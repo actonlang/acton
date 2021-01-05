@@ -182,7 +182,8 @@ instance Deact Decl where
     deact env (Actor l n q p KwdNIL b)
                                     = do inits <- deactSuite env2 inits
                                          decls <- mapM deactMeths decls
-                                         let _init_ = Def l0 initKW [] (addSelfPar p') KwdNIL (Just tNone) (actorinit:copies++inits++newact) NoDec fxAction
+                                         x <- newName "old"
+                                         let _init_ = Def l0 initKW [] (addSelfPar p') KwdNIL (Just tNone) (actorinit:newact:copies++inits++oldact) NoDec fxAction
                                          return $ Class l n q [TC primActor [], cStruct] (propsigs ++ [Decl l0 [_init_]] ++ decls ++ wrapped)
       where env1                    = setActor tSelf actions stvars locals $ extend (envOf p') $ defineTVars q env
             env2                    = define (envOf decls ++ envOf inits) env1
@@ -215,7 +216,8 @@ instance Deact Decl where
 
             actorinit               = Expr l0 (eCall (eDot (eQVar primActor) initKW) [eVar selfKW])
 
-            newact                  = [Expr l0 (eCall (eQVar primNEWACT) [eVar selfKW])]
+            newact                  = Expr l0 (eCall (eQVar primNEWACT) [eVar selfKW])
+            oldact                  = [Expr l0 (eCall (eQVar primOLDACT) [])]
 
             deactMeths (Decl l ds)  = Decl l <$> mapM deactMeth ds
 

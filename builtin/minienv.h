@@ -194,7 +194,7 @@ struct $Env$class {
     char *$GCINFO;
     $int $class_id;
     $Super$class $superclass;
-    $R (*__init__) ($Env, $list, $Cont);
+    $NoneType (*__init__) ($Env, $list);
     $NoneType (*__serialize__) ($Env, $Serial$state);
     $Env (*__deserialize__) ($Env, $Serial$state);
     $bool (*__bool__) ($Env);
@@ -215,15 +215,19 @@ struct $Env {
     $Actor $next;
     $Msg $msg;
     $Msg $outgoing;
+    $Actor $offspring;
+    $Actor $uterus;
+    $Msg $waitsfor;
     $Catcher $catcher;
     $Lock $msg_lock;
+    $long $globkey;
     $list args;
 };
 struct $Connection$class {
     char *$GCINFO;
     $int $class_id;
     $Super$class $superclass;
-    $R (*__init__) ($Connection, int, $Cont);
+    $NoneType (*__init__) ($Connection, int);
     $NoneType (*__serialize__) ($Connection, $Serial$state);
     $Connection (*__deserialize__) ($Connection, $Serial$state);
     $bool (*__bool__) ($Connection);
@@ -240,8 +244,12 @@ struct $Connection {
     $Actor $next;
     $Msg $msg;
     $Msg $outgoing;
+    $Actor $offspring;
+    $Actor $uterus;
+    $Msg $waitsfor;
     $Catcher $catcher;
     $Lock $msg_lock;
+    $long $globkey;
     int descriptor;
 };
 extern struct minienv$$l$1lambda$class minienv$$l$1lambda$methods;

@@ -79,6 +79,7 @@ int pthread_setaffinity_np(pthread_t thread, size_t cpu_size, cpu_set_t *cpu_set
 extern $R $ROOT($Env, $Cont);
 
 $Actor root_actor = NULL;
+$Env env_actor = NULL;
 
 $Actor readyQ = NULL;
 $Lock readyQ_lock;
@@ -173,10 +174,12 @@ void $Actor$__init__($Actor a) {
     a->$msg = NULL;
     a->$outgoing = NULL;
     a->$offspring = NULL;
+    a->$uterus = NULL;
     a->$waitsfor = NULL;
     a->$catcher = NULL;
     atomic_flag_clear(&a->$msg_lock);
     a->$globkey = get_next_key();
+    //printf("# New Actor %ld at %p of class %s\n", a->$globkey, a, a->$class->$GCINFO);
 }
 
 $bool $Actor$__bool__($Actor self) {
@@ -211,6 +214,7 @@ $Actor $Actor$__deserialize__($Actor res, $Serial$state state) {
     res->$msg = $step_deserialize(state);        // REMOVE!
     res->$outgoing = NULL;
     res->$offspring = NULL;
+    res->$uterus = NULL;
     res->$waitsfor = $step_deserialize(state);
     res->$catcher = $step_deserialize(state);
     atomic_flag_clear(&res->$msg_lock);
@@ -536,14 +540,13 @@ void FLUSH_outgoing($Actor self) {
 void CLEAR_offspring($Actor current) {
     $Actor a = current->$offspring;
     while (a) {
-        //printf("## Actor %p created offpring %p of class %s\n", current, a, a->$class->$GCINFO);
+        //printf("## Actor %ld at %p created offpring %ld at %p of class %s\n", current->$globkey, current, a->$globkey, a, a->$class->$GCINFO);
         $Actor b = a;
         a = a->$next;
         b->$next = NULL;
     }
     current->$offspring = NULL;
 }
-
 
 ////////////////////////////////////////////////////////////////////////////////////////
 char *RTAG_name($RTAG tag) {
@@ -596,8 +599,7 @@ struct $Cont $Done$instance = {
 ////////////////////////////////////////////////////////////////////////////////////////
 $R $NewRoot$__call__ ($Cont $this, $WORD val) {
     $Cont then = ($Cont)val;
-    $Env env = $NEW($Env,args,NULL);
-    return $ROOT(env, then);
+    return $ROOT(env_actor, then);
 }
 
 struct $Cont$class $NewRoot$methods = {
@@ -611,7 +613,7 @@ struct $Cont$class $NewRoot$methods = {
     NULL,
     ($R (*)($Cont, ...))$NewRoot$__call__
 };
-struct $Cont $NewRoot$instance = {
+struct $Cont $NewRoot$cont = {
     &$NewRoot$methods
 };
 ////////////////////////////////////////////////////////////////////////////////////////
@@ -631,17 +633,18 @@ struct $Cont$class $WriteRoot$methods = {
     NULL,
     ($R (*)($Cont, ...))$WriteRoot$__call__
 };
-struct $Cont $WriteRoot$instance = {
+struct $Cont $WriteRoot$cont = {
     &$WriteRoot$methods
 };
 ////////////////////////////////////////////////////////////////////////////////////////
 
 void BOOTSTRAP() {
+    minienv$$__init__();
+    env_actor = $NEW($Env, args);
+    $Actor ancestor0 = ($Actor)env_actor;
     struct timespec now;
     clock_gettime(CLOCK_MONOTONIC, &now);
-    $Cont cont = &$NewRoot$instance;
-    $Actor ancestor0 = $NEW($Actor);
-    $Msg m = $NEW($Msg, ancestor0, cont, now.tv_sec, &$WriteRoot$instance);
+    $Msg m = $NEW($Msg, ancestor0, &$NewRoot$cont, now.tv_sec, &$WriteRoot$cont);
     if (ENQ_msg(m, ancestor0)) {
         ENQ_ready(ancestor0);
     }
@@ -682,8 +685,10 @@ $Msg $ASYNC($Actor to, $Cont cont) {
 
 $Msg $AFTER($int sec, $Cont cont) {
     $Actor self = ($Actor)pthread_getspecific(self_key);
+    $Actor to = self->$uterus ? self->$uterus : self;
+    //printf("# AFTER towards %ld (current: %ld)\n", to->$globkey, self->$globkey);
     time_t baseline = self->$msg->$baseline + sec->val;
-    $Msg m = $NEW($Msg, self, cont, baseline, &$Done$instance);
+    $Msg m = $NEW($Msg, to, cont, baseline, &$Done$instance);
     PUSH_outgoing(self, m);
 //    ENQ_timed(m);
     return m;
@@ -695,6 +700,14 @@ $R $AWAIT($Msg m, $Cont cont) {
 
 void $NEWACT($Actor a) {
     $Actor self = ($Actor)pthread_getspecific(self_key);
+    a->$next = self->$uterus;
+    self->$uterus = a;
+}
+
+void $OLDACT() {
+    $Actor self = ($Actor)pthread_getspecific(self_key);
+    $Actor a = self->$uterus;
+    self->$uterus = a->$next;
     a->$next = self->$offspring;
     self->$offspring = a;
 }
@@ -729,8 +742,8 @@ void *main_loop(void *arg) {
                 case $RDONE: {
                     FLUSH_outgoing(current);
                     CLEAR_offspring(current);
-                    m->$value = r.value;
-                    $Actor b = FREEZE_waiting(m);        // Sets m->cont = NULL now that m->value holds the response
+                    m->$value = r.value;                 // m->value holds the response,
+                    $Actor b = FREEZE_waiting(m);        // so set m->cont = NULL and stop further m->waiting additions
                     while (b) {
                         b->$msg->$value = r.value;
                         b->$waitsfor = NULL;
@@ -760,9 +773,9 @@ void *main_loop(void *arg) {
                     CLEAR_offspring(current);
                     m->$cont = r.cont;
                     $Msg x = ($Msg)r.value;
-                    if (ADD_waiting(current, x)) {      // x->cont != NULL: x is still being processed
+                    if (ADD_waiting(current, x)) {      // x->cont != NULL: x is still being processed so current was added to x->waiting
                         current->$waitsfor = x;
-                    } else {                            // x->cont == NULL: x->value holds the final response
+                    } else {                            // x->cont == NULL: x->value holds the final response, current is not in x->waiting
                         m->$value = x->$value;
                         ENQ_ready(current);
                     }

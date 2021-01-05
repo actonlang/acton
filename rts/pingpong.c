@@ -92,12 +92,51 @@ lambda$2 lambda$2$new(Pingpong self, $int q) {
 
 ////////////////////////////////////////////////////////////////////////////////////////
 
+void lambda$3$__init__(lambda$3 $this, $Cont cont) {
+    $this->cont = cont;
+}
+
+$bool lambda$3$__bool__(lambda$3 self) {
+    return $True;
+}
+
+$str lambda$3$__str__(lambda$3 self) {
+    char *s;
+    asprintf(&s,"<lambda$3 object at %p>",self);
+    return to$str(s);
+}
+
+void lambda$3$__serialize__(lambda$3 self, $Serial$state state) {
+    $step_serialize(self->cont,state);
+}
+
+lambda$3 lambda$3$__deserialize__(lambda$3 self, $Serial$state state) {
+    lambda$3 res = $DNEW(lambda$3,state);
+    res->cont = $step_deserialize(state);
+    return res;
+}
+
+$R lambda$3$__call__ (lambda$3 $this, $NoneType none) {
+    $OLDACT();
+    $Cont cont = $this->cont;
+    return $R_CONT(cont, none);
+}
+
+lambda$3 lambda$3$new($Cont cont) {
+    lambda$3 obj = malloc(sizeof(struct lambda$3));
+    obj->$class = &lambda$3$methods;
+    lambda$3$methods.__init__(obj, cont);
+    return obj;
+}
+
+////////////////////////////////////////////////////////////////////////////////////////
+
 $R Pingpong$__init__(Pingpong self, $int i, $Cont then) {
     $Actor$methods.__init__(($Actor)self);
+    $NEWACT(($Actor)self);
     self->i = i;
     self->count = i;
-    $NEWACT(($Actor)self);
-    return self->$class->ping(self, i, then);
+    return self->$class->ping(self, i, ($Cont)lambda$3$new(then));
 }
 
 $bool Pingpong$__bool__(Pingpong self) {
@@ -167,6 +206,17 @@ struct lambda$2$class lambda$2$methods = {
     lambda$2$__bool__,
     lambda$2$__str__,
     lambda$2$__call__
+};
+struct lambda$3$class lambda$3$methods = {
+    "lambda$3",
+    UNASSIGNED,
+    ($Super$class)&$Cont$methods,
+    lambda$3$__init__,
+    lambda$3$__serialize__,
+    lambda$3$__deserialize__,
+    lambda$3$__bool__,
+    lambda$3$__str__,
+    lambda$3$__call__
 };
 struct Pingpong$class Pingpong$methods = {
     "Pingpong",

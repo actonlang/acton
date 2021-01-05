@@ -97,6 +97,7 @@ struct $Actor {
     $Msg $msg;
     $Msg $outgoing;
     $Actor $offspring;
+    $Actor $uterus;
     $Msg $waitsfor;
     $Catcher $catcher;
     $Lock $msg_lock;
@@ -158,6 +159,7 @@ $Msg $AFTER($int, $Cont);
 $R $AWAIT($Msg, $Cont);
 
 void $NEWACT($Actor);
+void $OLDACT();
 
 void $PUSH($Cont);
 void $POP();

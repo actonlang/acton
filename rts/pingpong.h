@@ -4,10 +4,12 @@
 
 struct lambda$1;
 struct lambda$2;
+struct lambda$3;
 struct Pingpong;
 
 typedef struct lambda$1 *lambda$1;
 typedef struct lambda$2 *lambda$2;
+typedef struct lambda$3 *lambda$3;
 typedef struct Pingpong *Pingpong;
 
 struct lambda$1$class {
@@ -47,6 +49,23 @@ struct lambda$2 {
 };
 lambda$2 lambda$2$new(Pingpong, $int);
 
+struct lambda$3$class {
+    char *$GCINFO;
+    int $class_id;
+    $Super$class $superclass;
+    void (*__init__)(lambda$3, $Cont);
+    void (*__serialize__)(lambda$3, $Serial$state);
+    lambda$3 (*__deserialize__)(lambda$3, $Serial$state);
+    $bool (*__bool__)(lambda$3);
+    $str (*__str__)(lambda$3);
+    $R (*__call__)(lambda$3, $NoneType);
+};
+struct lambda$3 {
+    struct lambda$3$class *$class;
+    $Cont cont;
+};
+lambda$3 lambda$3$new($Cont);
+
 struct Pingpong$class {
     char *$GCINFO;
     int $class_id;
@@ -61,14 +80,15 @@ struct Pingpong$class {
 };
 struct Pingpong {
     struct Pingpong$class *$class;
-    $Actor next;
-    $Msg msg;
-    $Msg outgoing;
-    $Actor offspring;
-    $Msg waitsfor;
-    $Catcher catcher;
-    $Lock msg_lock;
-    $long globkey;
+    $Actor $next;
+    $Msg $msg;
+    $Msg $outgoing;
+    $Actor $offspring;
+    $Actor $uterus;
+    $Msg $waitsfor;
+    $Catcher $catcher;
+    $Lock $msg_lock;
+    $long $globkey;
     $int i;
     $int count;
 };
@@ -76,4 +96,5 @@ $R Pingpong$new($int, $Cont);
 
 extern struct lambda$1$class lambda$1$methods;
 extern struct lambda$2$class lambda$2$methods;
+extern struct lambda$3$class lambda$3$methods;
 extern struct Pingpong$class Pingpong$methods;
