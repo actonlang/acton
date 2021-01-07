@@ -277,7 +277,7 @@ int set_private_read_head(WORD consumer_id, WORD shard_id, WORD app_id, WORD tab
 	int64_t no_entries = db_row->no_entries;
 
 	snode_t * consumer_node = skiplist_search(db_row->consumer_state, consumer_id);
-	if(node == NULL)
+	if(consumer_node == NULL)
 		return DB_ERR_NO_CONSUMER; // Consumer doesn't exist
 
 	if(use_lock)
@@ -322,7 +322,7 @@ int set_private_consume_head(WORD consumer_id, WORD shard_id, WORD app_id, WORD 
 	int64_t no_entries = db_row->no_entries;
 
 	snode_t * consumer_node = skiplist_search(db_row->consumer_state, consumer_id);
-	if(node == NULL)
+	if(consumer_node == NULL)
 		return DB_ERR_NO_CONSUMER; // Consumer doesn't exist
 
 	consumer_state * cs = (consumer_state *) (consumer_node->value);
@@ -362,7 +362,7 @@ int read_queue(WORD consumer_id, WORD shard_id, WORD app_id, WORD table_key, WOR
 	int64_t no_entries = db_row->no_entries;
 
 	snode_t * consumer_node = skiplist_search(db_row->consumer_state, consumer_id);
-	if(node == NULL)
+	if(consumer_node == NULL)
 		return DB_ERR_NO_CONSUMER; // Consumer doesn't exist
 
 	if(use_lock)
@@ -436,7 +436,7 @@ int peek_queue(WORD consumer_id, WORD shard_id, WORD app_id, WORD table_key, WOR
 	int64_t no_entries = db_row->no_entries;
 
 	snode_t * consumer_node = skiplist_search(db_row->consumer_state, consumer_id);
-	if(node == NULL)
+	if(consumer_node == NULL)
 		return DB_ERR_NO_CONSUMER; // Consumer doesn't exist
 
 	consumer_state * cs = (consumer_state *) (consumer_node->value);
@@ -493,7 +493,7 @@ int replay_queue(WORD consumer_id, WORD shard_id, WORD app_id, WORD table_key, W
 	int64_t no_entries = db_row->no_entries;
 
 	snode_t * consumer_node = skiplist_search(db_row->consumer_state, consumer_id);
-	if(node == NULL)
+	if(consumer_node == NULL)
 		return DB_ERR_NO_CONSUMER; // Consumer doesn't exist
 
 	consumer_state * cs = (consumer_state *) (consumer_node->value);
@@ -547,7 +547,7 @@ int consume_queue(WORD consumer_id, WORD shard_id, WORD app_id, WORD table_key, 
 	db_row_t * db_row = (db_row_t *) (node->value);
 
 	snode_t * consumer_node = skiplist_search(db_row->consumer_state, consumer_id);
-	if(node == NULL)
+	if(consumer_node == NULL)
 		return DB_ERR_NO_CONSUMER; // Consumer doesn't exist
 
 	consumer_state * cs = (consumer_state *) (consumer_node->value);
