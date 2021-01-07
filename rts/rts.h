@@ -6,30 +6,35 @@
 #include <stdint.h>
 #include <stdbool.h>
 #include <time.h>
+#include <pthread.h>
 
 #include "../builtin/builtin.h"
 
 struct $Msg;
 struct $Actor;
 struct $Catcher;
-struct $Clos;
+struct $function;
 struct $Cont;
-struct $RetNew;
+struct $ConstCont;
+
+extern pthread_key_t self_key;
+extern pthread_mutex_t sleep_lock;
+extern pthread_cond_t work_to_do;
 
 typedef struct $Msg *$Msg;
 typedef struct $Actor *$Actor;
 typedef struct $Catcher *$Catcher;
-typedef struct $Clos *$Clos;
+typedef struct $function *$function;
 typedef struct $Cont *$Cont;
-typedef struct $RetNew *$RetNew;
+typedef struct $ConstCont *$ConstCont;
 
 extern struct $Msg$class $Msg$methods;
 extern struct $Actor$class $Actor$methods;
 extern struct $Catcher$class $Catcher$methods;
-extern struct $Clos$class $Clos$methods;
+extern struct $function$class $function$methods;
 extern struct $Cont$class $Cont$methods;
 extern struct $Cont$class $Done$methods;
-extern struct $RetNew$class $RetNew$methods;
+extern struct $ConstCont$class $ConstCont$methods;
 
 enum $RTAG { $RDONE, $RFAIL, $RCONT, $RWAIT };
 typedef enum $RTAG $RTAG;
@@ -52,25 +57,28 @@ typedef struct $R $R;
 #define CLOS_HEADER             "Clos"
 #define CONT_HEADER             "Cont"
 
+#define $Lock                   volatile atomic_flag
+
 struct $Msg$class {
     char *$GCINFO;
     int $class_id;
     $Super$class $superclass;
     void (*__init__)($Msg, $Actor, $Cont, time_t, $WORD);
     void (*__serialize__)($Msg, $Serial$state);
-    $Msg (*__deserialize__)($Serial$state);
+    $Msg (*__deserialize__)($Msg, $Serial$state);
     $bool (*__bool__)($Msg);
     $str (*__str__)($Msg);
 };
 struct $Msg {
     struct $Msg$class *$class;
-    $Msg next;
-    $Actor to;
-    $Cont cont;
-    $Actor waiting;
-    time_t baseline;
-    volatile atomic_flag wait_lock;
-    $WORD value;
+    $Msg $next;
+    $Actor $to;
+    $Cont $cont;
+    $Actor $waiting;
+    time_t $baseline;
+    $Lock $wait_lock;
+    $WORD $value;
+    long $globkey;
 };
 
 struct $Actor$class {
@@ -79,17 +87,21 @@ struct $Actor$class {
     $Super$class $superclass;
     void (*__init__)($Actor);
     void (*__serialize__)($Actor, $Serial$state);
-    $Actor (*__deserialize__)($Serial$state);
+    $Actor (*__deserialize__)($Actor, $Serial$state);
     $bool (*__bool__)($Actor);
     $str (*__str__)($Actor);
 };
 struct $Actor {
     struct $Actor$class *$class;
-    $Actor next;
-    $Msg msg;
-    $Msg outgoing;
-    $Catcher catcher;
-    volatile atomic_flag msg_lock;
+    $Actor $next;
+    $Msg $msg;
+    $Msg $outgoing;
+    $Actor $offspring;
+    $Actor $uterus;
+    $Msg $waitsfor;
+    $Catcher $catcher;
+    $Lock $msg_lock;
+    $long $globkey;
 };
 
 struct $Catcher$class {
@@ -98,30 +110,16 @@ struct $Catcher$class {
     $Super$class $superclass;
     void (*__init__)($Catcher, $Cont);
     void (*__serialize__)($Catcher, $Serial$state);
-    $Catcher (*__deserialize__)($Serial$state);
+    $Catcher (*__deserialize__)($Catcher, $Serial$state);
     $bool (*__bool__)($Catcher);
     $str (*__str__)($Catcher);
 };
 struct $Catcher {
     struct $Catcher$class *$class;
-    $Catcher next;
-    $Cont cont;
+    $Catcher $next;
+    $Cont $cont;
 };
 
-struct $Clos$class {
-    char *$GCINFO;
-    int $class_id;
-    $Super$class $superclass;
-    void (*__init__)($Clos);
-    void (*__serialize__)($Clos, $Serial$state);
-    $Clos (*__deserialize__)($Serial$state);
-    $bool (*__bool__)($Clos);
-    $str (*__str__)($Clos);
-    $WORD (*enter)($Clos, $WORD);
-};
-struct $Clos {
-    struct $Clos$class *$class;
-};
 
 struct $Cont$class {
     char *$GCINFO;
@@ -129,43 +127,47 @@ struct $Cont$class {
     $Super$class $superclass;
     void (*__init__)($Cont);
     void (*__serialize__)($Cont, $Serial$state);
-    $Cont (*__deserialize__)($Serial$state);
+    $Cont (*__deserialize__)($Cont, $Serial$state);
     $bool (*__bool__)($Cont);
     $str (*__str__)($Cont);
-    $R (*enter)($Cont, $WORD);
+    $R (*__call__)($Cont, ...);
 };
 struct $Cont {
-    union {
-        struct $Cont$class *$class;
-        struct $Clos super;
-    };
+    struct $Cont$class *$class;
 };
 
-struct $RetNew$class {
+struct $ConstCont$class {
     char *$GCINFO;
     int $class_id;
     $Super$class $superclass;
-    void (*__init__)($RetNew, $Cont, $Actor);
-    void (*__serialize__)($RetNew, $Serial$state);
-    $RetNew (*__deserialize__)($Serial$state);
-    $bool (*__bool__)($RetNew);
-    $str (*__str__)($RetNew);
-    $R (*enter)($RetNew, $WORD);
+    void (*__init__)($ConstCont, $WORD, $Cont);
+    void (*__serialize__)($ConstCont, $Serial$state);
+    $ConstCont (*__deserialize__)($ConstCont, $Serial$state);
+    $bool (*__bool__)($ConstCont);
+    $str (*__str__)($ConstCont);
+    $R (*__call__)($ConstCont, $WORD);
 };
-struct $RetNew {
-    struct $RetNew$class *$class;
+struct $ConstCont {
+    struct $ConstCont$class *$class;
+    $WORD val;
     $Cont cont;
-    $Actor act;
 };
+$Cont $CONSTCONT($WORD, $Cont);
 
 $Msg $ASYNC($Actor, $Cont);
-$Msg $AFTER(time_t, $Cont);
+$Msg $AFTER($int, $Cont);
 $R $AWAIT($Msg, $Cont);
+
+void $NEWACT($Actor);
+void $OLDACT();
 
 void $PUSH($Cont);
 void $POP();
 
-typedef int $Env;
+//typedef $int $Env;
+
+void $Actor$serialize($Actor, $Serial$state);
+void $Actor$deserialize($Actor, $Serial$state);
 
 $ROW $serialize_rts();
 void $deserialize_rts($ROW);

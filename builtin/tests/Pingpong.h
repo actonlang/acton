@@ -1,6 +1,8 @@
 #pragma once
 
-#include "../../rts/rts.h"
+#include "builtin/builtin.h"
+#include "builtin/minienv.h"
+#include "rts/rts.h"
 
 struct lambda$1;
 struct lambda$2;
@@ -15,8 +17,8 @@ struct lambda$1$class {
     $Super$class $superclass;
     void (*__init__)(lambda$1, Pingpong, $int);
     void (*__serialize__)(lambda$1, $Serial$state);
-    lambda$1 (*__deserialize__)($Serial$state);
-    $R (*enter)(lambda$1, $Cont);
+    lambda$1 (*__deserialize__)(lambda$1, $Serial$state);
+    $R (*__call__)(lambda$1, $Cont);
 };
 struct lambda$1 {
     union {
@@ -32,8 +34,8 @@ struct lambda$2$class {
     $Super$class $superclass;
     void (*__init__)(lambda$2, Pingpong);
     void (*__serialize__)(lambda$2, $Serial$state);
-    lambda$2 (*__deserialize__)($Serial$state);
-    $R (*enter)(lambda$2, $Cont);
+    lambda$2 (*__deserialize__)(lambda$2, $Serial$state);
+    $R (*__call__)(lambda$2, $Cont);
 };
 struct lambda$2 {
     union {
@@ -46,9 +48,9 @@ struct lambda$2 {
 struct Pingpong$class {
     char *$GCINFO;
     $Super$class $superclass;
-    $R (*__init__)(Pingpong, $int, $Cont);
+    $R (*__init__)(Pingpong, $Env, $Cont);
     void (*__serialize__)(Pingpong, $Serial$state);
-    Pingpong (*__deserialize__)($Serial$state);
+    Pingpong (*__deserialize__)(Pingpong, $Serial$state);
     $R (*ping)(Pingpong, $Cont);
     $R (*pong)(Pingpong, $int, $Cont);
 }; 

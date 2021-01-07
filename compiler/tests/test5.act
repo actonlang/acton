@@ -1,0 +1,37 @@
+protocol Apa (Eq, Plus):
+    @staticmethod
+    apa : [C(Ord)] => (Self,Self,C) -> bool
+    @staticmethod
+    bepa : (Self,Self) -> bool
+    cepa : [C(Ord)] => (int,C) -> bool
+    def apa(a,b,c):
+        return a == b
+    def __add__(a,b):
+        return a
+
+extension bool (Apa):
+    def bepa(a,b):
+        return a == b
+    def __add__(a,b):
+        return b
+    def __eq__(a,b):
+        return False
+    def __ne__(a,b):
+        return not a==b
+    def cepa(self,i,c):
+        return False
+
+extension list[A(Eq)] (Apa):
+    def bepa(a,b):
+        return a == b
+    def __eq__(a,b):
+        if len(a) != len(b):
+            return False
+        for x,y in zip(a,b):
+            if x != y:
+                return False
+        return True
+    def __ne__(a,b):
+        return not a==b
+    def cepa(self,i,c):
+        return False

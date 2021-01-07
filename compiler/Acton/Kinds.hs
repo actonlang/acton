@@ -1,5 +1,5 @@
 {-# LANGUAGE MultiParamTypeClasses, FlexibleInstances, FlexibleContexts #-}
-module Acton.Kinds(check, kindError) where
+module Acton.Kinds(check) where
 
 import qualified Control.Exception
 import qualified Data.Map.Strict as Map
@@ -12,16 +12,14 @@ import Acton.Syntax
 import Acton.Names
 import Acton.Builtin
 import Acton.Subst
-import qualified Acton.Env
+import Acton.Env
 
 
-check                               :: Acton.Env.Env -> Module -> IO Module
-check ienv (Module l imps ss)       = return (Module l imps ss1)
-  where env                         = kenv0 ienv
+check                               :: Env0 -> Module -> IO Module
+check env0 (Module m imps ss)       = return (Module m imps ss1)
+  where env                         = kindEnv env0
         ss1                         = runKindM (kchkTop env ss)
 
-
-type KVar                           = Name
 
 data KindState                      = KindState {
                                         nextint     :: Int,
@@ -57,29 +55,32 @@ newKVar                             = KVar <$> (Internal Kindvar "" <$> newUniqu
 
 newXVar                             = TV KType <$> (Internal Xistvar "" <$> newUnique)
 
+type KindEnv                        = EnvF KindEnvX
 
-data KEnv                           = KEnv { impenv :: Acton.Env.Env, tcons :: Kinds, tvars :: [TVar] }
+data KindEnvX                       = KindEnvX { tconsX :: [(Name,Kind)], tvarsX :: [TVar] }
 
-type Kinds                          = [(Name,Kind)]
+kindEnv env0                        = setX env0 $ KindEnvX{ tconsX = [], tvarsX = [] }
 
-kenv0 ienv                          = KEnv { impenv = ienv, tcons = [], tvars = [] }
+tcons env                           = tconsX $ envX env
 
-extcons ke env                      = env { tcons = ke ++ tcons env }
+tvars env                           = tvarsX $ envX env
+
+extcons ke env                      = modX env $ \x -> x{ tconsX = ke ++ tcons env }
 
 extvars vs env
-  | not $ null clash                = Acton.Env.err1 (head clash) "Type variable already in scope:"    -- No type variable shadowing
-  | not $ null dups                 = Acton.Env.err1 (head dups) "Duplicate type variable in binding:"
-  | otherwise                       = env { tvars = vs ++ tvars env }
+  | not $ null clash                = err1 (head clash) "Type variable already in scope:"    -- No type variable shadowing
+  | not $ null dups                 = err1 (head dups) "Duplicate type variable in binding:"
+  | otherwise                       = return $ modX env $ \x -> x{ tvarsX = vs ++ tvars env }
   where clash                       = vs `intersect` tvars env
         dups                        = duplicates vs
 
-tconKind (NoQ n) env                = case lookup n (tcons env) of
+tcKind (NoQ n) env                  = case lookup n (tcons env) of
                                         Just k  -> k
-                                        Nothing -> Acton.Env.tconKind (NoQ n) (impenv env)
-tconKind qn env                     = Acton.Env.tconKind qn (impenv env)
+                                        Nothing -> tconKind (NoQ n) env
+tcKind qn env                       = tconKind qn env
 
-tvarKind v env                      = case filter (==v) (tvars env) of
-                                        [] -> Acton.Env.err1 v "Unbound type variable:"
+tvKind v env                        = case filter (==v) (tvars env) of
+                                        [] -> err1 v "Unbound type variable:"
                                         TV k _ : _ -> k
 
 instance Pretty (Name,Kind) where
@@ -126,6 +127,10 @@ instance InstKWild TVar where
     instKWild (TV KWild n)          = TV <$> newKVar <*> return n
     instKWild v                     = return v
 
+instance InstKWild (Maybe Type) where
+    instKWild (Just (TVar l v))     = Just <$> TVar l <$> instKWild v
+    instKWild x                     = return x
+
 
 ----------------------------------------------------------------------------------------------------------------------
 -- convTWild
@@ -141,8 +146,6 @@ instance ConvTWild Type where
     convTWild (TOpt l t)            = TOpt l <$> convTWild t
     convTWild (TCon l c)            = TCon l <$> convTWild c
     convTWild (TRow l k n t r)      = TRow l k n <$> convTWild t <*> convTWild r
-    convTWild (TFX l (FXMut t))     = TFX l <$> FXMut <$> convTWild t
-    convTWild (TFX l (FXAct t))     = TFX l <$> FXMut <$> convTWild t
     convTWild t                     = return t
 
 instance ConvTWild TCon where
@@ -171,11 +174,11 @@ instance ConvTWild KwdPar where
 ----------------------------------------------------------------------------------------------------------------------
 
 class ConvPExist a where
-    convPExist                      :: KEnv -> a -> KindM a
+    convPExist                      :: KindEnv -> a -> KindM a
 
 instance ConvPExist Type where
     convPExist env (TCon l c)       = do c <- convPExist env c
-                                         case khead $ tconKind (tcname c) env of
+                                         case khead $ tcKind (tcname c) env of
                                              KProto -> do
                                                  xv <- newXVar
                                                  storeXVar xv c
@@ -219,7 +222,7 @@ kchkTop env ss                      = do ss <- kchkSuite env ss
                                          ksubst True ss
 
 class KCheck a where
-    kchk                            :: KEnv -> a -> KindM a
+    kchk                            :: KindEnv -> a -> KindM a
 
 instance KCheck a => KCheck [a] where
     kchk env                        = mapM (kchk env)
@@ -273,7 +276,7 @@ instance KCheck Decl where
                                          t <- convPExist env =<< convTWild t
                                          x <- convPExist env =<< convTWild x
                                          q' <- swapXVars tmp
-                                         let env1 = extvars (tybound (q++q')) env
+                                         env1 <- extvars (tybound (q++q')) env
                                          q <- kchkQBinds env1 (q++q')
                                          p <- kchk env1 p
                                          k <- kchk env1 k
@@ -281,15 +284,15 @@ instance KCheck Decl where
                                          x <- kexp KFX env1 x
                                          b <- kchkSuite env1 b
                                          return $ Def l n q p k t b d x
-    kchk env (Actor l n q p k b)    = Actor l n <$> kchkQBinds env1 q <*> kchk env1 p <*> kchk env1 k <*> kchkSuite env1 b
-      where env1                    = extvars (tybound q) env
-    kchk env (Class l n q us b)     = Class l n <$> kchkQBinds env1 q <*> kchkBounds env1 us <*> kchkSuite env1 b
-      where env1                    = extvars (tvSelf : tybound q) env
-    kchk env (Protocol l n q us b)  = Protocol l n <$> kchkQBinds env1 q <*> kchkPBounds env1 us <*> kchkSuite env1 b
-      where env1                    = extvars (tvSelf : tybound q) env
-    kchk env (Extension l n q us b) = do kexp KType env1 (TC n (map tVar $ tybound q))
-                                         Extension l n <$> kchkQBinds env1 q <*> kchkPBounds env1 us <*> kchkSuite env1 b
-      where env1                    = extvars (tvSelf : tybound q) env
+    kchk env (Actor l n q p k b)    = do env1 <- extvars (tybound q) env
+                                         Actor l n <$> kchkQBinds env1 q <*> kchk env1 p <*> kchk env1 k <*> kchkSuite env1 b
+    kchk env (Class l n q us b)     = do env1 <- extvars (tvSelf : tybound q) env
+                                         Class l n <$> kchkQBinds env1 q <*> kchkBounds env1 us <*> kchkSuite env1 b
+    kchk env (Protocol l n q us b)  = do env1 <- extvars (tvSelf : tybound q) env
+                                         Protocol l n <$> kchkQBinds env1 q <*> kchkPBounds env1 us <*> kchkSuite env1 b
+    kchk env (Extension l n q us b) = do env1 <- extvars (tvSelf : tybound q) env
+                                         kexp KType env1 (TC n (map tVar $ tybound q))
+                                         Extension l (unalias env n) <$> kchkQBinds env1 q <*> kchkPBounds env1 us <*> kchkSuite env1 b
 
 instance KCheck Expr where
     kchk env (Var l n)              = return $ Var l n
@@ -304,16 +307,22 @@ instance KCheck Expr where
     kchk env (BStrings l ss)        = return $ BStrings l ss
     kchk env (Call l e ps ks)       = Call l <$> kchk env e <*> kchk env ps <*> kchk env ks
     kchk env (TApp l e ts)          = internal l "Unexpected TApp in kchk"
+    kchk env (Async l e)            = Async l <$> kchk env e
+    kchk env (Await l e)            = Await l <$> kchk env e
     kchk env (Index l e is)         = Index l <$> kchk env e <*> kchk env is
     kchk env (Slice l e sl)         = Slice l <$> kchk env e <*> kchk env sl
+    kchk env (NDSlice l e ss)       = NDSlice l <$> kchk env e <*> kchk env ss
     kchk env (Cond l e1 e2 e3)      = Cond l <$> kchk env e1 <*> kchk env e2 <*> kchk env e3
     kchk env (IsInstance l e c)     = IsInstance l <$> kchk env e <*> return c
     kchk env (BinOp l e1 op e2)     = BinOp l <$> kchk env e1 <*> return op <*> kchk env e2
     kchk env (CompOp l e ops)       = CompOp l <$> kchk env e <*> kchk env ops
     kchk env (UnOp l op e)          = UnOp l op <$> kchk env e 
     kchk env (Dot l e n)            = Dot l <$> kchk env e <*> return n
-    kchk env (DotI l e i tl)        = DotI l <$> kchk env e <*> return i <*> return tl
-    kchk env (Lambda l p k e x)     = Lambda l <$> (kchk env =<< convTWild p) <*> (kchk env =<< convTWild k) <*> kchk env e <*> kexp KFX env x
+    kchk env (Rest l e n)           = Rest l <$> kchk env e <*> return n
+    kchk env (DotI l e i)           = DotI l <$> kchk env e <*> return i
+    kchk env (RestI l e i)          = RestI l <$> kchk env e <*> return i
+    kchk env (Lambda l p k e x)     = Lambda l <$> (kchk env =<< convTWild p) <*> (kchk env =<< convTWild k) <*> 
+                                                   kchk env e <*> (kexp KFX env =<< convTWild x)
     kchk env (Yield l e)            = Yield l <$> kchk env e
     kchk env (YieldFrom l e)        = YieldFrom l <$> kchk env e
     kchk env (Tuple l es ks)        = Tuple l <$> kchk env es <*> kchk env ks
@@ -397,14 +406,18 @@ instance KCheck Assoc where
 instance KCheck Sliz where
     kchk env (Sliz l e1 e2 e3)      = Sliz l <$> kchk env e1 <*> kchk env e2 <*> kchk env e3
 
+instance KCheck NDSliz where
+    kchk env (NDExpr e)             = NDExpr <$> kchk env e
+    kchk env (NDSliz s)             = NDSliz <$> kchk env s
+    
 instance KCheck TSchema where
     kchk env (TSchema l q t)
-      | not $ null ambig            = Acton.Env.err2 ambig "Ambiguous type variable in schema:"
+      | not $ null ambig            = err2 ambig "Ambiguous type variable in schema:"
       | otherwise                   = do tmp <- swapXVars []
                                          q <- convPExist env q
                                          t <- convPExist env t
                                          q' <- swapXVars tmp
-                                         let env1 = extvars (tybound (q++q')) env
+                                         env1 <- extvars (tybound (q++q')) env
                                          q <- kchkQBinds env1 (q++q')
                                          t <- kexp KType env1 t
                                          return $ TSchema l q t
@@ -429,7 +442,7 @@ kchkPBounds env us                  = mapM (kexp KProto env) us
 ----------------------------------------------------------------------------------------------------------------------
 
 class KInfer t where
-    kinfer                          :: KEnv -> t -> KindM (Kind,t)
+    kinfer                          :: KindEnv -> t -> KindM (Kind,t)
 
 
 instance (KInfer t) => KInfer (Maybe t) where
@@ -441,21 +454,21 @@ instance KInfer TVar where
                                          return (tvkind tv, tv)
 
 instance KInfer TCon where
-    kinfer env (TC n [])            = return (tconKind n env, TC n [])
-    kinfer env (TC n ts)            = do let kn = tconKind n env
+    kinfer env (TC n [])            = return (tcKind n env, TC (unalias env n) [])
+    kinfer env (TC n ts)            = do let kn = tcKind n env
                                          (ks,ts) <- fmap unzip $ mapM (kinfer env) ts
                                          k <- newKVar
                                          kunify (loc n) kn (KFun ks k)
                                          k <- ksubst False k
-                                         return (k, TC n ts)
+                                         return (k, TC (unalias env n) ts)
 
 envBound (TV k (Internal p _ _))    = p == Xistvar
 envBound _                          = True
 
 instance KInfer Type where
-    kinfer env (TWild l)            = Acton.Env.err1 l "Illegal wildcard type"
+    kinfer env (TWild l)            = err1 l "Illegal wildcard type"
     kinfer env (TVar l v)           = do (k,v) <- kinfer env v
-                                         when (envBound v) $ kunify l k (tvarKind v env)     -- Wildvars are not int the environment
+                                         when (envBound v) $ kunify l k (tvKind v env)     -- Wildvars are not int the environment
                                          return (k, TVar l v)
     kinfer env (TCon l c)           = do c <- kexp KType env c
                                          return (KType, TCon l c)
@@ -467,7 +480,6 @@ instance KInfer Type where
     kinfer env (TTuple l p k)       = do p <- kexp PRow env p
                                          k <- kexp KRow env k
                                          return (KType, TTuple l p k)
-    kinfer env (TUnion l us)        = return (KType, TUnion l $ Acton.Env.uniNorm (impenv env) l us)
     kinfer env (TOpt _ t@TOpt{})    = kinfer env t
     kinfer env (TOpt l t)           = do t <- kexp KType env t
                                          return (KType, TOpt l t)
@@ -476,14 +488,7 @@ instance KInfer Type where
     kinfer env (TRow l k n t r)     = do t <- kexp KType env t
                                          r <- kexp k env r
                                          return (k, TRow l k n t r)
-    kinfer env (TFX l fx)           = do fx <- kchk env fx
-                                         return (KFX, TFX l fx)
-
-instance KCheck FX where
-    kchk env (FXAction)             = return FXAction
-    kchk env (FXAct t)              = FXAct <$> kexp KType env t
-    kchk env (FXMut t)              = FXMut <$> kexp KType env t
-    kchk env (FXPure)               = return FXPure
+    kinfer env (TFX l fx)           = return (KFX, TFX l fx)
 
 kexp k env t                        = do (k',t) <- kinfer env t
                                          kunify (loc t) k' k
@@ -506,7 +511,7 @@ kunify' l (KFun ks1 k1) (KFun ks2 k2)
                                          kunify l k1 k2
 kunify' l k1 k2
   | k1 == k2                        = return ()
-  | otherwise                       = noUnify l k1 k2
+  | otherwise                       = noKUnify l k1 k2
 
 
 kfree (KVar v)                      = []
@@ -553,18 +558,11 @@ instance KSubst Type where
     ksubst g (TCon l c)             = TCon l <$> ksubst g c
     ksubst g (TFun l fx p k t)      = TFun l <$> ksubst g fx <*> ksubst g p <*> ksubst g k<*> ksubst g t
     ksubst g (TTuple l p k)         = TTuple l <$> ksubst g p <*> ksubst g k
-    ksubst g (TUnion l as)          = return $ TUnion l as
     ksubst g (TOpt l t)             = TOpt l <$> ksubst g t
     ksubst g (TNone l)              = return $ TNone l
     ksubst g (TNil l s)             = return $ TNil l s
     ksubst g (TRow l k n t r)       = TRow l k n <$> ksubst g t <*> ksubst g r
-    ksubst g (TFX l fx)             = TFX l <$> ksubst g fx
-
-instance KSubst FX where
-    ksubst g FXPure                 = return FXPure
-    ksubst g (FXMut t)              = FXMut <$> ksubst g t
-    ksubst g (FXAct t)              = FXAct <$> ksubst g t
-    ksubst g FXAction               = return FXAction
+    ksubst g (TFX l fx)             = return $ TFX l fx
 
 instance KSubst Stmt where
     ksubst g (Expr l e)             = Expr l <$> ksubst g e
@@ -609,15 +607,20 @@ instance KSubst Expr where
     ksubst g (BStrings l ss)        = return $ BStrings l ss
     ksubst g (Call l e ps ks)       = Call l <$> ksubst g e <*> ksubst g ps <*> ksubst g ks
     ksubst g (TApp l e ts)          = TApp l <$> ksubst g e <*> ksubst g ts
+    ksubst g (Async l e)            = Async l <$> ksubst g e
+    ksubst g (Await l e)            = Await l <$> ksubst g e
     ksubst g (Index l e is)         = Index l <$> ksubst g e <*> ksubst g is
     ksubst g (Slice l e sl)         = Slice l <$> ksubst g e <*> ksubst g sl
+    ksubst g (NDSlice l e sl)       = NDSlice l <$> ksubst g e <*> ksubst g sl
     ksubst g (Cond l e1 e2 e3)      = Cond l <$> ksubst g e1 <*> ksubst g e2 <*> ksubst g e3
     ksubst g (IsInstance l e c)     = IsInstance l <$> ksubst g e <*> return c
     ksubst g (BinOp l e1 op e2)     = BinOp l <$> ksubst g e1 <*> return op <*> ksubst g e2
     ksubst g (CompOp l e ops)       = CompOp l <$> ksubst g e <*> ksubst g ops
     ksubst g (UnOp l op e)          = UnOp l op <$> ksubst g e 
     ksubst g (Dot l e n)            = Dot l <$> ksubst g e <*> return n
-    ksubst g (DotI l e i t)         = DotI l <$> ksubst g e <*> return i <*> return t
+    ksubst g (Rest l e n)           = Rest l <$> ksubst g e <*> return n
+    ksubst g (DotI l e i)           = DotI l <$> ksubst g e <*> return i
+    ksubst g (RestI l e i)           = RestI l <$> ksubst g e <*> return i
     ksubst g (Lambda l ps ks e fx)  = Lambda l <$> ksubst g ps <*> ksubst g ks <*> ksubst g e <*> ksubst g fx
     ksubst g (Yield l e)            = Yield l <$> ksubst g e
     ksubst g (YieldFrom l e)        = YieldFrom l <$> ksubst g e
@@ -697,17 +700,8 @@ instance KSubst Assoc where
 instance KSubst Sliz where
     ksubst g (Sliz l e1 e2 e3)      = Sliz l <$> ksubst g e1 <*> ksubst g e2 <*> ksubst g e3
 
-
---------------------------------------------------------------------------------------------------------------
-
-data KindError                      = KindError SrcLoc Kind Kind
-                                    | InfiniteKind SrcLoc KVar Kind
-                                    deriving (Show)
-
-instance Control.Exception.Exception KindError
-
-noUnify l k1 k2                     = Control.Exception.throw $ KindError l k1 k2
-infiniteKind l v k                  = Control.Exception.throw $ InfiniteKind l v k
-
-kindError (KindError l k1 k2)       = (l, " Expected a " ++ prstr k2 ++ ", actual kind is " ++ prstr k1)
-kindError (InfiniteKind l v k)      = (l, " Infinite kind inferred: " ++ prstr  v ++ " = " ++ prstr k)
+instance KSubst NDSliz where
+    ksubst g (NDExpr e)             = NDExpr <$> ksubst g e
+    ksubst g (NDSliz s)             = NDSliz <$> ksubst g s
+    
+    

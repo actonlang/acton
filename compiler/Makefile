@@ -1,5 +1,5 @@
 #ACTON_BINDIR  := ../bin
-ACTON_BINDIR  := .
+ACTON_BINDIR  := ..
 
 VERSION=$(shell awk -F= '/ACTON_VERSION=/ {print $$2}' ../VERSION)
 

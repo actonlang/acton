@@ -12,7 +12,7 @@
 */
 
 
-void normalize_slice($Slice slc, int len, int *slen, int *start, int *stop, int *step) {
+void normalize_slice($slice slc, int len, int *slen, int *start, int *stop, int *step) {
   if (slc->step == NULL)
     *step = 1;
   else
@@ -41,7 +41,11 @@ void normalize_slice($Slice slc, int len, int *slen, int *start, int *stop, int 
     *slen = (*stop-*start)/ *step + ((*stop-*start)%*step != 0);
 }
 
-void $Slice__init__($Slice s, $int start, $int stop, $int step) {
+$slice $slice$new($int start,$int stop,$int step) {
+  return $NEW($slice,start,stop,step);
+}
+
+void $slice__init__($slice s, $int start, $int stop, $int step) {
   if (start) {
     s->start = malloc(sizeof(int));
     *s->start = start->val;
@@ -59,4 +63,4 @@ void $Slice__init__($Slice s, $int start, $int stop, $int step) {
    s->step = NULL;
 }
 
-struct $Slice$class $Slice$methods = {"",UNASSIGNED,($Super$class)&$struct$methods,$Slice__init__,NULL,NULL,NULL,NULL};
+struct $slice$class $slice$methods = {"$slice",UNASSIGNED,($Super$class)&$struct$methods,$slice__init__,NULL,NULL,NULL,NULL};

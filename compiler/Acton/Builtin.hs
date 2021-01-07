@@ -21,9 +21,12 @@ delitemKW                           = name "__delitem__"
 getsliceKW                          = name "__getslice__"
 setsliceKW                          = name "__setslice__"
 delsliceKW                          = name "__delslice__"
+appendKW                            = name "append"
+callKW                              = name "__call__"
 boolKW                              = name "__bool__"
+strKW                               = name "__str__"
 
-methKWs                             = [initKW,enterKW,exitKW,iterKW,nextKW,containsKW,containsnotKW,getitemKW,setitemKW,getsliceKW,setsliceKW,boolKW]
+structKWs                           = [boolKW, strKW]
 
 iaddKW                              = name "__iadd__"
 isubKW                              = name "__isub__"
@@ -39,8 +42,6 @@ ixorKW                              = name "__ixor__"
 iandKW                              = name "__iand__"
 imatmulKW                           = name "__imatmul__"
 
-iopKWs                              = [iaddKW,isubKW,imulKW,ipowKW,itruedivKW,imodKW,ifloordivKW,ilshiftKW,irshiftKW,iorKW,ixorKW,iandKW,imatmulKW]
-
 addKW                               = name "__add__"
 subKW                               = name "__sub__"
 mulKW                               = name "__mul__"
@@ -55,13 +56,9 @@ xorKW                               = name "__xor__"
 andKW                               = name "__and__"
 matmulKW                            = name "__matmul__"
 
-binopKWs                            = [addKW,subKW,mulKW,powKW,truedivKW,modKW,floordivKW,lshiftKW,rshiftKW,orKW,xorKW,andKW,matmulKW]
-
 posKW                               = name "__pos__"
 negKW                               = name "__neg__"
 invertKW                            = name "__invert__"
-
-unopKWs                             = [posKW,negKW,invertKW]
 
 eqKW                                = name "__eq__"
 neKW                                = name "__ne__"
@@ -72,15 +69,12 @@ geKW                                = name "__ge__"
 isKW                                = name "__is__"
 isnotKW                             = name "__isnot__"
 
-compopKWs                           = [eqKW,neKW,ltKW,leKW,gtKW,geKW,isKW,isnotKW]
-
-attrKWs                             = methKWs ++ iopKWs ++ binopKWs ++ unopKWs ++ compopKWs
-
 nBuiltin                            = name "__builtin__"
 mBuiltin                            = ModName [nBuiltin]
-qBuiltin n                          = QName mBuiltin n
+gBuiltin n                          = GName mBuiltin n
 
 nStruct                             = name "struct"
+nAtom                               = name "atom"
 nObject                             = name "object"
 nInt                                = name "int"
 nFloat                              = name "float"
@@ -92,6 +86,7 @@ nMsg                                = name "Msg"
 nException                          = name "Exception"
 nStopIteration                      = name "StopIteration"
 nValueError                         = name "ValueError"
+nFunction                           = name "function"
 ---
 nRange                              = name "range"
 nLen                                = name "len"
@@ -99,6 +94,7 @@ nPrint                              = name "print"
 nDict                               = name "dict"
 nList                               = name "list"
 nSetT                               = name "set"
+nSlice                              = name "slice"
 ---
 nSequence                           = name "Sequence"
 nMapping                            = name "Mapping"
@@ -110,6 +106,7 @@ nPlus                               = name "Plus"
 nMinus                              = name "Minus"
 nNumber                             = name "Number"
 nReal                               = name "Real"
+nRealFloat                          = name "RealFloat"
 nRational                           = name "Rational"
 nIntegral                           = name "Integral"
 nLogical                            = name "Logical"
@@ -123,50 +120,54 @@ nIterable                           = name "Iterable"
 nContextManager                     = name "ContextManager"
 nShow                               = name "Show"
 
-qnStruct                            = qBuiltin nStruct
-qnObject                            = qBuiltin nObject
-qnInt                               = qBuiltin nInt
-qnFloat                             = qBuiltin nFloat
-qnBool                              = qBuiltin nBool
-qnStr                               = qBuiltin nStr
-qnBytes                             = qBuiltin nBytes
-qnRef                               = qBuiltin nRef
-qnMsg                               = qBuiltin nMsg
-qnException                         = qBuiltin nException
-qnStopIteration                     = qBuiltin nStopIteration
-qnValueError                        = qBuiltin nValueError
-qnLen                               = qBuiltin nLen
+qnStruct                            = gBuiltin nStruct
+qnAtom                              = gBuiltin nAtom
+qnObject                            = gBuiltin nObject
+qnInt                               = gBuiltin nInt
+qnFloat                             = gBuiltin nFloat
+qnBool                              = gBuiltin nBool
+qnStr                               = gBuiltin nStr
+qnBytes                             = gBuiltin nBytes
+qnRef                               = gBuiltin nRef
+qnMsg                               = gBuiltin nMsg
+qnException                         = gBuiltin nException
+qnStopIteration                     = gBuiltin nStopIteration
+qnValueError                        = gBuiltin nValueError
+qnFunction                          = gBuiltin nFunction
 ---
-qnRange                             = qBuiltin nRange
-qnPrint                             = qBuiltin nPrint
-qnDict                              = qBuiltin nDict
-qnList                              = qBuiltin nList
-qnSetT                              = qBuiltin nSetT
+qnRange                             = gBuiltin nRange
+qnPrint                             = gBuiltin nPrint
+qnDict                              = gBuiltin nDict
+qnList                              = gBuiltin nList
+qnSetT                              = gBuiltin nSetT
+qnSlice                             = gBuiltin nSlice
 ---
-qnSequence                          = qBuiltin nSequence
-qnMapping                           = qBuiltin nMapping
-qnSetP                              = qBuiltin nSetP
-qnIndexed                           = qBuiltin nIndexed
-qnSliceable                         = qBuiltin nSliceable
-qHashable                           = qBuiltin nHashable
-qnPlus                              = qBuiltin nPlus
-qnMinus                             = qBuiltin nMinus
-qnNumber                            = qBuiltin nNumber
-qnReal                              = qBuiltin nReal
-qnRational                          = qBuiltin nRational
-qnIntegral                          = qBuiltin nIntegral
-qnLogical                           = qBuiltin nLogical
-qnMatrix                            = qBuiltin nMatrix
-qnEq                                = qBuiltin nEq
-qnOrd                               = qBuiltin nOrd
-qnIdentity                          = qBuiltin nIdentity
-qnCollection                        = qBuiltin nCollection
-qnContainer                         = qBuiltin nContainer
-qnIterable                          = qBuiltin nIterable
-qnContextManager                    = qBuiltin nContextManager
-qnShow                              = qBuiltin nShow
+qnSequence                          = gBuiltin nSequence
+qnMapping                           = gBuiltin nMapping
+qnSetP                              = gBuiltin nSetP
+qnIndexed                           = gBuiltin nIndexed
+qnSliceable                         = gBuiltin nSliceable
+qHashable                           = gBuiltin nHashable
+qnPlus                              = gBuiltin nPlus
+qnMinus                             = gBuiltin nMinus
+qnNumber                            = gBuiltin nNumber
+qnReal                              = gBuiltin nReal
+qnRealFloat                         = gBuiltin nRealFloat
+qnRational                          = gBuiltin nRational
+qnIntegral                          = gBuiltin nIntegral
+qnLogical                           = gBuiltin nLogical
+qnMatrix                            = gBuiltin nMatrix
+qnEq                                = gBuiltin nEq
+qnOrd                               = gBuiltin nOrd
+qnIdentity                          = gBuiltin nIdentity
+qnCollection                        = gBuiltin nCollection
+qnContainer                         = gBuiltin nContainer
+qnIterable                          = gBuiltin nIterable
+qnContextManager                    = gBuiltin nContextManager
+qnShow                              = gBuiltin nShow
 
 cStruct                             = TC qnStruct []
+cAtom                               = TC qnAtom []
 cObject                             = TC qnObject []
 cInt                                = TC qnInt []
 cFloat                              = TC qnFloat []
@@ -178,9 +179,11 @@ cMsg a                              = TC qnMsg [a]
 cList a                             = TC qnList [a]
 cDict a b                           = TC qnDict [a,b]
 cSet a                              = TC qnSetT [a]
+cSlice                              = TC qnSlice []
 cException                          = TC qnException []
 cStopIteration                      = TC qnStopIteration []
 cValueError                         = TC qnValueError []
+cFunction x p k a                   = TC qnFunction [x,p,k,a]
 ---
 pSequence a                         = TC qnSequence [a]
 pMapping a b                        = TC qnMapping [a,b]
@@ -192,6 +195,7 @@ pPlus                               = TC qnPlus []
 pMinus                              = TC qnMinus []
 pNumber                             = TC qnNumber []
 pReal                               = TC qnReal []
+pRealFloat                          = TC qnRealFloat []
 pRational                           = TC qnRational []
 pIntegral                           = TC qnIntegral []
 pLogical                            = TC qnLogical []
@@ -206,6 +210,7 @@ pContextManager                     = TC qnContextManager []
 pShow                               = TC qnShow []
 
 tStruct                             = tCon cStruct
+tAtom                               = tCon cAtom
 tObject                             = tCon cObject
 tInt                                = tCon cInt
 tFloat                              = tCon cFloat
@@ -217,17 +222,41 @@ tMsg a                              = tCon (cMsg a)
 tList a                             = tCon (cList a)
 tDict a b                           = tCon (cDict a b)
 tSet a                              = tCon (cSet a)
+tSlice                              = tCon cSlice
 tException                          = tCon cException
 tStopIteration                      = tCon cStopIteration
 tValueError                         = tCon cValueError
+tFunction x p k a                   = tCon (cFunction x p k a)
 ---
 tSequence a                         = tCon (pSequence a)
 tMapping a b                        = tCon (pMapping a b)
 tSetExist a                         = tCon (pSet a)
 tCollection a                       = tCon (pCollection a)
 
-witIdentityOpt                      = qBuiltin $ name "Identity$opt"
-witEqOpt                            = qBuiltin $ name "Eq$opt"
-witEqUnion                          = qBuiltin $ name "Eq$union"
-witOrdStr                           = qBuiltin $ name "Ord$str"
-witEqStr                            = witOrdStr
+nNumpy                              = name "numpy"
+mNumpy                              = ModName [nNumpy]
+gNumpy n                            = GName mNumpy n
+
+ndgetsliceKW                        = name "__ndgetslice__"
+
+nNDArray                            = name "ndarray"
+nNDSelect                           = name "ndselect"
+nNDIndex                            = name "ndindex"
+nNDSlice                            = name "ndslice"
+
+qnNDArray                           = gNumpy nNDArray
+qnNDSelect                          = gNumpy nNDSelect
+qnNDIndex                           = gNumpy nNDIndex
+qnNDSlice                           = gNumpy nNDSlice
+
+cNDArray a                          = TC qnNDArray [a]
+cNDSelect                           = TC qnNDSelect []
+cNDIndex                            = TC qnNDIndex []
+cNDSlice                            = TC qnNDSlice []
+
+tNDArray a                          = tCon (cNDArray a)
+tNDSelect                           = tCon cNDSelect
+tNDIndex                            = tCon cNDIndex
+tNDSlice                            = tCon cNDSlice
+
+witSequenceList                     = gBuiltin (Derived (Derived nSequence nList) (name "witness"))

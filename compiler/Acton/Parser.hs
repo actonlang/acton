@@ -37,15 +37,15 @@ ifMissingSuggest p str = do
 parseModule :: S.ModName -> String -> IO (String,S.Module)
 parseModule qn file = do
     contents <- readFile file
-    case runParser (St.evalStateT file_input []) file (contents ++ "\n") of
+    case runParser (St.evalStateT file_input initState) file (contents ++ "\n") of
         Left err -> Control.Exception.throw err
         Right (i,s) -> return (contents, S.Module qn i s)
 
 parseTest file = snd (unsafePerformIO (parseModule (S.modName ["test"]) file))
 
-parseTestStr p str = case runParser (St.evalStateT p []) "" str of
-                       Left err -> putStrLn (errorBundlePretty err)
-                       Right t  -> print t
+parseTestStr b p str = case runParser (St.evalStateT p (b,[])) "" str of
+                         Left err -> putStrLn (errorBundlePretty err)
+                         Right t  -> print t
 
 parserError :: ParseErrorBundle String Void -> (SrcLoc,String)
 parserError err = (NoLoc,errorBundlePretty err)
@@ -53,7 +53,7 @@ parserError err = (NoLoc,errorBundlePretty err)
 extractSrcSpan :: SrcLoc -> String -> String -> SrcSpan
 extractSrcSpan NoLoc file src = SpanEmpty
 extractSrcSpan (Loc l r) file src = sp
-  where Right sp = runParser (St.evalStateT (extractP l r) []) file (src ++ "\n")
+  where Right sp = runParser (St.evalStateT (extractP l r) initState) file (src ++ "\n")
         extractP :: Int -> Int -> Parser SrcSpan
         extractP l r = do
             setOffset l
@@ -66,16 +66,29 @@ extractSrcSpan (Loc l r) file src = sp
                     else return $ SpanCoLinear f (unPos srow) (unPos scol) (unPos ecol - 1)
                 else return $ SpanMultiLine f (unPos srow) (unPos scol) (unPos erow) (unPos ecol - 1)
 
+-- Parser state -----------------------------------------------------------
+
+type ParserState = (Bool, [CTX])  -- (Is numpy imported?, Parser contexts)
+
+pushCtx ctx (b,ctxs) = (b, ctx:ctxs)
+popCtx (b,ctxs)      = (b,tail ctxs)
+getCtxs (_,ctxs)      = ctxs
+
+setNumpy b1 (b,ctxs) = (b1,ctxs)
+getNumpy (b,_)       = b
+
+initState            = (False,[])
+
 -- Parser contexts ---------------------------------------------------------
 
-type Parser = St.StateT [CTX] (Parsec Void String)
+type Parser = St.StateT ParserState (Parsec Void String)
 
 data CTX = TOP | PAR | IF | SEQ | LOOP | DATA | DEF | CLASS | PROTO | EXT | ACTOR deriving (Show,Eq)
 
-withCtx ctx = between (St.modify (ctx:)) (St.modify tail)
+withCtx ctx = between (St.modify (pushCtx ctx)) (St.modify popCtx)
 
 ifCtx accept ignore yes no = do
-    cs <- St.get
+    cs <- St.gets getCtxs
     case filter (`notElem` ignore) cs of
         c:_ | c `elem` accept -> yes
         _                     -> no
@@ -96,7 +109,6 @@ assertNotData       = ifCtx [DATA]                  [IF,SEQ,LOOP]       (fail "s
 --ifData              = ifCtx [DATA]                  [IF,SEQ,LOOP]
 
 ifPar               = ifCtx [PAR]                   []
-
 
 --- Whitespace consumers ----------------------------------------------------
 
@@ -420,12 +432,12 @@ funItems posCons posStar posNil positem posstaritem kwdItems kwdNil =
                (do optional comma; return (Left (posNil, kwdNil)))
 -}
 
-tuple_or_single posItems headItems len tup =
+tuple_or_single posItems headItems singleHead tup =
       do pa <- posItems
          mbc <- optional comma
          return (f pa mbc)
     where f pa mbc
-            | len pa == 1 = maybe (headItems pa) (const (tup pa)) mbc
+            | singleHead pa = maybe (headItems pa) (const (tup pa)) mbc
             | otherwise  = tup pa
         
  
@@ -530,6 +542,7 @@ trysome p = do x <- p; rest [x]
 
 after_stmt :: Parser S.Stmt
 after_stmt = addLoc $ do
+                assertDef
                 rword "after"
                 e <- expr
                 colon
@@ -571,8 +584,10 @@ import_stmt = import_name <|> import_from
    where import_name = addLoc $ do
                 rword "import"
                 S.Import NoLoc <$> module_item `sepBy1` comma
+                
          module_item = do
-                dn <- module_name
+                dn@(S.ModName ns) <- module_name
+                iff (length ns==1 && S.nstr(head ns) == "numpy") $  St.modify (setNumpy True)
                 S.ModuleItem dn <$> optional (rword "as" *> name)
                           
          import_from = addLoc $ do
@@ -587,6 +602,9 @@ import_stmt = import_name <|> import_from
          import_module = do
                 ds <- many dot
                 mbn <- optional module_name
+                let isNumpy Nothing = False
+                    isNumpy (Just (S.ModName ns)) = length ns==1 && S.nstr(head ns) == "numpy"
+                iff (null ds && isNumpy mbn) $ St.modify (setNumpy True)
                 return $ S.ModRef (length ds, mbn)
          import_items = ([] <$ star)   -- Note: [] means all...
                      <|> parens import_as_names
@@ -646,7 +664,7 @@ optbinds = brackets (do b <- qbind; bs <- many (comma *> qbind); return (b:bs))
            return []
 
 actordef = addLoc $ do 
-                assertNotData
+                assertTop
                 (s,_) <- withPos (rword "actor")
                 nm <- name <?> "actor name"
                 q <- optbinds
@@ -777,7 +795,7 @@ expr =  lambdef
 -- If more than one expr, build a tuple.
 -- if only one, leave as it is unless there is a trailing comma when we build a one-element tuple.
 exprlist :: Parser S.Expr
-exprlist = addLoc $ tuple_or_single posarg S.posArgHead S.posArgLen (\p -> S.Tuple NoLoc p S.KwdNil)
+exprlist = addLoc $ tuple_or_single posarg S.posArgHead S.singlePosArg (\p -> S.Tuple NoLoc p S.KwdNil)
  
 
 expr_nocond = or_expr <|> lambdef_nocond
@@ -876,10 +894,12 @@ commaList p = many (try (comma *> p)) <* optional comma
 
 atom_expr = do
               await <- optional $ withLoc $ rword "await" *> return (S.Await NoLoc)
+              async <- optional $ withLoc $ rword "async" *> return (S.Async NoLoc)
               a <- atom
               ts <- many trailer
               let e = foldl app a ts
-              return $ maybe e (app e) await 
+                  e' = maybe e (app e) async
+              return $ maybe e' (app e') await 
               <?> "atomic expression"
   where app a (l,f) = (f a){S.eloc = S.eloc a `upto` l}
              
@@ -940,39 +960,60 @@ atom_expr = do
 
         trailer :: Parser (SrcLoc,S.Expr -> S.Expr)
         trailer = withLoc (
-                      try (do
-                        ixs <- brackets indexlist
-                        let ix | length ixs > 1 = S.eTuple ixs
-                               | otherwise      = head ixs
-                        return (\a -> S.Index NoLoc a ix))
-                        <|>
                       (do
-                        ss <- brackets slicelist
-                        return (\a -> S.Slice NoLoc a ss))
-                        <|>
+                        ss <- brackets bslicelist
+                        numpyImp <- St.gets getNumpy
+                        return (\a -> splitlist a numpyImp ss))
+                       
+                      -- try (do
+                      --   ixs <- brackets indexlist
+                      --   let ix | length ixs > 1 = S.eTuple ixs
+                      --          | otherwise      = head ixs
+                      --   return (\a -> S.Index NoLoc a ix))
+                      --   <|>
+                      -- (do
+                      --   ss <- brackets slicelist
+                      --   return (\a -> S.Slice NoLoc a ss))
+                     <|>
                       (do
-                        (ps,ks) <- parens funargs
-                        return (\a -> S.Call NoLoc a ps ks))
-                        <|>
+                         (ps,ks) <- parens funargs
+                         return (\a -> S.Call NoLoc a ps ks))
+                     <|>
                       (do
                          dot
-                         intdot <|> iddot <|> strdot))
+                         try intdot <|> iddot <|> strdot))
                  
-           where iddot  = do 
-                     nm <- name
-                     return (\a -> S.Dot NoLoc a nm)
+           where iddot  = do
+                        mb <- optional (opPref "~")
+                        nm <- name
+                        return (\a -> maybe (S.Dot NoLoc a nm) (const $ S.Rest NoLoc a nm) mb)
                  intdot  = do 
-                        mbt <- optional star
+                        mb <- optional (opPref "~")
                         i <- lexeme L.decimal
-                        return (\a -> S.DotI NoLoc a i (maybe False (const True) mbt))
+                        return (\a -> maybe (S.DotI NoLoc a i) (const $ S.RestI NoLoc a i) mb)
                  strdot = do
                         (p,str) <- withPos stringP 
-                        return (\a -> S.Dot NoLoc a (S.Name NoLoc (init(tail str))))   -- init/tail?
-                 indexlist = (:) <$> expr <*> commaList expr
-                 slicelist = (:) <$> slice <*> commaList slice
-                 slice = addLoc (do 
-                        mbt <- optional expr
-                        S.Sliz NoLoc mbt <$> (colon *> optional expr) <*> (maybe Nothing id <$> optional (colon *> optional expr)))
+                        return (\a -> S.Dot NoLoc a (S.Name NoLoc (init(tail str))))
+
+                 bslicelist = (:) <$> bslice <*> commaList bslice
+                 tailslice = (,) <$> (colon *> optional expr) <*> (maybe Nothing id <$> optional (colon *> optional expr))
+                 bslice :: Parser S.NDSliz
+                 bslice =  S.NDSliz . uncurry (S.Sliz NoLoc Nothing) <$> tailslice
+                       <|> do e <- expr
+                              mbt <- optional tailslice
+                              return (maybe (S.NDExpr e) (S.NDSliz . uncurry (S.Sliz NoLoc (Just e))) mbt)
+                 splitlist a _ [S.NDExpr e] = S.Index NoLoc a e
+                 splitlist a _ [S.NDSliz s] = S.Slice NoLoc a s
+                 splitlist a numpyImp ss
+                     | not numpyImp && all isNDExpr ss = S.Index NoLoc a (S.eTuple [e | S.NDExpr e <- ss])
+                     | otherwise                       = S.NDSlice NoLoc a ss
+                 isNDExpr (S.NDExpr _) =True; isNDExpr _ = False
+                 -- indexlist = (:) <$> expr <*> commaList expr
+                 -- slicelist = (:) <$> slice <*> commaList slice
+                 -- slice = addLoc (do 
+                 --        mbt <- optional expr
+                 --        S.Sliz NoLoc mbt <$> (colon *> optional expr) <*> (maybe Nothing id <$> optional (colon *> optional expr)
+                        
                      
  
 comp_iter, comp_for, comp_if :: Parser S.Comp
@@ -1059,8 +1100,7 @@ effect  = addLoc $
             S.TVar NoLoc <$> tvar
         <|> rword "_" *> return (S.TWild NoLoc)
         <|> rword "action" *> return S.fxAction
-        <|> rword "act" *> optvar S.fxAct
-        <|> rword "mut" *> optvar S.fxMut
+        <|> rword "mut" *> return S.fxMut
         <|> rword "pure" *> return S.fxPure
   where optvar f = brackets (f <$> (addLoc $ S.TVar NoLoc <$> tvar)) <|> return S.tWild
 
@@ -1117,9 +1157,6 @@ ttype    =  addLoc (
         <|> braces (do t <- ttype
                        mbt <- optional (colon *> ttype)
                        return (maybe (Builtin.tSetExist t) (Builtin.tMapping t) mbt))
-        <|> try (parens (do alts <- some (try (utype <* vbar))
-                            alt <- utype
-                            return $ S.TUnion NoLoc (alts++[alt])))
         <|> try (do mbfx <- optional effect
                     (p,k) <- parens funrows
                     arrow
@@ -1134,9 +1171,3 @@ ttype    =  addLoc (
         <|> try (S.TVar NoLoc <$> tvar)
         <|> rword "_" *> return (S.TWild NoLoc)
         <|> S.TCon NoLoc <$> tcon)
-                
-
-utype :: Parser S.UType
-utype    =  S.UCon <$> qual_name
-        <|> (\str -> S.ULit str) <$> shortString []
-

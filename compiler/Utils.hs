@@ -46,9 +46,9 @@ dom                             = map fst
 
 rng                             = map snd
 
-exclude xs                      = filter ((`notElem` xs) . fst)
+kvs `exclude` ks                = filter ((`notElem` ks) . fst) kvs
 
-restrict xs                     = filter ((`elem` xs) . fst)
+kvs `restrict` ks               = filter ((`elem` ks) . fst) kvs
 
 mapFst f xs                     = [ (f a, b) | (a,b) <- xs ]
 
@@ -124,3 +124,7 @@ generalError err                = (loc err,render (expl err))
   where
     expl (InternalErr _ doc)    = text "(internal)" <+> doc
     expl (NotYet _ doc)         = text "Not yet supported:" <+> doc
+
+iff True m                      = m >> return ()
+iff False _                     = return ()
+

@@ -3,6 +3,7 @@
 #include <stdlib.h>
 #include <stddef.h>
 #include <stdio.h>
+#include <stdbool.h>
 #include <string.h>
 #include <math.h>
 
@@ -11,8 +12,9 @@
 #include "serialize.h"
 #include "registration.h"
 #include "Iterator.h"
-#include "complex.h"
+#include "complx.h"
 #include "none.h"
+#include "atom.h"
 #include "int.h"
 #include "slice.h"
 #include "float.h"
@@ -28,5 +30,6 @@
 #include "tuple.h"
 #include "range.h"
 #include "exceptions.h"
+#include "function.h"
 #include "builtin_functions.h"
 

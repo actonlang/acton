@@ -53,8 +53,8 @@ instance Pretty Stmt where
 instance Pretty Decl where
     pretty (Def _ n q p k a b d x)  = (prettyDecFX d x $ text "def" <+> pretty n <> nonEmpty brackets commaList q <+> 
                                       parens (pretty (p,k)) <> nonEmpty (text " -> " <>) pretty a <> colon) $+$ prettySuite b
-    pretty (Actor _ n q p k b)      = text "actor" <+> pretty n <> nonEmpty brackets commaList q <+> parens (pretty (p,k)) <>
-                                      colon $+$ prettySuite b
+    pretty (Actor _ n q p k b)      = text "actor" <+> pretty n <> nonEmpty brackets commaList q <+> 
+                                      parens (pretty (p,k)) <> colon $+$ prettySuite b
     pretty (Class _ n q a b)        = text "class" <+> pretty n <> nonEmpty brackets commaList q <+>
                                       nonEmpty parens commaList a <> colon $+$ prettySuite b
     pretty (Protocol _ n q a b)     = text "protocol" <+> pretty n <> nonEmpty brackets commaList q <+>
@@ -96,23 +96,34 @@ instance Pretty (PosPar,KwdPar) where
 instance Pretty PosArg where
     pretty (PosArg e PosNil)        = pretty e
     pretty (PosArg e p)             = pretty e <> comma <+> pretty p
-    pretty (PosStar e@Var{})        = text "*" <> pretty e
-    pretty (PosStar e@Paren{})      = text "*" <> pretty e
-    pretty (PosStar e)              = text "*" <> parens (pretty e)
+    pretty (PosStar e)
+      | atomic e                    = text "*" <> pretty e
+      | otherwise                   = text "*" <> parens (pretty e)
     pretty PosNil                   = empty
 
 instance Pretty KwdArg where
     pretty (KwdArg n e KwdNil)      = pretty n <+> equals <+> pretty e
     pretty (KwdArg n e k)           = pretty n <+> equals <+> pretty e <> comma <+> pretty k
-    pretty (KwdStar e@Var{})        = text "**" <> pretty e
-    pretty (KwdStar e@Paren{})      = text "**" <> pretty e
-    pretty (KwdStar e)              = text "**" <> parens (pretty e)
+    pretty (KwdStar e)
+      | atomic e                    = text "**" <> pretty e
+      | otherwise                   = text "**" <> parens (pretty e)
     pretty KwdNil                   = empty
 
 instance Pretty (PosArg,KwdArg) where
     pretty (PosNil, ks)             = pretty ks
     pretty (ps, KwdNil)             = pretty ps
     pretty (ps, ks)                 = pretty ps  <> comma <+> pretty ks
+
+atomic Async{}                      = False
+atomic Await{}                      = False
+atomic Cond{}                       = False
+atomic BinOp{}                      = False
+atomic CompOp{}                     = False
+atomic UnOp{}                       = False
+atomic Lambda{}                     = False
+atomic Yield{}                      = False
+atomic YieldFrom{}                  = False
+atomic _                            = True
 
 instance Pretty Expr where
     pretty (Var _ n)                = pretty n
@@ -125,25 +136,26 @@ instance Pretty Expr where
     pretty (Ellipsis _)             = text "..."
     pretty (Strings _ ss)           = hcat (map pretty ss)
     pretty (BStrings _ ss)          = hcat (map pretty ss)
-    pretty (Call _ e ps ks)         = pretty e <> parens (pretty (ps,ks))
+    pretty (Call _ e ps ks)
+        | atomic e                  = pretty e <> parens (pretty (ps,ks))
+        | otherwise                 = parens (pretty e) <> parens (pretty (ps,ks))
     pretty (TApp _ e ts)            = pretty e <> text "@" <> brackets (commaSep pretty ts)
+    pretty (Async _ e)              = text "async" <+> pretty e
     pretty (Await _ e)              = text "await" <+> pretty e
     pretty (Index _ e ix)           = pretty e <> brackets (pretty ix)
-    pretty (Slice _ e sl)           = pretty e <> brackets (commaList sl)
-    pretty (Cond _ e1 e e2)         = pretty e1 <+> text "if" <+> pretty e <+> text "else" <+> pretty e2
+    pretty (Slice _ e sl)           = pretty e <> brackets (pretty sl)
+    pretty (NDSlice _ e sl)         = pretty e <> brackets (commaList sl)
     pretty (IsInstance _ e c)       = text "isinstance" <> parens (pretty e <> comma <+> pretty c)
-    pretty (BinOp _ e1 o e2)        = pretty e1 <+> pretty o <+> pretty e2
-    pretty (CompOp _ e ops)         = pretty e <+> hsep (map pretty ops)
-    pretty (UnOp _ o e)             = pretty o <> pretty e
     pretty (Dot _ e n)              = pretty e <> dot <> pretty n
-    pretty (DotI _ e i False)       = pretty e <> dot <> pretty i
-    pretty (DotI _ e i True)        = pretty e <> dot <> pretty i <> text "*"
+    pretty (Rest _ e n)             = pretty e <> dot <> text "~" <> pretty n
+    pretty (DotI _ e i)             = pretty e <> dot <> pretty i
+    pretty (RestI _ e i)            = pretty e <> dot <> text "~" <> pretty i
     pretty (Lambda _ ps ks e fx)    = prettyFXnoWild fx <+> text "lambda" <+> prettyLambdaPar ps ks <> colon <+> pretty e
     pretty (Yield _ e)              = text "yield" <+> pretty e
     pretty (YieldFrom _ e)          = text "yield" <+> text "from" <+> pretty e
     pretty (Tuple _ ps KwdNil)
-      | posArgLen ps == 1           = pretty ps <> comma
-    pretty (Tuple _ ps ks)          = pretty (ps,ks)
+        | singlePosArg ps           = parens (pretty ps <> comma)
+    pretty (Tuple _ ps ks)          = parens (pretty (ps,ks))
     pretty (List _ es)              = brackets (commaList es)
     pretty (ListComp _ e co)        = brackets (pretty e <+> pretty co)
     pretty (Dict _ es)              = braces (commaList es)
@@ -151,7 +163,46 @@ instance Pretty Expr where
     pretty (Set _ [])               = text "set" <> parens empty
     pretty (Set _ es)               = braces (commaList es)
     pretty (SetComp _ e co)         = braces (pretty e <+> pretty co)
+    pretty (Paren _ e@Tuple{})      = pretty e
     pretty (Paren _ e)              = parens (pretty e)
+    pretty e                        = prettyPrec 0 e  -- BinOp, CompOp, UnOp and Cond
+
+{-
+We assign precedences to operator expressions according to their main operator as follows.
+The Python language reference does not assign numerical precedences, but the precedence order
+implied by the syntax rules is consistent with the values below, with one exception:
+Quote from section 6.5 in The Python Language Reference (v 3.8.6):
+    "The power operator binds more tightly than unary operators on its left; 
+     it binds less tightly than unary operators on its right."
+Printing here does not minimize the use of parentheses; unary operator expressions are 
+put in parenthesis (for clarity) in all operator contexts, also where the parser does not need them.
+
+12 **
+11 (unary) + - ~
+10 * / // / @
+ 9 + -
+ 8 << >>
+ 7 &
+ 6 ^
+ 5 |
+ 4 < > <= >= == !=, is, is not, in, not in
+ 3 not
+ 2 and
+ 1 or
+ 0 _ if _ else _
+-}
+
+prettyPrec n e@(BinOp _ e1 op e2)   = parensIf (n > prc) ps
+     where prc                      = fromJust (lookup op bps)
+           bps                      = [(Or,1),(And,2),(Plus,9),(Minus,9),(Mult,10),(Pow,12),(Div,10),(Mod,10),
+                                       (EuDiv,10),(BOr,5),(BXor,6),(BAnd,7),(ShiftL,8),(ShiftR,8),(MMult,10)]
+           ps | op == Pow           = prettyPrec (prc+1) e1 <+> pretty op <+> prettyPrec prc e2
+              | otherwise           = prettyPrec prc e1 <+> pretty op <+> prettyPrec (prc+1) e2
+prettyPrec n (CompOp _ e ops)       = parensIf (n > 4) $ pretty e <+> hsep (map pretty ops)
+prettyPrec n e1@(UnOp _ op e)       = parensIf (n > 0) $ pretty op <> prettyPrec prc e
+   where prc                        = if op == Not then 3 else 11
+prettyPrec n (Cond _ e1 e e2)       = parensIf (n > 1) $ pretty e1 <+> text "if" <+> pretty e <+> text "else" <+> pretty e2
+prettyPrec _ e                      = pretty e
 
 prettyLambdaPar ps ks
   | annotP ps || annotK ks          = parens (pretty (ps,ks))
@@ -182,12 +233,15 @@ instance Pretty ModName where
     pretty (ModName ns)             = dotCat pretty ns
 
 instance Pretty QName where
-    pretty (QName m n)
+--    pretty (QName m n)              = char '~' <> pretty m <> dot <> pretty n
+    pretty (QName m n)              = pretty m <> dot <> pretty n
+--    pretty (NoQ n)                  = char '~' <> pretty n
+    pretty (NoQ n)                  = pretty n
+    pretty (GName m n)
       | m == mPrim                  = text "$" <> pretty n
 --      | m == mBuiltin               = text "$" <> pretty n
-      | m == mBuiltin               = pretty n
+--      | m == mBuiltin               = pretty n
       | otherwise                   = pretty m <> dot <> pretty n
-    pretty (NoQ n)                  = pretty n
 
 instance Pretty ModRef where
     pretty (ModRef (i,n))           = hcat (replicate i dot) <> pretty n
@@ -226,6 +280,10 @@ instance Pretty ImportItem where
 instance Pretty Sliz where
     pretty (Sliz _ a b c)           = pretty a <> colon <> pretty b <> nonEmpty (colon <>) pretty c
 
+instance Pretty NDSliz where
+    pretty (NDExpr e)               = pretty e
+    pretty (NDSliz s)               = pretty s
+
 instance Pretty Comp where
     pretty (CompFor _ p e c)        = text "for" <+> pretty p <+> text "in" <+> pretty e <+> pretty c
     pretty (CompIf _ e c)           = text "if" <+> pretty e <+> pretty c
@@ -252,7 +310,7 @@ instance Pretty (PosPat,KwdPat) where
 instance Pretty Pattern where
     pretty (PVar _ n a)             = pretty n <> prettyAnn a
     pretty (PTuple _ ps KwdPatNil)
-      | posPatLen ps == 1           = pretty ps <> comma
+      | singlePosPat ps             = pretty ps <> comma
     pretty (PTuple _ ps ks)         = pretty (ps, ks)
     pretty (PList _ ps p)           = brackets (prettyPats ps p)
     pretty (PParen _ p)             = parens (pretty p)
@@ -344,10 +402,6 @@ instance Pretty QBind where
     pretty (Quant v [])             = pretty v
     pretty (Quant v cs)             = pretty v <> parens (commaList cs)
 
-instance Pretty UType where
-    pretty (UCon n)                 = pretty n
-    pretty (ULit str)               = text str
-
 prettyPosRow (TRow _ _ _ t (TNil _ _))
                                     = pretty t
 prettyPosRow (TRow _ _ _ t p)       = pretty t <> comma <+> prettyPosRow p
@@ -374,25 +428,24 @@ instance Pretty Type where
     pretty (TTuple _ (TRow _ _ _ t (TNil _ _)) (TNil _ _))
                                     = parens (pretty t <> comma)
     pretty (TTuple _ p k)           = parens (prettyFunRow p k)
-    pretty (TUnion _ as)            = parens (vbarSep pretty as)
-      where vbarSep f               = hsep . punctuate (space <> char '|') . map f
     pretty (TOpt _ t)               = text "?" <> pretty t
     pretty (TNone _)                = text "None"
     pretty (TWild _)                = text "_"
+    pretty (TRow _ PRow _ t TNil{}) = parens $ pretty t <> comma
     pretty r@TRow{rkind=PRow}       = parens $ prettyPosRow r
     pretty r@TRow{rkind=KRow}       = parens $ prettyKwdRow r
-    pretty r@TNil{rkind=PRow}       = parens $ prettyPosRow r
-    pretty r@TNil{rkind=KRow}       = parens $ prettyKwdRow r
+    pretty r@TNil{rkind=PRow}       = parens empty
+    pretty r@TNil{rkind=KRow}       = parens empty
     pretty (TFX _ fx)               = pretty fx
 
 prettyFXnoPure (TFX _ FXPure)       = empty
 prettyFXnoPure t                    = pretty t
 
 instance Pretty FX where
-    pretty (FXAction)               = text "action"
-    pretty (FXAct t)                = text "act" <> brackets (pretty t)
-    pretty (FXMut t)                = text "mut" <> brackets (pretty t)
-    pretty (FXPure)                 = text "pure"
+    pretty FXAction                 = text "action"
+    pretty FXMut                    = text "mut"
+    pretty FXPure                   = text "pure"
+    pretty FXAsync                  = text "async"
 
 instance Pretty Kind where
     pretty KType                    = text "type"
@@ -410,8 +463,6 @@ instance Pretty Constraint where
     pretty (Impl w t u)             = pretty w <+> colon <+> pretty t <+> parens (pretty u)
     pretty (Sel w t1 n t2)          = pretty w <+> colon <+> pretty t1 <> text "." <> pretty n <+> text "<" <+> pretty t2
     pretty (Mut t1 n t2)            = pretty t1 <+> text "." <> pretty n <+> text ">" <+> pretty t2
-    pretty (Seal w fx1 fx2 t1 t2)   = maybe empty ((<+> colon) . pretty) w  <+> text "seal" <+> 
-                                      parens (pretty fx1 <+> text "<" <+> pretty fx2) <+> parens (pretty t1 <+> text "<" <+> pretty t2)
 
 
 instance Pretty (TVar,TVar) where

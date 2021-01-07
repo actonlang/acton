@@ -1,124 +1,110 @@
-#include "../builtin/builtin.h"
+struct numpy$$ndarray;
+typedef struct numpy$$ndarray *numpy$$ndarray;
 
-struct $ndarray;
-typedef struct $ndarray *$ndarray;
-
-struct $ndarray$class {
+struct numpy$$ndarray$class {
   char *$GCINFO;
   int $class_id;
   $Super$class $superclass;
-  void (*__init__)($ndarray,$WORD);
-  void (*__serialize__)($ndarray,$Serial$state); 
-  $ndarray (*__deserialize__)($Serial$state);
-  $bool (*__bool__)($ndarray);
-  $str (*__str__)($ndarray);
+  void (*__init__)(numpy$$ndarray,$WORD);
+  void (*__serialize__)(numpy$$ndarray,$Serial$state); 
+  numpy$$ndarray (*__deserialize__)(numpy$$ndarray,$Serial$state);
+  $bool (*__bool__)(numpy$$ndarray);
+  $str (*__str__)(numpy$$ndarray);
+  numpy$$ndarray (*reshape)(numpy$$ndarray,$list);
+  numpy$$ndarray (*transpose)(numpy$$ndarray,$list);
+  numpy$$ndarray (*copy)(numpy$$ndarray);
+  numpy$$ndarray (*__ndgetslice__)(numpy$$ndarray,$list);
 };
 
-// Generic type for elements in the C array that holds ndarray data).
- 
-union $Bytes8 {
-  long l;
-  double d;
-  $WORD w;
-};
- 
-typedef $WORD (*to$obj_converter) (union $Bytes8);
-typedef union $Bytes8 (*from$obj_converter) ($WORD);
-
-struct $ndarray {
-  struct $ndarray$class *$class;
+struct numpy$$ndarray {
+  struct numpy$$ndarray$class *$class;
+  enum ElemType elem_type;
   long ndim;
-  long elem_size;
+  $int size;         // # of elements; equal to product of elements in shape.
   long offset;
-  to$obj_converter to$obj;
-  from$obj_converter from$obj;
+  long elem_size;
   $list shape;
   $list strides;
   union $Bytes8 *data;
 };
 
-extern struct $ndarray$class $ndarray$methods;
+extern struct numpy$$ndarray$class numpy$$ndarray$methods;
 
-$ndarray $ndarray_fromatom($Super a);
+// iterating over an ndarray //////////////////////////////////////////
 
-$ndarray $nd_getslice($ndarray a, $list ix);
-$ndarray $ndarray_fromatom($Super a);
+#define MAX_NDIM 16
 
-$ndarray $ndarray_reshape($ndarray a, $list newshape);
+typedef struct numpy$$array_iterator_state {
+  union $Bytes8 *current;
+  long currentstride;
+  long lastshapepos;
+  long lastshapelength;
+  long ndim1;    // ndim-1
+  long shape[MAX_NDIM]; 
+  long strides[MAX_NDIM];
+  long jumps[MAX_NDIM];
+  long index[MAX_NDIM];
+} *numpy$$array_iterator_state;
 
-$ndarray $ndarray_func1(union $Bytes8(*f)(union $Bytes8),$ndarray a);
-$ndarray $ndarray_oper1(union $Bytes8(*f)(union $Bytes8,union $Bytes8),$ndarray a, $ndarray b);
 
-$ndarray $ndarray_linspace($float a, $float b, $int n);
-$ndarray $ndarray_arange($int n);
 
-$float $ndarray_sumf($ndarray a);
+typedef struct numpy$$Iterator$ndarray *numpy$$Iterator$ndarray; ;
 
-union $Bytes8 mul2(union $Bytes8 x);
-
-// $Plus$ndarray$int  ////////////////////////////////////////////////////////////
-
-struct $Plus$ndarray$int;
-typedef struct $Plus$ndarray$int *$Plus$ndarray$int;
-
-struct $Plus$ndarray$int$class;
-typedef struct $Plus$ndarray$int$class *$Plus$ndarray$int$class;
-
-struct $Plus$ndarray$int {
-  $Plus$ndarray$int$class $class;
-};
-
-struct $Plus$ndarray$int$class {
+struct numpy$$Iterator$ndarray$class {
   char *$GCINFO;
   int $class_id;
   $Super$class $superclass;
-  void (*__init__)($Plus$ndarray$int);
-  $ndarray (*__add__)($Plus$ndarray$int, $ndarray, $ndarray);
+  void (*__init__)(numpy$$Iterator$ndarray, numpy$$Primitive, numpy$$ndarray);
+  void (*__serialize__)(numpy$$Iterator$ndarray,$Serial$state);
+  numpy$$Iterator$ndarray (*__deserialize__)(numpy$$Iterator$ndarray,$Serial$state);
+  $bool (*__bool__)(numpy$$Iterator$ndarray);
+  $str (*__str__)(numpy$$Iterator$ndarray);
+  $WORD (*__next__)(numpy$$Iterator$ndarray);
 };
 
-void $Plus$ndarray$int$__init__ ($Plus$ndarray$int);
-$ndarray $Plus$ndarray$int$__add__ ($Plus$ndarray$int, $ndarray, $ndarray);
-
-extern struct $Plus$ndarray$int *$Plus$ndarray$int$witness;
-
-// $Plus$ndarray$float  ////////////////////////////////////////////////////////////
-
-struct $Plus$ndarray$float;
-typedef struct $Plus$ndarray$float *$Plus$ndarray$float;
-
-struct $Plus$ndarray$float$class;
-typedef struct $Plus$ndarray$float$class *$Plus$ndarray$float$class;
-
-struct $Plus$ndarray$float {
-  $Plus$ndarray$float$class $class;
+struct numpy$$Iterator$ndarray {
+  struct numpy$$Iterator$ndarray$class *$class;
+  numpy$$Primitive pwit;
+  numpy$$array_iterator_state it;
 };
 
-struct $Plus$ndarray$float$class {
-  char *$GCINFO;
-  int $class_id;
-  $Super$class $superclass;
-  void (*__init__)($Plus$ndarray$float);
-  $ndarray (*__add__)($Plus$ndarray$float, $ndarray, $ndarray);
-};
+extern struct  numpy$$Iterator$ndarray$class  numpy$$Iterator$ndarray$methods;
 
-void $Plus$ndarray$float$__init__ ($Plus$ndarray$float);
-$ndarray $Plus$ndarray$float$__add__ ($Plus$ndarray$float, $ndarray, $ndarray);
+numpy$$Iterator$ndarray numpy$$Iterator$ndarray$new(numpy$$Primitive,numpy$$ndarray);
 
-extern struct $Plus$ndarray$float *$Plus$ndarray$float$witness;
+// Intended argument to constructor
 
+numpy$$ndarray numpy$$fromatom($atom a);
 
+//numpy$$ndarray numpy$$ndarray_func(union $Bytes8(*f)(union $Bytes8),numpy$$ndarray a);
+//numpy$$ndarray numpy$$ndarray_oper(union $Bytes8 (*f)(union $Bytes8, union $Bytes8), numpy$$ndarray a, numpy$$ndarray b);
 
+// Methods in ndarray class //////////////////////////////////////////////
 
-/*
-  extern struct $Real$ndarray$class $Real$ndarray$methods;
-  extern struct $Number$ndarray$class $Number$ndarray$methods;
-  extern struct $Plus$ndarray$class $Plus$ndarray$methods;
-  extern struct $Minus$ndarray$class $Minus$ndarray$methods;
-  extern struct $Hashable$ndarray$class $Hashable$ndarray$methods;
+numpy$$ndarray numpy$$reshape(numpy$$ndarray,$list);
+numpy$$ndarray numpy$$transpose(numpy$$ndarray,$list);
+numpy$$ndarray numpy$$copy(numpy$$ndarray);
+numpy$$ndarray numpy$$ndarray$__ndgetslice__(numpy$$ndarray,$list);
 
-  extern struct $Real$ndarray *$Real$ndarray$witness;
-  extern struct $Number$ndarray *$Number$ndarray$witness;
-  extern struct $Minus$ndarray *$Minus$ndarray$witness;
+// Functions to create ndarrays /////////////////////////////////////////
 
-  $ndarray $ndarray_fromatom($Super a);
-*/
+numpy$$ndarray numpy$$linspace($float a, $float b, $int n);
+numpy$$ndarray numpy$$arange($int start, $int stop, $int step);
+numpy$$ndarray numpy$$array(numpy$$Primitive wit, $list elems);
+numpy$$ndarray numpy$$full(numpy$$Primitive wit, $list shape, $WORD val);
+numpy$$ndarray numpy$$unirandint($int a, $int b, $int n);
+numpy$$ndarray numpy$$unirandfloat($float a, $float b, $int n);
+
+// Various utilities /////////////////////////////////////////////////////
+
+numpy$$ndarray numpy$$sum(numpy$$Primitive wit, numpy$$ndarray a, $int axis);
+numpy$$ndarray numpy$$partition(numpy$$Primitive wit, numpy$$ndarray a, $int k);
+numpy$$ndarray numpy$$sort(numpy$$Primitive wit, numpy$$ndarray a, $int axis);
+numpy$$ndarray numpy$$clip(numpy$$Primitive wit, numpy$$ndarray a, $WORD low, $WORD high);
+numpy$$ndarray numpy$$dot(numpy$$Primitive wit, numpy$$ndarray a, numpy$$ndarray b);
+numpy$$ndarray numpy$$abs(numpy$$Primitive wit, numpy$$ndarray a);
+$WORD numpy$$scalar(numpy$$Primitive wit, numpy$$ndarray a);
+
+// newaxis //////////////////////////////////////////////////////////
+
+extern $int numpy$$newaxis;

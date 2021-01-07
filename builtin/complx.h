@@ -4,9 +4,9 @@ struct $complex$class {
   char *$GCINFO;
   int $class_id;
   $Super$class $superclass;
-  void (*__init__)($complex, $Number$opaque);
+  void (*__init__)($complex, $Number, $WORD);
   void (*__serialize__)($complex,$Serial$state);
-  $complex (*__deserialize__)($Serial$state);
+  $complex (*__deserialize__)($complex,$Serial$state);
   $bool (*__bool__)($complex);
   $str (*__str__)($complex);
 };
@@ -17,15 +17,20 @@ struct $complex {
 };
 
 extern struct $complex$class $complex$methods;
+$complex $complex$new($Number, $WORD);
 
 $complex to$complex(complex double c);
 
 extern struct $Number$complex$class $Number$complex$methods;
-extern struct $Plus$complex$class $Plus$complex$methods;
+$Number$complex $Number$complex$new();
 extern struct $Minus$complex$class $Minus$complex$methods;
+$Minus$complex $Minus$complex$new($Number);
+extern struct $Eq$complex$class $Eq$complex$methods;
+$Eq$complex $Eq$complex$new();
 extern struct $Hashable$complex$class $Hashable$complex$methods;
+$Hashable$complex $Hashable$complex$new();
 
 extern struct $Number$complex *$Number$complex$witness;
-extern struct $Plus$complex *$Plus$complex$witness;
 extern struct $Minus$complex *$Minus$complex$witness;
+extern struct $Eq$complex *$Eq$complex$witness;
 extern struct $Hashable$complex *$Hashable$complex$witness;

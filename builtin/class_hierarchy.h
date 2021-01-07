@@ -21,8 +21,7 @@ struct $Super {
 
 // Initializable //////////////////////////////////////////////////////
 
-// Fundamental class, from which all classes inherit.
-// All witness classes inherit from Initializable
+// For the moment (end of Nov, 2020), we have no use for Initializable and Serializable
 
 typedef struct $Initializable$class *$Initializable$class;
 
@@ -32,7 +31,7 @@ struct $Initializable$class {
   char *$GCINFO;
   int $class_id;
   $Super$class $superclass;                   // = NULL
-  void (*__init__)($Initializable,...);
+  void (*__init__)($Initializable);
 };
 
 struct $Initializable {
@@ -40,10 +39,9 @@ struct $Initializable {
 };
 
 extern struct $Initializable$class $Initializable$methods;
+$Initializable $Initializable$new();
 
 // Serializable //////////////////////////////////////////////////////
-
-// Witness classes are not serializable.
 
 typedef struct $Serializable$class *$Serializable$class;
 
@@ -53,9 +51,9 @@ struct $Serializable$class {
   char *$GCINFO;
   int $class_id;
   $Super$class $superclass;                   // = Initializable$methods
-  void (*__init__)($Serializable,...);
+  void (*__init__)($Serializable);
   void (*__serialize__)($Serializable, $Serial$state);
-  $Serializable (*__deserialize__)($Serial$state);
+  $Serializable (*__deserialize__)($Serializable, $Serial$state);
 };
 
 struct $Serializable {
@@ -63,6 +61,7 @@ struct $Serializable {
 };
 
 extern struct $Serializable$class $Serializable$methods;
+$Serializable $Serializable$new();
 
 // struct //////////////////////////////////////////////////////
 
@@ -79,9 +78,9 @@ struct $struct$class {
   char *$GCINFO;
   int $class_id;
   $Super$class $superclass;                      // = Serializable$methods
-  void (*__init__)($struct,...);
+  void (*__init__)($struct);
   void (*__serialize__)($struct, $Serial$state);
-  $struct (*__deserialize__)($Serial$state);
+  $struct (*__deserialize__)($struct, $Serial$state);
   $bool (*__bool__)($struct);
   $str (*__str__)($struct);
 };
@@ -91,6 +90,7 @@ struct $struct {
 };
 
 extern struct $struct$class $struct$methods;
+$struct $struct$new();
 
 // object //////////////////////////////////////////////////////
 
@@ -105,9 +105,9 @@ struct $object$class {
   char *$GCINFO;
   int $class_id;
   $Super$class $superclass;                      // = $struct$methods
-  void (*__init__)($object,...);
+  void (*__init__)($object);
   void (*__serialize__)($object, $Serial$state);
-  $object (*__deserialize__)($Serial$state);
+  $object (*__deserialize__)($object, $Serial$state);
   $bool (*__bool__)($object);
   $str (*__str__)($object);
 };
@@ -117,5 +117,6 @@ struct $object {
 };
 
 extern struct $object$class $object$methods;
+$object $object$new();
 
   

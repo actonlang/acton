@@ -18,19 +18,23 @@ all:
 
 Pingpong: Pingpong.c Pingpong.h
 	cc 	-Wall -Werror -Wno-int-to-void-pointer-cast \
+		-I../../ \
 		-lutf8proc \
-		../../rts/rts.o \
+		../../rts/rts.c \
 		../builtin.o \
+		../minienv.o \
 		Pingpong.c \
 		-o Pingpong
 
 Pingpong2: ../../rts/rts.c Pingpong.c Pingpong.h
 	cc 	-Wall -Werror -Wno-int-to-void-pointer-cast \
+		-I../../ \
 		-lutf8proc \
 		-D EXPERIMENT=1 \
 		-pthread \
 		../../rts/rts.c \
 		../builtin.o \
+		../minienv.o \
 		Pingpong.c \
 		-o Pingpong2
 

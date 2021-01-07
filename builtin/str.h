@@ -13,7 +13,7 @@ struct $str$class {
   $Super$class $superclass;
   void (*__init__)($str, $struct);
   void (*__serialize__)($str,$Serial$state);
-  $str (*__deserialize__)($Serial$state);
+  $str (*__deserialize__)($str,$Serial$state);
   $bool (*__bool__)($str);
   $str (*__str__)($str);
   $str (*capitalize)($str s);
@@ -59,12 +59,18 @@ struct $str$class {
 };
 
 extern struct $str$class $str$methods;
+$str $str$new($struct);
 
 extern struct $Ord$str$class $Ord$str$methods;
+$Ord$str $Ord$str$new();
 extern struct $Hashable$str$class $Hashable$str$methods;
-extern struct $Plus$str$class $Plus$strmethods;
+$Hashable$str $Hashable$str$new();
+extern struct $Plus$str$class $Plus$str$methods;
+$Plus$str $Plus$str$new();
 extern struct $Sliceable$str$class $Sliceable$str$methods;
+$Sliceable$str $Sliceable$str$new();
 extern struct $Container$str$class $Container$str$methods;
+$Container$str $Container$str$new();
 
 extern struct $Ord$str *$Ord$str$witness;
 extern struct $Hashable$str *$Hashable$str$witness;
@@ -88,7 +94,7 @@ struct $Iterator$str$class {
   $Super$class $superclass;
   void (*__init__)($Iterator$str, $str);
   void (*__serialize__)($Iterator$str,$Serial$state);
-  $Iterator$str (*__deserialize__)($Serial$state);
+  $Iterator$str (*__deserialize__)($Iterator$str,$Serial$state);
   $bool (*__bool__)($Iterator$str);
   $str (*__str__)($Iterator$str);
   $str (*__next__)($Iterator$str);
@@ -101,6 +107,7 @@ struct $Iterator$str {
 };
 
 extern struct  $Iterator$str$class  $Iterator$str$methods;
+$Iterator$str $Iterator$str$new($str);
 
 // bytearray /////////////////////////////////////////////////////////////////////////////////////
 
@@ -120,7 +127,7 @@ struct $bytearray$class {
   $Super$class $superclass;
   void (*__init__)($bytearray, $struct);
   void (*__serialize__)($bytearray,$Serial$state);
-  $bytearray (*__deserialize__)($Serial$state);
+  $bytearray (*__deserialize__)($bytearray,$Serial$state);
   $bool (*__bool__)($bytearray);
   $str (*__str__)($bytearray);
   $bytearray (*capitalize)($bytearray s);
@@ -161,12 +168,18 @@ struct $bytearray$class {
 };
 
 extern struct $bytearray$class $bytearray$methods;
+$bytearray $bytearray$new($struct);
 
 extern struct $Ord$bytearray$class $Ord$bytearray$methods;
-extern struct $Sequence$bytearray$class $Sequence$bytearraymethods;
-extern struct $Collection$bytearray$class $Collection$bytearraymethods;
-extern struct $Plus$bytearray$class $Plus$bytearraymethods;
+$Ord$bytearray $Ord$bytearray$new();
+extern struct $Sequence$bytearray$class $Sequence$bytearray$methods;
+$Sequence$bytearray $Sequence$bytearray$new();
+extern struct $Collection$bytearray$class $Collection$bytearray$methods;
+$Collection$bytearray $Collection$bytearray$new($Sequence);
+extern struct $Plus$bytearray$class $Plus$bytearray$methods;
+$Plus$bytearray $Plus$bytearray$new($Sequence);
 extern struct $Container$bytearray$class $Container$bytearray$methods;
+$Container$bytearray $Container$bytearray$new($Eq);
 
 extern struct $Ord$bytearray *$Ord$bytearray$witness;
 extern struct $Sequence$bytearray *$Sequence$bytearray$witness;
@@ -187,7 +200,7 @@ struct $Iterator$bytearray$class {
   $Super$class $superclass;
   void (*__init__)($Iterator$bytearray, $bytearray);
   void (*__serialize__)($Iterator$bytearray,$Serial$state);
-  $Iterator$bytearray (*__deserialize__)($Serial$state);
+  $Iterator$bytearray (*__deserialize__)($Iterator$bytearray,$Serial$state);
   $bool (*__bool__)($Iterator$bytearray);
   $str (*__str__)($Iterator$bytearray);
   $int (*__next__)($Iterator$bytearray);
@@ -200,6 +213,7 @@ struct $Iterator$bytearray {
 };
 
 extern struct  $Iterator$bytearray$class  $Iterator$bytearray$methods;
+$Iterator$bytearray $Iterator$bytearray$new($bytearray);
 
 //builtin functions //////////////////////////////////////////////////////////////////////////////////
 
@@ -218,3 +232,4 @@ $int $ord($str c);
 // used in defining __str__ method for collection types (list, dict, set)
 $str $str_join_par(char lpar,$list elems, char rpar);
 
+$str $default__str__($struct);

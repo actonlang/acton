@@ -4,7 +4,7 @@ struct $BaseException$class {
   $Super$class $superclass;
   void (*__init__)($BaseException,$str);
   void (*__serialize__)($BaseException, $Serial$state);
-  $BaseException (*__deserialize__)($Serial$state);
+  $BaseException (*__deserialize__)($BaseException, $Serial$state);
   $bool (*__bool__)($BaseException);
   $str (*__str__)($BaseException);
 };
@@ -17,6 +17,7 @@ struct $BaseException {
 };
 
 extern struct $BaseException$class $BaseException$methods;
+$BaseException $BaseException$new($str);
 ////////////////////////////////////////////////////////////////////////////////////////
 struct $SystemExit$class {
   char *$GCINFO;
@@ -24,7 +25,7 @@ struct $SystemExit$class {
   $Super$class $superclass;
   void (*__init__)($SystemExit,$str);
   void (*__serialize__)($SystemExit,$Serial$state);
-  $SystemExit (*__deserialize__)($Serial$state);
+  $SystemExit (*__deserialize__)($SystemExit,$Serial$state);
   $bool (*__bool__)($SystemExit);
   $str (*__str__)($SystemExit);
 };
@@ -37,6 +38,7 @@ struct $SystemExit {
 };
 
 extern struct $SystemExit$class $SystemExit$methods;
+$SystemExit $SystemExit$new($str);
 ////////////////////////////////////////////////////////////////////////////////////////
 struct $KeyboardInterrupt$class {
   char *$GCINFO;
@@ -44,7 +46,7 @@ struct $KeyboardInterrupt$class {
   $Super$class $superclass;
   void (*__init__)($KeyboardInterrupt,$str);
   void (*__serialize__)($KeyboardInterrupt,$Serial$state);
-  $KeyboardInterrupt (*__deserialize__)($Serial$state);
+  $KeyboardInterrupt (*__deserialize__)($KeyboardInterrupt,$Serial$state);
   $bool (*__bool__)($KeyboardInterrupt);
   $str (*__str__)($KeyboardInterrupt);
 };
@@ -57,6 +59,7 @@ struct $KeyboardInterrupt {
 };
 
 extern struct $KeyboardInterrupt$class $KeyboardInterrupt$methods;
+$KeyboardInterrupt $KeyboardInterrupt$new($str);
 ////////////////////////////////////////////////////////////////////////////////////////
 struct $Exception$class {
   char *$GCINFO;
@@ -64,7 +67,7 @@ struct $Exception$class {
   $Super$class $superclass;
   void (*__init__)($Exception,$str);
   void (*__serialize__)($Exception,$Serial$state);
-  $Exception (*__deserialize__)($Serial$state);
+  $Exception (*__deserialize__)($Exception,$Serial$state);
   $bool (*__bool__)($Exception);
   $str (*__str__)($Exception);
 };
@@ -77,6 +80,7 @@ struct $Exception {
 };
 
 extern struct $Exception$class $Exception$methods;
+$Exception $Exception$new($str);
 ////////////////////////////////////////////////////////////////////////////////////////
 struct $AssertionError$class {
   char *$GCINFO;
@@ -84,7 +88,7 @@ struct $AssertionError$class {
   $Super$class $superclass;
   void (*__init__)($AssertionError,$str);
   void (*__serialize__)($AssertionError,$Serial$state);
-  $AssertionError (*__deserialize__)($Serial$state);
+  $AssertionError (*__deserialize__)($AssertionError,$Serial$state);
   $bool (*__bool__)($AssertionError);
   $str (*__str__)($AssertionError);
 };
@@ -97,6 +101,7 @@ struct $AssertionError {
 };
 
 extern struct $AssertionError$class $AssertionError$methods;
+$AssertionError $AssertionError$new($str);
 ////////////////////////////////////////////////////////////////////////////////////////
 struct $LookupError$class {
   char *$GCINFO;
@@ -104,7 +109,7 @@ struct $LookupError$class {
   $Super$class $superclass;
   void (*__init__)($LookupError,$str);
   void (*__serialize__)($LookupError,$Serial$state);
-  $LookupError (*__deserialize__)($Serial$state);
+  $LookupError (*__deserialize__)($LookupError,$Serial$state);
   $bool (*__bool__)($LookupError);
   $str (*__str__)($LookupError);
 };
@@ -117,6 +122,7 @@ struct $LookupError {
 };
 
 extern struct $LookupError$class $LookupError$methods;
+$LookupError $LookupError$new($str);
 ////////////////////////////////////////////////////////////////////////////////////////
 struct $IndexError$class {
   char *$GCINFO;
@@ -124,7 +130,7 @@ struct $IndexError$class {
   $Super$class $superclass;
   void (*__init__)($IndexError,$str);
   void (*__serialize__)($IndexError, $Serial$state);
-  $IndexError (*__deserialize__)($Serial$state);
+  $IndexError (*__deserialize__)($IndexError, $Serial$state);
   $bool (*__bool__)($IndexError);
   $str (*__str__)($IndexError);
 };
@@ -137,6 +143,7 @@ struct $IndexError {
 };
 
 extern struct $IndexError$class $IndexError$methods;
+$IndexError $IndexError$new($str);
 ////////////////////////////////////////////////////////////////////////////////////////
 struct $KeyError$class {
   char *$GCINFO;
@@ -144,7 +151,7 @@ struct $KeyError$class {
   $Super$class $superclass;
   void (*__init__)($KeyError,$str);
   void (*__serialize__)($KeyError,$Serial$state);
-  $KeyError (*__deserialize__)($Serial$state);
+  $KeyError (*__deserialize__)($KeyError,$Serial$state);
   $bool (*__bool__)($KeyError);
   $str (*__str__)($KeyError);
 };
@@ -157,6 +164,7 @@ struct $KeyError {
 };
 
 extern struct $KeyError$class $KeyError$methods;
+$KeyError $KeyError$new($str);
 ////////////////////////////////////////////////////////////////////////////////////////
 struct $MemoryError$class {
   char *$GCINFO;
@@ -164,7 +172,7 @@ struct $MemoryError$class {
   $Super$class $superclass;
   void (*__init__)($MemoryError,$str);
   void (*__serialize__)($MemoryError, $Serial$state);
-  $MemoryError (*__deserialize__)($Serial$state);
+  $MemoryError (*__deserialize__)($MemoryError, $Serial$state);
   $bool (*__bool__)($MemoryError);
   $str (*__str__)($MemoryError);
 };
@@ -177,6 +185,7 @@ struct $MemoryError {
 };
 
 extern struct $MemoryError$class $MemoryError$methods;
+$MemoryError $MemoryError$new($str);
 ////////////////////////////////////////////////////////////////////////////////////////
 struct $OSError$class {
   char *$GCINFO;
@@ -184,7 +193,7 @@ struct $OSError$class {
   $Super$class $superclass;
   void (*__init__)($OSError,$str);
   void (*__serialize__)($OSError, $Serial$state);
-  $OSError (*__deserialize__)($Serial$state);
+  $OSError (*__deserialize__)($OSError, $Serial$state);
   $bool (*__bool__)($OSError);
   $str (*__str__)($OSError);
 };
@@ -197,6 +206,7 @@ struct $OSError {
 };
 
 extern struct $OSError$class $OSError$methods;
+$OSError $OSError$new($str);
 ////////////////////////////////////////////////////////////////////////////////////////
 struct $RuntimeError$class {
   char *$GCINFO;
@@ -204,7 +214,7 @@ struct $RuntimeError$class {
   $Super$class $superclass;
   void (*__init__)($RuntimeError,$str);
   void (*__serialize__)($RuntimeError, $Serial$state);
-  $RuntimeError (*__deserialize__)($Serial$state);
+  $RuntimeError (*__deserialize__)($RuntimeError, $Serial$state);
   $bool (*__bool__)($RuntimeError);
   $str (*__str__)($RuntimeError);
 };
@@ -217,6 +227,7 @@ struct $RuntimeError {
 };
 
 extern struct $RuntimeError$class $RuntimeError$methods;
+$RuntimeError $RuntimeError$new($str);
 ////////////////////////////////////////////////////////////////////////////////////////
 struct $NotImplementedError$class {
   char *$GCINFO;
@@ -224,7 +235,7 @@ struct $NotImplementedError$class {
   $Super$class $superclass;
   void (*__init__)($NotImplementedError,$str);
   void (*__serialize__)($NotImplementedError,$Serial$state);
-  $NotImplementedError (*__deserialize__)($Serial$state);
+  $NotImplementedError (*__deserialize__)($NotImplementedError,$Serial$state);
   $bool (*__bool__)($NotImplementedError);
   $str (*__str__)($NotImplementedError);
 };
@@ -237,6 +248,7 @@ struct $NotImplementedError {
 };
 
 extern struct $NotImplementedError$class $NotImplementedError$methods;
+$NotImplementedError $NotImplementedError$new($str);
 ////////////////////////////////////////////////////////////////////////////////////////
 struct $ValueError$class {
   char *$GCINFO;
@@ -244,7 +256,7 @@ struct $ValueError$class {
   $Super$class $superclass;
   void (*__init__)($ValueError,$str);
   void (*__serialize__)($ValueError, $Serial$state);
-  $ValueError (*__deserialize__)($Serial$state);
+  $ValueError (*__deserialize__)($ValueError, $Serial$state);
   $bool (*__bool__)($ValueError);
   $str (*__str__)($ValueError);
 };
@@ -257,6 +269,7 @@ struct $ValueError {
 };
 
 extern struct $ValueError$class $ValueError$methods;
+$ValueError $ValueError$new($str);
 
 void RAISE($BaseException e);
 

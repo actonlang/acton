@@ -1,0 +1,10 @@
+def sumto(n):
+    res = 0
+    for i in range(n,None,None):
+        res += i
+    return res
+    
+actor main(env):
+  print(sumto(int(env.args[1])))
+  env.exit(0)
+  

@@ -2,9 +2,9 @@ struct $dict$class {
   char *$GCINFO;
   int $class_id;
   $Super$class $superclass;
-  void(*__init__)($dict, $Hashable, $Mapping, $WORD);
+  void(*__init__)($dict, $Hashable, $Iterable, $WORD);
   void (*__serialize__)($dict,$Serial$state);
-  $dict (*__deserialize__)($Serial$state);
+  $dict (*__deserialize__)($dict,$Serial$state);
   $bool (*__bool__)($dict);
   $str (*__str__)($dict);
 };
@@ -18,9 +18,12 @@ struct $dict {
 };
 
 extern struct $dict$class $dict$methods;
+$dict $dict$new($Hashable, $Iterable, $WORD);
 
 extern struct  $Mapping$dict$class $Mapping$dict$methods;
+$Mapping$dict $Mapping$dict$new($Hashable);
 extern struct  $Indexed$dict$class $Indexed$dict$methods;
+$Indexed$dict $Indexed$dict$new($Mapping, $Eq);
 
 // Iterators over dicts ///////////////////////////////////////////////////////
 
@@ -34,7 +37,7 @@ struct $Iterator$dict$class {
   $Super$class $superclass;
   void (*__init__)($Iterator$dict, $dict);
   void (*__serialize__)($Iterator$dict,$Serial$state);
-  $Iterator$dict (*__deserialize__)($Serial$state);
+  $Iterator$dict (*__deserialize__)($Iterator$dict,$Serial$state);
   $bool (*__bool__)($Iterator$dict);
   $str (*__str__)($Iterator$dict);
   $WORD(*__next__)($Iterator$dict);
@@ -47,6 +50,7 @@ struct $Iterator$dict {
 };
 
 extern struct $Iterator$dict$class  $Iterator$dict$methods;
+$Iterator$dict $Iterator$dict$new($dict);
 
 // values iterator
 
@@ -58,7 +62,7 @@ struct $Iterator$dict$values$class {
   $Super$class $superclass;
   void (*__init__)($Iterator$dict$values, $dict);
   void (*__serialize__)($Iterator$dict$values,$Serial$state);
-  $Iterator$dict$values (*__deserialize__)($Serial$state);
+  $Iterator$dict$values (*__deserialize__)($Iterator$dict$values,$Serial$state);
   $bool (*__bool__)($Iterator$dict$values);
   $str (*__str__)($Iterator$dict$values);
   $WORD(*__next__)($Iterator$dict$values);
@@ -71,6 +75,7 @@ struct $Iterator$dict$values {
 };
 
 extern struct $Iterator$dict$values$class  $Iterator$dict$values$methods;
+$Iterator$dict$values $Iterator$dict$values$new($dict);
 
 // items iterator
 
@@ -82,7 +87,7 @@ struct $Iterator$dict$items$class {
   $Super$class $superclass;
   void (*__init__)($Iterator$dict$items, $dict);
   void (*__serialize__)($Iterator$dict$items,$Serial$state);
-  $Iterator$dict$items (*__deserialize__)($Serial$state);
+  $Iterator$dict$items (*__deserialize__)($Iterator$dict$items,$Serial$state);
   $bool (*__bool__)($Iterator$dict$items);
   $str (*__str__)($Iterator$dict$items);
   $WORD(*__next__)($Iterator$dict$items);
@@ -95,3 +100,4 @@ struct $Iterator$dict$items {
 };
 
 extern struct $Iterator$dict$items$class  $Iterator$dict$items$methods;
+$Iterator$dict$items $Iterator$dict$items$new($dict);

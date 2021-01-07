@@ -11,7 +11,7 @@ import Prelude hiding((<>))
 version :: [Int]
 version = [0,1]
 
-data Module     = Module        ModName [Import] Suite deriving (Eq,Show)
+data Module     = Module        { modname::ModName, imps::[Import], mbody::Suite } deriving (Eq,Show)
 
 data Import     = Import        { iloc::SrcLoc, moduls::[ModuleItem] }
                 | FromImport    { iloc::SrcLoc, modul::ModRef, items::[ImportItem] }
@@ -43,7 +43,7 @@ data Stmt       = Expr          { sloc::SrcLoc, expr::Expr }
                 | Decl          { sloc::SrcLoc, decls::[Decl] }
                 deriving (Show)
 
-data Decl       = Def           { dloc::SrcLoc, dname:: Name, qbinds::QBinds, pos::PosPar, kwd::KwdPar, ann::(Maybe Type), dbody::Suite, deco::Deco, dfx::TFX }
+data Decl       = Def           { dloc::SrcLoc, dname:: Name, qbinds::QBinds, pos::PosPar, kwd::KwdPar, ann::Maybe Type, dbody::Suite, deco::Deco, dfx::TFX }
                 | Actor         { dloc::SrcLoc, dname:: Name, qbinds::QBinds, pos::PosPar, kwd::KwdPar, dbody::Suite }
                 | Class         { dloc::SrcLoc, dname:: Name, qbinds::QBinds, bounds::[TCon], dbody::Suite }
                 | Protocol      { dloc::SrcLoc, dname:: Name, qbinds::QBinds, bounds::[TCon], dbody::Suite }
@@ -60,18 +60,22 @@ data Expr       = Var           { eloc::SrcLoc, var::QName }
                 | Ellipsis      { eloc::SrcLoc }
                 | Strings       { eloc::SrcLoc, sval::[String] }
                 | BStrings      { eloc::SrcLoc, sval::[String] }
-                | Call          { eloc::SrcLoc, function::Expr, pargs::PosArg, kargs::KwdArg }
-                | TApp          { eloc::SrcLoc, function::Expr, targs::[Type] }
+                | Call          { eloc::SrcLoc, fun::Expr, pargs::PosArg, kargs::KwdArg }
+                | TApp          { eloc::SrcLoc, fun::Expr, targs::[Type] }
+                | Async         { eloc::SrcLoc, exp1::Expr }
                 | Await         { eloc::SrcLoc, exp1::Expr }
                 | Index         { eloc::SrcLoc, exp1::Expr, index::Expr }
-                | Slice         { eloc::SrcLoc, exp1::Expr, slice::[Sliz] }
+                | Slice         { eloc::SrcLoc, exp1::Expr, slice::Sliz }
+                | NDSlice       { eloc::SrcLoc, exp1::Expr, bslice::[NDSliz] }
                 | Cond          { eloc::SrcLoc, exp1::Expr, cond::Expr, exp2::Expr }
                 | IsInstance    { eloc::SrcLoc, exp1::Expr, classref::QName }
                 | BinOp         { eloc::SrcLoc, exp1::Expr, bop::Binary, exp2::Expr }
                 | CompOp        { eloc::SrcLoc, exp1::Expr, ops::[OpArg] }
                 | UnOp          { eloc::SrcLoc, uop::Unary, exp1::Expr }
                 | Dot           { eloc::SrcLoc, exp1::Expr, attr::Name }
-                | DotI          { eloc::SrcLoc, exp1::Expr, ival::Integer, tl :: Bool }
+                | Rest          { eloc::SrcLoc, exp1::Expr, attr::Name }
+                | DotI          { eloc::SrcLoc, exp1::Expr, ival::Integer }
+                | RestI         { eloc::SrcLoc, exp1::Expr, ival::Integer }
                 | Lambda        { eloc::SrcLoc, ppar::PosPar, kpar::KwdPar, exp1::Expr, efx::TFX }
                 | Yield         { eloc::SrcLoc, yexp1::Maybe Expr }
                 | YieldFrom     { eloc::SrcLoc, yfrom::Expr }
@@ -94,7 +98,7 @@ data Pattern    = PVar          { ploc::SrcLoc, pn::Name, pann::Maybe Type }
 
 type Target     = Expr
 
-data Prefix     = Kindvar | Xistvar | Actvar | Wildvar | Typevar | Witness | TypesPass | NormPass | CPSPass | LLiftPass
+data Prefix     = Kindvar | Xistvar | Wildvar | Typevar | Witness | Parvar | TypesPass | NormPass | DeactPass | CPSPass | LLiftPass
                 deriving (Eq,Ord,Show,Read,Generic)
 
 data Name       = Name SrcLoc String | Derived Name Name | Internal Prefix String Int deriving (Generic)
@@ -104,19 +108,27 @@ nloc _          = NoLoc
 
 nstr (Name _ s)             = s
 nstr (Derived n s)          = nstr n ++ "$" ++ nstr s
-nstr (Internal p s i)       = prefix p ++ "$" ++ show i ++ s
+nstr (Internal p s i)       = prefix p ++ "$" ++ unique i ++ s
   where prefix Kindvar      = "K"
         prefix Xistvar      = "X"
-        prefix Actvar       = "A"
         prefix Wildvar      = "_"
         prefix Typevar      = "T"
         prefix Witness      = "w"
+        prefix Parvar       = "p"
         prefix TypesPass    = "t"
         prefix NormPass     = "n"
+        prefix DeactPass    = "d"
         prefix CPSPass      = "c"
         prefix LLiftPass    = "l"
+        unique 0            = ""
+        unique i            = show i
 
 name            = Name NoLoc
+
+paramName0 s    = Internal Parvar s 0
+paramNames s    = map (Internal Parvar s) [1..]
+paramNames'     = paramNames ""
+
 
 data ModName    = ModName [Name] deriving (Show,Read,Eq,Generic)
 
@@ -124,14 +136,21 @@ modName ss      = ModName (map name ss)
 
 modPath (ModName ns) = map nstr ns
 
+modCat (ModName ns) n = ModName (ns++[n])
+
 instance Ord ModName where
     compare a b = compare (modPath a) (modPath b)
 
-data QName      = QName { mname::ModName, noq::Name } | NoQ { noq::Name } deriving (Show,Read,Eq,Ord,Generic)
+data QName      = QName { mname::ModName, noq::Name } | NoQ { noq::Name } | GName { mname::ModName, noq::Name } deriving (Show,Read,Eq,Ord,Generic)
 
 qName ss s      = QName (modName ss) (name s)
 
 noQ s           = NoQ (name s)
+
+univar (TV _ (Internal Typevar _ _))    = True          -- Regular type variable generated by the type-checker
+univar (TV _ (Internal Wildvar _ _))    = True          -- Type variable replacing a type wildcard, generated by the kind-checker
+univar _                                = False
+
 
 data ModuleItem = ModuleItem ModName (Maybe Name) deriving (Show,Eq)
 data ModRef     = ModRef (Int, Maybe ModName) deriving (Show,Eq)
@@ -155,8 +174,10 @@ data KwdPat     = KwdPat Name Pattern KwdPat | KwdPatStar Pattern | KwdPatNil de
 
 data OpArg      = OpArg Comparison Expr deriving (Eq,Show)
 data Sliz       = Sliz SrcLoc (Maybe Expr) (Maybe Expr) (Maybe Expr) deriving (Show)
+data NDSliz     = NDExpr Expr | NDSliz Sliz deriving (Show,Eq)
 data Comp       = CompFor SrcLoc Pattern Expr Comp | CompIf SrcLoc Expr Comp | NoComp deriving (Show)
 data WithItem   = WithItem Expr (Maybe Pattern) deriving (Show,Eq)
+
 
 data Unary      = Not|UPlus|UMinus|BNot deriving (Show,Eq)
 data Binary     = Or|And|Plus|Minus|Mult|Pow|Div|Mod|EuDiv|BOr|BXor|BAnd|ShiftL|ShiftR|MMult deriving (Show,Read,Eq,Generic)
@@ -173,19 +194,18 @@ data TVar       = TV { tvkind::Kind, tvname::Name } deriving (Ord,Show,Read,Gene
 
 data TCon       = TC { tcname::QName, tcargs::[Type] } deriving (Eq,Show,Read,Generic)
 
-data UType      = UCon QName | ULit String deriving (Eq,Show,Read,Generic)
-
-data FX         = FXPure | FXMut Type | FXAct Type | FXAction deriving (Eq,Show,Read,Generic)
+data FX         = FXPure | FXMut | FXAction | FXAsync deriving (Eq,Show,Read,Generic)
 
 data QBind      = Quant TVar [TCon] deriving (Eq,Show,Read,Generic)
 
 type QBinds     = [QBind]
 
+type KVar       = Name
+
 data Type       = TVar      { tloc::SrcLoc, tvar::TVar }
                 | TCon      { tloc::SrcLoc, tcon::TCon }
                 | TFun      { tloc::SrcLoc, fx::TFX, posrow::PosRow, kwdrow::KwdRow, restype::Type }
                 | TTuple    { tloc::SrcLoc, posrow::PosRow, kwdrow::KwdRow }
-                | TUnion    { tloc::SrcLoc, alts::[UType] }
                 | TOpt      { tloc::SrcLoc, opttype::Type }
                 | TNone     { tloc::SrcLoc }
                 | TWild     { tloc::SrcLoc }
@@ -204,22 +224,21 @@ data Constraint = Cast  Type Type
                 | Impl  Name Type TCon
                 | Sel   Name Type Name Type
                 | Mut   Type Name Type
-                | Seal  (Maybe Name) Type Type Type Type
                 deriving (Show,Read,Generic)
 
 type Constraints = [Constraint]
 
-dDef n p b      = Def NoLoc n [] p KwdNIL Nothing b NoDec fxWild
+mkBody []       = [Pass NoLoc]
+mkBody b        = b
 
-sDef n p b      = sDecl [dDef n p b]
+
+sDef n p t b fx = sDecl [Def NoLoc n [] p KwdNIL (Just t) b NoDec fx]
 sReturn e       = Return NoLoc (Just e)
-sAssign ps e    = Assign NoLoc ps e
+sAssign p e     = Assign NoLoc [p] e
 sMutAssign t e  = MutAssign NoLoc t e
-sAugAssign t o e = AugAssign NoLoc t o e
 sRaise e        = Raise NoLoc (Just (Exception e Nothing))
 sExpr e         = Expr NoLoc e
 sDecl ds        = Decl NoLoc ds
-sTry b hs els f = Try NoLoc b hs els f
 sIf bs els      = If NoLoc bs els
 sIf1 e b els    = sIf [Branch e b] els
 
@@ -228,10 +247,10 @@ handler qn b    = Handler (Except NoLoc qn) b
 tApp e []       = e
 tApp e ts       = TApp NoLoc e ts
 
-eCall e es      = Call NoLoc e (foldr PosArg PosNil es) KwdNil
+eCall e es      = Call NoLoc e (posarg es) KwdNil
 eCallVar c es   = eCall (eVar c) es
 eCallV c es     = eCall (Var NoLoc c) es
-eTuple es       = Tuple NoLoc (foldr PosArg PosNil es) KwdNil
+eTuple es       = Tuple NoLoc (posarg es) KwdNil
 eQVar n         = Var NoLoc n
 eVar n          = Var NoLoc (NoQ n)
 eDot e n        = Dot NoLoc e n
@@ -245,7 +264,10 @@ eLambda' ns e   = Lambda NoLoc (pospar' ns) KwdNIL e fxWild
 pospar nts      = foldr (\(n,t) p -> PosPar n (Just t) Nothing p) PosNIL nts
 pospar' ns      = foldr (\n p -> PosPar n Nothing Nothing p) PosNIL ns
 
-pVar n t        = PVar NoLoc n t
+posarg es       = foldr PosArg PosNil es
+
+pVar n t        = PVar NoLoc n (Just t)
+pVar' n         = PVar NoLoc n Nothing
 
 monotype t      = TSchema NoLoc [] t
 tSchema q t     = TSchema NoLoc q t
@@ -258,7 +280,7 @@ tFun fx p k t   = TFun NoLoc fx p k t
 tTuple p k      = TTuple NoLoc p k
 tTupleP p       = TTuple NoLoc p kwdNil
 tTupleK k       = TTuple NoLoc posNil k
-tUnion ts       = TUnion NoLoc (sort ts)
+tUnit           = tTuple posNil kwdNil
 tOpt t          = TOpt NoLoc t
 tNone           = TNone NoLoc
 tWild           = TWild NoLoc
@@ -274,10 +296,10 @@ tSelf           = TVar NoLoc tvSelf
 tvSelf          = TV KType nSelf
 nSelf           = Name NoLoc "Self"
 
-fxAction        = tTFX FXAction
-fxAct t         = tTFX (FXAct t)
-fxMut t         = tTFX (FXMut t)
 fxPure          = tTFX FXPure
+fxMut           = tTFX FXMut
+fxAction        = tTFX FXAction
+fxAsync         = tTFX FXAsync
 fxWild          = tWild
 
 posRow t r      = TRow NoLoc PRow (name "_") t r
@@ -291,6 +313,14 @@ kwdNil          = tNil KRow
 rowTail (TRow _ _ _ _ r)
                 = rowTail r
 rowTail r       = r
+
+findInRow n (TRow l k n' t r)
+  | n == n'             = Just (t,r)
+  | otherwise           = case findInRow n r of
+                            Nothing -> Nothing
+                            Just (t',r') -> Just (t, TRow l k n' t r')
+findInRow n (TVar _ _)  = Just (tWild,tWild)
+findInRow n (TNil _ _)  = Nothing
 
 
 prowOf (PosPar n a _ p) = posRow (case a of Just t -> t; _ -> tWild) (prowOf p)
@@ -339,7 +369,6 @@ instance Data.Binary.Binary Deco
 instance Data.Binary.Binary TSchema
 instance Data.Binary.Binary TVar
 instance Data.Binary.Binary TCon
-instance Data.Binary.Binary UType
 instance Data.Binary.Binary QBind
 instance Data.Binary.Binary Type
 instance Data.Binary.Binary Kind
@@ -370,6 +399,7 @@ instance HasLoc ModName where
 instance HasLoc QName where
     loc (QName m n)     = loc m `upto` loc n
     loc (NoQ n)         = loc n
+    loc (GName m n)     = loc m `upto` loc n
     
 instance HasLoc Elem where
     loc (Elem e)        = loc e
@@ -400,7 +430,6 @@ instance HasLoc Constraint where
     loc (Impl _ _ p)    = loc p
     loc (Sel _ _ n _)   = loc n
     loc (Mut _ n _)     = loc n
-    loc (Seal _ _ t _ _)= loc t
 
 
 -- Eq -------------------------
@@ -457,18 +486,22 @@ instance Eq Expr where
     x@Ellipsis{}        ==  y@Ellipsis{}        = True
     x@Strings{}         ==  y@Strings{}         = sval x == sval y
     x@BStrings{}        ==  y@BStrings{}        = sval x == sval y
-    x@Call{}            ==  y@Call{}            = function x == function y && pargs x == pargs y && kargs x == kargs y
-    x@TApp{}            ==  y@TApp{}            = function x == function y && targs x == targs y
+    x@Call{}            ==  y@Call{}            = fun x == fun y && pargs x == pargs y && kargs x == kargs y
+    x@TApp{}            ==  y@TApp{}            = fun x == fun y && targs x == targs y
+    x@Async{}           ==  y@Async{}           = exp1 x == exp1 y
     x@Await{}           ==  y@Await{}           = exp1 x == exp1 y
     x@Index{}           ==  y@Index{}           = exp1 x == exp1 y && index x == index y
     x@Slice{}           ==  y@Slice{}           = exp1 x == exp1 y && slice x == slice y
+    x@NDSlice{}         ==  y@NDSlice{}         = exp1 x == exp1 y && bslice x == bslice y
     x@Cond{}            ==  y@Cond{}            = exp1 x == exp1 y && cond x == cond y && exp2 x == exp2 y
     x@IsInstance{}      ==  y@IsInstance{}      = exp1 x == exp1 y && classref x == classref y
     x@BinOp{}           ==  y@BinOp{}           = exp1 x == exp1 y && bop x == bop y && exp2 x == exp2 y
     x@CompOp{}          ==  y@CompOp{}          = exp1 x == exp1 y && ops x == ops y
     x@UnOp{}            ==  y@UnOp{}            = uop x == uop y && exp1 x == exp1 y
     x@Dot{}             ==  y@Dot{}             = exp1 x == exp1 y && attr x == attr y
+    x@Rest{}            ==  y@Rest{}            = exp1 x == exp1 y && attr x == attr y
     x@DotI{}            ==  y@DotI{}            = exp1 x == exp1 y && ival x == ival y
+    x@RestI{}           ==  y@RestI{}           = exp1 x == exp1 y && ival x == ival y
     x@Lambda{}          ==  y@Lambda{}          = ppar x == ppar y && kpar x == kpar y && exp1 x == exp1 y && efx x == efx y
     x@Yield{}           ==  y@Yield{}           = yexp1 x == yexp1 y
     x@YieldFrom{}       ==  y@YieldFrom{}       = yfrom x == yfrom y
@@ -486,7 +519,7 @@ instance Eq Expr where
 instance Eq Name where
     Name _ s1           == Name _ s2            = s1 == s2
     Derived n1 s1       == Derived n2 s2        = n1 == n2 && s1 == s2
-    Internal p1 _ i1    == Internal p2 _ i2     = p1 == p2 && i1 == i2
+    Internal p1 s1 i1   == Internal p2 s2 i2    = p1 == p2 && s1 == s2 && i1 == i2
     _                   == _                    = False
 
 instance Ord Name where
@@ -506,7 +539,7 @@ instance Eq Except where
 
 instance Eq Sliz where
     Sliz _ a1 b1 c1     ==  Sliz _ a2 b2 c2     = a1 == a2 && b1 == b2 && c1 == c2
-    
+
 instance Eq Comp where
     CompFor _ p1 e1 c1  ==  CompFor _ p2 e2 c2  = p1 == p2 && e1 == e2 && c1 == c2
     CompIf _ e1 c1      ==  CompIf _ e2 c2      = e1 == e2 && c1 == c2
@@ -533,7 +566,6 @@ instance Eq Type where
     TCon _ c1           == TCon _ c2            = c1 == c2
     TFun _ e1 p1 r1 t1  == TFun _ e2 p2 r2 t2   = e1 == e2 && p1 == p2 && r1 == r2 && t1 == t2
     TTuple _ p1 r1      == TTuple _ p2 r2       = p1 == p2 && r1 == r2
-    TUnion _ u1         == TUnion _ u2          = all (`elem` u2) u1 && all (`elem` u1) u2
     TOpt _ t1           == TOpt _ t2            = t1 == t2
     TNone _             == TNone _              = True
     TWild _             == TWild _              = True
@@ -541,12 +573,6 @@ instance Eq Type where
     TRow _ s1 n1 t1 r1  == TRow _ s2 n2 t2 r2   = s1 == s2 && n1 == n2 && t1 == t2 && r1 == r2
     TFX _ fx1           == TFX _ fx2            = fx1 == fx2
     _                   == _                    = False
-
-instance Ord UType where
-    UCon a              <= UCon b               = a <= b
-    UCon a              <= ULit b               = True
-    ULit a              <= ULit b               = a <= b
-    _                   <= _                    = False
 
 -- Show & Read ----------------
 
@@ -583,15 +609,15 @@ isIdent s@(c:cs)                    = isAlpha c && all isAlphaNum cs && not (isK
 
 isKeyword x                         = x `Data.Set.member` rws
   where rws                         = Data.Set.fromDistinctAscList [
-                                        "False","None","NotImplemented","Self","True","actor","after","and","as",
-                                        "assert","await","break","class","continue","def","del","elif","else",
-                                        "except","extension","finally","for","from","if","import","in","is",
-                                        "isinstance","lambda","not","or","pass","protocol","raise","return",
-                                        "try","var","while","with","yield"
+                                        "False","None","NotImplemented","Self","True","action","actor","after","and","as",
+                                        "assert","async","await","break","class","continue","def","del","elif","else",
+                                        "except","extension","finally","for","from","if","import","in","is","isinstance",
+                                        "lambda","mut","not","or","pass","protocol","pure","raise","return","try","var",
+                                        "while","with","yield"
                                       ]
 
 isHidden (Name _ str)               = length (takeWhile (=='_') str) == 1
-isHidden _                          = False
+isHidden _                          = True
 
 isSig Signature{}                   = True
 isSig _                             = False
@@ -599,20 +625,25 @@ isSig _                             = False
 isDecl Decl{}                       = True
 isDecl _                            = False
 
-posParLen PosNIL                    = 0
-posParLen (PosSTAR _ _)             = 0
-posParLen (PosPar _ _ _ r)          = 1 + posParLen r
+singlePosArg (PosArg _ PosNil)      = True
+singlePosArg _                      = False
 
-posArgLen PosNil                    = 0
-posArgLen (PosStar _)               = 0
-posArgLen (PosArg _ r)              = 1 + posArgLen r
-
-posPatLen PosPatNil                 = 0
-posPatLen (PosPatStar _)            = 0
-posPatLen (PosPat _ r)              = 1 + posPatLen r
+singlePosPat (PosPat _ PosPatNil)   = True
+singlePosPat _                      = False
 
 posParHead (PosPar a b c _)         = (a,b,c)
 posArgHead (PosArg a _)             = a
 posPatHead (PosPat a _)             = a
 posRowHead (TRow _ PRow _ a _)      = a
- 
+
+kindOf (TVar _ tv)                  = tvkind tv
+kindOf TCon{}                       = KType
+kindOf TFun{}                       = KType
+kindOf TTuple{}                     = KType
+kindOf TOpt{}                       = KType
+kindOf TNone{}                      = KType
+kindOf TWild{}                      = KWild
+kindOf (TNil _ k)                   = k
+kindOf (TRow _ k _ _ _)             = k
+kindOf TFX{}                        = KFX
+

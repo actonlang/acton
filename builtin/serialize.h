@@ -26,6 +26,7 @@ struct $ROWLISTHEADER {
 struct $Serial$state {
   char *$GCINFO;
   $dict done;
+  $WORD (*globmap)($WORD);
   long row_no;
   $ROW row;
   $ROW fst; //not used in deserialization
@@ -43,12 +44,12 @@ $ROW $add_header(int class_id, int blob_size, $Serial$state state);
 
 // top-level functions for serialization of an object ////////////////////////////////////////////////
 
-$ROW $serialize($Serializable s);
+$ROW $serialize($Serializable s, $WORD (*globmap)($WORD));
 void $write_serialized($ROW row, char *file);
 // $serialize_file just calls the above two functions
 void $serialize_file($Serializable s, char *file);
 
-$Serializable $deserialize($ROW row);
+$Serializable $deserialize($ROW row, $WORD (*globmap)($WORD));
 $ROW $read_serialized(char *file);
 // $deserialize_file just calls the above two functions
 $Serializable $deserialize_file(char *file);
@@ -57,13 +58,15 @@ $Serializable $deserialize_file(char *file);
 
 // $Hashable$WORD$witness is needed to create the Mapping$dict witness necessary for serialization.
 
-typedef struct $Hashable$WORD *$Hashable$WORD;
-
 struct $Hashable$WORD$class {
     char *$GCINFO;
     int $class_id;
-    $Super$class *superclass;
+    $Super$class superclass;
     void (*__init__)($Hashable$WORD);
+    void (*__serialize__)($Hashable$WORD,$Serial$state);
+    $Hashable$WORD (*__deserialize__)($Hashable$WORD,$Serial$state);
+    $bool (*__bool__)($Hashable$WORD);
+    $str (*__str__)($Hashable$WORD);
     $bool (*__eq__)($Hashable$WORD, $WORD, $WORD);
     $bool (*__ne__)($Hashable$WORD, $WORD, $WORD);
     $int (*__hash__)($Hashable$WORD, $WORD);
@@ -74,4 +77,5 @@ struct $Hashable$WORD {
 };
 
 struct $Hashable$WORD$class $Hashable$WORD$methods;
+$Hashable$WORD $Hashable$WORD$new();
 struct $Hashable$WORD *$Hashable$WORD$witness;

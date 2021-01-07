@@ -77,16 +77,20 @@ instance Relabel Expr where
     relabel (BStrings _ ss) = BStrings <$> newLoc <*> return ss
     relabel (Call _ e ps ks) = Call <$> newLoc <*> relabel e <*> relabel ps <*> relabel ks
     relabel (TApp _ e ts) = TApp <$> newLoc <*> relabel e <*> relabel ts
+    relabel (Async _ e) = Async <$> newLoc <*> relabel e
     relabel (Await _ e) = Await <$> newLoc <*> relabel e
     relabel (Index _ e is) = Index <$> newLoc <*> relabel e <*> relabel is
     relabel (Slice _ e sl) = Slice <$> newLoc <*> relabel e <*> relabel sl
+    relabel (NDSlice _ e sl) = NDSlice <$> newLoc <*> relabel e <*> relabel sl
     relabel (Cond _ e1 e2 e3) = Cond <$> newLoc <*> relabel e1 <*> relabel e2 <*> relabel e3
     relabel (IsInstance _ e c) = IsInstance <$> newLoc <*> relabel e <*> relabel c
     relabel (BinOp _ l op r) = BinOp <$> newLoc <*> relabel l <*> pure op <*> relabel r
     relabel (CompOp _ e ops) = CompOp <$> newLoc <*> relabel e <*> relabel ops
     relabel (UnOp _ op e) = UnOp <$> newLoc <*> pure op <*> relabel e 
     relabel (Dot _ e nm) = Dot <$> newLoc <*> relabel e <*> relabel nm
-    relabel (DotI _ e i t) = DotI <$> newLoc <*> relabel e <*> return i <*> return t
+    relabel (Rest _ e nm) = Rest <$> newLoc <*> relabel e <*> relabel nm
+    relabel (DotI _ e i) = DotI <$> newLoc <*> relabel e <*> return i
+    relabel (RestI _ e i) = RestI <$> newLoc <*> relabel e <*> return i
     relabel (Lambda _ ps ks e fx) = Lambda <$> newLoc <*> relabel ps <*> relabel ks <*> relabel e <*> relabel fx
     relabel (Yield _ e) = Yield <$> newLoc <*> relabel e
     relabel (YieldFrom _ e) = YieldFrom <$> newLoc <*> relabel e
@@ -118,6 +122,7 @@ instance Relabel ModName where
 instance Relabel QName where
   relabel (QName m n) = QName <$> relabel m <*> relabel n
   relabel (NoQ n) = NoQ <$> relabel n
+  relabel (GName m n) = GName <$> relabel m <*> relabel n
 
 instance Relabel ModRef where
   relabel (ModRef (n,mbqn)) = (\m -> ModRef (n,m)) <$> relabel mbqn
@@ -191,6 +196,10 @@ instance Relabel Assoc where
 instance Relabel Sliz where
   relabel (Sliz _ e1 e2 e3) = Sliz <$> newLoc <*> relabel e1 <*> relabel e2 <*> relabel e3
 
+instance Relabel NDSliz where
+  relabel (NDExpr e) = NDExpr <$> relabel e
+  relabel (NDSliz s) = NDSliz <$> relabel s
+
 instance Relabel TSchema where
     relabel (TSchema _ q t) = TSchema <$> newLoc <*> relabel q <*> relabel t
 
@@ -208,19 +217,12 @@ instance Relabel Type where
     relabel (TFun _ es p k t) = TFun <$> newLoc <*> relabel es <*> relabel p <*> relabel k <*> relabel t
     relabel (TTuple _ p k) = TTuple <$> newLoc <*> relabel p <*> relabel k
     relabel (TOpt _ t) = TOpt <$> newLoc <*> relabel t
-    relabel (TUnion _ as) = TUnion <$> newLoc <*> return as
     relabel (TCon  _ c) = TCon <$> newLoc <*> relabel c
     relabel (TNone _) = TNone <$> newLoc
     relabel (TWild _) = TWild <$> newLoc
     relabel (TNil _ k) = TNil <$> newLoc <*> return k
     relabel (TRow _ k n t r) = TRow <$> newLoc <*> return k <*> relabel n <*> relabel t <*> relabel r
-    relabel (TFX _ fx) = TFX <$> newLoc <*> relabel fx
-
-instance Relabel FX where
-    relabel (FXAction) = return FXAction
-    relabel (FXAct t) = FXAct <$> relabel t
-    relabel (FXMut t) = FXMut <$> relabel t
-    relabel (FXPure) = return FXPure
+    relabel (TFX _ fx) = TFX <$> newLoc <*> pure fx
 
 instance Relabel Constraint where
     relabel (Cast t1 t2) = Cast <$> relabel t1 <*> relabel t2
@@ -228,4 +230,3 @@ instance Relabel Constraint where
     relabel (Impl w t p) = Impl <$> relabel w <*> relabel t <*> relabel p
     relabel (Sel w t1 n t2) = Sel w <$> relabel t1 <*> relabel n <*> relabel t2
     relabel (Mut t1 n t2) = Mut <$> relabel t1 <*> relabel n <*> relabel t2
-    relabel (Seal w fx1 fx2 t1 t2) = Seal w <$> relabel fx1 <*> relabel fx2 <*> relabel t1 <*> relabel t2

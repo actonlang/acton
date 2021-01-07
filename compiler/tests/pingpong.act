@@ -1,17 +1,13 @@
-def relay(t,m):
-    after t: m()
 
-actor Pingpong(i):
+actor Pingpong(env: Env):
     var count = 0
-#    ping : action() -> None
-#    _pong : action(int) -> None
-    def ping():
+    i = int(env.args[1])
+    def _ping():
         count = count + i
-        print('{i} Ping {count}')
+        print('%d Ping %8d' % (i,count))
         after 1: _pong(-count)
     def _pong(q):
-        print('{i}      {q} Pong')
-        #after 2: ping()
-        relay(2, ping)
-    ping()
+        print('%d      %8d Pong' % (i,q))
+        after 2: _ping()
+    _ping()
 

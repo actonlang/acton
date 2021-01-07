@@ -3,16 +3,25 @@ module Acton.Names where
 
 import Utils
 import Acton.Syntax
+import Acton.Builtin
 import Debug.Trace
+import Acton.Printer
 
 
 self                                = Name NoLoc "self"
 
 deriveQ (NoQ n)                     = n
 deriveQ (QName (ModName m) n)       = deriveMod n m
+deriveQ (GName m n)
+  | m == mBuiltin                   = n
+deriveQ (GName (ModName m) n)       = deriveMod n m
 
 deriveMod n0 []                     = n0
 deriveMod n0 (n:m)                  = deriveMod (Derived n0 n) m
+
+witAttr qn                          = Derived (name "w") (deriveQ qn)
+
+extensionName p c                   = Derived (deriveQ $ tcname p) (deriveQ c)
 
 
 -- Mutually recursive groups -------
@@ -87,7 +96,7 @@ instance DataVars Pattern where
 
 -- State variables -----------------
 
-statedefs b                         = concat [ bound ps | VarAssign _ ps _ <- b ]
+statevars b                         = concat [ bound ps | VarAssign _ ps _ <- b ]
 
 
 -- Free and bound names ------------
@@ -182,16 +191,20 @@ instance Vars Expr where
     free (BStrings _ ss)            = []
     free (Call _ e ps ks)           = free e ++ free ps ++ free ks
     free (TApp _ e ts)              = free e ++ free ts
+    free (Async _ e)                = free e
     free (Await _ e)                = free e
     free (Index _ e ix)             = free e ++ free ix
     free (Slice _ e sl)             = free e ++ free sl
+    free (NDSlice _ e sl)           = free e ++ free sl
     free (Cond _ e1 e e2)           = free [e1,e,e2]
     free (IsInstance _ e c)         = free e ++ free c
     free (BinOp _ e1 o e2)          = free [e1,e2]
     free (CompOp _ e ops)           = free e ++ free ops
     free (UnOp _ o e)               = free e
     free (Dot _ e n)                = free e
-    free (DotI _ e i t)             = free e
+    free (Rest _ e n)               = free e
+    free (DotI _ e i)               = free e
+    free (RestI _ e i)              = free e
     free (Lambda _ ps ks e fx)      = free ps ++ free ks ++ (free e \\ (bound ps ++ bound ks))
     free (Yield _ e)                = free e
     free (YieldFrom _ e)            = free e
@@ -213,6 +226,7 @@ instance Vars ModName where
 instance Vars QName where
     free (QName m n)                = free m
     free (NoQ n)                    = free n
+    free (GName m n)                = free m
 
 instance Vars Exception where
     free (Exception e1 e2)          = free e1 ++ free e2
@@ -227,8 +241,8 @@ instance Vars Except where
     bound (ExceptAs _ x n)          = [n]
 
 instance Vars PosPar where
-    free (PosPar n t e p)           = free e ++ free p
-    free (PosSTAR n t)              = []
+    free (PosPar n t e p)           = free t ++ free e ++ free p
+    free (PosSTAR n t)              = free t
     free PosNIL                     = []
     
     bound (PosPar n t e p)          = n : bound p
@@ -236,8 +250,8 @@ instance Vars PosPar where
     bound PosNIL                    = []
 
 instance Vars KwdPar where
-    free (KwdPar n t e k)           = free e ++ free k
-    free (KwdSTAR n t)              = []
+    free (KwdPar n t e k)           = free t ++ free e ++ free k
+    free (KwdSTAR n t)              = free t
     free KwdNIL                     = []
     
     bound (KwdPar n t e k)          = n : bound k
@@ -280,6 +294,10 @@ instance Vars OpArg where
 
 instance Vars Sliz where
     free (Sliz _ e1 e2 e3)          = free e1 ++ free e2 ++ free e3
+
+instance Vars NDSliz where
+    free (NDExpr e)                 = free e
+    free (NDSliz s)                 = free s
 
 instance Vars Comp where
     free (CompFor _ pat e c)        = (free e ++ free c) \\ bound pat
@@ -354,13 +372,8 @@ instance Vars Type where
     free (TOpt _ t)                 = free t
     free (TCon  _ c)                = free c
     free (TRow _ _ _ t r)           = free t ++ free r
-    free (TFX _ fx)                 = free fx
     free _                          = []
 
-instance Vars FX where
-    free (FXMut t)                  = free t
-    free (FXAct t)                  = free t
-    free _                          = []
 
 instance Vars Constraint where
     free (Cast t1 t2)               = free t1 ++ free t2
@@ -368,12 +381,3 @@ instance Vars Constraint where
     free (Impl w t p)               = free t ++ free p
     free (Sel w t1 n t2)            = free t1 ++ free t2
     free (Mut t1 n t2)              = free t1 ++ free t2
-    free (Seal w fx1 fx2 t1 t2)     = free fx1 ++ free fx2 ++ free t1 ++ free t2
-
------------------
-
--- Names free in embedded lambda
--- Called during translation to ensure that lambdas contain no state variables
--- Will become defunct once lambda-lifting works directly on Acton code
-
-lambdafree s                        = undefined

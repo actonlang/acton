@@ -26,8 +26,8 @@ lambda$1 lambda$1$__deserialize__($Serial$state state) {
   return res;
 }
 
-$R lambda$1$enter(lambda$1 $this, $Msg _ignore) {
-    return $this->cont$0->$class->enter($this->cont$0, $None);
+$R lambda$1$__call__(lambda$1 $this, $Msg _ignore) {
+    return $this->cont$0->$class->__call__($this->cont$0, $None);
 }
 
 struct lambda$1$class lambda$1$methods = {
@@ -39,7 +39,7 @@ struct lambda$1$class lambda$1$methods = {
     lambda$1$__deserialize__,
     lambda$1$__bool__,
     lambda$1$__str__,
-    lambda$1$enter
+    lambda$1$__call__
 };
 
 /// lambda$2
@@ -75,7 +75,7 @@ lambda$2 lambda$2$__deserialize__($Serial$state state) {
   return res;
 }
 
-$R lambda$2$enter(lambda$2 $this, $Cont c$1) {
+$R lambda$2$__call__(lambda$2 $this, $Cont c$1) {
     return $this->self->$class->act$local($this->self, $this->from, $this->table, c$1);
 }
 
@@ -88,7 +88,7 @@ struct lambda$2$class lambda$2$methods = {
     lambda$2$__deserialize__,
     lambda$2$__bool__,
     lambda$2$__str__,
-    lambda$2$enter
+    lambda$2$__call__
 };
 
 /// Act
@@ -97,8 +97,8 @@ $R Act$__init__(Act self, $int i, $Cont cont$0) {
     $Actor$methods.__init__(($Actor)self);
     self->i = i;
     self->count = to$int(0);
-    self->rcv_dict = $NEW($dict, ($Hashable)$Hashable$int$witness, $None);
-    self->snd_dict = $NEW($dict, ($Hashable)$Hashable$int$witness, $None);
+    self->rcv_dict = $dict$new(($Hashable)$Hashable$int$witness, NULL, $None);
+    self->snd_dict = $dict$new(($Hashable)$Hashable$int$witness, NULL, $None);
     return $R_CONT(cont$0, $None);
 }
 
@@ -129,11 +129,11 @@ Act Act$__deserialize__($Serial$state state) {
 }
 
 $R Act$act$local(Act self, $int from, $list table, $Cont cont$0) {
-    if (from$bool($Integral$int$witness->$class->__lt__($Integral$int$witness, self->count, total_msgs))) {
-        self->count = $Plus$int$witness->$class->__add__($Plus$int$witness, self->count, to$int(1));
-        $int to = $Integral$int$witness->$class->__mod__($Integral$int$witness, $Plus$int$witness->$class->__add__($Plus$int$witness, self->i, to$int(1)), no_actors);
-        $Indexed$dict$witness->$class->__setitem__($Indexed$dict$witness, self->rcv_dict, from, $Plus$int$witness->$class->__add__($Plus$int$witness, $Mapping$dict$witness->$class->get($Mapping$dict$witness, self->rcv_dict, from, to$int(0)), to$int(1)));
-        $Indexed$dict$witness->$class->__setitem__($Indexed$dict$witness, self->snd_dict, to,   $Plus$int$witness->$class->__add__($Plus$int$witness, $Mapping$dict$witness->$class->get($Mapping$dict$witness, self->snd_dict, to, to$int(0)), to$int(1)));
+    if (from$bool($Ord$int$witness->$class->__lt__($Ord$int$witness, self->count, total_msgs))) {
+        self->count = $Integral$int$witness->$class->__add__($Integral$int$witness, self->count, to$int(1));
+        $int to = $Integral$int$witness->$class->__mod__($Integral$int$witness, $Integral$int$witness->$class->__add__($Integral$int$witness, self->i, to$int(1)), no_actors);
+        $Indexed$dict$witness->$class->__setitem__($Indexed$dict$witness, self->rcv_dict, from, $Integral$int$witness->$class->__add__($Integral$int$witness, $Mapping$dict$witness->$class->get($Mapping$dict$witness, self->rcv_dict, from, to$int(0)), to$int(1)));
+        $Indexed$dict$witness->$class->__setitem__($Indexed$dict$witness, self->snd_dict, to,   $Integral$int$witness->$class->__add__($Integral$int$witness, $Mapping$dict$witness->$class->get($Mapping$dict$witness, self->snd_dict, to, to$int(0)), to$int(1)));
         printf("Actor %ld: count=%ld, from=%ld, to=%ld\n", from$int(self->i), from$int(self->count), from$int(from), from$int(to));
         Act tmp$1 = $Sequence$list$witness->$class->__getitem__($Sequence$list$witness, table, to);
         return tmp$1->$class->act(tmp$1, self->i, table, ($Cont)$NEW(lambda$1, cont$0));
@@ -190,7 +190,7 @@ lambda$3 lambda$3$__deserialize__($Serial$state state) {
   return res;
 }
 
-$R lambda$3$enter(lambda$3 $this, Act $res) {
+$R lambda$3$__call__(lambda$3 $this, Act $res) {
     return cont$1($this->self, $this->iter$1, $this->cont$0, $res);
 }
 
@@ -203,7 +203,7 @@ struct lambda$3$class lambda$3$methods = {
     lambda$3$__deserialize__,
     lambda$3$__bool__,
     lambda$3$__str__,
-    lambda$3$enter
+    lambda$3$__call__
 };
 
 /// lambda$4
@@ -232,8 +232,8 @@ lambda$4 lambda$4$__deserialize__($Serial$state state) {
   return res;
 }
 
-$R lambda$4$enter(lambda$4 $this, $WORD _ignore) {
-    return $this->cont$0->$class->enter($this->cont$0, $None);
+$R lambda$4$__call__(lambda$4 $this, $WORD _ignore) {
+    return $this->cont$0->$class->__call__($this->cont$0, $None);
 }
 
 struct lambda$4$class lambda$4$methods = {
@@ -245,7 +245,7 @@ struct lambda$4$class lambda$4$methods = {
     lambda$4$__deserialize__,
     lambda$4$__bool__,
     lambda$4$__str__,
-    lambda$4$enter
+    lambda$4$__call__
 };
 
 
@@ -269,10 +269,10 @@ $R join$1(Root self, $Cont cont$0, $WORD _ignore) {
     return tmp$2->$class->act(tmp$2, no_actors, self->table, ($Cont)$NEW(lambda$4, cont$0));
 }
 
-$R Root$__init__(Root self, $int _ignore, $Cont cont$0) {
+$R Root$__init__(Root self, $Env _ignore, $Cont cont$0) {
     $Actor$methods.__init__(($Actor)self);
-    self->table = $NEW($list, $None);
-    $Iterator iter$1 = $Iterable$range$witness->$class->__iter__($Iterable$range$witness, $NEW($range, $None, no_actors, $None));
+    self->table = $list$new(NULL, $None);
+    $Iterator iter$1 = $Iterable$range$witness->$class->__iter__($Iterable$range$witness, $NEW($range, no_actors, $None, $None));
     return loop$1(self, iter$1, cont$0, $None);
 }
 
@@ -307,6 +307,12 @@ struct Root$class Root$methods = {
     Root$__str__
 };
 
+$R Root$new($Env env, $Cont cont) {
+    Root $tmp = malloc(sizeof(struct Root));
+    $tmp->$class = &Root$methods;
+    return Root$methods.__init__($tmp, env, $CONSTCONT($tmp, cont));
+}
+
 /// Initialization
 
 $Mapping $Mapping$dict$witness;
@@ -317,7 +323,7 @@ $int total_msgs;
 
 void $init_module() {
     $Mapping$dict$witness = ($Mapping)$NEW($Mapping$dict, ($Hashable)$Hashable$int$witness);
-    $Indexed$dict$witness = $Mapping$dict$witness->w$Indexed$Mapping;
+    $Indexed$dict$witness = $Mapping$dict$witness->w$Indexed;
     
     no_actors = to$int(5);
     total_msgs = to$int(20);
@@ -330,7 +336,7 @@ void $init_module() {
     $register(&Act$methods);
 }
 
-$R $ROOT($Env env, $Cont cont$0) {
+$R $ROOT ($Env env, $Cont cont) {
     $init_module();
-    return $NEWCC(Root, cont$0, to$int(env));
+    return Root$new(env, cont);
 }

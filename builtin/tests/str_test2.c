@@ -20,7 +20,7 @@ int main() {
   $str text = wit1->$class->__add__(wit1,prefix,wit1->$class->__add__(wit1,message,suffix));
   $bool a = text->$class->startswith(text,prefix,NULL,NULL);
   if (a && text->$class->endswith(text,suffix,NULL,NULL)) {
-    struct $Slice slc;
+    struct $slice slc;
     $Container$str wit2 = $Container$str$witness;
     slc.start = slcel(wit2->$class->__len__(wit2,prefix));
     slc.stop =  slcel(neg(wit2->$class->__len__(wit2,suffix)));
@@ -32,19 +32,19 @@ int main() {
     $list lst = s->$class->split(s,to$str("/"),NULL);
     printf("list has been split");
     $Sequence$list wit4 = $Sequence$list$witness;
-    $int len = wit4->w$Collection$Sequence->$class->__len__(wit4->w$Collection$Sequence,lst);
+    $int len = wit4->w$Collection->$class->__len__(wit4->w$Collection,lst);
     for (long i=0; i < from$int(len); i++) {
       printf("  '%s'\n",from$str(wit4->$class->__getitem__(wit4,lst,to$int(i))));
     }
     $str space = to$str(" ");
-    $str joined = space->$class->join(space,($Iterable)wit4->w$Collection$Sequence,lst);
+    $str joined = space->$class->join(space,($Iterable)wit4->w$Collection,lst);
     printf("joined string is '%s'\n",from$str(joined));
   }
   $str chinese = to$str("但他呼吁进行全面调查");
   printf("chinese nbytes = %d, nchars = %d\n",chinese->nbytes,chinese->nchars);
   $str s = to$str("firstSEPsecondSEPthörd");
-  $print($NEW($tuple,1,s->$class->partition(s,to$str("SEP"))));
-  $print($NEW($tuple,1,s->$class->rpartition(s,to$str("SEP"))));
-  $print($NEW($tuple,1,s->$class->capitalize(s)));
-  $print($NEW($tuple,1,s->$class->center(s,to$int(50),NULL)));
+  $print(1,s->$class->partition(s,to$str("SEP")));
+  $print(1,s->$class->rpartition(s,to$str("SEP")));
+  $print(1,s->$class->capitalize(s));
+  $print(1,s->$class->center(s,to$int(50),NULL));
 }

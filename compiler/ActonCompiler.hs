@@ -5,6 +5,7 @@ import qualified Acton.Syntax as A
 
 import qualified Acton.Relabel
 import qualified Acton.Env
+import qualified Acton.QuickType
 import qualified Acton.Kinds
 import qualified Acton.Types
 import qualified Acton.Solver
@@ -13,11 +14,7 @@ import qualified Acton.CPS
 import qualified Acton.Deactorizer
 import qualified Acton.LambdaLifter
 import qualified Acton.CodeGen
-{-
-import qualified Yang.Syntax as Y
-import qualified Yang.Parser
-import qualified YangCompiler
--}
+import qualified Acton.Builtin
 import Utils
 import qualified Pretty
 import qualified InterfaceFiles
@@ -30,13 +27,13 @@ import Data.Graph
 import qualified Data.List
 import System.IO
 import System.Directory
+import System.Process
 import System.FilePath.Posix
+import qualified System.Environment
 import qualified System.Exit
 
 data Args       = Args {
-                    tokens  :: Bool,
                     parse   :: Bool,
-                    imports :: Bool,
                     kinds   :: Bool,
                     types   :: Bool,
                     sigs    :: Bool,
@@ -44,181 +41,269 @@ data Args       = Args {
                     deact   :: Bool,
                     cps     :: Bool,
                     llift   :: Bool,
+                    hgen    :: Bool,
                     cgen    :: Bool,
---                    tracef  :: Bool,
---                    expand  :: Bool,
-                    make    :: Bool,
                     verbose :: Bool,
-                    nobuiltin :: Bool,
+                    stub    :: Bool,
                     syspath :: String,
-                    files   :: [String]
+                    root    :: String,
+                    file    :: String
                 }
                 deriving Show
 
 getArgs         = Args
-                    <$> switch (long "tokens"  <> help "Show the result of lexing (Yang files only)")
-                    <*> switch (long "parse"   <> help "Show the result of parsing")
-                    <*> switch (long "imports" <> help "Show the contents of imported modules")
-                    <*> switch (long "kinds"   <> help "Show all the result after kind-checking (Acton files only)")
-                    <*> switch (long "types"   <> help "Show all inferred expression types (Acton files only)")
-                    <*> switch (long "sigs"    <> help "Show the inferred type signatures (Acton files only)")
+                    <$> switch (long "parse"   <> help "Show the result of parsing")
+                    <*> switch (long "kinds"   <> help "Show all the result after kind-checking")
+                    <*> switch (long "types"   <> help "Show all inferred expression types")
+                    <*> switch (long "sigs"    <> help "Show the inferred type signatures")
                     <*> switch (long "norm"    <> help "Show the result after syntactic normalization")
                     <*> switch (long "deact"   <> help "Show the result after deactorization")
-                    <*> switch (long "cps"     <> help "Show the result after CPS conversion (Acton files only)")
-                    <*> switch (long "llift"   <> help "Show the result of lambda-lifting (Acton files only)")
-                    <*> switch (long "cgen"    <> help "Show the generated C code (Acton files only)")
---                    <*> switch (long "trace"   <> help "Trace this module's functions and methods at run-time (Acton files only")
---                    <*> switch (long "expand"  <> help "Show the result after identifier expansion (Yang files only)")
-                    <*> switch (long "make"    <> help "(Re-)compile recursively this and all imported modules as needed")
+                    <*> switch (long "cps"     <> help "Show the result after CPS conversion")
+                    <*> switch (long "llift"   <> help "Show the result of lambda-lifting")
+                    <*> switch (long "hgen"    <> help "Show the generated .h header")
+                    <*> switch (long "cgen"    <> help "Show the generated .c code")
                     <*> switch (long "verbose" <> help "Print progress info during execution")
-                    <*> switch (long "nobuiltin" <> help "No builtin module (only for compiling __builtin__.act)")
+                    <*> switch (long "stub"    <> help "Stub (.ty) file generation only")
                     <*> strOption (long "path" <> metavar "TARGETDIR" <> value "" <> showDefault)
-                    <*> some (argument str (metavar "FILES"))
+                    <*> strOption (long "root" <> value "" <> showDefault)
+                    <*> argument str (metavar "FILE")
 
-descr           = fullDesc <> progDesc "Compile Acton (and Yang) source files to native executables"
+descr           = fullDesc <> progDesc "Compile an Acton source file with necessary recompilation of imported modules"
                     <> header "actonc - the Acton compiler"
 
 main            = do args <- execParser (info (getArgs <**> helper) descr)
-                     mapM_ (\str -> treatOneFile (args {files = [str]})) (files args)
-
-treatOneFile args
-                = do paths <- findPaths args
-                     let mn = A.modName (modpath paths)
+                     paths <- findPaths args
+                     when (verbose args) $ do
+                         putStrLn ("## sysPath: " ++ sysPath paths)
+                         putStrLn ("## sysRoot: " ++ sysRoot paths)
+                         putStrLn ("## srcRoot: " ++ srcRoot paths)
+                         putStrLn ("## modPrefix: " ++ prstrs (modPrefix paths))
+                         putStrLn ("## topMod: " ++ prstr (topMod paths))
+                     let mn = topMod paths
                      (case ext paths of
-                        ".act"   -> (do (src,tree) <- Acton.Parser.parseModule mn (srcFile paths)
-                                        iff (parse args) $ dump "parse" (Pretty.print tree)
-                                        if make args
-                                         then do let task = ActonTask mn src tree
-                                                 chaseImportsAndCompile args paths task
-                                         else do env0 <- Acton.Env.initEnv (nobuiltin args)
-                                                 runRestPasses args paths src env0 tree
-                                                 return ())
-                                          `catch` handle Acton.Parser.parserError "" paths
-{-
-                        ".yang"  -> if make args
-                                     then do let yangFile = srcFile paths
-                                                 yangbody = last (modpath paths)
-                                             m <- Yang.Parser.parseFile yangFile
-                                             let task = YangTask (A.qName ["yang",yangbody]) m
-                                             chaseImportsAndCompile args paths task
-                                     else YangCompiler.compileYangFile mn (mkYangArgs args)
--}
-                        ".types" -> compTypesFile paths
-                        ".ty"    -> showTyFile paths
---                        ".yt"    -> showYtFile paths
+                        ".act"   -> do (src,tree) <- Acton.Parser.parseModule mn (file args)
+                                                        `catch` handle Acton.Parser.parserError "" paths mn
+                                       iff (parse args) $ dump "parse" (Pretty.print tree)
+                                       let task = ActonTask mn src tree
+                                       chaseImportsAndCompile args paths task
+                        ".ty"    -> showTyFile args
                         _        -> error ("********************\nUnknown file extension "++ ext paths))
-                               `catch` handle (\exc -> (l0,displayException (exc :: IOException))) "" paths
-                               `catch` handle (\exc -> (l0,displayException (exc :: ErrorCall))) "" paths
-  where compTypesFile paths = do cont <- readFile (srcFile paths)
-                                 let te = read cont :: Acton.Env.TEnv
-                                 InterfaceFiles.writeFile (joinPath (projSrcRoot paths: modpath paths)++".ty") te
-
-        showTyFile paths    = do te <- InterfaceFiles.readFile (srcFile paths)
-                                 putStrLn ("**** Type environment in " ++ (srcFile paths) ++ " ****")
+                               `catch` handle (\exc -> (l0,displayException (exc :: IOException))) "" paths mn
+                               `catch` handle (\exc -> (l0,displayException (exc :: ErrorCall))) "" paths mn
+  where showTyFile args     = do te <- InterfaceFiles.readFile (file args)
+                                 putStrLn ("**** Type environment in " ++ (file args) ++ " ****")
                                  putStrLn (Pretty.render (Pretty.pretty (te :: Acton.Env.TEnv)))
 
---        showYtFile paths    = do t <- InterfaceFiles.readFile (srcFile paths)
---                                 putStrLn (Pretty.render (Pretty.pretty (t :: Y.Stmt)))
-
-
-
-iff True m      = m >> return ()
-iff False _     = return ()
 
 dump h txt      = putStrLn ("\n\n#################################### " ++ h ++ ":\n" ++ txt)
 
-data Paths      = Paths {projSrcRoot :: FilePath,
-                         projSysRoot :: FilePath,
-                         modpath     :: [String],
-                         ext         :: String
-                        }
-                   
--- projSrcRoot is root of project in source tree (i.e. directory containing .acton file) 
--- projSysRoot is root of project in target tree (i.e. joinPath of syspath args  and content of .acton file)
--- modpath is path from root of project source tree to directory of source file
--- ext is file suffix.
--- Thus, source filename is joinPath (projSrcRoot:modpath) ++ ext and outfiles will be in joinPath (projSysRoot:modpath)
-srcFile paths           = joinPath (projSrcRoot paths:modpath paths) ++ ext paths
-outBase paths           = joinPath (projSysRoot paths:modpath paths)
+data Paths      = Paths {
+                    sysPath     :: FilePath,
+                    sysRoot     :: FilePath,
+                    srcRoot     :: FilePath,
+                    modPrefix   :: [String],
+                    ext         :: String,
+                    topMod      :: A.ModName
+                  }
 
-checkDirs               :: FilePath -> [String] -> IO ()
-checkDirs path []       = return ()
-checkDirs path (d:dirs) = do found <- doesDirectoryExist path1
-                             if found
-                              then checkDirs path1 dirs
+-- Given a FILE and optionally --path PATH:
+-- 'sysPath' is the path to the system directory as given by PATH, defaulting to the actonc executable directory.
+-- 'sysRoot' is the root of the system's private module tree (directory "modules" under 'sysPath').
+-- 'srcRoot' is the root of a user's source tree (the longest directory prefix of FILE containing an ".acton" file)
+-- 'modPrefix' is the module prefix of the source tree under 'srcRoot' (the directory name at 'srcRoot' split at every '.')
+-- 'ext' is file suffix of FILE.
+-- 'topMod' is the module name of FILE (its path after 'srcRoot' except 'ext', split at every '/')
+
+srcFile                 :: Paths -> A.ModName -> Maybe FilePath
+srcFile paths mn        = case stripPrefix (modPrefix paths) (A.modPath mn) of
+                            Just ns -> Just $ joinPath (srcRoot paths : ns) ++ ".act"
+                            Nothing -> Nothing
+
+sysFile                 :: Paths -> A.ModName -> FilePath
+sysFile paths mn        = joinPath (sysRoot paths : A.modPath mn)
+
+
+touchDirs               :: FilePath -> A.ModName -> IO ()
+touchDirs path mn       = touch path (init $ A.modPath mn)
+  where 
+    touch path []       = return ()
+    touch path (d:dirs) = do found <- doesDirectoryExist path1
+                             if found then touch path1 dirs
                               else do createDirectory path1
-                                      writeFile (joinPath [path1,"__init__.py"]) ""
-                                      checkDirs path1 dirs
-  where path1           = joinPath [path,d]
+                                      touch path1 dirs
+      where path1       = joinPath [path,d]
 
 findPaths               :: Args -> IO Paths
-findPaths args          = do absfile <- canonicalizePath (head (files args))
-                             (projRoot,dirsSrc,dirsTarget) <- findDirs absfile
-                             sysRoot <- canonicalizePath (ifExists (syspath args) projRoot)
-                             checkDirs sysRoot (dirsTarget++dirsSrc)
-                             let modpath = dirsSrc ++ [body]
-                             return $ Paths projRoot (joinPath (sysRoot : dirsTarget)) modpath ext
-  where (body,ext)      = splitExtension $ takeFileName $ head (files args)
+findPaths args          = do execDir <- takeDirectory <$> System.Environment.getExecutablePath
+                             sysPath <- canonicalizePath (if null $ syspath args then execDir else syspath args)
+                             let sysRoot = joinPath [sysPath,"modules"]
+                             absfile <- canonicalizePath (file args)
+                             (srcRoot,subdirs) <- analyze (takeDirectory absfile) []
+                             let modPrefix = if srcRoot == sysRoot then [] else split (takeFileName srcRoot)
+                                 topMod = A.modName $ modPrefix++subdirs++[body]
+                             touchDirs sysRoot topMod
+                             return $ Paths sysPath sysRoot srcRoot modPrefix ext topMod
+  where (body,ext)      = splitExtension $ takeFileName $ file args
 
-        ifExists "" p   = p
-        ifExists p _    = p
+        split           = foldr f [[]] where f c l@(x:xs) = if c == '.' then []:l else (c:x):xs
 
-        findDirs path   = diff [] (takeDirectory path)
-          where diff dirs "/"   = error "********************\nNo .acton file found in any ancestor directory"
-                diff dirs pre   = do x <- doesFileExist path
-                                     if not x
-                                      then diff (takeFileName pre : dirs) (takeDirectory pre)
-                                      else do contents <- readFile path
-                                              return $ (pre, dirs, concat $ map splitPath $ lines $ contents)
-                   where path    = joinPath [pre, ".acton"]
+        analyze "/" ds  = error "********************\nNo .acton file found in any ancestor directory"
+        analyze pre ds  = do exists <- doesFileExist (joinPath [pre, ".acton"])
+                             if exists then return $ (pre, ds)
+                              else analyze (takeDirectory pre) (takeFileName pre : ds)
 
-runRestPasses args paths src env original = (do
-                          let outbase = outBase paths
-                              initnms =  Acton.Env.names env
-                          env' <- Acton.Env.mkEnv (projSysRoot paths,syspath args) env original
-                          kchecked <- Acton.Kinds.check env' original
-                          iff (kinds args) $ dump "kinds" (Pretty.print kchecked)
-                          
-                          (iface,tchecked) <- Acton.Types.reconstruct outbase env' kchecked
-                          iff (types args) $ dump "types" (Pretty.print tchecked)
-                          iff (sigs args) $ dump "sigs" (Pretty.vprint iface)
+data CompileTask        = ActonTask  {name :: A.ModName, src :: String, atree:: A.Module} deriving (Show)
 
-                          normalized <- Acton.Normalizer.normalize (iface,env') tchecked
-                          iff (norm args) $ dump "norm" (Pretty.print normalized)
+importsOf :: CompileTask -> [A.ModName]
+importsOf t = A.importsOf (atree t)
 
-                          deacted <- Acton.Deactorizer.deactorize env' normalized
-                          iff (deact args) $ dump "deact" (Pretty.print deacted)
+chaseImportsAndCompile :: Args -> Paths -> CompileTask -> IO ()
+chaseImportsAndCompile args paths task
+                       = do tasks <- chaseImportedFiles args paths (importsOf task) task
+                            let sccs = stronglyConnComp  [(t,name t,importsOf t) | t <- tasks]
+                                (as,cs) = Data.List.partition isAcyclic sccs
+                            if null cs
+                             then do env0 <- Acton.Env.initEnv (sysRoot paths) (stub args) (topMod paths == Acton.Builtin.mBuiltin)
+                                     env1 <- foldM (doTask args paths) env0 [t | AcyclicSCC t <- as]
+                                     buildExecutable env1 args paths task
+                                         `catch` handle Acton.Env.compilationError (src task) paths (name task)
+                                         `catch` handle Acton.Types.typeError (src task) paths (name task)
+                                     return ()
+                              else do error ("********************\nCyclic imports:"++concatMap showCycle cs)
+                                      System.Exit.exitFailure
+  where isAcyclic (AcyclicSCC _) = True
+        isAcyclic _              = False
+        showCycle (CyclicSCC ts) = "\n"++concatMap (\t-> concat (intersperse "." (A.modPath (name t)))++" ") ts
 
-                          cpstyled <- Acton.CPS.convert [] deacted
-                          iff (cps args) $ dump "cps" (Pretty.print cpstyled)
+chaseImportedFiles :: Args -> Paths -> [A.ModName] -> CompileTask -> IO [CompileTask]
+chaseImportedFiles args paths imps task
+                            = do newtasks <- catMaybes <$> mapM (readAFile [task]) imps
+                                 chaseRecursively (task:newtasks) (map name newtasks) (concatMap importsOf newtasks)
 
-                          lifted <- Acton.LambdaLifter.liftModule cpstyled
-                          iff (llift args) $ dump "llift" (Pretty.print lifted)
-                                
-                          c <- Acton.CodeGen.generate env' lifted
-                          iff (cgen args) $ dump "cgen" c
-{-        
-                          py3 <- Backend.Persistable.replace py2
-                          iff (persist args) $ dump "persist" (Pretty.vprint py3) 
-    
-                          writeFile (outbase ++ ".py") (Pretty.vprint py3)
-                          unless (projSrcRoot paths == projSysRoot paths)
-                               $ copyFileWithMetadata (joinPath (projSrcRoot paths: modpath paths) ++ ".act") (outbase ++ ".act")
--}
-                          return (env'{Acton.Env.names = initnms},iface)
-                        ) 
-                          `catch` handle generalError src paths
-                          `catch` handle Acton.Kinds.kindError src paths
-                          `catch` handle Acton.Env.checkerError src paths
-                          `catch` handle Acton.Types.solverError src paths
+  where readAFile tasks mn  = case lookUp mn tasks of    -- read and parse file mn in the project directory, unless it is already in tasks 
+                                 Just t -> return Nothing
+                                 Nothing -> case srcFile paths mn of
+                                               Nothing -> return Nothing
+                                               Just actFile -> do
+                                                    ok <- System.Directory.doesFileExist actFile
+                                                    if ok then do 
+                                                        (src,m) <- Acton.Parser.parseModule mn actFile
+                                                        return $ Just $ ActonTask mn src m
+                                                     else
+                                                        return Nothing
+  
+        lookUp mn (t : ts)
+          | name t == mn     = Just t
+          | otherwise        = lookUp mn ts
+        lookUp _ []          = Nothing
+        
+        chaseRecursively tasks mns []
+                             = return tasks
+        chaseRecursively tasks mns (imn : imns)
+                             = if imn `elem` mns
+                                then chaseRecursively tasks mns imns
+                                else do t <- readAFile tasks imn
+                                        chaseRecursively (maybe tasks (:tasks) t)
+                                                         (imn:mns)
+                                                         (imns ++ concatMap importsOf t)
 
 
-handle f src paths ex = do putStrLn "\n********************"
-                           putStrLn (makeReport (f ex) (srcFile paths) src)
-                           removeIfExists (outbase++".py")
-                           removeIfExists (outbase++".ty")
-                           System.Exit.exitFailure
-  where outbase       = outBase paths
+doTask :: Args -> Paths -> Acton.Env.Env0 -> CompileTask -> IO Acton.Env.Env0
+doTask args paths env t@(ActonTask mn src m)
+                            = do ok <- checkUptoDate paths actFile tyFile [hFile, cFile] (importsOf t)
+                                 if ok && mn /= topMod paths then do
+                                          iff (verbose args) (putStrLn ("Skipping  "++ actFile ++ " (files are up to date)."))
+                                          return env
+                                  else do touchDirs (sysRoot paths) mn
+                                          iff (verbose args) (putStr ("Compiling "++ actFile ++ "... ") >> hFlush stdout)
+                                          (env',te) <- runRestPasses args paths env m
+                                                           `catch` handle generalError src paths mn
+                                                           `catch` handle Acton.Env.compilationError src paths mn
+                                                           `catch` handle Acton.Types.typeError src paths mn
+                                          iff (verbose args) (putStrLn "Done.")
+                                          return (Acton.Env.addMod mn te env')
+  where Just actFile        = srcFile paths mn
+        outbase             = sysFile paths mn
+        tyFile              = outbase ++ ".ty"
+        hFile               = outbase ++ ".h"
+        cFile               = outbase ++ ".c"
+
+checkUptoDate :: Paths -> FilePath -> FilePath -> [FilePath] -> [A.ModName] -> IO Bool
+checkUptoDate paths actFile iFile outFiles imps
+                        = do srcExists <- System.Directory.doesFileExist actFile
+                             outExists <- mapM System.Directory.doesFileExist (iFile:outFiles)
+                             if not (srcExists && and outExists) then return False
+                              else do srcTime  <-  System.Directory.getModificationTime actFile
+                                      outTimes <- mapM System.Directory.getModificationTime (iFile:outFiles)
+                                      impsOK   <- mapM (impOK (head outTimes)) imps
+                                      return (all (srcTime <) outTimes && and impsOK)
+  where impOK iTime mn = do let impFile = sysFile paths mn ++ ".ty"
+                            ok <- System.Directory.doesFileExist impFile
+                            if ok then do impfileTime <- System.Directory.getModificationTime impFile
+                                          return (impfileTime < iTime)
+                             else error ("********************\nError: cannot find interface file "++impFile)
+
+
+runRestPasses :: Args -> Paths -> Acton.Env.Env0 -> A.Module -> IO (Acton.Env.Env0, Acton.Env.TEnv)
+runRestPasses args paths env0 parsed = do
+                      let outbase = sysFile paths (A.modname parsed)
+                      env <- Acton.Env.mkEnv (sysRoot paths) env0 parsed
+
+                      kchecked <- Acton.Kinds.check env parsed
+                      iff (kinds args) $ dump "kinds" (Pretty.print kchecked)
+
+                      (iface,tchecked,typeEnv) <- Acton.Types.reconstruct outbase env kchecked
+                      iff (types args) $ dump "types" (Pretty.print tchecked)
+                      iff (sigs args) $ dump "sigs" (Pretty.vprint iface)
+
+                      (normalized, normEnv) <- Acton.Normalizer.normalize typeEnv tchecked
+                      iff (norm args) $ dump "norm" (Pretty.print normalized)
+                      --traceM ("#################### normalized env0:")
+                      --traceM (Pretty.render (Pretty.pretty normEnv))
+
+                      (deacted,deactEnv) <- Acton.Deactorizer.deactorize normEnv normalized
+                      iff (deact args) $ dump "deact" (Pretty.print deacted)
+                      --traceM ("#################### deacted env0:")
+                      --traceM (Pretty.render (Pretty.pretty deactEnv))
+
+                      (cpstyled,cpsEnv) <- Acton.CPS.convert deactEnv deacted
+                      iff (cps args) $ dump "cps" (Pretty.print cpstyled)
+                      --traceM ("#################### cps'ed env0:")
+                      --traceM (Pretty.render (Pretty.pretty cpsEnv))
+
+                      (lifted,liftEnv) <- Acton.LambdaLifter.liftModule cpsEnv cpstyled
+                      iff (llift args) $ dump "llift" (Pretty.print lifted)
+                      --traceM ("#################### lifteded env0:")
+                      --traceM (Pretty.render (Pretty.pretty liftEnv))
+
+                      (n,h,c) <- Acton.CodeGen.generate liftEnv lifted
+                      iff (hgen args) $ dump "hgen (.h)" h
+                      iff (cgen args) $ dump "cgen (.c)" c
+
+                      iff (not $ stub args) $ do
+                          let libDir = joinPath [sysPath paths,"lib"]
+                              cFile = outbase ++ ".c"
+                              hFile = outbase ++ ".h"
+                              oFile = joinPath [libDir,n++".o"]
+                              aFile = joinPath [libDir,"libActon.a"]
+                              gccCmd = "gcc -c -I" ++ sysPath paths ++ " -o" ++ oFile ++ " " ++ cFile
+                              arCmd = "ar r " ++ aFile ++ " " ++ oFile
+                          writeFile hFile h
+                          writeFile cFile c
+                          iff (cgen args) $ do
+                              putStrLn gccCmd
+                              putStrLn arCmd
+                          createProcess (shell $ gccCmd ++ " && " ++ arCmd) >>= \(_,_,_,hdl) -> waitForProcess hdl
+
+                      return (env0 `Acton.Env.withModulesFrom` env,iface)
+
+
+handle f src paths mn ex = do putStrLn "\n********************"
+                              putStrLn (makeReport (f ex) fname src)
+                              removeIfExists (outbase++".ty")
+                              System.Exit.exitFailure
+  where Just fname     = srcFile paths mn
+        outbase        = sysFile paths mn
         removeIfExists f = removeFile f `catch` handleExists
         handleExists :: IOException -> IO ()
         handleExists _ = return ()
@@ -226,158 +311,27 @@ handle f src paths ex = do putStrLn "\n********************"
 makeReport (loc, msg) file src = errReport (sp, msg) src
   where sp = Acton.Parser.extractSrcSpan loc file src
 
-{-
-mkYangArgs :: Args -> YangCompiler.Args 
-mkYangArgs args         = YangCompiler.Args {
-                            YangCompiler.tokens  = tokens args,
-                            YangCompiler.parse   = parse args,
-                            YangCompiler.imports = imports args,
-                            YangCompiler.norm    = norm args,
-                            YangCompiler.expand  = expand args,
-                            YangCompiler.syspath = syspath args,
-                            YangCompiler.files    = files args}
--}
-                      
 
-data CompileTask        = ActonTask  {name :: A.ModName, src :: String, atree:: A.Module}
---                        | YangTask   {name :: A.QName, ytree :: Y.Stmt} 
-                        | PythonTask {name :: A.ModName} deriving (Show)
-
-importsOf :: CompileTask -> [A.ModName]
-importsOf t@ActonTask{} = A.importsOf (atree t)
---importsOf t@YangTask{}  = map ((\str -> A.qName ["yang",str]) . Y.istr . Y.ident) is
---   where m              = ytree t
---         is             = Y.importsOf m ++ Y.includesOf m 
-importsOf PythonTask{}  = []
-
-chaseImportsAndCompile :: Args -> Paths -> CompileTask -> IO ()
-chaseImportsAndCompile args paths task
-                       = do tasks <- chaseImportedFiles args paths (importsOf task) [task]
-                            let sccs = stronglyConnComp  [(t,name t,importsOf t) | t <- tasks]
-                                (as,cs)        = Data.List.partition isAcyclic sccs
-                            if null cs
-                             then do env0 <- Acton.Env.initEnv False
-                                     foldM (doTask args paths) (env0,[])
-                                           ([PythonTask (A.modName ["python",body])| body <- pythonFiles] ++ [t | AcyclicSCC t <- as])
-                                     return ()
-                              else do error ("********************\nCyclic imports:"++concatMap showCycle cs)
-                                      System.Exit.exitFailure
-  where isAcyclic (AcyclicSCC _) = True
-        isAcyclic _    = False
-        showCycle (CyclicSCC ts) = "\n"++concatMap (\t-> concat (intersperse "." (A.modPath (name t)))++" ") ts
-        pythonFiles    = ["dwdm", "getenv", "logging", "netconf_","power","re","timestamp","traceback","xmlparse", "xmlprint"]
-
-chaseImportedFiles :: Args -> Paths -> [A.ModName] -> [CompileTask] -> IO ([CompileTask])
-chaseImportedFiles args paths imps tasks
-                            = do newtasks <- mapM (readAFile tasks) imps
-                                 let newtasks' = concat newtasks
-                                 chaseRecursively (tasks++newtasks') (map name newtasks') (concatMap importsOf newtasks')
-
-  where readAFile tasks mn  = do let ps = A.modPath mn  -- read and parse file qn in the project directory, unless it is already in tasks 
-                                     srcBase = joinPath (projSrcRoot paths:ps)
-                                 if head ps == "python"
-                                  then return []
-                                  else case lookUp mn tasks of
-                                         Just t -> return []
-                                         Nothing -> {- if head ps == "yang" 
-                                                     then do let yangFile = srcBase ++ ".yang"
-                                                             ok <- System.Directory.doesFileExist yangFile
-                                                             if ok then do m <- Yang.Parser.parseFile yangFile
-                                                                           return [YangTask qn m]
-                                                              else return []
-                                                     else -} 
-                                                          do let actFile = srcBase ++ ".act"
-                                                             ok <- System.Directory.doesFileExist actFile
-                                                             if ok then do (src,m) <- Acton.Parser.parseModule mn actFile
-                                                                           return [ActonTask mn src m]
-                                                             else return []
-  
-        lookUp mn (t : ts)
-          | name t == mn     = Just t
-          | otherwise        = lookUp mn ts
-        lookUp _ []          = Nothing
-        
-        chaseRecursively tasks qns []
-                             = return tasks
-        chaseRecursively tasks qns (iqn : iqns)
-                             = if iqn `elem` qns
-                                then chaseRecursively tasks qns iqns
-                                else do t <- readAFile tasks iqn
-                                        chaseRecursively (if null t then tasks else head t : tasks)
-                                                         (iqn:qns)
-                                                         (iqns ++ concatMap importsOf t) 
-
-
-doTask args paths ifaces@(env, yangifaces) t@(ActonTask qn src m)
-                             = do ok <- checkUptoDate paths ".ty" actFile tyFile [pyFile] (syspath args) (importsOf t)
-                                  if ok then do iff (verbose args) (putStrLn ("Skipping  "++ actFile ++ " (files are up to date)."))
-                                                return ifaces
-                                   else do checkDirs (projSysRoot paths) (init (A.modPath qn))
-                                           iff (verbose args) (putStr ("Compiling "++ actFile ++ "... ") >> hFlush stdout)
-                                           (env',te) <- runRestPasses args (paths{modpath = A.modPath qn, ext = ".act"}) src env m
-                                           iff (verbose args) (putStrLn "Done.")
-                                           return (Acton.Env.addMod qn te env', yangifaces)
-  where actFile             = joinPath (projSrcRoot paths : A.modPath qn)++ ".act"
-        outBase             = joinPath (projSysRoot paths : A.modPath qn)
-        tyFile              = outBase ++ ".ty"
-        pyFile              = outBase ++ ".py"
-{-        
-doTask args paths ifaces@(env, yangifaces) t@(YangTask qn m) = do
-         let outFiles = case m of
-                          Y.Module{} -> [actFile,pyFile,tyFile]
-                          Y.Submodule{} -> []
-         ok <- checkUptoDate paths ".yt" yangFile ytFile outFiles (syspath args) (importsOf t)
-         if ok then do iff (verbose args) (putStrLn ("Skipping  "++ yangFile ++ " (files are up to date)."))
-                       return ifaces
-          else do checkDirs (projSysRoot paths) (init (A.modPath qn))
-                  iff (verbose args) (putStr ("Compiling "++ yangFile ++ "... ") >> hFlush stdout)
-                  (etree,yangifaces',mbt) <- YangCompiler.runRestPasses qn (mkYangArgs args) (yangFile,joinPath (projSysRoot paths:init (A.modPath qn)),outbase) yangifaces m
-                  iff (verbose args) (putStrLn ("Done."))
-                  case mbt of
-                     Nothing -> return (env, ((id,Y.revisionOf etree),etree):((id,Nothing),etree):yangifaces')
-                     Just m -> do 
-                                iff (verbose args) (putStr ("Compiling "++  actFile ++ "... ") >> hFlush stdout)
-                                let m1 = Acton.Relabel.relab m
-                                (amods,t) <- runRestPasses args (Paths (projSysRoot paths) (projSysRoot paths) (A.modPath qn) ".act") "" env m1
-                                iff (verbose args) (putStrLn ("Done."))
-                                return ((qn,t):amods,((id,Y.revisionOf etree),etree):((id,Nothing),etree):yangifaces')
-   where yangFile = joinPath (projSrcRoot paths: A.modPath qn) ++ ".yang"
-         outbase  = joinPath (projSysRoot paths: A.modPath qn)
-         ytFile   = outbase ++ ".yt"
-         tyFile   = outbase ++ ".ty"
-         pyFile   = outbase ++ ".py"
-         actFile  = outbase ++ ".act"
-         [_,i]    = A.modPath qn
-         id       = Y.Ident SpanEmpty i
--}
-doTask args paths ifaces@(env, yangifaces) (PythonTask qn)
-                        = do ok <- checkUptoDate paths ".ty" typesFile tyFile [] (joinPath (syspath args : ["python"])) []
-                             if ok then return ifaces --putStrLn ("Skipping  "++ typesFile ++ " (files are up to date).")
-                              else do putStr ("Compiling "++  typesFile ++ "... ")
-                                      cont <- readFile typesFile
-                                      let te = read cont :: Acton.Env.TEnv
-                                      InterfaceFiles.writeFile tyFile te
-                                      putStrLn ("Done.")
-                                      return (Acton.Env.addMod qn te env, yangifaces)
-   where pythonBase     = joinPath (syspath args : A.modPath qn)
-         typesFile      =  pythonBase ++ ".types"
-         tyFile         =  pythonBase ++ ".ty"
-         
-checkUptoDate :: Paths -> String -> FilePath -> FilePath -> [FilePath] -> FilePath -> [A.ModName] -> IO Bool
-checkUptoDate paths ext srcFile iFile outFiles libRoot imps
-                        = do srcExists <- System.Directory.doesFileExist srcFile
-                             outExists <- mapM System.Directory.doesFileExist (iFile:outFiles)
-                             if not (srcExists && and outExists) then return False
-                              else do srcTime  <-  System.Directory.getModificationTime srcFile
-                                      outTimes <- mapM System.Directory.getModificationTime (iFile:outFiles)
-                                      impsOK   <- mapM (impOK (head outTimes)) imps
-                                      return (all (srcTime <) outTimes && and impsOK)
-  where impOK iTime mn = do let impFile = joinPath (projSysRoot paths : A.modPath mn) ++ ext
-                            ok <- System.Directory.doesFileExist impFile
-                            if ok then do impfileTime <- System.Directory.getModificationTime impFile
-                                          return (impfileTime < iTime)
-                             else do let impSysFile = joinPath (libRoot : A.modPath mn) ++ ext
-                                     ok <-  System.Directory.doesFileExist impSysFile
-                                     if ok then do impfileTime <- System.Directory.getModificationTime impSysFile
-                                                   return (impfileTime < iTime)
-                                       else error ("********************\nError: cannot find interface file "++impFile)
+buildExecutable env args paths task
+  | null $ root args        = return ()
+  | otherwise               = case Acton.Env.findQName qn env of
+                                  i@(Acton.Env.NAct [] (A.TRow _ _ _ t A.TNil{}) A.TNil{} _) -> do
+                                      -- putStrLn ("## Env is " ++ prstr t)
+                                      c <- Acton.CodeGen.genRoot env qn t
+                                      writeFile rootFile c
+                                      iff (cgen args) $ do
+                                          putStrLn gccCmd
+                                      createProcess (shell gccCmd) >>= \(_,_,_,hdl) -> waitForProcess hdl
+                                      return ()
+                                  _ ->
+                                      error ("********************\nRoot " ++ prstr n ++ " : " ++ prstr sc ++ " is not instantiable")
+  where n                   = A.name (root args)
+        mn                  = name task
+        qn                  = A.GName mn n
+        (sc,_)              = Acton.QuickType.schemaOf env (A.eQVar qn)
+        outbase             = sysFile paths mn
+        rootFile            = outbase ++ ".root.c"
+        libFiles            = " -L " ++ joinPath [sysPath paths,"lib"] ++ " -lutf8proc -ldbclient -lremote -lcomm -ldb -lvc -lprotobuf-c -lActon "
+        binFile             = dropExtension srcbase
+        Just srcbase        = srcFile paths mn
+        gccCmd              = "gcc -I" ++ sysPath paths ++ libFiles ++ rootFile ++ " -o" ++ binFile

@@ -19,9 +19,9 @@ int main() {
   }
   $ROW row = $serialize(($Serializable)lst2);
   $write_serialized(row,"test2.bin");
-  $list lst3 = ($list)$deserialize(row);
+  $list lst3 = ($list)$deserialize(row, NULL);
   $ROW row2 = $read_serialized("test2.bin");
   $write_serialized(row2,"test3.bin");
   $list lst0 = $list_getitem(lst3,4);
-  $print($NEW($tuple,1,lst3));
+  $print(1,lst3);
 }

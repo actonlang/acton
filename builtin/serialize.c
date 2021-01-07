@@ -19,6 +19,14 @@ void $enqueue2(struct $ROWLISTHEADER *header, $ROW elem) {
  
 // Hashable$WORD methods //////////////////////////////////////////////////
 
+void $Hashable$WORD$__serialize__($Hashable$WORD self, $Serial$state state) {
+}
+
+$Hashable$WORD $Hashable$WORD$__deserialize__($Hashable$WORD self, $Serial$state state) {
+   $Hashable$WORD res = $DNEW($Hashable$WORD,state);
+   return res;
+}
+
 $bool $Hashable$WORD_eq($Hashable$WORD wit, $WORD a, $WORD b) {
   return to$bool(a==b);
 }
@@ -31,7 +39,19 @@ $int $Hashable$WORD_hash($Hashable$WORD wit, $WORD a) {
   return to$int($pointer_hash(a));
 }
 
-struct $Hashable$WORD$class $Hashable$WORD$methods = {"",UNASSIGNED,NULL,(void (*)($Hashable$WORD))$default__init__, $Hashable$WORD_eq,$Hashable$WORD_ne,$Hashable$WORD_hash};
+struct $Hashable$WORD$class $Hashable$WORD$methods = {
+    "$Hashable$WORD",
+    UNASSIGNED,
+    ($Super$class)&$Hashable$methods,
+    (void (*)($Hashable$WORD))$default__init__,
+    $Hashable$WORD$__serialize__,
+    $Hashable$WORD$__deserialize__,
+    ($bool (*)($Hashable$WORD))$default__bool__,
+    ($str (*)($Hashable$WORD))$default__str__,
+    $Hashable$WORD_eq,
+    $Hashable$WORD_ne,
+    $Hashable$WORD_hash
+};
 struct $Hashable$WORD $Hashable$WORD_instance = {&$Hashable$WORD$methods};
 struct $Hashable$WORD *$Hashable$WORD$witness = &$Hashable$WORD_instance;
 
@@ -52,6 +72,13 @@ void $step_serialize($WORD self, $Serial$state state) {
   if (self) {
     int class_id = $GET_CLASSID((($Serializable)self)->$class);
     if (class_id > ITEM_ID) { // not one of the Acton builtin datatypes, which have hand-crafted serializations
+      if (state->globmap) {
+          long key = (int)state->globmap(self);
+          if (key < 0) {
+            $val_serialize(-class_id,&key,state);
+            return;
+          }
+      }
       $int prevkey = ($int)$dict_get(state->done,($Hashable)$Hashable$WORD$witness,self,NULL);
       if (prevkey) {
         $val_serialize(-class_id,&prevkey->val,state);
@@ -71,12 +98,16 @@ $WORD $step_deserialize($Serial$state state) {
     $ROW this = state->row;
     state->row = this->next;
     state->row_no++;
-    if (this->class_id < 0)
-      return $dict_get(state->done,($Hashable)$Hashable$int$witness,to$int((long)this->blob[0]),NULL);
-    else 
-      return $GET_METHODS(this->class_id)->__deserialize__(state);
+    if (this->class_id < 0) {
+      long key = (long)this->blob[0];
+      if (key < 0)
+          return state->globmap(($WORD)key);
+      else
+          return $dict_get(state->done,($Hashable)$Hashable$int$witness,to$int(key),NULL);
+    } else
+      return $GET_METHODS(this->class_id)->__deserialize__(NULL, state);
   } else
-    return $GET_METHODS(abs(state->row->class_id))->__deserialize__(state);
+    return $GET_METHODS(abs(state->row->class_id))->__deserialize__(NULL, state);
 }
 
 
@@ -137,9 +168,10 @@ void $write_serialized($ROW row, char *file) {
   fclose(fileptr);
 }
  
-$ROW $serialize($Serializable s) {
+$ROW $serialize($Serializable s, $WORD (*globmap)($WORD)) {
   $Serial$state state = malloc(sizeof(struct $Serial$state));
-  state-> done = $NEW($dict,($Hashable)$Hashable$WORD$witness,NULL,NULL);
+  state->done = $NEW($dict,($Hashable)$Hashable$WORD$witness,NULL,NULL);
+  state->globmap = globmap;
   state->row_no=0;
   state->row = NULL;
   state->fst = NULL;
@@ -148,16 +180,16 @@ $ROW $serialize($Serializable s) {
 }
 
 void $serialize_file($Serializable s, char *file) {
-  $write_serialized($serialize(s),file);
+  $write_serialized($serialize(s,NULL),file);
 }
 
-$Serializable $deserialize($ROW row) {
+$Serializable $deserialize($ROW row, $WORD (*globmap)($WORD)) {
   $Serial$state state = malloc(sizeof(struct $Serial$state));
   state->done = $NEW($dict,($Hashable)$Hashable$int$witness,NULL,NULL);
+  state->globmap = globmap;
   state->row_no=0;
   state->row = row;
   state->fst = NULL;
-  $dict done = $NEW($dict,($Hashable)$Hashable$int$witness,NULL,NULL);
   return $step_deserialize(state);
 }
 
@@ -207,5 +239,5 @@ $ROW $read_serialized(char *file) {
 }
        
 $Serializable $deserialize_file(char *file) {
-  return $deserialize($read_serialized(file));
+  return $deserialize($read_serialized(file), NULL);
 }

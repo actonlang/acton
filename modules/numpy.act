@@ -1,0 +1,52 @@
+import math
+
+protocol Primitive: pass
+
+class ndselect(struct):
+    pass
+
+class ndindex(ndselect):
+    __init__: (int) -> None
+
+class ndslice(ndselect):
+    __init__: (slice) -> None
+
+class ndarray[A] ():
+    shape           : list[int]                      # should be a method? (at least until we have immutable lists)
+    strides         : list[int]                      #      -"-
+    size            : int
+    reshape         : (list[int]) -> Self
+    transpose       : (?list[int]) -> Self
+    flatten         : () -> Self                     # the same as reshape([-1])
+    copy            : () -> Self                     # makes a contiguous deep copy
+    __ndgetslice__  : (list[ndselect]) -> Self
+
+
+partition           : [A (Primitive)] => (ndarray[A],int)        -> ndarray[A]
+clip                : [A (Primitive)] => (ndarray[A],?A,?A)      -> ndarray[A]
+dot                 : [A (Primitive)] => (ndarray[A],ndarray[A]) -> ndarray[A]
+sum                 : [A (Primitive)] => (ndarray[A],?int)       -> ndarray[A]
+sort                : [A (Primitive)] => (ndarray[A],?int)       -> ndarray[A]
+abs                 : [A (Primitive)] => (ndarray[A])            -> ndarray[A]
+scalar              : [A (Primitive)] => (ndarray[A])            -> A           #only for 0-dim array
+    
+
+arange              :                    (?int,int,?int)         -> ndarray[int]       
+linspace            :                    (float, float, int)     -> ndarray[float]
+array               : [A (Primitive)] => (list[A])               -> ndarray[A]            
+full                : [A (Primitive)] => (list[int],A)           -> ndarray[A]           
+unirandint          :                    (int, int, int)         -> ndarray[int]
+unirandfloat        :                    (float, float, int)     -> ndarray[float]
+
+extension ndarray[A (Primitive)] (Integral): pass
+extension ndarray[A (Primitive)] (Sliceable[ndarray[A]]): pass
+extension ndarray[A (Primitive)] (Iterable[A]): pass
+extension ndarray[A (Primitive, math.RealFuns)] (math.RealFuns): pass
+extension ndarray[A (Primitive, RealFloat)] (RealFloat): pass
+
+extension int (Primitive): pass
+extension float (Primitive): pass
+
+newaxis : int  # unspecified value guaranteed not to be used for indexing (e.g. LONG_MIN)
+
+

@@ -1,23 +1,20 @@
 // General methods //////////////////////////////////////////////////////////////////////////
 
-void $list_init($list lst, $Sequence wit, $WORD seq) {
-  if (!seq) {
+$list $list$new($Iterable wit, $WORD iterable) {
+  return $NEW($list, wit, iterable);
+}
+
+void $list_init($list lst, $Iterable wit, $WORD iterable) {
     lst->length = 0;
     lst->capacity = 0;
     lst->data = NULL;
-    return;
-  }
-  $Collection wit2 = wit->w$Collection$Sequence;
-  int len = wit2->$class->__len__(wit2,seq)->val;
-  lst->data = malloc(len*sizeof($WORD));
-  if (lst->data == NULL) {
-    RAISE(($BaseException)$NEW($MemoryError,to$str("memory allocation failed")));
-  }
-  lst->length = len;
-  lst->capacity = len;
-  $Iterator it = wit2->$class->__iter__(wit2,seq);
-  for (int i=0; i<len; i++)
-    $list_setitem(lst,i,it->$class->__next__(it));
+    if (!iterable || !wit) {
+        return;
+    }
+    $WORD w;
+    $Iterator it = wit->$class->__iter__(wit,iterable);
+    while((w = it->$class->__next__(it)))
+        $list_append(lst,w);
 }
   
 $bool $list_bool($list self) {
@@ -47,14 +44,15 @@ void $list_serialize($list self,$Serial$state state) {
   }
 }
  
-$list $list_deserialize($Serial$state state) {
+$list $list_deserialize($list res, $Serial$state state) {
   $ROW this = state->row;
   state->row = this->next;
   state->row_no++;
   if (this->class_id < 0) {
     return ($list)$dict_get(state->done,($Hashable)$Hashable$int$witness,to$int((long)this->blob[0]),NULL);
   } else {
-    $list res = $list_new((int)(long)this->blob[0]);
+    if (!res)
+       res = $list_new((int)(long)this->blob[0]);
     $dict_setitem(state->done,($Hashable)$Hashable$int$witness,to$int(state->row_no-1),res);
     res->length = res->capacity;
     for (int i = 0; i < res->length; i++) 
@@ -63,7 +61,7 @@ $list $list_deserialize($Serial$state state) {
   }
 }
 
-struct $list$class $list$methods = {"",UNASSIGNED,($Super$class)&$object$methods, $list_init, $list_serialize,$list_deserialize, $list_bool, $list_str, $list_copy};
+struct $list$class $list$methods = {"$list",UNASSIGNED,($Super$class)&$object$methods, $list_init, $list_serialize,$list_deserialize, $list_bool, $list_str, $list_copy};
 
 // Auxiliary functions /////////////////////////////////////////////////////////////////////////////////////////////////////
  
@@ -156,6 +154,10 @@ static $WORD $Iterator$list_next($Iterator$list self) {
   return self->nxt >= self->src->length ? NULL : self->src->data[self->nxt++];
 }
 
+$Iterator$list $Iterator$list$new($list lst) {
+  return $NEW($Iterator$list, lst);
+}
+
 void $Iterator$list_init($Iterator$list self, $list lst) {
   self->src = lst;
   self->nxt = 0;
@@ -176,14 +178,15 @@ void $Iterator$list_serialize($Iterator$list self,$Serial$state state) {
   $step_serialize(to$int(self->nxt),state);
 }
 
-$Iterator$list $Iterator$list$_deserialize($Serial$state state) {
-   $Iterator$list res = $DNEW($Iterator$list,state);
+$Iterator$list $Iterator$list$_deserialize($Iterator$list res, $Serial$state state) {
+   if(!res)
+      res = $DNEW($Iterator$list,state);
    res->src = ($list)$step_deserialize(state);
    res->nxt = from$int(($int)$step_deserialize(state));
    return res;
 }
 
-struct $Iterator$list$class $Iterator$list$methods = {"",UNASSIGNED,($Super$class)&$Iterator$methods, $Iterator$list_init,
+struct $Iterator$list$class $Iterator$list$methods = {"$Iterator$list",UNASSIGNED,($Super$class)&$Iterator$methods, $Iterator$list_init,
                                                       $Iterator$list_serialize, $Iterator$list$_deserialize,$Iterator$list_bool,$Iterator$list_str,$Iterator$list_next};
 
 $Iterator $list_iter($list lst) {
@@ -225,7 +228,7 @@ void $list_delitem($list lst,int ix) {
 
 // Sliceable //////////////////////////////////////////////////////////////////////////////////////
 
-$list $list_getslice($list lst, $Slice slc) {
+$list $list_getslice($list lst, $slice slc) {
   int len = lst->length;
   int start, stop, step, slen;
   normalize_slice(slc, len, &slen, &start, &stop, &step);
@@ -242,7 +245,7 @@ $list $list_getslice($list lst, $Slice slc) {
   return rlst;
 }
 
-void $list_setslice($list lst, $Slice slc, $Iterator it) {
+void $list_setslice($list lst, $slice slc, $Iterator it) {
   int len = lst->length;
   $list other = $list_new(0);
   $WORD w;
@@ -282,7 +285,7 @@ void $list_setslice($list lst, $Slice slc, $Iterator it) {
   }
 }
 
-void $list_delslice($list lst, $Slice slc) {
+void $list_delslice($list lst, $slice slc) {
   int len = lst->length;
   int start, stop, step, slen;
   normalize_slice(slc, len, &slen, &start, &stop, &step);

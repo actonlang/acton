@@ -21,11 +21,24 @@ void $bool_serialize($bool self, $Serial$state state) {
   $val_serialize(BOOL_ID,&self->val,state);
 }
 
-$bool $bool_deserialize($Serial$state state) {
+$bool $bool_deserialize($bool self, $Serial$state state) {
   return to$bool((long)$val_deserialize(state));
 }
 
-struct $bool$class $bool$methods = {"",UNASSIGNED,($Super$class)&$struct$methods,$bool_init, $bool_serialize, $bool_deserialize, $bool_bool, $bool_str};
+struct $bool$class $bool$methods = {
+    "$bool",
+    UNASSIGNED,
+    ($Super$class)&$atom$methods,
+    $bool_init,
+    $bool_serialize,
+    $bool_deserialize,
+    $bool_bool,
+    $bool_str
+};
+
+$bool $bool$new($struct s) {
+    return $NEW($bool, s);
+}
 
 $bool to$bool(long b) {
   $bool res = malloc(sizeof(struct $bool));
@@ -43,3 +56,8 @@ struct $bool $f = {&$bool$methods,0L};
 
 $bool $True = &$t;
 $bool $False = &$f;
+
+
+$bool $default__bool__($struct self) {
+  return $True;
+}

@@ -17,6 +17,11 @@ import Text.PrettyPrint as TextPP
 
 --------------------------------------------------------------------------------
 
+infixl 5 $++$
+
+a $++$ b    = a $+$ blank $+$ b
+
+
 print x     = render $ pretty x
 
 vprint x    = render $ vpretty x
@@ -43,9 +48,17 @@ prettyPrefix maxLen x
 instance Pretty String where
    pretty s = text s
 
+{-
+This is not used in Acton compiler, so we reuse the name for the following function, which we have use for.
+
 -- | Conditionally wrap parentheses around an item.
 parensIf :: Pretty a => (a -> Bool) -> a -> Doc
 parensIf test x = if test x then parens $ pretty x else pretty x 
+-}
+
+parensIf :: Bool -> Doc -> Doc
+parensIf b e = if b then parens e else e
+
 
 perhaps :: Pretty a => Maybe a -> Doc -> Doc
 perhaps Nothing doc = empty

@@ -1,0 +1,6 @@
+actor server(env):
+
+    def session(conn):
+        conn.on_receipt(conn.write, env.stdout_write)
+
+    env.listen(12345,session)

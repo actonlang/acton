@@ -2,7 +2,12 @@
 typedef void *$WORD;
 #define $None ($WORD)0
 
+#define $long long
+
 void $default__init__($WORD);
+
+
+void $printobj(char *mess,$WORD obj);
 
 
 #define $NEW($T, ...)       ({ $T $t = malloc(sizeof(struct $T)); \
@@ -12,14 +17,25 @@ void $default__init__($WORD);
 
 #define $NEWCC($X, $c, ...) ({ $X $x = malloc(sizeof(struct $X)); \
                                $x->$class = &$X ## $methods; \
-                               $x->$class->__init__($x, ##__VA_ARGS__, ($Cont)$NEW($RetNew,$c,($Actor)$x)); })
+                               $x->$class->__init__($x, ##__VA_ARGS__, $CONSTCONT($x,$c)); })
 
 #define $DNEW($T, $state)   ({ $T $t = malloc(sizeof(struct $T)); \
                                $t->$class = &$T ## $methods;                                     \
                                $dict_setitem($state->done,($Hashable)$Hashable$int$witness,to$int($state->row_no-1),$t); \
                                $t; })
 
-#define $ISINSTANCE($x,$T)    ({ $Super$class $c = ($Super$class)$x->$class; \
-                                 while($c && $c != ($Super$class)&$T ## $methods) $c = $c->$superclass; \
-                                 $c == ($Super$class)&$T ## $methods; })
+#define $AND(a, b)            ((a)->val ? (b) : $False)
 
+#define $OR(a, b)             ((a)->val ? $True : (b))
+
+#define $NOT(a)               ((a)->val ? $False : $True)
+
+#define $ISINSTANCE($x,$T)    ({ $Super$class $c = (($Super)$x)->$class; \
+                                 while($c && $c != ($Super$class)&$T ## $methods) $c = $c->$superclass; \
+                                 to$bool($c != 0); })
+
+#define $ISNOTNONE(x)         ((x) != $None ? $True : $False)
+
+#define $SKIPRES(cont)        (cont)
+
+#define $FORMAT($s, ...)      ({ char * $b; asprintf(&$b, $s, ##__VA_ARGS__); to$str($b); })

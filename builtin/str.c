@@ -14,7 +14,7 @@ void $str_init($str, $struct);
 $bool $str_bool($str);
 $str $str_str($str);
 void $str_serialize($str,$Serial$state);
-$str $str_deserialize($Serial$state);
+$str $str_deserialize($str,$Serial$state);
 
 // String-specific methods
 $str $str_capitalize($str s);
@@ -56,7 +56,7 @@ $str $str_upper($str s);
 $str $str_zfill($str s, $int width);
 
 struct $str$class $str$methods =
-  {"",UNASSIGNED,($Super$class)&$struct$methods, $str_init, $str_serialize, $str_deserialize, $str_bool, $str_str, $str_capitalize, $str_center, $str_count, $str_encode, $str_endswith,
+  {"$str",UNASSIGNED,($Super$class)&$atom$methods, $str_init, $str_serialize, $str_deserialize, $str_bool, $str_str, $str_capitalize, $str_center, $str_count, $str_encode, $str_endswith,
    $str_expandtabs, $str_find, $str_index, $str_isalnum, $str_isalpha, $str_isascii, $str_isdecimal, $str_islower, $str_isprintable, $str_isspace,
    $str_istitle, $str_isupper, $str_join, $str_ljust, $str_lower, $str_lstrip, $str_partition, $str_replace, $str_rfind, $str_rindex, $str_rjust,
    $str_rpartition, $str_rstrip, $str_split, $str_splitlines, $str_startswith, $str_strip, $str_upper, $str_zfill};
@@ -80,11 +80,25 @@ int $str_contains ($str, $str);
 int $str_containsnot ($str, $str);
 
 $str $str_getitem($str, int);
-$str $str_getslice($str, $Slice);
+$str $str_getslice($str, $slice);
  
 $str $str_add($str, $str);
 
 // Protocol instances, using above prototypes 
+
+// Ord
+
+void $Ord$str$__serialize__($Ord$str self, $Serial$state state) {
+}
+
+$Ord$str $Ord$str$__deserialize__($Ord$str self, $Serial$state state) {
+   $Ord$str res = $DNEW($Ord$str,state);
+   return res;
+}
+
+$Ord$str $Ord$str$new() {
+  return $NEW($Ord$str);
+}
 
 $bool $Ord$str$__eq__ ($Ord$str wit, $str a, $str b) {
   return to$bool($str_eq(a,b));
@@ -110,6 +124,18 @@ $bool $Ord$str$__ge__ ($Ord$str wit, $str a, $str b){
   return to$bool($str_ge(a,b));
 }
 
+// Container
+
+void $Container$str$__serialize__($Container$str self, $Serial$state state) {
+  $step_serialize(self-> w$Eq$A$Container$str, state);
+}
+
+$Container$str $Container$str$__deserialize__($Container$str self, $Serial$state state) {
+   $Container$str res = $DNEW($Container$str,state);
+   res->w$Eq$A$Container$str = ($Eq)$step_deserialize(state);
+   return res;
+}
+
 $Iterator $Container$str$__iter__ ($Container$str wit, $str str) {
   return $str_iter(str);
 }
@@ -130,6 +156,16 @@ $bool $Container$str$__containsnot__ ($Container$str wit, $str str, $str sub) {
   return to$bool($str_containsnot(str, sub));
 }  
 
+// Sliceable
+
+void $Sliceable$str$__serialize__($Sliceable$str self, $Serial$state state) {
+}
+
+$Sliceable$str $Sliceable$str$__deserialize__($Sliceable$str self, $Serial$state state) {
+   $Sliceable$str res = $DNEW($Sliceable$str,state);
+   return res;
+}
+
 $str $Sliceable$str$__getitem__ ($Sliceable$str wit, $str str, $int i) {
   return $str_getitem(str,from$int(i));
 }
@@ -144,22 +180,42 @@ void $Sliceable$str$__delitem__ ($Sliceable$str wit, $str str, $int i) {
   exit(-1);
 }
 
-$str $Sliceable$str$__getslice__ ($Sliceable$str wit, $str str, $Slice slc) {
+$str $Sliceable$str$__getslice__ ($Sliceable$str wit, $str str, $slice slc) {
   return $str_getslice(str,slc);
 }
 
-void $Sliceable$str$__setslice__ ($Sliceable$str wit, $Iterable wit2, $str str, $Slice slc, $WORD iter) {
+void $Sliceable$str$__setslice__ ($Sliceable$str wit, $str str, $Iterable wit2, $slice slc, $WORD iter) {
   fprintf(stderr,"Internal error: call to mutating method setslice on string");
   exit(-1);
 }
 
-void $Sliceable$str$__delslice__ ($Sliceable$str wit, $str str, $Slice slc) {
+void $Sliceable$str$__delslice__ ($Sliceable$str wit, $str str, $slice slc) {
   fprintf(stderr,"Internal error: call to mutating method delslice on string");
   exit(-1);
 }
 
+// Plus
+
+void $Plus$str$__serialize__($Plus$str self, $Serial$state state) {
+}
+
+$Plus$str $Plus$str$__deserialize__($Plus$str self, $Serial$state state) {
+   $Plus$str res = $DNEW($Plus$str,state);
+   return res;
+}
+
 $str $Plus$str$__add__ ($Plus$str wit, $str a, $str b) {
   return $str_add(a,b);
+}
+
+// Hashable
+
+void $Hashable$str$__serialize__($Hashable$str self, $Serial$state state) {
+}
+
+$Hashable$str $Hashable$str$__deserialize__($Hashable$str self, $Serial$state state) {
+   $Hashable$str res = $DNEW($Hashable$str,state);
+   return res;
 }
 
 $bool $Hashable$str$__eq__ ($Hashable$str wit, $str a, $str b) {
@@ -174,31 +230,103 @@ $int $Hashable$str$__hash__($Hashable$str wit, $str str) {
   return to$int($string_hash(str));
 }
 
+
 // Method tables for witness classes
 
-struct $Ord$str$class  $Ord$str$methods = {"", UNASSIGNED, NULL,(void (*)($Ord$str))$default__init__,$Ord$str$__eq__, $Ord$str$__ne__, $Ord$str$__lt__, $Ord$str$__le__, $Ord$str$__gt__, $Ord$str$__ge__};
+struct $Ord$str$class  $Ord$str$methods = {
+    "$Ord$str",
+    UNASSIGNED,
+    ($Super$class)&$Ord$methods,
+    (void (*)($Ord$str))$default__init__,
+    $Ord$str$__serialize__,
+    $Ord$str$__deserialize__,
+    ($bool (*)($Ord$str))$default__bool__,
+    ($str (*)($Ord$str))$default__str__,
+    $Ord$str$__eq__,
+    $Ord$str$__ne__,
+    $Ord$str$__lt__,
+    $Ord$str$__le__,
+    $Ord$str$__gt__,
+    $Ord$str$__ge__
+};
 struct $Ord$str $Ord$str_instance = {&$Ord$str$methods};
 $Ord$str $Ord$str$witness = &$Ord$str_instance;
 
-struct $Container$str$class  $Container$str$methods = {"",UNASSIGNED, NULL,$Container$str$__init__,$Container$str$__iter__, $Container$str$__len__, $Container$str$__containsnot__};
+struct $Container$str$class  $Container$str$methods = {
+    "$Container$str",
+    UNASSIGNED,
+    ($Super$class)&$Container$methods,
+    $Container$str$__init__,
+    $Container$str$__serialize__,
+    $Container$str$__deserialize__,
+    ($bool (*)($Container$str))$default__bool__,
+    ($str (*)($Container$str))$default__str__,
+    $Container$str$__iter__,
+    NULL,
+    $Container$str$__len__,
+    $Container$str$__contains__,
+    $Container$str$__containsnot__
+};
 struct $Container$str $Container$str_instance = {&$Container$str$methods,($Eq)&$Ord$str_instance};
 $Container$str $Container$str$witness = &$Container$str_instance;
 
-struct $Sliceable$str$class  $Sliceable$str$methods = {"", UNASSIGNED,NULL,(void (*)($Sliceable$str))$default__init__,$Sliceable$str$__getitem__, $Sliceable$str$__setitem__, $Sliceable$str$__delitem__,
-                                                                    $Sliceable$str$__getslice__, $Sliceable$str$__setslice__, $Sliceable$str$__delslice__};
+struct $Sliceable$str$class  $Sliceable$str$methods = {
+    "$Sliceable$str",
+    UNASSIGNED,
+    ($Super$class)&$Sliceable$methods,
+    (void (*)($Sliceable$str))$default__init__,
+    $Sliceable$str$__serialize__,
+    $Sliceable$str$__deserialize__,
+    ($bool (*)($Sliceable$str))$default__bool__,
+    ($str (*)($Sliceable$str))$default__str__,
+    $Sliceable$str$__getitem__,
+    $Sliceable$str$__setitem__,
+    $Sliceable$str$__delitem__,
+    $Sliceable$str$__getslice__,
+    $Sliceable$str$__setslice__,
+    $Sliceable$str$__delslice__
+};
 struct $Sliceable$str $Sliceable$str_instance = {&$Sliceable$str$methods};
 $Sliceable$str $Sliceable$str$witness = &$Sliceable$str_instance;
 
-struct $Plus$str$class  $Plus$str$methods = {"", UNASSIGNED,NULL,(void (*)($Plus$str))$default__init__,$Plus$str$__add__};
+struct $Plus$str$class  $Plus$str$methods = {
+    "$Plus$str",
+    UNASSIGNED,
+    ($Super$class)&$Plus$methods,
+    (void (*)($Plus$str))$default__init__,
+    $Plus$str$__serialize__,
+    $Plus$str$__deserialize__,
+    ($bool (*)($Plus$str))$default__bool__,
+    ($str (*)($Plus$str))$default__str__,
+    $Plus$str$__add__,
+    ($str (*)($Plus$str, $str, $str))$Plus$__iadd__,
+
+};
 struct $Plus$str $Plus$str_instance = {&$Plus$str$methods};
 $Plus$str $Plus$str$witness = &$Plus$str_instance;
 
-struct $Hashable$str$class  $Hashable$str$methods = {"", UNASSIGNED,NULL,(void (*)($Hashable$str))$default__init__, $Hashable$str$__eq__, $Hashable$str$__ne__, $Hashable$str$__hash__};
+struct $Hashable$str$class  $Hashable$str$methods = {
+    "$Hashable$str",
+    UNASSIGNED,
+    ($Super$class)&$Hashable$methods,
+    (void (*)($Hashable$str))$default__init__,
+    $Hashable$str$__serialize__,
+    $Hashable$str$__deserialize__,
+    ($bool (*)($Hashable$str))$default__bool__,
+    ($str (*)($Hashable$str))$default__str__,
+    $Hashable$str$__eq__,
+    $Hashable$str$__ne__,
+    $Hashable$str$__hash__
+};
 struct $Hashable$str $Hashable$str_instance = {&$Hashable$str$methods};
 $Hashable$str $Hashable$str$witness = &$Hashable$str_instance;
 
-void $Container$str$__init__ ($Container$str wit, $Eq w$Eq$A) {
-  wit->w$Eq$A = w$Eq$A;
+$Hashable$str $Hashable$str$new() {
+  return $NEW($Hashable$str);
+}
+
+void $Container$str$__init__ ($Container$str wit, $Eq w$Eq$A$Container$str) {
+  wit->w$Eq$A$Container$str = w$Eq$A$Container$str;
 }
 
 // Auxiliaries, some used for both str and bytearray implementations ////////////////////////////////////////////////////////
@@ -235,7 +363,7 @@ nm = malloc(sizeof(struct $bytearray)); \
 
 // Conversion to and from C strings
 
-$str to$str(char *str) {
+$str to$str(char *str) { 
   int nbytes = 0;
   int nchars = 0;
 
@@ -243,11 +371,9 @@ $str to$str(char *str) {
   int cp, cpnbytes;
   while(1) {
     if (*p == '\0') {
-      $str res = malloc(sizeof(struct $str));
-      res->$class = &$str$methods;
-      res->nbytes = nbytes;
-      res->nchars = nchars;
-      res->str = (unsigned char*)str;
+      $str res;
+      NEW_UNFILLED_STR(res,nchars, nbytes);
+      memcpy(res->str,str,nbytes);
       return res;
     }
     cpnbytes = utf8proc_iterate(p,-1,&cp);
@@ -479,6 +605,7 @@ include mutating methods.
 
 // $Ord ///////////////////////////////////////////////////////////////////////////////////////////////
 
+
 // TODO: We should consider how to normalize strings before comparisons
 
 int $str_eq($str a, $str b) {
@@ -514,6 +641,10 @@ int $str_ge($str a, $str b) {
 
 // $Plus /////////////////////////////////////////////////////////////////////////////////////////////
 
+$Plus$str $Plus$str$new() {
+  return $NEW($Plus$str);
+}
+
 $str $str_add($str s, $str t) {
   $str res;
   NEW_UNFILLED_STR(res,s->nchars + t->nchars,s->nbytes + t->nbytes);
@@ -523,13 +654,17 @@ $str $str_add($str s, $str t) {
 }
 
 // Collection ///////////////////////////////////////////////////////////////////////////////////////
-         
+
 $int $str_len($str s) {
   $int res = to$int(s->nchars);
   return res;
 }
 
 // $Container ///////////////////////////////////////////////////////////////////////////
+
+$Container$str $Container$str$new() {
+  return $NEW($Container$str,($Eq)$Ord$str$witness);
+}
 
 int $str_contains($str s, $str sub) {
   return bmh(s->str,sub->str,s->nbytes,sub->nbytes) > 0;
@@ -540,6 +675,10 @@ int $str_containsnot($str s, $str sub) {
 }
 
 // Iterable ///////////////////////////////////////////////////////////////////////////
+
+$Iterator$str $Iterator$str$new($str str) {
+  return $NEW($Iterator$str, str);
+}
 
 void $Iterator$str_init($Iterator$str self, $str str) {
   self->src = str;
@@ -552,8 +691,9 @@ void $Iterator$str_serialize($Iterator$str self,$Serial$state state) {
 }
 
 
-$Iterator$str $Iterator$str$_deserialize($Serial$state state) {
-   $Iterator$str res = $DNEW($Iterator$str,state);
+$Iterator$str $Iterator$str$_deserialize($Iterator$str res, $Serial$state state) {
+   if (!res)
+      res = $DNEW($Iterator$str,state);
    res->src = ($str)$step_deserialize(state);
    res->nxt = from$int(($int)$step_deserialize(state));
    return res;
@@ -583,7 +723,7 @@ $Iterator $str_iter($str str) {
   return ($Iterator)$NEW($Iterator$str,str);
 }
 
-struct $Iterator$str$class $Iterator$str$methods = {"",UNASSIGNED,($Super$class)&$Iterator$methods, $Iterator$str_init,
+struct $Iterator$str$class $Iterator$str$methods = {"$Iterator$str",UNASSIGNED,($Super$class)&$Iterator$methods, $Iterator$str_init,
                                                     $Iterator$str_serialize, $Iterator$str$_deserialize,
                                                     $Iterator$str_bool, $Iterator$str_str, $Iterator$str_next};
 
@@ -599,7 +739,7 @@ $str $str_getitem($str s, int i) {
  
 // Sliceable //////////////////////////////////////////////////////////////////////////////////////
 
-$str $str_getslice($str s, $Slice slc) {
+$str $str_getslice($str s, $slice slc) {
   int isascii = s->nchars == s->nbytes;
   int nchars = s->nchars;
   int nbytes = 0;
@@ -628,6 +768,10 @@ $str $str_getslice($str s, $Slice slc) {
 
 // General methods ////////////////////////////////////////////////////////////// 
 
+$str $str$new($struct s) {
+  return $NEW($str, s);
+}
+
 void $str_init($str self, $struct s) {
   $str res = s->$class->__str__(s);
   self->nchars = res->nchars;
@@ -654,7 +798,7 @@ void $str_serialize($str str,$Serial$state state) {
   memcpy(row->blob+2,str->str,nbytes+1);
 }
 
-$str $str_deserialize($Serial$state state) {
+$str $str_deserialize($str self, $Serial$state state) {
   $ROW this = state->row;
   state->row =this->next;
   state->row_no++;
@@ -1378,7 +1522,7 @@ void $bytearray_init($bytearray, $struct);
 $bool $bytearray_bool($bytearray);
 $str $bytearray_str($bytearray);
 void $bytearray_serialize($bytearray,$Serial$state);
-$bytearray $bytearray_deserialize($Serial$state);
+$bytearray $bytearray_deserialize($bytearray,$Serial$state);
 
 
 // bytearray methods, prototypes
@@ -1424,7 +1568,7 @@ $bytearray $bytearray_zfill($bytearray s, $int width);
 // Method table
 
 struct $bytearray$class $bytearray$methods =
-  {"",UNASSIGNED,($Super$class)&$struct$methods, $bytearray_init, $bytearray_serialize, $bytearray_deserialize, $bytearray_bool,
+  {"$bytearray",UNASSIGNED,($Super$class)&$struct$methods, $bytearray_init, $bytearray_serialize, $bytearray_deserialize, $bytearray_bool,
    $bytearray_str, $bytearray_capitalize, $bytearray_center, $bytearray_count,  $bytearray_decode, $bytearray_endswith,
    $bytearray_expandtabs, $bytearray_find, $bytearray_index,
    $bytearray_isalnum, $bytearray_isalpha, $bytearray_isascii, $bytearray_isdigit, $bytearray_islower, $bytearray_isspace,
@@ -2031,9 +2175,9 @@ int $bytearray_ge($bytearray,$bytearray);
 $int $bytearray_getitem($bytearray, int);
 void $bytearray_setitem($bytearray, int, int);
 void $bytearray_delitem($bytearray, int);
-$bytearray $bytearray_getslice($bytearray, $Slice);
-void $bytearray_setslice($bytearray, $Slice, $Iterator);
-void $bytearray_delslice($bytearray, $Slice);
+$bytearray $bytearray_getslice($bytearray, $slice);
+void $bytearray_setslice($bytearray, $slice, $Iterator);
+void $bytearray_delslice($bytearray, $slice);
 $Iterator $bytearray_reversed($bytearray);
 void $bytearray_insert($bytearray, int, $int);
 void $bytearray_append($bytearray, $int);
@@ -2055,6 +2199,18 @@ int $bytearray_containsnot ($bytearray, $int);
 
 
 // Ord
+
+void $Ord$bytearray$__serialize__($Ord$bytearray self, $Serial$state state) {
+}
+
+$Ord$bytearray $Ord$bytearray$__deserialize__($Ord$bytearray self, $Serial$state state) {
+   $Ord$bytearray res = $DNEW($Ord$bytearray,state);
+   return res;
+}
+
+$Ord$bytearray $Ord$bytearray$new() {
+  return $NEW($Ord$bytearray);
+}
 
 $bool $Ord$bytearray$__eq__ ($Ord$bytearray wit, $bytearray a, $bytearray b) {
   return to$bool($bytearray_eq(a,b));
@@ -2082,6 +2238,22 @@ $bool $Ord$bytearray$__ge__ ($Ord$bytearray wit, $bytearray a, $bytearray b){
 
 // Sequence
 
+void $Sequence$bytearray$__serialize__($Sequence$bytearray self, $Serial$state state) {
+    $step_serialize(self->w$Collection, state);
+    $step_serialize(self->w$Plus, state);
+}
+
+$Sequence$bytearray $Sequence$bytearray$__deserialize__($Sequence$bytearray self, $Serial$state state) {
+   $Sequence$bytearray res = $DNEW($Sequence$bytearray,state);
+   res->w$Collection = ($Collection)$step_deserialize(state);
+   res->w$Plus = ($Plus)$step_deserialize(state);
+   return res;
+}
+
+$Sequence$bytearray $Sequence$bytearray$new() {
+  return $NEW($Sequence$bytearray);
+}
+
 $int $Sequence$bytearray$__getitem__ ($Sequence$bytearray wit, $bytearray self, $int ix) {
   return $bytearray_getitem(self,from$int(ix));
 }
@@ -2094,15 +2266,15 @@ void $Sequence$bytearray$__delitem__ ($Sequence$bytearray wit, $bytearray self, 
   $bytearray_delitem(self,from$int(ix));
 }
 
-$bytearray $Sequence$bytearray$__getslice__ ($Sequence$bytearray wit, $bytearray self, $Slice slc) {
+$bytearray $Sequence$bytearray$__getslice__ ($Sequence$bytearray wit, $bytearray self, $slice slc) {
   return $bytearray_getslice(self,slc);
 }
 
-void $Sequence$bytearray$__setslice__ ($Sequence$bytearray wit, $Iterable wit2, $bytearray self, $Slice slc, $WORD iter) {
+void $Sequence$bytearray$__setslice__ ($Sequence$bytearray wit,  $bytearray self, $Iterable wit2, $slice slc, $WORD iter) {
   $bytearray_setslice(self,slc,wit2->$class->__iter__(wit2,iter));
 }
 
-void $Sequence$bytearray$__delslice__ ($Sequence$bytearray wit, $bytearray self, $Slice slc) {
+void $Sequence$bytearray$__delslice__ ($Sequence$bytearray wit, $bytearray self, $slice slc) {
   $bytearray_delslice(self,slc);
 }
 
@@ -2125,6 +2297,20 @@ void $Sequence$bytearray$reverse($Sequence$bytearray wit, $bytearray self) {
 
 // Collection
 
+void $Collection$bytearray$__serialize__($Collection$bytearray self, $Serial$state state) {
+  $step_serialize(self->w$Sequence, state);
+}
+
+$Collection$bytearray $Collection$bytearray$__deserialize__($Collection$bytearray self, $Serial$state state) {
+   $Collection$bytearray res = $DNEW($Collection$bytearray,state);
+   res->w$Sequence = ($Sequence)$step_deserialize(state);
+   return res;
+}
+
+$Collection$bytearray $Collection$bytearray$new($Sequence wit) {
+  return $NEW($Collection$bytearray,wit);
+}
+
 $Iterator $Collection$bytearray$__iter__ ($Collection$bytearray wit, $bytearray str) {
   return $bytearray_iter(str);
 }
@@ -2139,11 +2325,39 @@ $int $Collection$bytearray$__len__ ($Collection$bytearray wit, $bytearray str) {
 
 // Plus
 
+void $Plus$bytearray$__serialize__($Plus$bytearray self, $Serial$state state) {
+  $step_serialize(self->w$Sequence, state);
+}
+
+$Plus$bytearray $Plus$bytearray$__deserialize__($Plus$bytearray self, $Serial$state state) {
+   $Plus$bytearray res = $DNEW($Plus$bytearray,state);
+   res->w$Sequence = ($Sequence)$step_deserialize(state);
+   return res;
+}
+
+$Plus$bytearray $Plus$bytearray$new($Sequence wit) {
+  return $NEW($Plus$bytearray,wit);
+}
+
 $bytearray $Plus$bytearray$__add__ ($Plus$bytearray wit, $bytearray a, $bytearray b) {
   return $bytearray_add(a,b);
 }
 
 // Container
+
+void $Container$bytearray$__serialize__($Container$bytearray self, $Serial$state state) {
+  $step_serialize(self->w$Eq$A$Container$bytearray, state);
+}
+
+$Container$bytearray $Container$bytearray$__deserialize__($Container$bytearray self, $Serial$state state) {
+   $Container$bytearray res = $DNEW($Container$bytearray,state);
+   res->w$Eq$A$Container$bytearray = ($Eq)$step_deserialize(state);
+   return res;
+}
+
+$Container$bytearray $Container$bytearray$new($Eq wit) {
+  return $NEW($Container$bytearray, wit);
+}
 
 $Iterator $Container$bytearray$__iter__ ($Container$bytearray wit, $bytearray str) {
   return $bytearray_iter(str);
@@ -2173,49 +2387,115 @@ struct $Collection$bytearray $Collection$bytearray_instance;
 struct $Plus$bytearray $Plus$bytearray_instance;
 
 
-struct $Ord$bytearray$class  $Ord$bytearray$methods = {"", UNASSIGNED, NULL,(void (*)($Ord$bytearray))$default__init__,$Ord$bytearray$__eq__, $Ord$bytearray$__ne__,
-                                                       $Ord$bytearray$__lt__, $Ord$bytearray$__le__, $Ord$bytearray$__gt__, $Ord$bytearray$__ge__};
+struct $Ord$bytearray$class  $Ord$bytearray$methods = {
+    "$Ord$bytearray",
+    UNASSIGNED,
+    ($Super$class)&$Ord$methods,
+    (void (*)($Ord$bytearray))$default__init__,
+    $Ord$bytearray$__serialize__,
+    $Ord$bytearray$__deserialize__,
+    ($bool (*)($Ord$bytearray))$default__bool__,
+    ($str (*)($Ord$bytearray))$default__str__,
+    $Ord$bytearray$__eq__, $Ord$bytearray$__ne__,
+    $Ord$bytearray$__lt__, $Ord$bytearray$__le__,
+    $Ord$bytearray$__gt__, $Ord$bytearray$__ge__
+};
 struct $Ord$bytearray $Ord$bytearray_instance = {&$Ord$bytearray$methods};
 $Ord$bytearray $Ord$bytearray$witness = &$Ord$bytearray_instance;
 
-struct $Sequence$bytearray$class $Sequence$bytearray$methods = {"", UNASSIGNED,NULL,$Sequence$bytearray$__init__,
-                                                                $Sequence$bytearray$__getitem__, $Sequence$bytearray$__setitem__, $Sequence$bytearray$__delitem__,
-                                                                $Sequence$bytearray$__getslice__, $Sequence$bytearray$__setslice__, $Sequence$bytearray$__delslice__,
-                                                                $Sequence$bytearray$__reversed__,$Sequence$bytearray$insert,$Sequence$bytearray$append,$Sequence$bytearray$reverse};
-struct $Sequence$bytearray $Sequence$bytearray_instance = {&$Sequence$bytearray$methods, &$Collection$bytearray_instance,&$Plus$bytearray_instance};
+struct $Sequence$bytearray$class $Sequence$bytearray$methods = {
+    "$Sequence$bytearray",
+    UNASSIGNED,
+    ($Super$class)&$Sequence$methods,
+    $Sequence$bytearray$__init__,
+    $Sequence$bytearray$__serialize__,
+    $Sequence$bytearray$__deserialize__,
+    ($bool (*)($Sequence$bytearray))$default__bool__,
+    ($str (*)($Sequence$bytearray))$default__str__,
+    $Sequence$bytearray$__getitem__,
+    $Sequence$bytearray$__setitem__,
+    $Sequence$bytearray$__delitem__,
+    $Sequence$bytearray$__getslice__,
+    $Sequence$bytearray$__setslice__,
+    $Sequence$bytearray$__delslice__,
+    $Sequence$bytearray$__reversed__,
+    $Sequence$bytearray$insert,
+    $Sequence$bytearray$append,
+    $Sequence$bytearray$reverse
+};
+struct $Sequence$bytearray $Sequence$bytearray_instance = {
+    &$Sequence$bytearray$methods,
+    ($Collection)&$Collection$bytearray_instance,
+    ($Plus)&$Plus$bytearray_instance
+};
 $Sequence$bytearray $Sequence$bytearray$witness = &$Sequence$bytearray_instance;
 
-struct $Collection$bytearray$class $Collection$bytearray$methods = {"",UNASSIGNED, NULL,$Collection$bytearray$__init__,$Collection$bytearray$__iter__,
-                                                          $Collection$bytearray$__fromiter__,$Collection$bytearray$__len__};
-struct $Collection$bytearray $Collection$bytearray_instance = {&$Collection$bytearray$methods,&$Sequence$bytearray_instance};
+struct $Collection$bytearray$class $Collection$bytearray$methods = {
+    "$Collection$bytearray",
+    UNASSIGNED,
+    ($Super$class)&$Collection$methods,
+    $Collection$bytearray$__init__,
+    $Collection$bytearray$__serialize__,
+    $Collection$bytearray$__deserialize__,
+    ($bool (*)($Collection$bytearray))$default__bool__,
+    ($str (*)($Collection$bytearray))$default__str__,
+    $Collection$bytearray$__iter__,
+    $Collection$bytearray$__fromiter__,
+    $Collection$bytearray$__len__
+};
+struct $Collection$bytearray $Collection$bytearray_instance = {&$Collection$bytearray$methods,($Sequence)&$Sequence$bytearray_instance};
 $Collection$bytearray $Collection$bytearray$witness = &$Collection$bytearray_instance;
 
-struct $Plus$bytearray$class  $Plus$bytearray$methods = {"", UNASSIGNED,NULL,$Plus$bytearray$__init__,$Plus$bytearray$__add__};
+struct $Plus$bytearray$class  $Plus$bytearray$methods = {
+    "$Plus$bytearray",
+    UNASSIGNED,
+    ($Super$class)&$Plus$methods,
+    $Plus$bytearray$__init__,
+    $Plus$bytearray$__serialize__,
+    $Plus$bytearray$__deserialize__,
+    ($bool (*)($Plus$bytearray))$default__bool__,
+    ($str (*)($Plus$bytearray))$default__str__,
+    $Plus$bytearray$__add__,
+    ($bytearray (*)($Plus$bytearray, $bytearray, $bytearray))$Plus$__iadd__,
+
+};
 struct $Plus$bytearray $Plus$bytearray_instance = {&$Plus$bytearray$methods};
 $Plus$bytearray $Plus$bytearray$witness = &$Plus$bytearray_instance;
 
-struct $Container$bytearray$class $Container$bytearray$methods = {"",UNASSIGNED, NULL,$Container$bytearray$__init__,$Container$bytearray$__iter__, $Container$bytearray$__len__,
-                                                                  $Container$bytearray$__contains__, $Container$bytearray$__containsnot__};
+struct $Container$bytearray$class $Container$bytearray$methods = {
+    "$Container$bytearray",
+    UNASSIGNED,
+    ($Super$class)&$Container$methods,
+    $Container$bytearray$__init__,
+    $Container$bytearray$__serialize__,
+    $Container$bytearray$__deserialize__,
+    ($bool (*)($Container$bytearray))$default__bool__,
+    ($str (*)($Container$bytearray))$default__str__,
+    $Container$bytearray$__iter__,
+    $Container$bytearray$__len__,
+    $Container$bytearray$__contains__,
+    $Container$bytearray$__containsnot__
+};
 struct $Container$bytearray $Container$bytearray_instance = {&$Container$bytearray$methods,($Eq)&$Ord$bytearray_instance};
 $Container$bytearray $Container$bytearray$witness = &$Container$bytearray_instance;
 
 // init methods for witness classes
 
-void $Collection$bytearray$__init__($Collection$bytearray self, $Sequence$bytearray master) {
-  self->w$Sequence$bytearray = master;
+void $Collection$bytearray$__init__($Collection$bytearray self, $Sequence master) {
+  self->w$Sequence = master;
 }
 
-void $Plus$bytearray$__init__($Plus$bytearray self, $Sequence$bytearray master) {
-  self->w$Sequence$bytearray = master;
+void $Plus$bytearray$__init__($Plus$bytearray self, $Sequence master) {
+  self->w$Sequence = master;
 }
 
 void $Sequence$bytearray$__init__($Sequence$bytearray self) {
-  self->w$Collection$Sequence = $NEW($Collection$bytearray, self);
-  self->w$Plus$Sequence = $NEW($Plus$bytearray, self);
+  self->w$Collection = ($Collection)$NEW($Collection$bytearray, ($Sequence)self);
+  self->w$Plus = ($Plus)$NEW($Plus$bytearray, ($Sequence)self);
 }
 
-void $Container$bytearray$__init__ ($Container$bytearray wit, $Eq w$Eq$A) {
-  wit->w$Eq$A = w$Eq$A;
+void $Container$bytearray$__init__ ($Container$bytearray wit, $Eq w$Eq$A$Container$bytearray) {
+  wit->w$Eq$A$Container$bytearray = w$Eq$A$Container$bytearray;
 }
 
 
@@ -2278,7 +2558,7 @@ void $bytearray_delitem($bytearray self, int ix) {
 
 // Sliceable
 
-$bytearray $bytearray_getslice($bytearray self, $Slice slc) {
+$bytearray $bytearray_getslice($bytearray self, $slice slc) {
   int len = self->nbytes;
   int start, stop, step, slen;
   normalize_slice(slc, len, &slen, &start, &stop, &step);
@@ -2294,7 +2574,7 @@ $bytearray $bytearray_getslice($bytearray self, $Slice slc) {
   return res;
 }
 
-void $bytearray_setslice($bytearray self, $Slice slc, $Iterator it) {
+void $bytearray_setslice($bytearray self, $slice slc, $Iterator it) {
   int len = self->nbytes;
   $bytearray other;
   NEW_UNFILLED_BYTEARRAY(other,0);
@@ -2335,7 +2615,7 @@ void $bytearray_setslice($bytearray self, $Slice slc, $Iterator it) {
   }
 }
 
-void $bytearray_delslice($bytearray self, $Slice slc) {
+void $bytearray_delslice($bytearray self, $slice slc) {
   int len = self->nbytes;
   int start, stop, step, slen;
   normalize_slice(slc, len, &slen, &start, &stop, &step);
@@ -2410,15 +2690,25 @@ void $Iterator$bytearray_serialize($Iterator$bytearray self,$Serial$state state)
   $step_serialize(to$int(self->nxt),state);
 }
 
-$Iterator$bytearray $Iterator$bytearray$_deserialize($Serial$state state) {
-   $Iterator$bytearray res = $DNEW($Iterator$bytearray,state);
+$Iterator$bytearray $Iterator$bytearray$_deserialize($Iterator$bytearray res, $Serial$state state) {
+   if(!res)
+      res = $DNEW($Iterator$bytearray,state);
    res->src = ($bytearray)$step_deserialize(state);
    res->nxt = from$int(($int)$step_deserialize(state));
    return res;
 }
 
-struct $Iterator$bytearray$class $Iterator$bytearray$methods = {"",UNASSIGNED,($Super$class)&$Iterator$methods, $Iterator$bytearray_init,
-                                                      $Iterator$bytearray_serialize, $Iterator$bytearray$_deserialize,$Iterator$bytearray_bool,$Iterator$bytearray_str,$Iterator$bytearray_next};
+struct $Iterator$bytearray$class $Iterator$bytearray$methods = {
+    "",
+    UNASSIGNED,
+    ($Super$class)&$Iterator$methods,
+    $Iterator$bytearray_init,
+    $Iterator$bytearray_serialize,
+    $Iterator$bytearray$_deserialize,
+    $Iterator$bytearray_bool,
+    $Iterator$bytearray_str,
+    $Iterator$bytearray_next
+};
 
 $Iterator $bytearray_iter($bytearray self) {
   return ($Iterator)$NEW($Iterator$bytearray,self);
@@ -2470,9 +2760,13 @@ int $bytearray_containsnot ($bytearray self, $int c) {
 
 void $bytearray_init($bytearray, $struct);
 void $bytearray_serialize($bytearray,$Serial$state);
-$bytearray $bytearray_deserialize($Serial$state);
+$bytearray $bytearray_deserialize($bytearray,$Serial$state);
 $bool $bytearray_bool($bytearray);
 $str $bytearray_str($bytearray);
+
+$bytearray $bytearray$new($struct s) {
+  return $NEW($bytearray, s);
+}
 
 void $bytearray_init($bytearray self, $struct s) {
   if (!s) {
@@ -2480,10 +2774,34 @@ void $bytearray_init($bytearray self, $struct s) {
     self->str = NULL;
     return;
   }
-  $str e = $NEW($str,s);
-  $bytearray b = e->$class->encode(e);
-  self->nbytes = b->nbytes;
-  self->str = b->str;
+  if ($ISINSTANCE(s, $str)->val) {
+    $str str = ($str)s;
+    $bytearray b = str->$class->encode(str);
+    self->nbytes = b->nbytes;
+    self->str = b->str;
+  } else if ($ISINSTANCE(s, $list)->val) {  // must be a list of ints in range 0..255
+    $list lst = ($list)s;
+    int len = lst->length;
+    self->nbytes = len;
+    self->str = malloc(len+1);
+    self->str[len] = 0;
+    if (len > 0 && !($ISINSTANCE(lst->data[0],$int)->val))
+      RAISE(($BaseException)$NEW($ValueError,to$str("illegal argument to bytearray constructor")));
+    for (int i = 0; i<len; i++) {
+      long v = (($int)lst->data[i])->val;
+      if (v < 0 || v > 255)
+        RAISE(($BaseException)$NEW($ValueError,to$str("illegal argument to bytearray constructor")));
+      self->str[i] = v;
+    }
+  } else if ($ISINSTANCE(s, $int)->val) {
+    $int n = ($int)s;
+    if (n->val < 0) 
+      RAISE(($BaseException)$NEW($ValueError,to$str("illegal argument to bytearray constructor")));
+    self->nbytes = n->val;
+    self->str = malloc(n->val);
+    memset(self->str, 0, n->val);
+  } else
+    RAISE(($BaseException)$NEW($ValueError,to$str("illegal argument to bytearray constructor")));
 }
 
 
@@ -2514,11 +2832,12 @@ void $bytearray_serialize($bytearray str,$Serial$state state) {
   memcpy(row->blob+1,str->str,nbytes+1);
 }
 
-$bytearray $bytearray_deserialize($Serial$state state) {
+$bytearray $bytearray_deserialize($bytearray res, $Serial$state state) {
   $ROW this = state->row;
   state->row =this->next;
   state->row_no++;
-  $bytearray res = malloc(sizeof(struct $bytearray));
+  if(!res)
+    res = malloc(sizeof(struct $bytearray));
   long nbytes;
   memcpy(&nbytes,this->blob,sizeof($WORD));
   res->$class = &$bytearray$methods;
@@ -2719,3 +3038,10 @@ $str $str_join_par(char lpar, $list elems, char rpar) {
   }
   return res;
 }
+
+$str $default__str__($struct self) {
+  char *s;
+  asprintf(&s,"<%s object at %p>",self->$class->$GCINFO,self);
+  return to$str(s);
+}
+

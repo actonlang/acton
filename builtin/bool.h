@@ -4,7 +4,7 @@ struct $bool$class {
   $Super$class $superclass;
   void (*__init__)($bool, $struct);
   void (*__serialize__)($bool, $Serial$state);
-  $bool (*__deserialize__)($Serial$state);
+  $bool (*__deserialize__)($bool, $Serial$state);
   $bool (*__bool__)($bool);
   $str (*__str__)($bool);
 };
@@ -15,8 +15,11 @@ struct $bool {
 };
 
 extern struct $bool$class $bool$methods;
+$bool $bool$new($struct);
 
 $bool to$bool(long b);
 long from$bool($bool b);
 
 $bool $True, $False;
+
+$bool $default__bool__($struct);

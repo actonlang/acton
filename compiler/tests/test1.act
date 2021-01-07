@@ -22,14 +22,8 @@ def f6(x : ?(?int)):
 def f7a(x : ?int):
     return x == 7
 
-def f7b(x : (int | str)):
-    return x == 7
-
-def f8(x : (int | str)):
-    return x == "hello"
-
-def f9(x : str):
-    return x == True
+#def f9(x : str):
+#    return x == True       # Cannot solve: atom < T, T(Eq)
 
 def f10(x : bool):
     return 'A' if x else 'B'
@@ -40,5 +34,38 @@ def f11():
 def f12(x : Exception):
     return 1 if isinstance(x, NotImplementedError) else 2
 
-def f13(x : (int | bool)):
+def f13(x : atom):
     return x if isinstance(x, int) else -1
+
+def f14():
+    a = (1, False, "hello" + "world")
+
+    b0 = a.0
+    b1 = a.1
+    b2 = a.2
+
+    c0 = a.~0
+    c1 = a.~1
+    c2 = a.~2
+
+    x = (apa = 1, bepa = False, cepa = "hello" "world")
+
+    y0 = x.apa
+    y1 = x.bepa
+    y2 = x.cepa
+
+    z0 = x.~apa
+    z1 = x.~bepa
+    z2 = x.~cepa
+
+    (p0,p1,p2) = a
+    (apa=q0,bepa=q1,cepa=q2) = x
+
+def f15(x):
+    return "%d %%" % x
+
+def f16(x,y,z):
+    return "%*f %s" % (x,y,z)
+
+def f17(x):
+    return "%s %f" % x

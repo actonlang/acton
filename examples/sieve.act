@@ -1,0 +1,33 @@
+import math
+
+def sieve(n):
+    isPrime = replicate(n, True)
+    isPrime[0] = False; isPrime[1] = False
+    for i in range(2,math.sqrt(float(n)).__ceil__(),1):
+        if isPrime[i]:
+            for k in range(i*i,n,i): isPrime[k] = False
+
+    return isPrime
+
+
+def count(bs):
+    res = 0
+    for b in bs:
+        if b: res += 1
+    return res
+
+
+def primesTo(n):
+    res = []
+    isPrime = sieve(n)
+    for i in range(2,n,1):
+        if isPrime[i]: res.append(i)
+    return res
+
+
+actor main(env):
+   n = int(env.args[1])
+   print(count(sieve(n)))
+#   print(len(primesTo(n)))
+   env.exit(0)
+   

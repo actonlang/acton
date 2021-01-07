@@ -4,6 +4,8 @@
 #include <stdarg.h>
 
 #include "rts.h"
+#include "../builtin/minienv.h"
+#include "../backend/client_api.h"
 
 #ifdef __gnu_linux__
     #define IS_GNU_LINUX
@@ -72,42 +74,55 @@ int pthread_setaffinity_np(pthread_t thread, size_t cpu_size, cpu_set_t *cpu_set
 
     return 0;
 }
-///////////////////////////////////////////////////////////////////////////////////////////////
 #endif
-
-$Env $ENV = 10;
 
 extern $R $ROOT($Env, $Cont);
 
 $Actor root_actor = NULL;
+$Env env_actor = NULL;
 
 $Actor readyQ = NULL;
-volatile atomic_flag readyQ_lock;
+$Lock readyQ_lock;
 
 $Msg timerQ = NULL;
-volatile atomic_flag timerQ_lock;
+$Lock timerQ_lock;
+
+int64_t next_key = 0;
+$Lock next_key_lock;
+
+$list args = NULL;
 
 pthread_key_t self_key;
+pthread_mutex_t sleep_lock = PTHREAD_MUTEX_INITIALIZER;
+pthread_cond_t work_to_do = PTHREAD_COND_INITIALIZER;
 
-static inline void spinlock_lock(volatile atomic_flag *f) {
+static inline void spinlock_lock($Lock *f) {
     while (atomic_flag_test_and_set(f) == true) {
         // spin until we could set the flag
     }
 }
-static inline void spinlock_unlock(volatile atomic_flag *f) {
+static inline void spinlock_unlock($Lock *f) {
     atomic_flag_clear(f);
+}
+
+int64_t get_next_key() {
+    spinlock_lock(&next_key_lock);
+    int64_t res = --next_key;
+    spinlock_unlock(&next_key_lock);
+    return res;
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////
 
 void $Msg$__init__($Msg m, $Actor to, $Cont cont, time_t baseline, $WORD value) {
-    m->next = NULL;
-    m->to = to;
-    m->cont = cont;
-    m->waiting = NULL;
-    m->baseline = baseline;
-    m->value = value;
-    atomic_flag_clear(&m->wait_lock);
+    m->$next = NULL;
+    m->$to = to;
+    m->$cont = cont;
+    m->$waiting = NULL;
+    m->$baseline = baseline;
+    m->$value = value;
+    atomic_flag_clear(&m->$wait_lock);
+    m->$globkey = get_next_key();
 }
 
 $bool $Msg$__bool__($Msg self) {
@@ -121,35 +136,50 @@ $str $Msg$__str__($Msg self) {
 }
 
 void $Msg$__serialize__($Msg self, $Serial$state state) {
-    $step_serialize(self->next,state);
-    $step_serialize(self->to,state);
-    $step_serialize(self->cont,state);
-    $step_serialize(self->waiting,state);
-    $val_serialize(ITEM_ID,&self->baseline,state);
-    $step_serialize(self->value,state);
+    $step_serialize(self->$next,state);          // REMOVE!
+    $step_serialize(self->$to,state);
+    $step_serialize(self->$cont,state);
+    $val_serialize(ITEM_ID,&self->$baseline,state);
+    $step_serialize(self->$value,state);
+    $WORD tmp = ($WORD)(long)self->$globkey;
+    $val_serialize(INT_ID,&tmp,state);          // REMOVE!
 }
 
 
-$Msg $Msg$__deserialize__($Serial$state state) {
-  $Msg res = $DNEW($Msg,state);
-    res->next = $step_deserialize(state);
-    res->to = $step_deserialize(state);
-    res->cont = $step_deserialize(state);
-    res->waiting = $step_deserialize(state);
-    res->baseline = (time_t)$val_deserialize(state);
-    res->value = $step_deserialize(state);
-    atomic_flag_clear(&res->wait_lock);
+$Msg $Msg$__deserialize__($Msg res, $Serial$state state) {
+    if (!res) {
+        if (!state) {
+            res = malloc(sizeof (struct $Msg));
+            res->$class = &$Msg$methods;
+            return res;
+        }
+        res = $DNEW($Msg,state);
+    }
+    res->$next = $step_deserialize(state);       // REMOVE!
+    res->$to = $step_deserialize(state);
+    res->$cont = $step_deserialize(state);
+    res->$waiting = NULL;
+    res->$baseline = (time_t)$val_deserialize(state);
+    res->$value = $step_deserialize(state);
+    atomic_flag_clear(&res->$wait_lock);
+    $WORD tmp = $val_deserialize(state);        // REMOVE!
+    res->$globkey = (int)tmp;
     return res;
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////
 
 void $Actor$__init__($Actor a) {
-    a->next = NULL;
-    a->msg = NULL;
-    a->outgoing = NULL;
-    a->catcher = NULL;
-    atomic_flag_clear(&a->msg_lock);
+    a->$next = NULL;
+    a->$msg = NULL;
+    a->$outgoing = NULL;
+    a->$offspring = NULL;
+    a->$uterus = NULL;
+    a->$waitsfor = NULL;
+    a->$catcher = NULL;
+    atomic_flag_clear(&a->$msg_lock);
+    a->$globkey = get_next_key();
+    //printf("# New Actor %ld at %p of class %s\n", a->$globkey, a, a->$class->$GCINFO);
 }
 
 $bool $Actor$__bool__($Actor self) {
@@ -163,25 +193,41 @@ $str $Actor$__str__($Actor self) {
 }
 
 void $Actor$__serialize__($Actor self, $Serial$state state) {
-    $step_serialize(self->next,state);
-    $step_serialize(self->msg,state);
-    $step_serialize(self->catcher,state);
+    $step_serialize(self->$next,state);          // REMOVE!
+    $step_serialize(self->$msg,state);           // REMOVE!
+    $step_serialize(self->$waitsfor,state);
+    $step_serialize(self->$catcher,state);
+    $WORD tmp = ($WORD)(long)self->$globkey;
+    $val_serialize(INT_ID,&tmp,state);          // REMOVE!
 }
 
-$Actor $Actor$__deserialize__($Serial$state state) {
-  $Actor res = $DNEW($Actor,state);
-    res->next = $step_deserialize(state);
-    res->msg = $step_deserialize(state);
-    res->catcher = $step_deserialize(state);
-    atomic_flag_clear(&res->msg_lock);
+$Actor $Actor$__deserialize__($Actor res, $Serial$state state) {
+    if (!res) {
+        if (!state) {
+            res = malloc(sizeof(struct $Actor));
+            res->$class = &$Actor$methods;
+            return res;
+        }
+        res = $DNEW($Actor, state);
+    }
+    res->$next = $step_deserialize(state);       // REMOVE!
+    res->$msg = $step_deserialize(state);        // REMOVE!
+    res->$outgoing = NULL;
+    res->$offspring = NULL;
+    res->$uterus = NULL;
+    res->$waitsfor = $step_deserialize(state);
+    res->$catcher = $step_deserialize(state);
+    atomic_flag_clear(&res->$msg_lock);
+    $WORD tmp = $val_deserialize(state);        // REMOVE!
+    res->$globkey = (int)tmp;
     return res;
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////
 
 void $Catcher$__init__($Catcher c, $Cont cont) {
-    c->next = NULL;
-    c->cont = cont;
+    c->$next = NULL;
+    c->$cont = cont;
 }
 
 $bool $Catcher$__bool__($Catcher self) {
@@ -195,39 +241,17 @@ $str $Catcher$__str__($Catcher self) {
 }
 
 void $Catcher$__serialize__($Catcher self, $Serial$state state) {
-    $step_serialize(self->next,state);
-    $step_serialize(self->cont,state);
+    $step_serialize(self->$next,state);
+    $step_serialize(self->$cont,state);
 }
 
-$Catcher $Catcher$__deserialize__($Serial$state state) {
+$Catcher $Catcher$__deserialize__($Catcher self, $Serial$state state) {
     $Catcher res = $DNEW($Catcher,state);
-    res->next = $step_deserialize(state);
-    res->cont = $step_deserialize(state);
+    res->$next = $step_deserialize(state);
+    res->$cont = $step_deserialize(state);
     return res;
 }
-////////////////////////////////////////////////////////////////////////////////////////
-
-void $Clos$__init__($Clos $this) { }
-
-$bool $Clos$__bool__($Clos self) {
-  return $True;
-}
-
-$str $Clos$__str__($Clos self) {
-  char *s;
-  asprintf(&s,"<$Clos object at %p>",self);
-  return to$str(s);
-}
-
-void $Clos$__serialize__($Clos self, $Serial$state state) {
-    // TBD
-}
-
-$Clos $Clos$__deserialize__($Serial$state state) {
-    // TBD
-    return NULL;
-}
-////////////////////////////////////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////////////////////////////
 
 void $Cont$__init__($Cont $this) { }
 
@@ -245,43 +269,50 @@ void $Cont$__serialize__($Cont self, $Serial$state state) {
     // TBD
 }
 
-$Cont $Cont$__deserialize__($Serial$state state) {
+$Cont $Cont$__deserialize__($Cont self, $Serial$state state) {
     // TBD
     return NULL;
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////
 
-void $RetNew$__init__($RetNew $this, $Cont cont, $Actor act) {
+void $ConstCont$__init__($ConstCont $this, $WORD val, $Cont cont) {
+    $this->val = val;
     $this->cont = cont;
-    $this->act = act;
 }
 
-$bool $RetNew$__bool__($RetNew self) {
+$bool $ConstCont$__bool__($ConstCont self) {
   return $True;
 }
 
-$str $RetNew$__str__($RetNew self) {
+$str $ConstCont$__str__($ConstCont self) {
   char *s;
-  asprintf(&s,"<$RetNew object at %p>",self);
+  asprintf(&s,"<$ConstCont object at %p>",self);
   return to$str(s);
 }
 
-void $RetNew$__serialize__($RetNew self, $Serial$state state) {
+void $ConstCont$__serialize__($ConstCont self, $Serial$state state) {
+    $step_serialize(self->val,state);
       $step_serialize(self->cont,state);
-      $step_serialize(self->act,state);
 }
 
-$RetNew $RetNew$__deserialize__($Serial$state state) {
-    $RetNew res = $DNEW($RetNew,state);
+$ConstCont $ConstCont$__deserialize__($ConstCont self, $Serial$state state) {
+    $ConstCont res = $DNEW($ConstCont,state);
+    res->val = $step_deserialize(state);
     res->cont = $step_deserialize(state);
-    res->act = $step_deserialize(state);
     return res;
 }
 
-$R $RetNew$enter($RetNew $this, $WORD _ignore) {
+$R $ConstCont$__call__($ConstCont $this, $WORD _ignore) {
     $Cont cont = $this->cont;
-    return cont->$class->enter(cont, $this->act);
+    return cont->$class->__call__(cont, $this->val);
+}
+
+$Cont $CONSTCONT($WORD val, $Cont cont){
+    $ConstCont obj = malloc(sizeof(struct $ConstCont));
+    obj->$class = &$ConstCont$methods;
+    $ConstCont$methods.__init__(obj, val, cont);
+    return ($Cont)obj;
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////
@@ -319,18 +350,6 @@ struct $Catcher$class $Catcher$methods = {
     $Catcher$__str__
 };
 
-struct $Clos$class $Clos$methods = {
-    CLOS_HEADER,
-    UNASSIGNED,
-    NULL,
-    $Clos$__init__,
-    $Clos$__serialize__,
-    $Clos$__deserialize__,
-    $Clos$__bool__,
-    $Clos$__str__,
-    NULL
-};
-
 struct $Cont$class $Cont$methods = {
     CONT_HEADER,
     UNASSIGNED,
@@ -343,16 +362,16 @@ struct $Cont$class $Cont$methods = {
     NULL
 };
 
-struct $RetNew$class $RetNew$methods = {
-    "$RetNew",
+struct $ConstCont$class $ConstCont$methods = {
+    "$ConstCont",
     UNASSIGNED,
     NULL,
-    $RetNew$__init__,
-    $RetNew$__serialize__,
-    $RetNew$__deserialize__,
-    $RetNew$__bool__,
-    $RetNew$__str__,
-    $RetNew$enter
+    $ConstCont$__init__,
+    $ConstCont$__serialize__,
+    $ConstCont$__deserialize__,
+    $ConstCont$__bool__,
+    $ConstCont$__str__,
+    $ConstCont$__call__
 };
 
 ////////////////////////////////////////////////////////////////////////////////////////
@@ -362,13 +381,13 @@ void ENQ_ready($Actor a) {
     spinlock_lock(&readyQ_lock);
     if (readyQ) {
         $Actor x = readyQ;
-        while (x->next)
-            x = x->next;
-        x->next = a;
+        while (x->$next)
+            x = x->$next;
+        x->$next = a;
     } else {
         readyQ = a;
     }
-    a->next = NULL;
+    a->$next = NULL;
     spinlock_unlock(&readyQ_lock);
 }
 
@@ -378,8 +397,8 @@ $Actor DEQ_ready() {
     spinlock_lock(&readyQ_lock);
     $Actor res = readyQ;
     if (res) {
-        readyQ = res->next;
-        res->next = NULL;
+        readyQ = res->$next;
+        res->$next = NULL;
     }
     spinlock_unlock(&readyQ_lock);
     return res;
@@ -389,18 +408,18 @@ $Actor DEQ_ready() {
 // return true if the queue was previously empty.
 bool ENQ_msg($Msg m, $Actor a) {
     bool did_enq = true;
-    spinlock_lock(&a->msg_lock);
-    m->next = NULL;
-    if (a->msg) {
-        $Msg x = a->msg;
-        while (x->next)
-            x = x->next;
-        x->next = m;
+    spinlock_lock(&a->$msg_lock);
+    m->$next = NULL;
+    if (a->$msg) {
+        $Msg x = a->$msg;
+        while (x->$next)
+            x = x->$next;
+        x->$next = m;
         did_enq = false;
     } else {
-        a->msg = m;
+        a->$msg = m;
     }
-    spinlock_unlock(&a->msg_lock);
+    spinlock_unlock(&a->$msg_lock);
     return did_enq;
 }
 
@@ -408,14 +427,14 @@ bool ENQ_msg($Msg m, $Actor a) {
 // return true if the queue still holds messages.
 bool DEQ_msg($Actor a) {
     bool has_more = false;
-    spinlock_lock(&a->msg_lock);
-    if (a->msg) {
-        $Msg x = a->msg;
-        a->msg = x->next;
-        x->next = NULL;
-        has_more = a->msg != NULL;
+    spinlock_lock(&a->$msg_lock);
+    if (a->$msg) {
+        $Msg x = a->$msg;
+        a->$msg = x->$next;
+        x->$next = NULL;
+        has_more = a->$msg != NULL;
     }
-    spinlock_unlock(&a->msg_lock);
+    spinlock_unlock(&a->$msg_lock);
     return has_more;
 }
 
@@ -423,43 +442,43 @@ bool DEQ_msg($Actor a) {
 // else immediately return false.
 bool ADD_waiting($Actor a, $Msg m) {
     bool did_add = false;
-    spinlock_lock(&m->wait_lock);
-    if (m->cont) {
-        a->next = m->waiting;
-        m->waiting = a;
+    spinlock_lock(&m->$wait_lock);
+    if (m->$cont) {
+        a->$next = m->$waiting;
+        m->$waiting = a;
         did_add = true;
     }
-    spinlock_unlock(&m->wait_lock);
+    spinlock_unlock(&m->$wait_lock);
     return did_add;
 }
 
 // Atomically freeze message "m" and return its list of waiting actors. 
 $Actor FREEZE_waiting($Msg m) {
-    spinlock_lock(&m->wait_lock);
-    m->cont = NULL;
-    spinlock_unlock(&m->wait_lock);
-    $Actor res = m->waiting;
-    m->waiting = NULL;
+    spinlock_lock(&m->$wait_lock);
+    m->$cont = NULL;
+    spinlock_unlock(&m->$wait_lock);
+    $Actor res = m->$waiting;
+    m->$waiting = NULL;
     return res;
 }
 
 // Atomically enqueue timed message "m" onto the global timer-queue, at position
 // given by "m->baseline".
 void ENQ_timed($Msg m) {
-    time_t m_baseline = m->baseline;
+    time_t m_baseline = m->$baseline;
     spinlock_lock(&timerQ_lock);
     $Msg x = timerQ;
-    if (x && x->baseline <= m_baseline) {
-        $Msg next = x->next;
-        while (next && next->baseline <= m_baseline) {
+    if (x && x->$baseline <= m_baseline) {
+        $Msg next = x->$next;
+        while (next && next->$baseline <= m_baseline) {
             x = next;
-            next = x->next;
+            next = x->$next;
         }
-        x->next = m;
-        m->next = next;
+        x->$next = m;
+        m->$next = next;
     } else {
         timerQ = m;
-        m->next = x;
+        m->$next = x;
     }
     spinlock_unlock(&timerQ_lock);
 }
@@ -470,9 +489,9 @@ $Msg DEQ_timed(time_t now) {
     spinlock_lock(&timerQ_lock);
     $Msg res = timerQ;
     if (res) {
-        if (res->baseline <= now) {
-            timerQ = res->next;
-            res->next = NULL;
+        if (res->$baseline <= now) {
+            timerQ = res->$next;
+            res->$next = NULL;
         } else {
             res = NULL;
         }
@@ -484,28 +503,28 @@ $Msg DEQ_timed(time_t now) {
 // Place a message in the outgoing buffer of the sender. Not protected (never
 // exposed to data races).
 void PUSH_outgoing($Actor self, $Msg m) {
-    m->next = self->outgoing;
-    self->outgoing = m;
+    m->$next = self->$outgoing;
+    self->$outgoing = m;
 }
 
 // Actually send all buffered messages of the sender. Not protected (never
 // exposed to data races).
 void FLUSH_outgoing($Actor self) {
     $Msg prev = NULL;
-    $Msg m = self->outgoing;
-    self->outgoing = NULL;
+    $Msg m = self->$outgoing;
+    self->$outgoing = NULL;
     while (m) {
-        $Msg next = m->next;
-        m->next = prev;
+        $Msg next = m->$next;
+        m->$next = prev;
         prev = m;
         m = next;
     }
     m = prev;
     while (m) {
-        $Msg next = m->next;
-        m->next = NULL;
-        if (m->baseline == self->msg->baseline) {
-            $Actor to = m->to;
+        $Msg next = m->$next;
+        m->$next = NULL;
+        if (m->$baseline == self->$msg->$baseline) {
+            $Actor to = m->$to;
             if (ENQ_msg(m, to)) {
                 ENQ_ready(to);
             }
@@ -514,6 +533,19 @@ void FLUSH_outgoing($Actor self) {
         }
         m = next;
     }
+}
+
+// Just clear the list of created actors and the links between them.
+// Not protected (never exposed to data races).
+void CLEAR_offspring($Actor current) {
+    $Actor a = current->$offspring;
+    while (a) {
+        //printf("## Actor %ld at %p created offpring %ld at %p of class %s\n", current->$globkey, current, a->$globkey, a, a->$class->$GCINFO);
+        $Actor b = a;
+        a = a->$next;
+        b->$next = NULL;
+    }
+    current->$offspring = NULL;
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////
@@ -526,7 +558,7 @@ char *RTAG_name($RTAG tag) {
     }
 }
 ////////////////////////////////////////////////////////////////////////////////////////
-$R $DONE$enter($Cont $this, $WORD val) {
+$R $DONE$__call__($Cont $this, $WORD val) {
     return $R_DONE(val);
 }
 
@@ -544,7 +576,7 @@ void $Done__serialize__($Cont self, $Serial$state state) {
   return;
 }
 
-$Cont $Done__deserialize__($Serial$state state) {
+$Cont $Done__deserialize__($Cont self, $Serial$state state) {
   $Cont res = $DNEW($Cont,state);
   res->$class = &$Done$methods;
   return res;
@@ -559,15 +591,15 @@ struct $Cont$class $Done$methods = {
     $Done__deserialize__,
     $Done$__bool__,
     $Done$__str__,
-    $DONE$enter
+    ($R (*)($Cont, ...))$DONE$__call__
 };
 struct $Cont $Done$instance = {
     &$Done$methods
 };
 ////////////////////////////////////////////////////////////////////////////////////////
-$R $NewRoot$enter ($Cont $this, $WORD val) {
+$R $NewRoot$__call__ ($Cont $this, $WORD val) {
     $Cont then = ($Cont)val;
-    return $ROOT($ENV, then);
+    return $ROOT(env_actor, then);
 }
 
 struct $Cont$class $NewRoot$methods = {
@@ -579,13 +611,13 @@ struct $Cont$class $NewRoot$methods = {
     NULL,
     NULL,
     NULL,
-    $NewRoot$enter
+    ($R (*)($Cont, ...))$NewRoot$__call__
 };
-struct $Cont $NewRoot$instance = {
+struct $Cont $NewRoot$cont = {
     &$NewRoot$methods
 };
 ////////////////////////////////////////////////////////////////////////////////////////
-$R $WriteRoot$enter($Cont $this, $WORD val) {
+$R $WriteRoot$__call__($Cont $this, $WORD val) {
     root_actor = ($Actor)val;
     return $R_DONE(val);
 }
@@ -599,51 +631,64 @@ struct $Cont$class $WriteRoot$methods = {
     NULL,
     NULL,
     NULL,
-    $WriteRoot$enter
+    ($R (*)($Cont, ...))$WriteRoot$__call__
 };
-struct $Cont $WriteRoot$instance = {
+struct $Cont $WriteRoot$cont = {
     &$WriteRoot$methods
 };
 ////////////////////////////////////////////////////////////////////////////////////////
 
 void BOOTSTRAP() {
+    minienv$$__init__();
+    env_actor = $NEW($Env, args);
+    $Actor ancestor0 = ($Actor)env_actor;
     struct timespec now;
     clock_gettime(CLOCK_MONOTONIC, &now);
-    $Cont cont = &$NewRoot$instance;
-    $Actor ancestor0 = $NEW($Actor);
-    $Msg m = $NEW($Msg, ancestor0, cont, now.tv_sec, &$WriteRoot$instance);
+    $Msg m = $NEW($Msg, ancestor0, &$NewRoot$cont, now.tv_sec, &$WriteRoot$cont);
     if (ENQ_msg(m, ancestor0)) {
         ENQ_ready(ancestor0);
     }
 }
 
 void PUSH_catcher($Actor a, $Catcher c) {
-    c->next = a->catcher;
-    a->catcher = c;
+    c->$next = a->$catcher;
+    a->$catcher = c;
 }
 
 $Catcher POP_catcher($Actor a) {
-    $Catcher c = a->catcher;
-    a->catcher = c->next;
-    c->next = NULL;
+    $Catcher c = a->$catcher;
+    a->$catcher = c->$next;
+    c->$next = NULL;
     return c;
 }
 
 $Msg $ASYNC($Actor to, $Cont cont) {
     $Actor self = ($Actor)pthread_getspecific(self_key);
-    time_t baseline = self->msg->baseline;
+    time_t baseline = 0;
     $Msg m = $NEW($Msg, to, cont, baseline, &$Done$instance);
-    PUSH_outgoing(self, m);
-//    if (ENQ_msg(m, to)) {
-//        ENQ_ready(to);
-//    }
+    if (self) {
+        m->$baseline = self->$msg->$baseline;
+        PUSH_outgoing(self, m);
+    } else {
+        struct timespec now;
+        clock_gettime(CLOCK_MONOTONIC, &now);
+        m->$baseline = now.tv_sec;
+        if (ENQ_msg(m, to)) {
+           ENQ_ready(to);
+        }
+    }
+    pthread_mutex_lock(&sleep_lock);
+    pthread_cond_signal(&work_to_do);
+    pthread_mutex_unlock(&sleep_lock);
     return m;
 }
 
-$Msg $AFTER(time_t sec, $Cont cont) {
+$Msg $AFTER($int sec, $Cont cont) {
     $Actor self = ($Actor)pthread_getspecific(self_key);
-    time_t baseline = self->msg->baseline + sec;
-    $Msg m = $NEW($Msg, self, cont, baseline, &$Done$instance);
+    $Actor to = self->$uterus ? self->$uterus : self;
+    //printf("# AFTER towards %ld (current: %ld)\n", to->$globkey, self->$globkey);
+    time_t baseline = self->$msg->$baseline + sec->val;
+    $Msg m = $NEW($Msg, to, cont, baseline, &$Done$instance);
     PUSH_outgoing(self, m);
 //    ENQ_timed(m);
     return m;
@@ -651,6 +696,20 @@ $Msg $AFTER(time_t sec, $Cont cont) {
 
 $R $AWAIT($Msg m, $Cont cont) {
     return $R_WAIT(cont, m);
+}
+
+void $NEWACT($Actor a) {
+    $Actor self = ($Actor)pthread_getspecific(self_key);
+    a->$next = self->$uterus;
+    self->$uterus = a;
+}
+
+void $OLDACT() {
+    $Actor self = ($Actor)pthread_getspecific(self_key);
+    $Actor a = self->$uterus;
+    self->$uterus = a->$next;
+    a->$next = self->$offspring;
+    self->$offspring = a;
 }
 
 void $PUSH($Cont cont) {
@@ -674,20 +733,22 @@ void *main_loop(void *arg) {
         $Actor current = DEQ_ready();
         if (current) {
             pthread_setspecific(self_key, current);
-            $Msg m = current->msg;
-            $Cont cont = m->cont;
-            $WORD val = m->value;
+            $Msg m = current->$msg;
+            $Cont cont = m->$cont;
+            $WORD val = m->$value;
             
-            $R r = cont->$class->enter(cont, val);
+            $R r = cont->$class->__call__(cont, val);
             switch (r.tag) {
                 case $RDONE: {
                     FLUSH_outgoing(current);
-                    m->value = r.value;
-                    $Actor b = FREEZE_waiting(m);        // Sets m->cont = NULL
+                    CLEAR_offspring(current);
+                    m->$value = r.value;                 // m->value holds the response,
+                    $Actor b = FREEZE_waiting(m);        // so set m->cont = NULL and stop further m->waiting additions
                     while (b) {
-                        b->msg->value = r.value;
+                        b->$msg->$value = r.value;
+                        b->$waitsfor = NULL;
                         ENQ_ready(b);
-                        b = b->next;
+                        b = b->$next;
                     }
                     if (DEQ_msg(current)) {
                         ENQ_ready(current);
@@ -695,24 +756,27 @@ void *main_loop(void *arg) {
                     break;
                 }
                 case $RCONT: {
-                    m->cont = r.cont;
-                    m->value = r.value;
+                    m->$cont = r.cont;
+                    m->$value = r.value;
                     ENQ_ready(current);
                     break;
                 }
                 case $RFAIL: {
                     $Catcher c = POP_catcher(current);
-                    m->cont = c->cont;
-                    m->value = r.value;
+                    m->$cont = c->$cont;
+                    m->$value = r.value;
                     ENQ_ready(current);
                     break;
                 }
                 case $RWAIT: {
                     FLUSH_outgoing(current);
-                    m->cont = r.cont;
+                    CLEAR_offspring(current);
+                    m->$cont = r.cont;
                     $Msg x = ($Msg)r.value;
-                    if (!ADD_waiting(current, x)) {
-                        m->value = x->value;
+                    if (ADD_waiting(current, x)) {      // x->cont != NULL: x is still being processed so current was added to x->waiting
+                        current->$waitsfor = x;
+                    } else {                            // x->cont == NULL: x->value holds the final response, current is not in x->waiting
+                        m->$value = x->$value;
                         ENQ_ready(current);
                     }
                     break;
@@ -723,8 +787,8 @@ void *main_loop(void *arg) {
             clock_gettime(CLOCK_MONOTONIC, &now);
             $Msg m = DEQ_timed(now.tv_sec);
             if (m) {
-                if (ENQ_msg(m, m->to)) {
-                    ENQ_ready(m->to);
+                if (ENQ_msg(m, m->$to)) {
+                    ENQ_ready(m->$to);
                 }
             } else {
 #ifdef EXPERIMENT
@@ -742,9 +806,15 @@ void *main_loop(void *arg) {
                   }
                 }
 #endif
-                // TODO: do I/O polling
-              static struct timespec idle_wait = { 0, 500000000 };  // 500ms
-              nanosleep(&idle_wait, NULL);
+                if  ((int)arg==0) {
+                    $eventloop();
+                } else {
+                  pthread_mutex_lock(&sleep_lock);
+                  pthread_cond_wait(&work_to_do, &sleep_lock);
+                  pthread_mutex_unlock(&sleep_lock);
+                  // static struct timespec idle_wait = { 0, 50000000 };  // 500ms
+                  // nanosleep(&idle_wait, NULL);
+                }
             }
         }
     }
@@ -754,12 +824,39 @@ void *main_loop(void *arg) {
 
 // we assume that (de)serialization takes place without need for spinlock protection.
 
+$dict glob_dict;
+
+$WORD try_glob_attr($WORD obj) {
+    $Serializable$class c = (($Serializable)obj)->$class;
+    if (c->$class_id == MSG_ID) {
+        int64_t key = (($Msg)obj)->$globkey;
+        //printf("## try_glob_attr Msg %p = %d\n", obj, key);
+        $dict_setitem(glob_dict, ($Hashable)$Hashable$int$witness, to$int(key), obj);
+        return 0;
+        //return ($WORD)(long)key;
+    } else if (c->$class_id == ACTOR_ID || c->$superclass && c->$superclass->$class_id == ACTOR_ID) {
+        int64_t key = (($Actor)obj)->$globkey;
+        //printf("## try_glob_attr Actor %p = %d\n", obj, key);
+        $dict_setitem(glob_dict, ($Hashable)$Hashable$int$witness, to$int(key), obj);
+        return 0;
+        //return ($WORD)(long)key;
+    }
+    return 0;
+}
+
 $ROW $serialize_rts() {
-  return $serialize(($Serializable)$NEW($tuple,3,root_actor,readyQ,timerQ));
+  glob_dict = $NEW($dict,($Hashable)$Hashable$int$witness,NULL,NULL);
+  return $serialize(($Serializable)$NEW($tuple,3,root_actor,readyQ,timerQ), try_glob_attr);
+}
+
+$WORD try_glob_dict($WORD w) {
+    int key = (int)w;
+    $WORD obj = $dict_get(glob_dict, ($Hashable)$Hashable$int$witness, to$int(key), try_glob_dict);
+    return obj;
 }
 
 void $deserialize_rts($ROW row) {
-  $tuple t = ($tuple)$deserialize(row);
+  $tuple t = ($tuple)$deserialize(row, NULL);
   root_actor = t->components[0];
   readyQ = t->components[1];
   timerQ = t->components[2];
@@ -771,10 +868,10 @@ void $register_rts () {
   $register_force(MSG_ID,&$Msg$methods);
   $register_force(ACTOR_ID,&$Actor$methods);
   $register_force(CATCHER_ID,&$Catcher$methods);
-  $register_force(CLOS_ID,&$Clos$methods);
+  $register_force(CLOS_ID,&$function$methods);
   $register_force(CONT_ID,&$Cont$methods);
   $register_force(DONE_ID,&$Done$methods);
-  $register_force(RETNEW_ID,&$RetNew$methods);
+  $register_force(CONSTCONT_ID,&$ConstCont$methods);
 }
  
 ////////////////////////////////////////////////////////////////////////////////////////
@@ -785,7 +882,23 @@ int main(int argc, char **argv) {
 #else
     long num_cores = sysconf(_SC_NPROCESSORS_ONLN);
 #endif
-    printf("%ld worker threads\n", num_cores);
+    //    printf("%ld worker threads\n", num_cores);
+    kq = kqueue();
+    $register_builtin();
+    $register_rts();
+
+//    int primary_key_idx = 0;
+//    int clustering_key_idxs[2] = {1, 2};
+//    int index_key_idx=3;
+//    db_schema_t* db_schema = db_create_schema(NULL, 3, &primary_key_idx, 1, clustering_key_idxs, 1, &index_key_idx, 1);
+//    printf("db_create_schema returns %p\n", db_schema);
+
+
+    args = $list$new(NULL,NULL);
+    for (int i=0; i< argc; i++)
+      $list_append(args,to$str(argv[i]));
+    
+    BOOTSTRAP();
     pthread_key_create(&self_key, NULL);
     // start worker threads, one per CPU
     pthread_t threads[num_cores];
@@ -796,65 +909,9 @@ int main(int argc, char **argv) {
         CPU_SET(idx, &cpu_set);
         pthread_setaffinity_np(threads[idx], sizeof(cpu_set), &cpu_set);
     }
-    $register_builtin();
-    $register_rts();
     
-    BOOTSTRAP();
-
     for(int idx = 0; idx < num_cores; ++idx) {
         pthread_join(threads[idx], NULL);
     }
     return 0;
 }
-
-/*
-
-int selector_fd = kqueue()
-
-handler[MAX_FD] = empty
-event_spec[MAX_FD] = empty
-sock_addr[MAX_FD] = empty
-data_buffer[MAX_FD] = empty
-
-for each thread:
-    while (1):
-        event_t event
-        int nready = kevent_WAIT(selector_fd, &event, 1)
-        int fd = (int)event.ident
-        handler[fd](fd):
-            handle_listen(fd):
-                sockaddr
-                while (int fd2 = accept(fd, &sockaddr)):
-                    set_non_blocking(fd2)
-                    try:
-                        handler[fd2] = handle_connect
-                        sock_addr[fd2] = sockaddr
-                        bzero(&data_buffer[fd2])
-                        EV_SET(event_spec[fd2], fd2, EVFILT_READ, EV_ADD | EV_ONESHOT, 0, 0, NULL)
-                        kevent_CHANGE(selector_fd, &event_spec[fd2], 1)
-                    catch:
-                        event_spec[fd2].flags = EV_DELETE
-                        kevent_CHANGE(selector_fd, &event_spec[fd2], 1)
-            handle_connect(fd):
-                if event_spec[fd].filter == EVFILT_READ:
-                    count = read(&data_buffer[fd])
-                elif event_spec[fd].filter == EVFILT_WRITE:
-                    count = write(&data_buffer[fd])
-
-
-to listen:
-    try:
-        fd = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP)
-        handler[fd] = handle_listen
-        sock_addr[fd] = { AF_INET, address, htons(port) }
-        bind(fd, sock_addr[fd])
-        listen(fd, 65535)
-        EV_SET(event_spec[fd], fd, EVFILT_READ, EV_ADD, 0, 0, NULL)
-        kevent_CHANGE(selector_fd, &event_spec[fd], 1)
-    catch:
-        event_spec[fd].flags = EV_DELETE
-        kevent_CHANGE(selector_fd, &event_spec[fd], 1)
-
-    
-
-*/

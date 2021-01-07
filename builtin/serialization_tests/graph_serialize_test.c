@@ -1,6 +1,5 @@
 #include "../builtin.h"
 #include "graph.h"
-#include "../../rts/rts.h"
 
 #define SIZE 100
 int main() {

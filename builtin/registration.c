@@ -29,6 +29,7 @@ void $register_builtin() {
   memset($methods->data,0,PREASSIGNED*sizeof($WORD)); // initiate PREASSIGNED first slots to NULL;
   $methods->length = PREASSIGNED;
   $register_force(NONE_ID,&$NoneType$methods);
+  $register_force(ATOM_ID,&$atom$methods);
   $register_force(INT_ID,&$int$methods);
   $register_force(FLOAT_ID,&$float$methods);
   //  $register_force(COMPLEX_ID,&$complex$methods);
@@ -64,6 +65,7 @@ void $register_builtin() {
   $register_force(RUNTIMEERROR_ID,&$RuntimeError$methods);
   $register_force(NOTIMPLEMENTEDERROR_ID,&$NotImplementedError$methods);
   $register_force(VALUEERROR_ID,&$ValueError$methods);
+  $register_builtin_protocols();
 }
 
 
