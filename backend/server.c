@@ -37,15 +37,19 @@
 char in_buf[SERVER_BUFSIZE];
 char out_buf[SERVER_BUFSIZE];
 
-int no_state_cols = 4;
+int no_state_cols = 1;                  // 4;
 int no_state_primary_keys = 1;
-int min_state_clustering_keys = 1;
-int no_state_index_keys = 1;
+int min_state_clustering_keys = 0;      // 1;
+int no_state_index_keys = 0;            // 1;
 
-int no_queue_cols = 2;
+int no_queue_cols = 1;                  // 2;
 
-WORD state_table_key = (WORD) 0;
-WORD queue_table_key = (WORD) 1;
+#define ACTORS_TABLE    (WORD)0
+#define MSGS_TABLE      (WORD)1
+#define MSG_QUEUE       (WORD)2
+
+//WORD state_table_key = (WORD) 0;
+//WORD queue_table_key = (WORD) 1;
 
 
 void error(char *msg) {
@@ -207,25 +211,29 @@ int create_state_schema(db_t * db, unsigned int * fastrandstate)
 
 	// Create table:
 
-	int ret = db_create_table((WORD) 0, db_schema, db, fastrandstate);
+	int ret = db_create_table(ACTORS_TABLE, db_schema, db, fastrandstate);
 
-	printf("Test %s - %s (%d)\n", "create_state_table", ret==0?"OK":"FAILED", ret);
+	printf("Test %s - %s (%d)\n", "create ACTORS_TABLE", ret==0?"OK":"FAILED", ret);
+
+	ret = db_create_table(MSGS_TABLE, db_schema, db, fastrandstate);
+
+	printf("Test %s - %s (%d)\n", "create MSGS_TABLE", ret==0?"OK":"FAILED", ret);
 
 	return ret;
 }
 
 int create_queue_schema(db_t * db, unsigned int * fastrandstate)
 {
-	assert(no_queue_cols == 2);
+//	assert(no_queue_cols == 2);
 
 	int * col_types = (int *) malloc((no_queue_cols + 1) * sizeof(int));
 	col_types[0] = DB_TYPE_INT64;
-	col_types[1] = DB_TYPE_INT32;
+//	col_types[1] = DB_TYPE_INT32;
 
 	col_types[no_queue_cols] = DB_TYPE_BLOB; // Include blob
 
-	int ret = create_queue_table(queue_table_key, no_queue_cols + 1, col_types, db,  fastrandstate);
-	printf("Test %s - %s (%d)\n", "create_queue_table", ret==0?"OK":"FAILED", ret);
+	int ret = create_queue_table(MSG_QUEUE, no_queue_cols + 1, col_types, db,  fastrandstate);
+	printf("Test %s - %s (%d)\n", "create MSG_QUEUE table", ret==0?"OK":"FAILED", ret);
 
 	return ret;
 }
