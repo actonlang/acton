@@ -3,6 +3,7 @@ typedef void *$WORD;
 #define $None ($WORD)0
 
 #define $long long
+#define $int64 int64_t
 
 void $default__init__($WORD);
 

@@ -78,7 +78,7 @@ struct $Msg {
     time_t $baseline;
     $Lock $wait_lock;
     $WORD $value;
-    long $globkey;
+    $long $globkey;
 };
 
 struct $Actor$class {
@@ -99,6 +99,7 @@ struct $Actor {
     $Actor $offspring;
     $Actor $uterus;
     $Msg $waitsfor;
+    $int64 $consume_hd;
     $Catcher $catcher;
     $Lock $msg_lock;
     $long $globkey;

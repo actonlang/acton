@@ -221,6 +221,7 @@ struct $Env {
     $Actor $offspring;
     $Actor $uterus;
     $Msg $waitsfor;
+    $int64 $consume_hd;
     $Catcher $catcher;
     $Lock $msg_lock;
     $long $globkey;
@@ -250,6 +251,7 @@ struct $Connection {
     $Actor $offspring;
     $Actor $uterus;
     $Msg $waitsfor;
+    $int64 $consume_hd;
     $Catcher $catcher;
     $Lock $msg_lock;
     $long $globkey;
