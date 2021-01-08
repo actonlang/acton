@@ -14,7 +14,7 @@ void $complex_init($complex self, $Number wit, $WORD c){
 }
 
 void $complex_serialize($complex c,$Serial$state state) {
-  $ROW row = $add_header(STR_ID,2,state);
+  $ROW row = $add_header(COMPLEX_ID,2,state);
   double re = creal(c->val);
   double im = cimag(c->val);
   memcpy(row->blob,&re,sizeof(double));
