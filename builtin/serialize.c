@@ -59,7 +59,7 @@ struct $Hashable$WORD *$Hashable$WORD$witness = &$Hashable$WORD_instance;
 // small-step functions for (de)serializing the next object /////////////////////////////////////////////////
 
 $ROW $add_header(int class_id, int blob_size, $Serial$state state) {
-  $ROW res = malloc(2 * sizeof(int) + (2+blob_size)*sizeof($WORD));
+  $ROW res = malloc(2 * sizeof(int) + (1+blob_size)*sizeof($WORD));
   res->class_id = class_id;
   state->row_no++;
   res->blob_size = blob_size;
@@ -125,8 +125,16 @@ $WORD $val_deserialize($Serial$state state) {
   return res;
 }
 
-
 // Serialization methods ///////////////////////////////////////////////////////////////////////////////
+
+long $total_rowsize($ROW r) {
+    long size = 0;
+    while (r) {
+        size += 1 + r->blob_size;       // Two ints == one $WORD
+        r = r->next;
+    }
+    return size + 1;                    // Make space for an extra UNASSIGNED marker at the end
+}
 
 void $write_serialized($ROW row, char *file) {
   char buf[BUF_SIZE];
@@ -179,6 +187,18 @@ $ROW $serialize($Serializable s, $WORD (*globmap)($WORD)) {
   return state->fst;
 }
 
+$ROW $glob_serialize($Serializable self, $WORD (*globmap)($WORD)) {
+  $Serial$state state = malloc(sizeof(struct $Serial$state));
+  state->done = $NEW($dict,($Hashable)$Hashable$WORD$witness,NULL,NULL);
+  state->globmap = globmap;
+  state->row_no=0;
+  state->row = NULL;
+  state->fst = NULL;
+  $add_header(self->$class->$class_id,0,state);
+  self->$class->__serialize__(self,state);
+  return state->fst;
+}
+
 void $serialize_file($Serializable s, char *file) {
   $write_serialized($serialize(s,NULL),file);
 }
@@ -191,6 +211,16 @@ $Serializable $deserialize($ROW row, $WORD (*globmap)($WORD)) {
   state->row = row;
   state->fst = NULL;
   return $step_deserialize(state);
+}
+
+$Serializable $glob_deserialize($Serializable self, $ROW row, $WORD (*globmap)($WORD)) {
+  $Serial$state state = malloc(sizeof(struct $Serial$state));
+  state->done = $NEW($dict,($Hashable)$Hashable$int$witness,NULL,NULL);
+  state->globmap = globmap;
+  state->row_no=0;
+  state->row = row;
+  state->fst = NULL;
+  return self->$class->__deserialize__(self,state);
 }
 
 $ROW $read_serialized(char *file) {

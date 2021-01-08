@@ -78,7 +78,7 @@ struct $Msg {
     time_t $baseline;
     $Lock $wait_lock;
     $WORD $value;
-    long $globkey;
+    $long $globkey;
 };
 
 struct $Actor$class {
@@ -97,7 +97,9 @@ struct $Actor {
     $Msg $msg;
     $Msg $outgoing;
     $Actor $offspring;
+    $Actor $uterus;
     $Msg $waitsfor;
+    $int64 $consume_hd;
     $Catcher $catcher;
     $Lock $msg_lock;
     $long $globkey;
@@ -158,6 +160,7 @@ $Msg $AFTER($int, $Cont);
 $R $AWAIT($Msg, $Cont);
 
 void $NEWACT($Actor);
+void $OLDACT();
 
 void $PUSH($Cont);
 void $POP();

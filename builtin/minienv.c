@@ -14,7 +14,8 @@ int new_socket ($function handler) {
 }
 
 void setupConnection (int fd) {
-  $Connection conn = $NEW($Connection,fd,NULL);
+  $Connection conn = $NEW($Connection,fd);
+  fd_data[fd].conn = conn;
   fd_data[fd].chandler->$class->__call__(fd_data[fd].chandler, conn);
 }
 
@@ -173,14 +174,10 @@ minienv$$l$8lambda minienv$$l$8lambda$new($Connection C$1par, $function C$2par, 
     return $tmp;
 }
 struct minienv$$l$8lambda$class minienv$$l$8lambda$methods= {"minienv$$l$8lambda", NULL, ($Super$class)&$Cont$methods, minienv$$l$8lambda$__init__, NULL, NULL, NULL, NULL,  minienv$$l$8lambda$__call__};
-$R $Env$__init__ ($Env __self__, $list args, $Cont c$cont) {
+$NoneType $Env$__init__ ($Env __self__, $list args) {
+    $Actor$methods.__init__(($Actor)__self__);
     __self__->args = args;
-    __self__->$next = NULL;
-    __self__->$msg = NULL;
-    __self__->$outgoing = NULL;
-    __self__->$catcher = NULL;
-    atomic_flag_clear(&__self__->$msg_lock);
-    return $R_CONT(c$cont, $None);
+    return $None;
 }
 $R $Env$stdout_write$local ($Env __self__, $str s, $Cont c$cont) {
     printf("%s",s->str);
@@ -260,18 +257,15 @@ $Msg $Env$exit ($Env __self__, $int n) {
 $R $Env$new($list args, $Cont C$1par) {
     $Env $tmp = malloc(sizeof(struct $Env));
     $tmp->$class = &$Env$methods;
-    return $Env$methods.__init__($tmp, args, $CONSTCONT($tmp, C$1par));
+    $Env$methods.__init__($tmp, args);
+    return $R_CONT(C$1par, $tmp);
 }
-struct $Env$class $Env$methods = {"$Env", NULL, ($Super$class)&$Actor$methods, $Env$__init__, NULL, NULL, NULL, NULL, $Env$stdout_write$local,  $Env$stdin_install$local,  $Env$connect$local, $Env$listen$local, $Env$exit$local, $Env$stdout_write, $Env$stdin_install,  $Env$connect,  $Env$listen, $Env$exit};
-$R $Connection$__init__ ($Connection __self__, int descriptor, $Cont c$cont) {
-    __self__->$next = NULL;
-    __self__->$msg = NULL;
-    __self__->$outgoing = NULL;
-    __self__->$catcher = NULL;
-    atomic_flag_clear(&__self__->$msg_lock);
+struct $Env$class $Env$methods;
+$NoneType $Connection$__init__ ($Connection __self__, int descriptor) {
+    $Actor$methods.__init__(($Actor)__self__);
     $Number w$9 = ($Number)$Integral$int$new();
     __self__->descriptor = descriptor;
-    return $R_CONT(c$cont, $None);
+    return $None;
 }
 $R $Connection$write$local ($Connection __self__, $str s, $Cont c$cont) {
     memcpy(fd_data[__self__->descriptor].buffer,s->str,s->nbytes+1);
@@ -302,12 +296,13 @@ $Msg $Connection$close ($Connection __self__) {
 $Msg $Connection$on_receipt ($Connection __self__, $function cb1, $function cb2) {
     return $ASYNC(($Actor)__self__, ($Cont)minienv$$l$8lambda$new(__self__, cb1, cb2));
 }
-$R $Connection$new(int fd,$Cont C$1par) {
+$R $Connection$new(int fd, $Cont C$1par) {
     $Connection $tmp = malloc(sizeof(struct $Connection));
     $tmp->$class = &$Connection$methods;
-    return $Connection$methods.__init__($tmp, fd, $CONSTCONT($tmp, C$1par));
+    $Connection$methods.__init__($tmp, fd);
+    return $R_CONT(C$1par, $tmp);
 }
-struct $Connection$class $Connection$methods = {"$Connection", NULL, ($Super$class)&$Actor$methods, $Connection$__init__, NULL, NULL, NULL, NULL, $Connection$write$local, $Connection$close$local, $Connection$on_receipt$local, $Connection$write, $Connection$close, $Connection$on_receipt};
+struct $Connection$class $Connection$methods;
 int minienv$$done$ = 0;
 void minienv$$__init__ () {
     if (minienv$$done$) return;
@@ -371,6 +366,8 @@ void minienv$$__init__ () {
     { 
         $Env$methods.$GCINFO = "$Env";
         $Env$methods.$superclass = ($Super$class)&$Actor$methods;
+        $Env$methods.__serialize__ = ($NoneType (*) ($Env, $Serial$state))$Actor$methods.__serialize__;
+        $Env$methods.__deserialize__ = ($Env (*) ($Env, $Serial$state))$Actor$methods.__deserialize__;
         $Env$methods.__bool__ = ($bool (*) ($Env))$Actor$methods.__bool__;
         $Env$methods.__str__ = ($str (*) ($Env))$Actor$methods.__str__;
         $Env$methods.__init__ = $Env$__init__;

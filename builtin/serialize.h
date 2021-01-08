@@ -9,10 +9,9 @@
 typedef struct $ROW *$ROW;
 
 struct $ROW {
+  $ROW next;
   int class_id;
   int blob_size;
-  //  long row_no;
-  $ROW next;
   $WORD blob[];
 };
 
@@ -44,12 +43,16 @@ $ROW $add_header(int class_id, int blob_size, $Serial$state state);
 
 // top-level functions for serialization of an object ////////////////////////////////////////////////
 
+long $total_rowsize($ROW);
+
 $ROW $serialize($Serializable s, $WORD (*globmap)($WORD));
+$ROW $glob_serialize($Serializable s, $WORD (*globmap)($WORD));
 void $write_serialized($ROW row, char *file);
 // $serialize_file just calls the above two functions
 void $serialize_file($Serializable s, char *file);
 
 $Serializable $deserialize($ROW row, $WORD (*globmap)($WORD));
+$Serializable $glob_deserialize($Serializable s, $ROW row, $WORD (*globmap)($WORD));
 $ROW $read_serialized(char *file);
 // $deserialize_file just calls the above two functions
 $Serializable $deserialize_file(char *file);
