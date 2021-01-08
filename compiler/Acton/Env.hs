@@ -821,6 +821,57 @@ mro env us                              = merge [] $ map lin us' ++ [us']
     absent (w,h) us                     = tcname h `notElem` map (tcname . snd) us
 
 
+----------------------------------------------------------------------------------------------------------------------
+-- castable predicate
+----------------------------------------------------------------------------------------------------------------------
+
+castable                                    :: EnvF x -> Type -> Type -> Bool
+castable env (TWild _) t2                   = True
+castable env t1 (TWild _)                   = True
+
+castable env (TCon _ c1) (TCon _ c2)
+  | Just (wf,c') <- search                  = tcargs c2 == tcargs c'
+  where search                              = findAncestor env c1 (tcname c2)
+
+castable env (TFun _ fx1 p1 k1 t1) (TFun _ fx2 p2 k2 t2)
+  | fx1 == fxAction , fx2 /= fxAction       = castable env fx1 fx2 && castable env p2 p1 && castable env k2 k1 && castable env (tMsg t1) t2
+  | otherwise                               = castable env fx1 fx2 && castable env p2 p1 && castable env k2 k1 && castable env t1 t2
+
+castable env (TTuple _ p1 k1) (TTuple _ p2 k2)
+                                            = castable env p1 p2 && castable env k1 k2
+
+castable env (TOpt _ t1) (TOpt _ t2)        = castable env t1 t2
+castable env (TNone _) (TOpt _ t)           = True
+castable env (TNone _) (TNone _)            = True
+
+castable env (TFX _ fx1) (TFX _ fx2)        = castable' fx1 fx2
+  where castable' FXPure   FXPure           = True
+        castable' FXPure   FXMut            = True
+        castable' FXPure   FXAction         = True
+        castable' FXMut    FXMut            = True
+        castable' FXMut    FXAction         = True
+        castable' FXAction FXAction         = True
+        castable' FXAsync  FXAsync          = True
+        castable' FXAsync  FXAction         = True
+        castable' fx1      fx2              = False
+
+castable env (TNil _ k1) (TNil _ k2)
+  | k1 == k2                                = True
+castable env (TRow _ k n t1 r1) r2
+  | Just (t2,r2') <- findInRow n r2         = t2 /= tWild && castable env t1 t2 && r2' /= tWild && castable env r1 r2'
+
+castable env (TVar _ tv1) (TVar _ tv2)
+  | tv1 == tv2                              = True
+
+castable env t1@(TVar _ tv) t2              = castable env (tCon c) t2
+  where c                                   = findTVBound env tv
+
+castable env t1 t2@(TVar _ tv)              = False
+
+castable env t1 (TOpt _ t2)                 = castable env t1 t2
+
+castable env t1 t2                          = False
+
 
 -- Import handling (local definitions only) ----------------------------------------------
 
