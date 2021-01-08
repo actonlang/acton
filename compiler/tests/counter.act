@@ -1,0 +1,19 @@
+actor Counter():
+    var count = 0
+    def inc():
+        count = count + 1
+    def get():
+        return count
+
+actor main(env: Env):
+    c = Counter()
+    def _step1():
+        print('inc')
+        c.inc()
+        after 1: _step2()
+    def _step2():
+        x = c.get()
+        print('get = %d' % x)
+        after 2: _step1()
+    _step1()
+
