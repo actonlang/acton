@@ -281,7 +281,7 @@ protocol Number (Plus,Minus):
   def __imul__(a,b):
       return a * b
   def __itruediv__(a,b):
-      return a / a
+      return a / b
   def __ipow__(a,b):
       return a ** b
 
@@ -549,21 +549,25 @@ replicate : (int, A) -> list[A]
 
 ## Environment ################################################
 
-actor Env (argv):
-    args : list[str]
-    args = argv
+actor Env (args):
+    argv : list[str]
+    argv = args
 
     stdout_write : action(str) -> None
     stdin_install: action(action(str)->None) -> None
     connect      : action(str, int, action(Connection)->None) -> None
     listen       : action(int, action(Connection)->None) -> None
     exit         : action(int) -> None
+    openR        : action(str) -> ?RFile
+    openW        : action(str) -> ?WFile
 
     def stdout_write(s): pass
     def stdin_install(cb): pass
     def connect(host,port,cb): pass
     def listen(port,cb): pass
     def exit(n): pass
+    def openR(nm): return RFile()
+    def openW(nm): return WFile()
 
 actor Connection ():
     write       : action(str) -> None
@@ -573,6 +577,18 @@ actor Connection ():
     def write(s): pass
     def close() : pass
     def on_receipt(cb1, cb2): pass
+
+actor RFile ():
+    read        : action() -> str
+    close       : action() -> None
+
+    def read()  : return ""
+    def close() : pass
+
+actor WFile ():
+    write       : action(str) -> None
+    close       : action() -> None
+
+    def write(s): pass
+    def close() : pass
     
-
-
