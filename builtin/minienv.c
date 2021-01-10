@@ -578,7 +578,7 @@ $R $Env$openR$local ($Env __self__, $str nm, $Cont c$cont) {
 }
 $R $Env$openW$local ($Env __self__, $str nm, $Cont c$cont) {
   printf("in $Env$openW$local\n");
-  int descr = open((char *)nm->str, O_WRONLY | O_CREAT | O_APPEND);
+  int descr = open((char *)nm->str, O_WRONLY | O_CREAT | O_APPEND, S_IWUSR|S_IRUSR|S_IRGRP|S_IROTH);
     if (descr < 0)
         return $R_CONT(c$cont, $None);
     else
