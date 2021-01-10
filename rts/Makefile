@@ -1,7 +1,7 @@
 all: rts.o
 
 rts.o: rts.c rts.h
-	cc  -Wno-int-to-void-pointer-cast \
+	cc  -g -Wno-int-to-void-pointer-cast \
 		-pthread \
 		-c -O3 rts.c
 	ar cr ../lib/libActon.a rts.o
