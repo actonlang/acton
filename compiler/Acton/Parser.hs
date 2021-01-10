@@ -103,6 +103,7 @@ assertLoop          = ifCtx [LOOP]                  [IF,SEQ]            success 
 assertDecl          = ifCtx [CLASS,PROTO,EXT]       []                  success (fail "decoration only allowed inside a class or protocol")
 assertClass         = ifCtx [CLASS]                 []                  success (fail "decoration only allowed inside a class")
 assertDef           = ifCtx [DEF]                   [IF,SEQ,LOOP]       success (fail "statement only allowed inside a function")
+assertDefAct        = ifCtx [DEF,ACTOR]             [IF,SEQ,LOOP]       success (fail "statement only allowed inside a function or actor")
 assertNotDecl       = ifCtx [CLASS,PROTO,EXT]       [IF]                (fail "statement not allowed inside a class, protocol or extension") success
 assertNotData       = ifCtx [DATA]                  [IF,SEQ,LOOP]       (fail "statement not allowed inside a data tree") success
 
@@ -542,7 +543,7 @@ trysome p = do x <- p; rest [x]
 
 after_stmt :: Parser S.Stmt
 after_stmt = addLoc $ do
-                assertDef
+                assertDefAct
                 rword "after"
                 e <- expr
                 colon

@@ -16,9 +16,6 @@ def main0(env):
        print("cannot open file 'data' for writing")   
    env.exit(0)
 
-def run(env):
-   after 0: main0(env)
-   
 actor main(env):
-   run(env)
+   after 0: main0(env)
    
