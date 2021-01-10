@@ -21,7 +21,7 @@ def sample():
     z = loess(x, y, x, 40)
     print("clear\n$data <<EOD");
     for i in range(0, 101, 1):
-       print(' %5f   %5f   %5f' % ( numpy.scalar(x[i]), numpy.scalar(y[i]), numpy.scalar(z[i])))
+       print(x[i],y[i],z[i])
     print("EOD")
     print("plot [0:10][0:5] \'$data\' using 1:2 with points title \"raw data\", \\")
     print("\'$data\' using 1:3 with lines title \"loess smoothed\"")

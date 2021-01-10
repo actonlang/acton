@@ -26,7 +26,7 @@ def primesTo(n):
 
 
 actor main(env):
-   n = int(env.args[1])
+   n = int(env.argv[1])
    print(count(sieve(n)))
 #   print(len(primesTo(n)))
    env.exit(0)
