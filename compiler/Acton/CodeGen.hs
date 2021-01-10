@@ -24,15 +24,17 @@ generate env m                      = do return (n, h,c)
         env0                        = genEnv $ setMod (modname m) env
 
 genRoot                             :: Acton.Env.Env0 -> QName -> Type -> IO String
-genRoot env0 qn@(GName m n) t       = do return $ render cRoot
+genRoot env0 qn@(GName m n) t       = do return $ render (cInclude $+$ cInit $+$ cRoot)
   where env                         = genEnv $ setMod m env0
         env1                        = ldefine (envOf pars) env
         pars                        = pPar paramNames' r
         r                           = posRow t $ posRow (tCont tWild tWild) posNil
-        cRoot                       = include env "modules" m $+$
-                                      (gen env tR <+> gen env primROOT <+> parens (gen env pars) <+> char '{') $+$
-                                       nest 4 (gen env1 (GName m initKW) <> parens empty <> semi $+$
-                                               text "return" <+> genNew env1 qn (pArg pars) <> semi) $+$
+        cInclude                    = include env "modules" m
+        cInit                       = (text "void" <+> gen env primROOTINIT <+> parens empty <+> char '{') $+$
+                                       nest 4 (gen env1 (GName m initKW) <> parens empty <> semi) $+$
+                                       char '}'
+        cRoot                       = (gen env tR <+> gen env primROOT <+> parens (gen env pars) <+> char '{') $+$
+                                       nest 4 (text "return" <+> genNew env1 qn (pArg pars) <> semi) $+$
                                        char '}'
 
 -- Environment --------------------------------------------------------------------------------------
@@ -192,6 +194,7 @@ primAND                             = gPrim "AND"
 primOR                              = gPrim "OR"
 primNOT                             = gPrim "NOT"
 primROOT                            = gPrim "ROOT"
+primROOTINIT                        = gPrim "ROOTINIT"
 primRegister                        = gPrim "register"
 
 primToInt                           = name "to$int"

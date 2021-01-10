@@ -254,6 +254,23 @@ $Msg $Env$listen ($Env __self__, $int port, $function cb) {
 $Msg $Env$exit ($Env __self__, $int n) {
     return $ASYNC(($Actor)__self__, ($Cont)minienv$$l$5lambda$new(__self__, n));
 }
+void $Env$__serialize__ ($Env self, $Serial$state state) {
+    $Actor$methods.__serialize__(($Actor)self, state);
+    $step_serialize(self->args, state);
+}
+$Env $Env$__deserialize__ ($Env self, $Serial$state state) {
+    if (!self) {
+        if (!state) {
+            self = malloc(sizeof(struct $Env));
+            self->$class = &$Env$methods;
+            return self;
+        }
+        self = $DNEW($Env, state);
+    }
+    $Actor$methods.__deserialize__(($Actor)self, state);
+    self->args = $step_deserialize(state);
+    return self;
+}
 $R $Env$new($list args, $Cont C$1par) {
     $Env $tmp = malloc(sizeof(struct $Env));
     $tmp->$class = &$Env$methods;
@@ -295,6 +312,21 @@ $Msg $Connection$close ($Connection __self__) {
 }
 $Msg $Connection$on_receipt ($Connection __self__, $function cb1, $function cb2) {
     return $ASYNC(($Actor)__self__, ($Cont)minienv$$l$8lambda$new(__self__, cb1, cb2));
+}
+void $Connection$__serialize__ ($Connection self, $Serial$state state) {
+    $Actor$methods.__serialize__(($Actor)self, state);
+}
+$Connection $Connection$__deserialize__ ($Connection self, $Serial$state state) {
+    if (!self) {
+        if (!state) {
+            self = malloc(sizeof(struct $Connection));
+            self->$class = &$Connection$methods;
+            return self;
+        }
+        self = $DNEW($Connection, state);
+    }
+    $Actor$methods.__deserialize__(($Actor)self, state);
+    return self;
 }
 $R $Connection$new(int fd, $Cont C$1par) {
     $Connection $tmp = malloc(sizeof(struct $Connection));
@@ -366,8 +398,8 @@ void minienv$$__init__ () {
     { 
         $Env$methods.$GCINFO = "$Env";
         $Env$methods.$superclass = ($Super$class)&$Actor$methods;
-        $Env$methods.__serialize__ = ($NoneType (*) ($Env, $Serial$state))$Actor$methods.__serialize__;
-        $Env$methods.__deserialize__ = ($Env (*) ($Env, $Serial$state))$Actor$methods.__deserialize__;
+        $Env$methods.__serialize__ = $Env$__serialize__;
+        $Env$methods.__deserialize__ = $Env$__deserialize__;
         $Env$methods.__bool__ = ($bool (*) ($Env))$Actor$methods.__bool__;
         $Env$methods.__str__ = ($str (*) ($Env))$Actor$methods.__str__;
         $Env$methods.__init__ = $Env$__init__;
@@ -386,6 +418,8 @@ void minienv$$__init__ () {
     {
         $Connection$methods.$GCINFO = "$Connection";
         $Connection$methods.$superclass = ($Super$class)&$Actor$methods;
+        $Connection$methods.__serialize__ = $Connection$__serialize__;
+        $Connection$methods.__deserialize__ = $Connection$__deserialize__;
         $Connection$methods.__bool__ = ($bool (*) ($Connection))$Actor$methods.__bool__;
         $Connection$methods.__str__ = ($str (*) ($Connection))$Actor$methods.__str__;
         $Connection$methods.__init__ = $Connection$__init__;

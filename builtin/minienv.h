@@ -198,7 +198,7 @@ struct $Env$class {
     $int $class_id;
     $Super$class $superclass;
     $NoneType (*__init__) ($Env, $list);
-    $NoneType (*__serialize__) ($Env, $Serial$state);
+    void (*__serialize__) ($Env, $Serial$state);
     $Env (*__deserialize__) ($Env, $Serial$state);
     $bool (*__bool__) ($Env);
     $str (*__str__) ($Env);
@@ -232,7 +232,7 @@ struct $Connection$class {
     $int $class_id;
     $Super$class $superclass;
     $NoneType (*__init__) ($Connection, int);
-    $NoneType (*__serialize__) ($Connection, $Serial$state);
+    void (*__serialize__) ($Connection, $Serial$state);
     $Connection (*__deserialize__) ($Connection, $Serial$state);
     $bool (*__bool__) ($Connection);
     $str (*__str__) ($Connection);
