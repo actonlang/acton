@@ -231,7 +231,8 @@ allBelow env (TFX _ FXMut)              = [fxMut, fxPure]
 allBelow env (TFX _ FXPure)             = [fxPure]
 
 
-allExtProto env p                       = [ tCon tc | tc <- allCons env, wit <- allWitnesses env (tcname tc), implProto env p wit ]
+allExtProto env p                       = [ tVar tv | tv <- tvarScope0 env, wit <- allWitnesses env (NoQ $ tvname tv), implProto env p wit ] ++
+                                          [ tCon tc | tc <- allCons env, wit <- allWitnesses env (tcname tc), implProto env p wit ]
 
 allConAttr env n                        = [ tCon tc | tc <- allCons env, n `elem` allAttrs env tc ]
 
