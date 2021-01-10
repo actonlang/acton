@@ -1,4 +1,4 @@
-def main0(env):
+actor main(env):
    print("will try to open file")
    f1 = env.openW("data")
    print("opened file f1")
@@ -15,7 +15,3 @@ def main0(env):
    else:
        print("cannot open file 'data' for writing")   
    env.exit(0)
-
-actor main(env):
-   after 0: main0(env)
-   

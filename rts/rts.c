@@ -616,18 +616,18 @@ void BOOTSTRAP(int argc, char *argv[]) {
     $list args = $list$new(NULL,NULL);
     for (int i=0; i< argc; i++)
       $list_append(args,to$str(argv[i]));
-    env_actor = $NEW($Env, args);
 
-    $Actor ancestor0 = ($Actor)env_actor;
+    env_actor = $NEW($Env, args);
+    $Actor ancestor0 = $NEW($Actor);
     struct timespec now;
     clock_gettime(CLOCK_MONOTONIC, &now);
     $Msg m = $NEW($Msg, ancestor0, &$NewRoot$cont, now.tv_sec, &$WriteRoot$cont);
 
 #if WITH_BACKEND
     create_db_queue(env_actor->$globkey);
-    env_actor->$consume_hd = 0;
-    int ret = remote_enqueue_in_txn(($WORD*)&m->$globkey, 1, NULL, 0, MSG_QUEUE, (WORD)env_actor->$globkey, NULL, db);
-    printf("   # enqueue bootstrap msg %ld to Env queue %ld returns %d\n", m->$globkey, env_actor->$globkey, ret);
+    create_db_queue(ancestor0->$globkey);
+    int ret = remote_enqueue_in_txn(($WORD*)&m->$globkey, 1, NULL, 0, MSG_QUEUE, (WORD)ancestor0->$globkey, NULL, db);
+    printf("   # enqueue bootstrap msg %ld to ancestor0 queue %ld returns %d\n", m->$globkey, ancestor0->$globkey, ret);
 #endif
 
     if (ENQ_msg(m, ancestor0)) {
@@ -768,7 +768,7 @@ long read_queued_msg(long key, int64_t *read_head) {
     
     if (key == 0 && *read_head == -1) {     // Very temporary workaround hack!
         *read_head = 0;
-        return -17;
+        return -19;
     }
     
 //    int ret = remote_read_queue_in_txn(($WORD)key, 0, 0, MSG_QUEUE, ($WORD)key, 
@@ -954,7 +954,7 @@ void deserialize_system(snode_t *actors_start) {
     }
 
     env_actor  = ($Env)$dict_get(globdict, ($Hashable)$Hashable$int$witness, to$int(-11), NULL);
-    root_actor = ($Actor)$dict_get(globdict, ($Hashable)$Hashable$int$witness, to$int(-13), NULL);
+    root_actor = ($Actor)$dict_get(globdict, ($Hashable)$Hashable$int$witness, to$int(-14), NULL);
     globdict = NULL;
     printf("\n\n");
 }
@@ -1178,7 +1178,7 @@ int main(int argc, char **argv) {
     add_server_to_membership("localhost", 32000, db, &seed);
     
     snode_t* start_row = NULL, * end_row = NULL;
-    int no_items = 0; //remote_read_full_table_in_txn(&start_row, &end_row, ACTORS_TABLE, NULL, db);
+    int no_items = remote_read_full_table_in_txn(&start_row, &end_row, ACTORS_TABLE, NULL, db);
     printf("Found %d existing actors\n", no_items);
     if (no_items > 0) {
         printf("############ DESERIALIZING ##############\n");
