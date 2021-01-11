@@ -500,7 +500,7 @@ chr : (Integral) -> str
 def divmod [A(Integral)] (a : A, b : A) -> (A, A): 
   return Integral.__divmod__(a,b)
 
-enumerate : (Iterable[A],?int) -> Iterator[(A,int)]
+enumerate : (Iterable[A],?int) -> Iterator[(int,A)]
 
 filter : (?((A) -> B), Iterable[A]) -> Iterator[A]
 
