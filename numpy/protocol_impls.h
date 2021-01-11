@@ -1,3 +1,5 @@
+#pragma once
+
 #include "../modules/math.h"
 
 
