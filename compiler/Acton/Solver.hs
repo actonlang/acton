@@ -82,7 +82,7 @@ solve' env select hist te tt eq cs
                                                         trace ("### goal " ++ prstr v ++ ", unifying with " ++ prstrs alts) $
                                                         unifyM env (repeat $ tVar v) alts >> proceed hist cs
   where (solve_cs, keep_cs)                 = partition select cs
-        goals                               = sortOn deco $ map condense $ group (rnks ++ rnks')
+        goals                               = sortOn deco $ map condense $ group rnks   -- (rnks ++ rnks')
         rnks                                = map (rank env) solve_cs
         rvs                                 = map headv rnks
         rnks'                               = [ rnk | rnk <- map (rank env) keep_cs, headv rnk `elem` rvs ]
