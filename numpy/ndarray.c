@@ -12,7 +12,7 @@ union $Bytes8 *iter_next(numpy$$array_iterator_state it);
 // method for creating ndarray structs.
 // res->offset gets default value 0 (may be unsuitable when allocate_data = false)
 
-static numpy$$ndarray $newarray(enum ElemType typ, long ndim,$int size,$list shape,$list strides,bool allocate_data) {
+static numpy$$ndarray $newarray(enum ElemType typ, long ndim, $int size, $list shape, $list strides, bool allocate_data) {
   numpy$$ndarray res = malloc(sizeof(struct numpy$$ndarray));
   res->$class = &numpy$$ndarray$methods;
   res->elem_type = typ;
@@ -340,6 +340,7 @@ struct numpy$$ndarray$class numpy$$ndarray$methods = {
     numpy$$ndarray$__str__,
     numpy$$ndarray$reshape,
     numpy$$ndarray$transpose,
+    numpy$$ndarray$flatten,
     numpy$$ndarray$copy,
     numpy$$ndarray$__ndgetslice__
 };
@@ -804,3 +805,57 @@ struct numpy$$Iterator$ndarray$class numpy$$Iterator$ndarray$methods = {"",UNASS
                                                       numpy$$Iterator$$serialize, numpy$$Iterator$ndarray$_deserialize,numpy$$Iterator$bool,numpy$$Iterator$str,numpy$$Iterator$ndarray$__next__};
 
 $int numpy$$newaxis;
+
+numpy$$ndarray numpy$$roll(numpy$$Primitive wit, numpy$$ndarray a, $int n) {
+  if (n->val==0)
+    return a;
+  numpy$$ndarray b = numpy$$ndarray$flatten(a);
+  $list newshape = $list_new(1);
+  $list_append(newshape,a->size);
+  $list newstrides = $list_new(1);
+  $list_append(newstrides,to$int(1));
+  numpy$$ndarray res = $newarray(b->elem_type,1,b->size,newshape,newstrides,true);
+  numpy$$Collection$ndarray wit2 = numpy$$Collection$ndarray$new(wit);
+  int len = wit2->$class->__len__(wit2,a)->val;
+  int start = n->val < 0 ? -n->val : len-n->val;
+  int stride =  (($int)b->strides->data[0])->val;
+  for (int i = 0; i < b->size->val; i++)
+    res->data[i] = b->data[b->offset + (start+i) % b->size->val * stride];
+  return numpy$$ndarray$reshape(res,a->shape);
+}
+
+   
+numpy$$ndarray numpy$$tile(numpy$$Primitive wit, numpy$$ndarray a, $int n) {
+  if (n->val<=0) 
+    RAISE(($BaseException)$NEW($ValueError,to$str("numpy.tile: non-positive number of tiles")));
+  $int sz = to$int(a->size->val*n->val);
+  $list newshape = $list_new(1);
+  $list_append(newshape,sz);
+  $list newstrides = $list_new(1);
+  $list_append(newstrides,to$int(1));
+  numpy$$ndarray res = $newarray(a->elem_type,1,sz,newshape,newstrides,true);
+  for (int i=0; i < sz->val; i++) 
+    res->data[i] = a->data[a->offset + i % a->size->val];
+  return res;    
+}
+
+numpy$$ndarray numpy$$zeros(numpy$$Primitive wit, $int n) {
+  if (n->val<=0) 
+    RAISE(($BaseException)$NEW($ValueError,to$str("numpy.zeros: non-positive size")));
+  $list newshape = $list_new(1);
+  $list_append(newshape,n);
+  $list newstrides = $list_new(1);
+  $list_append(newstrides,to$int(0));
+  numpy$$ndarray res = $newarray(wit->$class->elem_type,1,n,newshape,newstrides,true);
+  union $Bytes8 zero;
+  switch (wit->$class->elem_type) {
+  case LongType:
+    zero.l = 0;
+    break;
+  case DblType:
+    zero.d = 0.0;
+    break;
+  }
+  res->data[0] = zero;
+  return res;
+}

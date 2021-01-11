@@ -29,6 +29,9 @@ sum                 : [A (Primitive)] => (ndarray[A],?int)       -> ndarray[A]
 sort                : [A (Primitive)] => (ndarray[A],?int)       -> ndarray[A]
 abs                 : [A (Primitive)] => (ndarray[A])            -> ndarray[A]
 scalar              : [A (Primitive)] => (ndarray[A])            -> A           #only for 0-dim array
+roll                : [A (Primitive)] => (ndarray[A], int)       -> A           
+tile                : [A (Primitive)] => (ndarray[A], int)       -> A           
+zeros               : [A (Primitive)] => (int)                   -> ndarray[A]  
     
 
 arange              :                    (?int,int,?int)         -> ndarray[int]       
@@ -40,7 +43,7 @@ unirandfloat        :                    (float, float, int)     -> ndarray[floa
 
 extension ndarray[A (Primitive)] (Integral): pass
 extension ndarray[A (Primitive)] (Sliceable[ndarray[A]]): pass
-extension ndarray[A (Primitive)] (Iterable[A]): pass
+extension ndarray[A (Primitive)] (Collection[A]): pass
 extension ndarray[A (Primitive, math.RealFuns)] (math.RealFuns): pass
 extension ndarray[A (Primitive, RealFloat)] (RealFloat): pass
 
