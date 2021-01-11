@@ -1,0 +1,13 @@
+import numpy
+import math
+
+actor main(env):
+  a = numpy.arange(0,20,1)
+  b = numpy.tile(a,3)
+  print(b)
+  c = numpy.roll(a,-7)
+  print(c)
+  d = numpy.zeros(12)
+  print(d)
+  env.exit(0)
+  
