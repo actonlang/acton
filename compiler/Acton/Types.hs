@@ -645,7 +645,8 @@ instance Check Decl where
                                              checkNoEscape env tvs
                                              -- At this point, n has the type given by its def annotations.
                                              -- Now check that this type is no less general than its recursion assumption in env.
-                                             matchDefAssumption env cs1 (Def l n q p' k' (Just t) (bindWits eq1 ++ b') dec fx)
+                                             matchDefAssumption env cs1 (Def l n q (noDefaultsP p') (noDefaultsK k') (Just t)
+                                                                         (bindWits eq1 ++ defaultsP p' ++ defaultsK k' ++ b') dec fx)
       where env1                        = reserve (bound (p,k) ++ bound b \\ stateScope env) $ defineTVars q $ setInDef env
             tvs                         = tybound q
 
@@ -660,7 +661,8 @@ instance Check Decl where
                                              (cs1,eq1) <- solveScoped env1 tvs te tNone (csp++csk++csb++cs0)
                                              checkNoEscape env tvs
                                              fvs <- tyfree <$> msubst env
-                                             return (cs1, Actor l n (noqual env q) (qualWPar env q p') k' (bindWits (eq1++eq0) ++ defsigs ++ b'))
+                                             return (cs1, Actor l n (noqual env q) (qualWPar env q $ noDefaultsP p') (noDefaultsK k')
+                                                          (bindWits (eq1++eq0) ++ defsigs ++ defaultsP p' ++ defaultsK k' ++ b'))
       where env1                        = reserve (bound (p,k) ++ bound b) $ defineTVars q $
                                           define [(selfKW, NVar tRef)] $ reserve (statevars b) $ setInAct env
             tvs                         = tybound q
@@ -820,6 +822,30 @@ genEnv env cs te ds0
       where s                           = [ (n, Lambda l0 p k (Call l0 (tApp (eVar n) tvs) (wit2arg ws (pArg p)) (kArg k)) fx) 
                                             | Def _ n [] p k _ _ _ fx <- ds ]
             tvs                         = map tVar $ tybound q
+
+
+defaultsP (PosPar n (Just t) (Just e) p)
+                                        = s : defaultsP p
+  where s                               = sIf1 test [set] []
+        test                            = eCall (tApp (eQVar primISNOTNONE) [t]) [eVar n]
+        set                             = sAssign (pVar' n) e
+defaultsP (PosPar n _ Nothing p)        = defaultsP p
+defaultsP _                             = []
+
+noDefaultsP (PosPar n t _ p)            = PosPar n t Nothing (noDefaultsP p)
+noDefaultsP p                           = p
+
+defaultsK (KwdPar n (Just t) (Just e) k)
+                                        = s : defaultsK k
+  where s                               = sIf1 test [set] []
+        test                            = eCall (tApp (eQVar primISNOTNONE) [t]) [eVar n]
+        set                             = sAssign (pVar' n) e
+defaultsK (KwdPar n _ Nothing k)        = defaultsK k
+defaultsK _                             = []
+
+noDefaultsK (KwdPar n t _ k)            = KwdPar n t Nothing (noDefaultsK k)
+noDefaultsK k                           = k
+
 
 
 --------------------------------------------------------------------------------------------------------------------------
@@ -1127,7 +1153,8 @@ instance Infer Expr where
                                              (cs2,t,e') <- infer (define te1 (define te0 env1)) e
                                              popFX
                                              return (Cast fxPure fx : 
-                                                     cs0++cs1++cs2, tFun fx (prowOf p') (krowOf k') t, Lambda l p' k' e' fx)
+                                                     cs0++cs1++cs2, tFun fx (prowOf p') (krowOf k') t, Lambda l (noDefaultsP p') (noDefaultsK k') e' fx)
+                                                     -- TODO: replace defaulted params with Conds
       where env1                        = reserve (bound (p,k)) env
     infer env e@Yield{}                 = notYetExpr e
     infer env e@YieldFrom{}             = notYetExpr e
