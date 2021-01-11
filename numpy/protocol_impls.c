@@ -304,42 +304,51 @@ struct numpy$$Sliceable$ndarray$class numpy$$Sliceable$ndarray$methods = {
 struct numpy$$Sliceable$ndarray numpy$$Sliceable$instance = {&numpy$$Sliceable$ndarray$methods};
 numpy$$Sliceable$ndarray numpy$$Sliceable$ndarray$witness = &numpy$$Sliceable$instance;
 
-// numpy$$Iterable$ndarray ////////////////////////////////////////////////////////
+// numpy$$Collection$ndarray ////////////////////////////////////////////////////////
 
 
-void numpy$$Iterable$ndarray$__init__(numpy$$Iterable$ndarray self, numpy$$Primitive pwit) {
+void numpy$$Collection$ndarray$__init__(numpy$$Collection$ndarray self, numpy$$Primitive pwit) {
   self->pwit = pwit;
 }
   
-numpy$$Iterable$ndarray numpy$$Iterable$ndarray$new(numpy$$Primitive pwit) {
-  numpy$$Iterable$ndarray res = malloc(sizeof (struct numpy$$Iterable$ndarray));
-  numpy$$Iterable$ndarray$__init__(res, pwit);
+numpy$$Collection$ndarray numpy$$Collection$ndarray$new(numpy$$Primitive pwit) {
+  numpy$$Collection$ndarray res = malloc(sizeof (struct numpy$$Collection$ndarray));
+  numpy$$Collection$ndarray$__init__(res, pwit);
   return res;
 }
 
-void numpy$$Iterable$ndarray$__serialize__(numpy$$Iterable$ndarray wit, $Serial$state state) {
+void numpy$$Collection$ndarray$__serialize__(numpy$$Collection$ndarray wit, $Serial$state state) {
 }
 
-numpy$$Iterable$ndarray numpy$$Iterable$ndarray$__deserialize__(numpy$$Iterable$ndarray wit, $Serial$state state) {
-    numpy$$Iterable$ndarray res = $DNEW(numpy$$Iterable$ndarray,state);
+numpy$$Collection$ndarray numpy$$Collection$ndarray$__deserialize__(numpy$$Collection$ndarray wit, $Serial$state state) {
+    numpy$$Collection$ndarray res = $DNEW(numpy$$Collection$ndarray,state);
     return res;
 }
 
 
-$Iterator numpy$$Iterable$ndarray$__iter__(numpy$$Iterable$ndarray self, numpy$$ndarray a) {
+$Iterator numpy$$Collection$ndarray$__iter__(numpy$$Collection$ndarray self, numpy$$ndarray a) {
   return ($Iterator)numpy$$Iterator$ndarray$new(self->pwit,a);
 }
 
-struct numpy$$Iterable$ndarray$class numpy$$Iterable$ndarray$methods = {
-    "numpy$$Iterable$ndarray",
+numpy$$ndarray numpy$$Collection$ndarray$__fromiter__(numpy$$Collection$ndarray wit, $Iterable iter) {
+  return NULL;
+}
+$int numpy$$Collection$ndarray$__len__(numpy$$Collection$ndarray wit, numpy$$ndarray a) {
+  return $list_getitem(a->shape,-1);
+}
+
+struct numpy$$Collection$ndarray$class numpy$$Collection$ndarray$methods = {
+    "numpy$$Collection$ndarray",
     UNASSIGNED,
-    ($Super$class)&$Iterable$methods,
-    numpy$$Iterable$ndarray$__init__,
-    numpy$$Iterable$ndarray$__serialize__,
-    numpy$$Iterable$ndarray$__deserialize__,
-    ($bool (*)(numpy$$Iterable$ndarray))$default__bool__,
-    ($str (*)(numpy$$Iterable$ndarray))$default__str__,
-    numpy$$Iterable$ndarray$__iter__,
+    ($Super$class)&$Collection$methods,
+    numpy$$Collection$ndarray$__init__,
+    numpy$$Collection$ndarray$__serialize__,
+    numpy$$Collection$ndarray$__deserialize__,
+    ($bool (*)(numpy$$Collection$ndarray))$default__bool__,
+    ($str (*)(numpy$$Collection$ndarray))$default__str__,
+    numpy$$Collection$ndarray$__iter__,
+    numpy$$Collection$ndarray$__fromiter__,
+    numpy$$Collection$ndarray$__len__
 };
 
 

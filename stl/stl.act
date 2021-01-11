@@ -1,0 +1,19 @@
+import numpy
+import math
+
+def loess(x, y, xin, win):
+    xd = numpy.abs(xin[:,numpy.newaxis] - x)
+    q = xd/numpy.partition(xd,win)[:,win][:,numpy.newaxis]
+    w  = numpy.clip(q, 0.0, 1.0)
+    ws  = (1.0 - w ** 3.0) ** 3.0
+    a00 = numpy.sum(ws,1)
+    a01 = numpy.dot(ws, x)
+    a11 = numpy.dot(ws, x*x)
+    b0  = numpy.dot(ws, y)
+    b1  = numpy.dot(ws, x*y)
+    det = a00*a11-a01*a01
+    return ((a11*b0 - a01*b1) + (-a01*b0 + a00*b1)*xin)/det
+
+def decompose(observed, period, lo_window_frac):
+    n = len(observed)
+    trend = loess(observed, numpy.arange(0,n,1), observed, (lo_window_frac * float(n)).__trunc__())
