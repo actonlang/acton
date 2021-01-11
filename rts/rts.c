@@ -7,7 +7,7 @@
 #include "rts.h"
 #include "../builtin/minienv.h"
 
-#define WITH_BACKEND 0
+#define WITH_BACKEND 1
 
 #if WITH_BACKEND
 #include "../backend/client_api.h"
@@ -604,11 +604,11 @@ void dummy_callback(queue_callback_args * qca) { }
 
 void create_db_queue(long key) {
     int ret = remote_create_queue_in_txn(MSG_QUEUE, ($WORD)key, NULL, db);
-    printf("#### Create queue %ld returns %d\n", key, ret);
+    //printf("#### Create queue %ld returns %d\n", key, ret);
     queue_callback * qc = get_queue_callback(dummy_callback);
 	int64_t prev_read_head = -1, prev_consume_head = -1;
 	ret = remote_subscribe_queue(($WORD)key, 0, 0, MSG_QUEUE, ($WORD)key, qc, &prev_read_head, &prev_consume_head, db);
-    printf("   # Subscribe queue %ld returns %d\n", key, ret);
+    //printf("   # Subscribe queue %ld returns %d\n", key, ret);
 }
 #endif
 
@@ -627,7 +627,7 @@ void BOOTSTRAP(int argc, char *argv[]) {
     create_db_queue(env_actor->$globkey);
     create_db_queue(ancestor0->$globkey);
     int ret = remote_enqueue_in_txn(($WORD*)&m->$globkey, 1, NULL, 0, MSG_QUEUE, (WORD)ancestor0->$globkey, NULL, db);
-    printf("   # enqueue bootstrap msg %ld to ancestor0 queue %ld returns %d\n", m->$globkey, ancestor0->$globkey, ret);
+    //printf("   # enqueue bootstrap msg %ld to ancestor0 queue %ld returns %d\n", m->$globkey, ancestor0->$globkey, ret);
 #endif
 
     if (ENQ_msg(m, ancestor0)) {
@@ -742,10 +742,10 @@ void FLUSH_outgoing($Actor self, uuid_t *txnid) {
         }
 #if WITH_BACKEND
         int ret = remote_enqueue_in_txn(($WORD*)&m->$globkey, 1, NULL, 0, MSG_QUEUE, (WORD)dest, txnid, db);
-        if (dest)
-            printf("   # enqueue msg %ld to queue %ld returns %d\n", m->$globkey, dest, ret);
-        else
-            printf("   # enqueue msg %ld to TIMER_QUEUE returns %d\n", m->$globkey, ret);
+        //if (dest)
+        //    printf("   # enqueue msg %ld to queue %ld returns %d\n", m->$globkey, dest, ret);
+        //else
+        //    printf("   # enqueue msg %ld to TIMER_QUEUE returns %d\n", m->$globkey, ret);
 #endif
         m = next;
     }
@@ -766,19 +766,14 @@ long read_queued_msg(long key, int64_t *read_head) {
     snode_t *m_start, *m_end;
     int entries_read = 0;
     
-    if (key == 0 && *read_head == -1) {     // Very temporary workaround hack!
-        *read_head = 0;
-        return -19;
-    }
-    
-//    int ret = remote_read_queue_in_txn(($WORD)key, 0, 0, MSG_QUEUE, ($WORD)key, 
-//                                       1, &entries_read, read_head, &m_start, &m_end, NULL, db);
-//    printf("   # read msg from queue %ld returns %d, entries read: %d\n", key, ret, entries_read);
+    int ret = remote_read_queue_in_txn(($WORD)key, 0, 0, MSG_QUEUE, ($WORD)key, 
+                                       1, &entries_read, read_head, &m_start, &m_end, NULL, db);
+    //printf("   # read msg from queue %ld returns %d, entries read: %d\n", key, ret, entries_read);
 
     if (!entries_read)
         return 0;
     db_row_t *r = (db_row_t*)m_start->value;
-    printf("# r %p, key: %ld, cells: %p, columns: %p, no_cols: %d, blobsize: %d\n", r, (long)r->key, r->cells, r->column_array, r->no_columns, r->last_blob_size);
+    //printf("# r %p, key: %ld, cells: %p, columns: %p, no_cols: %d, blobsize: %d\n", r, (long)r->key, r->cells, r->column_array, r->no_columns, r->last_blob_size);
     return (long)r->column_array[0];
 }
 
@@ -851,7 +846,7 @@ void deserialize_system(snode_t *actors_start) {
 
     long min_key = 0;
 
-    printf("\n#### Msg allocation:\n");
+    //printf("\n#### Msg allocation:\n");
     for(snode_t * node = msgs_start; node!=NULL; node=NEXT(node)) {
 		db_row_t* r = (db_row_t*) node->value;
         //printf("# r %p, key: %ld, cells: %p, columns: %p, no_cols: %d, blobsize: %d\n", r, (long)r->key, r->cells, r->column_array, r->no_columns, r->last_blob_size);
@@ -863,12 +858,12 @@ void deserialize_system(snode_t *actors_start) {
             $Msg msg = ($Msg)$GET_METHODS(head->class_id)->__deserialize__(NULL, NULL);
             msg->$globkey = key;
             $dict_setitem(globdict, ($Hashable)$Hashable$int$witness, to$int(key), msg);
-            printf("# Allocated Msg %p = %ld of class %s = %d\n", msg, msg->$globkey, msg->$class->$GCINFO, msg->$class->$class_id);
+            //printf("# Allocated Msg %p = %ld of class %s = %d\n", msg, msg->$globkey, msg->$class->$GCINFO, msg->$class->$class_id);
             if (key < min_key)
                 min_key = key;
         }
     }
-    printf("\n#### Actor allocation:\n");
+    //printf("\n#### Actor allocation:\n");
     for(snode_t * node = actors_start; node!=NULL; node=NEXT(node)) {
         db_row_t* r = (db_row_t*) node->value;
         //printf("# r %p, key: %ld, cells: %p, columns: %p, no_cols: %d, blobsize: %d\n", r, (long)r->key, r->cells, r->column_array, r->no_columns, r->last_blob_size);
@@ -880,14 +875,14 @@ void deserialize_system(snode_t *actors_start) {
             $Actor act = ($Actor)$GET_METHODS(head->class_id)->__deserialize__(NULL, NULL);
             act->$globkey = key;
             $dict_setitem(globdict, ($Hashable)$Hashable$int$witness, to$int(key), act);
-            printf("# Allocated Actor %p = %ld of class %s = %d\n", act, act->$globkey, act->$class->$GCINFO, act->$class->$class_id);
+            //printf("# Allocated Actor %p = %ld of class %s = %d\n", act, act->$globkey, act->$class->$GCINFO, act->$class->$class_id);
             if (key < min_key)
                 min_key = key;
         }
     }
     next_key = min_key;
 
-    printf("\n#### Msg contents:\n");
+    //printf("\n#### Msg contents:\n");
     for(snode_t * node = msgs_start; node!=NULL; node=NEXT(node)) {
 		db_row_t* r = (db_row_t*) node->value;
         long key = (long)r->key;
@@ -895,15 +890,15 @@ void deserialize_system(snode_t *actors_start) {
             db_row_t* r2 = (HEAD(r->cells))->value;
             $WORD *blob = ($WORD*)r2->column_array[0];
             $Msg msg = ($Msg)$dict_get(globdict, ($Hashable)$Hashable$int$witness, to$int(key), NULL);
-            printf("####### Deserializing msg %p = %ld of class %s = %d\n", msg, msg->$globkey, msg->$class->$GCINFO, msg->$class->$class_id);
+            //printf("####### Deserializing msg %p = %ld of class %s = %d\n", msg, msg->$globkey, msg->$class->$GCINFO, msg->$class->$class_id);
             $ROW row = extract_row(blob);
-            print_rows(row);
+            //print_rows(row);
             $glob_deserialize(($Serializable)msg, row, try_globdict);
-            print_msg(msg);
+            //print_msg(msg);
         }
     }
 
-    printf("\n#### Actor contents:\n");
+    //printf("\n#### Actor contents:\n");
     for(snode_t * node = actors_start; node!=NULL; node=NEXT(node)) {
 		db_row_t* r = (db_row_t*) node->value;
         long key = (long)r->key;
@@ -911,52 +906,59 @@ void deserialize_system(snode_t *actors_start) {
             db_row_t* r2 = (HEAD(r->cells))->value;
             $WORD *blob = ($WORD*)r2->column_array[0];
             $Actor act = ($Actor)$dict_get(globdict, ($Hashable)$Hashable$int$witness, to$int(key), NULL);
-            printf("####### Deserializing actor %p = %ld of class %s = %d\n", act, act->$globkey, act->$class->$GCINFO, act->$class->$class_id);
+            //printf("####### Deserializing actor %p = %ld of class %s = %d\n", act, act->$globkey, act->$class->$GCINFO, act->$class->$class_id);
             $ROW row = extract_row(blob);
-            print_rows(row);
+            //print_rows(row);
             $glob_deserialize(($Serializable)act, row, try_globdict);
 
             $Msg m = act->$waitsfor;
             if (m && m->$cont) {
                 ADD_waiting(act, m);
-                printf("# Adding Actor %ld to wait for Msg %ld\n", act->$globkey, m->$globkey);
+                //printf("# Adding Actor %ld to wait for Msg %ld\n", act->$globkey, m->$globkey);
             }
             else {
                 act->$waitsfor = NULL;
             }
 
-            int64_t read_head = -1;
+            //printf("\n#### Reading nsgs queue %ld contents:\n", key);
+            queue_callback * qc = get_queue_callback(dummy_callback);
+            int64_t prev_read_head = -1, prev_consume_head = -1;
+            int ret = remote_subscribe_queue(($WORD)key, 0, 0, MSG_QUEUE, ($WORD)key, qc, &prev_read_head, &prev_consume_head, db);
+            //printf("   # Subscribe queue %ld returns %d\n", key, ret);
             while (1) {
-                long msg_key = read_queued_msg(key, &read_head);
+                long msg_key = read_queued_msg(key, &prev_read_head);
                 if (!msg_key)
                     break;
                 m = $dict_get(globdict, ($Hashable)$Hashable$int$witness, to$int(msg_key), NULL);
-                printf("# Adding Msg %ld to Actor %ld (prev msg: %p)\n", m->$globkey, act->$globkey, act->$msg);
+                //printf("# Adding Msg %ld to Actor %ld\n", m->$globkey, act->$globkey);
                 ENQ_msg(m, act);
             }
             if (act->$msg && !act->$waitsfor) {
                 ENQ_ready(act);
-                printf("# Adding Actor %ld to the readyQ\n", act->$globkey);
+                //printf("# Adding Actor %ld to the readyQ\n", act->$globkey);
             }
-            print_actor(act);
+            //print_actor(act);
         }
     }
 
-    printf("\n#### Timer queue contents:\n");
-    int64_t read_head = -1;
+    //printf("\n#### Reading timer queue contents:\n");
+    queue_callback * qc = get_queue_callback(dummy_callback);
+	int64_t prev_read_head = -1, prev_consume_head = -1;
+	int ret = remote_subscribe_queue(TIMER_QUEUE, 0, 0, MSG_QUEUE, TIMER_QUEUE, qc, &prev_read_head, &prev_consume_head, db);
+    //printf("   # Subscribe queue 0 returns %d\n", ret);
     while (1) {
-        long msg_key = read_queued_msg(TIMER_QUEUE, &read_head);
+        long msg_key = read_queued_msg(TIMER_QUEUE, &prev_read_head);
         if (!msg_key)
             break;
         $Msg m = $dict_get(globdict, ($Hashable)$Hashable$int$witness, to$int(msg_key), NULL);
-        printf("# Adding Msg %ld to the timerQ\n", m->$globkey);
+        //printf("# Adding Msg %ld to the timerQ\n", m->$globkey);
         ENQ_timed(m);
     }
 
     env_actor  = ($Env)$dict_get(globdict, ($Hashable)$Hashable$int$witness, to$int(-11), NULL);
     root_actor = ($Actor)$dict_get(globdict, ($Hashable)$Hashable$int$witness, to$int(-14), NULL);
     globdict = NULL;
-    printf("\n\n");
+    //printf("\n\n");
 }
 
 $WORD try_globkey($WORD obj) {
@@ -988,20 +990,20 @@ void insert_row(long key, size_t total, $ROW row, $WORD table, uuid_t *txnid) {
     end->class_id = UNASSIGNED;
     end->blob_size = 0;
     int ret = remote_insert_in_txn(column, 2, 1, 1, blob, total*sizeof($WORD), table, txnid, db);
-    printf("   # insert to table %ld, row %ld, returns %d\n", (long)table, key, ret);
+    //printf("   # insert to table %ld, row %ld, returns %d\n", (long)table, key, ret);
 }
 
 void serialize_msg($Msg m, uuid_t *txnid) {
-    printf("#### Serializing Msg %ld\n", m->$globkey);
+    //printf("#### Serializing Msg %ld\n", m->$globkey);
     $ROW row = $glob_serialize(($Serializable)m, try_globkey);
-    print_rows(row);
+    //print_rows(row);
     insert_row(m->$globkey, $total_rowsize(row), row, MSGS_TABLE, txnid);
 }
 
 void serialize_actor($Actor a, uuid_t *txnid) {
-    printf("#### Serializing Actor %ld\n", a->$globkey);
+    //printf("#### Serializing Actor %ld\n", a->$globkey);
     $ROW row = $glob_serialize(($Serializable)a, try_globkey);
-    print_rows(row);
+    //print_rows(row);
     insert_row(a->$globkey, $total_rowsize(row), row, ACTORS_TABLE, txnid);
 
     $Msg out = a->$outgoing;
@@ -1051,10 +1053,18 @@ void *main_loop(void *arg) {
                     FLUSH_outgoing(current, txnid);
                     serialize_msg(current->$msg, txnid);
                     FLUSH_offspring(current, txnid);
-                    int ret = remote_consume_queue_in_txn(($WORD)current->$globkey, 0, 0, MSG_QUEUE, ($WORD)current->$globkey, current->$consume_hd, txnid, db);
-                    printf("   # consume msg %ld from queue %ld returns %d\n", m->$globkey, current->$globkey, ret);
+
+                    long key = current->$globkey;
+                    snode_t *m_start, *m_end;
+                    int entries_read = 0;
+                    int64_t read_head = -1;
+                    int ret0 = remote_read_queue_in_txn(($WORD)key, 0, 0, MSG_QUEUE, ($WORD)key, 1, &entries_read, &read_head, &m_start, &m_end, NULL, db);
+                    //printf("   # dummy read msg from queue %ld returns %d, entries read: %d\n", key, ret0, entries_read);
+
+                    int ret = remote_consume_queue_in_txn(($WORD)key, 0, 0, MSG_QUEUE, ($WORD)key, read_head, txnid, db);
+                    //printf("   # consume msg %ld from queue %ld returns %d\n", m->$globkey, key, ret);
                     remote_commit_txn(txnid, db);
-                    printf("############## Commit\n\n");
+                    //printf("############## Commit\n\n");
 #else
                     FLUSH_outgoing(current, NULL);
                     FLUSH_offspring(current, NULL);
@@ -1094,7 +1104,7 @@ void *main_loop(void *arg) {
                     serialize_msg(current->$msg, txnid);
                     FLUSH_offspring(current, txnid);
                     remote_commit_txn(txnid, db);
-                    printf("############## Commit\n\n");
+                    //printf("############## Commit\n\n");
 #else
                     FLUSH_outgoing(current, NULL);
                     FLUSH_offspring(current, NULL);
@@ -1121,12 +1131,20 @@ void *main_loop(void *arg) {
 #if WITH_BACKEND
                 uuid_t *txnid = remote_new_txn(db);
                 timer_consume_hd++;
-                int ret = remote_consume_queue_in_txn(($WORD)TIMER_QUEUE, 0, 0, MSG_QUEUE, ($WORD)TIMER_QUEUE, timer_consume_hd, txnid, db);
-                printf("   # consume msg %ld from TIMER_QUEUE returns %d\n", m->$globkey, ret);
+
+                long key = TIMER_QUEUE;
+                snode_t *m_start, *m_end;
+                int entries_read = 0;
+                int64_t read_head = -1;
+                int ret0 = remote_read_queue_in_txn(($WORD)key, 0, 0, MSG_QUEUE, ($WORD)key, 1, &entries_read, &read_head, &m_start, &m_end, NULL, db);
+                //printf("   # dummy read msg from TIMER_QUEUE returns %d, entries read: %d\n", ret0, entries_read);
+
+                int ret = remote_consume_queue_in_txn(($WORD)key, 0, 0, MSG_QUEUE, ($WORD)key, read_head, txnid, db);
+                //printf("   # consume msg %ld from TIMER_QUEUE returns %d\n", m->$globkey, ret);
                 int ret2 = remote_enqueue_in_txn(($WORD*)&m->$globkey, 1, NULL, 0, MSG_QUEUE, (WORD)m->$to->$globkey, txnid, db);
-                printf("   # (timed) enqueue msg %ld to queue %ld returns %d\n", m->$globkey, m->$to->$globkey, ret2);
+                //printf("   # (timed) enqueue msg %ld to queue %ld returns %d\n", m->$globkey, m->$to->$globkey, ret2);
                 remote_commit_txn(txnid, db);
-                printf("############## Commit\n\n");
+                //printf("############## Commit\n\n");
 #endif
             } else {
                 if  ((int)arg==0) {
@@ -1179,19 +1197,13 @@ int main(int argc, char **argv) {
     
     snode_t* start_row = NULL, * end_row = NULL;
     int no_items = remote_read_full_table_in_txn(&start_row, &end_row, ACTORS_TABLE, NULL, db);
-    printf("Found %d existing actors\n", no_items);
+    //printf("Found %d existing actors\n", no_items);
     if (no_items > 0) {
-        printf("############ DESERIALIZING ##############\n");
+        printf("(restoring system)\n");
         deserialize_system(start_row);
-        printf("######### DESERIALIZATION DONE ##########\n");
-        printf("Proceed? [y/n]");
-        char c = getchar();
-        if (c != 'y')
-            return 0;
     } else {
         int indices[] = {0};
         db_schema_t* db_schema = db_create_schema(NULL, 1, indices, 1, indices, 0, indices, 0);
-        printf("## db_schema %p\n", db_schema);
         create_db_queue(TIMER_QUEUE);
         timer_consume_hd = 0;
         BOOTSTRAP(argc, argv);
