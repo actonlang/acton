@@ -2057,7 +2057,7 @@ int deserialize_server_message(void * buf, unsigned msg_len, void ** dest_buf, s
 
 	*vc = (sm->vc != NULL)?(init_vc_from_msg(sm->vc)):(NULL);
 
-	printf("Deserialized message of type %d\n", sm->mtype);
+	//printf("Deserialized message of type %d\n", sm->mtype);
 
 	server_message__free_unpacked(sm, NULL);
 

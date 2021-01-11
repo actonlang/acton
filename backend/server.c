@@ -1667,7 +1667,7 @@ int handle_agreement_response_message(membership_agreement_msg * ma, membership_
 
 int install_agreed_view(membership_agreement_msg * ma, membership * m, vector_clock * my_lc, unsigned int * fastrandstate)
 {
-#if (VERBOSE_RPC > 0)
+#if (VERBOSE_RPC > -1)
 	char msg_buf[1024];
 #endif
 

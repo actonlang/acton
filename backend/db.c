@@ -496,7 +496,7 @@ int table_range_search(WORD* start_primary_keys, WORD* end_primary_keys, snode_t
     if(start_primary_keys == NULL)
         assert(end_primary_keys == NULL);
 
-	if(start_primary_keys == NULL || (start_primary_keys[0] == LONG_MIN && end_primary_keys[0] == (LONG_MAX - 1)))
+	if(start_primary_keys == NULL || (start_primary_keys[0] == (WORD)LONG_MIN && end_primary_keys[0] == (WORD)(LONG_MAX - 1)))
 	{
 //		assert(end_primary_keys == NULL);
 		*start_row = HEAD(table->rows);

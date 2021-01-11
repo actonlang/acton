@@ -18,7 +18,7 @@
 #include <sys/select.h>
 #include <netdb.h>
 
-#define VERBOSE_RPC 1
+#define VERBOSE_RPC 0
 #define COMM_VERBOSITY 2
 
 #define BUFSIZE 4096
