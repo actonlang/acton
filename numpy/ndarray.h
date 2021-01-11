@@ -1,3 +1,5 @@
+#pragma once
+
 struct numpy$$ndarray;
 typedef struct numpy$$ndarray *numpy$$ndarray;
 

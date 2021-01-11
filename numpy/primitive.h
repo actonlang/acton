@@ -1,3 +1,5 @@
+#pragma once
+
 // The bulk of data in an ndarray is stored in a C array of union $Bytes8 data.
 // Each ndarray also holds the address of an $UnboxedFunctions struct, containing conversion
 // functions to and from boxed data, and operators on unboxed data.
