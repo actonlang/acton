@@ -1,0 +1,34 @@
+import numpy
+import math
+
+def loess(x, y, xin, win):
+    win1 = win-1                                # to be compatible with Loess.py and Loess_with_np.py
+    xd = numpy.abs(xin[:,numpy.newaxis] - x)
+    q = xd/numpy.partition(xd,win1)[:,win1][:,numpy.newaxis]
+    w  = numpy.clip(q, 0.0, 1.0)
+    ws  = (1.0 - w ** 3.0) ** 3.0
+    a00 = numpy.sum(ws,1)
+    a01 = numpy.dot(ws, x)
+    a11 = numpy.dot(ws, x*x)
+    b0  = numpy.dot(ws, y)
+    b1  = numpy.dot(ws, x*y)
+    det = a00*a11-a01*a01
+    return ((a11*b0 - a01*b1) + (-a01*b0 + a00*b1)*xin)/det
+
+def sample():
+    x = numpy.linspace(0.0, 10.0, 101)
+#    y = numpy.unirandfloat(1.0, 3.0, 101) + math.sin(x)
+    y = numpy.random.uniform(low=1.0, high=3.0, size=101) + numpy.sin(x)
+    z = loess(x, y, x, 40)
+    print("clear\n$data <<EOD");
+    for i in range(0, 101, 1):
+#       print(' %5f   %5f   %5f' % ( numpy.scalar(x[i]), numpy.scalar(y[i]), numpy.scalar(z[i])))
+       print(' %5f   %5f   %5f' % ( x[i], y[i], z[i]))
+    print("EOD")
+    print("plot [0:10][0:5] \'$data\' using 1:2 with points title \"raw data\", \\")
+    print("\'$data\' using 1:3 with lines title \"loess smoothed\"")
+    
+# print ("set terminal aqua title \"Loess smoothening\"")
+# print("set multiplot\nplot  [0:10][0:5] 0")
+# sample()
+
