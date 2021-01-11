@@ -5,13 +5,8 @@ actor counter(initval):
         val += 1
         return val
 
-actor countersrc():
-    def getCtr():
-        return counter(0)
-
 actor main(env):
-    src = countersrc()
-    ctr = src.getCtr()
+    ctr = counter(0)
     n = ctr.next()
     print(n)
     env.exit(0)
