@@ -555,8 +555,8 @@ actor Env (args):
 
     stdout_write : action(str) -> None
     stdin_install: action(action(str)->None) -> None
-    connect      : action(str, int, action(Connection)->None) -> None
-    listen       : action(int, action(Connection)->None) -> None
+    connect      : action(str, int, action(?Connection)->None) -> None
+    listen       : action(int, action(?Connection)->None) -> None
     exit         : action(int) -> None
     openR        : action(str) -> ?RFile
     openW        : action(str) -> ?WFile
