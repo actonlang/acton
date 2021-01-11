@@ -17,6 +17,7 @@ void $register_force(int classid, $WORD meths) {
 void $register($WORD meths) {
     $list_append($methods,meths);
     (($Serializable$class)meths)->$class_id = $methods->length-1;
+    //printf("$register class %s at index %d\n", (($Serializable$class)meths)->$GCINFO, $methods->length-1);
 }
 
 

@@ -218,7 +218,7 @@ $Serializable $glob_deserialize($Serializable self, $ROW row, $WORD (*globmap)($
   state->done = $NEW($dict,($Hashable)$Hashable$int$witness,NULL,NULL);
   state->globmap = globmap;
   state->row_no=0;
-  state->row = row;
+  state->row = row->next;
   state->fst = NULL;
   return self->$class->__deserialize__(self,state);
 }

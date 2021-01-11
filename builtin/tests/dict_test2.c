@@ -28,6 +28,14 @@ $Iterable dict_iterable($Mapping$dict wit) {
     
 int main() {
   //$register_builtin();
+  $dict idict = $NEW($dict,($Hashable)$Hashable$int$witness,NULL,NULL);
+  $dict_setitem(idict, ($Hashable)$Hashable$int$witness, to$int(-1), to$str("minus one"));
+  $dict_setitem(idict, ($Hashable)$Hashable$int$witness, to$int(-2), to$str("minus two"));
+  $str i1 = ($str)$dict_get(idict, ($Hashable)$Hashable$int$witness, to$int(-1), NULL);
+  $str i2 = ($str)$dict_get(idict, ($Hashable)$Hashable$int$witness, to$int(-2), NULL);
+  printf("value of -1: %s\n", i1->str);
+  printf("value of -2: %s\n", i2->str);
+        
   $Hashable hashwit = ($Hashable)$Hashable$str$witness;
   $Mapping$dict wit = $NEW($Mapping$dict,hashwit);
   $dict dict = $NEW($dict,hashwit,NULL,NULL); 
@@ -95,7 +103,7 @@ int main() {
     }
   }
 
-  wit->$class->update(wit,dict_iterable(wit),dict,other);
+  wit->$class->update(wit,dict,dict_iterable(wit),other);
   if((item = wit->$class->popitem(wit,dict))) {
     printf("popitem gives: key=%ld, value=%ld\n",fromWord(item->components[0]),fromWord(item->components[1]));
   }

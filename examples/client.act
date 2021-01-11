@@ -1,11 +1,14 @@
 actor client(env):
 
+    session : action(Connection) -> None
+    
     def session(conn):
         conn.on_receipt(env.stdout_write, env.stdout_write)
         env.stdin_install(conn.write)
 
-    if len(env.args) != 3:
+    if len(env.argv) != 3:
         print('usage: client host port')
         env.exit(-1)
     else:
-        env.connect(env.args[1],int(env.args[2]),session)
+        env.connect(env.argv[1],int(env.argv[2]),session)
+

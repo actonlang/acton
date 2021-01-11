@@ -8,6 +8,7 @@ import Data.Map.Strict (Map)
 import qualified Control.Exception
 
 import Utils
+import Pretty
 import Acton.Syntax
 import Acton.Printer
 import Acton.Builtin
@@ -54,6 +55,10 @@ instance Eq Rank where
     RUni h1 _   == RUni h2 _                = h1 == h2
     _           == _                        = False
 
+instance Pretty Rank where
+    pretty (RTry v ts rev)                  = pretty v <+> braces (commaSep pretty ts) Pretty.<> (if rev then char '\'' else empty)
+    pretty (RUni v ts)                      = pretty v <+> char '=' <+> commaSep pretty ts
+
 solve                                       :: (Polarity a, Pretty a) => Env -> (Constraint -> Bool) ->
                                                TEnv -> a -> Equations -> Constraints -> TypeM (Constraints,Equations)
 solve env select te tt eq []                = return ([], eq)
@@ -65,6 +70,7 @@ solve' env select hist te tt eq cs
   | otherwise                               = do st <- currentState
                                                  traceM ("## keep:\n" ++ render (nest 8 $ vcat $ map pretty keep_cs))
                                                  traceM ("## solve: " ++ render (nest 8 $ vcat $ map pretty solve_cs))
+                                                 traceM ("## posvs: " ++ prstrs posvs)
                                                  case head goals of
                                                     RTry v alts False ->
                                                         trace ("### goal " ++ prstr v ++ ", candidates: " ++ prstrs alts) $
@@ -76,7 +82,10 @@ solve' env select hist te tt eq cs
                                                         trace ("### goal " ++ prstr v ++ ", unifying with " ++ prstrs alts) $
                                                         unifyM env (repeat $ tVar v) alts >> proceed hist cs
   where (solve_cs, keep_cs)                 = partition select cs
-        goals                               = sortOn deco $ map condense $ group $ map (rank env) solve_cs
+        goals                               = sortOn deco $ map condense $ group (rnks ++ rnks')
+        rnks                                = map (rank env) solve_cs
+        rvs                                 = map headv rnks
+        rnks'                               = [ rnk | rnk <- map (rank env) keep_cs, headv rnk `elem` rvs ]
         tryAlts st tv []                    = trace ("### Out of alternatives for " ++ prstr tv) $ noSolve cs
         tryAlts st tv (t:ts)                = tryAlt tv t `catchError` const (traceM ("### ROLLBACK " ++ prstr tv) >> rollbackState st >> tryAlts st tv ts)
         tryAlt tv (TCon _ c)
@@ -94,7 +103,7 @@ solve' env select hist te tt eq cs
                                                  (cs,eq) <- simplify' env te tt eq cs
                                                  hist <- msubst hist
                                                  solve' env select hist te tt eq cs
-        condense (RTry v as r : rs)         = RTry v (if rev' then reverse ts' else ts') rev'
+        condense (RTry v as r : rs)         = RTry v (if rev' then subrev ts' else ts') rev'
           where ts                          = foldr intersect as $ map alts rs
                 ts'                         = if v `elem` optvs then ts \\ [tOpt tWild] else ts
                 rev'                        = (or $ r : map rev rs) || v `elem` posvs
@@ -106,6 +115,19 @@ solve' env select hist te tt eq cs
 
         deco (RTry v as r)                  = (0, length $ filter (==v) embvs, length $ filter (==v) univs, length as)
         deco (RUni v as)                    = (1, 0, 0, length as)
+
+        subreverse v ts                     = trace ("%%% rev rank " ++ prstr v) $
+                                              trace ("  % origin:  " ++ prstrs ts) $
+                                              trace ("  % reverse: " ++ prstrs (reverse ts)) $
+                                              trace ("  % subrev:  " ++ prstrs (subrev ts)) $ reverse ts
+        subrev []                           = []
+        subrev (t:ts)                       = subrev ts1 ++ t : subrev ts2
+          where (ts1,ts2)                   = partition (\t' -> castable env t' t) ts
+
+-- subrev [int,Pt,float,CPt,C3Pt]           = [] ++ int : subrev [Pt,float,CPt,C3Pt] 
+--                                          = int : subrev [CPt,C3Pt] ++ Pt : subrev [float]
+--                                          = int : [C3Pt] ++ CPt ++ subrev [] ++ Pt : [] ++ float : subrev []
+--                                          = int : C3Pt : CPt : Pt : float
 
 rank                                        :: Env -> Constraint -> Rank
 rank env (Sub _ t1 t2)                      = rank env (Cast t1 t2)
@@ -209,7 +231,8 @@ allBelow env (TFX _ FXMut)              = [fxMut, fxPure]
 allBelow env (TFX _ FXPure)             = [fxPure]
 
 
-allExtProto env p                       = [ tCon tc | tc <- allCons env, wit <- allWitnesses env (tcname tc), implProto env p wit ]
+allExtProto env p                       = [ tVar tv | tv <- tvarScope0 env, wit <- allWitnesses env (NoQ $ tvname tv), implProto env p wit ] ++
+                                          [ tCon tc | tc <- allCons env, wit <- allWitnesses env (tcname tc), implProto env p wit ]
 
 allConAttr env n                        = [ tCon tc | tc <- allCons env, n `elem` allAttrs env tc ]
 
@@ -804,7 +827,8 @@ glb env (TNil _ k1) (TNil _ k2)
 glb env (TRow _ k n t1 r1) r
   | Just (t2,r2) <- findInRow n r       = tRow k n (glb env t1 t2) (glb env r1 r2)
 
---glb env t1 t2                           = noGLB t1 t2
+glb env t1 t2                           = -- noGLB t1 t1
+                                          error ("No common subtype: " ++ prstr t1 ++ " and " ++ prstr t2)
     
 noGLB t1 t2                             = tyerr t1 ("No common subtype: " ++ prstr t2)
 
@@ -859,7 +883,8 @@ lub env (TNil _ k1) (TNil _ k2)
 lub env (TRow _ k n t1 r1) r
   | Just (t2,r2) <- findInRow n r       = tRow k n (lub env t1 t2) (lub env r1 r2)
 
---lub env t1 t2                           = noLUB t1 t2
+lub env t1 t2                           = -- noLUB t1 t2
+                                          error ("No common supertype: " ++ prstr t1 ++ " and " ++ prstr t2)
 
 noLUB t1 t2                             = tyerr t1 ("No common supertype: " ++ prstr t2)
 

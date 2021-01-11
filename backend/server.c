@@ -37,9 +37,9 @@
 char in_buf[SERVER_BUFSIZE];
 char out_buf[SERVER_BUFSIZE];
 
-int no_state_cols = 1;                  // 4;
+int no_state_cols = 2;                  // 1;   // 4;
 int no_state_primary_keys = 1;
-int min_state_clustering_keys = 0;      // 1;
+int min_state_clustering_keys = 1;      // 0;   // 1;
 int no_state_index_keys = 0;            // 1;
 
 int no_queue_cols = 1;                  // 2;

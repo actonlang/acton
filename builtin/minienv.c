@@ -2,7 +2,7 @@
 
 static void $init_FileDescriptorData(int fd) {
   fd_data[fd].kind = nohandler;
-  bzero(fd_data[fd].buffer,SOCK_BUF_SIZE);
+  bzero(fd_data[fd].buffer,BUF_SIZE);
 }
 
 int new_socket ($function handler) {
@@ -26,157 +26,487 @@ $str $getName(int fd) {
   return to$str(buf);
 }
 
-$NoneType minienv$$l$1lambda$__init__ (minienv$$l$1lambda l$self, $Env __self__, $str s) {
-    l$self->__self__ = __self__;
-    l$self->s = s;
+///////////////////////////////////////////////////////////////////////////////////////////
+
+$NoneType minienv$$l$1lambda$__init__ (minienv$$l$1lambda p$self, $Env __self__, $str s) {
+    p$self->__self__ = __self__;
+    p$self->s = s;
     return $None;
 }
-$R minienv$$l$1lambda$__call__ (minienv$$l$1lambda l$self, $Cont c$cont) {
-    $Env __self__ = l$self->__self__;
-    $str s = l$self->s;
-    return __self__->$class->stdout_write$local(__self__, s, ($Cont)c$cont);
+$R minienv$$l$1lambda$__call__ (minienv$$l$1lambda p$self, $Cont c$cont) {
+    $Env __self__ = p$self->__self__;
+    $str s = p$self->s;
+    return __self__->$class->stdout_write$local(__self__, s, c$cont);
 }
-minienv$$l$1lambda minienv$$l$1lambda$new($Env C$1par, $str C$2par) {
+void minienv$$l$1lambda$__serialize__ (minienv$$l$1lambda self, $Serial$state state) {
+    $step_serialize(self->__self__, state);
+    $step_serialize(self->s, state);
+}
+minienv$$l$1lambda minienv$$l$1lambda$__deserialize__ (minienv$$l$1lambda self, $Serial$state state) {
+    if (!self) {
+        if (!state) {
+            self = malloc(sizeof(struct minienv$$l$1lambda));
+            self->$class = &minienv$$l$1lambda$methods;
+            return self;
+        }
+        self = $DNEW(minienv$$l$1lambda, state);
+    }
+    self->__self__ = $step_deserialize(state);
+    self->s = $step_deserialize(state);
+    return self;
+}
+minienv$$l$1lambda minienv$$l$1lambda$new($Env p$1, $str p$2) {
     minienv$$l$1lambda $tmp = malloc(sizeof(struct minienv$$l$1lambda));
     $tmp->$class = &minienv$$l$1lambda$methods;
-    minienv$$l$1lambda$methods.__init__($tmp, C$1par, C$2par);
+    minienv$$l$1lambda$methods.__init__($tmp, p$1, p$2);
     return $tmp;
 }
-struct minienv$$l$1lambda$class minienv$$l$1lambda$methods = {"minienv$$l$1lambda", NULL, ($Super$class)&$Cont$methods, minienv$$l$1lambda$__init__, NULL, NULL, NULL, NULL,  minienv$$l$1lambda$__call__};
-;
-$NoneType minienv$$l$2lambda$__init__ (minienv$$l$2lambda l$self, $Env __self__, $function cb) {
-    l$self->__self__ = __self__;
-    l$self->cb = cb;
+struct minienv$$l$1lambda$class minienv$$l$1lambda$methods;
+$NoneType minienv$$l$2lambda$__init__ (minienv$$l$2lambda p$self, $Env __self__, $function cb) {
+    p$self->__self__ = __self__;
+    p$self->cb = cb;
     return $None;
 }
-$R minienv$$l$2lambda$__call__ (minienv$$l$2lambda l$self, $Cont c$cont) {
-    $Env __self__ = l$self->__self__;
-    $function cb = l$self->cb;
-    return __self__->$class->stdin_install$local(__self__, cb, ($Cont)c$cont);
+$R minienv$$l$2lambda$__call__ (minienv$$l$2lambda p$self, $Cont c$cont) {
+    $Env __self__ = p$self->__self__;
+    $function cb = p$self->cb;
+    return __self__->$class->stdin_install$local(__self__, cb, c$cont);
 }
-minienv$$l$2lambda minienv$$l$2lambda$new($Env C$1par, $function C$2par) {
+void minienv$$l$2lambda$__serialize__ (minienv$$l$2lambda self, $Serial$state state) {
+    $step_serialize(self->__self__, state);
+    $step_serialize(self->cb, state);
+}
+minienv$$l$2lambda minienv$$l$2lambda$__deserialize__ (minienv$$l$2lambda self, $Serial$state state) {
+    if (!self) {
+        if (!state) {
+            self = malloc(sizeof(struct minienv$$l$2lambda));
+            self->$class = &minienv$$l$2lambda$methods;
+            return self;
+        }
+        self = $DNEW(minienv$$l$2lambda, state);
+    }
+    self->__self__ = $step_deserialize(state);
+    self->cb = $step_deserialize(state);
+    return self;
+}
+minienv$$l$2lambda minienv$$l$2lambda$new($Env p$1, $function p$2) {
     minienv$$l$2lambda $tmp = malloc(sizeof(struct minienv$$l$2lambda));
     $tmp->$class = &minienv$$l$2lambda$methods;
-    minienv$$l$2lambda$methods.__init__($tmp, C$1par, C$2par);
+    minienv$$l$2lambda$methods.__init__($tmp, p$1, p$2);
     return $tmp;
 }
-struct minienv$$l$2lambda$class minienv$$l$2lambda$methods = {"minienv$$l$2lambda", NULL, ($Super$class)&$Cont$methods, minienv$$l$2lambda$__init__, NULL, NULL, NULL, NULL,  minienv$$l$2lambda$__call__};
-;
-$NoneType minienv$$l$3lambda$__init__ (minienv$$l$3lambda l$self, $Env __self__, $str host, $int port, $function cb) {
-    l$self->__self__ = __self__;
-    l$self->host = host;
-    l$self->port = port;
-    l$self->cb = cb;
+struct minienv$$l$2lambda$class minienv$$l$2lambda$methods;
+$NoneType minienv$$l$3lambda$__init__ (minienv$$l$3lambda p$self, $Env __self__, $str host, $int port, $function cb) {
+    p$self->__self__ = __self__;
+    p$self->host = host;
+    p$self->port = port;
+    p$self->cb = cb;
     return $None;
 }
-$R minienv$$l$3lambda$__call__ (minienv$$l$3lambda l$self, $Cont c$cont) {
-    $Env __self__ = l$self->__self__;
-    $str host = l$self->host;
-    $int port = l$self->port;
-    $function cb = l$self->cb;
-    return __self__->$class->connect$local(__self__, host, port, cb, ($Cont)c$cont);
+$R minienv$$l$3lambda$__call__ (minienv$$l$3lambda p$self, $Cont c$cont) {
+    $Env __self__ = p$self->__self__;
+    $str host = p$self->host;
+    $int port = p$self->port;
+    $function cb = p$self->cb;
+    return __self__->$class->connect$local(__self__, host, port, cb, c$cont);
 }
-minienv$$l$3lambda minienv$$l$3lambda$new($Env C$1par, $str C$2par, $int C$3par, $function C$4par) {
+void minienv$$l$3lambda$__serialize__ (minienv$$l$3lambda self, $Serial$state state) {
+    $step_serialize(self->__self__, state);
+    $step_serialize(self->host, state);
+    $step_serialize(self->port, state);
+    $step_serialize(self->cb, state);
+}
+minienv$$l$3lambda minienv$$l$3lambda$__deserialize__ (minienv$$l$3lambda self, $Serial$state state) {
+    if (!self) {
+        if (!state) {
+            self = malloc(sizeof(struct minienv$$l$3lambda));
+            self->$class = &minienv$$l$3lambda$methods;
+            return self;
+        }
+        self = $DNEW(minienv$$l$3lambda, state);
+    }
+    self->__self__ = $step_deserialize(state);
+    self->host = $step_deserialize(state);
+    self->port = $step_deserialize(state);
+    self->cb = $step_deserialize(state);
+    return self;
+}
+minienv$$l$3lambda minienv$$l$3lambda$new($Env p$1, $str p$2, $int p$3, $function p$4) {
     minienv$$l$3lambda $tmp = malloc(sizeof(struct minienv$$l$3lambda));
     $tmp->$class = &minienv$$l$3lambda$methods;
-    minienv$$l$3lambda$methods.__init__($tmp, C$1par, C$2par, C$3par, C$4par);
+    minienv$$l$3lambda$methods.__init__($tmp, p$1, p$2, p$3, p$4);
     return $tmp;
 }
-struct minienv$$l$3lambda$class minienv$$l$3lambda$methods= {"minienv$$l$3lambda", NULL, ($Super$class)&$Cont$methods, minienv$$l$3lambda$__init__, NULL, NULL, NULL, NULL,  minienv$$l$3lambda$__call__};
-;
-$NoneType minienv$$l$4lambda$__init__ (minienv$$l$4lambda l$self, $Env __self__, $int port, $function cb) {
-    l$self->__self__ = __self__;
-    l$self->port = port;
-    l$self->cb = cb;
+struct minienv$$l$3lambda$class minienv$$l$3lambda$methods;
+$NoneType minienv$$l$4lambda$__init__ (minienv$$l$4lambda p$self, $Env __self__, $int port, $function cb) {
+    p$self->__self__ = __self__;
+    p$self->port = port;
+    p$self->cb = cb;
     return $None;
 }
-$R minienv$$l$4lambda$__call__ (minienv$$l$4lambda l$self, $Cont c$cont) {
-    $Env __self__ = l$self->__self__;
-    $int port = l$self->port;
-    $function cb = l$self->cb;
-    return __self__->$class->listen$local(__self__, port, cb, ($Cont)c$cont);
+$R minienv$$l$4lambda$__call__ (minienv$$l$4lambda p$self, $Cont c$cont) {
+    $Env __self__ = p$self->__self__;
+    $int port = p$self->port;
+    $function cb = p$self->cb;
+    return __self__->$class->listen$local(__self__, port, cb, c$cont);
 }
-minienv$$l$4lambda minienv$$l$4lambda$new($Env C$1par, $int C$2par, $function C$3par) {
+void minienv$$l$4lambda$__serialize__ (minienv$$l$4lambda self, $Serial$state state) {
+    $step_serialize(self->__self__, state);
+    $step_serialize(self->port, state);
+    $step_serialize(self->cb, state);
+}
+minienv$$l$4lambda minienv$$l$4lambda$__deserialize__ (minienv$$l$4lambda self, $Serial$state state) {
+    if (!self) {
+        if (!state) {
+            self = malloc(sizeof(struct minienv$$l$4lambda));
+            self->$class = &minienv$$l$4lambda$methods;
+            return self;
+        }
+        self = $DNEW(minienv$$l$4lambda, state);
+    }
+    self->__self__ = $step_deserialize(state);
+    self->port = $step_deserialize(state);
+    self->cb = $step_deserialize(state);
+    return self;
+}
+minienv$$l$4lambda minienv$$l$4lambda$new($Env p$1, $int p$2, $function p$3) {
     minienv$$l$4lambda $tmp = malloc(sizeof(struct minienv$$l$4lambda));
     $tmp->$class = &minienv$$l$4lambda$methods;
-    minienv$$l$4lambda$methods.__init__($tmp, C$1par, C$2par, C$3par);
+    minienv$$l$4lambda$methods.__init__($tmp, p$1, p$2, p$3);
     return $tmp;
 }
-struct minienv$$l$4lambda$class minienv$$l$4lambda$methods = {"minienv$$l$4lambda", NULL, ($Super$class)&$Cont$methods, minienv$$l$4lambda$__init__, NULL, NULL, NULL, NULL,  minienv$$l$4lambda$__call__};
-
-$NoneType minienv$$l$5lambda$__init__ (minienv$$l$5lambda l$self, $Env __self__, $int n) {
-    l$self->__self__ = __self__;
-    l$self->n = n;
+struct minienv$$l$4lambda$class minienv$$l$4lambda$methods;
+$NoneType minienv$$l$5lambda$__init__ (minienv$$l$5lambda p$self, $Env __self__, $int n) {
+    p$self->__self__ = __self__;
+    p$self->n = n;
     return $None;
 }
-$R minienv$$l$5lambda$__call__ (minienv$$l$5lambda l$self, $Cont c$cont) {
-    $Env __self__ = l$self->__self__;
-    $int n = l$self->n;
-    return __self__->$class->exit$local(__self__, n, ($Cont)c$cont);
+$R minienv$$l$5lambda$__call__ (minienv$$l$5lambda p$self, $Cont c$cont) {
+    $Env __self__ = p$self->__self__;
+    $int n = p$self->n;
+    return __self__->$class->exit$local(__self__, n, c$cont);
 }
-minienv$$l$5lambda minienv$$l$5lambda$new($Env C$1par, $int C$2par) {
+void minienv$$l$5lambda$__serialize__ (minienv$$l$5lambda self, $Serial$state state) {
+    $step_serialize(self->__self__, state);
+    $step_serialize(self->n, state);
+}
+minienv$$l$5lambda minienv$$l$5lambda$__deserialize__ (minienv$$l$5lambda self, $Serial$state state) {
+    if (!self) {
+        if (!state) {
+            self = malloc(sizeof(struct minienv$$l$5lambda));
+            self->$class = &minienv$$l$5lambda$methods;
+            return self;
+        }
+        self = $DNEW(minienv$$l$5lambda, state);
+    }
+    self->__self__ = $step_deserialize(state);
+    self->n = $step_deserialize(state);
+    return self;
+}
+minienv$$l$5lambda minienv$$l$5lambda$new($Env p$1, $int p$2) {
     minienv$$l$5lambda $tmp = malloc(sizeof(struct minienv$$l$5lambda));
     $tmp->$class = &minienv$$l$5lambda$methods;
-    minienv$$l$5lambda$methods.__init__($tmp, C$1par, C$2par);
+    minienv$$l$5lambda$methods.__init__($tmp, p$1, p$2);
     return $tmp;
 }
-struct minienv$$l$5lambda$class minienv$$l$5lambda$methods  = {"minienv$$l$5lambda", NULL, ($Super$class)&$Cont$methods, minienv$$l$5lambda$__init__, NULL, NULL, NULL, NULL,  minienv$$l$5lambda$__call__};
-
-$NoneType minienv$$l$6lambda$__init__ (minienv$$l$6lambda l$self, $Connection __self__, $str s) {
-    l$self->__self__ = __self__;
-    l$self->s = s;
+struct minienv$$l$5lambda$class minienv$$l$5lambda$methods;
+$NoneType minienv$$l$6lambda$__init__ (minienv$$l$6lambda p$self, $Env __self__, $str nm) {
+    p$self->__self__ = __self__;
+    p$self->nm = nm;
     return $None;
 }
-$R minienv$$l$6lambda$__call__ (minienv$$l$6lambda l$self, $Cont c$cont) {
-    $Connection __self__ = l$self->__self__;
-    $str s = l$self->s;
-    return __self__->$class->write$local(__self__, s, ($Cont)c$cont);
+$R minienv$$l$6lambda$__call__ (minienv$$l$6lambda p$self, $Cont c$cont) {
+    $Env __self__ = p$self->__self__;
+    $str nm = p$self->nm;
+    return __self__->$class->openR$local(__self__, nm, c$cont);
 }
-minienv$$l$6lambda minienv$$l$6lambda$new($Connection C$1par, $str C$2par) {
+void minienv$$l$6lambda$__serialize__ (minienv$$l$6lambda self, $Serial$state state) {
+    $step_serialize(self->__self__, state);
+    $step_serialize(self->nm, state);
+}
+minienv$$l$6lambda minienv$$l$6lambda$__deserialize__ (minienv$$l$6lambda self, $Serial$state state) {
+    if (!self) {
+        if (!state) {
+            self = malloc(sizeof(struct minienv$$l$6lambda));
+            self->$class = &minienv$$l$6lambda$methods;
+            return self;
+        }
+        self = $DNEW(minienv$$l$6lambda, state);
+    }
+    self->__self__ = $step_deserialize(state);
+    self->nm = $step_deserialize(state);
+    return self;
+}
+minienv$$l$6lambda minienv$$l$6lambda$new($Env p$1, $str p$2) {
     minienv$$l$6lambda $tmp = malloc(sizeof(struct minienv$$l$6lambda));
     $tmp->$class = &minienv$$l$6lambda$methods;
-    minienv$$l$6lambda$methods.__init__($tmp, C$1par, C$2par);
+    minienv$$l$6lambda$methods.__init__($tmp, p$1, p$2);
     return $tmp;
 }
-struct minienv$$l$6lambda$class minienv$$l$6lambda$methods= {"minienv$$l$6lambda", NULL, ($Super$class)&$Cont$methods, minienv$$l$6lambda$__init__, NULL, NULL, NULL, NULL,  minienv$$l$6lambda$__call__};
-
-$NoneType minienv$$l$7lambda$__init__ (minienv$$l$7lambda l$self, $Connection __self__) {
-    l$self->__self__ = __self__;
+struct minienv$$l$6lambda$class minienv$$l$6lambda$methods;
+$NoneType minienv$$l$7lambda$__init__ (minienv$$l$7lambda p$self, $Env __self__, $str nm) {
+    p$self->__self__ = __self__;
+    p$self->nm = nm;
     return $None;
 }
-$R minienv$$l$7lambda$__call__ (minienv$$l$7lambda l$self, $Cont c$cont) {
-    $Connection __self__ = l$self->__self__;
-    return __self__->$class->close$local(__self__, ($Cont)c$cont);
+$R minienv$$l$7lambda$__call__ (minienv$$l$7lambda p$self, $Cont c$cont) {
+    $Env __self__ = p$self->__self__;
+    $str nm = p$self->nm;
+    return __self__->$class->openW$local(__self__, nm, c$cont);
 }
-minienv$$l$7lambda minienv$$l$7lambda$new($Connection C$1par) {
+void minienv$$l$7lambda$__serialize__ (minienv$$l$7lambda self, $Serial$state state) {
+    $step_serialize(self->__self__, state);
+    $step_serialize(self->nm, state);
+}
+minienv$$l$7lambda minienv$$l$7lambda$__deserialize__ (minienv$$l$7lambda self, $Serial$state state) {
+    if (!self) {
+        if (!state) {
+            self = malloc(sizeof(struct minienv$$l$7lambda));
+            self->$class = &minienv$$l$7lambda$methods;
+            return self;
+        }
+        self = $DNEW(minienv$$l$7lambda, state);
+    }
+    self->__self__ = $step_deserialize(state);
+    self->nm = $step_deserialize(state);
+    return self;
+}
+minienv$$l$7lambda minienv$$l$7lambda$new($Env p$1, $str p$2) {
     minienv$$l$7lambda $tmp = malloc(sizeof(struct minienv$$l$7lambda));
     $tmp->$class = &minienv$$l$7lambda$methods;
-    minienv$$l$7lambda$methods.__init__($tmp, C$1par);
+    minienv$$l$7lambda$methods.__init__($tmp, p$1, p$2);
     return $tmp;
 }
-struct minienv$$l$7lambda$class minienv$$l$7lambda$methods= {"minienv$$l$7lambda", NULL, ($Super$class)&$Cont$methods, minienv$$l$7lambda$__init__, NULL, NULL, NULL, NULL,  minienv$$l$7lambda$__call__};
-$NoneType minienv$$l$8lambda$__init__ (minienv$$l$8lambda l$self, $Connection __self__, $function cb1, $function cb2) {
-    l$self->__self__ = __self__;
-    l$self->cb1 = cb1;
-    l$self->cb2 = cb2;
+struct minienv$$l$7lambda$class minienv$$l$7lambda$methods;
+$NoneType minienv$$l$8lambda$__init__ (minienv$$l$8lambda p$self, $Connection __self__, $str s) {
+    p$self->__self__ = __self__;
+    p$self->s = s;
     return $None;
 }
-$R minienv$$l$8lambda$__call__ (minienv$$l$8lambda l$self, $Cont c$cont) {
-    $Connection __self__ = l$self->__self__;
-    $function cb1 = l$self->cb1;
-    $function cb2 = l$self->cb2;
-    return __self__->$class->on_receipt$local(__self__, cb1, cb2, ($Cont)c$cont);
+$R minienv$$l$8lambda$__call__ (minienv$$l$8lambda p$self, $Cont c$cont) {
+    $Connection __self__ = p$self->__self__;
+    $str s = p$self->s;
+    return __self__->$class->write$local(__self__, s, c$cont);
 }
-minienv$$l$8lambda minienv$$l$8lambda$new($Connection C$1par, $function C$2par, $function C$3par) {
+void minienv$$l$8lambda$__serialize__ (minienv$$l$8lambda self, $Serial$state state) {
+    $step_serialize(self->__self__, state);
+    $step_serialize(self->s, state);
+}
+minienv$$l$8lambda minienv$$l$8lambda$__deserialize__ (minienv$$l$8lambda self, $Serial$state state) {
+    if (!self) {
+        if (!state) {
+            self = malloc(sizeof(struct minienv$$l$8lambda));
+            self->$class = &minienv$$l$8lambda$methods;
+            return self;
+        }
+        self = $DNEW(minienv$$l$8lambda, state);
+    }
+    self->__self__ = $step_deserialize(state);
+    self->s = $step_deserialize(state);
+    return self;
+}
+minienv$$l$8lambda minienv$$l$8lambda$new($Connection p$1, $str p$2) {
     minienv$$l$8lambda $tmp = malloc(sizeof(struct minienv$$l$8lambda));
     $tmp->$class = &minienv$$l$8lambda$methods;
-    minienv$$l$8lambda$methods.__init__($tmp, C$1par, C$2par, C$3par);
+    minienv$$l$8lambda$methods.__init__($tmp, p$1, p$2);
     return $tmp;
 }
-struct minienv$$l$8lambda$class minienv$$l$8lambda$methods= {"minienv$$l$8lambda", NULL, ($Super$class)&$Cont$methods, minienv$$l$8lambda$__init__, NULL, NULL, NULL, NULL,  minienv$$l$8lambda$__call__};
-$NoneType $Env$__init__ ($Env __self__, $list args) {
-    $Actor$methods.__init__(($Actor)__self__);
-    __self__->args = args;
+struct minienv$$l$8lambda$class minienv$$l$8lambda$methods;
+$NoneType minienv$$l$9lambda$__init__ (minienv$$l$9lambda p$self, $Connection __self__) {
+    p$self->__self__ = __self__;
+    return $None;
+}
+$R minienv$$l$9lambda$__call__ (minienv$$l$9lambda p$self, $Cont c$cont) {
+    $Connection __self__ = p$self->__self__;
+    return __self__->$class->close$local(__self__, c$cont);
+}
+void minienv$$l$9lambda$__serialize__ (minienv$$l$9lambda self, $Serial$state state) {
+    $step_serialize(self->__self__, state);
+}
+minienv$$l$9lambda minienv$$l$9lambda$__deserialize__ (minienv$$l$9lambda self, $Serial$state state) {
+    if (!self) {
+        if (!state) {
+            self = malloc(sizeof(struct minienv$$l$9lambda));
+            self->$class = &minienv$$l$9lambda$methods;
+            return self;
+        }
+        self = $DNEW(minienv$$l$9lambda, state);
+    }
+    self->__self__ = $step_deserialize(state);
+    return self;
+}
+minienv$$l$9lambda minienv$$l$9lambda$new($Connection p$1) {
+    minienv$$l$9lambda $tmp = malloc(sizeof(struct minienv$$l$9lambda));
+    $tmp->$class = &minienv$$l$9lambda$methods;
+    minienv$$l$9lambda$methods.__init__($tmp, p$1);
+    return $tmp;
+}
+struct minienv$$l$9lambda$class minienv$$l$9lambda$methods;
+$NoneType minienv$$l$10lambda$__init__ (minienv$$l$10lambda p$self, $Connection __self__, $function cb1, $function cb2) {
+    p$self->__self__ = __self__;
+    p$self->cb1 = cb1;
+    p$self->cb2 = cb2;
+    return $None;
+}
+$R minienv$$l$10lambda$__call__ (minienv$$l$10lambda p$self, $Cont c$cont) {
+    $Connection __self__ = p$self->__self__;
+    $function cb1 = p$self->cb1;
+    $function cb2 = p$self->cb2;
+    return __self__->$class->on_receipt$local(__self__, cb1, cb2, c$cont);
+}
+void minienv$$l$10lambda$__serialize__ (minienv$$l$10lambda self, $Serial$state state) {
+    $step_serialize(self->__self__, state);
+    $step_serialize(self->cb1, state);
+    $step_serialize(self->cb2, state);
+}
+minienv$$l$10lambda minienv$$l$10lambda$__deserialize__ (minienv$$l$10lambda self, $Serial$state state) {
+    if (!self) {
+        if (!state) {
+            self = malloc(sizeof(struct minienv$$l$10lambda));
+            self->$class = &minienv$$l$10lambda$methods;
+            return self;
+        }
+        self = $DNEW(minienv$$l$10lambda, state);
+    }
+    self->__self__ = $step_deserialize(state);
+    self->cb1 = $step_deserialize(state);
+    self->cb2 = $step_deserialize(state);
+    return self;
+}
+minienv$$l$10lambda minienv$$l$10lambda$new($Connection p$1, $function p$2, $function p$3) {
+    minienv$$l$10lambda $tmp = malloc(sizeof(struct minienv$$l$10lambda));
+    $tmp->$class = &minienv$$l$10lambda$methods;
+    minienv$$l$10lambda$methods.__init__($tmp, p$1, p$2, p$3);
+    return $tmp;
+}
+struct minienv$$l$10lambda$class minienv$$l$10lambda$methods;
+$NoneType minienv$$l$11lambda$__init__ (minienv$$l$11lambda p$self, $RFile __self__) {
+    p$self->__self__ = __self__;
+    return $None;
+}
+$R minienv$$l$11lambda$__call__ (minienv$$l$11lambda p$self, $Cont c$cont) {
+    $RFile __self__ = p$self->__self__;
+    return __self__->$class->read$local(__self__, c$cont);
+}
+void minienv$$l$11lambda$__serialize__ (minienv$$l$11lambda self, $Serial$state state) {
+    $step_serialize(self->__self__, state);
+}
+minienv$$l$11lambda minienv$$l$11lambda$__deserialize__ (minienv$$l$11lambda self, $Serial$state state) {
+    if (!self) {
+        if (!state) {
+            self = malloc(sizeof(struct minienv$$l$11lambda));
+            self->$class = &minienv$$l$11lambda$methods;
+            return self;
+        }
+        self = $DNEW(minienv$$l$11lambda, state);
+    }
+    self->__self__ = $step_deserialize(state);
+    return self;
+}
+minienv$$l$11lambda minienv$$l$11lambda$new($RFile p$1) {
+    minienv$$l$11lambda $tmp = malloc(sizeof(struct minienv$$l$11lambda));
+    $tmp->$class = &minienv$$l$11lambda$methods;
+    minienv$$l$11lambda$methods.__init__($tmp, p$1);
+    return $tmp;
+}
+struct minienv$$l$11lambda$class minienv$$l$11lambda$methods;
+$NoneType minienv$$l$12lambda$__init__ (minienv$$l$12lambda p$self, $RFile __self__) {
+    p$self->__self__ = __self__;
+    return $None;
+}
+$R minienv$$l$12lambda$__call__ (minienv$$l$12lambda p$self, $Cont c$cont) {
+    $RFile __self__ = p$self->__self__;
+    return __self__->$class->close$local(__self__, c$cont);
+}
+void minienv$$l$12lambda$__serialize__ (minienv$$l$12lambda self, $Serial$state state) {
+    $step_serialize(self->__self__, state);
+}
+minienv$$l$12lambda minienv$$l$12lambda$__deserialize__ (minienv$$l$12lambda self, $Serial$state state) {
+    if (!self) {
+        if (!state) {
+            self = malloc(sizeof(struct minienv$$l$12lambda));
+            self->$class = &minienv$$l$12lambda$methods;
+            return self;
+        }
+        self = $DNEW(minienv$$l$12lambda, state);
+    }
+    self->__self__ = $step_deserialize(state);
+    return self;
+}
+minienv$$l$12lambda minienv$$l$12lambda$new($RFile p$1) {
+    minienv$$l$12lambda $tmp = malloc(sizeof(struct minienv$$l$12lambda));
+    $tmp->$class = &minienv$$l$12lambda$methods;
+    minienv$$l$12lambda$methods.__init__($tmp, p$1);
+    return $tmp;
+}
+struct minienv$$l$12lambda$class minienv$$l$12lambda$methods;
+$NoneType minienv$$l$13lambda$__init__ (minienv$$l$13lambda p$self, $WFile __self__, $str s) {
+    p$self->__self__ = __self__;
+    p$self->s = s;
+    return $None;
+}
+$R minienv$$l$13lambda$__call__ (minienv$$l$13lambda p$self, $Cont c$cont) {
+    $WFile __self__ = p$self->__self__;
+    $str s = p$self->s;
+    return __self__->$class->write$local(__self__, s, c$cont);
+}
+void minienv$$l$13lambda$__serialize__ (minienv$$l$13lambda self, $Serial$state state) {
+    $step_serialize(self->__self__, state);
+    $step_serialize(self->s, state);
+}
+minienv$$l$13lambda minienv$$l$13lambda$__deserialize__ (minienv$$l$13lambda self, $Serial$state state) {
+    if (!self) {
+        if (!state) {
+            self = malloc(sizeof(struct minienv$$l$13lambda));
+            self->$class = &minienv$$l$13lambda$methods;
+            return self;
+        }
+        self = $DNEW(minienv$$l$13lambda, state);
+    }
+    self->__self__ = $step_deserialize(state);
+    self->s = $step_deserialize(state);
+    return self;
+}
+minienv$$l$13lambda minienv$$l$13lambda$new($WFile p$1, $str p$2) {
+    minienv$$l$13lambda $tmp = malloc(sizeof(struct minienv$$l$13lambda));
+    $tmp->$class = &minienv$$l$13lambda$methods;
+    minienv$$l$13lambda$methods.__init__($tmp, p$1, p$2);
+    return $tmp;
+}
+struct minienv$$l$13lambda$class minienv$$l$13lambda$methods;
+$NoneType minienv$$l$14lambda$__init__ (minienv$$l$14lambda p$self, $WFile __self__) {
+    p$self->__self__ = __self__;
+    return $None;
+}
+$R minienv$$l$14lambda$__call__ (minienv$$l$14lambda p$self, $Cont c$cont) {
+    $WFile __self__ = p$self->__self__;
+    return __self__->$class->close$local(__self__, c$cont);
+}
+void minienv$$l$14lambda$__serialize__ (minienv$$l$14lambda self, $Serial$state state) {
+    $step_serialize(self->__self__, state);
+}
+minienv$$l$14lambda minienv$$l$14lambda$__deserialize__ (minienv$$l$14lambda self, $Serial$state state) {
+    if (!self) {
+        if (!state) {
+            self = malloc(sizeof(struct minienv$$l$14lambda));
+            self->$class = &minienv$$l$14lambda$methods;
+            return self;
+        }
+        self = $DNEW(minienv$$l$14lambda, state);
+    }
+    self->__self__ = $step_deserialize(state);
+    return self;
+}
+minienv$$l$14lambda minienv$$l$14lambda$new($WFile p$1) {
+    minienv$$l$14lambda $tmp = malloc(sizeof(struct minienv$$l$14lambda));
+    $tmp->$class = &minienv$$l$14lambda$methods;
+    minienv$$l$14lambda$methods.__init__($tmp, p$1);
+    return $tmp;
+}
+struct minienv$$l$14lambda$class minienv$$l$14lambda$methods;
+$NoneType $Env$__init__ ($Env __self__, $list argv) {
+    $Actor$methods.__init__((($Actor)__self__));
+    __self__->argv = argv;
     return $None;
 }
 $R $Env$stdout_write$local ($Env __self__, $str s, $Cont c$cont) {
@@ -239,37 +569,73 @@ $R $Env$exit$local ($Env __self__, $int n, $Cont c$cont) {
     exit(n->val);
     return $R_CONT(c$cont, $None);
 }
+$R $Env$openR$local ($Env __self__, $str nm, $Cont c$cont) {
+    int descr = open((char *)nm->str, O_RDONLY);
+    if (descr < 0)
+        return $R_CONT(c$cont, $None);
+    else
+        return $RFile$new(descr, c$cont);
+}
+$R $Env$openW$local ($Env __self__, $str nm, $Cont c$cont) {
+    int descr = open((char *)nm->str, O_WRONLY | O_CREAT | O_APPEND, S_IWUSR|S_IRUSR|S_IRGRP|S_IROTH);
+    if (descr < 0)
+        return $R_CONT(c$cont, $None);
+    else
+        return $WFile$new(descr, c$cont);
+}
 $Msg $Env$stdout_write ($Env __self__, $str s) {
-    return $ASYNC(($Actor)__self__, ($Cont)minienv$$l$1lambda$new(__self__, s));
+    return $ASYNC((($Actor)__self__), (($Cont)minienv$$l$1lambda$new(__self__, s)));
 }
 $Msg $Env$stdin_install ($Env __self__, $function cb) {
-    return $ASYNC(($Actor)__self__, ($Cont)minienv$$l$2lambda$new(__self__, cb));
+    return $ASYNC((($Actor)__self__), (($Cont)minienv$$l$2lambda$new(__self__, cb)));
 }
 $Msg $Env$connect ($Env __self__, $str host, $int port, $function cb) {
-    return $ASYNC(($Actor)__self__, ($Cont)minienv$$l$3lambda$new(__self__, host, port, cb));
+    return $ASYNC((($Actor)__self__), (($Cont)minienv$$l$3lambda$new(__self__, host, port, cb)));
 }
 $Msg $Env$listen ($Env __self__, $int port, $function cb) {
-    return $ASYNC(($Actor)__self__, ($Cont)minienv$$l$4lambda$new(__self__, port, cb));
+    return $ASYNC((($Actor)__self__), (($Cont)minienv$$l$4lambda$new(__self__, port, cb)));
 }
 $Msg $Env$exit ($Env __self__, $int n) {
-    return $ASYNC(($Actor)__self__, ($Cont)minienv$$l$5lambda$new(__self__, n));
+    return $ASYNC((($Actor)__self__), (($Cont)minienv$$l$5lambda$new(__self__, n)));
 }
-$R $Env$new($list args, $Cont C$1par) {
+$Msg $Env$openR ($Env __self__, $str nm) {
+    return $ASYNC((($Actor)__self__), (($Cont)minienv$$l$6lambda$new(__self__, nm)));
+}
+$Msg $Env$openW ($Env __self__, $str nm) {
+    return $ASYNC((($Actor)__self__), (($Cont)minienv$$l$7lambda$new(__self__, nm)));
+}
+void $Env$__serialize__ ($Env self, $Serial$state state) {
+    $Actor$methods.__serialize__(($Actor)self, state);
+    $step_serialize(self->argv, state);
+}
+$Env $Env$__deserialize__ ($Env self, $Serial$state state) {
+    if (!self) {
+        if (!state) {
+            self = malloc(sizeof(struct $Env));
+            self->$class = &$Env$methods;
+            return self;
+        }
+        self = $DNEW($Env, state);
+    }
+    $Actor$methods.__deserialize__(($Actor)self, state);
+    self->argv = $step_deserialize(state);
+    return self;
+}
+$R $Env$new($list p$1, $Cont p$2) {
     $Env $tmp = malloc(sizeof(struct $Env));
     $tmp->$class = &$Env$methods;
-    $Env$methods.__init__($tmp, args);
-    return $R_CONT(C$1par, $tmp);
+    $Env$methods.__init__($tmp, p$1);
+    return $R_CONT(p$2, $tmp);
 }
 struct $Env$class $Env$methods;
-$NoneType $Connection$__init__ ($Connection __self__, int descriptor) {
-    $Actor$methods.__init__(($Actor)__self__);
-    $Number w$9 = ($Number)$Integral$int$new();
-    __self__->descriptor = descriptor;
+$NoneType $Connection$__init__ ($Connection __self__, int descr) {
+    $Actor$methods.__init__((($Actor)__self__));
+    __self__->descriptor = descr;
     return $None;
 }
 $R $Connection$write$local ($Connection __self__, $str s, $Cont c$cont) {
     memcpy(fd_data[__self__->descriptor].buffer,s->str,s->nbytes+1);
-    int chunk_size = s->nbytes > SOCK_BUF_SIZE ? SOCK_BUF_SIZE : s->nbytes; 
+    int chunk_size = s->nbytes > BUF_SIZE ? BUF_SIZE : s->nbytes; 
     int r = write(__self__->descriptor,fd_data[__self__->descriptor].buffer,chunk_size);
     //  for now, assume str->nbytes < BUF_SIZE
     return $R_CONT(c$cont, $None);
@@ -288,21 +654,125 @@ $R $Connection$on_receipt$local ($Connection __self__, $function cb1, $function 
     return $R_CONT(c$cont, $None);
 }
 $Msg $Connection$write ($Connection __self__, $str s) {
-    return $ASYNC(($Actor)__self__, ($Cont)minienv$$l$6lambda$new(__self__, s));
+    return $ASYNC((($Actor)__self__), (($Cont)minienv$$l$8lambda$new(__self__, s)));
 }
 $Msg $Connection$close ($Connection __self__) {
-    return $ASYNC(($Actor)__self__, ($Cont)minienv$$l$7lambda$new(__self__));
+    return $ASYNC((($Actor)__self__), (($Cont)minienv$$l$9lambda$new(__self__)));
 }
 $Msg $Connection$on_receipt ($Connection __self__, $function cb1, $function cb2) {
-    return $ASYNC(($Actor)__self__, ($Cont)minienv$$l$8lambda$new(__self__, cb1, cb2));
+    return $ASYNC((($Actor)__self__), (($Cont)minienv$$l$10lambda$new(__self__, cb1, cb2)));
 }
-$R $Connection$new(int fd, $Cont C$1par) {
+void $Connection$__serialize__ ($Connection self, $Serial$state state) {
+    $Actor$methods.__serialize__(($Actor)self, state);
+}
+$Connection $Connection$__deserialize__ ($Connection self, $Serial$state state) {
+    if (!self) {
+        if (!state) {
+            self = malloc(sizeof(struct $Connection));
+            self->$class = &$Connection$methods;
+            return self;
+        }
+        self = $DNEW($Connection, state);
+    }
+    $Actor$methods.__deserialize__(($Actor)self, state);
+    return self;
+}
+$R $Connection$new(int descr, $Cont p$1) {
     $Connection $tmp = malloc(sizeof(struct $Connection));
     $tmp->$class = &$Connection$methods;
-    $Connection$methods.__init__($tmp, fd);
-    return $R_CONT(C$1par, $tmp);
+    $Connection$methods.__init__($tmp, descr);
+    return $R_CONT(p$1, $tmp);
 }
 struct $Connection$class $Connection$methods;
+$R $RFile$__init__ ($RFile __self__, int descr, $Cont c$cont) {
+    $Actor$methods.__init__((($Actor)__self__));
+    __self__->descriptor = descr;
+    $NEWACT((($Actor)__self__));
+    return $R_CONT(c$cont, $None);
+}
+$R $RFile$read$local ($RFile __self__, $Cont c$cont) {
+  int nread = read(__self__->descriptor, &fd_data[__self__->descriptor].buffer, BUF_SIZE); // for now, read at most BUF_SIZE chars
+    if (nread < 0) 
+        RAISE(($BaseException)$NEW($OSError,to$str(strerror(errno))));
+    return $R_CONT(c$cont, to$str(fd_data[__self__->descriptor].buffer));
+}
+$R $RFile$close$local ($RFile __self__, $Cont c$cont) {
+    close(__self__->descriptor); 
+    $init_FileDescriptorData(__self__->descriptor);
+    return $R_CONT(c$cont, $None);
+}
+$Msg $RFile$read ($RFile __self__) {
+    return $ASYNC((($Actor)__self__), (($Cont)minienv$$l$11lambda$new(__self__)));
+}
+$Msg $RFile$close ($RFile __self__) {
+    return $ASYNC((($Actor)__self__), (($Cont)minienv$$l$12lambda$new(__self__)));
+}
+void $RFile$__serialize__ ($RFile self, $Serial$state state) {
+    $Actor$methods.__serialize__(($Actor)self, state);
+}
+$RFile $RFile$__deserialize__ ($RFile self, $Serial$state state) {
+    if (!self) {
+        if (!state) {
+            self = malloc(sizeof(struct $RFile));
+            self->$class = &$RFile$methods;
+            return self;
+        }
+        self = $DNEW($RFile, state);
+    }
+    $Actor$methods.__deserialize__(($Actor)self, state);
+    return self;
+}
+$R $RFile$new(int descr, $Cont p$1) {
+    $RFile $tmp = malloc(sizeof(struct $RFile));
+    $tmp->$class = &$RFile$methods;
+    return $RFile$methods.__init__($tmp, descr, $CONSTCONT($tmp, p$1));
+}
+struct $RFile$class $RFile$methods;
+$R $WFile$__init__ ($WFile __self__, int descr, $Cont c$cont) {
+    $Actor$methods.__init__((($Actor)__self__));
+    __self__->descriptor = descr;
+    $NEWACT((($Actor)__self__));
+    return $R_CONT(c$cont, $None);
+}
+$R $WFile$write$local ($WFile __self__, $str s, $Cont c$cont) {
+    memcpy(fd_data[__self__->descriptor].buffer,s->str,s->nbytes+1);
+    int chunk_size = s->nbytes > BUF_SIZE ? BUF_SIZE : s->nbytes; 
+    int r = write(__self__->descriptor,fd_data[__self__->descriptor].buffer,chunk_size);
+    //  for now, assume str->nbytes < BUF_SIZE
+    return $R_CONT(c$cont, $None);
+}
+$R $WFile$close$local ($WFile __self__, $Cont c$cont) {
+    close(__self__->descriptor); 
+    $init_FileDescriptorData(__self__->descriptor);
+    return $R_CONT(c$cont, $None);
+}
+$Msg $WFile$write ($WFile __self__, $str s) {
+    return $ASYNC((($Actor)__self__), (($Cont)minienv$$l$13lambda$new(__self__, s)));
+}
+$Msg $WFile$close ($WFile __self__) {
+    return $ASYNC((($Actor)__self__), (($Cont)minienv$$l$14lambda$new(__self__)));
+}
+void $WFile$__serialize__ ($WFile self, $Serial$state state) {
+    $Actor$methods.__serialize__(($Actor)self, state);
+}
+$WFile $WFile$__deserialize__ ($WFile self, $Serial$state state) {
+    if (!self) {
+        if (!state) {
+            self = malloc(sizeof(struct $WFile));
+            self->$class = &$WFile$methods;
+            return self;
+        }
+        self = $DNEW($WFile, state);
+    }
+    $Actor$methods.__deserialize__(($Actor)self, state);
+    return self;
+}
+$R $WFile$new(int descr, $Cont p$1) {
+    $WFile $tmp = malloc(sizeof(struct $WFile));
+    $tmp->$class = &$WFile$methods;
+    return $WFile$methods.__init__($tmp, descr, $CONSTCONT($tmp, p$1));
+}
+struct $WFile$class $WFile$methods;
 int minienv$$done$ = 0;
 void minienv$$__init__ () {
     if (minienv$$done$) return;
@@ -310,64 +780,162 @@ void minienv$$__init__ () {
     {
         minienv$$l$1lambda$methods.$GCINFO = "minienv$$l$1lambda";
         minienv$$l$1lambda$methods.$superclass = ($Super$class)&$Cont$methods;
+        minienv$$l$1lambda$methods.__bool__ = ($bool (*) (minienv$$l$1lambda))$struct$methods.__bool__;
+        minienv$$l$1lambda$methods.__str__ = ($str (*) (minienv$$l$1lambda))$struct$methods.__str__;
         minienv$$l$1lambda$methods.__init__ = minienv$$l$1lambda$__init__;
         minienv$$l$1lambda$methods.__call__ = minienv$$l$1lambda$__call__;
+        minienv$$l$1lambda$methods.__serialize__ = minienv$$l$1lambda$__serialize__;
+        minienv$$l$1lambda$methods.__deserialize__ = minienv$$l$1lambda$__deserialize__;
         $register(&minienv$$l$1lambda$methods);
     }
     {
         minienv$$l$2lambda$methods.$GCINFO = "minienv$$l$2lambda";
         minienv$$l$2lambda$methods.$superclass = ($Super$class)&$Cont$methods;
+        minienv$$l$2lambda$methods.__bool__ = ($bool (*) (minienv$$l$2lambda))$struct$methods.__bool__;
+        minienv$$l$2lambda$methods.__str__ = ($str (*) (minienv$$l$2lambda))$struct$methods.__str__;
         minienv$$l$2lambda$methods.__init__ = minienv$$l$2lambda$__init__;
         minienv$$l$2lambda$methods.__call__ = minienv$$l$2lambda$__call__;
+        minienv$$l$2lambda$methods.__serialize__ = minienv$$l$2lambda$__serialize__;
+        minienv$$l$2lambda$methods.__deserialize__ = minienv$$l$2lambda$__deserialize__;
         $register(&minienv$$l$2lambda$methods);
     }
     {
         minienv$$l$3lambda$methods.$GCINFO = "minienv$$l$3lambda";
         minienv$$l$3lambda$methods.$superclass = ($Super$class)&$Cont$methods;
+        minienv$$l$3lambda$methods.__bool__ = ($bool (*) (minienv$$l$3lambda))$struct$methods.__bool__;
+        minienv$$l$3lambda$methods.__str__ = ($str (*) (minienv$$l$3lambda))$struct$methods.__str__;
         minienv$$l$3lambda$methods.__init__ = minienv$$l$3lambda$__init__;
         minienv$$l$3lambda$methods.__call__ = minienv$$l$3lambda$__call__;
+        minienv$$l$3lambda$methods.__serialize__ = minienv$$l$3lambda$__serialize__;
+        minienv$$l$3lambda$methods.__deserialize__ = minienv$$l$3lambda$__deserialize__;
         $register(&minienv$$l$3lambda$methods);
     }
     {
         minienv$$l$4lambda$methods.$GCINFO = "minienv$$l$4lambda";
         minienv$$l$4lambda$methods.$superclass = ($Super$class)&$Cont$methods;
+        minienv$$l$4lambda$methods.__bool__ = ($bool (*) (minienv$$l$4lambda))$struct$methods.__bool__;
+        minienv$$l$4lambda$methods.__str__ = ($str (*) (minienv$$l$4lambda))$struct$methods.__str__;
         minienv$$l$4lambda$methods.__init__ = minienv$$l$4lambda$__init__;
         minienv$$l$4lambda$methods.__call__ = minienv$$l$4lambda$__call__;
+        minienv$$l$4lambda$methods.__serialize__ = minienv$$l$4lambda$__serialize__;
+        minienv$$l$4lambda$methods.__deserialize__ = minienv$$l$4lambda$__deserialize__;
         $register(&minienv$$l$4lambda$methods);
     }
     {
         minienv$$l$5lambda$methods.$GCINFO = "minienv$$l$5lambda";
         minienv$$l$5lambda$methods.$superclass = ($Super$class)&$Cont$methods;
+        minienv$$l$5lambda$methods.__bool__ = ($bool (*) (minienv$$l$5lambda))$struct$methods.__bool__;
+        minienv$$l$5lambda$methods.__str__ = ($str (*) (minienv$$l$5lambda))$struct$methods.__str__;
         minienv$$l$5lambda$methods.__init__ = minienv$$l$5lambda$__init__;
         minienv$$l$5lambda$methods.__call__ = minienv$$l$5lambda$__call__;
+        minienv$$l$5lambda$methods.__serialize__ = minienv$$l$5lambda$__serialize__;
+        minienv$$l$5lambda$methods.__deserialize__ = minienv$$l$5lambda$__deserialize__;
         $register(&minienv$$l$5lambda$methods);
     }
     {
         minienv$$l$6lambda$methods.$GCINFO = "minienv$$l$6lambda";
         minienv$$l$6lambda$methods.$superclass = ($Super$class)&$Cont$methods;
+        minienv$$l$6lambda$methods.__bool__ = ($bool (*) (minienv$$l$6lambda))$struct$methods.__bool__;
+        minienv$$l$6lambda$methods.__str__ = ($str (*) (minienv$$l$6lambda))$struct$methods.__str__;
         minienv$$l$6lambda$methods.__init__ = minienv$$l$6lambda$__init__;
         minienv$$l$6lambda$methods.__call__ = minienv$$l$6lambda$__call__;
+        minienv$$l$6lambda$methods.__serialize__ = minienv$$l$6lambda$__serialize__;
+        minienv$$l$6lambda$methods.__deserialize__ = minienv$$l$6lambda$__deserialize__;
         $register(&minienv$$l$6lambda$methods);
     }
     {
         minienv$$l$7lambda$methods.$GCINFO = "minienv$$l$7lambda";
         minienv$$l$7lambda$methods.$superclass = ($Super$class)&$Cont$methods;
+        minienv$$l$7lambda$methods.__bool__ = ($bool (*) (minienv$$l$7lambda))$struct$methods.__bool__;
+        minienv$$l$7lambda$methods.__str__ = ($str (*) (minienv$$l$7lambda))$struct$methods.__str__;
         minienv$$l$7lambda$methods.__init__ = minienv$$l$7lambda$__init__;
         minienv$$l$7lambda$methods.__call__ = minienv$$l$7lambda$__call__;
+        minienv$$l$7lambda$methods.__serialize__ = minienv$$l$7lambda$__serialize__;
+        minienv$$l$7lambda$methods.__deserialize__ = minienv$$l$7lambda$__deserialize__;
         $register(&minienv$$l$7lambda$methods);
     }
     {
         minienv$$l$8lambda$methods.$GCINFO = "minienv$$l$8lambda";
         minienv$$l$8lambda$methods.$superclass = ($Super$class)&$Cont$methods;
+        minienv$$l$8lambda$methods.__bool__ = ($bool (*) (minienv$$l$8lambda))$struct$methods.__bool__;
+        minienv$$l$8lambda$methods.__str__ = ($str (*) (minienv$$l$8lambda))$struct$methods.__str__;
         minienv$$l$8lambda$methods.__init__ = minienv$$l$8lambda$__init__;
         minienv$$l$8lambda$methods.__call__ = minienv$$l$8lambda$__call__;
+        minienv$$l$8lambda$methods.__serialize__ = minienv$$l$8lambda$__serialize__;
+        minienv$$l$8lambda$methods.__deserialize__ = minienv$$l$8lambda$__deserialize__;
         $register(&minienv$$l$8lambda$methods);
     }
-    { 
+    {
+        minienv$$l$9lambda$methods.$GCINFO = "minienv$$l$9lambda";
+        minienv$$l$9lambda$methods.$superclass = ($Super$class)&$Cont$methods;
+        minienv$$l$9lambda$methods.__bool__ = ($bool (*) (minienv$$l$9lambda))$struct$methods.__bool__;
+        minienv$$l$9lambda$methods.__str__ = ($str (*) (minienv$$l$9lambda))$struct$methods.__str__;
+        minienv$$l$9lambda$methods.__init__ = minienv$$l$9lambda$__init__;
+        minienv$$l$9lambda$methods.__call__ = minienv$$l$9lambda$__call__;
+        minienv$$l$9lambda$methods.__serialize__ = minienv$$l$9lambda$__serialize__;
+        minienv$$l$9lambda$methods.__deserialize__ = minienv$$l$9lambda$__deserialize__;
+        $register(&minienv$$l$9lambda$methods);
+    }
+    {
+        minienv$$l$10lambda$methods.$GCINFO = "minienv$$l$10lambda";
+        minienv$$l$10lambda$methods.$superclass = ($Super$class)&$Cont$methods;
+        minienv$$l$10lambda$methods.__bool__ = ($bool (*) (minienv$$l$10lambda))$struct$methods.__bool__;
+        minienv$$l$10lambda$methods.__str__ = ($str (*) (minienv$$l$10lambda))$struct$methods.__str__;
+        minienv$$l$10lambda$methods.__init__ = minienv$$l$10lambda$__init__;
+        minienv$$l$10lambda$methods.__call__ = minienv$$l$10lambda$__call__;
+        minienv$$l$10lambda$methods.__serialize__ = minienv$$l$10lambda$__serialize__;
+        minienv$$l$10lambda$methods.__deserialize__ = minienv$$l$10lambda$__deserialize__;
+        $register(&minienv$$l$10lambda$methods);
+    }
+    {
+        minienv$$l$11lambda$methods.$GCINFO = "minienv$$l$11lambda";
+        minienv$$l$11lambda$methods.$superclass = ($Super$class)&$Cont$methods;
+        minienv$$l$11lambda$methods.__bool__ = ($bool (*) (minienv$$l$11lambda))$struct$methods.__bool__;
+        minienv$$l$11lambda$methods.__str__ = ($str (*) (minienv$$l$11lambda))$struct$methods.__str__;
+        minienv$$l$11lambda$methods.__init__ = minienv$$l$11lambda$__init__;
+        minienv$$l$11lambda$methods.__call__ = minienv$$l$11lambda$__call__;
+        minienv$$l$11lambda$methods.__serialize__ = minienv$$l$11lambda$__serialize__;
+        minienv$$l$11lambda$methods.__deserialize__ = minienv$$l$11lambda$__deserialize__;
+        $register(&minienv$$l$11lambda$methods);
+    }
+    {
+        minienv$$l$12lambda$methods.$GCINFO = "minienv$$l$12lambda";
+        minienv$$l$12lambda$methods.$superclass = ($Super$class)&$Cont$methods;
+        minienv$$l$12lambda$methods.__bool__ = ($bool (*) (minienv$$l$12lambda))$struct$methods.__bool__;
+        minienv$$l$12lambda$methods.__str__ = ($str (*) (minienv$$l$12lambda))$struct$methods.__str__;
+        minienv$$l$12lambda$methods.__init__ = minienv$$l$12lambda$__init__;
+        minienv$$l$12lambda$methods.__call__ = minienv$$l$12lambda$__call__;
+        minienv$$l$12lambda$methods.__serialize__ = minienv$$l$12lambda$__serialize__;
+        minienv$$l$12lambda$methods.__deserialize__ = minienv$$l$12lambda$__deserialize__;
+        $register(&minienv$$l$12lambda$methods);
+    }
+    {
+        minienv$$l$13lambda$methods.$GCINFO = "minienv$$l$13lambda";
+        minienv$$l$13lambda$methods.$superclass = ($Super$class)&$Cont$methods;
+        minienv$$l$13lambda$methods.__bool__ = ($bool (*) (minienv$$l$13lambda))$struct$methods.__bool__;
+        minienv$$l$13lambda$methods.__str__ = ($str (*) (minienv$$l$13lambda))$struct$methods.__str__;
+        minienv$$l$13lambda$methods.__init__ = minienv$$l$13lambda$__init__;
+        minienv$$l$13lambda$methods.__call__ = minienv$$l$13lambda$__call__;
+        minienv$$l$13lambda$methods.__serialize__ = minienv$$l$13lambda$__serialize__;
+        minienv$$l$13lambda$methods.__deserialize__ = minienv$$l$13lambda$__deserialize__;
+        $register(&minienv$$l$13lambda$methods);
+    }
+    {
+        minienv$$l$14lambda$methods.$GCINFO = "minienv$$l$14lambda";
+        minienv$$l$14lambda$methods.$superclass = ($Super$class)&$Cont$methods;
+        minienv$$l$14lambda$methods.__bool__ = ($bool (*) (minienv$$l$14lambda))$struct$methods.__bool__;
+        minienv$$l$14lambda$methods.__str__ = ($str (*) (minienv$$l$14lambda))$struct$methods.__str__;
+        minienv$$l$14lambda$methods.__init__ = minienv$$l$14lambda$__init__;
+        minienv$$l$14lambda$methods.__call__ = minienv$$l$14lambda$__call__;
+        minienv$$l$14lambda$methods.__serialize__ = minienv$$l$14lambda$__serialize__;
+        minienv$$l$14lambda$methods.__deserialize__ = minienv$$l$14lambda$__deserialize__;
+        $register(&minienv$$l$14lambda$methods);
+    }
+    {
         $Env$methods.$GCINFO = "$Env";
         $Env$methods.$superclass = ($Super$class)&$Actor$methods;
-        $Env$methods.__serialize__ = ($NoneType (*) ($Env, $Serial$state))$Actor$methods.__serialize__;
-        $Env$methods.__deserialize__ = ($Env (*) ($Env, $Serial$state))$Actor$methods.__deserialize__;
+        $Env$methods.__serialize__ = $Env$__serialize__;
+        $Env$methods.__deserialize__ = $Env$__deserialize__;
         $Env$methods.__bool__ = ($bool (*) ($Env))$Actor$methods.__bool__;
         $Env$methods.__str__ = ($str (*) ($Env))$Actor$methods.__str__;
         $Env$methods.__init__ = $Env$__init__;
@@ -376,16 +944,24 @@ void minienv$$__init__ () {
         $Env$methods.connect$local = $Env$connect$local;
         $Env$methods.listen$local = $Env$listen$local;
         $Env$methods.exit$local = $Env$exit$local;
+        $Env$methods.openR$local = $Env$openR$local;
+        $Env$methods.openW$local = $Env$openW$local;
         $Env$methods.stdout_write = $Env$stdout_write;
         $Env$methods.stdin_install = $Env$stdin_install;
         $Env$methods.connect = $Env$connect;
         $Env$methods.listen = $Env$listen;
         $Env$methods.exit = $Env$exit;
+        $Env$methods.openR = $Env$openR;
+        $Env$methods.openW = $Env$openW;
+        $Env$methods.__serialize__ = $Env$__serialize__;
+        $Env$methods.__deserialize__ = $Env$__deserialize__;
         $register(&$Env$methods);
     }
     {
         $Connection$methods.$GCINFO = "$Connection";
         $Connection$methods.$superclass = ($Super$class)&$Actor$methods;
+        $Connection$methods.__serialize__ = $Connection$__serialize__;
+        $Connection$methods.__deserialize__ = $Connection$__deserialize__;
         $Connection$methods.__bool__ = ($bool (*) ($Connection))$Actor$methods.__bool__;
         $Connection$methods.__str__ = ($str (*) ($Connection))$Actor$methods.__str__;
         $Connection$methods.__init__ = $Connection$__init__;
@@ -395,9 +971,40 @@ void minienv$$__init__ () {
         $Connection$methods.write = $Connection$write;
         $Connection$methods.close = $Connection$close;
         $Connection$methods.on_receipt = $Connection$on_receipt;
+        $Connection$methods.__serialize__ = $Connection$__serialize__;
+        $Connection$methods.__deserialize__ = $Connection$__deserialize__;
         $register(&$Connection$methods);
     }
+    {
+        $RFile$methods.$GCINFO = "$RFile";
+        $RFile$methods.$superclass = ($Super$class)&$Actor$methods;
+        $RFile$methods.__bool__ = ($bool (*) ($RFile))$Actor$methods.__bool__;
+        $RFile$methods.__str__ = ($str (*) ($RFile))$Actor$methods.__str__;
+        $RFile$methods.__init__ = $RFile$__init__;
+        $RFile$methods.read$local = $RFile$read$local;
+        $RFile$methods.close$local = $RFile$close$local;
+        $RFile$methods.read = $RFile$read;
+        $RFile$methods.close = $RFile$close;
+        $RFile$methods.__serialize__ = $RFile$__serialize__;
+        $RFile$methods.__deserialize__ = $RFile$__deserialize__;
+        $register(&$RFile$methods);
+    }
+    {
+        $WFile$methods.$GCINFO = "$WFile";
+        $WFile$methods.$superclass = ($Super$class)&$Actor$methods;
+        $WFile$methods.__bool__ = ($bool (*) ($WFile))$Actor$methods.__bool__;
+        $WFile$methods.__str__ = ($str (*) ($WFile))$Actor$methods.__str__;
+        $WFile$methods.__init__ = $WFile$__init__;
+        $WFile$methods.write$local = $WFile$write$local;
+        $WFile$methods.close$local = $WFile$close$local;
+        $WFile$methods.write = $WFile$write;
+        $WFile$methods.close = $WFile$close;
+        $WFile$methods.__serialize__ = $WFile$__serialize__;
+        $WFile$methods.__deserialize__ = $WFile$__deserialize__;
+        $register(&$WFile$methods);
+    }
 }
+
 
 void $eventloop() {
   while(1) {
@@ -441,7 +1048,7 @@ void $eventloop() {
           fd_data[fd2].kind = connecthandler;
           fd_data[fd2].chandler = fd_data[fd].chandler;
           fd_data[fd2].sock_addr = fd_data[fd].sock_addr;
-          bzero(fd_data[fd2].buffer,SOCK_BUF_SIZE); 
+          bzero(fd_data[fd2].buffer,BUF_SIZE); 
           EV_SET(&fd_data[fd2].event_spec,fd2,EVFILT_READ,EV_ADD,0,0,NULL);
           kevent(kq,&fd_data[fd2].event_spec,1,NULL,0,NULL);
           kevent(kq,&fd_data[fd].event_spec,1,NULL,0,NULL);
@@ -454,8 +1061,8 @@ void $eventloop() {
       break;
     case readhandler:  // data has arrived on fd to fd_data[fd].buffer
       if (fd_data[fd].event_spec.filter == EVFILT_READ) {
-        count = read(fd,&fd_data[fd].buffer,SOCK_BUF_SIZE);
-        if (count < SOCK_BUF_SIZE)
+        count = read(fd,&fd_data[fd].buffer,BUF_SIZE);
+        if (count < BUF_SIZE)
           fd_data[fd].buffer[count] = 0;
         fd_data[fd].rhandler->$class->__call__(fd_data[fd].rhandler,to$str(fd_data[fd].buffer));
       } else {

@@ -5,6 +5,6 @@ def sumto(n):
     return res
     
 actor main(env):
-  print(sumto(int(env.args[1])))
+  print(sumto(int(env.argv[1])))
   env.exit(0)
   

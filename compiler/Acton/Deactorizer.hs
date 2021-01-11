@@ -194,7 +194,8 @@ instance Deact Decl where
             inits                   = filter (not . isSig) ss
             stvars                  = statevars b
             fvs                     = free decls
-            locals                  = nub $ (bound p' `intersect` fvs) ++ [ n | n <- dom $ envOf b, not (isHidden n) || n `elem` fvs ]
+            fvs'                    = free inits `intersect` bound decls
+            locals                  = nub $ (bound p' `intersect` fvs) ++ [ n | n <- dom $ envOf b, not (isHidden n) || n `elem` (fvs++fvs') ]
             wrapped                 = [ wrapMeth def | Decl _ ds <- decls, def <- ds, dname def `elem` actions ]
             actions                 = [ n | Signature _ ns (TSchema _ _ (TFun _ fx _ _ _)) _ <- b, fx == fxAction, n <- ns ]
 

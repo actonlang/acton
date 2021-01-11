@@ -144,8 +144,8 @@ static void build_indices($table tbl, $entry_t ep, long n) {
   for (int ix = 0; ix != n; ix++, ep++) {
     long hash = ep->hash;
 
-    long i = hash & mask;
-    for (long perturb = hash; tbl->tb_indices[i] != DKIX_EMPTY;) {
+    unsigned long i = (unsigned long)hash & mask;
+    for (unsigned long perturb = hash; tbl->tb_indices[i] != DKIX_EMPTY;) {
       perturb >>= PERTURB_SHIFT;
       i = mask & (i*5 + perturb + 1);
     }
@@ -202,9 +202,9 @@ static int dictresize($dict d) {
 
 // Search index of hash table from offset of entry table 
 static int lookdict_index($table table, long hash, int index) {
-    long mask =  (table->tb_size)-1;
-    long perturb = hash;
-    long i = hash & mask;
+    unsigned long mask =  (table->tb_size)-1;
+    unsigned long perturb = hash;
+    unsigned long i = (unsigned long)hash & mask;
 
     for (;;) {
         int ix = table->tb_indices[i];
@@ -225,7 +225,7 @@ static int lookdict_index($table table, long hash, int index) {
 // or DKIX_EMPTY if no such entry exists
 static int lookdict($dict dict, $Hashable hashwit, long hash, $WORD key, $WORD *res) {
   $table table = dict->table;
-  long mask = (table->tb_size)-1, i = hash & mask, perturb = hash;
+  unsigned long mask = (table->tb_size)-1, i = ( unsigned long)hash & mask, perturb = hash;
   int ix;
   for(;;) {
     ix = table->tb_indices[i];
@@ -236,7 +236,7 @@ static int lookdict($dict dict, $Hashable hashwit, long hash, $WORD key, $WORD *
     }
     if (ix >= 0) {
       $entry_t entry = &TB_ENTRIES(table)[ix];
-      if (entry->value != NULL && (entry->key == key || (entry->hash == hash && hashwit->$class->__eq__(hashwit,key,entry->key)))) {
+      if (entry->value != NULL && (entry->key == key || (entry->hash == hash && hashwit->$class->__eq__(hashwit,key,entry->key)->val))) {
         // found an entry with the same or equal key
         *res = entry->value;
         return ix;
@@ -245,6 +245,7 @@ static int lookdict($dict dict, $Hashable hashwit, long hash, $WORD key, $WORD *
     }
     perturb >>= PERTURB_SHIFT;
     i = (i*5 + perturb + 1) & mask;
+    //printf("collision; perturb is %ld, hash is %ld, mask is %ld, next probe is %ld\n", perturb,  hash, mask, i);
   }
   // this should be unreachable
 }
@@ -253,11 +254,11 @@ static int lookdict($dict dict, $Hashable hashwit, long hash, $WORD key, $WORD *
  //  when it is known that the key is not present in the dict.
   
 static long find_empty_slot($table table, long hash) {
-  const long mask = (table->tb_size)-1;
+  const unsigned long mask = (table->tb_size)-1;
 
-  long i = hash & mask;
+  unsigned long i = (unsigned long)hash & mask;
   int ix = table->tb_indices[i];
-    for (long perturb = hash; ix >= 0;) {
+    for (unsigned long perturb = hash; ix >= 0;) {
         perturb >>= PERTURB_SHIFT;
         i = (i*5 + perturb + 1) & mask;
         ix = table->tb_indices[i];

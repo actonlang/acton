@@ -1,0 +1,13 @@
+actor counter(initval):
+    var val = initval
+
+    def next():
+        val += 1
+        return val
+
+actor main(env):
+    ctr = counter(0)
+    n = ctr.next()
+    print(n)
+    env.exit(0)
+    
