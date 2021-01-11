@@ -500,7 +500,8 @@ int table_range_search(WORD* start_primary_keys, WORD* end_primary_keys, snode_t
 	{
 //		assert(end_primary_keys == NULL);
 		*start_row = HEAD(table->rows);
-		for(*end_row=*start_row; NEXT(*end_row) != NULL; *end_row = NEXT(*end_row));
+		if(table->rows->no_items > 0 && (*start_row) != NULL)
+			for(*end_row=*start_row; NEXT(*end_row) != NULL; *end_row = NEXT(*end_row));
 
 		return table->rows->no_items;
 	}
