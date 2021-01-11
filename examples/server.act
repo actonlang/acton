@@ -1,6 +1,10 @@
 actor server(env):
 
     def session(conn):
-        conn.on_receipt(conn.write, env.stdout_write)
+        if conn is not None:
+            conn.on_receipt(conn.write, env.stdout_write)
+        else:
+            print("couldn't establish listening")
+            env.exit(0)
 
     env.listen(12345,session)
