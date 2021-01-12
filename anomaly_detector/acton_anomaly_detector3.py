@@ -91,9 +91,6 @@ def plot_forecast_and_anomalies(observed, observed_short, trend, seasonal, resid
     plt.show()
 
 
-def arrays_to_dict(observed_idx, observed):
-    return {observed_idx[i]: observed[i] for i in range(len(observed_idx))}
-
 df = pd.read_csv(file_name_x)
 
 if feature is None:
@@ -232,6 +229,8 @@ observed_idx_short = observed_idx[:int(TRAIN_RATIO*no_periods)*period]
 observed_test = observed[int(TRAIN_RATIO*no_periods)*period:]
 observed_idx_test = observed_idx[int(TRAIN_RATIO*no_periods)*period:]
 
+print('AnomalyDetector: Forecasting on window of size', len(observed_idx), ', [', observed_idx[0], ', ' , observed_idx[-1], ']')
+
 (trend, seasonal, resid, period_averages, phase) = decompose(observed_short, period=period, lo_window_frac=loess_window)
 (forecast_array, forecast_idx) = forecast(observed_short, observed_idx_short,
                  trend, seasonal, resid, period_averages, phase,
@@ -241,14 +240,11 @@ observed_idx_test = observed_idx[int(TRAIN_RATIO*no_periods)*period:]
 if do_plots:
     plot_forecast(observed, observed_short, observed_idx, observed_idx_short, trend, seasonal, resid, forecast_array, forecast_idx, feature)
 
-df_observed_dict=arrays_to_dict(observed_idx_test, observed_test)
-fcast_dict=arrays_to_dict(forecast_idx, forecast_array)
-
 anomaly_windows = sign_test_anomaly_detector(observed_test, forecast_array, k=24, alpha=0.2, offset=0.0, conf=0.01, gap=0)
 anomaly_timestamps = []
 for (start, end) in anomaly_windows:
    anomaly_timestamps.append((observed_idx_test[start], observed_idx_test[end])) 
-print('Detected anomaly windows:', anomaly_timestamps)
+print('DETECTED ANOMALY WINDOWS:', anomaly_timestamps)
 
 if do_plots:
     plot_forecast_and_anomalies(observed, observed_short, trend, seasonal, resid, forecast_array, forecast_idx, feature, anomaly_timestamps, 'anomaly_detector')
