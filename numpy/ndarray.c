@@ -517,7 +517,7 @@ numpy$$ndarray numpy$$linspace($float a, $float b, $int n) {
   $list strides = $NEW($list,NULL,NULL);
   $list_append(strides,to$int(1));
   numpy$$ndarray res = $newarray(DblType,1,n,shape,strides,true);
-  double step = (b->val - a->val)/(n->val-1);
+  double step = (b->val - a->val)/(n->val);
   for (long i = 0; i<n->val; i++) {
     res->data[i].d = a->val + i * step;
   }
@@ -857,5 +857,25 @@ numpy$$ndarray numpy$$zeros(numpy$$Primitive wit, $int n) {
     break;
   }
   res->data[0] = zero;
+  return res;
+}
+
+numpy$$ndarray numpy$$concatenate(numpy$$Primitive wit, $list as) {
+  int size = 0;
+  for (int i = 0; i < as->length; i++)
+    size += ((numpy$$ndarray)$list_getitem(as, i))->size->val;
+  $int sz = to$int(size);
+  $list newshape = $list_new(1);
+  $list_append(newshape,sz);
+  $list newstrides = $list_new(1);
+  $list_append(newstrides,to$int(1));
+  numpy$$ndarray res = $newarray(wit->$class->elem_type,1,sz,newshape,newstrides,true);
+  size = 0;
+  for (int i=0; i < as->length; i++) {
+     numpy$$ndarray a = (numpy$$ndarray)$list_getitem(as, i);
+     for (int j=0; j < a->size->val; j++)
+       res->data[size+j] = a->data[a->offset+j*(($int)$list_getitem(a->strides,-1))->val];
+     size +=  a->size->val;
+  }
   return res;
 }

@@ -32,7 +32,7 @@ scalar              : [A (Primitive)] => (ndarray[A])            -> A           
 roll                : [A (Primitive)] => (ndarray[A], int)       -> ndarray[A]           
 tile                : [A (Primitive)] => (ndarray[A], int)       -> ndarray[A]           
 zeros               : [A (Primitive)] => (int)                   -> ndarray[A]  
-    
+concatenate         : [A (Primitive)] => (list[ndarray[A]])      -> ndarray[A]      
 
 arange              :                    (?int,int,?int)         -> ndarray[int]       
 linspace            :                    (float, float, int)     -> ndarray[float]
