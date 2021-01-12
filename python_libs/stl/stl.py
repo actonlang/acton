@@ -62,30 +62,43 @@ def tile_array(arr, no_tiles):
 def decompose(observed, period=365, lo_window_frac=0.6):
     """ STL decomposition """
     # calc trend, remove from observation
-    trend = loess(observed, [x for x in range(len(observed))], observed, int(0.6 * len(observed))) # 40
+    loess_window = int(lo_window_frac * len(observed))
+    print('period=', period, ', loess_window=', loess_window, ', len(observed)=', len(observed))
+    xin = np.array([x for x in range(len(observed))])
+    trend = loess(xin, observed, xin, loess_window) # 40
     detrended = observed - trend
 
     # period must not be larger than size of series to avoid introducing NaNs
     period = min(period, len(observed))
     max_no_period_values = len(observed) // period + 1
+    print('max_no_period_values=', max_no_period_values)
 
-    # calc one-period seasonality, remove tiled array from detrended    
-    period_averages = np.zeros(period)
-    for i in range(period):
-        no_period_values = 0
-        period_sum = 0
-        for j in range(max_no_period_values):
-            if j * period < len(observed):
-                period_sum += observed[j * period]
-                no_period_values += 1
-        period_averages[i] = period_sum / no_period_values
+    # calc one-period seasonality, remove tiled array from detrended
+
+    period_averages = np.array([np.mean(detrended[i::period]) for i in range(period)])
+    
+#    period_averages = np.zeros(period) # []
+#    for i in range(period):
+#        no_period_values = 0
+#        period_sum = 0
+#        for j in range(max_no_period_values):
+#            if j * period < len(observed):
+#                period_sum += detrended[j * period]
+#                no_period_values += 1
+#        period_averages[i] = period_sum / no_period_values
     
     # 0-center the period avgs
     period_averages -= np.mean(period_averages)
+##    print('period_averages=', period_averages)
 
-    seasonal = np.zeros(len(observed))
-    for i in range(len(observed)): 
-        seasonal[i] = period_averages[i // period]
+##    seasonal = np.tile(period_averages, len(observed) // period + 1)[:len(observed)] 
+    seasonal = tile_array(period_averages, len(observed) // period + 1)[:len(observed)]
+    
+##    seasonal = np.zeros(len(observed))
+##    for i in range(len(observed)): 
+##        seasonal[i] = period_averages[i % period]
+        
+##    print('seasonal=', seasonal)    
         
     resid = detrended - seasonal
     
@@ -111,8 +124,8 @@ def forecast(observed, observed_idx,
     observed_timedelta = observed_idx[-1] - observed_idx[-2]
     forecast_idx_start = observed_idx[-1] + observed_timedelta
     print('forecast_idx_start=', forecast_idx_start, ', forecast_idx_end=', (forecast_idx_start + steps * observed_timedelta), ', steps=', (steps + 1))
-    forecast_idx = np.linspace(forecast_idx_start, forecast_idx_start + steps * observed_timedelta, steps + 1)
-    
+    forecast_idx = np.linspace(forecast_idx_start, forecast_idx_start + steps * observed_timedelta, steps)
+
     # (optionally) forecast seasonal & combine 
     if forecast_seasonal:
         detrended_array = observed - trend # np.asanyarray(observed - trend).squeeze()
