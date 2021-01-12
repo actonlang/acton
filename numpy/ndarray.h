@@ -14,6 +14,7 @@ struct numpy$$ndarray$class {
   $str (*__str__)(numpy$$ndarray);
   numpy$$ndarray (*reshape)(numpy$$ndarray,$list);
   numpy$$ndarray (*transpose)(numpy$$ndarray,$list);
+  numpy$$ndarray (*flatten)(numpy$$ndarray);
   numpy$$ndarray (*copy)(numpy$$ndarray);
   numpy$$ndarray (*__ndgetslice__)(numpy$$ndarray,$list);
 };
