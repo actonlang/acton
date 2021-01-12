@@ -26,17 +26,17 @@ globalnoise  = numpy.unirandfloat(-0.5, 0.5, 10000)
 actor sampler(sample_size, report: action(numpy.ndarray[float],numpy.ndarray[float])->None):
 #    print ("set terminal aqua title \"Loess smoothening\"")
 #    print("set multiplot\nplot  [0:1][0:5] 0")
-    def sample(t0, sample_size, n0):
-        t1 = t0+float(sample_size)/52.0
+    def sample(t0, n0):
+        t1           = t0+float(sample_size)/52.0
         time         = numpy.linspace(t0,t1,sample_size)
         trend        = 2.0 + 0.1 * time
         periodic     = 0.5 * math.sin (6.2832 * time)
         noise        = globalnoise[n0:n0+sample_size:1]
         observation  = trend + periodic + noise
         report(time, observation)
-        after 4: sample(t1,sample_size,n0+sample_size)
+        after 4: sample(t1, n0+sample_size)
 
-    sample(0.0, sample_size, 0)
+    sample(0.0, 0)
 
 
 actor analyzer(sample_size, loess_win_size):
