@@ -75,7 +75,12 @@ def decompose(observed, period=365, lo_window_frac=0.6):
 
     # calc one-period seasonality, remove tiled array from detrended
 
-    period_averages = np.array([np.mean(detrended[i::period]) for i in range(period)])
+    period_averages = []
+    for i in range(period):
+        period_averages.append(np.mean(detrended[i::period]))
+    period_averages = np.array(period_averages)
+    
+##    period_averages = np.array([np.mean(detrended[i::period]) for i in range(period)])
     
 #    period_averages = np.zeros(period) # []
 #    for i in range(period):
