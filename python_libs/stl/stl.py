@@ -63,7 +63,7 @@ def decompose(observed, period=365, lo_window_frac=0.6):
     """ STL decomposition """
     # calc trend, remove from observation
     loess_window = int(lo_window_frac * len(observed))
-    print('period=', period, ', loess_window=', loess_window, ', len(observed)=', len(observed))
+##    print('period=', period, ', loess_window=', loess_window, ', len(observed)=', len(observed))
     xin = np.array([x for x in range(len(observed))])
     trend = loess(xin, observed, xin, loess_window) # 40
     detrended = observed - trend
@@ -71,7 +71,6 @@ def decompose(observed, period=365, lo_window_frac=0.6):
     # period must not be larger than size of series to avoid introducing NaNs
     period = min(period, len(observed))
     max_no_period_values = len(observed) // period + 1
-    print('max_no_period_values=', max_no_period_values)
 
     # calc one-period seasonality, remove tiled array from detrended
 
@@ -128,7 +127,7 @@ def forecast(observed, observed_idx,
     # forecast start and index are determined by observed data 
     observed_timedelta = observed_idx[-1] - observed_idx[-2]
     forecast_idx_start = observed_idx[-1] + observed_timedelta
-    print('forecast_idx_start=', forecast_idx_start, ', forecast_idx_end=', (forecast_idx_start + steps * observed_timedelta), ', steps=', (steps + 1))
+##    print('forecast_idx_start=', forecast_idx_start, ', forecast_idx_end=', (forecast_idx_start + steps * observed_timedelta), ', steps=', (steps + 1))
     forecast_idx = np.linspace(forecast_idx_start, forecast_idx_start + steps * observed_timedelta, steps)
 
     # (optionally) forecast seasonal & combine 

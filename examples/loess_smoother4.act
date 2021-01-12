@@ -22,7 +22,7 @@ def loess(x, y, xin, win):
     return ((a11*b0 - a01*b1) + (-a01*b0 + a00*b1)*xin)/det
 
           
-actor sampler(sample_size, report: action(numpy.ndarray[float],numpy.ndarray[float])->None):
+actor sampler(sample_size, report):
     def sample(t0, n0):
         t1           = t0+float(sample_size)/52.0
         time         = numpy.linspace(t0,t1,sample_size)
