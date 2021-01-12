@@ -104,7 +104,7 @@ def merge_ranges(ranges, max_gap):
     return merged_ranges
 
 
-def sign_test_anomaly_detector(x, y, k=24, alpha=0.05, offset=0.0, conf=0.01, gap=0):
+def sign_test_anomaly_detector(x, y, k, alpha, offset, conf, gap):
     if len(x) != len(y) or len(x) < k:
         return list()
 
@@ -144,7 +144,7 @@ def sign_test_anomaly_detector(x, y, k=24, alpha=0.05, offset=0.0, conf=0.01, ga
     return ranges
 
 class Sensor(object):
-    def __init__(self, file_name_x, feature, anomaly_detector, read_window_size = 126, repeats=100, trend=0.0):
+    def __init__(self, file_name_x, feature, anomaly_detector, read_window_size, repeats, trend):
         self.repeats = repeats
         self.trend = trend
         self.read_window_size = read_window_size
@@ -180,7 +180,7 @@ class Sensor(object):
                 self.anomaly_detector.update(observed_idx_w, observed_w)
 
 class AnomalyDetector(object):
-    def __init__(self, period, loess_window, min_train_window_size=4032):
+    def __init__(self, period, loess_window, min_train_window_size):
         self.observed_idx = None
         self.observed = None
         self.min_train_window_size = min_train_window_size
