@@ -29,8 +29,8 @@ sum                 : [A (Primitive)] => (ndarray[A],?int)       -> ndarray[A]
 sort                : [A (Primitive)] => (ndarray[A],?int)       -> ndarray[A]
 abs                 : [A (Primitive)] => (ndarray[A])            -> ndarray[A]
 scalar              : [A (Primitive)] => (ndarray[A])            -> A           #only for 0-dim array
-roll                : [A (Primitive)] => (ndarray[A], int)       -> A           
-tile                : [A (Primitive)] => (ndarray[A], int)       -> A           
+roll                : [A (Primitive)] => (ndarray[A], int)       -> ndarray[A]           
+tile                : [A (Primitive)] => (ndarray[A], int)       -> ndarray[A]           
 zeros               : [A (Primitive)] => (int)                   -> ndarray[A]  
     
 
