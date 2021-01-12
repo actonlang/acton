@@ -817,7 +817,7 @@ genEnv env cs te ds0
             bindInDef' d@Def{}          = d{ dbody = bindWits eq ++ dbody d }
             bindInDef' d                = d{ dbody = map bindInDef (dbody d) }
             
-    wsubst ds q []                      = id
+    wsubst ds [] []                     = id
     wsubst ds q ws                      = termsubst s
       where s                           = [ (n, Lambda l0 p k (Call l0 (tApp (eVar n) tvs) (wit2arg ws (pArg p)) (kArg k)) fx) 
                                             | Def _ n [] p k _ _ _ fx <- ds ]

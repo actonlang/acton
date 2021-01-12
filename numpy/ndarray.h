@@ -99,6 +99,8 @@ numpy$$ndarray numpy$$full(numpy$$Primitive wit, $list shape, $WORD val);
 numpy$$ndarray numpy$$unirandint($int a, $int b, $int n);
 numpy$$ndarray numpy$$unirandfloat($float a, $float b, $int n);
 numpy$$ndarray numpy$$concatenate(numpy$$Primitive wit, $list as);
+numpy$$ndarray numpy$$zeros(numpy$$Primitive wit, $int n);
+
 // Various utilities /////////////////////////////////////////////////////
 
 numpy$$ndarray numpy$$sum(numpy$$Primitive wit, numpy$$ndarray a, $int axis);
