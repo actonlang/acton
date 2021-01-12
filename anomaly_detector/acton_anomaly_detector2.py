@@ -100,16 +100,6 @@ def plot_forecast_and_anomalies(observed, observed_short, trend, seasonal, resid
 def arrays_to_dict(observed_idx, observed):
     return {observed_idx[i]: observed[i] for i in range(len(observed_idx))}
 
-def forecast_to_dict(df):
-    dict = {}
-    
-    for idx,row in df.iterrows():
-#        print(idx.timestamp())
-#        print(df.loc[idx][0])
-        dict[idx.timestamp()]=df.loc[idx][0]        
-
-    return dict
-
 df = pd.read_csv(file_name_x)
 
 if feature is None:
