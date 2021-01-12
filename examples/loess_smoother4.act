@@ -22,21 +22,21 @@ def loess(x, y, xin, win):
     return ((a11*b0 - a01*b1) + (-a01*b0 + a00*b1)*xin)/det
 
 globalnoise  = numpy.unirandfloat(-0.5, 0.5, 10000)
-      
-def sample(report, t0, sample_size, n0):
-    t1 = t0+float(sample_size)/52.0
-    time         = numpy.linspace(t0,t1,sample_size)
-    trend        = 2.0 + 0.1 * time
-    periodic     = 0.5 * math.sin (6.2832 * time)
-    noise        = globalnoise[n0:n0+sample_size:1]
-    observation  = trend + periodic + noise
-    report(time, observation)
-    after 4: sample(report,t1,sample_size,n0+sample_size)
-    
-actor sampler(sample_size, report):
+          
+actor sampler(sample_size, report: action(numpy.ndarray[float],numpy.ndarray[float])->None):
 #    print ("set terminal aqua title \"Loess smoothening\"")
 #    print("set multiplot\nplot  [0:1][0:5] 0")
-    sample(report, 0.0, sample_size, 0)
+    def sample(t0, sample_size, n0):
+        t1 = t0+float(sample_size)/52.0
+        time         = numpy.linspace(t0,t1,sample_size)
+        trend        = 2.0 + 0.1 * time
+        periodic     = 0.5 * math.sin (6.2832 * time)
+        noise        = globalnoise[n0:n0+sample_size:1]
+        observation  = trend + periodic + noise
+        report(time, observation)
+        after 4: sample(t1,sample_size,n0+sample_size)
+
+    sample(0.0, sample_size, 0)
 
 
 actor analyzer(sample_size, loess_win_size):
@@ -72,5 +72,5 @@ actor main(env):
   sample_size = int(env.argv[1])
   loess_win_size =  int(env.argv[2])
   a = analyzer(sample_size, loess_win_size)
-#  s = sampler(sample_size, a.add_sample)
+  s = sampler(sample_size, a.add_sample)
 
