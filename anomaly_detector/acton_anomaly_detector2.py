@@ -73,23 +73,17 @@ def plot_forecast(observed, observed_short, observed_idx, observed_idx_short, tr
     plt.savefig('%s/forecast_%s.png' % (output_dir, feature))
     plt.show()
 
-def plot_forecast_and_anomalies(observed, observed_short, trend, seasonal, resid, forecast_array, forecast_idx, feature, anomalies, min_ts, tag):
+def plot_forecast_and_anomalies(observed, observed_short, trend, seasonal, resid, forecast_array, forecast_idx, feature, anomalies, tag):
     plt.title('Anomaly algorithm: %s'%(tag))
     
-#    plt.plot(observed, '-', label='truth')
-#    plt.plot(observed_short, '-', label='obs')
-#    plt.plot(trend, ':', label='decomp.trend')
-#    plt.plot(forecast_array, '-', label='FCAST' ) # fcast.columns[0]
     plt.plot(observed_idx, observed, label='truth') ## '-'
     plt.plot(observed_idx_short, observed_short, label='obs') ## '-'
     plt.plot(observed_idx_short, trend, label='decomp.trend') ## ':'
     plt.plot(forecast_idx, forecast_array, label='FCAST' ) ## '-'
     
-    for anomaly in anomalies:
-        window = anomaly.get_time_window()
-        print(window[0] - forecast_idx[0], window[1] - forecast_idx[0])
-        plt.plot(window[0], 10, window[1], 10, marker = 'o')
-##        plt.plot(datetime.datetime.fromtimestamp(window[0]), 10, datetime.datetime.fromtimestamp(window[1]), 10, marker = 'o')
+    for (start, end) in anomalies:
+        print(start - forecast_idx[0], end - forecast_idx[0])
+        plt.plot(start, 10, end, 10, marker = 'o')
 
     plt.legend();    
     plt.savefig('%s/forecast_%s_%s.png' % (output_dir, feature, tag))
@@ -166,6 +160,114 @@ def ema_anomaly_detector(timestamps, values, smoothing_factor = DEFAULT_EMA_SMOO
 
     return denoise_scores(anom_scores)
 
+def np_sign(arr):
+    """  Stand-in for numpy sign()"""
+    signs = []
+    for i in range(len(arr)):
+        signs.append(1 if arr[i] > 0 else -1)
+    return np.array(signs)
+
+def np_ones(size):
+    """  Stand-in for numpy ones()"""
+    ones = []
+    for i in range(size):
+        ones.append(1)
+    return np.array(ones)
+
+def np_argwhere(arr):
+    """  Stand-in for numpy argwhere()"""
+    indices = []
+    for i in range(len(arr)):
+        if arr[i] > 0:
+            indices.append(i)
+    return np.array(indices)
+
+def np_fmax_const(arr, const):
+    """ Stand-in for numpy fmax with a constant """
+    values = []
+    for i in range(len(arr)):
+        values.append(arr[i] if arr[i] > const else const)
+    return np.array(values)
+
+def np_convolve_valid(arr1, arr2):
+    """ Stand-in for numpy convolve with mode = valid (no extrapolation on edges) """
+    flipped_arr2 = []
+    for i in range(len(arr2)):
+        flipped_arr2.append(arr2[len(arr2) - i - 1])
+    
+    if len(arr2) > len(arr1):
+        return np.array([])
+    
+    convolution = []
+    for index in range(len(arr1) - len(arr2) + 1):
+        sum = 0
+        for i in range(len(arr2)):
+            sum += arr1[index + i] * flipped_arr2[i]
+        convolution.append(sum)
+    
+    return np.array(convolution)    
+
+def merge_ranges(ranges, max_gap):
+    """
+        Merge ranges which are closer than max_gap
+    """
+    merged_ranges = []
+    for range in ranges:
+        if merged_ranges:
+            curr_start, curr_end = range
+            # compare against last interval in merged_ranges
+            pre_start, pre_end = merged_ranges[-1]
+            if curr_start - pre_end < max_gap:
+                # merge current range with the last range in the list
+                merged_ranges[-1] = (pre_start, max(curr_end, pre_end))
+            else:
+                # append the new range to current one
+                merged_ranges.append(range)
+        else:
+            # no merged ranges - just add this one
+            merged_ranges.append(range)
+
+    return merged_ranges
+
+
+def sign_test_anomaly_detector(x, y, k=24, alpha=0.05, offset=0.0, conf=0.01, gap=0):
+    if len(x) != len(y) or len(x) < k:
+        return list()
+
+    # our filter to convolve with - just counts
+    f = np_ones(k)
+
+    # Threshold below calculated as quantile function for a binomial distribution with:
+    #   - probability of success=0.5
+    #   - confidence level p=0.01
+    #   - window size = 24 (2 hours at 5 minutes intervals)
+    # == Smallest k such that Prob(X <= k) >= p
+    # == scipy.stats.binom.ppf(1 - 0.01, 24, 0.5) - 1
+    
+    qthresh = 17.0
+    
+    alpha1 = 1. + alpha
+    diff_array = x - offset
+    diff_array = diff_array - (alpha1 * y)
+
+    # this is 1 if bigger 0 otherwise
+    d = np_fmax_const(np_sign(diff_array), 0)
+#    d = np_fmax_const(np_sign(x - offset - (1. + alpha) * y), 0)
+#    d = np.fmax(np.sign(x - offset - (1. + alpha) * y), 0)
+
+    con = np_convolve_valid(d, f)
+#    con = np.convolve(f, d, mode='valid')
+
+    a = np_fmax_const(con - qthresh, 0)
+#    a = np.fmax(con - qthresh, 0)
+
+    ranges = []
+    for t in np_argwhere(a):
+        ranges.append((t, t + k))        
+
+    ranges = merge_ranges(ranges, gap)
+
+    return ranges
 
 
 ## df['timestamp']=pd.to_datetime(df['timestamp'])
@@ -187,27 +289,32 @@ if do_plots:
 no_periods=int(len(observed)/period)
 observed_short = observed[:int(TRAIN_RATIO*no_periods)*period]
 observed_idx_short = observed_idx[:int(TRAIN_RATIO*no_periods)*period]
-df_short = df.head(int(TRAIN_RATIO*no_periods)*period)
-df_observed = df.tail(len(df)-len(df_short))
+observed_test = observed[int(TRAIN_RATIO*no_periods)*period:]
+observed_idx_test = observed_idx[int(TRAIN_RATIO*no_periods)*period:]
+
 (trend, seasonal, resid, period_averages, phase) = decompose(observed_short, period=period, lo_window_frac=loess_window)
 (forecast_array, forecast_idx) = forecast(observed_short, observed_idx_short,
                  trend, seasonal, resid, period_averages, phase,
-                 steps=(len(df)-len(df_short)), fc_func=drift,
+                 steps=len(observed_test), fc_func=drift,
                  forecast_seasonal=True, correlate_phase=False)
 
 if do_plots:
     plot_forecast(observed, observed_short, observed_idx, observed_idx_short, trend, seasonal, resid, forecast_array, forecast_idx, feature)
 
-min_ts = observed_idx[0]
-df_observed_dict=arrays_to_dict(observed_idx, observed)
+df_observed_dict=arrays_to_dict(observed_idx_test, observed_test)
 fcast_dict=arrays_to_dict(forecast_idx, forecast_array)
 
-# print(len(df_observed_dict), len(fcast_dict))
+anomaly_windows = sign_test_anomaly_detector(observed_test, forecast_array, k=24, alpha=0.2, offset=0.0, conf=0.01, gap=0)
+anomaly_timestamps = []
+for (start, end) in anomaly_windows:
+   anomaly_timestamps.append((observed_idx_test[start], observed_idx_test[end])) 
+print('Detected anomaly windows:', anomaly_timestamps)
 
-# print(list(set(df_observed_dict.keys()) - set(fcast_dict.keys())))
+if do_plots:
+    plot_forecast_and_anomalies(observed, observed_short, trend, seasonal, resid, forecast_array, forecast_idx, feature, anomaly_timestamps, 'anomaly_detector')
 
-anomaly_scores = ema_anomaly_detector(observed_idx, observed)
-print(anomaly_scores)
+## anomaly_scores = ema_anomaly_detector(observed_idx, observed)
+## print(anomaly_scores)
 
 if do_plots:
     plt.close('all')
