@@ -14,7 +14,7 @@ void numpy$$__init__() {
     $register(&numpy$$Logical$ndarray$methods);
     $register(&numpy$$Minus$ndarray$methods);
     $register(&numpy$$Sliceable$ndarray$methods);
-    $register(&numpy$$Iterable$ndarray$methods);
+    $register(&numpy$$Collection$ndarray$methods);
     $register(&numpy$$RealFuns$math$ndarray$methods);
     numpy$$newaxis = to$int(LONG_MIN);
 }

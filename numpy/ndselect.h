@@ -1,3 +1,5 @@
+#pragma once
+
 struct numpy$$ndselect;
 typedef struct numpy$$ndselect *numpy$$ndselect;
 struct numpy$$ndselect$class {

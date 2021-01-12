@@ -399,6 +399,7 @@ genStmt env s                       = vcat [ gen env t <+> gen env n <> semi | (
   where te                          = envOf s `exclude` defined env
 
 instance Gen Stmt where
+    gen env (Expr _ Strings{})      = semi
     gen env (Expr _ e)              = genExp' env e <> semi
     gen env (Assign _ [p] e)        = gen env p <+> equals <+> genExp env t e <> semi
       where t                       = typeOf env p

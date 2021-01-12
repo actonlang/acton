@@ -21,7 +21,6 @@ normalize env0 m                    = return (evalState (norm env m) 0, env0')
 --  Normalization:
 --  X All module aliases are replaced by their original module name
 --  X All parameters are positional
---  X Parameter defaults are moved inside function definitions
 --  - Comprehensions are translated into loops
 --  X String literals are concatenated and delimited by double quotes
 --  X Tuple (and list) patterns are replaced by a var pattern followed by explicit element assignments
@@ -187,12 +186,12 @@ superClose env (d : ds)             = d : superClose env1 ds
 instance Norm Decl where
     norm env (Def l n q p k t b d x)= do p' <- joinPar <$> norm env0 p <*> norm (define (envOf p) env0) k
                                          b' <- norm env1 b
-                                         return $ Def l n q (noDefaults p') KwdNIL t (defaults p' ++ b') d x
+                                         return $ Def l n q p' KwdNIL t b' d x
       where env1                    = define (envOf p ++ envOf k) env0
             env0                    = defineTVars q env
     norm env (Actor l n q p k b)    = do p' <- joinPar <$> norm env0 p <*> norm (define (envOf p) env0) k
                                          b' <- norm env1 b
-                                         return $ Actor l n q (noDefaults p') KwdNIL (defaults p' ++ b')
+                                         return $ Actor l n q p' KwdNIL b'
       where env1                    = define (envOf p ++ envOf k) env0
             env0                    = defineTVars q env
     norm env (Class l n q as b)     = Class l n q as <$> norm env1 b
@@ -244,7 +243,7 @@ instance Norm Expr where
     norm env (DotI l e i)           = DotI l <$> norm env e <*> pure i
     norm env (RestI l e i)          = RestI l <$> norm env e <*> pure i
     norm env (Lambda l p k e fx)    = do p' <- joinPar <$> norm env p <*> norm (define (envOf p) env) k
-                                         Lambda l (noDefaults p') KwdNIL <$> norm env1 e <*> return fx      -- TODO: replace defaulted params with Conds
+                                         Lambda l p' KwdNIL <$> norm env1 e <*> return fx
       where env1                    = define (envOf p ++ envOf k) env
     norm env (Yield l e)            = Yield l <$> norm env e
     norm env (YieldFrom l e)        = YieldFrom l <$> norm env e
@@ -302,16 +301,6 @@ kwdToPosArg (KwdArg n e k)          = PosArg e (kwdToPosArg k)
 kwdToPosArg (KwdStar e)             = PosArg e PosNil
 kwdToPosArg KwdNil                  = PosNil
 
-defaults (PosPar n (Just t) (Just e) p)
-                                    = s : defaults p
-  where s                           = sIf1 test [set] []
-        test                        = eCall (tApp (eQVar primISNOTNONE) [t]) [eVar n]
-        set                         = sAssign (pVar' n) e
-defaults (PosPar n _ Nothing p)     = defaults p
-defaults _                          = []
-
-noDefaults (PosPar n t _ p)         = PosPar n t Nothing (noDefaults p)
-noDefaults p                        = p
 
 instance Norm PosArg where
     norm env (PosArg e p)           = PosArg <$> norm env e <*> norm env p

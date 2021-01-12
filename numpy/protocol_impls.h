@@ -1,3 +1,5 @@
+#pragma once
+
 #include "../modules/math.h"
 
 
@@ -19,11 +21,11 @@ typedef struct numpy$$Minus$ndarray *numpy$$Minus$ndarray;
 struct numpy$$Minus$ndarray$class;
 typedef struct numpy$$Minus$ndarray$class *numpy$$Minus$ndarray$class;
 
-struct numpy$$Iterable$ndarray;
-typedef struct numpy$$Iterable$ndarray *numpy$$Iterable$ndarray;
+struct numpy$$Collection$ndarray;
+typedef struct numpy$$Collection$ndarray *numpy$$Collection$ndarray;
 
-struct numpy$$Iterable$ndarray$class;
-typedef struct numpy$$Iterable$ndarray$class *numpy$$Iterable$ndarray$class;
+struct numpy$$Collection$ndarray$class;
+typedef struct numpy$$Collection$ndarray$class *numpy$$Collection$ndarray$class;
 
 // numpy$$Integral$ndarray ////////////////////////////////////////////////////////////
 
@@ -194,29 +196,33 @@ struct numpy$$Sliceable$ndarray {
 };
 
 
-// numpy$$Iterable$ndarray ////////////////////////////////////////////////////////////
+// numpy$$Collection$ndarray ////////////////////////////////////////////////////////////
 
-struct numpy$$Iterable$ndarray {
-  numpy$$Iterable$ndarray$class $class;
+struct numpy$$Collection$ndarray {
+  numpy$$Collection$ndarray$class $class;
   numpy$$Primitive pwit;
 };
 
-struct numpy$$Iterable$ndarray$class {
+struct numpy$$Collection$ndarray$class {
     char *$GCINFO;
     int $class_id;
     $Super$class $superclass;
-    void (*__init__)(numpy$$Iterable$ndarray, numpy$$Primitive);
-    void (*__serialize__)(numpy$$Iterable$ndarray,$Serial$state); 
-    numpy$$Iterable$ndarray (*__deserialize__)(numpy$$Iterable$ndarray,$Serial$state);
-    $bool (*__bool__)(numpy$$Iterable$ndarray);
-    $str (*__str__)(numpy$$Iterable$ndarray);
-    $Iterator (*__iter__)(numpy$$Iterable$ndarray, numpy$$ndarray);
+    void (*__init__)(numpy$$Collection$ndarray, numpy$$Primitive);
+    void (*__serialize__)(numpy$$Collection$ndarray,$Serial$state); 
+    numpy$$Collection$ndarray (*__deserialize__)(numpy$$Collection$ndarray,$Serial$state);
+    $bool (*__bool__)(numpy$$Collection$ndarray);
+    $str (*__str__)(numpy$$Collection$ndarray);
+    $Iterator (*__iter__)(numpy$$Collection$ndarray, numpy$$ndarray);
+    numpy$$ndarray (*__fromiter__)(numpy$$Collection$ndarray, $Iterable);
+    $int (*__len__)(numpy$$Collection$ndarray, numpy$$ndarray);
 };
 
-void numpy$$Iterable$ndarray$__init__ (numpy$$Iterable$ndarray, numpy$$Primitive);
-void numpy$$Iterable$ndarray$__serialize__(numpy$$Iterable$ndarray,$Serial$state); 
-numpy$$Iterable$ndarray numpy$$Iterable$ndarray$__deserialize__(numpy$$Iterable$ndarray,$Serial$state);
-$Iterator numpy$$Iterable$ndarray$__iter__ (numpy$$Iterable$ndarray, numpy$$ndarray);
+void numpy$$Collection$ndarray$__init__ (numpy$$Collection$ndarray, numpy$$Primitive);
+void numpy$$Collection$ndarray$__serialize__(numpy$$Collection$ndarray,$Serial$state); 
+numpy$$Collection$ndarray numpy$$Collection$ndarray$__deserialize__(numpy$$Collection$ndarray,$Serial$state);
+$Iterator numpy$$Collection$ndarray$__iter__ (numpy$$Collection$ndarray, numpy$$ndarray);
+numpy$$ndarray numpy$$Collection$ndarray$__fromiter__(numpy$$Collection$ndarray, $Iterable);
+$int numpy$$Collection$ndarray$__len__(numpy$$Collection$ndarray, numpy$$ndarray);
 
 // numpy$$RealFloat$ndarray ////////////////////////////////////////////////////////
 
@@ -266,12 +272,12 @@ extern struct numpy$$Integral$ndarray$class numpy$$Integral$ndarray$methods;
 extern struct numpy$$Logical$ndarray$class numpy$$Logical$ndarray$methods;
 extern struct numpy$$Minus$ndarray$class numpy$$Minus$ndarray$methods;
 extern struct numpy$$Sliceable$ndarray$class numpy$$Sliceable$ndarray$methods;
-extern struct numpy$$Iterable$ndarray$class numpy$$Iterable$ndarray$methods;
+extern struct numpy$$Collection$ndarray$class numpy$$Collection$ndarray$methods;
 
 numpy$$Integral$ndarray numpy$$Integral$ndarray$new();
 numpy$$Logical$ndarray numpy$$Logical$ndarray$new($Integral);
 numpy$$Minus$ndarray numpy$$Minus$ndarray$new($Integral);
 numpy$$Sliceable$ndarray numpy$$Sliceable$ndarray$new();
-numpy$$Iterable$ndarray numpy$$Iterable$ndarray$new(numpy$$Primitive);
+numpy$$Collection$ndarray numpy$$Collection$ndarray$new(numpy$$Primitive);
 numpy$$RealFuns$math$ndarray numpy$$RealFuns$math$ndarray$new(numpy$$Primitive, math$$RealFuns);
 

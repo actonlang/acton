@@ -82,7 +82,7 @@ solve' env select hist te tt eq cs
                                                         trace ("### goal " ++ prstr v ++ ", unifying with " ++ prstrs alts) $
                                                         unifyM env (repeat $ tVar v) alts >> proceed hist cs
   where (solve_cs, keep_cs)                 = partition select cs
-        goals                               = sortOn deco $ map condense $ group (rnks ++ rnks')
+        goals                               = sortOn deco $ map condense $ group rnks   -- (rnks ++ rnks')
         rnks                                = map (rank env) solve_cs
         rvs                                 = map headv rnks
         rnks'                               = [ rnk | rnk <- map (rank env) keep_cs, headv rnk `elem` rvs ]
@@ -422,7 +422,7 @@ cast' env (TVar _ tv) t2@TFun{}
   | univar tv                               = do t1 <- instwild env KType $ tFun tWild tWild tWild tWild
                                                  substitute tv t1
                                                  cast env t1 t2
-cast' env t1@TFun{} (TVar _ tv)
+cast' env t1@TFun{} (TVar _ tv)                                                                             -- Should remove this, rejects tv = TOpt...
   | univar tv                               = do t2 <- instwild env KType $ tFun tWild tWild tWild tWild
                                                  substitute tv t2
                                                  cast env t1 t2
@@ -430,10 +430,6 @@ cast' env t1@TFun{} (TVar _ tv)
 cast' env (TVar _ tv) t2@TTuple{}
   | univar tv                               = do t1 <- instwild env KType $ tTuple tWild tWild
                                                  substitute tv t1
-                                                 cast env t1 t2
-cast' env t1@TTuple{} (TVar _ tv)
-  | univar tv                               = do t2 <- instwild env KType $ tTuple tWild tWild
-                                                 substitute tv t2
                                                  cast env t1 t2
 
 cast' env (TVar _ tv1) (TVar _ tv2)
@@ -572,7 +568,7 @@ sub' env eq w (TVar _ tv) t2@TFun{}
   | univar tv                               = do t1 <- instwild env KType $ tFun tWild tWild tWild tWild
                                                  substitute tv t1
                                                  sub env eq w t1 t2
-sub' env eq w t1@TFun{} (TVar _ tv)
+sub' env eq w t1@TFun{} (TVar _ tv)                                                                             -- Should remove this, rejects tv = TOpt...
   | univar tv                               = do t2 <- instwild env KType $ tFun tWild tWild tWild tWild
                                                  substitute tv t2
                                                  sub env eq w t1 t2
@@ -581,10 +577,6 @@ sub' env eq w t1@TFun{} (TVar _ tv)
 sub' env eq w (TVar _ tv) t2@TTuple{}
   | univar tv                               = do t1 <- instwild env KType $ tTuple tWild tWild
                                                  substitute tv t1
-                                                 sub env eq w t1 t2
-sub' env eq w t1@TTuple{} (TVar _ tv)
-  | univar tv                               = do t2 <- instwild env KType $ tTuple tWild tWild
-                                                 substitute tv t2
                                                  sub env eq w t1 t2
 
 sub' env eq w t1@(TVar _ tv1) t2@(TVar _ tv2)

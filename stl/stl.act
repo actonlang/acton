@@ -1,0 +1,48 @@
+import numpy
+import math
+
+def loess(x, y, xin, win):
+    xd = numpy.abs(xin[:,numpy.newaxis] - x)
+    q = xd/numpy.partition(xd,win)[:,win][:,numpy.newaxis]
+    w  = numpy.clip(q, 0.0, 1.0)
+    ws  = (1.0 - w ** 3.0) ** 3.0
+    a00 = numpy.sum(ws,1)
+    a01 = numpy.dot(ws, x)
+    a11 = numpy.dot(ws, x*x)
+    b0  = numpy.dot(ws, y)
+    b1  = numpy.dot(ws, x*y)
+    det = a00*a11-a01*a01
+    return ((a11*b0 - a01*b1) + (-a01*b0 + a00*b1)*xin)/det
+
+def decompose(observed, period, lo_window_frac):
+    n = len(observed)
+    trend = loess(observed, numpy.linspace(0,float(n-1),n), observed, (lo_window_frac * float(n)).__trunc__())
+    detrended = observed - trend
+    if n < period:
+      period = n
+    max_no_period_values = n // period + 1
+    period_averages_list = []    # use a list here rather than an ndarray because of imperative treatment
+
+    for i in range(0,period,1):
+        no_period_values = 0
+        period_sum = 0
+        for j in range(0,max_no_period_values,1):
+            if j * period < n:
+                period_sum += numpy.scalar(observed[j * period])
+                no_period_values += 1
+        period_averages_list.append(period_sum / no_period_values)
+    period_averages = numpy.array(period_averages_list)
+
+    mean = numpy.sum(period_averages, None)/numpy.array([float(len(period_averages))])
+    period_averages -= mean
+
+    seasonal_list = []
+    for i in range(0,n,1): 
+        seasonal_list.append(period_averages_list[i // period])
+    seasonal = numpy.array(seasonal_list)
+
+    resid = detrended - seasonal
+    
+    phase = n % period
+
+    return (trend, seasonal, resid, period_averages, phase)

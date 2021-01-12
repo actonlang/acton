@@ -57,7 +57,7 @@ $Iterator$enumerate $Iterator$enumerate$_deserialize($Iterator$enumerate res,$Se
 $WORD $Iterator$enumerate_next($Iterator$enumerate it) {
   $WORD w = it->it->$class->__next__(it->it);
   if (w)
-    return $NEW($tuple,2,w,to$int(it->nxt++));
+    return $NEW($tuple,2,to$int(it->nxt++),w);
   else
     return NULL;
 }

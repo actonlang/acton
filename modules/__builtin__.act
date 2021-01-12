@@ -500,7 +500,7 @@ chr : (Integral) -> str
 def divmod [A(Integral)] (a : A, b : A) -> (A, A): 
   return Integral.__divmod__(a,b)
 
-enumerate : (Iterable[A],?int) -> Iterator[(A,int)]
+enumerate : (Iterable[A],?int) -> Iterator[(int,A)]
 
 filter : (?((A) -> B), Iterable[A]) -> Iterator[A]
 
@@ -555,8 +555,8 @@ actor Env (args):
 
     stdout_write : action(str) -> None
     stdin_install: action(action(str)->None) -> None
-    connect      : action(str, int, action(Connection)->None) -> None
-    listen       : action(int, action(Connection)->None) -> None
+    connect      : action(str, int, action(?Connection)->None) -> None
+    listen       : action(int, action(?Connection)->None) -> None
     exit         : action(int) -> None
     openR        : action(str) -> ?RFile
     openW        : action(str) -> ?WFile
