@@ -71,6 +71,7 @@ solve' env select hist te tt eq cs
                                                  traceM ("## keep:\n" ++ render (nest 8 $ vcat $ map pretty keep_cs))
                                                  traceM ("## solve: " ++ render (nest 8 $ vcat $ map pretty solve_cs))
                                                  traceM ("## posvs: " ++ prstrs posvs)
+                                                 traceM ("## negvs: " ++ prstrs negvs)
                                                  case head goals of
                                                     RTry v alts False ->
                                                         trace ("### goal " ++ prstr v ++ ", candidates: " ++ prstrs alts) $

@@ -639,9 +639,8 @@ instance Check Decl where
                                              (csb,b') <- infDefBody (define te1 (define te0 env1)) n p' b
                                              popFX
                                              let cst = if fallsthru b then [Cast tNone t] else []
-                                                 csx = [Cast fxPure fx]
                                                  t1 = tFun fx (prowOf p') (krowOf k') t
-                                             (cs1,eq1) <- solveScoped env1 tvs [] t1 (csp++csk++csb++cst++csx)
+                                             (cs1,eq1) <- solveScoped env1 tvs [] t1 (csp++csk++csb++cst)
                                              checkNoEscape env tvs
                                              -- At this point, n has the type given by its def annotations.
                                              -- Now check that this type is no less general than its recursion assumption in env.
