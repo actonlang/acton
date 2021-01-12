@@ -1,0 +1,76 @@
+import numpy
+import math
+
+# run as follows:
+
+# script -q /dev/null examples/loess_smoother4 13 52 | gnuplot
+
+# first command line argument: nr of weeks shown in each sample. 8 consecutive samples are shown in window.
+# second command line argument: nr of weeks in "loess window", i.e. nr of neighboring observtions used for each smoothed value.
+
+def loess(x, y, xin, win):
+    xd = numpy.abs(xin[:,numpy.newaxis] - x)
+    q = xd/numpy.partition(xd,win)[:,win][:,numpy.newaxis]
+    w  = numpy.clip(q, 0.0, 1.0)
+    ws  = (1.0 - w ** 3.0) ** 3.0
+    a00 = numpy.sum(ws,1)
+    a01 = numpy.dot(ws, x)
+    a11 = numpy.dot(ws, x*x)
+    b0  = numpy.dot(ws, y)
+    b1  = numpy.dot(ws, x*y)
+    det = a00*a11-a01*a01
+    return ((a11*b0 - a01*b1) + (-a01*b0 + a00*b1)*xin)/det
+
+globalnoise  = numpy.unirandfloat(-0.5, 0.5, 10000)
+      
+def sample(report, t0, sample_size, n0):
+    t1 = t0+float(sample_size)/52.0
+    time         = numpy.linspace(t0,t1,sample_size)
+    trend        = 2.0 + 0.1 * time
+    periodic     = 0.5 * math.sin (6.2832 * time)
+    noise        = globalnoise[n0:n0+sample_size:1]
+    observation  = trend + periodic + noise
+    report(time, observation)
+    after 4: sample(report,t1,sample_size,n0+sample_size)
+    
+actor sampler(sample_size, report):
+#    print ("set terminal aqua title \"Loess smoothening\"")
+#    print("set multiplot\nplot  [0:1][0:5] 0")
+    sample(report, 0.0, sample_size, 0)
+
+
+actor analyser(sample_size, loess_win_size):
+    var xsamples = []
+    var ysamples = []
+
+    nullsample = numpy.zeros(sample_size)
+    width = float(sample_size)/52.0;
+    for i in range(8,0,-1):
+       xsamples.append(numpy.linspace(-float(i)*width, -float(i-1)*width))
+       ysamples.append(nullsample)
+       
+    #add_sample : action(numpy.ndarray[float],numpy.ndarray[float]) -> None
+
+    def add_sample(x, y):
+       xsamples.append(x)
+       ysamples.append(y)
+       del xsamples[0]
+       del ysamples[0]
+       time = numpy.concatenate(xsamples)
+       observation = numpy.concatenate(ysamples)
+       smooth = loess(time,observation,time,loess_win_size)
+       print("clear\n$data <<EOD")
+       for i in range(0, 8*sample_size, 1):
+           print(time[i],observation[i],smooth[i])
+       print("EOD")
+       t0 = time[0]
+       t1 = t0 + 8*width
+       print("plot [",t0,":",t1,"][0:5] \'$data\' using 1:2 with lines title \"raw data\", \\")
+       print("\'$data\' using 1:3 with lines title \"loess smoothed\"")
+
+actor main(env):
+  sample_size = int(env.argv[1])
+  loess_win_size =  int(env.argv[2])
+  a = analyzer(sample_size, loess_win_size)
+  s = sampler(sample_size, a.add_sample)
+

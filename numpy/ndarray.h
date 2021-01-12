@@ -86,6 +86,7 @@ numpy$$ndarray numpy$$fromatom($atom a);
 
 numpy$$ndarray numpy$$reshape(numpy$$ndarray,$list);
 numpy$$ndarray numpy$$transpose(numpy$$ndarray,$list);
+numpy$$ndarray numpy$$flatten(numpy$$ndarray);
 numpy$$ndarray numpy$$copy(numpy$$ndarray);
 numpy$$ndarray numpy$$ndarray$__ndgetslice__(numpy$$ndarray,$list);
 
@@ -97,7 +98,7 @@ numpy$$ndarray numpy$$array(numpy$$Primitive wit, $list elems);
 numpy$$ndarray numpy$$full(numpy$$Primitive wit, $list shape, $WORD val);
 numpy$$ndarray numpy$$unirandint($int a, $int b, $int n);
 numpy$$ndarray numpy$$unirandfloat($float a, $float b, $int n);
-
+numpy$$ndarray numpy$$concatenate(numpy$$Primitive wit, $list as);
 // Various utilities /////////////////////////////////////////////////////
 
 numpy$$ndarray numpy$$sum(numpy$$Primitive wit, numpy$$ndarray a, $int axis);
