@@ -217,7 +217,7 @@ $Serializable $glob_deserialize($Serializable self, $ROW row, $WORD (*globmap)($
   $Serial$state state = malloc(sizeof(struct $Serial$state));
   state->done = $NEW($dict,($Hashable)$Hashable$int$witness,NULL,NULL);
   state->globmap = globmap;
-  state->row_no=0;
+  state->row_no=1;
   state->row = row->next;
   state->fst = NULL;
   return self->$class->__deserialize__(self,state);
