@@ -50,7 +50,7 @@ typedef void *WORD;
 #define QUERY_TYPE_QUEUE_NOTIFICATION 17
 
 #define VERBOSE_BACKEND 0
-#define MAX_PRINT_BUFF 4096
+#define MAX_PRINT_BUFF 128 * 1024
 
 typedef struct db_schema {
 	int * col_types;

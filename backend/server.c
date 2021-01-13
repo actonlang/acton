@@ -29,7 +29,8 @@
 #include <string.h>
 #include <limits.h>
 
-#define SERVER_BUFSIZE 8 * 1024 // (1024 * 1024)
+#define SERVER_BUFSIZE 128 * 1024 // (1024 * 1024)
+#define PRINT_BUFSIZE 128 * 1024
 
 #define UPDATE_LC_ON_GOSSIP
 #define DO_HIERARCHICAL_CONNECT 0
@@ -463,7 +464,7 @@ int get_read_response_packet(db_row_t* result, read_query * q, db_schema_t * sch
 	}
 
 #if (VERBOSE_RPC > 0)
-	char print_buff[4096];
+	char print_buff[PRINT_BUFSIZE];
 	to_string_range_read_response_message(m, (char *) print_buff);
 	printf("Sending range read response message: %s\n", print_buff);
 #endif
@@ -539,7 +540,7 @@ int get_range_read_response_packet(snode_t* start_row, snode_t* end_row, int no_
 	}
 
 #if (VERBOSE_RPC > 0)
-		char print_buff[4096];
+		char print_buff[PRINT_BUFSIZE];
 		to_string_range_read_response_message(m, (char *) print_buff);
 		printf("Sending range read response message: %s\n", print_buff);
 #endif
@@ -1783,7 +1784,7 @@ int parse_gossip_message(void * rcv_buf, size_t rcv_msg_len, membership_agreemen
 		*vc = (*ma)->vc;
 
 #if (VERBOSE_RPC > 0)
-		char print_buff[4096];
+		char print_buff[PRINT_BUFSIZE];
 		to_string_membership_agreement_msg((*ma), (char *) print_buff);
 		printf("Received gossip message: %s\n", print_buff);
 #endif
