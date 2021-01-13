@@ -690,6 +690,7 @@ void print_long_row(db_row_t* row)
 void long_row_to_string(db_row_t* row, char * to_string, int * len, char * orig_offset)
 {
 	#define PRINT_BLOBS 1
+	#define PRINT_BLOBS_AS_LONG 1
 
 	sprintf(to_string, "{ %" PRId64 ", ", (int64_t) row->key);
 
@@ -723,9 +724,18 @@ void long_row_to_string(db_row_t* row, char * to_string, int * len, char * orig_
 
 #if (PRINT_BLOBS > 0)
 			if(i<(row->no_columns - 1) || row->last_blob_size <= 0)
+			{
 				sprintf(to_string + strlen(to_string), "%" PRId64 ", ", (int64_t) row->column_array[i]);
+			}
 			else
+			{
+#if (PRINT_BLOBS_AS_LONG > 0)
+				for(int bi=0;bi < row->last_blob_size / sizeof(long);bi++)
+					sprintf(to_string + strlen(to_string), "%lu ",  *((unsigned long *) row->column_array[i] + bi));
+#else
 				sprintf(to_string + strlen(to_string), "%s, ", (char *) row->column_array[i]);
+#endif
+			}
 
 #else
 			sprintf(to_string + strlen(to_string), "%" PRId64 ", ", (int64_t) row->column_array[i]);
