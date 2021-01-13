@@ -260,7 +260,7 @@ instance Polarity NameInfo where
     polvars (NSVar t)               = polvars t
     polvars (NDef t d)              = polvars t
     polvars (NSig t d)              = polvars t
-    polvars (NAct q p k te)         = (polvars q `polcat` polvars p `polcat` polvars k `polcat` polvars te) `polminus` (tvSelf : tybound q)
+    polvars (NAct q p k te)         = (polvars q `polcat` polneg (polvars p `polcat` polvars k) `polcat` polvars te) `polminus` (tvSelf : tybound q)
     polvars (NClass q us te)        = (polvars q `polcat` polvars us `polcat` polvars te) `polminus` (tvSelf : tybound q)
     polvars (NProto q us te)        = (polvars q `polcat` polvars us `polcat` polvars te) `polminus` (tvSelf : tybound q)
     polvars (NExt n q ps te)        = (polvars q `polcat` polvars ps `polcat` polvars te) `polminus` (tvSelf : tybound q)

@@ -9,9 +9,9 @@ import math
 # second command line argument: nr of weeks in "loess window", i.e. nr of neighboring observtions used for each smoothed value.
 
 def loess(x, y, xin, win):
-    xd = numpy.abs(xin[:,numpy.newaxis] - x)
-    q = xd/numpy.partition(xd,win)[:,win][:,numpy.newaxis]
-    w  = numpy.clip(q, 0.0, 1.0)
+    xd  = numpy.abs(xin[:,numpy.newaxis] - x)
+    q   = xd/numpy.partition(xd,win)[:,win][:,numpy.newaxis]
+    w   = numpy.clip(q, 0.0, 1.0)
     ws  = (1.0 - w ** 3.0) ** 3.0
     a00 = numpy.sum(ws,1)
     a01 = numpy.dot(ws, x)
@@ -21,15 +21,14 @@ def loess(x, y, xin, win):
     det = a00*a11-a01*a01
     return ((a11*b0 - a01*b1) + (-a01*b0 + a00*b1)*xin)/det
 
-globalnoise  = numpy.unirandfloat(-0.5, 0.5, 10000)
           
-actor sampler(sample_size, report: action(numpy.ndarray[float],numpy.ndarray[float])->None):
+actor sampler(sample_size, report):
     def sample(t0, n0):
         t1           = t0+float(sample_size)/52.0
         time         = numpy.linspace(t0,t1,sample_size)
         trend        = 2.0 + 0.1 * time
         periodic     = 0.5 * math.sin (6.2832 * time)
-        noise        = globalnoise[n0:n0+sample_size:1]
+        noise        = numpy.unirandfloat(-0.5, 0.5, sample_size);
         observation  = trend + periodic + noise
         report(time, observation)
         after 4: sample(t1, n0+sample_size)
