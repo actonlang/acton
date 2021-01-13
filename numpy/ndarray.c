@@ -350,8 +350,9 @@ struct numpy$$ndarray$class numpy$$ndarray$methods = {
 // Aims to be as fast as possible; used in many methods below and in protocol implementations 
 numpy$$array_iterator_state $mk_iterator(numpy$$ndarray a) {
   numpy$$array_iterator_state res = malloc(sizeof(struct numpy$$array_iterator_state));
-  if (a->ndim==0)
+  if (a->ndim==0) {
     RAISE(($BaseException)$NEW($ValueError,to$str("cannot make iterator for 0-dim array")));
+  }
   res->ndim1 = a->ndim-1;
   for (long i=res->ndim1; i>=0; i--) {
     res->shape[i]   = (($int)$list_getitem(a->shape,i))->val;
@@ -845,7 +846,7 @@ numpy$$ndarray numpy$$zeros(numpy$$Primitive wit, $int n) {
   $list newshape = $list_new(1);
   $list_append(newshape,n);
   $list newstrides = $list_new(1);
-  $list_append(newstrides,to$int(0));
+  $list_append(newstrides,to$int(1));
   numpy$$ndarray res = $newarray(wit->$class->elem_type,1,n,newshape,newstrides,true);
   union $Bytes8 zero;
   switch (wit->$class->elem_type) {
@@ -856,7 +857,8 @@ numpy$$ndarray numpy$$zeros(numpy$$Primitive wit, $int n) {
     zero.d = 0.0;
     break;
   }
-  res->data[0] = zero;
+  for (int i=0; i<n->val; i++)
+     res->data[i] = zero;
   return res;
 }
 
