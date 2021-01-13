@@ -67,6 +67,8 @@ struct FileDescriptorData {
   struct sockaddr_in sock_addr;
   struct kevent event_spec;
   char buffer[BUF_SIZE];
+  int bufnxt;              // only used for RFiles; index of first unreported char
+  int bufused;             //        -"-          ; nr of read chars in buffer. Equal to BUF_SIZE except before first read and (possibly) after last read.
 };
 
 struct FileDescriptorData fd_data[MAX_FD];
@@ -374,14 +376,14 @@ struct $RFile$class {
     char *$GCINFO;
     int $class_id;
     $Super$class $superclass;
-    $R (*__init__) ($RFile, int, $Cont);
+    $R (*__init__) ($RFile, FILE*, $Cont);
     void (*__serialize__) ($RFile, $Serial$state);
     $RFile (*__deserialize__) ($RFile, $Serial$state);
     $bool (*__bool__) ($RFile);
     $str (*__str__) ($RFile);
-    $R (*read$local) ($RFile, $Cont);
+    $R (*readln$local) ($RFile, $Cont);
     $R (*close$local) ($RFile, $Cont);
-    $Msg (*read) ($RFile);
+    $Msg (*readln) ($RFile);
     $Msg (*close) ($RFile);
 };
 struct $RFile {
@@ -396,7 +398,7 @@ struct $RFile {
     $Catcher $catcher;
     $Lock $msg_lock;
     $long $globkey;
-    int descriptor;
+    FILE *file;
 };
 struct $WFile$class {
     char *$GCINFO;
@@ -459,7 +461,7 @@ $R $Env$new($list, $Cont);
 extern struct $Connection$class $Connection$methods;
 $R $Connection$new(int, $Cont);
 extern struct $RFile$class $RFile$methods;
-$R $RFile$new(int, $Cont);
+$R $RFile$new(FILE*, $Cont);
 extern struct $WFile$class $WFile$methods;
 $R $WFile$new(int, $Cont);
 void minienv$$__init__ ();

@@ -386,7 +386,7 @@ $NoneType minienv$$l$11lambda$__init__ (minienv$$l$11lambda p$self, $RFile __sel
 }
 $R minienv$$l$11lambda$__call__ (minienv$$l$11lambda p$self, $Cont c$cont) {
     $RFile __self__ = p$self->__self__;
-    return __self__->$class->read$local(__self__, c$cont);
+    return __self__->$class->readln$local(__self__, c$cont);
 }
 void minienv$$l$11lambda$__serialize__ (minienv$$l$11lambda self, $Serial$state state) {
     $step_serialize(self->__self__, state);
@@ -528,9 +528,8 @@ $R $Env$connect$local ($Env __self__, $str host, $int port, $function cb, $Cont 
     int fd = new_socket(cb);
     ent = gethostbyname((char *)host->str); //this should be replaced by calling getaddrinfo
     if(ent==NULL) {
-      fprintf(stderr,"Name lookup error");  // should connect have one more param prescribing what do with errors before connection is established?
-      exit(-1);
-      //netError(fd,"Name lookup error");
+      fd_data[fd].chandler->$class->__call__(fd_data[fd].chandler, NULL);
+      //fprintf(stderr,"Name lookup error"); 
     }
     else {
       memcpy(&hostid, ent->h_addr_list[0], sizeof hostid);
@@ -543,11 +542,10 @@ $R $Env$connect$local ($Env __self__, $str host, $int port, $function cb, $Cont 
           EV_SET(&fd_data[fd].event_spec,fd,EVFILT_WRITE,EV_ADD | EV_ONESHOT,0,0,NULL);
           kevent(kq,&fd_data[fd].event_spec,1,NULL,0,NULL);
         } else {
-          fprintf(stderr,"Connect failed");
-          exit(-1);
-          //netError(fd,"Connect failed");
-        }
-      } else // connect succeeded immediately (can this ever happen for a non-blocking socket)?)
+          fd_data[fd].chandler->$class->__call__(fd_data[fd].chandler, NULL);
+          //fprintf(stderr,"Connect failed");
+         }
+      } else // connect succeeded immediately (can this ever happen for a non-blocking socket?)
         setupConnection(fd);
     }
     return $R_CONT(c$cont, $None);
@@ -559,7 +557,7 @@ $R $Env$listen$local ($Env __self__, $int port, $function cb, $Cont c$cont) {
     addr.sin_port = htons(port->val);
     addr.sin_family = AF_INET;
     if (bind(fd,(struct sockaddr *)&addr,sizeof(struct sockaddr)) < 0)
-      perror("bind failed");
+      fd_data[fd].chandler->$class->__call__(fd_data[fd].chandler, NULL);
     listen(fd,5);
     EV_SET(&fd_data[fd].event_spec,fd,EVFILT_READ,EV_ADD | EV_ONESHOT,0,0,NULL);
     kevent(kq,&fd_data[fd].event_spec,1,NULL,0,NULL);
@@ -570,11 +568,11 @@ $R $Env$exit$local ($Env __self__, $int n, $Cont c$cont) {
     return $R_CONT(c$cont, $None);
 }
 $R $Env$openR$local ($Env __self__, $str nm, $Cont c$cont) {
-    int descr = open((char *)nm->str, O_RDONLY);
-    if (descr < 0)
-        return $R_CONT(c$cont, $None);
+    FILE *file = fopen((char *)nm->str,"r");
+    if (file)
+        return $RFile$new(file, c$cont);
     else
-        return $RFile$new(descr, c$cont);
+        return $R_CONT(c$cont, $None);
 }
 $R $Env$openW$local ($Env __self__, $str nm, $Cont c$cont) {
     int descr = open((char *)nm->str, O_WRONLY | O_CREAT | O_APPEND, S_IWUSR|S_IRUSR|S_IRGRP|S_IROTH);
@@ -684,24 +682,25 @@ $R $Connection$new(int descr, $Cont p$1) {
     return $R_CONT(p$1, $tmp);
 }
 struct $Connection$class $Connection$methods;
-$R $RFile$__init__ ($RFile __self__, int descr, $Cont c$cont) {
+$R $RFile$__init__ ($RFile __self__, FILE *file, $Cont c$cont) {
     $Actor$methods.__init__((($Actor)__self__));
-    __self__->descriptor = descr;
+    __self__->file = file;
     $NEWACT((($Actor)__self__));
     return $R_CONT(c$cont, $None);
 }
-$R $RFile$read$local ($RFile __self__, $Cont c$cont) {
-  int nread = read(__self__->descriptor, &fd_data[__self__->descriptor].buffer, BUF_SIZE); // for now, read at most BUF_SIZE chars
-    if (nread < 0) 
-        RAISE(($BaseException)$NEW($OSError,to$str(strerror(errno))));
-    return $R_CONT(c$cont, to$str(fd_data[__self__->descriptor].buffer));
-}
+$R $RFile$readln$local ($RFile __self__, $Cont c$cont) {
+    char buf[BUF_SIZE];
+    char *res = fgets(buf, BUF_SIZE, __self__->file);
+    if (res)
+       return $R_CONT(c$cont, to$str(res));
+    else
+      return $R_CONT(c$cont, $None);      
+}                  
 $R $RFile$close$local ($RFile __self__, $Cont c$cont) {
-    close(__self__->descriptor); 
-    $init_FileDescriptorData(__self__->descriptor);
+    fclose(__self__->file); 
     return $R_CONT(c$cont, $None);
 }
-$Msg $RFile$read ($RFile __self__) {
+$Msg $RFile$readln ($RFile __self__) {
     return $ASYNC((($Actor)__self__), (($Cont)minienv$$l$11lambda$new(__self__)));
 }
 $Msg $RFile$close ($RFile __self__) {
@@ -722,10 +721,10 @@ $RFile $RFile$__deserialize__ ($RFile self, $Serial$state state) {
     $Actor$methods.__deserialize__(($Actor)self, state);
     return self;
 }
-$R $RFile$new(int descr, $Cont p$1) {
+$R $RFile$new(FILE *file, $Cont p$1) {
     $RFile $tmp = malloc(sizeof(struct $RFile));
     $tmp->$class = &$RFile$methods;
-    return $RFile$methods.__init__($tmp, descr, $CONSTCONT($tmp, p$1));
+    return $RFile$methods.__init__($tmp, file, $CONSTCONT($tmp, p$1));
 }
 struct $RFile$class $RFile$methods;
 $R $WFile$__init__ ($WFile __self__, int descr, $Cont c$cont) {
@@ -981,9 +980,9 @@ void minienv$$__init__ () {
         $RFile$methods.__bool__ = ($bool (*) ($RFile))$Actor$methods.__bool__;
         $RFile$methods.__str__ = ($str (*) ($RFile))$Actor$methods.__str__;
         $RFile$methods.__init__ = $RFile$__init__;
-        $RFile$methods.read$local = $RFile$read$local;
+        $RFile$methods.readln$local = $RFile$readln$local;
         $RFile$methods.close$local = $RFile$close$local;
-        $RFile$methods.read = $RFile$read;
+        $RFile$methods.readln = $RFile$readln;
         $RFile$methods.close = $RFile$close;
         $RFile$methods.__serialize__ = $RFile$__serialize__;
         $RFile$methods.__deserialize__ = $RFile$__deserialize__;

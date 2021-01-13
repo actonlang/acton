@@ -579,10 +579,10 @@ actor Connection ():
     def on_receipt(cb1, cb2): pass
 
 actor RFile ():
-    read        : action() -> str
+    readln      : action() -> ?str
     close       : action() -> None
 
-    def read()  : return ""
+    def readln(): return ""
     def close() : pass
 
 actor WFile ():
