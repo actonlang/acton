@@ -630,8 +630,36 @@ int send_packet_wait_replies_sync(void * out_buf, unsigned out_len, int64_t nonc
 int remote_insert_in_txn(WORD * column_values, int no_cols, int no_primary_keys, int no_clustering_keys, WORD blob, size_t blob_size, WORD table_key, uuid_t * txnid, remote_db_t * db)
 {
 	unsigned len = 0;
-	write_query * wq = build_insert_in_txn(column_values, no_cols, no_primary_keys, no_clustering_keys, blob, blob_size, table_key, txnid, get_nonce(db));
 	void * tmp_out_buf = NULL;
+
+#if (DEBUG_BLOBS > 0)
+	size_t print_size = 256 + no_cols * sizeof(long) + blob_size;
+	char * printbuf = (char *) malloc(print_size);
+	char * crt_ptr = printbuf;
+	sprintf(crt_ptr, "cols={");
+	crt_ptr += strlen(crt_ptr);
+	for(int i=0;i<no_cols;i++)
+	{
+		sprintf(crt_ptr, "%ld, ", (long) column_values[i]);
+		crt_ptr += strlen(crt_ptr);
+	}
+	sprintf(crt_ptr, "}, blob(%d)={", blob_size);
+	crt_ptr += strlen(crt_ptr);
+	if(blob_size > 0)
+	{
+		for(int i=0;i<blob_size / sizeof(long);i++)
+		{
+			sprintf(crt_ptr, "%lu ", *((long *)blob + i));
+			crt_ptr += strlen(crt_ptr);
+		}
+	}
+	sprintf(crt_ptr, "}");
+	crt_ptr += strlen(crt_ptr);
+	printf("remote_insert_in_txn: %s\n", printbuf);
+	free(printbuf);
+#endif
+
+	write_query * wq = build_insert_in_txn(column_values, no_cols, no_primary_keys, no_clustering_keys, blob, blob_size, table_key, txnid, get_nonce(db));
 	int success = serialize_write_query(wq, (void **) &tmp_out_buf, &len, 1, NULL);
 
 	if(db->servers->no_items < db->quorum_size)
@@ -1241,6 +1269,13 @@ int remote_read_full_table_in_txn(snode_t** start_row, snode_t** end_row,
 	}
 
 	delete_msg_callback(mc->nonce, db);
+
+#if DEBUG_BLOBS > 0
+	printf("remote_read_full_table_in_txn: Returning %" PRId64 " [%d rows]:\n", (int64_t) table_key, result);
+
+	for(snode_t * node = *start_row; node!=NULL; node=NEXT(node))
+		print_long_row((db_row_t*) node->value);
+#endif
 
 	return result;
 }
