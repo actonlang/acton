@@ -29,8 +29,8 @@
 #include <string.h>
 #include <limits.h>
 
-#define SERVER_BUFSIZE 128 * 1024 // (1024 * 1024)
-#define PRINT_BUFSIZE 128 * 1024
+#define SERVER_BUFSIZE 1024 * 1024 // (1024 * 1024)
+#define PRINT_BUFSIZE 1024 * 1024
 
 #define UPDATE_LC_ON_GOSSIP
 #define DO_HIERARCHICAL_CONNECT 0
