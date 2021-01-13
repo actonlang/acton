@@ -21,7 +21,7 @@ int parse_message_v1(void * rcv_buf, size_t rcv_msg_len, void ** out_msg, short 
 	range_read_response_message * rrr;
 
 #if (VERBOSE_RPC > 0)
-	char print_buff[4096];
+	char print_buff[BUFSIZE];
 #endif
 	int status = 0;
 
@@ -183,7 +183,7 @@ int parse_message(void * rcv_buf, size_t rcv_msg_len, void ** out_msg, short * o
 	range_read_response_message * rrr;
 
 #if (VERBOSE_RPC > 0)
-	char print_buff[4096];
+	char print_buff[BUFSIZE];
 #endif
 	int status = 0;
 
