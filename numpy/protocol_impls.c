@@ -313,6 +313,7 @@ void numpy$$Collection$ndarray$__init__(numpy$$Collection$ndarray self, numpy$$P
   
 numpy$$Collection$ndarray numpy$$Collection$ndarray$new(numpy$$Primitive pwit) {
   numpy$$Collection$ndarray res = malloc(sizeof (struct numpy$$Collection$ndarray));
+  res->$class = &numpy$$Collection$ndarray$methods;
   numpy$$Collection$ndarray$__init__(res, pwit);
   return res;
 }
