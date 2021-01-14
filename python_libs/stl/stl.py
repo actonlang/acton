@@ -81,29 +81,12 @@ def decompose(observed, period=365, lo_window_frac=0.6):
     
 ##    period_averages = np.array([np.mean(detrended[i::period]) for i in range(period)])
     
-#    period_averages = np.zeros(period) # []
-#    for i in range(period):
-#        no_period_values = 0
-#        period_sum = 0
-#        for j in range(max_no_period_values):
-#            if j * period < len(observed):
-#                period_sum += detrended[j * period]
-#                no_period_values += 1
-#        period_averages[i] = period_sum / no_period_values
-    
     # 0-center the period avgs
     period_averages -= np.mean(period_averages)
-##    print('period_averages=', period_averages)
 
 ##    seasonal = np.tile(period_averages, len(observed) // period + 1)[:len(observed)] 
     seasonal = tile_array(period_averages, len(observed) // period + 1)[:len(observed)]
     
-##    seasonal = np.zeros(len(observed))
-##    for i in range(len(observed)): 
-##        seasonal[i] = period_averages[i % period]
-        
-##    print('seasonal=', seasonal)    
-        
     resid = detrended - seasonal
     
     phase = len(observed) % period
