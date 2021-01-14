@@ -21,7 +21,7 @@
 #define VERBOSE_RPC 0
 #define COMM_VERBOSITY 2
 
-#define BUFSIZE 1024 * 1024
+#define BUFSIZE 128 * 1024
 #define MAX_CONNECT_RETRIES 5
 
 #define NODE_LIVE 0
