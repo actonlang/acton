@@ -166,6 +166,9 @@ $Sliceable$str $Sliceable$str$__deserialize__($Sliceable$str self, $Serial$state
    return res;
 }
 
+$Sliceable$str $Sliceable$str$new() {
+  return $NEW($Sliceable$str);
+}
 $str $Sliceable$str$__getitem__ ($Sliceable$str wit, $str str, $int i) {
   return $str_getitem(str,from$int(i));
 }
@@ -222,6 +225,9 @@ $bool $Hashable$str$__eq__ ($Hashable$str wit, $str a, $str b) {
   return to$bool($str_eq(a,b));
 }
 
+$Hashable$str $Hashable$str$new() {
+  return $NEW($Hashable$str);
+}
 $bool $Hashable$str$__ne__ ($Hashable$str wit, $str a, $str b) {
   return to$bool($str_neq(a,b));
 }
@@ -269,6 +275,7 @@ struct $Container$str$class  $Container$str$methods = {
 };
 struct $Container$str $Container$str_instance = {&$Container$str$methods,($Eq)&$Ord$str_instance};
 $Container$str $Container$str$witness = &$Container$str_instance;
+
 
 struct $Sliceable$str$class  $Sliceable$str$methods = {
     "$Sliceable$str",
@@ -321,10 +328,7 @@ struct $Hashable$str$class  $Hashable$str$methods = {
 struct $Hashable$str $Hashable$str_instance = {&$Hashable$str$methods};
 $Hashable$str $Hashable$str$witness = &$Hashable$str_instance;
 
-$Hashable$str $Hashable$str$new() {
-  return $NEW($Hashable$str);
-}
-
+ 
 void $Container$str$__init__ ($Container$str wit, $Eq w$Eq$A$Container$str) {
   wit->w$Eq$A$Container$str = w$Eq$A$Container$str;
 }
@@ -641,10 +645,7 @@ int $str_ge($str a, $str b) {
 
 // $Plus /////////////////////////////////////////////////////////////////////////////////////////////
 
-$Plus$str $Plus$str$new() {
-  return $NEW($Plus$str);
-}
-
+ 
 $str $str_add($str s, $str t) {
   $str res;
   NEW_UNFILLED_STR(res,s->nchars + t->nchars,s->nbytes + t->nbytes);
@@ -662,10 +663,7 @@ $int $str_len($str s) {
 
 // $Container ///////////////////////////////////////////////////////////////////////////
 
-$Container$str $Container$str$new() {
-  return $NEW($Container$str,($Eq)$Ord$str$witness);
-}
-
+ 
 int $str_contains($str s, $str sub) {
   return bmh(s->str,sub->str,s->nbytes,sub->nbytes) > 0;
 }

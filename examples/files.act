@@ -1,17 +1,10 @@
 actor main(env):
-   print("will try to open file")
-   f1 = env.openW("data")
-   print("opened file f1")
-   if f1 is not None:
-       f1.write("12345\n")
-       f1.write("abcde\n")
-       f1.close()
-       f2 = env.openR("data")
-       if f2 is not None:
-           s = f2.read()
+   f2 = env.openR("data")
+   if f2 is not None:
+        s = f2.readln()
+        while (s is not None):
            print(s)
-       else:
-           print("cannot open file 'data' for reading")
+           s = f2.readln()
    else:
-       print("cannot open file 'data' for writing")   
+       print("cannot open file 'data' for reading")
    env.exit(0)
