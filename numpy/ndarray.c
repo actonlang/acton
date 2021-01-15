@@ -143,6 +143,12 @@ $str numpy$$ndarray$__str__(numpy$$ndarray a) {
   }
 }
 
+numpy$$ndarray numpy$$ndarray$new($WORD w) {
+  numpy$$ndarray res = malloc(sizeof(struct numpy$$ndarray));
+  res->$class = &numpy$$ndarray$methods;
+  numpy$$ndarray$__init__(res, w);
+  return res;
+}
 //ndarray methods /////////////////////////////////////////////////////////////////////////////////
 
 // reshape attempts to present a new view, but may have to copy data.
@@ -731,26 +737,28 @@ numpy$$ndarray numpy$$sum(numpy$$Primitive wit, numpy$$ndarray a, $int axis) {
         wit->$class->$iadd(&resd,*ixa);
     }
     res = $newarray(a->elem_type,0,to$int(1),$NEW($list,NULL,NULL),$NEW($list,NULL,NULL),true);
-   res->data[0] = resd;
-   return res;
-   } else if (axis->val == -1 || axis->val == a->ndim-1) {
-    // for now, assume summing along last axis
-    long len = $LONGELEM(a->shape,a->ndim-1);
-    long stridea = $LONGELEM(a->strides,a->ndim-1);
-    $list newshape = $list_getslice(a->shape,$NEW($slice,NULL,to$int(-1),NULL));
+    res->data[0] = resd;
+    //    return res;
+  } else {
+    long len = $LONGELEM(a->shape,axis->val);
+    long stridea = $LONGELEM(a->strides,axis->val);
+    $list newshape = $list_copy(a->shape);
+    $list_delitem(newshape,axis->val);
+    $list newstrides = $list_copy(a->strides);
+    $list_delitem(newstrides,axis->val);
+    numpy$$ndarray a1 = $newarray(a->elem_type,a->ndim-1,$prod(newshape),newshape,newstrides,false);
+    a1->offset = a->offset;
     res = $newarray(a->elem_type,a->ndim-1,$prod(newshape),newshape,$mk_strides(newshape),true);
-    a->ndim--;
-    numpy$$array_iterator_state ita = $mk_iterator(a);
-    a->ndim++;
+    a1->data = a->data;
+    numpy$$array_iterator_state ita = $mk_iterator(a1);
     union $Bytes8 *ixa;
     union $Bytes8 *ixres = res->data;
     while ((ixa = iter_next(ita))) {
       *ixres = $sum1dim(wit,ixa,len,stridea);
       ixres++;
     }
-  } else
-     RAISE(($BaseException)$NEW($ValueError,to$str("summing only implemented for complete array or along last axis")));
-    return res;
+  }
+  return res;
 }         
 
 numpy$$ndarray numpy$$abs(numpy$$Primitive wit, numpy$$ndarray a) {
@@ -825,7 +833,25 @@ numpy$$ndarray numpy$$roll(numpy$$Primitive wit, numpy$$ndarray a, $int n) {
   return numpy$$ndarray$reshape(res,a->shape);
 }
 
+union $Bytes8 $convert_to_double(union $Bytes8 a) {
+  union  $Bytes8 res;
+  res.d = (double)a.l;
+  return res;
+}
    
+numpy$$ndarray numpy$$mean(numpy$$Primitive wit, numpy$$ndarray a, $int axis) {
+  numpy$$ndarray sums = numpy$$sum(wit,a,axis);
+  if (a->elem_type == LongType) {
+    sums = numpy$$func($convert_to_double,sums);
+    sums->elem_type = DblType;
+  }
+  numpy$$ndarray len = numpy$$fromatom(($atom)to$float((double)(axis ? (($int)$list_getitem(a->shape,axis->val))->val : a->size->val)));
+  return numpy$$oper(numpy$$Primitive$float$witness->$class->$div,sums,len);
+}
+  
+   
+
+  
 numpy$$ndarray numpy$$tile(numpy$$Primitive wit, numpy$$ndarray a, $int n) {
   if (n->val<=0) 
     RAISE(($BaseException)$NEW($ValueError,to$str("numpy.tile: non-positive number of tiles")));

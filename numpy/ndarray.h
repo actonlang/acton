@@ -65,6 +65,8 @@ struct numpy$$Iterator$ndarray$class {
   $WORD (*__next__)(numpy$$Iterator$ndarray);
 };
 
+numpy$$ndarray numpy$$ndarray$new($WORD);
+
 struct numpy$$Iterator$ndarray {
   struct numpy$$Iterator$ndarray$class *$class;
   numpy$$Primitive pwit;
@@ -84,10 +86,10 @@ numpy$$ndarray numpy$$fromatom($atom a);
 
 // Methods in ndarray class //////////////////////////////////////////////
 
-numpy$$ndarray numpy$$reshape(numpy$$ndarray,$list);
-numpy$$ndarray numpy$$transpose(numpy$$ndarray,$list);
-numpy$$ndarray numpy$$flatten(numpy$$ndarray);
-numpy$$ndarray numpy$$copy(numpy$$ndarray);
+numpy$$ndarray numpy$$ndarray$reshape(numpy$$ndarray,$list);
+numpy$$ndarray numpy$$ndarray$transpose(numpy$$ndarray,$list);
+numpy$$ndarray numpy$$ndarray$flatten(numpy$$ndarray);
+numpy$$ndarray numpy$$ndarray$copy(numpy$$ndarray);
 numpy$$ndarray numpy$$ndarray$__ndgetslice__(numpy$$ndarray,$list);
 
 // Functions to create ndarrays /////////////////////////////////////////
@@ -111,6 +113,7 @@ numpy$$ndarray numpy$$sort(numpy$$Primitive wit, numpy$$ndarray a, $int axis);
 numpy$$ndarray numpy$$clip(numpy$$Primitive wit, numpy$$ndarray a, $WORD low, $WORD high);
 numpy$$ndarray numpy$$dot(numpy$$Primitive wit, numpy$$ndarray a, numpy$$ndarray b);
 numpy$$ndarray numpy$$abs(numpy$$Primitive wit, numpy$$ndarray a);
+numpy$$ndarray numpy$$mean(numpy$$Primitive wit, numpy$$ndarray a, $int axis);
 $WORD numpy$$scalar(numpy$$Primitive wit, numpy$$ndarray a);
 
 // newaxis //////////////////////////////////////////////////////////

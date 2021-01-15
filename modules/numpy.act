@@ -12,6 +12,7 @@ class ndslice(ndselect):
     __init__: (slice) -> None
 
 class ndarray[A] ():
+    __init__        : (atom) -> None
     shape           : list[int]                      # should be a method? (at least until we have immutable lists)
     strides         : list[int]                      #      -"-
     size            : int
@@ -33,6 +34,7 @@ roll                : [A (Primitive)] => (ndarray[A], int)       -> ndarray[A]
 tile                : [A (Primitive)] => (ndarray[A], int)       -> ndarray[A]           
 zeros               : [A (Primitive)] => (int)                   -> ndarray[A]  
 concatenate         : [A (Primitive)] => (list[ndarray[A]])      -> ndarray[A]      
+mean                : [A (Primitive)] => (ndarray[A],?int)       -> ndarray[float]      
 
 arange              :                    (?int,int,?int)         -> ndarray[int]       
 linspace            :                    (float, float, int)     -> ndarray[float]
