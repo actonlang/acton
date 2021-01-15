@@ -13,7 +13,7 @@ def loess(x, y, xin, win):
     q   = xd/numpy.partition(xd,win)[:,win][:,numpy.newaxis]
     w   = numpy.clip(q, 0.0, 1.0)
     ws  = (1.0 - w ** 3.0) ** 3.0
-    a00 = numpy.sum(ws,1)
+    a00 = numpy.sum(ws, 1)
     a01 = numpy.dot(ws, x)
     a11 = numpy.dot(ws, x*x)
     b0  = numpy.dot(ws, y)
@@ -21,39 +21,21 @@ def loess(x, y, xin, win):
     det = a00*a11-a01*a01
     return ((a11*b0 - a01*b1) + (-a01*b0 + a00*b1)*xin)/det
 
-def decompose(observed, time, period, lo_window_frac):
-    n = len(observed)
-    trend = loess(time, observed, time, int(lo_window_frac * float(n)))
-    detrended = observed - trend
-    short_trend =  loess(time, detrended, time, period//3)
 
-    if n < period:
-      period = n
-    max_no_period_values = n // period + 1
- 
-    period_averages_list = replicate(period,0.0)
-    for i in range(0,period,1):
-        no_period_values = 0
-        period_sum = 0.0
-        for j in range(0,max_no_period_values,1):
-            if j * period < n:
-                y = short_trend[i+j * period]
-                period_sum += numpy.scalar(y)
-                no_period_values += 1
-        period_averages_list[i] = (period_sum / float(no_period_values))
-    mean = sum(period_averages_list,0.0)/float(period)
-    period_averages_smoothed = numpy.array(period_averages_list)
-    period_averages_smoothed -= numpy.array(replicate(period,mean))
-
-    seasonal = numpy.tile(period_averages_smoothed, max_no_period_values)[0:n:1]
-
-    residual = detrended - seasonal
-
-    phase = n % period
+def decompose(observed, time, period, lo_window_frac): 
+    n                = len(observed)
+    trend            = loess(time, observed, time, int(lo_window_frac * float(n)))
+    detrended        = observed - trend
+    detrended_smooth = loess(time, detrended, time, period//3)                         #smoothen data over small window to get nicer periodic
+    period_averages  = numpy.mean(detrended_smooth[:n:].reshape([n//period,period]),0) # reshape to get one period per row, do mean over columns
+    period_averages  -= numpy.mean(period_averages,None)
+    seasonal         = numpy.tile(period_averages, n//period)[:n:]
+    residual         = detrended - seasonal
+    phase            = n % period
     
-    return (trend, seasonal, residual, period_averages_smoothed, phase) 
+    return (trend, seasonal, residual, period_averages, phase) 
           
-actor sampler(sample_size, report):
+actor sampler(sample_size, report : action(numpy.ndarray[float],numpy.ndarray[float])->None):
     def sample(t0, n0):
         t1           = t0+float(sample_size)/52.0
         time         = numpy.linspace(t0,t1,sample_size)
@@ -88,8 +70,8 @@ actor analyzer(sample_size, loess_win_size):
        print("EOD")
        t0 = numpy.scalar(time[0])
        t1 = t0 + 8*width
-       print("plot [",t0,":",t1,"][-1:5] \'$data\' using 1:2 with lines title \"raw data\", \\")
-       print("\'$data\' using 1:3 with lines title \"loess smoothed\", \\")
+       print("plot [",t0,":",t1,"][-1:5] \'$data\' using 1:2 with lines title \"observations\", \\")
+       print("\'$data\' using 1:3 with lines title \"trend\", \\")
        print("\'$data\' using 1:4 with lines title \"periodic\", \\")
        print("\'$data\' using 1:5 with lines title \"residual\"")
 
@@ -99,8 +81,11 @@ actor analyzer(sample_size, loess_win_size):
        
 
 actor main(env):
+  if len(env.argv) != 3:
+     print("usage: loess_smoother5 >weeks in graph> <weeks in loess_window>")
+     env.exit(0)
   win_width = int(env.argv[1])
-  loess_win_size =  int(env.argv[2])
-  a = analyzer(win_width//8, loess_win_size)
+  loess_win_width = int(env.argv[2])
+  a = analyzer(win_width//8, loess_win_width)
   s = sampler(win_width//8, a.add_sample)
 
