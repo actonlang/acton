@@ -54,6 +54,8 @@ primWEqNone         = gPrim "wEqNone"
 primWIdentityNone   = gPrim "wIdentityNone"
 
 primWIntegralInt    = gPrim "Integral$int$witness"
+primWSequenceList   = gPrim "Sequence$list$witness"
+primWCollectionList = gPrim "Collection$list$witness"
 
 primISNOTNONE       = gPrim "ISNOTNONE"
 
@@ -109,13 +111,17 @@ primMkEnv cls def var sig =
                             (noq primWEqNone,       var tEqNone),
                             (noq primWIdentityNone, var tIdentityNone),
                             (noq primWIntegralInt,  var tIntegralInt),
+                            (noq primWSequenceList, var tSequenceListWild),
+                            (noq primWCollectionList,var tCollectionListWild),
 
                             (noq primISNOTNONE,     def scISNOTNONE NoDec),
 
                             (noq primSKIPRESc,      def scSKIPRESc NoDec),
                             (noq primSKIPRES,       def scSKIPRES NoDec)
-
                       ]
+
+tSequenceListWild   = tCon (TC qnSequence [tList tWild, tWild])
+tCollectionListWild = tCon (TC qnCollection [tList tWild, tWild])
 
 --  class $Actor (): pass
 clActor cls def sig = cls [] [([Nothing],cStruct)] te

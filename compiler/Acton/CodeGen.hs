@@ -624,7 +624,7 @@ instance Gen Expr where
                                         tmp <> semi) <+> rbrace)
       where n                       = qnList
             tmp                     = gen env tmpV
-            w                       = gen env witSequenceList
+            w                       = gen env primWSequenceList
             append                  = w <> text "->" <> gen env classKW <> text "->" <> gen env appendKW
             pars e                  = w <> comma <+> tmp <> comma <+> gen env e
         -- brackets (commaSep (gen env) es)

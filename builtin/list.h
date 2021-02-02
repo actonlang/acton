@@ -31,6 +31,7 @@ extern struct $Container$list$class $Container$list$methods;
 $Container$list $Container$list$new($Eq);
 
 extern struct $Sequence$list *$Sequence$list$witness;
+extern struct $Collection$list *$Collection$list$witness;
 extern struct $Container$list *$Container$list_new($Eq); // equality is for elements
 
 // void $printlist($list list); //for debugging; only for lists of ints

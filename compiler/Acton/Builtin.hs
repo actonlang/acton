@@ -258,5 +258,3 @@ tNDArray a                          = tCon (cNDArray a)
 tNDSelect                           = tCon cNDSelect
 tNDIndex                            = tCon cNDIndex
 tNDSlice                            = tCon cNDSlice
-
-witSequenceList                     = gBuiltin (Derived (Derived nSequence nList) (name "witness"))
