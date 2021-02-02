@@ -782,20 +782,22 @@ typedef struct BlobHd {           // C.f. $ROW
     int blob_size;
 } BlobHd;
 
-$ROW extract_row($WORD *blob) {
-    BlobHd* head = (BlobHd*)blob;
-    if (head->class_id == UNASSIGNED)
+$ROW extract_row($WORD *blob, size_t blob_size) {
+    int words_left = blob_size / sizeof($WORD);
+    if (words_left == 0)
         return NULL;
-    $ROW fst = malloc(sizeof(struct $ROW) + head->blob_size);
+    BlobHd* head = (BlobHd*)blob;
+    $ROW fst = malloc(sizeof(struct $ROW) + head->blob_size*sizeof($WORD));
     $ROW row = fst;
     while (1) {
-        long size = 1 + head->blob_size;;
+        long size = 1 + head->blob_size;
         memcpy(&row->class_id, blob, size*sizeof($WORD));
         blob += size;
-        head = (BlobHd*)blob;
-        if (head->class_id == UNASSIGNED)
+        words_left -= size;
+        if (words_left == 0)
             break;
-        row->next = malloc(sizeof(struct $ROW) + head->blob_size);
+        head = (BlobHd*)blob;
+        row->next = malloc(sizeof(struct $ROW) + head->blob_size*sizeof($WORD));
         row = row->next;
     };
     row->next = NULL;
@@ -889,9 +891,10 @@ void deserialize_system(snode_t *actors_start) {
 		if (r->cells) {
             db_row_t* r2 = (HEAD(r->cells))->value;
             $WORD *blob = ($WORD*)r2->column_array[0];
+            int blob_size = r2->last_blob_size;
+            $ROW row = extract_row(blob, blob_size);
             $Msg msg = ($Msg)$dict_get(globdict, ($Hashable)$Hashable$int$witness, to$int(key), NULL);
             //printf("####### Deserializing msg %p = %ld of class %s = %d\n", msg, msg->$globkey, msg->$class->$GCINFO, msg->$class->$class_id);
-            $ROW row = extract_row(blob);
             //print_rows(row);
             $glob_deserialize(($Serializable)msg, row, try_globdict);
             //print_msg(msg);
@@ -905,9 +908,10 @@ void deserialize_system(snode_t *actors_start) {
 		if (r->cells) {
             db_row_t* r2 = (HEAD(r->cells))->value;
             $WORD *blob = ($WORD*)r2->column_array[0];
+            int blob_size = r2->last_blob_size;
+            $ROW row = extract_row(blob, blob_size);
             $Actor act = ($Actor)$dict_get(globdict, ($Hashable)$Hashable$int$witness, to$int(key), NULL);
             //printf("####### Deserializing actor %p = %ld of class %s = %d\n", act, act->$globkey, act->$class->$GCINFO, act->$class->$class_id);
-            $ROW row = extract_row(blob);
             //print_rows(row);
             $glob_deserialize(($Serializable)act, row, try_globdict);
 
@@ -942,6 +946,8 @@ void deserialize_system(snode_t *actors_start) {
     }
 
     //printf("\n#### Reading timer queue contents:\n");
+    struct timespec now;
+    clock_gettime(CLOCK_MONOTONIC, &now);
     queue_callback * qc = get_queue_callback(dummy_callback);
 	int64_t prev_read_head = -1, prev_consume_head = -1;
 	int ret = remote_subscribe_queue(TIMER_QUEUE, 0, 0, MSG_QUEUE, TIMER_QUEUE, qc, &prev_read_head, &prev_consume_head, db);
@@ -951,6 +957,8 @@ void deserialize_system(snode_t *actors_start) {
         if (!msg_key)
             break;
         $Msg m = $dict_get(globdict, ($Hashable)$Hashable$int$witness, to$int(msg_key), NULL);
+        if (m->$baseline < now.tv_sec)
+            m->$baseline = now.tv_sec;
         //printf("# Adding Msg %ld to the timerQ\n", m->$globkey);
         ENQ_timed(m);
     }
@@ -973,6 +981,15 @@ $WORD try_globkey($WORD obj) {
     return 0;
 }
 
+long $total_rowsize($ROW r) {           // In words
+    long size = 0;
+    while (r) {
+        size += 1 + r->blob_size;       // Two ints == one $WORD
+        r = r->next;
+    }
+    return size;
+}
+
 void insert_row(long key, size_t total, $ROW row, $WORD table, uuid_t *txnid) {
     $WORD column[2] = {($WORD)key, 0};
     $WORD blob[total];
@@ -987,8 +1004,16 @@ void insert_row(long key, size_t total, $ROW row, $WORD table, uuid_t *txnid) {
         row = row->next;
     }
     BlobHd *end = (BlobHd*)p;
-    end->class_id = UNASSIGNED;
-    end->blob_size = 0;
+
+    //printf("## Built blob of size %ld\n", total);
+    //for (int i = 0; i < total; i++) {
+    //    printf("%lu ", (unsigned long)blob[i]);
+    //}
+
+    //printf("\n## Sanity check extract row:\n");
+    //$ROW row1 = extract_row(blob, total*sizeof($WORD));
+    //print_rows(row1);
+
     int ret = remote_insert_in_txn(column, 2, 1, 1, blob, total*sizeof($WORD), table, txnid, db);
     //printf("   # insert to table %ld, row %ld, returns %d\n", (long)table, key, ret);
 }
@@ -1199,7 +1224,7 @@ int main(int argc, char **argv) {
     int no_items = remote_read_full_table_in_txn(&start_row, &end_row, ACTORS_TABLE, NULL, db);
     //printf("Found %d existing actors\n", no_items);
     if (no_items > 0) {
-        printf("(restoring system)\n");
+        printf("# (restoring system)\n");
         deserialize_system(start_row);
     } else {
         int indices[] = {0};

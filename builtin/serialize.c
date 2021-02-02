@@ -127,15 +127,6 @@ $WORD $val_deserialize($Serial$state state) {
 
 // Serialization methods ///////////////////////////////////////////////////////////////////////////////
 
-long $total_rowsize($ROW r) {
-    long size = 0;
-    while (r) {
-        size += 1 + r->blob_size;       // Two ints == one $WORD
-        r = r->next;
-    }
-    return size + 1;                    // Make space for an extra UNASSIGNED marker at the end
-}
-
 void $write_serialized($ROW row, char *file) {
   char buf[BUF_SIZE];
   char *p = buf;

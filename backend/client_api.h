@@ -27,7 +27,7 @@
 #define NO_QUORUM_ERR -1
 #define NO_SUCH_MSG_CALLBACK -2
 
-#define DEBUG_BLOBS 1
+#define DEBUG_BLOBS 0
 
 
 // Remote DB API:
