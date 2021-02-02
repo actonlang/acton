@@ -23,18 +23,18 @@
     X Integrate DB sources in build                                         1d      2d
     X Set up dedicated rts thread for DB protocol daemon                    1d      2d
     X Add serialization calls to rts                                        3h      8h
+    X Define Acton Environment type and implement IO loop in rts            1w      2w
 
     X Build demo app                                                        2w      4w
     X Presentation slides                                                   1w      1w
     - Documentation/tutorial                                                1w      1w
                                                                             4w      6w
 
-    X Define Acton Environment type and implement IO loop in rts            1w      2w
     - Sort out conversion from star params/args to tuples                   2d      4d
-!   - Fix cps translation of effect-polymorphic functions                   2d      4d
     - Sort out the pos/kwd parameter parsing ambiguity                      4h      8h
     - Implement pos/kwd and opt relaxation in Solver                        3d      5d
     - Implement Rest/RestI in rts                                           1d      2d
+!   - Fix cps translation of effect-polymorphic functions                   2d      4d
 !   - Translate the root expression as a proper function                    4h      1d
     - Make global __builtin__ witnesses available to Solver                 2h      5h
     - Translate list comprehensions                                         2d      3d
