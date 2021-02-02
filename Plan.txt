@@ -1,4 +1,4 @@
-2020-12-03:
+2021-02-02:
 
     X Convert NameInfo envs to format of later passes
     X Make CPSEnv and LiftEnv instances of Env
@@ -20,12 +20,12 @@
     X Print generated C code with precedences                               2d      3d
     X Typecheck and convert formatted string literals                       1d      2d
     X Fully defer ASYNC/AWAIT wrapping to the deactorizer pass              1d      2d
-    / Integrate DB sources in build                                         1d      2d
-    / Set up dedicated rts thread for DB protocol daemon                    1d      2d
-    / Add serialization calls to rts                                        3h      8h
+    X Integrate DB sources in build                                         1d      2d
+    X Set up dedicated rts thread for DB protocol daemon                    1d      2d
+    X Add serialization calls to rts                                        3h      8h
 
-    - Build demo app                                                        2w      4w
-    - Presentation slides                                                   1w      1w
+    X Build demo app                                                        2w      4w
+    X Presentation slides                                                   1w      1w
     - Documentation/tutorial                                                1w      1w
                                                                             4w      6w
 
@@ -40,7 +40,9 @@
     - Translate list comprehensions                                         2d      3d
     / Handle the with statements                                            2d      3d
     - Implement raise and try in the rts                                    3d      4d
-
+!   - Allow error exceptions to be thrown in from within lub & glb
+!   - Make NVar polymorphic but not qualified by inference 
+      (c.f. the monomorphism restriction)
 
 
 
