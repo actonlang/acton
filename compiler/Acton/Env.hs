@@ -172,7 +172,7 @@ instance Pretty (Name,NameInfo) where
     pretty (n, NVar t)          = pretty n <+> colon <+> pretty t
     pretty (n, NSVar t)         = text "var" <+> pretty n <+> colon <+> pretty t
     pretty (n, NDef t d)        = prettyDec d $ pretty n <+> colon <+> pretty t
-    pretty (n, NSig t d)        = prettyDec d $ pretty n <+> text ":::" <+> pretty t
+    pretty (n, NSig t d)        = prettyDec d $ pretty n <+> text ":" <+> pretty t
     pretty (n, NAct q p k te)   = text "actor" <+> pretty n <> nonEmpty brackets commaList q <+>
                                   parens (prettyFunRow p k) <> colon $+$ (nest 4 $ prettyOrPass te)
     pretty (n, NClass q us te)  = text "class" <+> pretty n <> nonEmpty brackets commaList q <+>
@@ -197,9 +197,9 @@ prettyOrPass te
   where doc                     = pretty te
 
 instance Pretty WTCon where
---    pretty (ws,u)               = pretty u
+    pretty (ws,u)               = pretty u
 --    pretty (ws,u)               = dotCat pretty (catMaybes ws) <+> colon <+> pretty u
-    pretty (ws,u)               = dotCat prettyW ws <+> colon <+> pretty u
+--    pretty (ws,u)               = dotCat prettyW ws <+> colon <+> pretty u
       where prettyW Nothing     = text "_"
             prettyW (Just n)    = pretty n
 

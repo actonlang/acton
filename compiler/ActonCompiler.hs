@@ -254,7 +254,7 @@ runRestPasses args paths env0 parsed = do
 
                       (iface,tchecked,typeEnv) <- Acton.Types.reconstruct outbase env kchecked
                       iff (types args) $ dump "types" (Pretty.print tchecked)
-                      iff (sigs args) $ dump "sigs" (Pretty.vprint iface)
+                      iff (sigs args) $ dump "sigs" (Pretty.vprint (A.imps tchecked) ++ "\n\n" ++ Pretty.vprint iface)
 
                       (normalized, normEnv) <- Acton.Normalizer.normalize typeEnv tchecked
                       iff (norm args) $ dump "norm" (Pretty.print normalized)

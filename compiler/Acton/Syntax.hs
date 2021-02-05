@@ -352,7 +352,9 @@ kPar ns (TNil _ KRow)   = KwdNIL
 kPar ns t               = KwdSTAR (head ns) (Just t)
 
 
-tvarSupply              = [ TV KType $ name (c:tl) | tl <- "" : map show [1..], c <- "ABCDEFGHIJKLMNOPQRSTUVWXYZ" ]
+tvarSupply              = [ TV KType $ name (c:tl) | tl <- "" : map show [1..], c <- "ABCDEFGHIJKLMNOPQRSTUVW" ]
+
+fxSupply                = [ TV KType $ name (c:tl) | tl <- "" : map show [1..], c <- "XYZ" ]
 
 tvarSupplyMap vs avoid  = map setk (vs `zip` (tvarSupply \\ avoid))
   where setk (v,v')     = (v, tVar $ v'{ tvkind = tvkind v })
