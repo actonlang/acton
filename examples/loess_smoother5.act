@@ -1,11 +1,12 @@
 import numpy
 import math
+from numpy import ndarray
 
 # run as follows:
 
 # script -q /dev/null examples/loess_smoother5 312 104 | gnuplot
 
-# second command line argument: nr of weeks shown in window. 1/8 of this number are the new sample values intruced in each step.
+# second command line argument: nr of weeks shown in window. 1/8 of this number are the new sample values introduced in each step.
 # third command line argument: nr of weeks to be used in "loess window" for long term trend. 
 
 def loess(x, y, xin, win):
@@ -26,7 +27,7 @@ def decompose(observed, time, period, lo_window_frac):
     n                = len(observed)
     trend            = loess(time, observed, time, int(lo_window_frac * float(n)))
     detrended        = observed - trend
-    detrended_smooth = loess(time, detrended, time, period//3)                         #smoothen data over small window to get nicer periodic
+    detrended_smooth = loess(time, detrended, time, period//3)                         # smoothen data over small window to get nicer periodic
     period_averages  = numpy.mean(detrended_smooth[:n:].reshape([n//period,period]),0) # reshape to get one period per row, do mean over columns
     period_averages  -= numpy.mean(period_averages,None)
     seasonal         = numpy.tile(period_averages, n//period)[:n:]
@@ -35,26 +36,12 @@ def decompose(observed, time, period, lo_window_frac):
     
     return (trend, seasonal, residual, period_averages, phase) 
           
-actor sampler(sample_size, report : action(numpy.ndarray[float],numpy.ndarray[float])->None):
-    def sample(t0, n0):
-        t1           = t0+float(sample_size)/52.0
-        time         = numpy.linspace(t0,t1,sample_size)
-        trend        = 2.0 + 0.1 * time
-        periodic     = 0.5 * math.sin (6.2832 * time)
-        noise        = numpy.unirandfloat(-0.5, 0.5, sample_size);
-        observation  = trend + periodic + noise
-        report(time, observation)
-        after 4: sample(t1, n0+sample_size)
-
-    sample(0.0, 0)
-
-
 actor analyzer(sample_size, loess_win_size):
     var xsamples = []
     var ysamples = []
 
     nullsample   = numpy.zeros(sample_size)
-    width        = float(sample_size)/52.0;
+    width        = float(sample_size)/52.0
 
     def add_sample(x, y):
        xsamples.append(x)
@@ -80,9 +67,23 @@ actor analyzer(sample_size, loess_win_size):
        ysamples.append(nullsample)
        
 
+actor sampler(sample_size, report):
+    def sample(t0, n0):
+        t1           = t0+float(sample_size)/52.0
+        time         = numpy.linspace(t0,t1,sample_size)
+        trend        = 2.0 + 0.1 * time
+        periodic     = 0.5 * math.sin (6.2832 * time)
+        noise        = numpy.unirandfloat(-0.5, 0.5, sample_size)
+        observation  = trend + periodic + noise
+        report(time, observation)
+        after 4: sample(t1, n0+sample_size)
+
+    sample(0.0, 0)
+
+
 actor main(env):
   if len(env.argv) != 3:
-     print("usage: loess_smoother5 >weeks in graph> <weeks in loess_window>")
+     print("usage: loess_smoother5 <weeks in graph> <weeks in loess_window>")
      env.exit(0)
   win_width = int(env.argv[1])
   loess_win_width = int(env.argv[2])
