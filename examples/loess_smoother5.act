@@ -6,8 +6,8 @@ from numpy import ndarray
 
 # script -q /dev/null examples/loess_smoother5 312 104 | gnuplot
 
-# second command line argument: nr of weeks shown in window. 1/8 of this number are the new sample values introduced in each step.
-# third command line argument: nr of weeks to be used in "loess window" for long term trend. 
+# first command line argument:  nr of weeks shown in window. 1/8 of this number is size of the new sample introduced in each step.
+# second command line argument: nr of weeks to be used in "loess window" for long term trend. 
 
 def loess(x, y, xin, win):
     xd  = numpy.abs(xin[:,numpy.newaxis] - x)
@@ -22,50 +22,37 @@ def loess(x, y, xin, win):
     det = a00*a11-a01*a01
     return ((a11*b0 - a01*b1) + (-a01*b0 + a00*b1)*xin)/det
 
-
 def decompose(observed, time, period, lo_window_frac): 
     n                = len(observed)
+    phase            = n % period
     trend            = loess(time, observed, time, int(lo_window_frac * float(n)))
     detrended        = observed - trend
-    detrended_smooth = loess(time, detrended, time, period//3)                         # smoothen data over small window to get nicer periodic
-    period_averages  = numpy.mean(detrended_smooth[:n:].reshape([n//period,period]),0) # reshape to get one period per row, do mean over columns
+    detrended_smooth = loess(time, detrended, time, period//3)                                 # smoothen over small window to get nicer periodic
+    period_averages  = numpy.mean(detrended_smooth[:n - phase:].reshape([n//period,period]),0) # reshape to get one period per row, do mean over columns
     period_averages  -= numpy.mean(period_averages,None)
-    seasonal         = numpy.tile(period_averages, n//period)[:n:]
+    seasonal         = numpy.tile(period_averages, n//period + 1)[:n:]
     residual         = detrended - seasonal
-    phase            = n % period
     
     return (trend, seasonal, residual, period_averages, phase) 
           
-actor analyzer(sample_size, loess_win_size):
-    var xsamples = []
-    var ysamples = []
-
-    nullsample   = numpy.zeros(sample_size)
-    width        = float(sample_size)/52.0
+actor analyzer(window_size, loess_win_size):
+    var time        = numpy.linspace(-float(window_size)/52.0,0,window_size)
+    var observation = numpy.zeros(window_size)
 
     def add_sample(x, y):
-       xsamples.append(x)
-       ysamples.append(y)
-       del xsamples[0]
-       del ysamples[0]
-       time        = numpy.concatenate(xsamples)
-       observation = numpy.concatenate(ysamples)
+       time        = numpy.concatenate([time[len(x):],x])
+       observation = numpy.concatenate([observation[len(y):],y])
        trend, seasonal, resid, periodic, phase = decompose(observation, time, 52, 0.6)
        print("clear\n$data <<EOD")
-       for i in range(0, 8*sample_size, 1):
+       for i in range(0, window_size, 1):
            print(time[i], observation[i], trend[i], seasonal[i], resid[i])
        print("EOD")
        t0 = numpy.scalar(time[0])
-       t1 = t0 + 8*width
+       t1 = t0 + float(window_size)/52.0
        print("plot [",t0,":",t1,"][-1:5] \'$data\' using 1:2 with lines title \"observations\", \\")
        print("\'$data\' using 1:3 with lines title \"trend\", \\")
        print("\'$data\' using 1:4 with lines title \"periodic\", \\")
        print("\'$data\' using 1:5 with lines title \"residual\"")
-
-    for i in range(8,0,-1):
-       xsamples.append(numpy.linspace(-float(i)*width, -float(i-1)*width, sample_size))
-       ysamples.append(nullsample)
-       
 
 actor sampler(sample_size, report):
     def sample(t0, n0):
@@ -78,15 +65,14 @@ actor sampler(sample_size, report):
         report(time, observation)
         after 4: sample(t1, n0+sample_size)
 
-    sample(0.0, 0)
-
+    sample(0.0, 0) 
 
 actor main(env):
-  if len(env.argv) != 3:
-     print("usage: loess_smoother5 <weeks in graph> <weeks in loess_window>")
-     env.exit(0)
-  win_width = int(env.argv[1])
-  loess_win_width = int(env.argv[2])
-  a = analyzer(win_width//8, loess_win_width)
-  s = sampler(win_width//8, a.add_sample)
+    if len(env.argv) != 3:
+        print("usage: loess_smoother5 >weeks in graph> <weeks in loess_window>")
+        env.exit(0)
+    win_width = int(env.argv[1])
+    loess_win_width = int(env.argv[2])
+    a = analyzer(win_width, loess_win_width)
+    s = sampler(win_width//8, a.add_sample)
 
