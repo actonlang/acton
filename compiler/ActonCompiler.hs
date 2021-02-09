@@ -68,7 +68,7 @@ getArgs         = Args
                     <*> strOption (long "root" <> value "" <> showDefault)
                     <*> argument str (metavar "FILE")
 
-descr           = fullDesc <> progDesc "Compile an Acton source file with necessary recompilation of imported modules"
+descr           = fullDesc <> progDesc "Compile an Acton source file with recompilation of imported modules as needed"
                     <> header "actonc - the Acton compiler"
 
 main            = do args <- execParser (info (getArgs <**> helper) descr)
@@ -81,15 +81,18 @@ main            = do args <- execParser (info (getArgs <**> helper) descr)
                          putStrLn ("## topMod: " ++ prstr (topMod paths))
                      let mn = topMod paths
                      (case ext paths of
-                        ".act"   -> do (src,tree) <- Acton.Parser.parseModule mn (file args)
-                                                        `catch` handle Acton.Parser.parserError "" paths mn
+                        ".act"   -> do let fName = file args
+                                       src <- readFile fName
+                                       tree <- Acton.Parser.parseModule mn fName src 
+                                                        `catch` handle "Syntax error" Acton.Parser.parserError "" paths mn
+                                                        `catch` handle "Context error" Acton.Parser.contextError src paths mn
                                        iff (parse args) $ dump "parse" (Pretty.print tree)
                                        let task = ActonTask mn src tree
                                        chaseImportsAndCompile args paths task
                         ".ty"    -> showTyFile args
                         _        -> error ("********************\nUnknown file extension "++ ext paths))
-                               `catch` handle (\exc -> (l0,displayException (exc :: IOException))) "" paths mn
-                               `catch` handle (\exc -> (l0,displayException (exc :: ErrorCall))) "" paths mn
+                               `catch` handle "IOException" (\exc -> (l0,displayException (exc :: IOException))) "" paths mn
+                               `catch` handle "Error" (\exc -> (l0,displayException (exc :: ErrorCall))) "" paths mn
   where showTyFile args     = do te <- InterfaceFiles.readFile (file args)
                                  putStrLn ("**** Type environment in " ++ (file args) ++ " ****")
                                  putStrLn (Pretty.render (Pretty.pretty (te :: Acton.Env.TEnv)))
@@ -166,8 +169,8 @@ chaseImportsAndCompile args paths task
                              then do env0 <- Acton.Env.initEnv (sysRoot paths) (stub args) (topMod paths == Acton.Builtin.mBuiltin)
                                      env1 <- foldM (doTask args paths) env0 [t | AcyclicSCC t <- as]
                                      buildExecutable env1 args paths task
-                                         `catch` handle Acton.Env.compilationError (src task) paths (name task)
-                                         `catch` handle Acton.Types.typeError (src task) paths (name task)
+                                         `catch` handle "Compilation error" Acton.Env.compilationError (src task) paths (name task)
+                                         `catch` handle "Type error" Acton.Types.typeError (src task) paths (name task)
                                      return ()
                               else do error ("********************\nCyclic imports:"++concatMap showCycle cs)
                                       System.Exit.exitFailure
@@ -186,8 +189,9 @@ chaseImportedFiles args paths imps task
                                                Nothing -> return Nothing
                                                Just actFile -> do
                                                     ok <- System.Directory.doesFileExist actFile
-                                                    if ok then do 
-                                                        (src,m) <- Acton.Parser.parseModule mn actFile
+                                                    if ok then do
+                                                        src <- readFile actFile
+                                                        m <- Acton.Parser.parseModule mn actFile src
                                                         return $ Just $ ActonTask mn src m
                                                      else
                                                         return Nothing
@@ -217,9 +221,9 @@ doTask args paths env t@(ActonTask mn src m)
                                   else do touchDirs (sysRoot paths) mn
                                           iff (verbose args) (putStr ("Compiling "++ actFile ++ "... ") >> hFlush stdout)
                                           (env',te) <- runRestPasses args paths env m
-                                                           `catch` handle generalError src paths mn
-                                                           `catch` handle Acton.Env.compilationError src paths mn
-                                                           `catch` handle Acton.Types.typeError src paths mn
+                                                           `catch` handle "Compilation error" generalError src paths mn
+                                                           `catch` handle "Compilation error" Acton.Env.compilationError src paths mn
+                                                           `catch` handle "Type error" Acton.Types.typeError src paths mn
                                           iff (verbose args) (putStrLn "Done.")
                                           return (Acton.Env.addMod mn te env')
   where Just actFile        = srcFile paths mn
@@ -298,18 +302,14 @@ runRestPasses args paths env0 parsed = do
                       return (env0 `Acton.Env.withModulesFrom` env,iface)
 
 
-handle f src paths mn ex = do putStrLn "\n********************"
-                              putStrLn (makeReport (f ex) fname src)
-                              removeIfExists (outbase++".ty")
-                              System.Exit.exitFailure
-  where Just fname     = srcFile paths mn
-        outbase        = sysFile paths mn
+handle errKind f src paths mn ex = do putStrLn ("\n******************** " ++ errKind)
+                                      putStrLn (Acton.Parser.makeReport (f ex) src)
+                                      removeIfExists (outbase++".ty")
+                                      System.Exit.exitFailure
+  where outbase        = sysFile paths mn
         removeIfExists f = removeFile f `catch` handleExists
         handleExists :: IOException -> IO ()
         handleExists _ = return ()
-
-makeReport (loc, msg) file src = errReport (sp, msg) src
-  where sp = Acton.Parser.extractSrcSpan loc file src
 
 
 buildExecutable env args paths task
@@ -331,7 +331,7 @@ buildExecutable env args paths task
         (sc,_)              = Acton.QuickType.schemaOf env (A.eQVar qn)
         outbase             = sysFile paths mn
         rootFile            = outbase ++ ".root.c"
-        libFiles            = " -L " ++ joinPath [sysPath paths,"lib"] ++ " -lutf8proc -ldbclient -lremote -lcomm -ldb -lvc -lprotobuf-c -lActon "
+        libFiles            = " -L " ++ joinPath [sysPath paths,"lib"] ++ " -lutf8proc -lActon "
         binFile             = dropExtension srcbase
         Just srcbase        = srcFile paths mn
         gccCmd              = "gcc -g -I" ++ sysPath paths ++ libFiles ++ rootFile ++ " -o" ++ binFile
