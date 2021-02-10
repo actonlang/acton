@@ -2,7 +2,7 @@ import math
 
 protocol Primitive: pass
 
-class ndselect(struct):
+class ndselect(value):
     pass
 
 class ndindex(ndselect):

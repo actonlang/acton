@@ -1,5 +1,5 @@
 {-# LANGUAGE MultiParamTypeClasses, FlexibleInstances, FlexibleContexts #-}
-module Acton.Types(reconstruct, typeError) where
+module Acton.Types(reconstruct, showTyFile, typeError) where
 
 import Control.Monad
 import Pretty
@@ -29,6 +29,12 @@ reconstruct fname env0 (Module m i ss)  = do --traceM ("#################### ori
         (te,ss1)                        = runTypeM $ infTop env1 ss
         env2                            = define te env0
         env0'                           = convEnvProtos env0
+
+showTyFile env0 fname           = do te <- InterfaceFiles.readFile fname
+                                     putStrLn ("\n#################################### Interface:\n")
+                                     let env2 = define te env0
+                                     putStrLn (vprint (simp env2 te))
+
 
 nodup x
   | not $ null vs               = err2 vs "Duplicate names:"
@@ -74,7 +80,7 @@ instance Simp (Name, NameInfo) where
       where env'                    = defineTVars (stripQual q) env
     simp env (n, NProto q us te)    = (n, NProto (simp env' q) (simp env' us) (simp env' te))
       where env'                    = defineTVars (stripQual q) env
-    simp env (n, NExt n' q us te)   = (n, NExt n' (simp env' q) (simp env' us) (simp env' te))
+    simp env (n, NExt n' q us te)   = (n, NExt (simp env n') (simp env' q) (simp env' us) (simp env' te))
       where env'                    = defineTVars (stripQual q) env
     simp env (n, NAct q p k te)     = (n, NAct (simp env' q) (simp env' p) (simp env' k) (simp env' te))
       where env'                    = defineTVars (stripQual q) env
@@ -89,11 +95,15 @@ instance Simp Type where
     simp env t                      = t
 
 instance Simp TCon where
-    simp env (TC n ts)
-      | not $ null aliases          = TC (NoQ $ head aliases) (simp env ts)
-      | otherwise                   = TC n (simp env ts)
-      where aliases                 = [ n1 | (n1, NAlias n2) <- names env, n2 == n ]
+    simp env (TC n ts)              = TC (simp env n) (simp env ts)
 
+instance Simp QName where
+    simp env (GName m n)
+      | Just m == thismod env       = NoQ n
+    simp env n
+      | not $ null aliases          = NoQ $ head aliases
+      | otherwise                   = n
+      where aliases                 = [ n1 | (n1, NAlias n2) <- names env, n2 == n ]
 
 ------------------------------
 
@@ -453,7 +463,7 @@ instance InfEnv Decl where
       where env1                        = define (exclude (toSigs te') [initKW]) $ reserve (bound b) $ defineSelfOpaque $ defineTVars (stripQual q) env
             (as,ps)                     = mro2 env (unalias env us)
             q'                          = unalias env q
-            as'                         = if null as && not (inBuiltin env && n == nStruct) then [([Nothing],cStruct)] else as
+            as'                         = if null as && not (inBuiltin env && n == nValue) then [([Nothing],cValue)] else as
             te'                         = parentTEnv env as'
             props te0                   = [ Signature l0 [n] sc Property | (n,NSig sc Property) <- te0 ]
             
@@ -945,7 +955,6 @@ instance Infer Expr where
                                                 return (cs, t, app t (tApp x tvs) $ witsOf cs)
                                             NSig _ _ -> nameReserved n
                                             NReserved -> nameReserved n
-                                            NBlocked -> nameBlocked n
                                             _ -> nameUnexpected n
     infer env e@(Int _ val s)           = do t <- newTVar
                                              w <- newWitness

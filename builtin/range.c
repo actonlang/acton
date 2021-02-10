@@ -95,7 +95,7 @@ $Iterator$range $Iterator$range$_deserialize($Iterator$range self, $Serial$state
 struct $range$class $range$methods = {
    "$range",
    UNASSIGNED,
-   ($Super$class)&$struct$methods,
+   ($Super$class)&$value$methods,
    $range$__init__,
    $range$__serialize__,
    $range$__deserialize__,

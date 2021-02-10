@@ -18,7 +18,7 @@ int main(int argc, char *argv[]) {
     //printf("r->shape=%s\n",r->shape->$class->__str__(r->shape)->str);
     //printf("r->strides=%s\n",r->strides->$class->__str__(r->strides)->str);
     //printf("r=%s\n",r->$class->__str__(r)->str);
-    $struct sm = ($struct)numpy$$sum((numpy$$Primitive)numpy$$Primitive$float$witness,r,NULL);
+    $value sm = ($value)numpy$$sum((numpy$$Primitive)numpy$$Primitive$float$witness,r,NULL);
     $printobj("sum(r) =",sm);
     free(r->data);
     free(r);

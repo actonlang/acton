@@ -18,9 +18,9 @@ int main(int argc, char *argv[]) {
   numpy$$ndarray b = numpy$$ndarray_reshape(y,newshape);
   //$printobj("a =",a);
   //for (int i = 0; i<100; i++) {
-    $struct s = ($struct)numpy$$ndarray_sum((numpy$$Primitive)numpy$$Primitive$float$witness,a,NULL);
+    $value s = ($value)numpy$$ndarray_sum((numpy$$Primitive)numpy$$Primitive$float$witness,a,NULL);
     $printobj("sum(a) =",s);
-    $struct t = ($struct)numpy$$ndarray_sum((numpy$$Primitive)numpy$$Primitive$int$witness,b,NULL);
+    $value t = ($value)numpy$$ndarray_sum((numpy$$Primitive)numpy$$Primitive$int$witness,b,NULL);
     //$printobj("b =",b);  
     $printobj("sum(b) =",t);
     //  }

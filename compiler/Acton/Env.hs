@@ -100,7 +100,6 @@ data NameInfo               = NVar      Type
                             | NMAlias   ModName
                             | NModule   TEnv
                             | NReserved
-                            | NBlocked
                             deriving (Eq,Show,Read,Generic)
 
 data Witness                = WClass    { binds::QBinds, proto::TCon, wname::QName, wsteps::[Maybe QName] }
@@ -179,17 +178,16 @@ instance Pretty (Name,NameInfo) where
                                   nonEmpty parens commaList us <> colon $+$ (nest 4 $ prettyOrPass $ normTEnv te)
     pretty (n, NProto q us te)  = text "protocol" <+> pretty n <> nonEmpty brackets commaList q <+>
                                   nonEmpty parens commaList us <> colon $+$ (nest 4 $ prettyOrPass $ normTEnv te)
-    pretty (w, NExt n [] ps te) = pretty w  <+> colon <+> text "extension" <+> pretty n <+> parens (commaList ps) <>
+    pretty (w, NExt n [] ps te) = {-pretty w  <+> colon <+> -} text "extension" <+> pretty n <+> parens (commaList ps) <>
                                   colon $+$ (nest 4 $ prettyOrPass te)
-    pretty (w, NExt n q ps te)  = pretty w  <+> colon <+> pretty q <+> text "=>" <+> text "extension" <+> pretty n <> 
-                                  brackets (commaList $ tybound q) <+> parens (commaList ps) <>
+    pretty (w, NExt n q ps te)  = {-pretty w  <+> colon <+> pretty q <+> text "=>" <+> -}text "extension" <+> pretty n <> 
+                                  brackets (commaList $ {-tybound-} q) <+> parens (commaList ps) <>
                                   colon $+$ (nest 4 $ prettyOrPass te)
     pretty (n, NTVar k c)       = pretty n <> parens (pretty c)
     pretty (n, NAlias qn)       = text "alias" <+> pretty n <+> equals <+> pretty qn
     pretty (n, NMAlias m)       = text "module" <+> pretty n <+> equals <+> pretty m
     pretty (n, NModule te)      = text "module" <+> pretty n <> colon $+$ nest 4 (pretty te)
     pretty (n, NReserved)       = pretty n <+> text "(reserved)"
-    pretty (n, NBlocked)        = pretty n <+> text "(blocked)"
 
 prettyOrPass te
   | isEmpty doc                 = text "pass"
@@ -224,7 +222,6 @@ instance Subst NameInfo where
     msubst (NMAlias m)          = NMAlias <$> return m
     msubst (NModule te)         = NModule <$> return te     -- actually msubst te, but te has no free variables (top-level)
     msubst NReserved            = return NReserved
-    msubst NBlocked             = return NBlocked
 
     tyfree (NVar t)             = tyfree t
     tyfree (NSVar t)            = tyfree t
@@ -239,7 +236,6 @@ instance Subst NameInfo where
     tyfree (NMAlias qn)         = []
     tyfree (NModule te)         = []        -- actually tyfree te, but a module has no free variables on the top level
     tyfree NReserved            = []
-    tyfree NBlocked             = []
 
 instance Subst (QName,Witness) where
     msubst (n, w@WClass{})      = return (n, w)         -- A WClass (i.e., an extension) can't have any free type variables
@@ -347,7 +343,6 @@ instance Unalias NameInfo where
     unalias env (NMAlias m)         = NMAlias (unalias env m)
     unalias env (NModule te)        = NModule (unalias env te)
     unalias env NReserved           = NReserved
-    unalias env NBlocked            = NBlocked
 
 instance Unalias (Name,NameInfo) where
     unalias env (n,i)               = (n, unalias env i)
@@ -454,9 +449,6 @@ addWit env cwit
 reserve                     :: [Name] -> EnvF x -> EnvF x
 reserve xs env              = env{ names = [ (x, NReserved) | x <- nub xs ] ++ names env }
 
-block                       :: [Name] -> EnvF x -> EnvF x
-block xs env                = env{ names = [ (x, NBlocked) | x <- nub xs ] ++ names env }
-
 define                      :: TEnv -> EnvF x -> EnvF x
 define te env               = foldl addWit env1 ws
   where env1                = env{ names = reverse te ++ exclude (names env) (dom te) }
@@ -465,7 +457,7 @@ define te env               = foldl addWit env1 ws
 defineTVars                 :: QBinds -> EnvF x -> EnvF x
 defineTVars q env           = foldr f env q
   where f (Quant tv us) env = foldl addWit env{ names = (tvname tv, NTVar (tvkind tv) c) : names env } wits
-          where (c,ps)      = case mro2 env us of ([],_) -> (cStruct, us); _ -> (head us, tail us)   -- Just check that the mro exists, don't store it
+          where (c,ps)      = case mro2 env us of ([],_) -> (cValue, us); _ -> (head us, tail us)   -- Just check that the mro exists, don't store it
                 wits        = [ (NoQ (tvname tv), WInst p (NoQ $ tvarWit tv p0) wchain) | p0 <- ps, (wchain,p) <- findAncestry env p0 ]
 
 defineSelfOpaque            :: EnvF x -> EnvF x
@@ -510,7 +502,7 @@ tvarScope                   :: EnvF x -> [TVar]
 tvarScope env               = tvarScope0 env \\ [tvSelf]
 
 quantScope                  :: EnvF x -> QBinds
-quantScope env              = [ Quant (TV k n) (if c==cStruct then [] else [c]) | (n, NTVar k c) <- names env, n /= nSelf ]
+quantScope env              = [ Quant (TV k n) (if c==cValue then [] else [c]) | (n, NTVar k c) <- names env, n /= nSelf ]
 
 selfSubst                   :: EnvF x -> Substitution
 selfSubst env               = [ (TV k n, tCon c) | (n, NTVar k c) <- names env, n == nSelf ]

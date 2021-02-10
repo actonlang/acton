@@ -41,7 +41,7 @@ $str $complex_str($complex c) {
   return to$str(s);
 }
   
-struct $complex$class $complex$methods = {"$complex",UNASSIGNED,($Super$class)&$struct$methods,$complex_init,$complex_serialize,$complex_deserialize,$complex_bool,$complex_str};
+struct $complex$class $complex$methods = {"$complex",UNASSIGNED,($Super$class)&$value$methods,$complex_init,$complex_serialize,$complex_deserialize,$complex_bool,$complex_str};
 
 // $Number$complex  ////////////////////////////////////////////////////////////////////////////////////////
 

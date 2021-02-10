@@ -64,8 +64,8 @@ $str $dict_str($dict self) {
   $tuple item;
   for (int i=0; i<self->numelements; i++) {
     item = ($tuple)iter->$class->__next__(iter);
-    $struct key = (($struct)item->components[0]);
-    $struct value = (($struct)item->components[1]);
+    $value key = (($value)item->components[0]);
+    $value value = (($value)item->components[1]);
     $str keystr = key->$class->__str__(key);
     $str valuestr = value->$class->__str__(value);
     $str elem = malloc(sizeof(struct $str));

@@ -12,7 +12,7 @@ numpy$$ndselect numpy$$ndselect$__deserialize__(numpy$$ndselect wit, $Serial$sta
 struct numpy$$ndselect$class numpy$$ndselect$methods = {
     "numpy$$ndselect",
     UNASSIGNED,
-    ($Super$class)&$struct$methods,
+    ($Super$class)&$value$methods,
     numpy$$ndselect$__init__,
     numpy$$ndselect$__serialize__,
     numpy$$ndselect$__deserialize__,
@@ -48,7 +48,7 @@ numpy$$ndindex numpy$$ndindex$__deserialize__(numpy$$ndindex self, $Serial$state
 struct numpy$$ndindex$class numpy$$ndindex$methods = {
     "numpy$$ndindex",
     UNASSIGNED,
-    ($Super$class)&$struct$methods,
+    ($Super$class)&$value$methods,
     numpy$$ndindex$__init__,
     numpy$$ndindex$__serialize__,
     numpy$$ndindex$__deserialize__,
@@ -83,7 +83,7 @@ numpy$$ndslice numpy$$ndslice$__deserialize__(numpy$$ndslice self, $Serial$state
 struct numpy$$ndslice$class numpy$$ndslice$methods = {
     "numpy$$ndslice",
     UNASSIGNED,
-    ($Super$class)&$struct$methods,
+    ($Super$class)&$value$methods,
     numpy$$ndslice$__init__,
     numpy$$ndslice$__serialize__,
     numpy$$ndslice$__deserialize__,

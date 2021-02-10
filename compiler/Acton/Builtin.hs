@@ -26,7 +26,7 @@ callKW                              = name "__call__"
 boolKW                              = name "__bool__"
 strKW                               = name "__str__"
 
-structKWs                           = [boolKW, strKW]
+valueKWs                            = [boolKW, strKW]
 
 iaddKW                              = name "__iadd__"
 isubKW                              = name "__isub__"
@@ -73,7 +73,7 @@ nBuiltin                            = name "__builtin__"
 mBuiltin                            = ModName [nBuiltin]
 gBuiltin n                          = GName mBuiltin n
 
-nStruct                             = name "struct"
+nValue                              = name "value"
 nAtom                               = name "atom"
 nObject                             = name "object"
 nInt                                = name "int"
@@ -120,7 +120,7 @@ nIterable                           = name "Iterable"
 nContextManager                     = name "ContextManager"
 nShow                               = name "Show"
 
-qnStruct                            = gBuiltin nStruct
+qnValue                             = gBuiltin nValue
 qnAtom                              = gBuiltin nAtom
 qnObject                            = gBuiltin nObject
 qnInt                               = gBuiltin nInt
@@ -166,7 +166,7 @@ qnIterable                          = gBuiltin nIterable
 qnContextManager                    = gBuiltin nContextManager
 qnShow                              = gBuiltin nShow
 
-cStruct                             = TC qnStruct []
+cValue                              = TC qnValue []
 cAtom                               = TC qnAtom []
 cObject                             = TC qnObject []
 cInt                                = TC qnInt []
@@ -209,7 +209,7 @@ pIterable a                         = TC qnIterable [a]
 pContextManager                     = TC qnContextManager []
 pShow                               = TC qnShow []
 
-tStruct                             = tCon cStruct
+tValue                              = tCon cValue
 tAtom                               = tCon cAtom
 tObject                             = tCon cObject
 tInt                                = tCon cInt

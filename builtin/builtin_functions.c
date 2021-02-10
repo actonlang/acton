@@ -4,7 +4,7 @@
 // print //////////////////////////////////////////////////////////////////////////////
 
 static $WORD mkstr($WORD w) {
-  $struct w1 = ($struct)w;
+  $value w1 = ($value)w;
   return w1->$class->__str__(w);
 }
 
@@ -12,12 +12,12 @@ void $print(int size, ...) {
     va_list args;
     va_start(args,size);
     if (size > 0) {
-        $struct elem = va_arg(args,$struct);
+        $value elem = va_arg(args,$value);
         fputs((const char*)elem->$class->__str__(elem)->str,stdout);
     }
     for (int i=1; i<size; i++) {
         putchar(' ');
-        $struct elem = va_arg(args,$struct);
+        $value elem = va_arg(args,$value);
         fputs((const char*)elem->$class->__str__(elem)->str,stdout);
     }
     putchar('\n');
@@ -312,7 +312,7 @@ $bool $all ($Iterable w$164, $WORD it) {
     $Iterator n$iter = w$164->$class->__iter__(w$164, it);
     $WORD n$1val = n$iter->$class->__next__(n$iter);
     while ($ISNOTNONE(n$1val)) {
-        $struct x = ($struct)n$1val;
+        $value x = ($value)n$1val;
         if (!x->$class->__bool__(x)->val) {
             return ($bool)$False;
         }
@@ -324,7 +324,7 @@ $bool $any ($Iterable w$179, $WORD it) {
     $Iterator n$2iter = w$179->$class->__iter__(w$179, it);
     $WORD n$3val = n$2iter->$class->__next__(n$2iter);
     while ($ISNOTNONE(n$3val)) {
-        $struct x = ($struct)n$3val;
+        $value x = ($value)n$3val;
         if (x->$class->__bool__(x)->val) {
             return ($bool)$True;
         }

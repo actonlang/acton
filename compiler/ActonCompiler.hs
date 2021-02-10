@@ -89,13 +89,11 @@ main            = do args <- execParser (info (getArgs <**> helper) descr)
                                        iff (parse args) $ dump "parse" (Pretty.print tree)
                                        let task = ActonTask mn src tree
                                        chaseImportsAndCompile args paths task
-                        ".ty"    -> showTyFile args
+                        ".ty"    -> do env0 <- Acton.Env.initEnv (sysRoot paths) False False
+                                       Acton.Types.showTyFile (Acton.Env.setMod (topMod paths) env0) (file args)
                         _        -> error ("********************\nUnknown file extension "++ ext paths))
                                `catch` handle "IOException" (\exc -> (l0,displayException (exc :: IOException))) "" paths mn
                                `catch` handle "Error" (\exc -> (l0,displayException (exc :: ErrorCall))) "" paths mn
-  where showTyFile args     = do te <- InterfaceFiles.readFile (file args)
-                                 putStrLn ("**** Type environment in " ++ (file args) ++ " ****")
-                                 putStrLn (Pretty.render (Pretty.pretty (te :: Acton.Env.TEnv)))
 
 
 dump h txt      = putStrLn ("\n\n#################################### " ++ h ++ ":\n" ++ txt)

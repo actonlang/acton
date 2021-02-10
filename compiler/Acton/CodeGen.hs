@@ -564,7 +564,7 @@ genEnter env ts e n p
         t                           = typeInstOf env ts e
         env1                        = ldefine [(tmpV,NVar t)] env
 genEnter env ts e n p               = cast (gen env e) <> text "->" <> gen env classKW <> text "->" <> gen env n <> parens (cast (gen env e) <> comma' (gen env p))
-  where cast | n `elem` structKWs   = parens . (parens (gen env tStruct) <>)
+  where cast | n `elem` valueKWs    = parens . (parens (gen env tValue) <>)
              | otherwise            = id
 
 genInst env ts e@Var{}              = gen env e

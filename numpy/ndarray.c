@@ -338,7 +338,7 @@ numpy$$ndarray numpy$$ndarray$__ndgetslice__(numpy$$ndarray a, $list ix) {
 struct numpy$$ndarray$class numpy$$ndarray$methods = {
     "numpy$$ndarray",
     UNASSIGNED,
-    ($Super$class)&$struct$methods,
+    ($Super$class)&$value$methods,
     numpy$$ndarray$__init__,
     numpy$$ndarray$__serialize__,
     numpy$$ndarray$__deserialize__,

@@ -779,8 +779,8 @@ void minienv$$__init__ () {
     {
         minienv$$l$1lambda$methods.$GCINFO = "minienv$$l$1lambda";
         minienv$$l$1lambda$methods.$superclass = ($Super$class)&$Cont$methods;
-        minienv$$l$1lambda$methods.__bool__ = ($bool (*) (minienv$$l$1lambda))$struct$methods.__bool__;
-        minienv$$l$1lambda$methods.__str__ = ($str (*) (minienv$$l$1lambda))$struct$methods.__str__;
+        minienv$$l$1lambda$methods.__bool__ = ($bool (*) (minienv$$l$1lambda))$value$methods.__bool__;
+        minienv$$l$1lambda$methods.__str__ = ($str (*) (minienv$$l$1lambda))$value$methods.__str__;
         minienv$$l$1lambda$methods.__init__ = minienv$$l$1lambda$__init__;
         minienv$$l$1lambda$methods.__call__ = minienv$$l$1lambda$__call__;
         minienv$$l$1lambda$methods.__serialize__ = minienv$$l$1lambda$__serialize__;
@@ -790,8 +790,8 @@ void minienv$$__init__ () {
     {
         minienv$$l$2lambda$methods.$GCINFO = "minienv$$l$2lambda";
         minienv$$l$2lambda$methods.$superclass = ($Super$class)&$Cont$methods;
-        minienv$$l$2lambda$methods.__bool__ = ($bool (*) (minienv$$l$2lambda))$struct$methods.__bool__;
-        minienv$$l$2lambda$methods.__str__ = ($str (*) (minienv$$l$2lambda))$struct$methods.__str__;
+        minienv$$l$2lambda$methods.__bool__ = ($bool (*) (minienv$$l$2lambda))$value$methods.__bool__;
+        minienv$$l$2lambda$methods.__str__ = ($str (*) (minienv$$l$2lambda))$value$methods.__str__;
         minienv$$l$2lambda$methods.__init__ = minienv$$l$2lambda$__init__;
         minienv$$l$2lambda$methods.__call__ = minienv$$l$2lambda$__call__;
         minienv$$l$2lambda$methods.__serialize__ = minienv$$l$2lambda$__serialize__;
@@ -801,8 +801,8 @@ void minienv$$__init__ () {
     {
         minienv$$l$3lambda$methods.$GCINFO = "minienv$$l$3lambda";
         minienv$$l$3lambda$methods.$superclass = ($Super$class)&$Cont$methods;
-        minienv$$l$3lambda$methods.__bool__ = ($bool (*) (minienv$$l$3lambda))$struct$methods.__bool__;
-        minienv$$l$3lambda$methods.__str__ = ($str (*) (minienv$$l$3lambda))$struct$methods.__str__;
+        minienv$$l$3lambda$methods.__bool__ = ($bool (*) (minienv$$l$3lambda))$value$methods.__bool__;
+        minienv$$l$3lambda$methods.__str__ = ($str (*) (minienv$$l$3lambda))$value$methods.__str__;
         minienv$$l$3lambda$methods.__init__ = minienv$$l$3lambda$__init__;
         minienv$$l$3lambda$methods.__call__ = minienv$$l$3lambda$__call__;
         minienv$$l$3lambda$methods.__serialize__ = minienv$$l$3lambda$__serialize__;
@@ -812,8 +812,8 @@ void minienv$$__init__ () {
     {
         minienv$$l$4lambda$methods.$GCINFO = "minienv$$l$4lambda";
         minienv$$l$4lambda$methods.$superclass = ($Super$class)&$Cont$methods;
-        minienv$$l$4lambda$methods.__bool__ = ($bool (*) (minienv$$l$4lambda))$struct$methods.__bool__;
-        minienv$$l$4lambda$methods.__str__ = ($str (*) (minienv$$l$4lambda))$struct$methods.__str__;
+        minienv$$l$4lambda$methods.__bool__ = ($bool (*) (minienv$$l$4lambda))$value$methods.__bool__;
+        minienv$$l$4lambda$methods.__str__ = ($str (*) (minienv$$l$4lambda))$value$methods.__str__;
         minienv$$l$4lambda$methods.__init__ = minienv$$l$4lambda$__init__;
         minienv$$l$4lambda$methods.__call__ = minienv$$l$4lambda$__call__;
         minienv$$l$4lambda$methods.__serialize__ = minienv$$l$4lambda$__serialize__;
@@ -823,8 +823,8 @@ void minienv$$__init__ () {
     {
         minienv$$l$5lambda$methods.$GCINFO = "minienv$$l$5lambda";
         minienv$$l$5lambda$methods.$superclass = ($Super$class)&$Cont$methods;
-        minienv$$l$5lambda$methods.__bool__ = ($bool (*) (minienv$$l$5lambda))$struct$methods.__bool__;
-        minienv$$l$5lambda$methods.__str__ = ($str (*) (minienv$$l$5lambda))$struct$methods.__str__;
+        minienv$$l$5lambda$methods.__bool__ = ($bool (*) (minienv$$l$5lambda))$value$methods.__bool__;
+        minienv$$l$5lambda$methods.__str__ = ($str (*) (minienv$$l$5lambda))$value$methods.__str__;
         minienv$$l$5lambda$methods.__init__ = minienv$$l$5lambda$__init__;
         minienv$$l$5lambda$methods.__call__ = minienv$$l$5lambda$__call__;
         minienv$$l$5lambda$methods.__serialize__ = minienv$$l$5lambda$__serialize__;
@@ -834,8 +834,8 @@ void minienv$$__init__ () {
     {
         minienv$$l$6lambda$methods.$GCINFO = "minienv$$l$6lambda";
         minienv$$l$6lambda$methods.$superclass = ($Super$class)&$Cont$methods;
-        minienv$$l$6lambda$methods.__bool__ = ($bool (*) (minienv$$l$6lambda))$struct$methods.__bool__;
-        minienv$$l$6lambda$methods.__str__ = ($str (*) (minienv$$l$6lambda))$struct$methods.__str__;
+        minienv$$l$6lambda$methods.__bool__ = ($bool (*) (minienv$$l$6lambda))$value$methods.__bool__;
+        minienv$$l$6lambda$methods.__str__ = ($str (*) (minienv$$l$6lambda))$value$methods.__str__;
         minienv$$l$6lambda$methods.__init__ = minienv$$l$6lambda$__init__;
         minienv$$l$6lambda$methods.__call__ = minienv$$l$6lambda$__call__;
         minienv$$l$6lambda$methods.__serialize__ = minienv$$l$6lambda$__serialize__;
@@ -845,8 +845,8 @@ void minienv$$__init__ () {
     {
         minienv$$l$7lambda$methods.$GCINFO = "minienv$$l$7lambda";
         minienv$$l$7lambda$methods.$superclass = ($Super$class)&$Cont$methods;
-        minienv$$l$7lambda$methods.__bool__ = ($bool (*) (minienv$$l$7lambda))$struct$methods.__bool__;
-        minienv$$l$7lambda$methods.__str__ = ($str (*) (minienv$$l$7lambda))$struct$methods.__str__;
+        minienv$$l$7lambda$methods.__bool__ = ($bool (*) (minienv$$l$7lambda))$value$methods.__bool__;
+        minienv$$l$7lambda$methods.__str__ = ($str (*) (minienv$$l$7lambda))$value$methods.__str__;
         minienv$$l$7lambda$methods.__init__ = minienv$$l$7lambda$__init__;
         minienv$$l$7lambda$methods.__call__ = minienv$$l$7lambda$__call__;
         minienv$$l$7lambda$methods.__serialize__ = minienv$$l$7lambda$__serialize__;
@@ -856,8 +856,8 @@ void minienv$$__init__ () {
     {
         minienv$$l$8lambda$methods.$GCINFO = "minienv$$l$8lambda";
         minienv$$l$8lambda$methods.$superclass = ($Super$class)&$Cont$methods;
-        minienv$$l$8lambda$methods.__bool__ = ($bool (*) (minienv$$l$8lambda))$struct$methods.__bool__;
-        minienv$$l$8lambda$methods.__str__ = ($str (*) (minienv$$l$8lambda))$struct$methods.__str__;
+        minienv$$l$8lambda$methods.__bool__ = ($bool (*) (minienv$$l$8lambda))$value$methods.__bool__;
+        minienv$$l$8lambda$methods.__str__ = ($str (*) (minienv$$l$8lambda))$value$methods.__str__;
         minienv$$l$8lambda$methods.__init__ = minienv$$l$8lambda$__init__;
         minienv$$l$8lambda$methods.__call__ = minienv$$l$8lambda$__call__;
         minienv$$l$8lambda$methods.__serialize__ = minienv$$l$8lambda$__serialize__;
@@ -867,8 +867,8 @@ void minienv$$__init__ () {
     {
         minienv$$l$9lambda$methods.$GCINFO = "minienv$$l$9lambda";
         minienv$$l$9lambda$methods.$superclass = ($Super$class)&$Cont$methods;
-        minienv$$l$9lambda$methods.__bool__ = ($bool (*) (minienv$$l$9lambda))$struct$methods.__bool__;
-        minienv$$l$9lambda$methods.__str__ = ($str (*) (minienv$$l$9lambda))$struct$methods.__str__;
+        minienv$$l$9lambda$methods.__bool__ = ($bool (*) (minienv$$l$9lambda))$value$methods.__bool__;
+        minienv$$l$9lambda$methods.__str__ = ($str (*) (minienv$$l$9lambda))$value$methods.__str__;
         minienv$$l$9lambda$methods.__init__ = minienv$$l$9lambda$__init__;
         minienv$$l$9lambda$methods.__call__ = minienv$$l$9lambda$__call__;
         minienv$$l$9lambda$methods.__serialize__ = minienv$$l$9lambda$__serialize__;
@@ -878,8 +878,8 @@ void minienv$$__init__ () {
     {
         minienv$$l$10lambda$methods.$GCINFO = "minienv$$l$10lambda";
         minienv$$l$10lambda$methods.$superclass = ($Super$class)&$Cont$methods;
-        minienv$$l$10lambda$methods.__bool__ = ($bool (*) (minienv$$l$10lambda))$struct$methods.__bool__;
-        minienv$$l$10lambda$methods.__str__ = ($str (*) (minienv$$l$10lambda))$struct$methods.__str__;
+        minienv$$l$10lambda$methods.__bool__ = ($bool (*) (minienv$$l$10lambda))$value$methods.__bool__;
+        minienv$$l$10lambda$methods.__str__ = ($str (*) (minienv$$l$10lambda))$value$methods.__str__;
         minienv$$l$10lambda$methods.__init__ = minienv$$l$10lambda$__init__;
         minienv$$l$10lambda$methods.__call__ = minienv$$l$10lambda$__call__;
         minienv$$l$10lambda$methods.__serialize__ = minienv$$l$10lambda$__serialize__;
@@ -889,8 +889,8 @@ void minienv$$__init__ () {
     {
         minienv$$l$11lambda$methods.$GCINFO = "minienv$$l$11lambda";
         minienv$$l$11lambda$methods.$superclass = ($Super$class)&$Cont$methods;
-        minienv$$l$11lambda$methods.__bool__ = ($bool (*) (minienv$$l$11lambda))$struct$methods.__bool__;
-        minienv$$l$11lambda$methods.__str__ = ($str (*) (minienv$$l$11lambda))$struct$methods.__str__;
+        minienv$$l$11lambda$methods.__bool__ = ($bool (*) (minienv$$l$11lambda))$value$methods.__bool__;
+        minienv$$l$11lambda$methods.__str__ = ($str (*) (minienv$$l$11lambda))$value$methods.__str__;
         minienv$$l$11lambda$methods.__init__ = minienv$$l$11lambda$__init__;
         minienv$$l$11lambda$methods.__call__ = minienv$$l$11lambda$__call__;
         minienv$$l$11lambda$methods.__serialize__ = minienv$$l$11lambda$__serialize__;
@@ -900,8 +900,8 @@ void minienv$$__init__ () {
     {
         minienv$$l$12lambda$methods.$GCINFO = "minienv$$l$12lambda";
         minienv$$l$12lambda$methods.$superclass = ($Super$class)&$Cont$methods;
-        minienv$$l$12lambda$methods.__bool__ = ($bool (*) (minienv$$l$12lambda))$struct$methods.__bool__;
-        minienv$$l$12lambda$methods.__str__ = ($str (*) (minienv$$l$12lambda))$struct$methods.__str__;
+        minienv$$l$12lambda$methods.__bool__ = ($bool (*) (minienv$$l$12lambda))$value$methods.__bool__;
+        minienv$$l$12lambda$methods.__str__ = ($str (*) (minienv$$l$12lambda))$value$methods.__str__;
         minienv$$l$12lambda$methods.__init__ = minienv$$l$12lambda$__init__;
         minienv$$l$12lambda$methods.__call__ = minienv$$l$12lambda$__call__;
         minienv$$l$12lambda$methods.__serialize__ = minienv$$l$12lambda$__serialize__;
@@ -911,8 +911,8 @@ void minienv$$__init__ () {
     {
         minienv$$l$13lambda$methods.$GCINFO = "minienv$$l$13lambda";
         minienv$$l$13lambda$methods.$superclass = ($Super$class)&$Cont$methods;
-        minienv$$l$13lambda$methods.__bool__ = ($bool (*) (minienv$$l$13lambda))$struct$methods.__bool__;
-        minienv$$l$13lambda$methods.__str__ = ($str (*) (minienv$$l$13lambda))$struct$methods.__str__;
+        minienv$$l$13lambda$methods.__bool__ = ($bool (*) (minienv$$l$13lambda))$value$methods.__bool__;
+        minienv$$l$13lambda$methods.__str__ = ($str (*) (minienv$$l$13lambda))$value$methods.__str__;
         minienv$$l$13lambda$methods.__init__ = minienv$$l$13lambda$__init__;
         minienv$$l$13lambda$methods.__call__ = minienv$$l$13lambda$__call__;
         minienv$$l$13lambda$methods.__serialize__ = minienv$$l$13lambda$__serialize__;
@@ -922,8 +922,8 @@ void minienv$$__init__ () {
     {
         minienv$$l$14lambda$methods.$GCINFO = "minienv$$l$14lambda";
         minienv$$l$14lambda$methods.$superclass = ($Super$class)&$Cont$methods;
-        minienv$$l$14lambda$methods.__bool__ = ($bool (*) (minienv$$l$14lambda))$struct$methods.__bool__;
-        minienv$$l$14lambda$methods.__str__ = ($str (*) (minienv$$l$14lambda))$struct$methods.__str__;
+        minienv$$l$14lambda$methods.__bool__ = ($bool (*) (minienv$$l$14lambda))$value$methods.__bool__;
+        minienv$$l$14lambda$methods.__str__ = ($str (*) (minienv$$l$14lambda))$value$methods.__str__;
         minienv$$l$14lambda$methods.__init__ = minienv$$l$14lambda$__init__;
         minienv$$l$14lambda$methods.__call__ = minienv$$l$14lambda$__call__;
         minienv$$l$14lambda$methods.__serialize__ = minienv$$l$14lambda$__serialize__;

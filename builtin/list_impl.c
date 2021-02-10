@@ -24,7 +24,7 @@ $bool $list_bool($list self) {
 $str $list_str($list self) {
   $list s2 = $list_new(self->length);
   for (int i=0; i< self->length; i++) {
-    $struct elem = ($struct)self->data[i];
+    $value elem = ($value)self->data[i];
     $list_append(s2,elem->$class->__str__(elem));
   }
   return $str_join_par('[',s2,']');

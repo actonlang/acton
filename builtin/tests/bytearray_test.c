@@ -4,14 +4,14 @@
 int main() {
   $range r = $range$new(to$int(50),to$int(250),to$int(50));
   $list lst0 = $list_fromiter(($Iterator)$NEW($Iterator$range,r));
-  $bytearray b = $bytearray$new(($struct)lst0);
+  $bytearray b = $bytearray$new(($value)lst0);
   $print(1,b->$class->center(b,to$int(25),NULL));
   $range r2 = $range$new(to$int(65),to$int(91),NULL);
   $range r3 = $range$new(to$int(75),to$int(77),NULL);
   $list lst2 = $list_fromiter(($Iterator)$Iterator$range$new(r2));
   $list lst3 = $list_fromiter(($Iterator)$Iterator$range$new(r3));
-  $bytearray b2 = $NEW($bytearray,($struct)lst2);
-  $bytearray b3 = $NEW($bytearray,($struct)lst3);
+  $bytearray b2 = $NEW($bytearray,($value)lst2);
+  $bytearray b3 = $NEW($bytearray,($value)lst3);
   $Sequence wit = ($Sequence)$Sequence$bytearray$witness;
   wit->$class->__delitem__(wit,b3,to$int(0));
   wit->$class->__delitem__(wit,b3,to$int(-1));
@@ -20,7 +20,7 @@ int main() {
   $bytearray b4 = b->$class->center(b,to$int(20),NULL);
   $print(1,b->$class->lstrip(b4,NULL));
   $range rsep = $NEW($range,to$int(70),to$int(72),to$int(5));
-  $bytearray sep = $NEW($bytearray,($struct)rsep);
+  $bytearray sep = $NEW($bytearray,($value)rsep);
   $print(1,b2->$class->split(b2,sep,NULL));
   $str s = to$str("line 1\nline 2\r\n\nBjörn");
   $bytearray b5 = s->$class->encode(s);

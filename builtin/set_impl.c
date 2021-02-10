@@ -46,9 +46,9 @@ $bool $set_bool($set self) {
 $str $set_str($set self) {
   $list s2 = $list_new(self->numelements);
   $Iterator$set iter = $NEW($Iterator$set,self);
-  $struct elem;
+  $value elem;
   for (int i=0; i<self->numelements; i++) {
-    elem = ($struct)iter->$class->__next__(iter);
+    elem = ($value)iter->$class->__next__(iter);
     $list_append(s2,elem->$class->__str__(elem));
   }
   return $str_join_par('{',s2,'}');

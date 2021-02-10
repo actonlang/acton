@@ -70,27 +70,27 @@ $Serializable $Serializable$new();
 // For the moment, closures, iterators and exceptions also inherit from struct
 
 
-typedef struct $struct$class *$struct$class;
+typedef struct $value$class *$value$class;
 
-typedef struct $struct  *$struct;
+typedef struct $value  *$value;
 
-struct $struct$class {
+struct $value$class {
   char *$GCINFO;
   int $class_id;
   $Super$class $superclass;                      // = Serializable$methods
-  void (*__init__)($struct);
-  void (*__serialize__)($struct, $Serial$state);
-  $struct (*__deserialize__)($struct, $Serial$state);
-  $bool (*__bool__)($struct);
-  $str (*__str__)($struct);
+  void (*__init__)($value);
+  void (*__serialize__)($value, $Serial$state);
+  $value (*__deserialize__)($value, $Serial$state);
+  $bool (*__bool__)($value);
+  $str (*__str__)($value);
 };
 
-struct $struct {
-  struct $struct$class *$class;
+struct $value {
+  struct $value$class *$class;
 };
 
-extern struct $struct$class $struct$methods;
-$struct $struct$new();
+extern struct $value$class $value$methods;
+$value $value$new();
 
 // object //////////////////////////////////////////////////////
 
@@ -104,7 +104,7 @@ typedef struct $object  *$object;
 struct $object$class {
   char *$GCINFO;
   int $class_id;
-  $Super$class $superclass;                      // = $struct$methods
+  $Super$class $superclass;                      // = $value$methods
   void (*__init__)($object);
   void (*__serialize__)($object, $Serial$state);
   $object (*__deserialize__)($object, $Serial$state);

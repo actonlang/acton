@@ -124,7 +124,7 @@ tSequenceListWild   = tCon (TC qnSequence [tList tWild, tWild])
 tCollectionListWild = tCon (TC qnCollection [tList tWild, tWild])
 
 --  class $Actor (): pass
-clActor cls def sig = cls [] [([Nothing],cStruct)] te
+clActor cls def sig = cls [] [([Nothing],cValue)] te
   where te          = [ (primKW "next",       sig (monotype tActor) Property),
                         (primKW "msg",        sig (monotype (tMsg tWild)) Property),
                         (primKW "outgoing",   sig (monotype (tMsg tWild)) Property),
@@ -145,7 +145,7 @@ clR cls def         = cls [] [] []
 
 --  class $Cont[X,P] (function[X,P,(),$R]):
 --      pass
-clCont cls def      = cls [quant x, quant p] [([Nothing],TC qnFunction [tVar x, tVar p, kwdNil, tR]), ([Nothing,Nothing],cStruct)] []
+clCont cls def      = cls [quant x, quant p] [([Nothing],TC qnFunction [tVar x, tVar p, kwdNil, tR]), ([Nothing,Nothing],cValue)] []
   where x           = TV KFX (name "X")
         p           = TV PRow (name "P")
 
@@ -256,7 +256,7 @@ scOLDACT            = tSchema [] tOLDACT
 
 --  $ISINSTANCE     : pure (struct,_) -> bool
 scISINSTANCE        = tSchema [] tISINSTANCE
-  where tISINSTANCE = tFun fxPure (posRow tStruct $ posRow tWild posNil) kwdNil tNone
+  where tISINSTANCE = tFun fxPure (posRow tValue $ posRow tWild posNil) kwdNil tNone
 
 --  $CAST           : [A,B] => (A) -> B
 scCAST              = tSchema [quant a, quant b] tCAST

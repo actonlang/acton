@@ -16,6 +16,6 @@ int main(int argc, char *argv[]) {
   //printf("a.shape = %s\n",a->shape->$class->__str__(a->shape)->str);
   //printf("a.strides = %s\n",a->strides->$class->__str__(a->strides)->str);
   //printf("a=%s\n",x->$class->__str__(a)->str);
-  $struct s = ($struct)$ndarray_sum(a);
+  $value s = ($value)$ndarray_sum(a);
   printf("sum(a) = %s\n",s->$class->__str__(s)->str);
 }

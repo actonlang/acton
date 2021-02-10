@@ -11,7 +11,7 @@ struct $str$class {
   char *$GCINFO;
   int $class_id;
   $Super$class $superclass;
-  void (*__init__)($str, $struct);
+  void (*__init__)($str, $value);
   void (*__serialize__)($str,$Serial$state);
   $str (*__deserialize__)($str,$Serial$state);
   $bool (*__bool__)($str);
@@ -59,7 +59,7 @@ struct $str$class {
 };
 
 extern struct $str$class $str$methods;
-$str $str$new($struct);
+$str $str$new($value);
 
 extern struct $Ord$str$class $Ord$str$methods;
 $Ord$str $Ord$str$new();
@@ -125,7 +125,7 @@ struct $bytearray$class {
   char *$GCINFO;
   int $class_id;
   $Super$class $superclass;
-  void (*__init__)($bytearray, $struct);
+  void (*__init__)($bytearray, $value);
   void (*__serialize__)($bytearray,$Serial$state);
   $bytearray (*__deserialize__)($bytearray,$Serial$state);
   $bool (*__bool__)($bytearray);
@@ -168,7 +168,7 @@ struct $bytearray$class {
 };
 
 extern struct $bytearray$class $bytearray$methods;
-$bytearray $bytearray$new($struct);
+$bytearray $bytearray$new($value);
 
 extern struct $Ord$bytearray$class $Ord$bytearray$methods;
 $Ord$bytearray $Ord$bytearray$new();
@@ -232,4 +232,4 @@ $int $ord($str c);
 // used in defining __str__ method for collection types (list, dict, set)
 $str $str_join_par(char lpar,$list elems, char rpar);
 
-$str $default__str__($struct);
+$str $default__str__($value);

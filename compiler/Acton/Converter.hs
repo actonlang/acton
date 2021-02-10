@@ -32,7 +32,7 @@ convProtocol env n0 q ps0 eq wmap b     = mainClass : sibClasses
         p0                              = TC (NoQ n0) $ map tVar $ tybound q
         t0                              = tCon $ convProto p0
         w0                              = witAttr (NoQ n0)
-        main                            = if null ps then cStruct else head [ convProto p | ([],p,_) <- ps ]
+        main                            = if null ps then cValue else head [ convProto p | ([],p,_) <- ps ]
 
         immsibs                         = [ (witAttr w, tCon $ convProto p, inh) | ([w],p,inh) <- ps ]
 
@@ -129,7 +129,7 @@ witCtxt ps ws                           = ctxt $ tail $ reverse ws
         typemap                         = [ (reverse ws, tCon $ convProto p) | (ws,p,_) <- ps ]
 
 initCall ts args p
-  | tcname p == qnStruct                = []
+  | tcname p == qnValue                 = []
   | otherwise                           = [Expr NoLoc (eCall (tApp (eDot (eQVar (tcname p)) initKW) ts) (eVar selfKW' : args))]
 
 witArgs ws wmap                         = case lookup (head ws) wmap of

@@ -48,7 +48,7 @@ $str $float_str($float x) {
 struct $float$class $float$methods = {
     "$float",
     UNASSIGNED,
-    ($Super$class)&$struct$methods,
+    ($Super$class)&$value$methods,
     $float_init,
     $float_serialize,
     $float_deserialize,

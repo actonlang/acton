@@ -2,7 +2,7 @@
 
 // Serialization ///////////////////////////////////////////////////////////////////////
 
-void $bool_init($bool self, $struct s){
+void $bool_init($bool self, $value s){
   self->val = (s->$class->__bool__(s))->val;
 }
 
@@ -36,7 +36,7 @@ struct $bool$class $bool$methods = {
     $bool_str
 };
 
-$bool $bool$new($struct s) {
+$bool $bool$new($value s) {
     return $NEW($bool, s);
 }
 
@@ -58,6 +58,6 @@ $bool $True = &$t;
 $bool $False = &$f;
 
 
-$bool $default__bool__($struct self) {
+$bool $default__bool__($value self) {
   return $True;
 }

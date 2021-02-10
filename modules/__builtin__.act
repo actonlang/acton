@@ -1,14 +1,14 @@
 ## Built-in types ##################################################################################
 
-class struct:
+class value:
   __init__ : () -> None
   __bool__ : () -> bool
   __str__ : () -> str
 
-class object (struct):
+class object (value):
   pass
 
-class atom (struct):
+class atom (value):
   pass
 
 class int (atom):
@@ -17,13 +17,13 @@ class int (atom):
 class float (atom):
   __init__ : (atom) -> None
 
-class complex (struct):
+class complex (value):
   __init__ : (Number) -> None
 
 class bool (atom):
-  __init__ : (struct) -> None
+  __init__ : (value) -> None
 
-class BaseException (struct):
+class BaseException (value):
   __init__ : (str) -> None
 
 class SystemExit (BaseException):
@@ -62,14 +62,14 @@ class NotImplementedError (RuntimeError):
 class ValueError (Exception):
   pass
 
-class slice (struct):
+class slice (value):
   __init__     : (?int,?int,?int) -> None
   
 class list[A] (object):
   __init__     : (?Iterable[A]) -> None
   copy         : () -> list[A]
 
-class range (struct):
+class range (value):
   __init__     : (int,?int,?int) -> None
 
 class Iterator[A] (object):
@@ -79,7 +79,7 @@ protocol Iterable[A]:
   __iter__     : () -> Iterator[A]
   
 class str (atom):
-  __init__     : (struct) -> None
+  __init__     : (value) -> None
   capitalize   : () -> str
   center       : (int,?str) -> str
   count        : (str,?int,?int) -> int
@@ -116,7 +116,7 @@ class str (atom):
   zfill        : (str,int) -> str
 
 class bytearray (object):
-  __init__     : (struct) -> None
+  __init__     : (value) -> None
   capitalize   : () -> bytearray
   center       : (int,?bytearray) -> bytearray
   count        : (bytearray,?int,?int) -> int
@@ -152,10 +152,10 @@ class bytearray (object):
   upper        : () -> bytearray
   zfill        : (bytearray,int) -> bytearray
 
-class function[X,P,K,A] (struct):
+class function[X,P,K,A] (value):
     __call__   : X(*P,**K) -> A
 
-class Msg[A] (struct):
+class Msg[A] (value):
   pass
     
 ## General protocols ###############################################################################

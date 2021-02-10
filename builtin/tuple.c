@@ -17,7 +17,7 @@ $bool $tuple_bool($tuple self) {
 $str $tuple_str($tuple self) {
   $list s2 = $list_new(self->size);
   for (int i=0; i< self->size; i++) {
-    $struct elem = ($struct)self->components[i];
+    $value elem = ($value)self->components[i];
     $list_append(s2,elem->$class->__str__(elem));
   }
   return $str_join_par('(',s2,')');
@@ -60,7 +60,7 @@ $tuple $tuple_deserialize($tuple self, $Serial$state state) {
 struct $tuple$class $tuple$methods = {
     "tuple",
     UNASSIGNED,
-    ($Super$class)&$struct$methods,
+    ($Super$class)&$value$methods,
     $tuple_init,
     $tuple_serialize,
     $tuple_deserialize,

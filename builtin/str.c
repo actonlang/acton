@@ -10,7 +10,7 @@
 
 // General methods
 
-void $str_init($str, $struct);
+void $str_init($str, $value);
 $bool $str_bool($str);
 $str $str_str($str);
 void $str_serialize($str,$Serial$state);
@@ -766,11 +766,11 @@ $str $str_getslice($str s, $slice slc) {
 
 // General methods ////////////////////////////////////////////////////////////// 
 
-$str $str$new($struct s) {
+$str $str$new($value s) {
   return $NEW($str, s);
 }
 
-void $str_init($str self, $struct s) {
+void $str_init($str self, $value s) {
   $str res = s->$class->__str__(s);
   self->nchars = res->nchars;
   self->nbytes = res->nbytes;
@@ -1516,7 +1516,7 @@ static void expand_bytearray($bytearray b,int n) {
 
 
 // General methods, prototypes
-void $bytearray_init($bytearray, $struct);
+void $bytearray_init($bytearray, $value);
 $bool $bytearray_bool($bytearray);
 $str $bytearray_str($bytearray);
 void $bytearray_serialize($bytearray,$Serial$state);
@@ -1566,7 +1566,7 @@ $bytearray $bytearray_zfill($bytearray s, $int width);
 // Method table
 
 struct $bytearray$class $bytearray$methods =
-  {"$bytearray",UNASSIGNED,($Super$class)&$struct$methods, $bytearray_init, $bytearray_serialize, $bytearray_deserialize, $bytearray_bool,
+  {"$bytearray",UNASSIGNED,($Super$class)&$value$methods, $bytearray_init, $bytearray_serialize, $bytearray_deserialize, $bytearray_bool,
    $bytearray_str, $bytearray_capitalize, $bytearray_center, $bytearray_count,  $bytearray_decode, $bytearray_endswith,
    $bytearray_expandtabs, $bytearray_find, $bytearray_index,
    $bytearray_isalnum, $bytearray_isalpha, $bytearray_isascii, $bytearray_isdigit, $bytearray_islower, $bytearray_isspace,
@@ -2756,17 +2756,17 @@ int $bytearray_containsnot ($bytearray self, $int c) {
 
 // General methods, implementations
 
-void $bytearray_init($bytearray, $struct);
+void $bytearray_init($bytearray, $value);
 void $bytearray_serialize($bytearray,$Serial$state);
 $bytearray $bytearray_deserialize($bytearray,$Serial$state);
 $bool $bytearray_bool($bytearray);
 $str $bytearray_str($bytearray);
 
-$bytearray $bytearray$new($struct s) {
+$bytearray $bytearray$new($value s) {
   return $NEW($bytearray, s);
 }
 
-void $bytearray_init($bytearray self, $struct s) {
+void $bytearray_init($bytearray self, $value s) {
   if (!s) {
     self->nbytes = 0;
     self->str = NULL;
@@ -3037,7 +3037,7 @@ $str $str_join_par(char lpar, $list elems, char rpar) {
   return res;
 }
 
-$str $default__str__($struct self) {
+$str $default__str__($value self) {
   char *s;
   asprintf(&s,"<%s object at %p>",self->$class->$GCINFO,self);
   return to$str(s);
