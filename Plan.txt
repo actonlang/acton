@@ -30,20 +30,22 @@
     - Documentation/tutorial                                                1w      1w
                                                                             4w      6w
 
-    - Sort out conversion from star params/args to tuples                   2d      4d
-    - Sort out the pos/kwd parameter parsing ambiguity                      4h      8h
-    - Implement pos/kwd and opt relaxation in Solver                        3d      5d
-    - Implement Rest/RestI in rts                                           1d      2d
-!   - Fix cps translation of effect-polymorphic functions                   2d      4d
-!   - Translate the root expression as a proper function                    4h      1d
-    - Make global __builtin__ witnesses available to Solver                 2h      5h
-    - Translate list comprehensions                                         2d      3d
-    / Handle the with statements                                            2d      3d
-    - Implement raise and try in the rts                                    3d      4d
-!   - Allow error exceptions to be thrown in from within lub & glb
-!   - Make NVar polymorphic but not qualified by inference 
+    - Sort out conversion from star params/args to tuples
+    - Sort out the pos/kwd parameter parsing ambiguity
+    - Implement pos/kwd and opt relaxation in Solver
+    - Implement Rest/RestI in rts
+    - Eliminate Star-elems in Normalizer
+    - Fix cps translation of effect-polymorphic functions
+    - Translate the root expression as a proper function
+    - Make global __builtin__ witnesses available to Solver
+    - Translate list comprehensions
+    / Handle the with statements
+    - Implement raise and try in the rts
+    - Allow error exceptions to be thrown in from within lub & glb
+    - Make NVar polymorphic but not qualified by inference 
       (c.f. the monomorphism restriction)
-
+    - Save the import list with each ty-file, fall back to ty-file
+      if source not found when chasing imports
 
 
 Acton II
