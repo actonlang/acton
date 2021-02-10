@@ -139,10 +139,10 @@ commonTEnv env (te:tes)                 = unifEnv tes (restrict te vs)
                                              (cs2,te') <- unifEnv tes te
                                              return (cs1++cs2, (n,i'):te')
         unif n t0 (NVar t)
-          | length ts == l              = ([ Cast t t0 | t <- ts ], NVar t0)
+          | length ts == l              = ([ Cast t1 t0 | t1 <- t:ts ], NVar t0)
           where ts                      = [ t | te <- tes, Just (NVar t) <- [lookup n te] ]
         unif n t0 (NSVar t)
-          | length ts == l              = ([ Cast t t0 | t <- ts ], NSVar t0)
+          | length ts == l              = ([ Cast t1 t0 | t1 <- t:ts ], NSVar t0)
           where ts                      = [ t | te <- tes, Just (NSVar t) <- [lookup n te] ]
 {-
         unif n t0 (NDef sc d)
@@ -367,13 +367,13 @@ infTarget env (Index l e ix)            = do ti <- newTVar
                                              return (Impl w t (pIndexed ti t0) :
                                                      Cast t tObject :
                                                      cs1++cs2, t0, w, Index l e' ix')
-infTarget env (Slice l e sl)            = do (cs1,sl') <- inferSlice env sl
-                                             (cs2,t,e') <- infer env e
-                                             t0 <- newTVar
-                                             w <- newWitness
-                                             return (Impl w t (pSliceable t0) :
-                                                     Cast t tObject :
-                                                     cs1++cs2, t, w, Slice l e' sl')
+--infTarget env (Slice l e sl)            = do (cs1,sl') <- inferSlice env sl
+--                                             (cs2,t,e') <- infer env e
+--                                             t0 <- newTVar
+--                                             w <- newWitness
+--                                             return (Impl w t (pSliceable t0) :
+--                                                     Cast t tObject :
+--                                                     cs1++cs2, t, w, Slice l e' sl')
 infTarget env (Dot l e n)               = do (cs,t1,e') <- infer env e
                                              t2 <- newTVar
                                              return (Mut t1 n t2 :
