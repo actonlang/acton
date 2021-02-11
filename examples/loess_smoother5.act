@@ -12,8 +12,8 @@ from numpy import ndarray
 def loess(x, y, xin, win):
     xd  = numpy.abs(xin[:,numpy.newaxis] - x)
     q   = xd/numpy.partition(xd,win)[:,win][:,numpy.newaxis]
-    w   = numpy.clip(q, 0.0, 1.0)
-    ws  = (1.0 - w ** 3.0) ** 3.0
+    w   = numpy.clip(q, 0, 1)
+    ws  = (1 - w ** 3) ** 3
     a00 = numpy.sum(ws, 1)
     a01 = numpy.dot(ws, x)
     a11 = numpy.dot(ws, x*x)
@@ -36,7 +36,7 @@ def decompose(observed, time, period, lo_window_frac):
     return (trend, seasonal, residual, period_averages, phase) 
           
 actor analyzer(window_size, loess_win_size):
-    var time        = numpy.linspace(-float(window_size)/52.0,0,window_size)
+    var time        = numpy.linspace(-float(window_size)/52, 0, window_size)
     var observation = numpy.zeros(window_size)
 
     def add_sample(x, y):
@@ -48,19 +48,19 @@ actor analyzer(window_size, loess_win_size):
            print(time[i], observation[i], trend[i], seasonal[i], resid[i])
        print("EOD")
        t0 = numpy.scalar(time[0])
-       t1 = t0 + float(window_size)/52.0
+       t1 = t0 + float(window_size)/52
        print("plot [",t0,":",t1,"][-1:5] \'$data\' using 1:2 with lines title \"observations\", \\")
        print("\'$data\' using 1:3 with lines title \"trend\", \\")
        print("\'$data\' using 1:4 with lines title \"periodic\", \\")
        print("\'$data\' using 1:5 with lines title \"residual\"")
 
 actor sampler(sample_size, report):
-    var t0 = 0.0
+    var t0 = 0
 
     def _sample():
-        t1           = t0+float(sample_size)/52.0
-        time         = numpy.linspace(t0,t1,sample_size)
-        trend        = 2.0 + 0.1 * time
+        t1           = t0+float(sample_size)/52
+        time         = numpy.linspace(t0, t1, sample_size)
+        trend        = 2 + 0.1 * time
         periodic     = 0.5 * math.sin (6.2832 * time)
         noise        = numpy.unirandfloat(-0.5, 0.5, sample_size)
         observation  = trend + periodic + noise
