@@ -26,8 +26,8 @@ import Acton.TypeEnv
 simplify                                    :: (Polarity a, Pretty a) => Env -> TEnv -> a -> Constraints -> TypeM (Constraints,Equations)
 simplify env te tt cs                       = do cs <- msubst cs
                                                  te <- msubst te
-                                                 traceM ("  -simplify:\n" ++ render (nest 8 $ vcat $ map pretty cs))
-                                                 traceM ("  -for:\n" ++ render (nest 8 $ vcat $ map pretty te))
+                                                 --traceM ("  -simplify:\n" ++ render (nest 8 $ vcat $ map pretty cs))
+                                                 --traceM ("  -for:\n" ++ render (nest 8 $ vcat $ map pretty te))
                                                  simplify' env te tt [] cs `catchError` \err -> Control.Exception.throw err
 
 simplify'                                   :: (Polarity a, Pretty a) => Env -> TEnv -> a -> Equations -> Constraints -> TypeM (Constraints,Equations)
@@ -62,40 +62,40 @@ instance Pretty Rank where
 solve                                       :: (Polarity a, Pretty a) => Env -> (Constraint -> Bool) ->
                                                TEnv -> a -> Equations -> Constraints -> TypeM (Constraints,Equations)
 solve env select te tt eq []                = return ([], eq)
-solve env select te tt eq cs                = trace ("\n\n######### solve") $
+solve env select te tt eq cs                = --trace ("\n\n######### solve") $
                                               solve' env select [] te tt eq cs `catchError` \err -> Control.Exception.throw err
 
 solve' env select hist te tt eq cs
   | null solve_cs                           = return (keep_cs, eq)
   | otherwise                               = do st <- currentState
-                                                 traceM ("## keep:\n" ++ render (nest 8 $ vcat $ map pretty keep_cs))
-                                                 traceM ("## solve: " ++ render (nest 8 $ vcat $ map pretty solve_cs))
-                                                 traceM ("## posvs: " ++ prstrs posvs)
-                                                 traceM ("## negvs: " ++ prstrs negvs)
+                                                 --traceM ("## keep:\n" ++ render (nest 8 $ vcat $ map pretty keep_cs))
+                                                 --traceM ("## solve: " ++ render (nest 8 $ vcat $ map pretty solve_cs))
+                                                 --traceM ("## posvs: " ++ prstrs posvs)
+                                                 --traceM ("## negvs: " ++ prstrs negvs)
                                                  case head goals of
                                                     RTry v alts False ->
-                                                        trace ("### goal " ++ prstr v ++ ", candidates: " ++ prstrs alts) $
+                                                        --trace ("### goal " ++ prstr v ++ ", candidates: " ++ prstrs alts) $
                                                         tryAlts st v alts
                                                     RTry v alts True  ->
-                                                        trace ("### goal " ++ prstr v ++ ", candidates (rev): " ++ prstrs alts) $
+                                                        --trace ("### goal " ++ prstr v ++ ", candidates (rev): " ++ prstrs alts) $
                                                         tryAlts st v (alts)
                                                     RUni v alts       ->
-                                                        trace ("### goal " ++ prstr v ++ ", unifying with " ++ prstrs alts) $
+                                                        --trace ("### goal " ++ prstr v ++ ", unifying with " ++ prstrs alts) $
                                                         unifyM env (repeat $ tVar v) alts >> proceed hist cs
   where (solve_cs, keep_cs)                 = partition select cs
         goals                               = sortOn deco $ map condense $ group rnks   -- (rnks ++ rnks')
         rnks                                = map (rank env) solve_cs
         rvs                                 = map headv rnks
         rnks'                               = [ rnk | rnk <- map (rank env) keep_cs, headv rnk `elem` rvs ]
-        tryAlts st tv []                    = trace ("### Out of alternatives for " ++ prstr tv) $ noSolve cs
-        tryAlts st tv (t:ts)                = tryAlt tv t `catchError` const (traceM ("### ROLLBACK " ++ prstr tv) >> rollbackState st >> tryAlts st tv ts)
+        tryAlts st tv []                    = {-trace ("### Out of alternatives for " ++ prstr tv) $ -}noSolve cs
+        tryAlts st tv (t:ts)                = tryAlt tv t `catchError` const ({-traceM ("### ROLLBACK " ++ prstr tv) >> -}rollbackState st >> tryAlts st tv ts)
         tryAlt tv (TCon _ c)
           | isProto env (tcname c)          = do p <- instwildcon env c
                                                  w <- newWitness
-                                                 traceM ("  # trying " ++ prstr tv ++ " (" ++ prstr p ++ ")")
+                                                 --traceM ("  # trying " ++ prstr tv ++ " (" ++ prstr p ++ ")")
                                                  proceed hist (Impl w (tVar tv) p : cs)
         tryAlt tv t                         = do t <- instwild env (tvkind tv) t
-                                                 traceM ("  # trying " ++ prstr tv ++ " = " ++ prstr t)
+                                                 --traceM ("  # trying " ++ prstr tv ++ " = " ++ prstr t)
                                                  substitute tv t
                                                  proceed (t:hist) cs
         proceed hist cs                     = do cs <- msubst cs
@@ -117,10 +117,11 @@ solve' env select hist te tt eq cs
         deco (RTry v as r)                  = (0, length $ filter (==v) embvs, length $ filter (==v) univs, length as)
         deco (RUni v as)                    = (1, 0, 0, length as)
 
-        subreverse v ts                     = trace ("%%% rev rank " ++ prstr v) $
-                                              trace ("  % origin:  " ++ prstrs ts) $
-                                              trace ("  % reverse: " ++ prstrs (reverse ts)) $
-                                              trace ("  % subrev:  " ++ prstrs (subrev ts)) $ reverse ts
+        subreverse v ts                     = --trace ("%%% rev rank " ++ prstr v) $
+                                              --trace ("  % origin:  " ++ prstrs ts) $
+                                              --trace ("  % reverse: " ++ prstrs (reverse ts)) $
+                                              --trace ("  % subrev:  " ++ prstrs (subrev ts)) $ 
+                                              reverse ts
         subrev []                           = []
         subrev (t:ts)                       = subrev ts1 ++ t : subrev ts2
           where (ts1,ts2)                   = partition (\t' -> castable env t' t) ts
@@ -260,7 +261,7 @@ instance Subst Equation where
 reduce                                      :: Env -> Equations -> Constraints -> TypeM Equations
 reduce env eq []                            = return eq
 reduce env eq (c:cs)                        = do c' <- msubst c
-                                                 traceM ("   reduce " ++ prstr c')
+                                                 --traceM ("   reduce " ++ prstr c')
                                                  eq1 <- reduce' env eq c'
                                                  cs' <- msubst cs
                                                  reduce env eq1 cs'
@@ -362,7 +363,7 @@ solveMutAttr env (wf,sc,dec) (Mut t1 n t2)  = do when (dec /= Just Property) (no
 cast                                        :: Env -> Type -> Type -> TypeM ()
 cast env t1 t2                              = do t1' <- msubst t1
                                                  t2' <- msubst t2
-                                                 traceM ("   cast " ++ prstr t1 ++ " < " ++ prstr t2)
+                                                 --traceM ("   cast " ++ prstr t1 ++ " < " ++ prstr t2)
                                                  cast' env t1' t2'
 
 castM env ts1 ts2                           = mapM_ (uncurry $ cast env) (ts1 `zip` ts2)
@@ -783,7 +784,7 @@ instwildcon env c                       = case tconKind (tcname c) env of
 
 mkGLB                                   :: Env -> (TVar,[Type]) -> TypeM (TVar,Type)
 mkGLB env (v,ts)                        = do t <- instwild env KType $ foldr1 (glb env) ts
-                                             traceM ("   glb " ++ prstrs ts ++ " = " ++ prstr t)
+                                             --traceM ("   glb " ++ prstrs ts ++ " = " ++ prstr t)
                                              return (v, t)
 
 glb env (TWild _) t2                    = t2
@@ -833,9 +834,9 @@ isStr env (TCon _ c)                    = qualEq env (tcname c) qnStr
 -- LUB
 ----------------------------------------------------------------------------------------------------------------------
 
-mkLUB env (v,ts)                        = do traceM ("   lub " ++ prstrs ts ++ " ...")
+mkLUB env (v,ts)                        = do --traceM ("   lub " ++ prstrs ts ++ " ...")
                                              t <- instwild env KType $ foldr1 (lub env) ts
-                                             traceM ("   lub " ++ prstrs ts ++ " = " ++ prstr t)
+                                             --traceM ("   lub " ++ prstrs ts ++ " = " ++ prstr t)
                                              return (v, t)
 
 lub env (TWild _) t2                    = t2
@@ -908,42 +909,42 @@ noLUB t1 t2                             = tyerr t1 ("No common supertype: " ++ p
 improve                                 :: (Polarity a, Pretty a) => Env -> TEnv -> a -> Equations -> Constraints -> TypeM (Constraints,Equations)
 improve env te tt eq []                 = return ([], eq)
 improve env te tt eq cs
-  | Nothing <- info                     = do traceM ("  *Resubmit")
+  | Nothing <- info                     = do --traceM ("  *Resubmit")
                                              simplify' env te tt eq cs
-  | Left (v,vs) <- closure              = do traceM ("  *Unify cycle " ++ prstr v ++ " = " ++ prstrs vs)
+  | Left (v,vs) <- closure              = do --traceM ("  *Unify cycle " ++ prstr v ++ " = " ++ prstrs vs)
                                              sequence [ unify env (tVar v) (tVar v') | v' <- vs ]
                                              simplify' env te tt eq cs
-  | not $ null gsimple                  = do traceM ("  *G-simplify " ++ prstrs [ (v,tVar v') | (v,v') <- gsimple ])
-                                             traceM ("  *obsvars: " ++ prstrs obsvars)
-                                             traceM ("  *varvars: " ++ prstrs (varvars vi))
+  | not $ null gsimple                  = do --traceM ("  *G-simplify " ++ prstrs [ (v,tVar v') | (v,v') <- gsimple ])
+                                             --traceM ("  *obsvars: " ++ prstrs obsvars)
+                                             --traceM ("  *varvars: " ++ prstrs (varvars vi))
                                              sequence [ unify env (tVar v) (tVar v') | (v,v') <- gsimple ]
                                              simplify' env te tt eq cs
   | not $ null cyclic                   = tyerrs cyclic ("Cyclic subtyping:")
   | not $ null (multiUBnd++multiLBnd)   = do ub <- mapM (mkGLB env) multiUBnd
                                              lb <- mapM (mkLUB env) multiLBnd
-                                             traceM ("  *GLB " ++ prstrs ub)
-                                             traceM ("  *LUB " ++ prstrs lb)
+                                             --traceM ("  *GLB " ++ prstrs ub)
+                                             --traceM ("  *LUB " ++ prstrs lb)
                                              let cs' = [ Cast (tVar v) t | (v,t) <- ub ] ++ [ Cast t (tVar v) | (v,t) <- lb ]
                                              simplify' env te tt eq (cs' ++ map (replace ub lb) cs)
-  | not $ null posLBnd                  = do traceM ("  *S-simplify (dn) " ++ prstrs posLBnd)
+  | not $ null posLBnd                  = do --traceM ("  *S-simplify (dn) " ++ prstrs posLBnd)
                                              sequence [ unify env (tVar v) t | (v,t) <- posLBnd ]
                                              simplify' env te tt eq cs
-  | not $ null negUBnd                  = do traceM ("  *S-simplify (up) " ++ prstrs negUBnd)
+  | not $ null negUBnd                  = do --traceM ("  *S-simplify (up) " ++ prstrs negUBnd)
                                              sequence [ unify env (tVar v) t | (v,t) <- negUBnd ]
                                              simplify' env te tt eq cs
-  | not $ null closUBnd                 = do traceM ("  *Simplify upper closed bound " ++ prstrs closUBnd)
+  | not $ null closUBnd                 = do --traceM ("  *Simplify upper closed bound " ++ prstrs closUBnd)
                                              sequence [ unify env (tVar v) t | (v,t) <- closUBnd ]
                                              simplify' env te tt eq cs
-  | not $ null closLBnd                 = do traceM ("  *Simplify lower closed bound " ++ prstrs closLBnd)
+  | not $ null closLBnd                 = do --traceM ("  *Simplify lower closed bound " ++ prstrs closLBnd)
                                              sequence [ unify env (tVar v) t | (v,t) <- closLBnd ]
                                              simplify' env te tt eq cs
-  | not $ null redEq                    = do traceM ("  *(Context red) " ++ prstrs [ w | (w,_,_) <- redEq ])
+  | not $ null redEq                    = do --traceM ("  *(Context red) " ++ prstrs [ w | (w,_,_) <- redEq ])
                                              sequence [ unify env t1 t2 | (t1,t2) <- redUni ]
                                              simplify' env te tt (redEq++eq) (remove [ w | (w,_,_) <- redEq ] cs)
-  | not $ null dots                     = do traceM ("  *Implied mutation/selection solutions " ++ prstrs dots)
+  | not $ null dots                     = do --traceM ("  *Implied mutation/selection solutions " ++ prstrs dots)
                                              (eq',cs') <- solveDots env mutC selC selP cs
                                              simplify' env te tt (eq'++eq) cs'
-  | otherwise                           = do traceM ("  *improvement done")
+  | otherwise                           = do --traceM ("  *improvement done")
                                              return (cs, eq)
   where info                            = varinfo cs
         Just vi                         = info
@@ -1024,9 +1025,9 @@ ctxtReduce env vi multiPBnds            = (concat eqs, concat css)
   where (eqs,css)                       = unzip $ map ctxtRed multiPBnds
         ctxtRed (v,wps)                 = imp v [] [] [] wps
         imp v eq uni wps ((w,p):wps')
-          | (w',wf,p1,p'):_ <- hits     = trace ("  *" ++ prstr p ++ " covered by " ++ prstr p1) $
+          | (w',wf,p1,p'):_ <- hits     = --trace ("  *" ++ prstr p ++ " covered by " ++ prstr p1) $
                                           imp v ((w, impl2type (tVar v) p, wf (eVar w')) : eq) ((tcargs p `zip` tcargs p') ++ uni) wps wps'
-          | otherwise                   = trace ("   (Not covered: " ++ prstr p ++ " in context " ++ prstrs (map snd (wps++wps')) ++ ")") $
+          | otherwise                   = --trace ("   (Not covered: " ++ prstr p ++ " in context " ++ prstrs (map snd (wps++wps')) ++ ")") $
                                           imp v eq uni ((w,p):wps) wps'
           where hits                    = [ (w',wf,p0,p') | (w',p0) <- wps++wps', w'/=w, Just (wf,p') <- [findAncestor env p0 (tcname p)] ]
         imp v eq uni wps []               = (eq, uni)

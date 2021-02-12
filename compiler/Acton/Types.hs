@@ -108,7 +108,7 @@ instance Simp QName where
 ------------------------------
 
 infTop                                  :: Env -> Suite -> TypeM (TEnv,Suite)
-infTop env ss                           = do traceM ("\n## infEnv top")
+infTop env ss                           = do --traceM ("\n## infEnv top")
                                              pushFX fxPure tNone
                                              (cs,te,ss1) <- (if stub env then infEnv else infSuiteEnv) env ss
                                              ss1 <- msubst ss1
@@ -399,7 +399,7 @@ matchingDec n sc dec dec'
   | dec == dec'                         = True
   | otherwise                           = decorationMismatch n sc dec
 
-matchDefAssumption env cs def           = do traceM ("## matchDefAssumption " ++ prstr (dname def))
+matchDefAssumption env cs def           = do --traceM ("## matchDefAssumption " ++ prstr (dname def))
                                              (cs1, tvs) <- instQBinds env q1
                                              let eq0 = witSubst env q1 cs1
                                                  s = tybound q1 `zip` tvs           -- This cannot just be memoized in the global TypeM substitution,
@@ -423,13 +423,13 @@ instance InfEnv Decl where
     infEnv env d@(Def _ n q p k a _ _ fx)
       | nodup (p,k)                     = case findName n env of
                                              NSig sc dec | matchingDec n sc dec (deco d) -> do
-                                                 traceM ("\n## infEnv (sig) def " ++ prstr (n, NDef sc dec))
+                                                 --traceM ("\n## infEnv (sig) def " ++ prstr (n, NDef sc dec))
                                                  return ([], [(n, NDef sc dec)], d)
                                              NReserved -> do
                                                  prow <- newTVarOfKind PRow
                                                  krow <- newTVarOfKind KRow
                                                  t <- tFun fx prow krow <$> newTVar
-                                                 traceM ("\n## infEnv def " ++ prstr (n, NDef (monotype t) (deco d)))
+                                                 --traceM ("\n## infEnv def " ++ prstr (n, NDef (monotype t) (deco d)))
                                                  return ([], [(n, NDef (monotype t) (deco d))], d)
                                              _ ->
                                                  illegalRedef n
@@ -440,7 +440,7 @@ instance InfEnv Decl where
                                                  te <- infActorEnv env b
                                                  prow <- newTVarOfKind PRow
                                                  krow <- newTVarOfKind KRow
-                                                 traceM ("\n## infEnv actor " ++ prstr (n, NAct q prow krow te))
+                                                 --traceM ("\n## infEnv actor " ++ prstr (n, NAct q prow krow te))
                                                  return ([], [(n, NAct (unalias env q) prow krow te)], d)
                                              _ ->
                                                  illegalRedef n
@@ -449,7 +449,7 @@ instance InfEnv Decl where
       | not $ null ps                   = notYet (loc n) "Classes with direct extensions"
       | otherwise                       = case findName n env of
                                              NReserved -> do
-                                                 traceM ("\n## infEnv class " ++ prstr n)
+                                                 --traceM ("\n## infEnv class " ++ prstr n)
                                                  pushFX fxPure tNone
                                                  te0 <- infProperties env as' b
                                                  (cs,te,b') <- infEnv env1 b
@@ -469,7 +469,7 @@ instance InfEnv Decl where
             
     infEnv env (Protocol l n q us b)    = case findName n env of
                                              NReserved -> do
-                                                 traceM ("\n## infEnv protocol " ++ prstr n)
+                                                 --traceM ("\n## infEnv protocol " ++ prstr n)
                                                  pushFX fxPure tNone
                                                  (cs,te,b') <- infEnv env1 b
                                                  popFX
@@ -490,7 +490,7 @@ instance InfEnv Decl where
       | isProto env n                   = notYet (loc n) "Extension of a protocol"
       | length us == 0                  = err (loc n) "Extension lacks a protocol"
 --      | length us > 1                   = notYet (loc n) "Extensions with multiple protocols"
-      | otherwise                       = do traceM ("\n## infEnv extension " ++ prstr n)
+      | otherwise                       = do --traceM ("\n## infEnv extension " ++ prstr n)
                                              pushFX fxPure tNone
                                              (cs,te,b') <- infEnv env1 b
                                              popFX
@@ -546,13 +546,13 @@ stubSigs te                             = [ makeDef n sc dec | (n, NSig sc dec) 
 
 --------------------------------------------------------------------------------------------------------------------------
 
-solveAll env te tt cs                   = do traceM ("\n\n### solveAll " ++ prstrs cs)
+solveAll env te tt cs                   = do --traceM ("\n\n### solveAll " ++ prstrs cs)
                                              (cs,eq) <- simplify env te tt cs
                                              (_,cs,_,eq) <- refine env cs te eq
                                              snd <$> solve env (const True) te tt eq cs
 
 solveScoped env [] te tt cs             = simplify env te tt cs
-solveScoped env vs te tt cs             = do traceM ("\n\n### solveScoped " ++ prstrs vs)
+solveScoped env vs te tt cs             = do --traceM ("\n\n### solveScoped " ++ prstrs vs)
                                              (cs,eq) <- simplify env te tt cs
                                              solve env (any (`elem` vs) . tyfree) te tt eq cs
 
@@ -561,7 +561,7 @@ checkNoEscape env vs                    = do fvs <- tyfree <$> msubst env
                                              let escaped = vs `intersect` fvs
                                              when (not $ null escaped) $ do
                                                  env1 <- msubst env
-                                                 traceM ("####### env:\n" ++ prstr env1)
+                                                 --traceM ("####### env:\n" ++ prstr env1)
                                                  err2 escaped "Escaping type variable"
 
 
@@ -606,7 +606,7 @@ infActorEnv env ss                      = do dsigs <- mapM mkNDef (dvars ss \\ d
         mkNVar n                        = do t <- newTVar
                                              return (n, NVar t)
 
-matchActorAssumption env n0 p k te      = do traceM ("## matchActorAssumption " ++ prstr n0)
+matchActorAssumption env n0 p k te      = do --traceM ("## matchActorAssumption " ++ prstr n0)
                                              (cs,eq) <- simplify env te0 tNone [Cast (prowOf p) p0, Cast (krowOf k) k0]
                                              (css,eqs) <- unzip <$> mapM check1 te
                                              --traceM ("## matchActorAssumption returns " ++ prstrs (cs ++ concat css))
@@ -620,7 +620,7 @@ matchActorAssumption env n0 p k te      = do traceM ("## matchActorAssumption " 
                                              Just (NSig (TSchema _ _ t0) _) -> t0
                                              Just (NVar t0) -> t0
         check1 (n, NDef sc _)           = do (cs1,_,t) <- instantiate env sc
-                                             traceM ("## matchActorAssumption for method " ++ prstr n)
+                                             --traceM ("## matchActorAssumption for method " ++ prstr n)
                                              unify env t t0
                                              (cs2,eq) <- solveScoped (defineTVars q env) (tybound q) te0 tNone cs1
                                              checkNoEscape env (tybound q)
@@ -681,7 +681,7 @@ abstractDefs env q eq b                 = map absDef b
 
 instance Check Decl where
     checkEnv env (Def l n q p k a b dec fx)
-                                        = do traceM ("## checkEnv def " ++ prstr n ++ " (q = [" ++ prstrs q ++ "])")
+                                        = do --traceM ("## checkEnv def " ++ prstr n ++ " (q = [" ++ prstrs q ++ "])")
                                              t <- maybe newTVar return (unalias env a)
                                              pushFX fx t
                                              st <- newTVar
@@ -702,7 +702,7 @@ instance Check Decl where
       where env1                        = reserve (bound (p,k) ++ bound b \\ stateScope env) $ defineTVars q $ setInDef env
             tvs                         = tybound q
 
-    checkEnv env (Actor l n q p k b)    = do traceM ("## checkEnv actor " ++ prstr n)
+    checkEnv env (Actor l n q p k b)    = do --traceM ("## checkEnv actor " ++ prstr n)
                                              pushFX fxAction tNone
                                              wellformed env1 q
                                              (csp,te1,p') <- infEnv env1 p
@@ -721,7 +721,7 @@ instance Check Decl where
             defsigs                     = [ Signature NoLoc [n] sc dec | (n,NDef sc dec) <- te0 ]
             NAct _ _ _ te0              = findName n env
 
-    checkEnv' env (Class l n q us b)    = do traceM ("## checkEnv class " ++ prstr n)
+    checkEnv' env (Class l n q us b)    = do --traceM ("## checkEnv class " ++ prstr n)
                                              pushFX fxPure tNone
                                              wellformed env1 q
                                              wellformed env1 us
@@ -735,7 +735,7 @@ instance Check Decl where
             NClass _ as te              = findName n env
             s                           = [(tvSelf, tCon (TC (NoQ n) (map tVar $ tybound q)))]
 
-    checkEnv' env (Protocol l n q us b) = do traceM ("## checkEnv protocol " ++ prstr n)
+    checkEnv' env (Protocol l n q us b) = do --traceM ("## checkEnv protocol " ++ prstr n)
                                              pushFX fxPure tNone
                                              wellformed env1 q
                                              (csu,wmap) <- wellformedProtos env1 us
@@ -750,7 +750,7 @@ instance Check Decl where
             NProto _ ps te              = findName n env
 
     checkEnv' env (Extension l n q us b)
-                                        = do traceM ("## checkEnv extension " ++ prstr n)
+                                        = do --traceM ("## checkEnv extension " ++ prstr n)
                                              pushFX fxPure tNone
                                              wellformed env1 q
                                              (csu,wmap) <- wellformedProtos env1 us
@@ -795,11 +795,11 @@ instance Check Branch where
 
 refine                                  :: Env -> Constraints -> TEnv -> Equations -> TypeM ([TVar], Constraints, TEnv, Equations)
 refine env cs te eq
-  | not $ null solve_vs                 = do traceM ("  #solving cs : " ++ prstrs cs)
+  | not $ null solve_vs                 = do --traceM ("  #solving cs : " ++ prstrs cs)
                                              (cs',eq') <- solve (define te env) (not . canQual) te tNone eq cs
                                              refineAgain cs' eq'
-  | not $ null ambig_vs                 = do traceM ("  #defaulting vs : " ++ prstrs ambig_vs)
-                                             traceM ("              cs : " ++ prstrs cs)
+  | not $ null ambig_vs                 = do --traceM ("  #defaulting vs : " ++ prstrs ambig_vs)
+                                             --traceM ("              cs : " ++ prstrs cs)
                                              (cs',eq') <- solve env ambig te tNone eq cs
                                              refineAgain cs' eq'
   | otherwise                           = do eq <- msubst eq
@@ -834,19 +834,19 @@ qualify vs cs                           = let (q,wss) = unzip $ map qbind vs in 
 genEnv                                  :: Env -> Constraints -> TEnv -> [Decl] -> TypeM (Constraints,TEnv,[Decl])
 genEnv env cs te ds0
   | onTop env                           = do te <- msubst te
-                                             traceM ("## genEnv 1\n" ++ render (nest 6 $ pretty te))
+                                             --traceM ("## genEnv 1\n" ++ render (nest 6 $ pretty te))
                                              (cs0,eq0) <- simplify env te tNone cs
                                              te <- msubst te
                                              env <- msubst env
                                              (gen_vs, gen_cs, te, eq1) <- refine env cs0 te eq0
-                                             traceM ("## genEnv 2 [" ++ prstrs gen_vs ++ "]\n" ++ render (nest 6 $ pretty te))
+                                             --traceM ("## genEnv 2 [" ++ prstrs gen_vs ++ "]\n" ++ render (nest 6 $ pretty te))
                                              let (q,ws) = qualify gen_vs gen_cs
                                                  te1 = map (generalize q) te
                                                  ds1 = map (abstract q ds0 ws eq1) ds0
-                                             traceM ("## genEnv 3 [" ++ prstrs gen_vs ++ "]\n" ++ render (nest 6 $ pretty te1))
+                                             --traceM ("## genEnv 3 [" ++ prstrs gen_vs ++ "]\n" ++ render (nest 6 $ pretty te1))
                                              return ([], te1, ds1)
   | otherwise                           = do te <- msubst te
-                                             traceM ("## noGenEnv\n" ++ render (nest 6 $ pretty te))
+                                             --traceM ("## noGenEnv\n" ++ render (nest 6 $ pretty te))
                                              (cs0,eq0) <- simplify env te tNone cs
                                              te <- msubst te
                                              let ds1 = map (abstract [] ds0 [] eq0) ds0
@@ -942,7 +942,7 @@ instance Infer Expr where
                                                 return (cs, t, app t (tApp x tvs) $ witsOf cs)
                                             NClass q _ _ -> do
                                                 (cs0,ts) <- instQBinds env q
-                                                traceM ("## Instantiating " ++ prstr n)
+                                                --traceM ("## Instantiating " ++ prstr n)
                                                 when (not $ null $ abstractAttrs env n) (err1 n "Abstract class cannot be instantiated:")
                                                 case findAttr env (TC n ts) initKW of
                                                     Just (_,sc,_) -> do
@@ -1485,11 +1485,11 @@ instance InfEnvT Pattern where
                                              wellformed env t
                                              case findName n env of
                                                  NReserved -> do
-                                                     traceM ("## infEnvT " ++ prstr n ++ " : " ++ prstr t)
+                                                     --traceM ("## infEnvT " ++ prstr n ++ " : " ++ prstr t)
                                                      return ([], [(n, NVar t)], t, PVar l n (Just t))
                                                  NSig (TSchema _ [] TFun{}) _ -> notYet l "Assignment to variable with function signature"
                                                  NSig (TSchema _ [] t') _ -> do
-                                                     traceM ("## infEnvT (sig) " ++ prstr n ++ " : " ++ prstr t ++ " < " ++ prstr t')
+                                                     --traceM ("## infEnvT (sig) " ++ prstr n ++ " : " ++ prstr t ++ " < " ++ prstr t')
                                                      return ([Cast t t'], [(n, NVar t')], t, PVar l n (Just t))
                                                  NVar t' ->
                                                      return ([Cast t t'], [], t, PVar l n Nothing)
