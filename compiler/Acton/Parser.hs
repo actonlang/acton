@@ -27,10 +27,12 @@ import System.IO.Unsafe
 
 ifFailingSuggest :: Parser a -> String -> Parser a
 ifFailingSuggest p str = do
+     o <- getOffset
      r <- observing p
      case r of
         Left (TrivialError _ _ _) -> fancyFailure (S.singleton (ErrorCustom str))
-        Left err@(FancyError _ s) -> if hasCustom s then fancyFailure s else fancyFailure (S.singleton (ErrorCustom (str ++ info err)))
+       -- Left err@(FancyError _ s) -> parseError (FancyError o (if hasCustom s then s else (S.singleton (ErrorCustom (str ++ info err)))))
+        Left err@(FancyError _ s) -> fancyFailure (if hasCustom s then s else (S.singleton (ErrorCustom (str ++ info err))))
         Right r -> return r
    where info (TrivialError _ _ _) = ""
          info err@(FancyError _ s) = if S.null s1 then "" else "\n"++ parseErrorTextPretty (FancyError undefined s1 :: ParseError String String)
@@ -164,6 +166,8 @@ assertDef loc str       = ifCtx [DEF]                   [IF,SEQ,LOOP]       succ
 assertDefAct loc str    = ifCtx [DEF,ACTOR]             [IF,SEQ,LOOP]       success (Control.Exception.throw $ OnlyInFunctionOrActor loc (str ++ " statement only allowed inside a function or actor"))
 assertNotDecl loc str   = ifCtx [CLASS,PROTO,EXT]       [IF]                (Control.Exception.throw $ NotInClassProtoExt loc (str ++ "statement not allowed inside a class, protocol or extension")) success
 assertNotData loc str   = ifCtx [DATA]                  [IF,SEQ,LOOP]       (Control.Exception.throw $ NotInData loc (str ++ " statement not allowed inside a data tree")) success
+
+assertNotData2 loc str   = ifCtx [DATA]                  [IF,SEQ,LOOP]       (fail (str ++ " statement not allowed inside a data tree")) success
 
 --ifData              = ifCtx [DATA]                  [IF,SEQ,LOOP]
 
@@ -349,8 +353,8 @@ qmark     = symbol "?"
 vbar      = symbol "|"
 
 -- Parser for operator that is a prefix of another operator
--- Slightly hackish; depends on that chars in argument to oneOf are the only
--- chars that can follow directly after the prefix operator in a longer operator name.
+-- Slightly hackish; depends on the (presently true) fact that chars in argument to oneOf are
+-- the only chars that can follow directly after the prefix operator in a longer operator name.
 opPref :: String -> Parser String
 opPref op = (lexeme . try) (string op <* notFollowedBy (oneOf "<>=/*"))
 
@@ -361,7 +365,7 @@ identifier = (lexeme . try) (p >>= check)
   where
     p         = (:) <$> initChar <*> restChars
     initChar  = satisfy (\c -> isAlpha c || c=='_') <?> "letter or underscore"
-    restChars = takeWhileP Nothing (\c -> isAlphaNum c || c=='_') <?> "alphanumeric char or underscore"
+    restChars = takeWhileP (Just "alphanumeric char or underscore") (\c -> isAlphaNum c || c=='_') 
     check x = if S.isKeyword x
                 then fail $ "keyword " ++ show x ++ " cannot be an identifier"
                 else return x
@@ -380,7 +384,7 @@ tvarname = do off <- getOffset
               if isUpper (head x) && all isDigit (tail x)
                then return $ S.Name (Loc off (off+length x)) x
                else fail ("Name "++x++" cannot be a type variable")
-  
+
 module_name :: Parser S.ModName
 module_name = do
   n <- name
@@ -401,7 +405,7 @@ qual_name = do
 --- Helper functions for parenthesised forms -----------------------------------
 
 parens, brackets, braces :: Parser a -> Parser a
-parens p = withCtx PAR (L.symbol sc2 "(" *> p <* (char ')' <??>  "")) <* currSC
+parens p = withCtx PAR (L.symbol sc2 "(" *> p <* char ')') <* currSC
 
 brackets p = withCtx PAR (L.symbol sc2 "[" *> p <* char ']') <* currSC
 
@@ -566,14 +570,15 @@ simple_stmt = (small_stmt `sepEndBy1` semicolon) <* newline1
 --- Small statements ---------------------------------------------------------------------------------
 
 small_stmt :: Parser S.Stmt
-small_stmt = del_stmt <|> pass_stmt <|> flow_stmt <|> assert_stmt <|> var_stmt <|> after_stmt <|> try signature <|> expr_stmt
+small_stmt = del_stmt <|> pass_stmt <|> flow_stmt <|> assert_stmt <|> var_stmt <|> after_stmt <|> try signature <|> try expr_stmt <|> trace "Failing in small_stmt" (fail "expecting simple statement") -- <??> "expected simple statement"
 
 expr_stmt :: Parser S.Stmt
-expr_stmt = addLoc $
-            try ((S.AugAssign NoLoc <$> target <*> augassign <*> rhs) <* assertNotData NoLoc "augmented assignment")
-        <|> try (S.Assign NoLoc <$> trysome assign <*> rhs)                                 -- Single variable lhs matches here
-        <|> try (S.MutAssign NoLoc <$> target <* equals <*> rhs)                            -- and not here
-        <|>  (S.Expr NoLoc <$> rhs) <* assertNotData NoLoc "call"
+expr_stmt = addLoc $ do
+            o <- getOffset
+            try ((S.AugAssign NoLoc <$> target <*> augassign <*> rhs) <* assertNotData2 (Loc o o) "augmented assignment")
+              <|> try (S.Assign NoLoc <$> trysome assign <*> rhs)                                 -- Single variable lhs matches here
+              <|> try (S.MutAssign NoLoc <$> target <* equals <*> rhs)                            -- and not here
+              <|>  ((S.Expr NoLoc <$> rhs) <* assertNotData2 (Loc o o) "call")
    where augassign :: Parser S.Aug
          augassign = augops
           where augops = S.PlusA   <$ symbol "+="
@@ -695,9 +700,7 @@ signature = addLoc (do dec <- decorator True; (ns,t) <- tsig; return $ S.Signatu
 
 decl_group :: Parser [S.Stmt]
 decl_group = do p <- L.indentLevel
-                return ()
                 g <- some (atPos p decl)
-                return ()
                 return [ S.Decl (loc ds) ds | ds <- Names.splitDeclGroup g ]
 
 decl :: Parser S.Decl
@@ -837,9 +840,10 @@ data_stmt = addLoc $
 
 suite :: CTX -> Pos -> Parser S.Suite
 suite c p = do
-    withCtx c colon
-    withCtx c (try simple_stmt <|> indentSuite p)
-   <??> "expecting simple statement or newline and indented statement sequence"
+    o <- getOffset
+    withCtx c (trace ("colon at " ++ show o) colon)
+    withCtx c (indentSuite p <|> simple_stmt)
+ --  <??> "expecting simple statement or newline and indented statement sequence"
   where indentSuite p = do
           newline1
           p1 <- L.indentGuard sc1 GT p
