@@ -1205,8 +1205,7 @@ instance Infer Expr where
                                              (cs1,te1,k') <- infEnv (define te0 env1) k
                                              (cs2,t,e') <- infer (define te1 (define te0 env1)) e
                                              popFX
-                                             return (Cast fxPure fx : 
-                                                     cs0++cs1++cs2, tFun fx (prowOf p') (krowOf k') t, Lambda l (noDefaultsP p') (noDefaultsK k') e' fx)
+                                             return (cs0++cs1++cs2, tFun fx (prowOf p') (krowOf k') t, Lambda l (noDefaultsP p') (noDefaultsK k') e' fx)
                                                      -- TODO: replace defaulted params with Conds
       where env1                        = reserve (bound (p,k)) env
     infer env e@Yield{}                 = notYetExpr e
