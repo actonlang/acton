@@ -1525,7 +1525,7 @@ instance InfEnvT [Pattern] where
                                              return (cs1,te1,t1,[p'])
     infEnvT env (p:ps)                  = do (cs1,te1,t1,p') <- infEnvT env p
                                              (cs2,te2,t2,ps') <- infEnvT env ps
-                                             return (Cast t1 t2 :
-                                                     cs1++cs2, te1++te2, t1, p':ps')
+                                             unify env t1 t2
+                                             return (cs1++cs2, te1++te2, t1, p':ps')
 
 
