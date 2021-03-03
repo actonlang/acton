@@ -365,7 +365,7 @@ identifier :: Parser String
 identifier = (lexeme . try) $ do
     off <- getOffset
     c <-  satisfy (\c -> isAlpha c || c=='_') <?> "identifier"
-    cs <- takeWhileP Nothing (\c -> isAlphaNum c || c=='_')
+    cs <- hidden (takeWhileP Nothing (\c -> isAlphaNum c || c=='_'))
     let x = c:cs
     if S.isKeyword x
       then parseError (TrivialError off (Just (Tokens (N.fromList x))) (S.fromList [Label (N.fromList "identifier")]))
