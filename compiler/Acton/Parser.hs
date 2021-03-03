@@ -12,7 +12,8 @@ import Numeric
 import Text.Megaparsec
 import Text.Megaparsec.Char
 import Text.Megaparsec.Error
-import Control.Monad.Combinators.Expr
+--import Control.Monad.Combinators.Expr
+import Text_Megaparsec_Expr
 import qualified Text.Megaparsec.Char.Lexer as L
 import qualified Text.Megaparsec.Debug as D
 import qualified Data.List.NonEmpty
@@ -25,28 +26,13 @@ import System.IO.Unsafe
 
 -- Context errors -------------------------------------------------------------------------------
 
-ifFailingSuggest :: Parser a -> String -> Parser a
-ifFailingSuggest p str = do
-     o <- getOffset
-     r <- observing p
-     case r of
-        Left (TrivialError _ _ _) -> fancyFailure (S.singleton (ErrorCustom str))
-       -- Left err@(FancyError _ s) -> parseError (FancyError o (if hasCustom s then s else (S.singleton (ErrorCustom (str ++ info err)))))
-        Left err@(FancyError _ s) -> fancyFailure (if hasCustom s then s else (S.singleton (ErrorCustom (str ++ info err))))
-        Right r -> return r
-   where info (TrivialError _ _ _) = ""
-         info err@(FancyError _ s) = if S.null s1 then "" else "\n"++ parseErrorTextPretty (FancyError undefined s1 :: ParseError String String)
-            where s1 = S.filter failErr s
-         failErr (ErrorFail _)     = True
-         failErr _                 = False
-         customErr (ErrorCustom _) = True
-         customErr _               = False
-         hasCustom s               = not (S.null (S.filter customErr s))
-         
-infix 0 <??>
-
-p <??> str = ifFailingSuggest p str
- 
+tr :: Show a => String -> Parser a -> Parser a
+tr msg p = do
+  r <-  observing p
+  case r of
+     Left err -> trace ("failure "++msg ++": "++show err) (parseError err)
+     Right ok -> trace ("success "++msg++": "++show ok) (return ok)
+     
 makeReport (loc, msg) src = errReport (sp, msg) src
   where sp = extractSrcSpan loc src
 
@@ -92,6 +78,8 @@ extractSrcSpan (Loc l r) src = sp
 
 type ParserState = (Bool, [CTX])  -- (Is numpy imported?, Parser contexts)
 
+type Parser = St.StateT ParserState (Parsec String String)
+
 pushCtx ctx (b,ctxs) = (b, ctx:ctxs)
 popCtx (b,ctxs)      = (b,tail ctxs)
 getCtxs (_,ctxs)      = ctxs
@@ -103,8 +91,6 @@ initState            = (False,[])
 
 -- Parser contexts ---------------------------------------------------------
 
-type Parser = St.StateT ParserState (Parsec String String)
-
 data CTX = TOP | PAR | IF | SEQ | LOOP | DATA | DEF | CLASS | PROTO | EXT | ACTOR deriving (Show,Eq)
 
 withCtx ctx = between (St.modify (pushCtx ctx)) (St.modify popCtx)
@@ -114,6 +100,12 @@ ifCtx accept ignore yes no = do
     case filter (`notElem` ignore) cs of
         c:_ | c `elem` accept -> yes
         _                     -> no
+
+ifNotCtx avoid ignore yes no = do
+    cs <- St.gets getCtxs
+    case filter (`notElem` ignore) cs of
+        c:_ | c `elem` avoid -> no
+        _  -> yes
 
 -- onlyIn s            = fail ("statement only allowed inside " ++ s)
 -- notIn s             = fail ("statement not allowed inside " ++ s)
@@ -150,28 +142,36 @@ instance HasLoc ContextError where
 ctxMsg (OnlyTopLevel loc str)          = str ++ " declaration only allowed on the module top level"
 ctxMsg (OnlyInActor loc str)           = str ++ " statement only allowed inside an actor body"
 ctxMsg (OnlyInLoop loc str)            = str ++ " statement only allowed inside a loop"
-ctxMsg (OnlyInClassProtoExt loc str)   = str ++ " decoration only allowed inside a class or protocol"
+ctxMsg (OnlyInClassProtoExt loc str)   = str ++ " decoration only allowed inside a class, protocol or extension"
 ctxMsg (OnlyInClass loc str)           = str ++ " decoration only allowed inside a class"
 ctxMsg (OnlyInFunction loc str)        = str ++ " statement only allowed inside a function"
 ctxMsg (OnlyInFunctionOrActor loc str) = str ++ " statement only allowed inside a function or actor"
-ctxMsg (NotInClassProtoExt loc str)    = str ++ "statement not allowed inside a class, protocol or extension"
+ctxMsg (NotInClassProtoExt loc str)    = str ++ " statement not allowed inside a class, protocol or extension"
 ctxMsg (NotInData loc str)             = str ++ " statement not allowed inside a data tree"
 
 assertTop loc str       = ifCtx [TOP]                   []                  success (Control.Exception.throw $ OnlyTopLevel loc str)
-assertActBody loc str   = ifCtx [ACTOR]                 []                  success (Control.Exception.throw $ OnlyInActor loc (str ++ " statement only allowed inside an actor body"))
-assertLoop loc str      = ifCtx [LOOP]                  [IF,SEQ]            success (Control.Exception.throw $ OnlyInLoop loc (str ++ " statement only allowed inside a loop"))
-assertDecl loc str      = ifCtx [CLASS,PROTO,EXT]       []                  success (Control.Exception.throw $ OnlyInClassProtoExt loc (str ++ " decoration only allowed inside a class or protocol"))
-assertClass loc str     = ifCtx [CLASS]                 []                  success (Control.Exception.throw $ OnlyInClass loc (str ++ " decoration only allowed inside a class"))
-assertDef loc str       = ifCtx [DEF]                   [IF,SEQ,LOOP]       success (Control.Exception.throw $ OnlyInFunction loc (str ++ " statement only allowed inside a function"))
-assertDefAct loc str    = ifCtx [DEF,ACTOR]             [IF,SEQ,LOOP]       success (Control.Exception.throw $ OnlyInFunctionOrActor loc (str ++ " statement only allowed inside a function or actor"))
-assertNotDecl loc str   = ifCtx [CLASS,PROTO,EXT]       [IF]                (Control.Exception.throw $ NotInClassProtoExt loc (str ++ "statement not allowed inside a class, protocol or extension")) success
-assertNotData loc str   = ifCtx [DATA]                  [IF,SEQ,LOOP]       (Control.Exception.throw $ NotInData loc (str ++ " statement not allowed inside a data tree")) success
+assertActBody loc str   = ifCtx [ACTOR]                 []                  success (Control.Exception.throw $ OnlyInActor loc str)
+assertLoop loc str      = ifCtx [LOOP]                  [IF,SEQ]            success (Control.Exception.throw $ OnlyInLoop loc str)
+assertDecl loc str      = ifCtx [CLASS,PROTO,EXT]       []                  success (Control.Exception.throw $ OnlyInClassProtoExt loc str)
+assertClass loc str     = ifCtx [CLASS]                 []                  success (Control.Exception.throw $ OnlyInClass loc str)
+assertDef loc str       = ifCtx [DEF]                   [IF,SEQ,LOOP]       success (Control.Exception.throw $ OnlyInFunction loc str)
+assertDefAct loc str    = ifCtx [DEF,ACTOR]             [IF,SEQ,LOOP]       success (Control.Exception.throw $ OnlyInFunctionOrActor loc str)
+assertNotDecl loc str   = ifNotCtx [CLASS,PROTO,EXT]    [IF]                success (Control.Exception.throw $ NotInClassProtoExt loc str)
+assertNotData loc str   = ifNotCtx [DATA]               [IF,SEQ,LOOP]       success (Control.Exception.throw $ NotInData loc str)
 
-assertNotData2 loc str   = ifCtx [DATA]                  [IF,SEQ,LOOP]       (fail (str ++ " statement not allowed inside a data tree")) success
+ifPar                   = ifCtx [PAR]                   []
 
---ifData              = ifCtx [DATA]                  [IF,SEQ,LOOP]
+--- Indentation error -------------------------------------------------------
 
-ifPar               = ifCtx [PAR]                   []
+data IndentationError  = IndentationError SrcLoc deriving (Show, Eq)
+
+instance Control.Exception.Exception IndentationError
+
+instance HasLoc IndentationError where
+   loc (IndentationError l) = l
+
+indentationError     :: IndentationError -> (SrcLoc, String)
+indentationError err = (loc err, "Too much indentation")
 
 --- Whitespace consumers ----------------------------------------------------
 
@@ -199,9 +199,10 @@ currSC =  ifPar sc2 sc1
 -- fetching the start column of a construct
 withPos :: Parser a -> Parser (Pos,a)
 withPos p = do
-          SourcePos f r c <- getSourcePos
+          c <- L.indentLevel
+--          SourcePos f r c <- getSourcePos
           a <- p
-          getSourcePos
+--          getSourcePos
           return (c,a)
 
 -- forcing a construct to start in prescribed column
@@ -340,7 +341,7 @@ strings = addLoc $ do
 rword :: String -> Parser ()
 rword w = (lexeme . try) (string w *> notFollowedBy (alphaNumChar <|> char '_'))
 
-comma     = symbol ","
+comma     = symbol "," <?> "comma"
 colon     = symbol ":"
 semicolon = symbol ";"
 equals    = symbol "="
@@ -361,20 +362,20 @@ opPref op = (lexeme . try) (string op <* notFollowedBy (oneOf "<>=/*"))
 singleStar = (lexeme . try) (char '*' <* notFollowedBy (char '*'))
 
 identifier :: Parser String
-identifier = (lexeme . try) (p >>= check)
-  where
-    p         = (:) <$> initChar <*> restChars
-    initChar  = satisfy (\c -> isAlpha c || c=='_') <?> "letter or underscore"
-    restChars = takeWhileP (Just "alphanumeric char or underscore") (\c -> isAlphaNum c || c=='_') 
-    check x = if S.isKeyword x
-                then fail $ "keyword " ++ show x ++ " cannot be an identifier"
-                else return x
-
+identifier = (lexeme . try) $ do
+    off <- getOffset
+    c <-  satisfy (\c -> isAlpha c || c=='_') <?> "identifier"
+    cs <- takeWhileP Nothing (\c -> isAlphaNum c || c=='_')
+    let x = c:cs
+    if S.isKeyword x
+      then parseError (TrivialError off (Just (Tokens (N.fromList x))) (S.fromList [Label (N.fromList "identifier")]))
+      else return x
+      
 name, escname, tvarname :: Parser S.Name
 name = do off <- getOffset
           x <- identifier
           if isUpper (head x) && all isDigit (tail x)
-            then fail ("Type variable "++x++" cannot be a name")
+            then parseError  (TrivialError off (Just (Tokens (N.fromList x))) (S.fromList [Label (N.fromList "name (not type variable)")]))
             else return $ S.Name (Loc off (off+length x)) x
 
 escname = name <|> addLoc ((\str -> S.Name NoLoc  (init (tail str))) <$> stringP)
@@ -383,7 +384,7 @@ tvarname = do off <- getOffset
               x <- identifier
               if isUpper (head x) && all isDigit (tail x)
                then return $ S.Name (Loc off (off+length x)) x
-               else fail ("Name "++x++" cannot be a type variable")
+               else parseError (TrivialError off (Just (Tokens (N.fromList x))) (S.fromList [Label (N.fromList ("type variable (upper case letter optionally followed by digits)"))]))
 
 module_name :: Parser S.ModName
 module_name = do
@@ -405,7 +406,7 @@ qual_name = do
 --- Helper functions for parenthesised forms -----------------------------------
 
 parens, brackets, braces :: Parser a -> Parser a
-parens p = withCtx PAR (L.symbol sc2 "(" *> p <* char ')') <* currSC
+parens p = withCtx PAR (L.symbol sc2 "(" *> p <* (char ')' <?> "a closing parenthesis")) <* currSC
 
 brackets p = withCtx PAR (L.symbol sc2 "[" *> p <* char ']') <* currSC
 
@@ -414,7 +415,13 @@ braces p = withCtx PAR (L.symbol sc2 "{" *> p <* char '}') <* currSC
 --- Top-level parsers ------------------------------------------------------------
  
 file_input :: Parser ([S.Import], S.Suite)
-file_input = sc2 *> ((,) <$> imports <*> withCtx TOP top_suite <* eof)
+file_input = sc2 *>  do
+    is <- imports
+    s <-  withCtx TOP top_suite
+    eof
+    return (is,s)
+
+-- (((,) <$> imports <*> withCtx TOP top_suite) <* eof)
 
 imports :: Parser [S.Import]
 imports = many (L.nonIndented sc2 import_stmt <* eol <* sc2)
@@ -472,29 +479,7 @@ funItems posCons posStar posNil positem posstaritem kwdItems kwdNil =
                    Nothing -> return (Right i)
             <|>
                do optional comma; return (Left (posNil, kwdNil))
-{-
-              try (do i <- singleStar *> posstaritem; comma; k <- kwdItems; return (Left (posStar i, k)))
-           <|>
-              try (do i <- singleStar *> posstaritem; optional comma; return (Left (posStar i, kwdNil)))
-           <|>
-              try (do k <- kwdItems; return (Left (posNil, k)))
-           <|>
-              try (do i <- positem
-                      comma
-                      r <- funItems posCons posStar posNil positem posstaritem kwdItems kwdNil
-                      case r of
-                         Left (p,k) -> return (Left (posCons i p, k))
-                         Right p -> return (Left (posCons i (posCons p posNil),kwdNil)))
-           <|>
-              try (do i <- positem
-                      mb <- optional comma
-                      case mb of
-                         Just _ -> return (Left (posCons i posNil, kwdNil))
-                         Nothing -> return (Right i))
-           <|>
-               (do optional comma; return (Left (posNil, kwdNil)))
--}
-
+ 
 tuple_or_single posItems headItems singleHead tup =
       do pa <- posItems
          mbc <- optional comma
@@ -563,22 +548,22 @@ target = try $ do
 ------------------------------------------------------------------------------------------------
 
 stmt, simple_stmt :: Parser [S.Stmt]
-stmt =  try simple_stmt  <|> ((:[]) <$> compound_stmt) <|> decl_group
+stmt = ((:[]) <$> compound_stmt)  <|> try ((:[]) <$> (signature <* newline1)) <|> decl_group <|> simple_stmt <?> "statement"
 
-simple_stmt = (small_stmt `sepEndBy1` semicolon) <* newline1
+simple_stmt = (small_stmt `sepEndBy1` semicolon) <* newline1 <?> "simple statement"
 
 --- Small statements ---------------------------------------------------------------------------------
 
 small_stmt :: Parser S.Stmt
-small_stmt = del_stmt <|> pass_stmt <|> flow_stmt <|> assert_stmt <|> var_stmt <|> after_stmt <|> try signature <|> try expr_stmt <|> trace "Failing in small_stmt" (fail "expecting simple statement") -- <??> "expected simple statement"
+small_stmt = del_stmt <|> pass_stmt <|> flow_stmt <|> assert_stmt <|> var_stmt <|> after_stmt  <|> expr_stmt
 
 expr_stmt :: Parser S.Stmt
 expr_stmt = addLoc $ do
             o <- getOffset
-            try ((S.AugAssign NoLoc <$> target <*> augassign <*> rhs) <* assertNotData2 (Loc o o) "augmented assignment")
+            try ((S.AugAssign NoLoc <$> target <*> augassign <*> rhs) <* assertNotData (Loc o o) "augmented assignment")
               <|> try (S.Assign NoLoc <$> trysome assign <*> rhs)                                 -- Single variable lhs matches here
               <|> try (S.MutAssign NoLoc <$> target <* equals <*> rhs)                            -- and not here
-              <|>  ((S.Expr NoLoc <$> rhs) <* assertNotData2 (Loc o o) "call")
+              <|> (((S.Expr NoLoc <$> rhs) <* assertNotData (Loc o o) "call") <?> "expression statement")
    where augassign :: Parser S.Aug
          augassign = augops
           where augops = S.PlusA   <$ symbol "+="
@@ -650,7 +635,7 @@ raise_stmt = addLoc $ do
                rword "raise"
                S.Raise NoLoc <$> (optional $ S.Exception <$> expr <*> optional (rword "from" *> expr))
                                      
-import_stmt = import_name <|> import_from
+import_stmt = import_name <|> import_from <?> "import statement"
    where import_name = addLoc $ do
                 rword "import"
                 S.Import NoLoc <$> module_item `sepBy1` comma
@@ -767,7 +752,7 @@ classdefGen k pname ctx con = addLoc $ do
 -- Compound statements -------------------------------------------------------------------------
 
 compound_stmt :: Parser S.Stmt
-compound_stmt =  if_stmt <|> while_stmt <|> for_stmt <|> try_stmt <|> with_stmt <|> data_stmt
+compound_stmt =  if_stmt <|> while_stmt <|> for_stmt <|> try_stmt <|> with_stmt -- <|> data_stmt
 
 
 else_part p = atPos p (rword "else" *> suite SEQ p)
@@ -795,8 +780,7 @@ for_stmt = addLoc $ do
                  e <- exprlist
                  ss <- suite LOOP p
                  S.For NoLoc pat e ss . maybe [] id <$> optional (else_part p)
-
-
+      
 except :: Parser S.Except
 except = addLoc $ do
              rword "except"
@@ -841,16 +825,16 @@ data_stmt = addLoc $
 suite :: CTX -> Pos -> Parser S.Suite
 suite c p = do
     o <- getOffset
-    withCtx c (trace ("colon at " ++ show o) colon)
+    withCtx c colon
     withCtx c (indentSuite p <|> simple_stmt)
- --  <??> "expecting simple statement or newline and indented statement sequence"
   where indentSuite p = do
           newline1
           p1 <- L.indentGuard sc1 GT p
           concat <$> some (do
              p2 <- L.indentLevel
              case compare p1 p2 of
-                LT -> L.incorrectIndent LT p1 p2
+                LT -> do o <- getOffset
+                         Control.Exception.throw $ IndentationError (Loc o o) --L.incorrectIndent LT p1 p2
                 EQ -> stmt
                 GT -> L.incorrectIndent GT p2 p1)
 
@@ -868,7 +852,7 @@ expr =  lambdef
           case mbp of
             Nothing -> return e1
             Just (c,e2) -> return $ S.Cond (S.eloc e1) e1 c e2
-   where if_part = (,) <$> (rword "if" *> or_expr) <*> (rword "else" *> expr)
+   where if_part = (,) <$> (rword "if" *> or_expr) <*> (rword "else" *> expr) <?> "if clause"
 
 -- Non-empty list of comma-separated expressions.
 -- If more than one expr, build a tuple.
@@ -892,7 +876,7 @@ lambdef_nocond = try $ lambdefGen expr_nocond
 -- Logical expressions ------------------------------------------------------------------
 
 -- The intermediate levels between or_expr and comparison, i.e. expressions involving and, or and not,
--- are handled by makeExprParser from Text.Megaparsec.Expr
+-- are handled by makeExprParser from Text.Megaparsec.Expr 6.4.0,  here Text_Megaparsec_Expr
 
 -- Three auxiliary functions used in building tables for makeExprParser
 binary name op = InfixL $ do
@@ -905,7 +889,7 @@ unop name op = do
 
 prefix name op = Prefix (unop name op)
 
-or_expr = makeExprParser comparison btable
+or_expr = makeExprParser comparison btable 
 
 btable :: [[Operator Parser S.Expr]]
 btable = [ [ prefix (rwordLoc "not") S.Not]
@@ -930,7 +914,8 @@ comparison = addLoc (do
                 <|> S.In <$ symbol "in"
                 <|> S.NotIn <$ (symbol "not" *> symbol "in")
                 <|> S.IsNot <$ try (symbol "is" *> symbol "not")
-                <|> S.Is <$ (symbol "is") <?> "comparison operator"
+                <|> S.Is <$ (symbol "is")
+                <?> "operator"
 
 star_expr :: Parser S.Elem
 star_expr = S.Star <$> (star *> arithexpr)                                        
@@ -939,7 +924,7 @@ star_expr = S.Star <$> (star *> arithexpr)
 -- Again, everything between arithexpr and factor is handled by makeExprParser
 
 arithexpr :: Parser S.Expr
-arithexpr = makeExprParser factor table <??> "expecting arithmetic expression"
+arithexpr = makeExprParser factor table 
 
 table :: [[Operator Parser S.Expr]]
 table = [ [ binary (opPref "*") S.Mult, binary (opPref "/") S.Div, binary (opPref "@") S.MMult,
@@ -954,7 +939,6 @@ table = [ [ binary (opPref "*") S.Mult, binary (opPref "/") S.Div, binary (opPre
 factor :: Parser S.Expr
 factor = (((unop (opPref "+") S.UPlus <|> unop (opPref "-") S.UMinus <|> unop (opPref "~") S.BNot) <?> "unary operator") <*> factor)
         <|> power
-        <??> "expecting factor"
         
 power = addLoc $ do
            ae <- atom_expr
@@ -962,7 +946,8 @@ power = addLoc $ do
            return (maybe ae (S.BinOp NoLoc ae S.Pow) mbe)
   where expo = do opPref "**"
                   factor
-
+                <?> "operator"
+                
 isinstance = addLoc $ do
                 rword "isinstance"
                 (e,c) <- parens ((,) <$> expr <* comma <*> qual_name)
@@ -1043,17 +1028,7 @@ atom_expr = do
                         ss <- brackets bslicelist
                         numpyImp <- St.gets getNumpy
                         return (\a -> splitlist a numpyImp ss))
-                       
-                      -- try (do
-                      --   ixs <- brackets indexlist
-                      --   let ix | length ixs > 1 = S.eTuple ixs
-                      --          | otherwise      = head ixs
-                      --   return (\a -> S.Index NoLoc a ix))
-                      --   <|>
-                      -- (do
-                      --   ss <- brackets slicelist
-                      --   return (\a -> S.Slice NoLoc a ss))
-                     <|>
+                    <|>
                       (do
                          (ps,ks) <- parens funargs
                          return (\a -> S.Call NoLoc a ps ks))
@@ -1061,6 +1036,7 @@ atom_expr = do
                       (do
                          dot
                          try intdot <|> iddot <|> strdot))
+                     <?> "call arguments, slice/index expression"
                  
            where iddot  = do
                         mb <- optional (opPref "~")
@@ -1087,12 +1063,6 @@ atom_expr = do
                      | not numpyImp && all isNDExpr ss = S.Index NoLoc a (S.eTuple [e | S.NDExpr e <- ss])
                      | otherwise                       = S.NDSlice NoLoc a ss
                  isNDExpr (S.NDExpr _) =True; isNDExpr _ = False
-                 -- indexlist = (:) <$> expr <*> commaList expr
-                 -- slicelist = (:) <$> slice <*> commaList slice
-                 -- slice = addLoc (do 
-                 --        mbt <- optional expr
-                 --        S.Sliz NoLoc mbt <$> (colon *> optional expr) <*> (maybe Nothing id <$> optional (colon *> optional expr)
-                        
                      
  
 comp_iter, comp_for, comp_if :: Parser S.Comp
@@ -1121,7 +1091,7 @@ yield_expr = addLoc $ do
 
 parm :: Bool -> Parser (S.Name, Maybe S.Type, Maybe S.Expr)
 parm ann = do n <- name
-              mbt <- if ann then optional (colon *> (ttype `ifFailingSuggest` "expected type of parameter")) else return Nothing
+              mbt <- if ann then optional (colon *> ttype) else return Nothing
               mbe <- optional (equals *> expr)
               return (n, mbt, mbe)
 
@@ -1218,13 +1188,13 @@ optbounds = do bounds <- optional (parens (optional ((:) <$> tcon <*> commaList 
 
 tschema :: Parser S.TSchema
 tschema = addLoc $
-            try (do 
+            do 
                 bs <- brackets (do n <- qbind
                                    ns <- commaList qbind
                                    return (n:ns))
                 fatarrow
                 t <- ttype
-                return (S.tSchema bs t))
+                return (S.tSchema bs t)
             <|>
             (S.monotype <$> ttype)
 
@@ -1241,7 +1211,7 @@ ttype    =  addLoc (
                     arrow
                     t <- ttype
                     return (S.TFun NoLoc (maybe S.fxPure id mbfx) p k t))
-        <|> try (do r <- parens (funItems S.posRow S.posVar S.posNil ttype (optional tvar) kwdrow S.kwdNil)
+        <|> try (do r <- parens (funItems S.posRow S.posVar S.posNil ttype (optional  tvar) kwdrow S.kwdNil)
                     case r of
                       Left (p,k) -> return (S.TTuple NoLoc p k)
                       Right t -> return t)
@@ -1249,4 +1219,4 @@ ttype    =  addLoc (
         <|> try (brackets (Builtin.tSequence <$> ttype))
         <|> try (S.TVar NoLoc <$> tvar)
         <|> rword "_" *> return (S.TWild NoLoc)
-        <|> S.TCon NoLoc <$> tcon) `ifFailingSuggest` "expected type"
+        <|> S.TCon NoLoc <$> tcon)

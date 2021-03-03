@@ -86,6 +86,7 @@ main            = do args <- execParser (info (getArgs <**> helper) descr)
                                        tree <- Acton.Parser.parseModule mn fName src 
                                                         `catch` handle "Syntax error" Acton.Parser.parserError "" paths mn
                                                         `catch` handle "Context error" Acton.Parser.contextError src paths mn
+                                                        `catch` handle "Indentation error" Acton.Parser.indentationError src paths mn
                                        iff (parse args) $ dump "parse" (Pretty.print tree)
                                        let task = ActonTask mn src tree
                                        chaseImportsAndCompile args paths task

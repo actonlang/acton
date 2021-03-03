@@ -1,0 +1,5 @@
+def f(x):
+   actor a():
+      pass
+
+   return 2+x
