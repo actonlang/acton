@@ -273,9 +273,9 @@ instance Lift Expr where
                                              return $ Call l e' p' KwdNil
 
     ll env e0@(Lambda l p KwdNIL e fx)  = do e' <- ll env1 e
+                                             let vts = restrict (locals env) (free e' \\ bound p)
                                              closureConvert env (Lambda l (conv p) KwdNIL e' fx) t vts (map (eVar . fst) vts)
       where env1                        = extLocals p $ define (envOf p) env
-            vts                         = restrict (locals env) (free e \\ bound p)
             t                           = typeOf env1 e
 
     ll env (Var l n)                    = pure $ Var l (primSubst n)
