@@ -1,0 +1,4 @@
+def f(x):
+    y = 2
+     z = x+y
+    return z

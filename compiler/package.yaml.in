@@ -32,7 +32,7 @@ dependencies:
 - parser-combinators
 - scientific
 - deepseq
-- megaparsec >= 7
+- megaparsec >= 9
 - hashable
 - process
 

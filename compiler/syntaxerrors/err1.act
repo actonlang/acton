@@ -1,0 +1,4 @@
+def f(x): if x>pass:
+    return 1
+  else
+    return 2
