@@ -13,7 +13,7 @@ def loess(x, y, xin, win):
     xd  = numpy.abs(xin[:,numpy.newaxis] - x)
     q   = xd/numpy.partition(xd,win)[:,win][:,numpy.newaxis]
     w   = numpy.clip(q, 0, 1)
-    ws  = (1 - w ** 3) ** 3
+    ws  = (1.0 - w ** 3.0) ** 3.0
     a00 = numpy.sum(ws, 1)
     a01 = numpy.dot(ws, x)
     a11 = numpy.dot(ws, x*x)
@@ -60,7 +60,7 @@ actor sampler(sample_size, report):
     def _sample():
         t1           = t0+float(sample_size)/52
         time         = numpy.linspace(t0, t1, sample_size)
-        trend        = 2 + 0.1 * time
+        trend        = 2.0 + 0.1 * time
         periodic     = 0.5 * math.sin (6.2832 * time)
         noise        = numpy.unirandfloat(-0.5, 0.5, sample_size)
         observation  = trend + periodic + noise
