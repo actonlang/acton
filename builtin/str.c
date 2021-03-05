@@ -664,6 +664,10 @@ $int $str_len($str s) {
 // $Container ///////////////////////////////////////////////////////////////////////////
 
  
+$Container$str $Container$str$new($Eq wit) {
+  return $NEW($Container$str, wit);
+}
+
 int $str_contains($str s, $str sub) {
   return bmh(s->str,sub->str,s->nbytes,sub->nbytes) > 0;
 }
