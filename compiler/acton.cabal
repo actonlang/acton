@@ -1,10 +1,10 @@
 cabal-version: 1.12
 
--- This file has been generated from package.yaml by hpack version 0.31.2.
+-- This file has been generated from package.yaml by hpack version 0.33.0.
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: e81cb3999ea162237d2895b36ceb13dda9b265dd6ebcba9054c3b97765bf4099
+-- hash: 785dd967caf082cfa6a335391470e87bcb52078316617c68f462d4862662791d
 
 name:           acton
 version:        0.3.0
@@ -43,6 +43,7 @@ executable actonc
       InterfaceFiles
       Pretty
       SrcLocation
+      Text_Megaparsec_Expr
       Utils
       Paths_acton
   hs-source-dirs:
@@ -60,7 +61,7 @@ executable actonc
     , directory >=1.3.1
     , filepath
     , hashable
-    , megaparsec >=7
+    , megaparsec >=9
     , mtl
     , optparse-applicative
     , parser-combinators
