@@ -120,7 +120,7 @@ class bytearray (object):
   capitalize   : () -> bytearray
   center       : (int,?bytearray) -> bytearray
   count        : (bytearray,?int,?int) -> int
-  decode       : () -> bytearray
+  decode       : () -> str
   endswith     : (bytearray,?int,?int) -> bool
   expandtabs   : (?int) -> bytearray
   find         : (bytearray,?int,?int) -> int

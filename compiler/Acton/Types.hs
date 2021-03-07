@@ -476,8 +476,10 @@ instance InfEnv Decl where
                                                  (cs1,eq1) <- solveScoped env1 (tybound q) te tNone cs
                                                  checkNoEscape env (tybound q)
                                                  (nterms,_,sigs) <- checkAttributes [] te' te
+                                                 let noself = [ n | (n, NSig sc Static) <- te, tvSelf `notElem` tyfree sc ]
                                                  when (not $ null nterms) $ err2 (dom nterms) "Method/attribute lacks signature:"
                                                  when (initKW `elem` sigs) $ err2 (filter (==initKW) sigs) "A protocol cannot define __init__"
+                                                 when (not $ null noself) $ err2 noself "A static protocol signature must mention Self"
                                                  return (cs1, [(n, NProto q' ps te)], Protocol l n q us (bindWits eq1 ++ b'))
                                              _ -> illegalRedef n
       where env1                        = define (toSigs te') $ reserve (bound b) $ defineSelfOpaque $ defineTVars (stripQual q) env
@@ -1203,8 +1205,7 @@ instance Infer Expr where
                                              (cs1,te1,k') <- infEnv (define te0 env1) k
                                              (cs2,t,e') <- infer (define te1 (define te0 env1)) e
                                              popFX
-                                             return (Cast fxPure fx : 
-                                                     cs0++cs1++cs2, tFun fx (prowOf p') (krowOf k') t, Lambda l (noDefaultsP p') (noDefaultsK k') e' fx)
+                                             return (cs0++cs1++cs2, tFun fx (prowOf p') (krowOf k') t, Lambda l (noDefaultsP p') (noDefaultsK k') e' fx)
                                                      -- TODO: replace defaulted params with Conds
       where env1                        = reserve (bound (p,k)) env
     infer env e@Yield{}                 = notYetExpr e
@@ -1524,7 +1525,7 @@ instance InfEnvT [Pattern] where
                                              return (cs1,te1,t1,[p'])
     infEnvT env (p:ps)                  = do (cs1,te1,t1,p') <- infEnvT env p
                                              (cs2,te2,t2,ps') <- infEnvT env ps
-                                             return (Cast t1 t2 :
-                                                     cs1++cs2, te1++te2, t1, p':ps')
+                                             unify env t1 t2
+                                             return (cs1++cs2, te1++te2, t1, p':ps')
 
 
