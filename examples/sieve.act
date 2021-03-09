@@ -1,15 +1,16 @@
 import math
 
 def sieve(n):
+#    isPrime = n * [True]
     isPrime = replicate(n, True)
     isPrime[0] = False; isPrime[1] = False
-    for i in range(2,math.sqrt(float(n)).__ceil__(),1):
+    for i in range(2,int(math.sqrt(float(n)))+1,1):
         if isPrime[i]:
             for k in range(i*i,n,i): isPrime[k] = False
 
     return isPrime
 
-
+count : (list[bool]) -> int
 def count(bs):
     res = 0
     for b in bs:
@@ -28,6 +29,7 @@ def primesTo(n):
 actor main(env):
    n = int(env.argv[1])
    print(count(sieve(n)))
-#   print(len(primesTo(n)))
    env.exit(0)
-   
+
+# For Python, change first line of sieve, remove type signature for count and actor main; uncomment next line
+#print(count(sieve(10000000)))
