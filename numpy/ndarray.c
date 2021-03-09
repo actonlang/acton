@@ -725,7 +725,13 @@ union $Bytes8 $sum1dim(numpy$$Primitive wit, union $Bytes8 *a, long size, long s
 
 numpy$$ndarray numpy$$sum(numpy$$Primitive wit, numpy$$ndarray a, $int axis) {
   numpy$$ndarray res;
-  if(!axis) {
+  long laxis;
+  if(axis) {
+     laxis = axis->val < 0 ? axis->val + a->ndim : axis->val;
+     if (laxis < 0 || laxis >= a->ndim)
+       RAISE(($BaseException)$NEW($ValueError,to$str("illegal axis in numpy.sum")));
+  }
+  if(!axis || a->ndim == 1) {
     union $Bytes8 resd = (union $Bytes8) 0L;
     if ($is_contiguous(a)) {
       for (int i=0; i<a->size->val; i++)
@@ -738,14 +744,13 @@ numpy$$ndarray numpy$$sum(numpy$$Primitive wit, numpy$$ndarray a, $int axis) {
     }
     res = $newarray(a->elem_type,0,to$int(1),$NEW($list,NULL,NULL),$NEW($list,NULL,NULL),true);
     res->data[0] = resd;
-    //    return res;
-  } else {
-    long len = $LONGELEM(a->shape,axis->val);
-    long stridea = $LONGELEM(a->strides,axis->val);
+   } else {
+    long len = $LONGELEM(a->shape,laxis);
+    long stridea = $LONGELEM(a->strides,laxis);
     $list newshape = $list_copy(a->shape);
-    $list_delitem(newshape,axis->val);
+    $list_delitem(newshape,laxis);
     $list newstrides = $list_copy(a->strides);
-    $list_delitem(newstrides,axis->val);
+    $list_delitem(newstrides,laxis);
     numpy$$ndarray a1 = $newarray(a->elem_type,a->ndim-1,$prod(newshape),newshape,newstrides,false);
     a1->offset = a->offset;
     res = $newarray(a->elem_type,a->ndim-1,$prod(newshape),newshape,$mk_strides(newshape),true);
