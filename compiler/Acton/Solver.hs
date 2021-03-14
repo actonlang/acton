@@ -61,9 +61,21 @@ instance Pretty Rank where
 
 solve                                       :: (Polarity a, Pretty a) => Env -> (Constraint -> Bool) ->
                                                TEnv -> a -> Equations -> Constraints -> TypeM (Constraints,Equations)
-solve env select te tt eq []                = return ([], eq)
-solve env select te tt eq cs                = --trace ("\n\n######### solve") $
-                                              solve' env select [] te tt eq cs `catchError` \err -> Control.Exception.throw err
+solve env select te tt eq cs                = do (cs',eq') <- solveGroups env select te tt (group cs)
+                                                 eq <- msubst eq
+                                                 return (cs', eq'++eq)
+  where group []                            = []
+        group (c:cs)                        = close (tyfree c) [c] cs
+        close tvs cs0 cs
+          | null cs1                        = cs0 : group cs2
+          | otherwise                       = close (tvs++tyfree cs1) (cs0++cs1) cs2
+          where (cs1,cs2)                   = partition (not . null . intersect tvs . tyfree) cs
+
+solveGroups env select te tt []             = return ([], [])
+solveGroups env select te tt (cs:css)       = do --trace ("\n\n######### solve") $
+                                                 (cs1,eq1) <- solve' env select [] te tt [] cs `catchError` \err -> Control.Exception.throw err
+                                                 (cs2,eq2) <- solveGroups env select te tt css
+                                                 return (cs1++cs2, eq1++eq2)
 
 solve' env select hist te tt eq cs
   | null solve_cs                           = return (keep_cs, eq)
