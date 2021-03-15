@@ -251,9 +251,9 @@ instance InfEnv Stmt where
             
             protocol PlusA              = pPlus
             protocol MinusA             = pMinus
-            protocol MultA              = pNumber
+            protocol MultA              = pTimes
             protocol PowA               = pNumber
-            protocol DivA               = pNumber
+            protocol DivA               = pDiv
             protocol ModA               = pIntegral
             protocol EuDivA             = pIntegral
             protocol ShiftLA            = pIntegral
@@ -1066,9 +1066,9 @@ instance Infer Expr where
                                                      cs1++cs2, t, eCall (eDot (eVar w) (method op)) [e1',e2'])
       where protocol Plus               = pPlus
             protocol Minus              = pMinus
-            protocol Mult               = pNumber
+            protocol Mult               = pTimes
             protocol Pow                = pNumber
-            protocol Div                = pNumber
+            protocol Div                = pDiv
             protocol Mod                = pIntegral
             protocol EuDiv              = pIntegral
             protocol ShiftL             = pIntegral
