@@ -364,10 +364,12 @@ extension int (Ord):pass
 extension int (Hashable):pass
 
 extension float (RealFloat):pass
+extension float (Div):pass
 extension float (Ord):pass
 extension float (Hashable):pass
 
 extension complex (Number):pass
+extension complex (Div):pass
 extension complex (Eq):pass
 extension complex (Hashable):pass
 
