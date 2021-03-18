@@ -213,7 +213,7 @@ instance Lift Decl where
             n'                          = liftedName env n
             vts                         = extraArgs env n
     ll env (Class l n q cs b)           = do b' <- llSuite (setCtxt InClass env1) b
-                                             return $ Class l n q cs b'
+                                             return $ Class l n q (conv cs) b'
       where env1                        = defineSelf (NoQ n) q $ defineTVars q env
     ll env d                            = error ("ll unexpected: " ++ prstr d)
 
