@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <link rel="stylesheet" type="text/css" href="tutorialstyle.css">
+  <title>Example 0: Hello world</title>
+</head>
+
+<body>
+
+<h3>Example 0: Hello, world</h3>
+<p>
+We follow tradition and introduce Acton programming with the following
+minimal example:
+
+<pre>
+actor main(env):
+    print("Hello, world!")
+</pre>
+<p>
+We already mentioned that an executing Acton program consists of a
+collection of interacting actors. Here we have just a single actor,
+which has been given the name <tt>main</tt>. By convention, the
+<em>root actor</em> of a system takes a parameter <tt>env</tt> which
+represents the execution environment, i.e. <tt>env</tt> has fields and
+methods for accessing command line arguments, reading from and writing
+to keyboard/screen and files, working with sockets etc. When the
+program is executed, the runtime system creates the root actor,
+hands it an <tt>env</tt> object and runs its initialization code, which here is
+just a single command, to print a message on screen.
+</p>
+<p>
+The careful reader may ask why <tt>print</tt> is not a method of
+<tt>env</tt>. The answer is that we see <tt>print</tt> as a useful tool
+for tracing program execution, and this should be
+possible without having to thread an <tt>env</tt> parameter to all subunits.
+</p>
+<p>
+To compile the program, assuming that it is saved in
+<tt>world.act</tt>, the command is
+</p>
+
+<pre>
+actonc world.act --root main
+</pre>
+
+<p>
+This creates an executable file <tt>world</tt> in the same directory,
+which can be run to see the familiar message.
+</p>
+<p>
+Finally, let's modify the program to greet not the world, but a name
+given on the command line:
+</p>
+<pre>
+actor main(env):
+    print("Hello, " + env.argv[1] + "!")
+</pre>
+
+<p>
+The field <tt>env.argv</tt> is the list of command line arguments
+(with element 0 the name of the shell command, and element 1 the first proper
+argument).
+</p>
+</body> </html>

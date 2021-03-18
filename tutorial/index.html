@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <link rel="stylesheet" type="text/css" href="tutorialstyle.css">
+  <title>Acton tutorial</title>
+</head>
+
+<body>
+<h1>Acton tutorial</h1>
+
+<h2>Introduction</h2>
+<p>
+Acton is a general purpose programming language, designed to be useful
+for a wide range of applications, from desktop applications to
+embedded and distributed systems. In a first approximation Acton can be
+described as a seamless addition of a powerful new construct to an
+existing language: Acton adds <em>actors</em> to <em>Python</em>.
+</p>
+<p>
+The aim of this document is to serve as a tutorial on Acton for a reader
+familiar with Python. The presentation is mainly through examples,
+chosen to illustrate both similarities and differences between the two
+languages. As befits a tutorial, the examples are short and simple,
+but we hope that they are chosen in a way that helps the reader to see how the
+concepts illustrated scale to more complex situations. 
+We also try to explain the considerations that has led the
+Acton designers to deviate from Python, where this is the case. However,
+the document is not a comprehensive description of the Acton language.
+In fact, both the language definition and its implementation is
+currently under active development, so some minor aspects of what we 
+present here may be subject to change.
+</p>
+<p>
+We recommend the reader to <a href="">download and install Acton</a>
+and to play with the examples.
+
+<h2>Background: Actors and Python</h2>
+<p>
+Before we turn to examples, we briefly discuss actors and Python and the
+reasons for basing Acton on this foundation.
+</p>
+<ul>
+ <li><p>
+  The actor model for (concurrent) computation goes back to work by Carl
+  Hewitt around 1970 and has been influential ever since, even though
+  its direct impact on mainstream computation has been limited. However,
+  recent developments, where multi-core processors have become ubiquitous
+  and cloud computing is rapidly growing in importance, have put focus on
+  the shortcomings of mainstream tools and methodologies for concurrent
+  programming, based on shared memory and threads, requiring
+  synchronization and coordination using locks and similar tools. Many
+  observers have come to the conclusion that this methodology is
+  inadequate in the current and future computing landscape. 
+  </p>
+ <p>
+  Actors offer a promising approach to addressing this bottleneck by
+  providing a simpler programming model. The notion of actors provides
+  a conceptual framework, and concrete, actor-based languages and libraries
+  take different forms. For our purposes, we think of
+  an actor as an entity, which interacts with other actors only through
+  message-passing. An actor may encapsulate some private state, which
+  can be accessed and modified only through messages in its <em>interface</em>, a
+  description of the message forms that the actor can handle. Each actor
+  has a <em>mailbox</em>, i.e. a queue where incoming messages are stored,
+  waiting to be processed. In response to receipt of a message an actor
+  can perform some computation, send messages to other actors, create
+  new actors and update its state. Sending a message is an
+  asynchronous operation, i.e. the sender asks the runtime
+  system to supply the necessary service (delivering the message in
+  the receiver's mailbox) and can immediately proceed with its
+  processing of the current message. 
+  </p>
+  <p>
+  The runtime system guarantees that
+  an actor only serves one message at a time, but of course several
+  actors may be active in parallel. Therefore, actors can be used for
+  synchronization and coordination of concurrent activities. It turns
+  out that this simple and intuitive construct gives great power for
+  concurrent and distributed programming, and suggests a programming
+  style that naturally avoids common pitfalls.
+ </p>
+  <p>
+  At the top level, an Acton program is an ensemble of actors.
+  In-between processing messages, actors are idle, just maintaining
+  their state. An intuitive view of an Acton system is therefore that it
+  alternates between being idle and being engaged in a burst of
+  activities in response to an incoming message. So, an Acton program is
+  a <em>reactive</em> system. Also this notion has recently received a lot
+  of attention, as witnessed by the <a href="https://www.reactivemanifesto.org">Reactive Manifesto</a>.
+ </p>
+  <p>
+  In some respects actors can appear to be quite similar to class
+  instances, which also maintain an internal state that can be
+  manipulated through method calls. However, there are also major
+  differences. We defer a fuller discussion of this to Example 3
+below.
+</p>
+</li>
+<li>
+<p>
+  A major design decision in Acton is therefore to adopt the actor 
+  programming model as a base for the large-scale structure of
+  programs. It remains to embed this model in a concrete programming
+  language, either as a library or middleware package in an existing
+  language, or to design a new programming language. For reasons to 
+  be discussed below, Acton is a new language, but is also very
+  closely related to Python.
+<p>
+</p>
+  Python has over many years acquired a large and enthousiastic user
+  base. Programmers appreciate its light-weight syntax based on
+  indentation and its native support for a variety of programming
+  styles, including imperative, functional and object-oriented idioms.
+  Acton capitalizes on this appeal by adopting Python syntax, making
+  Acton immediately accessible to the Python programmer for programming
+  in the small, i.e. defining functions and classes.
+</p>
+<p>
+  Part of the appeal of Python lies also in the lack of variable and
+  type declarations, accompanied by liberal polymorphism, dynamic
+  typing and an interactive interpreter environment. All of this enables
+  a quick development cycle, but it also implies that many errors in
+  Python programs are caught only at runtime. Acton follows Python in
+  the lack of declarations (it has the same syntax!), but adopts
+  a much stricter discipline of
+  static checks. In particular, Acton is statically typed with an
+  expressive type language and type inference. Also, scope rules are
+  modified to avoid runtime errors caused by uninitialized variables.
+  See Examples 1 and 2 for more detail.
+</p>
+</li>
+</ul>
+<p>
+At the syntax level, the addition of actors to the Python base just
+means a new keyword <tt>actor</tt> and a new form of compound statement,
+<tt>actor Name(params): suite</tt>, similar to class and function definitions.
+Thus, in spite of the fact that Acton is a new language, it is
+sufficiently close to Python that Python programmers will comfortably
+transition to Acton programming. We would even dare to conjecture that
+programming in Acton will come more natural than use of existing
+libraries for programming with actors in Python. Also, many Python
+library packages will also be valid Acton code.
+</p>
+<p>
+For the Acton programmer, there is no notion of threads to consider
+and no need of locks, semaphores or other low-level synchronisation
+primitives. Threads enter instead at the level of the runtime system,
+where a thread pool works on the collection of tasks formed by idle
+actors with non-empty mailboxes, each thread repeatedly picking an
+actor/message pair and executing the actor's message-processing code.
+This implementation permits efficient utilization of multi-core
+processors. Also distribution of tasks across machines can be done
+transparently.
+  </p>
+<p>
+The execution environment of an Acton program is also modelled by an
+interface similar to that of an actor, i.e. we think of the external
+world as an actor with which the program interacts. The interface to
+this exterior world can vary greatly, depending on the type of
+application and the computing environment, and an Acton installation may
+offer one or more interfaces, with supporting runtime system.
+</p>
+<h2>Examples</h2>
+
+<p>
+The rest of this tutorial consists of a sequence of short examples. In
+connection with some of them we discuss Acton design decisions and
+differences between Python and Acton.
+</p>
+<p>
+As will become clear from the examples, Acton is a compiled language,
+as C or Java.
+Programs are written to files which are compiled to produce executable files,
+which can be run. There is currently no interactive environment,
+where programs can be developed and tested in a read/eval/print loop.
+
+<ul>
+  <li> <a href="example0.html">Example 0: Hello world</a>. 
+  <li> <a href="example1.html">Example 1: Harmonic numbers</a>. 
+  <li> <a href="example2.html">Example 2: Prime numbers</a>. 
+  <li> <a href="example3.html">Example 3: Actors vs classes</a>. 
+  <li> <a href="example4.html">Example 4: ...</a>. 
+  <li> <a href="example5.html">Example 5: ...</a>. 
+  <li> <a href="example6.html">Example 6: ...</a>. 
+</ul>
+</body> </html>
