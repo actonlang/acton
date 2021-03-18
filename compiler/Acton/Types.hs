@@ -492,6 +492,7 @@ instance InfEnv Decl where
       | isProto env n                   = notYet (loc n) "Extension of a protocol"
       | length us == 0                  = err (loc n) "Extension lacks a protocol"
 --      | length us > 1                   = notYet (loc n) "Extensions with multiple protocols"
+      | isJust witsearch                = err (loc n) "Extension already exists"
       | otherwise                       = do --traceM ("\n## infEnv extension " ++ prstr n)
                                              pushFX fxPure tNone
                                              (cs,te,b') <- infEnv env1 b
@@ -505,6 +506,7 @@ instance InfEnv Decl where
                                              -- w <- newWitness
                                              return (cs1, [(extensionName (head us) n, NExt n q' ps te)], Extension l n q us (bindWits eq1 ++ b'))
       where env1                        = define (toSigs te') $ reserve (bound b) $ defineSelfOpaque $ defineTVars (stripQual q) env
+            witsearch                   = findWitness env n (implProto env $ head us)
             ps                          = mro1 env (unalias env us)
             q'                          = unalias env q
             final                       = concat [ conAttrs env pn | (_, TC pn _) <- ps, hasWitness env n pn ]
@@ -980,10 +982,10 @@ instance Infer Expr where
                                              return (Sub w t (tFun fx prow krow t0) :
                                                      cs1++cs2++cs3, t0, Call l (eCall (eVar w) [e']) ps' ks')
     infer env (TApp l e ts)             = internal l "Unexpected TApp in infer"
-    infer env (Async l e)               = do (cs1,t,e') <- infer env e
+    infer env (Async l e)               = do (cs1,t,e') <- infer env e              -- TODO: expect an action type returning t
                                              fx <- currFX
                                              return (Cast fxAction fx :
-                                                     cs1, tMsg t, Async l e')
+                                                     cs1, tMsg t, Async l e')       -- TODO: produce action type returning Msg[t]
     infer env (Await l e)               = do t0 <- newTVar
                                              (cs1,e') <- inferSub env (tMsg t0) e
                                              fx <- currFX
