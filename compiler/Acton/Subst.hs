@@ -45,16 +45,16 @@ subst                               :: Subst a => Substitution -> a -> a
 subst s x0
   | null clash                      = runTypeM' s (msubst x0)
   | otherwise                       = x2
-  where x1                          = runTypeM' (s1 ++ clash `zip` map tVar tmp) (msubst x0)
-        x2                          = runTypeM' (s1 ++ tmp `zip` rng s0) (msubst x1)
-        (s0,s1)                     = partition ((`elem` clash) . fst) s
+  where x1                          = runTypeM' s0 (msubst x0)
+        x2                          = runTypeM' s1 (msubst x1)
+        s0                          = [ (v, subst (clash `zip` map tVar tmp) t) | (v,t) <- s ]
+        s1                          = tmp `zip` map tVar clash
         clash                       = dom s `intersect` tyfree (rng s)
         used                        = dom s ++ tyfree (rng s)                             
         tmp                         = take (length clash) $ map (TV KWild . Internal TypesPass "") [1 ..] \\ used
 
 erase x                             = subst s x
   where s                           = [ (tv, tWild) | tv <- nub (tyfree x) ]
-
 
 class Subst t where
     msubst                          :: t -> TypeM t
