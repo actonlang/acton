@@ -190,7 +190,7 @@ data Kind       = KType | KProto | KFX | PRow | KRow | KFun [Kind] Kind | KVar N
 
 data TSchema    = TSchema { scloc::SrcLoc, scbind::QBinds, sctype::Type } deriving (Show,Read,Generic)
 
-data TVar       = TV { tvkind::Kind, tvname::Name } deriving (Ord,Show,Read,Generic) -- the Name is an uppercase letter, optionally followed by digits.
+data TVar       = TV { tvkind::Kind, tvname::Name } deriving (Show,Read,Generic) -- the Name is an uppercase letter, optionally followed by digits.
 
 data TCon       = TC { tcname::QName, tcargs::[Type] } deriving (Eq,Show,Read,Generic)
 
@@ -562,6 +562,9 @@ instance Eq TSchema where
 
 instance Eq TVar where
     TV k1 v1            == TV k2 v2             = v1 == v2
+
+instance Ord TVar where
+    TV _ v1             <= TV _ v2              = v1 <= v2
 
 instance Eq Type where
     TVar _ v1           == TVar _ v2            = v1 == v2
