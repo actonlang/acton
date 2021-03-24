@@ -65,8 +65,8 @@ extern struct $Ord$str$class $Ord$str$methods;
 $Ord$str $Ord$str$new();
 extern struct $Hashable$str$class $Hashable$str$methods;
 $Hashable$str $Hashable$str$new();
-extern struct $Plus$str$class $Plus$str$methods;
-$Plus$str $Plus$str$new();
+extern struct $Times$str$class $Times$str$methods;
+$Times$str $Times$str$new();
 extern struct $Sliceable$str$class $Sliceable$str$methods;
 $Sliceable$str $Sliceable$str$new();
 extern struct $Container$str$class $Container$str$methods;
@@ -74,7 +74,7 @@ $Container$str $Container$str$new();
 
 extern struct $Ord$str *$Ord$str$witness;
 extern struct $Hashable$str *$Hashable$str$witness;
-extern struct $Plus$str *$Plus$str$witness;
+extern struct $Times$str *$Times$str$witness;
 extern struct $Sliceable$str *$Sliceable$str$witness;
 extern struct $Container$str *$Container$str$witness;
 
@@ -176,15 +176,15 @@ extern struct $Sequence$bytearray$class $Sequence$bytearray$methods;
 $Sequence$bytearray $Sequence$bytearray$new();
 extern struct $Collection$bytearray$class $Collection$bytearray$methods;
 $Collection$bytearray $Collection$bytearray$new($Sequence);
-extern struct $Plus$bytearray$class $Plus$bytearray$methods;
-$Plus$bytearray $Plus$bytearray$new($Sequence);
+extern struct $Times$bytearray$class $Times$bytearray$methods;
+$Times$bytearray $Times$bytearray$new($Sequence);
 extern struct $Container$bytearray$class $Container$bytearray$methods;
 $Container$bytearray $Container$bytearray$new($Eq);
 
 extern struct $Ord$bytearray *$Ord$bytearray$witness;
 extern struct $Sequence$bytearray *$Sequence$bytearray$witness;
 extern struct $Collection$bytearray *$Collection$bytearray$witness;
-extern struct $Plus$bytearray *$Plus$bytearray$witness;
+extern struct $Times$bytearray *$Times$bytearray$witness;
 extern struct $Container$bytearray *$Container$bytearray$witness;
 
 $bytearray to$bytearray(char *str); 

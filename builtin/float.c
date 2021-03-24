@@ -97,10 +97,6 @@ $float $Real$float$__mul__($Real$float wit,  $float a, $float b) {
   return to$float(from$float(a) * from$float(b));
 }  
 
-$float $Real$float$__truediv__($Real$float wit,  $float a, $float b) {
-  return to$float(from$float(a) / from$float(b));
-}  
-
 $float $Real$float$__pow__($Real$float wit,  $float a, $float b) {
   return to$float(exp(from$float(b) * log(from$float(a))));
   }
@@ -164,6 +160,20 @@ $Minus$float $Minus$float$__deserialize__($Minus$float self, $Serial$state state
 
 $float $Minus$float$__sub__($Minus$float wit,  $float a, $float b) {
   return to$float(from$float(a) - from$float(b));
+}  
+
+// $Div$float  ////////////////////////////////////////////////////////////////////////////////////////
+
+void $Div$float$__serialize__($Div$float self, $Serial$state state) {
+}
+
+$Div$float $Div$float$__deserialize__($Div$float self, $Serial$state state) {
+   $Div$float res = $DNEW($Div$float,state);
+   return res;
+}
+
+$float $Div$float$__truediv__($Div$float wit, $float a, $float b) {
+  return to$float(from$float(a) / from$float(b));
 }  
 
 // $Ord$float  ////////////////////////////////////////////////////////////////////////////////////////
@@ -236,6 +246,9 @@ void $Minus$float_init($Minus$float wit, $Real w$Real) {
 void $Ord$float_init($Ord$float wit) {
   return;
 }
+void $Div$float_init($Div$float wit) {
+  return;
+}
 
 void $Hashable$float_init($Hashable$float wit) {
   return;
@@ -243,6 +256,10 @@ void $Hashable$float_init($Hashable$float wit) {
 
 $Real$float $Real$float$new() {
   return $NEW($Real$float);
+}
+
+$Div$float $Div$float$new() {
+  return $NEW($Div$float);
 }
 
 $Minus$float $Minus$float$new($Real wit) {
@@ -274,14 +291,12 @@ struct $Real$float$class $Real$float$methods = {
     ($str (*)($Real$float))$default__str__,
     $Real$float$__add__,
     ($float (*)($Real$float, $float, $float))$Plus$__iadd__,
+    $Real$float$__mul__,
+    ($float (*)($Real$float, $float, $float))$Times$__imul__,
     $Real$float$__fromatom__,
     $Real$float$__complx__,
-    $Real$float$__mul__,
-    $Real$float$__truediv__,
     $Real$float$__pow__,
     ($float (*)($Real$float, $float, $float))$Number$__ipow__,
-    ($float (*)($Real$float, $float, $float))$Number$__itruediv__,
-    ($float (*)($Real$float, $float, $float))$Number$__imul__,
     $Real$float$__neg__,
     $Real$float$__pos__,
     $Real$float$real,
@@ -312,6 +327,22 @@ struct $Minus$float$class $Minus$float$methods = {
 };
 struct $Minus$float $Minus$float_instance = {&$Minus$float$methods, ($Real)&$Real$float_instance};
 $Minus$float $Minus$float$witness = &$Minus$float_instance;
+
+struct $Div$float$class $Div$float$methods = {
+    "$Div$float",
+    UNASSIGNED,
+    ($Super$class)&$Div$methods,
+    $Div$float_init,
+    $Div$float$__serialize__,
+    $Div$float$__deserialize__,
+    ($bool (*)($Div$float))$default__bool__,
+    ($str (*)($Div$float))$default__str__,
+    $Div$float$__truediv__,
+    ($float (*)($Div$float, $float, $float))$Div$__itruediv__,
+};
+
+struct $Div$float $Div$float_instance = {&$Div$float$methods};
+$Div$float $Div$float$witness = &$Div$float_instance;
 
 
 struct $Ord$float$class $Ord$float$methods = {

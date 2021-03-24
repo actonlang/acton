@@ -105,7 +105,7 @@ $list $list_new(int capacity) {
   return lst;
 }
 
-// Plus /////////////////////////////////////////////////////////////////////////////////////////////
+// Times /////////////////////////////////////////////////////////////////////////////////////////////
 
 $list $list_add($list lst, $list other) {
   int lstlen = lst->length;
@@ -117,7 +117,20 @@ $list $list_add($list lst, $list other) {
   res->length = reslen;
   return res;
 }
- 
+
+$list $list_mul($list lst, $int n) {
+  int lstlen = lst->length;
+  if (n->val <= 0)
+    return $list_new(0);
+  else {
+    $list res = $list_new(lstlen * n->val);
+    for (int i=0; i<n->val; i++)
+      memcpy(res->data + i*lstlen, lst->data, lstlen * sizeof($WORD));
+    return res;
+  }
+}
+      
+    
 // Collection ///////////////////////////////////////////////////////////////////////////////////////
 
 $list $list_fromiter($Iterator it) {

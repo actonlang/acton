@@ -23,6 +23,8 @@ $complex to$complex(complex double c);
 
 extern struct $Number$complex$class $Number$complex$methods;
 $Number$complex $Number$complex$new();
+extern struct $Div$complex$class $Div$complex$methods;
+$Div$complex $Div$complex$new();
 extern struct $Minus$complex$class $Minus$complex$methods;
 $Minus$complex $Minus$complex$new($Number);
 extern struct $Eq$complex$class $Eq$complex$methods;

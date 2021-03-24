@@ -83,6 +83,7 @@ $str $str_getitem($str, int);
 $str $str_getslice($str, $slice);
  
 $str $str_add($str, $str);
+$str $str_mul($str, $int);
 
 // Protocol instances, using above prototypes 
 
@@ -197,18 +198,22 @@ void $Sliceable$str$__delslice__ ($Sliceable$str wit, $str str, $slice slc) {
   exit(-1);
 }
 
-// Plus
+// Times
 
-void $Plus$str$__serialize__($Plus$str self, $Serial$state state) {
+void $Times$str$__serialize__($Times$str self, $Serial$state state) {
 }
 
-$Plus$str $Plus$str$__deserialize__($Plus$str self, $Serial$state state) {
-   $Plus$str res = $DNEW($Plus$str,state);
+$Times$str $Times$str$__deserialize__($Times$str self, $Serial$state state) {
+   $Times$str res = $DNEW($Times$str,state);
    return res;
 }
 
-$str $Plus$str$__add__ ($Plus$str wit, $str a, $str b) {
+$str $Times$str$__add__ ($Times$str wit, $str a, $str b) {
   return $str_add(a,b);
+}
+
+$str $Times$str$__mul__ ($Times$str wit, $str a, $int n) {
+  return $str_mul(a,n);
 }
 
 // Hashable
@@ -296,21 +301,23 @@ struct $Sliceable$str$class  $Sliceable$str$methods = {
 struct $Sliceable$str $Sliceable$str_instance = {&$Sliceable$str$methods};
 $Sliceable$str $Sliceable$str$witness = &$Sliceable$str_instance;
 
-struct $Plus$str$class  $Plus$str$methods = {
-    "$Plus$str",
+struct $Times$str$class  $Times$str$methods = {
+    "$Times$str",
     UNASSIGNED,
-    ($Super$class)&$Plus$methods,
-    (void (*)($Plus$str))$default__init__,
-    $Plus$str$__serialize__,
-    $Plus$str$__deserialize__,
-    ($bool (*)($Plus$str))$default__bool__,
-    ($str (*)($Plus$str))$default__str__,
-    $Plus$str$__add__,
-    ($str (*)($Plus$str, $str, $str))$Plus$__iadd__,
+    ($Super$class)&$Times$methods,
+    (void (*)($Times$str))$default__init__,
+    $Times$str$__serialize__,
+    $Times$str$__deserialize__,
+    ($bool (*)($Times$str))$default__bool__,
+    ($str (*)($Times$str))$default__str__,
+    $Times$str$__add__,
+    ($str (*)($Times$str, $str, $str))$Plus$__iadd__,
+    $Times$str$__mul__,
+    ($str (*)($Times$str, $str, $int))$Times$__imul__,
 
 };
-struct $Plus$str $Plus$str_instance = {&$Plus$str$methods};
-$Plus$str $Plus$str$witness = &$Plus$str_instance;
+struct $Times$str $Times$str_instance = {&$Times$str$methods};
+$Times$str $Times$str$witness = &$Times$str_instance;
 
 struct $Hashable$str$class  $Hashable$str$methods = {
     "$Hashable$str",
@@ -643,7 +650,7 @@ int $str_ge($str a, $str b) {
 
 // hash function $string_hash defined in hash.c
 
-// $Plus /////////////////////////////////////////////////////////////////////////////////////////////
+// $Times /////////////////////////////////////////////////////////////////////////////////////////////
 
  
 $str $str_add($str s, $str t) {
@@ -652,6 +659,18 @@ $str $str_add($str s, $str t) {
   memcpy(res->str,s->str,s->nbytes);
   memcpy(res->str+s->nbytes,t->str,t->nbytes);
   return res;
+}
+
+$str $str_mul ($str a, $int n) {
+  if (n->val <= 0)
+    return to$str("");
+  else {
+      $str res;
+      NEW_UNFILLED_STR(res,a->nchars * n->val, a->nbytes * n->val);
+      for (int i=0; i<n->val; i++)
+        memcpy(res->str + i*a->nbytes,a->str,a->nbytes);
+      return res;
+  }
 }
 
 // Collection ///////////////////////////////////////////////////////////////////////////////////////
@@ -2190,6 +2209,7 @@ $bytearray $bytearray_fromiter($Iterable, $WORD);
 $int $bytearray_len($bytearray str);
 
 $bytearray $bytearray_add($bytearray, $bytearray);
+$bytearray $bytearray_mul($bytearray, $int);
 
 int $bytearray_contains ($bytearray, $int);
 int $bytearray_containsnot ($bytearray, $int);
@@ -2242,13 +2262,13 @@ $bool $Ord$bytearray$__ge__ ($Ord$bytearray wit, $bytearray a, $bytearray b){
 
 void $Sequence$bytearray$__serialize__($Sequence$bytearray self, $Serial$state state) {
     $step_serialize(self->w$Collection, state);
-    $step_serialize(self->w$Plus, state);
+    $step_serialize(self->w$Times, state);
 }
 
 $Sequence$bytearray $Sequence$bytearray$__deserialize__($Sequence$bytearray self, $Serial$state state) {
    $Sequence$bytearray res = $DNEW($Sequence$bytearray,state);
    res->w$Collection = ($Collection)$step_deserialize(state);
-   res->w$Plus = ($Plus)$step_deserialize(state);
+   res->w$Times = ($Times)$step_deserialize(state);
    return res;
 }
 
@@ -2325,24 +2345,28 @@ $int $Collection$bytearray$__len__ ($Collection$bytearray wit, $bytearray str) {
   return $bytearray_len(str);
 }
 
-// Plus
+// Times
 
-void $Plus$bytearray$__serialize__($Plus$bytearray self, $Serial$state state) {
+void $Times$bytearray$__serialize__($Times$bytearray self, $Serial$state state) {
   $step_serialize(self->w$Sequence, state);
 }
 
-$Plus$bytearray $Plus$bytearray$__deserialize__($Plus$bytearray self, $Serial$state state) {
-   $Plus$bytearray res = $DNEW($Plus$bytearray,state);
+$Times$bytearray $Times$bytearray$__deserialize__($Times$bytearray self, $Serial$state state) {
+   $Times$bytearray res = $DNEW($Times$bytearray,state);
    res->w$Sequence = ($Sequence)$step_deserialize(state);
    return res;
 }
 
-$Plus$bytearray $Plus$bytearray$new($Sequence wit) {
-  return $NEW($Plus$bytearray,wit);
+$Times$bytearray $Times$bytearray$new($Sequence wit) {
+  return $NEW($Times$bytearray,wit);
 }
 
-$bytearray $Plus$bytearray$__add__ ($Plus$bytearray wit, $bytearray a, $bytearray b) {
+$bytearray $Times$bytearray$__add__ ($Times$bytearray wit, $bytearray a, $bytearray b) {
   return $bytearray_add(a,b);
+}
+
+$bytearray $Times$bytearray$__mul__ ($Times$bytearray wit, $bytearray a, $int n) {
+  return $bytearray_mul(a,n);
 }
 
 // Container
@@ -2386,7 +2410,7 @@ $bool $Container$bytearray$__containsnot__($Container$bytearray wit, $bytearray 
 
 struct $Sequence$bytearray  $Sequence$bytearray_instance;
 struct $Collection$bytearray $Collection$bytearray_instance;
-struct $Plus$bytearray $Plus$bytearray_instance;
+struct $Times$bytearray $Times$bytearray_instance;
 
 
 struct $Ord$bytearray$class  $Ord$bytearray$methods = {
@@ -2428,7 +2452,7 @@ struct $Sequence$bytearray$class $Sequence$bytearray$methods = {
 struct $Sequence$bytearray $Sequence$bytearray_instance = {
     &$Sequence$bytearray$methods,
     ($Collection)&$Collection$bytearray_instance,
-    ($Plus)&$Plus$bytearray_instance
+    ($Times)&$Times$bytearray_instance
 };
 $Sequence$bytearray $Sequence$bytearray$witness = &$Sequence$bytearray_instance;
 
@@ -2448,21 +2472,22 @@ struct $Collection$bytearray$class $Collection$bytearray$methods = {
 struct $Collection$bytearray $Collection$bytearray_instance = {&$Collection$bytearray$methods,($Sequence)&$Sequence$bytearray_instance};
 $Collection$bytearray $Collection$bytearray$witness = &$Collection$bytearray_instance;
 
-struct $Plus$bytearray$class  $Plus$bytearray$methods = {
-    "$Plus$bytearray",
+struct $Times$bytearray$class  $Times$bytearray$methods = {
+    "$Times$bytearray",
     UNASSIGNED,
-    ($Super$class)&$Plus$methods,
-    $Plus$bytearray$__init__,
-    $Plus$bytearray$__serialize__,
-    $Plus$bytearray$__deserialize__,
-    ($bool (*)($Plus$bytearray))$default__bool__,
-    ($str (*)($Plus$bytearray))$default__str__,
-    $Plus$bytearray$__add__,
-    ($bytearray (*)($Plus$bytearray, $bytearray, $bytearray))$Plus$__iadd__,
-
+    ($Super$class)&$Times$methods,
+    $Times$bytearray$__init__,
+    $Times$bytearray$__serialize__,
+    $Times$bytearray$__deserialize__,
+    ($bool (*)($Times$bytearray))$default__bool__,
+    ($str (*)($Times$bytearray))$default__str__,
+    $Times$bytearray$__add__,
+    ($bytearray (*)($Times$bytearray, $bytearray, $bytearray))$Plus$__iadd__,
+    $Times$bytearray$__mul__,
+    ($bytearray (*)($Times$bytearray, $bytearray, $int))$Times$__imul__,
 };
-struct $Plus$bytearray $Plus$bytearray_instance = {&$Plus$bytearray$methods};
-$Plus$bytearray $Plus$bytearray$witness = &$Plus$bytearray_instance;
+struct $Times$bytearray $Times$bytearray_instance = {&$Times$bytearray$methods};
+$Times$bytearray $Times$bytearray$witness = &$Times$bytearray_instance;
 
 struct $Container$bytearray$class $Container$bytearray$methods = {
     "$Container$bytearray",
@@ -2487,13 +2512,13 @@ void $Collection$bytearray$__init__($Collection$bytearray self, $Sequence master
   self->w$Sequence = master;
 }
 
-void $Plus$bytearray$__init__($Plus$bytearray self, $Sequence master) {
+void $Times$bytearray$__init__($Times$bytearray self, $Sequence master) {
   self->w$Sequence = master;
 }
 
 void $Sequence$bytearray$__init__($Sequence$bytearray self) {
   self->w$Collection = ($Collection)$NEW($Collection$bytearray, ($Sequence)self);
-  self->w$Plus = ($Plus)$NEW($Plus$bytearray, ($Sequence)self);
+  self->w$Times = ($Times)$NEW($Times$bytearray, ($Sequence)self);
 }
 
 void $Container$bytearray$__init__ ($Container$bytearray wit, $Eq w$Eq$A$Container$bytearray) {
@@ -2733,7 +2758,7 @@ $int $bytearray_len($bytearray self) {
   return to$int(self->nbytes);
 }
 
-// Plus
+// Times
  
 $bytearray $bytearray_add($bytearray a, $bytearray b) {
   $bytearray res;
@@ -2743,6 +2768,17 @@ $bytearray $bytearray_add($bytearray a, $bytearray b) {
   return res;
 }
 
+$bytearray $bytearray_mul ($bytearray a, $int n) {
+  if (n->val <= 0)
+    return to$bytearray("");
+  else {
+      $bytearray res;
+      NEW_UNFILLED_BYTEARRAY(res, a->nbytes * n->val);
+      for (int i=0; i<n->val; i++)
+        memcpy(res->str + i*a->nbytes,a->str,a->nbytes);
+      return res;
+  }
+}
 // Container
  
 int $bytearray_contains ($bytearray self, $int c) {

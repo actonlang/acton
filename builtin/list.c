@@ -1,7 +1,7 @@
 
 struct $Sequence$list $Sequence$list_instance;
 struct $Collection$list $Collection$list_instance;
-struct $Plus$list $Plus$list_instance;
+struct $Times$list $Times$list_instance;
 
 struct $Sequence$list$class $Sequence$list$methods = {
     "$Sequence$list", 
@@ -26,7 +26,7 @@ struct $Sequence$list$class $Sequence$list$methods = {
 struct $Sequence$list $Sequence$list_instance = {
     &$Sequence$list$methods,
     ($Collection)&$Collection$list_instance, 
-    ($Plus)&$Plus$list_instance
+    ($Times)&$Times$list_instance
 };
 $Sequence$list $Sequence$list$witness = &$Sequence$list_instance;
 
@@ -50,23 +50,25 @@ struct $Collection$list $Collection$list_instance = {
 $Collection$list $Collection$list$witness = &$Collection$list_instance;
 
 
-struct $Plus$list$class $Plus$list$methods = {
-    "$Plus$list",
+struct $Times$list$class $Times$list$methods = {
+    "$Times$list",
     UNASSIGNED,
-    ($Super$class)&$Plus$methods,
-    $Plus$list$__init__,
-    $Plus$list$__serialize__,
-    $Plus$list$__deserialize__,
-    ($bool (*)($Plus$list))$default__bool__,
-    ($str (*)($Plus$list))$default__str__,
-    $Plus$list$__add__,
-    ($list (*)($Plus$list, $list, $list))$Plus$__iadd__,
+    ($Super$class)&$Times$methods,
+    $Times$list$__init__,
+    $Times$list$__serialize__,
+    $Times$list$__deserialize__,
+    ($bool (*)($Times$list))$default__bool__,
+    ($str (*)($Times$list))$default__str__,
+    $Times$list$__add__,
+    ($list (*)($Times$list, $list, $list))$Plus$__iadd__,
+    $Times$list$__mul__,
+    ($list (*)($Times$list, $list, $int))$Times$__imul__,
 };
-struct $Plus$list $Plus$list_instance = {
-    &$Plus$list$methods,
+struct $Times$list $Times$list_instance = {
+    &$Times$list$methods,
     ($Sequence)&$Sequence$list_instance
 };
-$Plus$list $Plus$list$witness = &$Plus$list_instance;
+$Times$list $Times$list$witness = &$Times$list_instance;
 
 struct $Container$list$class $Container$list$methods = {
     "$Container$list",
@@ -84,18 +86,22 @@ struct $Container$list$class $Container$list$methods = {
     $Container$list$__containsnot__
 };
 
-void $Plus$list$__serialize__($Plus$list self, $Serial$state state) {
+void $Times$list$__serialize__($Times$list self, $Serial$state state) {
   $step_serialize(self->w$Sequence, state);
 }
 
-$Plus$list $Plus$list$__deserialize__($Plus$list self, $Serial$state state) {
-   $Plus$list res = $DNEW($Plus$list,state);
+$Times$list $Times$list$__deserialize__($Times$list self, $Serial$state state) {
+   $Times$list res = $DNEW($Times$list,state);
    res->w$Sequence = ($Sequence)$step_deserialize(state);
    return res;
 }
 
-$list $Plus$list$__add__ ($Plus$list wit, $list a, $list b) {
+$list $Times$list$__add__ ($Times$list wit, $list a, $list b) {
   return $list_add(a,b);
+}
+
+$list $Times$list$__mul__ ($Times$list wit, $list a, $int n) {
+  return $list_mul(a,n);
 }
 
 void $Collection$list$__serialize__($Collection$list self, $Serial$state state) {
@@ -122,13 +128,13 @@ $int $Collection$list$__len__($Collection$list wit, $list self) {
 
 void $Sequence$list$__serialize__($Sequence$list self, $Serial$state state) {
   $step_serialize(self->w$Collection, state);
-  $step_serialize(self->w$Plus, state);
+  $step_serialize(self->w$Times, state);
 }
 
 $Sequence$list $Sequence$list$__deserialize__($Sequence$list self, $Serial$state state) {
    $Sequence$list res = $DNEW($Sequence$list,state);
    res->w$Collection = ($Collection)$step_deserialize(state);
-   res->w$Plus = ($Plus)$step_deserialize(state);
+   res->w$Times = ($Times)$step_deserialize(state);
    return res;
 }
   
@@ -208,7 +214,7 @@ void $Collection$list$__init__($Collection$list self, $Sequence master) {
   self->w$Sequence = master;
 }
 
-void $Plus$list$__init__($Plus$list self, $Sequence master) {
+void $Times$list$__init__($Times$list self, $Sequence master) {
   self->w$Sequence = master;
 }
 
@@ -219,11 +225,11 @@ $Sequence$list $Sequence$list$new() {
 $Collection$list $Collection$list$new($Sequence master){
   return $NEW($Collection$list, master);
 }
-$Plus$list $Plus$list$new($Sequence master) {
-  return $NEW($Plus$list, master);
+$Times$list $Times$list$new($Sequence master) {
+  return $NEW($Times$list, master);
 }
 
 void $Sequence$list$__init__($Sequence$list self) {
   self->w$Collection = ($Collection)$Collection$list$new(($Sequence)self);
-  self->w$Plus = ($Plus)$Plus$list$new(($Sequence)self);
+  self->w$Times = ($Times)$Times$list$new(($Sequence)self);
 }

@@ -1023,7 +1023,7 @@ void $eventloop() {
     }
     int fd = kev.ident;
     if (kev.flags & EV_EOF) {
-      $str msg = $Plus$str$witness->$class->__add__($Plus$str$witness,$getName(fd),to$str(" closed connection\n"));
+      $str msg = $Times$str$witness->$class->__add__($Times$str$witness,$getName(fd),to$str(" closed connection\n"));
       if (fd_data[fd].errhandler)
         fd_data[fd].errhandler->$class ->__call__(fd_data[fd].errhandler,msg);
       else {

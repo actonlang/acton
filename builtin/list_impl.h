@@ -4,6 +4,7 @@ void $list_init($list lst, $Iterable wit, $WORD seq);
 $list $list_copy($list lst);
 
 $list $list_add($list lst, $list other);
+$list $list_mul($list lst, $int n);
 
 $Iterator $list_iter($list lst);
 
