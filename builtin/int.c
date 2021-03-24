@@ -102,13 +102,6 @@ $int $Integral$int$__fromatom__($Integral$int wit, $atom a) {
 $int $Integral$int$__mul__($Integral$int wit,  $int a, $int b) {
   return to$int(a->val * b->val);
 }  
-
-// The typechecker will reject true division between two integers.
-$int $Integral$int$__truediv__($Integral$int wit,  $int a, $int b) {
-  // raise NOTIMPLEMENTED
-  return NULL;
-}  
-
   
 $int $Integral$int$__pow__($Integral$int wit,  $int a, $int b) {
   if ( b->val < 0) {
@@ -375,14 +368,12 @@ struct $Integral$int$class $Integral$int$methods = {
     ($str (*)($Integral$int))$default__str__,
     $Integral$int$__add__,
     ($int (*)($Integral$int, $int, $int))$Plus$__iadd__,
+    $Integral$int$__mul__,
+    ($int (*)($Integral$int, $int, $int))$Times$__imul__,
     $Integral$int$__fromatom__,
     $Integral$int$__complx__,
-    $Integral$int$__mul__,
-    $Integral$int$__truediv__,
     $Integral$int$__pow__,
     ($int (*)($Integral$int, $int, $int))$Number$__ipow__,
-    ($int (*)($Integral$int, $int, $int))$Number$__itruediv__,
-    ($int (*)($Integral$int, $int, $int))$Number$__imul__,
     $Integral$int$__neg__,
     $Integral$int$__pos__,
     $Integral$int$real,

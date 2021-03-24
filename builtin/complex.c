@@ -68,10 +68,6 @@ $complex $Number$complex$__mul__ ($Number$complex wit, $complex a, $complex b){
   return to$complex(a->val * b->val);
 }
 
-$complex $Number$complex$__truediv__ ($Number$complex wit, $complex a, $complex b) {
-  return to$complex(a->val/b->val);
-}
-
 $complex $Number$complex$__pow__ ($Number$complex wit, $complex a, $complex b) {
   return to$complex(cpow(a->val,b->val));
 }
@@ -98,6 +94,20 @@ $WORD $Number$complex$__abs__ ($Number$complex wit, $complex c, $Real wit2) {
 
 $complex $Number$complex$conjugate ($Number$complex wit, $complex c) {
   return to$complex(conj(c->val));
+}
+
+// $Div$complex /////////////////////////////////////////////////////////////////////////////////////////
+
+void $Div$complex$__serialize__($Div$complex self, $Serial$state state) {
+}
+
+$Div$complex $Div$complex$__deserialize__($Div$complex self, $Serial$state state) {
+   $Div$complex res = $DNEW($Div$complex,state);
+   return res;
+}
+
+$complex $Div$complex$__truediv__ ($Div$complex wit, $complex a, $complex b) {
+  return to$complex(a->val/b->val);
 }
 
 // $Minus$complex  ////////////////////////////////////////////////////////////////////////////////////////
@@ -170,6 +180,10 @@ void $Eq$complex_init($Eq$complex wit) {
   return;
 }
 
+void $Div$complex_init($Div$complex wit) {
+  return;
+}
+
 void $Hashable$complex_init($Hashable$complex wit) {
   return;
 }
@@ -207,14 +221,12 @@ struct $Number$complex$class $Number$complex$methods = {
     ($str (*)($Number$complex))$default__str__,
     $Number$complex$__add__,
     ($complex (*)($Number$complex, $complex, $complex))$Plus$__iadd__,
+    $Number$complex$__mul__,
+    ($complex (*)($Number$complex, $complex, $complex))$Times$__imul__,
     NULL,        // fromatom
     $Number$complex$__complx__,
-    $Number$complex$__mul__,
-    $Number$complex$__truediv__,
     $Number$complex$__pow__,
     ($complex (*)($Number$complex, $complex, $complex))$Number$__ipow__,
-    ($complex (*)($Number$complex, $complex, $complex))$Number$__itruediv__,
-    ($complex (*)($Number$complex, $complex, $complex))$Number$__imul__,
     $Number$complex$__neg__,
     $Number$complex$__pos__,
     $Number$complex$real,
@@ -224,6 +236,22 @@ struct $Number$complex$class $Number$complex$methods = {
 };
 struct $Number$complex $Number$complex_instance = {&$Number$complex$methods, ($Minus)&$Minus$complex_instance};
 $Number$complex $Number$complex$witness = &$Number$complex_instance;
+
+struct $Div$complex$class $Div$complex$methods = {
+    "$Div$complex",
+    UNASSIGNED,
+    ($Super$class)&$Div$methods,
+    $Div$complex_init,
+    $Div$complex$__serialize__,
+    $Div$complex$__deserialize__,
+    ($bool (*)($Div$complex))$default__bool__,
+    ($str (*)($Div$complex))$default__str__,
+    $Div$complex$__truediv__,
+    ($complex (*)($Div$complex, $complex, $complex))$Div$__itruediv__,
+};
+
+struct $Div$complex $Div$complex_instance = {&$Div$complex$methods};
+$Div$complex $Div$complex$witness = &$Div$complex_instance;
 
 struct $Minus$complex$class $Minus$complex$methods = {
     "$Minus$complex",

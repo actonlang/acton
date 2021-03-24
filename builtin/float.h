@@ -24,8 +24,12 @@ $Real$float $Real$float$new();
 #define $RealFloat$float$new(...) $Real$float$new(__VA_ARGS__)
 #define $RealFloat$float $Real$float
 
+extern struct $Div$float$class $Div$float$methods;
+$Div$float $Div$float$new();
+
 extern struct $Minus$float$class $Minus$float$methods;
 $Minus$float $Minus$float$new($Real);
+
 extern struct $Ord$float$class $Ord$float$methods;
 $Ord$float $Ord$float$new();
 extern struct $Hashable$float$class $Hashable$float$methods;

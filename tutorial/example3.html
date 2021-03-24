@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <link rel="stylesheet" type="text/css" href="tutorialstyle.css">
+  <title>Example 3: Actors vs classes</title>
+</head>
+
+<body>
+<h3>Example 3: Actors vs classes</h3>
+
+<p>
+ We now turn to classes and actors, which, as we have already mentioned, 
+have some similarities, but also major differences. We consider a 
+classical example of an object with state, the counter. 
+</p>
+
+<img src="counter.png">
+
+<p>
+The counter allows three operations: its value can be <tt>inc</tt>reased
+by one (the ``button'' on top), <tt>reset</tt> to zero (the knob on the right) or
+<tt>read</tt> (the display). The use case for this particular variant of a counter is
+to keep track of the number of inc's performed since the counter was last reset.
+</p>
+<p>
+Below are two valid Acton definitions, modelling the counter. The left
+one is also a valid class definition in Python. We also show some
+simple, typical use of the definitions.
+
+<pre>
+class CounterC():                               actor CounterA(initval=0):
+                                           
+    def __init__(self,initval=0):                 var val = initval
+        self._val = initval                
+                                           
+    def inc(self):                                def inc():
+        self._val += 1                                val += 1
+                                           
+    def read(self):                               def read():
+        return self._val                              return val
+                                              
+    def reset(self):                              def reset():
+        self._val = 0                                 val = 0
+                                           
+
+actor main(env):                               actor main(env)             
+    c = CounterC(5)                                a = CounterA(5)
+    c.inc()                                        a.inc()
+    c.inc()                                        a.inc()
+    v = c.read()                                   v = a.read()
+    print(v) # prints 7                            print(v)  # prints 7
+                                           
+</pre>
+<p>
+We see striking similarities and some minor differences between the two
+definitions:
+</p>
+
+<ul>
+  <li>
+  Most strikingly, the definitions are used in exactly the same way: we
+  create a class instance/an actor with initial value 5, we increase its
+  value twice and finally read the counter value, which in both cases
+  will be 7.
+  <li>
+  The definitions of methods are almost
+  the same; the differences are the occurrences of <tt>self</tt> in the
+  class (and our choice of having an underscore in the name of the
+  instance variable).
+  <li>
+  There is no <tt>__init__</tt> method in the actor definition;
+  instead the optional initial value is a parameter to the actor name.
+  Thus parameters in an actor definition have another meaning than in a class
+  definition (where they denote superclasses).
+  <li>
+  The state variable <tt>val</tt> is explicitly declared in the actor definition,
+  introduced by the keyword <tt>var</tt>.
+</ul>
+<p>
+Thus, we can use both class and actor definitions to create objects with
+state that can be manipulated and accessed through methods. But the
+syntax and the similaritites tend to downplay the fundamental difference
+between the two concepts:
+</p>
+<ul>
+  <li>
+  The method call <tt>c.inc()</tt> is essentially an ordinary function
+  call (with the receiving object as first parameter). A thread that
+  executes this call will transfer control to the function body, execute
+  the body, which will update the state variable, and continue.
+  <li>
+  The statement <tt>a.inc()</tt>, on the other hand, looks exactly the
+  same but denotes the sending of the message <tt>inc()</tt> to the
+  actor <tt>a</tt>. A thread executing the call will ask the runtime
+  system for this service and proceed immediately with the next
+  statement. The message will be queued and the actual increase of
+  <tt>a</tt>'s state will be done at some later point in time,
+  probably by some other thread.
+</ul>
+<p>
+This difference means that the actor <tt>a</tt> can be used as a member
+of the community of actors comprising a program, providing the service
+of a shared counter. It keeps track of the number of <tt>inc</tt>
+messages received, for which it can be queried in a <tt>read</tt> message.
+</p>
+<p>
+The class instance, on the other hand, can <em>not</em> be safely used in this
+way. Imagine that we could create class instance <tt>c</tt> and place it as a
+top level member in a community of actors. Since the operation of
+increasing the value of an integer variable is not thread-safe, it is
+conceivable that two concurrent threads, doing message processing for
+actors using the class instance, will execute <tt>c.inc()</tt> in
+parallel, both read the same <tt>_val</tt> and increase it by 1 before
+writing back, with
+the net result that the two calls will only increase the counter by one.
+</p>
+<p>
+The conclusion is that classes and class instances do have a role to
+play in Acton: instances can be used as (part of) the internal
+state in actors, but not as replacement for actors. To illustrate this
+point in an exaggerated way, the following would be a legitimate and
+safe use of class <tt>CounterC</tt>:
+</p>
+<pre>
+actor CounterA(initval = 0):
+
+    var c = CounterC(initval)
+
+    def inc():
+        c.inc()
+
+    def read():
+        return c.read()
+
+    def reset():
+        c.reset()
+</pre>
+<p>
+Here, there is no risk of multiple threads causing problems, since the
+calls to <tt>c</tt>'s methods occur within the processing of an
+actor message. We certainly do not recommend this design, since the
+example is too trivial. The internal
+state of the actor is as easily modelled by an integer variable, so the
+use of a class instance here seems to offer no advantage. For an
+example where a class instance would be a natural choice as
+state we can think of a sorted container (set, list or dictionary or
+...), i.e. a container which also supports an operation to retrieve its
+elements in sorted order. Here some form of binary search tree would be a
+natural candidate to represent the state. More generally, any data
+structure implemented as a class can be made thread-safe by wrapping
+it in an actor as indicated here.
+</p>
+
+<h4>On templates, instances and message passing</h4>
+<p>
+A class declaration is a template for
+objects. Every time we execute <tt>c = CounterC()</tt> we get a new
+<em>instance</em> of the class <tt>CounterC</tt> with its own copy of
+the state <tt>_val</tt>.
+</p>
+<p>
+The situation is the same for actors. Executing <tt>a  =
+CounterA()</tt> creates a new actor instance of the "actor class"
+<tt>CounterA</tt> with its own copy of the
+state <tt>val</tt>. However, following established terminology but
+maybe a bit confusing at first, we refer also to the instance just as an actor.
+</p>
+<p>
+The syntax for sending a message to an actor <tt>b</tt>,
+where <tt>b</tt> is an instance of actor (class) <tt>B</tt>, is
+<tt>b.m(args)</tt>, where <tt>m</tt> must be a method declared in <tt>B</tt>
+and <tt>args</tt> are suitable arguments. Thus, actor 
+<tt>a</tt> can only send a message to actor
+<tt>b</tt>, if <tt>a</tt>  knows the name of 
+<tt>b</tt>. This can be obtained in only two ways:
+<ul>
+  <li> The name is obtained when <tt>b</tt> is created, as in 
+<tt>b = CounterA()</tt>. The name is completely opaque; there are no
+operations that apply to it and it cannot be programmatically
+constructed. Thus, if  <tt>a</tt>  actually created
+<tt>b</tt>, then <tt>a</tt> knows the name of, and can send messages
+  to, <tt>b</tt>.
+  <li> The only other way that <tt>a</tt> may know the name
+is that it has received the name in a message, from an actor who
+already knows <tt>b</tt>. That actor could possibly be <tt>b</tt>
+  itself, using the reserved word <tt>self</tt>.
+</ul>
+
+If <tt>a</tt> sends two asynchronous
+messages to <tt>b</tt>, the first message sent is guaranteed to be delivered
+before the second. But this is the only guarantee that Acton makes as
+to delivery order. If a third actor <tt>c</tt> also sends messages to
+<tt>b</tt>, nothing can be said about the arrival order between two
+messages with distinct senders. To be a bit more concrete, consider a
+community of worker actors that use a <tt>CounterA</tt> actor <tt>a</tt> to keep track
+how many times a certain task has been performed. To this end, all the 
+workers call <tt>a.inc()</tt> each time they have completed the
+task. We consider two scenarios:
+<ul>
+ <li> A method call <tt>a.read()</tt> which is done when 
+  the system is idle, will accurately report how many tasks have
+  been completed.
+ <li>Regardless of the state of the system, if one of the workers
+  calls <tt>a.read()</tt>, the returned value will certainly include
+  all tasks completed and reported by that worker. For task
+  completions reported by other workers, we cannot say whether 
+  tasks completed ``recently'' will have been counted or whether the
+  corresponding <tt>a.inc()</tt> messages remain in <tt>a</tt>'s
+  mailbox, to be processed after the reading of the counter.
+</ul>
+
+</body> </html>

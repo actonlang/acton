@@ -32,11 +32,11 @@ $WORD $Logical$__ixor__ ($Logical wit, $WORD a, $WORD b) {
     return wit->$class->__xor__(wit, a, b);
 }
 
-$WORD $Number$__imul__ ($Number wit, $WORD a, $WORD b) {
+$WORD $Times$__imul__ ($Times wit, $WORD a, $WORD b) {
     return wit->$class->__mul__(wit, a, b);
 }
 
-$WORD $Number$__itruediv__ ($Number wit, $WORD a, $WORD b) {
+$WORD $Div$__itruediv__ ($Div wit, $WORD a, $WORD b) {
     return wit->$class->__truediv__(wit, a, b);
 }
 
@@ -96,8 +96,26 @@ $Plus $Plus$new() {
   return res;
 }
 
+struct $Times$class $Times$methods = {"$Times$class", UNASSIGNED, NULL, (void (*)($Times))$default__init__, NULL, NULL, ($bool (*)($Times))$default__bool__,  ($str (*)($Times))$default__str__,
+                                      NULL, ($WORD (*)($Times,$WORD,$WORD))$Plus$__iadd__, $Times$__imul__};
+
+$Times $Times$new() {
+  $Times res = malloc(sizeof(struct $Times));
+  res->$class = &$Times$methods;
+  return res;
+}
+
+struct $Div$class $Div$methods = {"$Div$class", UNASSIGNED, NULL, (void (*)($Div))$default__init__, NULL, NULL, ($bool (*)($Div))$default__bool__,  ($str (*)($Div))$default__str__,
+                                    NULL, $Div$__itruediv__};
+
+$Div $Div$new() {
+  $Div res = malloc(sizeof(struct $Div));
+  res->$class = &$Div$methods;
+  return res;
+}
+
 struct $Minus$class $Minus$methods = {"$Minus$class", UNASSIGNED, NULL, (void (*)($Minus))$default__init__, NULL, NULL, ($bool (*)($Minus))$default__bool__,  ($str (*)($Minus))$default__str__,
-                                NULL};
+                                      NULL, $Minus$__isub__};
 
 $Minus $Minus$new() {
   $Minus res = malloc(sizeof(struct $Minus));
@@ -171,7 +189,7 @@ $Container $Container$new($Eq w$Eq$A$Container) {
 
 static void $Sequence$__init__($Sequence self) {
   self->w$Collection = $Collection$new();
-  self->w$Plus = $Plus$new();
+  self->w$Times = $Times$new();
 }
 
 struct $Sequence$class $Sequence$methods = {"$Sequence$class", UNASSIGNED, ($Super$class)&$Sliceable$methods, $Sequence$__init__, NULL, NULL, ($bool (*)($Sequence))$default__bool__,  ($str (*)($Sequence))$default__str__,
@@ -181,7 +199,7 @@ $Sequence $Sequence$new() {
   $Sequence res = malloc(sizeof(struct $Sequence));
   res->$class = &$Sequence$methods;
   res->w$Collection = $Collection$new();
-  res->w$Plus = $Plus$new();
+  res->w$Times = $Times$new();
   return res;
 }
 
@@ -225,8 +243,8 @@ void $Number$__init__($Number self) {
   self->w$Minus = $Minus$new();
 }
 
-struct $Number$class $Number$methods = {"$Number$class", UNASSIGNED, ($Super$class)&$Plus$methods, $Number$__init__, NULL, NULL, ($bool (*)($Number))$default__bool__,  ($str (*)($Number))$default__str__,
-                                        NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL};
+struct $Number$class $Number$methods = {"$Number$class", UNASSIGNED, ($Super$class)&$Times$methods, $Number$__init__, NULL, NULL, ($bool (*)($Number))$default__bool__,  ($str (*)($Number))$default__str__,
+                                        NULL, ($WORD (*)($Number,$WORD,$WORD))$Plus$__iadd__, NULL, ($WORD (*)($Number,$WORD,$WORD))$Plus$__iadd__, NULL, NULL, NULL, $Number$__ipow__, NULL, NULL, NULL, NULL, NULL, NULL};
 
 
 $Number $Number$new() {
@@ -238,7 +256,7 @@ $Number $Number$new() {
 
 
 struct $Real$class $Real$methods = {"$Real$class", UNASSIGNED, ($Super$class)&$Number$methods, (void (*)($Real))$default__init__, NULL, NULL, ($bool (*)($Real))$default__bool__,  ($str (*)($Real))$default__str__,
-                                    NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL};
+                                    NULL, ($WORD (*)($Real,$WORD,$WORD))$Plus$__iadd__, NULL, ($WORD (*)($Real,$WORD,$WORD))$Times$__imul__, NULL, NULL, NULL, ($WORD (*)($Real,$WORD,$WORD))$Number$__ipow__, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL};
 
 
 $Real $Real$new() {
@@ -248,7 +266,7 @@ $Real $Real$new() {
 }
 
 struct $Rational$class $Rational$methods = {"$Rational$class", UNASSIGNED, ($Super$class)&$Real$methods, (void (*)($Rational))$default__init__, NULL, NULL, ($bool (*)($Rational))$default__bool__,  ($str (*)($Rational))$default__str__,
-                                            NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL};
+                                            NULL, ($WORD (*)($Rational,$WORD,$WORD))$Plus$__iadd__, NULL,  ($WORD (*)($Rational,$WORD,$WORD))$Times$__imul__, NULL, NULL, NULL, ($WORD (*)($Rational,$WORD,$WORD))$Number$__ipow__, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL};
 
 
 $Rational $Rational$new() {
@@ -263,7 +281,7 @@ void $Integral$__init__($Integral self) {
 }
   
 struct $Integral$class $Integral$methods = {"$Integral$class", UNASSIGNED, ($Super$class)&$Rational$methods, $Integral$__init__, NULL, NULL, ($bool (*)($Integral))$default__bool__,  ($str (*)($Integral))$default__str__,
-                                            NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL};
+                                            NULL,  ($WORD (*)($Integral,$WORD,$WORD))$Plus$__iadd__, NULL,  ($WORD (*)($Integral,$WORD,$WORD))$Times$__imul__, NULL, NULL, NULL,  ($WORD (*)($Integral,$WORD,$WORD))$Number$__ipow__, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, $Integral$__ifloordiv__, $Integral$__imod__, $Integral$__ilshift__, $Integral$__irshift__, NULL};
 
 $Integral $Integral$new() {
   $Integral res = malloc(sizeof(struct $Integral));
@@ -278,6 +296,8 @@ void $register_builtin_protocols() {
   $register(&$Ord$methods);
   $register(&$Logical$methods);
   $register(&$Plus$methods);
+  $register(&$Times$methods);
+  $register(&$Div$methods);
   $register(&$Minus$methods);
   $register(&$Hashable$methods);
   $register(&$Indexed$methods);
@@ -293,7 +313,7 @@ void $register_builtin_protocols() {
   $register(&$Rational$methods);
   $register(&$Sequence$list$methods);
   $register(&$Collection$list$methods);
-  $register(&$Plus$list$methods);
+  $register(&$Times$list$methods);
   $register(&$Container$list$methods);
   $register(&$Mapping$dict$methods);
   $register(&$Indexed$dict$methods);
@@ -305,7 +325,7 @@ void $register_builtin_protocols() {
   $register(&$Ord$str$methods);
   $register(&$Container$str$methods);
   $register(&$Sliceable$str$methods);
-  $register(&$Plus$str$methods);
+  $register(&$Times$str$methods);
   $register(&$Hashable$str$methods);
   $register(&$Integral$int$methods);
   $register(&$Logical$int$methods);
@@ -313,10 +333,12 @@ void $register_builtin_protocols() {
   $register(&$Ord$int$methods);
   $register(&$Hashable$int$methods);
   $register(&$Real$float$methods);
+  $register(&$Div$float$methods);
   $register(&$Minus$float$methods);
   $register(&$Ord$float$methods);
   $register(&$Hashable$float$methods);
   $register(&$Number$complex$methods);
+  $register(&$Div$complex$methods);
   $register(&$Minus$complex$methods);
   $register(&$Eq$complex$methods);
   $register(&$Hashable$complex$methods);
@@ -327,7 +349,7 @@ void $register_builtin_protocols() {
   $register(&$Ord$bytearray$methods);
   $register(&$Sequence$bytearray$methods);
   $register(&$Collection$bytearray$methods);
-  $register(&$Plus$bytearray$methods);
+  $register(&$Times$bytearray$methods);
   $register(&$Container$bytearray$methods);
   $register(&$Hashable$WORD$methods);
   

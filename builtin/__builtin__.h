@@ -154,6 +154,18 @@ typedef struct $Plus *$Plus;
 struct $Plus$class;
 typedef struct $Plus$class *$Plus$class;
 
+struct $Times;
+typedef struct $Times *$Times;
+
+struct $Times$class;
+typedef struct $Times$class *$Times$class;
+
+struct $Div;
+typedef struct $Div *$Div;
+
+struct $Div$class;
+typedef struct $Div$class *$Div$class;
+
 struct $Minus;
 typedef struct $Minus *$Minus;
 
@@ -250,11 +262,11 @@ typedef struct $Collection$list *$Collection$list;
 struct $Collection$list$class;
 typedef struct $Collection$list$class *$Collection$list$class;
 
-struct $Plus$list;
-typedef struct $Plus$list *$Plus$list;
+struct $Times$list;
+typedef struct $Times$list *$Times$list;
 
-struct $Plus$list$class;
-typedef struct $Plus$list$class *$Plus$list$class;
+struct $Times$list$class;
+typedef struct $Times$list$class *$Times$list$class;
 
 struct $Container$list;
 typedef struct $Container$list *$Container$list;
@@ -322,11 +334,11 @@ typedef struct $Sliceable$str *$Sliceable$str;
 struct $Sliceable$str$class;
 typedef struct $Sliceable$str$class *$Sliceable$str$class;
 
-struct $Plus$str;
-typedef struct $Plus$str *$Plus$str;
+struct $Times$str;
+typedef struct $Times$str *$Times$str;
 
-struct $Plus$str$class;
-typedef struct $Plus$str$class *$Plus$str$class;
+struct $Times$str$class;
+typedef struct $Times$str$class *$Times$str$class;
 
 struct $Hashable$str;
 typedef struct $Hashable$str *$Hashable$str;
@@ -370,6 +382,12 @@ typedef struct $Real$float *$Real$float;
 struct $Real$float$class;
 typedef struct $Real$float$class *$Real$float$class;
 
+struct $Div$float;
+typedef struct $Div$float *$Div$float;
+
+struct $Div$float$class;
+typedef struct $Div$float$class *$Div$float$class;
+
 struct $Minus$float;
 typedef struct $Minus$float *$Minus$float;
 
@@ -393,6 +411,12 @@ typedef struct $Number$complex *$Number$complex;
 
 struct $Number$complex$class;
 typedef struct $Number$complex$class *$Number$complex$class;
+
+struct $Div$complex;
+typedef struct $Div$complex *$Div$complex;
+
+struct $Div$complex$class;
+typedef struct $Div$complex$class *$Div$complex$class;
 
 struct $Minus$complex;
 typedef struct $Minus$complex *$Minus$complex;
@@ -454,11 +478,11 @@ typedef struct $Collection$bytearray *$Collection$bytearray;
 struct $Collection$bytearray$class;
 typedef struct $Collection$bytearray$class *$Collection$bytearray$class;
 
-struct $Plus$bytearray;
-typedef struct $Plus$bytearray *$Plus$bytearray;
+struct $Times$bytearray;
+typedef struct $Times$bytearray *$Times$bytearray;
 
-struct $Plus$bytearray$class;
-typedef struct $Plus$bytearray$class *$Plus$bytearray$class;
+struct $Times$bytearray$class;
+typedef struct $Times$bytearray$class *$Times$bytearray$class;
 
 struct $Container$bytearray;
 typedef struct $Container$bytearray *$Container$bytearray;
@@ -492,6 +516,7 @@ struct $Eq$class {
     $bool (*__ne__)($Eq, $WORD, $WORD);
 };
 
+$WORD $Eq$__ne__($Eq wit, $WORD a, $WORD b);
 extern struct $Eq$class $Eq$methods;
 $Eq $Eq$new();
 
@@ -518,6 +543,8 @@ struct $Ord$class {
     $bool (*__ge__)($Ord, $WORD, $WORD);
 };
 
+$WORD $Ord$__gt__($Ord wit, $WORD a, $WORD b);
+$WORD $Ord$__ge__($Ord wit, $WORD a, $WORD b);
 extern struct $Ord$class $Ord$methods;
 $Ord $Ord$new();
 
@@ -574,6 +601,56 @@ $WORD $Plus$__iadd__ ($Plus, $WORD, $WORD);
 
 extern struct $Plus$class $Plus$methods;
 $Plus $Plus$new();
+
+// $Times ////////////////////////////////////////////////////////////
+
+struct $Times {
+    $Times$class $class;
+};
+
+struct $Times$class {
+    char *$GCINFO;
+    int $class_id;
+    $Super$class $superclass;
+    void (*__init__)($Times);
+    void (*__serialize__)($Times,$Serial$state);
+    $Times (*__deserialize__)($Times,$Serial$state);
+    $bool (*__bool__)($Times);
+    $str (*__str__)($Times);
+    $WORD (*__add__)($Times, $WORD, $WORD);
+    $WORD (*__iadd__)($Times, $WORD, $WORD);
+    $WORD (*__mul__)($Times, $WORD, $WORD);
+    $WORD (*__imul__)($Times, $WORD, $WORD);
+};
+
+$WORD $Times$__imul__ ($Times, $WORD, $WORD);
+
+extern struct $Times$class $Times$methods;
+$Times $Times$new();
+
+// $Div ////////////////////////////////////////////////////////////
+
+struct $Div {
+    $Div$class $class;
+};
+
+struct $Div$class {
+    char *$GCINFO;
+    int $class_id;
+    $Super$class $superclass;
+    void (*__init__)($Div);
+    void (*__serialize__)($Div,$Serial$state);
+    $Div (*__deserialize__)($Div,$Serial$state);
+    $bool (*__bool__)($Div);
+    $str (*__str__)($Div);
+    $WORD (*__truediv__)($Div, $WORD, $WORD);
+    $WORD (*__itruediv__)($Div, $WORD, $WORD);
+};
+
+$WORD $Div$__itruediv__ ($Div, $WORD, $WORD);
+
+extern struct $Div$class $Div$methods;
+$Div $Div$new();
 
 // $Minus ////////////////////////////////////////////////////////////
 
@@ -746,7 +823,7 @@ extern struct $Container$class $Container$methods;
 struct $Sequence {
     $Sequence$class $class;
     $Collection w$Collection;
-    $Plus w$Plus;
+    $Times w$Times;
 };
 
 struct $Sequence$class {
@@ -857,13 +934,13 @@ struct $Number$class {
     $str (*__str__)($Number);
     $WORD (*__add__)($Number, $WORD, $WORD);
     $WORD (*__iadd__)($Number, $WORD, $WORD);
+    $WORD (*__mul__)($Number, $WORD, $WORD);
+    $WORD (*__imul__)($Number, $WORD, $WORD);
     $WORD (*__fromatom__)($Number,$atom);
     $complex (*__complx__)($Number, $WORD);
-    $WORD (*__mul__)($Number, $WORD, $WORD);
-    $WORD (*__truediv__)($Number, $WORD, $WORD);
+  //    $WORD (*__truediv__)($Number, $WORD, $WORD);
     $WORD (*__pow__)($Number, $WORD, $WORD);
-    $WORD (*__imul__)($Number, $WORD, $WORD);
-    $WORD (*__itruediv__)($Number, $WORD, $WORD);
+  //    $WORD (*__itruediv__)($Number, $WORD, $WORD);
     $WORD (*__ipow__)($Number, $WORD, $WORD);
     $WORD (*__neg__)($Number, $WORD);
     $WORD (*__pos__)($Number, $WORD);
@@ -873,8 +950,7 @@ struct $Number$class {
     $WORD (*conjugate)($Number, $WORD);
 };
 
-$WORD $Number$__imul__($Number, $WORD, $WORD);
-$WORD $Number$__itruediv__($Number, $WORD, $WORD);
+//$WORD $Number$__itruediv__($Number, $WORD, $WORD);
 $WORD $Number$__ipow__($Number, $WORD, $WORD);
 
 extern struct $Number$class $Number$methods;
@@ -898,13 +974,13 @@ struct $Real$class {
     $str (*__str__)($Real);
     $WORD (*__add__)($Real, $WORD, $WORD);
     $WORD (*__iadd__)($Real, $WORD, $WORD);
+    $WORD (*__mul__)($Real, $WORD, $WORD);
+    $WORD (*__imul__)($Real, $WORD, $WORD);
     $WORD (*__fromatom__)($Real,$atom);
     $complex (*__complx__)($Real, $WORD);
-    $WORD (*__mul__)($Real, $WORD, $WORD);
-    $WORD (*__truediv__)($Real, $WORD, $WORD);
+  //    $WORD (*__truediv__)($Real, $WORD, $WORD);
     $WORD (*__pow__)($Real, $WORD, $WORD);
-    $WORD (*__imul__)($Real, $WORD, $WORD);
-    $WORD (*__itruediv__)($Real, $WORD, $WORD);
+  //    $WORD (*__itruediv__)($Real, $WORD, $WORD);
     $WORD (*__ipow__)($Real, $WORD, $WORD);
     $WORD (*__neg__)($Real, $WORD);
     $WORD (*__pos__)($Real, $WORD);
@@ -944,13 +1020,13 @@ struct $Rational$class {
     $str (*__str__)($Rational);
     $WORD (*__add__)($Rational, $WORD, $WORD);
     $WORD (*__iadd__)($Rational, $WORD, $WORD);
+    $WORD (*__mul__)($Rational, $WORD, $WORD);
+    $WORD (*__imul__)($Rational, $WORD, $WORD);
     $WORD (*__fromatom__)($Rational,$atom);
     $complex (*__complx__)($Rational, $WORD);
-    $WORD (*__mul__)($Rational, $WORD, $WORD);
-    $WORD (*__truediv__)($Rational, $WORD, $WORD);
+  //    $WORD (*__truediv__)($Rational, $WORD, $WORD);
     $WORD (*__pow__)($Rational, $WORD, $WORD);
-    $WORD (*__imul__)($Rational, $WORD, $WORD);
-    $WORD (*__itruediv__)($Rational, $WORD, $WORD);
+  //    $WORD (*__itruediv__)($Rational, $WORD, $WORD);
     $WORD (*__ipow__)($Rational, $WORD, $WORD);
     $WORD (*__neg__)($Rational, $WORD);
     $WORD (*__pos__)($Rational, $WORD);
@@ -989,13 +1065,13 @@ struct $Integral$class {
     $str (*__str__)($Integral);
     $WORD (*__add__)($Integral, $WORD, $WORD);
     $WORD (*__iadd__)($Integral, $WORD, $WORD);
+    $WORD (*__mul__)($Integral, $WORD, $WORD);
+    $WORD (*__imul__)($Integral, $WORD, $WORD);
     $WORD (*__fromatom__)($Integral,$atom);
     $complex (*__complx__)($Integral, $WORD);
-    $WORD (*__mul__)($Integral, $WORD, $WORD);
-    $WORD (*__truediv__)($Integral, $WORD, $WORD);
+  //    $WORD (*__truediv__)($Integral, $WORD, $WORD);
     $WORD (*__pow__)($Integral, $WORD, $WORD);
-    $WORD (*__imul__)($Integral, $WORD, $WORD);
-    $WORD (*__itruediv__)($Integral, $WORD, $WORD);
+  //    $WORD (*__itruediv__)($Integral, $WORD, $WORD);
     $WORD (*__ipow__)($Integral, $WORD, $WORD);
     $WORD (*__neg__)($Integral, $WORD);
     $WORD (*__pos__)($Integral, $WORD);
@@ -1036,7 +1112,7 @@ extern struct $Integral$class $Integral$methods;
 struct $Sequence$list {
     $Sequence$list$class $class;
     $Collection w$Collection;
-    $Plus w$Plus;
+    $Times w$Times;
 };
 
 struct $Sequence$list$class {
@@ -1102,30 +1178,33 @@ $Iterator $Collection$list$__iter__ ($Collection$list, $list);
 $list $Collection$list$__fromiter__ ($Collection$list, $Iterable, $WORD);
 $int $Collection$list$__len__ ($Collection$list, $list);
 
-// $Plus$list ////////////////////////////////////////////////////////////
+// $Times$list ////////////////////////////////////////////////////////////
 
-struct $Plus$list {
-    $Plus$list$class $class;
+struct $Times$list {
+    $Times$list$class $class;
     $Sequence w$Sequence;
 };
 
-struct $Plus$list$class {
+struct $Times$list$class {
     char *$GCINFO;
     int $class_id;
     $Super$class $superclass;
-    void (*__init__)($Plus$list, $Sequence);
-    void (*__serialize__)($Plus$list,$Serial$state);
-    $Plus$list (*__deserialize__)($Plus$list,$Serial$state);
-    $bool (*__bool__)($Plus$list);
-    $str (*__str__)($Plus$list);
-    $list (*__add__)($Plus$list, $list, $list);
-    $list (*__iadd__)($Plus$list, $list, $list);
+    void (*__init__)($Times$list, $Sequence);
+    void (*__serialize__)($Times$list,$Serial$state);
+    $Times$list (*__deserialize__)($Times$list,$Serial$state);
+    $bool (*__bool__)($Times$list);
+    $str (*__str__)($Times$list);
+    $list (*__add__)($Times$list, $list, $list);
+    $list (*__iadd__)($Times$list, $list, $list);
+    $list (*__mul__)($Times$list, $list, $int);
+    $list (*__imul__)($Times$list, $list, $int);
 };
 
-void $Plus$list$__init__ ($Plus$list, $Sequence);
-void $Plus$list$__serialize__($Plus$list, $Serial$state);
-$Plus$list $Plus$list$__deserialize__($Plus$list, $Serial$state);
-$list $Plus$list$__add__ ($Plus$list, $list, $list);
+void $Times$list$__init__ ($Times$list, $Sequence);
+void $Times$list$__serialize__($Times$list, $Serial$state);
+$Times$list $Times$list$__deserialize__($Times$list, $Serial$state);
+$list $Times$list$__add__ ($Times$list, $list, $list);
+$list $Times$list$__mul__($Times$list, $list, $int);
 
 // $Container$list ////////////////////////////////////////////////////////////
 
@@ -1492,31 +1571,34 @@ $str $Sliceable$str$__getslice__ ($Sliceable$str, $str, $slice);
 void $Sliceable$str$__setslice__ ($Sliceable$str, $str, $Iterable, $slice, $WORD);
 void $Sliceable$str$__delslice__ ($Sliceable$str, $str, $slice);
 
-// $Plus$str ////////////////////////////////////////////////////////////
+// $Times$str ////////////////////////////////////////////////////////////
 
-struct $Plus$str {
-    $Plus$str$class $class;
+struct $Times$str {
+    $Times$str$class $class;
 };
 
-struct $Plus$str$class {
+struct $Times$str$class {
     char *$GCINFO;
     int $class_id;
     $Super$class $superclass;
-    void (*__init__)($Plus$str);
-    void (*__serialize__)($Plus$str,$Serial$state);
-    $Plus$str (*__deserialize__)($Plus$str,$Serial$state);
-    $bool (*__bool__)($Plus$str);
-    $str (*__str__)($Plus$str);
-    $str (*__add__)($Plus$str, $str, $str);
-    $str (*__iadd__)($Plus$str, $str, $str);
+    void (*__init__)($Times$str);
+    void (*__serialize__)($Times$str,$Serial$state);
+    $Times$str (*__deserialize__)($Times$str,$Serial$state);
+    $bool (*__bool__)($Times$str);
+    $str (*__str__)($Times$str);
+    $str (*__add__)($Times$str, $str, $str);
+    $str (*__iadd__)($Times$str, $str, $str);
+    $str (*__mul__)($Times$str, $str, $int);
+    $str (*__imul__)($Times$str, $str, $int);
 };
 
-void $Plus$str$__init__ ($Plus$str);
-void $Plus$str$__serialize__($Plus$str, $Serial$state);
-$Plus$str $Plus$str$__deserialize__($Plus$str, $Serial$state);
-$bool $Plus$str$__bool__($Plus$str);
-$str $Plus$str$__str__($Plus$str);
-$str $Plus$str$__add__ ($Plus$str, $str, $str);
+void $Times$str$__init__ ($Times$str);
+void $Times$str$__serialize__($Times$str, $Serial$state);
+$Times$str $Times$str$__deserialize__($Times$str, $Serial$state);
+$bool $Times$str$__bool__($Times$str);
+$str $Times$str$__str__($Times$str);
+$str $Times$str$__add__ ($Times$str, $str, $str);
+$str $Times$str$__mul__($Times$str, $str, $int);
 
 // $Hashable$str ////////////////////////////////////////////////////////////
 
@@ -1564,13 +1646,13 @@ struct $Integral$int$class {
     $str (*__str__)($Integral$int);
     $int (*__add__)($Integral$int, $int, $int);
     $int (*__iadd__)($Integral$int, $int, $int);
+    $int (*__mul__)($Integral$int, $int, $int);
+    $int (*__imul__)($Integral$int, $int, $int);
     $int (*__fromatom__)($Integral$int,$atom);
     $complex (*__complx__)($Integral$int, $int);
-    $int (*__mul__)($Integral$int, $int, $int);
-    $int (*__truediv__)($Integral$int, $int, $int);
+  //    $int (*__truediv__)($Integral$int, $int, $int);
     $int (*__pow__)($Integral$int, $int, $int);
-    $int (*__imul__)($Integral$int, $int, $int);
-    $int (*__itruediv__)($Integral$int, $int, $int);
+  //    $int (*__itruediv__)($Integral$int, $int, $int);
     $int (*__ipow__)($Integral$int, $int, $int);
     $int (*__neg__)($Integral$int, $int);
     $int (*__pos__)($Integral$int, $int);
@@ -1606,7 +1688,7 @@ $int $Integral$int$__add__($Integral$int, $int, $int);
 $int $Integral$int$__fromatom__($Integral$int,$atom);
 $complex $Integral$int$__complx__($Integral$int, $int);
 $int $Integral$int$__mul__($Integral$int, $int, $int);
-$int $Integral$int$__truediv__($Integral$int, $int, $int);
+//$int $Integral$int$__truediv__($Integral$int, $int, $int);
 $int $Integral$int$__pow__($Integral$int, $int, $int);
 $int $Integral$int$__neg__($Integral$int, $int);
 $int $Integral$int$__pos__($Integral$int, $int);
@@ -1765,13 +1847,13 @@ struct $Real$float$class {
     $str (*__str__)($Real$float);
     $float (*__add__)($Real$float, $float, $float);
     $float (*__iadd__)($Real$float, $float, $float);
+    $float (*__mul__)($Real$float, $float, $float);
+    $float (*__imul__)($Real$float, $float, $float);
     $float (*__fromatom__)($Real$float,$atom);
     $complex (*__complx__)($Real$float, $float);
-    $float (*__mul__)($Real$float, $float, $float);
-    $float (*__truediv__)($Real$float, $float, $float);
+  //    $float (*__truediv__)($Real$float, $float, $float);
     $float (*__pow__)($Real$float, $float, $float);
-    $float (*__imul__)($Real$float, $float, $float);
-    $float (*__itruediv__)($Real$float, $float, $float);
+  //    $float (*__itruediv__)($Real$float, $float, $float);
     $float (*__ipow__)($Real$float, $float, $float);
     $float (*__neg__)($Real$float, $float);
     $float (*__pos__)($Real$float, $float);
@@ -1793,7 +1875,7 @@ $float $Real$float$__add__($Real$float, $float, $float);
 $float $Real$float$__fromatom__($Real$float,$atom);
 $complex $Real$float$__complx__($Real$float, $float);
 $float $Real$float$__mul__($Real$float, $float, $float);
-$float $Real$float$__truediv__($Real$float, $float, $float);
+//$float $Real$float$__truediv__($Real$float, $float, $float);
 $float $Real$float$__pow__($Real$float, $float, $float);
 $float $Real$float$__neg__($Real$float, $float);
 $float $Real$float$__pos__($Real$float, $float);
@@ -1806,6 +1888,28 @@ $WORD $Real$float$__trunc__ ($Real$float, $float, $Integral);
 $WORD $Real$float$__floor__ ($Real$float, $float, $Integral);
 $WORD $Real$float$__ceil__ ($Real$float, $float, $Integral);
 $float $Real$float$__round__ ($Real$float, $float, $int);
+
+// $Div$float ////////////////////////////////////////////////////////////
+
+struct $Div$float {
+    $Div$float$class $class;
+};
+
+struct $Div$float$class {
+    char *$GCINFO;
+    int $class_id;
+    $Super$class $superclass;
+    void (*__init__)($Div$float);
+    void (*__serialize__)($Div$float,$Serial$state);
+    $Div$float (*__deserialize__)($Div$float,$Serial$state);
+    $bool (*__bool__)($Div$float);
+    $str (*__str__)($Div$float);
+    $float (*__truediv__)($Div$float, $float, $float);
+    $float (*__itruediv__)($Div$float, $float, $float);
+};
+
+$float $Div$float$__truediv__ ($Div$float, $float, $float);
+$float $Div$float$__itruediv__ ($Div$float, $float, $float);
 
 // $Minus$float ////////////////////////////////////////////////////////////
 
@@ -1910,13 +2014,13 @@ struct $Number$complex$class {
     $str (*__str__)($Number$complex);
     $complex (*__add__)($Number$complex, $complex, $complex);
     $complex (*__iadd__)($Number$complex, $complex, $complex);
+    $complex (*__mul__)($Number$complex, $complex, $complex);
+    $complex (*__imul__)($Number$complex, $complex, $complex);
     $complex (*__fromatom__)($Number$complex,$atom);
     $complex (*__complx__)($Number$complex, $complex);
-    $complex (*__mul__)($Number$complex, $complex, $complex);
-    $complex (*__truediv__)($Number$complex, $complex, $complex);
+  //    $complex (*__truediv__)($Number$complex, $complex, $complex);
     $complex (*__pow__)($Number$complex, $complex, $complex);
-    $complex (*__imul__)($Number$complex, $complex, $complex);
-    $complex (*__itruediv__)($Number$complex, $complex, $complex);
+  //    $complex (*__itruediv__)($Number$complex, $complex, $complex);
     $complex (*__ipow__)($Number$complex, $complex, $complex);
     $complex (*__neg__)($Number$complex, $complex);
     $complex (*__pos__)($Number$complex, $complex);
@@ -1933,7 +2037,7 @@ $complex $Number$complex$__add__ ($Number$complex, $complex, $complex);
 $complex $Number$complex$__fromatom__($Number$complex,$atom);
 $complex $Number$complex$__complx__ ($Number$complex, $complex);
 $complex $Number$complex$__mul__ ($Number$complex, $complex, $complex);
-$complex $Number$complex$__truediv__ ($Number$complex, $complex, $complex);
+//$complex $Number$complex$__truediv__ ($Number$complex, $complex, $complex);
 $complex $Number$complex$__pow__ ($Number$complex, $complex, $complex);
 $complex $Number$complex$__neg__ ($Number$complex, $complex);
 $complex $Number$complex$__pos__ ($Number$complex, $complex);
@@ -1941,6 +2045,28 @@ $WORD $Number$complex$real ($Number$complex, $complex, $Real);
 $WORD $Number$complex$imag ($Number$complex, $complex, $Real);
 $WORD $Number$complex$__abs__ ($Number$complex, $complex, $Real);
 $complex $Number$complex$conjugate ($Number$complex, $complex);
+
+// $Div$complex ////////////////////////////////////////////////////////////
+
+struct $Div$complex {
+    $Div$complex$class $class;
+};
+
+struct $Div$complex$class {
+    char *$GCINFO;
+    int $class_id;
+    $Super$class $superclass;
+    void (*__init__)($Div$complex);
+    void (*__serialize__)($Div$complex,$Serial$state);
+    $Div$complex (*__deserialize__)($Div$complex,$Serial$state);
+    $bool (*__bool__)($Div$complex);
+    $str (*__str__)($Div$complex);
+    $complex (*__truediv__)($Div$complex, $complex, $complex);
+    $complex (*__itruediv__)($Div$complex, $complex, $complex);
+};
+
+$complex $Div$complex$__truediv__ ($Div$complex, $complex, $complex);
+$complex $Div$complex$__itruediv__ ($Div$complex, $complex, $complex);
 
 // $Minus$complex ////////////////////////////////////////////////////////////
 
@@ -2171,7 +2297,7 @@ $bool $Ord$bytearray$__ge__ ($Ord$bytearray, $bytearray, $bytearray);
 struct $Sequence$bytearray {
     $Sequence$bytearray$class $class;
     $Collection w$Collection;
-    $Plus w$Plus;
+    $Times w$Times;
 };
 
 struct $Sequence$bytearray$class {
@@ -2241,32 +2367,35 @@ $Iterator $Collection$bytearray$__iter__ ($Collection$bytearray, $bytearray);
 $bytearray $Collection$bytearray$__fromiter__ ($Collection$bytearray, $Iterable, $WORD);
 $int $Collection$bytearray$__len__ ($Collection$bytearray, $bytearray);
 
-// $Plus$bytearray ////////////////////////////////////////////////////////////
+// $Times$bytearray ////////////////////////////////////////////////////////////
 
-struct $Plus$bytearray {
-    $Plus$bytearray$class $class;
+struct $Times$bytearray {
+    $Times$bytearray$class $class;
     $Sequence w$Sequence;
 };
 
-struct $Plus$bytearray$class {
+struct $Times$bytearray$class {
     char *$GCINFO;
     int $class_id;
     $Super$class $superclass;
-    void (*__init__)($Plus$bytearray, $Sequence);
-    void (*__serialize__)($Plus$bytearray,$Serial$state);
-    $Plus$bytearray (*__deserialize__)($Plus$bytearray,$Serial$state);
-    $bool (*__bool__)($Plus$bytearray);
-    $str (*__str__)($Plus$bytearray);
-    $bytearray (*__add__)($Plus$bytearray, $bytearray, $bytearray);
-    $bytearray (*__iadd__)($Plus$bytearray, $bytearray, $bytearray);
+    void (*__init__)($Times$bytearray, $Sequence);
+    void (*__serialize__)($Times$bytearray,$Serial$state);
+    $Times$bytearray (*__deserialize__)($Times$bytearray,$Serial$state);
+    $bool (*__bool__)($Times$bytearray);
+    $str (*__str__)($Times$bytearray);
+    $bytearray (*__add__)($Times$bytearray, $bytearray, $bytearray);
+    $bytearray (*__iadd__)($Times$bytearray, $bytearray, $bytearray);
+    $bytearray (*__mul__)($Times$bytearray, $bytearray, $int);
+    $bytearray (*__imul__)($Times$bytearray, $bytearray, $int);
 };
 
-void $Plus$bytearray$__init__ ($Plus$bytearray, $Sequence);
-void $Plus$bytearray$__serialize__($Plus$bytearray, $Serial$state);
-$Plus$bytearray $Plus$bytearray$__deserialize__($Plus$bytearray, $Serial$state);
-$bool $Plus$bytearray$__bool__($Plus$bytearray);
-$str $Plus$bytearray$__str__($Plus$bytearray);
-$bytearray $Plus$bytearray$__add__ ($Plus$bytearray, $bytearray, $bytearray);
+void $Times$bytearray$__init__ ($Times$bytearray, $Sequence);
+void $Times$bytearray$__serialize__($Times$bytearray, $Serial$state);
+$Times$bytearray $Times$bytearray$__deserialize__($Times$bytearray, $Serial$state);
+$bool $Times$bytearray$__bool__($Times$bytearray);
+$str $Times$bytearray$__str__($Times$bytearray);
+$bytearray $Times$bytearray$__add__ ($Times$bytearray, $bytearray, $bytearray);
+$bytearray $Times$bytearray$__mul__ ($Times$bytearray, $bytearray, $int);
 
 // $Container$bytearray ////////////////////////////////////////////////////////////
 
