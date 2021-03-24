@@ -347,7 +347,7 @@ instance InfEnv Stmt where
     
     infEnv env (Signature l ns sc dec)
       | not $ null redefs               = illegalRedef (head redefs)
-      | otherwise                       = return ([], [(n, NSig (unalias env sc) dec) | n <- ns], Signature l ns sc dec)
+      | otherwise                       = return ([], [(n, NSig sc dec) | n <- ns], Signature l ns sc dec)
       where redefs                      = [ n | n <- ns, findName n env /= NReserved ]
 
     infEnv env (Data l _ _)             = notYet l "data syntax"
@@ -445,7 +445,7 @@ instance InfEnv Decl where
                                                  prow <- newTVarOfKind PRow
                                                  krow <- newTVarOfKind KRow
                                                  --traceM ("\n## infEnv actor " ++ prstr (n, NAct q prow krow te))
-                                                 return ([], [(n, NAct (unalias env q) prow krow te)], d)
+                                                 return ([], [(n, NAct q prow krow te)], d)
                                              _ ->
                                                  illegalRedef n
 
@@ -462,11 +462,10 @@ instance InfEnv Decl where
                                                  checkNoEscape env (qbound q)
                                                  (nterms,_,_) <- checkAttributes [] te' te
                                                  let te1 = stubAttributes env te
-                                                 return (cs1, [(n, NClass q' as' (te0++te1))], Class l n q us (bindWits eq1 ++ props te0 ++ b'))
+                                                 return (cs1, [(n, NClass q as' (te0++te1))], Class l n q us (bindWits eq1 ++ props te0 ++ b'))
                                              _ -> illegalRedef n
       where env1                        = define (exclude (toSigs te') [initKW]) $ reserve (bound b) $ defineSelfOpaque $ defineTVars (stripQual q) env
-            (as,ps)                     = mro2 env (unalias env us)
-            q'                          = unalias env q
+            (as,ps)                     = mro2 env us
             as'                         = if null as && not (inBuiltin env && n == nValue) then [([Nothing],cValue)] else as
             te'                         = parentTEnv env as'
             props te0                   = [ Signature l0 [n] sc Property | (n,NSig sc Property) <- te0 ]
@@ -484,11 +483,10 @@ instance InfEnv Decl where
                                                  when (not $ null nterms) $ err2 (dom nterms) "Method/attribute lacks signature:"
                                                  when (initKW `elem` sigs) $ err2 (filter (==initKW) sigs) "A protocol cannot define __init__"
                                                  when (not $ null noself) $ err2 noself "A static protocol signature must mention Self"
-                                                 return (cs1, [(n, NProto q' ps te)], Protocol l n q us (bindWits eq1 ++ b'))
+                                                 return (cs1, [(n, NProto q ps te)], Protocol l n q us (bindWits eq1 ++ b'))
                                              _ -> illegalRedef n
       where env1                        = define (toSigs te') $ reserve (bound b) $ defineSelfOpaque $ defineTVars (stripQual q) env
-            ps                          = mro1 env (unalias env us)
-            q'                          = unalias env q
+            ps                          = mro1 env us
             te'                         = parentTEnv env ps
 
     infEnv env (Extension l q c us b)
@@ -508,12 +506,11 @@ instance InfEnv Decl where
                                              when (not (null asigs || stub env)) $ err3 l asigs "Protocol method/attribute lacks implementation:"
                                              when (not $ null sigs) $ err2 sigs "Extension with new methods/attributes not supported"
                                              -- w <- newWitness
-                                             return (cs1, [(extensionName (head us) n, NExt q' c ps te)], Extension l q c us (bindWits eq1 ++ b'))
+                                             return (cs1, [(extensionName (head us) n, NExt q c ps te)], Extension l q c us (bindWits eq1 ++ b'))
       where TC n ts                     = c
             env1                        = define (toSigs te') $ reserve (bound b) $ defineSelfOpaque $ defineTVars (stripQual q) env
             witsearch                   = findWitness env n (implProto env $ head us)
-            ps                          = mro1 env (unalias env us)     -- TODO: check that ps doesn't contradict any previous extension mro for c
-            q'                          = unalias env q
+            ps                          = mro1 env us     -- TODO: check that ps doesn't contradict any previous extension mro for c
             final                       = concat [ conAttrs env pn | (_, TC pn _) <- ps, hasWitness env n pn ]
             te'                         = parentTEnv env ps
 
@@ -691,7 +688,7 @@ abstractDefs env q eq b                 = map absDef b
 instance Check Decl where
     checkEnv env (Def l n q p k a b dec fx)
                                         = do --traceM ("## checkEnv def " ++ prstr n ++ " (q = [" ++ prstrs q ++ "])")
-                                             t <- maybe newTVar return (unalias env a)
+                                             t <- maybe newTVar return a
                                              pushFX fx t
                                              st <- newTVar
                                              wellformed env1 q
@@ -1023,7 +1020,7 @@ instance Infer Expr where
                                              NClass q _ _ -> do
                                                 (cs,t,e') <- infer env e
                                                 ts <- newTVars [ tvkind v | v <- qbound q ]
-                                                return (Cast (tCon (TC (unalias env c) ts)) t :
+                                                return (Cast (tCon (TC c ts)) t :
                                                         cs, tBool, IsInstance l e' c)
                                              _ -> nameUnexpected c
     infer env (BinOp l s@Strings{} Mod e)
@@ -1360,7 +1357,7 @@ inferBool env (IsInstance l e@(Var _ (NoQ n)) c)
                                              NClass q _ _ -> do
                                                 (cs,t,e') <- infer env e
                                                 ts <- newTVars [ tvkind v | v <- qbound q ]
-                                                let tc = tCon (TC (unalias env c) ts)
+                                                let tc = tCon (TC c ts)
                                                 return (Cast tc t :
                                                         cs, define [(n,NVar tc)] env, sCast n t tc, IsInstance l e' c)
                                              _ -> nameUnexpected c
@@ -1407,32 +1404,32 @@ instance (Infer a) => Infer (Maybe a) where
                                              return (cs, t, Just e')
 
 instance InfEnv PosPar where
-    infEnv env (PosPar n a Nothing p)   = do t <- maybe newTVar return (unalias env a)
+    infEnv env (PosPar n a Nothing p)   = do t <- maybe newTVar return a
                                              wellformed env t
                                              (cs,te,p') <- infEnv (define [(n, NVar t)] env) p
                                              return (cs, (n, NVar t):te, PosPar n (Just t) Nothing p')
-    infEnv env (PosPar n a (Just e) p)  = do t <- maybe newTVar return (unalias env a)
+    infEnv env (PosPar n a (Just e) p)  = do t <- maybe newTVar return a
                                              wellformed env t
                                              (cs1,e') <- inferSub env t e
                                              (cs2,te,p') <- infEnv (define [(n, NVar t)] env) p
                                              return (cs1++cs2, (n, NVar t):te, PosPar n (Just t) (Just e') p')
-    infEnv env (PosSTAR n a)            = do t <- maybe newTVar return (unalias env a)
+    infEnv env (PosSTAR n a)            = do t <- maybe newTVar return a
                                              wellformed env t
                                              r <- newTVarOfKind PRow
                                              return ([Cast t (tTupleP r)], [(n, NVar t)], PosSTAR n (Just $ tTupleP r))
     infEnv env PosNIL                   = return ([], [], PosNIL)
 
 instance InfEnv KwdPar where
-    infEnv env (KwdPar n a Nothing k)   = do t <- maybe newTVar return (unalias env a)
+    infEnv env (KwdPar n a Nothing k)   = do t <- maybe newTVar return a
                                              wellformed env t
                                              (cs,te,k') <- infEnv (define [(n, NVar t)] env) k
                                              return (cs, (n, NVar t):te, KwdPar n (Just t) Nothing k')
-    infEnv env (KwdPar n a (Just e) k)  = do t <- maybe newTVar return (unalias env a)
+    infEnv env (KwdPar n a (Just e) k)  = do t <- maybe newTVar return a
                                              wellformed env t
                                              (cs1,e') <- inferSub env t e
                                              (cs2,te,k') <- infEnv (define [(n, NVar t)] env) k
                                              return (cs1++cs2, (n, NVar t):te, KwdPar n (Just t) (Just e') k')
-    infEnv env (KwdSTAR n a)            = do t <- maybe newTVar return (unalias env a)
+    infEnv env (KwdSTAR n a)            = do t <- maybe newTVar return a
                                              wellformed env t
                                              r <- newTVarOfKind KRow
                                              return ([Cast t (tTupleK r)], [(n, NVar t)], KwdSTAR n (Just $ tTupleK r))
@@ -1509,7 +1506,7 @@ instance InfEnvT KwdPat where
 
 
 instance InfEnvT Pattern where
-    infEnvT env (PVar l n a)            = do t <- maybe newTVar return (unalias env a)
+    infEnvT env (PVar l n a)            = do t <- maybe newTVar return a
                                              wellformed env t
                                              case findName n env of
                                                  NReserved -> do

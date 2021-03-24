@@ -323,7 +323,7 @@ instance KCheck Expr where
     kchk env (Slice l e sl)         = Slice l <$> kchk env e <*> kchk env sl
     kchk env (NDSlice l e ss)       = NDSlice l <$> kchk env e <*> kchk env ss
     kchk env (Cond l e1 e2 e3)      = Cond l <$> kchk env e1 <*> kchk env e2 <*> kchk env e3
-    kchk env (IsInstance l e c)     = IsInstance l <$> kchk env e <*> return c
+    kchk env (IsInstance l e c)     = IsInstance l <$> kchk env e <*> return (unalias env c)
     kchk env (BinOp l e1 op e2)     = BinOp l <$> kchk env e1 <*> return op <*> kchk env e2
     kchk env (CompOp l e ops)       = CompOp l <$> kchk env e <*> kchk env ops
     kchk env (UnOp l op e)          = UnOp l op <$> kchk env e 

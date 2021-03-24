@@ -217,7 +217,7 @@ univars cs                              = concat $ map uni cs
         uni _                           = []
 
 allAbove env (TCon _ tc)                = tOpt tWild : map tCon tcons
-  where n                               = unalias env (tcname tc)
+  where n                               = tcname tc
         tcons                           = allAncestors env tc ++ [tc]
 allAbove env (TVar _ tv)
   | not $ univar tv                     = [tOpt tWild, tCon tc, tVar tv]
