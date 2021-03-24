@@ -88,20 +88,23 @@ instance Pretty (Name,Kind) where
 
 
 autoQuantS env (TSchema l q t)      = TSchema l (q ++ auto_q) t
-  where auto_q                      = map quant $ nub (tyfree q ++ tyfree t) \\ (tvSelf : tybound q ++ tvars env)
+  where auto_q                      = map quant $ nub (tyfree q ++ tyfree t) \\ (tvSelf : qbound q ++ tvars env)
 
 autoQuantD env (Def l n q p k t b d x)
                                     = Def l n (q ++ auto_q) p k t b d x
-  where auto_q                      = map quant $ nub (tyfree p ++ tyfree k ++ tyfree t) \\ (tvSelf : tybound q ++ tvars env)
+  where auto_q                      = map quant $ nub (tyfree q ++ tyfree p ++ tyfree k ++ tyfree t) \\ (tvSelf : qbound q ++ tvars env)
+autoQuantD env (Extension l q c ps b)
+                                    = Extension l (q ++ auto_q) c ps b
+  where auto_q                      = map quant $ nub (tyfree q ++ tyfree c ++ tyfree ps) \\ (tvSelf : qbound q ++ tvars env)
 autoQuantD env d                    = d
 
 
 --                  TWild             ~TWild
---                ---------------------------------------------------
---         Exist  | Def             | TSchema                        |
---                ---------------------------------------------------
---        ~Exist  | Lambda,Pattern  | Actor,Class,Protocol,Extension |
---                ---------------------------------------------------
+--                -------------------------------------------
+--         Exist  | Def             | TSchema,Extension     |
+--                -------------------------------------------
+--        ~Exist  | Lambda,Pattern  | Actor,Class,Protocol  |
+--                -------------------------------------------
 
 
 ----------------------------------------------------------------------------------------------------------------------
@@ -196,12 +199,14 @@ instance ConvPExist Type where
 instance ConvPExist TCon where
     convPExist env (TC n ts)        = TC n <$> mapM (convPExist env) ts
 
-instance ConvPExist QBinds where
-    convPExist env q                = mapM instq q
-      where instq (Quant v us)      = Quant v <$> mapM (convPExist env) us
+instance ConvPExist QBind where
+    convPExist env (Quant v us)     = Quant v <$> convPExist env us
 
 instance (ConvPExist a) => ConvPExist (Maybe a) where
     convPExist env t                = sequence $ fmap (convPExist env) t
+
+instance (ConvPExist a) => ConvPExist [a] where
+    convPExist env                  = mapM (convPExist env)
 
 instance ConvPExist PosPar where
     convPExist env (PosPar n t e p) = PosPar n <$> convPExist env t <*> return e <*> convPExist env p
@@ -269,7 +274,8 @@ instance KCheck Stmt where
 
 instance KCheck Decl where
     kchk env (Def l n q p k t b d x)
-                                    = do tmp <- swapXVars []
+      | not $ null ambig            = err2 ambig "Ambiguous type variable in annotation:"
+      | otherwise                   = do tmp <- swapXVars []
                                          q <- convPExist env =<< convTWild q
                                          p <- convPExist env =<< convTWild p
                                          k <- convPExist env =<< convTWild k
@@ -278,21 +284,25 @@ instance KCheck Decl where
                                          q' <- swapXVars tmp
                                          env1 <- extvars (tybound (q++q')) env
                                          q <- kchkQBinds env1 (q++q')
-                                         p <- kchk env1 p
-                                         k <- kchk env1 k
-                                         t <- kexp KType env1 t
-                                         x <- kexp KFX env1 x
-                                         b <- kchkSuite env1 b
-                                         return $ Def l n q p k t b d x
-    kchk env (Actor l n q p k b)    = do env1 <- extvars (tybound q) env
+                                         Def l n q <$> kchk env1 p <*> kchk env1 k <*> kexp KType env1 t <*> kchkSuite env1 b <*> pure d <*> kexp KFX env1 x
+      where ambig                   = qualbound q \\ closeDepVarsQ (tyfree p ++ tyfree k ++ tyfree t ++ tyfree x) q
+    kchk env (Actor l n q p k b)    = do env1 <- extvars (qbound q) env
                                          Actor l n <$> kchkQBinds env1 q <*> kchk env1 p <*> kchk env1 k <*> kchkSuite env1 b
-    kchk env (Class l n q us b)     = do env1 <- extvars (tvSelf : tybound q) env
+    kchk env (Class l n q us b)     = do env1 <- extvars (tvSelf : qbound q) env
                                          Class l n <$> kchkQBinds env1 q <*> kchkBounds env1 us <*> kchkSuite env1 b
-    kchk env (Protocol l n q us b)  = do env1 <- extvars (tvSelf : tybound q) env
+    kchk env (Protocol l n q us b)  = do env1 <- extvars (tvSelf : qbound q) env
                                          Protocol l n <$> kchkQBinds env1 q <*> kchkPBounds env1 us <*> kchkSuite env1 b
-    kchk env (Extension l n q us b) = do env1 <- extvars (tvSelf : tybound q) env
-                                         kexp KType env1 (TC n (map tVar $ tybound q))
-                                         Extension l (unalias env n) <$> kchkQBinds env1 q <*> kchkPBounds env1 us <*> kchkSuite env1 b
+    kchk env (Extension l q c us b)
+      | not $ null ambig            = err2 ambig "Ambiguous type variable in extension:"
+      | otherwise                   = do tmp <- swapXVars []
+                                         q <- convPExist env q
+                                         c <- convPExist env c
+                                         us <- convPExist env us
+                                         q' <- swapXVars tmp
+                                         env1 <- extvars (tvSelf : qbound (q++q')) env
+                                         Extension l <$> kchkQBinds env1 (q++q') <*> kexp KType env1 c <*> kchkPBounds env1 us <*> kchkSuite env1 b
+      where ambig                   = qualbound q \\ vs
+            vs                      = closeDepVarsQ (tyfree c ++ tyfree us) q
 
 instance KCheck Expr where
     kchk env (Var l n)              = return $ Var l n
@@ -418,10 +428,8 @@ instance KCheck TSchema where
                                          t <- convPExist env t
                                          q' <- swapXVars tmp
                                          env1 <- extvars (tybound (q++q')) env
-                                         q <- kchkQBinds env1 (q++q')
-                                         t <- kexp KType env1 t
-                                         return $ TSchema l q t
-      where ambig                   = tybound q \\ closeDepVarsQ (tyfree t) q
+                                         TSchema l <$> kchkQBinds env1 (q++q') <*> kexp KType env1 t
+      where ambig                   = qualbound q \\ closeDepVarsQ (tyfree t) q
 
 kchkQBinds env []                   = return []
 kchkQBinds env (Quant v us : q)     = do us <- kchkBounds env us

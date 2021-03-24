@@ -46,8 +46,9 @@ data Stmt       = Expr          { sloc::SrcLoc, expr::Expr }
 data Decl       = Def           { dloc::SrcLoc, dname:: Name, qbinds::QBinds, pos::PosPar, kwd::KwdPar, ann::Maybe Type, dbody::Suite, deco::Deco, dfx::TFX }
                 | Actor         { dloc::SrcLoc, dname:: Name, qbinds::QBinds, pos::PosPar, kwd::KwdPar, dbody::Suite }
                 | Class         { dloc::SrcLoc, dname:: Name, qbinds::QBinds, bounds::[TCon], dbody::Suite }
-                | Protocol      { dloc::SrcLoc, dname:: Name, qbinds::QBinds, bounds::[TCon], dbody::Suite }
-                | Extension     { dloc::SrcLoc, dqname::QName, qbinds::QBinds, bounds::[TCon], dbody::Suite }
+                | Protocol      { dloc::SrcLoc, dname:: Name, qbinds::QBinds, bounds::[PCon], dbody::Suite }
+--                | Extension     { dloc::SrcLoc, dqname::QName, qbinds::QBinds, bounds::[PCon], dbody::Suite }
+                | Extension     { dloc::SrcLoc, qbinds::QBinds, tycon::TCon, bounds::[PCon], dbody::Suite }
                 deriving (Show)
 
 data Expr       = Var           { eloc::SrcLoc, var::QName }
@@ -101,7 +102,7 @@ type Target     = Expr
 data Prefix     = Kindvar | Xistvar | Wildvar | Typevar | Witness | Parvar | TypesPass | NormPass | DeactPass | CPSPass | LLiftPass
                 deriving (Eq,Ord,Show,Read,Generic)
 
-data Name       = Name SrcLoc String | Derived Name Name | Internal Prefix String Int deriving (Generic)
+data Name       = Name SrcLoc String | Derived Name Name | Internal Prefix String Int deriving (Generic,Show)
 
 nloc (Name l _) = l
 nloc _          = NoLoc
@@ -200,6 +201,9 @@ data QBind      = Quant TVar [TCon] deriving (Eq,Show,Read,Generic)
 
 type QBinds     = [QBind]
 
+type PCon       = TCon
+type CCon       = TCon
+
 type KVar       = Name
 
 data Type       = TVar      { tloc::SrcLoc, tvar::TVar }
@@ -221,7 +225,7 @@ type TRow       = Type
 
 data Constraint = Cast  Type Type
                 | Sub   Name Type Type
-                | Impl  Name Type TCon
+                | Impl  Name Type PCon
                 | Sel   Name Type Name Type
                 | Mut   Type Name Type
                 deriving (Show,Read,Generic)
@@ -273,6 +277,7 @@ monotype t      = TSchema NoLoc [] t
 tSchema q t     = TSchema NoLoc q t
 
 quant v         = Quant v []
+qbound q        = [ tv | Quant tv _ <- q ]
 
 tVar v          = TVar NoLoc v
 tCon c          = TCon NoLoc c
@@ -474,7 +479,7 @@ instance Eq Decl where
     Actor _ n1 q1 p1 k1 b1          ==  Actor _ n2 q2 p2 k2 b2      = n1 == n2 && q1 == q2 && p1 == p2 && k1 == k2 && b1 == b2
     Class _ n1 q1 a1 b1             ==  Class _ n2 q2 a2 b2         = n1 == n2 && q1 == q2 && a1 == a2 && b1 == b2
     Protocol _ n1 q1 a1 b1          ==  Protocol _ n2 q2 a2 b2      = n1 == n2 && q1 == q2 && a1 == a2 && b1 == b2
-    Extension _ n1 q1 a1 b1         ==  Extension _ n2 q2 a2 b2     = n1 == n2 && q1 == q2 && a1 == a2 && b1 == b2
+    Extension _ q1 c1 a1 b1         ==  Extension _ q2 c2 a2 b2     = q1 == q2 && c1 == c2 && a1 == a2 && b1 == b2
     _                               == _                            = False
 
 instance Eq Expr where
@@ -581,8 +586,8 @@ instance Eq Type where
 
 -- Show & Read ----------------
 
-instance Show Name where
-    show n              = show (nstr n)
+--instance Show Name where
+--    show n              = show (nstr n)
 
 instance Read Name where
     readsPrec p str     = [ (Name NoLoc s, str') | (s,str') <- readsPrec p str ]

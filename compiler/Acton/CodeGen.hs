@@ -248,7 +248,7 @@ declDecl env (Class _ n q as b)     = vcat [ declDecl env1 d{ dname = methodname
                                       declCon env1 n q $+$
                                       text "struct" <+> classname env n <+> methodtable env n <> semi
   where b'                          = subst [(tvSelf, tCon c)] b
-        c                           = TC (NoQ n) (map tVar $ tybound q)
+        c                           = TC (NoQ n) (map tVar $ qbound q)
         env1                        = defineTVars q env
         props                       = [ n | (n, NSig sc Property) <- fullAttrEnv env c ]
         sup_c                       = filter ((`elem` special_repr) . unalias env . tcname) as
@@ -523,7 +523,7 @@ declCon env n q                     = (gen env tRes <+> newcon env n <> parens (
                                               initcall env1) $+$
                                       char '}'
   where TFun _ fx r _ t             = sctype $ fst $ schemaOf env (eVar n)
-        tObj                        = tCon $ TC (unalias env $ NoQ n) (map tVar $ tybound q)
+        tObj                        = tCon $ TC (unalias env $ NoQ n) (map tVar $ qbound q)
         tRes                        = if t == tR then tR else tObj
         pars                        = pPar paramNames' r
         args                        = pArg pars

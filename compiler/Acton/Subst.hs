@@ -39,7 +39,9 @@ closeDepVarsQ vs q
   | null vs'                        = nub vs
   | otherwise                       = closeDepVarsQ (vs'++vs) q
   where vs'                         = concat [ tyfree us \\ vs | Quant v us <- q, v `elem` vs ]
-  
+
+qualbound q                         = [ v | Quant v ps <- q, not $ null ps ]
+
 
 subst                               :: Subst a => Substitution -> a -> a
 subst s x0
@@ -252,14 +254,14 @@ instance Subst Decl where
     msubst (Actor l n q p k ss)         = Actor l n <$> msubst q <*> msubst p <*> msubst k <*> msubst ss
     msubst (Class l n q bs ss)          = Class l n <$> msubst q <*> msubst bs <*> msubst ss
     msubst (Protocol l n q bs ss)       = Protocol l n <$> msubst q <*> msubst bs <*> msubst ss
-    msubst (Extension l n q bs ss)      = Extension l n <$> msubst q <*> msubst bs <*> msubst ss
+    msubst (Extension l q c bs ss)      = Extension l <$> msubst q <*> msubst c <*> msubst bs <*> msubst ss
     {-
     msubst d@(Protocol l n q bs ss)     = do (s,ren) <- msubstRenaming d
                                              return $ Protocol l n (subst s (subst ren q)) (subst s (subst ren bs)) (subst s (subst ren ss))
     msubst d@(Class l n q bs ss)        = do (s,ren) <- msubstRenaming d
                                              return $ Class l n (subst s (subst ren q)) (subst s (subst ren bs)) (subst s (subst ren ss))
-    msubst d@(Extension l n q bs ss)    = do (s,ren) <- msubstRenaming d
-                                             return $ Extension l n (subst s (subst ren q)) (subst s (subst ren bs)) (subst s (subst ren ss))
+    msubst d@(Extension l q c bs ss)    = do (s,ren) <- msubstRenaming d
+                                             return $ Extension l (subst s (subst ren q)) (subst s (subst ren c)) (subst s (subst ren bs)) (subst s (subst ren ss))
     msubst d@(Def l n q p k a ss de fx) = do (s,ren) <- msubstRenaming d
                                              return $ Def l n (subst s (subst ren q)) (subst s (subst ren p)) (subst s (subst ren k))
                                                               (subst s (subst ren a)) (subst s (subst ren ss)) de (subst s fx)
@@ -269,13 +271,13 @@ instance Subst Decl where
     -}
     tybound (Protocol l n q ps b)   = tvSelf : tybound q
     tybound (Class l n q ps b)      = tvSelf : tybound q
-    tybound (Extension l n q ps b)  = tvSelf : tybound q
+    tybound (Extension l q c ps b)  = tvSelf : tybound q
     tybound (Def l n q p k t b d x) = tybound q
     tybound (Actor l n q p k b)     = tybound q
     
     tyfree (Protocol l n q ps b)   = nub (tyfree q ++ tyfree ps ++ tyfree b) \\ (tvSelf : tybound q)
     tyfree (Class l n q ps b)      = nub (tyfree q ++ tyfree ps ++ tyfree b) \\ (tvSelf : tybound q)
-    tyfree (Extension l n q ps b)  = nub (tyfree q ++ tyfree ps ++ tyfree b) \\ (tvSelf : tybound q)
+    tyfree (Extension l q c ps b)  = nub (tyfree q ++ tyfree c ++ tyfree ps ++ tyfree b) \\ (tvSelf : tybound q)
     tyfree (Def l n q p k t b d x) = nub (tyfree q ++ tyfree p ++ tyfree k ++ tyfree b ++ tyfree t ++ tyfree x) \\ tybound q
     tyfree (Actor l n q p k b)     = nub (tyfree q ++ tyfree p ++ tyfree k ++ tyfree b) \\ (tybound q)
     

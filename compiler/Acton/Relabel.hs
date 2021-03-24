@@ -62,7 +62,7 @@ instance Relabel Decl where
     relabel (Actor _ n q ps ks b) = Actor <$> newLoc <*> relabel n <*> relabel q <*> relabel ps <*> relabel ks <*> relabel b
     relabel (Class _ n q as ss) = Class <$> newLoc <*> relabel n <*> relabel q <*> relabel as <*> relabel ss
     relabel (Protocol _ n q as ss) = Protocol <$> newLoc <*> relabel n <*> relabel q <*> relabel as <*> relabel ss
-    relabel (Extension _ n q as ss) = Extension <$> newLoc <*> relabel n <*> relabel q <*> relabel as <*> relabel ss
+    relabel (Extension _ q c as ss) = Extension <$> newLoc <*> relabel q <*> relabel c <*> relabel as <*> relabel ss
 
 instance Relabel Expr where
     relabel (Var _ nm) = Var <$> newLoc <*> relabel nm

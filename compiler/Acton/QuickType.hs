@@ -35,7 +35,7 @@ schemaOf env e                      = (sc, dec)
 closedType                          :: EnvF x -> Expr -> Bool
 closedType env (Var _ n)            = isClosed $ findQName n env
 closedType env (Dot _ (Var _ x) n)
-  | NClass q _ _ <- findQName x env = case findAttrInfo env (TC x (map tVar $ tybound q)) n of
+  | NClass q _ _ <- findQName x env = case findAttrInfo env (TC x (map tVar $ qbound q)) n of
                                         Just (w,i) -> isClosed i
 closedType env (Dot _ e n)          = case typeOf env e of
                                         TCon _ c -> case findAttrInfo env c n of Just (w,i) -> isClosed i
@@ -65,7 +65,7 @@ qSchema env f e@(Var _ n)           = case findQName n env of
                                         NSig sc dec ->
                                             (sc, Just dec, e)
                                         NClass q _ _ ->
-                                            let tc = TC n (map tVar $ tybound q)
+                                            let tc = TC n (map tVar $ qbound q)
                                                 (TSchema _ q' t, _) = findAttr' env tc initKW
                                                 t' = if restype t == tR then t else t{ restype = tSelf }
                                             in (tSchema (q++q') $ subst [(tvSelf,tCon tc)] t', Just NoDec, e)
@@ -73,7 +73,7 @@ qSchema env f e@(Var _ n)           = case findQName n env of
                                             (tSchema q (tFun fxAction p k (tCon0 n q)), Just NoDec, e)
                                         i -> error ("### qSchema Var unexpected " ++ prstr (noq n,i))
 qSchema env f e@(Dot _ (Var _ x) n)
-  | NClass q _ _ <- info            = let tc = TC x (map tVar $ tybound q)
+  | NClass q _ _ <- info            = let tc = TC x (map tVar $ qbound q)
                                           (TSchema _ q' t, mbdec) = findAttr' env tc n
                                       in (tSchema (q++q') $ subst [(tvSelf,tCon tc)] (addSelf t mbdec), mbdec, e)
   where info                        = findQName x env
@@ -92,7 +92,7 @@ qInst                               :: EnvF x -> Checker -> [Type] -> Expr -> (T
 qInst env f [] (TApp _ e ts)        = qInst env f ts e
 qInst env f ts e                    = case qSchema env f e of
                                         (TSchema _ q t, _, e') | length q == length ts -> (t, t', tApp e' ts)
-                                           where t' = subst (tybound q `zip` ts) t
+                                           where t' = subst (qbound q `zip` ts) t
                                         (sc, _, _) -> error ("###### qInst [" ++ prstrs ts ++ "] " ++ prstr e ++ " is " ++ prstr sc)
 
 instance QType Expr where
@@ -345,21 +345,3 @@ maxtype env (t:ts)                          = maxt t ts
 maxtype env []                              = tWild
 
 
-----------------------------------------------------------------------------------------------------------------------
--- extends predicate
-----------------------------------------------------------------------------------------------------------------------
-{-
-extends                                     :: EnvF x -> Type -> QName -> Maybe ([Type],Expr)
-extends env (TCon _ c) pn                   = case findWitness env (tcname c) (implProto' env pn) of
-                                                Just (WClass q p w ws) -> [ constr (subst s (tVar v)) (subst s u) | Quant v us <- q, u <- us ]
-                                                 where s = tybound q `zip` tcargs c
-                                                Just (WInst p w ws) -> Just (tcargs p, wexpr ws (eQVar w))
-                                                Nothing -> Nothing
-
-extends'                                    :: EnvF x -> Type -> TCon -> Bool
-extends env (TCon _ c) p                    = case findWitness env (tcname c) (implProto env p) of
-                                                Just (WClass q p w ws) -> and [ extends' env (subst s $ tVar v) (subst s u) | Quant v us <- q, u <- us ]
-                                                    where s = tybound q `zip` tcargs c
-                                                Just (WInst p w ws) -> True
-                                                Nothing -> False
--}

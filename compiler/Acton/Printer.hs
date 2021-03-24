@@ -59,8 +59,12 @@ instance Pretty Decl where
                                       nonEmpty parens commaList a <> colon $+$ prettySuite b
     pretty (Protocol _ n q a b)     = text "protocol" <+> pretty n <> nonEmpty brackets commaList q <+>
                                       nonEmpty parens commaList a <> colon $+$ prettySuite b
-    pretty (Extension _ n q a b)    = text "extension" <+> pretty n <> nonEmpty brackets commaList q <+>
+    pretty (Extension _ q c a b)
+      | tvs == tcargs c             = text "extension" <+> pretty (tcname c) <> nonEmpty brackets commaList q <+>
                                       nonEmpty parens commaList a <> colon $+$ prettySuite b
+      | otherwise                   = text "extension" <+> prettyQual q <+> pretty c <+>
+                                      nonEmpty parens commaList a <> colon $+$ prettySuite b
+      where tvs                     = map tVar $ qbound q
 
 prettyDecFX d fx                    = prettyDec d . (prettyFXnoWild fx <+>)
 
@@ -380,8 +384,10 @@ instance Pretty Aug where
     pretty EuDivA                   = text "//="
 
 instance Pretty TSchema where
-    pretty (TSchema _ [] t)         = pretty t
-    pretty (TSchema _ q t)          = pretty q <+> text "=>" <+> pretty t
+    pretty (TSchema _ q t)          = prettyQual q <+> pretty t
+
+prettyQual []                       = empty
+prettyQual q                        = pretty q <+> text "=>"
 
 instance Pretty TVar where
     pretty (TV k n)                 = pretty n
@@ -482,4 +488,4 @@ instance Pretty (TVar,Name) where
     pretty (tv,n)                   = pretty tv <> text "." <> pretty n
 
 instance Pretty Substitution where
-    pretty s                        = vcat (map pretty s)
+    pretty s                        = commaSep pretty s

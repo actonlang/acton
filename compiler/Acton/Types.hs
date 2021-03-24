@@ -48,22 +48,25 @@ instance (Simp a) => Simp [a] where
     simp env                        = map (simp env)
 
 instance Simp TSchema where
-    simp env (TSchema l q t)        = TSchema l (subst s [ Quant v ps | Quant v ps <- q2, not $ null ps ]) (subst s $ simp env t)
-      where (q1,q2)                 = partition isEX (simp env q)
-            isEX (Quant v [p])      = length (filter (==v) vs) == 1
-            isEX _                  = False
-            vs                      = concat [ tyfree ps | Quant v ps <- q ] ++ tyfree t
-            s                       = s1 ++ s2 ++ s3 ++ s4
-            s1                      = [ (v, tCon p) | Quant v [p] <- q1 ]           -- Inline existentials
-            s2                      = univars `zip` beautyvars                      -- Beautify univars
-            s3                      = fxvars1 `zip` repeat fxPure                   -- Eliminate unconstrained effects
-            s4                      = fxvars2 `zip` beautyfx                        -- Beautify effects
-            (fxvars,univars)        = partition ((==KFX) . tvkind) $ filter univar $ tybound q2
-            (fxvars1,fxvars2)       = partition (\v -> length (filter (==v) vs) == 1) fxvars
-            isFX v                  = tvkind v == KFX && length (filter (==v) vs) == 1
-            beautyvars              = map tVar $ tvarSupply \\ tvarScope env
-            beautyfx                = map tVar $ fxSupply \\ tvarScope env
+    simp env (TSchema l q t)        = TSchema l q' (subst s $ simp env' t)
+      where (q', s)                 = simpQuant env (simp env' q) (tyfree t)
             env'                    = defineTVars (stripQual q) env
+
+simpQuant env q vs0                 = (subst s [ Quant v ps | Quant v ps <- q2, not $ null ps ], s)
+  where (q1,q2)                     = partition isEX q
+        isEX (Quant v [p])          = length (filter (==v) vs) == 1
+        isEX _                      = False
+        vs                          = concat [ tyfree ps | Quant v ps <- q ] ++ vs0
+        s                           = s1 ++ s2 ++ s3 ++ s4
+        s1                          = [ (v, tCon p) | Quant v [p] <- q1 ]                       -- Inline existentials
+        s2                          = univars `zip` beautyvars                                  -- Beautify univars
+        s3                          = fxvars1 `zip` repeat fxPure                               -- Eliminate unconstrained effects
+        s4                          = fxvars2 `zip` beautyfx                                    -- Beautify effects
+        (fxvars,univars)            = partition ((==KFX) . tvkind) $ filter univar $ qbound q2
+        (fxvars1,fxvars2)           = partition (\v -> length (filter (==v) vs) == 1) fxvars
+        isFX v                      = tvkind v == KFX && length (filter (==v) vs) == 1
+        beautyvars                  = map tVar $ tvarSupply \\ tvarScope env
+        beautyfx                    = map tVar $ fxSupply \\ tvarScope env
 
 instance Simp QBind where
     simp env (Quant v ps)           = Quant v (simp env ps)
@@ -80,8 +83,9 @@ instance Simp (Name, NameInfo) where
       where env'                    = defineTVars (stripQual q) env
     simp env (n, NProto q us te)    = (n, NProto (simp env' q) (simp env' us) (simp env' te))
       where env'                    = defineTVars (stripQual q) env
-    simp env (n, NExt n' q us te)   = (n, NExt (simp env n') (simp env' q) (simp env' us) (simp env' te))
-      where env'                    = defineTVars (stripQual q) env
+    simp env (n, NExt q c us te)    = (n, NExt q' (subst s $ simp env' c) (subst s $ simp env' us) (subst s $ simp env' te))
+      where (q', s)                 = simpQuant env (simp env' q) (tyfree c ++ tyfree us ++ tyfree te)
+            env'                    = defineTVars (stripQual q) env
     simp env (n, NAct q p k te)     = (n, NAct (simp env' q) (simp env' p) (simp env' k) (simp env' te))
       where env'                    = defineTVars (stripQual q) env
     simp env (n, i)                 = (n, i)
@@ -402,11 +406,11 @@ matchingDec n sc dec dec'
 matchDefAssumption env cs def           = do --traceM ("## matchDefAssumption " ++ prstr (dname def))
                                              (cs1, tvs) <- instQBinds env q1
                                              let eq0 = witSubst env q1 cs1
-                                                 s = tybound q1 `zip` tvs           -- This cannot just be memoized in the global TypeM substitution,
-                                             def <- msubstWith s def{ qbinds = [] } -- since the variables in (tybound q1) aren't necessarily unique
+                                                 s = qbound q1 `zip` tvs           -- This cannot just be memoized in the global TypeM substitution,
+                                             def <- msubstWith s def{ qbinds = [] } -- since the variables in (qbound q1) aren't necessarily globally unique
                                              let t1 = tFun (dfx def) (prowOf $ pos def) (krowOf $ kwd def) (fromJust $ ann def)
-                                             (cs2,eq1) <- solveScoped env0 (tybound q0) [] t1 (Cast t1 (if inClass env then addSelf t0 (Just dec) else t0) : cs++cs1)
-                                             checkNoEscape env (tybound q0)
+                                             (cs2,eq1) <- solveScoped env0 (qbound q0) [] t1 (Cast t1 (if inClass env then addSelf t0 (Just dec) else t0) : cs++cs1)
+                                             checkNoEscape env (qbound q0)
                                              return (cs2, def{ qbinds = noqual env q0, pos = pos0 def, dbody = bindWits (eq0++eq1) ++ dbody def, dfx = fx t0 })
   where NDef (TSchema _ q0 t0) dec      = findName (dname def) env
         q1                              = qbinds def
@@ -454,8 +458,8 @@ instance InfEnv Decl where
                                                  te0 <- infProperties env as' b
                                                  (cs,te,b') <- infEnv env1 b
                                                  popFX
-                                                 (cs1,eq1) <- solveScoped env1 (tybound q) te tNone cs
-                                                 checkNoEscape env (tybound q)
+                                                 (cs1,eq1) <- solveScoped env1 (qbound q) te tNone cs
+                                                 checkNoEscape env (qbound q)
                                                  (nterms,_,_) <- checkAttributes [] te' te
                                                  let te1 = stubAttributes env te
                                                  return (cs1, [(n, NClass q' as' (te0++te1))], Class l n q us (bindWits eq1 ++ props te0 ++ b'))
@@ -473,8 +477,8 @@ instance InfEnv Decl where
                                                  pushFX fxPure tNone
                                                  (cs,te,b') <- infEnv env1 b
                                                  popFX
-                                                 (cs1,eq1) <- solveScoped env1 (tybound q) te tNone cs
-                                                 checkNoEscape env (tybound q)
+                                                 (cs1,eq1) <- solveScoped env1 (qbound q) te tNone cs
+                                                 checkNoEscape env (qbound q)
                                                  (nterms,_,sigs) <- checkAttributes [] te' te
                                                  let noself = [ n | (n, NSig sc Static) <- te, tvSelf `notElem` tyfree sc ]
                                                  when (not $ null nterms) $ err2 (dom nterms) "Method/attribute lacks signature:"
@@ -487,27 +491,28 @@ instance InfEnv Decl where
             q'                          = unalias env q
             te'                         = parentTEnv env ps
 
-    infEnv env (Extension l n q us b)
+    infEnv env (Extension l q c us b)
       | isActor env n                   = notYet (loc n) "Extension of an actor"
       | isProto env n                   = notYet (loc n) "Extension of a protocol"
       | length us == 0                  = err (loc n) "Extension lacks a protocol"
 --      | length us > 1                   = notYet (loc n) "Extensions with multiple protocols"
-      | isJust witsearch                = err (loc n) "Extension already exists"
+      | not $ null witsearch            = err (loc n) "Extension already exists"
       | otherwise                       = do --traceM ("\n## infEnv extension " ++ prstr n)
                                              pushFX fxPure tNone
                                              (cs,te,b') <- infEnv env1 b
                                              popFX
-                                             (cs1,eq1) <- solveScoped env1 (tybound q) te tNone cs
-                                             checkNoEscape env (tybound q)
+                                             (cs1,eq1) <- solveScoped env1 (qbound q) te tNone cs
+                                             checkNoEscape env (qbound q)
                                              (nterms,asigs,sigs) <- checkAttributes final te' te
                                              when (not $ null nterms) $ err2 (dom nterms) "Method/attribute not in listed protocols:"
                                              when (not (null asigs || stub env)) $ err3 l asigs "Protocol method/attribute lacks implementation:"
                                              when (not $ null sigs) $ err2 sigs "Extension with new methods/attributes not supported"
                                              -- w <- newWitness
-                                             return (cs1, [(extensionName (head us) n, NExt n q' ps te)], Extension l n q us (bindWits eq1 ++ b'))
-      where env1                        = define (toSigs te') $ reserve (bound b) $ defineSelfOpaque $ defineTVars (stripQual q) env
+                                             return (cs1, [(extensionName (head us) n, NExt q' c ps te)], Extension l q c us (bindWits eq1 ++ b'))
+      where TC n ts                     = c
+            env1                        = define (toSigs te') $ reserve (bound b) $ defineSelfOpaque $ defineTVars (stripQual q) env
             witsearch                   = findWitness env n (implProto env $ head us)
-            ps                          = mro1 env (unalias env us)
+            ps                          = mro1 env (unalias env us)     -- TODO: check that ps doesn't contradict any previous extension mro for c
             q'                          = unalias env q
             final                       = concat [ conAttrs env pn | (_, TC pn _) <- ps, hasWitness env n pn ]
             te'                         = parentTEnv env ps
@@ -574,7 +579,7 @@ wellformed env x                        = do _ <- solveAll env [] tNone cs
                                              return ()
   where cs                              = wf env x
 
-wellformedProtos                        :: Env -> [TCon] -> TypeM (Constraints, [(QName,[Expr])])
+wellformedProtos                        :: Env -> [PCon] -> TypeM (Constraints, [(QName,[Expr])])
 wellformedProtos env ps                 = do (css0, css1) <- unzip <$> mapM (wfProto env) ps
                                              _ <- solveAll env [] tNone (concat css0)
                                              return (concat css1, [ (tcname p, witsOf cs) | (p,cs) <- ps `zip` css1 ])
@@ -626,8 +631,8 @@ matchActorAssumption env n0 p k te      = do --traceM ("## matchActorAssumption 
         check1 (n, NDef sc _)           = do (cs1,_,t) <- instantiate env sc
                                              --traceM ("## matchActorAssumption for method " ++ prstr n)
                                              unify env t t0
-                                             (cs2,eq) <- solveScoped (defineTVars q env) (tybound q) te0 tNone cs1
-                                             checkNoEscape env (tybound q)
+                                             (cs2,eq) <- solveScoped (defineTVars q env) (qbound q) te0 tNone cs1
+                                             checkNoEscape env (qbound q)
                                              return (cs2, eq)
           where TSchema _ q t0          = case lookup n te0 of
                                              Just (NSig sc _) -> sc
@@ -704,7 +709,7 @@ instance Check Decl where
                                              matchDefAssumption env cs1 (Def l n q (noDefaultsP p') (noDefaultsK k') (Just t)
                                                                          (bindWits eq1 ++ defaultsP p' ++ defaultsK k' ++ b') dec fx)
       where env1                        = reserve (bound (p,k) ++ bound b \\ stateScope env) $ defineTVars q $ setInDef env
-            tvs                         = tybound q
+            tvs                         = qbound q
 
     checkEnv env (Actor l n q p k b)    = do --traceM ("## checkEnv actor " ++ prstr n)
                                              pushFX fxAction tNone
@@ -721,7 +726,7 @@ instance Check Decl where
                                                           (bindWits (eq1++eq0) ++ defsigs ++ defaultsP p' ++ defaultsK k' ++ b'))
       where env1                        = reserve (bound (p,k) ++ bound b) $ defineTVars q $
                                           define [(selfKW, NVar tRef)] $ reserve (statevars b) $ setInAct env
-            tvs                         = tybound q
+            tvs                         = qbound q
             defsigs                     = [ Signature NoLoc [n] sc dec | (n,NDef sc dec) <- te0 ]
             NAct _ _ _ te0              = findName n env
 
@@ -735,9 +740,9 @@ instance Check Decl where
                                              checkNoEscape env tvs
                                              return (cs1, [Class l n (noqual env q) (map snd as) (abstractDefs env q eq1 b')])
       where env1                        = define (subst s te) $ defineSelf (NoQ n) q $ defineTVars q $ setInClass env
-            tvs                         = tvSelf : tybound q
+            tvs                         = tvSelf : qbound q
             NClass _ as te              = findName n env
-            s                           = [(tvSelf, tCon (TC (NoQ n) (map tVar $ tybound q)))]
+            s                           = [(tvSelf, tCon (TC (NoQ n) (map tVar $ qbound q)))]
 
     checkEnv' env (Protocol l n q us b) = do --traceM ("## checkEnv protocol " ++ prstr n)
                                              pushFX fxPure tNone
@@ -750,10 +755,10 @@ instance Check Decl where
                                              b' <- msubst b'
                                              return (cs1, convProtocol env n q ps eq1 wmap b')
       where env1                        = define te $ defineSelf (NoQ n) q $ defineTVars q $ setInClass env
-            tvs                         = tvSelf : tybound q
+            tvs                         = tvSelf : qbound q
             NProto _ ps te              = findName n env
 
-    checkEnv' env (Extension l n q us b)
+    checkEnv' env (Extension l q c us b)
                                         = do --traceM ("## checkEnv extension " ++ prstr n)
                                              pushFX fxPure tNone
                                              wellformed env1 q
@@ -763,12 +768,13 @@ instance Check Decl where
                                              (cs1,eq1) <- solveScoped env1 tvs te tNone (csu++csb)
                                              checkNoEscape env tvs
                                              b' <- msubst b'
-                                             return (cs1, convExtension env n' n q ps eq1 wmap b')
+                                             return (cs1, convExtension env n' c q ps eq1 wmap b')
       where env1                        = define (subst s te) $ defineInst n ps thisKW' $ defineSelf n q $ defineTVars q $ setInClass env
-            tvs                         = tvSelf : tybound q
+            tvs                         = tvSelf : qbound q
+            n                           = tcname c
             n'                          = extensionName (head us) n
             NExt _ _ ps te              = findName n' env
-            s                           = [(tvSelf, tCon $ TC n (map tVar $ tybound q))]
+            s                           = [(tvSelf, tCon $ TC n (map tVar $ qbound q))]
 
     checkEnv' env x                     = do (cs,x') <- checkEnv env x
                                              return (cs, [x'])
@@ -877,7 +883,7 @@ genEnv env cs te ds0
     wsubst ds q ws                      = termsubst s
       where s                           = [ (n, Lambda l0 p k (Call l0 (tApp (eVar n) tvs) (wit2arg ws (pArg p)) (kArg k)) fx) 
                                             | Def _ n [] p k _ _ _ fx <- ds ]
-            tvs                         = map tVar $ tybound q
+            tvs                         = map tVar $ qbound q
 
 
 defaultsP (PosPar n (Just t) (Just e) p)
@@ -1016,7 +1022,7 @@ instance Infer Expr where
     infer env (IsInstance l e c)        = case findQName c env of
                                              NClass q _ _ -> do
                                                 (cs,t,e') <- infer env e
-                                                ts <- newTVars [ tvkind v | v <- tybound q ]
+                                                ts <- newTVars [ tvkind v | v <- qbound q ]
                                                 return (Cast (tCon (TC (unalias env c) ts)) t :
                                                         cs, tBool, IsInstance l e' c)
                                              _ -> nameUnexpected c
@@ -1146,6 +1152,25 @@ instance Infer Expr where
 
     infer env (Dot l e n)
       | Just m <- isModule env e        = infer env (Var l (QName m n))
+
+{-
+          extension ndarray[float] (Number,Times,Plus,Minus):
+              __neg__ : () -> ndarray[float]
+
+          extension ndarray[int] (Number,Times,Plus,Minus):
+              __neg__ : () -> ndarray[int]
+
+          extension ndarray[float] (Real,Number,Times,Plus,Minus):
+              __round__ : (?int) -> ndarray[float]
+
+          extension ndarray[int] (Real,Number,Times,Plus,Minus):
+              __round__ : (?int) -> mdarray[int]
+
+          extension ndarray[A] (Sliceable[ndarray[A]], Indexed[int,ndarray[A]])):
+              __getslice__ : (slice) -> ndarray[A]
+
+
+-}
 
     infer env (Dot l x@(Var _ c) n)
       | NClass q us te <- cinfo         = do (cs0,ts) <- instQBinds env q
@@ -1334,7 +1359,7 @@ inferBool env (IsInstance l e@(Var _ (NoQ n)) c)
                                         = case findQName c env of
                                              NClass q _ _ -> do
                                                 (cs,t,e') <- infer env e
-                                                ts <- newTVars [ tvkind v | v <- tybound q ]
+                                                ts <- newTVars [ tvkind v | v <- qbound q ]
                                                 let tc = tCon (TC (unalias env c) ts)
                                                 return (Cast tc t :
                                                         cs, define [(n,NVar tc)] env, sCast n t tc, IsInstance l e' c)

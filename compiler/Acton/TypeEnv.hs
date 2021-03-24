@@ -69,7 +69,7 @@ instance WellFormed TCon where
                                 NProto q us te -> q
                                 NReserved -> nameReserved n
                                 i -> err1 n ("wf: Class or protocol name expected, got " ++ show i)
-            s               = tybound q `zip` ts
+            s               = qbound q `zip` ts
             constr u t      = if isProto env (tcname u) then Impl (name "_") t u else Cast t (tCon u)
 
 wfProto                     :: EnvF x -> TCon -> TypeM (Constraints, Constraints)
@@ -99,7 +99,7 @@ instance WellFormed QBind where
 instantiate                 :: EnvF x -> TSchema -> TypeM (Constraints, [Type], Type)
 instantiate env (TSchema _ q t)
                             = do (cs, tvs) <- instQBinds env q
-                                 let s = tybound q `zip` tvs
+                                 let s = qbound q `zip` tvs
                                  return (cs, tvs, subst s t)
 
 instQBinds                  :: EnvF x -> QBinds -> TypeM (Constraints, [Type])
@@ -107,16 +107,16 @@ instQBinds env q            = do ts <- newTVars [ tvkind v | Quant v _ <- q ]
                                  cs <- instQuals env q ts
                                  return (cs, ts)
 
-instWitness                 :: EnvF x -> [Type] -> Witness -> TypeM (Constraints,TCon,Expr)        -- witnesses of cs already applied in e!
-instWitness env ts wit      = case wit of
-                                 WClass q p w ws -> do
-                                    cs <- instQuals env q ts
-                                    return (cs, subst (tybound q `zip` ts) p, wexpr ws (eCall (tApp (eQVar w) ts) $ wvars cs))
+instWitness                 :: EnvF x -> [Type] -> Witness -> TypeM (Constraints,TCon,Expr)
+instWitness env ts1 wit     = case wit of
+                                 WClass q ts p w ws -> do
+                                    cs <- instQuals env q ts1
+                                    return (cs, subst (qbound q `zip` ts1) p, wexpr ws (eCall (tApp (eQVar w) ts1) $ wvars cs))
                                  WInst p w ws ->
                                     return ([], p, wexpr ws (eQVar w))
 
 instQuals                   :: EnvF x -> QBinds -> [Type] -> TypeM Constraints
-instQuals env q ts          = do let s = tybound q `zip` ts
+instQuals env q ts          = do let s = qbound q `zip` ts
                                  sequence [ constr (subst s (tVar v)) (subst s u) | Quant v us <- q, u <- us ]
   where constr t u@(TC n _)
           | isProto env n   = do w <- newWitness; return $ Impl w t u

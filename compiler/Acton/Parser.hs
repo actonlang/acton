@@ -719,10 +719,11 @@ funcdef =  addLoc $ do
               S.Def NoLoc n q ppar kpar <$> optional (arrow *> ttype) <*> suite DEF p <*> return deco <*> return (maybe S.tWild id fx)
 
 
+binds :: Parser S.QBinds
+binds = brackets (do b <- qbind; bs <- many (comma *> qbind); return (b:bs))
+
 optbinds :: Parser S.QBinds
-optbinds = brackets (do b <- qbind; bs <- many (comma *> qbind); return (b:bs))
-            <|>
-           return []
+optbinds = binds <|> return []
 
 actordef = addLoc $ do
                 (s,l) <- withPos (rwordLoc "actor")
@@ -739,7 +740,7 @@ actordef = addLoc $ do
 
 classdef    = classdefGen "class" name CLASS S.Class
 protodef    = classdefGen "protocol" name PROTO S.Protocol
-extdef      = classdefGen "extension" qual_name EXT S.Extension
+--extdef      = classdefGen "extension" qual_name EXT S.Extension
 
 classdefGen k pname ctx con = addLoc $ do
                 (s,l) <- withPos (rwordLoc k)
@@ -748,6 +749,22 @@ classdefGen k pname ctx con = addLoc $ do
                 q <- optbinds
                 cs <- optbounds
                 con NoLoc nm q cs <$> suite ctx s
+
+extdef = addLoc $ do
+                (s,l) <- withPos (rwordLoc "extension")
+                assertTop l "extension"
+                (q,c) <- try head1 <|> try head2 <|> head3
+                cs <- optbounds
+                S.Extension NoLoc q c cs <$> suite EXT s
+  where head1 = do q <- binds
+                   fatarrow
+                   c <- tcon
+                   return (q, c)
+        head2 = do c <- tcon
+                   return ([], c)
+        head3 = do n <- qual_name
+                   q <- binds
+                   return (q, S.TC n [ S.tVar v | S.Quant v _ <- q ])
 
 -- Compound statements -------------------------------------------------------------------------
 

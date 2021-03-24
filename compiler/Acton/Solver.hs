@@ -519,6 +519,53 @@ unify' env t1 (TVar _ tv)
 unify' env t1 t2                            = noUnify t1 t2
 
 
+matchM env (t1:ts1) (t2:ts2)                = do s1 <- match env t1 t2
+                                                 s2 <- matchM env ts1 ts2
+                                                 merge s1 s2
+matchM env [] []                            = Just []
+
+match env (TCon _ c1) (TCon _ c2)
+  | qualEq env (tcname c1) (tcname c2)      = matchM env (tcargs c1) (tcargs c2)
+match env (TFun _ fx1 p1 k1 t1) (TFun _ fx2 p2 k2 t2)
+                                            = do s1 <- match env fx1 fx2
+                                                 s2 <- match env p1 p2
+                                                 s3 <- match env k1 k2
+                                                 s4 <- match env t1 t2
+                                                 s <- merge s1 s2
+                                                 s' <- merge s3 s4
+                                                 merge s s'
+match env (TTuple _ p1 k1) (TTuple _ p2 k2)
+                                            = do s1 <- match env p1 p2
+                                                 s2 <- match env k1 k2
+                                                 merge s1 s2
+match env (TOpt _ t1) (TOpt _ t2)           = match env t1 t2
+match env (TNone _) (TNone _)               = Just []
+match env (TFX _ fx1) (TFX _ fx2)
+  | fx1 == fx2                              = Just []
+
+match env (TNil _ k1) (TNil _ k2)
+  | k1 == k2                                = Just []
+match env (TRow _ k n1 t1 r1) r2
+  | Just (t2,r2') <- findElem r2            = do s1 <- match env t1 t2
+                                                 s2 <- match env r1 r2'
+                                                 merge s1 s2
+  where findElem (TRow l k n2 t2 r2)
+          | n1 == n2                        = Just (t2, r2)
+          | otherwise                       = do (t2',r2') <- findElem r2
+                                                 Just (t2', TRow l k n2 t2 r2')
+        findElem r2                         = Nothing
+match env (TVar _ tv1) (TVar _ tv2)
+  | tv1 == tv2                              = Just []
+match env (TVar _ tv) t2
+  | tv `notElem` tyfree t2                  = Just [(tv, t2)]
+match env t1 t2                             = Nothing
+
+merge s1 s2
+  | agree                                   = Just $ s1 ++ s2
+  | otherwise                               = Nothing
+  where agree                               = and [ subst s1 (tVar v) == subst s2 (tVar v) | v <- dom s1 `intersect` dom s2 ]
+
+
 ----------------------------------------------------------------------------------------------------------------------
 -- sub
 ----------------------------------------------------------------------------------------------------------------------
@@ -721,7 +768,7 @@ data VInfo                                  = VInfo {
                                                 embedded    :: [TVar],
                                                 ubounds     :: Map TVar [Type], 
                                                 lbounds     :: Map TVar [Type], 
-                                                pbounds     :: Map TVar [(Name,TCon)],
+                                                pbounds     :: Map TVar [(Name,PCon)],
                                                 mutattrs    :: Map TVar [Name],
                                                 selattrs    :: Map TVar [Name] }
 
