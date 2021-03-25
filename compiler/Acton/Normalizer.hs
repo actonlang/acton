@@ -120,9 +120,8 @@ instance Norm Stmt where
     norm env (Data l mbt ss)        = Data l <$> norm env mbt <*> norm env ss
     norm env (VarAssign l ps e)     = VarAssign l <$> norm env ps <*> norm env e
     norm env (After l e e')         = After l <$> norm env e <*> norm env e'
-    norm env (Decl l ds)            = Decl l <$> norm env1 ds1
-      where env1                    = define (envOf ds1) env
-            ds1                     = superClose env ds
+    norm env (Decl l ds)            = Decl l <$> norm env1 ds
+      where env1                    = define (envOf ds) env
     norm env (Signature l ns t d)   = return $ Signature l ns (conv t) d
     norm env s                      = error ("norm unexpected stmt: " ++ prstr s)    
 
@@ -175,13 +174,6 @@ normItem env (WithItem e Nothing)   = do e' <- norm env e
 normItem env (WithItem e (Just p))  = do e' <- norm env e
                                          (p',ss) <- normPat env p
                                          return (e', Just p', ss)
-
-superClose env []                   = []
-superClose env (d@Class{} : ds)     = d1 : superClose env1 ds
-  where d1                          = d{ bounds = map snd $ mro1 env (bounds d) }
-        env1                        = define (envOf d1) env
-superClose env (d : ds)             = d : superClose env1 ds
-  where env1                        = define (envOf d) env
 
 instance Norm Decl where
     norm env (Def l n q p k t b d x)= do p' <- joinPar <$> norm env0 p <*> norm (define (envOf p) env0) k
