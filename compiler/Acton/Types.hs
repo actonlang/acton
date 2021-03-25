@@ -103,6 +103,7 @@ instance Simp TCon where
 
 instance Simp QName where
     simp env (GName m n)
+      | inBuiltin env               = NoQ n
       | Just m == thismod env       = NoQ n
     simp env n
       | not $ null aliases          = NoQ $ head aliases

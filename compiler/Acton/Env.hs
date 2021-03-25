@@ -307,11 +307,13 @@ instance Unalias QName where
                                                       _ -> noItem m n
                                         Nothing -> error ("#### unalias fails for " ++ prstr (QName m n))
       where m'                      = unalias env m
-    unalias env (NoQ n)             = case lookup n (names env) of
+    unalias env (NoQ n)
+      | inBuiltin env               = GName mBuiltin n
+      | otherwise                   = case lookup n (names env) of
                                         Just (NAlias qn) -> qn
                                         _ -> case thismod env of Just m -> GName m n; _ -> NoQ n
     unalias env (GName m n)
-      | inBuiltin env, m==mBuiltin  = NoQ n
+--      | inBuiltin env, m==mBuiltin  = NoQ n
       | otherwise                   = GName m n
                                     
 instance Unalias TSchema where
@@ -614,8 +616,6 @@ hasAttr env n w             = n `elem` conAttrs env (tcname $ proto w)
 hasWitness                  :: EnvF x -> QName -> QName -> Bool
 hasWitness env cn pn        =  not $ null $ findWitness env cn (qualEq env pn . tcname . proto)
 
-getWitness                  :: EnvF x -> QName -> PCon -> Witness
-getWitness env cn p         = fromJust $ findWitness env cn (qualEq env (tcname p) . tcname . proto)
 
 -- TCon queries ------------------------------------------------------------------------------------------------------------------
 
