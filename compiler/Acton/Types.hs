@@ -1172,7 +1172,7 @@ instance Infer Expr where
 
     infer env (Dot l x@(Var _ c) n)
       | NClass q us te <- cinfo         = do (cs0,ts) <- instQBinds env q
-                                             let tc = TC c ts
+                                             let tc = TC c' ts
                                              case findAttr env tc n of
                                                 Just (_,sc,dec)
                                                   | dec == Just Property -> err l "Property attribute not selectable by class"
@@ -1182,7 +1182,7 @@ instance Infer Expr where
                                                       let t' = subst [(tvSelf,tCon tc)] $ addSelf t dec
                                                       return (cs0++cs1, t', app2nd dec t' (tApp (Dot l x n) (ts++tvs)) $ witsOf (cs0++cs1))
                                                 Nothing ->
-                                                    case findWitness env c (hasAttr env n) of
+                                                    case findWitness env c' (hasAttr env n) of
                                                         Just wit -> do
                                                             (cs1,p,we) <- instWitness env ts wit
                                                             let Just (wf,sc,dec) = findAttr env p n
@@ -1191,7 +1191,7 @@ instance Infer Expr where
                                                             return (cs1++cs2, t', app t' (tApp (eDot (wf we) n) tvs) $ witsOf cs2)
                                                         Nothing -> err1 l "Attribute not found"
       | NProto q us te <- cinfo         = do (_,ts) <- instQBinds env q
-                                             let tc = TC c ts
+                                             let tc = TC c' ts
                                              case findAttr env tc n of
                                                 Just (wf,sc,dec) -> do
                                                     (cs1,tvs,t) <- instantiate env sc
@@ -1201,7 +1201,8 @@ instance Infer Expr where
                                                     return (Impl w t0 tc :
                                                             cs1, t', app t' (tApp (Dot l (wf $ eVar w) n) tvs) $ witsOf cs1)
                                                 Nothing -> err1 l "Attribute not found"
-      where cinfo                       = findQName c env
+      where c'                          = unalias env c
+            cinfo                       = findQName c' env
 
     infer env (Dot l e n)
       | n == initKW                     = err1 n "__init__ cannot be selected by instance"

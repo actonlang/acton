@@ -298,15 +298,15 @@ reduce' env eq c@(Impl w t@(TCon _ tc) p)
   where witSearch                           = findWitness env (tcname tc) (implProto env p)
 
 reduce' env eq c@(Impl w t@(TOpt _ t') p)
-  | qualEq env (tcname p) qnIdentity        = do let e = eCall (tApp (eQVar primIdentityOpt) [t']) []
+  | tcname p == qnIdentity                  = do let e = eCall (tApp (eQVar primIdentityOpt) [t']) []
                                                  return ((w, impl2type t p, e):eq)
-  | qualEq env (tcname p) qnEq              = do w' <- newWitness
+  | tcname p == qnEq                        = do w' <- newWitness
                                                  let e = eCall (tApp (eQVar primEqOpt) [t']) [eVar w']
                                                  reduce env ((w, impl2type t p, e):eq) [Impl w' t' p]
 
 reduce' env eq c@(Impl w t@(TNone _) p)
-  | qualEq env (tcname p) qnIdentity        = return ((w, impl2type t p, eQVar primWIdentityNone):eq)
-  | qualEq env (tcname p) qnEq              = return ((w, impl2type t p, eQVar primWEqNone):eq)
+  | tcname p == qnIdentity                  = return ((w, impl2type t p, eQVar primWIdentityNone):eq)
+  | tcname p == qnEq                        = return ((w, impl2type t p, eQVar primWEqNone):eq)
 
 reduce' env eq c@(Sel w (TVar _ tv) n _)
   | univar tv                               = do defer [c]; return eq
@@ -482,7 +482,7 @@ unify' env (TWild _) t2                     = return ()
 unify' env t1 (TWild _)                     = return ()
 
 unify' env (TCon _ c1) (TCon _ c2)
-  | qualEq env (tcname c1) (tcname c2)      = unifyM env (tcargs c1) (tcargs c2)
+  | tcname c1 == tcname c2                  = unifyM env (tcargs c1) (tcargs c2)
 
 unify' env (TFun _ fx1 p1 k1 t1) (TFun _ fx2 p2 k2 t2)
                                             = do unify env fx1 fx2
@@ -525,7 +525,7 @@ matchM env (t1:ts1) (t2:ts2)                = do s1 <- match env t1 t2
 matchM env [] []                            = Just []
 
 match env (TCon _ c1) (TCon _ c2)
-  | qualEq env (tcname c1) (tcname c2)      = matchM env (tcargs c1) (tcargs c2)
+  | tcname c1 == tcname c2                  = matchM env (tcargs c1) (tcargs c2)
 match env (TFun _ fx1 p1 k1 t1) (TFun _ fx2 p2 k2 t2)
                                             = do s1 <- match env fx1 fx2
                                                  s2 <- match env p1 p2
@@ -853,7 +853,7 @@ glb env TVar{} _                        = tWild        -- (Might occur in recurs
 glb env _ TVar{}                        = tWild        -- (Might occur in recursive calls)
 
 glb env (TCon _ c1) (TCon _ c2)
-  | qualEq env (tcname c1) (tcname c2)  = tCon c1
+  | tcname c1 == tcname c2              = tCon c1
   | hasAncestor env c1 c2               = tCon c1
   | hasAncestor env c2 c1               = tCon c2
 
@@ -885,8 +885,6 @@ glb env t1 t2                           = -- noGLB t1 t1
     
 noGLB t1 t2                             = tyerr t1 ("No common subtype: " ++ prstr t2)
 
-isStr env (TCon _ c)                    = qualEq env (tcname c) qnStr
-
 
 
 ----------------------------------------------------------------------------------------------------------------------
@@ -905,7 +903,7 @@ lub env TVar{} _                        = tWild        -- (Might occur in recurs
 lub env _ TVar{}                        = tWild        -- (Might occur in recursive calls)
 
 lub env (TCon _ c1) (TCon _ c2)
-  | qualEq env (tcname c1) (tcname c2)  = tCon c1
+  | tcname c1 == tcname c2              = tCon c1
   | hasAncestor env c1 c2               = tCon c2
   | hasAncestor env c2 c1               = tCon c1
   | not $ null common                   = tCon $ head common
@@ -1053,7 +1051,7 @@ findWitAttrs env attrs bounds           = [ ((v,n), WInst p (NoQ w) ws) | (v,ns)
 
 implAll env [] t                        = True
 implAll env ps (TCon _ c)               = and [ hasWitness env (tcname c) (tcname p) | (w,p) <- ps ]
-implAll env ps (TOpt _ _)               = all (\(_,p) -> any (qualEq env $ tcname p) [qnIdentity,qnEq]) ps
+implAll env ps (TOpt _ _)               = all ((`elem` [qnIdentity,qnEq]) . tcname . snd) ps
 implAll env ps t                        = False
 
 noDots env vi v                         = null (lookup' v $ selattrs vi) && null (lookup' v $ mutattrs vi)
