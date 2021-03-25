@@ -251,7 +251,7 @@ declDecl env (Class _ n q as b)     = vcat [ declDecl env1 d{ dname = methodname
         c                           = TC (NoQ n) (map tVar $ qbound q)
         env1                        = defineTVars q env
         props                       = [ n | (n, NSig sc Property) <- fullAttrEnv env c ]
-        sup_c                       = filter ((`elem` special_repr) . unalias env . tcname) as
+        sup_c                       = filter ((`elem` special_repr) . tcname) as
         special_repr                = [primActor]                                               -- To be extended...
 
 declSerialize env n c props sup_c   = (text "void" <+> genTopName env (methodname n serializeKW) <+> parens (gen env pars) <+> char '{') $+$
@@ -347,7 +347,7 @@ instance Gen QName where
       | m == mBuiltin               = char '$' <> text (nstr n)
       | otherwise                   = gen env m <> text "$$" <> text (mkCident $ nstr n)
     gen env (NoQ n)                 = gen env n
-    gen env n@QName{}               = gen env (globalize env n)
+    gen env n@QName{}               = gen env (unalias env n)
 
 instance Gen Name where
     gen env nm                      = text $ unCkeyword $ mkCident $ nstr nm
@@ -381,8 +381,9 @@ unCkeyword str
 
 preEscape str                       = "_$" ++ str
 
-
 genTopName env n                    = gen env (gname env n)
+
+gname env n                         = unalias env (NoQ n)
 
 word                                = text "$WORD"
 
@@ -523,7 +524,7 @@ declCon env n q                     = (gen env tRes <+> newcon env n <> parens (
                                               initcall env1) $+$
                                       char '}'
   where TFun _ fx r _ t             = sctype $ fst $ schemaOf env (eVar n)
-        tObj                        = tCon $ TC (unalias env $ NoQ n) (map tVar $ qbound q)
+        tObj                        = tCon $ TC (NoQ n) (map tVar $ qbound q)
         tRes                        = if t == tR then tR else tObj
         pars                        = pPar paramNames' r
         args                        = pArg pars
@@ -604,7 +605,7 @@ instance Gen Expr where
     gen env e@BStrings{}            = gen env primToBytearray <> parens (genStr env e)
     gen env (Call _ e p _)          = genCall env tNone [] e p
     gen env (TApp _ e ts)           = genInst env ts e
-    gen env (IsInstance _ e c)      = gen env primISINSTANCE <> parens (gen env e <> comma <+> gen env (globalize env c))
+    gen env (IsInstance _ e c)      = gen env primISINSTANCE <> parens (gen env e <> comma <+> gen env c)
     gen env (Dot _ e n)             = genDot env [] e n
     gen env (DotI _ e i)            = gen env e <> text "->" <> gen env componentsKW <> brackets (pretty i)
     gen env (RestI _ e i)           = gen env eNone <> semi <+> text "// CodeGen for tuple tail not implemented"
@@ -677,7 +678,7 @@ instance Gen TVar where
     gen env (TV k n)                = word
 
 instance Gen TCon where
-    gen env (TC n ts)               = gen env (globalize env n)
+    gen env (TC n ts)               = gen env (unalias env n)
     
 instance Gen Type where
     gen env (TVar _ v)              = gen env v

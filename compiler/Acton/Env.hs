@@ -338,8 +338,6 @@ instance Unalias WTCon where
     unalias env (w,u)               = (unalias env w, unalias env u)
 
 
-globalize env                       = unalias env
-
 
 -- TEnv filters --------------------------------------------------------------------------------------------------------
 
@@ -732,8 +730,6 @@ wexpr                       :: [Maybe QName] -> Expr -> Expr
 wexpr []                    = id
 wexpr (Nothing : w)         = wexpr w
 wexpr (Just n : w)          = wexpr w . (\e -> eDot e (witAttr n))
-
-gname env n                 = unalias env (NoQ n)
 
 
 -- TVar queries ------------------------------------------------------------------------------------------------------------------
