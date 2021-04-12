@@ -9,6 +9,7 @@ import Acton.TypeM
 import Acton.Printer
 import Acton.Names
 import Acton.Subst
+import Acton.Unify
 
 data TypeX                      = TypeX {
                                     context    :: EnvCtx,
@@ -107,12 +108,20 @@ instQBinds env q            = do ts <- newTVars [ tvkind v | Quant v _ <- q ]
                                  cs <- instQuals env q ts
                                  return (cs, ts)
 
-instWitness                 :: EnvF x -> [Type] -> Witness -> TypeM (Constraints,TCon,Expr)
-instWitness env ts1 wit     = case wit of
-                                 WClass q ts p w ws -> do
-                                    cs <- instQuals env q ts1
-                                    return (cs, subst (qbound q `zip` ts1) p, wexpr ws (eCall (tApp (eQVar w) ts1) $ wvars cs))
-                                 WInst p w ws ->
+instWitness                 :: EnvF x -> Type -> Witness -> TypeM (Constraints,TCon,Expr)
+instWitness env t0 wit      = case wit of
+                                 WClass q t1 p w ws -> do
+                                    (cs,tvs) <- instQBinds env q
+                                    let s = qbound q `zip` tvs
+                                    unify t0 (subst s t1)
+                                    p <- msubst (subst s p)
+                                    cs <- msubst cs
+                                    return (cs, p, wexpr ws (eCall (tApp (eQVar w) tvs) $ wvars cs))
+                                 WInst vs t1 p w ws -> do
+                                    tvs <- newTVars (map tvkind vs)
+                                    let s = vs `zip` tvs
+                                    unify t0 (subst s t1)
+                                    p <- msubst (subst s p)
                                     return ([], p, wexpr ws (eQVar w))
 
 instQuals                   :: EnvF x -> QBinds -> [Type] -> TypeM Constraints

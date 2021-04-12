@@ -293,7 +293,8 @@ instance KCheck Decl where
     kchk env (Protocol l n q us b)  = do env1 <- extvars (tvSelf : qbound q) env
                                          Protocol l n <$> kchkQBinds env1 q <*> kchkPBounds env1 us <*> kchkSuite env1 b
     kchk env (Extension l q c us b)
-      | not $ null ambig            = err2 ambig "Ambiguous type variable in extension:"
+      | not $ null ambig            = err2 ambig "Ambiguous type variables in extension:"
+      | not $ null undet            = err2 undet "Type variables undetermined by extended class:"
       | otherwise                   = do tmp <- swapXVars []
                                          q <- convPExist env q
                                          c <- convPExist env c
@@ -302,7 +303,8 @@ instance KCheck Decl where
                                          env1 <- extvars (tvSelf : qbound (q++q')) env
                                          Extension l <$> kchkQBinds env1 (q++q') <*> kexp KType env1 c <*> kchkPBounds env1 us <*> kchkSuite env1 b
       where ambig                   = qualbound q \\ vs
-            vs                      = closeDepVarsQ (tyfree c ++ tyfree us) q
+            undet                   = tyfree us \\ vs
+            vs                      = closeDepVarsQ (tyfree c) q
 
 instance KCheck Expr where
     kchk env (Var l n)              = return $ Var l n
