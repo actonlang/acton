@@ -1,6 +1,6 @@
 ACTONC=../actonc
 EXAMPLES=abs average counter files sieve sumto worker
-TESTS=fail1 segfault
+TESTS=fail1 segfault quotes-in-triquotes triquotes-across-lines
 
 test:
 	$(MAKE) abs
@@ -12,6 +12,8 @@ test:
 	@echo TODO: fix below entries
 	#$(MAKE) fail1
 	#$(MAKE) files  # some compile time error
+	#$(MAKE) quotes-in-triquotes
+	#$(MAKE) triquotes-across-lines
 	#$(MAKE) worker # this never exits, shouldn't acton exit when the root actor exits?
 	#$(MAKE) ifisnone
 

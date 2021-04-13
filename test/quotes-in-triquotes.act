@@ -1,0 +1,4 @@
+actor main(env):
+    a = """foo"bar"cookie"""
+    print(a)
+    env.exit(0)
