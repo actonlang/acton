@@ -6,6 +6,9 @@ all:
 	cd math && $(MAKE)
 	cd numpy && $(MAKE)
 
+test:
+	$(MAKE) -C test
+
 clean:
 	rm -f actonc
 	cd compiler && $(MAKE) clean
@@ -15,3 +18,5 @@ clean:
 	cd math && $(MAKE) clean
 	cd numpy && $(MAKE) clean
 
+
+.PHONY: test
