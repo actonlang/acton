@@ -7,7 +7,7 @@
 #include "rts.h"
 #include "../builtin/minienv.h"
 
-#define WITH_BACKEND 1
+#define WITH_BACKEND 0
 
 #if WITH_BACKEND
 #include "../backend/client_api.h"
