@@ -1,6 +1,6 @@
 ACTONC=../actonc
 EXAMPLES=abs average counter files sieve sumto worker
-TESTS=segfault
+TESTS=fail1 segfault
 
 test:
 	$(MAKE) abs
@@ -10,6 +10,7 @@ test:
 	$(MAKE) sumto
 	$(MAKE) segfault
 	@echo TODO: fix below entries
+	#$(MAKE) fail1
 	#$(MAKE) files  # some compile time error
 	#$(MAKE) worker # this never exits, shouldn't acton exit when the root actor exits?
 	#$(MAKE) ifisnone
