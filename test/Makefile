@@ -1,5 +1,6 @@
 ACTONC=../actonc
 EXAMPLES=abs average counter files sieve sumto worker
+TESTS=segfault
 
 test:
 	$(MAKE) abs
@@ -7,9 +8,10 @@ test:
 	$(MAKE) counter
 	$(MAKE) sieve
 	$(MAKE) sumto
+	$(MAKE) segfault
 	@echo TODO: fix below entries
 	#$(MAKE) files  # some compile time error
-	#$(MAKE) worker # this never exist, shouldn't acton exit when the root actor exits?
+	#$(MAKE) worker # this never exits, shouldn't acton exit when the root actor exits?
 	#$(MAKE) ifisnone
 
 test-examples: $(EXAMPLES)
@@ -18,7 +20,11 @@ $(EXAMPLES):
 	$(ACTONC) ../examples/$@.act --root main
 	../examples/$@
 
+$(TESTS):
+	$(ACTONC) $@.act --root main
+	./$@
+
 ifisnone:
 	$(ACTONC) ifisnone.act
 
-.PHONY: test test-examples
+.PHONY: test test-examples $(TESTS)
