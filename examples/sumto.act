@@ -5,5 +5,9 @@ def sumto(n):
     return res
     
 actor main(env):
-    print(sumto(int(env.argv[1])))
+    if len(env.argv) >= 2:
+        target = int(env.argv[1])
+    else:
+        target = int(123)
+    print(sumto(int(target)))
     env.exit(0)
