@@ -17,16 +17,30 @@ involved in declaring types.
 
 # Building
 
-git
-make (GNU)
-gcc
+## Build dependencies
 
+- stack
+- git
+- make (GNU)
+- gcc
+
+### Debian
+Install prerequisites
+```
+apt install alex gcc happy libutf8proc-dev make stack
+```
 
 ## Build instructions
 
-Submodules needs to be fetched as well:
+To build the project, simply run:
 
-    git pull ... --recurse-submodules
-	make
-	cd test
-	make
+```
+make
+```
+
+To run the test suite you also need to pull in all git submodules
+
+```
+git pull --recurse-submodules
+make -C test
+```
