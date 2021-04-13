@@ -38,9 +38,7 @@ To build the project, simply run:
 make
 ```
 
-To run the test suite you also need to pull in all git submodules
-
+## Running tests
 ```
-git pull --recurse-submodules
 make -C test
 ```
