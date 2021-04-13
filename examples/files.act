@@ -1,10 +1,10 @@
 actor main(env):
-   f2 = env.openR("data")
-   if f2 is not None:
+    f2 = env.openR("data")
+    if f2 is not None:
         s = f2.readln()
         while (s is not None):
-           print(s)
-           s = f2.readln()
-   else:
-       print("cannot open file 'data' for reading")
-   env.exit(0)
+            print(s)
+            s = f2.readln()
+    else:
+        print("cannot open file 'data' for reading")
+    env.exit(0)
