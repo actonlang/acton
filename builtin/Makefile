@@ -1,7 +1,8 @@
-all: builtin.o minienv.o
 ifeq ($(shell uname -s),Linux)
 CFLAGS += -I/usr/include/kqueue
 endif
+
+all: builtin.o minienv.o
 
 builtin.o: builtin.c builtin.h Iterator.h Iterator.c __builtin__.h __builtin__.c builtin_functions.h builtin_functions.c \
            class_hierarchy.h class_hierarchy.c common.h common.c complx.h complex.c csiphash.c dict.h dict.c dict_impl.h dict_impl.c \
