@@ -1,3 +1,7 @@
+ifeq ($(shell uname -s),Linux)
+CFLAGS += -I/usr/include/kqueue
+endif
+
 all: builtin.o minienv.o
 
 builtin.o: builtin.c builtin.h Iterator.h Iterator.c __builtin__.h __builtin__.c builtin_functions.h builtin_functions.c \
@@ -5,11 +9,11 @@ builtin.o: builtin.c builtin.h Iterator.h Iterator.c __builtin__.h __builtin__.c
            exceptions.h exceptions.c float.h float.c hash.h hash.c int.h int.c list.h list.c list_impl.h list_impl.c none.h none.c \
            range.h range.c registration.h registration.c serialize.h serialize.c set.h set.c set_impl.h set_impl.c \
            slice.h slice.c str.h str.c tuple.h tuple.c
-	cc -g -c -O3 builtin.c
+	cc $(CFLAGS) -g -c -O3 builtin.c
 	ar cr ../lib/libActon.a builtin.o
 
 minienv.o: minienv.c minienv.h builtin.o
-	cc -g -c -O3 minienv.c
+	cc $(CFLAGS) -g -c -O3 minienv.c
 	ar cr ../lib/libActon.a minienv.o
 
 clean:

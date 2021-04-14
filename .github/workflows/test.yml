@@ -41,10 +41,10 @@ jobs:
             ~/.stack
           key: ${{ runner.os }}
       - name: Install build prerequisites
-        run: sudo apt-get install -qy alex gcc happy haskell-stack libutf8proc-dev make
+        run: sudo apt-get install -qy alex gcc happy haskell-stack libkqueue-dev libutf8proc-dev make
       - name: Install GHC && build dependencies
         run: cd ${{ github.workspace }}/compiler && make package.yaml && stack build --only-dependencies
-#      - name: Build actonc
-#        run: make -C ${{ github.workspace }}
+      - name: Build actonc
+        run: make -C ${{ github.workspace }}
 #      - name: Run tests
 #        run: make -C ${{ github.workspace }} test
