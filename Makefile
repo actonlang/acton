@@ -4,7 +4,10 @@ all:
 	cd builtin && $(MAKE)
 	cd rts && $(MAKE)
 	cd math && $(MAKE)
-	cd numpy && $(MAKE)
+	#cd numpy && $(MAKE)
+
+test:
+	$(MAKE) -C test
 
 clean:
 	rm -f actonc
@@ -15,3 +18,5 @@ clean:
 	cd math && $(MAKE) clean
 	cd numpy && $(MAKE) clean
 
+
+.PHONY: test

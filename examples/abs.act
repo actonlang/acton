@@ -1,4 +1,4 @@
 actor main(env):
-  x = -3
-  print(abs(x))
-  
+    x = -3
+    print(abs(x))
+    env.exit(0)

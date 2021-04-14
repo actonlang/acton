@@ -5,18 +5,17 @@ def average(coll):
     return sum.__float__()/float(len(coll))
 
 actor main(env):
-   s = [3.2, 4.5, 3.2, 0.5]
-   print(average(s))
-   t = [4, 6, 9, 14]
-   print(average(t))
-   u = [3, 4.4]                        # u has type list[float]
-   for i in map(int,u): print(i)
-   for x in map(float,u): print(x)
-   n : int
-   n = 3
-   v = [n, 4.4]                        # v has type list[atom]
-   for i in map(int,v): print(i)
-   for x in map(float,v): print(x)
+    s = [3.2, 4.5, 3.2, 0.5]
+    print(average(s))
+    t = [4, 6, 9, 14]
+    print(average(t))
+    u = [3, 4.4]                        # u has type list[float]
+    for i in map(int,u): print(i)
+    for x in map(float,u): print(x)
+    n : int
+    n = 3
+    v = [n, 4.4]                        # v has type list[atom]
+    for i in map(int,v): print(i)
+    for x in map(float,v): print(x)
 #   print(average(v))
-   
-   
+    env.exit(0)

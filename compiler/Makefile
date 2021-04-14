@@ -1,8 +1,6 @@
+include ../common.mk
 #ACTON_BINDIR  := ../bin
 ACTON_BINDIR  := ..
-
-VERSION=$(shell awk -F= '/ACTON_VERSION=/ {print $$2}' ../VERSION)
-
 
 .SUFFIXES : .o .hs .hi .lhs .hc .s
 .PHONY: all build install clean
@@ -12,7 +10,7 @@ all: build
 build: package.yaml
 	stack build
 
-package.yaml: package.yaml.in ../VERSION
+package.yaml: package.yaml.in
 	@echo "  ver   " $(VERSION)
 	@sed 's/^version:.*/version: $(VERSION)/' <$< >$@ || (rm -f $@; exit 1)
 

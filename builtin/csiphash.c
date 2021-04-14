@@ -35,6 +35,8 @@
     - letoh64() fallback
 */
 
+#include <stdint.h>
+
 /* byte swap little endian to host endian
  * Endian conversion not only ensures that the hash function returns the same
  * value on all platforms. It is also required to for a good dispersion of

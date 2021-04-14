@@ -6,6 +6,5 @@ def sumto(n):
     return numpy.sum(a,None)
     
 actor main(env):
-  print(sumto(int(env.argv[1])))
-  env.exit(0)
-  
+    print(sumto(int(env.argv[1])))
+    env.exit(0)
