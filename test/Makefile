@@ -8,7 +8,6 @@ test:
 	$(MAKE) counter
 	$(MAKE) sieve
 	$(MAKE) sumto
-	$(MAKE) segfault
 	@echo TODO: fix below entries
 	#$(MAKE) fail1
 	#$(MAKE) files  # some compile time error
@@ -17,6 +16,7 @@ test:
 	#$(MAKE) string-concat
 	#$(MAKE) worker # this never exits, shouldn't acton exit when the root actor exits?
 	#$(MAKE) ifisnone
+	#$(MAKE) segfault
 
 test-examples: $(EXAMPLES)
 
