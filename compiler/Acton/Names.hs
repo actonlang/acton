@@ -19,9 +19,17 @@ deriveQ (GName (ModName m) n)       = deriveMod n m
 deriveMod n0 []                     = n0
 deriveMod n0 (n:m)                  = deriveMod (Derived n0 n) m
 
+deriveT (TVar _ v)                  = tvname v
+deriveT (TCon _ c)                  = deriveQ (tcname c)
+
 witAttr qn                          = Derived (name "w") (deriveQ qn)
 
-extensionName p c                   = Derived (deriveQ $ tcname p) (deriveQ c)
+extensionName p c
+  | length ts == length vs          = n0
+  | otherwise                       = foldl Derived n0 (map deriveT ts)
+  where ts                          = tcargs c
+        vs                          = [ v | TVar _ v <- ts ]
+        n0                          = Derived (deriveQ $ tcname p) (deriveQ $ tcname c)
 
 
 -- Mutually recursive groups -------

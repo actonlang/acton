@@ -16,6 +16,7 @@ import Acton.Prim
 import Acton.Printer
 import Acton.Names
 import Acton.Subst
+import Acton.Unify
 import Utils
 import Pretty
 import InterfaceFiles
@@ -528,6 +529,18 @@ isAlias n env               = case lookup n (names env) of
                                 Just NAlias{} -> True
                                 _ -> False
 
+kindOf env (TVar _ tv)      = tvkind tv
+kindOf env (TCon _ tc)      = tconKind (tcname tc) env
+kindOf env TFun{}           = KType
+kindOf env TTuple{}         = KType
+kindOf env TOpt{}           = KType
+kindOf env TNone{}          = KType
+kindOf env TWild{}          = KWild
+kindOf env r@TNil{}         = rkind r
+kindOf env r@TRow{}         = rkind r
+kindOf env TFX{}            = KFX
+
+
 tconKind                    :: QName -> EnvF x -> Kind
 tconKind n env              = case findQName n env of
                                 NAct q _ _ _ -> kind KType q
@@ -566,40 +579,31 @@ isDefOrClass env n          = case findQName n env of
 allWitnesses                :: EnvF x -> QName -> [Witness]
 allWitnesses env cn         = [ w | (c,w) <- witnesses env, c == cn ]
 
-findWitness                 :: EnvF x -> QName -> PCon -> Maybe Witness
-findWitness env cn p        = listToMaybe $ filter (implProto env p) $ allWitnesses env cn
+findWitness                 :: EnvF x -> Type -> QName -> Maybe Witness
+findWitness env t pn
+  | Just n <- typename t    = listToMaybe $ filter implProto $ allWitnesses env n
+  | otherwise               = Nothing
+  where typename (TCon _ c) = Just $ tcname c
+        typename (TVar _ v) = Just $ NoQ $ tvname v
+        typename _          = Nothing
+        implProto w         = tcname (proto w) == pn && wtype w `matches` t
 
-implProto                   :: EnvF x -> PCon -> Witness -> Bool
-implProto env p w           = case w of
-                                WClass{} -> tcname p == tcname p'
-                                WInst{}  -> unifEq p p'
-  where p'                  = proto w
-
-        -- Equality modulo unifiable type variables... to be replaced with matching.
-        unifEq (TC a ts) (TC b us)                      = a == b && and (zipWith ueq ts us)
-
-        ueq (TVar _ v1) (TVar _ v2)                     = univar v1 || univar v2 || v1 == v2
-        ueq (TCon _ c1) (TCon _ c2)                     = unifEq c1 c2
-        ueq (TFun _ e1 p1 r1 t1) (TFun _ e2 p2 r2 t2)   = ueq e1 e2 && ueq p1 p2 && ueq r1 r2 && ueq t1 t2
-        ueq (TTuple _ p1 r1) (TTuple _ p2 r2)           = ueq p1 p2 && ueq r1 r2
-        ueq (TOpt _ t1) (TOpt _ t2)                     = ueq t1 t2
-        ueq (TNone _) (TNone _)                         = True
-        ueq (TWild _) (TWild _)                         = True
-        ueq (TNil _ s1)  (TNil _ s2)                    = s1 == s2
-        ueq (TRow _ s1 n1 t1 r1) (TRow _ s2 n2 t2 r2)   = s1 == s2 && n1 == n2 && ueq t1 t2 && ueq r1 r2
-        ueq (TFX _ fx1) (TFX _ fx2)                     = fx1 == fx2
-        ueq _ _                                         = False
-
-
-findProto env cn n          = case filter (hasAttr env n) $ allWitnesses env cn of
+findProto                   :: EnvF x -> QName -> Name -> Maybe PCon
+findProto env cn n          = case filter hasAttr $ allWitnesses env cn of
                                 [] -> Nothing
                                 w:_ -> Just (TC (tcname $ proto w) (map (const tWild) (tcargs $ proto w)))
+  where hasAttr w           = n `elem` conAttrs env (tcname $ proto w)
 
-hasAttr                     :: EnvF x -> Name -> Witness -> Bool
-hasAttr env n w             = n `elem` conAttrs env (tcname $ proto w)
+hasWitness                  :: EnvF x -> Type -> QName -> Bool
+hasWitness env t pn         =  isJust $ findWitness env t pn
 
-hasWitness                  :: EnvF x -> QName -> QName -> Bool
-hasWitness env cn pn        =  not $ null $ filter ((pn==) . tcname . proto) $ allWitnesses env cn
+allExtProto                 :: EnvF x -> Type -> PCon -> [Type]
+allExtProto env t p         = reverse [ wild (wtype w) | (_,w) <- witnesses env, tcname (proto w) == tcname p, wtype w `matches` t0 ]
+  where t0                  = wild t
+        wild t              = subst [ (v,tWild) | v <- nub (tyfree t) ] t
+
+allExtProtoAttr             :: EnvF x -> Name -> [Type]
+allExtProtoAttr env n       = [ tCon tc | tc <- allCons env, any ((n `elem`) . allAttrs env . proto) (allWitnesses env $ tcname tc) ]
 
 
 -- TCon queries ------------------------------------------------------------------------------------------------------------------
@@ -729,6 +733,13 @@ allProtos env               = reverse locals ++ concat [ protos m (lookupMod m e
         proto _             = False
         protos m (Just te)  = [ TC (GName m n) (args i) | (n,i) <- te, proto i ] ++ concat [ protos (modCat m n) (Just te') | (n,NModule te') <- te ]
         args (NProto q _ _) = [ tWild | _ <- q ]
+
+allConAttr                  :: EnvF x -> Name -> [Type]
+allConAttr env n            = [ tCon tc | tc <- allCons env, n `elem` allAttrs env tc ]
+
+allProtoAttr                :: EnvF x -> Name -> [Type]
+allProtoAttr env n          = [ tCon p | p <- allProtos env, n `elem` allAttrs env p ]
+
 
 wexpr                       :: [Maybe QName] -> Expr -> Expr
 wexpr []                    = id

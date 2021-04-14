@@ -496,8 +496,8 @@ instance InfEnv Decl where
       | isProto env n                   = notYet (loc n) "Extension of a protocol"
       | length us == 0                  = err (loc n) "Extension lacks a protocol"
 --      | length us > 1                   = notYet (loc n) "Extensions with multiple protocols"
-      | not $ null witsearch            = err (loc n) "Extension already exists"
-      | otherwise                       = do --traceM ("\n## infEnv extension " ++ prstr n)
+      | Just wit <- witsearch           = err (loc n) ("Extension already exists: " ++ prstr (n,wit))
+      | otherwise                       = do --traceM ("\n## infEnv extension " ++ prstr c)
                                              pushFX fxPure tNone
                                              (cs,te,b') <- infEnv env1 b
                                              popFX
@@ -508,12 +508,12 @@ instance InfEnv Decl where
                                              when (not (null asigs || stub env)) $ err3 l asigs "Protocol method/attribute lacks implementation:"
                                              when (not $ null sigs) $ err2 sigs "Extension with new methods/attributes not supported"
                                              -- w <- newWitness
-                                             return (cs1, [(extensionName (head us) n, NExt q c ps te)], Extension l q c us (bindWits eq1 ++ b'))
+                                             return (cs1, [(extensionName (head us) c, NExt q c ps te)], Extension l q c us (bindWits eq1 ++ b'))
       where TC n ts                     = c
             env1                        = define (toSigs te') $ reserve (bound b) $ defineSelfOpaque $ defineTVars (stripQual q) env
-            witsearch                   = findWitness env n (head us)
+            witsearch                   = findWitness env (tCon c) (tcname $ head us)
             ps                          = mro1 env us     -- TODO: check that ps doesn't contradict any previous extension mro for c
-            final                       = concat [ conAttrs env pn | (_, TC pn _) <- ps, hasWitness env n pn ]
+            final                       = concat [ conAttrs env pn | (_, TC pn _) <- ps, hasWitness env (tCon c) pn ]
             te'                         = parentTEnv env ps
 
 --------------------------------------------------------------------------------------------------------------------------
@@ -771,7 +771,7 @@ instance Check Decl where
       where env1                        = define (subst s te) $ defineInst c ps thisKW' $ defineSelf n q $ defineTVars q $ setInClass env
             tvs                         = tvSelf : qbound q
             n                           = tcname c
-            n'                          = extensionName (head us) n
+            n'                          = extensionName (head us) c
             NExt _ _ ps te              = findName n' env
             s                           = [(tvSelf, tCon $ TC n (map tVar $ qbound q))]
 

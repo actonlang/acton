@@ -64,13 +64,17 @@ unify' t1 t2                                = noUnify t1 t2
 
 -- matching ----------------------------------------------------------------------------------------------------------------------
 
-matchM (t1:ts1) (t2:ts2)                    = do s1 <- match t1 t2
-                                                 s2 <- matchM ts1 ts2
-                                                 merge s1 s2
-matchM [] []                                = Just []
+matches t t'                                = isJust $ match t t'
 
+
+match (TWild _) t                           = Just []
+match t (TWild _)                           = Just []
 match (TCon _ c1) (TCon _ c2)
-  | tcname c1 == tcname c2                  = matchM (tcargs c1) (tcargs c2)
+  | tcname c1 == tcname c2                  = match' (tcargs c1) (tcargs c2)
+  where match' (t1:ts1) (t2:ts2)            = do s1 <- match t1 t2
+                                                 s2 <- match' ts1 ts2
+                                                 merge s1 s2
+        match' [] []                        = Just []
 match (TFun _ fx1 p1 k1 t1) (TFun _ fx2 p2 k2 t2)
                                             = do s1 <- match fx1 fx2
                                                  s2 <- match p1 p2
