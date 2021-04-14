@@ -4,7 +4,7 @@ all:
 	cd builtin && $(MAKE)
 	cd rts && $(MAKE)
 	cd math && $(MAKE)
-	cd numpy && $(MAKE)
+	#cd numpy && $(MAKE)
 
 test:
 	$(MAKE) -C test
