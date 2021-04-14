@@ -27,7 +27,7 @@ involved in declaring types.
 ### Debian
 Install prerequisites
 ```
-apt install alex gcc happy libutf8proc-dev make stack
+apt install alex gcc happy haskell-stack libutf8proc-dev make
 ```
 
 ## Build instructions
