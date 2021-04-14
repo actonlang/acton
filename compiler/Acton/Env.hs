@@ -112,7 +112,6 @@ type WTCon                  = ([Maybe QName],PCon)
 
 instance Data.Binary.Binary NameInfo
 
-
 instance Pretty (QName,Witness) where
     pretty (n, WClass q t p w ws)   = text "WClass" <+> prettyQual q <+> pretty t <+> parens (pretty p) <+>
                                       equals <+> pretty (wexpr ws (eCall (eQVar w) []))
@@ -412,9 +411,9 @@ env `withModulesFrom` env'  = env{modules = modules env'}
 
 addWit                      :: EnvF x -> (QName,Witness) -> EnvF x
 addWit env (c,wit)
-  | exists                  = env
-  | otherwise               = env{ witnesses = (c,wit) : witnesses env }
-  where exists              = tcname (proto wit) `elem` map (tcname . proto) (allWitnesses env c)
+  | null same               = env{ witnesses = (c,wit) : witnesses env }
+  | otherwise               = env
+  where same                = [ w | w <- allWitnesses env c, wtype w == wtype wit && proto w == proto wit ]
 
 reserve                     :: [Name] -> EnvF x -> EnvF x
 reserve xs env              = env{ names = [ (x, NReserved) | x <- nub xs ] ++ names env }
