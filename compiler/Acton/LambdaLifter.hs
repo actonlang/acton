@@ -105,7 +105,7 @@ freemap env                     = freemapX $ envX env
 quantmap env                    = quantmapX $ envX env
 namemap env                     = namemapX $ envX env
 
-extLocals e env                 = modX env $ \x -> x{ localsX = vts ++ locals env }
+extLocals e env                 = modX env $ \x -> x{ localsX = vts ++ locals env `exclude` dom vts }
   where vts                     = [ (v, conv t) | (v,NVar t) <- envOf e ]
 
 extFree m env                   = modX env $ \x -> x{ freemapX = m ++ freemap env,
