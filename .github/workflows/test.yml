@@ -1,0 +1,50 @@
+name: Compile
+on: [push]
+jobs:
+  build-and-test-on-macosx:
+    runs-on: macos-latest
+    steps:
+      - run: echo "🎉 The job was automatically triggered by a ${{ github.event_name }} event."
+      - run: echo "🐧 This job is now running on a ${{ runner.os }} server hosted by GitHub!"
+      - run: echo "🔎 The name of your branch is ${{ github.ref }} and your repository is ${{ github.repository }}."
+      - name: Check out repository code
+        uses: actions/checkout@v2
+      - run: echo "💡 The ${{ github.repository }} repository has been cloned to the runner."
+      - name: Cache ~/.stack
+        uses: actions/cache@v2
+        with:
+          path: |
+            ~/.stack
+          key: ${{ runner.os }}
+      - name: Install build prerequisites
+        run: brew install haskell-stack
+      - name: Install GHC && build dependencies
+        run: cd ${{ github.workspace }}/compiler && make package.yaml && stack build --only-dependencies
+      - name: Build actonc
+        run: make -C ${{ github.workspace }}
+      - name: Run tests
+        run: make -C ${{ github.workspace }} test
+
+  build-and-test-on-linux:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "🎉 The job was automatically triggered by a ${{ github.event_name }} event."
+      - run: echo "🐧 This job is now running on a ${{ runner.os }} server hosted by GitHub!"
+      - run: echo "🔎 The name of your branch is ${{ github.ref }} and your repository is ${{ github.repository }}."
+      - name: Check out repository code
+        uses: actions/checkout@v2
+      - run: echo "💡 The ${{ github.repository }} repository has been cloned to the runner."
+      - name: Cache ~/.stack
+        uses: actions/cache@v2
+        with:
+          path: |
+            ~/.stack
+          key: ${{ runner.os }}
+      - name: Install build prerequisites
+        run: sudo apt-get install -qy alex gcc happy haskell-stack libkqueue-dev libutf8proc-dev make
+      - name: Install GHC && build dependencies
+        run: cd ${{ github.workspace }}/compiler && make package.yaml && stack build --only-dependencies
+      - name: Build actonc
+        run: make -C ${{ github.workspace }}
+#      - name: Run tests
+#        run: make -C ${{ github.workspace }} test

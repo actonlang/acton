@@ -1,3 +1,9 @@
+#ifdef __linux__
+#ifndef _GNU_SOURCE
+#define _GNU_SOURCE 1
+#endif
+#endif
+
 #include <unistd.h>
 #include <pthread.h>
 #include <stdio.h>
@@ -7,7 +13,7 @@
 #include "rts.h"
 #include "../builtin/minienv.h"
 
-#define WITH_BACKEND 1
+#define WITH_BACKEND 0
 
 #if WITH_BACKEND
 #include "../backend/client_api.h"

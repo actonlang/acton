@@ -10,4 +10,3 @@ actor main(env):
     n = ctr.next()
     print(n)
     env.exit(0)
-    

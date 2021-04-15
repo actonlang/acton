@@ -11,6 +11,7 @@ import Acton.Prim
 import Acton.Env
 import Acton.Solver
 import Acton.Subst
+import Acton.Unify
 import Acton.Transform
 import Acton.Converter
 import Acton.TypeM
@@ -495,8 +496,8 @@ instance InfEnv Decl where
       | isProto env n                   = notYet (loc n) "Extension of a protocol"
       | length us == 0                  = err (loc n) "Extension lacks a protocol"
 --      | length us > 1                   = notYet (loc n) "Extensions with multiple protocols"
-      | not $ null witsearch            = err (loc n) "Extension already exists"
-      | otherwise                       = do --traceM ("\n## infEnv extension " ++ prstr n)
+      | Just wit <- witsearch           = err (loc n) ("Extension already exists: " ++ prstr (n,wit))
+      | otherwise                       = do --traceM ("\n## infEnv extension " ++ prstr c)
                                              pushFX fxPure tNone
                                              (cs,te,b') <- infEnv env1 b
                                              popFX
@@ -507,12 +508,12 @@ instance InfEnv Decl where
                                              when (not (null asigs || stub env)) $ err3 l asigs "Protocol method/attribute lacks implementation:"
                                              when (not $ null sigs) $ err2 sigs "Extension with new methods/attributes not supported"
                                              -- w <- newWitness
-                                             return (cs1, [(extensionName (head us) n, NExt q c ps te)], Extension l q c us (bindWits eq1 ++ b'))
+                                             return (cs1, [(extensionName (head us) c, NExt q c ps te)], Extension l q c us (bindWits eq1 ++ b'))
       where TC n ts                     = c
             env1                        = define (toSigs te') $ reserve (bound b) $ defineSelfOpaque $ defineTVars (stripQual q) env
-            witsearch                   = findWitness env n (implProto env $ head us)
+            witsearch                   = findWitness env (tCon c) (tcname $ head us)
             ps                          = mro1 env us     -- TODO: check that ps doesn't contradict any previous extension mro for c
-            final                       = concat [ conAttrs env pn | (_, TC pn _) <- ps, hasWitness env n pn ]
+            final                       = concat [ conAttrs env pn | (_, TC pn _) <- ps, hasWitness env (tCon c) pn ]
             te'                         = parentTEnv env ps
 
 --------------------------------------------------------------------------------------------------------------------------
@@ -621,14 +622,14 @@ matchActorAssumption env n0 p k te      = do --traceM ("## matchActorAssumption 
   where NAct _ p0 k0 te0                = findName n0 env
         check1 (n, i) | isHidden n      = return ([], [])
         check1 (n, NVar t)              = do --traceM ("## matchActorAssumption for attribute " ++ prstr n)
-                                             unify env t t0
+                                             unify t t0
                                              return ([],[])
           where t0                      = case lookup n te0 of
                                              Just (NSig (TSchema _ _ t0) _) -> t0
                                              Just (NVar t0) -> t0
         check1 (n, NDef sc _)           = do (cs1,_,t) <- instantiate env sc
                                              --traceM ("## matchActorAssumption for method " ++ prstr n)
-                                             unify env t t0
+                                             unify t t0
                                              (cs2,eq) <- solveScoped (defineTVars q env) (qbound q) te0 tNone cs1
                                              checkNoEscape env (qbound q)
                                              return (cs2, eq)
@@ -767,10 +768,10 @@ instance Check Decl where
                                              checkNoEscape env tvs
                                              b' <- msubst b'
                                              return (cs1, convExtension env n' c q ps eq1 wmap b')
-      where env1                        = define (subst s te) $ defineInst n ps thisKW' $ defineSelf n q $ defineTVars q $ setInClass env
+      where env1                        = define (subst s te) $ defineInst c ps thisKW' $ defineSelf n q $ defineTVars q $ setInClass env
             tvs                         = tvSelf : qbound q
             n                           = tcname c
-            n'                          = extensionName (head us) n
+            n'                          = extensionName (head us) c
             NExt _ _ ps te              = findName n' env
             s                           = [(tvSelf, tCon $ TC n (map tVar $ qbound q))]
 
@@ -1182,13 +1183,14 @@ instance Infer Expr where
                                                       let t' = subst [(tvSelf,tCon tc)] $ addSelf t dec
                                                       return (cs0++cs1, t', app2nd dec t' (tApp (Dot l x n) (ts++tvs)) $ witsOf (cs0++cs1))
                                                 Nothing ->
-                                                    case findWitness env c' (hasAttr env n) of
-                                                        Just wit -> do
-                                                            (cs1,p,we) <- instWitness env ts wit
+                                                    case findProto env c' n of
+                                                        Just p -> do
+                                                            p <- instwildcon env p
+                                                            we <- eVar <$> newWitness
                                                             let Just (wf,sc,dec) = findAttr env p n
                                                             (cs2,tvs,t) <- instantiate env sc
                                                             let t' = subst [(tvSelf,tCon tc)] $ addSelf t dec
-                                                            return (cs1++cs2, t', app t' (tApp (eDot (wf we) n) tvs) $ witsOf cs2)
+                                                            return (cs2, t', app t' (tApp (eDot (wf we) n) tvs) $ witsOf cs2)
                                                         Nothing -> err1 l "Attribute not found"
       | NProto q us te <- cinfo         = do (_,ts) <- instQBinds env q
                                              let tc = TC c' ts
@@ -1551,7 +1553,7 @@ instance InfEnvT [Pattern] where
                                              return (cs1,te1,t1,[p'])
     infEnvT env (p:ps)                  = do (cs1,te1,t1,p') <- infEnvT env p
                                              (cs2,te2,t2,ps') <- infEnvT env ps
-                                             unify env t1 t2
+                                             unify t1 t2
                                              return (cs1++cs2, te1++te2, t1, p':ps')
 
 

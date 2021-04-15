@@ -16,6 +16,7 @@ import Acton.Prim
 import Acton.Printer
 import Acton.Names
 import Acton.Subst
+import Acton.Unify
 import Utils
 import Pretty
 import InterfaceFiles
@@ -102,36 +103,19 @@ data NameInfo               = NVar      Type
                             | NReserved
                             deriving (Eq,Show,Read,Generic)
 
-data Witness                = WClass    { binds::QBinds, tyargs::[Type], proto::PCon, wname::QName, wsteps::[Maybe QName] }     -- add tycon's tcargs
-                            | WInst     { proto::PCon, wname::QName, wsteps::[Maybe QName] }
---                            | WInst     { tyvars::[TVar], tyargs::[Type], proto::PCon, wname::QName, wsteps::[Maybe QName] }
+data Witness                = WClass    { binds::QBinds, wtype::Type, proto::PCon, wname::QName, wsteps::[Maybe QName] }     -- add tycon's tcargs
+--                            | WInst     { proto::PCon, wname::QName, wsteps::[Maybe QName] }
+                            | WInst     { quants::[TVar], wtype::Type, proto::PCon, wname::QName, wsteps::[Maybe QName] }
                             deriving (Show)
 
 type WTCon                  = ([Maybe QName],PCon)
 
 instance Data.Binary.Binary NameInfo
 
-
--- Equality modulo unifiable type variables... to be replaced with matching.
-
-unifEq (TC a ts) (TC b us)  = a == b && and (zipWith ueq ts us)
-  where ueq (TVar _ v1) (TVar _ v2)                      = univar v1 || univar v2 || v1 == v2
-        ueq (TCon _ c1) (TCon _ c2)                      = unifEq c1 c2
-        ueq (TFun _ e1 p1 r1 t1) (TFun _ e2 p2 r2 t2)    = ueq e1 e2 && ueq p1 p2 && ueq r1 r2 && ueq t1 t2
-        ueq (TTuple _ p1 r1) (TTuple _ p2 r2)            = ueq p1 p2 && ueq r1 r2
-        ueq (TOpt _ t1) (TOpt _ t2)                      = ueq t1 t2
-        ueq (TNone _) (TNone _)                          = True
-        ueq (TWild _) (TWild _)                          = True
-        ueq (TNil _ s1)  (TNil _ s2)                     = s1 == s2
-        ueq (TRow _ s1 n1 t1 r1) (TRow _ s2 n2 t2 r2)    = s1 == s2 && n1 == n2 && ueq t1 t2 && ueq r1 r2
-        ueq (TFX _ fx1) (TFX _ fx2)                      = fx1 == fx2
-        ueq _ _                                          = False
-
-
 instance Pretty (QName,Witness) where
-    pretty (n, WClass q ts p w ws)  = text "WClass" <+> prettyQual q <+> pretty n <> nonEmpty brackets commaList ts <+> parens (pretty p) <+>
+    pretty (n, WClass q t p w ws)   = text "WClass" <+> prettyQual q <+> pretty t <+> parens (pretty p) <+>
                                       equals <+> pretty (wexpr ws (eCall (eQVar w) []))
-    pretty (n, WInst p w ws)        = text "WInst" <+> pretty n <+> parens (pretty p) <+>
+    pretty (n, WInst vs t p w ws)   = text "WInst" <+> prettyQual (map quant vs) <+> pretty t <+> parens (pretty p) <+>
                                       equals <+> pretty (wexpr ws (eQVar w))
         
 instance Pretty TEnv where
@@ -228,7 +212,7 @@ instance Subst (QName,Witness) where
                                      return (n, w{ proto = p })
     
     tyfree (n, w@WClass{})      = []
-    tyfree (n, w@WInst{})       = filter univar $ tyfree (proto w)
+    tyfree (n, w@WInst{})       = filter univar (tyfree (proto w) \\ quants w)
     
 
 instance Subst WTCon where
@@ -427,9 +411,9 @@ env `withModulesFrom` env'  = env{modules = modules env'}
 
 addWit                      :: EnvF x -> (QName,Witness) -> EnvF x
 addWit env (c,wit)
-  | exists                  = env
-  | otherwise               = env{ witnesses = (c,wit) : witnesses env }
-  where exists              = tcname (proto wit) `elem` map (tcname . proto) (allWitnesses env c)
+  | null same               = env{ witnesses = (c,wit) : witnesses env }
+  | otherwise               = env
+  where same                = [ w | w <- allWitnesses env c, wtype w == wtype wit && proto w == proto wit ]
 
 reserve                     :: [Name] -> EnvF x -> EnvF x
 reserve xs env              = env{ names = [ (x, NReserved) | x <- nub xs ] ++ names env }
@@ -437,13 +421,13 @@ reserve xs env              = env{ names = [ (x, NReserved) | x <- nub xs ] ++ n
 define                      :: TEnv -> EnvF x -> EnvF x
 define te env               = foldl addWit env1 ws
   where env1                = env{ names = reverse te ++ exclude (names env) (dom te) }
-        ws                  = [ (tcname c, WClass q (tcargs c) p (NoQ w) ws) | (w, NExt q c ps te') <- te, (ws,p) <- ps ]
+        ws                  = [ (tcname c, WClass q (tCon c) p (NoQ w) ws) | (w, NExt q c ps te') <- te, (ws,p) <- ps ]
 
 defineTVars                 :: QBinds -> EnvF x -> EnvF x
 defineTVars q env           = foldr f env q
   where f (Quant tv us) env = foldl addWit env{ names = (tvname tv, NTVar (tvkind tv) c) : names env } wits
           where (c,ps)      = case mro2 env us of ([],_) -> (cValue, us); _ -> (head us, tail us)   -- Just check that the mro exists, don't store it
-                wits        = [ (NoQ (tvname tv), WInst p (NoQ $ tvarWit tv p0) wchain) | p0 <- ps, (wchain,p) <- findAncestry env p0 ]
+                wits        = [ (NoQ (tvname tv), WInst [] (tVar tv) p (NoQ $ tvarWit tv p0) wchain) | p0 <- ps, (wchain,p) <- findAncestry env p0 ]
 
 defineSelfOpaque            :: EnvF x -> EnvF x
 defineSelfOpaque env        = defineTVars [Quant tvSelf []] env
@@ -452,9 +436,9 @@ defineSelf                  :: QName -> QBinds -> EnvF x -> EnvF x
 defineSelf qn q env         = defineTVars [Quant tvSelf [tc]] env
   where tc                  = TC (unalias env qn) [ tVar tv | Quant tv _ <- q ]
 
-defineInst                  :: QName -> [WTCon] -> Name -> EnvF x -> EnvF x
-defineInst n ps w env       = foldl addWit env wits
-  where wits                = [ (n, WInst p (NoQ w) ws) | (ws,p) <- ps ]
+defineInst                  :: TCon -> [WTCon] -> Name -> EnvF x -> EnvF x
+defineInst c ps w env       = foldl addWit env wits
+  where wits                = [ (tcname c, WInst [] (tCon c) p (NoQ w) ws) | (ws,p) <- ps ]
 
 setMod                      :: ModName -> EnvF x -> EnvF x
 setMod m env                = env{ thismod = Just m }
@@ -544,6 +528,18 @@ isAlias n env               = case lookup n (names env) of
                                 Just NAlias{} -> True
                                 _ -> False
 
+kindOf env (TVar _ tv)      = tvkind tv
+kindOf env (TCon _ tc)      = tconKind (tcname tc) env
+kindOf env TFun{}           = KType
+kindOf env TTuple{}         = KType
+kindOf env TOpt{}           = KType
+kindOf env TNone{}          = KType
+kindOf env TWild{}          = KWild
+kindOf env r@TNil{}         = rkind r
+kindOf env r@TRow{}         = rkind r
+kindOf env TFX{}            = KFX
+
+
 tconKind                    :: QName -> EnvF x -> Kind
 tconKind n env              = case findQName n env of
                                 NAct q _ _ _ -> kind KType q
@@ -579,23 +575,34 @@ isDefOrClass env n          = case findQName n env of
                                 NClass _ _ _ -> True
                                 _ -> False
 
-findWitness                 :: EnvF x -> QName -> (Witness->Bool) -> Maybe Witness
-findWitness env cn f        = listToMaybe $ filter f $ allWitnesses env cn
-
 allWitnesses                :: EnvF x -> QName -> [Witness]
 allWitnesses env cn         = [ w | (c,w) <- witnesses env, c == cn ]
 
-implProto                   :: EnvF x -> PCon -> Witness -> Bool
-implProto env p w           = case w of
-                                WClass{} -> tcname p == tcname p'
-                                WInst{}  -> unifEq p p'
-  where p'                  = proto w
+findWitness                 :: EnvF x -> Type -> QName -> Maybe Witness
+findWitness env t pn
+  | Just n <- typename t    = listToMaybe $ filter implProto $ allWitnesses env n
+  | otherwise               = Nothing
+  where typename (TCon _ c) = Just $ tcname c
+        typename (TVar _ v) = Just $ NoQ $ tvname v
+        typename _          = Nothing
+        implProto w         = tcname (proto w) == pn && wtype w `matches` t
 
-hasAttr                     :: EnvF x -> Name -> Witness -> Bool
-hasAttr env n w             = n `elem` conAttrs env (tcname $ proto w)
+findProto                   :: EnvF x -> QName -> Name -> Maybe PCon
+findProto env cn n          = case filter hasAttr $ allWitnesses env cn of
+                                [] -> Nothing
+                                w:_ -> Just (TC (tcname $ proto w) (map (const tWild) (tcargs $ proto w)))
+  where hasAttr w           = n `elem` conAttrs env (tcname $ proto w)
 
-hasWitness                  :: EnvF x -> QName -> QName -> Bool
-hasWitness env cn pn        =  not $ null $ findWitness env cn ((pn==) . tcname . proto)
+hasWitness                  :: EnvF x -> Type -> QName -> Bool
+hasWitness env t pn         =  isJust $ findWitness env t pn
+
+allExtProto                 :: EnvF x -> Type -> PCon -> [Type]
+allExtProto env t p         = reverse [ wild (wtype w) | (_,w) <- witnesses env, tcname (proto w) == tcname p, wtype w `matches` t0 ]
+  where t0                  = wild t
+        wild t              = subst [ (v,tWild) | v <- nub (tyfree t) ] t
+
+allExtProtoAttr             :: EnvF x -> Name -> [Type]
+allExtProtoAttr env n       = [ tCon tc | tc <- allCons env, any ((n `elem`) . allAttrs env . proto) (allWitnesses env $ tcname tc) ]
 
 
 -- TCon queries ------------------------------------------------------------------------------------------------------------------
@@ -725,6 +732,13 @@ allProtos env               = reverse locals ++ concat [ protos m (lookupMod m e
         proto _             = False
         protos m (Just te)  = [ TC (GName m n) (args i) | (n,i) <- te, proto i ] ++ concat [ protos (modCat m n) (Just te') | (n,NModule te') <- te ]
         args (NProto q _ _) = [ tWild | _ <- q ]
+
+allConAttr                  :: EnvF x -> Name -> [Type]
+allConAttr env n            = [ tCon tc | tc <- allCons env, n `elem` allAttrs env tc ]
+
+allProtoAttr                :: EnvF x -> Name -> [Type]
+allProtoAttr env n          = [ tCon p | p <- allProtos env, n `elem` allAttrs env p ]
+
 
 wexpr                       :: [Maybe QName] -> Expr -> Expr
 wexpr []                    = id
@@ -908,7 +922,7 @@ impNames m te               = mapMaybe imp te
 
 importWits                  :: ModName -> TEnv -> EnvF x -> EnvF x
 importWits m te env         = foldl addWit env ws
-  where ws                  = [ (tcname c, WClass q (tcargs c) p (GName m n) ws) | (n, NExt q c ps te') <- te, (ws,p) <- ps ]
+  where ws                  = [ (tcname c, WClass q (tCon c) p (GName m n) ws) | (n, NExt q c ps te') <- te, (ws,p) <- ps ]
 
 
 
