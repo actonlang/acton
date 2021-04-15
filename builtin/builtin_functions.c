@@ -357,7 +357,8 @@ $WORD $round ($Real w$395, $WORD x, $int n) {
 
 $list $replicate($int n, $WORD elem) {
   $list res = $list_new(n->val);
-  memset_pattern8(res->data,&elem,8*n->val);
+  for (int k = 0; k < n->val; k++)
+    res->data[k] = elem;
   res->length = n->val;
   return res;
 }
