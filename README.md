@@ -15,6 +15,21 @@ variable but that the compiler will *infer* the type and performs its checks
 accordingly. We can have the benefits of type safety without the extra overhead
 involved in declaring types.
 
+The Acton Run Time System (RTS) offers a distributed mode of operation allowing
+multiple computers to participate in running one logical Acton system. Actors
+can migrate between compute nodes for load sharing purposes and similar. The RTS
+offers exactly once delivery guarantees. Through checkpointing of actor states
+to a distributed database, the failure of individual compute nodes can be
+recovered by restoring actor state.
+
+NOTE: Acton is in an experimental phase and although much of the syntax has been
+worked out, there may be changes.
+
+NOTE: The RTS currently does not have a garbage collector, severely limiting it
+for long running tasks. However, for smaller shorter lived processes, it can
+work fairly well.
+
+
 # Building
 
 ## Build dependencies
