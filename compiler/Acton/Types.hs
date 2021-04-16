@@ -1365,6 +1365,8 @@ inferBool env (IsInstance l e@(Var _ (NoQ n)) c)
                                                 return (Cast tc t :
                                                         cs, define [(n,NVar tc)] env, sCast n t tc, IsInstance l e' c)
                                              _ -> nameUnexpected c
+inferBool env (Paren l e)               = do (cs,env',s,e') <- inferBool env e
+                                             return (cs, env', s, Paren l e')
 inferBool env e                         = do (cs,t,e') <- infer env e
                                              return (cs, env, [], eCall (eDot e' boolKW) [])
 
