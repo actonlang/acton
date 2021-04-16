@@ -175,10 +175,12 @@ llSuite env (Decl l ds : ss)
                                              ss' <- llSuite env1 ss
                                              return $ Decl l (ds2++ds1) : ss'
   where env'                            = extFree funfree $ define (envOf ds) env
-        funfree                         = expand (freemap env) $ iterexpand funfree0
-        funfree0                        = [ (dname d, free d) | d@Def{} <- ds ]
+        funfree                         = [ (n, vs \\ bound p) | (n,vs) <- funfree1, let p = [ pos d | d <- ds, dname d == n ] ]
+        funfree1                        = expand (freemap env) $ iterexpand funfree0
+        funfree0                        = [ (dname d, nub $ free d) | d@Def{} <- ds ]
         fs                              = dom funfree0
         env1                            = define (envOf ds) env
+        parambound n                    = bound [ pos d | d <- ds, dname d == n ]
 llSuite env (s : ss)
   | ctxt env == InDef                   = (:) <$> ll env s <*> llSuite (extLocals s env1) ss
   | ctxt env == InClass                 = (:) <$> ll env s <*> llSuite env1 ss
