@@ -43,7 +43,9 @@ full                : [A (Primitive)] => (list[int],A)           -> ndarray[A]
 unirandint          :                    (int, int, int)         -> ndarray[int]
 unirandfloat        :                    (float, float, int)     -> ndarray[float]
 
-extension ndarray[A (Primitive)] (Integral): pass
+extension ndarray[int] (Integral): pass
+extension ndarray[A (Primitive)] (Real): pass
+extension ndarray[float] (Div): pass
 extension ndarray[A (Primitive)] (Sliceable[ndarray[A]]): pass
 extension ndarray[A (Primitive)] (Collection[A]): pass
 extension ndarray[A (Primitive, math.RealFuns)] (math.RealFuns): pass

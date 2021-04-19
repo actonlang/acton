@@ -138,7 +138,7 @@ $str numpy$$ndarray$__str__(numpy$$ndarray a) {
       $list_append(strs,numpy$$ndarray$__str__(b));
     }
     $str s = $str_join_par('[',strs,']');
-    $Plus wit = ($Plus)$Plus$str$witness;
+    $Plus wit = ($Plus)$Times$str$witness;
     return wit->$class->__add__(wit,s,to$str("\n"));
   }
 }
@@ -682,7 +682,7 @@ numpy$$ndarray numpy$$dot(numpy$$Primitive wit, numpy$$ndarray a, numpy$$ndarray
   numpy$$ndarray res;
   if (a->ndim==0 || b->ndim==0) {
     // following  Python's numpy, we multiply elementwise...
-    numpy$$Integral$ndarray wit2 = $NEW(numpy$$Integral$ndarray,wit);
+    numpy$$Real$ndarray wit2 = $NEW(numpy$$Real$ndarray,wit);
     res = wit2->$class->__mul__(wit2,a,b);
   } else if (b->ndim==1) {
     long len = $LONGELEM(b->shape,0);

@@ -10,8 +10,10 @@ void numpy$$__init__() {
     $register(&numpy$$ndselect$methods);
     $register(&numpy$$ndindex$methods);
     $register(&numpy$$ndslice$methods);
-    $register(&numpy$$Integral$ndarray$methods);
-    $register(&numpy$$Logical$ndarray$methods);
+    $register(&numpy$$Integral$ndarray$int$methods);
+    $register(&numpy$$Logical$ndarray$int$methods);
+    $register(&numpy$$Minus$ndarray$int$methods);
+    $register(&numpy$$Real$ndarray$methods);
     $register(&numpy$$Minus$ndarray$methods);
     $register(&numpy$$Sliceable$ndarray$methods);
     $register(&numpy$$Collection$ndarray$methods);

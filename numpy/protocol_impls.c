@@ -1,150 +1,273 @@
-// Integral$ndarray /////////////////////////////////////////////////////////////////////////////////////////////
+// numpy$$Integral$ndarray$int /////////////////////////////////////////////////////////////////////////////////////////////
 
-void numpy$$Integral$ndarray$__init__(numpy$$Integral$ndarray wit, numpy$$Primitive w$Primitive$A$numpy) {
-  wit->w$Logical = ($Logical)$NEW(numpy$$Logical$ndarray,($Integral)wit);
-  wit->w$Minus = ($Minus)$NEW(numpy$$Minus$ndarray,($Integral)wit);
-  wit->w$Primitive$A$Integral$ndarray = w$Primitive$A$numpy;
+void numpy$$Integral$ndarray$int$__init__(numpy$$Integral$ndarray$int wit) {
+  wit->w$Logical = ($Logical)$NEW(numpy$$Logical$ndarray$int,($Integral)wit);
+  wit->w$Minus = ($Minus)$NEW(numpy$$Minus$ndarray$int,($Integral)wit);
 }; 
 
-numpy$$Integral$ndarray numpy$$Integral$ndarray$new(numpy$$Primitive pwit) {
-  numpy$$Integral$ndarray res = malloc(sizeof (struct numpy$$Integral$ndarray));
-  res->$class = &numpy$$Integral$ndarray$methods;
-  numpy$$Integral$ndarray$__init__(res, pwit);
+numpy$$Integral$ndarray$int numpy$$Integral$ndarray$int$new() {
+  numpy$$Integral$ndarray$int res = malloc(sizeof (struct numpy$$Integral$ndarray$int));
+  res->$class = &numpy$$Integral$ndarray$int$methods;
+  numpy$$Integral$ndarray$int$__init__(res);
   return res;
 }
 
 
-void numpy$$Integral$ndarray$__serialize__(numpy$$Integral$ndarray wit, $Serial$state state) {
+void numpy$$Integral$ndarray$int$__serialize__(numpy$$Integral$ndarray$int wit, $Serial$state state) {
     $step_serialize(wit->w$Logical, state);
     $step_serialize(wit->w$Minus, state);
-    $step_serialize(wit->w$Primitive$A$Integral$ndarray, state);
 }
 
-numpy$$Integral$ndarray numpy$$Integral$ndarray$__deserialize__(numpy$$Integral$ndarray wit, $Serial$state state) {
-    numpy$$Integral$ndarray res = $DNEW(numpy$$Integral$ndarray,state);
+numpy$$Integral$ndarray$int numpy$$Integral$ndarray$int$__deserialize__(numpy$$Integral$ndarray$int wit, $Serial$state state) {
+    numpy$$Integral$ndarray$int res = $DNEW(numpy$$Integral$ndarray$int,state);
     res->w$Logical = ($Logical)$step_deserialize(state);
     res->w$Minus = ($Minus)$step_deserialize(state);
-    res->w$Primitive$A$Integral$ndarray = (numpy$$Primitive)$step_deserialize(state);
     return res;
 }
 
-numpy$$ndarray numpy$$Integral$ndarray$__add__(numpy$$Integral$ndarray wit, numpy$$ndarray a, numpy$$ndarray b){
-  return numpy$$oper(wit->w$Primitive$A$Integral$ndarray->$class->$add,a,b);
+numpy$$ndarray numpy$$Integral$ndarray$int$__add__(numpy$$Integral$ndarray$int wit, numpy$$ndarray a, numpy$$ndarray b){
+  return numpy$$oper(numpy$$Primitive$int$witness->$class->$add,a,b);
 }
 
-numpy$$ndarray numpy$$Integral$ndarray$__fromatom__(numpy$$Integral$ndarray wit,$atom a) {
+numpy$$ndarray numpy$$Integral$ndarray$int$__fromatom__(numpy$$Integral$ndarray$int wit,$atom a) {
   return numpy$$fromatom(a);
 }
 
-$complex numpy$$Integral$ndarray$__complx__(numpy$$Integral$ndarray wit, numpy$$ndarray a) {
+$complex numpy$$Integral$ndarray$int$__complx__(numpy$$Integral$ndarray$int wit, numpy$$ndarray a) {
     RAISE(($BaseException)$NEW($NotImplementedError,to$str("complex not implemented for ndarray")));
     return NULL;
 }
 
-numpy$$ndarray numpy$$Integral$ndarray$__mul__(numpy$$Integral$ndarray wit, numpy$$ndarray a, numpy$$ndarray b) {
-  return numpy$$oper(wit->w$Primitive$A$Integral$ndarray->$class->$mul,a,b);
+numpy$$ndarray numpy$$Integral$ndarray$int$__mul__(numpy$$Integral$ndarray$int wit, numpy$$ndarray a, numpy$$ndarray b) {
+  return numpy$$oper(numpy$$Primitive$int$witness->$class->$mul,a,b);
 }
 
-numpy$$ndarray numpy$$Integral$ndarray$__truediv__(numpy$$Integral$ndarray wit, numpy$$ndarray a, numpy$$ndarray b) {
-    return numpy$$oper(wit->w$Primitive$A$Integral$ndarray->$class->$div,a,b);
+numpy$$ndarray numpy$$Integral$ndarray$int$__pow__(numpy$$Integral$ndarray$int wit, numpy$$ndarray a, numpy$$ndarray b) {
+    return numpy$$oper(numpy$$Primitive$int$witness->$class->$pow,a,b);
 }
 
-
-numpy$$ndarray numpy$$Integral$ndarray$__pow__(numpy$$Integral$ndarray wit, numpy$$ndarray a, numpy$$ndarray b) {
-    return numpy$$oper(wit->w$Primitive$A$Integral$ndarray->$class->$pow,a,b);
+numpy$$ndarray numpy$$Integral$ndarray$int$__neg__(numpy$$Integral$ndarray$int wit, numpy$$ndarray a) {
+  return numpy$$func(numpy$$Primitive$int$witness->$class->$neg,a);
 }
 
-numpy$$ndarray numpy$$Integral$ndarray$__neg__(numpy$$Integral$ndarray wit, numpy$$ndarray a) {
-  return numpy$$func(wit->w$Primitive$A$Integral$ndarray->$class->$neg,a);
-}
-
-numpy$$ndarray numpy$$Integral$ndarray$__pos__(numpy$$Integral$ndarray wit, numpy$$ndarray a) {
+numpy$$ndarray numpy$$Integral$ndarray$int$__pos__(numpy$$Integral$ndarray$int wit, numpy$$ndarray a) {
   return a;
 }
 
-$WORD numpy$$Integral$ndarray$real(numpy$$Integral$ndarray wit, numpy$$ndarray a, $Real wit2) {
+$WORD numpy$$Integral$ndarray$int$real(numpy$$Integral$ndarray$int wit, numpy$$ndarray a, $Real wit2) {
   return a;
 }
-$WORD numpy$$Integral$ndarray$imag(numpy$$Integral$ndarray wit, numpy$$ndarray a, $Real wit2);
-$WORD numpy$$Integral$ndarray$__abs__(numpy$$Integral$ndarray wit, numpy$$ndarray a, $Real wit2) {
-    return numpy$$func(wit->w$Primitive$A$Integral$ndarray->$class->$abs,a);
+$WORD numpy$$Integral$ndarray$int$imag(numpy$$Integral$ndarray$int wit, numpy$$ndarray a, $Real wit2);
+$WORD numpy$$Integral$ndarray$int$__abs__(numpy$$Integral$ndarray$int wit, numpy$$ndarray a, $Real wit2) {
+    return numpy$$func(numpy$$Primitive$int$witness->$class->$abs,a);
 }
-numpy$$ndarray numpy$$Integral$ndarray$conjugate(numpy$$Integral$ndarray wit, numpy$$ndarray a);
-$float numpy$$Integral$ndarray$__float__ (numpy$$Integral$ndarray wit, numpy$$ndarray a);
-$WORD numpy$$Integral$ndarray$__trunc__ (numpy$$Integral$ndarray wit, numpy$$ndarray a, $Integral wit2);
-$WORD numpy$$Integral$ndarray$__floor__ (numpy$$Integral$ndarray wit, numpy$$ndarray a, $Integral wit2);
-$WORD numpy$$Integral$ndarray$__ceil__ (numpy$$Integral$ndarray wit, numpy$$ndarray a, $Integral wit2);
-numpy$$ndarray numpy$$Integral$ndarray$__round__ (numpy$$Integral$ndarray wit, numpy$$ndarray a, numpy$$ndarray b);
-$WORD numpy$$Integral$ndarray$numerator (numpy$$Integral$ndarray wit, numpy$$ndarray a, $Integral wit2);
-$WORD numpy$$Integral$ndarray$denominator (numpy$$Integral$ndarray wit, numpy$$ndarray a, $Integral wit2);
-numpy$$ndarray numpy$$Integral$ndarray$__int__ (numpy$$Integral$ndarray wit, numpy$$ndarray a);
-numpy$$ndarray numpy$$Integral$ndarray$__index__ (numpy$$Integral$ndarray wit, numpy$$ndarray a);
-$tuple numpy$$Integral$ndarray$__divmod__ (numpy$$Integral$ndarray wit, numpy$$ndarray a, numpy$$ndarray b);
-numpy$$ndarray numpy$$Integral$ndarray$__floordiv__ (numpy$$Integral$ndarray wit, numpy$$ndarray a, numpy$$ndarray b) {
-    return numpy$$oper(wit->w$Primitive$A$Integral$ndarray->$class->$div,a,b);
+numpy$$ndarray numpy$$Integral$ndarray$int$conjugate(numpy$$Integral$ndarray$int wit, numpy$$ndarray a);
+$float numpy$$Integral$ndarray$int$__float__ (numpy$$Integral$ndarray$int wit, numpy$$ndarray a);
+$WORD numpy$$Integral$ndarray$int$__trunc__ (numpy$$Integral$ndarray$int wit, numpy$$ndarray a, $Integral wit2);
+$WORD numpy$$Integral$ndarray$int$__floor__ (numpy$$Integral$ndarray$int wit, numpy$$ndarray a, $Integral wit2);
+$WORD numpy$$Integral$ndarray$int$__ceil__ (numpy$$Integral$ndarray$int wit, numpy$$ndarray a, $Integral wit2);
+numpy$$ndarray numpy$$Integral$ndarray$int$__round__ (numpy$$Integral$ndarray$int wit, numpy$$ndarray a, numpy$$ndarray b);
+$WORD numpy$$Integral$ndarray$int$numerator (numpy$$Integral$ndarray$int wit, numpy$$ndarray a, $Integral wit2);
+$WORD numpy$$Integral$ndarray$int$denominator (numpy$$Integral$ndarray$int wit, numpy$$ndarray a, $Integral wit2);
+numpy$$ndarray numpy$$Integral$ndarray$int$__int__ (numpy$$Integral$ndarray$int wit, numpy$$ndarray a);
+numpy$$ndarray numpy$$Integral$ndarray$int$__index__ (numpy$$Integral$ndarray$int wit, numpy$$ndarray a);
+$tuple numpy$$Integral$ndarray$int$__divmod__ (numpy$$Integral$ndarray$int wit, numpy$$ndarray a, numpy$$ndarray b);
+numpy$$ndarray numpy$$Integral$ndarray$int$__floordiv__ (numpy$$Integral$ndarray$int wit, numpy$$ndarray a, numpy$$ndarray b) {
+  return numpy$$oper(numpy$$Primitive$int$witness->$class->$div,a,b);
 }  
-numpy$$ndarray numpy$$Integral$ndarray$__mod__ (numpy$$Integral$ndarray wit, numpy$$ndarray a, numpy$$ndarray b);
-numpy$$ndarray numpy$$Integral$ndarray$__lshift__ (numpy$$Integral$ndarray wit, numpy$$ndarray a, numpy$$ndarray b);
-numpy$$ndarray numpy$$Integral$ndarray$__rshift__ (numpy$$Integral$ndarray wit, numpy$$ndarray a, numpy$$ndarray b);
-numpy$$ndarray numpy$$Integral$ndarray$__invert__ (numpy$$Integral$ndarray wit, numpy$$ndarray a);
+numpy$$ndarray numpy$$Integral$ndarray$int$__mod__ (numpy$$Integral$ndarray$int wit, numpy$$ndarray a, numpy$$ndarray b);
+numpy$$ndarray numpy$$Integral$ndarray$int$__lshift__ (numpy$$Integral$ndarray$int wit, numpy$$ndarray a, numpy$$ndarray b);
+numpy$$ndarray numpy$$Integral$ndarray$int$__rshift__ (numpy$$Integral$ndarray$int wit, numpy$$ndarray a, numpy$$ndarray b);
+numpy$$ndarray numpy$$Integral$ndarray$int$__invert__ (numpy$$Integral$ndarray$int wit, numpy$$ndarray a);
 
-// Logical$ndarray //////////////////////////////////////////////////////////////////////////////
+// numpy$$Logical$ndarray$int //////////////////////////////////////////////////////////////////////////////
 
-void numpy$$Logical$ndarray$__init__(numpy$$Logical$ndarray wit, $Integral w$Integral) {
+void numpy$$Logical$ndarray$int$__init__(numpy$$Logical$ndarray$int wit, $Integral w$Integral) {
   wit->w$Integral =  w$Integral;
 };
 
-numpy$$Logical$ndarray numpy$$Logical$ndarray$new($Integral w$Integral) {
-  numpy$$Logical$ndarray res = malloc(sizeof (struct numpy$$Logical$ndarray));
-  res->$class = &numpy$$Logical$ndarray$methods;
-  numpy$$Logical$ndarray$__init__(res, w$Integral);
+numpy$$Logical$ndarray$int numpy$$Logical$ndarray$int$new($Integral w$Integral) {
+  numpy$$Logical$ndarray$int res = malloc(sizeof (struct numpy$$Logical$ndarray$int));
+  res->$class = &numpy$$Logical$ndarray$int$methods;
+  numpy$$Logical$ndarray$int$__init__(res, w$Integral);
   return res;
 }
-void numpy$$Logical$ndarray$__serialize__(numpy$$Logical$ndarray wit, $Serial$state state) {
+void numpy$$Logical$ndarray$int$__serialize__(numpy$$Logical$ndarray$int wit, $Serial$state state) {
     $step_serialize(wit->w$Integral, state);
 }
 
-numpy$$Logical$ndarray numpy$$Logical$ndarray$__deserialize__(numpy$$Logical$ndarray wit, $Serial$state state) {
-    numpy$$Logical$ndarray res = $DNEW(numpy$$Logical$ndarray,state);
+numpy$$Logical$ndarray$int numpy$$Logical$ndarray$int$__deserialize__(numpy$$Logical$ndarray$int wit, $Serial$state state) {
+    numpy$$Logical$ndarray$int res = $DNEW(numpy$$Logical$ndarray$int,state);
     res->w$Integral = ($Integral)$step_deserialize(state);
     return res;
 }
 
-numpy$$ndarray numpy$$Logical$ndarray$__and__ (numpy$$Logical$ndarray wit, numpy$$ndarray a, numpy$$ndarray b) {
-  return numpy$$oper(((numpy$$Integral$ndarray)wit->w$Integral)->w$Primitive$A$Integral$ndarray->$class->$band,a,b);
+numpy$$ndarray numpy$$Logical$ndarray$int$__and__ (numpy$$Logical$ndarray$int wit, numpy$$ndarray a, numpy$$ndarray b) {
+  return numpy$$oper(numpy$$Primitive$int$witness->$class->$band,a,b);
 }
-numpy$$ndarray numpy$$Logical$ndarray$__or__ (numpy$$Logical$ndarray wit, numpy$$ndarray a, numpy$$ndarray b) {
-    return numpy$$oper(((numpy$$Integral$ndarray)wit->w$Integral)->w$Primitive$A$Integral$ndarray->$class->$bor,a,b);
+numpy$$ndarray numpy$$Logical$ndarray$int$__or__ (numpy$$Logical$ndarray$int wit, numpy$$ndarray a, numpy$$ndarray b) {
+    return numpy$$oper(numpy$$Primitive$int$witness->$class->$bor,a,b);
 }
-numpy$$ndarray numpy$$Logical$ndarray$__xor__ (numpy$$Logical$ndarray wit, numpy$$ndarray a, numpy$$ndarray b) {
-    return numpy$$oper(((numpy$$Integral$ndarray)wit->w$Integral)->w$Primitive$A$Integral$ndarray->$class->$bxor,a,b);
+numpy$$ndarray numpy$$Logical$ndarray$int$__xor__ (numpy$$Logical$ndarray$int wit, numpy$$ndarray a, numpy$$ndarray b) {
+    return numpy$$oper(numpy$$Primitive$int$witness->$class->$bxor,a,b);
 }
 
-// Minus$ndarray /////////////////////////////////////////////////////////////////////////////////
+// numpy$$Minus$ndarray$int /////////////////////////////////////////////////////////////////////////////////
 
-void numpy$$Minus$ndarray$__init__(numpy$$Minus$ndarray wit, $Integral w$Integral) {
+void numpy$$Minus$ndarray$int$__init__(numpy$$Minus$ndarray$int wit, $Integral w$Integral) {
   wit->w$Integral =  w$Integral;
 };
 
-numpy$$Minus$ndarray numpy$$Minus$ndarray$new($Integral w$Integral) {
+numpy$$Minus$ndarray$int numpy$$Minus$ndarray$int$new($Integral w$Integral) {
+  numpy$$Minus$ndarray$int res = malloc(sizeof (struct numpy$$Minus$ndarray$int));
+  res->$class = &numpy$$Minus$ndarray$int$methods;
+  numpy$$Minus$ndarray$int$__init__(res, w$Integral);
+  return res;
+}
+
+void numpy$$Minus$ndarray$int$__serialize__(numpy$$Minus$ndarray$int wit, $Serial$state state) {
+    $step_serialize(wit->w$Integral, state);
+}
+
+numpy$$Minus$ndarray$int numpy$$Minus$ndarray$int$__deserialize__(numpy$$Minus$ndarray$int wit, $Serial$state state) {
+    numpy$$Minus$ndarray$int res = $DNEW(numpy$$Minus$ndarray$int,state);
+    res->w$Integral = ($Integral)$step_deserialize(state);
+    return res;
+}
+
+numpy$$ndarray numpy$$Minus$ndarray$int$__sub__ (numpy$$Minus$ndarray$int wit, numpy$$ndarray a, numpy$$ndarray b) {
+  return numpy$$oper(numpy$$Primitive$int$witness->$class->$sub,a,b);
+}
+
+// numpy$$Real$ndarray /////////////////////////////////////////////////////////////////////////////////////////////
+
+void numpy$$Real$ndarray$__init__(numpy$$Real$ndarray wit, numpy$$Primitive w$Primitive$A$numpy) {
+  wit->w$Minus = ($Minus)$NEW(numpy$$Minus$ndarray,($Real)wit);
+  wit->w$Primitive$A$Real$ndarray =  w$Primitive$A$numpy;
+}; 
+
+numpy$$Real$ndarray numpy$$Real$ndarray$new(numpy$$Primitive w$Primitive$A$numpy) {
+  numpy$$Real$ndarray res = malloc(sizeof (struct numpy$$Real$ndarray));
+  res->$class = &numpy$$Real$ndarray$methods;
+  numpy$$Real$ndarray$__init__(res, w$Primitive$A$numpy);
+  return res;
+}
+
+
+void numpy$$Real$ndarray$__serialize__(numpy$$Real$ndarray wit, $Serial$state state) {
+    $step_serialize(wit->w$Minus, state);
+}
+
+numpy$$Real$ndarray numpy$$Real$ndarray$__deserialize__(numpy$$Real$ndarray wit, $Serial$state state) {
+    numpy$$Real$ndarray res = $DNEW(numpy$$Real$ndarray,state);
+    res->w$Minus = ($Minus)$step_deserialize(state);
+    return res;
+}
+
+numpy$$ndarray numpy$$Real$ndarray$__add__(numpy$$Real$ndarray wit, numpy$$ndarray a, numpy$$ndarray b){
+  return numpy$$oper(wit->w$Primitive$A$Real$ndarray->$class->$add,a,b);
+}
+
+numpy$$ndarray numpy$$Real$ndarray$__fromatom__(numpy$$Real$ndarray wit,$atom a) {
+  return numpy$$fromatom(a);
+}
+
+$complex numpy$$Real$ndarray$__complx__(numpy$$Real$ndarray wit, numpy$$ndarray a) {
+    RAISE(($BaseException)$NEW($NotImplementedError,to$str("complex not implemented for ndarray")));
+    return NULL;
+}
+
+numpy$$ndarray numpy$$Real$ndarray$__mul__(numpy$$Real$ndarray wit, numpy$$ndarray a, numpy$$ndarray b) {
+  return numpy$$oper(wit->w$Primitive$A$Real$ndarray->$class->$mul,a,b);
+}
+
+numpy$$ndarray numpy$$Real$ndarray$__pow__(numpy$$Real$ndarray wit, numpy$$ndarray a, numpy$$ndarray b) {
+    return numpy$$oper(wit->w$Primitive$A$Real$ndarray->$class->$pow,a,b);
+}
+
+numpy$$ndarray numpy$$Real$ndarray$__neg__(numpy$$Real$ndarray wit, numpy$$ndarray a) {
+  return numpy$$func(wit->w$Primitive$A$Real$ndarray->$class->$neg,a);
+}
+
+numpy$$ndarray numpy$$Real$ndarray$__pos__(numpy$$Real$ndarray wit, numpy$$ndarray a) {
+  return a;
+}
+
+$WORD numpy$$Real$ndarray$real(numpy$$Real$ndarray wit, numpy$$ndarray a, $Real wit2) {
+  return a;
+}
+$WORD numpy$$Real$ndarray$imag(numpy$$Real$ndarray wit, numpy$$ndarray a, $Real wit2);
+$WORD numpy$$Real$ndarray$__abs__(numpy$$Real$ndarray wit, numpy$$ndarray a, $Real wit2) {
+    return numpy$$func(wit->w$Primitive$A$Real$ndarray->$class->$abs,a);
+}
+numpy$$ndarray numpy$$Real$ndarray$conjugate(numpy$$Real$ndarray wit, numpy$$ndarray a);
+$float numpy$$Real$ndarray$__float__ (numpy$$Real$ndarray wit, numpy$$ndarray a);
+$WORD numpy$$Real$ndarray$__trunc__ (numpy$$Real$ndarray wit, numpy$$ndarray a, $Integral wit2);
+$WORD numpy$$Real$ndarray$__floor__ (numpy$$Real$ndarray wit, numpy$$ndarray a, $Integral wit2);
+$WORD numpy$$Real$ndarray$__ceil__ (numpy$$Real$ndarray wit, numpy$$ndarray a, $Integral wit2);
+numpy$$ndarray numpy$$Real$ndarray$__round__ (numpy$$Real$ndarray wit, numpy$$ndarray a, numpy$$ndarray b);
+$WORD numpy$$Real$ndarray$numerator (numpy$$Real$ndarray wit, numpy$$ndarray a, $Integral wit2);
+$WORD numpy$$Real$ndarray$denominator (numpy$$Real$ndarray wit, numpy$$ndarray a, $Integral wit2);
+numpy$$ndarray numpy$$Real$ndarray$__int__ (numpy$$Real$ndarray wit, numpy$$ndarray a);
+numpy$$ndarray numpy$$Real$ndarray$__index__ (numpy$$Real$ndarray wit, numpy$$ndarray a);
+$tuple numpy$$Real$ndarray$__divmod__ (numpy$$Real$ndarray wit, numpy$$ndarray a, numpy$$ndarray b);
+numpy$$ndarray numpy$$Real$ndarray$__floordiv__ (numpy$$Real$ndarray wit, numpy$$ndarray a, numpy$$ndarray b) {
+  return numpy$$oper(wit->w$Primitive$A$Real$ndarray->$class->$div,a,b);
+}  
+numpy$$ndarray numpy$$Real$ndarray$__mod__ (numpy$$Real$ndarray wit, numpy$$ndarray a, numpy$$ndarray b);
+numpy$$ndarray numpy$$Real$ndarray$__lshift__ (numpy$$Real$ndarray wit, numpy$$ndarray a, numpy$$ndarray b);
+numpy$$ndarray numpy$$Real$ndarray$__rshift__ (numpy$$Real$ndarray wit, numpy$$ndarray a, numpy$$ndarray b);
+numpy$$ndarray numpy$$Real$ndarray$__invert__ (numpy$$Real$ndarray wit, numpy$$ndarray a);
+
+ 
+// numpy$$Minus$ndarray /////////////////////////////////////////////////////////////////////////////////
+
+void numpy$$Minus$ndarray$__init__(numpy$$Minus$ndarray wit, $Real w$Real) {
+  wit->w$Real =  w$Real;
+};
+
+numpy$$Minus$ndarray numpy$$Minus$ndarray$new($Real w$Real) {
   numpy$$Minus$ndarray res = malloc(sizeof (struct numpy$$Minus$ndarray));
   res->$class = &numpy$$Minus$ndarray$methods;
-  numpy$$Minus$ndarray$__init__(res, w$Integral);
+  numpy$$Minus$ndarray$__init__(res, w$Real);
   return res;
 }
 
 void numpy$$Minus$ndarray$__serialize__(numpy$$Minus$ndarray wit, $Serial$state state) {
-    $step_serialize(wit->w$Integral, state);
+    $step_serialize(wit->w$Real, state);
 }
 
 numpy$$Minus$ndarray numpy$$Minus$ndarray$__deserialize__(numpy$$Minus$ndarray wit, $Serial$state state) {
     numpy$$Minus$ndarray res = $DNEW(numpy$$Minus$ndarray,state);
-    res->w$Integral = ($Integral)$step_deserialize(state);
+    res->w$Real = ($Real)$step_deserialize(state);
     return res;
 }
 
 numpy$$ndarray numpy$$Minus$ndarray$__sub__ (numpy$$Minus$ndarray wit, numpy$$ndarray a, numpy$$ndarray b) {
-  return numpy$$oper(((numpy$$Integral$ndarray)wit->w$Integral)->w$Primitive$A$Integral$ndarray->$class->$sub,a,b);
+  return numpy$$oper(((numpy$$Real$ndarray)wit->w$Real)-> w$Primitive$A$Real$ndarray->$class->$sub,a,b);
+}
+
+// numpy$$Div$ndarray$float /////////////////////////////////////////////////////////////////////////////////
+
+void numpy$$Div$ndarray$float$__init__(numpy$$Div$ndarray$float wit) {
+};
+
+numpy$$Div$ndarray$float numpy$$Div$ndarray$float$new() {
+  numpy$$Div$ndarray$float res = malloc(sizeof (struct numpy$$Div$ndarray$float));
+  res->$class = &numpy$$Div$ndarray$float$methods;
+  return res;
+}
+
+void numpy$$Div$ndarray$float$__serialize__(numpy$$Div$ndarray$float wit, $Serial$state state) {
+}
+
+numpy$$Div$ndarray$float numpy$$Div$ndarray$float$__deserialize__(numpy$$Div$ndarray$float wit, $Serial$state state) {
+    numpy$$Div$ndarray$float res = $DNEW(numpy$$Div$ndarray$float,state);
+    return res;
+}
+
+numpy$$ndarray numpy$$Div$ndarray$float$__truediv__ (numpy$$Div$ndarray$float wit, numpy$$ndarray a, numpy$$ndarray b) {
+  return numpy$$oper(numpy$$Primitive$float$witness->$class->$div,a,b);
 }
 
 // Sliceable$ndarray ///////////////////////////////////////////////////////////////////////////////
@@ -198,35 +321,35 @@ void numpy$$Sliceable$ndarray$__delslice__ (numpy$$Sliceable$ndarray wit, numpy$
   exit(-1);
 }
 
-struct numpy$$Integral$ndarray numpy$$Integral$instance;
-struct numpy$$Logical$ndarray numpy$$Logical$instance;
-struct numpy$$Minus$ndarray numpy$$Minus$instance;
-struct numpy$$Sliceable$ndarray numpy$$Sliceable$instance;
+struct numpy$$Integral$ndarray$int numpy$$Integral$ndarray$int$instance;
+struct numpy$$Logical$ndarray$int numpy$$Logical$ndarray$int$instance;
+struct numpy$$Minus$ndarray$int numpy$$Minus$ndarray$int$instance;
+struct numpy$$Real$ndarray numpy$$Real$ndarray$instance;
+struct numpy$$Minus$ndarray numpy$$Minus$ndarray$instance;
+struct numpy$$Sliceable$ndarray numpy$$Sliceable$ndarray$instance;
 
-struct numpy$$Integral$ndarray$class numpy$$Integral$ndarray$methods = {
-    "numpy$$Integral$ndarray",
+struct numpy$$Integral$ndarray$int$class numpy$$Integral$ndarray$int$methods = {
+    "numpy$$Integral$ndarray$int",
     UNASSIGNED,
     ($Super$class)&$Integral$methods,
-    numpy$$Integral$ndarray$__init__,
-    numpy$$Integral$ndarray$__serialize__,
-    numpy$$Integral$ndarray$__deserialize__,
-    ($bool (*)(numpy$$Integral$ndarray))$default__bool__,
-    ($str (*)(numpy$$Integral$ndarray))$default__str__,
-    numpy$$Integral$ndarray$__add__,
-    (numpy$$ndarray (*)(numpy$$Integral$ndarray, numpy$$ndarray, numpy$$ndarray))$Plus$__iadd__,    
-    numpy$$Integral$ndarray$__fromatom__,
+    numpy$$Integral$ndarray$int$__init__,
+    numpy$$Integral$ndarray$int$__serialize__,
+    numpy$$Integral$ndarray$int$__deserialize__,
+    ($bool (*)(numpy$$Integral$ndarray$int))$default__bool__,
+    ($str (*)(numpy$$Integral$ndarray$int))$default__str__,
+    numpy$$Integral$ndarray$int$__add__,
+    (numpy$$ndarray (*)(numpy$$Integral$ndarray$int, numpy$$ndarray, numpy$$ndarray))$Plus$__iadd__,    
+    numpy$$Integral$ndarray$int$__mul__,
+    (numpy$$ndarray (*)(numpy$$Integral$ndarray$int, numpy$$ndarray, numpy$$ndarray))$Times$__imul__ ,
+    numpy$$Integral$ndarray$int$__fromatom__,
     NULL,
-    numpy$$Integral$ndarray$__mul__,
-    numpy$$Integral$ndarray$__truediv__,
-    numpy$$Integral$ndarray$__pow__,
-    (numpy$$ndarray (*)(numpy$$Integral$ndarray, numpy$$ndarray, numpy$$ndarray))$Number$__imul__ ,
-    (numpy$$ndarray (*)(numpy$$Integral$ndarray, numpy$$ndarray, numpy$$ndarray))$Number$__itruediv__ ,
-    (numpy$$ndarray (*)(numpy$$Integral$ndarray, numpy$$ndarray, numpy$$ndarray))$Number$__ipow__ ,
-    numpy$$Integral$ndarray$__neg__,
-    numpy$$Integral$ndarray$__pos__,
+    numpy$$Integral$ndarray$int$__pow__,
+    (numpy$$ndarray (*)(numpy$$Integral$ndarray$int, numpy$$ndarray, numpy$$ndarray))$Number$__ipow__ ,
+    numpy$$Integral$ndarray$int$__neg__,
+    numpy$$Integral$ndarray$int$__pos__,
     NULL,
     NULL,
-    numpy$$Integral$ndarray$__abs__,
+    numpy$$Integral$ndarray$int$__abs__,
     NULL,
     NULL,
     NULL,
@@ -238,37 +361,86 @@ struct numpy$$Integral$ndarray$class numpy$$Integral$ndarray$methods = {
     NULL,
     NULL,
     NULL,
-    numpy$$Integral$ndarray$__floordiv__ ,
+    numpy$$Integral$ndarray$int$__floordiv__ ,
     NULL,
     NULL,
     NULL,
-    (numpy$$ndarray (*)(numpy$$Integral$ndarray, numpy$$ndarray, numpy$$ndarray))$Integral$__ifloordiv__,
+    (numpy$$ndarray (*)(numpy$$Integral$ndarray$int, numpy$$ndarray, numpy$$ndarray))$Integral$__ifloordiv__,
     NULL,
     NULL,
     NULL,
     NULL
 };
 
-struct numpy$$Logical$ndarray$class numpy$$Logical$ndarray$methods =  {
-    "numpy$$Logical$ndarray",
+ struct numpy$$Integral$ndarray$int numpy$$Integral$ndarray$int$instance = {&numpy$$Integral$ndarray$int$methods,
+                                                                            ($Logical)&numpy$$Logical$ndarray$int$instance,  ($Minus)&numpy$$Minus$ndarray$int$instance};
+numpy$$Integral$ndarray$int numpy$$Integral$ndarray$int$witness = &numpy$$Integral$ndarray$int$instance;
+
+struct numpy$$Logical$ndarray$int$class numpy$$Logical$ndarray$int$methods =  {
+    "numpy$$Logical$ndarray$int",
     UNASSIGNED,
     ($Super$class)&$Logical$methods,
-    numpy$$Logical$ndarray$__init__,
-    numpy$$Logical$ndarray$__serialize__,
-    numpy$$Logical$ndarray$__deserialize__,
-    ($bool (*)(numpy$$Logical$ndarray))$default__bool__,
-    ($str (*)(numpy$$Logical$ndarray))$default__str__,
-    numpy$$Logical$ndarray$__and__,
-    numpy$$Logical$ndarray$__or__,
-    numpy$$Logical$ndarray$__xor__,
-    (numpy$$ndarray (*)(numpy$$Logical$ndarray, numpy$$ndarray, numpy$$ndarray))$Logical$__iand__,
-    (numpy$$ndarray (*)(numpy$$Logical$ndarray, numpy$$ndarray, numpy$$ndarray))$Logical$__ior__,
-    (numpy$$ndarray (*)(numpy$$Logical$ndarray, numpy$$ndarray, numpy$$ndarray))$Logical$__ixor__
+    numpy$$Logical$ndarray$int$__init__,
+    numpy$$Logical$ndarray$int$__serialize__,
+    numpy$$Logical$ndarray$int$__deserialize__,
+    ($bool (*)(numpy$$Logical$ndarray$int))$default__bool__,
+    ($str (*)(numpy$$Logical$ndarray$int))$default__str__,
+    numpy$$Logical$ndarray$int$__and__,
+    numpy$$Logical$ndarray$int$__or__,
+    numpy$$Logical$ndarray$int$__xor__,
+    (numpy$$ndarray (*)(numpy$$Logical$ndarray$int, numpy$$ndarray, numpy$$ndarray))$Logical$__iand__,
+    (numpy$$ndarray (*)(numpy$$Logical$ndarray$int, numpy$$ndarray, numpy$$ndarray))$Logical$__ior__,
+    (numpy$$ndarray (*)(numpy$$Logical$ndarray$int, numpy$$ndarray, numpy$$ndarray))$Logical$__ixor__
 };
 
-struct numpy$$Logical$ndarray numpy$$Logical$instance = {&numpy$$Logical$ndarray$methods, ($Integral)&numpy$$Integral$instance};
-numpy$$Logical$ndarray numpy$$Logical$ndarray$witness = &numpy$$Logical$instance;
+struct numpy$$Logical$ndarray$int numpy$$Logical$ndarray$int$instance = {&numpy$$Logical$ndarray$int$methods, ($Integral)&numpy$$Integral$ndarray$int$instance};
+numpy$$Logical$ndarray$int numpy$$Logical$ndarray$int$witness = &numpy$$Logical$ndarray$int$instance;
 
+struct numpy$$Minus$ndarray$int$class numpy$$Minus$ndarray$int$methods = {
+    "numpy$$Minus$ndarray$int",
+    UNASSIGNED,
+    ($Super$class)&$Minus$methods,
+    numpy$$Minus$ndarray$int$__init__,
+    numpy$$Minus$ndarray$int$__serialize__,
+    numpy$$Minus$ndarray$int$__deserialize__,
+    ($bool (*)(numpy$$Minus$ndarray$int))$default__bool__,
+    ($str (*)(numpy$$Minus$ndarray$int))$default__str__,
+    numpy$$Minus$ndarray$int$__sub__,
+    (numpy$$ndarray (*)(numpy$$Minus$ndarray$int, numpy$$ndarray, numpy$$ndarray))$Minus$__isub__
+};
+struct numpy$$Minus$ndarray$int numpy$$Minus$ndarray$int$instance = {&numpy$$Minus$ndarray$int$methods,  ($Integral)&numpy$$Integral$ndarray$int$instance};
+numpy$$Minus$ndarray$int numpy$$Minus$ndarray$int$witness = &numpy$$Minus$ndarray$int$instance;
+
+struct numpy$$Real$ndarray$class numpy$$Real$ndarray$methods = {
+    "numpy$$Real$ndarray",
+    UNASSIGNED,
+    ($Super$class)&$Integral$methods,
+    numpy$$Real$ndarray$__init__,
+    numpy$$Real$ndarray$__serialize__,
+    numpy$$Real$ndarray$__deserialize__,
+    ($bool (*)(numpy$$Real$ndarray))$default__bool__,
+    ($str (*)(numpy$$Real$ndarray))$default__str__,
+    numpy$$Real$ndarray$__add__,
+    (numpy$$ndarray (*)(numpy$$Real$ndarray, numpy$$ndarray, numpy$$ndarray))$Plus$__iadd__,    
+    numpy$$Real$ndarray$__mul__,
+    (numpy$$ndarray (*)(numpy$$Real$ndarray, numpy$$ndarray, numpy$$ndarray))$Times$__imul__ ,
+    numpy$$Real$ndarray$__fromatom__,
+    NULL,
+    numpy$$Real$ndarray$__pow__,
+    (numpy$$ndarray (*)(numpy$$Real$ndarray, numpy$$ndarray, numpy$$ndarray))$Number$__ipow__ ,
+    numpy$$Real$ndarray$__neg__,
+    numpy$$Real$ndarray$__pos__,
+    NULL,
+    NULL,
+    numpy$$Real$ndarray$__abs__,
+    NULL,
+    NULL,
+    NULL,
+    NULL,
+    NULL,
+    NULL
+};
+ 
 struct numpy$$Minus$ndarray$class numpy$$Minus$ndarray$methods = {
     "numpy$$Minus$ndarray",
     UNASSIGNED,
@@ -281,9 +453,25 @@ struct numpy$$Minus$ndarray$class numpy$$Minus$ndarray$methods = {
     numpy$$Minus$ndarray$__sub__,
     (numpy$$ndarray (*)(numpy$$Minus$ndarray, numpy$$ndarray, numpy$$ndarray))$Minus$__isub__
 };
-struct numpy$$Minus$ndarray numpy$$Minus$instance = {&numpy$$Minus$ndarray$methods,  ($Integral)&numpy$$Integral$instance};
-numpy$$Minus$ndarray numpy$$Minus$ndarray$witness = &numpy$$Minus$instance;
 
+struct numpy$$Minus$ndarray numpy$$Minus$ndarray$instance = {&numpy$$Minus$ndarray$methods,  ($Real)&numpy$$Real$ndarray$instance};
+numpy$$Minus$ndarray numpy$$Minus$ndarray$witness = &numpy$$Minus$ndarray$instance;
+
+struct numpy$$Div$ndarray$float$class numpy$$Div$ndarray$float$methods = {
+    "numpy$$Div$ndarray$float",
+    UNASSIGNED,
+    ($Super$class)&$Minus$methods,
+    numpy$$Div$ndarray$float$__init__,
+    numpy$$Div$ndarray$float$__serialize__,
+    numpy$$Div$ndarray$float$__deserialize__,
+    ($bool (*)(numpy$$Div$ndarray$float))$default__bool__,
+    ($str (*)(numpy$$Div$ndarray$float))$default__str__,
+    numpy$$Div$ndarray$float$__truediv__,
+    (numpy$$ndarray (*)(numpy$$Div$ndarray$float, numpy$$ndarray, numpy$$ndarray))$Div$__itruediv__
+};
+
+struct numpy$$Div$ndarray$float numpy$$Div$ndarray$float$instance = {&numpy$$Div$ndarray$float$methods};
+numpy$$Div$ndarray$float numpy$$Div$ndarray$float$witness = &numpy$$Div$ndarray$float$instance;
 
 struct numpy$$Sliceable$ndarray$class numpy$$Sliceable$ndarray$methods = {
     "numpy$$Sliceable$ndarray",
