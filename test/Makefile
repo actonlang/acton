@@ -8,9 +8,9 @@ test:
 	$(MAKE) counter
 	$(MAKE) sieve
 	$(MAKE) sumto
+	$(MAKE) files
 	@echo TODO: fix below entries
 	#$(MAKE) fail1
-	#$(MAKE) files  # some compile time error
 	#$(MAKE) quotes-in-triquotes
 	#$(MAKE) triquotes-across-lines
 	#$(MAKE) string-concat
