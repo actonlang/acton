@@ -126,6 +126,7 @@ $list $list_mul($list lst, $int n) {
     $list res = $list_new(lstlen * n->val);
     for (int i=0; i<n->val; i++)
       memcpy(res->data + i*lstlen, lst->data, lstlen * sizeof($WORD));
+    res->length = lstlen * n->val;
     return res;
   }
 }

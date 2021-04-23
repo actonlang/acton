@@ -652,6 +652,9 @@ int $str_ge($str a, $str b) {
 
 // $Times /////////////////////////////////////////////////////////////////////////////////////////////
 
+$Times$str $Times$str$new() {
+  return $NEW($Times$str);
+}
  
 $str $str_add($str s, $str t) {
   $str res;

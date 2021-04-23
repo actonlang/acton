@@ -353,12 +353,3 @@ $Iterator $reversed ($Sequence w$369, $WORD seq) {
 $WORD $round ($Real w$395, $WORD x, $int n) {
     return w$395->$class->__round__(w$395, x, n);
 }
-
-
-$list $replicate($int n, $WORD elem) {
-  $list res = $list_new(n->val);
-  for (int k = 0; k < n->val; k++)
-    res->data[k] = elem;
-  res->length = n->val;
-  return res;
-}

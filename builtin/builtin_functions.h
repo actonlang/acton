@@ -157,4 +157,3 @@ $WORD $pow ($Number, $WORD, $WORD);
 $Iterator $reversed ($Sequence, $WORD);
 $WORD $round ($Real, $WORD, $int);
 $WORD $sum($Plus, $Iterable, $WORD, $WORD);
-$list $replicate($int, $WORD);

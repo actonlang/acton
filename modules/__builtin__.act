@@ -552,10 +552,6 @@ sum : [A(Plus)] => (Iterable[A],?A) -> A
 
 zip : (Iterable[A], Iterable[B]) -> Iterator[(A,B)]
 
-
-
-replicate : (int, A) -> list[A]
-
 ## Environment ################################################
 
 actor Env (args):

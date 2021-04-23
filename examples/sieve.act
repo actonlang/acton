@@ -1,8 +1,8 @@
 import math
 
 def sieve(n):
-#    isPrime = n * [True]
-    isPrime = replicate(n, True)
+    isPrime = [True] * n
+#    isPrime = replicate(n, True)
     isPrime[0] = False; isPrime[1] = False
     for i in range(2,int(math.sqrt(float(n)))+1,1):
         if isPrime[i]:
