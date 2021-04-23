@@ -968,8 +968,9 @@ ctxtReduce env vi multiPBnds            = (concat eqs, concat css)
                                           imp v ((w, impl2type (tVar v) p, wf (eVar w')) : eq) ((tcargs p `zip` tcargs p') ++ uni) wps wps'
           | otherwise                   = --trace ("   (Not covered: " ++ prstr p ++ " in context " ++ prstrs (map snd (wps++wps')) ++ ")") $
                                           imp v eq uni ((w,p):wps) wps'
-          where hits                    = [ (w',wf,p0,p') | (w',p0) <- wps++wps', w'/=w, Just (wf,p') <- [findAncestor env p0 (tcname p)] ]
-        imp v eq uni wps []               = (eq, uni)
+          where hits                    = [ (w',wf,p0,subst s p') | (w',p0) <- wps++wps', w'/=w, Just (wf,p') <- [findAncestor env p0 (tcname p)] ]
+                s                       = [(tvSelf,tVar v)]
+        imp v eq uni wps []             = (eq, uni)
   -- TODO: also check that an mro exists (?)
 
 
