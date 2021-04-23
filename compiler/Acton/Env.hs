@@ -9,6 +9,7 @@ import System.FilePath.Posix (joinPath,takeDirectory)
 import System.Directory (doesFileExist)
 import System.Environment (getExecutablePath)
 import Control.Monad
+import Control.Monad.Except
 
 import Acton.Syntax
 import Acton.Builtin
@@ -17,6 +18,7 @@ import Acton.Printer
 import Acton.Names
 import Acton.Subst
 import Acton.Unify
+import Acton.TypeM
 import Utils
 import Pretty
 import InterfaceFiles
@@ -34,7 +36,7 @@ type TEnv                   = [(Name, NameInfo)]
 data EnvF x                 = EnvF {
                                 names      :: TEnv,
                                 modules    :: TEnv,
-                                witnesses  :: [(QName,Witness)],
+                                witnesses  :: [Witness],
                                 thismod    :: Maybe ModName,
                                 stub       :: Bool,
                                 envX       :: x }
@@ -104,18 +106,18 @@ data NameInfo               = NVar      Type
                             deriving (Eq,Show,Read,Generic)
 
 data Witness                = WClass    { binds::QBinds, wtype::Type, proto::PCon, wname::QName, wsteps::[Maybe QName] }     -- add tycon's tcargs
---                            | WInst     { proto::PCon, wname::QName, wsteps::[Maybe QName] }
-                            | WInst     { quants::[TVar], wtype::Type, proto::PCon, wname::QName, wsteps::[Maybe QName] }
+                            | WInst     { binds::QBinds, wtype::Type, proto::PCon, wname::QName, wsteps::[Maybe QName] }
                             deriving (Show)
 
 type WTCon                  = ([Maybe QName],PCon)
 
 instance Data.Binary.Binary NameInfo
 
-instance Pretty (QName,Witness) where
-    pretty (n, WClass q t p w ws)   = text "WClass" <+> prettyQual q <+> pretty t <+> parens (pretty p) <+>
+
+instance Pretty Witness where
+    pretty (WClass q t p w ws)  = text "WClass" <+> prettyQual q <+> pretty t <+> parens (pretty p) <+>
                                       equals <+> pretty (wexpr ws (eCall (eQVar w) []))
-    pretty (n, WInst vs t p w ws)   = text "WInst" <+> prettyQual (map quant vs) <+> pretty t <+> parens (pretty p) <+>
+    pretty (WInst q t p w ws)   = text "WInst" <+> prettyQual q <+> pretty t <+> parens (pretty p) <+>
                                       equals <+> pretty (wexpr ws (eQVar w))
         
 instance Pretty TEnv where
@@ -206,13 +208,14 @@ instance Subst NameInfo where
     tyfree (NModule te)         = []        -- actually tyfree te, but a module has no free variables on the top level
     tyfree NReserved            = []
 
-instance Subst (QName,Witness) where
-    msubst (n, w@WClass{})      = return (n, w)         -- A WClass (i.e., an extension) can't have any free type variables
-    msubst (n, w@WInst{})       = do p <- msubst (proto w)
-                                     return (n, w{ proto = p })
+instance Subst Witness where
+    msubst w@WClass{}           = return w                      -- A WClass (i.e., an extension) can't have any free type variables
+    msubst w@WInst{}            = do t <- msubst (wtype w)
+                                     p <- msubst (proto w)
+                                     return w{ wtype  = t, proto = p }
     
-    tyfree (n, w@WClass{})      = []
-    tyfree (n, w@WInst{})       = filter univar (tyfree (proto w) \\ quants w)
+    tyfree w@WClass{}           = []
+    tyfree w@WInst{}            = (tyfree (wtype w) ++ tyfree (proto w)) \\ qbound (binds w)
     
 
 instance Subst WTCon where
@@ -409,11 +412,11 @@ envPrim                     = primMkEnv NClass NDef NVar NSig
 withModulesFrom             :: EnvF x -> EnvF x -> EnvF x
 env `withModulesFrom` env'  = env{modules = modules env'}
 
-addWit                      :: EnvF x -> (QName,Witness) -> EnvF x
-addWit env (c,wit)
-  | null same               = env{ witnesses = (c,wit) : witnesses env }
+addWit                      :: EnvF x -> Witness -> EnvF x
+addWit env wit
+  | null same               = env{ witnesses = wit : witnesses env }
   | otherwise               = env
-  where same                = [ w | w <- allWitnesses env c, wtype w == wtype wit && proto w == proto wit ]
+  where same                = [ w | w <- witsByPName env (tcname $ proto wit), wtype w == wtype wit ]
 
 reserve                     :: [Name] -> EnvF x -> EnvF x
 reserve xs env              = env{ names = [ (x, NReserved) | x <- nub xs ] ++ names env }
@@ -421,13 +424,13 @@ reserve xs env              = env{ names = [ (x, NReserved) | x <- nub xs ] ++ n
 define                      :: TEnv -> EnvF x -> EnvF x
 define te env               = foldl addWit env1 ws
   where env1                = env{ names = reverse te ++ exclude (names env) (dom te) }
-        ws                  = [ (tcname c, WClass q (tCon c) p (NoQ w) ws) | (w, NExt q c ps te') <- te, (ws,p) <- ps ]
+        ws                  = [ WClass q (tCon c) p (NoQ w) ws | (w, NExt q c ps te') <- te, (ws,p) <- ps ]
 
 defineTVars                 :: QBinds -> EnvF x -> EnvF x
 defineTVars q env           = foldr f env q
   where f (Quant tv us) env = foldl addWit env{ names = (tvname tv, NTVar (tvkind tv) c) : names env } wits
           where (c,ps)      = case mro2 env us of ([],_) -> (cValue, us); _ -> (head us, tail us)   -- Just check that the mro exists, don't store it
-                wits        = [ (NoQ (tvname tv), WInst [] (tVar tv) p (NoQ $ tvarWit tv p0) wchain) | p0 <- ps, (wchain,p) <- findAncestry env p0 ]
+                wits        = [ WInst [] (tVar tv) p (NoQ $ tvarWit tv p0) wchain | p0 <- ps, (wchain,p) <- findAncestry env p0 ]
 
 defineSelfOpaque            :: EnvF x -> EnvF x
 defineSelfOpaque env        = defineTVars [Quant tvSelf []] env
@@ -438,7 +441,7 @@ defineSelf qn q env         = defineTVars [Quant tvSelf [tc]] env
 
 defineInst                  :: TCon -> [WTCon] -> Name -> EnvF x -> EnvF x
 defineInst c ps w env       = foldl addWit env wits
-  where wits                = [ (tcname c, WInst [] (tCon c) p (NoQ w) ws) | (ws,p) <- ps ]
+  where wits                = [ WInst [] (tCon c) p (NoQ w) ws | (ws,p) <- ps ]
 
 setMod                      :: ModName -> EnvF x -> EnvF x
 setMod m env                = env{ thismod = Just m }
@@ -575,34 +578,50 @@ isDefOrClass env n          = case findQName n env of
                                 NClass _ _ _ -> True
                                 _ -> False
 
-allWitnesses                :: EnvF x -> QName -> [Witness]
-allWitnesses env cn         = [ w | (c,w) <- witnesses env, c == cn ]
+witsByPName                 :: EnvF x -> QName -> [Witness]
+witsByPName env pn          = [ w | w <- witnesses env, tcname (proto w) == pn ]
 
-findWitness                 :: EnvF x -> Type -> QName -> Maybe Witness
-findWitness env t pn
-  | Just n <- typename t    = listToMaybe $ filter implProto $ allWitnesses env n
-  | otherwise               = Nothing
-  where typename (TCon _ c) = Just $ tcname c
-        typename (TVar _ v) = Just $ NoQ $ tvname v
-        typename _          = Nothing
-        implProto w         = tcname (proto w) == pn && wtype w `matches` t
+witsByTName                 :: EnvF x -> QName -> [Witness]
+witsByTName env tn          = [ w | w <- witnesses env, eqname (wtype w) ]
+  where eqname (TCon _ c)   = tcname c == tn
+        eqname (TVar _ v)   = NoQ (tvname v) == tn
+        eqname _            = False
 
-findProto                   :: EnvF x -> QName -> Name -> Maybe PCon
-findProto env cn n          = case filter hasAttr $ allWitnesses env cn of
+findWitness                 :: EnvF x -> Type -> PCon -> Maybe Witness
+findWitness env t p         = case elim [] m_wits of
+                                  [w] | null u_wits -> Just w
+                                  _ -> Nothing
+  where (m_wits, wits1)     = partition (matching t) (witsByPName env $ tcname p)
+        u_wits              = filter (unifying t) wits1
+        elim ws' []         = reverse ws'
+        elim ws' (w:ws)
+          | covered         = elim ws' ws
+          | otherwise       = elim (w:ws') ws
+          where covered     = or [ matching (wtype w') w && not (matching (wtype w) w') | w' <- ws'++ws ]
+
+findProtoByAttr             :: EnvF x -> QName -> Name -> Maybe PCon
+findProtoByAttr env cn n    = case filter hasAttr $ witsByTName env cn of
                                 [] -> Nothing
                                 w:_ -> Just (TC (tcname $ proto w) (map (const tWild) (tcargs $ proto w)))
   where hasAttr w           = n `elem` conAttrs env (tcname $ proto w)
 
-hasWitness                  :: EnvF x -> Type -> QName -> Bool
-hasWitness env t pn         =  isJust $ findWitness env t pn
+hasWitness                  :: EnvF x -> Type -> PCon -> Bool
+hasWitness env t p          =  isJust $ findWitness env t p
 
 allExtProto                 :: EnvF x -> Type -> PCon -> [Type]
-allExtProto env t p         = reverse [ wild (wtype w) | (_,w) <- witnesses env, tcname (proto w) == tcname p, wtype w `matches` t0 ]
+allExtProto env t p         = reverse [ wild (wtype w) | w <- witsByPName env (tcname p), matching t0 w ]
   where t0                  = wild t
         wild t              = subst [ (v,tWild) | v <- nub (tyfree t) ] t
 
 allExtProtoAttr             :: EnvF x -> Name -> [Type]
-allExtProtoAttr env n       = [ tCon tc | tc <- allCons env, any ((n `elem`) . allAttrs env . proto) (allWitnesses env $ tcname tc) ]
+allExtProtoAttr env n       = [ tCon tc | tc <- allCons env, any ((n `elem`) . allAttrs env . proto) (witsByTName env $ tcname tc) ]
+
+
+matching t w                = isJust $ match (qbound $ binds w) t (wtype w)
+
+unifying t w                = runTypeM $ tryUnify `catchError` const (return False)
+  where tryUnify            = do unify t (wtype w)
+                                 return True
 
 
 -- TCon queries ------------------------------------------------------------------------------------------------------------------
@@ -922,7 +941,7 @@ impNames m te               = mapMaybe imp te
 
 importWits                  :: ModName -> TEnv -> EnvF x -> EnvF x
 importWits m te env         = foldl addWit env ws
-  where ws                  = [ (tcname c, WClass q (tCon c) p (GName m n) ws) | (n, NExt q c ps te') <- te, (ws,p) <- ps ]
+  where ws                  = [ WClass q (tCon c) p (GName m n) ws | (n, NExt q c ps te') <- te, (ws,p) <- ps ]
 
 
 

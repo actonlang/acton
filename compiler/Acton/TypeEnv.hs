@@ -117,12 +117,12 @@ instWitness env t0 wit      = case wit of
                                     p <- msubst (subst s p)
                                     cs <- msubst cs
                                     return (cs, p, wexpr ws (eCall (tApp (eQVar w) tvs) $ wvars cs))
-                                 WInst vs t1 p w ws -> do
-                                    tvs <- newTVars (map tvkind vs)
-                                    let s = vs `zip` tvs
+                                 WInst q t1 p w ws -> do
+                                    (cs,tvs) <- instQBinds env q
+                                    let s = qbound q `zip` tvs
                                     unify t0 (subst s t1)
                                     p <- msubst (subst s p)
-                                    return ([], p, wexpr ws (eQVar w))
+                                    return (cs, p, wexpr ws (eQVar w))
 
 instQuals                   :: EnvF x -> QBinds -> [Type] -> TypeM Constraints
 instQuals env q ts          = do let s = qbound q `zip` ts

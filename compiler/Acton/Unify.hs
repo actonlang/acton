@@ -62,52 +62,50 @@ unify' t1 (TVar _ tv)
 unify' t1 t2                                = noUnify t1 t2
 
 
+
 -- matching ----------------------------------------------------------------------------------------------------------------------
 
-matches t t'                                = isJust $ match t t'
-
-
-match (TWild _) t                           = Just []
-match t (TWild _)                           = Just []
-match (TCon _ c1) (TCon _ c2)
+match vs (TWild _) t                        = Just []
+match vs t (TWild _)                        = Just []
+match vs (TCon _ c1) (TCon _ c2)
   | tcname c1 == tcname c2                  = match' (tcargs c1) (tcargs c2)
-  where match' (t1:ts1) (t2:ts2)            = do s1 <- match t1 t2
+  where match' (t1:ts1) (t2:ts2)            = do s1 <- match vs t1 t2
                                                  s2 <- match' ts1 ts2
                                                  merge s1 s2
         match' [] []                        = Just []
-match (TFun _ fx1 p1 k1 t1) (TFun _ fx2 p2 k2 t2)
-                                            = do s1 <- match fx1 fx2
-                                                 s2 <- match p1 p2
-                                                 s3 <- match k1 k2
-                                                 s4 <- match t1 t2
+match vs (TFun _ fx1 p1 k1 t1) (TFun _ fx2 p2 k2 t2)
+                                            = do s1 <- match vs fx1 fx2
+                                                 s2 <- match vs p1 p2
+                                                 s3 <- match vs k1 k2
+                                                 s4 <- match vs t1 t2
                                                  s <- merge s1 s2
                                                  s' <- merge s3 s4
                                                  merge s s'
-match (TTuple _ p1 k1) (TTuple _ p2 k2)
-                                            = do s1 <- match p1 p2
-                                                 s2 <- match k1 k2
+match vs (TTuple _ p1 k1) (TTuple _ p2 k2)
+                                            = do s1 <- match vs p1 p2
+                                                 s2 <- match vs k1 k2
                                                  merge s1 s2
-match (TOpt _ t1) (TOpt _ t2)               = match t1 t2
-match (TNone _) (TNone _)                   = Just []
-match (TFX _ fx1) (TFX _ fx2)
+match vs (TOpt _ t1) (TOpt _ t2)            = match vs t1 t2
+match vs (TNone _) (TNone _)                = Just []
+match vs (TFX _ fx1) (TFX _ fx2)
   | fx1 == fx2                              = Just []
 
-match (TNil _ k1) (TNil _ k2)
+match vs (TNil _ k1) (TNil _ k2)
   | k1 == k2                                = Just []
-match (TRow _ k n1 t1 r1) r2
-  | Just (t2,r2') <- findElem r2            = do s1 <- match t1 t2
-                                                 s2 <- match r1 r2'
+match vs r1 (TRow _ k n2 t2 r2)
+  | Just (t1,r1') <- findElem r1            = do s1 <- match vs t1 t2
+                                                 s2 <- match vs r1' r2
                                                  merge s1 s2
-  where findElem (TRow l k n2 t2 r2)
-          | n1 == n2                        = Just (t2, r2)
-          | otherwise                       = do (t2',r2') <- findElem r2
-                                                 Just (t2', TRow l k n2 t2 r2')
-        findElem r2                         = Nothing
-match (TVar _ tv1) (TVar _ tv2)
+  where findElem (TRow l k n1 t1 r1)
+          | n1 == n2                        = Just (t1, r1)
+          | otherwise                       = do (t1',r1') <- findElem r1
+                                                 Just (t1', TRow l k n1 t1 r1')
+        findElem r1                         = Nothing
+match vs (TVar _ tv1) (TVar _ tv2)
   | tv1 == tv2                              = Just []
-match (TVar _ tv) t2
-  | tv `notElem` tyfree t2                  = Just [(tv, t2)]
-match t1 t2                                 = Nothing
+match vs t1 (TVar _ tv)
+  | tv `elem` vs && tv `notElem` tyfree t1  = Just [(tv, t1)]
+match vs t1 t2                              = Nothing
 
 merge s1 s2
   | agree                                   = Just $ s1 ++ s2

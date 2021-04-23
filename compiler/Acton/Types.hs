@@ -496,7 +496,7 @@ instance InfEnv Decl where
       | isProto env n                   = notYet (loc n) "Extension of a protocol"
       | length us == 0                  = err (loc n) "Extension lacks a protocol"
 --      | length us > 1                   = notYet (loc n) "Extensions with multiple protocols"
-      | Just wit <- witsearch           = err (loc n) ("Extension already exists: " ++ prstr (n,wit))
+      | Just wit <- witsearch           = err (loc n) ("Extension already exists: " ++ prstr wit)
       | otherwise                       = do --traceM ("\n## infEnv extension " ++ prstr c)
                                              pushFX fxPure tNone
                                              (cs,te,b') <- infEnv env1 b
@@ -511,9 +511,9 @@ instance InfEnv Decl where
                                              return (cs1, [(extensionName (head us) c, NExt q c ps te)], Extension l q c us (bindWits eq1 ++ b'))
       where TC n ts                     = c
             env1                        = define (toSigs te') $ reserve (bound b) $ defineSelfOpaque $ defineTVars (stripQual q) env
-            witsearch                   = findWitness env (tCon c) (tcname $ head us)
+            witsearch                   = findWitness env (tCon c) (head us)
             ps                          = mro1 env us     -- TODO: check that ps doesn't contradict any previous extension mro for c
-            final                       = concat [ conAttrs env pn | (_, TC pn _) <- ps, hasWitness env (tCon c) pn ]
+            final                       = concat [ conAttrs env (tcname p) | (_, p) <- ps, hasWitness env (tCon c) p ]
             te'                         = parentTEnv env ps
 
 --------------------------------------------------------------------------------------------------------------------------
@@ -560,7 +560,7 @@ solveAll env te tt cs                   = do --traceM ("\n\n### solveAll " ++ pr
                                              snd <$> solve env (const True) te tt eq cs
 
 solveScoped env [] te tt cs             = simplify env te tt cs
-solveScoped env vs te tt cs             = do --traceM ("\n\n### solveScoped " ++ prstrs vs)
+solveScoped env vs te tt cs             = do --traceM ("\n\n### solveScoped: " ++ prstrs vs)
                                              (cs,eq) <- simplify env te tt cs
                                              solve env (any (`elem` vs) . tyfree) te tt eq cs
 
@@ -1183,7 +1183,7 @@ instance Infer Expr where
                                                       let t' = subst [(tvSelf,tCon tc)] $ addSelf t dec
                                                       return (cs0++cs1, t', app2nd dec t' (tApp (Dot l x n) (ts++tvs)) $ witsOf (cs0++cs1))
                                                 Nothing ->
-                                                    case findProto env c' n of
+                                                    case findProtoByAttr env c' n of
                                                         Just p -> do
                                                             p <- instwildcon env p
                                                             we <- eVar <$> newWitness

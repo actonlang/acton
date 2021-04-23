@@ -281,14 +281,14 @@ reduce' env eq c@(Impl w t@(TVar _ tv) p)
   | Just wit <- witSearch                   = do (cs,p',we) <- instWitness env t wit
                                                  unifyM (tcargs p) (tcargs p')
                                                  reduce env ((w, impl2type t p, we):eq) cs
-  where witSearch                           = findWitness env t (tcname p)
+  where witSearch                           = findWitness env t p
   
 reduce' env eq c@(Impl w t@(TCon _ tc) p)
   | Just wit <- witSearch                   = do (cs,p',we) <- instWitness env t wit
                                                  unifyM (tcargs p) (tcargs p')
                                                  reduce env ((w, impl2type t p, we):eq) cs
   | not $ null $ filter univar $ tyfree t   = do defer [c]; return eq
-  where witSearch                           = findWitness env t (tcname p)
+  where witSearch                           = findWitness env t p
 
 reduce' env eq c@(Impl w t@(TOpt _ t') p)
   | tcname p == qnIdentity                  = do let e = eCall (tApp (eQVar primIdentityOpt) [t']) []
@@ -309,7 +309,7 @@ reduce' env eq c@(Sel w (TVar _ tv) n _)
                                                  reduce env (eq'++eq) cs
   | otherwise                               = tyerr n "Attribute not found"
   where attrSearch                          = findTVAttr env tv n
-        protoSearch                         = findProto env (NoQ $ tvname tv) n
+        protoSearch                         = findProtoByAttr env (NoQ $ tvname tv) n
 
 reduce' env eq c@(Sel w (TCon _ tc) n _)
   | Just wsc <- attrSearch                  = do (eq',cs) <- solveSelAttr env wsc c
@@ -318,7 +318,7 @@ reduce' env eq c@(Sel w (TCon _ tc) n _)
                                                  reduce env (eq'++eq) cs
   | otherwise                               = tyerr n "Attribute not found"
   where attrSearch                          = findAttr env tc n
-        protoSearch                         = findProto env (tcname tc) n
+        protoSearch                         = findProtoByAttr env (tcname tc) n
 
 reduce' env eq (Sel w t1@(TTuple _ p r) n t2)
                                             = do let e = eLambda [(px0,t1)] (eDot (eVar px0) n)
@@ -932,7 +932,7 @@ findWitAttrs env attrs bounds           = [ ((v,n), (p, wexpr ws $ eVar w)) | (v
 
 
 implAll env [] t                        = True
-implAll env ps (TCon _ c)               = and [ hasWitness env (tCon c) (tcname p) | (w,p) <- ps ]
+implAll env ps (TCon _ c)               = and [ hasWitness env (tCon c) p | (w,p) <- ps ]
 implAll env ps (TOpt _ _)               = all ((`elem` [qnIdentity,qnEq]) . tcname . snd) ps
 implAll env ps t                        = False
 

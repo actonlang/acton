@@ -303,7 +303,7 @@ instance KCheck Decl where
                                          env1 <- extvars (tvSelf : qbound (q++q')) env
                                          Extension l <$> kchkQBinds env1 (q++q') <*> kexp KType env1 c <*> kchkPBounds env1 us <*> kchkSuite env1 b
       where ambig                   = qualbound q \\ vs
-            undet                   = tyfree us \\ vs
+            undet                   = tyfree us \\ (tvSelf : vs)
             vs                      = closeDepVarsQ (tyfree c) q
 
 instance KCheck Expr where
