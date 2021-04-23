@@ -231,11 +231,11 @@ protocol Minus:
   def __isub__(a,b):
       return a - b
 
-protocol Times (Plus):
+protocol Times[A] (Plus):
   @staticmethod
-  __mul__      : (Self,Self) -> Self
+  __mul__      : (Self,A) -> Self
   @staticmethod
-  __imul__     : (Self,Self) -> Self
+  __imul__     : (Self,A) -> Self
 
   def __imul__(a,b):
       return a * b
@@ -277,7 +277,7 @@ class set[A(Hashable)] (object):
 #    |               |
 #   Integral <--------
 
-protocol Number (Times,Minus):
+protocol Number (Times[Self],Minus):
   @staticmethod
   __fromatom__ : (atom) -> Self
 
@@ -404,7 +404,7 @@ protocol Container[A(Eq)] (Collection[A]):
 #    |               |               |
 #   Sequence <-------- <--------------
 
-protocol Sequence[A] (Sliceable[A], Collection[A], Times):
+protocol Sequence[A] (Sliceable[A], Collection[A], Times[int]):
   __reversed__ : () -> Iterator[A] 
   insert      : (int,A) -> None
   append      : (A) -> None   
@@ -473,7 +473,7 @@ extension str (Container[str]): pass
 
 extension str (Sliceable[str]): pass
 
-extension str (Times): pass
+extension str (Times[int]): pass
 
 extension str (Hashable): pass
 

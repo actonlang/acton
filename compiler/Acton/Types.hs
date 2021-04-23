@@ -243,7 +243,16 @@ instance InfEnv Stmt where
       where assign w (Index _ e ix) r   = Expr l $ eCall (eDot (eVar w) setitemKW) [e, ix, r]
             assign _ tg r               = MutAssign l tg r
 
-    infEnv env (AugAssign l tg o e)     = do cs0 <- targetFX tg
+    infEnv env (AugAssign l tg o e)
+      | o == MultA                      = do cs0 <- targetFX tg
+                                             (cs1,t,w,lval) <- infTarget env tg
+                                             (cs2,rval) <- inferSub env t tg
+                                             t' <- newTVar
+                                             (cs3,e') <- inferSub env t' e
+                                             w' <- newWitness
+                                             return ( Impl w' t (pTimes t') :
+                                                      cs0++cs1++cs2++cs3, [], assign w lval $ eCall (eDot (eVar w') imulKW) [rval,e'])
+      | otherwise                       = do cs0 <- targetFX tg
                                              (cs1,t,w,lval) <- infTarget env tg
                                              (cs2,rval) <- inferSub env t tg
                                              (cs3,e') <- inferSub env t e
@@ -257,7 +266,6 @@ instance InfEnv Stmt where
             
             protocol PlusA              = pPlus
             protocol MinusA             = pMinus
-            protocol MultA              = pTimes
             protocol PowA               = pNumber
             protocol DivA               = pDiv
             protocol ModA               = pIntegral
@@ -270,7 +278,6 @@ instance InfEnv Stmt where
             protocol MMultA             = pMatrix
             method PlusA                = iaddKW
             method MinusA               = isubKW
-            method MultA                = imulKW
             method PowA                 = ipowKW
             method DivA                 = itruedivKW
             method ModA                 = imodKW
@@ -1065,6 +1072,13 @@ instance Infer Expr where
       | op `elem` [Or,And]              = do (cs1,env1,s1,e1') <- inferBool env e1
                                              (cs2,env2,s2,e2') <- inferBool env1 e2
                                              return (cs1++cs2, tBool, BinOp l e1' op (termsubst s1 e2'))
+      | op == Mult                      = do t <- newTVar
+                                             t' <- newTVar
+                                             (cs1,e1') <- inferSub env t e1
+                                             (cs2,e2') <- inferSub env t' e2
+                                             w <- newWitness
+                                             return (Impl w t (pTimes t') :
+                                                     cs1++cs2, t, eCall (eDot (eVar w) mulKW) [e1',e2'])
       | otherwise                       = do t <- newTVar
                                              (cs1,e1') <- inferSub env t e1
                                              (cs2,e2') <- inferSub env (rtype op t) e2
@@ -1073,7 +1087,6 @@ instance Infer Expr where
                                                      cs1++cs2, t, eCall (eDot (eVar w) (method op)) [e1',e2'])
       where protocol Plus               = pPlus
             protocol Minus              = pMinus
-            protocol Mult               = pTimes
             protocol Pow                = pNumber
             protocol Div                = pDiv
             protocol Mod                = pIntegral
@@ -1086,7 +1099,6 @@ instance Infer Expr where
             protocol MMult              = pMatrix
             method Plus                 = addKW
             method Minus                = subKW
-            method Mult                 = mulKW
             method Pow                  = powKW
             method Div                  = truedivKW
             method Mod                  = modKW

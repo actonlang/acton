@@ -112,14 +112,14 @@ instWitness                 :: EnvF x -> Type -> Witness -> TypeM (Constraints,T
 instWitness env t0 wit      = case wit of
                                  WClass q t1 p w ws -> do
                                     (cs,tvs) <- instQBinds env q
-                                    let s = qbound q `zip` tvs
+                                    let s = (tvSelf,t0) : qbound q `zip` tvs
                                     unify t0 (subst s t1)
                                     p <- msubst (subst s p)
                                     cs <- msubst cs
                                     return (cs, p, wexpr ws (eCall (tApp (eQVar w) tvs) $ wvars cs))
                                  WInst q t1 p w ws -> do
                                     (cs,tvs) <- instQBinds env q
-                                    let s = qbound q `zip` tvs
+                                    let s = (tvSelf,t0) : qbound q `zip` tvs
                                     unify t0 (subst s t1)
                                     p <- msubst (subst s p)
                                     return (cs, p, wexpr ws (eQVar w))
