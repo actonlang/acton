@@ -503,7 +503,7 @@ instance InfEnv Decl where
       | isProto env n                   = notYet (loc n) "Extension of a protocol"
       | length us == 0                  = err (loc n) "Extension lacks a protocol"
 --      | length us > 1                   = notYet (loc n) "Extensions with multiple protocols"
-      | Just wit <- witsearch           = err (loc n) ("Extension already exists: " ++ prstr wit)
+      | not $ null witsearch            = err (loc n) ("Extension already exists: " ++ prstr (head witsearch))
       | otherwise                       = do --traceM ("\n## infEnv extension " ++ prstr c)
                                              pushFX fxPure tNone
                                              (cs,te,b') <- infEnv env1 b
@@ -518,9 +518,9 @@ instance InfEnv Decl where
                                              return (cs1, [(extensionName (head us) c, NExt q c ps te)], Extension l q c us (bindWits eq1 ++ b'))
       where TC n ts                     = c
             env1                        = define (toSigs te') $ reserve (bound b) $ defineSelfOpaque $ defineTVars (stripQual q) env
-            witsearch                   = findWitness env (tCon c) (head us)
+            witsearch                   = [ w | w <- witsByPName env (tcname $ head us), matching (tCon c) w, matching' (qbound q) (wtype w) (tCon c) ]
             ps                          = mro1 env us     -- TODO: check that ps doesn't contradict any previous extension mro for c
-            final                       = concat [ conAttrs env (tcname p) | (_, p) <- ps, hasWitness env (tCon c) p ]
+            final                       = concat [ conAttrs env (tcname p) | (_,p) <- tail ps, hasWitness env (tCon c) p ]
             te'                         = parentTEnv env ps
 
 --------------------------------------------------------------------------------------------------------------------------

@@ -609,7 +609,7 @@ hasWitness                  :: EnvF x -> Type -> PCon -> Bool
 hasWitness env t p          =  isJust $ findWitness env t p
 
 allExtProto                 :: EnvF x -> Type -> PCon -> [Type]
-allExtProto env t p         = reverse [ wild (wtype w) | w <- witsByPName env (tcname p), matching t0 w ]
+allExtProto env t p         = reverse [ wild (wtype w) | w <- witsByPName env (tcname p), matching t0 w, wild (wtype w) /= t0 ]
   where t0                  = wild t
         wild t              = subst [ (v,tWild) | v <- nub (tyfree t) ] t
 
@@ -617,7 +617,9 @@ allExtProtoAttr             :: EnvF x -> Name -> [Type]
 allExtProtoAttr env n       = [ tCon tc | tc <- allCons env, any ((n `elem`) . allAttrs env . proto) (witsByTName env $ tcname tc) ]
 
 
-matching t w                = isJust $ match (qbound $ binds w) t (wtype w)
+matching t w                = matching' (qbound $ binds w) t (wtype w)
+
+matching' vs t t'           = isJust $ match vs t t'
 
 unifying t w                = runTypeM $ tryUnify `catchError` const (return False)
   where tryUnify            = do unify t (wtype w)
