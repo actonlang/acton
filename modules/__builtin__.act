@@ -17,50 +17,8 @@ class int (atom):
 class float (atom):
   __init__ : (atom) -> None
 
-class complex (value):
-  __init__ : (Number) -> None
-
 class bool (atom):
   __init__ : (value) -> None
-
-class BaseException (value):
-  __init__ : (str) -> None
-
-class SystemExit (BaseException):
-  pass
-
-class KeyboardInterrupt (BaseException):
-  pass 
-
-class Exception (BaseException):
-  pass
-
-class AssertionError (Exception):
-  pass
-
-class LookupError (Exception):
-  pass
-
-class IndexError (LookupError):
-  pass
-
-class KeyError (LookupError):
-  pass
-
-class MemoryError (Exception):
-  pass
-
-class OSError (Exception):
-  pass
-
-class RuntimeError (Exception):
-  pass
-
-class NotImplementedError (RuntimeError):
-  pass
-
-class ValueError (Exception):
-  pass
 
 class slice (value):
   __init__     : (?int,?int,?int) -> None
@@ -157,7 +115,48 @@ class function[X,P,K,A] (value):
 
 class Msg[A] (value):
   pass
-    
+
+## Exceptions ##################################################################################
+
+class BaseException (value):
+  __init__ : (str) -> None
+
+class SystemExit (BaseException):
+  pass
+
+class KeyboardInterrupt (BaseException):
+  pass
+
+class Exception (BaseException):
+  pass
+
+class AssertionError (Exception):
+  pass
+
+class LookupError (Exception):
+  pass
+
+class IndexError (LookupError):
+  pass
+
+class KeyError (LookupError):
+  pass
+
+class MemoryError (Exception):
+  pass
+
+class OSError (Exception):
+  pass
+
+class RuntimeError (Exception):
+  pass
+
+class NotImplementedError (RuntimeError):
+  pass
+
+class ValueError (Exception):
+  pass
+
 ## General protocols ###############################################################################
 
 protocol Identity:
@@ -173,8 +172,6 @@ protocol Eq:
   __ne__       : (Self,Self) -> bool
   def __ne__(a,b):
       return not (a == b)
-      
-  
 
 protocol Ord (Eq):
   @staticmethod
@@ -252,6 +249,10 @@ protocol Div:
 protocol Hashable (Eq):
   __hash__     : () -> int
 
+
+class complex (value):
+  __init__ : (Number) -> None
+
 class dict[A(Hashable),B] (object):
   __init__     : (?Iterable[(A,B)]) -> None
 
@@ -300,7 +301,6 @@ protocol Number (Times[Self],Minus):
   __abs__      : () -> Real  # What about arg?
 
   conjugate    : () -> Self
-
 
 protocol Real (Number):
   __float__    : () -> float
@@ -353,9 +353,7 @@ protocol Integral (Rational,Logical):
   def __irshift__(a,b):
     return a >> b
 
-
   __invert__   : () -> Self
-
 
 ## Number protocol extensions ######################################################################
 
