@@ -105,11 +105,9 @@ data NameInfo               = NVar      Type
                             | NReserved
                             deriving (Eq,Show,Read,Generic)
 
-data Witness                = WClass    { binds::QBinds, wtype::Type, proto::PCon, wname::QName, wsteps::[Maybe QName] }     -- add tycon's tcargs
-                            | WInst     { binds::QBinds, wtype::Type, proto::PCon, wname::QName, wsteps::[Maybe QName] }
+data Witness                = WClass    { binds::QBinds, wtype::Type, proto::PCon, wname::QName, wsteps::WPath }
+                            | WInst     { binds::QBinds, wtype::Type, proto::PCon, wname::QName, wsteps::WPath }
                             deriving (Show)
-
-type WTCon                  = ([Maybe QName],PCon)
 
 instance Data.Binary.Binary NameInfo
 
@@ -166,11 +164,11 @@ prettyOrPass te
   where doc                     = pretty te
 
 instance Pretty WTCon where
-    pretty (ws,u)               = pretty u
+--    pretty (ws,u)               = pretty u
 --    pretty (ws,u)               = dotCat pretty (catMaybes ws) <+> colon <+> pretty u
---    pretty (ws,u)               = dotCat prettyW ws <+> colon <+> pretty u
-      where prettyW Nothing     = text "_"
-            prettyW (Just n)    = pretty n
+    pretty (ws,u)               = dotCat prettyW ws <+> colon <+> pretty u
+      where prettyW (Left n)    = text "_"
+            prettyW (Right n)   = pretty n
 
 instance (Subst x) => Subst (EnvF x) where
     msubst env                  = do ne <- msubst (names env)
@@ -324,7 +322,9 @@ instance Unalias (Name,NameInfo) where
 instance Unalias WTCon where
     unalias env (w,u)               = (unalias env w, unalias env u)
 
-
+instance Unalias (Either QName QName) where
+    unalias env (Left n)            = Left $ unalias env n
+    unalias env (Right n)           = Right $ unalias env n
 
 -- TEnv filters --------------------------------------------------------------------------------------------------------
 
@@ -654,7 +654,7 @@ findAttr' env tc n          = case findAttr env tc n of
                                   Nothing -> error ("#### findAttr' fails for " ++ prstr tc ++ " . " ++ prstr n)
 
 findAncestry                :: EnvF x -> TCon -> [WTCon]
-findAncestry env tc         = ([Nothing],tc) : fst (findCon env tc)
+findAncestry env tc         = ([Left (tcname tc)],tc) : fst (findCon env tc)
 
 findAncestor                :: EnvF x -> TCon -> QName -> Maybe (Expr->Expr,TCon)
 findAncestor env p qn       = listToMaybe [ (wexpr ws, p') | (ws,p') <- findAncestry env p, tcname p' == qn ]
@@ -671,7 +671,7 @@ commonAncestors env c1 c2   = filter ((`elem` ns) . tcname) $ map snd (findAnces
   where ns                  = map (tcname . snd) (findAncestry env c2)
 
 directAncestors             :: EnvF x -> QName -> [QName]
-directAncestors env qn      = [ tcname p | (ws,p) <- us, null $ catMaybes ws ]
+directAncestors env qn      = [ tcname p | (ws,p) <- us, null $ catRight ws ]
   where (q,us,te)           = findConName qn env
 
 allAncestors                :: EnvF x -> TCon -> [TCon]
@@ -761,10 +761,10 @@ allProtoAttr                :: EnvF x -> Name -> [Type]
 allProtoAttr env n          = [ tCon p | p <- allProtos env, n `elem` allAttrs env p ]
 
 
-wexpr                       :: [Maybe QName] -> Expr -> Expr
+wexpr                       :: WPath -> Expr -> Expr
 wexpr []                    = id
-wexpr (Nothing : w)         = wexpr w
-wexpr (Just n : w)          = wexpr w . (\e -> eDot e (witAttr n))
+wexpr (Left _ : w)          = wexpr w
+wexpr (Right n : w)         = wexpr w . (\e -> eDot e (witAttr n))
 
 
 -- TVar queries ------------------------------------------------------------------------------------------------------------------
@@ -800,7 +800,7 @@ mro1 env us                             = mro env us
 mro                                     :: EnvF x -> [TCon] -> [WTCon]
 mro env us                              = merge [] $ map lin us' ++ [us']
   where
-    us'                                 = case us of [] -> []; u:us -> ([Nothing],u) : [ ([Just (tcname u)],u) | u <- us ]
+    us'                                 = case us of [] -> []; u:us -> ([Left (tcname u)],u) : [ ([Right (tcname u)],u) | u <- us ]
     
     lin                                 :: WTCon -> [WTCon]
     lin (w,u)                           = (w,u) : [ (w++w',u') | (w',u') <- us' ]

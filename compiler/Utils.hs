@@ -54,6 +54,10 @@ mapFst f xs                     = [ (f a, b) | (a,b) <- xs ]
 
 mapSnd f xs                     = [ (a, f b) | (a,b) <- xs ]
 
+catLeft xs                      = [ x | Left x <- xs ]
+
+catRight xs                     = [ x | Right x <- xs ]
+
 l0                              = NoLoc
 
 ignore t                        = return ()

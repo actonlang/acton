@@ -124,7 +124,7 @@ tSequenceListWild   = tCon (TC qnSequence [tList tWild, tWild])
 tCollectionListWild = tCon (TC qnCollection [tList tWild, tWild])
 
 --  class $Actor (): pass
-clActor cls def sig = cls [] [([Nothing],cValue)] te
+clActor cls def sig = cls [] (leftpath [cValue]) te
   where te          = [ (primKW "next",       sig (monotype tActor) Property),
                         (primKW "msg",        sig (monotype (tMsg tWild)) Property),
                         (primKW "outgoing",   sig (monotype (tMsg tWild)) Property),
@@ -145,7 +145,7 @@ clR cls def         = cls [] [] []
 
 --  class $Cont[X,P] (function[X,P,(),$R]):
 --      pass
-clCont cls def      = cls [quant x, quant p] [([Nothing],TC qnFunction [tVar x, tVar p, kwdNil, tR]), ([Nothing,Nothing],cValue)] []
+clCont cls def      = cls [quant x, quant p] (leftpath [TC qnFunction [tVar x, tVar p, kwdNil, tR], cValue]) []
   where x           = TV KFX (name "X")
         p           = TV PRow (name "P")
 
@@ -293,13 +293,13 @@ scRCont             = tSchema [quant x, quant a] tRCont
 
 
 --  class $EqOpt[A] (Eq[?A]): pass
-clEqOpt cls def     = cls [quant a] [([Nothing],TC qnEq [tOpt $ tVar a])] clTEnv
+clEqOpt cls def     = cls [quant a] (leftpath [TC qnEq [tOpt $ tVar a]]) clTEnv
   where clTEnv      = [ (initKW, def scInit NoDec) ]
         scInit      = tSchema [] $ tFun fxPure (posRow (tCon $ TC qnEq [tVar a]) posNil) kwdNil tNone
         a           = TV KType (name "A")
 
 --  class $EqOpt[A] (Eq[?A]): pass
-clIdentityOpt cls def = cls [quant a] [([Nothing],TC qnIdentity [tOpt $ tVar a])] []
+clIdentityOpt cls def = cls [quant a] (leftpath [TC qnIdentity [tOpt $ tVar a]]) []
   where a           = TV KType (name "A")
 
 --  w$EqNone        : Eq[None]

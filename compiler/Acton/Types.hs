@@ -475,7 +475,7 @@ instance InfEnv Decl where
                                              _ -> illegalRedef n
       where env1                        = define (exclude (toSigs te') [initKW]) $ reserve (bound b) $ defineSelfOpaque $ defineTVars (stripQual q) env
             (as,ps)                     = mro2 env us
-            as'                         = if null as && not (inBuiltin env && n == nValue) then [([Nothing],cValue)] else as
+            as'                         = if null as && not (inBuiltin env && n == nValue) then leftpath [cValue] else as
             te'                         = parentTEnv env as'
             props te0                   = [ Signature l0 [n] sc Property | (n,NSig sc Property) <- te0 ]
             

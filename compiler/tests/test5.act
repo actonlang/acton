@@ -35,3 +35,14 @@ extension list[A(Eq)] (Apa):
         return not a==b
     def cepa(self,i,c):
         return False
+
+
+protocol What (Iterable[int], Real):
+    pass
+
+protocol Who (Iterable[int], Ord):
+    pass
+
+
+extension int (What): pass
+extension int (Who): pass

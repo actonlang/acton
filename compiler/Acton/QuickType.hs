@@ -293,8 +293,7 @@ commonEnvOf suites
 instance EnvOf Decl where
     envOf (Def _ n q p k (Just t) b dec fx)
                                     = [(n, NDef (TSchema NoLoc q $ TFun NoLoc fx (prowOf p) (krowOf k) t) dec)]
-    envOf (Class _ n q as ss)       = [(n, NClass q as' (map dropSelf $ envOf ss))]
-      where as'                     = [ ([Nothing],a) | a <- as ]
+    envOf (Class _ n q as ss)       = [(n, NClass q (leftpath as) (map dropSelf $ envOf ss))]
 
     envOf (Actor _ n q p k ss)      = [(n, NAct q (prowOf p) (krowOf k) (envOf ss))]
 

@@ -422,7 +422,7 @@ instance LambdaFree Elem where
 
 -- Convert environments -----------------------------------------------------------------------------------------
 
-conv (n, NAct q p k te')            = (n, NClass q [([Nothing],TC primActor [])] (convActorEnv q p k te'))
+conv (n, NAct q p k te')            = (n, NClass q (leftpath [TC primActor [], cValue]) (convActorEnv q p k te'))
   where convActorEnv q0 p k te'     = (initKW, NDef t0 NoDec) : te'
           where t0                  = tSchema q0 (TFun NoLoc fxAction p k tNone)
 conv ni                             = ni

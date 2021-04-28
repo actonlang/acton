@@ -232,6 +232,13 @@ data Constraint = Cast  Type Type
 
 type Constraints = [Constraint]
 
+type WPath      = [Either QName QName]
+
+type WTCon      = (WPath,PCon)
+
+leftpath tcs    = [ (map Left ns, tc) | (ns,tc) <- nss `zip` tcs ]
+  where nss     = tail $ inits $ map tcname tcs
+
 mkBody []       = [Pass NoLoc]
 mkBody b        = b
 
