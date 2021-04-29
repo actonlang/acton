@@ -1,5 +1,5 @@
 ACTONC=../actonc
-EXAMPLES=abs average counter files sieve sumto worker
+EXAMPLES=abs average counter files sieve sumto worker overlap
 TESTS=fail1 segfault quotes-in-triquotes triquotes-across-lines string-concat
 
 test:
@@ -9,6 +9,7 @@ test:
 	$(MAKE) sieve
 	$(MAKE) sumto
 	$(MAKE) files
+	$(MAKE) overlap
 	@echo TODO: fix below entries
 	#$(MAKE) fail1
 	#$(MAKE) quotes-in-triquotes
