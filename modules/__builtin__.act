@@ -237,14 +237,14 @@ protocol Times[A] (Plus):
   def __imul__(a,b):
       return a * b
 
-protocol Div:
-  @staticmethod
-  __truediv__  : (Self,Self) -> Self
-  @staticmethod
-  __itruediv__ : (Self,Self) -> Self
+protocol Div[A]:
+ @staticmethod
+ __truediv__  : (Self,Self) -> A
+ @staticmethod
+ __itruediv__ : (Self,Self) -> A
 
-  def __itruediv__(a,b):
-      return a / b
+ def __itruediv__(a,b):
+     return a / b
 
 protocol Hashable (Eq):
   __hash__     : () -> int
@@ -358,16 +358,17 @@ protocol Integral (Rational,Logical):
 ## Number protocol extensions ######################################################################
 
 extension int (Integral):pass
+extension int (Div[float]):pass
 extension int (Ord):pass
 extension int (Hashable):pass
 
 extension float (RealFloat):pass
-extension float (Div):pass
+extension float (Div[float]):pass
 extension float (Ord):pass
 extension float (Hashable):pass
 
 extension complex (Number):pass
-extension complex (Div):pass
+extension complex (Div[complex]):pass
 extension complex (Eq):pass
 extension complex (Hashable):pass
 

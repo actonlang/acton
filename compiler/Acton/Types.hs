@@ -252,6 +252,14 @@ instance InfEnv Stmt where
                                              w' <- newWitness
                                              return ( Impl w' t (pTimes t') :
                                                       cs0++cs1++cs2++cs3, [], assign w lval $ eCall (eDot (eVar w') imulKW) [rval,e'])
+      | o == DivA                       = do cs0 <- targetFX tg
+                                             (cs1,t,w,lval) <- infTarget env tg
+                                             (cs2,rval) <- inferSub env t tg
+                                             t' <- newTVar
+                                             (cs3,e') <- inferSub env t e
+                                             w' <- newWitness
+                                             return ( Impl w' t (pDiv t') :
+                                                      cs0++cs1++cs2++cs3, [], assign w lval $ eCall (eDot (eVar w') itruedivKW) [rval,e'])
       | otherwise                       = do cs0 <- targetFX tg
                                              (cs1,t,w,lval) <- infTarget env tg
                                              (cs2,rval) <- inferSub env t tg
@@ -267,7 +275,6 @@ instance InfEnv Stmt where
             protocol PlusA              = pPlus
             protocol MinusA             = pMinus
             protocol PowA               = pNumber
-            protocol DivA               = pDiv
             protocol ModA               = pIntegral
             protocol EuDivA             = pIntegral
             protocol ShiftLA            = pIntegral
@@ -279,7 +286,6 @@ instance InfEnv Stmt where
             method PlusA                = iaddKW
             method MinusA               = isubKW
             method PowA                 = ipowKW
-            method DivA                 = itruedivKW
             method ModA                 = imodKW
             method EuDivA               = ifloordivKW
             method ShiftLA              = ilshiftKW
@@ -1079,6 +1085,13 @@ instance Infer Expr where
                                              w <- newWitness
                                              return (Impl w t (pTimes t') :
                                                      cs1++cs2, t, eCall (eDot (eVar w) mulKW) [e1',e2'])
+      | op == Div                       = do t <- newTVar
+                                             t' <- newTVar
+                                             (cs1,e1') <- inferSub env t e1
+                                             (cs2,e2') <- inferSub env t e2
+                                             w <- newWitness
+                                             return (Impl w t (pDiv t') :
+                                                     cs1++cs2, t', eCall (eDot (eVar w) truedivKW) [e1',e2'])
       | otherwise                       = do t <- newTVar
                                              (cs1,e1') <- inferSub env t e1
                                              (cs2,e2') <- inferSub env (rtype op t) e2
@@ -1088,7 +1101,6 @@ instance Infer Expr where
       where protocol Plus               = pPlus
             protocol Minus              = pMinus
             protocol Pow                = pNumber
-            protocol Div                = pDiv
             protocol Mod                = pIntegral
             protocol EuDiv              = pIntegral
             protocol ShiftL             = pIntegral
@@ -1100,7 +1112,6 @@ instance Infer Expr where
             method Plus                 = addKW
             method Minus                = subKW
             method Pow                  = powKW
-            method Div                  = truedivKW
             method Mod                  = modKW
             method EuDiv                = floordivKW
             method ShiftL               = lshiftKW

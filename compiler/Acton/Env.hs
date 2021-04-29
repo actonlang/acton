@@ -164,11 +164,11 @@ prettyOrPass te
   where doc                     = pretty te
 
 instance Pretty WTCon where
---    pretty (ws,u)               = pretty u
+    pretty (ws,u)               = pretty u
 --    pretty (ws,u)               = dotCat pretty (catMaybes ws) <+> colon <+> pretty u
-    pretty (ws,u)               = dotCat prettyW ws <+> colon <+> pretty u
-      where prettyW (Left n)    = text "_"
-            prettyW (Right n)   = pretty n
+--    pretty (ws,u)               = dotCat prettyW ws <+> colon <+> pretty u
+--      where prettyW (Left n)    = text "_"
+--            prettyW (Right n)   = pretty n
 
 instance (Subst x) => Subst (EnvF x) where
     msubst env                  = do ne <- msubst (names env)
