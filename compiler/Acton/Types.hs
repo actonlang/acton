@@ -255,10 +255,9 @@ instance InfEnv Stmt where
       | o == DivA                       = do cs0 <- targetFX tg
                                              (cs1,t,w,lval) <- infTarget env tg
                                              (cs2,rval) <- inferSub env t tg
-                                             t' <- newTVar
                                              (cs3,e') <- inferSub env t e
                                              w' <- newWitness
-                                             return ( Impl w' t (pDiv t') :
+                                             return ( Impl w' t (pDiv t) :
                                                       cs0++cs1++cs2++cs3, [], assign w lval $ eCall (eDot (eVar w') itruedivKW) [rval,e'])
       | otherwise                       = do cs0 <- targetFX tg
                                              (cs1,t,w,lval) <- infTarget env tg
