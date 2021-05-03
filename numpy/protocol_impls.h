@@ -33,6 +33,12 @@ typedef struct numpy$$Minus$ndarray *numpy$$Minus$ndarray;
 struct numpy$$Minus$ndarray$class;
 typedef struct numpy$$Minus$ndarray$class *numpy$$Minus$ndarray$class;
 
+struct numpy$$Div$ndarray$int;
+typedef struct numpy$$Div$ndarray$int *numpy$$Div$ndarray$int;
+
+struct numpy$$Div$ndarray$int$class;
+typedef struct numpy$$Div$ndarray$int$class *numpy$$Div$ndarray$int$class;
+
 struct numpy$$Div$ndarray$float;
 typedef struct numpy$$Div$ndarray$float *numpy$$Div$ndarray$float;
 
@@ -268,6 +274,31 @@ void numpy$$Minus$ndarray$__serialize__(numpy$$Minus$ndarray,$Serial$state);
 numpy$$Minus$ndarray numpy$$Minus$ndarray$__deserialize__(numpy$$Minus$ndarray,$Serial$state);
 numpy$$ndarray numpy$$Minus$ndarray$__sub__ (numpy$$Minus$ndarray, numpy$$ndarray, numpy$$ndarray);
 
+// numpy$$Div$ndarray$int ////////////////////////////////////////////////////////////
+
+struct numpy$$Div$ndarray$int {
+    numpy$$Div$ndarray$int$class $class;
+    $Real w$Real;
+};
+
+struct numpy$$Div$ndarray$int$class {
+    char *$GCINFO;
+    int $class_id;
+    $Super$class $superclass;
+    void (*__init__)(numpy$$Div$ndarray$int);
+    void (*__serialize__)(numpy$$Div$ndarray$int,$Serial$state); 
+    numpy$$Div$ndarray$int (*__deserialize__)(numpy$$Div$ndarray$int,$Serial$state);
+    $bool (*__bool__)(numpy$$Div$ndarray$int);
+    $str (*__str__)(numpy$$Div$ndarray$int);
+    numpy$$ndarray (*__truediv__)(numpy$$Div$ndarray$int, numpy$$ndarray, numpy$$ndarray);
+    numpy$$ndarray (*__itruediv__)(numpy$$Div$ndarray$int, numpy$$ndarray, numpy$$ndarray);
+};
+
+void numpy$$Div$ndarray$int$__init__ (numpy$$Div$ndarray$int);
+void numpy$$Div$ndarray$int$__serialize__(numpy$$Div$ndarray$int,$Serial$state); 
+numpy$$Div$ndarray$int numpy$$Div$ndarray$int$__deserialize__(numpy$$Div$ndarray$int,$Serial$state);
+numpy$$ndarray numpy$$Div$ndarray$int$__truediv__ (numpy$$Div$ndarray$int, numpy$$ndarray, numpy$$ndarray);
+
 // numpy$$Div$ndarray$float ////////////////////////////////////////////////////////////
 
 struct numpy$$Div$ndarray$float {
@@ -284,14 +315,14 @@ struct numpy$$Div$ndarray$float$class {
     numpy$$Div$ndarray$float (*__deserialize__)(numpy$$Div$ndarray$float,$Serial$state);
     $bool (*__bool__)(numpy$$Div$ndarray$float);
     $str (*__str__)(numpy$$Div$ndarray$float);
-    numpy$$ndarray (*__true__)(numpy$$Div$ndarray$float, numpy$$ndarray, numpy$$ndarray);
+    numpy$$ndarray (*__truediv__)(numpy$$Div$ndarray$float, numpy$$ndarray, numpy$$ndarray);
     numpy$$ndarray (*__itruediv__)(numpy$$Div$ndarray$float, numpy$$ndarray, numpy$$ndarray);
 };
 
 void numpy$$Div$ndarray$float$__init__ (numpy$$Div$ndarray$float);
 void numpy$$Div$ndarray$float$__serialize__(numpy$$Div$ndarray$float,$Serial$state); 
 numpy$$Div$ndarray$float numpy$$Div$ndarray$float$__deserialize__(numpy$$Div$ndarray$float,$Serial$state);
-numpy$$ndarray numpy$$Div$ndarray$float$__div__ (numpy$$Div$ndarray$float, numpy$$ndarray, numpy$$ndarray);
+numpy$$ndarray numpy$$Div$ndarray$float$__truediv__ (numpy$$Div$ndarray$float, numpy$$ndarray, numpy$$ndarray);
 
 // numpy$$Sliceable$ndarray /////////////////////////////////////////////////////////////////
 
@@ -396,6 +427,7 @@ extern struct numpy$$Logical$ndarray$int$class numpy$$Logical$ndarray$int$method
 extern struct numpy$$Minus$ndarray$int$class numpy$$Minus$ndarray$int$methods;
 extern struct numpy$$Real$ndarray$class numpy$$Real$ndarray$methods;
 extern struct numpy$$Minus$ndarray$class numpy$$Minus$ndarray$methods;
+extern struct numpy$$Div$ndarray$int$class numpy$$Div$ndarray$int$methods;
 extern struct numpy$$Div$ndarray$float$class numpy$$Div$ndarray$float$methods;
 extern struct numpy$$Sliceable$ndarray$class numpy$$Sliceable$ndarray$methods;
 extern struct numpy$$Collection$ndarray$class numpy$$Collection$ndarray$methods;
@@ -405,6 +437,7 @@ numpy$$Logical$ndarray$int numpy$$Logical$ndarray$int$new($Integral);
 numpy$$Minus$ndarray$int numpy$$Minus$ndarray$int$new($Integral);
 numpy$$Real$ndarray numpy$$Real$ndarray$new();
 numpy$$Minus$ndarray numpy$$Minus$ndarray$new($Real);
+numpy$$Div$ndarray$int numpy$$Div$ndarray$int$new();
 numpy$$Div$ndarray$float numpy$$Div$ndarray$float$new();
 numpy$$Sliceable$ndarray numpy$$Sliceable$ndarray$new();
 numpy$$Collection$ndarray numpy$$Collection$ndarray$new(numpy$$Primitive);

@@ -2,7 +2,6 @@ import math
 
 def sieve(n):
     isPrime = [True] * n
-#    isPrime = replicate(n, True)
     isPrime[0] = False; isPrime[1] = False
     for i in range(2,int(math.sqrt(float(n)))+1,1):
         if isPrime[i]:
@@ -27,12 +26,8 @@ def primesTo(n):
 
 
 actor main(env):
-    if len(env.argv) >= 2:
-	n = int(env.argv[1])
+    if (len(env.argv) >= 2) and env.argv[1].isdecimal():
+	print(count(sieve(int(env.argv[1]))))
     else:
-	n = 123
-    print(count(sieve(n)))
+	print("Usage: sieve <positive integer>")
     env.exit(0)
-
-# For Python, change first line of sieve, remove type signature for count and actor main; uncomment next line
-#print(count(sieve(10000000)))

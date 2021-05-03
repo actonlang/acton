@@ -4,20 +4,24 @@ import math
 def harmonic(n):
     sum = 0
     for i in range(1,n+1,1):
-        sum += 1/float(i)
+        sum += 1/i
     return sum
 
 def harmonic2(n):
-    a = np.linspace(1,float(n+1),n)
-    return np.sum(1.0/a,0)
-  
+    return np.sum(1/np.arange(1,n+1,1),0)
+
+    
 actor main(env):
+    response : action(str) -> None
     def response(input):
         n = int(input.strip("\n"))
-        if n>0:
-            print(harmonic2(n))
-        else:
-            env.exit(0)
+        print(n)
+        print(harmonic(n))
+        print(harmonic2(n))
 
     env.stdin_install(response)
-
+#    n = int(env.argv[1])
+#    print(harmonic(n))
+#    print(harmonic2(n))
+    
+    

@@ -25,12 +25,15 @@ extern struct $Minus$int$class $Minus$int$methods;
 $Minus$int $Minus$int$new($Integral);
 extern struct $Ord$int$class $Ord$int$methods;
 $Ord$int $Ord$int$new();
+extern struct $Div$int$class $Div$int$methods;
+$Div$int $Div$int$new();
 extern struct $Hashable$int$class $Hashable$int$methods;
 $Hashable$int $Hashable$int$new();
 
 extern struct $Integral$int *$Integral$int$witness;
 extern struct $Logical$int *$Logical$int$witness;
 extern struct $Minus$int *$Minus$int$witness;
+extern struct $Div$int *$Div$int$witness;
 extern struct $Ord$int *$Ord$int$witness;
 extern struct $Hashable$int *$Hashable$int$witness;
 

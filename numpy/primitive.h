@@ -55,7 +55,8 @@ struct numpy$$Primitive$class {
   union $Bytes8 (*$add)(union $Bytes8, union $Bytes8); 
   union $Bytes8 (*$sub)(union $Bytes8, union $Bytes8); 
   union $Bytes8 (*$mul)(union $Bytes8, union $Bytes8); 
-  union $Bytes8 (*$div)(union $Bytes8, union $Bytes8); 
+  union $Bytes8 (*$truediv)(union $Bytes8, union $Bytes8); 
+  union $Bytes8 (*$floordiv)(union $Bytes8, union $Bytes8); 
   union $Bytes8 (*$mod)(union $Bytes8, union $Bytes8);
   union $Bytes8 (*$land)(union $Bytes8, union $Bytes8);
   union $Bytes8 (*$lor)(union $Bytes8, union $Bytes8);
@@ -68,7 +69,8 @@ struct numpy$$Primitive$class {
   void (*$iadd)(union $Bytes8*, union $Bytes8);        
   void (*$isub)(union $Bytes8*, union $Bytes8);        
   void (*$imul)(union $Bytes8*, union $Bytes8);        
-  void (*$idiv)(union $Bytes8*, union $Bytes8);        
+  void (*$itruediv)(union $Bytes8*, union $Bytes8);        
+  void (*$ifloordiv)(union $Bytes8*, union $Bytes8);        
   void (*$imod)(union $Bytes8*, union $Bytes8);       
   void (*$iband)(union $Bytes8*, union $Bytes8);      
   void (*$ibor)(union $Bytes8*, union $Bytes8);       
@@ -112,7 +114,8 @@ struct numpy$$Primitive$int$class {
   union $Bytes8 (*$add)(union $Bytes8, union $Bytes8); 
   union $Bytes8 (*$sub)(union $Bytes8, union $Bytes8); 
   union $Bytes8 (*$mul)(union $Bytes8, union $Bytes8); 
-  union $Bytes8 (*$div)(union $Bytes8, union $Bytes8); 
+  union $Bytes8 (*$truediv)(union $Bytes8, union $Bytes8); 
+  union $Bytes8 (*$floordiv)(union $Bytes8, union $Bytes8); 
   union $Bytes8 (*$mod)(union $Bytes8, union $Bytes8);
   union $Bytes8 (*$land)(union $Bytes8, union $Bytes8);
   union $Bytes8 (*$lor)(union $Bytes8, union $Bytes8);
@@ -125,7 +128,8 @@ struct numpy$$Primitive$int$class {
   void (*$iadd)(union $Bytes8*, union $Bytes8);        
   void (*$isub)(union $Bytes8*, union $Bytes8);        
   void (*$imul)(union $Bytes8*, union $Bytes8);        
-  void (*$idiv)(union $Bytes8*, union $Bytes8);        
+  void (*$itruediv)(union $Bytes8*, union $Bytes8);        
+  void (*$ifloordiv)(union $Bytes8*, union $Bytes8);        
   void (*$imod)(union $Bytes8*, union $Bytes8);       
   void (*$iband)(union $Bytes8*, union $Bytes8);      
   void (*$ibor)(union $Bytes8*, union $Bytes8);       
@@ -166,7 +170,8 @@ struct numpy$$Primitive$float$class {
   union $Bytes8 (*$add)(union $Bytes8, union $Bytes8); 
   union $Bytes8 (*$sub)(union $Bytes8, union $Bytes8); 
   union $Bytes8 (*$mul)(union $Bytes8, union $Bytes8); 
-  union $Bytes8 (*$div)(union $Bytes8, union $Bytes8); 
+  union $Bytes8 (*$truediv)(union $Bytes8, union $Bytes8); 
+  union $Bytes8 (*$floordiv)(union $Bytes8, union $Bytes8); 
   union $Bytes8 (*$mod)(union $Bytes8, union $Bytes8);
   union $Bytes8 (*$land)(union $Bytes8, union $Bytes8);
   union $Bytes8 (*$lor)(union $Bytes8, union $Bytes8);
@@ -179,7 +184,8 @@ struct numpy$$Primitive$float$class {
   void (*$iadd)(union $Bytes8*, union $Bytes8);        
   void (*$isub)(union $Bytes8*, union $Bytes8);        
   void (*$imul)(union $Bytes8*, union $Bytes8);        
-  void (*$idiv)(union $Bytes8*, union $Bytes8);        
+  void (*$itruediv)(union $Bytes8*, union $Bytes8);        
+  void (*$ifloordiv)(union $Bytes8*, union $Bytes8);        
   void (*$imod)(union $Bytes8*, union $Bytes8);       
   void (*$iband)(union $Bytes8*, union $Bytes8);      
   void (*$ibor)(union $Bytes8*, union $Bytes8);       

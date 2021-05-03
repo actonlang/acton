@@ -73,7 +73,7 @@ numpy$$ndarray numpy$$Integral$ndarray$int$__int__ (numpy$$Integral$ndarray$int 
 numpy$$ndarray numpy$$Integral$ndarray$int$__index__ (numpy$$Integral$ndarray$int wit, numpy$$ndarray a);
 $tuple numpy$$Integral$ndarray$int$__divmod__ (numpy$$Integral$ndarray$int wit, numpy$$ndarray a, numpy$$ndarray b);
 numpy$$ndarray numpy$$Integral$ndarray$int$__floordiv__ (numpy$$Integral$ndarray$int wit, numpy$$ndarray a, numpy$$ndarray b) {
-  return numpy$$oper(numpy$$Primitive$int$witness->$class->$div,a,b);
+  return numpy$$oper(l$floordiv,a,b);
 }  
 numpy$$ndarray numpy$$Integral$ndarray$int$__mod__ (numpy$$Integral$ndarray$int wit, numpy$$ndarray a, numpy$$ndarray b);
 numpy$$ndarray numpy$$Integral$ndarray$int$__lshift__ (numpy$$Integral$ndarray$int wit, numpy$$ndarray a, numpy$$ndarray b);
@@ -206,19 +206,21 @@ $WORD numpy$$Real$ndarray$__trunc__ (numpy$$Real$ndarray wit, numpy$$ndarray a, 
 $WORD numpy$$Real$ndarray$__floor__ (numpy$$Real$ndarray wit, numpy$$ndarray a, $Integral wit2);
 $WORD numpy$$Real$ndarray$__ceil__ (numpy$$Real$ndarray wit, numpy$$ndarray a, $Integral wit2);
 numpy$$ndarray numpy$$Real$ndarray$__round__ (numpy$$Real$ndarray wit, numpy$$ndarray a, numpy$$ndarray b);
+
+/*
 $WORD numpy$$Real$ndarray$numerator (numpy$$Real$ndarray wit, numpy$$ndarray a, $Integral wit2);
 $WORD numpy$$Real$ndarray$denominator (numpy$$Real$ndarray wit, numpy$$ndarray a, $Integral wit2);
 numpy$$ndarray numpy$$Real$ndarray$__int__ (numpy$$Real$ndarray wit, numpy$$ndarray a);
 numpy$$ndarray numpy$$Real$ndarray$__index__ (numpy$$Real$ndarray wit, numpy$$ndarray a);
 $tuple numpy$$Real$ndarray$__divmod__ (numpy$$Real$ndarray wit, numpy$$ndarray a, numpy$$ndarray b);
 numpy$$ndarray numpy$$Real$ndarray$__floordiv__ (numpy$$Real$ndarray wit, numpy$$ndarray a, numpy$$ndarray b) {
-  return numpy$$oper(wit->w$Primitive$A$Real$ndarray->$class->$div,a,b);
+  return numpy$$oper(wit->w$Primitive$A$Real$ndarray->$class->$floodiv,a,b);
 }  
 numpy$$ndarray numpy$$Real$ndarray$__mod__ (numpy$$Real$ndarray wit, numpy$$ndarray a, numpy$$ndarray b);
 numpy$$ndarray numpy$$Real$ndarray$__lshift__ (numpy$$Real$ndarray wit, numpy$$ndarray a, numpy$$ndarray b);
 numpy$$ndarray numpy$$Real$ndarray$__rshift__ (numpy$$Real$ndarray wit, numpy$$ndarray a, numpy$$ndarray b);
 numpy$$ndarray numpy$$Real$ndarray$__invert__ (numpy$$Real$ndarray wit, numpy$$ndarray a);
-
+*/
  
 // numpy$$Minus$ndarray /////////////////////////////////////////////////////////////////////////////////
 
@@ -247,6 +249,31 @@ numpy$$ndarray numpy$$Minus$ndarray$__sub__ (numpy$$Minus$ndarray wit, numpy$$nd
   return numpy$$oper(((numpy$$Real$ndarray)wit->w$Real)-> w$Primitive$A$Real$ndarray->$class->$sub,a,b);
 }
 
+// numpy$$Div$ndarray$int /////////////////////////////////////////////////////////////////////////////////
+
+void numpy$$Div$ndarray$int$__init__(numpy$$Div$ndarray$int wit) {
+};
+
+numpy$$Div$ndarray$int numpy$$Div$ndarray$int$new() {
+  numpy$$Div$ndarray$int res = malloc(sizeof (struct numpy$$Div$ndarray$int));
+  res->$class = &numpy$$Div$ndarray$int$methods;
+  return res;
+}
+
+void numpy$$Div$ndarray$int$__serialize__(numpy$$Div$ndarray$int wit, $Serial$state state) {
+}
+
+numpy$$Div$ndarray$int numpy$$Div$ndarray$int$__deserialize__(numpy$$Div$ndarray$int wit, $Serial$state state) {
+    numpy$$Div$ndarray$int res = $DNEW(numpy$$Div$ndarray$int,state);
+    return res;
+}
+
+numpy$$ndarray numpy$$Div$ndarray$int$__truediv__ (numpy$$Div$ndarray$int wit, numpy$$ndarray a, numpy$$ndarray b) {
+  numpy$$ndarray res = numpy$$oper(l$truediv,a,b);
+  res->elem_type = DblType;
+  return res;
+}
+
 // numpy$$Div$ndarray$float /////////////////////////////////////////////////////////////////////////////////
 
 void numpy$$Div$ndarray$float$__init__(numpy$$Div$ndarray$float wit) {
@@ -267,7 +294,7 @@ numpy$$Div$ndarray$float numpy$$Div$ndarray$float$__deserialize__(numpy$$Div$nda
 }
 
 numpy$$ndarray numpy$$Div$ndarray$float$__truediv__ (numpy$$Div$ndarray$float wit, numpy$$ndarray a, numpy$$ndarray b) {
-  return numpy$$oper(numpy$$Primitive$float$witness->$class->$div,a,b);
+  return numpy$$oper(d$truediv,a,b);
 }
 
 // Sliceable$ndarray ///////////////////////////////////////////////////////////////////////////////
@@ -456,6 +483,22 @@ struct numpy$$Minus$ndarray$class numpy$$Minus$ndarray$methods = {
 
 struct numpy$$Minus$ndarray numpy$$Minus$ndarray$instance = {&numpy$$Minus$ndarray$methods,  ($Real)&numpy$$Real$ndarray$instance};
 numpy$$Minus$ndarray numpy$$Minus$ndarray$witness = &numpy$$Minus$ndarray$instance;
+
+struct numpy$$Div$ndarray$int$class numpy$$Div$ndarray$int$methods = {
+    "numpy$$Div$ndarray$int",
+    UNASSIGNED,
+    ($Super$class)&$Minus$methods,
+    numpy$$Div$ndarray$int$__init__,
+    numpy$$Div$ndarray$int$__serialize__,
+    numpy$$Div$ndarray$int$__deserialize__,
+    ($bool (*)(numpy$$Div$ndarray$int))$default__bool__,
+    ($str (*)(numpy$$Div$ndarray$int))$default__str__,
+    numpy$$Div$ndarray$int$__truediv__,
+    (numpy$$ndarray (*)(numpy$$Div$ndarray$int, numpy$$ndarray, numpy$$ndarray))$Div$__itruediv__
+};
+
+struct numpy$$Div$ndarray$int numpy$$Div$ndarray$int$instance = {&numpy$$Div$ndarray$int$methods};
+numpy$$Div$ndarray$int numpy$$Div$ndarray$int$witness = &numpy$$Div$ndarray$int$instance;
 
 struct numpy$$Div$ndarray$float$class numpy$$Div$ndarray$float$methods = {
     "numpy$$Div$ndarray$float",

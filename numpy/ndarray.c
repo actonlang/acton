@@ -851,7 +851,7 @@ numpy$$ndarray numpy$$mean(numpy$$Primitive wit, numpy$$ndarray a, $int axis) {
     sums->elem_type = DblType;
   }
   numpy$$ndarray len = numpy$$fromatom(($atom)to$float((double)(axis ? (($int)$list_getitem(a->shape,axis->val))->val : a->size->val)));
-  return numpy$$oper(numpy$$Primitive$float$witness->$class->$div,sums,len);
+  return numpy$$oper(d$truediv,sums,len);
 }
   
    

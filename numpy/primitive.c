@@ -17,7 +17,7 @@ int $elem_size(enum ElemType typ) {
 LONGOP(l$add,+)
 LONGOP(l$sub,-)
 LONGOP(l$mul,*)
-LONGOP(l$div,/)
+LONGOP(l$floordiv,/)
 LONGOP(l$mod,%)
 LONGOP(l$land,&&)
 LONGOP(l$lor,||)
@@ -26,6 +26,12 @@ LONGOP(l$bor,|)
 LONGOP(l$bxor,^)
 LONGOP(l$lsh,<<)
 LONGOP(l$rsh,>>)
+
+static union $Bytes8 l$truediv(union $Bytes8 a, union $Bytes8 b) {
+  union $Bytes8 res;
+  res.d = (double)a.l/(double)b.l;
+  return res;
+} 
 
 #define LONGBOOLOP(op,sym) static bool op(union $Bytes8 a, union $Bytes8 b) { \
   return a.l sym b.l; \
@@ -47,7 +53,7 @@ LONGBOOLOP(l$ge,>=)
 DBLOP(d$add,+)
 DBLOP(d$sub,-)
 DBLOP(d$mul,*)
-DBLOP(d$div,/)
+DBLOP(d$truediv,/)
 
 #define DBLBOOLOP(op,sym) static bool op(union $Bytes8 a, union $Bytes8 b) { \
   return a.d sym b.d; \
@@ -64,7 +70,7 @@ DBLBOOLOP(d$ge,>=)
 LONGINCROP(l$iadd,+=)
 LONGINCROP(l$isub,-=)
 LONGINCROP(l$imul,*=)
-LONGINCROP(l$idiv,/=)
+LONGINCROP(l$ifloordiv,/=)
 LONGINCROP(l$imod,%=)
 LONGINCROP(l$iband,&=)
 LONGINCROP(l$ibor,|=)
@@ -72,13 +78,17 @@ LONGINCROP(l$ibxor,^=)
 LONGINCROP(l$ilsh,<<=)
 LONGINCROP(l$irsh,>>=)
 
-#define DBLINCROP(op,sym) static void op(union $Bytes8 *a, union $Bytes8 b) { (*a).d sym b.d;}
+static void l$itruediv(union $Bytes8 *a, union $Bytes8 b) {
+  fprintf(stderr,"Internal error: executing numpy.l$itruediv\n");
+  exit(-1);
+} 
 
+#define DBLINCROP(op,sym) static void op(union $Bytes8 *a, union $Bytes8 b) { (*a).d sym b.d;}
 
 DBLINCROP(d$iadd,+=)
 DBLINCROP(d$isub,-=)
 DBLINCROP(d$imul,*=)
-DBLINCROP(d$idiv,/=)
+DBLINCROP(d$itruediv,/=)
 
 #define LONGUNARY(op,sym) static union $Bytes8 op(union $Bytes8 a) {union $Bytes8 res; res.l = sym(a.l); return res;}
 
@@ -157,18 +167,18 @@ numpy$$Primitive$float numpy$$Primitive$float$deserialize(numpy$$Primitive$float
 
 struct numpy$$Primitive$int$class numpy$$Primitive$int$methods = {"numpy$$Primitive$int",UNASSIGNED,NULL,(void (*)(numpy$$Primitive$int))$default__init__,
                                                                   numpy$$Primitive$int$serialize,numpy$$Primitive$int$deserialize,NULL,NULL,
-                                                      LongType,to$obj$int,from$obj$int,l$prim_str,
-                                                      l$add,l$sub,l$mul,l$div,l$mod,l$land,l$lor,l$band,l$bor,l$bxor,l$lsh,l$rsh,l$pow,
-                                                      l$iadd,l$isub,l$imul,l$idiv,l$imod,l$iband,l$ibor,l$ibxor,l$ilsh,l$irsh,
-                                                      l$eq,l$neq,l$lt,l$le,l$gt,l$ge,l$abs,l$neg,l$lnot,l$bnot};
+                                                                  LongType,to$obj$int,from$obj$int,l$prim_str,
+                                                                  l$add,l$sub,l$mul,l$truediv,l$floordiv,l$mod,l$land,l$lor,l$band,l$bor,l$bxor,l$lsh,l$rsh,l$pow,
+                                                                  l$iadd,l$isub,l$imul,l$itruediv,l$ifloordiv,l$imod,l$iband,l$ibor,l$ibxor,l$ilsh,l$irsh,
+                                                                  l$eq,l$neq,l$lt,l$le,l$gt,l$ge,l$abs,l$neg,l$lnot,l$bnot};
 
 
 struct numpy$$Primitive$float$class numpy$$Primitive$float$methods = {"numpy$$Primitive$float",UNASSIGNED,NULL,(void (*)(numpy$$Primitive$float))$default__init__, 
-                                                                  numpy$$Primitive$float$serialize,numpy$$Primitive$float$deserialize,NULL,NULL,
-                                                          DblType,to$obj$float,from$obj$float,d$prim_str,
-                                                          d$add,d$sub,d$mul,d$div,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,d$pow,
-                                                          d$iadd,d$isub,d$imul,d$idiv,NULL,NULL,NULL,NULL,NULL,NULL,
-                                                          d$eq,d$neq,d$lt,d$le,d$gt,d$ge,d$abs,d$neg,NULL,NULL};
+                                                                      numpy$$Primitive$float$serialize,numpy$$Primitive$float$deserialize,NULL,NULL,
+                                                                      DblType,to$obj$float,from$obj$float,d$prim_str,
+                                                                      d$add,d$sub,d$mul,d$truediv,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,d$pow,
+                                                                      d$iadd,d$isub,d$imul,d$itruediv,NULL,NULL,NULL,NULL,NULL,NULL,NULL,
+                                                                      d$eq,d$neq,d$lt,d$le,d$gt,d$ge,d$abs,d$neg,NULL,NULL};
 
 struct numpy$$Primitive$int numpy$$Primitive$int_instance = {&numpy$$Primitive$int$methods};
 numpy$$Primitive$int numpy$$Primitive$int$witness = &numpy$$Primitive$int_instance;

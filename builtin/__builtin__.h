@@ -364,6 +364,12 @@ typedef struct $Minus$int *$Minus$int;
 struct $Minus$int$class;
 typedef struct $Minus$int$class *$Minus$int$class;
 
+struct $Div$int;
+typedef struct $Div$int *$Div$int;
+
+struct $Div$int$class;
+typedef struct $Div$int$class *$Div$int$class;
+
 struct $Ord$int;
 typedef struct $Ord$int *$Ord$int;
 
@@ -1767,6 +1773,28 @@ void $Minus$int$__init__ ($Minus$int, $Integral);
 void $Minus$int$__serialize__($Minus$int, $Serial$state);
 $Minus$int $Minus$int$__deserialize__($Minus$int, $Serial$state);
 $int $Minus$int$__sub__ ($Minus$int, $int, $int);
+
+// $Div$int ////////////////////////////////////////////////////////////
+
+struct $Div$int {
+    $Div$int$class $class;
+};
+
+struct $Div$int$class {
+    char *$GCINFO;
+    int $class_id;
+    $Super$class $superclass;
+    void (*__init__)($Div$int);
+    void (*__serialize__)($Div$int,$Serial$state);
+    $Div$int (*__deserialize__)($Div$int,$Serial$state);
+    $bool (*__bool__)($Div$int);
+    $str (*__str__)($Div$int);
+    $float (*__truediv__)($Div$int, $int, $int);
+    $float (*__itruediv__)($Div$int, $int, $int);
+};
+
+$float $Div$int$__truediv__ ($Div$int, $int, $int);
+$float $Div$int$__itruediv__ ($Div$int, $int, $int);
 
 // $Ord$int /////////////////////////////////////////////////////////////////
 

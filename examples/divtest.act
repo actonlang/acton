@@ -1,0 +1,14 @@
+import numpy as np
+import math
+
+actor main(env):
+  print(3/5)
+  print(3.2/1.6)
+  a = np.arange(1,10,1)
+  b = np.full(a.shape,2)
+  print(a/b)
+  c = np.linspace(0,5,5)
+  d = np.array([2.5] * 5)
+  print(c/d)
+  env.exit(0)
+  

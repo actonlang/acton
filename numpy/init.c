@@ -13,6 +13,8 @@ void numpy$$__init__() {
     $register(&numpy$$Integral$ndarray$int$methods);
     $register(&numpy$$Logical$ndarray$int$methods);
     $register(&numpy$$Minus$ndarray$int$methods);
+    $register(&numpy$$Div$ndarray$int$methods);
+    $register(&numpy$$Div$ndarray$float$methods);
     $register(&numpy$$Real$ndarray$methods);
     $register(&numpy$$Minus$ndarray$methods);
     $register(&numpy$$Sliceable$ndarray$methods);

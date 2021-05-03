@@ -251,6 +251,20 @@ $int $Minus$int$__sub__($Minus$int wit,  $int a, $int b) {
   return to$int(a->val - b->val);
 }  
 
+// $Div$int  ////////////////////////////////////////////////////////////////////////////////////////
+
+void $Div$int$__serialize__($Div$int self, $Serial$state state) {
+}
+
+$Div$int $Div$int$__deserialize__($Div$int self, $Serial$state state) {
+   $Div$int res = $DNEW($Div$int,state);
+   return res;
+}
+
+$float $Div$int$__truediv__ ($Div$int wit, $int a, $int b) {
+  return to$float((double)a->val/(double)b->val);
+}
+
 // $Ord$int  ////////////////////////////////////////////////////////////////////////////////////////
 
 void $Ord$int$__serialize__($Ord$int self, $Serial$state state) {
@@ -322,6 +336,10 @@ void $Minus$int_init($Minus$int wit, $Integral w$Integral) {
   wit->w$Integral =  w$Integral;
 }
 
+void $Div$int_init($Div$int wit) {
+  return;
+}
+
 void $Ord$int_init($Ord$int wit) {
   return;
 }
@@ -346,6 +364,10 @@ $Ord$int $Ord$int$new() {
   return $NEW($Ord$int);
 }
 
+$Div$int $Div$int$new() {
+  return $NEW($Div$int);
+}
+
 $Hashable$int $Hashable$int$new() {
   return $NEW($Hashable$int);
 }
@@ -355,6 +377,7 @@ struct $Integral$int $Integral$int_instance;
 struct $Logical$int $Logical$int_instance;
 struct $Minus$int $Minus$int_instance;
 struct $Ord$int $Ord$int_instance;
+struct $Div$int $Div$int_instance;
 struct $Hashable$int $Hashable$int_instance;
 
 struct $Integral$int$class $Integral$int$methods = {
@@ -459,6 +482,22 @@ struct $Ord$int$class $Ord$int$methods = {
 
 struct $Ord$int $Ord$int_instance = {&$Ord$int$methods};
 $Ord$int $Ord$int$witness = &$Ord$int_instance;
+
+struct $Div$int$class $Div$int$methods = {
+    "$Div$int",
+    UNASSIGNED,
+    ($Super$class)&$Div$methods,
+    $Div$int_init,
+    $Div$int$__serialize__,
+    $Div$int$__deserialize__,
+    ($bool (*)($Div$int))$default__bool__,
+    ($str (*)($Div$int))$default__str__,
+    $Div$int$__truediv__,
+    ($float (*)($Div$int, $int, $int))$Div$__itruediv__,
+};
+
+struct $Div$int $Div$int_instance = {&$Div$int$methods};
+$Div$int $Div$int$witness = &$Div$int_instance;
 
 struct $Hashable$int$class $Hashable$int$methods = {
     "$Hashable$int",
