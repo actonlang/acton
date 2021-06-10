@@ -302,7 +302,7 @@ runRestPasses args paths env0 parsed = do
                               hFile = outbase ++ ".h"
                               oFile = joinPath [libDir,n++".o"]
                               aFile = joinPath [libDir,"libActon.a"]
-                              gccCmd = "gcc -g -c -I" ++ sysPath paths ++ " -o" ++ oFile ++ " " ++ cFile
+                              gccCmd = "gcc -g -c -I /usr/include/kqueue -I" ++ sysPath paths ++ " -o" ++ oFile ++ " " ++ cFile
                               arCmd = "ar r " ++ aFile ++ " " ++ oFile
                           writeFile hFile h
                           writeFile cFile c
@@ -348,4 +348,4 @@ buildExecutable env args paths task
         libFiles            = " -L " ++ joinPath [sysPath paths,"lib"] ++ " -lutf8proc -lActon "
         binFile             = dropExtension srcbase
         Just srcbase        = srcFile paths mn
-        gccCmd              = "gcc -g -I" ++ sysPath paths ++ libFiles ++ rootFile ++ " -o" ++ binFile
+        gccCmd              = "gcc -g -I /usr/include/kqueue -I" ++ sysPath paths ++ libFiles ++ rootFile ++ " -o" ++ binFile
