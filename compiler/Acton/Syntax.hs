@@ -241,7 +241,7 @@ data Constraint = Cast  Type Type
                 | Impl  Name Type PCon
                 | Sel   Name Type Name Type
                 | Mut   Type Name Type
-                deriving (Show,Read,Generic)
+                deriving (Eq,Show,Read,Generic)
 
 type Constraints = [Constraint]
 

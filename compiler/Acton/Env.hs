@@ -600,43 +600,16 @@ witsByTName env tn          = [ w | w <- witnesses env, eqname (wtype w) ]
         eqname (TVar _ v)   = NoQ (tvname v) == tn
         eqname _            = False
 
-findWitness                 :: EnvF x -> Type -> PCon -> Maybe Witness
-findWitness env t p         = case elim [] m_wits of
-                                  [w] | null u_wits -> Just w
-                                  _ -> Nothing
-  where (m_wits, wits1)     = partition (matching t) (witsByPName env $ tcname p)
-        u_wits              = filter (unifying t) wits1
-        elim ws' []         = reverse ws'
-        elim ws' (w:ws)
-          | covered         = elim ws' ws
-          | otherwise       = elim (w:ws') ws
-          where covered     = or [ matching (wtype w') w && not (matching (wtype w) w') | w' <- ws'++ws ]
+schematic (TC n ts)         = TC n [ tWild | _ <- ts ]
 
-findProtoByAttr             :: EnvF x -> QName -> Name -> Maybe PCon
-findProtoByAttr env cn n    = case filter hasAttr $ witsByTName env cn of
-                                [] -> Nothing
-                                w:_ -> Just (TC (tcname $ proto w) (map (const tWild) (tcargs $ proto w)))
-  where hasAttr w           = n `elem` conAttrs env (tcname $ proto w)
+wild t                      = subst [ (v,tWild) | v <- nub (tyfree t) ] t
 
-hasWitness                  :: EnvF x -> Type -> PCon -> Bool
-hasWitness env t p          =  isJust $ findWitness env t p
-
-allExtProto                 :: EnvF x -> Type -> PCon -> [Type]
-allExtProto env t p         = reverse [ wild (wtype w) | w <- witsByPName env (tcname p), matching t0 w, wild (wtype w) /= t0 ]
-  where t0                  = wild t
-        wild t              = subst [ (v,tWild) | v <- nub (tyfree t) ] t
-
-allExtProtoAttr             :: EnvF x -> Name -> [Type]
-allExtProtoAttr env n       = [ tCon tc | tc <- allCons env, any ((n `elem`) . allAttrs env . proto) (witsByTName env $ tcname tc) ]
-
-
-matching t w                = matching' (qbound $ binds w) t (wtype w)
-
-matching' vs t t'           = isJust $ match vs t t'
-
-unifying t w                = runTypeM $ tryUnify `catchError` const (return False)
-  where tryUnify            = do unify t (wtype w)
-                                 return True
+wildargs i                  = [ tWild | _ <- nbinds i ]
+  where
+    nbinds (NAct q _ _ _)   = q
+    nbinds (NClass q _ _)   = q
+    nbinds (NProto q _ _)   = q
+    nbinds (NExt q _ _ _)   = q
 
 
 -- TCon queries ------------------------------------------------------------------------------------------------------------------
@@ -688,7 +661,7 @@ directAncestors env qn      = [ tcname p | (ws,p) <- us, null $ catRight ws ]
   where (q,us,te)           = findConName qn env
 
 allAncestors                :: EnvF x -> TCon -> [TCon]
-allAncestors env tc         = [ TC n (map (const tWild) ts) | (_, TC n ts) <- us ]
+allAncestors env tc         = [ schematic c | (_, c) <- us ]
   where (us,te)             = findCon env tc
 
 allAncestors'               :: EnvF x -> QName -> [QName]
@@ -751,21 +724,18 @@ abstractAttrs env n         = (initKW : dom sigs) \\ dom terms
 
 allCons                     :: EnvF x -> [CCon]
 allCons env                 = reverse locals ++ concat [ cons m (lookupMod m env) | m <- moduleRefs (names env), m /= mPrim ]
-  where locals              = [ TC (NoQ n) (args i) | (n,i) <- names env, con i ]
+  where locals              = [ TC (NoQ n) (wildargs i) | (n,i) <- names env, con i ]
         con NClass{}        = True
         con NAct{}          = True
         con _               = False
-        cons m (Just te)    = [ TC (GName m n) (args i) | (n,i) <- te, con i ] ++ concat [ cons (modCat m n) (Just te') | (n,NModule te') <- te ]
-        args (NClass q _ _) = [ tWild | _ <- q ]
-        args (NAct q _ _ _) = [ tWild | _ <- q ]
+        cons m (Just te)    = [ TC (GName m n) (wildargs i) | (n,i) <- te, con i ] ++ concat [ cons (modCat m n) (Just te') | (n,NModule te') <- te ]
 
 allProtos                   :: EnvF x -> [PCon]
 allProtos env               = reverse locals ++ concat [ protos m (lookupMod m env) | m <- moduleRefs (names env), m /= mPrim ]
-  where locals              = [ TC (NoQ n) (args i) | (n,i) <- names env, proto i ]
+  where locals              = [ TC (NoQ n) (wildargs i) | (n,i) <- names env, proto i ]
         proto NProto{}      = True
         proto _             = False
-        protos m (Just te)  = [ TC (GName m n) (args i) | (n,i) <- te, proto i ] ++ concat [ protos (modCat m n) (Just te') | (n,NModule te') <- te ]
-        args (NProto q _ _) = [ tWild | _ <- q ]
+        protos m (Just te)  = [ TC (GName m n) (wildargs i) | (n,i) <- te, proto i ] ++ concat [ protos (modCat m n) (Just te') | (n,NModule te') <- te ]
 
 allConAttr                  :: EnvF x -> Name -> [Type]
 allConAttr env n            = [ tCon tc | tc <- allCons env, n `elem` allAttrs env tc ]
