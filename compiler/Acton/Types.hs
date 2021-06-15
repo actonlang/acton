@@ -536,7 +536,7 @@ instance InfEnv Decl where
                                              return (cs1, [(extensionName (head us) c, NExt q c ps te)], Extension l q c us (bindWits eq1 ++ b'))
       where TC n ts                     = c
             env1                        = define (toSigs te') $ reserve (bound b) $ defineSelfOpaque $ defineTVars (stripQual q) env
-            witsearch                   = [ w | w <- witsByPName env (tcname $ head us), matching (tCon c) w, matching' (qbound q) (wtype w) (tCon c) ]
+            witsearch                   = [ w | w <- witsByPName env (tcname $ head us), matching (tCon c) w, matching' (wtype w) (qbound q) (tCon c) ]
             ps                          = mro1 env us     -- TODO: check that ps doesn't contradict any previous extension mro for c
             final                       = concat [ conAttrs env (tcname p) | (_,p) <- tail ps, hasWitness env (tCon c) p ]
             te'                         = parentTEnv env ps
