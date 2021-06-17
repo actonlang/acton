@@ -1,22 +1,21 @@
 all:
-	cd compiler && $(MAKE) install
-	cd modules && $(MAKE)
-	cd builtin && $(MAKE)
-	cd rts && $(MAKE)
-	cd math && $(MAKE)
-	cd numpy && $(MAKE)
+	$(MAKE) -C compiler install
+	$(MAKE) -C modules
+	$(MAKE) -C builtin
+	$(MAKE) -C rts
+	$(MAKE) -C math
+	$(MAKE) -C numpy
 
 test:
 	$(MAKE) -C test
 
 clean:
 	rm -f actonc
-	cd compiler && $(MAKE) clean
-	cd modules && $(MAKE) clean
-	cd builtin && $(MAKE) clean
-	cd rts && $(MAKE) clean
-	cd math && $(MAKE) clean
-	cd numpy && $(MAKE) clean
+	$(MAKE) -C compiler clean
+	$(MAKE) -C modules clean
+	$(MAKE) -C builtin clean
+	$(MAKE) -C rts clean
+	$(MAKE) -C math clean
+	$(MAKE) -C numpy clean
 
-
-.PHONY: test
+.PHONY: all clean test
