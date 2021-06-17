@@ -48,7 +48,7 @@ apt install alex gcc happy haskell-stack libkqueue-dev libprotobuf-c-dev libutf8
 ### Mac OS X
 
 ```
-brew install haskell-stack protobuf-c util-linux
+brew install argp-standalone haskell-stack protobuf-c util-linux
 ```
 
 
