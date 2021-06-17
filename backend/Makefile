@@ -20,6 +20,13 @@ LFLAGS=-luuid#-latomic -lm
 
 LIBDIR=../lib
 
+UNAME_S := $(shell uname -s)
+ifeq ($(UNAME_S),Darwin)
+	LARGP=-largp
+else
+	LARGP=
+endif
+
 SUBDIRS = failure_detector
 
 all: failure_detector skiplist_test libdb libcomm db_unit_tests queue_unit_tests actor_ring_tests_local actor_ring_tests_remote client server
@@ -97,13 +104,13 @@ skiplist_test: skiplist_test.c skiplist.c
 
 client: client.c libdb libdbclient
 	cc client.c \
-	 $(CFLAGS) \
+	 $(CFLAGS) $(LARGP) \
 	 -L $(LIBDIR) -L/usr/local/opt/util-linux/lib -ldbclient -lremote -lcomm -ldb -lvc -lprotobuf-c -pthread -luuid \
 	 -o client
 
 server: server.c libdb failure_detector
 	cc server.c \
-	 $(CFLAGS) \
+	 $(CFLAGS) $(LARGP) \
 	 -L $(LIBDIR) -L/usr/local/opt/util-linux/lib -lremote -lcomm -ldb -lvc -lprotobuf-c -pthread -luuid \
 	 -o server
 
