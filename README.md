@@ -45,6 +45,13 @@ Install prerequisites
 apt install alex gcc happy haskell-stack libkqueue-dev libprotobuf-c-dev libutf8proc-dev make
 ```
 
+### Mac OS X
+
+```
+brew install haskell-stack protobuf-c util-linux
+```
+
+
 ## Build instructions
 
 To build the project, simply run:
