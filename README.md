@@ -42,7 +42,7 @@ work fairly well.
 ### Debian
 Install prerequisites
 ```
-apt install alex gcc happy haskell-stack libkqueue-dev libutf8proc-dev make
+apt install alex gcc happy haskell-stack libkqueue-dev libprotobuf-c-dev libutf8proc-dev make
 ```
 
 ## Build instructions
