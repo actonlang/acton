@@ -1,4 +1,5 @@
 all:
+	$(MAKE) -C backend
 	$(MAKE) -C compiler install
 	$(MAKE) -C modules
 	$(MAKE) -C builtin
@@ -11,6 +12,7 @@ test:
 
 clean:
 	rm -f actonc
+	$(MAKE) -C backend clean
 	$(MAKE) -C compiler clean
 	$(MAKE) -C modules clean
 	$(MAKE) -C builtin clean
