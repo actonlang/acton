@@ -16,7 +16,7 @@ endif
 CFLAGS:=$(JEM_FLAGS) -Wno-int-to-pointer-cast -Wno-pointer-to-int-cast -g -O0
 LIBS:=$(JEM_LIBS)
 
-LFLAGS=#-luuid#-latomic -lm
+LFLAGS=-luuid#-latomic -lm
 
 LIBDIR=../../lib
 
@@ -27,7 +27,7 @@ vector_clock.o:
 
 db_messages.pb-c.c: db_messages.proto
 	protoc-c --c_out=. db_messages.proto
-	
+
 db_messages.pb-c.o: db_messages.pb-c.c
 	cc db_messages.pb-c.c -c $(LFLAGS) $(CFLAGS)
 
@@ -51,7 +51,7 @@ libremote: db_messages.pb-c.o cells.o db_queries.o fd.o $(LIBDIR)
 
 db_messages_test: db_messages_test.c libremote libvc
 	cc db_messages_test.c \
-		$(CFLAGS) -I ../src -I/usr/local/include \
+		$(CFLAGS) -I ../src -I/usr/local/include -I/usr/include \
 		-L $(LIBDIR) -L/usr/local/lib -L/usr/local/opt/util-linux/lib -lvc -lremote -pthread -lprotobuf-c $(LFLAGS) \
 		$(LIBS) \
 		-o db_messages_test

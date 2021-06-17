@@ -16,11 +16,13 @@ endif
 CFLAGS:=$(JEM_FLAGS) -Wno-int-to-pointer-cast -Wno-pointer-to-int-cast -g -O0
 LIBS:=$(JEM_LIBS)
 
-LFLAGS=#-luuid#-latomic -lm
+LFLAGS=-luuid#-latomic -lm
 
 LIBDIR=../lib
 
 SUBDIRS = failure_detector
+
+all: failure_detector skiplist_test libdb libcomm db_unit_tests queue_unit_tests actor_ring_tests_local actor_ring_tests_remote client server
 
 .PHONY: subdirs $(SUBDIRS)
 
@@ -29,7 +31,6 @@ subdirs: $(SUBDIRS)
 $(SUBDIRS):
 	$(MAKE) -C $@
 
-all: failure_detector skiplist_test libdb libcomm db_unit_tests queue_unit_tests actor_ring_tests_local actor_ring_tests_remote client server
 
 db.o:
 	cc db.c -c -I src $(LFLAGS) $(CFLAGS)
@@ -39,7 +40,7 @@ queue.o:
 
 skiplist.o:
 	cc skiplist.c -c -I src $(LFLAGS) $(CFLAGS)
-	
+
 # vector_clock.o:
 # 	cc failure_detector/vector_clock.c -c -I src $(LFLAGS) $(CFLAGS)
 
@@ -51,7 +52,7 @@ txns.o:
 
 comm.o:
 	cc comm.c -c -I src $(LFLAGS) $(CFLAGS)
-	
+
 client_api.o:
 	cc client_api.c -c -I src $(LFLAGS) $(CFLAGS)
 
@@ -87,13 +88,13 @@ actor_ring_tests_local: actor_ring_tests_local.c libdb
 		-ldb -lvc -lremote -lprotobuf-c $(LFLAGS) -pthread \
 		$(LIBS) \
 		-o actor_ring_tests_local
-		
+
 skiplist_test: skiplist_test.c skiplist.c
 	cc skiplist_test.c skiplist.c \
 		$(CFLAGS) -I ../src \
 		$(LFLAGS) -L/usr/local/opt/util-linux/lib \
 		-o skiplist_test
-		
+
 client: client.c libdb libdbclient
 	cc client.c \
 	 $(CFLAGS) \
@@ -103,7 +104,7 @@ client: client.c libdb libdbclient
 server: server.c libdb failure_detector
 	cc server.c \
 	 $(CFLAGS) \
-	 -L $(LIBDIR) -L/usr/local/opt/util-linux/lib -lremote -lcomm -ldb -lvc -lprotobuf-c -largp -pthread -luuid \
+	 -L $(LIBDIR) -L/usr/local/opt/util-linux/lib -lremote -lcomm -ldb -lvc -lprotobuf-c -pthread -luuid \
 	 -o server
 
 actor_ring_tests_remote: actor_ring_tests_remote.c libdb libdbclient failure_detector
