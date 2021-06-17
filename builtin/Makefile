@@ -18,5 +18,3 @@ minienv.o: minienv.c minienv.h builtin.o
 
 clean:
 	rm -f builtin.o minienv.o
-
-
