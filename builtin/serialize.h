@@ -79,6 +79,6 @@ struct $Hashable$WORD {
     struct $Hashable$WORD$class *$class;
 };
 
-struct $Hashable$WORD$class $Hashable$WORD$methods;
+extern struct $Hashable$WORD$class $Hashable$WORD$methods;
 $Hashable$WORD $Hashable$WORD$new();
-struct $Hashable$WORD *$Hashable$WORD$witness;
+extern struct $Hashable$WORD *$Hashable$WORD$witness;

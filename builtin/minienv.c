@@ -14,6 +14,9 @@
 
 #include "minienv.h"
 
+int kq;
+struct FileDescriptorData fd_data[MAX_FD];
+
 static void $init_FileDescriptorData(int fd) {
   fd_data[fd].kind = nohandler;
   bzero(fd_data[fd].buffer,BUF_SIZE);

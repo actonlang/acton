@@ -20,6 +20,6 @@ $bool $bool$new($value);
 $bool to$bool(long b);
 long from$bool($bool b);
 
-$bool $True, $False;
+extern $bool $True, $False;
 
 $bool $default__bool__($value);

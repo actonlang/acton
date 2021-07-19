@@ -71,8 +71,8 @@ struct FileDescriptorData {
   int bufused;             //        -"-          ; nr of read chars in buffer. Equal to BUF_SIZE except before first read and (possibly) after last read.
 };
 
-struct FileDescriptorData fd_data[MAX_FD];
-int kq;
+extern struct FileDescriptorData fd_data[MAX_FD];
+extern int kq;
 
 void setupConnection (int fd);
 $str $getName(int fd);
