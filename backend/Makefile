@@ -29,7 +29,7 @@ endif
 
 SUBDIRS = failure_detector
 
-all: failure_detector skiplist_test libdb libcomm db_unit_tests queue_unit_tests actor_ring_tests_local actor_ring_tests_remote client server
+all: failure_detector skiplist_test $(LIBDIR)/libcomm.a $(LIBDIR)/libdb.a db_unit_tests queue_unit_tests actor_ring_tests_local actor_ring_tests_remote client server
 
 .PHONY: subdirs $(SUBDIRS)
 
@@ -39,57 +39,56 @@ $(SUBDIRS):
 	$(MAKE) -C $@
 
 
-db.o:
+db.o: db.c
 	cc db.c -c -I src $(LFLAGS) $(CFLAGS)
 
-queue.o:
+queue.o: queue.c
 	cc queue.c -c -I src $(LFLAGS) $(CFLAGS)
 
-skiplist.o:
+skiplist.o: skiplist.c
 	cc skiplist.c -c -I src $(LFLAGS) $(CFLAGS)
 
 # vector_clock.o:
 # 	cc failure_detector/vector_clock.c -c -I src $(LFLAGS) $(CFLAGS)
 
-txn_state.o:
+txn_state.o: txn_state.c
 	cc txn_state.c -c -I src $(LFLAGS) $(CFLAGS)
 
-txns.o:
+txns.o: txns.c
 	cc txns.c -c -I src $(LFLAGS) $(CFLAGS)
 
-comm.o:
+comm.o: comm.c
 	cc comm.c -c -I src $(LFLAGS) $(CFLAGS)
 
 client_api.o:
 	cc client_api.c -c -I src $(LFLAGS) $(CFLAGS)
 
-libdb: txns.o txn_state.o db.o queue.o skiplist.o $(LIBDIR)
-	ar rcs $(LIBDIR)/libdb.a db.o queue.o skiplist.o txn_state.o txns.o
-	ranlib $(LIBDIR)/libdb.a
+$(LIBDIR)/libcomm.a:
+	$(MAKE) -C .. lib/libcomm.a
 
-libcomm: comm.o $(LIBDIR)
-	ar rcs $(LIBDIR)/libcomm.a comm.o
-	ranlib $(LIBDIR)/libcomm.a
+$(LIBDIR)/libdb.a:
+	$(MAKE) -C .. lib/libdb.a
 
-libdbclient: client_api.o failure_detector $(LIBDIR)
-	ar rcs $(LIBDIR)/libdbclient.a client_api.o
-	ranlib $(LIBDIR)/libdbclient.a
+$(LIBDIR)/libdbclient.a:
+	$(MAKE) -C .. lib/libdbclient.a
 
-db_unit_tests: db_unit_tests.c libdb
+.PHONY: $(LIBDIR)/libcomm.a $(LIBDIR)/libdb.a $(LIBDIR)/libdbclient.a
+
+db_unit_tests: db_unit_tests.c $(LIBDIR)/libdb.a
 	cc -std=c11 db_unit_tests.c \
 		$(CFLAGS) -I ../src -L $(LIBDIR) -L/usr/local/opt/util-linux/lib \
 		-ldb -lvc $(LFLAGS) -pthread \
 		$(LIBS) \
 		-o db_unit_tests
 
-queue_unit_tests: queue_unit_tests.c libdb
+queue_unit_tests: queue_unit_tests.c $(LIBDIR)/libdb.a
 	cc queue_unit_tests.c \
 		$(CFLAGS) -I ../src -L $(LIBDIR) -L/usr/local/opt/util-linux/lib \
 		-ldb -lvc -lremote -lprotobuf-c $(LFLAGS) -pthread \
 		$(LIBS) \
 		-o queue_unit_tests
 
-actor_ring_tests_local: actor_ring_tests_local.c libdb
+actor_ring_tests_local: actor_ring_tests_local.c $(LIBDIR)/libdb.a
 	cc actor_ring_tests_local.c \
 		$(CFLAGS) -I ../src -L $(LIBDIR) -L/usr/local/opt/util-linux/lib \
 		-ldb -lvc -lremote -lprotobuf-c $(LFLAGS) -pthread \
@@ -102,26 +101,23 @@ skiplist_test: skiplist_test.c skiplist.c
 		$(LFLAGS) -L/usr/local/opt/util-linux/lib \
 		-o skiplist_test
 
-client: client.c libdb libdbclient
+client: client.c $(LIBDIR)/libdb.a $(LIBDIR)/libdbclient.a
 	cc client.c \
 	 $(CFLAGS) $(LARGP) \
 	 -L $(LIBDIR) -L/usr/local/opt/util-linux/lib -ldbclient -lremote -lcomm -ldb -lvc -lprotobuf-c -pthread -luuid \
 	 -o client
 
-server: server.c libdb failure_detector
+server: server.c $(LIBDIR)/libdb.a failure_detector
 	cc server.c \
 	 $(CFLAGS) $(LARGP) \
 	 -L $(LIBDIR) -L/usr/local/opt/util-linux/lib -lremote -lcomm -ldb -lvc -lprotobuf-c -pthread -luuid \
 	 -o server
 
-actor_ring_tests_remote: actor_ring_tests_remote.c libdb libdbclient failure_detector
+actor_ring_tests_remote: actor_ring_tests_remote.c $(LIBDIR)/libdb.a $(LIBDIR)/libdbclient.a failure_detector
 	cc actor_ring_tests_remote.c \
 	 $(CFLAGS) \
 	 -L $(LIBDIR) -L/usr/local/opt/util-linux/lib -ldbclient -lremote -lcomm -ldb -lvc -lprotobuf-c -pthread -luuid \
 	 -o actor_ring_tests_remote
-
-$(LIBDIR):
-	mkdir -p $(LIBDIR)
 
 clean:
 	rm -rf *.o failure_detector/*.o $(LIBDIR)/libdb.a $(LIBDIR)/libcomm.a $(LIBDIR)/libdbclient.a skiplist_test db_unit_tests queue_unit_tests actor_ring_tests_local actor_ring_tests_remote server client failure_detector/db_messages_test
