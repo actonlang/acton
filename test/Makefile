@@ -1,23 +1,14 @@
 ACTONC=../actonc
-EXAMPLES=abs average counter files sieve sumto worker overlap
-TESTS=fail1 segfault quotes-in-triquotes triquotes-across-lines string-concat
+EXAMPLES=abs average counter files sieve sumto overlap
+TESTS=fail1 for-break if-return segfault quotes-in-triquotes triquotes-across-lines string-concat
 
-test:
-	$(MAKE) abs
-	$(MAKE) average
-	$(MAKE) counter
-	$(MAKE) sieve
-	$(MAKE) sumto
-	$(MAKE) files
-	$(MAKE) overlap
-	@echo TODO: fix below entries
-	#$(MAKE) fail1
-	#$(MAKE) quotes-in-triquotes
-	#$(MAKE) triquotes-across-lines
-	#$(MAKE) string-concat
-	#$(MAKE) worker # this never exits, shouldn't acton exit when the root actor exits?
-	#$(MAKE) ifisnone
-	#$(MAKE) segfault
+DISABLED_TESTS=fail1 for-break if-return ifisnone quotes-in-triquotes triquotes-across-lines string-concat segfault
+
+ALL_TESTS=$(EXAMPLES) $(TESTS)
+
+RUN_TESTS=$(filter-out $(DISABLED_TESTS),$(ALL_TESTS))
+
+test: $(RUN_TESTS)
 
 test-examples: $(EXAMPLES)
 
@@ -32,4 +23,4 @@ $(TESTS):
 ifisnone:
 	$(ACTONC) ifisnone.act
 
-.PHONY: test test-examples $(TESTS)
+.PHONY: test test-examples $(TESTS) $(EXAMPLES)

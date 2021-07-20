@@ -1,0 +1,5 @@
+actor main(env):
+    var a = 1
+    def foo():
+        if a > 0:
+            return
