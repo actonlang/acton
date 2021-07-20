@@ -1,0 +1,13 @@
+actor Thing():
+    def foo():
+        return 1
+
+actor main(env):
+    var thingies = [Thing()]
+
+    for thing in thingies:
+        bar = thing.foo()
+        if 1 > 0:
+            break
+
+    env.exit(0)
