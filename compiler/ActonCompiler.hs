@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP #-}
 -- Copyright (C) 2019-2021 Data Ductus AB
 --
 -- Redistribution and use in source and binary forms, with or without modification, are permitted provided that the following conditions are met:
@@ -302,7 +303,7 @@ runRestPasses args paths env0 parsed = do
                               hFile = outbase ++ ".h"
                               oFile = joinPath [libDir,n++".o"]
                               aFile = joinPath [libDir,"libActon.a"]
-                              gccCmd = "gcc -g -c -I /usr/include/kqueue -I" ++ sysPath paths ++ " -o" ++ oFile ++ " " ++ cFile
+                              gccCmd = "gcc -g -c -I/usr/include/kqueue -I" ++ sysPath paths ++ " -o" ++ oFile ++ " " ++ cFile
                               arCmd = "ar r " ++ aFile ++ " " ++ oFile
                           writeFile hFile h
                           writeFile cFile c
@@ -343,7 +344,15 @@ buildExecutable env args paths task
         (sc,_)              = Acton.QuickType.schemaOf env (A.eQVar qn)
         outbase             = sysFile paths mn
         rootFile            = outbase ++ ".root.c"
-        libFiles            = " -L " ++ joinPath [sysPath paths,"lib"] ++ " -lutf8proc -ldbclient -lremote -lcomm -ldb -lvc -lprotobuf-c -lActon "
+        libFilesBase        = " -L" ++ joinPath [sysPath paths,"lib"] ++ " -ldbclient -lremote -lcomm -ldb -lvc -lprotobuf-c -lActon -lm -lpthread -lutf8proc"
+#if defined(linux_HOST_OS)
+        libFiles            = libFilesBase ++  " -lkqueue"
+#elif defined(darwin_HOST_OS)
+        libFiles            = libFilesBase
+-- Do we support anything else? Do a default clause for now...
+#else
+        libFiles            = libFilesBase
+#endif
         binFile             = dropExtension srcbase
         Just srcbase        = srcFile paths mn
-        gccCmd              = "gcc -g -I /usr/include/kqueue -I" ++ sysPath paths ++ libFiles ++ rootFile ++ " -o" ++ binFile
+        gccCmd              = "gcc -g -I/usr/include/kqueue -I" ++ sysPath paths ++ " " ++ rootFile ++ " -o" ++ binFile ++ libFiles
