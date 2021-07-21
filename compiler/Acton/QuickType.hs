@@ -40,7 +40,7 @@ typecast t t' e
 typeOf env x                        = fst $ qType env accept x
 
 typeInstOf env ts e                 = t
-  where (t0, t, e')                 = qInst env accept ts e
+  where (_, t, e')                  = qInst env accept ts e
 
 schemaOf env e                      = (sc, dec)
   where (sc, dec, e')               = qSchema env accept e
@@ -132,19 +132,21 @@ instance QType Expr where
     qType env f (Await l e)         = case t of
                                         TCon _ (TC c [t]) | c == qnMsg -> (t, Await l e')
       where (t, e')                 = qType env f e
-    qType env f (BinOp l e1 Or e2)  = (tBool, BinOp l (qMatch f t1 tBool e1) Or (qMatch f t2 tBool e2'))
+    qType env f (BinOp l e1 Or e2)  = (t, BinOp l (qMatch f t1 t e1') Or (qMatch f t2 t e2'))
       where (t1, e1')               = qType env f e1
             (t2, e2')               = qType env f e2
-    qType env f (BinOp l e1 And e2) = (tBool, BinOp l (qMatch f t1 tBool e1) And (qMatch f t2 tBool e2'))
+            t                       = upbound env [t1,t2]
+    qType env f (BinOp l e1 And e2) = (t, BinOp l (qMatch f t1 t e1') And (qMatch f t2 t e2'))
       where (t1, e1')               = qType env f e1
             (t2, e2')               = qType env f e2
-    qType env f (UnOp l Not e)      = (tBool, UnOp l Not (qMatch f t tBool e'))
-      where (t, e')                 = qType env f e
-    qType env f (Cond l e1 e e2)    = (t', Cond l (qMatch f t1 t' e1') (qMatch f t tBool e') (qMatch f t2 t' e2'))
+            t                       = upbound env [t1,t2]
+    qType env f (UnOp l Not e)      = (tBool, UnOp l Not e')
+      where (_, e')                 = qType env f e
+    qType env f (Cond l e1 e e2)    = (t', Cond l (qMatch f t1 t' e1') e' (qMatch f t2 t' e2'))
       where (t1, e1')               = qType env f e1
-            (t, e')                 = qType env f e
+            (_, e')                 = qType env f e
             (t2, e2')               = qType env f e2
-            t'                      = maxtype env [t1,t2]
+            t'                      = upbound env [t1,t2]
     qType env f (IsInstance l e c)  = (tBool, IsInstance l e' c)
       where (t, e')                 = qType env f e
     qType env f (DotI l e i)        = case t of
@@ -167,7 +169,7 @@ instance QType Expr where
     qType env f (Tuple l ps ks)     = (TTuple NoLoc p k, Tuple l ps' ks')
       where (p, ps')                = qType env f ps
             (k, ks')                = qType env f ks
-    qType env f (List l es)         = (tList (maxtype env ts), List l es')
+    qType env f (List l es)         = (tList (upbound env ts), List l es')
       where (ts, es')               = unzip $ map (qType env f) es
     qType env f (ListComp l e c)    = (tList t, ListComp l e' c')
       where (_, c')                 = qType env f c
@@ -238,7 +240,7 @@ instance QType Comp where
       where (t, e')                 = qType env f e
             (_, c')                 = qType env1 f c
             env1                    = define (envOf p) env
-    qType env f (CompIf l e c)      = (tNone, CompIf l (qMatch f t tBool e') c')
+    qType env f (CompIf l e c)      = (tNone, CompIf l e' c')
       where (t, e')                 = qType env f e
             (_, c')                 = qType env f c
     qType env f NoComp              = (tNone, NoComp)
@@ -348,12 +350,7 @@ instance EnvOf Assoc where
     envOf _                         = []
 
 
-
-maxtype env (t:ts)                          = maxt t ts
-  where maxt top (t:ts)
-          | castable env t top              = maxt top ts
-          | otherwise                       = maxt t ts
-        maxt top []                         = top
-maxtype env []                              = tWild
+upbound env (t:ts)                  = foldr (lub env) t ts
+upbound env []                      = tWild
 
 

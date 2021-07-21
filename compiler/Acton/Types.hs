@@ -307,7 +307,7 @@ instance InfEnv Stmt where
             method BAndA                = iandKW
             method MMultA               = imatmulKW
             
-    infEnv env (Assert l e1 e2)         = do (cs1,_,_,e1') <- inferBool env e1
+    infEnv env (Assert l e1 e2)         = do (cs1,_,_,_,e1') <- inferTest env e1
                                              (cs2,e2') <- inferSub env tStr e2
                                              return (cs1++cs2, [], Assert l e1' e2')
     infEnv env s@(Pass l)               = return ([], [], s)
@@ -337,7 +337,7 @@ instance InfEnv Stmt where
                                              (cs0,te,els') <- infLiveEnv env els
                                              (cs1,te1) <- commonTEnv env $ catMaybes (te:tes)
                                              return (cs0++cs1++concat css, te1, If l bs' els')
-    infEnv env (While l e b els)        = do (cs1,env',s,e') <- inferBool env e
+    infEnv env (While l e b els)        = do (cs1,env',s,_,e') <- inferTest env e
                                              (cs2,te1,b') <- infSuiteEnv env' b
                                              (cs3,te2,els') <- infSuiteEnv env els
                                              return (cs1++cs2++cs3, [], While l e' (termsubst s b') els')
@@ -937,7 +937,7 @@ noDefaultsK k                           = k
 --------------------------------------------------------------------------------------------------------------------------
 
 instance InfEnv Branch where
-    infEnv env (Branch e b)             = do (cs1,env',s,e') <- inferBool env e
+    infEnv env (Branch e b)             = do (cs1,env',s,_,e') <- inferTest env e
                                              (cs2,te,b') <- infEnv env' b
                                              return (cs1++cs2, te, Branch e' (termsubst s b'))
 
@@ -1039,7 +1039,7 @@ instance Infer Expr where
                                              (cs,e') <- inferSub env (tNDArray t) e
                                              return (concat css++cs, (tNDArray t), eCall (eDot e' ndgetsliceKW) [List l (map Elem es)])
     infer env (Cond l e1 e e2)          = do t0 <- newTVar
-                                             (cs0,env',s,e') <- inferBool env e
+                                             (cs0,env',s,_,e') <- inferTest env e
                                              (cs1,e1') <- inferSub env' t0 e1
                                              (cs2,e2') <- inferSub env t0 e2
                                              return (cs0++cs1++cs2, t0, Cond l (termsubst s e1') e' e2')
@@ -1086,10 +1086,9 @@ instance Infer Expr where
               | t == '%'                = format s
             conv (c:s)                  = err l ("Bad conversion character: " ++ [c])
             conv []                     = err l ("Bad conversion string")
-    infer env (BinOp l e1 op e2)
-      | op `elem` [Or,And]              = do (cs1,env1,s1,e1') <- inferBool env e1
-                                             (cs2,env2,s2,e2') <- inferBool env1 e2
-                                             return (cs1++cs2, tBool, BinOp l e1' op (termsubst s1 e2'))
+    infer env e@(BinOp l e1 op e2)
+      | op `elem` [Or,And]              = do (cs,_,_,t,e') <- inferTest env e
+                                             return (cs, t, e')
       | op == Mult                      = do t <- newTVar
                                              t' <- newTVar
                                              (cs1,e1') <- inferSub env t e1
@@ -1136,7 +1135,7 @@ instance Infer Expr where
             rtype ShiftR t              = tInt
             rtype _ t                   = t
     infer env (UnOp l op e)
-      | op == Not                       = do (cs,_,_,e') <- inferBool env e
+      | op == Not                       = do (cs,_,_,_,e') <- inferTest env e
                                              return (cs, tBool, UnOp l op e')
       | otherwise                       = do (cs,t,e') <- infer env e
                                              w <- newWitness
@@ -1379,31 +1378,40 @@ infAssocs env (StarStar e : as) tk tv   = do t1 <- newTVar
                                                      cs1++cs2, Star e' : as')                       -- TODO: translate using primitive Iterator
 
 
-inferBool env (BinOp l e1 And e2)       = do (cs1,env1,s1,e1') <- inferBool env e1
-                                             (cs2,env2,s2,e2') <- inferBool env1 e2
-                                             return (cs1++cs2, env2, s1++s2, BinOp l e1' And (termsubst s1 e2'))
-inferBool env (BinOp l e1 Or e2)        = do (cs1,_,_,e1') <- inferBool env e1
-                                             (cs2,_,_,e2') <- inferBool env e2
-                                             return (cs1++cs2, env, [], BinOp l e1' Or e2')
-inferBool env (UnOp l Not e)            = do (cs,_,_,e') <- inferBool env e
-                                             return (cs, env, [], UnOp l Not e')
-inferBool env (CompOp l e1 [OpArg op e2])
+inferTest env (BinOp l e1 And e2)       = do (cs1,env1,s1,t1,e1') <- inferTest env e1
+                                             (cs2,env2,s2,t2,e2') <- inferTest env1 e2
+                                             t <- newTVar
+                                             w1 <- newWitness
+                                             w2 <- newWitness
+                                             return (Sub w1 t1 t : Sub w2 t2 t :
+                                                     cs1++cs2, env2, s1++s2, t, BinOp l (eCall (eVar w1) [e1']) And (eCall (eVar w2) [termsubst s1 e2']))
+inferTest env (BinOp l e1 Or e2)        = do (cs1,_,_,t1,e1') <- inferTest env e1
+                                             (cs2,_,_,t2,e2') <- inferTest env e2
+                                             t <- newTVar
+                                             w1 <- newWitness
+                                             w2 <- newWitness
+                                             return (Sub w1 t1 t : Sub w2 t2 t :
+                                                     cs1++cs2, env, [], t, BinOp l (eCall (eVar w1) [e1']) Or (eCall (eVar w2) [e2']))
+inferTest env (UnOp l Not e)            = do (cs,_,_,_,e') <- inferTest env e
+                                             return (cs, env, [], tBool, UnOp l Not e')
+inferTest env (CompOp l e1 [OpArg op e2])
   | Just n <- noneTest e1 op e2         = do t <- newTVar
                                              (cs1,e') <- inferSub env (tOpt t) (eVar n)
-                                             return (cs1, define [(n,NVar t)] env, sCast n (tOpt t) t, eCall (tApp (eQVar primISNOTNONE) [t]) [e'])
-inferBool env (IsInstance l e@(Var _ (NoQ n)) c)
+                                             return (cs1, define [(n,NVar t)] env, sCast n (tOpt t) t, tBool, eCall (tApp (eQVar primISNOTNONE) [t]) [e'])
+inferTest env (IsInstance l e@(Var _ (NoQ n)) c)
                                         = case findQName c env of
                                              NClass q _ _ -> do
                                                 (cs,t,e') <- infer env e
                                                 ts <- newTVars [ tvkind v | v <- qbound q ]
                                                 let tc = tCon (TC c ts)
                                                 return (Cast tc t :
-                                                        cs, define [(n,NVar tc)] env, sCast n t tc, IsInstance l e' c)
+                                                        cs, define [(n,NVar tc)] env, sCast n t tc, tBool, IsInstance l e' c)
                                              _ -> nameUnexpected c
-inferBool env (Paren l e)               = do (cs,env',s,e') <- inferBool env e
-                                             return (cs, env', s, Paren l e')
-inferBool env e                         = do (cs,t,e') <- infer env e
-                                             return (cs, env, [], eCall (eDot e' boolKW) [])
+inferTest env (Paren l e)               = do (cs,env',s,t,e') <- inferTest env e
+                                             return (cs, env', s, t, Paren l e')
+inferTest env e                         = do (cs,t,e') <- infer env e
+                                             return (cs, env, [], t, e')
+
 
 noneTest (Var _ (NoQ n)) IsNot None{}   = Just n
 noneTest (Var _ (NoQ n)) NEq None{}     = Just n
@@ -1502,7 +1510,7 @@ instance Infer KwdArg where
 
 instance InfEnv Comp where
     infEnv env NoComp                   = return ([], [], NoComp)
-    infEnv env (CompIf l e c)           = do (cs1,env',s,e') <- inferBool env e
+    infEnv env (CompIf l e c)           = do (cs1,env',s,_,e') <- inferTest env e
                                              (cs2,te,c') <- infEnv env' c
                                              return (cs1++cs2, te, CompIf l e' (termsubst s c'))
     infEnv env (CompFor l p e c)        = do (cs1,te1,t1,p') <- infEnvT (reserve (bound p) env) p
