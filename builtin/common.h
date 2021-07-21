@@ -25,9 +25,9 @@ void $printobj(char *mess,$WORD obj);
                                $dict_setitem($state->done,($Hashable)$Hashable$int$witness,to$int($state->row_no-1),$t); \
                                $t; })
 
-#define $AND(a, b)            ((a)->val ? (b) : $False)
+#define $AND(T, a, b)       ({ T $a = (a); $a->$class->__bool__($a)->val ? (b) : $a; })
 
-#define $OR(a, b)             ((a)->val ? $True : (b))
+#define $OR(a, b)           ({ T $a = (a); $a->$class->__bool__($a)->val ? $a : (b); })
 
 #define $NOT(a)               ((a)->val ? $False : $True)
 

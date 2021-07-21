@@ -789,107 +789,17 @@ instwildcon env c                       = case tconKind (tcname c) env of
                                             KFun ks _ -> TC (tcname c) <$> sequence [ instwild env k t | (k,t) <- ks `zip` tcargs c ]
                                             _ -> return $ TC (tcname c) []
 
-----------------------------------------------------------------------------------------------------------------------
--- GLB
-----------------------------------------------------------------------------------------------------------------------
 
-mkGLB                                   :: Env -> (TVar,[Type]) -> TypeM (TVar,Type)
 mkGLB env (v,ts)                        = do t <- instwild env KType $ foldr1 (glb env) ts
                                              --traceM ("   glb " ++ prstrs ts ++ " = " ++ prstr t)
                                              return (v, t)
 
-glb env (TWild _) t2                    = t2
-glb env t1 (TWild _)                    = t1
-
-glb env TVar{} _                        = tWild        -- (Might occur in recursive calls)
-glb env _ TVar{}                        = tWild        -- (Might occur in recursive calls)
-
-glb env (TCon _ c1) (TCon _ c2)
-  | tcname c1 == tcname c2              = tCon c1
-  | hasAncestor env c1 c2               = tCon c1
-  | hasAncestor env c2 c1               = tCon c2
-
-glb env (TFun _ e1 p1 k1 t1) (TFun _ e2 p2 k2 t2)                                           -- tWilds instead of glbs enable the special
-                                        = tFun tWild (lub env p1 p2) (lub env k1 k2) tWild  -- async rules in sub and cast
-glb env (TTuple _ p1 k1) (TTuple _ p2 k2)
-                                        = tTuple (glb env p1 p2) (glb env k1 k2)
-
-glb env (TOpt _ t1) (TOpt _ t2)         = tOpt (glb env t1 t2)
-glb env (TNone _) t2                    = tNone
-glb env t1 (TNone _)                    = tNone
-glb env (TOpt _ t1) t2                  = glb env t1 t2
-glb env t1 (TOpt _ t2)                  = glb env t1 t2
-
-glb env t1@(TFX _ fx1) t2@(TFX _ fx2)   = tTFX (glfx fx1 fx2)
-  where glfx FXPure   _                 = FXPure
-        glfx _        FXPure            = FXPure
-        glfx FXMut    _                 = FXMut
-        glfx _        FXMut             = FXMut
-        glfx FXAction FXAction          = FXAction
-
-glb env (TNil _ k1) (TNil _ k2)
-  | k1 == k2                            = tNil k1
-glb env (TRow _ k n t1 r1) r
-  | Just (t2,r2) <- findInRow n r       = tRow k n (glb env t1 t2) (glb env r1 r2)
-
-glb env t1 t2                           = -- noGLB t1 t1
-                                          error ("No common subtype: " ++ prstr t1 ++ " and " ++ prstr t2)
-    
-noGLB t1 t2                             = tyerr t1 ("No common subtype: " ++ prstr t2)
-
-
-
-----------------------------------------------------------------------------------------------------------------------
--- LUB
-----------------------------------------------------------------------------------------------------------------------
 
 mkLUB env (v,ts)                        = do --traceM ("   lub " ++ prstrs ts ++ " ...")
                                              t <- instwild env KType $ foldr1 (lub env) ts
                                              --traceM ("   lub " ++ prstrs ts ++ " = " ++ prstr t)
                                              return (v, t)
 
-lub env (TWild _) t2                    = t2
-lub env t1 (TWild _)                    = t1
-
-lub env TVar{} _                        = tWild        -- (Might occur in recursive calls)
-lub env _ TVar{}                        = tWild        -- (Might occur in recursive calls)
-
-lub env (TCon _ c1) (TCon _ c2)
-  | tcname c1 == tcname c2              = tCon c1
-  | hasAncestor env c1 c2               = tCon c2
-  | hasAncestor env c2 c1               = tCon c1
-  | not $ null common                   = tCon $ head common
-  where common                          = commonAncestors env c1 c2
-
-lub env (TFun _ e1 p1 k1 t1) (TFun _ e2 p2 k2 t2)
-                                        = tFun (lub env e1 e2) (glb env p1 p2) (glb env k1 k2) (lub env t1 t2)
-lub env (TTuple _ p1 k1) (TTuple _ p2 k2)
-                                        = tTuple (lub env p1 p2) (lub env k1 k2)
-
-lub env (TOpt _ t1) (TOpt _ t2)         = tOpt (lub env t1 t2)
-lub env (TNone _) t2@TOpt{}             = t2
-lub env t1@TOpt{} (TNone _)             = t1
-lub env (TNone _) t2                    = tOpt t2
-lub env t1 (TNone _)                    = tOpt t1
-lub env (TOpt _ t1) t2                  = tOpt $ lub env t1 t2
-lub env t1 (TOpt _ t2)                  = tOpt $ lub env t1 t2
-
-lub env t1@(TFX _ fx1) t2@(TFX _ fx2)   = tTFX (lufx fx1 fx2)
-  where lufx FXAction _                 = FXAction
-        lufx _        FXAction          = FXAction
-        lufx FXMut    _                 = FXMut
-        lufx _        FXMut             = FXMut
-        lufx FXPure   FXPure            = FXPure
-
-lub env (TNil _ k1) (TNil _ k2)
-  | k1 == k2                            = tNil k1
-lub env (TRow _ k n t1 r1) r
-  | Just (t2,r2) <- findInRow n r       = tRow k n (lub env t1 t2) (lub env r1 r2)
-
-lub env t1 t2                           = -- noLUB t1 t2
-                                          error ("No common supertype: " ++ prstr t1 ++ " and " ++ prstr t2)
-
-noLUB t1 t2                             = tyerr t1 ("No common supertype: " ++ prstr t2)
 
 ----------------------------------------------------------------------------------------------------------------------
 -- Improvement

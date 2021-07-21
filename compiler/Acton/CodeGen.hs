@@ -425,13 +425,13 @@ instance Gen Stmt where
     gen env (Break _)               = text "break" <> semi
     gen env (Continue _)            = text "continue" <> semi
     gen env (If _ (b:bs) b2)        = genBranch env "if" b $+$ vmap (genBranch env "else if") bs $+$ genElse env b2
-    gen env (While _ e b [])        = (text "while" <+> parens (genExp env tBool e <> text "->val") <+> char '{') $+$ nest 4 (genSuite env b) $+$ char '}'
+    gen env (While _ e b [])        = (text "while" <+> parens (genBool env e <> text "->val") <+> char '{') $+$ nest 4 (genSuite env b) $+$ char '}'
     gen env (Signature _ ns sc _)
       | TFun{} <- sctype sc         = vcat [ funsig env n (sctype sc) <> semi | n <- ns ]
       | otherwise                   = vcat [ varsig env n (sctype sc) <> semi | n <- ns ]
     gen env _                       = empty
 
-genBranch env kw (Branch e b)       = (text kw <+> parens (genExp env tBool e <> text "->val") <+> char '{') $+$ nest 4 (genSuite env b) $+$ char '}'
+genBranch env kw (Branch e b)       = (text kw <+> parens (genBool env e <> text "->val") <+> char '{') $+$ nest 4 (genSuite env b) $+$ char '}'
 
 genElse env []                      = empty
 genElse env b                       = (text "else" <+> char '{') $+$ nest 4 (genSuite env b) $+$ char '}'
@@ -592,8 +592,8 @@ adjust TNone{} t' e                 = e
 adjust t t'@TVar{} e                = e
 adjust (TCon _ c) (TCon _ c') e
   | tcname c == tcname c'           = e
-adjust TFun{} _ e                   = e
-adjust _ TFun{} e                   = e
+--adjust TFun{} _ e                   = e
+--adjust _ TFun{} e                   = e
 adjust t t' e                       = typecast t t' e
 
 genExp env t' e                     = gen env (adjust t t' e')
@@ -645,38 +645,16 @@ instance Gen Expr where
     gen env (BinOp _ e1 And e2)     = gen env primAND <> parens (gen env e1 <> comma <+> gen env e2)
     gen env (BinOp _ e1 Or e2)      = gen env primOR <> parens (gen env e1 <> comma <+> gen env e2)
     gen env (UnOp _ Not e)          = gen env primNOT <> parens (gen env e)
-    gen env (Cond _ e1 e e2)        = parens (parens (gen env e) <> text "->val" <+> text "?" <+> gen env e1 <+> text ":" <+> genPrec env 1 e2)
---    gen env e@BinOp{}               = genPrec env 0 e
---    gen env e@UnOp{}                = genPrec env 0 e
---    gen env e@Cond{}                = genPrec env 0 e
+    gen env (Cond _ e1 e e2)        = parens (parens (genBool env e) <> text "->val" <+> text "?" <+> gen env e1 <+> text ":" <+> gen env e2)
 
 genStr env s                        = doubleQuotes $ text $ tail $ init $ concat $ sval s
+
+genBool env e                       = genExp env tBool e
+  where t                           = typeOf env e
 
 nargs                               :: PosArg -> Int
 nargs PosNil                        = 0
 nargs (PosArg _ p)                  = 1 + nargs p
-
-{-
-We assign precedences and associativity to remaining operators as follows
-
-   Not   4  ---
-   And   3  left
-   Or    2  left
-   ?:    1  right
-
-Note that the expression between ? and : in the ternary conditional operator is parsed as if it was parenthesized, 
-so we never print parentheses around it. The remaining binary operator _ ?: _ has lower precedence than the other 
-boolean operators and associates to the right.
-
-We never need to put unary negated expressions in parentheses, since all higher precedence operators have been 
-eliminated in previous passes.
--}
-
-genPrec env _ (UnOp _ Not e)            = text "!" <> genPrec env 4 e
-genPrec env n e@(BinOp _ e1 And e2)     = parensIf (n > 3) (genPrec env 3 e1 <+> text "&&&&&" <+> genPrec env 4 e2)
-genPrec env n e@(BinOp _ e1 Or e2)      = parensIf (n > 2) (genPrec env 2 e1 <+> text "||" <+> genPrec env 3 e2)
-genPrec env n (Cond _ e1 e e2)          = parensIf (n > 1) (parens (genPrec env 2 e) <> text "->val" <+> text "?" <+> gen env e1 <+> text ":" <+> genPrec env 1 e2)
-genPrec env _ e                         = gen env e
 
 instance Gen Elem where
     gen env (Elem e)                = gen env e

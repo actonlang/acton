@@ -11,7 +11,7 @@
 -- THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 --
 
-{-# LANGUAGE FlexibleInstances, DeriveGeneric #-}
+{-# LANGUAGE FlexibleInstances, FlexibleContexts, DeriveGeneric #-}
 module Acton.Env where
 
 import qualified Control.Exception
@@ -856,6 +856,97 @@ castable env t1 t2@(TVar _ tv)              = False
 castable env t1 (TOpt _ t2)                 = castable env t1 t2
 
 castable env t1 t2                          = False
+
+----------------------------------------------------------------------------------------------------------------------
+-- GLB
+----------------------------------------------------------------------------------------------------------------------
+
+glb env (TWild _) t2                    = t2
+glb env t1 (TWild _)                    = t1
+
+glb env t1@TVar{} t2@TVar{}
+  | t1 == t2                            = t1
+glb env TVar{} _                        = tWild
+glb env _ TVar{}                        = tWild
+
+glb env (TCon _ c1) (TCon _ c2)
+  | tcname c1 == tcname c2              = tCon c1
+  | hasAncestor env c1 c2               = tCon c1
+  | hasAncestor env c2 c1               = tCon c2
+
+glb env (TFun _ e1 p1 k1 t1) (TFun _ e2 p2 k2 t2)
+                                        = tFun (glb env e1 e2) (lub env p1 p2) (lub env k1 k2) (glb env t1 t2)
+glb env (TTuple _ p1 k1) (TTuple _ p2 k2)
+                                        = tTuple (glb env p1 p2) (glb env k1 k2)
+
+glb env (TOpt _ t1) (TOpt _ t2)         = tOpt (glb env t1 t2)
+glb env (TNone _) t2                    = tNone
+glb env t1 (TNone _)                    = tNone
+glb env (TOpt _ t1) t2                  = glb env t1 t2
+glb env t1 (TOpt _ t2)                  = glb env t1 t2
+
+glb env t1@(TFX _ fx1) t2@(TFX _ fx2)   = tTFX (glfx fx1 fx2)
+  where glfx FXPure   _                 = FXPure
+        glfx _        FXPure            = FXPure
+        glfx FXMut    _                 = FXMut
+        glfx _        FXMut             = FXMut
+        glfx FXAction FXAction          = FXAction
+
+glb env (TNil _ k1) (TNil _ k2)
+  | k1 == k2                            = tNil k1
+glb env (TRow _ k n t1 r1) r
+  | Just (t2,r2) <- findInRow n r       = tRow k n (glb env t1 t2) (glb env r1 r2)
+
+glb env t1 t2                           = -- tyerr t1 ("No common subtype: " ++ prstr t2)
+                                          error ("No common subtype: " ++ prstr t1 ++ " and " ++ prstr t2)
+    
+
+----------------------------------------------------------------------------------------------------------------------
+-- LUB
+----------------------------------------------------------------------------------------------------------------------
+
+lub env (TWild _) t2                    = t2
+lub env t1 (TWild _)                    = t1
+
+lub env t1@TVar{} t2@TVar{}
+  | t1 == t2                            = t1
+lub env TVar{} _                        = tWild
+lub env _ TVar{}                        = tWild
+
+lub env (TCon _ c1) (TCon _ c2)
+  | tcname c1 == tcname c2              = tCon c1
+  | hasAncestor env c1 c2               = tCon c2
+  | hasAncestor env c2 c1               = tCon c1
+  | not $ null common                   = tCon $ head common
+  where common                          = commonAncestors env c1 c2
+
+lub env (TFun _ e1 p1 k1 t1) (TFun _ e2 p2 k2 t2)
+                                        = tFun (lub env e1 e2) (glb env p1 p2) (glb env k1 k2) (lub env t1 t2)
+lub env (TTuple _ p1 k1) (TTuple _ p2 k2)
+                                        = tTuple (lub env p1 p2) (lub env k1 k2)
+
+lub env (TOpt _ t1) (TOpt _ t2)         = tOpt (lub env t1 t2)
+lub env (TNone _) t2@TOpt{}             = t2
+lub env t1@TOpt{} (TNone _)             = t1
+lub env (TNone _) t2                    = tOpt t2
+lub env t1 (TNone _)                    = tOpt t1
+lub env (TOpt _ t1) t2                  = tOpt $ lub env t1 t2
+lub env t1 (TOpt _ t2)                  = tOpt $ lub env t1 t2
+
+lub env t1@(TFX _ fx1) t2@(TFX _ fx2)   = tTFX (lufx fx1 fx2)
+  where lufx FXAction _                 = FXAction
+        lufx _        FXAction          = FXAction
+        lufx FXMut    _                 = FXMut
+        lufx _        FXMut             = FXMut
+        lufx FXPure   FXPure            = FXPure
+
+lub env (TNil _ k1) (TNil _ k2)
+  | k1 == k2                            = tNil k1
+lub env (TRow _ k n t1 r1) r
+  | Just (t2,r2) <- findInRow n r       = tRow k n (lub env t1 t2) (lub env r1 r2)
+
+lub env t1 t2                           = -- tyerr t1 ("No common supertype: " ++ prstr t2)
+                                          error ("No common supertype: " ++ prstr t1 ++ " and " ++ prstr t2)
 
 
 -- Import handling (local definitions only) ----------------------------------------------
