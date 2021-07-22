@@ -43,6 +43,7 @@ import qualified Data.List
 import System.IO
 import System.Info
 import System.Directory
+import System.Exit
 import System.Process
 import System.FilePath.Posix
 import qualified System.Environment
@@ -322,7 +323,17 @@ runRestPasses args paths env0 parsed = do
                           iff (cgen args) $ do
                               putStrLn gccCmd
                               putStrLn arCmd
-                          createProcess (shell $ gccCmd ++ " && " ++ arCmd) >>= \(_,_,_,hdl) -> waitForProcess hdl
+                          (_,_,_,hdl) <- createProcess (shell $ gccCmd ++ " && " ++ arCmd)
+                          returnCode <- waitForProcess hdl
+                          case returnCode of
+                              ExitSuccess -> return()
+                              ExitFailure _ -> do putStrLn(
+                                                    "ERROR: internal compiler error: the compilation of the generated C code failed" ++
+                                                    "\nNOTE: this is likely a bug in actonc, please report this at:" ++
+                                                    "\nNOTE: https://github.com/actonlang/acton/issues/new?template=ice.md" ++
+                                                    "\nNOTE: acton " ++ getVer ++ " " ++ getVerExtra
+                                                    )
+                                                  System.Exit.exitFailure
 
                       return (env0 `Acton.Env.withModulesFrom` env,iface)
 
@@ -346,7 +357,17 @@ buildExecutable env args paths task
                                       writeFile rootFile c
                                       iff (cgen args) $ do
                                           putStrLn gccCmd
-                                      createProcess (shell gccCmd) >>= \(_,_,_,hdl) -> waitForProcess hdl
+                                      (_,_,_,hdl) <- createProcess (shell gccCmd)
+                                      returnCode <- waitForProcess hdl
+                                      case returnCode of
+                                          ExitSuccess -> return()
+                                          ExitFailure _ -> do putStrLn(
+                                                                "ERROR: internal compiler error: the compilation of the generated C code for the root actor failed" ++
+                                                                "\nNOTE: this is likely a bug in actonc, please report this at:" ++
+                                                                "\nNOTE: https://github.com/actonlang/acton/issues/new?template=ice.md" ++
+                                                                "\nNOTE: acton " ++ getVer ++ " " ++ getVerExtra
+                                                                )
+                                                              System.Exit.exitFailure
                                       return ()
                                   _ ->
                                       error ("********************\nRoot " ++ prstr n ++ " : " ++ prstr sc ++ " is not instantiable")
