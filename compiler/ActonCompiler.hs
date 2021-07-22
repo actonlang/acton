@@ -38,13 +38,16 @@ import Control.Monad
 import Options.Applicative
 import Data.Monoid ((<>))
 import Data.Graph
+import Data.Version (showVersion)
 import qualified Data.List
 import System.IO
+import System.Info
 import System.Directory
 import System.Process
 import System.FilePath.Posix
 import qualified System.Environment
 import qualified System.Exit
+import qualified Paths_acton
 
 data Args       = Args {
                     parse   :: Bool,
@@ -58,6 +61,7 @@ data Args       = Args {
                     hgen    :: Bool,
                     cgen    :: Bool,
                     verbose :: Bool,
+                    version :: Bool,
                     stub    :: Bool,
                     syspath :: String,
                     root    :: String,
@@ -77,6 +81,7 @@ getArgs         = Args
                     <*> switch (long "hgen"    <> help "Show the generated .h header")
                     <*> switch (long "cgen"    <> help "Show the generated .c code")
                     <*> switch (long "verbose" <> help "Print progress info during execution")
+                    <*> switch (long "version" <> help "Show version information")
                     <*> switch (long "stub"    <> help "Stub (.ty) file generation only")
                     <*> strOption (long "path" <> metavar "TARGETDIR" <> value "" <> showDefault)
                     <*> strOption (long "root" <> value "" <> showDefault)
@@ -85,7 +90,14 @@ getArgs         = Args
 descr           = fullDesc <> progDesc "Compile an Acton source file with recompilation of imported modules as needed"
                     <> header "actonc - the Acton compiler"
 
+getVer          = showVersion Paths_acton.version
+getVerExtra     = unwords ["compiled by", compilerName, showVersion compilerVersion, "on", os, arch]
+showVer         = do putStrLn("acton " ++ getVer ++ "\n" ++ getVerExtra)
+
 main            = do args <- execParser (info (getArgs <**> helper) descr)
+                     when (version args) $ do
+                         showVer
+                         System.Exit.exitSuccess
                      paths <- findPaths args
                      when (verbose args) $ do
                          putStrLn ("## sysPath: " ++ sysPath paths)
