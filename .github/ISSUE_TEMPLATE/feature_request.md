@@ -1,5 +1,5 @@
 ---
-name: Feature / Enhancement Request
+name: "\U0001F680 Feature / Enhancement Request"
 about: Suggest a new idea / feature enhancement for Acton.
 labels: enhancement
 ---
