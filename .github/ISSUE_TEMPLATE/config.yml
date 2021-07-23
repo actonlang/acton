@@ -1,0 +1,5 @@
+blank_issues_enabled: true
+contact_links:
+  - name: 🗣 Ask a Question, Discuss
+    url: https://github.com/actonlang/acton/discussions
+    about: Please ask and answer questions about Acton using GitHub discussions.
