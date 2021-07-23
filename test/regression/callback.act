@@ -1,0 +1,15 @@
+actor Other():
+    def foo(cb):
+        print("bar")
+        cb('from the other side')
+
+actor main(env):
+    def callback(cb_arg):
+        print("The callback has been called with argument:", cb_arg)
+
+    def _work():
+        o = Other()
+        o.foo(callback)
+
+    _work()
+    f = env.exit(0)

@@ -1,0 +1,5 @@
+actor main(env):
+    a = "asdf"
+    a += "foo"
+    print(a)
+    env.exit(0)

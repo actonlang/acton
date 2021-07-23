@@ -1,0 +1,11 @@
+# this should be an invalid program - the compiler should prevent us from
+# printing a, which should not have a value? or is it the pythonesque None that
+# is implicitly returned?
+# It currently segfaults
+def foo(bar):
+    print("test")
+
+actor main(env):
+    a = foo("foo")
+    print(a)
+    env.exit(0)
