@@ -1,0 +1,10 @@
+# https://github.com/actonlang/acton/issues/12
+actor Foo():
+    def ping():
+        return "pong"
+
+actor main(env):
+    var actors = [Foo()]
+    for act in actors:
+        act.ping()
+    env.exit(0)

@@ -1,0 +1,5 @@
+actor main(env):
+    if 5-3 != 2:
+        await async env.exit(1)
+
+    await async env.exit(0)

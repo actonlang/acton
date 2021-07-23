@@ -1,0 +1,5 @@
+actor main(env):
+    a = """blargh
+"""
+    print(a)
+    env.exit(0)
