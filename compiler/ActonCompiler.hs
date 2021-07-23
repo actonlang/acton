@@ -38,13 +38,17 @@ import Control.Monad
 import Options.Applicative
 import Data.Monoid ((<>))
 import Data.Graph
+import Data.Version (showVersion)
 import qualified Data.List
 import System.IO
+import System.Info
 import System.Directory
+import System.Exit
 import System.Process
 import System.FilePath.Posix
 import qualified System.Environment
 import qualified System.Exit
+import qualified Paths_acton
 
 data Args       = Args {
                     parse   :: Bool,
@@ -58,6 +62,7 @@ data Args       = Args {
                     hgen    :: Bool,
                     cgen    :: Bool,
                     verbose :: Bool,
+                    version :: Bool,
                     stub    :: Bool,
                     syspath :: String,
                     root    :: String,
@@ -77,6 +82,7 @@ getArgs         = Args
                     <*> switch (long "hgen"    <> help "Show the generated .h header")
                     <*> switch (long "cgen"    <> help "Show the generated .c code")
                     <*> switch (long "verbose" <> help "Print progress info during execution")
+                    <*> switch (long "version" <> help "Show version information")
                     <*> switch (long "stub"    <> help "Stub (.ty) file generation only")
                     <*> strOption (long "path" <> metavar "TARGETDIR" <> value "" <> showDefault)
                     <*> strOption (long "root" <> value "" <> showDefault)
@@ -85,7 +91,14 @@ getArgs         = Args
 descr           = fullDesc <> progDesc "Compile an Acton source file with recompilation of imported modules as needed"
                     <> header "actonc - the Acton compiler"
 
+getVer          = showVersion Paths_acton.version
+getVerExtra     = unwords ["compiled by", compilerName, showVersion compilerVersion, "on", os, arch]
+showVer         = do putStrLn("acton " ++ getVer ++ "\n" ++ getVerExtra)
+
 main            = do args <- execParser (info (getArgs <**> helper) descr)
+                     when (version args) $ do
+                         showVer
+                         System.Exit.exitSuccess
                      paths <- findPaths args
                      when (verbose args) $ do
                          putStrLn ("## sysPath: " ++ sysPath paths)
@@ -310,7 +323,17 @@ runRestPasses args paths env0 parsed = do
                           iff (cgen args) $ do
                               putStrLn gccCmd
                               putStrLn arCmd
-                          createProcess (shell $ gccCmd ++ " && " ++ arCmd) >>= \(_,_,_,hdl) -> waitForProcess hdl
+                          (_,_,_,hdl) <- createProcess (shell $ gccCmd ++ " && " ++ arCmd)
+                          returnCode <- waitForProcess hdl
+                          case returnCode of
+                              ExitSuccess -> return()
+                              ExitFailure _ -> do putStrLn(
+                                                    "ERROR: internal compiler error: the compilation of the generated C code failed" ++
+                                                    "\nNOTE: this is likely a bug in actonc, please report this at:" ++
+                                                    "\nNOTE: https://github.com/actonlang/acton/issues/new?template=ice.md" ++
+                                                    "\nNOTE: acton " ++ getVer ++ " " ++ getVerExtra
+                                                    )
+                                                  System.Exit.exitFailure
 
                       return (env0 `Acton.Env.withModulesFrom` env,iface)
 
@@ -334,7 +357,17 @@ buildExecutable env args paths task
                                       writeFile rootFile c
                                       iff (cgen args) $ do
                                           putStrLn gccCmd
-                                      createProcess (shell gccCmd) >>= \(_,_,_,hdl) -> waitForProcess hdl
+                                      (_,_,_,hdl) <- createProcess (shell gccCmd)
+                                      returnCode <- waitForProcess hdl
+                                      case returnCode of
+                                          ExitSuccess -> return()
+                                          ExitFailure _ -> do putStrLn(
+                                                                "ERROR: internal compiler error: the compilation of the generated C code for the root actor failed" ++
+                                                                "\nNOTE: this is likely a bug in actonc, please report this at:" ++
+                                                                "\nNOTE: https://github.com/actonlang/acton/issues/new?template=ice.md" ++
+                                                                "\nNOTE: acton " ++ getVer ++ " " ++ getVerExtra
+                                                                )
+                                                              System.Exit.exitFailure
                                       return ()
                                   _ ->
                                       error ("********************\nRoot " ++ prstr n ++ " : " ++ prstr sc ++ " is not instantiable")
