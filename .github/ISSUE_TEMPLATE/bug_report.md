@@ -1,5 +1,5 @@
 ---
-name: "\U0001F41E  Bug Report"
+name: "\U0001F41E Bug Report"
 about: Create a bug report for Acton.
 labels: bug
 ---
