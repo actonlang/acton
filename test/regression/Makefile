@@ -10,7 +10,7 @@ TESTS=$(TEST_SOURCES:.act=)
 
 # Here we mark tests as failing, if we expect them to fail. They can fail either
 # during compilation using actonc or at run time.
-FAILING_COMPILATION=for-break if-return ifisnone quotes-in-triquotes rtail triquotes-across-lines
+FAILING_COMPILATION=if-return ifisnone 11-int-float 12-for-actor 20-for-break quotes-in-triquotes rtail triquotes-across-lines
 FAILING_RUNNING=segfault subtract_off_by_one
 ALL_FAILING=$(FAILING_COMPILATION) $(FAILING_RUNNING)
 
@@ -32,5 +32,12 @@ $(FAILING_COMPILATION):
 $(FAILING_RUNNING):
 	$(ACTONC) $@.act --root main
 	! ./$@
+
+13-print-actor-method:
+	$(ACTONC) $@.act --root main
+	@echo "We really should see 2 'pong' messages, but will see 1 due to bug #13"
+	@echo "Since this is a negative test, we check for 1, this can later be changed to 2 when working"
+	./$@
+	./$@ | grep -c pong | grep 1
 
 .PHONY: test test-examples $(TESTS)
