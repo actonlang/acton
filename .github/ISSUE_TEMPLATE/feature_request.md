@@ -1,5 +1,5 @@
 ---
-name: "\U0001F680 Feature / Enhancement Request**
+name: "\U0001F680 Feature / Enhancement Request"
 about: Suggest a new idea / feature enhancement for Acton.
 labels: enhancement
 ---
@@ -13,9 +13,8 @@ labels: enhancement
 ### Motivation
 
 <!--
-  Provide a clear and concise description of what the problem is.
-  Ex. I have an issue when [...]
--->
+  Explain the problem that your proposal is attempting to address
+  -->
 
 ### Alternatives
 <!--
