@@ -10,7 +10,7 @@ Thank you for filing a bug report! 🐛 Please provide a short summary of the bu
 along with any information you feel relevant to replicating the bug.
 -->
 
-**What did you do?**
+### Code / what did you do
 
 I tried this code:
 
@@ -18,7 +18,7 @@ I tried this code:
 <code>
 ```
 
-**What did you expect to happen?**
+### Expected outcome
 
 I expected to see this happen: *explanation*
 
@@ -27,7 +27,7 @@ I expected to see this happen: *explanation*
 ```
 
 
-**What actually happened?**
+### Actual outcome
 
 <!-- Please include the actual, raw output -->
 
