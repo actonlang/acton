@@ -93,12 +93,19 @@ descr           = fullDesc <> progDesc "Compile an Acton source file with recomp
 
 getVer          = showVersion Paths_acton.version
 getVerExtra     = unwords ["compiled by", compilerName, showVersion compilerVersion, "on", os, arch]
-showVer         = do putStrLn("acton " ++ getVer ++ "\n" ++ getVerExtra)
+getCcVer        = do verStr <- readProcess "cc" ["--version"] []
+                     return $ unwords $ take 1 $ lines verStr
+
+showVer verbose = do putStrLn("acton " ++ getVer)
+                     when (verbose) $ do
+                         putStrLn(getVerExtra)
+                         ccVer <- getCcVer
+                         putStrLn("cc: " ++ ccVer)
+                     System.Exit.exitSuccess
 
 main            = do args <- execParser (info (getArgs <**> helper) descr)
                      when (version args) $ do
-                         showVer
-                         System.Exit.exitSuccess
+                         showVer (verbose args)
                      paths <- findPaths args
                      when (verbose args) $ do
                          putStrLn ("## sysPath: " ++ sysPath paths)
@@ -273,6 +280,14 @@ checkUptoDate paths actFile iFile outFiles imps
                                           return (impfileTime < iTime)
                              else error ("********************\nError: cannot find interface file "++impFile)
 
+printIce errMsg = do ccVer <- getCcVer
+                     putStrLn(
+                        "ERROR: internal compiler error: " ++ errMsg ++
+                        "\nNOTE: this is likely a bug in actonc, please report this at:" ++
+                        "\nNOTE: https://github.com/actonlang/acton/issues/new?template=ice.md" ++
+                        "\nNOTE: acton " ++ getVer ++ " " ++ getVerExtra ++
+                        "\nNOTE: cc: " ++ ccVer
+                        )
 
 runRestPasses :: Args -> Paths -> Acton.Env.Env0 -> A.Module -> IO (Acton.Env.Env0, Acton.Env.TEnv)
 runRestPasses args paths env0 parsed = do
@@ -327,12 +342,7 @@ runRestPasses args paths env0 parsed = do
                           returnCode <- waitForProcess hdl
                           case returnCode of
                               ExitSuccess -> return()
-                              ExitFailure _ -> do putStrLn(
-                                                    "ERROR: internal compiler error: the compilation of the generated C code failed" ++
-                                                    "\nNOTE: this is likely a bug in actonc, please report this at:" ++
-                                                    "\nNOTE: https://github.com/actonlang/acton/issues/new?template=ice.md" ++
-                                                    "\nNOTE: acton " ++ getVer ++ " " ++ getVerExtra
-                                                    )
+                              ExitFailure _ -> do printIce "compilation of generated C code failed"
                                                   System.Exit.exitFailure
 
                       return (env0 `Acton.Env.withModulesFrom` env,iface)
@@ -361,12 +371,7 @@ buildExecutable env args paths task
                                       returnCode <- waitForProcess hdl
                                       case returnCode of
                                           ExitSuccess -> return()
-                                          ExitFailure _ -> do putStrLn(
-                                                                "ERROR: internal compiler error: the compilation of the generated C code for the root actor failed" ++
-                                                                "\nNOTE: this is likely a bug in actonc, please report this at:" ++
-                                                                "\nNOTE: https://github.com/actonlang/acton/issues/new?template=ice.md" ++
-                                                                "\nNOTE: acton " ++ getVer ++ " " ++ getVerExtra
-                                                                )
+                                          ExitFailure _ -> do printIce "compilation of generated C code of the root actor failed"
                                                               System.Exit.exitFailure
                                       return ()
                                   _ ->
