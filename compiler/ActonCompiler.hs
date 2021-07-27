@@ -330,9 +330,9 @@ runRestPasses args paths env0 parsed = do
                               cFile = outbase ++ ".c"
                               hFile = outbase ++ ".h"
                               oFile = joinPath [libDir,n++".o"]
-                              aFile = joinPath [libDir,"libActon.a"]
+                              aFile = joinPath [libDir,"libActonProject.a"]
                               gccCmd = "gcc -g -c -I/usr/include/kqueue -I" ++ sysPath paths ++ " -o" ++ oFile ++ " " ++ cFile
-                              arCmd = "ar r " ++ aFile ++ " " ++ oFile
+                              arCmd = "ar rcs " ++ aFile ++ " " ++ oFile
                           writeFile hFile h
                           writeFile cFile c
                           iff (cgen args) $ do
@@ -382,7 +382,7 @@ buildExecutable env args paths task
         (sc,_)              = Acton.QuickType.schemaOf env (A.eQVar qn)
         outbase             = sysFile paths mn
         rootFile            = outbase ++ ".root.c"
-        libFilesBase        = " -L" ++ joinPath [sysPath paths,"lib"] ++ " -ldbclient -lremote -lcomm -ldb -lvc -lprotobuf-c -lActon -lm -lpthread -lutf8proc"
+        libFilesBase        = " -L" ++ joinPath [sysPath paths,"lib"] ++ " -ldbclient -lremote -lcomm -ldb -lvc -lprotobuf-c -lActon -lActonProject -lm -lpthread -lutf8proc"
 #if defined(linux_HOST_OS)
         libFiles            = libFilesBase ++  " -lkqueue"
 #elif defined(darwin_HOST_OS)
