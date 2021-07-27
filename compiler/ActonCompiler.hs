@@ -382,7 +382,7 @@ buildExecutable env args paths task
         (sc,_)              = Acton.QuickType.schemaOf env (A.eQVar qn)
         outbase             = sysFile paths mn
         rootFile            = outbase ++ ".root.c"
-        libFilesBase        = " -L" ++ joinPath [sysPath paths,"lib"] ++ " -ldbclient -lremote -lcomm -ldb -lvc -lprotobuf-c -lActonProject -lActon -lm -lpthread -lutf8proc"
+        libFilesBase        = " -L" ++ joinPath [sysPath paths,"lib"] ++ " -lActonProject -lActon -ldbclient -lremote -luuid -lcomm -ldb -lprotobuf-c -lutf8proc -lvc -lpthread -lm"
 #if defined(linux_HOST_OS)
         libFiles            = libFilesBase ++  " -lkqueue"
 #elif defined(darwin_HOST_OS)
