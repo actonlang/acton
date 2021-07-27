@@ -382,11 +382,11 @@ buildExecutable env args paths task
         (sc,_)              = Acton.QuickType.schemaOf env (A.eQVar qn)
         outbase             = sysFile paths mn
         rootFile            = outbase ++ ".root.c"
-        libFilesBase        = " -L" ++ joinPath [sysPath paths,"lib"] ++ " -lActonProject -lActon -ldbclient -lremote -luuid -lcomm -ldb -lprotobuf-c -lutf8proc -lvc -lpthread -lm"
+        libFilesBase        = " -L" ++ joinPath [sysPath paths,"lib"] ++ " -lActonProject -lActon -ldbclient -lremote -luuid -lcomm -ldb -lvc -lprotobuf-c -lutf8proc -lpthread -lm"
 #if defined(linux_HOST_OS)
-        libFiles            = libFilesBase ++  " -lkqueue"
+        libFiles            = libFilesBase ++ " -lkqueue"
 #elif defined(darwin_HOST_OS)
-        libFiles            = libFilesBase
+        libFiles            = libFilesBase ++ " -L/usr/local/opt/util-linux/lib "
 -- Do we support anything else? Do a default clause for now...
 #else
         libFiles            = libFilesBase
