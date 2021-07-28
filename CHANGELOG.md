@@ -6,6 +6,10 @@
 - `--version --verbose` will print verbose version information
 - internal compiler errors now include information about the C compiler (cc)
 
+### Fixed
+- integer subtraction has been fixed
+  - wrong order of operators would previously return wildly incorrect results
+
 
 ## [0.4.0](https://github.com/actonlang/acton/releases/tag/v0.4.0) (2021-07-23)
 
