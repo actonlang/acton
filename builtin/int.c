@@ -438,7 +438,7 @@ struct $Integral$int$class $Integral$int$methods = {
     $Integral$int$__invert__
 };
 
-struct $Integral$int $Integral$int_instance = {&$Integral$int$methods, ($Logical)&$Logical$int_instance, ($Minus)&$Minus$int_instance};
+struct $Integral$int $Integral$int_instance = {&$Integral$int$methods, ($Minus)&$Minus$int_instance, ($Logical)&$Logical$int_instance};
 $Integral$int $Integral$int$witness = &$Integral$int_instance;
 
 struct $Logical$int$class $Logical$int$methods =  {

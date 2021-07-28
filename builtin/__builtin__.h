@@ -1056,8 +1056,8 @@ $Rational $Rational$new();
 
 struct $Integral {
     $Integral$class $class;
-    $Logical w$Logical;
     $Minus w$Minus;
+    $Logical w$Logical;
 };
 
 struct $Integral$class {
@@ -1637,8 +1637,8 @@ $int $Hashable$str$__hash__ ($Hashable$str, $str);
 
 struct $Integral$int {
     $Integral$int$class $class;
-    $Logical w$Logical;
     $Minus w$Minus;
+    $Logical w$Logical;
 };
 
 struct $Integral$int$class {
