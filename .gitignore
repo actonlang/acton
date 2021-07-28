@@ -9,6 +9,7 @@
 .cabal-sandbox/
 kernel
 test_io
+actonc
 compiler/actonc
 compiler/package.yaml
 compiler/tests/*.ty
