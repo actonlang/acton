@@ -1,0 +1,11 @@
+actor main(env):
+    def testEqual(a, b, msg):
+        if a == b:
+            print(msg, "=", a, "as expected (", b, ")")
+        if a != b:
+            print("Assertion error:", a, "!=", b, "(" + msg + ")")
+            await async env.exit(1)
+
+    testEqual(8/2, 4, "8/2")
+    testEqual(32/4, 8, "32/4")
+    await async env.exit(0)
