@@ -1,0 +1,11 @@
+import time
+
+actor main(env):
+    var now = int(time.time(0))
+    var now_seconds = (int(now / 1000000000))
+    var diff = now_seconds - int(env.argv[1])
+    print("diff:", diff)
+    if int(diff) > 5:
+        print("ERROR: diff seems too large, time.time() should be roughly same as provided UNIX timestamp input")
+        await async env.exit(1)
+    await async env.exit(0)
