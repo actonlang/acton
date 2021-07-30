@@ -1,3 +1,5 @@
+include common.mk
+
 all: compiler rts
 
 compiler:
@@ -32,4 +34,17 @@ clean-rts:
 	$(MAKE) -C math clean
 	$(MAKE) -C numpy clean
 
-.PHONY: all compiler backend rts clean clean-compiler clean-backend clean-rts test
+ARCH=$(shell uname -s -m | sed -e 's/ /-/' | tr '[A-Z]' '[a-z]')
+RELEASE_MANIFEST=actonc backend builtin lib math modules numpy rts
+GNU_TAR := $(shell ls --version 2>&1 | grep GNU >/dev/null 2>&1; echo $$?)
+ifeq ($(GNU_TAR),0)
+TAR_TRANSFORM_OPT=--transform 's,^,acton/,'
+else
+TAR_TRANSFORM_OPT=-s ,^,acton/,
+endif
+acton-$(ARCH)-$(VERSION).tar.bz2:
+	tar jcvf $@ $(TAR_TRANSFORM_OPT) $(RELEASE_MANIFEST)
+
+release: acton-$(ARCH)-$(VERSION).tar.bz2
+
+.PHONY: all compiler backend rts clean clean-compiler clean-backend clean-rts test release acton-$(ARCH)-$(VERSION).tar.bz2
