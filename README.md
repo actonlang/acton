@@ -1,4 +1,6 @@
 # The Acton programming language
+[![Test](https://github.com/actonlang/acton/actions/workflows/test.yml/badge.svg)](https://github.com/actonlang/acton/actions/workflows/test.yml)
+
 Acton is a general purpose programming language, designed to be useful for a
 wide range of applications, from desktop applications to embedded and
 distributed systems. In a first approximation Acton can be described as a
