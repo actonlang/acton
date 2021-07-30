@@ -1,7 +1,7 @@
-name: Compile
+name: Test
 on: [push]
 jobs:
-  build-and-test-on-macosx:
+  test-darwin:
     runs-on: macos-latest
     steps:
       - run: echo "🎉 The job was automatically triggered by a ${{ github.event_name }} event."
@@ -22,10 +22,17 @@ jobs:
         run: cd ${{ github.workspace }}/compiler && make package.yaml && stack build --only-dependencies
       - name: Build actonc
         run: make -C ${{ github.workspace }}
+      - name: Build a release
+        run: make -C ${{ github.workspace }} release
+      - name: Upload artifact
+        uses: actions/upload-artifact@v2
+        with:
+          name: acton-darwin
+          path: ${{ github.workspace }}/acton-darwin-x86_64*
       - name: Run tests
         run: make -C ${{ github.workspace }} test
 
-  build-and-test-on-linux:
+  test-linux:
     runs-on: ubuntu-latest
     steps:
       - run: echo "🎉 The job was automatically triggered by a ${{ github.event_name }} event."
@@ -46,5 +53,12 @@ jobs:
         run: cd ${{ github.workspace }}/compiler && make package.yaml && stack build --only-dependencies
       - name: Build actonc
         run: make -C ${{ github.workspace }}
+      - name: Build a release
+        run: make -C ${{ github.workspace }} release
+      - name: Upload artifact
+        uses: actions/upload-artifact@v2
+        with:
+          name: acton-linux
+          path: ${{ github.workspace }}/acton-linux-x86_64*
       - name: Run tests
         run: make -C ${{ github.workspace }} test
