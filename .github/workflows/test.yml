@@ -62,3 +62,36 @@ jobs:
           path: ${{ github.workspace }}/acton-linux-x86_64*
       - name: Run tests
         run: make -C ${{ github.workspace }} test
+
+  release-latest:
+    # Only run this on our main branch, not on PRs or other branches...
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    needs: [test-darwin, test-linux]
+    steps:
+      - run: echo "Doing a release, yay! 🎉"
+      - name: "Check out repository code"
+        uses: actions/checkout@v2
+      - name: "Download artifacts for darwin"
+        uses: actions/download-artifact@v2
+        with:
+          name: acton-darwin
+      - name: "Download artifacts for linux"
+        uses: actions/download-artifact@v2
+        with:
+          name: acton-linux
+      - name: "Workaround for changelog extractor that looks for number versions in headlines, which won't work for 'Unreleased'"
+        run: sed -i -e 's/^## Unreleased/## [999.9] Unreleased\nThis is an unreleased snapshot built from the main branch. Like a nightly but more up to date./' CHANGELOG.md
+      - name: "Extract release notes"
+        id: extract-release-notes
+        uses: ffurrer2/extract-release-notes@v1
+      - name: "Update 'latest' release notes"
+        uses: ncipollo/release-action@v1
+        with:
+          allowUpdates: true
+          artifacts: acton*.tar*
+          body: ${{ steps.extract-release-notes.outputs.release_notes }}
+          prerelease: true
+          name: "latest"
+          tag: "latest"
+          token: ${{ secrets.GITHUB_TOKEN }}
