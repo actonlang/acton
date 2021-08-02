@@ -1,10 +1,9 @@
-name: Test
+name: Release
+
 on:
   push:
-    branches:
-      - '**'
-    tags-ignore:
-      - '**'
+    tags:
+      - "v*.*"
 
 jobs:
   test-darwin:
@@ -69,11 +68,7 @@ jobs:
       - name: Run tests
         run: make -C ${{ github.workspace }} test
 
-# If we are on the main branch, we'll create or update a pre-release called
-# 'tip' which holds the latest build output from the main branch!
-  pre-release-tip:
-    # Only run on the main branch
-    if: github.ref == 'refs/heads/main'
+  release:
     runs-on: ubuntu-latest
     needs: [test-darwin, test-linux]
     steps:
@@ -88,27 +83,15 @@ jobs:
         uses: actions/download-artifact@v2
         with:
           name: acton-linux
-      - name: "Update tip release with artifacts, overwriting earlier artifacts and force pushing the 'tip' tag"
-        uses: eine/tip@master
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-          tag: tip
-          rm: True
-          files: acton*.tar*
-      - name: "Workaround for changelog extractor that looks for number versions in headlines, which won't work for 'Unreleased'"
-        run: sed -i -e 's/^## Unreleased/## [999.9] Unreleased\nThis is an unreleased snapshot built from the main branch. Like a nightly but more up to date./' CHANGELOG.md
       - name: "Extract release notes"
         id: extract-release-notes
         uses: ffurrer2/extract-release-notes@v1
-      - name: "Update 'tip' release notes"
+      - name: "Create release"
         uses: ncipollo/release-action@v1
         with:
           allowUpdates: true
           artifacts: acton*.tar*
           body: ${{ steps.extract-release-notes.outputs.release_notes }}
           draft: false
-          prerelease: true
-          name: "tip"
-          tag: "tip"
           token: ${{ secrets.GITHUB_TOKEN }}
           replacesArtifacts: true
