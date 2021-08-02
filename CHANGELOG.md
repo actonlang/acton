@@ -5,6 +5,7 @@
 ### Added
 - `--version --verbose` will print verbose version information
 - internal compiler errors now include information about the C compiler (cc)
+- Added a thing
 
 ### Fixed
 - integer subtraction has been fixed
