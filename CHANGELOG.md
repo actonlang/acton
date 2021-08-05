@@ -11,6 +11,10 @@
 - versioned releases now use correct version number, like `0.4.1` rather than
   the version style used for `tip` releases which include the date & time, like
   `0.4.1.2021.08.05.12.15.37`
+- tip release tar balls now reflect the full tip version in the filename
+  - like `acton-linux-x86_64-0.4.1.20210805.13.46.55.tar.bz2`
+  - previously, it would just be `acton-linux-x86_64-0.4.1.tar.bz2`, making it
+    difficult to differentiate against the proper 0.4.1 or other nightlies
 
 
 ## [0.4.1](https://github.com/actonlang/acton/releases/tag/v0.4.1) (2021-08-05)
