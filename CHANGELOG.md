@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+### Added
+- `tip` releases are now available at stable URLs:
+  - https://github.com/actonlang/acton/releases/download/tip/acton-darwin-x86_64.tar.bz2
+  - https://github.com/actonlang/acton/releases/download/tip/acton-linux-x86_64.tar.bz2
+
 ### Fixed
 - versioned releases now use correct version number, like `0.4.1` rather than
   the version style used for `tip` releases which include the date & time, like
