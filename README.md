@@ -22,7 +22,7 @@ multiple computers to participate in running one logical Acton system. Actors
 can migrate between compute nodes for load sharing purposes and similar. The RTS
 offers exactly once delivery guarantees. Through checkpointing of actor states
 to a distributed database, the failure of individual compute nodes can be
-recovered by restoring actor state.
+recovered by restoring actor state. Your system can run forever!
 
 NOTE: Acton is in an experimental phase and although much of the syntax has been
 worked out, there may be changes.
@@ -32,37 +32,87 @@ for long running tasks. However, for smaller shorter lived processes, it can
 work fairly well.
 
 
-# Building
+# Getting started with Acton
 
-## Build dependencies
+Acton is published as GitHub Releases. Download a tar ball from [the Release
+page](https://github.com/actonlang/acton/releases). Pick the latest stable
+versioned release.
 
-- stack
-- git
-- make (GNU)
-- gcc
+In case you are looking to live on the bleeding edge or have been asked by a
+developer (in case you ran into a bug) you can pick `tip`, which is built
+directly from the `main` branch.
+
+Extract the Acton tar ball:
+```
+$ tar jxvf acton-*
+```
+
+## `actonc` dependencies
+In order to compile Acton programs using `actonc` you need to install the
+following prerequisites:
 
 ### Debian
-Install prerequisites
+```
+apt install gcc libkqueue-dev libprotobuf-c-dev libutf8proc-dev
+```
+
+### Mac OS X
+```
+brew install protobuf-c util-linux
+```
+
+## Compiling an Acton program
+
+Enter the Acton examples directory, compile the hello world program and run:
+```
+$ cd acton/examples
+$ ../actonc --root main helloworld.act
+$ ./helloworld
+Hello, world!
+```
+
+## Running Acton programs
+The final program produced by the Acton compiler is a self contained binary.
+Thus it has no run time dependencies. The `helloworld` binary built in the
+above example can be shipped to another machine, that does not have `actonc` or
+any of its dependencies installed, and still run. Like any other binary, it is
+naturally OS and arch dependent though.
+
+## And then...?
+Go read the [tutorial!](docs/tutorial/index.html)
+
+# Building the Acton system from source
+If you want to mess around with Acton itself, like hack on the compiler or add
+to the standard library of modules you will need to build the Acton system from
+source.
+
+## Get the code
+```
+git clone git@github.com:actonlang/acton.git
+```
+
+## Build dependencies
+Install the build time dependencies. This also includes the dependencies for
+using `actonc` to compile Acton programs.
+
+### Debian
 ```
 apt install alex gcc happy haskell-stack libkqueue-dev libprotobuf-c-dev libutf8proc-dev make
 ```
 
 ### Mac OS X
-
 ```
 brew install argp-standalone haskell-stack protobuf-c util-linux
 ```
 
-
-## Build instructions
-
-To build the project, simply run:
-
+## Building the Acton system
+Simply run `make` in the project root:
 ```
 make
 ```
 
 ## Running tests
+You can run the test suite through:
 ```
 make -C test
 ```
