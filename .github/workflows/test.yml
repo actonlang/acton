@@ -71,6 +71,9 @@ jobs:
 
 # If we are on the main branch, we'll create or update a pre-release called
 # 'tip' which holds the latest build output from the main branch!
+# We upload artifacts twice, first with the version number held in the filename
+# and a second time after being renamed to remove the version number in the
+# filename, thus providing a stable URL for downloading the tip tar balls.
   pre-release-tip:
     # Only run on the main branch
     if: github.ref == 'refs/heads/main'
@@ -95,12 +98,16 @@ jobs:
           tag: tip
           rm: True
           files: acton*.tar*
+      - name: "Remove version number from darwin tar ball"
+        run: mv acton-darwin-x86_64*tar.bz2 acton-darwin-x86_64.tar.bz2
+      - name: "Remove version number from darwin tar ball"
+        run: mv acton-linux-x86_64*tar.bz2 acton-linux-x86_64.tar.bz2
       - name: "Workaround for changelog extractor that looks for number versions in headlines, which won't work for 'Unreleased'"
         run: sed -i -e 's/^## Unreleased/## [999.9] Unreleased\nThis is an unreleased snapshot built from the main branch. Like a nightly but more up to date./' CHANGELOG.md
       - name: "Extract release notes"
         id: extract-release-notes
         uses: ffurrer2/extract-release-notes@v1
-      - name: "Update 'tip' release notes"
+      - name: "Update 'tip' release notes and upload renamed artifacts"
         uses: ncipollo/release-action@v1
         with:
           allowUpdates: true
