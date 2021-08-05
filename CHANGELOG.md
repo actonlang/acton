@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+
+## [0.4.2](https://github.com/actonlang/acton/releases/tag/v0.4.2) (2021-08-05)
+
 ### Added
 - `tip` releases are now available at stable URLs:
   - https://github.com/actonlang/acton/releases/download/tip/acton-darwin-x86_64.tar.bz2
