@@ -1,5 +1,7 @@
 include common.mk
 
+VERSION_INFO=$(subst acton ,,$(shell ./actonc --version DUMMY))
+
 all: compiler rts
 
 compiler:
@@ -42,9 +44,9 @@ TAR_TRANSFORM_OPT=--transform 's,^,acton/,'
 else
 TAR_TRANSFORM_OPT=-s ,^,acton/,
 endif
-acton-$(ARCH)-$(VERSION).tar.bz2:
+acton-$(ARCH)-$(VERSION_INFO).tar.bz2:
 	tar jcvf $@ $(TAR_TRANSFORM_OPT) $(RELEASE_MANIFEST)
 
-release: acton-$(ARCH)-$(VERSION).tar.bz2
+release: acton-$(ARCH)-$(VERSION_INFO).tar.bz2
 
 .PHONY: all compiler backend rts clean clean-compiler clean-backend clean-rts test release acton-$(ARCH)-$(VERSION).tar.bz2
