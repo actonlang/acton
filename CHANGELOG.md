@@ -2,9 +2,16 @@
 
 ## Unreleased
 
+## [0.4.1](https://github.com/actonlang/acton/releases/tag/v0.4.1) (2021-08-05)
+
 ### Added
 - `--version --verbose` will print verbose version information
 - internal compiler errors now include information about the C compiler (cc)
+- Acton is now made available as GitHub Releases
+  - pre-built binary releases! Users no longer need to compile Acton themselves
+  - available from [Releases page](https://github.com/actonlang/acton/releases)
+  - versioned releases, like this v0.4.1, are available
+  - latest build from `main` branch is available as `tip`
 
 ### Fixed
 - integer subtraction has been fixed
