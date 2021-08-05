@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+### Fixed
+- versioned releases now use correct version number, like `0.4.1` rather than
+  the version style used for `tip` releases which include the date & time, like
+  `0.4.1.2021.08.05.12.15.37`
+
+
 ## [0.4.1](https://github.com/actonlang/acton/releases/tag/v0.4.1) (2021-08-05)
 
 ### Added
