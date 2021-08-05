@@ -5,6 +5,9 @@ on:
     tags:
       - "v*.*"
 
+env:
+  BUILD_RELEASE: 1
+
 jobs:
   test-darwin:
     runs-on: macos-latest
