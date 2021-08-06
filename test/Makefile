@@ -28,3 +28,10 @@ ddb_count:
 	sleep 1
 	./count 8 --rts-verbose --rts-ddb-host 127.0.0.1
 	$(MAKE) ddb_stop
+
+
+argv:
+	../actonc --root main argv.act
+	./argv --rts-verbose foo --bar --rts-verbose
+
+.PHONY: argv
