@@ -1221,11 +1221,26 @@ void $register_rts () {
  
 ////////////////////////////////////////////////////////////////////////////////////////
 
+/*
+ * A note on argument parsing: The RTS has its own command line arguments, all
+ * prefixed with --rts-, which we need to parse out. The remainder of the
+ * arguments should be passed on to the Acton program, thus we need to fiddle
+ * with argv. To avoid modifying argv in place, we create a new argc and argv
+ * which we bootstrap the Acton program with. The special -- means to stop
+ * scanning for options, and any argument following it will be passed verbatim.
+ * For example (note the duplicate --rts-verbose)
+ *   Command line    : ./app foo --rts-verbose --bar --rts-verbose
+ *   Application sees: [./app, foo, --bar]
+ * Using -- to pass verbatim arguments:
+ *   Command line    : ./app foo --rts-verbose --bar -- --rts-verbose
+ *   Application sees: [./app, foo, --bar, --, --rts-verbose]
+ */
 int main(int argc, char **argv) {
     int ch = 0;
     char *ddb_host = NULL;
     int ddb_port = 32000;
     int verbose = 0;
+    int new_argc = argc;
 
     static struct option long_options[] = {
         {"rts-verbose", no_argument, NULL, 'v'},
@@ -1233,19 +1248,49 @@ int main(int argc, char **argv) {
         {"rts-ddb-port", required_argument, NULL, 'p'},
         {NULL, 0, NULL, 0}
     };
-    while ((ch = getopt_long(argc, argv, "", long_options, NULL)) != -1) {
+
+    while ((ch = getopt_long(argc, argv, "-", long_options, NULL)) != -1) {
         switch (ch) {
-        case 'h':
-            ddb_host = optarg;
-            break;
-        case 'p':
-            ddb_port = atoi(optarg);
-            break;
-        case 'v':
-            verbose = 1;
-            break;
+            case 'h':
+                new_argc -= 2;
+                ddb_host = optarg;
+                break;
+            case 'p':
+                new_argc -= 2;
+                ddb_port = atoi(optarg);
+                break;
+            case 'v':
+                new_argc--;
+                verbose = 1;
+                break;
         }
     }
+    char** new_argv = malloc((new_argc+1) * sizeof *new_argv);
+
+    // length of long_options array
+    int lo_len = sizeof(long_options) / sizeof(long_options[0]) - 1;
+    // where we map current (i) argc position into new_argc
+    int new_argc_dst = 0;
+    // stop scanning once we've seen '--', passing the rest verbatim
+    int opt_scan = 1;
+    for(int i = 0; i < argc; ++i) {
+        if (strcmp(argv[i], "--") == 0) opt_scan = 0;
+        if (opt_scan) {
+            for (int j = 0; j < lo_len; j++) {
+                // compare at +2 since in argv it is --foo while only foo in long_options
+                if (strcmp(argv[i]+2, long_options[j].name) == 0) {
+                    if (long_options[j].has_arg == 1) i++;
+                    goto cnt; // abort inner loop
+                }
+            }
+        }
+        size_t length = strlen(argv[i])+1;
+        new_argv[new_argc_dst] = malloc(length);
+        memcpy(new_argv[new_argc_dst], argv[i], length);
+        new_argc_dst += 1;
+        cnt:;
+    }
+    new_argv[new_argc] = NULL;
 
     long num_cores = sysconf(_SC_NPROCESSORS_ONLN);
     //    printf("%ld worker threads\n", num_cores);

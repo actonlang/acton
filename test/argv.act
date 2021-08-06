@@ -1,0 +1,12 @@
+actor main(env):
+    var exp = ["./argv", "foo", "--bar"]
+    var i = 0
+    print("Expected:", exp)
+    print("env.argv:", env.argv)
+    for arg in env.argv:
+        if arg != exp[i]:
+            print("Oh noes:", arg, "!=", exp[i])
+            await async env.exit(1)
+        i += 1
+    print("All is well")
+    await async env.exit(0)
