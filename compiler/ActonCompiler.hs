@@ -108,11 +108,15 @@ main            = do cv <- getCcVer
                      args <- execParser (info (getArgs (showVer cv) <**> helper) descr)
                      paths <- findPaths args
                      when (verbose args) $ do
-                         putStrLn ("## sysPath: " ++ sysPath paths)
-                         putStrLn ("## sysRoot: " ++ sysRoot paths)
-                         putStrLn ("## srcRoot: " ++ srcRoot paths)
+                         putStrLn ("## sysPath  : " ++ sysPath paths)
+                         putStrLn ("## sysTypes : " ++ sysTypes paths)
+                         putStrLn ("## sysLib   : " ++ sysLib paths)
+                         putStrLn ("## projPath : " ++ projPath paths)
+                         putStrLn ("## projTypes: " ++ projTypes paths)
+                         putStrLn ("## projLib  : " ++ projLib paths)
+                         putStrLn ("## srcRoot  : " ++ srcRoot paths)
                          putStrLn ("## modPrefix: " ++ prstrs (modPrefix paths))
-                         putStrLn ("## topMod: " ++ prstr (topMod paths))
+                         putStrLn ("## topMod   : " ++ prstr (topMod paths))
                      let mn = topMod paths
                      (case ext paths of
                         ".act"   -> do let fName = file args
@@ -124,7 +128,7 @@ main            = do cv <- getCcVer
                                        iff (parse args) $ dump "parse" (Pretty.print tree)
                                        let task = ActonTask mn src tree
                                        chaseImportsAndCompile args paths task
-                        ".ty"    -> do env0 <- Acton.Env.initEnv (sysRoot paths) False False
+                        ".ty"    -> do env0 <- Acton.Env.initEnv (sysTypes paths) False False
                                        Acton.Types.showTyFile (Acton.Env.setMod (topMod paths) env0) (file args)
                         _        -> error ("********************\nUnknown file extension "++ ext paths))
                                `catch` handle "IOException" (\exc -> (l0,displayException (exc :: IOException))) "" paths mn
@@ -135,7 +139,11 @@ dump h txt      = putStrLn ("\n\n#################################### " ++ h ++ 
 
 data Paths      = Paths {
                     sysPath     :: FilePath,
-                    sysRoot     :: FilePath,
+                    sysTypes    :: FilePath,
+                    sysLib      :: FilePath,
+                    projPath    :: FilePath,
+                    projTypes   :: FilePath,
+                    projLib     :: FilePath,
                     srcRoot     :: FilePath,
                     modPrefix   :: [String],
                     ext         :: String,
@@ -144,7 +152,7 @@ data Paths      = Paths {
 
 -- Given a FILE and optionally --path PATH:
 -- 'sysPath' is the path to the system directory as given by PATH, defaulting to the actonc executable directory.
--- 'sysRoot' is the root of the system's private module tree (directory "modules" under 'sysPath').
+-- 'sysTypes' is the root of the system's private types tree (directory "types" under 'sysPath').
 -- 'srcRoot' is the root of a user's source tree (the longest directory prefix of FILE containing an ".acton" file)
 -- 'modPrefix' is the module prefix of the source tree under 'srcRoot' (the directory name at 'srcRoot' split at every '.')
 -- 'ext' is file suffix of FILE.
@@ -156,7 +164,7 @@ srcFile paths mn        = case stripPrefix (modPrefix paths) (A.modPath mn) of
                             Nothing -> Nothing
 
 sysFile                 :: Paths -> A.ModName -> FilePath
-sysFile paths mn        = joinPath (sysRoot paths : A.modPath mn)
+sysFile paths mn        = joinPath (sysTypes paths : A.modPath mn)
 
 
 touchDirs               :: FilePath -> A.ModName -> IO ()
@@ -172,19 +180,25 @@ touchDirs path mn       = touch path (init $ A.modPath mn)
 findPaths               :: Args -> IO Paths
 findPaths args          = do execDir <- takeDirectory <$> System.Environment.getExecutablePath
                              sysPath <- canonicalizePath (if null $ syspath args then execDir ++ "/.." else syspath args)
-                             let sysRoot = joinPath [sysPath,"modules"]
-                             absfile <- canonicalizePath (file args)
-                             (srcRoot,subdirs) <- analyze (takeDirectory absfile) []
-                             let modPrefix = if srcRoot == sysRoot then [] else split (takeFileName srcRoot)
-                                 topMod = A.modName $ modPrefix++subdirs++[body]
-                             touchDirs sysRoot topMod
-                             return $ Paths sysPath sysRoot srcRoot modPrefix ext topMod
-  where (body,ext)      = splitExtension $ takeFileName $ file args
+                             let sysTypes = joinPath [sysPath, "types"]
+                             let sysLib = joinPath [sysPath, "lib"]
+                             absSrcFile <- canonicalizePath (file args)
+                             (projPath, subdirs) <- analyze (takeDirectory absSrcFile) []
+                             let dirInSrc = drop 1 subdirs
+                             let srcRoot = joinPath [projPath, "src"]
+                             let srcPath = takeDirectory absSrcFile
+                             let modPrefix = if srcRoot == projPath then [] else split (unwords ( take 1 dirInSrc ) )
+                                 topMod = A.modName $ dirInSrc ++ [fileBody]
+                             let projTypes = joinPath [projPath, "out", "types"]
+                             let projLib = joinPath [projPath, "out", "lib"]
+                             touchDirs projTypes topMod
+                             return $ Paths sysPath sysTypes sysLib projPath projTypes projLib srcRoot modPrefix ext topMod
+  where (fileBody,ext)      = splitExtension $ takeFileName $ file args
 
         split           = foldr f [[]] where f c l@(x:xs) = if c == '.' then []:l else (c:x):xs
 
-        analyze "/" ds  = error "********************\nNo .acton file found in any ancestor directory"
-        analyze pre ds  = do exists <- doesFileExist (joinPath [pre, ".acton"])
+        analyze "/" ds  = error "********************\nNo Acton.toml file found in any ancestor directory"
+        analyze pre ds  = do exists <- doesFileExist (joinPath [pre, "Acton.toml"])
                              if exists then return $ (pre, ds)
                               else analyze (takeDirectory pre) (takeFileName pre : ds)
 
@@ -199,7 +213,7 @@ chaseImportsAndCompile args paths task
                             let sccs = stronglyConnComp  [(t,name t,importsOf t) | t <- tasks]
                                 (as,cs) = Data.List.partition isAcyclic sccs
                             if null cs
-                             then do env0 <- Acton.Env.initEnv (sysRoot paths) (stub args) (topMod paths == Acton.Builtin.mBuiltin)
+                             then do env0 <- Acton.Env.initEnv (sysTypes paths) (stub args) (topMod paths == Acton.Builtin.mBuiltin)
                                      env1 <- foldM (doTask args paths) env0 [t | AcyclicSCC t <- as]
                                      buildExecutable env1 args paths task
                                          `catch` handle "Compilation error" Acton.Env.compilationError (src task) paths (name task)
@@ -251,7 +265,7 @@ doTask args paths env t@(ActonTask mn src m)
                                  if ok && mn /= topMod paths then do
                                           iff (verbose args) (putStrLn ("Skipping  "++ actFile ++ " (files are up to date)."))
                                           return env
-                                  else do touchDirs (sysRoot paths) mn
+                                  else do touchDirs (projTypes paths) mn
                                           iff (verbose args) (putStr ("Compiling "++ actFile ++ "... ") >> hFlush stdout)
                                           (env',te) <- runRestPasses args paths env m
                                                            `catch` handle "Compilation error" generalError src paths mn
@@ -292,7 +306,7 @@ printIce errMsg = do ccVer <- getCcVer
 runRestPasses :: Args -> Paths -> Acton.Env.Env0 -> A.Module -> IO (Acton.Env.Env0, Acton.Env.TEnv)
 runRestPasses args paths env0 parsed = do
                       let outbase = sysFile paths (A.modname parsed)
-                      env <- Acton.Env.mkEnv (sysRoot paths) env0 parsed
+                      env <- Acton.Env.mkEnv (sysTypes paths) env0 parsed
 
                       kchecked <- Acton.Kinds.check env parsed
                       iff (kinds args) $ dump "kinds" (Pretty.print kchecked)
@@ -327,11 +341,10 @@ runRestPasses args paths env0 parsed = do
 
                       let pedantArg = if (cpedantic args) then "-Werror" else ""
                       iff (not $ stub args) $ do
-                          let libDir = joinPath [sysPath paths,"lib"]
-                              cFile = outbase ++ ".c"
+                          let cFile = outbase ++ ".c"
                               hFile = outbase ++ ".h"
-                              oFile = joinPath [libDir,n++".o"]
-                              aFile = joinPath [libDir,"libActonProject.a"]
+                              oFile = joinPath [projLib paths, n++".o"]
+                              aFile = joinPath [projLib paths, "libActonProject.a"]
                               gccCmd = "gcc " ++ pedantArg ++ " -g -c -I/usr/include/kqueue -I" ++ sysPath paths ++ " -o" ++ oFile ++ " " ++ cFile
                               arCmd = "ar rcs " ++ aFile ++ " " ++ oFile
                           writeFile hFile h
@@ -385,7 +398,7 @@ buildExecutable env args paths task
         outbase             = sysFile paths mn
         rootFile            = outbase ++ ".root.c"
         libRTSarg           = if (rts_debug args) then " -lActonRTSdebug " else " "
-        libFilesBase        = " -L" ++ joinPath [sysPath paths,"lib"] ++ libRTSarg ++ " -lActonProject -lActon -ldbclient -lremote -luuid -lcomm -ldb -lvc -lprotobuf-c -lutf8proc -lpthread -lm"
+        libFilesBase        = " -L" ++ projLib paths ++ " -L" ++ sysLib paths ++ libRTSarg ++ " -lActonProject -lActon -ldbclient -lremote -luuid -lcomm -ldb -lvc -lprotobuf-c -lutf8proc -lpthread -lm"
 #if defined(linux_HOST_OS)
         libFiles            = libFilesBase ++ " -lkqueue"
 #elif defined(darwin_HOST_OS)
