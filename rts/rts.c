@@ -641,7 +641,7 @@ void BOOTSTRAP(int argc, char *argv[]) {
     clock_gettime(CLOCK_MONOTONIC, &now);
     $Msg m = $NEW($Msg, ancestor0, &$NewRoot$cont, now.tv_sec, &$WriteRoot$cont);
 
-    if (db != NULL) {
+    if (db) {
         create_db_queue(env_actor->$globkey);
         create_db_queue(ancestor0->$globkey);
         int ret = remote_enqueue_in_txn(($WORD*)&m->$globkey, 1, NULL, 0, MSG_QUEUE, (WORD)ancestor0->$globkey, NULL, db);
@@ -758,7 +758,7 @@ void FLUSH_outgoing($Actor self, uuid_t *txnid) {
             ENQ_timed(m);
             dest = 0;
         }
-        if (db != NULL) {
+        if (db) {
             int ret = remote_enqueue_in_txn(($WORD*)&m->$globkey, 1, NULL, 0, MSG_QUEUE, (WORD)dest, txnid, db);
             //if (dest)
             //    printf("   # enqueue msg %ld to queue %ld returns %d\n", m->$globkey, dest, ret);
@@ -1058,7 +1058,7 @@ void serialize_actor($Actor a, uuid_t *txnid) {
 void FLUSH_offspring($Actor current, uuid_t *txnid) {
     $Actor a = current->$offspring;
     while (a) {
-        if (db != NULL) {
+        if (db) {
             create_db_queue(a->$globkey);
             a->$consume_hd = 0;
             serialize_actor(a, txnid);
@@ -1087,7 +1087,7 @@ void *main_loop(void *arg) {
             $R r = cont->$class->__call__(cont, val);
             switch (r.tag) {
                 case $RDONE: {
-                    if (db != NULL) {
+                    if (db) {
                         uuid_t * txnid = remote_new_txn(db);
                         current->$consume_hd++;
                         serialize_actor(current, txnid);
@@ -1138,7 +1138,7 @@ void *main_loop(void *arg) {
                     break;
                 }
                 case $RWAIT: {
-                    if (db != NULL) {
+                    if (db) {
                         uuid_t * txnid = remote_new_txn(db);
                         serialize_actor(current, txnid);
                         FLUSH_outgoing(current, txnid);
@@ -1169,7 +1169,7 @@ void *main_loop(void *arg) {
                 if (ENQ_msg(m, m->$to)) {
                     ENQ_ready(m->$to);
                 }
-                if (db != NULL) {
+                if (db) {
                     uuid_t *txnid = remote_new_txn(db);
                     timer_consume_hd++;
 
@@ -1273,7 +1273,7 @@ int main(int argc, char **argv) {
     int new_argc_dst = 0;
     // stop scanning once we've seen '--', passing the rest verbatim
     int opt_scan = 1;
-    for(int i = 0; i < argc; ++i) {
+    for (int i = 0; i < argc; ++i) {
         if (strcmp(argv[i], "--") == 0) opt_scan = 0;
         if (opt_scan) {
             for (int j = 0; j < lo_len; j++) {
@@ -1308,7 +1308,7 @@ int main(int argc, char **argv) {
         add_server_to_membership(ddb_host, ddb_port, db, &seed);
     }
 
-    if (db != NULL) {
+    if (db) {
         snode_t* start_row = NULL, * end_row = NULL;
         if (verbose) printf("Acton RTS: checking for previous actor state in DDB... ");
         fflush(stdout);
