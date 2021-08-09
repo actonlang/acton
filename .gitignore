@@ -1,8 +1,18 @@
+# Ignore all
+*
+
+# Unignore all with extensions
+!*.*
+
+# Unignore all dirs
+!*/
+
 *~
 *.o
 *.a
 **/.DS_Store
 **/.stack-work
+**/*.dSYM
 **/*.hi
 **/*.o
 **/a.out
