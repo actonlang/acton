@@ -1,12 +1,10 @@
-# jemalloc is faster so let's use it by default
-JEM_LIBS:=
-JEM_FLAGS:=
-
-# there's no pkg-config ??
+# look for jemalloc
 JEM_LIB?=$(wildcard /usr/lib/x86_64-linux-gnu/libjemalloc.a)
 
 ifeq ($(JEM_LIB),)
 $(info ** Not using jemalloc)
+JEM_LIBS:=
+JEM_FLAGS:=
 else
 $(info Using jemalloc: $(JEM_LIB))
 JEM_FLAGS:=-DUSE_JEMALLOC
@@ -16,7 +14,7 @@ endif
 CFLAGS:=$(JEM_FLAGS) -Wno-int-to-pointer-cast -Wno-pointer-to-int-cast -g -O0
 LIBS:=$(JEM_LIBS)
 
-LFLAGS=-luuid#-latomic -lm
+LFLAGS=-luuid -lm
 
 LIBDIR=../lib
 
@@ -27,74 +25,91 @@ else
 	LARGP=
 endif
 
-SUBDIRS = failure_detector
+all: $(LIBDIR)/libcomm.a $(LIBDIR)/libdb.a $(LIBDIR)/libdbclient.a $(LIBDIR)/libremote.a $(LIBDIR)/libvc.a client server
 
-all: failure_detector skiplist_test libdb libcomm db_unit_tests queue_unit_tests actor_ring_tests_local actor_ring_tests_remote client server
+%.o: %.c
+	cc $^ -c $(LFLAGS) $(CFLAGS) -o $@
 
-.PHONY: subdirs $(SUBDIRS)
+failure_detector/%.o: failure_detector/%.c
+	cc $^ -c $(LFLAGS) $(CFLAGS) -o $@
 
-subdirs: $(SUBDIRS)
+failure_detector/db_messages.pb-c.c: failure_detector/db_messages.proto
+	protoc-c --c_out=$@ $^
 
-$(SUBDIRS):
-	$(MAKE) -C $@
+$(LIBDIR)/libcomm.a:
+	$(MAKE) -C .. lib/libcomm.a
 
+$(LIBDIR)/libdb.a:
+	$(MAKE) -C .. lib/libdb.a
 
-db.o:
-	cc db.c -c -I src $(LFLAGS) $(CFLAGS)
+$(LIBDIR)/libdbclient.a:
+	$(MAKE) -C .. lib/libdbclient.a
 
-queue.o:
-	cc queue.c -c -I src $(LFLAGS) $(CFLAGS)
+$(LIBDIR)/libremote.a:
+	$(MAKE) -C .. lib/libremote.a
 
-skiplist.o:
-	cc skiplist.c -c -I src $(LFLAGS) $(CFLAGS)
+$(LIBDIR)/libvc.a:
+	$(MAKE) -C .. lib/libvc.a
 
-# vector_clock.o:
-# 	cc failure_detector/vector_clock.c -c -I src $(LFLAGS) $(CFLAGS)
+.PHONY: $(LIBDIR)/libcomm.a $(LIBDIR)/libdb.a $(LIBDIR)/libdbclient.a
 
-txn_state.o:
-	cc txn_state.c -c -I src $(LFLAGS) $(CFLAGS)
+client: client.c $(LIBDIR)/libdb.a $(LIBDIR)/libdbclient.a
+	cc client.c \
+	 $(CFLAGS) $(LARGP) \
+	 -L $(LIBDIR) -L/usr/local/opt/util-linux/lib -ldbclient -lremote -lcomm -ldb -lvc -lprotobuf-c -pthread -luuid \
+	 -o client
 
-txns.o:
-	cc txns.c -c -I src $(LFLAGS) $(CFLAGS)
+server: server.c $(LIBDIR)/libdb.a failure_detector
+	cc server.c \
+	 $(CFLAGS) $(LARGP) \
+	 -L $(LIBDIR) -L/usr/local/opt/util-linux/lib -lremote -lcomm -ldb -lvc -lprotobuf-c -pthread -luuid \
+	 -o server
 
-comm.o:
-	cc comm.c -c -I src $(LFLAGS) $(CFLAGS)
+# tests
+TESTS=failure_detector/db_messages_test actor_ring_tests_local actor_ring_tests_remote db_unit_tests queue_unit_tests skiplist_test
+build-tests: $(TESTS)
 
-client_api.o:
-	cc client_api.c -c -I src $(LFLAGS) $(CFLAGS)
+test: $(TESTS)
+	@echo DISABLED TEST: failure_detector/db_messages_test
+	./actor_ring_tests_local
+	./actor_ring_tests_remote
+	./db_unit_tests
+	./queue_unit_tests
+	./skiplist_test
 
-libdb: txns.o txn_state.o db.o queue.o skiplist.o $(LIBDIR)
-	ar rcs $(LIBDIR)/libdb.a db.o queue.o skiplist.o txn_state.o txns.o
-	ranlib $(LIBDIR)/libdb.a
+failure_detector/db_messages_test: failure_detector/db_messages_test.c $(LIBDIR)/libremote.a $(LIBDIR)/libvc.a
+	cc $^ \
+		$(CFLAGS) -I/usr/local/include -I/usr/include \
+		-L $(LIBDIR) -L/usr/local/lib -L/usr/local/opt/util-linux/lib -lvc -lremote -pthread -lprotobuf-c $(LFLAGS) \
+		$(LIBS) \
+		-o $@
 
-libcomm: comm.o $(LIBDIR)
-	ar rcs $(LIBDIR)/libcomm.a comm.o
-	ranlib $(LIBDIR)/libcomm.a
+actor_ring_tests_local: actor_ring_tests_local.c $(LIBDIR)/libdb.a
+	cc actor_ring_tests_local.c \
+		$(CFLAGS) -I ../src -L $(LIBDIR) -L/usr/local/opt/util-linux/lib \
+		-ldb -lvc -lremote -lprotobuf-c $(LFLAGS) -pthread \
+		$(LIBS) \
+		-o actor_ring_tests_local
 
-libdbclient: client_api.o failure_detector $(LIBDIR)
-	ar rcs $(LIBDIR)/libdbclient.a client_api.o
-	ranlib $(LIBDIR)/libdbclient.a
+actor_ring_tests_remote: actor_ring_tests_remote.c $(LIBDIR)/libdb.a $(LIBDIR)/libdbclient.a failure_detector
+	cc actor_ring_tests_remote.c \
+	 $(CFLAGS) \
+	 -L $(LIBDIR) -L/usr/local/opt/util-linux/lib -ldbclient -lremote -lcomm -ldb -lvc -lprotobuf-c -pthread -luuid \
+	 -o actor_ring_tests_remote
 
-db_unit_tests: db_unit_tests.c libdb
+db_unit_tests: db_unit_tests.c $(LIBDIR)/libdb.a
 	cc -std=c11 db_unit_tests.c \
 		$(CFLAGS) -I ../src -L $(LIBDIR) -L/usr/local/opt/util-linux/lib \
 		-ldb -lvc $(LFLAGS) -pthread \
 		$(LIBS) \
 		-o db_unit_tests
 
-queue_unit_tests: queue_unit_tests.c libdb
+queue_unit_tests: queue_unit_tests.c $(LIBDIR)/libdb.a
 	cc queue_unit_tests.c \
 		$(CFLAGS) -I ../src -L $(LIBDIR) -L/usr/local/opt/util-linux/lib \
 		-ldb -lvc -lremote -lprotobuf-c $(LFLAGS) -pthread \
 		$(LIBS) \
 		-o queue_unit_tests
-
-actor_ring_tests_local: actor_ring_tests_local.c libdb
-	cc actor_ring_tests_local.c \
-		$(CFLAGS) -I ../src -L $(LIBDIR) -L/usr/local/opt/util-linux/lib \
-		-ldb -lvc -lremote -lprotobuf-c $(LFLAGS) -pthread \
-		$(LIBS) \
-		-o actor_ring_tests_local
 
 skiplist_test: skiplist_test.c skiplist.c
 	cc skiplist_test.c skiplist.c \
@@ -102,26 +117,5 @@ skiplist_test: skiplist_test.c skiplist.c
 		$(LFLAGS) -L/usr/local/opt/util-linux/lib \
 		-o skiplist_test
 
-client: client.c libdb libdbclient
-	cc client.c \
-	 $(CFLAGS) $(LARGP) \
-	 -L $(LIBDIR) -L/usr/local/opt/util-linux/lib -ldbclient -lremote -lcomm -ldb -lvc -lprotobuf-c -pthread -luuid \
-	 -o client
-
-server: server.c libdb failure_detector
-	cc server.c \
-	 $(CFLAGS) $(LARGP) \
-	 -L $(LIBDIR) -L/usr/local/opt/util-linux/lib -lremote -lcomm -ldb -lvc -lprotobuf-c -pthread -luuid \
-	 -o server
-
-actor_ring_tests_remote: actor_ring_tests_remote.c libdb libdbclient failure_detector
-	cc actor_ring_tests_remote.c \
-	 $(CFLAGS) \
-	 -L $(LIBDIR) -L/usr/local/opt/util-linux/lib -ldbclient -lremote -lcomm -ldb -lvc -lprotobuf-c -pthread -luuid \
-	 -o actor_ring_tests_remote
-
-$(LIBDIR):
-	mkdir -p $(LIBDIR)
-
 clean:
-	rm -rf *.o failure_detector/*.o $(LIBDIR)/libdb.a $(LIBDIR)/libcomm.a $(LIBDIR)/libdbclient.a skiplist_test db_unit_tests queue_unit_tests actor_ring_tests_local actor_ring_tests_remote server client failure_detector/db_messages_test
+	rm -rf *.o failure_detector/*.o failure_detector/*.a $(LIBDIR)/libcomm.a $(LIBDIR)/libdb.a $(LIBDIR)/libdbclient.a $(LIBDIR)/libremote.a $(LIBDIR)/libvc.a $(TESTS) server client failure_detector/db_messages_test
