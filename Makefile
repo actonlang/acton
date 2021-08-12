@@ -78,7 +78,7 @@ numpy/numpy.o: numpy/numpy.c numpy/numpy.h numpy/init.h numpy/init.c \
 
 
 # /lib --------------------------------------------------
-LIBS=lib/libActon.a lib/libcomm.a lib/libdb.a lib/libdbclient.a
+LIBS=lib/libActon.a lib/libcomm.a lib/libdb.a lib/libdbclient.a lib/libremote.a lib/libvc.a
 
 lib/libActon.a: builtin/builtin.o builtin/minienv.o math/math.o numpy/numpy.o rts/empty.o rts/rts.o
 	ar rcs $@ $^
@@ -90,6 +90,12 @@ lib/libdb.a: backend/db.o backend/queue.o backend/skiplist.o backend/txn_state.o
 	ar rcs $@ $^
 
 lib/libdbclient.a: backend/client_api.o rts/empty.o
+	ar rcs $@ $^
+
+lib/libremote.a: backend/failure_detector/db_messages.pb-c.o backend/failure_detector/cells.o backend/failure_detector/db_queries.o backend/failure_detector/fd.o
+	ar rcs $@ $^
+
+lib/libvc.a: backend/failure_detector/vector_clock.o
 	ar rcs $@ $^
 
 
@@ -124,6 +130,7 @@ backend:
 rts: $(MODULES) $(LIBS) $(TYMODULES)
 
 test:
+	$(MAKE) -C backend test
 	$(MAKE) -C test
 
 clean: clean-compiler clean-backend clean-rts
