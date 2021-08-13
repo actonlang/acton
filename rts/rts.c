@@ -1280,14 +1280,11 @@ int main(int argc, char **argv) {
                 // compare at +2 since in argv it is --foo while only foo in long_options
                 if (strcmp(argv[i]+2, long_options[j].name) == 0) {
                     if (long_options[j].has_arg == 1) i++;
-                    goto cnt; // abort inner loop
+                    goto cnt; // continue on outer loop
                 }
             }
         }
-        size_t length = strlen(argv[i])+1;
-        new_argv[new_argc_dst] = malloc(length);
-        memcpy(new_argv[new_argc_dst], argv[i], length);
-        new_argc_dst += 1;
+        new_argv[new_argc_dst++] = argv[i];
         cnt:;
     }
     new_argv[new_argc] = NULL;
