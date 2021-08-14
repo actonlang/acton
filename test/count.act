@@ -1,0 +1,12 @@
+actor main(env):
+    var i = 0;
+    var count_to = int(env.args[-1])
+
+    def _work():
+        print(i)
+        if count_to and i == count_to:
+            await async env.exit(0)
+        i += 1
+        after 1: _work()
+
+    _work()

@@ -23,16 +23,18 @@
 #include <stdio.h>
 #include <stdarg.h>
 #include <uuid/uuid.h>
+#include <getopt.h>
 
 #include "rts.h"
 #include "../builtin/minienv.h"
 
-#define WITH_BACKEND 0
+// We want to pass through unknown arguments, so tell getopt to ignore invalid
+// (unknown to it) options
+extern int opterr;
+int opterr = 0;
 
-#if WITH_BACKEND
 #include "../backend/client_api.h"
 #include "../backend/fastrand.h"
-#endif
 
 #ifdef __gnu_linux__
     #define IS_GNU_LINUX
@@ -140,15 +142,13 @@ int64_t get_next_key() {
     return res;
 }
 
-#if WITH_BACKEND
 #define ACTORS_TABLE    ($WORD)0
 #define MSGS_TABLE      ($WORD)1
 #define MSG_QUEUE       ($WORD)2
 
 #define TIMER_QUEUE     0           // Special key in table MSG_QUEUE
 
-remote_db_t * db;
-#endif
+remote_db_t * db = NULL;
 
 ////////////////////////////////////////////////////////////////////////////////////////
 
@@ -619,7 +619,6 @@ struct $Cont $WriteRoot$cont = {
 };
 ////////////////////////////////////////////////////////////////////////////////////////
 
-#if WITH_BACKEND
 void dummy_callback(queue_callback_args * qca) { }
 
 void create_db_queue(long key) {
@@ -630,7 +629,6 @@ void create_db_queue(long key) {
 	ret = remote_subscribe_queue(($WORD)key, 0, 0, MSG_QUEUE, ($WORD)key, qc, &prev_read_head, &prev_consume_head, db);
     //printf("   # Subscribe queue %ld returns %d\n", key, ret);
 }
-#endif
 
 void BOOTSTRAP(int argc, char *argv[]) {
     $list args = $list$new(NULL,NULL);
@@ -643,12 +641,12 @@ void BOOTSTRAP(int argc, char *argv[]) {
     clock_gettime(CLOCK_MONOTONIC, &now);
     $Msg m = $NEW($Msg, ancestor0, &$NewRoot$cont, now.tv_sec, &$WriteRoot$cont);
 
-#if WITH_BACKEND
-    create_db_queue(env_actor->$globkey);
-    create_db_queue(ancestor0->$globkey);
-    int ret = remote_enqueue_in_txn(($WORD*)&m->$globkey, 1, NULL, 0, MSG_QUEUE, (WORD)ancestor0->$globkey, NULL, db);
-    //printf("   # enqueue bootstrap msg %ld to ancestor0 queue %ld returns %d\n", m->$globkey, ancestor0->$globkey, ret);
-#endif
+    if (db) {
+        create_db_queue(env_actor->$globkey);
+        create_db_queue(ancestor0->$globkey);
+        int ret = remote_enqueue_in_txn(($WORD*)&m->$globkey, 1, NULL, 0, MSG_QUEUE, (WORD)ancestor0->$globkey, NULL, db);
+        //printf("   # enqueue bootstrap msg %ld to ancestor0 queue %ld returns %d\n", m->$globkey, ancestor0->$globkey, ret);
+    }
 
     if (ENQ_msg(m, ancestor0)) {
         ENQ_ready(ancestor0);
@@ -760,20 +758,19 @@ void FLUSH_outgoing($Actor self, uuid_t *txnid) {
             ENQ_timed(m);
             dest = 0;
         }
-#if WITH_BACKEND
-        int ret = remote_enqueue_in_txn(($WORD*)&m->$globkey, 1, NULL, 0, MSG_QUEUE, (WORD)dest, txnid, db);
-        //if (dest)
-        //    printf("   # enqueue msg %ld to queue %ld returns %d\n", m->$globkey, dest, ret);
-        //else
-        //    printf("   # enqueue msg %ld to TIMER_QUEUE returns %d\n", m->$globkey, ret);
-#endif
+        if (db) {
+            int ret = remote_enqueue_in_txn(($WORD*)&m->$globkey, 1, NULL, 0, MSG_QUEUE, (WORD)dest, txnid, db);
+            //if (dest)
+            //    printf("   # enqueue msg %ld to queue %ld returns %d\n", m->$globkey, dest, ret);
+            //else
+            //    printf("   # enqueue msg %ld to TIMER_QUEUE returns %d\n", m->$globkey, ret);
+        }
         m = next;
     }
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////
 
-#if WITH_BACKEND
 $dict globdict = NULL;
 
 $WORD try_globdict($WORD w) {
@@ -1057,19 +1054,18 @@ void serialize_actor($Actor a, uuid_t *txnid) {
         out = out->$next;
     }
 }
-#endif
 
 void FLUSH_offspring($Actor current, uuid_t *txnid) {
     $Actor a = current->$offspring;
     while (a) {
-#if WITH_BACKEND
-        create_db_queue(a->$globkey);
-        a->$consume_hd = 0;
-        serialize_actor(a, txnid);
-        FLUSH_outgoing(a, txnid);
-#else
-        FLUSH_outgoing(a, NULL);
-#endif
+        if (db) {
+            create_db_queue(a->$globkey);
+            a->$consume_hd = 0;
+            serialize_actor(a, txnid);
+            FLUSH_outgoing(a, txnid);
+        } else {
+            FLUSH_outgoing(a, NULL);
+        }
         $Actor b = a;
         a = a->$next;
         b->$next = NULL;
@@ -1091,29 +1087,29 @@ void *main_loop(void *arg) {
             $R r = cont->$class->__call__(cont, val);
             switch (r.tag) {
                 case $RDONE: {
-#if WITH_BACKEND
-                    uuid_t * txnid = remote_new_txn(db);
-                    current->$consume_hd++;
-                    serialize_actor(current, txnid);
-                    FLUSH_outgoing(current, txnid);
-                    serialize_msg(current->$msg, txnid);
-                    FLUSH_offspring(current, txnid);
+                    if (db) {
+                        uuid_t * txnid = remote_new_txn(db);
+                        current->$consume_hd++;
+                        serialize_actor(current, txnid);
+                        FLUSH_outgoing(current, txnid);
+                        serialize_msg(current->$msg, txnid);
+                        FLUSH_offspring(current, txnid);
 
-                    long key = current->$globkey;
-                    snode_t *m_start, *m_end;
-                    int entries_read = 0;
-                    int64_t read_head = -1;
-                    int ret0 = remote_read_queue_in_txn(($WORD)key, 0, 0, MSG_QUEUE, ($WORD)key, 1, &entries_read, &read_head, &m_start, &m_end, NULL, db);
-                    //printf("   # dummy read msg from queue %ld returns %d, entries read: %d\n", key, ret0, entries_read);
+                        long key = current->$globkey;
+                        snode_t *m_start, *m_end;
+                        int entries_read = 0;
+                        int64_t read_head = -1;
+                        int ret0 = remote_read_queue_in_txn(($WORD)key, 0, 0, MSG_QUEUE, ($WORD)key, 1, &entries_read, &read_head, &m_start, &m_end, NULL, db);
+                        //printf("   # dummy read msg from queue %ld returns %d, entries read: %d\n", key, ret0, entries_read);
 
-                    int ret = remote_consume_queue_in_txn(($WORD)key, 0, 0, MSG_QUEUE, ($WORD)key, read_head, txnid, db);
-                    //printf("   # consume msg %ld from queue %ld returns %d\n", m->$globkey, key, ret);
-                    remote_commit_txn(txnid, db);
-                    //printf("############## Commit\n\n");
-#else
-                    FLUSH_outgoing(current, NULL);
-                    FLUSH_offspring(current, NULL);
-#endif
+                        int ret = remote_consume_queue_in_txn(($WORD)key, 0, 0, MSG_QUEUE, ($WORD)key, read_head, txnid, db);
+                        //printf("   # consume msg %ld from queue %ld returns %d\n", m->$globkey, key, ret);
+                        remote_commit_txn(txnid, db);
+                        //printf("############## Commit\n\n");
+                    } else {
+                        FLUSH_outgoing(current, NULL);
+                        FLUSH_offspring(current, NULL);
+                    }
 
                     m->$value = r.value;                 // m->value holds the response,
                     $Actor b = FREEZE_waiting(m);        // so set m->cont = NULL and stop further m->waiting additions
@@ -1142,18 +1138,18 @@ void *main_loop(void *arg) {
                     break;
                 }
                 case $RWAIT: {
-#if WITH_BACKEND
-                    uuid_t * txnid = remote_new_txn(db);
-                    serialize_actor(current, txnid);
-                    FLUSH_outgoing(current, txnid);
-                    serialize_msg(current->$msg, txnid);
-                    FLUSH_offspring(current, txnid);
-                    remote_commit_txn(txnid, db);
-                    //printf("############## Commit\n\n");
-#else
-                    FLUSH_outgoing(current, NULL);
-                    FLUSH_offspring(current, NULL);
-#endif
+                    if (db) {
+                        uuid_t * txnid = remote_new_txn(db);
+                        serialize_actor(current, txnid);
+                        FLUSH_outgoing(current, txnid);
+                        serialize_msg(current->$msg, txnid);
+                        FLUSH_offspring(current, txnid);
+                        remote_commit_txn(txnid, db);
+                        //printf("############## Commit\n\n");
+                    } else {
+                        FLUSH_outgoing(current, NULL);
+                        FLUSH_offspring(current, NULL);
+                    }
                     m->$cont = r.cont;
                     $Msg x = ($Msg)r.value;
                     if (ADD_waiting(current, x)) {      // x->cont != NULL: x is still being processed so current was added to x->waiting
@@ -1173,24 +1169,24 @@ void *main_loop(void *arg) {
                 if (ENQ_msg(m, m->$to)) {
                     ENQ_ready(m->$to);
                 }
-#if WITH_BACKEND
-                uuid_t *txnid = remote_new_txn(db);
-                timer_consume_hd++;
+                if (db) {
+                    uuid_t *txnid = remote_new_txn(db);
+                    timer_consume_hd++;
 
-                long key = TIMER_QUEUE;
-                snode_t *m_start, *m_end;
-                int entries_read = 0;
-                int64_t read_head = -1;
-                int ret0 = remote_read_queue_in_txn(($WORD)key, 0, 0, MSG_QUEUE, ($WORD)key, 1, &entries_read, &read_head, &m_start, &m_end, NULL, db);
-                //printf("   # dummy read msg from TIMER_QUEUE returns %d, entries read: %d\n", ret0, entries_read);
+                    long key = TIMER_QUEUE;
+                    snode_t *m_start, *m_end;
+                    int entries_read = 0;
+                    int64_t read_head = -1;
+                    int ret0 = remote_read_queue_in_txn(($WORD)key, 0, 0, MSG_QUEUE, ($WORD)key, 1, &entries_read, &read_head, &m_start, &m_end, NULL, db);
+                    //printf("   # dummy read msg from TIMER_QUEUE returns %d, entries read: %d\n", ret0, entries_read);
 
-                int ret = remote_consume_queue_in_txn(($WORD)key, 0, 0, MSG_QUEUE, ($WORD)key, read_head, txnid, db);
-                //printf("   # consume msg %ld from TIMER_QUEUE returns %d\n", m->$globkey, ret);
-                int ret2 = remote_enqueue_in_txn(($WORD*)&m->$globkey, 1, NULL, 0, MSG_QUEUE, (WORD)m->$to->$globkey, txnid, db);
-                //printf("   # (timed) enqueue msg %ld to queue %ld returns %d\n", m->$globkey, m->$to->$globkey, ret2);
-                remote_commit_txn(txnid, db);
-                //printf("############## Commit\n\n");
-#endif
+                    int ret = remote_consume_queue_in_txn(($WORD)key, 0, 0, MSG_QUEUE, ($WORD)key, read_head, txnid, db);
+                    //printf("   # consume msg %ld from TIMER_QUEUE returns %d\n", m->$globkey, ret);
+                    int ret2 = remote_enqueue_in_txn(($WORD*)&m->$globkey, 1, NULL, 0, MSG_QUEUE, (WORD)m->$to->$globkey, txnid, db);
+                    //printf("   # (timed) enqueue msg %ld to queue %ld returns %d\n", m->$globkey, m->$to->$globkey, ret2);
+                    remote_commit_txn(txnid, db);
+                    //printf("############## Commit\n\n");
+                }
             } else {
                 if  ((int)arg==0) {
                     $eventloop();
@@ -1225,7 +1221,74 @@ void $register_rts () {
  
 ////////////////////////////////////////////////////////////////////////////////////////
 
+/*
+ * A note on argument parsing: The RTS has its own command line arguments, all
+ * prefixed with --rts-, which we need to parse out. The remainder of the
+ * arguments should be passed on to the Acton program, thus we need to fiddle
+ * with argv. To avoid modifying argv in place, we create a new argc and argv
+ * which we bootstrap the Acton program with. The special -- means to stop
+ * scanning for options, and any argument following it will be passed verbatim.
+ * For example (note the duplicate --rts-verbose)
+ *   Command line    : ./app foo --rts-verbose --bar --rts-verbose
+ *   Application sees: [./app, foo, --bar]
+ * Using -- to pass verbatim arguments:
+ *   Command line    : ./app foo --rts-verbose --bar -- --rts-verbose
+ *   Application sees: [./app, foo, --bar, --, --rts-verbose]
+ */
 int main(int argc, char **argv) {
+    int ch = 0;
+    char *ddb_host = NULL;
+    int ddb_port = 32000;
+    int verbose = 0;
+    int new_argc = argc;
+
+    static struct option long_options[] = {
+        {"rts-verbose", no_argument, NULL, 'v'},
+        {"rts-ddb-host", required_argument, NULL, 'h'},
+        {"rts-ddb-port", required_argument, NULL, 'p'},
+        {NULL, 0, NULL, 0}
+    };
+
+    while ((ch = getopt_long(argc, argv, "-", long_options, NULL)) != -1) {
+        switch (ch) {
+            case 'h':
+                new_argc -= 2;
+                ddb_host = optarg;
+                break;
+            case 'p':
+                new_argc -= 2;
+                ddb_port = atoi(optarg);
+                break;
+            case 'v':
+                new_argc--;
+                verbose = 1;
+                break;
+        }
+    }
+    char** new_argv = malloc((new_argc+1) * sizeof *new_argv);
+
+    // length of long_options array
+    int lo_len = sizeof(long_options) / sizeof(long_options[0]) - 1;
+    // where we map current (i) argc position into new_argc
+    int new_argc_dst = 0;
+    // stop scanning once we've seen '--', passing the rest verbatim
+    int opt_scan = 1;
+    for (int i = 0; i < argc; ++i) {
+        if (strcmp(argv[i], "--") == 0) opt_scan = 0;
+        if (opt_scan) {
+            for (int j = 0; j < lo_len; j++) {
+                // compare at +2 since in argv it is --foo while only foo in long_options
+                if (strcmp(argv[i]+2, long_options[j].name) == 0) {
+                    if (long_options[j].has_arg == 1) i++;
+                    goto cnt; // continue on outer loop
+                }
+            }
+        }
+        new_argv[new_argc_dst++] = argv[i];
+        cnt:;
+    }
+    new_argv[new_argc] = NULL;
+
     long num_cores = sysconf(_SC_NPROCESSORS_ONLN);
     //    printf("%ld worker threads\n", num_cores);
     kq = kqueue();
@@ -1234,28 +1297,34 @@ int main(int argc, char **argv) {
     $register_rts();
     $ROOTINIT();
 
-#if WITH_BACKEND
     unsigned int seed;
-    GET_RANDSEED(&seed, 0);
-    db = get_remote_db(1);
-    add_server_to_membership("localhost", 32000, db, &seed);
-    
-    snode_t* start_row = NULL, * end_row = NULL;
-    int no_items = remote_read_full_table_in_txn(&start_row, &end_row, ACTORS_TABLE, NULL, db);
-    //printf("Found %d existing actors\n", no_items);
-    if (no_items > 0) {
-        printf("# (restoring system)\n");
-        deserialize_system(start_row);
-    } else {
-        int indices[] = {0};
-        db_schema_t* db_schema = db_create_schema(NULL, 1, indices, 1, indices, 0, indices, 0);
-        create_db_queue(TIMER_QUEUE);
-        timer_consume_hd = 0;
-        BOOTSTRAP(argc, argv);
+    if (ddb_host) {
+        if (verbose) printf("Acton RTS: using distributed database backend (DDB): %s:%d\n", ddb_host, ddb_port);
+        GET_RANDSEED(&seed, 0);
+        db = get_remote_db(1);
+        add_server_to_membership(ddb_host, ddb_port, db, &seed);
     }
-#else
-    BOOTSTRAP(argc, argv);
-#endif
+
+    if (db) {
+        snode_t* start_row = NULL, * end_row = NULL;
+        if (verbose) printf("Acton RTS: checking for previous actor state in DDB... ");
+        fflush(stdout);
+        int no_items = remote_read_full_table_in_txn(&start_row, &end_row, ACTORS_TABLE, NULL, db);
+        if (verbose) printf("done\n");
+        //printf("Found %d existing actors\n", no_items);
+        if (no_items > 0) {
+            if (verbose) printf("Acton RTS: restoring actor state from DDB... ");
+            fflush(stdout);
+            deserialize_system(start_row);
+            if (verbose) printf("done\n");
+        } else {
+            int indices[] = {0};
+            db_schema_t* db_schema = db_create_schema(NULL, 1, indices, 1, indices, 0, indices, 0);
+            create_db_queue(TIMER_QUEUE);
+            timer_consume_hd = 0;
+        }
+    }
+    BOOTSTRAP(new_argc, new_argv);
 
     pthread_key_create(&self_key, NULL);
     // start worker threads, one per CPU

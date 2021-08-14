@@ -1,0 +1,52 @@
+# This is a simple illustration for demoing how the Acton RTS can persist its
+# run time state in the Acton distributed database backend. First start the
+# database:
+#
+#   ./server -p 32000 -m 34000 -s 127.0.0.1:34000
+#   ./server -p 32001 -m 34001 -s 127.0.0.1:34000
+#   ./server -p 32002 -m 34002 -s 127.0.0.1:34000
+#
+# Then compile and run this program. Abort its current invocation with ^C, then
+# restart the program and note how it will resume its state from the database
+# before counting further.
+#
+#   kll@Boxy:~/acton/examples$ ../actonc --root main count.act
+#   kll@Boxy:~/acton/examples$ ./count --rts-ddb-host localhost --rts-verbose
+#   Acton RTS: using distributed database backend (DDB): localhost:32000
+#   Acton RTS: checking for previous actor state in DDB... done
+#   0
+#   1
+#   2
+#   3
+#   4
+#   ^C
+#   kll@Boxy:~/acton/examples$ ./count --rts-ddb-host localhost --rts-verbose
+#   Acton RTS: using distributed database backend (DDB): localhost:32000
+#   Acton RTS: checking for previous actor state in DDB... done
+#   Acton RTS: restoring actor state from DDB... done
+#   5
+#   6
+#   7
+#   8
+#   ^C
+#   kll@Boxy:~/acton/examples$ ./count --rts-ddb-host localhost --rts-verbose
+#
+actor main(env):
+    var i = 0;
+    var count_to = 0
+
+    if len(env.argv) > 2:
+        print("Usage: count COUNT")
+        await async env.exit(1)
+
+    if len(env.argv) > 1:
+        count_to = int(env.argv[1])
+
+    def _work():
+        print(i)
+        if count_to and i == count_to:
+            await async env.exit(0)
+        i += 1
+        after 1: _work()
+
+    _work()

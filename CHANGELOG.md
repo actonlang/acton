@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+### Added
+- distributed database backend is enabled in the RTS
+  - this was previously a build time flag
+  - it is now run time configuration via `--rts-ddb-host` and `--rts-ddb-port`
+  - see `examples/count` for a demo and instructions
+- RTS now has a `--rts-verbose` argument to make it more chatty
 
 ## [0.4.2](https://github.com/actonlang/acton/releases/tag/v0.4.2) (2021-08-05)
 
