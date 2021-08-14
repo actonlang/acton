@@ -61,6 +61,7 @@ data Args       = Args {
                     llift   :: Bool,
                     hgen    :: Bool,
                     cgen    :: Bool,
+                    ccmd    :: Bool,
                     verbose :: Bool,
                     version :: Bool,
                     stub    :: Bool,
@@ -81,6 +82,7 @@ getArgs         = Args
                     <*> switch (long "llift"   <> help "Show the result of lambda-lifting")
                     <*> switch (long "hgen"    <> help "Show the generated .h header")
                     <*> switch (long "cgen"    <> help "Show the generated .c code")
+                    <*> switch (long "ccmd"    <> help "Show CC / LD commands")
                     <*> switch (long "verbose" <> help "Print progress info during execution")
                     <*> switch (long "version" <> help "Show version information")
                     <*> switch (long "stub"    <> help "Stub (.ty) file generation only")
@@ -322,8 +324,8 @@ runRestPasses args paths env0 parsed = do
                       --traceM (Pretty.render (Pretty.pretty liftEnv))
 
                       (n,h,c) <- Acton.CodeGen.generate liftEnv lifted
-                      iff (hgen args) $ dump "hgen (.h)" h
-                      iff (cgen args) $ dump "cgen (.c)" c
+                      iff (hgen args) $ putStrLn(h)
+                      iff (cgen args) $ putStrLn(c)
 
                       iff (not $ stub args) $ do
                           let libDir = joinPath [sysPath paths,"lib"]
@@ -335,7 +337,7 @@ runRestPasses args paths env0 parsed = do
                               arCmd = "ar rcs " ++ aFile ++ " " ++ oFile
                           writeFile hFile h
                           writeFile cFile c
-                          iff (cgen args) $ do
+                          iff (ccmd args) $ do
                               putStrLn gccCmd
                               putStrLn arCmd
                           (_,_,_,hdl) <- createProcess (shell $ gccCmd ++ " && " ++ arCmd)
@@ -365,7 +367,7 @@ buildExecutable env args paths task
                                       -- putStrLn ("## Env is " ++ prstr t)
                                       c <- Acton.CodeGen.genRoot env qn t
                                       writeFile rootFile c
-                                      iff (cgen args) $ do
+                                      iff (ccmd args) $ do
                                           putStrLn gccCmd
                                       (_,_,_,hdl) <- createProcess (shell gccCmd)
                                       returnCode <- waitForProcess hdl
