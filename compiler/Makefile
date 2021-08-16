@@ -1,5 +1,5 @@
 include ../common.mk
-ACTON_BINDIR  := ..
+ACTON_BINDIR  := ../dist
 BUILD_TIME=$(shell date "+%Y%m%d.%-H.%-M.%-S")
 ifdef BUILD_RELEASE
 VERSION_INFO:=$(VERSION)
