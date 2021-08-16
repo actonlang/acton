@@ -49,22 +49,28 @@ math/math.o: math/math.c math/math.h
 
 
 # /modules ----------------------------------------------
-ACTONC=../actonc
-TYMODULES=modules/__builtin__.ty modules/math.ty modules/numpy.ty
+ACTONC=./actonc
+TYMODULES=modules/__builtin__.ty modules/math.ty modules/numpy.ty modules/time.ty
 modules/math.h: math/math.h
 	cp $< $@
 
 modules/numpy.h: numpy/numpy.h
 	cp $< $@
 
+modules/time.h: time/time.h
+	cp $< $@
+
 modules/__builtin__.ty: modules/__builtin__.act actonc
-	cd modules && $(ACTONC) --stub __builtin__.act
+	$(ACTONC) $< --stub
 
 modules/math.ty: modules/math.act modules/math.h modules/__builtin__.ty actonc
-	cd modules && $(ACTONC) --stub math.act
+	$(ACTONC) $< --stub
 
 modules/numpy.ty: modules/numpy.act modules/math.ty actonc
-	cd modules && $(ACTONC) --stub numpy.act
+	$(ACTONC) $< --stub
+
+modules/time.ty: modules/time.act modules/time.h actonc
+	$(ACTONC) $< --stub
 
 
 # /numpy ------------------------------------------------
@@ -80,7 +86,7 @@ numpy/numpy.o: numpy/numpy.c numpy/numpy.h numpy/init.h numpy/init.c \
 # /lib --------------------------------------------------
 LIBS=lib/libActon.a lib/libcomm.a lib/libdb.a lib/libdbclient.a lib/libremote.a lib/libvc.a
 
-lib/libActon.a: builtin/builtin.o builtin/minienv.o math/math.o numpy/numpy.o rts/empty.o rts/rts.o
+lib/libActon.a: builtin/builtin.o builtin/minienv.o math/math.o numpy/numpy.o rts/empty.o rts/rts.o time/time.o
 	ar rcs $@ $^
 
 lib/libcomm.a: backend/comm.o rts/empty.o
@@ -119,6 +125,11 @@ rts/pingpong: rts/pingpong.c rts/pingpong.h rts/rts.o
 		$< \
 		-o $@
 
+
+# /time -------------------------------------------------
+MODULES += time/time.o
+time/time.o: time/time.c time/time.h
+	cc $(CFLAGS) -I. -c $< -o$@
 
 # top level targets
 actonc:

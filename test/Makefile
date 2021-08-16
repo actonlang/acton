@@ -1,3 +1,4 @@
+ACTONC=../actonc
 DDB_SERVER=../backend/server
 test:
 	$(MAKE) -C regression
@@ -34,4 +35,8 @@ argv:
 	../actonc --root main argv.act
 	./argv --rts-verbose foo --bar --rts-verbose
 
-.PHONY: argv
+time:
+	$(ACTONC) --root main time.act
+	./time $(shell date "+%s")
+
+.PHONY: argv time
