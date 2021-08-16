@@ -7,10 +7,12 @@ CFLAGS += -I/usr/include/kqueue
 endif
 MODULES=
 
-all: actonc rts
+all: dist
 
 help:
 	@echo "Available make targets"
+	@echo "  all     - build everything"
+	@echo "  dist    - build complete distribution"
 	@echo "  actonc  - build the Acton compiler"
 	@echo "  backend - build the database backend"
 	@echo "  rts     - build the Run Time System"
@@ -48,8 +50,7 @@ math/math.o: math/math.c math/math.h
 	cc $(CFLAGS) -I. -c $< -o$@
 
 
-# /modules ----------------------------------------------
-ACTONC=./actonc
+ACTONC=dist/actonc --path .
 TYMODULES=modules/__builtin__.ty modules/math.ty modules/numpy.ty modules/time.ty
 modules/math.h: math/math.h
 	cp $< $@
@@ -144,7 +145,7 @@ test:
 	$(MAKE) -C backend test
 	$(MAKE) -C test
 
-clean: clean-compiler clean-backend clean-rts
+clean: clean-compiler clean-backend clean-rts clean-dist
 
 clean-compiler:
 	rm -f actonc
@@ -156,17 +157,29 @@ clean-backend:
 clean-rts:
 	rm -f $(MODULES) $(LIBS) $(TYMODULES) modules/math.h modules/numpy.h
 
+clean-dist:
+	rm dist/lib dist/modules dist/builtin dist/rts
+
 ARCH=$(shell uname -s -m | sed -e 's/ /-/' | tr '[A-Z]' '[a-z]')
-RELEASE_MANIFEST=actonc backend builtin lib math modules numpy rts
 GNU_TAR := $(shell ls --version 2>&1 | grep GNU >/dev/null 2>&1; echo $$?)
 ifeq ($(GNU_TAR),0)
-TAR_TRANSFORM_OPT=--transform 's,^,acton/,'
+TAR_TRANSFORM_OPT=--transform 's,^dist,acton,'
 else
-TAR_TRANSFORM_OPT=-s ,^,acton/,
+TAR_TRANSFORM_OPT=-s ,^dist,acton,
 endif
 acton-$(ARCH)-$(VERSION_INFO).tar.bz2:
-	tar jcvf $@ $(TAR_TRANSFORM_OPT) $(RELEASE_MANIFEST)
+	tar jcvf $@ $(TAR_TRANSFORM_OPT) --exclude .gitignore dist
 
-release: acton-$(ARCH)-$(VERSION_INFO).tar.bz2
+release: dist
+	$(MAKE) acton-$(ARCH)-$(VERSION_INFO).tar.bz2
 
-.PHONY: all compiler backend rts clean clean-compiler clean-backend clean-rts test release acton-$(ARCH)-$(VERSION).tar.bz2
+dist: actonc backend rts
+	mkdir -p dist/lib dist/modules dist/builtin dist/rts
+	cp backend/server dist/actondb
+	cp lib/*.a dist/lib/
+	cp builtin/*.h dist/builtin/
+	cp rts/rts.h dist/rts/rts.h
+	find modules -name "*.h" -or -name "*.ty" | xargs -n 1 dirname | xargs -I {} mkdir -p dist/{}
+	find modules -name "*.h" -or -name "*.ty" | xargs -I {} cp {} dist/{}
+
+.PHONY: all backend compiler dist rts clean clean-compiler clean-backend clean-rts test release acton-$(ARCH)-$(VERSION).tar.bz2

@@ -1,4 +1,4 @@
-ACTONC=../actonc
+ACTONC=../dist/actonc
 DDB_SERVER=../backend/server
 test:
 	$(MAKE) -C regression
@@ -22,7 +22,7 @@ ddb_stop:
 # improved upon :)
 ddb_count:
 	$(MAKE) ddb_start
-	../actonc --root main count.act
+	$(ACTONC) --root main count.act
 	./count 8 --rts-verbose --rts-ddb-host 127.0.0.1 &
 	sleep 5
 	pkill -f count.8
@@ -32,7 +32,7 @@ ddb_count:
 
 
 argv:
-	../actonc --root main argv.act
+	$(ACTONC) --root main argv.act
 	./argv --rts-verbose foo --bar --rts-verbose
 
 time:

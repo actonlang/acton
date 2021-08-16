@@ -1,7 +1,7 @@
 # The general assumption for test cases are that they implement an actor called
 # 'main' - this makes it possible to compile all of the test cases in the same
 # way.
-ACTONC=../../actonc
+ACTONC=../../dist/actonc
 
 # Expand to all of the tests in this directory
 TEST_SOURCES=$(shell ls *.act)
