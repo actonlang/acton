@@ -1,6 +1,6 @@
 include common.mk
 
-VERSION_INFO=$(subst acton ,,$(shell ./actonc --version DUMMY))
+VERSION_INFO=$(subst acton ,,$(shell ./dist/actonc --version DUMMY))
 
 ifeq ($(shell uname -s),Linux)
 CFLAGS += -I/usr/include/kqueue
