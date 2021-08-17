@@ -86,7 +86,7 @@ getArgs         = Args
                     <*> switch (long "verbose" <> help "Print progress info during execution")
                     <*> switch (long "version" <> help "Show version information")
                     <*> switch (long "stub"    <> help "Stub (.ty) file generation only")
-                    <*> strOption (long "path" <> metavar "TARGETDIR" <> value "" <> showDefault)
+                    <*> strOption (long "syspath" <> metavar "TARGETDIR" <> value "" <> showDefault)
                     <*> strOption (long "root" <> value "" <> showDefault)
                     <*> argument str (metavar "FILE")
 

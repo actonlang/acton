@@ -50,7 +50,7 @@ math/math.o: math/math.c math/math.h
 	cc $(CFLAGS) -I. -c $< -o$@
 
 
-ACTONC=dist/actonc --path .
+ACTONC=dist/actonc --syspath .
 TYMODULES=modules/__builtin__.ty modules/math.ty modules/numpy.ty modules/time.ty
 modules/math.h: math/math.h
 	cp $< $@
