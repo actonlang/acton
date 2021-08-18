@@ -46,7 +46,7 @@ convProtocol env n0 q ps0 eq wmap b     = mainClass : sibClasses
         t0                              = tCon $ convProto p0
         w0                              = witAttr (NoQ n0)
         main                            = head bases
-        bases                           = [ convProto p | ([],_,p) <- ps ] ++ [cValue]
+        bases                           = [ convProto p | (ws,p) <- ps0, null (catRight ws) ] ++ [cValue]
 
         immsibs                         = [ (witAttr w, tCon $ convProto p, inherited ws0) | ([w],ws0,p) <- ps ]
 
@@ -109,7 +109,7 @@ convExtension env n1 c0 q ps0 eq wmap b = mainClass : sibClasses
         w0                              = witAttr (tcname main)
         ts                              = tcargs main
         main                            = head bases
-        bases                           = [ instProto t0 p | ([],_,p) <- ps ] ++ [cValue]
+        bases                           = [ instProto t0 p | (ws,p) <- ps0, null (catRight ws) ] ++ [cValue]
 
         mainClass                       = Class NoLoc n1 q1 bases mainClassBody
           where mainClassBody           = qsigs ++ Decl NoLoc [mainInit] : pruneDefs env (tcname main) (convStmts t0 eq1 b)
