@@ -178,7 +178,6 @@ prettyOrPass te
 
 instance Pretty WTCon where
     pretty (ws,u)               = pretty u
---    pretty (ws,u)               = dotCat pretty (catMaybes ws) <+> colon <+> pretty u
 --    pretty (ws,u)               = dotCat prettyW ws <+> colon <+> pretty u
 --      where prettyW (Left n)    = text "_"
 --            prettyW (Right n)   = pretty n
@@ -638,6 +637,10 @@ findAttr'                   :: EnvF x -> TCon -> Name -> (TSchema, Maybe Deco)
 findAttr' env tc n          = case findAttr env tc n of
                                   Just (_, sc, mbdec) -> (sc, mbdec)
                                   Nothing -> error ("#### findAttr' fails for " ++ prstr tc ++ " . " ++ prstr n)
+
+splitTC                     :: EnvF x -> TCon -> (Substitution, TCon)
+splitTC env (TC n ts)       = (qbound q `zip` ts, TC n $ map tVar $ qbound q)
+  where (q,_,_)             = findConName n env
 
 findAncestry                :: EnvF x -> TCon -> [WTCon]
 findAncestry env tc         = ([Left (tcname tc)],tc) : fst (findCon env tc)

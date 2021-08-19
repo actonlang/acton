@@ -505,14 +505,14 @@ castLit env (Strings l ss) p        = format (concat ss) p
           where expr                = parens (parens (gen env tStr) <> gen env e) <> text "->str"
         conv ('%':s) p              = format s p
 
-genCall env t0 [] (TApp _ e ts) p   = genCall env t0 ts e p
-genCall env t0 [_,t] (Var _ n) (PosArg e PosNil)
+genCall env [] (TApp _ e ts) p      = genCall env ts e p
+genCall env [_,t] (Var _ n) (PosArg e PosNil)
   | n == primCAST                   = parens (parens (gen env t) <> gen env e)
-genCall env t0 [row] (Var _ n) p
+genCall env [row] (Var _ n) p
   | qn == qnPrint                   = gen env qn <> parens (pretty i <> if i > 0 then comma <+> gen env p else empty)
   where i                           = nargs p
         qn                          = unalias env n
-genCall env t0 [row] (Var _ n) (PosArg s@Strings{} (PosArg tup PosNil))
+genCall env [row] (Var _ n) (PosArg s@Strings{} (PosArg tup PosNil))
   | n == primFORMAT                 = gen env n <> parens (genStr env (formatLit s) <> castLit env s (flatten tup))
   where unbox (TNil _ _) p          = empty
         unbox (TRow _  _ _ t r) (PosArg e p)
@@ -521,12 +521,30 @@ genCall env t0 [row] (Var _ n) (PosArg s@Strings{} (PosArg tup PosNil))
           where expr                = parens (parens (gen env t) <> gen env e)
         flatten (Tuple _ p KwdNil)  = p
         flatten e                   = foldr PosArg PosNil $ map (DotI l0 e) [0..]
-genCall env t0 ts e@(Var _ n) p
+genCall env ts e@(Var _ n) p
   | NClass{} <- info                = genNew env n p
-  | NDef{} <- info                  = gen env e <> parens (gen env p)
+  | NDef{} <- info                  = (instCast env ts e $ gen env e) <> parens (gen env p)
   where info                        = findQName n env
-genCall env t0 ts e0@(Dot _ e n) p  = genDotCall env (snd $ schemaOf env e0) e n p
-genCall env t0 ts e p               = genEnter env ts e callKW p
+genCall env ts e0@(Dot _ e n) p     = genDotCall env ts (snd $ schemaOf env e0) e n p
+genCall env ts e p                  = genEnter env ts e callKW p
+
+instCast env [] e                   = id
+instCast env ts (Var _ x)
+  | GName m _ <- x, m == mPrim      = id
+instCast env ts e                   = parens . (parens (gen env t) <>)
+  where t                           = typeInstOf env ts e
+
+dotCast env ent ts (Var _ x) n
+  | GName m _ <- x, m == mPrim      = id
+dotCast env ent ts e n
+  | null ts && null argsubst        = id
+  | otherwise                       = -- trace ("## dotCast " ++ prstr e ++ " : " ++ prstr t0 ++ ", ." ++ prstr n ++ ": " ++ prstr sc ++ ", t: " ++ prstr t) $
+                                      parens . (parens (gen env t) <>)
+  where t0                          = typeOf env e
+        (argsubst, c0)              = splitTC env (tcon t0)  -- If e's type is really a tyvar it must have been cast to a tycon by QuickType at this point
+        (sc, dec)                   = findAttr' env c0 n
+        t                           = subst fullsubst $ if ent then addSelf (sctype sc) dec else sctype sc
+        fullsubst                   = (tvSelf,t0) : (qbound (scbind sc) `zip` ts) ++ argsubst
 
 
 genNew env n p                      = newcon' env n <> parens (gen env p)
@@ -552,36 +570,34 @@ malloc env n                        = text "malloc" <> parens (text "sizeof" <> 
 
 comma' x                            = if isEmpty x then empty else comma <+> x
 
-genDotCall env dec e@(Var _ x) n p
-  | NClass{} <- info, Just _ <- dec = methodtable' env x <> text "." <> gen env n <> parens (gen env p)
-  | NClass{} <- info                = genEnter env [] (eDot e n) callKW p       -- In case n is a closure...
+genDotCall env ts dec e@(Var _ x) n p
+  | NClass{} <- info, Just _ <- dec = dotCast env False ts e n (methodtable' env x <> text "." <> gen env n) <> parens (gen env p)
+  | NClass{} <- info                = genEnter env ts (eDot e n) callKW p       -- In case n is a closure...
   where info                        = findQName x env
-genDotCall env dec e n p
-  | Just NoDec <- dec               = genEnter env [] e n p
-  | Just Static <- dec              = gen env e <> text "->" <> gen env classKW <> text "->" <> gen env n <> parens (gen env p)
-genDotCall env dec e n p            = genEnter env [] (eDot e n) callKW p
+genDotCall env ts dec e n p
+  | Just NoDec <- dec               = genEnter env ts e n p
+  | Just Static <- dec              = dotCast env False ts e n (gen env e <> text "->" <> gen env classKW <> text "->") <> gen env n <> parens (gen env p)
+  | otherwise                       = genEnter env ts (eDot e n) callKW p
 
 
 genDot env ts e@(Var _ x) n
-  | NClass{} <- findQName x env     = methodtable' env x <> text "." <> gen env n
-genDot env [] e n                   = gen env e <> text "->" <> gen env n
-genDot env ts e n                   = gen env e <> text "->" <> gen env n
+  | NClass{} <- findQName x env     = dotCast env False ts e n $ methodtable' env x <> text "." <> gen env n
+genDot env ts e n                   = dotCast env False ts e n $ gen env e <> text "->" <> gen env n
+-- NOTE: all method references are eta-expanded by the lambda-lifter at this point, so n cannot be a method (i.e., require methodtable lookup) here
 
 
 genEnter env ts e n p
   | costly e                        = parens (lbrace <+> (gen env t <+> gen env tmpV <+> equals <+> gen env e <> semi $+$
-                                                          genEnter env1 [] (eVar tmpV) n p <> semi) <+> rbrace)
+                                                          genEnter env1 ts (eVar tmpV) n p <> semi) <+> rbrace)
   where costly Var{}                = False
         costly (Dot _ e n)          = costly e
         costly (DotI _ e i)         = costly e
         costly e                    = True
-        t                           = typeInstOf env ts e
+        t                           = typeOf env e
         env1                        = ldefine [(tmpV,NVar t)] env
-genEnter env ts e n p               = cast (gen env e) <> text "->" <> gen env classKW <> text "->" <> gen env n <> parens (cast (gen env e) <> comma' (gen env p))
-  where cast | n `elem` valueKWs    = parens . (parens (gen env tValue) <>)
-             | otherwise            = id
+genEnter env ts e n p               = dotCast env True ts e n (gen env e <> text "->" <> gen env classKW <> text "->" <> gen env n) <> parens (gen env e <> comma' (gen env p))
 
-genInst env ts e@Var{}              = gen env e
+genInst env ts e@Var{}              = instCast env ts e $ gen env e
 genInst env ts (Dot _ e n)          = genDot env ts e n
 
 adjust t t' e
@@ -616,7 +632,7 @@ instance Gen Expr where
     gen env (None _)                = gen env primNone
     gen env e@Strings{}             = gen env primToStr <> parens (genStr env e)
     gen env e@BStrings{}            = gen env primToBytearray <> parens (genStr env e)
-    gen env (Call _ e p _)          = genCall env tNone [] e p
+    gen env (Call _ e p _)          = genCall env [] e p
     gen env (TApp _ e ts)           = genInst env ts e
     gen env (IsInstance _ e c)      = gen env primISINSTANCE <> parens (gen env e <> comma <+> gen env c)
     gen env (Dot _ e n)             = genDot env [] e n
@@ -642,9 +658,11 @@ instance Gen Expr where
             append                  = w <> text "->" <> gen env classKW <> text "->" <> gen env appendKW
             pars e                  = w <> comma <+> tmp <> comma <+> gen env e
         -- brackets (commaSep (gen env) es)
-    gen env (BinOp _ e1 And e2)     = gen env primAND <> parens (gen env e1 <> comma <+> gen env e2)
-    gen env (BinOp _ e1 Or e2)      = gen env primOR <> parens (gen env e1 <> comma <+> gen env e2)
-    gen env (UnOp _ Not e)          = gen env primNOT <> parens (gen env e)
+    gen env (BinOp _ e1 And e2)     = gen env primAND <> parens (gen env t <> comma <+> gen env e1 <> comma <+> gen env e2)
+      where t                       = typeOf env e1
+    gen env (BinOp _ e1 Or e2)      = gen env primOR <> parens (gen env t <> comma <+> gen env e1 <> comma <+> gen env e2)
+      where t                       = typeOf env e1
+    gen env (UnOp _ Not e)          = gen env primNOT <> parens (genBool env e)
     gen env (Cond _ e1 e e2)        = parens (parens (genBool env e) <> text "->val" <+> text "?" <+> gen env e1 <+> text ":" <+> gen env e2)
 
 genStr env s                        = doubleQuotes $ text $ tail $ init $ concat $ sval s

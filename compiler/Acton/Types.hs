@@ -1390,7 +1390,7 @@ inferTest env (BinOp l e1 Or e2)        = do (cs1,_,_,t1,e1') <- inferTest env e
                                              t <- newTVar
                                              w1 <- newWitness
                                              w2 <- newWitness
-                                             return (Sub w1 t1 t : Sub w2 t2 t :
+                                             return (Sub w1 t1 (tOpt t) : Sub w2 t2 t :
                                                      cs1++cs2, env, [], t, BinOp l (eCall (eVar w1) [e1']) Or (eCall (eVar w2) [e2']))
 inferTest env (UnOp l Not e)            = do (cs,_,_,_,e') <- inferTest env e
                                              return (cs, env, [], tBool, UnOp l Not e')

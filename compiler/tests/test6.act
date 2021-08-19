@@ -1,0 +1,45 @@
+def f1(x):
+    return x or "default"
+
+def f2(x):
+    return x or 42
+
+def f2b(x: int):
+    return x or 42
+
+def f3(x: ?int):
+    return x or None
+
+def f4(x: int, y: ?int):
+    return x or y
+
+def f5(x, y):
+    return x or y
+
+def f6(x, y):
+    return x and y/x
+
+def f7(x):
+    return not x
+
+def f8(x):
+    return x and True
+
+def f9(x: str):
+    return x and True
+
+def f10(x):
+    return x and 7 % x or 42
+
+def g(x, y, z):
+    if x:
+        return 0
+    if not y:
+        return 1
+    if x and y:
+        return 2
+    if y or x:
+        return 3
+    if x or y and z:
+        return 4
+    return -1
