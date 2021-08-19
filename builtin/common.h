@@ -25,18 +25,18 @@ void $printobj(char *mess,$WORD obj);
                                $dict_setitem($state->done,($Hashable)$Hashable$int$witness,to$int($state->row_no-1),$t); \
                                $t; })
 
-#define $AND(T, a, b)       ({ T $a = (a); $a->$class->__bool__($a)->val ? (b) : $a; })
+#define $AND(T, a, b)       ({ T $a = (a); (($value)$a)->$class->__bool__(($value)$a)->val ? (b) : $a; })
 
-#define $OR(a, b)           ({ T $a = (a); $a->$class->__bool__($a)->val ? $a : (b); })
+#define $OR(T, a, b)        ({ T $a = (a); ($a && (($value)$a)->$class->__bool__(($value)$a)->val) ? $a : (b); })
 
-#define $NOT(a)               ((a)->val ? $False : $True)
+#define $NOT(a)             ((a)->val ? $False : $True)
 
-#define $ISINSTANCE($x,$T)    ({ $Super$class $c = (($Super)$x)->$class; \
-                                 while($c && $c != ($Super$class)&$T ## $methods) $c = $c->$superclass; \
-                                 to$bool($c != 0); })
+#define $ISINSTANCE($x,$T)  ({ $Super$class $c = (($Super)$x)->$class; \
+                               while($c && $c != ($Super$class)&$T ## $methods) $c = $c->$superclass; \
+                               to$bool($c != 0); })
 
-#define $ISNOTNONE(x)         ((x) != $None ? $True : $False)
+#define $ISNOTNONE(x)       ((x) != $None ? $True : $False)
 
-#define $SKIPRES(cont)        (cont)
+#define $SKIPRES(cont)      (cont)
 
-#define $FORMAT($s, ...)      ({ char * $b; asprintf(&$b, $s, ##__VA_ARGS__); to$str($b); })
+#define $FORMAT($s, ...)    ({ char * $b; asprintf(&$b, $s, ##__VA_ARGS__); to$str($b); })
