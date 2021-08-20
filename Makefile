@@ -44,35 +44,33 @@ builtin/minienv.o: builtin/minienv.c builtin/minienv.h builtin/builtin.o
 	cc $(CFLAGS) -g -c -O3 $< -o$@
 
 
-# /math -------------------------------------------------
-MODULES += math/math.o
-math/math.o: math/math.c math/math.h
-	cc $(CFLAGS) -I. -c $< -o$@
-
-
 ACTONC=dist/actonc --syspath .
 TYMODULES=modules/__builtin__.ty modules/math.ty modules/numpy.ty modules/time.ty
-modules/math.h: math/math.h
-	cp $< $@
 
 modules/numpy.h: numpy/numpy.h
-	cp $< $@
-
-modules/time.h: time/time.h
 	cp $< $@
 
 modules/__builtin__.ty: modules/__builtin__.act actonc
 	$(ACTONC) $< --stub
 
+MODULES += modules/math.o
 modules/math.ty: modules/math.act modules/math.h modules/__builtin__.ty actonc
 	$(ACTONC) $< --stub
+
+modules/math.o: modules/math.c modules/math.h
+	cc $(CFLAGS) -I. -c $< -o$(subst $,\$,$@)
 
 modules/numpy.ty: modules/numpy.act modules/math.ty actonc
 	$(ACTONC) $< --stub
 
+MODULES += modules/time.o
 modules/time.ty: modules/time.act modules/time.h actonc
 	$(ACTONC) $< --stub
 
+modules/time.o: modules/time.c modules/time.h
+	cc $(CFLAGS) -I. -c $< -o$(subst $,\$,$@)
+
+MODULES += modules/acton/acton$$rts.o
 modules/acton/rts.ty: modules/acton/rts.act modules/time.h actonc
 	$(ACTONC) $< --stub
 
@@ -93,7 +91,7 @@ numpy/numpy.o: numpy/numpy.c numpy/numpy.h numpy/init.h numpy/init.c \
 # /lib --------------------------------------------------
 LIBS=lib/libActon.a lib/libcomm.a lib/libdb.a lib/libdbclient.a lib/libremote.a lib/libvc.a
 
-lib/libActon.a: builtin/builtin.o builtin/minienv.o math/math.o numpy/numpy.o rts/empty.o rts/rts.o time/time.o modules/acton/acton$$rts.o
+lib/libActon.a: builtin/builtin.o builtin/minienv.o modules/math.o numpy/numpy.o rts/empty.o rts/rts.o modules/time.o modules/acton/acton$$rts.o
 	ar rcs $@ $(subst $,\$,$^)
 
 lib/libcomm.a: backend/comm.o rts/empty.o
@@ -133,10 +131,6 @@ rts/pingpong: rts/pingpong.c rts/pingpong.h rts/rts.o
 		-o $@
 
 
-# /time -------------------------------------------------
-MODULES += time/time.o
-time/time.o: time/time.c time/time.h
-	cc $(CFLAGS) -I. -c $< -o$@
 
 # top level targets
 actonc:
