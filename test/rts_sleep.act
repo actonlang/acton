@@ -1,0 +1,5 @@
+import acton.rts
+
+actor main(env):
+    acton.rts.sleep(1.337)
+    await async env.exit(0)

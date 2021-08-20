@@ -73,6 +73,12 @@ modules/numpy.ty: modules/numpy.act modules/math.ty actonc
 modules/time.ty: modules/time.act modules/time.h actonc
 	$(ACTONC) $< --stub
 
+modules/acton/rts.ty: modules/acton/rts.act modules/time.h actonc
+	$(ACTONC) $< --stub
+
+modules/acton/acton$$rts.o: modules/acton/rts.c modules/acton/rts.h actonc
+	cc $(CFLAGS) -I. -c $< -o$(subst $,\$,$@)
+
 
 # /numpy ------------------------------------------------
 MODULES += numpy/numpy.o
@@ -87,8 +93,8 @@ numpy/numpy.o: numpy/numpy.c numpy/numpy.h numpy/init.h numpy/init.c \
 # /lib --------------------------------------------------
 LIBS=lib/libActon.a lib/libcomm.a lib/libdb.a lib/libdbclient.a lib/libremote.a lib/libvc.a
 
-lib/libActon.a: builtin/builtin.o builtin/minienv.o math/math.o numpy/numpy.o rts/empty.o rts/rts.o time/time.o
-	ar rcs $@ $^
+lib/libActon.a: builtin/builtin.o builtin/minienv.o math/math.o numpy/numpy.o rts/empty.o rts/rts.o time/time.o modules/acton/acton$$rts.o
+	ar rcs $@ $(subst $,\$,$^)
 
 lib/libcomm.a: backend/comm.o rts/empty.o
 	ar rcs $@ $^
@@ -158,7 +164,7 @@ clean-rts:
 	rm -f $(MODULES) $(LIBS) $(TYMODULES) modules/math.h modules/numpy.h
 
 clean-dist:
-	rm dist/lib dist/modules dist/builtin dist/rts
+	rm -rf dist/lib dist/modules dist/builtin dist/rts
 
 ARCH=$(shell uname -s -m | sed -e 's/ /-/' | tr '[A-Z]' '[a-z]')
 GNU_TAR := $(shell ls --version 2>&1 | grep GNU >/dev/null 2>&1; echo $$?)
