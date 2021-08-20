@@ -662,7 +662,8 @@ instance Gen Expr where
       where t                       = typeOf env e1
     gen env (BinOp _ e1 Or e2)      = gen env primOR <> parens (gen env t <> comma <+> gen env e1 <> comma <+> gen env e2)
       where t                       = typeOf env e1
-    gen env (UnOp _ Not e)          = gen env primNOT <> parens (genBool env e)
+    gen env (UnOp _ Not e)          = gen env primNOT <> parens (gen env t <> comma <+> genBool env e)
+      where t                       = typeOf env e
     gen env (Cond _ e1 e e2)        = parens (parens (genBool env e) <> text "->val" <+> text "?" <+> gen env e1 <+> text ":" <+> gen env e2)
 
 genStr env s                        = doubleQuotes $ text $ tail $ init $ concat $ sval s

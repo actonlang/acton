@@ -10,7 +10,7 @@ TESTS=$(TEST_SOURCES:.act=)
 
 # Here we mark tests as failing, if we expect them to fail. They can fail either
 # during compilation using actonc or at run time.
-FAILING_COMPILATION=if-return ifisnone 11-int-float 12-for-actor 20-for-break 103-dict-of-int 105-type-inference-order quotes-in-triquotes rtail triquotes-across-lines
+FAILING_COMPILATION=if-return 11-int-float 12-for-actor 20-for-break 103-dict-of-int 105-type-inference-order quotes-in-triquotes rtail triquotes-across-lines
 FAILING_RUNNING=segfault subtract_off_by_one
 ALL_FAILING=$(FAILING_COMPILATION) $(FAILING_RUNNING)
 
