@@ -9,7 +9,6 @@ from numpy import ndarray
 # first command line argument:  nr of weeks shown in window. 1/8 of this number is size of the new sample introduced in each step.
 # second command line argument: nr of weeks to be used in "loess window" for long term trend. 
 
-loess : (ndarray[float],ndarray[float],ndarray[float],int) -> ndarray[float]
 def loess(x, y, xin, win):
     xd  = numpy.abs(xin[:,numpy.newaxis] - x)
     q   = xd/numpy.partition(xd,win)[:,win][:,numpy.newaxis]

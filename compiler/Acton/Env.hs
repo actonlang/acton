@@ -11,7 +11,7 @@
 -- THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 --
 
-{-# LANGUAGE FlexibleInstances, DeriveGeneric #-}
+{-# LANGUAGE FlexibleInstances, FlexibleContexts, DeriveGeneric #-}
 module Acton.Env where
 
 import qualified Control.Exception
@@ -178,7 +178,6 @@ prettyOrPass te
 
 instance Pretty WTCon where
     pretty (ws,u)               = pretty u
---    pretty (ws,u)               = dotCat pretty (catMaybes ws) <+> colon <+> pretty u
 --    pretty (ws,u)               = dotCat prettyW ws <+> colon <+> pretty u
 --      where prettyW (Left n)    = text "_"
 --            prettyW (Right n)   = pretty n
@@ -600,43 +599,16 @@ witsByTName env tn          = [ w | w <- witnesses env, eqname (wtype w) ]
         eqname (TVar _ v)   = NoQ (tvname v) == tn
         eqname _            = False
 
-findWitness                 :: EnvF x -> Type -> PCon -> Maybe Witness
-findWitness env t p         = case elim [] m_wits of
-                                  [w] | null u_wits -> Just w
-                                  _ -> Nothing
-  where (m_wits, wits1)     = partition (matching t) (witsByPName env $ tcname p)
-        u_wits              = filter (unifying t) wits1
-        elim ws' []         = reverse ws'
-        elim ws' (w:ws)
-          | covered         = elim ws' ws
-          | otherwise       = elim (w:ws') ws
-          where covered     = or [ matching (wtype w') w && not (matching (wtype w) w') | w' <- ws'++ws ]
+schematic (TC n ts)         = TC n [ tWild | _ <- ts ]
 
-findProtoByAttr             :: EnvF x -> QName -> Name -> Maybe PCon
-findProtoByAttr env cn n    = case filter hasAttr $ witsByTName env cn of
-                                [] -> Nothing
-                                w:_ -> Just (TC (tcname $ proto w) (map (const tWild) (tcargs $ proto w)))
-  where hasAttr w           = n `elem` conAttrs env (tcname $ proto w)
+wild t                      = subst [ (v,tWild) | v <- nub (tyfree t) ] t
 
-hasWitness                  :: EnvF x -> Type -> PCon -> Bool
-hasWitness env t p          =  isJust $ findWitness env t p
-
-allExtProto                 :: EnvF x -> Type -> PCon -> [Type]
-allExtProto env t p         = reverse [ wild (wtype w) | w <- witsByPName env (tcname p), matching t0 w, wild (wtype w) /= t0 ]
-  where t0                  = wild t
-        wild t              = subst [ (v,tWild) | v <- nub (tyfree t) ] t
-
-allExtProtoAttr             :: EnvF x -> Name -> [Type]
-allExtProtoAttr env n       = [ tCon tc | tc <- allCons env, any ((n `elem`) . allAttrs env . proto) (witsByTName env $ tcname tc) ]
-
-
-matching t w                = matching' (qbound $ binds w) t (wtype w)
-
-matching' vs t t'           = isJust $ match vs t t'
-
-unifying t w                = runTypeM $ tryUnify `catchError` const (return False)
-  where tryUnify            = do unify t (wtype w)
-                                 return True
+wildargs i                  = [ tWild | _ <- nbinds i ]
+  where
+    nbinds (NAct q _ _ _)   = q
+    nbinds (NClass q _ _)   = q
+    nbinds (NProto q _ _)   = q
+    nbinds (NExt q _ _ _)   = q
 
 
 -- TCon queries ------------------------------------------------------------------------------------------------------------------
@@ -666,6 +638,10 @@ findAttr' env tc n          = case findAttr env tc n of
                                   Just (_, sc, mbdec) -> (sc, mbdec)
                                   Nothing -> error ("#### findAttr' fails for " ++ prstr tc ++ " . " ++ prstr n)
 
+splitTC                     :: EnvF x -> TCon -> (Substitution, TCon)
+splitTC env (TC n ts)       = (qbound q `zip` ts, TC n $ map tVar $ qbound q)
+  where (q,_,_)             = findConName n env
+
 findAncestry                :: EnvF x -> TCon -> [WTCon]
 findAncestry env tc         = ([Left (tcname tc)],tc) : fst (findCon env tc)
 
@@ -688,7 +664,7 @@ directAncestors env qn      = [ tcname p | (ws,p) <- us, null $ catRight ws ]
   where (q,us,te)           = findConName qn env
 
 allAncestors                :: EnvF x -> TCon -> [TCon]
-allAncestors env tc         = [ TC n (map (const tWild) ts) | (_, TC n ts) <- us ]
+allAncestors env tc         = [ schematic c | (_, c) <- us ]
   where (us,te)             = findCon env tc
 
 allAncestors'               :: EnvF x -> QName -> [QName]
@@ -751,21 +727,18 @@ abstractAttrs env n         = (initKW : dom sigs) \\ dom terms
 
 allCons                     :: EnvF x -> [CCon]
 allCons env                 = reverse locals ++ concat [ cons m (lookupMod m env) | m <- moduleRefs (names env), m /= mPrim ]
-  where locals              = [ TC (NoQ n) (args i) | (n,i) <- names env, con i ]
+  where locals              = [ TC (NoQ n) (wildargs i) | (n,i) <- names env, con i ]
         con NClass{}        = True
         con NAct{}          = True
         con _               = False
-        cons m (Just te)    = [ TC (GName m n) (args i) | (n,i) <- te, con i ] ++ concat [ cons (modCat m n) (Just te') | (n,NModule te') <- te ]
-        args (NClass q _ _) = [ tWild | _ <- q ]
-        args (NAct q _ _ _) = [ tWild | _ <- q ]
+        cons m (Just te)    = [ TC (GName m n) (wildargs i) | (n,i) <- te, con i ] ++ concat [ cons (modCat m n) (Just te') | (n,NModule te') <- te ]
 
 allProtos                   :: EnvF x -> [PCon]
 allProtos env               = reverse locals ++ concat [ protos m (lookupMod m env) | m <- moduleRefs (names env), m /= mPrim ]
-  where locals              = [ TC (NoQ n) (args i) | (n,i) <- names env, proto i ]
+  where locals              = [ TC (NoQ n) (wildargs i) | (n,i) <- names env, proto i ]
         proto NProto{}      = True
         proto _             = False
-        protos m (Just te)  = [ TC (GName m n) (args i) | (n,i) <- te, proto i ] ++ concat [ protos (modCat m n) (Just te') | (n,NModule te') <- te ]
-        args (NProto q _ _) = [ tWild | _ <- q ]
+        protos m (Just te)  = [ TC (GName m n) (wildargs i) | (n,i) <- te, proto i ] ++ concat [ protos (modCat m n) (Just te') | (n,NModule te') <- te ]
 
 allConAttr                  :: EnvF x -> Name -> [Type]
 allConAttr env n            = [ tCon tc | tc <- allCons env, n `elem` allAttrs env tc ]
@@ -886,6 +859,97 @@ castable env t1 t2@(TVar _ tv)              = False
 castable env t1 (TOpt _ t2)                 = castable env t1 t2
 
 castable env t1 t2                          = False
+
+----------------------------------------------------------------------------------------------------------------------
+-- GLB
+----------------------------------------------------------------------------------------------------------------------
+
+glb env (TWild _) t2                    = t2
+glb env t1 (TWild _)                    = t1
+
+glb env t1@TVar{} t2@TVar{}
+  | t1 == t2                            = t1
+glb env TVar{} _                        = tWild
+glb env _ TVar{}                        = tWild
+
+glb env (TCon _ c1) (TCon _ c2)
+  | tcname c1 == tcname c2              = tCon c1
+  | hasAncestor env c1 c2               = tCon c1
+  | hasAncestor env c2 c1               = tCon c2
+
+glb env (TFun _ e1 p1 k1 t1) (TFun _ e2 p2 k2 t2)
+                                        = tFun (glb env e1 e2) (lub env p1 p2) (lub env k1 k2) (glb env t1 t2)
+glb env (TTuple _ p1 k1) (TTuple _ p2 k2)
+                                        = tTuple (glb env p1 p2) (glb env k1 k2)
+
+glb env (TOpt _ t1) (TOpt _ t2)         = tOpt (glb env t1 t2)
+glb env (TNone _) t2                    = tNone
+glb env t1 (TNone _)                    = tNone
+glb env (TOpt _ t1) t2                  = glb env t1 t2
+glb env t1 (TOpt _ t2)                  = glb env t1 t2
+
+glb env t1@(TFX _ fx1) t2@(TFX _ fx2)   = tTFX (glfx fx1 fx2)
+  where glfx FXPure   _                 = FXPure
+        glfx _        FXPure            = FXPure
+        glfx FXMut    _                 = FXMut
+        glfx _        FXMut             = FXMut
+        glfx FXAction FXAction          = FXAction
+
+glb env (TNil _ k1) (TNil _ k2)
+  | k1 == k2                            = tNil k1
+glb env (TRow _ k n t1 r1) r
+  | Just (t2,r2) <- findInRow n r       = tRow k n (glb env t1 t2) (glb env r1 r2)
+
+glb env t1 t2                           = -- tyerr t1 ("No common subtype: " ++ prstr t2)
+                                          error ("No common subtype: " ++ prstr t1 ++ " and " ++ prstr t2)
+    
+
+----------------------------------------------------------------------------------------------------------------------
+-- LUB
+----------------------------------------------------------------------------------------------------------------------
+
+lub env (TWild _) t2                    = t2
+lub env t1 (TWild _)                    = t1
+
+lub env t1@TVar{} t2@TVar{}
+  | t1 == t2                            = t1
+lub env TVar{} _                        = tWild
+lub env _ TVar{}                        = tWild
+
+lub env (TCon _ c1) (TCon _ c2)
+  | tcname c1 == tcname c2              = tCon c1
+  | hasAncestor env c1 c2               = tCon c2
+  | hasAncestor env c2 c1               = tCon c1
+  | not $ null common                   = tCon $ head common
+  where common                          = commonAncestors env c1 c2
+
+lub env (TFun _ e1 p1 k1 t1) (TFun _ e2 p2 k2 t2)
+                                        = tFun (lub env e1 e2) (glb env p1 p2) (glb env k1 k2) (lub env t1 t2)
+lub env (TTuple _ p1 k1) (TTuple _ p2 k2)
+                                        = tTuple (lub env p1 p2) (lub env k1 k2)
+
+lub env (TOpt _ t1) (TOpt _ t2)         = tOpt (lub env t1 t2)
+lub env (TNone _) t2@TOpt{}             = t2
+lub env t1@TOpt{} (TNone _)             = t1
+lub env (TNone _) t2                    = tOpt t2
+lub env t1 (TNone _)                    = tOpt t1
+lub env (TOpt _ t1) t2                  = tOpt $ lub env t1 t2
+lub env t1 (TOpt _ t2)                  = tOpt $ lub env t1 t2
+
+lub env t1@(TFX _ fx1) t2@(TFX _ fx2)   = tTFX (lufx fx1 fx2)
+  where lufx FXAction _                 = FXAction
+        lufx _        FXAction          = FXAction
+        lufx FXMut    _                 = FXMut
+        lufx _        FXMut             = FXMut
+        lufx FXPure   FXPure            = FXPure
+
+lub env (TNil _ k1) (TNil _ k2)
+  | k1 == k2                            = tNil k1
+lub env (TRow _ k n t1 r1) r
+  | Just (t2,r2) <- findInRow n r       = tRow k n (lub env t1 t2) (lub env r1 r2)
+
+lub env t1 t2                           = -- tyerr t1 ("No common supertype: " ++ prstr t2)
+                                          error ("No common supertype: " ++ prstr t1 ++ " and " ++ prstr t2)
 
 
 -- Import handling (local definitions only) ----------------------------------------------

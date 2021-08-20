@@ -71,6 +71,7 @@ primWSequenceList   = gPrim "Sequence$list$witness"
 primWCollectionList = gPrim "Collection$list$witness"
 
 primISNOTNONE       = gPrim "ISNOTNONE"
+primISNONE          = gPrim "ISNONE"
 
 primSKIPRESc        = gPrim "SKIPRESc"
 primSKIPRES         = gPrim "SKIPRES"
@@ -128,6 +129,7 @@ primMkEnv cls def var sig =
                             (noq primWCollectionList,var tCollectionListWild),
 
                             (noq primISNOTNONE,     def scISNOTNONE NoDec),
+                            (noq primISNONE,        def scISNONE NoDec),
 
                             (noq primSKIPRESc,      def scSKIPRESc NoDec),
                             (noq primSKIPRES,       def scSKIPRES NoDec)
@@ -328,6 +330,11 @@ tIntegralInt        = tCon $ TC qnIntegral [tInt]
 --  $ISNOTNONE      : [A] => pure (?A) -> bool
 scISNOTNONE         = tSchema [quant a] tISNOTNONE
   where tISNOTNONE  = tFun fxPure (posRow (tOpt $ tVar a) posNil) kwdNil tBool
+        a           = TV KType (name "A")
+
+--  $ISNONE         : [A] => pure (?A) -> bool
+scISNONE            = tSchema [quant a] tISNONE
+  where tISNONE     = tFun fxPure (posRow (tOpt $ tVar a) posNil) kwdNil tBool
         a           = TV KType (name "A")
 
 --  $SKIPRESc       : [X,A] => X(X(None)->$R) -> X(A)->$R
