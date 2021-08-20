@@ -913,7 +913,7 @@ genEnv env cs te ds0
 defaultsP (PosPar n (Just t) (Just e) p)
                                         = s : defaultsP p
   where s                               = sIf1 test [set] []
-        test                            = eCall (tApp (eQVar primISNOTNONE) [t]) [eVar n]
+        test                            = eCall (tApp (eQVar primISNONE) [t]) [eVar n]
         set                             = sAssign (pVar' n) e
 defaultsP (PosPar n _ Nothing p)        = defaultsP p
 defaultsP _                             = []
@@ -924,7 +924,7 @@ noDefaultsP p                           = p
 defaultsK (KwdPar n (Just t) (Just e) k)
                                         = s : defaultsK k
   where s                               = sIf1 test [set] []
-        test                            = eCall (tApp (eQVar primISNOTNONE) [t]) [eVar n]
+        test                            = eCall (tApp (eQVar primISNONE) [t]) [eVar n]
         set                             = sAssign (pVar' n) e
 defaultsK (KwdPar n _ Nothing k)        = defaultsK k
 defaultsK _                             = []
@@ -1395,9 +1395,12 @@ inferTest env (BinOp l e1 Or e2)        = do (cs1,_,_,t1,e1') <- inferTest env e
 inferTest env (UnOp l Not e)            = do (cs,_,_,_,e') <- inferTest env e
                                              return (cs, env, [], tBool, UnOp l Not e')
 inferTest env (CompOp l e1 [OpArg op e2])
-  | Just n <- noneTest e1 op e2         = do t <- newTVar
+  | Just n <- isNotNone e1 op e2        = do t <- newTVar
                                              (cs1,e') <- inferSub env (tOpt t) (eVar n)
                                              return (cs1, define [(n,NVar t)] env, sCast n (tOpt t) t, tBool, eCall (tApp (eQVar primISNOTNONE) [t]) [e'])
+  | Just n <- isNone e1 op e2           = do t <- newTVar
+                                             (cs1,e') <- inferSub env (tOpt t) (eVar n)
+                                             return (cs1, env, [], tBool, eCall (tApp (eQVar primISNONE) [t]) [e'])
 inferTest env (IsInstance l e@(Var _ (NoQ n)) c)
                                         = case findQName c env of
                                              NClass q _ _ -> do
@@ -1413,11 +1416,18 @@ inferTest env e                         = do (cs,t,e') <- infer env e
                                              return (cs, env, [], t, e')
 
 
-noneTest (Var _ (NoQ n)) IsNot None{}   = Just n
-noneTest (Var _ (NoQ n)) NEq None{}     = Just n
-noneTest None{} IsNot (Var _ (NoQ n))   = Just n
-noneTest None{} NEq (Var _ (NoQ n))     = Just n
-noneTest e op e'                        = Nothing
+isNotNone (Var _ (NoQ n)) IsNot None{}  = Just n
+isNotNone (Var _ (NoQ n)) NEq None{}    = Just n
+isNotNone None{} IsNot (Var _ (NoQ n))  = Just n
+isNotNone None{} NEq (Var _ (NoQ n))    = Just n
+isNotNone e op e'                       = Nothing
+
+isNone (Var _ (NoQ n)) Is None{}        = Just n
+isNone (Var _ (NoQ n)) Eq None{}        = Just n
+isNone None{} Is (Var _ (NoQ n))        = Just n
+isNone None{} Eq (Var _ (NoQ n))        = Just n
+isNone e op e'                          = Nothing
+
 
 sCast n t t'                            = [(n, eCall (tApp (eQVar primCAST) [t,t']) [eVar n])]
 
