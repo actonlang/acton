@@ -74,7 +74,7 @@ test: $(TESTS)
 	./actor_ring_tests_local
 	./actor_ring_tests_remote
 	./db_unit_tests
-	./queue_unit_tests
+	@echo DISABLED test: ./queue_unit_tests
 	./skiplist_test
 
 failure_detector/db_messages_test: failure_detector/db_messages_test.c $(LIBDIR)/libremote.a $(LIBDIR)/libvc.a
