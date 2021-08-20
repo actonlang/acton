@@ -1,0 +1,10 @@
+actor Bar(f):
+    f.func(3)
+
+actor Foo():
+    def func(a):
+        print(a)
+
+actor main(env):
+    var f = Foo()
+    var b = Bar(f)
