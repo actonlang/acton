@@ -1,6 +1,6 @@
 #pragma once
 
-#include "../math/math.h"
+#include "modules/math.h"
 
 
 struct numpy$$Integral$ndarray$int;
