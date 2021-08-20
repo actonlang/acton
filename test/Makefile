@@ -35,6 +35,10 @@ argv:
 	$(ACTONC) --root main argv.act
 	./argv --rts-verbose foo --bar --rts-verbose
 
+rts_sleep:
+	$(ACTONC) --root main $@.act
+	./$@
+
 time:
 	$(ACTONC) --root main time.act
 	./time $(shell date "+%s")
