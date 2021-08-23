@@ -1,0 +1,55 @@
+import random
+
+def check_random_distribution(min, max, total):
+    print("Checking distribution of", total, "random numbers between", min, "and", max, "are within 10% of an even distribution")
+    num_range = max - min
+    stats = {}
+    for i in range(0, total, 1):
+        r = random.randint(min, max)
+        if r not in stats:
+            stats[r] = 0
+        stats[r] += 1
+    exp_count = total / num_range
+    slack = 0.1
+    exp_min = exp_count * (1-slack)
+    exp_max = exp_count * (1+slack)
+    for n, v in stats.items():
+        if v < exp_min:
+            print("n", n, "with a count of", v, "is below expected value of", exp_min)
+        if v > exp_max:
+            print("n", n, "with a count of", v, "is above expected value of", exp_max)
+        #if n > (expected_count * 1.1) or n < (expected_count * 0.9):
+            #print("n", n, " outside of expected range (", (expected_count*0.9), "-", (expected_count*1.1), "):", stats[n])
+
+
+actor main(env):
+    print("Checking that 100k random numbers are within the specified range")
+    for i in range(0, 100000, 1):
+        r = random.randint(0, 1234)
+        if r < 0:
+            print("Got a random number outside range: ", r, "min 0 / max 1234")
+            await async env.exit(1)
+
+    print("Checking that 100k random numbers are within the specified range")
+    for i in range(0, 100000, 1):
+        r = random.randint(1293862, 97309358)
+        if r < 0:
+            print("Got a random number outside range: ", r, "min 1293862 / max 97309358")
+            await async env.exit(1)
+
+    check_random_distribution(500, 1000, 1*1000*1000)
+
+
+    print("Printing some random numbers for show:")
+    print(random.randint(0, 1234))
+    print(random.randint(0, 1234))
+    print(random.randint(0, 1234))
+    print(random.randint(0, 1234))
+    print(random.randint(0, 1234))
+    print(random.randint(34560, 9281234))
+    print(random.randint(34560, 9281234))
+    print(random.randint(34560, 9281234))
+    print(random.randint(34560, 9281234))
+    print(random.randint(34560, 9281234))
+
+    await async env.exit(0)
