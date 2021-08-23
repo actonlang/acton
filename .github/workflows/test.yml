@@ -91,23 +91,35 @@ jobs:
         uses: actions/download-artifact@v2
         with:
           name: acton-linux
-      - name: "Update tip release with artifacts, overwriting earlier artifacts and force pushing the 'tip' tag"
-        uses: eine/tip@master
+      - name: "Delete current tip release & tag"
+        uses: dev-drprasad/delete-tag-and-release@v0.2.0
         with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-          tag: tip
-          rm: True
-          files: acton*.tar*
-      - name: "Remove version number from darwin tar ball"
-        run: mv acton-darwin-x86_64*tar.bz2 acton-darwin-x86_64.tar.bz2
-      - name: "Remove version number from darwin tar ball"
-        run: mv acton-linux-x86_64*tar.bz2 acton-linux-x86_64.tar.bz2
+          delete_release: true
+          tag_name: tip
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - name: "Workaround for changelog extractor that looks for number versions in headlines, which won't work for 'Unreleased'"
         run: sed -i -e 's/^## Unreleased/## [999.9] Unreleased\nThis is an unreleased snapshot built from the main branch. Like a nightly but more up to date./' CHANGELOG.md
       - name: "Extract release notes"
         id: extract-release-notes
         uses: ffurrer2/extract-release-notes@v1
-      - name: "Update 'tip' release notes and upload renamed artifacts"
+      - name: "(re-)create 'tip' release notes and upload artifacts as assets"
+        uses: ncipollo/release-action@v1
+        with:
+          allowUpdates: true
+          artifacts: acton*.tar*
+          body: ${{ steps.extract-release-notes.outputs.release_notes }}
+          draft: false
+          prerelease: true
+          name: "tip"
+          tag: "tip"
+          token: ${{ secrets.GITHUB_TOKEN }}
+          replacesArtifacts: true
+      - name: "Remove version number from darwin tar ball"
+        run: mv acton-darwin-x86_64*tar.bz2 acton-darwin-x86_64.tar.bz2
+      - name: "Remove version number from darwin tar ball"
+        run: mv acton-linux-x86_64*tar.bz2 acton-linux-x86_64.tar.bz2
+      - name: "Upload artifacts without version number for stable links"
         uses: ncipollo/release-action@v1
         with:
           allowUpdates: true
