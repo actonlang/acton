@@ -47,6 +47,9 @@ Extract the Acton tar ball:
 $ tar jxvf acton-*
 ```
 
+You will want to include the acton directory in your `PATH` so you can use
+`actonc`.
+
 ## `actonc` dependencies
 In order to compile Acton programs using `actonc` you need to install the
 following prerequisites:
@@ -63,10 +66,31 @@ brew install protobuf-c util-linux
 
 ## Compiling an Acton program
 
-Enter the Acton examples directory, compile the hello world program and run:
+Make your own module by creating a directory
+
+```sh
+$ mkdir foo
+$ cd foo
 ```
-$ cd acton/examples
-$ ../actonc --root main helloworld.act
+
+Tell Acton its a module
+```sh
+$ touch .acton
+```
+
+Edit the program source file, let's call it `helloworld.act`, and enter the
+following code:
+
+``` Acton
+actor main(env):
+    print("Hello, world!")
+    await async env.exit(0)
+```
+
+Compile the program and run it:
+
+```
+$ actonc --root main helloworld.act
 $ ./helloworld
 Hello, world!
 ```
