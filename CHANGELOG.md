@@ -2,12 +2,62 @@
 
 ## Unreleased
 
+## [0.5.0](https://github.com/actonlang/acton/releases/tag/v0.5.0) (2021-08-23)
+
 ### Added
-- distributed database backend is enabled in the RTS
+- The distributed database backend is enabled in the RTS
   - this was previously a build time flag
   - it is now run time configuration via `--rts-ddb-host` and `--rts-ddb-port`
   - see `examples/count` for a demo and instructions
 - RTS now has a `--rts-verbose` argument to make it more chatty
+- General evaluation of expressions in a boolean context
+  - explicit boolean expressions were already supported and working
+  - however, in Python any expression can be evaluated in a boolean context
+    which was not properly supported... and it now is!
+  - this could be considered a bug fix, like it should go under "Fixed" but it
+    is big enough of a thing to warrant being here... almost like new
+    functionality, although we probably did intend to support this all along
+- Description of development workflow, see docs/development_workflow.md
+- A short guide on how to wrap C libraries for use in Acton, see
+  docs/wrapping_c_libraries.md
+- `time.time()` function
+  - returns the current system time in nanoseconds as an integer
+  - `time` is a new module
+- `random.randint()` function
+  - `random` is a new module
+- `acton.rts.sleep()` function
+  - from a user perspective acts just like Pythons `time.sleep()`
+  - it uses `usleep` in C which means it actually sleeps the RTS thread
+    executing the actor
+    - this is typically a bad thing - we just want to sleep an actor, not the
+      RTS thread
+    - there are however use cases, like when implementing benchmarking or
+      similar.
+    - this is why it is under `acton.rts` and not in `time`
+  - `acton.rts` is a new module
+
+### Changed
+- Refactored Makefile structure to complete DAG
+  - use a single top level Makefile rather than recursive Makefiles
+  - only matters if you are doing development on Acton itself
+  - backend, being enough of a standalone piece, still has its own Makefile
+- `actonc --hgen` and `actonc --cgen` now outputs only code
+  - easier to pipe directly to a file
+  - compilation command not included, now available with `actonc --ccmd`
+- `actonc` argument `--path` is now called `--syspath`
+  - it is the system path and was already referred to as `syspath` internally
+- The build output, when building Acton itself, is now placed in `dist`
+  - makes it considerably easier to produce a release by tarring up its content
+  - release size has been reduced to almost half by avoiding unnecessary files
+  - the top level directories, like `modules` is now a source directory and no
+    longer "the working directory of `actonc`"
+- Source code of several modules have been moved from separate subdirs, like
+  `math` and `time`, into `modules/`. Less top level clutter!
+
+### Fixed
+- Improved dependency declaration for backend
+  - Only matters if you are building Acton yourself and making changes to the
+    backend database
 
 ## [0.4.2](https://github.com/actonlang/acton/releases/tag/v0.4.2) (2021-08-05)
 
@@ -17,7 +67,7 @@
   - https://github.com/actonlang/acton/releases/download/tip/acton-linux-x86_64.tar.bz2
 
 ### Fixed
-- versioned releases now use correct version number, like `0.4.1` rather than
+- Versioned releases now use correct version number, like `0.4.1` rather than
   the version style used for `tip` releases which include the date & time, like
   `0.4.1.2021.08.05.12.15.37`
 - tip release tar balls now reflect the full tip version in the filename
@@ -30,7 +80,7 @@
 
 ### Added
 - `--version --verbose` will print verbose version information
-- internal compiler errors now include information about the C compiler (cc)
+- Internal compiler errors now include information about the C compiler (cc)
 - Acton is now made available as GitHub Releases
   - pre-built binary releases! Users no longer need to compile Acton themselves
   - available from [Releases page](https://github.com/actonlang/acton/releases)
