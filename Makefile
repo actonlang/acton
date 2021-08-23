@@ -63,6 +63,13 @@ modules/math.o: modules/math.c modules/math.h
 modules/numpy.ty: modules/numpy.act modules/math.ty actonc
 	$(ACTONC) $< --stub
 
+MODULES += modules/random.o
+modules/random.ty: modules/random.act modules/random.h actonc
+	$(ACTONC) $< --stub
+
+modules/random.o: modules/random.c modules/random.h
+	cc $(CFLAGS) -I. -c $< -o$(subst $,\$,$@)
+
 MODULES += modules/time.o
 modules/time.ty: modules/time.act modules/time.h actonc
 	$(ACTONC) $< --stub
@@ -91,7 +98,7 @@ numpy/numpy.o: numpy/numpy.c numpy/numpy.h numpy/init.h numpy/init.c \
 # /lib --------------------------------------------------
 LIBS=lib/libActon.a lib/libcomm.a lib/libdb.a lib/libdbclient.a lib/libremote.a lib/libvc.a
 
-lib/libActon.a: builtin/builtin.o builtin/minienv.o modules/math.o numpy/numpy.o rts/empty.o rts/rts.o modules/time.o modules/acton/acton$$rts.o
+lib/libActon.a: builtin/builtin.o builtin/minienv.o modules/math.o numpy/numpy.o rts/empty.o rts/rts.o modules/time.o modules/acton/acton$$rts.o $(MODULES)
 	ar rcs $@ $(subst $,\$,$^)
 
 lib/libcomm.a: backend/comm.o rts/empty.o
