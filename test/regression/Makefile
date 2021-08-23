@@ -17,6 +17,7 @@ FAILING_COMPILATION= \
 	103-dict-of-int \
 	105-type-inference-order \
 	110-union-none-int \
+	111-raise-exception \
 	if-return \
 	quotes-in-triquotes \
 	rtail \
