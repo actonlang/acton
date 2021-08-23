@@ -110,7 +110,7 @@ instance Norm Module where
 instance Norm Stmt where
     norm env (Expr l e)             = Expr l <$> norm env e
     norm env (MutAssign l t e)      = MutAssign l <$> norm env t <*> norm env e
-    norm env (Assert l e mbe)       = do e' <- norm env e
+    norm env (Assert l e mbe)       = do e' <- normBool env e
                                          mbe' <- norm env mbe
                                          return $ Expr l $ eCall (eQVar primASSERT) [e', maybe eNone id mbe']
     norm env (Pass l)               = return $ Pass l
@@ -128,7 +128,7 @@ instance Norm Stmt where
     norm env (Break l)              = return $ Break l
     norm env (Continue l)           = return $ Continue l
     norm env (If l bs els)          = If l <$> norm env bs <*> norm env els
-    norm env (While l e b els)      = While l <$> norm env e <*> norm env b <*> norm env els
+    norm env (While l e b els)      = While l <$> normBool env e <*> norm env b <*> norm env els
     norm env (Try l b hs els fin)   = Try l <$> norm env b <*> norm env hs <*> norm env els <*> norm env fin
     norm env (Data l mbt ss)        = Data l <$> norm env mbt <*> norm env ss
     norm env (VarAssign l ps e)     = VarAssign l <$> norm env ps <*> norm env e
@@ -217,6 +217,12 @@ catStrings ss                       = '"' : (escape '"' (concatMap stripQuotes s
 
 normInst env ts e                   = norm env e
 
+normBool env e
+  | t == tBool                      = norm env e
+  | otherwise                       = do e' <- norm env e
+                                         return $ eCall (eDot e' boolKW) []
+  where t                           = typeOf env e
+
 instance Norm Expr where
     norm env (Var l nm)             = return $ Var l nm
     norm env (Int l i s)            = Int l <$> return i <*> return s
@@ -238,11 +244,11 @@ instance Norm Expr where
       where t                       = typeOf env e
     norm env (Async l e)            = Async l <$> norm env e
     norm env (Await l e)            = Await l <$> norm env e
-    norm env (Cond l e1 e2 e3)      = Cond l <$> norm env e1 <*> norm env e2 <*> norm env e3
+    norm env (Cond l e1 e2 e3)      = Cond l <$> normBool env e1 <*> norm env e2 <*> norm env e3
     norm env (IsInstance l e c)     = IsInstance l <$> norm env e <*> pure c
     norm env (BinOp l e1 Or e2)     = BinOp l <$> norm env e1 <*> pure Or <*> norm env e2
     norm env (BinOp l e1 And e2)    = BinOp l <$> norm env e1 <*> pure And <*> norm env e2
-    norm env (UnOp l Not e)         = UnOp l Not <$> norm env e
+    norm env (UnOp l Not e)         = UnOp l Not <$> normBool env e
     norm env (Rest l e n)           = RestI l <$> norm env e <*> pure (nargs p + narg n k)
       where TTuple _ p k            = typeOf env e
     norm env (DotI l e i)           = DotI l <$> norm env e <*> pure i
@@ -274,7 +280,7 @@ instance Norm Exception where
     norm env (Exception e mbe)      = Exception <$> norm env e <*> norm env mbe
 
 instance Norm Branch where
-    norm env (Branch e ss)          = Branch <$> norm env e <*> norm env ss
+    norm env (Branch e ss)          = Branch <$> normBool env e <*> norm env ss
 
 instance Norm Handler where
     norm env (Handler ex b)         = Handler ex <$> norm env1 b
@@ -329,7 +335,7 @@ instance Norm KwdPat where
     
 instance Norm Comp where
     norm env (CompFor l p e c)      = CompFor l <$> norm env p <*> norm env e <*> norm (define (envOf p) env) c
-    norm env (CompIf l e c)         = CompIf l <$> norm env e <*> norm env c
+    norm env (CompIf l e c)         = CompIf l <$> normBool env e <*> norm env c
     norm env NoComp                 = return NoComp
 
 instance Norm Elem where
