@@ -182,7 +182,8 @@ release: dist
 
 dist: actonc backend rts
 	mkdir -p dist/lib dist/modules dist/builtin dist/rts
-	cp backend/server dist/actondb
+	cp backend/server backend/actondb
+	mv backend/actondb dist/
 	cp lib/*.a dist/lib/
 	cp builtin/*.h dist/builtin/
 	cp rts/rts.h dist/rts/rts.h
