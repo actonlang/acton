@@ -45,7 +45,7 @@ builtin/minienv.o: builtin/minienv.c builtin/minienv.h builtin/builtin.o
 
 
 ACTONC=dist/actonc --syspath .
-TYMODULES=modules/__builtin__.ty modules/acton/rts.ty modules/math.ty modules/numpy.ty modules/time.ty
+TYMODULES=modules/__builtin__.ty modules/acton/rts.ty modules/math.ty modules/numpy.ty modules/random.ty modules/time.ty
 
 modules/numpy.h: numpy/numpy.h
 	cp $< $@
