@@ -27,7 +27,7 @@ void $range$__init__($range self, $int start, $int stop, $int step) {
   if (step) {
     int stp = from$int(step);
     if (stp==0) {
-    RAISE(($BaseException)$NEW($ValueError,to$str("step size zero in range")));
+      $RAISE(($BaseException)$NEW($ValueError,to$str("step size zero in range")));
     }
     else
       self->step = stp;

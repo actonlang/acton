@@ -15,7 +15,7 @@
 $int random$$randint ($int min, $int max) {
     // ensure we have a valid range where min is smaller than max
     if (min->val > max->val) {
-        RAISE((($Exception)$ValueError$new(to$str("min value must be smaller than max"))));
+        $RAISE((($BaseException)$ValueError$new(to$str("min value must be smaller than max"))));
     }
     // upper end of the range we want when "based to 0"
     int range = max->val - min->val;

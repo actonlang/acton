@@ -48,7 +48,7 @@ numpy$$ndarray numpy$$Integral$ndarray$int$__fromatom__(numpy$$Integral$ndarray$
 }
 
 $complex numpy$$Integral$ndarray$int$__complx__(numpy$$Integral$ndarray$int wit, numpy$$ndarray a) {
-    RAISE(($BaseException)$NEW($NotImplementedError,to$str("complex not implemented for ndarray")));
+    $RAISE(($BaseException)$NEW($NotImplementedError,to$str("complex not implemented for ndarray")));
     return NULL;
 }
 
@@ -187,7 +187,7 @@ numpy$$ndarray numpy$$Real$ndarray$__fromatom__(numpy$$Real$ndarray wit,$atom a)
 }
 
 $complex numpy$$Real$ndarray$__complx__(numpy$$Real$ndarray wit, numpy$$ndarray a) {
-    RAISE(($BaseException)$NEW($NotImplementedError,to$str("complex not implemented for ndarray")));
+    $RAISE(($BaseException)$NEW($NotImplementedError,to$str("complex not implemented for ndarray")));
     return NULL;
 }
 

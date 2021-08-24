@@ -27,7 +27,7 @@ $float $float$new($atom a) {
     if (c==(($str)a)->nbytes)
       return to$float(x);
     else
-      RAISE(($BaseException)$NEW($ValueError,to$str("float_fromatom(): invalid str literal for type float")));
+      $RAISE(($BaseException)$NEW($ValueError,to$str("float_fromatom(): invalid str literal for type float")));
   }
   fprintf(stderr,"internal error: float_fromatom: argument not of atomic type");
   exit(-1);
