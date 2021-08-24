@@ -765,15 +765,18 @@ varclose xys                                = clos [] xys
 below x cl                                  = [ v | (v,w) <- cl, w==x ]
 above y cl                                  = [ w | (v,w) <- cl, v==y ]
 
-gsimp cl obs []                         = []
-gsimp cl obs ((x,y):xys)
-  | not subsumed                        = gsimp cl obs xys
-  | x_obs && y_obs                      = gsimp cl obs xys
-  | x_obs                               = (x,y) : gsimp cl (y:obs) xys
-  | y_obs                               = (x,y) : gsimp cl (x:obs) xys
-  | otherwise                           = (x,y) : gsimp cl obs xys
-  where subsumed                        = (above x cl \\ [y]) `eq` above y cl && (below y cl \\ [x]) `eq` below x cl
-        a `eq` b                        = all (`elem` b) a && all (`elem` a) b
+gsimp vi cl obs []                      = []
+gsimp vi cl obs ((x,y):xys)
+  | not subsumed                        = gsimp vi cl obs xys
+  | x_obs && y_obs                      = gsimp vi cl obs xys
+  | x_obs                               = (x,y) : gsimp vi cl (y:obs) xys
+  | y_obs                               = (x,y) : gsimp vi cl (x:obs) xys
+  | otherwise                           = (x,y) : gsimp vi cl obs xys
+  where subsumed                        = (above x cl \\ [y]) `eq` above y cl && (below y cl \\ [x]) `eq` below x cl &&
+                                          lookup' x (ubounds vi) `subset` lookup' y (ubounds vi) && lookup' y (lbounds vi) `subset` lookup' x (lbounds vi) &&
+                                          rng (lookup' x (pbounds vi)) `eq` rng (lookup' y (pbounds vi))
+        a `eq` b                        = a `subset` b && b `subset` a
+        a `subset` b                    = all (`elem` b) a
         x_obs                           = x `elem` obs
         y_obs                           = y `elem` obs
 
@@ -870,7 +873,7 @@ improve env te tt eq cs
         closure                         = varclose (varvars vi)
         Right vclosed                   = closure
         (vvsL,vvsU)                     = unzip vclosed
-        gsimple                         = gsimp vclosed obsvars (varvars vi)
+        gsimple                         = gsimp vi vclosed obsvars (varvars vi)
         multiUBnd                       = [ (v,ts) | (v,ts) <- Map.assocs (ubounds vi), v `notElem` embedded vi, length ts > 1 ]
         multiLBnd                       = [ (v,ts) | (v,ts) <- Map.assocs (lbounds vi), v `notElem` embedded vi, length ts > 1 ]
         multiPBnd                       = [ (v,ps) | (v,ps) <- Map.assocs (pbounds vi), length ps > 1 ]
