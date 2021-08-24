@@ -1,6 +1,15 @@
 ACTONC=../dist/actonc
 DDB_SERVER=../backend/server
-test:
+TESTS= \
+	argv \
+	test_acton_rts_sleep \
+	test_random \
+	rts_sleep \
+	time \
+	regression
+test: $(TESTS)
+
+regression:
 	$(MAKE) -C regression
 
 ddb_start:
@@ -51,4 +60,4 @@ time:
 	$(ACTONC) --root main time.act
 	./time $(shell date "+%s")
 
-.PHONY: argv test_acton_rts_sleep test_random rts_sleep time
+.PHONY: argv test_acton_rts_sleep test_random regression rts_sleep time
