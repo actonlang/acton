@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+## [0.5.1](https://github.com/actonlang/acton/releases/tag/v0.5.1) (2021-08-24)
+
+### Fixed
+- v0.5.0 was released with an incorrect version number and would identify itself
+  as version v0.4.2
+
 ## [0.5.0](https://github.com/actonlang/acton/releases/tag/v0.5.0) (2021-08-23)
 
 ### Added
