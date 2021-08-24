@@ -1,0 +1,25 @@
+import acton.rts
+import time
+
+actor sleeper():
+    def sleep(sleep_time):
+        acton.rts.sleep(sleep_time)
+
+actor main(env):
+    def work():
+        s1 = sleeper()
+        s2 = sleeper()
+        t1 = time.time()
+        # this is not an assignment, so sleep() should run async and thus take
+        # like 0 time
+        s1.sleep(1)
+        s2.sleep(1)
+        t2 = time.time()
+        diff = (t2-t1) / 1000000000
+        print(diff)
+        if diff > 0.5:
+            print("Diff (", diff, ") is larger than expected")
+            await async env.exit(1)
+
+    work()
+    await async env.exit(0)

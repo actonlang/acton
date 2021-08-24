@@ -22,6 +22,7 @@ FAILING_COMPILATION= \
 	rtail \
 	triquotes-across-lines
 FAILING_RUNNING= \
+	125-async-actor-method-call \
 	segfault \
 	subtract_off_by_one
 ALL_FAILING=$(FAILING_COMPILATION) $(FAILING_RUNNING)
