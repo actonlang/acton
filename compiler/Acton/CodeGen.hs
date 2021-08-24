@@ -541,7 +541,9 @@ dotCast env ent ts e n
   | otherwise                       = -- trace ("## dotCast " ++ prstr e ++ " : " ++ prstr t0 ++ ", ." ++ prstr n ++ ": " ++ prstr sc ++ ", t: " ++ prstr t) $
                                       parens . (parens (gen env t) <>)
   where t0                          = typeOf env e
-        (argsubst, c0)              = splitTC env (tcon t0)  -- If e's type is really a tyvar it must have been cast to a tycon by QuickType at this point
+        (argsubst, c0)              = case t0 of
+                                         TCon _ tc -> splitTC env tc
+                                         TVar _ tv -> splitTC env (findTVBound env tv)
         (sc, dec)                   = findAttr' env c0 n
         t                           = subst fullsubst $ if ent then addSelf (sctype sc) dec else sctype sc
         fullsubst                   = (tvSelf,t0) : (qbound (scbind sc) `zip` ts) ++ argsubst
