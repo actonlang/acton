@@ -131,7 +131,7 @@ $str d$prim_str(union $Bytes8 x) {
 union $Bytes8 l$pow(union $Bytes8 a, union $Bytes8 b) {
   union $Bytes8 res;
   if (b.l < 0)
-    RAISE(($BaseException)$NEW($ValueError,to$str("pow for ndarray[int]: negative value in exponent array")));
+    $RAISE(($BaseException)$NEW($ValueError,to$str("pow for ndarray[int]: negative value in exponent array")));
   res.l = longpow(a.l,b.l);
   return res;
 }
