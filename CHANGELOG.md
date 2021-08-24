@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Fixed
+- Distributed RTS mode has been fixed with regards to actor bootstrap that
+  previously lead to duplicat actors
+
 ## [0.5.1](https://github.com/actonlang/acton/releases/tag/v0.5.1) (2021-08-24)
 
 ### Fixed
