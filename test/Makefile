@@ -35,6 +35,10 @@ argv:
 	$(ACTONC) --root main argv.act
 	./argv --rts-verbose foo --bar --rts-verbose
 
+test_acton_rts_sleep:
+	$(ACTONC) --root main $@.act
+	./$@
+
 test_random:
 	$(ACTONC) --root main $@.act
 	./$@
@@ -47,4 +51,4 @@ time:
 	$(ACTONC) --root main time.act
 	./time $(shell date "+%s")
 
-.PHONY: argv test_random rts_sleep time
+.PHONY: argv test_acton_rts_sleep test_random rts_sleep time
