@@ -1322,9 +1322,11 @@ int main(int argc, char **argv) {
             db_schema_t* db_schema = db_create_schema(NULL, 1, indices, 1, indices, 0, indices, 0);
             create_db_queue(TIMER_QUEUE);
             timer_consume_hd = 0;
+            BOOTSTRAP(new_argc, new_argv);
         }
+    } else {
+        BOOTSTRAP(new_argc, new_argv);
     }
-    BOOTSTRAP(new_argc, new_argv);
 
     pthread_key_create(&self_key, NULL);
     // start worker threads, one per CPU
