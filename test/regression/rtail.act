@@ -1,8 +1,5 @@
 def read(filename):
-# Simply uncommenting this comment makes the program work
-#    print("fake reading")
     a = "blargh"
-
     return a
 
 actor main(env):
