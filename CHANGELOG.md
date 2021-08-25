@@ -11,6 +11,8 @@
 - An actor method (callback) can now be passed as an argument to another actor
   method
   - This previously lead to a segmentation fault but has now been fixed.
+- Avoid cleaning away modules/math.h
+  - This was due to an outdated makefile cleaning target
 
 ## [0.5.1](https://github.com/actonlang/acton/releases/tag/v0.5.1) (2021-08-24)
 
