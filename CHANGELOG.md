@@ -5,6 +5,10 @@
 ### Fixed
 - Distributed RTS mode has been fixed with regards to actor bootstrap that
   previously lead to duplicat actors
+- Asynchronous actor method calls now work properly
+  - Calling an actor method without assigning its return value should run the
+    method asynchronously. There were situations where it was instead run
+    synchronously. This has now been fixed.
 
 ## [0.5.1](https://github.com/actonlang/acton/releases/tag/v0.5.1) (2021-08-24)
 
