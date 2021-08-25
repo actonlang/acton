@@ -14,10 +14,8 @@ FAILING_COMPILATION= \
 	11-int-float \
 	12-for-actor \
 	20-for-break \
-	105-type-inference-order \
 	if-return \
 	quotes-in-triquotes \
-	rtail \
 	triquotes-across-lines
 FAILING_RUNNING= \
 	125-async-actor-method-call \
@@ -52,9 +50,8 @@ $(FAILING_RUNNING):
 
 13-print-actor-method:
 	$(ACTONC) $@.act --root main
-	@echo "We really should see 2 'pong' messages, but will see 1 due to bug #13"
-	@echo "Since this is a negative test, we check for 1, this can later be changed to 2 when working"
+	@echo "Now we really see 2 'pong' messages"
 	./$@
-	./$@ | grep -c pong | grep 1
+	./$@ | grep -c pong | grep 2
 
 .PHONY: test test-examples $(TESTS)

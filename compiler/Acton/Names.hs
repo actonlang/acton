@@ -54,10 +54,11 @@ declnames []                        = []
 splitDeclGroup []                   = []
 splitDeclGroup (d:ds)               = split (free d) [d] ds
   where split vs ds0 []             = [reverse ds0]
-        split vs ds0 (d:ds)
+        split vs ds0 (d@Def{}:ds)
           | any (`elem` ws) vs      = split (free d++vs) (d:ds0) ds
           | otherwise               = reverse ds0 : split (free d) [d] ds
           where ws                  = declnames (d:ds)
+        split vs ds0 (d:ds)         = split (free d++vs) (d:ds0) ds
 
 
 -- Control flow --------------------
@@ -299,17 +300,17 @@ instance Vars WithItem where
     free (WithItem e p)             = free e ++ free p
 
     bound (WithItem e p)            = bound p
-    
+
 instance Vars PosArg where
     free (PosArg e p)               = free e ++ free p
     free (PosStar e)                = free e
     free PosNil                     = []
-    
+
 instance Vars KwdArg where
     free (KwdArg n e k)             = free e ++ free k
     free (KwdStar e)                = free e
     free KwdNil                     = []
-    
+
 instance Vars OpArg where
     free (OpArg o e)                = free e
 

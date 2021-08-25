@@ -154,7 +154,7 @@ deactSuite env []                   = return []
 deactSuite env (s : ss)             = do s' <- deact (setSampled ns env) s
                                          ss' <- deactSuite env1 ss
                                          return (samples ++ s' : ss')
-  where env1                        = extend (envOf s) env
+  where env1                        = extend (map sealActors $ envOf s) env
         ns                          = nub $ stvars env `intersect` lamfree s
         samples                     = [ sAssign (pVar n $ typeOf env (eVar n)) (eDot (eVar selfKW) n) | n <- ns ]
 
@@ -187,7 +187,7 @@ instance Deact Stmt where
       where t2                      = typeOf env e2
             t                       = tFun fxAction posNil kwdNil t2
     deact env (Decl l ds)           = Decl l <$> deact env1 ds
-      where env1                    = extend (envOf ds) env
+      where env1                    = extend (map sealActors $ envOf ds) env
     deact env (Signature l ns t d)  = return $ Signature l ns t d
     deact env s                     = error ("deact unexpected stmt: " ++ prstr s)
 
