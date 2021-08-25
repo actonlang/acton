@@ -29,6 +29,11 @@
     computer things worked due to manually compiled files. We failed to detect
     these missing type signature files in CI since the tests were not run
     automatically.
+- Type inference is now order independent.
+  - There were previously situations in which the type inferencer was unable to
+    do its job based on the layout / order of the code.
+- `print(foo())` now correctly prints the return value of foo() rather than a
+  message reference (due to asynchronous evaluation).
 
 
 ## [0.5.1](https://github.com/actonlang/acton/releases/tag/v0.5.1) (2021-08-24)
