@@ -62,11 +62,16 @@ instance (Simp a) => Simp [a] where
     simp env                        = map (simp env)
 
 instance Simp TSchema where
-    simp env (TSchema l q t)        = TSchema l q' (subst s $ simp env' t)
+    simp env sc@(TSchema l q t)     = trace ("## BFORE: " ++ prstr sc) $ TSchema l q' (subst s $ simp env' t)
       where (q', s)                 = simpQuant env (simp env' q) (tyfree t)
             env'                    = defineTVars (stripQual q) env
 
-simpQuant env q vs0                 = (subst s [ Quant v ps | Quant v ps <- q2, not $ null ps ], s)
+simpQuant env q vs0                 = trace ("## simpQuant (" ++ prstrs vs0 ++ ") : " ++ prstrs q) $ 
+                                      trace ("## vs: " ++ prstrs vs) $
+                                      trace ("## q1: " ++ prstrs q1) $
+                                      trace ("## q2: " ++ prstrs q2) $
+                                      trace ("## s: " ++ prstrs s) $
+                                      (subst s [ Quant v ps | Quant v ps <- q2, not $ null ps ], s)
   where (q1,q2)                     = partition isEX q
         isEX (Quant v [p])          = length (filter (==v) vs) == 1
         isEX _                      = False
@@ -1368,7 +1373,7 @@ infElems env (Star e : es) t0           = do t1 <- newTVar
 infAssocs env [] tk tv                  = return ([], [])
 infAssocs env (Assoc k v : as) tk tv    = do (cs1,k') <- inferSub env tk k
                                              (cs2,v') <- inferSub env tv v
-                                             (cs3,as') <- infAssocs env as tv tk
+                                             (cs3,as') <- infAssocs env as tk tv
                                              return (cs1++cs2++cs3, Elem (eTuple [k',v']) : as')    -- TODO: translate using primitive Iterator
 infAssocs env (StarStar e : as) tk tv   = do t1 <- newTVar
                                              (cs1,e') <- inferSub env t1 e
