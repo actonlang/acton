@@ -3,6 +3,9 @@
 ## Unreleased
 
 ### Fixed
+- It is now possible to raise exceptions.
+  - Previously a naming misalignment between the Acton compiler code generation
+    and the builtins of the RTS previously lead to an Internal Compiler Error.
 - Distributed RTS mode has been fixed with regards to actor bootstrap that
   previously lead to duplicat actors
 
