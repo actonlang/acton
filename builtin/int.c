@@ -35,7 +35,7 @@ $int $int$new($atom a) {
     if (c==(($str)a)->nbytes)
       return to$int(x);
     else 
-      RAISE(($BaseException)$NEW($ValueError,to$str("int(): invalid str value for type int")));
+      $RAISE(($BaseException)$NEW($ValueError,to$str("int(): invalid str value for type int")));
   }
   fprintf(stderr,"internal error: $int$new: argument not of atomic type");
   exit(-1);

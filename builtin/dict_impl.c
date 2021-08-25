@@ -368,7 +368,7 @@ $Iterator $dict_iter($dict dict) {
 void $dict_setitem($dict dict, $Hashable hashwit, $WORD key, $WORD value) {
   long hash = from$int(hashwit->$class->__hash__(hashwit,key));
   if (insertdict(dict, hashwit, hash, key, value)<0) {
-    RAISE(($BaseException)$NEW($IndexError,to$str("getitem: key not in dictionary")));
+    $RAISE(($BaseException)$NEW($IndexError,to$str("getitem: key not in dictionary")));
   }      
 }
 
@@ -377,7 +377,7 @@ $WORD $dict_getitem($dict dict, $Hashable hashwit, $WORD key) {
   $WORD res;
   int ix = lookdict(dict,hashwit,hash,key,&res);
   if (ix < 0)  {
-    RAISE(($BaseException)$NEW($IndexError,to$str("setitem: key not in dictionary")));
+    $RAISE(($BaseException)$NEW($IndexError,to$str("setitem: key not in dictionary")));
   }      
   return res;
 }
@@ -394,7 +394,7 @@ void $dict_delitem($dict dict, $Hashable hashwit, $WORD key) {
     table->tb_indices[i] = DKIX_DUMMY;
     res = entry->value;
     if (res == NULL) {
-      RAISE(($BaseException)$NEW($IndexError,to$str("setitem: key not in dictionary")));
+      $RAISE(($BaseException)$NEW($IndexError,to$str("setitem: key not in dictionary")));
     }
     entry->value = NULL;
     dict->numelements--;

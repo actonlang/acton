@@ -271,7 +271,7 @@ struct $ValueError {
 extern struct $ValueError$class $ValueError$methods;
 $ValueError $ValueError$new($str);
 
-void RAISE($BaseException e);
+void $RAISE($BaseException e);
 
  
 /*

@@ -123,7 +123,7 @@ numpy$$ndarray numpy$$ndarray$__deserialize__(numpy$$ndarray res, $Serial$state 
 
 $bool  numpy$$ndarray$__bool__(numpy$$ndarray a) {
   if (a->size->val > 1) 
-    RAISE(($BaseException)$NEW($ValueError,to$str("__bool__ undefined for ndarrays with more than one element")));
+    $RAISE(($BaseException)$NEW($ValueError,to$str("__bool__ undefined for ndarrays with more than one element")));
   switch (a->elem_type) {
   case LongType:
     return to$bool(a->data[a->offset].l != 0);
@@ -170,7 +170,7 @@ numpy$$ndarray numpy$$ndarray$new($WORD w) {
 numpy$$ndarray numpy$$ndarray$reshape(numpy$$ndarray a, $list newshape) {
   long newsize = $prod(newshape)->val;
   if (a->size->val != newsize)
-    RAISE(($BaseException)$NEW($ValueError,to$str("wrong number of array elements for reshape")));
+    $RAISE(($BaseException)$NEW($ValueError,to$str("wrong number of array elements for reshape")));
   if (a->shape->length == newshape->length) {
     // Check if newshape is actually equal to a->shape.
     int sameshape = 1;
@@ -242,7 +242,7 @@ numpy$$ndarray numpy$$ndarray$transpose(numpy$$ndarray a, $list axes) {
       i--;
     }
     if (!is_perm)
-      RAISE(($BaseException)$NEW($ValueError,to$str("transpose: axes argument must be permutation of [0..a.ndim-1]")));
+      $RAISE(($BaseException)$NEW($ValueError,to$str("transpose: axes argument must be permutation of [0..a.ndim-1]")));
     newshape = $list_new(axes->length);
     newstrides = $list_new(axes->length);
     newshape->length = axes->length;
@@ -305,7 +305,7 @@ numpy$$ndarray numpy$$ndarray$__ndgetslice__(numpy$$ndarray a, $list ix) {
     }
   }
   if (ints+slices > a->ndim)
-    RAISE(($BaseException)$NEW($ValueError,to$str("indexing too many dimensions")));
+    $RAISE(($BaseException)$NEW($ValueError,to$str("indexing too many dimensions")));
   int ndim = a->ndim + nulls - ints;
   numpy$$ndarray res = $newarray(a->elem_type,ndim,0,$list_new(ndim),$list_new(ndim),false); // size 0 is temporary
   res->shape->length = ndim;
@@ -371,7 +371,7 @@ struct numpy$$ndarray$class numpy$$ndarray$methods = {
 numpy$$array_iterator_state $mk_iterator(numpy$$ndarray a) {
   numpy$$array_iterator_state res = malloc(sizeof(struct numpy$$array_iterator_state));
   if (a->ndim==0) {
-    RAISE(($BaseException)$NEW($ValueError,to$str("cannot make iterator for 0-dim array")));
+    $RAISE(($BaseException)$NEW($ValueError,to$str("cannot make iterator for 0-dim array")));
   }
   res->ndim1 = a->ndim-1;
   for (long i=res->ndim1; i>=0; i--) {
@@ -471,7 +471,7 @@ static numpy$$ndarray numpy$$broadcast(numpy$$ndarray a1, numpy$$ndarray a2, num
     else if ($LONGELEM(shape2,i) == 1)
       resshape->data[i] = shape1->data[i];
     else
-      RAISE(($BaseException)$NEW($ValueError,to$str("ndarray broadcasting: shapes do not match")));
+      $RAISE(($BaseException)$NEW($ValueError,to$str("ndarray broadcasting: shapes do not match")));
   }
   numpy$$ndarray res = $newarray(a1->elem_type,len,$prod(resshape),resshape,$mk_strides(resshape),true);
   numpy$$ndarray tmparr = $newarray(a1->elem_type,len,res->size,res->shape,strides1,false); // only for making iterators
@@ -571,7 +571,7 @@ numpy$$ndarray numpy$$array(numpy$$Primitive wit, $list elems) {
   $list strides = $NEW($list,NULL,NULL);
   $list_append(strides,to$int(1));
   if (elems->length == 0)
-    RAISE(($BaseException)$NEW($ValueError,to$str("function numpy.array cannot create empty ndarray")));
+    $RAISE(($BaseException)$NEW($ValueError,to$str("function numpy.array cannot create empty ndarray")));
   numpy$$ndarray res = $newarray(wit->$class->elem_type,1,to$int(elems->length),shape,strides,true);
   for (int i=0; i<elems->length; i++) 
     res->data[i] = wit->$class->from$obj(elems->data[i]);
@@ -591,7 +591,7 @@ numpy$$ndarray numpy$$full(numpy$$Primitive wit, $list shape, $WORD val) {
 
 numpy$$ndarray numpy$$unirandint($int a, $int b, $int n) {
   if (a->val >= b->val)
-     RAISE(($BaseException)$NEW($ValueError,to$str("lower limit not smaller than upper in numpy.unirand")));
+     $RAISE(($BaseException)$NEW($ValueError,to$str("lower limit not smaller than upper in numpy.unirand")));
   $list shape = $NEW($list,NULL,NULL);
   $list_append(shape,n);
   $list strides = $NEW($list,NULL,NULL);
@@ -606,7 +606,7 @@ numpy$$ndarray numpy$$unirandint($int a, $int b, $int n) {
 #define MAX 1000000000
 numpy$$ndarray numpy$$unirandfloat($float a, $float b, $int n) {
   if (a->val >= b->val)
-     RAISE(($BaseException)$NEW($ValueError,to$str("lower limit not smaller than upper in numpy.unirand")));
+     $RAISE(($BaseException)$NEW($ValueError,to$str("lower limit not smaller than upper in numpy.unirand")));
   $list shape = $NEW($list,NULL,NULL);
   $list_append(shape,n);
   $list strides = $NEW($list,NULL,NULL);
@@ -653,7 +653,7 @@ numpy$$ndarray numpy$$sort(numpy$$Primitive wit, numpy$$ndarray a, $int axis) {
     while ((start = iter_next(it))) 
       quicksort(start,0,$LONGELEM(res->shape,res->ndim-1)-1,wit->$class->$lt);
   } else
-    RAISE(($BaseException)$NEW($ValueError,to$str("sorting only implemented for complete array or along last axis")));
+    $RAISE(($BaseException)$NEW($ValueError,to$str("sorting only implemented for complete array or along last axis")));
   return res;
 }
 
@@ -701,7 +701,7 @@ numpy$$ndarray numpy$$dot(numpy$$Primitive wit, numpy$$ndarray a, numpy$$ndarray
   } else if (b->ndim==1) {
     long len = $LONGELEM(b->shape,0);
     if  ($LONGELEM(a->shape,a->ndim-1) != len)
-      RAISE(($BaseException)$NEW($ValueError,to$str("array sizes in numpy.dot do not match")));
+      $RAISE(($BaseException)$NEW($ValueError,to$str("array sizes in numpy.dot do not match")));
     long stridea = $LONGELEM(a->strides,a->ndim-1);
     long strideb = $LONGELEM(b->strides,0);
     $list newshape = $list_getslice(a->shape,$NEW($slice,NULL,to$int(-1),NULL));
@@ -719,7 +719,7 @@ numpy$$ndarray numpy$$dot(numpy$$Primitive wit, numpy$$ndarray a, numpy$$ndarray
       }
     }
   } else { //b->ndim > 1. Following Python we should do a sum product over last axis of a and 2nd to last axis of b ??????
-    RAISE(($BaseException)$NEW($ValueError,to$str("numpy.dot not implemented for ndim of second arg > 1")));    
+    $RAISE(($BaseException)$NEW($ValueError,to$str("numpy.dot not implemented for ndim of second arg > 1")));    
   } 
   return res; 
 }
@@ -743,7 +743,7 @@ numpy$$ndarray numpy$$sum(numpy$$Primitive wit, numpy$$ndarray a, $int axis) {
   if(axis) {
      laxis = axis->val < 0 ? axis->val + a->ndim : axis->val;
      if (laxis < 0 || laxis >= a->ndim)
-       RAISE(($BaseException)$NEW($ValueError,to$str("illegal axis in numpy.sum")));
+       $RAISE(($BaseException)$NEW($ValueError,to$str("illegal axis in numpy.sum")));
   }
   if(!axis || a->ndim == 1) {
     union $Bytes8 resd = (union $Bytes8) 0L;
@@ -786,7 +786,7 @@ numpy$$ndarray numpy$$abs(numpy$$Primitive wit, numpy$$ndarray a) {
 
 $WORD numpy$$scalar (numpy$$Primitive wit, numpy$$ndarray a) {
   if (a->ndim > 0)
-     RAISE(($BaseException)$NEW($ValueError,to$str("scalar only for zero-dim arrays")));
+     $RAISE(($BaseException)$NEW($ValueError,to$str("scalar only for zero-dim arrays")));
   return wit->$class->to$obj(a->data[a->offset]);
 }
 
@@ -821,11 +821,11 @@ $WORD numpy$$Iterator$ndarray$__next__(numpy$$Iterator$ndarray self) {
 }
 
 void numpy$$Iterator$$serialize(numpy$$Iterator$ndarray self,$Serial$state state) {
-  RAISE(($BaseException)$NEW($ValueError,to$str("(de)serialization not implemented for ndarray iterators")));
+  $RAISE(($BaseException)$NEW($ValueError,to$str("(de)serialization not implemented for ndarray iterators")));
 }
 
 numpy$$Iterator$ndarray numpy$$Iterator$ndarray$_deserialize(numpy$$Iterator$ndarray self,$Serial$state state) {
-  RAISE(($BaseException)$NEW($ValueError,to$str("(de)serialization not implemented for ndarray iterators")));
+  $RAISE(($BaseException)$NEW($ValueError,to$str("(de)serialization not implemented for ndarray iterators")));
    return NULL;
 }
 
@@ -873,7 +873,7 @@ numpy$$ndarray numpy$$mean(numpy$$Primitive wit, numpy$$ndarray a, $int axis) {
   
 numpy$$ndarray numpy$$tile(numpy$$Primitive wit, numpy$$ndarray a, $int n) {
   if (n->val<=0) 
-    RAISE(($BaseException)$NEW($ValueError,to$str("numpy.tile: non-positive number of tiles")));
+    $RAISE(($BaseException)$NEW($ValueError,to$str("numpy.tile: non-positive number of tiles")));
   $int sz = to$int(a->size->val*n->val);
   $list newshape = $list_new(1);
   $list_append(newshape,sz);
@@ -887,7 +887,7 @@ numpy$$ndarray numpy$$tile(numpy$$Primitive wit, numpy$$ndarray a, $int n) {
 
 numpy$$ndarray numpy$$zeros(numpy$$Primitive wit, $int n) {
   if (n->val<=0) 
-    RAISE(($BaseException)$NEW($ValueError,to$str("numpy.zeros: non-positive size")));
+    $RAISE(($BaseException)$NEW($ValueError,to$str("numpy.zeros: non-positive size")));
   $list newshape = $list_new(1);
   $list_append(newshape,n);
   $list newstrides = $list_new(1);

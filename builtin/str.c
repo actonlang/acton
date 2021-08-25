@@ -403,7 +403,7 @@ $str to$str(char *str) {
     }
     cpnbytes = utf8proc_iterate(p,-1,&cp);
     if (cpnbytes < 0) {
-      RAISE(($BaseException)$NEW($ValueError,to$str("to$str: Unicode decode error")));
+      $RAISE(($BaseException)$NEW($ValueError,to$str("to$str: Unicode decode error")));
       return NULL;
     }
     nbytes += cpnbytes;
@@ -515,7 +515,7 @@ static int get_index(int i, int nchars) {
     if (i >= -nchars)
       return nchars+i;
   }
-  RAISE(($BaseException)$NEW($IndexError,to$str("indexing outside str")));
+  $RAISE(($BaseException)$NEW($IndexError,to$str("indexing outside str")));
   return 0;
 }
 
@@ -882,7 +882,7 @@ $str $str_center($str s, $int width, $str fill) {
   if (!fill)
     fill = space_str;
   if (fill->nchars != 1) {
-    RAISE(($BaseException)$NEW($ValueError,to$str("center: fill string not single char")));
+    $RAISE(($BaseException)$NEW($ValueError,to$str("center: fill string not single char")));
   }
   if (width->val <= s->nchars) {
     return s;
@@ -997,7 +997,7 @@ $int $str_find($str s, $str sub, $int start, $int end) {
 $int $str_index($str s, $str sub, $int start, $int end) {
   $int n = $str_find(s,sub,start,end);
   if (from$int(n)<0) {
-    RAISE(($BaseException)$NEW($ValueError,to$str("index: substring not found")));
+    $RAISE(($BaseException)$NEW($ValueError,to$str("index: substring not found")));
   }
   return n;
 }
@@ -1192,7 +1192,7 @@ $str $str_join($str s, $Iterable wit, $WORD iter) {
 $str $str_ljust($str s, $int width, $str fill) {
   if (!fill) fill = space_str;
   if (fill->nchars != 1) {
-    RAISE(($BaseException)$NEW($ValueError,to$str("ljust: fill str not single char")));
+    $RAISE(($BaseException)$NEW($ValueError,to$str("ljust: fill str not single char")));
   }
   if (width->val <= s->nchars) {
     return s;
@@ -1299,7 +1299,7 @@ $int $str_rfind($str s, $str sub, $int start, $int end) {
 $int $str_rindex($str s, $str sub, $int start, $int end) {
   $int n = $str_rfind(s,sub,start,end);
   if (from$int(n)<0) {
-    RAISE(($BaseException)$NEW($ValueError,to$str("rindex: substring not found")));
+    $RAISE(($BaseException)$NEW($ValueError,to$str("rindex: substring not found")));
   };
   return n;
 }
@@ -1307,7 +1307,7 @@ $int $str_rindex($str s, $str sub, $int start, $int end) {
 $str $str_rjust($str s, $int width, $str fill) {
   if (!fill) fill = space_str;
   if (fill->nchars != 1) {
-    RAISE(($BaseException)$NEW($ValueError,to$str("rjust: fill string not single char")));
+    $RAISE(($BaseException)$NEW($ValueError,to$str("rjust: fill string not single char")));
   }
   if (width->val <= s->nchars) {
     return s;
@@ -1397,7 +1397,7 @@ $list $str_split($str s, $str sep, $int maxsplit) {
     return res;
   } else { // separator given
     if (sep->nchars==0) {
-    RAISE(($BaseException)$NEW($ValueError,to$str("split: separator is empty string")));
+      $RAISE(($BaseException)$NEW($ValueError,to$str("split: separator is empty string")));
     }
     if (remaining==0) { // for some unfathomable reason, this is the behaviour of the Python method
       $list_append(res,null_str);
@@ -1548,7 +1548,7 @@ static void expand_bytearray($bytearray b,int n) {
      ? malloc(newcapacity+1)
      : realloc(b->str,newcapacity+1);
    if (newstr == NULL) {
-    RAISE(($BaseException)$NEW($MemoryError,to$str("memory allocation failed")));
+    $RAISE(($BaseException)$NEW($MemoryError,to$str("memory allocation failed")));
    }
    b->str = newstr;
    b->capacity = newcapacity;
@@ -1638,7 +1638,7 @@ $bytearray $bytearray_capitalize($bytearray s) {
 $bytearray $bytearray_center($bytearray s, $int width, $bytearray fill) {
   if (!fill) fill = to$bytearray(" ");
   if (fill->nbytes != 1) {
-    RAISE(($BaseException)$NEW($ValueError,to$str("center: fill bytearray not single char")));
+    $RAISE(($BaseException)$NEW($ValueError,to$str("center: fill bytearray not single char")));
   }
   if (width->val <= s->nbytes) {
     return $bytearray_copy(s);
@@ -1743,7 +1743,7 @@ $int $bytearray_find($bytearray s, $bytearray sub, $int start, $int end) {
 $int $bytearray_index($bytearray s, $bytearray sub, $int start, $int end) {
   $int n = $bytearray_find(s,sub,start,end);
   if (n->val<0) {
-    RAISE(($BaseException)$NEW($ValueError,to$str("index: substring not found")));
+    $RAISE(($BaseException)$NEW($ValueError,to$str("index: substring not found")));
   }
   return n;
 }
@@ -1877,7 +1877,7 @@ $bytearray $bytearray_join($bytearray s, $Iterable wit, $WORD iter) {
 
 $bytearray $bytearray_ljust($bytearray s, $int width, $bytearray fill) {
   if (fill->nbytes != 1) {
-    RAISE(($BaseException)$NEW($ValueError,to$str("bytearray ljust: fill array not single char")));
+    $RAISE(($BaseException)$NEW($ValueError,to$str("bytearray ljust: fill array not single char")));
   }
   if (width->val <= s->nbytes) {
     return $bytearray_copy(s);
@@ -1990,14 +1990,14 @@ $int $bytearray_rfind($bytearray s, $bytearray sub, $int start, $int end) {
 $int $bytearray_rindex($bytearray s, $bytearray sub, $int start, $int end) {
   $int n = $bytearray_rfind(s,sub,start,end);
   if (from$int(n)<0) {
-    RAISE(($BaseException)$NEW($ValueError,to$str("rindex for bytearray: substring not found")));
+    $RAISE(($BaseException)$NEW($ValueError,to$str("rindex for bytearray: substring not found")));
   };
   return n;
 }
 
 $bytearray $bytearray_rjust($bytearray s, $int width, $bytearray fill) {
   if (fill->nbytes != 1) {
-    RAISE(($BaseException)$NEW($ValueError,to$str("rjust: fill string not single char")));
+    $RAISE(($BaseException)$NEW($ValueError,to$str("rjust: fill string not single char")));
   }
   if (width->val <= s->nbytes) {
     return $bytearray_copy(s);
@@ -2099,7 +2099,7 @@ $list $bytearray_split($bytearray s, $bytearray sep, $int maxsplit) {
     return res;
   } else { // separator given
     if (sep->nbytes==0) {
-    RAISE(($BaseException)$NEW($ValueError,to$str("split for bytearray: separator is empty string")));
+      $RAISE(($BaseException)$NEW($ValueError,to$str("split for bytearray: separator is empty string")));
     }
     if (s->nbytes==0) { // for some unfathomable reason, this is the behaviour of the Python method
       $list_append(res,null_str);
@@ -2578,16 +2578,16 @@ int $bytearray_ge($bytearray a,$bytearray b) {
 $int $bytearray_getitem($bytearray self, int ix) {
   int ix0 = ix < 0 ? self->nbytes + ix : ix;
   if (ix0<0 || ix0 >= self->nbytes)
-    RAISE(($BaseException)$NEW($IndexError,to$str("getitem for bytearray: indexing outside array")));
+    $RAISE(($BaseException)$NEW($IndexError,to$str("getitem for bytearray: indexing outside array")));
   return to$int((long)self->str[ix0]);
 }
     
 void $bytearray_setitem($bytearray self, int ix, int val) {
   int ix0 = ix < 0 ? self->nbytes + ix : ix;
   if (ix0<0 || ix0 >= self->nbytes)
-    RAISE(($BaseException)$NEW($IndexError,to$str("setitem for bytearray: indexing outside array")));
+    $RAISE(($BaseException)$NEW($IndexError,to$str("setitem for bytearray: indexing outside array")));
   if (val<0 || val>255)
-    RAISE(($BaseException)$NEW($ValueError,to$str("setitem for bytearray: value outside [0..255]")));
+    $RAISE(($BaseException)$NEW($ValueError,to$str("setitem for bytearray: value outside [0..255]")));
   self->str[ix0] = (unsigned char)val;
 }
   
@@ -2595,7 +2595,7 @@ void $bytearray_delitem($bytearray self, int ix) {
   int len = self->nbytes;
   int ix0 = ix < 0 ? len + ix : ix;
   if (ix0 < 0 || ix0 >= len)
-    RAISE(($BaseException)$NEW($IndexError,to$str("delitem for bytearray: indexing outside array")));
+    $RAISE(($BaseException)$NEW($IndexError,to$str("delitem for bytearray: indexing outside array")));
   memmove(self->str + ix0,self->str + (ix0 + 1),len-(ix0+1));
   self->nbytes--;
 }
@@ -2629,7 +2629,7 @@ void $bytearray_setslice($bytearray self, $slice slc, $Iterator it) {
   int start, stop, step, slen;
   normalize_slice(slc, len, &slen, &start, &stop, &step);
   if (step != 1 && olen != slen) {
-    RAISE(($BaseException)$NEW($ValueError,to$str("setslice for bytearray: illegal slice")));
+    $RAISE(($BaseException)$NEW($ValueError,to$str("setslice for bytearray: illegal slice")));
   }
   int copy = olen <= slen ? olen : slen;
   int t = start;
@@ -2841,22 +2841,22 @@ void $bytearray_init($bytearray self, $value s) {
     self->str = malloc(len+1);
     self->str[len] = 0;
     if (len > 0 && !($ISINSTANCE(lst->data[0],$int)->val))
-      RAISE(($BaseException)$NEW($ValueError,to$str("illegal argument to bytearray constructor")));
+      $RAISE(($BaseException)$NEW($ValueError,to$str("illegal argument to bytearray constructor")));
     for (int i = 0; i<len; i++) {
       long v = (($int)lst->data[i])->val;
       if (v < 0 || v > 255)
-        RAISE(($BaseException)$NEW($ValueError,to$str("illegal argument to bytearray constructor")));
+        $RAISE(($BaseException)$NEW($ValueError,to$str("illegal argument to bytearray constructor")));
       self->str[i] = v;
     }
   } else if ($ISINSTANCE(s, $int)->val) {
     $int n = ($int)s;
     if (n->val < 0) 
-      RAISE(($BaseException)$NEW($ValueError,to$str("illegal argument to bytearray constructor")));
+      $RAISE(($BaseException)$NEW($ValueError,to$str("illegal argument to bytearray constructor")));
     self->nbytes = n->val;
     self->str = malloc(n->val);
     memset(self->str, 0, n->val);
   } else
-    RAISE(($BaseException)$NEW($ValueError,to$str("illegal argument to bytearray constructor")));
+    $RAISE(($BaseException)$NEW($ValueError,to$str("illegal argument to bytearray constructor")));
 }
 
 
@@ -3001,11 +3001,11 @@ $str $bin($Integral wit, $WORD n) {
 $str $chr($Integral wit, $WORD n) {
   long v = wit->$class->__int__(wit,n)->val;
   if (v >=  0x110000)
-     RAISE(($BaseException)$NEW($ValueError,to$str("chr: argument is not a valid Unicode code point")));
+     $RAISE(($BaseException)$NEW($ValueError,to$str("chr: argument is not a valid Unicode code point")));
   unsigned char code[4];
   int nbytes = utf8proc_encode_char((int)v,(unsigned char*)&code);
   if (nbytes==0)
-     RAISE(($BaseException)$NEW($ValueError,to$str("chr: argument is not a valid Unicode code point")));
+     $RAISE(($BaseException)$NEW($ValueError,to$str("chr: argument is not a valid Unicode code point")));
   $str res;
   NEW_UNFILLED_STR(res,1,nbytes);
   for (int i=0; i<nbytes; i++)
@@ -3049,11 +3049,11 @@ $str $hex($Integral wit, $WORD n) {
 
 $int $ord($str c) {
   if(c->nchars != 1)
-    RAISE(($BaseException)$NEW($ValueError,to$str("ord: argument is not a single Unicode char")));
+    $RAISE(($BaseException)$NEW($ValueError,to$str("ord: argument is not a single Unicode char")));
   int cp;
   int cpnbytes = utf8proc_iterate(c->str,-1,&cp);
   if (cpnbytes < 0)
-    RAISE(($BaseException)$NEW($ValueError,to$str("ord: argument is not a single Unicode char")));
+    $RAISE(($BaseException)$NEW($ValueError,to$str("ord: argument is not a single Unicode char")));
   return to$int(cp);
 }
 

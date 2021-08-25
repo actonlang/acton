@@ -169,7 +169,7 @@ $WORD $Sliceable$tuple$__getitem__ ($Sliceable$tuple wit, $tuple self, $int n) {
   int ix = (int)from$int(n);
   int ix0 = ix < 0 ? size + ix : ix;
   if (ix0 < 0 || ix0 >= size) {
-    RAISE(($BaseException)$NEW($IndexError,to$str("getitem: indexing outside tuple")));
+    $RAISE(($BaseException)$NEW($IndexError,to$str("getitem: indexing outside tuple")));
   }
   return self->components[ix0];
 }

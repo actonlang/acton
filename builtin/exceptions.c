@@ -418,7 +418,7 @@ $ValueError $ValueError$__deserialize__($ValueError self,$Serial$state state) {
 struct $ValueError$class $ValueError$methods = {"$ValueError",UNASSIGNED,($Super$class)&$Exception$methods,$ValueError$__init__,$ValueError$__serialize__,$ValueError$__deserialize__,$ValueError$__bool__,$ValueError$__str__};
 //////////////////////////////////////////////////////////////////////////////////////////////
 
-void RAISE($BaseException e) {
+void $RAISE($BaseException e) {
   fprintf(stderr,"%s\n",(char*)from$str(e->error_message));
   exit(1);
 }
