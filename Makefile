@@ -1,4 +1,5 @@
 include common.mk
+CHANGELOG_VERSION=$(shell grep '^\#\# \[[0-9]' CHANGELOG.md | sed 's/\#\# \[\([^]]\{1,\}\)].*/\1/' | head -n1)
 
 VERSION_INFO=$(subst acton ,,$(shell ./dist/actonc --version DUMMY))
 
@@ -7,7 +8,7 @@ CFLAGS += -I/usr/include/kqueue
 endif
 MODULES=
 
-all: dist
+all: version-check dist
 
 help:
 	@echo "Available make targets"
@@ -19,6 +20,12 @@ help:
 	@echo ""
 	@echo "  test    - run the test suite"
 
+
+version-check:
+ifneq ($(VERSION), $(CHANGELOG_VERSION))
+	$(error Version in common.mk ($(VERSION)) differs from last version in CHANGELOG.md ($(CHANGELOG_VERSION)))
+endif
+.PHONY: version-check
 
 
 # /backend ----------------------------------------------

@@ -2,17 +2,34 @@
 
 ## Unreleased
 
+## [0.5.2](https://github.com/actonlang/acton/releases/tag/v0.5.2) (2021-08-25)
+
 ### Fixed
 - It is now possible to raise exceptions.
   - Previously a naming misalignment between the Acton compiler code generation
     and the builtins of the RTS previously lead to an Internal Compiler Error.
+  - BaseException is now also used instead of Exception, as it should.
 - Distributed RTS mode has been fixed with regards to actor bootstrap that
-  previously lead to duplicat actors
+  previously lead to duplicate actors.
 - An actor method (callback) can now be passed as an argument to another actor
   method
-  - This previously lead to a segmentation fault but has now been fixed.
+  - This could previously lead to a segmentation fault during certain
+    situations.
 - Avoid cleaning away modules/math.h
-  - This was due to an outdated makefile cleaning target
+  - This was due to an outdated Makefile cleaning target
+- Type inferencing now works for all dicts.
+  - Previously worked for some, for example a dict of strings but not for a dict
+    of ints.
+- The modules `acton.rts`, `math` and `random` now work correctly
+  - The type signature filed was missing but is now correctly built.
+  - There are test cases for these modules but the tests were not run in CI
+- All tests are now run in CI
+  - Due to a directory restructuring and assumptions (mother of all evil), some
+    tests were previously not run. While working locally on a developers
+    computer things worked due to manually compiled files. We failed to detect
+    these missing type signature files in CI since the tests were not run
+    automatically.
+
 
 ## [0.5.1](https://github.com/actonlang/acton/releases/tag/v0.5.1) (2021-08-24)
 
