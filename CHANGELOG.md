@@ -5,6 +5,9 @@
 ### Fixed
 - Distributed RTS mode has been fixed with regards to actor bootstrap that
   previously lead to duplicat actors
+- An actor method (callback) can now be passed as an argument to another actor
+  method
+  - This previously lead to a segmentation fault but has now been fixed.
 
 ## [0.5.1](https://github.com/actonlang/acton/releases/tag/v0.5.1) (2021-08-24)
 
