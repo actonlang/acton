@@ -1,0 +1,11 @@
+actor Foo():
+    def func(a):
+        print("request", a)
+
+actor Bar(f):
+    f("test")
+
+actor main(env):
+    var f = Foo()
+    var b = Bar(f.func)
+    await async env.exit(0)
