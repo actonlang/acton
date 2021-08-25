@@ -62,7 +62,7 @@ instance (Simp a) => Simp [a] where
     simp env                        = map (simp env)
 
 instance Simp TSchema where
-    simp env (TSchema l q t)        = TSchema l q' (subst s $ simp env' t)
+    simp env (TSchema l q t)        = TSchema l q' (substIteratively s $ simp env' t)
       where (q', s)                 = simpQuant env (simp env' q) (tyfree t)
             env'                    = defineTVars (stripQual q) env
 
@@ -1356,26 +1356,26 @@ isModule env e                          = fmap ModName $ mfilter (isMod env) $ f
 infElems env [] t0                      = return ([], [])
 infElems env (Elem e : es) t0           = do (cs1,e') <- inferSub env t0 e
                                              (cs2,es') <- infElems env es t0
-                                             return (cs1++cs2, Elem e' : es')           -- TODO: translate using primitive Iterator
+                                             return (cs1++cs2, Elem e' : es')
 infElems env (Star e : es) t0           = do t1 <- newTVar
                                              (cs1,e') <- inferSub env t1 e
                                              (cs2,es') <- infElems env es t0
                                              w <- newWitness
                                              return (Impl w t1 (pIterable t0) :
-                                                     cs1++cs2, Star e' : es')           -- TODO: translate using primitive Iterator
+                                                     cs1++cs2, Star e' : es')
                                                      
 
 infAssocs env [] tk tv                  = return ([], [])
 infAssocs env (Assoc k v : as) tk tv    = do (cs1,k') <- inferSub env tk k
                                              (cs2,v') <- inferSub env tv v
-                                             (cs3,as') <- infAssocs env as tv tk
-                                             return (cs1++cs2++cs3, Elem (eTuple [k',v']) : as')    -- TODO: translate using primitive Iterator
+                                             (cs3,as') <- infAssocs env as tk tv
+                                             return (cs1++cs2++cs3, Elem (eTuple [k',v']) : as')
 infAssocs env (StarStar e : as) tk tv   = do t1 <- newTVar
                                              (cs1,e') <- inferSub env t1 e
                                              (cs2,as') <- infAssocs env as tk tv
                                              w <- newWitness
                                              return (Impl w t1 (pIterable $ tTupleP $ posRow tk $ posRow tv posNil) :
-                                                     cs1++cs2, Star e' : as')                       -- TODO: translate using primitive Iterator
+                                                     cs1++cs2, Star e' : as')
 
 
 inferTest env (BinOp l e1 And e2)       = do (cs1,env1,s1,t1,e1') <- inferTest env e1

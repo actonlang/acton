@@ -1,2 +1,6 @@
 def foo():
     a = {"a": 1, "b": 3}
+    return a
+
+actor main(env):
+    await async env.exit(0)
