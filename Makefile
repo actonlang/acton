@@ -162,7 +162,7 @@ clean-backend:
 	$(MAKE) -C backend clean
 
 clean-rts:
-	rm -f $(MODULES) $(LIBS) $(TYMODULES) modules/math.h modules/numpy.h
+	rm -f $(MODULES) $(LIBS) $(TYMODULES) modules/numpy.h
 
 clean-dist:
 	rm -rf dist/lib dist/modules dist/builtin dist/rts
