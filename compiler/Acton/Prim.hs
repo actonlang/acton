@@ -226,18 +226,18 @@ scAWAIT             = tSchema [quant a] tAWAIT
 
 
 
---  $PUSHc          : [X] => pure (X(Exception)->$R) -> None
+--  $PUSHc          : [X] => pure (X(BaseException)->$R) -> None
 scPUSHc             = tSchema [quant x] tPUSH
   where tPUSH       = tFun fxPure (posRow tCont' posNil) kwdNil tNone
         x           = TV KFX $ name "X"
-        tCont'      = tFun (tVar x) (posRow tException posNil) kwdNil tR
+        tCont'      = tFun (tVar x) (posRow tBaseException posNil) kwdNil tR
 
---  $PUSH           : [X] => pure ($Cont[X,(Exception,)]) -> None
+--  $PUSH           : [X] => pure ($Cont[X,(BaseException,)]) -> None
 scPUSH              = tSchema [quant x] tPUSH
   where tPUSH       = tFun fxPure (posRow tCont' posNil) kwdNil tNone
         x           = TV KFX $ name "X" 
         a           = TV KType $ name "A"
-        tCont'      = tCont (tVar x) tException
+        tCont'      = tCont (tVar x) tBaseException
 
 
 
@@ -249,13 +249,13 @@ scPOP               = tSchema [] tPOP
 scRERAISE           = tSchema [] tRERAISE
   where tRERAISE    = tFun fxPure posNil kwdNil tNone
 
---  $RAISE          : pure (Exception) -> None
+--  $RAISE          : pure (BaseException) -> None
 scRAISE             = tSchema [] tRAISE
-  where tRAISE      = tFun fxPure (posRow tException posNil) kwdNil tNone
+  where tRAISE      = tFun fxPure (posRow tBaseException posNil) kwdNil tNone
 
---  $RAISEFROM      : pure (Exception, Exception) -> None
+--  $RAISEFROM      : pure (BaseException, BaseException) -> None
 scRAISEFROM         = tSchema [] tRAISEFROM
-  where tRAISEFROM  = tFun fxPure (posRow tException $ posRow tException posNil) kwdNil tNone
+  where tRAISEFROM  = tFun fxPure (posRow tBaseException $ posRow tBaseException posNil) kwdNil tNone
 
 --  $ASSERT         : pure (bool, ?str) -> None
 scASSERT            = tSchema [] tASSERT
