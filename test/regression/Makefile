@@ -31,6 +31,8 @@ SUCCESS_TESTS=$(filter-out $(ALL_FAILING),$(TESTS))
 test: $(TESTS)
 
 $(SUCCESS_TESTS):
+	@echo ""
+	@echo "== Running test: $@"
 	$(ACTONC) $@.act --root main
 	./$@
 
@@ -39,11 +41,15 @@ $(SUCCESS_TESTS):
 # easily fixed by simply removing it from the FAILING_COMPILATION or
 # FAILING_RUNNING variable.
 $(FAILING_COMPILATION):
-	! $(ACTONC) $@.act --root main
+	@echo ""
+	@echo "== Running negative test (expecting compilation failure): $@"
+	! $(ACTONC) $@.act --root main >/dev/null 2>&1
 
 $(FAILING_RUNNING):
-	$(ACTONC) $@.act --root main
-	! ./$@
+	@echo ""
+	@echo "== Running negative test (expecting run time failure): $@"
+	$(ACTONC) $@.act --root main >/dev/null 2>&1
+	! ./$@ >/dev/null 2>&1
 
 13-print-actor-method:
 	$(ACTONC) $@.act --root main
