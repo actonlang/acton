@@ -68,6 +68,9 @@ subst s x0
         used                        = dom s ++ tyfree (rng s)                             
         tmp                         = take (length clash) $ map (TV KWild . Internal TypesPass "") [1 ..] \\ used
 
+substIteratively                    :: Subst a => Substitution -> a -> a
+substIteratively s x                = runTypeM' s (msubst x)
+
 erase x                             = subst s x
   where s                           = [ (tv, tWild) | tv <- nub (tyfree x) ]
 

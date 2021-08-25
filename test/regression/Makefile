@@ -14,7 +14,6 @@ FAILING_COMPILATION= \
 	11-int-float \
 	12-for-actor \
 	20-for-break \
-	103-dict-of-int \
 	105-type-inference-order \
 	if-return \
 	quotes-in-triquotes \
