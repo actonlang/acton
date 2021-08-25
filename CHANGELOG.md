@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## [0.5.2](https://github.com/actonlang/acton/releases/tag/v0.5.2) (2021-08-25)
+
 ### Fixed
 - It is now possible to raise exceptions.
   - Previously a naming misalignment between the Acton compiler code generation
