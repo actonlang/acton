@@ -1,10 +1,11 @@
 actor Bar(f):
-    f.func(3)
+    f.func('x')
 
 actor Foo():
     def func(a):
         print(a)
 
 actor main(env):
-    var f = Foo()
-    var b = Bar(f)
+    f = Foo()
+    b = Bar(f)
+    await async env.exit(0)
