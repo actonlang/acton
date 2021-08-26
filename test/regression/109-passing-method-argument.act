@@ -6,6 +6,6 @@ actor Bar(f):
     f("test")
 
 actor main(env):
-    var f = Foo()
-    var b = Bar(f.func)
+    f = Foo()
+    b = Bar(f.func)
     await async env.exit(0)
