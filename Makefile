@@ -99,7 +99,7 @@ numpy/numpy.o: numpy/numpy.c numpy/numpy.h numpy/init.h numpy/init.c \
 		numpy/ndselect.c numpy/primitive.h numpy/primitive.c \
 		numpy/protocol_impls.h numpy/protocol_impls.c numpy/quickselect.h \
 		numpy/quickselect.c
-	cc $(CFLAGS) -Wno-unused-result -Wno-implicit-function-declaration -I. -O3 -c $< -o$@
+	cc $(CFLAGS) -Wno-unused-result -I. -O3 -c $< -o$@
 
 
 # /lib --------------------------------------------------
