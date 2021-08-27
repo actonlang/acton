@@ -4,8 +4,8 @@ TESTS= \
 	argv \
 	test_acton_rts_sleep \
 	test_random \
+	test_time \
 	rts_sleep \
-	time \
 	regression
 test: $(TESTS)
 
@@ -56,8 +56,8 @@ rts_sleep:
 	$(ACTONC) --root main $@.act
 	./$@
 
-time:
-	$(ACTONC) --root main time.act
-	./time $(shell date "+%s")
+test_time:
+	$(ACTONC) --root main $@.act
+	./test_time $(shell date "+%s")
 
-.PHONY: argv test_acton_rts_sleep test_random regression rts_sleep time
+.PHONY: argv test_acton_rts_sleep test_random test_time regression rts_sleep
