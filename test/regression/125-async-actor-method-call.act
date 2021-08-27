@@ -15,7 +15,7 @@ actor main(env):
         s1.sleep(1)
         s2.sleep(1)
         t2 = time.time()
-        diff = (t2-t1) / 1000000000
+        diff = (t2-t1)
         print(diff)
         if diff > 0.5:
             print("Diff (", diff, ") is larger than expected")

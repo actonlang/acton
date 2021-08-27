@@ -3,9 +3,9 @@ import time
 
 actor main(env):
     def work():
-        t1 = time.time()
+        t1 = time.time_ns()
         acton.rts.sleep(1)
-        t2 = time.time()
+        t2 = time.time_ns()
         diff = (t2-t1) / 1000000000
         if diff < 1:
             print("Sleep seems to have been below 1 second :(")
