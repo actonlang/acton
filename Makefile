@@ -4,7 +4,7 @@ CHANGELOG_VERSION=$(shell grep '^\#\# \[[0-9]' CHANGELOG.md | sed 's/\#\# \[\([^
 VERSION_INFO=$(subst acton ,,$(shell ./dist/actonc --version DUMMY))
 
 ifeq ($(shell uname -s),Linux)
-CFLAGS += -I/usr/include/kqueue
+CFLAGS += -Werror -Wno-int-to-pointer-cast -Wno-pointer-to-int-cast -I/usr/include/kqueue
 endif
 MODULES=
 
@@ -45,7 +45,7 @@ builtin/builtin.o: builtin/builtin.c builtin/builtin.h builtin/Iterator.h builti
            builtin/exceptions.h builtin/exceptions.c builtin/float.h builtin/float.c builtin/hash.h builtin/hash.c builtin/int.h builtin/int.c builtin/list.h builtin/list.c builtin/list_impl.h builtin/list_impl.c builtin/none.h builtin/none.c \
            builtin/range.h builtin/range.c builtin/registration.h builtin/registration.c builtin/serialize.h builtin/serialize.c builtin/set.h builtin/set.c builtin/set_impl.h builtin/set_impl.c \
            builtin/slice.h builtin/slice.c builtin/str.h builtin/str.c builtin/tuple.h builtin/tuple.c
-	cc $(CFLAGS) -g -c -O3 $< -o$@
+	cc $(CFLAGS) -Wno-unused-result -g -c -O3 $< -o$@
 
 builtin/minienv.o: builtin/minienv.c builtin/minienv.h builtin/builtin.o
 	cc $(CFLAGS) -g -c -O3 $< -o$@
@@ -99,7 +99,7 @@ numpy/numpy.o: numpy/numpy.c numpy/numpy.h numpy/init.h numpy/init.c \
 		numpy/ndselect.c numpy/primitive.h numpy/primitive.c \
 		numpy/protocol_impls.h numpy/protocol_impls.c numpy/quickselect.h \
 		numpy/quickselect.c
-	cc $(CFLAGS) -I. -O3 -c $< -o$@
+	cc $(CFLAGS) -Wno-unused-result -Wno-implicit-function-declaration -I. -O3 -c $< -o$@
 
 
 # /lib --------------------------------------------------
@@ -128,6 +128,7 @@ lib/libvc.a: backend/failure_detector/vector_clock.o
 MODULES += rts/rts.o rts/empty.o
 rts/rts.o: rts/rts.c rts/rts.h
 	cc $(CFLAGS) -g -Wno-int-to-void-pointer-cast \
+		-Wno-unused-result \
 		-pthread \
 		-c -O3 $< -o $@
 
