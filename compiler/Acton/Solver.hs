@@ -98,6 +98,7 @@ solve' env select hist te tt eq cs
                                                  --traceM ("## keep:\n" ++ render (nest 8 $ vcat $ map pretty keep_cs))
                                                  --traceM ("## solve:\n" ++ render (nest 8 $ vcat $ map pretty solve_cs))
                                                  --traceM ("## ranks:\n" ++ render (nest 8 $ vcat $ map pretty rnks))
+                                                 --traceM ("## optvs: " ++ prstrs optvs)
                                                  --traceM ("## posvs: " ++ prstrs posvs)
                                                  --traceM ("## negvs: " ++ prstrs negvs)
                                                  case head goals of
@@ -169,6 +170,8 @@ rank                                        :: Env -> Constraint -> Rank
 rank env (Sub _ t1 t2)                      = rank env (Cast t1 t2)
 
 rank env (Cast t1@TVar{} t2@TVar{})
+  | univar (tvar t1), univar (tvar t2)      = RUni t1 [t2]
+rank env (Cast t1@TVar{} (TOpt _ t2@TVar{}))
   | univar (tvar t1), univar (tvar t2)      = RUni t1 [t2]
 rank env (Cast t1@TVar{} (TOpt _ t2))
   | univar (tvar t1)                        = RTry t1 (allBelow env t2 ++ [tOpt tWild, tNone]) False
