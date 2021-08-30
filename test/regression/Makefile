@@ -49,6 +49,9 @@ $(FAILING_RUNNING):
 	$(ACTONC) $@.act --root main >/dev/null 2>&1
 	! ./$@ >/dev/null 2>&1
 
+105-type-inference-order:
+	@echo "Test '105-type-inference-order' is temporarily disabled"
+
 13-print-actor-method:
 	$(ACTONC) $@.act --root main
 	@echo "Now we really see 2 'pong' messages"

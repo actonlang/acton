@@ -126,6 +126,12 @@ pthread_key_t self_key;
 pthread_mutex_t sleep_lock = PTHREAD_MUTEX_INITIALIZER;
 pthread_cond_t work_to_do = PTHREAD_COND_INITIALIZER;
 
+void new_work() {
+    pthread_mutex_lock(&sleep_lock);
+    pthread_cond_signal(&work_to_do);
+    pthread_mutex_unlock(&sleep_lock);
+}
+
 static inline void spinlock_lock($Lock *f) {
     while (atomic_flag_test_and_set(f) == true) {
         // spin until we could set the flag
@@ -674,20 +680,18 @@ $Msg $ASYNC($Actor to, $Cont cont) {
     $Actor self = ($Actor)pthread_getspecific(self_key);
     time_t baseline = 0;
     $Msg m = $NEW($Msg, to, cont, baseline, &$Done$instance);
-    if (self) {
+    if (self) {                                         // $ASYNC called by actor code
         m->$baseline = self->$msg->$baseline;
         PUSH_outgoing(self, m);
-    } else {
+    } else {                                            // $ASYNC called by the event loop
         struct timespec now;
         clock_gettime(CLOCK_MONOTONIC, &now);
         m->$baseline = now.tv_sec;
         if (ENQ_msg(m, to)) {
            ENQ_ready(to);
+           new_work();
         }
     }
-    pthread_mutex_lock(&sleep_lock);
-    pthread_cond_signal(&work_to_do);
-    pthread_mutex_unlock(&sleep_lock);
     return m;
 }
 
@@ -752,6 +756,7 @@ void FLUSH_outgoing($Actor self, uuid_t *txnid) {
             $Actor to = m->$to;
             if (ENQ_msg(m, to)) {
                 ENQ_ready(to);
+                new_work();
             }
             dest = to->$globkey;
         } else {
@@ -1117,6 +1122,7 @@ void *main_loop(void *arg) {
                         b->$msg->$value = r.value;
                         b->$waitsfor = NULL;
                         ENQ_ready(b);
+                        new_work();
                         b = b->$next;
                     }
                     if (DEQ_msg(current)) {
@@ -1188,15 +1194,11 @@ void *main_loop(void *arg) {
                     //printf("############## Commit\n\n");
                 }
             } else {
-                if  ((long)arg==0) {
-                    $eventloop();
-                } else {
-                  pthread_mutex_lock(&sleep_lock);
-                  pthread_cond_wait(&work_to_do, &sleep_lock);
-                  pthread_mutex_unlock(&sleep_lock);
-                  // static struct timespec idle_wait = { 0, 50000000 };  // 500ms
-                  // nanosleep(&idle_wait, NULL);
-                }
+                pthread_mutex_lock(&sleep_lock);
+                pthread_cond_wait(&work_to_do, &sleep_lock);
+                pthread_mutex_unlock(&sleep_lock);
+                // static struct timespec idle_wait = { 0, 50000000 };  // 500ms
+                // nanosleep(&idle_wait, NULL);
             }
         }
     }
@@ -1333,7 +1335,11 @@ int main(int argc, char **argv) {
     pthread_t threads[num_cores];
     cpu_set_t cpu_set;
     for(int idx = 0; idx < num_cores; ++idx) {
-        pthread_create(&threads[idx], NULL, main_loop, (void*)idx);
+        if (idx==0) {
+            pthread_create(&threads[idx], NULL, $eventloop, (void*)idx);
+        } else {
+            pthread_create(&threads[idx], NULL, main_loop, (void*)idx);
+        }
         CPU_ZERO(&cpu_set);
         CPU_SET(idx, &cpu_set);
         pthread_setaffinity_np(threads[idx], sizeof(cpu_set), &cpu_set);

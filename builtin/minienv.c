@@ -1022,7 +1022,7 @@ void minienv$$__init__ () {
 }
 
 
-void $eventloop() {
+void *$eventloop(void *arg) {
   while(1) {
     struct kevent timer;
     pthread_setspecific(self_key, NULL);
@@ -1094,5 +1094,6 @@ void $eventloop() {
     pthread_cond_signal(&work_to_do);
     pthread_mutex_unlock(&sleep_lock);
 
-  } 
+  }
+  return NULL;
 }

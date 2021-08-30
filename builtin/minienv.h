@@ -76,7 +76,7 @@ extern int kq;
 
 void setupConnection (int fd);
 $str $getName(int fd);
-void $eventloop();
+void *$eventloop(void *);
 
 //////////////////////////////////////////////////////////////////////////////////////
 
