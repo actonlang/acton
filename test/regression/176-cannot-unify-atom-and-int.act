@@ -1,0 +1,11 @@
+import random
+
+actor Foo():
+    def bar(a):
+        rest = int(a["id"]) % 2
+
+actor main(env):
+    a = {"id": random.randint(0,10)}
+    f = Foo()
+    f.bar(a)
+    await async env.exit(0)
