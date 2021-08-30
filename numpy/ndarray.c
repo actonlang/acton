@@ -111,7 +111,7 @@ numpy$$ndarray numpy$$ndarray$__deserialize__(numpy$$ndarray res, $Serial$state 
        res = malloc(sizeof(struct numpy$$ndarray));
     $dict_setitem(state->done,($Hashable)$Hashable$int$witness,to$int(state->row_no-1),res);
     res->$class = &numpy$$ndarray$methods;
-    res->elem_type = (enum ElemType)this->blob[0];
+    res->elem_type = (enum ElemType)(long)this->blob[0];
     res->ndim = (long)this->blob[1];
     res->size = to$int((long)this->blob[2]);
     res->offset = (long)this->blob[3];

@@ -774,7 +774,7 @@ void FLUSH_outgoing($Actor self, uuid_t *txnid) {
 $dict globdict = NULL;
 
 $WORD try_globdict($WORD w) {
-    int key = (int)w;
+    int key = (int)(long)w;
     $WORD obj = $dict_get(globdict, ($Hashable)$Hashable$int$witness, to$int(key), NULL);
     return obj;
 }
@@ -1188,7 +1188,7 @@ void *main_loop(void *arg) {
                     //printf("############## Commit\n\n");
                 }
             } else {
-                if  ((int)arg==0) {
+                if  ((long)arg==0) {
                     $eventloop();
                 } else {
                   pthread_mutex_lock(&sleep_lock);
