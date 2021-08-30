@@ -221,6 +221,7 @@ tSerialstate                        = tCon $ TC (GName mPrim (Derived (name "Ser
 primStepSerialize                   = gPrim "step_serialize"
 primStepDeserialize                 = gPrim "step_deserialize"
 primDNEW                            = gPrim "DNEW"
+primNEWTUPLE                        = gPrim "NEWTUPLE"
 
 
 -- Implementation -----------------------------------------------------------------------------------
@@ -640,14 +641,7 @@ instance Gen Expr where
     gen env (Dot _ e n)             = genDot env [] e n
     gen env (DotI _ e i)            = gen env e <> text "->" <> gen env componentsKW <> brackets (pretty i)
     gen env (RestI _ e i)           = gen env eNone <> semi <+> text "// CodeGen for tuple tail not implemented"
-    gen env (Tuple _ p KwdNil)      = parens (lbrace <+> (
-                                        gen env n <+> tmp <+> equals <+> malloc env n <> semi $+$
-                                        tmp <> text "->" <> gen env classKW <+> equals <+> char '&' <> table <> semi $+$
-                                        table <> dot <> gen env initKW <> parens (tmp <> comma <+> text (show $ nargs p) <> comma' (gen env p)) <> semi $+$
-                                        tmp <> semi) <+> rbrace)
-      where n                       = primTuple
-            table                   = methodtable' env n
-            tmp                     = gen env tmpV
+    gen env (Tuple _ p KwdNil)      = gen env primNEWTUPLE <> parens (text (show $ nargs p) <> comma' (gen env p))
     gen env (List _ es)
       | null es                     = newcon' env n <> parens (text "NULL" <> comma <+> text "NULL")
       | otherwise                   = parens (lbrace <+> (

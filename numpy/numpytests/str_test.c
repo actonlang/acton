@@ -17,5 +17,5 @@
 
 int main() {
   $ndarray a = $NEW($ndarray,to$float(3.1416));
-  $print($NEW($tuple,2,to$str("a="),a));
+  $print($NEWTUPLE(2,to$str("a="),a));
 }
