@@ -2,12 +2,16 @@
 
 ## Unreleased
 
+### Added
+- Bug triage and prioritization document
+  - see `docs/triage.md`
+
 ## [0.5.2](https://github.com/actonlang/acton/releases/tag/v0.5.2) (2021-08-25)
 
 ### Fixed
 - It is now possible to raise exceptions.
   - Previously a naming misalignment between the Acton compiler code generation
-    and the builtins of the RTS previously lead to an Internal Compiler Error.
+    and the builtins of the RTS led to an Internal Compiler Error.
   - BaseException is now also used instead of Exception, as it should.
 - Distributed RTS mode has been fixed with regards to actor bootstrap that
   previously lead to duplicate actors.
@@ -15,7 +19,7 @@
   method
   - This could previously lead to a segmentation fault during certain
     situations.
-- Avoid cleaning away modules/math.h
+- Avoid cleaning away `modules/math.h`
   - This was due to an outdated Makefile cleaning target
 - Type inferencing now works for all dicts.
   - Previously worked for some, for example a dict of strings but not for a dict
@@ -57,9 +61,9 @@
   - this could be considered a bug fix, like it should go under "Fixed" but it
     is big enough of a thing to warrant being here... almost like new
     functionality, although we probably did intend to support this all along
-- Description of development workflow, see docs/development_workflow.md
+- Description of development workflow, see `docs/development_workflow.md`
 - A short guide on how to wrap C libraries for use in Acton, see
-  docs/wrapping_c_libraries.md
+  `docs/wrapping_c_libraries.md`
 - `time.time()` function
   - returns the current system time in nanoseconds as an integer
   - `time` is a new module
