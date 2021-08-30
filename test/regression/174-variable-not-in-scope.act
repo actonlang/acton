@@ -1,0 +1,7 @@
+def foo(a):
+    print(a)
+
+actor main(env):
+    b = 1
+    foo(b)
+    await async env.exit(0)
