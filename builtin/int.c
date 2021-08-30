@@ -198,10 +198,7 @@ $int $Integral$int$__index__($Integral$int wit, $int n) {
 $tuple $Integral$int$__divmod__($Integral$int wit, $int a, $int b) {
   int n = a->val;
   int d = b->val;
-  $WORD *comps = malloc(2*sizeof($WORD));
-  comps[0] = to$int(n/d);
-  comps[1] = to$int(n%d);
-  return $NEW($tuple,2,comps);
+  return $NEW($tuple, 2, to$int(n/d), to$int(n%d));
 }
 
 $int $Integral$int$__floordiv__($Integral$int wit, $int a, $int b) {
