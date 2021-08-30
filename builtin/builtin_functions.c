@@ -71,7 +71,7 @@ $Iterator$enumerate $Iterator$enumerate$_deserialize($Iterator$enumerate res,$Se
 $WORD $Iterator$enumerate_next($Iterator$enumerate it) {
   $WORD w = it->it->$class->__next__(it->it);
   if (w)
-    return $NEW($tuple,2,to$int(it->nxt++),w);
+    return $NEWTUPLE(2,to$int(it->nxt++),w);
   else
     return NULL;
 }
@@ -270,7 +270,7 @@ $WORD $Iterator$zip_next($Iterator$zip it) {
   $WORD w1 = it->it1->$class->__next__(it->it1);
   $WORD w2 = it->it2->$class->__next__(it->it2);
   if (w1 && w2)
-    return $NEW($tuple,2,w1,w2);
+    return $NEWTUPLE(2,w1,w2);
   else
     return NULL;
 }

@@ -16,7 +16,7 @@
 #include "../builtin.h"
 
 int main() {
-  $tuple tup1 = $NEW($tuple,3,to$int(7),to$str("A string"),to$float(3.14));
+  $tuple tup1 = $NEWTUPLE(3,to$int(7),to$str("A string"),to$float(3.14));
   $Sliceable$tuple wit = $Sliceable$tuple$witness;
   $print(2,to$str("tup1 = "),tup1);
   int start = 0;

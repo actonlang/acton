@@ -1234,7 +1234,7 @@ $str $str_lstrip($str s, $str cs) {
 $tuple $str_partition($str s, $str sep) {
   int n = from$int($str_find(s,sep,NULL,NULL));
   if (n<0) {
-    return $NEW($tuple,3,s,null_str,null_str);
+    return $NEWTUPLE(3,s,null_str,null_str);
   } else {
     int nb = bmh(s->str,sep->str,s->nbytes,sep->nbytes);
     $str ls;
@@ -1244,7 +1244,7 @@ $tuple $str_partition($str s, $str sep) {
     int nbr = s->nbytes - sep->nbytes - nb;
     NEW_UNFILLED_STR(rs,s->nchars-n-sep->nchars,nbr);
     memcpy(rs->str,s->str+nb+sep->nbytes,nbr);
-    return $NEW($tuple,3,ls,sep,rs);
+    return $NEWTUPLE(3,ls,sep,rs);
   }
 }
 
@@ -1328,7 +1328,7 @@ $str $str_rjust($str s, $int width, $str fill) {
 $tuple $str_rpartition($str s, $str sep) {
   int n = from$int($str_rfind(s,sep,NULL,NULL));
   if (n<0) {
-    return $NEW($tuple,3,null_str,null_str,s);
+    return $NEWTUPLE(3,null_str,null_str,s);
   } else {
     int nb = rbmh(s->str,sep->str,s->nbytes,sep->nbytes);
     $str ls;
@@ -1338,7 +1338,7 @@ $tuple $str_rpartition($str s, $str sep) {
     $str rs;    
     NEW_UNFILLED_STR(rs,s->nchars-n-sep->nchars,nbr);
     memcpy(rs->str,s->str+nb+sep->nbytes,nbr);
-    return  $NEW($tuple,3,ls,sep,rs);
+    return  $NEWTUPLE(3,ls,sep,rs);
   }
 }
 
@@ -1926,7 +1926,7 @@ $bytearray $bytearray_lstrip($bytearray s, $bytearray cs) {
 $tuple $bytearray_partition($bytearray s, $bytearray sep) {
   int n = from$int($bytearray_find(s,sep,NULL,NULL));
   if (n<0) {
-    return $NEW($tuple,3,s,to$bytearray(""),to$bytearray(""));
+    return $NEWTUPLE(3,s,to$bytearray(""),to$bytearray(""));
   } else {
     int nb = bmh(s->str,sep->str,s->nbytes,sep->nbytes);
     $bytearray ls;
@@ -1936,7 +1936,7 @@ $tuple $bytearray_partition($bytearray s, $bytearray sep) {
     int nbr = s->nbytes - sep->nbytes - nb;
     NEW_UNFILLED_BYTEARRAY(rs,nbr);
     memcpy(rs->str,s->str+nb+sep->nbytes,nbr);
-    return $NEW($tuple,3,ls,sep,rs);
+    return $NEWTUPLE(3,ls,sep,rs);
   }
 }
 
@@ -2016,7 +2016,7 @@ $bytearray $bytearray_rjust($bytearray s, $int width, $bytearray fill) {
 $tuple $bytearray_rpartition($bytearray s, $bytearray sep) {
   int n = from$int($bytearray_rfind(s,sep,NULL,NULL));
   if (n<0) {
-    return $NEW($tuple,3,to$bytearray(""),to$bytearray(""),s);
+    return $NEWTUPLE(3,to$bytearray(""),to$bytearray(""),s);
   } else {
     int nb = rbmh(s->str,sep->str,s->nbytes,sep->nbytes);
     $bytearray ls;
@@ -2026,7 +2026,7 @@ $tuple $bytearray_rpartition($bytearray s, $bytearray sep) {
     $bytearray rs;    
     NEW_UNFILLED_BYTEARRAY(rs,nbr);
     memcpy(rs->str,s->str+nb+sep->nbytes,nbr);
-    return  $NEW($tuple,3,ls,sep,rs);
+    return  $NEWTUPLE(3,ls,sep,rs);
   }
 }
 

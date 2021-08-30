@@ -497,7 +497,7 @@ static $WORD $Iterator$dict$items_next($Iterator$dict$items self) {
     $entry_t entry =  &TB_ENTRIES(table)[i];
     if (entry->value != NULL) {
       self->nxt = i+1;
-      return $NEW($tuple,2,entry->key,entry->value);
+      return $NEWTUPLE(2,entry->key,entry->value);
     }
     i++;
   }
@@ -576,7 +576,7 @@ $tuple $dict_popitem($dict dict, $Hashable hashwit) {
       table->tb_indices[i] = DKIX_DUMMY;
       dict->numelements--;
       table->tb_nentries = ix;
-      return $NEW($tuple,2,entry->key,entry->value);
+      return $NEWTUPLE(2,entry->key,entry->value);
     }
     ix--;
   }
