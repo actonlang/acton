@@ -19,6 +19,7 @@ FAILING_COMPILATION= \
 	triquotes-across-lines
 FAILING_RUNNING= \
 	125-async-actor-method-call \
+	164-divmod \
 	segfault \
 	subtract_off_by_one
 ALL_FAILING=$(FAILING_COMPILATION) $(FAILING_RUNNING)
