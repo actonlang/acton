@@ -1,0 +1,24 @@
+import acton.rts
+
+actor counter(env):
+    var i = 0
+    def test():
+        print("counter actor in test, i:", i)
+        if i > 1:
+            print("counter actor finished in time, exiting happily")
+            await async env.exit(0)
+        i += 1
+        after 1: test()
+
+actor error_exiter(env):
+    def test():
+        print("error actor sleeping for 5 seconds")
+        acton.rts.sleep(5)
+        print("error actor finished sleeping, exiting with error")
+        await async env.exit(1)
+
+actor main(env):
+    var c = counter(env)
+    c.test()
+    var e = error_exiter(env)
+    e.test()
