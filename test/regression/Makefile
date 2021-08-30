@@ -14,6 +14,7 @@ FAILING_COMPILATION= \
 	11-int-float \
 	12-for-actor \
 	20-for-break \
+	174-variable-not-in-scope \
 	if-return \
 	quotes-in-triquotes \
 	triquotes-across-lines
