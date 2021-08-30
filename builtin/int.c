@@ -310,7 +310,7 @@ $bool $Ord$int$__gt__ ($Ord$int wit, $int a, $int b) {
 }
 
 $bool $Ord$int$__ge__ ($Ord$int wit, $int a, $int b) {
-  return to$bool(a->val == b->val);
+  return to$bool(a->val >= b->val);
 }
 
 // $Hashable$int ///////////////////////////////////////////////////////////////////////////////////////////////////////
