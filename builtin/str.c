@@ -950,7 +950,7 @@ $bool $str_endswith($str s, $str sub, $int start, $int end) {
 }
 
 $str $str_expandtabs($str s, $int tabsize){
-  int tabsz = (int)tabsize?tabsize->val:8;
+  int tabsz = tabsize?(long)tabsize->val:8;
   int pos = 0;
   int expanded = 0;
   tabsz = tabsz <= 0 ? 1 : tabsz;

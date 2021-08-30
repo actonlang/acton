@@ -87,7 +87,7 @@ void $step_serialize($WORD self, $Serial$state state) {
     int class_id = $GET_CLASSID((($Serializable)self)->$class);
     if (class_id > ITEM_ID) { // not one of the Acton builtin datatypes, which have hand-crafted serializations
       if (state->globmap) {
-          long key = (int)state->globmap(self);
+          long key = (long)state->globmap(self);
           if (key < 0) {
             $val_serialize(-class_id,&key,state);
             return;
