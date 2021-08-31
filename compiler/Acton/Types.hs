@@ -581,7 +581,7 @@ stubSigs te                             = [ makeDef n sc dec | (n, NSig sc dec) 
 
 solveAll env te tt cs                   = do --traceM ("\n\n### solveAll " ++ prstrs cs)
                                              (cs,eq) <- simplify env te tt cs
-                                             (_,cs,_,eq) <- refine env cs te eq
+                                             (_,cs,_,eq) <- refine env True cs te eq
                                              snd <$> solve env (const True) te tt eq cs
 
 solveScoped env [] te tt cs             = simplify env te tt cs
@@ -827,8 +827,8 @@ instance Check Branch where
 
 --------------------------------------------------------------------------------------------------------------------------
 
-refine                                  :: Env -> Constraints -> TEnv -> Equations -> TypeM ([TVar], Constraints, TEnv, Equations)
-refine env cs te eq
+refine                                  :: Env -> Bool -> Constraints -> TEnv -> Equations -> TypeM ([TVar], Constraints, TEnv, Equations)
+refine env canGen cs te eq
   | not $ null solve_vs                 = do --traceM ("  #solving cs : " ++ prstrs cs)
                                              (cs',eq') <- solve (define te env) (not . canQual) te tNone eq cs
                                              refineAgain cs' eq'
@@ -845,7 +845,7 @@ refine env cs te eq
         def_vss                         = [ nub $ tyfree sc | (_, NDef sc _) <- te, null $ scbind sc ]
         gen_vs                          = nub (foldr union (tyfree cs) def_vss)
         
-        canQual (Impl _ (TVar _ v) _)   = univar v
+        canQual (Impl _ (TVar _ v) _)   = univar v && canGen
         canQual _                       = False
 
         ambig c                         = any (`elem` ambig_vs) (tyfree c)
@@ -853,7 +853,7 @@ refine env cs te eq
         refineAgain cs eq               = do (cs,eq') <- simplify env te tNone cs
                                              te <- msubst te
                                              env <- msubst env
-                                             refine env cs te (eq'++eq)
+                                             refine env canGen cs te (eq'++eq)
 
 tyfixed te                              = tyfree $ filter (not . gen) te
   where gen (n, NDef sc _)              = null $ scbind sc
@@ -872,7 +872,7 @@ genEnv env cs te ds0
                                              (cs0,eq0) <- simplify env te tNone cs
                                              te <- msubst te
                                              env <- msubst env
-                                             (gen_vs, gen_cs, te, eq1) <- refine env cs0 te eq0
+                                             (gen_vs, gen_cs, te, eq1) <- refine env (all matchDef te) cs0 te eq0
                                              --traceM ("## genEnv 2 [" ++ prstrs gen_vs ++ "]\n" ++ render (nest 6 $ pretty te))
                                              let (q,ws) = qualify gen_vs gen_cs
                                                  te1 = map (generalize q) te
@@ -908,6 +908,9 @@ genEnv env cs te ds0
       where s                           = [ (n, Lambda l0 p k (Call l0 (tApp (eVar n) tvs) (wit2arg ws (pArg p)) (kArg k)) fx) 
                                             | Def _ n [] p k _ _ _ fx <- ds ]
             tvs                         = map tVar $ qbound q
+
+    matchDef (_,NDef{})                 = True
+    matchDef _                          = False
 
 
 defaultsP (PosPar n (Just t) (Just e) p)

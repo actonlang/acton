@@ -864,31 +864,31 @@ castable env t1 t2                          = False
 -- GLB
 ----------------------------------------------------------------------------------------------------------------------
 
-glb env (TWild _) t2                    = t2
-glb env t1 (TWild _)                    = t1
+glb env (TWild _) t2                    = pure t2
+glb env t1 (TWild _)                    = pure t1
 
 glb env t1@TVar{} t2@TVar{}
-  | t1 == t2                            = t1
-glb env TVar{} _                        = tWild
-glb env _ TVar{}                        = tWild
+  | t1 == t2                            = pure t1
+glb env TVar{} _                        = pure tWild
+glb env _ TVar{}                        = pure tWild
 
 glb env (TCon _ c1) (TCon _ c2)
-  | tcname c1 == tcname c2              = tCon c1
-  | hasAncestor env c1 c2               = tCon c1
-  | hasAncestor env c2 c1               = tCon c2
+  | tcname c1 == tcname c2              = pure $ tCon c1
+  | hasAncestor env c1 c2               = pure $ tCon c1
+  | hasAncestor env c2 c1               = pure $ tCon c2
 
 glb env (TFun _ e1 p1 k1 t1) (TFun _ e2 p2 k2 t2)
-                                        = tFun (glb env e1 e2) (lub env p1 p2) (lub env k1 k2) (glb env t1 t2)
+                                        = tFun <$> glb env e1 e2 <*> lub env p1 p2 <*> lub env k1 k2 <*> glb env t1 t2
 glb env (TTuple _ p1 k1) (TTuple _ p2 k2)
-                                        = tTuple (glb env p1 p2) (glb env k1 k2)
+                                        = tTuple <$> glb env p1 p2 <*> glb env k1 k2
 
-glb env (TOpt _ t1) (TOpt _ t2)         = tOpt (glb env t1 t2)
-glb env (TNone _) t2                    = tNone
-glb env t1 (TNone _)                    = tNone
+glb env (TOpt _ t1) (TOpt _ t2)         = tOpt <$> glb env t1 t2
+glb env (TNone _) t2                    = pure tNone
+glb env t1 (TNone _)                    = pure tNone
 glb env (TOpt _ t1) t2                  = glb env t1 t2
 glb env t1 (TOpt _ t2)                  = glb env t1 t2
 
-glb env t1@(TFX _ fx1) t2@(TFX _ fx2)   = tTFX (glfx fx1 fx2)
+glb env t1@(TFX _ fx1) t2@(TFX _ fx2)   = pure $ tTFX (glfx fx1 fx2)
   where glfx FXPure   _                 = FXPure
         glfx _        FXPure            = FXPure
         glfx FXMut    _                 = FXMut
@@ -896,47 +896,49 @@ glb env t1@(TFX _ fx1) t2@(TFX _ fx2)   = tTFX (glfx fx1 fx2)
         glfx FXAction FXAction          = FXAction
 
 glb env (TNil _ k1) (TNil _ k2)
-  | k1 == k2                            = tNil k1
+  | k1 == k2                            = pure $ tNil k1
 glb env (TRow _ k n t1 r1) r
-  | Just (t2,r2) <- findInRow n r       = tRow k n (glb env t1 t2) (glb env r1 r2)
+  | Just (t2,r2) <- findInRow n r       = tRow k n <$> glb env t1 t2 <*> glb env r1 r2
 
-glb env t1 t2                           = -- tyerr t1 ("No common subtype: " ++ prstr t2)
-                                          error ("No common subtype: " ++ prstr t1 ++ " and " ++ prstr t2)
+glb env t1 t2                           = Nothing
     
+glbfold env []                          = pure tWild
+glbfold env (t:ts)                      = foldM (glb env) t ts
+
 
 ----------------------------------------------------------------------------------------------------------------------
 -- LUB
 ----------------------------------------------------------------------------------------------------------------------
 
-lub env (TWild _) t2                    = t2
-lub env t1 (TWild _)                    = t1
+lub env (TWild _) t2                    = pure t2
+lub env t1 (TWild _)                    = pure t1
 
 lub env t1@TVar{} t2@TVar{}
-  | t1 == t2                            = t1
-lub env TVar{} _                        = tWild
-lub env _ TVar{}                        = tWild
+  | t1 == t2                            = pure t1
+lub env TVar{} _                        = pure tWild
+lub env _ TVar{}                        = pure tWild
 
 lub env (TCon _ c1) (TCon _ c2)
-  | tcname c1 == tcname c2              = tCon c1
-  | hasAncestor env c1 c2               = tCon c2
-  | hasAncestor env c2 c1               = tCon c1
-  | not $ null common                   = tCon $ head common
+  | tcname c1 == tcname c2              = pure $ tCon c1
+  | hasAncestor env c1 c2               = pure $ tCon c2
+  | hasAncestor env c2 c1               = pure $ tCon c1
+  | not $ null common                   = pure $ tCon $ head common
   where common                          = commonAncestors env c1 c2
 
 lub env (TFun _ e1 p1 k1 t1) (TFun _ e2 p2 k2 t2)
-                                        = tFun (lub env e1 e2) (glb env p1 p2) (glb env k1 k2) (lub env t1 t2)
+                                        = tFun <$> lub env e1 e2 <*> glb env p1 p2 <*> glb env k1 k2 <*> lub env t1 t2
 lub env (TTuple _ p1 k1) (TTuple _ p2 k2)
-                                        = tTuple (lub env p1 p2) (lub env k1 k2)
+                                        = tTuple <$> lub env p1 p2 <*> lub env k1 k2
 
-lub env (TOpt _ t1) (TOpt _ t2)         = tOpt (lub env t1 t2)
-lub env (TNone _) t2@TOpt{}             = t2
-lub env t1@TOpt{} (TNone _)             = t1
-lub env (TNone _) t2                    = tOpt t2
-lub env t1 (TNone _)                    = tOpt t1
-lub env (TOpt _ t1) t2                  = tOpt $ lub env t1 t2
-lub env t1 (TOpt _ t2)                  = tOpt $ lub env t1 t2
+lub env (TOpt _ t1) (TOpt _ t2)         = tOpt <$> lub env t1 t2
+lub env (TNone _) t2@TOpt{}             = pure t2
+lub env t1@TOpt{} (TNone _)             = pure t1
+lub env (TNone _) t2                    = pure $ tOpt t2
+lub env t1 (TNone _)                    = pure $ tOpt t1
+lub env (TOpt _ t1) t2                  = tOpt <$> lub env t1 t2
+lub env t1 (TOpt _ t2)                  = tOpt <$> lub env t1 t2
 
-lub env t1@(TFX _ fx1) t2@(TFX _ fx2)   = tTFX (lufx fx1 fx2)
+lub env t1@(TFX _ fx1) t2@(TFX _ fx2)   = pure $ tTFX (lufx fx1 fx2)
   where lufx FXAction _                 = FXAction
         lufx _        FXAction          = FXAction
         lufx FXMut    _                 = FXMut
@@ -944,12 +946,14 @@ lub env t1@(TFX _ fx1) t2@(TFX _ fx2)   = tTFX (lufx fx1 fx2)
         lufx FXPure   FXPure            = FXPure
 
 lub env (TNil _ k1) (TNil _ k2)
-  | k1 == k2                            = tNil k1
+  | k1 == k2                            = pure $ tNil k1
 lub env (TRow _ k n t1 r1) r
-  | Just (t2,r2) <- findInRow n r       = tRow k n (lub env t1 t2) (lub env r1 r2)
+  | Just (t2,r2) <- findInRow n r       = tRow k n <$> lub env t1 t2 <*> lub env r1 r2
 
-lub env t1 t2                           = -- tyerr t1 ("No common supertype: " ++ prstr t2)
-                                          error ("No common supertype: " ++ prstr t1 ++ " and " ++ prstr t2)
+lub env t1 t2                           = Nothing
+
+lubfold env []                          = pure tWild
+lubfold env (t:ts)                      = foldM (lub env) t ts
 
 
 -- Import handling (local definitions only) ----------------------------------------------

@@ -87,7 +87,7 @@ solve env select te tt eq cs                = do (cs',eq') <- solveGroups env se
           where (cs1,cs2)                   = partition (not . null . intersect tvs . tyfree) cs
 
 solveGroups env select te tt []             = return ([], [])
-solveGroups env select te tt (cs:css)       = do --traceM ("\n\n######### solveGroup")
+solveGroups env select te tt (cs:css)       = do --traceM ("\n\n######### solveGroup " ++ prstrs cs)
                                                  (cs1,eq1) <- solve' env select [] te tt [] cs `catchError` \err -> Control.Exception.throw err
                                                  (cs2,eq2) <- solveGroups env select te tt css
                                                  return (cs1++cs2, eq1++eq2)
@@ -98,6 +98,7 @@ solve' env select hist te tt eq cs
                                                  --traceM ("## keep:\n" ++ render (nest 8 $ vcat $ map pretty keep_cs))
                                                  --traceM ("## solve:\n" ++ render (nest 8 $ vcat $ map pretty solve_cs))
                                                  --traceM ("## ranks:\n" ++ render (nest 8 $ vcat $ map pretty rnks))
+                                                 --traceM ("## optvs: " ++ prstrs optvs)
                                                  --traceM ("## posvs: " ++ prstrs posvs)
                                                  --traceM ("## negvs: " ++ prstrs negvs)
                                                  case head goals of
@@ -106,7 +107,7 @@ solve' env select hist te tt eq cs
                                                         tryAlts st t alts
                                                     RUni t alts -> do
                                                         --traceM ("### goal " ++ prstr t ++ ", unifying with " ++ prstrs alts)
-                                                        unifyM (repeat t) alts >> proceed hist cs
+                                                        unifyM alts (repeat t) >> proceed hist cs
                                                     ROvl t -> do
                                                         --traceM ("### goal " ++ prstr t ++ ", defaulting remaining constraints")
                                                         (cs,eq) <- simplify' (useForce env) te tt eq cs
@@ -169,6 +170,8 @@ rank                                        :: Env -> Constraint -> Rank
 rank env (Sub _ t1 t2)                      = rank env (Cast t1 t2)
 
 rank env (Cast t1@TVar{} t2@TVar{})
+  | univar (tvar t1), univar (tvar t2)      = RUni t1 [t2]
+rank env (Cast t1@TVar{} (TOpt _ t2@TVar{}))
   | univar (tvar t1), univar (tvar t2)      = RUni t1 [t2]
 rank env (Cast t1@TVar{} (TOpt _ t2))
   | univar (tvar t1)                        = RTry t1 (allBelow env t2 ++ [tOpt tWild, tNone]) False
@@ -793,15 +796,18 @@ instwildcon env c                       = case tconKind (tcname c) env of
                                             _ -> return $ TC (tcname c) []
 
 
-mkGLB env (v,ts)                        = do t <- instwild env KType $ foldr1 (glb env) ts
+mkGLB env (v,ts)
+  | Just t <- glbfold env ts            = do t <- instwild env KType t
                                              --traceM ("   glb " ++ prstrs ts ++ " = " ++ prstr t)
                                              return (v, t)
+  | otherwise                           = tyerrs ts ("No common subtype:")
 
 
-mkLUB env (v,ts)                        = do --traceM ("   lub " ++ prstrs ts ++ " ...")
-                                             t <- instwild env KType $ foldr1 (lub env) ts
+mkLUB env (v,ts)
+  | Just t <- lubfold env ts            = do t <- instwild env KType t
                                              --traceM ("   lub " ++ prstrs ts ++ " = " ++ prstr t)
                                              return (v, t)
+  | otherwise                           = tyerrs ts ("No common supertype:")
 
 
 ----------------------------------------------------------------------------------------------------------------------

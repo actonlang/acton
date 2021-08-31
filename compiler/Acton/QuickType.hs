@@ -351,7 +351,6 @@ instance EnvOf Assoc where
     envOf _                         = []
 
 
-upbound env (t:ts)                  = foldr (lub env) t ts
-upbound env []                      = tWild
+upbound env ts                      = case lubfold env ts of Just u -> u
 
 
