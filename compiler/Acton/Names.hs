@@ -52,14 +52,18 @@ declnames (d : ds)                  = dname d : declnames ds
 declnames []                        = []
 
 splitDeclGroup []                   = []
-splitDeclGroup (d:ds)               = split (free d) [d] ds
-  where split vs ds0 []             = [reverse ds0]
-        split vs ds0 (d@Def{}:ds)
-          | any (`elem` ws) vs      = split (free d++vs) (d:ds0) ds
-          | otherwise               = reverse ds0 : split (free d) [d] ds
+splitDeclGroup (d:ds)
+  | def d                           = splitdef (free d) [d] defs ++ splitDeclGroup ds1
+  | otherwise                       = (d:types) : splitDeclGroup ds2
+  where (defs,ds1)                  = span def ds
+        (types,ds2)                 = span (not . def) ds
+        splitdef vs ds0 []          = [reverse ds0]
+        splitdef vs ds0 (d:ds)
+          | any (`elem` ws) vs      = splitdef (free d++vs) (d:ds0) ds
+          | otherwise               = reverse ds0 : splitdef (free d) [d] ds
           where ws                  = declnames (d:ds)
-        split vs ds0 (d:ds)         = split (free d++vs) (d:ds0) ds
-
+        def Def{}                   = True
+        def _                       = False
 
 -- Control flow --------------------
 
