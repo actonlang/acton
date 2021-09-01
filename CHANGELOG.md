@@ -5,6 +5,26 @@
 ### Added
 - Bug triage and prioritization document
   - see `docs/triage.md`
+- warnings are now generally treated as errors when compiling Acton components
+  - many warnings have been fixed
+  - there are some exceptions added for some warnings
+    - with time these should be reduced
+
+### Changed
+- `time` module has been aligned on its Python counterpart
+  - `time.time()` function now returns a float
+  - `time.time_ns()` returns time in nanoseconds as an integer
+  - monotonic time function has been added through `time.monotonic()` and
+    `time.monotonic_ns()`
+
+### Fixed
+- Fix internal instantiations of tuples to use `$NEWTUPLE`
+  - For example functions like `divmod` that returns a tuple was using an
+    incorrect macro
+- Divmod now works correctly
+- greater than or equal (`>=`) now works for integers
+  - it was broken and actually did an equal match
+- Fix header inclusion for numpy use of arc4random
 
 ## [0.5.2](https://github.com/actonlang/acton/releases/tag/v0.5.2) (2021-08-25)
 
