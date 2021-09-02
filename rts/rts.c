@@ -212,8 +212,6 @@ void $Actor$__init__($Actor a) {
     a->$next = NULL;
     a->$msg = NULL;
     a->$outgoing = NULL;
-    a->$offspring = NULL;
-    a->$uterus = NULL;
     a->$waitsfor = NULL;
     a->$consume_hd = 0;
     a->$catcher = NULL;
@@ -250,8 +248,6 @@ $Actor $Actor$__deserialize__($Actor res, $Serial$state state) {
     res->$next = NULL;
     res->$msg = NULL;
     res->$outgoing = NULL;
-    res->$offspring = NULL;
-    res->$uterus = NULL;
     res->$waitsfor = $step_deserialize(state);
     res->$consume_hd = (long)$val_deserialize(state);
     res->$catcher = $step_deserialize(state);
@@ -636,6 +632,11 @@ void create_db_queue(long key) {
     //printf("   # Subscribe queue %ld returns %d\n", key, ret);
 }
 
+void init_db_queue(long key) {
+    if (db)
+        create_db_queue(key);
+}
+
 void BOOTSTRAP(int argc, char *argv[]) {
     $list args = $list$new(NULL,NULL);
     for (int i=0; i< argc; i++)
@@ -697,10 +698,9 @@ $Msg $ASYNC($Actor to, $Cont cont) {
 
 $Msg $AFTER($int sec, $Cont cont) {
     $Actor self = ($Actor)pthread_getspecific(self_key);
-    $Actor to = self->$uterus ? self->$uterus : self;
-    //printf("# AFTER towards %ld (current: %ld)\n", to->$globkey, self->$globkey);
+    //printf("# AFTER by %ld\n", self->$globkey);
     time_t baseline = self->$msg->$baseline + sec->val;
-    $Msg m = $NEW($Msg, to, cont, baseline, &$Done$instance);
+    $Msg m = $NEW($Msg, self, cont, baseline, &$Done$instance);
     PUSH_outgoing(self, m);
 //    ENQ_timed(m);
     return m;
@@ -708,20 +708,6 @@ $Msg $AFTER($int sec, $Cont cont) {
 
 $R $AWAIT($Msg m, $Cont cont) {
     return $R_WAIT(cont, m);
-}
-
-void $NEWACT($Actor a) {
-    $Actor self = ($Actor)pthread_getspecific(self_key);
-    a->$next = self->$uterus;
-    self->$uterus = a;
-}
-
-void $OLDACT() {
-    $Actor self = ($Actor)pthread_getspecific(self_key);
-    $Actor a = self->$uterus;
-    self->$uterus = a->$next;
-    a->$next = self->$offspring;
-    self->$offspring = a;
 }
 
 void $PUSH($Cont cont) {
@@ -854,8 +840,6 @@ void print_actor($Actor a) {
     printf("     next: %p\n", a->$next);
     printf("     msg: %p\n", a->$msg);
     printf("     outgoing: %p\n", a->$outgoing);
-    printf("     offspring: %p\n", a->$offspring);
-    printf("     uterus: %p\n", a->$uterus);
     printf("     waitsfor: %p\n", a->$waitsfor);
     printf("     consume_hd: %ld\n", (long)a->$consume_hd);
     printf("     catcher: %p\n", a->$catcher);
@@ -1060,24 +1044,6 @@ void serialize_actor($Actor a, uuid_t *txnid) {
     }
 }
 
-void FLUSH_offspring($Actor current, uuid_t *txnid) {
-    $Actor a = current->$offspring;
-    while (a) {
-        if (db) {
-            create_db_queue(a->$globkey);
-            a->$consume_hd = 0;
-            serialize_actor(a, txnid);
-            FLUSH_outgoing(a, txnid);
-        } else {
-            FLUSH_outgoing(a, NULL);
-        }
-        $Actor b = a;
-        a = a->$next;
-        b->$next = NULL;
-    }
-    current->$offspring = NULL;
-}
-
 ////////////////////////////////////////////////////////////////////////////////////////
 
 void *main_loop(void *arg) {
@@ -1089,6 +1055,7 @@ void *main_loop(void *arg) {
             $Cont cont = m->$cont;
             $WORD val = m->$value;
             
+            //printf("## Running actor %ld : %s\n", current->$globkey, current->$class->$GCINFO);
             $R r = cont->$class->__call__(cont, val);
             switch (r.tag) {
                 case $RDONE: {
@@ -1098,7 +1065,6 @@ void *main_loop(void *arg) {
                         serialize_actor(current, txnid);
                         FLUSH_outgoing(current, txnid);
                         serialize_msg(current->$msg, txnid);
-                        FLUSH_offspring(current, txnid);
 
                         long key = current->$globkey;
                         snode_t *m_start, *m_end;
@@ -1113,7 +1079,6 @@ void *main_loop(void *arg) {
                         //printf("############## Commit\n\n");
                     } else {
                         FLUSH_outgoing(current, NULL);
-                        FLUSH_offspring(current, NULL);
                     }
 
                     m->$value = r.value;                 // m->value holds the response,
@@ -1123,8 +1088,10 @@ void *main_loop(void *arg) {
                         b->$waitsfor = NULL;
                         ENQ_ready(b);
                         new_work();
+                        //printf("## Waking up actor %ld : %s\n", b->$globkey, b->$class->$GCINFO);
                         b = b->$next;
                     }
+                    //printf("## DONE actor %ld : %s\n", current->$globkey, current->$class->$GCINFO);
                     if (DEQ_msg(current)) {
                         ENQ_ready(current);
                     }
@@ -1133,6 +1100,7 @@ void *main_loop(void *arg) {
                 case $RCONT: {
                     m->$cont = r.cont;
                     m->$value = r.value;
+                    //printf("## CONT actor %ld : %s\n", current->$globkey, current->$class->$GCINFO);
                     ENQ_ready(current);
                     break;
                 }
@@ -1149,18 +1117,18 @@ void *main_loop(void *arg) {
                         serialize_actor(current, txnid);
                         FLUSH_outgoing(current, txnid);
                         serialize_msg(current->$msg, txnid);
-                        FLUSH_offspring(current, txnid);
                         remote_commit_txn(txnid, db);
                         //printf("############## Commit\n\n");
                     } else {
                         FLUSH_outgoing(current, NULL);
-                        FLUSH_offspring(current, NULL);
                     }
                     m->$cont = r.cont;
                     $Msg x = ($Msg)r.value;
                     if (ADD_waiting(current, x)) {      // x->cont != NULL: x is still being processed so current was added to x->waiting
+                        //printf("## AWAIT actor %ld : %s\n", current->$globkey, current->$class->$GCINFO);
                         current->$waitsfor = x;
                     } else {                            // x->cont == NULL: x->value holds the final response, current is not in x->waiting
+                        //printf("## AWAIT/wakeup actor %ld : %s\n", current->$globkey, current->$class->$GCINFO);
                         m->$value = x->$value;
                         ENQ_ready(current);
                     }

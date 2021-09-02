@@ -702,7 +702,6 @@ struct $Connection$class $Connection$methods;
 $R $RFile$__init__ ($RFile __self__, FILE *file, $Cont c$cont) {
     $Actor$methods.__init__((($Actor)__self__));
     __self__->file = file;
-    $NEWACT((($Actor)__self__));
     return $R_CONT(c$cont, $None);
 }
 $R $RFile$readln$local ($RFile __self__, $Cont c$cont) {
@@ -747,7 +746,6 @@ struct $RFile$class $RFile$methods;
 $R $WFile$__init__ ($WFile __self__, int descr, $Cont c$cont) {
     $Actor$methods.__init__((($Actor)__self__));
     __self__->descriptor = descr;
-    $NEWACT((($Actor)__self__));
     return $R_CONT(c$cont, $None);
 }
 $R $WFile$write$local ($WFile __self__, $str s, $Cont c$cont) {

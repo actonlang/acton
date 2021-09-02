@@ -47,7 +47,7 @@ genRoot env0 qn@(GName m n) t       = do return $ render (cInclude $+$ cInit $+$
                                        nest 4 (gen env1 (GName m initKW) <> parens empty <> semi) $+$
                                        char '}'
         cRoot                       = (gen env tR <+> gen env primROOT <+> parens (gen env pars) <+> char '{') $+$
-                                       nest 4 (text "return" <+> genNew env1 qn (pArg pars) <> semi) $+$
+                                       nest 4 (text "return" <+> gen env1 qn <> parens (gen env1 $ pArg pars) <> semi) $+$
                                        char '}'
 
 -- Environment --------------------------------------------------------------------------------------
@@ -522,6 +522,8 @@ genCall env [row] (Var _ n) (PosArg s@Strings{} (PosArg tup PosNil))
           where expr                = parens (parens (gen env t) <> gen env e)
         flatten (Tuple _ p KwdNil)  = p
         flatten e                   = foldr PosArg PosNil $ map (DotI l0 e) [0..]
+genCall env [t] (Var _ n) PosNil
+  | n == primNEWACTOR               = gen env n <> parens (gen env t)
 genCall env ts e@(Var _ n) p
   | NClass{} <- info                = genNew env n p
   | NDef{} <- info                  = (instCast env ts e $ gen env e) <> parens (gen env p)

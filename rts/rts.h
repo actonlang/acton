@@ -96,8 +96,6 @@ struct $Actor {
     $Actor $next;
     $Msg $msg;
     $Msg $outgoing;
-    $Actor $offspring;
-    $Actor $uterus;
     $Msg $waitsfor;
     $int64 $consume_hd;
     $Catcher $catcher;
@@ -159,8 +157,13 @@ $Msg $ASYNC($Actor, $Cont);
 $Msg $AFTER($int, $Cont);
 $R $AWAIT($Msg, $Cont);
 
-void $NEWACT($Actor);
-void $OLDACT();
+void init_db_queue(long);
+
+#define $NEWACTOR($T)       ({ $T $t = malloc(sizeof(struct $T)); \
+                               $t->$class = &$T ## $methods; \
+                               $Actor$methods.__init__(($Actor)$t); \
+                               init_db_queue($t->$globkey); \
+                               $t; })
 
 void $PUSH($Cont);
 void $POP();

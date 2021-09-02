@@ -75,7 +75,7 @@ sampled env                         = sampledX $ envX env
 
 ret env                             = fromJust $ retX $ envX env
 
-setActor id acts stvars locals env  = modX env $ \x -> x{ actionsX = acts, stvarsX = stvars, localsX = locals, sampledX = [] }
+setActor acts stvars locals env     = modX env $ \x -> x{ actionsX = acts, stvarsX = stvars, localsX = locals, sampledX = [] }
 
 setSampled ns env                   = modX env $ \x -> x{ sampledX = ns ++ sampled env }
 
@@ -186,7 +186,8 @@ instance Deact Stmt where
                                          return $ Expr l $ Call l0 (tApp (eQVar primAFTERf) [t2]) (PosArg delta $ PosArg lambda PosNil) KwdNil
       where t2                      = typeOf env e2
             t                       = tFun fxAction posNil kwdNil t2
-    deact env (Decl l ds)           = Decl l <$> deact env1 ds
+    deact env (Decl l ds)           = do ds1 <- deact env1 ds
+                                         return $ Decl l $ ds1 ++ [ newact env1 n q p | Actor _ n q p _ _ <- ds ]
       where env1                    = extend (map sealActors $ envOf ds) env
     deact env (Signature l ns t d)  = return $ Signature l ns t d
     deact env s                     = error ("deact unexpected stmt: " ++ prstr s)
@@ -195,10 +196,9 @@ instance Deact Decl where
     deact env (Actor l n q p KwdNIL b)
                                     = do inits <- deactSuite env2 inits
                                          decls <- mapM deactMeths decls
-                                         x <- newName "old"
-                                         let _init_ = Def l0 initKW [] (addSelfPar p') KwdNIL (Just tNone) (actorinit:newact:copies++inits++oldact) NoDec fxAction
+                                         let _init_ = Def l0 initKW [] (addSelfPar p') KwdNIL (Just tNone) (copies++inits) NoDec fxAction
                                          return $ Class l n q [TC primActor [], cValue] (propsigs ++ [Decl l0 [_init_]] ++ decls ++ wrapped)
-      where env1                    = setActor tSelf actions stvars locals $ extend (envOf p') $ defineTVars q env
+      where env1                    = setActor actions stvars locals $ extend (envOf p') $ define [(selfKW, NVar tSelf)] $ defineTVars q env
             env2                    = define (envOf decls ++ envOf inits) env1
 
             p'                      = seal p
@@ -228,11 +228,6 @@ instance Deact Decl where
 
             copies                  = [ MutAssign l0 (selfRef n) (Var l0 (NoQ n)) | n <- bound p, n `elem` locals ]
 
-            actorinit               = Expr l0 (eCall (eDot (eQVar primActor) initKW) [eVar selfKW])
-
-            newact                  = Expr l0 (eCall (eQVar primNEWACT) [eVar selfKW])
-            oldact                  = [Expr l0 (eCall (eQVar primOLDACT) [])]
-
             deactMeths (Decl l ds)  = Decl l <$> mapM deactMeth ds
 
             deactMeth (Def l n q p KwdNIL (Just t) b d fx)
@@ -252,7 +247,7 @@ instance Deact Decl where
                     q'              = seal q
                     async           = Call l0 (tApp (eQVar primASYNCf) [t']) (PosArg self (PosArg clos PosNil)) KwdNil
                     self            = Var l0 (NoQ selfKW)
-                    clos            = Lambda l0 PosNIL KwdNIL (Call l0 (tApp (selfRef n') ts) (pArg p') KwdNil) fx
+                    clos            = Lambda l0 PosNIL KwdNIL (Call l0 (tApp (selfRef n') ts) (pArg p') KwdNil) fxAction
                     ts              = map tVar (qbound q')
 
     deact env (Def l n q p KwdNIL (Just t) b d fx)
@@ -263,7 +258,26 @@ instance Deact Decl where
       where env1                    = defineSelf (NoQ n) q $ defineTVars q env
     deact env d                     = error ("deact unexpected decl: " ++ prstr d)
 
+
+newact env n q p                    = Def l0 (newactName n) q p KwdNIL (Just t) [newassign, waitinit, sReturn x] NoDec fxAction
+  where p'                          = seal p
+        t                           = tCon $ TC (NoQ n) (map tVar $ qbound q)
+        x                           = eVar tmpName
+        newassign                   = sAssign (pVar tmpName t) (eCall (tApp (eQVar primNEWACTOR) [t]) [])
+        waitinit                    = sExpr $ eCall (tApp (eQVar primAWAITf) [tNone]) [asyncmsg]
+        asyncmsg                    = eCall (tApp (eQVar primASYNCf) [tNone]) [x, closure]
+        closure                     = Lambda l0 PosNIL KwdNIL initcall fxAction
+        initcall                    = Call l0 (eDot x initKW) (pArg p') KwdNil
+
+newactQName (QName m n)             = QName m (newactName n)
+newactQName (NoQ n)                 = NoQ (newactName n)
+newactQName (GName m n)             = GName m (newactName n)
+
+newactName n                        = Derived n (name "newact")
+
 localName n                         = Derived n (name "local")
+
+tmpName                             = Internal DeactPass "tmp" 0
 
 addSelfPar p                        = PosPar selfKW (Just tSelf) Nothing p
 
@@ -339,7 +353,9 @@ instance Deact Expr where
       | n `elem` sampled env        = return $ Var l (NoQ n)
       | n `elem` stvars env         = return $ Dot l (Var l (NoQ selfKW)) n
       | n `elem` locals env         = return $ Dot l (Var l (NoQ selfKW)) n
-    deact env (Var l n)             = return $ Var l n
+    deact env (Var l n)
+      | isActor env n               = return $ Var l $ newactQName n
+      | otherwise                   = return $ Var l n
     deact env (Async l e)           = deact env e
     deact env (Await l e)           = do e' <- deact env e
                                          return $ Call l (tApp (eQVar primAWAITf) ts) (PosArg e' PosNil) KwdNil

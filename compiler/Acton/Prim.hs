@@ -48,8 +48,7 @@ primRERAISE         = gPrim "RERAISE"
 primRAISE           = gPrim "RAISE"
 primRAISEFROM       = gPrim "RAISEFROM"
 primASSERT          = gPrim "ASSERT"
-primNEWACT          = gPrim "NEWACT"
-primOLDACT          = gPrim "OLDACT"
+primNEWACTOR        = gPrim "NEWACTOR"
 
 primISINSTANCE      = gPrim "ISINSTANCE"
 primCAST            = gPrim "CAST"
@@ -76,8 +75,8 @@ primISNONE          = gPrim "ISNONE"
 primSKIPRESc        = gPrim "SKIPRESc"
 primSKIPRES         = gPrim "SKIPRES"
 
-
-tActor              = tCon $ TC primActor []
+cActor              = TC primActor []
+tActor              = tCon cActor
 tR                  = tCon $ TC primR []
 tCont x t           = tCon $ TC primCont [x,posRow t posNil]
 
@@ -103,8 +102,7 @@ primMkEnv cls def var sig =
                             (noq primRAISE,         def scRAISE NoDec),
                             (noq primRAISEFROM,     def scRAISEFROM NoDec),
                             (noq primASSERT,        def scASSERT NoDec),
-                            (noq primNEWACT,        def scNEWACT NoDec),
-                            (noq primOLDACT,        def scOLDACT NoDec),
+                            (noq primNEWACTOR,      def scNEWACTOR NoDec),
 
                             (noq primISINSTANCE,    def scISINSTANCE NoDec),
                             (noq primCAST,          def scCAST NoDec),
@@ -261,13 +259,10 @@ scRAISEFROM         = tSchema [] tRAISEFROM
 scASSERT            = tSchema [] tASSERT
   where tASSERT     = tFun fxPure (posRow tBool $ posRow (tOpt tStr) posNil) kwdNil tNone
 
---  $NEWACT         : pure ($Actor) -> None
-scNEWACT            = tSchema [] tNEWACT
-  where tNEWACT     = tFun fxPure (posRow tActor posNil) kwdNil tNone
-
---  $OLDACT         : pure () -> None
-scOLDACT            = tSchema [] tOLDACT
-  where tOLDACT     = tFun fxPure posNil kwdNil tNone
+--  $NEWACTOR       : [A($Actor)] => pure () -> A
+scNEWACTOR          = tSchema [Quant a [cActor]] tNEWACTOR
+  where tNEWACTOR   = tFun fxPure posNil kwdNil (tVar a)
+        a           = TV KType $ name "A"
 
 --  $ISINSTANCE     : pure (struct,_) -> bool
 scISINSTANCE        = tSchema [] tISINSTANCE
