@@ -103,9 +103,12 @@ numpy/numpy.o: numpy/numpy.c numpy/numpy.h numpy/init.h numpy/init.c \
 
 
 # /lib --------------------------------------------------
-LIBS=lib/libActon.a lib/libcomm.a lib/libdb.a lib/libdbclient.a lib/libremote.a lib/libvc.a
+LIBS=lib/libActon.a lib/libActonRTSdebug.a lib/libcomm.a lib/libdb.a lib/libdbclient.a lib/libremote.a lib/libvc.a
 
 lib/libActon.a: builtin/builtin.o builtin/minienv.o modules/math.o numpy/numpy.o rts/empty.o rts/rts.o modules/time.o modules/acton/acton$$rts.o $(MODULES)
+	ar rcs $@ $(subst $,\$,$^)
+
+lib/libActonRTSdebug.a: rts/rts-debug.o
 	ar rcs $@ $(subst $,\$,$^)
 
 lib/libcomm.a: backend/comm.o rts/empty.o
@@ -128,6 +131,12 @@ lib/libvc.a: backend/failure_detector/vector_clock.o
 MODULES += rts/rts.o rts/empty.o
 rts/rts.o: rts/rts.c rts/rts.h
 	cc $(CFLAGS) -g -Wno-int-to-void-pointer-cast \
+		-Wno-unused-result \
+		-pthread \
+		-c -O3 $< -o $@
+
+rts/rts-debug.o: rts/rts.c rts/rts.h
+	cc $(CFLAGS) -DRTS_DEBUG -g -Wno-int-to-void-pointer-cast \
 		-Wno-unused-result \
 		-pthread \
 		-c -O3 $< -o $@
