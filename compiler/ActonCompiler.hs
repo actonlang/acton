@@ -66,6 +66,7 @@ data Args       = Args {
                     version   :: Bool,
                     stub      :: Bool,
                     rts_debug :: Bool,
+                    cpedantic :: Bool,
                     syspath   :: String,
                     root      :: String,
                     file      :: String
@@ -88,6 +89,7 @@ getArgs         = Args
                     <*> switch (long "version" <> help "Show version information")
                     <*> switch (long "stub"    <> help "Stub (.ty) file generation only")
                     <*> switch (long "rts-debug"<> help "Include RTS debug support in output program")
+                    <*> switch (long "cpedantic"<> help "Pedantic C compilation with -Werror")
                     <*> strOption (long "syspath" <> metavar "TARGETDIR" <> value "" <> showDefault)
                     <*> strOption (long "root" <> value "" <> showDefault)
                     <*> argument str (metavar "FILE")
@@ -329,13 +331,14 @@ runRestPasses args paths env0 parsed = do
                       iff (hgen args) $ putStrLn(h)
                       iff (cgen args) $ putStrLn(c)
 
+                      let pedantArg = if (cpedantic args) then "-Werror" else ""
                       iff (not $ stub args) $ do
                           let libDir = joinPath [sysPath paths,"lib"]
                               cFile = outbase ++ ".c"
                               hFile = outbase ++ ".h"
                               oFile = joinPath [libDir,n++".o"]
                               aFile = joinPath [libDir,"libActonProject.a"]
-                              gccCmd = "gcc -g -c -I/usr/include/kqueue -I" ++ sysPath paths ++ " -o" ++ oFile ++ " " ++ cFile
+                              gccCmd = "gcc " ++ pedantArg ++ " -g -c -I/usr/include/kqueue -I" ++ sysPath paths ++ " -o" ++ oFile ++ " " ++ cFile
                               arCmd = "ar rcs " ++ aFile ++ " " ++ oFile
                           writeFile hFile h
                           writeFile cFile c
@@ -399,4 +402,5 @@ buildExecutable env args paths task
 #endif
         binFile             = dropExtension srcbase
         Just srcbase        = srcFile paths mn
-        gccCmd              = "gcc -g -I/usr/include/kqueue -I" ++ sysPath paths ++ " " ++ rootFile ++ " -o" ++ binFile ++ libFiles
+        pedantArg           = if (cpedantic args) then "-Werror" else ""
+        gccCmd              = "gcc " ++ pedantArg ++ " -g -I/usr/include/kqueue -I" ++ sysPath paths ++ " " ++ rootFile ++ " -o" ++ binFile ++ libFiles
