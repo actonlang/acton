@@ -1225,7 +1225,8 @@ void $register_rts () {
  */
 int main(int argc, char **argv) {
     int ch = 0;
-    char *ddb_host = NULL;
+    uint ddb_no_host = 0;
+    char **ddb_host = NULL;
     int ddb_port = 32000;
     int ddb_replication = 3;
     int new_argc = argc;
@@ -1254,7 +1255,8 @@ int main(int argc, char **argv) {
                 break;
             case 'h':
                 new_argc -= 2;
-                ddb_host = optarg;
+                ddb_host = realloc(ddb_host, ++ddb_no_host * sizeof *ddb_host);
+                ddb_host[ddb_no_host-1] = optarg;
                 break;
             case 'p':
                 new_argc -= 2;
@@ -1304,10 +1306,20 @@ int main(int argc, char **argv) {
 
     unsigned int seed;
     if (ddb_host) {
-        rtsv_printf(LOGPFX "Using distributed database backend (DDB): %s:%d\n", ddb_host, ddb_port);
         GET_RANDSEED(&seed, 0);
+        rtsv_printf(LOGPFX "Using distributed database backend replication factor of %d\n", ddb_replication);
         db = get_remote_db(ddb_replication);
-        add_server_to_membership(ddb_host, ddb_port, db, &seed);
+        for (int i=0; i<ddb_no_host; i++) {
+            char * colon = strchr(ddb_host[i], ':');
+            int port = ddb_port;
+            if (colon) {
+                *colon = '\0';
+                port = atoi(colon + 1);
+            }
+
+            rtsv_printf(LOGPFX "Using distributed database backend (DDB): %s:%d\n", ddb_host[i], port);
+            add_server_to_membership(ddb_host[i], port, db, &seed);
+        }
     }
 
     if (db) {
