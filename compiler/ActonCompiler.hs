@@ -51,23 +51,24 @@ import qualified System.Exit
 import qualified Paths_acton
 
 data Args       = Args {
-                    parse   :: Bool,
-                    kinds   :: Bool,
-                    types   :: Bool,
-                    sigs    :: Bool,
-                    norm    :: Bool,
-                    deact   :: Bool,
-                    cps     :: Bool,
-                    llift   :: Bool,
-                    hgen    :: Bool,
-                    cgen    :: Bool,
-                    ccmd    :: Bool,
-                    verbose :: Bool,
-                    version :: Bool,
-                    stub    :: Bool,
-                    syspath :: String,
-                    root    :: String,
-                    file    :: String
+                    parse     :: Bool,
+                    kinds     :: Bool,
+                    types     :: Bool,
+                    sigs      :: Bool,
+                    norm      :: Bool,
+                    deact     :: Bool,
+                    cps       :: Bool,
+                    llift     :: Bool,
+                    hgen      :: Bool,
+                    cgen      :: Bool,
+                    ccmd      :: Bool,
+                    verbose   :: Bool,
+                    version   :: Bool,
+                    stub      :: Bool,
+                    rts_debug :: Bool,
+                    syspath   :: String,
+                    root      :: String,
+                    file      :: String
                 }
                 deriving Show
 
@@ -86,6 +87,7 @@ getArgs         = Args
                     <*> switch (long "verbose" <> help "Print progress info during execution")
                     <*> switch (long "version" <> help "Show version information")
                     <*> switch (long "stub"    <> help "Stub (.ty) file generation only")
+                    <*> switch (long "rts-debug"<> help "Include RTS debug support in output program")
                     <*> strOption (long "syspath" <> metavar "TARGETDIR" <> value "" <> showDefault)
                     <*> strOption (long "root" <> value "" <> showDefault)
                     <*> argument str (metavar "FILE")
@@ -385,7 +387,8 @@ buildExecutable env args paths task
         (sc,_)              = Acton.QuickType.schemaOf env (A.eQVar qn)
         outbase             = sysFile paths mn
         rootFile            = outbase ++ ".root.c"
-        libFilesBase        = " -L" ++ joinPath [sysPath paths,"lib"] ++ " -lActonProject -lActon -ldbclient -lremote -luuid -lcomm -ldb -lvc -lprotobuf-c -lutf8proc -lpthread -lm"
+        libRTSarg           = if (rts_debug args) then " -lActonRTSdebug " else " "
+        libFilesBase        = " -L" ++ joinPath [sysPath paths,"lib"] ++ libRTSarg ++ " -lActonProject -lActon -ldbclient -lremote -luuid -lcomm -ldb -lvc -lprotobuf-c -lutf8proc -lpthread -lm"
 #if defined(linux_HOST_OS)
         libFiles            = libFilesBase ++ " -lkqueue"
 #elif defined(darwin_HOST_OS)

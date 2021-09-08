@@ -44,6 +44,23 @@ int opterr = 0;
     #define USE_KQUEUE
 #endif
 
+char rts_verbose = 0;
+char rts_debug = 0;
+
+/*
+ * Custom printf macros for printing verbose and debug information
+ * RTS Verbose Printf = rtsv_printf
+ * RTS Debug Printf   = rtsd_printf
+ */
+#define LOGPFX "**RTS** "
+#define rtsv_printf(...) if (rts_verbose) printf(__VA_ARGS__)
+
+#ifdef RTS_DEBUG
+#define rtsd_printf(...) if (rts_debug) printf(__VA_ARGS__)
+#else
+#define rtsd_printf(...)
+#endif
+
 
 #if defined(IS_MACOS)
 ///////////////////////////////////////////////////////////////////////////////////////////////
@@ -73,7 +90,7 @@ int sched_getaffinity(pid_t pid, size_t cpu_size, cpu_set_t *cpu_set)
     size_t  len = sizeof(core_count);
     int ret = sysctlbyname(SYSCTL_CORE_COUNT, &core_count, &len, 0, 0);
     if (ret) {
-        printf("error getting the core count %d\n", ret);
+        fprintf(stderr, "error getting the core count %d\n", ret);
         return -1;
     }
     cpu_set->count = 0;
@@ -217,7 +234,7 @@ void $Actor$__init__($Actor a) {
     a->$catcher = NULL;
     atomic_flag_clear(&a->$msg_lock);
     a->$globkey = get_next_key();
-    //printf("# New Actor %ld at %p of class %s\n", a->$globkey, a, a->$class->$GCINFO);
+    rtsd_printf(LOGPFX "# New Actor %ld at %p of class %s\n", a->$globkey, a, a->$class->$GCINFO);
 }
 
 $bool $Actor$__bool__($Actor self) {
@@ -625,11 +642,11 @@ void dummy_callback(queue_callback_args * qca) { }
 
 void create_db_queue(long key) {
     int ret = remote_create_queue_in_txn(MSG_QUEUE, ($WORD)key, NULL, db);
-    //printf("#### Create queue %ld returns %d\n", key, ret);
+    rtsd_printf(LOGPFX "#### Create queue %ld returns %d\n", key, ret);
     queue_callback * qc = get_queue_callback(dummy_callback);
 	int64_t prev_read_head = -1, prev_consume_head = -1;
 	ret = remote_subscribe_queue(($WORD)key, 0, 0, MSG_QUEUE, ($WORD)key, qc, &prev_read_head, &prev_consume_head, db);
-    //printf("   # Subscribe queue %ld returns %d\n", key, ret);
+    rtsd_printf(LOGPFX "   # Subscribe queue %ld returns %d\n", key, ret);
 }
 
 void init_db_queue(long key) {
@@ -652,7 +669,7 @@ void BOOTSTRAP(int argc, char *argv[]) {
         create_db_queue(env_actor->$globkey);
         create_db_queue(ancestor0->$globkey);
         int ret = remote_enqueue_in_txn(($WORD*)&m->$globkey, 1, NULL, 0, MSG_QUEUE, (WORD)ancestor0->$globkey, NULL, db);
-        //printf("   # enqueue bootstrap msg %ld to ancestor0 queue %ld returns %d\n", m->$globkey, ancestor0->$globkey, ret);
+        rtsd_printf(LOGPFX "   # enqueue bootstrap msg %ld to ancestor0 queue %ld returns %d\n", m->$globkey, ancestor0->$globkey, ret);
     }
 
     if (ENQ_msg(m, ancestor0)) {
@@ -698,7 +715,7 @@ $Msg $ASYNC($Actor to, $Cont cont) {
 
 $Msg $AFTER($int sec, $Cont cont) {
     $Actor self = ($Actor)pthread_getspecific(self_key);
-    //printf("# AFTER by %ld\n", self->$globkey);
+    rtsd_printf(LOGPFX "# AFTER by %ld\n", self->$globkey);
     time_t baseline = self->$msg->$baseline + sec->val;
     $Msg m = $NEW($Msg, self, cont, baseline, &$Done$instance);
     PUSH_outgoing(self, m);
@@ -723,7 +740,7 @@ void $POP() {
 
 // Actually send all buffered messages of the sender
 void FLUSH_outgoing($Actor self, uuid_t *txnid) {
-    //printf("#### FLUSH_outgoing messages from %ld\n", self->$globkey);
+    rtsd_printf(LOGPFX "#### FLUSH_outgoing messages from %ld\n", self->$globkey);
     $Msg prev = NULL;
     $Msg m = self->$outgoing;
     self->$outgoing = NULL;
@@ -751,10 +768,11 @@ void FLUSH_outgoing($Actor self, uuid_t *txnid) {
         }
         if (db) {
             int ret = remote_enqueue_in_txn(($WORD*)&m->$globkey, 1, NULL, 0, MSG_QUEUE, (WORD)dest, txnid, db);
-            //if (dest)
-            //    printf("   # enqueue msg %ld to queue %ld returns %d\n", m->$globkey, dest, ret);
-            //else
-            //    printf("   # enqueue msg %ld to TIMER_QUEUE returns %d\n", m->$globkey, ret);
+            if (dest) {
+                rtsd_printf(LOGPFX "   # enqueue msg %ld to queue %ld returns %d\n", m->$globkey, dest, ret);
+            } else {
+                rtsd_printf(LOGPFX "   # enqueue msg %ld to TIMER_QUEUE returns %d\n", m->$globkey, ret);
+            }
         }
         m = next;
     }
@@ -776,12 +794,12 @@ long read_queued_msg(long key, int64_t *read_head) {
     
     int ret = remote_read_queue_in_txn(($WORD)key, 0, 0, MSG_QUEUE, ($WORD)key, 
                                        1, &entries_read, read_head, &m_start, &m_end, NULL, db);
-    //printf("   # read msg from queue %ld returns %d, entries read: %d\n", key, ret, entries_read);
+    rtsd_printf(LOGPFX "   # read msg from queue %ld returns %d, entries read: %d\n", key, ret, entries_read);
 
     if (!entries_read)
         return 0;
     db_row_t *r = (db_row_t*)m_start->value;
-    //printf("# r %p, key: %ld, cells: %p, columns: %p, no_cols: %d, blobsize: %d\n", r, (long)r->key, r->cells, r->column_array, r->no_columns, r->last_blob_size);
+    rtsd_printf(LOGPFX "# r %p, key: %ld, cells: %p, columns: %p, no_cols: %d, blobsize: %d\n", r, (long)r->key, r->cells, r->column_array, r->no_columns, r->last_blob_size);
     return (long)r->column_array[0];
 }
 
@@ -815,35 +833,35 @@ $ROW extract_row($WORD *blob, size_t blob_size) {
 void print_rows($ROW row) {
     int n = 0;
     while (row) {
-        printf("--- %d: class_id %d, blob_size: %d, blob: ", n, row->class_id, row->blob_size);
+        rtsd_printf(LOGPFX "--- %d: class_id %d, blob_size: %d, blob: ", n, row->class_id, row->blob_size);
         for (int i = 0; i < row->blob_size; i++)
-            printf("%ld ", (long)row->blob[i]);
-        printf(".\n");
+            rtsd_printf(LOGPFX "%ld ", (long)row->blob[i]);
+        rtsd_printf(LOGPFX ".\n");
         n++;
         row = row->next;
     }
 }
 
 void print_msg($Msg m) {
-    printf("==== Message %p\n", m);
-    printf("     next: %p\n", m->$next);
-    printf("     to: %p\n", m->$to);
-    printf("     cont: %p\n", m->$cont);
-    printf("     waiting: %p\n", m->$waiting);
-    printf("     baseline: %ld\n", m->$baseline);
-    printf("     value: %p\n", m->$value);
-    printf("     globkey: %ld\n", m->$globkey);
+    rtsd_printf(LOGPFX "==== Message %p\n", m);
+    rtsd_printf(LOGPFX "     next: %p\n", m->$next);
+    rtsd_printf(LOGPFX "     to: %p\n", m->$to);
+    rtsd_printf(LOGPFX "     cont: %p\n", m->$cont);
+    rtsd_printf(LOGPFX "     waiting: %p\n", m->$waiting);
+    rtsd_printf(LOGPFX "     baseline: %ld\n", m->$baseline);
+    rtsd_printf(LOGPFX "     value: %p\n", m->$value);
+    rtsd_printf(LOGPFX "     globkey: %ld\n", m->$globkey);
 }
 
 void print_actor($Actor a) {
-    printf("==== Actor %p\n", a);
-    printf("     next: %p\n", a->$next);
-    printf("     msg: %p\n", a->$msg);
-    printf("     outgoing: %p\n", a->$outgoing);
-    printf("     waitsfor: %p\n", a->$waitsfor);
-    printf("     consume_hd: %ld\n", (long)a->$consume_hd);
-    printf("     catcher: %p\n", a->$catcher);
-    printf("     globkey: %ld\n", a->$globkey);
+    rtsd_printf(LOGPFX "==== Actor %p\n", a);
+    rtsd_printf(LOGPFX "     next: %p\n", a->$next);
+    rtsd_printf(LOGPFX "     msg: %p\n", a->$msg);
+    rtsd_printf(LOGPFX "     outgoing: %p\n", a->$outgoing);
+    rtsd_printf(LOGPFX "     waitsfor: %p\n", a->$waitsfor);
+    rtsd_printf(LOGPFX "     consume_hd: %ld\n", (long)a->$consume_hd);
+    rtsd_printf(LOGPFX "     catcher: %p\n", a->$catcher);
+    rtsd_printf(LOGPFX "     globkey: %ld\n", a->$globkey);
 }
 
 void deserialize_system(snode_t *actors_start) {
@@ -854,43 +872,43 @@ void deserialize_system(snode_t *actors_start) {
 
     long min_key = 0;
 
-    //printf("\n#### Msg allocation:\n");
+    rtsd_printf(LOGPFX "\n#### Msg allocation:\n");
     for(snode_t * node = msgs_start; node!=NULL; node=NEXT(node)) {
 		db_row_t* r = (db_row_t*) node->value;
-        //printf("# r %p, key: %ld, cells: %p, columns: %p, no_cols: %d, blobsize: %d\n", r, (long)r->key, r->cells, r->column_array, r->no_columns, r->last_blob_size);
+        rtsd_printf(LOGPFX "# r %p, key: %ld, cells: %p, columns: %p, no_cols: %d, blobsize: %d\n", r, (long)r->key, r->cells, r->column_array, r->no_columns, r->last_blob_size);
         long key = (long)r->key;
 		if (r->cells) {
             db_row_t* r2 = (HEAD(r->cells))->value;
-            //printf("# r2 %p, key: %ld, cells: %p, columns: %p, no_cols: %d, blobsize: %d\n", r2, (long)r2->key, r2->cells, r2->column_array, r2->no_columns, r2->last_blob_size);
+            rtsd_printf(LOGPFX "# r2 %p, key: %ld, cells: %p, columns: %p, no_cols: %d, blobsize: %d\n", r2, (long)r2->key, r2->cells, r2->column_array, r2->no_columns, r2->last_blob_size);
             BlobHd *head = (BlobHd*)r2->column_array[0];
             $Msg msg = ($Msg)$GET_METHODS(head->class_id)->__deserialize__(NULL, NULL);
             msg->$globkey = key;
             $dict_setitem(globdict, ($Hashable)$Hashable$int$witness, to$int(key), msg);
-            //printf("# Allocated Msg %p = %ld of class %s = %d\n", msg, msg->$globkey, msg->$class->$GCINFO, msg->$class->$class_id);
+            rtsd_printf(LOGPFX "# Allocated Msg %p = %ld of class %s = %d\n", msg, msg->$globkey, msg->$class->$GCINFO, msg->$class->$class_id);
             if (key < min_key)
                 min_key = key;
         }
     }
-    //printf("\n#### Actor allocation:\n");
+    rtsd_printf(LOGPFX "\n#### Actor allocation:\n");
     for(snode_t * node = actors_start; node!=NULL; node=NEXT(node)) {
         db_row_t* r = (db_row_t*) node->value;
-        //printf("# r %p, key: %ld, cells: %p, columns: %p, no_cols: %d, blobsize: %d\n", r, (long)r->key, r->cells, r->column_array, r->no_columns, r->last_blob_size);
+        rtsd_printf(LOGPFX "# r %p, key: %ld, cells: %p, columns: %p, no_cols: %d, blobsize: %d\n", r, (long)r->key, r->cells, r->column_array, r->no_columns, r->last_blob_size);
         long key = (long)r->key;
         if (r->cells) {
             db_row_t* r2 = (HEAD(r->cells))->value;
-            //printf("# r2 %p, key: %ld, cells: %p, columns: %p, no_cols: %d, blobsize: %d\n", r2, (long)r2->key, r2->cells, r2->column_array, r2->no_columns, r2->last_blob_size);
+            rtsd_printf(LOGPFX "# r2 %p, key: %ld, cells: %p, columns: %p, no_cols: %d, blobsize: %d\n", r2, (long)r2->key, r2->cells, r2->column_array, r2->no_columns, r2->last_blob_size);
             BlobHd *head = (BlobHd*)r2->column_array[0];
             $Actor act = ($Actor)$GET_METHODS(head->class_id)->__deserialize__(NULL, NULL);
             act->$globkey = key;
             $dict_setitem(globdict, ($Hashable)$Hashable$int$witness, to$int(key), act);
-            //printf("# Allocated Actor %p = %ld of class %s = %d\n", act, act->$globkey, act->$class->$GCINFO, act->$class->$class_id);
+            rtsd_printf(LOGPFX "# Allocated Actor %p = %ld of class %s = %d\n", act, act->$globkey, act->$class->$GCINFO, act->$class->$class_id);
             if (key < min_key)
                 min_key = key;
         }
     }
     next_key = min_key;
 
-    //printf("\n#### Msg contents:\n");
+    rtsd_printf(LOGPFX "\n#### Msg contents:\n");
     for(snode_t * node = msgs_start; node!=NULL; node=NEXT(node)) {
 		db_row_t* r = (db_row_t*) node->value;
         long key = (long)r->key;
@@ -900,14 +918,14 @@ void deserialize_system(snode_t *actors_start) {
             int blob_size = r2->last_blob_size;
             $ROW row = extract_row(blob, blob_size);
             $Msg msg = ($Msg)$dict_get(globdict, ($Hashable)$Hashable$int$witness, to$int(key), NULL);
-            //printf("####### Deserializing msg %p = %ld of class %s = %d\n", msg, msg->$globkey, msg->$class->$GCINFO, msg->$class->$class_id);
-            //print_rows(row);
+            rtsd_printf(LOGPFX "####### Deserializing msg %p = %ld of class %s = %d\n", msg, msg->$globkey, msg->$class->$GCINFO, msg->$class->$class_id);
+            print_rows(row);
             $glob_deserialize(($Serializable)msg, row, try_globdict);
-            //print_msg(msg);
+            print_msg(msg);
         }
     }
 
-    //printf("\n#### Actor contents:\n");
+    rtsd_printf(LOGPFX "\n#### Actor contents:\n");
     for(snode_t * node = actors_start; node!=NULL; node=NEXT(node)) {
 		db_row_t* r = (db_row_t*) node->value;
         long key = (long)r->key;
@@ -917,47 +935,47 @@ void deserialize_system(snode_t *actors_start) {
             int blob_size = r2->last_blob_size;
             $ROW row = extract_row(blob, blob_size);
             $Actor act = ($Actor)$dict_get(globdict, ($Hashable)$Hashable$int$witness, to$int(key), NULL);
-            //printf("####### Deserializing actor %p = %ld of class %s = %d\n", act, act->$globkey, act->$class->$GCINFO, act->$class->$class_id);
-            //print_rows(row);
+            rtsd_printf(LOGPFX "####### Deserializing actor %p = %ld of class %s = %d\n", act, act->$globkey, act->$class->$GCINFO, act->$class->$class_id);
+            print_rows(row);
             $glob_deserialize(($Serializable)act, row, try_globdict);
 
             $Msg m = act->$waitsfor;
             if (m && m->$cont) {
                 ADD_waiting(act, m);
-                //printf("# Adding Actor %ld to wait for Msg %ld\n", act->$globkey, m->$globkey);
+                rtsd_printf(LOGPFX "# Adding Actor %ld to wait for Msg %ld\n", act->$globkey, m->$globkey);
             }
             else {
                 act->$waitsfor = NULL;
             }
 
-            //printf("\n#### Reading nsgs queue %ld contents:\n", key);
+            rtsd_printf(LOGPFX "\n#### Reading msgs queue %ld contents:\n", key);
             queue_callback * qc = get_queue_callback(dummy_callback);
             int64_t prev_read_head = -1, prev_consume_head = -1;
             int ret = remote_subscribe_queue(($WORD)key, 0, 0, MSG_QUEUE, ($WORD)key, qc, &prev_read_head, &prev_consume_head, db);
-            //printf("   # Subscribe queue %ld returns %d\n", key, ret);
+            rtsd_printf(LOGPFX "   # Subscribe queue %ld returns %d\n", key, ret);
             while (1) {
                 long msg_key = read_queued_msg(key, &prev_read_head);
                 if (!msg_key)
                     break;
                 m = $dict_get(globdict, ($Hashable)$Hashable$int$witness, to$int(msg_key), NULL);
-                //printf("# Adding Msg %ld to Actor %ld\n", m->$globkey, act->$globkey);
+                rtsd_printf(LOGPFX "# Adding Msg %ld to Actor %ld\n", m->$globkey, act->$globkey);
                 ENQ_msg(m, act);
             }
             if (act->$msg && !act->$waitsfor) {
                 ENQ_ready(act);
-                //printf("# Adding Actor %ld to the readyQ\n", act->$globkey);
+                rtsd_printf(LOGPFX "# Adding Actor %ld to the readyQ\n", act->$globkey);
             }
-            //print_actor(act);
+            print_actor(act);
         }
     }
 
-    //printf("\n#### Reading timer queue contents:\n");
+    rtsd_printf(LOGPFX "\n#### Reading timer queue contents:\n");
     struct timespec now;
     clock_gettime(CLOCK_MONOTONIC, &now);
     queue_callback * qc = get_queue_callback(dummy_callback);
 	int64_t prev_read_head = -1, prev_consume_head = -1;
 	int ret = remote_subscribe_queue(TIMER_QUEUE, 0, 0, MSG_QUEUE, TIMER_QUEUE, qc, &prev_read_head, &prev_consume_head, db);
-    //printf("   # Subscribe queue 0 returns %d\n", ret);
+    rtsd_printf(LOGPFX "   # Subscribe queue 0 returns %d\n", ret);
     while (1) {
         long msg_key = read_queued_msg(TIMER_QUEUE, &prev_read_head);
         if (!msg_key)
@@ -965,14 +983,14 @@ void deserialize_system(snode_t *actors_start) {
         $Msg m = $dict_get(globdict, ($Hashable)$Hashable$int$witness, to$int(msg_key), NULL);
         if (m->$baseline < now.tv_sec)
             m->$baseline = now.tv_sec;
-        //printf("# Adding Msg %ld to the timerQ\n", m->$globkey);
+        rtsd_printf(LOGPFX "# Adding Msg %ld to the timerQ\n", m->$globkey);
         ENQ_timed(m);
     }
 
     env_actor  = ($Env)$dict_get(globdict, ($Hashable)$Hashable$int$witness, to$int(-11), NULL);
     root_actor = ($Actor)$dict_get(globdict, ($Hashable)$Hashable$int$witness, to$int(-14), NULL);
     globdict = NULL;
-    //printf("\n\n");
+    rtsd_printf(LOGPFX "\n\n");
 }
 
 $WORD try_globkey($WORD obj) {
@@ -1011,30 +1029,30 @@ void insert_row(long key, size_t total, $ROW row, $WORD table, uuid_t *txnid) {
     }
     BlobHd *end = (BlobHd*)p;
 
-    //printf("## Built blob of size %ld\n", total);
-    //for (int i = 0; i < total; i++) {
-    //    printf("%lu ", (unsigned long)blob[i]);
-    //}
+    rtsd_printf(LOGPFX "## Built blob of size %ld\n", total);
+    for (int i = 0; i < total; i++) {
+        rtsd_printf(LOGPFX "%lu ", (unsigned long)blob[i]);
+    }
 
     //printf("\n## Sanity check extract row:\n");
     //$ROW row1 = extract_row(blob, total*sizeof($WORD));
     //print_rows(row1);
 
     int ret = remote_insert_in_txn(column, 2, 1, 1, blob, total*sizeof($WORD), table, txnid, db);
-    //printf("   # insert to table %ld, row %ld, returns %d\n", (long)table, key, ret);
+    rtsd_printf(LOGPFX "   # insert to table %ld, row %ld, returns %d\n", (long)table, key, ret);
 }
 
 void serialize_msg($Msg m, uuid_t *txnid) {
-    //printf("#### Serializing Msg %ld\n", m->$globkey);
+    rtsd_printf(LOGPFX "#### Serializing Msg %ld\n", m->$globkey);
     $ROW row = $glob_serialize(($Serializable)m, try_globkey);
-    //print_rows(row);
+    print_rows(row);
     insert_row(m->$globkey, $total_rowsize(row), row, MSGS_TABLE, txnid);
 }
 
 void serialize_actor($Actor a, uuid_t *txnid) {
-    //printf("#### Serializing Actor %ld\n", a->$globkey);
+    rtsd_printf(LOGPFX "#### Serializing Actor %ld\n", a->$globkey);
     $ROW row = $glob_serialize(($Serializable)a, try_globkey);
-    //print_rows(row);
+    print_rows(row);
     insert_row(a->$globkey, $total_rowsize(row), row, ACTORS_TABLE, txnid);
 
     $Msg out = a->$outgoing;
@@ -1055,7 +1073,7 @@ void *main_loop(void *arg) {
             $Cont cont = m->$cont;
             $WORD val = m->$value;
             
-            //printf("## Running actor %ld : %s\n", current->$globkey, current->$class->$GCINFO);
+            rtsd_printf(LOGPFX "## Running actor %ld : %s\n", current->$globkey, current->$class->$GCINFO);
             $R r = cont->$class->__call__(cont, val);
             switch (r.tag) {
                 case $RDONE: {
@@ -1071,12 +1089,12 @@ void *main_loop(void *arg) {
                         int entries_read = 0;
                         int64_t read_head = -1;
                         int ret0 = remote_read_queue_in_txn(($WORD)key, 0, 0, MSG_QUEUE, ($WORD)key, 1, &entries_read, &read_head, &m_start, &m_end, NULL, db);
-                        //printf("   # dummy read msg from queue %ld returns %d, entries read: %d\n", key, ret0, entries_read);
+                        rtsd_printf(LOGPFX "   # dummy read msg from queue %ld returns %d, entries read: %d\n", key, ret0, entries_read);
 
                         int ret = remote_consume_queue_in_txn(($WORD)key, 0, 0, MSG_QUEUE, ($WORD)key, read_head, txnid, db);
-                        //printf("   # consume msg %ld from queue %ld returns %d\n", m->$globkey, key, ret);
+                        rtsd_printf(LOGPFX "   # consume msg %ld from queue %ld returns %d\n", m->$globkey, key, ret);
                         remote_commit_txn(txnid, db);
-                        //printf("############## Commit\n\n");
+                        rtsd_printf(LOGPFX "############## Commit\n\n");
                     } else {
                         FLUSH_outgoing(current, NULL);
                     }
@@ -1088,10 +1106,10 @@ void *main_loop(void *arg) {
                         b->$waitsfor = NULL;
                         ENQ_ready(b);
                         new_work();
-                        //printf("## Waking up actor %ld : %s\n", b->$globkey, b->$class->$GCINFO);
+                        rtsd_printf(LOGPFX "## Waking up actor %ld : %s\n", b->$globkey, b->$class->$GCINFO);
                         b = b->$next;
                     }
-                    //printf("## DONE actor %ld : %s\n", current->$globkey, current->$class->$GCINFO);
+                    rtsd_printf(LOGPFX "## DONE actor %ld : %s\n", current->$globkey, current->$class->$GCINFO);
                     if (DEQ_msg(current)) {
                         ENQ_ready(current);
                     }
@@ -1100,7 +1118,7 @@ void *main_loop(void *arg) {
                 case $RCONT: {
                     m->$cont = r.cont;
                     m->$value = r.value;
-                    //printf("## CONT actor %ld : %s\n", current->$globkey, current->$class->$GCINFO);
+                    rtsd_printf(LOGPFX "## CONT actor %ld : %s\n", current->$globkey, current->$class->$GCINFO);
                     ENQ_ready(current);
                     break;
                 }
@@ -1118,17 +1136,17 @@ void *main_loop(void *arg) {
                         FLUSH_outgoing(current, txnid);
                         serialize_msg(current->$msg, txnid);
                         remote_commit_txn(txnid, db);
-                        //printf("############## Commit\n\n");
+                        rtsd_printf(LOGPFX "############## Commit\n\n");
                     } else {
                         FLUSH_outgoing(current, NULL);
                     }
                     m->$cont = r.cont;
                     $Msg x = ($Msg)r.value;
                     if (ADD_waiting(current, x)) {      // x->cont != NULL: x is still being processed so current was added to x->waiting
-                        //printf("## AWAIT actor %ld : %s\n", current->$globkey, current->$class->$GCINFO);
+                        rtsd_printf(LOGPFX "## AWAIT actor %ld : %s\n", current->$globkey, current->$class->$GCINFO);
                         current->$waitsfor = x;
                     } else {                            // x->cont == NULL: x->value holds the final response, current is not in x->waiting
-                        //printf("## AWAIT/wakeup actor %ld : %s\n", current->$globkey, current->$class->$GCINFO);
+                        rtsd_printf(LOGPFX "## AWAIT/wakeup actor %ld : %s\n", current->$globkey, current->$class->$GCINFO);
                         m->$value = x->$value;
                         ENQ_ready(current);
                     }
@@ -1152,14 +1170,14 @@ void *main_loop(void *arg) {
                     int entries_read = 0;
                     int64_t read_head = -1;
                     int ret0 = remote_read_queue_in_txn(($WORD)key, 0, 0, MSG_QUEUE, ($WORD)key, 1, &entries_read, &read_head, &m_start, &m_end, NULL, db);
-                    //printf("   # dummy read msg from TIMER_QUEUE returns %d, entries read: %d\n", ret0, entries_read);
+                    rtsd_printf(LOGPFX "   # dummy read msg from TIMER_QUEUE returns %d, entries read: %d\n", ret0, entries_read);
 
                     int ret = remote_consume_queue_in_txn(($WORD)key, 0, 0, MSG_QUEUE, ($WORD)key, read_head, txnid, db);
-                    //printf("   # consume msg %ld from TIMER_QUEUE returns %d\n", m->$globkey, ret);
+                    rtsd_printf(LOGPFX "   # consume msg %ld from TIMER_QUEUE returns %d\n", m->$globkey, ret);
                     int ret2 = remote_enqueue_in_txn(($WORD*)&m->$globkey, 1, NULL, 0, MSG_QUEUE, (WORD)m->$to->$globkey, txnid, db);
-                    //printf("   # (timed) enqueue msg %ld to queue %ld returns %d\n", m->$globkey, m->$to->$globkey, ret2);
+                    rtsd_printf(LOGPFX "   # (timed) enqueue msg %ld to queue %ld returns %d\n", m->$globkey, m->$to->$globkey, ret2);
                     remote_commit_txn(txnid, db);
-                    //printf("############## Commit\n\n");
+                    rtsd_printf(LOGPFX "############## Commit\n\n");
                 }
             } else {
                 pthread_mutex_lock(&sleep_lock);
@@ -1209,11 +1227,11 @@ int main(int argc, char **argv) {
     int ch = 0;
     char *ddb_host = NULL;
     int ddb_port = 32000;
-    int verbose = 0;
     int new_argc = argc;
 
     static struct option long_options[] = {
         {"rts-verbose", no_argument, NULL, 'v'},
+        {"rts-debug", no_argument, NULL, 'd'},
         {"rts-ddb-host", required_argument, NULL, 'h'},
         {"rts-ddb-port", required_argument, NULL, 'p'},
         {NULL, 0, NULL, 0}
@@ -1221,6 +1239,17 @@ int main(int argc, char **argv) {
 
     while ((ch = getopt_long(argc, argv, "-", long_options, NULL)) != -1) {
         switch (ch) {
+            case 'd':
+                new_argc--;
+                #ifndef RTS_DEBUG
+                fprintf(stderr, "ERROR: RTS debug not supported.\n");
+                fprintf(stderr, "HINT: Recompile this program using: actonc --rts-debug ...\n");
+                exit(1);
+                #endif
+                rts_debug = 1;
+                // Enabling rts debug implies verbose RTS output too
+                rts_verbose = 10;
+                break;
             case 'h':
                 new_argc -= 2;
                 ddb_host = optarg;
@@ -1231,7 +1260,7 @@ int main(int argc, char **argv) {
                 break;
             case 'v':
                 new_argc--;
-                verbose = 1;
+                rts_verbose = 1;
                 break;
         }
     }
@@ -1260,7 +1289,7 @@ int main(int argc, char **argv) {
     new_argv[new_argc] = NULL;
 
     long num_cores = sysconf(_SC_NPROCESSORS_ONLN);
-    //    printf("%ld worker threads\n", num_cores);
+    rtsd_printf(LOGPFX "%ld worker threads\n", num_cores);
     kq = kqueue();
     $register_builtin();
     minienv$$__init__();
@@ -1269,7 +1298,7 @@ int main(int argc, char **argv) {
 
     unsigned int seed;
     if (ddb_host) {
-        if (verbose) printf("Acton RTS: using distributed database backend (DDB): %s:%d\n", ddb_host, ddb_port);
+        rtsv_printf(LOGPFX "Using distributed database backend (DDB): %s:%d\n", ddb_host, ddb_port);
         GET_RANDSEED(&seed, 0);
         db = get_remote_db(1);
         add_server_to_membership(ddb_host, ddb_port, db, &seed);
@@ -1277,22 +1306,24 @@ int main(int argc, char **argv) {
 
     if (db) {
         snode_t* start_row = NULL, * end_row = NULL;
-        if (verbose) printf("Acton RTS: checking for previous actor state in DDB... ");
+        rtsv_printf(LOGPFX "Checking for existing actor state in DDB... ");
         fflush(stdout);
         int no_items = remote_read_full_table_in_txn(&start_row, &end_row, ACTORS_TABLE, NULL, db);
-        if (verbose) printf("done\n");
-        //printf("Found %d existing actors\n", no_items);
+        rtsv_printf(LOGPFX "done\n");
         if (no_items > 0) {
-            if (verbose) printf("Acton RTS: restoring actor state from DDB... ");
+            rtsv_printf(LOGPFX "Found %d existing actors; Restoring actor state from DDB... ", no_items);
             fflush(stdout);
             deserialize_system(start_row);
-            if (verbose) printf("done\n");
+            rtsv_printf(LOGPFX "done\n");
         } else {
+            rtsv_printf(LOGPFX "No previous state in DDB; Initializing database...");
+            fflush(stdout);
             int indices[] = {0};
             db_schema_t* db_schema = db_create_schema(NULL, 1, indices, 1, indices, 0, indices, 0);
             create_db_queue(TIMER_QUEUE);
             timer_consume_hd = 0;
             BOOTSTRAP(new_argc, new_argv);
+            rtsv_printf(LOGPFX "done\n");
         }
     } else {
         BOOTSTRAP(new_argc, new_argv);
