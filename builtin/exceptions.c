@@ -331,6 +331,10 @@ $OSError $OSError$__deserialize__($OSError self, $Serial$state state) {
 struct $OSError$class $OSError$methods = {"$OSError",UNASSIGNED,($Super$class)&$Exception$methods,$OSError$__init__,
                                           $OSError$__serialize__,$OSError$__deserialize__,$OSError$__bool__,$OSError$__str__};
 //////////////////////////////////////////////////////////////////////////////////////////////
+$RuntimeError $RuntimeError$new($str error_message) {
+    return $NEW($RuntimeError, error_message);
+}
+
 void $RuntimeError$__init__($RuntimeError self, $str error_message) {
   self->error_message = error_message;
 };
