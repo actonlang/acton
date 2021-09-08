@@ -1227,13 +1227,15 @@ int main(int argc, char **argv) {
     int ch = 0;
     char *ddb_host = NULL;
     int ddb_port = 32000;
+    int ddb_replication = 3;
     int new_argc = argc;
 
     static struct option long_options[] = {
-        {"rts-verbose", no_argument, NULL, 'v'},
         {"rts-debug", no_argument, NULL, 'd'},
         {"rts-ddb-host", required_argument, NULL, 'h'},
         {"rts-ddb-port", required_argument, NULL, 'p'},
+        {"rts-ddb-replication", required_argument, NULL, 'r'},
+        {"rts-verbose", no_argument, NULL, 'v'},
         {NULL, 0, NULL, 0}
     };
 
@@ -1257,6 +1259,10 @@ int main(int argc, char **argv) {
             case 'p':
                 new_argc -= 2;
                 ddb_port = atoi(optarg);
+                break;
+            case 'r':
+                new_argc -= 2;
+                ddb_replication = atoi(optarg);
                 break;
             case 'v':
                 new_argc--;
@@ -1300,7 +1306,7 @@ int main(int argc, char **argv) {
     if (ddb_host) {
         rtsv_printf(LOGPFX "Using distributed database backend (DDB): %s:%d\n", ddb_host, ddb_port);
         GET_RANDSEED(&seed, 0);
-        db = get_remote_db(1);
+        db = get_remote_db(ddb_replication);
         add_server_to_membership(ddb_host, ddb_port, db, &seed);
     }
 
