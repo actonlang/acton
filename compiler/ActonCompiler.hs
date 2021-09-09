@@ -158,13 +158,11 @@ data Paths      = Paths {
 -- 'ext' is file suffix of FILE.
 -- 'topMod' is the module name of FILE (its path after 'srcRoot' except 'ext', split at every '/')
 
-srcFile                 :: Paths -> A.ModName -> Maybe FilePath
-srcFile paths mn        = case stripPrefix (modPrefix paths) (A.modPath mn) of
-                            Just ns -> Just $ joinPath (srcRoot paths : ns) ++ ".act"
-                            Nothing -> Nothing
+srcFile                 :: Paths -> A.ModName -> FilePath
+srcFile paths mn        = joinPath (srcRoot paths : A.modPath mn) ++ ".act"
 
-sysFile                 :: Paths -> A.ModName -> FilePath
-sysFile paths mn        = joinPath (sysTypes paths : A.modPath mn)
+outBase                 :: Paths -> A.ModName -> FilePath
+outBase paths mn        = joinPath (projTypes paths : A.modPath mn)
 
 
 touchDirs               :: FilePath -> A.ModName -> IO ()
@@ -232,16 +230,14 @@ chaseImportedFiles args paths imps task
 
   where readAFile tasks mn  = case lookUp mn tasks of    -- read and parse file mn in the project directory, unless it is already in tasks 
                                  Just t -> return Nothing
-                                 Nothing -> case srcFile paths mn of
-                                               Nothing -> return Nothing
-                                               Just actFile -> do
-                                                    ok <- System.Directory.doesFileExist actFile
-                                                    if ok then do
-                                                        src <- readFile actFile
-                                                        m <- Acton.Parser.parseModule mn actFile src
-                                                        return $ Just $ ActonTask mn src m
-                                                     else
-                                                        return Nothing
+                                 Nothing -> do let actFile = srcFile paths mn 
+                                               ok <- System.Directory.doesFileExist actFile
+                                               if ok then do
+                                                   src <- readFile actFile
+                                                   m <- Acton.Parser.parseModule mn actFile src
+                                                   return $ Just $ ActonTask mn src m
+                                                else
+                                                   return Nothing
   
         lookUp mn (t : ts)
           | name t == mn     = Just t
@@ -273,22 +269,22 @@ doTask args paths env t@(ActonTask mn src m)
                                                            `catch` handle "Type error" Acton.Types.typeError src paths mn
                                           iff (verbose args) (putStrLn "Done.")
                                           return (Acton.Env.addMod mn te env')
-  where Just actFile        = srcFile paths mn
-        outbase             = sysFile paths mn
+  where actFile             = srcFile paths mn
+        outbase             = outBase paths mn
         tyFile              = outbase ++ ".ty"
         hFile               = outbase ++ ".h"
         cFile               = outbase ++ ".c"
 
 checkUptoDate :: Paths -> FilePath -> FilePath -> [FilePath] -> [A.ModName] -> IO Bool
-checkUptoDate paths actFile iFile outFiles imps
+checkUptoDate paths actFile iFile outBases imps
                         = do srcExists <- System.Directory.doesFileExist actFile
-                             outExists <- mapM System.Directory.doesFileExist (iFile:outFiles)
+                             outExists <- mapM System.Directory.doesFileExist (iFile:outBases)
                              if not (srcExists && and outExists) then return False
                               else do srcTime  <-  System.Directory.getModificationTime actFile
-                                      outTimes <- mapM System.Directory.getModificationTime (iFile:outFiles)
+                                      outTimes <- mapM System.Directory.getModificationTime (iFile:outBases)
                                       impsOK   <- mapM (impOK (head outTimes)) imps
                                       return (all (srcTime <) outTimes && and impsOK)
-  where impOK iTime mn = do let impFile = sysFile paths mn ++ ".ty"
+  where impOK iTime mn = do let impFile = outBase paths mn ++ ".ty"
                             ok <- System.Directory.doesFileExist impFile
                             if ok then do impfileTime <- System.Directory.getModificationTime impFile
                                           return (impfileTime < iTime)
@@ -305,8 +301,8 @@ printIce errMsg = do ccVer <- getCcVer
 
 runRestPasses :: Args -> Paths -> Acton.Env.Env0 -> A.Module -> IO (Acton.Env.Env0, Acton.Env.TEnv)
 runRestPasses args paths env0 parsed = do
-                      let outbase = sysFile paths (A.modname parsed)
-                      env <- Acton.Env.mkEnv (sysTypes paths) env0 parsed
+                      let outbase = outBase paths (A.modname parsed)
+                      env <- Acton.Env.mkEnv (sysTypes paths) (projTypes paths) env0 parsed
 
                       kchecked <- Acton.Kinds.check env parsed
                       iff (kinds args) $ dump "kinds" (Pretty.print kchecked)
@@ -366,7 +362,7 @@ handle errKind f src paths mn ex = do putStrLn ("\n******************** " ++ err
                                       putStrLn (Acton.Parser.makeReport (f ex) src)
                                       removeIfExists (outbase++".ty")
                                       System.Exit.exitFailure
-  where outbase        = sysFile paths mn
+  where outbase        = outBase paths mn
         removeIfExists f = removeFile f `catch` handleExists
         handleExists :: IOException -> IO ()
         handleExists _ = return ()
@@ -395,7 +391,7 @@ buildExecutable env args paths task
         qn                  = A.GName mn n
         qn'                 = Acton.Deactorizer.newactQName qn
         (sc,_)              = Acton.QuickType.schemaOf env (A.eQVar qn)
-        outbase             = sysFile paths mn
+        outbase             = outBase paths mn
         rootFile            = outbase ++ ".root.c"
         libRTSarg           = if (rts_debug args) then " -lActonRTSdebug " else " "
         libFilesBase        = " -L" ++ projLib paths ++ " -L" ++ sysLib paths ++ libRTSarg ++ " -lActonProject -lActon -ldbclient -lremote -luuid -lcomm -ldb -lvc -lprotobuf-c -lutf8proc -lpthread -lm"
@@ -408,6 +404,6 @@ buildExecutable env args paths task
         libFiles            = libFilesBase
 #endif
         binFile             = dropExtension srcbase
-        Just srcbase        = srcFile paths mn
+        srcbase             = srcFile paths mn
         pedantArg           = if (cpedantic args) then "-Werror" else ""
         gccCmd              = "gcc " ++ pedantArg ++ " -g -I/usr/include/kqueue -I" ++ sysPath paths ++ " " ++ rootFile ++ " -o" ++ binFile ++ libFiles
