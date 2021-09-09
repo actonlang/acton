@@ -63,7 +63,6 @@ data Args       = Args {
                     cgen      :: Bool,
                     ccmd      :: Bool,
                     verbose   :: Bool,
-                    version   :: Bool,
                     stub      :: Bool,
                     rts_debug :: Bool,
                     cpedantic :: Bool,
@@ -73,7 +72,9 @@ data Args       = Args {
                 }
                 deriving Show
 
-getArgs         = Args
+getArgs cv      = infoOption cv (long "version" <> help "Show version information")
+                  <*>
+                  (Args
                     <$> switch (long "parse"   <> help "Show the result of parsing")
                     <*> switch (long "kinds"   <> help "Show all the result after kind-checking")
                     <*> switch (long "types"   <> help "Show all inferred expression types")
@@ -86,13 +87,12 @@ getArgs         = Args
                     <*> switch (long "cgen"    <> help "Show the generated .c code")
                     <*> switch (long "ccmd"    <> help "Show CC / LD commands")
                     <*> switch (long "verbose" <> help "Print progress info during execution")
-                    <*> switch (long "version" <> help "Show version information")
                     <*> switch (long "stub"    <> help "Stub (.ty) file generation only")
                     <*> switch (long "rts-debug"<> help "Include RTS debug support in output program")
                     <*> switch (long "cpedantic"<> help "Pedantic C compilation with -Werror")
                     <*> strOption (long "syspath" <> metavar "TARGETDIR" <> value "" <> showDefault)
                     <*> strOption (long "root" <> value "" <> showDefault)
-                    <*> argument str (metavar "FILE")
+                    <*> argument str (metavar "FILE"))
 
 descr           = fullDesc <> progDesc "Compile an Acton source file with recompilation of imported modules as needed"
                     <> header "actonc - the Acton compiler"
@@ -102,16 +102,10 @@ getVerExtra     = unwords ["compiled by", compilerName, showVersion compilerVers
 getCcVer        = do verStr <- readProcess "cc" ["--version"] []
                      return $ unwords $ take 1 $ lines verStr
 
-showVer verbose = do putStrLn("acton " ++ getVer)
-                     when (verbose) $ do
-                         putStrLn(getVerExtra)
-                         ccVer <- getCcVer
-                         putStrLn("cc: " ++ ccVer)
-                     System.Exit.exitSuccess
+showVer cv      = "acton " ++ getVer ++ "\n" ++ getVerExtra ++ "\ncc: " ++ cv
 
-main            = do args <- execParser (info (getArgs <**> helper) descr)
-                     when (version args) $ do
-                         showVer (verbose args)
+main            = do cv <- getCcVer
+                     args <- execParser (info (getArgs (showVer cv) <**> helper) descr)
                      paths <- findPaths args
                      when (verbose args) $ do
                          putStrLn ("## sysPath: " ++ sysPath paths)

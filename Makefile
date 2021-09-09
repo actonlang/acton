@@ -1,7 +1,7 @@
 include common.mk
 CHANGELOG_VERSION=$(shell grep '^\#\# \[[0-9]' CHANGELOG.md | sed 's/\#\# \[\([^]]\{1,\}\)].*/\1/' | head -n1)
 
-VERSION_INFO=$(subst acton ,,$(shell ./dist/actonc --version DUMMY))
+VERSION_INFO=$(subst acton ,,$(shell ./dist/actonc --version | head -n1))
 
 ifeq ($(shell uname -s),Linux)
 CFLAGS += -Werror -Wno-int-to-pointer-cast -Wno-pointer-to-int-cast -I/usr/include/kqueue

@@ -1021,77 +1021,77 @@ void minienv$$__init__ () {
 
 
 void *$eventloop(void *arg) {
-  while(1) {
-    struct kevent timer;
-    pthread_setspecific(self_key, NULL);
-    EV_SET(&timer, 9999, EVFILT_TIMER, EV_ADD | EV_ONESHOT, 0, 500, 0);
-    kevent(kq,&timer,1,0,0,0);
-    struct kevent kev;
-    struct sockaddr_in addr;
-    socklen_t socklen = sizeof(addr);
-    int fd2;
-    int count;
-    int nready = kevent(kq,NULL,0,&kev,1,NULL);
-    if (nready<0) {
-      printf("kevent error: %s. kev.ident=%lu, kq is %d\n",strerror(errno),kev.ident,kq);
-      exit(-1);
-    }
-    int fd = kev.ident;
-    if (kev.flags & EV_EOF) {
-      $str msg = $Times$str$witness->$class->__add__($Times$str$witness,$getName(fd),to$str(" closed connection\n"));
-      if (fd_data[fd].errhandler)
-        fd_data[fd].errhandler->$class ->__call__(fd_data[fd].errhandler,msg);
-      else {
-        perror("Remote host closed connection");
-        exit(-1);
-      }
-      EV_SET(&fd_data[fd].event_spec,fd,EVFILT_READ,EV_DISABLE,0,0,NULL);
-      kevent(kq,&fd_data[fd].event_spec,1,NULL,0,NULL);
-    }
-    if (kev.flags & EV_ERROR) { 
-      fprintf(stderr, "EV_ERROR: %s\n", strerror(kev.data));
-      exit(-1);
-    }
-    if (fd==9999)
-      break;
-    switch (fd_data[fd].kind) {
-    case connecthandler:
-      if (kev.filter==EVFILT_READ) { // we are a listener and someone tries to connect
-        while ((fd2 = accept(fd, (struct sockaddr *)&fd_data[fd].sock_addr,&socklen)) != -1) {
-          fcntl(fd2,F_SETFL,O_NONBLOCK);
-          fd_data[fd2].kind = connecthandler;
-          fd_data[fd2].chandler = fd_data[fd].chandler;
-          fd_data[fd2].sock_addr = fd_data[fd].sock_addr;
-          bzero(fd_data[fd2].buffer,BUF_SIZE); 
-          EV_SET(&fd_data[fd2].event_spec,fd2,EVFILT_READ,EV_ADD,0,0,NULL);
-          kevent(kq,&fd_data[fd2].event_spec,1,NULL,0,NULL);
-          kevent(kq,&fd_data[fd].event_spec,1,NULL,0,NULL);
-          setupConnection(fd2);
-          printf("%s %s\n","Connection from",$getName(fd2)->str);
+    while(1) {
+        struct kevent timer;
+        pthread_setspecific(self_key, NULL);
+        EV_SET(&timer, 9999, EVFILT_TIMER, EV_ADD | EV_ONESHOT, 0, 500, 0);
+        kevent(kq,&timer,1,0,0,0);
+        struct kevent kev;
+        struct sockaddr_in addr;
+        socklen_t socklen = sizeof(addr);
+        int fd2;
+        int count;
+        int nready = kevent(kq,NULL,0,&kev,1,NULL);
+        if (nready<0) {
+            printf("kevent error: %s. kev.ident=%lu, kq is %d\n",strerror(errno),kev.ident,kq);
+            exit(-1);
         }
-      } else { // we are a client and a delayed connection attempt has succeeded
-        setupConnection(fd);
-      }
-      break;
-    case readhandler:  // data has arrived on fd to fd_data[fd].buffer
-      if (fd_data[fd].event_spec.filter == EVFILT_READ) {
-        count = read(fd,&fd_data[fd].buffer,BUF_SIZE);
-        if (count < BUF_SIZE)
-          fd_data[fd].buffer[count] = 0;
-        fd_data[fd].rhandler->$class->__call__(fd_data[fd].rhandler,to$str(fd_data[fd].buffer));
-      } else {
-        fprintf(stderr,"internal error: readhandler/event filter mismatch on descriptor %d\n",fd);
-        exit(-1);
-      }
-      break;
-    case nohandler:
-      fprintf(stderr,"internal error: no event handler on descriptor %d\n",fd);
-      exit(-1);
-    }
-    pthread_mutex_lock(&sleep_lock);
-    pthread_cond_signal(&work_to_do);
-    pthread_mutex_unlock(&sleep_lock);
+        int fd = kev.ident;
+        if (kev.flags & EV_EOF) {
+            $str msg = $Times$str$witness->$class->__add__($Times$str$witness,$getName(fd),to$str(" closed connection\n"));
+            if (fd_data[fd].errhandler)
+                fd_data[fd].errhandler->$class ->__call__(fd_data[fd].errhandler,msg);
+            else {
+                perror("Remote host closed connection");
+                exit(-1);
+            }
+            EV_SET(&fd_data[fd].event_spec,fd,EVFILT_READ,EV_DISABLE,0,0,NULL);
+            kevent(kq,&fd_data[fd].event_spec,1,NULL,0,NULL);
+        }
+        if (kev.flags & EV_ERROR) {
+            fprintf(stderr, "EV_ERROR: %s\n", strerror(kev.data));
+            exit(-1);
+        }
+        if (fd==9999)
+            break;
+        switch (fd_data[fd].kind) {
+            case connecthandler:
+                if (kev.filter==EVFILT_READ) { // we are a listener and someone tries to connect
+                    while ((fd2 = accept(fd, (struct sockaddr *)&fd_data[fd].sock_addr,&socklen)) != -1) {
+                      fcntl(fd2,F_SETFL,O_NONBLOCK);
+                      fd_data[fd2].kind = connecthandler;
+                      fd_data[fd2].chandler = fd_data[fd].chandler;
+                      fd_data[fd2].sock_addr = fd_data[fd].sock_addr;
+                      bzero(fd_data[fd2].buffer,BUF_SIZE);
+                      EV_SET(&fd_data[fd2].event_spec,fd2,EVFILT_READ,EV_ADD,0,0,NULL);
+                      kevent(kq,&fd_data[fd2].event_spec,1,NULL,0,NULL);
+                      kevent(kq,&fd_data[fd].event_spec,1,NULL,0,NULL);
+                      setupConnection(fd2);
+                      printf("%s %s\n","Connection from",$getName(fd2)->str);
+                    }
+                } else { // we are a client and a delayed connection attempt has succeeded
+                    setupConnection(fd);
+                }
+                break;
+            case readhandler:  // data has arrived on fd to fd_data[fd].buffer
+                if (fd_data[fd].event_spec.filter == EVFILT_READ) {
+                    count = read(fd,&fd_data[fd].buffer,BUF_SIZE);
+                    if (count < BUF_SIZE)
+                        fd_data[fd].buffer[count] = 0;
+                    fd_data[fd].rhandler->$class->__call__(fd_data[fd].rhandler,to$str(fd_data[fd].buffer));
+                } else {
+                    fprintf(stderr,"internal error: readhandler/event filter mismatch on descriptor %d\n",fd);
+                    exit(-1);
+                }
+                break;
+            case nohandler:
+                fprintf(stderr,"internal error: no event handler on descriptor %d\n",fd);
+                exit(-1);
+        }
+        pthread_mutex_lock(&sleep_lock);
+        pthread_cond_signal(&work_to_do);
+        pthread_mutex_unlock(&sleep_lock);
 
-  }
-  return NULL;
+    }
+    return NULL;
 }
