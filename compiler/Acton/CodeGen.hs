@@ -42,7 +42,7 @@ genRoot env0 qn@(GName m n) t       = do return $ render (cInclude $+$ cInit $+$
         env1                        = ldefine (envOf pars) env
         pars                        = pPar paramNames' r
         r                           = posRow t $ posRow (tCont tWild tWild) posNil
-        cInclude                    = include env "modules" m
+        cInclude                    = include env "types" m
         cInit                       = (text "void" <+> gen env primROOTINIT <+> parens empty <+> char '{') $+$
                                        nest 4 (gen env1 (GName m initKW) <> parens empty <> semi) $+$
                                        char '}'
@@ -226,7 +226,7 @@ primNEWTUPLE                        = gPrim "NEWTUPLE"
 
 -- Implementation -----------------------------------------------------------------------------------
 
-cModule env (Module m imps stmts)   = include env "modules" m $+$
+cModule env (Module m imps stmts)   = include env "types" m $+$
                                       declModule env stmts $+$
                                       text "int" <+> genTopName env initFlag <+> equals <+> text "0" <> semi $+$
                                       (text "void" <+> genTopName env initKW <+> parens empty <+> char '{') $+$

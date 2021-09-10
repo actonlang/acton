@@ -142,6 +142,7 @@ data Paths      = Paths {
                     sysTypes    :: FilePath,
                     sysLib      :: FilePath,
                     projPath    :: FilePath,
+                    projOut     :: FilePath,
                     projTypes   :: FilePath,
                     projLib     :: FilePath,
                     srcRoot     :: FilePath,
@@ -187,10 +188,11 @@ findPaths args          = do execDir <- takeDirectory <$> System.Environment.get
                              let srcPath = takeDirectory absSrcFile
                              let modPrefix = if srcRoot == projPath then [] else split (unwords ( take 1 dirInSrc ) )
                                  topMod = A.modName $ dirInSrc ++ [fileBody]
-                             let projTypes = joinPath [projPath, "out", "types"]
-                             let projLib = joinPath [projPath, "out", "lib"]
+                             let projOut = joinPath [projPath, "out"]
+                             let projTypes = joinPath [projOut, "types"]
+                             let projLib = joinPath [projOut, "lib"]
                              touchDirs projTypes topMod
-                             return $ Paths sysPath sysTypes sysLib projPath projTypes projLib srcRoot modPrefix ext topMod
+                             return $ Paths sysPath sysTypes sysLib projPath projOut projTypes projLib srcRoot modPrefix ext topMod
   where (fileBody,ext)      = splitExtension $ takeFileName $ file args
 
         split           = foldr f [[]] where f c l@(x:xs) = if c == '.' then []:l else (c:x):xs
@@ -341,7 +343,7 @@ runRestPasses args paths env0 parsed = do
                               hFile = outbase ++ ".h"
                               oFile = joinPath [projLib paths, n++".o"]
                               aFile = joinPath [projLib paths, "libActonProject.a"]
-                              gccCmd = "gcc " ++ pedantArg ++ " -g -c -I/usr/include/kqueue -I" ++ sysPath paths ++ " -o" ++ oFile ++ " " ++ cFile
+                              gccCmd = "gcc " ++ pedantArg ++ " -g -c -I/usr/include/kqueue -I" ++ projOut paths ++ " -I" ++ sysPath paths ++ " -o" ++ oFile ++ " " ++ cFile
                               arCmd = "ar rcs " ++ aFile ++ " " ++ oFile
                           writeFile hFile h
                           writeFile cFile c
@@ -403,7 +405,8 @@ buildExecutable env args paths task
 #else
         libFiles            = libFilesBase
 #endif
-        binFile             = dropExtension srcbase
+        binFilename         = takeFileName $ dropExtension srcbase
+        binFile             = projOut paths ++ "/bin/" ++ binFilename
         srcbase             = srcFile paths mn
         pedantArg           = if (cpedantic args) then "-Werror" else ""
-        gccCmd              = "gcc " ++ pedantArg ++ " -g -I/usr/include/kqueue -I" ++ sysPath paths ++ " " ++ rootFile ++ " -o" ++ binFile ++ libFiles
+        gccCmd              = "gcc " ++ pedantArg ++ " -g -I/usr/include/kqueue -I" ++ projOut paths ++ " -I" ++ sysPath paths ++ " " ++ rootFile ++ " -o" ++ binFile ++ libFiles
