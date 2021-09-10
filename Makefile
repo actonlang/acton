@@ -46,12 +46,10 @@ backend/server: lib/libcomm.a lib/libremote.a lib/libvc.a
 
 
 # /builtin ----------------------------------------------
-# TODO: maybe use wildcard to build this target, but filter out the env stuff?
-builtin/builtin.o: builtin/builtin.c builtin/builtin.h builtin/Iterator.h builtin/Iterator.c builtin/__builtin__.h builtin/__builtin__.c builtin/builtin_functions.h builtin/builtin_functions.c \
-           builtin/class_hierarchy.h builtin/class_hierarchy.c builtin/common.h builtin/common.c builtin/complx.h builtin/complex.c builtin/csiphash.c builtin/dict.h builtin/dict.c builtin/dict_impl.h builtin/dict_impl.c \
-           builtin/exceptions.h builtin/exceptions.c builtin/float.h builtin/float.c builtin/hash.h builtin/hash.c builtin/int.h builtin/int.c builtin/list.h builtin/list.c builtin/list_impl.h builtin/list_impl.c builtin/none.h builtin/none.c \
-           builtin/range.h builtin/range.c builtin/registration.h builtin/registration.c builtin/serialize.h builtin/serialize.c builtin/set.h builtin/set.c builtin/set_impl.h builtin/set_impl.c \
-           builtin/slice.h builtin/slice.c builtin/str.h builtin/str.c builtin/tuple.h builtin/tuple.c
+ENV_FILES=$(wildcard builtin/minienv.*)
+BUILTIN_HFILES=$(filter-out $(ENV_FILES),$(wildcard builtin/*.h))
+BUILTIN_CFILES=$(filter-out $(ENV_FILES),$(wildcard builtin/*.c))
+builtin/builtin.o: builtin/builtin.c $(BUILTIN_HFILES) $(BUILTIN_CFILES)
 	cc $(CFLAGS) -Wno-unused-result -g -c -O3 $< -o$@
 
 builtin/minienv.o: builtin/minienv.c builtin/minienv.h builtin/builtin.o
@@ -222,7 +220,6 @@ dist/lib/libActon.a: lib/libActon.a
 	@mkdir -p $(dir $@)
 	cp $< $@
 
-BUILTIN_HFILES=$(wildcard builtin/*.h)
 DIST_ACTONC=dist/actonc
 DIST_ACTONDB=dist/actondb
 DIST_BUILTIN=$(addprefix dist/,$(BUILTIN_HFILES)) dist/builtin/minienv.h dist/builtin/builtin.o
