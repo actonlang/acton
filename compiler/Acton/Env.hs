@@ -992,12 +992,16 @@ doImp sys proj env m            = case lookupMod m env of
                                     Just te -> return (env, te)
                                     Nothing -> do
                                         found <- doesFileExist fpath1
-                                        unless found (fileNotFound m)
-                                        te <- InterfaceFiles.readFile fpath1
+                                        --traceM ("## Does " ++ fpath1 ++ " exist? " ++ show found)
+                                        te <- if found then InterfaceFiles.readFile fpath1 else do
+                                                found <- doesFileExist fpath2
+                                                --traceM ("## Does " ++ fpath2 ++ " exist? " ++ show found)
+                                                unless found (fileNotFound m)
+                                                InterfaceFiles.readFile fpath2
                                         env' <- subImp sys proj env (moduleRefs te)
                                         return (addMod m te env', te)
-  where fpath1                  = joinPath (sys : modPath m) ++ ".ty"
-        fpath2                  = joinPath (proj : modPath m) ++ ".ty"
+  where fpath1                  = joinPath (proj : modPath m) ++ ".ty"
+        fpath2                  = joinPath (sys : modPath m) ++ ".ty"
 
 
 importSome                  :: [ImportItem] -> ModName -> TEnv -> EnvF x -> EnvF x
