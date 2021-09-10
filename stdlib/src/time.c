@@ -1,4 +1,4 @@
-#include "modules/time.h"
+#include "time.h"
 
 $float time$$monotonic () {
     struct timespec ts;

@@ -1,4 +1,4 @@
-#include "modules/random.h"
+#include "random.h"
 #include <stdlib.h>
 
 // NOTE: the standard srand / rand functions are not thread safe, but what does
