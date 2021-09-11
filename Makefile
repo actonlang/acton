@@ -1,8 +1,8 @@
 include common.mk
 CHANGELOG_VERSION=$(shell grep '^\#\# \[[0-9]' CHANGELOG.md | sed 's/\#\# \[\([^]]\{1,\}\)].*/\1/' | head -n1)
 
-ifeq ($(shell ls dist/actonc >/dev/null 2>&1; echo $$?),0)
-VERSION_INFO:=$(shell dist/actonc --version | head -n1 | cut -d' ' -f2)
+ifeq ($(shell ls dist/bin/actonc >/dev/null 2>&1; echo $$?),0)
+VERSION_INFO:=$(shell dist/bin/actonc --version | head -n1 | cut -d' ' -f2)
 else
 VERSION_INFO:=unknown
 endif
@@ -55,7 +55,7 @@ builtin/minienv.o: builtin/minienv.c builtin/minienv.h builtin/builtin.o
 	cc $(CFLAGS) -g -c -O3 $< -o$@
 
 
-ACTONC=dist/actonc --syspath .
+ACTONC=dist/bin/actonc --syspath .
 TYMODULES=modules/__builtin__.ty modules/acton/rts.ty modules/math.ty modules/numpy.ty modules/random.ty modules/time.ty
 
 modules/numpy.h: numpy/numpy.h
@@ -154,6 +154,8 @@ rts/pingpong: rts/pingpong.c rts/pingpong.h rts/rts.o
 # top level targets
 actonc:
 	$(MAKE) -C compiler install
+	mkdir -p dist/bin
+	cp compiler/actonc dist/bin/actonc
 
 backend:
 	$(MAKE) -C backend
@@ -193,9 +195,10 @@ release: dist
 	$(MAKE) acton-$(ARCH)-$(VERSION_INFO).tar.bz2
 
 dist: actonc backend rts
-	mkdir -p dist/lib dist/modules dist/builtin dist/rts
+	mkdir -p dist/bin dist/lib dist/modules dist/builtin dist/rts
+	cp compiler/actonc dist/bin/actonc
 	cp backend/server backend/actondb
-	mv backend/actondb dist/
+	mv backend/actondb dist/bin/
 	cp lib/*.a dist/lib/
 	cp builtin/*.h dist/builtin/
 	cp rts/rts.h dist/rts/rts.h
