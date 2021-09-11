@@ -53,13 +53,13 @@ $(LIBDIR)/libvc.a:
 
 .PHONY: $(LIBDIR)/libcomm.a $(LIBDIR)/libdb.a $(LIBDIR)/libdbclient.a
 
-client: client.c $(LIBDIR)/libdb.a $(LIBDIR)/libdbclient.a
+client: client.c $(LIBDIR)/libdb.a $(LIBDIR)/libdbclient.a $(LIBDIR)/libremote.a $(LIBDIR)/libcomm.a $(LIBDIR)/libvc.a
 	cc client.c \
 	 $(CFLAGS) $(LARGP) \
 	 -L $(LIBDIR) -L/usr/local/opt/util-linux/lib -ldbclient -lremote -lcomm -ldb -lvc -lprotobuf-c -pthread -luuid \
 	 -o client
 
-server: server.c $(LIBDIR)/libdb.a failure_detector
+server: server.c failure_detector $(LIBDIR)/libremote.a $(LIBDIR)/libcomm.a $(LIBDIR)/libdb.a $(LIBDIR)/libvc.a
 	cc server.c \
 	 $(CFLAGS) $(LARGP) \
 	 -L $(LIBDIR) -L/usr/local/opt/util-linux/lib -lremote -lcomm -ldb -lvc -lprotobuf-c -pthread -luuid \
