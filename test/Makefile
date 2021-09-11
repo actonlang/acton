@@ -1,4 +1,4 @@
-ACTONC=../dist/actonc --cpedantic
+ACTONC=../dist/bin/actonc --cpedantic
 DDB_SERVER=../backend/server
 TESTS= \
 	argv \
