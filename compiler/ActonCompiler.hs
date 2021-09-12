@@ -171,7 +171,7 @@ touchDirs path mn       = touch path (init $ A.modPath mn)
 
 findPaths               :: Args -> IO Paths
 findPaths args          = do execDir <- takeDirectory <$> System.Environment.getExecutablePath
-                             sysPath <- canonicalizePath (if null $ syspath args then execDir else syspath args)
+                             sysPath <- canonicalizePath (if null $ syspath args then execDir ++ "/.." else syspath args)
                              let sysRoot = joinPath [sysPath,"modules"]
                              absfile <- canonicalizePath (file args)
                              (srcRoot,subdirs) <- analyze (takeDirectory absfile) []
