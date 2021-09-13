@@ -24,5 +24,5 @@ install: build
 	stack --local-bin-path=$(ACTON_BINDIR) install 2>/dev/null
 
 clean:
-	stack clean
-	rm -f $(ACTON_BINDIR)/actonc package.yaml
+	-stack clean
+	rm -f $(ACTON_BINDIR)/actonc package.yaml acton.cabal
