@@ -29,14 +29,6 @@ There are currently known regressions:
   [#152](https://github.com/actonlang/acton/pull/152)
   - `time.monotonic()` returning a float.
   - `time.monotonic_ns()` returning nanoseconds as an integer.
-- Warnings are now generally treated as errors when compiling Acton components
-  [#153](https://github.com/actonlang/acton/pull/153)
-  - Many warnings have been fixed.
-  - There are some exceptions added for some warnings.
-    - With time these should be reduced.
-- Bug triage and prioritization document
-  [#165](https://github.com/actonlang/acton/pull/165)
-  - see `docs/triage.md`
 
 ### Changed
 - `time` module has been aligned with its Python counterpart
@@ -62,6 +54,23 @@ There are currently known regressions:
     would just hang even when they should exit.
   - RTS has been entirely reworked in regards to actor creation and now follows
     the overall language model, which makes things simpler and more robust.
+
+
+## [0.5.3](https://github.com/actonlang/acton/releases/tag/v0.5.3) (2021-09-13)
+
+### Added
+- It is now possible to install Acton on Mac OS X via Homebrew
+  - `brew install actonlang/acton/acton`
+- Warnings are now generally treated as errors when compiling Acton components
+  [#153](https://github.com/actonlang/acton/pull/153)
+  - Many warnings have been fixed.
+  - There are some exceptions added for some warnings.
+    - With time these should be reduced.
+- Bug triage and prioritization document
+  [#165](https://github.com/actonlang/acton/pull/165)
+  - see `docs/triage.md`
+
+### Fixed
 - Fix internal instantiations of tuples to use `$NEWTUPLE`
   [#173](https://github.com/actonlang/acton/pull/173)
   - For example functions like `divmod` that returns a tuple was using an

@@ -34,6 +34,16 @@ work fairly well.
 
 # Getting started with Acton
 
+## Install acton
+
+### Mac OS X using Homebrew
+Acton is available as a Homebrew tap, which can be installed with:
+```
+brew install actonlang/acton/acton
+```
+
+### By downloading a tar ball
+
 Acton is published as GitHub Releases. Download a tar ball from [the Release
 page](https://github.com/actonlang/acton/releases). Pick the latest stable
 versioned release.
@@ -47,19 +57,18 @@ Extract the Acton tar ball:
 $ tar jxvf acton-*
 ```
 
-You will want to include the acton directory in your `PATH` so you can use
+You will want to include the `acton/bin` directory in your `PATH` so you can use
 `actonc`.
 
-## `actonc` dependencies
-In order to compile Acton programs using `actonc` you need to install the
-following prerequisites:
+`actonc` has run time dependencies and you will need to install the necessary
+dependencies for your platform.
 
-### Debian
+#### Debian
 ```
 apt install gcc libkqueue-dev libprotobuf-c-dev libutf8proc-dev
 ```
 
-### Mac OS X
+#### Mac OS X
 ```
 brew install protobuf-c util-linux
 ```
