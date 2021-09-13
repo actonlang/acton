@@ -1,8 +1,10 @@
 include common.mk
 CHANGELOG_VERSION=$(shell grep '^\#\# \[[0-9]' CHANGELOG.md | sed 's/\#\# \[\([^]]\{1,\}\)].*/\1/' | head -n1)
 
-ifeq ($(shell ls dist/bin/actonc >/dev/null 2>&1; echo $$?),0)
-VERSION_INFO:=$(shell dist/bin/actonc --version | head -n1 | cut -d' ' -f2)
+ACTONC=dist/bin/actonc
+
+ifeq ($(shell ls $(ACTONC) >/dev/null 2>&1; echo $$?),0)
+VERSION_INFO:=$(shell $(ACTONC) --version | head -n1 | cut -d' ' -f2)
 else
 VERSION_INFO:=unknown
 endif
@@ -11,7 +13,6 @@ ifeq ($(shell uname -s),Linux)
 CFLAGS += -Werror -Wno-int-to-pointer-cast -Wno-pointer-to-int-cast -I/usr/include/kqueue
 endif
 
-ACTONC=dist/actonc
 
 all: version-check distribution
 
@@ -155,8 +156,6 @@ rts/pingpong: rts/pingpong.c rts/pingpong.h rts/rts.o
 
 
 # top level targets
-actonc: dist/actonc
-
 compiler/actonc:
 	$(MAKE) -C compiler install
 	mkdir -p dist/bin
@@ -174,7 +173,6 @@ test:
 clean: clean-compiler clean-distribution clean-backend clean-rts clean-stdlib
 
 clean-compiler:
-	rm -f actonc
 	$(MAKE) -C compiler clean
 
 clean-backend:
@@ -195,7 +193,7 @@ dist/actonc: compiler/actonc
 # file and modify it, which the Linux kernel (and perhaps others?) will prevent
 # if the file to be modified is an executable program that is currently running.
 # We work around it by moving / renaming the file in place instead!
-dist/actondb: backend/server dist/actonc
+dist/actondb: backend/server $(ACTONC)
 	@mkdir -p $(dir $@)
 	cp $< backend/actondb
 	mv $< $@
