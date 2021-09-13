@@ -126,7 +126,7 @@ apt install alex gcc happy haskell-stack libbsd-dev libkqueue-dev libprotobuf-c-
 
 ### Mac OS X
 ```
-brew install argp-standalone haskell-stack protobuf-c util-linux
+brew install argp-standalone haskell-stack protobuf-c utf8proc util-linux
 ```
 
 ## Building the Acton system
