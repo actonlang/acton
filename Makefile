@@ -2,7 +2,7 @@ include common.mk
 CHANGELOG_VERSION=$(shell grep '^\#\# \[[0-9]' CHANGELOG.md | sed 's/\#\# \[\([^]]\{1,\}\)].*/\1/' | head -n1)
 
 ifeq ($(shell ls dist/bin/actonc >/dev/null 2>&1; echo $$?),0)
-VERSION_INFO:=$(shell dist/bin/actonc --version | head -n1 | cut -d' ' -f2)
+VERSION_INFO:=$(shell dist/bin/actonc --version DUMMY | head -n1 | cut -d' ' -f2)
 else
 VERSION_INFO:=unknown
 endif
