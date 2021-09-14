@@ -92,7 +92,7 @@ hModule env (Module m imps stmts)   = text "#pragma" <+> text "once" $+$
                                       include env "builtin" (modName ["builtin"]) $+$
                                       include env "builtin" (modName ["minienv"]) $+$
                                       include env "rts" (modName ["rts"]) $+$
-                                      vcat (map (include env "modules") $ modNames imps) $+$
+                                      vcat (map (include env "types") $ modNames imps) $+$
                                       hSuite env stmts $+$
                                       text "void" <+> genTopName env initKW <+> parens empty <> semi
 
