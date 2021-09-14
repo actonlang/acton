@@ -20,6 +20,7 @@
 
 #include <unistd.h>
 #include <pthread.h>
+#include <signal.h>
 #include <stdio.h>
 #include <stdarg.h>
 #include <uuid/uuid.h>
@@ -138,6 +139,16 @@ int64_t next_key = -10;
 $Lock next_key_lock;
 
 int64_t timer_consume_hd = 0;       // Lacks protection, although spinlocks wouldn't help concurrent increments. Must fix in db!
+
+void reset_timeout() {
+    kill(0, SIGUSR1);               // Wakes up the eventloop thread which then resets its timer offset
+}
+
+time_t current_time() {
+    struct timeval now;
+    gettimeofday(&now, NULL);
+    return now.tv_sec * 1000000 + now.tv_usec;
+}
 
 pthread_key_t self_key;
 pthread_mutex_t sleep_lock = PTHREAD_MUTEX_INITIALIZER;
@@ -512,8 +523,9 @@ $Actor FREEZE_waiting($Msg m) {
 
 // Atomically enqueue timed message "m" onto the global timer-queue, at position
 // given by "m->baseline".
-void ENQ_timed($Msg m) {
+bool ENQ_timed($Msg m) {
     time_t m_baseline = m->$baseline;
+    bool new_head = false;
     spinlock_lock(&timerQ_lock);
     $Msg x = timerQ;
     if (x && x->$baseline <= m_baseline) {
@@ -527,8 +539,10 @@ void ENQ_timed($Msg m) {
     } else {
         timerQ = m;
         m->$next = x;
+        new_head = true;
     }
     spinlock_unlock(&timerQ_lock);
+    return new_head;
 }
 
 // Atomically dequeue and return the first message from the global timer-queue if 
@@ -661,9 +675,8 @@ void BOOTSTRAP(int argc, char *argv[]) {
 
     env_actor = $NEW($Env, args);
     $Actor ancestor0 = $NEW($Actor);
-    struct timespec now;
-    clock_gettime(CLOCK_MONOTONIC, &now);
-    $Msg m = $NEW($Msg, ancestor0, &$NewRoot$cont, now.tv_sec, &$WriteRoot$cont);
+    time_t now = current_time();
+    $Msg m = $NEW($Msg, ancestor0, &$NewRoot$cont, now, &$WriteRoot$cont);
 
     if (db) {
         create_db_queue(env_actor->$globkey);
@@ -702,9 +715,7 @@ $Msg $ASYNC($Actor to, $Cont cont) {
         m->$baseline = self->$msg->$baseline;
         PUSH_outgoing(self, m);
     } else {                                            // $ASYNC called by the event loop
-        struct timespec now;
-        clock_gettime(CLOCK_MONOTONIC, &now);
-        m->$baseline = now.tv_sec;
+        m->$baseline = current_time();
         if (ENQ_msg(m, to)) {
            ENQ_ready(to);
            new_work();
@@ -716,10 +727,9 @@ $Msg $ASYNC($Actor to, $Cont cont) {
 $Msg $AFTER($int sec, $Cont cont) {
     $Actor self = ($Actor)pthread_getspecific(self_key);
     rtsd_printf(LOGPFX "# AFTER by %ld\n", self->$globkey);
-    time_t baseline = self->$msg->$baseline + sec->val;
+    time_t baseline = self->$msg->$baseline + sec->val * 1000000;
     $Msg m = $NEW($Msg, self, cont, baseline, &$Done$instance);
     PUSH_outgoing(self, m);
-//    ENQ_timed(m);
     return m;
 }
 
@@ -763,7 +773,8 @@ void FLUSH_outgoing($Actor self, uuid_t *txnid) {
             }
             dest = to->$globkey;
         } else {
-            ENQ_timed(m);
+            if (ENQ_timed(m))
+                reset_timeout();
             dest = 0;
         }
         if (db) {
@@ -775,6 +786,39 @@ void FLUSH_outgoing($Actor self, uuid_t *txnid) {
             }
         }
         m = next;
+    }
+}
+
+time_t next_timeout() {
+    return timerQ ? timerQ->$baseline : 0;
+}
+
+void handle_timeout() {
+    time_t now = current_time();
+    $Msg m = DEQ_timed(now);
+    if (m) {
+        if (ENQ_msg(m, m->$to)) {
+            ENQ_ready(m->$to);
+            new_work();
+        }
+        if (db) {
+            uuid_t *txnid = remote_new_txn(db);
+            timer_consume_hd++;
+
+            long key = TIMER_QUEUE;
+            snode_t *m_start, *m_end;
+            int entries_read = 0;
+            int64_t read_head = -1;
+            int ret0 = remote_read_queue_in_txn(($WORD)key, 0, 0, MSG_QUEUE, ($WORD)key, 1, &entries_read, &read_head, &m_start, &m_end, NULL, db);
+            rtsd_printf(LOGPFX "   # dummy read msg from TIMER_QUEUE returns %d, entries read: %d\n", ret0, entries_read);
+
+            int ret = remote_consume_queue_in_txn(($WORD)key, 0, 0, MSG_QUEUE, ($WORD)key, read_head, txnid, db);
+            rtsd_printf(LOGPFX "   # consume msg %ld from TIMER_QUEUE returns %d\n", m->$globkey, ret);
+            int ret2 = remote_enqueue_in_txn(($WORD*)&m->$globkey, 1, NULL, 0, MSG_QUEUE, (WORD)m->$to->$globkey, txnid, db);
+            rtsd_printf(LOGPFX "   # (timed) enqueue msg %ld to queue %ld returns %d\n", m->$globkey, m->$to->$globkey, ret2);
+            remote_commit_txn(txnid, db);
+            rtsd_printf(LOGPFX "############## Commit\n\n");
+        }
     }
 }
 
@@ -970,8 +1014,7 @@ void deserialize_system(snode_t *actors_start) {
     }
 
     rtsd_printf(LOGPFX "\n#### Reading timer queue contents:\n");
-    struct timespec now;
-    clock_gettime(CLOCK_MONOTONIC, &now);
+    time_t now = current_time();
     queue_callback * qc = get_queue_callback(dummy_callback);
 	int64_t prev_read_head = -1, prev_consume_head = -1;
 	int ret = remote_subscribe_queue(TIMER_QUEUE, 0, 0, MSG_QUEUE, TIMER_QUEUE, qc, &prev_read_head, &prev_consume_head, db);
@@ -981,8 +1024,8 @@ void deserialize_system(snode_t *actors_start) {
         if (!msg_key)
             break;
         $Msg m = $dict_get(globdict, ($Hashable)$Hashable$int$witness, to$int(msg_key), NULL);
-        if (m->$baseline < now.tv_sec)
-            m->$baseline = now.tv_sec;
+        if (m->$baseline < now)
+            m->$baseline = now;
         rtsd_printf(LOGPFX "# Adding Msg %ld to the timerQ\n", m->$globkey);
         ENQ_timed(m);
     }
@@ -1154,38 +1197,9 @@ void *main_loop(void *arg) {
                 }
             }
         } else {
-            struct timespec now;
-            clock_gettime(CLOCK_MONOTONIC, &now);
-            $Msg m = DEQ_timed(now.tv_sec);
-            if (m) {
-                if (ENQ_msg(m, m->$to)) {
-                    ENQ_ready(m->$to);
-                }
-                if (db) {
-                    uuid_t *txnid = remote_new_txn(db);
-                    timer_consume_hd++;
-
-                    long key = TIMER_QUEUE;
-                    snode_t *m_start, *m_end;
-                    int entries_read = 0;
-                    int64_t read_head = -1;
-                    int ret0 = remote_read_queue_in_txn(($WORD)key, 0, 0, MSG_QUEUE, ($WORD)key, 1, &entries_read, &read_head, &m_start, &m_end, NULL, db);
-                    rtsd_printf(LOGPFX "   # dummy read msg from TIMER_QUEUE returns %d, entries read: %d\n", ret0, entries_read);
-
-                    int ret = remote_consume_queue_in_txn(($WORD)key, 0, 0, MSG_QUEUE, ($WORD)key, read_head, txnid, db);
-                    rtsd_printf(LOGPFX "   # consume msg %ld from TIMER_QUEUE returns %d\n", m->$globkey, ret);
-                    int ret2 = remote_enqueue_in_txn(($WORD*)&m->$globkey, 1, NULL, 0, MSG_QUEUE, (WORD)m->$to->$globkey, txnid, db);
-                    rtsd_printf(LOGPFX "   # (timed) enqueue msg %ld to queue %ld returns %d\n", m->$globkey, m->$to->$globkey, ret2);
-                    remote_commit_txn(txnid, db);
-                    rtsd_printf(LOGPFX "############## Commit\n\n");
-                }
-            } else {
-                pthread_mutex_lock(&sleep_lock);
-                pthread_cond_wait(&work_to_do, &sleep_lock);
-                pthread_mutex_unlock(&sleep_lock);
-                // static struct timespec idle_wait = { 0, 50000000 };  // 500ms
-                // nanosleep(&idle_wait, NULL);
-            }
+            pthread_mutex_lock(&sleep_lock);
+            pthread_cond_wait(&work_to_do, &sleep_lock);
+            pthread_mutex_unlock(&sleep_lock);
         }
     }
 }
@@ -1346,6 +1360,12 @@ int main(int argc, char **argv) {
     } else {
         BOOTSTRAP(new_argc, new_argv);
     }
+
+    struct sigaction act;
+    act.sa_handler = SIG_IGN;
+    act.sa_flags = 0;
+    sigemptyset(&act.sa_mask);
+    sigaction(SIGUSR1, &act, NULL);     // Don't terminate on SIGUSR1, used as eventloop wakeup signal
 
     pthread_key_create(&self_key, NULL);
     // start worker threads, one per CPU

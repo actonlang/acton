@@ -168,6 +168,14 @@ void init_db_queue(long);
 void $PUSH($Cont);
 void $POP();
 
+extern $Msg timerQ;
+
+void reset_timeout();
+time_t current_time();
+
+time_t next_timeout();
+void handle_timeout();
+
 //typedef $int $Env;
 
 void $Actor$serialize($Actor, $Serial$state);

@@ -11,6 +11,7 @@
 #include <arpa/inet.h>
 #include <netdb.h>
 #include <pthread.h>
+#include <signal.h>
 
 #include "builtin.h"
 #include "../rts/rts.h"

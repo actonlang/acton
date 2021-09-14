@@ -1019,22 +1019,42 @@ void minienv$$__init__ () {
     }
 }
 
+#define TIMER_ID    9999
 
 void *$eventloop(void *arg) {
     while(1) {
-        struct kevent timer;
         pthread_setspecific(self_key, NULL);
-        EV_SET(&timer, 9999, EVFILT_TIMER, EV_ADD | EV_ONESHOT, 0, 500, 0);
-        kevent(kq,&timer,1,0,0,0);
+        time_t next_time = next_timeout();
+        if (next_time) {
+            struct kevent timer;
+            time_t now = current_time();
+//            next_time -= (1000000*now.tv_sec + now.tv_usec);
+            next_time -= now;
+            EV_SET(&timer, TIMER_ID, EVFILT_TIMER, EV_ADD | EV_ONESHOT, NOTE_USECONDS, next_time, 0);
+            kevent(kq, &timer,1,0,0,0);
+        }
+        struct kevent sigev;
+        EV_SET(&sigev, SIGUSR1, EVFILT_SIGNAL, EV_ADD, 0, 0, 0);
         struct kevent kev;
         struct sockaddr_in addr;
         socklen_t socklen = sizeof(addr);
         int fd2;
         int count;
-        int nready = kevent(kq,NULL,0,&kev,1,NULL);
+
+        // Blocking call
+        int nready = kevent(kq, &sigev, 1, &kev, 1, NULL);
+
         if (nready<0) {
             printf("kevent error: %s. kev.ident=%lu, kq is %d\n",strerror(errno),kev.ident,kq);
             exit(-1);
+        }
+        if (kev.filter == EVFILT_TIMER & kev.ident == TIMER_ID) {
+            handle_timeout();
+            continue;
+        }
+        if (kev.filter == EVFILT_SIGNAL & kev.ident == SIGUSR1) {
+            // Just reset timer at the start of next turn
+            continue;
         }
         int fd = kev.ident;
         if (kev.flags & EV_EOF) {
@@ -1052,8 +1072,6 @@ void *$eventloop(void *arg) {
             fprintf(stderr, "EV_ERROR: %s\n", strerror(kev.data));
             exit(-1);
         }
-        if (fd==9999)
-            break;
         switch (fd_data[fd].kind) {
             case connecthandler:
                 if (kev.filter==EVFILT_READ) { // we are a listener and someone tries to connect
