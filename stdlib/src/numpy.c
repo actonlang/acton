@@ -14,10 +14,9 @@
 
 #include "numpy.h"
 
-#include "ndselect.c"
-#include "primitive.c"
-#include "ndarray.c"
-#include "protocol_impls.c"
-#include "init.c"
-#include "quickselect.c"
-
+#include "../c_src/numpy/ndselect.c"
+#include "../c_src/numpy/primitive.c"
+#include "../c_src/numpy/ndarray.c"
+#include "../c_src/numpy/protocol_impls.c"
+#include "../c_src/numpy/init.c"
+#include "../c_src/numpy/quickselect.c"

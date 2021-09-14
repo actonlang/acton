@@ -35,6 +35,7 @@ dependencies:
 - megaparsec >= 9
 - hashable
 - process
+- temporary
 
 executables:
   actonc:

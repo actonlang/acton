@@ -40,8 +40,8 @@ import Prelude hiding ((<>))
 
 
 
-mkEnv                       :: FilePath -> Env0 -> Module -> IO Env0
-mkEnv prefix env m          = getImps prefix env (imps m)
+mkEnv                       :: FilePath -> FilePath -> Env0 -> Module -> IO Env0
+mkEnv sys proj env m        = getImps sys proj env (imps m)
 
 
 type TEnv                   = [(Name, NameInfo)]
@@ -958,45 +958,50 @@ lubfold env (t:ts)                      = foldM (lub env) t ts
 
 -- Import handling (local definitions only) ----------------------------------------------
 
-getImps                         :: FilePath -> EnvF x -> [Import] -> IO (EnvF x)
-getImps prefix env []           = return env
-getImps prefix env (i:is)       = do env' <- impModule prefix env i
-                                     getImps prefix env' is
+getImps                         :: FilePath -> FilePath -> EnvF x -> [Import] -> IO (EnvF x)
+getImps sys proj env []         = return env
+getImps sys proj env (i:is)     = do env' <- impModule sys proj env i
+                                     getImps sys proj env' is
 
 
-impModule                       :: FilePath -> EnvF x -> Import -> IO (EnvF x)
-impModule prefix env (Import _ ms)
+impModule                       :: FilePath -> FilePath -> EnvF x -> Import -> IO (EnvF x)
+impModule sys proj env (Import _ ms)
                                 = imp env ms
   where imp env []              = return env
         imp env (ModuleItem m as : is)
-                                = do (env1,te) <- doImp prefix env m
+                                = do (env1,te) <- doImp sys proj env m
                                      let ModName (m0:_) = m
                                          env2 = maybe (define [(m0, NMAlias $ ModName [m0])] env1) (\n->define [(n, NMAlias m)] env1) as
                                      imp (importWits m te env2) is
-impModule prefix env (FromImport _ (ModRef (0,Just m)) items)
-                                = do (env1,te) <- doImp prefix env m
+impModule sys proj env (FromImport _ (ModRef (0,Just m)) items)
+                                = do (env1,te) <- doImp sys proj env m
                                      return $ importSome items m te $ importWits m te $ env1
-impModule prefix env (FromImportAll _ (ModRef (0,Just m)))
-                                = do (env1,te) <- doImp prefix env m
+impModule sys proj env (FromImportAll _ (ModRef (0,Just m)))
+                                = do (env1,te) <- doImp sys proj env m
                                      return $ importAll m te $ importWits m te $ env1
-impModule _ _ i                 = illegalImport (loc i)
+impModule _ _ _ i               = illegalImport (loc i)
 
 
 moduleRefs te                   = nub $ [ m | (_,NMAlias m) <- te ] ++ [ m | (_,NAlias (GName m _)) <- te ]
 
-subImp prefix env []            = return env
-subImp prefix env (m:ms)        = do (env',_) <- doImp prefix env m
-                                     subImp prefix env' ms
+subImp sys proj env []          = return env
+subImp sys proj env (m:ms)      = do (env',_) <- doImp sys proj env m
+                                     subImp sys proj env' ms
 
-doImp prefix env m              = case lookupMod m env of
+doImp sys proj env m            = case lookupMod m env of
                                     Just te -> return (env, te)
                                     Nothing -> do
-                                        found <- doesFileExist fpath
-                                        unless found (fileNotFound m)
-                                        te <- InterfaceFiles.readFile fpath
-                                        env' <- subImp prefix env (moduleRefs te)
+                                        found <- doesFileExist fpath1
+                                        --traceM ("## Does " ++ fpath1 ++ " exist? " ++ show found)
+                                        te <- if found then InterfaceFiles.readFile fpath1 else do
+                                                found <- doesFileExist fpath2
+                                                --traceM ("## Does " ++ fpath2 ++ " exist? " ++ show found)
+                                                unless found (fileNotFound m)
+                                                InterfaceFiles.readFile fpath2
+                                        env' <- subImp sys proj env (moduleRefs te)
                                         return (addMod m te env', te)
-  where fpath                   = joinPath (prefix : modPath m) ++ ".ty"
+  where fpath1                  = joinPath (proj : modPath m) ++ ".ty"
+        fpath2                  = joinPath (sys : modPath m) ++ ".ty"
 
 
 importSome                  :: [ImportItem] -> ModName -> TEnv -> EnvF x -> EnvF x
