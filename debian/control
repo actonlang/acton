@@ -1,0 +1,30 @@
+Source: acton
+Section: devel
+Priority: optional
+Maintainer: Kristian Larsson <kristian@spritelink.net>
+Build-Depends:
+ alex,
+ debhelper-compat (= 13),
+ gcc,
+ happy,
+ haskell-stack,
+ libbsd-dev,
+ libkqueue-dev,
+ libprotobuf-c-dev,
+ libutf8proc-dev,
+ make
+Standards-Version: 4.6.0
+Homepage: http://www.acton-lang.org
+Rules-Requires-Root: no
+
+Package: acton
+Architecture: any
+Depends:
+ ${shlibs:Depends},
+ ${misc:Depends},
+ gcc,
+ libkqueue-dev,
+ libprotobuf-c-dev,
+ libutf8proc-dev
+Description: Acton Programming Language
+ An awesome programming language.

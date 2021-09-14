@@ -14,8 +14,10 @@ CFLAGS += -Werror -Wno-int-to-pointer-cast -Wno-pointer-to-int-cast
 endif
 
 
+.PHONY: all
 all: version-check distribution
 
+.PHONY: help
 help:
 	@echo "Available make targets"
 	@echo "  all     - build everything"
@@ -27,16 +29,16 @@ help:
 	@echo "  test    - run the test suite"
 
 
+.PHONY: version-check
 version-check:
 ifneq ($(VERSION), $(CHANGELOG_VERSION))
 	$(error Version in common.mk ($(VERSION)) differs from last version in CHANGELOG.md ($(CHANGELOG_VERSION)))
 endif
-.PHONY: version-check
 
 
 # /backend ----------------------------------------------
-BACKEND_OFILES = backend/comm.o backend/db.o backend/queue.o backend/skiplist.o backend/txn_state.o backend/txns.o
 .PHONY: $(BACKEND_OFILES)
+BACKEND_OFILES = backend/comm.o backend/db.o backend/queue.o backend/skiplist.o backend/txn_state.o backend/txns.o
 # pass through for now.. should probably move the actual definitions from
 # backend/Makefile to here instead for proper dependency tracking
 $(BACKEND_OFILES):
@@ -167,23 +169,30 @@ compiler/actonc:
 	$(MAKE) -C compiler install
 	mkdir -p dist/bin
 
+.PHONY: backend
 backend:
 	$(MAKE) -C backend
 
+.PHONY: rts
 rts: $(ARCHIVES)
 
+.PHONY: test
 test:
 	$(MAKE) -C backend test
 	$(MAKE) -C test
 
+.PHONY: clean
 clean: clean-compiler clean-distribution clean-backend clean-rts
 
+.PHONY: clean-compiler
 clean-compiler:
 	$(MAKE) -C compiler clean
 
+.PHONY: clean-backend
 clean-backend:
 	$(MAKE) -C backend clean
 
+.PHONY: clean-rts
 clean-rts:
 	rm -f $(ARCHIVES) $(OFILES) $(STDLIB_HFILES) $(STDLIB_OFILES) $(STDLIB_TYFILES)
 
@@ -248,10 +257,24 @@ else
 TAR_TRANSFORM_OPT=-s ,^dist,acton,
 endif
 
+.PHONY: acton-$(ARCH)-$(VERSION_INFO).tar.bz2
 acton-$(ARCH)-$(VERSION_INFO).tar.bz2:
 	tar jcvf $@ $(TAR_TRANSFORM_OPT) --exclude .gitignore dist
 
+.PHONY: release
 release: distribution
 	$(MAKE) acton-$(ARCH)-$(VERSION_INFO).tar.bz2
 
-.PHONY: all backend compiler distribution rts clean clean-compiler clean-backend clean-rts test release acton-$(ARCH)-$(VERSION).tar.bz2
+.PHONY: install
+install:
+	mkdir -p $(DESTDIR)/usr/bin $(DESTDIR)/usr/lib/acton
+	cp -a dist/. $(DESTDIR)/usr/lib/acton/
+	cd $(DESTDIR)/usr/bin && ln -s ../lib/acton/bin/actonc
+	cd $(DESTDIR)/usr/bin && ln -s ../lib/acton/bin/actondb
+
+debian/changelog: debian/changelog.in CHANGELOG.md
+	cat $< | sed 's/VERSION/$(VERSION)/' > $@
+
+.PHONY: debs
+debs: debian/changelog
+	debuild -i -us -uc -b
