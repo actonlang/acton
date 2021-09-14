@@ -58,8 +58,8 @@ builtin/minienv.o: builtin/minienv.c builtin/minienv.h builtin/builtin.o
 
 # Building the builtin, rts and stdlib is a little tricky as we have to be
 # careful about order. First comes the __builtin__.act file,
-STDLIB_ACTFILES=$(wildcard stdlib/src/*.act)
-STDLIB_CFILES=$(wildcard stdlib/src/*.c)
+STDLIB_ACTFILES=$(wildcard stdlib/src/*.act stdlib/src/**/*.act)
+STDLIB_CFILES=$(wildcard stdlib/src/*.c stdlib/src/**/*.c)
 STDLIB_TYFILES=$(subst src,out/types,$(STDLIB_CFILES:.c=.ty))
 STDLIB_HFILES=$(subst src,out/types,$(STDLIB_CFILES:.c=.h))
 STDLIB_OFILES=$(subst src,out/release,$(STDLIB_CFILES:.c=.o))
@@ -88,7 +88,7 @@ stdlib/out/types/%.h: stdlib/src/%.h
 
 stdlib/out/release/%.o: stdlib/src/%.c
 	@mkdir -p $(dir $@)
-	cc $(CFLAGS) -I. -Istdlib/out/ -c $< -o$(subst $,\$,$@)
+	cc $(CFLAGS) -I. -Istdlib/ -Istdlib/out/ -c $< -o$(subst $,\$,$@)
 
 NUMPY_HFILES=$(wildcard stdlib/c_src/numpy/*.h)
 NUMPY_CFILES=$(wildcard stdlib/c_src/numpy/*.h)
