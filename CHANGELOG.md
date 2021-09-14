@@ -7,6 +7,38 @@ There are currently known regressions:
 - using RTS together with the distributed backend database is not working
 
 ### Added
+- **Acton project** concept [#140](https://github.com/actonlang/acton/pull/140)
+  - An Acton project is a standardized structure for how to organize an Acton
+    project:
+    - At the root is an `Acton.toml` file. It is currently empty but its
+      location denotes the project root.
+    - `src/` is the directory in which source files are stored, imports are
+      relative to this directory, i.e. `import foo` will import `src/foo.act`
+      - imports will also search the system path as before for the stdlib modules
+    - `out/` is the output directory in which generated type file (`.ty`) and
+      object / library files are written as well as binaries
+      - `out/bin` is where executables end up (`actonc --root foo bar.act` will
+        produce an executable)
+      - `out/types` is where types files go
+      - `out/lib` is where object / library files go
+  - We used to write compiled output of modules to the system path. To install
+    acton on a system, outside of a users home directory, we can no longer write
+    to the system path since it is owned by root. Further, we don't want to
+    write to a common system path as different users code could collide.
+  - Now only the builtins and stdlib modules are in the system path. Other
+    compiled output, like type files and object files, are written to the
+    project directory.
+  - It is still possible to compile individual `.act` files as executabes
+    (`--root ROOT`), in which case `actonc` will create a temporary directory
+    for intermediate output and write the final file in the same directory as
+    the `.act` file. This is to preserve the current behavior when "using acton
+    as a scripting language".
+  - Overall, the idea is to cater to both:
+    - Acton as a scripting language
+      - Often a single source file - minimal "project overhead" wanted
+    - Acton for large projects
+      - Many modules, perhaps producing multiple executables
+      - Good project structure necessary to manage it all
 - There is now an RTS debug mode
   [#189](https://github.com/actonlang/acton/pull/189)
   - With `actonc --rts-debug`, an Acton program can be compiled with debug
