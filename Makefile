@@ -156,6 +156,9 @@ rts/pingpong: rts/pingpong.c rts/pingpong.h rts/rts.o
 
 
 # top level targets
+# NOTE: we don't do proper dependency declaration for actonc and let stack
+# handle it, thus this target is declared a PHONY so stack can always run
+.PHONY: compiler/actonc
 compiler/actonc:
 	$(MAKE) -C compiler install
 	mkdir -p dist/bin
