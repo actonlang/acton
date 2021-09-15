@@ -793,6 +793,7 @@ void handle_timeout() {
     time_t now = current_time();
     $Msg m = DEQ_timed(now);
     if (m) {
+        printf("## Dequeued timerQ msg with baseline %ld (now: %ld)\n", m->$baseline, now);
         if (ENQ_msg(m, m->$to)) {
             ENQ_ready(m->$to);
             new_work();
@@ -815,6 +816,12 @@ void handle_timeout() {
             remote_commit_txn(txnid, db);
             rtsd_printf(LOGPFX "############## Commit\n\n");
         }
+    } else {
+        m = timerQ;
+        if (m)
+            printf("## First timerQ event not yet expired: %ld (now: %ld)\n", m->$baseline, now);
+        else
+            printf("## TimerQ is empty (now: %ld)\n", now);
     }
 }
 
