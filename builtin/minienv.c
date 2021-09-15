@@ -1065,6 +1065,8 @@ void *$eventloop(void *arg) {
         }
         if (kev.filter == EVFILT_TIMER & kev.ident == TIMER_ID) {
             printf("## TIMER event\n");
+            if (EV_ERROR & kev.flags)
+                printf("######## EV_ERROR %s\n", strerror(errno));
             handle_timeout();
             continue;
         }
