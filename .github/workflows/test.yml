@@ -54,7 +54,7 @@ jobs:
             ~/.stack
           key: ${{ runner.os }}
       - name: Install build prerequisites
-        run: sudo apt-get install -qy alex gcc happy haskell-stack libbsd-dev libkqueue-dev libprotobuf-c-dev libutf8proc-dev make
+        run: sudo apt-get install -qy alex gcc happy haskell-stack libbsd-dev libkqueue-dev libprotobuf-c-dev libutf8proc-dev make uuid-dev zlib1g-dev
       - name: Install GHC && build dependencies
         run: cd ${{ github.workspace }}/compiler && make package.yaml && stack build --only-dependencies
       - name: Build actonc
