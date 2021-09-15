@@ -1039,43 +1039,46 @@ void reset_timeout() {
 }
 
 void *$eventloop(void *arg) {
+    pthread_setspecific(self_key, NULL);
     while(1) {
-        pthread_setspecific(self_key, NULL);
-        time_t next_time = next_timeout();
-        if (next_time) {
-            struct kevent timer;
-            time_t now = current_time();
-            next_time = (next_time - now)/1000;
-            if (next_time < 1) next_time = 1; // XXX: hmmmmm, we've seen it at 0, should never be negative, but 0 breaks the program
-            printf("## Current time is %ld, setting timer offset %ld\n", now, next_time);
-            EV_SET(&timer, TIMER_ID, EVFILT_TIMER, EV_ADD | EV_ONESHOT, 0, next_time, 0);
-            kevent(kq, &timer, 1, NULL, 0, NULL);
-        }
         struct kevent kev;
         struct sockaddr_in addr;
         socklen_t socklen = sizeof(addr);
         int fd2;
         int count;
+        struct timespec tspec, *timeout;
+
+        time_t next_time = next_timeout();
+        if (next_time) {
+            time_t now = current_time();
+            time_t offset = next_time - now;
+            tspec.tv_sec = offset / 1000000;
+            tspec.tv_nsec = 1000 * (offset % 1000000);
+            printf("## Current time is setting timer offset %ld sec, %ld nsec\n", tspec.tv_sec, tspec.tv_nsec);
+            timeout = &tspec;
+        } else {
+            timeout = NULL;
+        }
 
         // Blocking call
-        int nready = kevent(kq, NULL, 0, &kev, 1, NULL);
+        int nready = kevent(kq, NULL, 0, &kev, 1, timeout);
 
         if (nready<0) {
             printf("kevent error: %s. kev.ident=%lu, kq is %d\n",strerror(errno),kev.ident,kq);
             exit(-1);
         }
-        if (kev.filter == EVFILT_TIMER & kev.ident == TIMER_ID) {
-            printf("## TIMER event\n");
-            if (EV_ADD & kev.flags)     printf("    ## EV_ADD\n");
-            if (EV_ENABLE & kev.flags)  printf("    ## EV_ENABLE\n");
-            if (EV_DISABLE & kev.flags) printf("    ## EV_DISABLE\n");
-            if (EV_DELETE & kev.flags)  printf("    ## EV_DELETE\n");
-            if (EV_RECEIPT & kev.flags) printf("    ## EV_RECEIPT\n");
-            if (EV_ONESHOT & kev.flags) printf("    ## EV_ONESHOT\n");
-            if (EV_CLEAR & kev.flags)   printf("    ## EV_CLEAR\n");
-            if (EV_EOF & kev.flags)     printf("    ## EV_EOF\n");
+        if (nready == 0) {      // (kev.filter == EVFILT_TIMER & kev.ident == TIMER_ID) {
+            printf("## TIMOUT event\n");
+//            if (EV_ADD & kev.flags)     printf("    ## EV_ADD\n");
+//            if (EV_ENABLE & kev.flags)  printf("    ## EV_ENABLE\n");
+//            if (EV_DISABLE & kev.flags) printf("    ## EV_DISABLE\n");
+//            if (EV_DELETE & kev.flags)  printf("    ## EV_DELETE\n");
+//            if (EV_RECEIPT & kev.flags) printf("    ## EV_RECEIPT\n");
+//            if (EV_ONESHOT & kev.flags) printf("    ## EV_ONESHOT\n");
+//            if (EV_CLEAR & kev.flags)   printf("    ## EV_CLEAR\n");
+//            if (EV_EOF & kev.flags)     printf("    ## EV_EOF\n");
 //            if (EV_OOBAND & kev.flags)  printf("    ## EV_OOBAND\n");
-            if (EV_ERROR & kev.flags)   printf("    ## EV_ERROR %s\n", strerror(kev.data));
+//            if (EV_ERROR & kev.flags)   printf("    ## EV_ERROR %s\n", strerror(kev.data));
             handle_timeout();
             continue;
         }
