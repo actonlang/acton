@@ -1,0 +1,12 @@
+import json
+
+actor main(env):
+    def test():
+
+        a = '{ "foo": 1 }'
+        js = json.loads(a)
+        print(str(js["foo"]))
+
+    test()
+
+    await async env.exit(0)
