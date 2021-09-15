@@ -20,7 +20,6 @@
 
 #include <unistd.h>
 #include <pthread.h>
-#include <signal.h>
 #include <stdio.h>
 #include <stdarg.h>
 #include <uuid/uuid.h>
@@ -139,10 +138,6 @@ int64_t next_key = -10;
 $Lock next_key_lock;
 
 int64_t timer_consume_hd = 0;       // Lacks protection, although spinlocks wouldn't help concurrent increments. Must fix in db!
-
-void reset_timeout() {
-    kill(0, SIGUSR1);               // Wakes up the eventloop thread which then resets its timer offset
-}
 
 time_t current_time() {
     struct timeval now;
@@ -1312,7 +1307,6 @@ int main(int argc, char **argv) {
 
     long num_cores = sysconf(_SC_NPROCESSORS_ONLN);
     rtsd_printf(LOGPFX "%ld worker threads\n", num_cores);
-    kq = kqueue();
     $register_builtin();
     minienv$$__init__();
     $register_rts();
@@ -1360,12 +1354,6 @@ int main(int argc, char **argv) {
     } else {
         BOOTSTRAP(new_argc, new_argv);
     }
-
-    struct sigaction act;
-    act.sa_handler = SIG_IGN;
-    act.sa_flags = 0;
-    sigemptyset(&act.sa_mask);
-    sigaction(SIGUSR1, &act, NULL);     // Don't terminate on SIGUSR1, used as eventloop wakeup signal
 
     pthread_key_create(&self_key, NULL);
     // start worker threads, one per CPU

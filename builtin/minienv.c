@@ -16,6 +16,9 @@
 
 int kq;
 struct FileDescriptorData fd_data[MAX_FD];
+int wakeup_pipe[2];
+
+void init_globals();
 
 static void $init_FileDescriptorData(int fd) {
   fd_data[fd].kind = nohandler;
@@ -1017,9 +1020,22 @@ void minienv$$__init__ () {
         $WFile$methods.__deserialize__ = $WFile$__deserialize__;
         $register(&$WFile$methods);
     }
+    init_globals();
 }
 
 #define TIMER_ID    9999
+
+void init_globals() {
+    kq = kqueue();
+    pipe(wakeup_pipe);
+    struct kevent wakeup;
+    EV_SET(&wakeup, wakeup_pipe[0], EVFILT_READ, EV_ADD, 0, 0, NULL);
+    kevent(kq, &wakeup, 1, NULL, 0, NULL);
+}
+
+void reset_timeout() {
+    write(wakeup_pipe[1], "!", 1);      // Write dummy data that wakes up the eventloop thread
+}
 
 void *$eventloop(void *arg) {
     while(1) {
@@ -1028,13 +1044,10 @@ void *$eventloop(void *arg) {
         if (next_time) {
             struct kevent timer;
             time_t now = current_time();
-//            next_time -= (1000000*now.tv_sec + now.tv_usec);
             next_time -= now;
             EV_SET(&timer, TIMER_ID, EVFILT_TIMER, EV_ADD | EV_ONESHOT, NOTE_USECONDS, next_time, 0);
-            kevent(kq, &timer,1,0,0,0);
+            kevent(kq, &timer, 1, NULL, 0, NULL);
         }
-        struct kevent sigev;
-        EV_SET(&sigev, SIGUSR1, EVFILT_SIGNAL, EV_ADD, 0, 0, 0);
         struct kevent kev;
         struct sockaddr_in addr;
         socklen_t socklen = sizeof(addr);
@@ -1042,7 +1055,7 @@ void *$eventloop(void *arg) {
         int count;
 
         // Blocking call
-        int nready = kevent(kq, &sigev, 1, &kev, 1, NULL);
+        int nready = kevent(kq, NULL, 0, &kev, 1, NULL);
 
         if (nready<0) {
             printf("kevent error: %s. kev.ident=%lu, kq is %d\n",strerror(errno),kev.ident,kq);
@@ -1052,8 +1065,9 @@ void *$eventloop(void *arg) {
             handle_timeout();
             continue;
         }
-        if (kev.filter == EVFILT_SIGNAL & kev.ident == SIGUSR1) {
-            // Just reset timer at the start of next turn
+        if (kev.filter == EVFILT_READ & kev.ident == wakeup_pipe[0]) {
+            char dummy;
+            read(wakeup_pipe[0], &dummy, 1);      // Consume dummy data, reset timer at the start of next turn
             continue;
         }
         int fd = kev.ident;

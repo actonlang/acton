@@ -11,7 +11,6 @@
 #include <arpa/inet.h>
 #include <netdb.h>
 #include <pthread.h>
-#include <signal.h>
 
 #include "builtin.h"
 #include "../rts/rts.h"
@@ -74,6 +73,8 @@ struct FileDescriptorData {
 
 extern struct FileDescriptorData fd_data[MAX_FD];
 extern int kq;
+
+void reset_timeout();
 
 void setupConnection (int fd);
 $str $getName(int fd);

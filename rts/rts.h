@@ -170,9 +170,7 @@ void $POP();
 
 extern $Msg timerQ;
 
-void reset_timeout();
 time_t current_time();
-
 time_t next_timeout();
 void handle_timeout();
 
