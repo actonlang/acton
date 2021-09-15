@@ -12,7 +12,6 @@ jobs:
   test-darwin:
     runs-on: macos-latest
     steps:
-      - run: echo "🎉 The job was automatically triggered by a ${{ github.event_name }} event."
       - run: echo "🐧 This job is now running on a ${{ runner.os }} server hosted by GitHub!"
       - run: echo "🔎 The name of your branch is ${{ github.ref }} and your repository is ${{ github.repository }}."
       - name: Check out repository code
@@ -26,9 +25,7 @@ jobs:
           key: ${{ runner.os }}
       - name: Install build prerequisites
         run: brew install argp-standalone haskell-stack protobuf-c util-linux
-      - name: Install GHC && build dependencies
-        run: cd ${{ github.workspace }}/compiler && make package.yaml && stack build --only-dependencies
-      - name: Build actonc
+      - name: Build Acton
         run: make -C ${{ github.workspace }}
       - name: Build a release
         run: make -C ${{ github.workspace }} release
@@ -45,7 +42,6 @@ jobs:
     container:
       image: debian:sid
     steps:
-      - run: echo "🎉 The job was automatically triggered by a ${{ github.event_name }} event."
       - run: echo "🐧 This job is now running on a ${{ runner.os }} server hosted by GitHub!"
       - run: echo "🔎 The name of your branch is ${{ github.ref }} and your repository is ${{ github.repository }}."
       - name: Check out repository code
@@ -62,9 +58,7 @@ jobs:
         run: apt-get install -qy alex bzip2 gcc happy haskell-stack libbsd-dev libkqueue-dev libprotobuf-c-dev libutf8proc-dev make uuid-dev zlib1g-dev
       - name: chown our home dir to avoid stack complaining
         run: chown -R root:root /github/home
-      - name: Install GHC && build dependencies
-        run: cd ${GITHUB_WORKSPACE}/compiler && make package.yaml && stack build --only-dependencies
-      - name: Build actonc
+      - name: Build Acton
         run: make -C ${GITHUB_WORKSPACE}
       - name: Build a release
         run: make -C ${GITHUB_WORKSPACE} release
