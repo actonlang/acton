@@ -1065,8 +1065,16 @@ void *$eventloop(void *arg) {
         }
         if (kev.filter == EVFILT_TIMER & kev.ident == TIMER_ID) {
             printf("## TIMER event\n");
-            if (EV_ERROR & kev.flags)
-                printf("######## EV_ERROR %s\n", strerror(kev.data));
+            if (EV_ADD & kev.flags)     printf("    ## EV_ADD\n");
+            if (EV_ENABLE & kev.flags)  printf("    ## EV_ENABLE\n");
+            if (EV_DISABLE & kev.flags) printf("    ## EV_DISABLE\n");
+            if (EV_DELETE & kev.flags)  printf("    ## EV_DELETE\n");
+            if (EV_RECEIPT & kev.flags) printf("    ## EV_RECEIPT\n");
+            if (EV_ONESHOT & kev.flags) printf("    ## EV_ONESHOT\n");
+            if (EV_CLEAR & kev.flags)   printf("    ## EV_CLEAR\n");
+            if (EV_EOF & kev.flags)     printf("    ## EV_EOF\n");
+            if (EV_OOBAND & kev.flags)  printf("    ## EV_OOBAND\n");
+            if (EV_ERROR & kev.flags)   printf("    ## EV_ERROR %s\n", strerror(kev.data));
             handle_timeout();
             continue;
         }
