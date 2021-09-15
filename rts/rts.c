@@ -768,6 +768,7 @@ void FLUSH_outgoing($Actor self, uuid_t *txnid) {
             }
             dest = to->$globkey;
         } else {
+            printf("## Enqueueing new timed message at baseline %ld\n", m->$baseline);
             if (ENQ_timed(m))
                 reset_timeout();
             dest = 0;

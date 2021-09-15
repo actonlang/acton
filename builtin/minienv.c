@@ -1034,6 +1034,7 @@ void init_globals() {
 }
 
 void reset_timeout() {
+    printf("## Waking up the eventloop\n");
     write(wakeup_pipe[1], "!", 1);      // Write dummy data that wakes up the eventloop thread
 }
 
@@ -1045,6 +1046,7 @@ void *$eventloop(void *arg) {
             struct kevent timer;
             time_t now = current_time();
             next_time -= now;
+            printf("## Current time is %ld, setting timer offset %ld\n", now, next_time);
             EV_SET(&timer, TIMER_ID, EVFILT_TIMER, EV_ADD | EV_ONESHOT, NOTE_USECONDS, next_time, 0);
             kevent(kq, &timer, 1, NULL, 0, NULL);
         }
@@ -1062,10 +1064,12 @@ void *$eventloop(void *arg) {
             exit(-1);
         }
         if (kev.filter == EVFILT_TIMER & kev.ident == TIMER_ID) {
+            printf("## TIMER event\n");
             handle_timeout();
             continue;
         }
         if (kev.filter == EVFILT_READ & kev.ident == wakeup_pipe[0]) {
+            printf("## WAKEUP event\n");
             char dummy;
             read(wakeup_pipe[0], &dummy, 1);      // Consume dummy data, reset timer at the start of next turn
             continue;
