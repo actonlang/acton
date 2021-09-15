@@ -42,6 +42,8 @@ jobs:
 
   test-linux:
     runs-on: ubuntu-latest
+    container:
+      image: debian:sid
     steps:
       - run: echo "🎉 The job was automatically triggered by a ${{ github.event_name }} event."
       - run: echo "🐧 This job is now running on a ${{ runner.os }} server hosted by GitHub!"
@@ -55,21 +57,24 @@ jobs:
           path: |
             ~/.stack
           key: ${{ runner.os }}
+      - run: apt-get update
       - name: Install build prerequisites
-        run: sudo apt-get install -qy alex gcc happy haskell-stack libbsd-dev libkqueue-dev libprotobuf-c-dev libutf8proc-dev make uuid-dev zlib1g-dev
+        run: apt-get install -qy alex bzip2 gcc happy haskell-stack libbsd-dev libkqueue-dev libprotobuf-c-dev libutf8proc-dev make uuid-dev zlib1g-dev
+      - name: chown our home dir to avoid stack complaining
+        run: chown -R root:root /github/home
       - name: Install GHC && build dependencies
-        run: cd ${{ github.workspace }}/compiler && make package.yaml && stack build --only-dependencies
+        run: cd ${GITHUB_WORKSPACE}/compiler && make package.yaml && stack build --only-dependencies
       - name: Build actonc
-        run: make -C ${{ github.workspace }}
+        run: make -C ${GITHUB_WORKSPACE}
       - name: Build a release
-        run: make -C ${{ github.workspace }} release
+        run: make -C ${GITHUB_WORKSPACE} release
       - name: Upload artifact
         uses: actions/upload-artifact@v2
         with:
           name: acton-linux
           path: ${{ github.workspace }}/acton-linux-x86_64*
       - name: Run tests
-        run: make -C ${{ github.workspace }} test
+        run: make -C ${GITHUB_WORKSPACE} test
 
   release:
     runs-on: ubuntu-latest
