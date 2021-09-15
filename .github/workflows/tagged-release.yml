@@ -10,7 +10,10 @@ env:
 
 jobs:
   test-darwin:
-    runs-on: macos-latest
+    strategy:
+      matrix:
+        os: [macos-10.15, macos-11]
+    runs-on: ${{ matrix.os }}
     steps:
       - run: echo "🐧 This job is now running on a ${{ runner.os }} server hosted by GitHub!"
       - run: echo "🔎 The name of your branch is ${{ github.ref }} and your repository is ${{ github.repository }}."
@@ -22,7 +25,7 @@ jobs:
         with:
           path: |
             ~/.stack
-          key: ${{ runner.os }}
+          key: ${{ matrix.os }}
       - name: Install build prerequisites
         run: brew install argp-standalone haskell-stack protobuf-c util-linux
       - name: Build Acton
@@ -32,10 +35,12 @@ jobs:
       - name: Upload artifact
         uses: actions/upload-artifact@v2
         with:
-          name: acton-darwin
+          name: acton-${{ matrix.os }}
           path: ${{ github.workspace }}/acton-darwin-x86_64*
+          if-no-files-found: error
       - name: Run tests
         run: make -C ${{ github.workspace }} test
+
 
   test-linux:
     runs-on: ubuntu-latest
@@ -67,6 +72,7 @@ jobs:
         with:
           name: acton-linux
           path: ${{ github.workspace }}/acton-linux-x86_64*
+          if-no-files-found: error
       - name: Run tests
         run: make -C ${GITHUB_WORKSPACE} test
 
