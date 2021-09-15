@@ -162,7 +162,6 @@ rts/pingpong: rts/pingpong.c rts/pingpong.h rts/rts.o
 compiler/actonc:
 	$(MAKE) -C compiler install
 	mkdir -p dist/bin
-	cp compiler/actonc dist/bin/actonc
 
 backend:
 	$(MAKE) -C backend
@@ -187,7 +186,7 @@ clean-rts:
 # == DIST ==
 #
 
-dist/actonc: compiler/actonc
+$(ACTONC): compiler/actonc
 	@mkdir -p $(dir $@)
 	cp $< $@
 
@@ -196,7 +195,7 @@ dist/actonc: compiler/actonc
 # file and modify it, which the Linux kernel (and perhaps others?) will prevent
 # if the file to be modified is an executable program that is currently running.
 # We work around it by moving / renaming the file in place instead!
-dist/actondb: backend/server $(ACTONC)
+dist/bin/actondb: backend/server
 	@mkdir -p $(dir $@)
 	cp $< backend/actondb
 	mv $< $@
@@ -221,8 +220,8 @@ dist/lib/libActon.a: lib/libActon.a
 	@mkdir -p $(dir $@)
 	cp $< $@
 
-DIST_ACTONC=dist/actonc
-DIST_ACTONDB=dist/actondb
+DIST_ACTONC=$(ACTONC)
+DIST_ACTONDB=dist/bin/actondb
 DIST_BUILTIN=$(addprefix dist/,$(BUILTIN_HFILES)) dist/builtin/minienv.h dist/builtin/builtin.o
 DIST_RTS=dist/rts/empty.o dist/rts/rts.h dist/rts/rts.o
 DIST_HFILES=$(subst stdlib/out/types,dist/types,$(STDLIB_HFILES))
