@@ -74,11 +74,11 @@ dist/types/__builtin__.ty: stdlib/out/types/__builtin__.ty
 	@mkdir -p $(dir $@)
 	cp $< $@
 
-stdlib/out/types/__builtin__.ty: stdlib/src/__builtin__.act
+stdlib/out/types/__builtin__.ty: stdlib/src/__builtin__.act $(ACTONC)
 	@mkdir -p $(dir $@)
 	$(ACTONC) $< --stub
 
-stdlib/out/types/%.ty: stdlib/src/%.act dist/types/__builtin__.ty
+stdlib/out/types/%.ty: stdlib/src/%.act dist/types/__builtin__.ty $(ACTONC)
 	@mkdir -p $(dir $@)
 	$(ACTONC) $< --stub
 
