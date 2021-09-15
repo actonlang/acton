@@ -1046,8 +1046,9 @@ void *$eventloop(void *arg) {
             struct kevent timer;
             time_t now = current_time();
             next_time -= now;
+            if (next_time < 1) next_time = 1; // XXX: hmmmmm, we've seen it at 0, should never be negative, but 0 breaks the program
             printf("## Current time is %ld, setting timer offset %ld\n", now, next_time);
-            EV_SET(&timer, TIMER_ID, EVFILT_TIMER, EV_ADD | EV_ONESHOT, NOTE_USECONDS, next_time, 0);
+            EV_SET(&timer, TIMER_ID, EVFILT_TIMER, EV_ADD | EV_ONESHOT, NOTE_NSECONDS, next_time*1000, 0);
             kevent(kq, &timer, 1, NULL, 0, NULL);
         }
         struct kevent kev;
