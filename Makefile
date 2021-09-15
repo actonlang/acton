@@ -220,19 +220,19 @@ dist/lib/libActon.a: lib/libActon.a
 	@mkdir -p $(dir $@)
 	cp $< $@
 
-DIST_ACTONC=$(ACTONC)
-DIST_ACTONDB=dist/bin/actondb
-DIST_BUILTIN=$(addprefix dist/,$(BUILTIN_HFILES)) dist/builtin/minienv.h dist/builtin/builtin.o
-DIST_RTS=dist/rts/empty.o dist/rts/rts.h dist/rts/rts.o
-DIST_HFILES=$(subst stdlib/out/types,dist/types,$(STDLIB_HFILES))
+DIST_BINS=$(ACTONC) dist/bin/actondb
+DIST_HFILES=dist/rts/rts.h \
+	dist/builtin/minienv.h \
+	$(addprefix dist/,$(BUILTIN_HFILES)) \
+	$(subst stdlib/out/types,dist/types,$(STDLIB_HFILES))
 DIST_TYFILES=$(subst stdlib/out/types,dist/types,$(STDLIB_TYFILES))
 DIST_LIBS=$(addprefix dist/,$(LIBS))
 
 .PHONY: distribution clean-distribution
-distribution: $(DIST_ACTONC) $(DIST_ACTONDB) $(DIST_BUILTIN) $(DIST_RTS) $(DIST_HFILES) $(DIST_TYFILES) $(DIST_LIBS)
+distribution: $(DIST_BINS) $(DIST_HFILES) $(DIST_TYFILES) $(DIST_LIBS)
 
 clean-distribution:
-	rm -f $(DIST_ACTONC) $(DIST_ACTONDB) $(DIST_BUILTIN) $(DIST_RTS) $(DIST_HFILES) $(DIST_TYFILES) $(DIST_LIBS)
+	rm -f $(DIST_BINS) $(DIST_HFILES) $(DIST_TYFILES) $(DIST_LIBS)
 
 # == release ==
 # This is where we take our distribution and turn it into a release tar ball
