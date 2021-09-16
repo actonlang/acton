@@ -8,6 +8,12 @@
 #include <time.h>
 #include <pthread.h>
 
+#ifdef __gnu_linux__
+    #define IS_GNU_LINUX
+#elif  __APPLE__ && __MACH__
+    #define IS_MACOS
+#endif
+
 #include "../builtin/builtin.h"
 
 struct $Msg;
@@ -167,6 +173,12 @@ void init_db_queue(long);
 
 void $PUSH($Cont);
 void $POP();
+
+extern $Msg timerQ;
+
+time_t current_time();
+time_t next_timeout();
+void handle_timeout();
 
 //typedef $int $Env;
 

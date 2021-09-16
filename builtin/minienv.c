@@ -14,8 +14,128 @@
 
 #include "minienv.h"
 
-int kq;
 struct FileDescriptorData fd_data[MAX_FD];
+int wakeup_pipe[2];
+
+
+#ifdef IS_MACOS         // Use kqueue
+int kq;
+void EVENT_init() {
+    kq = kqueue();
+    struct kevent wakeup;
+    EV_SET(&wakeup, wakeup_pipe[0], EVFILT_READ, EV_ADD, 0, 0, NULL);
+    kevent(kq, &wakeup, 1, NULL, 0, NULL);
+}
+void EVENT_add_read(int fd) {
+    EV_SET(&fd_data[fd].event_spec, fd, EVFILT_READ, EV_ADD, 0, 0, NULL);
+    kevent(kq, &fd_data[fd].event_spec, 1, NULL, 0, NULL);
+}
+void EVENT_add_read_once(int fd) {
+    EV_SET(&fd_data[fd].event_spec, fd, EVFILT_READ, EV_ADD | EV_ONESHOT, 0, 0, NULL);
+    kevent(kq, &fd_data[fd].event_spec, 1, NULL, 0, NULL);
+}
+void EVENT_mod_read_once(int fd) {
+    EV_SET(&fd_data[fd].event_spec, fd, EVFILT_READ, EV_ADD | EV_ONESHOT, 0, 0, NULL);
+    kevent(kq, &fd_data[fd].event_spec, 1, NULL, 0, NULL);
+}
+void EVENT_add_write_once(int fd) {
+    EV_SET(&fd_data[fd].event_spec, fd, EVFILT_WRITE, EV_ADD | EV_ONESHOT, 0, 0, NULL);
+    kevent(kq, &fd_data[fd].event_spec, 1, NULL, 0, NULL);
+}
+void EVENT_del_read(int fd) {
+    EV_SET(&fd_data[fd].event_spec, fd, EVFILT_READ, EV_DISABLE, 0, 0, NULL);
+    kevent(kq, &fd_data[fd].event_spec, 1, NULL, 0, NULL);
+}
+int EVENT_wait(EVENT_type *ev, struct timespec *timeout) {
+    return kevent(kq, NULL, 0, ev, 1, timeout);
+}
+int EVENT_fd(EVENT_type *ev) {
+    return ev->ident;
+}
+int EVENT_is_wakeup(EVENT_type *ev) {
+    return ev->filter == EVFILT_READ & ev->ident == wakeup_pipe[0];
+}
+int EVENT_is_eof(EVENT_type *ev) {
+    return ev->flags & EV_EOF;
+}
+int EVENT_is_error(EVENT_type *ev) {
+    return ev->flags & EV_ERROR;
+}
+int EVENT_errno(EVENT_type *ev) {
+    return ev->data;
+}
+int EVENT_is_read(EVENT_type *ev) {
+    return ev->filter==EVFILT_READ;
+}
+int EVENT_fd_is_read(int fd) {
+    return fd_data[fd].event_spec.filter == EVFILT_READ;
+}
+#endif
+
+#ifdef IS_GNU_LINUX             // Use epoll            
+int ep;
+void EVENT_init() {
+    ep = epoll_create(1);
+    struct epoll_event wakeup;
+    wakeup.events = EPOLLIN;
+    wakeup.data.fd = wakeup_pipe[0];
+    epoll_ctl(ep, EPOLL_CTL_ADD, wakeup_pipe[0], &wakeup);
+}
+void EVENT_add_read(int fd) {
+    fd_data[fd].event_spec.events = EPOLLIN;
+    fd_data[fd].event_spec.data.fd = fd;
+    epoll_ctl(ep, EPOLL_CTL_ADD, fd, &fd_data[fd].event_spec);
+}
+void EVENT_add_read_once(int fd) {
+    fd_data[fd].event_spec.events = EPOLLIN | EPOLLONESHOT;
+    fd_data[fd].event_spec.data.fd = fd;
+    epoll_ctl(ep, EPOLL_CTL_ADD, fd, &fd_data[fd].event_spec);
+}
+void EVENT_mod_read_once(int fd) {
+    fd_data[fd].event_spec.events = EPOLLIN | EPOLLONESHOT;
+    fd_data[fd].event_spec.data.fd = fd;
+    epoll_ctl(ep, EPOLL_CTL_MOD, fd, &fd_data[fd].event_spec);
+}
+void EVENT_add_write_once(int fd) {
+    fd_data[fd].event_spec.events = EPOLLOUT | EPOLLONESHOT;
+    fd_data[fd].event_spec.data.fd = fd;
+    epoll_ctl(ep, EPOLL_CTL_ADD, fd, &fd_data[fd].event_spec);
+}
+void EVENT_del_read(int fd) {
+    fd_data[fd].event_spec.events = EPOLLIN;
+    fd_data[fd].event_spec.data.fd = fd;
+    epoll_ctl(ep, EPOLL_CTL_DEL, fd, &fd_data[fd].event_spec);
+}
+int EVENT_wait(EVENT_type *ev, struct timespec *timeout) {
+    int msec = timeout ? timeout->tv_sec * 1000 + timeout->tv_nsec / 1000000 : -1;
+    return epoll_wait(ep, ev, 1, msec);
+//    return epoll_pwait2(ep, ev, 1, timeout, NULL);        // appears in linux kernel 5.11
+}
+int EVENT_fd(EVENT_type *ev) {
+    return ev->data.fd;
+}
+int EVENT_is_wakeup(EVENT_type *ev) {
+    return (ev->events & EPOLLIN) && ev->data.fd == wakeup_pipe[0];
+}
+int EVENT_is_eof(EVENT_type *ev) {
+    return ev->events & EPOLLHUP;
+}
+int EVENT_is_error(EVENT_type *ev) {
+    return ev->events & EPOLLERR;
+}
+int EVENT_errno(EVENT_type *ev) {
+    int error = 0;
+    socklen_t errlen = sizeof(error);
+    getsockopt(ev->data.fd, SOL_SOCKET, SO_ERROR, (void *)&error, &errlen);
+    return error;
+}
+int EVENT_is_read(EVENT_type *ev) {
+    return ev->events & EPOLLIN;
+}
+int EVENT_fd_is_read(int fd) {
+    return fd_data[fd].event_spec.events & EPOLLIN;
+}
+#endif
 
 static void $init_FileDescriptorData(int fd) {
   fd_data[fd].kind = nohandler;
@@ -533,8 +653,7 @@ $R $Env$stdout_write$local ($Env __self__, $str s, $Cont c$cont) {
 $R $Env$stdin_install$local ($Env __self__, $function cb, $Cont c$cont) {
     fd_data[STDIN_FILENO].kind = readhandler;
     fd_data[STDIN_FILENO].rhandler = cb;
-    EV_SET(&fd_data[STDIN_FILENO].event_spec,STDIN_FILENO,EVFILT_READ,EV_ADD,0,0,NULL);
-    kevent(kq,&fd_data[STDIN_FILENO].event_spec,1,NULL,0,NULL);
+    EVENT_add_read(STDIN_FILENO);
     return $R_CONT(c$cont, $None);
 }
 $R $Env$connect$local ($Env __self__, $str host, $int port, $function cb, $Cont c$cont) {
@@ -556,8 +675,7 @@ $R $Env$connect$local ($Env __self__, $str host, $int port, $function cb, $Cont 
       fd_data[fd].sock_addr.sin_family = AF_INET;
       if (connect(fd,(struct sockaddr *)&fd_data[fd].sock_addr,sizeof(struct sockaddr)) < 0) { // couldn't connect immediately, 
         if (errno==EINPROGRESS)  {                                                             // so check if attempt continues asynchronously.
-          EV_SET(&fd_data[fd].event_spec,fd,EVFILT_WRITE,EV_ADD | EV_ONESHOT,0,0,NULL);
-          kevent(kq,&fd_data[fd].event_spec,1,NULL,0,NULL);
+          EVENT_add_write_once(fd);
         } else {
           fd_data[fd].chandler->$class->__call__(fd_data[fd].chandler, NULL);
           //fprintf(stderr,"Connect failed");
@@ -576,8 +694,7 @@ $R $Env$listen$local ($Env __self__, $int port, $function cb, $Cont c$cont) {
     if (bind(fd,(struct sockaddr *)&addr,sizeof(struct sockaddr)) < 0)
       fd_data[fd].chandler->$class->__call__(fd_data[fd].chandler, NULL);
     listen(fd,5);
-    EV_SET(&fd_data[fd].event_spec,fd,EVFILT_READ,EV_ADD | EV_ONESHOT,0,0,NULL);
-    kevent(kq,&fd_data[fd].event_spec,1,NULL,0,NULL);
+    EVENT_add_read_once(fd);
     return $R_CONT(c$cont, $None);
 }
 $R $Env$exit$local ($Env __self__, $int n, $Cont c$cont) {
@@ -664,8 +781,7 @@ $R $Connection$on_receipt$local ($Connection __self__, $function cb1, $function 
     fd_data[__self__->descriptor].kind = readhandler;
     fd_data[__self__->descriptor].rhandler = cb1;
     fd_data[__self__->descriptor].errhandler = cb2;
-    EV_SET(&fd_data[__self__->descriptor].event_spec,__self__->descriptor,EVFILT_READ,EV_ADD,0,0,NULL);
-    kevent(kq,&fd_data[__self__->descriptor].event_spec,1,NULL,0,NULL);
+    EVENT_add_read(__self__->descriptor);
     return $R_CONT(c$cont, $None);
 }
 $Msg $Connection$write ($Connection __self__, $str s) {
@@ -1017,27 +1133,59 @@ void minienv$$__init__ () {
         $WFile$methods.__deserialize__ = $WFile$__deserialize__;
         $register(&$WFile$methods);
     }
+    pipe(wakeup_pipe);
+    EVENT_init();
 }
 
+void reset_timeout() {
+    write(wakeup_pipe[1], "!", 1);      // Write dummy data that wakes up the eventloop thread
+}
 
 void *$eventloop(void *arg) {
+    pthread_setspecific(self_key, NULL);
     while(1) {
-        struct kevent timer;
-        pthread_setspecific(self_key, NULL);
-        EV_SET(&timer, 9999, EVFILT_TIMER, EV_ADD | EV_ONESHOT, 0, 500, 0);
-        kevent(kq,&timer,1,0,0,0);
-        struct kevent kev;
+        EVENT_type kev;                                                          // struct epoll_event epev;
+
         struct sockaddr_in addr;
         socklen_t socklen = sizeof(addr);
         int fd2;
         int count;
-        int nready = kevent(kq,NULL,0,&kev,1,NULL);
-        if (nready<0) {
-            printf("kevent error: %s. kev.ident=%lu, kq is %d\n",strerror(errno),kev.ident,kq);
-            exit(-1);
+        struct timespec tspec, *timeout;
+
+        handle_timeout();
+        time_t next_time = next_timeout();
+        if (next_time) {
+            time_t now = current_time();
+            time_t offset = next_time - now;
+            tspec.tv_sec = offset / 1000000;
+            tspec.tv_nsec = 1000 * (offset % 1000000);
+            //printf("## Current time is setting timer offset %ld sec, %ld nsec\n", tspec.tv_sec, tspec.tv_nsec);
+            timeout = &tspec;
+        } else {
+            timeout = NULL;
         }
-        int fd = kev.ident;
-        if (kev.flags & EV_EOF) {
+
+        // Blocking call
+        int nready = EVENT_wait(&kev, timeout);
+
+        if (nready<0) {
+            fprintf(stderr, "EVENT error: %s\n", strerror(errno));
+            continue;
+        }
+        if (nready == 0) {
+            continue;
+        }
+        if (EVENT_is_error(&kev)) {
+            fprintf(stderr, "EVENT error: %s\n", strerror(EVENT_errno(&kev)));
+            continue;
+        }
+        if (EVENT_is_wakeup(&kev)) {
+            char dummy;
+            read(wakeup_pipe[0], &dummy, 1);      // Consume dummy data, reset timer at the start of next turn
+            continue;
+        }
+        int fd = EVENT_fd(&kev);
+        if (EVENT_is_eof(&kev)) {
             $str msg = $Times$str$witness->$class->__add__($Times$str$witness,$getName(fd),to$str(" closed connection\n"));
             if (fd_data[fd].errhandler)
                 fd_data[fd].errhandler->$class ->__call__(fd_data[fd].errhandler,msg);
@@ -1045,27 +1193,19 @@ void *$eventloop(void *arg) {
                 perror("Remote host closed connection");
                 exit(-1);
             }
-            EV_SET(&fd_data[fd].event_spec,fd,EVFILT_READ,EV_DISABLE,0,0,NULL);
-            kevent(kq,&fd_data[fd].event_spec,1,NULL,0,NULL);
+            EVENT_del_read(fd);
         }
-        if (kev.flags & EV_ERROR) {
-            fprintf(stderr, "EV_ERROR: %s\n", strerror(kev.data));
-            exit(-1);
-        }
-        if (fd==9999)
-            break;
         switch (fd_data[fd].kind) {
             case connecthandler:
-                if (kev.filter==EVFILT_READ) { // we are a listener and someone tries to connect
+                if (EVENT_is_read(&kev)) {              // we are a listener and someone tries to connect
                     while ((fd2 = accept(fd, (struct sockaddr *)&fd_data[fd].sock_addr,&socklen)) != -1) {
                       fcntl(fd2,F_SETFL,O_NONBLOCK);
                       fd_data[fd2].kind = connecthandler;
                       fd_data[fd2].chandler = fd_data[fd].chandler;
                       fd_data[fd2].sock_addr = fd_data[fd].sock_addr;
                       bzero(fd_data[fd2].buffer,BUF_SIZE);
-                      EV_SET(&fd_data[fd2].event_spec,fd2,EVFILT_READ,EV_ADD,0,0,NULL);
-                      kevent(kq,&fd_data[fd2].event_spec,1,NULL,0,NULL);
-                      kevent(kq,&fd_data[fd].event_spec,1,NULL,0,NULL);
+                      EVENT_add_read(fd2);
+                      EVENT_mod_read_once(fd);
                       setupConnection(fd2);
                       printf("%s %s\n","Connection from",$getName(fd2)->str);
                     }
@@ -1074,7 +1214,7 @@ void *$eventloop(void *arg) {
                 }
                 break;
             case readhandler:  // data has arrived on fd to fd_data[fd].buffer
-                if (fd_data[fd].event_spec.filter == EVFILT_READ) {
+                if (EVENT_fd_is_read(fd)) {
                     count = read(fd,&fd_data[fd].buffer,BUF_SIZE);
                     if (count < BUF_SIZE)
                         fd_data[fd].buffer[count] = 0;

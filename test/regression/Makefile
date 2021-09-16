@@ -20,7 +20,6 @@ FAILING_COMPILATION= \
 	triquotes-across-lines
 FAILING_RUNNING= \
 	125-async-actor-method-call \
-	178-after \
 	segfault \
 	subtract_off_by_one
 ALL_FAILING=$(FAILING_COMPILATION) $(FAILING_RUNNING)
@@ -55,5 +54,8 @@ $(FAILING_RUNNING):
 	@echo "Now we really see 2 'pong' messages"
 	./$@
 	./$@ | grep -c pong | grep 2
+
+210-nontermination:
+	@echo "Non-termination test disabled (for obvious reasons...)"
 
 .PHONY: test test-examples $(TESTS)
