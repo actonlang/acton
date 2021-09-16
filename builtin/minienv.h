@@ -2,7 +2,6 @@
 //////////////////////////////////////////////////////////////////////////////////
 #include <sys/types.h>
 #include <sys/socket.h>
-#include <sys/event.h>
 #include <sys/time.h>
 #include <fcntl.h>
 #include <strings.h>
@@ -14,6 +13,16 @@
 
 #include "builtin.h"
 #include "../rts/rts.h"
+
+#ifdef IS_MACOS
+#include <sys/event.h>
+typedef struct kevent EVENT_type;
+#endif
+
+#ifdef IS_GNU_LINUX
+#include <sys/epoll.h>
+typedef struct epoll_event EVENT_type;
+#endif
 
 #define BUF_SIZE 1024
 
@@ -65,7 +74,7 @@ struct FileDescriptorData {
   $function chandler;
   $Connection conn;
   struct sockaddr_in sock_addr;
-  struct kevent event_spec;
+  EVENT_type event_spec;
   char buffer[BUF_SIZE];
   int bufnxt;              // only used for RFiles; index of first unreported char
   int bufused;             //        -"-          ; nr of read chars in buffer. Equal to BUF_SIZE except before first read and (possibly) after last read.

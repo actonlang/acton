@@ -8,6 +8,12 @@
 #include <time.h>
 #include <pthread.h>
 
+#ifdef __gnu_linux__
+    #define IS_GNU_LINUX
+#elif  __APPLE__ && __MACH__
+    #define IS_MACOS
+#endif
+
 #include "../builtin/builtin.h"
 
 struct $Msg;

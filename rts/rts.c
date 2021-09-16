@@ -36,14 +36,6 @@ int opterr = 0;
 #include "../backend/client_api.h"
 #include "../backend/fastrand.h"
 
-#ifdef __gnu_linux__
-    #define IS_GNU_LINUX
-    #define USE_EPOLL
-#elif  __APPLE__ && __MACH__
-    #define IS_MACOS
-    #define USE_KQUEUE
-#endif
-
 char rts_verbose = 0;
 char rts_debug = 0;
 
