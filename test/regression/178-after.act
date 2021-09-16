@@ -20,5 +20,5 @@ actor error_exiter(env):
 actor main(env):
     var c = counter(env)
     c.test()
-    var e = error_exiter(env)
-    e.test()
+#    var e = error_exiter(env)
+#    e.test()
