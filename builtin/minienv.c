@@ -108,8 +108,10 @@ void EVENT_del_read(int fd) {
     epoll_ctl(ep, EPOLL_CTL_DEL, fd, &fd_data[fd].event_spec);
 }
 int EVENT_wait(EVENT_type *ev, struct timespec *timeout) {
+    int msec = timeout->tv_sec * 1000 + timeout->tv_nsec / 1000000;
     printf("## EPOLL kevent\n");
-    return epoll_pwait2(ep, ev, 1, timeout, NULL);
+    return epoll_wait(ep, ev, 1, msec);
+//    return epoll_pwait2(ep, ev, 1, timeout, NULL);        // appears in linux kernel 5.11
 }
 int EVENT_fd(EVENT_type *ev) {
     return ev->data.fd;
