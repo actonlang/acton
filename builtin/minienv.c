@@ -47,7 +47,6 @@ void EVENT_del_read(int fd) {
     kevent(kq, &fd_data[fd].event_spec, 1, NULL, 0, NULL);
 }
 int EVENT_wait(EVENT_type *ev, struct timespec *timeout) {
-    printf("## KQUEUE kevent\n");
     return kevent(kq, NULL, 0, ev, 1, timeout);
 }
 int EVENT_fd(EVENT_type *ev) {
@@ -109,7 +108,6 @@ void EVENT_del_read(int fd) {
 }
 int EVENT_wait(EVENT_type *ev, struct timespec *timeout) {
     int msec = timeout ? timeout->tv_sec * 1000 + timeout->tv_nsec / 1000000 : -1;
-    printf("## EPOLL kevent\n");
     return epoll_wait(ep, ev, 1, msec);
 //    return epoll_pwait2(ep, ev, 1, timeout, NULL);        // appears in linux kernel 5.11
 }
@@ -1140,7 +1138,6 @@ void minienv$$__init__ () {
 }
 
 void reset_timeout() {
-    printf("## Waking up the eventloop\n");
     write(wakeup_pipe[1], "!", 1);      // Write dummy data that wakes up the eventloop thread
 }
 
@@ -1162,7 +1159,7 @@ void *$eventloop(void *arg) {
             time_t offset = next_time - now;
             tspec.tv_sec = offset / 1000000;
             tspec.tv_nsec = 1000 * (offset % 1000000);
-            printf("## Current time is setting timer offset %ld sec, %ld nsec\n", tspec.tv_sec, tspec.tv_nsec);
+            //printf("## Current time is setting timer offset %ld sec, %ld nsec\n", tspec.tv_sec, tspec.tv_nsec);
             timeout = &tspec;
         } else {
             timeout = NULL;
@@ -1172,19 +1169,17 @@ void *$eventloop(void *arg) {
         int nready = EVENT_wait(&kev, timeout);
 
         if (nready<0) {
-            printf("EVENT error: %s\n", strerror(errno));
+            fprintf(stderr, "EVENT error: %s\n", strerror(errno));
             continue;
         }
         if (nready == 0) {
-            printf("## TIMEOUT event\n");
             continue;
         }
         if (EVENT_is_error(&kev)) {
-            fprintf(stderr, "EV_ERROR: %s\n", strerror(EVENT_errno(&kev)));
-            exit(-1);
+            fprintf(stderr, "EVENT error: %s\n", strerror(EVENT_errno(&kev)));
+            continue;
         }
         if (EVENT_is_wakeup(&kev)) {
-            printf("## WAKEUP event\n");
             char dummy;
             read(wakeup_pipe[0], &dummy, 1);      // Consume dummy data, reset timer at the start of next turn
             continue;

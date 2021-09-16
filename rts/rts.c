@@ -760,7 +760,6 @@ void FLUSH_outgoing($Actor self, uuid_t *txnid) {
             }
             dest = to->$globkey;
         } else {
-            printf("## Enqueueing new timed message at baseline %ld\n", m->$baseline);
             if (ENQ_timed(m))
                 reset_timeout();
             dest = 0;
@@ -785,7 +784,7 @@ void handle_timeout() {
     time_t now = current_time();
     $Msg m = DEQ_timed(now);
     if (m) {
-        printf("## Dequeued timerQ msg with baseline %ld (now: %ld)\n", m->$baseline, now);
+        rtsd_printf(LOGPFX "## Dequeued timed msg with baseline %ld (now is %ld)\n", m->$baseline, now);
         if (ENQ_msg(m, m->$to)) {
             ENQ_ready(m->$to);
             new_work();
@@ -808,12 +807,6 @@ void handle_timeout() {
             remote_commit_txn(txnid, db);
             rtsd_printf(LOGPFX "############## Commit\n\n");
         }
-    } else {
-        m = timerQ;
-        if (m)
-            printf("## First timerQ event not yet expired: %ld (now: %ld)\n", m->$baseline, now);
-        else
-            printf("## TimerQ is empty (now: %ld)\n", now);
     }
 }
 
