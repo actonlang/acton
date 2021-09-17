@@ -1,12 +1,3 @@
-# Ignore all
-*
-
-# Unignore all with extensions
-!*.*
-
-# Unignore all dirs
-!*/
-
 *~
 *.o
 *.a
@@ -17,9 +8,6 @@
 **/*.o
 **/a.out
 .cabal-sandbox/
-kernel
-test_io
-actonc
 compiler/actonc
 compiler/package.yaml
 compiler/tests/*.ty
