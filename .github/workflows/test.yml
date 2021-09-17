@@ -86,6 +86,13 @@ jobs:
     needs: [test-darwin, test-linux]
     steps:
       - run: echo "Doing a release, yay! 🎉"
+      - name: "Delete current tip release & tag"
+        uses: dev-drprasad/delete-tag-and-release@v0.2.0
+        with:
+          delete_release: true
+          tag_name: tip
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - name: "Check out repository code"
         uses: actions/checkout@v2
       - name: "Download artifacts for darwin / macos-11"
@@ -96,13 +103,6 @@ jobs:
         uses: actions/download-artifact@v2
         with:
           name: acton-linux
-      - name: "Delete current tip release & tag"
-        uses: dev-drprasad/delete-tag-and-release@v0.2.0
-        with:
-          delete_release: true
-          tag_name: tip
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - name: "Workaround for changelog extractor that looks for number versions in headlines, which won't work for 'Unreleased'"
         run: sed -i -e 's/^## Unreleased/## [999.9] Unreleased\nThis is an unreleased snapshot built from the main branch. Like a nightly but more up to date./' CHANGELOG.md
       - name: "Extract release notes"
