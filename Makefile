@@ -10,7 +10,7 @@ VERSION_INFO:=unknown
 endif
 
 ifeq ($(shell uname -s),Linux)
-CFLAGS += -Werror -Wno-int-to-pointer-cast -Wno-pointer-to-int-cast -I/usr/include/kqueue
+CFLAGS += -Werror -Wno-int-to-pointer-cast -Wno-pointer-to-int-cast
 endif
 
 
@@ -96,33 +96,37 @@ stdlib/out/release/numpy.o: stdlib/src/numpy.c stdlib/src/numpy.h stdlib/out/typ
 	@mkdir -p $(dir $@)
 	cc $(CFLAGS) -Wno-unused-result -I. -Istdlib/out/ -c $< -o$(subst $,\$,$@)
 
-clean-stdlib:
-	rm -f $(STDLIB_HFILES) $(STDLIB_OFILES) $(STDLIB_TYFILES)
-
 # /lib --------------------------------------------------
-LIBS=lib/libActon.a lib/libActonRTSdebug.a lib/libcomm.a lib/libdb.a lib/libdbclient.a lib/libremote.a lib/libvc.a
-#
+ARCHIVES=lib/libActon.a lib/libActonRTSdebug.a lib/libcomm.a lib/libdb.a lib/libdbclient.a lib/libremote.a lib/libvc.a
+
 # If we later let actonc build things, it would produce a libActonProject.a file
 # in the stdlib directory, which we would need to join together with rts.o etc
 # to form the final libActon (or maybe produce a libActonStdlib and link with?)
+OFILES += builtin/builtin.o builtin/minienv.o $(STDLIB_OFILES) stdlib/out/release/numpy.o rts/empty.o rts/rts.o
 lib/libActon.a: builtin/builtin.o builtin/minienv.o $(STDLIB_OFILES) stdlib/out/release/numpy.o rts/empty.o rts/rts.o
 	ar rcs $@ $(subst $,\$,$^)
 
+OFILES += rts/rts-debug.o
 lib/libActonRTSdebug.a: rts/rts-debug.o
 	ar rcs $@ $(subst $,\$,$^)
 
+OFILES += backend/comm.o rts/empty.o
 lib/libcomm.a: backend/comm.o rts/empty.o
 	ar rcs $@ $^
 
+OFILES += backend/db.o backend/queue.o backend/skiplist.o backend/txn_state.o backend/txns.o rts/empty.o
 lib/libdb.a: backend/db.o backend/queue.o backend/skiplist.o backend/txn_state.o backend/txns.o rts/empty.o
 	ar rcs $@ $^
 
+OFILES += backend/client_api.o rts/empty.o
 lib/libdbclient.a: backend/client_api.o rts/empty.o
 	ar rcs $@ $^
 
+OFILES += backend/failure_detector/db_messages.pb-c.o backend/failure_detector/cells.o backend/failure_detector/db_queries.o backend/failure_detector/fd.o
 lib/libremote.a: backend/failure_detector/db_messages.pb-c.o backend/failure_detector/cells.o backend/failure_detector/db_queries.o backend/failure_detector/fd.o
 	ar rcs $@ $^
 
+OFILES += backend/failure_detector/vector_clock.o
 lib/libvc.a: backend/failure_detector/vector_clock.o
 	ar rcs $@ $^
 
@@ -166,13 +170,13 @@ compiler/actonc:
 backend:
 	$(MAKE) -C backend
 
-rts: $(LIBS)
+rts: $(ARCHIVES)
 
 test:
 	$(MAKE) -C backend test
 	$(MAKE) -C test
 
-clean: clean-compiler clean-distribution clean-backend clean-rts clean-stdlib
+clean: clean-compiler clean-distribution clean-backend clean-rts
 
 clean-compiler:
 	$(MAKE) -C compiler clean
@@ -181,7 +185,7 @@ clean-backend:
 	$(MAKE) -C backend clean
 
 clean-rts:
-	rm -f $(LIBS) $(TYFILES)
+	rm -f $(ARCHIVES) $(OFILES) $(STDLIB_HFILES) $(STDLIB_OFILES) $(STDLIB_TYFILES)
 
 # == DIST ==
 #
@@ -226,13 +230,13 @@ DIST_HFILES=dist/rts/rts.h \
 	$(addprefix dist/,$(BUILTIN_HFILES)) \
 	$(subst stdlib/out/types,dist/types,$(STDLIB_HFILES))
 DIST_TYFILES=$(subst stdlib/out/types,dist/types,$(STDLIB_TYFILES))
-DIST_LIBS=$(addprefix dist/,$(LIBS))
+DIST_ARCHIVES=$(addprefix dist/,$(ARCHIVES))
 
 .PHONY: distribution clean-distribution
-distribution: $(DIST_BINS) $(DIST_HFILES) $(DIST_TYFILES) $(DIST_LIBS)
+distribution: $(DIST_BINS) $(DIST_HFILES) $(DIST_TYFILES) $(DIST_ARCHIVES)
 
 clean-distribution:
-	rm -f $(DIST_BINS) $(DIST_HFILES) $(DIST_TYFILES) $(DIST_LIBS)
+	rm -rf dist
 
 # == release ==
 # This is where we take our distribution and turn it into a release tar ball
