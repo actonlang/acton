@@ -1299,7 +1299,13 @@ int main(int argc, char **argv) {
     new_argv[new_argc] = NULL;
 
     long num_cores = sysconf(_SC_NPROCESSORS_ONLN);
-    rtsd_printf(LOGPFX "%ld worker threads\n", num_cores);
+    long num_wthreads = num_cores;
+    if (num_wthreads < 4) {
+        rtsd_printf(LOGPFX "Detected %ld CPUs: Using %ld worker threads, due to low CPU count. No CPU affinity used.\n", num_cores, num_wthreads);
+        num_wthreads = 4;
+    } else {
+        rtsd_printf(LOGPFX "Detected %ld CPUs: Using %ld worker threads for 1:1 mapping with CPU affinity set.\n", num_cores, num_wthreads);
+    }
     $register_builtin();
     minienv$$__init__();
     $register_rts();
@@ -1349,18 +1355,24 @@ int main(int argc, char **argv) {
     }
 
     pthread_key_create(&self_key, NULL);
-    // start worker threads, one per CPU
-    pthread_t threads[num_cores];
+    // Start worker threads, normally one per CPU. On small machines with less
+    // than 4 cores, we start more worker threads than CPUs.
+    pthread_t threads[num_wthreads];
     cpu_set_t cpu_set;
-    for(int idx = 0; idx < num_cores; ++idx) {
+    for(int idx = 0; idx <= num_wthreads; ++idx) {
         if (idx==0) {
             pthread_create(&threads[idx], NULL, $eventloop, (void*)idx);
         } else {
             pthread_create(&threads[idx], NULL, main_loop, (void*)idx);
         }
-        CPU_ZERO(&cpu_set);
-        CPU_SET(idx, &cpu_set);
-        pthread_setaffinity_np(threads[idx], sizeof(cpu_set), &cpu_set);
+        // Only do affinity when we have a 1:1 mapping of eventloop / worker
+        // threads to CPUs. Otherwise we are on a small system and we let our
+        // worker threads roam freely across CPU cores.
+        if (num_cores == num_wthreads) {
+            CPU_ZERO(&cpu_set);
+            CPU_SET(idx, &cpu_set);
+            pthread_setaffinity_np(threads[idx], sizeof(cpu_set), &cpu_set);
+        }
     }
     
     for(int idx = 0; idx < num_cores; ++idx) {

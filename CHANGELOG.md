@@ -5,6 +5,21 @@
 There are currently known regressions:
 - using RTS together with the distributed backend database is not working
 
+### Changed
+- RTS now uses a minimum of 4 worker threads [#263]
+  - The default is to use as many worker threads as there are CPUs and set CPU
+    affinity to map worker threads to CPUs in a 1:1 fashion.
+  - The first core is used to run the eventloop that processes I/O and the rest
+    runs the main loop that executes actors.
+  - On machines with a low CPU count this can be catastrophic. The extreme
+    example being a single CPU machine, which consequently will have 0 worker
+    threads executing actors. It will only run the eventloop that processes I/O
+    and thus is unable to actually run an Acton program.
+  - Even on a 2 CPU machine, which would lead to a single worker thread
+    executing actors, this can be quite bad.
+  - We now run a minimum of 4 worker threads, 1 for the I/O eventloop and 3
+    actor processing threads, to get around these problems.
+
 
 ## [0.6.0] (2021-09-17)
 
@@ -359,6 +374,7 @@ then, this second incarnation has been in focus and 0.2.0 was its first version.
 [#206]: https://github.com/actonlang/acton/pull/206
 [#212]: https://github.com/actonlang/acton/pull/212
 [#243]: https://github.com/actonlang/acton/pull/243
+[#263]: https://github.com/actonlang/acton/pull/264
 [0.3.0]: https://github.com/actonlang/acton/releases/tag/v0.3.0
 [0.4.0]: https://github.com/actonlang/acton/compare/v0.3.0...v0.4.0
 [0.4.1]: https://github.com/actonlang/acton/compare/v0.4.0...v0.4.1
