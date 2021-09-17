@@ -65,7 +65,7 @@ dependencies for your platform.
 
 #### Debian
 ```
-apt install gcc libkqueue-dev libprotobuf-c-dev libutf8proc-dev
+apt install gcc libprotobuf-c-dev libutf8proc-dev
 ```
 
 #### Mac OS X
@@ -130,7 +130,7 @@ using `actonc` to compile Acton programs.
 
 ### Debian
 ```
-apt install alex gcc happy haskell-stack libbsd-dev libkqueue-dev libprotobuf-c-dev libutf8proc-dev make uuid-dev zlib1g-dev
+apt install alex gcc happy haskell-stack libbsd-dev libprotobuf-c-dev libutf8proc-dev make uuid-dev zlib1g-dev
 ```
 
 ### Mac OS X
