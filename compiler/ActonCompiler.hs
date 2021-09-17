@@ -361,7 +361,7 @@ runRestPasses args paths env0 parsed = do
                               hFile = outbase ++ ".h"
                               oFile = joinPath [projLib paths, n++".o"]
                               aFile = joinPath [projLib paths, "libActonProject.a"]
-                              gccCmd = "gcc " ++ pedantArg ++ " -g -c -I/usr/include/kqueue -I" ++ projOut paths ++ " -I" ++ sysPath paths ++ " -o" ++ oFile ++ " " ++ cFile
+                              gccCmd = "gcc " ++ pedantArg ++ " -g -c -I" ++ projOut paths ++ " -I" ++ sysPath paths ++ " -o" ++ oFile ++ " " ++ cFile
                               arCmd = "ar rcs " ++ aFile ++ " " ++ oFile
                           writeFile hFile h
                           writeFile cFile c
@@ -416,11 +416,8 @@ buildExecutable env args paths task
         rootFile            = outbase ++ ".root.c"
         libRTSarg           = if (rts_debug args) then " -lActonRTSdebug " else " "
         libFilesBase        = " -L" ++ projLib paths ++ " -L" ++ sysLib paths ++ libRTSarg ++ " -lActonProject -lActon -ldbclient -lremote -luuid -lcomm -ldb -lvc -lprotobuf-c -lutf8proc -lpthread -lm"
-#if defined(linux_HOST_OS)
-        libFiles            = libFilesBase ++ " -lkqueue"
-#elif defined(darwin_HOST_OS)
+#if defined(darwin_HOST_OS)
         libFiles            = libFilesBase ++ " -L/usr/local/opt/util-linux/lib "
--- Do we support anything else? Do a default clause for now...
 #else
         libFiles            = libFilesBase
 #endif
@@ -428,4 +425,4 @@ buildExecutable env args paths task
         binFile             = joinPath [binDir paths, binFilename]
         srcbase             = srcFile paths mn
         pedantArg           = if (cpedantic args) then "-Werror" else ""
-        gccCmd              = "gcc " ++ pedantArg ++ " -g -I/usr/include/kqueue -I" ++ projOut paths ++ " -I" ++ sysPath paths ++ " " ++ rootFile ++ " -o" ++ binFile ++ libFiles
+        gccCmd              = "gcc " ++ pedantArg ++ " -g -I" ++ projOut paths ++ " -I" ++ sysPath paths ++ " " ++ rootFile ++ " -o" ++ binFile ++ libFiles
