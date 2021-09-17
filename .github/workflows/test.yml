@@ -1,10 +1,6 @@
-name: Test
-on:
-  push:
-    branches:
-      - '**'
-    tags-ignore:
-      - '**'
+name: Build, Test & Release
+
+on: [push]
 
 jobs:
   test-darwin:
@@ -13,6 +9,10 @@ jobs:
         os: [macos-10.15, macos-11]
     runs-on: ${{ matrix.os }}
     steps:
+      - name: Set BUILD_RELEASE when we are building for a version tag
+        run: |
+          echo "BUILD_RELEASE=1" >> $GITHUB_ENV
+        if: startsWith(github.ref, 'refs/tags/v')
       - name: Check out repository code
         uses: actions/checkout@v2
       - name: Cache ~/.stack
@@ -24,7 +24,7 @@ jobs:
       - name: Install build prerequisites
         run: brew install argp-standalone haskell-stack protobuf-c util-linux
       - name: Build Acton
-        run: make -C ${{ github.workspace }}
+        run: make -C ${{ github.workspace }} BUILD_RELEASE=${{ env.BUILD_RELEASE }}
       - name: Build a release
         run: make -C ${{ github.workspace }} release
       - name: Upload artifact
@@ -36,11 +36,16 @@ jobs:
       - name: Run tests
         run: make -C ${{ github.workspace }} test
 
+
   test-linux:
     runs-on: ubuntu-latest
     container:
       image: debian:sid
     steps:
+      - name: Set BUILD_RELEASE when we are building for a version tag
+        run: |
+          echo "BUILD_RELEASE=1" >> $GITHUB_ENV
+        if: startsWith(github.ref, 'refs/tags/v')
       - name: Check out repository code
         uses: actions/checkout@v2
       - name: Cache ~/.stack
@@ -55,7 +60,7 @@ jobs:
       - name: chown our home dir to avoid stack complaining
         run: chown -R root:root /github/home
       - name: Build Acton
-        run: make -C ${GITHUB_WORKSPACE}
+        run: make -C ${GITHUB_WORKSPACE} BUILD_RELEASE=${{ env.BUILD_RELEASE }}
       - name: Build a release
         run: make -C ${GITHUB_WORKSPACE} release
       - name: Upload artifact
@@ -67,18 +72,27 @@ jobs:
       - name: Run tests
         run: make -C ${GITHUB_WORKSPACE} test
 
-# If we are on the main branch, we'll create or update a pre-release called
-# 'tip' which holds the latest build output from the main branch!
-# We upload artifacts twice, first with the version number held in the filename
-# and a second time after being renamed to remove the version number in the
-# filename, thus providing a stable URL for downloading the tip tar balls.
+
+  # If we are on the main branch, we'll create or update a pre-release called
+  # 'tip' which holds the latest build output from the main branch!  We upload
+  # artifacts twice, first with the version number held in the filename and a
+  # second time after being renamed to remove the version number in the
+  # filename, thus providing a stable URL for downloading the tip tar balls.
   pre-release-tip:
     # Only run on the main branch
+    # TODO: ensure we do NOT run when on a version tag. I think this github.ref already ensures that, since if we are run for when being pushed to the main branch, with no tag, the ref will be 'refs/head/main' whereas if we are pushed as part of a tag, it will be 'refs/tag/vXXX'
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     needs: [test-darwin, test-linux]
     steps:
       - run: echo "Doing a release, yay! 🎉"
+      - name: "Delete current tip release & tag"
+        uses: dev-drprasad/delete-tag-and-release@v0.2.0
+        with:
+          delete_release: true
+          tag_name: tip
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - name: "Check out repository code"
         uses: actions/checkout@v2
       - name: "Download artifacts for darwin / macos-11"
@@ -89,13 +103,6 @@ jobs:
         uses: actions/download-artifact@v2
         with:
           name: acton-linux
-      - name: "Delete current tip release & tag"
-        uses: dev-drprasad/delete-tag-and-release@v0.2.0
-        with:
-          delete_release: true
-          tag_name: tip
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - name: "Workaround for changelog extractor that looks for number versions in headlines, which won't work for 'Unreleased'"
         run: sed -i -e 's/^## Unreleased/## [999.9] Unreleased\nThis is an unreleased snapshot built from the main branch. Like a nightly but more up to date./' CHANGELOG.md
       - name: "Extract release notes"
@@ -127,5 +134,38 @@ jobs:
           prerelease: true
           name: "tip"
           tag: "tip"
+          token: ${{ secrets.GITHUB_TOKEN }}
+          replacesArtifacts: true
+
+
+  # This release job is only run for git tags starting with 'v', which is
+  # probably a version tag. We don't have any tags besides version tags and
+  # 'tip' right now, so it seems fairly safe. If GitHub Actions support a better
+  # condition, like a pattern match, that would naturally be ideal but here we
+  # are.
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    needs: [test-darwin, test-linux]
+    steps:
+      - uses: actions/checkout@v2
+      - name: "Download artifacts for darwin / macos-11"
+        uses: actions/download-artifact@v2
+        with:
+          name: acton-macos-11
+      - name: "Download artifacts for linux"
+        uses: actions/download-artifact@v2
+        with:
+          name: acton-linux
+      - name: "Extract release notes"
+        id: extract-release-notes
+        uses: ffurrer2/extract-release-notes@v1
+      - name: "Create release"
+        uses: ncipollo/release-action@v1
+        with:
+          allowUpdates: true
+          artifacts: acton*.tar*
+          body: ${{ steps.extract-release-notes.outputs.release_notes }}
+          draft: false
           token: ${{ secrets.GITHUB_TOKEN }}
           replacesArtifacts: true
