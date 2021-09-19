@@ -5,6 +5,14 @@
 There are currently known regressions:
 - using RTS together with the distributed backend database is not working
 
+
+## [0.6.1] (2021-09-19)
+
+### Added
+- Debian packaging [#60]
+  - There is now a .deb produced and uploaded as part of the artifacts for each
+    release on GitHub.
+
 ### Changed
 - RTS now uses a minimum of 4 worker threads [#263]
   - The default is to use as many worker threads as there are CPUs and set CPU
@@ -335,6 +343,7 @@ then, this second incarnation has been in focus and 0.2.0 was its first version.
 [#45]: https://github.com/actonlang/acton/pull/45
 [#48]: https://github.com/actonlang/acton/pull/48
 [#53]: https://github.com/actonlang/acton/pull/53
+[#60]: https://github.com/actonlang/acton/pull/60
 [#69]: https://github.com/actonlang/acton/pull/69
 [#70]: https://github.com/actonlang/acton/pull/70
 [#71]: https://github.com/actonlang/acton/pull/71
@@ -384,3 +393,4 @@ then, this second incarnation has been in focus and 0.2.0 was its first version.
 [0.5.2]: https://github.com/actonlang/acton/compare/v0.5.1...v0.5.2
 [0.5.3]: https://github.com/actonlang/acton/compare/v0.5.2...v0.5.3
 [0.6.0]: https://github.com/actonlang/acton/compare/v0.5.3...v0.6.0
+[0.6.1]: https://github.com/actonlang/acton/compare/v0.6.0...v0.6.1
