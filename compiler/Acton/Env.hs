@@ -743,6 +743,9 @@ allProtos env               = reverse locals ++ concat [ protos m (lookupMod m e
 allConAttr                  :: EnvF x -> Name -> [Type]
 allConAttr env n            = [ tCon tc | tc <- allCons env, n `elem` allAttrs env tc ]
 
+allConAttrFree              :: EnvF x -> Name -> [TVar]
+allConAttrFree env n        = concat [ tyfree $ fst $ findAttr' env tc n | tc <- allCons env, n `elem` allAttrs env tc ]
+
 allProtoAttr                :: EnvF x -> Name -> [Type]
 allProtoAttr env n          = [ tCon p | p <- allProtos env, n `elem` allAttrs env p ]
 

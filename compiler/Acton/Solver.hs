@@ -80,15 +80,18 @@ solve env select te tt eq cs                = do (cs',eq') <- solveGroups env se
                                                  eq <- msubst eq
                                                  return (cs', eq'++eq)
   where group []                            = []
-        group (c:cs)                        = close (tyfree c) [c] cs
+        group (c:cs)                        = close (tyfree c ++ attrfree [c]) [c] cs
         close tvs cs0 cs
           | null cs1                        = cs0 : group cs2
-          | otherwise                       = close (tvs++tyfree cs1) (cs0++cs1) cs2
+          | otherwise                       = close (tvs++tyfree cs1++attrfree cs1) (cs0++cs1) cs2
           where (cs1,cs2)                   = partition (not . null . intersect tvs . tyfree) cs
+        attrs cs                            = [ n | Sel _ t n _ <- cs ] ++ [ n | Mut t n _ <- cs ]
+        attrfree cs                         = [ tv | n <- attrs cs, tv <- allConAttrFree env n ]
 
 solveGroups env select te tt []             = return ([], [])
 solveGroups env select te tt (cs:css)       = do --traceM ("\n\n######### solveGroup " ++ prstrs cs)
                                                  (cs1,eq1) <- solve' env select [] te tt [] cs `catchError` \err -> Control.Exception.throw err
+                                                 env <- msubst env
                                                  (cs2,eq2) <- solveGroups env select te tt css
                                                  return (cs1++cs2, eq1++eq2)
 
