@@ -15,7 +15,6 @@ FAILING_COMPILATION= \
 	12-for-actor \
 	20-for-break \
 	rtail \
-	if-return \
 	quotes-in-triquotes \
 	triquotes-across-lines
 FAILING_RUNNING= \

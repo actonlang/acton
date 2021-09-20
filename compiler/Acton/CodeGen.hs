@@ -250,11 +250,9 @@ declModule env (s : ss)             = vcat [ gen env t <+> genTopName env n <> s
 
 declDecl env (Def _ n q p KwdNIL (Just t) b d m)
                                     = (gen env t <+> genTopName env n <+> parens (gen env p) <+> char '{') $+$
-                                      nest 4 (genSuite env1 b $+$ ret) $+$
+                                      nest 4 (genSuite env1 b) $+$
                                       char '}'
   where env1                        = setRet t $ ldefine (envOf p) $ defineTVars q env
-        ret | fallsthru b           = text "return" <+> gen env primNone <> semi
-            | otherwise             = empty
 
 declDecl env (Class _ n q as b)     = vcat [ declDecl env1 d{ dname = methodname n (dname d) } | Decl _ ds <- b', d@Def{} <- ds ] $+$
                                       declSerialize env1 n c props sup_c $+$

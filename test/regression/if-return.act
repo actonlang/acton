@@ -3,3 +3,4 @@ actor main(env):
     def foo():
         if a > 0:
             return
+    await async env.exit(0)
