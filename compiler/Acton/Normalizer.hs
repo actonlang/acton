@@ -191,9 +191,11 @@ normItem env (WithItem e (Just p))  = do e' <- norm env e
 instance Norm Decl where
     norm env (Def l n q p k t b d x)= do p' <- joinPar <$> norm env0 p <*> norm (define (envOf p) env0) k
                                          b' <- norm env1 b
-                                         return $ Def l n q p' KwdNIL t b' d x
+                                         return $ Def l n q p' KwdNIL t (ret b') d x
       where env1                    = define (envOf p ++ envOf k) env0
             env0                    = defineTVars q env
+            ret b | fallsthru b     = b ++ [sReturn eNone]
+                  | otherwise       = b
     norm env (Actor l n q p k b)    = do p' <- joinPar <$> norm env0 p <*> norm (define (envOf p) env0) k
                                          b' <- norm env1 b
                                          return $ Actor l n q p' KwdNIL b'
