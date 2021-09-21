@@ -155,10 +155,6 @@ cpsSuite env ss                         = cps env ss
 class CPS a where
     cps                                 :: CPSEnv -> a -> CpsM a
 
-instance CPS Module where
-    cps env (Module m imps ss)          = do ss' <- preSuite env ss
-                                             Module m imps <$> cpsSuite env ss'
-
 instance CPS [Stmt] where
     cps env []
       | inCont env                      = return $ format $ seqcont 0 (ctxt env)
@@ -375,8 +371,9 @@ inCont env                              = length (ctxt env) > 0
 class NeedCont a where
     needCont                            :: CPSEnv -> a -> Bool
 
-instance NeedCont a => NeedCont [a] where
-    needCont env xs                     = any (needCont env) xs
+instance (NeedCont a, EnvOf a) => NeedCont [a] where
+    needCont env []                     = False
+    needCont env (s : ss)               = needCont env s || needCont (define (envOf s) env) ss
 
 instance NeedCont Branch where
     needCont env (Branch _ ss)          = needCont env ss
