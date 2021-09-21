@@ -418,6 +418,8 @@ buildExecutable env args paths task
         libFilesBase        = " -L" ++ projLib paths ++ " -L" ++ sysLib paths ++ libRTSarg ++ " -lActonProject -lActon -ldbclient -lremote -luuid -lcomm -ldb -lvc -lprotobuf-c -lutf8proc -lpthread -lm"
 #if defined(darwin_HOST_OS)
         libFiles            = libFilesBase ++ " -L/usr/local/opt/util-linux/lib "
+#elif defined(linux_HOST_OS)
+        libFiles            = libFilesBase ++ " -lbsd -ldl -lmd "
 #else
         libFiles            = libFilesBase
 #endif

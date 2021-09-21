@@ -1,0 +1,7 @@
+# This is currently just about importing numpy to ensure the import works!
+import numpy
+
+actor main(env):
+    a = numpy.abs(1)
+    print(a)
+    await async env.exit(0)
