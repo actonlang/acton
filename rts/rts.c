@@ -1135,10 +1135,11 @@ void *main_loop(void *arg) {
                     while (b) {
                         b->$msg->$value = r.value;
                         b->$waitsfor = NULL;
+                        $Actor c = b->$next;
                         ENQ_ready(b);
                         new_work();
                         rtsd_printf(LOGPFX "## Waking up actor %ld : %s\n", b->$globkey, b->$class->$GCINFO);
-                        b = b->$next;
+                        b = c;
                     }
                     rtsd_printf(LOGPFX "## DONE actor %ld : %s\n", current->$globkey, current->$class->$GCINFO);
                     if (DEQ_msg(current)) {
