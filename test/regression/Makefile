@@ -12,7 +12,6 @@ TESTS=$(TEST_SOURCES:.act=)
 # during compilation using actonc or at run time.
 FAILING_COMPILATION= \
 	11-int-float \
-	12-for-actor \
 	20-for-break \
 	rtail \
 	quotes-in-triquotes \
