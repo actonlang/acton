@@ -5,6 +5,21 @@
 There are currently known regressions:
 - using RTS together with the distributed backend database is not working
 
+### Fixed
+- Constraint grouping to also consider free environment types variables [#277]
+  - Previously, this bug in the constraint solver meant that `actonc` could hang
+    when compiling certain programs.
+- Added missing CPS case to fix return value [#279]
+  - Would previously lead to an internal compiler error where the generated C
+    code would not compile.
+- Fix RTS bug that could lead to segmentation fault [#285]
+  - The integrity of a linked list was not preserved during a certain operation
+    which would lead to a segmentation fault.
+  - The error typically occurred during high load situations.
+- Continuation environment now includes all variables [#288]
+  - Previously, after the CPS step, the generated continuation was lacking its
+    environment which meant some variables were inaccessible.
+
 
 ## [0.6.1] (2021-09-19)
 
@@ -384,6 +399,10 @@ then, this second incarnation has been in focus and 0.2.0 was its first version.
 [#212]: https://github.com/actonlang/acton/pull/212
 [#243]: https://github.com/actonlang/acton/pull/243
 [#263]: https://github.com/actonlang/acton/pull/264
+[#277]: https://github.com/actonlang/acton/pull/277
+[#279]: https://github.com/actonlang/acton/pull/279
+[#285]: https://github.com/actonlang/acton/pull/285
+[#288]: https://github.com/actonlang/acton/pull/288
 [0.3.0]: https://github.com/actonlang/acton/releases/tag/v0.3.0
 [0.4.0]: https://github.com/actonlang/acton/compare/v0.3.0...v0.4.0
 [0.4.1]: https://github.com/actonlang/acton/compare/v0.4.0...v0.4.1
