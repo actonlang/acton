@@ -90,13 +90,15 @@ stdlib/out/types/%.h: stdlib/src/%.h
 
 stdlib/out/release/%.o: stdlib/src/%.c
 	@mkdir -p $(dir $@)
-	cc $(CFLAGS) -I. -Istdlib/ -Istdlib/out/ -c $< -o$(subst $,\$,$@)
+	cc $(CFLAGS) -I. -Istdlib/ -Istdlib/out/ -c $< -o$@
 
-NUMPY_HFILES=$(wildcard stdlib/c_src/numpy/*.h)
 NUMPY_CFILES=$(wildcard stdlib/c_src/numpy/*.h)
-stdlib/out/release/numpy.o: stdlib/src/numpy.c stdlib/src/numpy.h stdlib/out/types/math.h $(NUMPY_HFILES) $(NUMPY_CFILES)
+ifeq ($(shell uname -s),Linux)
+NUMPY_CFLAGS+=-lbsd -ldl -lmd
+endif
+stdlib/out/release/numpy.o: stdlib/src/numpy.c stdlib/src/numpy.h stdlib/out/types/math.h $(NUMPY_CFILES)
 	@mkdir -p $(dir $@)
-	cc $(CFLAGS) -Wno-unused-result -I. -Istdlib/out/ -c $< -o$(subst $,\$,$@)
+	cc $(CFLAGS) -Wno-unused-result -r -I. -Istdlib/out/ $< -o$@ $(NUMPY_CFLAGS)
 
 # /lib --------------------------------------------------
 ARCHIVES=lib/libActon.a lib/libActonRTSdebug.a lib/libcomm.a lib/libdb.a lib/libdbclient.a lib/libremote.a lib/libvc.a
@@ -106,11 +108,11 @@ ARCHIVES=lib/libActon.a lib/libActonRTSdebug.a lib/libcomm.a lib/libdb.a lib/lib
 # to form the final libActon (or maybe produce a libActonStdlib and link with?)
 OFILES += builtin/builtin.o builtin/minienv.o $(STDLIB_OFILES) stdlib/out/release/numpy.o rts/empty.o rts/rts.o
 lib/libActon.a: builtin/builtin.o builtin/minienv.o $(STDLIB_OFILES) stdlib/out/release/numpy.o rts/empty.o rts/rts.o
-	ar rcs $@ $(subst $,\$,$^)
+	ar rcs $@ $^
 
 OFILES += rts/rts-debug.o
 lib/libActonRTSdebug.a: rts/rts-debug.o
-	ar rcs $@ $(subst $,\$,$^)
+	ar rcs $@ $^
 
 OFILES += backend/comm.o rts/empty.o
 lib/libcomm.a: backend/comm.o rts/empty.o
