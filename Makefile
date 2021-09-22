@@ -68,18 +68,9 @@ STDLIB_OFILES=$(subst src,out/release,$(STDLIB_CFILES:.c=.o))
 STDLIB_ACTS=$(not-in $(STDLIB_ACTFILES),$(STDLIB_CFILES))
 
 # __builtin__.ty is special, it even has special handling in actonc. Essentially
-# all other modules depend on it, so it must be compiled first. While we use
-# wildcard patterns for all other files, we have explicit targets for
-# __builtin__.ty to make things work. Other .ty file targets etc depend on this,
-# so we get the order right.
-dist/types/__builtin__.ty: stdlib/out/types/__builtin__.ty
-	@mkdir -p $(dir $@)
-	cp $< $@
-
-stdlib/out/types/__builtin__.ty: stdlib/src/__builtin__.act $(ACTONC)
-	@mkdir -p $(dir $@)
-	$(ACTONC) $< --stub
-
+# all other modules depend on it, so it must be compiled first, which is why we
+# specify it as a dependency. This rule also builds __builtin__.ty but make is
+# clever enough to cancel out a dependency on itself.
 stdlib/out/types/%.ty: stdlib/src/%.act dist/types/__builtin__.ty $(ACTONC)
 	@mkdir -p $(dir $@)
 	$(ACTONC) $< --stub

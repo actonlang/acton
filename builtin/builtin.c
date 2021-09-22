@@ -21,7 +21,7 @@
 #include "builtin.h"
 
 #include "common.c"
-#include "__builtin__.c"
+#include "../stdlib/src/__builtin__.c"
 #include "class_hierarchy.c"
 #include "none.c"
 #include "atom.c"

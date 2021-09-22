@@ -1,6 +1,6 @@
 #pragma once
 
-#include "common.h"
+#include "../../builtin/common.h"
 
 struct $atom;
 typedef struct $atom *$atom;
@@ -38,7 +38,7 @@ typedef struct $bool *$bool;
 struct $Serial$state;
 typedef struct $Serial$state *$Serial$state;
 
-#include "class_hierarchy.h"
+#include "../../builtin/class_hierarchy.h"
 
 struct $range;
 typedef struct $range *$range;
