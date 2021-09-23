@@ -9,7 +9,6 @@ Build-Depends:
  happy,
  haskell-stack,
  libbsd-dev,
- libkqueue-dev,
  libprotobuf-c-dev,
  libutf8proc-dev,
  make
@@ -23,7 +22,6 @@ Depends:
  ${shlibs:Depends},
  ${misc:Depends},
  gcc,
- libkqueue-dev,
  libprotobuf-c-dev,
  libutf8proc-dev
 Description: Acton Programming Language
