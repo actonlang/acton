@@ -54,10 +54,10 @@ ENV_FILES=$(wildcard builtin/minienv.*)
 BUILTIN_HFILES=$(filter-out $(ENV_FILES),$(wildcard builtin/*.h))
 BUILTIN_CFILES=$(filter-out $(ENV_FILES),$(wildcard builtin/*.c))
 builtin/builtin.o: builtin/builtin.c $(BUILTIN_HFILES) $(BUILTIN_CFILES)
-	cc $(CFLAGS) -Wno-unused-result -c -O3 $< -o$@
+	$(CC) $(CFLAGS) -Wno-unused-result -c -O3 $< -o$@
 
 builtin/minienv.o: builtin/minienv.c builtin/minienv.h builtin/builtin.o
-	cc $(CFLAGS) -c -O3 $< -o$@
+	$(CC) $(CFLAGS) -c -O3 $< -o$@
 
 # Building the builtin, rts and stdlib is a little tricky as we have to be
 # careful about order. First comes the __builtin__.act file,
@@ -82,7 +82,7 @@ stdlib/out/types/%.h: stdlib/src/%.h
 
 stdlib/out/release/%.o: stdlib/src/%.c
 	@mkdir -p $(dir $@)
-	cc $(CFLAGS) -I. -Istdlib/ -Istdlib/out/ -c $< -o$@
+	$(CC) $(CFLAGS) -I. -Istdlib/ -Istdlib/out/ -c $< -o$@
 
 NUMPY_CFILES=$(wildcard stdlib/c_src/numpy/*.h)
 ifeq ($(shell uname -s),Linux)
@@ -90,7 +90,7 @@ NUMPY_CFLAGS+=-lbsd -ldl -lmd
 endif
 stdlib/out/release/numpy.o: stdlib/src/numpy.c stdlib/src/numpy.h stdlib/out/types/math.h $(NUMPY_CFILES) stdlib/out/release/math.o
 	@mkdir -p $(dir $@)
-	cc $(CFLAGS) -Wno-unused-result -r -I. -Istdlib/out/ $< -o$@ $(NUMPY_CFLAGS) stdlib/out/release/math.o
+	$(CC) $(CFLAGS) -Wno-unused-result -r -I. -Istdlib/out/ $< -o$@ $(NUMPY_CFLAGS) stdlib/out/release/math.o
 
 # /lib --------------------------------------------------
 ARCHIVES=lib/libActon.a lib/libActonRTSdebug.a lib/libcomm.a lib/libdb.a lib/libdbclient.a lib/libremote.a lib/libvc.a
@@ -129,22 +129,22 @@ lib/libvc.a: backend/failure_detector/vector_clock.o
 
 # /rts --------------------------------------------------
 rts/rts.o: rts/rts.c rts/rts.h
-	cc $(CFLAGS) -Wno-int-to-void-pointer-cast \
+	$(CC) $(CFLAGS) -Wno-int-to-void-pointer-cast \
 		-Wno-unused-result \
 		-pthread \
 		-c -O3 $< -o $@
 
 rts/rts-debug.o: rts/rts.c rts/rts.h
-	cc $(CFLAGS) -DRTS_DEBUG -Wno-int-to-void-pointer-cast \
+	$(CC) $(CFLAGS) -DRTS_DEBUG -Wno-int-to-void-pointer-cast \
 		-Wno-unused-result \
 		-pthread \
 		-c -O3 $< -o $@
 
 rts/empty.o: rts/empty.c
-	cc $(CFLAGS) -c $< -o $@
+	$(CC) $(CFLAGS) -c $< -o $@
 
 rts/pingpong: rts/pingpong.c rts/pingpong.h rts/rts.o
-	cc $(CFLAGS) -Wno-int-to-void-pointer-cast \
+	$(CC) $(CFLAGS) -Wno-int-to-void-pointer-cast \
 		-L lib \
 		-lutf8proc -ldbclient -lremote -lcomm -ldb -lvc -lprotobuf-c \
 		rts/rts.o \
