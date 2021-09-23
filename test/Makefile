@@ -6,7 +6,8 @@ TESTS= \
 	test_random \
 	test_time \
 	rts_sleep \
-	regression
+	regression \
+	stdlib/test_numpy
 test: $(TESTS)
 
 regression:
@@ -59,5 +60,10 @@ rts_sleep:
 test_time:
 	$(ACTONC) --root main $@.act
 	./test_time $(shell date "+%s")
+
+.PHONY: stdlib/test_numpy
+stdlib/test_numpy: stdlib/test_numpy.act
+	$(ACTONC) --root main $<
+	./$@
 
 .PHONY: argv test_acton_rts_sleep test_random test_time regression rts_sleep
