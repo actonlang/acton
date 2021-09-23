@@ -130,7 +130,7 @@ using `actonc` to compile Acton programs.
 
 ### Debian
 ```
-apt install alex gcc happy haskell-stack libbsd-dev libprotobuf-c-dev libutf8proc-dev make uuid-dev zlib1g-dev
+apt install gcc haskell-stack libbsd-dev libprotobuf-c-dev libutf8proc-dev make uuid-dev zlib1g-dev
 ```
 
 ### Mac OS X

@@ -3,10 +3,8 @@ Section: devel
 Priority: optional
 Maintainer: Kristian Larsson <kristian@spritelink.net>
 Build-Depends:
- alex,
  debhelper-compat (= 13),
  gcc,
- happy,
  haskell-stack,
  libbsd-dev,
  libprotobuf-c-dev,
