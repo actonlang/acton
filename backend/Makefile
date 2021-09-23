@@ -28,10 +28,10 @@ endif
 all: $(LIBDIR)/libcomm.a $(LIBDIR)/libdb.a $(LIBDIR)/libdbclient.a $(LIBDIR)/libremote.a $(LIBDIR)/libvc.a client server
 
 %.o: %.c
-	cc $^ -c $(LFLAGS) $(CFLAGS) -o $@
+	$(CC) $^ -c $(LFLAGS) $(CFLAGS) -o $@
 
 failure_detector/%.o: failure_detector/%.c
-	cc $^ -c $(LFLAGS) $(CFLAGS) -o $@
+	$(CC) $^ -c $(LFLAGS) $(CFLAGS) -o $@
 
 failure_detector/db_messages.pb-c.c: failure_detector/db_messages.proto
 	protoc-c --c_out=$@ $^
@@ -54,13 +54,13 @@ $(LIBDIR)/libvc.a:
 .PHONY: $(LIBDIR)/libcomm.a $(LIBDIR)/libdb.a $(LIBDIR)/libdbclient.a
 
 client: client.c $(LIBDIR)/libdb.a $(LIBDIR)/libdbclient.a $(LIBDIR)/libremote.a $(LIBDIR)/libcomm.a $(LIBDIR)/libvc.a
-	cc client.c \
+	$(CC) client.c \
 	 $(CFLAGS) $(LARGP) \
 	 -L $(LIBDIR) -L/usr/local/opt/util-linux/lib -ldbclient -lremote -lcomm -ldb -lvc -lprotobuf-c -pthread -luuid \
 	 -o client
 
 server: server.c failure_detector $(LIBDIR)/libremote.a $(LIBDIR)/libcomm.a $(LIBDIR)/libdb.a $(LIBDIR)/libvc.a
-	cc server.c \
+	$(CC) server.c \
 	 $(CFLAGS) $(LARGP) \
 	 -L $(LIBDIR) -L/usr/local/opt/util-linux/lib -lremote -lcomm -ldb -lvc -lprotobuf-c -pthread -luuid \
 	 -o server
@@ -78,41 +78,41 @@ test: $(TESTS)
 	./skiplist_test
 
 failure_detector/db_messages_test: failure_detector/db_messages_test.c $(LIBDIR)/libremote.a $(LIBDIR)/libvc.a
-	cc $^ \
+	$(CC) $^ \
 		$(CFLAGS) -I/usr/local/include -I/usr/include \
 		-L $(LIBDIR) -L/usr/local/lib -L/usr/local/opt/util-linux/lib -lvc -lremote -pthread -lprotobuf-c $(LFLAGS) \
 		$(LIBS) \
 		-o $@
 
 actor_ring_tests_local: actor_ring_tests_local.c $(LIBDIR)/libdb.a
-	cc actor_ring_tests_local.c \
+	$(CC) actor_ring_tests_local.c \
 		$(CFLAGS) -I ../src -L $(LIBDIR) -L/usr/local/opt/util-linux/lib \
 		-ldb -lvc -lremote -lprotobuf-c $(LFLAGS) -pthread \
 		$(LIBS) \
 		-o actor_ring_tests_local
 
 actor_ring_tests_remote: actor_ring_tests_remote.c $(LIBDIR)/libdb.a $(LIBDIR)/libdbclient.a failure_detector
-	cc actor_ring_tests_remote.c \
+	$(CC) actor_ring_tests_remote.c \
 	 $(CFLAGS) \
 	 -L $(LIBDIR) -L/usr/local/opt/util-linux/lib -ldbclient -lremote -lcomm -ldb -lvc -lprotobuf-c -pthread -luuid \
 	 -o actor_ring_tests_remote
 
 db_unit_tests: db_unit_tests.c $(LIBDIR)/libdb.a
-	cc -std=c11 db_unit_tests.c \
+	$(CC) -std=c11 db_unit_tests.c \
 		$(CFLAGS) -I ../src -L $(LIBDIR) -L/usr/local/opt/util-linux/lib \
 		-ldb -lvc $(LFLAGS) -pthread \
 		$(LIBS) \
 		-o db_unit_tests
 
 queue_unit_tests: queue_unit_tests.c $(LIBDIR)/libdb.a
-	cc queue_unit_tests.c \
+	$(CC) queue_unit_tests.c \
 		$(CFLAGS) -I ../src -L $(LIBDIR) -L/usr/local/opt/util-linux/lib \
 		-ldb -lvc -lremote -lprotobuf-c $(LFLAGS) -pthread \
 		$(LIBS) \
 		-o queue_unit_tests
 
 skiplist_test: skiplist_test.c skiplist.c
-	cc skiplist_test.c skiplist.c \
+	$(CC) skiplist_test.c skiplist.c \
 		$(CFLAGS) -I ../src \
 		$(LFLAGS) -L/usr/local/opt/util-linux/lib \
 		-o skiplist_test

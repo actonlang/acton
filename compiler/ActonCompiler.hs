@@ -361,14 +361,14 @@ runRestPasses args paths env0 parsed = do
                               hFile = outbase ++ ".h"
                               oFile = joinPath [projLib paths, n++".o"]
                               aFile = joinPath [projLib paths, "libActonProject.a"]
-                              gccCmd = "gcc " ++ pedantArg ++ " -g -c -I" ++ projOut paths ++ " -I" ++ sysPath paths ++ " -o" ++ oFile ++ " " ++ cFile
+                              ccCmd = "cc " ++ pedantArg ++ " -g -c -I" ++ projOut paths ++ " -I" ++ sysPath paths ++ " -o" ++ oFile ++ " " ++ cFile
                               arCmd = "ar rcs " ++ aFile ++ " " ++ oFile
                           writeFile hFile h
                           writeFile cFile c
                           iff (ccmd args) $ do
-                              putStrLn gccCmd
+                              putStrLn ccCmd
                               putStrLn arCmd
-                          (_,_,_,hdl) <- createProcess (shell $ gccCmd ++ " && " ++ arCmd)
+                          (_,_,_,hdl) <- createProcess (shell $ ccCmd ++ " && " ++ arCmd)
                           returnCode <- waitForProcess hdl
                           case returnCode of
                               ExitSuccess -> return()
@@ -397,8 +397,8 @@ buildExecutable env args paths task
                                       c <- Acton.CodeGen.genRoot env qn' t
                                       writeFile rootFile c
                                       iff (ccmd args) $ do
-                                          putStrLn gccCmd
-                                      (_,_,_,hdl) <- createProcess (shell gccCmd)
+                                          putStrLn ccCmd
+                                      (_,_,_,hdl) <- createProcess (shell ccCmd)
                                       returnCode <- waitForProcess hdl
                                       case returnCode of
                                           ExitSuccess -> return()
@@ -425,4 +425,4 @@ buildExecutable env args paths task
         binFile             = joinPath [binDir paths, binFilename]
         srcbase             = srcFile paths mn
         pedantArg           = if (cpedantic args) then "-Werror" else ""
-        gccCmd              = "gcc " ++ pedantArg ++ " -g -I" ++ projOut paths ++ " -I" ++ sysPath paths ++ " " ++ rootFile ++ " -o" ++ binFile ++ libFiles
+        ccCmd               = "cc " ++ pedantArg ++ " -g -I" ++ projOut paths ++ " -I" ++ sysPath paths ++ " " ++ rootFile ++ " -o" ++ binFile ++ libFiles
