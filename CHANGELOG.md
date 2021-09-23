@@ -26,6 +26,13 @@ There are currently known regressions:
 - Continuation environment now includes all variables [#288]
   - Previously, after the CPS step, the generated continuation was lacking its
     environment which meant some variables were inaccessible.
+- The numpy module is now working again [#293]
+  - It was broken during a code restructuring and has now been restored.
+  - The entire public interface is now contained in numpy.h (not spread over
+    multiple .h files as before).
+  - numpy.o is partially linked to hide any library dependencies.
+  - The same model of not leaking module internals will be used for other
+    modules in the future.
 
 
 ## [0.6.1] (2021-09-19)
@@ -410,6 +417,7 @@ then, this second incarnation has been in focus and 0.2.0 was its first version.
 [#279]: https://github.com/actonlang/acton/pull/279
 [#285]: https://github.com/actonlang/acton/pull/285
 [#288]: https://github.com/actonlang/acton/pull/288
+[#293]: https://github.com/actonlang/acton/pull/293
 [0.3.0]: https://github.com/actonlang/acton/releases/tag/v0.3.0
 [0.4.0]: https://github.com/actonlang/acton/compare/v0.3.0...v0.4.0
 [0.4.1]: https://github.com/actonlang/acton/compare/v0.4.0...v0.4.1
