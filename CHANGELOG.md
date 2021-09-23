@@ -5,6 +5,13 @@
 There are currently known regressions:
 - using RTS together with the distributed backend database is not working
 
+
+## [0.6.2] (2021-09-23)
+
+### Added
+- Linuxbrew build [homebrew-acton#7]
+  - Acton can now be installed via Linuxbrew (Homebrew on Linux)
+
 ### Fixed
 - Constraint grouping to also consider free environment types variables [#277]
   - Previously, this bug in the constraint solver meant that `actonc` could hang
@@ -413,3 +420,6 @@ then, this second incarnation has been in focus and 0.2.0 was its first version.
 [0.5.3]: https://github.com/actonlang/acton/compare/v0.5.2...v0.5.3
 [0.6.0]: https://github.com/actonlang/acton/compare/v0.5.3...v0.6.0
 [0.6.1]: https://github.com/actonlang/acton/compare/v0.6.0...v0.6.1
+[0.6.2]: https://github.com/actonlang/acton/compare/v0.6.0...v0.6.1
+
+[homebrew-acton#7]: https://github.com/actonlang/homebrew-acton/pull/7
