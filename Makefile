@@ -1,7 +1,6 @@
 include common.mk
 CHANGELOG_VERSION=$(shell grep '^\#\# \[[0-9]' CHANGELOG.md | sed 's/\#\# \[\([^]]\{1,\}\)].*/\1/' | head -n1)
 
-CFLAGS=-g -I.
 ACTONC=dist/bin/actonc
 
 ifeq ($(shell ls $(ACTONC) >/dev/null 2>&1; echo $$?),0)
@@ -10,12 +9,10 @@ else
 VERSION_INFO:=unknown
 endif
 
-ifeq ($(shell uname -s),Linux)
-CFLAGS += -Werror -Wno-int-to-pointer-cast -Wno-pointer-to-int-cast
-endif
+CFLAGS+=-g -I. -Wno-int-to-pointer-cast -Wno-pointer-to-int-cast
+LDFLAGS+=-Llib
+LDLIBS+=-lprotobuf-c -luuid -lm -lpthread
 
-CFLAGS+=-Wno-int-to-pointer-cast -Wno-pointer-to-int-cast -g -O0
-#
 # look for jemalloc
 JEM_LIB?=$(wildcard /usr/lib/x86_64-linux-gnu/libjemalloc.a)
 ifneq ($(JEM_LIB),)
@@ -25,14 +22,14 @@ LDFLAGS+=-L$(dir $(JEM_LIB))
 LDLIBS+=-ljemalloc
 endif
 
-LDFLAGS+=-Llib
-LDLIBS+=-lprotobuf-c -luuid -lm -lpthread
-
 ifeq ($(shell uname -s),Darwin)
 LDFLAGS+=-L/usr/local/opt/util-linux/lib
 LDLIBS+=-largp
 endif
 
+ifeq ($(shell uname -s),Linux)
+CFLAGS += -Werror
+endif
 
 .PHONY: all
 all: version-check distribution
