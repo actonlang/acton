@@ -36,56 +36,31 @@ work fairly well.
 
 ## Install acton
 
+### Debian / Ubuntu by downloading .deb
+
+There are pre-built .deb packages available via GitHub Releases. Download the
+latest one from [the Release page](https://github.com/actonlang/acton/releases).
+
+```
+$ wget https://github.com/actonlang/acton/releases/download/v0.6.2/acton_0.6.2_amd64.deb
+$ dpkg -i acton_0.6.2_amd64.deb
+$ apt-get -f install
+```
+
 ### Mac OS X using Homebrew
 Acton is available as a Homebrew tap, which can be installed with:
 ```
 brew install actonlang/acton/acton
 ```
 
-### By downloading a tar ball
+### By downloading a binary release tar ball
 
-Acton is published as GitHub Releases. Download a tar ball from [the Release
-page](https://github.com/actonlang/acton/releases). Pick the latest stable
-versioned release.
+There are pre-built binary release tar balls available for download for Linux
+and Mac OS X in case the above package formats are not suitable. See the guide,
+[installing Acton from a release tar ball](docs/install-acton-from-tar-ball.md).
 
-In case you are looking to live on the bleeding edge or have been asked by a
-developer (in case you ran into a bug) you can pick `tip`, which is built
-directly from the `main` branch.
 
-Extract the Acton tar ball:
-```
-$ tar jxvf acton-*
-```
-
-You will want to include the `acton/bin` directory in your `PATH` so you can use
-`actonc`.
-
-`actonc` has run time dependencies and you will need to install the necessary
-dependencies for your platform.
-
-#### Debian
-```
-apt install gcc libprotobuf-c-dev libutf8proc-dev
-```
-
-#### Mac OS X
-```
-brew install protobuf-c util-linux
-```
-
-## Compiling an Acton program
-
-Make your own module by creating a directory
-
-```sh
-$ mkdir foo
-$ cd foo
-```
-
-Tell Acton its a module
-```sh
-$ touch .acton
-```
+## Writing and compiling your first Acton program
 
 Edit the program source file, let's call it `helloworld.act`, and enter the
 following code:
@@ -104,15 +79,9 @@ $ ./helloworld
 Hello, world!
 ```
 
-## Running Acton programs
-The final program produced by the Acton compiler is a self contained binary.
-Thus it has no run time dependencies. The `helloworld` binary built in the
-above example can be shipped to another machine, that does not have `actonc` or
-any of its dependencies installed, and still run. Like any other binary, it is
-naturally OS and arch dependent though.
-
 ## And then...?
 Go read the [tutorial!](docs/tutorial/index.html)
+
 
 # Building Acton from source
 See [building Acton from source](docs/building-acton-from-source.md).
