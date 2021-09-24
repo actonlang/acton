@@ -1,7 +1,7 @@
 include common.mk
 CHANGELOG_VERSION=$(shell grep '^\#\# \[[0-9]' CHANGELOG.md | sed 's/\#\# \[\([^]]\{1,\}\)].*/\1/' | head -n1)
 
-CFLAGS=-g
+CFLAGS=-g -I.
 ACTONC=dist/bin/actonc
 
 ifeq ($(shell ls $(ACTONC) >/dev/null 2>&1; echo $$?),0)
@@ -96,12 +96,11 @@ backend/failure_detector/db_messages_test: backend/failure_detector/db_messages_
 		-lActonDB $(LDLIBS)
 
 backend/test/%: backend/test/%.c lib/libActonDB.a
-	$(CC) -o$@ $< $(CFLAGS) \
-		$(LDFLAGS) \
-		-lActonDB $(LDLIBS)
+	$(CC) -o$@ $< $(CFLAGS) -Ibackend \
+		$(LDFLAGS) -lActonDB $(LDLIBS)
 
 backend/test/skiplist_test: backend/test/skiplist_test.c backend/skiplist.c
-	$(CC) -o$@ $^ $(CFLAGS) \
+	$(CC) -o$@ $^ $(CFLAGS) -Ibackend \
 		$(LDLIBS)
 
 # /builtin ----------------------------------------------
@@ -137,7 +136,7 @@ stdlib/out/types/%.h: stdlib/src/%.h
 
 stdlib/out/release/%.o: stdlib/src/%.c
 	@mkdir -p $(dir $@)
-	$(CC) $(CFLAGS) -I. -Istdlib/ -Istdlib/out/ -c $< -o$@
+	$(CC) $(CFLAGS) -Istdlib/ -Istdlib/out/ -c $< -o$@
 
 NUMPY_CFILES=$(wildcard stdlib/c_src/numpy/*.h)
 ifeq ($(shell uname -s),Linux)
@@ -145,7 +144,7 @@ NUMPY_CFLAGS+=-lbsd -ldl -lmd
 endif
 stdlib/out/release/numpy.o: stdlib/src/numpy.c stdlib/src/numpy.h stdlib/out/types/math.h $(NUMPY_CFILES) stdlib/out/release/math.o
 	@mkdir -p $(dir $@)
-	$(CC) $(CFLAGS) -Wno-unused-result -r -I. -Istdlib/out/ $< -o$@ $(NUMPY_CFLAGS) stdlib/out/release/math.o
+	$(CC) $(CFLAGS) -Wno-unused-result -r -Istdlib/out/ $< -o$@ $(NUMPY_CFLAGS) stdlib/out/release/math.o
 
 # /lib --------------------------------------------------
 ARCHIVES=lib/libActon.a lib/libActonRTSdebug.a lib/libActonDB.a
