@@ -1,37 +1,32 @@
+CFLAGS+=-Wno-int-to-pointer-cast -Wno-pointer-to-int-cast -g -O0
+
 # look for jemalloc
 JEM_LIB?=$(wildcard /usr/lib/x86_64-linux-gnu/libjemalloc.a)
-
 ifeq ($(JEM_LIB),)
 $(info ** Not using jemalloc)
-JEM_LIBS:=
-JEM_FLAGS:=
 else
 $(info Using jemalloc: $(JEM_LIB))
-JEM_FLAGS:=-DUSE_JEMALLOC
-JEM_LIBS:=$(JEM_LIB)
+CFLAGS+=-DUSE_JEMALLOC
+LDFLAGS+=-L$(dir $(JEM_LIB))
+LDLIBS+=-ljemalloc
 endif
 
-CFLAGS:=$(JEM_FLAGS) -Wno-int-to-pointer-cast -Wno-pointer-to-int-cast -g -O0
-LIBS:=$(JEM_LIBS)
-
-LFLAGS=-luuid -lm
-
 LIBDIR=../lib
+LDFLAGS+=-L$(LIBDIR)
+LDLIBS+=-lprotobuf-c -luuid -lm -lpthread
 
-UNAME_S := $(shell uname -s)
-ifeq ($(UNAME_S),Darwin)
-	LARGP=-largp
-else
-	LARGP=
+ifeq ($(shell uname -s),Darwin)
+	LDFLAGS+=/usr/local/opt/util-linux/lib
+	LDLIBS=-largp
 endif
 
 all: actondb
 
 %.o: %.c
-	$(CC) -o$@ $< -c $(CFLAGS) $(LFLAGS)
+	$(CC) -o$@ $< -c $(CFLAGS) $(LDLIBS)
 
 failure_detector/%.o: failure_detector/%.c
-	$(CC) -o$@ $< -c $(CFLAGS) $(LFLAGS)
+	$(CC) -o$@ $< -c $(CFLAGS) $(LDLIBS)
 
 failure_detector/db_messages.pb-c.c: failure_detector/db_messages.proto
 	protoc-c --c_out=$@ $<
@@ -42,8 +37,9 @@ $(LIBDIR)/libActonDB.a:
 
 actondb: actondb.c failure_detector $(LIBDIR)/libActonDB.a
 	$(CC) -o$@ $< $(CFLAGS) $(LARGP) \
-		-L $(LIBDIR) -L/usr/local/opt/util-linux/lib \
-		-lActonDB -lprotobuf-c -pthread -luuid
+		$(LDFLAGS) \
+		-lActonDB \
+		$(LDLIBS)
 
 # tests
 TESTS=failure_detector/db_messages_test test/actor_ring_tests_local test/actor_ring_tests_remote test/db_unit_tests test/queue_unit_tests test/skiplist_test test/test_client
@@ -60,43 +56,37 @@ test: $(TESTS)
 failure_detector/db_messages_test: failure_detector/db_messages_test.c $(LIBDIR)/libActonDB.a
 	$(CC) -o$@ $< $(CFLAGS) \
 		-I/usr/local/include -I/usr/include \
-		-L $(LIBDIR) -L/usr/local/lib -L/usr/local/opt/util-linux/lib \
-		-lActonDB -lprotobuf-c $(LFLAGS) -pthread \
-		$(LIBS)
+		$(LDFLAGS) \
+		-lActonDB $(LDLIBS)
 
 test/actor_ring_tests_local: test/actor_ring_tests_local.c $(LIBDIR)/libActonDB.a
 	$(CC) -o$@ $< $(CFLAGS) \
-		-I. -L $(LIBDIR) -L/usr/local/opt/util-linux/lib \
-		-lActonDB -lprotobuf-c $(LFLAGS) -pthread \
-		$(LIBS)
+		-I. $(LDFLAGS) \
+		-lActonDB $(LDLIBS)
 
 test/actor_ring_tests_remote: test/actor_ring_tests_remote.c $(LIBDIR)/libActonDB.a failure_detector
 	$(CC) -o$@ $< $(CFLAGS) \
-		-I. -L $(LIBDIR) -L/usr/local/opt/util-linux/lib \
-		-lActonDB -lprotobuf-c $(LFLAGS) -pthread \
-		$(LIBS)
+		-I. $(LDFLAGS) \
+		-lActonDB $(LDLIBS)
 
 test/db_unit_tests: test/db_unit_tests.c $(LIBDIR)/libActonDB.a
 	$(CC) -o$@ $< -std=c11 $(CFLAGS) \
-		-I. -L $(LIBDIR) -L/usr/local/opt/util-linux/lib \
-		-lActonDB -lprotobuf-c $(LFLAGS) -pthread \
-		$(LIBS)
+		-I. $(LDFLAGS) \
+		-lActonDB $(LDLIBS)
 
 test/queue_unit_tests: test/queue_unit_tests.c $(LIBDIR)/libActonDB.a
 	$(CC) -o$@ $< $(CFLAGS) \
-		-I. -L $(LIBDIR) -L/usr/local/opt/util-linux/lib \
-		-lActonDB -lprotobuf-c $(LFLAGS) -pthread \
-		$(LIBS)
+		-I. $(LDFLAGS) \
+		-lActonDB $(LDLIBS)
 
 test/skiplist_test: test/skiplist_test.c skiplist.c
 	$(CC) -o$@ $^ $(CFLAGS) \
-		-I. -L/usr/local/opt/util-linux/lib $(LFLAGS)
+		-I. $(LDLIBS)
 
 test/test_client: test/test_client.c $(LIBDIR)/libActonDB.a
 	$(CC) -o$@ $< $(CFLAGS) $(LARGP) \
-		-I. -L $(LIBDIR) -L/usr/local/opt/util-linux/lib \
-		-lActonDB -lprotobuf-c $(LFLAGS) -pthread \
-		$(LIBS)
+		-I. $(LDFLAGS) \
+		-lActonDB $(LDLIBS)
 
 
 clean:
