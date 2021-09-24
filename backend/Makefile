@@ -25,7 +25,7 @@ else
 	LARGP=
 endif
 
-all: $(LIBDIR)/libcomm.a $(LIBDIR)/libdb.a $(LIBDIR)/libdbclient.a $(LIBDIR)/libremote.a $(LIBDIR)/libvc.a client server
+all: $(LIBDIR)/libcomm.a $(LIBDIR)/libdb.a $(LIBDIR)/libdbclient.a $(LIBDIR)/libremote.a $(LIBDIR)/libvc.a server
 
 %.o: %.c
 	$(CC) -o$@ $< -c $(CFLAGS) $(LFLAGS)
@@ -53,7 +53,7 @@ $(LIBDIR)/libvc.a:
 
 .PHONY: $(LIBDIR)/libcomm.a $(LIBDIR)/libdb.a $(LIBDIR)/libdbclient.a
 
-client: client.c $(LIBDIR)/libdb.a $(LIBDIR)/libdbclient.a $(LIBDIR)/libremote.a $(LIBDIR)/libcomm.a $(LIBDIR)/libvc.a
+test_client: test_client.c $(LIBDIR)/libdb.a $(LIBDIR)/libdbclient.a $(LIBDIR)/libremote.a $(LIBDIR)/libcomm.a $(LIBDIR)/libvc.a
 	$(CC) -o$@ $< $(CFLAGS) $(LARGP) \
 		-L $(LIBDIR) -L/usr/local/opt/util-linux/lib \
 		-ldbclient -lremote -lcomm -ldb -lvc -lprotobuf-c -pthread -luuid
@@ -88,7 +88,7 @@ actor_ring_tests_local: actor_ring_tests_local.c $(LIBDIR)/libdb.a
 		-ldb -lvc -lremote -lprotobuf-c $(LFLAGS) -pthread \
 		$(LIBS)
 
-actor_ring_tests_remote: actor_ring_tests_remote.c $(LIBDIR)/libdb.a $(LIBDIR)/libdbclient.a failure_detector
+actor_ring_tests_remote: actor_ring_tests_remote.c $(LIBDIR)/libcomm.a $(LIBDIR)/libdb.a $(LIBDIR)/libdbclient.a failure_detector
 	$(CC) -o$@ $< $(CFLAGS) \
 		-L $(LIBDIR) -L/usr/local/opt/util-linux/lib \
 		-ldbclient -lremote -lcomm -ldb -lvc -lprotobuf-c -pthread -luuid
@@ -110,4 +110,4 @@ skiplist_test: skiplist_test.c skiplist.c
 		-L/usr/local/opt/util-linux/lib $(LFLAGS)
 
 clean:
-	rm -rf *.o failure_detector/*.o failure_detector/*.a $(LIBDIR)/libcomm.a $(LIBDIR)/libdb.a $(LIBDIR)/libdbclient.a $(LIBDIR)/libremote.a $(LIBDIR)/libvc.a $(TESTS) server client failure_detector/db_messages_test
+	rm -rf *.o failure_detector/*.o failure_detector/*.a $(LIBDIR)/libcomm.a $(LIBDIR)/libdb.a $(LIBDIR)/libdbclient.a $(LIBDIR)/libremote.a $(LIBDIR)/libvc.a $(TESTS) server test_client failure_detector/db_messages_test
