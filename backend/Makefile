@@ -25,7 +25,7 @@ else
 	LARGP=
 endif
 
-all: $(LIBDIR)/libcomm.a $(LIBDIR)/libdb.a $(LIBDIR)/libdbclient.a $(LIBDIR)/libremote.a $(LIBDIR)/libvc.a server
+all: $(LIBDIR)/libcomm.a $(LIBDIR)/libdb.a $(LIBDIR)/libdbclient.a $(LIBDIR)/libremote.a $(LIBDIR)/libvc.a actondb
 
 %.o: %.c
 	$(CC) -o$@ $< -c $(CFLAGS) $(LFLAGS)
@@ -58,7 +58,7 @@ test_client: test_client.c $(LIBDIR)/libdb.a $(LIBDIR)/libdbclient.a $(LIBDIR)/l
 		-L $(LIBDIR) -L/usr/local/opt/util-linux/lib \
 		-ldbclient -lremote -lcomm -ldb -lvc -lprotobuf-c -pthread -luuid
 
-server: server.c failure_detector $(LIBDIR)/libremote.a $(LIBDIR)/libcomm.a $(LIBDIR)/libdb.a $(LIBDIR)/libvc.a
+actondb: actondb.c failure_detector $(LIBDIR)/libremote.a $(LIBDIR)/libcomm.a $(LIBDIR)/libdb.a $(LIBDIR)/libvc.a
 	$(CC) -o$@ $< $(CFLAGS) $(LARGP) \
 		-L $(LIBDIR) -L/usr/local/opt/util-linux/lib \
 		-lremote -lcomm -ldb -lvc -lprotobuf-c -pthread -luuid
@@ -110,4 +110,4 @@ skiplist_test: skiplist_test.c skiplist.c
 		-L/usr/local/opt/util-linux/lib $(LFLAGS)
 
 clean:
-	rm -rf *.o failure_detector/*.o failure_detector/*.a $(LIBDIR)/libcomm.a $(LIBDIR)/libdb.a $(LIBDIR)/libdbclient.a $(LIBDIR)/libremote.a $(LIBDIR)/libvc.a $(TESTS) server test_client failure_detector/db_messages_test
+	rm -rf *.o failure_detector/*.o failure_detector/*.a $(LIBDIR)/libcomm.a $(LIBDIR)/libdb.a $(LIBDIR)/libdbclient.a $(LIBDIR)/libremote.a $(LIBDIR)/libvc.a $(TESTS) actondb test_client failure_detector/db_messages_test

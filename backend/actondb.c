@@ -18,7 +18,7 @@
  *      Author: aagapi
  */
 
-// Server:
+// ActonDB Server:
 
 #include "db.h"
 #include "failure_detector/db_queries.h"
