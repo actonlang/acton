@@ -53,27 +53,22 @@ $(LIBDIR)/libvc.a:
 
 .PHONY: $(LIBDIR)/libcomm.a $(LIBDIR)/libdb.a $(LIBDIR)/libdbclient.a
 
-test_client: test_client.c $(LIBDIR)/libdb.a $(LIBDIR)/libdbclient.a $(LIBDIR)/libremote.a $(LIBDIR)/libcomm.a $(LIBDIR)/libvc.a
-	$(CC) -o$@ $< $(CFLAGS) $(LARGP) \
-		-L $(LIBDIR) -L/usr/local/opt/util-linux/lib \
-		-ldbclient -lremote -lcomm -ldb -lvc -lprotobuf-c -pthread -luuid
-
 actondb: actondb.c failure_detector $(LIBDIR)/libremote.a $(LIBDIR)/libcomm.a $(LIBDIR)/libdb.a $(LIBDIR)/libvc.a
 	$(CC) -o$@ $< $(CFLAGS) $(LARGP) \
 		-L $(LIBDIR) -L/usr/local/opt/util-linux/lib \
 		-lremote -lcomm -ldb -lvc -lprotobuf-c -pthread -luuid
 
 # tests
-TESTS=failure_detector/db_messages_test actor_ring_tests_local actor_ring_tests_remote db_unit_tests queue_unit_tests skiplist_test
+TESTS=failure_detector/db_messages_test test/actor_ring_tests_local test/actor_ring_tests_remote test/db_unit_tests test/queue_unit_tests test/skiplist_test
 build-tests: $(TESTS)
 
 test: $(TESTS)
 	@echo DISABLED TEST: failure_detector/db_messages_test
-	./actor_ring_tests_local
-	./actor_ring_tests_remote
-	./db_unit_tests
-	@echo DISABLED test: ./queue_unit_tests
-	./skiplist_test
+	./test/actor_ring_tests_local
+	./test/actor_ring_tests_remote
+	./test/db_unit_tests
+	@echo DISABLED test: ./test/queue_unit_tests
+	./test/skiplist_test
 
 failure_detector/db_messages_test: failure_detector/db_messages_test.c $(LIBDIR)/libremote.a $(LIBDIR)/libvc.a
 	$(CC) -o$@ $< $(CFLAGS) \
@@ -82,32 +77,36 @@ failure_detector/db_messages_test: failure_detector/db_messages_test.c $(LIBDIR)
 		-lvc -lremote -pthread -lprotobuf-c $(LFLAGS) \
 		$(LIBS)
 
-actor_ring_tests_local: actor_ring_tests_local.c $(LIBDIR)/libdb.a
+test/actor_ring_tests_local: test/actor_ring_tests_local.c $(LIBDIR)/libdb.a
 	$(CC) -o$@ $< $(CFLAGS) \
-		-I ../src -L $(LIBDIR) -L/usr/local/opt/util-linux/lib \
+		-I. -L $(LIBDIR) -L/usr/local/opt/util-linux/lib \
 		-ldb -lvc -lremote -lprotobuf-c $(LFLAGS) -pthread \
 		$(LIBS)
 
-actor_ring_tests_remote: actor_ring_tests_remote.c $(LIBDIR)/libcomm.a $(LIBDIR)/libdb.a $(LIBDIR)/libdbclient.a failure_detector
+test/actor_ring_tests_remote: test/actor_ring_tests_remote.c $(LIBDIR)/libcomm.a $(LIBDIR)/libdb.a $(LIBDIR)/libdbclient.a failure_detector
 	$(CC) -o$@ $< $(CFLAGS) \
-		-L $(LIBDIR) -L/usr/local/opt/util-linux/lib \
+		-I. -L $(LIBDIR) -L/usr/local/opt/util-linux/lib \
 		-ldbclient -lremote -lcomm -ldb -lvc -lprotobuf-c -pthread -luuid
 
-db_unit_tests: db_unit_tests.c $(LIBDIR)/libdb.a
+test/db_unit_tests: test/db_unit_tests.c $(LIBDIR)/libdb.a
 	$(CC) -o$@ $< -std=c11 $(CFLAGS) \
-		-I ../src -L $(LIBDIR) -L/usr/local/opt/util-linux/lib \
+		-I. -L $(LIBDIR) -L/usr/local/opt/util-linux/lib \
 		-ldb -lvc $(LFLAGS) -pthread \
 		$(LIBS)
 
-queue_unit_tests: queue_unit_tests.c $(LIBDIR)/libdb.a
+test/queue_unit_tests: test/queue_unit_tests.c $(LIBDIR)/libdb.a
 	$(CC) -o$@ $< $(CFLAGS) \
-		-I ../src -L $(LIBDIR) -L/usr/local/opt/util-linux/lib \
+		-I. -L $(LIBDIR) -L/usr/local/opt/util-linux/lib \
 		-ldb -lvc -lremote -lprotobuf-c $(LFLAGS) -pthread
 
-skiplist_test: skiplist_test.c skiplist.c
+test/skiplist_test: test/skiplist_test.c skiplist.c
 	$(CC) -o$@ $^ $(CFLAGS) \
-		-I ../src \
-		-L/usr/local/opt/util-linux/lib $(LFLAGS)
+		-I. -L/usr/local/opt/util-linux/lib $(LFLAGS)
+
+test/test_client: test/test_client.c $(LIBDIR)/libdb.a $(LIBDIR)/libdbclient.a $(LIBDIR)/libremote.a $(LIBDIR)/libcomm.a $(LIBDIR)/libvc.a
+	$(CC) -o$@ $< $(CFLAGS) $(LARGP) \
+		-I. -L $(LIBDIR) -L/usr/local/opt/util-linux/lib \
+		-ldbclient -lremote -lcomm -ldb -lvc -lprotobuf-c -pthread -luuid
 
 clean:
 	rm -rf *.o failure_detector/*.o failure_detector/*.a $(LIBDIR)/libcomm.a $(LIBDIR)/libdb.a $(LIBDIR)/libdbclient.a $(LIBDIR)/libremote.a $(LIBDIR)/libvc.a $(TESTS) actondb test_client failure_detector/db_messages_test
