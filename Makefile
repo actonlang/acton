@@ -64,10 +64,10 @@ backend/actondb: backend/actondb.c lib/libActonDB.a
 		$(LDLIBS)
 
 backend/%.o: backend/%.c
-	$(CC) -o$@ $< -c $(CFLAGS) $(LDLIBS)
+	$(CC) -o$@ $< -c $(CFLAGS)
 
 backend/failure_detector/%.o: backend/failure_detector/%.c
-	$(CC) -o$@ $< -c $(CFLAGS) $(LDLIBS)
+	$(CC) -o$@ $< -c $(CFLAGS)
 
 backend/failure_detector/db_messages.pb-c.c: backend/failure_detector/db_messages.proto
 	protoc-c --c_out=$@ $<
