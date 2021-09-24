@@ -92,38 +92,17 @@ test-backend: $(BACKEND_TESTS)
 
 backend/failure_detector/db_messages_test: backend/failure_detector/db_messages_test.c lib/libActonDB.a
 	$(CC) -o$@ $< $(CFLAGS) \
-		-I/usr/local/include -I/usr/include \
 		$(LDFLAGS) \
 		-lActonDB $(LDLIBS)
 
-backend/test/actor_ring_tests_local: backend/test/actor_ring_tests_local.c lib/libActonDB.a
+backend/test/%: backend/test/%.c lib/libActonDB.a
 	$(CC) -o$@ $< $(CFLAGS) \
-		-I. $(LDFLAGS) \
-		-lActonDB $(LDLIBS)
-
-backend/test/actor_ring_tests_remote: backend/test/actor_ring_tests_remote.c lib/libActonDB.a
-	$(CC) -o$@ $< $(CFLAGS) \
-		-I. $(LDFLAGS) \
-		-lActonDB $(LDLIBS)
-
-backend/test/db_unit_tests: backend/test/db_unit_tests.c lib/libActonDB.a
-	$(CC) -o$@ $< -std=c11 $(CFLAGS) \
-		-I. $(LDFLAGS) \
-		-lActonDB $(LDLIBS)
-
-backend/test/queue_unit_tests: backend/test/queue_unit_tests.c lib/libActonDB.a
-	$(CC) -o$@ $< $(CFLAGS) \
-		-I. $(LDFLAGS) \
+		$(LDFLAGS) \
 		-lActonDB $(LDLIBS)
 
 backend/test/skiplist_test: backend/test/skiplist_test.c backend/skiplist.c
 	$(CC) -o$@ $^ $(CFLAGS) \
-		-I. $(LDLIBS)
-
-backend/test/test_client: backend/test/test_client.c lib/libActonDB.a
-	$(CC) -o$@ $< $(CFLAGS) $(LARGP) \
-		-I. $(LDFLAGS) \
-		-lActonDB $(LDLIBS)
+		$(LDLIBS)
 
 # /builtin ----------------------------------------------
 ENV_FILES=$(wildcard builtin/minienv.*)
