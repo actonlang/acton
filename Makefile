@@ -1,7 +1,6 @@
 include common.mk
 CHANGELOG_VERSION=$(shell grep '^\#\# \[[0-9]' CHANGELOG.md | sed 's/\#\# \[\([^]]\{1,\}\)].*/\1/' | head -n1)
 
-CFLAGS=-g
 ACTONC=dist/bin/actonc
 
 ifeq ($(shell ls $(ACTONC) >/dev/null 2>&1; echo $$?),0)
@@ -10,10 +9,27 @@ else
 VERSION_INFO:=unknown
 endif
 
-ifeq ($(shell uname -s),Linux)
-CFLAGS += -Werror -Wno-int-to-pointer-cast -Wno-pointer-to-int-cast
+CFLAGS+=-g -I. -Wno-int-to-pointer-cast -Wno-pointer-to-int-cast
+LDFLAGS+=-Llib
+LDLIBS+=-lprotobuf-c -luuid -lm -lpthread
+
+# look for jemalloc
+JEM_LIB?=$(wildcard /usr/lib/x86_64-linux-gnu/libjemalloc.a)
+ifneq ($(JEM_LIB),)
+$(info Using jemalloc: $(JEM_LIB))
+CFLAGS+=-DUSE_JEMALLOC
+LDFLAGS+=-L$(dir $(JEM_LIB))
+LDLIBS+=-ljemalloc
 endif
 
+ifeq ($(shell uname -s),Darwin)
+LDFLAGS+=-L/usr/local/opt/util-linux/lib
+LDLIBS+=-largp
+endif
+
+ifeq ($(shell uname -s),Linux)
+CFLAGS += -Werror
+endif
 
 .PHONY: all
 all: version-check distribution
@@ -38,16 +54,51 @@ endif
 
 
 # /backend ----------------------------------------------
-.PHONY: $(BACKEND_OFILES)
-BACKEND_OFILES = backend/comm.o backend/db.o backend/queue.o backend/skiplist.o backend/txn_state.o backend/txns.o
-# pass through for now.. should probably move the actual definitions from
-# backend/Makefile to here instead for proper dependency tracking
-$(BACKEND_OFILES):
-	$(MAKE) -C backend $(notdir $@)
+backend/actondb: backend/actondb.c lib/libActonDB.a
+	$(CC) -o$@ $< $(CFLAGS) \
+		$(LDFLAGS) \
+		-lActonDB \
+		$(LDLIBS)
 
-backend/server: lib/libcomm.a lib/libremote.a lib/libvc.a
-	$(MAKE) -C backend $(notdir $@)
+backend/%.o: backend/%.c
+	$(CC) -o$@ $< -c $(CFLAGS)
 
+backend/failure_detector/%.o: backend/failure_detector/%.c
+	$(CC) -o$@ $< -c $(CFLAGS)
+
+backend/failure_detector/db_messages.pb-c.c: backend/failure_detector/db_messages.proto
+	protoc-c --c_out=$@ $<
+
+# backend tests
+BACKEND_TESTS=backend/failure_detector/db_messages_test \
+	backend/test/actor_ring_tests_local \
+	backend/test/actor_ring_tests_remote \
+	backend/test/db_unit_tests \
+	backend/test/queue_unit_tests \
+	backend/test/skiplist_test \
+	backend/test/test_client
+
+.PHONY: test-backend
+test-backend: $(BACKEND_TESTS)
+	@echo DISABLED TEST: backend/failure_detector/db_messages_test
+	./backend/test/actor_ring_tests_local
+	./backend/test/actor_ring_tests_remote
+	./backend/test/db_unit_tests
+	@echo DISABLED test: ./backend/test/queue_unit_tests
+	./backend/test/skiplist_test
+
+backend/failure_detector/db_messages_test: backend/failure_detector/db_messages_test.c lib/libActonDB.a
+	$(CC) -o$@ $< $(CFLAGS) \
+		$(LDFLAGS) \
+		-lActonDB $(LDLIBS)
+
+backend/test/%: backend/test/%.c lib/libActonDB.a
+	$(CC) -o$@ $< $(CFLAGS) -Ibackend \
+		$(LDFLAGS) -lActonDB $(LDLIBS)
+
+backend/test/skiplist_test: backend/test/skiplist_test.c backend/skiplist.c
+	$(CC) -o$@ $^ $(CFLAGS) -Ibackend \
+		$(LDLIBS)
 
 # /builtin ----------------------------------------------
 ENV_FILES=$(wildcard builtin/minienv.*)
@@ -82,7 +133,7 @@ stdlib/out/types/%.h: stdlib/src/%.h
 
 stdlib/out/release/%.o: stdlib/src/%.c
 	@mkdir -p $(dir $@)
-	$(CC) $(CFLAGS) -I. -Istdlib/ -Istdlib/out/ -c $< -o$@
+	$(CC) $(CFLAGS) -Istdlib/ -Istdlib/out/ -c $< -o$@
 
 NUMPY_CFILES=$(wildcard stdlib/c_src/numpy/*.h)
 ifeq ($(shell uname -s),Linux)
@@ -90,10 +141,10 @@ NUMPY_CFLAGS+=-lbsd -ldl -lmd
 endif
 stdlib/out/release/numpy.o: stdlib/src/numpy.c stdlib/src/numpy.h stdlib/out/types/math.h $(NUMPY_CFILES) stdlib/out/release/math.o
 	@mkdir -p $(dir $@)
-	$(CC) $(CFLAGS) -Wno-unused-result -r -I. -Istdlib/out/ $< -o$@ $(NUMPY_CFLAGS) stdlib/out/release/math.o
+	$(CC) $(CFLAGS) -Wno-unused-result -r -Istdlib/out/ $< -o$@ $(NUMPY_CFLAGS) stdlib/out/release/math.o
 
 # /lib --------------------------------------------------
-ARCHIVES=lib/libActon.a lib/libActonRTSdebug.a lib/libcomm.a lib/libdb.a lib/libdbclient.a lib/libremote.a lib/libvc.a
+ARCHIVES=lib/libActon.a lib/libActonRTSdebug.a lib/libActonDB.a
 
 # If we later let actonc build things, it would produce a libActonProject.a file
 # in the stdlib directory, which we would need to join together with rts.o etc
@@ -106,24 +157,14 @@ OFILES += rts/rts-debug.o
 lib/libActonRTSdebug.a: rts/rts-debug.o
 	ar rcs $@ $^
 
-OFILES += backend/comm.o rts/empty.o
-lib/libcomm.a: backend/comm.o rts/empty.o
-	ar rcs $@ $^
-
-OFILES += backend/db.o backend/queue.o backend/skiplist.o backend/txn_state.o backend/txns.o rts/empty.o
-lib/libdb.a: backend/db.o backend/queue.o backend/skiplist.o backend/txn_state.o backend/txns.o rts/empty.o
-	ar rcs $@ $^
-
-OFILES += backend/client_api.o rts/empty.o
-lib/libdbclient.a: backend/client_api.o rts/empty.o
-	ar rcs $@ $^
-
-OFILES += backend/failure_detector/db_messages.pb-c.o backend/failure_detector/cells.o backend/failure_detector/db_queries.o backend/failure_detector/fd.o
-lib/libremote.a: backend/failure_detector/db_messages.pb-c.o backend/failure_detector/cells.o backend/failure_detector/db_queries.o backend/failure_detector/fd.o
-	ar rcs $@ $^
-
-OFILES += backend/failure_detector/vector_clock.o
-lib/libvc.a: backend/failure_detector/vector_clock.o
+COMM_OFILES += backend/comm.o rts/empty.o
+DB_OFILES += backend/db.o backend/queue.o backend/skiplist.o backend/txn_state.o backend/txns.o rts/empty.o
+DBCLIENT_OFILES += backend/client_api.o rts/empty.o
+REMOTE_OFILES += backend/failure_detector/db_messages.pb-c.o backend/failure_detector/cells.o backend/failure_detector/db_queries.o backend/failure_detector/fd.o
+VC_OFILES += backend/failure_detector/vector_clock.o
+BACKEND_OFILES=$(COMM_OFILES) $(DB_OFILES) $(DBCLIENT_OFILES) $(REMOTE_OFILES) $(VC_OFILES)
+OFILES += $(BACKEND_OFILES)
+lib/libActonDB.a: $(BACKEND_OFILES)
 	ar rcs $@ $^
 
 
@@ -131,13 +172,13 @@ lib/libvc.a: backend/failure_detector/vector_clock.o
 rts/rts.o: rts/rts.c rts/rts.h
 	$(CC) $(CFLAGS) -Wno-int-to-void-pointer-cast \
 		-Wno-unused-result \
-		-pthread \
+		$(LDLIBS) \
 		-c -O3 $< -o $@
 
 rts/rts-debug.o: rts/rts.c rts/rts.h
 	$(CC) $(CFLAGS) -DRTS_DEBUG -Wno-int-to-void-pointer-cast \
 		-Wno-unused-result \
-		-pthread \
+		$(LDLIBS) \
 		-c -O3 $< -o $@
 
 rts/empty.o: rts/empty.c
@@ -145,14 +186,13 @@ rts/empty.o: rts/empty.c
 
 rts/pingpong: rts/pingpong.c rts/pingpong.h rts/rts.o
 	$(CC) $(CFLAGS) -Wno-int-to-void-pointer-cast \
-		-L lib \
-		-lutf8proc -ldbclient -lremote -lcomm -ldb -lvc -lprotobuf-c \
+		-lutf8proc -lActonDB \
+		$(LDLIBS)
 		rts/rts.o \
 		builtin/builtin.o \
 		builtin/minienv.o \
 		$< \
 		-o $@
-
 
 
 # top level targets
@@ -184,7 +224,7 @@ clean-compiler:
 
 .PHONY: clean-backend
 clean-backend:
-	$(MAKE) -C backend clean
+	rm -f $(BACKEND_OFILES) backend/actondb
 
 .PHONY: clean-rts
 clean-rts:
@@ -202,10 +242,10 @@ $(ACTONC): compiler/actonc
 # file and modify it, which the Linux kernel (and perhaps others?) will prevent
 # if the file to be modified is an executable program that is currently running.
 # We work around it by moving / renaming the file in place instead!
-dist/bin/actondb: backend/server
+dist/bin/actondb: backend/actondb
 	@mkdir -p $(dir $@)
-	cp $< backend/actondb
-	mv $< $@
+	cp $< $@.tmp
+	mv $@.tmp $@
 
 dist/builtin/%: builtin/%
 	@mkdir -p $(dir $@)
