@@ -3,10 +3,12 @@ CHANGELOG_VERSION=$(shell grep '^\#\# \[[0-9]' CHANGELOG.md | sed 's/\#\# \[\([^
 
 ACTONC=dist/bin/actonc
 
-ifeq ($(shell ls $(ACTONC) >/dev/null 2>&1; echo $$?),0)
-VERSION_INFO:=$(shell $(ACTONC) --version | head -n1 | cut -d' ' -f2)
+# This is the version we will stamp into actonc
+BUILD_TIME=$(shell date "+%Y%m%d.%-H.%-M.%-S")
+ifdef BUILD_RELEASE
+export VERSION_INFO?=$(VERSION)
 else
-VERSION_INFO:=unknown
+export VERSION_INFO?=$(VERSION).$(BUILD_TIME)
 endif
 
 CFLAGS+=-g -I. -Wno-int-to-pointer-cast -Wno-pointer-to-int-cast
@@ -110,6 +112,21 @@ builtin/builtin.o: builtin/builtin.c $(BUILTIN_HFILES) $(BUILTIN_CFILES)
 builtin/minienv.o: builtin/minienv.c builtin/minienv.h builtin/builtin.o
 	$(CC) $(CFLAGS) -c -O3 $< -o$@
 
+
+# /compiler ----------------------------------------------
+ACTONC_ALL_HS=$(wildcard compiler/*.hs compiler/**/*.hs)
+ACTONC_TEST_HS=$(wildcard compiler/tests/*.hs)
+ACTONC_HS=$(filter-out $(ACTONC_TEST_HS),$(ACTONC_ALL_HS))
+compiler/actonc: compiler/package.yaml.in compiler/stack.yaml $(ACTONC_HS)
+	sed 's,^version:.*,version:      "$(VERSION_INFO)",' < compiler/package.yaml.in > compiler/package.yaml
+	cd compiler && stack build --ghc-options -j4
+	cd compiler && stack --local-bin-path=. install 2>/dev/null
+
+.PHONY: clean-compiler
+clean-compiler:
+	cd compiler && stack clean >/dev/null 2>&1 || true
+	rm -f compiler/actonc compiler/package.yaml compiler/acton.cabal
+
 # Building the builtin, rts and stdlib is a little tricky as we have to be
 # careful about order. First comes the __builtin__.act file,
 STDLIB_ACTFILES=$(wildcard stdlib/src/*.act stdlib/src/**/*.act)
@@ -196,12 +213,6 @@ rts/pingpong: rts/pingpong.c rts/pingpong.h rts/rts.o
 
 
 # top level targets
-# NOTE: we don't do proper dependency declaration for actonc and let stack
-# handle it, thus this target is declared a PHONY so stack can always run
-.PHONY: compiler/actonc
-compiler/actonc:
-	$(MAKE) -C compiler install
-	mkdir -p dist/bin
 
 .PHONY: backend
 backend:
@@ -217,10 +228,6 @@ test:
 
 .PHONY: clean
 clean: clean-compiler clean-distribution clean-backend clean-rts
-
-.PHONY: clean-compiler
-clean-compiler:
-	$(MAKE) -C compiler clean
 
 .PHONY: clean-backend
 clean-backend:
@@ -291,13 +298,14 @@ else
 TAR_TRANSFORM_OPT=-s ,^dist,acton,
 endif
 
-.PHONY: acton-$(ARCH)-$(VERSION_INFO).tar.bz2
-acton-$(ARCH)-$(VERSION_INFO).tar.bz2:
+ACTONC_VERSION=$(shell $(ACTONC) --version 2>/dev/null | head -n1 | cut -d' ' -f2)
+.PHONY: acton-$(ARCH)-$(ACTONC_VERSION).tar.bz2
+acton-$(ARCH)-$(ACTONC_VERSION).tar.bz2:
 	tar jcvf $@ $(TAR_TRANSFORM_OPT) --exclude .gitignore dist
 
 .PHONY: release
 release: distribution
-	$(MAKE) acton-$(ARCH)-$(VERSION_INFO).tar.bz2
+	$(MAKE) acton-$(ARCH)-$(ACTONC_VERSION).tar.bz2
 
 .PHONY: install
 install:
@@ -306,8 +314,9 @@ install:
 	cd $(DESTDIR)/usr/bin && ln -s ../lib/acton/bin/actonc
 	cd $(DESTDIR)/usr/bin && ln -s ../lib/acton/bin/actondb
 
+.PHONY: debian/changelog
 debian/changelog: debian/changelog.in CHANGELOG.md
-	cat $< | sed 's/VERSION/$(VERSION)/' > $@
+	cat $< | sed 's/VERSION/$(VERSION_INFO)/' > $@
 
 .PHONY: debs
 debs: debian/changelog
