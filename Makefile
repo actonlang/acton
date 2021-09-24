@@ -175,13 +175,13 @@ lib/libActonDB.a: $(BACKEND_OFILES)
 rts/rts.o: rts/rts.c rts/rts.h
 	$(CC) $(CFLAGS) -Wno-int-to-void-pointer-cast \
 		-Wno-unused-result \
-		-pthread \
+		$(LDLIBS) \
 		-c -O3 $< -o $@
 
 rts/rts-debug.o: rts/rts.c rts/rts.h
 	$(CC) $(CFLAGS) -DRTS_DEBUG -Wno-int-to-void-pointer-cast \
 		-Wno-unused-result \
-		-pthread \
+		$(LDLIBS) \
 		-c -O3 $< -o $@
 
 rts/empty.o: rts/empty.c
@@ -189,14 +189,13 @@ rts/empty.o: rts/empty.c
 
 rts/pingpong: rts/pingpong.c rts/pingpong.h rts/rts.o
 	$(CC) $(CFLAGS) -Wno-int-to-void-pointer-cast \
-		-L lib \
-		-lutf8proc -ldbclient -lremote -lcomm -ldb -lvc -lprotobuf-c \
+		-lutf8proc -lActonDB \
+		$(LDLIBS)
 		rts/rts.o \
 		builtin/builtin.o \
 		builtin/minienv.o \
 		$< \
 		-o $@
-
 
 
 # top level targets
