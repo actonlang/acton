@@ -106,24 +106,12 @@ OFILES += rts/rts-debug.o
 lib/libActonRTSdebug.a: rts/rts-debug.o
 	ar rcs $@ $^
 
-OFILES += backend/comm.o rts/empty.o
-lib/libcomm.a: backend/comm.o rts/empty.o
-	ar rcs $@ $^
-
-OFILES += backend/db.o backend/queue.o backend/skiplist.o backend/txn_state.o backend/txns.o rts/empty.o
-lib/libdb.a: backend/db.o backend/queue.o backend/skiplist.o backend/txn_state.o backend/txns.o rts/empty.o
-	ar rcs $@ $^
-
-OFILES += backend/client_api.o rts/empty.o
-lib/libdbclient.a: backend/client_api.o rts/empty.o
-	ar rcs $@ $^
-
-OFILES += backend/failure_detector/db_messages.pb-c.o backend/failure_detector/cells.o backend/failure_detector/db_queries.o backend/failure_detector/fd.o
-lib/libremote.a: backend/failure_detector/db_messages.pb-c.o backend/failure_detector/cells.o backend/failure_detector/db_queries.o backend/failure_detector/fd.o
-	ar rcs $@ $^
-
-OFILES += backend/failure_detector/vector_clock.o
-lib/libvc.a: backend/failure_detector/vector_clock.o
+COMM_OFILES += backend/comm.o rts/empty.o
+DB_OFILES += backend/db.o backend/queue.o backend/skiplist.o backend/txn_state.o backend/txns.o rts/empty.o
+DBCLIENT_OFILES += backend/client_api.o rts/empty.o
+REMOTE_OFILES += backend/failure_detector/db_messages.pb-c.o backend/failure_detector/cells.o backend/failure_detector/db_queries.o backend/failure_detector/fd.o
+VC_OFILES += backend/failure_detector/vector_clock.o
+lib/libActonDB.a: $(COMM_OFILES) $(DB_OFILES) $(DBCLIENT_OFILES) $(REMOTE_OFILES) $(VC_OFILES)
 	ar rcs $@ $^
 
 

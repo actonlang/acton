@@ -415,7 +415,7 @@ buildExecutable env args paths task
         outbase             = outBase paths mn
         rootFile            = outbase ++ ".root.c"
         libRTSarg           = if (rts_debug args) then " -lActonRTSdebug " else " "
-        libFilesBase        = " -L" ++ projLib paths ++ " -L" ++ sysLib paths ++ libRTSarg ++ " -lActonProject -lActon -ldbclient -lremote -luuid -lcomm -ldb -lvc -lprotobuf-c -lutf8proc -lpthread -lm"
+        libFilesBase        = " -L" ++ projLib paths ++ " -L" ++ sysLib paths ++ libRTSarg ++ " -lActonProject -lActon -lActonDB -luuid -lprotobuf-c -lutf8proc -lpthread -lm"
 #if defined(darwin_HOST_OS)
         libFiles            = libFilesBase ++ " -L/usr/local/opt/util-linux/lib "
 #else

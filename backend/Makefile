@@ -25,7 +25,7 @@ else
 	LARGP=
 endif
 
-all: $(LIBDIR)/libcomm.a $(LIBDIR)/libdb.a $(LIBDIR)/libdbclient.a $(LIBDIR)/libremote.a $(LIBDIR)/libvc.a actondb
+all: actondb
 
 %.o: %.c
 	$(CC) -o$@ $< -c $(CFLAGS) $(LFLAGS)
@@ -36,30 +36,17 @@ failure_detector/%.o: failure_detector/%.c
 failure_detector/db_messages.pb-c.c: failure_detector/db_messages.proto
 	protoc-c --c_out=$@ $<
 
-$(LIBDIR)/libcomm.a:
-	$(MAKE) -C .. lib/libcomm.a
+.PHONY: $(LIBDIR)/libActonDB.a
+$(LIBDIR)/libActonDB.a:
+	$(MAKE) -C .. lib/libActonDB.a
 
-$(LIBDIR)/libdb.a:
-	$(MAKE) -C .. lib/libdb.a
-
-$(LIBDIR)/libdbclient.a:
-	$(MAKE) -C .. lib/libdbclient.a
-
-$(LIBDIR)/libremote.a:
-	$(MAKE) -C .. lib/libremote.a
-
-$(LIBDIR)/libvc.a:
-	$(MAKE) -C .. lib/libvc.a
-
-.PHONY: $(LIBDIR)/libcomm.a $(LIBDIR)/libdb.a $(LIBDIR)/libdbclient.a
-
-actondb: actondb.c failure_detector $(LIBDIR)/libremote.a $(LIBDIR)/libcomm.a $(LIBDIR)/libdb.a $(LIBDIR)/libvc.a
+actondb: actondb.c failure_detector $(LIBDIR)/libActonDB.a
 	$(CC) -o$@ $< $(CFLAGS) $(LARGP) \
 		-L $(LIBDIR) -L/usr/local/opt/util-linux/lib \
-		-lremote -lcomm -ldb -lvc -lprotobuf-c -pthread -luuid
+		-lActonDB -lprotobuf-c -pthread -luuid
 
 # tests
-TESTS=failure_detector/db_messages_test test/actor_ring_tests_local test/actor_ring_tests_remote test/db_unit_tests test/queue_unit_tests test/skiplist_test
+TESTS=failure_detector/db_messages_test test/actor_ring_tests_local test/actor_ring_tests_remote test/db_unit_tests test/queue_unit_tests test/skiplist_test test/test_client
 build-tests: $(TESTS)
 
 test: $(TESTS)
@@ -70,43 +57,47 @@ test: $(TESTS)
 	@echo DISABLED test: ./test/queue_unit_tests
 	./test/skiplist_test
 
-failure_detector/db_messages_test: failure_detector/db_messages_test.c $(LIBDIR)/libremote.a $(LIBDIR)/libvc.a
+failure_detector/db_messages_test: failure_detector/db_messages_test.c $(LIBDIR)/libActonDB.a
 	$(CC) -o$@ $< $(CFLAGS) \
 		-I/usr/local/include -I/usr/include \
 		-L $(LIBDIR) -L/usr/local/lib -L/usr/local/opt/util-linux/lib \
-		-lvc -lremote -pthread -lprotobuf-c $(LFLAGS) \
+		-lActonDB -lprotobuf-c $(LFLAGS) -pthread \
 		$(LIBS)
 
-test/actor_ring_tests_local: test/actor_ring_tests_local.c $(LIBDIR)/libdb.a
+test/actor_ring_tests_local: test/actor_ring_tests_local.c $(LIBDIR)/libActonDB.a
 	$(CC) -o$@ $< $(CFLAGS) \
 		-I. -L $(LIBDIR) -L/usr/local/opt/util-linux/lib \
-		-ldb -lvc -lremote -lprotobuf-c $(LFLAGS) -pthread \
+		-lActonDB -lprotobuf-c $(LFLAGS) -pthread \
 		$(LIBS)
 
-test/actor_ring_tests_remote: test/actor_ring_tests_remote.c $(LIBDIR)/libcomm.a $(LIBDIR)/libdb.a $(LIBDIR)/libdbclient.a failure_detector
+test/actor_ring_tests_remote: test/actor_ring_tests_remote.c $(LIBDIR)/libActonDB.a failure_detector
 	$(CC) -o$@ $< $(CFLAGS) \
 		-I. -L $(LIBDIR) -L/usr/local/opt/util-linux/lib \
-		-ldbclient -lremote -lcomm -ldb -lvc -lprotobuf-c -pthread -luuid
+		-lActonDB -lprotobuf-c $(LFLAGS) -pthread \
+		$(LIBS)
 
-test/db_unit_tests: test/db_unit_tests.c $(LIBDIR)/libdb.a
+test/db_unit_tests: test/db_unit_tests.c $(LIBDIR)/libActonDB.a
 	$(CC) -o$@ $< -std=c11 $(CFLAGS) \
 		-I. -L $(LIBDIR) -L/usr/local/opt/util-linux/lib \
-		-ldb -lvc $(LFLAGS) -pthread \
+		-lActonDB -lprotobuf-c $(LFLAGS) -pthread \
 		$(LIBS)
 
-test/queue_unit_tests: test/queue_unit_tests.c $(LIBDIR)/libdb.a
+test/queue_unit_tests: test/queue_unit_tests.c $(LIBDIR)/libActonDB.a
 	$(CC) -o$@ $< $(CFLAGS) \
 		-I. -L $(LIBDIR) -L/usr/local/opt/util-linux/lib \
-		-ldb -lvc -lremote -lprotobuf-c $(LFLAGS) -pthread
+		-lActonDB -lprotobuf-c $(LFLAGS) -pthread \
+		$(LIBS)
 
 test/skiplist_test: test/skiplist_test.c skiplist.c
 	$(CC) -o$@ $^ $(CFLAGS) \
 		-I. -L/usr/local/opt/util-linux/lib $(LFLAGS)
 
-test/test_client: test/test_client.c $(LIBDIR)/libdb.a $(LIBDIR)/libdbclient.a $(LIBDIR)/libremote.a $(LIBDIR)/libcomm.a $(LIBDIR)/libvc.a
+test/test_client: test/test_client.c $(LIBDIR)/libActonDB.a
 	$(CC) -o$@ $< $(CFLAGS) $(LARGP) \
 		-I. -L $(LIBDIR) -L/usr/local/opt/util-linux/lib \
-		-ldbclient -lremote -lcomm -ldb -lvc -lprotobuf-c -pthread -luuid
+		-lActonDB -lprotobuf-c $(LFLAGS) -pthread \
+		$(LIBS)
+
 
 clean:
-	rm -rf *.o failure_detector/*.o failure_detector/*.a $(LIBDIR)/libcomm.a $(LIBDIR)/libdb.a $(LIBDIR)/libdbclient.a $(LIBDIR)/libremote.a $(LIBDIR)/libvc.a $(TESTS) actondb test_client failure_detector/db_messages_test
+	rm -rf *.o failure_detector/*.o failure_detector/*.a $(LIBDIR)/libActonDB.a $(TESTS) actondb $(TESTS)
