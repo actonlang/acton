@@ -5,6 +5,28 @@
 There are currently known regressions:
 - using RTS together with the distributed backend database is not working
 
+### Changed
+- `actonc` now uses `cc` rather than `gcc` [#303]
+- Acton project makefiles now use `$(CC)` rather than hardcoding `cc` [#303]
+
+### Fixed
+- Makefile restructuring [#304] [#307]
+  - backend and compiler Makefiles have now been folded into the top level
+    Makefile.
+  - DAG is more complete and more things can run correctly in parallel.
+  - stack / ghc build now uses 4 parallel threads, for some speedup (55 seconds
+    -> 35 seconds on an AMD 5950X). Higher parallelism did not improve things
+    much further.
+  - Avoid declaring actonc as a PHONY target, which causes constant rebuilds,
+    not it actually has proper dependencies defined so make can understand when
+    there is nothing to do.
+- Debian packages now reflect tip version number [#307] [#308]
+  - Previously debian packages had the "base version", like 0.6.2, even when
+    built as a pre-release build. `actonc --version` in the package would still
+    correctly identify like e.g. `0.6.2.20210924.16.58.23`
+  - Now the .deb file also contains the complete build info, like
+    `acton_0.6.2.20210924.16.58.23_amd64.deb`
+
 
 ## [0.6.2] (2021-09-23)
 
@@ -418,6 +440,10 @@ then, this second incarnation has been in focus and 0.2.0 was its first version.
 [#285]: https://github.com/actonlang/acton/pull/285
 [#288]: https://github.com/actonlang/acton/pull/288
 [#293]: https://github.com/actonlang/acton/pull/293
+[#303]: https://github.com/actonlang/acton/pull/303
+[#304]: https://github.com/actonlang/acton/pull/304
+[#307]: https://github.com/actonlang/acton/pull/307
+[#308]: https://github.com/actonlang/acton/pull/308
 [0.3.0]: https://github.com/actonlang/acton/releases/tag/v0.3.0
 [0.4.0]: https://github.com/actonlang/acton/compare/v0.3.0...v0.4.0
 [0.4.1]: https://github.com/actonlang/acton/compare/v0.4.0...v0.4.1
