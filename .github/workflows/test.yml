@@ -24,7 +24,7 @@ jobs:
       - name: Install build prerequisites
         run: brew install argp-standalone haskell-stack protobuf-c util-linux
       - name: Build Acton
-        run: make -C ${{ github.workspace }} BUILD_RELEASE=${{ env.BUILD_RELEASE }}
+        run: make -j2 -C ${{ github.workspace }} BUILD_RELEASE=${{ env.BUILD_RELEASE }}
       - name: Build a release
         run: make -C ${{ github.workspace }} release
       - name: Upload artifact
@@ -60,7 +60,7 @@ jobs:
       - name: chown our home dir to avoid stack complaining
         run: chown -R root:root /github/home
       - name: Build Acton
-        run: make -C ${GITHUB_WORKSPACE} BUILD_RELEASE=${{ env.BUILD_RELEASE }}
+        run: make -j2 -C ${GITHUB_WORKSPACE} BUILD_RELEASE=${{ env.BUILD_RELEASE }}
       - name: Build a release
         run: make -C ${GITHUB_WORKSPACE} release
       - name: Upload artifact
