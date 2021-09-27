@@ -40,7 +40,7 @@ jobs:
   test-linux:
     runs-on: ubuntu-latest
     container:
-      image: debian:sid
+      image: debian:bullseye
     steps:
       - name: Set BUILD_RELEASE when we are building for a version tag
         run: |
@@ -75,7 +75,7 @@ jobs:
   build-debs:
     runs-on: ubuntu-latest
     container:
-      image: debian:sid
+      image: debian:bullseye
     steps:
       - name: Set BUILD_RELEASE when we are building for a version tag
         run: |
