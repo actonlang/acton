@@ -5,11 +5,23 @@
 There are currently known regressions:
 - using RTS together with the distributed backend database is not working
 
+
+## [0.6.3] (2021-09-28)
+
+There are currently known regressions:
+- using RTS together with the distributed backend database is not working
+
+### Added
+- Acton now has a apt repository - `apt.acton-lang.io` [#320]
+  - Version tagged releases are automatically uploaded.
+
 ### Changed
 - `actonc` now uses `cc` rather than `gcc` [#303]
 - Acton project makefiles now use `$(CC)` rather than hardcoding `cc` [#303]
+- Acton is now built and tested on debian:bullseye (11, current stable) [#313]
 
 ### Fixed
+- Debian packages now depend on non-dev libraries for utf8proc & protobuf [#315]
 - Makefile restructuring [#304] [#307]
   - backend and compiler Makefiles have now been folded into the top level
     Makefile.
@@ -444,6 +456,8 @@ then, this second incarnation has been in focus and 0.2.0 was its first version.
 [#304]: https://github.com/actonlang/acton/pull/304
 [#307]: https://github.com/actonlang/acton/pull/307
 [#308]: https://github.com/actonlang/acton/pull/308
+[#313]: https://github.com/actonlang/acton/pull/313
+[#320]: https://github.com/actonlang/acton/pull/320
 [0.3.0]: https://github.com/actonlang/acton/releases/tag/v0.3.0
 [0.4.0]: https://github.com/actonlang/acton/compare/v0.3.0...v0.4.0
 [0.4.1]: https://github.com/actonlang/acton/compare/v0.4.0...v0.4.1
@@ -454,6 +468,7 @@ then, this second incarnation has been in focus and 0.2.0 was its first version.
 [0.5.3]: https://github.com/actonlang/acton/compare/v0.5.2...v0.5.3
 [0.6.0]: https://github.com/actonlang/acton/compare/v0.5.3...v0.6.0
 [0.6.1]: https://github.com/actonlang/acton/compare/v0.6.0...v0.6.1
-[0.6.2]: https://github.com/actonlang/acton/compare/v0.6.0...v0.6.1
+[0.6.2]: https://github.com/actonlang/acton/compare/v0.6.1...v0.6.2
+[0.6.3]: https://github.com/actonlang/acton/compare/v0.6.2...v0.6.3
 
 [homebrew-acton#7]: https://github.com/actonlang/homebrew-acton/pull/7
