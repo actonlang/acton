@@ -20,7 +20,7 @@ Depends:
  ${shlibs:Depends},
  ${misc:Depends},
  gcc,
- libprotobuf-c-dev,
- libutf8proc-dev
+ libprotobuf-c1,
+ libutf8proc2
 Description: Acton Programming Language
  An awesome programming language.
