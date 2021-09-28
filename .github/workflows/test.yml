@@ -104,6 +104,47 @@ jobs:
           path: ${{ steps.artifact_dir.outputs.dir }}/*deb/
           if-no-files-found: error
 
+  update-apt-repo:
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    container:
+      image: debian:bullseye
+    needs: build-debs
+    steps:
+      - name: Install build prerequisites
+        run: |
+          apt-get update
+          apt-get install -qy git gnupg reprepro
+      - name: Import GPG key
+        id: import_gpg
+        uses: crazy-max/ghaction-import-gpg@v4
+        with:
+          gpg_private_key: ${{ secrets.APT_GPG_PRIVATE_KEY }}
+      - name: Check out code of apt.acton-lang.io repo
+        uses: actions/checkout@v2
+        with:
+          repository: actonlang/apt.acton-lang.io
+          path: apt
+          ssh-key: ${{ secrets.APT_DEPLOY_KEY }}
+      - name: "Download artifacts for Debian Linux"
+        uses: actions/download-artifact@v2
+        with:
+          name: acton-debian
+      - name: "Include new deb in Apt repository"
+        run: |
+          cd apt
+          reprepro include bullseye ../deb/*.changes
+      - name: "Push updates to git repository for apt.acton-lang.io"
+        run: |
+          cd apt
+          git config user.name "Apt Bot"
+          git config user.email apt@acton-lang.org
+          git add .
+          git status
+          git diff
+          git commit -a -m "Updated apt package index"
+          git push
+
 
   # If we are on the main branch, we'll create or update a pre-release called
   # 'tip' which holds the latest build output from the main branch!  We upload
