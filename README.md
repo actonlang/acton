@@ -36,18 +36,19 @@ work fairly well.
 
 ## Install acton
 
-### Debian / Ubuntu by downloading .deb
+### Debian / Ubuntu via apt repository
 
-There are pre-built .deb packages available via GitHub Releases. Download the
-latest one from [the Release page](https://github.com/actonlang/acton/releases).
+Install Acton via apt repository:
 
-```
-$ wget https://github.com/actonlang/acton/releases/download/v0.6.2/acton_0.6.2_amd64.deb
-$ dpkg -i acton_0.6.2_amd64.deb
-$ apt-get -f install
+```sh
+wget -q -O - https://apt.acton-lang.io/acton.gpg | sudo apt-key add -
+echo "deb http://apt.acton-lang.io/ bullseye main" | sudo tee /etc/apt/sources.list.d/acton.list
+sudo apt-get update
+sudo apt-get install -qy acton
 ```
 
 ### Mac OS X using Homebrew
+
 Acton is available as a Homebrew tap, which can be installed with:
 ```
 brew install actonlang/acton/acton
