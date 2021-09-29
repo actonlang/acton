@@ -93,7 +93,7 @@ qSchema env f e@(Dot _ (Var _ x) n)
 qSchema env f e0@(Dot l e n)        = case t of
                                         TCon _ c -> addE e' $ findAttr' env c n
                                         TTuple _ p k -> addE e' $ (monotype $ pick n k, Nothing)
-                                        TVar _ v  -> addE (qMatch f t (tCon tc) e') $ findAttr' env tc n
+                                        TVar _ v  -> addE e' $ findAttr' env tc n
                                            where tc = findTVBound env v
                                         t -> error ("### qSchema Dot unexpected " ++ prstr e0 ++ "  ::  " ++ prstr t)
   where (t, e')                     = qType env f e
@@ -141,17 +141,17 @@ instance QType Expr where
       where (t1, e1')               = qType env f e1
             (t2, e2')               = qType env f e2
             t                       = upbound env [t1,t2]
-    qType env f (UnOp l Not e)      = (tBool, UnOp l Not e')
-      where (_, e')                 = qType env f e
-    qType env f (Cond l e1 e e2)    = (t', Cond l (qMatch f t1 t' e1') e' (qMatch f t2 t' e2'))
+    qType env f (UnOp l Not e)      = (tBool, UnOp l Not (qMatch f t tBool e'))
+      where (t, e')                 = qType env f e
+    qType env f (Cond l e1 e e2)    = (t', Cond l (qMatch f t1 t' e1') (qMatch f t tBool e') (qMatch f t2 t' e2'))
       where (t1, e1')               = qType env f e1
-            (_, e')                 = qType env f e
+            (t, e')                 = qType env f e
             (t2, e2')               = qType env f e2
             t'                      = upbound env [t1,t2]
     qType env f (IsInstance l e c)  = (tBool, IsInstance l e' c)
       where (t, e')                 = qType env f e
     qType env f (DotI l e i)        = case t of
-                                        TTuple _ p _ -> (pick i p, qMatch f tWild (pick i p) $ DotI l e' i)
+                                        TTuple _ p _ -> (pick i p, DotI l e' i)
       where (t, e')                 = qType env f e
             pick i (TRow _ _ _ t' p) = if i == 0 then t' else pick (i-1) p
     qType env f (RestI l e i)       = case t of
