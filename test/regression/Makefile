@@ -12,7 +12,6 @@ TESTS=$(TEST_SOURCES:.act=)
 # during compilation using actonc or at run time.
 FAILING_COMPILATION= \
 	11-int-float \
-	20-for-break \
 	rtail \
 	quotes-in-triquotes \
 	triquotes-across-lines
@@ -52,8 +51,5 @@ $(FAILING_RUNNING):
 	@echo "Now we really see 2 'pong' messages"
 	./$@
 	./$@ | grep -c pong | grep 2
-
-210-nontermination:
-	@echo "Non-termination test disabled (for obvious reasons...)"
 
 .PHONY: test test-examples $(TESTS)

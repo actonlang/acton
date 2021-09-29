@@ -380,6 +380,8 @@ instance NeedCont Branch where
 
 instance NeedCont Stmt where
     needCont env (Return _ (Just e))    = inCont env
+    needCont env (Continue _)           = inCont env
+    needCont env (Break _)              = inCont env
     needCont env (Expr _ e)             = contCall env e
     needCont env (Assign _ _ e)         = contCall env e
     needCont env (MutAssign _ _ e)      = contCall env e
