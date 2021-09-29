@@ -13,7 +13,7 @@
 #include <math.h>
 
 #include "common.h"
-#include "../stdlib/src/__builtin__.h"
+#include "__builtin__.h"
 #include "serialize.h"
 #include "registration.h"
 #include "Iterator.h"
