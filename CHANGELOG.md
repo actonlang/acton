@@ -6,6 +6,25 @@ There are currently known regressions:
 - using RTS together with the distributed backend database is not working
 
 
+## [0.6.4] (2021-09-29)
+
+There are currently known regressions:
+- using RTS together with the distributed backend database is not working
+
+### Fixed
+- `break` & `continue` now works in `for` loops that are CPS fragmented [#325]
+  - Using `break` would previously not work in a `for` loop if the loop was
+    broken into multiple continuations during the CPS transform. For example,
+    this happens when a call to another actor is made in the `for` loop.
+- An installed `actonc` can now find `__builtin__.h` [#327]
+  - A previous restructuring of files in order to improve the Makefile and build
+    organization led to us having to use weirdly long and relative include
+    paths. This ultimately led to run time failures of actonc. Since some of
+    these files need to be built both when building actonc itself as well as
+    when using actonc, the paths must remain the same in source and release
+    output. They did not after [#286], which has now been reverted.
+
+
 ## [0.6.3] (2021-09-28)
 
 There are currently known regressions:
@@ -450,6 +469,7 @@ then, this second incarnation has been in focus and 0.2.0 was its first version.
 [#277]: https://github.com/actonlang/acton/pull/277
 [#279]: https://github.com/actonlang/acton/pull/279
 [#285]: https://github.com/actonlang/acton/pull/285
+[#286]: https://github.com/actonlang/acton/pull/286
 [#288]: https://github.com/actonlang/acton/pull/288
 [#293]: https://github.com/actonlang/acton/pull/293
 [#303]: https://github.com/actonlang/acton/pull/303
@@ -458,6 +478,8 @@ then, this second incarnation has been in focus and 0.2.0 was its first version.
 [#308]: https://github.com/actonlang/acton/pull/308
 [#313]: https://github.com/actonlang/acton/pull/313
 [#320]: https://github.com/actonlang/acton/pull/320
+[#325]: https://github.com/actonlang/acton/pull/325
+[#327]: https://github.com/actonlang/acton/pull/327
 [0.3.0]: https://github.com/actonlang/acton/releases/tag/v0.3.0
 [0.4.0]: https://github.com/actonlang/acton/compare/v0.3.0...v0.4.0
 [0.4.1]: https://github.com/actonlang/acton/compare/v0.4.0...v0.4.1
@@ -470,5 +492,6 @@ then, this second incarnation has been in focus and 0.2.0 was its first version.
 [0.6.1]: https://github.com/actonlang/acton/compare/v0.6.0...v0.6.1
 [0.6.2]: https://github.com/actonlang/acton/compare/v0.6.1...v0.6.2
 [0.6.3]: https://github.com/actonlang/acton/compare/v0.6.2...v0.6.3
+[0.6.4]: https://github.com/actonlang/acton/compare/v0.6.3...v0.6.4
 
 [homebrew-acton#7]: https://github.com/actonlang/homebrew-acton/pull/7
