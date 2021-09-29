@@ -137,9 +137,13 @@ STDLIB_OFILES=$(subst src,out/release,$(STDLIB_CFILES:.c=.o))
 STDLIB_ACTS=$(not-in $(STDLIB_ACTFILES),$(STDLIB_CFILES))
 
 # __builtin__.ty is special, it even has special handling in actonc. Essentially
-# all other modules depend on it, so it must be compiled first, which is why we
-# specify it as a dependency. This rule also builds __builtin__.ty but make is
-# clever enough to cancel out a dependency on itself.
+# all other modules depend on it, so it must be compiled first. The rule below
+# is actually capable of building __builtin__.ty too but to avoid an extra
+# warning we have a dedicated target for it.
+stdlib/out/types/__builtin__.ty: stdlib/src/__builtin__.act $(ACTONC)
+	@mkdir -p $(dir $@)
+	$(ACTONC) $< --stub
+
 stdlib/out/types/%.ty: stdlib/src/%.act dist/types/__builtin__.ty $(ACTONC)
 	@mkdir -p $(dir $@)
 	$(ACTONC) $< --stub
