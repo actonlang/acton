@@ -1,3 +1,4 @@
+#pragma once
 #include "builtin/builtin.h"
 
 #include "math.h"
