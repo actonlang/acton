@@ -142,11 +142,12 @@ solve' env select hist te tt eq cs
                                                  hist <- msubst hist
                                                  solve' env select hist te tt eq cs
 
-        condense (RTry t@TVar{} as r : rs)  = RTry t (if rev' then subrev ts' else ts') rev'
+        condense (RTry t as r : rs)
+          | TVar{} <- t                     = RTry t (if rev' then subrev ts' else ts') rev'
+          | otherwise                       = RTry t ts r
           where ts                          = foldr intersect as $ map alts rs
                 ts'                         = if tvar t `elem` optvs then ts \\ [tOpt tWild] else ts
                 rev'                        = (or $ r : map rev rs) || tvar t `elem` posvs
-        condense (RTry t as r : rs)         = RTry t (foldr intersect as $ map alts rs) r
         condense (RUni t as : rs)           = RUni t (foldr union as $ map alts rs)
         condense (ROvl t : rs)              = ROvl t
 
