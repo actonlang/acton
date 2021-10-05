@@ -118,9 +118,10 @@ ACTONC_ALL_HS=$(wildcard compiler/*.hs compiler/**/*.hs)
 ACTONC_TEST_HS=$(wildcard compiler/tests/*.hs)
 ACTONC_HS=$(filter-out $(ACTONC_TEST_HS),$(ACTONC_ALL_HS))
 compiler/actonc: compiler/package.yaml.in compiler/stack.yaml $(ACTONC_HS)
-	sed 's,^version:.*,version:      "$(VERSION_INFO)",' < compiler/package.yaml.in > compiler/package.yaml
-	cd compiler && stack build --ghc-options -j4
-	cd compiler && stack --local-bin-path=. install 2>/dev/null
+	cd compiler && stack build --dry-run 2>&1 | grep "Nothing to build" || \
+		(sed 's,^version:.*,version:      "$(VERSION_INFO)",' < package.yaml.in > package.yaml \
+		&& stack build --ghc-options -j4 \
+		&& stack --local-bin-path=. install 2>/dev/null)
 
 .PHONY: clean-compiler
 clean-compiler:
