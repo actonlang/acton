@@ -81,7 +81,7 @@ Hello, world!
 ```
 
 ## And then...?
-Go read the [tutorial!](docs/tutorial/index.html)
+Go read the [tutorial!](docs/tutorial)
 
 
 # Building Acton from source
