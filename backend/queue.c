@@ -494,6 +494,7 @@ int replay_queue(WORD consumer_id, WORD shard_id, WORD app_id, WORD table_key, W
 		db_t * db)
 {
 	db_table_t * table = get_table_by_key(table_key, db);
+	*entries_read=0;
 
 	if(table == NULL)
 		return DB_ERR_NO_TABLE; // Table doesn't exist
@@ -528,6 +529,7 @@ int replay_queue(WORD consumer_id, WORD shard_id, WORD app_id, WORD table_key, W
 	int64_t no_results = (int64_t) table_range_search_clustering((WORD *) &queue_id,
 										(WORD*) &start_index, (WORD*) new_replay_offset, 1,
 										start_row, end_row, table);
+	*entries_read = (int) no_results;
 
 	if(no_results != (*new_replay_offset) - start_index)
 	{

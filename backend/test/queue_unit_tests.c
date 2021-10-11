@@ -410,7 +410,7 @@ int main(int argc, char **argv) {
 	printf("Test %s - %s (%d)\n", "read_head", ((int) cargs_replay.read_head)==(cargs_replay.no_enqueues - 1)?"OK":"FAILED", ret);
 
 	// Test replays on C2:
-	printf("Test %s - %s (%d)\n", "dequeue", cargs_replay.successful_replays==cargs_replay.no_enqueues?"OK":"FAILED", ret);
+	printf("Test %s - %s (%d)\n", "replay", cargs_replay.successful_replays==cargs_replay.no_enqueues?"OK":"FAILED", ret);
 
 	// Test read head sanity after replay on C2:
 	printf("Test %s - %s (%d)\n", "read_head_replay", ((int) cargs_replay.read_head_after_replay)==(cargs_replay.no_enqueues - 1)?"OK":"FAILED", ret);
