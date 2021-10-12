@@ -86,3 +86,14 @@ Go read the [tutorial!](docs/tutorial/index.html)
 
 # Building Acton from source
 See [building Acton from source](docs/building-acton-from-source.md).
+
+
+# Contributions
+
+For information about contributing to Acton, see [CONTRIBUTING.md](CONTRIBUTING.md).
+
+## Thanks to all the people who already contributed!
+
+<a href="https://github.com/actonlang/acton/graphs/contributors">
+  <img src="https://contributors-img.web.app/image?repo=actonlang/acton" />
+</a>
