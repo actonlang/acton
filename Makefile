@@ -301,7 +301,7 @@ clean-distribution:
 # == release ==
 # This is where we take our distribution and turn it into a release tar ball
 ARCH=$(shell uname -s -m | sed -e 's/ /-/' | tr '[A-Z]' '[a-z]')
-GNU_TAR := $(shell ls --version 2>&1 | grep GNU >/dev/null 2>&1; echo $$?)
+GNU_TAR := $(shell sed --version 2>&1 | grep GNU >/dev/null 2>&1; echo $$?)
 ifeq ($(GNU_TAR),0)
 TAR_TRANSFORM_OPT=--transform 's,^dist,acton,'
 else
