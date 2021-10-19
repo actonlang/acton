@@ -65,7 +65,7 @@ data Args       = Args {
                     ccmd      :: Bool,
                     verbose   :: Bool,
                     stub      :: Bool,
-                    rts_debug :: Bool,
+                    dev       :: Bool,
                     cpedantic :: Bool,
                     syspath   :: String,
                     root      :: String,
@@ -89,7 +89,7 @@ getArgs cv      = infoOption cv (long "version" <> help "Show version informatio
                     <*> switch (long "ccmd"    <> help "Show CC / LD commands")
                     <*> switch (long "verbose" <> help "Print progress info during execution")
                     <*> switch (long "stub"    <> help "Stub (.ty) file generation only")
-                    <*> switch (long "rts-debug"<> help "Include RTS debug support in output program")
+                    <*> switch (long "dev"     <> help "Development mode; include debug symbols etc")
                     <*> switch (long "cpedantic"<> help "Pedantic C compilation with -Werror")
                     <*> strOption (long "syspath" <> metavar "TARGETDIR" <> value "" <> showDefault)
                     <*> strOption (long "root" <> value "" <> showDefault)
@@ -361,7 +361,12 @@ runRestPasses args paths env0 parsed = do
                               hFile = outbase ++ ".h"
                               oFile = joinPath [projLib paths, n++".o"]
                               aFile = joinPath [projLib paths, "libActonProject.a"]
-                              ccCmd = "cc " ++ pedantArg ++ " -g -c -I" ++ projOut paths ++ " -I" ++ sysPath paths ++ " -o" ++ oFile ++ " " ++ cFile
+                              ccCmd = ("cc " ++ pedantArg ++
+                                       if (dev args) then " -g " else "" ++
+                                       " -c -I" ++ projOut paths ++
+                                       " -I" ++ sysPath paths ++
+                                       " -o" ++ oFile ++
+                                       " " ++ cFile)
                               arCmd = "ar rcs " ++ aFile ++ " " ++ oFile
                           writeFile hFile h
                           writeFile cFile c
@@ -414,7 +419,7 @@ buildExecutable env args paths task
         (sc,_)              = Acton.QuickType.schemaOf env (A.eQVar qn)
         outbase             = outBase paths mn
         rootFile            = outbase ++ ".root.c"
-        libRTSarg           = if (rts_debug args) then " -lActonRTSdebug " else " "
+        libRTSarg           = if (dev args) then " -lActonRTSdebug " else " "
         libFilesBase        = " -L" ++ projLib paths ++ " -L" ++ sysLib paths ++ libRTSarg ++ " -lActonProject -lActon -lActonDB -luuid -lprotobuf-c -lutf8proc -lpthread -lm"
 #if defined(darwin_HOST_OS)
         libFiles            = libFilesBase ++ " -L/usr/local/opt/util-linux/lib "
@@ -425,4 +430,10 @@ buildExecutable env args paths task
         binFile             = joinPath [binDir paths, binFilename]
         srcbase             = srcFile paths mn
         pedantArg           = if (cpedantic args) then "-Werror" else ""
-        ccCmd               = "cc " ++ pedantArg ++ " -g -I" ++ projOut paths ++ " -I" ++ sysPath paths ++ " " ++ rootFile ++ " -o" ++ binFile ++ libFiles
+        ccCmd               = ("cc " ++ pedantArg ++
+                               if (dev args) then " -g " else "" ++
+                               " -I" ++ projOut paths ++
+                               " -I" ++ sysPath paths ++
+                               " " ++ rootFile ++
+                               " -o" ++ binFile ++
+                               libFiles)
