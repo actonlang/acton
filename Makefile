@@ -308,7 +308,7 @@ else
 TAR_TRANSFORM_OPT=-s ,^dist,acton,
 endif
 
-ACTONC_VERSION=$(shell $(ACTONC) --version 2>/dev/null | head -n1 | cut -d' ' -f2)
+ACTONC_VERSION=$(shell $(ACTONC) --numeric-version 2>/dev/null)
 .PHONY: acton-$(ARCH)-$(ACTONC_VERSION).tar.bz2
 acton-$(ARCH)-$(ACTONC_VERSION).tar.bz2:
 	tar jcvf $@ $(TAR_TRANSFORM_OPT) --exclude .gitignore dist
