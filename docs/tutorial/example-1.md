@@ -27,25 +27,15 @@ actor harmonicMain(env):
 We used the name `harmonicMain` for this actor just to emphasize
 that there is no name convention for the root actor in Acton; instead
 its name is given to the compiler. So to compile and run this program
-(saved to `harmonic.act`) we do
+(saved to `harmonic.act`) we do:
 
 ```shell
 $ actonc harmonic.act --root harmonicMain
+$ ./harmonic 2
+1.5
+$ ./harmonic 10000
+9.7876
 ```
-
-Input
-```shell
-> harmonic 2
-```
-Output
-> 1.5
-
-Input
-```shell
-> harmonic 10000
-```
-Output
-> 9.7876
 
 Let's make the program a bit more interesting by making it
 interactive, repeatedly inputting an integer from the user and
@@ -112,7 +102,7 @@ harmonic(3)
 ```
 
 The definition above ***binds*** the name `harmonic` to an
-object of type ``function'`. This type means only that we may use the
+object of type `function`. This type means only that we may use the
 object in a function call. Thus, parameter `n` is bound to the
 integer 3, and the function body is executed. 3 will be added to 1, which is fine;
 integer values can be added. The result is used as the second argument
@@ -162,7 +152,7 @@ To discuss this, we consider a slight variant of this function. In fact, it is a
 inferior version, which we show only to be able to discuss the 
 different scope rules.
 
-``` py
+```py
 def harmonic2(n):
     if n>=0:
         sum = 0

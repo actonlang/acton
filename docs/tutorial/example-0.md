@@ -3,7 +3,7 @@
 We follow tradition and introduce Acton programmin with the following minimal example
 
 ```py
-  actor main(env):
+actor main(env):
     print("Hello, World!")
 ```
 

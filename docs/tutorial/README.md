@@ -22,7 +22,7 @@ currently under active development, so some minor aspects of what we
 present here may be subject to change.
  
  
-We recommend the reader to [download and install Acton (Currently not available)]()
+We recommend the reader to [download and install Acton](https://github.com/actonlang/acton#install-acton)
 and to play with the examples.
 
 ## Background: Actors and Python
