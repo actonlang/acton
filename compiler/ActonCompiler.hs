@@ -73,7 +73,8 @@ data Args       = Args {
                 }
                 deriving Show
 
-getArgs cv      = infoOption cv (long "version" <> help "Show version information")
+getArgs ver     = infoOption (showVersion Paths_acton.version) (long "numeric-version" <> help "Show numeric version")
+                  <*> infoOption ver (long "version" <> help "Show version information")
                   <*>
                   (Args
                     <$> switch (long "parse"   <> help "Show the result of parsing")
