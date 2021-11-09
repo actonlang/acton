@@ -363,7 +363,7 @@ runRestPasses args paths env0 parsed = do
                               oFile = joinPath [projLib paths, n++".o"]
                               aFile = joinPath [projLib paths, "libActonProject.a"]
                               ccCmd = ("cc " ++ pedantArg ++
-                                       if (dev args) then " -g " else "" ++
+                                       (if (dev args) then " -g " else "") ++
                                        " -c -I" ++ projOut paths ++
                                        " -I" ++ sysPath paths ++
                                        " -o" ++ oFile ++
@@ -432,7 +432,7 @@ buildExecutable env args paths task
         srcbase             = srcFile paths mn
         pedantArg           = if (cpedantic args) then "-Werror" else ""
         ccCmd               = ("cc " ++ pedantArg ++
-                               if (dev args) then " -g " else "" ++
+                               (if (dev args) then " -g " else "") ++
                                " -I" ++ projOut paths ++
                                " -I" ++ sysPath paths ++
                                " " ++ rootFile ++
