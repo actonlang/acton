@@ -1302,10 +1302,10 @@ int main(int argc, char **argv) {
     long num_cores = sysconf(_SC_NPROCESSORS_ONLN);
     long num_wthreads = num_cores;
     if (num_wthreads < 4) {
-        rtsd_printf(LOGPFX "Detected %ld CPUs: Using %ld worker threads, due to low CPU count. No CPU affinity used.\n", num_cores, num_wthreads);
+        rtsv_printf(LOGPFX "Detected %ld CPUs: Using %ld worker threads, due to low CPU count. No CPU affinity used.\n", num_cores, num_wthreads);
         num_wthreads = 4;
     } else {
-        rtsd_printf(LOGPFX "Detected %ld CPUs: Using %ld worker threads for 1:1 mapping with CPU affinity set.\n", num_cores, num_wthreads);
+        rtsv_printf(LOGPFX "Detected %ld CPUs: Using %ld worker threads for 1:1 mapping with CPU affinity set.\n", num_cores, num_wthreads);
     }
     $register_builtin();
     minienv$$__init__();
