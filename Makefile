@@ -11,7 +11,7 @@ else
 export VERSION_INFO?=$(VERSION).$(BUILD_TIME)
 endif
 
-CFLAGS+=-g -I. -Wno-int-to-pointer-cast -Wno-pointer-to-int-cast
+CFLAGS+=-g -I. -Ideps -Wno-int-to-pointer-cast -Wno-pointer-to-int-cast
 LDFLAGS+=-Llib
 LDLIBS+=-lprotobuf-c -luuid -lm -lpthread
 
@@ -128,6 +128,9 @@ clean-compiler:
 	cd compiler && stack clean >/dev/null 2>&1 || true
 	rm -f compiler/actonc compiler/package.yaml compiler/acton.cabal
 
+deps/yyjson.o: deps/yyjson.c
+	$(CC) $(CFLAGS) -c $< -o$@
+
 # Building the builtin, rts and stdlib is a little tricky as we have to be
 # careful about order. First comes the __builtin__.act file,
 STDLIB_ACTFILES=$(wildcard stdlib/src/*.act stdlib/src/**/*.act)
@@ -176,8 +179,9 @@ ARCHIVES=lib/libActon.a lib/libActonRTSdebug.a lib/libActonDB.a
 # If we later let actonc build things, it would produce a libActonProject.a file
 # in the stdlib directory, which we would need to join together with rts.o etc
 # to form the final libActon (or maybe produce a libActonStdlib and link with?)
-OFILES += builtin/builtin.o builtin/minienv.o $(STDLIB_OFILES) stdlib/out/release/numpy.o rts/empty.o rts/rts.o
-lib/libActon.a: builtin/builtin.o builtin/minienv.o $(STDLIB_OFILES) stdlib/out/release/numpy.o rts/empty.o rts/rts.o
+LIBACTON_OFILES=builtin/builtin.o builtin/minienv.o $(STDLIB_OFILES) stdlib/out/release/numpy.o rts/empty.o rts/rts.o deps/yyjson.o
+OFILES += $(LIBACTON_OFILES)
+lib/libActon.a: $(LIBACTON_OFILES)
 	ar rcs $@ $^
 
 OFILES += rts/rts-debug.o
