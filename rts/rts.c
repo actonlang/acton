@@ -25,6 +25,7 @@
 #include <uuid/uuid.h>
 #include <getopt.h>
 
+#include "yyjson.h"
 #include "rts.h"
 #include "../builtin/minienv.h"
 
@@ -38,6 +39,54 @@ int opterr = 0;
 
 char rts_verbose = 0;
 char rts_debug = 0;
+
+long num_wthreads;
+
+char *rts_mon_path = NULL;
+
+struct wt_stat {
+    unsigned int idx;          // worker thread index
+    char key[10];              // thread index as string for convenience
+    unsigned int state;        // current thread state
+    unsigned long long sleeps; // number of times thread slept
+    // Executing actor continuations is the primary work of the RTS, we measure
+    // the execution time of each and count to buckets to get a rough idea of
+    // how long it takes
+    unsigned long long conts_count; // number of executed continuations
+    unsigned long long conts_sum;   // nanoseconds spent running continuations
+    unsigned long long conts_100ns; // bucket for <100ns
+    unsigned long long conts_1us;   // bucket for <1us
+    unsigned long long conts_10us;  // bucket for <10us
+    unsigned long long conts_100us; // bucket for <100us
+    unsigned long long conts_1ms;   // bucket for <1ms
+    unsigned long long conts_10ms;  // bucket for <10ms
+    unsigned long long conts_100ms; // bucket for <100ms
+    unsigned long long conts_1s;     // bucket for <1s
+    unsigned long long conts_10s;    // bucket for <10s
+    unsigned long long conts_100s;   // bucket for <100s
+    unsigned long long conts_inf;   // bucket for <+Inf
+    // Bookkeeping is all the other work we do not directly related to running
+    // actor continuations, like taking locks, committing information, talking
+    // to the database etc
+    unsigned long long bkeep_count; // number of bookkeeping rounds
+    unsigned long long bkeep_sum;   // nanoseconds spent bookkeeping
+    unsigned long long bkeep_100ns; // bucket for <100ns
+    unsigned long long bkeep_1us;   // bucket for <1us
+    unsigned long long bkeep_10us;  // bucket for <10us
+    unsigned long long bkeep_100us; // bucket for <100us
+    unsigned long long bkeep_1ms;   // bucket for <1ms
+    unsigned long long bkeep_10ms;  // bucket for <10ms
+    unsigned long long bkeep_100ms; // bucket for <100ms
+    unsigned long long bkeep_1s;     // bucket for <1s
+    unsigned long long bkeep_10s;    // bucket for <10s
+    unsigned long long bkeep_100s;   // bucket for <100s
+    unsigned long long bkeep_inf;   // bucket for <+Inf
+};
+struct wt_stat wt_stats[32];
+
+// Conveys current thread status, like what is it doing?
+enum WT_State {WT_NoExist = 0, WT_Working = 1, WT_Idle = 2, WT_Sleeping = 3};
+static const char *WT_State_name[] = {"poof", "work", "idle", "sleep"};
 
 /*
  * Custom printf macros for printing verbose and debug information
@@ -1100,7 +1149,8 @@ void serialize_actor($Actor a, uuid_t *txnid) {
 
 ////////////////////////////////////////////////////////////////////////////////////////
 
-void *main_loop(void *arg) {
+void *main_loop(void *idx) {
+    struct timespec ts1, ts2, ts3;
     while (1) {
         $Actor current = DEQ_ready();
         if (current) {
@@ -1110,8 +1160,30 @@ void *main_loop(void *arg) {
             $Cont cont = m->$cont;
             $WORD val = m->$value;
             
+            clock_gettime(CLOCK_MONOTONIC, &ts1);
+            wt_stats[(int)idx].state = WT_Working;
+
             rtsd_printf(LOGPFX "## Running actor %ld : %s\n", current->$globkey, current->$class->$GCINFO);
             $R r = cont->$class->__call__(cont, val);
+
+            clock_gettime(CLOCK_MONOTONIC, &ts2);
+            long long int diff = (ts2.tv_sec * 1000000000 + ts2.tv_nsec) - (ts1.tv_sec * 1000000000 + ts1.tv_nsec);
+
+            wt_stats[(int)idx].conts_count++;
+            wt_stats[(int)idx].conts_sum += diff;
+
+            if      (diff < 100)              { wt_stats[(int)idx].conts_100ns++; }
+            else if (diff < 1   * 1000)       { wt_stats[(int)idx].conts_1us++; }
+            else if (diff < 10  * 1000)       { wt_stats[(int)idx].conts_10us++; }
+            else if (diff < 100 * 1000)       { wt_stats[(int)idx].conts_100us++; }
+            else if (diff < 1   * 1000000)    { wt_stats[(int)idx].conts_1ms++; }
+            else if (diff < 10  * 1000000)    { wt_stats[(int)idx].conts_10ms++; }
+            else if (diff < 100 * 1000000)    { wt_stats[(int)idx].conts_100ms++; }
+            else if (diff < 1   * 1000000000) { wt_stats[(int)idx].conts_1s++; }
+            else if (diff < (long long int)10  * 1000000000) { wt_stats[(int)idx].conts_10s++; }
+            else if (diff < (long long int)100 * 1000000000) { wt_stats[(int)idx].conts_100s++; }
+            else                              { wt_stats[(int)idx].conts_inf++; }
+
             switch (r.tag) {
                 case $RDONE: {
                     if (db) {
@@ -1190,8 +1262,28 @@ void *main_loop(void *arg) {
                     break;
                 }
             }
+            clock_gettime(CLOCK_MONOTONIC, &ts3);
+            diff = (ts3.tv_sec * 1000000000 + ts3.tv_nsec) - (ts2.tv_sec * 1000000000 + ts2.tv_nsec);
+            wt_stats[(int)idx].bkeep_count++;
+            wt_stats[(int)idx].bkeep_sum += diff;
+
+            if      (diff < 100)              { wt_stats[(int)idx].bkeep_100ns++; }
+            else if (diff < 1   * 1000)       { wt_stats[(int)idx].bkeep_1us++; }
+            else if (diff < 10  * 1000)       { wt_stats[(int)idx].bkeep_10us++; }
+            else if (diff < 100 * 1000)       { wt_stats[(int)idx].bkeep_100us++; }
+            else if (diff < 1   * 1000000)    { wt_stats[(int)idx].bkeep_1ms++; }
+            else if (diff < 10  * 1000000)    { wt_stats[(int)idx].bkeep_10ms++; }
+            else if (diff < 100 * 1000000)    { wt_stats[(int)idx].bkeep_100ms++; }
+            else if (diff < 1   * 1000000000) { wt_stats[(int)idx].bkeep_1s++; }
+            else if (diff < (long long int)10  * 1000000000) { wt_stats[(int)idx].bkeep_10s++; }
+            else if (diff < (long long int)100 * 1000000000) { wt_stats[(int)idx].bkeep_100s++; }
+            else                              { wt_stats[(int)idx].bkeep_inf++; }
+
+            wt_stats[(int)idx].state = WT_Idle;
         } else {
             pthread_mutex_lock(&sleep_lock);
+            wt_stats[(int)idx].state = WT_Sleeping;
+            wt_stats[(int)idx].sleeps++;
             pthread_cond_wait(&work_to_do, &sleep_lock);
             pthread_mutex_unlock(&sleep_lock);
         }
@@ -1217,6 +1309,108 @@ void $register_rts () {
  
 ////////////////////////////////////////////////////////////////////////////////////////
 
+void *$mon_loop(void *appname) {
+    rtsv_printf("Starting monitor listen on %s\n", rts_mon_path);
+
+    pid_t pid = getpid();
+
+    int s, s2, t, len;
+    struct sockaddr_un local, remote;
+    char q[100];
+
+    if ((s = socket(AF_UNIX, SOCK_STREAM, 0)) == -1) {
+        perror("socket");
+        exit(1);
+    }
+
+    local.sun_family = AF_UNIX;
+    strcpy(local.sun_path, rts_mon_path);
+    unlink(local.sun_path);
+    len = sizeof(local.sun_path) + sizeof(local.sun_family);
+    if (bind(s, (struct sockaddr *)&local, len) == -1) {
+        perror("bind");
+        exit(1);
+    }
+
+    if (listen(s, 5) == -1) {
+        perror("listen");
+        exit(1);
+    }
+
+    for(;;) {
+        t = sizeof(remote);
+        if ((s2 = accept(s, (struct sockaddr *)&remote, &t)) == -1) {
+            perror("accept");
+            exit(1);
+        }
+
+        int n;
+        while (1) {
+            n = recv(s2, q, 100, 0);
+            if (n <= 0) {
+                if (n < 0) perror("recv");
+                break;
+            }
+
+            if (strncmp(q, "WTS", 3) == 0) {
+                yyjson_mut_doc *doc = yyjson_mut_doc_new(NULL);
+                yyjson_mut_val *root = yyjson_mut_obj(doc);
+                yyjson_mut_doc_set_root(doc, root);
+
+                yyjson_mut_obj_add_str(doc, root, "name", appname);
+                yyjson_mut_obj_add_int(doc, root, "pid", pid);
+
+                yyjson_mut_val *j_stat = yyjson_mut_obj(doc);
+                yyjson_mut_obj_add_val(doc, root, "wt", j_stat);
+                for (unsigned int i = 0; i < num_wthreads; i++) {
+                    yyjson_mut_val *j_wt = yyjson_mut_obj(doc);
+                    yyjson_mut_obj_add_val(doc, j_stat, wt_stats[i].key, j_wt);
+                    yyjson_mut_obj_add_str(doc, j_wt, "state",       WT_State_name[wt_stats[i].state]);
+                    yyjson_mut_obj_add_int(doc, j_wt, "sleeps",      wt_stats[i].sleeps);
+                    yyjson_mut_obj_add_int(doc, j_wt, "conts_count", wt_stats[i].conts_count);
+                    yyjson_mut_obj_add_int(doc, j_wt, "conts_sum",   wt_stats[i].conts_sum);
+                    yyjson_mut_obj_add_int(doc, j_wt, "conts_100ns", wt_stats[i].conts_100ns);
+                    yyjson_mut_obj_add_int(doc, j_wt, "conts_1us",   wt_stats[i].conts_1us);
+                    yyjson_mut_obj_add_int(doc, j_wt, "conts_10us",  wt_stats[i].conts_10us);
+                    yyjson_mut_obj_add_int(doc, j_wt, "conts_100us", wt_stats[i].conts_100us);
+                    yyjson_mut_obj_add_int(doc, j_wt, "conts_1ms",   wt_stats[i].conts_1ms);
+                    yyjson_mut_obj_add_int(doc, j_wt, "conts_10ms",  wt_stats[i].conts_10ms);
+                    yyjson_mut_obj_add_int(doc, j_wt, "conts_100ms", wt_stats[i].conts_100ms);
+                    yyjson_mut_obj_add_int(doc, j_wt, "conts_1s",    wt_stats[i].conts_1s);
+                    yyjson_mut_obj_add_int(doc, j_wt, "conts_10s",   wt_stats[i].conts_10s);
+                    yyjson_mut_obj_add_int(doc, j_wt, "conts_100s",  wt_stats[i].conts_100s);
+                    yyjson_mut_obj_add_int(doc, j_wt, "conts_inf",   wt_stats[i].conts_inf);
+                    yyjson_mut_obj_add_int(doc, j_wt, "bkeep_count", wt_stats[i].bkeep_count);
+                    yyjson_mut_obj_add_int(doc, j_wt, "bkeep_sum",   wt_stats[i].bkeep_sum);
+                    yyjson_mut_obj_add_int(doc, j_wt, "bkeep_100ns", wt_stats[i].bkeep_100ns);
+                    yyjson_mut_obj_add_int(doc, j_wt, "bkeep_1us",   wt_stats[i].bkeep_1us);
+                    yyjson_mut_obj_add_int(doc, j_wt, "bkeep_10us",  wt_stats[i].bkeep_10us);
+                    yyjson_mut_obj_add_int(doc, j_wt, "bkeep_100us", wt_stats[i].bkeep_100us);
+                    yyjson_mut_obj_add_int(doc, j_wt, "bkeep_1ms",   wt_stats[i].bkeep_1ms);
+                    yyjson_mut_obj_add_int(doc, j_wt, "bkeep_10ms",  wt_stats[i].bkeep_10ms);
+                    yyjson_mut_obj_add_int(doc, j_wt, "bkeep_100ms", wt_stats[i].bkeep_100ms);
+                    yyjson_mut_obj_add_int(doc, j_wt, "bkeep_1s",    wt_stats[i].bkeep_1s);
+                    yyjson_mut_obj_add_int(doc, j_wt, "bkeep_10s",   wt_stats[i].bkeep_10s);
+                    yyjson_mut_obj_add_int(doc, j_wt, "bkeep_100s",  wt_stats[i].bkeep_100s);
+                    yyjson_mut_obj_add_int(doc, j_wt, "bkeep_inf",   wt_stats[i].bkeep_inf);
+                }
+
+                const char *json = yyjson_mut_write(doc, 0, NULL);
+                int send_res = send(s2, json, strlen(json), 0);
+                free((void *)json);
+                yyjson_mut_doc_free(doc);
+                if (send_res < 0) {
+                    perror("send");
+                    break;
+                }
+            }
+        }
+
+        close(s2);
+    }
+}
+
+
 /*
  * A note on argument parsing: The RTS has its own command line arguments, all
  * prefixed with --rts-, which we need to parse out. The remainder of the
@@ -1240,11 +1434,47 @@ int main(int argc, char **argv) {
     int new_argc = argc;
     int cpu_pin = 0;
 
+    for (uint i=0; i<32; i++) {
+        wt_stats[i].idx = i;
+        sprintf(wt_stats[i].key, "%d", i);
+        wt_stats[i].state = 0;
+        wt_stats[i].sleeps = 0;
+
+        wt_stats[i].conts_count = 0;
+        wt_stats[i].conts_sum = 0;
+        wt_stats[i].conts_100ns = 0;
+        wt_stats[i].conts_1us = 0;
+        wt_stats[i].conts_10us = 0;
+        wt_stats[i].conts_100us = 0;
+        wt_stats[i].conts_1ms = 0;
+        wt_stats[i].conts_10ms = 0;
+        wt_stats[i].conts_100ms = 0;
+        wt_stats[i].conts_1s = 0;
+        wt_stats[i].conts_10s = 0;
+        wt_stats[i].conts_100s = 0;
+        wt_stats[i].conts_inf = 0;
+
+        wt_stats[i].bkeep_count = 0;
+        wt_stats[i].bkeep_sum = 0;
+        wt_stats[i].bkeep_100ns = 0;
+        wt_stats[i].bkeep_1us = 0;
+        wt_stats[i].bkeep_10us = 0;
+        wt_stats[i].bkeep_100us = 0;
+        wt_stats[i].bkeep_1ms = 0;
+        wt_stats[i].bkeep_10ms = 0;
+        wt_stats[i].bkeep_100ms = 0;
+        wt_stats[i].bkeep_1s = 0;
+        wt_stats[i].bkeep_10s = 0;
+        wt_stats[i].bkeep_100s = 0;
+        wt_stats[i].bkeep_inf = 0;
+    }
+
     static struct option long_options[] = {
         {"rts-debug", no_argument, NULL, 'd'},
         {"rts-ddb-host", required_argument, NULL, 'h'},
         {"rts-ddb-port", required_argument, NULL, 'p'},
         {"rts-ddb-replication", required_argument, NULL, 'r'},
+        {"rts-mon", required_argument, NULL, 'm'},
         {"rts-verbose", no_argument, NULL, 'v'},
         {NULL, 0, NULL, 0}
     };
@@ -1266,6 +1496,10 @@ int main(int argc, char **argv) {
                 new_argc -= 2;
                 ddb_host = realloc(ddb_host, ++ddb_no_host * sizeof *ddb_host);
                 ddb_host[ddb_no_host-1] = optarg;
+                break;
+            case 'm':
+                new_argc -= 2;
+                rts_mon_path = optarg;
                 break;
             case 'p':
                 new_argc -= 2;
@@ -1306,7 +1540,7 @@ int main(int argc, char **argv) {
     new_argv[new_argc] = NULL;
 
     long num_cores = sysconf(_SC_NPROCESSORS_ONLN);
-    long num_wthreads = num_cores;
+    num_wthreads = num_cores;
     // Determine number of worker threads, normally 1:1 per CPU thread / core
     // For low core count systems we do a minimum of 4 worker threads
     if (num_wthreads < 4) {
@@ -1369,8 +1603,8 @@ int main(int argc, char **argv) {
     cpu_set_t cpu_set;
 
     // Start worker threads
-    // number of threads is workers + IO
-    pthread_t threads[num_wthreads + 1];
+    // number of threads is workers + (IO + mon)
+    pthread_t threads[num_wthreads + 2];
     // Keep track of total number of threads, worker threads and then some...
     int num_threads = num_wthreads;
 
@@ -1383,14 +1617,22 @@ int main(int argc, char **argv) {
     }
     num_threads++;
 
+    // Monitor listen + pin to CPU 0
+    if (rts_mon_path) {
+        pthread_create(&threads[num_threads], NULL, $mon_loop, (void*)argv[0]);
+        if (cpu_pin) {
+            CPU_ZERO(&cpu_set);
+            CPU_SET(0, &cpu_set);
+            pthread_setaffinity_np(threads[num_threads], sizeof(cpu_set), &cpu_set);
+        }
+        num_threads++;
+    }
+
     int total_threads = 0;
     for(int idx = 0; idx <= num_cores; ++idx) {
         pthread_create(&threads[idx], NULL, main_loop, (void*)idx);
-        // Only do affinity when we have a 1:1 mapping of eventloop / worker
-        // threads to CPUs. Otherwise we are on a small system and we let our
-        // worker threads roam freely across CPU cores.
-        // Note how we ping thread index + 1, so thread 0 is on CPU 1
-        // We use CPU 0 for the misc threads, like IO / mon etc
+        // Note how we pin thread index + 1, so worker thread 0 is on CPU 1
+        // We use CPU 0 for misc threads, like IO / mon etc
         if (cpu_pin) {
             CPU_ZERO(&cpu_set);
             CPU_SET(idx+1, &cpu_set);

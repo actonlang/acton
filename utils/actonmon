@@ -1,0 +1,384 @@
+#!/usr/bin/env python3
+
+
+import argparse
+from functools import partial
+from http.server import HTTPServer, BaseHTTPRequestHandler
+import json
+import socket
+import time
+
+class MonSock:
+    def __init__(self, address):
+        self.address = address
+        self.sock = None
+
+    def connect(self):
+        self.sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        try:
+            self.sock.connect(self.address)
+        except:
+            pass
+
+    def mon(self, retries=5):
+        if self.sock is None:
+            self.connect()
+
+        try:
+            self.sock.send(b"WTS")
+            res = self.sock.recv(20000)
+            return json.loads(res.decode("utf-8"))
+        except Exception as exc:
+            self.connect()
+            if retries > 0:
+                return self.mon(retries-1)
+            else:
+                raise ConnectionError("Unable to get data from acton rts")
+
+
+class PromHTTPRequestHandler(BaseHTTPRequestHandler):
+    def __init__(self, sock_addr, *args, **kwargs):
+        self.ms = MonSock(sock_addr)
+        # BaseHTTPRequestHandler calls do_GET **inside** __init__ !!!
+        # So we have to call super().__init__ after setting attributes.
+        super().__init__(*args, **kwargs)
+
+    def do_GET(self):
+        try:
+            data = self.ms.mon()
+        except ConnectionError:
+            self.send_response(503)
+            return
+
+        self.send_response(200)
+        self.end_headers()
+
+        total = {k: 0 for k in data['wt']['0']}
+
+        self.wfile.write(b'# HELP acton_rts_sleeps Number of times a thread went to sleep\n')
+        self.wfile.write(b'# TYPE acton_rts_sleeps counter\n')
+        for k,v in sorted(data['wt'].items(), key=lambda item: int(item[0])):
+            self.wfile.write(f'acton_rts_sleeps{{thread="{k}"}} {v["sleeps"]}\n'.encode('utf-8'))
+
+        self.wfile.write(b'# HELP acton_rts_conts Execution time of continuations\n')
+        self.wfile.write(b'# TYPE acton_rts_conts histogram\n')
+        for k,v in sorted(data['wt'].items(), key=lambda item: int(item[0])):
+            total['conts_count'] += v['conts_count']
+            total['conts_sum'] += v['conts_sum']
+            total['conts_100ns'] += v['conts_100ns']
+            total['conts_1us'] += v['conts_1us']
+            total['conts_10us'] += v['conts_10us']
+            total['conts_100us'] += v['conts_100us']
+            total['conts_1ms'] += v['conts_1ms']
+            total['conts_10ms'] += v['conts_10ms']
+            total['conts_100ms'] += v['conts_100ms']
+            total['conts_1s'] += v['conts_1s']
+            total['conts_10s'] += v['conts_10s']
+            total['conts_100s'] += v['conts_100s']
+            total['conts_inf'] += v['conts_inf']
+
+            self.wfile.write(f'acton_rts_conts_bucket{{thread="{k}",le="0.0000001"}} {v["conts_100ns"]}\n'.encode('utf-8'))
+            self.wfile.write(f'acton_rts_conts_bucket{{thread="{k}",le="0.000001"}} {v["conts_1us"]}\n'.encode('utf-8'))
+            self.wfile.write(f'acton_rts_conts_bucket{{thread="{k}",le="0.00001"}} {v["conts_10us"]}\n'.encode('utf-8'))
+            self.wfile.write(f'acton_rts_conts_bucket{{thread="{k}",le="0.0001"}} {v["conts_100us"]}\n'.encode('utf-8'))
+            self.wfile.write(f'acton_rts_conts_bucket{{thread="{k}",le="0.001"}} {v["conts_1ms"]}\n'.encode('utf-8'))
+            self.wfile.write(f'acton_rts_conts_bucket{{thread="{k}",le="0.01"}} {v["conts_10ms"]}\n'.encode('utf-8'))
+            self.wfile.write(f'acton_rts_conts_bucket{{thread="{k}",le="0.1"}} {v["conts_100ms"]}\n'.encode('utf-8'))
+            self.wfile.write(f'acton_rts_conts_bucket{{thread="{k}",le="1"}} {v["conts_1s"]}\n'.encode('utf-8'))
+            self.wfile.write(f'acton_rts_conts_bucket{{thread="{k}",le="10"}} {v["conts_10s"]}\n'.encode('utf-8'))
+            self.wfile.write(f'acton_rts_conts_bucket{{thread="{k}",le="100"}} {v["conts_100s"]}\n'.encode('utf-8'))
+            self.wfile.write(f'acton_rts_conts_bucket{{thread="{k}",le="+Inf"}} {v["conts_inf"]}\n'.encode('utf-8'))
+            self.wfile.write(f'acton_rts_conts_sum{{thread="{k}"}} {v["conts_sum"]}\n'.encode('utf-8'))
+            self.wfile.write(f'acton_rts_conts_count{{thread="{k}"}} {v["conts_count"]}\n'.encode('utf-8'))
+
+        self.wfile.write(f'acton_rts_conts_bucket{{thread="sum",le="0.0000001"}} {total["conts_100ns"]}\n'.encode('utf-8'))
+        self.wfile.write(f'acton_rts_conts_bucket{{thread="sum",le="0.000001"}} {total["conts_1us"]}\n'.encode('utf-8'))
+        self.wfile.write(f'acton_rts_conts_bucket{{thread="sum",le="0.00001"}} {total["conts_10us"]}\n'.encode('utf-8'))
+        self.wfile.write(f'acton_rts_conts_bucket{{thread="sum",le="0.0001"}} {total["conts_100us"]}\n'.encode('utf-8'))
+        self.wfile.write(f'acton_rts_conts_bucket{{thread="sum",le="0.001"}} {total["conts_1ms"]}\n'.encode('utf-8'))
+        self.wfile.write(f'acton_rts_conts_bucket{{thread="sum",le="0.01"}} {total["conts_10ms"]}\n'.encode('utf-8'))
+        self.wfile.write(f'acton_rts_conts_bucket{{thread="sum",le="0.1"}} {total["conts_100ms"]}\n'.encode('utf-8'))
+        self.wfile.write(f'acton_rts_conts_bucket{{thread="sum",le="1"}} {total["conts_1s"]}\n'.encode('utf-8'))
+        self.wfile.write(f'acton_rts_conts_bucket{{thread="sum",le="10"}} {total["conts_10s"]}\n'.encode('utf-8'))
+        self.wfile.write(f'acton_rts_conts_bucket{{thread="sum",le="100"}} {total["conts_100s"]}\n'.encode('utf-8'))
+        self.wfile.write(f'acton_rts_conts_bucket{{thread="sum",le="+Inf"}} {total["conts_inf"]}\n'.encode('utf-8'))
+        self.wfile.write(f'acton_rts_conts_sum{{thread="sum"}} {total["conts_sum"]}\n'.encode('utf-8'))
+        self.wfile.write(f'acton_rts_conts_count{{thread="sum"}} {total["conts_count"]}\n'.encode('utf-8'))
+
+        self.wfile.write(b'# HELP acton_rts_bkeep Bookkeeping\n')
+        self.wfile.write(b'# TYPE acton_rts_bkeep histogram\n')
+        for k,v in sorted(data['wt'].items(), key=lambda item: int(item[0])):
+            total['bkeep_count'] += v['bkeep_count']
+            total['bkeep_sum'] += v['bkeep_sum']
+            total['bkeep_100ns'] += v['bkeep_100ns']
+            total['bkeep_1us'] += v['bkeep_1us']
+            total['bkeep_10us'] += v['bkeep_10us']
+            total['bkeep_100us'] += v['bkeep_100us']
+            total['bkeep_1ms'] += v['bkeep_1ms']
+            total['bkeep_10ms'] += v['bkeep_10ms']
+            total['bkeep_100ms'] += v['bkeep_100ms']
+            total['bkeep_1s'] += v['bkeep_1s']
+            total['bkeep_10s'] += v['bkeep_10s']
+            total['bkeep_100s'] += v['bkeep_100s']
+            total['bkeep_inf'] += v['bkeep_inf']
+
+            self.wfile.write(f'acton_rts_bkeep_bucket{{thread="{k}",le="0.0000001"}} {v["bkeep_100ns"]}\n'.encode('utf-8'))
+            self.wfile.write(f'acton_rts_bkeep_bucket{{thread="{k}",le="0.000001"}} {v["bkeep_1us"]}\n'.encode('utf-8'))
+            self.wfile.write(f'acton_rts_bkeep_bucket{{thread="{k}",le="0.00001"}} {v["bkeep_10us"]}\n'.encode('utf-8'))
+            self.wfile.write(f'acton_rts_bkeep_bucket{{thread="{k}",le="0.0001"}} {v["bkeep_100us"]}\n'.encode('utf-8'))
+            self.wfile.write(f'acton_rts_bkeep_bucket{{thread="{k}",le="0.001"}} {v["bkeep_1ms"]}\n'.encode('utf-8'))
+            self.wfile.write(f'acton_rts_bkeep_bucket{{thread="{k}",le="0.01"}} {v["bkeep_10ms"]}\n'.encode('utf-8'))
+            self.wfile.write(f'acton_rts_bkeep_bucket{{thread="{k}",le="0.1"}} {v["bkeep_100ms"]}\n'.encode('utf-8'))
+            self.wfile.write(f'acton_rts_bkeep_bucket{{thread="{k}",le="1"}} {v["bkeep_1s"]}\n'.encode('utf-8'))
+            self.wfile.write(f'acton_rts_bkeep_bucket{{thread="{k}",le="10"}} {v["bkeep_10s"]}\n'.encode('utf-8'))
+            self.wfile.write(f'acton_rts_bkeep_bucket{{thread="{k}",le="100"}} {v["bkeep_100s"]}\n'.encode('utf-8'))
+            self.wfile.write(f'acton_rts_bkeep_bucket{{thread="{k}",le="+Inf"}} {v["bkeep_inf"]}\n'.encode('utf-8'))
+            self.wfile.write(f'acton_rts_bkeep_sum{{thread="{k}"}} {v["bkeep_sum"]}\n'.encode('utf-8'))
+            self.wfile.write(f'acton_rts_bkeep_count{{thread="{k}"}} {v["bkeep_count"]}\n'.encode('utf-8'))
+
+        self.wfile.write(f'acton_rts_bkeep_bucket{{thread="sum",le="0.0000001"}} {total["bkeep_100ns"]}\n'.encode('utf-8'))
+        self.wfile.write(f'acton_rts_bkeep_bucket{{thread="sum",le="0.000001"}} {total["bkeep_1us"]}\n'.encode('utf-8'))
+        self.wfile.write(f'acton_rts_bkeep_bucket{{thread="sum",le="0.00001"}} {total["bkeep_10us"]}\n'.encode('utf-8'))
+        self.wfile.write(f'acton_rts_bkeep_bucket{{thread="sum",le="0.0001"}} {total["bkeep_100us"]}\n'.encode('utf-8'))
+        self.wfile.write(f'acton_rts_bkeep_bucket{{thread="sum",le="0.001"}} {total["bkeep_1ms"]}\n'.encode('utf-8'))
+        self.wfile.write(f'acton_rts_bkeep_bucket{{thread="sum",le="0.01"}} {total["bkeep_10ms"]}\n'.encode('utf-8'))
+        self.wfile.write(f'acton_rts_bkeep_bucket{{thread="sum",le="0.1"}} {total["bkeep_100ms"]}\n'.encode('utf-8'))
+        self.wfile.write(f'acton_rts_bkeep_bucket{{thread="sum",le="1"}} {total["bkeep_1s"]}\n'.encode('utf-8'))
+        self.wfile.write(f'acton_rts_bkeep_bucket{{thread="sum",le="10"}} {total["bkeep_10s"]}\n'.encode('utf-8'))
+        self.wfile.write(f'acton_rts_bkeep_bucket{{thread="sum",le="100"}} {total["bkeep_100s"]}\n'.encode('utf-8'))
+        self.wfile.write(f'acton_rts_bkeep_bucket{{thread="sum",le="+Inf"}} {total["bkeep_inf"]}\n'.encode('utf-8'))
+        self.wfile.write(f'acton_rts_bkeep_sum{{thread="sum"}} {total["bkeep_sum"]}\n'.encode('utf-8'))
+        self.wfile.write(f'acton_rts_bkeep_count{{thread="sum"}} {total["bkeep_count"]}\n'.encode('utf-8'))
+
+
+def prompom(sock_addr, listen_addr='localhost', listen_port=8000):
+    ad = (listen_addr, listen_port)
+    print(f"Serving stuff on {ad}")
+
+    handler = partial(PromHTTPRequestHandler, sock_addr)
+    httpd = HTTPServer(ad, handler)
+    httpd.serve_forever()
+
+def mon(address, interval, once):
+    ms = MonSock(address)
+    while True:
+        data = ms.mon()
+        print(f"Program: {data['name']}  PID: {data['pid']}")
+        print("WT#  State  Conts  Sleeps")
+        print("--------------------------------------------------------------------------------")
+        for k,v in sorted(data['wt'].items(), key=lambda item: int(item[0])):
+            print(f"{k:>3}: {v['state']:>6} {v['conts_count']:6} {v['sleeps']:7}")
+        if once:
+            break
+        time.sleep(interval)
+
+
+def richmon(address, interval, once):
+    import random
+    import time
+
+    from rich.live import Live
+    from rich.table import Table
+
+    ms = MonSock(address)
+
+    def generate_table() -> Table:
+        table = Table(title="Acton RTS worker thread statistics")
+
+        table.add_column("WT#", style="cyan", no_wrap=True)
+        table.add_column("State", style="magenta")
+        table.add_column("Sleeps", justify="right", style="green")
+
+        table.add_column("Continuations", justify="right", style="green")
+        table.add_column("Sum", justify="right", style="green")
+        table.add_column("<100ns", justify="right", style="green")
+        table.add_column("<1us", justify="right", style="green")
+        table.add_column("<10us", justify="right", style="green")
+        table.add_column("<100us", justify="right", style="green")
+        table.add_column("<1ms", justify="right", style="green")
+        table.add_column("<10ms", justify="right", style="green")
+        table.add_column("<100ms", justify="right", style="green")
+        table.add_column("<1s", justify="right", style="green")
+        table.add_column("<10s", justify="right", style="green")
+        table.add_column("<100s", justify="right", style="green")
+        table.add_column("<+Inf", justify="right", style="green")
+
+        table.add_column("bkeep", justify="right", style="green")
+        table.add_column("Sum", justify="right", style="green")
+        table.add_column("<100ns", justify="right", style="green")
+        table.add_column("<1us", justify="right", style="green")
+        table.add_column("<10us", justify="right", style="green")
+        table.add_column("<100us", justify="right", style="green")
+        table.add_column("<1ms", justify="right", style="green")
+        table.add_column("<10ms", justify="right", style="green")
+        table.add_column("<100ms", justify="right", style="green")
+        table.add_column("<1s", justify="right", style="green")
+        table.add_column("<10s", justify="right", style="green")
+        table.add_column("<100s", justify="right", style="green")
+        table.add_column("<+Inf", justify="right", style="green")
+
+        while True:
+            try:
+                data = ms.mon()
+                break
+            except ConnectionError:
+                time.sleep(0.5)
+
+        total = {k: 0 for k in data['wt']['0']}
+
+        total = {
+            'sleeps': 0,
+
+            'conts_count': 0,
+            'conts_sum': 0,
+            'conts_100ns': 0,
+            'conts_1us': 0,
+            'conts_10us': 0,
+            'conts_100us': 0,
+            'conts_1ms': 0,
+            'conts_10ms': 0,
+            'conts_100ms': 0,
+            'conts_1s': 0,
+            'conts_10s': 0,
+            'conts_100s': 0,
+            'conts_inf': 0,
+
+            'bkeep_count': 0,
+            'bkeep_sum': 0,
+            'bkeep_100ns': 0,
+            'bkeep_1us': 0,
+            'bkeep_10us': 0,
+            'bkeep_100us': 0,
+            'bkeep_1ms': 0,
+            'bkeep_10ms': 0,
+            'bkeep_100ms': 0,
+            'bkeep_1s': 0,
+            'bkeep_10s': 0,
+            'bkeep_100s': 0,
+            'bkeep_inf': 0,
+        }
+
+        for k,v in sorted(data['wt'].items(), key=lambda item: int(item[0])):
+            if k not in table.columns:
+                total['sleeps'] += v['sleeps']
+
+                total['conts_count'] += v['conts_count']
+                total['conts_sum'] += v['conts_sum']
+                total['conts_100ns'] += v['conts_100ns']
+                total['conts_1us'] += v['conts_1us']
+                total['conts_10us'] += v['conts_10us']
+                total['conts_100us'] += v['conts_100us']
+                total['conts_1ms'] += v['conts_1ms']
+                total['conts_10ms'] += v['conts_10ms']
+                total['conts_100ms'] += v['conts_100ms']
+                total['conts_1s'] += v['conts_1s']
+                total['conts_10s'] += v['conts_10s']
+                total['conts_100s'] += v['conts_100s']
+                total['conts_inf'] += v['conts_inf']
+
+                total['bkeep_count'] += v['bkeep_count']
+                total['bkeep_sum'] += v['bkeep_sum']
+                total['bkeep_100ns'] += v['bkeep_100ns']
+                total['bkeep_1us'] += v['bkeep_1us']
+                total['bkeep_10us'] += v['bkeep_10us']
+                total['bkeep_100us'] += v['bkeep_100us']
+                total['bkeep_1ms'] += v['bkeep_1ms']
+                total['bkeep_10ms'] += v['bkeep_10ms']
+                total['bkeep_100ms'] += v['bkeep_100ms']
+                total['bkeep_1s'] += v['bkeep_1s']
+                total['bkeep_10s'] += v['bkeep_10s']
+                total['bkeep_100s'] += v['bkeep_100s']
+                total['bkeep_inf'] += v['bkeep_inf']
+
+                table.add_row(k,
+                              v['state'],
+                              str(v['sleeps']),
+
+                              str(v['conts_count']),
+                              str(v['conts_sum']),
+                              str(v['conts_100ns']),
+                              str(v['conts_1us']),
+                              str(v['conts_10us']),
+                              str(v['conts_100us']),
+                              str(v['conts_1ms']),
+                              str(v['conts_10ms']),
+                              str(v['conts_100ms']),
+                              str(v['conts_1s']),
+                              str(v['conts_10s']),
+                              str(v['conts_100s']),
+                              str(v['conts_inf']),
+
+                              str(v['bkeep_count']),
+                              str(v['bkeep_sum']),
+                              str(v['bkeep_100ns']),
+                              str(v['bkeep_1us']),
+                              str(v['bkeep_10us']),
+                              str(v['bkeep_100us']),
+                              str(v['bkeep_1ms']),
+                              str(v['bkeep_10ms']),
+                              str(v['bkeep_100ms']),
+                              str(v['bkeep_1s']),
+                              str(v['bkeep_10s']),
+                              str(v['bkeep_100s']),
+                              str(v['bkeep_inf'])
+
+                              )
+        table.add_row("SUM",
+                        '',
+                        str(total['sleeps']),
+
+                        str(total['conts_count']),
+                        str(total['conts_sum']),
+                        str(total['conts_100ns']),
+                        str(total['conts_1us']),
+                        str(total['conts_10us']),
+                        str(total['conts_100us']),
+                        str(total['conts_1ms']),
+                        str(total['conts_10ms']),
+                        str(total['conts_100ms']),
+                        str(total['conts_1s']),
+                        str(total['conts_10s']),
+                        str(total['conts_100s']),
+                        str(total['conts_inf']),
+
+                        str(total['bkeep_count']),
+                        str(total['bkeep_sum']),
+                        str(total['bkeep_100ns']),
+                        str(total['bkeep_1us']),
+                        str(total['bkeep_10us']),
+                        str(total['bkeep_100us']),
+                        str(total['bkeep_1ms']),
+                        str(total['bkeep_10ms']),
+                        str(total['bkeep_100ms']),
+                        str(total['bkeep_1s']),
+                        str(total['bkeep_10s']),
+                        str(total['bkeep_100s']),
+                        str(total['bkeep_inf']),
+                        )
+
+        return table
+
+    with Live(generate_table(), refresh_per_second=(1.0/interval)) as live:
+        while True:
+            time.sleep(interval)
+            live.update(generate_table())
+            if once:
+                break
+
+
+if __name__ == '__main__':
+    parser = argparse.ArgumentParser()
+    parser.add_argument("socket")
+    parser.add_argument("--interval", type=float, default=0.5)
+    parser.add_argument("--rich", action="store_true")
+    parser.add_argument("--once", action="store_true", default=False)
+    parser.add_argument("--prom", action="store_true")
+
+    args = parser.parse_args()
+
+    if args.prom:
+        prompom(args.socket)
+    elif args.rich:
+        richmon(args.socket, args.interval, args.once)
+    else:
+        mon(args.socket, args.interval, args.once)
