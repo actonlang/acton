@@ -142,6 +142,12 @@ pthread_mutex_t sleep_lock = PTHREAD_MUTEX_INITIALIZER;
 pthread_cond_t work_to_do = PTHREAD_COND_INITIALIZER;
 
 void new_work() {
+    // We are sometimes optimistically called, i.e. the caller sometimes does
+    // not really know whether there is new work or not. We check and if there
+    // is not, then there is no need to wake anyone up.
+    if (!readyQ)
+        return;
+
     pthread_mutex_lock(&sleep_lock);
     pthread_cond_signal(&work_to_do);
     pthread_mutex_unlock(&sleep_lock);
@@ -756,7 +762,6 @@ void FLUSH_outgoing($Actor self, uuid_t *txnid) {
             $Actor to = m->$to;
             if (ENQ_msg(m, to)) {
                 ENQ_ready(to);
-                new_work();
             }
             dest = to->$globkey;
         } else {
@@ -1099,6 +1104,7 @@ void *main_loop(void *arg) {
     while (1) {
         $Actor current = DEQ_ready();
         if (current) {
+            new_work();
             pthread_setspecific(self_key, current);
             $Msg m = current->$msg;
             $Cont cont = m->$cont;
@@ -1137,7 +1143,6 @@ void *main_loop(void *arg) {
                         b->$waitsfor = NULL;
                         $Actor c = b->$next;
                         ENQ_ready(b);
-                        new_work();
                         rtsd_printf(LOGPFX "## Waking up actor %ld : %s\n", b->$globkey, b->$class->$GCINFO);
                         b = c;
                     }
