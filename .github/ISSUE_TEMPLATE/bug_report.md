@@ -5,36 +5,27 @@ labels: bug
 ---
 <!--
 Before opening a new issue, please search existing issues:  https://github.com/actonlang/acton/issues
-
-Thank you for filing a bug report! 🐛 Please provide a short summary of the bug,
-along with any information you feel relevant to replicating the bug.
 -->
 
-### Code / what did you do
+### Code
 
-I tried this code:
-
-```Acton
-<code>
+<!-- Describe what you did and fill in your code: -->
+```acton
+<paste your code>
 ```
 
-### Expected outcome
+### Outcome
 
-I expected to see this happen: *explanation*
+<!-- Describe what bad thing happened -->
+```
+<paste output>
+```
 
+### Expectation
+
+<!-- Describe your expectation -->
 ```
 <expected output>
-```
-
-
-### Actual outcome
-
-<!-- Please include the actual, raw output -->
-
-Instead, this happened: *explanation*
-
-```
-<actual output>
 ```
 
 ### Meta
@@ -45,5 +36,5 @@ bug also exists in the beta or nightly versions.
 
 `actonc --version`:
 ```
-<version>
+<paste output of actonc --version>
 ```
