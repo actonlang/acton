@@ -18,6 +18,8 @@
 #endif
 #endif
 
+#define MAX_WTHREADS 256
+
 #include <unistd.h>
 #include <pthread.h>
 #include <stdio.h>
@@ -82,7 +84,7 @@ struct wt_stat {
     unsigned long long bkeep_100s;   // bucket for <100s
     unsigned long long bkeep_inf;   // bucket for <+Inf
 };
-struct wt_stat wt_stats[32];
+struct wt_stat wt_stats[MAX_WTHREADS];
 
 // Conveys current thread status, like what is it doing?
 enum WT_State {WT_NoExist = 0, WT_Working = 1, WT_Idle = 2, WT_Sleeping = 3};
@@ -1433,41 +1435,8 @@ int main(int argc, char **argv) {
     int ddb_replication = 3;
     int new_argc = argc;
     int cpu_pin = 0;
-
-    for (uint i=0; i<32; i++) {
-        wt_stats[i].idx = i;
-        sprintf(wt_stats[i].key, "%d", i);
-        wt_stats[i].state = 0;
-        wt_stats[i].sleeps = 0;
-
-        wt_stats[i].conts_count = 0;
-        wt_stats[i].conts_sum = 0;
-        wt_stats[i].conts_100ns = 0;
-        wt_stats[i].conts_1us = 0;
-        wt_stats[i].conts_10us = 0;
-        wt_stats[i].conts_100us = 0;
-        wt_stats[i].conts_1ms = 0;
-        wt_stats[i].conts_10ms = 0;
-        wt_stats[i].conts_100ms = 0;
-        wt_stats[i].conts_1s = 0;
-        wt_stats[i].conts_10s = 0;
-        wt_stats[i].conts_100s = 0;
-        wt_stats[i].conts_inf = 0;
-
-        wt_stats[i].bkeep_count = 0;
-        wt_stats[i].bkeep_sum = 0;
-        wt_stats[i].bkeep_100ns = 0;
-        wt_stats[i].bkeep_1us = 0;
-        wt_stats[i].bkeep_10us = 0;
-        wt_stats[i].bkeep_100us = 0;
-        wt_stats[i].bkeep_1ms = 0;
-        wt_stats[i].bkeep_10ms = 0;
-        wt_stats[i].bkeep_100ms = 0;
-        wt_stats[i].bkeep_1s = 0;
-        wt_stats[i].bkeep_10s = 0;
-        wt_stats[i].bkeep_100s = 0;
-        wt_stats[i].bkeep_inf = 0;
-    }
+    long num_cores = sysconf(_SC_NPROCESSORS_ONLN);
+    num_wthreads = num_cores;
 
     static struct option long_options[] = {
         {"rts-debug", no_argument, NULL, 'd'},
@@ -1476,6 +1445,7 @@ int main(int argc, char **argv) {
         {"rts-ddb-replication", required_argument, NULL, 'r'},
         {"rts-mon", required_argument, NULL, 'm'},
         {"rts-verbose", no_argument, NULL, 'v'},
+        {"rts-wthreads", required_argument, NULL, 'w'},
         {NULL, 0, NULL, 0}
     };
 
@@ -1513,6 +1483,10 @@ int main(int argc, char **argv) {
                 new_argc--;
                 rts_verbose = 1;
                 break;
+            case 'w':
+                new_argc -= 2;
+                num_wthreads = atoi(optarg);
+                break;
         }
     }
     char** new_argv = malloc((new_argc+1) * sizeof *new_argv);
@@ -1539,8 +1513,11 @@ int main(int argc, char **argv) {
     }
     new_argv[new_argc] = NULL;
 
-    long num_cores = sysconf(_SC_NPROCESSORS_ONLN);
-    num_wthreads = num_cores;
+    if (num_wthreads > MAX_WTHREADS) {
+        fprintf(stderr, "ERROR: Maximum of %d worker threads supported.\n", MAX_WTHREADS);
+        fprintf(stderr, "HINT: Run this program with fewer worker threads: %s --rts-wthreads %d\n", argv[0], MAX_WTHREADS);
+        exit(1);
+    }
     // Determine number of worker threads, normally 1:1 per CPU thread / core
     // For low core count systems we do a minimum of 4 worker threads
     if (num_wthreads < 4) {
@@ -1551,6 +1528,43 @@ int main(int argc, char **argv) {
         rtsv_printf(LOGPFX "Detected %ld CPUs: Using %ld worker threads for 1:1 mapping with CPU affinity set.\n", num_cores, num_wthreads);
         cpu_pin = 1;
     }
+
+    // Zeroize statistics
+    for (uint i=0; i < MAX_WTHREADS; i++) {
+        wt_stats[i].idx = i;
+        sprintf(wt_stats[i].key, "%d", i);
+        wt_stats[i].state = 0;
+        wt_stats[i].sleeps = 0;
+
+        wt_stats[i].conts_count = 0;
+        wt_stats[i].conts_sum = 0;
+        wt_stats[i].conts_100ns = 0;
+        wt_stats[i].conts_1us = 0;
+        wt_stats[i].conts_10us = 0;
+        wt_stats[i].conts_100us = 0;
+        wt_stats[i].conts_1ms = 0;
+        wt_stats[i].conts_10ms = 0;
+        wt_stats[i].conts_100ms = 0;
+        wt_stats[i].conts_1s = 0;
+        wt_stats[i].conts_10s = 0;
+        wt_stats[i].conts_100s = 0;
+        wt_stats[i].conts_inf = 0;
+
+        wt_stats[i].bkeep_count = 0;
+        wt_stats[i].bkeep_sum = 0;
+        wt_stats[i].bkeep_100ns = 0;
+        wt_stats[i].bkeep_1us = 0;
+        wt_stats[i].bkeep_10us = 0;
+        wt_stats[i].bkeep_100us = 0;
+        wt_stats[i].bkeep_1ms = 0;
+        wt_stats[i].bkeep_10ms = 0;
+        wt_stats[i].bkeep_100ms = 0;
+        wt_stats[i].bkeep_1s = 0;
+        wt_stats[i].bkeep_10s = 0;
+        wt_stats[i].bkeep_100s = 0;
+        wt_stats[i].bkeep_inf = 0;
+    }
+
     $register_builtin();
     minienv$$__init__();
     $register_rts();
