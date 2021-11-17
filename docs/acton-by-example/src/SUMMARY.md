@@ -1,0 +1,22 @@
+# Summary
+
+[Introduction](index.md)
+
+- [Hello World](hello.md)
+  - [Program Arguments](hello/args.md)
+- [Variable data types](primitives.md)
+  - [Scalars](primitives/scalars.md)
+  - [Lists](primitives/lists.md)
+  - [Dictionaries](primitives/dicts.md)
+  - [Tuples](primitives/tuples.md)
+  - [Sets](primitives/sets.md)
+- [Types](types.md)
+- [Actors](actors.md)
+  - [Root Actor](actors/root.md)
+  - [Lifetime](actors/lifetime.md)
+  - [Attributes](actors/attributes.md)
+  - [Concurrency](actors/concurrency.md)
+  - [Sync Method calls](actors/sync_method_call.md)
+<!-- should go under Actors -- - [Async Method calls](actors/async_method_call.md) -->
+<!--- [Control flow](control_flow.md)-->
+
