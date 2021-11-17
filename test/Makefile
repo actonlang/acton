@@ -49,6 +49,10 @@ test_acton_rts_sleep:
 	$(ACTONC) --root main $@.act
 	./$@
 
+test_async:
+	$(ACTONC) --root main $@.act
+	./$@
+
 test_random:
 	$(ACTONC) --root main $@.act
 	./$@
@@ -66,4 +70,4 @@ stdlib/test_numpy: stdlib/test_numpy.act
 	$(ACTONC) --root main $<
 	./$@
 
-.PHONY: argv test_acton_rts_sleep test_random test_time regression rts_sleep
+.PHONY: argv test_acton_rts_sleep test_async test_random test_time regression rts_sleep
