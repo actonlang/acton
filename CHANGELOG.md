@@ -5,6 +5,83 @@
 There are currently known regressions:
 - using RTS together with the distributed backend database is not working
 
+## [0.7.0] (2021-11-23)
+
+There are currently known regressions:
+- using RTS together with the distributed backend database is not working
+
+### Added
+- Basic support for Apple M1 silicon [#383]
+  - Mostly about keeping track of Homebrew paths, since it uses `/opt/homebrew`
+    on Apple silicon vs `/usr/local` on Intel CPUs
+  - Not thoroughly tested, but Acton compiles and `actonc` appears to produce
+    working programs
+- *Acton by Example* book [#370] [#371] [#375]
+  - https://www.acton-lang.org/learn/acton-by-example/
+  - far from complete, but a decent start
+  - using mdBook format
+  - using svgbob plugin to draw pretty SVG art using ASCII art
+  - source in `docs/acton-by-example`
+    - source deliberately kept close (same git repo) to Acton itself, so we can
+      easily update docs as we update other things
+- The number of worker threads is made configurable [#365]
+  - Run an acton program with `--rts-wthreads X`
+  - As before, number of worker threads defaults to number of logical CPU cores
+    (threads)
+- RTS statistics and monitoring functionality [#353]
+  - Each worker thread keeps some statistics, like:
+    - number of sleeps
+    - number of continuations executed
+    - time spent executing continuation, counted in bucket less than:
+      - 100ns, 1us, 10us, 100us, 1ms, 10ms, 100ms, 1s, 10s, 100s, +Inf
+    - bookkeeping overhead, like taking internal locks, enqueueing messages etc,
+      also counted in buckets
+  - `utils/actonmon` is a simple utility to connect to monitor socket, fetch
+    statistics and display them
+    - can display in fancy table using `--rich` (using Python rich module)
+    - defaults to simple no-frills output that have no extra dependencies
+    - `--prom` will expose a http server exposing metrics to be consumed by
+      Prometheus in the OpenMetrics exposition format
+      - can then be displayed in Grafana or similar
+- There are now two compilation "profiles"; development & release [#345]
+  - `--dev` implies debug symbols are included and RTS debugging is enabled,
+    which was previously enabled with `--rts-debug`
+  - release mode is the default and does not include debug symbols nor RTS
+    debugging
+- `actonc --numeric-version` shows a numeric version number [#346]
+  - a stable interface to simply display the actonc version number
+  - unlike `--version` which stretches across multiple lines and includes the
+    versions of cc, the haskell stack used to build actonc etc
+- Debian packages are now added as assets to GitHub releases [#369]
+  - .deb have always been available as GH Action job artifact
+  - For release versions, the .deb was available via the Acton apt repo
+  - Now easily possible to grab historic versions as well as pre-release .deb,
+    i.e. from main branch by downloading .deb from GitHub release page
+  
+### Changed
+- Acton compiler now built using Haskell LTS 18.12 [#335]
+- `--rts-debug` option replaced `--dev` [#345]
+- GitHub Actions now run for PRs and for main branch and tags [#385]
+  - Would previously run both for PRs and for push to a branch, resulting in
+    duplicate runs
+  
+### Fixed
+- Significantly improve performance by reducing RTS worker thread wake ups
+  - Best case scenarios is on the scale of 10x performance with drastically
+    reduced syscall overhead
+- Fix lib path on Mac OS X on x86_64 [#384]
+  - Now includes `/usr/local/lib` in library search path
+  - This was previously included through some default mechanism but it is now
+    explicit
+- Make build more idempotent [#333]
+- Fix GNU sed check in Makefile [#344]
+- Add `#pragma once` to `numpy.h` [#331]
+- Avoid regenerating protobuf generated files [#382]
+  - Since the generated files are checked into git, we really do not want to
+    regenerate them, thus the Make target has been turned into a NOP
+- Fix GitHub Action caching issue by adding version cache key [#339]
+- Simplify GitHub issue template for bug report [#367]
+
 
 ## [0.6.4] (2021-09-29)
 
@@ -480,6 +557,24 @@ then, this second incarnation has been in focus and 0.2.0 was its first version.
 [#320]: https://github.com/actonlang/acton/pull/320
 [#325]: https://github.com/actonlang/acton/pull/325
 [#327]: https://github.com/actonlang/acton/pull/327
+[#331]: https://github.com/actonlang/acton/pull/331
+[#333]: https://github.com/actonlang/acton/pull/333
+[#335]: https://github.com/actonlang/acton/pull/335
+[#339]: https://github.com/actonlang/acton/pull/339
+[#344]: https://github.com/actonlang/acton/pull/344
+[#345]: https://github.com/actonlang/acton/pull/345
+[#346]: https://github.com/actonlang/acton/pull/346
+[#353]: https://github.com/actonlang/acton/pull/353
+[#365]: https://github.com/actonlang/acton/pull/365
+[#367]: https://github.com/actonlang/acton/pull/367
+[#369]: https://github.com/actonlang/acton/pull/369
+[#370]: https://github.com/actonlang/acton/pull/370
+[#371]: https://github.com/actonlang/acton/pull/371
+[#375]: https://github.com/actonlang/acton/pull/375
+[#382]: https://github.com/actonlang/acton/pull/382
+[#383]: https://github.com/actonlang/acton/pull/383
+[#384]: https://github.com/actonlang/acton/pull/384
+[#385]: https://github.com/actonlang/acton/pull/385
 [0.3.0]: https://github.com/actonlang/acton/releases/tag/v0.3.0
 [0.4.0]: https://github.com/actonlang/acton/compare/v0.3.0...v0.4.0
 [0.4.1]: https://github.com/actonlang/acton/compare/v0.4.0...v0.4.1
