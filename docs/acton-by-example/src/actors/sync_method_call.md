@@ -33,4 +33,13 @@ Output:
 The answer is 42
 ```
 
+The call flow can be illustrated like this. We can see how the execution of `main` is suspended while it is waiting for the return value from actor `d1`.
+```bob
+   main    *-------*            *-------*
+                    \          ^
+                     v        /
+   d1                 *------'
+```
+
+
 While synchronous is *bad* because we block waiting for someone else, we are only ever going to wait for another actor to run its method. There is never any wait for I/O or other indefinite waiting, only blocking wait for computation within the Acton system. This is achieved by the lack of blocking calls for I/O, thus even if there is a chain of actors waiting for each other
