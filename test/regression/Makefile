@@ -14,11 +14,16 @@ FAILING_COMPILATION= \
 	11-int-float \
 	rtail \
 	quotes-in-triquotes \
-	triquotes-across-lines
+	triquotes-across-lines \
+
+FAILING_SEGFAULT= \
+	366-async-return \
+	segfault \
+
 FAILING_RUNNING= \
 	125-async-actor-method-call \
-	segfault \
-	subtract_off_by_one
+	subtract_off_by_one \
+
 ALL_FAILING=$(FAILING_COMPILATION) $(FAILING_RUNNING)
 
 SUCCESS_TESTS=$(filter-out $(ALL_FAILING),$(TESTS))
@@ -39,6 +44,12 @@ $(FAILING_COMPILATION):
 	@echo ""
 	@echo "== Running negative test (expecting compilation failure): $@"
 	! $(ACTONC) $@.act --root main >/dev/null 2>&1
+
+$(FAILING_SEGFAULT):
+	@echo ""
+	@echo "== Running negative test (expecting segfault): $@"
+	$(ACTONC) $@.act --root main >/dev/null 2>&1
+	./$@ >/dev/null 2>&1; EXIT_CODE=$$?; if [ $$EXIT_CODE -ne 139 ]; then exit 1; fi
 
 $(FAILING_RUNNING):
 	@echo ""
