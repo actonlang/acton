@@ -241,6 +241,8 @@ jobs:
         uses: actions/download-artifact@v2
         with:
           name: acton-debian
+      - name: "List downloaded artifacts"
+        run: ls
       - name: "Extract release notes"
         id: extract-release-notes
         uses: ffurrer2/extract-release-notes@v1
@@ -248,7 +250,7 @@ jobs:
         uses: ncipollo/release-action@v1
         with:
           allowUpdates: true
-          artifacts: "acton*.tar*,acton*deb"
+          artifacts: "acton*.tar*,deb/*deb"
           body: ${{ steps.extract-release-notes.outputs.release_notes }}
           draft: false
           token: ${{ secrets.GITHUB_TOKEN }}
