@@ -1434,41 +1434,6 @@ int main(int argc, char **argv) {
     int new_argc = argc;
     int cpu_pin = 0;
 
-    for (uint i=0; i<32; i++) {
-        wt_stats[i].idx = i;
-        sprintf(wt_stats[i].key, "%d", i);
-        wt_stats[i].state = 0;
-        wt_stats[i].sleeps = 0;
-
-        wt_stats[i].conts_count = 0;
-        wt_stats[i].conts_sum = 0;
-        wt_stats[i].conts_100ns = 0;
-        wt_stats[i].conts_1us = 0;
-        wt_stats[i].conts_10us = 0;
-        wt_stats[i].conts_100us = 0;
-        wt_stats[i].conts_1ms = 0;
-        wt_stats[i].conts_10ms = 0;
-        wt_stats[i].conts_100ms = 0;
-        wt_stats[i].conts_1s = 0;
-        wt_stats[i].conts_10s = 0;
-        wt_stats[i].conts_100s = 0;
-        wt_stats[i].conts_inf = 0;
-
-        wt_stats[i].bkeep_count = 0;
-        wt_stats[i].bkeep_sum = 0;
-        wt_stats[i].bkeep_100ns = 0;
-        wt_stats[i].bkeep_1us = 0;
-        wt_stats[i].bkeep_10us = 0;
-        wt_stats[i].bkeep_100us = 0;
-        wt_stats[i].bkeep_1ms = 0;
-        wt_stats[i].bkeep_10ms = 0;
-        wt_stats[i].bkeep_100ms = 0;
-        wt_stats[i].bkeep_1s = 0;
-        wt_stats[i].bkeep_10s = 0;
-        wt_stats[i].bkeep_100s = 0;
-        wt_stats[i].bkeep_inf = 0;
-    }
-
     static struct option long_options[] = {
         {"rts-debug", no_argument, NULL, 'd'},
         {"rts-ddb-host", required_argument, NULL, 'h'},
@@ -1551,6 +1516,43 @@ int main(int argc, char **argv) {
         rtsv_printf(LOGPFX "Detected %ld CPUs: Using %ld worker threads for 1:1 mapping with CPU affinity set.\n", num_cores, num_wthreads);
         cpu_pin = 1;
     }
+
+    // Zeroize statistics
+    for (uint i=0; i<num_wthreads; i++) {
+        wt_stats[i].idx = i;
+        sprintf(wt_stats[i].key, "%d", i);
+        wt_stats[i].state = 0;
+        wt_stats[i].sleeps = 0;
+
+        wt_stats[i].conts_count = 0;
+        wt_stats[i].conts_sum = 0;
+        wt_stats[i].conts_100ns = 0;
+        wt_stats[i].conts_1us = 0;
+        wt_stats[i].conts_10us = 0;
+        wt_stats[i].conts_100us = 0;
+        wt_stats[i].conts_1ms = 0;
+        wt_stats[i].conts_10ms = 0;
+        wt_stats[i].conts_100ms = 0;
+        wt_stats[i].conts_1s = 0;
+        wt_stats[i].conts_10s = 0;
+        wt_stats[i].conts_100s = 0;
+        wt_stats[i].conts_inf = 0;
+
+        wt_stats[i].bkeep_count = 0;
+        wt_stats[i].bkeep_sum = 0;
+        wt_stats[i].bkeep_100ns = 0;
+        wt_stats[i].bkeep_1us = 0;
+        wt_stats[i].bkeep_10us = 0;
+        wt_stats[i].bkeep_100us = 0;
+        wt_stats[i].bkeep_1ms = 0;
+        wt_stats[i].bkeep_10ms = 0;
+        wt_stats[i].bkeep_100ms = 0;
+        wt_stats[i].bkeep_1s = 0;
+        wt_stats[i].bkeep_10s = 0;
+        wt_stats[i].bkeep_100s = 0;
+        wt_stats[i].bkeep_inf = 0;
+    }
+
     $register_builtin();
     minienv$$__init__();
     $register_rts();
