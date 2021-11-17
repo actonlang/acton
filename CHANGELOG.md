@@ -5,6 +5,9 @@
 There are currently known regressions:
 - using RTS together with the distributed backend database is not working
 
+## [0.6.5] (2021-11-17)
+
+Foo
 
 ## [0.6.4] (2021-09-29)
 
