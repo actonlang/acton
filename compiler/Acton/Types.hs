@@ -598,7 +598,7 @@ instance InfEnv Decl where
                                                  (cs1,eq1) <- solveScoped env1 (qbound q) te tNone cs
                                                  checkNoEscape env (qbound q)
                                                  (nterms,_,_) <- checkAttributes [] te' te
-                                                 let te1 = stubAttributes env te
+                                                 let te1 = if stub env then te ++ stubSigs te else te
                                                  return (cs1, [(n, NClass q as' (te0++te1))], Class l n q us (bindWits eq1 ++ props te0 ++ b'))
                                              _ -> illegalRedef n
       where env1                        = define (exclude (toSigs te') [initKW]) $ reserve (bound b) $ defineSelfOpaque $ defineTVars (stripQual q) $ setInClass env
@@ -677,10 +677,6 @@ toSigs te                               = map makeSig te
         makeSig (n, i)                  = (n,i)
 
 
-stubAttributes env te
-  | stub env                            = te ++ stubSigs te
-  | otherwise                           = te
-
 stubSigs te                             = [ makeDef n sc dec | (n, NSig sc dec) <- te, dec /= Property ]
   where makeDef n (TSchema l q t) dec
           | TFun{} <- t                 = (n, NDef (TSchema l q $ addSelf t (Just dec)) dec)
@@ -735,9 +731,9 @@ instance (Check a) => Check [a] where
 
 ------------------
 
-infActorEnv env ss                      = do dsigs <- mapM mkNDef (dvars ss \\ dom sigs)
-                                             bsigs <- mapM mkNVar (pvars ss \\ dom (sigs++dsigs))
-                                             return (sigs ++ dsigs ++ bsigs)
+infActorEnv env ss                      = do dsigs <- mapM mkNDef (dvars ss \\ dom sigs)                -- exposed defs (without sigs)
+                                             bsigs <- mapM mkNVar (pvars ss \\ dom (sigs++dsigs))       -- exposed assigns (without sigs)
+                                             return (sigs ++ dsigs ++ bsigs)                            -- exposed sigs + all the above
   where sigs                            = [ (n, NSig sc dec) | Signature _ ns sc dec <- ss, n <- ns, not $ isHidden n ]
         dvars ss                        = nub [ n | Decl _ ds <- ss, Def{dname=n} <- ds, not $ isHidden n ]
         mkNDef n                        = do t <- newTVar
@@ -859,11 +855,10 @@ instance Check Decl where
                                              checkNoEscape env tvs
                                              fvs <- tyfree <$> msubst env
                                              return (cs1, Actor l n (noqual env q) (qualWPar env q $ noDefaultsP p') (noDefaultsK k')
-                                                          (bindWits (eq1++eq0) ++ defsigs ++ defaultsP p' ++ defaultsK k' ++ b'))
+                                                          (bindWits (eq1++eq0) ++ defaultsP p' ++ defaultsK k' ++ b'))
       where env1                        = reserve (bound (p,k) ++ bound b) $ defineTVars q $
                                           define [(selfKW, NVar tRef)] $ reserve (statevars b) $ setInAct env
             tvs                         = qbound q
-            defsigs                     = [ Signature NoLoc [n] sc dec | (n,NDef sc dec) <- te0 ]
             NAct _ _ _ te0              = findName n env
 
     checkEnv' env (Class l n q us b)    = do --traceM ("## checkEnv class " ++ prstr n)
@@ -1692,8 +1687,9 @@ instance InfEnvT Pattern where
                                                  NReserved -> do
                                                      --traceM ("## infEnvT " ++ prstr n ++ " : " ++ prstr t)
                                                      return ([], [(n, NVar t)], t, PVar l n (Just t))
-                                                 NSig (TSchema _ [] TFun{}) _ -> notYet l "Assignment to variable with function signature"
-                                                 NSig (TSchema _ [] t') _ -> do
+                                                 NSig (TSchema _ [] t') _
+                                                   | TFun{} <- t' -> notYet l "Pattern variable with previous function signature"
+                                                   | otherwise -> do
                                                      --traceM ("## infEnvT (sig) " ++ prstr n ++ " : " ++ prstr t ++ " < " ++ prstr t')
                                                      return ([Cast t t'], [(n, NVar t')], t, PVar l n (Just t))
                                                  NVar t' ->
