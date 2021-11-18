@@ -1,4 +1,4 @@
-# Primitives
+# Variable data types
 
 Acton supports a plethora of primitive data types.
 
@@ -12,3 +12,27 @@ Acton supports a plethora of primitive data types.
 - [tuples](primitives/tuples.md) like `(1, "foo")`
 - [sets](primitives/sets.md) like `{"foo", "bar"}`
 
+In Acton, mutable state can only be held by actors. You can define a global variable at the top level in your program, but it becomes constant. Assigning to the same name in an actor will overshadow the global variable.
+
+Source:
+```python
+foo = 3    # this is a global constant and cannot be changed
+
+def printfoo():
+    print("global foo:", foo)  # this will print the global foo
+
+actor main(env):
+    # this sets a local variable with the name foo, shadowing the global constant foo
+    foo = 4
+    print("local foo, shadowing the global foo:", foo)
+
+    printfoo()
+
+    await async env.exit(0)
+```
+
+Output:
+```sh
+local foo, shadowing the global foo: 4
+global foo: 3
+```
