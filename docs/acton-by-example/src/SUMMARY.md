@@ -10,7 +10,9 @@
   - [Dictionaries](primitives/dicts.md)
   - [Tuples](primitives/tuples.md)
   - [Sets](primitives/sets.md)
-- [Types](types.md)
+- [Functions](functions.md)
+  - [Actor methods](functions/actor_methods.md)
+  - [Higher order functions](functions/higher_order.md)
 - [Actors](actors.md)
   - [Root Actor](actors/root.md)
   - [Lifetime](actors/lifetime.md)
@@ -22,6 +24,7 @@
   - [if / elif / else](control_flow/if_else.md)
   - [for](control_flow/for.md)
   - [while](control_flow/while.md)
+- [Types](types.md)
 
 
 - [Modules](modules.md)
