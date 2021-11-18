@@ -52,7 +52,7 @@ closedType env (Dot _ (Var _ x) n)
                                         Just (w,i) -> isClosed i
 closedType env (Dot _ e n)          = case typeOf env e of
                                         TCon _ c -> case findAttrInfo env c n of Just (w,i) -> isClosed i
-                                        TVar _ v  -> case findAttrInfo env (findTVBound env v) n of Just (w,i) -> isClosed i
+                                        TVar _ v  -> case findAttrInfo env (findTVBound env v) n of Just (w,i) -> isClosed i; _ -> error ("## Tyvar " ++ prstr v ++ " not found")
                                         TTuple _ p k -> True
 closedType env (TApp _ e _)         = closedType env e
 closedType env _                    = True
@@ -298,7 +298,7 @@ instance EnvOf Stmt where
     envOf (Signature _ ns sc dec)   = [ (n, NSig sc dec) | n <- ns ]
     envOf (If _ bs els)             = commonEnvOf $ [ ss | Branch _ ss <- bs ] ++ [els]
     envOf (Try _ b hs els fin)      = commonEnvOf $ [ ss | Handler _ ss <- hs ] ++ [b++els]
-    envOf (With _ items b)          = exclude (envOf b) (bound items)
+    envOf (With _ items b)          = envOf b `exclude` bound items
     envOf s                         = []
 
 commonEnvOf suites
@@ -311,7 +311,7 @@ instance EnvOf Decl where
                                     = [(n, NDef (TSchema NoLoc q $ TFun NoLoc fx (prowOf p) (krowOf k) t) dec)]
     envOf (Class _ n q as ss)       = [(n, NClass q (leftpath as) (map dropDefSelf $ envOf ss))]
 
-    envOf (Actor _ n q p k ss)      = [(n, NAct q (prowOf p) (krowOf k) (envOf ss))]
+    envOf (Actor _ n q p k ss)      = [(n, NAct q (prowOf p) (krowOf k) (filter (not . isHidden . fst) $ envOf ss `exclude` statevars ss))]
 
 dropDefSelf (n, NDef (TSchema l q t) dec)
                                     = (n, NDef (TSchema l q (dropSelf t dec)) dec)

@@ -856,8 +856,8 @@ improve env te tt eq cs
                                              sequence [ unify (tVar v) (tVar v') | (v,v') <- gsimple ]
                                              simplify' env te tt eq cs
   | not $ null cyclic                   = tyerrs cyclic ("Cyclic subtyping:")
-  | not $ null (multiUBnd++multiLBnd)   = do ub <- mapM (mkGLB env) multiUBnd
-                                             lb <- mapM (mkLUB env) multiLBnd
+  | not $ null (multiUBnd++multiLBnd)   = do ub <- mapM (mkGLB env) multiUBnd   -- GLB of the upper bounds
+                                             lb <- mapM (mkLUB env) multiLBnd   -- LUB of the lower bounds
                                              --traceM ("  *GLB " ++ prstrs ub)
                                              --traceM ("  *LUB " ++ prstrs lb)
                                              let cs' = [ Cast (tVar v) t | (v,t) <- ub ] ++ [ Cast t (tVar v) | (v,t) <- lb ]
