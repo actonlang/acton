@@ -68,8 +68,11 @@ backend/%.o: backend/%.c
 backend/failure_detector/%.o: backend/failure_detector/%.c
 	$(CC) -o$@ $< -c $(CFLAGS)
 
+# This target is just to override the above target and turn it into a NOP for
+# the protobuf files. We have the generated files committed to git, so this
+# isn't something we normally want to regenerate anyway.
 backend/failure_detector/db_messages.pb-c.c: backend/failure_detector/db_messages.proto
-	cd $(dir $@) && protoc-c --c_out=. $(notdir $<)
+	true
 
 # backend tests
 BACKEND_TESTS=backend/failure_detector/db_messages_test \
