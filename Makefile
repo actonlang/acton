@@ -24,10 +24,23 @@ LDFLAGS+=-L$(dir $(JEM_LIB))
 LDLIBS+=-ljemalloc
 endif
 
+# -- Apple Mac OS X ------------------------------------------------------------
 ifeq ($(shell uname -s),Darwin)
-LDFLAGS+=-L/usr/local/opt/util-linux/lib
 LDLIBS+=-largp
+
+# -- M1
+ifeq ($(shell uname -m),arm64)
+CFLAGS += -I/opt/homebrew/include
+LDFLAGS += -L/opt/homebrew/opt/util-linux/lib -L/opt/homebrew/lib
 endif
+
+# -- Intel CPU
+ifeq ($(shell uname -m),x86_64)
+LDFLAGS += -L/usr/local/opt/util-linux/lib
+endif
+
+endif # -- END: Apple Mac OS X -------------------------------------------------
+
 
 ifeq ($(shell uname -s),Linux)
 CFLAGS += -Werror
