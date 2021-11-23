@@ -423,10 +423,13 @@ buildExecutable env args paths task
         libPathsBase        = " -L" ++ projLib paths ++ " -L" ++ sysLib paths
 #if defined(darwin_HOST_OS) && defined(aarch64_HOST_ARCH)
         libPaths            = libPathsBase ++ " -L/opt/homebrew/lib -L/opt/homebrew/opt/util-linux/lib "
+        ccArgs              = ""
 #elif defined(darwin_HOST_OS) && defined(x86_64_HOST_ARCH)
         libPaths            = libPathsBase ++ " -L/usr/local/lib -L/usr/local/opt/util-linux/lib "
+        ccArgs              = ""
 #else
         libPaths            = libPathsBase
+        ccArgs              = " -no-pie "
 #endif
         libRTSarg           = if (dev args) then " -lActonRTSdebug " else ""
         libFiles            = libRTSarg ++ " -lActonProject -lActon -lActonDB -luuid -lprotobuf-c -lutf8proc -lpthread -lm"
@@ -434,7 +437,7 @@ buildExecutable env args paths task
         binFile             = joinPath [binDir paths, binFilename]
         srcbase             = srcFile paths mn
         pedantArg           = if (cpedantic args) then "-Werror" else ""
-        ccCmd               = ("cc " ++ pedantArg ++
+        ccCmd               = ("cc " ++ ccArgs ++ pedantArg ++
                                (if (dev args) then " -g " else "") ++
                                " -I" ++ projOut paths ++
                                " -I" ++ sysPath paths ++
