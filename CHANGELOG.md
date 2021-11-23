@@ -5,6 +5,17 @@
 There are currently known regressions:
 - using RTS together with the distributed backend database is not working
 
+## [0.7.1] (2021-11-23)
+
+There are currently known regressions:
+- using RTS together with the distributed backend database is not working
+
+### Fixed
+- `actonc` now explicitly using `-no-pie` on Linux [#390]
+  - this aligns with how we already build our object files, shipped in
+    libActon.a etc
+
+
 ## [0.7.0] (2021-11-23)
 
 There are currently known regressions:
@@ -575,6 +586,7 @@ then, this second incarnation has been in focus and 0.2.0 was its first version.
 [#383]: https://github.com/actonlang/acton/pull/383
 [#384]: https://github.com/actonlang/acton/pull/384
 [#385]: https://github.com/actonlang/acton/pull/385
+[#390]: https://github.com/actonlang/acton/pull/390
 [0.3.0]: https://github.com/actonlang/acton/releases/tag/v0.3.0
 [0.4.0]: https://github.com/actonlang/acton/compare/v0.3.0...v0.4.0
 [0.4.1]: https://github.com/actonlang/acton/compare/v0.4.0...v0.4.1
