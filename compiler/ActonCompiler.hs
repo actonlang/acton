@@ -420,15 +420,16 @@ buildExecutable env args paths task
         (sc,_)              = Acton.QuickType.schemaOf env (A.eQVar qn)
         outbase             = outBase paths mn
         rootFile            = outbase ++ ".root.c"
-        libRTSarg           = if (dev args) then " -lActonRTSdebug " else " "
-        libFilesBase        = " -L" ++ projLib paths ++ " -L" ++ sysLib paths ++ libRTSarg ++ " -lActonProject -lActon -lActonDB -luuid -lprotobuf-c -lutf8proc -lpthread -lm"
+        libPathsBase        = " -L" ++ projLib paths ++ " -L" ++ sysLib paths
 #if defined(darwin_HOST_OS) && defined(aarch64_HOST_ARCH)
-        libFiles            = libFilesBase ++ " -L/opt/homebrew/opt/util-linux/lib -L/opt/homebrew/lib "
+        libPaths            = libPathsBase ++ " -L/opt/homebrew/lib -L/opt/homebrew/opt/util-linux/lib "
 #elif defined(darwin_HOST_OS) && defined(x86_64_HOST_ARCH)
-        libFiles            = libFilesBase ++ " -L/usr/local/opt/util-linux/lib "
+        libPaths            = libPathsBase ++ " -L/usr/local/lib -L/usr/local/opt/util-linux/lib "
 #else
-        libFiles            = libFilesBase
+        libPaths            = libPathsBase
 #endif
+        libRTSarg           = if (dev args) then " -lActonRTSdebug " else ""
+        libFiles            = libRTSarg ++ " -lActonProject -lActon -lActonDB -luuid -lprotobuf-c -lutf8proc -lpthread -lm"
         binFilename         = takeFileName $ dropExtension srcbase
         binFile             = joinPath [binDir paths, binFilename]
         srcbase             = srcFile paths mn
@@ -439,4 +440,5 @@ buildExecutable env args paths task
                                " -I" ++ sysPath paths ++
                                " " ++ rootFile ++
                                " -o" ++ binFile ++
+                               libPaths ++
                                libFiles)
