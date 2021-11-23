@@ -1,6 +1,12 @@
 name: Build, Test & Release
 
-on: [push,pull_request]
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+    tags:
+      - v*
 
 # NOTE: Jobs for version tagged releases just pattern match on any tag starting
 # with 'v'. That's probably a version tag, but could be something else. Is there
