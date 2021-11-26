@@ -34,32 +34,10 @@ work fairly well.
 
 # Getting started with Acton
 
+
 ## Install acton
 
-### Debian / Ubuntu via apt repository
-
-Install Acton via apt repository:
-
-```sh
-wget -q -O - https://apt.acton-lang.io/acton.gpg | sudo apt-key add -
-echo "deb http://apt.acton-lang.io/ bullseye main" | sudo tee /etc/apt/sources.list.d/acton.list
-sudo apt-get update
-sudo apt-get install -qy acton
-```
-
-### Mac OS X using Homebrew
-
-Acton is available as a Homebrew tap, which can be installed with:
-```
-brew install actonlang/acton/acton
-```
-
-### By downloading a binary release tar ball
-
-There are pre-built binary release tar balls available for download for Linux
-and Mac OS X in case the above package formats are not suitable. See the guide,
-[installing Acton from a release tar ball](docs/install-acton-from-tar-ball.md).
-
+Check out the [installation guide](https://www.acton-lang.org/install)
 
 ## Writing and compiling your first Acton program
 
@@ -81,11 +59,11 @@ Hello, world!
 ```
 
 ## And then...?
-Go read the [tutorial!](docs/tutorial)
+Check out our [learning resources](https://www.acton-lang.org/learn).
 
 
 # Building Acton from source
-See [building Acton from source](docs/building-acton-from-source.md).
+See [building Acton from source](https://www.acton-lang.org/install/from-source).
 
 
 # Contributions
