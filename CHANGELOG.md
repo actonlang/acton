@@ -5,6 +5,13 @@
 There are currently known regressions:
 - using RTS together with the distributed backend database is not working
 
+### Added
+- Homewbrew formula now supports building from source on Apple M1 silicon
+  - Mac on M1 users, simple do: `brew install actonlang/acton/acton`
+  - No pre-built binary packages ("bottles") as our build environment cannot
+    build those, but it is automatically built from source
+
+
 ## [0.7.1] (2021-11-23)
 
 There are currently known regressions:
