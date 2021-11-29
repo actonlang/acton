@@ -1,0 +1,42 @@
+name: Build & Test on Apple M1
+
+on:
+#  pull_request:
+  push:
+    branches:
+#      - main
+#    tags:
+#      - v*
+
+# NOTE: Jobs for version tagged releases just pattern match on any tag starting
+# with 'v'. That's probably a version tag, but could be something else. Is there
+# a better way to match?
+
+jobs:
+  test-macos-m1:
+    runs-on: [self-hosted, macOS, arm64]
+    steps:
+      - name: "Set BUILD_RELEASE when we are building for a version tag"
+        run: |
+          echo "BUILD_RELEASE=1" >> $GITHUB_ENV
+        if: startsWith(github.ref, 'refs/tags/v')
+      - name: "Check out repository code"
+        uses: actions/checkout@v2
+      - name: "Cache ~/.stack"
+        uses: actions/cache@v2
+        with:
+          path: |
+            ~/.stack
+          key: ${{ matrix.os }}-${{ secrets.CACHE_VERSION }}
+      - name: "Build Acton"
+        run: arch -arm64 make -j2 -C ${{ github.workspace }} BUILD_RELEASE=${{ env.BUILD_RELEASE }}
+      - name: "Build a release"
+        run: arch -arm64 make -C ${{ github.workspace }} release
+      - name: "Upload artifact"
+        uses: actions/upload-artifact@v2
+        with:
+          name: acton-${{ matrix.os }}
+          path: ${{ github.workspace }}/acton-darwin-arm64*
+          if-no-files-found: error
+      - name: "Run tests"
+        run: arch -arm64 make -C ${{ github.workspace }} test
