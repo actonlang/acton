@@ -1,3 +1,8 @@
+/*
+ * This file is deliberately named complx.h to avoid collisions under gcc or
+ * clang. Details are murky, is it with the standard complex.h? (Path should be
+ * different, no?) Björn should know the details..
+ */
 #include <complex.h>
 
 struct $complex$class {
