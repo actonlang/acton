@@ -431,14 +431,14 @@ buildExecutable env args paths task
         libPaths            = libPathsBase
         ccArgs              = " -no-pie "
 #endif
-        libRTSarg           = if (dev args) then " -lActonRTSdebug " else ""
-        libFiles            = libRTSarg ++ " -lActonProject -lActon -lActonDB -luuid -lprotobuf-c -lutf8proc -lpthread -lm"
+        libActonArg         = if (dev args) then "-lActon_dev" else "-lActon_rel"
+        libFiles            = " -lActonProject " ++ libActonArg ++ " -lActonDB -luuid -lprotobuf-c -lutf8proc -lpthread -lm"
         binFilename         = takeFileName $ dropExtension srcbase
         binFile             = joinPath [binDir paths, binFilename]
         srcbase             = srcFile paths mn
         pedantArg           = if (cpedantic args) then "-Werror" else ""
         ccCmd               = ("cc " ++ ccArgs ++ pedantArg ++
-                               (if (dev args) then " -g " else "") ++
+                               (if (dev args) then " -g " else " -O3 ") ++
                                " -I" ++ projOut paths ++
                                " -I" ++ sysPath paths ++
                                " " ++ rootFile ++

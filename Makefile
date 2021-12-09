@@ -11,7 +11,9 @@ else
 export VERSION_INFO?=$(VERSION).$(BUILD_TIME)
 endif
 
-CFLAGS+=-g -I. -Ideps -Wno-int-to-pointer-cast -Wno-pointer-to-int-cast
+CFLAGS+= -I. -Ideps -Wno-int-to-pointer-cast -Wno-pointer-to-int-cast
+CFLAGS_REL= -O3
+CFLAGS_DEV= -g
 LDFLAGS+=-Llib
 LDLIBS+=-lprotobuf-c -luuid -lm -lpthread
 
@@ -122,11 +124,17 @@ backend/test/skiplist_test: backend/test/skiplist_test.c backend/skiplist.c
 ENV_FILES=$(wildcard builtin/minienv.*)
 BUILTIN_HFILES=$(filter-out $(ENV_FILES),$(wildcard builtin/*.h))
 BUILTIN_CFILES=$(filter-out $(ENV_FILES),$(wildcard builtin/*.c))
-builtin/builtin.o: builtin/builtin.c $(BUILTIN_HFILES) $(BUILTIN_CFILES)
-	$(CC) $(CFLAGS) -Wno-unused-result -c -O3 $< -o$@
+builtin/builtin_dev.o: builtin/builtin.c $(BUILTIN_HFILES) $(BUILTIN_CFILES)
+	$(CC) $(CFLAGS) $(CFLAGS_DEV) -Wno-unused-result -c $< -o$@
 
-builtin/minienv.o: builtin/minienv.c builtin/minienv.h builtin/builtin.o
-	$(CC) $(CFLAGS) -c -O3 $< -o$@
+builtin/builtin_rel.o: builtin/builtin.c $(BUILTIN_HFILES) $(BUILTIN_CFILES)
+	$(CC) $(CFLAGS) $(CFLAGS_REL) -Wno-unused-result -c $< -o$@
+
+builtin/minienv_dev.o: builtin/minienv.c builtin/minienv.h builtin/builtin_dev.o
+	$(CC) $(CFLAGS) $(CFLAGS_DEV) -c $< -o$@
+
+builtin/minienv_rel.o: builtin/minienv.c builtin/minienv.h builtin/builtin_rel.o
+	$(CC) $(CFLAGS) $(CFLAGS_REL) -c $< -o$@
 
 
 # /compiler ----------------------------------------------
@@ -144,8 +152,11 @@ clean-compiler:
 	cd compiler && stack clean >/dev/null 2>&1 || true
 	rm -f compiler/actonc compiler/package.yaml compiler/acton.cabal
 
-deps/yyjson.o: deps/yyjson.c
-	$(CC) $(CFLAGS) -c $< -o$@
+deps/yyjson_dev.o: deps/yyjson.c
+	$(CC) $(CFLAGS) $(CFLAGS_DEV) -c $< -o$@
+
+deps/yyjson_rel.o: deps/yyjson.c
+	$(CC) $(CFLAGS) $(CFLAGS_REL) -c $< -o$@
 
 # Building the builtin, rts and stdlib is a little tricky as we have to be
 # careful about order. First comes the __builtin__.act file,
@@ -154,6 +165,8 @@ STDLIB_CFILES=$(wildcard stdlib/src/*.c stdlib/src/**/*.c)
 STDLIB_TYFILES=$(subst src,out/types,$(STDLIB_CFILES:.c=.ty))
 STDLIB_HFILES=$(subst src,out/types,$(STDLIB_CFILES:.c=.h))
 STDLIB_OFILES=$(subst src,out/release,$(STDLIB_CFILES:.c=.o))
+STDLIB_DEV_OFILES=$(STDLIB_OFILES:.o=_dev.o)
+STDLIB_REL_OFILES=$(STDLIB_OFILES:.o=_rel.o)
 STDLIB_ACTS=$(not-in $(STDLIB_ACTFILES),$(STDLIB_CFILES))
 
 # __builtin__.ty is special, it even has special handling in actonc. Essentially
@@ -177,31 +190,41 @@ stdlib/out/types/%.h: stdlib/src/%.h
 	@mkdir -p $(dir $@)
 	cp $< $@
 
-stdlib/out/release/%.o: stdlib/src/%.c
+stdlib/out/release/%_dev.o: stdlib/src/%.c
 	@mkdir -p $(dir $@)
-	$(CC) $(CFLAGS) -Istdlib/ -Istdlib/out/ -c $< -o$@
+	$(CC) $(CFLAGS) $(CFLAGS_DEV) -Istdlib/ -Istdlib/out/ -c $< -o$@
+
+stdlib/out/release/%_rel.o: stdlib/src/%.c
+	@mkdir -p $(dir $@)
+	$(CC) $(CFLAGS) $(CFLAGS_REL) -Istdlib/ -Istdlib/out/ -c $< -o$@
 
 NUMPY_CFILES=$(wildcard stdlib/c_src/numpy/*.h)
 ifeq ($(shell uname -s),Linux)
 NUMPY_CFLAGS+=-lbsd -ldl -lmd
 endif
-stdlib/out/release/numpy.o: stdlib/src/numpy.c stdlib/src/numpy.h stdlib/out/types/math.h $(NUMPY_CFILES) stdlib/out/release/math.o
+stdlib/out/release/numpy_dev.o: stdlib/src/numpy.c stdlib/src/numpy.h stdlib/out/types/math.h $(NUMPY_CFILES) stdlib/out/release/math_dev.o
 	@mkdir -p $(dir $@)
-	$(CC) $(CFLAGS) -Wno-unused-result -r -Istdlib/out/ $< -o$@ $(NUMPY_CFLAGS) stdlib/out/release/math.o
+	$(CC) $(CFLAGS) $(CFLAGS_DEV) -Wno-unused-result -r -Istdlib/out/ $< -o$@ $(NUMPY_CFLAGS) stdlib/out/release/math_dev.o
+
+stdlib/out/release/numpy_rel.o: stdlib/src/numpy.c stdlib/src/numpy.h stdlib/out/types/math.h $(NUMPY_CFILES) stdlib/out/release/math_rel.o
+	@mkdir -p $(dir $@)
+	$(CC) $(CFLAGS) $(CFLAGS_REL) -Wno-unused-result -r -Istdlib/out/ $< -o$@ $(NUMPY_CFLAGS) stdlib/out/release/math_rel.o
 
 # /lib --------------------------------------------------
-ARCHIVES=lib/libActon.a lib/libActonRTSdebug.a lib/libActonDB.a
+ARCHIVES=lib/libActon_dev.a lib/libActon_rel.a lib/libActonDB.a
 
 # If we later let actonc build things, it would produce a libActonProject.a file
 # in the stdlib directory, which we would need to join together with rts.o etc
 # to form the final libActon (or maybe produce a libActonStdlib and link with?)
-LIBACTON_OFILES=builtin/builtin.o builtin/minienv.o $(STDLIB_OFILES) stdlib/out/release/numpy.o rts/empty.o rts/rts.o deps/yyjson.o
-OFILES += $(LIBACTON_OFILES)
-lib/libActon.a: $(LIBACTON_OFILES)
+
+LIBACTON_DEV_OFILES=builtin/builtin_dev.o builtin/minienv_dev.o $(STDLIB_DEV_OFILES) stdlib/out/release/numpy_dev.o rts/empty.o rts/rts_dev.o deps/yyjson_dev.o
+OFILES += $(LIBACTON_DEV_OFILES)
+lib/libActon_dev.a: $(LIBACTON_DEV_OFILES)
 	ar rcs $@ $^
 
-OFILES += rts/rts-debug.o
-lib/libActonRTSdebug.a: rts/rts-debug.o
+LIBACTON_REL_OFILES=$(LIBACTON_DEV_OFILES:_dev.o=_rel.o)
+OFILES += $(LIBACTON_REL_OFILES)
+lib/libActon_rel.a: $(LIBACTON_REL_OFILES)
 	ar rcs $@ $^
 
 COMM_OFILES += backend/comm.o rts/empty.o
@@ -216,20 +239,20 @@ lib/libActonDB.a: $(BACKEND_OFILES)
 
 
 # /rts --------------------------------------------------
-rts/rts.o: rts/rts.c rts/rts.h
-	$(CC) $(CFLAGS) -Wno-int-to-void-pointer-cast \
-		-Wno-unused-result \
+rts/rts_dev.o: rts/rts.c rts/rts.h
+	$(CC) $(CFLAGS) $(CFLAGS_DEV) -DRTS_DEBUG \
+		-Wno-int-to-void-pointer-cast -Wno-unused-result \
 		$(LDLIBS) \
-		-c -O3 $< -o $@
+		-c $< -o $@
 
-rts/rts-debug.o: rts/rts.c rts/rts.h
-	$(CC) $(CFLAGS) -DRTS_DEBUG -Wno-int-to-void-pointer-cast \
-		-Wno-unused-result \
+rts/rts_rel.o: rts/rts.c rts/rts.h
+	$(CC) $(CFLAGS) $(CFLAGS_REL) \
+		-Wno-int-to-void-pointer-cast -Wno-unused-result \
 		$(LDLIBS) \
-		-c -O3 $< -o $@
+		-c $< -o $@
 
 rts/empty.o: rts/empty.c
-	$(CC) $(CFLAGS) -c $< -o $@
+	$(CC) $(CFLAGS) -g -c $< -o $@
 
 rts/pingpong: rts/pingpong.c rts/pingpong.h rts/rts.o
 	$(CC) $(CFLAGS) -Wno-int-to-void-pointer-cast \
@@ -300,7 +323,11 @@ dist/lib/%: lib/%
 	@mkdir -p $(dir $@)
 	cp $< $@
 
-dist/lib/libActon.a: lib/libActon.a
+dist/lib/libActon_dev.a: lib/libActon_dev.a
+	@mkdir -p $(dir $@)
+	cp $< $@
+
+dist/lib/libActon_rel.a: lib/libActon_rel.a
 	@mkdir -p $(dir $@)
 	cp $< $@
 
