@@ -10,6 +10,15 @@ There are currently known regressions:
   - Mac on M1 users, simple do: `brew install actonlang/acton/acton`
   - No pre-built binary packages ("bottles") as our build environment cannot
     build those, but it is automatically built from source
+    
+### Fixed
+- `actonc` compiler profiles fully implemented [#403]
+  - previously, `--dev` only used to enable RTS debug
+  - now, all libraries are compiled twice, for dev and rel, and packaged up into
+    libActon_dev and libActon_rel archives
+  - dev mode is compiled with debug symbols (`-g`)
+  - release mode is using optimized code (`-O3`)
+  - final program binary is also compiled with the same flags
 
 
 ## [0.7.1] (2021-11-23)
@@ -594,6 +603,7 @@ then, this second incarnation has been in focus and 0.2.0 was its first version.
 [#384]: https://github.com/actonlang/acton/pull/384
 [#385]: https://github.com/actonlang/acton/pull/385
 [#390]: https://github.com/actonlang/acton/pull/390
+[#403]: https://github.com/actonlang/acton/pull/403
 [0.3.0]: https://github.com/actonlang/acton/releases/tag/v0.3.0
 [0.4.0]: https://github.com/actonlang/acton/compare/v0.3.0...v0.4.0
 [0.4.1]: https://github.com/actonlang/acton/compare/v0.4.0...v0.4.1

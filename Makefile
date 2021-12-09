@@ -12,8 +12,8 @@ export VERSION_INFO?=$(VERSION).$(BUILD_TIME)
 endif
 
 CFLAGS+= -I. -Ideps -Wno-int-to-pointer-cast -Wno-pointer-to-int-cast
-CFLAGS_REL= -O3
-CFLAGS_DEV= -g
+CFLAGS_REL= -O3 -DREL
+CFLAGS_DEV= -g -DDEV
 LDFLAGS+=-Llib
 LDLIBS+=-lprotobuf-c -luuid -lm -lpthread
 
@@ -240,7 +240,7 @@ lib/libActonDB.a: $(BACKEND_OFILES)
 
 # /rts --------------------------------------------------
 rts/rts_dev.o: rts/rts.c rts/rts.h
-	$(CC) $(CFLAGS) $(CFLAGS_DEV) -DRTS_DEBUG \
+	$(CC) $(CFLAGS) $(CFLAGS_DEV) \
 		-Wno-int-to-void-pointer-cast -Wno-unused-result \
 		$(LDLIBS) \
 		-c $< -o $@
