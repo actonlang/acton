@@ -93,7 +93,7 @@ There are currently known regressions:
     duplicate runs
   
 ### Fixed
-- Significantly improve performance by reducing RTS worker thread wake ups
+- Significantly improve performance by reducing RTS worker thread wake ups [#360]
   - Best case scenarios is on the scale of 10x performance with drastically
     reduced syscall overhead
 - Fix lib path on Mac OS X on x86_64 [#384]
@@ -592,6 +592,7 @@ then, this second incarnation has been in focus and 0.2.0 was its first version.
 [#345]: https://github.com/actonlang/acton/pull/345
 [#346]: https://github.com/actonlang/acton/pull/346
 [#353]: https://github.com/actonlang/acton/pull/353
+[#360]: https://github.com/actonlang/acton/pull/360
 [#365]: https://github.com/actonlang/acton/pull/365
 [#367]: https://github.com/actonlang/acton/pull/367
 [#369]: https://github.com/actonlang/acton/pull/369
