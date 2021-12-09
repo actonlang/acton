@@ -98,7 +98,7 @@ static const char *WT_State_name[] = {"poof", "work", "idle", "sleep"};
 #define LOGPFX "**RTS** "
 #define rtsv_printf(...) if (rts_verbose) printf(__VA_ARGS__)
 
-#ifdef RTS_DEBUG
+#ifdef DEV
 #define rtsd_printf(...) if (rts_debug) printf(__VA_ARGS__)
 #else
 #define rtsd_printf(...)
@@ -1453,7 +1453,7 @@ int main(int argc, char **argv) {
         switch (ch) {
             case 'd':
                 new_argc--;
-                #ifndef RTS_DEBUG
+                #ifndef DEV
                 fprintf(stderr, "ERROR: RTS debug not supported.\n");
                 fprintf(stderr, "HINT: Recompile this program using: actonc --rts-debug ...\n");
                 exit(1);
