@@ -6,12 +6,13 @@ There are currently known regressions:
 - using RTS together with the distributed backend database is not working
 
 ### Added
-- Homewbrew formula now supports building from source on Apple M1 silicon
-  - Mac on M1 users, simple do: `brew install actonlang/acton/acton`
-  - No pre-built binary packages ("bottles") as our build environment cannot
-    build those, but it is automatically built from source
-    
-### Fixed
+- Homebrew formula revamped to support Apple M1 [homebrew-acton#28]
+  - Formula now uses brew installed ("system") ghc instead of stack installed
+    GHC, which is more idiomatic Homebrew
+  - Mac on M1 users, simply do: `brew install actonlang/acton/acton`
+    - Acton will be automatically built from source!
+  - No pre-built binary packages ("bottles") as our build environment, which is
+    using GitHub Action runners, cannot build those
 - `actonc` compiler profiles fully implemented [#403]
   - previously, `--dev` only used to enable RTS debug
   - now, all libraries are compiled twice, for dev and rel, and packaged up into
@@ -620,3 +621,4 @@ then, this second incarnation has been in focus and 0.2.0 was its first version.
 [0.6.4]: https://github.com/actonlang/acton/compare/v0.6.3...v0.6.4
 
 [homebrew-acton#7]: https://github.com/actonlang/homebrew-acton/pull/7
+[homebrew-acton#28]: https://github.com/actonlang/homebrew-acton/pull/28
