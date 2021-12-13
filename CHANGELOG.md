@@ -6,12 +6,13 @@ There are currently known regressions:
 - using RTS together with the distributed backend database is not working
 
 ### Added
-- Homewbrew formula now supports building from source on Apple M1 silicon
-  - Mac on M1 users, simple do: `brew install actonlang/acton/acton`
-  - No pre-built binary packages ("bottles") as our build environment cannot
-    build those, but it is automatically built from source
-    
-### Fixed
+- Homebrew formula revamped to support Apple M1 [homebrew-acton#28]
+  - Formula now uses brew installed ("system") ghc instead of stack installed
+    GHC, which is more idiomatic Homebrew
+  - Mac on M1 users, simply do: `brew install actonlang/acton/acton`
+    - Acton will be automatically built from source!
+  - No pre-built binary packages ("bottles") as our build environment, which is
+    using GitHub Action runners, cannot build those
 - `actonc` compiler profiles fully implemented [#403]
   - previously, `--dev` only used to enable RTS debug
   - now, all libraries are compiled twice, for dev and rel, and packaged up into
@@ -93,7 +94,7 @@ There are currently known regressions:
     duplicate runs
   
 ### Fixed
-- Significantly improve performance by reducing RTS worker thread wake ups
+- Significantly improve performance by reducing RTS worker thread wake ups [#360]
   - Best case scenarios is on the scale of 10x performance with drastically
     reduced syscall overhead
 - Fix lib path on Mac OS X on x86_64 [#384]
@@ -592,6 +593,7 @@ then, this second incarnation has been in focus and 0.2.0 was its first version.
 [#345]: https://github.com/actonlang/acton/pull/345
 [#346]: https://github.com/actonlang/acton/pull/346
 [#353]: https://github.com/actonlang/acton/pull/353
+[#360]: https://github.com/actonlang/acton/pull/360
 [#365]: https://github.com/actonlang/acton/pull/365
 [#367]: https://github.com/actonlang/acton/pull/367
 [#369]: https://github.com/actonlang/acton/pull/369
@@ -619,3 +621,4 @@ then, this second incarnation has been in focus and 0.2.0 was its first version.
 [0.6.4]: https://github.com/actonlang/acton/compare/v0.6.3...v0.6.4
 
 [homebrew-acton#7]: https://github.com/actonlang/homebrew-acton/pull/7
+[homebrew-acton#28]: https://github.com/actonlang/homebrew-acton/pull/28
