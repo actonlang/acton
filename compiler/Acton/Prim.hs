@@ -141,8 +141,6 @@ clActor cls def sig = cls [] (leftpath [cValue]) te
   where te          = [ (primKW "next",       sig (monotype tActor) Property),
                         (primKW "msg",        sig (monotype (tMsg tWild)) Property),
                         (primKW "outgoing",   sig (monotype (tMsg tWild)) Property),
-                        (primKW "offspring",  sig (monotype tActor) Property),
-                        (primKW "uterus",     sig (monotype tActor) Property),
                         (primKW "waitsfor",   sig (monotype (tMsg tWild)) Property),
                         (primKW "consume_hd", sig (monotype $ tCon $ TC (gPrim "int64") []) Property),
                         (primKW "catcher",    sig (monotype $ tCon $ TC (gPrim "Catcher") []) Property),
