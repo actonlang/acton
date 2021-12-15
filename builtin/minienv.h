@@ -344,8 +344,6 @@ struct $Env {
     $Actor $next;
     $Msg $msg;
     $Msg $outgoing;
-    $Actor $offspring;
-    $Actor $uterus;
     $Msg $waitsfor;
     $int64 $consume_hd;
     $Catcher $catcher;
@@ -374,8 +372,6 @@ struct $Connection {
     $Actor $next;
     $Msg $msg;
     $Msg $outgoing;
-    $Actor $offspring;
-    $Actor $uterus;
     $Msg $waitsfor;
     $int64 $consume_hd;
     $Catcher $catcher;
@@ -402,8 +398,6 @@ struct $RFile {
     $Actor $next;
     $Msg $msg;
     $Msg $outgoing;
-    $Actor $offspring;
-    $Actor $uterus;
     $Msg $waitsfor;
     $int64 $consume_hd;
     $Catcher $catcher;
@@ -430,8 +424,6 @@ struct $WFile {
     $Actor $next;
     $Msg $msg;
     $Msg $outgoing;
-    $Actor $offspring;
-    $Actor $uterus;
     $Msg $waitsfor;
     $int64 $consume_hd;
     $Catcher $catcher;
