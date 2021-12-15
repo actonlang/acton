@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+
+## [0.7.2] (2021-12-15)
+
 ### Added
 - Homebrew formula revamped to support Apple M1 [homebrew-acton#28]
   - Formula now uses brew installed ("system") ghc instead of stack installed
@@ -623,6 +626,7 @@ then, this second incarnation has been in focus and 0.2.0 was its first version.
 [0.6.4]: https://github.com/actonlang/acton/compare/v0.6.3...v0.6.4
 [0.7.0]: https://github.com/actonlang/acton/compare/v0.6.4...v0.7.0
 [0.7.1]: https://github.com/actonlang/acton/compare/v0.7.0...v0.7.1
+[0.7.2]: https://github.com/actonlang/acton/compare/v0.7.1...v0.7.2
 
 [homebrew-acton#7]: https://github.com/actonlang/homebrew-acton/pull/7
 [homebrew-acton#28]: https://github.com/actonlang/homebrew-acton/pull/28
