@@ -2,9 +2,6 @@
 
 ## Unreleased
 
-There are currently known regressions:
-- using RTS together with the distributed backend database is not working
-
 ### Added
 - Homebrew formula revamped to support Apple M1 [homebrew-acton#28]
   - Formula now uses brew installed ("system") ghc instead of stack installed
@@ -20,6 +17,10 @@ There are currently known regressions:
   - dev mode is compiled with debug symbols (`-g`)
   - release mode is using optimized code (`-O3`)
   - final program binary is also compiled with the same flags
+
+### Fixed
+- The RTS mode using the distributed backend for storing program state is now
+  working [#407]
 
 
 ## [0.7.1] (2021-11-23)
@@ -85,14 +86,14 @@ There are currently known regressions:
   - For release versions, the .deb was available via the Acton apt repo
   - Now easily possible to grab historic versions as well as pre-release .deb,
     i.e. from main branch by downloading .deb from GitHub release page
-  
+
 ### Changed
 - Acton compiler now built using Haskell LTS 18.12 [#335]
 - `--rts-debug` option replaced `--dev` [#345]
 - GitHub Actions now run for PRs and for main branch and tags [#385]
   - Would previously run both for PRs and for push to a branch, resulting in
     duplicate runs
-  
+
 ### Fixed
 - Significantly improve performance by reducing RTS worker thread wake ups [#360]
   - Best case scenarios is on the scale of 10x performance with drastically
@@ -258,7 +259,7 @@ date.
 - There is now an RTS debug mode [#189]
   - With `actonc --rts-debug`, an Acton program can be compiled with debug
     functionality included.
-  - When a debug enabled Acton program is run with `my-program --rts-debug`, 
+  - When a debug enabled Acton program is run with `my-program --rts-debug`,
 - Argument to configure the replication factor used with the distributed backend
   database [#204]
   - Default is 3, as that is the lowest value that makes sense for a quorum.
@@ -606,6 +607,7 @@ then, this second incarnation has been in focus and 0.2.0 was its first version.
 [#385]: https://github.com/actonlang/acton/pull/385
 [#390]: https://github.com/actonlang/acton/pull/390
 [#403]: https://github.com/actonlang/acton/pull/403
+[#407]: https://github.com/actonlang/acton/pull/407
 [0.3.0]: https://github.com/actonlang/acton/releases/tag/v0.3.0
 [0.4.0]: https://github.com/actonlang/acton/compare/v0.3.0...v0.4.0
 [0.4.1]: https://github.com/actonlang/acton/compare/v0.4.0...v0.4.1
@@ -619,6 +621,8 @@ then, this second incarnation has been in focus and 0.2.0 was its first version.
 [0.6.2]: https://github.com/actonlang/acton/compare/v0.6.1...v0.6.2
 [0.6.3]: https://github.com/actonlang/acton/compare/v0.6.2...v0.6.3
 [0.6.4]: https://github.com/actonlang/acton/compare/v0.6.3...v0.6.4
+[0.7.0]: https://github.com/actonlang/acton/compare/v0.6.4...v0.7.0
+[0.7.1]: https://github.com/actonlang/acton/compare/v0.7.0...v0.7.1
 
 [homebrew-acton#7]: https://github.com/actonlang/homebrew-acton/pull/7
 [homebrew-acton#28]: https://github.com/actonlang/homebrew-acton/pull/28
