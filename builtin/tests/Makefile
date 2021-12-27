@@ -22,7 +22,7 @@ Pingpong: Pingpong.c Pingpong.h
 		-lutf8proc \
 		../../rts/rts.c \
 		../builtin.o \
-		../minienv.o \
+		../env.o \
 		Pingpong.c \
 		-o Pingpong
 
@@ -34,7 +34,7 @@ Pingpong2: ../../rts/rts.c Pingpong.c Pingpong.h
 		-pthread \
 		../../rts/rts.c \
 		../builtin.o \
-		../minienv.o \
+		../env.o \
 		Pingpong.c \
 		-o Pingpong2
 

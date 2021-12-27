@@ -32,7 +32,7 @@ We generate a header file using `--hgen` and the C code using `--cgen`:
 ```c
 #pragma once
 #include "builtin/builtin.h"
-#include "builtin/minienv.h"
+#include "builtin/env.h"
 #include "rts/rts.h"
 $int time$$time ();
 void time$$__init__ ();
@@ -88,7 +88,7 @@ modules/time.h: time/time.h
 modules/time.ty: modules/time.act modules/time.h actonc
 	$(ACTONC) $< --stub
 
-lib/libActon.a: builtin/builtin.o builtin/minienv.o math/math.o numpy/numpy.o rts/empty.o rts/rts.o time/time.o
+lib/libActon.a: builtin/builtin.o builtin/env.o math/math.o numpy/numpy.o rts/empty.o rts/rts.o time/time.o
 
 # /time -------------------------------------------------
 MODULES += time/time.o

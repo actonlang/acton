@@ -121,7 +121,7 @@ backend/test/skiplist_test: backend/test/skiplist_test.c backend/skiplist.c
 		$(LDLIBS)
 
 # /builtin ----------------------------------------------
-ENV_FILES=$(wildcard builtin/minienv.*)
+ENV_FILES=$(wildcard builtin/env.*)
 BUILTIN_HFILES=$(filter-out $(ENV_FILES),$(wildcard builtin/*.h))
 BUILTIN_CFILES=$(filter-out $(ENV_FILES),$(wildcard builtin/*.c))
 builtin/builtin_dev.o: builtin/builtin.c $(BUILTIN_HFILES) $(BUILTIN_CFILES)
@@ -130,10 +130,10 @@ builtin/builtin_dev.o: builtin/builtin.c $(BUILTIN_HFILES) $(BUILTIN_CFILES)
 builtin/builtin_rel.o: builtin/builtin.c $(BUILTIN_HFILES) $(BUILTIN_CFILES)
 	$(CC) $(CFLAGS) $(CFLAGS_REL) -Wno-unused-result -c $< -o$@
 
-builtin/minienv_dev.o: builtin/minienv.c builtin/minienv.h builtin/builtin_dev.o
+builtin/env_dev.o: builtin/env.c builtin/env.h builtin/builtin_dev.o
 	$(CC) $(CFLAGS) $(CFLAGS_DEV) -c $< -o$@
 
-builtin/minienv_rel.o: builtin/minienv.c builtin/minienv.h builtin/builtin_rel.o
+builtin/env_rel.o: builtin/env.c builtin/env.h builtin/builtin_rel.o
 	$(CC) $(CFLAGS) $(CFLAGS_REL) -c $< -o$@
 
 
@@ -217,7 +217,7 @@ ARCHIVES=lib/libActon_dev.a lib/libActon_rel.a lib/libActonDB.a
 # in the stdlib directory, which we would need to join together with rts.o etc
 # to form the final libActon (or maybe produce a libActonStdlib and link with?)
 
-LIBACTON_DEV_OFILES=builtin/builtin_dev.o builtin/minienv_dev.o $(STDLIB_DEV_OFILES) stdlib/out/release/numpy_dev.o rts/empty.o rts/rts_dev.o deps/yyjson_dev.o
+LIBACTON_DEV_OFILES=builtin/builtin_dev.o builtin/env_dev.o $(STDLIB_DEV_OFILES) stdlib/out/release/numpy_dev.o rts/empty.o rts/rts_dev.o deps/yyjson_dev.o
 OFILES += $(LIBACTON_DEV_OFILES)
 lib/libActon_dev.a: $(LIBACTON_DEV_OFILES)
 	ar rcs $@ $^
@@ -260,7 +260,7 @@ rts/pingpong: rts/pingpong.c rts/pingpong.h rts/rts.o
 		$(LDLIBS)
 		rts/rts.o \
 		builtin/builtin.o \
-		builtin/minienv.o \
+		builtin/env.o \
 		$< \
 		-o $@
 
@@ -333,7 +333,7 @@ dist/lib/libActon_rel.a: lib/libActon_rel.a
 
 DIST_BINS=$(ACTONC) dist/bin/actondb
 DIST_HFILES=dist/rts/rts.h \
-	dist/builtin/minienv.h \
+	dist/builtin/env.h \
 	$(addprefix dist/,$(BUILTIN_HFILES)) \
 	$(subst stdlib/out/types,dist/types,$(STDLIB_HFILES))
 DIST_TYFILES=$(subst stdlib/out/types,dist/types,$(STDLIB_TYFILES))

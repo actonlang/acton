@@ -14,7 +14,7 @@
 
 #include "rts.h"
 #include "pingpong.h"
-#include "../builtin/minienv.h"
+#include "../builtin/env.h"
 
 void lambda$1$__init__(lambda$1 $this, Pingpong self, $int count, $int q) {
     $this->self = self;
