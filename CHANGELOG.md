@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+### Changed
+- Renamed minienv to env [#417]
+
 
 ## [0.7.2] (2021-12-15)
 
@@ -611,6 +614,7 @@ then, this second incarnation has been in focus and 0.2.0 was its first version.
 [#390]: https://github.com/actonlang/acton/pull/390
 [#403]: https://github.com/actonlang/acton/pull/403
 [#407]: https://github.com/actonlang/acton/pull/407
+[#417]: https://github.com/actonlang/acton/pull/417
 [0.3.0]: https://github.com/actonlang/acton/releases/tag/v0.3.0
 [0.4.0]: https://github.com/actonlang/acton/compare/v0.3.0...v0.4.0
 [0.4.1]: https://github.com/actonlang/acton/compare/v0.4.0...v0.4.1

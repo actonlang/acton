@@ -1,6 +1,6 @@
 #pragma once
 #include "builtin/builtin.h"
-#include "builtin/minienv.h"
+#include "builtin/env.h"
 #include "rts/rts.h"
 $float time$$monotonic ();
 $int time$$monotonic_ns ();

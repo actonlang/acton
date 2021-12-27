@@ -13,7 +13,7 @@ ActorRing: ActorRing.c ActorRing.h
 		-lutf8proc \
 		../../rts/rts.o \
 		../builtin.o \
-		../minienv.o \
+		../env.o \
 		ActorRing.c \
 		-o ActorRing
 

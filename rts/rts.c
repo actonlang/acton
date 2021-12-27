@@ -29,7 +29,7 @@
 
 #include "yyjson.h"
 #include "rts.h"
-#include "../builtin/minienv.h"
+#include "../builtin/env.h"
 
 // We want to pass through unknown arguments, so tell getopt to ignore invalid
 // (unknown to it) options
@@ -1566,7 +1566,7 @@ int main(int argc, char **argv) {
     }
 
     $register_builtin();
-    minienv$$__init__();
+    env$$__init__();
     $register_rts();
     $ROOTINIT();
 
