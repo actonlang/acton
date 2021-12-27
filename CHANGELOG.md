@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+### Fixed
+- Various fixes to C lib wrapping document [#418]
+
 ### Changed
 - Renamed minienv to env [#417]
 
@@ -615,6 +618,7 @@ then, this second incarnation has been in focus and 0.2.0 was its first version.
 [#403]: https://github.com/actonlang/acton/pull/403
 [#407]: https://github.com/actonlang/acton/pull/407
 [#417]: https://github.com/actonlang/acton/pull/417
+[#418]: https://github.com/actonlang/acton/pull/418
 [0.3.0]: https://github.com/actonlang/acton/releases/tag/v0.3.0
 [0.4.0]: https://github.com/actonlang/acton/compare/v0.3.0...v0.4.0
 [0.4.1]: https://github.com/actonlang/acton/compare/v0.4.0...v0.4.1

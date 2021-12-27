@@ -1,18 +1,18 @@
 # Wrapping C libraries in Acton
 
-This document attempts to provide a brief introduction to integration C libraries in Acton.
+This document attempts to provide a brief introduction to integration of C libraries in Acton.
 
 Acton is a compiled language and C is used as an intermediate representation. The Acton syntax that you're familiar with will be compiled into C and from there a C compiler will turn that into machine code. This makes it comparatively simple to integrate C libraries into Acton; we "just" need to write some C that looks the way that the Acton compiler would have written it!
 
 We will do that here by using an implementation of `time.time()` as an example. `time` is a module with a single free function (not in an actor or a class method) called `time()`.
 
-The Acton compiler, `actonc`, renders somewhat funny looking C code, quite far from what one might consider idiomatic C. Rather than attempting to write this by hand, the easiest way to get started is to write an Acton program, let `actonc` generate the C code and then replace the body of the various generated C functions with the relevant content.
+The Acton compiler, `actonc`, renders somewhat funny looking C code, quite far from what one might consider idiomatic C. Rather than attempting to write this by hand, the easiest way to get started is to write an Acton program, let `actonc` generate the C code from this Acton program and then replace the body of the various generated C functions with the actual functions we want.
 
 Acton is a statically typed language with an advanced type inferencer. When we are manually implementing C functions, the type inferencer, which works on an Acton syntax level, is unable to do its work. Thus, we must provide a type signature for our function. In order to generate surrounding code, we also write a simple dummy function.
 
-This is `modules/time.act`:
+This is `stdlib/src/time.act`:
 ```Acton
-time : () -> int
+time : () -> float
 
 def time():
     return 3
@@ -34,16 +34,16 @@ We generate a header file using `--hgen` and the C code using `--cgen`:
 #include "builtin/builtin.h"
 #include "builtin/env.h"
 #include "rts/rts.h"
-$int time$$time ();
+$float time$$time ();
 void time$$__init__ ();
 ```
 
 `time.c`:
 ```c
-#include "modules/time.h"
-$int time$$time () {
+#include "time.h"
+$float time$$time () {
     $Number w$4 = (($Number)$Integral$int$new());
-    return w$4->$class->__fromatom__(w$4, (($atom)to$int(3)));
+    return w$4->$class->__fromatom__(w$4, (($atom)to$float(3)));
 }
 int time$$done$ = 0;
 void time$$__init__ () {
@@ -52,18 +52,17 @@ void time$$__init__ () {
 }
 ```
 
-Now all we have to do is replace the content of the function `$int time$$time` with our stuff!
+Now all we have to do is replace the content of the function `$float time$$time` with our stuff!
 
 Updated `time.c`:
 ```c
 #include "time/time.h"
-$int time$$time () {
+$float time$$time () {
     struct timespec ts;
     if (clock_gettime(CLOCK_REALTIME, &ts) == -1) {
-        perror("clock_gettime");
-        exit(EXIT_FAILURE);
+        $RAISE((($BaseException)$RuntimeError$new(to$str("Unable to get time"))));
     }
-    return to$int(ts.tv_sec * 1000000000 + ts.tv_nsec);
+    return to$float(ts.tv_sec + 0.000000001*ts.tv_nsec);
 }
 int time$$done$ = 0;
 void time$$__init__ () {
@@ -72,34 +71,18 @@ void time$$__init__ () {
 }
 ```
 
-We can now reduce `modules/time.act` by removing the function definition of `time()` and just leaving the type signature!
+We can now reduce `stdlib/src/time.act` by removing the function definition of `time()` and just leaving the type signature!
 
-`modules/time.act`:
+`stdlib/src/time.act`:
 ```Acton
-time : () -> int
+time : () -> float
 ```
 
-Compile it with `actonc time.act --stub` and `modules/time.ty` will be created with type signatures. Update the Makefile to produce a time.o and add it to libActon.a. Here are the relevant make targets that are added or updated for the new time module:
-```Makefile
+If you've placed these files in `stdlib/src` as suggested, the main Makefile will automatically pick up on them through a wildcard pattern so they will be compiled and made available.
 
-modules/time.h: time/time.h
-	cp $< $@
+Run `make` and everything should be ready to go. We can use it from an Acton program like so:
 
-modules/time.ty: modules/time.act modules/time.h actonc
-	$(ACTONC) $< --stub
-
-lib/libActon.a: builtin/builtin.o builtin/env.o math/math.o numpy/numpy.o rts/empty.o rts/rts.o time/time.o
-
-# /time -------------------------------------------------
-MODULES += time/time.o
-time/time.o: time/time.c time/time.h
-	cc $(CFLAGS) -I. -c $< -o$@
-
-```
-
-Recompile the rts with `make rts` and everything should be ready to go. We can use it from an Acton program like so:
-
-`examples/time.act`:
+`examples/print_time.act`:
 ```Acton
 import time
 
@@ -109,10 +92,10 @@ actor main(env):
 ```
 
 ```shell
-$ actonc --root main examples/time.act
+$ actonc --root main examples/print_time.act
 $ examples/time
-1628925272624772012
+1.64064e+09
 $
 ```
 
-The Acton RTS runs multiple concurrent threads (per default one per CPU thread) that runs actors and as such it is of utmost importance that the C libraries used are thread safe.
+The Acton RTS runs multiple concurrent threads that run actors and as such it is of utmost importance that the C libraries used are thread safe.
