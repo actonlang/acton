@@ -8,9 +8,8 @@
     fixed [#419]
   - Passing option arguments with =, like `--rts-wthreads=8` now works
 - Various fixes to C lib wrapping document [#418]
-
-### Changed
 - Renamed minienv to env [#417]
+  - Only internal change, does not influence what a user of Acton sees
 
 
 ## [0.7.2] (2021-12-15)
