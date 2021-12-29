@@ -25,16 +25,10 @@
 #include <stdio.h>
 #include <stdarg.h>
 #include <uuid/uuid.h>
-#include <getopt.h>
 
 #include "yyjson.h"
 #include "rts.h"
 #include "../builtin/env.h"
-
-// We want to pass through unknown arguments, so tell getopt to ignore invalid
-// (unknown to it) options
-extern int opterr;
-int opterr = 0;
 
 #include "../backend/client_api.h"
 #include "../backend/fastrand.h"
@@ -1412,23 +1406,13 @@ void *$mon_loop(void *appname) {
     }
 }
 
+struct option {
+    const char *name;
+    bool        has_arg;
+    int         val;
+};
 
-/*
- * A note on argument parsing: The RTS has its own command line arguments, all
- * prefixed with --rts-, which we need to parse out. The remainder of the
- * arguments should be passed on to the Acton program, thus we need to fiddle
- * with argv. To avoid modifying argv in place, we create a new argc and argv
- * which we bootstrap the Acton program with. The special -- means to stop
- * scanning for options, and any argument following it will be passed verbatim.
- * For example (note the duplicate --rts-verbose)
- *   Command line    : ./app foo --rts-verbose --bar --rts-verbose
- *   Application sees: [./app, foo, --bar]
- * Using -- to pass verbatim arguments:
- *   Command line    : ./app foo --rts-verbose --bar -- --rts-verbose
- *   Application sees: [./app, foo, --bar, --, --rts-verbose]
- */
 int main(int argc, char **argv) {
-    int ch = 0;
     uint ddb_no_host = 0;
     char **ddb_host = NULL;
     int ddb_port = 32000;
@@ -1438,21 +1422,85 @@ int main(int argc, char **argv) {
     long num_cores = sysconf(_SC_NPROCESSORS_ONLN);
     num_wthreads = num_cores;
 
+    /*
+     * A note on argument parsing: The RTS has its own command line arguments,
+     * all prefixed with --rts-, which we need to parse out. The remainder of
+     * the arguments should be passed on to the Acton program, thus we need to
+     * fiddle with argv. To avoid modifying argv in place, we create a new argc
+     * and argv which we bootstrap the Acton program with. The special -- means
+     * to stop scanning for options, and any argument following it will be
+     * passed verbatim.
+     * For example (note the duplicate --rts-verbose)
+     *   Command line    : ./app foo --rts-verbose --bar --rts-verbose
+     *   Application sees: [./app, foo, --bar]
+     * Using -- to pass verbatim arguments:
+     *   Command line    : ./app foo --rts-verbose --bar -- --rts-verbose
+     *   Application sees: [./app, foo, --bar, --, --rts-verbose]
+     *
+     * We support both styles of providing an option argument, e.g.:
+     *    ./app --rts-wthreads 8
+     *    ./app --rts-wthreads=8
+     * Optional arguments aren't supported, an option either takes a required
+     * argument or it does not.
+     */
     static struct option long_options[] = {
-        {"rts-debug", no_argument, NULL, 'd'},
-        {"rts-ddb-host", required_argument, NULL, 'h'},
-        {"rts-ddb-port", required_argument, NULL, 'p'},
-        {"rts-ddb-replication", required_argument, NULL, 'r'},
-        {"rts-mon", required_argument, NULL, 'm'},
-        {"rts-verbose", no_argument, NULL, 'v'},
-        {"rts-wthreads", required_argument, NULL, 'w'},
-        {NULL, 0, NULL, 0}
+        {"rts-debug", false, 'd'},
+        {"rts-ddb-host", true, 'h'},
+        {"rts-ddb-port", true, 'p'},
+        {"rts-ddb-replication", true, 'r'},
+        {"rts-mon", true, 'm'},
+        {"rts-verbose", false, 'v'},
+        {"rts-wthreads", true, 'w'},
+        {NULL, 0, 0}
     };
+    // length of long_options array
+    #define OPTLEN (sizeof(long_options) / sizeof(long_options[0]) - 1)
 
-    while ((ch = getopt_long(argc, argv, "-", long_options, NULL)) != -1) {
+    int ch = 0;
+    // where we map current (i) argc position into new_argc
+    int new_argc_dst = 0;
+    // stop scanning once we've seen '--', passing the rest verbatim
+    int opt_scan = 1;
+    char **new_argv = malloc((argc+1) * sizeof *new_argv);
+    char *optarg = NULL;
+    for (int i = 0; i < argc; i++) {
+        ch = 0;
+        optarg = NULL;
+        if (strcmp(argv[i], "--") == 0) opt_scan = 0;
+        if (opt_scan) {
+            for (int j=0; j<OPTLEN; j++) {
+                if (strlen(argv[i]) > 2
+                    && strncmp(argv[i]+2, long_options[j].name, strlen(long_options[j].name)) == 0) {
+                    // argv[i] matches one of our options!
+                    ch = long_options[j].val;
+                    new_argc--;
+                    if (long_options[j].has_arg == true) {
+                        if (strlen(argv[i]) > 2+strlen(long_options[j].name)
+                            && argv[i][2+strlen(long_options[j].name)] == '=') {
+                            // option argument is in --opt=arg style, so dig out
+                            optarg = (char *)argv[i]+(2+strlen(long_options[j].name+1));
+                        } else {
+                            // argument has to be next in argv
+                            if (i+1 == argc) { // check we are not at end
+                                fprintf(stderr, "ERROR: --%s requires an argument.\n", long_options[j].name);
+                                exit(1);
+                            }
+                            i++;
+                            optarg = argv[i];
+                            new_argc--;
+                        }
+                    }
+                    break;
+                }
+            }
+        }
+        if (!ch) { // Didn't identify one of our options, so pass through
+            new_argv[new_argc_dst++] = argv[i];
+            continue;
+        }
+
         switch (ch) {
             case 'd':
-                new_argc--;
                 #ifndef DEV
                 fprintf(stderr, "ERROR: RTS debug not supported.\n");
                 fprintf(stderr, "HINT: Recompile this program using: actonc --rts-debug ...\n");
@@ -1463,53 +1511,25 @@ int main(int argc, char **argv) {
                 rts_verbose = 10;
                 break;
             case 'h':
-                new_argc -= 2;
                 ddb_host = realloc(ddb_host, ++ddb_no_host * sizeof *ddb_host);
                 ddb_host[ddb_no_host-1] = optarg;
                 break;
             case 'm':
-                new_argc -= 2;
                 rts_mon_path = optarg;
                 break;
             case 'p':
-                new_argc -= 2;
                 ddb_port = atoi(optarg);
                 break;
             case 'r':
-                new_argc -= 2;
                 ddb_replication = atoi(optarg);
                 break;
             case 'v':
-                new_argc--;
                 rts_verbose = 1;
                 break;
             case 'w':
-                new_argc -= 2;
                 num_wthreads = atoi(optarg);
                 break;
         }
-    }
-    char** new_argv = malloc((new_argc+1) * sizeof *new_argv);
-
-    // length of long_options array
-    int lo_len = sizeof(long_options) / sizeof(long_options[0]) - 1;
-    // where we map current (i) argc position into new_argc
-    int new_argc_dst = 0;
-    // stop scanning once we've seen '--', passing the rest verbatim
-    int opt_scan = 1;
-    for (int i = 0; i < argc; ++i) {
-        if (strcmp(argv[i], "--") == 0) opt_scan = 0;
-        if (opt_scan) {
-            for (int j = 0; j < lo_len; j++) {
-                // compare at +2 since in argv it is --foo while only foo in long_options
-                if (strcmp(argv[i]+2, long_options[j].name) == 0) {
-                    if (long_options[j].has_arg == 1) i++;
-                    goto cnt; // continue on outer loop
-                }
-            }
-        }
-        new_argv[new_argc_dst++] = argv[i];
-        cnt:;
     }
     new_argv[new_argc] = NULL;
 
