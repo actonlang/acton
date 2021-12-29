@@ -3,6 +3,10 @@
 ## Unreleased
 
 ### Fixed
+- Fix segfaults in RTS argument parsing [#420]
+  - Missing argument to option would previously lead to segfault, which is now
+    fixed [#419]
+  - Passing option arguments with =, like `--rts-wthreads=8` now works
 - Various fixes to C lib wrapping document [#418]
 
 ### Changed
@@ -619,6 +623,8 @@ then, this second incarnation has been in focus and 0.2.0 was its first version.
 [#407]: https://github.com/actonlang/acton/pull/407
 [#417]: https://github.com/actonlang/acton/pull/417
 [#418]: https://github.com/actonlang/acton/pull/418
+[#419]: https://github.com/actonlang/acton/issues/419
+[#420]: https://github.com/actonlang/acton/pull/420
 [0.3.0]: https://github.com/actonlang/acton/releases/tag/v0.3.0
 [0.4.0]: https://github.com/actonlang/acton/compare/v0.3.0...v0.4.0
 [0.4.1]: https://github.com/actonlang/acton/compare/v0.4.0...v0.4.1
