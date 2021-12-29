@@ -1,7 +1,9 @@
 ACTONC=../dist/bin/actonc --cpedantic
 DDB_SERVER=../backend/server
 TESTS= \
-	argv \
+	rts/argv1 \
+	rts/argv2 \
+	rts/argv3 \
 	test_acton_rts_sleep \
 	test_random \
 	test_time \
@@ -41,9 +43,23 @@ ddb_count:
 	$(MAKE) ddb_stop
 
 
-argv:
-	$(ACTONC) --root main argv.act
-	./argv --rts-verbose foo --bar --rts-verbose
+# Test normal argument parsing
+rts/argv1:
+	$(ACTONC) --root main $@.act
+	./$@ --rts-verbose foo --bar --rts-verbose
+	./$@ --rts-verbose --rts-wthreads 7 foo --bar
+	./$@ --rts-verbose --rts-wthreads=7 foo --bar
+
+# Test argument parsing when using --
+rts/argv2:
+	$(ACTONC) --root main $@.act
+	./$@ --rts-verbose --rts-wthreads=7 -- foo --bar --rts-verbose
+
+# Test argument parsing for lacking argument to option
+rts/argv3:
+	$(ACTONC) --root main $@.act
+	./$@ --rts-wthreads 2>&1 | grep "ERROR: --rts-wthreads requires an argument."
+	@echo "Test success, saw expected error message"
 
 test_acton_rts_sleep:
 	$(ACTONC) --root main $@.act
@@ -70,4 +86,4 @@ stdlib/test_numpy: stdlib/test_numpy.act
 	$(ACTONC) --root main $<
 	./$@
 
-.PHONY: argv test_acton_rts_sleep test_async test_random test_time regression rts_sleep
+.PHONY: rts/argv1 rts/argv2 rts/argv3 test_acton_rts_sleep test_async test_random test_time regression rts_sleep
