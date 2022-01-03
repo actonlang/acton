@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+
+## [0.7.3] (2022-01-03)
+
 ### Fixed
 - Fix segfaults in RTS argument parsing [#420]
   - Missing argument to option would previously lead to segfault, which is now
@@ -640,6 +643,7 @@ then, this second incarnation has been in focus and 0.2.0 was its first version.
 [0.7.0]: https://github.com/actonlang/acton/compare/v0.6.4...v0.7.0
 [0.7.1]: https://github.com/actonlang/acton/compare/v0.7.0...v0.7.1
 [0.7.2]: https://github.com/actonlang/acton/compare/v0.7.1...v0.7.2
+[0.7.3]: https://github.com/actonlang/acton/compare/v0.7.2...v0.7.3
 
 [homebrew-acton#7]: https://github.com/actonlang/homebrew-acton/pull/7
 [homebrew-acton#28]: https://github.com/actonlang/homebrew-acton/pull/28
