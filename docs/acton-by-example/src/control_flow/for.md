@@ -2,7 +2,7 @@
 
 Iteration is a core concept in programming and for loops are perhaps the most well known.
 
-Acton supports the `for in` construct, which takes an 
+Acton supports the `for in` construct to iterate through an `Iterator`.
 
 Source:
 ```python
