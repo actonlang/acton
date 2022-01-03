@@ -37,11 +37,11 @@ ddb_count:
 	$(MAKE) ddb_stop
 	$(MAKE) ddb_start
 	$(ACTONC) --root main count.act
-	./count 8 --rts-verbose --rts-ddb-host 127.0.0.1 --rts-ddb-replication 1 &
-	sleep 5
-	pkill -f count.8
-	sleep 1
-	./count 8 --rts-verbose --rts-ddb-host 127.0.0.1 --rts-ddb-replication 1
+#	./count 8 --rts-verbose --rts-ddb-host 127.0.0.1 --rts-ddb-replication 1 &
+#	sleep 5
+#	pkill -f count.8
+#	sleep 1
+	./count 1 --rts-verbose --rts-ddb-host 127.0.0.1 --rts-ddb-replication 1
 	$(MAKE) ddb_stop
 
 
