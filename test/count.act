@@ -1,6 +1,6 @@
 actor main(env):
     var i = 0;
-    var count_to = int(env.args[-1])
+    var count_to = int(env.argv[1])
 
     def _work():
         print(i)
