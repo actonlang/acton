@@ -15,7 +15,7 @@ regression:
 	$(MAKE) -C regression
 
 ddb_start:
-	$(DDB_SERVER) -p 32000 -m 34000 -s 127.0.0.1:34000 >db1.log 2>&1 &
+	$(DDB_SERVER) -p 32000 -m 34000 -s 127.0.0.1:34000 >db1.log 2>&1 & echo $$! > db1.pid
 	sleep 0.1
 #	$(DDB_SERVER) -p 32001 -m 34001 -s 127.0.0.1:34000 >db2.log 2>&1 &
 #	sleep 0.1
@@ -23,7 +23,9 @@ ddb_start:
 #	sleep 0.1
 
 ddb_stop:
-	-pkill -f "server.*-s 127.0.0.1.34000"
+	-kill $$(cat db1.pid); rm db1.pid
+	-pkill -f "actondb.*-s 127.0.0.1.34000"
+
 
 # This is a really naive test. We don't even check the output of the program so
 # we do not check that the actual persistence and restoration of state is
