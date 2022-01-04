@@ -2179,6 +2179,13 @@ int main(int argc, char **argv) {
   char msg_buf[1024];
   int verbosity = SERVER_VERBOSITY;
 
+  // Disable buffering of stdout. This is necessary for testing actondb since we
+  // rely on reading log output on stdout to know the status of the server. We
+  // should ideally replace this with a better way of reading the server status,
+  // in which case we can remove this line and return to having buffered stdout.
+  // Unbuffered stdout isn't a huge deal since we don't write that much.
+  setbuf(stdout, NULL);
+
   const char *argp_program_version = "ddb server 1.0";
 
   static struct argp_option options[] =

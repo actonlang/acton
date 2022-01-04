@@ -1,0 +1,27 @@
+# Basic test case of the Acton RTS together with the database backend. We want
+# to focus on things that lead to database interaction, so in essence calling
+# actor methods / sending methods and execution of continuations. We also want
+# to test the timer queue.
+#
+# main -> Foo."init" -> timerQ after 0 -> Foo.callback() -> main.final() -> exit
+
+
+actor Foo(cb_method):
+    def callback():
+        print("Calling cb_method()")
+        cb_method()
+
+    print("Scheduling after 0")
+    after 0: callback()
+
+actor main(env):
+    def final():
+        print("In final method")
+        print("exiting...")
+        await async env.exit(0)
+
+    def test():
+        print("Creating Foo() instance")
+        f = Foo(final)
+
+    test()
