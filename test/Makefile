@@ -2,47 +2,34 @@ ACTONC=../dist/bin/actonc --cpedantic
 DDB_SERVER=../dist/bin/actondb
 TESTS= \
 	$(RTS_TESTS) \
-	ddb_count \
+	$(DDB_TESTS) \
 	test_acton_rts_sleep \
 	test_random \
 	test_time \
 	rts_sleep \
 	regression \
 	stdlib/test_numpy
-test: $(TESTS)
+test:
+	$(MAKE) $(TESTS)
 
 regression:
 	$(MAKE) -C regression
 
-ddb_start:
-	$(DDB_SERVER) -p 32000 -m 34000 -s 127.0.0.1:34000 >db1.log 2>&1 & echo $$! > db1.pid
-	sleep 0.1
-#	$(DDB_SERVER) -p 32001 -m 34001 -s 127.0.0.1:34000 >db2.log 2>&1 &
-#	sleep 0.1
-#	$(DDB_SERVER) -p 32002 -m 34002 -s 127.0.0.1:34000 >db3.log 2>&1 &
-#	sleep 0.1
 
-ddb_stop:
-	-kill $$(cat db1.pid); rm db1.pid
-	-pkill -f "actondb.*-s 127.0.0.1.34000"
+foo:
+	@echo $(TESTS)
 
+DDB_TESTS=test_db_membership test_db_app
+.PHONY: test_db_membership test_db_app
+# Starts up a database cluster and checks membership
+test_db_membership:
+	./test_db.py --db-nodes 3
 
-# This is a really naive test. We don't even check the output of the program so
-# we do not check that the actual persistence and restoration of state is
-# working. We assume that stuff will attempt to do its business and if anything
-# goes wrong, it will have catastrophic failure so that something will return an
-# incorrect return code and this test case can fail. This should really be
-# improved upon :)
-ddb_count:
-	$(MAKE) ddb_stop
-	$(MAKE) ddb_start
-	$(ACTONC) --root main count.act
-#	./count 8 --rts-verbose --rts-ddb-host 127.0.0.1 --rts-ddb-replication 1 &
-#	sleep 5
-#	pkill -f count.8
-#	sleep 1
-	./count 1 --rts-verbose --rts-ddb-host 127.0.0.1 --rts-ddb-replication 1
-	$(MAKE) ddb_stop
+# Starts up a database cluster and
+# Currently using a single (1) DB node since replication is b0rked!
+test_db_app:
+	$(ACTONC) --root main test_db.act
+	./test_db.py --db-nodes 1 --app ./test_db
 
 
 # -- RTS --
