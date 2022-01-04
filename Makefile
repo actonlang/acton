@@ -124,6 +124,7 @@ backend/test/skiplist_test: backend/test/skiplist_test.c backend/skiplist.c
 ENV_FILES=$(wildcard builtin/env.*)
 BUILTIN_HFILES=$(filter-out $(ENV_FILES),$(wildcard builtin/*.h))
 BUILTIN_CFILES=$(filter-out $(ENV_FILES),$(wildcard builtin/*.c))
+C_FILES += $(BUILTIN_CFILES) $(BUILTIN_HFILES)
 builtin/builtin_dev.o: builtin/builtin.c $(BUILTIN_HFILES) $(BUILTIN_CFILES)
 	$(CC) $(CFLAGS) $(CFLAGS_DEV) -Wno-unused-result -c $< -o$@
 
@@ -168,6 +169,7 @@ STDLIB_OFILES=$(subst src,out/release,$(STDLIB_CFILES:.c=.o))
 STDLIB_DEV_OFILES=$(STDLIB_OFILES:.o=_dev.o)
 STDLIB_REL_OFILES=$(STDLIB_OFILES:.o=_rel.o)
 STDLIB_ACTS=$(not-in $(STDLIB_ACTFILES),$(STDLIB_CFILES))
+C_FILES += $(STDLIB_CFILES)
 
 # __builtin__.ty is special, it even has special handling in actonc. Essentially
 # all other modules depend on it, so it must be compiled first. While we use
@@ -202,6 +204,7 @@ NUMPY_CFILES=$(wildcard stdlib/c_src/numpy/*.h)
 ifeq ($(shell uname -s),Linux)
 NUMPY_CFLAGS+=-lbsd -ldl -lmd
 endif
+C_FILES += stdlib/src/numpy.c stdlib/src/numpy.h
 stdlib/out/release/numpy_dev.o: stdlib/src/numpy.c stdlib/src/numpy.h stdlib/out/types/math.h $(NUMPY_CFILES) stdlib/out/release/math_dev.o
 	@mkdir -p $(dir $@)
 	$(CC) $(CFLAGS) $(CFLAGS_DEV) -Wno-unused-result -r -Istdlib/out/ $< -o$@ $(NUMPY_CFLAGS) stdlib/out/release/math_dev.o
@@ -239,6 +242,7 @@ lib/libActonDB.a: $(BACKEND_OFILES)
 
 
 # /rts --------------------------------------------------
+C_FILES += rts/rts.c rts/rts.h
 rts/rts_dev.o: rts/rts.c rts/rts.h
 	$(CC) $(CFLAGS) $(CFLAGS_DEV) \
 		-Wno-int-to-void-pointer-cast -Wno-unused-result \
@@ -251,9 +255,11 @@ rts/rts_rel.o: rts/rts.c rts/rts.h
 		$(LDLIBS) \
 		-c $< -o $@
 
+C_FILES += rts/empty.c
 rts/empty.o: rts/empty.c
 	$(CC) $(CFLAGS) -g -c $< -o $@
 
+C_FILES += rts/pingpong.c rts/pingpong.h
 rts/pingpong: rts/pingpong.c rts/pingpong.h rts/rts.o
 	$(CC) $(CFLAGS) -Wno-int-to-void-pointer-cast \
 		-lutf8proc -lActonDB \
@@ -344,6 +350,14 @@ distribution: $(DIST_BINS) $(DIST_HFILES) $(DIST_TYFILES) $(DIST_ARCHIVES)
 
 clean-distribution:
 	rm -rf dist
+
+.PHONY: check-clangformat clangformat
+check-clangformat:
+	$(MAKE) clangformat
+	git diff --exit-code $(C_FILES)
+
+clangformat:
+	clang-format -style=file -i $(C_FILES)
 
 # == release ==
 # This is where we take our distribution and turn it into a release tar ball

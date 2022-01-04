@@ -1,0 +1,6 @@
+BasedOnStyle: LLVM
+IndentWidth: 4
+ColumnLimit: 0
+AlignConsecutiveMacros: true
+IndentCaseLabels: true
+SortIncludes: false
