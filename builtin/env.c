@@ -1133,12 +1133,12 @@ void env$$__init__ () {
         $WFile$methods.__deserialize__ = $WFile$__deserialize__;
         $register(&$WFile$methods);
     }
-    pipe(wakeup_pipe);
+    int r = pipe(wakeup_pipe);
     EVENT_init();
 }
 
 void reset_timeout() {
-    write(wakeup_pipe[1], "!", 1);      // Write dummy data that wakes up the eventloop thread
+    int r = write(wakeup_pipe[1], "!", 1);      // Write dummy data that wakes up the eventloop thread
 }
 
 void *$eventloop(void *arg) {
@@ -1181,7 +1181,7 @@ void *$eventloop(void *arg) {
         }
         if (EVENT_is_wakeup(&kev)) {
             char dummy;
-            read(wakeup_pipe[0], &dummy, 1);      // Consume dummy data, reset timer at the start of next turn
+            int r = read(wakeup_pipe[0], &dummy, 1);      // Consume dummy data, reset timer at the start of next turn
             continue;
         }
         int fd = EVENT_fd(&kev);
