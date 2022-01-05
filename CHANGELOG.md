@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+### Fixed
+- env actor is serialized to database backend during bootstrap [#430]
+  - Actor serialization ("snapshotting") to the database usually happens when a
+    continuation (roughly an actor method) has been run
+  - The env actor might never run, which meant it might not have been
+    serialized to the DB, so when resuming an Acton application from the
+    database, the env actor could be missing leading to a segfault [#408]
+
 
 ## [0.7.3] (2022-01-03)
 
