@@ -1604,7 +1604,8 @@ int main(int argc, char **argv) {
             }
 
             rtsv_printf(LOGPFX "Using distributed database backend (DDB): %s:%d\n", ddb_host[i], port);
-            add_server_to_membership(ddb_host[i], port, db, &seed);
+            for(int replica=0;replica<ddb_replication;replica++)
+                add_server_to_membership(ddb_host[i], port+replica, db, &seed);
         }
     }
 
