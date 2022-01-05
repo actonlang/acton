@@ -9,6 +9,13 @@
   - The env actor might never run, which meant it might not have been
     serialized to the DB, so when resuming an Acton application from the
     database, the env actor could be missing leading to a segfault [#408]
+- RTS now connects to all DB nodes to enable replication factor >1 [#427]
+  - This is a short term fix [#409]
+  - Longer term, the client DB gossip protocol will be enhanced to deal with
+    this properly [#432]
+  - Tests now using 3 DB nodes
+- Fix DB Membership signaling on DB server crash [#429]
+- Avoid some C errors so we compile on Ubuntu [#428]
 
 
 ## [0.7.3] (2022-01-03)
@@ -631,10 +638,17 @@ then, this second incarnation has been in focus and 0.2.0 was its first version.
 [#390]: https://github.com/actonlang/acton/pull/390
 [#403]: https://github.com/actonlang/acton/pull/403
 [#407]: https://github.com/actonlang/acton/pull/407
+[#408]: https://github.com/actonlang/acton/issues/408
+[#409]: https://github.com/actonlang/acton/issues/409
 [#417]: https://github.com/actonlang/acton/pull/417
 [#418]: https://github.com/actonlang/acton/pull/418
 [#419]: https://github.com/actonlang/acton/issues/419
 [#420]: https://github.com/actonlang/acton/pull/420
+[#427]: https://github.com/actonlang/acton/pull/427
+[#428]: https://github.com/actonlang/acton/pull/428
+[#429]: https://github.com/actonlang/acton/pull/429
+[#430]: https://github.com/actonlang/acton/pull/430
+[#432]: https://github.com/actonlang/acton/issues/432
 [0.3.0]: https://github.com/actonlang/acton/releases/tag/v0.3.0
 [0.4.0]: https://github.com/actonlang/acton/compare/v0.3.0...v0.4.0
 [0.4.1]: https://github.com/actonlang/acton/compare/v0.4.0...v0.4.1
