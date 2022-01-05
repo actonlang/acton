@@ -706,28 +706,6 @@ void init_db_queue(long key) {
         create_db_queue(key);
 }
 
-void BOOTSTRAP(int argc, char *argv[]) {
-    $list args = $list$new(NULL,NULL);
-    for (int i=0; i< argc; i++)
-      $list_append(args,to$str(argv[i]));
-
-    env_actor = $NEW($Env, args);
-    $Actor ancestor0 = $NEW($Actor);
-    time_t now = current_time();
-    $Msg m = $NEW($Msg, ancestor0, &$NewRoot$cont, now, &$WriteRoot$cont);
-
-    if (db) {
-        create_db_queue(env_actor->$globkey);
-        create_db_queue(ancestor0->$globkey);
-        int ret = remote_enqueue_in_txn(($WORD*)&m->$globkey, 1, NULL, 0, MSG_QUEUE, (WORD)ancestor0->$globkey, NULL, db);
-        rtsd_printf(LOGPFX "   # enqueue bootstrap msg %ld to ancestor0 queue %ld returns %d\n", m->$globkey, ancestor0->$globkey, ret);
-    }
-
-    if (ENQ_msg(m, ancestor0)) {
-        ENQ_ready(ancestor0);
-    }
-}
-
 void PUSH_outgoing($Actor self, $Msg m) {
     m->$next = self->$outgoing;
     self->$outgoing = m;
@@ -1142,6 +1120,36 @@ void serialize_actor($Actor a, uuid_t *txnid) {
         out = out->$next;
     }
 }
+
+void BOOTSTRAP(int argc, char *argv[]) {
+    $list args = $list$new(NULL,NULL);
+    for (int i=0; i< argc; i++)
+      $list_append(args,to$str(argv[i]));
+
+    env_actor = $NEW($Env, args);
+    $Actor ancestor0 = $NEW($Actor);
+    time_t now = current_time();
+    $Msg m = $NEW($Msg, ancestor0, &$NewRoot$cont, now, &$WriteRoot$cont);
+
+    if (db) {
+        create_db_queue(env_actor->$globkey);
+        create_db_queue(ancestor0->$globkey);
+
+        // serialize env to DB, since it is constant and never gets picked up by
+        // main_loop, thus never serialized
+        uuid_t * txnid = remote_new_txn(db);
+        serialize_actor(($Actor)env_actor, txnid);
+        remote_commit_txn(txnid, db);
+
+        int ret = remote_enqueue_in_txn(($WORD*)&m->$globkey, 1, NULL, 0, MSG_QUEUE, (WORD)ancestor0->$globkey, NULL, db);
+        rtsd_printf(LOGPFX "   # enqueue bootstrap msg %ld to ancestor0 queue %ld returns %d\n", m->$globkey, ancestor0->$globkey, ret);
+    }
+
+    if (ENQ_msg(m, ancestor0)) {
+        ENQ_ready(ancestor0);
+    }
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////
 
