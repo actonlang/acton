@@ -21,15 +21,15 @@ foo:
 
 DDB_TESTS=test_db_membership test_db_app
 .PHONY: test_db_membership test_db_app
-# Starts up a database cluster and checks membership
+# Starts up a database cluster and checks membership looks ok.
 test_db_membership:
 	./test_db.py --db-nodes 3
 
-# Starts up a database cluster and
-# Currently using a single (1) DB node since replication is b0rked!
+# Starts up a database cluster, checks membership is ok before proceeding to run
+# an app.
 test_db_app:
 	$(ACTONC) --root main test_db.act
-	./test_db.py --db-nodes 1 --app ./test_db
+	./test_db.py --db-nodes 3 --app ./test_db
 
 
 # -- RTS --
