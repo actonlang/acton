@@ -1828,7 +1828,10 @@ int handle_join_message(int childfd, int msg_len, membership * m, db_t * db, uns
     	    	return -1;
 	}
 
-	assert(ma->msg_type == MEMBERSHIP_AGREEMENT_JOIN);
+	if(ma->msg_type != MEMBERSHIP_AGREEMENT_JOIN)
+	{
+		return -1;
+	}
 
 #if (VERBOSE_RPC > 0)
 	char msg_buf[1024];
@@ -2538,7 +2541,11 @@ int main(int argc, char **argv) {
 
 				int sender_id = get_node_id((struct sockaddr *) &(rs->serveraddr));
 				if((ret=handle_join_message(rs->sockfd, msg_len, m, db, &seed, my_lc, sender_id, my_id, rs)) < 0)
-			    		continue;
+				{
+					if(handle_server_message(rs->sockfd, msg_len, m, db, &seed, my_lc, sender_id))
+						continue;
+				}
+
 
 				if(ret > 0) // local membership changed
 				{
