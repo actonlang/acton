@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## [0.7.4] (2022-01-06)
+
 ### Fixed
 - env actor is serialized to database backend during bootstrap [#430]
   - Actor serialization ("snapshotting") to the database usually happens when a
@@ -15,6 +17,7 @@
     this properly [#432]
   - Tests now using 3 DB nodes
 - Fix DB Membership signaling on DB server crash [#429]
+- The RTS with DDB test is now using 3 DB nodes and replication factor 3 [#434]
 - Avoid some C errors so we compile on Ubuntu [#428]
 
 
@@ -28,6 +31,7 @@
 - Various fixes to C lib wrapping document [#418]
 - Renamed minienv to env [#417]
   - Only internal change, does not influence what a user of Acton sees
+- Now testing RTS using DDB in CI [#425]
 
 
 ## [0.7.2] (2021-12-15)
@@ -644,11 +648,13 @@ then, this second incarnation has been in focus and 0.2.0 was its first version.
 [#418]: https://github.com/actonlang/acton/pull/418
 [#419]: https://github.com/actonlang/acton/issues/419
 [#420]: https://github.com/actonlang/acton/pull/420
+[#425]: https://github.com/actonlang/acton/pull/425
 [#427]: https://github.com/actonlang/acton/pull/427
 [#428]: https://github.com/actonlang/acton/pull/428
 [#429]: https://github.com/actonlang/acton/pull/429
 [#430]: https://github.com/actonlang/acton/pull/430
 [#432]: https://github.com/actonlang/acton/issues/432
+[#434]: https://github.com/actonlang/acton/pull/434
 [0.3.0]: https://github.com/actonlang/acton/releases/tag/v0.3.0
 [0.4.0]: https://github.com/actonlang/acton/compare/v0.3.0...v0.4.0
 [0.4.1]: https://github.com/actonlang/acton/compare/v0.4.0...v0.4.1
@@ -666,6 +672,7 @@ then, this second incarnation has been in focus and 0.2.0 was its first version.
 [0.7.1]: https://github.com/actonlang/acton/compare/v0.7.0...v0.7.1
 [0.7.2]: https://github.com/actonlang/acton/compare/v0.7.1...v0.7.2
 [0.7.3]: https://github.com/actonlang/acton/compare/v0.7.2...v0.7.3
+[0.7.4]: https://github.com/actonlang/acton/compare/v0.7.3...v0.7.4
 
 [homebrew-acton#7]: https://github.com/actonlang/homebrew-acton/pull/7
 [homebrew-acton#28]: https://github.com/actonlang/homebrew-acton/pull/28
