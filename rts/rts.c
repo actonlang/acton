@@ -1046,6 +1046,15 @@ void deserialize_system(snode_t *actors_start) {
         ENQ_timed(m);
     }
 
+    /*
+     * Actor IDs (-11 & -14) here chosen by fair dice roll... Haha, kidding.
+     * These values are aligned with the IDs allocated by get_next_key() when
+     * called in the BOOTSTRAP() function. The ID allocator next_key starts at
+     * -10, so -11 is the first key handed out and with the env actor is created
+     * first, it will get -11. Similarly for the root actor, though there are
+     * some intermediate things grabbing two numbers. This must be kept in sync
+     * with next_key and the structure in the BOOTSTRAP() function!
+     */
     env_actor  = ($Env)$dict_get(globdict, ($Hashable)$Hashable$int$witness, to$int(-11), NULL);
     root_actor = ($Actor)$dict_get(globdict, ($Hashable)$Hashable$int$witness, to$int(-14), NULL);
     globdict = NULL;
