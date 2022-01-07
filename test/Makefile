@@ -16,20 +16,25 @@ regression:
 	$(MAKE) -C regression
 
 
-foo:
-	@echo $(TESTS)
+ddb-tests:
+	$(MAKE) $(DDB_TESTS)
 
-DDB_TESTS=test_db_membership test_db_app
-.PHONY: test_db_membership test_db_app
+DDB_TESTS=test_db_membership test_db_app test_db_app_recovery
+.PHONY: test_db_membership test_db_app test_db_app_recovery
 # Starts up a database cluster and checks membership looks ok.
 test_db_membership:
 	./test_db.py --db-nodes 3
 
 # Starts up a database cluster, checks membership is ok before proceeding to run
-# an app.
+# a simple app. We do not really verify that the RTS uses the database - we
+# assume it does and would fail catastrohpically if it encounters an error.
 test_db_app:
-	$(ACTONC) --root main test_db.act
-	./test_db.py --db-nodes 3 --app ./test_db
+	$(ACTONC) --root main test_db_app.act
+	./test_db.py --db-nodes 3 --test-app
+
+test_db_app_recovery:
+	$(ACTONC) --root main test_db_recovery.act
+	./test_db.py --db-nodes 1 --test-recovery
 
 
 # -- RTS --

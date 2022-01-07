@@ -1454,6 +1454,15 @@ int main(int argc, char **argv) {
     long num_cores = sysconf(_SC_NPROCESSORS_ONLN);
     num_wthreads = num_cores;
 
+    // Disable buffering of stdout. This is necessary for testing certain
+    // applications since we rely on reading log output on stdout to know the
+    // status of the application and take action. For example, in the ddb app
+    // recovery test we kill the application and must do so in a timely manner.
+    // With buffered output, we don't see the output when we need to.
+    // We should decide on how to do this in a better way, like leaving it to
+    // the user? See https://github.com/actonlang/acton/issues/439
+    setbuf(stdout, NULL);
+
     /*
      * A note on argument parsing: The RTS has its own command line arguments,
      * all prefixed with --rts-, which we need to parse out. The remainder of

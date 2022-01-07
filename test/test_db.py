@@ -73,40 +73,6 @@ class Db:
                 return parse_membership(line)
 
 
-class App:
-    def __repr__(self):
-        return f"App[{self.name}]"
-
-    def __init__(self, app_path, app_args=None):
-        self.path = app_path
-        if app_args is not None:
-            self.args = app_args
-        else:
-            self.args = []
-        self.name = "fjong"
-        self.p = None
-
-    def start(self):
-        cmd = [self.path, "--rts-ddb-host", "localhost", "--rts-ddb-replication", "1", "--rts-verbose", *self.args]
-        print("RUNNING:", cmd)
-        self.p = subprocess.Popen(cmd, stdin=subprocess.PIPE,
-                                  stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-        #os.set_blocking(self.p.stdout.fileno(), False)
-
-    def wait(self):
-        print("Waiting for application...")
-        while True:
-            print("fjong..")
-            line = self.p.stdout.readline().decode(locale.getpreferredencoding(False)).strip()
-            print(line)
-            if line == '':
-                break
-        self.p.wait()
-
-    def stop(self):
-        pass
-
-
 class DbCluster:
     def __init__(self, num=3):
         self.num = num
@@ -151,16 +117,73 @@ class DbCluster:
         log.debug("Stopping database servers")
         for dbn in self.dbs:
             dbn.stop()
+        return True
 
+
+def test_app_recovery(db_nodes):
+    cmd = ["./test_db_recovery", "--rts-verbose", "--rts-ddb-host", "127.0.0.1", "--rts-ddb-replication", str(db_nodes)]
+
+    log.debug(f"Starting application: {' '.join(cmd)}")
+    p1 = subprocess.Popen(cmd, stdout=subprocess.PIPE, universal_newlines=True)
+
+    i = 1
+    # Wait for app to count to 1, which means it must have run 'after
+    # 1', i.e. a message through the timer queue and thus must have been
+    # scheduled and serialized to the DB
+    while i < 4:
+        res = p1.stdout.readline().strip()
+        log.debug(f"App output: {res}")
+        m = re.match("COUNT: (\d+)", res)
+        if m:
+            log.debug(f"Got count: {m.group(1)}")
+            if int(m.group(1)) != i:
+                log.error(f"Unexpected output from app, got {res} but expected {i}")
+                return False
+            i += 1
+
+    log.debug("Waiting somewhat")
+    time.sleep(0.3)
+    log.debug("Killing application")
+    p1.terminate()
+    p1.wait()
+    log.debug("App dead")
+
+    # Start app again
+    log.debug(f"Starting application again: {' '.join(cmd)}")
+    p2 = subprocess.Popen(cmd, stdout=subprocess.PIPE, universal_newlines=True)
+    while True:
+        res = p2.stdout.readline().strip()
+        log.debug(f"App output: {res}")
+        if res == '':
+            log.error(f"Got no output, app dead?")
+            break
+        m = re.match("COUNT: (\d+)", res)
+        if m:
+            if int(m.group(1)) == i:
+                log.info(f"App resumed perfectly at {i}")
+                break
+            elif int(m.group(1)) == i-1:
+                log.info(f"Got higher than {i-1}, deemed ok but seems we failed to snapshot last count?")
+                break
+            else:
+                log.error(f"Unexpected output from app, got {res} but expected {i}")
+                return False
+
+    log.debug("Waiting for app to exit..")
+    p2.wait()
+    log.debug("App exited")
+
+    return True
 
 
 
 if __name__ == '__main__':
     import argparse
     parser = argparse.ArgumentParser()
-    parser.add_argument("--app")
     parser.add_argument("--db-nodes", type=int, default=3)
     parser.add_argument("--repeat", type=int, default=1)
+    parser.add_argument("--test-app", action="store_true")
+    parser.add_argument("--test-recovery", action="store_true")
     args = parser.parse_args()
 
     # set logging format
@@ -182,8 +205,8 @@ if __name__ == '__main__':
         if not dbc.start():
             allgood = False
 
-        if args.app:
-            cmd = [args.app, "--rts-verbose", "--rts-ddb-host", "localhost", "--rts-ddb-replication", str(args.db_nodes)]
+        if args.test_app:
+            cmd = ["./test_db_app", "--rts-verbose", "--rts-ddb-host", "127.0.0.1", "--rts-ddb-replication", str(args.db_nodes)]
             log.debug(f"Starting application: {' '.join(cmd)}")
             res = subprocess.run(cmd, capture_output=True)
             if re.search("No quorum", res.stderr.decode(locale.getpreferredencoding(False))):
@@ -191,10 +214,18 @@ if __name__ == '__main__':
             elif res.returncode == 0:
                 log.debug("Application exited successfully")
             else:
-                log.error("Non-0 return code:", res)
+                log.error(f"Non-0 return code: {res}")
+                allgood = False
+
+        if args.test_recovery:
+            if not test_app_recovery(args.db_nodes):
                 allgood = False
 
         if not dbc.stop():
+            log.error("Something went wrong stopping DB Cluster")
             allgood = False
 
-    sys.exit(allgood)
+    if allgood:
+        sys.exit(0)
+    else:
+        sys.exit(1)
