@@ -20,7 +20,7 @@ ddb-tests:
 	$(MAKE) $(DDB_TESTS)
 
 DDB_TESTS=test_db_membership test_db_app test_db_app_recovery
-.PHONY: test_db_membership test_db_app test_db_app_recovery
+.PHONY: $(DDB_TESTS)
 # Starts up a database cluster and checks membership looks ok.
 test_db_membership:
 	./test_db.py --db-nodes 3

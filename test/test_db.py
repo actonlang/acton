@@ -176,15 +176,93 @@ def test_app_recovery(db_nodes):
     return True
 
 
+def run_cmd(cmd, cb_so=None, cb_se=None, cb_end=None, state=None):
+    log.debug(f"Starting application: {' '.join(cmd)}")
+    p = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, universal_newlines=True)
+    os.set_blocking(p.stderr.fileno(), False)
+    os.set_blocking(p.stdout.fileno(), False)
+    done = False
+    while not done:
+        readfds = [p.stdout.fileno(), p.stderr.fileno()]
+        rds, _, _ = select.select(readfds, [], [])
+        for rd in rds:
+            if rd == p.stdout.fileno():
+                line = p.stdout.readline().strip()
+                if line == '':
+                    done = True
+                    log.info(f"End of process, from stdout: {line}")
+                    break
+                if cb_so:
+                    done = cb_so(line, p, state)
+            elif rd == p.stderr.fileno():
+                line = p.stderr.readline().strip()
+                if line == '':
+                    done = True
+                    log.info(f"End of process, from stderr: {line}")
+                    break
+                if cb_se:
+                    done = cb_se(line, p, state)
+    o, e = p.communicate()
+    for line in o:
+        if cb_so:
+            cb_so(line, p, state)
+    for line in e:
+        if cb_se:
+            cb_se(line, p, state)
+
+    if cb_end:
+        cb_end(p, state)
+
+    return p, state
+
+
+def test_app(replication_factor):
+    cmd = ["./test_db_app", "--rts-verbose", "--rts-ddb-host", "127.0.0.1", "--rts-ddb-replication", str(replication_factor)]
+
+    def so(line, p, s):
+        log.info(f"App output: {line}")
+        return False
+
+
+    def se(line, p, s):
+        print(f"App errput: {line}")
+
+        if re.search("ERROR", line):
+            log.error(f"ERROR: {line}")
+            return True
+
+        if re.search("No quorum", line):
+            log.error(f"DB Quorum error: {line}")
+            return True
+
+        return False
+
+
+    state = {}
+
+    p, s = run_cmd(cmd, so, se, state=state)
+
+    if p.returncode == 0:
+        log.debug("application exited successfully")
+        return True
+    else:
+        log.error(f"Non-0 return code: {p.returncode}")
+        return False
+
+
 
 if __name__ == '__main__':
     import argparse
     parser = argparse.ArgumentParser()
     parser.add_argument("--db-nodes", type=int, default=3)
+    parser.add_argument("--replication-factor", type=int)
     parser.add_argument("--repeat", type=int, default=1)
     parser.add_argument("--test-app", action="store_true")
     parser.add_argument("--test-recovery", action="store_true")
     args = parser.parse_args()
+
+    if args.replication_factor is None:
+        args.replication_factor = args.db_nodes
 
     # set logging format
     LOG_FORMAT = "%(asctime)s: %(module)-10s %(levelname)-8s %(message)s"
@@ -206,19 +284,19 @@ if __name__ == '__main__':
             allgood = False
 
         if args.test_app:
-            cmd = ["./test_db_app", "--rts-verbose", "--rts-ddb-host", "127.0.0.1", "--rts-ddb-replication", str(args.db_nodes)]
-            log.debug(f"Starting application: {' '.join(cmd)}")
-            res = subprocess.run(cmd, capture_output=True)
-            if re.search("No quorum", res.stderr.decode(locale.getpreferredencoding(False))):
-                log.error(f"DB Quorum error: {res}")
-            elif res.returncode == 0:
-                log.debug("Application exited successfully")
-            else:
-                log.error(f"Non-0 return code: {res}")
+            try:
+                if not test_app(args.replication_factor):
+                    allgood = False
+            except Exception as exc:
+                log.exception(exc)
                 allgood = False
 
         if args.test_recovery:
-            if not test_app_recovery(args.db_nodes):
+            try:
+                if not test_app_recovery(args.replication_factor):
+                    allgood = False
+            except Exception as exc:
+                log.exception(exc)
                 allgood = False
 
         if not dbc.stop():
