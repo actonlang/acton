@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+### Fixed
+- Corrected worker thread count message [#446]
+  - Previously, the log message (when using `--rts-verbose`) that shows the
+    number of worker threads used when there are few available CPU cores would
+    show the incorrect number (`0`) [#445]:
+    - `**RTS** Detected 2 CPUs: Using 0 worker threads, due to low CPU count. No CPU affinity used.`
+  - RTS was actually using 4 worker threads, as it should, but the log message
+    was wrong and has now been corrected.
+
+
 ## [0.7.4] (2022-01-06)
 
 ### Fixed
@@ -655,6 +665,8 @@ then, this second incarnation has been in focus and 0.2.0 was its first version.
 [#430]: https://github.com/actonlang/acton/pull/430
 [#432]: https://github.com/actonlang/acton/issues/432
 [#434]: https://github.com/actonlang/acton/pull/434
+[#445]: https://github.com/actonlang/acton/issues/445
+[#446]: https://github.com/actonlang/acton/pull/446
 [0.3.0]: https://github.com/actonlang/acton/releases/tag/v0.3.0
 [0.4.0]: https://github.com/actonlang/acton/compare/v0.3.0...v0.4.0
 [0.4.1]: https://github.com/actonlang/acton/compare/v0.4.0...v0.4.1

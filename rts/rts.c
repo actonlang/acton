@@ -1558,9 +1558,9 @@ int main(int argc, char **argv) {
     // Determine number of worker threads, normally 1:1 per CPU thread / core
     // For low core count systems we do a minimum of 4 worker threads
     if (num_wthreads < 4) {
-        rtsv_printf(LOGPFX "Detected %ld CPUs: Using %ld worker threads, due to low CPU count. No CPU affinity used.\n", num_cores, num_wthreads);
         num_wthreads = 4;
         cpu_pin = 0;
+        rtsv_printf(LOGPFX "Detected %ld CPUs: Using %ld worker threads, due to low CPU count. No CPU affinity used.\n", num_cores, num_wthreads);
     } else {
         rtsv_printf(LOGPFX "Detected %ld CPUs: Using %ld worker threads for 1:1 mapping with CPU affinity set.\n", num_cores, num_wthreads);
         cpu_pin = 1;
