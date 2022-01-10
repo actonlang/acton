@@ -2,7 +2,7 @@ actor main(env):
     var i = 0;
 
     def _work():
-        if i == 5:
+        if i == 4:
             await async env.exit(0)
         after 1: _work()
         i += 1

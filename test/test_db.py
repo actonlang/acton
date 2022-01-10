@@ -123,64 +123,74 @@ class DbCluster:
 def test_app_recovery(db_nodes):
     cmd = ["./test_db_recovery", "--rts-verbose", "--rts-ddb-host", "127.0.0.1", "--rts-ddb-replication", str(db_nodes)]
 
-    log.debug(f"Starting application: {' '.join(cmd)}")
-    p1 = subprocess.Popen(cmd, stdout=subprocess.PIPE, universal_newlines=True)
 
-    i = 1
-    # Wait for app to count to 1, which means it must have run 'after
-    # 1', i.e. a message through the timer queue and thus must have been
-    # scheduled and serialized to the DB
-    while i < 4:
-        res = p1.stdout.readline().strip()
-        log.debug(f"App output: {res}")
-        m = re.match("COUNT: (\d+)", res)
+    def se(line, p, s):
+        print(f"App errput: {line}")
+
+        if re.search("ERROR", line):
+            log.error(f"ERROR: {line}")
+            return True
+
+        if re.search("No quorum", line):
+            log.error(f"DB Quorum error: {line}")
+            return True
+
+        return False
+
+
+    def so1(line, p, s):
+        log.info(f"App output: {line}")
+        m = re.match("COUNT: (\d+)", line)
         if m:
             log.debug(f"Got count: {m.group(1)}")
-            if int(m.group(1)) != i:
-                log.error(f"Unexpected output from app, got {res} but expected {i}")
-                return False
-            i += 1
+            if int(m.group(1)) != s["i"]:
+                log.error(f"Unexpected output from app, got {line} but expected {i}")
+                return True
+            if s["i"] == 3:
+                log.debug("Waiting somewhat")
+                time.sleep(0.1)
+                log.debug("Killing application")
+                p.terminate()
+            s["i"] += 1
+        return False
 
-    log.debug("Waiting somewhat")
-    time.sleep(0.3)
-    log.debug("Killing application")
-    p1.terminate()
-    p1.wait()
-    log.debug("App dead")
-
-    # Start app again
-    log.debug(f"Starting application again: {' '.join(cmd)}")
-    p2 = subprocess.Popen(cmd, stdout=subprocess.PIPE, universal_newlines=True)
-    while True:
-        res = p2.stdout.readline().strip()
-        log.debug(f"App output: {res}")
-        if res == '':
-            log.error(f"Got no output, app dead?")
-            break
-        m = re.match("COUNT: (\d+)", res)
+    def so2(line, p, s):
+        log.info(f"App output: {line}")
+        m = re.match("COUNT: (\d+)", line)
         if m:
-            if int(m.group(1)) == i:
-                log.info(f"App resumed perfectly at {i}")
-                break
-            elif int(m.group(1)) == i-1:
-                log.info(f"Got higher than {i-1}, deemed ok but seems we failed to snapshot last count?")
-                break
+            log.debug(f"Got count: {m.group(1)}")
+            if int(m.group(1)) == s["i"]:
+                log.info(f"App resumed perfectly at {s['i']}")
+                return True
+            elif int(m.group(1)) == s["i"]-1:
+                log.info(f"Got higher than {s['i']-1}, deemed ok but seems we failed to snapshot last count?")
+                return True
             else:
-                log.error(f"Unexpected output from app, got {res} but expected {i}")
-                return False
+                log.error(f"Unexpected output from app, got {line} but expected {s['i']}")
+                return True
+            s["i"] += 1
+        return False
 
-    log.debug("Waiting for app to exit..")
-    p2.wait()
-    log.debug("App exited")
+    state = {
+        "i": 1
+    }
 
-    return True
+    p, s = run_cmd(cmd, so1, se, state=state)
+
+    p, s = run_cmd(cmd, so2, se, state=state)
+
+
+    if p.returncode == 0:
+        log.debug("Application exited successfully")
+        return True
+    else:
+        log.error(f"Non-0 return code: {p.returncode}")
+        return False
 
 
 def run_cmd(cmd, cb_so=None, cb_se=None, cb_end=None, state=None):
     log.debug(f"Starting application: {' '.join(cmd)}")
     p = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, universal_newlines=True)
-    os.set_blocking(p.stderr.fileno(), False)
-    os.set_blocking(p.stdout.fileno(), False)
     done = False
     while not done:
         readfds = [p.stdout.fileno(), p.stderr.fileno()]
@@ -203,10 +213,10 @@ def run_cmd(cmd, cb_so=None, cb_se=None, cb_end=None, state=None):
                 if cb_se:
                     done = cb_se(line, p, state)
     o, e = p.communicate()
-    for line in o:
+    for line in o.splitlines():
         if cb_so:
             cb_so(line, p, state)
-    for line in e:
+    for line in e.splitlines():
         if cb_se:
             cb_se(line, p, state)
 
