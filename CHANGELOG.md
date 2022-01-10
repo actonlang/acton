@@ -3,6 +3,12 @@
 ## Unreleased
 
 ### Fixed
+- Only do CPU affinity when there are as many worker threads as CPU cores [#447]
+  - `--rts-wthreads` can be used to specify the number of worker threads and if
+    that number does not align with the number of CPU cores in the machine, we
+    will not do CPU pinning
+  - Previously, the worker threads that overlapped with available CPU cores
+    would be pinned whereas the rest would go unpinned.
 - Corrected worker thread count message [#446]
   - Previously, the log message (when using `--rts-verbose`) that shows the
     number of worker threads used when there are few available CPU cores would
@@ -667,6 +673,7 @@ then, this second incarnation has been in focus and 0.2.0 was its first version.
 [#434]: https://github.com/actonlang/acton/pull/434
 [#445]: https://github.com/actonlang/acton/issues/445
 [#446]: https://github.com/actonlang/acton/pull/446
+[#447]: https://github.com/actonlang/acton/pull/447
 [0.3.0]: https://github.com/actonlang/acton/releases/tag/v0.3.0
 [0.4.0]: https://github.com/actonlang/acton/compare/v0.3.0...v0.4.0
 [0.4.1]: https://github.com/actonlang/acton/compare/v0.4.0...v0.4.1

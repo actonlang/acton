@@ -1435,7 +1435,7 @@ int main(int argc, char **argv) {
     int ddb_port = 32000;
     int ddb_replication = 3;
     int new_argc = argc;
-    int cpu_pin = 0;
+    int cpu_pin;
     long num_cores = sysconf(_SC_NPROCESSORS_ONLN);
     num_wthreads = num_cores;
 
@@ -1561,9 +1561,12 @@ int main(int argc, char **argv) {
         num_wthreads = 4;
         cpu_pin = 0;
         rtsv_printf(LOGPFX "Detected %ld CPUs: Using %ld worker threads, due to low CPU count. No CPU affinity used.\n", num_cores, num_wthreads);
-    } else {
-        rtsv_printf(LOGPFX "Detected %ld CPUs: Using %ld worker threads for 1:1 mapping with CPU affinity set.\n", num_cores, num_wthreads);
+    } else if (num_wthreads == num_cores) {
         cpu_pin = 1;
+        rtsv_printf(LOGPFX "Detected %ld CPUs: Using %ld worker threads for 1:1 mapping with CPU affinity set.\n", num_cores, num_wthreads);
+    } else {
+        cpu_pin = 0;
+        rtsv_printf(LOGPFX "Detected %ld CPUs: Using %ld worker threads. No CPU affinity used.\n", num_cores, num_wthreads);
     }
 
     // Zeroize statistics
