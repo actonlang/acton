@@ -1465,7 +1465,7 @@ void *$mon_socket_loop() {
     pthread_setname_np(pthread_self(), "Monitor Socket");
 #endif
 
-    int s, s2, t, len;
+    int s, s2, len;
     struct sockaddr_un local, remote;
     char q[100];
 
@@ -1489,7 +1489,7 @@ void *$mon_socket_loop() {
     }
 
     for(;;) {
-        t = sizeof(remote);
+        socklen_t t = sizeof(remote);
         if ((s2 = accept(s, (struct sockaddr *)&remote, &t)) == -1) {
             perror("accept");
             exit(1);
