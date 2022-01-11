@@ -173,7 +173,7 @@ def test_app_recovery(db_nodes):
 
 
 def stderr_checker(line, p, s):
-    print(f"App stderr: {line}")
+    log.info(f"App stderr: {line}")
 
     if re.search("ERROR", line):
         raise ValueError(f"ERROR: {line}")
@@ -208,12 +208,13 @@ def run_cmd(cmd, cb_so=None, cb_se=None, cb_end=None, state=None):
             break
 
     o, e = p.communicate()
-    for line in o.splitlines():
-        if cb_so:
-            cb_so(line, p, state)
-    for line in e.splitlines():
-        if cb_se:
-            cb_se(line, p, state)
+    log.info(f"p.communicate(): {o}  {e}")
+#    for line in o.splitlines():
+#        if cb_so:
+#            cb_so(line, p, state)
+#    for line in e.splitlines():
+#        if cb_se:
+#            cb_se(line, p, state)
 
     if cb_end:
         cb_end(p, state)
