@@ -19,11 +19,27 @@ regression:
 ddb-tests:
 	$(MAKE) $(DDB_TESTS)
 
-DDB_TESTS=test_db_membership test_db_app test_db_app_recovery
+#DDB_TESTS=test_db_membership test_db_app test_db_app_recovery
+DDB_TESTS=test_db_foo
 .PHONY: $(DDB_TESTS)
 # Starts up a database cluster and checks membership looks ok.
 test_db_membership:
 	./test_db.py --db-nodes 3 --repeat 10
+
+test_db_foo:
+	for I in $$(seq 10); do \
+		echo "\n\n-- Round $${I}"; \
+		$(MAKE) test_db_one; \
+	done
+
+test_db_one:
+	$(ACTONC) --root main test_db_app.act
+	@date
+	-pkill actondb
+	$(DDB_SERVER) -p 32000 -m 34000 -s 127.0.0.1:34000 >db1.log 2>&1 &
+	-./test_db_app --rts-verbose --rts-ddb-host 127.0.0.1 --rts-ddb-replication 1
+	-pkill actondb
+	@date
 
 # Starts up a database cluster, checks membership is ok before proceeding to run
 # a simple app. We do not really verify that the RTS uses the database - we
