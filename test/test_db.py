@@ -148,13 +148,10 @@ def test_app_recovery(db_nodes):
             log.debug(f"Got count: {m.group(1)}")
             if int(m.group(1)) == s["i"]:
                 log.info(f"App resumed perfectly at {s['i']}")
-                return True
             elif int(m.group(1)) == s["i"]-1:
                 log.info(f"Got higher than {s['i']-1}, deemed ok but seems we failed to snapshot last count?")
-                return True
             else:
-                log.error(f"Unexpected output from app, got {line} but expected {s['i']}")
-                return True
+                raise ValueError(f"Unexpected output from app, got {line} but expected {s['i']}")
             s["i"] += 1
         return False
 
@@ -200,11 +197,12 @@ def run_cmd(cmd, cb_so=None, cb_se=None, cb_end=None, state=None):
             if rd == p.stdout.fileno():
                 line = p.stdout.readline().strip()
                 if cb_so:
-                    done = cb_so(line, p, state)
+                    cb_so(line, p, state)
             elif rd == p.stderr.fileno():
                 line = p.stderr.readline().strip()
                 if cb_se:
-                    done = cb_se(line, p, state)
+                    cb_se(line, p, state)
+
         if p.poll() != None:
             log.info("End of process...")
             break
