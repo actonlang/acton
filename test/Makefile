@@ -23,18 +23,18 @@ DDB_TESTS=test_db_membership test_db_app test_db_app_recovery
 .PHONY: $(DDB_TESTS)
 # Starts up a database cluster and checks membership looks ok.
 test_db_membership:
-	./test_db.py --db-nodes 3
+	./test_db.py --db-nodes 3 --repeat 10
 
 # Starts up a database cluster, checks membership is ok before proceeding to run
 # a simple app. We do not really verify that the RTS uses the database - we
 # assume it does and would fail catastrohpically if it encounters an error.
 test_db_app:
 	$(ACTONC) --root main test_db_app.act
-	./test_db.py --db-nodes 3 --test-app
+	./test_db.py --db-nodes 3 --test-app --repeat 10
 
 test_db_app_recovery:
 	$(ACTONC) --root main test_db_recovery.act
-	./test_db.py --db-nodes 1 --test-recovery
+	./test_db.py --db-nodes 1 --test-recovery --repeat 10
 
 
 # -- RTS --
