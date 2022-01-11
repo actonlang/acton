@@ -1461,7 +1461,7 @@ int main(int argc, char **argv) {
     // With buffered output, we don't see the output when we need to.
     // We should decide on how to do this in a better way, like leaving it to
     // the user? See https://github.com/actonlang/acton/issues/439
-    setbuf(stdout, NULL);
+    //setbuf(stdout, NULL);
 
     /*
      * A note on argument parsing: The RTS has its own command line arguments,
