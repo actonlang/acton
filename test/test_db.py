@@ -44,16 +44,21 @@ class Db:
     def start(self):
         args = [ACTONDB, "-p", f"32{self.idx:03d}", "-m", f"34{self.idx:03d}",
                 "-s", "127.0.0.1:34000"]
-        self.p = subprocess.Popen(
-            [ACTONDB, "-p", f"32{self.idx:03d}", "-m", f"34{self.idx:03d}", "-s", "127.0.0.1:34000"],
-            stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-        os.set_blocking(self.p.stdout.fileno(), False)
+#        self.p = subprocess.Popen(
+#            [ACTONDB, "-p", f"32{self.idx:03d}", "-m", f"34{self.idx:03d}", "-s", "127.0.0.1:34000"],
+#            stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        with open(f"db{self.idx}.log", "w") as outfile:
+            self.p = subprocess.Popen(
+                [ACTONDB, "-p", f"32{self.idx:03d}", "-m", f"34{self.idx:03d}", "-s", "127.0.0.1:34000"],
+                stdout=outfile
+            )
+        #os.set_blocking(self.p.stdout.fileno(), False)
 
-        while True:
-            line = self.p.stdout.readline().decode(locale.getpreferredencoding(False)).strip()
-            if re.match("SERVER: Started", line):
-                self.running = True
-                break
+#        while True:
+#            line = self.p.stdout.readline().decode(locale.getpreferredencoding(False)).strip()
+#            if re.match("SERVER: Started", line):
+#                self.running = True
+#                break
 
 
     def stop(self):
@@ -96,20 +101,20 @@ class DbCluster:
             self.dbs.append(dbn)
 
             # Now go through all existing nodes and ensure all have new membership
-            expected = None
-            for db in self.dbs:
-                mbs = db.await_membership()
-                #log.debug(f"Membership info for {db}: {mbs}")
-                if expected is None:
-                    log.debug(f"Using Membership info from {db} as expected")
-                    expected = mbs
-                else:
-                    if mbs == expected:
-                        log.debug(f"Membership info for {db} is as expected")
-                        pass
-                    else:
-                        log.error(f"Membership info for {db} seems incorrect")
-                        allgood = False
+#            expected = None
+#            for db in self.dbs:
+#                mbs = db.await_membership()
+#                #log.debug(f"Membership info for {db}: {mbs}")
+#                if expected is None:
+#                    log.debug(f"Using Membership info from {db} as expected")
+#                    expected = mbs
+#                else:
+#                    if mbs == expected:
+#                        log.debug(f"Membership info for {db} is as expected")
+#                        pass
+#                    else:
+#                        log.error(f"Membership info for {db} seems incorrect")
+#                        allgood = False
         return allgood
 
 
