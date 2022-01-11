@@ -37,11 +37,11 @@ test_db_foo:
 	done
 
 test_db_one:
-	$(ACTONC) --root main test_db_app.act
+	$(ACTONC) --root main --dev test_db_app.act
 	@date
 	-pkill actondb
 	$(DDB_SERVER) -p 32000 -m 34000 -s 127.0.0.1:34000 >db1.log 2>&1 &
-	-./test_db_app --rts-verbose --rts-ddb-host 127.0.0.1 --rts-ddb-replication 1
+	-./test_db_app --rts-verbose --rts-debug --rts-ddb-host 127.0.0.1 --rts-ddb-replication 1
 	-pkill actondb
 	@date
 

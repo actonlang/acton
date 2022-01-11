@@ -1189,6 +1189,7 @@ void *main_loop(void *idx) {
 
             clock_gettime(CLOCK_MONOTONIC, &ts2);
             long long int diff = (ts2.tv_sec * 1000000000 + ts2.tv_nsec) - (ts1.tv_sec * 1000000000 + ts1.tv_nsec);
+            rtsd_printf(LOGPFX "## TIME actor %ld : %lld\n", current->$globkey, diff);
 
             wt_stats[(int)idx].conts_count++;
             wt_stats[(int)idx].conts_sum += diff;
@@ -1285,6 +1286,7 @@ void *main_loop(void *idx) {
             }
             clock_gettime(CLOCK_MONOTONIC, &ts3);
             diff = (ts3.tv_sec * 1000000000 + ts3.tv_nsec) - (ts2.tv_sec * 1000000000 + ts2.tv_nsec);
+            rtsd_printf(LOGPFX "## TIME overhead %ld: %lld\n", current->$globkey, diff);
             wt_stats[(int)idx].bkeep_count++;
             wt_stats[(int)idx].bkeep_sum += diff;
 
