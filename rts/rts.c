@@ -1351,8 +1351,13 @@ void $register_rts () {
  
 ////////////////////////////////////////////////////////////////////////////////////////
 
-void *$mon_loop(void *appname) {
-    rtsv_printf("Starting monitor listen on %s\n", rts_mon_path);
+
+const char* stats_to_json (void *appname) {
+    yyjson_mut_doc *doc = yyjson_mut_doc_new(NULL);
+    yyjson_mut_val *root = yyjson_mut_obj(doc);
+    yyjson_mut_doc_set_root(doc, root);
+
+    yyjson_mut_obj_add_str(doc, root, "name", appname);
 
 #if defined(IS_MACOS)
     pthread_setname_np("Monitor Socket");
@@ -1362,6 +1367,51 @@ void *$mon_loop(void *appname) {
 
 
     pid_t pid = getpid();
+    yyjson_mut_obj_add_int(doc, root, "pid", pid);
+
+    yyjson_mut_val *j_stat = yyjson_mut_obj(doc);
+    yyjson_mut_obj_add_val(doc, root, "wt", j_stat);
+    for (unsigned int i = 0; i < num_wthreads; i++) {
+        yyjson_mut_val *j_wt = yyjson_mut_obj(doc);
+        yyjson_mut_obj_add_val(doc, j_stat, wt_stats[i].key, j_wt);
+        yyjson_mut_obj_add_str(doc, j_wt, "state",       WT_State_name[wt_stats[i].state]);
+        yyjson_mut_obj_add_int(doc, j_wt, "sleeps",      wt_stats[i].sleeps);
+        yyjson_mut_obj_add_int(doc, j_wt, "conts_count", wt_stats[i].conts_count);
+        yyjson_mut_obj_add_int(doc, j_wt, "conts_sum",   wt_stats[i].conts_sum);
+        yyjson_mut_obj_add_int(doc, j_wt, "conts_100ns", wt_stats[i].conts_100ns);
+        yyjson_mut_obj_add_int(doc, j_wt, "conts_1us",   wt_stats[i].conts_1us);
+        yyjson_mut_obj_add_int(doc, j_wt, "conts_10us",  wt_stats[i].conts_10us);
+        yyjson_mut_obj_add_int(doc, j_wt, "conts_100us", wt_stats[i].conts_100us);
+        yyjson_mut_obj_add_int(doc, j_wt, "conts_1ms",   wt_stats[i].conts_1ms);
+        yyjson_mut_obj_add_int(doc, j_wt, "conts_10ms",  wt_stats[i].conts_10ms);
+        yyjson_mut_obj_add_int(doc, j_wt, "conts_100ms", wt_stats[i].conts_100ms);
+        yyjson_mut_obj_add_int(doc, j_wt, "conts_1s",    wt_stats[i].conts_1s);
+        yyjson_mut_obj_add_int(doc, j_wt, "conts_10s",   wt_stats[i].conts_10s);
+        yyjson_mut_obj_add_int(doc, j_wt, "conts_100s",  wt_stats[i].conts_100s);
+        yyjson_mut_obj_add_int(doc, j_wt, "conts_inf",   wt_stats[i].conts_inf);
+        yyjson_mut_obj_add_int(doc, j_wt, "bkeep_count", wt_stats[i].bkeep_count);
+        yyjson_mut_obj_add_int(doc, j_wt, "bkeep_sum",   wt_stats[i].bkeep_sum);
+        yyjson_mut_obj_add_int(doc, j_wt, "bkeep_100ns", wt_stats[i].bkeep_100ns);
+        yyjson_mut_obj_add_int(doc, j_wt, "bkeep_1us",   wt_stats[i].bkeep_1us);
+        yyjson_mut_obj_add_int(doc, j_wt, "bkeep_10us",  wt_stats[i].bkeep_10us);
+        yyjson_mut_obj_add_int(doc, j_wt, "bkeep_100us", wt_stats[i].bkeep_100us);
+        yyjson_mut_obj_add_int(doc, j_wt, "bkeep_1ms",   wt_stats[i].bkeep_1ms);
+        yyjson_mut_obj_add_int(doc, j_wt, "bkeep_10ms",  wt_stats[i].bkeep_10ms);
+        yyjson_mut_obj_add_int(doc, j_wt, "bkeep_100ms", wt_stats[i].bkeep_100ms);
+        yyjson_mut_obj_add_int(doc, j_wt, "bkeep_1s",    wt_stats[i].bkeep_1s);
+        yyjson_mut_obj_add_int(doc, j_wt, "bkeep_10s",   wt_stats[i].bkeep_10s);
+        yyjson_mut_obj_add_int(doc, j_wt, "bkeep_100s",  wt_stats[i].bkeep_100s);
+        yyjson_mut_obj_add_int(doc, j_wt, "bkeep_inf",   wt_stats[i].bkeep_inf);
+    }
+
+    const char *json = yyjson_mut_write(doc, 0, NULL);
+    yyjson_mut_doc_free(doc);
+    return json;
+}
+
+
+void *$mon_loop(void *appname) {
+    rtsv_printf("Starting monitor listen on %s\n", rts_mon_path);
 
     int s, s2, t, len;
     struct sockaddr_un local, remote;
@@ -1402,52 +1452,9 @@ void *$mon_loop(void *appname) {
             }
 
             if (strncmp(q, "WTS", 3) == 0) {
-                yyjson_mut_doc *doc = yyjson_mut_doc_new(NULL);
-                yyjson_mut_val *root = yyjson_mut_obj(doc);
-                yyjson_mut_doc_set_root(doc, root);
-
-                yyjson_mut_obj_add_str(doc, root, "name", appname);
-                yyjson_mut_obj_add_int(doc, root, "pid", pid);
-
-                yyjson_mut_val *j_stat = yyjson_mut_obj(doc);
-                yyjson_mut_obj_add_val(doc, root, "wt", j_stat);
-                for (unsigned int i = 0; i < num_wthreads; i++) {
-                    yyjson_mut_val *j_wt = yyjson_mut_obj(doc);
-                    yyjson_mut_obj_add_val(doc, j_stat, wt_stats[i].key, j_wt);
-                    yyjson_mut_obj_add_str(doc, j_wt, "state",       WT_State_name[wt_stats[i].state]);
-                    yyjson_mut_obj_add_int(doc, j_wt, "sleeps",      wt_stats[i].sleeps);
-                    yyjson_mut_obj_add_int(doc, j_wt, "conts_count", wt_stats[i].conts_count);
-                    yyjson_mut_obj_add_int(doc, j_wt, "conts_sum",   wt_stats[i].conts_sum);
-                    yyjson_mut_obj_add_int(doc, j_wt, "conts_100ns", wt_stats[i].conts_100ns);
-                    yyjson_mut_obj_add_int(doc, j_wt, "conts_1us",   wt_stats[i].conts_1us);
-                    yyjson_mut_obj_add_int(doc, j_wt, "conts_10us",  wt_stats[i].conts_10us);
-                    yyjson_mut_obj_add_int(doc, j_wt, "conts_100us", wt_stats[i].conts_100us);
-                    yyjson_mut_obj_add_int(doc, j_wt, "conts_1ms",   wt_stats[i].conts_1ms);
-                    yyjson_mut_obj_add_int(doc, j_wt, "conts_10ms",  wt_stats[i].conts_10ms);
-                    yyjson_mut_obj_add_int(doc, j_wt, "conts_100ms", wt_stats[i].conts_100ms);
-                    yyjson_mut_obj_add_int(doc, j_wt, "conts_1s",    wt_stats[i].conts_1s);
-                    yyjson_mut_obj_add_int(doc, j_wt, "conts_10s",   wt_stats[i].conts_10s);
-                    yyjson_mut_obj_add_int(doc, j_wt, "conts_100s",  wt_stats[i].conts_100s);
-                    yyjson_mut_obj_add_int(doc, j_wt, "conts_inf",   wt_stats[i].conts_inf);
-                    yyjson_mut_obj_add_int(doc, j_wt, "bkeep_count", wt_stats[i].bkeep_count);
-                    yyjson_mut_obj_add_int(doc, j_wt, "bkeep_sum",   wt_stats[i].bkeep_sum);
-                    yyjson_mut_obj_add_int(doc, j_wt, "bkeep_100ns", wt_stats[i].bkeep_100ns);
-                    yyjson_mut_obj_add_int(doc, j_wt, "bkeep_1us",   wt_stats[i].bkeep_1us);
-                    yyjson_mut_obj_add_int(doc, j_wt, "bkeep_10us",  wt_stats[i].bkeep_10us);
-                    yyjson_mut_obj_add_int(doc, j_wt, "bkeep_100us", wt_stats[i].bkeep_100us);
-                    yyjson_mut_obj_add_int(doc, j_wt, "bkeep_1ms",   wt_stats[i].bkeep_1ms);
-                    yyjson_mut_obj_add_int(doc, j_wt, "bkeep_10ms",  wt_stats[i].bkeep_10ms);
-                    yyjson_mut_obj_add_int(doc, j_wt, "bkeep_100ms", wt_stats[i].bkeep_100ms);
-                    yyjson_mut_obj_add_int(doc, j_wt, "bkeep_1s",    wt_stats[i].bkeep_1s);
-                    yyjson_mut_obj_add_int(doc, j_wt, "bkeep_10s",   wt_stats[i].bkeep_10s);
-                    yyjson_mut_obj_add_int(doc, j_wt, "bkeep_100s",  wt_stats[i].bkeep_100s);
-                    yyjson_mut_obj_add_int(doc, j_wt, "bkeep_inf",   wt_stats[i].bkeep_inf);
-                }
-
-                const char *json = yyjson_mut_write(doc, 0, NULL);
+                const char *json = stats_to_json(appname);
                 int send_res = send(s2, json, strlen(json), 0);
                 free((void *)json);
-                yyjson_mut_doc_free(doc);
                 if (send_res < 0) {
                     perror("send");
                     break;
@@ -1705,7 +1712,7 @@ int main(int argc, char **argv) {
 
     // eventloop + pin to CPU 0
     pthread_create(&threads[num_threads], NULL, $eventloop, (void*)num_threads);
-    if (cpu_pin == 1) {
+    if (cpu_pin) {
         CPU_ZERO(&cpu_set);
         CPU_SET(0, &cpu_set);
         pthread_setaffinity_np(threads[num_threads], sizeof(cpu_set), &cpu_set);
