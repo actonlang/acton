@@ -31,6 +31,10 @@ test_db_foo:
 		echo "\n\n-- Round $${I}"; \
 		$(MAKE) test_db_one; \
 	done
+	for I in $$(seq 10); do \
+		echo "\n\n-- Round $${I}"; \
+		$(MAKE) test_db_two; \
+	done
 
 test_db_one:
 	$(ACTONC) --root main test_db_app.act
@@ -38,6 +42,15 @@ test_db_one:
 	-pkill actondb
 	$(DDB_SERVER) -p 32000 -m 34000 -s 127.0.0.1:34000 >db1.log 2>&1 &
 	-./test_db_app --rts-verbose --rts-ddb-host 127.0.0.1 --rts-ddb-replication 1
+	-pkill actondb
+	@date
+
+test_db_two:
+	$(ACTONC) --root main test_db_app.act
+	@date
+	-pkill actondb
+	$(DDB_SERVER) -p 32000 -m 34000 -s 127.0.0.1:34000 >db1.log 2>&1 &
+	-./test_db_app --rts-verbose
 	-pkill actondb
 	@date
 
