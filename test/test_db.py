@@ -124,20 +124,6 @@ def test_app_recovery(db_nodes):
     cmd = ["./test_db_recovery", "--rts-verbose", "--rts-ddb-host", "127.0.0.1", "--rts-ddb-replication", str(db_nodes)]
 
 
-    def se(line, p, s):
-        print(f"App errput: {line}")
-
-        if re.search("ERROR", line):
-            log.error(f"ERROR: {line}")
-            return True
-
-        if re.search("No quorum", line):
-            log.error(f"DB Quorum error: {line}")
-            return True
-
-        return False
-
-
     def so1(line, p, s):
         log.info(f"App output: {line}")
         m = re.match("COUNT: (\d+)", line)
@@ -152,6 +138,7 @@ def test_app_recovery(db_nodes):
                 log.debug("Killing application")
                 p.terminate()
             s["i"] += 1
+
         return False
 
     def so2(line, p, s):
@@ -175,9 +162,9 @@ def test_app_recovery(db_nodes):
         "i": 1
     }
 
-    p, s = run_cmd(cmd, so1, se, state=state)
+    p, s = run_cmd(cmd, so1, stderr_checker, state=state)
 
-    p, s = run_cmd(cmd, so2, se, state=state)
+    p, s = run_cmd(cmd, so2, stderr_checker, state=state)
 
 
     if p.returncode == 0:
@@ -186,6 +173,18 @@ def test_app_recovery(db_nodes):
     else:
         log.error(f"Non-0 return code: {p.returncode}")
         return False
+
+
+def stderr_checker(line, p, s):
+    print(f"App stderr: {line}")
+
+    if re.search("ERROR", line):
+        raise ValueError(f"ERROR: {line}")
+
+    if re.search("No quorum", line):
+        raise ValueError(f"DB Quorum error: {line}")
+
+    return False
 
 
 def run_cmd(cmd, cb_so=None, cb_se=None, cb_end=None, state=None):
@@ -234,23 +233,9 @@ def test_app(replication_factor):
         return False
 
 
-    def se(line, p, s):
-        print(f"App errput: {line}")
-
-        if re.search("ERROR", line):
-            log.error(f"ERROR: {line}")
-            return True
-
-        if re.search("No quorum", line):
-            log.error(f"DB Quorum error: {line}")
-            return True
-
-        return False
-
-
     state = {}
 
-    p, s = run_cmd(cmd, so, se, state=state)
+    p, s = run_cmd(cmd, so, stderr_checker, state=state)
 
     if p.returncode == 0:
         log.debug("application exited successfully")
