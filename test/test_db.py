@@ -199,20 +199,16 @@ def run_cmd(cmd, cb_so=None, cb_se=None, cb_end=None, state=None):
         for rd in rds:
             if rd == p.stdout.fileno():
                 line = p.stdout.readline().strip()
-                if line == '':
-                    done = True
-                    log.info(f"End of process, from stdout: {line}")
-                    break
                 if cb_so:
                     done = cb_so(line, p, state)
             elif rd == p.stderr.fileno():
                 line = p.stderr.readline().strip()
-                if line == '':
-                    done = True
-                    log.info(f"End of process, from stderr: {line}")
-                    break
                 if cb_se:
                     done = cb_se(line, p, state)
+        if p.poll() != None:
+            log.info("End of process...")
+            break
+
     o, e = p.communicate()
     for line in o.splitlines():
         if cb_so:
