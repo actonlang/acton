@@ -123,7 +123,6 @@ class DbCluster:
 def test_app_recovery(db_nodes):
     cmd = ["./test_db_recovery", "--rts-verbose", "--rts-ddb-host", "127.0.0.1", "--rts-ddb-replication", str(db_nodes)]
 
-
     def so1(line, p, s):
         log.info(f"App output: {line}")
         m = re.match("COUNT: (\d+)", line)
@@ -175,6 +174,9 @@ def test_app_recovery(db_nodes):
 def stderr_checker(line, p, s):
     log.info(f"App stderr: {line}")
 
+    if re.search("Assertion", line):
+        raise ValueError(f"Got an assertion: {line}")
+
     if re.search("ERROR", line):
         raise ValueError(f"ERROR: {line}")
 
@@ -193,12 +195,14 @@ def run_cmd(cmd, cb_so=None, cb_se=None, cb_end=None, state=None):
     while not done:
         readfds = [p.stdout.fileno(), p.stderr.fileno()]
         rds, _, _ = select.select(readfds, [], [])
+
         for rd in rds:
             if rd == p.stdout.fileno():
                 line = p.stdout.readline().strip()
                 if cb_so:
                     cb_so(line, p, state)
-            elif rd == p.stderr.fileno():
+
+            if rd == p.stderr.fileno():
                 line = p.stderr.readline().strip()
                 if cb_se:
                     cb_se(line, p, state)
@@ -227,8 +231,6 @@ def test_app(replication_factor):
 
     def so(line, p, s):
         log.info(f"App output: {line}")
-        return False
-
 
     state = {}
 

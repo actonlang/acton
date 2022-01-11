@@ -1,3 +1,5 @@
+import time
+
 actor main(env):
     var i = 0;
 
@@ -6,6 +8,6 @@ actor main(env):
             await async env.exit(0)
         after 1: _work()
         i += 1
-        print("COUNT:", i)
+        print("COUNT:", i, int(time.time()))
 
     _work()

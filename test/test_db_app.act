@@ -5,23 +5,23 @@
 #
 # main -> Foo."init" -> timerQ after 0 -> Foo.callback() -> main.final() -> exit
 
+import time
 
 actor Foo(cb_method):
     def callback():
-        print("Calling cb_method()")
+        print("Calling cb_method()", int(time.time()))
         cb_method()
 
-    print("Scheduling after 0")
+    print("Scheduling after 0", int(time.time()))
     after 0: callback()
 
 actor main(env):
     def final():
-        print("In final method")
-        print("exiting...")
+        print("In final method, exiting...", int(time.time()))
         await async env.exit(0)
 
     def test():
-        print("Creating Foo() instance")
+        print("Creating Foo() instance", int(time.time()))
         f = Foo(final)
 
     test()
