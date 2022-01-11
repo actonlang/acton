@@ -190,8 +190,8 @@ def stderr_checker(line, p, s):
 def run_cmd(cmd, cb_so=None, cb_se=None, cb_end=None, state=None):
     log.debug(f"Starting application: {' '.join(cmd)}")
     p = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, universal_newlines=True)
-    os.set_blocking(p.stderr.fileno(), False)
-    os.set_blocking(p.stdout.fileno(), False)
+#    os.set_blocking(p.stderr.fileno(), False)
+#    os.set_blocking(p.stdout.fileno(), False)
     done = False
     while not done:
         readfds = [p.stdout.fileno(), p.stderr.fileno()]
