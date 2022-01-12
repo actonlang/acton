@@ -893,7 +893,7 @@ $ROW extract_row($WORD *blob, size_t blob_size) {
 void print_rows($ROW row) {
     int n = 0;
     while (row) {
-        rtsd_printf(LOGPFX "--- %d: class_id %d, blob_size: %d, blob: ", n, row->class_id, row->blob_size);
+        rtsd_printf(LOGPFX "--- %2d: class_id %6d, blob_size: %3d, blob: ", n, row->class_id, row->blob_size);
         for (int i = 0; i < row->blob_size; i++)
             rtsd_printf("%ld ", (long)row->blob[i]);
         rtsd_printf(".\n");
