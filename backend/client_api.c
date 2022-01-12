@@ -576,6 +576,13 @@ int wait_on_msg_callback(msg_callback * mc, remote_db_t * db)
 
 	int ret = pthread_mutex_lock(mc->lock);
 
+	if(mc->no_replies >= db->quorum_size)
+	// Enough replies arrived already
+	{
+		pthread_mutex_unlock(mc->lock);
+		return 0;
+	}
+
 	struct timespec ts;
 	clock_gettime(CLOCK_REALTIME, &ts);
 	ts.tv_sec += db->rpc_timeout;
