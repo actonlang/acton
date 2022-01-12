@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Added
+- Threads are now named, making it easier to debug [#457]
+  - "IO", "Mon Socket" and "Worker X" are the currently used names
+
 ### Fixed
 - Only do CPU affinity when there are as many worker threads as CPU cores [#447]
   - `--rts-wthreads` can be used to specify the number of worker threads and if
@@ -16,6 +20,13 @@
     - `**RTS** Detected 2 CPUs: Using 0 worker threads, due to low CPU count. No CPU affinity used.`
   - RTS was actually using 4 worker threads, as it should, but the log message
     was wrong and has now been corrected.
+- Corrected actual number of worker threads [#457]
+  - While we computed the correct number of worker threads to use, when creating
+    the threads we completely failed to use that computed value and instead
+    unconditionally spawned as many worker threads as there CPU cores.
+  - There was also an off-by-one error on the number of worker threads.
+  - This has all been corrected so the correct number of worker threads is now
+    created and there is a test case to prove it.
 
 
 ## [0.7.4] (2022-01-06)
