@@ -89,7 +89,7 @@ static const char *WT_State_name[] = {"poof", "work", "idle", "sleep"};
  * RTS Verbose Printf = rtsv_printf
  * RTS Debug Printf   = rtsd_printf
  */
-#define LOGPFX "**RTS** "
+#define LOGPFX "#RTS# "
 #define rtsv_printf(...) if (rts_verbose) printf(__VA_ARGS__)
 
 #ifdef DEV
