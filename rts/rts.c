@@ -1658,13 +1658,15 @@ int main(int argc, char **argv) {
     cpu_set_t cpu_set;
 
     // Start worker threads
-    // number of threads is workers + (IO + mon)
-    pthread_t threads[num_wthreads + 2];
+    // number of threads is IO + (mon)? + Worker Threads
+    pthread_t threads[2 + num_wthreads];
     // Keep track of total number of threads, worker threads and then some...
-    int num_threads = num_wthreads;
+    // also used as current index into threads array
+    int num_threads = 0;
 
     // eventloop + pin to CPU 0
     pthread_create(&threads[num_threads], NULL, $eventloop, (void*)num_threads);
+    pthread_setname_np(threads[num_threads], "IO");
     if (cpu_pin == 1) {
         CPU_ZERO(&cpu_set);
         CPU_SET(0, &cpu_set);
@@ -1672,9 +1674,10 @@ int main(int argc, char **argv) {
     }
     num_threads++;
 
-    // Monitor listen + pin to CPU 0
+    // RTS Monitor Socket + pin to CPU 0
     if (rts_mon_path) {
         pthread_create(&threads[num_threads], NULL, $mon_loop, (void*)argv[0]);
+        pthread_setname_np(threads[num_threads], "Monitor Socket");
         if (cpu_pin) {
             CPU_ZERO(&cpu_set);
             CPU_SET(0, &cpu_set);
@@ -1683,19 +1686,25 @@ int main(int argc, char **argv) {
         num_threads++;
     }
 
-    int total_threads = 0;
-    for(int idx = 0; idx <= num_cores; ++idx) {
-        pthread_create(&threads[idx], NULL, main_loop, (void*)idx);
+    // We start on index 1 for pretty names, like Worker 1 is first, not 0, plus
+    // when doing CPU affinity, we want to bind worker threads to CPU 1, so we
+    // can reuse idx for that
+    for(int idx = 1; idx <= num_wthreads; idx++) {
+        pthread_create(&threads[num_threads+idx], NULL, main_loop, (void*)idx);
+        char tname[11]; // Enough for "Worker XXX\0"
+        snprintf(tname, sizeof(tname), "Worker %d", idx);
+        pthread_setname_np(threads[num_threads+idx], tname);
         // Note how we pin thread index + 1, so worker thread 0 is on CPU 1
         // We use CPU 0 for misc threads, like IO / mon etc
         if (cpu_pin) {
             CPU_ZERO(&cpu_set);
-            CPU_SET(idx+1, &cpu_set);
-            pthread_setaffinity_np(threads[idx], sizeof(cpu_set), &cpu_set);
+            CPU_SET(idx, &cpu_set);
+            pthread_setaffinity_np(threads[num_threads+idx], sizeof(cpu_set), &cpu_set);
         }
     }
-    
-    for(int idx = 0; idx < num_threads; ++idx) {
+    num_threads = num_threads + num_wthreads;
+
+    for(int idx = 0; idx <= num_threads; ++idx) {
         pthread_join(threads[idx], NULL);
     }
     return 0;
