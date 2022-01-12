@@ -89,7 +89,7 @@ static const char *WT_State_name[] = {"poof", "work", "idle", "sleep"};
  * RTS Verbose Printf = rtsv_printf
  * RTS Debug Printf   = rtsd_printf
  */
-#define LOGPFX "**RTS** "
+#define LOGPFX "#RTS# "
 #define rtsv_printf(...) if (rts_verbose) printf(__VA_ARGS__)
 
 #ifdef DEV
@@ -893,10 +893,10 @@ $ROW extract_row($WORD *blob, size_t blob_size) {
 void print_rows($ROW row) {
     int n = 0;
     while (row) {
-        rtsd_printf(LOGPFX "--- %d: class_id %d, blob_size: %d, blob: ", n, row->class_id, row->blob_size);
+        rtsd_printf(LOGPFX "--- %2d: class_id %6d, blob_size: %3d, blob: ", n, row->class_id, row->blob_size);
         for (int i = 0; i < row->blob_size; i++)
-            rtsd_printf(LOGPFX "%ld ", (long)row->blob[i]);
-        rtsd_printf(LOGPFX ".\n");
+            rtsd_printf("%ld ", (long)row->blob[i]);
+        rtsd_printf(".\n");
         n++;
         row = row->next;
     }
@@ -1097,10 +1097,10 @@ void insert_row(long key, size_t total, $ROW row, $WORD table, uuid_t *txnid) {
     }
     BlobHd *end = (BlobHd*)p;
 
-    rtsd_printf(LOGPFX "## Built blob of size %ld\n", total);
-    for (int i = 0; i < total; i++) {
-        rtsd_printf(LOGPFX "%lu ", (unsigned long)blob[i]);
-    }
+    rtsd_printf(LOGPFX "## Built blob, size: %ld, blob: ", total);
+    for (int i = 0; i < total; i++)
+        rtsd_printf("%lu ", (unsigned long)blob[i]);
+    rtsd_printf(".\n");
 
     //printf("\n## Sanity check extract row:\n");
     //$ROW row1 = extract_row(blob, total*sizeof($WORD));
@@ -1649,12 +1649,12 @@ int main(int argc, char **argv) {
         rtsv_printf(LOGPFX "Checking for existing actor state in DDB... ");
         fflush(stdout);
         int no_items = remote_read_full_table_in_txn(&start_row, &end_row, ACTORS_TABLE, NULL, db);
-        rtsv_printf(LOGPFX "done\n");
+        rtsv_printf("done\n");
         if (no_items > 0) {
             rtsv_printf(LOGPFX "Found %d existing actors; Restoring actor state from DDB... ", no_items);
             fflush(stdout);
             deserialize_system(start_row);
-            rtsv_printf(LOGPFX "done\n");
+            rtsv_printf("done\n");
         } else {
             rtsv_printf(LOGPFX "No previous state in DDB; Initializing database...");
             fflush(stdout);
@@ -1663,7 +1663,7 @@ int main(int argc, char **argv) {
             create_db_queue(TIMER_QUEUE);
             timer_consume_hd = 0;
             BOOTSTRAP(new_argc, new_argv);
-            rtsv_printf(LOGPFX "done\n");
+            rtsv_printf("done\n");
         }
     } else {
         BOOTSTRAP(new_argc, new_argv);
