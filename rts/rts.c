@@ -1163,6 +1163,14 @@ void BOOTSTRAP(int argc, char *argv[]) {
 ////////////////////////////////////////////////////////////////////////////////////////
 
 void *main_loop(void *idx) {
+    char tname[11]; // Enough for "Worker XXX\0"
+    snprintf(tname, sizeof(tname), "Worker %d", (int)idx);
+#if defined(IS_MACOS)
+    pthread_setname_np(tname);
+#else
+    pthread_setname_np(pthread_self(), tname);
+#endif
+
     struct timespec ts1, ts2, ts3;
     while (1) {
         $Actor current = DEQ_ready();
@@ -1324,6 +1332,13 @@ void $register_rts () {
 
 void *$mon_loop(void *appname) {
     rtsv_printf("Starting monitor listen on %s\n", rts_mon_path);
+
+#if defined(IS_MACOS)
+    pthread_setname_np("Monitor Socket");
+#else
+    pthread_setname_np(pthread_self(), "Monitor Socket");
+#endif
+
 
     pid_t pid = getpid();
 
@@ -1666,7 +1681,6 @@ int main(int argc, char **argv) {
 
     // eventloop + pin to CPU 0
     pthread_create(&threads[num_threads], NULL, $eventloop, (void*)num_threads);
-    pthread_setname_np(threads[num_threads], "IO");
     if (cpu_pin == 1) {
         CPU_ZERO(&cpu_set);
         CPU_SET(0, &cpu_set);
@@ -1677,7 +1691,6 @@ int main(int argc, char **argv) {
     // RTS Monitor Socket + pin to CPU 0
     if (rts_mon_path) {
         pthread_create(&threads[num_threads], NULL, $mon_loop, (void*)argv[0]);
-        pthread_setname_np(threads[num_threads], "Monitor Socket");
         if (cpu_pin) {
             CPU_ZERO(&cpu_set);
             CPU_SET(0, &cpu_set);
@@ -1691,9 +1704,6 @@ int main(int argc, char **argv) {
     // can reuse idx for that
     for(int idx = 1; idx <= num_wthreads; idx++) {
         pthread_create(&threads[num_threads+idx], NULL, main_loop, (void*)idx);
-        char tname[11]; // Enough for "Worker XXX\0"
-        snprintf(tname, sizeof(tname), "Worker %d", idx);
-        pthread_setname_np(threads[num_threads+idx], tname);
         // Note how we pin thread index + 1, so worker thread 0 is on CPU 1
         // We use CPU 0 for misc threads, like IO / mon etc
         if (cpu_pin) {
