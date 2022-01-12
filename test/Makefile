@@ -53,6 +53,11 @@ rts/argv3:
 	./$@ --rts-wthreads 2>&1 | grep "ERROR: --rts-wthreads requires an argument."
 	@echo "Test success, saw expected error message"
 
+# Expect 9 threads given 7 workers + main process + IO
+rts/wthreads1:
+	$(ACTONC) --root main $@.act
+	./$@ --rts-wthreads 7 & PID=$$! && ps -o thcount $${PID} | tail -n1 | awk '{ print $$1 }' | grep "^9$$"
+
 
 test_acton_rts_sleep:
 	$(ACTONC) --root main $@.act
@@ -79,4 +84,4 @@ stdlib/test_numpy: stdlib/test_numpy.act
 	$(ACTONC) --root main $<
 	./$@
 
-.PHONY: rts/argv1 rts/argv2 rts/argv3 test_acton_rts_sleep test_async test_random test_time regression rts_sleep
+.PHONY: rts/argv1 rts/argv2 rts/argv3 rts/wthreads1 test_acton_rts_sleep test_async test_random test_time regression rts_sleep
