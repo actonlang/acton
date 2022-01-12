@@ -1427,17 +1427,22 @@ int remote_delete_queue_in_txn(WORD table_key, WORD queue_id, uuid_t * txnid, re
 
 int remote_enqueue_in_txn(WORD * column_values, int no_cols, WORD blob, size_t blob_size, WORD table_key, WORD queue_id, uuid_t * txnid, remote_db_t * db)
 {
+	printf("FOO REQT1\n");
 	unsigned len = 0;
 	void * tmp_out_buf = NULL;
 
+	printf("FOO REQT2\n");
 	queue_query_message * q = build_enqueue_in_txn(column_values, no_cols, blob, blob_size, table_key, queue_id, txnid, get_nonce(db));
+	printf("FOO REQT3\n");
 	int success = serialize_queue_message(q, (void **) &tmp_out_buf, &len, 1, NULL);
+	printf("FOO REQT4\n");
 
 	if(db->servers->no_items < db->quorum_size)
 	{
 		fprintf(stderr, "No quorum (%d/%d servers alive)\n", db->servers->no_items, db->replication_factor);
 		return NO_QUORUM_ERR;
 	}
+	printf("FOO REQT5\n");
 	remote_server * rs = (remote_server *) (HEAD(db->servers))->value;
 
 #if CLIENT_VERBOSITY > 0

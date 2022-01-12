@@ -793,7 +793,9 @@ void FLUSH_outgoing($Actor self, uuid_t *txnid) {
             dest = 0;
         }
         if (db) {
+            printf("BAM1\n");
             int ret = remote_enqueue_in_txn(($WORD*)&m->$globkey, 1, NULL, 0, MSG_QUEUE, (WORD)dest, txnid, db);
+            printf("BAM2\n");
             if (dest) {
                 rtsd_printf(LOGPFX "   # enqueue msg %ld to queue %ld returns %d\n", m->$globkey, dest, ret);
             } else {
