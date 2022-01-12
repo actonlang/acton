@@ -1740,6 +1740,9 @@ int main(int argc, char **argv) {
     // down IO / Mon threads
     for(int idx = wthread_start; idx < num_threads; ++idx) {
         pthread_join(threads[idx], NULL);
+        pthread_mutex_lock(&sleep_lock);
+        pthread_cond_broadcast(&work_to_do);
+        pthread_mutex_unlock(&sleep_lock);
     }
     return return_val;
 }
