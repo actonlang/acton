@@ -1,0 +1,6 @@
+actor main(env):
+
+    def exit():
+        env.exit(0)
+
+    after 10: exit()

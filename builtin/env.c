@@ -23,6 +23,8 @@
 struct FileDescriptorData fd_data[MAX_FD];
 int wakeup_pipe[2];
 
+extern char rts_exit;
+extern int return_val;
 
 #ifdef IS_MACOS         // Use kqueue
 int kq;
@@ -704,7 +706,8 @@ $R $Env$listen$local ($Env __self__, $int port, $function cb, $Cont c$cont) {
     return $R_CONT(c$cont, $None);
 }
 $R $Env$exit$local ($Env __self__, $int n, $Cont c$cont) {
-    exit(n->val);
+    return_val = n->val;
+    rts_exit = 1;
     return $R_CONT(c$cont, $None);
 }
 $R $Env$openR$local ($Env __self__, $str nm, $Cont c$cont) {

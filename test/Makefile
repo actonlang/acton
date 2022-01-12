@@ -33,7 +33,10 @@ test_db_app:
 
 
 # -- RTS --
-RTS_TESTS = rts/argv1 rts/argv2 rts/argv3
+RTS_TESTS = rts/argv1 rts/argv2 rts/argv3 rts/exit_0 rts/exit_1
+.PHONY: $(RTS_TESTS)
+
+test-rts: $(RTS_TESTS)
 
 # Test normal argument parsing
 rts/argv1:
@@ -53,11 +56,20 @@ rts/argv3:
 	./$@ --rts-wthreads 2>&1 | grep "ERROR: --rts-wthreads requires an argument."
 	@echo "Test success, saw expected error message"
 
+rts/exit_0:
+	$(ACTONC) --root main $@.act
+	./$@
+
+rts/exit_1:
+	$(ACTONC) --root main $@.act
+	./$@; EXIT_CODE=$$?; if [ $$EXIT_CODE -ne 1 ]; then exit 1; fi
+
 # Expect 9 threads given 7 workers + main process + IO
 rts/wthreads1:
 	$(ACTONC) --root main $@.act
 	./$@ --rts-wthreads 7 & PID=$$! && ps -o thcount $${PID} | tail -n1 | awk '{ print $$1 }' | grep "^9$$"
 
+#--
 
 test_acton_rts_sleep:
 	$(ACTONC) --root main $@.act
@@ -84,4 +96,4 @@ stdlib/test_numpy: stdlib/test_numpy.act
 	$(ACTONC) --root main $<
 	./$@
 
-.PHONY: rts/argv1 rts/argv2 rts/argv3 rts/wthreads1 test_acton_rts_sleep test_async test_random test_time regression rts_sleep
+.PHONY: test_acton_rts_sleep test_async test_random test_time regression rts_sleep
