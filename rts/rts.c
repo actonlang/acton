@@ -1481,6 +1481,7 @@ int main(int argc, char **argv) {
     int cpu_pin;
     long num_cores = sysconf(_SC_NPROCESSORS_ONLN);
     num_wthreads = num_cores;
+    bool rts_mon_on_exit = false;
 
     // Do line buffered output
     setlinebuf(stdout);
@@ -1511,7 +1512,8 @@ int main(int argc, char **argv) {
         {"rts-ddb-host", true, 'h'},
         {"rts-ddb-port", true, 'p'},
         {"rts-ddb-replication", true, 'r'},
-        {"rts-mon", true, 'm'},
+        {"rts-mon-on-exit", false, 'E'},
+        {"rts-mon-socket", true, 'm'},
         {"rts-verbose", false, 'v'},
         {"rts-wthreads", true, 'w'},
         {NULL, 0, 0}
@@ -1572,6 +1574,9 @@ int main(int argc, char **argv) {
                 rts_debug = 1;
                 // Enabling rts debug implies verbose RTS output too
                 rts_verbose = 10;
+                break;
+            case 'E':
+                rts_mon_on_exit = true;
                 break;
             case 'h':
                 ddb_host = realloc(ddb_host, ++ddb_no_host * sizeof *ddb_host);
@@ -1751,5 +1756,11 @@ int main(int argc, char **argv) {
         pthread_cond_broadcast(&work_to_do);
         pthread_mutex_unlock(&sleep_lock);
     }
+
+    if (rts_mon_on_exit) {
+        const char *stats_json = stats_to_json(argv[0]);
+        printf("%s\n", stats_json);
+    }
+
     return return_val;
 }
