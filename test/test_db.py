@@ -191,7 +191,7 @@ if __name__ == '__main__':
             elif res.returncode == 0:
                 log.debug("Application exited successfully")
             else:
-                log.error("Non-0 return code:", res)
+                log.error(f"Non-0 return code: {res}")
                 allgood = False
 
         if not dbc.stop():
