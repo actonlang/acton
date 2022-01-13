@@ -1454,6 +1454,9 @@ int main(int argc, char **argv) {
     long num_cores = sysconf(_SC_NPROCESSORS_ONLN);
     num_wthreads = num_cores;
 
+    // Do line buffered output
+    setlinebuf(stdout);
+
     /*
      * A note on argument parsing: The RTS has its own command line arguments,
      * all prefixed with --rts-, which we need to parse out. The remainder of

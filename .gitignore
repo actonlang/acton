@@ -39,6 +39,7 @@ examples/**
 !examples/**/*/
 
 test/*
+!test/Makefile
 !test/*.*
 test/*.log
 !test/*/

@@ -73,40 +73,6 @@ class Db:
                 return parse_membership(line)
 
 
-class App:
-    def __repr__(self):
-        return f"App[{self.name}]"
-
-    def __init__(self, app_path, app_args=None):
-        self.path = app_path
-        if app_args is not None:
-            self.args = app_args
-        else:
-            self.args = []
-        self.name = "fjong"
-        self.p = None
-
-    def start(self):
-        cmd = [self.path, "--rts-ddb-host", "localhost", "--rts-ddb-replication", "1", "--rts-verbose", *self.args]
-        print("RUNNING:", cmd)
-        self.p = subprocess.Popen(cmd, stdin=subprocess.PIPE,
-                                  stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-        #os.set_blocking(self.p.stdout.fileno(), False)
-
-    def wait(self):
-        print("Waiting for application...")
-        while True:
-            print("fjong..")
-            line = self.p.stdout.readline().decode(locale.getpreferredencoding(False)).strip()
-            print(line)
-            if line == '':
-                break
-        self.p.wait()
-
-    def stop(self):
-        pass
-
-
 class DbCluster:
     def __init__(self, num=3):
         self.num = num
@@ -151,17 +117,139 @@ class DbCluster:
         log.debug("Stopping database servers")
         for dbn in self.dbs:
             dbn.stop()
+        return True
 
+
+def test_app_recovery(db_nodes):
+    cmd = ["./test_db_recovery", "--rts-verbose", "--rts-ddb-host", "127.0.0.1", "--rts-ddb-replication", str(db_nodes)]
+
+
+    def so1(line, p, s):
+        log.info(f"App output: {line}")
+        m = re.match("COUNT: (\d+)", line)
+        if m:
+            log.debug(f"Got count: {m.group(1)}")
+            if int(m.group(1)) != s["i"]:
+                log.error(f"Unexpected output from app, got {line} but expected {i}")
+                return True
+            if s["i"] == 3:
+                log.debug("Waiting somewhat")
+                time.sleep(0.1)
+                log.debug("Killing application")
+                p.terminate()
+            s["i"] += 1
+
+        return False
+
+    def so2(line, p, s):
+        log.info(f"App output: {line}")
+        m = re.match("COUNT: (\d+)", line)
+        if m:
+            log.debug(f"Got count: {m.group(1)}")
+            if int(m.group(1)) == s["i"]:
+                log.info(f"App resumed perfectly at {s['i']}")
+            elif int(m.group(1)) == s["i"]-1:
+                log.info(f"Got higher than {s['i']-1}, deemed ok but seems we failed to snapshot last count?")
+            else:
+                raise ValueError(f"Unexpected output from app, got {line} but expected {s['i']}")
+            s["i"] += 1
+        return False
+
+    state = {
+        "i": 1
+    }
+
+    p, s = run_cmd(cmd, so1, stderr_checker, state=state)
+
+    p, s = run_cmd(cmd, so2, stderr_checker, state=state)
+
+
+    if p.returncode == 0:
+        log.debug("Application exited successfully")
+        return True
+    else:
+        log.error(f"Non-0 return code: {p.returncode}")
+        return False
+
+
+def stderr_checker(line, p, s):
+    log.info(f"App stderr: {line}")
+
+    if re.search("Assertion", line):
+        raise ValueError(f"Got an assertion: {line}")
+
+    if re.search("ERROR", line):
+        raise ValueError(f"ERROR: {line}")
+
+    if re.search("No quorum", line):
+        raise ValueError(f"DB Quorum error: {line}")
+
+    return False
+
+
+def run_cmd(cmd, cb_so=None, cb_se=None, cb_end=None, state=None):
+    log.debug(f"Starting application: {' '.join(cmd)}")
+    p = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, universal_newlines=True)
+    done = False
+    while not done:
+        readfds = [p.stdout.fileno(), p.stderr.fileno()]
+        rds, _, _ = select.select(readfds, [], [])
+        for rd in rds:
+            if rd == p.stdout.fileno():
+                line = p.stdout.readline().strip()
+                if cb_so:
+                    cb_so(line, p, state)
+            elif rd == p.stderr.fileno():
+                line = p.stderr.readline().strip()
+                if cb_se:
+                    cb_se(line, p, state)
+
+        if p.poll() != None:
+            log.info("End of process...")
+            break
+
+    o, e = p.communicate()
+    log.info(f"p.communicate(): {o}  {e}")
+
+    if cb_end:
+        cb_end(p, state)
+
+    return p, state
+
+
+def test_app(replication_factor):
+    cmd = ["./test_db_app", "--rts-verbose", "--rts-ddb-host", "127.0.0.1", "--rts-ddb-replication", str(replication_factor)]
+
+    def so(line, p, s):
+        log.info(f"App output: {line}")
+        return False
+
+
+    state = {}
+
+    p, s = run_cmd(cmd, so, stderr_checker, state=state)
+
+    if p.returncode == 0:
+        log.debug("application exited successfully")
+        return True
+    else:
+        log.error(f"Non-0 return code: {p.returncode}")
+        return False
 
 
 
 if __name__ == '__main__':
     import argparse
     parser = argparse.ArgumentParser()
-    parser.add_argument("--app")
     parser.add_argument("--db-nodes", type=int, default=3)
+    parser.add_argument("--replication-factor", type=int)
     parser.add_argument("--repeat", type=int, default=1)
+    parser.add_argument("--test-app", action="store_true")
+    parser.add_argument("--test-recovery", action="store_true")
     args = parser.parse_args()
+
+    if args.replication_factor is None:
+        args.replication_factor = args.db_nodes
 
     # set logging format
     LOG_FORMAT = "%(asctime)s: %(module)-10s %(levelname)-8s %(message)s"
@@ -182,19 +270,27 @@ if __name__ == '__main__':
         if not dbc.start():
             allgood = False
 
-        if args.app:
-            cmd = [args.app, "--rts-verbose", "--rts-ddb-host", "localhost", "--rts-ddb-replication", str(args.db_nodes)]
-            log.debug(f"Starting application: {' '.join(cmd)}")
-            res = subprocess.run(cmd, capture_output=True)
-            if re.search("No quorum", res.stderr.decode(locale.getpreferredencoding(False))):
-                log.error(f"DB Quorum error: {res}")
-            elif res.returncode == 0:
-                log.debug("Application exited successfully")
-            else:
-                log.error(f"Non-0 return code: {res}")
+        if args.test_app:
+            try:
+                if not test_app(args.replication_factor):
+                    allgood = False
+            except Exception as exc:
+                log.error(exc)
+                allgood = False
+
+        if args.test_recovery:
+            try:
+                if not test_app_recovery(args.replication_factor):
+                    allgood = False
+            except Exception as exc:
+                log.exception(exc)
                 allgood = False
 
         if not dbc.stop():
+            log.error("Something went wrong stopping DB Cluster")
             allgood = False
 
-    sys.exit(allgood)
+    if allgood:
+        sys.exit(0)
+    else:
+        sys.exit(1)
