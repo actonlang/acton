@@ -40,7 +40,10 @@ long num_wthreads;
 char rts_exit = 0;
 int return_val = 0;
 
-char *rts_mon_path = NULL;
+char *appname = NULL;
+char *mon_log_path = NULL;
+int mon_log_period = 30;
+char *mon_socket_path = NULL;
 
 struct wt_stat {
     unsigned int idx;          // worker thread index
@@ -187,6 +190,9 @@ time_t current_time() {
 pthread_key_t self_key;
 pthread_mutex_t sleep_lock = PTHREAD_MUTEX_INITIALIZER;
 pthread_cond_t work_to_do = PTHREAD_COND_INITIALIZER;
+
+pthread_mutex_t rts_exit_lock = PTHREAD_MUTEX_INITIALIZER;
+pthread_cond_t rts_exit_signal = PTHREAD_COND_INITIALIZER;
 
 void new_work() {
     // We are sometimes optimistically called, i.e. the caller sometimes does
@@ -1352,19 +1358,12 @@ void $register_rts () {
 ////////////////////////////////////////////////////////////////////////////////////////
 
 
-const char* stats_to_json (void *appname) {
+const char* stats_to_json () {
     yyjson_mut_doc *doc = yyjson_mut_doc_new(NULL);
     yyjson_mut_val *root = yyjson_mut_obj(doc);
     yyjson_mut_doc_set_root(doc, root);
 
     yyjson_mut_obj_add_str(doc, root, "name", appname);
-
-#if defined(IS_MACOS)
-    pthread_setname_np("Monitor Socket");
-#else
-    pthread_setname_np(pthread_self(), "Monitor Socket");
-#endif
-
 
     pid_t pid = getpid();
     yyjson_mut_obj_add_int(doc, root, "pid", pid);
@@ -1410,8 +1409,50 @@ const char* stats_to_json (void *appname) {
 }
 
 
-void *$mon_loop(void *appname) {
-    rtsv_printf("Starting monitor listen on %s\n", rts_mon_path);
+void *$mon_log_loop(void *period) {
+    rtsv_printf(LOGPFX "Starting monitor log, with %d second(s) period, to: %s\n", (uint)period, mon_log_path);
+
+#if defined(IS_MACOS)
+    pthread_setname_np("Monitor Log");
+#else
+    pthread_setname_np(pthread_self(), "Monitor Log");
+#endif
+
+    FILE *f;
+    f = fopen(mon_log_path, "w");
+    if (!f) {
+        fprintf(stderr, "ERROR: Unable to open RTS monitor log file (%s) for writing\n", mon_log_path);
+        exit(1);
+    }
+
+    while (1) {
+        const char *json = stats_to_json();
+        fputs(json, f);
+        fputs("\n", f);
+        if (rts_exit > 0) {
+            rtsv_printf(LOGPFX "Shutting down RTS Monitor log thread.\n");
+            break;
+        }
+
+        pthread_mutex_lock(&rts_exit_lock);
+        struct timespec ts;
+        clock_gettime(CLOCK_REALTIME, &ts);
+        ts.tv_sec += (uint)period;
+        pthread_cond_timedwait(&rts_exit_signal, &rts_exit_lock, &ts);
+        pthread_mutex_unlock(&rts_exit_lock);
+    }
+    fclose(f);
+}
+
+
+void *$mon_socket_loop() {
+    rtsv_printf(LOGPFX "Starting monitor socket listen on %s\n", mon_socket_path);
+
+#if defined(IS_MACOS)
+    pthread_setname_np("Monitor Socket");
+#else
+    pthread_setname_np(pthread_self(), "Monitor Socket");
+#endif
 
     int s, s2, t, len;
     struct sockaddr_un local, remote;
@@ -1423,7 +1464,7 @@ void *$mon_loop(void *appname) {
     }
 
     local.sun_family = AF_UNIX;
-    strcpy(local.sun_path, rts_mon_path);
+    strcpy(local.sun_path, mon_socket_path);
     unlink(local.sun_path);
     len = sizeof(local.sun_path) + sizeof(local.sun_family);
     if (bind(s, (struct sockaddr *)&local, len) == -1) {
@@ -1452,7 +1493,7 @@ void *$mon_loop(void *appname) {
             }
 
             if (strncmp(q, "WTS", 3) == 0) {
-                const char *json = stats_to_json(appname);
+                const char *json = stats_to_json();
                 int send_res = send(s2, json, strlen(json), 0);
                 free((void *)json);
                 if (send_res < 0) {
@@ -1481,10 +1522,18 @@ int main(int argc, char **argv) {
     int cpu_pin;
     long num_cores = sysconf(_SC_NPROCESSORS_ONLN);
     num_wthreads = num_cores;
-    bool rts_mon_on_exit = false;
+    bool mon_on_exit = false;
+
+    appname = argv[0];
 
     // Do line buffered output
     setlinebuf(stdout);
+
+#if defined(IS_MACOS)
+    pthread_setname_np("main");
+#else
+    pthread_setname_np(pthread_self(), "main");
+#endif
 
     /*
      * A note on argument parsing: The RTS has its own command line arguments,
@@ -1512,8 +1561,10 @@ int main(int argc, char **argv) {
         {"rts-ddb-host", true, 'h'},
         {"rts-ddb-port", true, 'p'},
         {"rts-ddb-replication", true, 'r'},
+        {"rts-mon-log-path", true, 'l'},
+        {"rts-mon-log-period", true, 'k'},
         {"rts-mon-on-exit", false, 'E'},
-        {"rts-mon-socket", true, 'm'},
+        {"rts-mon-socket-path", true, 'm'},
         {"rts-verbose", false, 'v'},
         {"rts-wthreads", true, 'w'},
         {NULL, 0, 0}
@@ -1576,14 +1627,20 @@ int main(int argc, char **argv) {
                 rts_verbose = 10;
                 break;
             case 'E':
-                rts_mon_on_exit = true;
+                mon_on_exit = true;
                 break;
             case 'h':
                 ddb_host = realloc(ddb_host, ++ddb_no_host * sizeof *ddb_host);
                 ddb_host[ddb_no_host-1] = optarg;
                 break;
+            case 'k':
+                mon_log_period = atoi(optarg);
+                break;
+            case 'l':
+                mon_log_path = optarg;
+                break;
             case 'm':
-                rts_mon_path = optarg;
+                mon_socket_path = optarg;
                 break;
             case 'p':
                 ddb_port = atoi(optarg);
@@ -1708,57 +1765,71 @@ int main(int argc, char **argv) {
     pthread_key_create(&self_key, NULL);
     cpu_set_t cpu_set;
 
-    // Start worker threads
-    // number of threads is IO + (mon)? + Worker Threads
-    pthread_t threads[2 + num_wthreads];
-    // Keep track of total number of threads, worker threads and then some...
-    // also used as current index into threads array
-    int num_threads = 0;
-
-    // eventloop + pin to CPU 0
-    pthread_create(&threads[num_threads], NULL, $eventloop, (void*)num_threads);
-    if (cpu_pin) {
-        CPU_ZERO(&cpu_set);
-        CPU_SET(0, &cpu_set);
-        pthread_setaffinity_np(threads[num_threads], sizeof(cpu_set), &cpu_set);
-    }
-    num_threads++;
-
-    // RTS Monitor Socket + pin to CPU 0
-    if (rts_mon_path) {
-        pthread_create(&threads[num_threads], NULL, $mon_loop, (void*)argv[0]);
+    // RTS Monitor Log
+    pthread_t mon_log_thread;
+    if (mon_log_path) {
+        pthread_create(&mon_log_thread, NULL, $mon_log_loop, (void *)mon_log_period);
         if (cpu_pin) {
             CPU_ZERO(&cpu_set);
             CPU_SET(0, &cpu_set);
-            pthread_setaffinity_np(threads[num_threads], sizeof(cpu_set), &cpu_set);
+            pthread_setaffinity_np(mon_log_thread, sizeof(cpu_set), &cpu_set);
         }
-        num_threads++;
     }
 
-    int wthread_start = num_threads;
-    for(int idx = 0; idx < num_wthreads; idx++) {
-        pthread_create(&threads[num_threads+idx], NULL, main_loop, (void*)idx+1);
-        // Note how we pin thread index + 1, so worker thread 0 is on CPU 1
+    // RTS Monitor Socket
+    pthread_t mon_socket_thread;
+    if (mon_socket_path) {
+        pthread_create(&mon_socket_thread, NULL, $mon_socket_loop, NULL);
+        if (cpu_pin) {
+            CPU_ZERO(&cpu_set);
+            CPU_SET(0, &cpu_set);
+            pthread_setaffinity_np(mon_socket_thread, sizeof(cpu_set), &cpu_set);
+        }
+    }
+
+    // Start IO + worker threads
+    pthread_t threads[1 + num_wthreads];
+
+    // eventloop
+    pthread_create(&threads[0], NULL, $eventloop, NULL);
+    if (cpu_pin) {
+        CPU_ZERO(&cpu_set);
+        CPU_SET(0, &cpu_set);
+        pthread_setaffinity_np(threads[0], sizeof(cpu_set), &cpu_set);
+    }
+
+    for(int idx = 1; idx < num_wthreads+1; idx++) {
+        pthread_create(&threads[idx], NULL, main_loop, (void*)idx);
+        // Index start at 1 and we pin wthreads to CPU 1...n
         // We use CPU 0 for misc threads, like IO / mon etc
         if (cpu_pin) {
             CPU_ZERO(&cpu_set);
-            CPU_SET(idx+1, &cpu_set);
-            pthread_setaffinity_np(threads[num_threads+idx], sizeof(cpu_set), &cpu_set);
+            CPU_SET(idx, &cpu_set);
+            pthread_setaffinity_np(threads[idx], sizeof(cpu_set), &cpu_set);
         }
     }
-    num_threads = num_threads + num_wthreads;
 
-    // Only joining the worker threads, we don't care about gracefully shutting
-    // down IO / Mon threads
-    for(int idx = wthread_start; idx < num_threads; ++idx) {
+    // -- SHUTDOWN --
+
+    // Only join the worker threads, starting at 1, we don't care about
+    // gracefully shutting down IO (thread 0)
+    for(int idx = 1; idx <= num_wthreads; idx++) {
         pthread_join(threads[idx], NULL);
         pthread_mutex_lock(&sleep_lock);
         pthread_cond_broadcast(&work_to_do);
         pthread_mutex_unlock(&sleep_lock);
     }
 
-    if (rts_mon_on_exit) {
-        const char *stats_json = stats_to_json(argv[0]);
+    pthread_mutex_lock(&rts_exit_lock);
+    pthread_cond_broadcast(&rts_exit_signal);
+    pthread_mutex_unlock(&rts_exit_lock);
+
+    if (mon_log_path) {
+        pthread_join(mon_log_thread, NULL);
+    }
+
+    if (mon_on_exit) {
+        const char *stats_json = stats_to_json();
         printf("%s\n", stats_json);
     }
 
