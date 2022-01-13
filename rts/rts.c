@@ -35,8 +35,10 @@
 
 char rts_verbose = 0;
 char rts_debug = 0;
-
 long num_wthreads;
+
+char rts_exit = 0;
+int return_val = 0;
 
 char *rts_mon_path = NULL;
 
@@ -1173,6 +1175,15 @@ void *main_loop(void *idx) {
 
     struct timespec ts1, ts2, ts3;
     while (1) {
+        if (rts_exit) {
+            wt_stats[(int)idx].state = WT_NoExist;
+            rtsd_printf(LOGPFX "Worker thread %d exiting\n", (int)idx);
+            // Wake up all sleeping threads so they too can exit
+            pthread_mutex_lock(&sleep_lock);
+            pthread_cond_broadcast(&work_to_do);
+            pthread_mutex_unlock(&sleep_lock);
+            break;
+        }
         $Actor current = DEQ_ready();
         if (current) {
             new_work();
@@ -1303,6 +1314,16 @@ void *main_loop(void *idx) {
             wt_stats[(int)idx].state = WT_Idle;
         } else {
             pthread_mutex_lock(&sleep_lock);
+
+            if (rts_exit) {
+                wt_stats[(int)idx].state = WT_NoExist;
+                rtsd_printf(LOGPFX "Worker thread %d exiting\n", (int)idx);
+                // Wake up all sleeping threads so they too can exit
+                pthread_cond_broadcast(&work_to_do);
+                pthread_mutex_unlock(&sleep_lock);
+                break;
+            }
+
             wt_stats[(int)idx].state = WT_Sleeping;
             wt_stats[(int)idx].sleeps++;
             pthread_cond_wait(&work_to_do, &sleep_lock);
@@ -1702,23 +1723,23 @@ int main(int argc, char **argv) {
         num_threads++;
     }
 
-    // We start on index 1 for pretty names, like Worker 1 is first, not 0, plus
-    // when doing CPU affinity, we want to bind worker threads to CPU 1, so we
-    // can reuse idx for that
-    for(int idx = 1; idx <= num_wthreads; idx++) {
-        pthread_create(&threads[num_threads+idx], NULL, main_loop, (void*)idx);
+    int wthread_start = num_threads;
+    for(int idx = 0; idx < num_wthreads; idx++) {
+        pthread_create(&threads[num_threads+idx], NULL, main_loop, (void*)idx+1);
         // Note how we pin thread index + 1, so worker thread 0 is on CPU 1
         // We use CPU 0 for misc threads, like IO / mon etc
         if (cpu_pin) {
             CPU_ZERO(&cpu_set);
-            CPU_SET(idx, &cpu_set);
+            CPU_SET(idx+1, &cpu_set);
             pthread_setaffinity_np(threads[num_threads+idx], sizeof(cpu_set), &cpu_set);
         }
     }
     num_threads = num_threads + num_wthreads;
 
-    for(int idx = 0; idx <= num_threads; ++idx) {
+    // Only joining the worker threads, we don't care about gracefully shutting
+    // down IO / Mon threads
+    for(int idx = wthread_start; idx < num_threads; ++idx) {
         pthread_join(threads[idx], NULL);
     }
-    return 0;
+    return return_val;
 }
