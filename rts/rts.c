@@ -41,6 +41,8 @@ char rts_exit = 0;
 int return_val = 0;
 
 char *appname = NULL;
+pid_t pid;
+
 char *mon_log_path = NULL;
 int mon_log_period = 30;
 char *mon_socket_path = NULL;
@@ -1365,8 +1367,17 @@ const char* stats_to_json () {
 
     yyjson_mut_obj_add_str(doc, root, "name", appname);
 
-    pid_t pid = getpid();
     yyjson_mut_obj_add_int(doc, root, "pid", pid);
+
+    struct timeval tv;
+    struct tm tm;
+    gettimeofday(&tv, NULL);
+    localtime_r(&tv.tv_sec, &tm);
+    char dt[] = "YYYY-MM-ddTHH:mm:ss.SSS+0000";
+    strftime(dt, sizeof(dt), "%Y-%m-%dT%H:%M:%S.000%z", &tm);
+    sprintf(dt + 20, "%03hu%s", (short unsigned int)tv.tv_usec / 1000, dt + 23);
+
+    yyjson_mut_obj_add_str(doc, root, "datetime", dt);
 
     yyjson_mut_val *j_stat = yyjson_mut_obj(doc);
     yyjson_mut_obj_add_val(doc, root, "wt", j_stat);
@@ -1525,6 +1536,7 @@ int main(int argc, char **argv) {
     bool mon_on_exit = false;
 
     appname = argv[0];
+    pid_t pid = getpid();
 
     // Do line buffered output
     setlinebuf(stdout);
