@@ -652,7 +652,6 @@ env$$l$14lambda env$$l$14lambda$new($WFile p$1) {
 }
 struct env$$l$14lambda$class env$$l$14lambda$methods;
 $NoneType $Env$__init__ ($Env __self__, $list argv) {
-    $Actor$methods.__init__((($Actor)__self__));
     __self__->argv = argv;
     return $None;
 }
