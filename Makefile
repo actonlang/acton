@@ -11,7 +11,7 @@ else
 export VERSION_INFO?=$(VERSION).$(BUILD_TIME)
 endif
 
-CFLAGS+= -I. -Ideps -Wno-int-to-pointer-cast -Wno-pointer-to-int-cast
+CFLAGS+= -I. -Ideps -Wno-int-to-pointer-cast -Wno-pointer-to-int-cast -Wformat -Werror=format-security
 CFLAGS_REL= -O3 -DREL
 CFLAGS_DEV= -g -DDEV
 LDFLAGS+=-Llib
