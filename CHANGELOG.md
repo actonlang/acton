@@ -2,11 +2,51 @@
 
 ## Unreleased
 
+
+## [0.8.0] (2022-01-14)
+
 ### Added
-- Threads are now named, making it easier to debug [#457]
-  - "IO", "Mon Socket" and "Worker X" are the currently used names
+- New RTS mon logging option [#464]
+  - This new option makes it possible to write the RTS monitor statistics to a
+    log file specified with `--rts-mon-log-path`
+  - The first stats snapshot is taken just at startup of the application after
+    which subsequent stats snapshots are taken at the specified periodicity. A
+    snapshot is always taken just before shutdown.
+  - The periodicity is specified by `--rts-mon-log-period` in units of seconds
+    and the default value is 30
+- New RTS mon output option [#464]
+  - It is possible to output the RTS monitor statistics just before the exit of
+    program by specifying `--rts-mon-on-exit`
+  - The RTS monitor statics are printed to stdout.
+- Threads now have names, making it easier to debug [#457]
+  - "main", "IO", "Mon Socket" and "Worker X" are the currently used names
+- Show RTS options and arguments with `--rts-help` [#465]
+
+### Changed
+- stdout is now line buffered [#464]
+- `--rts-mon` has been renamed to `--rts-mon-socket-path`
+  - Since there are now multiple output options for the RTS monitor statistics
+    we use a more specific name
 
 ### Fixed
+- Avoid slow RTS performance when using DDB & the DDB server is too fast [#453]
+  - If the DB server responded quickly enough, the client library would enter a
+    pthread_cond_timedwait to wait for the response but it had already arrived
+    leading to always hitting the timeout [#449]
+  - The effect was that the Acton program would run very slowly as each
+    continuation would take one DDB communication timeout to process, which is
+    set to 10 seconds
+  - The DDB client library has been improved to check for the response within
+    the mutex lock to avoid this situation
+  - RTS in DDB mode is now fast!
+- Acton RTS now shuts down "gracefully" [#460]
+  - `env.exit()` previously called `exit()` in C, immediately shutting down the
+    application & RTS
+  - Any currently running continuation (in another worker thread) would be
+    abrubtly killed
+  - This has been improved so that the RTS will let worker threads complete any
+    currently executing continuation and commit that work before exiting the
+    application
 - Only do CPU affinity when there are as many worker threads as CPU cores [#447]
   - `--rts-wthreads` can be used to specify the number of worker threads and if
     that number does not align with the number of CPU cores in the machine, we
@@ -18,12 +58,12 @@
     number of worker threads used when there are few available CPU cores would
     show the incorrect number (`0`) [#445]:
     - `**RTS** Detected 2 CPUs: Using 0 worker threads, due to low CPU count. No CPU affinity used.`
-  - RTS was actually using 4 worker threads, as it should, but the log message
-    was wrong and has now been corrected.
+  - RTS was actually using more worker threads but the log message was wrong and
+    has now been corrected.
 - Corrected actual number of worker threads [#457]
   - While we computed the correct number of worker threads to use, when creating
     the threads we completely failed to use that computed value and instead
-    unconditionally spawned as many worker threads as there CPU cores.
+    unconditionally spawned as many worker threads as there are CPU cores.
   - There was also an off-by-one error on the number of worker threads.
   - This has all been corrected so the correct number of worker threads is now
     created and there is a test case to prove it.
@@ -685,6 +725,12 @@ then, this second incarnation has been in focus and 0.2.0 was its first version.
 [#445]: https://github.com/actonlang/acton/issues/445
 [#446]: https://github.com/actonlang/acton/pull/446
 [#447]: https://github.com/actonlang/acton/pull/447
+[#449]: https://github.com/actonlang/acton/issues/449
+[#453]: https://github.com/actonlang/acton/pull/453
+[#457]: https://github.com/actonlang/acton/pull/457
+[#460]: https://github.com/actonlang/acton/pull/460
+[#464]: https://github.com/actonlang/acton/pull/464
+[#465]: https://github.com/actonlang/acton/pull/465
 [0.3.0]: https://github.com/actonlang/acton/releases/tag/v0.3.0
 [0.4.0]: https://github.com/actonlang/acton/compare/v0.3.0...v0.4.0
 [0.4.1]: https://github.com/actonlang/acton/compare/v0.4.0...v0.4.1
@@ -703,6 +749,7 @@ then, this second incarnation has been in focus and 0.2.0 was its first version.
 [0.7.2]: https://github.com/actonlang/acton/compare/v0.7.1...v0.7.2
 [0.7.3]: https://github.com/actonlang/acton/compare/v0.7.2...v0.7.3
 [0.7.4]: https://github.com/actonlang/acton/compare/v0.7.3...v0.7.4
+[0.8.0]: https://github.com/actonlang/acton/compare/v0.7.4...v0.8.0
 
 [homebrew-acton#7]: https://github.com/actonlang/homebrew-acton/pull/7
 [homebrew-acton#28]: https://github.com/actonlang/homebrew-acton/pull/28
