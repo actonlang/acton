@@ -1520,9 +1520,27 @@ void *$mon_socket_loop() {
 
 struct option {
     const char *name;
-    bool        has_arg;
+    const char *arg_name;
     int         val;
+    const char *desc;
 };
+
+
+void print_help(struct option *opt) {
+    printf("The Acton RTS reads and consumes the following options and arguments. All\n" \
+           "other parameters are passed verbatim to the Acton application. Option\n" \
+           "arguments can be passed either with --rts-option=ARG or --rts-option ARG\n\n");
+    while (opt->name) {
+        char optarg[64];
+
+        sprintf(optarg, "%s%s%s", opt->name, opt->arg_name?"=":"", opt->arg_name?opt->arg_name:"");
+        printf("  --%-30s  %s\n", optarg, opt->desc);
+        opt++;
+    }
+    printf("\n");
+    exit(0);
+}
+
 
 int main(int argc, char **argv) {
     uint ddb_no_host = 0;
@@ -1569,16 +1587,17 @@ int main(int argc, char **argv) {
      * argument or it does not.
      */
     static struct option long_options[] = {
-        {"rts-debug", false, 'd'},
-        {"rts-ddb-host", true, 'h'},
-        {"rts-ddb-port", true, 'p'},
-        {"rts-ddb-replication", true, 'r'},
-        {"rts-mon-log-path", true, 'l'},
-        {"rts-mon-log-period", true, 'k'},
-        {"rts-mon-on-exit", false, 'E'},
-        {"rts-mon-socket-path", true, 'm'},
-        {"rts-verbose", false, 'v'},
-        {"rts-wthreads", true, 'w'},
+        {"rts-debug", NULL, 'd', "RTS debug, requires program compiled with "},
+        {"rts-ddb-host", "HOST", 'h', "DDB hostname"},
+        {"rts-ddb-port", "PORT", 'p', "DDB port [32000]"},
+        {"rts-ddb-replication", "FACTOR", 'r', "DDB replication factor [3]"},
+        {"rts-help", NULL, 'H', "Show this help"},
+        {"rts-mon-log-path", "PATH", 'l', "Path to write log RTS mon stats"},
+        {"rts-mon-log-period", "PERIOD", 'k', "Periodicity of writing RTS mon stats log entry"},
+        {"rts-mon-on-exit", NULL, 'E', "Print RTS mon stats to stdout on exit"},
+        {"rts-mon-socket-path", "PATH", 'm', "Path to unix socket to expose RTS mon stats"},
+        {"rts-verbose", NULL, 'v', "Enable verbose RTS output to stdout"},
+        {"rts-wthreads", "COUNT", 'w', "Number of worker threads [#CPU cores]"},
         {NULL, 0, 0}
     };
     // length of long_options array
@@ -1602,7 +1621,7 @@ int main(int argc, char **argv) {
                     // argv[i] matches one of our options!
                     ch = long_options[j].val;
                     new_argc--;
-                    if (long_options[j].has_arg == true) {
+                    if (long_options[j].arg_name) {
                         if (strlen(argv[i]) > 2+strlen(long_options[j].name)
                             && argv[i][2+strlen(long_options[j].name)] == '=') {
                             // option argument is in --opt=arg style, so dig out
@@ -1640,6 +1659,9 @@ int main(int argc, char **argv) {
                 break;
             case 'E':
                 mon_on_exit = true;
+                break;
+            case 'H':
+                print_help(long_options);
                 break;
             case 'h':
                 ddb_host = realloc(ddb_host, ++ddb_no_host * sizeof *ddb_host);
