@@ -90,22 +90,22 @@ void EVENT_init() {
     epoll_ctl(ep, EPOLL_CTL_ADD, wakeup_pipe[0], &wakeup);
 }
 void EVENT_add_read(int fd) {
-    fd_data[fd].event_spec.events = EPOLLIN;
+    fd_data[fd].event_spec.events = EPOLLIN | EPOLLRDHUP;
     fd_data[fd].event_spec.data.fd = fd;
     epoll_ctl(ep, EPOLL_CTL_ADD, fd, &fd_data[fd].event_spec);
 }
 void EVENT_add_read_once(int fd) {
-    fd_data[fd].event_spec.events = EPOLLIN | EPOLLONESHOT;
+    fd_data[fd].event_spec.events = EPOLLIN | EPOLLRDHUP | EPOLLONESHOT;
     fd_data[fd].event_spec.data.fd = fd;
     epoll_ctl(ep, EPOLL_CTL_ADD, fd, &fd_data[fd].event_spec);
 }
 void EVENT_mod_read_once(int fd) {
-    fd_data[fd].event_spec.events = EPOLLIN | EPOLLONESHOT;
+    fd_data[fd].event_spec.events = EPOLLIN | EPOLLRDHUP | EPOLLONESHOT;
     fd_data[fd].event_spec.data.fd = fd;
     epoll_ctl(ep, EPOLL_CTL_MOD, fd, &fd_data[fd].event_spec);
 }
 void EVENT_add_write_once(int fd) {
-    fd_data[fd].event_spec.events = EPOLLOUT | EPOLLONESHOT;
+    fd_data[fd].event_spec.events = EPOLLOUT | EPOLLRDHUP | EPOLLONESHOT;
     fd_data[fd].event_spec.data.fd = fd;
     epoll_ctl(ep, EPOLL_CTL_ADD, fd, &fd_data[fd].event_spec);
 }
@@ -125,8 +125,10 @@ int EVENT_fd(EVENT_type *ev) {
 int EVENT_is_wakeup(EVENT_type *ev) {
     return (ev->events & EPOLLIN) && ev->data.fd == wakeup_pipe[0];
 }
+// epoll TCP disconnect is EPOLLRDHUP (remote bla hup) and various other socket
+// errors (like what?) go in EPOLLHUP so we check for both
 int EVENT_is_eof(EVENT_type *ev) {
-    return ev->events & EPOLLHUP;
+    return ev->events & (EPOLLHUP | EPOLLRDHUP);
 }
 int EVENT_is_error(EVENT_type *ev) {
     return ev->events & EPOLLERR;
