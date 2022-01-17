@@ -6,4 +6,4 @@ long $complex_hash($complex c);
 long $string_hash($str s);
 
 long $pointer_hash($WORD w);
-long $tuple_hash($Hashable$tuple wit,$tuple tup);
+long $tuple_hash($Hashable$tuple wit, $tuple tup);

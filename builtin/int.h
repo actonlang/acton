@@ -1,17 +1,17 @@
 struct $int$class {
-  char *$GCINFO;
-  int $class_id;
-  $Super$class $superclass;
-  void (*__init__)($int, $atom);
-  void (*__serialize__)($int,$Serial$state);
-  $int (*__deserialize__)($int,$Serial$state);
-  $bool (*__bool__)($int);
-  $str (*__str__)($int);
+    char *$GCINFO;
+    int $class_id;
+    $Super$class $superclass;
+    void (*__init__)($int, $atom);
+    void (*__serialize__)($int, $Serial$state);
+    $int (*__deserialize__)($int, $Serial$state);
+    $bool (*__bool__)($int);
+    $str (*__str__)($int);
 };
 
 struct $int {
-  struct $int$class *$class;
-  long val;
+    struct $int$class *$class;
+    long val;
 };
 
 extern struct $int$class $int$methods;
@@ -37,7 +37,6 @@ extern struct $Div$int *$Div$int$witness;
 extern struct $Ord$int *$Ord$int$witness;
 extern struct $Hashable$int *$Hashable$int$witness;
 
-
 $int to$int(long n);
 long from$int($int n);
 
@@ -54,4 +53,3 @@ $int $int$new($atom a);
 
 // only called with e>=0.
 long longpow(long a, long e); // used also for ndarrays
-

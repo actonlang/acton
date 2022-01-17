@@ -10,7 +10,8 @@ struct $function$class {
     $function (*__deserialize__)($function, $Serial$state);
     $bool (*__bool__)($function);
     $str (*__str__)($function);
-    $WORD (*__call__)($function, ...);
+    $WORD (*__call__)
+    ($function, ...);
 };
 struct $function {
     struct $function$class *$class;

@@ -12,7 +12,7 @@
 // the time, which is prolly good enough for now. In a future, we could cook up
 // something better.
 
-$int random$$randint ($int min, $int max) {
+$int random$$randint($int min, $int max) {
     // ensure we have a valid range where min is smaller than max
     if (min->val > max->val) {
         $RAISE((($BaseException)$ValueError$new(to$str("min value must be smaller than max"))));
@@ -27,16 +27,18 @@ $int random$$randint ($int min, $int max) {
     // run rand() until we get a value below end
     int r;
     // spin getting new values until we find one in range
-    while ((r = rand()) >= end);
+    while ((r = rand()) >= end)
+        ;
     // normalize back to the requested range
-    return to$int(min->val + r%range);
+    return to$int(min->val + r % range);
 }
 
 int random$$done$ = 0;
 int random$$seeded = 0;
-void random$$__init__ () {
+void random$$__init__() {
     // default to just seeding
     srand(time(NULL));
-    if (random$$done$) return;
+    if (random$$done$)
+        return;
     random$$done$ = 1;
 }

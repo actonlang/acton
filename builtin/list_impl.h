@@ -11,12 +11,12 @@ $Iterator $list_iter($list lst);
 $list $list_fromiter($Iterator it);
 long $list_len($list lst);
 
-int $list_contains($Eq w,$list lst, $WORD elem);
+int $list_contains($Eq w, $list lst, $WORD elem);
 int $list_containsnot($Eq w, $list lst, $WORD elem);
 
 $WORD $list_getitem($list lst, int ix);
 void $list_setitem($list lst, int ix, $WORD val);
-void $list_delitem($list lst,int ix);
+void $list_delitem($list lst, int ix);
 
 $list $list_getslice($list lst, $slice slc);
 void $list_setslice($list lst, $slice slc, $Iterator it);

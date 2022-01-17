@@ -1,17 +1,17 @@
 struct $bool$class {
-  char *$GCINFO;
-  int $class_id;
-  $Super$class $superclass;
-  void (*__init__)($bool, $value);
-  void (*__serialize__)($bool, $Serial$state);
-  $bool (*__deserialize__)($bool, $Serial$state);
-  $bool (*__bool__)($bool);
-  $str (*__str__)($bool);
+    char *$GCINFO;
+    int $class_id;
+    $Super$class $superclass;
+    void (*__init__)($bool, $value);
+    void (*__serialize__)($bool, $Serial$state);
+    $bool (*__deserialize__)($bool, $Serial$state);
+    $bool (*__bool__)($bool);
+    $str (*__str__)($bool);
 };
 
 struct $bool {
-  struct $bool$class *$class;
-  long val;
+    struct $bool$class *$class;
+    long val;
 };
 
 extern struct $bool$class $bool$methods;

@@ -10,56 +10,55 @@
  * by being the same piece of software.
  */
 
-#define UNASSIGNED -1
-#define NONE_ID 0
-#define ATOM_ID 1
-#define INT_ID 2
-#define FLOAT_ID 3
-#define COMPLEX_ID 4
-#define BOOL_ID 5
-#define STR_ID 6
-#define LIST_ID 7
-#define DICT_ID 8
-#define SET_ID 9
-#define RANGE_ID 10
-#define TUPLE_ID 11
-#define BYTEARRAY_ID 12
-#define ITEM_ID 13
-#define MSG_ID 14
-#define ACTOR_ID 15
-#define CATCHER_ID 16
-#define CLOS_ID 17
-#define CONT_ID 18
-#define DONE_ID 19
-#define CONSTCONT_ID 20
-#define STRITERATOR_ID 21
-#define LISTITERATOR_ID 22
-#define DICTITERATOR_ID 23
-#define VALUESITERATOR_ID 24
-#define ITEMSITERATOR_ID 25
-#define SETITERATOR_ID 26
-#define RANGEITERATOR_ID 27
+#define UNASSIGNED           -1
+#define NONE_ID              0
+#define ATOM_ID              1
+#define INT_ID               2
+#define FLOAT_ID             3
+#define COMPLEX_ID           4
+#define BOOL_ID              5
+#define STR_ID               6
+#define LIST_ID              7
+#define DICT_ID              8
+#define SET_ID               9
+#define RANGE_ID             10
+#define TUPLE_ID             11
+#define BYTEARRAY_ID         12
+#define ITEM_ID              13
+#define MSG_ID               14
+#define ACTOR_ID             15
+#define CATCHER_ID           16
+#define CLOS_ID              17
+#define CONT_ID              18
+#define DONE_ID              19
+#define CONSTCONT_ID         20
+#define STRITERATOR_ID       21
+#define LISTITERATOR_ID      22
+#define DICTITERATOR_ID      23
+#define VALUESITERATOR_ID    24
+#define ITEMSITERATOR_ID     25
+#define SETITERATOR_ID       26
+#define RANGEITERATOR_ID     27
 #define ENUMERATEITERATOR_ID 28
-#define FILTERITERATOR_ID 29
-#define MAPITERATOR_ID 30
-#define ZIPITERATOR_ID 31
+#define FILTERITERATOR_ID    29
+#define MAPITERATOR_ID       30
+#define ZIPITERATOR_ID       31
 
-#define BASEEXCEPTION_ID                        32
-#define     SYSTEMEXIT_ID                       33
-#define     KEYBOARDINTERRUPT_ID                34
-#define     EXCEPTION_ID                        35
-#define         ASSERTIONERROR_ID               36
-#define         LOOKUPERROR_ID                  37
-#define             INDEXERROR_ID               38
-#define             KEYERROR_ID                 39
-#define         MEMORYERROR_ID                  40
-#define         OSERROR_ID                      41
-#define         RUNTIMEERROR_ID                 42
-#define             NOTIMPLEMENTEDERROR_ID      43
-#define         VALUEERROR_ID                   44
+#define BASEEXCEPTION_ID       32
+#define SYSTEMEXIT_ID          33
+#define KEYBOARDINTERRUPT_ID   34
+#define EXCEPTION_ID           35
+#define ASSERTIONERROR_ID      36
+#define LOOKUPERROR_ID         37
+#define INDEXERROR_ID          38
+#define KEYERROR_ID            39
+#define MEMORYERROR_ID         40
+#define OSERROR_ID             41
+#define RUNTIMEERROR_ID        42
+#define NOTIMPLEMENTEDERROR_ID 43
+#define VALUEERROR_ID          44
 
 #define PREASSIGNED 45
-
 
 /* 
  * Register the builtin classes (those with the above class id's except MSG_ID  -- CONSTCONT_ID). 
@@ -82,12 +81,12 @@ void $register($WORD meths);
  */
 void $register_force(int classid, $WORD meths);
 
-#define $GET_CLASSID(meths)  ((meths)->$class_id)
+#define $GET_CLASSID(meths) ((meths)->$class_id)
 
-#define $GET_METHODS(classid)  (($Serializable$class)$list_getitem($methods,classid))
+#define $GET_METHODS(classid) (($Serializable$class)$list_getitem($methods, classid))
 
 // list of method tables indexed by class_id. Only accessed via GET_METHODS above
 
 extern $list $methods;
 
-$bool issubtype(int sub_id, int ancestor_id); 
+$bool issubtype(int sub_id, int ancestor_id);

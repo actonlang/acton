@@ -12,7 +12,6 @@ void $set_add($set set, $Hashable hashwit, $WORD elem);
 void $set_discard($set set, $Hashable hashwit, $WORD elem);
 $WORD $set_pop($set set);
 
-
 int $set_eq($Hashable hashwit, $set set, $set other);
 
 int $set_lt($Hashable hashwit, $set set, $set other);

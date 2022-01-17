@@ -9,9 +9,9 @@
 #include <pthread.h>
 
 #ifdef __gnu_linux__
-    #define IS_GNU_LINUX
-#elif  __APPLE__ && __MACH__
-    #define IS_MACOS
+#define IS_GNU_LINUX
+#elif __APPLE__ && __MACH__
+#define IS_MACOS
 #endif
 
 #include "../builtin/builtin.h"
@@ -42,7 +42,10 @@ extern struct $Cont$class $Cont$methods;
 extern struct $Cont$class $Done$methods;
 extern struct $ConstCont$class $ConstCont$methods;
 
-enum $RTAG { $RDONE, $RFAIL, $RCONT, $RWAIT };
+enum $RTAG { $RDONE,
+             $RFAIL,
+             $RCONT,
+             $RWAIT };
 typedef enum $RTAG $RTAG;
 
 struct $R {
@@ -52,18 +55,22 @@ struct $R {
 };
 typedef struct $R $R;
 
-#define $R_CONT(cont, arg)      ($R){$RCONT, (cont), ($WORD)(arg)}
-#define $R_DONE(value)          ($R){$RDONE, NULL,   (value)}
-#define $R_FAIL(value)          ($R){$RFAIL, NULL,   (value)}
-#define $R_WAIT(cont, value)    ($R){$RWAIT, (cont), (value)}
+#define $R_CONT(cont, arg) \
+    ($R) { $RCONT, (cont), ($WORD)(arg) }
+#define $R_DONE(value) \
+    ($R) { $RDONE, NULL, (value) }
+#define $R_FAIL(value) \
+    ($R) { $RFAIL, NULL, (value) }
+#define $R_WAIT(cont, value) \
+    ($R) { $RWAIT, (cont), (value) }
 
-#define MSG_HEADER              "Msg"
-#define ACTOR_HEADER            "Actor"
-#define CATCHER_HEADER          "Catcher"
-#define CLOS_HEADER             "Clos"
-#define CONT_HEADER             "Cont"
+#define MSG_HEADER     "Msg"
+#define ACTOR_HEADER   "Actor"
+#define CATCHER_HEADER "Catcher"
+#define CLOS_HEADER    "Clos"
+#define CONT_HEADER    "Cont"
 
-#define $Lock                   volatile atomic_flag
+#define $Lock volatile atomic_flag
 
 struct $Msg$class {
     char *$GCINFO;
@@ -125,7 +132,6 @@ struct $Catcher {
     $Cont $cont;
 };
 
-
 struct $Cont$class {
     char *$GCINFO;
     int $class_id;
@@ -135,7 +141,8 @@ struct $Cont$class {
     $Cont (*__deserialize__)($Cont, $Serial$state);
     $bool (*__bool__)($Cont);
     $str (*__str__)($Cont);
-    $R (*__call__)($Cont, ...);
+    $R (*__call__)
+    ($Cont, ...);
 };
 struct $Cont {
     struct $Cont$class *$class;
@@ -150,7 +157,8 @@ struct $ConstCont$class {
     $ConstCont (*__deserialize__)($ConstCont, $Serial$state);
     $bool (*__bool__)($ConstCont);
     $str (*__str__)($ConstCont);
-    $R (*__call__)($ConstCont, $WORD);
+    $R (*__call__)
+    ($ConstCont, $WORD);
 };
 struct $ConstCont {
     struct $ConstCont$class *$class;
@@ -165,7 +173,7 @@ $R $AWAIT($Msg, $Cont);
 
 void init_db_queue(long);
 
-#define $NEWACTOR($T)       ({ $T $t = malloc(sizeof(struct $T)); \
+#define $NEWACTOR($T) ({ $T $t = malloc(sizeof(struct $T)); \
                                $t->$class = &$T ## $methods; \
                                $Actor$methods.__init__(($Actor)$t); \
                                init_db_queue($t->$globkey); \
@@ -187,6 +195,5 @@ void $Actor$deserialize($Actor, $Serial$state);
 
 $ROW $serialize_rts();
 void $deserialize_rts($ROW);
-
 
 void $register_rts();

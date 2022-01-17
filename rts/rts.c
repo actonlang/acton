@@ -64,9 +64,9 @@ struct wt_stat {
     unsigned long long conts_1ms;   // bucket for <1ms
     unsigned long long conts_10ms;  // bucket for <10ms
     unsigned long long conts_100ms; // bucket for <100ms
-    unsigned long long conts_1s;     // bucket for <1s
-    unsigned long long conts_10s;    // bucket for <10s
-    unsigned long long conts_100s;   // bucket for <100s
+    unsigned long long conts_1s;    // bucket for <1s
+    unsigned long long conts_10s;   // bucket for <10s
+    unsigned long long conts_100s;  // bucket for <100s
     unsigned long long conts_inf;   // bucket for <+Inf
     // Bookkeeping is all the other work we do not directly related to running
     // actor continuations, like taking locks, committing information, talking
@@ -80,15 +80,18 @@ struct wt_stat {
     unsigned long long bkeep_1ms;   // bucket for <1ms
     unsigned long long bkeep_10ms;  // bucket for <10ms
     unsigned long long bkeep_100ms; // bucket for <100ms
-    unsigned long long bkeep_1s;     // bucket for <1s
-    unsigned long long bkeep_10s;    // bucket for <10s
-    unsigned long long bkeep_100s;   // bucket for <100s
+    unsigned long long bkeep_1s;    // bucket for <1s
+    unsigned long long bkeep_10s;   // bucket for <10s
+    unsigned long long bkeep_100s;  // bucket for <100s
     unsigned long long bkeep_inf;   // bucket for <+Inf
 };
 struct wt_stat wt_stats[MAX_WTHREADS];
 
 // Conveys current thread status, like what is it doing?
-enum WT_State {WT_NoExist = 0, WT_Working = 1, WT_Idle = 2, WT_Sleeping = 3};
+enum WT_State { WT_NoExist = 0,
+                WT_Working = 1,
+                WT_Idle = 2,
+                WT_Sleeping = 3 };
 static const char *WT_State_name[] = {"poof", "work", "idle", "sleep"};
 
 /*
@@ -97,14 +100,17 @@ static const char *WT_State_name[] = {"poof", "work", "idle", "sleep"};
  * RTS Debug Printf   = rtsd_printf
  */
 #define LOGPFX "#RTS# "
-#define rtsv_printf(...) if (rts_verbose) printf(__VA_ARGS__)
+#define rtsv_printf(...) \
+    if (rts_verbose)     \
+    printf(__VA_ARGS__)
 
 #ifdef DEV
-#define rtsd_printf(...) if (rts_debug) printf(__VA_ARGS__)
+#define rtsd_printf(...) \
+    if (rts_debug)       \
+    printf(__VA_ARGS__)
 #else
 #define rtsd_printf(...)
 #endif
-
 
 #if defined(IS_MACOS)
 ///////////////////////////////////////////////////////////////////////////////////////////////
@@ -113,10 +119,10 @@ static const char *WT_State_name[] = {"poof", "work", "idle", "sleep"};
 #include <mach/mach_init.h>
 #include <mach/thread_policy.h>
 
-#define SYSCTL_CORE_COUNT   "machdep.cpu.core_count"
+#define SYSCTL_CORE_COUNT "machdep.cpu.core_count"
 
 typedef struct cpu_set {
-  uint32_t    count;
+    uint32_t count;
 } cpu_set_t;
 
 static inline void
@@ -128,10 +134,9 @@ CPU_SET(int num, cpu_set_t *cs) { cs->count |= (1 << num); }
 static inline int
 CPU_ISSET(int num, cpu_set_t *cs) { return (cs->count & (1 << num)); }
 
-int sched_getaffinity(pid_t pid, size_t cpu_size, cpu_set_t *cpu_set)
-{
+int sched_getaffinity(pid_t pid, size_t cpu_size, cpu_set_t *cpu_set) {
     int32_t core_count = 0;
-    size_t  len = sizeof(core_count);
+    size_t len = sizeof(core_count);
     int ret = sysctlbyname(SYSCTL_CORE_COUNT, &core_count, &len, 0, 0);
     if (ret) {
         fprintf(stderr, "error getting the core count %d\n", ret);
@@ -146,10 +151,10 @@ int sched_getaffinity(pid_t pid, size_t cpu_size, cpu_set_t *cpu_set)
 }
 
 kern_return_t thread_policy_set(
-					thread_t thread,
-					thread_policy_flavor_t flavor,
-					thread_policy_t policy_info,
-					mach_msg_type_number_t count);
+    thread_t thread,
+    thread_policy_flavor_t flavor,
+    thread_policy_t policy_info,
+    mach_msg_type_number_t count);
 
 int pthread_setaffinity_np(pthread_t thread, size_t cpu_size, cpu_set_t *cpu_set) {
     int core = 0;
@@ -157,7 +162,7 @@ int pthread_setaffinity_np(pthread_t thread, size_t cpu_size, cpu_set_t *cpu_set
         if (CPU_ISSET(core, cpu_set))
             break;
     }
-    thread_affinity_policy_data_t policy = { core };
+    thread_affinity_policy_data_t policy = {core};
 
     thread_port_t mach_thread = pthread_mach_thread_np(thread);
     thread_policy_set(mach_thread, THREAD_AFFINITY_POLICY, (thread_policy_t)&policy, 1);
@@ -181,7 +186,7 @@ $Lock timerQ_lock;
 int64_t next_key = -10;
 $Lock next_key_lock;
 
-int64_t timer_consume_hd = 0;       // Lacks protection, although spinlocks wouldn't help concurrent increments. Must fix in db!
+int64_t timer_consume_hd = 0; // Lacks protection, although spinlocks wouldn't help concurrent increments. Must fix in db!
 
 time_t current_time() {
     struct timeval now;
@@ -224,13 +229,13 @@ int64_t get_next_key() {
     return res;
 }
 
-#define ACTORS_TABLE    ($WORD)0
-#define MSGS_TABLE      ($WORD)1
-#define MSG_QUEUE       ($WORD)2
+#define ACTORS_TABLE ($WORD)0
+#define MSGS_TABLE   ($WORD)1
+#define MSG_QUEUE    ($WORD)2
 
-#define TIMER_QUEUE     0           // Special key in table MSG_QUEUE
+#define TIMER_QUEUE 0 // Special key in table MSG_QUEUE
 
-remote_db_t * db = NULL;
+remote_db_t *db = NULL;
 
 ////////////////////////////////////////////////////////////////////////////////////////
 
@@ -246,31 +251,30 @@ void $Msg$__init__($Msg m, $Actor to, $Cont cont, time_t baseline, $WORD value) 
 }
 
 $bool $Msg$__bool__($Msg self) {
-  return $True;
+    return $True;
 }
 
 $str $Msg$__str__($Msg self) {
-  char *s;
-  asprintf(&s,"<$Msg object at %p>",self);
-  return to$str(s);
+    char *s;
+    asprintf(&s, "<$Msg object at %p>", self);
+    return to$str(s);
 }
 
 void $Msg$__serialize__($Msg self, $Serial$state state) {
-    $step_serialize(self->$to,state);
-    $step_serialize(self->$cont,state);
-    $val_serialize(ITEM_ID,&self->$baseline,state);
-    $step_serialize(self->$value,state);
+    $step_serialize(self->$to, state);
+    $step_serialize(self->$cont, state);
+    $val_serialize(ITEM_ID, &self->$baseline, state);
+    $step_serialize(self->$value, state);
 }
-
 
 $Msg $Msg$__deserialize__($Msg res, $Serial$state state) {
     if (!res) {
         if (!state) {
-            res = malloc(sizeof (struct $Msg));
+            res = malloc(sizeof(struct $Msg));
             res->$class = &$Msg$methods;
             return res;
         }
-        res = $DNEW($Msg,state);
+        res = $DNEW($Msg, state);
     }
     res->$next = NULL;
     res->$to = $step_deserialize(state);
@@ -297,19 +301,19 @@ void $Actor$__init__($Actor a) {
 }
 
 $bool $Actor$__bool__($Actor self) {
-  return $True;
+    return $True;
 }
 
 $str $Actor$__str__($Actor self) {
-  char *s;
-  asprintf(&s,"<$Actor object at %p>",self);
-  return to$str(s);
+    char *s;
+    asprintf(&s, "<$Actor object at %p>", self);
+    return to$str(s);
 }
 
 void $Actor$__serialize__($Actor self, $Serial$state state) {
-    $step_serialize(self->$waitsfor,state);
-    $val_serialize(ITEM_ID,&self->$consume_hd,state);
-    $step_serialize(self->$catcher,state);
+    $step_serialize(self->$waitsfor, state);
+    $val_serialize(ITEM_ID, &self->$consume_hd, state);
+    $step_serialize(self->$catcher, state);
 }
 
 $Actor $Actor$__deserialize__($Actor res, $Serial$state state) {
@@ -339,38 +343,38 @@ void $Catcher$__init__($Catcher c, $Cont cont) {
 }
 
 $bool $Catcher$__bool__($Catcher self) {
-  return $True;
+    return $True;
 }
 
 $str $Catcher$__str__($Catcher self) {
-  char *s;
-  asprintf(&s,"<$Catcher object at %p>",self);
-  return to$str(s);
+    char *s;
+    asprintf(&s, "<$Catcher object at %p>", self);
+    return to$str(s);
 }
 
 void $Catcher$__serialize__($Catcher self, $Serial$state state) {
-    $step_serialize(self->$next,state);
-    $step_serialize(self->$cont,state);
+    $step_serialize(self->$next, state);
+    $step_serialize(self->$cont, state);
 }
 
 $Catcher $Catcher$__deserialize__($Catcher self, $Serial$state state) {
-    $Catcher res = $DNEW($Catcher,state);
+    $Catcher res = $DNEW($Catcher, state);
     res->$next = $step_deserialize(state);
     res->$cont = $step_deserialize(state);
     return res;
 }
 ///////////////////////////////////////////////////////////////////////////////////////
 
-void $Cont$__init__($Cont $this) { }
+void $Cont$__init__($Cont $this) {}
 
 $bool $Cont$__bool__($Cont self) {
-  return $True;
+    return $True;
 }
 
 $str $Cont$__str__($Cont self) {
-  char *s;
-  asprintf(&s,"<$Cont object at %p>",self);
-  return to$str(s);
+    char *s;
+    asprintf(&s, "<$Cont object at %p>", self);
+    return to$str(s);
 }
 
 void $Cont$__serialize__($Cont self, $Serial$state state) {
@@ -378,7 +382,7 @@ void $Cont$__serialize__($Cont self, $Serial$state state) {
 }
 
 $Cont $Cont$__deserialize__($Cont self, $Serial$state state) {
-    return $DNEW($Cont,state);
+    return $DNEW($Cont, state);
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////
@@ -389,22 +393,22 @@ void $ConstCont$__init__($ConstCont $this, $WORD val, $Cont cont) {
 }
 
 $bool $ConstCont$__bool__($ConstCont self) {
-  return $True;
+    return $True;
 }
 
 $str $ConstCont$__str__($ConstCont self) {
-  char *s;
-  asprintf(&s,"<$ConstCont object at %p>",self);
-  return to$str(s);
+    char *s;
+    asprintf(&s, "<$ConstCont object at %p>", self);
+    return to$str(s);
 }
 
 void $ConstCont$__serialize__($ConstCont self, $Serial$state state) {
-    $step_serialize(self->val,state);
-    $step_serialize(self->cont,state);
+    $step_serialize(self->val, state);
+    $step_serialize(self->cont, state);
 }
 
 $ConstCont $ConstCont$__deserialize__($ConstCont self, $Serial$state state) {
-    $ConstCont res = $DNEW($ConstCont,state);
+    $ConstCont res = $DNEW($ConstCont, state);
     res->val = $step_deserialize(state);
     res->cont = $step_deserialize(state);
     return res;
@@ -415,7 +419,7 @@ $R $ConstCont$__call__($ConstCont $this, $WORD _ignore) {
     return cont->$class->__call__(cont, $this->val);
 }
 
-$Cont $CONSTCONT($WORD val, $Cont cont){
+$Cont $CONSTCONT($WORD val, $Cont cont) {
     $ConstCont obj = malloc(sizeof(struct $ConstCont));
     obj->$class = &$ConstCont$methods;
     $ConstCont$methods.__init__(obj, val, cont);
@@ -432,8 +436,7 @@ struct $Msg$class $Msg$methods = {
     $Msg$__serialize__,
     $Msg$__deserialize__,
     $Msg$__bool__,
-    $Msg$__str__
-};
+    $Msg$__str__};
 
 struct $Actor$class $Actor$methods = {
     ACTOR_HEADER,
@@ -443,8 +446,7 @@ struct $Actor$class $Actor$methods = {
     $Actor$__serialize__,
     $Actor$__deserialize__,
     $Actor$__bool__,
-    $Actor$__str__
-};
+    $Actor$__str__};
 
 struct $Catcher$class $Catcher$methods = {
     CATCHER_HEADER,
@@ -454,8 +456,7 @@ struct $Catcher$class $Catcher$methods = {
     $Catcher$__serialize__,
     $Catcher$__deserialize__,
     $Catcher$__bool__,
-    $Catcher$__str__
-};
+    $Catcher$__str__};
 
 struct $Cont$class $Cont$methods = {
     CONT_HEADER,
@@ -466,8 +467,7 @@ struct $Cont$class $Cont$methods = {
     $Cont$__deserialize__,
     $Cont$__bool__,
     $Cont$__str__,
-    NULL
-};
+    NULL};
 
 struct $ConstCont$class $ConstCont$methods = {
     "$ConstCont",
@@ -478,8 +478,7 @@ struct $ConstCont$class $ConstCont$methods = {
     $ConstCont$__deserialize__,
     $ConstCont$__bool__,
     $ConstCont$__str__,
-    $ConstCont$__call__
-};
+    $ConstCont$__call__};
 
 ////////////////////////////////////////////////////////////////////////////////////////
 
@@ -498,7 +497,7 @@ void ENQ_ready($Actor a) {
     spinlock_unlock(&readyQ_lock);
 }
 
-// Atomically dequeue and return the first actor from the global ready-queue, 
+// Atomically dequeue and return the first actor from the global ready-queue,
 // or return NULL.
 $Actor DEQ_ready() {
     spinlock_lock(&readyQ_lock);
@@ -511,7 +510,7 @@ $Actor DEQ_ready() {
     return res;
 }
 
-// Atomically enqueue message "m" onto the queue of actor "a", 
+// Atomically enqueue message "m" onto the queue of actor "a",
 // return true if the queue was previously empty.
 bool ENQ_msg($Msg m, $Actor a) {
     bool did_enq = true;
@@ -559,7 +558,7 @@ bool ADD_waiting($Actor a, $Msg m) {
     return did_add;
 }
 
-// Atomically freeze message "m" and return its list of waiting actors. 
+// Atomically freeze message "m" and return its list of waiting actors.
 $Actor FREEZE_waiting($Msg m) {
     spinlock_lock(&m->$wait_lock);
     m->$cont = NULL;
@@ -593,7 +592,7 @@ bool ENQ_timed($Msg m) {
     return new_head;
 }
 
-// Atomically dequeue and return the first message from the global timer-queue if 
+// Atomically dequeue and return the first message from the global timer-queue if
 // its baseline is less or equal to "now", else return NULL.
 $Msg DEQ_timed(time_t now) {
     spinlock_lock(&timerQ_lock);
@@ -613,10 +612,18 @@ $Msg DEQ_timed(time_t now) {
 ////////////////////////////////////////////////////////////////////////////////////////
 char *RTAG_name($RTAG tag) {
     switch (tag) {
-        case $RDONE: return "RDONE"; break;
-        case $RFAIL: return "RFAIL"; break;
-        case $RCONT: return "RCONT"; break;
-        case $RWAIT: return "RWAIT"; break;
+        case $RDONE:
+            return "RDONE";
+            break;
+        case $RFAIL:
+            return "RFAIL";
+            break;
+        case $RCONT:
+            return "RCONT";
+            break;
+        case $RWAIT:
+            return "RWAIT";
+            break;
     }
 }
 ////////////////////////////////////////////////////////////////////////////////////////
@@ -625,23 +632,23 @@ $R $DONE$__call__($Cont $this, $WORD val) {
 }
 
 $bool $Done$__bool__($Cont self) {
-  return $True;
+    return $True;
 }
 
 $str $Done$__str__($Cont self) {
-  char *s;
-  asprintf(&s,"<$Done object at %p>",self);
-  return to$str(s);
+    char *s;
+    asprintf(&s, "<$Done object at %p>", self);
+    return to$str(s);
 }
 
 void $Done__serialize__($Cont self, $Serial$state state) {
-  return;
+    return;
 }
 
 $Cont $Done__deserialize__($Cont self, $Serial$state state) {
-  $Cont res = $DNEW($Cont,state);
-  res->$class = &$Done$methods;
-  return res;
+    $Cont res = $DNEW($Cont, state);
+    res->$class = &$Done$methods;
+    return res;
 }
 
 struct $Cont$class $Done$methods = {
@@ -653,13 +660,11 @@ struct $Cont$class $Done$methods = {
     $Done__deserialize__,
     $Done$__bool__,
     $Done$__str__,
-    ($R (*)($Cont, ...))$DONE$__call__
-};
+    ($R(*)($Cont, ...))$DONE$__call__};
 struct $Cont $Done$instance = {
-    &$Done$methods
-};
+    &$Done$methods};
 ////////////////////////////////////////////////////////////////////////////////////////
-$R $NewRoot$__call__ ($Cont $this, $WORD val) {
+$R $NewRoot$__call__($Cont $this, $WORD val) {
     $Cont then = ($Cont)val;
     return $ROOT(env_actor, then);
 }
@@ -673,11 +678,9 @@ struct $Cont$class $NewRoot$methods = {
     $Cont$__deserialize__,
     $Cont$__bool__,
     $Cont$__str__,
-    ($R (*)($Cont, ...))$NewRoot$__call__
-};
+    ($R(*)($Cont, ...))$NewRoot$__call__};
 struct $Cont $NewRoot$cont = {
-    &$NewRoot$methods
-};
+    &$NewRoot$methods};
 ////////////////////////////////////////////////////////////////////////////////////////
 $R $WriteRoot$__call__($Cont $this, $WORD val) {
     root_actor = ($Actor)val;
@@ -693,21 +696,19 @@ struct $Cont$class $WriteRoot$methods = {
     $Cont$__deserialize__,
     $Cont$__bool__,
     $Cont$__str__,
-    ($R (*)($Cont, ...))$WriteRoot$__call__
-};
+    ($R(*)($Cont, ...))$WriteRoot$__call__};
 struct $Cont $WriteRoot$cont = {
-    &$WriteRoot$methods
-};
+    &$WriteRoot$methods};
 ////////////////////////////////////////////////////////////////////////////////////////
 
-void dummy_callback(queue_callback_args * qca) { }
+void dummy_callback(queue_callback_args *qca) {}
 
 void create_db_queue(long key) {
     int ret = remote_create_queue_in_txn(MSG_QUEUE, ($WORD)key, NULL, db);
     rtsd_printf(LOGPFX "#### Create queue %ld returns %d\n", key, ret);
-    queue_callback * qc = get_queue_callback(dummy_callback);
-	int64_t prev_read_head = -1, prev_consume_head = -1;
-	ret = remote_subscribe_queue(($WORD)key, 0, 0, MSG_QUEUE, ($WORD)key, qc, &prev_read_head, &prev_consume_head, db);
+    queue_callback *qc = get_queue_callback(dummy_callback);
+    int64_t prev_read_head = -1, prev_consume_head = -1;
+    ret = remote_subscribe_queue(($WORD)key, 0, 0, MSG_QUEUE, ($WORD)key, qc, &prev_read_head, &prev_consume_head, db);
     rtsd_printf(LOGPFX "   # Subscribe queue %ld returns %d\n", key, ret);
 }
 
@@ -737,14 +738,14 @@ $Msg $ASYNC($Actor to, $Cont cont) {
     $Actor self = ($Actor)pthread_getspecific(self_key);
     time_t baseline = 0;
     $Msg m = $NEW($Msg, to, cont, baseline, &$Done$instance);
-    if (self) {                                         // $ASYNC called by actor code
+    if (self) { // $ASYNC called by actor code
         m->$baseline = self->$msg->$baseline;
         PUSH_outgoing(self, m);
-    } else {                                            // $ASYNC called by the event loop
+    } else { // $ASYNC called by the event loop
         m->$baseline = current_time();
         if (ENQ_msg(m, to)) {
-           ENQ_ready(to);
-           new_work();
+            ENQ_ready(to);
+            new_work();
         }
     }
     return m;
@@ -803,7 +804,7 @@ void FLUSH_outgoing($Actor self, uuid_t *txnid) {
             dest = 0;
         }
         if (db) {
-            int ret = remote_enqueue_in_txn(($WORD*)&m->$globkey, 1, NULL, 0, MSG_QUEUE, (WORD)dest, txnid, db);
+            int ret = remote_enqueue_in_txn(($WORD *)&m->$globkey, 1, NULL, 0, MSG_QUEUE, (WORD)dest, txnid, db);
             if (dest) {
                 rtsd_printf(LOGPFX "   # enqueue msg %ld to queue %ld returns %d\n", m->$globkey, dest, ret);
             } else {
@@ -840,7 +841,7 @@ void handle_timeout() {
 
             int ret = remote_consume_queue_in_txn(($WORD)key, 0, 0, MSG_QUEUE, ($WORD)key, read_head, txnid, db);
             rtsd_printf(LOGPFX "   # consume msg %ld from TIMER_QUEUE returns %d\n", m->$globkey, ret);
-            int ret2 = remote_enqueue_in_txn(($WORD*)&m->$globkey, 1, NULL, 0, MSG_QUEUE, (WORD)m->$to->$globkey, txnid, db);
+            int ret2 = remote_enqueue_in_txn(($WORD *)&m->$globkey, 1, NULL, 0, MSG_QUEUE, (WORD)m->$to->$globkey, txnid, db);
             rtsd_printf(LOGPFX "   # (timed) enqueue msg %ld to queue %ld returns %d\n", m->$globkey, m->$to->$globkey, ret2);
             remote_commit_txn(txnid, db);
             rtsd_printf(LOGPFX "############## Commit\n\n");
@@ -861,19 +862,19 @@ $WORD try_globdict($WORD w) {
 long read_queued_msg(long key, int64_t *read_head) {
     snode_t *m_start, *m_end;
     int entries_read = 0;
-    
-    int ret = remote_read_queue_in_txn(($WORD)key, 0, 0, MSG_QUEUE, ($WORD)key, 
+
+    int ret = remote_read_queue_in_txn(($WORD)key, 0, 0, MSG_QUEUE, ($WORD)key,
                                        1, &entries_read, read_head, &m_start, &m_end, NULL, db);
     rtsd_printf(LOGPFX "   # read msg from queue %ld returns %d, entries read: %d\n", key, ret, entries_read);
 
     if (!entries_read)
         return 0;
-    db_row_t *r = (db_row_t*)m_start->value;
+    db_row_t *r = (db_row_t *)m_start->value;
     rtsd_printf(LOGPFX "# r %p, key: %ld, cells: %p, columns: %p, no_cols: %d, blobsize: %d\n", r, (long)r->key, r->cells, r->column_array, r->no_columns, r->last_blob_size);
     return (long)r->column_array[0];
 }
 
-typedef struct BlobHd {           // C.f. $ROW
+typedef struct BlobHd { // C.f. $ROW
     int class_id;
     int blob_size;
 } BlobHd;
@@ -882,18 +883,18 @@ $ROW extract_row($WORD *blob, size_t blob_size) {
     int words_left = blob_size / sizeof($WORD);
     if (words_left == 0)
         return NULL;
-    BlobHd* head = (BlobHd*)blob;
-    $ROW fst = malloc(sizeof(struct $ROW) + head->blob_size*sizeof($WORD));
+    BlobHd *head = (BlobHd *)blob;
+    $ROW fst = malloc(sizeof(struct $ROW) + head->blob_size * sizeof($WORD));
     $ROW row = fst;
     while (1) {
         long size = 1 + head->blob_size;
-        memcpy(&row->class_id, blob, size*sizeof($WORD));
+        memcpy(&row->class_id, blob, size * sizeof($WORD));
         blob += size;
         words_left -= size;
         if (words_left == 0)
             break;
-        head = (BlobHd*)blob;
-        row->next = malloc(sizeof(struct $ROW) + head->blob_size*sizeof($WORD));
+        head = (BlobHd *)blob;
+        row->next = malloc(sizeof(struct $ROW) + head->blob_size * sizeof($WORD));
         row = row->next;
     };
     row->next = NULL;
@@ -937,20 +938,20 @@ void print_actor($Actor a) {
 void deserialize_system(snode_t *actors_start) {
     snode_t *msgs_start, *msgs_end;
     remote_read_full_table_in_txn(&msgs_start, &msgs_end, MSGS_TABLE, NULL, db);
-    
-    globdict = $NEW($dict,($Hashable)$Hashable$int$witness,NULL,NULL);
+
+    globdict = $NEW($dict, ($Hashable)$Hashable$int$witness, NULL, NULL);
 
     long min_key = 0;
 
     rtsd_printf(LOGPFX "\n#### Msg allocation:\n");
-    for(snode_t * node = msgs_start; node!=NULL; node=NEXT(node)) {
-		db_row_t* r = (db_row_t*) node->value;
+    for (snode_t *node = msgs_start; node != NULL; node = NEXT(node)) {
+        db_row_t *r = (db_row_t *)node->value;
         rtsd_printf(LOGPFX "# r %p, key: %ld, cells: %p, columns: %p, no_cols: %d, blobsize: %d\n", r, (long)r->key, r->cells, r->column_array, r->no_columns, r->last_blob_size);
         long key = (long)r->key;
-		if (r->cells) {
-            db_row_t* r2 = (HEAD(r->cells))->value;
+        if (r->cells) {
+            db_row_t *r2 = (HEAD(r->cells))->value;
             rtsd_printf(LOGPFX "# r2 %p, key: %ld, cells: %p, columns: %p, no_cols: %d, blobsize: %d\n", r2, (long)r2->key, r2->cells, r2->column_array, r2->no_columns, r2->last_blob_size);
-            BlobHd *head = (BlobHd*)r2->column_array[0];
+            BlobHd *head = (BlobHd *)r2->column_array[0];
             $Msg msg = ($Msg)$GET_METHODS(head->class_id)->__deserialize__(NULL, NULL);
             msg->$globkey = key;
             $dict_setitem(globdict, ($Hashable)$Hashable$int$witness, to$int(key), msg);
@@ -960,14 +961,14 @@ void deserialize_system(snode_t *actors_start) {
         }
     }
     rtsd_printf(LOGPFX "\n#### Actor allocation:\n");
-    for(snode_t * node = actors_start; node!=NULL; node=NEXT(node)) {
-        db_row_t* r = (db_row_t*) node->value;
+    for (snode_t *node = actors_start; node != NULL; node = NEXT(node)) {
+        db_row_t *r = (db_row_t *)node->value;
         rtsd_printf(LOGPFX "# r %p, key: %ld, cells: %p, columns: %p, no_cols: %d, blobsize: %d\n", r, (long)r->key, r->cells, r->column_array, r->no_columns, r->last_blob_size);
         long key = (long)r->key;
         if (r->cells) {
-            db_row_t* r2 = (HEAD(r->cells))->value;
+            db_row_t *r2 = (HEAD(r->cells))->value;
             rtsd_printf(LOGPFX "# r2 %p, key: %ld, cells: %p, columns: %p, no_cols: %d, blobsize: %d\n", r2, (long)r2->key, r2->cells, r2->column_array, r2->no_columns, r2->last_blob_size);
-            BlobHd *head = (BlobHd*)r2->column_array[0];
+            BlobHd *head = (BlobHd *)r2->column_array[0];
             $Actor act = ($Actor)$GET_METHODS(head->class_id)->__deserialize__(NULL, NULL);
             act->$globkey = key;
             $dict_setitem(globdict, ($Hashable)$Hashable$int$witness, to$int(key), act);
@@ -979,12 +980,12 @@ void deserialize_system(snode_t *actors_start) {
     next_key = min_key;
 
     rtsd_printf(LOGPFX "\n#### Msg contents:\n");
-    for(snode_t * node = msgs_start; node!=NULL; node=NEXT(node)) {
-		db_row_t* r = (db_row_t*) node->value;
+    for (snode_t *node = msgs_start; node != NULL; node = NEXT(node)) {
+        db_row_t *r = (db_row_t *)node->value;
         long key = (long)r->key;
-		if (r->cells) {
-            db_row_t* r2 = (HEAD(r->cells))->value;
-            $WORD *blob = ($WORD*)r2->column_array[0];
+        if (r->cells) {
+            db_row_t *r2 = (HEAD(r->cells))->value;
+            $WORD *blob = ($WORD *)r2->column_array[0];
             int blob_size = r2->last_blob_size;
             $ROW row = extract_row(blob, blob_size);
             $Msg msg = ($Msg)$dict_get(globdict, ($Hashable)$Hashable$int$witness, to$int(key), NULL);
@@ -996,12 +997,12 @@ void deserialize_system(snode_t *actors_start) {
     }
 
     rtsd_printf(LOGPFX "\n#### Actor contents:\n");
-    for(snode_t * node = actors_start; node!=NULL; node=NEXT(node)) {
-		db_row_t* r = (db_row_t*) node->value;
+    for (snode_t *node = actors_start; node != NULL; node = NEXT(node)) {
+        db_row_t *r = (db_row_t *)node->value;
         long key = (long)r->key;
-		if (r->cells) {
-            db_row_t* r2 = (HEAD(r->cells))->value;
-            $WORD *blob = ($WORD*)r2->column_array[0];
+        if (r->cells) {
+            db_row_t *r2 = (HEAD(r->cells))->value;
+            $WORD *blob = ($WORD *)r2->column_array[0];
             int blob_size = r2->last_blob_size;
             $ROW row = extract_row(blob, blob_size);
             $Actor act = ($Actor)$dict_get(globdict, ($Hashable)$Hashable$int$witness, to$int(key), NULL);
@@ -1013,13 +1014,12 @@ void deserialize_system(snode_t *actors_start) {
             if (m && m->$cont) {
                 ADD_waiting(act, m);
                 rtsd_printf(LOGPFX "# Adding Actor %ld to wait for Msg %ld\n", act->$globkey, m->$globkey);
-            }
-            else {
+            } else {
                 act->$waitsfor = NULL;
             }
 
             rtsd_printf(LOGPFX "\n#### Reading msgs queue %ld contents:\n", key);
-            queue_callback * qc = get_queue_callback(dummy_callback);
+            queue_callback *qc = get_queue_callback(dummy_callback);
             int64_t prev_read_head = -1, prev_consume_head = -1;
             int ret = remote_subscribe_queue(($WORD)key, 0, 0, MSG_QUEUE, ($WORD)key, qc, &prev_read_head, &prev_consume_head, db);
             rtsd_printf(LOGPFX "   # Subscribe queue %ld returns %d\n", key, ret);
@@ -1041,9 +1041,9 @@ void deserialize_system(snode_t *actors_start) {
 
     rtsd_printf(LOGPFX "\n#### Reading timer queue contents:\n");
     time_t now = current_time();
-    queue_callback * qc = get_queue_callback(dummy_callback);
-	int64_t prev_read_head = -1, prev_consume_head = -1;
-	int ret = remote_subscribe_queue(TIMER_QUEUE, 0, 0, MSG_QUEUE, TIMER_QUEUE, qc, &prev_read_head, &prev_consume_head, db);
+    queue_callback *qc = get_queue_callback(dummy_callback);
+    int64_t prev_read_head = -1, prev_consume_head = -1;
+    int ret = remote_subscribe_queue(TIMER_QUEUE, 0, 0, MSG_QUEUE, TIMER_QUEUE, qc, &prev_read_head, &prev_consume_head, db);
     rtsd_printf(LOGPFX "   # Subscribe queue 0 returns %d\n", ret);
     while (1) {
         long msg_key = read_queued_msg(TIMER_QUEUE, &prev_read_head);
@@ -1065,7 +1065,7 @@ void deserialize_system(snode_t *actors_start) {
      * some intermediate things grabbing two numbers. This must be kept in sync
      * with next_key and the structure in the BOOTSTRAP() function!
      */
-    env_actor  = ($Env)$dict_get(globdict, ($Hashable)$Hashable$int$witness, to$int(-11), NULL);
+    env_actor = ($Env)$dict_get(globdict, ($Hashable)$Hashable$int$witness, to$int(-11), NULL);
     root_actor = ($Actor)$dict_get(globdict, ($Hashable)$Hashable$int$witness, to$int(-14), NULL);
     globdict = NULL;
     rtsd_printf(LOGPFX "\n\n");
@@ -1083,10 +1083,10 @@ $WORD try_globkey($WORD obj) {
     return 0;
 }
 
-long $total_rowsize($ROW r) {           // In words
+long $total_rowsize($ROW r) { // In words
     long size = 0;
     while (r) {
-        size += 1 + r->blob_size;       // Two ints == one $WORD
+        size += 1 + r->blob_size; // Two ints == one $WORD
         r = r->next;
     }
     return size;
@@ -1100,12 +1100,12 @@ void insert_row(long key, size_t total, $ROW row, $WORD table, uuid_t *txnid) {
     while (row) {
         //printf("   # row %d: class %d, blob_size %d\n", row_no, row->class_id, row->blob_size);
         long size = 1 + row->blob_size;
-        memcpy(p, &row->class_id, size*sizeof($WORD));
+        memcpy(p, &row->class_id, size * sizeof($WORD));
         row_no++;
         p += size;
         row = row->next;
     }
-    BlobHd *end = (BlobHd*)p;
+    BlobHd *end = (BlobHd *)p;
 
     rtsd_printf(LOGPFX "## Built blob, size: %ld, blob: ", total);
     for (int i = 0; i < total; i++)
@@ -1116,7 +1116,7 @@ void insert_row(long key, size_t total, $ROW row, $WORD table, uuid_t *txnid) {
     //$ROW row1 = extract_row(blob, total*sizeof($WORD));
     //print_rows(row1);
 
-    int ret = remote_insert_in_txn(column, 2, 1, 1, blob, total*sizeof($WORD), table, txnid, db);
+    int ret = remote_insert_in_txn(column, 2, 1, 1, blob, total * sizeof($WORD), table, txnid, db);
     rtsd_printf(LOGPFX "   # insert to table %ld, row %ld, returns %d\n", (long)table, key, ret);
 }
 
@@ -1141,9 +1141,9 @@ void serialize_actor($Actor a, uuid_t *txnid) {
 }
 
 void BOOTSTRAP(int argc, char *argv[]) {
-    $list args = $list$new(NULL,NULL);
-    for (int i=0; i< argc; i++)
-      $list_append(args,to$str(argv[i]));
+    $list args = $list$new(NULL, NULL);
+    for (int i = 0; i < argc; i++)
+        $list_append(args, to$str(argv[i]));
 
     env_actor = $NEW($Env, args);
     $Actor ancestor0 = $NEW($Actor);
@@ -1156,11 +1156,11 @@ void BOOTSTRAP(int argc, char *argv[]) {
 
         // serialize env to DB, since it is constant and never gets picked up by
         // main_loop, thus never serialized
-        uuid_t * txnid = remote_new_txn(db);
+        uuid_t *txnid = remote_new_txn(db);
         serialize_actor(($Actor)env_actor, txnid);
         remote_commit_txn(txnid, db);
 
-        int ret = remote_enqueue_in_txn(($WORD*)&m->$globkey, 1, NULL, 0, MSG_QUEUE, (WORD)ancestor0->$globkey, NULL, db);
+        int ret = remote_enqueue_in_txn(($WORD *)&m->$globkey, 1, NULL, 0, MSG_QUEUE, (WORD)ancestor0->$globkey, NULL, db);
         rtsd_printf(LOGPFX "   # enqueue bootstrap msg %ld to ancestor0 queue %ld returns %d\n", m->$globkey, ancestor0->$globkey, ret);
     }
 
@@ -1168,7 +1168,6 @@ void BOOTSTRAP(int argc, char *argv[]) {
         ENQ_ready(ancestor0);
     }
 }
-
 
 ////////////////////////////////////////////////////////////////////////////////////////
 
@@ -1199,7 +1198,7 @@ void *main_loop(void *idx) {
             $Msg m = current->$msg;
             $Cont cont = m->$cont;
             $WORD val = m->$value;
-            
+
             clock_gettime(CLOCK_MONOTONIC, &ts1);
             wt_stats[(int)idx].state = WT_Working;
 
@@ -1212,22 +1211,34 @@ void *main_loop(void *idx) {
             wt_stats[(int)idx].conts_count++;
             wt_stats[(int)idx].conts_sum += diff;
 
-            if      (diff < 100)              { wt_stats[(int)idx].conts_100ns++; }
-            else if (diff < 1   * 1000)       { wt_stats[(int)idx].conts_1us++; }
-            else if (diff < 10  * 1000)       { wt_stats[(int)idx].conts_10us++; }
-            else if (diff < 100 * 1000)       { wt_stats[(int)idx].conts_100us++; }
-            else if (diff < 1   * 1000000)    { wt_stats[(int)idx].conts_1ms++; }
-            else if (diff < 10  * 1000000)    { wt_stats[(int)idx].conts_10ms++; }
-            else if (diff < 100 * 1000000)    { wt_stats[(int)idx].conts_100ms++; }
-            else if (diff < 1   * 1000000000) { wt_stats[(int)idx].conts_1s++; }
-            else if (diff < (long long int)10  * 1000000000) { wt_stats[(int)idx].conts_10s++; }
-            else if (diff < (long long int)100 * 1000000000) { wt_stats[(int)idx].conts_100s++; }
-            else                              { wt_stats[(int)idx].conts_inf++; }
+            if (diff < 100) {
+                wt_stats[(int)idx].conts_100ns++;
+            } else if (diff < 1 * 1000) {
+                wt_stats[(int)idx].conts_1us++;
+            } else if (diff < 10 * 1000) {
+                wt_stats[(int)idx].conts_10us++;
+            } else if (diff < 100 * 1000) {
+                wt_stats[(int)idx].conts_100us++;
+            } else if (diff < 1 * 1000000) {
+                wt_stats[(int)idx].conts_1ms++;
+            } else if (diff < 10 * 1000000) {
+                wt_stats[(int)idx].conts_10ms++;
+            } else if (diff < 100 * 1000000) {
+                wt_stats[(int)idx].conts_100ms++;
+            } else if (diff < 1 * 1000000000) {
+                wt_stats[(int)idx].conts_1s++;
+            } else if (diff < (long long int)10 * 1000000000) {
+                wt_stats[(int)idx].conts_10s++;
+            } else if (diff < (long long int)100 * 1000000000) {
+                wt_stats[(int)idx].conts_100s++;
+            } else {
+                wt_stats[(int)idx].conts_inf++;
+            }
 
             switch (r.tag) {
                 case $RDONE: {
                     if (db) {
-                        uuid_t * txnid = remote_new_txn(db);
+                        uuid_t *txnid = remote_new_txn(db);
                         current->$consume_hd++;
                         serialize_actor(current, txnid);
                         FLUSH_outgoing(current, txnid);
@@ -1248,8 +1259,8 @@ void *main_loop(void *idx) {
                         FLUSH_outgoing(current, NULL);
                     }
 
-                    m->$value = r.value;                 // m->value holds the response,
-                    $Actor b = FREEZE_waiting(m);        // so set m->cont = NULL and stop further m->waiting additions
+                    m->$value = r.value;          // m->value holds the response,
+                    $Actor b = FREEZE_waiting(m); // so set m->cont = NULL and stop further m->waiting additions
                     while (b) {
                         b->$msg->$value = r.value;
                         b->$waitsfor = NULL;
@@ -1280,7 +1291,7 @@ void *main_loop(void *idx) {
                 }
                 case $RWAIT: {
                     if (db) {
-                        uuid_t * txnid = remote_new_txn(db);
+                        uuid_t *txnid = remote_new_txn(db);
                         serialize_actor(current, txnid);
                         FLUSH_outgoing(current, txnid);
                         serialize_msg(current->$msg, txnid);
@@ -1291,10 +1302,10 @@ void *main_loop(void *idx) {
                     }
                     m->$cont = r.cont;
                     $Msg x = ($Msg)r.value;
-                    if (ADD_waiting(current, x)) {      // x->cont != NULL: x is still being processed so current was added to x->waiting
+                    if (ADD_waiting(current, x)) { // x->cont != NULL: x is still being processed so current was added to x->waiting
                         rtsd_printf(LOGPFX "## AWAIT actor %ld : %s\n", current->$globkey, current->$class->$GCINFO);
                         current->$waitsfor = x;
-                    } else {                            // x->cont == NULL: x->value holds the final response, current is not in x->waiting
+                    } else { // x->cont == NULL: x->value holds the final response, current is not in x->waiting
                         rtsd_printf(LOGPFX "## AWAIT/wakeup actor %ld : %s\n", current->$globkey, current->$class->$GCINFO);
                         m->$value = x->$value;
                         ENQ_ready(current);
@@ -1307,17 +1318,29 @@ void *main_loop(void *idx) {
             wt_stats[(int)idx].bkeep_count++;
             wt_stats[(int)idx].bkeep_sum += diff;
 
-            if      (diff < 100)              { wt_stats[(int)idx].bkeep_100ns++; }
-            else if (diff < 1   * 1000)       { wt_stats[(int)idx].bkeep_1us++; }
-            else if (diff < 10  * 1000)       { wt_stats[(int)idx].bkeep_10us++; }
-            else if (diff < 100 * 1000)       { wt_stats[(int)idx].bkeep_100us++; }
-            else if (diff < 1   * 1000000)    { wt_stats[(int)idx].bkeep_1ms++; }
-            else if (diff < 10  * 1000000)    { wt_stats[(int)idx].bkeep_10ms++; }
-            else if (diff < 100 * 1000000)    { wt_stats[(int)idx].bkeep_100ms++; }
-            else if (diff < 1   * 1000000000) { wt_stats[(int)idx].bkeep_1s++; }
-            else if (diff < (long long int)10  * 1000000000) { wt_stats[(int)idx].bkeep_10s++; }
-            else if (diff < (long long int)100 * 1000000000) { wt_stats[(int)idx].bkeep_100s++; }
-            else                              { wt_stats[(int)idx].bkeep_inf++; }
+            if (diff < 100) {
+                wt_stats[(int)idx].bkeep_100ns++;
+            } else if (diff < 1 * 1000) {
+                wt_stats[(int)idx].bkeep_1us++;
+            } else if (diff < 10 * 1000) {
+                wt_stats[(int)idx].bkeep_10us++;
+            } else if (diff < 100 * 1000) {
+                wt_stats[(int)idx].bkeep_100us++;
+            } else if (diff < 1 * 1000000) {
+                wt_stats[(int)idx].bkeep_1ms++;
+            } else if (diff < 10 * 1000000) {
+                wt_stats[(int)idx].bkeep_10ms++;
+            } else if (diff < 100 * 1000000) {
+                wt_stats[(int)idx].bkeep_100ms++;
+            } else if (diff < 1 * 1000000000) {
+                wt_stats[(int)idx].bkeep_1s++;
+            } else if (diff < (long long int)10 * 1000000000) {
+                wt_stats[(int)idx].bkeep_10s++;
+            } else if (diff < (long long int)100 * 1000000000) {
+                wt_stats[(int)idx].bkeep_100s++;
+            } else {
+                wt_stats[(int)idx].bkeep_inf++;
+            }
 
             wt_stats[(int)idx].state = WT_Idle;
         } else {
@@ -1342,25 +1365,24 @@ void *main_loop(void *idx) {
 
 ////////////////////////////////////////////////////////////////////////////////////////
 
-void $register_rts () {
-  $register_force(MSG_ID,&$Msg$methods);
-  $register_force(ACTOR_ID,&$Actor$methods);
-  $register_force(CATCHER_ID,&$Catcher$methods);
-  $register_force(CLOS_ID,&$function$methods);
-  $register_force(CONT_ID,&$Cont$methods);
-  $register_force(DONE_ID,&$Done$methods);
-  $register_force(CONSTCONT_ID,&$ConstCont$methods);
-  $register(&$Done$methods);
-  $register(&$NewRoot$methods);
-  $register(&$WriteRoot$methods);
-  $register(&$Env$methods);
-  $register(&$Connection$methods);
+void $register_rts() {
+    $register_force(MSG_ID, &$Msg$methods);
+    $register_force(ACTOR_ID, &$Actor$methods);
+    $register_force(CATCHER_ID, &$Catcher$methods);
+    $register_force(CLOS_ID, &$function$methods);
+    $register_force(CONT_ID, &$Cont$methods);
+    $register_force(DONE_ID, &$Done$methods);
+    $register_force(CONSTCONT_ID, &$ConstCont$methods);
+    $register(&$Done$methods);
+    $register(&$NewRoot$methods);
+    $register(&$WriteRoot$methods);
+    $register(&$Env$methods);
+    $register(&$Connection$methods);
 }
- 
+
 ////////////////////////////////////////////////////////////////////////////////////////
 
-
-const char* stats_to_json () {
+const char *stats_to_json() {
     yyjson_mut_doc *doc = yyjson_mut_doc_new(NULL);
     yyjson_mut_val *root = yyjson_mut_obj(doc);
     yyjson_mut_doc_set_root(doc, root);
@@ -1384,41 +1406,40 @@ const char* stats_to_json () {
     for (unsigned int i = 0; i < num_wthreads; i++) {
         yyjson_mut_val *j_wt = yyjson_mut_obj(doc);
         yyjson_mut_obj_add_val(doc, j_stat, wt_stats[i].key, j_wt);
-        yyjson_mut_obj_add_str(doc, j_wt, "state",       WT_State_name[wt_stats[i].state]);
-        yyjson_mut_obj_add_int(doc, j_wt, "sleeps",      wt_stats[i].sleeps);
+        yyjson_mut_obj_add_str(doc, j_wt, "state", WT_State_name[wt_stats[i].state]);
+        yyjson_mut_obj_add_int(doc, j_wt, "sleeps", wt_stats[i].sleeps);
         yyjson_mut_obj_add_int(doc, j_wt, "conts_count", wt_stats[i].conts_count);
-        yyjson_mut_obj_add_int(doc, j_wt, "conts_sum",   wt_stats[i].conts_sum);
+        yyjson_mut_obj_add_int(doc, j_wt, "conts_sum", wt_stats[i].conts_sum);
         yyjson_mut_obj_add_int(doc, j_wt, "conts_100ns", wt_stats[i].conts_100ns);
-        yyjson_mut_obj_add_int(doc, j_wt, "conts_1us",   wt_stats[i].conts_1us);
-        yyjson_mut_obj_add_int(doc, j_wt, "conts_10us",  wt_stats[i].conts_10us);
+        yyjson_mut_obj_add_int(doc, j_wt, "conts_1us", wt_stats[i].conts_1us);
+        yyjson_mut_obj_add_int(doc, j_wt, "conts_10us", wt_stats[i].conts_10us);
         yyjson_mut_obj_add_int(doc, j_wt, "conts_100us", wt_stats[i].conts_100us);
-        yyjson_mut_obj_add_int(doc, j_wt, "conts_1ms",   wt_stats[i].conts_1ms);
-        yyjson_mut_obj_add_int(doc, j_wt, "conts_10ms",  wt_stats[i].conts_10ms);
+        yyjson_mut_obj_add_int(doc, j_wt, "conts_1ms", wt_stats[i].conts_1ms);
+        yyjson_mut_obj_add_int(doc, j_wt, "conts_10ms", wt_stats[i].conts_10ms);
         yyjson_mut_obj_add_int(doc, j_wt, "conts_100ms", wt_stats[i].conts_100ms);
-        yyjson_mut_obj_add_int(doc, j_wt, "conts_1s",    wt_stats[i].conts_1s);
-        yyjson_mut_obj_add_int(doc, j_wt, "conts_10s",   wt_stats[i].conts_10s);
-        yyjson_mut_obj_add_int(doc, j_wt, "conts_100s",  wt_stats[i].conts_100s);
-        yyjson_mut_obj_add_int(doc, j_wt, "conts_inf",   wt_stats[i].conts_inf);
+        yyjson_mut_obj_add_int(doc, j_wt, "conts_1s", wt_stats[i].conts_1s);
+        yyjson_mut_obj_add_int(doc, j_wt, "conts_10s", wt_stats[i].conts_10s);
+        yyjson_mut_obj_add_int(doc, j_wt, "conts_100s", wt_stats[i].conts_100s);
+        yyjson_mut_obj_add_int(doc, j_wt, "conts_inf", wt_stats[i].conts_inf);
         yyjson_mut_obj_add_int(doc, j_wt, "bkeep_count", wt_stats[i].bkeep_count);
-        yyjson_mut_obj_add_int(doc, j_wt, "bkeep_sum",   wt_stats[i].bkeep_sum);
+        yyjson_mut_obj_add_int(doc, j_wt, "bkeep_sum", wt_stats[i].bkeep_sum);
         yyjson_mut_obj_add_int(doc, j_wt, "bkeep_100ns", wt_stats[i].bkeep_100ns);
-        yyjson_mut_obj_add_int(doc, j_wt, "bkeep_1us",   wt_stats[i].bkeep_1us);
-        yyjson_mut_obj_add_int(doc, j_wt, "bkeep_10us",  wt_stats[i].bkeep_10us);
+        yyjson_mut_obj_add_int(doc, j_wt, "bkeep_1us", wt_stats[i].bkeep_1us);
+        yyjson_mut_obj_add_int(doc, j_wt, "bkeep_10us", wt_stats[i].bkeep_10us);
         yyjson_mut_obj_add_int(doc, j_wt, "bkeep_100us", wt_stats[i].bkeep_100us);
-        yyjson_mut_obj_add_int(doc, j_wt, "bkeep_1ms",   wt_stats[i].bkeep_1ms);
-        yyjson_mut_obj_add_int(doc, j_wt, "bkeep_10ms",  wt_stats[i].bkeep_10ms);
+        yyjson_mut_obj_add_int(doc, j_wt, "bkeep_1ms", wt_stats[i].bkeep_1ms);
+        yyjson_mut_obj_add_int(doc, j_wt, "bkeep_10ms", wt_stats[i].bkeep_10ms);
         yyjson_mut_obj_add_int(doc, j_wt, "bkeep_100ms", wt_stats[i].bkeep_100ms);
-        yyjson_mut_obj_add_int(doc, j_wt, "bkeep_1s",    wt_stats[i].bkeep_1s);
-        yyjson_mut_obj_add_int(doc, j_wt, "bkeep_10s",   wt_stats[i].bkeep_10s);
-        yyjson_mut_obj_add_int(doc, j_wt, "bkeep_100s",  wt_stats[i].bkeep_100s);
-        yyjson_mut_obj_add_int(doc, j_wt, "bkeep_inf",   wt_stats[i].bkeep_inf);
+        yyjson_mut_obj_add_int(doc, j_wt, "bkeep_1s", wt_stats[i].bkeep_1s);
+        yyjson_mut_obj_add_int(doc, j_wt, "bkeep_10s", wt_stats[i].bkeep_10s);
+        yyjson_mut_obj_add_int(doc, j_wt, "bkeep_100s", wt_stats[i].bkeep_100s);
+        yyjson_mut_obj_add_int(doc, j_wt, "bkeep_inf", wt_stats[i].bkeep_inf);
     }
 
     const char *json = yyjson_mut_write(doc, 0, NULL);
     yyjson_mut_doc_free(doc);
     return json;
 }
-
 
 void *$mon_log_loop(void *period) {
     rtsv_printf(LOGPFX "Starting monitor log, with %d second(s) period, to: %s\n", (uint)period, mon_log_path);
@@ -1455,7 +1476,6 @@ void *$mon_log_loop(void *period) {
     fclose(f);
 }
 
-
 void *$mon_socket_loop() {
     rtsv_printf(LOGPFX "Starting monitor socket listen on %s\n", mon_socket_path);
 
@@ -1488,7 +1508,7 @@ void *$mon_socket_loop() {
         exit(1);
     }
 
-    for(;;) {
+    for (;;) {
         t = sizeof(remote);
         if ((s2 = accept(s, (struct sockaddr *)&remote, &t)) == -1) {
             perror("accept");
@@ -1499,7 +1519,8 @@ void *$mon_socket_loop() {
         while (1) {
             n = recv(s2, q, 100, 0);
             if (n <= 0) {
-                if (n < 0) perror("recv");
+                if (n < 0)
+                    perror("recv");
                 break;
             }
 
@@ -1521,26 +1542,24 @@ void *$mon_socket_loop() {
 struct option {
     const char *name;
     const char *arg_name;
-    int         val;
+    int val;
     const char *desc;
 };
 
-
 void print_help(struct option *opt) {
-    printf("The Acton RTS reads and consumes the following options and arguments. All\n" \
-           "other parameters are passed verbatim to the Acton application. Option\n" \
+    printf("The Acton RTS reads and consumes the following options and arguments. All\n"
+           "other parameters are passed verbatim to the Acton application. Option\n"
            "arguments can be passed either with --rts-option=ARG or --rts-option ARG\n\n");
     while (opt->name) {
         char optarg[64];
 
-        sprintf(optarg, "%s%s%s", opt->name, opt->arg_name?"=":"", opt->arg_name?opt->arg_name:"");
+        sprintf(optarg, "%s%s%s", opt->name, opt->arg_name ? "=" : "", opt->arg_name ? opt->arg_name : "");
         printf("  --%-30s  %s\n", optarg, opt->desc);
         opt++;
     }
     printf("\n");
     exit(0);
 }
-
 
 int main(int argc, char **argv) {
     uint ddb_no_host = 0;
@@ -1598,37 +1617,35 @@ int main(int argc, char **argv) {
         {"rts-mon-socket-path", "PATH", 'm', "Path to unix socket to expose RTS mon stats"},
         {"rts-verbose", NULL, 'v', "Enable verbose RTS output to stdout"},
         {"rts-wthreads", "COUNT", 'w', "Number of worker threads [#CPU cores]"},
-        {NULL, 0, 0}
-    };
-    // length of long_options array
-    #define OPTLEN (sizeof(long_options) / sizeof(long_options[0]) - 1)
+        {NULL, 0, 0}};
+// length of long_options array
+#define OPTLEN (sizeof(long_options) / sizeof(long_options[0]) - 1)
 
     int ch = 0;
     // where we map current (i) argc position into new_argc
     int new_argc_dst = 0;
     // stop scanning once we've seen '--', passing the rest verbatim
     int opt_scan = 1;
-    char **new_argv = malloc((argc+1) * sizeof *new_argv);
+    char **new_argv = malloc((argc + 1) * sizeof *new_argv);
     char *optarg = NULL;
     for (int i = 0; i < argc; i++) {
         ch = 0;
         optarg = NULL;
-        if (strcmp(argv[i], "--") == 0) opt_scan = 0;
+        if (strcmp(argv[i], "--") == 0)
+            opt_scan = 0;
         if (opt_scan) {
-            for (int j=0; j<OPTLEN; j++) {
-                if (strlen(argv[i]) > 2
-                    && strncmp(argv[i]+2, long_options[j].name, strlen(long_options[j].name)) == 0) {
+            for (int j = 0; j < OPTLEN; j++) {
+                if (strlen(argv[i]) > 2 && strncmp(argv[i] + 2, long_options[j].name, strlen(long_options[j].name)) == 0) {
                     // argv[i] matches one of our options!
                     ch = long_options[j].val;
                     new_argc--;
                     if (long_options[j].arg_name) {
-                        if (strlen(argv[i]) > 2+strlen(long_options[j].name)
-                            && argv[i][2+strlen(long_options[j].name)] == '=') {
+                        if (strlen(argv[i]) > 2 + strlen(long_options[j].name) && argv[i][2 + strlen(long_options[j].name)] == '=') {
                             // option argument is in --opt=arg style, so dig out
-                            optarg = (char *)argv[i]+(2+strlen(long_options[j].name+1));
+                            optarg = (char *)argv[i] + (2 + strlen(long_options[j].name + 1));
                         } else {
                             // argument has to be next in argv
-                            if (i+1 == argc) { // check we are not at end
+                            if (i + 1 == argc) { // check we are not at end
                                 fprintf(stderr, "ERROR: --%s requires an argument.\n", long_options[j].name);
                                 exit(1);
                             }
@@ -1648,11 +1665,11 @@ int main(int argc, char **argv) {
 
         switch (ch) {
             case 'd':
-                #ifndef DEV
+#ifndef DEV
                 fprintf(stderr, "ERROR: RTS debug not supported.\n");
                 fprintf(stderr, "HINT: Recompile this program using: actonc --rts-debug ...\n");
                 exit(1);
-                #endif
+#endif
                 rts_debug = 1;
                 // Enabling rts debug implies verbose RTS output too
                 rts_verbose = 10;
@@ -1665,7 +1682,7 @@ int main(int argc, char **argv) {
                 break;
             case 'h':
                 ddb_host = realloc(ddb_host, ++ddb_no_host * sizeof *ddb_host);
-                ddb_host[ddb_no_host-1] = optarg;
+                ddb_host[ddb_no_host - 1] = optarg;
                 break;
             case 'k':
                 mon_log_period = atoi(optarg);
@@ -1718,7 +1735,7 @@ int main(int argc, char **argv) {
     }
 
     // Zeroize statistics
-    for (uint i=0; i < MAX_WTHREADS; i++) {
+    for (uint i = 0; i < MAX_WTHREADS; i++) {
         wt_stats[i].idx = i;
         sprintf(wt_stats[i].key, "%d", i);
         wt_stats[i].state = 0;
@@ -1763,7 +1780,7 @@ int main(int argc, char **argv) {
         GET_RANDSEED(&seed, 0);
         rtsv_printf(LOGPFX "Using distributed database backend replication factor of %d\n", ddb_replication);
         db = get_remote_db(ddb_replication);
-        for (int i=0; i<ddb_no_host; i++) {
+        for (int i = 0; i < ddb_no_host; i++) {
             char *host = strdup(ddb_host[i]);
 
             int port = ddb_port;
@@ -1779,7 +1796,7 @@ int main(int argc, char **argv) {
     }
 
     if (db) {
-        snode_t* start_row = NULL, * end_row = NULL;
+        snode_t *start_row = NULL, *end_row = NULL;
         rtsv_printf(LOGPFX "Checking for existing actor state in DDB.\n");
         int no_items = remote_read_full_table_in_txn(&start_row, &end_row, ACTORS_TABLE, NULL, db);
         if (no_items > 0) {
@@ -1789,7 +1806,7 @@ int main(int argc, char **argv) {
         } else {
             rtsv_printf(LOGPFX "No previous state in DDB; Initializing database...\n");
             int indices[] = {0};
-            db_schema_t* db_schema = db_create_schema(NULL, 1, indices, 1, indices, 0, indices, 0);
+            db_schema_t *db_schema = db_create_schema(NULL, 1, indices, 1, indices, 0, indices, 0);
             create_db_queue(TIMER_QUEUE);
             timer_consume_hd = 0;
             BOOTSTRAP(new_argc, new_argv);
@@ -1835,8 +1852,8 @@ int main(int argc, char **argv) {
         pthread_setaffinity_np(threads[0], sizeof(cpu_set), &cpu_set);
     }
 
-    for(int idx = 1; idx < num_wthreads+1; idx++) {
-        pthread_create(&threads[idx], NULL, main_loop, (void*)idx);
+    for (int idx = 1; idx < num_wthreads + 1; idx++) {
+        pthread_create(&threads[idx], NULL, main_loop, (void *)idx);
         // Index start at 1 and we pin wthreads to CPU 1...n
         // We use CPU 0 for misc threads, like IO / mon etc
         if (cpu_pin) {
@@ -1850,7 +1867,7 @@ int main(int argc, char **argv) {
 
     // Only join the worker threads, starting at 1, we don't care about
     // gracefully shutting down IO (thread 0)
-    for(int idx = 1; idx <= num_wthreads; idx++) {
+    for (int idx = 1; idx <= num_wthreads; idx++) {
         pthread_join(threads[idx], NULL);
         pthread_mutex_lock(&sleep_lock);
         pthread_cond_broadcast(&work_to_do);

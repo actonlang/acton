@@ -2,33 +2,32 @@
 
 // Types for serialization ////////////////////////////////////////////////////////////////////////////
 
-
 // The serialization of an Acton object/value is a linked list of $ROW:s.
-
 
 typedef struct $ROW *$ROW;
 
 struct $ROW {
-  $ROW next;
-  int class_id;
-  int blob_size;
-  $WORD blob[];
+    $ROW next;
+    int class_id;
+    int blob_size;
+    $WORD blob[];
 };
 
 struct $ROWLISTHEADER {
-  $ROW fst;
-  $ROW last;
+    $ROW fst;
+    $ROW last;
 };
 
 //typedef struct $Serial$state *$Serial$state;
 
 struct $Serial$state {
-  char *$GCINFO;
-  $dict done;
-  $WORD (*globmap)($WORD);
-  long row_no;
-  $ROW row;
-  $ROW fst; //not used in deserialization
+    char *$GCINFO;
+    $dict done;
+    $WORD (*globmap)
+    ($WORD);
+    long row_no;
+    $ROW row;
+    $ROW fst; //not used in deserialization
 };
 
 // small-step helpers for defining serializations //////////////////////////////////////////////////
@@ -66,8 +65,8 @@ struct $Hashable$WORD$class {
     int $class_id;
     $Super$class superclass;
     void (*__init__)($Hashable$WORD);
-    void (*__serialize__)($Hashable$WORD,$Serial$state);
-    $Hashable$WORD (*__deserialize__)($Hashable$WORD,$Serial$state);
+    void (*__serialize__)($Hashable$WORD, $Serial$state);
+    $Hashable$WORD (*__deserialize__)($Hashable$WORD, $Serial$state);
     $bool (*__bool__)($Hashable$WORD);
     $str (*__str__)($Hashable$WORD);
     $bool (*__eq__)($Hashable$WORD, $WORD, $WORD);

@@ -21,7 +21,8 @@ struct lambda$1$class {
     lambda$1 (*__deserialize__)(lambda$1, $Serial$state);
     $bool (*__bool__)(lambda$1);
     $str (*__str__)(lambda$1);
-    $R (*__call__)(lambda$1, $Cont);
+    $R (*__call__)
+    (lambda$1, $Cont);
 };
 struct lambda$1 {
     struct lambda$1$class *$class;
@@ -40,7 +41,8 @@ struct lambda$2$class {
     lambda$2 (*__deserialize__)(lambda$2, $Serial$state);
     $bool (*__bool__)(lambda$2);
     $str (*__str__)(lambda$2);
-    $R (*__call__)(lambda$2, $Cont);
+    $R (*__call__)
+    (lambda$2, $Cont);
 };
 struct lambda$2 {
     struct lambda$2$class *$class;
@@ -58,7 +60,8 @@ struct lambda$3$class {
     lambda$3 (*__deserialize__)(lambda$3, $Serial$state);
     $bool (*__bool__)(lambda$3);
     $str (*__str__)(lambda$3);
-    $R (*__call__)(lambda$3, $NoneType);
+    $R (*__call__)
+    (lambda$3, $NoneType);
 };
 struct lambda$3 {
     struct lambda$3$class *$class;
@@ -70,13 +73,16 @@ struct Pingpong$class {
     char *$GCINFO;
     int $class_id;
     $Super$class $superclass;
-    $R (*__init__)(Pingpong, $int, $Cont);
+    $R (*__init__)
+    (Pingpong, $int, $Cont);
     void (*__serialize__)(Pingpong, $Serial$state);
     Pingpong (*__deserialize__)(Pingpong, $Serial$state);
     $bool (*__bool__)(Pingpong);
     $str (*__str__)(Pingpong);
-    $R (*ping)(Pingpong, $int, $Cont);
-    $R (*pong)(Pingpong, $int, $int, $Cont);
+    $R (*ping)
+    (Pingpong, $int, $Cont);
+    $R (*pong)
+    (Pingpong, $int, $int, $Cont);
 };
 struct Pingpong {
     struct Pingpong$class *$class;
