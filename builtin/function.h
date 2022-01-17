@@ -1,3 +1,5 @@
+#pragma once
+
 struct $function;
 typedef struct $function *$function;
 

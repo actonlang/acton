@@ -16,6 +16,7 @@
 #include <bsd/stdlib.h>
 #endif
 #include <limits.h>
+#include "primitive.c"
 
 //Select element #n in lst which is a list[int].
 #define $LONGELEM(lst,n)   ((($int)lst->data[n])->val)
