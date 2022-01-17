@@ -1711,6 +1711,12 @@ int main(int argc, char **argv) {
         rtsv_printf(LOGPFX "Detected %ld CPUs: Using %ld worker threads. No CPU affinity used.\n", num_cores, num_wthreads);
     }
 
+    if (ddb_host && ddb_no_host < ddb_replication) {
+        fprintf(stderr, "ERROR: Not enough DDB servers specified (%d) for replication factor %d.\n", ddb_no_host, ddb_replication);
+        fprintf(stderr, "HINT: Supply multiple --rts-ddb-host HOST arguments for all DDB servers.\n");
+        exit(1);
+    }
+
     // Zeroize statistics
     for (uint i=0; i < MAX_WTHREADS; i++) {
         wt_stats[i].idx = i;
@@ -1766,8 +1772,7 @@ int main(int argc, char **argv) {
             }
 
             rtsv_printf(LOGPFX "Using distributed database backend (DDB): %s:%d\n", ddb_host[i], port);
-            for(int replica=0;replica<ddb_replication;replica++)
-                add_server_to_membership(ddb_host[i], port+replica, db, &seed);
+            add_server_to_membership(ddb_host[i], port, db, &seed);
         }
     }
 
