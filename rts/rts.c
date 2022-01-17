@@ -1764,15 +1764,17 @@ int main(int argc, char **argv) {
         rtsv_printf(LOGPFX "Using distributed database backend replication factor of %d\n", ddb_replication);
         db = get_remote_db(ddb_replication);
         for (int i=0; i<ddb_no_host; i++) {
-            char * colon = strchr(ddb_host[i], ':');
+            char *host = strdup(ddb_host[i]);
+
             int port = ddb_port;
+            char *colon = strchr(host, ':');
             if (colon) {
                 *colon = '\0';
                 port = atoi(colon + 1);
             }
 
-            rtsv_printf(LOGPFX "Using distributed database backend (DDB): %s:%d\n", ddb_host[i], port);
-            add_server_to_membership(ddb_host[i], port, db, &seed);
+            rtsv_printf(LOGPFX "Using distributed database backend (DDB): %s:%d\n", host, port);
+            add_server_to_membership(host, port, db, &seed);
         }
     }
 
