@@ -29,6 +29,8 @@ def parse_membership(line):
     raise ValueError("Unable to parse Membership agreement")
 
 
+def get_db_args(replication_factor):
+    return [item for sublist in map(lambda x: ("--rts-ddb-host", x), [f"127.0.0.1:{32000+idx}" for idx in range(replication_factor)]) for item in sublist]
 
 class Db:
     def __repr__(self):
@@ -120,8 +122,9 @@ class DbCluster:
         return True
 
 
-def test_app_recovery(db_nodes):
-    cmd = ["./test_db_recovery", "--rts-verbose", "--rts-ddb-host", "127.0.0.1", "--rts-ddb-replication", str(db_nodes)]
+def test_app_recovery(replication_factor):
+    cmd = ["./test_db_recovery", "--rts-verbose", "--rts-ddb-replication", str(replication_factor)] + get_db_args(replication_factor)
+
 
 
     def so1(line, p, s):
@@ -218,7 +221,8 @@ def run_cmd(cmd, cb_so=None, cb_se=None, cb_end=None, state=None):
 
 
 def test_app(replication_factor):
-    cmd = ["./test_db_app", "--rts-verbose", "--rts-ddb-host", "127.0.0.1", "--rts-ddb-replication", str(replication_factor)]
+    cmd = (["./test_db_app", "--rts-verbose", "--rts-ddb-replication", str(replication_factor)] +
+           get_db_args(replication_factor))
 
     def so(line, p, s):
         log.info(f"App output: {line}")
