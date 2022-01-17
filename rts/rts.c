@@ -33,6 +33,8 @@
 #include "../backend/client_api.h"
 #include "../backend/fastrand.h"
 
+extern struct dbc_stat dbc_stats;
+
 char rts_verbose = 0;
 char rts_debug = 0;
 long num_wthreads;
@@ -1359,6 +1361,30 @@ void $register_rts () {
  
 ////////////////////////////////////////////////////////////////////////////////////////
 
+const char* dbc_ops_stats_to_json(yyjson_mut_doc *doc, yyjson_mut_val *j_mpoint, struct dbc_ops_stat *ops_stat) {
+    yyjson_mut_val *j_ops_stat = yyjson_mut_obj(doc);
+    yyjson_mut_obj_add_val(doc, j_mpoint, ops_stat->name, j_ops_stat);
+
+    yyjson_mut_obj_add_int(doc, j_ops_stat, "called",     ops_stat->called);
+    yyjson_mut_obj_add_int(doc, j_ops_stat, "completed",  ops_stat->completed);
+    yyjson_mut_obj_add_int(doc, j_ops_stat, "success",    ops_stat->success);
+    yyjson_mut_obj_add_int(doc, j_ops_stat, "error",      ops_stat->error);
+    yyjson_mut_obj_add_int(doc, j_ops_stat, "no_quorum",  ops_stat->no_quorum);
+    yyjson_mut_obj_add_int(doc, j_ops_stat, "time_sum",   ops_stat->time_sum);
+    yyjson_mut_obj_add_int(doc, j_ops_stat, "time_100ns", ops_stat->time_100ns);
+    yyjson_mut_obj_add_int(doc, j_ops_stat, "time_1us",   ops_stat->time_1us);
+    yyjson_mut_obj_add_int(doc, j_ops_stat, "time_10us",  ops_stat->time_10us);
+    yyjson_mut_obj_add_int(doc, j_ops_stat, "time_100us", ops_stat->time_100us);
+    yyjson_mut_obj_add_int(doc, j_ops_stat, "time_1ms",   ops_stat->time_1ms);
+    yyjson_mut_obj_add_int(doc, j_ops_stat, "time_10ms",  ops_stat->time_10ms);
+    yyjson_mut_obj_add_int(doc, j_ops_stat, "time_100ms", ops_stat->time_100ms);
+    yyjson_mut_obj_add_int(doc, j_ops_stat, "time_1s",    ops_stat->time_1s);
+    yyjson_mut_obj_add_int(doc, j_ops_stat, "time_10s",   ops_stat->time_10s);
+    yyjson_mut_obj_add_int(doc, j_ops_stat, "time_100s",  ops_stat->time_100s);
+    yyjson_mut_obj_add_int(doc, j_ops_stat, "time_inf",   ops_stat->time_inf);
+
+}
+
 
 const char* stats_to_json () {
     yyjson_mut_doc *doc = yyjson_mut_doc_new(NULL);
@@ -1379,6 +1405,7 @@ const char* stats_to_json () {
 
     yyjson_mut_obj_add_str(doc, root, "datetime", dt);
 
+    // Worker threads
     yyjson_mut_val *j_stat = yyjson_mut_obj(doc);
     yyjson_mut_obj_add_val(doc, root, "wt", j_stat);
     for (unsigned int i = 0; i < num_wthreads; i++) {
@@ -1413,6 +1440,15 @@ const char* stats_to_json () {
         yyjson_mut_obj_add_int(doc, j_wt, "bkeep_100s",  wt_stats[i].bkeep_100s);
         yyjson_mut_obj_add_int(doc, j_wt, "bkeep_inf",   wt_stats[i].bkeep_inf);
     }
+
+    // Database
+    yyjson_mut_val *j_dbc = yyjson_mut_obj(doc);
+    yyjson_mut_obj_add_val(doc, root, "db_client", j_dbc);
+
+#define X(ops_name) \
+    dbc_ops_stats_to_json(doc, j_dbc, dbc_stats.ops_name);
+LIST_OF_DBC_OPS
+#undef X
 
     const char *json = yyjson_mut_write(doc, 0, NULL);
     yyjson_mut_doc_free(doc);
@@ -1752,6 +1788,7 @@ int main(int argc, char **argv) {
         wt_stats[i].bkeep_100s = 0;
         wt_stats[i].bkeep_inf = 0;
     }
+    init_dbc_stats();
 
     $register_builtin();
     env$$__init__();

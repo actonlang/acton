@@ -26,9 +26,88 @@
 
 #define NO_QUORUM_ERR -1
 #define NO_SUCH_MSG_CALLBACK -2
+#define NO_SUCH_TXN -3
+#define SUBSCRIPTION_EXISTS -4
+#define NO_SUBSCRIPTION_EXISTS -5
 
 #define DEBUG_BLOBS 0
 
+/*
+ * Statistics per type of DB operation
+ *
+ * When a DB operation is called through the client API, we immediately
+ * increment the "called" counter. When an operation ends successfully we
+ * increment the success counter or if it fails, we increment the error counter.
+ * This way, we can see the number of outstanding requests through
+ * called-(success+error). no_quorum is a specific error type, and such errors
+ * are counted both using the generic "error" counter as well as the more
+ * specific no_quorum counter. The timing of each operation is recorded in the
+ * time_ buckets, forming a histogram.
+ */
+struct dbc_ops_stat {
+    const char *name;
+    unsigned long long called;     // Number of calls of this op, incremented on start
+    unsigned long long completed;  // Number of completed, incremented on completion
+    // Currently outstanding / in-flight ops is the diff between called - completed
+    unsigned long long success;    // Number of successful calls of this op
+    unsigned long long error;      // Number of failed calls of this op, includes all errors
+    // success + error = completed
+    unsigned long long no_quorum;  // Number of failed calls with NO_QUORUM_ERR
+    unsigned long long time_sum;   // nanoseconds spent waiting for op to complete
+    unsigned long long time_100ns; // bucket for <100ns
+    unsigned long long time_1us;   // bucket for <1us
+    unsigned long long time_10us;  // bucket for <10us
+    unsigned long long time_100us; // bucket for <100us
+    unsigned long long time_1ms;   // bucket for <1ms
+    unsigned long long time_10ms;  // bucket for <10ms
+    unsigned long long time_100ms; // bucket for <100ms
+    unsigned long long time_1s;    // bucket for <1s
+    unsigned long long time_10s;   // bucket for <10s
+    unsigned long long time_100s;  // bucket for <100s
+    unsigned long long time_inf;   // bucket for <+Inf
+};
+
+// List of operation types
+#define LIST_OF_DBC_OPS \
+    X(remote_insert_in_txn) \
+    X(remote_update_in_txn) \
+    X(remote_delete_row_in_txn) \
+    X(remote_delete_cell_in_txn) \
+    X(remote_delete_by_index_in_txn) \
+    X(remote_search_in_txn) \
+    X(remote_search_clustering_in_txn) \
+    X(remote_search_columns_in_txn) \
+    X(remote_search_index_in_txn) \
+    X(remote_range_search_in_txn) \
+    X(remote_range_search_clustering_in_txn) \
+    X(remote_range_search_index_in_txn) \
+    X(remote_read_full_table_in_txn) \
+    X(remote_create_queue_in_txn) \
+    X(remote_delete_queue_in_txn) \
+    X(remote_enqueue_in_txn) \
+    X(remote_read_queue_in_txn) \
+    X(remote_consume_queue_in_txn) \
+    X(remote_subscribe_queue) \
+    X(remote_unsubscribe_queue) \
+    X(remote_subscribe_queue_in_txn) \
+    X(remote_unsubscribe_queue_in_txn) \
+    X(subscribe_queue_client) \
+    X(unsubscribe_queue_client) \
+    X(remote_validate_txn) \
+    X(remote_abort_txn) \
+    X(remote_commit_txn) \
+    X(close_client_txn)
+
+// DB client statistics per operation type
+struct dbc_stat {
+    // Generate the DB client stats structure, based on the list of operations
+#define X(ops_name) \
+    struct dbc_ops_stat *ops_name;
+LIST_OF_DBC_OPS
+#undef X
+};
+
+void init_dbc_stats();
 
 // Remote DB API:
 
