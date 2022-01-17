@@ -1773,24 +1773,20 @@ int main(int argc, char **argv) {
 
     if (db) {
         snode_t* start_row = NULL, * end_row = NULL;
-        rtsv_printf(LOGPFX "Checking for existing actor state in DDB... ");
-        fflush(stdout);
+        rtsv_printf(LOGPFX "Checking for existing actor state in DDB.\n");
         int no_items = remote_read_full_table_in_txn(&start_row, &end_row, ACTORS_TABLE, NULL, db);
-        rtsv_printf("done\n");
         if (no_items > 0) {
-            rtsv_printf(LOGPFX "Found %d existing actors; Restoring actor state from DDB... ", no_items);
-            fflush(stdout);
+            rtsv_printf(LOGPFX "Found %d existing actors; Restoring actor state from DDB.\n", no_items);
             deserialize_system(start_row);
-            rtsv_printf("done\n");
+            rtsv_printf(LOGPFX "Actor state restored from DDB.\n");
         } else {
-            rtsv_printf(LOGPFX "No previous state in DDB; Initializing database...");
-            fflush(stdout);
+            rtsv_printf(LOGPFX "No previous state in DDB; Initializing database...\n");
             int indices[] = {0};
             db_schema_t* db_schema = db_create_schema(NULL, 1, indices, 1, indices, 0, indices, 0);
             create_db_queue(TIMER_QUEUE);
             timer_consume_hd = 0;
             BOOTSTRAP(new_argc, new_argv);
-            rtsv_printf("done\n");
+            rtsv_printf(LOGPFX "Database intialization complete.\n");
         }
     } else {
         BOOTSTRAP(new_argc, new_argv);
