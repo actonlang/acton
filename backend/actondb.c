@@ -2207,6 +2207,7 @@ int main(int argc, char **argv) {
   arguments.portno = DEFAULT_DATA_PORT;
   arguments.gportno = DEFAULT_GOSSIP_PORT;
   arguments.local_iface = "127.0.0.1";
+  arguments.no_seeds = 0;
 
   argp_parse (&argp, argc, argv, 0, 0, &arguments);
 
