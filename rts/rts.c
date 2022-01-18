@@ -1625,7 +1625,7 @@ int main(int argc, char **argv) {
                         if (strlen(argv[i]) > 2+strlen(long_options[j].name)
                             && argv[i][2+strlen(long_options[j].name)] == '=') {
                             // option argument is in --opt=arg style, so dig out
-                            optarg = (char *)argv[i]+(2+strlen(long_options[j].name+1));
+                            optarg = (char *)argv[i]+(2+strlen(long_options[j].name)+1);
                         } else {
                             // argument has to be next in argv
                             if (i+1 == argc) { // check we are not at end
