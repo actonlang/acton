@@ -1126,8 +1126,7 @@ void BOOTSTRAP(int argc, char *argv[]) {
     for (int i=0; i< argc; i++)
       $list_append(args,to$str(argv[i]));
 
-    env_actor = $NEWACTOR($Env);
-    env_actor->$class->__init__(env_actor, args);    // Inline this message, note that $Env$__init__ is *not* CPS'ed
+    env_actor = $Env$newact(args);
     if (db) {
         uuid_t * txnid = remote_new_txn(db);
         serialize_actor(($Actor)env_actor, txnid);
