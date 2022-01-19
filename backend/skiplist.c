@@ -83,7 +83,9 @@ int skiplist_insert(skiplist_t *list, WORD key, WORD value, unsigned int * seedp
     for (; i >= 0; i--) {
         while (x->forward[i] != NULL && (list->cmp(x->forward[i]->key, key) < 0))
             x = x->forward[i];
-//		printf("Item %" PRId64 " will update node %" PRId64 " at level %d\n", key, x->key, i);
+#if (SKIPLIST_VERBOSITY > 0)
+		printf("Item %" PRId64 " will update node %" PRId64 " at level %d\n", (long) key, (long) x->key, i);
+#endif
         	update[i] = x;
     }
 //    x = x->forward[0];
@@ -93,7 +95,9 @@ int skiplist_insert(skiplist_t *list, WORD key, WORD value, unsigned int * seedp
         return 0;
     } else {
         level = rand_level(seedptr);
-//		printf("Item %" PRId64 ", picking level %d\n", key, level);
+#if (SKIPLIST_VERBOSITY > 0)
+		printf("Item %" PRId64 ", picking level %d\n", (long) key, level);
+#endif
         if (level > list->level) {
             for (i = list->level + 1; i <= level; i++) {
                 update[i] = list->header;
@@ -106,7 +110,9 @@ int skiplist_insert(skiplist_t *list, WORD key, WORD value, unsigned int * seedp
         x->value = value;
         x->forward = (snode_t **) malloc(sizeof(snode_t*) * (level+1));
         for (i = 0; i <= level; i++) {
-//        		printf("Item %" PRId64 " chaining myself after node %" PRId64 " at level %d\n", key, update[i]->key, i);
+#if (SKIPLIST_VERBOSITY > 0)
+        		printf("Item %" PRId64 " chaining myself after node %" PRId64 " at level %d\n", (long) key, (long) update[i]->key, i);
+#endif
             x->forward[i] = update[i]->forward[i];
             update[i]->forward[i] = x;
         }

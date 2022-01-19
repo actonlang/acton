@@ -503,6 +503,10 @@ int close_remote_db(remote_db_t * db)
 
 int free_remote_db(remote_db_t * db)
 {
+#if (CLIENT_VERBOSITY > 0)
+	printf("CLIENT: free_remote_db(): Deleting all client side state \n");
+#endif
+
 	skiplist_free_val(db->servers, &free_remote_server_ptr);
 	skiplist_free(db->txn_state);
 	skiplist_free(db->queue_subscriptions);
@@ -2153,6 +2157,11 @@ int remote_commit_txn(uuid_t * txnid, remote_db_t * db)
 txn_state * get_client_txn_state(uuid_t * txnid, remote_db_t * db)
 {
 	snode_t * txn_node = (snode_t *) skiplist_search(db->txn_state, (WORD) txnid);
+#if (CLIENT_VERBOSITY > 0)
+	char uuid_str[37];
+	uuid_unparse_lower(*txnid, uuid_str);
+	printf("CLIENT: get_client_txn_state(%s): skiplist_search() returned: %p / %p\n", uuid_str, txn_node, (txn_node != NULL)? (txn_state *) txn_node->value : NULL);
+#endif
 
 	return (txn_node != NULL)? (txn_state *) txn_node->value : NULL;
 }
@@ -2161,16 +2170,31 @@ uuid_t * new_client_txn(remote_db_t * db, unsigned int * seedptr)
 {
 	txn_state * ts = NULL, * previous = NULL;
 
+#if (CLIENT_VERBOSITY > 0)
+	printf("CLIENT: new_client_txn(): \n");
+#endif
+
 	while(ts == NULL)
 	{
 		ts = init_txn_state();
 		previous = get_client_txn_state(&(ts->txnid), db);
 		if(previous != NULL)
 		{
+#if (CLIENT_VERBOSITY > 0)
+			char uuid_str[37];
+			uuid_unparse_lower(ts->txnid, uuid_str);
+			printf("CLIENT: new_client_txn(): Previous txn existed with the same txnid %s. Freeing previous state and retry-ing new uuid. \n", uuid_str);
+#endif
 			free_txn_state(ts);
 			ts = NULL;
 		}
 	}
+
+#if (CLIENT_VERBOSITY > 0)
+	char uuid_str[37];
+	uuid_unparse_lower(ts->txnid, uuid_str);
+	printf("CLIENT: new_client_txn(): Inserting new txn state for txn uuid %s. \n", uuid_str);
+#endif
 
 	skiplist_insert(db->txn_state, (WORD) &(ts->txnid), (WORD) ts, seedptr);
 
@@ -2180,6 +2204,11 @@ uuid_t * new_client_txn(remote_db_t * db, unsigned int * seedptr)
 int close_client_txn(uuid_t * txnid, remote_db_t * db)
 {
 	txn_state * ts = get_client_txn_state(txnid, db);
+#if (CLIENT_VERBOSITY > 0)
+	char uuid_str[37];
+	uuid_unparse_lower(*txnid, uuid_str);
+	printf("CLIENT: close_client_txn(%s): get_client_txn_state() returned: %p\n", uuid_str, ts);
+#endif
 	if(ts == NULL)
 		return -2; // No such txn
 
