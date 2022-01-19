@@ -2,6 +2,26 @@
 
 ## Unreleased
 
+### Changed
+- Enough DDB servers must be specified for configured replication factor [#474]
+  - With a replication factor of 3, `--rts-ddb-host` must be specified at least
+    3 times to point to 3 DB servers
+  - A previous short term fix [#427] assumed all DDB servers were running on the
+    same host, typically localhost for testing
+  - We now let the user figure it out instead, allowing true multi-node operation
+  - Long term fix is still to properly implement gossip protocol
+
+### Fixed
+- Fix epoll detection of disconnect [#469]
+  - In addition to listening for EPOLLHUP we must detect EPOLLRDHUP
+- Do not rewrite argv for `--rts-ddb-host` option arguments [#476]
+- Fix `--opt=arg` style parsing of argument [#479]
+  - Argument value was `t=arg` rather than `arg` due to misplaced parentheses
+- Do single line logging [#475]
+  - Previously had tasks where first a partial log line would be printed, to be
+    completed when the task finished. This looks nice in an interactive terminal
+    but if anything else logs meanwhile, the output becomes garbled.
+
 
 ## [0.8.0] (2022-01-14)
 
@@ -731,6 +751,10 @@ then, this second incarnation has been in focus and 0.2.0 was its first version.
 [#460]: https://github.com/actonlang/acton/pull/460
 [#464]: https://github.com/actonlang/acton/pull/464
 [#465]: https://github.com/actonlang/acton/pull/465
+[#474]: https://github.com/actonlang/acton/pull/474
+[#475]: https://github.com/actonlang/acton/pull/475
+[#476]: https://github.com/actonlang/acton/pull/476
+[#479]: https://github.com/actonlang/acton/pull/479
 [0.3.0]: https://github.com/actonlang/acton/releases/tag/v0.3.0
 [0.4.0]: https://github.com/actonlang/acton/compare/v0.3.0...v0.4.0
 [0.4.1]: https://github.com/actonlang/acton/compare/v0.4.0...v0.4.1
