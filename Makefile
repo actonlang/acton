@@ -242,13 +242,11 @@ lib/libActonDB.a: $(BACKEND_OFILES)
 rts/rts_dev.o: rts/rts.c rts/rts.h
 	$(CC) $(CFLAGS) $(CFLAGS_DEV) \
 		-Wno-int-to-void-pointer-cast -Wno-unused-result \
-		$(LDLIBS) \
 		-c $< -o $@
 
 rts/rts_rel.o: rts/rts.c rts/rts.h
 	$(CC) $(CFLAGS) $(CFLAGS_REL) \
 		-Wno-int-to-void-pointer-cast -Wno-unused-result \
-		$(LDLIBS) \
 		-c $< -o $@
 
 rts/empty.o: rts/empty.c
