@@ -1316,6 +1316,7 @@ void *main_loop(void *idx) {
             pthread_mutex_unlock(&sleep_lock);
         }
     }
+    return NULL;
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////
@@ -1350,9 +1351,9 @@ const char* stats_to_json () {
     struct tm tm;
     gettimeofday(&tv, NULL);
     localtime_r(&tv.tv_sec, &tm);
-    char dt[] = "YYYY-MM-ddTHH:mm:ss.SSS+0000";
-    strftime(dt, sizeof(dt), "%Y-%m-%dT%H:%M:%S.000%z", &tm);
-    sprintf(dt + 20, "%03hu%s", (short unsigned int)tv.tv_usec / 1000, dt + 23);
+    char dt[32];    // = "YYYY-MM-ddTHH:mm:ss.SSS+0000";
+    strftime(dt, 32, "%Y-%m-%dT%H:%M:%S.000%z", &tm);
+    sprintf(dt + 20, "%03hu%s", (unsigned short)(tv.tv_usec / 1000), dt + 23);
 
     yyjson_mut_obj_add_str(doc, root, "datetime", dt);
 
@@ -1430,6 +1431,7 @@ void *$mon_log_loop(void *period) {
         pthread_mutex_unlock(&rts_exit_lock);
     }
     fclose(f);
+    return NULL;
 }
 
 
@@ -1493,6 +1495,7 @@ void *$mon_socket_loop() {
 
         close(s2);
     }
+    return NULL;
 }
 
 struct option {
