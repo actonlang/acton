@@ -167,7 +167,7 @@ int pthread_setaffinity_np(pthread_t thread, size_t cpu_size, cpu_set_t *cpu_set
 #endif
 
 extern void $ROOTINIT();
-extern $R $ROOT($Env, $Cont);
+extern $Actor $ROOT();
 
 $Actor root_actor = NULL;
 $Env env_actor = NULL;
@@ -659,13 +659,13 @@ struct $Cont $Done$instance = {
     &$Done$methods
 };
 ////////////////////////////////////////////////////////////////////////////////////////
-$R $NewRoot$__call__ ($Cont $this, $WORD val) {
-    $Cont then = ($Cont)val;
-    return $ROOT(env_actor, then);
+$R $InitRoot$__call__ ($Cont $this, $WORD val) {
+    typedef $R(*ROOT__init__t)($Actor, $Env, $Cont);    // Assumed type of the ROOT actor's __init__ method
+    return ((ROOT__init__t)root_actor->$class->__init__)(root_actor, env_actor, ($Cont)val);
 }
 
-struct $Cont$class $NewRoot$methods = {
-    "$NewRoot",
+struct $Cont$class $InitRoot$methods = {
+    "$InitRoot",
     UNASSIGNED,
     NULL,
     $Cont$__init__,
@@ -673,30 +673,10 @@ struct $Cont$class $NewRoot$methods = {
     $Cont$__deserialize__,
     $Cont$__bool__,
     $Cont$__str__,
-    ($R (*)($Cont, ...))$NewRoot$__call__
+    ($R (*)($Cont, ...))$InitRoot$__call__
 };
-struct $Cont $NewRoot$cont = {
-    &$NewRoot$methods
-};
-////////////////////////////////////////////////////////////////////////////////////////
-$R $WriteRoot$__call__($Cont $this, $WORD val) {
-    root_actor = ($Actor)val;
-    return $R_DONE(val);
-}
-
-struct $Cont$class $WriteRoot$methods = {
-    "$WriteRoot",
-    UNASSIGNED,
-    NULL,
-    $Cont$__init__,
-    $Cont$__serialize__,
-    $Cont$__deserialize__,
-    $Cont$__bool__,
-    $Cont$__str__,
-    ($R (*)($Cont, ...))$WriteRoot$__call__
-};
-struct $Cont $WriteRoot$cont = {
-    &$WriteRoot$methods
+struct $Cont $InitRoot$cont = {
+    &$InitRoot$methods
 };
 ////////////////////////////////////////////////////////////////////////////////////////
 
@@ -1057,16 +1037,17 @@ void deserialize_system(snode_t *actors_start) {
     }
 
     /*
-     * Actor IDs (-11 & -14) here chosen by fair dice roll... Haha, kidding.
+     * Actor IDs (-11 & -12) here chosen by fair dice roll... Haha, kidding.
      * These values are aligned with the IDs allocated by get_next_key() when
      * called in the BOOTSTRAP() function. The ID allocator next_key starts at
      * -10, so -11 is the first key handed out and with the env actor is created
-     * first, it will get -11. Similarly for the root actor, though there are
-     * some intermediate things grabbing two numbers. This must be kept in sync
-     * with next_key and the structure in the BOOTSTRAP() function!
+     * first, it will get -11. Similarly for the root actor, which is assigned
+     * ID -12 (via the $NEWROOT call embedded in the external function $ROOT).
+     * These values must be kept in sync with next_key and the structure in
+     * the BOOTSTRAP() function!
      */
     env_actor  = ($Env)$dict_get(globdict, ($Hashable)$Hashable$int$witness, to$int(-11), NULL);
-    root_actor = ($Actor)$dict_get(globdict, ($Hashable)$Hashable$int$witness, to$int(-14), NULL);
+    root_actor = ($Actor)$dict_get(globdict, ($Hashable)$Hashable$int$witness, to$int(-12), NULL);
     globdict = NULL;
     rtsd_printf(LOGPFX "\n\n");
 }
@@ -1145,28 +1126,24 @@ void BOOTSTRAP(int argc, char *argv[]) {
     for (int i=0; i< argc; i++)
       $list_append(args,to$str(argv[i]));
 
-    env_actor = $NEW($Env, args);
-    $Actor ancestor0 = $NEW($Actor);
-    time_t now = current_time();
-    $Msg m = $NEW($Msg, ancestor0, &$NewRoot$cont, now, &$WriteRoot$cont);
-
+    env_actor = $Env$newact(args);
     if (db) {
-        create_db_queue(env_actor->$globkey);
-        create_db_queue(ancestor0->$globkey);
-
-        // serialize env to DB, since it is constant and never gets picked up by
-        // main_loop, thus never serialized
         uuid_t * txnid = remote_new_txn(db);
         serialize_actor(($Actor)env_actor, txnid);
         remote_commit_txn(txnid, db);
-
-        int ret = remote_enqueue_in_txn(($WORD*)&m->$globkey, 1, NULL, 0, MSG_QUEUE, (WORD)ancestor0->$globkey, NULL, db);
-        rtsd_printf(LOGPFX "   # enqueue bootstrap msg %ld to ancestor0 queue %ld returns %d\n", m->$globkey, ancestor0->$globkey, ret);
     }
 
-    if (ENQ_msg(m, ancestor0)) {
-        ENQ_ready(ancestor0);
+    root_actor = $ROOT();                           // Assumed to return $NEWACTOR(X) for the selected root actor X
+    time_t now = current_time();
+    $Msg m = $NEW($Msg, root_actor, &$InitRoot$cont, now, &$Done$instance);
+    if (db) {
+        int ret = remote_enqueue_in_txn(($WORD*)&m->$globkey, 1, NULL, 0, MSG_QUEUE, (WORD)root_actor->$globkey, NULL, db);
+        rtsd_printf(LOGPFX "   # enqueue bootstrap msg %ld to root actor queue %ld returns %d\n", m->$globkey, root_actor->$globkey, ret);
     }
+    if (ENQ_msg(m, root_actor)) {
+        ENQ_ready(root_actor);
+    }
+
 }
 
 
@@ -1338,6 +1315,7 @@ void *main_loop(void *idx) {
             pthread_mutex_unlock(&sleep_lock);
         }
     }
+    return NULL;
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////
@@ -1351,8 +1329,7 @@ void $register_rts () {
   $register_force(DONE_ID,&$Done$methods);
   $register_force(CONSTCONT_ID,&$ConstCont$methods);
   $register(&$Done$methods);
-  $register(&$NewRoot$methods);
-  $register(&$WriteRoot$methods);
+  $register(&$InitRoot$methods);
   $register(&$Env$methods);
   $register(&$Connection$methods);
 }
@@ -1373,9 +1350,9 @@ const char* stats_to_json () {
     struct tm tm;
     gettimeofday(&tv, NULL);
     localtime_r(&tv.tv_sec, &tm);
-    char dt[] = "YYYY-MM-ddTHH:mm:ss.SSS+0000";
-    strftime(dt, sizeof(dt), "%Y-%m-%dT%H:%M:%S.000%z", &tm);
-    sprintf(dt + 20, "%03hu%s", (short unsigned int)tv.tv_usec / 1000, dt + 23);
+    char dt[32];    // = "YYYY-MM-ddTHH:mm:ss.SSS+0000";
+    strftime(dt, 32, "%Y-%m-%dT%H:%M:%S.000%z", &tm);
+    sprintf(dt + 20, "%03hu%s", (unsigned short)(tv.tv_usec / 1000), dt + 23);
 
     yyjson_mut_obj_add_str(doc, root, "datetime", dt);
 
@@ -1453,6 +1430,7 @@ void *$mon_log_loop(void *period) {
         pthread_mutex_unlock(&rts_exit_lock);
     }
     fclose(f);
+    return NULL;
 }
 
 
@@ -1465,7 +1443,7 @@ void *$mon_socket_loop() {
     pthread_setname_np(pthread_self(), "Monitor Socket");
 #endif
 
-    int s, s2, t, len;
+    int s, s2, len;
     struct sockaddr_un local, remote;
     char q[100];
 
@@ -1489,7 +1467,7 @@ void *$mon_socket_loop() {
     }
 
     for(;;) {
-        t = sizeof(remote);
+        socklen_t t = sizeof(remote);
         if ((s2 = accept(s, (struct sockaddr *)&remote, &t)) == -1) {
             perror("accept");
             exit(1);
@@ -1516,6 +1494,7 @@ void *$mon_socket_loop() {
 
         close(s2);
     }
+    return NULL;
 }
 
 struct option {

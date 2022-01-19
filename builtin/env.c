@@ -652,7 +652,6 @@ env$$l$14lambda env$$l$14lambda$new($WFile p$1) {
 }
 struct env$$l$14lambda$class env$$l$14lambda$methods;
 $NoneType $Env$__init__ ($Env __self__, $list argv) {
-    $Actor$methods.__init__((($Actor)__self__));
     __self__->argv = argv;
     return $None;
 }
@@ -715,7 +714,7 @@ $R $Env$exit$local ($Env __self__, $int n, $Cont c$cont) {
 $R $Env$openR$local ($Env __self__, $str nm, $Cont c$cont) {
     FILE *file = fopen((char *)nm->str,"r");
     if (file)
-        return $RFile$new(file, c$cont);
+        return $R_CONT(c$cont, $RFile$newact(file));
     else
         return $R_CONT(c$cont, $None);
 }
@@ -724,7 +723,7 @@ $R $Env$openW$local ($Env __self__, $str nm, $Cont c$cont) {
     if (descr < 0)
         return $R_CONT(c$cont, $None);
     else
-        return $WFile$new(descr, c$cont);
+        return $R_CONT(c$cont, $WFile$newact(descr));
 }
 $Msg $Env$stdout_write ($Env __self__, $str s) {
     return $ASYNC((($Actor)__self__), (($Cont)env$$l$1lambda$new(__self__, s)));
@@ -764,15 +763,13 @@ $Env $Env$__deserialize__ ($Env self, $Serial$state state) {
     self->argv = $step_deserialize(state);
     return self;
 }
-$R $Env$new($list p$1, $Cont p$2) {
-    $Env $tmp = malloc(sizeof(struct $Env));
-    $tmp->$class = &$Env$methods;
-    $Env$methods.__init__($tmp, p$1);
-    return $R_CONT(p$2, $tmp);
+$Env $Env$newact($list p$1) {
+    $Env $tmp = $NEWACTOR($Env);
+    $tmp->$class->__init__($tmp, p$1);  // Inline this message, note that $Env$__init__ is *not* CPS'ed
+    return $tmp;
 }
 struct $Env$class $Env$methods;
 $NoneType $Connection$__init__ ($Connection __self__, int descr) {
-    $Actor$methods.__init__((($Actor)__self__));
     __self__->descriptor = descr;
     return $None;
 }
@@ -819,17 +816,15 @@ $Connection $Connection$__deserialize__ ($Connection self, $Serial$state state) 
     $Actor$methods.__deserialize__(($Actor)self, state);
     return self;
 }
-$R $Connection$new(int descr, $Cont p$1) {
-    $Connection $tmp = malloc(sizeof(struct $Connection));
-    $tmp->$class = &$Connection$methods;
-    $Connection$methods.__init__($tmp, descr);
-    return $R_CONT(p$1, $tmp);
+$Connection $Connection$newact(int descr) {
+    $Connection $tmp = $NEWACTOR($Connection);
+    $tmp->$class->__init__($tmp, descr);          // Inline this message, note that $Connection$__init__ is *not* CPS'ed
+    return $tmp;
 }
 struct $Connection$class $Connection$methods;
-$R $RFile$__init__ ($RFile __self__, FILE *file, $Cont c$cont) {
-    $Actor$methods.__init__((($Actor)__self__));
+$NoneType $RFile$__init__ ($RFile __self__, FILE *file) {
     __self__->file = file;
-    return $R_CONT(c$cont, $None);
+    return $None;
 }
 $R $RFile$readln$local ($RFile __self__, $Cont c$cont) {
     char buf[BUF_SIZE];
@@ -864,16 +859,15 @@ $RFile $RFile$__deserialize__ ($RFile self, $Serial$state state) {
     $Actor$methods.__deserialize__(($Actor)self, state);
     return self;
 }
-$R $RFile$new(FILE *file, $Cont p$1) {
-    $RFile $tmp = malloc(sizeof(struct $RFile));
-    $tmp->$class = &$RFile$methods;
-    return $RFile$methods.__init__($tmp, file, $CONSTCONT($tmp, p$1));
+$RFile $RFile$newact(FILE *file) {
+    $RFile $tmp = $NEWACTOR($RFile);
+    $tmp->$class->__init__($tmp, file);     // Inline this message, note that $RFile$__init__ is *not* CPS'ed
+    return $tmp;
 }
 struct $RFile$class $RFile$methods;
-$R $WFile$__init__ ($WFile __self__, int descr, $Cont c$cont) {
-    $Actor$methods.__init__((($Actor)__self__));
+$NoneType $WFile$__init__ ($WFile __self__, int descr) {
     __self__->descriptor = descr;
-    return $R_CONT(c$cont, $None);
+    return $None;
 }
 $R $WFile$write$local ($WFile __self__, $str s, $Cont c$cont) {
     memcpy(fd_data[__self__->descriptor].buffer,s->str,s->nbytes+1);
@@ -908,10 +902,10 @@ $WFile $WFile$__deserialize__ ($WFile self, $Serial$state state) {
     $Actor$methods.__deserialize__(($Actor)self, state);
     return self;
 }
-$R $WFile$new(int descr, $Cont p$1) {
-    $WFile $tmp = malloc(sizeof(struct $WFile));
-    $tmp->$class = &$WFile$methods;
-    return $WFile$methods.__init__($tmp, descr, $CONSTCONT($tmp, p$1));
+$WFile $WFile$newact(int descr) {
+    $WFile $tmp = $NEWACTOR($WFile);
+    $tmp->$class->__init__($tmp, descr);     // Inline this message, note that $WFile$__init__ is *not* CPS'ed
+    return $tmp;
 }
 struct $WFile$class $WFile$methods;
 int env$$done$ = 0;

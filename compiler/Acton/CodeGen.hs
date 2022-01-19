@@ -36,18 +36,15 @@ generate env m                      = do return (n, h,c)
         c                           = render $ cModule env0 m
         env0                        = genEnv $ setMod (modname m) env
 
-genRoot                             :: Acton.Env.Env0 -> QName -> Type -> IO String
-genRoot env0 qn@(GName m n) t       = do return $ render (cInclude $+$ cInit $+$ cRoot)
+genRoot                            :: Acton.Env.Env0 -> QName -> IO String
+genRoot env0 qn@(GName m n)         = do return $ render (cInclude $+$ cInit $+$ cRoot)
   where env                         = genEnv $ setMod m env0
-        env1                        = ldefine (envOf pars) env
-        pars                        = pPar paramNames' r
-        r                           = posRow t $ posRow (tCont tWild tWild) posNil
         cInclude                    = include env "types" m
         cInit                       = (text "void" <+> gen env primROOTINIT <+> parens empty <+> char '{') $+$
-                                       nest 4 (gen env1 (GName m initKW) <> parens empty <> semi) $+$
+                                       nest 4 (gen env (GName m initKW) <> parens empty <> semi) $+$
                                        char '}'
-        cRoot                       = (gen env tR <+> gen env primROOT <+> parens (gen env pars) <+> char '{') $+$
-                                       nest 4 (text "return" <+> gen env1 qn <> parens (gen env1 $ pArg pars) <> semi) $+$
+        cRoot                       = (gen env tActor <+> gen env primROOT <+> parens empty <+> char '{') $+$
+                                       nest 4 (text "return" <+> parens (gen env tActor) <> gen env primNEWACTOR <> parens (gen env qn) <> semi) $+$
                                        char '}'
 
 -- Environment --------------------------------------------------------------------------------------

@@ -400,7 +400,7 @@ buildExecutable env args paths task
   | otherwise               = case Acton.Env.findQName qn env of
                                   i@(Acton.Env.NAct [] (A.TRow _ _ _ t A.TNil{}) A.TNil{} _) -> do
                                       -- putStrLn ("## Env is " ++ prstr t)
-                                      c <- Acton.CodeGen.genRoot env qn' t
+                                      c <- Acton.CodeGen.genRoot env qn
                                       writeFile rootFile c
                                       iff (ccmd args) $ do
                                           putStrLn ccCmd
@@ -416,7 +416,6 @@ buildExecutable env args paths task
   where n                   = A.name (root args)
         mn                  = name task
         qn                  = A.GName mn n
-        qn'                 = Acton.Deactorizer.newactQName qn
         (sc,_)              = Acton.QuickType.schemaOf env (A.eQVar qn)
         outbase             = outBase paths mn
         rootFile            = outbase ++ ".root.c"
