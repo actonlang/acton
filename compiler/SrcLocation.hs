@@ -1,4 +1,4 @@
-{-# LANGUAGE CPP, DeriveDataTypeable, DeriveGeneric #-}
+{-# LANGUAGE DeriveDataTypeable, DeriveGeneric #-}
 -----------------------------------------------------------------------------
 -- |
 -- Module      : Language.Python.Common.SrcLocation 
