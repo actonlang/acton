@@ -33,8 +33,8 @@ int long_cmp(WORD e1, WORD e2) {
 
 int uuid_cmp(WORD e1, WORD e2)
 {
-//	return memcmp(e1, e2, sizeof(uuid_t));
-	return uuid_compare(*((uuid_t*) e1), *((uuid_t*) e2));
+	return memcmp(e1, e2, sizeof(uuid_t));
+//	return uuid_compare(*((uuid_t*) e1), *((uuid_t*) e2));
 }
 
 skiplist_t *create_skiplist_long() {
