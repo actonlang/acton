@@ -15,6 +15,8 @@ typedef void *WORD;
 
 #define SKIPLIST_VERBOSITY 1
 
+#include <string.h>
+
 typedef struct snode {
 	WORD key;
     WORD value;

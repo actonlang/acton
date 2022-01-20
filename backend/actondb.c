@@ -810,7 +810,7 @@ int handle_new_txn(txn_message * q, db_t * db, unsigned int * fastrandstate)
 
 	memcpy(&ts->txnid, q->txnid, sizeof(uuid_t));
 
-	skiplist_insert(db->txn_state, (WORD) &(ts->txnid), (WORD) ts, fastrandstate);
+	skiplist_insert(db->txn_state, (WORD) ts->txnid, (WORD) ts, fastrandstate); // &(ts->txnid)
 
 	return 0;
 }
