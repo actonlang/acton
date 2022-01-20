@@ -13,7 +13,7 @@ typedef void *WORD;
 #define HEAD(skiplist) ((skiplist)->header->forward[0])
 #define NEXT(snode) ((snode)->forward[0])
 
-#define SKIPLIST_VERBOSITY 1
+#define SKIPLIST_VERBOSITY 0
 
 #include <string.h>
 
