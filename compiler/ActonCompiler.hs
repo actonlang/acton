@@ -419,19 +419,23 @@ buildExecutable env args paths task
         (sc,_)              = Acton.QuickType.schemaOf env (A.eQVar qn)
         outbase             = outBase paths mn
         rootFile            = outbase ++ ".root.c"
+        libFilesBase        = " -lActonProject " ++ libActonArg ++ " -lActonDB -lprotobuf-c -lutf8proc -lpthread -lm"
         libPathsBase        = " -L" ++ projLib paths ++ " -L" ++ sysLib paths
 #if defined(darwin_HOST_OS) && defined(aarch64_HOST_ARCH)
-        libPaths            = libPathsBase ++ " -L/opt/homebrew/lib -L/opt/homebrew/opt/util-linux/lib "
+        libFiles            = libFilesBase
+        libPaths            = libPathsBase ++ " -L/opt/homebrew/lib "
         ccArgs              = ""
 #elif defined(darwin_HOST_OS) && defined(x86_64_HOST_ARCH)
-        libPaths            = libPathsBase ++ " -L/usr/local/lib -L/usr/local/opt/util-linux/lib "
+        libFiles            = libFilesBase
+        libPaths            = libPathsBase ++ " -L/usr/local/lib "
         ccArgs              = ""
+-- Linux? and what else? maybe split
 #else
+        libFiles            = libFilesBase ++ " -luuid "
         libPaths            = libPathsBase
         ccArgs              = " -no-pie "
 #endif
         libActonArg         = if (dev args) then "-lActon_dev" else "-lActon_rel"
-        libFiles            = " -lActonProject " ++ libActonArg ++ " -lActonDB -luuid -lprotobuf-c -lutf8proc -lpthread -lm"
         binFilename         = takeFileName $ dropExtension srcbase
         binFile             = joinPath [binDir paths, binFilename]
         srcbase             = srcFile paths mn
