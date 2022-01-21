@@ -15,7 +15,7 @@ CFLAGS+= -I. -Ideps -Wno-int-to-pointer-cast -Wno-pointer-to-int-cast -Wformat -
 CFLAGS_REL= -O3 -DREL
 CFLAGS_DEV= -g -DDEV
 LDFLAGS+=-Llib
-LDLIBS+=-lprotobuf-c -luuid -lm -lpthread
+LDLIBS+=-lprotobuf-c -lm -lpthread
 
 # look for jemalloc
 JEM_LIB?=$(wildcard /usr/lib/x86_64-linux-gnu/libjemalloc.a)
@@ -33,20 +33,21 @@ LDLIBS+=-largp
 # -- M1
 ifeq ($(shell uname -m),arm64)
 CFLAGS += -I/opt/homebrew/include
-LDFLAGS += -L/opt/homebrew/opt/util-linux/lib -L/opt/homebrew/lib
+LDFLAGS += -L/opt/homebrew/lib
 endif
 
 # -- Intel CPU
 ifeq ($(shell uname -m),x86_64)
-LDFLAGS += -L/usr/local/opt/util-linux/lib
 endif
 
 endif # -- END: Apple Mac OS X -------------------------------------------------
 
 
+# -- Linux ---------------------------------------------------------------------
 ifeq ($(shell uname -s),Linux)
 CFLAGS += -Werror
-endif
+LDLIBS+=-luuid
+endif # -- END: Linux ----------------------------------------------------------
 
 .PHONY: all
 all: version-check distribution
