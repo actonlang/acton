@@ -2128,7 +2128,7 @@ int remote_commit_txn(uuid_t * txnid, remote_db_t * db)
 #endif
 		}
 
-		int res = close_client_txn(txnid, db); // Clear local cached txn state on client
+		int res = close_client_txn(*txnid, db); // Clear local cached txn state on client
 
 #if (CLIENT_VERBOSITY > 1)
 		printf("CLIENT: close txn %s returned %d\n", uuid_str, res);
@@ -2154,12 +2154,12 @@ int remote_commit_txn(uuid_t * txnid, remote_db_t * db)
 
 // Txn state handling client-side:
 
-txn_state * get_client_txn_state(uuid_t * txnid, remote_db_t * db)
+txn_state * get_client_txn_state(uuid_t txnid, remote_db_t * db)
 {
-	snode_t * txn_node = (snode_t *) skiplist_search(db->txn_state, (WORD) (*txnid));
+	snode_t * txn_node = (snode_t *) skiplist_search(db->txn_state, (WORD) txnid);
 #if (CLIENT_VERBOSITY > 0)
 	char uuid_str[37];
-	uuid_unparse_lower(*txnid, uuid_str);
+	uuid_unparse_lower(txnid, uuid_str);
 	printf("CLIENT: get_client_txn_state(%s): skiplist_search() returned: %p / %p\n", uuid_str, txn_node, (txn_node != NULL)? (txn_state *) txn_node->value : NULL);
 #endif
 
@@ -2177,7 +2177,7 @@ uuid_t * new_client_txn(remote_db_t * db, unsigned int * seedptr)
 	while(ts == NULL)
 	{
 		ts = init_txn_state();
-		previous = get_client_txn_state(&(ts->txnid), db);
+		previous = get_client_txn_state(ts->txnid, db);
 		if(previous != NULL)
 		{
 #if (CLIENT_VERBOSITY > 0)
@@ -2201,18 +2201,18 @@ uuid_t * new_client_txn(remote_db_t * db, unsigned int * seedptr)
 	return &(ts->txnid);
 }
 
-int close_client_txn(uuid_t * txnid, remote_db_t * db)
+int close_client_txn(uuid_t txnid, remote_db_t * db)
 {
 	txn_state * ts = get_client_txn_state(txnid, db);
 #if (CLIENT_VERBOSITY > 0)
 	char uuid_str[37];
-	uuid_unparse_lower(*txnid, uuid_str);
+	uuid_unparse_lower(txnid, uuid_str);
 	printf("CLIENT: close_client_txn(%s): get_client_txn_state() returned: %p\n", uuid_str, ts);
 #endif
 	if(ts == NULL)
 		return -2; // No such txn
 
-	skiplist_delete(db->txn_state, (WORD) *txnid);
+	skiplist_delete(db->txn_state, (WORD) txnid);
 	free_txn_state(ts);
 
 	return 0;

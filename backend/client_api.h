@@ -20,7 +20,7 @@
 
 #define RANDOM_NONCES
 
-#define CLIENT_VERBOSITY 0
+#define CLIENT_VERBOSITY 1
 #define CLIENT_LOCK_VERBOSITY 0
 #define SYNC_SOCKET 1
 
@@ -162,9 +162,9 @@ int remote_commit_txn(uuid_t * txnid, remote_db_t * db);
 
 // Txn state handling client-side:
 
-txn_state * get_client_txn_state(uuid_t * txnid, remote_db_t * db);
+txn_state * get_client_txn_state(uuid_t txnid, remote_db_t * db);
 uuid_t * new_client_txn(remote_db_t * db, unsigned int * seedptr);
-int close_client_txn(uuid_t * txnid, remote_db_t * db);
+int close_client_txn(uuid_t txnid, remote_db_t * db);
 
 
 #endif /* BACKEND_CLIENT_API_H_ */

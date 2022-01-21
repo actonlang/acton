@@ -29,7 +29,7 @@
 
 txn_state * get_txn_state(uuid_t * txnid, db_t * db)
 {
-	snode_t * txn_node = (snode_t *) skiplist_search(db->txn_state, (WORD) (*txnid)); // *
+	snode_t * txn_node = (snode_t *) skiplist_search(db->txn_state, (WORD) *txnid); // *
 
 	return (txn_node != NULL)? (txn_state *) txn_node->value : NULL;
 }
@@ -41,7 +41,7 @@ uuid_t * new_txn(db_t * db, unsigned int * seedptr)
 	while(ts == NULL)
 	{
 		ts = init_txn_state();
-		previous = get_txn_state(&(ts->txnid), db);
+		previous = get_txn_state(&ts->txnid, db);
 		if(previous != NULL)
 		{
 			free_txn_state(ts);
@@ -56,7 +56,11 @@ uuid_t * new_txn(db_t * db, unsigned int * seedptr)
 
 int close_txn_state(txn_state * ts, db_t * db)
 {
-	skiplist_delete(db->txn_state, (WORD) ts->txnid);
+	WORD ret = skiplist_delete(db->txn_state, (WORD) ts->txnid);
+
+#if (VERBOSE_TXNS > 0)
+	printf("skiplist_delete() returned %p\n", ret);
+#endif
 	free_txn_state(ts);
 
 	return 0;
