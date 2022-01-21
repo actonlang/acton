@@ -2156,7 +2156,7 @@ int remote_commit_txn(uuid_t * txnid, remote_db_t * db)
 
 txn_state * get_client_txn_state(uuid_t * txnid, remote_db_t * db)
 {
-	snode_t * txn_node = (snode_t *) skiplist_search(db->txn_state, (WORD) txnid);
+	snode_t * txn_node = (snode_t *) skiplist_search(db->txn_state, (WORD) (*txnid));
 #if (CLIENT_VERBOSITY > 0)
 	char uuid_str[37];
 	uuid_unparse_lower(*txnid, uuid_str);
@@ -2196,7 +2196,7 @@ uuid_t * new_client_txn(remote_db_t * db, unsigned int * seedptr)
 	printf("CLIENT: new_client_txn(): Inserting new txn state for txn uuid %s. \n", uuid_str);
 #endif
 
-	skiplist_insert(db->txn_state, (WORD) &(ts->txnid), (WORD) ts, seedptr);
+	skiplist_insert(db->txn_state, (WORD) (ts->txnid), (WORD) ts, seedptr); // &
 
 	return &(ts->txnid);
 }
@@ -2212,7 +2212,7 @@ int close_client_txn(uuid_t * txnid, remote_db_t * db)
 	if(ts == NULL)
 		return -2; // No such txn
 
-	skiplist_delete(db->txn_state, txnid);
+	skiplist_delete(db->txn_state, (WORD) *txnid);
 	free_txn_state(ts);
 
 	return 0;
