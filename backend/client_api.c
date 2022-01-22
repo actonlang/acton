@@ -20,6 +20,77 @@
 
 #include "client_api.h"
 
+struct dbc_stat dbc_stats;
+
+void zeroize_dbc_ops_stats(struct dbc_ops_stat *ops_stat, const char *name) {
+	ops_stat->name = name;
+	ops_stat->called = 0;
+	ops_stat->completed = 0;
+	ops_stat->success = 0;
+	ops_stat->error = 0;
+	ops_stat->no_quorum = 0;
+	ops_stat->time_sum = 0;
+	ops_stat->time_100ns = 0;
+	ops_stat->time_1us = 0;
+	ops_stat->time_10us = 0;
+	ops_stat->time_100us = 0;
+	ops_stat->time_1ms = 0;
+	ops_stat->time_10ms = 0;
+	ops_stat->time_100ms = 0;
+	ops_stat->time_1s = 0;
+	ops_stat->time_10s = 0;
+	ops_stat->time_100s = 0;
+	ops_stat->time_inf = 0;
+}
+
+void init_dbc_stats() {
+
+#define X(ops_name) \
+	dbc_stats.ops_name = malloc(sizeof(struct dbc_ops_stat)); \
+	zeroize_dbc_ops_stats(dbc_stats.ops_name, #ops_name);
+LIST_OF_DBC_OPS
+#undef X
+
+}
+
+void stat_start(struct dbc_ops_stat *ops_stat, struct timespec *ts_start) {
+	ops_stat->called++;
+
+	clock_gettime(CLOCK_MONOTONIC, ts_start);
+}
+
+void stat_stop(struct dbc_ops_stat *ops_stat, struct timespec *ts_start, int status) {
+	ops_stat->completed++;
+
+    struct timespec ts_stop;
+	clock_gettime(CLOCK_MONOTONIC, &ts_stop);
+	long long int diff = (ts_stop.tv_sec * 1000000000 + ts_stop.tv_nsec) - ((long long int)ts_start->tv_sec * 1000000000 + (long long int)ts_start->tv_nsec);
+
+	if      (diff < 100)              { ops_stat->time_100ns++; }
+	else if (diff < 1   * 1000)       { ops_stat->time_1us++; }
+	else if (diff < 10  * 1000)       { ops_stat->time_10us++; }
+	else if (diff < 100 * 1000)       { ops_stat->time_100us++; }
+	else if (diff < 1   * 1000000)    { ops_stat->time_1ms++; }
+	else if (diff < 10  * 1000000)    { ops_stat->time_10ms++; }
+	else if (diff < 100 * 1000000)    { ops_stat->time_100ms++; }
+	else if (diff < 1   * 1000000000) { ops_stat->time_1s++; }
+	else if (diff < (long long int)10  * 1000000000) { ops_stat->time_10s++; }
+	else if (diff < (long long int)100 * 1000000000) { ops_stat->time_100s++; }
+	else                              { ops_stat->time_inf++; }
+
+	if (status == 0) {
+		ops_stat->success++;
+	} else if (status == NO_QUORUM_ERR) {
+		ops_stat->error++;
+		ops_stat->no_quorum++;
+	} else if (status < 0) {
+		ops_stat->error++;
+	} else {
+		printf("Unknown ops status %d\n", status);
+		assert(0);
+	}
+}
+
 int64_t requests=0;
 
 int queue_callback_cmp(WORD e1, WORD e2)
@@ -641,7 +712,6 @@ int send_packet_wait_replies_sync(void * out_buf, unsigned out_len, int64_t nonc
 		return ret;
 
 	// Wait for signal from comm thread. It will come when 'db->quorum_size' replies have arrived on that nonce:
-
 	return wait_on_msg_callback(*mc, db);
 }
 
@@ -650,6 +720,9 @@ int send_packet_wait_replies_sync(void * out_buf, unsigned out_len, int64_t nonc
 
 int remote_insert_in_txn(WORD * column_values, int no_cols, int no_primary_keys, int no_clustering_keys, WORD blob, size_t blob_size, WORD table_key, uuid_t * txnid, remote_db_t * db)
 {
+    struct timespec ts_start;
+	stat_start(dbc_stats.remote_insert_in_txn, &ts_start);
+
 	unsigned len = 0;
 	void * tmp_out_buf = NULL;
 
@@ -686,6 +759,7 @@ int remote_insert_in_txn(WORD * column_values, int no_cols, int no_primary_keys,
 	if(db->servers->no_items < db->quorum_size)
 	{
 		fprintf(stderr, "Not enough servers configured for quorum (%d/%d servers configured)\n", db->servers->no_items, db->replication_factor);
+		stat_stop(dbc_stats.remote_insert_in_txn, &ts_start, NO_QUORUM_ERR);
 		return NO_QUORUM_ERR;
 	}
 	remote_server * rs = (remote_server *) (HEAD(db->servers))->value;
@@ -707,6 +781,7 @@ int remote_insert_in_txn(WORD * column_values, int no_cols, int no_primary_keys,
 	{
 		fprintf(stderr, "No quorum (%d/%d replies received)\n", mc->no_replies, db->replication_factor);
 		delete_msg_callback(mc->nonce, db);
+		stat_stop(dbc_stats.remote_insert_in_txn, &ts_start, NO_QUORUM_ERR);
 		return NO_QUORUM_ERR;
 	}
 
@@ -727,6 +802,7 @@ int remote_insert_in_txn(WORD * column_values, int no_cols, int no_primary_keys,
 
 	delete_msg_callback(mc->nonce, db);
 
+	stat_stop(dbc_stats.remote_insert_in_txn, &ts_start, !(ok_status >= db->quorum_size));
 	return !(ok_status >= db->quorum_size);
 }
 
@@ -738,6 +814,9 @@ int remote_update_in_txn(int * col_idxs, int no_cols, WORD * column_values, WORD
 
 int remote_delete_row_in_txn(WORD * column_values, int no_primary_keys, WORD table_key, uuid_t * txnid, remote_db_t * db)
 {
+	struct timespec ts_start;
+	stat_start(dbc_stats.remote_delete_row_in_txn, &ts_start);
+
 	unsigned len = 0;
 	write_query * wq = build_delete_row_in_txn(column_values, no_primary_keys, table_key, txnid, get_nonce(db));
 	void * tmp_out_buf = NULL;
@@ -746,6 +825,7 @@ int remote_delete_row_in_txn(WORD * column_values, int no_primary_keys, WORD tab
 	if(db->servers->no_items < db->quorum_size)
 	{
 		fprintf(stderr, "No quorum (%d/%d servers alive)\n", db->servers->no_items, db->replication_factor);
+		stat_stop(dbc_stats.remote_delete_row_in_txn, &ts_start, NO_QUORUM_ERR);
 		return NO_QUORUM_ERR;
 	}
 	remote_server * rs = (remote_server *) (HEAD(db->servers))->value;
@@ -767,6 +847,7 @@ int remote_delete_row_in_txn(WORD * column_values, int no_primary_keys, WORD tab
 	{
 		fprintf(stderr, "No quorum (%d/%d replies received)\n", mc->no_replies, db->replication_factor);
 		delete_msg_callback(mc->nonce, db);
+		stat_stop(dbc_stats.remote_delete_row_in_txn, &ts_start, NO_QUORUM_ERR);
 		return NO_QUORUM_ERR;
 	}
 
@@ -787,11 +868,15 @@ int remote_delete_row_in_txn(WORD * column_values, int no_primary_keys, WORD tab
 
 	delete_msg_callback(mc->nonce, db);
 
+	stat_stop(dbc_stats.remote_delete_row_in_txn, &ts_start, !(ok_status >= db->quorum_size));
 	return !(ok_status >= db->quorum_size);
 }
 
 int remote_delete_cell_in_txn(WORD * column_values, int no_primary_keys, int no_clustering_keys, WORD table_key, uuid_t * txnid, remote_db_t * db)
 {
+	struct timespec ts_start;
+	stat_start(dbc_stats.remote_delete_cell_in_txn, &ts_start);
+
 	unsigned len = 0;
 	write_query * wq = build_delete_cell_in_txn(column_values, no_primary_keys, no_clustering_keys, table_key, txnid, get_nonce(db));
 	void * tmp_out_buf = NULL;
@@ -800,6 +885,7 @@ int remote_delete_cell_in_txn(WORD * column_values, int no_primary_keys, int no_
 	if(db->servers->no_items < db->quorum_size)
 	{
 		fprintf(stderr, "No quorum (%d/%d servers alive)\n", db->servers->no_items, db->replication_factor);
+        stat_stop(dbc_stats.remote_delete_cell_in_txn, &ts_start, NO_QUORUM_ERR);
 		return NO_QUORUM_ERR;
 	}
 	remote_server * rs = (remote_server *) (HEAD(db->servers))->value;
@@ -821,6 +907,7 @@ int remote_delete_cell_in_txn(WORD * column_values, int no_primary_keys, int no_
 	{
 		fprintf(stderr, "No quorum (%d/%d replies received)\n", mc->no_replies, db->replication_factor);
 		delete_msg_callback(mc->nonce, db);
+        stat_stop(dbc_stats.remote_delete_cell_in_txn, &ts_start, NO_QUORUM_ERR);
 		return NO_QUORUM_ERR;
 	}
 
@@ -841,6 +928,7 @@ int remote_delete_cell_in_txn(WORD * column_values, int no_primary_keys, int no_
 
 	delete_msg_callback(mc->nonce, db);
 
+    stat_stop(dbc_stats.remote_delete_cell_in_txn, &ts_start, !(ok_status >= db->quorum_size));
 	return !(ok_status >= db->quorum_size);
 }
 
@@ -977,6 +1065,9 @@ db_row_t* get_db_rows_tree_from_read_response(range_read_response_message * resp
 db_row_t* remote_search_in_txn(WORD* primary_keys, int no_primary_keys, WORD table_key,
 		uuid_t * txnid, remote_db_t * db)
 {
+    struct timespec ts_start;
+	stat_start(dbc_stats.remote_search_in_txn, &ts_start);
+
 	unsigned len = 0;
 	void * tmp_out_buf = NULL;
 
@@ -986,6 +1077,7 @@ db_row_t* remote_search_in_txn(WORD* primary_keys, int no_primary_keys, WORD tab
 	if(db->servers->no_items < db->quorum_size)
 	{
 		fprintf(stderr, "No quorum (%d/%d servers alive)\n", db->servers->no_items, db->replication_factor);
+		stat_stop(dbc_stats.remote_search_in_txn, &ts_start, NO_QUORUM_ERR);
 		return NULL;
 	}
 	remote_server * rs = (remote_server *) (HEAD(db->servers))->value;
@@ -1007,6 +1099,7 @@ db_row_t* remote_search_in_txn(WORD* primary_keys, int no_primary_keys, WORD tab
 	{
 		fprintf(stderr, "No quorum (%d/%d replies received)\n", mc->no_replies, db->replication_factor);
 		delete_msg_callback(mc->nonce, db);
+		stat_stop(dbc_stats.remote_search_in_txn, &ts_start, NO_QUORUM_ERR);
 		return NULL;
 	}
 
@@ -1029,6 +1122,7 @@ db_row_t* remote_search_in_txn(WORD* primary_keys, int no_primary_keys, WORD tab
 
 	delete_msg_callback(mc->nonce, db);
 
+	stat_stop(dbc_stats.remote_search_in_txn, &ts_start, 0);
 	return result;
 }
 
@@ -1037,6 +1131,9 @@ db_row_t* remote_search_clustering_in_txn(WORD* primary_keys, int no_primary_key
 														WORD table_key, uuid_t * txnid,
 														remote_db_t * db)
 {
+    struct timespec ts_start;
+	stat_start(dbc_stats.remote_search_clustering_in_txn, &ts_start);
+
 	unsigned len = 0;
 	void * tmp_out_buf = NULL;
 
@@ -1046,6 +1143,7 @@ db_row_t* remote_search_clustering_in_txn(WORD* primary_keys, int no_primary_key
 	if(db->servers->no_items < db->quorum_size)
 	{
 		fprintf(stderr, "No quorum (%d/%d servers alive)\n", db->servers->no_items, db->replication_factor);
+		stat_stop(dbc_stats.remote_search_clustering_in_txn, &ts_start, NO_QUORUM_ERR);
 		return NULL;
 	}
 	remote_server * rs = (remote_server *) (HEAD(db->servers))->value;
@@ -1067,6 +1165,7 @@ db_row_t* remote_search_clustering_in_txn(WORD* primary_keys, int no_primary_key
 	{
 		fprintf(stderr, "No quorum (%d/%d replies received)\n", mc->no_replies, db->replication_factor);
 		delete_msg_callback(mc->nonce, db);
+		stat_stop(dbc_stats.remote_search_clustering_in_txn, &ts_start, NO_QUORUM_ERR);
 		return NULL;
 	}
 
@@ -1089,6 +1188,7 @@ db_row_t* remote_search_clustering_in_txn(WORD* primary_keys, int no_primary_key
 
 	delete_msg_callback(mc->nonce, db);
 
+	stat_stop(dbc_stats.remote_search_clustering_in_txn, &ts_start, 0);
 	return result;
 }
 
@@ -1111,6 +1211,9 @@ int remote_range_search_in_txn(WORD* start_primary_keys, WORD* end_primary_keys,
 							snode_t** start_row, snode_t** end_row,
 							WORD table_key, uuid_t * txnid, remote_db_t * db)
 {
+    struct timespec ts_start;
+    stat_start(dbc_stats.remote_range_search_in_txn, &ts_start);
+
 	unsigned len = 0;
 	void * tmp_out_buf = NULL;
 
@@ -1120,6 +1223,7 @@ int remote_range_search_in_txn(WORD* start_primary_keys, WORD* end_primary_keys,
 	if(db->servers->no_items < db->quorum_size)
 	{
 		fprintf(stderr, "No quorum (%d/%d servers alive)\n", db->servers->no_items, db->replication_factor);
+        stat_stop(dbc_stats.remote_range_search_in_txn, &ts_start, NO_QUORUM_ERR);
 		return NO_QUORUM_ERR;
 	}
 	remote_server * rs = (remote_server *) (HEAD(db->servers))->value;
@@ -1141,6 +1245,7 @@ int remote_range_search_in_txn(WORD* start_primary_keys, WORD* end_primary_keys,
 	{
 		fprintf(stderr, "No quorum (%d/%d replies received)\n", mc->no_replies, db->replication_factor);
 		delete_msg_callback(mc->nonce, db);
+        stat_stop(dbc_stats.remote_range_search_in_txn, &ts_start, NO_QUORUM_ERR);
 		return NO_QUORUM_ERR;
 	}
 
@@ -1163,6 +1268,7 @@ int remote_range_search_in_txn(WORD* start_primary_keys, WORD* end_primary_keys,
 
 	delete_msg_callback(mc->nonce, db);
 
+    stat_stop(dbc_stats.remote_range_search_in_txn, &ts_start, 0);
 	return result;
 }
 
@@ -1171,6 +1277,9 @@ int remote_range_search_clustering_in_txn(WORD* primary_keys, int no_primary_key
 									 snode_t** start_row, snode_t** end_row,
 									 WORD table_key, uuid_t * txnid, remote_db_t * db)
 {
+    struct timespec ts_start;
+    stat_start(dbc_stats.remote_range_search_clustering_in_txn, &ts_start);
+
 	unsigned len = 0;
 	void * tmp_out_buf = NULL;
 
@@ -1182,6 +1291,7 @@ int remote_range_search_clustering_in_txn(WORD* primary_keys, int no_primary_key
 	if(db->servers->no_items < db->quorum_size)
 	{
 		fprintf(stderr, "No quorum (%d/%d servers alive)\n", db->servers->no_items, db->replication_factor);
+        stat_stop(dbc_stats.remote_range_search_clustering_in_txn, &ts_start, NO_QUORUM_ERR);
 		return NO_QUORUM_ERR;
 	}
 	remote_server * rs = (remote_server *) (HEAD(db->servers))->value;
@@ -1203,6 +1313,7 @@ int remote_range_search_clustering_in_txn(WORD* primary_keys, int no_primary_key
 	{
 		fprintf(stderr, "No quorum (%d/%d replies received)\n", mc->no_replies, db->replication_factor);
 		delete_msg_callback(mc->nonce, db);
+        stat_stop(dbc_stats.remote_range_search_clustering_in_txn, &ts_start, NO_QUORUM_ERR);
 		return NO_QUORUM_ERR;
 	}
 
@@ -1225,6 +1336,7 @@ int remote_range_search_clustering_in_txn(WORD* primary_keys, int no_primary_key
 
 	delete_msg_callback(mc->nonce, db);
 
+    stat_stop(dbc_stats.remote_range_search_clustering_in_txn, &ts_start, !(ok_status >= db->quorum_size));
 	return result;
 }
 
@@ -1239,6 +1351,9 @@ int remote_range_search_index_in_txn(int idx_idx, WORD start_idx_key, WORD end_i
 int remote_read_full_table_in_txn(snode_t** start_row, snode_t** end_row,
 									WORD table_key, uuid_t * txnid, remote_db_t * db)
 {
+    struct timespec ts_start;
+    stat_start(dbc_stats.remote_read_full_table_in_txn, &ts_start);
+
 	unsigned len = 0;
 	void * tmp_out_buf = NULL;
 
@@ -1248,6 +1363,7 @@ int remote_read_full_table_in_txn(snode_t** start_row, snode_t** end_row,
 	if(db->servers->no_items < db->quorum_size)
 	{
 		fprintf(stderr, "No quorum (%d/%d servers alive)\n", db->servers->no_items, db->replication_factor);
+        stat_stop(dbc_stats.remote_read_full_table_in_txn, &ts_start, NO_QUORUM_ERR);
 		return NO_QUORUM_ERR;
 	}
 	remote_server * rs = (remote_server *) (HEAD(db->servers))->value;
@@ -1269,6 +1385,7 @@ int remote_read_full_table_in_txn(snode_t** start_row, snode_t** end_row,
 	{
 		fprintf(stderr, "No quorum (%d/%d replies received)\n", mc->no_replies, db->replication_factor);
 		delete_msg_callback(mc->nonce, db);
+        stat_stop(dbc_stats.remote_read_full_table_in_txn, &ts_start, NO_QUORUM_ERR);
 		return NO_QUORUM_ERR;
 	}
 
@@ -1298,6 +1415,7 @@ int remote_read_full_table_in_txn(snode_t** start_row, snode_t** end_row,
 		print_long_row((db_row_t*) node->value);
 #endif
 
+    stat_stop(dbc_stats.remote_read_full_table_in_txn, &ts_start, 0);
 	return result;
 }
 
@@ -1317,6 +1435,9 @@ void remote_print_long_table(WORD table_key, remote_db_t * db)
 
 int remote_create_queue_in_txn(WORD table_key, WORD queue_id, uuid_t * txnid, remote_db_t * db)
 {
+    struct timespec ts_start;
+    stat_start(dbc_stats.remote_create_queue_in_txn, &ts_start);
+
 	unsigned len = 0;
 	void * tmp_out_buf = NULL;
 
@@ -1326,6 +1447,7 @@ int remote_create_queue_in_txn(WORD table_key, WORD queue_id, uuid_t * txnid, re
 	if(db->servers->no_items < db->quorum_size)
 	{
 		fprintf(stderr, "No quorum (%d/%d servers alive)\n", db->servers->no_items, db->replication_factor);
+        stat_stop(dbc_stats.remote_create_queue_in_txn, &ts_start, NO_QUORUM_ERR);
 		return NO_QUORUM_ERR;
 	}
 	remote_server * rs = (remote_server *) (HEAD(db->servers))->value;
@@ -1347,6 +1469,7 @@ int remote_create_queue_in_txn(WORD table_key, WORD queue_id, uuid_t * txnid, re
 	{
 		fprintf(stderr, "No quorum (%d/%d replies received)\n", mc->no_replies, db->replication_factor);
 		delete_msg_callback(mc->nonce, db);
+        stat_stop(dbc_stats.remote_create_queue_in_txn, &ts_start, NO_QUORUM_ERR);
 		return NO_QUORUM_ERR;
 	}
 
@@ -1367,11 +1490,15 @@ int remote_create_queue_in_txn(WORD table_key, WORD queue_id, uuid_t * txnid, re
 
 	delete_msg_callback(mc->nonce, db);
 
+    stat_stop(dbc_stats.remote_create_queue_in_txn, &ts_start, !(ok_status >= db->quorum_size));
 	return !(ok_status >= db->quorum_size);
 }
 
 int remote_delete_queue_in_txn(WORD table_key, WORD queue_id, uuid_t * txnid, remote_db_t * db)
 {
+    struct timespec ts_start;
+    stat_start(dbc_stats.remote_delete_queue_in_txn, &ts_start);
+
 	unsigned len = 0;
 	void * tmp_out_buf = NULL;
 
@@ -1381,6 +1508,7 @@ int remote_delete_queue_in_txn(WORD table_key, WORD queue_id, uuid_t * txnid, re
 	if(db->servers->no_items < db->quorum_size)
 	{
 		fprintf(stderr, "No quorum (%d/%d servers alive)\n", db->servers->no_items, db->replication_factor);
+        stat_stop(dbc_stats.remote_delete_queue_in_txn, &ts_start, NO_QUORUM_ERR);
 		return NO_QUORUM_ERR;
 	}
 	remote_server * rs = (remote_server *) (HEAD(db->servers))->value;
@@ -1402,6 +1530,7 @@ int remote_delete_queue_in_txn(WORD table_key, WORD queue_id, uuid_t * txnid, re
 	{
 		fprintf(stderr, "No quorum (%d/%d replies received)\n", mc->no_replies, db->replication_factor);
 		delete_msg_callback(mc->nonce, db);
+        stat_stop(dbc_stats.remote_delete_queue_in_txn, &ts_start, NO_QUORUM_ERR);
 		return NO_QUORUM_ERR;
 	}
 
@@ -1422,11 +1551,15 @@ int remote_delete_queue_in_txn(WORD table_key, WORD queue_id, uuid_t * txnid, re
 
 	delete_msg_callback(mc->nonce, db);
 
+    stat_stop(dbc_stats.remote_delete_queue_in_txn, &ts_start, !(ok_status >= db->quorum_size));
 	return !(ok_status >= db->quorum_size);
 }
 
 int remote_enqueue_in_txn(WORD * column_values, int no_cols, WORD blob, size_t blob_size, WORD table_key, WORD queue_id, uuid_t * txnid, remote_db_t * db)
 {
+    struct timespec ts_start;
+    stat_start(dbc_stats.remote_enqueue_in_txn, &ts_start);
+
 	unsigned len = 0;
 	void * tmp_out_buf = NULL;
 
@@ -1436,6 +1569,7 @@ int remote_enqueue_in_txn(WORD * column_values, int no_cols, WORD blob, size_t b
 	if(db->servers->no_items < db->quorum_size)
 	{
 		fprintf(stderr, "No quorum (%d/%d servers alive)\n", db->servers->no_items, db->replication_factor);
+        stat_stop(dbc_stats.remote_enqueue_in_txn, &ts_start, NO_QUORUM_ERR);
 		return NO_QUORUM_ERR;
 	}
 	remote_server * rs = (remote_server *) (HEAD(db->servers))->value;
@@ -1457,6 +1591,7 @@ int remote_enqueue_in_txn(WORD * column_values, int no_cols, WORD blob, size_t b
 	{
 		fprintf(stderr, "No quorum (%d/%d replies received)\n", mc->no_replies, db->replication_factor);
 		delete_msg_callback(mc->nonce, db);
+        stat_stop(dbc_stats.remote_enqueue_in_txn, &ts_start, NO_QUORUM_ERR);
 		return NO_QUORUM_ERR;
 	}
 
@@ -1477,6 +1612,7 @@ int remote_enqueue_in_txn(WORD * column_values, int no_cols, WORD blob, size_t b
 
 	delete_msg_callback(mc->nonce, db);
 
+    stat_stop(dbc_stats.remote_enqueue_in_txn, &ts_start, !(ok_status >= db->quorum_size));
 	return !(ok_status >= db->quorum_size);
 }
 
@@ -1485,6 +1621,9 @@ int remote_read_queue_in_txn(WORD consumer_id, WORD shard_id, WORD app_id, WORD 
 		snode_t** start_row, snode_t** end_row, uuid_t * txnid,
 		remote_db_t * db)
 {
+    struct timespec ts_start;
+    stat_start(dbc_stats.remote_read_queue_in_txn, &ts_start);
+
 	unsigned len = 0;
 	void * tmp_out_buf = NULL;
 
@@ -1494,6 +1633,7 @@ int remote_read_queue_in_txn(WORD consumer_id, WORD shard_id, WORD app_id, WORD 
 	if(db->servers->no_items < db->quorum_size)
 	{
 		fprintf(stderr, "No quorum (%d/%d servers alive)\n", db->servers->no_items, db->replication_factor);
+        stat_stop(dbc_stats.remote_read_queue_in_txn, &ts_start, NO_QUORUM_ERR);
 		return NO_QUORUM_ERR;
 	}
 	remote_server * rs = (remote_server *) (HEAD(db->servers))->value;
@@ -1515,6 +1655,7 @@ int remote_read_queue_in_txn(WORD consumer_id, WORD shard_id, WORD app_id, WORD 
 	{
 		fprintf(stderr, "No quorum (%d/%d replies received)\n", mc->no_replies, db->replication_factor);
 		delete_msg_callback(mc->nonce, db);
+        stat_stop(dbc_stats.remote_read_queue_in_txn, &ts_start, NO_QUORUM_ERR);
 		return NO_QUORUM_ERR;
 	}
 
@@ -1557,12 +1698,16 @@ int remote_read_queue_in_txn(WORD consumer_id, WORD shard_id, WORD app_id, WORD 
 
 	delete_msg_callback(mc->nonce, db);
 
+    stat_stop(dbc_stats.remote_read_queue_in_txn, &ts_start, 0);
 	return response->status;
 }
 
 int remote_consume_queue_in_txn(WORD consumer_id, WORD shard_id, WORD app_id, WORD table_key, WORD queue_id,
 					int64_t new_consume_head, uuid_t * txnid, remote_db_t * db)
 {
+    struct timespec ts_start;
+    stat_start(dbc_stats.remote_consume_queue_in_txn, &ts_start);
+
 	unsigned len = 0;
 	void * tmp_out_buf = NULL;
 
@@ -1572,6 +1717,7 @@ int remote_consume_queue_in_txn(WORD consumer_id, WORD shard_id, WORD app_id, WO
 	if(db->servers->no_items < db->quorum_size)
 	{
 		fprintf(stderr, "No quorum (%d/%d servers alive)\n", db->servers->no_items, db->replication_factor);
+        stat_stop(dbc_stats.remote_consume_queue_in_txn, &ts_start, NO_QUORUM_ERR);
 		return NO_QUORUM_ERR;
 	}
 	remote_server * rs = (remote_server *) (HEAD(db->servers))->value;
@@ -1593,6 +1739,7 @@ int remote_consume_queue_in_txn(WORD consumer_id, WORD shard_id, WORD app_id, WO
 	{
 		fprintf(stderr, "No quorum (%d/%d replies received)\n", mc->no_replies, db->replication_factor);
 		delete_msg_callback(mc->nonce, db);
+        stat_stop(dbc_stats.remote_consume_queue_in_txn, &ts_start, NO_QUORUM_ERR);
 		return NO_QUORUM_ERR;
 	}
 
@@ -1613,6 +1760,7 @@ int remote_consume_queue_in_txn(WORD consumer_id, WORD shard_id, WORD app_id, WO
 
 	delete_msg_callback(mc->nonce, db);
 
+    stat_stop(dbc_stats.remote_consume_queue_in_txn, &ts_start, !(ok_status >= db->quorum_size));
 	return !(ok_status >= db->quorum_size);
 }
 
@@ -1620,6 +1768,9 @@ int remote_subscribe_queue(WORD consumer_id, WORD shard_id, WORD app_id, WORD ta
 						queue_callback * callback, int64_t * prev_read_head, int64_t * prev_consume_head,
 						remote_db_t * db)
 {
+    struct timespec ts_start;
+    stat_start(dbc_stats.remote_subscribe_queue, &ts_start);
+
 	unsigned len = 0;
 	void * tmp_out_buf = NULL;
 
@@ -1629,6 +1780,7 @@ int remote_subscribe_queue(WORD consumer_id, WORD shard_id, WORD app_id, WORD ta
 	if(db->servers->no_items < db->quorum_size)
 	{
 		fprintf(stderr, "No quorum (%d/%d servers alive)\n", db->servers->no_items, db->replication_factor);
+        stat_stop(dbc_stats.remote_subscribe_queue, &ts_start, NO_QUORUM_ERR);
 		return NO_QUORUM_ERR;
 	}
 	remote_server * rs = (remote_server *) (HEAD(db->servers))->value;
@@ -1650,6 +1802,7 @@ int remote_subscribe_queue(WORD consumer_id, WORD shard_id, WORD app_id, WORD ta
 	{
 		fprintf(stderr, "No quorum (%d/%d replies received)\n", mc->no_replies, db->replication_factor);
 		delete_msg_callback(mc->nonce, db);
+        stat_stop(dbc_stats.remote_subscribe_queue, &ts_start, NO_QUORUM_ERR);
 		return NO_QUORUM_ERR;
 	}
 
@@ -1662,6 +1815,8 @@ int remote_subscribe_queue(WORD consumer_id, WORD shard_id, WORD app_id, WORD ta
 	    if(ack->status == CLIENT_ERR_SUBSCRIPTION_EXISTS)
 	    {
 	    		delete_msg_callback(mc->nonce, db);
+				stat_stop(dbc_stats.remote_subscribe_queue, &ts_start, SUBSCRIPTION_EXISTS);
+				// TODO: align return value to use client API codes rather than server API?
 	    		return CLIENT_ERR_SUBSCRIPTION_EXISTS;
 	    }
 
@@ -1675,12 +1830,16 @@ int remote_subscribe_queue(WORD consumer_id, WORD shard_id, WORD app_id, WORD ta
 
     // Add local subscription on client:
 
+    stat_stop(dbc_stats.remote_subscribe_queue, &ts_start, 0);
     return subscribe_queue_client(consumer_id, shard_id, app_id, table_key, queue_id, callback, 1, db);
 }
 
 int remote_unsubscribe_queue(WORD consumer_id, WORD shard_id, WORD app_id, WORD table_key, WORD queue_id,
 						remote_db_t * db)
 {
+    struct timespec ts_start;
+    stat_start(dbc_stats.remote_unsubscribe_queue, &ts_start);
+
 	unsigned len = 0;
 	void * tmp_out_buf = NULL;
 
@@ -1690,6 +1849,7 @@ int remote_unsubscribe_queue(WORD consumer_id, WORD shard_id, WORD app_id, WORD 
 	if(db->servers->no_items < db->quorum_size)
 	{
 		fprintf(stderr, "No quorum (%d/%d servers alive)\n", db->servers->no_items, db->replication_factor);
+        stat_stop(dbc_stats.remote_unsubscribe_queue, &ts_start, NO_QUORUM_ERR);
 		return NO_QUORUM_ERR;
 	}
 	remote_server * rs = (remote_server *) (HEAD(db->servers))->value;
@@ -1711,6 +1871,7 @@ int remote_unsubscribe_queue(WORD consumer_id, WORD shard_id, WORD app_id, WORD 
 	{
 		fprintf(stderr, "No quorum (%d/%d replies received)\n", mc->no_replies, db->replication_factor);
 		delete_msg_callback(mc->nonce, db);
+        stat_stop(dbc_stats.remote_unsubscribe_queue, &ts_start, NO_QUORUM_ERR);
 		return NO_QUORUM_ERR;
 	}
 
@@ -1723,6 +1884,7 @@ int remote_unsubscribe_queue(WORD consumer_id, WORD shard_id, WORD app_id, WORD 
 	    if(ack->status == CLIENT_ERR_NO_SUBSCRIPTION_EXISTS)
 	    {
 	    		delete_msg_callback(mc->nonce, db);
+				stat_stop(dbc_stats.remote_unsubscribe_queue, &ts_start, SUBSCRIPTION_EXISTS);
 	    		return CLIENT_ERR_NO_SUBSCRIPTION_EXISTS;
 	    }
 
@@ -1736,6 +1898,7 @@ int remote_unsubscribe_queue(WORD consumer_id, WORD shard_id, WORD app_id, WORD 
 
     // Remove local subscription from client:
 
+    stat_stop(dbc_stats.remote_unsubscribe_queue, &ts_start, 0);
     return unsubscribe_queue_client(consumer_id, shard_id, app_id, table_key, queue_id, 1, db);
 }
 
@@ -1759,6 +1922,9 @@ int remote_unsubscribe_queue_in_txn(WORD consumer_id, WORD shard_id, WORD app_id
 int subscribe_queue_client(WORD consumer_id, WORD shard_id, WORD app_id, WORD table_key, WORD queue_id,
 					queue_callback * callback, short use_lock, remote_db_t * db)
 {
+    struct timespec ts_start;
+    stat_start(dbc_stats.subscribe_queue_client, &ts_start);
+
 	queue_callback_args * qca = get_queue_callback_args(table_key, queue_id, app_id, shard_id, consumer_id, QUEUE_NOTIF_ENQUEUED);
 
 	if(use_lock)
@@ -1771,6 +1937,7 @@ int subscribe_queue_client(WORD consumer_id, WORD shard_id, WORD app_id, WORD ta
 		if(use_lock)
 			pthread_mutex_unlock(db->subscribe_lock);
 
+        stat_stop(dbc_stats.subscribe_queue_client, &ts_start, SUBSCRIPTION_EXISTS);
 		return CLIENT_ERR_SUBSCRIPTION_EXISTS; // Subscription already exists
 	}
 
@@ -1787,6 +1954,7 @@ int subscribe_queue_client(WORD consumer_id, WORD shard_id, WORD app_id, WORD ta
 					(int64_t) table_key, (int64_t) queue_id, cs->callback);
 #endif
 
+	stat_stop(dbc_stats.subscribe_queue_client, &ts_start, 0);
 	return status;
 }
 
@@ -1808,6 +1976,9 @@ queue_callback * get_queue_client_callback(WORD consumer_id, WORD shard_id, WORD
 int unsubscribe_queue_client(WORD consumer_id, WORD shard_id, WORD app_id, WORD table_key, WORD queue_id,
 						short use_lock, remote_db_t * db)
 {
+    struct timespec ts_start;
+    stat_start(dbc_stats.unsubscribe_queue_client, &ts_start);
+
 	queue_callback_args * qca = get_queue_callback_args(table_key, queue_id, app_id, shard_id, consumer_id, QUEUE_NOTIF_ENQUEUED);
 
 	if(use_lock)
@@ -1828,6 +1999,7 @@ int unsubscribe_queue_client(WORD consumer_id, WORD shard_id, WORD app_id, WORD 
 					(int64_t) table_key, (int64_t) queue_id, cs->callback);
 #endif
 
+    stat_stop(dbc_stats.unsubscribe_queue_client, &ts_start, 0);
 	return (callback != NULL)?0:CLIENT_ERR_NO_SUBSCRIPTION_EXISTS;
 }
 
@@ -1960,17 +2132,24 @@ int _remote_validate_txn(uuid_t * txnid, vector_clock * version, remote_server *
 
 int remote_validate_txn(uuid_t * txnid, remote_db_t * db)
 {
+    struct timespec ts_start;
+    stat_start(dbc_stats.remote_validate_txn, &ts_start);
+
 	vector_clock * version = get_lc(db);
 
 	int ret = _remote_validate_txn(txnid, get_lc(db), NULL, db);
 
 	free_vc(version);
 
+    stat_stop(dbc_stats.remote_validate_txn, &ts_start, 0);
 	return ret;
 }
 
 int _remote_abort_txn(uuid_t * txnid, remote_server * rs_in, remote_db_t * db)
 {
+    struct timespec ts_start;
+    stat_start(dbc_stats.remote_abort_txn, &ts_start);
+
 	unsigned len = 0;
 	void * tmp_out_buf = NULL;
 
@@ -1980,6 +2159,7 @@ int _remote_abort_txn(uuid_t * txnid, remote_server * rs_in, remote_db_t * db)
 	if(db->servers->no_items < db->quorum_size)
 	{
 		fprintf(stderr, "No quorum (%d/%d servers alive)\n", db->servers->no_items, db->replication_factor);
+        stat_stop(dbc_stats.remote_abort_txn, &ts_start, NO_QUORUM_ERR);
 		return NO_QUORUM_ERR;
 	}
 	remote_server * rs = (rs_in != NULL)?(rs_in):((remote_server *) (HEAD(db->servers))->value);
@@ -2001,6 +2181,7 @@ int _remote_abort_txn(uuid_t * txnid, remote_server * rs_in, remote_db_t * db)
 	{
 		fprintf(stderr, "No quorum (%d/%d replies received)\n", mc->no_replies, db->replication_factor);
 		delete_msg_callback(mc->nonce, db);
+        stat_stop(dbc_stats.remote_abort_txn, &ts_start, NO_QUORUM_ERR);
 		return NO_QUORUM_ERR;
 	}
 
@@ -2021,6 +2202,7 @@ int _remote_abort_txn(uuid_t * txnid, remote_server * rs_in, remote_db_t * db)
 
 	delete_msg_callback(mc->nonce, db);
 
+	stat_stop(dbc_stats.remote_abort_txn, &ts_start, 0);
 	return !(ok_status >= db->quorum_size);
 }
 
@@ -2086,6 +2268,9 @@ int _remote_persist_txn(uuid_t * txnid, vector_clock * version, remote_server * 
 
 int remote_commit_txn(uuid_t * txnid, remote_db_t * db)
 {
+    struct timespec ts_start;
+    stat_start(dbc_stats.remote_commit_txn, &ts_start);
+
 	unsigned len = 0;
 	void * tmp_out_buf = NULL;
 
@@ -2100,6 +2285,7 @@ int remote_commit_txn(uuid_t * txnid, remote_db_t * db)
 	if(db->servers->no_items < db->quorum_size)
 	{
 		fprintf(stderr, "No quorum (%d/%d servers alive)\n", db->servers->no_items, db->replication_factor);
+        stat_stop(dbc_stats.remote_commit_txn, &ts_start, NO_QUORUM_ERR);
 		return NO_QUORUM_ERR;
 	}
 	remote_server * rs = (remote_server *) (HEAD(db->servers))->value;
@@ -2145,6 +2331,7 @@ int remote_commit_txn(uuid_t * txnid, remote_db_t * db)
 
 	free_vc(commit_stamp);
 
+	stat_stop(dbc_stats.remote_commit_txn, &ts_start, 0);
 	return val_res;
 }
 
@@ -2179,13 +2366,19 @@ uuid_t * new_client_txn(remote_db_t * db, unsigned int * seedptr)
 
 int close_client_txn(uuid_t * txnid, remote_db_t * db)
 {
+    struct timespec ts_start;
+    stat_start(dbc_stats.close_client_txn, &ts_start);
+
 	txn_state * ts = get_client_txn_state(txnid, db);
-	if(ts == NULL)
-		return -2; // No such txn
+	if(ts == NULL) { // No such txn
+        stat_stop(dbc_stats.close_client_txn, &ts_start, NO_SUCH_TXN);
+		return -2;
+	}
 
 	skiplist_delete(db->txn_state, txnid);
 	free_txn_state(ts);
 
+	stat_stop(dbc_stats.close_client_txn, &ts_start, 0);
 	return 0;
 }
 

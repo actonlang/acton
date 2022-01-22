@@ -26,7 +26,7 @@ class MonSock:
 
         try:
             self.sock.send(b"WTS")
-            res = self.sock.recv(20000)
+            res = self.sock.recv(50000)
             return json.loads(res.decode("utf-8"))
         except Exception as exc:
             self.connect()
@@ -150,8 +150,50 @@ class PromHTTPRequestHandler(BaseHTTPRequestHandler):
         self.wfile.write(f'acton_rts_bkeep_sum{{thread="sum"}} {total["bkeep_sum"]}\n'.encode('utf-8'))
         self.wfile.write(f'acton_rts_bkeep_count{{thread="sum"}} {total["bkeep_count"]}\n'.encode('utf-8'))
 
+        self.wfile.write(b'# HELP acton_rts_dbc_ops_called DB Client operation called\n')
+        self.wfile.write(b'# TYPE acton_rts_dbc_ops_called counter\n')
+        for k,v in data['db_client'].items():
+            self.wfile.write(f'acton_rts_dbc_ops_called{{type="{k}"}} {v["called"]}\n'.encode('utf-8'))
 
-def prompom(sock_addr, listen_addr='localhost', listen_port=8000):
+        self.wfile.write(b'# HELP acton_rts_dbc_ops_completed DB Client operation completed\n')
+        self.wfile.write(b'# TYPE acton_rts_dbc_ops_completed counter\n')
+        for k,v in data['db_client'].items():
+            self.wfile.write(f'acton_rts_dbc_ops_completed{{type="{k}"}} {v["completed"]}\n'.encode('utf-8'))
+
+        self.wfile.write(b'# HELP acton_rts_dbc_ops_success DB Client operation success\n')
+        self.wfile.write(b'# TYPE acton_rts_dbc_ops_success counter\n')
+        for k,v in data['db_client'].items():
+            self.wfile.write(f'acton_rts_dbc_ops_success{{type="{k}"}} {v["success"]}\n'.encode('utf-8'))
+
+        self.wfile.write(b'# HELP acton_rts_dbc_ops_error DB Client operation errors\n')
+        self.wfile.write(b'# TYPE acton_rts_dbc_ops_error counter\n')
+        for k,v in data['db_client'].items():
+            self.wfile.write(f'acton_rts_dbc_ops_error{{type="{k}"}} {v["error"]}\n'.encode('utf-8'))
+
+        self.wfile.write(b'# HELP acton_rts_dbc_ops_no_quorum DB Client operation no_quorum\n')
+        self.wfile.write(b'# TYPE acton_rts_dbc_ops_no_quorum counter\n')
+        for k,v in data['db_client'].items():
+            self.wfile.write(f'acton_rts_dbc_ops_no_quorum{{type="{k}"}} {v["no_quorum"]}\n'.encode('utf-8'))
+
+        self.wfile.write(b'# HELP acton_rts_dbc_ops DB client operations\n')
+        self.wfile.write(b'# TYPE acton_rts_dbc_ops histogram\n')
+        for k,v in data['db_client'].items():
+            self.wfile.write(f'acton_rts_dbc_ops_bucket{{type="{k}",le="0.0000001"}} {v["time_100ns"]}\n'.encode('utf-8'))
+            self.wfile.write(f'acton_rts_dbc_ops_bucket{{type="{k}",le="0.000001"}} {v["time_1us"]}\n'.encode('utf-8'))
+            self.wfile.write(f'acton_rts_dbc_ops_bucket{{type="{k}",le="0.00001"}} {v["time_10us"]}\n'.encode('utf-8'))
+            self.wfile.write(f'acton_rts_dbc_ops_bucket{{type="{k}",le="0.0001"}} {v["time_100us"]}\n'.encode('utf-8'))
+            self.wfile.write(f'acton_rts_dbc_ops_bucket{{type="{k}",le="0.001"}} {v["time_1ms"]}\n'.encode('utf-8'))
+            self.wfile.write(f'acton_rts_dbc_ops_bucket{{type="{k}",le="0.01"}} {v["time_10ms"]}\n'.encode('utf-8'))
+            self.wfile.write(f'acton_rts_dbc_ops_bucket{{type="{k}",le="0.1"}} {v["time_100ms"]}\n'.encode('utf-8'))
+            self.wfile.write(f'acton_rts_dbc_ops_bucket{{type="{k}",le="1"}} {v["time_1s"]}\n'.encode('utf-8'))
+            self.wfile.write(f'acton_rts_dbc_ops_bucket{{type="{k}",le="10"}} {v["time_10s"]}\n'.encode('utf-8'))
+            self.wfile.write(f'acton_rts_dbc_ops_bucket{{type="{k}",le="100"}} {v["time_100s"]}\n'.encode('utf-8'))
+            self.wfile.write(f'acton_rts_dbc_ops_bucket{{type="{k}",le="+Inf"}} {v["time_inf"]}\n'.encode('utf-8'))
+            self.wfile.write(f'acton_rts_dbc_ops_sum{{type="{k}"}} {v["time_sum"]}\n'.encode('utf-8'))
+            self.wfile.write(f'acton_rts_dbc_ops_count{{type="{k}"}} {v["success"]+v["error"]}\n'.encode('utf-8'))
+
+
+def prompom(sock_addr, listen_addr='0.0.0.0', listen_port=8000):
     ad = (listen_addr, listen_port)
     print(f"Serving stuff on {ad}")
 
