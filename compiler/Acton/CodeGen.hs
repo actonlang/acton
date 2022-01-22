@@ -536,8 +536,7 @@ dotCast env ent ts (Var _ x) n
   | GName m _ <- x, m == mPrim      = id
 dotCast env ent ts e n
   | null ts && null argsubst        = id
-  | otherwise                       = -- trace ("## dotCast " ++ prstr e ++ " : " ++ prstr t0 ++ ", ." ++ prstr n ++ ": " ++ prstr sc ++ ", t: " ++ prstr t) $
-                                      parens . (parens (gen env t) <>)
+  | otherwise                       = parens . (parens (gen env t) <>)
   where t0                          = typeOf env e
         (argsubst, c0)              = case t0 of
                                          TCon _ tc -> splitTC env tc
@@ -546,6 +545,12 @@ dotCast env ent ts e n
         t                           = subst fullsubst $ if ent then addSelf (sctype sc) dec else sctype sc
         fullsubst                   = (tvSelf,t0) : (qbound (scbind sc) `zip` ts) ++ argsubst
 
+classCast env ts x q n              = parens . (parens (gen env t) <>)
+  where (ts0,ts1)                   = splitAt (length q) ts
+        tc                          = TC x ts0
+        (sc, dec)                   = findAttr' env tc n
+        t                           = subst fullsubst $ addSelf (sctype sc) dec
+        fullsubst                   = (tvSelf,tCon tc) : (qbound (scbind sc) `zip` ts1)
 
 genNew env n p                      = newcon' env n <> parens (gen env p)
 
@@ -571,7 +576,8 @@ malloc env n                        = text "malloc" <> parens (text "sizeof" <> 
 comma' x                            = if isEmpty x then empty else comma <+> x
 
 genDotCall env ts dec e@(Var _ x) n p
-  | NClass{} <- info, Just _ <- dec = dotCast env False ts e n (methodtable' env x <> text "." <> gen env n) <> parens (gen env p)
+  | NClass q _ _ <- info,
+    Just _ <- dec                   = classCast env ts x q n (methodtable' env x <> text "." <> gen env n) <> parens (gen env p)
   | NClass{} <- info                = genEnter env ts (eDot e n) callKW p       -- In case n is a closure...
   where info                        = findQName x env
 genDotCall env ts dec e n p
@@ -581,7 +587,7 @@ genDotCall env ts dec e n p
 
 
 genDot env ts e@(Var _ x) n
-  | NClass{} <- findQName x env     = dotCast env False ts e n $ methodtable' env x <> text "." <> gen env n
+  | NClass q _ _ <- findQName x env = classCast env ts x q n $ methodtable' env x <> text "." <> gen env n
 genDot env ts e n                   = dotCast env False ts e n $ gen env e <> text "->" <> gen env n
 -- NOTE: all method references are eta-expanded by the lambda-lifter at this point, so n cannot be a method (i.e., require methodtable lookup) here
 
