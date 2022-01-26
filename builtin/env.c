@@ -174,6 +174,9 @@ $str $getName(int fd) {
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////
+// START GENERATED __builtin__.act
+// END GENERATED __builtin__.act
+///////////////////////////////////////////////////////////////////////////////////////////
 
 $NoneType $l$1lambda$__init__ ($l$1lambda p$self, $Env __self__, $str s) {
     p$self->__self__ = __self__;
@@ -1138,6 +1141,10 @@ void $__init__ () {
         $WFile$methods.__deserialize__ = $WFile$__deserialize__;
         $register(&$WFile$methods);
     }
+    ///////////////////////////////////////////////////////////////////////////////////////
+    // START GENERATED __builtin__.act $__init__
+    // END GENERATED __builtin__.act $__init__
+    ///////////////////////////////////////////////////////////////////////////////////////
     int r = pipe(wakeup_pipe);
     EVENT_init();
 }
