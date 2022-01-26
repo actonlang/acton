@@ -161,7 +161,7 @@ int new_socket ($function handler) {
 }
 
 void setupConnection (int fd) {
-  $Connection conn = $NEW($Connection,fd);
+  $Connection conn = $Connection$newact(fd);
   fd_data[fd].conn = conn;
   fd_data[fd].chandler->$class->__call__(fd_data[fd].chandler, conn);
 }
