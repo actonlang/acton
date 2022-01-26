@@ -175,9 +175,6 @@ $str $getName(int fd) {
 
 ///////////////////////////////////////////////////////////////////////////////////////////
 // START GENERATED __builtin__.act
-// END GENERATED __builtin__.act
-///////////////////////////////////////////////////////////////////////////////////////////
-
 $NoneType $l$1lambda$__init__ ($l$1lambda p$self, $Env __self__, $str s) {
     p$self->__self__ = __self__;
     p$self->s = s;
@@ -653,6 +650,43 @@ $l$14lambda $l$14lambda$new($WFile p$1) {
     $l$14lambda$methods.__init__($tmp, p$1);
     return $tmp;
 }
+struct $l$14lambda$class $l$14lambda$methods;
+$Msg $Env$stdout_write ($Env __self__, $str s) {
+    return $ASYNC((($Actor)__self__), (($Cont)$l$1lambda$new((($Env)__self__), s)));
+}
+$Msg $Env$stdin_install ($Env __self__, $function cb) {
+    return $ASYNC((($Actor)__self__), (($Cont)$l$2lambda$new((($Env)__self__), cb)));
+}
+$Msg $Env$connect ($Env __self__, $str host, $int port, $function cb) {
+    return $ASYNC((($Actor)__self__), (($Cont)$l$3lambda$new((($Env)__self__), host, port, cb)));
+}
+$Msg $Env$listen ($Env __self__, $int port, $function cb) {
+    return $ASYNC((($Actor)__self__), (($Cont)$l$4lambda$new((($Env)__self__), port, cb)));
+}
+$Msg $Env$exit ($Env __self__, $int n) {
+    return $ASYNC((($Actor)__self__), (($Cont)$l$5lambda$new((($Env)__self__), n)));
+}
+$Msg $Env$openR ($Env __self__, $str nm) {
+    return $ASYNC((($Actor)__self__), (($Cont)$l$6lambda$new((($Env)__self__), nm)));
+}
+$Msg $Env$openW ($Env __self__, $str nm) {
+    return $ASYNC((($Actor)__self__), (($Cont)$l$7lambda$new((($Env)__self__), nm)));
+}
+$Msg $RFile$readln ($RFile __self__) {
+    return $ASYNC((($Actor)__self__), (($Cont)$l$11lambda$new((($RFile)__self__))));
+}
+$Msg $RFile$close ($RFile __self__) {
+    return $ASYNC((($Actor)__self__), (($Cont)$l$12lambda$new((($RFile)__self__))));
+}
+$Msg $WFile$write ($WFile __self__, $str s) {
+    return $ASYNC((($Actor)__self__), (($Cont)$l$13lambda$new((($WFile)__self__), s)));
+}
+$Msg $WFile$close ($WFile __self__) {
+    return $ASYNC((($Actor)__self__), (($Cont)$l$14lambda$new((($WFile)__self__))));
+}
+// END GENERATED __builtin__.act
+///////////////////////////////////////////////////////////////////////////////////////////
+
 $NoneType $Env$__init__ ($Env __self__, $list argv) {
 struct $l$14lambda$class $l$14lambda$methods;
     __self__->argv = argv;
@@ -727,27 +761,6 @@ $R $Env$openW$local ($Env __self__, $str nm, $Cont c$cont) {
         return $R_CONT(c$cont, $None);
     else
         return $R_CONT(c$cont, $WFile$newact(descr));
-}
-$Msg $Env$stdout_write ($Env __self__, $str s) {
-    return $ASYNC((($Actor)__self__), (($Cont)$l$1lambda$new(__self__, s)));
-}
-$Msg $Env$stdin_install ($Env __self__, $function cb) {
-    return $ASYNC((($Actor)__self__), (($Cont)$l$2lambda$new(__self__, cb)));
-}
-$Msg $Env$connect ($Env __self__, $str host, $int port, $function cb) {
-    return $ASYNC((($Actor)__self__), (($Cont)$l$3lambda$new(__self__, host, port, cb)));
-}
-$Msg $Env$listen ($Env __self__, $int port, $function cb) {
-    return $ASYNC((($Actor)__self__), (($Cont)$l$4lambda$new(__self__, port, cb)));
-}
-$Msg $Env$exit ($Env __self__, $int n) {
-    return $ASYNC((($Actor)__self__), (($Cont)$l$5lambda$new(__self__, n)));
-}
-$Msg $Env$openR ($Env __self__, $str nm) {
-    return $ASYNC((($Actor)__self__), (($Cont)$l$6lambda$new(__self__, nm)));
-}
-$Msg $Env$openW ($Env __self__, $str nm) {
-    return $ASYNC((($Actor)__self__), (($Cont)$l$7lambda$new(__self__, nm)));
 }
 void $Env$__serialize__ ($Env self, $Serial$state state) {
     $Actor$methods.__serialize__(($Actor)self, state);
@@ -836,16 +849,10 @@ $R $RFile$readln$local ($RFile __self__, $Cont c$cont) {
        return $R_CONT(c$cont, to$str(res));
     else
       return $R_CONT(c$cont, $None);      
-}                  
+}
 $R $RFile$close$local ($RFile __self__, $Cont c$cont) {
     fclose(__self__->file); 
     return $R_CONT(c$cont, $None);
-}
-$Msg $RFile$readln ($RFile __self__) {
-    return $ASYNC((($Actor)__self__), (($Cont)$l$11lambda$new(__self__)));
-}
-$Msg $RFile$close ($RFile __self__) {
-    return $ASYNC((($Actor)__self__), (($Cont)$l$12lambda$new(__self__)));
 }
 void $RFile$__serialize__ ($RFile self, $Serial$state state) {
     $Actor$methods.__serialize__(($Actor)self, state);
@@ -884,12 +891,6 @@ $R $WFile$close$local ($WFile __self__, $Cont c$cont) {
     $init_FileDescriptorData(__self__->descriptor);
     return $R_CONT(c$cont, $None);
 }
-$Msg $WFile$write ($WFile __self__, $str s) {
-    return $ASYNC((($Actor)__self__), (($Cont)$l$13lambda$new(__self__, s)));
-}
-$Msg $WFile$close ($WFile __self__) {
-    return $ASYNC((($Actor)__self__), (($Cont)$l$14lambda$new(__self__)));
-}
 void $WFile$__serialize__ ($WFile self, $Serial$state state) {
     $Actor$methods.__serialize__(($Actor)self, state);
 }
@@ -915,11 +916,11 @@ int $done$ = 0;
 void $__init__ () {
     if ($done$) return;
     $done$ = 1;
+    ///////////////////////////////////////////////////////////////////////////////////////
+    // START GENERATED __builtin__.act $__init__
     {
         $l$1lambda$methods.$GCINFO = "$l$1lambda";
         $l$1lambda$methods.$superclass = ($Super$class)&$Cont$methods;
-        $l$1lambda$methods.__bool__ = ($bool (*) ($l$1lambda))$value$methods.__bool__;
-        $l$1lambda$methods.__str__ = ($str (*) ($l$1lambda))$value$methods.__str__;
         $l$1lambda$methods.__init__ = $l$1lambda$__init__;
         $l$1lambda$methods.__call__ = $l$1lambda$__call__;
         $l$1lambda$methods.__serialize__ = $l$1lambda$__serialize__;
@@ -929,8 +930,6 @@ void $__init__ () {
     {
         $l$2lambda$methods.$GCINFO = "$l$2lambda";
         $l$2lambda$methods.$superclass = ($Super$class)&$Cont$methods;
-        $l$2lambda$methods.__bool__ = ($bool (*) ($l$2lambda))$value$methods.__bool__;
-        $l$2lambda$methods.__str__ = ($str (*) ($l$2lambda))$value$methods.__str__;
         $l$2lambda$methods.__init__ = $l$2lambda$__init__;
         $l$2lambda$methods.__call__ = $l$2lambda$__call__;
         $l$2lambda$methods.__serialize__ = $l$2lambda$__serialize__;
@@ -940,8 +939,6 @@ void $__init__ () {
     {
         $l$3lambda$methods.$GCINFO = "$l$3lambda";
         $l$3lambda$methods.$superclass = ($Super$class)&$Cont$methods;
-        $l$3lambda$methods.__bool__ = ($bool (*) ($l$3lambda))$value$methods.__bool__;
-        $l$3lambda$methods.__str__ = ($str (*) ($l$3lambda))$value$methods.__str__;
         $l$3lambda$methods.__init__ = $l$3lambda$__init__;
         $l$3lambda$methods.__call__ = $l$3lambda$__call__;
         $l$3lambda$methods.__serialize__ = $l$3lambda$__serialize__;
@@ -951,8 +948,6 @@ void $__init__ () {
     {
         $l$4lambda$methods.$GCINFO = "$l$4lambda";
         $l$4lambda$methods.$superclass = ($Super$class)&$Cont$methods;
-        $l$4lambda$methods.__bool__ = ($bool (*) ($l$4lambda))$value$methods.__bool__;
-        $l$4lambda$methods.__str__ = ($str (*) ($l$4lambda))$value$methods.__str__;
         $l$4lambda$methods.__init__ = $l$4lambda$__init__;
         $l$4lambda$methods.__call__ = $l$4lambda$__call__;
         $l$4lambda$methods.__serialize__ = $l$4lambda$__serialize__;
@@ -962,8 +957,6 @@ void $__init__ () {
     {
         $l$5lambda$methods.$GCINFO = "$l$5lambda";
         $l$5lambda$methods.$superclass = ($Super$class)&$Cont$methods;
-        $l$5lambda$methods.__bool__ = ($bool (*) ($l$5lambda))$value$methods.__bool__;
-        $l$5lambda$methods.__str__ = ($str (*) ($l$5lambda))$value$methods.__str__;
         $l$5lambda$methods.__init__ = $l$5lambda$__init__;
         $l$5lambda$methods.__call__ = $l$5lambda$__call__;
         $l$5lambda$methods.__serialize__ = $l$5lambda$__serialize__;
@@ -973,8 +966,6 @@ void $__init__ () {
     {
         $l$6lambda$methods.$GCINFO = "$l$6lambda";
         $l$6lambda$methods.$superclass = ($Super$class)&$Cont$methods;
-        $l$6lambda$methods.__bool__ = ($bool (*) ($l$6lambda))$value$methods.__bool__;
-        $l$6lambda$methods.__str__ = ($str (*) ($l$6lambda))$value$methods.__str__;
         $l$6lambda$methods.__init__ = $l$6lambda$__init__;
         $l$6lambda$methods.__call__ = $l$6lambda$__call__;
         $l$6lambda$methods.__serialize__ = $l$6lambda$__serialize__;
@@ -984,8 +975,6 @@ void $__init__ () {
     {
         $l$7lambda$methods.$GCINFO = "$l$7lambda";
         $l$7lambda$methods.$superclass = ($Super$class)&$Cont$methods;
-        $l$7lambda$methods.__bool__ = ($bool (*) ($l$7lambda))$value$methods.__bool__;
-        $l$7lambda$methods.__str__ = ($str (*) ($l$7lambda))$value$methods.__str__;
         $l$7lambda$methods.__init__ = $l$7lambda$__init__;
         $l$7lambda$methods.__call__ = $l$7lambda$__call__;
         $l$7lambda$methods.__serialize__ = $l$7lambda$__serialize__;
@@ -995,8 +984,6 @@ void $__init__ () {
     {
         $l$8lambda$methods.$GCINFO = "$l$8lambda";
         $l$8lambda$methods.$superclass = ($Super$class)&$Cont$methods;
-        $l$8lambda$methods.__bool__ = ($bool (*) ($l$8lambda))$value$methods.__bool__;
-        $l$8lambda$methods.__str__ = ($str (*) ($l$8lambda))$value$methods.__str__;
         $l$8lambda$methods.__init__ = $l$8lambda$__init__;
         $l$8lambda$methods.__call__ = $l$8lambda$__call__;
         $l$8lambda$methods.__serialize__ = $l$8lambda$__serialize__;
@@ -1006,8 +993,6 @@ void $__init__ () {
     {
         $l$9lambda$methods.$GCINFO = "$l$9lambda";
         $l$9lambda$methods.$superclass = ($Super$class)&$Cont$methods;
-        $l$9lambda$methods.__bool__ = ($bool (*) ($l$9lambda))$value$methods.__bool__;
-        $l$9lambda$methods.__str__ = ($str (*) ($l$9lambda))$value$methods.__str__;
         $l$9lambda$methods.__init__ = $l$9lambda$__init__;
         $l$9lambda$methods.__call__ = $l$9lambda$__call__;
         $l$9lambda$methods.__serialize__ = $l$9lambda$__serialize__;
@@ -1017,8 +1002,6 @@ void $__init__ () {
     {
         $l$10lambda$methods.$GCINFO = "$l$10lambda";
         $l$10lambda$methods.$superclass = ($Super$class)&$Cont$methods;
-        $l$10lambda$methods.__bool__ = ($bool (*) ($l$10lambda))$value$methods.__bool__;
-        $l$10lambda$methods.__str__ = ($str (*) ($l$10lambda))$value$methods.__str__;
         $l$10lambda$methods.__init__ = $l$10lambda$__init__;
         $l$10lambda$methods.__call__ = $l$10lambda$__call__;
         $l$10lambda$methods.__serialize__ = $l$10lambda$__serialize__;
@@ -1028,8 +1011,6 @@ void $__init__ () {
     {
         $l$11lambda$methods.$GCINFO = "$l$11lambda";
         $l$11lambda$methods.$superclass = ($Super$class)&$Cont$methods;
-        $l$11lambda$methods.__bool__ = ($bool (*) ($l$11lambda))$value$methods.__bool__;
-        $l$11lambda$methods.__str__ = ($str (*) ($l$11lambda))$value$methods.__str__;
         $l$11lambda$methods.__init__ = $l$11lambda$__init__;
         $l$11lambda$methods.__call__ = $l$11lambda$__call__;
         $l$11lambda$methods.__serialize__ = $l$11lambda$__serialize__;
@@ -1039,8 +1020,6 @@ void $__init__ () {
     {
         $l$12lambda$methods.$GCINFO = "$l$12lambda";
         $l$12lambda$methods.$superclass = ($Super$class)&$Cont$methods;
-        $l$12lambda$methods.__bool__ = ($bool (*) ($l$12lambda))$value$methods.__bool__;
-        $l$12lambda$methods.__str__ = ($str (*) ($l$12lambda))$value$methods.__str__;
         $l$12lambda$methods.__init__ = $l$12lambda$__init__;
         $l$12lambda$methods.__call__ = $l$12lambda$__call__;
         $l$12lambda$methods.__serialize__ = $l$12lambda$__serialize__;
@@ -1050,8 +1029,6 @@ void $__init__ () {
     {
         $l$13lambda$methods.$GCINFO = "$l$13lambda";
         $l$13lambda$methods.$superclass = ($Super$class)&$Cont$methods;
-        $l$13lambda$methods.__bool__ = ($bool (*) ($l$13lambda))$value$methods.__bool__;
-        $l$13lambda$methods.__str__ = ($str (*) ($l$13lambda))$value$methods.__str__;
         $l$13lambda$methods.__init__ = $l$13lambda$__init__;
         $l$13lambda$methods.__call__ = $l$13lambda$__call__;
         $l$13lambda$methods.__serialize__ = $l$13lambda$__serialize__;
@@ -1061,8 +1038,6 @@ void $__init__ () {
     {
         $l$14lambda$methods.$GCINFO = "$l$14lambda";
         $l$14lambda$methods.$superclass = ($Super$class)&$Cont$methods;
-        $l$14lambda$methods.__bool__ = ($bool (*) ($l$14lambda))$value$methods.__bool__;
-        $l$14lambda$methods.__str__ = ($str (*) ($l$14lambda))$value$methods.__str__;
         $l$14lambda$methods.__init__ = $l$14lambda$__init__;
         $l$14lambda$methods.__call__ = $l$14lambda$__call__;
         $l$14lambda$methods.__serialize__ = $l$14lambda$__serialize__;
@@ -1072,8 +1047,6 @@ void $__init__ () {
     {
         $Env$methods.$GCINFO = "$Env";
         $Env$methods.$superclass = ($Super$class)&$Actor$methods;
-        $Env$methods.__serialize__ = $Env$__serialize__;
-        $Env$methods.__deserialize__ = $Env$__deserialize__;
         $Env$methods.__bool__ = ($bool (*) ($Env))$Actor$methods.__bool__;
         $Env$methods.__str__ = ($str (*) ($Env))$Actor$methods.__str__;
         $Env$methods.__init__ = $Env$__init__;
@@ -1098,8 +1071,6 @@ void $__init__ () {
     {
         $Connection$methods.$GCINFO = "$Connection";
         $Connection$methods.$superclass = ($Super$class)&$Actor$methods;
-        $Connection$methods.__serialize__ = $Connection$__serialize__;
-        $Connection$methods.__deserialize__ = $Connection$__deserialize__;
         $Connection$methods.__bool__ = ($bool (*) ($Connection))$Actor$methods.__bool__;
         $Connection$methods.__str__ = ($str (*) ($Connection))$Actor$methods.__str__;
         $Connection$methods.__init__ = $Connection$__init__;
@@ -1141,8 +1112,6 @@ void $__init__ () {
         $WFile$methods.__deserialize__ = $WFile$__deserialize__;
         $register(&$WFile$methods);
     }
-    ///////////////////////////////////////////////////////////////////////////////////////
-    // START GENERATED __builtin__.act $__init__
     // END GENERATED __builtin__.act $__init__
     ///////////////////////////////////////////////////////////////////////////////////////
     int r = pipe(wakeup_pipe);

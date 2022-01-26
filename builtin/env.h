@@ -30,6 +30,9 @@ typedef struct epoll_event EVENT_type;
 
 typedef enum HandlerCase {nohandler, readhandler, connecthandler} HandlerCase;
 
+
+///////////////////////////////////////////////////////////////////////////////////////////
+// START GENERATED __builtin__.act
 struct $l$1lambda;
 struct $l$2lambda;
 struct $l$3lambda;
@@ -66,34 +69,6 @@ typedef struct $Env *$Env;
 typedef struct $Connection *$Connection;
 typedef struct $RFile *$RFile;
 typedef struct $WFile *$WFile;
-
-struct FileDescriptorData {
-  HandlerCase kind;
-  $function rhandler;
-  $function errhandler;
-  $function chandler;
-  $Connection conn;
-  struct sockaddr_in sock_addr;
-  EVENT_type event_spec;
-  char buffer[BUF_SIZE];
-  int bufnxt;              // only used for RFiles; index of first unreported char
-  int bufused;             //        -"-          ; nr of read chars in buffer. Equal to BUF_SIZE except before first read and (possibly) after last read.
-};
-
-extern struct FileDescriptorData fd_data[MAX_FD];
-extern int kq;
-
-void reset_timeout();
-
-void setupConnection (int fd);
-$str $getName(int fd);
-void *$eventloop(void *);
-
-///////////////////////////////////////////////////////////////////////////////////////////
-// START GENERATED __builtin__.act
-// END GENERATED __builtin__.act
-///////////////////////////////////////////////////////////////////////////////////////////
-
 struct $l$1lambda$class {
     char *$GCINFO;
     int $class_id;
@@ -318,6 +293,41 @@ struct $l$14lambda {
     struct $l$14lambda$class *$class;
     $WFile __self__;
 };
+extern struct $l$1lambda$class $l$1lambda$methods;
+$l$1lambda $l$1lambda$new($Env, $str);
+extern struct $l$2lambda$class $l$2lambda$methods;
+$l$2lambda $l$2lambda$new($Env, $function);
+extern struct $l$3lambda$class $l$3lambda$methods;
+$l$3lambda $l$3lambda$new($Env, $str, $int, $function);
+extern struct $l$4lambda$class $l$4lambda$methods;
+$l$4lambda $l$4lambda$new($Env, $int, $function);
+extern struct $l$5lambda$class $l$5lambda$methods;
+$l$5lambda $l$5lambda$new($Env, $int);
+extern struct $l$6lambda$class $l$6lambda$methods;
+$l$6lambda $l$6lambda$new($Env, $str);
+extern struct $l$7lambda$class $l$7lambda$methods;
+$l$7lambda $l$7lambda$new($Env, $str);
+extern struct $l$8lambda$class $l$8lambda$methods;
+$l$8lambda $l$8lambda$new($Connection, $str);
+extern struct $l$9lambda$class $l$9lambda$methods;
+$l$9lambda $l$9lambda$new($Connection);
+extern struct $l$10lambda$class $l$10lambda$methods;
+$l$10lambda $l$10lambda$new($Connection, $function, $function);
+extern struct $l$11lambda$class $l$11lambda$methods;
+$l$11lambda $l$11lambda$new($RFile);
+extern struct $l$12lambda$class $l$12lambda$methods;
+$l$12lambda $l$12lambda$new($RFile);
+extern struct $l$13lambda$class $l$13lambda$methods;
+$l$13lambda $l$13lambda$new($WFile, $str);
+extern struct $l$14lambda$class $l$14lambda$methods;
+$l$14lambda $l$14lambda$new($WFile);
+$R $Env$new($list, $Cont);
+$R $Connection$new($Cont);
+$R $RFile$new($Cont);
+$R $WFile$new($Cont);
+// END GENERATED __builtin__.act
+///////////////////////////////////////////////////////////////////////////////////////////
+
 struct $Env$class {
     char *$GCINFO;
     int $class_id;
@@ -436,34 +446,6 @@ struct $WFile {
 };
 extern struct $Env$class $Env$methods;
 $Env $Env$newact($list);
-extern struct $l$1lambda$class $l$1lambda$methods;
-$l$1lambda $l$1lambda$new($Env, $str);
-extern struct $l$2lambda$class $l$2lambda$methods;
-$l$2lambda $l$2lambda$new($Env, $function);
-extern struct $l$3lambda$class $l$3lambda$methods;
-$l$3lambda $l$3lambda$new($Env, $str, $int, $function);
-extern struct $l$4lambda$class $l$4lambda$methods;
-$l$4lambda $l$4lambda$new($Env, $int, $function);
-extern struct $l$5lambda$class $l$5lambda$methods;
-$l$5lambda $l$5lambda$new($Env, $int);
-extern struct $l$6lambda$class $l$6lambda$methods;
-$l$6lambda $l$6lambda$new($Env, $str);
-extern struct $l$7lambda$class $l$7lambda$methods;
-$l$7lambda $l$7lambda$new($Env, $str);
-extern struct $l$8lambda$class $l$8lambda$methods;
-$l$8lambda $l$8lambda$new($Connection, $str);
-extern struct $l$9lambda$class $l$9lambda$methods;
-$l$9lambda $l$9lambda$new($Connection);
-extern struct $l$10lambda$class $l$10lambda$methods;
-$l$10lambda $l$10lambda$new($Connection, $function, $function);
-extern struct $l$11lambda$class $l$11lambda$methods;
-$l$11lambda $l$11lambda$new($RFile);
-extern struct $l$12lambda$class $l$12lambda$methods;
-$l$12lambda $l$12lambda$new($RFile);
-extern struct $l$13lambda$class $l$13lambda$methods;
-$l$13lambda $l$13lambda$new($WFile, $str);
-extern struct $l$14lambda$class $l$14lambda$methods;
-$l$14lambda $l$14lambda$new($WFile);
 extern struct $Connection$class $Connection$methods;
 $Connection $Connection$newact(int);
 extern struct $RFile$class $RFile$methods;
@@ -471,3 +453,25 @@ $RFile $RFile$newact(FILE*);
 extern struct $WFile$class $WFile$methods;
 $WFile $WFile$newact(int);
 void $__init__();
+
+struct FileDescriptorData {
+  HandlerCase kind;
+  $function rhandler;
+  $function errhandler;
+  $function chandler;
+  $Connection conn;
+  struct sockaddr_in sock_addr;
+  EVENT_type event_spec;
+  char buffer[BUF_SIZE];
+  int bufnxt;              // only used for RFiles; index of first unreported char
+  int bufused;             //        -"-          ; nr of read chars in buffer. Equal to BUF_SIZE except before first read and (possibly) after last read.
+};
+
+extern struct FileDescriptorData fd_data[MAX_FD];
+extern int kq;
+
+void reset_timeout();
+
+void setupConnection (int fd);
+$str $getName(int fd);
+void *$eventloop(void *);
