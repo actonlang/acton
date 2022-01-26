@@ -30,38 +30,38 @@ typedef struct epoll_event EVENT_type;
 
 typedef enum HandlerCase {nohandler, readhandler, connecthandler} HandlerCase;
 
-struct env$$l$1lambda;
-struct env$$l$2lambda;
-struct env$$l$3lambda;
-struct env$$l$4lambda;
-struct env$$l$5lambda;
-struct env$$l$6lambda;
-struct env$$l$7lambda;
-struct env$$l$8lambda;
-struct env$$l$9lambda;
-struct env$$l$10lambda;
-struct env$$l$11lambda;
-struct env$$l$12lambda;
-struct env$$l$13lambda;
-struct env$$l$14lambda;
+struct $l$1lambda;
+struct $l$2lambda;
+struct $l$3lambda;
+struct $l$4lambda;
+struct $l$5lambda;
+struct $l$6lambda;
+struct $l$7lambda;
+struct $l$8lambda;
+struct $l$9lambda;
+struct $l$10lambda;
+struct $l$11lambda;
+struct $l$12lambda;
+struct $l$13lambda;
+struct $l$14lambda;
 struct $Env;
 struct $Connection;
 struct $RFile;
 struct $WFile;
-typedef struct env$$l$1lambda *env$$l$1lambda;
-typedef struct env$$l$2lambda *env$$l$2lambda;
-typedef struct env$$l$3lambda *env$$l$3lambda;
-typedef struct env$$l$4lambda *env$$l$4lambda;
-typedef struct env$$l$5lambda *env$$l$5lambda;
-typedef struct env$$l$6lambda *env$$l$6lambda;
-typedef struct env$$l$7lambda *env$$l$7lambda;
-typedef struct env$$l$8lambda *env$$l$8lambda;
-typedef struct env$$l$9lambda *env$$l$9lambda;
-typedef struct env$$l$10lambda *env$$l$10lambda;
-typedef struct env$$l$11lambda *env$$l$11lambda;
-typedef struct env$$l$12lambda *env$$l$12lambda;
-typedef struct env$$l$13lambda *env$$l$13lambda;
-typedef struct env$$l$14lambda *env$$l$14lambda;
+typedef struct $l$1lambda *$l$1lambda;
+typedef struct $l$2lambda *$l$2lambda;
+typedef struct $l$3lambda *$l$3lambda;
+typedef struct $l$4lambda *$l$4lambda;
+typedef struct $l$5lambda *$l$5lambda;
+typedef struct $l$6lambda *$l$6lambda;
+typedef struct $l$7lambda *$l$7lambda;
+typedef struct $l$8lambda *$l$8lambda;
+typedef struct $l$9lambda *$l$9lambda;
+typedef struct $l$10lambda *$l$10lambda;
+typedef struct $l$11lambda *$l$11lambda;
+typedef struct $l$12lambda *$l$12lambda;
+typedef struct $l$13lambda *$l$13lambda;
+typedef struct $l$14lambda *$l$14lambda;
 typedef struct $Env *$Env;
 typedef struct $Connection *$Connection;
 typedef struct $RFile *$RFile;
@@ -91,228 +91,228 @@ void *$eventloop(void *);
 
 //////////////////////////////////////////////////////////////////////////////////////
 
-struct env$$l$1lambda$class {
+struct $l$1lambda$class {
     char *$GCINFO;
     int $class_id;
     $Super$class $superclass;
-    $NoneType (*__init__) (env$$l$1lambda, $Env, $str);
-    void (*__serialize__) (env$$l$1lambda, $Serial$state);
-    env$$l$1lambda (*__deserialize__) (env$$l$1lambda, $Serial$state);
-    $bool (*__bool__) (env$$l$1lambda);
-    $str (*__str__) (env$$l$1lambda);
-    $R (*__call__) (env$$l$1lambda, $Cont);
+    $NoneType (*__init__) ($l$1lambda, $Env, $str);
+    void (*__serialize__) ($l$1lambda, $Serial$state);
+    $l$1lambda (*__deserialize__) ($l$1lambda, $Serial$state);
+    $bool (*__bool__) ($l$1lambda);
+    $str (*__str__) ($l$1lambda);
+    $R (*__call__) ($l$1lambda, $Cont);
 };
-struct env$$l$1lambda {
-    struct env$$l$1lambda$class *$class;
+struct $l$1lambda {
+    struct $l$1lambda$class *$class;
     $Env __self__;
     $str s;
 };
-struct env$$l$2lambda$class {
+struct $l$2lambda$class {
     char *$GCINFO;
     int $class_id;
     $Super$class $superclass;
-    $NoneType (*__init__) (env$$l$2lambda, $Env, $function);
-    void (*__serialize__) (env$$l$2lambda, $Serial$state);
-    env$$l$2lambda (*__deserialize__) (env$$l$2lambda, $Serial$state);
-    $bool (*__bool__) (env$$l$2lambda);
-    $str (*__str__) (env$$l$2lambda);
-    $R (*__call__) (env$$l$2lambda, $Cont);
+    $NoneType (*__init__) ($l$2lambda, $Env, $function);
+    void (*__serialize__) ($l$2lambda, $Serial$state);
+    $l$2lambda (*__deserialize__) ($l$2lambda, $Serial$state);
+    $bool (*__bool__) ($l$2lambda);
+    $str (*__str__) ($l$2lambda);
+    $R (*__call__) ($l$2lambda, $Cont);
 };
-struct env$$l$2lambda {
-    struct env$$l$2lambda$class *$class;
+struct $l$2lambda {
+    struct $l$2lambda$class *$class;
     $Env __self__;
     $function cb;
 };
-struct env$$l$3lambda$class {
+struct $l$3lambda$class {
     char *$GCINFO;
     int $class_id;
     $Super$class $superclass;
-    $NoneType (*__init__) (env$$l$3lambda, $Env, $str, $int, $function);
-    void (*__serialize__) (env$$l$3lambda, $Serial$state);
-    env$$l$3lambda (*__deserialize__) (env$$l$3lambda, $Serial$state);
-    $bool (*__bool__) (env$$l$3lambda);
-    $str (*__str__) (env$$l$3lambda);
-    $R (*__call__) (env$$l$3lambda, $Cont);
+    $NoneType (*__init__) ($l$3lambda, $Env, $str, $int, $function);
+    void (*__serialize__) ($l$3lambda, $Serial$state);
+    $l$3lambda (*__deserialize__) ($l$3lambda, $Serial$state);
+    $bool (*__bool__) ($l$3lambda);
+    $str (*__str__) ($l$3lambda);
+    $R (*__call__) ($l$3lambda, $Cont);
 };
-struct env$$l$3lambda {
-    struct env$$l$3lambda$class *$class;
+struct $l$3lambda {
+    struct $l$3lambda$class *$class;
     $Env __self__;
     $str host;
     $int port;
     $function cb;
 };
-struct env$$l$4lambda$class {
+struct $l$4lambda$class {
     char *$GCINFO;
     int $class_id;
     $Super$class $superclass;
-    $NoneType (*__init__) (env$$l$4lambda, $Env, $int, $function);
-    void (*__serialize__) (env$$l$4lambda, $Serial$state);
-    env$$l$4lambda (*__deserialize__) (env$$l$4lambda, $Serial$state);
-    $bool (*__bool__) (env$$l$4lambda);
-    $str (*__str__) (env$$l$4lambda);
-    $R (*__call__) (env$$l$4lambda, $Cont);
+    $NoneType (*__init__) ($l$4lambda, $Env, $int, $function);
+    void (*__serialize__) ($l$4lambda, $Serial$state);
+    $l$4lambda (*__deserialize__) ($l$4lambda, $Serial$state);
+    $bool (*__bool__) ($l$4lambda);
+    $str (*__str__) ($l$4lambda);
+    $R (*__call__) ($l$4lambda, $Cont);
 };
-struct env$$l$4lambda {
-    struct env$$l$4lambda$class *$class;
+struct $l$4lambda {
+    struct $l$4lambda$class *$class;
     $Env __self__;
     $int port;
     $function cb;
 };
-struct env$$l$5lambda$class {
+struct $l$5lambda$class {
     char *$GCINFO;
     int $class_id;
     $Super$class $superclass;
-    $NoneType (*__init__) (env$$l$5lambda, $Env, $int);
-    void (*__serialize__) (env$$l$5lambda, $Serial$state);
-    env$$l$5lambda (*__deserialize__) (env$$l$5lambda, $Serial$state);
-    $bool (*__bool__) (env$$l$5lambda);
-    $str (*__str__) (env$$l$5lambda);
-    $R (*__call__) (env$$l$5lambda, $Cont);
+    $NoneType (*__init__) ($l$5lambda, $Env, $int);
+    void (*__serialize__) ($l$5lambda, $Serial$state);
+    $l$5lambda (*__deserialize__) ($l$5lambda, $Serial$state);
+    $bool (*__bool__) ($l$5lambda);
+    $str (*__str__) ($l$5lambda);
+    $R (*__call__) ($l$5lambda, $Cont);
 };
-struct env$$l$5lambda {
-    struct env$$l$5lambda$class *$class;
+struct $l$5lambda {
+    struct $l$5lambda$class *$class;
     $Env __self__;
     $int n;
 };
-struct env$$l$6lambda$class {
+struct $l$6lambda$class {
     char *$GCINFO;
     int $class_id;
     $Super$class $superclass;
-    $NoneType (*__init__) (env$$l$6lambda, $Env, $str);
-    void (*__serialize__) (env$$l$6lambda, $Serial$state);
-    env$$l$6lambda (*__deserialize__) (env$$l$6lambda, $Serial$state);
-    $bool (*__bool__) (env$$l$6lambda);
-    $str (*__str__) (env$$l$6lambda);
-    $R (*__call__) (env$$l$6lambda, $Cont);
+    $NoneType (*__init__) ($l$6lambda, $Env, $str);
+    void (*__serialize__) ($l$6lambda, $Serial$state);
+    $l$6lambda (*__deserialize__) ($l$6lambda, $Serial$state);
+    $bool (*__bool__) ($l$6lambda);
+    $str (*__str__) ($l$6lambda);
+    $R (*__call__) ($l$6lambda, $Cont);
 };
-struct env$$l$6lambda {
-    struct env$$l$6lambda$class *$class;
+struct $l$6lambda {
+    struct $l$6lambda$class *$class;
     $Env __self__;
     $str nm;
 };
-struct env$$l$7lambda$class {
+struct $l$7lambda$class {
     char *$GCINFO;
     int $class_id;
     $Super$class $superclass;
-    $NoneType (*__init__) (env$$l$7lambda, $Env, $str);
-    void (*__serialize__) (env$$l$7lambda, $Serial$state);
-    env$$l$7lambda (*__deserialize__) (env$$l$7lambda, $Serial$state);
-    $bool (*__bool__) (env$$l$7lambda);
-    $str (*__str__) (env$$l$7lambda);
-    $R (*__call__) (env$$l$7lambda, $Cont);
+    $NoneType (*__init__) ($l$7lambda, $Env, $str);
+    void (*__serialize__) ($l$7lambda, $Serial$state);
+    $l$7lambda (*__deserialize__) ($l$7lambda, $Serial$state);
+    $bool (*__bool__) ($l$7lambda);
+    $str (*__str__) ($l$7lambda);
+    $R (*__call__) ($l$7lambda, $Cont);
 };
-struct env$$l$7lambda {
-    struct env$$l$7lambda$class *$class;
+struct $l$7lambda {
+    struct $l$7lambda$class *$class;
     $Env __self__;
     $str nm;
 };
-struct env$$l$8lambda$class {
+struct $l$8lambda$class {
     char *$GCINFO;
     int $class_id;
     $Super$class $superclass;
-    $NoneType (*__init__) (env$$l$8lambda, $Connection, $str);
-    void (*__serialize__) (env$$l$8lambda, $Serial$state);
-    env$$l$8lambda (*__deserialize__) (env$$l$8lambda, $Serial$state);
-    $bool (*__bool__) (env$$l$8lambda);
-    $str (*__str__) (env$$l$8lambda);
-    $R (*__call__) (env$$l$8lambda, $Cont);
+    $NoneType (*__init__) ($l$8lambda, $Connection, $str);
+    void (*__serialize__) ($l$8lambda, $Serial$state);
+    $l$8lambda (*__deserialize__) ($l$8lambda, $Serial$state);
+    $bool (*__bool__) ($l$8lambda);
+    $str (*__str__) ($l$8lambda);
+    $R (*__call__) ($l$8lambda, $Cont);
 };
-struct env$$l$8lambda {
-    struct env$$l$8lambda$class *$class;
+struct $l$8lambda {
+    struct $l$8lambda$class *$class;
     $Connection __self__;
     $str s;
 };
-struct env$$l$9lambda$class {
+struct $l$9lambda$class {
     char *$GCINFO;
     int $class_id;
     $Super$class $superclass;
-    $NoneType (*__init__) (env$$l$9lambda, $Connection);
-    void (*__serialize__) (env$$l$9lambda, $Serial$state);
-    env$$l$9lambda (*__deserialize__) (env$$l$9lambda, $Serial$state);
-    $bool (*__bool__) (env$$l$9lambda);
-    $str (*__str__) (env$$l$9lambda);
-    $R (*__call__) (env$$l$9lambda, $Cont);
+    $NoneType (*__init__) ($l$9lambda, $Connection);
+    void (*__serialize__) ($l$9lambda, $Serial$state);
+    $l$9lambda (*__deserialize__) ($l$9lambda, $Serial$state);
+    $bool (*__bool__) ($l$9lambda);
+    $str (*__str__) ($l$9lambda);
+    $R (*__call__) ($l$9lambda, $Cont);
 };
-struct env$$l$9lambda {
-    struct env$$l$9lambda$class *$class;
+struct $l$9lambda {
+    struct $l$9lambda$class *$class;
     $Connection __self__;
 };
-struct env$$l$10lambda$class {
+struct $l$10lambda$class {
     char *$GCINFO;
     int $class_id;
     $Super$class $superclass;
-    $NoneType (*__init__) (env$$l$10lambda, $Connection, $function, $function);
-    void (*__serialize__) (env$$l$10lambda, $Serial$state);
-    env$$l$10lambda (*__deserialize__) (env$$l$10lambda, $Serial$state);
-    $bool (*__bool__) (env$$l$10lambda);
-    $str (*__str__) (env$$l$10lambda);
-    $R (*__call__) (env$$l$10lambda, $Cont);
+    $NoneType (*__init__) ($l$10lambda, $Connection, $function, $function);
+    void (*__serialize__) ($l$10lambda, $Serial$state);
+    $l$10lambda (*__deserialize__) ($l$10lambda, $Serial$state);
+    $bool (*__bool__) ($l$10lambda);
+    $str (*__str__) ($l$10lambda);
+    $R (*__call__) ($l$10lambda, $Cont);
 };
-struct env$$l$10lambda {
-    struct env$$l$10lambda$class *$class;
+struct $l$10lambda {
+    struct $l$10lambda$class *$class;
     $Connection __self__;
     $function cb1;
     $function cb2;
 };
-struct env$$l$11lambda$class {
+struct $l$11lambda$class {
     char *$GCINFO;
     int $class_id;
     $Super$class $superclass;
-    $NoneType (*__init__) (env$$l$11lambda, $RFile);
-    void (*__serialize__) (env$$l$11lambda, $Serial$state);
-    env$$l$11lambda (*__deserialize__) (env$$l$11lambda, $Serial$state);
-    $bool (*__bool__) (env$$l$11lambda);
-    $str (*__str__) (env$$l$11lambda);
-    $R (*__call__) (env$$l$11lambda, $Cont);
+    $NoneType (*__init__) ($l$11lambda, $RFile);
+    void (*__serialize__) ($l$11lambda, $Serial$state);
+    $l$11lambda (*__deserialize__) ($l$11lambda, $Serial$state);
+    $bool (*__bool__) ($l$11lambda);
+    $str (*__str__) ($l$11lambda);
+    $R (*__call__) ($l$11lambda, $Cont);
 };
-struct env$$l$11lambda {
-    struct env$$l$11lambda$class *$class;
+struct $l$11lambda {
+    struct $l$11lambda$class *$class;
     $RFile __self__;
 };
-struct env$$l$12lambda$class {
+struct $l$12lambda$class {
     char *$GCINFO;
     int $class_id;
     $Super$class $superclass;
-    $NoneType (*__init__) (env$$l$12lambda, $RFile);
-    void (*__serialize__) (env$$l$12lambda, $Serial$state);
-    env$$l$12lambda (*__deserialize__) (env$$l$12lambda, $Serial$state);
-    $bool (*__bool__) (env$$l$12lambda);
-    $str (*__str__) (env$$l$12lambda);
-    $R (*__call__) (env$$l$12lambda, $Cont);
+    $NoneType (*__init__) ($l$12lambda, $RFile);
+    void (*__serialize__) ($l$12lambda, $Serial$state);
+    $l$12lambda (*__deserialize__) ($l$12lambda, $Serial$state);
+    $bool (*__bool__) ($l$12lambda);
+    $str (*__str__) ($l$12lambda);
+    $R (*__call__) ($l$12lambda, $Cont);
 };
-struct env$$l$12lambda {
-    struct env$$l$12lambda$class *$class;
+struct $l$12lambda {
+    struct $l$12lambda$class *$class;
     $RFile __self__;
 };
-struct env$$l$13lambda$class {
+struct $l$13lambda$class {
     char *$GCINFO;
     int $class_id;
     $Super$class $superclass;
-    $NoneType (*__init__) (env$$l$13lambda, $WFile, $str);
-    void (*__serialize__) (env$$l$13lambda, $Serial$state);
-    env$$l$13lambda (*__deserialize__) (env$$l$13lambda, $Serial$state);
-    $bool (*__bool__) (env$$l$13lambda);
-    $str (*__str__) (env$$l$13lambda);
-    $R (*__call__) (env$$l$13lambda, $Cont);
+    $NoneType (*__init__) ($l$13lambda, $WFile, $str);
+    void (*__serialize__) ($l$13lambda, $Serial$state);
+    $l$13lambda (*__deserialize__) ($l$13lambda, $Serial$state);
+    $bool (*__bool__) ($l$13lambda);
+    $str (*__str__) ($l$13lambda);
+    $R (*__call__) ($l$13lambda, $Cont);
 };
-struct env$$l$13lambda {
-    struct env$$l$13lambda$class *$class;
+struct $l$13lambda {
+    struct $l$13lambda$class *$class;
     $WFile __self__;
     $str s;
 };
-struct env$$l$14lambda$class {
+struct $l$14lambda$class {
     char *$GCINFO;
     int $class_id;
     $Super$class $superclass;
-    $NoneType (*__init__) (env$$l$14lambda, $WFile);
-    void (*__serialize__) (env$$l$14lambda, $Serial$state);
-    env$$l$14lambda (*__deserialize__) (env$$l$14lambda, $Serial$state);
-    $bool (*__bool__) (env$$l$14lambda);
-    $str (*__str__) (env$$l$14lambda);
-    $R (*__call__) (env$$l$14lambda, $Cont);
+    $NoneType (*__init__) ($l$14lambda, $WFile);
+    void (*__serialize__) ($l$14lambda, $Serial$state);
+    $l$14lambda (*__deserialize__) ($l$14lambda, $Serial$state);
+    $bool (*__bool__) ($l$14lambda);
+    $str (*__str__) ($l$14lambda);
+    $R (*__call__) ($l$14lambda, $Cont);
 };
-struct env$$l$14lambda {
-    struct env$$l$14lambda$class *$class;
+struct $l$14lambda {
+    struct $l$14lambda$class *$class;
     $WFile __self__;
 };
 struct $Env$class {
@@ -431,40 +431,40 @@ struct $WFile {
     $long $globkey;
     int descriptor;
 };
-extern struct env$$l$1lambda$class env$$l$1lambda$methods;
-env$$l$1lambda env$$l$1lambda$new($Env, $str);
-extern struct env$$l$2lambda$class env$$l$2lambda$methods;
-env$$l$2lambda env$$l$2lambda$new($Env, $function);
-extern struct env$$l$3lambda$class env$$l$3lambda$methods;
-env$$l$3lambda env$$l$3lambda$new($Env, $str, $int, $function);
-extern struct env$$l$4lambda$class env$$l$4lambda$methods;
-env$$l$4lambda env$$l$4lambda$new($Env, $int, $function);
-extern struct env$$l$5lambda$class env$$l$5lambda$methods;
-env$$l$5lambda env$$l$5lambda$new($Env, $int);
-extern struct env$$l$6lambda$class env$$l$6lambda$methods;
-env$$l$6lambda env$$l$6lambda$new($Env, $str);
-extern struct env$$l$7lambda$class env$$l$7lambda$methods;
-env$$l$7lambda env$$l$7lambda$new($Env, $str);
-extern struct env$$l$8lambda$class env$$l$8lambda$methods;
-env$$l$8lambda env$$l$8lambda$new($Connection, $str);
-extern struct env$$l$9lambda$class env$$l$9lambda$methods;
-env$$l$9lambda env$$l$9lambda$new($Connection);
-extern struct env$$l$10lambda$class env$$l$10lambda$methods;
-env$$l$10lambda env$$l$10lambda$new($Connection, $function, $function);
-extern struct env$$l$11lambda$class env$$l$11lambda$methods;
-env$$l$11lambda env$$l$11lambda$new($RFile);
-extern struct env$$l$12lambda$class env$$l$12lambda$methods;
-env$$l$12lambda env$$l$12lambda$new($RFile);
-extern struct env$$l$13lambda$class env$$l$13lambda$methods;
-env$$l$13lambda env$$l$13lambda$new($WFile, $str);
-extern struct env$$l$14lambda$class env$$l$14lambda$methods;
-env$$l$14lambda env$$l$14lambda$new($WFile);
 extern struct $Env$class $Env$methods;
 $Env $Env$newact($list);
+extern struct $l$1lambda$class $l$1lambda$methods;
+$l$1lambda $l$1lambda$new($Env, $str);
+extern struct $l$2lambda$class $l$2lambda$methods;
+$l$2lambda $l$2lambda$new($Env, $function);
+extern struct $l$3lambda$class $l$3lambda$methods;
+$l$3lambda $l$3lambda$new($Env, $str, $int, $function);
+extern struct $l$4lambda$class $l$4lambda$methods;
+$l$4lambda $l$4lambda$new($Env, $int, $function);
+extern struct $l$5lambda$class $l$5lambda$methods;
+$l$5lambda $l$5lambda$new($Env, $int);
+extern struct $l$6lambda$class $l$6lambda$methods;
+$l$6lambda $l$6lambda$new($Env, $str);
+extern struct $l$7lambda$class $l$7lambda$methods;
+$l$7lambda $l$7lambda$new($Env, $str);
+extern struct $l$8lambda$class $l$8lambda$methods;
+$l$8lambda $l$8lambda$new($Connection, $str);
+extern struct $l$9lambda$class $l$9lambda$methods;
+$l$9lambda $l$9lambda$new($Connection);
+extern struct $l$10lambda$class $l$10lambda$methods;
+$l$10lambda $l$10lambda$new($Connection, $function, $function);
+extern struct $l$11lambda$class $l$11lambda$methods;
+$l$11lambda $l$11lambda$new($RFile);
+extern struct $l$12lambda$class $l$12lambda$methods;
+$l$12lambda $l$12lambda$new($RFile);
+extern struct $l$13lambda$class $l$13lambda$methods;
+$l$13lambda $l$13lambda$new($WFile, $str);
+extern struct $l$14lambda$class $l$14lambda$methods;
+$l$14lambda $l$14lambda$new($WFile);
 extern struct $Connection$class $Connection$methods;
 $Connection $Connection$newact(int);
 extern struct $RFile$class $RFile$methods;
 $RFile $RFile$newact(FILE*);
 extern struct $WFile$class $WFile$methods;
 $WFile $WFile$newact(int);
-void env$$__init__();
+void $__init__();
