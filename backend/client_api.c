@@ -141,6 +141,8 @@ remote_db_t * get_remote_db(int replication_factor)
 	db->rpc_timeout = 10;
 
 	db->stop_comm = 0;
+    int r = pipe(db->wakeup_pipe);
+
 	assert(pthread_create(&(db->comm_thread), NULL, comm_thread_loop, db) == 0);
 
 	db->my_lc = init_empty_vc();
@@ -164,6 +166,10 @@ int handle_socket_close(int * childfd)
 	return 0;
 }
 
+void comm_wake_up(remote_db_t *db) {
+	// Write dummy data that wakes up the comms thread
+    int r = write(db->wakeup_pipe[1], "!", 1);
+}
 
 void * comm_thread_loop(void * args)
 {
@@ -179,7 +185,8 @@ void * comm_thread_loop(void * args)
 	while(!db->stop_comm)
 	{
 		FD_ZERO(&(db->readfds));
-		int max_fd = -1;
+		FD_SET(db->wakeup_pipe[0], &(db->readfds));
+		int max_fd = db->wakeup_pipe[0];
 
 		for(snode_t * crt = HEAD(db->servers); crt!=NULL; crt = NEXT(crt))
 		{
@@ -203,6 +210,11 @@ void * comm_thread_loop(void * args)
             printf("select error!\n");
             assert(0);
         }
+
+		if (FD_ISSET(db->wakeup_pipe[0], &(db->readfds))) {
+            char dummy;
+            int r = read(db->wakeup_pipe[0], &dummy, 1); // Consume dummy data
+		}
 
 		for(snode_t * crt = HEAD(db->servers); crt!=NULL; crt = NEXT(crt))
 		{
@@ -404,6 +416,7 @@ int add_server_to_membership(char *hostname, int portno, remote_db_t * db, unsig
 		printf("ERROR: Failed joining server %s:%d (it looks down)!\n", hostname, portno);
     		return 1;
     }
+	comm_wake_up(db);
 
     return 0;
 }

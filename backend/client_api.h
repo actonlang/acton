@@ -145,6 +145,7 @@ typedef struct remote_db {
 	pthread_t comm_thread;
 	short stop_comm;
 	fd_set readfds;
+    int wakeup_pipe[2];
 
 	int64_t requests;
 	unsigned int fastrandstate;
