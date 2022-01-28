@@ -8,10 +8,13 @@ import json
 import socket
 import time
 
+
+
 class MonSock:
     def __init__(self, address):
         self.address = address
         self.sock = None
+        self.buf = b""
 
     def connect(self):
         self.sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
@@ -24,10 +27,37 @@ class MonSock:
         if self.sock is None:
             self.connect()
 
+        # Simple netstrings implementation, which also assumes that there is
+        # only one response to our query
         try:
-            self.sock.send(b"WTS")
-            res = self.sock.recv(50000)
-            return json.loads(res.decode("utf-8"))
+            #self.sock.send(b"3:VER,3:WTS,50:hfjgfjhgfjhgfjhgfjhgfjhgfjgfjgfjhgfjhgfjghf")
+            self.sock.send(b"3:WTS,")
+            while True:
+                try:
+                    colpos = self.buf.index(b':')
+                except ValueError as exc:
+                    print("no colon...", self.buf)
+                    # Not enough data, read some and try again
+                    recv = self.sock.recv(1024)
+                    if len(recv) == 0:
+                        raise ConnectionError("RTS hung up")
+                    self.buf += recv
+                    continue
+                length = int(self.buf[0:colpos])
+                start = colpos + 1
+                end = start + length
+                if len(self.buf) < end:
+                    # Not enough data, read some and try again
+                    recv = self.sock.recv(1024)
+                    if len(recv) == 0:
+                        raise ConnectionError("RTS hung up")
+                    self.buf += recv
+                    continue
+                print("GOT DATA")
+                res = self.buf[start:end]
+                print(res)
+                self.buf = self.buf[end+1:] # +1 to skip the ,
+                return json.loads(res.decode("utf-8"))
         except Exception as exc:
             self.connect()
             if retries > 0:

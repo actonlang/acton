@@ -25,9 +25,11 @@
 #include <stdio.h>
 #include <stdarg.h>
 #include <uuid/uuid.h>
+#include <signal.h>
 
 #include "yyjson.h"
 #include "rts.h"
+#include "netstring.h"
 #include "../builtin/env.h"
 
 #include "../backend/client_api.h"
@@ -1479,12 +1481,12 @@ void *$mon_socket_loop() {
     pthread_setname_np(pthread_self(), "Monitor Socket");
 #endif
 
-    int s, s2, len;
+    int s, client_sock, len;
     struct sockaddr_un local, remote;
     char q[100];
 
     if ((s = socket(AF_UNIX, SOCK_STREAM, 0)) == -1) {
-        perror("socket");
+        fprintf(stderr, LOGPFX "ERROR: Unable to create Monitor Socket\n");
         exit(1);
     }
 
@@ -1493,42 +1495,60 @@ void *$mon_socket_loop() {
     unlink(local.sun_path);
     len = sizeof(local.sun_path) + sizeof(local.sun_family);
     if (bind(s, (struct sockaddr *)&local, len) == -1) {
-        perror("bind");
+        fprintf(stderr, LOGPFX "ERROR: Unable to bind to Monitor Socket\n");
         exit(1);
     }
 
     if (listen(s, 5) == -1) {
-        perror("listen");
+        fprintf(stderr, LOGPFX "ERROR: Unable to listen on Monitor Socket\n");
         exit(1);
     }
 
-    for(;;) {
+    while (1) {
         socklen_t t = sizeof(remote);
-        if ((s2 = accept(s, (struct sockaddr *)&remote, &t)) == -1) {
+        if ((client_sock = accept(s, (struct sockaddr *)&remote, &t)) == -1) {
             perror("accept");
             exit(1);
         }
 
         int n;
+        char rbuf[64], *buf_base, *str;
+        ssize_t bytes_read, buf_used = 0, len;
         while (1) {
-            n = recv(s2, q, 100, 0);
-            if (n <= 0) {
-                if (n < 0) perror("recv");
+            bytes_read = recv(client_sock, &rbuf[buf_used], sizeof(rbuf) - buf_used, 0);
+            if (bytes_read <= 0)
                 break;
-            }
+            buf_used += bytes_read;
 
-            if (strncmp(q, "WTS", 3) == 0) {
-                const char *json = stats_to_json();
-                int send_res = send(s2, json, strlen(json), 0);
-                free((void *)json);
-                if (send_res < 0) {
-                    perror("send");
+            buf_base = rbuf;
+            while (1) {
+                if (buf_used == 0)
+                    break;
+                int r = netstring_read(&buf_base, &buf_used, &str, &len);
+                if (r != 0) {
+                    rtsv_printf(LOGPFX "Mon socket: Error reading netstring: %d\n", r);
                     break;
                 }
+
+                if (memcmp(str, "WTS", len) == 0) {
+                    const char *json = stats_to_json();
+                    char *send_buf = malloc(strlen(json)+14); // maximum digits for length is 9 (999999999) + : + ; + \0
+                    sprintf(send_buf, "%lu:%s,", strlen(json), json);
+                    int send_res = send(client_sock, send_buf, strlen(send_buf), 0);
+                    free((void *)json);
+                    free((void *)send_buf);
+                    if (send_res < 0) {
+                        rtsv_printf(LOGPFX "Mon socket: Error sending\n");
+                        break;
+                    }
+                }
             }
+
+            if (buf_base > rbuf && buf_used > 0)
+                memmove(rbuf, buf_base, buf_used);
         }
 
-        close(s2);
+        close(client_sock);
     }
     return NULL;
 }
@@ -1579,6 +1599,10 @@ int main(int argc, char **argv) {
 #else
     pthread_setname_np(pthread_self(), "main");
 #endif
+
+    // Ignore SIGPIPE, like we get if the other end talking to us on the Monitor
+    // socket (which is a Unix domain socket) goes away.
+    signal(SIGPIPE, SIG_IGN);
 
     /*
      * A note on argument parsing: The RTS has its own command line arguments,
