@@ -720,10 +720,14 @@ inheritedAttrs env n        = inh (dom $ snd $ splitSigs te) us
                 (_,_,te)    = findConName c env
                 ns1         = (dom $ snd $ splitSigs te) \\ ns0
 
-abstractAttrs               :: EnvF x -> QName -> [Name]
-abstractAttrs env n         = (initKW : dom sigs) \\ dom terms
+abstractAttrs               :: EnvF x -> QName -> [Name] -> [Name]
+abstractAttrs env n ns      = (ns ++ dom sigs) \\ dom terms
   where (_,us,te)           = findConName n env
         (sigs,terms)        = sigTerms $ concat $ te : [ te | (w,u) <- us, let (_,_,te) = findConName (tcname u) env ]
+
+abstractClass env n         = not $ null (abstractAttrs env n [initKW])
+
+abstractActor env n         = not $ null (abstractAttrs env n [])
 
 allCons                     :: EnvF x -> [CCon]
 allCons env                 = reverse locals ++ concat [ cons m (lookupMod m env) | m <- moduleRefs (names env), m /= mPrim ]
