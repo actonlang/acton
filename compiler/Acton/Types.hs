@@ -740,7 +740,7 @@ instance Check Decl where
                                              wellformed env1 q
                                              (csp,te1,p') <- infEnv env1 p
                                              (csk,te2,k') <- infEnv (define te1 env1) k
-                                             (csb,te,b') <- infSuiteEnv (define te2 $ define te1 env1) b
+                                             (csb,te,b') <- (if stub env then infEnv else infSuiteEnv) (define te2 $ define te1 env1) b
                                              (cs0,eq0) <- matchActorAssumption env1 n p' k' te
                                              popFX
                                              (cs1,eq1) <- solveScoped env1 tvs te tNone (csp++csk++csb++cs0)
@@ -980,7 +980,7 @@ instance Infer Expr where
                                             NClass q _ _ -> do
                                                 (cs0,ts) <- instQBinds env q
                                                 --traceM ("## Instantiating " ++ prstr n)
-                                                when (not $ null $ abstractAttrs env n) (err1 n "Abstract class cannot be instantiated:")
+                                                when (abstractClass env n) (err1 n "Abstract class cannot be instantiated:")
                                                 case findAttr env (TC n ts) initKW of
                                                     Just (_,sc,_) -> do
                                                         (cs1,tvs,t) <- instantiate env sc
@@ -988,6 +988,7 @@ instance Infer Expr where
                                                             t' = subst [(tvSelf,t0)] t{ restype = tSelf }
                                                         return (cs0++cs1, t', app t' (tApp x (ts++tvs)) $ witsOf (cs0++cs1))
                                             NAct q p k _ -> do
+                                                when (abstractActor env n) (err1 n "Abstract actor cannot be instantiated:")
                                                 (cs,tvs,t) <- instantiate env (tSchema q (tFun fxAction p k (tCon0 (unalias env n) q)))
                                                 return (cs, t, app t (tApp x tvs) $ witsOf cs)
                                             NSig _ _ -> nameReserved n

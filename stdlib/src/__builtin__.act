@@ -583,8 +583,8 @@ actor Env (args):
     def connect(host,port,cb): pass
     def listen(port,cb): pass
     def exit(n): pass
-    def openR(nm): return RFile()
-    def openW(nm): return WFile()
+#    def openR(nm): return RFile()
+#    def openW(nm): return WFile()
 
 actor Connection ():
     write       : action(str) -> None

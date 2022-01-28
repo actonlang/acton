@@ -187,17 +187,18 @@ instance Deact Stmt where
       where t2                      = typeOf env e2
             t                       = tFun fxAction posNil kwdNil t2
     deact env (Decl l ds)           = do ds1 <- deact env1 ds
-                                         return $ Decl l $ ds1 ++ [ newact env1 n q p | Actor _ n q p _ _ <- ds ]
+                                         return $ Decl l $ ds1 ++ [ newact env1 n q p | Actor _ n q p _ _ <- ds, not $ abstractActor env1 (NoQ n) ]
       where env1                    = extend (map sealActors $ envOf ds) env
     deact env (Signature l ns t d)  = return $ Signature l ns t d
     deact env s                     = error ("deact unexpected stmt: " ++ prstr s)
 
 instance Deact Decl where
     deact env (Actor l n q p KwdNIL b)
-                                    = do inits <- deactSuite env2 inits
-                                         decls <- mapM deactMeths decls
-                                         let _init_ = Def l0 initKW [] (addSelfPar p') KwdNIL (Just tNone) (copies++inits) NoDec fxAction
-                                         return $ Class l n q [TC primActor [], cValue] (propsigs ++ [Decl l0 [_init_]] ++ decls ++ wrapped)
+                                    = do inits' <- deactSuite env2 inits
+                                         decls' <- mapM deactMeths decls
+                                         -- traceM ("## abstract: " ++ prstrs (actions \\ bound decls))
+                                         let _init_ = Def l0 initKW [] (addSelfPar p') KwdNIL (Just tNone) (copies++inits') NoDec fxAction
+                                         return $ Class l n q [TC primActor [], cValue] (propsigs ++ [Decl l0 [_init_]] ++ decls' ++ wrapped)
       where env1                    = setActor actions stvars locals $ extend (envOf p') $ define [(selfKW, NVar tSelf)] $ defineTVars q env
             env2                    = define (envOf decls ++ envOf inits) env1
 
@@ -239,7 +240,7 @@ instance Deact Decl where
                     t'              = seal t
                     q'              = seal q
 
-            wrapMeth (Def l n q p KwdNIL (Just t) b d fx)
+            wrapMeth (Def l n q p KwdNIL (Just t) _ d fx)
                                     = Decl l0 [Def l0 n q (addSelfPar p') KwdNIL (Just $ tMsg t') [Return l0 (Just $ async)] d fxAsync]
               where n'              = localName n
                     p'              = seal p
