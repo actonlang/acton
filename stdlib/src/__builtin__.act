@@ -583,8 +583,10 @@ actor Env (args):
     def connect(host,port,cb): pass
     def listen(port,cb): pass
     def exit(n): pass
-#    def openR(nm): return RFile()
-#    def openW(nm): return WFile()
+    def openR(nm): pass
+    def openW(nm): pass
+
+    _abstract   : () -> None
 
 actor Connection ():
     write       : action(str) -> None
@@ -595,12 +597,16 @@ actor Connection ():
     def close() : pass
     def on_receipt(cb1, cb2): pass
 
+    _abstract   : () -> None
+
 actor RFile ():
     readln      : action() -> ?str
     close       : action() -> None
 
     def readln(): return ""
     def close() : pass
+
+    _abstract   : () -> None
 
 actor WFile ():
     write       : action(str) -> None
@@ -609,3 +615,4 @@ actor WFile ():
     def write(s): pass
     def close() : pass
     
+    _abstract   : () -> None
