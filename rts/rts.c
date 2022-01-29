@@ -1340,7 +1340,7 @@ void $register_rts () {
  
 ////////////////////////////////////////////////////////////////////////////////////////
 
-const char* dbc_ops_stats_to_json(yyjson_mut_doc *doc, yyjson_mut_val *j_mpoint, struct dbc_ops_stat *ops_stat) {
+void dbc_ops_stats_to_json(yyjson_mut_doc *doc, yyjson_mut_val *j_mpoint, struct dbc_ops_stat *ops_stat) {
     yyjson_mut_val *j_ops_stat = yyjson_mut_obj(doc);
     yyjson_mut_obj_add_val(doc, j_mpoint, ops_stat->name, j_ops_stat);
 
@@ -1513,7 +1513,8 @@ void *$mon_socket_loop() {
 
         int n;
         char rbuf[64], *buf_base, *str;
-        ssize_t bytes_read, buf_used = 0, len;
+        ssize_t bytes_read;
+        size_t buf_used = 0, len;
         while (1) {
             bytes_read = recv(client_sock, &rbuf[buf_used], sizeof(rbuf) - buf_used, 0);
             if (bytes_read <= 0)

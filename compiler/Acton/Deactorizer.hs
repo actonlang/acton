@@ -196,7 +196,6 @@ instance Deact Decl where
     deact env (Actor l n q p KwdNIL b)
                                     = do inits' <- deactSuite env2 inits
                                          decls' <- mapM deactMeths decls
-                                         -- traceM ("## abstract: " ++ prstrs (actions \\ bound decls))
                                          let _init_ = Def l0 initKW [] (addSelfPar p') KwdNIL (Just tNone) (copies++inits') NoDec fxAction
                                          return $ Class l n q [TC primActor [], cValue] (propsigs ++ [Decl l0 [_init_]] ++ decls' ++ wrapped)
       where env1                    = setActor actions stvars locals $ extend (envOf p') $ define [(selfKW, NVar tSelf)] $ defineTVars q env
@@ -250,6 +249,7 @@ instance Deact Decl where
                     self            = Var l0 (NoQ selfKW)
                     clos            = Lambda l0 PosNIL KwdNIL (Call l0 (tApp (selfRef n') ts) (pArg p') KwdNil) fxAction
                     ts              = map tVar (qbound q')
+
 
     deact env (Def l n q p KwdNIL (Just t) b d fx)
                                     = do b <- deactSuite env1 b
