@@ -1795,7 +1795,7 @@ int main(int argc, char **argv) {
     init_dbc_stats();
 
     $register_builtin();
-    env$$__init__();
+    $__init__();
     $register_rts();
     $ROOTINIT();
 
