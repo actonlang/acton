@@ -1632,7 +1632,7 @@ int main(int argc, char **argv) {
         {"rts-ddb-port", "PORT", 'p', "DDB port [32000]"},
         {"rts-ddb-replication", "FACTOR", 'r', "DDB replication factor [3]"},
         {"rts-help", NULL, 'H', "Show this help"},
-        {"rts-mon-log-path", "PATH", 'l', "Path to write log RTS mon stats"},
+        {"rts-mon-log-path", "PATH", 'l', "Path to write RTS mon stats log"},
         {"rts-mon-log-period", "PERIOD", 'k', "Periodicity of writing RTS mon stats log entry"},
         {"rts-mon-on-exit", NULL, 'E', "Print RTS mon stats to stdout on exit"},
         {"rts-mon-socket-path", "PATH", 'm', "Path to unix socket to expose RTS mon stats"},

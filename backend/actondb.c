@@ -25,6 +25,8 @@
 #include "failure_detector/fd.h"
 #include "comm.h"
 #include "fastrand.h"
+#include "netstring.h"
+#include "yyjson.h"
 
 #include <stdio.h>
 #include <unistd.h>
@@ -42,6 +44,10 @@
 #include <argp.h>
 #include <string.h>
 #include <limits.h>
+
+#define LOGPFX "#ActDB# "
+
+pid_t pid;
 
 #define SERVER_BUFSIZE 128 * 1024 // (1024 * 1024)
 #define PRINT_BUFSIZE 128 * 1024
@@ -2094,6 +2100,7 @@ typedef struct argp_arguments
   unsigned short * seed_ports;
   int no_seeds;
   char * local_iface;
+  char *mon_socket_path;
 } argp_arguments;
 
 error_t parse_opt (int key, char *arg, struct argp_state *state)
@@ -2147,7 +2154,10 @@ error_t parse_opt (int key, char *arg, struct argp_state *state)
 		  }
 		  break;
 	  }
-	  case 'i':
+      case 'S':
+          arguments->mon_socket_path = arg;
+          break;
+      case 'i':
 	  {
 		  assert(strnlen(arg, 256) > 1);
 		  arguments->local_iface = strndup(arg, 256);
@@ -2163,6 +2173,38 @@ error_t parse_opt (int key, char *arg, struct argp_state *state)
 
 	return 0;
 }
+
+
+const char* membership_to_json (membership *m) {
+    yyjson_mut_doc *doc = yyjson_mut_doc_new(NULL);
+    yyjson_mut_val *root = yyjson_mut_obj(doc);
+    yyjson_mut_doc_set_root(doc, root);
+
+    yyjson_mut_obj_add_str(doc, root, "name", "membership");
+
+    yyjson_mut_obj_add_int(doc, root, "pid", pid);
+
+    struct timeval tv;
+    struct tm tm;
+    gettimeofday(&tv, NULL);
+    localtime_r(&tv.tv_sec, &tm);
+    char dt[32];    // = "YYYY-MM-ddTHH:mm:ss.SSS+0000";
+    strftime(dt, 32, "%Y-%m-%dT%H:%M:%S.000%z", &tm);
+    sprintf(dt + 20, "%03hu%s", (unsigned short)(tv.tv_usec / 1000), dt + 23);
+
+    yyjson_mut_obj_add_str(doc, root, "datetime", dt);
+
+    yyjson_mut_val *j_mbm = yyjson_mut_obj(doc);
+    yyjson_mut_obj_add_val(doc, root, "membership", j_mbm);
+    yyjson_mut_obj_add_int(doc, j_mbm, "my_id", m->my_id);
+    char view_id[1024];
+    yyjson_mut_obj_add_str(doc, j_mbm, "view_id", to_string_vc(m->view_id, view_id));
+
+    const char *json = yyjson_mut_write(doc, 0, NULL);
+    yyjson_mut_doc_free(doc);
+    return json;
+}
+
 
 int main(int argc, char **argv) {
   int parentfd, gparentfd, childfd;
@@ -2182,6 +2224,8 @@ int main(int argc, char **argv) {
   char msg_buf[1024];
   int verbosity = SERVER_VERBOSITY;
 
+  pid = getpid();
+
   // Do line buffered output
   setlinebuf(stdout);
 
@@ -2189,12 +2233,13 @@ int main(int argc, char **argv) {
 
   static struct argp_option options[] =
   {
-    {"verbose",  'v', 0,      0,  "Produce verbose output" },
-    {"quiet",    'q', 0,      0,  "Don't produce any output" },
-    {"port",   	 'p', "PORT", 0,  "Port for client data requests" },
-    {"mport",   	 'm', "MPORT", 0,  "Port for server gossip packets" },
-    {"seeds",   	 's', "SEEDS", 0,  "Seeds, comma-separated" },
-    {"iface",   	 'i', "IFACE", 0,  "Local interface to listen to" },
+    {"verbose",         'v',        0, 0,  "Produce verbose output" },
+    {"quiet",           'q',        0, 0,  "Don't produce any output" },
+    {"port",            'p',   "PORT", 0,  "Port for client data requests" },
+    {"mon-socket-path", 'S',   "PATH", 0,  "Path to unix socket to expose mon stats" },
+    {"mport",           'm',  "MPORT", 0,  "Port for server gossip packets" },
+    {"seeds",           's',  "SEEDS", 0,  "Seeds, comma-separated" },
+    {"iface",           'i',  "IFACE", 0,  "Local interface to listen to" },
     { 0 }
   };
 
@@ -2282,6 +2327,30 @@ int main(int argc, char **argv) {
   membership * m = get_membership(my_id);
 
   printf("SERVER: Started [%s:%d, %s:%d], my_lc = %s\n", inet_ntoa(serveraddr.sin_addr), ntohs(serveraddr.sin_port), my_address, my_port, to_string_vc(my_lc, msg_buf));
+
+  // Set up monitoring socket
+  int mon_sock, mon_client_sock;
+  struct sockaddr_un mon_addr, mon_client_addr;
+  char mon_rbuf[64];
+  size_t mon_buf_used = 0;
+  if (arguments.mon_socket_path) {
+      if ((mon_sock = socket(AF_UNIX, SOCK_STREAM, 0)) == -1) {
+          fprintf(stderr, LOGPFX "ERROR: Unable to create Monitor Socket\n");
+          exit(1);
+      }
+
+      mon_addr.sun_family = AF_UNIX;
+      strcpy(mon_addr.sun_path, arguments.mon_socket_path);
+      unlink(mon_addr.sun_path);
+      if (bind(mon_sock, (struct sockaddr *)&mon_addr, sizeof(mon_addr.sun_path) + sizeof(mon_addr.sun_family)) == -1) {
+          fprintf(stderr, LOGPFX "ERROR: Unable to bind to Monitor Socket\n");
+          exit(1);
+      }
+      if (listen(mon_sock, 5) == -1) {
+          fprintf(stderr, LOGPFX "ERROR: Unable to listen on Monitor Socket\n");
+          exit(1);
+      }
+  }
 
   if (bind(parentfd, (struct sockaddr *) &serveraddr, sizeof(serveraddr)) < 0)
     error("ERROR on binding client socket");
@@ -2412,7 +2481,15 @@ int main(int argc, char **argv) {
 			}
 		}
 
-		int status = select(max_fd + 1, &readfds, NULL, NULL, NULL); // &timeout
+        // Monitor socket
+        FD_SET(mon_sock, &readfds);
+        max_fd = (mon_sock > max_fd)? mon_sock : max_fd;
+        if (mon_client_sock) {
+            FD_SET(mon_client_sock, &readfds);
+            max_fd = (mon_client_sock > max_fd)? mon_client_sock : max_fd;
+        }
+
+        int status = select(max_fd + 1, &readfds, NULL, NULL, NULL); // &timeout
 
 		if ((status < 0) && (errno != EINTR) && (errno != EBADF))
 		{
@@ -2424,7 +2501,57 @@ int main(int argc, char **argv) {
 		if(verbosity > 3)
 			printf("select returned %d/%d!\n", status, errno);
 
-		// Check if there's a new connection attempt from a client:
+        // Monitor socket
+        if (FD_ISSET(mon_sock, &readfds)) {
+            if (!mon_client_sock) {
+                socklen_t t = sizeof(mon_client_sock);
+                if ((mon_client_sock = accept(mon_sock, (struct sockaddr *)&mon_client_addr, &t)) == -1) {
+                    perror("accept");
+                    exit(1);
+                }
+            }
+        }
+
+        // Monitor socket client requests
+        if (mon_client_sock && FD_ISSET(mon_client_sock, &readfds)) {
+            char *buf_base, *str;
+            size_t len;
+            ssize_t bytes_read = recv(mon_client_sock, &mon_rbuf[mon_buf_used], sizeof(mon_rbuf) - mon_buf_used, 0);
+            if (bytes_read <= 0) {
+                close(mon_client_sock);
+                mon_client_sock = 0;
+            } else {
+                mon_buf_used += bytes_read;
+
+                buf_base = mon_rbuf;
+                while (1) {
+                    if (mon_buf_used == 0)
+                        break;
+                    int r = netstring_read(&buf_base, &mon_buf_used, &str, &len);
+                    if (r != 0) {
+                        printf(LOGPFX "Mon socket: Error reading netstring: %d\n", r);
+                        break;
+                    }
+
+                    if (memcmp(str, "membership", len) == 0) {
+                        const char *json = membership_to_json(m);
+                        char *send_buf = malloc(strlen(json)+14); // maximum digits for length is 9 (999999999) + : + ; + \0
+                        sprintf(send_buf, "%lu:%s,", strlen(json), json);
+                        int send_res = send(mon_client_sock, send_buf, strlen(send_buf), 0);
+                        free((void *)json);
+                        free((void *)send_buf);
+                        if (send_res < 0) {
+                            break;
+                        }
+                    }
+                }
+
+                if (buf_base > mon_rbuf && mon_buf_used > 0)
+                    memmove(mon_rbuf, buf_base, mon_buf_used);
+            }
+        }
+
+        // Check if there's a new connection attempt from a client:
 
 		if(FD_ISSET(parentfd, &readfds))
 		{
