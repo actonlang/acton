@@ -23,20 +23,18 @@ class MonSock:
         except:
             pass
 
-    def mon(self, retries=5):
+    def cmd(self, cmd, retries=5):
         if self.sock is None:
             self.connect()
 
         # Simple netstrings implementation, which also assumes that there is
         # only one response to our query
         try:
-            #self.sock.send(b"3:VER,3:WTS,50:hfjgfjhgfjhgfjhgfjhgfjhgfjgfjgfjhgfjhgfjghf")
-            self.sock.send(b"3:WTS,")
+            self.sock.send(f"{len(cmd)}:{cmd},".encode('utf-8'))
             while True:
                 try:
                     colpos = self.buf.index(b':')
                 except ValueError as exc:
-                    print("no colon...", self.buf)
                     # Not enough data, read some and try again
                     recv = self.sock.recv(1024)
                     if len(recv) == 0:
@@ -53,15 +51,13 @@ class MonSock:
                         raise ConnectionError("RTS hung up")
                     self.buf += recv
                     continue
-                print("GOT DATA")
                 res = self.buf[start:end]
-                print(res)
                 self.buf = self.buf[end+1:] # +1 to skip the ,
                 return json.loads(res.decode("utf-8"))
         except Exception as exc:
             self.connect()
             if retries > 0:
-                return self.mon(retries-1)
+                return self.cmd(cmd, retries-1)
             else:
                 raise ConnectionError("Unable to get data from acton rts")
 
@@ -75,7 +71,7 @@ class PromHTTPRequestHandler(BaseHTTPRequestHandler):
 
     def do_GET(self):
         try:
-            data = self.ms.mon()
+            data = self.ms.cmd("WTS")
         except ConnectionError:
             self.send_response(503)
             return
@@ -231,10 +227,11 @@ def prompom(sock_addr, listen_addr='0.0.0.0', listen_port=8000):
     httpd = HTTPServer(ad, handler)
     httpd.serve_forever()
 
+
 def mon(address, interval, once):
     ms = MonSock(address)
     while True:
-        data = ms.mon()
+        data = ms.cmd("WTS")
         print(f"Program: {data['name']}  PID: {data['pid']}")
         print("WT#  State  Conts  Sleeps")
         print("--------------------------------------------------------------------------------")
@@ -291,7 +288,7 @@ def richmon(address, interval, once):
 
         while True:
             try:
-                data = ms.mon()
+                data = ms.cmd("WTS")
                 break
             except ConnectionError:
                 time.sleep(0.5)
