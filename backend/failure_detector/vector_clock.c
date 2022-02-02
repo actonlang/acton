@@ -362,7 +362,7 @@ char * to_string_vc(vector_clock * vc, char * msg_buff)
 
 	for(int i=0;i<vc->no_nodes;i++)
 	{
-		sprintf(crt_ptr, "%d:%" PRId64 ", ", vc->node_ids[i].node_id, vc->node_ids[i].counter);
+		sprintf(crt_ptr, "%s%d:%" PRId64, i>0?", ":"", vc->node_ids[i].node_id, vc->node_ids[i].counter);
 		crt_ptr += strlen(crt_ptr);
 	}
 

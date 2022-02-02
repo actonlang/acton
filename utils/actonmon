@@ -242,6 +242,17 @@ def mon(address, interval, once):
         time.sleep(interval)
 
 
+def actdb_membership(address, interval, once):
+    ms = MonSock(address)
+    while True:
+        data = ms.cmd("membership")
+        print(json.dumps(data))
+
+        if once:
+            break
+        time.sleep(interval)
+
+
 def richmon(address, interval, once):
     import random
     import time
@@ -442,10 +453,13 @@ if __name__ == '__main__':
     parser.add_argument("--rich", action="store_true")
     parser.add_argument("--once", action="store_true", default=False)
     parser.add_argument("--prom", action="store_true")
+    parser.add_argument("--actdb-membership", action="store_true")
 
     args = parser.parse_args()
 
-    if args.prom:
+    if args.actdb_membership:
+        actdb_membership(args.socket, args.interval, args.once)
+    elif args.prom:
         prompom(args.socket)
     elif args.rich:
         richmon(args.socket, args.interval, args.once)

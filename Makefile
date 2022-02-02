@@ -239,7 +239,7 @@ DB_OFILES += backend/db.o backend/queue.o backend/skiplist.o backend/txn_state.o
 DBCLIENT_OFILES += backend/client_api.o rts/empty.o
 REMOTE_OFILES += backend/failure_detector/db_messages.pb-c.o backend/failure_detector/cells.o backend/failure_detector/db_queries.o backend/failure_detector/fd.o
 VC_OFILES += backend/failure_detector/vector_clock.o
-BACKEND_OFILES=$(COMM_OFILES) $(DB_OFILES) $(DBCLIENT_OFILES) $(REMOTE_OFILES) $(VC_OFILES)
+BACKEND_OFILES=$(COMM_OFILES) $(DB_OFILES) $(DBCLIENT_OFILES) $(REMOTE_OFILES) $(VC_OFILES) deps/netstring_rel.o deps/yyjson.o
 OFILES += $(BACKEND_OFILES)
 lib/libActonDB.a: $(BACKEND_OFILES)
 	ar rcs $@ $^
