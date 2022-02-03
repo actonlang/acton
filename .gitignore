@@ -39,11 +39,11 @@ examples/**
 !examples/**/*/
 
 test/*
-!test/Makefile
 !test/*.*
 test/*.log
 !test/*/
 test/**
+!test/Makefile
 !test/**/*.*
 test/**/*.log
 !test/**/*/
