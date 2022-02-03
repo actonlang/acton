@@ -1,0 +1,40 @@
+actor main(env):
+    var client = None
+    var i = 0
+    var port = 12345
+
+    def init_listen():
+        env.listen(port, connect_handler)
+
+        # TODO: register listen socket error handler, but RTS does not support this today
+        #env.listen(port, conn_handler, sock_err_handler)
+
+    def sock_err_handler():
+        print("Error with our listening socket, attempting to re-establish listening socket")
+        init_listen()
+        # Maybe do a slight sleep to avoid hammering? or even better, do increasing backoff
+        #after 1: init_listen()
+
+    def recv_handler(msg):
+        print("RECV", msg)
+        if msg == "GET":
+            if client is not None:
+                client.write(str(i))
+        if msg == "INC":
+            i += 1
+            if client is not None:
+                client.write("OK")
+
+    def err_handler(msg):
+        pass
+
+    def connect_handler(conn):
+        if conn is not None:
+            print("Got connection")
+            client = conn
+            conn.on_receipt(recv_handler, err_handler)
+        else:
+            raise Exception("Unable to bind")
+
+    port = int(env.argv[1])
+    init_listen()

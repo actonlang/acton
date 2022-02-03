@@ -22,7 +22,6 @@ def get_db_args(base_port, replication_factor):
 
 
 def mon_cmd(address, cmd, retries=5):
-
     buf = b""
     # Simple netstrings implementation, which also assumes that there is
     # only one response to our query
@@ -61,6 +60,23 @@ def mon_cmd(address, cmd, retries=5):
             return mon_cmd(address, cmd, retries-1)
         else:
             raise ConnectionError("Unable to get data from acton rts")
+
+
+def tcp_cmd(port, cmd, retries=100):
+    s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    try:
+        s.connect(("localhost", port))
+        s.send(cmd.encode("UTF-8"))
+        res = s.recv(10)
+        s.close()
+        return res.decode("utf-8")
+    except Exception as exc:
+        s.close()
+        if retries == 0:
+            raise exc
+        time.sleep(0.01)
+        return tcp_cmd(port, cmd, retries-1)
+
 
 
 class Db:
@@ -336,6 +352,26 @@ class TestDbApps(unittest.TestCase):
         p, s = run_cmd(cmd, so2, stderr_checker, state=state)
 
         self.assertEqual(p.returncode, 0)
+
+
+    def test_app_tcp_recovery(self):
+        app_port = self.dbc.base_port+199
+        cmd = ["./rts/ddb_test_server", str(app_port), "--rts-verbose",
+               "--rts-ddb-replication", str(self.replication_factor)
+               ] + get_db_args(self.dbc.base_port, self.replication_factor)
+        self.p = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        self.assertEqual(tcp_cmd(app_port, "GET"), "0")
+        tcp_cmd(app_port, "INC")
+        tcp_cmd(app_port, "INC")
+        self.assertEqual(tcp_cmd(app_port, "GET"), "2")
+        self.p.terminate()
+        self.p.communicate()
+        self.p = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        # TODO: App should resume from DB and give us back same number
+#        self.assertEqual(tcp_cmd(app_port, "GET"), "2")
+        self.p.terminate()
+        self.p.communicate()
+
 
 
 class TestDbAppsNoQuorum(unittest.TestCase):
