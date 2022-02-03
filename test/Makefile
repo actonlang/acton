@@ -19,7 +19,7 @@ regression:
 ddb-tests:
 	$(MAKE) $(DDB_TESTS)
 
-DDB_TESTS=test_db_app test_db_app_no_quorum test_db_app_recovery
+DDB_TESTS=test_db_app test_db_app_no_quorum test_db_app_recovery test_db_app_tcp
 .PHONY: $(DDB_TESTS)
 
 # Starts up a database cluster, checks membership is ok before proceeding to run
@@ -37,6 +37,10 @@ test_db_app_no_quorum:
 test_db_app_recovery:
 	$(ACTONC) --root main test_db_recovery.act
 	./test_db.py TestDbApps.test_app_recovery
+
+test_db_app_tcp:
+	$(ACTONC) --root main rts/ddb_test_server.act
+	./test_db.py TestDbApps.test_app_tcp_recovery
 
 
 # -- RTS --

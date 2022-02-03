@@ -22,7 +22,6 @@ def get_db_args(base_port, replication_factor):
 
 
 def mon_cmd(address, cmd, retries=5):
-
     buf = b""
     # Simple netstrings implementation, which also assumes that there is
     # only one response to our query
@@ -63,6 +62,23 @@ def mon_cmd(address, cmd, retries=5):
             raise ConnectionError("Unable to get data from acton rts")
 
 
+def tcp_cmd(port, cmd, retries=100):
+    s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    try:
+        s.connect(("localhost", port))
+        s.send(cmd.encode("UTF-8"))
+        res = s.recv(10)
+        s.close()
+        return res.decode("utf-8")
+    except Exception as exc:
+        s.close()
+        if retries == 0:
+            raise exc
+        time.sleep(0.01)
+        return tcp_cmd(port, cmd, retries-1)
+
+
+
 class Db:
     """A single DB node
     """
@@ -85,7 +101,6 @@ class Db:
                 "-p", str(self.port), "-m", str(self.gossip_port),
                 "-s", f"127.0.0.1:{self.seed_port}"]
         self.p = subprocess.Popen(cmd, stdout=self.logfile, stderr=self.logfile)
-        time.sleep(0.1)
         self.get_membership()
         for i in range(9999):
             if i > 100:
@@ -267,12 +282,19 @@ def run_cmd(cmd, cb_so=None, cb_se=None, cb_end=None, state=None):
 class TestDbApps(unittest.TestCase):
     replication_factor = 3
     dbc = None
+    p = None
 
     def setUp(self):
         self.dbc = DbCluster(self.replication_factor)
         self.dbc.start()
 
     def tearDown(self):
+        if self.p:
+            try:
+                self.p.kill()
+                self.p.wait()
+            except:
+                pass
         self.dbc.stop()
 
 
@@ -280,7 +302,7 @@ class TestDbApps(unittest.TestCase):
         cmd = ["./test_db_app", "--rts-verbose",
                "--rts-ddb-replication", str(self.replication_factor)
                ] + get_db_args(self.dbc.base_port, self.replication_factor)
-        p = subprocess.run(cmd, capture_output=True, timeout=3)
+        self.p = subprocess.run(cmd, capture_output=True, timeout=3)
 
         self.assertEqual(p.returncode, 0)
 
@@ -329,6 +351,26 @@ class TestDbApps(unittest.TestCase):
         p, s = run_cmd(cmd, so2, stderr_checker, state=state)
 
         self.assertEqual(p.returncode, 0)
+
+
+    def test_app_tcp_recovery(self):
+        app_port = self.dbc.base_port+199
+        cmd = ["./rts/ddb_test_server", str(app_port), "--rts-verbose",
+               "--rts-ddb-replication", str(self.replication_factor)
+               ] + get_db_args(self.dbc.base_port, self.replication_factor)
+        self.p = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        self.assertEqual(tcp_cmd(app_port, "GET"), "0")
+        tcp_cmd(app_port, "INC")
+        tcp_cmd(app_port, "INC")
+        self.assertEqual(tcp_cmd(app_port, "GET"), "2")
+        self.p.terminate()
+        self.p.communicate()
+        self.p = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        # TODO: App should resume from DB and give us back same number
+#        self.assertEqual(tcp_cmd(app_port, "GET"), "2")
+        self.p.terminate()
+        self.p.communicate()
+
 
 
 class TestDbAppsNoQuorum(unittest.TestCase):
