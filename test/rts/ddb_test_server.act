@@ -4,10 +4,7 @@ actor main(env):
     var port = 12345
 
     def init_listen():
-        env.listen(port, connect_handler)
-
-        # TODO: register listen socket error handler, but RTS does not support this today
-        #env.listen(port, conn_handler, sock_err_handler)
+        env.listen(port, connect_handler, sock_err_handler)
 
     def sock_err_handler():
         print("Error with our listening socket, attempting to re-establish listening socket")
