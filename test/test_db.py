@@ -101,7 +101,6 @@ class Db:
                 "-p", str(self.port), "-m", str(self.gossip_port),
                 "-s", f"127.0.0.1:{self.seed_port}"]
         self.p = subprocess.Popen(cmd, stdout=self.logfile, stderr=self.logfile)
-        time.sleep(0.1)
         self.get_membership()
         for i in range(9999):
             if i > 100:
