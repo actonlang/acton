@@ -267,12 +267,19 @@ def run_cmd(cmd, cb_so=None, cb_se=None, cb_end=None, state=None):
 class TestDbApps(unittest.TestCase):
     replication_factor = 3
     dbc = None
+    p = None
 
     def setUp(self):
         self.dbc = DbCluster(self.replication_factor)
         self.dbc.start()
 
     def tearDown(self):
+        if self.p:
+            try:
+                self.p.kill()
+                self.p.wait()
+            except:
+                pass
         self.dbc.stop()
 
 
@@ -280,7 +287,7 @@ class TestDbApps(unittest.TestCase):
         cmd = ["./test_db_app", "--rts-verbose",
                "--rts-ddb-replication", str(self.replication_factor)
                ] + get_db_args(self.dbc.base_port, self.replication_factor)
-        p = subprocess.run(cmd, capture_output=True, timeout=3)
+        self.p = subprocess.run(cmd, capture_output=True, timeout=3)
 
         self.assertEqual(p.returncode, 0)
 
