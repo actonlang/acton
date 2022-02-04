@@ -201,7 +201,7 @@ def get_env_hgen_stuff():
     for thing in get_stuff(hgen_builtin(), input_generated=True):
         if re.match(r"struct .l.1lambda;", thing.body[0]):
             found = True
-        if found:
+        if found and thing.name not in skip_funcs:
             res.append(thing)
     return res
 

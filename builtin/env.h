@@ -321,10 +321,6 @@ extern struct $l$13lambda$class $l$13lambda$methods;
 $l$13lambda $l$13lambda$new($WFile, $str);
 extern struct $l$14lambda$class $l$14lambda$methods;
 $l$14lambda $l$14lambda$new($WFile);
-$R $Env$new($list, $Cont);
-$R $Connection$new($Cont);
-$R $RFile$new($Cont);
-$R $WFile$new($Cont);
 // END GENERATED __builtin__.act
 ///////////////////////////////////////////////////////////////////////////////////////////
 
