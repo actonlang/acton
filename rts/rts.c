@@ -1560,7 +1560,7 @@ void sigint_handler(int signum) {
         rtsv_printf(LOGPFX "Received SIGINT, shutting down gracefully...\n");
         rts_exit = 1;
     } else {
-        rtsv_printf(LOGPFX "Received second SIGINT, shutting down immediately\n");
+        rtsv_printf(LOGPFX "Received SIGINT during graceful shutdown, exiting immediately\n");
         exit(return_val);
     }
 }
@@ -1570,7 +1570,7 @@ void sigterm_handler(int signum) {
         rtsv_printf(LOGPFX "Received SIGTERM, shutting down gracefully...\n");
         rts_exit = 1;
     } else {
-        rtsv_printf(LOGPFX "Received second SIGTERM, shutting down immediately\n");
+        rtsv_printf(LOGPFX "Received SIGTERM during graceful shutdown, exiting immediately\n");
         exit(return_val);
     }
 }
