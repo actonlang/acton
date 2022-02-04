@@ -1554,6 +1554,28 @@ void *$mon_socket_loop() {
     return NULL;
 }
 
+
+void sigint_handler(int signum) {
+    if (rts_exit == 0) {
+        rtsv_printf(LOGPFX "Received SIGINT, shutting down gracefully...\n");
+        rts_exit = 1;
+    } else {
+        rtsv_printf(LOGPFX "Received second SIGINT, shutting down immediately\n");
+        exit(return_val);
+    }
+}
+
+void sigterm_handler(int signum) {
+    if (rts_exit == 0) {
+        rtsv_printf(LOGPFX "Received SIGTERM, shutting down gracefully...\n");
+        rts_exit = 1;
+    } else {
+        rtsv_printf(LOGPFX "Received second SIGTERM, shutting down immediately\n");
+        exit(return_val);
+    }
+}
+
+
 struct option {
     const char *name;
     const char *arg_name;
@@ -1604,6 +1626,9 @@ int main(int argc, char **argv) {
     // Ignore SIGPIPE, like we get if the other end talking to us on the Monitor
     // socket (which is a Unix domain socket) goes away.
     signal(SIGPIPE, SIG_IGN);
+    // Handle SIGINT & SIGTERM
+    signal(SIGINT, sigint_handler);
+    signal(SIGTERM, sigterm_handler);
 
     /*
      * A note on argument parsing: The RTS has its own command line arguments,
