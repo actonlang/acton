@@ -149,6 +149,8 @@ def hgen_builtin():
     return ac.stdout.decode('utf-8').splitlines()
 
 
+skip_funcs = ['$Env$new', '$Connection$new', '$ListenSocket$new', '$RFile$new', '$WFile$new']
+
 def get_env_cgen_stuff():
     """Get the generated stuff
 
@@ -169,7 +171,7 @@ def get_env_cgen_stuff():
     for thing in get_stuff(cgen_builtin(), input_generated=True):
         if re.search('\$Env', thing.body[0]):
             found = True
-        if found:
+        if found and thing.name not in skip_funcs:
             res.append(thing)
     return res
 
