@@ -304,7 +304,7 @@ class TestDbApps(unittest.TestCase):
                ] + get_db_args(self.dbc.base_port, self.replication_factor)
         self.p = subprocess.run(cmd, capture_output=True, timeout=3)
 
-        self.assertEqual(p.returncode, 0)
+        self.assertEqual(self.p.returncode, 0)
 
 
     def test_app_recovery(self):
