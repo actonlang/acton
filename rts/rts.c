@@ -1554,11 +1554,18 @@ void *$mon_socket_loop() {
     return NULL;
 }
 
+void rts_shutdown() {
+    rts_exit = 1;
+    pthread_mutex_lock(&sleep_lock);
+    pthread_cond_broadcast(&work_to_do);
+    pthread_mutex_unlock(&sleep_lock);
+}
+
 
 void sigint_handler(int signum) {
     if (rts_exit == 0) {
         rtsv_printf(LOGPFX "Received SIGINT, shutting down gracefully...\n");
-        rts_exit = 1;
+        rts_shutdown();
     } else {
         rtsv_printf(LOGPFX "Received SIGINT during graceful shutdown, exiting immediately\n");
         exit(return_val);
@@ -1568,7 +1575,7 @@ void sigint_handler(int signum) {
 void sigterm_handler(int signum) {
     if (rts_exit == 0) {
         rtsv_printf(LOGPFX "Received SIGTERM, shutting down gracefully...\n");
-        rts_exit = 1;
+        rts_shutdown();
     } else {
         rtsv_printf(LOGPFX "Received SIGTERM during graceful shutdown, exiting immediately\n");
         exit(return_val);
