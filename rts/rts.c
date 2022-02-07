@@ -926,7 +926,7 @@ void deserialize_system(snode_t *actors_start) {
 
     long min_key = 0;
 
-    rtsd_printf(LOGPFX "\n#### Msg allocation:\n");
+    rtsd_printf(LOGPFX "#### Msg allocation:\n");
     for(snode_t * node = msgs_start; node!=NULL; node=NEXT(node)) {
 		db_row_t* r = (db_row_t*) node->value;
         rtsd_printf(LOGPFX "# r %p, key: %ld, cells: %p, columns: %p, no_cols: %d, blobsize: %d\n", r, (long)r->key, r->cells, r->column_array, r->no_columns, r->last_blob_size);
@@ -943,7 +943,7 @@ void deserialize_system(snode_t *actors_start) {
                 min_key = key;
         }
     }
-    rtsd_printf(LOGPFX "\n#### Actor allocation:\n");
+    rtsd_printf(LOGPFX "#### Actor allocation:\n");
     for(snode_t * node = actors_start; node!=NULL; node=NEXT(node)) {
         db_row_t* r = (db_row_t*) node->value;
         rtsd_printf(LOGPFX "# r %p, key: %ld, cells: %p, columns: %p, no_cols: %d, blobsize: %d\n", r, (long)r->key, r->cells, r->column_array, r->no_columns, r->last_blob_size);
@@ -962,7 +962,7 @@ void deserialize_system(snode_t *actors_start) {
     }
     next_key = min_key;
 
-    rtsd_printf(LOGPFX "\n#### Msg contents:\n");
+    rtsd_printf(LOGPFX "#### Msg contents:\n");
     for(snode_t * node = msgs_start; node!=NULL; node=NEXT(node)) {
 		db_row_t* r = (db_row_t*) node->value;
         long key = (long)r->key;
@@ -979,7 +979,7 @@ void deserialize_system(snode_t *actors_start) {
         }
     }
 
-    rtsd_printf(LOGPFX "\n#### Actor contents:\n");
+    rtsd_printf(LOGPFX "#### Actor contents:\n");
     for(snode_t * node = actors_start; node!=NULL; node=NEXT(node)) {
 		db_row_t* r = (db_row_t*) node->value;
         long key = (long)r->key;
@@ -1002,7 +1002,7 @@ void deserialize_system(snode_t *actors_start) {
                 act->$waitsfor = NULL;
             }
 
-            rtsd_printf(LOGPFX "\n#### Reading msgs queue %ld contents:\n", key);
+            rtsd_printf(LOGPFX "#### Reading msgs queue %ld contents:\n", key);
             queue_callback * qc = get_queue_callback(dummy_callback);
             int64_t prev_read_head = -1, prev_consume_head = -1;
             int ret = remote_subscribe_queue(($WORD)key, 0, 0, MSG_QUEUE, ($WORD)key, qc, &prev_read_head, &prev_consume_head, db);
@@ -1554,13 +1554,20 @@ void *$mon_socket_loop() {
     return NULL;
 }
 
+void rts_shutdown() {
+    rts_exit = 1;
+    pthread_mutex_lock(&sleep_lock);
+    pthread_cond_broadcast(&work_to_do);
+    pthread_mutex_unlock(&sleep_lock);
+}
+
 
 void sigint_handler(int signum) {
     if (rts_exit == 0) {
         rtsv_printf(LOGPFX "Received SIGINT, shutting down gracefully...\n");
-        rts_exit = 1;
+        rts_shutdown();
     } else {
-        rtsv_printf(LOGPFX "Received second SIGINT, shutting down immediately\n");
+        rtsv_printf(LOGPFX "Received SIGINT during graceful shutdown, exiting immediately\n");
         exit(return_val);
     }
 }
@@ -1568,9 +1575,9 @@ void sigint_handler(int signum) {
 void sigterm_handler(int signum) {
     if (rts_exit == 0) {
         rtsv_printf(LOGPFX "Received SIGTERM, shutting down gracefully...\n");
-        rts_exit = 1;
+        rts_shutdown();
     } else {
-        rtsv_printf(LOGPFX "Received second SIGTERM, shutting down immediately\n");
+        rtsv_printf(LOGPFX "Received SIGTERM during graceful shutdown, exiting immediately\n");
         exit(return_val);
     }
 }
