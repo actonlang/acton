@@ -2,7 +2,37 @@
 
 ## Unreleased
 
+
+## [0.9.0] (2022-02-15)
+
+### Added
+- Add DB client library statistics [#473]
+  - We keep count, sum of time and timing buckets per operation type
+  - `actonmon` exposes these metrics over the prometheus HTTP endpoint
+- RTS mon interface now uses netstrings as line encoding [#494]
+  - Much more robust than the previous implementation which relied on luck
+  - netstrings are very simple and can be implemented in a few lines of C or
+    Python, so we are still considerably simpler than protobuf or similar
+- Add mon interface to ActonDB [#499]
+  - We only expose membership information
+  - Gives us a nice programmatic interface to query the DB for membership info,
+    so we can determine whether our DB cluster has converged or not
+- Acton RTS now handles `SIGINT` and `SIGTERM` [#509]
+  - RTS will gracefully shutdown upon receiving either `SIGINT` or `SIGTERM`
+  - If a second `SIGINT` or `SIGTERM` is received while the RTS is gracefully
+    shutting down, it will instead exit immediately
+- Add `ListenSocket` actor [#506]
+  - `env.listen()` now returns a `ListenSocket`, previously it did not return
+    anything, which meant that we never got a "handle" on the socket itself so
+    we couldn't for example stop listening on a port.
+  - Also means we have a more natural place to add logic for what should happen
+    on actor resumption.
+
 ### Changed
+- `env.listen()` now takes a on_error callback function [#504]
+  - Previously the on_connect callback would be invoked with a `None` argument
+    on error, which meant it wasn't really an "on connect" handler
+  - Now we get separate callbacks so each can be implemented much cleaner
 - Enough DDB servers must be specified for configured replication factor [#474]
   - With a replication factor of 3, `--rts-ddb-host` must be specified at least
     3 times to point to 3 DB servers
@@ -22,7 +52,7 @@
     defined in `env.c` are manually implemented and still used to old way
   - All actors in `env.c` now use the new correct way!
 - Fix epoll detection of disconnect [#469]
-  - In addition to listening for EPOLLHUP we must detect EPOLLRDHUP
+  - In addition to listening for `EPOLLHUP` we must detect `EPOLLRDHUP`
 - Do not rewrite argv for `--rts-ddb-host` option arguments [#476]
 - Fix `--opt=arg` style parsing of argument [#479]
   - Argument value was `t=arg` rather than `arg` due to misplaced parentheses
@@ -30,6 +60,33 @@
   - Previously had tasks where first a partial log line would be printed, to be
     completed when the task finished. This looks nice in an interactive terminal
     but if anything else logs meanwhile, the output becomes garbled.
+- Cleaned up bootstrap removing `ancestor0` [#481]
+- Speed up RTS startup when using the database [#493]
+  - A `select()` timeout meant we would always pause for 3 seconds
+  - We now avoid the timeout entirely by having a "wakeup pipe" that we can prod
+    to wake up the comms thread in the RTS
+  - For small programs, like most of our tests, we can now startup 3 DB nodes
+    and run the program in 30ms or so whereas previously it would take just over
+    3 seconds. 100x improvement!
+
+### Testing / CI
+- CI jobs now depend on all "previous jobs" which prevents inconsistencies [#478]
+  - There are jobs, like the update-apt-repo job, which depend on previously
+    jobs, like test-linux.
+  - While the test job for Linux could succeed and thus allow the
+    update-apt-repo job to proceed, text-macos could fail, meaning the overall
+    pipeline status is failed, yet enough has passed to now run the
+    update-apt-repo job. Uploading a new version there but not a similar one for
+    Mac OS X causes inconsistencies.
+- DB test script (`test_db.py`) now uses Python unittest style rather than
+  homegrown functions [#501]
+  - Makes it easier and more robust to handle setUp & tearDown
+- Ensure app is killed during tearDown as to ensure cleanup [#502]
+- The test for RTS with DB now has a new test where the test app uses TCP for
+  control and exposing information which should make it much faster and more
+  robust than relying on stdout parsing.
+  - However, it does not currently support testing DB resumption / recovery as
+    our TCP listen sockets do not support resumption
 
 
 ## [0.8.0] (2022-01-14)
@@ -760,13 +817,24 @@ then, this second incarnation has been in focus and 0.2.0 was its first version.
 [#460]: https://github.com/actonlang/acton/pull/460
 [#464]: https://github.com/actonlang/acton/pull/464
 [#465]: https://github.com/actonlang/acton/pull/465
+[#469]: https://github.com/actonlang/acton/pull/469
 [#472]: https://github.com/actonlang/acton/issues/472
+[#473]: https://github.com/actonlang/acton/pull/473
 [#474]: https://github.com/actonlang/acton/pull/474
 [#475]: https://github.com/actonlang/acton/pull/475
 [#476]: https://github.com/actonlang/acton/pull/476
+[#478]: https://github.com/actonlang/acton/pull/478
 [#479]: https://github.com/actonlang/acton/pull/479
 [#481]: https://github.com/actonlang/acton/pull/481
 [#488]: https://github.com/actonlang/acton/pull/488
+[#493]: https://github.com/actonlang/acton/pull/493
+[#494]: https://github.com/actonlang/acton/pull/494
+[#499]: https://github.com/actonlang/acton/pull/499
+[#501]: https://github.com/actonlang/acton/pull/501
+[#502]: https://github.com/actonlang/acton/pull/502
+[#504]: https://github.com/actonlang/acton/pull/504
+[#506]: https://github.com/actonlang/acton/pull/506
+[#509]: https://github.com/actonlang/acton/pull/509
 [0.3.0]: https://github.com/actonlang/acton/releases/tag/v0.3.0
 [0.4.0]: https://github.com/actonlang/acton/compare/v0.3.0...v0.4.0
 [0.4.1]: https://github.com/actonlang/acton/compare/v0.4.0...v0.4.1
