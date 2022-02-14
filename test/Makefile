@@ -1,6 +1,7 @@
 ACTONC=../dist/bin/actonc --cpedantic
 DDB_SERVER=../dist/bin/actondb
 TESTS= \
+	$(ENV_TESTS) \
 	$(RTS_TESTS) \
 	$(DDB_TESTS) \
 	test_acton_rts_sleep \
@@ -14,6 +15,13 @@ test:
 
 regression:
 	$(MAKE) -C regression
+
+
+ENV_TESTS=env/listen_err
+.PHONY: $(ENV_TESTS)
+env/listen_err:
+	$(ACTONC) --root main $@.act
+	./$@
 
 
 ddb-tests:

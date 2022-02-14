@@ -1,0 +1,19 @@
+actor main(env):
+    def conn_handler(conn):
+        print("Not expecting any connection on socket1... fail :/")
+        await async env.exit(1)
+
+    def err_handler():
+        print("Some socket error occurred on socket1, not supposed to happen..")
+        await async env.exit(1)
+
+    def conn_handler2(conn):
+        print("We should not end up here...")
+        await async env.exit(1)
+
+    def err_handler2():
+        print("This is the second error handler, which we expect to be called because we cannot bind... now exiting")
+        await async env.exit(0)
+
+    env.listen(1234, conn_handler, err_handler)
+    env.listen(1234, conn_handler2, err_handler2)

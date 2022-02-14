@@ -123,7 +123,7 @@ struct $l$4lambda$class {
     char *$GCINFO;
     int $class_id;
     $Super$class $superclass;
-    $NoneType (*__init__) ($l$4lambda, $Env, $int, $function);
+    $NoneType (*__init__) ($l$4lambda, $Env, $int, $function, $function);
     void (*__serialize__) ($l$4lambda, $Serial$state);
     $l$4lambda (*__deserialize__) ($l$4lambda, $Serial$state);
     $bool (*__bool__) ($l$4lambda);
@@ -134,7 +134,8 @@ struct $l$4lambda {
     struct $l$4lambda$class *$class;
     $Env __self__;
     $int port;
-    $function cb;
+    $function cb_on_connect;
+    $function cb_on_error;
 };
 struct $l$5lambda$class {
     char *$GCINFO;
@@ -300,7 +301,7 @@ $l$2lambda $l$2lambda$new($Env, $function);
 extern struct $l$3lambda$class $l$3lambda$methods;
 $l$3lambda $l$3lambda$new($Env, $str, $int, $function);
 extern struct $l$4lambda$class $l$4lambda$methods;
-$l$4lambda $l$4lambda$new($Env, $int, $function);
+$l$4lambda $l$4lambda$new($Env, $int, $function, $function);
 extern struct $l$5lambda$class $l$5lambda$methods;
 $l$5lambda $l$5lambda$new($Env, $int);
 extern struct $l$6lambda$class $l$6lambda$methods;
@@ -336,14 +337,14 @@ struct $Env$class {
     $R (*stdout_write$local) ($Env, $str, $Cont);
     $R (*stdin_install$local) ($Env, $function, $Cont);
     $R (*connect$local) ($Env, $str, $int, $function, $Cont);
-    $R (*listen$local) ($Env, $int, $function, $Cont);
+    $R (*listen$local) ($Env, $int, $function, $function, $Cont);
     $R (*exit$local) ($Env, $int, $Cont);
     $R (*openR$local) ($Env, $str, $Cont);
     $R (*openW$local) ($Env, $str, $Cont);
     $Msg (*stdout_write) ($Env, $str);
     $Msg (*stdin_install) ($Env, $function);
     $Msg (*connect) ($Env, $str, $int, $function);
-    $Msg (*listen) ($Env, $int, $function);
+    $Msg (*listen) ($Env, $int, $function, $function);
     $Msg (*exit) ($Env, $int);
     $Msg (*openR) ($Env, $str);
     $Msg (*openW) ($Env, $str);

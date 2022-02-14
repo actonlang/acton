@@ -285,22 +285,25 @@ $l$3lambda $l$3lambda$new($Env p$1, $str p$2, $int p$3, $function p$4) {
     return $tmp;
 }
 struct $l$3lambda$class $l$3lambda$methods;
-$NoneType $l$4lambda$__init__ ($l$4lambda p$self, $Env __self__, $int port, $function cb) {
+$NoneType $l$4lambda$__init__ ($l$4lambda p$self, $Env __self__, $int port, $function cb_on_connect, $function cb_on_error) {
     p$self->__self__ = __self__;
     p$self->port = port;
-    p$self->cb = cb;
+    p$self->cb_on_connect = cb_on_connect;
+    p$self->cb_on_error = cb_on_error;
     return $None;
 }
 $R $l$4lambda$__call__ ($l$4lambda p$self, $Cont c$cont) {
     $Env __self__ = p$self->__self__;
     $int port = p$self->port;
-    $function cb = p$self->cb;
-    return __self__->$class->listen$local(__self__, port, cb, c$cont);
+    $function cb_on_connect = p$self->cb_on_connect;
+    $function cb_on_error = p$self->cb_on_error;
+    return __self__->$class->listen$local(__self__, port, cb_on_connect, cb_on_error, c$cont);
 }
 void $l$4lambda$__serialize__ ($l$4lambda self, $Serial$state state) {
     $step_serialize(self->__self__, state);
     $step_serialize(self->port, state);
-    $step_serialize(self->cb, state);
+    $step_serialize(self->cb_on_connect, state);
+    $step_serialize(self->cb_on_error, state);
 }
 $l$4lambda $l$4lambda$__deserialize__ ($l$4lambda self, $Serial$state state) {
     if (!self) {
@@ -313,13 +316,14 @@ $l$4lambda $l$4lambda$__deserialize__ ($l$4lambda self, $Serial$state state) {
     }
     self->__self__ = $step_deserialize(state);
     self->port = $step_deserialize(state);
-    self->cb = $step_deserialize(state);
+    self->cb_on_connect = $step_deserialize(state);
+    self->cb_on_error = $step_deserialize(state);
     return self;
 }
-$l$4lambda $l$4lambda$new($Env p$1, $int p$2, $function p$3) {
+$l$4lambda $l$4lambda$new($Env p$1, $int p$2, $function p$3, $function p$4) {
     $l$4lambda $tmp = malloc(sizeof(struct $l$4lambda));
     $tmp->$class = &$l$4lambda$methods;
-    $l$4lambda$methods.__init__($tmp, p$1, p$2, p$3);
+    $l$4lambda$methods.__init__($tmp, p$1, p$2, p$3, p$4);
     return $tmp;
 }
 struct $l$4lambda$class $l$4lambda$methods;
@@ -660,8 +664,8 @@ $Msg $Env$stdin_install ($Env __self__, $function cb) {
 $Msg $Env$connect ($Env __self__, $str host, $int port, $function cb) {
     return $ASYNC((($Actor)__self__), (($Cont)$l$3lambda$new((($Env)__self__), host, port, cb)));
 }
-$Msg $Env$listen ($Env __self__, $int port, $function cb) {
-    return $ASYNC((($Actor)__self__), (($Cont)$l$4lambda$new((($Env)__self__), port, cb)));
+$Msg $Env$listen ($Env __self__, $int port, $function cb_on_connect, $function cb_on_error) {
+    return $ASYNC((($Actor)__self__), (($Cont)$l$4lambda$new((($Env)__self__), port, cb_on_connect, cb_on_error)));
 }
 $Msg $Env$exit ($Env __self__, $int n) {
     return $ASYNC((($Actor)__self__), (($Cont)$l$5lambda$new((($Env)__self__), n)));
@@ -731,15 +735,16 @@ $R $Env$connect$local ($Env __self__, $str host, $int port, $function cb, $Cont 
     }
     return $R_CONT(c$cont, $None);
 }
-$R $Env$listen$local ($Env __self__, $int port, $function cb, $Cont c$cont) {
+$R $Env$listen$local ($Env __self__, $int port, $function cb_on_connect, $function cb_on_error, $Cont c$cont) {
     struct sockaddr_in addr;
-    int fd = new_socket(cb);
+    int fd = new_socket(cb_on_connect);
     addr.sin_addr.s_addr = INADDR_ANY;
     addr.sin_port = htons(port->val);
     addr.sin_family = AF_INET;
     if (bind(fd,(struct sockaddr *)&addr,sizeof(struct sockaddr)) < 0)
-      fd_data[fd].chandler->$class->__call__(fd_data[fd].chandler, NULL);
-    listen(fd,5);
+        cb_on_error->$class->__call__(cb_on_error);
+    if (listen(fd, 5) < 0)
+        cb_on_error->$class->__call__(cb_on_error);
     EVENT_add_read_once(fd);
     return $R_CONT(c$cont, $None);
 }

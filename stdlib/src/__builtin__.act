@@ -573,7 +573,7 @@ actor Env (args):
     stdout_write : action(str) -> None
     stdin_install: action(action(str)->None) -> None
     connect      : action(str, int, action(?Connection)->None) -> None
-    listen       : action(int, action(?Connection)->None) -> None
+    listen       : action(int, action(?Connection)->None, action()->None) -> None
     exit         : action(int) -> None
     openR        : action(str) -> ?RFile
     openW        : action(str) -> ?WFile
@@ -581,7 +581,7 @@ actor Env (args):
     def stdout_write(s): pass
     def stdin_install(cb): pass
     def connect(host,port,cb): pass
-    def listen(port,cb): pass
+    def listen(port, cb_on_connect, cb_on_error): pass
     def exit(n): pass
     def openR(nm): pass
     def openW(nm): pass
