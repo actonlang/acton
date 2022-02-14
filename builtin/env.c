@@ -655,6 +655,36 @@ $l$14lambda $l$14lambda$new($WFile p$1) {
     return $tmp;
 }
 struct $l$14lambda$class $l$14lambda$methods;
+$NoneType $l$15lambda$__init__ ($l$15lambda p$self, $ListenSocket __self__) {
+    p$self->__self__ = __self__;
+    return $None;
+}
+$R $l$15lambda$__call__ ($l$15lambda p$self, $Cont c$cont) {
+    $ListenSocket __self__ = p$self->__self__;
+    return __self__->$class->close$local(__self__, c$cont);
+}
+void $l$15lambda$__serialize__ ($l$15lambda self, $Serial$state state) {
+    $step_serialize(self->__self__, state);
+}
+$l$15lambda $l$15lambda$__deserialize__ ($l$15lambda self, $Serial$state state) {
+    if (!self) {
+        if (!state) {
+            self = malloc(sizeof(struct $l$15lambda));
+            self->$class = &$l$15lambda$methods;
+            return self;
+        }
+        self = $DNEW($l$15lambda, state);
+    }
+    self->__self__ = $step_deserialize(state);
+    return self;
+}
+$l$15lambda $l$15lambda$new($ListenSocket p$1) {
+    $l$15lambda $tmp = malloc(sizeof(struct $l$15lambda));
+    $tmp->$class = &$l$15lambda$methods;
+    $l$15lambda$methods.__init__($tmp, p$1);
+    return $tmp;
+}
+struct $l$15lambda$class $l$15lambda$methods;
 $Msg $Env$stdout_write ($Env __self__, $str s) {
     return $ASYNC((($Actor)__self__), (($Cont)$l$1lambda$new((($Env)__self__), s)));
 }
@@ -688,8 +718,30 @@ $Msg $WFile$write ($WFile __self__, $str s) {
 $Msg $WFile$close ($WFile __self__) {
     return $ASYNC((($Actor)__self__), (($Cont)$l$14lambda$new((($WFile)__self__))));
 }
+$Msg $ListenSocket$close ($ListenSocket __self__) {
+    return $ASYNC((($Actor)__self__), (($Cont)$l$15lambda$new((($ListenSocket)__self__))));
+}
+void $ListenSocket$__serialize__ ($ListenSocket self, $Serial$state state) {
+    $Actor$methods.__serialize__(($Actor)self, state);
+}
+$ListenSocket $ListenSocket$__deserialize__ ($ListenSocket self, $Serial$state state) {
+    if (!self) {
+        if (!state) {
+            self = malloc(sizeof(struct $ListenSocket));
+            self->$class = &$ListenSocket$methods;
+            return self;
+        }
+        self = $DNEW($ListenSocket, state);
+    }
+    $Actor$methods.__deserialize__(($Actor)self, state);
+    return self;
+}
+struct $ListenSocket$class $ListenSocket$methods;
 // END GENERATED __builtin__.act
 ///////////////////////////////////////////////////////////////////////////////////////////
+
+
+// Env /////////////////////////////////////////////////////////////////////////
 
 $NoneType $Env$__init__ ($Env __self__, $list argv) {
 struct $l$14lambda$class $l$14lambda$methods;
@@ -746,7 +798,9 @@ $R $Env$listen$local ($Env __self__, $int port, $function cb_on_connect, $functi
     if (listen(fd, 5) < 0)
         cb_on_error->$class->__call__(cb_on_error);
     EVENT_add_read_once(fd);
-    return $R_CONT(c$cont, $None);
+
+    $ListenSocket lsock = $ListenSocket$newact(fd, cb_on_error);
+    return $R_CONT(c$cont, lsock);
 }
 $R $Env$exit$local ($Env __self__, $int n, $Cont c$cont) {
     return_val = n->val;
@@ -790,6 +844,7 @@ $Env $Env$newact($list p$1) {
     return $tmp;
 }
 struct $Env$class $Env$methods;
+
 $NoneType $Connection$__init__ ($Connection __self__, int descr) {
     __self__->descriptor = descr;
     return $None;
@@ -843,6 +898,27 @@ $Connection $Connection$newact(int descr) {
     return $tmp;
 }
 struct $Connection$class $Connection$methods;
+
+// ListenSocket ////////////////////////////////////////////////////////////////
+
+$NoneType $ListenSocket$__init__ ($ListenSocket __self__, int fd, $function cb_on_error) {
+    __self__->fd = fd;
+    __self__->cb_err = cb_on_error;
+    return $None;
+}
+$R $ListenSocket$close$local ($ListenSocket __self__, $Cont c$cont) {
+    close(__self__->fd);
+    return $R_CONT(c$cont, $None);
+}
+$ListenSocket $ListenSocket$newact(int fd, $function cb_on_error) {
+    $ListenSocket $tmp = $NEWACTOR($ListenSocket);
+    $tmp->$class->__init__($tmp, fd, cb_on_error);
+    return $tmp;
+}
+
+
+// RFile ///////////////////////////////////////////////////////////////////////
+
 $NoneType $RFile$__init__ ($RFile __self__, FILE *file) {
     __self__->file = file;
     return $None;
@@ -1050,6 +1126,15 @@ void $__init__ () {
         $register(&$l$14lambda$methods);
     }
     {
+        $l$15lambda$methods.$GCINFO = "$l$15lambda";
+        $l$15lambda$methods.$superclass = ($Super$class)&$Cont$methods;
+        $l$15lambda$methods.__init__ = $l$15lambda$__init__;
+        $l$15lambda$methods.__call__ = $l$15lambda$__call__;
+        $l$15lambda$methods.__serialize__ = $l$15lambda$__serialize__;
+        $l$15lambda$methods.__deserialize__ = $l$15lambda$__deserialize__;
+        $register(&$l$15lambda$methods);
+    }
+    {
         $Env$methods.$GCINFO = "$Env";
         $Env$methods.$superclass = ($Super$class)&$Actor$methods;
         $Env$methods.__bool__ = ($bool (*) ($Env))$Actor$methods.__bool__;
@@ -1116,6 +1201,18 @@ void $__init__ () {
         $WFile$methods.__serialize__ = $WFile$__serialize__;
         $WFile$methods.__deserialize__ = $WFile$__deserialize__;
         $register(&$WFile$methods);
+    }
+    {
+        $ListenSocket$methods.$GCINFO = "$ListenSocket";
+        $ListenSocket$methods.$superclass = ($Super$class)&$Actor$methods;
+        $ListenSocket$methods.__bool__ = ($bool (*) ($ListenSocket))$Actor$methods.__bool__;
+        $ListenSocket$methods.__str__ = ($str (*) ($ListenSocket))$Actor$methods.__str__;
+        $ListenSocket$methods.__init__ = $ListenSocket$__init__;
+        $ListenSocket$methods.close$local = $ListenSocket$close$local;
+        $ListenSocket$methods.close = $ListenSocket$close;
+        $ListenSocket$methods.__serialize__ = $ListenSocket$__serialize__;
+        $ListenSocket$methods.__deserialize__ = $ListenSocket$__deserialize__;
+        $register(&$ListenSocket$methods);
     }
     // END GENERATED __builtin__.act $__init__
     ///////////////////////////////////////////////////////////////////////////////////////

@@ -1,16 +1,14 @@
-actor main(env):
+actor Tester(env, port):
     var client = None
     var i = 0
-    var port = 12345
 
     def init_listen():
-        env.listen(port, connect_handler, sock_err_handler)
+        s = env.listen(port, connect_handler, sock_err_handler)
+        return s
 
     def sock_err_handler():
         print("Error with our listening socket, attempting to re-establish listening socket")
-        init_listen()
-        # Maybe do a slight sleep to avoid hammering? or even better, do increasing backoff
-        #after 1: init_listen()
+        lsock = init_listen()
 
     def recv_handler(msg):
         print("RECV", msg)
@@ -33,5 +31,10 @@ actor main(env):
         else:
             raise Exception("Unable to bind")
 
+    var lsock = init_listen()
+
+
+actor main(env):
     port = int(env.argv[1])
-    init_listen()
+
+    t = Tester(env, port)

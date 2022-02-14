@@ -47,10 +47,12 @@ struct $l$11lambda;
 struct $l$12lambda;
 struct $l$13lambda;
 struct $l$14lambda;
+struct $l$15lambda;
 struct $Env;
 struct $Connection;
 struct $RFile;
 struct $WFile;
+struct $ListenSocket;
 typedef struct $l$1lambda *$l$1lambda;
 typedef struct $l$2lambda *$l$2lambda;
 typedef struct $l$3lambda *$l$3lambda;
@@ -65,10 +67,12 @@ typedef struct $l$11lambda *$l$11lambda;
 typedef struct $l$12lambda *$l$12lambda;
 typedef struct $l$13lambda *$l$13lambda;
 typedef struct $l$14lambda *$l$14lambda;
+typedef struct $l$15lambda *$l$15lambda;
 typedef struct $Env *$Env;
 typedef struct $Connection *$Connection;
 typedef struct $RFile *$RFile;
 typedef struct $WFile *$WFile;
+typedef struct $ListenSocket *$ListenSocket;
 struct $l$1lambda$class {
     char *$GCINFO;
     int $class_id;
@@ -294,6 +298,21 @@ struct $l$14lambda {
     struct $l$14lambda$class *$class;
     $WFile __self__;
 };
+struct $l$15lambda$class {
+    char *$GCINFO;
+    int $class_id;
+    $Super$class $superclass;
+    $NoneType (*__init__) ($l$15lambda, $ListenSocket);
+    void (*__serialize__) ($l$15lambda, $Serial$state);
+    $l$15lambda (*__deserialize__) ($l$15lambda, $Serial$state);
+    $bool (*__bool__) ($l$15lambda);
+    $str (*__str__) ($l$15lambda);
+    $R (*__call__) ($l$15lambda, $Cont);
+};
+struct $l$15lambda {
+    struct $l$15lambda$class *$class;
+    $ListenSocket __self__;
+};
 extern struct $l$1lambda$class $l$1lambda$methods;
 $l$1lambda $l$1lambda$new($Env, $str);
 extern struct $l$2lambda$class $l$2lambda$methods;
@@ -322,6 +341,8 @@ extern struct $l$13lambda$class $l$13lambda$methods;
 $l$13lambda $l$13lambda$new($WFile, $str);
 extern struct $l$14lambda$class $l$14lambda$methods;
 $l$14lambda $l$14lambda$new($WFile);
+extern struct $l$15lambda$class $l$15lambda$methods;
+$l$15lambda $l$15lambda$new($ListenSocket);
 // END GENERATED __builtin__.act
 ///////////////////////////////////////////////////////////////////////////////////////////
 
@@ -361,6 +382,33 @@ struct $Env {
     $long $globkey;
     $list argv;
 };
+
+struct $ListenSocket$class {
+    char *$GCINFO;
+    int $class_id;
+    $Super$class $superclass;
+    $NoneType (*__init__) ($ListenSocket, int fd, $function cb_on_error);
+    void (*__serialize__) ($ListenSocket, $Serial$state);
+    $ListenSocket (*__deserialize__) ($ListenSocket, $Serial$state);
+    $bool (*__bool__) ($ListenSocket);
+    $str (*__str__) ($ListenSocket);
+    $R (*close$local) ($ListenSocket, $Cont);
+    $Msg (*close) ($ListenSocket);
+};
+struct $ListenSocket {
+    struct $ListenSocket$class *$class;
+    $Actor $next;
+    $Msg $msg;
+    $Msg $outgoing;
+    $Msg $waitsfor;
+    $int64 $consume_hd;
+    $Catcher $catcher;
+    $Lock $msg_lock;
+    $long $globkey;
+    int fd;
+    $function cb_err;
+};
+
 struct $Connection$class {
     char *$GCINFO;
     int $class_id;
@@ -389,6 +437,7 @@ struct $Connection {
     $long $globkey;
     int descriptor;
 };
+
 struct $RFile$class {
     char *$GCINFO;
     int $class_id;
@@ -415,6 +464,7 @@ struct $RFile {
     $long $globkey;
     FILE *file;
 };
+
 struct $WFile$class {
     char *$GCINFO;
     int $class_id;
@@ -441,10 +491,13 @@ struct $WFile {
     $long $globkey;
     int descriptor;
 };
+
 extern struct $Env$class $Env$methods;
 $Env $Env$newact($list);
 extern struct $Connection$class $Connection$methods;
 $Connection $Connection$newact(int);
+extern struct $ListenSocket$class $ListenSocket$methods;
+$ListenSocket $ListenSocket$newact(int, $function);
 extern struct $RFile$class $RFile$methods;
 $RFile $RFile$newact(FILE*);
 extern struct $WFile$class $WFile$methods;
