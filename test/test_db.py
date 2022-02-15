@@ -36,7 +36,7 @@ def mon_cmd(address, cmd, retries=5):
                 # Not enough data, read some and try again
                 recv = sock.recv(1024)
                 if len(recv) == 0:
-                    raise ConnectionError("RTS hung up")
+                    raise ConnectionError("remote hung up")
                 buf += recv
                 continue
             length = int(buf[0:colpos])
@@ -46,7 +46,7 @@ def mon_cmd(address, cmd, retries=5):
                 # Not enough data, read some and try again
                 recv = sock.recv(1024)
                 if len(recv) == 0:
-                    raise ConnectionError("RTS hung up")
+                    raise ConnectionError("remote hung up")
                 buf += recv
                 continue
             res = buf[start:end]
@@ -59,7 +59,7 @@ def mon_cmd(address, cmd, retries=5):
             time.sleep(0.01)
             return mon_cmd(address, cmd, retries-1)
         else:
-            raise ConnectionError("Unable to get data from acton rts")
+            raise ConnectionError("Unable to get data from remote")
 
 
 def tcp_cmd(port, cmd, retries=100):
