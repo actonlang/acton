@@ -164,6 +164,7 @@ $Msg $AFTER($int, $Cont);
 $R $AWAIT($Msg, $Cont);
 
 void init_db_queue(long);
+void serialize_state_shortcut($Actor);
 
 #define $NEWACTOR($T)       ({ $T $t = malloc(sizeof(struct $T)); \
                                $t->$class = &$T ## $methods; \

@@ -1125,17 +1125,20 @@ void serialize_actor($Actor a, uuid_t *txnid) {
     }
 }
 
+void serialize_state_shortcut($Actor a) {
+    if (db) {
+        uuid_t * txnid = remote_new_txn(db);
+        serialize_actor(a, txnid);
+        remote_commit_txn(txnid, db);
+    }
+}
+
 void BOOTSTRAP(int argc, char *argv[]) {
     $list args = $list$new(NULL,NULL);
     for (int i=0; i< argc; i++)
       $list_append(args,to$str(argv[i]));
 
     env_actor = $Env$newact(args);
-    if (db) {
-        uuid_t * txnid = remote_new_txn(db);
-        serialize_actor(($Actor)env_actor, txnid);
-        remote_commit_txn(txnid, db);
-    }
 
     root_actor = $ROOT();                           // Assumed to return $NEWACTOR(X) for the selected root actor X
     time_t now = current_time();
