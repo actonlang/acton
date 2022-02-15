@@ -310,6 +310,10 @@ $str $Actor$__str__($Actor self) {
   return to$str(s);
 }
 
+$NoneType $Actor$__resume__($Actor self) {
+  return $None;
+}
+
 void $Actor$__serialize__($Actor self, $Serial$state state) {
     $step_serialize(self->$waitsfor,state);
     $val_serialize(ITEM_ID,&self->$consume_hd,state);
@@ -447,7 +451,8 @@ struct $Actor$class $Actor$methods = {
     $Actor$__serialize__,
     $Actor$__deserialize__,
     $Actor$__bool__,
-    $Actor$__str__
+    $Actor$__str__,
+    $Actor$__resume__
 };
 
 struct $Catcher$class $Catcher$methods = {
@@ -1021,6 +1026,15 @@ void deserialize_system(snode_t *actors_start) {
             }
             print_actor(act);
         }
+    }
+
+    rtsd_printf(LOGPFX "#### Actor resume:\n");
+    for(snode_t * node = actors_start; node!=NULL; node=NEXT(node)) {
+        db_row_t* r = (db_row_t*) node->value;
+        long key = (long)r->key;
+        $Actor act = ($Actor)$dict_get(globdict, ($Hashable)$Hashable$int$witness, to$int(key), NULL);
+        rtsd_printf(LOGPFX "####### Resuming actor %p = %ld of class %s = %d\n", act, act->$globkey, act->$class->$GCINFO, act->$class->$class_id);
+        act->$class->__resume__(act);
     }
 
     rtsd_printf(LOGPFX "\n#### Reading timer queue contents:\n");

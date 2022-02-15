@@ -355,6 +355,7 @@ struct $Env$class {
     $Env (*__deserialize__) ($Env, $Serial$state);
     $bool (*__bool__) ($Env);
     $str (*__str__) ($Env);
+    $NoneType (*__resume__) ($Env);
     $R (*stdout_write$local) ($Env, $str, $Cont);
     $R (*stdin_install$local) ($Env, $function, $Cont);
     $R (*connect$local) ($Env, $str, $int, $function, $Cont);
@@ -392,6 +393,7 @@ struct $ListenSocket$class {
     $ListenSocket (*__deserialize__) ($ListenSocket, $Serial$state);
     $bool (*__bool__) ($ListenSocket);
     $str (*__str__) ($ListenSocket);
+    $NoneType (*__resume__) ($ListenSocket);
     $R (*close$local) ($ListenSocket, $Cont);
     $Msg (*close) ($ListenSocket);
 };
@@ -418,6 +420,7 @@ struct $Connection$class {
     $Connection (*__deserialize__) ($Connection, $Serial$state);
     $bool (*__bool__) ($Connection);
     $str (*__str__) ($Connection);
+    $NoneType (*__resume__) ($Connection);
     $R (*write$local) ($Connection, $str, $Cont);
     $R (*close$local) ($Connection, $Cont);
     $R (*on_receipt$local) ($Connection, $function, $function, $Cont);
@@ -447,6 +450,7 @@ struct $RFile$class {
     $RFile (*__deserialize__) ($RFile, $Serial$state);
     $bool (*__bool__) ($RFile);
     $str (*__str__) ($RFile);
+    $NoneType (*__resume__) ($RFile);
     $R (*readln$local) ($RFile, $Cont);
     $R (*close$local) ($RFile, $Cont);
     $Msg (*readln) ($RFile);
@@ -474,6 +478,7 @@ struct $WFile$class {
     $WFile (*__deserialize__) ($WFile, $Serial$state);
     $bool (*__bool__) ($WFile);
     $str (*__str__) ($WFile);
+    $NoneType (*__resume__) ($WFile);
     $R (*write$local) ($WFile, $str, $Cont);
     $R (*close$local) ($WFile, $Cont);
     $Msg (*write) ($WFile, $str);

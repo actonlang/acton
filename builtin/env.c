@@ -908,6 +908,10 @@ $NoneType $ListenSocket$__init__ ($ListenSocket __self__, int fd, $function cb_o
     __self__->cb_err = cb_on_error;
     return $None;
 }
+$NoneType $ListenSocket$__resume__($ListenSocket self) {
+    printf("Resuming ListenSocket\n");
+    return $None;
+}
 $R $ListenSocket$close$local ($ListenSocket __self__, $Cont c$cont) {
     close(__self__->fd);
     return $R_CONT(c$cont, $None);
@@ -1144,6 +1148,7 @@ void $__init__ () {
         $Env$methods.$superclass = ($Super$class)&$Actor$methods;
         $Env$methods.__bool__ = ($bool (*) ($Env))$Actor$methods.__bool__;
         $Env$methods.__str__ = ($str (*) ($Env))$Actor$methods.__str__;
+        $Env$methods.__resume__ = ($NoneType (*) ($Env))$Actor$methods.__resume__;
         $Env$methods.__init__ = $Env$__init__;
         $Env$methods.stdout_write$local = $Env$stdout_write$local;
         $Env$methods.stdin_install$local = $Env$stdin_install$local;
@@ -1168,6 +1173,7 @@ void $__init__ () {
         $Connection$methods.$superclass = ($Super$class)&$Actor$methods;
         $Connection$methods.__bool__ = ($bool (*) ($Connection))$Actor$methods.__bool__;
         $Connection$methods.__str__ = ($str (*) ($Connection))$Actor$methods.__str__;
+        $Connection$methods.__resume__ = ($NoneType (*) ($Connection))$Actor$methods.__resume__;
         $Connection$methods.__init__ = $Connection$__init__;
         $Connection$methods.write$local = $Connection$write$local;
         $Connection$methods.close$local = $Connection$close$local;
@@ -1184,6 +1190,7 @@ void $__init__ () {
         $RFile$methods.$superclass = ($Super$class)&$Actor$methods;
         $RFile$methods.__bool__ = ($bool (*) ($RFile))$Actor$methods.__bool__;
         $RFile$methods.__str__ = ($str (*) ($RFile))$Actor$methods.__str__;
+        $RFile$methods.__resume__ = ($NoneType (*) ($RFile))$Actor$methods.__resume__;
         $RFile$methods.__init__ = $RFile$__init__;
         $RFile$methods.readln$local = $RFile$readln$local;
         $RFile$methods.close$local = $RFile$close$local;
@@ -1198,6 +1205,7 @@ void $__init__ () {
         $WFile$methods.$superclass = ($Super$class)&$Actor$methods;
         $WFile$methods.__bool__ = ($bool (*) ($WFile))$Actor$methods.__bool__;
         $WFile$methods.__str__ = ($str (*) ($WFile))$Actor$methods.__str__;
+        $WFile$methods.__resume__ = ($NoneType (*) ($WFile))$Actor$methods.__resume__;
         $WFile$methods.__init__ = $WFile$__init__;
         $WFile$methods.write$local = $WFile$write$local;
         $WFile$methods.close$local = $WFile$close$local;
@@ -1212,6 +1220,7 @@ void $__init__ () {
         $ListenSocket$methods.$superclass = ($Super$class)&$Actor$methods;
         $ListenSocket$methods.__bool__ = ($bool (*) ($ListenSocket))$Actor$methods.__bool__;
         $ListenSocket$methods.__str__ = ($str (*) ($ListenSocket))$Actor$methods.__str__;
+        $ListenSocket$methods.__resume__ = ($NoneType (*) ($ListenSocket))$ListenSocket$__resume__;
         $ListenSocket$methods.__init__ = $ListenSocket$__init__;
         $ListenSocket$methods.close$local = $ListenSocket$close$local;
         $ListenSocket$methods.close = $ListenSocket$close;
