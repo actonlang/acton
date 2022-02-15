@@ -2253,6 +2253,7 @@ int main(int argc, char **argv) {
   arguments.gportno = DEFAULT_GOSSIP_PORT;
   arguments.local_iface = "127.0.0.1";
   arguments.no_seeds = 0;
+  arguments.mon_socket_path = NULL;
 
   argp_parse (&argp, argc, argv, 0, 0, &arguments);
 
@@ -2329,7 +2330,7 @@ int main(int argc, char **argv) {
   printf("SERVER: Started [%s:%d, %s:%d], my_lc = %s\n", inet_ntoa(serveraddr.sin_addr), ntohs(serveraddr.sin_port), my_address, my_port, to_string_vc(my_lc, msg_buf));
 
   // Set up monitoring socket
-  int mon_sock, mon_client_sock;
+  int mon_sock=-1, mon_client_sock=-1;
   struct sockaddr_un mon_addr, mon_client_addr;
   char mon_rbuf[64];
   size_t mon_buf_used = 0;
@@ -2482,9 +2483,11 @@ int main(int argc, char **argv) {
 		}
 
         // Monitor socket
-        FD_SET(mon_sock, &readfds);
-        max_fd = (mon_sock > max_fd)? mon_sock : max_fd;
-        if (mon_client_sock) {
+        if (mon_sock > 0) {
+            FD_SET(mon_sock, &readfds);
+            max_fd = (mon_sock > max_fd)? mon_sock : max_fd;
+        }
+        if (mon_client_sock > 0) {
             FD_SET(mon_client_sock, &readfds);
             max_fd = (mon_client_sock > max_fd)? mon_client_sock : max_fd;
         }
@@ -2503,7 +2506,7 @@ int main(int argc, char **argv) {
 
         // Monitor socket
         if (FD_ISSET(mon_sock, &readfds)) {
-            if (!mon_client_sock) {
+            if (mon_client_sock == -1) {
                 socklen_t t = sizeof(mon_client_sock);
                 if ((mon_client_sock = accept(mon_sock, (struct sockaddr *)&mon_client_addr, &t)) == -1) {
                     perror("accept");
@@ -2519,7 +2522,7 @@ int main(int argc, char **argv) {
             ssize_t bytes_read = recv(mon_client_sock, &mon_rbuf[mon_buf_used], sizeof(mon_rbuf) - mon_buf_used, 0);
             if (bytes_read <= 0) {
                 close(mon_client_sock);
-                mon_client_sock = 0;
+                mon_client_sock = -1;
             } else {
                 mon_buf_used += bytes_read;
 
