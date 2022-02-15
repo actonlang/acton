@@ -841,6 +841,7 @@ $Env $Env$__deserialize__ ($Env self, $Serial$state state) {
 $Env $Env$newact($list p$1) {
     $Env $tmp = $NEWACTOR($Env);
     $tmp->$class->__init__($tmp, p$1);  // Inline this message, note that $Env$__init__ is *not* CPS'ed
+    serialize_state_shortcut(($Actor)$tmp);
     return $tmp;
 }
 struct $Env$class $Env$methods;
@@ -895,6 +896,7 @@ $Connection $Connection$__deserialize__ ($Connection self, $Serial$state state) 
 $Connection $Connection$newact(int descr) {
     $Connection $tmp = $NEWACTOR($Connection);
     $tmp->$class->__init__($tmp, descr);          // Inline this message, note that $Connection$__init__ is *not* CPS'ed
+    serialize_state_shortcut(($Actor)$tmp);
     return $tmp;
 }
 struct $Connection$class $Connection$methods;
@@ -913,6 +915,7 @@ $R $ListenSocket$close$local ($ListenSocket __self__, $Cont c$cont) {
 $ListenSocket $ListenSocket$newact(int fd, $function cb_on_error) {
     $ListenSocket $tmp = $NEWACTOR($ListenSocket);
     $tmp->$class->__init__($tmp, fd, cb_on_error);
+    serialize_state_shortcut(($Actor)$tmp);
     return $tmp;
 }
 
@@ -953,6 +956,7 @@ $RFile $RFile$__deserialize__ ($RFile self, $Serial$state state) {
 $RFile $RFile$newact(FILE *file) {
     $RFile $tmp = $NEWACTOR($RFile);
     $tmp->$class->__init__($tmp, file);     // Inline this message, note that $RFile$__init__ is *not* CPS'ed
+    serialize_state_shortcut(($Actor)$tmp);
     return $tmp;
 }
 struct $RFile$class $RFile$methods;
@@ -990,6 +994,7 @@ $WFile $WFile$__deserialize__ ($WFile self, $Serial$state state) {
 $WFile $WFile$newact(int descr) {
     $WFile $tmp = $NEWACTOR($WFile);
     $tmp->$class->__init__($tmp, descr);     // Inline this message, note that $WFile$__init__ is *not* CPS'ed
+    serialize_state_shortcut(($Actor)$tmp);
     return $tmp;
 }
 struct $WFile$class $WFile$methods;
