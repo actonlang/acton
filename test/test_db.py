@@ -16,6 +16,15 @@ import unittest
 ACTONDB="../dist/bin/actondb"
 BASEPORT=32001
 
+class MonIntermittentError(Exception):
+    pass
+
+class MonOtherError(Exception):
+    pass
+
+class TcpCmdError(Exception):
+    pass
+
 
 def get_db_args(base_port, replication_factor):
     return [item for sublist in map(lambda x: ("--rts-ddb-host", x), [f"127.0.0.1:{base_port+idx}" for idx in range(replication_factor)]) for item in sublist]
@@ -36,7 +45,7 @@ def mon_cmd(address, cmd, retries=5):
                 # Not enough data, read some and try again
                 recv = sock.recv(1024)
                 if len(recv) == 0:
-                    raise ConnectionError("RTS hung up")
+                    raise ConnectionError("remote hung up")
                 buf += recv
                 continue
             length = int(buf[0:colpos])
@@ -46,23 +55,27 @@ def mon_cmd(address, cmd, retries=5):
                 # Not enough data, read some and try again
                 recv = sock.recv(1024)
                 if len(recv) == 0:
-                    raise ConnectionError("RTS hung up")
+                    raise ConnectionError("remote hung up")
                 buf += recv
                 continue
             res = buf[start:end]
             buf = buf[end+1:] # +1 to skip the ,
             sock.close()
             return json.loads(res.decode("utf-8"))
-    except Exception as exc:
+    except (FileNotFoundError, ConnectionError):
         sock.close()
         if retries > 0:
             time.sleep(0.01)
             return mon_cmd(address, cmd, retries-1)
         else:
-            raise ConnectionError("Unable to get data from acton rts")
+            raise MonIntermittentError("Unable to get data from remote")
+    except Exception as exc:
+        raise MonOtherError(f"Unhandled exception in mon_cmd: {exc}")
 
 
-def tcp_cmd(port, cmd, retries=100):
+def tcp_cmd(p, port, cmd, retries=100):
+    if p.poll() is not None:
+        raise TcpCmdError(f"Process is dead, returncode: {p.returncode}  stdout: {p.stdout.read()}  stderr: {p.stderr.read()}")
     s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     try:
         s.connect(("localhost", port))
@@ -70,12 +83,12 @@ def tcp_cmd(port, cmd, retries=100):
         res = s.recv(10)
         s.close()
         return res.decode("utf-8")
-    except Exception as exc:
+    except ConnectionRefusedError as exc:
         s.close()
         if retries == 0:
             raise exc
         time.sleep(0.01)
-        return tcp_cmd(port, cmd, retries-1)
+        return tcp_cmd(p, port, cmd, retries-1)
 
 
 
@@ -101,14 +114,13 @@ class Db:
                 "-p", str(self.port), "-m", str(self.gossip_port),
                 "-s", f"127.0.0.1:{self.seed_port}"]
         self.p = subprocess.Popen(cmd, stdout=self.logfile, stderr=self.logfile)
-        self.get_membership()
         for i in range(9999):
             if i > 100:
                 raise Exception("Unable to get membership")
             try:
                 self.get_membership()
                 break
-            except:
+            except MonIntermittentError:
                 time.sleep(0.01)
 
 
@@ -122,8 +134,20 @@ class Db:
         data = self.get_membership()
         return data["membership"]["view_id"]
 
-    def get_membership(self):
-        return mon_cmd(self.mon_sock, "membership")
+    def get_membership(self, retries=5):
+        self.p.poll()
+        if self.p.returncode is not None:
+            raise Exception(f"Bad exit code from ActonDB {self.idx}: {self.p.returncode}")
+
+        try:
+            return mon_cmd(self.mon_sock, "membership", retries=5)
+        except MonOtherError as exc:
+            if retries > 0:
+                time.sleep(0.01)
+                return self.get_membership(retries=retries-1)
+            else:
+                raise exc
+
 
 
 
@@ -135,7 +159,7 @@ class DbCluster:
         if not self.base_port:
             # compute random base port between 10000 to 60000 in increments of
             # 200 ports, which allows us to run up to 100 DB nodes per test
-            self.base_port = random.randint(50, 300) * 200
+            self.base_port = random.randint(50, 100) * 200
 
     def start(self):
         """Start up a cluster of num nodes and ensure that memberships look alright
@@ -174,7 +198,10 @@ class DbCluster:
     def stop(self):
         self.log.debug("Stopping database servers")
         for dbn in self.dbs:
-            dbn.stop()
+            try:
+                dbn.stop()
+            except:
+                print("Unable to stop {dbn}")
         return True
 
 
@@ -304,6 +331,10 @@ class TestDbApps(unittest.TestCase):
                ] + get_db_args(self.dbc.base_port, self.replication_factor)
         self.p = subprocess.run(cmd, capture_output=True, timeout=3)
 
+        if self.p.returncode != 0:
+            print(self.p.returncode)
+            print(self.p.stdout)
+            print(self.p.stderr)
         self.assertEqual(self.p.returncode, 0)
 
 
@@ -359,16 +390,15 @@ class TestDbApps(unittest.TestCase):
                "--rts-ddb-replication", str(self.replication_factor)
                ] + get_db_args(self.dbc.base_port, self.replication_factor)
         self.p = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-        self.assertEqual(tcp_cmd(app_port, "GET"), "0")
-        tcp_cmd(app_port, "INC")
-        tcp_cmd(app_port, "INC")
-        self.assertEqual(tcp_cmd(app_port, "GET"), "2")
+        self.assertEqual(tcp_cmd(self.p, app_port, "GET"), "0")
+        tcp_cmd(self.p, app_port, "INC")
+        tcp_cmd(self.p, app_port, "INC")
+        self.assertEqual(tcp_cmd(self.p, app_port, "GET"), "2")
         self.p.terminate()
         self.p.communicate()
-        #self.p = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-        self.p = subprocess.Popen(cmd)
+        self.p = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         # TODO: App should resume from DB and give us back same number
-#        self.assertEqual(tcp_cmd(app_port, "GET"), "2")
+#        self.assertEqual(tcp_cmd(self.p, app_port, "GET"), "2")
         time.sleep(0.1)
         self.p.terminate()
         self.p.communicate()
