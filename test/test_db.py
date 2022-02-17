@@ -422,7 +422,8 @@ if __name__ == '__main__':
 
     allgood = True
     for i in range(args.repeat):
-        if not unittest.main(argv=[sys.argv[0]] + unknown, exit=False):
+        r = unittest.main(argv=[sys.argv[0]] + unknown, exit=False)
+        if len(r.result.errors) > 0 or len(r.result.failures) > 0:
             allgood = False
 
     if allgood:
