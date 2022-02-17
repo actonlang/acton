@@ -3,6 +3,22 @@
 ## Unreleased
 
 
+## [0.9.1] (2022-02-17)
+
+### Fixed
+- Fix ActonDB monitor interface initialization [#514]
+  - God knows how this ever worked, but it mostly did on Linux. Mac OS X really
+    exposed the errors together with the RTS not halting on DDB errors, which we
+    should address through [#431]
+- Serialize all manually constructed actors [#512]
+  - A new convenience function makes it easier to serialize all manually
+    constructed actors to the DB and it is used in various places so that all
+    currently known actors are serialized
+  - The better fix for most of these actors is probably to have CPS converted
+    init functions instead but that's some more code to write which is
+    cumbersome for manually defined actors
+
+
 ## [0.9.0] (2022-02-15)
 
 ### Added
