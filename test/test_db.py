@@ -351,9 +351,7 @@ class TestDbApps(unittest.TestCase):
         self.p.terminate()
         self.p.communicate()
         self.p = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-        # TODO: App should resume from DB and give us back same number
-#        self.assertEqual(tcp_cmd(self.p, app_port, "GET"), "2")
-        time.sleep(0.1)
+        self.assertEqual(tcp_cmd(self.p, app_port, "GET"), "2")
         self.p.terminate()
         self.p.communicate()
 
