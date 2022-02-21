@@ -36,6 +36,7 @@ dependencies:
 - hashable
 - process
 - temporary
+- unix
 
 executables:
   actonc:

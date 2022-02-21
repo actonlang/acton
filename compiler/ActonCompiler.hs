@@ -45,6 +45,7 @@ import System.IO.Temp
 import System.Info
 import System.Directory
 import System.Exit
+import System.Posix.Files
 import System.Process
 import System.FilePath.Posix
 import qualified System.Environment
@@ -67,6 +68,7 @@ data Args       = Args {
                     stub      :: Bool,
                     dev       :: Bool,
                     cpedantic :: Bool,
+                    tempdir   :: String,
                     syspath   :: String,
                     root      :: String,
                     file      :: String
@@ -92,6 +94,7 @@ getArgs ver     = infoOption (showVersion Paths_acton.version) (long "numeric-ve
                     <*> switch (long "stub"    <> help "Stub (.ty) file generation only")
                     <*> switch (long "dev"     <> help "Development mode; include debug symbols etc")
                     <*> switch (long "cpedantic"<> help "Pedantic C compilation with -Werror")
+                    <*> strOption (long "tempdir" <> metavar "TEMPDIR" <> value "" <> showDefault)
                     <*> strOption (long "syspath" <> metavar "TARGETDIR" <> value "" <> showDefault)
                     <*> strOption (long "root" <> value "" <> showDefault)
                     <*> argument str (metavar "FILE"))
@@ -152,6 +155,7 @@ data Paths      = Paths {
                     binDir      :: FilePath,
                     srcDir      :: FilePath,
                     isTmp       :: Bool,
+                    rmTmp       :: Bool,
                     fileExt     :: String,
                     modName     :: A.ModName
                   }
@@ -194,7 +198,7 @@ findPaths args          = do execDir <- takeDirectory <$> System.Environment.get
                              let sysTypes = joinPath [sysPath, "types"]
                              let sysLib = joinPath [sysPath, "lib"]
                              absSrcFile <- canonicalizePath (file args)
-                             (isTmp, projPath, dirInSrc) <- analyze (takeDirectory absSrcFile) []
+                             (isTmp, rmTmp, projPath, dirInSrc) <- analyze (takeDirectory absSrcFile) []
                              let sysTypes = joinPath [sysPath, "types"]
                                  sysLib  = joinPath [sysPath, "lib"]
                                  srcDir  = if isTmp then takeDirectory absSrcFile else joinPath [projPath, "src"]
@@ -208,17 +212,19 @@ findPaths args          = do execDir <- takeDirectory <$> System.Environment.get
                              touchDir projTypes
                              touchDir projLib
                              touchDirs projTypes modName
-                             return $ Paths sysPath sysTypes sysLib projPath projOut projTypes projLib binDir srcDir isTmp  fileExt modName
+                             return $ Paths sysPath sysTypes sysLib projPath projOut projTypes projLib binDir srcDir isTmp rmTmp fileExt modName
   where (fileBody,fileExt) = splitExtension $ takeFileName $ file args
 
-        analyze "/" ds  = do tmp <- createTempDirectory (joinPath ["/", "tmp"]) "actonc"
-                             return (True, tmp, [])
+        analyze "/" ds  = do let rmTmp = if (null $ tempdir args) then True else False
+                             tmp <- if (null $ tempdir args) then createTempDirectory (joinPath ["/", "tmp"]) "actonc" else canonicalizePath (tempdir args)
+                             touchDir tmp
+                             return (True, rmTmp, tmp, [])
         analyze pre ds  = do exists <- doesFileExist (joinPath [pre, "Acton.toml"])
                              if not exists 
                                 then analyze (takeDirectory pre) (takeFileName pre : ds)
                                 else do
                                     when (take 1 ds /= ["src"]) $ error ("************* Project source file is not in 'src' directory")
-                                    return $ (False, pre, drop 1 ds)
+                                    return $ (False, False, pre, drop 1 ds)
 
 data CompileTask        = ActonTask  {name :: A.ModName, src :: String, atree:: A.Module} deriving (Show)
 
@@ -236,7 +242,7 @@ chaseImportsAndCompile args paths task
                                      buildExecutable env1 args paths task
                                          `catch` handle "Compilation error" Acton.Env.compilationError (src task) paths (name task)
                                          `catch` handle "Type error" Acton.Types.typeError (src task) paths (name task)
-                                     when (isTmp paths) $ removeDirectoryRecursive (projPath paths)
+                                     when (rmTmp paths) $ removeDirectoryRecursive (projPath paths)
                                      return ()
                               else do error ("********************\nCyclic imports:"++concatMap showCycle cs)
                                       System.Exit.exitFailure
@@ -362,6 +368,7 @@ runRestPasses args paths env0 parsed = do
                               hFile = outbase ++ ".h"
                               oFile = joinPath [projLib paths, n++".o"]
                               aFile = joinPath [projLib paths, "libActonProject.a"]
+                              buildF = joinPath [projPath paths, "build.sh"]
                               ccCmd = ("cc " ++ pedantArg ++
                                        (if (dev args) then " -g " else "") ++
                                        " -c -I" ++ projOut paths ++
@@ -374,6 +381,7 @@ runRestPasses args paths env0 parsed = do
                           iff (ccmd args) $ do
                               putStrLn ccCmd
                               putStrLn arCmd
+                          writeFile buildF $ unlines ["#!/bin/sh", ccCmd, arCmd]
                           (_,_,_,hdl) <- createProcess (shell $ ccCmd ++ " && " ++ arCmd)
                           returnCode <- waitForProcess hdl
                           case returnCode of
@@ -387,7 +395,7 @@ runRestPasses args paths env0 parsed = do
 handle errKind f src paths mn ex = do putStrLn ("\n******************** " ++ errKind)
                                       putStrLn (Acton.Parser.makeReport (f ex) src)
                                       removeIfExists (outbase++".ty")
-                                      when (isTmp paths) $ removeDirectoryRecursive (projPath paths)
+                                      when (rmTmp paths) $ removeDirectoryRecursive (projPath paths)
                                       System.Exit.exitFailure
   where outbase        = outBase paths mn
         removeIfExists f = removeFile f `catch` handleExists
@@ -404,6 +412,8 @@ buildExecutable env args paths task
                                       writeFile rootFile c
                                       iff (ccmd args) $ do
                                           putStrLn ccCmd
+                                      appendFile buildF ccCmd
+                                      setFileMode buildF 0o755
                                       (_,_,_,hdl) <- createProcess (shell ccCmd)
                                       returnCode <- waitForProcess hdl
                                       case returnCode of
@@ -417,6 +427,7 @@ buildExecutable env args paths task
         mn                  = name task
         qn                  = A.GName mn n
         (sc,_)              = Acton.QuickType.schemaOf env (A.eQVar qn)
+        buildF              = joinPath [projPath paths, "build.sh"]
         outbase             = outBase paths mn
         rootFile            = outbase ++ ".root.c"
         libFilesBase        = " -lActonProject " ++ libActonArg ++ " -lActonDB -lprotobuf-c -lutf8proc -lpthread -lm"
