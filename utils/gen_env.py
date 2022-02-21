@@ -279,7 +279,7 @@ def gen_envc():
         if not skip:
             out.append(line)
 
-    write_file("builtin/env.c", "\n".join(out))
+    write_file("builtin/env.c", "\n".join(out) + "\n")
 
 
 def gen_envh():
@@ -306,7 +306,7 @@ def gen_envh():
             out.append(line)
 
 
-    write_file("builtin/env.h", "\n".join(out))
+    write_file("builtin/env.h", "\n".join(out) + "\n")
 
 
 def check_env(filename):
