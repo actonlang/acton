@@ -503,7 +503,7 @@ $R $l$10lambda$__call__ ($l$10lambda p$self, $Cont c$cont) {
     $Connection __self__ = p$self->__self__;
     $function cb1 = p$self->cb1;
     $function cb2 = p$self->cb2;
-    return __self__->$class->on_receipt$local(__self__, cb1, cb2, c$cont);
+    return __self__->$class->on_receive$local(__self__, cb1, cb2, c$cont);
 }
 void $l$10lambda$__serialize__ ($l$10lambda self, $Serial$state state) {
     $step_serialize(self->__self__, state);
@@ -862,7 +862,7 @@ $R $Connection$close$local ($Connection __self__, $Cont c$cont) {
     $init_FileDescriptorData(__self__->descriptor);
     return $R_CONT(c$cont, $None);
 }
-$R $Connection$on_receipt$local ($Connection __self__, $function cb1, $function cb2, $Cont c$cont) {
+$R $Connection$on_receive$local ($Connection __self__, $function cb1, $function cb2, $Cont c$cont) {
     fd_data[__self__->descriptor].kind = readhandler;
     fd_data[__self__->descriptor].rhandler = cb1;
     fd_data[__self__->descriptor].errhandler = cb2;
@@ -875,7 +875,7 @@ $Msg $Connection$write ($Connection __self__, $str s) {
 $Msg $Connection$close ($Connection __self__) {
     return $ASYNC((($Actor)__self__), (($Cont)$l$9lambda$new(__self__)));
 }
-$Msg $Connection$on_receipt ($Connection __self__, $function cb1, $function cb2) {
+$Msg $Connection$on_receive ($Connection __self__, $function cb1, $function cb2) {
     return $ASYNC((($Actor)__self__), (($Cont)$l$10lambda$new(__self__, cb1, cb2)));
 }
 void $Connection$__serialize__ ($Connection self, $Serial$state state) {
@@ -1171,10 +1171,10 @@ void $__init__ () {
         $Connection$methods.__init__ = $Connection$__init__;
         $Connection$methods.write$local = $Connection$write$local;
         $Connection$methods.close$local = $Connection$close$local;
-        $Connection$methods.on_receipt$local = $Connection$on_receipt$local;
+        $Connection$methods.on_receive$local = $Connection$on_receive$local;
         $Connection$methods.write = $Connection$write;
         $Connection$methods.close = $Connection$close;
-        $Connection$methods.on_receipt = $Connection$on_receipt;
+        $Connection$methods.on_receive = $Connection$on_receive;
         $Connection$methods.__serialize__ = $Connection$__serialize__;
         $Connection$methods.__deserialize__ = $Connection$__deserialize__;
         $register(&$Connection$methods);

@@ -420,10 +420,10 @@ struct $Connection$class {
     $str (*__str__) ($Connection);
     $R (*write$local) ($Connection, $str, $Cont);
     $R (*close$local) ($Connection, $Cont);
-    $R (*on_receipt$local) ($Connection, $function, $function, $Cont);
+    $R (*on_receive$local) ($Connection, $function, $function, $Cont);
     $Msg (*write) ($Connection, $str);
     $Msg (*close) ($Connection);
-    $Msg (*on_receipt) ($Connection, $function, $function);
+    $Msg (*on_receive) ($Connection, $function, $function);
 };
 struct $Connection {
     struct $Connection$class *$class;
