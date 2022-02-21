@@ -27,7 +27,7 @@ actor Tester(env, port):
         if conn is not None:
             print("Got connection")
             client = conn
-            conn.on_receipt(recv_handler, err_handler)
+            conn.on_receive(recv_handler, err_handler)
         else:
             raise Exception("Unable to bind")
 
