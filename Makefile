@@ -79,10 +79,10 @@ backend/actondb: backend/actondb.c lib/libActonDB.a
 		$(LDLIBS)
 
 backend/%.o: backend/%.c
-	$(CC) -o$@ $< -c $(CFLAGS)
+	$(CC) -g -o$@ $< -c $(CFLAGS)
 
 backend/failure_detector/%.o: backend/failure_detector/%.c
-	$(CC) -o$@ $< -c $(CFLAGS)
+	$(CC) -g -o$@ $< -c $(CFLAGS)
 
 # This target is just to override the above target and turn it into a NOP for
 # the protobuf files. We have the generated files committed to git, so this
