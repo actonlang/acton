@@ -1648,6 +1648,9 @@ int main(int argc, char **argv) {
     signal(SIGINT, sigint_handler);
     signal(SIGTERM, sigterm_handler);
 
+
+    pthread_key_create(&self_key, NULL);
+    pthread_setspecific(self_key, NULL);
     /*
      * A note on argument parsing: The RTS has its own command line arguments,
      * all prefixed with --rts-, which we need to parse out. The remainder of
@@ -1883,7 +1886,6 @@ int main(int argc, char **argv) {
         BOOTSTRAP(new_argc, new_argv);
     }
 
-    pthread_key_create(&self_key, NULL);
     cpu_set_t cpu_set;
 
     // RTS Monitor Log
