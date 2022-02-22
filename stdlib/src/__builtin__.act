@@ -617,8 +617,8 @@ actor WFile ():
     
     _abstract   : () -> None
 
-actor ListenSocket (cb_on_connection: action() -> None, cb_on_error: action() -> None):
-    cb_err = cb_on_error
+actor ListenSocket (on_connect: action() -> None, on_error: action() -> None):
+    cb_err = on_error
 
     close       : action() -> None
 
