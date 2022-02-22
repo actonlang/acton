@@ -83,7 +83,7 @@ def tcp_cmd(p, port, cmd, retries=100):
         res = s.recv(10)
         s.close()
         return res.decode("utf-8")
-    except ConnectionRefusedError as exc:
+    except (ConnectionRefusedError, ConnectionResetError) as exc:
         s.close()
         if retries == 0:
             raise exc
