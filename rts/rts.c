@@ -1641,12 +1641,6 @@ int main(int argc, char **argv) {
     // Do line buffered output
     setlinebuf(stdout);
 
-#if defined(IS_MACOS)
-    pthread_setname_np("main");
-#else
-    pthread_setname_np(pthread_self(), "main");
-#endif
-
     // Ignore SIGPIPE, like we get if the other end talking to us on the Monitor
     // socket (which is a Unix domain socket) goes away.
     signal(SIGPIPE, SIG_IGN);
