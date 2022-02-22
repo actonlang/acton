@@ -42,10 +42,6 @@ test_db_app_no_quorum:
 	#$(ACTONC) --root main test_db_app.act
 	#./test_db.py TestDbAppsNoQuorum
 
-test_db_app_recovery:
-	$(ACTONC) --root main test_db_recovery.act
-	./test_db.py TestDbApps.test_app_recovery
-
 test_db_app_tcp:
 	$(ACTONC) --root main --dev rts/ddb_test_server.act
 	./test_db.py TestDbApps.test_app_tcp_recovery
