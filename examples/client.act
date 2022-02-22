@@ -4,7 +4,7 @@ actor client(env):
     
     def session(conn):
         if conn is not None:
-           conn.on_receipt(env.stdout_write, env.stdout_write)
+           conn.on_receive(env.stdout_write, env.stdout_write)
            env.stdin_install(conn.write)
         else:
            print("couldn't connect to",env.argv[1])
