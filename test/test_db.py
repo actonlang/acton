@@ -338,52 +338,6 @@ class TestDbApps(unittest.TestCase):
         self.assertEqual(self.p.returncode, 0)
 
 
-    def test_app_recovery(self):
-        cmd = ["./test_db_recovery", "--rts-verbose",
-               "--rts-ddb-replication", str(self.replication_factor)
-               ] + get_db_args(self.dbc.base_port, self.replication_factor)
-        log = logging.getLogger()
-
-        def so1(line, p, s):
-            log.info(f"App output: {line}")
-            m = re.match("COUNT: (\d+)", line)
-            if m:
-                log.debug(f"Got count: {m.group(1)}")
-                if int(m.group(1)) != s["i"]:
-                    raise ValueError(f"Unexpected output from app, got {line} but expected {i}")
-                if s["i"] == 3:
-                    log.debug("Waiting somewhat")
-                    time.sleep(0.1)
-                    log.debug("Killing application")
-                    p.terminate()
-                s["i"] += 1
-
-            return False
-
-        def so2(line, p, s):
-            log.info(f"App output: {line}")
-            m = re.match("COUNT: (\d+)", line)
-            if m:
-                log.debug(f"Got count: {m.group(1)}")
-                if int(m.group(1)) == s["i"]:
-                    log.info(f"App resumed perfectly at {s['i']}")
-                elif int(m.group(1)) == s["i"]-1:
-                    log.info(f"Got higher than {s['i']-1}, deemed ok but seems we failed to snapshot last count?")
-                else:
-                    raise ValueError(f"Unexpected output from app, got {line} but expected {s['i']}")
-                s["i"] += 1
-            return False
-
-        state = {
-            "i": 1
-        }
-
-        p, s = run_cmd(cmd, so1, stderr_checker, state=state)
-        p, s = run_cmd(cmd, so2, stderr_checker, state=state)
-
-        self.assertEqual(p.returncode, 0)
-
-
     def test_app_tcp_recovery(self):
         app_port = self.dbc.base_port+199
         cmd = ["./rts/ddb_test_server", str(app_port), "--rts-verbose",
