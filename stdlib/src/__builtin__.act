@@ -581,7 +581,7 @@ actor Env (args):
     def stdout_write(s): pass
     def stdin_install(cb): pass
     def connect(host,port,cb): pass
-    def listen(port, cb_on_connect, cb_on_error): pass
+    def listen(port, on_connect, on_error): pass
     def exit(n): pass
     def openR(nm): pass
     def openW(nm): pass
