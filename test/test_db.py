@@ -25,6 +25,8 @@ class MonOtherError(Exception):
 class TcpCmdError(Exception):
     pass
 
+class TcpCmdNoResponse(Exception):
+    pass
 
 def get_db_args(base_port, replication_factor):
     return [item for sublist in map(lambda x: ("--rts-ddb-host", x), [f"127.0.0.1:{base_port+idx}" for idx in range(replication_factor)]) for item in sublist]
@@ -75,19 +77,25 @@ def mon_cmd(address, cmd, retries=5):
 
 def tcp_cmd(p, port, cmd, retries=100):
     if p.poll() is not None:
-        raise TcpCmdError(f"Process is dead, returncode: {p.returncode}  stdout: {p.stdout.read()}  stderr: {p.stderr.read()}")
+        raise TcpCmdError(f"Process is dead, returncode: {p.returncode}  stdout: {p.stdout and p.stdout.read()}  stderr: {p.stderr and p.stderr.read()}")
     s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     try:
         s.connect(("localhost", port))
         s.send(cmd.encode("UTF-8"))
         res = s.recv(10)
+        if res == b"":
+            print("Weird, got no response from server, retrying...")
+            raise TcpCmdNoResponse()
         s.close()
         return res.decode("utf-8")
-    except (ConnectionRefusedError, ConnectionResetError) as exc:
+    except (ConnectionRefusedError, ConnectionResetError, TcpCmdNoResponse) as exc:
         s.close()
         if retries == 0:
             raise exc
-        time.sleep(0.01)
+        st = (101-retries)*0.01
+        if retries < 90:
+            print(f"Sleeping {st} before next attempt...")
+        time.sleep(st)
         return tcp_cmd(p, port, cmd, retries-1)
 
 
