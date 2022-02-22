@@ -1037,7 +1037,7 @@ void deserialize_system(snode_t *actors_start) {
         act->$class->__resume__(act);
     }
 
-    rtsd_printf(LOGPFX "\n#### Reading timer queue contents:\n");
+    rtsd_printf(LOGPFX "#### Reading timer queue contents:\n");
     time_t now = current_time();
     queue_callback * qc = get_queue_callback(dummy_callback);
 	int64_t prev_read_head = -1, prev_consume_head = -1;
