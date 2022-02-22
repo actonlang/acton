@@ -48,6 +48,7 @@ struct $l$12lambda;
 struct $l$13lambda;
 struct $l$14lambda;
 struct $l$15lambda;
+struct $l$16lambda;
 struct $Env;
 struct $Connection;
 struct $RFile;
@@ -68,6 +69,7 @@ typedef struct $l$12lambda *$l$12lambda;
 typedef struct $l$13lambda *$l$13lambda;
 typedef struct $l$14lambda *$l$14lambda;
 typedef struct $l$15lambda *$l$15lambda;
+typedef struct $l$16lambda *$l$16lambda;
 typedef struct $Env *$Env;
 typedef struct $Connection *$Connection;
 typedef struct $RFile *$RFile;
@@ -302,7 +304,7 @@ struct $l$15lambda$class {
     char *$GCINFO;
     int $class_id;
     $Super$class $superclass;
-    $NoneType (*__init__) ($l$15lambda, $ListenSocket);
+    $NoneType (*__init__) ($l$15lambda, $function);
     void (*__serialize__) ($l$15lambda, $Serial$state);
     $l$15lambda (*__deserialize__) ($l$15lambda, $Serial$state);
     $bool (*__bool__) ($l$15lambda);
@@ -311,6 +313,21 @@ struct $l$15lambda$class {
 };
 struct $l$15lambda {
     struct $l$15lambda$class *$class;
+    $function cb_on_error;
+};
+struct $l$16lambda$class {
+    char *$GCINFO;
+    int $class_id;
+    $Super$class $superclass;
+    $NoneType (*__init__) ($l$16lambda, $ListenSocket);
+    void (*__serialize__) ($l$16lambda, $Serial$state);
+    $l$16lambda (*__deserialize__) ($l$16lambda, $Serial$state);
+    $bool (*__bool__) ($l$16lambda);
+    $str (*__str__) ($l$16lambda);
+    $R (*__call__) ($l$16lambda, $Cont);
+};
+struct $l$16lambda {
+    struct $l$16lambda$class *$class;
     $ListenSocket __self__;
 };
 extern struct $l$1lambda$class $l$1lambda$methods;
@@ -342,7 +359,9 @@ $l$13lambda $l$13lambda$new($WFile, $str);
 extern struct $l$14lambda$class $l$14lambda$methods;
 $l$14lambda $l$14lambda$new($WFile);
 extern struct $l$15lambda$class $l$15lambda$methods;
-$l$15lambda $l$15lambda$new($ListenSocket);
+$l$15lambda $l$15lambda$new($function);
+extern struct $l$16lambda$class $l$16lambda$methods;
+$l$16lambda $l$16lambda$new($ListenSocket);
 // END GENERATED __builtin__.act
 ///////////////////////////////////////////////////////////////////////////////////////////
 
