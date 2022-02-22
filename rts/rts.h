@@ -96,6 +96,7 @@ struct $Actor$class {
     $Actor (*__deserialize__)($Actor, $Serial$state);
     $bool (*__bool__)($Actor);
     $str (*__str__)($Actor);
+    $NoneType (*__resume__)($Actor);
 };
 struct $Actor {
     struct $Actor$class *$class;

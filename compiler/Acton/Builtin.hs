@@ -38,6 +38,7 @@ appendKW                            = name "append"
 callKW                              = name "__call__"
 boolKW                              = name "__bool__"
 strKW                               = name "__str__"
+resumeKW                            = name "__resume__"
 
 valueKWs                            = [boolKW, strKW]
 
