@@ -1,5 +1,6 @@
 actor Tester(env, port):
     var client = None
+    var lsock = None
     var i = 0
 
     def init_listen():
@@ -31,10 +32,10 @@ actor Tester(env, port):
         else:
             raise Exception("Unable to bind")
 
-    var lsock = init_listen()
+    lsock = init_listen()
 
 
 actor main(env):
     port = int(env.argv[1])
-
+    var t = None
     t = Tester(env, port)

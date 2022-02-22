@@ -47,7 +47,7 @@ test_db_app_recovery:
 	./test_db.py TestDbApps.test_app_recovery
 
 test_db_app_tcp:
-	$(ACTONC) --root main rts/ddb_test_server.act
+	$(ACTONC) --root main --dev rts/ddb_test_server.act
 	./test_db.py TestDbApps.test_app_tcp_recovery
 
 
