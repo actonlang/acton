@@ -1,10 +1,11 @@
-actor server(env):
+actor main(env):
 
-    def session(conn):
-        if conn is not None:
-            conn.on_receive(conn.write, env.stdout_write)
-        else:
-            print("couldn't establish listening")
-            env.exit(0)
+    def connect_handler(conn):
+        print("Got a connection...")
+        conn.on_receive(conn.write, env.stdout_write)
 
-    env.listen(12345,session)
+    def err_handler():
+        print("An error occurred trying to establish listening socket")
+        env.exit(1)
+
+    env.listen(12345, connect_handler, err_handler)
