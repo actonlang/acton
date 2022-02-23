@@ -140,8 +140,8 @@ struct $l$4lambda {
     struct $l$4lambda$class *$class;
     $Env __self__;
     $int port;
-    $function cb_on_connect;
-    $function cb_on_error;
+    $function on_connect;
+    $function on_error;
 };
 struct $l$5lambda$class {
     char *$GCINFO;
@@ -313,7 +313,7 @@ struct $l$15lambda$class {
 };
 struct $l$15lambda {
     struct $l$15lambda$class *$class;
-    $function cb_on_error;
+    $function on_error;
 };
 struct $l$16lambda$class {
     char *$GCINFO;
@@ -407,7 +407,7 @@ struct $ListenSocket$class {
     char *$GCINFO;
     int $class_id;
     $Super$class $superclass;
-    $NoneType (*__init__) ($ListenSocket, int fd, $function cb_on_error);
+    $NoneType (*__init__) ($ListenSocket, int fd, $function on_error);
     void (*__serialize__) ($ListenSocket, $Serial$state);
     $ListenSocket (*__deserialize__) ($ListenSocket, $Serial$state);
     $bool (*__bool__) ($ListenSocket);
