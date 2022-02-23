@@ -1362,7 +1362,7 @@ void *$eventloop(void *arg) {
                     count = read(fd,&fd_data[fd].buffer,BUF_SIZE);
                     if (count < BUF_SIZE)
                         fd_data[fd].buffer[count] = 0;
-                    fd_data[fd].rhandler->$class->__call__(fd_data[fd].rhandler,to$str(fd_data[fd].buffer));
+                    fd_data[fd].rhandler->$class->__call__(fd_data[fd].rhandler, fd_data[fd].conn, to$str(fd_data[fd].buffer));
                 } else {
                     fprintf(stderr,"internal error: readhandler/event filter mismatch on descriptor %d\n",fd);
                     exit(-1);
