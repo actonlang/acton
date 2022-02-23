@@ -24,13 +24,10 @@ actor Tester(env, port):
     def err_handler(msg):
         pass
 
-    def connect_handler(conn):
-        if conn is not None:
-            print("Got connection")
-            client = conn
-            conn.on_receive(recv_handler, err_handler)
-        else:
-            raise Exception("Unable to bind")
+    def connect_handler(conn : Connection):
+        print("Got connection")
+        client = conn
+        conn.on_receive(recv_handler, err_handler)
 
     lsock = init_listen()
 
