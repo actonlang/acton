@@ -741,6 +741,23 @@ $Msg $Env$openR ($Env __self__, $str nm) {
 $Msg $Env$openW ($Env __self__, $str nm) {
     return $ASYNC((($Actor)__self__), (($Cont)$l$7lambda$new((($Env)__self__), nm)));
 }
+void $Connection$__serialize__ ($Connection self, $Serial$state state) {
+    $Actor$methods.__serialize__(($Actor)self, state);
+    $step_serialize(self->cb_err, state);
+}
+$Connection $Connection$__deserialize__ ($Connection self, $Serial$state state) {
+    if (!self) {
+        if (!state) {
+            self = malloc(sizeof(struct $Connection));
+            self->$class = &$Connection$methods;
+            return self;
+        }
+        self = $DNEW($Connection, state);
+    }
+    $Actor$methods.__deserialize__(($Actor)self, state);
+    self->cb_err = $step_deserialize(state);
+    return self;
+}
 $Msg $RFile$readln ($RFile __self__) {
     return $ASYNC((($Actor)__self__), (($Cont)$l$11lambda$new((($RFile)__self__))));
 }
@@ -885,6 +902,13 @@ struct $Env$class $Env$methods;
 
 $NoneType $Connection$__init__ ($Connection __self__, int descr) {
     __self__->descriptor = descr;
+    __self__->cb_err = NULL;
+    return $None;
+}
+$NoneType $Connection$__resume__($Connection self) {
+    printf("$Connection$__resume__\n");
+    if (self->cb_err)
+        self->cb_err->$class->__call__(self->cb_err);
     return $None;
 }
 $R $Connection$write$local ($Connection __self__, $str s, $Cont c$cont) {
@@ -900,6 +924,7 @@ $R $Connection$close$local ($Connection __self__, $Cont c$cont) {
     return $R_CONT(c$cont, $None);
 }
 $R $Connection$on_receive$local ($Connection __self__, $function cb1, $function cb2, $Cont c$cont) {
+    __self__->cb_err = cb2;
     fd_data[__self__->descriptor].kind = readhandler;
     fd_data[__self__->descriptor].rhandler = cb1;
     fd_data[__self__->descriptor].errhandler = cb2;
@@ -914,21 +939,6 @@ $Msg $Connection$close ($Connection __self__) {
 }
 $Msg $Connection$on_receive ($Connection __self__, $function cb1, $function cb2) {
     return $ASYNC((($Actor)__self__), (($Cont)$l$10lambda$new(__self__, cb1, cb2)));
-}
-void $Connection$__serialize__ ($Connection self, $Serial$state state) {
-    $Actor$methods.__serialize__(($Actor)self, state);
-}
-$Connection $Connection$__deserialize__ ($Connection self, $Serial$state state) {
-    if (!self) {
-        if (!state) {
-            self = malloc(sizeof(struct $Connection));
-            self->$class = &$Connection$methods;
-            return self;
-        }
-        self = $DNEW($Connection, state);
-    }
-    $Actor$methods.__deserialize__(($Actor)self, state);
-    return self;
 }
 $Connection $Connection$newact(int descr) {
     $Connection $tmp = $NEWACTOR($Connection);
@@ -1219,7 +1229,7 @@ void $__init__ () {
         $Connection$methods.$superclass = ($Super$class)&$Actor$methods;
         $Connection$methods.__bool__ = ($bool (*) ($Connection))$Actor$methods.__bool__;
         $Connection$methods.__str__ = ($str (*) ($Connection))$Actor$methods.__str__;
-        $Connection$methods.__resume__ = ($NoneType (*) ($Connection))$Actor$methods.__resume__;
+        $Connection$methods.__resume__ = ($NoneType (*) ($Connection))$Connection$__resume__;
         $Connection$methods.__init__ = $Connection$__init__;
         $Connection$methods.write$local = $Connection$write$local;
         $Connection$methods.close$local = $Connection$close$local;
