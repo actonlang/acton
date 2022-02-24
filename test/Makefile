@@ -46,6 +46,11 @@ test_db_app_resume_tcp_server:
 	$(ACTONC) --root main --dev rts/ddb_test_server.act
 	./test_db.py TestDbApps.test_app_resume_tcp_server
 
+test_db_app_resume_tcp_client:
+	$(ACTONC) --root main --dev rts/ddb_test_server.act
+	$(ACTONC) --root main --dev rts/ddb_test_client.act
+	./test_db.py TestDbApps.test_app_resume_tcp_client
+
 
 # -- RTS --
 RTS_TESTS = rts/argv1 rts/argv2 rts/argv3 rts/exit_0 rts/exit_1
