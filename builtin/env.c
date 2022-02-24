@@ -114,6 +114,11 @@ void EVENT_del_read(int fd) {
     fd_data[fd].event_spec.data.fd = fd;
     epoll_ctl(ep, EPOLL_CTL_DEL, fd, &fd_data[fd].event_spec);
 }
+void EVENT_del_write_once(int fd) {
+    fd_data[fd].event_spec.events = EPOLLOUT | EPOLLRDHUP | EPOLLONESHOT;
+    fd_data[fd].event_spec.data.fd = fd;
+    epoll_ctl(ep, EPOLL_CTL_DEL, fd, &fd_data[fd].event_spec);
+}
 int EVENT_wait(EVENT_type *ev, struct timespec *timeout) {
     int msec = timeout ? timeout->tv_sec * 1000 + timeout->tv_nsec / 1000000 : -1;
     return epoll_wait(ep, ev, 1, msec);
@@ -1354,6 +1359,10 @@ void *$eventloop(void *arg) {
                       printf("%s %s\n","Connection from",$getName(fd2)->str);
                     }
                 } else { // we are a client and a delayed connection attempt has succeeded
+#ifdef IS_GNU_LINUX
+                    // Need to clear write bit in epoll
+                    EVENT_del_write_once(fd);
+#endif
                     setupConnection(fd);
                 }
                 break;
