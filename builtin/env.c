@@ -18,6 +18,7 @@
 #endif
 #endif
 
+#include <assert.h>
 #include "env.h"
 
 struct FileDescriptorData fd_data[MAX_FD];
@@ -32,27 +33,33 @@ void EVENT_init() {
     kq = kqueue();
     struct kevent wakeup;
     EV_SET(&wakeup, wakeup_pipe[0], EVFILT_READ, EV_ADD, 0, 0, NULL);
-    kevent(kq, &wakeup, 1, NULL, 0, NULL);
+    int r = kevent(kq, &wakeup, 1, NULL, 0, NULL);
+    assert(r == 0);
 }
 void EVENT_add_read(int fd) {
     EV_SET(&fd_data[fd].event_spec, fd, EVFILT_READ, EV_ADD, 0, 0, NULL);
-    kevent(kq, &fd_data[fd].event_spec, 1, NULL, 0, NULL);
+    int r = kevent(kq, &fd_data[fd].event_spec, 1, NULL, 0, NULL);
+    assert(r == 0);
 }
 void EVENT_add_read_once(int fd) {
     EV_SET(&fd_data[fd].event_spec, fd, EVFILT_READ, EV_ADD | EV_ONESHOT, 0, 0, NULL);
-    kevent(kq, &fd_data[fd].event_spec, 1, NULL, 0, NULL);
+    int r = kevent(kq, &fd_data[fd].event_spec, 1, NULL, 0, NULL);
+    assert(r == 0);
 }
 void EVENT_mod_read_once(int fd) {
     EV_SET(&fd_data[fd].event_spec, fd, EVFILT_READ, EV_ADD | EV_ONESHOT, 0, 0, NULL);
-    kevent(kq, &fd_data[fd].event_spec, 1, NULL, 0, NULL);
+    int r = kevent(kq, &fd_data[fd].event_spec, 1, NULL, 0, NULL);
+    assert(r == 0);
 }
 void EVENT_add_write_once(int fd) {
     EV_SET(&fd_data[fd].event_spec, fd, EVFILT_WRITE, EV_ADD | EV_ONESHOT, 0, 0, NULL);
-    kevent(kq, &fd_data[fd].event_spec, 1, NULL, 0, NULL);
+    int r = kevent(kq, &fd_data[fd].event_spec, 1, NULL, 0, NULL);
+    assert(r == 0);
 }
 void EVENT_del_read(int fd) {
     EV_SET(&fd_data[fd].event_spec, fd, EVFILT_READ, EV_DISABLE, 0, 0, NULL);
-    kevent(kq, &fd_data[fd].event_spec, 1, NULL, 0, NULL);
+    int r = kevent(kq, &fd_data[fd].event_spec, 1, NULL, 0, NULL);
+    assert(r == 0);
 }
 int EVENT_wait(EVENT_type *ev, struct timespec *timeout) {
     return kevent(kq, NULL, 0, ev, 1, timeout);
@@ -92,27 +99,32 @@ void EVENT_init() {
 void EVENT_add_read(int fd) {
     fd_data[fd].event_spec.events = EPOLLIN | EPOLLRDHUP;
     fd_data[fd].event_spec.data.fd = fd;
-    epoll_ctl(ep, EPOLL_CTL_ADD, fd, &fd_data[fd].event_spec);
+    int r = epoll_ctl(ep, EPOLL_CTL_ADD, fd, &fd_data[fd].event_spec);
+    assert(r == 0);
 }
 void EVENT_add_read_once(int fd) {
     fd_data[fd].event_spec.events = EPOLLIN | EPOLLRDHUP | EPOLLONESHOT;
     fd_data[fd].event_spec.data.fd = fd;
-    epoll_ctl(ep, EPOLL_CTL_ADD, fd, &fd_data[fd].event_spec);
+    int r = epoll_ctl(ep, EPOLL_CTL_ADD, fd, &fd_data[fd].event_spec);
+    assert(r == 0);
 }
 void EVENT_mod_read_once(int fd) {
     fd_data[fd].event_spec.events = EPOLLIN | EPOLLRDHUP | EPOLLONESHOT;
     fd_data[fd].event_spec.data.fd = fd;
-    epoll_ctl(ep, EPOLL_CTL_MOD, fd, &fd_data[fd].event_spec);
+    int r = epoll_ctl(ep, EPOLL_CTL_MOD, fd, &fd_data[fd].event_spec);
+    assert(r == 0);
 }
 void EVENT_add_write_once(int fd) {
     fd_data[fd].event_spec.events = EPOLLOUT | EPOLLRDHUP | EPOLLONESHOT;
     fd_data[fd].event_spec.data.fd = fd;
-    epoll_ctl(ep, EPOLL_CTL_ADD, fd, &fd_data[fd].event_spec);
+    int r = epoll_ctl(ep, EPOLL_CTL_ADD, fd, &fd_data[fd].event_spec);
+    assert(r == 0);
 }
 void EVENT_del_read(int fd) {
     fd_data[fd].event_spec.events = EPOLLIN;
     fd_data[fd].event_spec.data.fd = fd;
-    epoll_ctl(ep, EPOLL_CTL_DEL, fd, &fd_data[fd].event_spec);
+    int r = epoll_ctl(ep, EPOLL_CTL_DEL, fd, &fd_data[fd].event_spec);
+    assert(r == 0);
 }
 int EVENT_wait(EVENT_type *ev, struct timespec *timeout) {
     int msec = timeout ? timeout->tv_sec * 1000 + timeout->tv_nsec / 1000000 : -1;
