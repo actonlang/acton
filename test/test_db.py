@@ -346,7 +346,7 @@ class TestDbApps(unittest.TestCase):
         self.assertEqual(self.p.returncode, 0)
 
 
-    def test_app_tcp_recovery(self):
+    def test_app_resume_tcp_server(self):
         app_port = self.dbc.base_port+199
         cmd = ["./rts/ddb_test_server", str(app_port), "--rts-verbose",
                "--rts-ddb-replication", str(self.replication_factor)
@@ -354,12 +354,11 @@ class TestDbApps(unittest.TestCase):
         self.p = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         self.assertEqual(tcp_cmd(self.p, app_port, "GET"), "0")
         tcp_cmd(self.p, app_port, "INC")
-        tcp_cmd(self.p, app_port, "INC")
-        self.assertEqual(tcp_cmd(self.p, app_port, "GET"), "2")
+        self.assertEqual(tcp_cmd(self.p, app_port, "GET"), "1")
         self.p.terminate()
         self.p.communicate()
         self.p = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-        self.assertEqual(tcp_cmd(self.p, app_port, "GET"), "2")
+        self.assertEqual(tcp_cmd(self.p, app_port, "GET"), "1")
         self.p.terminate()
         self.p.communicate()
 

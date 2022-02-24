@@ -27,7 +27,7 @@ env/listen_err:
 ddb-tests:
 	$(MAKE) $(DDB_TESTS)
 
-DDB_TESTS=test_db_app test_db_app_no_quorum test_db_app_recovery test_db_app_tcp
+DDB_TESTS=test_db_app test_db_app_no_quorum test_db_app_recovery test_db_app_resume_tcp_server
 .PHONY: $(DDB_TESTS)
 
 # Starts up a database cluster, checks membership is ok before proceeding to run
@@ -42,9 +42,9 @@ test_db_app_no_quorum:
 	#$(ACTONC) --root main test_db_app.act
 	#./test_db.py TestDbAppsNoQuorum
 
-test_db_app_tcp:
+test_db_app_resume_tcp_server:
 	$(ACTONC) --root main --dev rts/ddb_test_server.act
-	./test_db.py TestDbApps.test_app_tcp_recovery
+	./test_db.py TestDbApps.test_app_resume_tcp_server
 
 
 # -- RTS --
