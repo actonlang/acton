@@ -318,6 +318,7 @@ class TestDbApps(unittest.TestCase):
     replication_factor = 3
     dbc = None
     p = None
+    p2 = None
 
     def setUp(self):
         self.dbc = DbCluster(self.replication_factor)
@@ -328,6 +329,12 @@ class TestDbApps(unittest.TestCase):
             try:
                 self.p.kill()
                 self.p.wait()
+            except:
+                pass
+        if self.p2:
+            try:
+                self.p2.kill()
+                self.p2.wait()
             except:
                 pass
         self.dbc.stop()
@@ -361,6 +368,26 @@ class TestDbApps(unittest.TestCase):
         self.assertEqual(tcp_cmd(self.p, app_port, "GET"), "1")
         self.p.terminate()
         self.p.communicate()
+
+
+    def test_app_resume_tcp_client(self):
+        app_port = self.dbc.base_port+199
+        # Start TCP server
+        srv_cmd = ["./rts/ddb_test_server", str(app_port)]
+        self.p2 = subprocess.Popen(srv_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+
+        cmd = ["./rts/ddb_test_client", str(app_port), "--rts-verbose",
+               "--rts-ddb-replication", str(self.replication_factor)
+               ] + get_db_args(self.dbc.base_port, self.replication_factor)
+         # TODO: enable this when Connection calls error cb on resume
+#        self.p = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+#        time.sleep(0.1)
+#        self.p.terminate()
+
+        tcp_cmd(self.p2, app_port, "INC")
+
+        self.p = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=1)
+        self.assertEqual(self.p.returncode, 0)
 
 
 
