@@ -591,7 +591,7 @@ actor Env (args):
 actor Connection ():
     write       : action(str) -> None
     close       : action() -> None
-    on_receive  : action(action(str)->None, action(str)->None) -> None
+    on_receive  : action(action(Connection, str)->None, action(str)->None) -> None
 
     def write(s): pass
     def close() : pass

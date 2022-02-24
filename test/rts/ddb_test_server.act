@@ -1,5 +1,4 @@
 actor Tester(env, port):
-    var client = None
     var lsock = None
     var i = 0
 
@@ -11,22 +10,19 @@ actor Tester(env, port):
         print("Error with our listening socket, attempting to re-establish listening socket")
         lsock = init_listen()
 
-    def recv_handler(msg):
-        print("RECV", msg)
+    def recv_handler(conn, msg):
+        print("RECV", conn, msg)
         if msg == "GET":
-            if client is not None:
-                client.write(str(i))
+            conn.write(str(i))
         if msg == "INC":
             i += 1
-            if client is not None:
-                client.write("OK")
+            conn.write("OK")
 
     def err_handler(msg):
         pass
 
     def connect_handler(conn : Connection):
         print("Got connection")
-        client = conn
         conn.on_receive(recv_handler, err_handler)
 
     lsock = init_listen()
