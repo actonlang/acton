@@ -380,13 +380,14 @@ class TestDbApps(unittest.TestCase):
                "--rts-ddb-replication", str(self.replication_factor)
                ] + get_db_args(self.dbc.base_port, self.replication_factor)
          # TODO: enable this when Connection calls error cb on resume
-#        self.p = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-#        time.sleep(0.1)
-#        self.p.terminate()
+        self.p = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        time.sleep(0.1)
+        self.p.terminate()
 
         tcp_cmd(self.p2, app_port, "INC")
 
-        self.p = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=1)
+        #self.p = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=1)
+        self.p = subprocess.run(cmd, timeout=1)
         self.assertEqual(self.p.returncode, 0)
 
 

@@ -588,7 +588,9 @@ actor Env (args):
 
     _abstract   : () -> None
 
-actor Connection ():
+actor Connection (on_error):
+    cb_err = on_error
+
     write       : action(str) -> None
     close       : action() -> None
     on_receive  : action(action(Connection, str)->None, action(str)->None) -> None

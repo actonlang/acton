@@ -458,6 +458,7 @@ struct $Connection {
     $Lock $msg_lock;
     $long $globkey;
     int descriptor;
+    $function cb_err;
 };
 
 struct $RFile$class {
