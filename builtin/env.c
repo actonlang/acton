@@ -900,6 +900,9 @@ $Env $Env$newact($list p$1) {
 }
 struct $Env$class $Env$methods;
 
+
+// Connection //////////////////////////////////////////////////////////////////
+
 $NoneType $Connection$__init__ ($Connection __self__, int descr) {
     __self__->descriptor = descr;
     __self__->cb_err = NULL;
@@ -947,6 +950,7 @@ $Connection $Connection$newact(int descr) {
     return $tmp;
 }
 struct $Connection$class $Connection$methods;
+
 
 // ListenSocket ////////////////////////////////////////////////////////////////
 
@@ -1015,6 +1019,10 @@ $NoneType $WFile$__init__ ($WFile __self__, int descr) {
     __self__->descriptor = descr;
     return $None;
 }
+
+
+// WFile ///////////////////////////////////////////////////////////////////////
+
 $R $WFile$write$local ($WFile __self__, $str s, $Cont c$cont) {
     memcpy(fd_data[__self__->descriptor].buffer,s->str,s->nbytes+1);
     int chunk_size = s->nbytes > BUF_SIZE ? BUF_SIZE : s->nbytes; 
@@ -1049,6 +1057,8 @@ $WFile $WFile$newact(int descr) {
     return $tmp;
 }
 struct $WFile$class $WFile$methods;
+
+
 int $done$ = 0;
 void $__init__ () {
     if ($done$) return;

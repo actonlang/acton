@@ -2,6 +2,71 @@
 
 ## Unreleased
 
+### Added
+- actors now have a `__resume__` function that is called by the RTS just after
+  actors have been deserialized from the database [#517]
+  - This is effectively a generic hook point that can be used by certain actor
+    implementations to run code when being resumed from the database
+- ListenSocket supports resumption [#529]
+  - We cannot restore the previous state of a listening socket since that fd and
+    all its associated resources in the kernel etc are gone.
+  - The next best thing we can do is tell the application, through the error
+    callback, that there is an error with the listen socket and it is then up to
+    the application to retry, effectively attempting to listen again
+- Connection now supports resumption [#546]
+  - Similar to ListenSocket, so that upon resumption we invoke the registered
+    error handler so that the application can reconnect
+  - Unlike ListenSocket, the error callback must first be registered through
+    `on_receive` on the `Connection`
+  - What's neat is that any application that attempts to handle reconnects will
+    also automatically have code for dealing with Acton based actor migration
+    and recovery!!!
+- `actonc` now takes `--tempdir` option to write intermediate output (generated
+  C) to instead of randomly generated directory, which also means the specified
+  directory is kept and not deleted on exit [#516]
+  - in the generated directory, there is a `build.sh` file that contains the
+    same commands that `actonc` would use to produce the final binary output
+    from the source files
+
+### Changed
+- `on_receipt` is now called `on_receive` on `Connection` [#522]
+- `on_connection` is now called `on_connect` on `env.listen` [#535]
+- The main program thread is no longer named `main` [#528]
+  - The thread name is reported in various tools like top and ps or when there
+    is no thread name, the process name is used
+  - The process name is more unique than the main thread name (always "main"),
+    so we prefer to use the process name
+
+### Fixed
+- Initialize `pthread_getspecific` to `NULL` value [#529]
+  - Avoids segfault, in particular on MacOS
+- `on_connect` callback is now always handed a connection argument [#538]
+  - Every since we split out the error handler this was really the case but the
+    function signature indicated that it was maybe a Connection and so all
+    application code had to be written defensively, checking if the argument was
+    None
+  - It will never be None and the signature now matches that so application code
+    can be written more cleanly
+- Fix TCP client connection on Linux with epoll [#542]
+  - Ever since we started supporting epoll natively on Linux, rather than the
+    libkqueue shim layer, we have had this regression where TCP client
+    connections do not work
+  - We registered the same fd with different filters in epoll which resulted in
+    an error. It's now fixed by first clearing older flags before
+    re-registering the fd.
+- ActonDB and DDB libraries are now compiled with debug flags [#529]
+  - Unlike other parts of RTS that are compiled with debug flags when `actonc
+    --dev` is used, we don't have the same possibility of conditional
+    compilation here, so meanwhile the DDB things will now always include debug
+    flags
+
+
+### Testing / CI
+- Correct DB test so that the return value is actually inspected [#518]
+- Generated files now come with newline [#521]
+- Work around current issues with serialization of uninitialized values [#518]
+- Remove old RTS DDB test [#530]
+
 
 ## [0.9.1] (2022-02-17)
 
@@ -851,6 +916,18 @@ then, this second incarnation has been in focus and 0.2.0 was its first version.
 [#504]: https://github.com/actonlang/acton/pull/504
 [#506]: https://github.com/actonlang/acton/pull/506
 [#509]: https://github.com/actonlang/acton/pull/509
+[#516]: https://github.com/actonlang/acton/pull/516
+[#517]: https://github.com/actonlang/acton/pull/517
+[#518]: https://github.com/actonlang/acton/pull/518
+[#521]: https://github.com/actonlang/acton/pull/521
+[#522]: https://github.com/actonlang/acton/pull/522
+[#528]: https://github.com/actonlang/acton/pull/528
+[#529]: https://github.com/actonlang/acton/pull/529
+[#530]: https://github.com/actonlang/acton/pull/530
+[#535]: https://github.com/actonlang/acton/pull/535
+[#538]: https://github.com/actonlang/acton/pull/538
+[#542]: https://github.com/actonlang/acton/pull/542
+[#546]: https://github.com/actonlang/acton/pull/546
 [0.3.0]: https://github.com/actonlang/acton/releases/tag/v0.3.0
 [0.4.0]: https://github.com/actonlang/acton/compare/v0.3.0...v0.4.0
 [0.4.1]: https://github.com/actonlang/acton/compare/v0.4.0...v0.4.1
