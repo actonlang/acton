@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+
+## [0.10.0] (2022-02-25)
+
 ### Added
 - actors now have a `__resume__` function that is called by the RTS just after
   actors have been deserialized from the database [#517]
