@@ -3,7 +3,7 @@ actor main(env):
         print("Not expecting any connection on socket1... fail :/")
         await async env.exit(1)
 
-    def err_handler():
+    def err_handler(lsock):
         print("Some socket error occurred on socket1, not supposed to happen..")
         await async env.exit(1)
 
@@ -11,7 +11,7 @@ actor main(env):
         print("We should not end up here...")
         await async env.exit(1)
 
-    def err_handler2():
+    def err_handler2(lsock):
         print("This is the second error handler, which we expect to be called because we cannot bind... now exiting")
         await async env.exit(0)
 

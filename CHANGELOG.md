@@ -31,6 +31,9 @@
 ### Changed
 - `on_receipt` is now called `on_receive` on `Connection` [#522]
 - `on_connection` is now called `on_connect` on `env.listen` [#535]
+- The error callbacks of Connection & ListenSocket now receive the Connection or
+  ListenSocket as an argument so that it is easy to identify which instance the
+  error pertains too [#547]
 - The main program thread is no longer named `main` [#528]
   - The thread name is reported in various tools like top and ps or when there
     is no thread name, the process name is used

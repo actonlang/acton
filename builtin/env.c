@@ -844,16 +844,16 @@ $R $Env$connect$local ($Env __self__, $str host, $int port, $function cb, $Cont 
 $R $Env$listen$local ($Env __self__, $int port, $function on_connect, $function on_error, $Cont c$cont) {
     struct sockaddr_in addr;
     int fd = new_socket(on_connect);
+    $ListenSocket lsock = $ListenSocket$newact(fd, on_error);
     addr.sin_addr.s_addr = INADDR_ANY;
     addr.sin_port = htons(port->val);
     addr.sin_family = AF_INET;
     if (bind(fd,(struct sockaddr *)&addr,sizeof(struct sockaddr)) < 0)
-        on_error->$class->__call__(on_error);
+        on_error->$class->__call__(on_error, lsock);
     if (listen(fd, 5) < 0)
-        on_error->$class->__call__(on_error);
+        on_error->$class->__call__(on_error, lsock);
     EVENT_add_read_once(fd);
 
-    $ListenSocket lsock = $ListenSocket$newact(fd, on_error);
     return $R_CONT(c$cont, lsock);
 }
 $R $Env$exit$local ($Env __self__, $int n, $Cont c$cont) {
@@ -909,9 +909,8 @@ $NoneType $Connection$__init__ ($Connection __self__, int descr) {
     return $None;
 }
 $NoneType $Connection$__resume__($Connection self) {
-    printf("$Connection$__resume__\n");
     if (self->cb_err)
-        self->cb_err->$class->__call__(self->cb_err);
+        self->cb_err->$class->__call__(self->cb_err, self);
     return $None;
 }
 $R $Connection$write$local ($Connection __self__, $str s, $Cont c$cont) {
@@ -960,7 +959,7 @@ $NoneType $ListenSocket$__init__ ($ListenSocket __self__, int fd, $function on_e
     return $None;
 }
 $NoneType $ListenSocket$__resume__($ListenSocket self) {
-    self->cb_err->$class->__call__(self->cb_err);
+    self->cb_err->$class->__call__(self->cb_err, self);
     return $None;
 }
 $R $ListenSocket$close$local ($ListenSocket __self__, $Cont c$cont) {
