@@ -6,7 +6,7 @@ actor Tester(env, port):
         s = env.listen(port, connect_handler, sock_err_handler)
         return s
 
-    def sock_err_handler():
+    def sock_err_handler(lsock):
         print("Error with our listening socket, attempting to re-establish listening socket")
         lsock = init_listen()
 
@@ -18,7 +18,7 @@ actor Tester(env, port):
             i += 1
             conn.write("OK")
 
-    def err_handler(msg):
+    def err_handler(conn, msg):
         pass
 
     def connect_handler(conn : Connection):

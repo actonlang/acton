@@ -573,7 +573,7 @@ actor Env (args):
     stdout_write : action(str) -> None
     stdin_install: action(action(str)->None) -> None
     connect      : action(str, int, action(?Connection)->None) -> None
-    listen       : action(int, action(Connection)->None, action()->None) -> ?ListenSocket
+    listen       : action(int, action(Connection)->None, action(ListenSocket)->None) -> ?ListenSocket
     exit         : action(int) -> None
     openR        : action(str) -> ?RFile
     openW        : action(str) -> ?WFile
@@ -593,7 +593,7 @@ actor Connection (on_error):
 
     write       : action(str) -> None
     close       : action() -> None
-    on_receive  : action(action(Connection, str)->None, action(str)->None) -> None
+    on_receive  : action(action(Connection, str)->None, action(Connection, str)->None) -> None
 
     def write(s): pass
     def close() : pass
