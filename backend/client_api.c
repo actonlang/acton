@@ -427,25 +427,14 @@ msg_callback * add_msg_callback(int64_t nonce, void (*callback)(void *), remote_
 
 	snode_t * node = skiplist_search(db->msg_callbacks, (WORD) nonce);
 
-	if(node != NULL)
-	{
-		pthread_mutex_unlock(db->msg_callbacks_lock);
-		return NULL;
-	}
+	assert(node != NULL);
+	assert(node->value == (WORD) 1);
 
 	msg_callback * mc = get_msg_callback(nonce, NULL, callback, db->replication_factor);
 
-    int status = skiplist_insert(db->msg_callbacks, (WORD) nonce, mc, &(db->fastrandstate));
+    skiplist_insert(db->msg_callbacks, (WORD) nonce, mc, &(db->fastrandstate));
 
 	pthread_mutex_unlock(db->msg_callbacks_lock);
-
-    if(status != 0)
-    {
-		fprintf(stderr, "ERROR: Found duplicate nonce %" PRId64 " when trying to add msg callback!\n", nonce);
-		assert(0);
-		delete_msg_callback(mc->nonce, db);
-		return NULL;
-    }
 
     return mc;
 }
@@ -458,7 +447,7 @@ int add_reply_to_nonce(void * reply, short reply_type, int64_t nonce, remote_db_
 
 	snode_t * node = skiplist_search(db->msg_callbacks, (WORD) nonce);
 
-	if(node == NULL)
+	if(node == NULL || node->value == (WORD) 1)
 	{
 		pthread_mutex_unlock(db->msg_callbacks_lock);
 
@@ -536,6 +525,10 @@ int64_t get_nonce(remote_db_t * db)
 		nonce = _get_nonce(db);
 		pthread_mutex_lock(db->msg_callbacks_lock);
 		node = skiplist_search(db->msg_callbacks, (WORD) nonce);
+		if(node == NULL)
+		{
+		    skiplist_insert(db->msg_callbacks, (WORD) nonce, (WORD) 1, &(db->fastrandstate));
+		}
 		pthread_mutex_unlock(db->msg_callbacks_lock);
 	}
 
@@ -687,13 +680,7 @@ int send_packet_wait_replies_async(void * out_buf, unsigned out_len, int64_t non
 {
 	int ret = 0;
 	*mc = add_msg_callback(nonce, NULL, db);
-
-	if(*mc == NULL)
-	{
-		assert(0);
-
-		return -1;
-	}
+	assert (*mc != NULL);
 
 	for(snode_t * server_node = HEAD(db->servers); server_node!=NULL; server_node=NEXT(server_node))
 	{
