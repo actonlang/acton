@@ -15,7 +15,7 @@ actor main(env):
             await async conn.on_receive(recv_handler, err_handler)
             conn.write("GET")
 
-    def err_handler(msg):
+    def err_handler(conn, msg):
         print("Error with our connection occurred, attempting to re-establish connection")
         connect()
 

@@ -27,7 +27,7 @@ env/listen_err:
 ddb-tests:
 	$(MAKE) $(DDB_TESTS)
 
-DDB_TESTS=test_db_app test_db_app_no_quorum test_db_app_recovery test_db_app_resume_tcp_server
+DDB_TESTS=test_db_app test_db_app_no_quorum test_db_app_recovery test_db_app_resume_tcp_client test_db_app_resume_tcp_server
 .PHONY: $(DDB_TESTS)
 
 # Starts up a database cluster, checks membership is ok before proceeding to run
