@@ -434,6 +434,10 @@ msg_callback * add_msg_callback(int64_t nonce, void (*callback)(void *), remote_
 
     skiplist_insert(db->msg_callbacks, (WORD) nonce, mc, &(db->fastrandstate));
 
+    snode_t * node2 = skiplist_search(db->msg_callbacks, (WORD) nonce);
+
+    assert(node2->value == mc);
+
 	pthread_mutex_unlock(db->msg_callbacks_lock);
 
     return mc;
@@ -460,20 +464,26 @@ int add_reply_to_nonce(void * reply, short reply_type, int64_t nonce, remote_db_
 
 	int no_replies = add_reply_to_msg_callback(reply, reply_type, mc);
 
-	pthread_mutex_unlock(db->msg_callbacks_lock);
-
 	if(no_replies < 0)
+	{
+		pthread_mutex_unlock(db->msg_callbacks_lock);
 		return no_replies;
+	}
 
 	// Signal consumer if a quorum of replies have arrived:
 	if(no_replies >= db->quorum_size)
 	{
 		ret = pthread_mutex_lock(mc->lock);
 		pthread_cond_signal(mc->signal);
-		if(mc->callback != NULL)
-			mc->callback(NULL);
+		if((mc->callback) != (void (*)(void *)) 0x0)
+		{
+//			fprintf(stderr, "mc = %p, mc->callback = %p, calling..\n", mc, mc->callback);
+			(mc->callback)(NULL);
+		}
 		ret = pthread_mutex_unlock(mc->lock);
 	}
+
+	pthread_mutex_unlock(db->msg_callbacks_lock);
 
 	return no_replies;
 }
@@ -681,6 +691,7 @@ int send_packet_wait_replies_async(void * out_buf, unsigned out_len, int64_t non
 	int ret = 0;
 	*mc = add_msg_callback(nonce, NULL, db);
 	assert (*mc != NULL);
+	assert (*mc != (WORD) 1);
 
 	for(snode_t * server_node = HEAD(db->servers); server_node!=NULL; server_node=NEXT(server_node))
 	{
