@@ -208,7 +208,7 @@ data TVar       = TV { tvkind::Kind, tvname::Name } deriving (Show,Read,Generic)
 
 data TCon       = TC { tcname::QName, tcargs::[Type] } deriving (Eq,Show,Read,Generic)
 
-data FX         = FXPure | FXMut | FXAction | FXAsync deriving (Eq,Show,Read,Generic)
+data FX         = FXPure | FXMut | FXProc | FXAction deriving (Eq,Show,Read,Generic)
 
 data QBind      = Quant TVar [TCon] deriving (Eq,Show,Read,Generic)
 
@@ -323,8 +323,8 @@ nSelf           = Name NoLoc "Self"
 
 fxPure          = tTFX FXPure
 fxMut           = tTFX FXMut
+fxProc          = tTFX FXProc
 fxAction        = tTFX FXAction
-fxAsync         = tTFX FXAsync
 fxWild          = tWild
 
 posRow t r      = TRow NoLoc PRow (name "_") t r
@@ -642,8 +642,8 @@ isKeyword x                         = x `Data.Set.member` rws
                                         "False","None","NotImplemented","Self","True","action","actor","after","and","as",
                                         "assert","async","await","break","class","continue","def","del","elif","else",
                                         "except","extension","finally","for","from","if","import","in","is","isinstance",
-                                        "lambda","mut","not","or","pass","protocol","pure","raise","return","try","var",
-                                        "while","with","yield"
+                                        "lambda","mut","not","or","pass","proc","protocol","pure","raise","return","try",
+                                        "var","while","with","yield"
                                       ]
 
 isNotImpl [Expr _ (NotImplemented _)]   = True

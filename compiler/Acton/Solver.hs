@@ -262,9 +262,10 @@ allAbove env (TFun _ _ _ _ _)           = [tOpt tWild, tFun tWild tWild tWild tW
 allAbove env (TTuple _ _ _)             = [tOpt tWild, tTuple tWild tWild]
 allAbove env (TRow _ k n _ _)           = [tRow k n tWild tWild]
 allAbove env (TNil _ k)                 = [tNil k]
-allAbove env (TFX _ FXAction)           = [fxAction]
-allAbove env (TFX _ FXMut)              = [fxAction, fxMut]
-allAbove env (TFX _ FXPure)             = [fxAction, fxMut, fxPure]
+allAbove env (TFX _ FXProc)             = [fxProc]
+allAbove env (TFX _ FXMut)              = [fxProc, fxMut]
+allAbove env (TFX _ FXPure)             = [fxProc, fxMut, fxPure]
+allAbove env (TFX _ FXAction)           = [fxProc, fxAction]
 
 allBelow env (TCon _ tc)                = map tCon $ schematic' tc : allDescendants env tc
 allBelow env (TVar _ tv)                = [tVar tv]
@@ -274,9 +275,10 @@ allBelow env (TFun _ _ _ _ _)           = [tFun tWild tWild tWild tWild]
 allBelow env (TTuple _ _ _)             = [tTuple tWild tWild]
 allBelow env (TRow _ k n _ _)           = [tRow k n tWild tWild]
 allBelow env (TNil _ k)                 = [tNil k]
-allBelow env (TFX _ FXAction)           = [fxAction, fxMut, fxPure]
+allBelow env (TFX _ FXProc)             = [fxProc, fxMut, fxPure, fxAction]
 allBelow env (TFX _ FXMut)              = [fxMut, fxPure]
 allBelow env (TFX _ FXPure)             = [fxPure]
+allBelow env (TFX _ FXAction)           = [fxAction]
 
 
 ----------------------------------------------------------------------------------------------------------------------
@@ -500,10 +502,12 @@ cast' env (TFX _ fx1) (TFX _ fx2)
   | castFX fx1 fx2                          = return ()
   where castFX FXPure   FXPure              = True
         castFX FXPure   FXMut               = True
-        castFX FXPure   FXAction            = True
+        castFX FXPure   FXProc              = True
         castFX FXMut    FXMut               = True
-        castFX FXMut    FXAction            = True
+        castFX FXMut    FXProc              = True      -- temporary
+        castFX FXProc   FXProc              = True
         castFX FXAction FXAction            = True
+        castFX FXAction FXProc              = True      -- temporary
         castFX fx1      fx2                 = False
 
 cast' env (TNil _ k1) (TNil _ k2)

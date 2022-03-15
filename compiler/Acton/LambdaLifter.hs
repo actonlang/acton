@@ -413,10 +413,10 @@ instance Conv Type where
     conv t                              = t
 
 instance Conv FX where
-    conv FXAction                       = FXMut
+    conv FXProc                         = FXMut
     conv FXMut                          = FXMut
     conv FXPure                         = FXPure
-    conv FXAsync                        = FXAsync
+    conv FXAction                       = FXAction
 
 instance Conv TCon where
     conv (TC c ts)                      = TC c (conv ts)

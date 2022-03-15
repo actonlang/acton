@@ -83,7 +83,7 @@ qSchema env f e@(Var _ n)           = case findQName n env of
                                                 t' = if restype t == tR then t else t{ restype = tSelf }
                                             in (tSchema (q++q') $ subst [(tvSelf,tCon tc)] t', Just NoDec, e)
                                         NAct q p k _ ->
-                                            (tSchema q (tFun fxAction p k (tCon0 n q)), Just NoDec, e)
+                                            (tSchema q (tFun fxProc p k (tCon0 n q)), Just NoDec, e)
                                         i -> error ("### qSchema Var unexpected " ++ prstr (noq n,i))
 qSchema env f e@(Dot _ (Var _ x) n)
   | NClass q _ _ <- info            = let tc = TC x (map tVar $ qbound q)

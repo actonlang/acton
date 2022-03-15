@@ -461,10 +461,10 @@ prettyFXnoPure (TFX _ FXPure)       = empty
 prettyFXnoPure t                    = pretty t
 
 instance Pretty FX where
-    pretty FXAction                 = text "action"
+    pretty FXProc                   = text "proc"
     pretty FXMut                    = text "mut"
     pretty FXPure                   = text "pure"
-    pretty FXAsync                  = text "async"
+    pretty FXAction                 = text "action"
 
 instance Pretty Kind where
     pretty KType                    = text "type"

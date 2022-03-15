@@ -165,21 +165,21 @@ clCont cls def      = cls [quant x, quant p] (leftpath [TC qnFunction [tVar x, t
         p           = TV PRow (name "P")
 
 
---  $ASYNCf         : [A] => async($Actor, action()->A) -> Msg[A]
+--  $ASYNCf         : [A] => action($Actor, proc()->A) -> Msg[A]
 scASYNCf            = tSchema [quant a] tASYNC
   where tASYNC      = tFun fxAction (posRow tActor $ posRow tFun' posNil) kwdNil (tMsg $ tVar a)
         a           = TV KType $ name "A"
-        tFun'       = tFun fxAsync posNil kwdNil (tVar a)
+        tFun'       = tFun fxProc posNil kwdNil (tVar a)
 
---  $AFTERf         : [A] => action(float, action()->A) -> Msg[A]
+--  $AFTERf         : [A] => proc(int, proc()->A) -> Msg[A]
 scAFTERf            = tSchema [quant a] tAFTER
-  where tAFTER      = tFun fxAction (posRow tFloat $ posRow tFun' posNil) kwdNil (tMsg $ tVar a)
+  where tAFTER      = tFun fxProc (posRow tFloat $ posRow tFun' posNil) kwdNil (tMsg $ tVar a)
         a           = TV KType $ name "A"
-        tFun'       = tFun fxAction posNil kwdNil (tVar a)
+        tFun'       = tFun fxProc posNil kwdNil (tVar a)
 
---  $AWAITf         : [A] => action(Msg[A]) -> A
+--  $AWAITf         : [A] => proc(Msg[A]) -> A
 scAWAITf            = tSchema [quant a] tAWAIT
-  where tAWAIT      = tFun fxAction (posRow (tMsg $ tVar a) posNil) kwdNil (tVar a)
+  where tAWAIT      = tFun fxProc (posRow (tMsg $ tVar a) posNil) kwdNil (tVar a)
         a           = TV KType $ name "T"
 
 

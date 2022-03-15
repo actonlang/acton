@@ -363,11 +363,11 @@ mutCall env e                           = fxCall env mutFX e
 
 primNoCont                              = [primASYNCf, primAFTERf]
 
-contFX (TFX _ FXAction)                 = True                              -- TODO: refine this test using finer-grained effects?
+contFX (TFX _ FXProc)                   = True
 contFX _                                = False
 
 mutFX (TFX _ FXMut)                     = True
-mutFX (TFX _ FXAction)                  = True
+mutFX (TFX _ FXProc)                    = True
 mutFX _                                 = False
 
 inCont env                              = length (ctxt env) > 0

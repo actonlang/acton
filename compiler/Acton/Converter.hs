@@ -271,7 +271,7 @@ extension c[A(Eq),B] (p[A,B]):                              class p$c[A,B] (p[c[
 
 actor[ a[A(Eq),B] (b[A]):                                   class a[A,B] ($Actor[]):
     f : [C(Ord)] => action(A,B) -> C                            __init__ : (Eq[A],b[A]) -> None
-                                                                f        : [C] => async(Ord[C],A,B) -> C
-                                                                f$local  : [C] => action(Ord[C],A,B) -> C
+                                                                f        : [C] => action(Ord[C],A,B) -> C
+                                                                f$local  : [C] => proc(Ord[C],A,B) -> C
 
 -}

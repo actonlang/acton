@@ -280,8 +280,9 @@ instance InfEnv Stmt where
     
     infEnv env (After l e1 e2)          = do (cs1,e1') <- inferSub env tFloat e1
                                              (cs2,t,e2') <- infer env e2
+                                             -- TODO: constrain t
                                              fx <- currFX
-                                             return (Cast fxAction fx :
+                                             return (Cast fxProc fx :
                                                      cs1++cs2, [], After l e1' e2')
     
     infEnv env (Signature l ns sc dec)
@@ -844,7 +845,7 @@ instance Check Decl where
             tvs                         = qbound q
 
     checkEnv env (Actor l n q p k b)    = do --traceM ("## checkEnv actor " ++ prstr n)
-                                             pushFX fxAction tNone
+                                             pushFX fxProc tNone
                                              wellformed env1 q
                                              (csp,te1,p') <- infEnv env1 p
                                              (csk,te2,k') <- infEnv (define te1 env1) k
@@ -1086,7 +1087,7 @@ instance Infer Expr where
                                             NVar t -> return ([], t, x)
                                             NSVar t -> do
                                                 fx <- currFX
-                                                return ([Cast fxAction fx], t, x)
+                                                return ([Cast fxProc fx], t, x)
                                             NDef sc d -> do 
                                                 (cs,tvs,t) <- instantiate env sc
                                                 return (cs, t, app t (tApp x tvs) $ witsOf cs)
@@ -1102,7 +1103,7 @@ instance Infer Expr where
                                                         return (cs0++cs1, t', app t' (tApp x (ts++tvs)) $ witsOf (cs0++cs1))
                                             NAct q p k _ -> do
 --                                                when (abstractActor env n) (err1 n "Abstract actor cannot be instantiated:")
-                                                (cs,tvs,t) <- instantiate env (tSchema q (tFun fxAction p k (tCon0 (unalias env n) q)))
+                                                (cs,tvs,t) <- instantiate env (tSchema q (tFun fxProc p k (tCon0 (unalias env n) q)))
                                                 return (cs, t, app t (tApp x tvs) $ witsOf cs)
                                             NSig _ _ -> nameReserved n
                                             NReserved -> nameReserved n
@@ -1129,14 +1130,14 @@ instance Infer Expr where
                                              return (Sub w t (tFun fx prow krow t0) :
                                                      cs1++cs2++cs3, t0, Call l (eCall (eVar w) [e']) ps' ks')
     infer env (TApp l e ts)             = internal l "Unexpected TApp in infer"
-    infer env (Async l e)               = do (cs1,t,e') <- infer env e              -- TODO: expect an action type returning t
+    infer env (Async l e)               = do (cs1,t,e') <- infer env e              -- TODO: expect an action returning t
                                              fx <- currFX
-                                             return (Cast fxAction fx :
-                                                     cs1, tMsg t, Async l e')       -- TODO: produce action type returning Msg[t]
+                                             return (Cast fxProc fx :
+                                                     cs1, tMsg t, Async l e')       -- TODO: produce a proc returning Msg[t]
     infer env (Await l e)               = do t0 <- newTVar
                                              (cs1,e') <- inferSub env (tMsg t0) e
                                              fx <- currFX
-                                             return (Cast fxAction fx :
+                                             return (Cast fxProc fx :
                                                      cs1, t0, Await l e')
     infer env (Index l e ix)            = do ti <- newTVar
                                              (cs1,ix') <- inferSub env ti ix
@@ -1697,7 +1698,7 @@ instance InfEnvT Pattern where
                                                      return ([Cast t t'], [], t, PVar l n Nothing)
                                                  NSVar t' -> do
                                                      fx <- currFX
-                                                     return (Cast fxAction fx :
+                                                     return (Cast fxProc fx :
                                                              Cast t t' : 
                                                              [], [], t, PVar l n Nothing)
                                                  _ -> 

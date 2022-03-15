@@ -839,7 +839,7 @@ castable env (TCon _ c1) (TCon _ c2)
   where search                              = findAncestor env c1 (tcname c2)
 
 castable env (TFun _ fx1 p1 k1 t1) (TFun _ fx2 p2 k2 t2)
-  | fx1 == fxAction , fx2 /= fxAction       = castable env fx1 fx2 && castable env p2 p1 && castable env k2 k1 && castable env (tMsg t1) t2
+  | fx1 == fxProc , fx2 /= fxProc           = castable env fx1 fx2 && castable env p2 p1 && castable env k2 k1 && castable env (tMsg t1) t2
   | otherwise                               = castable env fx1 fx2 && castable env p2 p1 && castable env k2 k1 && castable env t1 t2
 
 castable env (TTuple _ p1 k1) (TTuple _ p2 k2)
@@ -852,12 +852,12 @@ castable env (TNone _) (TNone _)            = True
 castable env (TFX _ fx1) (TFX _ fx2)        = castable' fx1 fx2
   where castable' FXPure   FXPure           = True
         castable' FXPure   FXMut            = True
-        castable' FXPure   FXAction         = True
+        castable' FXPure   FXProc           = True
         castable' FXMut    FXMut            = True
-        castable' FXMut    FXAction         = True
+        castable' FXMut    FXProc           = True
+        castable' FXProc   FXProc           = True
         castable' FXAction FXAction         = True
-        castable' FXAsync  FXAsync          = True
-        castable' FXAsync  FXAction         = True
+        castable' FXAction FXProc           = True
         castable' fx1      fx2              = False
 
 castable env (TNil _ k1) (TNil _ k2)
@@ -910,7 +910,7 @@ glb env t1@(TFX _ fx1) t2@(TFX _ fx2)   = pure $ tTFX (glfx fx1 fx2)
         glfx _        FXPure            = FXPure
         glfx FXMut    _                 = FXMut
         glfx _        FXMut             = FXMut
-        glfx FXAction FXAction          = FXAction
+        glfx FXProc   FXProc            = FXProc
 
 glb env (TNil _ k1) (TNil _ k2)
   | k1 == k2                            = pure $ tNil k1
@@ -956,8 +956,8 @@ lub env (TOpt _ t1) t2                  = tOpt <$> lub env t1 t2
 lub env t1 (TOpt _ t2)                  = tOpt <$> lub env t1 t2
 
 lub env t1@(TFX _ fx1) t2@(TFX _ fx2)   = pure $ tTFX (lufx fx1 fx2)
-  where lufx FXAction _                 = FXAction
-        lufx _        FXAction          = FXAction
+  where lufx FXProc   _                 = FXProc
+        lufx _        FXProc            = FXProc
         lufx FXMut    _                 = FXMut
         lufx _        FXMut             = FXMut
         lufx FXPure   FXPure            = FXPure
