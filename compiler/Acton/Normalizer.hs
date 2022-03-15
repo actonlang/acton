@@ -245,7 +245,7 @@ instance Norm Expr where
       where t                       = typeOf env e
     norm env (Async l e)            = Async l <$> norm env e
     norm env (Await l e)            = Await l <$> norm env e
-    norm env (Cond l e1 e2 e3)      = Cond l <$> normBool env e1 <*> norm env e2 <*> norm env e3
+    norm env (Cond l e1 e2 e3)      = Cond l <$> norm env e1 <*> normBool env e2 <*> norm env e3
     norm env (IsInstance l e c)     = IsInstance l <$> norm env e <*> pure c
     norm env (BinOp l e1 Or e2)     = BinOp l <$> norm env e1 <*> pure Or <*> norm env e2
     norm env (BinOp l e1 And e2)    = BinOp l <$> norm env e1 <*> pure And <*> norm env e2
