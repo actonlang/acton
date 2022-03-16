@@ -807,16 +807,30 @@ int handle_new_txn(txn_message * q, db_t * db, unsigned int * fastrandstate)
 {
 	assert(q->txnid != NULL);
 
+#if (MULTI_THREADED == 1)
+	pthread_mutex_lock(db->txn_state_lock);
+#endif
+
 	txn_state * ts = get_txn_state(q->txnid, db);
 
 	if(ts != NULL)
+	{
+#if (MULTI_THREADED == 1)
+		pthread_mutex_unlock(db->txn_state_lock);
+#endif
+
 		return -2; // txnid already exists on server
+	}
 
 	ts = init_txn_state();
 
 	memcpy(&ts->txnid, q->txnid, sizeof(uuid_t));
 
-	skiplist_insert(db->txn_state, (WORD) &(ts->txnid), (WORD) ts, fastrandstate);
+	skiplist_insert(db->txn_state, (WORD) ts->txnid, (WORD) ts, fastrandstate);
+
+#if (MULTI_THREADED == 1)
+	pthread_mutex_unlock(db->txn_state_lock);
+#endif
 
 	return 0;
 }

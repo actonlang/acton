@@ -52,6 +52,8 @@ typedef void *WORD;
 #define VERBOSE_BACKEND 0
 #define MAX_PRINT_BUFF 128 * 1024
 
+#define MULTI_THREADED 0
+
 typedef struct db_schema {
 	int * col_types;
 	int min_no_cols;
@@ -141,6 +143,9 @@ typedef db_cell_t db_row_t;
 typedef struct db {
     skiplist_t * tables;
     skiplist_t * txn_state;
+#if (MULTI_THREADED == 1)
+    pthread_mutex_t* txn_state_lock;
+#endif
 } db_t;
 
 // DB high level API:
