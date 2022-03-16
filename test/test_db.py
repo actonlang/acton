@@ -143,9 +143,8 @@ class Db:
         return data["membership"]["view_id"]
 
     def get_membership(self, retries=5):
-        self.p.poll()
-        if self.p.returncode is not None:
-            raise Exception(f"Bad exit code from ActonDB {self.idx}: {self.p.returncode}")
+        if self.p.poll() is not None:
+            raise Exception(f"ActonDB {self.idx} is dead, returncode: {self.p.returncode}, see db{self.idx}.log file")
 
         try:
             return mon_cmd(self.mon_sock, "membership", retries=5)
@@ -200,6 +199,27 @@ class DbCluster:
                     else:
                         self.log.error(f"Membership info for {db} seems incorrect: {mbs}")
                         allgood = False
+
+        return allgood
+
+
+    def check_membership(self):
+        allgood = True
+
+        expected = None
+        for db in self.dbs:
+            mbs = db.get_vc()
+            if expected is None:
+                self.log.info(f"Using Membership info from {db} as expected: {mbs}")
+                expected = mbs
+            else:
+                if mbs == expected:
+                    self.log.info(f"Membership info for {db} is as expected: {mbs}")
+                    pass
+                else:
+                    self.log.error(f"Membership info for {db} seems incorrect: {mbs} vs {expected}")
+                    allgood = False
+
         return allgood
 
 
@@ -325,6 +345,13 @@ class TestDbApps(unittest.TestCase):
         self.dbc.start()
 
     def tearDown(self):
+        try:
+            dbm = self.dbc.check_membership()
+            if not dbm:
+                print(f"DB membership status on shutdown: {dbm}, check the log files")
+        except Exception as exc:
+            print(f"Got exception during check membership on shutdown: {exc}")
+
         if self.p:
             try:
                 self.p.kill()
