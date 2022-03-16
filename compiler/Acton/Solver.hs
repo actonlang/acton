@@ -568,18 +568,23 @@ sub'                                        :: Env -> Equations -> Name -> Type 
 sub' env eq w t1@TWild{} t2                 = return (idwit w t1 t2 : eq)
 sub' env eq w t1 t2@TWild{}                 = return (idwit w t1 t2 : eq)
 
+sub' env eq w (TFX _ fx1) (TFX _ fx2)
+  | Just e <- subFX fx1 fx2                 = return undefined
+  where subFX FXPure   FXPure               = Nothing
+
 --                as declared               as called
 --                existing                  expected
 sub' env eq w t1@(TFun _ fx1 p1 k1 t1') t2@(TFun _ fx2 p2 k2 t2')                   -- TODO: implement pos/kwd argument shifting
-                                            = do wp <- newWitness
+                                            = do wx <- newWitness
+                                                 wp <- newWitness
                                                  wk <- newWitness
                                                  wt <- newWitness
-                                                 let e = eLambda [(px0,t1)] e'
+                                                 let e = eLambda [(px0,t1)] (eCall (eVar wx) [e'])
                                                      e' = Lambda l0 (PosSTAR px1 $ Just $ tTupleP p2) (KwdSTAR px2 $ Just $ tTupleK k2) e0 fx2
                                                      e0 = eCall (eVar wt) [Call l0 (eVar px0) (PosStar e1) (KwdStar e2)]
                                                      e1 = eCall (eVar wp) [eVar px1]
                                                      e2 = eCall (eVar wk) [eVar px2]
-                                                     cs = [Cast fx1 fx2, Sub wp p2 p1, Sub wk k2 k1, Sub wt t1' t2']
+                                                     cs = [Sub wx fx1 fx2, Sub wp p2 p1, Sub wk k2 k1, Sub wt t1' t2']
 
                                                  reduce env ((w, wFun t1 t2, e):eq) cs
 
@@ -922,10 +927,12 @@ noOpt ts                                = filter chk ts
 
 dnClosed env (TCon _ c)                 = isActor env (tcname c)
 dnClosed env (TFX _ FXPure)             = True
+dnClosed env (TFX _ FXAction)           = True
 dnClosed env (TNone _)                  = True
 dnClosed env (TNil _ _)                 = True
 dnClosed env _                          = False
 
+upClosed env (TFX _ FXProc)             = True
 upClosed env (TOpt _ _)                 = True
 upClosed env (TNil _ _)                 = True
 upClosed env _                          = False
