@@ -122,8 +122,8 @@ void * comm_thread_loop(void * args);
 
 remote_db_t * get_remote_db(int replication_factor)
 {
-	remote_db_t * db = (remote_db_t *) malloc(sizeof(remote_db_t) + 3 * sizeof(pthread_mutex_t));
-	memset(db, 0, sizeof(remote_db_t) + 3 * sizeof(pthread_mutex_t));
+	remote_db_t * db = (remote_db_t *) malloc(sizeof(remote_db_t) + 4 * sizeof(pthread_mutex_t));
+	memset(db, 0, sizeof(remote_db_t) + 4 * sizeof(pthread_mutex_t));
 
 	db->servers = create_skiplist(&sockaddr_cmp);
 	db->txn_state = create_skiplist_uuid();
@@ -135,6 +135,8 @@ remote_db_t * get_remote_db(int replication_factor)
 	pthread_mutex_init(db->msg_callbacks_lock, NULL);
 	db->lc_lock = (pthread_mutex_t*) ((char*) db + sizeof(remote_db_t) + 2 * sizeof(pthread_mutex_t));
 	pthread_mutex_init(db->lc_lock, NULL);
+	db->txn_state_lock = (pthread_mutex_t*) ((char*) db + sizeof(remote_db_t) + 3 * sizeof(pthread_mutex_t));
+	pthread_mutex_init(db->txn_state_lock, NULL);
 
 	db->replication_factor = replication_factor;
 	db->quorum_size = (int) (replication_factor / 2) + 1;
@@ -475,7 +477,7 @@ int add_reply_to_nonce(void * reply, short reply_type, int64_t nonce, remote_db_
 	{
 		ret = pthread_mutex_lock(mc->lock);
 		pthread_cond_signal(mc->signal);
-		if((mc->callback) != (void (*)(void *)) 0x0)
+		if((mc->callback) != NULL)
 		{
 //			fprintf(stderr, "mc = %p, mc->callback = %p, calling..\n", mc, mc->callback);
 			(mc->callback)(NULL);
@@ -2321,7 +2323,7 @@ int remote_commit_txn(uuid_t * txnid, remote_db_t * db)
 #endif
 		}
 
-		int res = close_client_txn(txnid, db); // Clear local cached txn state on client
+		int res = close_client_txn(*txnid, db); // Clear local cached txn state on client
 
 #if (CLIENT_VERBOSITY > 1)
 		printf("CLIENT: close txn %s returned %d\n", uuid_str, res);
@@ -2348,9 +2350,15 @@ int remote_commit_txn(uuid_t * txnid, remote_db_t * db)
 
 // Txn state handling client-side:
 
-txn_state * get_client_txn_state(uuid_t * txnid, remote_db_t * db)
+txn_state * get_client_txn_state(uuid_t txnid, remote_db_t * db)
 {
 	snode_t * txn_node = (snode_t *) skiplist_search(db->txn_state, (WORD) txnid);
+
+#if (CLIENT_VERBOSITY > 0)
+	char uuid_str[37];
+	uuid_unparse_lower(txnid, uuid_str);
+	printf("CLIENT: get_client_txn_state(%s): skiplist_search() returned: %p / %p\n", uuid_str, txn_node, (txn_node != NULL)? (txn_state *) txn_node->value : NULL);
+#endif
 
 	return (txn_node != NULL)? (txn_state *) txn_node->value : NULL;
 }
@@ -2359,10 +2367,12 @@ uuid_t * new_client_txn(remote_db_t * db, unsigned int * seedptr)
 {
 	txn_state * ts = NULL, * previous = NULL;
 
+	pthread_mutex_lock(db->txn_state_lock);
+
 	while(ts == NULL)
 	{
 		ts = init_txn_state();
-		previous = get_client_txn_state(&(ts->txnid), db);
+		previous = get_client_txn_state(ts->txnid, db);
 		if(previous != NULL)
 		{
 			free_txn_state(ts);
@@ -2370,24 +2380,30 @@ uuid_t * new_client_txn(remote_db_t * db, unsigned int * seedptr)
 		}
 	}
 
-	skiplist_insert(db->txn_state, (WORD) &(ts->txnid), (WORD) ts, seedptr);
+	skiplist_insert(db->txn_state, (WORD) (ts->txnid), (WORD) ts, seedptr);
+
+	pthread_mutex_unlock(db->txn_state_lock);
 
 	return &(ts->txnid);
 }
 
-int close_client_txn(uuid_t * txnid, remote_db_t * db)
+int close_client_txn(uuid_t txnid, remote_db_t * db)
 {
     struct timespec ts_start;
     stat_start(dbc_stats.close_client_txn, &ts_start);
 
+    pthread_mutex_lock(db->txn_state_lock);
+
 	txn_state * ts = get_client_txn_state(txnid, db);
 	if(ts == NULL) { // No such txn
+	    pthread_mutex_unlock(db->txn_state_lock);
         stat_stop(dbc_stats.close_client_txn, &ts_start, NO_SUCH_TXN);
 		return -2;
 	}
 
-	skiplist_delete(db->txn_state, txnid);
+	skiplist_delete(db->txn_state, (WORD) txnid);
 	free_txn_state(ts);
+    pthread_mutex_unlock(db->txn_state_lock);
 
 	stat_stop(dbc_stats.close_client_txn, &ts_start, 0);
 	return 0;
