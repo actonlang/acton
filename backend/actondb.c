@@ -44,6 +44,7 @@
 #include <argp.h>
 #include <string.h>
 #include <limits.h>
+#include <signal.h>
 
 #define LOGPFX "#ActDB# "
 
@@ -2271,6 +2272,18 @@ int main(int argc, char **argv) {
 
   argp_parse (&argp, argc, argv, 0, 0, &arguments);
 
+  // Ignore SIGPIPE:
+
+  struct sigaction sa;
+  memset(&sa, 0, sizeof(sa));
+
+  sa.sa_handler = SIG_IGN;
+
+  if (sigaction(SIGPIPE, &sa, NULL) == -1)
+  {
+	  error("sigaction(SIG_IGN SIGPIPE) failed");
+  }
+
   printf("SERVER: Using args: portno=%d, gportno=%d, verbosity=%d, seeds:\n", arguments.portno, arguments.gportno, arguments.verbosity);
   for(int i=0;i<arguments.no_seeds;i++)
   {
@@ -2576,6 +2589,13 @@ int main(int argc, char **argv) {
 			  if (childfd < 0)
 			    error("ERROR on accept");
 
+#ifdef MACOS
+			  int option_set = 1;
+			  if (setsockopt (childfd, SOL_SOCKET, SO_NOSIGPIPE, &option_set, sizeof (option_set)) < 0) {
+				  error("setsockopt(SO_NOSIGPIPE)");
+			  }
+#endif
+
 			  hostp = gethostbyaddr((const char *)&clientaddr.sin_addr.s_addr,
 						  sizeof(clientaddr.sin_addr.s_addr), AF_INET);
 			  if (hostp == NULL)
@@ -2599,6 +2619,13 @@ int main(int argc, char **argv) {
 			  childfd = accept(gparentfd, (struct sockaddr *) &clientaddr, &clientlen);
 			  if (childfd < 0)
 			    error("ERROR on accept");
+
+#ifdef MACOS
+			  int option_set = 1;
+			  if (setsockopt (childfd, SOL_SOCKET, SO_NOSIGPIPE, &option_set, sizeof (option_set)) < 0) {
+				  error("setsockopt(SO_NOSIGPIPE)");
+			  }
+#endif
 
 			  hostp = gethostbyaddr((const char *)&clientaddr.sin_addr.s_addr,
 						  sizeof(clientaddr.sin_addr.s_addr), AF_INET);
