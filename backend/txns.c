@@ -29,7 +29,7 @@
 
 txn_state * get_txn_state(uuid_t * txnid, db_t * db)
 {
-	snode_t * txn_node = (snode_t *) skiplist_search(db->txn_state, (WORD) txnid);
+	snode_t * txn_node = (snode_t *) skiplist_search(db->txn_state, (WORD) (*txnid));
 
 	return (txn_node != NULL)? (txn_state *) txn_node->value : NULL;
 }
@@ -37,6 +37,10 @@ txn_state * get_txn_state(uuid_t * txnid, db_t * db)
 uuid_t * new_txn(db_t * db, unsigned int * seedptr)
 {
 	txn_state * ts = NULL, * previous = NULL;
+
+#if (MULTI_THREADED == 1)
+	pthread_mutex_lock(db->txn_state_lock);
+#endif
 
 	while(ts == NULL)
 	{
@@ -49,15 +53,27 @@ uuid_t * new_txn(db_t * db, unsigned int * seedptr)
 		}
 	}
 
-	skiplist_insert(db->txn_state, (WORD) &(ts->txnid), (WORD) ts, seedptr);
+	skiplist_insert(db->txn_state, (WORD) ts->txnid, (WORD) ts, seedptr);
+
+#if (MULTI_THREADED == 1)
+	pthread_mutex_unlock(db->txn_state_lock);
+#endif
 
 	return &(ts->txnid);
 }
 
 int close_txn_state(txn_state * ts, db_t * db)
 {
+#if (MULTI_THREADED == 1)
+	pthread_mutex_lock(db->txn_state_lock);
+#endif
+
 	skiplist_delete(db->txn_state, ts->txnid);
 	free_txn_state(ts);
+
+#if (MULTI_THREADED == 1)
+	pthread_mutex_unlock(db->txn_state_lock);
+#endif
 
 	return 0;
 }
@@ -240,6 +256,10 @@ int is_read_invalidated(txn_read * tr, txn_state * rts, db_t * db)
 	int is_exact_query = (tr->query_type == QUERY_TYPE_READ_COLS || tr->query_type == QUERY_TYPE_READ_CELL || tr->query_type == QUERY_TYPE_READ_ROW);
 	txn_write * dummy_tw_update = is_exact_query? get_dummy_txn_write(QUERY_TYPE_UPDATE, tr->start_primary_keys, tr->no_primary_keys, tr->start_clustering_keys, tr->no_clustering_keys, tr->table_key, 0) : NULL;
 
+#if (MULTI_THREADED == 1)
+	pthread_mutex_lock(db->txn_state_lock);
+#endif
+
 	for(snode_t * node=HEAD(db->txn_state); node!=NULL; node=NEXT(node))
 	{
 		assert(node->value != NULL);
@@ -264,6 +284,11 @@ int is_read_invalidated(txn_read * tr, txn_state * rts, db_t * db)
 #if (VERBOSE_TXNS > 0)
 						printf("Invalidating txn due to rw conflict\n");
 #endif
+
+#if (MULTI_THREADED == 1)
+						pthread_mutex_unlock(db->txn_state_lock);
+#endif
+
 						return 1;
 				}
 			}
@@ -279,11 +304,18 @@ int is_read_invalidated(txn_read * tr, txn_state * rts, db_t * db)
 
 				if(rw_conflict(tr, tw, 1) && ts->state == TXN_STATUS_VALIDATED)
 				{
+#if (MULTI_THREADED == 1)
+						pthread_mutex_unlock(db->txn_state_lock);
+#endif
 					return 1;
 				}
 			}
 		}
 	}
+
+#if (MULTI_THREADED == 1)
+	pthread_mutex_unlock(db->txn_state_lock);
+#endif
 
 	return 0;
 }
@@ -309,6 +341,10 @@ int is_write_invalidated(txn_write * tw, txn_state * rts, db_t * db)
 	}
 
 	// Check for WW conflicts with other txns' write sets:
+
+#if (MULTI_THREADED == 1)
+	pthread_mutex_lock(db->txn_state_lock);
+#endif
 
 	for(snode_t * node=HEAD(db->txn_state); node!=NULL; node=NEXT(node))
 	{
@@ -344,6 +380,11 @@ int is_write_invalidated(txn_write * tw, txn_state * rts, db_t * db)
 								uuid_str2, uuid_str1);
 //					assert(0);
 #endif
+
+#if (MULTI_THREADED == 1)
+					pthread_mutex_unlock(db->txn_state_lock);
+#endif
+
 					return 1;
 //				}
 			}
@@ -363,12 +404,20 @@ int is_write_invalidated(txn_write * tw, txn_state * rts, db_t * db)
 					continue;
 
 				if(queue_op_conflict(tw, tw2))
+
 				{
+#if (MULTI_THREADED == 1)
+					pthread_mutex_unlock(db->txn_state_lock);
+#endif
 					return 1;
 				}
 			}
 		}
 	}
+
+#if (MULTI_THREADED == 1)
+	pthread_mutex_unlock(db->txn_state_lock);
+#endif
 
 	return 0;
 }

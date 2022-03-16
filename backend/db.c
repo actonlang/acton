@@ -193,10 +193,19 @@ void free_db_row(db_row_t * row, db_schema_t * schema)
 
 db_t * get_db()
 {
+#if (MULTI_THREADED == 1)
+	db_t * db = (db_t *) malloc(sizeof(db_t) + sizeof(pthread_mutex_t));
+#else
 	db_t * db = (db_t *) malloc(sizeof(db_t));
+# endif
 
 	db->tables = create_skiplist_long();
 	db->txn_state = create_skiplist_uuid();
+
+#if (MULTI_THREADED == 1)
+	db->txn_state_lock = (pthread_mutex_t*) ((char*) db + sizeof(db_t));
+	pthread_mutex_init(db->txn_state_lock, NULL);
+# endif
 
 	return db;
 }
