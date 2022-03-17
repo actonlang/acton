@@ -23,6 +23,10 @@ jobs:
         run: |
           echo "BUILD_RELEASE=1" >> $GITHUB_ENV
         if: startsWith(github.ref, 'refs/tags/v')
+      - name: "Enable dumping core files"
+        run: |
+          sudo sysctl kern.corefile=core.%P
+          ulimit -c unlimited
       - name: "Check out repository code"
         uses: actions/checkout@v2
       - name: "Cache ~/.stack"
@@ -45,6 +49,16 @@ jobs:
           if-no-files-found: error
       - name: "Run tests"
         run: make -C ${{ github.workspace }} test
+      - name: "Upload core file & binaries as artifacts on test failure"
+        if: failure()
+        uses: actions/upload-artifact@v2
+        with:
+          name: test-debug-${{ matrix.os }}-${{ github.run_id }}.zip
+          path: |
+            ${{ github.workspace }}/test/core*
+            ${{ github.workspace }}/test/db*.log
+            ${{ github.workspace }}/test/rts/ddb_test_client
+            ${{ github.workspace }}/test/rts/ddb_test_server
 
 
   test-linux:
