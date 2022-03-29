@@ -19,7 +19,7 @@ actor Tester(env, port):
             conn.write("OK")
 
     def err_handler(conn, msg):
-        pass
+        print("Some error, probably client disconnecting")
 
     def connect_handler(conn : Connection):
         print("Got connection")
