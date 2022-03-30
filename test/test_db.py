@@ -416,6 +416,17 @@ class TestDbApps(unittest.TestCase):
         self.assertEqual(self.p.returncode, 0)
 
 
+class TestTcpServer(unittest.TestCase):
+    def test_tcp_server(self):
+        app_port = random.randint(10000, 20000)
+        cmd = ["./rts/ddb_test_server", str(app_port), "--rts-verbose"]
+        self.p = subprocess.Popen(cmd)
+        for i in range(2000):
+            self.assertEqual(tcp_cmd(self.p, app_port, "GET"), str(i))
+            tcp_cmd(self.p, app_port, "INC")
+        self.p.terminate()
+        self.p.communicate()
+
 
 class TestDbAppsNoQuorum(unittest.TestCase):
     def test_app(self):

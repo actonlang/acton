@@ -1366,20 +1366,22 @@ void *$eventloop(void *arg) {
                 exit(-1);
             }
             EVENT_del_read(fd);
-        }
-        switch (fd_data[fd].kind) {
+            $init_FileDescriptorData(fd);
+            close(fd);
+        } else {
+            switch (fd_data[fd].kind) {
             case connecthandler:
                 if (EVENT_is_read(&kev)) {              // we are a listener and someone tries to connect
                     while ((fd2 = accept(fd, (struct sockaddr *)&fd_data[fd].sock_addr,&socklen)) != -1) {
-                      fcntl(fd2,F_SETFL,O_NONBLOCK);
-                      fd_data[fd2].kind = connecthandler;
-                      fd_data[fd2].chandler = fd_data[fd].chandler;
-                      fd_data[fd2].sock_addr = fd_data[fd].sock_addr;
-                      bzero(fd_data[fd2].buffer,BUF_SIZE);
-                      EVENT_add_read(fd2);
-                      EVENT_mod_read_once(fd);
-                      setupConnection(fd2);
-                      printf("%s %s\n","Connection from",$getName(fd2)->str);
+                        fcntl(fd2,F_SETFL,O_NONBLOCK);
+                        fd_data[fd2].kind = connecthandler;
+                        fd_data[fd2].chandler = fd_data[fd].chandler;
+                        fd_data[fd2].sock_addr = fd_data[fd].sock_addr;
+                        bzero(fd_data[fd2].buffer,BUF_SIZE);
+                        EVENT_add_read(fd2);
+                        EVENT_mod_read_once(fd);
+                        setupConnection(fd2);
+                        printf("%s %s\n","Connection from",$getName(fd2)->str);
                     }
                 } else { // we are a client and a delayed connection attempt has succeeded
 #ifdef IS_GNU_LINUX
@@ -1403,7 +1405,9 @@ void *$eventloop(void *arg) {
             case nohandler:
                 fprintf(stderr,"internal error: no event handler on descriptor %d\n",fd);
                 exit(-1);
+            }
         }
+
         pthread_mutex_lock(&sleep_lock);
         pthread_cond_signal(&work_to_do);
         pthread_mutex_unlock(&sleep_lock);

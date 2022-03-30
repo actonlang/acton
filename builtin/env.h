@@ -26,7 +26,7 @@ typedef struct epoll_event EVENT_type;
 
 #define BUF_SIZE 1024
 
-#define MAX_FD  100
+#define MAX_FD  1024
 
 typedef enum HandlerCase {nohandler, readhandler, connecthandler} HandlerCase;
 
