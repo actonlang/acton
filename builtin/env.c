@@ -154,7 +154,11 @@ int EVENT_fd_is_read(int fd) {
 
 static void $init_FileDescriptorData(int fd) {
   fd_data[fd].kind = nohandler;
-  bzero(fd_data[fd].buffer,BUF_SIZE);
+  fd_data[fd].rhandler = NULL;
+  fd_data[fd].errhandler = NULL;
+  fd_data[fd].chandler = NULL;
+  fd_data[fd].conn = NULL;
+  bzero(fd_data[fd].buffer, BUF_SIZE);
 }
 
 int new_socket ($function handler) {
