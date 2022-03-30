@@ -607,7 +607,7 @@ int free_remote_db(remote_db_t * db)
  */
 void error(char *msg) {
     perror(msg);
-    exit(0);
+    exit(1);
 }
 
 int send_packet(void * buf, unsigned len, int sockfd)
