@@ -76,8 +76,6 @@ int no_queue_cols = 1;                  // 2;
 
 void error(char *msg) {
   perror(msg);
-  assert(0);
-  exit(1);
 }
 
 #define SERVER_VERBOSITY 1
