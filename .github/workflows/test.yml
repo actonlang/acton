@@ -16,7 +16,7 @@ jobs:
   test-darwin:
     strategy:
       matrix:
-        os: [macos-10.15, macos-11]
+        os: [macos-10.15, macos-11, macos-12]
     runs-on: ${{ matrix.os }}
     steps:
       - name: "Set BUILD_RELEASE when we are building for a version tag"
