@@ -286,13 +286,11 @@ allBelow env (TFX _ FXAction)           = [fxAction]
 ----------------------------------------------------------------------------------------------------------------------
 
 instance Subst Equation where
-    msubst (VarEqn w t e)                   = do t <- msubst t
+    msubst (Eqn w t e)                      = do t <- msubst t
                                                  e <- msubst e
-                                                 return (VarEqn w t e)
-    msubst eq@DefEqn{}                      = return eq
+                                                 return (Eqn w t e)
     
-    tyfree (VarEqn w t e)                   = tyfree t ++ tyfree e
-    tyfree DefEqn{}                         = []
+    tyfree (Eqn w t e)                      = tyfree t ++ tyfree e
 
 instance Vars Equation where
     free (VarEqn w t e)                     = free e
@@ -329,14 +327,14 @@ reduce' env eq c@(Impl w t@(TCon _ tc) p)
 
 reduce' env eq c@(Impl w t@(TOpt _ t') p)
   | tcname p == qnIdentity                  = do let e = eCall (tApp (eQVar primIdentityOpt) [t']) []
-                                                 return (VarEqn w (impl2type t p) e : eq)
+                                                 return (Eqn w (impl2type t p) e : eq)
   | tcname p == qnEq                        = do w' <- newWitness
                                                  let e = eCall (tApp (eQVar primEqOpt) [t']) [eVar w']
-                                                 reduce env (VarEqn w (impl2type t p) e : eq) [Impl w' t' p]
+                                                 reduce env (Eqn w (impl2type t p) e : eq) [Impl w' t' p]
 
 reduce' env eq c@(Impl w t@(TNone _) p)
-  | tcname p == qnIdentity                  = return (VarEqn w (impl2type t p) (eQVar primWIdentityNone) : eq)
-  | tcname p == qnEq                        = return (VarEqn w (impl2type t p) (eQVar primWEqNone) : eq)
+  | tcname p == qnIdentity                  = return (Eqn w (impl2type t p) (eQVar primWIdentityNone) : eq)
+  | tcname p == qnEq                        = return (Eqn w (impl2type t p) (eQVar primWEqNone) : eq)
 
 reduce' env eq c@(Sel w (TVar _ tv) n _)
   | univar tv                               = do defer [c]; return eq
@@ -359,8 +357,13 @@ reduce' env eq c@(Sel w (TCon _ tc) n _)
 
 reduce' env eq (Sel w t1@(TTuple _ p r) n t2)
                                             = do let e = eLambda [(px0,t1)] (eDot (eVar px0) n)
+<<<<<<< HEAD
                                                  unify r (kwdRow n t2 tWild)
                                                  return (VarEqn w (wFun t1 t2) e : eq)
+=======
+                                                     cs' = [Cast r (kwdRow n t2 tWild)]
+                                                 reduce env (Eqn w (wFun t1 t2) e : eq) cs'
+>>>>>>> 9610c95 (Dropped the idea of witness "def equations" in favor of the musch simpler notion of an internal primitive: $MapFX.)
 
 reduce' env eq c@(Mut (TVar _ tv) n _)
   | univar tv                               = do defer [c]; return eq
@@ -380,13 +383,19 @@ reduce' env eq c                            = noRed c
 
 solveImpl env wit w t p                     = do (cs,p',we) <- instWitness env t wit
                                                  unifyM (tcargs p) (tcargs p')
-                                                 return ([VarEqn w (impl2type t p) we], cs)
+                                                 return ([Eqn w (impl2type t p) we], cs)
 
 solveSelAttr env (wf,sc,d) (Sel w t1 n t2)  = do (cs,tvs,t) <- instantiate env sc
                                                  when (tvSelf `elem` snd (polvars t)) (tyerr n "Contravariant Self attribute not selectable by instance")
+<<<<<<< HEAD
                                                  let e = eLambda [(px0,t1)] (app t (tApp (eDot (wf $ eVar px0) n) tvs) $ witsOf cs)
                                                  unify (subst [(tvSelf,t1)] t) t2
                                                  return ([VarEqn w (wFun t1 t2) e], cs)
+=======
+                                                 let e = eLambda [(px0,t1)] (app t (tApp (eDot (wf $ eVar px0) n) tvs) $ witsOf cs1)
+                                                     cs = Cast (subst [(tvSelf,t1)] t) t2 : cs1
+                                                 return ([Eqn w (wFun t1 t2) e], cs)
+>>>>>>> 9610c95 (Dropped the idea of witness "def equations" in favor of the musch simpler notion of an internal primitive: $MapFX.)
 
 --  e1.__setslice__(sl, e2)
 --  e1.__setslice__(w_Iterable, sl, e2)
@@ -405,9 +414,15 @@ solveSelProto env pn c@(Sel w t1 n t2)      = do p <- instwildcon env pn
 solveSelWit env (p,we) (Sel w t1 n t2)      = do let Just (wf,sc,d) = findAttr env p n
                                                  (cs,tvs,t) <- instantiate env sc
                                                  when (tvSelf `elem` snd (polvars t)) (tyerr n "Contravariant Self attribute not selectable by instance")
+<<<<<<< HEAD
                                                  let e = eLambda [(px0,t1)] (app t (tApp (eDot (wf we) n) tvs) $ eVar px0 : witsOf cs)
                                                  unify (subst [(tvSelf,t1)] t) t2
                                                  return ([VarEqn w (wFun t1 t2) e], cs)
+=======
+                                                 let e = eLambda [(px0,t1)] (app t (tApp (eDot (wf we) n) tvs) $ eVar px0 : witsOf cs1)
+                                                     cs = Cast (subst [(tvSelf,t1)] t) t2 : cs1
+                                                 return ([Eqn w (wFun t1 t2) e], cs)
+>>>>>>> 9610c95 (Dropped the idea of witness "def equations" in favor of the musch simpler notion of an internal primitive: $MapFX.)
 
 solveMutAttr env (wf,sc,dec) (Mut t1 n t2)  = do when (dec /= Just Property) (noMut n)
                                                  let TSchema _ [] t = sc
@@ -564,13 +579,21 @@ sub env eq w t1 t2                          = do t1' <- msubst t1
 
 sub'                                        :: Env -> Equations -> Name -> Type -> Type ->TypeM Equations
 
-sub' env eq w t1@TWild{} t2                 = return (idwit w t1 t2 : eq)
-sub' env eq w t1 t2@TWild{}                 = return (idwit w t1 t2 : eq)
+sub' env eq w t1@TWild{} t2                 = return (idwit env w t1 t2 : eq)
+sub' env eq w t1 t2@TWild{}                 = return (idwit env w t1 t2 : eq)
 
-sub' env eq w (TFX _ fx1) (TFX _ fx2)
-  | Just w' <- subFX fx1 fx2                = return (DefEqn w fx1 w' fx2 : eq)
-  where subFX FXPure   FXPure               = Nothing
+sub' env eq w t1@(TFX _ fx1) t2@(TFX _ fx2)
+  | Just e <- subFX fx1 fx2                 = return (Eqn w (fxFun t1 t2) e : eq)
+  where subFX FXPure   FXPure               = Just $ idFX FXPure
+        subFX FXPure   FXMut                = Just $ idFX FXMut
+        subFX FXPure   FXProc               = Just $ eQVar primCoerceMut
+        subFX FXMut    FXMut                = Just $ idFX FXMut
+        subFX FXMut    FXProc               = Just $ eQVar primCoerceMut
+        subFX FXProc   FXProc               = Just $ idFX FXProc
+        subFX FXAction FXAction             = Just $ idFX FXAction
+        subFX FXAction FXProc               = Just $ eQVar primCoerceAct
         subFX _        _                    = Nothing
+        idFX fx                             = tApp (eQVar primIdFX) [tTFX fx]
 
 --                as declared               as called
 --                existing                  expected
@@ -579,14 +602,14 @@ sub' env eq w t1@(TFun _ fx1 p1 k1 t1') t2@(TFun _ fx2 p2 k2 t2')               
                                                  wp <- newWitness
                                                  wk <- newWitness
                                                  wt <- newWitness
-                                                 let e = eLambda [(px0,t1)] (eCall (eVar wx) [e'])
-                                                     e' = Lambda l0 (PosSTAR px1 $ Just $ tTupleP p2) (KwdSTAR px2 $ Just $ tTupleK k2) e0 fx2
+                                                 let e = eLambda [(px0,t1)] (eCall (tApp (eQVar primMapFX) [fx1,fx2,p2,k2,t2']) [eVar wx, e'])
+                                                     e' = Lambda l0 (PosSTAR px1 $ Just $ tTupleP p2) (KwdSTAR px2 $ Just $ tTupleK k2) e0 fx1
                                                      e0 = eCall (eVar wt) [Call l0 (eVar px0) (PosStar e1) (KwdStar e2)]
                                                      e1 = eCall (eVar wp) [eVar px1]
                                                      e2 = eCall (eVar wk) [eVar px2]
                                                      cs = [Sub wx fx1 fx2, Sub wp p2 p1, Sub wk k2 k1, Sub wt t1' t2']
 
-                                                 reduce env (VarEqn w (wFun t1 t2) e : eq) cs
+                                                 reduce env (Eqn w (wFun t1 t2) e : eq) cs
 
 --                existing            expected
 sub' env eq w t1@(TTuple _ p1 k1) t2@(TTuple _ p2 k2)                               -- TODO: implement pos/kwd argument shifting
@@ -596,13 +619,13 @@ sub' env eq w t1@(TTuple _ p1 k1) t2@(TTuple _ p2 k2)                           
                                                      e1 = eCall (eVar wp) [Paren l0 $ Tuple l0 (PosStar $ eVar px0) KwdNil]
                                                      e2 = eCall (eVar wk) [Paren l0 $ Tuple l0 PosNil (KwdStar $ eVar px0)]
                                                      cs = [Sub wp p1 p2, Sub wk k1 k2]
-                                                 reduce env (VarEqn w (wFun t1 t2) e : eq) cs
+                                                 reduce env (Eqn w (wFun t1 t2) e : eq) cs
 
 -- Note: a sub-row constraint R1 < R2 is witnessed by a lambda of type
 -- (*(R1))->(*(R2)) or (**(R1))->(**(R2)), depending on the row kind
 
 sub' env eq w r1@(TNil _ k1) r2@(TNil _ k2)
-  | k1 == k2                                = return (idwit w tUnit tUnit : eq)
+  | k1 == k2                                = return (idwit env w tUnit tUnit : eq)
 
 --          existing     expected                Match labels in the order of the expected row
 sub' env eq w r1     r2@(TRow _ k n t2 r2') = do (t1,r1') <- findElem k (tNil k) n r1 (rowTail r2)
@@ -610,13 +633,13 @@ sub' env eq w r1     r2@(TRow _ k n t2 r2') = do (t1,r1') <- findElem k (tNil k)
                                                  wr <- newWitness
                                                  let e = rowWit k w n t1 r1' wt wr
                                                      cs = [Sub wt t1 t2, Sub wr r1' r2']
-                                                 reduce env (VarEqn w (rowFun k r1 r2) e : eq) cs
+                                                 reduce env (Eqn w (rowFun k r1 r2) e : eq) cs
 sub' env eq w r1@(TRow _ k n t1 r1') r2     = do (t2,r2') <- findElem k (tNil k) n r2 (rowTail r1)
                                                  wt <- newWitness
                                                  wr <- newWitness
                                                  let e = rowWit k w n t2 r2' wt wr
                                                      cs = [Sub wt t1 t2, Sub wr r1' r2']
-                                                 reduce env (VarEqn w (rowFun k r1 r2) e : eq) cs
+                                                 reduce env (Eqn w (rowFun k r1 r2) e : eq) cs
 
 sub' env eq w (TVar _ tv) t2@TFun{}
   | univar tv                               = do t1 <- instwild env KType $ tFun tWild tWild tWild tWild
@@ -634,11 +657,11 @@ sub' env eq w (TVar _ tv) t2@TTuple{}
                                                  sub env eq w t1 t2
 
 sub' env eq w t1@(TVar _ tv1) t2@(TVar _ tv2)
-  | tv1 == tv2                              = do return (idwit w t1 t2 : eq)
+  | tv1 == tv2                              = return (idwit env w t1 t2 : eq)
   | univar tv1 && univar tv2                = do defer [Sub w t1 t2]; return eq
 
 sub' env eq w t1 t2                         = do cast env t1 t2
-                                                 return (idwit w t1 t2 : eq)
+                                                 return (idwit env w t1 t2 : eq)
 
 
 {-
@@ -886,7 +909,7 @@ improve env te tt eq cs
                                              simplify' env te tt eq cs
   | not $ null redEq                    = do --traceM ("  *(Context red) " ++ prstrs [ w | (w,_,_) <- redEq ])
                                              sequence [ unify t1 t2 | (t1,t2) <- redUni ]
-                                             simplify' env te tt (redEq++eq) (remove [ w | VarEqn w _ _ <- redEq ] cs)
+                                             simplify' env te tt (redEq++eq) (remove [ w | Eqn w _ _ <- redEq ] cs)
   | not $ null dots                     = do --traceM ("  *Implied mutation/selection solutions " ++ prstrs dots)
                                              (eq',cs') <- solveDots env mutC selC selP cs
                                              simplify' env te tt (eq'++eq) cs'
@@ -978,7 +1001,7 @@ ctxtReduce env vi multiPBnds            = (concat eqs, concat css)
         ctxtRed (v,wps)                 = imp v [] [] [] wps
         imp v eq uni wps ((w,p):wps')
           | (w',wf,p1,p'):_ <- hits     = --trace ("  *" ++ prstr p ++ " covered by " ++ prstr p1) $
-                                          imp v (VarEqn w (impl2type (tVar v) p) (wf (eVar w')) : eq) ((tcargs p `zip` tcargs p') ++ uni) wps wps'
+                                          imp v (Eqn w (impl2type (tVar v) p) (wf (eVar w')) : eq) ((tcargs p `zip` tcargs p') ++ uni) wps wps'
           | otherwise                   = --trace ("   (Not covered: " ++ prstr p ++ " in context " ++ prstrs (map snd (wps++wps')) ++ ")") $
                                           imp v eq uni ((w,p):wps) wps'
           where hits                    = [ (w',wf,p0,subst s p') | (w',p0) <- wps++wps', w'/=w, Just (wf,p') <- [findAncestor env p0 (tcname p)] ]
@@ -1013,7 +1036,9 @@ app2nd _ tx e es                        = Lambda NoLoc p' k' (Call NoLoc e (PosA
         (p',k')                         = (pPar pNames p, kPar kNames k)
         PosArg pSelf pArgs              = pArg p'                    
 
-idwit w t1 t2                           = VarEqn w (wFun t1 t2) (eLambda [(px0,t1)] (eVar px0))
+idwit env w t1 t2
+  | kindOf env t1 == KFX                = Eqn w (fxFun t1 t2) (tApp (eQVar primIdFX) [t2])
+  | otherwise                           = Eqn w (wFun t1 t2) (eLambda [(px0,t1)] (eVar px0))
 
 rowFun PRow r1 r2                       = tFun fxPure (posRow (tTupleP r1) posNil) kwdNil (tTupleP r2)
 rowFun KRow r1 r2                       = tFun fxPure (posRow (tTupleK r1) posNil) kwdNil (tTupleK r2)

@@ -327,6 +327,9 @@ fxProc          = tTFX FXProc
 fxAction        = tTFX FXAction
 fxWild          = tWild
 
+fxFun fx1 fx2   = tFun fxPure (posRow (tF0 fx1) posNil) kwdNil (tF0 fx2)
+  where tF0 fx  = tFun fx posNil kwdNil tNone
+
 posRow t r      = TRow NoLoc PRow (name "_") t r
 posVar mbv      = maybe tWild tVar mbv
 posNil          = tNil PRow

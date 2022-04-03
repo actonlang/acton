@@ -76,6 +76,11 @@ primISNONE          = gPrim "ISNONE"
 primSKIPRESc        = gPrim "SKIPRESc"
 primSKIPRES         = gPrim "SKIPRES"
 
+primCoerceAct       = gPrim "CoerceAct"
+primCoerceMut       = gPrim "CoerceMut"
+primIdFX            = gPrim "IdFX"
+primMapFX           = gPrim "MapFX"
+
 cActor              = TC primActor []
 tActor              = tCon cActor
 tR                  = tCon $ TC primR []
@@ -131,7 +136,12 @@ primMkEnv cls def var sig =
                             (noq primISNONE,        def scISNONE NoDec),
 
                             (noq primSKIPRESc,      def scSKIPRESc NoDec),
-                            (noq primSKIPRES,       def scSKIPRES NoDec)
+                            (noq primSKIPRES,       def scSKIPRES NoDec),
+
+                            (noq primCoerceAct,     def scCoerceAct NoDec),
+                            (noq primCoerceMut,     def scCoerceMut NoDec),
+                            (noq primIdFX,          def scIdFX NoDec),
+                            (noq primMapFX,         def scMapFX NoDec)
                       ]
 
 tSequenceListWild   = tCon (TC qnSequence [tList tWild, tWild])
@@ -352,3 +362,31 @@ scSKIPRES           = tSchema [quant x, quant a] tSKIPRES
         tCont''     = tCont (tVar x) (tVar a)
         x           = TV KFX $ name "X"
         a           = TV KType $ name "A"
+
+--  $CoerceAct      : (action()->None) -> proc()->None
+scCoerceAct         = tSchema [] tCoerceAct
+  where tCoerceAct  = tFun fxPure (posRow tActFun posNil) kwdNil tProcFun
+        tActFun     = tFun fxAction posNil kwdNil tNone
+        tProcFun    = tFun fxProc posNil kwdNil tNone
+
+--  $CoerceMut      : (mut()->None) -> proc()->None
+scCoerceMut         = tSchema [] tCoerceMut
+  where tCoerceMut  = tFun fxPure (posRow tMutFun posNil) kwdNil tProcFun
+        tMutFun     = tFun fxMut posNil kwdNil tNone
+        tProcFun    = tFun fxProc posNil kwdNil tNone
+
+--  $IdFX           : [X] => (X()->None) -> X()->None
+scIdFX              = tSchema [quant x] tIdFX
+  where tIdFX       = tFun fxPure (posRow tXFun posNil) kwdNil tXFun
+        tXFun       = tFun (tVar x) posNil kwdNil tNone
+        x           = TV KFX $ name "X"
+
+--  $MapFX          : [X1,X2A,B,C] => ((X1()->None)->X2()->None, X1(*A,**B)->C) -> X2(*A,**B)->C
+scMapFX             = tSchema [quant x1, quant x2, quant a, quant b, quant c] tMapFX
+  where tMapFX      = tFun fxPure (posRow (fxFun (tVar x1) (tVar x2)) $ posRow (tRealFun x1) posNil) kwdNil (tRealFun x2)
+        tRealFun x  = tFun (tVar x) (tVar a) (tVar b) (tVar c)
+        x1          = TV KFX $ name "X1"
+        x2          = TV KFX $ name "X2"
+        a           = TV PRow $ name "A"
+        b           = TV KRow $ name "B"
+        c           = TV KType $ name "C"

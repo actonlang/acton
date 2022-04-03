@@ -51,6 +51,7 @@ instance Pretty (Name,Expr) where
 
 wtrans env (Assign l p@[PVar _ n (Just t)] e : ss)
   | Lambda{} <- e                       = wtrans (extsubst [(n,e1)] env) ss
+  | TApp _ Var{} _ <- e                 = wtrans (extsubst [(n,e1)] env) ss
   | Var{} <- e                          = wtrans (extsubst [(n,e1)] env) ss
   | Dot _ Var{} _ <- e                  = wtrans (extsubst [(n,e1)] env) ss
   | not $ null hits                     = wtrans (extsubst [(n,head hits)] env) ss
@@ -108,6 +109,11 @@ instance Transform Expr where
       | Lambda{} <- e',
         Just s1 <- pzip (ppar e') p',
         Just s2 <-  kzip (kpar e') k'   = termsubst (s1++s2) (exp1 e')
+      | TApp _ (Var _ n) _ <- e',
+        n == primMapFX,
+        PosArg e1 (PosArg e2 _) <- p',
+        TApp _ (Var _ n1) _ <- e1,
+        n1 == primIdFX                  = e2
       | otherwise                       = Call l e' p' k'
       where e'                          = trans env e
             p'                          = trans env p
