@@ -1,0 +1,14 @@
+actor main(env):
+    b = bytearray("strtest")
+    print(b.removeprefix(bytearray("str")))
+    print(b.removeprefix(bytearray("stt")))
+    print(b.removesuffix(bytearray("test")))
+    print(b.removesuffix(bytearray("tett")))
+    print(b.removesuffix(bytearray("strtest")))
+    print(b.removeprefix(bytearray("strtest")))
+    print(b.removesuffix(bytearray("strtestt")))
+    print(b.removeprefix(bytearray("strtestt")))
+    b = bytearray("abcdefgh")
+    print(b[::2])
+    
+    env.exit(0)

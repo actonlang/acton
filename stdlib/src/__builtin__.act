@@ -112,6 +112,8 @@ class bytearray (object):
   lower        : () -> bytearray
   lstrip       : (bytearray) -> bytearray
   partition    : (bytearray) -> (bytearray,bytearray,bytearray)
+  removeprefix : (bytearray) -> bytearray
+  removesuffix : (bytearray) -> bytearray
   replace      : (bytearray,bytearray,?int) -> bytearray
   rfind        : (bytearray,?int,?int) -> int
   rindex       : (bytearray,?int,?int) -> int

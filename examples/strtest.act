@@ -11,7 +11,5 @@ actor main(env):
     print("України".removeprefix("str"))
     print("України".removesuffix("ни"))
     print("України".removesuffix("Укр"))
-    b = bytearray("abcdefgh")
-    print(b[::2])
     
     env.exit(0)

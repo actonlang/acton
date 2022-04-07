@@ -1620,6 +1620,8 @@ $bytearray $bytearray_ljust($bytearray s, $int width, $bytearray fill);
 $bytearray $bytearray_lower($bytearray s);
 $bytearray $bytearray_lstrip($bytearray s,$bytearray cs); 
 $tuple $bytearray_partition($bytearray s, $bytearray sep);
+$bytearray $bytearray_removeprefix($bytearray s, $bytearray prefix);
+$bytearray $bytearray_removesuffix($bytearray s, $bytearray suffix);
 $bytearray $bytearray_replace($bytearray s, $bytearray old, $bytearray new, $int count);
 $int $bytearray_rfind($bytearray s, $bytearray sub, $int start, $int end);
 $int $bytearray_rindex($bytearray s, $bytearray sub, $int start, $int end);
@@ -1640,7 +1642,8 @@ struct $bytearray$class $bytearray$methods =
    $bytearray_str, $bytearray_capitalize, $bytearray_center, $bytearray_count,  $bytearray_decode, $bytearray_endswith,
    $bytearray_expandtabs, $bytearray_find, $bytearray_index,
    $bytearray_isalnum, $bytearray_isalpha, $bytearray_isascii, $bytearray_isdigit, $bytearray_islower, $bytearray_isspace,
-   $bytearray_istitle, $bytearray_isupper, $bytearray_join, $bytearray_ljust, $bytearray_lower, $bytearray_lstrip, $bytearray_partition, $bytearray_replace,
+   $bytearray_istitle, $bytearray_isupper, $bytearray_join, $bytearray_ljust, $bytearray_lower, $bytearray_lstrip, $bytearray_partition,
+   $bytearray_removeprefix,  $bytearray_removesuffix, $bytearray_replace,
    $bytearray_rfind, $bytearray_rindex, $bytearray_rjust,
    $bytearray_rpartition, $bytearray_rstrip, $bytearray_split, $bytearray_splitlines, $bytearray_startswith, $bytearray_strip, $bytearray_upper, $bytearray_zfill};
 
@@ -1971,6 +1974,31 @@ $tuple $bytearray_partition($bytearray s, $bytearray sep) {
 }
 
 
+$bytearray $bytearray_removeprefix($bytearray s, $bytearray prefix) {
+  int bytes_to_remove;
+  if (prefix->nbytes > s->nbytes || bcmp(s->str,prefix->str,prefix->nbytes))
+    bytes_to_remove = 0;
+  else
+    bytes_to_remove = prefix->nbytes;
+  $bytearray res;
+  int resbytes = s->nbytes - bytes_to_remove;
+  NEW_UNFILLED_BYTEARRAY(res,resbytes);
+  memcpy(res->str,s->str+bytes_to_remove,resbytes);
+  return res;
+}
+
+$bytearray $bytearray_removesuffix($bytearray s, $bytearray suffix) {
+  int bytes_to_remove;
+  if (suffix->nbytes > s->nbytes || bcmp(s->str+s->nbytes-suffix->nbytes,suffix->str,suffix->nbytes))
+    bytes_to_remove = 0;
+  else
+    bytes_to_remove = suffix->nbytes;
+  $bytearray res;
+  int resbytes = s->nbytes - bytes_to_remove;
+  NEW_UNFILLED_BYTEARRAY(res,resbytes);
+  memcpy(res->str,s->str,resbytes);
+  return res;
+}
 $bytearray $bytearray_replace($bytearray s, $bytearray old, $bytearray new, $int count) {
   if (count==NULL)
     count = to$int(INT_MAX);

@@ -154,6 +154,8 @@ struct $bytearray$class {
   $bytearray (*lower)($bytearray s);
   $bytearray (*lstrip)($bytearray s,$bytearray cs);                               
   $tuple (*partition)($bytearray s, $bytearray sep);
+  $bytearray (*removeprefix)($bytearray s, $bytearray prefix);
+  $bytearray (*removesuffix)($bytearray s, $bytearray suffix);
   $bytearray (*replace)($bytearray s, $bytearray old, $bytearray new, $int count);
   $int (*rfind)($bytearray s, $bytearray sub, $int start, $int end);
   $int (*rindex)($bytearray s, $bytearray sub, $int start, $int end);       
