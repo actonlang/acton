@@ -76,8 +76,7 @@ primISNONE          = gPrim "ISNONE"
 primSKIPRESc        = gPrim "SKIPRESc"
 primSKIPRES         = gPrim "SKIPRES"
 
-primCoerceAct       = gPrim "CoerceAct"
-primCoerceMut       = gPrim "CoerceMut"
+primAct2Proc        = gPrim "Act2Proc"
 primIdFX            = gPrim "IdFX"
 primMapFX           = gPrim "MapFX"
 
@@ -138,8 +137,7 @@ primMkEnv cls def var sig =
                             (noq primSKIPRESc,      def scSKIPRESc NoDec),
                             (noq primSKIPRES,       def scSKIPRES NoDec),
 
-                            (noq primCoerceAct,     def scCoerceAct NoDec),
-                            (noq primCoerceMut,     def scCoerceMut NoDec),
+                            (noq primAct2Proc,      def scAct2Proc NoDec),
                             (noq primIdFX,          def scIdFX NoDec),
                             (noq primMapFX,         def scMapFX NoDec)
                       ]
@@ -363,16 +361,10 @@ scSKIPRES           = tSchema [quant x, quant a] tSKIPRES
         x           = TV KFX $ name "X"
         a           = TV KType $ name "A"
 
---  $CoerceAct      : (action()->None) -> proc()->None
-scCoerceAct         = tSchema [] tCoerceAct
-  where tCoerceAct  = tFun fxPure (posRow tActFun posNil) kwdNil tProcFun
+--  $Act2Proc       : (action()->None) -> proc()->None
+scAct2Proc          = tSchema [] tAct2Proc
+  where tAct2Proc   = tFun fxPure (posRow tActFun posNil) kwdNil tProcFun
         tActFun     = tFun fxAction posNil kwdNil tNone
-        tProcFun    = tFun fxProc posNil kwdNil tNone
-
---  $CoerceMut      : (mut()->None) -> proc()->None
-scCoerceMut         = tSchema [] tCoerceMut
-  where tCoerceMut  = tFun fxPure (posRow tMutFun posNil) kwdNil tProcFun
-        tMutFun     = tFun fxMut posNil kwdNil tNone
         tProcFun    = tFun fxProc posNil kwdNil tNone
 
 --  $IdFX           : [X] => (X()->None) -> X()->None

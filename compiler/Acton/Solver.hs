@@ -586,12 +586,12 @@ sub' env eq w t1@(TFX _ fx1) t2@(TFX _ fx2)
   | Just e <- subFX fx1 fx2                 = return (Eqn w (fxFun t1 t2) e : eq)
   where subFX FXPure   FXPure               = Just $ idFX FXPure
         subFX FXPure   FXMut                = Just $ idFX FXMut
-        subFX FXPure   FXProc               = Just $ eQVar primCoerceMut
+        subFX FXPure   FXProc               = Just $ idFX FXProc
         subFX FXMut    FXMut                = Just $ idFX FXMut
-        subFX FXMut    FXProc               = Just $ eQVar primCoerceMut
+        subFX FXMut    FXProc               = Just $ idFX FXProc
         subFX FXProc   FXProc               = Just $ idFX FXProc
         subFX FXAction FXAction             = Just $ idFX FXAction
-        subFX FXAction FXProc               = Just $ eQVar primCoerceAct
+        subFX FXAction FXProc               = Just $ eQVar primAct2Proc
         subFX _        _                    = Nothing
         idFX fx                             = tApp (eQVar primIdFX) [tTFX fx]
 
