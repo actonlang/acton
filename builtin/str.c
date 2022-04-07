@@ -1252,12 +1252,10 @@ $tuple $str_partition($str s, $str sep) {
 
 $str $str_removeprefix($str s, $str prefix) {
   int bytes_to_remove;
-  if (prefix->nbytes > s->nbytes)
-    bytes_to_remove=0;
-  else if (bcmp(s,prefix,prefix->nbytes))
-    bytes_to_remove=prefix->nbytes;
-  else
+  if (prefix->nbytes > s->nbytes || bcmp(s->str,prefix->str,prefix->nbytes))
     bytes_to_remove = 0;
+  else
+    bytes_to_remove = prefix->nbytes;
   $str res;
   int reschars = bytes_to_remove==0 ? s->nchars : s->nchars-prefix->nchars;
   NEW_UNFILLED_STR(res,reschars,s->nbytes-bytes_to_remove);
@@ -1267,16 +1265,15 @@ $str $str_removeprefix($str s, $str prefix) {
 
 $str $str_removesuffix($str s, $str suffix) {
   int bytes_to_remove;
-  if (suffix->nbytes > s->nbytes)
-    bytes_to_remove=0;
-  else if (bcmp(s+s->nbytes-suffix->nbytes,suffix,suffix->nbytes))
-    bytes_to_remove=suffix->nbytes;
-  else
+  if (suffix->nbytes > s->nbytes || bcmp(s->str+s->nbytes-suffix->nbytes,suffix->str,suffix->nbytes))
     bytes_to_remove = 0;
+  else
+    bytes_to_remove = suffix->nbytes;
   $str res;
   int reschars = bytes_to_remove==0 ? s->nchars : s->nchars-suffix->nchars;
-  NEW_UNFILLED_STR(res,reschars,s->nbytes-bytes_to_remove);
-  memcpy(res->str,s->str+bytes_to_remove,s->nbytes-bytes_to_remove);
+  int resbytes = s->nbytes - bytes_to_remove;
+  NEW_UNFILLED_STR(res,reschars,resbytes);
+  memcpy(res->str,s->str,resbytes);
   return res;
 }
 
@@ -2645,7 +2642,7 @@ $bytearray $bytearray_getslice($bytearray self, $slice slc) {
   for (int i=0; i<slen; i++) {
     $int w;
     w = $bytearray_getitem(self,t);
-    $bytearray_append(res,w);
+    $bytearray_setitem(res,i,w->val);
     t += step;
   }
   return res;

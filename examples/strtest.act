@@ -1,3 +1,17 @@
 actor main(env):
     print("strtest".removeprefix("str"))
+    print("strtest".removeprefix("stt"))
+    print("strtest".removesuffix("test"))
+    print("strtest".removesuffix("tett"))
+    print("strtest".removesuffix("strtest"))
+    print("strtest".removeprefix("strtest"))
+    print("strtest".removesuffix("strtestt"))
+    print("strtest".removeprefix("strtestt"))
+    print("України".removeprefix("Укр"))
+    print("України".removeprefix("str"))
+    print("України".removesuffix("ни"))
+    print("України".removesuffix("Укр"))
+    b = bytearray("abcdefgh")
+    print(b[::2])
+    
     env.exit(0)
