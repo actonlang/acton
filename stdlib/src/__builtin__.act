@@ -73,6 +73,8 @@ class str (atom):
   lower        : () -> str
   lstrip       : (str) -> str
   partition    : (str) -> (str,str,str)
+  removeprefix : (str) -> str
+  removesuffix : (str) -> str
   replace      : (str,str,?int) -> str
   rfind        : (str,?int,?int) -> int
   rindex       : (str,?int,?int) -> int
