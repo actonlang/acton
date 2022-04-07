@@ -42,6 +42,8 @@ struct $str$class {
   $str (*lstrip)($str s,$str cs);                                // cs may be NULL, then defaulting to whitespace removal.
   //maketrans not implemented
   $tuple (*partition)($str s, $str sep);
+  $str (*removeprefix)($str s, $str prefix);
+  $str (*removesuffix)($str s, $str suffix);
   $str (*replace)($str s, $str old, $str new, $int count);
   $int (*rfind)($str s, $str sub, $int start, $int end);         // returns -1 when not found
   $int (*rindex)($str s, $str sub, $int start, $int end);        // like rfind but raises VALUEERROR when not found

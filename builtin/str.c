@@ -56,6 +56,8 @@ $str $str_ljust($str s, $int width, $str fill);
 $str $str_lower($str s);
 $str $str_lstrip($str s,$str cs); 
 $tuple $str_partition($str s, $str sep);
+$str $str_removeprefix($str s, $str prefix);
+$str $str_removesuffix($str s, $str suffix);
 $str $str_replace($str s, $str old, $str new, $int count);
 $int $str_rfind($str s, $str sub, $int start, $int end);
 $int $str_rindex($str s, $str sub, $int start, $int end);
@@ -72,7 +74,7 @@ $str $str_zfill($str s, $int width);
 struct $str$class $str$methods =
   {"$str",UNASSIGNED,($Super$class)&$atom$methods, $str_init, $str_serialize, $str_deserialize, $str_bool, $str_str, $str_capitalize, $str_center, $str_count, $str_encode, $str_endswith,
    $str_expandtabs, $str_find, $str_index, $str_isalnum, $str_isalpha, $str_isascii, $str_isdecimal, $str_islower, $str_isprintable, $str_isspace,
-   $str_istitle, $str_isupper, $str_join, $str_ljust, $str_lower, $str_lstrip, $str_partition, $str_replace, $str_rfind, $str_rindex, $str_rjust,
+   $str_istitle, $str_isupper, $str_join, $str_ljust, $str_lower, $str_lstrip, $str_partition, $str_removeprefix, $str_removesuffix, $str_replace, $str_rfind, $str_rindex, $str_rjust,
    $str_rpartition, $str_rstrip, $str_split, $str_splitlines, $str_startswith, $str_strip, $str_upper, $str_zfill};
 
 
@@ -1247,6 +1249,37 @@ $tuple $str_partition($str s, $str sep) {
     return $NEWTUPLE(3,ls,sep,rs);
   }
 }
+
+$str $str_removeprefix($str s, $str prefix) {
+  int bytes_to_remove;
+  if (prefix->nbytes > s->nbytes)
+    bytes_to_remove=0;
+  else if (bcmp(s,prefix,prefix->nbytes))
+    bytes_to_remove=prefix->nbytes;
+  else
+    bytes_to_remove = 0;
+  $str res;
+  int reschars = bytes_to_remove==0 ? s->nchars : s->nchars-prefix->nchars;
+  NEW_UNFILLED_STR(res,reschars,s->nbytes-bytes_to_remove);
+  memcpy(res->str,s->str+bytes_to_remove,s->nbytes-bytes_to_remove);
+  return res;
+}
+
+$str $str_removesuffix($str s, $str suffix) {
+  int bytes_to_remove;
+  if (suffix->nbytes > s->nbytes)
+    bytes_to_remove=0;
+  else if (bcmp(s+s->nbytes-suffix->nbytes,suffix,suffix->nbytes))
+    bytes_to_remove=suffix->nbytes;
+  else
+    bytes_to_remove = 0;
+  $str res;
+  int reschars = bytes_to_remove==0 ? s->nchars : s->nchars-suffix->nchars;
+  NEW_UNFILLED_STR(res,reschars,s->nbytes-bytes_to_remove);
+  memcpy(res->str,s->str+bytes_to_remove,s->nbytes-bytes_to_remove);
+  return res;
+}
+
 
 $str $str_replace($str s, $str old, $str new, $int count) {
   if (count==NULL)

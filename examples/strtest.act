@@ -1,0 +1,3 @@
+actor main(env):
+    print("strtest".removeprefix("str"))
+    env.exit(0)
