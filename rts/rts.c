@@ -1639,6 +1639,9 @@ int main(int argc, char **argv) {
     long num_cores = sysconf(_SC_NPROCESSORS_ONLN);
     num_wthreads = num_cores;
     bool mon_on_exit = false;
+    char *log_path = NULL;
+    FILE *logf;
+    bool log_stderr = false;
 
     appname = argv[0];
     pid_t pid = getpid();
@@ -1685,11 +1688,13 @@ int main(int argc, char **argv) {
         {"rts-ddb-port", "PORT", 'p', "DDB port [32000]"},
         {"rts-ddb-replication", "FACTOR", 'r', "DDB replication factor [3]"},
         {"rts-help", NULL, 'H', "Show this help"},
-        {"rts-mon-log-path", "PATH", 'l', "Path to write RTS mon stats log"},
+        {"rts-mon-log-path", "PATH", 'l', "Path to RTS mon stats log"},
         {"rts-mon-log-period", "PERIOD", 'k', "Periodicity of writing RTS mon stats log entry"},
         {"rts-mon-on-exit", NULL, 'E', "Print RTS mon stats to stdout on exit"},
         {"rts-mon-socket-path", "PATH", 'm', "Path to unix socket to expose RTS mon stats"},
-        {"rts-verbose", NULL, 'v', "Enable verbose RTS output to stdout"},
+        {"rts-log-path", "PATH", 'L', "Path to RTS log"},
+        {"rts-log-stderr", NULL, 's', "Log to stderr in addition to log file"},
+        {"rts-verbose", NULL, 'v', "Enable verbose RTS output"},
         {"rts-wthreads", "COUNT", 'w', "Number of worker threads [#CPU cores]"},
         {NULL, 0, 0}
     };
@@ -1766,6 +1771,9 @@ int main(int argc, char **argv) {
             case 'k':
                 mon_log_period = atoi(optarg);
                 break;
+            case 'L':
+                log_path = optarg;
+                break;
             case 'l':
                 mon_log_path = optarg;
                 break;
@@ -1778,8 +1786,10 @@ int main(int argc, char **argv) {
             case 'r':
                 ddb_replication = atoi(optarg);
                 break;
+            case 's':
+                log_stderr = true;
+                break;
             case 'v':
-                log_set_quiet(false);
                 if (log_get_level() > LOG_INFO)
                     log_set_level(LOG_INFO);
                 rts_verbose = 1;
@@ -1790,6 +1800,20 @@ int main(int argc, char **argv) {
         }
     }
     new_argv[new_argc] = NULL;
+
+    if (log_path)
+        log_set_quiet(true);
+    if (rts_verbose || log_stderr)
+        log_set_quiet(false);
+
+    if (log_path) {
+        logf = fopen(log_path, "w");
+        if (!logf) {
+            fprintf(stderr, "ERROR: Unable to open RTS log file (%s) for writing\n", log_path);
+            exit(1);
+        }
+        log_add_fp(logf, LOG_TRACE);
+    }
 
     if (num_wthreads > MAX_WTHREADS) {
         fprintf(stderr, "ERROR: Maximum of %d worker threads supported.\n", MAX_WTHREADS);
@@ -1967,6 +1991,10 @@ int main(int argc, char **argv) {
     if (mon_on_exit) {
         const char *stats_json = stats_to_json();
         printf("%s\n", stats_json);
+    }
+
+    if (log_path) {
+        fclose(logf);
     }
 
     return return_val;
