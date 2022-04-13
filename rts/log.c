@@ -63,16 +63,16 @@ static void stdout_callback(log_Event *ev) {
   }
 
   char buf[16];
-  buf[strftime(buf, sizeof(buf), "%H:%M:%S", ev->time)] = '\0';
+  buf[strftime(buf, sizeof(buf), "%H:%M:%S", ev->date)] = '\0';
 #ifdef LOG_USE_COLOR
   fprintf(
-    ev->udata, "%s %s%-5s\x1b[0m \x1b[90m%-20s:%5d:\x1b[0m RTS %2s: ",
-    buf, level_colors[ev->level], level_strings[ev->level],
+    ev->udata, "%s.%06lu %s%-5s\x1b[0m \x1b[90m%-20s:%5d:\x1b[0m RTS %2s: ",
+    buf, ev->ts.tv_nsec/1000, level_colors[ev->level], level_strings[ev->level],
     ev->file, ev->line, tname);
 #else
   fprintf(
-    ev->udata, "%s %-5s %-20s:%5d: RTS %2s: ",
-    buf, level_strings[ev->level], ev->file, ev->line, tname);
+    ev->udata, "%s.%06lu %-5s %-20s:%5d: RTS %2s: ",
+    buf, ev->ts.tv_nsec/1000, level_strings[ev->level], ev->file, ev->line, tname);
 #endif
   vfprintf(ev->udata, ev->fmt, ev->ap);
   fprintf(ev->udata, "\n");
@@ -93,10 +93,10 @@ static void file_callback(log_Event *ev) {
   }
 
   char buf[64];
-  buf[strftime(buf, sizeof(buf), "%Y-%m-%d %H:%M:%S", ev->time)] = '\0';
+  buf[strftime(buf, sizeof(buf), "%Y-%m-%d %H:%M:%S", ev->date)] = '\0';
   fprintf(
-    ev->udata, "%s %-5s %-20s:%5d: RTS %2s: ",
-    buf, level_strings[ev->level], ev->file, ev->line, tname);
+    ev->udata, "%s.%09lu %-5s %-20s:%5d: RTS %2s: ",
+    buf, ev->ts.tv_nsec, level_strings[ev->level], ev->file, ev->line, tname);
   vfprintf(ev->udata, ev->fmt, ev->ap);
   fprintf(ev->udata, "\n");
   fflush(ev->udata);
@@ -148,9 +148,9 @@ int log_add_fp(FILE *fp, int level) {
 
 
 static void init_event(log_Event *ev, void *udata) {
-  if (!ev->time) {
-    time_t t = time(NULL);
-    ev->time = localtime(&t);
+  if (!ev->date) {
+    clock_gettime(CLOCK_REALTIME, &ev->ts);
+    ev->date = localtime(&ev->ts.tv_sec);
   }
   ev->udata = udata;
 }
