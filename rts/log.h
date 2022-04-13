@@ -30,7 +30,8 @@ typedef struct {
   va_list ap;
   const char *fmt;
   const char *file;
-  struct tm *time;
+  struct timespec ts;
+  struct tm *date;
   void *udata;
   int line;
   int level;
