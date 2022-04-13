@@ -51,18 +51,28 @@ static const char *level_colors[] = {
 
 
 static void stdout_callback(log_Event *ev) {
-  struct ThreadStore *ts = pthread_getspecific(self_key);
+  // Get a short thread name
+  char tname[16];
+  pthread_getname_np(pthread_self(), tname, 16);
+  if (strncmp(tname, "IO", 6) == 0) {
+  } else if (strncmp(tname, "Worker", 6) == 0) {
+    strncpy(tname, &tname[7], 4);
+  } else {
+    // main thread, ignore the name
+    strcpy(tname, "");
+  }
+
   char buf[16];
   buf[strftime(buf, sizeof(buf), "%H:%M:%S", ev->time)] = '\0';
 #ifdef LOG_USE_COLOR
   fprintf(
     ev->udata, "%s %s%-5s\x1b[0m \x1b[90m%-20s:%5d:\x1b[0m RTS %2s: ",
     buf, level_colors[ev->level], level_strings[ev->level],
-    ev->file, ev->line, ts->name);
+    ev->file, ev->line, tname);
 #else
   fprintf(
     ev->udata, "%s %-5s %-20s:%5d: RTS %2s: ",
-    buf, level_strings[ev->level], ev->file, ev->line, ts->name);
+    buf, level_strings[ev->level], ev->file, ev->line, tname);
 #endif
   vfprintf(ev->udata, ev->fmt, ev->ap);
   fprintf(ev->udata, "\n");
@@ -71,12 +81,22 @@ static void stdout_callback(log_Event *ev) {
 
 
 static void file_callback(log_Event *ev) {
-  struct ThreadStore *ts = pthread_getspecific(self_key);
+  // Get a short thread name
+  char tname[16];
+  pthread_getname_np(pthread_self(), tname, 16);
+  if (strncmp(tname, "IO", 6) == 0) {
+  } else if (strncmp(tname, "Worker", 6) == 0) {
+    strncpy(tname, &tname[7], 4);
+  } else {
+    // main thread, ignore the name
+    strcpy(tname, "");
+  }
+
   char buf[64];
   buf[strftime(buf, sizeof(buf), "%Y-%m-%d %H:%M:%S", ev->time)] = '\0';
   fprintf(
     ev->udata, "%s %-5s %-20s:%5d: RTS %2s: ",
-    buf, level_strings[ev->level], ev->file, ev->line, ts->name);
+    buf, level_strings[ev->level], ev->file, ev->line, tname);
   vfprintf(ev->udata, ev->fmt, ev->ap);
   fprintf(ev->udata, "\n");
   fflush(ev->udata);
