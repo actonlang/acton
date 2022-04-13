@@ -23,6 +23,7 @@
 #include "log.h"
 
 #define MAX_CALLBACKS 32
+static pthread_mutex_t l_mutex;
 
 typedef struct {
   log_LogFn fn;
@@ -32,7 +33,6 @@ typedef struct {
 
 static struct {
   void *udata;
-  log_LockFn lock;
   int level;
   bool quiet;
   Callback callbacks[MAX_CALLBACKS];
@@ -82,23 +82,17 @@ static void file_callback(log_Event *ev) {
 
 
 static void lock(void)   {
-  if (L.lock) { L.lock(true, L.udata); }
+  pthread_mutex_lock(&l_mutex);
 }
 
 
 static void unlock(void) {
-  if (L.lock) { L.lock(false, L.udata); }
+  pthread_mutex_unlock(&l_mutex);
 }
 
 
 const char* log_level_string(int level) {
   return level_strings[level];
-}
-
-
-void log_set_lock(log_LockFn fn, void *udata) {
-  L.lock = fn;
-  L.udata = udata;
 }
 
 
