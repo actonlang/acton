@@ -8,6 +8,12 @@
 #ifndef LOG_H
 #define LOG_H
 
+#ifdef __linux__
+#ifndef _GNU_SOURCE
+#define _GNU_SOURCE 1
+#endif
+#endif
+
 #include <pthread.h>
 #include <stdio.h>
 #include <stdarg.h>
