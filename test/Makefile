@@ -64,8 +64,8 @@ rts/argv1:
 	./$@ --rts-verbose foo --bar --rts-verbose
 	./$@ --rts-verbose --rts-wthreads 7 foo --bar
 	./$@ --rts-verbose --rts-wthreads=7 foo --bar
-	./$@ --rts-verbose --rts-wthreads 7 foo --bar | grep "Using 7 worker threads"
-	./$@ --rts-verbose --rts-wthreads=7 foo --bar | grep "Using 7 worker threads"
+	./$@ --rts-verbose --rts-wthreads 7 foo --bar 2>&1 | grep "Using 7 worker threads"
+	./$@ --rts-verbose --rts-wthreads=7 foo --bar 2>&1 | grep "Using 7 worker threads"
 
 # Test argument parsing when using --
 rts/argv2:
