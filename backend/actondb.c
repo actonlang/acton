@@ -167,43 +167,6 @@ void free_membership(membership * m)
 	free(m);
 }
 
-/*
-int create_state_schema(db_t * db, unsigned int * fastrandstate) {
-	int primary_key_idx = 0;
-	int clustering_key_idxs[2];
-	clustering_key_idxs[0]=1;
-	clustering_key_idxs[1]=2;
-	int index_key_idx=3;
-
-	int * col_types = (int *) malloc(no_cols * sizeof(int));
-
-	for(int i=0;i<no_cols;i++)
-		col_types[i] = DB_TYPE_INT32;
-
-	db_schema_t* db_schema = db_create_schema(col_types, no_cols, &primary_key_idx, no_primary_keys, clustering_key_idxs, no_clustering_keys, &index_key_idx, no_index_keys);
-
-	assert(db_schema != NULL && "Schema creation failed");
-
-	// Create table:
-
-	return db_create_table((WORD) 0, db_schema, db, fastrandstate);;
-}
-
-int create_queue_schema(db_t * db, unsigned int * fastrandstate)
-{
-	int no_queue_cols = 2;
-
-	int * col_types = (int *) malloc(no_queue_cols * sizeof(int));
-	col_types[0] = DB_TYPE_INT64;
-	col_types[1] = DB_TYPE_INT32;
-
-	int ret = create_queue_table((WORD) 1, no_queue_cols, col_types, db,  fastrandstate);
-	printf("Test %s - %s (%d)\n", "create_queue_table", ret==0?"OK":"FAILED", ret);
-
-	return ret;
-}
-*/
-
 int create_state_schema(db_t * db, unsigned int * fastrandstate)
 {
 	int primary_key_idx = 0;
@@ -214,17 +177,6 @@ int create_state_schema(db_t * db, unsigned int * fastrandstate)
 
 	int * col_types = NULL;
 
-//	Col types are not enforced:
-
-/*
-	col_types = (int *) malloc((no_state_cols+1) * sizeof(int));
-
-	for(int i=0;i<no_state_cols;i++)
-		col_types[i] = DB_TYPE_INT32;
-
-	col_types[no_state_cols] = DB_TYPE_BLOB; // Include blob
-*/
-
 	db_schema_t* db_schema = db_create_schema(col_types, no_state_cols + 1, &primary_key_idx, no_state_primary_keys, clustering_key_idxs, min_state_clustering_keys, &index_key_idx, no_state_index_keys);
 
 	assert(db_schema != NULL && "Schema creation failed");
@@ -233,22 +185,19 @@ int create_state_schema(db_t * db, unsigned int * fastrandstate)
 
 	int ret = db_create_table(ACTORS_TABLE, db_schema, db, fastrandstate);
 
-	printf("Test %s - %s (%d)\n", "create ACTORS_TABLE", ret==0?"OK":"FAILED", ret);
+	printf("%s - %s (%d)\n", "Create ACTORS_TABLE", ret==0?"OK":"FAILED", ret);
 
 	ret = db_create_table(MSGS_TABLE, db_schema, db, fastrandstate);
 
-	printf("Test %s - %s (%d)\n", "create MSGS_TABLE", ret==0?"OK":"FAILED", ret);
+	printf("%s - %s (%d)\n", "Create MSGS_TABLE", ret==0?"OK":"FAILED", ret);
 
 	return ret;
 }
 
 int create_queue_schema(db_t * db, unsigned int * fastrandstate)
 {
-//	assert(no_queue_cols == 2);
-
 	int * col_types = (int *) malloc((no_queue_cols + 1) * sizeof(int));
 	col_types[0] = DB_TYPE_INT64;
-//	col_types[1] = DB_TYPE_INT32;
 
 	col_types[no_queue_cols] = DB_TYPE_BLOB; // Include blob
 
