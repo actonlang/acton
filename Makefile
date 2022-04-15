@@ -224,7 +224,7 @@ ARCHIVES=lib/libActon_dev.a lib/libActon_rel.a lib/libActonDB.a
 # in the stdlib directory, which we would need to join together with rts.o etc
 # to form the final libActon (or maybe produce a libActonStdlib and link with?)
 
-LIBACTON_DEV_OFILES=builtin/builtin_dev.o builtin/env_dev.o $(STDLIB_DEV_OFILES) stdlib/out/release/numpy_dev.o rts/empty.o rts/rts_dev.o deps/netstring_dev.o deps/yyjson_dev.o
+LIBACTON_DEV_OFILES=builtin/builtin_dev.o builtin/env_dev.o $(STDLIB_DEV_OFILES) stdlib/out/release/numpy_dev.o rts/empty.o rts/log.o rts/rts_dev.o deps/netstring_dev.o deps/yyjson_dev.o
 OFILES += $(LIBACTON_DEV_OFILES)
 lib/libActon_dev.a: $(LIBACTON_DEV_OFILES)
 	ar rcs $@ $^
@@ -246,6 +246,9 @@ lib/libActonDB.a: $(BACKEND_OFILES)
 
 
 # /rts --------------------------------------------------
+rts/log.o: rts/log.c rts/log.h
+	$(CC) $(CFLAGS) $(CFLAGS_DEV) -DLOG_USE_COLOR -c $< -o$@
+
 rts/rts_dev.o: rts/rts.c rts/rts.h
 	$(CC) $(CFLAGS) $(CFLAGS_DEV) \
 		-Wno-int-to-void-pointer-cast -Wno-unused-result \
