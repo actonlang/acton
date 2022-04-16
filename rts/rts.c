@@ -1649,12 +1649,34 @@ int main(int argc, char **argv) {
     // Do line buffered output
     setlinebuf(stdout);
 
+    // Signal handling
+    struct sigaction sa_int, sa_pipe, sa_term;
+    sigfillset(&sa_int.sa_mask);
+    sigfillset(&sa_pipe.sa_mask);
+    sigfillset(&sa_term.sa_mask);
+    sa_int.sa_flags = SA_RESTART;
+    sa_pipe.sa_flags = SA_RESTART;
+    sa_term.sa_flags = SA_RESTART;
+
     // Ignore SIGPIPE, like we get if the other end talking to us on the Monitor
     // socket (which is a Unix domain socket) goes away.
-    signal(SIGPIPE, SIG_IGN);
+    sa_pipe.sa_handler = SIG_IGN;
     // Handle SIGINT & SIGTERM
-    signal(SIGINT, sigint_handler);
-    signal(SIGTERM, sigterm_handler);
+    sa_int.sa_handler = &sigint_handler;
+    sa_term.sa_handler = &sigterm_handler;
+
+    if (sigaction(SIGPIPE, &sa_pipe, NULL) == -1) {
+        log_fatal("Failed to install signal handler for SIGPIPE: %s", strerror(errno));
+        exit(1);
+    }
+    if (sigaction(SIGINT, &sa_int, NULL) == -1) {
+        log_fatal("Failed to install signal handler for SIGINT: %s", strerror(errno));
+        exit(1);
+    }
+    if (sigaction(SIGTERM, &sa_term, NULL) == -1) {
+        log_fatal("Failed to install signal handler for SIGTERM: %s", strerror(errno));
+        exit(1);
+    }
 
 
     pthread_key_create(&self_key, NULL);
