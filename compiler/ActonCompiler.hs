@@ -555,7 +555,13 @@ checkUptoDate paths actFile outFiles imps = do
                              return filePath
 
 
-runRestPasses :: C.CompileOptions -> Paths -> Acton.Env.Env0 -> A.Module -> Bool -> IO (Acton.Env.Env0, Acton.Env.TEnv)
+fmtTime t =
+    printf "%6.3f s" secs
+  where
+    secs :: Float
+    secs = (fromIntegral(sec t)) + (fromIntegral (nsec t) / 1000000000)
+
+runRestPasses :: C.CompileOptions -> Paths -> Acton.Env.Env0 -> A.Module -> Bool -> IO (Acton.Env.Env0, A.TEnv)
 runRestPasses opts paths env0 parsed stubMode = do
                       let outbase = outBase paths (A.modname parsed)
                       let absSrcBase = srcBase paths (A.modname parsed)

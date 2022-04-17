@@ -293,9 +293,9 @@ instance Subst Equation where
     tyfree (Eqn w t e)                      = tyfree t ++ tyfree e
 
 instance Vars Equation where
-    free (VarEqn w t e)                     = free e
+    free (Eqn w t e)                     = free e
 
-    bound (VarEqn w t e)                    = [w]
+    bound (Eqn w t e)                    = [w]
 
 
 
@@ -357,13 +357,8 @@ reduce' env eq c@(Sel w (TCon _ tc) n _)
 
 reduce' env eq (Sel w t1@(TTuple _ p r) n t2)
                                             = do let e = eLambda [(px0,t1)] (eDot (eVar px0) n)
-<<<<<<< HEAD
                                                  unify r (kwdRow n t2 tWild)
-                                                 return (VarEqn w (wFun t1 t2) e : eq)
-=======
-                                                     cs' = [Cast r (kwdRow n t2 tWild)]
-                                                 reduce env (Eqn w (wFun t1 t2) e : eq) cs'
->>>>>>> 9610c95 (Dropped the idea of witness "def equations" in favor of the musch simpler notion of an internal primitive: $MapFX.)
+                                                 return (Eqn w (wFun t1 t2) e : eq)
 
 reduce' env eq c@(Mut (TVar _ tv) n _)
   | univar tv                               = do defer [c]; return eq
@@ -387,15 +382,9 @@ solveImpl env wit w t p                     = do (cs,p',we) <- instWitness env t
 
 solveSelAttr env (wf,sc,d) (Sel w t1 n t2)  = do (cs,tvs,t) <- instantiate env sc
                                                  when (tvSelf `elem` snd (polvars t)) (tyerr n "Contravariant Self attribute not selectable by instance")
-<<<<<<< HEAD
                                                  let e = eLambda [(px0,t1)] (app t (tApp (eDot (wf $ eVar px0) n) tvs) $ witsOf cs)
                                                  unify (subst [(tvSelf,t1)] t) t2
-                                                 return ([VarEqn w (wFun t1 t2) e], cs)
-=======
-                                                 let e = eLambda [(px0,t1)] (app t (tApp (eDot (wf $ eVar px0) n) tvs) $ witsOf cs1)
-                                                     cs = Cast (subst [(tvSelf,t1)] t) t2 : cs1
                                                  return ([Eqn w (wFun t1 t2) e], cs)
->>>>>>> 9610c95 (Dropped the idea of witness "def equations" in favor of the musch simpler notion of an internal primitive: $MapFX.)
 
 --  e1.__setslice__(sl, e2)
 --  e1.__setslice__(w_Iterable, sl, e2)
@@ -414,15 +403,9 @@ solveSelProto env pn c@(Sel w t1 n t2)      = do p <- instwildcon env pn
 solveSelWit env (p,we) (Sel w t1 n t2)      = do let Just (wf,sc,d) = findAttr env p n
                                                  (cs,tvs,t) <- instantiate env sc
                                                  when (tvSelf `elem` snd (polvars t)) (tyerr n "Contravariant Self attribute not selectable by instance")
-<<<<<<< HEAD
                                                  let e = eLambda [(px0,t1)] (app t (tApp (eDot (wf we) n) tvs) $ eVar px0 : witsOf cs)
                                                  unify (subst [(tvSelf,t1)] t) t2
-                                                 return ([VarEqn w (wFun t1 t2) e], cs)
-=======
-                                                 let e = eLambda [(px0,t1)] (app t (tApp (eDot (wf we) n) tvs) $ eVar px0 : witsOf cs1)
-                                                     cs = Cast (subst [(tvSelf,t1)] t) t2 : cs1
                                                  return ([Eqn w (wFun t1 t2) e], cs)
->>>>>>> 9610c95 (Dropped the idea of witness "def equations" in favor of the musch simpler notion of an internal primitive: $MapFX.)
 
 solveMutAttr env (wf,sc,dec) (Mut t1 n t2)  = do when (dec /= Just Property) (noMut n)
                                                  let TSchema _ [] t = sc

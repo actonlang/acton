@@ -44,8 +44,6 @@ mkEnv                       :: FilePath -> FilePath -> Env0 -> Module -> IO Env0
 mkEnv sys proj env m        = getImps sys proj env (imps m)
 
 
-type TEnv                   = [(Name, NameInfo)]
-
 data EnvF x                 = EnvF {
                                 names      :: TEnv,
                                 modules    :: TEnv,
@@ -102,30 +100,6 @@ mapModules f env            = walk env0 [] mods
 
 
 -}
-
-data NameInfo               = NVar      Type
-                            | NSVar     Type
-                            | NDef      TSchema Deco
-                            | NSig      TSchema Deco
-                            | NAct      QBinds PosRow KwdRow TEnv
-                            | NClass    QBinds [WTCon] TEnv
-                            | NProto    QBinds [WTCon] TEnv
-                            | NExt      QBinds TCon [WTCon] TEnv
-                            | NTVar     Kind CCon
-                            | NAlias    QName
-                            | NMAlias   ModName
-                            | NModule   TEnv
-                            | NReserved
-                            deriving (Eq,Show,Read,Generic)
-
-data Witness                = WClass    { binds::QBinds, wtype::Type, proto::PCon, wname::QName, wsteps::WPath }
-                            | WInst     { binds::QBinds, wtype::Type, proto::PCon, wname::QName, wsteps::WPath }
-                            deriving (Show)
-
-instance Data.Binary.Binary NameInfo
-
-typeDecl (_,NDef{})         = False
-typeDecl _                  = True
 
 instance Pretty Witness where
     pretty (WClass q t p w ws)  = text "WClass" <+> prettyQual q <+> pretty t <+> parens (pretty p) <+>
@@ -407,22 +381,20 @@ unSig te                    = map f te
 -- first variant is special case for compiling __builtin__.act
 initEnv                    :: FilePath -> Bool -> IO Env0
 initEnv path True          = return $ EnvF{ names = [(nPrim,NMAlias mPrim)],
-                                            modules = [(nPrim,NModule envPrim)],
+                                            modules = [(nPrim,NModule primEnv)],
                                             witnesses = [],
                                             thismod = Nothing,
                                             stub = False,
                                             envX = () }
 initEnv path False         = do envBuiltin <- InterfaceFiles.readFile (joinPath [path,"__builtin__.ty"])
                                 let env0 = EnvF{ names = [(nPrim,NMAlias mPrim), (nBuiltin,NMAlias mBuiltin)],
-                                                 modules = [(nPrim,NModule envPrim), (nBuiltin,NModule envBuiltin)],
+                                                 modules = [(nPrim,NModule primEnv), (nBuiltin,NModule envBuiltin)],
                                                  witnesses = [],
                                                  thismod = Nothing,
                                                  stub = False,
                                                  envX = () }
                                     env = importAll mBuiltin envBuiltin $ importWits mBuiltin envBuiltin $ env0
                                 return env
-
-envPrim                     = primMkEnv NClass NDef NVar NSig
 
 withModulesFrom             :: EnvF x -> EnvF x -> EnvF x
 env `withModulesFrom` env'  = env{modules = modules env'}

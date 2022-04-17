@@ -388,7 +388,31 @@ tvarSupplyMap vs avoid  = map setk (vs `zip` (tvarSupply \\ avoid))
   where setk (v,v')     = (v, tVar $ v'{ tvkind = tvkind v })
 
 
-type Substitution = [(TVar,Type)]
+type Substitution       = [(TVar,Type)]
+
+type TEnv               = [(Name, NameInfo)]
+
+data NameInfo           = NVar      Type
+                        | NSVar     Type
+                        | NDef      TSchema Deco
+                        | NSig      TSchema Deco
+                        | NAct      QBinds PosRow KwdRow TEnv
+                        | NClass    QBinds [WTCon] TEnv
+                        | NProto    QBinds [WTCon] TEnv
+                        | NExt      QBinds TCon [WTCon] TEnv
+                        | NTVar     Kind CCon
+                        | NAlias    QName
+                        | NMAlias   ModName
+                        | NModule   TEnv
+                        | NReserved
+                        deriving (Eq,Show,Read,Generic)
+
+data Witness            = WClass    { binds::QBinds, wtype::Type, proto::PCon, wname::QName, wsteps::WPath }
+                        | WInst     { binds::QBinds, wtype::Type, proto::PCon, wname::QName, wsteps::WPath }
+                        deriving (Show)
+
+typeDecl (_,NDef{})     = False
+typeDecl _              = True
 
 
 instance Data.Binary.Binary Prefix
@@ -404,6 +428,7 @@ instance Data.Binary.Binary Type
 instance Data.Binary.Binary Kind
 instance Data.Binary.Binary FX
 instance Data.Binary.Binary Constraint
+instance Data.Binary.Binary NameInfo
 
 
 -- Locations ----------------

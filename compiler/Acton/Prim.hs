@@ -85,90 +85,101 @@ tActor              = tCon cActor
 tR                  = tCon $ TC primR []
 tCont x t           = tCon $ TC primCont [x,posRow t posNil]
 
+primWrapped         = gPrim "Wrapped"
+pWrapped x          = TC primWrapped [x]
 
-primMkEnv cls def var sig = 
-                        [   (noq primASYNCf,        def scASYNCf NoDec),
-                            (noq primAFTERf,        def scAFTERf NoDec),
-                            (noq primAWAITf,        def scAWAITf NoDec),
+primWrap            = primKW "wrap"
+primExec            = primKW "exec"
+primEval            = primKW "eval"
 
-                            (noq primASYNCc,        def scASYNCc NoDec),
-                            (noq primAFTERc,        def scAFTERc NoDec),
-                            (noq primAWAITc,        def scAWAITc NoDec),
+primWrapProc        = gPrim "wWrapProc"
+primWrapAction      = gPrim "wWrapAction"
+primWrapMut         = gPrim "wWrapMut"
+primWrapPure        = gPrim "wWrapPure"
 
-                            (noq primASYNC,         def scASYNC NoDec),
-                            (noq primAFTER,         def scAFTER NoDec),
-                            (noq primAWAIT,         def scAWAIT NoDec),
+primEnv             = [     (noq primASYNCf,        NDef scASYNCf NoDec),
+                            (noq primAFTERf,        NDef scAFTERf NoDec),
+                            (noq primAWAITf,        NDef scAWAITf NoDec),
+
+                            (noq primASYNCc,        NDef scASYNCc NoDec),
+                            (noq primAFTERc,        NDef scAFTERc NoDec),
+                            (noq primAWAITc,        NDef scAWAITc NoDec),
+
+                            (noq primASYNC,         NDef scASYNC NoDec),
+                            (noq primAFTER,         NDef scAFTER NoDec),
+                            (noq primAWAIT,         NDef scAWAIT NoDec),
                         
-                            (noq primPUSHc,         def scPUSHc NoDec),
-                            (noq primPUSH,          def scPUSH NoDec),
+                            (noq primPUSHc,         NDef scPUSHc NoDec),
+                            (noq primPUSH,          NDef scPUSH NoDec),
                         
-                            (noq primPOP,           def scPOP NoDec),
-                            (noq primRERAISE,       def scRERAISE NoDec),
-                            (noq primRAISE,         def scRAISE NoDec),
-                            (noq primRAISEFROM,     def scRAISEFROM NoDec),
-                            (noq primASSERT,        def scASSERT NoDec),
-                            (noq primNEWACTOR,      def scNEWACTOR NoDec),
+                            (noq primPOP,           NDef scPOP NoDec),
+                            (noq primRERAISE,       NDef scRERAISE NoDec),
+                            (noq primRAISE,         NDef scRAISE NoDec),
+                            (noq primRAISEFROM,     NDef scRAISEFROM NoDec),
+                            (noq primASSERT,        NDef scASSERT NoDec),
+                            (noq primNEWACTOR,      NDef scNEWACTOR NoDec),
 
-                            (noq primISINSTANCE,    def scISINSTANCE NoDec),
-                            (noq primCAST,          def scCAST NoDec),
-                            (noq primCONSTCONT,     def scCONSTCONT NoDec),
+                            (noq primISINSTANCE,    NDef scISINSTANCE NoDec),
+                            (noq primCAST,          NDef scCAST NoDec),
+                            (noq primCONSTCONT,     NDef scCONSTCONT NoDec),
 
-                            (noq primFORMAT,        def scFORMAT NoDec),
+                            (noq primFORMAT,        NDef scFORMAT NoDec),
                         
-                            (noq primActor,         clActor cls def sig),
-                            (noq primR,             clR cls def),
-                            (noq primCont,          clCont cls def),
+                            (noq primActor,         clActor),
+                            (noq primR,             clR),
+                            (noq primCont,          clCont),
 
-                            (noq primRContc,        def scRContc NoDec),
-                            (noq primRCont,         def scRCont NoDec),
+                            (noq primRContc,        NDef scRContc NoDec),
+                            (noq primRCont,         NDef scRCont NoDec),
 
-                            (noq primEqOpt,         clEqOpt cls def),
-                            (noq primIdentityOpt,   clIdentityOpt cls def),
+                            (noq primEqOpt,         clEqOpt),
+                            (noq primIdentityOpt,   clIdentityOpt),
 
-                            (noq primWEqNone,       var tEqNone),
-                            (noq primWIdentityNone, var tIdentityNone),
-                            (noq primWIntegralInt,  var tIntegralInt),
-                            (noq primWSequenceList, var tSequenceListWild),
-                            (noq primWCollectionList,var tCollectionListWild),
+                            (noq primWEqNone,       NVar tEqNone),
+                            (noq primWIdentityNone, NVar tIdentityNone),
+                            (noq primWIntegralInt,  NVar tIntegralInt),
+                            (noq primWSequenceList, NVar tSequenceListWild),
+                            (noq primWCollectionList,NVar tCollectionListWild),
 
-                            (noq primISNOTNONE,     def scISNOTNONE NoDec),
-                            (noq primISNONE,        def scISNONE NoDec),
+                            (noq primISNOTNONE,     NDef scISNOTNONE NoDec),
+                            (noq primISNONE,        NDef scISNONE NoDec),
 
-                            (noq primSKIPRESc,      def scSKIPRESc NoDec),
-                            (noq primSKIPRES,       def scSKIPRES NoDec),
+                            (noq primSKIPRESc,      NDef scSKIPRESc NoDec),
+                            (noq primSKIPRES,       NDef scSKIPRES NoDec),
 
-                            (noq primAct2Proc,      def scAct2Proc NoDec),
-                            (noq primIdFX,          def scIdFX NoDec),
-                            (noq primMapFX,         def scMapFX NoDec)
+                            (noq primAct2Proc,      NDef scAct2Proc NoDec),
+                            (noq primIdFX,          NDef scIdFX NoDec),
+                            (noq primMapFX,         NDef scMapFX NoDec),
+                            
+                            (noq primWrapped,       proWrapped)
                       ]
 
 tSequenceListWild   = tCon (TC qnSequence [tList tWild, tWild])
 tCollectionListWild = tCon (TC qnCollection [tList tWild, tWild])
 
 --  class $Actor (): pass
-clActor cls def sig = cls [] (leftpath [cValue]) te
-  where te          = [ (primKW "next",       sig (monotype tActor) Property),
-                        (primKW "msg",        sig (monotype (tMsg tWild)) Property),
-                        (primKW "outgoing",   sig (monotype (tMsg tWild)) Property),
-                        (primKW "waitsfor",   sig (monotype (tMsg tWild)) Property),
-                        (primKW "consume_hd", sig (monotype $ tCon $ TC (gPrim "int64") []) Property),
-                        (primKW "catcher",    sig (monotype $ tCon $ TC (gPrim "Catcher") []) Property),
-                        (primKW "msg_lock",   sig (monotype $ tCon $ TC (gPrim "Lock") []) Property),
-                        (primKW "globkey",    sig (monotype $ tCon $ TC (gPrim "long") []) Property),
-                        (primKW "affinity",   sig (monotype $ tCon $ TC (gPrim "int64") []) Property),
-                        (boolKW,              def (monotype $ tFun fxPure posNil kwdNil tBool) NoDec),
-                        (strKW,               def (monotype $ tFun fxPure posNil kwdNil tStr) NoDec),
-                        (reprKW,              def (monotype $ tFun fxPure posNil kwdNil tStr) NoDec),
-                        (resumeKW,            def (monotype $ tFun fxPure posNil kwdNil tNone) NoDec)
+clActor             = NClass [] (leftpath [cValue]) te
+  where te          = [ (primKW "next",       NSig (monotype tActor) Property),
+                        (primKW "msg",        NSig (monotype (tMsg tWild)) Property),
+                        (primKW "outgoing",   NSig (monotype (tMsg tWild)) Property),
+                        (primKW "waitsfor",   NSig (monotype (tMsg tWild)) Property),
+                        (primKW "consume_hd", NSig (monotype $ tCon $ TC (gPrim "int64") []) Property),
+                        (primKW "catcher",    NSig (monotype $ tCon $ TC (gPrim "Catcher") []) Property),
+                        (primKW "msg_lock",   NSig (monotype $ tCon $ TC (gPrim "Lock") []) Property),
+                        (primKW "globkey",    NSig (monotype $ tCon $ TC (gPrim "long") []) Property),
+                        (boolKW,              NDef (monotype $ tFun fxPure posNil kwdNil tBool) NoDec),
+                        (strKW,               NDef (monotype $ tFun fxPure posNil kwdNil tStr) NoDec),
+                        (reprKW,              NDef (monotype $ tFun fxPure posNil kwdNil tStr) NoDec),
+                        (resumeKW,            NDef (monotype $ tFun fxPure posNil kwdNil tNone) NoDec)
                       ]
         
 
 --  class $R (): pass
-clR cls def         = cls [] [] []
+clR                 = NClass [] [] []
 
 --  class $Cont[X,P] (function[X,P,(),$R]):
 --      pass
-clCont cls def      = cls [quant x, quant p] (leftpath [TC qnFunction [tVar x, tVar p, kwdNil, tR], cValue]) []
+clCont              = NClass [quant x, quant p] (leftpath [TC qnFunction [tVar x, tVar p, kwdNil, tR], cValue]) []
   where x           = TV KFX (name "X")
         p           = TV PRow (name "P")
 
@@ -313,13 +324,13 @@ scRCont             = tSchema [quant x, quant a] tRCont
 
 
 --  class $EqOpt[A] (Eq[?A]): pass
-clEqOpt cls def     = cls [quant a] (leftpath [TC qnEq [tOpt $ tVar a]]) clTEnv
-  where clTEnv      = [ (initKW, def scInit NoDec) ]
+clEqOpt             = NClass [quant a] (leftpath [TC qnEq [tOpt $ tVar a]]) clTEnv
+  where clTEnv      = [ (initKW, NDef scInit NoDec) ]
         scInit      = tSchema [] $ tFun fxPure (posRow (tCon $ TC qnEq [tVar a]) posNil) kwdNil tNone
         a           = TV KType (name "A")
 
 --  class $EqOpt[A] (Eq[?A]): pass
-clIdentityOpt cls def = cls [quant a] (leftpath [TC qnIdentity [tOpt $ tVar a]]) []
+clIdentityOpt       = NClass [quant a] (leftpath [TC qnIdentity [tOpt $ tVar a]]) []
   where a           = TV KType (name "A")
 
 --  w$EqNone        : Eq[None]
@@ -382,3 +393,27 @@ scMapFX             = tSchema [quant x1, quant x2, quant a, quant b, quant c] tM
         a           = TV PRow $ name "A"
         b           = TV KRow $ name "B"
         c           = TV KType $ name "C"
+
+--  protocol $Wrapped[X]: pass
+proWrapped          = NProto [quant x] [] te
+  where te          = [(primWrap,scWrap), (primExec,scExec), (primEval,scEval)]
+        scWrap      = NSig (tSchema q (tFun0 [tActor, abFun tX tC] (abFun tSelf' tC))) Static
+        scExec      = NSig (tSchema q (tFun0 [abFun tSelf' tC] (abFun tX tNone))) Static
+        scEval      = NSig (tSchema q (tFun0 [abFun tSelf' tC] (abFun tX tC))) Static
+        abFun fx c  = tFun fx (tVar a) (tVar b) c
+        tX          = tVar x
+        tC          = tVar c
+        tSelf'      = tVar (TV KFX nSelf)
+        q           = [quant a, quant b, quant c]
+        x           = TV KFX (name "X")
+        a           = TV KType (name "A")
+        b           = TV KType (name "B")
+        c           = TV KType (name "C")
+
+
+primWits            = [ WClass [] fxProc   (pWrapped fxProc) primWrapProc path,
+                        WClass [] fxAction (pWrapped fxProc) primWrapAction path,
+                        WClass [] fxMut    (pWrapped fxMut)  primWrapMut path,
+                        WClass [] fxPure   (pWrapped fxPure) primWrapPure path
+                      ]
+  where path        = [Left (noQ "_")]
