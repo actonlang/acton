@@ -462,7 +462,6 @@ instance Leaves TVar where
     leaves tv               = [tVar tv]
 
 
-
 instance Data.Binary.Binary Prefix
 instance Data.Binary.Binary Name
 instance Data.Binary.Binary ModName
