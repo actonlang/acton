@@ -241,6 +241,7 @@ data Constraint = Cast  Type Type
                 | Impl  Name Type PCon
                 | Sel   Name Type Name Type
                 | Mut   Type Name Type
+                | Seal  Type
                 deriving (Eq,Show,Read,Generic)
 
 type Constraints = [Constraint]
@@ -485,6 +486,7 @@ instance HasLoc Constraint where
     loc (Impl _ _ p)    = loc p
     loc (Sel _ _ n _)   = loc n
     loc (Mut _ n _)     = loc n
+    loc (Seal t)        = loc t
 
 
 -- Eq -------------------------

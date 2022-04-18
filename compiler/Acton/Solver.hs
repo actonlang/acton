@@ -61,6 +61,7 @@ simplify' env te tt eq cs                   = do eq1 <- reduce env eq cs
 data Rank                                   = RTry { tgt :: Type, alts :: [Type], rev :: Bool }
                                             | RUni { tgt :: Type, alts :: [Type] }
                                             | ROvl { tgt :: Type }
+                                            | RSkip
                                             deriving (Show)
 
 instance Eq Rank where
@@ -73,6 +74,7 @@ instance Pretty Rank where
     pretty (RTry t ts rev)                  = pretty t <+> braces (commaSep pretty ts) Pretty.<> (if rev then char '\'' else empty)
     pretty (RUni t ts)                      = pretty t <+> char '=' <+> commaSep pretty ts
     pretty (ROvl t)                         = pretty t <+> text "..."
+    pretty RSkip                            = text "<skip>"
 
 solve                                       :: (Polarity a, Pretty a) => Env -> (Constraint -> Bool) ->
                                                TEnv -> a -> Equations -> Constraints -> TypeM (Constraints,Equations)
@@ -122,7 +124,7 @@ solve' env select hist te tt eq cs
         group []                            = []
         group (r:rs)                        = (r : rs1) : group rs2
           where (rs1,rs2)                   = partition (==r) rs
-        rnks                                = map (rank env) solve_cs
+        rnks                                = map (rank env) solve_cs \\ [RSkip]
         tryAlts st t0 []                    = --trace ("### Out of alternatives for " ++ prstr t0) $
                                               noSolve cs
         tryAlts st t0 (t:ts)                = tryAlt t0 t `catchError` const ({-traceM ("### ROLLBACK " ++ prstr t0) >> -}rollbackState st >> tryAlts st t0 ts)
@@ -194,6 +196,10 @@ rank env c@(Impl _ t p)
 rank env (Sel _ t n _)                      = RTry t (allConAttr env n ++ allProtoAttr env n ++ allExtProtoAttr env n) False
 rank env (Mut t n _)                        = RTry t (allConAttr env n `intersect` allBelow env tObject) False
 
+rank env (Seal t@TVar{})
+  | tvkind (tvar t) == KFX                  = RTry t [fxAction, fxPure] False
+  | otherwise                               = RSkip
+
 
 class OptVars a where
     optvars                             :: a -> [TVar]
@@ -202,20 +208,21 @@ instance (OptVars a) => OptVars [a] where
     optvars                             = concat . map optvars
 
 instance OptVars Constraint where
-    optvars (Cast t1 t2)               = optvars [t1, t2]
-    optvars (Sub w t1 t2)              = optvars [t1, t2]
-    optvars (Impl w t p)               = optvars t ++ optvars p
-    optvars (Sel w t1 n t2)            = optvars [t1, t2]
-    optvars (Mut t1 n t2)              = optvars [t1, t2]
+    optvars (Cast t1 t2)                = optvars [t1, t2]
+    optvars (Sub w t1 t2)               = optvars [t1, t2]
+    optvars (Impl w t p)                = optvars t ++ optvars p
+    optvars (Sel w t1 n t2)             = optvars [t1, t2]
+    optvars (Mut t1 n t2)               = optvars [t1, t2]
+    optvars (Seal t)                    = optvars t
 
 instance OptVars Type where
-    optvars (TOpt _ (TVar _ v))        = [v]
-    optvars (TOpt _ t)                 = optvars t
-    optvars (TCon _ c)                 = optvars c
-    optvars (TFun _ fx p k t)          = optvars [p, k, t]
-    optvars (TTuple _ p k)             = optvars [p, k]
-    optvars (TRow _ _ _ t r)           = optvars [t, r]
-    optvars _                          = []
+    optvars (TOpt _ (TVar _ v))         = [v]
+    optvars (TOpt _ t)                  = optvars t
+    optvars (TCon _ c)                  = optvars c
+    optvars (TFun _ fx p k t)           = optvars [p, k, t]
+    optvars (TTuple _ p k)              = optvars [p, k]
+    optvars (TRow _ _ _ t r)            = optvars [t, r]
+    optvars _                           = []
 
 instance OptVars TCon where
     optvars (TC n ts)                   = optvars ts
@@ -279,7 +286,6 @@ allBelow env (TFX _ FXProc)             = [fxProc, fxMut, fxPure, fxAction]
 allBelow env (TFX _ FXMut)              = [fxMut, fxPure]
 allBelow env (TFX _ FXPure)             = [fxPure]
 allBelow env (TFX _ FXAction)           = [fxAction]
-
 
 ----------------------------------------------------------------------------------------------------------------------
 -- reduce
@@ -372,6 +378,21 @@ reduce' env eq c@(Mut (TCon _ tc) n _)
                                                  return eq
   | otherwise                               = tyerr n "Attribute not found:"
   where attrSearch                          = findAttr env tc n
+
+reduce' env eq c@(Seal t)                   = redS t
+  where redS (TCon _ tc)                    = reduce env eq (map Seal $ tcargs tc)
+        redS (TFun _ fx p k t)              = reduce env eq (map Seal [fx,p,k,t])
+        redS (TTuple _ p k)                 = reduce env eq (map Seal [p,k])
+        redS (TOpt _ t)                     = reduce env eq [Seal t]
+        redS (TNone _)                      = return eq
+        redS (TWild _)                      = return eq
+        redS (TNil _ _)                     = return eq
+        redS (TRow _ _ _ t r)               = reduce env eq (map Seal [t,r])
+        redS (TFX l FXPure)                 = return eq
+        redS (TFX l FXAction)               = return eq
+        redS (TVar _ tv)
+          | univar tv                       = do defer [c]; return eq
+          | otherwise                       = return eq
 
 reduce' env eq c                            = noRed c
 
@@ -742,6 +763,7 @@ w22 = lambda: ()                                                        = round(
 data VInfo                                  = VInfo {
                                                 varvars     :: [(TVar,TVar)],
                                                 embedded    :: [TVar],
+                                                sealed      :: [TVar],
                                                 ubounds     :: Map TVar [Type], 
                                                 lbounds     :: Map TVar [Type], 
                                                 pbounds     :: Map TVar [(Name,PCon)],
@@ -750,6 +772,7 @@ data VInfo                                  = VInfo {
 
 varvar v1 v2 vi                             = vi{ varvars = (v1,v2) : varvars vi }
 embed vs vi                                 = vi{ embedded = vs ++ embedded vi }
+seal v vi                                   = vi{ sealed = v : sealed vi }
 ubound v t vi                               = vi{ ubounds = Map.insertWith (++) v [t] (ubounds vi) }
 lbound v t vi                               = vi{ lbounds = Map.insertWith (++) v [t] (lbounds vi) }
 pbound v w p vi                             = vi{ pbounds = Map.insertWith (++) v [(w,p)] (pbounds vi) }
@@ -758,7 +781,7 @@ selattr v n vi                              = vi{ selattrs = Map.insertWith (++)
 
 lookup' v m                                 = maybe [] id $ Map.lookup v m
 
-varinfo cs                                  = f cs (VInfo [] [] Map.empty Map.empty Map.empty Map.empty Map.empty)
+varinfo cs                                  = f cs (VInfo [] [] [] Map.empty Map.empty Map.empty Map.empty Map.empty)
   where
     f (Cast (TVar _ v1) (TVar _ v2) : cs)
       | v1 == v2                            = f cs
@@ -774,6 +797,7 @@ varinfo cs                                  = f cs (VInfo [] [] Map.empty Map.em
       where vs                              = tyfree t
     f (Mut (TVar _ v) n t : cs)             = f cs . mutattr v n . embed (tyfree t)
     f (Sel _ (TVar _ v) n t : cs)           = f cs . selattr v n . embed (tyfree t)
+    f (Seal (TVar _ v) : cs)                = f cs . seal v
     f []                                    = Just
     f (_ : cs)                              = \_ -> Nothing
 
@@ -896,6 +920,8 @@ improve env te tt eq cs
   | not $ null dots                     = do --traceM ("  *Implied mutation/selection solutions " ++ prstrs dots)
                                              (eq',cs') <- solveDots env mutC selC selP cs
                                              simplify' env te tt (eq'++eq) cs'
+  | not $ null redSeal                  = do --traceM ("  *removing redundant Seal constraints on: " ++ prstrs redSeal)
+                                             return (cs \\ map (Seal . tVar) redSeal, eq)
   | otherwise                           = do --traceM ("  *improvement done")
                                              return (cs, eq)
   where info                            = varinfo cs
@@ -926,6 +952,9 @@ improve env te tt eq cs
         boundvars                       = Map.keys (ubounds vi) ++ Map.keys (lbounds vi)
         boundprot                       = tyfree (Map.elems $ ubounds vi) ++ tyfree (Map.elems $ lbounds vi)
         cyclic                          = if null (boundvars\\boundprot) then [ c | c <- cs, headvar c `elem` boundvars ] else []
+        redSeal                         = [ v | v <- sealed vi, (v1,v2) <- varvars vi, v/=v1, v/=v2 ] \\ embedded vi \\
+                                          Map.keys (ubounds vi) \\ Map.keys (lbounds vi) \\ Map.keys (pbounds vi) \\
+                                          Map.keys (mutattrs vi) \\ Map.keys (selattrs vi)
 
 noOpt ts                                = filter chk ts
   where chk TOpt{}                      = False

@@ -482,6 +482,7 @@ instance Pretty Constraint where
     pretty (Impl w t u)             = pretty w <+> colon <+> pretty t <+> parens (pretty u)
     pretty (Sel w t1 n t2)          = pretty w <+> colon <+> pretty t1 <> text "." <> pretty n <+> text "<" <+> pretty t2
     pretty (Mut t1 n t2)            = pretty t1 <+> text "." <> pretty n <+> text ">" <+> pretty t2
+    pretty (Seal t)                 = text "$Seal" <+> pretty t
 
 
 instance Pretty (TVar,TVar) where

@@ -409,3 +409,4 @@ instance Vars Constraint where
     free (Impl w t p)               = free t ++ free p
     free (Sel w t1 n t2)            = free t1 ++ free t2
     free (Mut t1 n t2)              = free t1 ++ free t2
+    free (Seal t)                   = free t

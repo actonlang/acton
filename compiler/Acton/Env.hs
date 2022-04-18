@@ -1039,6 +1039,8 @@ headvar (Sel w (TVar _ v) n t)      = v
 
 headvar (Mut (TVar _ v) n t)        = v
 
+headvar (Seal (TVar _ v))           = v
+
 
 -- Error handling ----------------------------------------------------------------------------------------------------
 
