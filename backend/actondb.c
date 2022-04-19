@@ -2192,7 +2192,7 @@ int main(int argc, char **argv) {
   int ret = 0;
   char msg_buf[1024];
   int verbosity = SERVER_VERBOSITY;
-  FILE *logf;
+  FILE *logf = NULL;
 
   pid = getpid();
 
