@@ -388,10 +388,12 @@ reduce' env eq c@(Seal t)                   = redS t
         redS (TWild _)                      = return eq
         redS (TNil _ _)                     = return eq
         redS (TRow _ _ _ t r)               = reduce env eq (map Seal [t,r])
-        redS (TFX l FXPure)                 = return eq
-        redS (TFX l FXAction)               = return eq
-        redS (TVar _ tv)
+        redS (TFX _ FXPure)                 = return eq
+        redS (TFX _ FXAction)               = return eq
+        redS (TFX l _)                      = tyerr l "Leaking seal"
+        redS (TVar l tv)
           | univar tv                       = do defer [c]; return eq
+          | tvkind tv == KFX                = tyerr l "Leaking seal"
           | otherwise                       = return eq
 
 reduce' env eq c                            = noRed c
