@@ -1265,8 +1265,3 @@ void free_queue_callback(queue_callback * qc)
 {
 	free(qc);
 }
-
-
-
-
-
