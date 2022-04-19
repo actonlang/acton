@@ -2015,7 +2015,7 @@ int main(int argc, char **argv) {
         printf("%s\n", stats_json);
     }
 
-    if (log_path) {
+    if (logf) {
         fclose(logf);
     }
 

@@ -2064,6 +2064,7 @@ typedef struct argp_arguments
   int no_seeds;
   char * local_iface;
   char *mon_socket_path;
+  char *log_file_path;
 } argp_arguments;
 
 error_t parse_opt (int key, char *arg, struct argp_state *state)
@@ -2126,6 +2127,11 @@ error_t parse_opt (int key, char *arg, struct argp_state *state)
 		  arguments->local_iface = strndup(arg, 256);
 		  break;
 	  }
+      case 'l':
+	  {
+		  arguments->log_file_path = arg;
+		  break;
+	  }
 	  case ARGP_KEY_ARG:
   	  case ARGP_KEY_END:
 //		  argp_usage (state);
@@ -2186,6 +2192,7 @@ int main(int argc, char **argv) {
   int ret = 0;
   char msg_buf[1024];
   int verbosity = SERVER_VERBOSITY;
+  FILE *logf;
 
   pid = getpid();
 
@@ -2203,6 +2210,7 @@ int main(int argc, char **argv) {
     {"mport",           'm',  "MPORT", 0,  "Port for server gossip packets" },
     {"seeds",           's',  "SEEDS", 0,  "Seeds, comma-separated" },
     {"iface",           'i',  "IFACE", 0,  "Local interface to listen to" },
+    {"log-file",        'l',   "FILE", 0,  "Log file" },
     { 0 }
   };
 
@@ -2217,8 +2225,20 @@ int main(int argc, char **argv) {
   arguments.local_iface = "127.0.0.1";
   arguments.no_seeds = 0;
   arguments.mon_socket_path = NULL;
+  arguments.log_file_path = NULL;
 
   argp_parse (&argp, argc, argv, 0, 0, &arguments);
+
+  if (arguments.log_file_path) {
+      logf = fopen(arguments.log_file_path, "w");
+      if (!logf) {
+          fprintf(stderr, "ERROR: Unable to open log file (%s) for writing\n", arguments.log_file_path);
+          exit(1);
+      }
+      log_add_fp(logf, LOG_TRACE);
+      // Turn off log output on stderr
+      log_set_quiet(true);
+  }
 
   // Ignore SIGPIPE:
 
@@ -2702,4 +2722,8 @@ int main(int argc, char **argv) {
 			close(rs->sockfd);
 		}
 	}
+
+    if (logf) {
+        fclose(logf);
+    }
 }
