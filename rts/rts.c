@@ -1640,7 +1640,7 @@ int main(int argc, char **argv) {
     num_wthreads = num_cores;
     bool mon_on_exit = false;
     char *log_path = NULL;
-    FILE *logf;
+    FILE *logf = NULL;
     bool log_stderr = false;
 
     appname = argv[0];
