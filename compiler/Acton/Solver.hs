@@ -524,7 +524,7 @@ cast' env (TFX _ fx1) (TFX _ fx2)
         castFX FXPure   FXMut               = True
         castFX FXPure   FXProc              = True
         castFX FXMut    FXMut               = True
-        castFX FXMut    FXProc              = True      -- temporary
+        castFX FXMut    FXProc              = True
         castFX FXProc   FXProc              = True
         castFX FXAction FXAction            = True
         castFX FXAction FXProc              = True      -- temporary

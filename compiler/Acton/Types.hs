@@ -938,16 +938,15 @@ instance Check Branch where
 
 refine                                  :: Env -> Constraints -> TEnv -> Equations -> TypeM ([TVar], Constraints, TEnv, Equations)
 refine env cs te eq
-  | not $ null solve_vs                 = do --traceM ("  #solving cs : " ++ prstrs cs)
+  | not $ null solve_cs                 = do --traceM ("  #solving: " ++ prstrs solve_cs)
                                              (cs',eq') <- solve (define te env) (not . canQual) te tNone eq cs
                                              refineAgain cs' eq'
-  | not $ null ambig_vs                 = do --traceM ("  #defaulting vs : " ++ prstrs ambig_vs)
-                                             --traceM ("              cs : " ++ prstrs cs)
+  | not $ null ambig_vs                 = do --traceM ("  #defaulting: " ++ prstrs ambig_vs)
                                              (cs',eq') <- solve env ambig te tNone eq cs
                                              refineAgain cs' eq'
   | otherwise                           = do eq <- msubst eq
                                              return (gen_vs, cs, te, eq)
-  where solve_vs                        = [ headvar c | c <- cs, not (canQual c) ]
+  where solve_cs                        = [ c | c <- cs, not (canQual c) ]
         ambig_vs                        = tyfree cs \\ closeDepVars safe_vs cs
 
         safe_vs                         = if null def_vss then [] else nub $ foldr1 intersect def_vss
@@ -966,21 +965,11 @@ refine env cs te eq
                                              env <- msubst env
                                              refine env cs te (eq'++eq)
 
-tyfixed te                              = tyfree $ filter (not . gen) te
-  where gen (n, NDef sc _)              = null $ scbind sc
-        gen _                           = False
-
-qualify vs cs                           = let (q,wss) = unzip $ map qbind vs in (q, concat wss)
-  where qbind v                         = (Quant v (casts ++ impls), wits)
-          where casts                   = [ u | Cast (TVar _ v') (TCon _ u) <- cs, v == v' ]
-                impls                   = [ p | Impl w (TVar _ v') p <- cs, v == v' ]
-                wits                    = [ (w, impl2type t p) | Impl w t@(TVar _ v') p <- cs, v == v' ]
-
 genEnv                                  :: Env -> Constraints -> TEnv -> [Decl] -> TypeM (Constraints,TEnv,Equations,[Decl])
 genEnv env cs te ds
   | any typeDecl te                     = do te <- msubst te
                                              --traceM ("## genEnv 11\n" ++ render (nest 6 $ pretty te))
-                                             eq <- solveAll (define (filter typeDecl te) env) te tNone cs
+                                             eq <- solveAll (define te env) te tNone cs
                                              te <- defaultVars te
                                              --traceM ("## genEnv 12\n" ++ render (nest 6 $ pretty te))
                                              return ([], te, eq, ds)
@@ -1004,6 +993,12 @@ genEnv env cs te ds
                                              --traceM ("## genEnv 02\n" ++ render (nest 6 $ pretty te))
                                              return (cs, te, eq, ds)
   where
+    qualify vs cs                       = let (q,wss) = unzip $ map qbind vs in (q, concat wss)
+      where qbind v                     = (Quant v (casts ++ impls), wits)
+              where casts               = [ u | Cast (TVar _ v') (TCon _ u) <- cs, v == v' ]
+                    impls               = [ p | Impl w (TVar _ v') p <- cs, v == v' ]
+                    wits                = [ (w, impl2type t p) | Impl w t@(TVar _ v') p <- cs, v == v' ]
+
     generalize q (n, NDef sc d)
       | null $ scbind sc                = (n, NDef (tSchema q (sctype sc)) d)
       | otherwise                       = (n, NDef sc d)
