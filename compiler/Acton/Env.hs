@@ -124,6 +124,8 @@ data Witness                = WClass    { binds::QBinds, wtype::Type, proto::PCo
 
 instance Data.Binary.Binary NameInfo
 
+typeDecl (_,NDef{})         = False
+typeDecl _                  = True
 
 instance Pretty Witness where
     pretty (WClass q t p w ws)  = text "WClass" <+> prettyQual q <+> pretty t <+> parens (pretty p) <+>
