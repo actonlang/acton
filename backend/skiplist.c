@@ -25,6 +25,7 @@
 #include <inttypes.h>
 
 #include "skiplist.h"
+#include "log.h"
 #include "fastrand.h"
 
 int long_cmp(WORD e1, WORD e2) {
@@ -83,7 +84,7 @@ int skiplist_insert(skiplist_t *list, WORD key, WORD value, unsigned int * seedp
     for (; i >= 0; i--) {
         while (x->forward[i] != NULL && (list->cmp(x->forward[i]->key, key) < 0))
             x = x->forward[i];
-//		printf("Item %" PRId64 " will update node %" PRId64 " at level %d\n", key, x->key, i);
+//		log_debug("Item %" PRId64 " will update node %" PRId64 " at level %d", key, x->key, i);
         	update[i] = x;
     }
 //    x = x->forward[0];
@@ -93,7 +94,7 @@ int skiplist_insert(skiplist_t *list, WORD key, WORD value, unsigned int * seedp
         return 0;
     } else {
         level = rand_level(seedptr);
-//		printf("Item %" PRId64 ", picking level %d\n", key, level);
+//		log_debug("Item %" PRId64 ", picking level %d", key, level);
         if (level > list->level) {
             for (i = list->level + 1; i <= level; i++) {
                 update[i] = list->header;
@@ -106,7 +107,7 @@ int skiplist_insert(skiplist_t *list, WORD key, WORD value, unsigned int * seedp
         x->value = value;
         x->forward = (snode_t **) malloc(sizeof(snode_t*) * (level+1));
         for (i = 0; i <= level; i++) {
-//        		printf("Item %" PRId64 " chaining myself after node %" PRId64 " at level %d\n", key, update[i]->key, i);
+//        		log_debug("Item %" PRId64 " chaining myself after node %" PRId64 " at level %d", key, update[i]->key, i);
             x->forward[i] = update[i]->forward[i];
             update[i]->forward[i] = x;
         }
@@ -278,10 +279,10 @@ void skiplist_free_val(skiplist_t *list, void (*free_val)(WORD))
 void skiplist_dump(skiplist_t *list) {
     snode_t *x = list->header;
     while (x && x->forward[0] != NULL) {
-        printf("%" PRId64 "[%" PRId64 "]->", (int64_t) x->forward[0]->key, (int64_t) x->forward[0]->value);
+        log_trace("%" PRId64 "[%" PRId64 "]->", (int64_t) x->forward[0]->key, (int64_t) x->forward[0]->value);
         x = x->forward[0];
     }
-    printf("NIL\n");
+    log_trace("NIL");
 }
 
 

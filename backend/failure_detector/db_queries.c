@@ -18,6 +18,7 @@
  *      Author: aagapi
  */
 
+#include "../log.h"
 #include "db_queries.h"
 #include "db_messages.pb-c.h"
 
@@ -766,7 +767,7 @@ int deserialize_ack_message(void * buf, unsigned msg_len, ack_message ** ca)
 	*ca = init_ack_message_from_msg(msg);
 
 //	to_string_ack_message(*ca, (char *) print_buff);
-//	printf("Received ACK message: %s\n", print_buff);
+//	log_debug("Received ACK message: %s", print_buff);
 
 	ack_message__free_unpacked(msg, NULL);
 

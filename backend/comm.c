@@ -19,6 +19,7 @@
  */
 
 #include "comm.h"
+#include "log.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
@@ -46,7 +47,7 @@ int parse_message_v1(void * rcv_buf, size_t rcv_msg_len, void ** out_msg, short 
 		{
 #if (VERBOSE_RPC > 0)
 			to_string_write_query(wq, (char *) print_buff);
-			printf("Received write query: %s\n", print_buff);
+			log_debug("Received write query: %s", print_buff);
 #endif
 			*out_msg = (void *) wq;
 			*out_msg_type = RPC_TYPE_WRITE;
@@ -59,7 +60,7 @@ int parse_message_v1(void * rcv_buf, size_t rcv_msg_len, void ** out_msg, short 
 		{
 #if (VERBOSE_RPC > 0)
 			to_string_read_query(rq, (char *) print_buff);
-			printf("Received read query: %s\n", print_buff);
+			log_debug("Received read query: %s", print_buff);
 #endif
 			*out_msg = (void *) rq;
 			*out_msg_type = RPC_TYPE_READ;
@@ -72,7 +73,7 @@ int parse_message_v1(void * rcv_buf, size_t rcv_msg_len, void ** out_msg, short 
 		{
 #if (VERBOSE_RPC > 0)
 			to_string_range_read_query(rrq, (char *) print_buff);
-			printf("Received range read query: %s\n", print_buff);
+			log_debug("Received range read query: %s", print_buff);
 #endif
 			*out_msg = (void *) rrq;
 			*out_msg_type = RPC_TYPE_RANGE_READ;
@@ -85,7 +86,7 @@ int parse_message_v1(void * rcv_buf, size_t rcv_msg_len, void ** out_msg, short 
 		{
 #if (VERBOSE_RPC > 0)
 			to_string_txn_message(tm, (char *) print_buff);
-			printf("Received txn message: %s\n", print_buff);
+			log_debug("Received txn message: %s", print_buff);
 #endif
 			*out_msg = (void *) tm;
 			*out_msg_type = RPC_TYPE_TXN;
@@ -98,7 +99,7 @@ int parse_message_v1(void * rcv_buf, size_t rcv_msg_len, void ** out_msg, short 
 		{
 #if (VERBOSE_RPC > 0)
 			to_string_queue_message(qq, (char *) print_buff);
-			printf("Received queue query: %s\n", print_buff);
+			log_debug("Received queue query: %s", print_buff);
 #endif
 			*out_msg = (void *) qq;
 			*out_msg_type = RPC_TYPE_QUEUE;
@@ -111,7 +112,7 @@ int parse_message_v1(void * rcv_buf, size_t rcv_msg_len, void ** out_msg, short 
 		{
 #if (VERBOSE_RPC > 0)
 			to_string_ack_message(am, (char *) print_buff);
-			printf("Received ack message: %s\n", print_buff);
+			log_debug("Received ack message: %s", print_buff);
 #endif
 			*out_msg = (void *) am;
 			*out_msg_type = RPC_TYPE_ACK;
@@ -127,7 +128,7 @@ int parse_message_v1(void * rcv_buf, size_t rcv_msg_len, void ** out_msg, short 
 		{
 #if (VERBOSE_RPC > 0)
 			to_string_ack_message(am, (char *) print_buff);
-			printf("Received ack message: %s\n", print_buff);
+			log_debug("Received ack message: %s", print_buff);
 #endif
 			*out_msg = (void *) am;
 			*out_msg_type = RPC_TYPE_ACK;
@@ -141,7 +142,7 @@ int parse_message_v1(void * rcv_buf, size_t rcv_msg_len, void ** out_msg, short 
 		{
 #if (VERBOSE_RPC > 0)
 			to_string_write_query(wq, (char *) print_buff);
-			printf("Received write query: %s\n", print_buff);
+			log_debug("Received write query: %s", print_buff);
 #endif
 			*out_msg = (void *) wq;
 			*out_msg_type = RPC_TYPE_READ_RESPONSE;
@@ -155,7 +156,7 @@ int parse_message_v1(void * rcv_buf, size_t rcv_msg_len, void ** out_msg, short 
 		{
 #if (VERBOSE_RPC > 0)
 			to_string_range_read_response_message(rrr, (char *) print_buff);
-			printf("Received range read response: %s\n", print_buff);
+			log_debug("Received range read response: %s", print_buff);
 #endif
 			*out_msg = (void *) rrr;
 			*out_msg_type = RPC_TYPE_RANGE_READ_RESPONSE;
@@ -169,7 +170,7 @@ int parse_message_v1(void * rcv_buf, size_t rcv_msg_len, void ** out_msg, short 
 		{
 #if (VERBOSE_RPC > 0)
 			to_string_queue_message(qq, (char *) print_buff);
-			printf("Received queue read response: %s\n", print_buff);
+			log_debug("Received queue read response: %s", print_buff);
 #endif
 			*out_msg = (void *) qq;
 			*out_msg_type = RPC_TYPE_QUEUE;
@@ -214,7 +215,7 @@ int parse_message(void * rcv_buf, size_t rcv_msg_len, void ** out_msg, short * o
 					write_query * wq = (write_query *) *(out_msg);
 #if (VERBOSE_RPC > 0)
 					to_string_write_query(wq, (char *) print_buff);
-					printf("Received write query: %s\n", print_buff);
+					log_debug("Received write query: %s", print_buff);
 #endif
 					*nonce = wq->nonce;
 					return 0;
@@ -224,7 +225,7 @@ int parse_message(void * rcv_buf, size_t rcv_msg_len, void ** out_msg, short * o
 					read_query * wq = (read_query *) *(out_msg);
 #if (VERBOSE_RPC > 0)
 					to_string_read_query(wq, (char *) print_buff);
-					printf("Received read query: %s\n", print_buff);
+					log_debug("Received read query: %s", print_buff);
 #endif
 					*nonce = wq->nonce;
 					return 0;
@@ -234,7 +235,7 @@ int parse_message(void * rcv_buf, size_t rcv_msg_len, void ** out_msg, short * o
 					range_read_query * wq = (range_read_query *) *(out_msg);
 #if (VERBOSE_RPC > 0)
 					to_string_range_read_query(wq, (char *) print_buff);
-					printf("Received range read query: %s\n", print_buff);
+					log_debug("Received range read query: %s", print_buff);
 #endif
 					*nonce = wq->nonce;
 					return 0;
@@ -244,7 +245,7 @@ int parse_message(void * rcv_buf, size_t rcv_msg_len, void ** out_msg, short * o
 					queue_query_message * wq = (queue_query_message *) *(out_msg);
 #if (VERBOSE_RPC > 0)
 					to_string_queue_message(wq, (char *) print_buff);
-					printf("Received queue message: %s\n", print_buff);
+					log_debug("Received queue message: %s", print_buff);
 #endif
 					*nonce = wq->nonce;
 					return 0;
@@ -254,7 +255,7 @@ int parse_message(void * rcv_buf, size_t rcv_msg_len, void ** out_msg, short * o
 					txn_message * wq = (txn_message *) *(out_msg);
 #if (VERBOSE_RPC > 0)
 					to_string_txn_message(wq, (char *) print_buff);
-					printf("Received txn message: %s\n", print_buff);
+					log_debug("Received txn message: %s", print_buff);
 #endif
 					*nonce = wq->nonce;
 					return 0;
@@ -279,7 +280,7 @@ int parse_message(void * rcv_buf, size_t rcv_msg_len, void ** out_msg, short * o
 					ack_message * wq = (ack_message *) *(out_msg);
 	#if (VERBOSE_RPC > 0)
 					to_string_ack_message(wq, (char *) print_buff);
-					printf("Received ack message: %s\n", print_buff);
+					log_debug("Received ack message: %s", print_buff);
 	#endif
 					*nonce = wq->nonce;
 					return 0;
@@ -289,7 +290,7 @@ int parse_message(void * rcv_buf, size_t rcv_msg_len, void ** out_msg, short * o
 					write_query * wq = (write_query *) *(out_msg);
 #if (VERBOSE_RPC > 0)
 					to_string_write_query(wq, (char *) print_buff);
-					printf("Received write query: %s\n", print_buff);
+					log_debug("Received write query: %s", print_buff);
 #endif
 					*nonce = wq->nonce;
 					return 0;
@@ -299,7 +300,7 @@ int parse_message(void * rcv_buf, size_t rcv_msg_len, void ** out_msg, short * o
 					range_read_response_message * wq = (range_read_response_message *) *(out_msg);
 #if (VERBOSE_RPC > 0)
 					to_string_range_read_response_message(wq, (char *) print_buff);
-					printf("Received range read response message: %s\n", print_buff);
+					log_debug("Received range read response message: %s", print_buff);
 #endif
 					*nonce = wq->nonce;
 					return 0;
@@ -309,7 +310,7 @@ int parse_message(void * rcv_buf, size_t rcv_msg_len, void ** out_msg, short * o
 					queue_query_message * wq = (queue_query_message *) *(out_msg);
 #if (VERBOSE_RPC > 0)
 					to_string_queue_message(wq, (char *) print_buff);
-					printf("Received queue message: %s\n", print_buff);
+					log_debug("Received queue message: %s", print_buff);
 #endif
 					*nonce = wq->nonce;
 					return 0;
@@ -319,7 +320,7 @@ int parse_message(void * rcv_buf, size_t rcv_msg_len, void ** out_msg, short * o
 					txn_message * wq = (txn_message *) *(out_msg);
 #if (VERBOSE_RPC > 0)
 					to_string_txn_message(wq, (char *) print_buff);
-					printf("Received txn message: %s\n", print_buff);
+					log_debug("Received txn message: %s", print_buff);
 #endif
 					*nonce = wq->nonce;
 					return 0;
@@ -386,7 +387,7 @@ int read_full_packet(int * sockfd, char * inbuf, size_t inbuf_size, int * msg_le
 	    *msg_len = read(*sockfd, inbuf + sizeof(int) + read_buf_offset, announced_msg_len - read_buf_offset);
 
 #if COMM_VERBOSITY > 2
-		printf("announced_msg_len=%d, msg_len=%d, read_buf_offset=%d\n", announced_msg_len, *msg_len, read_buf_offset);
+		log_debug("announced_msg_len=%d, msg_len=%d, read_buf_offset=%d", announced_msg_len, *msg_len, read_buf_offset);
 #endif
 
 	    if (*msg_len < 0)
@@ -414,7 +415,7 @@ int read_full_packet(int * sockfd, char * inbuf, size_t inbuf_size, int * msg_le
 //    read_buf_offset = 0; // Reset
 
 #if COMM_VERBOSITY > 2
-    printf("server received %d / %d bytes\n", announced_msg_len, *msg_len);
+    log_debug("server received %d / %d bytes", announced_msg_len, *msg_len);
 #endif
 
 	return status;
@@ -570,11 +571,11 @@ int update_listen_socket(remote_server * rs, char *hostname, unsigned short port
 		}
 		else
 		{
-			printf("SERVER: Updated listen socket of %s/%s:%d (%s:%d) from %d to %d\n", rs->id, rs->hostname, rs->portno, hostname, portno, old_sockfd, rs->sockfd);
+			log_debug("SERVER: Updated listen socket of %s/%s:%d (%s:%d) from %d to %d", rs->id, rs->hostname, rs->portno, hostname, portno, old_sockfd, rs->sockfd);
 		}
 	}
 
-	printf("SERVER: Updating listen socket of %s/%s:%d (%d) to %s:%d\n", rs->id, rs->hostname, rs->portno, rs->sockfd, hostname, portno);
+	log_debug("SERVER: Updating listen socket of %s/%s:%d (%d) to %s:%d", rs->id, rs->hostname, rs->portno, rs->sockfd, hostname, portno);
 
     snprintf((char *) &rs->id, 256, "%s:%d", hostname, portno);
 
