@@ -124,26 +124,29 @@ instance Simp QName where
       | otherwise                   = n
       where aliases                 = [ n1 | (n1, NAlias n2) <- names env, n2 == n ]
 
+
+defaultVars                         :: TEnv -> TypeM TEnv
+defaultVars te                      = do te <- msubst te
+                                         sequence [ substitute tv (dflt (tvkind tv)) | tv <- tyfree te ]
+                                         msubst te
+  where dflt KType                  = tNone
+        dflt KFX                    = fxPure
+        dflt PRow                   = posNil
+        dflt KRow                   = kwdNil
+
 ------------------------------
 
 infTop                                  :: Env -> Suite -> TypeM (TEnv,Suite)
 infTop env ss                           = do --traceM ("\n## infEnv top")
                                              pushFX fxPure tNone
-                                             (cs,te,ss1) <- (if stub env then infEnv else infSuiteEnv) env ss
-                                             ss1 <- msubst ss1
+                                             (cs,te,ss) <- (if stub env then infEnv else infSuiteEnv) env ss
+                                             ss <- msubst ss
                                              popFX
-                                             eq <- solveAll (define te env) te tNone cs
-                                             te <- msubst te
-                                             ss2 <- termred <$> msubst (bindWits eq ++ ss1)
-                                             let s = [ (tv,repl (tvkind tv)) | tv <- tyfree te ]
-                                                 te1 = subst s te
-                                                 te2 = normTEnv $ if stub env then unSig te1 else te1
-                                             return (te2, ss2)
-  where repl KType                      = tNone 
-        repl KFX                        = fxPure
-        repl PRow                       = posNil
-        repl KRow                       = kwdNil
-
+                                             eq <- solveAll (define (filter typeDecl te) env) te tNone cs
+                                             te <- defaultVars te
+                                             ss1 <- termred <$> msubst (bindWits eq ++ ss)
+                                             let te1 = normTEnv $ if stub env then unSig te else te
+                                             return (te1, ss1)
 
 class Infer a where
     infer                               :: Env -> a -> TypeM (Constraints,Type,a)
@@ -384,8 +387,11 @@ instance InfEnv Stmt where
                                              return (cs1, te1, Decl l ds1)
       | nodup ds                        = do (cs1,te1,ds1) <- infEnv (setInDecl env) ds
                                              (cs2,ds2) <- checkEnv (define te1 env) ds1
-                                             (cs3,te2,ds3) <- genEnv (define te1 env) cs2 te1 ds2
-                                             return (cs1++cs3, te2, Decl l ds3)
+                                             (cs3,te2,eq,ds3) <- genEnv env cs2 te1 ds2
+                                             return (cs1++cs3, te2, withLocal (bindWits eq) $ Decl l ds3)
+
+withLocal [] s                          = s
+withLocal ss s                          = With l0 [] (ss ++ [s])
 
 
 infTarget env (Var l (NoQ n))           = case findName n env of
@@ -581,8 +587,8 @@ stubSigs te                             = [ makeDef n sc dec | (n, NSig sc dec) 
 
 solveAll env te tt cs                   = do --traceM ("\n\n### solveAll " ++ prstrs cs)
                                              (cs,eq) <- simplify env te tt cs
-                                             (_,cs,_,eq) <- refine env True cs te eq
-                                             snd <$> solve env (const True) te tt eq cs
+                                             (cs,eq) <- solve env (const True) te tt eq cs
+                                             return eq
 
 solveScoped env [] te tt cs             = simplify env te tt cs
 solveScoped env vs te tt cs             = do --traceM ("\n\n### solveScoped: " ++ prstrs vs)
@@ -827,8 +833,8 @@ instance Check Branch where
 
 --------------------------------------------------------------------------------------------------------------------------
 
-refine                                  :: Env -> Bool -> Constraints -> TEnv -> Equations -> TypeM ([TVar], Constraints, TEnv, Equations)
-refine env canGen cs te eq
+refine                                  :: Env -> Constraints -> TEnv -> Equations -> TypeM ([TVar], Constraints, TEnv, Equations)
+refine env cs te eq
   | not $ null solve_vs                 = do --traceM ("  #solving cs : " ++ prstrs cs)
                                              (cs',eq') <- solve (define te env) (not . canQual) te tNone eq cs
                                              refineAgain cs' eq'
@@ -845,7 +851,7 @@ refine env canGen cs te eq
         def_vss                         = [ nub $ tyfree sc | (_, NDef sc _) <- te, null $ scbind sc ]
         gen_vs                          = nub (foldr union (tyfree cs) def_vss)
         
-        canQual (Impl _ (TVar _ v) _)   = univar v && canGen
+        canQual (Impl _ (TVar _ v) _)   = univar v
         canQual _                       = False
 
         ambig c                         = any (`elem` ambig_vs) (tyfree c)
@@ -853,7 +859,7 @@ refine env canGen cs te eq
         refineAgain cs eq               = do (cs,eq') <- simplify env te tNone cs
                                              te <- msubst te
                                              env <- msubst env
-                                             refine env canGen cs te (eq'++eq)
+                                             refine env cs te (eq'++eq)
 
 tyfixed te                              = tyfree $ filter (not . gen) te
   where gen (n, NDef sc _)              = null $ scbind sc
@@ -865,52 +871,55 @@ qualify vs cs                           = let (q,wss) = unzip $ map qbind vs in 
                 impls                   = [ p | Impl w (TVar _ v') p <- cs, v == v' ]
                 wits                    = [ (w, impl2type t p) | Impl w t@(TVar _ v') p <- cs, v == v' ]
 
-genEnv                                  :: Env -> Constraints -> TEnv -> [Decl] -> TypeM (Constraints,TEnv,[Decl])
-genEnv env cs te ds0
+genEnv                                  :: Env -> Constraints -> TEnv -> [Decl] -> TypeM (Constraints,TEnv,Equations,[Decl])
+genEnv env cs te ds
+  | any typeDecl te                     = do te <- msubst te
+                                             --traceM ("## genEnv 11\n" ++ render (nest 6 $ pretty te))
+                                             eq <- solveAll (define (filter typeDecl te) env) te tNone cs
+                                             te <- defaultVars te
+                                             --traceM ("## genEnv 12\n" ++ render (nest 6 $ pretty te))
+                                             return ([], te, eq, ds)
   | onTop env                           = do te <- msubst te
                                              --traceM ("## genEnv 1\n" ++ render (nest 6 $ pretty te))
-                                             (cs0,eq0) <- simplify env te tNone cs
+                                             (cs,eq) <- simplify env te tNone cs
                                              te <- msubst te
                                              env <- msubst env
-                                             (gen_vs, gen_cs, te, eq1) <- refine env (all matchDef te) cs0 te eq0
+                                             (gen_vs, gen_cs, te, eq) <- refine env cs te eq
                                              --traceM ("## genEnv 2 [" ++ prstrs gen_vs ++ "]\n" ++ render (nest 6 $ pretty te))
                                              let (q,ws) = qualify gen_vs gen_cs
                                                  te1 = map (generalize q) te
-                                                 ds1 = map (abstract q ds0 ws eq1) ds0
+                                                 (eq1,eq2) = splitEqs (dom ws) eq
+                                                 ds1 = map (abstract q ds ws eq1) ds
                                              --traceM ("## genEnv 3 [" ++ prstrs gen_vs ++ "]\n" ++ render (nest 6 $ pretty te1))
-                                             return ([], te1, ds1)
+                                             return ([], te1, eq2, ds1)
   | otherwise                           = do te <- msubst te
-                                             --traceM ("## noGenEnv\n" ++ render (nest 6 $ pretty te))
-                                             (cs0,eq0) <- simplify env te tNone cs
+                                             --traceM ("## genEnv 01\n" ++ render (nest 6 $ pretty te))
+                                             (cs,eq) <- simplify env te tNone cs
                                              te <- msubst te
-                                             let ds1 = map (abstract [] ds0 [] eq0) ds0
-                                             return (cs0, te, ds1)
+                                             --traceM ("## genEnv 02\n" ++ render (nest 6 $ pretty te))
+                                             return (cs, te, eq, ds)
   where
     generalize q (n, NDef sc d)
       | null $ scbind sc                = (n, NDef (tSchema q (sctype sc)) d)
-    generalize q (n, i)                 = (n, i)
+      | otherwise                       = (n, NDef sc d)
 
     abstract q ds ws eq d@Def{}
       | null $ qbinds d                 = d{ qbinds = noqual env q, 
                                              pos = wit2par ws (pos d),
                                              dbody = bindWits eq ++ wsubst ds q ws (dbody d) }
       | otherwise                       = d{ dbody = bindWits eq ++ wsubst ds q ws (dbody d) }
-    abstract q ds ws eq d@Actor{}       = d{ dbody = bindWits eq ++ wsubst ds q ws (dbody d) }
-    abstract q ds ws eq d               = d{ dbody = map bindInDef (wsubst ds q ws (dbody d)) }
-      where bindInDef (Decl l ds')      = Decl l (map bindInDef' ds')
-            bindInDef (If l bs els)     = If l [ Branch e (map bindInDef ss) | Branch e ss <- bs ] (map bindInDef els)
-            bindInDef stmt              = stmt
-            bindInDef' d@Def{}          = d{ dbody = bindWits eq ++ dbody d }
-            bindInDef' d                = d{ dbody = map bindInDef (dbody d) }
-            
+
     wsubst ds [] []                     = id
     wsubst ds q ws                      = termsubst s
       where s                           = [ (n, Lambda l0 p k (Call l0 (tApp (eVar n) tvs) (wit2arg ws (pArg p)) (kArg k)) fx) 
                                             | Def _ n [] p k _ _ _ fx <- ds ]
             tvs                         = map tVar $ qbound q
 
-    matchDef (_,NDef{})                 = True
-    matchDef _                          = False
+    splitEqs ws eq
+      | null eq1                        = ([], eq)
+      | otherwise                       = (eq1++eq1', eq2')
+      where (eq1,eq2)                   = partition (any (`elem` ws) . free) eq
+            (eq1',eq2')                 = splitEqs (bound eq1 ++ ws) eq2
 
 
 defaultsP (PosPar n (Just t) (Just e) p)

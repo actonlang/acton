@@ -292,6 +292,12 @@ instance Subst Equation where
     
     tyfree (w, t, e)                        = tyfree t ++ tyfree e
 
+instance Vars Equation where
+    free (w, t, e)                          = free e
+
+    bound (w, t, e)                         = [w]
+
+
 
 reduce                                      :: Env -> Equations -> Constraints -> TypeM Equations
 reduce env eq []                            = return eq

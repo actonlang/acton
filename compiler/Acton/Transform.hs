@@ -80,7 +80,7 @@ instance Transform Stmt where
     trans env (For l p e b els)         = For l p (trans env e) (trans env1 b) (trans env els)
       where env1                        = blockscope (bound p) env
     trans env (Try l b hs els fin)      = Try l (trans env b) (trans env hs) (trans env els) (trans env fin)
-    trans env (With l is b)             = With l (trans env1 is) (trans env1 b)
+    trans env (With l is b)             = With l (trans env1 is) (wtrans env1 b)
       where env1                        = blockscope (bound is) env
     trans env (Data l mbp ss)           = Data l mbp (trans env ss)
     trans env (VarAssign l ps e)        = VarAssign l ps (trans env e)
