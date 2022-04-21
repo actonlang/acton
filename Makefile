@@ -166,6 +166,7 @@ clean-compiler:
 	cd compiler && stack clean >/dev/null 2>&1 || true
 	rm -f compiler/actonc compiler/package.yaml compiler/acton.cabal
 
+OFILES += deps/netstring_dev.o deps/netstring_rel.o deps/yyjson_dev.o deps/yyjson_rel.o
 deps/netstring_dev.o: deps/netstring.c
 	$(CC) $(CFLAGS) $(CFLAGS_DEV) -c $< -o$@
 
@@ -336,13 +337,14 @@ DB_OFILES += backend/db.o backend/queue.o backend/skiplist.o backend/txn_state.o
 DBCLIENT_OFILES += backend/client_api.o rts/empty.o
 REMOTE_OFILES += backend/failure_detector/db_messages.pb-c.o backend/failure_detector/cells.o backend/failure_detector/db_queries.o backend/failure_detector/fd.o
 VC_OFILES += backend/failure_detector/vector_clock.o
-BACKEND_OFILES=$(COMM_OFILES) $(DB_OFILES) $(DBCLIENT_OFILES) $(REMOTE_OFILES) $(VC_OFILES) backend/log.o deps/netstring_rel.o deps/yyjson.o
+BACKEND_OFILES=$(COMM_OFILES) $(DB_OFILES) $(DBCLIENT_OFILES) $(REMOTE_OFILES) $(VC_OFILES) backend/log.o deps/netstring_rel.o deps/yyjson_rel.o
 OFILES += $(BACKEND_OFILES)
 lib/libActonDB.a: $(BACKEND_OFILES)
 	ar rcs $@ $^
 
 
 # /rts --------------------------------------------------
+OFILES += rts/log.o rts/rts_dev.o rts/rts_rel.o rts/empty.o
 rts/log.o: rts/log.c rts/log.h
 	$(CC) $(CFLAGS) $(CFLAGS_DEV) -DLOG_USE_COLOR -c $< -o$@
 
