@@ -357,19 +357,19 @@ reduce' env eq c@(Sel w (TCon _ tc) n _)
 
 reduce' env eq (Sel w t1@(TTuple _ p r) n t2)
                                             = do let e = eLambda [(px0,t1)] (eDot (eVar px0) n)
-                                                     cs' = [Cast r (kwdRow n t2 tWild)]
-                                                 reduce env ((w, wFun t1 t2, e):eq) cs'
+                                                 unify r (kwdRow n t2 tWild)
+                                                 return ((w, wFun t1 t2, e):eq)
 
 reduce' env eq c@(Mut (TVar _ tv) n _)
   | univar tv                               = do defer [c]; return eq
-  | Just wsc <- attrSearch                  = do cs <- solveMutAttr env wsc c
-                                                 reduce env eq cs
+  | Just wsc <- attrSearch                  = do solveMutAttr env wsc c
+                                                 return eq
   | otherwise                               = tyerr n "Attribute not found:"
   where attrSearch                          = findTVAttr env tv n
 
 reduce' env eq c@(Mut (TCon _ tc) n _)
-  | Just wsc <- attrSearch                  = do cs <- solveMutAttr env wsc c
-                                                 reduce env eq cs
+  | Just wsc <- attrSearch                  = do solveMutAttr env wsc c
+                                                 return eq
   | otherwise                               = tyerr n "Attribute not found:"
   where attrSearch                          = findAttr env tc n
 
@@ -380,10 +380,10 @@ solveImpl env wit w t p                     = do (cs,p',we) <- instWitness env t
                                                  unifyM (tcargs p) (tcargs p')
                                                  return ([(w, impl2type t p, we)], cs)
 
-solveSelAttr env (wf,sc,d) (Sel w t1 n t2)  = do (cs1,tvs,t) <- instantiate env sc
+solveSelAttr env (wf,sc,d) (Sel w t1 n t2)  = do (cs,tvs,t) <- instantiate env sc
                                                  when (tvSelf `elem` snd (polvars t)) (tyerr n "Contravariant Self attribute not selectable by instance")
-                                                 let e = eLambda [(px0,t1)] (app t (tApp (eDot (wf $ eVar px0) n) tvs) $ witsOf cs1)
-                                                     cs = Cast (subst [(tvSelf,t1)] t) t2 : cs1
+                                                 let e = eLambda [(px0,t1)] (app t (tApp (eDot (wf $ eVar px0) n) tvs) $ witsOf cs)
+                                                 unify (subst [(tvSelf,t1)] t) t2
                                                  return ([(w, wFun t1 t2, e)], cs)
 
 --  e1.__setslice__(sl, e2)
@@ -401,16 +401,15 @@ solveSelProto env pn c@(Sel w t1 n t2)      = do p <- instwildcon env pn
                                                  return (eq, Impl w' t1 p : cs)
 
 solveSelWit env (p,we) (Sel w t1 n t2)      = do let Just (wf,sc,d) = findAttr env p n
-                                                 (cs1,tvs,t) <- instantiate env sc
+                                                 (cs,tvs,t) <- instantiate env sc
                                                  when (tvSelf `elem` snd (polvars t)) (tyerr n "Contravariant Self attribute not selectable by instance")
-                                                 let e = eLambda [(px0,t1)] (app t (tApp (eDot (wf we) n) tvs) $ eVar px0 : witsOf cs1)
-                                                     cs = Cast (subst [(tvSelf,t1)] t) t2 : cs1
+                                                 let e = eLambda [(px0,t1)] (app t (tApp (eDot (wf we) n) tvs) $ eVar px0 : witsOf cs)
+                                                 unify (subst [(tvSelf,t1)] t) t2
                                                  return ([(w, wFun t1 t2, e)], cs)
 
 solveMutAttr env (wf,sc,dec) (Mut t1 n t2)  = do when (dec /= Just Property) (noMut n)
                                                  let TSchema _ [] t = sc
-                                                     cs = [Cast t2 (subst [(tvSelf,t1)] t)]
-                                                 return cs
+                                                 unify t2 (subst [(tvSelf,t1)] t)
 
 ----------------------------------------------------------------------------------------------------------------------
 -- witness lookup
@@ -956,7 +955,7 @@ replace ub lb c                         = c
 solveDots env mutC selC selP cs         = do (eqs,css) <- unzip <$> mapM solveDot cs
                                              return (concat eqs, concat css)
   where solveDot c@(Mut (TVar _ v) n _)
-          | Just w <- lookup (v,n) mutC = solveMutAttr env w c >>= \cs -> return ([], cs)
+          | Just w <- lookup (v,n) mutC = solveMutAttr env w c >> return ([], [])
         solveDot c@(Sel _ (TVar _ v) n _)
           | Just w <- lookup (v,n) selC = solveSelAttr env w c
           | Just w <- lookup (v,n) selP = solveSelWit env w c
