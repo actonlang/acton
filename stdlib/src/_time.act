@@ -1,0 +1,7 @@
+monotonic : () -> float
+
+monotonic_ns : () -> int
+
+time : () -> float
+
+time_ns : () -> int
