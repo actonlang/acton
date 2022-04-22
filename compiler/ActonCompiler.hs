@@ -284,7 +284,7 @@ chaseImportedFiles args paths imps task
 
 doTask :: Args -> Paths -> Acton.Env.Env0 -> CompileTask -> IO Acton.Env.Env0
 doTask args paths env t@(ActonTask mn src m)
-                            = do ok <- checkUptoDate paths actFile tyFile [hFile, cFile] (importsOf t)
+                            = do ok <- checkUptoDate paths actFile tyFile [hFile] (importsOf t)
                                  if ok && mn /= modName paths then do
                                           iff (verbose args) (putStrLn ("Skipping  "++ actFile ++ " (files are up to date)."))
                                           return env
