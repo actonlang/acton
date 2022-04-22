@@ -186,7 +186,9 @@ STDLIB_ACTFILES_NS=$(filter-out stdlib/src/__builtin__.act,$(STDLIB_ACTFILES))
 STDLIB_CFILES=$(wildcard stdlib/src/*.c stdlib/src/**/*.c)
 STDLIB_ACTON_MODULES=$(filter-out $(STDLIB_CFILES:.c=.act),$(STDLIB_ACTFILES_NS))
 STDLIB_TYFILES=$(subst src,out/types,$(STDLIB_ACTFILES:.act=.ty))
+STDLIB_TYFILES_C=$(subst src,out/types,$(STDLIB_CFILES:.c=.ty))
 STDLIB_HFILES=$(subst src,out/types,$(STDLIB_ACTFILES_NS:.act=.h))
+STDLIB_HFILES_C=$(subst src,out/types,$(STDLIB_CFILES:.c=.h))
 STDLIB_OFILES_C=$(subst src,out/release,$(STDLIB_CFILES:.c=.o))
 STDLIB_DEV_OFILES_ACT=$(subst src,out/lib,$(STDLIB_ACTS:.act=_dev.o))
 STDLIB_REL_OFILES_ACT=$(subst src,out/lib,$(STDLIB_ACTS:.act=_rel.o))
@@ -258,7 +260,7 @@ stdlib/out/release/math_rel.o: stdlib/src/math.c
 	$(CC) $(CFLAGS) $(CFLAGS_REL) -Istdlib/ -Istdlib/out/ -c $< -o$@
 
 # -- numpy --
-stdlib/out/types/numpy.ty: stdlib/src/numpy.act dist/types/__builtin__.ty $(ACTONC)
+stdlib/out/types/numpy.ty: stdlib/src/numpy.act stdlib/out/types/math.ty dist/types/__builtin__.ty $(ACTONC)
 	@mkdir -p $(dir $@)
 	$(ACTC) $< --stub
 
