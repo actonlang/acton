@@ -295,20 +295,20 @@ stdlib/out/release/random_rel.o: stdlib/src/random.c
 	@mkdir -p $(dir $@)
 	$(CC) $(CFLAGS) $(CFLAGS_REL) -Istdlib/ -Istdlib/out/ -c $< -o$@
 
-# -- time --
-stdlib/out/types/time.ty: stdlib/src/time.act dist/types/__builtin__.ty $(ACTONC)
+# -- _time --
+stdlib/out/types/_time.ty: stdlib/src/_time.act dist/types/__builtin__.ty $(ACTONC)
 	@mkdir -p $(dir $@)
 	$(ACTC) $< --stub
 
-stdlib/out/types/time.h: stdlib/src/time.h
+stdlib/out/types/_time.h: stdlib/src/_time.h
 	@mkdir -p $(dir $@)
 	cp $< $@
 
-stdlib/out/release/time_dev.o: stdlib/src/time.c
+stdlib/out/release/_time_dev.o: stdlib/src/_time.c
 	@mkdir -p $(dir $@)
 	$(CC) $(CFLAGS) $(CFLAGS_DEV) -Istdlib/ -Istdlib/out/ -c $< -o$@
 
-stdlib/out/release/time_rel.o: stdlib/src/time.c
+stdlib/out/release/_time_rel.o: stdlib/src/_time.c
 	@mkdir -p $(dir $@)
 	$(CC) $(CFLAGS) $(CFLAGS_REL) -Istdlib/ -Istdlib/out/ -c $< -o$@
 
