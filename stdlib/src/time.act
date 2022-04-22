@@ -1,7 +1,13 @@
-monotonic : () -> float
+import _time
 
-monotonic_ns : () -> int
+def monotonic():
+    return _time.monotonic()
 
-time : () -> float
+def monotonic_ns():
+    return _time.monotonic_ns()
 
-time_ns : () -> int
+def time():
+    return _time.time()
+
+def time_ns():
+    return _time.time_ns()

@@ -284,7 +284,7 @@ chaseImportedFiles args paths imps task
 
 doTask :: Args -> Paths -> Acton.Env.Env0 -> CompileTask -> IO Acton.Env.Env0
 doTask args paths env t@(ActonTask mn src m)
-                            = do ok <- checkUptoDate paths actFile tyFile [hFile, cFile] (importsOf t)
+                            = do ok <- checkUptoDate paths actFile tyFile [hFile] (importsOf t)
                                  if ok && mn /= modName paths then do
                                           iff (verbose args) (putStrLn ("Skipping  "++ actFile ++ " (files are up to date)."))
                                           return env
@@ -366,8 +366,9 @@ runRestPasses args paths env0 parsed = do
                       iff (not $ stub args) $ do
                           let cFile = outbase ++ ".c"
                               hFile = outbase ++ ".h"
-                              oFile = joinPath [projLib paths, n++".o"]
-                              aFile = joinPath [projLib paths, "libActonProject.a"]
+                              oFile = joinPath [projLib paths, n++ if (dev args) then "_dev.o" else "_rel.o"]
+                              aFile = joinPath [projLib paths,
+                                                if (dev args) then "libActonProject_dev.a" else "libActonProject_rel.a"]
                               buildF = joinPath [projPath paths, "build.sh"]
                               ccCmd = ("cc " ++ pedantArg ++
                                        (if (dev args) then " -g " else "") ++
@@ -430,7 +431,7 @@ buildExecutable env args paths task
         buildF              = joinPath [projPath paths, "build.sh"]
         outbase             = outBase paths mn
         rootFile            = outbase ++ ".root.c"
-        libFilesBase        = " -lActonProject " ++ libActonArg ++ " -lActonDB -lprotobuf-c -lutf8proc -lpthread -lm"
+        libFilesBase        = " " ++ libActonProjArg ++ " " ++ libActonArg ++ " -lActonDB -lprotobuf-c -lutf8proc -lpthread -lm"
         libPathsBase        = " -L" ++ projLib paths ++ " -L" ++ sysLib paths
 #if defined(darwin_HOST_OS) && defined(aarch64_HOST_ARCH)
         libFiles            = libFilesBase
@@ -447,6 +448,7 @@ buildExecutable env args paths task
         ccArgs              = " -no-pie "
 #endif
         libActonArg         = if (dev args) then "-lActon_dev" else "-lActon_rel"
+        libActonProjArg     = if (dev args) then "-lActonProject_dev" else "-lActonProject_rel"
         binFilename         = takeFileName $ dropExtension srcbase
         binFile             = joinPath [binDir paths, binFilename]
         srcbase             = srcFile paths mn
