@@ -93,6 +93,8 @@ xNames                                  = paramNames "x"
 
 newWitness                              = Internal Witness "" <$> newUnique
 
+newTmp                                  = Internal TypesPass "" <$> newUnique
+
 newTVarOfKind k                         = TVar NoLoc <$> TV k <$> Internal Typevar (str k) <$> newUnique
   where str KType                       = ""
         str KFX                         = "x"
