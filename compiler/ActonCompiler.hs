@@ -384,7 +384,27 @@ runRestPasses args paths env0 parsed = do
 
                       stubM <- stubMode actFile args
                       if stubM then do
-                        putStrLn("Doing stub compilation for " ++ file args ++ "... i.e. mostly nothing")
+                          putStrLn("Doing stub compilation for " ++ actFile)
+                          let makeFile = projPath paths ++ "/Makefile"
+                          makeExist <- doesFileExist makeFile
+                          iff (makeExist) (do
+                            cExist <- doesFileExist $ replaceExtension (file args) ".c"
+                            iff (cExist) (do
+                              let roFile = makeRelative (projPath paths) oFile
+                                  makeCmd = "make -C " ++ projPath paths ++ " " ++ roFile
+                                  arCmd = "ar rcs " ++ aFile ++ " " ++ oFile
+                              (_,_,_,hdl) <- createProcess (shell $ makeCmd ++ " && " ++ arCmd)
+                              returnCode <- waitForProcess hdl
+                              case returnCode of
+                                  ExitSuccess -> return()
+                                  ExitFailure _ -> do printIce "compilation of C code failed"
+                                                      System.Exit.exitFailure)
+
+                            let srcH = replaceExtension (file args) ".h"
+                            hExist <- doesFileExist srcH
+                            let hFile = outbase ++ ".h"
+                            iff (hExist) (do
+                              copyFile srcH hFile))
                       else do
                           let cFile = outbase ++ ".c"
                               hFile = outbase ++ ".h"
