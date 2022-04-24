@@ -228,7 +228,7 @@ stdlib/out/lib/libActonProject_rel.a stdlib/out/lib/libActonProject_dev.a: $(STD
 # -- acton/rts --
 stdlib/out/types/acton/rts.ty: stdlib/src/acton/rts.act dist/types/__builtin__.ty $(ACTONC)
 	@mkdir -p $(dir $@)
-	$(ACTC) $< --stub
+	$(ACTC) $<
 
 stdlib/out/types/acton/rts.h: stdlib/src/acton/rts.h
 	@mkdir -p $(dir $@)
@@ -245,7 +245,7 @@ stdlib/out/release/acton/rts_rel.o: stdlib/src/acton/rts.c
 # -- math --
 stdlib/out/types/math.ty: stdlib/src/math.act dist/types/__builtin__.ty $(ACTONC)
 	@mkdir -p $(dir $@)
-	$(ACTC) $< --stub
+	$(ACTC) $<
 
 stdlib/out/types/math.h: stdlib/src/math.h
 	@mkdir -p $(dir $@)
@@ -262,7 +262,7 @@ stdlib/out/release/math_rel.o: stdlib/src/math.c
 # -- numpy --
 stdlib/out/types/numpy.ty: stdlib/src/numpy.act stdlib/out/types/math.ty dist/types/__builtin__.ty $(ACTONC)
 	@mkdir -p $(dir $@)
-	$(ACTC) $< --stub
+	$(ACTC) $<
 
 stdlib/out/types/numpy.h: stdlib/src/numpy.h
 	@mkdir -p $(dir $@)
@@ -283,7 +283,7 @@ stdlib/out/release/numpy_rel.o: stdlib/src/numpy.c stdlib/src/numpy.h stdlib/out
 # -- random --
 stdlib/out/types/random.ty: stdlib/src/random.act dist/types/__builtin__.ty $(ACTONC)
 	@mkdir -p $(dir $@)
-	$(ACTC) $< --stub
+	$(ACTC) $<
 
 stdlib/out/types/random.h: stdlib/src/random.h
 	@mkdir -p $(dir $@)
@@ -300,7 +300,7 @@ stdlib/out/release/random_rel.o: stdlib/src/random.c
 # -- _time --
 stdlib/out/types/_time.ty: stdlib/src/_time.act dist/types/__builtin__.ty $(ACTONC)
 	@mkdir -p $(dir $@)
-	$(ACTC) $< --stub
+	$(ACTC) $<
 
 stdlib/out/types/_time.h: stdlib/src/_time.h
 	@mkdir -p $(dir $@)

@@ -125,6 +125,8 @@ main            = do cv <- getCcVer
                          putStrLn ("## fileExt  : " ++ fileExt paths)
                          putStrLn ("## modName  : " ++ prstr (modName paths))
                      let mn = modName paths
+                     stubM <- stubMode (file args) args
+                     when (stubM) $ do putStrLn("Found matching C file (" ++ (replaceExtension (file args) ".c") ++ "), assuming stub compilation")
                      (case fileExt paths of
                         ".act"   -> do let fName = file args
                                        src <- readFile fName
@@ -140,6 +142,10 @@ main            = do cv <- getCcVer
                         _        -> error ("********************\nUnknown file extension "++ fileExt paths))
                                `catch` handle "IOException" (\exc -> (l0,displayException (exc :: IOException))) "" paths mn
                                `catch` handle "Error" (\exc -> (l0,displayException (exc :: ErrorCall))) "" paths mn
+
+stubMode srcfile args = do exists <- doesFileExist cFile
+                           if (stub args || exists) then return True else return False
+  where cFile = replaceExtension srcfile ".c"
 
 
 dump h txt      = putStrLn ("\n\n#################################### " ++ h ++ ":\n" ++ txt)
@@ -179,6 +185,8 @@ srcFile paths mn        = joinPath (srcDir paths : A.modPath mn) ++ ".act"
 outBase                 :: Paths -> A.ModName -> FilePath
 outBase paths mn        = joinPath (projTypes paths : A.modPath mn)
 
+srcBase                 :: Paths -> A.ModName -> FilePath
+srcBase paths mn        = joinPath (srcDir paths : A.modPath mn)
 
 touchDirs               :: FilePath -> A.ModName -> IO ()
 touchDirs path mn       = touch path (init $ A.modPath mn)
@@ -234,10 +242,14 @@ importsOf t = A.importsOf (atree t)
 chaseImportsAndCompile :: Args -> Paths -> CompileTask -> IO ()
 chaseImportsAndCompile args paths task
                        = do tasks <- chaseImportedFiles args paths (importsOf task) task
+                            -- stubM tracks stub mode for the source file,
+                            -- imported dependencies might need to be stub
+                            -- compiled separately and is checked elsewhere
+                            stubM <- stubMode (file args) args
                             let sccs = stronglyConnComp  [(t,name t,importsOf t) | t <- tasks]
                                 (as,cs) = Data.List.partition isAcyclic sccs
                             if null cs
-                             then do env0 <- Acton.Env.initEnv (sysTypes paths) (stub args) (modName paths == Acton.Builtin.mBuiltin)
+                             then do env0 <- Acton.Env.initEnv (sysTypes paths) (stubM) (modName paths == Acton.Builtin.mBuiltin)
                                      env1 <- foldM (doTask args paths) env0 [t | AcyclicSCC t <- as]
                                      buildExecutable env1 args paths task
                                          `catch` handle "Compilation error" Acton.Env.compilationError (src task) paths (name task)
@@ -329,6 +341,7 @@ printIce errMsg = do ccVer <- getCcVer
 runRestPasses :: Args -> Paths -> Acton.Env.Env0 -> A.Module -> IO (Acton.Env.Env0, Acton.Env.TEnv)
 runRestPasses args paths env0 parsed = do
                       let outbase = outBase paths (A.modname parsed)
+                      let actFile = srcBase paths (A.modname parsed) ++ ".act"
                       env <- Acton.Env.mkEnv (sysTypes paths) (projTypes paths) env0 parsed
 
                       kchecked <- Acton.Kinds.check env parsed
@@ -363,7 +376,16 @@ runRestPasses args paths env0 parsed = do
                       iff (cgen args) $ putStrLn(c)
 
                       let pedantArg = if (cpedantic args) then "-Werror" else ""
-                      iff (not $ stub args) $ do
+
+                      let hFile = outbase ++ ".h"
+                          oFile = joinPath [projLib paths, n++ if (dev args) then "_dev.o" else "_rel.o"]
+                          aFile = joinPath [projLib paths,
+                                             if (dev args) then "libActonProject_dev.a" else "libActonProject_rel.a"]
+
+                      stubM <- stubMode actFile args
+                      if stubM then do
+                        putStrLn("Doing stub compilation for " ++ file args ++ "... i.e. mostly nothing")
+                      else do
                           let cFile = outbase ++ ".c"
                               hFile = outbase ++ ".h"
                               oFile = joinPath [projLib paths, n++ if (dev args) then "_dev.o" else "_rel.o"]
