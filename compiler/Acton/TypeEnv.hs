@@ -155,7 +155,23 @@ wvars cs                    = [ eVar v | Impl v _ _ <- cs ]
 
 -- Misc. ---------------------------------------------------------------------------------------------------------------------------
 
-bindWits eqs                            = [ Assign l0 [PVar l0 n (Just t)] e | (n,t,e) <- eqs ]
+data Equation                           = VarEqn Name Type Expr
+                                        | DefEqn Name FX QName FX
+
+type Equations                          = [Equation]
+
+bindWits eqs                            = map bind eqs
+  where bind (VarEqn w t e)             = Assign l0 [PVar l0 w (Just t)] e
+        bind (DefEqn w fx w' fx')       = Decl l0 [Def l0 w q (pospar [(x0,t)]) KwdNIL (Just t') body NoDec fxPure]
+          where tvA                     = TV PRow $ name "A"
+                tvB                     = TV KRow $ name "B"
+                tvC                     = TV KType $ name "C"
+                (tA,tB,tC)              = (tVar tvA, tVar tvB, tVar tvC)
+                t                       = tFun (tTFX fx) tA tB tC
+                t'                      = tFun (tTFX fx') tA tB tC
+                q                       = map quant [tvA,tvB,tvC]
+                x0                      = head xNames
+                body                    = [sReturn (eCall (tApp (eQVar w') [tA,tB,tC]) [eVar x0])]
 
 impl2type t (TC n ts)                   = tCon $ TC n (t:ts)
 
@@ -181,7 +197,7 @@ qualWRow env q                          = wit2row (qualWits env q)
 
 qualWits env q                          = [ (tvarWit tv p, impl2type (tVar tv) p) | Quant tv ps <- q, p <- ps, isProto env (tcname p) ]
 
-witSubst env q cs                       = [ (w0,t,eVar w) | ((w,t),w0) <- ws `zip` ws0 ]
+witSubst env q cs                       = [ VarEqn w0 t (eVar w) | ((w,t),w0) <- ws `zip` ws0 ]
   where ws                              = [ (w, impl2type t p) | Impl w t p <- cs ]
         ws0                             = [ tvarWit tv p | Quant tv ps <- q, p <- ps, isProto env (tcname p) ]
 

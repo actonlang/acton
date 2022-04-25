@@ -58,8 +58,8 @@ convProtocol env n0 q ps0 eq wmap b     = mainClass : sibClasses
                 mainInitBody            = bindWits eq0 ++ initCall (tcargs main) mainArgs main ++ mainCopies
                 mainArgs                = witArgs (tcname main) wmap ++ [ eVar n | (n,_,True) <- immsibs ]
                 mainCopies              = qcopies ++ [ MutAssign NoLoc (eDot (eVar selfKW') n) (eVar n) | (n,t,False) <- immsibs ]
-                eq0                     = (tvarWit tvSelf p0, t0, eVar selfKW') : eq
-                eq1                     = (tvarWit tvSelf p0, t0, eVar selfKW') : qcopies' ++ eq
+                eq0                     = VarEqn (tvarWit tvSelf p0) t0 (eVar selfKW') : eq
+                eq1                     = VarEqn (tvarWit tvSelf p0) t0 (eVar selfKW') : qcopies' ++ eq
 
         allsibs                         = [ sib ws ws0 p | (ws,ws0,p) <- ps, not (null ws) ]
           where sib ws ws0 p            = (ws, tcname p, us, witArgs w0 wmap, inherited ws0)
@@ -80,13 +80,13 @@ convProtocol env n0 q ps0 eq wmap b     = mainClass : sibClasses
                 sibSubParams            = [ (witAttr (last ws'), tCon $ convProto p') | (ws',_,p') <- ps, truePrefix ws ws' ]
                 sibSubArgs              = [ eVar (witAttr (last ws')) | (ws',_,p') <- ps, truePrefix ws ws' ]
                 sibCtxtArgs             = (if inh then id else init) [ eVar n | (n,t) <- sibCtxt ]
-                eq0                     = (tvarWit tvSelf p0, t0, eVar w0) : eq
-                eq1                     = (tvarWit tvSelf p0, t0, eDot (eVar selfKW') w0) : qcopies' ++ eq
+                eq0                     = VarEqn (tvarWit tvSelf p0) t0 (eVar w0) : eq
+                eq1                     = VarEqn (tvarWit tvSelf p0) t0 (eDot (eVar selfKW') w0) : qcopies' ++ eq
 
         qsigs                           = [ Signature NoLoc [qualAttr p v n0] (monotype $ impl2type (tVar v) p) Property | (v,p) <- quals env q ]
         qpars                           = [ (tvarWit v p, impl2type (tVar v) p) | (v,p) <- quals env q ]
         qcopies                         = [ MutAssign NoLoc (eDot (eVar selfKW') $ qualAttr p v n0) (eVar $ tvarWit v p) | (v,p) <- quals env q ]
-        qcopies'                        = [ (tvarWit v p, impl2type (tVar v) p, eDot (eVar selfKW') $ qualAttr p v n0) | (v,p) <- quals env q ]
+        qcopies'                        = [ VarEqn (tvarWit v p) (impl2type (tVar v) p) (eDot (eVar selfKW') $ qualAttr p v n0) | (v,p) <- quals env q ]
 
 inherited (Left _ : _)                  = True
 inherited _                             = False
@@ -116,8 +116,8 @@ convExtension env n1 c0 q ps0 eq wmap b = mainClass : sibClasses
                 mainInit                = Def NoLoc initKW [] mainParams KwdNIL (Just tNone) (mkBody mainInitBody) NoDec fxPure
                 mainParams              = wit2par ((selfKW',tSelf) : qpars) PosNIL
                 mainInitBody            = bindWits eq0 ++ initCall ts (witArgs (tcname main) wmap ++ sibSubs []) main ++ qcopies
-                eq0                     = (thisKW', tCon main, eVar selfKW') : eq
-                eq1                     = (thisKW', tCon main, eVar selfKW') : qcopies' ++ eq
+                eq0                     = VarEqn thisKW' (tCon main) (eVar selfKW') : eq
+                eq1                     = VarEqn thisKW' (tCon main) (eVar selfKW') : qcopies' ++ eq
 
         allsibs                         = [ sib ws ws0 p | (ws,ws0,p) <- ps, not (null ws) ]
           where sib ws ws0 p            = (ws, tcname p, us, witArgs w0 wmap, inherited ws0)
@@ -133,8 +133,8 @@ convExtension env n1 c0 q ps0 eq wmap b = mainClass : sibClasses
                 sibParams               = wit2par ((selfKW',tSelf) : qpars ++ sibCtxt) PosNIL
                 sibCtxt                 = witCtxt ps ws ++ [(w0,tCon main)]
                 sibInitBody             = bindWits eq0 ++ initCall ts (wes ++ sibSubs ws ++ sibArgs ws) p ++ qcopies
-                eq0                     = (thisKW', tCon main, eVar  w0) : eq
-                eq1                     = (thisKW', tCon main, eDot (eVar selfKW') w0) : qcopies' ++ eq
+                eq0                     = VarEqn thisKW' (tCon main) (eVar  w0) : eq
+                eq1                     = VarEqn thisKW' (tCon main) (eDot (eVar selfKW') w0) : qcopies' ++ eq
 
         sibSubs ws                      = [ eCall (tApp (eVar $ sibName ws' n1) tvs) (qargs ++ eVar selfKW' : sibArgs ws) | (ws',_,p') <- ps, truePrefix ws ws' ]
 
@@ -145,7 +145,7 @@ convExtension env n1 c0 q ps0 eq wmap b = mainClass : sibClasses
         qpars                           = [ (tvarWit v p, impl2type (tVar v) p) | (v,p) <- quals env q ]
         qargs                           = [ eVar n | (n,p) <- qpars ]
         qcopies                         = [ MutAssign NoLoc (eDot (eVar selfKW') $ qualAttr p v n1) (eVar $ tvarWit v p) | (v,p) <- quals env q ]
-        qcopies'                        = [ (tvarWit v p, impl2type (tVar v) p, eDot (eVar selfKW') $ qualAttr p v n1) | (v,p) <- quals env q ]
+        qcopies'                        = [ VarEqn (tvarWit v p) (impl2type (tVar v) p) (eDot (eVar selfKW') $ qualAttr p v n1) | (v,p) <- quals env q ]
 
 
 trim ps0                                = nubBy eqWit [ (catRight ws0, ws0, p) | (ws0,p) <- ps0 ]
