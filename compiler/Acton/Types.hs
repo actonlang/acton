@@ -317,21 +317,21 @@ instance InfEnv Stmt where
     infEnv env (MutAssign l targ e)     = do (cs0,t0,e0,tg) <- infTarg env targ
                                              t <- newTVar
                                              (cs1,e) <- inferSub env t e
-                                             (cs2,stmt) <- asg t0 t e0 e tg
-                                             return (cs0++cs1, [], stmt)
-      where asg t0 t e0 e (TgVar n)     = do unify t0 t
+                                             (cs2,stmt) <- asgn t0 t e0 e tg
+                                             return (cs0++cs1++cs2, [], stmt)
+      where asgn t0 t e0 e (TgVar n)    = do unify t0 t
                                              return ( [], sAssign (pVar' n) e )
-            asg t0 t e0 e (TgIndex ix)  = do (cs,ti,ix) <- infer env ix
+            asgn t0 t e0 e (TgIndex ix) = do (cs,ti,ix) <- infer env ix
                                              w <- newWitness
                                              return ( Impl w t0 (pIndexed ti t) : cs, sExpr $ dotCall w setitemKW [e0, ix, e] )
-            asg t0 t e0 e (TgSlice sl)  = do (cs,sl) <- inferSlice env sl
+            asgn t0 t e0 e (TgSlice sl) = do (cs,sl) <- inferSlice env sl
                                              t' <- newTVar
                                              w <- newWitness
                                              w' <- newWitness
                                              return ( Impl w t0 (pSliceable t') :
                                                       Impl w' t (pIterable t') : 
                                                       cs, sExpr $ eCall (tApp (eDot (eVar w) setsliceKW) [t]) [e0, eVar w', sliz2exp sl, e] )
-            asg t0 t e0 e (TgDot n)     = do return ( Mut t0 n t : [], sMutAssign (eDot e0 n) e )
+            asgn t0 t e0 e (TgDot n)    = do return ( Mut t0 n t : [], sMutAssign (eDot e0 n) e )
 
     infEnv env (AugAssign l targ o e)   = do (cs0,t0,e0,tg) <- infTarg env targ
                                              t1 <- newTVar
