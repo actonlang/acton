@@ -889,7 +889,7 @@ improve env te tt eq cs
         Right vclosed                   = closure
         (vvsL,vvsU)                     = unzip vclosed
         gsimple                         = gsimp vi vclosed obsvars (varvars vi)
-        multiUBnd                       = [ (v,ts) | (v,ts) <- Map.assocs (ubounds vi), v `notElem` embedded vi, length ts > 1 ]
+        multiUBnd                       = [ (v,us) | (v,ts) <- Map.assocs (ubounds vi), v `notElem` embedded vi, let us = noOpt ts, length us > 1 ]
         multiLBnd                       = [ (v,ts) | (v,ts) <- Map.assocs (lbounds vi), v `notElem` embedded vi, length ts > 1 ]
         multiPBnd                       = [ (v,ps) | (v,ps) <- Map.assocs (pbounds vi), length ps > 1 ]
         lowerBnd                        = [ (v,t) | (v,[t]) <- Map.assocs (lbounds vi), v `notElem` embedded vi ]
@@ -911,6 +911,10 @@ improve env te tt eq cs
         boundvars                       = Map.keys (ubounds vi) ++ Map.keys (lbounds vi)
         boundprot                       = tyfree (Map.elems $ ubounds vi) ++ tyfree (Map.elems $ lbounds vi)
         cyclic                          = if null (boundvars\\boundprot) then [ c | c <- cs, headvar c `elem` boundvars ] else []
+
+noOpt ts                                = filter chk ts
+  where chk TOpt{}                      = False
+        chk _                           = True
 
 dnClosed env (TCon _ c)                 = isActor env (tcname c)
 dnClosed env (TFX _ FXPure)             = True
