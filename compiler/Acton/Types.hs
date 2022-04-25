@@ -487,8 +487,6 @@ infTarg env (Dot _ e n)                 = do (cs,t,e) <- infer env e
                                              fx <- currFX
                                              return ([Cast t tObject], t, e, TgDot n)
 
->>>>>>> deb077f (Corrected witness translation of targets in mutations and deletions.)
-
 
 infTarget env (Var l (NoQ n))           = case findName n env of
                                              NReserved ->
