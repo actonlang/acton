@@ -143,8 +143,11 @@ main            = do cv <- getCcVer
                                `catch` handle "IOException" (\exc -> (l0,displayException (exc :: IOException))) "" paths mn
                                `catch` handle "Error" (\exc -> (l0,displayException (exc :: ErrorCall))) "" paths mn
 
-stubMode srcfile args = do exists <- doesFileExist cFile
-                           if (stub args || exists) then return True else return False
+stubMode srcfile args = do
+    exists <- doesFileExist cFile
+    if ((takeFileName srcfile) == "__builtin__.act" || stub args || exists)
+      then return True
+      else return False
   where cFile = replaceExtension srcfile ".c"
 
 

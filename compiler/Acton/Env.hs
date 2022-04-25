@@ -404,6 +404,7 @@ unSig te                    = map f te
 -- Env construction and modification -------------------------------------------------------------------------------------------
 
 
+-- first variant is special case for compiling __builtin__.act
 initEnv                    :: FilePath -> Bool -> Bool -> IO Env0
 initEnv path stub True     = return $ EnvF{ names = [(nPrim,NMAlias mPrim)],
                                             modules = [(nPrim,NModule envPrim)],
