@@ -225,7 +225,8 @@ stdlib/out/lib/libActonProject_rel.a stdlib/out/lib/libActonProject_dev.a: $(STD
 
 
 # /lib --------------------------------------------------
-ARCHIVES=lib/libActon_dev.a lib/libActon_rel.a lib/libActonDB.a
+DBARCHIVE=lib/libActonDB.a
+ARCHIVES=lib/libActon_dev.a lib/libActon_rel.a
 
 # If we later let actonc build things, it would produce a libActonProject.a file
 # in the stdlib directory, which we would need to join together with rts.o etc
@@ -306,7 +307,7 @@ clean-backend:
 
 .PHONY: clean-rts
 clean-rts:
-	rm -f $(ARCHIVES) $(OFILES) $(STDLIB_HFILES) $(STDLIB_OFILES) $(STDLIB_TYFILES) stdlib/out/lib/libActonProject_dev.a stdlib/out/lib/libActonProject_rel.a stdlib/out/lib/*.o
+	rm -rf $(ARCHIVES) $(DBARCHIVE) $(OFILES) $(STDLIB_HFILES) $(STDLIB_OFILES) $(STDLIB_TYFILES) stdlib/out/
 
 # == DIST ==
 #
@@ -353,10 +354,14 @@ DIST_BINS=$(ACTONC) dist/bin/actondb
 DIST_HFILES=dist/rts/rts.h \
 	dist/builtin/env.h \
 	$(addprefix dist/,$(BUILTIN_HFILES))
+DIST_DBARCHIVE=$(addprefix dist/,$(DBARCHIVE))
 DIST_ARCHIVES=$(addprefix dist/,$(ARCHIVES))
 
 .PHONY: distribution clean-distribution
-distribution: $(DIST_BINS) $(DIST_HFILES) $(DIST_TYFILES) $(DIST_ARCHIVES)
+# Our stdlib (via DIST_ARCHIVES) must not be compiled concurrently, so we avoid
+# listing it as a dependency and instead run it in the target
+distribution: $(DIST_BINS) $(DIST_HFILES) $(DIST_TYFILES) $(DIST_DBARCHIVE)
+	$(MAKE) -j1 $(DIST_ARCHIVES)
 
 clean-distribution:
 	rm -rf dist
