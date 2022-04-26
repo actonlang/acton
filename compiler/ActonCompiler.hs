@@ -142,7 +142,7 @@ main = do
                 errorWithoutStackTrace("Unknown command: " ++ cmd args)
                 System.Exit.exitFailure
 
-compileFile :: [Char] -> Args -> IO ()
+compileFile :: String -> Args -> IO ()
 compileFile actFile args = do
     paths <- findPaths actFile args
     when (verbose args) $ do
@@ -157,9 +157,9 @@ compileFile actFile args = do
         putStrLn ("## srcDir   : " ++ srcDir paths)
         putStrLn ("## fileExt  : " ++ fileExt paths)
         putStrLn ("## modName  : " ++ prstr (modName paths))
-    let mn = modName paths
     stubM <- stubMode actFile args
     when (stubM) $ do putStrLn("Found matching C file (" ++ (replaceExtension actFile ".c") ++ "), assuming stub compilation")
+    let mn = modName paths
     src <- readFile actFile
     tree <- Acton.Parser.parseModule mn actFile src
             `catch` handle "Syntax error" Acton.Parser.parserError "" paths mn
@@ -278,7 +278,7 @@ importsOf t = A.importsOf (atree t)
 
 chaseImportsAndCompile :: FilePath -> Args -> Paths -> CompileTask -> IO ()
 chaseImportsAndCompile actFile args paths task
-                       = do tasks <- chaseImportedFiles args paths (importsOf task) task
+                       = do tasks <- chaseImportedFiles paths task
                             -- stubM tracks stub mode for the source file,
                             -- imported dependencies might need to be stub
                             -- compiled separately and is checked elsewhere
@@ -301,10 +301,11 @@ chaseImportsAndCompile actFile args paths task
         isAcyclic _              = False
         showTaskGraph ts         = "\n"++concatMap (\t-> concat (intersperse "." (A.modPath (name t)))++" ") ts
 
-chaseImportedFiles :: Args -> Paths -> [A.ModName] -> CompileTask -> IO [CompileTask]
-chaseImportedFiles args paths imps task
-                            = do newtasks <- catMaybes <$> mapM (readAFile [task]) imps
-                                 chaseRecursively (task:newtasks) (map name newtasks) (concatMap importsOf newtasks)
+chaseImportedFiles :: Paths -> CompileTask -> IO [CompileTask]
+chaseImportedFiles paths itask
+                            = do
+                                 newtasks <- catMaybes <$> mapM (readAFile [itask]) (importsOf itask)
+                                 chaseRecursively (itask:newtasks) (map name newtasks) (concatMap importsOf newtasks)
 
   where readAFile tasks mn  = case lookUp mn tasks of    -- read and parse file mn in the project directory, unless it is already in tasks 
                                  Just t -> return Nothing
