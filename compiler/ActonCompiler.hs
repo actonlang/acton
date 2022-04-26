@@ -224,17 +224,10 @@ outBase paths mn        = joinPath (projTypes paths : A.modPath mn)
 srcBase                 :: Paths -> A.ModName -> FilePath
 srcBase paths mn        = joinPath (srcDir paths : A.modPath mn)
 
-touchDirs               :: FilePath -> A.ModName -> IO ()
-touchDirs path mn       = touch path (init $ A.modPath mn)
-  where 
-    touch path []       = return ()
-    touch path (d:dirs) = do touchDir path1
-                             touch path1 dirs
-      where path1       = joinPath [path,d]
 
-touchDir                :: FilePath -> IO ()
-touchDir path           = do found <- doesDirectoryExist path
-                             when (not found) $ createDirectory path
+getModPath :: FilePath -> A.ModName -> FilePath
+getModPath path mn =
+     joinPath [path, joinPath $ init $ A.modPath mn]
 
 findPaths               :: FilePath -> Args -> IO Paths
 findPaths actFile args  = do execDir <- takeDirectory <$> System.Environment.getExecutablePath
@@ -251,17 +244,17 @@ findPaths actFile args  = do execDir <- takeDirectory <$> System.Environment.get
                                  projTypes = joinPath [projOut, "types"]
                                  projLib = joinPath [projOut, "lib"]
                                  modName = A.modName $ dirInSrc ++ [fileBody]
-                             touchDir binDir
-                             touchDir projOut
-                             touchDir projTypes
-                             touchDir projLib
-                             touchDirs projTypes modName
+                             createDirectoryIfMissing True binDir
+                             createDirectoryIfMissing True projOut
+                             createDirectoryIfMissing True projTypes
+                             createDirectoryIfMissing True projLib
+                             createDirectoryIfMissing True (getModPath projTypes modName)
                              return $ Paths sysPath sysTypes sysLib projPath projOut projTypes projLib binDir srcDir isTmp rmTmp fileExt modName
   where (fileBody,fileExt) = splitExtension $ takeFileName actFile
 
         analyze "/" ds  = do let rmTmp = if (null $ tempdir args) then True else False
                              tmp <- if (null $ tempdir args) then createTempDirectory (joinPath ["/", "tmp"]) "actonc" else canonicalizePath (tempdir args)
-                             touchDir tmp
+                             createDirectoryIfMissing True tmp
                              return (True, rmTmp, tmp, [])
         analyze pre ds  = do exists <- doesFileExist (joinPath [pre, "Acton.toml"])
                              if not exists 
@@ -340,7 +333,7 @@ doTask args paths env t@(ActonTask mn src m)
                                  if ok && mn /= modName paths then do
                                           iff (verbose args) (putStrLn ("Skipping  "++ actFile ++ " (files are up to date)."))
                                           return env
-                                  else do touchDirs (projTypes paths) mn
+                                  else do createDirectoryIfMissing True (getModPath (projTypes paths) mn)
                                           iff (verbose args) (putStrLn ("Compiling "++ actFile ++ "... ") >> hFlush stdout)
                                           (env',te) <- runRestPasses args paths env m
                                                            `catch` handle "Compilation error" generalError src paths mn
