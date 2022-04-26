@@ -207,7 +207,7 @@ dist/types/__builtin__.ty: stdlib/out/types/__builtin__.ty
 
 stdlib/out/types/__builtin__.ty: stdlib/src/__builtin__.act $(ACTONC)
 	@mkdir -p $(dir $@)
-	$(ACTC) $< --stub
+	$(ACTC) $<
 
 # Build our standard library
 # We use a single target as a focal point to get serialization since we cannot
