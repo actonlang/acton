@@ -1381,7 +1381,6 @@ void *$eventloop(void *arg) {
                         EVENT_add_read(fd2);
                         EVENT_mod_read_once(fd);
                         setupConnection(fd2);
-                        printf("%s %s\n","Connection from",$getName(fd2)->str);
                     }
                 } else { // we are a client and a delayed connection attempt has succeeded
 #ifdef IS_GNU_LINUX
