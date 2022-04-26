@@ -220,13 +220,13 @@ stdlib_project: $(STDLIB_ACTFILES_NS) dist/types/__builtin__.ty $(ACTONC)
 	echo $(STDLIB_ACTFILES_NS) | $(XARGS) -n1 $(ACTC) --dev
 	cp -a stdlib/out/types/. dist/types/
 
-stdlib/out/lib/libActonProject_rel.a stdlib/out/lib/libActonProject_dev.a: $(STDLIB_ACTFILES) $(ACTONC)
+stdlib/out/dev/lib/libActonProject.a stdlib/out/rel/lib/libActonProject.a: $(STDLIB_ACTFILES) $(ACTONC)
 	$(MAKE) stdlib_project
 
 
 # /lib --------------------------------------------------
 DBARCHIVE=lib/libActonDB.a
-ARCHIVES=lib/libActon_dev.a lib/libActon_rel.a
+ARCHIVES=lib/dev/libActon.a lib/rel/libActon.a
 
 # If we later let actonc build things, it would produce a libActonProject.a file
 # in the stdlib directory, which we would need to join together with rts.o etc
@@ -234,15 +234,17 @@ ARCHIVES=lib/libActon_dev.a lib/libActon_rel.a
 
 LIBACTON_DEV_OFILES=builtin/builtin_dev.o builtin/env_dev.o rts/empty.o rts/log.o rts/rts_dev.o deps/netstring_dev.o deps/yyjson_dev.o
 OFILES += $(LIBACTON_DEV_OFILES)
-lib/libActon_dev.a: stdlib/out/lib/libActonProject_dev.a  $(LIBACTON_DEV_OFILES)
+lib/dev/libActon.a: stdlib/out/dev/lib/libActonProject.a  $(LIBACTON_DEV_OFILES)
+	@mkdir -p $(dir $@)
 	cp -a $< $@
-	ar rcs $@ $(filter-out libActonProject_,$^)
+	ar rcs $@ $(filter-out stdlib/out/dev/lib/libActonProject.a,$^)
 
 LIBACTON_REL_OFILES=$(LIBACTON_DEV_OFILES:_dev.o=_rel.o)
 OFILES += $(LIBACTON_REL_OFILES)
-lib/libActon_rel.a: stdlib/out/lib/libActonProject_dev.a $(LIBACTON_REL_OFILES)
+lib/rel/libActon.a: stdlib/out/rel/lib/libActonProject.a $(LIBACTON_REL_OFILES)
+	@mkdir -p $(dir $@)
 	cp -a $< $@
-	ar rcs $@ $(filter-out libActonProject_,$^)
+	ar rcs $@ $(filter-out stdlib/out/rel/lib/libActonProject.a,$^)
 
 COMM_OFILES += backend/comm.o rts/empty.o
 DB_OFILES += backend/db.o backend/queue.o backend/skiplist.o backend/txn_state.o backend/txns.o rts/empty.o
@@ -339,14 +341,6 @@ dist/types/%: stdlib/out/types/% stdlib
 	cp $< $@
 
 dist/lib/%: lib/%
-	@mkdir -p $(dir $@)
-	cp $< $@
-
-dist/lib/libActon_dev.a: lib/libActon_dev.a
-	@mkdir -p $(dir $@)
-	cp $< $@
-
-dist/lib/libActon_rel.a: lib/libActon_rel.a
 	@mkdir -p $(dir $@)
 	cp $< $@
 

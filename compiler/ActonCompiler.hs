@@ -233,16 +233,16 @@ findPaths               :: FilePath -> Args -> IO Paths
 findPaths actFile args  = do execDir <- takeDirectory <$> System.Environment.getExecutablePath
                              sysPath <- canonicalizePath (if null $ syspath args then execDir ++ "/.." else syspath args)
                              let sysTypes = joinPath [sysPath, "types"]
-                             let sysLib = joinPath [sysPath, "lib"]
+                             let sysLib = joinPath [sysPath, "lib/" ++ if (dev args) then "dev" else "rel"]
                              absSrcFile <- canonicalizePath actFile
                              (isTmp, rmTmp, projPath, dirInSrc) <- analyze (takeDirectory absSrcFile) []
                              let sysTypes = joinPath [sysPath, "types"]
-                                 sysLib  = joinPath [sysPath, "lib"]
                                  srcDir  = if isTmp then takeDirectory absSrcFile else joinPath [projPath, "src"]
-                                 binDir  = if isTmp then srcDir else joinPath [projOut, "bin"]
                                  projOut = joinPath [projPath, "out"]
+                                 projProfile = joinPath [projOut, if (dev args) then "dev" else "rel"]
+                                 projLib = joinPath [projProfile, "lib"]
                                  projTypes = joinPath [projOut, "types"]
-                                 projLib = joinPath [projOut, "lib"]
+                                 binDir  = if isTmp then srcDir else joinPath [projProfile, "bin"]
                                  modName = A.modName $ dirInSrc ++ [fileBody]
                              createDirectoryIfMissing True binDir
                              createDirectoryIfMissing True projOut
@@ -411,9 +411,8 @@ runRestPasses args paths env0 parsed = do
                       let pedantArg = if (cpedantic args) then "-Werror" else ""
 
                       let hFile = outbase ++ ".h"
-                          oFile = joinPath [projLib paths, n++ if (dev args) then "_dev.o" else "_rel.o"]
-                          aFile = joinPath [projLib paths,
-                                             if (dev args) then "libActonProject_dev.a" else "libActonProject_rel.a"]
+                          oFile = joinPath [projLib paths, n ++ ".o"]
+                          aFile = joinPath [projLib paths, "libActonProject.a"]
 
                       stubM <- stubMode actFile args
                       if stubM then do
@@ -441,9 +440,8 @@ runRestPasses args paths env0 parsed = do
                       else do
                           let cFile = outbase ++ ".c"
                               hFile = outbase ++ ".h"
-                              oFile = joinPath [projLib paths, n++ if (dev args) then "_dev.o" else "_rel.o"]
-                              aFile = joinPath [projLib paths,
-                                                if (dev args) then "libActonProject_dev.a" else "libActonProject_rel.a"]
+                              oFile = joinPath [projLib paths, n ++ ".o"]
+                              aFile = joinPath [projLib paths, "libActonProject.a"]
                               buildF = joinPath [projPath paths, "build.sh"]
                               ccCmd = ("cc " ++ pedantArg ++
                                        (if (dev args) then " -g " else "") ++
@@ -506,8 +504,8 @@ buildExecutable env args paths task
         buildF              = joinPath [projPath paths, "build.sh"]
         outbase             = outBase paths mn
         rootFile            = outbase ++ ".root.c"
-        libFilesBase        = " " ++ libActonProjArg ++ " " ++ libActonArg ++ " -lActonDB -lprotobuf-c -lutf8proc -lpthread -lm"
-        libPathsBase        = " -L" ++ projLib paths ++ " -L" ++ sysLib paths
+        libFilesBase        = " -lActonProject -lActon -lActonDB -lprotobuf-c -lutf8proc -lpthread -lm"
+        libPathsBase        = " -L " ++ sysPath paths ++ "/lib -L" ++ sysLib paths ++ " -L" ++ projLib paths
 #if defined(darwin_HOST_OS) && defined(aarch64_HOST_ARCH)
         libFiles            = libFilesBase
         libPaths            = libPathsBase ++ " -L/opt/homebrew/lib "
@@ -522,8 +520,6 @@ buildExecutable env args paths task
         libPaths            = libPathsBase
         ccArgs              = " -no-pie "
 #endif
-        libActonArg         = if (dev args) then "-lActon_dev" else "-lActon_rel"
-        libActonProjArg     = if (dev args) then "-lActonProject_dev" else "-lActonProject_rel"
         binFilename         = takeFileName $ dropExtension srcbase
         binFile             = joinPath [binDir paths, binFilename]
         srcbase             = srcFile paths mn
