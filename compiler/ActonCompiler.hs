@@ -158,7 +158,7 @@ compileFile actFile args = do
         putStrLn ("## fileExt  : " ++ fileExt paths)
         putStrLn ("## modName  : " ++ prstr (modName paths))
     stubM <- stubMode actFile args
-    when (stubM) $ do putStrLn("Found matching C file (" ++ (replaceExtension actFile ".c") ++ "), assuming stub compilation")
+    when (stubM && verbose args) $ do putStrLn("Found matching C file (" ++ (replaceExtension actFile ".c") ++ "), assuming stub compilation")
     let mn = modName paths
     src <- readFile actFile
     tree <- Acton.Parser.parseModule mn actFile src
@@ -415,8 +415,11 @@ runRestPasses args paths env0 parsed = do
                           aFile = joinPath [projLib paths, "libActonProject.a"]
 
                       stubM <- stubMode actFile args
+                      putStrLn("Compiling " ++ makeRelative (srcDir paths) actFile
+                               ++ if (dev args) then " for development" else " for release"
+                               ++ if stubM then " in stub mode" else ""
+                              )
                       if stubM then do
-                          putStrLn("Doing stub compilation for " ++ actFile)
                           let makeFile = projPath paths ++ "/Makefile"
                           makeExist <- doesFileExist makeFile
                           iff (makeExist) (do
