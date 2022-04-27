@@ -21,19 +21,21 @@ import Acton.Env
 import Acton.TypeM
 import Acton.Printer
 import Acton.Names
+import Acton.Builtin
 import Acton.Subst
 import Acton.Unify
 
 data TypeX                      = TypeX {
                                     context    :: EnvCtx,
                                     indecl     :: Bool,
-                                    forced     :: Bool }
+                                    forced     :: Bool,
+                                    sealstatus :: [(QName,Bool)] }
 
 type Env                        = EnvF TypeX
 
 data EnvCtx                     = CtxTop | CtxDef | CtxAct | CtxClass deriving (Eq,Show)
 
-typeX env0                      = setX env0 TypeX{ context = CtxTop, indecl = False, forced = False }
+typeX env0                      = setX env0 TypeX{ context = CtxTop, indecl = False, forced = False, sealstatus = [] }
 
 instance Pretty TypeX where
     pretty _                    = empty
@@ -55,6 +57,8 @@ setInDecl env                   = modX env $ \x -> x{ indecl = True }
 
 useForce env                    = modX env $ \x -> x{ forced = True }
 
+setSealStatus ns stats env      = modX env $ \x -> x{ sealstatus = (ns `zip` stats) ++ sealstatus x }
+
 onTop env                       = context (envX env) == CtxTop
 
 inDef env                       = context (envX env) == CtxDef
@@ -67,6 +71,69 @@ inDecl env                      = indecl $ envX env
 
 isForced env                    = forced $ envX env
 
+sealStatus c env                = lookup c $ sealstatus $ envX env
+
+
+-- Sealed status for type constructors --------------------------------------------------------------------------------------------
+
+iterSealStatus te env                   = setSealStatus qns stats $ define te env
+  where (ns,is)                         = unzip te
+        qns                             = map NoQ ns
+        stats                           = iter (map (const True) ns)
+        iter s0
+          | s0 == s1                    = s0
+          | otherwise                   = iter s1
+          where s1                      = map (safe $ setSealStatus qns s0 env) is
+
+class Safe a where
+    safe                                :: Env -> a -> Bool
+
+instance (Safe a) => Safe [a] where
+    safe env                            = all (safe env)
+
+instance (Safe a) => Safe (Name,a) where
+    safe env (n,x)                      = safe env x
+
+instance Safe NameInfo where
+    safe env (NClass q cs te)           = safe env q && safe env cs && safe env te          -- Also checks object heritage (in cs)
+    safe env (NProto q ps te)           = safe env q && safe env ps && safe env te
+    safe env _                          = True
+
+instance Safe QBind where
+    safe env (Quant tv ps)              = safe env ps
+
+instance Safe (WPath,PCon) where
+    safe env (wp,p)                     = safe env p
+
+instance Safe TSchema where
+    safe env (TSchema _ q t)            = safe env q && safe env t
+
+instance Safe TCon where
+    safe env (TC n ts)
+      | unalias env n == qnObject       = False                                             -- Mutable (ancestor) class
+      | Just True <- sealStatus n env   = safe env ts                                       -- Previously deemed safe
+      | otherwise                       = False                                             -- (Previously deemed unsafe)
+
+instance Safe TVar where
+    safe env (TV k n)
+      | k == KFX                        = False                                             -- Polymorphic fx
+      | otherwise                       = True
+
+instance Safe Type where
+    safe env (TCon _ tc)                = safe env tc
+    safe env (TVar _ tv)                = safe env tv
+    safe env (TFun _ fx p k t)          = safe env [fx,p,k,t]
+    safe env (TTuple _ p k)             = safe env [p,k]
+    safe env (TOpt _ t)                 = safe env t
+    safe env (TRow _ _ _ t r)           = safe env [t,r]
+    safe env (TFX _ fx)                 = safe env fx
+    safe env _                          = True
+
+instance Safe FX where
+    safe env FXPure                     = True
+    safe env FXMut                      = False                                             -- mut
+    safe env FXProc                     = False                                             -- proc
+    safe env FXAction                   = True
 
 
 -- Well-formed tycon applications -------------------------------------------------------------------------------------------------

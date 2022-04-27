@@ -213,13 +213,9 @@ instance (InfEnv a) => InfEnv [a] where
     infEnv env []                       = return ([], [], [])
     infEnv env (s : ss)                 = do (cs1,te1,s1) <- infEnv env s
                                              let te1' = if inDecl env then noDefs te1 else te1      -- TODO: also stop class instantiation!
-                                             (cs2,te2,ss2) <- infEnv (define te1' env) ss
+                                                 env' = iterSealStatus (filter typeDecl te1') $ define te1' env
+                                             (cs2,te2,ss2) <- infEnv env' ss
                                              return (cs1++cs2, te1++te2, s1:ss2)
-
-targetFX Var{}                          = return []
-targetFX _                              = do st <- newTVar
-                                             fx <- currFX
-                                             return [Cast fxMut fx]
 
 instance InfEnv Stmt where
     infEnv env (Expr l e)               = do (cs,_,e') <- infer env e
@@ -939,7 +935,7 @@ instance Check Branch where
 refine                                  :: Env -> Constraints -> TEnv -> Equations -> TypeM ([TVar], Constraints, TEnv, Equations)
 refine env cs te eq
   | not $ null solve_cs                 = do --traceM ("  #solving: " ++ prstrs solve_cs)
-                                             (cs',eq') <- solve (define te env) (not . canQual) te tNone eq cs
+                                             (cs',eq') <- solve env (not . canQual) te tNone eq cs
                                              refineAgain cs' eq'
   | not $ null ambig_vs                 = do --traceM ("  #defaulting: " ++ prstrs ambig_vs)
                                              (cs',eq') <- solve env ambig te tNone eq cs
