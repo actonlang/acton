@@ -423,13 +423,14 @@ runRestPasses args paths env0 parsed = do
                             cExist <- doesFileExist $ replaceExtension actFile ".c"
                             iff (cExist) (do
                               let roFile = makeRelative (projPath paths) oFile
-                                  makeCmd = "make -C " ++ projPath paths ++ " " ++ roFile
+                                  makeCmd = "make " ++ roFile
                                   arCmd = "ar rcs " ++ aFile ++ " " ++ oFile
-                              (_,_,_,hdl) <- createProcess (shell $ makeCmd ++ " && " ++ arCmd)
-                              returnCode <- waitForProcess hdl
+                              (returnCode, makeStdout, makeStderr) <- readCreateProcessWithExitCode (shell $ makeCmd ++ " && " ++ arCmd){ cwd = Just (projPath paths) } ""
                               case returnCode of
                                   ExitSuccess -> return()
                                   ExitFailure _ -> do printIce "compilation of C code failed"
+                                                      putStrLn $ "make stdout:\n" ++ makeStdout
+                                                      putStrLn $ "make stderr:\n" ++ makeStderr
                                                       System.Exit.exitFailure)
 
                             let srcH = replaceExtension actFile ".h"
@@ -456,11 +457,12 @@ runRestPasses args paths env0 parsed = do
                               putStrLn ccCmd
                               putStrLn arCmd
                           writeFile buildF $ unlines ["#!/bin/sh", ccCmd, arCmd]
-                          (_,_,_,hdl) <- createProcess (shell $ ccCmd ++ " && " ++ arCmd)
-                          returnCode <- waitForProcess hdl
+                          (returnCode, ccStdout, ccStderr) <- readCreateProcessWithExitCode (shell $ ccCmd ++ " && " ++ arCmd) ""
                           case returnCode of
                               ExitSuccess -> return()
                               ExitFailure _ -> do printIce "compilation of generated C code failed"
+                                                  putStrLn $ "cc stdout:\n" ++ ccStdout
+                                                  putStrLn $ "cc stderr:\n" ++ ccStderr
                                                   System.Exit.exitFailure
 
                       return (env0 `Acton.Env.withModulesFrom` env,iface)
