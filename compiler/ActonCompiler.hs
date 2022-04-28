@@ -312,13 +312,27 @@ chaseImportsAndCompile actFile args paths task
                             if null cs
                              then do env0 <- Acton.Env.initEnv (sysTypes paths) (stubM) (modName paths == Acton.Builtin.mBuiltin)
                                      env1 <- foldM (doTask args paths) env0 [t | AcyclicSCC t <- as]
-                                     buildExecutable env1 args paths task
                                          `catch` handle "Compilation error" Acton.Env.compilationError (src task) paths (name task)
                                          `catch` handle "Type error" Acton.Types.typeError (src task) paths (name task)
                                      when (rmTmp paths) $ removeDirectoryRecursive (projPath paths)
                                      return ()
                               else do error ("********************\nCyclic imports:"++concatMap showTaskGraph cs)
                                       System.Exit.exitFailure
+                            -- if we accept many input tasks, we will get all
+                            -- source files and compile them above, but we are
+                            -- missing binaries...
+                            -- can we do buildExecutable here? go through our
+                            -- tasks and look through the source looking for a
+                            -- potential root actor, something like:
+                            rootActors = map findRoot tasks
+                            mapM (buildExecutable env1 args paths task)
+                            -- potential root actor is either if one is
+                            -- specified via (root args) or no --root arg is
+                            -- set, we look for an actor called 'main'...
+                            --
+                            -- env1 seems to be specific per source root, can it
+                            -- be reused? how do we best invoke buildExecutable
+                            -- for all potential roots?
   where isAcyclic (AcyclicSCC _) = True
         isAcyclic _              = False
         showTaskGraph ts         = "\n"++concatMap (\t-> concat (intersperse "." (A.modPath (name t)))++" ") ts
