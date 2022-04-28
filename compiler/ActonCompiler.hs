@@ -128,10 +128,24 @@ main = do
         case (cmd args) of
             "build" -> do
                 -- find all .act files in src/ directory and invoke compileFile for each
+                -- this method is wasteful since it runs through all files, so
+                -- if we have module A & B and A imports B, we are going to run
+                -- compilation with A as our source root and then chase down B,
+                -- so we've then parsed both files. Then we are going to run
+                -- compilation with B as our source root and parse B again. For
+                -- densely connected projects, where modules import each other a
+                -- lot, this is wasteful.
                 curDir <- getCurrentDirectory
                 paths <- findPaths (joinPath [ curDir, "Acton.toml" ]) args
                 srcFiles <- getDirFiltered filterActFile (joinPath [projPath paths, "src"])
                 mapM (compileFile args) srcFiles
+
+                -- alternative would be to build up tasks and pass all tasks to
+                -- chaseImportsAndCompile, however, it doesn't really
+                -- (currently) do well if there are multiple binaries to build
+                tasks <- catMaybes <$> mapM (fileToTask args) srcFiles
+                --chaseImportsAndCompile (head srcFiles) args paths tasks
+                System.Exit.exitSuccess
             "dump" -> do
                 if null $ file args
                   then do
@@ -150,6 +164,12 @@ main = do
             _       -> do
                 errorWithoutStackTrace("Unknown command: " ++ cmd args)
                 System.Exit.exitFailure
+  where fileToTask args actFile = do
+            paths <- findPaths actFile args
+            src <- readFile actFile
+            m <- Acton.Parser.parseModule (modName paths) actFile src
+            return $ Just $ ActonTask (modName paths) src m
+
 
 compileFile :: Args -> String -> IO ()
 compileFile args actFile = do
