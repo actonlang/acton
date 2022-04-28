@@ -181,20 +181,6 @@ deps/yyjson_rel.o: deps/yyjson.c
 
 # Building the builtin, rts and stdlib is a little tricky as we have to be
 # careful about order. First comes the __builtin__.act file,
-STDLIB_ACTFILES=$(wildcard stdlib/src/*.act stdlib/src/**/*.act)
-STDLIB_ACTFILES_NS=$(filter-out stdlib/src/__builtin__.act,$(STDLIB_ACTFILES))
-STDLIB_CFILES=$(wildcard stdlib/src/*.c stdlib/src/**/*.c)
-STDLIB_ACTON_MODULES=$(filter-out $(STDLIB_CFILES:.c=.act),$(STDLIB_ACTFILES_NS))
-STDLIB_TYFILES=$(subst src,out/types,$(STDLIB_ACTFILES:.act=.ty))
-STDLIB_TYFILES_C=$(subst src,out/types,$(STDLIB_CFILES:.c=.ty))
-STDLIB_HFILES=$(subst src,out/types,$(STDLIB_ACTFILES_NS:.act=.h))
-STDLIB_HFILES_C=$(subst src,out/types,$(STDLIB_CFILES:.c=.h))
-STDLIB_DEV_OFILES_ACT=$(subst src,out/lib,$(STDLIB_ACTS:.act=_dev.o))
-STDLIB_REL_OFILES_ACT=$(subst src,out/lib,$(STDLIB_ACTS:.act=_rel.o))
-STDLIB_DEV_OFILES=$(STDLIB_DEV_OFILES_ACT)
-STDLIB_REL_OFILES=$(STDLIB_REL_OFILES_ACT)
-STDLIB_OFILES=$(STDLIB_DEV_OFILES) $(STDLIB_REL_OFILES)
-
 
 # __builtin__.ty is special, it even has special handling in actonc. Essentially
 # all other modules depend on it, so it must be compiled first. While we use
@@ -214,10 +200,11 @@ stdlib/out/types/__builtin__.ty: stdlib/src/__builtin__.act $(ACTONC)
 # build these things in parallel
 # Compiling these .act files with and with --dev will produce
 # stdlib/out/lib/libActonProject_rel.a and stdlib/out/lib/libActonProject_dev.a which we then rename
+STDLIB_ACTFILES=$(wildcard stdlib/src/*.act stdlib/src/**/*.act)
 .PHONY: stdlib_project
-stdlib_project: $(STDLIB_ACTFILES_NS) dist/types/__builtin__.ty $(ACTONC)
-	echo $(STDLIB_ACTFILES_NS) | $(XARGS) -n1 $(ACTC)
-	echo $(STDLIB_ACTFILES_NS) | $(XARGS) -n1 $(ACTC) --dev
+stdlib_project: $(STDLIB_ACTFILES) dist/types/__builtin__.ty $(ACTONC)
+	cd stdlib && ../$(ACTC) build
+	cd stdlib && ../$(ACTC) build --dev
 	cp -a stdlib/out/types/. dist/types/
 
 stdlib/out/dev/lib/libActonProject.a stdlib/out/rel/lib/libActonProject.a: $(STDLIB_ACTFILES) $(ACTONC)
@@ -309,7 +296,7 @@ clean-backend:
 
 .PHONY: clean-rts
 clean-rts:
-	rm -rf $(ARCHIVES) $(DBARCHIVE) $(OFILES) $(STDLIB_HFILES) $(STDLIB_OFILES) $(STDLIB_TYFILES) stdlib/out/
+	rm -rf $(ARCHIVES) $(DBARCHIVE) $(OFILES) stdlib/out/
 
 # == DIST ==
 #
