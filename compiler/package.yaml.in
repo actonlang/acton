@@ -37,6 +37,7 @@ dependencies:
 - process
 - temporary
 - unix
+- dir-traverse
 
 executables:
   actonc:

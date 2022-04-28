@@ -40,6 +40,7 @@ import Data.Monoid ((<>))
 import Data.Graph
 import Data.Version (showVersion)
 import qualified Data.List
+import System.Directory.Recursive
 import System.IO
 import System.IO.Temp
 import System.Info
@@ -112,17 +113,25 @@ getCcVer        = do verStr <- readProcess "cc" ["--version"] []
 showVer cv      = "acton " ++ getVer ++ "\n" ++ getVerExtra ++ "\ncc: " ++ cv
 
 
+filterActFile :: FilePath -> IO Bool
+filterActFile file =
+    return (fileExt == ".act")
+  where (fileBody,fileExt) = splitExtension $ takeFileName file
+
 main = do
     cv <- getCcVer
     args <- execParser (info (getArgs (showVer cv) <**> helper) descr)
     cmdIsFile <- checkCmdIsFile (cmd args)
     if cmdIsFile
-      then compileFile (cmd args) args
+      then compileFile args (cmd args)
       else
         case (cmd args) of
             "build" -> do
-                errorWithoutStackTrace("Build is not implemented :/")
-                System.Exit.exitFailure
+                -- find all .act files in src/ directory and invoke compileFile for each
+                curDir <- getCurrentDirectory
+                paths <- findPaths (joinPath [ curDir, "Acton.toml" ]) args
+                srcFiles <- getDirFiltered filterActFile (joinPath [projPath paths, "src"])
+                mapM (compileFile args) srcFiles
             "dump" -> do
                 if null $ file args
                   then do
@@ -142,8 +151,8 @@ main = do
                 errorWithoutStackTrace("Unknown command: " ++ cmd args)
                 System.Exit.exitFailure
 
-compileFile :: String -> Args -> IO ()
-compileFile actFile args = do
+compileFile :: Args -> String -> IO ()
+compileFile args actFile = do
     paths <- findPaths actFile args
     when (verbose args) $ do
         putStrLn ("## sysPath  : " ++ sysPath paths)
