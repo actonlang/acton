@@ -493,11 +493,12 @@ buildExecutable env args paths task
                                           putStrLn ccCmd
                                       appendFile buildF ccCmd
                                       setFileMode buildF 0o755
-                                      (_,_,_,hdl) <- createProcess (shell ccCmd)
-                                      returnCode <- waitForProcess hdl
+                                      (returnCode, ccStdout, ccStderr) <- readCreateProcessWithExitCode (shell $ ccCmd) ""
                                       case returnCode of
                                           ExitSuccess -> return()
                                           ExitFailure _ -> do printIce "compilation of generated C code of the root actor failed"
+                                                              putStrLn $ "cc stdout:\n" ++ ccStdout
+                                                              putStrLn $ "cc stderr:\n" ++ ccStderr
                                                               System.Exit.exitFailure
                                       return ()
                                   _ ->
