@@ -416,8 +416,8 @@ runRestPasses args paths env0 parsed = do
 
                       stubM <- stubMode actFile args
                       putStrLn("Compiling " ++ makeRelative (srcDir paths) actFile
-                               ++ if (dev args) then " for development" else " for release"
-                               ++ if stubM then " in stub mode" else ""
+                               ++ (if (dev args) then " for development" else " for release")
+                               ++ (if stubM then " in stub mode" else "")
                               )
                       if stubM then do
                           let makeFile = projPath paths ++ "/Makefile"
