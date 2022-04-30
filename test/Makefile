@@ -1,4 +1,6 @@
-ACTONC=../dist/bin/actonc --cpedantic
+
+MK_PATH:=$(shell dirname $(dir $(abspath $(lastword $(MAKEFILE_LIST)))))
+ACTONC=$(MK_PATH)/dist/bin/actonc --cpedantic
 DDB_SERVER=../dist/bin/actondb
 TESTS= \
 	$(ENV_TESTS) \
@@ -15,6 +17,23 @@ test:
 
 regression:
 	$(MAKE) -C regression
+
+
+# -- actonc
+# Verify simple project compiles and we see output files
+.PHONY: actonc/project/simple
+actonc/project/simple:
+	cd $@ && $(ACTONC) build
+	@ls $@/out/types/a.h
+	@ls $@/out/types/a.ty
+	@ls $@/out/types/b.h
+	@ls $@/out/types/b.ty
+
+# Verify we get error when there's no src/ directory in project
+.PHONY: actonc/project/missing_src
+actonc/project/missing_src:
+	cd $@ && $(ACTONC) build; EXIT_CODE=$$?; if [ $$EXIT_CODE -ne 1 ]; then exit 1; fi
+	cd $@ && $(ACTONC) build 2>&1 | grep "Missing src/ directory"
 
 
 ENV_TESTS=env/listen_err
