@@ -133,7 +133,7 @@ main = do
                     case fileExt of
                         ".ty" -> do
                             paths <- findPaths (file args) args
-                            env0 <- Acton.Env.initEnv (sysTypes paths) False False
+                            env0 <- Acton.Env.initEnv (sysTypes paths) False
                             Acton.Types.showTyFile (Acton.Env.setMod (modName paths) env0) (file args)
                         _     -> do
                             errorWithoutStackTrace("Unknown filetype: " ++ file args)
@@ -157,8 +157,6 @@ compileFile actFile args = do
         putStrLn ("## srcDir   : " ++ srcDir paths)
         putStrLn ("## fileExt  : " ++ fileExt paths)
         putStrLn ("## modName  : " ++ prstr (modName paths))
-    stubM <- stubMode actFile args
-    when (stubM && verbose args) $ do putStrLn("Found matching C file (" ++ (replaceExtension actFile ".c") ++ "), assuming stub compilation")
     let mn = modName paths
     src <- readFile actFile
     tree <- Acton.Parser.parseModule mn actFile src
@@ -170,8 +168,9 @@ compileFile actFile args = do
     chaseImportsAndCompile actFile args paths task
 
 
-stubMode srcfile args = do
+detectStubMode srcfile args = do
     exists <- doesFileExist cFile
+    when (exists && verbose args) $ do putStrLn("Found matching C file (" ++ cFile ++ "), assuming stub compilation")
     if ((takeFileName srcfile) == "__builtin__.act" || stub args || exists)
       then return True
       else return False
@@ -272,16 +271,12 @@ importsOf t = A.importsOf (atree t)
 chaseImportsAndCompile :: FilePath -> Args -> Paths -> CompileTask -> IO ()
 chaseImportsAndCompile actFile args paths task
                        = do tasks <- chaseImportedFiles paths task
-                            -- stubM tracks stub mode for the source file,
-                            -- imported dependencies might need to be stub
-                            -- compiled separately and is checked elsewhere
-                            stubM <- stubMode actFile args
                             let sccs = stronglyConnComp  [(t,name t,importsOf t) | t <- tasks]
                                 (as,cs) = Data.List.partition isAcyclic sccs
                             -- show modules to compile and in which order
                             --putStrLn(concatMap showTaskGraph sccs)
                             if null cs
-                             then do env0 <- Acton.Env.initEnv (sysTypes paths) (stubM) (modName paths == Acton.Builtin.mBuiltin)
+                             then do env0 <- Acton.Env.initEnv (sysTypes paths) (modName paths == Acton.Builtin.mBuiltin)
                                      env1 <- foldM (doTask args paths) env0 [t | AcyclicSCC t <- as]
                                      buildExecutable env1 args paths task
                                          `catch` handle "Compilation error" Acton.Env.compilationError (src task) paths (name task)
@@ -375,7 +370,9 @@ runRestPasses :: Args -> Paths -> Acton.Env.Env0 -> A.Module -> IO (Acton.Env.En
 runRestPasses args paths env0 parsed = do
                       let outbase = outBase paths (A.modname parsed)
                       let actFile = srcBase paths (A.modname parsed) ++ ".act"
-                      env <- Acton.Env.mkEnv (sysTypes paths) (projTypes paths) env0 parsed
+                      stubMode <- detectStubMode actFile args
+                      envTmp <- Acton.Env.mkEnv (sysTypes paths) (projTypes paths) env0 parsed
+                      let env = envTmp { Acton.Env.stub = stubMode }
 
                       kchecked <- Acton.Kinds.check env parsed
                       iff (kinds args) $ dump "kinds" (Pretty.print kchecked)
@@ -414,12 +411,11 @@ runRestPasses args paths env0 parsed = do
                           oFile = joinPath [projLib paths, n ++ ".o"]
                           aFile = joinPath [projLib paths, "libActonProject.a"]
 
-                      stubM <- stubMode actFile args
                       putStrLn("Compiling " ++ makeRelative (srcDir paths) actFile
                                ++ (if (dev args) then " for development" else " for release")
-                               ++ (if stubM then " in stub mode" else "")
+                               ++ (if stubMode then " in stub mode" else "")
                               )
-                      if stubM then do
+                      if stubMode then do
                           let makeFile = projPath paths ++ "/Makefile"
                           makeExist <- doesFileExist makeFile
                           iff (makeExist) (do

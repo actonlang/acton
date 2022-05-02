@@ -405,19 +405,19 @@ unSig te                    = map f te
 
 
 -- first variant is special case for compiling __builtin__.act
-initEnv                    :: FilePath -> Bool -> Bool -> IO Env0
-initEnv path stub True     = return $ EnvF{ names = [(nPrim,NMAlias mPrim)],
+initEnv                    :: FilePath -> Bool -> IO Env0
+initEnv path True          = return $ EnvF{ names = [(nPrim,NMAlias mPrim)],
                                             modules = [(nPrim,NModule envPrim)],
                                             witnesses = [],
                                             thismod = Nothing,
-                                            stub = stub,
+                                            stub = False,
                                             envX = () }
-initEnv path stub False    = do envBuiltin <- InterfaceFiles.readFile (joinPath [path,"__builtin__.ty"])
+initEnv path False         = do envBuiltin <- InterfaceFiles.readFile (joinPath [path,"__builtin__.ty"])
                                 let env0 = EnvF{ names = [(nPrim,NMAlias mPrim), (nBuiltin,NMAlias mBuiltin)],
                                                  modules = [(nPrim,NModule envPrim), (nBuiltin,NModule envBuiltin)],
                                                  witnesses = [],
                                                  thismod = Nothing,
-                                                 stub = stub,
+                                                 stub = False,
                                                  envX = () }
                                     env = importAll mBuiltin envBuiltin $ importWits mBuiltin envBuiltin $ env0
                                 return env
