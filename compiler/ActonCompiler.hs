@@ -40,6 +40,7 @@ import Data.Monoid ((<>))
 import Data.Graph
 import Data.Version (showVersion)
 import qualified Data.List
+import System.Directory.Recursive
 import System.IO
 import System.IO.Temp
 import System.Info
@@ -112,17 +113,36 @@ getCcVer        = do verStr <- readProcess "cc" ["--version"] []
 showVer cv      = "acton " ++ getVer ++ "\n" ++ getVerExtra ++ "\ncc: " ++ cv
 
 
+filterActFile :: FilePath -> Maybe FilePath
+filterActFile file =
+    case fileExt of
+        ".act" -> Just file
+        _ -> Nothing
+  where (fileBody, fileExt) = splitExtension $ takeFileName file
+
 main = do
     cv <- getCcVer
     args <- execParser (info (getArgs (showVer cv) <**> helper) descr)
     cmdIsFile <- checkCmdIsFile (cmd args)
     if cmdIsFile
-      then compileFile (cmd args) args
+      then compileFile args (cmd args)
       else
         case (cmd args) of
             "build" -> do
-                errorWithoutStackTrace("Build is not implemented :/")
-                System.Exit.exitFailure
+                -- find all .act files in src/ directory, parse into tasks and
+                -- submit for compilation
+                curDir <- getCurrentDirectory
+                paths <- findPaths (joinPath [ curDir, "Acton.toml" ]) args
+                srcDirExists <- doesDirectoryExist (srcDir paths)
+                if not srcDirExists
+                  then do
+                    errorWithoutStackTrace("Missing src/ directory")
+                    System.Exit.exitFailure
+                  else do
+                    allFiles <- getFilesRecursive (srcDir paths)
+                    let srcFiles = catMaybes $ map filterActFile allFiles
+                    tasks <- catMaybes <$> mapM (fileToTask args) srcFiles
+                    chaseImportsAndCompile (head srcFiles) args paths tasks
             "dump" -> do
                 if null $ file args
                   then do
@@ -141,9 +161,15 @@ main = do
             _       -> do
                 errorWithoutStackTrace("Unknown command: " ++ cmd args)
                 System.Exit.exitFailure
+  where fileToTask args actFile = do
+            paths <- findPaths actFile args
+            src <- readFile actFile
+            m <- Acton.Parser.parseModule (modName paths) actFile src
+            return $ Just $ ActonTask (modName paths) src m
 
-compileFile :: String -> Args -> IO ()
-compileFile actFile args = do
+
+compileFile :: Args -> String -> IO ()
+compileFile args actFile = do
     paths <- findPaths actFile args
     when (verbose args) $ do
         putStrLn ("## sysPath  : " ++ sysPath paths)
@@ -165,7 +191,7 @@ compileFile actFile args = do
             `catch` handle "Indentation error" Acton.Parser.indentationError src paths mn
     iff (parse args) $ dump "parse" (Pretty.print tree)
     let task = ActonTask mn src tree
-    chaseImportsAndCompile actFile args paths task
+    chaseImportsAndCompile actFile args paths [task]
 
 
 detectStubMode srcfile args = do
@@ -268,9 +294,9 @@ data CompileTask        = ActonTask  {name :: A.ModName, src :: String, atree:: 
 importsOf :: CompileTask -> [A.ModName]
 importsOf t = A.importsOf (atree t)
 
-chaseImportsAndCompile :: FilePath -> Args -> Paths -> CompileTask -> IO ()
-chaseImportsAndCompile actFile args paths task
-                       = do tasks <- chaseImportedFiles paths task
+chaseImportsAndCompile :: FilePath -> Args -> Paths -> [CompileTask] -> IO ()
+chaseImportsAndCompile actFile args paths tasks
+                       = do tasks <- chaseImportedFiles paths tasks
                             let sccs = stronglyConnComp  [(t,name t,importsOf t) | t <- tasks]
                                 (as,cs) = Data.List.partition isAcyclic sccs
                             -- show modules to compile and in which order
@@ -278,9 +304,11 @@ chaseImportsAndCompile actFile args paths task
                             if null cs
                              then do env0 <- Acton.Env.initEnv (sysTypes paths) (modName paths == Acton.Builtin.mBuiltin)
                                      env1 <- foldM (doTask args paths) env0 [t | AcyclicSCC t <- as]
-                                     buildExecutable env1 args paths task
-                                         `catch` handle "Compilation error" Acton.Env.compilationError (src task) paths (name task)
-                                         `catch` handle "Type error" Acton.Types.typeError (src task) paths (name task)
+                                     when (length tasks == 1) (
+                                         buildExecutable env1 args paths (head tasks)
+                                             `catch` handle "Compilation error" Acton.Env.compilationError (src $ head tasks) paths (name $ head tasks)
+                                             `catch` handle "Type error" Acton.Types.typeError (src $ head tasks) paths (name $ head tasks)
+                                         )
                                      when (rmTmp paths) $ removeDirectoryRecursive (projPath paths)
                                      return ()
                               else do error ("********************\nCyclic imports:"++concatMap showTaskGraph cs)
@@ -289,11 +317,13 @@ chaseImportsAndCompile actFile args paths task
         isAcyclic _              = False
         showTaskGraph ts         = "\n"++concatMap (\t-> concat (intersperse "." (A.modPath (name t)))++" ") ts
 
-chaseImportedFiles :: Paths -> CompileTask -> IO [CompileTask]
-chaseImportedFiles paths itask
+
+chaseImportedFiles :: Paths -> [CompileTask] -> IO [CompileTask]
+chaseImportedFiles paths itasks
                             = do
-                                 newtasks <- catMaybes <$> mapM (readAFile [itask]) (importsOf itask)
-                                 chaseRecursively (itask:newtasks) (map name newtasks) (concatMap importsOf newtasks)
+                                 let itasks_imps = concatMap importsOf itasks
+                                 newtasks <- catMaybes <$> mapM (readAFile itasks) itasks_imps
+                                 chaseRecursively (itasks ++ newtasks) (map name newtasks) (concatMap importsOf newtasks)
 
   where readAFile tasks mn  = case lookUp mn tasks of    -- read and parse file mn in the project directory, unless it is already in tasks 
                                  Just t -> return Nothing
@@ -324,7 +354,9 @@ chaseImportedFiles paths itask
 
 doTask :: Args -> Paths -> Acton.Env.Env0 -> CompileTask -> IO Acton.Env.Env0
 doTask args paths env t@(ActonTask mn src m)
-                            = do ok <- checkUptoDate paths actFile tyFile [hFile] (importsOf t)
+                            = do stubMode <- detectStubMode actFile args
+                                 let outfiles = [hFile] ++ if stubMode then [] else [oFile]
+                                 ok <- checkUptoDate paths actFile tyFile outfiles (importsOf t)
                                  if ok && mn /= modName paths then do
                                           iff (verbose args) (putStrLn ("Skipping  "++ actFile ++ " (files are up to date)."))
                                           return env
@@ -341,6 +373,7 @@ doTask args paths env t@(ActonTask mn src m)
         tyFile              = outbase ++ ".ty"
         hFile               = outbase ++ ".h"
         cFile               = outbase ++ ".c"
+        oFile               = joinPath (projLib paths : A.modPath mn) ++  ".o"
 
 checkUptoDate :: Paths -> FilePath -> FilePath -> [FilePath] -> [A.ModName] -> IO Bool
 checkUptoDate paths actFile iFile outBases imps

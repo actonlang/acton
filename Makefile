@@ -197,15 +197,12 @@ STDLIB_OFILES=$(STDLIB_DEV_OFILES) $(STDLIB_REL_OFILES)
 
 
 # __builtin__.ty is special, it even has special handling in actonc. Essentially
-# all other modules depend on it, so it must be compiled first. While we use
-# wildcard patterns for all other files, we have explicit targets for
-# __builtin__.ty to make things work. Other .ty file targets etc depend on this,
-# so we get the order right.
-dist/types/__builtin__.ty: stdlib/out/types/__builtin__.ty
+# all other modules depend on it, so it must be compiled first.
+dist/types/__builtin__.ty: builtin/ty/out/types/__builtin__.ty
 	@mkdir -p $(dir $@)
 	cp $< $@
 
-stdlib/out/types/__builtin__.ty: stdlib/src/__builtin__.act $(ACTONC)
+builtin/ty/out/types/__builtin__.ty: builtin/ty/src/__builtin__.act $(ACTONC)
 	@mkdir -p $(dir $@)
 	$(ACTC) $<
 
@@ -215,9 +212,9 @@ stdlib/out/types/__builtin__.ty: stdlib/src/__builtin__.act $(ACTONC)
 # Compiling these .act files with and with --dev will produce
 # stdlib/out/lib/libActonProject_rel.a and stdlib/out/lib/libActonProject_dev.a which we then rename
 .PHONY: stdlib_project
-stdlib_project: $(STDLIB_ACTFILES_NS) dist/types/__builtin__.ty $(ACTONC)
-	echo $(STDLIB_ACTFILES_NS) | $(XARGS) -n1 $(ACTC)
-	echo $(STDLIB_ACTFILES_NS) | $(XARGS) -n1 $(ACTC) --dev
+stdlib_project: $(STDLIB_ACTFILES_NS) dist/types/__builtin__.ty $(DIST_HFILES) $(ACTONC)
+	cd stdlib && ../$(ACTC) build
+	cd stdlib && ../$(ACTC) build --dev
 	cp -a stdlib/out/types/. dist/types/
 
 stdlib/out/dev/lib/libActonProject.a stdlib/out/rel/lib/libActonProject.a: $(STDLIB_ACTFILES) $(ACTONC)
