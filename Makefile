@@ -212,9 +212,9 @@ builtin/ty/out/types/__builtin__.ty: builtin/ty/src/__builtin__.act $(ACTONC)
 # Compiling these .act files with and with --dev will produce
 # stdlib/out/lib/libActonProject_rel.a and stdlib/out/lib/libActonProject_dev.a which we then rename
 .PHONY: stdlib_project
-stdlib_project: $(STDLIB_ACTFILES_NS) dist/types/__builtin__.ty $(ACTONC)
-	echo $(STDLIB_ACTFILES_NS) | $(XARGS) -n1 $(ACTC)
-	echo $(STDLIB_ACTFILES_NS) | $(XARGS) -n1 $(ACTC) --dev
+stdlib_project: $(STDLIB_ACTFILES_NS) dist/types/__builtin__.ty $(DIST_HFILES) $(ACTONC)
+	cd stdlib && ../$(ACTC) build
+	cd stdlib && ../$(ACTC) build --dev
 	cp -a stdlib/out/types/. dist/types/
 
 stdlib/out/dev/lib/libActonProject.a stdlib/out/rel/lib/libActonProject.a: $(STDLIB_ACTFILES) $(ACTONC)
