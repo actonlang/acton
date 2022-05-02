@@ -579,7 +579,9 @@ instance InfEnv Decl where
                                                  prow <- newTVarOfKind PRow
                                                  krow <- newTVarOfKind KRow
                                                  --traceM ("\n## infEnv actor " ++ prstr (n, NAct q prow krow te))
-                                                 return ([], [(n, NAct q prow krow te)], d)
+--                                                 let cs = map Seal (prow : krow : leaves te)
+                                                 let cs = []
+                                                 return (cs, [(n, NAct q prow krow te)], d)
                                              _ ->
                                                  illegalRedef n
 

@@ -379,28 +379,10 @@ reduce' env eq c@(Mut (TCon _ tc) n _)
   | otherwise                               = tyerr n "Attribute not found:"
   where attrSearch                          = findAttr env tc n
 
-reduce' env eq c@(Seal t)                   = redS t
-  where redS (TCon _ tc)
-          | Just True <- stat               = reduce env eq (map Seal $ tcargs tc)                  -- Previously checked tycon & safe: constrain the args
-          | Just False <- stat              = tyerr (loc tc) "Leaking seal"                         -- Previously checked tycon & unsafe: fail
-          | safe env cinfo                  = reduce env eq [ Seal (tVar tv) | tv <- tyfree cinfo ] -- In current group & statically safe: constrain free vars
-          | otherwise                       = tyerr (loc tc) "Leaking seal"                         -- In current group & unsafe: fail
-          where stat                        = sealStatus (tcname tc) env
-                cinfo                       = findQName (tcname tc) env
-        redS (TFun _ fx p k t)              = reduce env eq (map Seal [fx,p,k,t])
-        redS (TTuple _ p k)                 = reduce env eq (map Seal [p,k])
-        redS (TOpt _ t)                     = reduce env eq [Seal t]
-        redS (TNone _)                      = return eq
-        redS (TWild _)                      = return eq
-        redS (TNil _ _)                     = return eq
-        redS (TRow _ _ _ t r)               = reduce env eq (map Seal [t,r])
-        redS (TFX _ FXPure)                 = return eq
-        redS (TFX _ FXAction)               = return eq
-        redS (TFX l _)                      = tyerr l "Leaking seal"
-        redS (TVar l tv)
-          | univar tv                       = do defer [c]; return eq
-          | tvkind tv == KFX                = tyerr l "Leaking seal"
-          | otherwise                       = return eq
+reduce' env eq (Seal t)
+  | null leaks                              = do defer (map Seal tvs); return eq
+  | otherwise                               = tyerrs leaks "Leaking actor seal:"
+  where (tvs,leaks)                         = unsealed env t
 
 reduce' env eq c                            = noRed c
 

@@ -74,66 +74,48 @@ isForced env                    = forced $ envX env
 sealStatus c env                = lookup c $ sealstatus $ envX env
 
 
--- Sealed status for type constructors --------------------------------------------------------------------------------------------
+-- Iterate sealed status for type constructors ------------------------------------------------------------------------------------
 
-iterSealStatus te env                   = setSealStatus qns stats $ define te env
-  where (ns,is)                         = unzip te
-        qns                             = map NoQ ns
-        stats                           = iter (map (const True) ns)
+iterSealStatus te env           = setSealStatus qns (iter (map (const True) ns)) env
+  where (ns,is)                 = unzip te
+        qns                     = map NoQ ns
         iter s0
-          | s0 == s1                    = s0
-          | otherwise                   = iter s1
-          where s1                      = map (safe $ setSealStatus qns s0 env) is
+          | s0 == s1            = s0
+          | otherwise           = iter s1
+          where s1              = [ null $ snd $ unsealed env' info | info <- is ]
+                env'            = setSealStatus qns s0 env
 
-class Safe a where
-    safe                                :: Env -> a -> Bool
 
-instance (Safe a) => Safe [a] where
-    safe env                            = all (safe env)
+-- Return the leaf types that may break an actor's seal  --------------------------------------------------------------------------
 
-instance (Safe a) => Safe (Name,a) where
-    safe env (n,x)                      = safe env x
+unsealed env item               = partition isTVar $ f $ leaves item
+  where
+    f []                        = []
+    f (t@(TVar _ tv) : ts)
+      | univar tv               = t : f ts                      -- Must be checked again later on when instantiated
+    f (t@(TFX _ x) : ts)
+      | x `elem` [FXMut,FXProc] = t : f ts                      -- Definitely leaking
+    f (t@(TCon _ tc) : ts)
+      | castable env t tObject  = t : f ts                      -- Definitely leaking
+      | Just False <- stat      = t : f ts                      -- Previously determined to leak
+      | Just True <- stat       = f (tcargs tc ++ ts)           -- Not leaking, but conservatively check type arguments too
+      | Nothing <- stat         = f (leaves info ++ ts)         -- Sibling type currently being defined, check its full rhs
+      where stat                = sealStatus (tcname tc) env
+            info                = findQName (tcname tc) env
+    f (_ : ts)                  = f ts                          -- Not leaking!
 
-instance Safe NameInfo where
-    safe env (NClass q cs te)           = safe env q && safe env cs && safe env te          -- Also checks object heritage (in cs)
-    safe env (NProto q ps te)           = safe env q && safe env ps && safe env te
-    safe env _                          = True
 
-instance Safe QBind where
-    safe env (Quant tv ps)              = safe env ps
+-- In iterSealStatus:
+--      Find leaves of NameInfo
+--      Don't follow TCon names in env (can't happen, sealStatus always succeeds)
+--      Return True/False on TCon/TFX safety
+--      Ignore TVar leaves (can't happen, processed decls have no free vars)
 
-instance Safe (WPath,PCon) where
-    safe env (wp,p)                     = safe env p
-
-instance Safe TSchema where
-    safe env (TSchema _ q t)            = safe env q && safe env t
-
-instance Safe TCon where
-    safe env (TC n ts)
-      | unalias env n == qnObject       = False                                             -- Mutable (ancestor) class
-      | Just True <- sealStatus n env   = safe env ts                                       -- Previously deemed safe
-      | otherwise                       = False                                             -- (Previously deemed unsafe)
-
-instance Safe TVar where
-    safe env (TV k n)
-      | k == KFX                        = False                                             -- Polymorphic fx
-      | otherwise                       = True
-
-instance Safe Type where
-    safe env (TCon _ tc)                = safe env tc
-    safe env (TVar _ tv)                = safe env tv
-    safe env (TFun _ fx p k t)          = safe env [fx,p,k,t]
-    safe env (TTuple _ p k)             = safe env [p,k]
-    safe env (TOpt _ t)                 = safe env t
-    safe env (TRow _ _ _ t r)           = safe env [t,r]
-    safe env (TFX _ fx)                 = safe env fx
-    safe env _                          = True
-
-instance Safe FX where
-    safe env FXPure                     = True
-    safe env FXMut                      = False                                             -- mut
-    safe env FXProc                     = False                                             -- proc
-    safe env FXAction                   = True
+-- In reduce (Seal t):
+--      Find leaves of t
+--      Follow TCon names (when sealStatus fails on sibling a TCon)
+--      Fail on leaking TCon/TFX
+--      Seal TVar leaves
 
 
 -- Well-formed tycon applications -------------------------------------------------------------------------------------------------

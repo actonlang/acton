@@ -416,6 +416,51 @@ typeDecl (_,NDef{})     = False
 typeDecl _              = True
 
 
+-- Finding type leaves -----
+
+class Leaves a where
+    leaves                  :: a -> [Type]
+
+instance (Leaves a) => Leaves [a] where
+    leaves                  = concatMap leaves
+
+instance (Leaves a) => Leaves (Name,a) where
+    leaves (n,x)            = leaves x
+
+instance Leaves NameInfo where
+    leaves (NClass q cs te) = leaves q ++ leaves cs ++ leaves te
+    leaves (NProto q ps te) = leaves q ++ leaves ps ++ leaves te
+    leaves (NAct q p k te)  = leaves q ++ leaves [p,k] ++ leaves te
+    leaves (NExt q c ps te) = leaves q ++ leaves c ++ leaves ps ++ leaves te
+    leaves _                = []
+
+instance Leaves QBind where
+    leaves (Quant tv ps)    = tVar tv : leaves ps
+
+instance Leaves (WPath,PCon) where
+    leaves (wp,p)           = leaves p
+
+instance Leaves TSchema where
+    leaves (TSchema _ q t)  = leaves q ++ leaves t
+
+instance Leaves Type where
+    leaves t@TCon{}         = [t]
+    leaves t@TVar{}         = [t]
+    leaves t@TFX{}          = [t]
+    leaves (TFun _ x p k t) = leaves [x,p,k,t]
+    leaves (TTuple _ p k)   = leaves [p,k]
+    leaves (TOpt _ t)       = leaves t
+    leaves (TRow _ _ _ t r) = leaves [t,r]
+    leaves _                = []
+
+instance Leaves TCon where
+    leaves tc               = [tCon tc]
+
+instance Leaves TVar where
+    leaves tv               = [tVar tv]
+
+
+
 instance Data.Binary.Binary Prefix
 instance Data.Binary.Binary Name
 instance Data.Binary.Binary ModName
@@ -688,6 +733,9 @@ isSig _                             = False
 
 isDecl Decl{}                       = True
 isDecl _                            = False
+
+isTVar TVar{}                       = True
+isTVar _                            = False
 
 singlePosArg (PosArg _ PosNil)      = True
 singlePosArg _                      = False
