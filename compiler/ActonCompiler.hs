@@ -36,6 +36,7 @@ import qualified InterfaceFiles
 import Control.Exception (throw,catch,displayException,IOException,ErrorCall)
 import Control.Monad
 import Options.Applicative
+import Data.List.Split
 import Data.Monoid ((<>))
 import Data.Graph
 import Data.Version (showVersion)
@@ -129,6 +130,9 @@ main = do
       else
         case (cmd args) of
             "build" -> do
+                iff (not (null $ (root args)) && (length $ splitOn "." (root args)) == 1) (
+                    errorWithoutStackTrace("Project build requires a qualified root actor name, like foo.main")
+                    System.Exit.exitFailure)
                 -- find all .act files in src/ directory, parse into tasks and
                 -- submit for compilation
                 curDir <- getCurrentDirectory
@@ -290,6 +294,7 @@ findPaths actFile args  = do execDir <- takeDirectory <$> System.Environment.get
                                     return $ (False, False, pre, drop 1 ds)
 
 data CompileTask        = ActonTask  {name :: A.ModName, src :: String, atree:: A.Module} deriving (Show)
+data BinTask            = BinTask { binName :: String, rootActor :: A.QName }
 
 importsOf :: CompileTask -> [A.ModName]
 importsOf t = A.importsOf (atree t)
@@ -304,11 +309,9 @@ chaseImportsAndCompile actFile args paths tasks
                             if null cs
                              then do env0 <- Acton.Env.initEnv (sysTypes paths) (modName paths == Acton.Builtin.mBuiltin)
                                      env1 <- foldM (doTask args paths) env0 [t | AcyclicSCC t <- as]
-                                     when (length tasks == 1) (
-                                         buildExecutable env1 args paths (head tasks)
-                                             `catch` handle "Compilation error" Acton.Env.compilationError (src $ head tasks) paths (name $ head tasks)
-                                             `catch` handle "Type error" Acton.Types.typeError (src $ head tasks) paths (name $ head tasks)
-                                         )
+                                     mapM (buildExecutable env1 args paths) binTasks
+                                         `catch` handle "Compilation error" Acton.Env.compilationError (src $ head tasks) paths (name $ head tasks)
+                                         `catch` handle "Type error" Acton.Types.typeError (src $ head tasks) paths (name $ head tasks)
                                      when (rmTmp paths) $ removeDirectoryRecursive (projPath paths)
                                      return ()
                               else do error ("********************\nCyclic imports:"++concatMap showTaskGraph cs)
@@ -316,6 +319,12 @@ chaseImportsAndCompile actFile args paths tasks
   where isAcyclic (AcyclicSCC _) = True
         isAcyclic _              = False
         showTaskGraph ts         = "\n"++concatMap (\t-> concat (intersperse "." (A.modPath (name t)))++" ") ts
+        rootParts                = splitOn "." (root args)
+        rootMod                  = init rootParts
+        -- for unqualified root name, assume first source file module
+        guessMod                 = if length rootParts == 1 then name $ head tasks else A.modName rootMod
+        binTask                  = BinTask (prstr guessMod) (A.GName guessMod (A.name $ last rootParts))
+        binTasks                 = [binTask]
 
 
 chaseImportedFiles :: Paths -> [CompileTask] -> IO [CompileTask]
@@ -511,7 +520,7 @@ handle errKind f src paths mn ex = do putStrLn ("\n******************** " ++ err
         handleExists _ = return ()
 
 
-buildExecutable env args paths task
+buildExecutable env args paths binTask
   | null $ root args        = return ()
   | otherwise               = case Acton.Env.findQName qn env of
                                   i@(Acton.Env.NAct [] (A.TRow _ _ _ t A.TNil{}) A.TNil{} _) -> do
@@ -531,10 +540,9 @@ buildExecutable env args paths task
                                                               System.Exit.exitFailure
                                       return ()
                                   _ ->
-                                      error ("********************\nRoot " ++ prstr n ++ " : " ++ prstr sc ++ " is not instantiable")
-  where n                   = A.name (root args)
-        mn                  = name task
-        qn                  = A.GName mn n
+                                      error ("********************\nRoot " ++ prstr qn ++ " : " ++ prstr sc ++ " is not instantiable")
+  where mn                  = A.mname qn
+        qn                  = (rootActor binTask)
         (sc,_)              = Acton.QuickType.schemaOf env (A.eQVar qn)
         buildF              = joinPath [projPath paths, "build.sh"]
         outbase             = outBase paths mn
@@ -555,8 +563,7 @@ buildExecutable env args paths task
         libPaths            = libPathsBase
         ccArgs              = " -no-pie "
 #endif
-        binFilename         = takeFileName $ dropExtension srcbase
-        binFile             = joinPath [binDir paths, binFilename]
+        binFile             = joinPath [binDir paths, (binName binTask)]
         srcbase             = srcFile paths mn
         pedantArg           = if (cpedantic args) then "-Werror" else ""
         ccCmd               = ("cc " ++ ccArgs ++ pedantArg ++

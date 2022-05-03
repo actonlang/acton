@@ -1,9 +1,8 @@
-
 MK_PATH:=$(shell dirname $(dir $(abspath $(lastword $(MAKEFILE_LIST)))))
 ACTONC=$(MK_PATH)/dist/bin/actonc --cpedantic
 DDB_SERVER=../dist/bin/actondb
 TESTS= \
-	$(ACTONC_PROJ_TESTS) \
+	$(ACTONC_TESTS) \
 	$(ENV_TESTS) \
 	$(RTS_TESTS) \
 	$(DDB_TESTS) \
@@ -20,10 +19,16 @@ regression:
 	$(MAKE) -C regression
 
 
-# -- actonc
-ACTONC_PROJ_TESTS_S = simple missing_src auto_root
-ACTONC_PROJ_TESTS = $(addprefix actonc/project/,$(ACTONC_PROJ_TESTS_S))
-.PHONY: $(ACTONC_PROJ_TESTS)
+# -- actonc ---------------------------------------------------------------------
+ACTONC_TESTS = $(ACTONC_PROJ_TESTS) $(ACTONC_ROOT_TESTS)
+.PHONY: test-actonc
+
+test-actonc:
+	$(MAKE) $(ACTONC_TESTS)
+
+# -- actonc project -------------------------------------------------------------
+ACTONC_PROJ_TESTS := actonc/project/simple actonc/project/missing_src actonc/project/qualified_root actonc/project/qualified_root§unqualified
+.PHONY: actonc/project/simple actonc/project/missing_src actonc/project/qualified_root actonc/project/qualified_root§unqualified
 # Verify simple project compiles and we see output files
 actonc/project/simple:
 	cd $@ && $(ACTONC) build
@@ -41,6 +46,32 @@ actonc/project/missing_src:
 actonc/project/auto_root:
 	cd $@ && $(ACTONC) build
 	-@ls $@/out/rel/bin/test
+
+# Verify root argument as a qualified name
+# TODO: remove the rm -rf here, it should not be needed, but when removed,
+# multiple test invokations fail
+actonc/project/qualified_root:
+	rm -rf $@/out
+	cd $@ && $(ACTONC) build --verbose --root test.main
+	@ls $@/out/rel/bin/test
+	$@/out/rel/bin/test | grep "qualified_root foo"
+
+N=$(word 1,$(subst §, ,$@))
+actonc/project/qualified_root§unqualified:
+	rm -rf $(N)/out
+	cd $(N) && $(ACTONC) build --root main; EXIT_CODE=$$?; if [ $$EXIT_CODE -ne 1 ]; then exit 1; fi
+	cd $(N) && $(ACTONC) build --root main 2>&1 | grep "Project build requires a qualified root actor name"
+
+# -- actonc root actor ----------------------------------------------------------
+.PHONY: actonc/root/test
+ACTONC_ROOT_TESTS = actonc/root/test
+actonc/root/test:
+	rm -f $@
+	$(ACTONC) $@.act --root test.main
+	$@
+	rm -f $@
+	$(ACTONC) $@.act --root main
+	$@
 
 
 ENV_TESTS=env/listen_err

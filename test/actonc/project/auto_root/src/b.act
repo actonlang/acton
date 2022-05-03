@@ -1,2 +1,2 @@
 def foo():
-    print("b")
+    print("auto_root foo")
