@@ -213,11 +213,13 @@ instance (InfEnv a) => InfEnv [a] where
     infEnv env []                       = return ([], [], [])
     infEnv env (s : ss)                 = do (cs1,te1,s1) <- infEnv env s
                                              let te1' = if inDecl env then noDefs te1 else te1      -- TODO: also stop class instantiation!
-                                                 env' = iterSealStatus (filter typeDecl te1') $ define te1' env
+                                                 env' = setActDefs te1' $ iterSealStatus (filter typeDecl te1') $ define te1' env
                                              (cs2,te2,ss2) <- infEnv env' ss
                                              return (cs1++cs2, te1++te2, s1:ss2)
 
 instance InfEnv Stmt where
+    infEnv env (Expr l (Call l' e p k)) = do (cs,t,e') <- infer env (Call l' e p k)
+                                             return (cs, [], Expr l e')
     infEnv env (Expr l e)               = do (cs,_,e') <- infer env e
                                              return (cs, [], Expr l e')
 
@@ -292,7 +294,7 @@ instance InfEnv Stmt where
       | inDecl env && nodup ds          = do (cs1,te1,ds1) <- infEnv env ds
                                              return (cs1, te1, Decl l ds1)
       | nodup ds                        = do (cs1,te1,ds1) <- infEnv (setInDecl env) ds
-                                             (cs2,ds2) <- checkEnv (define te1 env) ds1
+                                             (cs2,ds2) <- checkEnv (setActDefs te1 $ define te1 env) ds1
                                              (cs3,te2,eq,ds3) <- genEnv env cs2 te1 ds2
                                              return (cs1++cs3, te2, withLocal (bindWits eq) $ Decl l ds3)
 {-
@@ -719,6 +721,7 @@ wellformedProtos env ps                 = do (css0, css1) <- unzip <$> mapM (wfP
 class Check a where
     checkEnv                            :: Env -> a -> TypeM (Constraints,a)
     checkEnv'                           :: Env -> a -> TypeM (Constraints,[a])
+    checkEnv env x                      = undefined
     checkEnv' env x                     = do (cs,x') <- checkEnv env x
                                              return (cs, [x'])
 
@@ -820,7 +823,7 @@ abstractDefs env q eq b                 = map absDef b
 
 
 instance Check Decl where
-    checkEnv env (Def l n q p k a b dec fx)
+    checkEnv' env (Def l n q p k a b dec fx)
                                         = do --traceM ("## checkEnv def " ++ prstr n ++ " (q = [" ++ prstrs q ++ "])")
                                              t <- maybe newTVar return a
                                              pushFX fx t
@@ -837,12 +840,15 @@ instance Check Decl where
                                              checkNoEscape env tvs
                                              -- At this point, n has the type given by its def annotations.
                                              -- Now check that this type is no less general than its recursion assumption in env.
-                                             matchDefAssumption env cs1 (Def l n q (noDefaultsP p') (noDefaultsK k') (Just t)
-                                                                         (bindWits eq1 ++ defaultsP p' ++ defaultsK k' ++ b') dec fx)
+                                             (cs2, d) <- matchDefAssumption env cs1 (Def l n q (noDefaultsP p') (noDefaultsK k') (Just t)
+                                                                                     (bindWits eq1 ++ defaultsP p' ++ defaultsK k' ++ b') dec fx)
+                                             if inAct env
+                                                 then return (cs2, [d])
+                                                 else return (cs2, [d])
       where env1                        = reserve (bound (p,k) ++ bound b \\ stateScope env) $ defineTVars q $ setInDef env
             tvs                         = qbound q
 
-    checkEnv env (Actor l n q p k b)    = do --traceM ("## checkEnv actor " ++ prstr n)
+    checkEnv' env (Actor l n q p k b)   = do --traceM ("## checkEnv actor " ++ prstr n)
                                              pushFX fxProc tNone
                                              wellformed env1 q
                                              (csp,te1,p') <- infEnv env1 p
@@ -853,8 +859,8 @@ instance Check Decl where
                                              (cs1,eq1) <- solveScoped env1 tvs te tNone (csp++csk++csb++cs0)
                                              checkNoEscape env tvs
                                              fvs <- tyfree <$> msubst env
-                                             return (cs1, Actor l n (noqual env q) (qualWPar env q $ noDefaultsP p') (noDefaultsK k')
-                                                          (bindWits (eq1++eq0) ++ defsigs ++ defaultsP p' ++ defaultsK k' ++ b'))
+                                             return (cs1, [Actor l n (noqual env q) (qualWPar env q $ noDefaultsP p') (noDefaultsK k')
+                                                           (bindWits (eq1++eq0) ++ defsigs ++ defaultsP p' ++ defaultsK k' ++ b')])
       where env1                        = reserve (bound (p,k) ++ bound b) $ defineTVars q $
                                           define [(selfKW, NVar tRef)] $ reserve (statevars b) $ setInAct env
             tvs                         = qbound q
@@ -906,9 +912,6 @@ instance Check Decl where
             n'                          = extensionName (head us) c
             NExt _ _ ps te              = findName n' env
             s                           = [(tvSelf, tCon $ TC n (map tVar $ qbound q))]
-
-    checkEnv' env x                     = do (cs,x') <- checkEnv env x
-                                             return (cs, [x'])
 
 
 instance Check Stmt where
@@ -1083,7 +1086,9 @@ instance Infer Expr where
                                                 return ([Cast fxProc fx], t, x)
                                             NDef sc d -> do 
                                                 (cs,tvs,t) <- instantiate env sc
-                                                return (cs, t, app t (tApp x tvs) $ witsOf cs)
+                                                if inAct env
+                                                    then return (cs, t, app t (tApp x tvs) $ witsOf cs)
+                                                    else return (cs, t, app t (tApp x tvs) $ witsOf cs)
                                             NClass q _ _ -> do
                                                 (cs0,ts) <- instQBinds env q
                                                 --traceM ("## Instantiating " ++ prstr n)

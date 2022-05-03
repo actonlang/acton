@@ -29,13 +29,14 @@ data TypeX                      = TypeX {
                                     context    :: EnvCtx,
                                     indecl     :: Bool,
                                     forced     :: Bool,
+                                    actdefs    :: [Name],
                                     sealstatus :: [(QName,Bool)] }
 
 type Env                        = EnvF TypeX
 
 data EnvCtx                     = CtxTop | CtxDef | CtxAct | CtxClass deriving (Eq,Show)
 
-typeX env0                      = setX env0 TypeX{ context = CtxTop, indecl = False, forced = False, sealstatus = [] }
+typeX env0                      = setX env0 TypeX{ context = CtxTop, indecl = False, forced = False, actdefs = [], sealstatus = [] }
 
 instance Pretty TypeX where
     pretty _                    = empty
@@ -57,6 +58,10 @@ setInDecl env                   = modX env $ \x -> x{ indecl = True }
 
 useForce env                    = modX env $ \x -> x{ forced = True }
 
+setActDefs te env
+  | inAct env                   = modX env $ \x -> x{ actdefs = [ n | (n,NDef{}) <- te ] ++ actdefs x }
+  | otherwise                   = env
+
 setSealStatus ns stats env      = modX env $ \x -> x{ sealstatus = (ns `zip` stats) ++ sealstatus x }
 
 onTop env                       = context (envX env) == CtxTop
@@ -70,6 +75,8 @@ inClass env                     = context (envX env) == CtxClass
 inDecl env                      = indecl $ envX env
 
 isForced env                    = forced $ envX env
+
+isActDef n env                  = n `elem` actdefs (envX env)
 
 sealStatus c env                = lookup c $ sealstatus $ envX env
 
