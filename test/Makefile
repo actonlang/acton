@@ -3,6 +3,7 @@ MK_PATH:=$(shell dirname $(dir $(abspath $(lastword $(MAKEFILE_LIST)))))
 ACTONC=$(MK_PATH)/dist/bin/actonc --cpedantic
 DDB_SERVER=../dist/bin/actondb
 TESTS= \
+	$(ACTONC_PROJ_TESTS) \
 	$(ENV_TESTS) \
 	$(RTS_TESTS) \
 	$(DDB_TESTS) \
@@ -20,8 +21,10 @@ regression:
 
 
 # -- actonc
+ACTONC_PROJ_TESTS_S = simple missing_src auto_root
+ACTONC_PROJ_TESTS = $(addprefix actonc/project/,$(ACTONC_PROJ_TESTS_S))
+.PHONY: $(ACTONC_PROJ_TESTS)
 # Verify simple project compiles and we see output files
-.PHONY: actonc/project/simple
 actonc/project/simple:
 	cd $@ && $(ACTONC) build
 	@ls $@/out/types/a.h
@@ -30,10 +33,14 @@ actonc/project/simple:
 	@ls $@/out/types/b.ty
 
 # Verify we get error when there's no src/ directory in project
-.PHONY: actonc/project/missing_src
 actonc/project/missing_src:
 	cd $@ && $(ACTONC) build; EXIT_CODE=$$?; if [ $$EXIT_CODE -ne 1 ]; then exit 1; fi
 	cd $@ && $(ACTONC) build 2>&1 | grep "Missing src/ directory"
+
+# Verify detection of root actor
+actonc/project/auto_root:
+	cd $@ && $(ACTONC) build
+	-@ls $@/out/rel/bin/test
 
 
 ENV_TESTS=env/listen_err
