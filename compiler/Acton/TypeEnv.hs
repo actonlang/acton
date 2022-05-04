@@ -29,14 +29,13 @@ data TypeX                      = TypeX {
                                     context    :: EnvCtx,
                                     indecl     :: Bool,
                                     forced     :: Bool,
-                                    actdefs    :: [Name],
-                                    sealstatus :: [(QName,Bool)] }
+                                    actdefs    :: [Name] }
 
 type Env                        = EnvF TypeX
 
 data EnvCtx                     = CtxTop | CtxDef | CtxAct | CtxClass deriving (Eq,Show)
 
-typeX env0                      = setX env0 TypeX{ context = CtxTop, indecl = False, forced = False, actdefs = [], sealstatus = [] }
+typeX env0                      = setX env0 TypeX{ context = CtxTop, indecl = False, forced = False, actdefs = [] }
 
 instance Pretty TypeX where
     pretty _                    = empty
@@ -62,8 +61,6 @@ setActDefs te env
   | inAct env                   = modX env $ \x -> x{ actdefs = [ n | (n,NDef{}) <- te ] ++ actdefs x }
   | otherwise                   = env
 
-setSealStatus ns stats env      = modX env $ \x -> x{ sealstatus = (ns `zip` stats) ++ sealstatus x }
-
 onTop env                       = context (envX env) == CtxTop
 
 inDef env                       = context (envX env) == CtxDef
@@ -77,52 +74,6 @@ inDecl env                      = indecl $ envX env
 isForced env                    = forced $ envX env
 
 isActDef n env                  = n `elem` actdefs (envX env)
-
-sealStatus c env                = lookup c $ sealstatus $ envX env
-
-
--- Iterate sealed status for type constructors ------------------------------------------------------------------------------------
-
-iterSealStatus te env           = setSealStatus qns (iter (map (const True) ns)) env
-  where (ns,is)                 = unzip te
-        qns                     = map NoQ ns
-        iter s0
-          | s0 == s1            = s0
-          | otherwise           = iter s1
-          where s1              = [ null $ snd $ unsealed env' info | info <- is ]
-                env'            = setSealStatus qns s0 env
-
-
--- Return the leaf types that may break an actor's seal  --------------------------------------------------------------------------
-
-unsealed env item               = partition isTVar $ f $ leaves item
-  where
-    f []                        = []
-    f (t@(TVar _ tv) : ts)
-      | univar tv               = t : f ts                      -- Must be checked again later on when instantiated
-    f (t@(TFX _ x) : ts)
-      | x `elem` [FXMut,FXProc] = t : f ts                      -- Definitely leaking
-    f (t@(TCon _ tc) : ts)
-      | castable env t tObject  = t : f ts                      -- Definitely leaking
-      | Just False <- stat      = t : f ts                      -- Previously determined to leak
-      | Just True <- stat       = f (tcargs tc ++ ts)           -- Not leaking, but conservatively check type arguments too
-      | Nothing <- stat         = f (leaves info ++ ts)         -- Sibling type currently being defined, check its full rhs
-      where stat                = sealStatus (tcname tc) env
-            info                = findQName (tcname tc) env
-    f (_ : ts)                  = f ts                          -- Not leaking!
-
-
--- In iterSealStatus:
---      Find leaves of NameInfo
---      Don't follow TCon names in env (can't happen, sealStatus always succeeds)
---      Return True/False on TCon/TFX safety
---      Ignore TVar leaves (can't happen, processed decls have no free vars)
-
--- In reduce (Seal t):
---      Find leaves of t
---      Follow TCon names (when sealStatus fails on sibling a TCon)
---      Fail on leaking TCon/TFX
---      Seal TVar leaves
 
 
 -- Well-formed tycon applications -------------------------------------------------------------------------------------------------

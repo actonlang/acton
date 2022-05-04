@@ -379,10 +379,16 @@ reduce' env eq c@(Mut (TCon _ tc) n _)
   | otherwise                               = tyerr n "Attribute not found:"
   where attrSearch                          = findAttr env tc n
 
-reduce' env eq (Seal t)
-  | null leaks                              = do defer (map Seal tvs); return eq
-  | otherwise                               = tyerrs leaks "Leaking actor seal:"
-  where (tvs,leaks)                         = unsealed env t
+reduce' env eq (Seal t@(TVar _ tv))
+  | univar tv                               = do defer [Seal t]; return eq
+  | otherwise                               = return eq
+reduce' env eq (Seal t@(TCon _ tc))
+  | castable env t tObject                  = tyerr t "Leaking actor seal:"
+  | otherwise                               = reduce env eq (map Seal $ tcargs tc)
+reduce' env eq (Seal t@(TFX _ fx))
+  | fx `elem` [FXMut,FXProc]                = tyerr t "Leaking actor seal:"
+  | otherwise                               = return eq
+reduce' env eq (Seal t)                     = reduce env eq (map Seal $ leaves t)
 
 reduce' env eq c                            = noRed c
 

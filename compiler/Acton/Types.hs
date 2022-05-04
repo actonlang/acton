@@ -213,7 +213,7 @@ instance (InfEnv a) => InfEnv [a] where
     infEnv env []                       = return ([], [], [])
     infEnv env (s : ss)                 = do (cs1,te1,s1) <- infEnv env s
                                              let te1' = if inDecl env then noDefs te1 else te1      -- TODO: also stop class instantiation!
-                                                 env' = setActDefs te1' $ iterSealStatus (filter typeDecl te1') $ define te1' env
+                                                 env' = setActDefs te1' $ define te1' env
                                              (cs2,te2,ss2) <- infEnv env' ss
                                              return (cs1++cs2, te1++te2, s1:ss2)
 
