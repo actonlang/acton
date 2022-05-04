@@ -382,14 +382,14 @@ unSig te                    = map f te
 initEnv                    :: FilePath -> Bool -> IO Env0
 initEnv path True          = return $ EnvF{ names = [(nPrim,NMAlias mPrim)],
                                             modules = [(nPrim,NModule primEnv)],
-                                            witnesses = [],
+                                            witnesses = primWits,
                                             thismod = Nothing,
                                             stub = False,
                                             envX = () }
 initEnv path False         = do envBuiltin <- InterfaceFiles.readFile (joinPath [path,"__builtin__.ty"])
                                 let env0 = EnvF{ names = [(nPrim,NMAlias mPrim), (nBuiltin,NMAlias mBuiltin)],
                                                  modules = [(nPrim,NModule primEnv), (nBuiltin,NModule envBuiltin)],
-                                                 witnesses = [],
+                                                 witnesses = primWits,
                                                  thismod = Nothing,
                                                  stub = False,
                                                  envX = () }
