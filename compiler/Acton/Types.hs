@@ -207,6 +207,19 @@ liveCombine te Nothing                  = te
 liveCombine Nothing te'                 = te'
 liveCombine (Just te) (Just te')        = Just $ te++te'
 
+wrapped kw env cs ts args               = do tvx <- newTVarOfKind KFX
+                                             let p = pWrapped tvx
+                                                 Just (_, sc, Just Static) = findAttr env p kw
+                                             (_,tvs,t0) <- instantiate env sc
+                                             fx <- newTVarOfKind KFX
+                                             t' <- newTVar
+                                             let t1 = subst [(fxSelf,fx)] t0
+                                                 t2 = tFun fx (foldr posRow posNil ts) kwdNil t'
+                                             w <- newWitness
+                                             return (Impl w fx p :
+                                                     Cast t1 t2 :
+                                                     cs, t', eCall (tApp (Dot l0 (eVar w) kw) tvs) args)
+
 --------------------------------------------------------------------------------------------------------------------------
 
 instance (InfEnv a) => InfEnv [a] where
@@ -218,8 +231,16 @@ instance (InfEnv a) => InfEnv [a] where
                                              return (cs1++cs2, te1++te2, s1:ss2)
 
 instance InfEnv Stmt where
-    infEnv env (Expr l (Call l' e p k)) = do (cs,t,e') <- infer env (Call l' e p k)
-                                             return (cs, [], Expr l e')
+    infEnv env (Expr l (Call _ e p k))  = do (cs1,t,e) <- infer env e
+                                             (cs1,t,e) <- wrapped primExec env cs1 [t] [e]               -- DEACT!
+                                             (cs2,prow,p) <- infer env p
+                                             (cs3,krow,k) <- infer env k
+                                             t0 <- newTVar
+                                             fx <- currFX
+                                             w <- newWitness
+                                             return (Sub w t (tFun fx prow krow t0) :
+                                                     cs1++cs2++cs3, [], Expr l $ Call l (eCall (eVar w) [e]) p k)
+
     infEnv env (Expr l e)               = do (cs,_,e') <- infer env e
                                              return (cs, [], Expr l e')
 
@@ -463,8 +484,8 @@ instance InfEnv Decl where
                                                  prow <- newTVarOfKind PRow
                                                  krow <- newTVarOfKind KRow
                                                  --traceM ("\n## infEnv actor " ++ prstr (n, NAct q prow krow te))
---                                                 let cs = map Seal (prow : krow : leaves te)
                                                  let cs = []
+-- DEACT!                                          let cs = map Seal (prow : krow : leaves te)
                                                  return (cs, [(n, NAct q prow krow te)], d)
                                              _ ->
                                                  illegalRedef n
@@ -969,8 +990,9 @@ instance Infer Expr where
                                             NDef sc d -> do 
                                                 (cs,tvs,t) <- instantiate env sc
                                                 case n of
-                                                  NoQ n' | isActDef n' env ->
-                                                    return (cs, t, app t (tApp x tvs) $ witsOf cs)
+--                                                  NoQ n' | isActDef n' env -> do                                            -- DEACT!
+--                                                    let e = app t (tApp (eVar $ localName n') tvs) $ witsOf cs              -- DEACT!
+--                                                    wrapped primWrap env cs [tActor,t] [eVar selfKW,e]                      -- DEACT!
                                                   _ ->
                                                     return (cs, t, app t (tApp x tvs) $ witsOf cs)
                                             NClass q _ _ -> do
@@ -990,6 +1012,7 @@ instance Infer Expr where
                                             NSig _ _ -> nameReserved n
                                             NReserved -> nameReserved n
                                             _ -> nameUnexpected n
+
     infer env e@(Int _ val s)           = do t <- newTVar
                                              w <- newWitness
                                              return ([Impl w t pNumber], t, eCall (eDot (eVar w) fromatomKW) [e])
@@ -1003,14 +1026,16 @@ instance Infer Expr where
     infer env e@(Ellipsis _)            = notYetExpr e
     infer env e@(Strings _ ss)          = return ([], tStr, e)
     infer env e@(BStrings _ ss)         = return ([], tBytes, e)
-    infer env (Call l e ps ks)          = do (cs1,t,e') <- infer env e
-                                             (cs2,prow,ps') <- infer env ps
-                                             (cs3,krow,ks') <- infer env ks
+    infer env (Call l e ps ks)          = do (cs1,t,e) <- infer env e
+--                                             (cs1,t,e) <- wrapped primEval env cs1 [t] [e]             -- DEACT!
+                                             (cs2,prow,ps) <- infer env ps
+                                             (cs3,krow,ks) <- infer env ks
                                              t0 <- newTVar
                                              fx <- currFX
                                              w <- newWitness
                                              return (Sub w t (tFun fx prow krow t0) :
-                                                     cs1++cs2++cs3, t0, Call l (eCall (eVar w) [e']) ps' ks')
+                                                     cs1++cs2++cs3, t0, Call l (eCall (eVar w) [e]) ps ks)
+
     infer env (TApp l e ts)             = internal l "Unexpected TApp in infer"
     infer env (Async l e)               = do (cs1,t,e') <- infer env e              -- TODO: expect an action returning t
                                              fx <- currFX

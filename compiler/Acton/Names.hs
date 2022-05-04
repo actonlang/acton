@@ -23,6 +23,8 @@ import Acton.Printer
 
 self                                = Name NoLoc "self"
 
+localName n                         = Derived n (name "local")
+
 deriveQ (NoQ n)                     = n
 deriveQ (QName (ModName m) n)       = deriveMod n m
 deriveQ (GName m n)

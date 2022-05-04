@@ -397,13 +397,13 @@ scMapFX             = tSchema [quant x1, quant x2, quant a, quant b, quant c] tM
 --  protocol $Wrapped[X]: pass
 proWrapped          = NProto [quant x] [] te
   where te          = [(primWrap,scWrap), (primExec,scExec), (primEval,scEval)]
-        scWrap      = NSig (tSchema q (tFun0 [tActor, abFun tX tC] (abFun tSelf' tC))) Static
-        scExec      = NSig (tSchema q (tFun0 [abFun tSelf' tC] (abFun tX tNone))) Static
-        scEval      = NSig (tSchema q (tFun0 [abFun tSelf' tC] (abFun tX tC))) Static
+        scWrap      = NSig (tSchema q (tFun0 [tActor, abFun tX tC] (abFun tSelf tC))) Static
+        scExec      = NSig (tSchema q (tFun0 [abFun tSelf tC] (abFun tX tNone))) Static
+        scEval      = NSig (tSchema q (tFun0 [abFun tSelf tC] (abFun tX tC))) Static
         abFun fx c  = tFun fx (tVar a) (tVar b) c
         tX          = tVar x
         tC          = tVar c
-        tSelf'      = tVar (TV KFX nSelf)
+        tSelf       = tVar fxSelf
         q           = [quant a, quant b, quant c]
         x           = TV KFX (name "X")
         a           = TV KType (name "A")

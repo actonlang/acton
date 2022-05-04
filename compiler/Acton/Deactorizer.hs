@@ -280,8 +280,6 @@ newactQName (GName m n)             = GName m (newactName n)
 
 newactName n                        = Derived n (name "newact")
 
-localName n                         = Derived n (name "local")
-
 tmpName                             = Internal DeactPass "tmp" 0
 
 addSelfPar p                        = PosPar selfKW (Just tSelf) Nothing p

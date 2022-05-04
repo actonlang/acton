@@ -322,6 +322,8 @@ tSelf           = TVar NoLoc tvSelf
 tvSelf          = TV KType nSelf
 nSelf           = Name NoLoc "Self"
 
+fxSelf          = TV KFX nSelf
+
 fxPure          = tTFX FXPure
 fxMut           = tTFX FXMut
 fxProc          = tTFX FXProc
