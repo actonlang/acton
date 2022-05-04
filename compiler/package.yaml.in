@@ -38,6 +38,7 @@ dependencies:
 - temporary
 - unix
 - dir-traverse
+- split
 
 executables:
   actonc:
