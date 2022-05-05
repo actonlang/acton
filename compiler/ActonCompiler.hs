@@ -126,7 +126,7 @@ main = do
     args <- execParser (info (getArgs (showVer cv) <**> helper) descr)
     cmdIsFile <- checkCmdIsFile (cmd args)
     if cmdIsFile
-      then compileFile args (cmd args)
+      then compileFiles args [(cmd args)]
       else
         case (cmd args) of
             "build" -> do
@@ -145,8 +145,7 @@ main = do
                   else do
                     allFiles <- getFilesRecursive (srcDir paths)
                     let srcFiles = catMaybes $ map filterActFile allFiles
-                    tasks <- mapM (readActFile args) srcFiles
-                    compileTasks args paths tasks
+                    compileFiles args srcFiles
             "dump" -> do
                 if null $ file args
                   then do
@@ -167,21 +166,12 @@ main = do
                 System.Exit.exitFailure
 
 
-readActFile :: Args -> String -> IO CompileTask
-readActFile args actFile = do
-    paths <- findPaths actFile args
-    src <- readFile actFile
-    m <- Acton.Parser.parseModule (modName paths) actFile src
-            `catch` handle "Syntax error" Acton.Parser.parserError "" paths (modName paths)
-            `catch` handle "Context error" Acton.Parser.contextError src paths (modName paths)
-            `catch` handle "Indentation error" Acton.Parser.indentationError src paths (modName paths)
-    iff (parse args) $ dump "parse" (Pretty.print m)
-    return $ ActonTask (modName paths) src m
-
-
-compileFile :: Args -> String -> IO ()
-compileFile args actFile = do
-    paths <- findPaths actFile args
+compileFiles :: Args -> [String] -> IO ()
+compileFiles args srcFiles = do
+    -- it is ok to get paths from just the first file here since at this point
+    -- we only care about project level path stuff and all source files are
+    -- known to be in the same project
+    paths <- findPaths (head srcFiles) args
     when (verbose args) $ do
         putStrLn ("## sysPath  : " ++ sysPath paths)
         putStrLn ("## sysTypes : " ++ sysTypes paths)
@@ -192,10 +182,21 @@ compileFile args actFile = do
         putStrLn ("## projLib  : " ++ projLib paths)
         putStrLn ("## binDir   : " ++ binDir paths)
         putStrLn ("## srcDir   : " ++ srcDir paths)
-        putStrLn ("## fileExt  : " ++ fileExt paths)
-        putStrLn ("## modName  : " ++ prstr (modName paths))
-    task <- readActFile args actFile
-    compileTasks args paths [task]
+        iff (length srcFiles == 1) (putStrLn ("## modName  : " ++ prstr (modName paths)))
+    tasks <- mapM (readActFile args) srcFiles
+    compileTasks args paths tasks
+
+
+readActFile :: Args -> String -> IO CompileTask
+readActFile args actFile = do
+    paths <- findPaths actFile args
+    src <- readFile actFile
+    m <- Acton.Parser.parseModule (modName paths) actFile src
+            `catch` handle "Syntax error" Acton.Parser.parserError "" paths (modName paths)
+            `catch` handle "Context error" Acton.Parser.contextError src paths (modName paths)
+            `catch` handle "Indentation error" Acton.Parser.indentationError src paths (modName paths)
+    iff (parse args) $ dump "parse" (Pretty.print m)
+    return $ ActonTask (modName paths) src m
 
 
 detectStubMode srcfile args = do
