@@ -146,7 +146,7 @@ main = do
                     allFiles <- getFilesRecursive (srcDir paths)
                     let srcFiles = catMaybes $ map filterActFile allFiles
                     tasks <- catMaybes <$> mapM (fileToTask args) srcFiles
-                    chaseImportsAndCompile args paths tasks
+                    compileTasks args paths tasks
             "dump" -> do
                 if null $ file args
                   then do
@@ -195,7 +195,7 @@ compileFile args actFile = do
             `catch` handle "Indentation error" Acton.Parser.indentationError src paths mn
     iff (parse args) $ dump "parse" (Pretty.print tree)
     let task = ActonTask mn src tree
-    chaseImportsAndCompile args paths [task]
+    compileTasks args paths [task]
 
 
 detectStubMode srcfile args = do
@@ -299,8 +299,8 @@ data BinTask            = BinTask { binName :: String, rootActor :: A.QName }
 importsOf :: CompileTask -> [A.ModName]
 importsOf t = A.importsOf (atree t)
 
-chaseImportsAndCompile :: Args -> Paths -> [CompileTask] -> IO ()
-chaseImportsAndCompile args paths tasks
+compileTasks :: Args -> Paths -> [CompileTask] -> IO ()
+compileTasks args paths tasks
                        = do tasks <- chaseImportedFiles paths tasks
                             let sccs = stronglyConnComp  [(t,name t,importsOf t) | t <- tasks]
                                 (as,cs) = Data.List.partition isAcyclic sccs
