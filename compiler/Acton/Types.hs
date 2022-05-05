@@ -232,7 +232,7 @@ instance (InfEnv a) => InfEnv [a] where
 
 instance InfEnv Stmt where
     infEnv env (Expr l (Call _ e p k))  = do (cs1,t,e) <- infer env e
-                                             (cs1,t,e) <- wrapped primExec env cs1 [t] [e]               -- DEACT!
+--                                             (cs1,t,e) <- wrapped primExec env cs1 [t] [e]               -- DEACT!
                                              (cs2,prow,p) <- infer env p
                                              (cs3,krow,k) <- infer env k
                                              t0 <- newTVar

@@ -114,10 +114,20 @@ instance Transform Expr where
         PosArg e1 (PosArg e2 _) <- p',
         TApp _ (Var _ n1) _ <- e1,
         n1 == primIdFX                  = e2
+      | TApp _ e0 _ <- e',
+        Dot _ (Var _ n) n1 <- e0,
+        isExecEval n n1,
+        PosArg e1 _ <- p'               = trace ("### Removing " ++ prstr e0 ++ " call") e1
+      | TApp _ e0 _ <- e',
+        Dot _ (Var _ n) n1 <- e0,
+        isWrap n n1,
+        PosArg _ (PosArg e2 _) <- p'    = trace ("### Removing " ++ prstr e0 ++ " call") e2
       | otherwise                       = Call l e' p' k'
       where e'                          = trans env e
             p'                          = trans env p
             k'                          = trans env k
+            isExecEval n n1             = n `elem` [primWrappedPure,primWrappedMut] && n1 `elem` [primExec,primEval]
+            isWrap n n1                 = n `elem` [primWrappedPure,primWrappedMut,primWrappedProc] && n1 == primWrap
     trans env (TApp l e ts)             = TApp l (trans env e) ts
     trans env (Async l e)               = Async l (trans env e)
     trans env (Await l e)               = Await l (trans env e)

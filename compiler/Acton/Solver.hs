@@ -331,6 +331,12 @@ reduce' env eq c@(Impl w t@(TCon _ tc) p)
   | not $ null $ filter univar $ tyfree t   = do defer [c]; return eq
   where witSearch                           = findWitness env t p
 
+reduce' env eq c@(Impl w t@(TFX _ tc) p)
+  | Just wit <- witSearch                   = do (eq',cs) <- solveImpl env wit w t p
+                                                 reduce env (eq'++eq) cs
+  | not $ null $ filter univar $ tyfree t   = do defer [c]; return eq
+  where witSearch                           = findWitness env t p
+
 reduce' env eq c@(Impl w t@(TOpt _ t') p)
   | tcname p == qnIdentity                  = do let e = eCall (tApp (eQVar primIdentityOpt) [t']) []
                                                  return (Eqn w (impl2type t p) e : eq)

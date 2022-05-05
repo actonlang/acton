@@ -88,14 +88,17 @@ tCont x t           = tCon $ TC primCont [x,posRow t posNil]
 primWrapped         = gPrim "Wrapped"
 pWrapped x          = TC primWrapped [x]
 
+primWrappedC        = gPrim "WrappedC"
+tWrapped s x        = tCon $ TC primWrappedC [s,x]
+
 primWrap            = primKW "wrap"
 primExec            = primKW "exec"
 primEval            = primKW "eval"
 
-primWrapProc        = gPrim "wWrapProc"
-primWrapAction      = gPrim "wWrapAction"
-primWrapMut         = gPrim "wWrapMut"
-primWrapPure        = gPrim "wWrapPure"
+primWrappedProc     = gPrim "wWrappedProc"
+primWrappedAction   = gPrim "wWrappedAction"
+primWrappedMut      = gPrim "wWrappedMut"
+primWrappedPure     = gPrim "wWrappedPure"
 
 primEnv             = [     (noq primASYNCf,        NDef scASYNCf NoDec),
                             (noq primAFTERf,        NDef scAFTERf NoDec),
@@ -151,7 +154,10 @@ primEnv             = [     (noq primASYNCf,        NDef scASYNCf NoDec),
                             (noq primIdFX,          NDef scIdFX NoDec),
                             (noq primMapFX,         NDef scMapFX NoDec),
                             
-                            (noq primWrapped,       proWrapped)
+                            (noq primWrapped,       proWrapped),
+                            (noq primWrappedC,      clWrapped),
+                            (noq primWrappedProc,   NVar $ tWrapped fxProc fxProc),
+                            (noq primWrappedAction, NVar $ tWrapped fxAction fxProc)
                       ]
 
 tSequenceListWild   = tCon (TC qnSequence [tList tWild, tWild])
@@ -410,10 +416,28 @@ proWrapped          = NProto [quant x] [] te
         b           = TV KType (name "B")
         c           = TV KType (name "C")
 
+--  class $WrappedC[S,X]: pass
+clWrapped           = NClass [quant s, quant x] [] te
+  where te          = [(primWrap,scWrap), (primExec,scExec), (primEval,scEval)]
+        scWrap      = NDef (tSchema q (tFun0 [tActor, abFun tX tC] (abFun tS tC))) NoDec
+        scExec      = NDef (tSchema q (tFun0 [abFun tS tC] (abFun tX tNone))) NoDec
+        scEval      = NDef (tSchema q (tFun0 [abFun tS tC] (abFun tX tC))) NoDec
+        abFun fx c  = tFun fx (tVar a) (tVar b) c
+        tS          = tVar s
+        tX          = tVar x
+        tC          = tVar c
+        q           = [quant a, quant b, quant c]
+        s           = TV KFX (name "S")
+        x           = TV KFX (name "X")
+        a           = TV KType (name "A")
+        b           = TV KType (name "B")
+        c           = TV KType (name "C")
 
-primWits            = [ WClass [] fxProc   (pWrapped fxProc) primWrapProc path,
-                        WClass [] fxAction (pWrapped fxProc) primWrapAction path,
-                        WClass [] fxMut    (pWrapped fxMut)  primWrapMut path,
-                        WClass [] fxPure   (pWrapped fxPure) primWrapPure path
+
+
+primWits            = [ WInst [] fxProc   (pWrapped fxProc) primWrappedProc path,
+                        WInst [] fxAction (pWrapped fxProc) primWrappedAction path,
+                        WInst [] fxMut    (pWrapped fxMut)  primWrappedMut path,
+                        WInst [] fxPure   (pWrapped fxPure) primWrappedPure path
                       ]
   where path        = [Left (noQ "_")]
