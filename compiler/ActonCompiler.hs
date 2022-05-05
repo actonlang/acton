@@ -145,7 +145,7 @@ main = do
                   else do
                     allFiles <- getFilesRecursive (srcDir paths)
                     let srcFiles = catMaybes $ map filterActFile allFiles
-                    tasks <- catMaybes <$> mapM (fileToTask args) srcFiles
+                    tasks <- mapM (readActFile args) srcFiles
                     compileTasks args paths tasks
             "dump" -> do
                 if null $ file args
@@ -165,11 +165,18 @@ main = do
             _       -> do
                 errorWithoutStackTrace("Unknown command: " ++ cmd args)
                 System.Exit.exitFailure
-  where fileToTask args actFile = do
-            paths <- findPaths actFile args
-            src <- readFile actFile
-            m <- Acton.Parser.parseModule (modName paths) actFile src
-            return $ Just $ ActonTask (modName paths) src m
+
+
+readActFile :: Args -> String -> IO CompileTask
+readActFile args actFile = do
+    paths <- findPaths actFile args
+    src <- readFile actFile
+    m <- Acton.Parser.parseModule (modName paths) actFile src
+            `catch` handle "Syntax error" Acton.Parser.parserError "" paths (modName paths)
+            `catch` handle "Context error" Acton.Parser.contextError src paths (modName paths)
+            `catch` handle "Indentation error" Acton.Parser.indentationError src paths (modName paths)
+    iff (parse args) $ dump "parse" (Pretty.print m)
+    return $ ActonTask (modName paths) src m
 
 
 compileFile :: Args -> String -> IO ()
@@ -187,14 +194,7 @@ compileFile args actFile = do
         putStrLn ("## srcDir   : " ++ srcDir paths)
         putStrLn ("## fileExt  : " ++ fileExt paths)
         putStrLn ("## modName  : " ++ prstr (modName paths))
-    let mn = modName paths
-    src <- readFile actFile
-    tree <- Acton.Parser.parseModule mn actFile src
-            `catch` handle "Syntax error" Acton.Parser.parserError "" paths mn
-            `catch` handle "Context error" Acton.Parser.contextError src paths mn
-            `catch` handle "Indentation error" Acton.Parser.indentationError src paths mn
-    iff (parse args) $ dump "parse" (Pretty.print tree)
-    let task = ActonTask mn src tree
+    task <- readActFile args actFile
     compileTasks args paths [task]
 
 
@@ -301,7 +301,7 @@ importsOf t = A.importsOf (atree t)
 
 compileTasks :: Args -> Paths -> [CompileTask] -> IO ()
 compileTasks args paths tasks
-                       = do tasks <- chaseImportedFiles paths tasks
+                       = do tasks <- chaseImportedFiles args paths tasks
                             let sccs = stronglyConnComp  [(t,name t,importsOf t) | t <- tasks]
                                 (as,cs) = Data.List.partition isAcyclic sccs
                             -- show modules to compile and in which order
@@ -327,8 +327,8 @@ compileTasks args paths tasks
         binTasks                 = [binTask]
 
 
-chaseImportedFiles :: Paths -> [CompileTask] -> IO [CompileTask]
-chaseImportedFiles paths itasks
+chaseImportedFiles :: Args -> Paths -> [CompileTask] -> IO [CompileTask]
+chaseImportedFiles args paths itasks
                             = do
                                  let itasks_imps = concatMap importsOf itasks
                                  newtasks <- catMaybes <$> mapM (readAFile itasks) itasks_imps
@@ -336,15 +336,13 @@ chaseImportedFiles paths itasks
 
   where readAFile tasks mn  = case lookUp mn tasks of    -- read and parse file mn in the project directory, unless it is already in tasks 
                                  Just t -> return Nothing
-                                 Nothing -> do let actFile = srcFile paths mn 
+                                 Nothing -> do let actFile = srcFile paths mn
                                                ok <- System.Directory.doesFileExist actFile
                                                if ok then do
-                                                   src <- readFile actFile
-                                                   m <- Acton.Parser.parseModule mn actFile src
-                                                   return $ Just $ ActonTask mn src m
-                                                else
-                                                   return Nothing
-  
+                                                   task <- readActFile args actFile
+                                                   return $ Just task
+                                                 else return Nothing
+
         lookUp mn (t : ts)
           | name t == mn     = Just t
           | otherwise        = lookUp mn ts
