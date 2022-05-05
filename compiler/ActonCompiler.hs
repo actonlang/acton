@@ -196,7 +196,8 @@ readActFile args actFile = do
             `catch` handle "Context error" Acton.Parser.contextError src paths (modName paths)
             `catch` handle "Indentation error" Acton.Parser.indentationError src paths (modName paths)
     iff (parse args) $ dump "parse" (Pretty.print m)
-    return $ ActonTask (modName paths) src m
+    stubMode <- detectStubMode actFile args
+    return $ ActonTask (modName paths) src m stubMode
 
 
 detectStubMode srcfile args = do
@@ -294,7 +295,7 @@ findPaths actFile args  = do execDir <- takeDirectory <$> System.Environment.get
 --                                    when (take 1 ds /= ["src"]) $ error ("************* Project source file is not in 'src' directory")
                                     return $ (False, False, pre, drop 1 ds)
 
-data CompileTask        = ActonTask  {name :: A.ModName, src :: String, atree:: A.Module} deriving (Show)
+data CompileTask        = ActonTask { name :: A.ModName, src :: String, atree:: A.Module, stubmode :: Bool } deriving (Show)
 data BinTask            = BinTask { binName :: String, rootActor :: A.QName }
 
 importsOf :: CompileTask -> [A.ModName]
@@ -361,16 +362,15 @@ chaseImportedFiles args paths itasks
 
 
 doTask :: Args -> Paths -> Acton.Env.Env0 -> CompileTask -> IO Acton.Env.Env0
-doTask args paths env t@(ActonTask mn src m)
-                            = do stubMode <- detectStubMode actFile args
-                                 let outfiles = [hFile] ++ if stubMode then [] else [oFile]
+doTask args paths env t@(ActonTask mn src m stubMode)
+                            = do let outfiles = [hFile] ++ if stubMode then [] else [oFile]
                                  ok <- checkUptoDate paths actFile tyFile outfiles (importsOf t)
                                  if ok && mn /= modName paths then do
                                           iff (verbose args) (putStrLn ("Skipping  "++ actFile ++ " (files are up to date)."))
                                           return env
                                   else do createDirectoryIfMissing True (getModPath (projTypes paths) mn)
                                           iff (verbose args) (putStrLn ("Compiling "++ actFile ++ "... ") >> hFlush stdout)
-                                          (env',te) <- runRestPasses args paths env m
+                                          (env',te) <- runRestPasses args paths env m stubMode
                                                            `catch` handle "Compilation error" generalError src paths mn
                                                            `catch` handle "Compilation error" Acton.Env.compilationError src paths mn
                                                            `catch` handle "Type error" Acton.Types.typeError src paths mn
@@ -407,11 +407,10 @@ printIce errMsg = do ccVer <- getCcVer
                         "\nNOTE: cc: " ++ ccVer
                         )
 
-runRestPasses :: Args -> Paths -> Acton.Env.Env0 -> A.Module -> IO (Acton.Env.Env0, Acton.Env.TEnv)
-runRestPasses args paths env0 parsed = do
+runRestPasses :: Args -> Paths -> Acton.Env.Env0 -> A.Module -> Bool -> IO (Acton.Env.Env0, Acton.Env.TEnv)
+runRestPasses args paths env0 parsed stubMode = do
                       let outbase = outBase paths (A.modname parsed)
                       let actFile = srcBase paths (A.modname parsed) ++ ".act"
-                      stubMode <- detectStubMode actFile args
                       envTmp <- Acton.Env.mkEnv (sysTypes paths) (projTypes paths) env0 parsed
                       let env = envTmp { Acton.Env.stub = stubMode }
 
