@@ -294,6 +294,7 @@ rts: $(ARCHIVES)
 
 .PHONY: test
 test:
+	cd compiler && stack test
 	$(MAKE) -C backend test
 	$(MAKE) -C test
 
