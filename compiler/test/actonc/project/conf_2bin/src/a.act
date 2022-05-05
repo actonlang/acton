@@ -1,0 +1,3 @@
+actor main(env):
+    print("a")
+    await async env.exit(0)
