@@ -184,7 +184,13 @@ compileFiles args srcFiles = do
         putStrLn ("## srcDir   : " ++ srcDir paths)
         iff (length srcFiles == 1) (putStrLn ("## modName  : " ++ prstr (modName paths)))
     tasks <- mapM (readActFile args) srcFiles
-    compileTasks args paths tasks
+    -- figure out binTasks, currently just based on --root
+    let rootParts = splitOn "." (root args)
+        rootMod   = init rootParts
+        guessMod  = if length rootParts == 1 then modName paths else A.modName rootMod
+        binTask   = BinTask (prstr guessMod) (A.GName guessMod (A.name $ last rootParts))
+        binTasks  = [binTask]
+    compileTasks args paths tasks binTasks
 
 
 readActFile :: Args -> String -> IO CompileTask
@@ -301,8 +307,8 @@ data BinTask            = BinTask { binName :: String, rootActor :: A.QName }
 importsOf :: CompileTask -> [A.ModName]
 importsOf t = A.importsOf (atree t)
 
-compileTasks :: Args -> Paths -> [CompileTask] -> IO ()
-compileTasks args paths tasks
+compileTasks :: Args -> Paths -> [CompileTask] -> [BinTask] -> IO ()
+compileTasks args paths tasks binTasks
                        = do tasks <- chaseImportedFiles args paths tasks
                             let sccs = stronglyConnComp  [(t,name t,importsOf t) | t <- tasks]
                                 (as,cs) = Data.List.partition isAcyclic sccs
@@ -321,12 +327,6 @@ compileTasks args paths tasks
   where isAcyclic (AcyclicSCC _) = True
         isAcyclic _              = False
         showTaskGraph ts         = "\n"++concatMap (\t-> concat (intersperse "." (A.modPath (name t)))++" ") ts
-        rootParts                = splitOn "." (root args)
-        rootMod                  = init rootParts
-        -- for unqualified root name, assume first source file module
-        guessMod                 = if length rootParts == 1 then name $ head tasks else A.modName rootMod
-        binTask                  = BinTask (prstr guessMod) (A.GName guessMod (A.name $ last rootParts))
-        binTasks                 = [binTask]
 
 
 chaseImportedFiles :: Args -> Paths -> [CompileTask] -> IO [CompileTask]
