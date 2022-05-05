@@ -1037,10 +1037,14 @@ instance Infer Expr where
                                                      cs1++cs2++cs3, t0, Call l (eCall (eVar w) [e]) ps ks)
 
     infer env (TApp l e ts)             = internal l "Unexpected TApp in infer"
-    infer env (Async l e)               = do (cs1,t,e') <- infer env e              -- TODO: expect an action returning t
-                                             fx <- currFX
-                                             return (Cast fxProc fx :
-                                                     cs1, tMsg t, Async l e')       -- TODO: produce a proc returning Msg[t]
+    infer env (Async l e)               = do (cs,t,e) <- infer env e                        -- expect an action returning t'
+                                             prow <- newTVarOfKind PRow
+                                             krow <- newTVarOfKind KRow
+                                             t' <- newTVar
+                                             let tf fx = tFun fx prow krow
+--                                             return (Cast t (tf fxAction t') :            -- DEACT!
+                                             return (Cast t (tf fxProc t') :
+                                                     cs, tf fxProc (tMsg t'), Async l e)    -- produce a proc returning Msg[t']
     infer env (Await l e)               = do t0 <- newTVar
                                              (cs1,e') <- inferSub env (tMsg t0) e
                                              fx <- currFX

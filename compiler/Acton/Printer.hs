@@ -131,7 +131,6 @@ instance Pretty (PosArg,KwdArg) where
     pretty (ps, KwdNil)             = pretty ps
     pretty (ps, ks)                 = pretty ps  <> comma <+> pretty ks
 
-atomic Async{}                      = False
 atomic Await{}                      = False
 atomic Cond{}                       = False
 atomic BinOp{}                      = False
@@ -157,7 +156,7 @@ instance Pretty Expr where
         | atomic e                  = pretty e <> parens (pretty (ps,ks))
         | otherwise                 = parens (pretty e) <> parens (pretty (ps,ks))
     pretty (TApp _ e ts)            = pretty e <> text "@" <> brackets (commaSep pretty ts)
-    pretty (Async _ e)              = text "async" <+> pretty e
+    pretty (Async _ e)              = parens (text "async" <+> pretty e)
     pretty (Await _ e)              = text "await" <+> pretty e
     pretty (Index _ e ix)           = pretty e <> brackets (pretty ix)
     pretty (Slice _ e sl)           = pretty e <> brackets (pretty sl)

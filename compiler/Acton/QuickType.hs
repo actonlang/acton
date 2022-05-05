@@ -128,7 +128,8 @@ instance QType Expr where
       where (t, e')                 = qType env f e
             (p, ps')                = qType env f ps
             (k, ks')                = qType env f ks
-    qType env f (Async l e)         = (tMsg t, Async l e')
+    qType env f (Async l e)         = case t of
+                                        TFun _ fx p k t' -> (tFun fxProc p k (tMsg t'), Async l e')
       where (t, e')                 = qType env f e
     qType env f (Await l e)         = case t of
                                         TCon _ (TC c [t]) | c == qnMsg -> (t, Await l e')
