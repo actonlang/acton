@@ -374,7 +374,6 @@ doTask args paths env t@(ActonTask mn src m stubMode)
                                                            `catch` handle "Compilation error" generalError src paths mn
                                                            `catch` handle "Compilation error" Acton.Env.compilationError src paths mn
                                                            `catch` handle "Type error" Acton.Types.typeError src paths mn
-                                          iff (verbose args) (putStrLn "Done.")
                                           return (Acton.Env.addMod mn te env')
   where actFile             = srcFile paths mn
         outbase             = outBase paths mn
