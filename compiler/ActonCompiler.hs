@@ -318,8 +318,6 @@ compileTasks args paths tasks binTasks
                              then do env0 <- Acton.Env.initEnv (sysTypes paths) (modName paths == Acton.Builtin.mBuiltin)
                                      env1 <- foldM (doTask args paths) env0 [t | AcyclicSCC t <- as]
                                      mapM (buildExecutable env1 args paths) binTasks
-                                         `catch` handle "Compilation error" Acton.Env.compilationError (src $ head tasks) paths (name $ head tasks)
-                                         `catch` handle "Type error" Acton.Types.typeError (src $ head tasks) paths (name $ head tasks)
                                      when (rmTmp paths) $ removeDirectoryRecursive (projPath paths)
                                      return ()
                               else do error ("********************\nCyclic imports:"++concatMap showTaskGraph cs)
