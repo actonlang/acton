@@ -1,0 +1,3 @@
+def e_print():
+    print("e")
+
