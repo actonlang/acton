@@ -6,6 +6,95 @@
 ## [0.10.0] (2022-02-25)
 
 ### Added
+- Improve DB schema creation messages [#586]
+  - Messages contained "test", which is misleading. The DB server creates the
+    schemas, i.e. the schema is hard-coded. This is per design and a
+    simplification (no need for schema management RPCs) as the DB and RTS are
+    tightly coupled anyway.
+- RTS has improved logging, including timestamps, log levels etc. Also supports
+  file output [#584]
+  - Log output is sent to stderr
+  - RTS worker thread id is included so it is now easier to follow what a
+    particular thread is doing.
+  - stderr output has millisecond time resolution
+  - file output (--rts-log-path) has nanosecond precision
+- ActonDB has improved logging, including timestamps, log levels etc and
+  supports file output [#588]
+  - supports logging to file with --log-file
+  - similar implementation as RTS (based on same log.c library but modified)
+- actonc automatically detects stub mode compilation based on presence of .c
+  file [#601] [#624]
+- stdlib time module (written in C) has been moved to _time & new time module
+  written in Acton wraps all current functions in _time [#599]
+  - Preparatory move for adding more functionality to the time module
+  - The idea is to use leading _ for modules implemented in C. They should be
+    small, i.e. wrap C syscalls etc as tightly as possible and additional data
+    wrangling to be done in Acton.
+- actonc is now aware of development / release profile [#599] [#612]
+  - output placed in correct location, i.e. out/rel or out/dev
+- actonc now supports custom compilation of modules via Makefile [#602]
+  - if a module is to be stub compiled (i.e. there is a .act file with a
+    corresponding .c file) then if there is also a Makefile in the project root,
+    actonc will run make for the corresponding target, e.g. `make out/rel/foo.o`
+- actonc now has concept of commands [#608]
+  - like `actonc build` which will build an Acton project
+- stdlib is now compiled from actonc as a Acton project [#599]
+- `__builtin__.act` has been moved from stdlib to `builtin/ty`, which is also an
+  Acton project [#623]
+  - `__builtin__.act` really is special, like it's an implicit dependency for
+    everything else, and trying to add extra logic to get it to build first when
+    building the stdlib project doesn't make sense; it's now special rules in
+    the Acton Makefile
+- actonc --root argument now takes a qualified name, like <module>.<actor>
+  [#628]
+  - this is required to build an executable in a project with:
+    `actonc build --root test.main`
+
+### Changed
+- RTS log output is now sent to stderr rather than stdout
+
+### Fixed
+- Exceptions during build of executables no longer deletes produced .ty files [#629]
+- Fixed DB server & client issues leading to segfaults [#559]
+  - Pass skiplist keys by reference
+  - Fix duplicate nonces in msg_callbacks skiplist
+  - Extend lock protection over msg_callbacks
+- DB client no longer asserts & exits on perror [#574]
+  - Now handles more errors rather than bailing out
+- Properly initialize fd_data entries [#571]
+  - Sometimes a slot wasn't properly initialized, which would lead to incorrect
+    behavior
+- RTS now cleans up and closes fd on EOF [#570]
+- RTS fd array is now 1024 slots long [#570]
+  - Used to be 100, which means we can address up to 100 fds. Default fd limit
+    on most Linuxes is 1024, so we align on that. The proper fix is to have a
+    dynamic structure for fd or set it to the same value as the limit (but
+    that's bad for large values).
+- RTS uses sigaction instead of signal, which should tighten up some edge cases
+  [#587]
+- Do not print log message on new connection in RTS / env [#607]
+- Correct Debian package dependencies [#625]
+  - We used the wrong dependencies, shared libraries, when we should have the
+    development libraries available, since we are not a "normal" application but
+    a compiler, so when we in turn build programs we want to link them as
+    statically as possible (sort of, not including libc but most other things)
+  - Now installing the .deb file will pull in all the correct dependencies on
+    Debian 11 / bullseye and Ubuntu 20.04
+
+### Testing / CI
+- Tasty (Haskell test library & runner) is now used for testing actonc. Some
+  tests have been migrated from test/Makefile to compiler/test.hs [#631]
+  - Tasty offers different style testing; unit, golden, property etc, with
+    flexible runners that can execute tests in paralell. Has nice, compact and
+    colorized output in the terminal and can output to richer formats as well as
+    run benchmarking tests. We should use it for a lot more testing!
+- TCP servers stress test for opening & closing fds in RTS [#570]
+- actonc build of projects have some test cases [#623] [#625]
+
+
+## [0.10.0] (2022-02-25)
+
+### Added
 - actors now have a `__resume__` function that is called by the RTS just after
   actors have been deserialized from the database [#517]
   - This is effectively a generic hook point that can be used by certain actor
@@ -934,6 +1023,26 @@ then, this second incarnation has been in focus and 0.2.0 was its first version.
 [#538]: https://github.com/actonlang/acton/pull/538
 [#542]: https://github.com/actonlang/acton/pull/542
 [#546]: https://github.com/actonlang/acton/pull/546
+[#559]: https://github.com/actonlang/acton/pull/559
+[#570]: https://github.com/actonlang/acton/pull/570
+[#571]: https://github.com/actonlang/acton/pull/571
+[#574]: https://github.com/actonlang/acton/pull/574
+[#584]: https://github.com/actonlang/acton/pull/584
+[#586]: https://github.com/actonlang/acton/pull/586
+[#587]: https://github.com/actonlang/acton/pull/587
+[#588]: https://github.com/actonlang/acton/pull/588
+[#599]: https://github.com/actonlang/acton/pull/599
+[#601]: https://github.com/actonlang/acton/pull/601
+[#602]: https://github.com/actonlang/acton/pull/602
+[#607]: https://github.com/actonlang/acton/pull/607
+[#608]: https://github.com/actonlang/acton/pull/608
+[#612]: https://github.com/actonlang/acton/pull/612
+[#623]: https://github.com/actonlang/acton/pull/623
+[#624]: https://github.com/actonlang/acton/pull/624
+[#625]: https://github.com/actonlang/acton/pull/625
+[#628]: https://github.com/actonlang/acton/pull/628
+[#629]: https://github.com/actonlang/acton/pull/629
+[#631]: https://github.com/actonlang/acton/pull/631
 [0.3.0]: https://github.com/actonlang/acton/releases/tag/v0.3.0
 [0.4.0]: https://github.com/actonlang/acton/compare/v0.3.0...v0.4.0
 [0.4.1]: https://github.com/actonlang/acton/compare/v0.4.0...v0.4.1
@@ -953,6 +1062,9 @@ then, this second incarnation has been in focus and 0.2.0 was its first version.
 [0.7.3]: https://github.com/actonlang/acton/compare/v0.7.2...v0.7.3
 [0.7.4]: https://github.com/actonlang/acton/compare/v0.7.3...v0.7.4
 [0.8.0]: https://github.com/actonlang/acton/compare/v0.7.4...v0.8.0
+[0.9.0]: https://github.com/actonlang/acton/compare/v0.8.0...v0.9.0
+[0.10.0]: https://github.com/actonlang/acton/compare/v0.9.0...v0.10.0
+[0.11.0]: https://github.com/actonlang/acton/compare/v0.10.0...v0.11.0
 
 [homebrew-acton#7]: https://github.com/actonlang/homebrew-acton/pull/7
 [homebrew-acton#28]: https://github.com/actonlang/homebrew-acton/pull/28
