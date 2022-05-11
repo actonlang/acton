@@ -10,6 +10,7 @@
 #include "cells.h"
 #include "../db.h"
 #include "../txns.h"
+#include "fd.h"
 #include <uuid/uuid.h>
 
 #define RPC_TYPE_WRITE 0
@@ -21,6 +22,8 @@
 #define RPC_TYPE_RANGE_READ_RESPONSE 6
 #define RPC_TYPE_QUEUE 7
 #define RPC_TYPE_TXN 8
+#define RPC_TYPE_GOSSIP 9
+#define RPC_TYPE_GOSSIP_LISTEN 10
 
 #define DB_TXN_BEGIN 0
 #define DB_TXN_VALIDATION 1
@@ -225,5 +228,18 @@ int serialize_txn_message(txn_message * ca, void ** buf, unsigned * len, short f
 int deserialize_txn_message(void * buf, unsigned msg_len, txn_message ** ca);
 char * to_string_txn_message(txn_message * ca, char * msg_buff);
 int equals_txn_message(txn_message * ca1, txn_message * ca2);
+
+typedef struct gossip_listen_message
+{
+	node_description * node_description;
+	int64_t nonce;
+} gossip_listen_message;
+
+gossip_listen_message * build_gossip_listen_msg(node_description * nd, int64_t nonce);
+void free_gossip_listen_msg(gossip_listen_message * gs);
+int serialize_gossip_listen_msg(gossip_listen_message * gs, void ** buf, unsigned * len);
+int deserialize_gossip_listen_msg(void * buf, unsigned msg_len, gossip_listen_message ** gl);
+int equals_gossip_listen_msg(gossip_listen_message * gs1, gossip_listen_message * gs2);
+char * to_string_gossip_listen_msg(gossip_listen_message * gs, char * msg_buff);
 
 #endif /* BACKEND_FAILURE_DETECTOR_DB_QUERIES_H_ */

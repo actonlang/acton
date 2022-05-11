@@ -1908,7 +1908,7 @@ int main(int argc, char **argv) {
     if (ddb_host) {
         GET_RANDSEED(&seed, 0);
         log_info("Using distributed database backend replication factor of %d\n", ddb_replication);
-        db = get_remote_db(ddb_replication);
+        db = get_remote_db(ddb_replication, 0, 0, "localhost", 0);
         for (int i=0; i<ddb_no_host; i++) {
             char *host = strdup(ddb_host[i]);
 
@@ -1922,6 +1922,7 @@ int main(int argc, char **argv) {
             log_info("Using distributed database backend (DDB): %s:%d\n", host, port);
             add_server_to_membership(host, port, db, &seed);
         }
+        listen_to_gossip(NODE_LIVE, 0, 0, "localhost", 11111, db);
     }
 
     if (db) {

@@ -9,6 +9,7 @@
 
 #include "db.h"
 #include "failure_detector/db_queries.h"
+#include "failure_detector/fd.h"
 #include "fastrand.h"
 #include "comm.h"
 
@@ -153,9 +154,26 @@ typedef struct remote_db {
 
     pthread_mutex_t* lc_lock;
 	vector_clock * my_lc;
+
+	vector_clock * current_view_id;
+	pthread_mutex_t * gossip_lock;
+	pthread_cond_t * gossip_signal;
 } remote_db_t;
 
-remote_db_t * get_remote_db(int replication_factor);
+typedef struct gossip_callback_args
+{
+	membership_state * membership;
+	int status;
+} gossip_callback_args;
+
+typedef struct gossip_callback
+{
+	void (*callback)(gossip_callback_args *);
+	pthread_mutex_t * lock;
+	pthread_cond_t * signal;
+} gossip_callback;
+
+remote_db_t * get_remote_db(int replication_factor, int rack_id, int dc_id, char * hostname, unsigned short local_rts_id);
 int add_server_to_membership(char *hostname, int portno, remote_db_t * db, unsigned int * seedptr);
 msg_callback * add_msg_callback(int64_t nonce, void (*callback)(void *), remote_db_t * db);
 int delete_msg_callback(int64_t nonce, remote_db_t * db);
@@ -247,5 +265,13 @@ txn_state * get_client_txn_state(uuid_t txnid, remote_db_t * db);
 uuid_t * new_client_txn(remote_db_t * db, unsigned int * seedptr);
 int close_client_txn(uuid_t txnid, remote_db_t * db);
 
+// Gossip listener:
+
+gossip_callback_args * get_gossip_callback_args(membership_state * ms, int status);
+void free_gossip_callback_args(gossip_callback_args * qca);
+gossip_callback * get_gossip_callback(void (*callback)(gossip_callback_args *));
+int wait_on_gossip_callback(gossip_callback *);
+void free_gossip_callback(gossip_callback * qc);
+int listen_to_gossip(int status, int rack_id, int dc_id, char * hostname, unsigned short local_rts_id, remote_db_t * db);
 
 #endif /* BACKEND_CLIENT_API_H_ */

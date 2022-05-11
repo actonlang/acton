@@ -30,6 +30,7 @@ int copy_node_description(node_description * nd, int status, int node_id, int ra
 void free_node_description(node_description * vc);
 int equals_node_description(node_description * nd1, node_description * nd2);
 char * to_string_node_description(node_description * nd, char * msg_buff);
+void init_ns_msg_from_description(NodeStateMessage * ns_msg, node_description * nd);
 
 /* Gossip state: */
 
@@ -52,10 +53,12 @@ typedef struct membership_state
 {
 	int no_nodes;
 	node_description * membership;
+	int no_client_nodes;
+	node_description * client_membership;
 	vector_clock * view_id;
 } membership_state;
 
-membership_state * init_membership_state(int no_nodes, node_description * membership, vector_clock * view_id);
+membership_state * init_membership_state(int no_nodes, node_description * membership, int no_client_nodes, node_description * client_membership, vector_clock * view_id);
 void free_membership_state(membership_state * vc);
 int serialize_membership_state(membership_state * gs, void ** buf, unsigned * len);
 int deserialize_membership_state(void * buf, unsigned msg_len, membership_state ** gs);

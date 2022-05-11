@@ -35,9 +35,15 @@ message GossipMessage {
  	required VectorClockMessage vc=2;
 }
 
+message GossipListenMessage {
+	required NodeStateMessage node_state=1;
+	required int64 nonce=2;
+}
+
 message MembershipViewMessage {
  	repeated NodeStateMessage membership=1; 
- 	required VectorClockMessage view_id=2;
+ 	repeated NodeStateMessage client_membership=2; 
+ 	required VectorClockMessage view_id=3;
 }
 
 message MembershipAgreementMessage {
@@ -74,15 +80,16 @@ message VersionedCellMessage {
 // DB queries:
 
 message ServerMessage {
-	required int32 mtype=1; // {RPC_TYPE_WRITE, RPC_TYPE_READ, RPC_TYPE_RANGE_READ, RPC_TYPE_QUEUE, RPC_TYPE_TXN}
+	required int32 mtype=1; // {RPC_TYPE_WRITE, RPC_TYPE_READ, RPC_TYPE_RANGE_READ, RPC_TYPE_QUEUE, RPC_TYPE_TXN, RPC_TYPE_GOSSIP_LISTEN}
 	
 	optional WriteQueryMessage wm=2;
 	optional ReadQueryMessage rm=3;
 	optional RangeReadQueryMessage rrm=4;
 	optional QueueQueryMessage qm=5;
 	optional TxnMessage tm=6;
+	optional GossipListenMessage gl=7;
 	
-	optional VectorClockMessage vc=7;
+	optional VectorClockMessage vc=8;
 }
 
 message ClientMessage {

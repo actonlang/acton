@@ -260,6 +260,16 @@ int parse_message(void * rcv_buf, size_t rcv_msg_len, void ** out_msg, short * o
 					*nonce = wq->nonce;
 					return 0;
 				}
+				case RPC_TYPE_GOSSIP_LISTEN:
+				{
+					gossip_listen_message * wq = (gossip_listen_message *) *(out_msg);
+#if (VERBOSE_RPC > 0)
+					to_string_gossip_listen_msg(wq, (char *) print_buff);
+					log_debug("Received gossip listen message: %s\n", print_buff);
+#endif
+					*nonce = wq->nonce;
+					return 0;
+				}
 				default:
 				{
 					assert(0);
@@ -457,11 +467,14 @@ int sockaddr_cmp(WORD a1, WORD a2)
 
 // Remote server struct fctns:
 
-remote_server * get_remote_server(char *hostname, unsigned short portno, struct sockaddr_in serveraddr, int serverfd, int do_connect)
+remote_server * get_remote_server(char *hostname, unsigned short portno,
+		struct sockaddr_in serveraddr, struct sockaddr_in client_socket_addr,
+		int serverfd, int do_connect)
 {
 	remote_server * rs = (remote_server *) malloc(sizeof(remote_server));
     bzero(rs, sizeof(remote_server));
     rs->status = NODE_UNKNOWN;
+    memcpy(&(rs->client_socket_addr), &client_socket_addr, sizeof(struct sockaddr_in));
 
     if(serverfd > 0 || serverfd == -1) // For own node (-1), use provided serveraddr
     {

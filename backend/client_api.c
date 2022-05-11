@@ -120,10 +120,10 @@ int queue_callback_cmp(WORD e1, WORD e2)
 
 void * comm_thread_loop(void * args);
 
-remote_db_t * get_remote_db(int replication_factor)
+remote_db_t * get_remote_db(int replication_factor, int rack_id, int dc_id, char * hostname, unsigned short local_rts_id)
 {
-	remote_db_t * db = (remote_db_t *) malloc(sizeof(remote_db_t) + 4 * sizeof(pthread_mutex_t));
-	memset(db, 0, sizeof(remote_db_t) + 4 * sizeof(pthread_mutex_t));
+	remote_db_t * db = (remote_db_t *) malloc(sizeof(remote_db_t) + 5 * sizeof(pthread_mutex_t) + sizeof(pthread_cond_t));
+	memset(db, 0, sizeof(remote_db_t) + 5 * sizeof(pthread_mutex_t) + sizeof(pthread_cond_t));
 
 	db->servers = create_skiplist(&sockaddr_cmp);
 	db->txn_state = create_skiplist_uuid();
@@ -137,6 +137,10 @@ remote_db_t * get_remote_db(int replication_factor)
 	pthread_mutex_init(db->lc_lock, NULL);
 	db->txn_state_lock = (pthread_mutex_t*) ((char*) db + sizeof(remote_db_t) + 3 * sizeof(pthread_mutex_t));
 	pthread_mutex_init(db->txn_state_lock, NULL);
+	db->gossip_lock = (pthread_mutex_t*) ((char*) db + sizeof(remote_db_t) + 4 * sizeof(pthread_mutex_t));
+	pthread_mutex_init(db->gossip_lock, NULL);
+	db->gossip_signal = (pthread_cond_t*) ((char*) db + sizeof(remote_db_t) + 5 * sizeof(pthread_mutex_t));
+	pthread_cond_init(db->gossip_signal, NULL);
 
 	db->replication_factor = replication_factor;
 	db->quorum_size = (int) (replication_factor / 2) + 1;
@@ -148,6 +152,10 @@ remote_db_t * get_remote_db(int replication_factor)
 	assert(pthread_create(&(db->comm_thread), NULL, comm_thread_loop, db) == 0);
 
 	db->my_lc = init_empty_vc();
+	db->current_view_id = NULL;
+
+	// TO DO: get rack_id, dc_id, hostname local_rts_id from conf object
+	int status = listen_to_gossip(NODE_LIVE, rack_id, dc_id, hostname, local_rts_id, db);
 
 	return db;
 }
@@ -166,6 +174,100 @@ int handle_socket_close(int * childfd)
 	*childfd = 0;
 
 	return 0;
+}
+
+int install_gossiped_view(membership_agreement_msg * ma, remote_db_t * db, unsigned int * fastrandstate)
+{
+#if (VERBOSE_RPC > -1)
+	char msg_buf[1024];
+#endif
+
+	pthread_mutex_lock(db->gossip_lock);
+
+	if(compare_vc(db->current_view_id, ma->vc) > 0)
+	{
+#if (VERBOSE_RPC > -1)
+		fprintf(stderr, "SERVER: Skipping installing notified view %s because it is older than my installed view %s!\n",
+							to_string_vc(ma->vc, msg_buf), to_string_vc(db->current_view_id, msg_buf));
+#endif
+
+		pthread_mutex_unlock(db->gossip_lock);
+
+		return 1;
+	}
+
+	// If servers are already connected in local membership, copy their entries from there into agreed membership. Otherwise create new connections for them:
+
+	skiplist_t * new_membership = create_skiplist(&sockaddr_cmp);
+
+	int local_view_disagrees = 0;
+	struct sockaddr_in dummy_serveraddr;
+
+	for(int i=0;i<ma->membership->no_nodes;i++)
+	{
+		node_description nd = ma->membership->membership[i];
+
+		remote_server * rs = get_remote_server(nd.hostname, nd.portno, dummy_serveraddr, dummy_serveraddr, -2, 0); // 1
+		rs->status = nd.status;
+
+		snode_t * node = skiplist_search(db->servers, &rs->serveraddr);
+
+		if(node == NULL) // I just learned about this node
+		{
+			int status = connect_remote_server(rs);
+
+			if(status != 0)
+			{
+				rs->sockfd = 0;
+				rs->status = NODE_DEAD;
+				local_view_disagrees = 1;
+			}
+
+		    status = skiplist_insert(db->servers, &rs->serveraddr, rs, fastrandstate);
+			assert(status == 0);
+
+			status = skiplist_insert(new_membership, &rs->serveraddr, rs, fastrandstate);
+			assert(status == 0);
+		}
+		else
+		{
+			free_remote_server(rs);
+
+			remote_server * rs_local = (remote_server *) node->value;
+
+			if(rs_local->status == NODE_UNKNOWN)
+			{
+				rs_local->status = nd.status;
+			}
+			else if(rs_local->status != nd.status) // if proposed server status is different than local one, use proposed status
+			{
+				rs_local->status = nd.status;
+			}
+
+			int status = skiplist_insert(new_membership, &rs_local->serveraddr, rs_local, fastrandstate);
+			assert(status == 0);
+		}
+	}
+
+	if(db->servers != NULL)
+	{
+		skiplist_free(db->servers);
+//		skiplist_free_val(m->agreed_peers, &free_remote_server_ptr);
+	}
+
+	db->servers = new_membership;
+
+	update_or_replace_vc(&(db->current_view_id), ma->vc);
+
+	pthread_mutex_unlock(db->gossip_lock);
+
+#if (VERBOSE_RPC > -1)
+	printf("SERVER: Installed new agreed view %s, local_view_disagrees=%d\n",
+					to_string_membership_agreement_msg(ma, msg_buf),
+					local_view_disagrees);
+#endif
+
+	return local_view_disagrees;
 }
 
 void comm_wake_up(remote_db_t *db) {
@@ -326,11 +428,9 @@ void * comm_thread_loop(void * args)
 			    {
 			    		status = add_reply_to_nonce(q, msg_type, nonce, db);
 			    }
-			    else // A queue notification
+			    else if (msg_type == RPC_TYPE_QUEUE) // A queue notification
 			    {
 			    		// Notify local subscriber if found:
-
-			    		assert(msg_type == RPC_TYPE_QUEUE);
 
 			    		queue_query_message * qqm = (queue_query_message *) q;
 
@@ -376,6 +476,16 @@ void * comm_thread_loop(void * args)
 					printf("CLIENT: Notified local subscriber %" PRId64 " (%p/%p/%p/%p)\n", (int64_t) qqm->consumer_id, qc, qc->lock, qc->signal, qc->callback);
 #endif
 			    }
+			    else // a gossip notification
+			    {
+		    			assert(msg_type == RPC_TYPE_GOSSIP);
+
+		    			membership_agreement_msg * ma = (membership_agreement_msg *) q;
+
+		    			assert(ma->msg_type == MEMBERSHIP_AGREEMENT_NOTIFY);
+
+		    			install_gossiped_view(ma, db, &(db->fastrandstate));
+			    }
 
 //			    assert(status > 0);
 			}
@@ -389,7 +499,7 @@ int add_server_to_membership(char *hostname, int portno, remote_db_t * db, unsig
 {
 	struct sockaddr_in dummy_serveraddr;
 
-    remote_server * rs = get_remote_server(hostname, portno, dummy_serveraddr, -2, 1);
+    remote_server * rs = get_remote_server(hostname, portno, dummy_serveraddr, dummy_serveraddr, -2, 1);
 
     if(rs == NULL)
     {
@@ -2456,6 +2566,124 @@ void free_msg_callback(msg_callback * mc)
 	free(mc->reply_types);
 	free(mc);
 }
+
+// Gossip listener:
+
+#define DEBUG_GOSSIP_CALLBACK 0
+
+gossip_callback_args * get_gossip_callback_args(membership_state * membership, int status)
+{
+	gossip_callback_args * qca = (gossip_callback_args *) malloc(sizeof(gossip_callback_args));
+	qca->membership = membership;
+	qca->status = status;
+	return qca;
+}
+
+void free_gossip_callback_args(gossip_callback_args * qca)
+{
+	free(qca);
+}
+
+gossip_callback * get_gossip_callback(void (*callback)(gossip_callback_args *))
+{
+	gossip_callback * qc = (gossip_callback *) malloc(sizeof(gossip_callback) + sizeof(pthread_mutex_t) + sizeof(pthread_cond_t));
+	qc->lock = (pthread_mutex_t *) ((char *)qc + sizeof(gossip_callback));
+	qc->signal = (pthread_cond_t *) ((char *)qc + sizeof(gossip_callback) + sizeof(pthread_mutex_t));
+	pthread_mutex_init(qc->lock, NULL);
+	pthread_cond_init(qc->signal, NULL);
+	qc->callback = callback;
+	return qc;
+}
+
+int wait_on_gossip_callback(gossip_callback * qc)
+{
+	int ret = pthread_mutex_lock(qc->lock);
+
+#if DEBUG_GOSSIP_CALLBACK > 0
+	printf("Locked gossip lock %p/%p\n", qc, qc->lock);
+#endif
+
+	struct timespec ts;
+	clock_gettime(CLOCK_REALTIME, &ts);
+	ts.tv_sec += 3;
+	ret = pthread_cond_timedwait(qc->signal, qc->lock, &ts);
+
+	pthread_mutex_unlock(qc->lock);
+
+#if DEBUG_GOSSIP_CALLBACK > 0
+	printf("Unlocked gossip lock %p/%p\n", qc, qc->lock);
+#endif
+
+	return ret;
+}
+
+void free_gossip_callback(gossip_callback * qc)
+{
+	free(qc);
+}
+
+int listen_to_gossip(int status, int rack_id, int dc_id, char * hostname, unsigned short local_rts_id, remote_db_t * db)
+{
+	unsigned len = 0;
+	void * tmp_out_buf = NULL;
+
+	node_description * nd = init_node_description(status, -1, rack_id, dc_id, hostname, local_rts_id);
+	nd->node_id = get_node_id((struct sockaddr *) &(nd->address));
+
+	gossip_listen_message * q = build_gossip_listen_msg(nd, get_nonce(db));
+
+	int success = serialize_gossip_listen_msg(q, (void **) &tmp_out_buf, &len);
+
+	if(db->servers->no_items < 1)
+	{
+		fprintf(stderr, "At least 1 server must be configured for the client to subscribe to gossip (%d servers configured)\n", db->servers->no_items);
+		return NO_QUORUM_ERR;
+	}
+	remote_server * rs = (remote_server *) (HEAD(db->servers))->value;
+
+#if CLIENT_VERBOSITY > 0
+	char print_buff[1024];
+	to_string_gossip_listen_msg(q, (char *) print_buff);
+	printf("Sending gossip listen message to server %s: %s\n", rs->id, print_buff);
+#endif
+
+	// Send packet to server and wait for reply:
+
+	msg_callback * mc = NULL;
+	success = send_packet_wait_replies_sync(tmp_out_buf, len, q->nonce, &mc, db);
+	assert(success == 0);
+	free_gossip_listen_msg(q);
+
+	if(mc->no_replies < db->quorum_size)
+	{
+		fprintf(stderr, "No quorum (%d/%d replies received)\n", mc->no_replies, db->replication_factor);
+		delete_msg_callback(mc->nonce, db);
+		return NO_QUORUM_ERR;
+	}
+
+	int ok_status = 0;
+
+	for(int i=0;i<mc->no_replies;i++)
+	{
+		assert(mc->reply_types[i] == RPC_TYPE_ACK);
+		ack_message * ack = (ack_message *) mc->replies[i];
+	    if(ack->status == CLIENT_ERR_SUBSCRIPTION_EXISTS)
+	    {
+	    		delete_msg_callback(mc->nonce, db);
+	    		return CLIENT_ERR_SUBSCRIPTION_EXISTS;
+	    }
+
+#if CLIENT_VERBOSITY > 0
+		to_string_ack_message(ack, (char *) print_buff);
+		printf("Got back response from server %s: %s\n", rs->id, print_buff);
+#endif
+	}
+
+	delete_msg_callback(mc->nonce, db);
+
+	return 0;
+}
+
 
 
 

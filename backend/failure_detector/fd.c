@@ -192,11 +192,13 @@ char * to_string_gs(gossip_state * gs, char * msg_buff)
 
 /* Membership: */
 
-membership_state * init_membership_state(int no_nodes, node_description * membership, vector_clock * view_id)
+membership_state * init_membership_state(int no_nodes, node_description * membership, int no_client_nodes, node_description * client_membership, vector_clock * view_id)
 {
 	membership_state * ms = (membership_state *) malloc(sizeof(membership_state));
 	ms->no_nodes = no_nodes;
 	ms->membership = membership;
+	ms->no_client_nodes = no_client_nodes;
+	ms->client_membership = client_membership;
 	ms->view_id = view_id;
 	return ms;
 }
@@ -209,6 +211,11 @@ membership_state * clone_membership(membership_state * m)
 	for(int i=0;i<m->no_nodes;i++)
 		copy_node_description(ms->membership + i, m->membership[i].status, m->membership[i].node_id, m->membership[i].rack_id, m->membership[i].dc_id, m->membership[i].hostname, m->membership[i].portno);
 
+	ms->no_client_nodes = m->no_client_nodes;
+	ms->client_membership = (node_description *) malloc(m->no_client_nodes * sizeof(node_description));
+	for(int i=0;i<m->no_client_nodes;i++)
+		copy_node_description(ms->client_membership + i, m->client_membership[i].status, m->client_membership[i].node_id, m->client_membership[i].rack_id, m->client_membership[i].dc_id, m->client_membership[i].hostname, m->client_membership[i].portno);
+
 	ms->view_id = (m->view_id != NULL)?(copy_vc(m->view_id)):(NULL);
 
 	return ms;
@@ -217,6 +224,7 @@ membership_state * clone_membership(membership_state * m)
 void free_membership_state(membership_state * ms)
 {
 	free(ms->membership);
+	free(ms->client_membership);
 	free_vc(ms->view_id);
 	free(ms);
 }
@@ -229,13 +237,19 @@ void free_membership_msg(MembershipViewMessage * msg)
 		free(msg->membership[i]);
 
 	free(msg->membership);
+
+	for(int i=0;i<msg->n_client_membership;i++)
+		free(msg->client_membership[i]);
+
+	free(msg->client_membership);
 }
 
 void init_membership_msg(MembershipViewMessage * msg, membership_state * m, VectorClockMessage * view_id_msg)
 {
 	NodeStateMessage **membership_v = (NodeStateMessage **) malloc (m->no_nodes * sizeof (NodeStateMessage*));
-
-	msg->view_id = view_id_msg;
+	NodeStateMessage **client_membership_v = NULL;
+	if(m->no_client_nodes > 0)
+		client_membership_v = (NodeStateMessage **) malloc (m->no_client_nodes * sizeof (NodeStateMessage*));
 
 	for(int i = 0; i < m->no_nodes; i++)
 	{
@@ -243,9 +257,19 @@ void init_membership_msg(MembershipViewMessage * msg, membership_state * m, Vect
 	    node_state_message__init(membership_v[i]);
 	    init_ns_msg_from_description(membership_v[i], m->membership+i);
 	}
-
 	msg->n_membership = m->no_nodes;
 	msg->membership = membership_v;
+
+	for(int i = 0; i < m->no_client_nodes; i++)
+	{
+		client_membership_v[i] = malloc (sizeof (NodeStateMessage));
+	    node_state_message__init(client_membership_v[i]);
+	    init_ns_msg_from_description(client_membership_v[i], m->client_membership+i);
+	}
+	msg->n_client_membership = m->no_client_nodes;
+	msg->client_membership = client_membership_v;
+
+	msg->view_id = view_id_msg;
 }
 
 int serialize_membership_state(membership_state * m, void ** buf, unsigned * len)
@@ -274,7 +298,17 @@ membership_state * init_membership_from_msg(MembershipViewMessage * msg)
 	for(int i=0;i<msg->n_membership;i++)
 		copy_node_description(membership+i, msg->membership[i]->status, msg->membership[i]->node_id, msg->membership[i]->rack_id, msg->membership[i]->dc_id,
 								(char *) msg->membership[i]->hostname.data, (unsigned short) msg->membership[i]->port);
-	return init_membership_state(msg->n_membership, membership, view_id);
+
+	node_description * client_membership = NULL;
+	if(msg->n_client_membership > 0)
+	{
+		client_membership = (node_description *) malloc(msg->n_client_membership * sizeof(node_description));
+		for(int i=0;i<msg->n_client_membership;i++)
+			copy_node_description(client_membership+i, msg->client_membership[i]->status, msg->client_membership[i]->node_id, msg->client_membership[i]->rack_id, msg->client_membership[i]->dc_id,
+									(char *) msg->client_membership[i]->hostname.data, (unsigned short) msg->client_membership[i]->port);
+	}
+
+	return init_membership_state(msg->n_membership, membership, msg->n_client_membership, client_membership, view_id);
 }
 
 int deserialize_membership_state(void * buf, unsigned msg_len, membership_state ** ms)
@@ -301,6 +335,13 @@ int equals_membership_state(membership_state * gs1, membership_state * gs2)
 		if(!equals_node_description(gs1->membership + i, gs2->membership + i))
 			return 0;
 
+	if(gs1->no_client_nodes != gs2->no_client_nodes)
+		return 0;
+
+	for(int i=0;i<gs1->no_client_nodes;i++)
+		if(!equals_node_description(gs1->client_membership + i, gs2->client_membership + i))
+			return 0;
+
 	return 1;
 }
 
@@ -313,6 +354,17 @@ char * to_string_membership_state(membership_state * gs, char * msg_buff)
 	for(int i=0;i<gs->no_nodes;i++)
 	{
 		to_string_node_description(gs->membership+i, crt_ptr);
+		crt_ptr += strlen(crt_ptr);
+		sprintf(crt_ptr, ", ");
+		crt_ptr += 2;
+	}
+
+	sprintf(crt_ptr, "), Client Membership(");
+	crt_ptr += strlen("), Client Membership(");
+
+	for(int i=0;i<gs->no_client_nodes;i++)
+	{
+		to_string_node_description(gs->client_membership+i, crt_ptr);
 		crt_ptr += strlen(crt_ptr);
 		sprintf(crt_ptr, ", ");
 		crt_ptr += 2;
@@ -361,7 +413,7 @@ membership_agreement_msg * get_membership_join_msg(int status, int rack_id, int 
 
 	nd->node_id = get_node_id((struct sockaddr *) &(nd->address));
 
-	membership_state * membership = init_membership_state(1, nd, copy_vc(vc));
+	membership_state * membership = init_membership_state(1, nd, 0, NULL, copy_vc(vc));
 
 	return init_membership_agreement_msg(MEMBERSHIP_AGREEMENT_JOIN, status, membership, nonce, vc);
 }
