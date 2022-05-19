@@ -142,13 +142,10 @@ $bool $Ord$str$__ge__ ($Ord$str wit, $str a, $str b){
 // Container
 
 void $Container$str$__serialize__($Container$str self, $Serial$state state) {
-  $step_serialize(self-> w$Eq$A$Container$str, state);
 }
 
 $Container$str $Container$str$__deserialize__($Container$str self, $Serial$state state) {
-   $Container$str res = $DNEW($Container$str,state);
-   res->w$Eq$A$Container$str = ($Eq)$step_deserialize(state);
-   return res;
+   return $DNEW($Container$str,state);
 }
 
 $Iterator $Container$str$__iter__ ($Container$str wit, $str str) {
@@ -292,7 +289,7 @@ struct $Container$str$class  $Container$str$methods = {
     $Container$str$__contains__,
     $Container$str$__containsnot__
 };
-struct $Container$str $Container$str_instance = {&$Container$str$methods,($Eq)&$Ord$str_instance};
+struct $Container$str $Container$str_instance = {&$Container$str$methods};
 $Container$str $Container$str$witness = &$Container$str_instance;
 
 
@@ -350,8 +347,7 @@ struct $Hashable$str $Hashable$str_instance = {&$Hashable$str$methods};
 $Hashable$str $Hashable$str$witness = &$Hashable$str_instance;
 
  
-void $Container$str$__init__ ($Container$str wit, $Eq w$Eq$A$Container$str) {
-  wit->w$Eq$A$Container$str = w$Eq$A$Container$str;
+void $Container$str$__init__ ($Container$str wit) {
 }
 
 // Auxiliaries, some used for both str and bytearray implementations ////////////////////////////////////////////////////////
@@ -385,6 +381,13 @@ nm = malloc(sizeof(struct $bytearray)); \
 (nm)->capacity = nbtes;            \
 (nm)->str = malloc((nm)->nbytes + 1);    \
 (nm)->str[(nm)->nbytes] = 0
+
+#define NEW_UNFILLED_BYTES(nm,nbtes)\
+nm = malloc(sizeof(struct $bytes));\
+(nm)->$class = &$bytes$methods;\
+(nm)->nbytes = nbtes;\
+(nm)->str = malloc(nbtes + 1);\
+(nm)->str[nbtes] = 0
 
 // Conversion to and from C strings
 
@@ -700,8 +703,8 @@ $int $str_len($str s) {
 // $Container ///////////////////////////////////////////////////////////////////////////
 
  
-$Container$str $Container$str$new($Eq wit) {
-  return $NEW($Container$str, wit);
+$Container$str $Container$str$new() {
+  return $NEW($Container$str);
 }
 
 int $str_contains($str s, $str sub) {
@@ -1556,7 +1559,7 @@ static void expand_bytearray($bytearray b,int n) {
 
 
 // General methods, prototypes
-void $bytearray_init($bytearray, $value);
+void $bytearray_init($bytearray, $bytes);
 $bool $bytearray_bool($bytearray);
 $str $bytearray_str($bytearray);
 void $bytearray_serialize($bytearray,$Serial$state);
@@ -1630,8 +1633,9 @@ $bytearray $bytearray_capitalize($bytearray s) {
   }
   $bytearray res;
   NEW_UNFILLED_BYTEARRAY(res,s->nbytes);
-  for (int i=0; i<s->nbytes; i++) 
-    res->str[i] = i==0 ? toupper(s->str[i]) : tolower(s->str[i]);
+  res->str[0] = toupper(s->str[0]);
+  for (int i=1; i<s->nbytes; i++) 
+    res->str[i] = tolower(s->str[i]);
    return res;
 }
 
@@ -2389,17 +2393,14 @@ $bytearray $Times$bytearray$__mul__ ($Times$bytearray wit, $bytearray a, $int n)
 // Container
 
 void $Container$bytearray$__serialize__($Container$bytearray self, $Serial$state state) {
-  $step_serialize(self->w$Eq$A$Container$bytearray, state);
 }
 
 $Container$bytearray $Container$bytearray$__deserialize__($Container$bytearray self, $Serial$state state) {
-   $Container$bytearray res = $DNEW($Container$bytearray,state);
-   res->w$Eq$A$Container$bytearray = ($Eq)$step_deserialize(state);
-   return res;
+   return $DNEW($Container$bytearray,state);
 }
 
-$Container$bytearray $Container$bytearray$new($Eq wit) {
-  return $NEW($Container$bytearray, wit);
+$Container$bytearray $Container$bytearray$new() {
+  return $NEW($Container$bytearray);
 }
 
 $Iterator $Container$bytearray$__iter__ ($Container$bytearray wit, $bytearray str) {
@@ -2520,7 +2521,7 @@ struct $Container$bytearray$class $Container$bytearray$methods = {
     $Container$bytearray$__contains__,
     $Container$bytearray$__containsnot__
 };
-struct $Container$bytearray $Container$bytearray_instance = {&$Container$bytearray$methods,($Eq)&$Ord$bytearray_instance};
+struct $Container$bytearray $Container$bytearray_instance = {&$Container$bytearray$methods};
 $Container$bytearray $Container$bytearray$witness = &$Container$bytearray_instance;
 
 // init methods for witness classes
@@ -2538,8 +2539,7 @@ void $Sequence$bytearray$__init__($Sequence$bytearray self) {
   self->w$Times = ($Times)$NEW($Times$bytearray, ($Sequence)self);
 }
 
-void $Container$bytearray$__init__ ($Container$bytearray wit, $Eq w$Eq$A$Container$bytearray) {
-  wit->w$Eq$A$Container$bytearray = w$Eq$A$Container$bytearray;
+void $Container$bytearray$__init__ ($Container$bytearray wit) {
 }
 
 
@@ -2612,7 +2612,7 @@ $bytearray $bytearray_getslice($bytearray self, $slice slc) {
   for (int i=0; i<slen; i++) {
     $int w;
     w = $bytearray_getitem(self,t);
-    $bytearray_append(res,w);
+    $bytearray_setitem(res,i,w->val);
     t += step;
   }
   return res;
@@ -2813,53 +2813,24 @@ int $bytearray_containsnot ($bytearray self, $int c) {
 
 // General methods, implementations
 
-void $bytearray_init($bytearray, $value);
+void $bytearray_init($bytearray, $bytes);
 void $bytearray_serialize($bytearray,$Serial$state);
 $bytearray $bytearray_deserialize($bytearray,$Serial$state);
 $bool $bytearray_bool($bytearray);
 $str $bytearray_str($bytearray);
 
-$bytearray $bytearray$new($value s) {
-  return $NEW($bytearray, s);
+$bytearray $bytearray$new($bytes b) {
+  return $NEW($bytearray, b);
 }
 
-void $bytearray_init($bytearray self, $value s) {
-  if (!s) {
-    self->nbytes = 0;
-    self->str = NULL;
-    return;
-  }
-  if ($ISINSTANCE(s, $str)->val) {
-    $str str = ($str)s;
-    $bytearray b = str->$class->encode(str);
-    self->nbytes = b->nbytes;
-    self->str = b->str;
-  } else if ($ISINSTANCE(s, $list)->val) {  // must be a list of ints in range 0..255
-    $list lst = ($list)s;
-    int len = lst->length;
-    self->nbytes = len;
-    self->str = malloc(len+1);
-    self->str[len] = 0;
-    if (len > 0 && !($ISINSTANCE(lst->data[0],$int)->val))
-      $RAISE(($BaseException)$NEW($ValueError,to$str("illegal argument to bytearray constructor")));
-    for (int i = 0; i<len; i++) {
-      long v = (($int)lst->data[i])->val;
-      if (v < 0 || v > 255)
-        $RAISE(($BaseException)$NEW($ValueError,to$str("illegal argument to bytearray constructor")));
-      self->str[i] = v;
-    }
-  } else if ($ISINSTANCE(s, $int)->val) {
-    $int n = ($int)s;
-    if (n->val < 0) 
-      $RAISE(($BaseException)$NEW($ValueError,to$str("illegal argument to bytearray constructor")));
-    self->nbytes = n->val;
-    self->str = malloc(n->val);
-    memset(self->str, 0, n->val);
-  } else
-    $RAISE(($BaseException)$NEW($ValueError,to$str("illegal argument to bytearray constructor")));
+void $bytearray_init($bytearray self, $bytes b) {
+  int len = b->nbytes;
+  self->nbytes = len;
+  self->capacity = len;
+  self->str = malloc(len+1);
+  memcpy(self->str,b->str,len+1);
 }
-
-
+ 
 $bool $bytearray_bool($bytearray s) {
   return to$bool(s->nbytes > 0);
 };
@@ -2904,6 +2875,1261 @@ $bytearray $bytearray_deserialize($bytearray res, $Serial$state state) {
 
 // End of bytearray implementation ////////////////////////////////////////////////
 
+// bytes implementation ///////////////////////////////////////////////////////////
+
+
+// bytes implementation ///////////////////////////////////////////////////////////
+
+
+// Conversion to and from C strings
+
+$bytes to$bytes(char *str) {
+  $bytes res;
+  int len = strlen(str);
+  NEW_UNFILLED_BYTES(res,len);
+  memcpy(res->str,str,len);
+  return res;
+}
+
+unsigned char *from$bytes($bytes b) {
+  return b->str;
+}
+
+// Auxiliaries
+/*
+static void expand_bytes($bytes b,int n) {
+   if (b->capacity >= b->nbytes + n)
+     return;
+   int newcapacity = b->capacity==0 ? 1 : b->capacity;
+   while (newcapacity < b->nbytes+n)
+     newcapacity <<= 1;
+   unsigned char *newstr = b->str==NULL
+     ? malloc(newcapacity+1)
+     : realloc(b->str,newcapacity+1);
+   if (newstr == NULL) {
+    $RAISE(($BaseException)$NEW($MemoryError,to$str("memory allocation failed")));
+   }
+   b->str = newstr;
+   b->capacity = newcapacity;
+}  
+*/
+
+// Object methods for bytes, prototypes
+void $bytes_init($bytes, $Iterable,$WORD);
+$bool $bytes_bool($bytes);
+$str $bytes_str($bytes);
+void $bytes_serialize($bytes,$Serial$state);
+$bytes $bytes_deserialize($bytes,$Serial$state);
+
+
+// bytes methods, prototypes
+
+$bytes $bytes_capitalize($bytes s);
+$bytes $bytes_center($bytes s, $int width, $bytes fill);
+$int $bytes_count($bytes s, $bytes sub, $int start, $int end);
+$str $bytes_decode($bytes s);
+$bool $bytes_endswith($bytes s, $bytes suffix, $int start, $int end);
+$bytes $bytes_expandtabs($bytes s, $int tabsize);      
+$int $bytes_find($bytes s, $bytes sub, $int start, $int end);
+$int $bytes_index($bytes s, $bytes sub, $int start, $int end);
+$bool $bytes_isalnum($bytes s);
+$bool $bytes_isalpha($bytes s);
+$bool $bytes_isascii($bytes s);
+$bool $bytes_isdecimal($bytes s);
+$bool $bytes_isdigit($bytes s);
+$bool $bytes_isidentifier($bytes s);
+$bool $bytes_islower($bytes s);
+$bool $bytes_isnumeric($bytes s);
+$bool $bytes_isprintable($bytes s);
+$bool $bytes_isspace($bytes s);
+$bool $bytes_istitle($bytes s);
+$bool $bytes_isupper($bytes s);
+$bytes $bytes_join($bytes sep, $Iterable wit, $WORD iter);
+$bytes $bytes_ljust($bytes s, $int width, $bytes fill); 
+$bytes $bytes_lower($bytes s);
+$bytes $bytes_lstrip($bytes s,$bytes cs); 
+$tuple $bytes_partition($bytes s, $bytes sep);
+$bytes $bytes_removeprefix($bytes s, $bytes prefix);
+$bytes $bytes_removesuffix($bytes s, $bytes suffix);
+$bytes $bytes_replace($bytes s, $bytes old, $bytes new, $int count);
+$int $bytes_rfind($bytes s, $bytes sub, $int start, $int end);
+$int $bytes_rindex($bytes s, $bytes sub, $int start, $int end);
+$bytes $bytes_rjust($bytes s, $int width, $bytes fill);  
+$tuple $bytes_rpartition($bytes s, $bytes sep); 
+$bytes $bytes_rstrip($bytes s,$bytes cs);
+$list $bytes_split($bytes s, $bytes sep, $int maxsplit);  
+$list $bytes_splitlines($bytes s, $bool keepends); 
+$bool $bytes_startswith($bytes s, $bytes prefix, $int start, $int end); 
+$bytes $bytes_strip($bytes s,$bytes cs);
+$bytes $bytes_upper($bytes s);
+$bytes $bytes_zfill($bytes s, $int width);
+
+// Method table
+
+struct $bytes$class $bytes$methods =
+  {"$bytes",UNASSIGNED,($Super$class)&$value$methods, $bytes_init, $bytes_serialize, $bytes_deserialize, $bytes_bool,
+   $bytes_str, $bytes_capitalize, $bytes_center, $bytes_count,  $bytes_decode, $bytes_endswith,
+   $bytes_expandtabs, $bytes_find, $bytes_index,
+   $bytes_isalnum, $bytes_isalpha, $bytes_isascii, $bytes_isdigit, $bytes_islower, $bytes_isspace,
+   $bytes_istitle, $bytes_isupper, $bytes_join, $bytes_ljust, $bytes_lower, $bytes_lstrip, $bytes_partition,
+   $bytes_replace, $bytes_rfind, $bytes_rindex, $bytes_rjust,
+   $bytes_rpartition, $bytes_rstrip, $bytes_split, $bytes_splitlines, $bytes_startswith, $bytes_strip, $bytes_upper, $bytes_zfill};
+
+/*
+struct $bytes$class $bytes$methods =
+  {"$bytes",UNASSIGNED,($Super$class)&$value$methods, $bytes_init, $bytes_serialize, $bytes_deserialize, $bytes_bool,
+   $bytes_str,
+   ($bytes (*)($bytes))$bytearray_capitalize,
+   ($bytes (*)($bytes,$int,$bytes))$bytearray_center,
+   ($int (*)($bytes,$bytes,$int,$int))$bytearray_count,
+   ($str (*)($bytes))$bytearray_decode,
+   ($bool (*)($bytes,$bytes,$int,$int))$bytearray_endswith,
+   ($bytes (*)($bytes,$int))$bytearray_expandtabs,
+   ($int (*)($bytes,$bytes,$int,$int))$bytearray_find,
+   ($int (*)($bytes,$bytes,$int,$int))$bytearray_index,
+   ($bool (*)($bytes))$bytearray_isalnum,
+   ($bool (*)($bytes))$bytearray_isalpha,
+   ($bool (*)($bytes))$bytearray_isascii,
+   ($bool (*)($bytes))$bytearray_isdigit,
+   ($bool (*)($bytes))$bytearray_islower,
+   ($bool (*)($bytes))$bytearray_isspace,
+   ($bool (*)($bytes))$bytearray_istitle,
+   ($bool (*)($bytes))$bytearray_isupper,
+   ($bytes (*)($bytes,$Iterable,$WORD))$bytearray_join,
+   ($bytes (*)($bytes,$int,$bytes))$bytearray_ljust,
+   ($bytes (*)($bytes))$bytearray_lower,
+   ($bytes (*)($bytes,$bytes))$bytearray_lstrip,
+   ($tuple (*)($bytes,$bytes))$bytearray_partition,
+   ($bytes (*)($bytes,$bytes,$bytes,$int))$bytearray_replace,
+   ($int (*)($bytes,$bytes,$int,$int))$bytearray_rfind,
+   ($int (*)($bytes,$bytes,$int,$int))$bytearray_rindex,
+   ($bytes (*)($bytes,$int,$bytes))$bytearray_rjust,
+   ($tuple (*)($bytes,$bytes))$bytearray_rpartition,
+   ($bytes (*)($bytes,$bytes))$bytearray_rstrip,
+   ($list (*)($bytes,$bytes,$int))$bytearray_split,
+   ($list (*)($bytes,$bool))$bytearray_splitlines,
+   ($bool (*)($bytes,$bytes,$int,$int))$bytearray_startswith,
+   ($bytes (*)($bytes,$bytes))$bytearray_strip,
+   ($bytes (*)($bytes))$bytearray_upper,
+   ($bytes (*)($bytes,$int))$bytearray_zfill};
+*/
+
+
+// Bytes methods, implementations
+
+
+static $bytes $bytes_copy($bytes s) {
+  $bytes res;
+  NEW_UNFILLED_BYTES(res,s->nbytes);
+  res->nbytes = s->nbytes;
+  memcpy(res->str,s->str,s->nbytes);
+  return res;
+}
+
+ 
+$bytes $bytes_capitalize($bytes s) {
+  if (s->nbytes==0) {
+    return s;
+  }
+  $bytes res;
+  NEW_UNFILLED_BYTES(res,s->nbytes);
+  res->str[0] = toupper(s->str[0]);
+  for (int i = 1; i < s->nbytes; i++) 
+     res->str[i] = tolower(s->str[i]);
+   return res;
+}
+
+$bytes $bytes_center($bytes s, $int width, $bytes fill) {
+  if (!fill) fill = to$bytes(" ");
+  if (fill->nbytes != 1) {
+    $RAISE(($BaseException)$NEW($ValueError,to$str("center: fill bytes not single char")));
+  }
+  if (width->val <= s->nbytes) {
+    return s;
+  }
+  int pad = (width->val-s->nbytes);
+  int padleft = pad/2; 
+  int padright = pad-padleft;
+  int sbytes = s->nbytes;
+  $bytes res;
+  NEW_UNFILLED_BYTES(res, width->val);
+  unsigned char c = fill->str[0];
+  unsigned char *p = res->str;
+  p += padleft+sbytes;
+  for (int i = 0; i<padright; i++) {
+      p[i] = c;
+   }
+  memcpy(res->str,p,padleft);
+  p -= sbytes;
+  memcpy(p,s->str,sbytes);
+  return res;
+}
+
+$int $bytes_count($bytes s, $bytes sub, $int start, $int end) {
+  $int st = start;
+  $int en = end;
+  if (fix_start_end(s->nbytes,&st,&en) < 0) return to$int(0);
+  unsigned char *p = &s->str[st->val];
+  unsigned char *q = &p[en->val-st->val];
+  int res = 0;
+  int n = bmh(p,sub->str,q-p,sub->nbytes);
+  while (n>=0) {
+    res++;
+    p += n + (sub->nbytes>0 ? sub->nbytes : 1);
+    n = bmh(p,sub->str,q-p,sub->nbytes);
+  }
+  return to$int(res);
+}
+
+$str $bytes_decode($bytes s) {
+  return to$str((char*)s->str);
+}
+
+$bool $bytes_endswith($bytes s, $bytes sub, $int start, $int end) {
+  $int st = start;
+  $int en = end;
+  if (fix_start_end(s->nbytes,&st,&en) < 0) return $False;
+  unsigned char *p = &s->str[en->val-sub->nbytes];
+  unsigned char *q = sub->str;
+  for (int i=0; i<sub->nbytes; i++) {
+    if (*p == 0 || *p++ != *q++) {
+      return $False;
+    }
+  }
+  return $True;
+}
+
+$bytes $bytes_expandtabs($bytes s, $int tabsz){
+  int pos = 0;
+  int expanded = 0;
+  int tabsize = tabsz->val;
+  tabsize = tabsize <= 0 ? 1 : tabsize;
+  unsigned char buffer[tabsize * s->nbytes];
+  unsigned char *p = s->str;
+  unsigned char *q = buffer;
+  for (int i=0; i<s->nbytes; i++) {
+    if (*p == '\t') {
+      int n = tabsize - pos % tabsize;
+      for (int j=0; j < n; j++) {
+        *q++ = ' ';
+      }
+      p++;
+      expanded += n-1;
+      pos+=n;
+    } else if (*p=='\n' || *p == '\r') {
+      *q++ = *p++;
+      pos = 0;
+    } else {
+      for (int j=0; j< byte_length2(*p); j++) {
+        *q++ = *p++;
+        pos++;
+      }
+    }
+  }
+  $bytes res;
+  NEW_UNFILLED_BYTES(res,s->nbytes+expanded);
+  memcpy(res->str,buffer,s->nbytes+expanded);
+  return res;
+}
+
+$int $bytes_find($bytes s, $bytes sub, $int start, $int end) {
+  $int st = start;
+  $int en = end;
+  if (fix_start_end(s->nbytes,&st,&en) < 0) return to$int(-1);
+  unsigned char *p = &s->str[st->val];
+  unsigned char *q = &s->str[en->val];
+  int n = bmh(p,sub->str,q-p,sub->nbytes);
+  if (n<0) return to$int(-1);
+  return to$int(n+p-s->str);
+}
+
+
+$int $bytes_index($bytes s, $bytes sub, $int start, $int end) {
+  $int n = $bytes_find(s,sub,start,end);
+  if (n->val<0) {
+    $RAISE(($BaseException)$NEW($ValueError,to$str("index: substring not found")));
+  }
+  return n;
+}
+
+$bool $bytes_isalnum($bytes s) {
+  if (s->nbytes==0)
+    return $False;
+  for (int i=0; i<s->nbytes; i++) {
+    unsigned char c = s->str[i];
+    if (c < '0' || c > 'z' || (c > '9' && c < 'A') || (c > 'Z' && c < 'a'))
+      return $False;
+  }
+  return $True;
+}
+
+$bool $bytes_isalpha($bytes s) {
+  if (s->nbytes==0)
+    return $False;
+  for (int i=0; i<s->nbytes; i++) {
+    unsigned char c = s->str[i];
+    if (c < 'A' || c > 'z' || (c > 'Z' && c < 'a'))
+      return $False;
+  }
+  return $True;
+}
+
+$bool $bytes_isascii($bytes s) {
+  for (int i=0; i<s->nbytes; i++) {
+    unsigned char c = s->str[i];
+    if (c > 0x7f)
+      return $False;
+  }
+  return $True;
+}
+
+$bool $bytes_isdigit($bytes s) {
+  if (s->nbytes==0)
+    return $False;
+  for (int i=0; i<s->nbytes; i++) {
+    unsigned char c = s->str[i];
+    if (c<'0' || c > '9')
+      return $False;
+  }
+  return $True;
+}
+ 
+
+$bool $bytes_islower($bytes s) {
+  int has_lower = 0;
+  for (int i=0; i < s->nbytes; i++) {
+    unsigned char c = s->str[i];
+    if (c >= 'A' && c <= 'Z')
+      return $False;
+    if (c >= 'a' && c <= 'z')
+      has_lower = 1;
+  }
+  return to$bool(has_lower);
+}
+
+$bool $bytes_isspace($bytes s) {
+  if (s->nbytes==0)
+    return $False;
+  for (int i=0; i<s->nbytes; i++) {
+    unsigned char c = s->str[i];
+    if (c !=' ' && c != '\t' && c != '\n' && c != '\r' && c != '\x0b' && c != '\f')
+      return $False;
+  }
+  return $True;
+}
+
+$bool $bytes_istitle($bytes s) {
+  if (s->nbytes==0)
+    return $False;
+  int incasedrun = 0;
+  for (int i=0; i < s->nbytes; i++) {
+    unsigned char c = s->str[i];
+    if (c >='A' && c <= 'Z') {
+      if (incasedrun)
+        return $False;
+      incasedrun = 1;
+    } else if (c >='a' && c <= 'z') {
+      if (!incasedrun)
+        return $False;
+    } else
+        incasedrun = 0;
+  }
+  return $True;
+}
+
+$bool $bytes_isupper($bytes s) {
+  int has_upper = 0;
+  for (int i=0; i < s->nbytes; i++) {
+    unsigned char c = s->str[i];
+    if (c >= 'a' && c <= 'z')
+      return $False;
+    if (c >= 'a' && c <= 'z')
+      has_upper = 1;
+  }
+  return to$bool(has_upper);
+}
+
+$bytes $bytes_join($bytes s, $Iterable wit, $WORD iter) {
+  int totbytes = 0;
+  $list lst = $list_fromiter(wit->$class->__iter__(wit,iter));
+  $bytes nxt;
+  int len = lst->length;
+  for (int i=0; i<len; i++) {
+    nxt = ($bytes)lst->data[i];
+    totbytes += nxt->nbytes;
+  }
+  if (len > 1) {
+    totbytes += (len-1) * s->nbytes;
+  }
+  $bytes res;
+  NEW_UNFILLED_BYTES(res,totbytes);
+  if (len > 0) {
+    nxt = ($bytes)lst->data[0];
+    unsigned char *p = res->str;
+    memcpy(p,nxt->str,nxt->nbytes);
+    p += nxt->nbytes;
+    for (int i=1; i<len; i++) {
+      nxt = ($bytes)lst->data[i];
+      memcpy(p,s->str,s->nbytes);
+      p += s->nbytes;
+      memcpy(p,nxt->str,nxt->nbytes);
+      p += nxt->nbytes;
+    }
+  }
+  return res;
+}
+
+$bytes $bytes_ljust($bytes s, $int width, $bytes fill) {
+  if (fill->nbytes != 1) {
+    $RAISE(($BaseException)$NEW($ValueError,to$str("bytes ljust: fill array not single char")));
+  }
+  if (width->val <= s->nbytes) {
+    return $bytes_copy(s);
+  }
+  $bytes res;
+  NEW_UNFILLED_BYTES(res,width->val);
+  memcpy(res->str,s->str,s->nbytes);
+  unsigned char c = fill->str[0];
+  for (int i = s->nbytes; i<width->val; i++) {
+      res->str[i] = c;
+  }
+  return res;
+}
+
+$bytes $bytes_lower($bytes s) {
+  $bytes res;
+  NEW_UNFILLED_BYTES(res,s->nbytes);
+  for (int i=0; i< s->nbytes; i++)
+    res->str[i] = tolower(res->str[i]);
+  return res;
+}
+
+$bytes $bytes_lstrip($bytes s, $bytes cs) {
+  if (!cs)
+    cs = to$bytes(" \t\n\r\x0b\x0c");
+  int nstrip = 0;
+  for (int i=0; i<s->nbytes; i++) {
+    unsigned char c = s->str[i];
+    int found = 0;
+    for (int j=0; j<cs->nbytes; j++)
+      if (c == cs->str[j]) {
+        found = 1;
+        break;
+      }
+    if (!found)
+      break;
+    nstrip++;
+  }
+  $bytes res;
+  NEW_UNFILLED_BYTES(res,s->nbytes-nstrip);
+  memcpy(res->str,s->str+nstrip,res->nbytes);       
+  return res;
+}
+
+
+$tuple $bytes_partition($bytes s, $bytes sep) {
+  int n = from$int($bytes_find(s,sep,NULL,NULL));
+  if (n<0) {
+    return $NEWTUPLE(3,s,to$bytes(""),to$bytes(""));
+  } else {
+    int nb = bmh(s->str,sep->str,s->nbytes,sep->nbytes);
+    $bytes ls;
+    NEW_UNFILLED_BYTES(ls,nb);
+    memcpy(ls->str,s->str,nb);
+    $bytes rs;
+    int nbr = s->nbytes - sep->nbytes - nb;
+    NEW_UNFILLED_BYTES(rs,nbr);
+    memcpy(rs->str,s->str+nb+sep->nbytes,nbr);
+    return $NEWTUPLE(3,ls,sep,rs);
+  }
+}
+
+
+$bytes $bytes_removeprefix($bytes s, $bytes prefix) {
+  int bytes_to_remove;
+  if (prefix->nbytes > s->nbytes || bcmp(s->str,prefix->str,prefix->nbytes))
+    bytes_to_remove = 0;
+  else
+    bytes_to_remove = prefix->nbytes;
+  $bytes res;
+  int resbytes = s->nbytes - bytes_to_remove;
+  NEW_UNFILLED_BYTES(res,resbytes);
+  memcpy(res->str,s->str+bytes_to_remove,resbytes);
+  return res;
+}
+
+$bytes $bytes_removesuffix($bytes s, $bytes suffix) {
+  int bytes_to_remove;
+  if (suffix->nbytes > s->nbytes || bcmp(s->str+s->nbytes-suffix->nbytes,suffix->str,suffix->nbytes))
+    bytes_to_remove = 0;
+  else
+    bytes_to_remove = suffix->nbytes;
+  $bytes res;
+  int resbytes = s->nbytes - bytes_to_remove;
+  NEW_UNFILLED_BYTES(res,resbytes);
+  memcpy(res->str,s->str,resbytes);
+  return res;
+}
+$bytes $bytes_replace($bytes s, $bytes old, $bytes new, $int count) {
+  if (count==NULL)
+    count = to$int(INT_MAX);
+  int c = from$int($bytes_count(s,old,NULL,NULL));
+  int c0 = from$int(count) < c ? from$int(count) : c;
+  if (c0==0){
+    return $bytes_copy(s);
+  }
+  int nbytes = s->nbytes + c0*(new->nbytes-old->nbytes);
+  $bytes res;
+  NEW_UNFILLED_BYTES(res,nbytes);
+  unsigned char *p = s->str;
+  unsigned char *q = res->str;
+  unsigned char *pold = old->str;
+  unsigned char *pnew = new->str;
+  int plen = s->nbytes;
+  int n;
+  for (int i=0; i<c0; i++) {
+    n = i>0 && old->nbytes==0 ? 1 : bmh(p,pold,plen,old->nbytes);
+    if (n>0) {
+      memcpy(q,p,n);
+      p+=n; q+=n;
+    }
+    memcpy(q,pnew,new->nbytes);
+    p += old->nbytes;
+    q += new->nbytes;
+    plen -= n+old->nbytes;
+  }
+  if (plen>0)
+    memcpy(q,p,plen);
+  return res;
+}
+      
+
+$int $bytes_rfind($bytes s, $bytes sub, $int start, $int end) {
+  $int st = start;
+  $int en = end;
+  if (fix_start_end(s->nbytes,&st,&en) < 0) return to$int(-1);
+  unsigned char *p = &s->str[st->val];
+  unsigned char *q = &s->str[en->val];
+  int n = rbmh(p,sub->str,q-p,sub->nbytes);
+  if (n<0) return to$int(-1);
+  return to$int(n+p-s->str);
+}
+
+
+$int $bytes_rindex($bytes s, $bytes sub, $int start, $int end) {
+  $int n = $bytes_rfind(s,sub,start,end);
+  if (from$int(n)<0) {
+    $RAISE(($BaseException)$NEW($ValueError,to$str("rindex for bytes: substring not found")));
+  };
+  return n;
+}
+
+$bytes $bytes_rjust($bytes s, $int width, $bytes fill) {
+  if (fill->nbytes != 1) {
+    $RAISE(($BaseException)$NEW($ValueError,to$str("rjust: fill string not single char")));
+  }
+  if (width->val <= s->nbytes) {
+    return $bytes_copy(s);
+  }
+  int pad = (width->val-s->nbytes);
+  $bytes res;
+  NEW_UNFILLED_BYTES(res,width->val);
+  unsigned char c = fill->str[0];
+  for (int i = 0; i<pad; i++) {
+      res->str[i] = c;
+  }
+  memcpy(&res->str[pad],s->str,s->nbytes);
+  return res;
+}
+                                
+$tuple $bytes_rpartition($bytes s, $bytes sep) {
+  int n = from$int($bytes_rfind(s,sep,NULL,NULL));
+  if (n<0) {
+    return $NEWTUPLE(3,to$bytes(""),to$bytes(""),s);
+  } else {
+    int nb = rbmh(s->str,sep->str,s->nbytes,sep->nbytes);
+    $bytes ls;
+    NEW_UNFILLED_BYTES(ls,nb);
+    memcpy(ls->str,s->str,nb);
+    int nbr = s->nbytes - sep->nbytes - nb;
+    $bytes rs;    
+    NEW_UNFILLED_BYTES(rs,nbr);
+    memcpy(rs->str,s->str+nb+sep->nbytes,nbr);
+    return  $NEWTUPLE(3,ls,sep,rs);
+  }
+}
+
+$bytes $bytes_rstrip($bytes s, $bytes cs) {
+  if (!cs)
+   cs = to$bytes(" \t\n\r\x0b\x0c");
+   int nstrip = 0;
+  for (int i=s->nbytes-1; i>=0; i--) {
+    unsigned char c = s->str[i];
+    int found = 0;
+    for (int j=0; j<cs->nbytes; j++)
+      if (c == cs->str[j]) {
+        found = 1;
+        break;
+      }
+    if (!found)
+      break;
+    nstrip++;
+  }
+  $bytes res;
+  NEW_UNFILLED_BYTES(res,s->nbytes-nstrip);
+  memcpy(res->str,s->str,res->nbytes);       
+  return res;
+}
+ 
+$list $bytes_split($bytes s, $bytes sep, $int maxsplit) {
+  $list res = $NEW($list,NULL,NULL);
+  if (maxsplit == NULL || from$int(maxsplit) < 0) maxsplit = to$int(INT_MAX); 
+  if (sep == NULL) {
+    unsigned char *p = s->str;
+    if (s->nbytes==0) {
+      return res;
+    }
+    int inword = 0;
+    unsigned char *q;
+    while (p < s->str + s->nbytes) {
+      if  (*p !=' ' && *p != '\t' && *p != '\n' && *p != '\r' && *p != '\x0b' && *p != '\f') {
+        if (!inword) {
+          inword = 1;
+          q = p;
+          if ($list_len(res) == from$int(maxsplit))
+            break; // we have now removed leading whitespace in remainder
+        } 
+      } else {
+          if (inword) {
+            inword = 0;
+            $bytes word;
+            NEW_UNFILLED_BYTES(word,p-q);
+            memcpy(word->str,q,p-q);
+            $list_append(res,word);
+          }
+      }
+      p++;
+    }
+    // this if statement should be simplified; almost code duplication.
+    if (p < s->str + s->nbytes) { // we did not break out of the while loop
+      if (inword) {
+        $bytes word;
+        NEW_UNFILLED_BYTES(word,p-q);
+        memcpy(word->str,q,p-q);
+        $list_append(res,word);
+      }
+    } else {
+      $bytes word;
+      p = s->str+s->nbytes;
+      NEW_UNFILLED_BYTES(word,p-q);
+      memcpy(word->str,q,p-q);
+      $list_append(res,word);
+    }
+    return res;
+  } else { // separator given
+    if (sep->nbytes==0) {
+      $RAISE(($BaseException)$NEW($ValueError,to$str("split for bytes: separator is empty string")));
+    }
+    if (s->nbytes==0) { // for some unfathomable reason, this is the behaviour of the Python method
+      $list_append(res,null_str);
+      return res;
+    }
+    $bytes ls, rs, ssep;
+    rs = s;
+    // Note: This builds many intermediate rs strings...
+    while (rs->nbytes>0 && $list_len(res) < from$int(maxsplit)) {
+     $tuple t = $bytes_partition(rs,sep);
+     ssep = ($bytes)t->components[1];
+     rs =  ($bytes)t->components[2];
+     $list_append(res,($bytes)t->components[0]);
+    }
+    if (ssep->nbytes>0)
+      $list_append(res,rs);
+    return res;
+  }
+}
+
+$list $bytes_splitlines($bytes s, $bool keepends) {
+  if (!keepends)
+    keepends = $False;
+  $list res = $NEW($list,NULL,NULL);
+  if (s->nbytes==0) {
+    return res;
+  }
+  int winend;
+  unsigned char *p = s->str;
+  unsigned char *q = p;
+  while (p < s->str + s->nbytes) {
+    if (*p != '\n' && *p != '\r') {
+      p++;
+    } else {
+      $bytes line;
+      winend = *p=='\r' && *(p+1)=='\n';
+      int size = p-q + (keepends->val ? 1 + winend : 0);
+      NEW_UNFILLED_BYTES(line,size);
+      memcpy(line->str,q,size);
+      p+= 1 + winend;
+      q = p;
+      $list_append(res,line);
+    }
+  }
+  if (q < p) {
+    $bytes line;
+    NEW_UNFILLED_BYTES(line,p-q);
+    memcpy(line->str,q,p-q);
+    $list_append(res,line);
+  }
+  return res;
+} 
+
+$bool $bytes_startswith($bytes s, $bytes sub, $int start, $int end) {
+  $int st = start;
+  $int en = end;
+  if (fix_start_end(s->nbytes,&st,&en) < 0) return $False;
+  unsigned char *p = s->str + st->val;
+  if (p+sub->nbytes >= s->str+s->nbytes) return $False;
+  unsigned char *q = sub->str;
+  for (int i=0; i<sub->nbytes; i++) {
+    if (p >= s->str + en->val || *p++ != *q++) {
+      return $False;
+    }
+  }
+  return $True;
+}
+
+
+$bytes $bytes_strip($bytes s, $bytes cs) {
+  return $bytes_lstrip($bytes_rstrip(s,cs),cs);
+}
+
+$bytes $bytes_upper($bytes s) {
+  $bytes res;
+  NEW_UNFILLED_BYTES(res,s->nbytes);
+  for (int i=0; i< s->nbytes; i++)
+    res->str[i] = toupper(res->str[i]);
+  
+  return res;
+}
+
+$bytes $bytes_zfill($bytes s, $int width) {
+  int fill = width->val - s->nbytes;
+  if (fill < 0)
+    return $bytes_copy(s);
+  $bytes res;
+  NEW_UNFILLED_BYTES(res,width->val);
+  unsigned char *p = s->str;
+  unsigned char *q = res->str;
+  int hassign = (*p=='+' | *p=='-');
+  if (hassign) {
+    *q = *p;
+    q++;
+  }
+  for (int i=0; i < fill; i++) 
+    *q++ = '0';
+  memcpy(res->str+hassign+fill,s->str+hassign,s->nbytes-hassign);
+  return res;
+}
+
+// protocol methods; string implementation prototypes ///////////////////////////////////////////////////
+
+int $bytes_eq($bytes,$bytes);
+int $bytes_neq($bytes,$bytes);
+int $bytes_lt($bytes,$bytes);
+int $bytes_le($bytes,$bytes);
+int $bytes_gt($bytes,$bytes);
+int $bytes_ge($bytes,$bytes);
+
+$Iterator $bytes_iter($bytes);
+
+$bytes $bytes_fromiter($Iterable, $WORD);
+$int $bytes_len($bytes str);
+
+int $bytes_contains ($bytes, $bytes);
+int $bytes_containsnot ($bytes, $bytes);
+
+$int $bytes_getitem($bytes, int);
+$bytes $bytes_getslice($bytes, $slice);
+ 
+$bytes $bytes_add($bytes, $bytes);
+$bytes $bytes_mul($bytes, $int);
+
+// Protocol instances, using above prototypes 
+
+// Ord
+
+void $Ord$bytes$__serialize__($Ord$bytes self, $Serial$state state) {
+}
+
+$Ord$bytes $Ord$bytes$__deserialize__($Ord$bytes self, $Serial$state state) {
+   $Ord$bytes res = $DNEW($Ord$bytes,state);
+   return res;
+}
+
+$Ord$bytes $Ord$bytes$new() {
+  return $NEW($Ord$bytes);
+}
+
+$bool $Ord$bytes$__eq__ ($Ord$bytes wit, $bytes a, $bytes b) {
+  return to$bool($bytes_eq(a,b));
+}
+
+$bool $Ord$bytes$__ne__ ($Ord$bytes wit, $bytes a, $bytes b) {
+  return  to$bool($bytes_neq(a,b));
+}
+
+$bool $Ord$bytes$__lt__ ($Ord$bytes wit, $bytes a, $bytes b) {
+  return to$bool($bytes_lt(a,b));
+}
+
+$bool $Ord$bytes$__le__ ($Ord$bytes wit, $bytes a, $bytes b){
+  return to$bool($bytes_le(a,b));
+}
+
+$bool $Ord$bytes$__gt__ ($Ord$bytes wit, $bytes a, $bytes b){
+  return to$bool($bytes_gt(a,b));
+}
+
+$bool $Ord$bytes$__ge__ ($Ord$bytes wit, $bytes a, $bytes b){
+  return to$bool($bytes_ge(a,b));
+}
+
+// Container
+
+void $Container$bytes$__serialize__($Container$bytes self, $Serial$state state) {
+}
+
+$Container$bytes $Container$bytes$__deserialize__($Container$bytes self, $Serial$state state) {
+   return  $DNEW($Container$bytes,state);
+}
+
+$Iterator $Container$bytes$__iter__ ($Container$bytes wit, $bytes str) {
+  return $bytes_iter(str);
+}
+
+$bytes $Container$bytes$__fromiter__ ($Container$bytes wit, $Iterable wit2, $WORD iter) {
+  return $bytes_join(to$bytes(""),wit2,iter);
+}
+
+$int $Container$bytes$__len__ ($Container$bytes wit, $bytes str) {
+  return $bytes_len(str);
+}
+
+$bool $Container$bytes$__contains__ ($Container$bytes wit, $bytes str, $bytes sub) {
+  return to$bool($bytes_contains(str, sub));
+}
+
+$bool $Container$bytes$__containsnot__ ($Container$bytes wit, $bytes str, $bytes sub) {
+  return to$bool($bytes_containsnot(str, sub));
+}  
+
+// Sliceable
+
+void $Sliceable$bytes$__serialize__($Sliceable$bytes self, $Serial$state state) {
+}
+
+$Sliceable$bytes $Sliceable$bytes$__deserialize__($Sliceable$bytes self, $Serial$state state) {
+   $Sliceable$bytes res = $DNEW($Sliceable$bytes,state);
+   return res;
+}
+
+$Sliceable$bytes $Sliceable$bytes$new() {
+  return $NEW($Sliceable$bytes);
+}
+$int $Sliceable$bytes$__getitem__ ($Sliceable$bytes wit, $bytes str, $int i) {
+  return $bytes_getitem(str,from$int(i));
+}
+
+void $Sliceable$bytes$__setitem__ ($Sliceable$bytes wit, $bytes str, $int i, $bytes val) {
+  fprintf(stderr,"Internal error: call to mutating method setitem on string");
+  exit(-1);
+}
+
+void $Sliceable$bytes$__delitem__ ($Sliceable$bytes wit, $bytes str, $int i) {
+  fprintf(stderr,"Internal error: call to mutating method delitem on string");
+  exit(-1);
+}
+
+$bytes $Sliceable$bytes$__getslice__ ($Sliceable$bytes wit, $bytes str, $slice slc) {
+  return $bytes_getslice(str,slc);
+}
+
+void $Sliceable$bytes$__setslice__ ($Sliceable$bytes wit, $bytes str, $Iterable wit2, $slice slc, $WORD iter) {
+  fprintf(stderr,"Internal error: call to mutating method setslice on string");
+  exit(-1);
+}
+
+void $Sliceable$bytes$__delslice__ ($Sliceable$bytes wit, $bytes str, $slice slc) {
+  fprintf(stderr,"Internal error: call to mutating method delslice on string");
+  exit(-1);
+}
+
+// Times
+
+void $Times$bytes$__serialize__($Times$bytes self, $Serial$state state) {
+}
+
+$Times$bytes $Times$bytes$__deserialize__($Times$bytes self, $Serial$state state) {
+   $Times$bytes res = $DNEW($Times$bytes,state);
+   return res;
+}
+
+$bytes $Times$bytes$__add__ ($Times$bytes wit, $bytes a, $bytes b) {
+  return $bytes_add(a,b);
+}
+
+$bytes $Times$bytes$__mul__ ($Times$bytes wit, $bytes a, $int n) {
+  return $bytes_mul(a,n);
+}
+
+// Hashable
+
+void $Hashable$bytes$__serialize__($Hashable$bytes self, $Serial$state state) {
+}
+
+$Hashable$bytes $Hashable$bytes$__deserialize__($Hashable$bytes self, $Serial$state state) {
+   $Hashable$bytes res = $DNEW($Hashable$bytes,state);
+   return res;
+}
+
+$bool $Hashable$bytes$__eq__ ($Hashable$bytes wit, $bytes a, $bytes b) {
+  return to$bool($bytes_eq(a,b));
+}
+
+$Hashable$bytes $Hashable$bytes$new() {
+  return $NEW($Hashable$bytes);
+}
+$bool $Hashable$bytes$__ne__ ($Hashable$bytes wit, $bytes a, $bytes b) {
+  return to$bool($bytes_neq(a,b));
+}
+
+$int $Hashable$bytes$__hash__($Hashable$bytes wit, $bytes str) {
+  return to$int($bytes_hash(str));
+}
+
+
+// Method tables for witness classes
+
+struct $Ord$bytes$class  $Ord$bytes$methods = {
+    "$Ord$bytes",
+    UNASSIGNED,
+    ($Super$class)&$Ord$methods,
+    (void (*)($Ord$bytes))$default__init__,
+    $Ord$bytes$__serialize__,
+    $Ord$bytes$__deserialize__,
+    ($bool (*)($Ord$bytes))$default__bool__,
+    ($str (*)($Ord$bytes))$default__str__,
+    $Ord$bytes$__eq__,
+    $Ord$bytes$__ne__,
+    $Ord$bytes$__lt__,
+    $Ord$bytes$__le__,
+    $Ord$bytes$__gt__,
+    $Ord$bytes$__ge__
+};
+struct $Ord$bytes $Ord$bytes_instance = {&$Ord$bytes$methods};
+$Ord$bytes $Ord$bytes$witness = &$Ord$bytes_instance;
+
+struct $Container$bytes$class  $Container$bytes$methods = {
+    "$Container$bytes",
+    UNASSIGNED,
+    ($Super$class)&$Container$methods,
+    $Container$bytes$__init__,
+    $Container$bytes$__serialize__,
+    $Container$bytes$__deserialize__,
+    ($bool (*)($Container$bytes))$default__bool__,
+    ($str (*)($Container$bytes))$default__str__,
+    $Container$bytes$__iter__,
+    NULL,
+    $Container$bytes$__len__,
+    $Container$bytes$__contains__,
+    $Container$bytes$__containsnot__
+};
+struct $Container$bytes $Container$bytes_instance = {&$Container$bytes$methods};
+$Container$bytes $Container$bytes$witness = &$Container$bytes_instance;
+
+
+struct $Sliceable$bytes$class  $Sliceable$bytes$methods = {
+    "$Sliceable$bytes",
+    UNASSIGNED,
+    ($Super$class)&$Sliceable$methods,
+    (void (*)($Sliceable$bytes))$default__init__,
+    $Sliceable$bytes$__serialize__,
+    $Sliceable$bytes$__deserialize__,
+    ($bool (*)($Sliceable$bytes))$default__bool__,
+    ($str (*)($Sliceable$bytes))$default__str__,
+    $Sliceable$bytes$__getitem__,
+    $Sliceable$bytes$__setitem__,
+    $Sliceable$bytes$__delitem__,
+    $Sliceable$bytes$__getslice__,
+    $Sliceable$bytes$__setslice__,
+    $Sliceable$bytes$__delslice__
+};
+struct $Sliceable$bytes $Sliceable$bytes_instance = {&$Sliceable$bytes$methods};
+$Sliceable$bytes $Sliceable$bytes$witness = &$Sliceable$bytes_instance;
+
+struct $Times$bytes$class  $Times$bytes$methods = {
+    "$Times$bytes",
+    UNASSIGNED,
+    ($Super$class)&$Times$methods,
+    (void (*)($Times$bytes))$default__init__,
+    $Times$bytes$__serialize__,
+    $Times$bytes$__deserialize__,
+    ($bool (*)($Times$bytes))$default__bool__,
+    ($str (*)($Times$bytes))$default__str__,
+    $Times$bytes$__add__,
+    ($bytes (*)($Times$bytes, $bytes, $bytes))$Plus$__iadd__,
+    $Times$bytes$__mul__,
+    ($bytes (*)($Times$bytes, $bytes, $int))$Times$__imul__,
+
+};
+struct $Times$bytes $Times$bytes_instance = {&$Times$bytes$methods};
+$Times$bytes $Times$bytes$witness = &$Times$bytes_instance;
+
+struct $Hashable$bytes$class  $Hashable$bytes$methods = {
+    "$Hashable$bytes",
+    UNASSIGNED,
+    ($Super$class)&$Hashable$methods,
+    (void (*)($Hashable$bytes))$default__init__,
+    $Hashable$bytes$__serialize__,
+    $Hashable$bytes$__deserialize__,
+    ($bool (*)($Hashable$bytes))$default__bool__,
+    ($str (*)($Hashable$bytes))$default__str__,
+    $Hashable$bytes$__eq__,
+    $Hashable$bytes$__ne__,
+    $Hashable$bytes$__hash__
+};
+struct $Hashable$bytes $Hashable$bytes_instance = {&$Hashable$bytes$methods};
+$Hashable$bytes $Hashable$bytes$witness = &$Hashable$bytes_instance;
+
+ 
+void $Container$bytes$__init__ ($Container$bytes wit) {
+}
+
+
+// Protocol methods; bytes implementations /////////////////////////////////////////////////////////////////////////////
+/* 
+Note: We make bytes instances for Indexed and Sliceable even though these protocols 
+include mutating methods. 
+*/
+
+// $Ord ///////////////////////////////////////////////////////////////////////////////////////////////
+
+
+// TODO: We should consider how to normalize strings before comparisons
+
+int $bytes_eq($bytes a, $bytes b) {
+  return (strcmp((char *)a->str,(char *)b->str)==0);
+}
+         
+int $bytes_neq($bytes a, $bytes b) {
+  return !$bytes_eq(a,b);
+}
+
+// The comparisons below do lexicographic byte-wise comparisons.
+// Thus they do not in general reflect locale-dependent order conventions.
+ 
+int $bytes_lt($bytes a, $bytes b) {
+  return (strcmp((char *)a->str,(char *)b->str) < 0);
+}
+ 
+int $bytes_le($bytes a, $bytes b) {
+  return (strcmp((char *)a->str,(char *)b->str) <= 0);
+}
+ 
+int $bytes_gt($bytes a, $bytes b) {
+  return (strcmp((char *)a->str,(char *)b->str) > 0);
+}
+ 
+int $bytes_ge($bytes a, $bytes b) {
+  return (strcmp((char *)a->str,(char *)b->str) >= 0);
+}
+ 
+// $Hashable ///////////////////////////////////////////////////////////////////////////////////
+
+// hash function $string_hash defined in hash.c
+
+// $Times /////////////////////////////////////////////////////////////////////////////////////////////
+
+$Times$bytes $Times$bytes$new() {
+  return $NEW($Times$bytes);
+}
+ 
+$bytes $bytes_add($bytes s, $bytes t) {
+  $bytes res;
+  NEW_UNFILLED_BYTES(res,s->nbytes + t->nbytes);
+  memcpy(res->str,s->str,s->nbytes);
+  memcpy(res->str+s->nbytes,t->str,t->nbytes);
+  return res;
+}
+
+$bytes $bytes_mul ($bytes a, $int n) {
+  if (n->val <= 0)
+    return to$bytes("");
+  else {
+      $bytes res;
+      NEW_UNFILLED_BYTES(res, a->nbytes * n->val);
+      for (int i=0; i<n->val; i++)
+        memcpy(res->str + i*a->nbytes,a->str,a->nbytes);
+      return res;
+  }
+}
+
+// Collection ///////////////////////////////////////////////////////////////////////////////////////
+
+$int $bytes_len($bytes s) {
+  $int res = to$int(s->nbytes);
+  return res;
+}
+
+// $Container ///////////////////////////////////////////////////////////////////////////
+
+ 
+$Container$bytes $Container$bytes$new() {
+  return $NEW($Container$bytes);
+}
+
+int $bytes_contains($bytes s, $bytes sub) {
+  return bmh(s->str,sub->str,s->nbytes,sub->nbytes) > 0;
+}
+
+int $bytes_containsnot($bytes s, $bytes sub) {
+  return !$bytes_contains(s,sub);
+}
+
+// Iterable ///////////////////////////////////////////////////////////////////////////
+
+$Iterator$bytes $Iterator$bytes$new($bytes str) {
+  return $NEW($Iterator$bytes, str);
+}
+
+void $Iterator$bytes_init($Iterator$bytes self, $bytes str) {
+  self->src = str;
+  self->nxt = 0;
+}
+
+void $Iterator$bytes_serialize($Iterator$bytes self,$Serial$state state) {
+  $step_serialize(self->src,state);
+  $step_serialize(to$int(self->nxt),state);
+}
+
+
+$Iterator$bytes $Iterator$bytes$_deserialize($Iterator$bytes res, $Serial$state state) {
+   if (!res)
+      res = $DNEW($Iterator$bytes,state);
+   res->src = ($bytes)$step_deserialize(state);
+   res->nxt = from$int(($int)$step_deserialize(state));
+   return res;
+}
+
+$bool $Iterator$bytes_bool($Iterator$bytes self) {
+  return $True;
+}
+
+$str $Iterator$bytes_str($Iterator$bytes self) {
+  char *s;
+  asprintf(&s,"<bytes iterator object at %p>",self);
+  return to$str(s);
+}
+
+// this is next function for forward iteration
+static $int $Iterator$bytes_next($Iterator$bytes self) {
+    return self->nxt >= self->src->nbytes ? NULL : to$int(self->src->str[self->nxt++]);
+}
+
+$Iterator $bytes_iter($bytes str) {
+  return ($Iterator)$NEW($Iterator$bytes,str);
+}
+
+struct $Iterator$bytes$class $Iterator$bytes$methods = {"$Iterator$bytes",UNASSIGNED,($Super$class)&$Iterator$methods, $Iterator$bytes_init,
+                                                    $Iterator$bytes_serialize, $Iterator$bytes$_deserialize,
+                                                    $Iterator$bytes_bool, $Iterator$bytes_str, $Iterator$bytes_next};
+
+
+// Indexed ///////////////////////////////////////////////////////////////////////////
+
+$int $bytes_getitem($bytes self, int ix) {
+  int ix0 = ix < 0 ? self->nbytes + ix : ix;
+  if (ix0<0 || ix0 >= self->nbytes)
+    $RAISE(($BaseException)$NEW($IndexError,to$str("getitem for bytes: indexing outside array")));
+  return to$int((long)self->str[ix0]);
+}
+ 
+// Sliceable //////////////////////////////////////////////////////////////////////////////////////
+
+$bytes $bytes_getslice($bytes s, $slice slc) {
+  int start, stop, step, slen;
+  normalize_slice(slc, s->nbytes, &slen, &start, &stop, &step);
+ //slice notation has been eliminated and default values applied
+  $bytes res;
+  NEW_UNFILLED_BYTES(res,slen);
+  int t = start;
+  for (int i=0; i<slen; i++) {
+    res->str[i] = s->str[t];
+    t += step;
+  }
+ return res;
+}
+
+
+
+// General methods ////////////////////////////////////////////////////////////// 
+
+$bytes $bytes$new($Iterable iter, $WORD wit) {
+  return $NEW($bytes, iter, wit);
+}
+
+void $bytes_init($bytes self, $Iterable wit, $WORD iter) {
+  $list lst = $list_fromiter(wit->$class->__iter__(wit,iter));
+  int len = lst->length;
+  self->nbytes = len;
+  self->str = malloc(len+1);
+  self->str[len] = 0;
+  for (int i=0; i< len; i++) {
+    long n = (($int)lst->data[i])->val;
+    if (0<=n && n <= 255)
+      self->str[i] = n;
+    else
+    $RAISE(($BaseException)$NEW($ValueError,to$str("bytes constructor: element outside [0..255]")));
+  }
+}
+
+$bool $bytes_bool($bytes s) {
+  return to$bool(s->nbytes > 0);
+};
+
+$str $bytes_str($bytes s) {
+  int lens = s->nbytes+4;
+  char * str = malloc(lens);
+  str[0] = 'b';
+  str[1] = '\'';
+  str[lens-2] = '\'';
+  str[lens-1] = '\0';
+  memcpy(str+2,s->str,lens-4);
+  return to$str(str);
+}
+
+
+void $bytes_serialize($bytes str,$Serial$state state) {
+  int nWords = str->nbytes/sizeof($WORD) + 1;         // # $WORDS needed to store str->str, including terminating 0.
+  $ROW row = $add_header(STR_ID,1+nWords,state);
+  long nbytes = (long)str->nbytes;                    
+  memcpy(row->blob,&nbytes,sizeof($WORD));            
+  memcpy(row->blob+1,str->str,nbytes+1);
+}
+
+$bytes $bytes_deserialize($bytes self, $Serial$state state) {
+  $ROW this = state->row;
+  state->row =this->next;
+  state->row_no++;
+  $bytes res = malloc(sizeof(struct $bytes));
+  long nbytes;
+  memcpy(&nbytes,this->blob,sizeof($WORD));
+  res->$class = &$bytes$methods;
+  res->nbytes = (int)nbytes;
+  res->str = malloc(nbytes+1);
+  memcpy(res->str,this->blob+2,nbytes+1);
+  return res;
+}
+  
 
 // Builtin functions involving strings /////////////////////////////////////////////
 

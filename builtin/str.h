@@ -125,7 +125,7 @@ struct $bytearray$class {
   char *$GCINFO;
   int $class_id;
   $Super$class $superclass;
-  void (*__init__)($bytearray, $value);
+  void (*__init__)($bytearray, $bytes);
   void (*__serialize__)($bytearray,$Serial$state);
   $bytearray (*__deserialize__)($bytearray,$Serial$state);
   $bool (*__bool__)($bytearray);
@@ -168,7 +168,7 @@ struct $bytearray$class {
 };
 
 extern struct $bytearray$class $bytearray$methods;
-$bytearray $bytearray$new($value);
+$bytearray $bytearray$new($bytes);
 
 extern struct $Ord$bytearray$class $Ord$bytearray$methods;
 $Ord$bytearray $Ord$bytearray$new();
@@ -214,6 +214,114 @@ struct $Iterator$bytearray {
 
 extern struct  $Iterator$bytearray$class  $Iterator$bytearray$methods;
 $Iterator$bytearray $Iterator$bytearray$new($bytearray);
+
+// bytes /////////////////////////////////////////////////////////////////////////////////////
+
+
+struct $bytes$class;
+
+struct $bytes {
+  struct $bytes$class *$class;
+  int nbytes;
+  //  int capacity;   // not used; present here so that all bytearray functions can be reused for bytes (after typecasts)
+  unsigned char *str;
+};
+
+struct $bytes$class {
+  char *$GCINFO;
+  int $class_id;
+  $Super$class $superclass;
+  void (*__init__)($bytes, $Iterable, $WORD);
+  void (*__serialize__)($bytes,$Serial$state);
+  $bytes (*__deserialize__)($bytes,$Serial$state);
+  $bool (*__bool__)($bytes);
+  $str (*__str__)($bytes);
+  $bytes (*capitalize)($bytes s);
+  $bytes (*center)($bytes s, $int width, $bytes fill);                 
+  $int (*count)($bytes s, $bytes sub, $int start, $int end);
+  $str (*decode)($bytes);
+  $bool (*endswith)($bytes s, $bytes suffix, $int start, $int end);
+  $bytes (*expandtabs)($bytes s, $int tabsize);     
+  $int (*find)($bytes s, $bytes sub, $int start, $int end);         
+  $int (*index)($bytes s, $bytes sub, $int start, $int end);        
+  $bool (*isalnum)($bytes s);                                     
+  $bool (*isalpha)($bytes s);
+  $bool (*isascii)($bytes s);
+  $bool (*isdigit)($bytes s);
+  $bool (*islower)($bytes s);
+  //  $bool (*isprintable)($bytes s);
+  $bool (*isspace)($bytes s);
+  $bool (*istitle)($bytes s);
+  $bool (*isupper)($bytes s);
+  $bytes (*join)($bytes sep, $Iterable wit, $WORD iter);
+  $bytes (*ljust)($bytes s, $int width, $bytes fill);                  
+  $bytes (*lower)($bytes s);
+  $bytes (*lstrip)($bytes s,$bytes cs);                               
+  $tuple (*partition)($bytes s, $bytes sep);
+  $bytes (*replace)($bytes s, $bytes old, $bytes new, $int count);
+  $int (*rfind)($bytes s, $bytes sub, $int start, $int end);
+  $int (*rindex)($bytes s, $bytes sub, $int start, $int end);       
+  $bytes (*rjust)($bytes s, $int width, $bytes fill);                  
+  $tuple (*rpartition)($bytes s, $bytes sep); 
+  //$list (*rsplit)($bytes s, $bytes sep, int maxsplit);             
+  $bytes (*rstrip)($bytes s,$bytes cs);                                
+  $list (*split)($bytes s, $bytes sep, $int maxsplit);               
+  $list (*splitlines)($bytes s, $bool keepends);                                   
+  $bool (*startswith)($bytes s, $bytes prefix, $int start, $int end);
+  $bytes (*strip)($bytes s, $bytes cs);                                
+  $bytes (*upper)($bytes s);
+  $bytes (*zfill)($bytes s, $int width);
+};
+
+extern struct $bytes$class $bytes$methods;
+$bytes $bytes$new($Iterable,$WORD);
+
+extern struct $Ord$bytes$class $Ord$bytes$methods;
+$Ord$bytes $Ord$bytes$new();
+extern struct $Hashable$bytes$class $Hashable$bytes$methods;
+$Hashable$bytes $Hashable$bytes$new();
+extern struct $Times$bytes$class $Times$bytes$methods;
+$Times$bytes $Times$bytes$new();
+extern struct $Sliceable$bytes$class $Sliceable$bytes$methods;
+$Sliceable$bytes $Sliceable$bytes$new();
+extern struct $Container$bytes$class $Container$bytes$methods;
+$Container$bytes $Container$bytes$new();
+
+extern struct $Ord$bytes *$Ord$bytes$witness;
+extern struct $Hashable$bytes *$Hashable$bytes$witness;
+extern struct $Times$bytes *$Times$bytes$witness;
+extern struct $Sliceable$bytes *$Sliceable$bytes$witness;
+extern struct $Container$bytes *$Container$bytes$witness;
+
+$bytes to$bytes(char *str); 
+unsigned char *from$bytes($bytes b);
+
+
+// Iterators over bytess ///////////////////////////////////////////////////////
+
+
+typedef struct $Iterator$bytes *$Iterator$bytes; ;
+
+struct $Iterator$bytes$class {
+  char *$GCINFO;
+  int $class_id;
+  $Super$class $superclass;
+  void (*__init__)($Iterator$bytes, $bytes);
+  void (*__serialize__)($Iterator$bytes,$Serial$state);
+  $Iterator$bytes (*__deserialize__)($Iterator$bytes,$Serial$state);
+  $bool (*__bool__)($Iterator$bytes);
+  $str (*__str__)($Iterator$bytes);
+  $int (*__next__)($Iterator$bytes);
+};
+
+struct $Iterator$bytes {
+  struct $Iterator$bytes$class *$class;
+  $bytes src;
+  int nxt;
+};
+
+extern struct  $Iterator$bytes$class  $Iterator$bytes$methods;
+$Iterator$bytes $Iterator$bytes$new($bytes);
 
 //builtin functions //////////////////////////////////////////////////////////////////////////////////
 

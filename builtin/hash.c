@@ -201,6 +201,23 @@ long $string_hash($str s) {
     return x;
 }
 
+long $bytes_hash($bytes s) {
+  int len = s->nbytes;
+    long x;
+    /*
+      We make the hash of the empty string be 0, rather than using
+      (prefix ^ suffix), since this slightly obfuscates the hash secret
+    */
+    if (len == 0) {
+        return 0;
+    }
+         x = pysiphash(s->str, len);
+
+    if (x == -1)
+        return -2;
+    return x;
+}
+
    
 /*
  "Old" hash algorithm for tuples; used in Python versions <= 3.7. 
