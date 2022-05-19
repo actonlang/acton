@@ -2508,7 +2508,7 @@ int main(int argc, char **argv) {
 			log_debug("select returned %d/%d!", status, errno);
 
         // Monitor socket
-        if (FD_ISSET(mon_sock, &readfds)) {
+        if (mon_sock > 0 && FD_ISSET(mon_sock, &readfds)) {
             if (mon_client_sock == -1) {
                 socklen_t t = sizeof(mon_client_sock);
                 if ((mon_client_sock = accept(mon_sock, (struct sockaddr *)&mon_client_addr, &t)) == -1) {
@@ -2519,7 +2519,7 @@ int main(int argc, char **argv) {
         }
 
         // Monitor socket client requests
-        if (mon_client_sock && FD_ISSET(mon_client_sock, &readfds)) {
+        if (mon_client_sock > 0 && FD_ISSET(mon_client_sock, &readfds)) {
             char *buf_base, *str;
             size_t len;
             ssize_t bytes_read = recv(mon_client_sock, &mon_rbuf[mon_buf_used], sizeof(mon_rbuf) - mon_buf_used, 0);
