@@ -59,7 +59,7 @@ typedef struct membership_state
 } membership_state;
 
 membership_state * init_membership_state(int no_nodes, node_description * membership, int no_client_nodes, node_description * client_membership, vector_clock * view_id);
-void free_membership_state(membership_state * vc);
+void free_membership_state(membership_state * ms, int do_free_vc);
 int serialize_membership_state(membership_state * gs, void ** buf, unsigned * len);
 int deserialize_membership_state(void * buf, unsigned msg_len, membership_state ** gs);
 int equals_membership_state(membership_state * gs1, membership_state * gs2);

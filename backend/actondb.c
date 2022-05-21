@@ -118,6 +118,7 @@ typedef struct membership
 	skiplist_t * agreed_peers;
 	skiplist_t * stable_peers;
 	skiplist_t * connected_clients;
+	skiplist_t * connected_client_sockets;
 
 	vector_clock * view_id;
 
@@ -575,6 +576,8 @@ int handle_gossip_listen_message(gossip_listen_message * msg, client_descriptor 
 	struct sockaddr_in dummy_serveraddr;
 	remote_server * rs = get_remote_server(msg->node_description->hostname, msg->node_description->portno, dummy_serveraddr, cd->addr, -2, 0);
 	rs->status = 0;
+
+	log_debug("Adding client %s:%d/%d/%d to membership.", rs->hostname, msg->node_description->portno, msg->node_description->node_id, rs->portno);
 
 	int status = add_remote_server_to_list(rs, m->connected_clients, fastrandstate);
 
@@ -1037,11 +1040,12 @@ int handle_client_message(int childfd, int msg_len, db_t * db, membership * m, s
     void * tmp_out_buf = NULL, * q = NULL;
     unsigned snd_msg_len;
     short msg_type;
+    short is_gossip_message;
 	db_schema_t * schema;
 	int64_t nonce = -1;
 
 	vector_clock * lc_read = NULL;
-    int status = parse_message(in_buf + sizeof(int), msg_len, &q, &msg_type, &nonce, 1, &lc_read);
+    int status = parse_message(in_buf + sizeof(int), msg_len, &q, &msg_type, &is_gossip_message, &nonce, 1, &lc_read);
 
     if(status != 0)
     {
@@ -1937,9 +1941,50 @@ int install_agreed_view(membership_agreement_msg * ma, membership * m, vector_cl
 	return local_view_disagrees;
 }
 
+int notify_new_view_to_clients(membership * m, membership_agreement_msg * ma, vector_clock * my_lc)
+{
+    void * tmp_out_buf = NULL, * q = NULL;
+    unsigned snd_msg_len;
+    char msg_buf[1024];
+
+	membership_agreement_msg * amr = NULL;
+
+	membership_state * mstate = get_membership_state_from_server_list(m->local_peers, m->connected_clients, my_lc);
+
+	int status = get_agreement_notify_packet(PROPOSAL_STATUS_ACCEPTED, mstate, ma, &amr, &tmp_out_buf, &snd_msg_len, copy_vc(my_lc), copy_vc(my_lc));
+
+	for(snode_t * crt = HEAD(m->connected_client_sockets); crt!=NULL; crt = NEXT(crt))
+	{
+		client_descriptor * cd = (client_descriptor *) crt->value;
+
+		if(cd->sockfd == 0)
+			continue;
+
+		char client_address2[INET_ADDRSTRLEN];
+		inet_ntop( AF_INET, &(cd->addr).sin_addr, client_address2, sizeof(client_address2));
+		log_debug("SERVER: Notifying new agreed view %s to client %s:%d, fd=%d",
+							to_string_membership_agreement_msg(ma, msg_buf),
+							client_address2, ntohs(cd->addr.sin_port), cd->sockfd);
+
+		int n = write(cd->sockfd, tmp_out_buf, snd_msg_len);
+
+		if (n < 0)
+			error("ERROR writing to socket");
+	}
+
+	free_membership_agreement(amr);
+
+//	free_membership_state(mstate, 0);
+
+	free(tmp_out_buf);
+
+	return 0;
+}
+
 int handle_agreement_notify_message(membership_agreement_msg * ma, membership * m, db_t * db, vector_clock * my_lc, vector_clock * prev_vc, unsigned int * fastrandstate)
 {
 	int ret = install_agreed_view(ma, m, my_lc, fastrandstate);
+	notify_new_view_to_clients(m, ma, my_lc);
 	return ret;
 }
 
@@ -1984,7 +2029,7 @@ int handle_join_message(int childfd, int msg_len, membership * m, db_t * db, uns
 
 	if(status != 0)
 	{
-		fprintf(stderr, "ERROR decoding client request");
+		fprintf(stderr, "ERROR decoding server join request");
     	    	return -1;
 	}
 
@@ -2089,7 +2134,7 @@ int handle_server_message(int childfd, int msg_len, membership * m, db_t * db, u
 
 	if(status != 0)
 	{
-		fprintf(stderr, "ERROR decoding client request");
+		fprintf(stderr, "ERROR decoding server gossip message");
     	    	return -1;
 	}
 
@@ -2427,7 +2472,7 @@ int main(int argc, char **argv) {
           fprintf(stderr, "ERROR: Unable to open log file (%s) for writing\n", arguments.log_file_path);
           exit(1);
       }
-      log_add_fp(logf, LOG_TRACE);
+      log_add_fp(logf, LOG_DEBUG); // LOG_TRACE
       // Turn off log output on stderr
       log_set_quiet(true);
   }
@@ -2521,6 +2566,7 @@ int main(int argc, char **argv) {
   vector_clock * my_lc = init_local_vc_id(my_id);
 
   membership * m = get_membership(my_id);
+  m->connected_client_sockets = clients;
 
   log_info("Started [%s:%d, %s:%d], my_lc = %s", inet_ntoa(serveraddr.sin_addr), ntohs(serveraddr.sin_port), my_address, my_port, to_string_vc(my_lc, msg_buf));
 
@@ -2849,7 +2895,7 @@ int main(int argc, char **argv) {
 			if(rs->sockfd > 0 && FD_ISSET(rs->sockfd , &readfds))
 			// Received a msg from this server:
 			{
-                log_debug("active peer %s, sockfd=%d, status=%d is ready for reading", rs->id, rs->sockfd, rs->status);
+				log_trace("active peer %s, sockfd=%d, status=%d is ready for reading", rs->id, rs->sockfd, rs->status);
 
 				ret = read_full_packet(&(rs->sockfd), (char *) in_buf, SERVER_BUFSIZE, &msg_len, &(rs->status), &handle_socket_close);
 

@@ -2226,14 +2226,55 @@ void free_client_msg(ClientMessage * cm)
 		free_vc_msg(cm->vc);
 }
 
-int deserialize_client_message(void * buf, unsigned msg_len, void ** dest_buf, short * mtype, vector_clock ** vc)
+int deserialize_client_message(void * buf, unsigned msg_len, void ** dest_buf, short * mtype, short * is_gossip_message, vector_clock ** vc)
 {
 	ClientMessage * cm = client_message__unpack (NULL, msg_len, buf);
+	*is_gossip_message = 0;
 
 	if (cm == NULL)
 	{
-		fprintf(stderr, "error unpacking server message\n");
-	    return 1;
+		fprintf(stderr, "error unpacking client message\n");
+
+		// This might be a gossiped membership notification:
+
+		membership_agreement_msg * ma = NULL;
+
+		int status = deserialize_membership_agreement_msg(buf, msg_len, &ma); //  + sizeof(int)
+
+		if(status == 0)
+		{
+// #if (VERBOSE_RPC > 0)
+			char print_buff[1024];
+			to_string_membership_agreement_msg(ma, (char *) print_buff);
+			log_debug("Received gossip message: %s", print_buff);
+// #endif
+
+			switch(ma->msg_type)
+			{
+				case MEMBERSHIP_AGREEMENT_NOTIFY:
+				{
+					*is_gossip_message = 1;
+					*mtype = ma->msg_type;
+					*dest_buf = ma;
+//					int local_view_disagrees = handle_agreement_notify_message(ma, m, db, copy_vc(my_lc), prev_vc, fastrandstate);
+					break;
+				}
+				default:
+				{
+					fprintf(stderr, "Wrong gossip message type %d\n", ma->msg_type);
+					assert(0);
+				}
+			}
+
+//			free_membership_agreement(ma);
+
+			return 0;
+		}
+		else
+		{
+			fprintf(stderr, "error unpacking gossip message\n");
+			return 1;
+		}
 	}
 
 	switch(cm->mtype)

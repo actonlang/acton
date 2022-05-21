@@ -221,11 +221,12 @@ membership_state * clone_membership(membership_state * m)
 	return ms;
 }
 
-void free_membership_state(membership_state * ms)
+void free_membership_state(membership_state * ms, int do_free_vc)
 {
 	free(ms->membership);
 	free(ms->client_membership);
-	free_vc(ms->view_id);
+	if(do_free_vc)
+		free_vc(ms->view_id);
 	free(ms);
 }
 
@@ -421,7 +422,7 @@ membership_agreement_msg * get_membership_join_msg(int status, int rack_id, int 
 void free_membership_agreement(membership_agreement_msg * ma)
 {
 	if(ma->membership != NULL)
-		free_membership_state(ma->membership);
+		free_membership_state(ma->membership, 1);
 	if(ma->vc != NULL)
 		free_vc(ma->vc);
 	free(ma);
@@ -479,7 +480,7 @@ int deserialize_membership_agreement_msg(void * buf, unsigned msg_len, membershi
 	if (msg == NULL)
 	{
 		fprintf(stderr, "error unpacking membership agreement message\n");
-	    return 1;
+		return 1;
 	}
 
 	vector_clock * vc = init_vc_from_msg(msg->vc);

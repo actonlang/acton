@@ -27,6 +27,9 @@
 #include <uuid/uuid.h>
 #include <signal.h>
 
+#include <time.h>
+#include <stdlib.h>
+
 #include "yyjson.h"
 #include "rts.h"
 
@@ -1908,7 +1911,11 @@ int main(int argc, char **argv) {
     if (ddb_host) {
         GET_RANDSEED(&seed, 0);
         log_info("Using distributed database backend replication factor of %d\n", ddb_replication);
-        db = get_remote_db(ddb_replication, 0, 0, "localhost", 0);
+        int random_id;
+		FASTRAND(&seed, random_id);
+		random_id = 5000 + random_id % 100;
+		printf("Picked ID %d\n", random_id);
+        db = get_remote_db(ddb_replication, 0, 0, "localhost", random_id);
         for (int i=0; i<ddb_no_host; i++) {
             char *host = strdup(ddb_host[i]);
 
@@ -1922,7 +1929,7 @@ int main(int argc, char **argv) {
             log_info("Using distributed database backend (DDB): %s:%d\n", host, port);
             add_server_to_membership(host, port, db, &seed);
         }
-        listen_to_gossip(NODE_LIVE, 0, 0, "localhost", 11111, db);
+        listen_to_gossip(NODE_LIVE, 0, 0, "localhost", random_id, db);
     }
 
     if (db) {

@@ -187,7 +187,7 @@ int parse_message_v1(void * rcv_buf, size_t rcv_msg_len, void ** out_msg, short 
 	return 1;
 }
 
-int parse_message(void * rcv_buf, size_t rcv_msg_len, void ** out_msg, short * out_msg_type, int64_t * nonce, short is_server, vector_clock ** vc)
+int parse_message(void * rcv_buf, size_t rcv_msg_len, void ** out_msg, short * out_msg_type, short * is_gossip_message, int64_t * nonce, short is_server, vector_clock ** vc)
 {
 	read_query * rq;
 	range_read_query * rrq;
@@ -279,10 +279,15 @@ int parse_message(void * rcv_buf, size_t rcv_msg_len, void ** out_msg, short * o
 	}
 	else // RPCs received by client
 	{
-		status = deserialize_client_message(rcv_buf, rcv_msg_len, out_msg, out_msg_type, vc);
+		status = deserialize_client_message(rcv_buf, rcv_msg_len, out_msg, out_msg_type, is_gossip_message, vc);
 
 		if(status == 0)
 		{
+			if(*is_gossip_message)
+			{
+				return 0;
+			}
+
 			switch(*out_msg_type)
 			{
 				case RPC_TYPE_ACK:

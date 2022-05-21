@@ -19,6 +19,7 @@
  */
 
 #include "client_api.h"
+#include "log.h"
 
 struct dbc_stat dbc_stats;
 
@@ -126,6 +127,8 @@ remote_db_t * get_remote_db(int replication_factor, int rack_id, int dc_id, char
 	memset(db, 0, sizeof(remote_db_t) + 5 * sizeof(pthread_mutex_t) + sizeof(pthread_cond_t));
 
 	db->servers = create_skiplist(&sockaddr_cmp);
+	db->rtses = create_skiplist(&sockaddr_cmp);
+	db->actors = create_skiplist_long();
 	db->txn_state = create_skiplist_uuid();
 	db->queue_subscriptions = create_skiplist(&queue_callback_cmp);
 	db->msg_callbacks = create_skiplist_long();
@@ -196,78 +199,33 @@ int install_gossiped_view(membership_agreement_msg * ma, remote_db_t * db, unsig
 		return 1;
 	}
 
-	// If servers are already connected in local membership, copy their entries from there into agreed membership. Otherwise create new connections for them:
-
-	skiplist_t * new_membership = create_skiplist(&sockaddr_cmp);
-
-	int local_view_disagrees = 0;
-	struct sockaddr_in dummy_serveraddr;
-
+	// Add DB servers we have recently found about to client's server membership:
 	for(int i=0;i<ma->membership->no_nodes;i++)
 	{
 		node_description nd = ma->membership->membership[i];
 
-		remote_server * rs = get_remote_server(nd.hostname, nd.portno, dummy_serveraddr, dummy_serveraddr, -2, 0); // 1
-		rs->status = nd.status;
-
-		snode_t * node = skiplist_search(db->servers, &rs->serveraddr);
-
-		if(node == NULL) // I just learned about this node
-		{
-			int status = connect_remote_server(rs);
-
-			if(status != 0)
-			{
-				rs->sockfd = 0;
-				rs->status = NODE_DEAD;
-				local_view_disagrees = 1;
-			}
-
-		    status = skiplist_insert(db->servers, &rs->serveraddr, rs, fastrandstate);
-			assert(status == 0);
-
-			status = skiplist_insert(new_membership, &rs->serveraddr, rs, fastrandstate);
-			assert(status == 0);
-		}
-		else
-		{
-			free_remote_server(rs);
-
-			remote_server * rs_local = (remote_server *) node->value;
-
-			if(rs_local->status == NODE_UNKNOWN)
-			{
-				rs_local->status = nd.status;
-			}
-			else if(rs_local->status != nd.status) // if proposed server status is different than local one, use proposed status
-			{
-				rs_local->status = nd.status;
-			}
-
-			int status = skiplist_insert(new_membership, &rs_local->serveraddr, rs_local, fastrandstate);
-			assert(status == 0);
-		}
+		add_server_to_membership(nd.hostname, nd.portno - 2000, db, fastrandstate);
 	}
 
-	if(db->servers != NULL)
+	// Add RTSs we have recently found about to client's RTS membership:
+	for(int i=0;i<ma->membership->no_client_nodes;i++)
 	{
-		skiplist_free(db->servers);
-//		skiplist_free_val(m->agreed_peers, &free_remote_server_ptr);
-	}
+		node_description nd = ma->membership->client_membership[i];
 
-	db->servers = new_membership;
+		add_rts_to_membership(nd.rack_id, nd.dc_id, nd.hostname, nd.portno, nd.status, db->rtses, fastrandstate);
+	}
 
 	update_or_replace_vc(&(db->current_view_id), ma->vc);
 
 	pthread_mutex_unlock(db->gossip_lock);
 
 #if (VERBOSE_RPC > -1)
-	printf("SERVER: Installed new agreed view %s, local_view_disagrees=%d\n",
-					to_string_membership_agreement_msg(ma, msg_buf),
-					local_view_disagrees);
+	log_debug("CLIENT: Installed new agreed view %s\n", to_string_membership_agreement_msg(ma, msg_buf));
 #endif
 
-	return local_view_disagrees;
+    log_debug("CLIENT: RTS membership: %s\n", to_string_rts_membership(db, msg_buf));
+
+	return 0;
 }
 
 void comm_wake_up(remote_db_t *db) {
@@ -405,11 +363,12 @@ void * comm_thread_loop(void * args)
 
 			    void * tmp_out_buf = NULL, * q = NULL;
 			    short msg_type;
+			    short is_gossip_message;
 				db_schema_t * schema;
 				int64_t nonce = -1;
 
 				vector_clock * lc_read = NULL;
-			    int status = parse_message(in_buf + sizeof(int), msg_len, &q, &msg_type, &nonce, 0, &lc_read);
+			    int status = parse_message(in_buf + sizeof(int), msg_len, &q, &msg_type, &is_gossip_message, &nonce, 0, &lc_read);
 
 			    if(status != 0)
 			    {
@@ -478,13 +437,15 @@ void * comm_thread_loop(void * args)
 			    }
 			    else // a gossip notification
 			    {
-		    			assert(msg_type == RPC_TYPE_GOSSIP);
+					assert(is_gossip_message && msg_type == MEMBERSHIP_AGREEMENT_NOTIFY);
 
-		    			membership_agreement_msg * ma = (membership_agreement_msg *) q;
+					membership_agreement_msg * ma = (membership_agreement_msg *) q;
 
-		    			assert(ma->msg_type == MEMBERSHIP_AGREEMENT_NOTIFY);
+					assert(ma->msg_type == MEMBERSHIP_AGREEMENT_NOTIFY);
 
-		    			install_gossiped_view(ma, db, &(db->fastrandstate));
+					install_gossiped_view(ma, db, &(db->fastrandstate));
+
+					free_membership_agreement(ma);
 			    }
 
 //			    assert(status > 0);
@@ -499,7 +460,7 @@ int add_server_to_membership(char *hostname, int portno, remote_db_t * db, unsig
 {
 	struct sockaddr_in dummy_serveraddr;
 
-    remote_server * rs = get_remote_server(hostname, portno, dummy_serveraddr, dummy_serveraddr, -2, 1);
+    remote_server * rs = get_remote_server(hostname, portno, dummy_serveraddr, dummy_serveraddr, -2, 0);
 
     if(rs == NULL)
     {
@@ -507,12 +468,21 @@ int add_server_to_membership(char *hostname, int portno, remote_db_t * db, unsig
     		return 1;
     }
 
-    if(skiplist_search(db->servers, &rs->serveraddr) != NULL)
+    snode_t * prev_entry = skiplist_search(db->servers, &rs->serveraddr);
+
+    if(prev_entry != NULL)
     {
 		fprintf(stderr, "ERROR: Server address %s:%d was already added to membership!\n", hostname, portno);
 		free_remote_server(rs);
+		remote_server * prev_rems = (remote_server *) prev_entry->value;
+		if(prev_rems->status == NODE_DEAD)
+			prev_rems->status = NODE_LIVE;
 		return -1;
     }
+
+    free_remote_server(rs);
+
+    rs = get_remote_server(hostname, portno, dummy_serveraddr, dummy_serveraddr, -2, 1);
 
     int status = skiplist_insert(db->servers, &rs->serveraddr, rs, seedptr);
 
@@ -532,6 +502,95 @@ int add_server_to_membership(char *hostname, int portno, remote_db_t * db, unsig
 
     return 0;
 }
+
+rts_descriptor * get_rts_descriptor(int rack_id, int dc_id, char *hostname, int local_rts_id, int status)
+{
+	rts_descriptor * rts_d = (rts_descriptor *) malloc(sizeof(struct rts_descriptor));
+
+	rts_d->rack_id = rack_id;
+	rts_d->dc_id = dc_id;
+	rts_d->local_rts_id = local_rts_id;
+	rts_d->status = status;
+
+	struct hostent * host = gethostbyname(hostname);
+	if (host == NULL)
+	{
+		fprintf(stderr, "ERROR, no such host %s\n", hostname);
+		free_rts_descriptor(rts_d);
+		return NULL;
+	}
+
+	bzero((void *) &rts_d->addr, sizeof(struct sockaddr_in));
+	rts_d->addr.sin_family = AF_INET;
+	bcopy((char *) host->h_addr_list[0], (char *)&(rts_d->addr.sin_addr.s_addr), host->h_length);
+	rts_d->addr.sin_port = htons(local_rts_id);
+
+//	free(host);
+
+	return rts_d;
+}
+
+void free_rts_descriptor(rts_descriptor * rts_d)
+{
+	free(rts_d);
+}
+
+int add_rts_to_membership(int rack_id, int dc_id, char *hostname, int local_rts_id, int node_status, skiplist_t * rtss, unsigned int * seedptr)
+{
+	rts_descriptor * rts_d = get_rts_descriptor(rack_id, dc_id, hostname, local_rts_id, node_status);
+
+	snode_t * prev_entry = skiplist_search(rtss, &(rts_d->addr));
+    if(prev_entry != NULL)
+    {
+    		log_debug("RTS address %s:%d was already added to membership, updating status and metadata!\n", hostname, local_rts_id);
+		rts_descriptor * prev_descriptor = (rts_descriptor *) prev_entry->value;
+		prev_descriptor->status = rts_d->status;
+		prev_descriptor->rack_id = rts_d->rack_id;
+		prev_descriptor->dc_id = rts_d->dc_id;
+		free_rts_descriptor(rts_d);
+		return -1;
+    }
+
+    int status = skiplist_insert(rtss, &(rts_d->addr), rts_d, seedptr);
+
+    if(status != 0)
+    {
+    		log_debug("ERROR: Error adding RTS %s:%d to membership!\n", hostname, local_rts_id);
+    		free_rts_descriptor(rts_d);
+		return -2;
+    }
+
+    log_debug("Added RTS %s:%d to membership!", hostname, local_rts_id);
+
+    return 0;
+}
+
+char * to_string_rts_membership(remote_db_t * db, char * msg_buff)
+{
+	for(snode_t * crt = HEAD(db->rtses); crt!=NULL; crt = NEXT(crt))
+	{
+		rts_descriptor * rs = (rts_descriptor *) crt->value;
+
+	}
+
+	char * crt_ptr = msg_buff;
+	sprintf(crt_ptr, "RTS_membership(");
+	crt_ptr += strlen(crt_ptr);
+
+	for(snode_t * crt = HEAD(db->rtses); crt!=NULL; crt = NEXT(crt))
+	{
+		rts_descriptor * nd = (rts_descriptor *) crt->value;
+		sprintf(crt_ptr, "RTS(status=%d, rack_id=%d, dc_id=%d, hostname=%s, rts_id=%d)", nd->status, nd->rack_id, nd->dc_id, (nd->hostname != NULL)?(nd->hostname):"NULL", nd->local_rts_id);
+		crt_ptr += strlen(crt_ptr);
+		sprintf(crt_ptr, ", ");
+		crt_ptr += 2;
+	}
+
+	sprintf(crt_ptr, ")");
+
+	return msg_buff;
+}
+
 
 msg_callback * add_msg_callback(int64_t nonce, void (*callback)(void *), remote_db_t * db)
 {

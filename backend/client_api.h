@@ -133,6 +133,9 @@ void free_msg_callback(msg_callback * mc);
 typedef struct remote_db {
     int db_id;
     skiplist_t * servers; // List of remote servers
+    skiplist_t * rtses; // List of connected rts-es
+    skiplist_t * actors; // List of connected rts-es
+
     skiplist_t * txn_state; // Client cache of txn state
     skiplist_t * queue_subscriptions; // Client queue subscriptions
     skiplist_t * msg_callbacks; // Client msg callbacks
@@ -175,6 +178,7 @@ typedef struct gossip_callback
 
 remote_db_t * get_remote_db(int replication_factor, int rack_id, int dc_id, char * hostname, unsigned short local_rts_id);
 int add_server_to_membership(char *hostname, int portno, remote_db_t * db, unsigned int * seedptr);
+int add_actor(int actor_id, remote_db_t * db, unsigned int * seedptr);
 msg_callback * add_msg_callback(int64_t nonce, void (*callback)(void *), remote_db_t * db);
 int delete_msg_callback(int64_t nonce, remote_db_t * db);
 int wait_on_msg_callback(msg_callback * mc, remote_db_t * db);
@@ -273,5 +277,22 @@ gossip_callback * get_gossip_callback(void (*callback)(gossip_callback_args *));
 int wait_on_gossip_callback(gossip_callback *);
 void free_gossip_callback(gossip_callback * qc);
 int listen_to_gossip(int status, int rack_id, int dc_id, char * hostname, unsigned short local_rts_id, remote_db_t * db);
+
+// RTS mgmt:
+
+typedef struct rts_descriptor
+{
+	int rack_id;
+	int dc_id;
+	char * hostname;
+	unsigned short local_rts_id;
+	struct sockaddr_in addr;
+	int status;
+} rts_descriptor;
+
+rts_descriptor * get_rts_descriptor(int rack_id, int dc_id, char *hostname, int local_rts_id, int status);
+void free_rts_descriptor(rts_descriptor * rts_d);
+int add_rts_to_membership(int rack_id, int dc_id, char *hostname, int local_rts_id, int node_status, skiplist_t * rtss, unsigned int * seedptr);
+char * to_string_rts_membership(remote_db_t * db, char * msg_buff);
 
 #endif /* BACKEND_CLIENT_API_H_ */

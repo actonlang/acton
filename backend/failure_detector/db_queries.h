@@ -37,7 +37,7 @@
 #define CLIENT_ERR_NO_SUBSCRIPTION_EXISTS 2
 
 int deserialize_server_message(void * buf, unsigned msg_len, void ** sm, short * mtype, vector_clock ** vc);
-int deserialize_client_message(void * buf, unsigned msg_len, void ** cm, short * mtype, vector_clock ** vc);
+int deserialize_client_message(void * buf, unsigned msg_len, void ** cm, short * mtype, short * is_gossip_message, vector_clock ** vc);
 
 typedef struct write_query
 {
