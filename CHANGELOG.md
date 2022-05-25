@@ -2,10 +2,9 @@
 
 ## Unreleased
 
-
-## [0.10.0] (2022-02-25)
-
 ### Added
+- `actonc new foobar` will create a new project called foobar according to the
+  standard project directory layout
 - Improve DB schema creation messages [#586]
   - Messages contained "test", which is misleading. The DB server creates the
     schemas, i.e. the schema is hard-coded. This is per design and a
@@ -54,6 +53,7 @@
 - RTS log output is now sent to stderr rather than stdout
 
 ### Fixed
+- Avoid segfault in actondb due to uninitialized mon fds [#627] [#633]
 - Exceptions during build of executables no longer deletes produced .ty files [#629]
 - Fixed DB server & client issues leading to segfaults [#559]
   - Pass skiplist keys by reference
@@ -1040,9 +1040,11 @@ then, this second incarnation has been in focus and 0.2.0 was its first version.
 [#623]: https://github.com/actonlang/acton/pull/623
 [#624]: https://github.com/actonlang/acton/pull/624
 [#625]: https://github.com/actonlang/acton/pull/625
+[#627]: https://github.com/actonlang/acton/issues/627
 [#628]: https://github.com/actonlang/acton/pull/628
 [#629]: https://github.com/actonlang/acton/pull/629
 [#631]: https://github.com/actonlang/acton/pull/631
+[#633]: https://github.com/actonlang/acton/pull/633
 [0.3.0]: https://github.com/actonlang/acton/releases/tag/v0.3.0
 [0.4.0]: https://github.com/actonlang/acton/compare/v0.3.0...v0.4.0
 [0.4.1]: https://github.com/actonlang/acton/compare/v0.4.0...v0.4.1
