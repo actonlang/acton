@@ -33,6 +33,7 @@ import Utils
 import qualified Pretty
 import qualified InterfaceFiles
 
+import Control.Applicative
 import Control.Exception (throw,catch,displayException,IOException,ErrorCall)
 import Control.Monad
 import Options.Applicative
@@ -41,6 +42,7 @@ import Data.Monoid ((<>))
 import Data.Graph
 import Data.Version (showVersion)
 import qualified Data.List
+import qualified Filesystem.Path.CurrentOS as Fsco
 import System.Directory.Recursive
 import System.IO
 import System.IO.Temp
@@ -74,7 +76,8 @@ data Args       = Args {
                     syspath   :: String,
                     root      :: String,
                     file      :: String,
-                    cmd       :: String
+                    cmd       :: String,
+                    arg       :: Maybe String
                 }
                 deriving Show
 
@@ -101,7 +104,9 @@ getArgs ver     = infoOption (showVersion Paths_acton.version) (long "numeric-ve
                     <*> strOption (long "syspath" <> metavar "TARGETDIR" <> value "" <> showDefault)
                     <*> strOption (long "root" <> value "" <> showDefault)
                     <*> strOption (long "file" <> metavar "FILE" <> value [] <> showDefault)
-                    <*> argument str (metavar "CMD"))
+                    <*> argument str (metavar "CMD")
+                    <*> optional (argument str (metavar "ARG"))
+                  )
 
 descr           = fullDesc <> progDesc "Compile an Acton source file with recompilation of imported modules as needed"
                     <> header "actonc - the Acton compiler"
@@ -161,6 +166,13 @@ main = do
                         _     -> do
                             errorWithoutStackTrace("Unknown filetype: " ++ file args)
                             System.Exit.exitFailure
+            "new"   -> do
+                case arg args of
+                    Just name -> createProject name args
+                    Nothing -> do
+                        errorWithoutStackTrace("Please specify a name for the new project")
+                        System.Exit.exitFailure
+                System.Exit.exitSuccess
             _       -> do
                 errorWithoutStackTrace("Unknown command: " ++ cmd args)
                 System.Exit.exitFailure
@@ -213,6 +225,24 @@ detectStubMode srcfile args = do
       then return True
       else return False
   where cFile = replaceExtension srcfile ".c"
+
+
+createProject :: String -> Args -> IO ()
+createProject name args = do
+    curDir <- getCurrentDirectory
+    projDirExists <- doesDirectoryExist name
+    iff (projDirExists) (
+        errorWithoutStackTrace("Unable to create project " ++ name ++ ", directory already exists.")
+        System.Exit.exitFailure)
+    createDirectoryIfMissing True name
+    writeFile (joinPath [ curDir, name, "Acton.toml" ]) ""
+    paths <- findPaths (joinPath [ curDir, name, "Acton.toml" ]) args
+    createDirectoryIfMissing True (srcDir paths)
+    writeFile (joinPath [(srcDir paths), name ++ ".act"]) "#\n#\n\nactor main(env):\n    print(\"Hello World!\")\n    await async env.exit(0)\n"
+    putStrLn("Created project " ++ name)
+    putStrLn("Enter your new project directory with:\n  cd " ++ name)
+    putStrLn("Compile:\n  actonc build --root " ++ name ++ ".main")
+    putStrLn("Run:\n  ./out/rel/bin/" ++ name)
 
 
 dump h txt      = putStrLn ("\n\n#################################### " ++ h ++ ":\n" ++ txt)

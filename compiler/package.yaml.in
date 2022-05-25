@@ -41,6 +41,7 @@ executables:
       - process
       - scientific
       - split
+      - system-filepath
       - temporary
       - transformers
       - unix
