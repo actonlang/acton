@@ -75,7 +75,6 @@ data Args       = Args {
                     tempdir   :: String,
                     syspath   :: String,
                     root      :: String,
-                    file      :: String,
                     cmd       :: String,
                     arg       :: Maybe String
                 }
@@ -103,7 +102,6 @@ getArgs ver     = infoOption (showVersion Paths_acton.version) (long "numeric-ve
                     <*> strOption (long "tempdir" <> metavar "TEMPDIR" <> value "" <> showDefault)
                     <*> strOption (long "syspath" <> metavar "TARGETDIR" <> value "" <> showDefault)
                     <*> strOption (long "root" <> value "" <> showDefault)
-                    <*> strOption (long "file" <> metavar "FILE" <> value [] <> showDefault)
                     <*> argument str (metavar "CMD")
                     <*> optional (argument str (metavar "ARG"))
                   )
@@ -152,20 +150,20 @@ main = do
                     let srcFiles = catMaybes $ map filterActFile allFiles
                     compileFiles args srcFiles
             "dump" -> do
-                if null $ file args
-                  then do
-                    errorWithoutStackTrace("Specify file to dump with --file")
-                    System.Exit.exitFailure
-                  else do
-                    let (fileBody,fileExt) = splitExtension $ takeFileName (file args)
-                    case fileExt of
-                        ".ty" -> do
-                            paths <- findPaths (file args) args
-                            env0 <- Acton.Env.initEnv (sysTypes paths) False
-                            Acton.Types.showTyFile (Acton.Env.setMod (modName paths) env0) (file args)
-                        _     -> do
-                            errorWithoutStackTrace("Unknown filetype: " ++ file args)
-                            System.Exit.exitFailure
+                case arg args of
+                    Just filename -> do
+                        let (fileBody,fileExt) = splitExtension $ takeFileName filename
+                        case fileExt of
+                            ".ty" -> do
+                                paths <- findPaths filename args
+                                env0 <- Acton.Env.initEnv (sysTypes paths) False
+                                Acton.Types.showTyFile (Acton.Env.setMod (modName paths) env0) filename
+                            _     -> do
+                                errorWithoutStackTrace("Unknown filetype: " ++ filename)
+                                System.Exit.exitFailure
+                    Nothing -> do
+                        errorWithoutStackTrace("Specify file to dump with --file")
+                        System.Exit.exitFailure
             "new"   -> do
                 case arg args of
                     Just name -> createProject name args

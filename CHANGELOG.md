@@ -51,6 +51,9 @@
 
 ### Changed
 - RTS log output is now sent to stderr rather than stdout
+- `actonc dump foo.ty` now takes the filename of the `.ty` file to dump as a
+  positional argument rather than the old way of using an option (`actonc dump
+  --file foo.ty`)
 
 ### Fixed
 - Avoid segfault in actondb due to uninitialized mon fds [#627] [#633]
