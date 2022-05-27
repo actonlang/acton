@@ -799,11 +799,9 @@ int update_actor_placement(remote_db_t * db)
 
 		    a->host_rts = first_rts;
 
-		    host_id = get_node_id((struct sockaddr *) &(a->host_rts->addr));
+		    a->is_local = (first_rts->_local_rts_index == db->local_rts_id);
 
-		    a->is_local = (host_id == db->local_rts_id);
-
-		    log_debug("CLIENT: Found host RTS with ID %d / %d, local = %d\n", first_rts->_local_rts_index, host_id, a->is_local);
+		    log_debug("CLIENT: Found host RTS with ID %d, local = %d\n", first_rts->_local_rts_index, a->is_local);
 		}
 		else
 		{
