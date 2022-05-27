@@ -132,7 +132,7 @@ void free_msg_callback(msg_callback * mc);
 
 typedef struct remote_db {
     int db_id;
-    skiplist_t * servers; // List of remote servers
+    skiplist_t * servers; // List of remote database servers
     skiplist_t * rtses; // List of connected rts-es
     skiplist_t * actors; // List of actors to be deployed in the system
 
@@ -164,7 +164,6 @@ typedef struct remote_db {
 	pthread_cond_t * gossip_signal;
 
     skiplist_t * _rts_ring; // Consistent hashing skiplist of rts-es for actor-to-rts placement
-    skiplist_t * _actor_ring; // Consistent hashing skiplist of actors for actor-to-rts placement
     int local_rts_id;
 } remote_db_t;
 

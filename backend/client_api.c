@@ -131,7 +131,6 @@ remote_db_t * get_remote_db(int replication_factor, int rack_id, int dc_id, char
 	db->rtses = create_skiplist(&sockaddr_cmp);
 	db->actors = create_skiplist_long();
 	db->_rts_ring = create_skiplist_long();
-	db->_actor_ring = create_skiplist_long();
 	db->txn_state = create_skiplist_uuid();
 	db->queue_subscriptions = create_skiplist(&queue_callback_cmp);
 	db->msg_callbacks = create_skiplist_long();
@@ -709,17 +708,13 @@ rts_descriptor * get_first_rts_for_actor(long actor_id, remote_db_t * db)
 
 skiplist_t * get_local_actors(remote_db_t * db)
 {
-	// TO DO: Optimize this using the _actor_ring list:
-	// Local actors are those in range (hash(ID(RTSS(my_id-actor_replication_factor))), hash(my_id)],
-	// also considering wraps around the circle
-
 	skiplist_t * result = create_skiplist_long();
 	int status = 0;
 
 	for(snode_t * crt = HEAD(db->actors); crt!=NULL; crt = NEXT(crt))
 	{
 		actor_descriptor * a = (actor_descriptor *) crt->value;
-		if(a->is_local) // is_actor_local(a->actor_id, db)
+		if(a->is_local)
 		{
 			status = skiplist_insert(result, (WORD) a->actor_id, a, &(db->fastrandstate));
 
@@ -732,17 +727,13 @@ skiplist_t * get_local_actors(remote_db_t * db)
 
 skiplist_t * get_remote_actors(remote_db_t * db)
 {
-	// TO DO: Optimize this using the _actor_ring list:
-	// Local actors are those outside the range (hash(ID(RTSS(my_id-actor_replication_factor))), hash(my_id)],
-	// also considering wraps around the circle
-
 	skiplist_t * result = create_skiplist_long();
 	int status = 0;
 
 	for(snode_t * crt = HEAD(db->actors); crt!=NULL; crt = NEXT(crt))
 	{
 		actor_descriptor * a = (actor_descriptor *) crt->value;
-		if(!a->is_local) // !is_actor_local(a->actor_id, db)
+		if(!a->is_local)
 		{
 			status = skiplist_insert(result, (WORD) a->actor_id, a, &(db->fastrandstate));
 
@@ -859,17 +850,7 @@ int add_actor_to_membership(long actor_id, remote_db_t * db)
 
     a->is_local = (host_id == db->local_rts_id);
 
-    // Update RTS consistent hashing ring used for actor placement:
-
-    uint32_t actor_id_hash = hash32((int) actor_id);
-
-    assert(skiplist_search(db->_actor_ring, (WORD) actor_id_hash) == NULL);
-
-    status = skiplist_insert(db->_actor_ring, (WORD) actor_id_hash, a, &(db->fastrandstate));
-
-    assert(status == 0);
-
-    log_debug("Added actor %ld (%d) to membership!", a->actor_id, actor_id_hash);
+    log_debug("Added actor %ld (%d) to membership!", a->actor_id, hash32((int) actor_id));
 
     log_debug("CLIENT: Actor membership: %s\n", to_string_actor_membership(db, msg_buf));
 
@@ -1081,7 +1062,6 @@ int free_remote_db(remote_db_t * db)
 	skiplist_free_val(db->rtses, &free_rts_descriptor);
 	skiplist_free(db->actors);
 	skiplist_free(db->_rts_ring);
-	skiplist_free(db->_actor_ring);
 	free(db);
 	free_vc(db->my_lc);
 	return 0;

@@ -346,9 +346,10 @@ int set_private_consume_head(WORD consumer_id, WORD shard_id, WORD app_id, WORD 
 
 //	assert(cs->private_read_head >= new_consume_head);
 
-	assert(cs->private_consume_head <= new_consume_head);
+//	assert(cs->private_consume_head <= new_consume_head);
 
-	cs->private_consume_head = new_consume_head;
+	if(cs->private_consume_head <= new_consume_head)
+		cs->private_consume_head = new_consume_head;
 
 	assert(version != NULL);
 
