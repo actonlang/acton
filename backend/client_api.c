@@ -778,6 +778,8 @@ int update_actor_placement(remote_db_t * db)
 
     log_debug("Updating actor placement");
 
+    log_debug("CLIENT: Previous actor membership: %s\n", to_string_actor_membership(db, msg_buf));
+
 	int host_id = -1;
 	for(snode_t * crt = HEAD(db->actors); crt!=NULL; crt = NEXT(crt))
 	{
@@ -871,7 +873,6 @@ char * to_string_actor_membership(remote_db_t * db, char * msg_buff)
 	for(snode_t * crt = HEAD(db->actors); crt!=NULL; crt = NEXT(crt))
 	{
 		actor_descriptor * a = (actor_descriptor *) crt->value;
-		 a->host_rts;
 		sprintf(crt_ptr, "Actor(actor_id=%ld (%d), rts=%s:%d, rts_index=%d, rack_id=%d, dc_id=%d, status=%d)",
 						a->actor_id, hash32((int) a->actor_id),
 						(a->host_rts != NULL && a->host_rts->hostname != NULL)?(a->host_rts->hostname):"local",
