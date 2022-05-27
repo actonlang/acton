@@ -704,6 +704,8 @@ rts_descriptor * get_first_rts_for_actor(long actor_id, remote_db_t * db)
 
 		visited++;
 	}
+
+	return NULL;
 }
 
 skiplist_t * get_local_actors(remote_db_t * db)
@@ -787,9 +789,11 @@ int update_actor_placement(remote_db_t * db)
 
 		if(db->actor_replication_factor == 1)
 		{
-			a->host_rts = get_first_rts_for_actor(a->actor_id, db);
+			rts_descriptor * first_rts = get_first_rts_for_actor(a->actor_id, db);
 
-		    assert(a->host_rts != NULL);
+		    assert(first_rts != NULL);
+
+		    a->host_rts = first_rts;
 
 		    host_id = get_node_id((struct sockaddr *) &(a->host_rts->addr));
 
