@@ -844,11 +844,16 @@ int add_actor_to_membership(long actor_id, remote_db_t * db)
 
     a->host_rts = get_first_rts_for_actor(actor_id, db);
 
-    assert(a->host_rts != NULL);
+    if(a->host_rts != NULL)
+    {
+    		int host_id = get_node_id((struct sockaddr *) &(a->host_rts->addr));
 
-    int host_id = get_node_id((struct sockaddr *) &(a->host_rts->addr));
-
-    a->is_local = (host_id == db->local_rts_id);
+    		a->is_local = (host_id == db->local_rts_id);
+    }
+    else // RTS node has not installed a gossiped view yet, consider actors local until it does
+    {
+    		a->is_local = 1;
+    }
 
     log_debug("Added actor %ld (%d) to membership!", a->actor_id, hash32((int) actor_id));
 
@@ -869,7 +874,7 @@ char * to_string_actor_membership(remote_db_t * db, char * msg_buff)
 		 a->host_rts;
 		sprintf(crt_ptr, "Actor(actor_id=%ld (%d), rts=%s:%d, rts_index=%d, rack_id=%d, dc_id=%d, status=%d)",
 						a->actor_id, hash32((int) a->actor_id),
-						(a->host_rts != NULL && a->host_rts->hostname != NULL)?(a->host_rts->hostname):"NULL",
+						(a->host_rts != NULL && a->host_rts->hostname != NULL)?(a->host_rts->hostname):"local",
 						(a->host_rts != NULL)?a->host_rts->local_rts_id:-1,
 						(a->host_rts != NULL)?a->host_rts->_local_rts_index:-1,
 						(a->host_rts != NULL)?a->host_rts->rack_id:-1,
