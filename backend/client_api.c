@@ -823,7 +823,7 @@ int update_actor_placement(remote_db_t * db)
 		}
 	}
 
-    log_debug("CLIENT: Actor membership: %s\n", to_string_actor_membership(db, msg_buf));
+//    log_debug("CLIENT: Actor membership: %s\n", to_string_actor_membership(db, msg_buf));
 
 	return 0;
 }
