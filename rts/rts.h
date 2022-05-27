@@ -165,12 +165,14 @@ $Msg $AFTER($int, $Cont);
 $R $AWAIT($Msg, $Cont);
 
 void init_db_queue(long);
+void register_actor(long key);
 void serialize_state_shortcut($Actor);
 
 #define $NEWACTOR($T)       ({ $T $t = malloc(sizeof(struct $T)); \
                                $t->$class = &$T ## $methods; \
                                $Actor$methods.__init__(($Actor)$t); \
                                init_db_queue($t->$globkey); \
+                               register_actor($t->$globkey); \
                                $t; })
 
 void $PUSH($Cont);

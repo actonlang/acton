@@ -252,8 +252,6 @@ void skiplist_free(skiplist_t *list)
     free(list->header->forward);
     free(list->header);
 
-//    free(current_node->forward);
-//    free(current_node);
     free(list);
 }
 
@@ -271,8 +269,6 @@ void skiplist_free_val(skiplist_t *list, void (*free_val)(WORD))
     free(list->header->forward);
     free(list->header);
 
-//    free(current_node->forward);
-//    free(current_node);
     free(list);
 }
 

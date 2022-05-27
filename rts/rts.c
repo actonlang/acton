@@ -707,6 +707,13 @@ void init_db_queue(long key) {
         create_db_queue(key);
 }
 
+void register_actor(long key) {
+    if (db) {
+    		int status = add_actor_to_membership(key, db);
+    		assert(status == 0);
+    }
+}
+
 void PUSH_outgoing($Actor self, $Msg m) {
     m->$next = self->$outgoing;
     self->$outgoing = m;
@@ -970,6 +977,7 @@ void deserialize_system(snode_t *actors_start) {
             if (key < min_key)
                 min_key = key;
         }
+        register_actor(key);
     }
     next_key = min_key;
 

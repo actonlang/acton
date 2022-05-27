@@ -134,7 +134,7 @@ typedef struct remote_db {
     int db_id;
     skiplist_t * servers; // List of remote servers
     skiplist_t * rtses; // List of connected rts-es
-    skiplist_t * actors; // List of connected rts-es
+    skiplist_t * actors; // List of actors to be deployed in the system
 
     skiplist_t * txn_state; // Client cache of txn state
     skiplist_t * queue_subscriptions; // Client queue subscriptions
@@ -146,6 +146,7 @@ typedef struct remote_db {
 	int replication_factor;
 	int quorum_size;
 	int rpc_timeout;
+    int actor_replication_factor;
 
 	pthread_t comm_thread;
 	short stop_comm;
@@ -161,6 +162,10 @@ typedef struct remote_db {
 	vector_clock * current_view_id;
 	pthread_mutex_t * gossip_lock;
 	pthread_cond_t * gossip_signal;
+
+    skiplist_t * _rts_ring; // Consistent hashing skiplist of rts-es for actor-to-rts placement
+    skiplist_t * _actor_ring; // Consistent hashing skiplist of actors for actor-to-rts placement
+    int local_rts_id;
 } remote_db_t;
 
 typedef struct gossip_callback_args
@@ -178,7 +183,6 @@ typedef struct gossip_callback
 
 remote_db_t * get_remote_db(int replication_factor, int rack_id, int dc_id, char * hostname, unsigned short local_rts_id);
 int add_server_to_membership(char *hostname, int portno, remote_db_t * db, unsigned int * seedptr);
-int add_actor(int actor_id, remote_db_t * db, unsigned int * seedptr);
 msg_callback * add_msg_callback(int64_t nonce, void (*callback)(void *), remote_db_t * db);
 int delete_msg_callback(int64_t nonce, remote_db_t * db);
 int wait_on_msg_callback(msg_callback * mc, remote_db_t * db);
@@ -286,13 +290,39 @@ typedef struct rts_descriptor
 	int dc_id;
 	char * hostname;
 	unsigned short local_rts_id;
+	unsigned int _local_rts_index;
 	struct sockaddr_in addr;
 	int status;
 } rts_descriptor;
 
 rts_descriptor * get_rts_descriptor(int rack_id, int dc_id, char *hostname, int local_rts_id, int status);
-void free_rts_descriptor(rts_descriptor * rts_d);
-int add_rts_to_membership(int rack_id, int dc_id, char *hostname, int local_rts_id, int node_status, skiplist_t * rtss, unsigned int * seedptr);
+void free_rts_descriptor(WORD rts_d);
+int add_rts_to_membership(int rack_id, int dc_id, char *hostname, int local_rts_id, int node_status, skiplist_t * rtss, skiplist_t * _rts_ring, unsigned int * seedptr);
 char * to_string_rts_membership(remote_db_t * db, char * msg_buff);
+
+// Actor mgmt:
+
+#define ACTOR_STATUS_RUNNING 0
+#define ACTOR_STATUS_MIGRATING 1
+#define ACTOR_STATUS_STOPPED 2
+
+typedef struct actor_descriptor
+{
+	long actor_id;
+	rts_descriptor * host_rts;
+	int is_local;
+	int status;
+} actor_descriptor;
+
+actor_descriptor * get_actor_descriptor(long actor_id, rts_descriptor * host_rts, int is_local, int status);
+void free_actor_descriptor(actor_descriptor * a);
+int add_actor_to_membership(long actor_id, remote_db_t * db);
+int update_actor_placement(remote_db_t * db);
+int is_actor_local(long actor_id, remote_db_t * db);
+skiplist_t * get_rtses_for_actor(long actor_id, remote_db_t * db);
+rts_descriptor * get_first_rts_for_actor(long actor_id, remote_db_t * db);
+skiplist_t * get_local_actors(remote_db_t * db);
+skiplist_t * get_remote_actors(remote_db_t * db);
+char * to_string_actor_membership(remote_db_t * db, char * msg_buff);
 
 #endif /* BACKEND_CLIENT_API_H_ */
