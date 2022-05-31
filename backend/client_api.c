@@ -122,7 +122,8 @@ int queue_callback_cmp(WORD e1, WORD e2)
 
 void * comm_thread_loop(void * args);
 
-remote_db_t * get_remote_db(int replication_factor, int rack_id, int dc_id, char * hostname, unsigned short local_rts_id)
+remote_db_t * get_remote_db(int replication_factor, int rack_id, int dc_id, char * hostname, unsigned short local_rts_id,
+							int no_seeds, char ** seed_hosts, int * seed_ports, unsigned int * seedptr)
 {
 	remote_db_t * db = (remote_db_t *) malloc(sizeof(remote_db_t) + 5 * sizeof(pthread_mutex_t) + sizeof(pthread_cond_t));
 	memset(db, 0, sizeof(remote_db_t) + 5 * sizeof(pthread_mutex_t) + sizeof(pthread_cond_t));
@@ -161,7 +162,9 @@ remote_db_t * get_remote_db(int replication_factor, int rack_id, int dc_id, char
 	db->my_lc = init_empty_vc();
 	db->current_view_id = NULL;
 
-	// TO DO: get rack_id, dc_id, hostname local_rts_id from conf object
+	for(int i=0; i<no_seeds; i++)
+		add_server_to_membership(seed_hosts[i], seed_ports[i], db, seedptr);
+
 	int status = listen_to_gossip(NODE_LIVE, rack_id, dc_id, hostname, local_rts_id, db);
 
 	return db;
@@ -823,7 +826,7 @@ int update_actor_placement(remote_db_t * db)
 		}
 	}
 
-//    log_debug("CLIENT: Actor membership: %s\n", to_string_actor_membership(db, msg_buf));
+    log_debug("CLIENT: Actor membership: %s\n", to_string_actor_membership(db, msg_buf));
 
 	return 0;
 }

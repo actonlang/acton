@@ -180,7 +180,8 @@ typedef struct gossip_callback
 	pthread_cond_t * signal;
 } gossip_callback;
 
-remote_db_t * get_remote_db(int replication_factor, int rack_id, int dc_id, char * hostname, unsigned short local_rts_id);
+remote_db_t * get_remote_db(int replication_factor, int rack_id, int dc_id, char * hostname, unsigned short local_rts_id,
+							int no_seeds, char ** seed_hosts, int * seed_ports, unsigned int * seedptr);
 int add_server_to_membership(char *hostname, int portno, remote_db_t * db, unsigned int * seedptr);
 msg_callback * add_msg_callback(int64_t nonce, void (*callback)(void *), remote_db_t * db);
 int delete_msg_callback(int64_t nonce, remote_db_t * db);
