@@ -1938,8 +1938,8 @@ int main(int argc, char **argv) {
     unsigned int seed;
     if (ddb_host) {
         GET_RANDSEED(&seed, 0);
+        log_info("Starting distributed RTS node, host=%s, node_id=%d, rack_id=%d, datacenter_id=%d\n", rts_host, rts_node_id, rts_rack_id, rts_dc_id);
         log_info("Using distributed database backend replication factor of %d\n", ddb_replication);
-		printf("Starting RTS, host=%s, node_id=%d, rack_id=%d, datacenter_id=%d\n", rts_host, rts_node_id, rts_rack_id, rts_dc_id);
 		char ** seed_hosts = (char **) malloc(ddb_no_host * sizeof(char *));
 		int * seed_ports = (int *) malloc(ddb_no_host * sizeof(int));
 
