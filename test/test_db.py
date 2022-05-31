@@ -13,8 +13,16 @@ import sys
 import time
 import unittest
 
+# Tests that involve running an Acton program together with the database
+# requires communication over localhost. By dynamically allocating ports we can
+# run multiple tests concurrently. Each test invocation gets a "chunk" of ports,
+# and can use the ports within its chunk freely. Port chunks are in the
+# specified range (10000-60000).
+PORT_CHUNK_SIZE=20
+PORT_CHUNK_MIN=10000
+PORT_CHUNK_MAX=60000
+
 ACTONDB="../dist/bin/actondb"
-BASEPORT=32001
 
 class MonIntermittentError(Exception):
     pass
@@ -28,8 +36,8 @@ class TcpCmdError(Exception):
 class TcpCmdNoResponse(Exception):
     pass
 
-def get_db_args(base_port, replication_factor):
-    return [item for sublist in map(lambda x: ("--rts-ddb-host", x), [f"127.0.0.1:{base_port+idx}" for idx in range(replication_factor)]) for item in sublist]
+def get_db_args(port_chunk, replication_factor):
+    return [item for sublist in map(lambda x: ("--rts-ddb-host", x), [f"127.0.0.1:{port_chunk+idx}" for idx in range(replication_factor)]) for item in sublist]
 
 
 def mon_cmd(address, cmd, retries=5):
@@ -106,11 +114,14 @@ class Db:
     def __repr__(self):
         return f"Db{self.idx}"
 
-    def __init__(self, idx, base_port=32000):
+    def __init__(self, idx, port_chunk):
         self.idx = idx
         self.name = f"Db{idx}"
-        self.port = base_port + self.idx
-        self.seed_port = base_port + 100
+        # lower half of port_chunk is used for DB client ports
+        self.port = port_chunk + self.idx
+        # upper half of the port_chunk is used for DB gossip port, and the first
+        # DB node's gossip port is also used as the seed port...
+        self.seed_port = port_chunk + (PORT_CHUNK_SIZE/2)
         self.gossip_port = self.seed_port + self.idx
         self.mon_sock = f"db{self.idx}_mon"
         self.logfile = open(f"db{self.idx}.log", "w")
@@ -159,21 +170,21 @@ class Db:
 
 
 class DbCluster:
-    def __init__(self, num=3, base_port=None):
+    def __init__(self, num=3, port_chunk=None):
         self.log = logging.getLogger()
         self.num = num
-        self.base_port = base_port
-        if not self.base_port:
-            # compute random base port between 10000 to 60000 in increments of
-            # 200 ports, which allows us to run up to 100 DB nodes per test
-            self.base_port = random.randint(50, 100) * 200
+        self.port_chunk = port_chunk
+        if not self.port_chunk:
+            # compute random base port between PORT_CHUNK_MIN and PORT_CHUNK_MAX
+            # in increments of PORT_CHUNK_SIZE
+            self.port_chunk = random.randint(PORT_CHUNK_MIN/PORT_CHUNK_SIZE, PORT_CHUNK_MAX/PORT_CHUNK_SIZE) * PORT_CHUNK_SIZE
 
     def start(self):
         """Start up a cluster of num nodes and ensure that memberships look alright
         """
 
         self.log.debug("Starting database servers")
-        self.dbs=[Db(0, self.base_port)]
+        self.dbs=[Db(0, self.port_chunk)]
         self.dbs[0].start()
 
         allgood = True
@@ -181,7 +192,7 @@ class DbCluster:
         for i in range(1, self.num):
             self.log.debug(f"Starting instance {i}")
             # Create & start new instance
-            dbn = Db(i, self.base_port)
+            dbn = Db(i, self.port_chunk)
             dbn.start()
             self.dbs.append(dbn)
 
@@ -233,7 +244,7 @@ class DbCluster:
         return True
 
 
-def test_app_recovery(base_port, replication_factor):
+def test_app_recovery(port_chunk, replication_factor):
     cmd = ["./test_db_recovery", "--rts-verbose", "--rts-ddb-replication", str(replication_factor)] + get_db_args(base_port, replication_factor)
 
 
@@ -370,7 +381,7 @@ class TestDbApps(unittest.TestCase):
     def test_app(self):
         cmd = ["./test_db_app", "--rts-verbose",
                "--rts-ddb-replication", str(self.replication_factor)
-               ] + get_db_args(self.dbc.base_port, self.replication_factor)
+               ] + get_db_args(self.dbc.port_chunk, self.replication_factor)
         self.p = subprocess.run(cmd, capture_output=True, timeout=3)
 
         if self.p.returncode != 0:
@@ -381,10 +392,10 @@ class TestDbApps(unittest.TestCase):
 
 
     def test_app_resume_tcp_server(self):
-        app_port = self.dbc.base_port+199
+        app_port = self.dbc.port_chunk+199
         cmd = ["./rts/ddb_test_server", str(app_port), "--rts-verbose",
                "--rts-ddb-replication", str(self.replication_factor)
-               ] + get_db_args(self.dbc.base_port, self.replication_factor)
+               ] + get_db_args(self.dbc.port_chunk, self.replication_factor)
         self.p = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         self.assertEqual(tcp_cmd(self.p, app_port, "GET"), "0")
         tcp_cmd(self.p, app_port, "INC")
@@ -398,14 +409,14 @@ class TestDbApps(unittest.TestCase):
 
 
     def test_app_resume_tcp_client(self):
-        app_port = self.dbc.base_port+199
+        app_port = self.dbc.port_chunk+199
         # Start TCP server
         srv_cmd = ["./rts/ddb_test_server", str(app_port)]
         self.p2 = subprocess.Popen(srv_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
 
         cmd = ["./rts/ddb_test_client", str(app_port), "--rts-verbose",
                "--rts-ddb-replication", str(self.replication_factor)
-               ] + get_db_args(self.dbc.base_port, self.replication_factor)
+               ] + get_db_args(self.dbc.port_chunk, self.replication_factor)
         self.p = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         time.sleep(0.1)
         self.p.terminate()
