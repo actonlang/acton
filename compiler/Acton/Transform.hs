@@ -101,14 +101,40 @@ instance Transform Decl where
     trans env (Extension l n q us b)    = Extension l n q us (wtrans env1 b)
       where env1                        = blockscope (bound q) env
 
+
+transCall (Var _ n) [_,_,a,b,c] [TApp _ (Var _ n1) _, e2]
+  | n == primMapFX, n1 == primIdFX      = Just e2
+transCall (Var _ n) [_,_,a,b,c] [Var _ n1, e2]
+  | n == primMapFX, n1 == primLiftFX    = Just $ eCall (tApp (eQVar primLIFT) [a,b,c]) [e2]
+transCall (Dot _ (Var _ n) m) ts [e1,e2]
+  | n == primWrapProc,   m == attrWrap  = Just e2
+  | n == primWrapAction, m == attrWrap  = Just $ eCall (tApp (eQVar primWRAP) ts) [e1,e2]
+  | n == primWrapMut,    m == attrWrap  = Just e2
+  | n == primWrapPure,   m == attrWrap  = Just e2
+transCall (Dot _ (Var _ n) m) ts [e1]
+  | n == primWrapProc,   m == attrExec  = Just $ eCall (tApp (eQVar primEXEC) ts) [e1]
+  | n == primWrapProc,   m == attrEval  = Just e1
+  | n == primWrapAction, m == attrExec  = Just $ eAsync e1
+  | n == primWrapAction, m == attrEval  = Just $ eAwait $ eAsync e1
+  | n == primWrapMut,    m == attrExec  = Just e1
+  | n == primWrapMut,    m == attrEval  = Just e1
+  | n == primWrapPure,   m == attrExec  = Just e1
+  | n == primWrapPure,   m == attrEval  = Just e1
+transCall _ _ _                         = Nothing
+
+
 instance Transform Expr where
     trans env (Var l (NoQ n))
       | Just e <- trfind n env          = trans (blockscope [n] env) e
 
-    trans env e0@(Call l e p k)
+    trans env (Call l e p k)
       | Lambda{} <- e',
         Just s1 <- pzip (ppar e') p',
         Just s2 <-  kzip (kpar e') k'   = termsubst (s1++s2) (exp1 e')
+
+      | TApp _ e0 ts <- e',
+        Just e1 <- transCall e0 ts es   = e1
+{-
       | TApp _ (Var _ n) _ <- e',
         n == primMapFX,
         PosArg e1 (PosArg e2 _) <- p',
@@ -122,12 +148,12 @@ instance Transform Expr where
         Dot _ (Var _ n) n1 <- e0,
         isWrap n n1,
         PosArg _ (PosArg e2 _) <- p'    = trace ("### Removing " ++ prstr e0 ++ " call") e2
+-}
       | otherwise                       = Call l e' p' k'
       where e'                          = trans env e
             p'                          = trans env p
             k'                          = trans env k
-            isExecEval n n1             = n `elem` [primWrappedPure,primWrappedMut] && n1 `elem` [primExec,primEval]
-            isWrap n n1                 = n `elem` [primWrappedPure,primWrappedMut,primWrappedProc] && n1 == primWrap
+            es                          = posargs p'
     trans env (TApp l e ts)             = TApp l (trans env e) ts
     trans env (Async l e)               = Async l (trans env e)
     trans env (Await l e)               = Await l (trans env e)

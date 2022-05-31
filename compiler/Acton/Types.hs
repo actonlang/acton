@@ -232,7 +232,7 @@ instance (InfEnv a) => InfEnv [a] where
 
 instance InfEnv Stmt where
     infEnv env (Expr l (Call _ e p k))  = do (cs1,t,e) <- infer env e
---                                             (cs1,t,e) <- wrapped primExec env cs1 [t] [e]               -- DEACT!
+--                                             (cs1,t,e) <- wrapped attrExec env cs1 [t] [e]               -- DEACT!
                                              (cs2,prow,p) <- infer env p
                                              (cs3,krow,k) <- infer env k
                                              t0 <- newTVar
@@ -992,7 +992,7 @@ instance Infer Expr where
                                                 case n of
 --                                                  NoQ n' | isActDef n' env -> do                                            -- DEACT!
 --                                                    let e = app t (tApp (eVar $ localName n') tvs) $ witsOf cs              -- DEACT!
---                                                    wrapped primWrap env cs [tActor,t] [eVar selfKW,e]                      -- DEACT!
+--                                                    wrapped attrWrap env cs [tActor,t] [eVar selfKW,e]                      -- DEACT!
                                                   _ ->
                                                     return (cs, t, app t (tApp x tvs) $ witsOf cs)
                                             NClass q _ _ -> do
@@ -1027,7 +1027,7 @@ instance Infer Expr where
     infer env e@(Strings _ ss)          = return ([], tStr, e)
     infer env e@(BStrings _ ss)         = return ([], tBytes, e)
     infer env (Call l e ps ks)          = do (cs1,t,e) <- infer env e
---                                             (cs1,t,e) <- wrapped primEval env cs1 [t] [e]             -- DEACT!
+--                                             (cs1,t,e) <- wrapped attrEval env cs1 [t] [e]             -- DEACT!
                                              (cs2,prow,ps) <- infer env ps
                                              (cs3,krow,ks) <- infer env ks
                                              t0 <- newTVar

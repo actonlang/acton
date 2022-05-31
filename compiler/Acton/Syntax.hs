@@ -285,11 +285,19 @@ eBool b         = Bool NoLoc b
 eBinOp e o e'   = BinOp NoLoc e o e'
 eLambda nts e   = Lambda NoLoc (pospar nts) KwdNIL e fxPure
 eLambda' ns e   = Lambda NoLoc (pospar' ns) KwdNIL e fxWild
+eAsync e        = Async NoLoc e
+eAwait e        = Await NoLoc e
 
 pospar nts      = foldr (\(n,t) p -> PosPar n (Just t) Nothing p) PosNIL nts
 pospar' ns      = foldr (\n p -> PosPar n Nothing Nothing p) PosNIL ns
 
 posarg es       = foldr PosArg PosNil es
+
+posargs (PosArg e p) 
+                = e : posargs p
+posargs (PosStar e)
+                = [e]
+posargs PosNil  = []
 
 pVar n t        = PVar NoLoc n (Just t)
 pVar' n         = PVar NoLoc n Nothing

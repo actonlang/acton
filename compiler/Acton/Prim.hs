@@ -76,7 +76,7 @@ primISNONE          = gPrim "ISNONE"
 primSKIPRESc        = gPrim "SKIPRESc"
 primSKIPRES         = gPrim "SKIPRES"
 
-primAct2Proc        = gPrim "Act2Proc"
+primLiftFX          = gPrim "LiftFX"
 primIdFX            = gPrim "IdFX"
 primMapFX           = gPrim "MapFX"
 
@@ -91,14 +91,19 @@ pWrapped x          = TC primWrapped [x]
 primWrappedC        = gPrim "WrappedC"
 tWrapped s x        = tCon $ TC primWrappedC [s,x]
 
-primWrap            = primKW "wrap"
-primExec            = primKW "exec"
-primEval            = primKW "eval"
+attrWrap            = name "$wrap"
+attrExec            = name "$exec"
+attrEval            = name "$eval"
 
-primWrappedProc     = gPrim "wWrappedProc"
-primWrappedAction   = gPrim "wWrappedAction"
-primWrappedMut      = gPrim "wWrappedMut"
-primWrappedPure     = gPrim "wWrappedPure"
+primWrapProc        = gPrim "wWrapProc"
+primWrapAction      = gPrim "wWrapAction"
+primWrapMut         = gPrim "wWrapMut"
+primWrapPure        = gPrim "wWrapPure"
+
+primWRAP            = gPrim "WRAP"
+primEXEC            = gPrim "EXEC"
+primLIFT            = gPrim "LIFT"
+
 
 primEnv             = [     (noq primASYNCf,        NDef scASYNCf NoDec),
                             (noq primAFTERf,        NDef scAFTERf NoDec),
@@ -150,14 +155,18 @@ primEnv             = [     (noq primASYNCf,        NDef scASYNCf NoDec),
                             (noq primSKIPRESc,      NDef scSKIPRESc NoDec),
                             (noq primSKIPRES,       NDef scSKIPRES NoDec),
 
-                            (noq primAct2Proc,      NDef scAct2Proc NoDec),
+                            (noq primLiftFX,        NDef scLiftFX NoDec),
                             (noq primIdFX,          NDef scIdFX NoDec),
                             (noq primMapFX,         NDef scMapFX NoDec),
                             
                             (noq primWrapped,       proWrapped),
                             (noq primWrappedC,      clWrapped),
-                            (noq primWrappedProc,   NVar $ tWrapped fxProc fxProc),
-                            (noq primWrappedAction, NVar $ tWrapped fxAction fxProc)
+                            (noq primWrapProc,      NVar $ tWrapped fxProc fxProc),
+                            (noq primWrapAction,    NVar $ tWrapped fxAction fxProc),
+
+                            (noq primWRAP,          NDef scWRAP NoDec),
+                            (noq primEXEC,          NDef scEXEC NoDec),
+                            (noq primLIFT,          NDef scLIFT NoDec)
                       ]
 
 tSequenceListWild   = tCon (TC qnSequence [tList tWild, tWild])
@@ -378,9 +387,9 @@ scSKIPRES           = tSchema [quant x, quant a] tSKIPRES
         x           = TV KFX $ name "X"
         a           = TV KType $ name "A"
 
---  $Act2Proc       : (action()->None) -> proc()->None
-scAct2Proc          = tSchema [] tAct2Proc
-  where tAct2Proc   = tFun fxPure (posRow tActFun posNil) kwdNil tProcFun
+--  $LiftFX         : (action()->None) -> proc()->None
+scLiftFX            = tSchema [] tLiftFX
+  where tLiftFX     = tFun fxPure (posRow tActFun posNil) kwdNil tProcFun
         tActFun     = tFun fxAction posNil kwdNil tNone
         tProcFun    = tFun fxProc posNil kwdNil tNone
 
@@ -390,7 +399,7 @@ scIdFX              = tSchema [quant x] tIdFX
         tXFun       = tFun (tVar x) posNil kwdNil tNone
         x           = TV KFX $ name "X"
 
---  $MapFX          : [X1,X2A,B,C] => ((X1()->None)->X2()->None, X1(*A,**B)->C) -> X2(*A,**B)->C
+--  $MapFX          : [X1,X2,A,B,C] => ((X1()->None)->X2()->None, X1(*A,**B)->C) -> X2(*A,**B)->C
 scMapFX             = tSchema [quant x1, quant x2, quant a, quant b, quant c] tMapFX
   where tMapFX      = tFun fxPure (posRow (fxFun (tVar x1) (tVar x2)) $ posRow (tRealFun x1) posNil) kwdNil (tRealFun x2)
         tRealFun x  = tFun (tVar x) (tVar a) (tVar b) (tVar c)
@@ -400,9 +409,33 @@ scMapFX             = tSchema [quant x1, quant x2, quant a, quant b, quant c] tM
         b           = TV KRow $ name "B"
         c           = TV KType $ name "C"
 
+--  $WRAP           : [A,B,C] => ($Actor, proc(*A,**B)->C) -> action(*A,**B)->C
+scWRAP              = tSchema [quant a, quant b, quant c] tWRAP
+  where tWRAP       = tFun0 [tActor, abcFun fxProc] (abcFun fxAction)
+        abcFun fx   = tFun fx (tVar a) (tVar b) (tVar c)
+        a           = TV KType (name "A")
+        b           = TV KType (name "B")
+        c           = TV KType (name "C")
+
+--  $EXEC           : [A,B,C] => (proc(*A,**B)->C) -> proc(*A,**B)->None
+scEXEC              = tSchema [quant a, quant b, quant c] tEXEC
+  where tEXEC       = tFun0 [procFun $ tVar c] (procFun tNone)
+        procFun c   = tFun fxProc (tVar a) (tVar b) c
+        a           = TV KType (name "A")
+        b           = TV KType (name "B")
+        c           = TV KType (name "C")
+
+--  $LIFT           : [A,B,C] => (action(*A,**B)->C) -> proc(*A,**B)->C
+scLIFT              = tSchema [quant a, quant b, quant c] tLIFT
+  where tLIFT       = tFun0 [abcFun fxAction] (abcFun fxProc)
+        abcFun fx   = tFun fx (tVar a) (tVar b) (tVar c)
+        a           = TV KType (name "A")
+        b           = TV KType (name "B")
+        c           = TV KType (name "C")
+
 --  protocol $Wrapped[X]: pass
 proWrapped          = NProto [quant x] [] te
-  where te          = [(primWrap,scWrap), (primExec,scExec), (primEval,scEval)]
+  where te          = [(attrWrap,scWrap), (attrExec,scExec), (attrEval,scEval)]
         scWrap      = NSig (tSchema q (tFun0 [tActor, abFun tX tC] (abFun tSelf tC))) Static
         scExec      = NSig (tSchema q (tFun0 [abFun tSelf tC] (abFun tX tNone))) Static
         scEval      = NSig (tSchema q (tFun0 [abFun tSelf tC] (abFun tX tC))) Static
@@ -418,7 +451,7 @@ proWrapped          = NProto [quant x] [] te
 
 --  class $WrappedC[S,X]: pass
 clWrapped           = NClass [quant s, quant x] [] te
-  where te          = [(primWrap,scWrap), (primExec,scExec), (primEval,scEval)]
+  where te          = [(attrWrap,scWrap), (attrExec,scExec), (attrEval,scEval)]
         scWrap      = NDef (tSchema q (tFun0 [tActor, abFun tX tC] (abFun tS tC))) NoDec
         scExec      = NDef (tSchema q (tFun0 [abFun tS tC] (abFun tX tNone))) NoDec
         scEval      = NDef (tSchema q (tFun0 [abFun tS tC] (abFun tX tC))) NoDec
@@ -435,9 +468,9 @@ clWrapped           = NClass [quant s, quant x] [] te
 
 
 
-primWits            = [ WInst [] fxProc   (pWrapped fxProc) primWrappedProc path,
-                        WInst [] fxAction (pWrapped fxProc) primWrappedAction path,
-                        WInst [] fxMut    (pWrapped fxMut)  primWrappedMut path,
-                        WInst [] fxPure   (pWrapped fxPure) primWrappedPure path
+primWits            = [ WInst [] fxProc   (pWrapped fxProc) primWrapProc path,
+                        WInst [] fxAction (pWrapped fxProc) primWrapAction path,
+                        WInst [] fxMut    (pWrapped fxMut)  primWrapMut path,
+                        WInst [] fxPure   (pWrapped fxPure) primWrapPure path
                       ]
   where path        = [Left (noQ "_")]

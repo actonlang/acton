@@ -597,7 +597,7 @@ sub' env eq w t1@(TFX _ fx1) t2@(TFX _ fx2)
         subFX FXMut    FXProc               = Just $ idFX FXProc
         subFX FXProc   FXProc               = Just $ idFX FXProc
         subFX FXAction FXAction             = Just $ idFX FXAction
-        subFX FXAction FXProc               = Just $ eQVar primAct2Proc
+        subFX FXAction FXProc               = Just $ eQVar primLiftFX
         subFX _        _                    = Nothing
         idFX fx                             = tApp (eQVar primIdFX) [tTFX fx]
 
