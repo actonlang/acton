@@ -450,8 +450,7 @@ matchDefAssumption env cs def
                                              let t1 = tFun (dfx def) (prowOf $ pos def) (krowOf $ kwd def) (fromJust $ ann def)
                                              (cs2,eq1) <- solveScoped env0 (qbound q0) [] t1 (Cast t1 (if inClass env then addSelf t0 (Just dec) else t0) : cs++cs1)
                                              checkNoEscape env (qbound q0)
-                                             cs2 <- msubst cs2
-                                             return (cs2, def{ qbinds = noqual env q0, pos = pos0 def, dbody = bindWits (eq0++eq1) ++ dbody def, dfx = fx t0 })
+                                             return (cs2, def{ qbinds = noqual env q0, pos = pos0 def, dbody = bindWits (eq0++eq1) ++ dbody def })
   where NDef (TSchema _ q0 t0) dec      = findName (dname def) env
         q1                              = qbinds def
         env0                            = defineTVars q1 $ defineTVars q0 env
@@ -464,7 +463,7 @@ matchDefAssumption env cs def
 --------------------------------------------------------------------------------------------------------------------------
 
 instance InfEnv Decl where
-    infEnv env d@(Def _ n q p k a _ _ fx)
+    infEnv env d@(Def _ n q p k a _ _ _)
       | nodup (p,k)                     = case findName n env of
                                              NSig sc dec | matchingDec n sc dec (deco d) -> do
                                                  --traceM ("\n## infEnv (sig) def " ++ prstr (n, NDef sc dec))
@@ -989,12 +988,12 @@ instance Infer Expr where
                                                 return ([Cast fxProc fx], t, x)
                                             NDef sc d -> do 
                                                 (cs,tvs,t) <- instantiate env sc
+                                                let e = app t (tApp x tvs) $ witsOf cs
                                                 case n of
 --                                                  NoQ n' | isActDef n' env -> do                                            -- DEACT!
---                                                    let e = app t (tApp (eVar $ localName n') tvs) $ witsOf cs              -- DEACT!
 --                                                    wrapped attrWrap env cs [tActor,t] [eVar selfKW,e]                      -- DEACT!
                                                   _ ->
-                                                    return (cs, t, app t (tApp x tvs) $ witsOf cs)
+                                                    return (cs, t, e)
                                             NClass q _ _ -> do
                                                 (cs0,ts) <- instQBinds env q
                                                 --traceM ("## Instantiating " ++ prstr n)
