@@ -209,7 +209,7 @@ int install_gossiped_view(membership_agreement_msg * ma, remote_db_t * db, unsig
 	{
 		node_description nd = ma->membership->membership[i];
 
-		add_server_to_membership(nd.hostname, nd.portno - 2000, db, fastrandstate);
+		add_server_to_membership(nd.hostname, nd.portno - 1, db, fastrandstate);
 	}
 
 	// Add RTSs we have recently found about to client's RTS membership:
