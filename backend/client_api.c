@@ -783,9 +783,7 @@ int update_actor_placement(remote_db_t * db)
 {
 	char msg_buf[4096];
 
-    log_debug("CLIENT: Updating actor placement");
-
-    log_debug("CLIENT: Previous actor membership: %s\n", to_string_actor_membership(db, msg_buf));
+    log_debug("CLIENT: Updating actor placement. Previous actor membership: %s\n", to_string_actor_membership(db, msg_buf));
 
 	int host_id = -1;
 	for(snode_t * crt = HEAD(db->actors); crt!=NULL; crt = NEXT(crt))
@@ -794,19 +792,13 @@ int update_actor_placement(remote_db_t * db)
 
 		if(db->actor_replication_factor == 1)
 		{
-		    log_debug("CLIENT: Finding placement for actor %d..\n", a->actor_id);
-
 			rts_descriptor * first_rts = get_first_rts_for_actor(a->actor_id, db);
 
 		    assert(first_rts != NULL);
 
-		    log_debug("CLIENT: Found host RTS with ID %d\n", first_rts->_local_rts_index);
-
 		    a->host_rts = first_rts;
 
 		    a->is_local = (first_rts->_local_rts_index == db->local_rts_id);
-
-		    log_debug("CLIENT: Found host RTS with ID %d, local = %d\n", first_rts->_local_rts_index, a->is_local);
 		}
 		else
 		{
