@@ -214,7 +214,7 @@ int deserialize_write_query(void * buf, unsigned msg_len, write_query ** ca)
 
 	if (msg == NULL || msg->mtype != RPC_TYPE_WRITE)
 	{
-		fprintf(stderr, "error unpacking write query message\n");
+		log_error("error unpacking write query message\n");
 	    return 1;
 	}
 
@@ -399,7 +399,7 @@ int deserialize_read_query(void * buf, unsigned msg_len, read_query ** ca)
 
 	if (msg == NULL || msg->mtype != RPC_TYPE_READ)
 	{
-		fprintf(stderr, "error unpacking read query message\n");
+		log_error("error unpacking read query message\n");
 	    return 1;
 	}
 
@@ -594,7 +594,7 @@ int deserialize_range_read_query(void * buf, unsigned msg_len, range_read_query 
 
 	if (msg == NULL || msg->mtype != RPC_TYPE_RANGE_READ)
 	{
-		fprintf(stderr, "error unpacking range read query message\n");
+		log_error("error unpacking range read query message\n");
 	    return 1;
 	}
 
@@ -763,7 +763,7 @@ int deserialize_ack_message(void * buf, unsigned msg_len, ack_message ** ca)
 
 	if (msg == NULL || msg->mtype != RPC_TYPE_ACK)
 	{
-		fprintf(stderr, "error unpacking ack query message\n");
+		log_error("error unpacking ack query message\n");
 	    return 1;
 	}
 
@@ -954,7 +954,7 @@ int deserialize_range_read_response_message(void * buf, unsigned msg_len, range_
 
 	if (msg == NULL || msg->mtype != RPC_TYPE_RANGE_READ_RESPONSE)
 	{
-		fprintf(stderr, "error unpacking range read response message\n");
+		log_error("error unpacking range read response message\n");
 	    return 1;
 	}
 
@@ -1401,7 +1401,7 @@ int deserialize_queue_message(void * buf, unsigned msg_len, queue_query_message 
 
 	if (msg == NULL || msg->mtype != RPC_TYPE_QUEUE)
 	{
-		fprintf(stderr, "error unpacking queue query message\n");
+		log_error("error unpacking queue query message\n");
 	    return 1;
 	}
 
@@ -1866,7 +1866,7 @@ int deserialize_txn_message(void * buf, unsigned msg_len, txn_message ** ca)
 
 	if (msg == NULL || msg->mtype != RPC_TYPE_TXN)
 	{
-		fprintf(stderr, "error unpacking read query message\n");
+		log_error("error unpacking read query message\n");
 	    return 1;
 	}
 
@@ -2034,7 +2034,7 @@ int deserialize_gossip_listen_msg(void * buf, unsigned msg_len, gossip_listen_me
 
 	if (msg == NULL)
 	{ // Something failed
-	    fprintf(stderr, "error unpacking gossip_state message\n");
+	    log_error("error unpacking gossip_state message\n");
 	    return 1;
 	}
 
@@ -2103,8 +2103,7 @@ void free_server_msg(ServerMessage * sm)
 		}
 		default:
 		{
-			fprintf(stderr, "Wrong server message type %d\n", sm->mtype);
-			assert(0);
+			log_fatal("Wrong server message type %d\n", sm->mtype);
 		}
 	}
 
@@ -2119,7 +2118,7 @@ int deserialize_server_message(void * buf, unsigned msg_len, void ** dest_buf, s
 	if (sm == NULL)
 	{
 		*mtype = -1;
-		fprintf(stderr, "error unpacking server message\n");
+		log_error("error unpacking server message\n");
 	    return 1;
 	}
 
@@ -2164,8 +2163,7 @@ int deserialize_server_message(void * buf, unsigned msg_len, void ** dest_buf, s
 		}
 		default:
 		{
-			fprintf(stderr, "Wrong server message type %d\n", sm->mtype);
-			assert(0);
+			log_fatal("Wrong server message type %d\n", sm->mtype);
 		    return 1;
 		}
 	}
@@ -2217,8 +2215,7 @@ void free_client_msg(ClientMessage * cm)
 		}
 		default:
 		{
-			fprintf(stderr, "Wrong client message type %d\n", cm->mtype);
-			assert(0);
+			log_fatal("Wrong client message type %d\n", cm->mtype);
 		}
 	}
 
@@ -2233,7 +2230,7 @@ int deserialize_client_message(void * buf, unsigned msg_len, void ** dest_buf, s
 
 	if (cm == NULL)
 	{
-		fprintf(stderr, "error unpacking client message\n");
+		log_error("error unpacking client message\n");
 
 		// This might be a gossiped membership notification:
 
@@ -2256,23 +2253,19 @@ int deserialize_client_message(void * buf, unsigned msg_len, void ** dest_buf, s
 					*is_gossip_message = 1;
 					*mtype = ma->msg_type;
 					*dest_buf = ma;
-//					int local_view_disagrees = handle_agreement_notify_message(ma, m, db, copy_vc(my_lc), prev_vc, fastrandstate);
 					break;
 				}
 				default:
 				{
-					fprintf(stderr, "Wrong gossip message type %d\n", ma->msg_type);
-					assert(0);
+					log_fatal("Wrong gossip message type %d\n", ma->msg_type);
 				}
 			}
-
-//			free_membership_agreement(ma);
 
 			return 0;
 		}
 		else
 		{
-			fprintf(stderr, "error unpacking gossip message\n");
+			log_error("error unpacking gossip message\n");
 			return 1;
 		}
 	}
@@ -2311,8 +2304,7 @@ int deserialize_client_message(void * buf, unsigned msg_len, void ** dest_buf, s
 		}
 		default:
 		{
-			fprintf(stderr, "Wrong client message type %d\n", cm->mtype);
-			assert(0);
+			log_fatal("Wrong client message type %d\n", cm->mtype);
 		    return 1;
 		}
 	}
