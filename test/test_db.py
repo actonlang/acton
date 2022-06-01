@@ -100,7 +100,7 @@ def tcp_cmd(p, port, cmd, retries=100):
         s.close()
         if retries == 0:
             raise exc
-        st = (101-retries)*0.01
+        st = (101-retries)*0.1
         if retries < 90:
             print(f"Sleeping {st} before next attempt...")
         time.sleep(st)
