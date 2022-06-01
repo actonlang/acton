@@ -448,10 +448,13 @@ matchDefAssumption env cs def
                                                  s = qbound q1 `zip` tvs            -- This cannot just be memoized in the global TypeM substitution,
                                              def <- msubstWith s def{ qbinds = [] } -- since the variables in (qbound q1) aren't necessarily globally unique
                                              let t1 = tFun (dfx def) (prowOf $ pos def) (krowOf $ kwd def) (fromJust $ ann def)
-                                             (cs2,eq1) <- solveScoped env0 (qbound q0) [] t1 (Cast t1 (if inClass env then addSelf t0 (Just dec) else t0) : cs++cs1)
+                                             (cs2,eq1) <- solveScoped env0 (qbound q0) [] t1 (Cast t1 t2 : cs++cs1)
                                              checkNoEscape env (qbound q0)
                                              return (cs2, def{ qbinds = noqual env q0, pos = pos0 def, dbody = bindWits (eq0++eq1) ++ dbody def })
   where NDef (TSchema _ q0 t0) dec      = findName (dname def) env
+        t2 | inClass env                = addSelf t0 (Just dec)
+           | inAct env                  = case t0 of TFun{} | effect t0 == fxAction -> t0{ effect = fxProc }; _ -> t0
+           | otherwise                  = t0
         q1                              = qbinds def
         env0                            = defineTVars q1 $ defineTVars q0 env
         pos0 def
@@ -728,7 +731,7 @@ instance Check Decl where
     checkEnv' env (Def l n q p k a b dec fx)
                                         = do --traceM ("## checkEnv def " ++ prstr n ++ " (q = [" ++ prstrs q ++ "])")
                                              t <- maybe newTVar return a
-                                             pushFX fx t
+                                             pushFX fx' t
                                              st <- newTVar
                                              wellformed env1 q
                                              wellformed env1 a
@@ -737,18 +740,19 @@ instance Check Decl where
                                              (csb,b') <- infDefBody (define te1 (define te0 env1)) n p' b
                                              popFX
                                              let cst = if fallsthru b then [Cast tNone t] else []
-                                                 t1 = tFun fx (prowOf p') (krowOf k') t
+                                                 t1 = tFun fx' (prowOf p') (krowOf k') t
                                              (cs1,eq1) <- solveScoped env1 tvs [] t1 (csp++csk++csb++cst)
                                              checkNoEscape env tvs
                                              -- At this point, n has the type given by its def annotations.
                                              -- Now check that this type is no less general than its recursion assumption in env.
                                              (cs2, d) <- matchDefAssumption env cs1 (Def l n q (noDefaultsP p') (noDefaultsK k') (Just t)
-                                                                                     (bindWits eq1 ++ defaultsP p' ++ defaultsK k' ++ b') dec fx)
+                                                                                     (bindWits eq1 ++ defaultsP p' ++ defaultsK k' ++ b') dec fx')
                                              if inAct env
                                                  then return (cs2, [d])
                                                  else return (cs2, [d])
       where env1                        = reserve (bound (p,k) ++ bound b \\ stateScope env) $ defineTVars q $ setInDef env
             tvs                         = qbound q
+            fx'                         = if fx == fxAction && inAct env then fxProc else fx
 
     checkEnv' env (Actor l n q p k b)   = do --traceM ("## checkEnv actor " ++ prstr n)
                                              pushFX fxProc tNone
