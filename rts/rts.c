@@ -709,8 +709,8 @@ void init_db_queue(long key) {
 
 void register_actor(long key) {
     if (db) {
-    		int status = add_actor_to_membership(key, db);
-    		assert(status == 0);
+        int status = add_actor_to_membership(key, db);
+        assert(status == 0);
     }
 }
 
@@ -1831,10 +1831,10 @@ int main(int argc, char **argv) {
                 rts_node_id = atoi(optarg);
                 break;
             case 'R':
-            		rts_rack_id = atoi(optarg);
+                rts_rack_id = atoi(optarg);
                 break;
             case 'D':
-            		rts_dc_id = atoi(optarg);
+                rts_dc_id = atoi(optarg);
                 break;
             case 'N':
                 rts_host = strdup(optarg);
@@ -1940,12 +1940,12 @@ int main(int argc, char **argv) {
         GET_RANDSEED(&seed, 0);
         log_info("Starting distributed RTS node, host=%s, node_id=%d, rack_id=%d, datacenter_id=%d\n", rts_host, rts_node_id, rts_rack_id, rts_dc_id);
         log_info("Using distributed database backend replication factor of %d\n", ddb_replication);
-		char ** seed_hosts = (char **) malloc(ddb_no_host * sizeof(char *));
-		int * seed_ports = (int *) malloc(ddb_no_host * sizeof(int));
+        char ** seed_hosts = (char **) malloc(ddb_no_host * sizeof(char *));
+        int * seed_ports = (int *) malloc(ddb_no_host * sizeof(int));
 
         for (int i=0; i<ddb_no_host; i++) {
-        		seed_hosts[i] = strdup(ddb_host[i]);
-        		seed_ports[i] = ddb_port;
+            seed_hosts[i] = strdup(ddb_host[i]);
+            seed_ports[i] = ddb_port;
             char *colon = strchr(seed_hosts[i], ':');
             if (colon) {
                 *colon = '\0';
