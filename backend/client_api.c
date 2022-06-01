@@ -188,7 +188,7 @@ int handle_socket_close(int * childfd)
 
 int install_gossiped_view(membership_agreement_msg * ma, remote_db_t * db, unsigned int * fastrandstate)
 {
-	char msg_buf[1024];
+	char msg_buf[4096];
 
 	pthread_mutex_lock(db->gossip_lock);
 
@@ -533,6 +533,8 @@ rts_descriptor * get_rts_descriptor(int rack_id, int dc_id, char *hostname, int 
 	bcopy((char *) host->h_addr_list[0], (char *)&(rts_d->addr.sin_addr.s_addr), host->h_length);
 	rts_d->addr.sin_port = htons(local_rts_id);
 
+	rts_d->hostname = strndup(hostname, strnlen(hostname, 256) + 1);
+
 //	free(host);
 
 	return rts_d;
@@ -779,7 +781,7 @@ int is_actor_local(long actor_id, remote_db_t * db)
 
 int update_actor_placement(remote_db_t * db)
 {
-	char msg_buf[1024];
+	char msg_buf[4096];
 
     log_debug("CLIENT: Updating actor placement");
 
@@ -833,7 +835,7 @@ int update_actor_placement(remote_db_t * db)
 
 int add_actor_to_membership(long actor_id, remote_db_t * db)
 {
-	char msg_buf[1024];
+	char msg_buf[4096];
 
     log_debug("Adding actor %ld to membership!", actor_id);
 
