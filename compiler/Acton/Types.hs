@@ -215,9 +215,12 @@ wrapped kw env cs ts args               = do tvx <- newTVarOfKind KFX
                                              t' <- newTVar
                                              let t1 = subst [(fxSelf,fx)] t0
                                                  t2 = tFun fx (foldr posRow posNil ts) kwdNil t'
+                                                 TFun{restype=TFun{effect=fx1}} = t1
+                                             fx2 <- currFX
                                              w <- newWitness
                                              return (Impl w fx p :
                                                      Cast t1 t2 :
+                                                     Cast fx1 fx2 :
                                                      cs, t', eCall (tApp (Dot l0 (eVar w) kw) tvs) args)
 
 --------------------------------------------------------------------------------------------------------------------------
@@ -640,40 +643,50 @@ instance (Check a) => Check [a] where
 
 infActorEnv env ss                      = do dsigs <- mapM mkNDef (dvars ss \\ dom sigs)                -- exposed defs (without sigs)
                                              bsigs <- mapM mkNVar (pvars ss \\ dom (sigs++dsigs))       -- exposed assigns (without sigs)
-                                             return (sigs ++ dsigs ++ bsigs)                            -- exposed sigs + all the above
+                                             return (unSig sigs ++ dsigs ++ bsigs)                      -- exposed sigs + all the above
   where sigs                            = [ (n, NSig sc dec) | Signature _ ns sc dec <- ss, n <- ns, not $ isHidden n ]
+        svars                           = statevars ss
         dvars ss                        = nub [ n | Decl _ ds <- ss, Def{dname=n} <- ds, not $ isHidden n ]
         mkNDef n                        = do t <- newTVar
                                              return (n, NDef (monotype $ t) NoDec)
         pvars ss                        = nub $ concat $ map pvs ss
-          where pvs (Assign _ pats _)   = filter (not . isHidden) $ bound pats
+          where pvs (Assign _ pats _)   = filter (not . isHidden) $ bound pats \\ svars
                 pvs (If _ bs els)       = foldr intersect (pvars els) [ pvars ss | Branch _ ss <- bs ]
                 pvs _                   = []
         mkNVar n                        = do t <- newTVar
                                              return (n, NVar t)
 
+exportActorDefs b                       = sequence [ export n q p k a | Decl _ ds <- b, Def _ n q p k a _ _ _ <- ds, not $ isHidden n, False ]      -- DEACT!
+  where export n q p k a                = do fx <- newTVarOfKind KFX
+                                             return $ Def NoLoc (exportName n) q p k a [sReturn $ Call NoLoc (eVar n) (pArg p) (kArg k)] NoDec fx
+
 matchActorAssumption env n0 p k te      = do --traceM ("## matchActorAssumption " ++ prstr n0)
                                              (cs,eq) <- simplify env te0 tNone [Cast (prowOf p) p0, Cast (krowOf k) k0]
-                                             (css,eqs) <- unzip <$> mapM check1 te
+                                             (css,eqs) <- unzip <$> mapM check1 te0
                                              --traceM ("## matchActorAssumption returns " ++ prstrs (cs ++ concat css))
                                              return (cs ++ concat css, eq ++ concat eqs)
   where NAct _ p0 k0 te0                = findName n0 env
+        ns                              = dom te0
+        te1                             = unSig $ te `restrict` (ns ++ map exportName ns)
         check1 (n, i) | isHidden n      = return ([], [])
-        check1 (n, NVar t)              = do --traceM ("## matchActorAssumption for attribute " ++ prstr n)
+        check1 (n, NVar t0)             = do --traceM ("## matchActorAssumption for attribute " ++ prstr n)
                                              unify t t0
                                              return ([],[])
-          where t0                      = case lookup n te0 of
-                                             Just (NSig (TSchema _ _ t0) _) -> t0
-                                             Just (NVar t0) -> t0
-        check1 (n, NDef sc _)           = do (cs1,_,t) <- instantiate env sc
+          where t                       = case lookup n te1 of
+                                             Just (NVar t) -> t
+                                             x -> error ("(internal) Lookup of " ++ prstr n ++ " = " ++ show x)
+        check1 (n, NDef sc0 _)          = do (cs1,_,t) <- instantiate env sc
                                              --traceM ("## matchActorAssumption for method " ++ prstr n)
-                                             unify t t0
+                                             unify t (sctype sc0)
                                              (cs2,eq) <- solveScoped (defineTVars q env) (qbound q) te0 tNone cs1
                                              checkNoEscape env (qbound q)
                                              return (cs2, eq)
-          where TSchema _ q t0          = case lookup n te0 of
-                                             Just (NSig sc _) -> sc
+          where q                       = scbind sc
+--                n'                      = exportName n                        -- DEACT!
+                n'                      = n
+                sc                      = case lookup n' te1 of
                                              Just (NDef sc _) -> sc
+                                             x -> error ("(internal) Lookup of " ++ prstr n ++ " = " ++ show x)
         check1 (n, i)                   = return ([], [])
 
 
@@ -759,8 +772,9 @@ instance Check Decl where
                                              wellformed env1 q
                                              (csp,te1,p') <- infEnv env1 p
                                              (csk,te2,k') <- infEnv (define te1 env1) k
-                                             (csb,te,b') <- (if stub env then infEnv else infSuiteEnv) (define te2 $ define te1 env1) b
-                                             (cs0,eq0) <- matchActorAssumption env1 n p' k' te
+                                             s0 <- Decl NoLoc <$> exportActorDefs b
+                                             (csb,te,b') <- (if stub env then infEnv else infSuiteEnv) (define te2 $ define te1 env1) (b++[s0])
+                                             (cs0,eq0) <- matchActorAssumption env1 n p' k' (unSig te)
                                              popFX
                                              (cs1,eq1) <- solveScoped env1 tvs te tNone (csp++csk++csb++cs0)
                                              checkNoEscape env tvs

@@ -25,6 +25,8 @@ self                                = Name NoLoc "self"
 
 localName n                         = Derived n (name "local")
 
+exportName n                        = Derived n (name "export")
+
 deriveQ (NoQ n)                     = n
 deriveQ (QName (ModName m) n)       = deriveMod n m
 deriveQ (GName m n)
