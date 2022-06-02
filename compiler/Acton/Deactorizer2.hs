@@ -41,23 +41,23 @@ runDeactM m                         = evalState m [1..]
 
 type DeactEnv                       = EnvF DeactX
 
-data DeactX                         = DeactX { actionsX :: [Name], stvarsX :: [Name], localsX :: [Name], sampledX :: [Name] }
+data DeactX                         = DeactX { procsX :: [Name], stvarsX :: [Name], localsX :: [Name], sampledX :: [Name] }
 
 deactEnv                            :: Env0 -> DeactEnv
-deactEnv env0                       = setX env0 DeactX{ actionsX = [], stvarsX = [], localsX = [], sampledX = [] }
+deactEnv env0                       = setX env0 DeactX{ procsX = [], stvarsX = [], localsX = [], sampledX = [] }
 
 extend                              :: TEnv -> DeactEnv -> DeactEnv
 extend te env                       = define te env
 
 extendAndShadow                     :: TEnv -> DeactEnv -> DeactEnv
-extendAndShadow te env              = modX (define te env) $ \x -> x{ actionsX = actions env \\ ns, localsX = locals env \\ ns }
+extendAndShadow te env              = modX (define te env) $ \x -> x{ procsX = procs env \\ ns, localsX = locals env \\ ns }
   where ns                          = dom te
 
 newName                             :: String -> DeactM Name
 newName s                           = state (\(uniq:supply) -> (Internal DeactPass s uniq, supply))
 
 
-actions env                         = actionsX $ envX env
+procs env                         = procsX $ envX env
 
 stvars env                          = stvarsX $ envX env
 
@@ -65,7 +65,7 @@ locals env                          = localsX $ envX env
 
 sampled env                         = sampledX $ envX env
 
-setActor acts stvars locals env     = modX env $ \x -> x{ actionsX = acts, stvarsX = stvars, localsX = locals, sampledX = [] }
+setActor procs stvars locals env    = modX env $ \x -> x{ procsX = procs, stvarsX = stvars, localsX = locals, sampledX = [] }
 
 setSampled ns env                   = modX env $ \x -> x{ sampledX = ns ++ sampled env }
 
@@ -132,7 +132,7 @@ instance Deact Decl where
                                          decls' <- mapM deactDecl decls
                                          let _init_ = Def l0 initKW [] (addSelfPar p) KwdNIL (Just tNone) (mkBody $ copies++inits') NoDec fxProc
                                          return $ Class l n q [TC primActor [], cValue] (propsigs ++ [Decl l0 [_init_]] ++ decls')
-      where env1                    = setActor actions stvars locals $ extend (envOf p) $ define [(selfKW, NVar tSelf)] $ defineTVars q env
+      where env1                    = setActor procs stvars locals $ extend (envOf p) $ define [(selfKW, NVar tSelf)] $ defineTVars q env
             env2                    = define (envOf decls ++ envOf inits) env1
 
             (decls,ss)              = partition isDecl b
@@ -141,7 +141,7 @@ instance Deact Decl where
             fvs                     = free decls
             fvs'                    = free inits `intersect` bound decls
             locals                  = nub $ (bound p `intersect` fvs) ++ [ n | n <- dom $ envOf b, not (isHidden n) || n `elem` (fvs++fvs') ]
-            actions                 = [ n | Signature _ ns (TSchema _ _ (TFun _ fx _ _ _)) _ <- b, fx == fxProc, n <- ns ]
+            procs                   = [ n | Signature _ ns (TSchema _ _ (TFun _ fx _ _ _)) _ <- b, fx == fxProc, n <- ns ]
 
             propsigs                = [ Signature l0 [n] (monotype t) Property | (n,t) <- concat $ props' p : map props inits ]
 
@@ -217,7 +217,7 @@ instance Deact Handler where
 instance Deact Expr where
     deact env (Var l (NoQ n))
       | n `elem` sampled env        = return $ Var l (NoQ n)
-      | n `elem` actions env        = return $ Dot l (Var l (NoQ selfKW)) n
+      | n `elem` procs env        = return $ Dot l (Var l (NoQ selfKW)) n
       | n `elem` stvars env         = return $ Dot l (Var l (NoQ selfKW)) n
       | n `elem` locals env         = return $ Dot l (Var l (NoQ selfKW)) n
     deact env (Var l n)

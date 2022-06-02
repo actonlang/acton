@@ -126,9 +126,16 @@ instance DataVars Pattern where
     datavars n _                    = []
 
 
--- State variables -----------------
+-- Special attributes variables ----
+
+methods b                           = [ n | Decl _ ds <- b, Def{dname=n} <- ds ]
 
 statevars b                         = concat [ bound ps | VarAssign _ ps _ <- b ]
+
+isHidden (Name _ str)               = length (takeWhile (=='_') str) == 1
+isHidden _                          = True
+
+notHidden                           = filter (not . isHidden)
 
 
 -- Free and bound names ------------

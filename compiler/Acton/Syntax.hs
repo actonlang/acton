@@ -734,9 +734,6 @@ isNotImpl [Expr _ (NotImplemented _)]   = True
 isNotImpl (Expr _ (Strings _ _) : b)    = isNotImpl b
 isNotImpl _                             = False
 
-isHidden (Name _ str)               = length (takeWhile (=='_') str) == 1
-isHidden _                          = True
-
 isSig Signature{}                   = True
 isSig _                             = False
 

@@ -646,11 +646,11 @@ infActorEnv env ss                      = do dsigs <- mapM mkNDef (dvars ss \\ d
                                              return (unSig sigs ++ dsigs ++ bsigs)                      -- exposed sigs + all the above
   where sigs                            = [ (n, NSig sc dec) | Signature _ ns sc dec <- ss, n <- ns, not $ isHidden n ]
         svars                           = statevars ss
-        dvars ss                        = nub [ n | Decl _ ds <- ss, Def{dname=n} <- ds, not $ isHidden n ]
+        dvars ss                        = notHidden $ methods ss
         mkNDef n                        = do t <- newTVar
                                              return (n, NDef (monotype $ t) NoDec)
         pvars ss                        = nub $ concat $ map pvs ss
-          where pvs (Assign _ pats _)   = filter (not . isHidden) $ bound pats \\ svars
+          where pvs (Assign _ pats _)   = notHidden $ bound pats \\ svars
                 pvs (If _ bs els)       = foldr intersect (pvars els) [ pvars ss | Branch _ ss <- bs ]
                 pvs _                   = []
         mkNVar n                        = do t <- newTVar
