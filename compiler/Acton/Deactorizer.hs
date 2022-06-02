@@ -166,7 +166,6 @@ deactSuite env (s : ss)             = do s' <- deact (setSampled ns env) s
 instance Deact Stmt where
     deact env (Expr l e)            = Expr l <$> deactExpTop env e
     deact env (Assign l [p@(PVar _ n _)] e)
-      | n `elem` stvars env         = MutAssign l (selfRef n) <$> deactExp env t e
       | n `elem` locals env         = MutAssign l (selfRef n) <$> deactExp env t e
       | otherwise                   = Assign l [p] <$> deactExp env t e
       where t                       = typeOf env p
@@ -353,7 +352,6 @@ instance Deact Expr where
     deact env (Var l (NoQ n))
       | n `elem` sampled env        = return $ Var l (NoQ n)
       | n `elem` actions env        = return $ Dot l (Var l (NoQ selfKW)) (localName n)
-      | n `elem` stvars env         = return $ Dot l (Var l (NoQ selfKW)) n
       | n `elem` locals env         = return $ Dot l (Var l (NoQ selfKW)) n
     deact env (Var l n)
       | isActor env n               = return $ Var l $ newactQName n

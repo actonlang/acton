@@ -57,7 +57,7 @@ newName                             :: String -> DeactM Name
 newName s                           = state (\(uniq:supply) -> (Internal DeactPass s uniq, supply))
 
 
-procs env                         = procsX $ envX env
+procs env                           = procsX $ envX env
 
 stvars env                          = stvarsX $ envX env
 
@@ -96,7 +96,6 @@ deactSuite env (s : ss)             = do s' <- deact (setSampled ns env) s
 instance Deact Stmt where
     deact env (Expr l e)            = Expr l <$> deact env e
     deact env (Assign l [p@(PVar _ n _)] e)
-      | n `elem` stvars env         = MutAssign l (selfRef n) <$> deact env e
       | n `elem` locals env         = MutAssign l (selfRef n) <$> deact env e
       | otherwise                   = Assign l [p] <$> deact env e
       where t                       = typeOf env p
@@ -137,8 +136,8 @@ instance Deact Decl where
 
             (decls,ss)              = partition isDecl body
             inits                   = filter (not . isSig) ss
-            meths                   = bound decls
             stvars                  = statevars body
+            meths                   = bound decls
             fvs                     = free decls
             locals                  = nub $ (bound params `intersect` fvs) ++ [ n | n <- dom $ envOf inits, not (isHidden n) || n `elem` fvs ]
             procs                   = [ n | Decl _ ds <- decls, Def{dname=n, dfx=fx} <- ds, fx == fxProc ]
@@ -217,8 +216,6 @@ instance Deact Handler where
 instance Deact Expr where
     deact env (Var l (NoQ n))
       | n `elem` sampled env        = return $ Var l (NoQ n)
-      | n `elem` procs env        = return $ Dot l (Var l (NoQ selfKW)) n
-      | n `elem` stvars env         = return $ Dot l (Var l (NoQ selfKW)) n
       | n `elem` locals env         = return $ Dot l (Var l (NoQ selfKW)) n
     deact env (Var l n)
       | isActor env n               = return $ Var l $ newactQName n
