@@ -197,26 +197,25 @@ instance Deact Stmt where
     deact env s                     = error ("deact unexpected stmt: " ++ prstr s)
 
 instance Deact Decl where
-    deact env (Actor l n q p KwdNIL b)
+    deact env (Actor l n q params KwdNIL body)
                                     = do inits' <- deactSuite env2 inits
                                          decls' <- mapM deactMeths decls
-                                         let _init_ = Def l0 initKW [] (addSelfPar p') KwdNIL (Just tNone) (mkBody $ copies++inits') NoDec fxProc
+                                         let _init_ = Def l0 initKW [] (addSelfPar params') KwdNIL (Just tNone) (mkBody $ copies++inits') NoDec fxProc
                                          return $ Class l n q [TC primActor [], cValue] (propsigs ++ [Decl l0 [_init_]] ++ decls' ++ wrapped)
-      where env1                    = setActor actions stvars locals $ extend (envOf p') $ define [(selfKW, NVar tSelf)] $ defineTVars q env
+      where env1                    = setActor actions stvars (locals++meths) $ extend (envOf params') $ define [(selfKW, NVar tSelf)] $ defineTVars q env
             env2                    = define (envOf decls ++ envOf inits) env1
 
-            p'                      = seal p
-            (decls,ss)              = partition isDecl b
+            params'                 = seal params
+            (decls,ss)              = partition isDecl body
             meths                   = bound decls
             inits                   = filter (not . isSig) ss
-            stvars                  = statevars b
+            stvars                  = statevars body
             fvs                     = free decls
-            fvs'                    = free inits `intersect` bound decls
-            locals                  = nub $ (bound p' `intersect` fvs) ++ [ n | n <- dom $ envOf b, not (isHidden n) || n `elem` (fvs++fvs') ]
+            locals                  = nub $ (bound params' `intersect` fvs) ++ [ n | n <- dom $ envOf inits, not (isHidden n) || n `elem` fvs ]
             wrapped                 = [ wrapMeth def | Decl _ ds <- decls, def <- ds, dname def `elem` actions ]
-            actions                 = [ n | Signature _ ns (TSchema _ _ (TFun _ fx _ _ _)) _ <- b, fx == fxProc, n <- ns ]
+            actions                 = [ n | Signature _ ns (TSchema _ _ (TFun _ fx _ _ _)) _ <- body, fx == fxProc, n <- ns ]
 
-            propsigs                = [ Signature l0 [n] (monotype t) Property | (n,t) <- concat $ props' p' : map props inits ]
+            propsigs                = [ Signature l0 [n] (monotype t) Property | (n,t) <- concat $ props' params' : map props inits ]
 
             props (VarAssign _ p _) = [ (n, t) | PVar _ n (Just t) <- p ]
             props (Assign _ p _)    = [ (n, t) | PVar _ n (Just t) <- p, n `elem` locals ]
@@ -230,7 +229,7 @@ instance Deact Decl where
               | n `elem` locals     = [(n, fromJust a)]
             props' _                = []
 
-            copies                  = [ MutAssign l0 (selfRef n) (Var l0 (NoQ n)) | n <- bound p, n `elem` locals ]
+            copies                  = [ MutAssign l0 (selfRef n) (Var l0 (NoQ n)) | n <- bound params, n `elem` locals ]
 
             deactMeths (Decl l ds)  = Decl l <$> mapM deactMeth ds
 
