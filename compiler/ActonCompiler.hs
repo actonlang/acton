@@ -472,8 +472,12 @@ runRestPasses args paths env0 parsed stubMode = do
                       --traceM (Pretty.render (Pretty.pretty liftEnv))
 
                       (n,h,c) <- Acton.CodeGen.generate liftEnv lifted
-                      iff (hgen args) $ putStrLn(h)
-                      iff (cgen args) $ putStrLn(c)
+                      iff (hgen args) $ do
+                          putStrLn(h)
+                          System.Exit.exitSuccess
+                      iff (cgen args) $ do
+                          putStrLn(c)
+                          System.Exit.exitSuccess
 
                       let pedantArg = if (cpedantic args) then "-Werror" else ""
 
