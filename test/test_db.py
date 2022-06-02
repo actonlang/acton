@@ -37,7 +37,7 @@ class TcpCmdNoResponse(Exception):
     pass
 
 def get_db_args(port_chunk, replication_factor):
-    return [item for sublist in map(lambda x: ("--rts-ddb-host", x), [f"127.0.0.1:{port_chunk+idx}" for idx in range(replication_factor)]) for item in sublist]
+    return [item for sublist in map(lambda x: ("--rts-ddb-host", x), [f"127.0.0.1:{port_chunk+(idx*2)}" for idx in range(replication_factor)]) for item in sublist]
 
 
 def mon_cmd(address, cmd, retries=5):
@@ -117,12 +117,12 @@ class Db:
     def __init__(self, idx, port_chunk):
         self.idx = idx
         self.name = f"Db{idx}"
-        # lower half of port_chunk is used for DB client ports
-        self.port = port_chunk + self.idx
-        # upper half of the port_chunk is used for DB gossip port, and the first
-        # DB node's gossip port is also used as the seed port...
-        self.seed_port = port_chunk + (PORT_CHUNK_SIZE/2)
-        self.gossip_port = self.seed_port + self.idx
+        # even ports are DB client ports
+        self.port = port_chunk + (self.idx*2)
+        # odd ports are DB gossip pors and the first DB node's gossip port is
+        # also used as the seed port...
+        self.seed_port = port_chunk + 1
+        self.gossip_port = self.seed_port + (self.idx*2)
         self.mon_sock = f"db{self.idx}_mon"
         self.logfile = open(f"db{self.idx}.log", "w")
         self.p = None

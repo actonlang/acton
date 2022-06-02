@@ -134,7 +134,10 @@ int main (int argc, const char * argv[])
 	copy_node_description(&nds[1], 0, 1, 0, 0, "localhost", 32001);
 	copy_node_description(&nds[2], 1, 2, 0, 0, "localhost", 32002);
 
-	membership_state * ms = init_membership_state(3, nds, vc), * ms_r = NULL;
+	node_description * client_nds = (node_description *) malloc(1 * sizeof(node_description));
+	copy_node_description(&client_nds[0], 0, 0, 0, 0, "localhost", 22000);
+
+	membership_state * ms = init_membership_state(3, nds, 1, client_nds, vc), * ms_r = NULL;
 	serialize_membership_state(ms, &buf_w, &len_w);
 	write_read_from_file(buf_w, len_w, buf_r, &len_r);
 	deserialize_membership_state(buf_r, len_r, &ms_r);
@@ -151,7 +154,8 @@ int main (int argc, const char * argv[])
 	membership_agreement_msg * ma = init_membership_agreement_msg(MEMBERSHIP_AGREEMENT_PROPOSE, 0, ms, 0, vc), * ma_r = NULL;
 	serialize_membership_agreement_msg(ma, &buf_w, &len_w);
 	write_read_from_file(buf_w, len_w, buf_r, &len_r);
-	deserialize_membership_agreement_msg(buf_r, len_r, &ma_r);
+	unsigned msg_len = ((unsigned *) buf_r)[0];
+	deserialize_membership_agreement_msg(buf_r + sizeof(int), msg_len, &ma_r);
 
 	printf("MembershipAgreement message: %s\n", to_string_membership_agreement_msg(ma, err_msg));
 	if(!equals_membership_agreement_msg(ma, ma_r))

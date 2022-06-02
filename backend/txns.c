@@ -544,6 +544,8 @@ int persist_txn(txn_state * ts, db_t * db, unsigned int * fastrandstate)
 				printf("BACKEND: Txn %s successfully persisted write of type %d\n", uuid_str, tw->query_type);
 #endif
 
+			if(res != 0)
+				printf("BACKEND: persist_write for txn, of type %d returned %d\n", tw->query_type, res);
 			assert (res == 0);
 		}
 	}

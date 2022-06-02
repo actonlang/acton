@@ -27,6 +27,9 @@
 #include <uuid/uuid.h>
 #include <signal.h>
 
+#include <time.h>
+#include <stdlib.h>
+
 #include "yyjson.h"
 #include "rts.h"
 
@@ -704,6 +707,13 @@ void init_db_queue(long key) {
         create_db_queue(key);
 }
 
+void register_actor(long key) {
+    if (db) {
+        int status = add_actor_to_membership(key, db);
+        assert(status == 0);
+    }
+}
+
 void PUSH_outgoing($Actor self, $Msg m) {
     m->$next = self->$outgoing;
     self->$outgoing = m;
@@ -967,6 +977,7 @@ void deserialize_system(snode_t *actors_start) {
             if (key < min_key)
                 min_key = key;
         }
+        register_actor(key);
     }
     next_key = min_key;
 
@@ -1632,8 +1643,12 @@ void print_help(struct option *opt) {
 int main(int argc, char **argv) {
     uint ddb_no_host = 0;
     char **ddb_host = NULL;
+    char *rts_host = "localhost";
     int ddb_port = 32000;
     int ddb_replication = 3;
+    int rts_node_id = -1;
+    int rts_rack_id = -1;
+    int rts_dc_id = -1;
     int new_argc = argc;
     int cpu_pin;
     long num_cores = sysconf(_SC_NPROCESSORS_ONLN);
@@ -1709,6 +1724,10 @@ int main(int argc, char **argv) {
         {"rts-ddb-host", "HOST", 'h', "DDB hostname"},
         {"rts-ddb-port", "PORT", 'p', "DDB port [32000]"},
         {"rts-ddb-replication", "FACTOR", 'r', "DDB replication factor [3]"},
+        {"rts-node-id", "ID", 'i', "RTS node ID"},
+        {"rts-rack-id", "RACK", 'R', "RTS rack ID"},
+        {"rts-dc-id", "DATACENTER", 'D', "RTS datacenter ID"},
+        {"rts-host", "RTSHOST", 'N', "RTS hostname"},
         {"rts-help", NULL, 'H', "Show this help"},
         {"rts-mon-log-path", "PATH", 'l', "Path to RTS mon stats log"},
         {"rts-mon-log-period", "PERIOD", 'k', "Periodicity of writing RTS mon stats log entry"},
@@ -1807,6 +1826,18 @@ int main(int argc, char **argv) {
                 break;
             case 'r':
                 ddb_replication = atoi(optarg);
+                break;
+            case 'i':
+                rts_node_id = atoi(optarg);
+                break;
+            case 'R':
+                rts_rack_id = atoi(optarg);
+                break;
+            case 'D':
+                rts_dc_id = atoi(optarg);
+                break;
+            case 'N':
+                rts_host = strdup(optarg);
                 break;
             case 's':
                 log_stderr = true;
@@ -1907,21 +1938,24 @@ int main(int argc, char **argv) {
     unsigned int seed;
     if (ddb_host) {
         GET_RANDSEED(&seed, 0);
+        log_info("Starting distributed RTS node, host=%s, node_id=%d, rack_id=%d, datacenter_id=%d\n", rts_host, rts_node_id, rts_rack_id, rts_dc_id);
         log_info("Using distributed database backend replication factor of %d\n", ddb_replication);
-        db = get_remote_db(ddb_replication);
-        for (int i=0; i<ddb_no_host; i++) {
-            char *host = strdup(ddb_host[i]);
+        char ** seed_hosts = (char **) malloc(ddb_no_host * sizeof(char *));
+        int * seed_ports = (int *) malloc(ddb_no_host * sizeof(int));
 
-            int port = ddb_port;
-            char *colon = strchr(host, ':');
+        for (int i=0; i<ddb_no_host; i++) {
+            seed_hosts[i] = strdup(ddb_host[i]);
+            seed_ports[i] = ddb_port;
+            char *colon = strchr(seed_hosts[i], ':');
             if (colon) {
                 *colon = '\0';
-                port = atoi(colon + 1);
+                seed_ports[i] = atoi(colon + 1);
             }
-
-            log_info("Using distributed database backend (DDB): %s:%d\n", host, port);
-            add_server_to_membership(host, port, db, &seed);
+            log_info("Using distributed database backend (DDB): %s:%d\n", seed_hosts[i], seed_ports[i]);
         }
+        db = get_remote_db(ddb_replication, rts_rack_id, rts_dc_id, rts_host, rts_node_id, ddb_no_host, seed_hosts, seed_ports, &seed);
+        free(seed_hosts);
+        free(seed_ports);
     }
 
     if (db) {

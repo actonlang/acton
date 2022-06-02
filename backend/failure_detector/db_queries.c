@@ -18,9 +18,9 @@
  *      Author: aagapi
  */
 
-#include "../log.h"
 #include "db_queries.h"
 #include "db_messages.pb-c.h"
+#include "../log.h"
 
 #include <stdlib.h>
 #include <stdio.h>
@@ -152,6 +152,7 @@ int serialize_write_query(write_query * ca, void ** buf, unsigned * len, short f
 		sm.rrm = NULL;
 		sm.qm = NULL;
 		sm.tm = NULL;
+		sm.gl = NULL;
 
 		if(vc != NULL)
 		{
@@ -213,7 +214,7 @@ int deserialize_write_query(void * buf, unsigned msg_len, write_query ** ca)
 
 	if (msg == NULL || msg->mtype != RPC_TYPE_WRITE)
 	{
-		fprintf(stderr, "error unpacking write query message\n");
+		log_error("error unpacking write query message\n");
 	    return 1;
 	}
 
@@ -367,6 +368,7 @@ int serialize_read_query(read_query * ca, void ** buf, unsigned * len, vector_cl
 	sm.rrm = NULL;
 	sm.qm = NULL;
 	sm.tm = NULL;
+	sm.gl = NULL;
 
 	if(vc != NULL)
 	{
@@ -397,7 +399,7 @@ int deserialize_read_query(void * buf, unsigned msg_len, read_query ** ca)
 
 	if (msg == NULL || msg->mtype != RPC_TYPE_READ)
 	{
-		fprintf(stderr, "error unpacking read query message\n");
+		log_error("error unpacking read query message\n");
 	    return 1;
 	}
 
@@ -561,6 +563,7 @@ int serialize_range_read_query(range_read_query * ca, void ** buf, unsigned * le
 	sm.rrm = &msg;
 	sm.qm = NULL;
 	sm.tm = NULL;
+	sm.gl = NULL;
 
 	if(vc != NULL)
 	{
@@ -591,7 +594,7 @@ int deserialize_range_read_query(void * buf, unsigned msg_len, range_read_query 
 
 	if (msg == NULL || msg->mtype != RPC_TYPE_RANGE_READ)
 	{
-		fprintf(stderr, "error unpacking range read query message\n");
+		log_error("error unpacking range read query message\n");
 	    return 1;
 	}
 
@@ -760,14 +763,14 @@ int deserialize_ack_message(void * buf, unsigned msg_len, ack_message ** ca)
 
 	if (msg == NULL || msg->mtype != RPC_TYPE_ACK)
 	{
-		fprintf(stderr, "error unpacking ack query message\n");
+		log_error("error unpacking ack query message\n");
 	    return 1;
 	}
 
 	*ca = init_ack_message_from_msg(msg);
 
 //	to_string_ack_message(*ca, (char *) print_buff);
-//	log_debug("Received ACK message: %s", print_buff);
+//	log_debug("Received ACK message: %s\n", print_buff);
 
 	ack_message__free_unpacked(msg, NULL);
 
@@ -951,7 +954,7 @@ int deserialize_range_read_response_message(void * buf, unsigned msg_len, range_
 
 	if (msg == NULL || msg->mtype != RPC_TYPE_RANGE_READ_RESPONSE)
 	{
-		fprintf(stderr, "error unpacking range read response message\n");
+		log_error("error unpacking range read response message\n");
 	    return 1;
 	}
 
@@ -1335,6 +1338,7 @@ int serialize_queue_message(queue_query_message * ca, void ** buf, unsigned * le
 		sm.rrm = NULL;
 		sm.qm = &msg;
 		sm.tm = NULL;
+		sm.gl = NULL;
 
 		if(vc != NULL)
 		{
@@ -1397,7 +1401,7 @@ int deserialize_queue_message(void * buf, unsigned msg_len, queue_query_message 
 
 	if (msg == NULL || msg->mtype != RPC_TYPE_QUEUE)
 	{
-		fprintf(stderr, "error unpacking queue query message\n");
+		log_error("error unpacking queue query message\n");
 	    return 1;
 	}
 
@@ -1800,6 +1804,7 @@ int serialize_txn_message(txn_message * ca, void ** buf, unsigned * len, short f
 		sm.rrm = NULL;
 		sm.qm = NULL;
 		sm.tm = &msg;
+		sm.gl = NULL;
 
 		if(vc != NULL)
 		{
@@ -1861,7 +1866,7 @@ int deserialize_txn_message(void * buf, unsigned msg_len, txn_message ** ca)
 
 	if (msg == NULL || msg->mtype != RPC_TYPE_TXN)
 	{
-		fprintf(stderr, "error unpacking read query message\n");
+		log_error("error unpacking read query message\n");
 	    return 1;
 	}
 
@@ -1972,6 +1977,90 @@ int equals_txn_message(txn_message * ca1, txn_message * ca2)
 	return 1;
 }
 
+
+gossip_listen_message * build_gossip_listen_msg(node_description * nd, int64_t nonce)
+{
+	gossip_listen_message * gs = (gossip_listen_message *) malloc(sizeof(gossip_listen_message));
+	gs->node_description = nd;
+	gs->nonce = nonce;
+	return gs;
+}
+
+void free_gossip_listen_msg(gossip_listen_message * gs)
+{
+	free_node_description(gs->node_description);
+	free(gs);
+}
+
+void free_gossip_listen_message_msg(GossipListenMessage * msg)
+{
+}
+
+int serialize_gossip_listen_msg(gossip_listen_message * gs, void ** buf, unsigned * len)
+{
+	GossipListenMessage msg = GOSSIP_LISTEN_MESSAGE__INIT;
+
+	NodeStateMessage ns_msg = NODE_STATE_MESSAGE__INIT;
+	init_ns_msg_from_description(&ns_msg, gs->node_description);
+
+	msg.node_state = &ns_msg;
+	msg.nonce = gs->nonce;
+
+	ServerMessage sm = SERVER_MESSAGE__INIT;
+	sm.mtype = RPC_TYPE_GOSSIP_LISTEN;
+	sm.wm = NULL;
+	sm.rm = NULL;
+	sm.rrm = NULL;
+	sm.qm = NULL;
+	sm.tm = NULL;
+	sm.gl = &msg;
+	sm.vc = NULL;
+
+	*len = server_message__get_packed_size (&sm);
+	*len = (*len) + sizeof(int);
+	*buf = malloc (*len);
+	memset(*buf, 0 , *len);
+	*((int *)(*buf)) = (*len) - sizeof(int);
+	server_message__pack (&sm, (void *) ((int *)(*buf) + 1));
+
+	free_server_msg(&sm);
+
+	return 0;
+}
+
+int deserialize_gossip_listen_msg(void * buf, unsigned msg_len, gossip_listen_message ** gl)
+{
+	GossipListenMessage * msg = gossip_listen_message__unpack(NULL, msg_len, buf);
+
+	if (msg == NULL)
+	{ // Something failed
+	    log_error("error unpacking gossip_state message\n");
+	    return 1;
+	}
+
+	node_description * nd = init_node_description(msg->node_state->status, msg->node_state->node_id, msg->node_state->rack_id, msg->node_state->dc_id, (char *) msg->node_state->hostname.data, msg->node_state->port);
+
+	*gl = build_gossip_listen_msg(nd, msg->nonce);
+
+	 return 0;
+}
+
+int equals_gossip_listen_msg(gossip_listen_message * gs1, gossip_listen_message * gs2)
+{
+	return equals_node_description(gs1->node_description, gs2->node_description) &&
+			gs1->node_description->status == gs2->node_description->status &&
+			gs1->nonce == gs2->nonce;
+}
+
+char * to_string_gossip_listen_msg(gossip_listen_message * gs, char * msg_buff)
+{
+	sprintf(msg_buff, "GossipListenMessage(node_description=");
+	to_string_node_description(gs->node_description, msg_buff + strlen(msg_buff));
+	sprintf(msg_buff, ", nonce=%ld)", gs->nonce);
+	return msg_buff;
+}
+
+
 void free_server_msg(ServerMessage * sm)
 {
 	switch(sm->mtype)
@@ -2006,10 +2095,15 @@ void free_server_msg(ServerMessage * sm)
 			free_txn_message_msg(sm->tm);
 			break;
 		}
+		case RPC_TYPE_GOSSIP_LISTEN:
+		{
+			assert(sm->gl != NULL);
+			free_gossip_listen_message_msg(sm->gl);
+			break;
+		}
 		default:
 		{
-			fprintf(stderr, "Wrong server message type %d\n", sm->mtype);
-			assert(0);
+			log_fatal("Wrong server message type %d\n", sm->mtype);
 		}
 	}
 
@@ -2024,7 +2118,7 @@ int deserialize_server_message(void * buf, unsigned msg_len, void ** dest_buf, s
 	if (sm == NULL)
 	{
 		*mtype = -1;
-		fprintf(stderr, "error unpacking server message\n");
+		log_error("error unpacking server message\n");
 	    return 1;
 	}
 
@@ -2060,10 +2154,16 @@ int deserialize_server_message(void * buf, unsigned msg_len, void ** dest_buf, s
 			*dest_buf = (txn_message *) init_txn_message_from_msg(sm->tm);
 			break;
 		}
+		case RPC_TYPE_GOSSIP_LISTEN:
+		{
+			assert(sm->gl != NULL);
+			node_description * nd = init_node_description(sm->gl->node_state->status, sm->gl->node_state->node_id, sm->gl->node_state->rack_id, sm->gl->node_state->dc_id, (char *) sm->gl->node_state->hostname.data, sm->gl->node_state->port);
+			*dest_buf = (gossip_listen_message *) build_gossip_listen_msg(nd, sm->gl->nonce);
+			break;
+		}
 		default:
 		{
-			fprintf(stderr, "Wrong server message type %d\n", sm->mtype);
-			assert(0);
+			log_fatal("Wrong server message type %d\n", sm->mtype);
 		    return 1;
 		}
 	}
@@ -2115,8 +2215,7 @@ void free_client_msg(ClientMessage * cm)
 		}
 		default:
 		{
-			fprintf(stderr, "Wrong client message type %d\n", cm->mtype);
-			assert(0);
+			log_fatal("Wrong client message type %d\n", cm->mtype);
 		}
 	}
 
@@ -2124,14 +2223,51 @@ void free_client_msg(ClientMessage * cm)
 		free_vc_msg(cm->vc);
 }
 
-int deserialize_client_message(void * buf, unsigned msg_len, void ** dest_buf, short * mtype, vector_clock ** vc)
+int deserialize_client_message(void * buf, unsigned msg_len, void ** dest_buf, short * mtype, short * is_gossip_message, vector_clock ** vc)
 {
 	ClientMessage * cm = client_message__unpack (NULL, msg_len, buf);
+	*is_gossip_message = 0;
 
 	if (cm == NULL)
 	{
-		fprintf(stderr, "error unpacking server message\n");
-	    return 1;
+		log_error("error unpacking client message\n");
+
+		// This might be a gossiped membership notification:
+
+		membership_agreement_msg * ma = NULL;
+
+		int status = deserialize_membership_agreement_msg(buf, msg_len, &ma); //  + sizeof(int)
+
+		if(status == 0)
+		{
+// #if (VERBOSE_RPC > 0)
+			char print_buff[1024];
+			to_string_membership_agreement_msg(ma, (char *) print_buff);
+			log_debug("Received gossip message: %s", print_buff);
+// #endif
+
+			switch(ma->msg_type)
+			{
+				case MEMBERSHIP_AGREEMENT_NOTIFY:
+				{
+					*is_gossip_message = 1;
+					*mtype = ma->msg_type;
+					*dest_buf = ma;
+					break;
+				}
+				default:
+				{
+					log_fatal("Wrong gossip message type %d\n", ma->msg_type);
+				}
+			}
+
+			return 0;
+		}
+		else
+		{
+			log_error("error unpacking gossip message\n");
+			return 1;
+		}
 	}
 
 	switch(cm->mtype)
@@ -2168,8 +2304,7 @@ int deserialize_client_message(void * buf, unsigned msg_len, void ** dest_buf, s
 		}
 		default:
 		{
-			fprintf(stderr, "Wrong client message type %d\n", cm->mtype);
-			assert(0);
+			log_fatal("Wrong client message type %d\n", cm->mtype);
 		    return 1;
 		}
 	}

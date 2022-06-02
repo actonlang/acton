@@ -106,24 +106,37 @@ int64_t _get_nonce(unsigned int * fastrandstate)
 #define PROPOSAL_STATUS_AMMENDED 3
 #define PROPOSAL_STATUS_REJECTED 4
 
+#define AGREED_PEERS 0
+#define LOCAL_PEERS 1
+#define CONNECTED_PEERS 2
+#define CONNECTED_CLIENTS 3
+
 typedef struct membership
 {
 	skiplist_t * connected_peers;
 	skiplist_t * local_peers;
 	skiplist_t * agreed_peers;
 	skiplist_t * stable_peers;
+	skiplist_t * connected_clients;
+	skiplist_t * connected_client_sockets;
 
 	vector_clock * view_id;
 
 	int my_id;
 
 	skiplist_t * outstanding_proposal;
+	skiplist_t * outstanding_proposal_clients;
 	int64_t outstanding_proposal_nonce;
 	vector_clock * outstanding_view_id;
 	int outstanding_proposal_acks;
 	short proposal_status;
 	skiplist_t * merged_responses;
+	skiplist_t * merged_client_responses;
 } membership;
+
+int add_remote_server_to_list(remote_server * rs, skiplist_t * peer_list, unsigned int * seedptr);
+int add_client_to_membership(struct sockaddr_in addr, int sockfd, char *hostname, int portno, skiplist_t * clients, unsigned int * seedptr);
+int propose_local_membership(membership * m, vector_clock * my_vc, unsigned int * fastrandstate);
 
 membership * get_membership(int my_id)
 {
@@ -133,15 +146,18 @@ membership * get_membership(int my_id)
 	m->local_peers = create_skiplist(&sockaddr_cmp);
 	m->agreed_peers = create_skiplist(&sockaddr_cmp);
 	m->stable_peers = create_skiplist(&sockaddr_cmp);
+	m->connected_clients = create_skiplist(&sockaddr_cmp);
 	m->view_id = NULL;
 	m->my_id = my_id;
 
 	m->outstanding_proposal = create_skiplist(&sockaddr_cmp);
+	m->outstanding_proposal_clients = create_skiplist(&sockaddr_cmp);
 	m->outstanding_view_id = NULL;
 	m->outstanding_proposal_acks = 0;
 	m->outstanding_proposal_nonce = -1;
 	m->proposal_status = PROPOSAL_STATUS_NON_EXISTING;
 	m->merged_responses = create_skiplist(&sockaddr_cmp);
+	m->merged_client_responses = create_skiplist(&sockaddr_cmp);
 
 	return m;
 }
@@ -152,6 +168,7 @@ void free_membership(membership * m)
 	skiplist_free(m->local_peers);
 	skiplist_free(m->agreed_peers);
 	skiplist_free(m->stable_peers);
+	skiplist_free(m->connected_clients);
 
 	if(m->view_id != NULL)
 		free_vc(m->view_id);
@@ -159,13 +176,74 @@ void free_membership(membership * m)
 	if(m->outstanding_proposal != NULL)
 		skiplist_free(m->outstanding_proposal);
 
+	if(m->outstanding_proposal_clients != NULL)
+		skiplist_free(m->outstanding_proposal_clients);
+
 	if(m->outstanding_view_id != NULL)
 		free_vc(m->outstanding_view_id);
 
 	if(m->merged_responses != NULL)
 		skiplist_free(m->merged_responses);
 
+	if(m->merged_client_responses != NULL)
+		skiplist_free(m->merged_client_responses);
+
 	free(m);
+}
+
+typedef struct client_descriptor
+{
+	struct sockaddr_in addr;
+	int sockfd;
+	char id[256];
+} client_descriptor;
+
+client_descriptor * get_client_descriptor(struct sockaddr_in addr, int sockfd, char *hostname, int portno)
+{
+	client_descriptor * cd = (client_descriptor *) malloc(sizeof(struct client_descriptor));
+	memcpy(&(cd->addr), &addr, sizeof(struct sockaddr_in));
+	cd->sockfd = sockfd;
+    snprintf((char *) &cd->id, 256, "%s:%d", hostname, portno);
+	return cd;
+}
+
+void free_client_descriptor(client_descriptor * cd)
+{
+	free(cd);
+}
+
+int add_client_to_membership(struct sockaddr_in addr, int sockfd, char *hostname, int portno, skiplist_t * clients, unsigned int * seedptr)
+{
+	client_descriptor * cd = get_client_descriptor(addr, sockfd, hostname, portno);
+
+    if(skiplist_search(clients, &(cd->addr)) != NULL)
+    {
+		fprintf(stderr, "ERROR: Client address %s:%d was already added to membership!\n", hostname, portno);
+		free_client_descriptor(cd);
+		return -1;
+    }
+
+    int status = skiplist_insert(clients, &(cd->addr), cd, seedptr);
+
+    if(status != 0)
+    {
+		fprintf(stderr, "ERROR: Error adding client address %s:%d to membership!\n", hostname, portno);
+		free_client_descriptor(cd);
+		return -2;
+    }
+
+    return 0;
+}
+
+client_descriptor * lookup_client_by_fd(int fd, skiplist_t * clients)
+{
+	for(snode_t * crt = HEAD(clients); crt!=NULL; crt = NEXT(crt))
+	{
+		client_descriptor * crt_cd = (client_descriptor *) crt->value;
+		if(crt_cd->sockfd == fd)
+			return crt_cd;
+	}
+	return NULL;
 }
 
 int create_state_schema(db_t * db, unsigned int * fastrandstate)
@@ -233,6 +311,24 @@ int get_ack_packet(int status, write_query * q,
 	char print_buff[1024];
 	to_string_ack_message(ack, (char *) print_buff);
 	log_debug("Sending ack message: %s", print_buff);
+#endif
+
+	int ret = serialize_ack_message(ack, snd_buf, snd_msg_len, vc);
+
+	free_ack_message(ack);
+
+	return ret;
+}
+
+int get_gossip_ack_packet(int status, gossip_listen_message * q,
+					void ** snd_buf, unsigned * snd_msg_len, vector_clock * vc)
+{
+	ack_message * ack = init_ack_message(NULL, status, NULL, q->nonce);
+
+#if (VERBOSE_RPC > 0)
+	char print_buff[1024];
+	to_string_ack_message(ack, (char *) print_buff);
+	log_debug("Sending ack message: %s\n", print_buff);
 #endif
 
 	int ret = serialize_ack_message(ack, snd_buf, snd_msg_len, vc);
@@ -462,6 +558,30 @@ db_row_t* handle_read_query(read_query * q, db_schema_t ** schema, db_t * db, un
 									(WORD *) (q->cell_address->keys + (*schema)->no_primary_keys),
 									no_clustering_keys, (WORD) q->cell_address->table_key, db);
 	}
+}
+
+remote_server * lookup_client_by_client_socket_addr(struct sockaddr_in * client_socket_addr, skiplist_t * clients)
+{
+	for(snode_t * crt = HEAD(clients); crt!=NULL; crt = NEXT(crt))
+	{
+		remote_server * rs = (remote_server *) crt->value;
+		if(sockaddr_cmp((WORD) client_socket_addr, (WORD) (&(rs->client_socket_addr))) == 0)
+			return rs;
+	}
+	return NULL;
+}
+
+int handle_gossip_listen_message(gossip_listen_message * msg, client_descriptor * cd, membership * m, vector_clock * my_lc, unsigned int * fastrandstate)
+{
+	struct sockaddr_in dummy_serveraddr;
+	remote_server * rs = get_remote_server(msg->node_description->hostname, msg->node_description->portno, dummy_serveraddr, cd->addr, -2, 0);
+	rs->status = 0;
+
+	log_debug("Adding client %s:%d/%d/%d to membership.", rs->hostname, msg->node_description->portno, msg->node_description->node_id, rs->portno);
+
+	int status = add_remote_server_to_list(rs, m->connected_clients, fastrandstate);
+
+	return propose_local_membership(m, my_lc, fastrandstate);
 }
 
 int get_range_read_response_packet(snode_t* start_row, snode_t* end_row, int no_results, range_read_query * q,
@@ -850,10 +970,15 @@ int handle_socket_close(int * childfd, int * status)
 
 int add_remote_server_to_list(remote_server * rs, skiplist_t * peer_list, unsigned int * seedptr)
 {
-    if(skiplist_search(peer_list, &rs->serveraddr) != NULL)
+	snode_t * snode = skiplist_search(peer_list, &rs->serveraddr);
+
+    if(snode != NULL)
     {
-		fprintf(stderr, "ERROR: Server address %s:%d was already added to membership!\n", rs->hostname, rs->portno);
-		assert(0);
+		fprintf(stderr, "ERROR: Server address %s:%d was already added to membership, marking it as live!\n", rs->hostname, rs->portno);
+		remote_server * existing_rs = (remote_server *) snode->value;
+		existing_rs->status = NODE_LIVE;
+		// Update client socket address:
+		memcpy(&(existing_rs->client_socket_addr), &(rs->client_socket_addr), sizeof(struct sockaddr_in));
 		return -1;
     }
 
@@ -869,10 +994,6 @@ int add_remote_server_to_list(remote_server * rs, skiplist_t * peer_list, unsign
     return 0;
 }
 
-#define AGREED_PEERS 0
-#define LOCAL_PEERS 1
-#define CONNECTED_PEERS 2
-
 int add_remote_server_to_membership(remote_server * rs, membership * m, short list, unsigned int * seedptr)
 {
 	switch(list)
@@ -883,6 +1004,8 @@ int add_remote_server_to_membership(remote_server * rs, membership * m, short li
 			return add_remote_server_to_list(rs, m->local_peers, seedptr);
 		case CONNECTED_PEERS:
 			return add_remote_server_to_list(rs, m->connected_peers, seedptr);
+		case CONNECTED_CLIENTS:
+			return add_remote_server_to_list(rs, m->connected_clients, seedptr);
 	}
 
     return -1;
@@ -890,7 +1013,8 @@ int add_remote_server_to_membership(remote_server * rs, membership * m, short li
 
 int add_peer_to_membership(char *hostname, unsigned short portno, struct sockaddr_in serveraddr, int serverfd, int do_connect, membership * m, short list, remote_server ** rs, unsigned int * seedptr)
 {
-    *rs = get_remote_server(hostname, portno, serveraddr, serverfd, do_connect);
+	struct sockaddr_in dummy_serveraddr;
+    *rs = get_remote_server(hostname, portno, serveraddr, dummy_serveraddr, serverfd, do_connect);
 
     if(rs == NULL)
     {
@@ -910,60 +1034,18 @@ int add_peer_to_membership(char *hostname, unsigned short portno, struct sockadd
     return status;
 }
 
-typedef struct client_descriptor
-{
-	struct sockaddr_in addr;
-	int sockfd;
-	char id[256];
-} client_descriptor;
 
-client_descriptor * get_client_descriptor(struct sockaddr_in addr, int sockfd, char *hostname, int portno)
-{
-	client_descriptor * cd = (client_descriptor *) malloc(sizeof(struct client_descriptor));
-	memcpy(&(cd->addr), &addr, sizeof(struct sockaddr_in));
-	cd->sockfd = sockfd;
-    snprintf((char *) &cd->id, 256, "%s:%d", hostname, portno);
-	return cd;
-}
-
-void free_client_descriptor(client_descriptor * cd)
-{
-	free(cd);
-}
-
-int add_client_to_membership(struct sockaddr_in addr, int sockfd, char *hostname, int portno, skiplist_t * clients, unsigned int * seedptr)
-{
-	client_descriptor * cd = get_client_descriptor(addr, sockfd, hostname, portno);
-
-    if(skiplist_search(clients, &(cd->addr)) != NULL)
-    {
-		fprintf(stderr, "ERROR: Client address %s:%d was already added to membership!\n", hostname, portno);
-		free_client_descriptor(cd);
-		return -1;
-    }
-
-    int status = skiplist_insert(clients, &(cd->addr), cd, seedptr);
-
-    if(status != 0)
-    {
-		fprintf(stderr, "ERROR: Error adding client address %s:%d to membership!\n", hostname, portno);
-		free_client_descriptor(cd);
-		return -2;
-    }
-
-    return 0;
-}
-
-int handle_client_message(int childfd, int msg_len, db_t * db, unsigned int * fastrandstate, vector_clock * my_lc, int my_id)
+int handle_client_message(int childfd, int msg_len, db_t * db, membership * m, skiplist_t * clients, unsigned int * fastrandstate, vector_clock * my_lc, int my_id)
 {
     void * tmp_out_buf = NULL, * q = NULL;
     unsigned snd_msg_len;
     short msg_type;
+    short is_gossip_message;
 	db_schema_t * schema;
 	int64_t nonce = -1;
 
 	vector_clock * lc_read = NULL;
-    int status = parse_message(in_buf + sizeof(int), msg_len, &q, &msg_type, &nonce, 1, &lc_read);
+    int status = parse_message(in_buf + sizeof(int), msg_len, &q, &msg_type, &is_gossip_message, &nonce, 1, &lc_read);
 
     if(status != 0)
     {
@@ -1145,6 +1227,15 @@ int handle_client_message(int childfd, int msg_len, db_t * db, unsigned int * fa
 
     			break;
     		}
+    		case RPC_TYPE_GOSSIP_LISTEN:
+    		{
+    			client_descriptor * cd = lookup_client_by_fd(childfd, clients);
+    			int status = handle_gossip_listen_message((gossip_listen_message *) q, cd, m, copy_vc(my_lc), fastrandstate);
+//			assert(status == 0);
+			status = get_gossip_ack_packet(status, (gossip_listen_message *) q, &tmp_out_buf, &snd_msg_len, NULL);
+			free_gossip_listen_msg(q);
+    			break;
+    		}
     		case RPC_TYPE_ACK:
     		{
     			assert(0); // S'dn't happen currently
@@ -1258,12 +1349,13 @@ int get_agreement_notify_ack_packet(int status, membership_agreement_msg * am,
 	return ret;
 }
 
-membership_state * get_membership_state_from_server_list(skiplist_t * servers, vector_clock * my_lc)
+membership_state * get_membership_state_from_server_list(skiplist_t * servers, skiplist_t * clients, vector_clock * my_lc)
 {
 	if(servers->no_items == 0)
 		return NULL;
 
 	node_description * nds = (node_description *) malloc(servers->no_items * sizeof(node_description));
+	node_description * client_nds = (node_description *) malloc(clients->no_items * sizeof(node_description));
 
 	int i = 0;
 	for(snode_t * crt = HEAD(servers); crt!=NULL; crt = NEXT(crt), i++)
@@ -1272,7 +1364,14 @@ membership_state * get_membership_state_from_server_list(skiplist_t * servers, v
 		copy_node_description(nds+i, rs->status, get_node_id((struct sockaddr *) &(rs->serveraddr)), 0, 0, rs->hostname, rs->portno);
 	}
 
-	return init_membership_state(servers->no_items, nds, my_lc);
+	int j = 0;
+	for(snode_t * crt = HEAD(clients); crt!=NULL; crt = NEXT(crt), j++)
+	{
+		remote_server * rs = (remote_server *) crt->value;
+		copy_node_description(client_nds+j, rs->status, get_node_id((struct sockaddr *) &(rs->serveraddr)), 0, 0, rs->hostname, rs->portno);
+	}
+
+	return init_membership_state(servers->no_items, nds, clients->no_items, client_nds, my_lc);
 }
 
 int no_live_nodes(skiplist_t * list)
@@ -1431,17 +1530,20 @@ int propose_local_membership(membership * m, vector_clock * my_vc, unsigned int 
 							to_string_vc(m->outstanding_view_id, msg_buf));
 #endif
 		skiplist_free(m->outstanding_proposal);
+		skiplist_free(m->outstanding_proposal_clients);
 		free_vc(m->outstanding_view_id);
     }
 
     m->outstanding_proposal = skiplist_clone(m->local_peers, fastrandstate);
+    m->outstanding_proposal_clients = skiplist_clone(m->connected_clients, fastrandstate);
     m->outstanding_view_id = copy_vc(my_vc);
     m->outstanding_proposal_nonce = _get_nonce(fastrandstate);
     m->proposal_status = PROPOSAL_STATUS_ACTIVE;
     m->outstanding_proposal_acks = 0;
-	m->merged_responses = skiplist_clone(m->local_peers, fastrandstate); // init merged responses to "my response"
+	m->merged_responses = skiplist_clone(m->local_peers, fastrandstate); // init merged responses for server list to "my response"
+	m->merged_client_responses = skiplist_clone(m->connected_clients, fastrandstate); // init merged responses for client list to "my response"
 
-	int status = get_agreement_propose_packet(0, get_membership_state_from_server_list(m->outstanding_proposal, copy_vc(m->outstanding_view_id)),
+	int status = get_agreement_propose_packet(0, get_membership_state_from_server_list(m->outstanding_proposal, m->outstanding_proposal_clients, copy_vc(m->outstanding_view_id)),
 												m->outstanding_proposal_nonce, &tmp_out_buf, &snd_msg_len, copy_vc(m->outstanding_view_id));
 
 	for(snode_t * crt = HEAD(m->local_peers); crt!=NULL; crt = NEXT(crt))
@@ -1481,7 +1583,7 @@ int merge_membership_agreement_msg_to_list(membership_agreement_msg * ma, skipli
 	{
 		node_description nd = ma->membership->membership[i];
 
-		remote_server * rs = get_remote_server(nd.hostname, nd.portno, dummy_serveraddr, -2, 0);
+		remote_server * rs = get_remote_server(nd.hostname, nd.portno, dummy_serveraddr, dummy_serveraddr, -2, 0);
 		rs->status = nd.status;
 
 		snode_t * node = skiplist_search(merged_list, &rs->serveraddr);
@@ -1527,7 +1629,8 @@ int merge_membership_agreement_msg_to_list(membership_agreement_msg * ma, skipli
 				int64_t local_counter = get_component_vc(my_lc, nd.node_id);
 				int64_t proposed_counter = get_component_vc(ma->vc, nd.node_id);
 
-				if(proposed_counter > local_counter)
+				if((proposed_counter > local_counter)
+						|| (proposed_counter == -1 && local_counter == -1)) // -1 is for client (RTS membership entries), which do not participate in the vector_clock version
 				{
 #if (VERBOSE_RPC > 0)
 					log_debug("SERVER: merge_membership_agreement_msg_to_list: Updating status of node %s from %d to %d, because local_counter=%" PRId64 ", proposed_counter=%" PRId64 ".", rs->id, rs_local->status, nd.status, local_counter, proposed_counter);
@@ -1539,6 +1642,94 @@ int merge_membership_agreement_msg_to_list(membership_agreement_msg * ma, skipli
 				{
 #if (VERBOSE_RPC > 0)
 					log_debug("SERVER: merge_membership_agreement_msg_to_list: Requesting membership ammend, because for node %s, local_status=%d, proposed_status=%d, local_counter=%" PRId64 ", proposed_counter=%" PRId64 ".", rs->id, rs_local->status, nd.status, local_counter, proposed_counter);
+#endif
+
+					memberships_differ = 1;
+				}
+			}
+		}
+	}
+
+	return memberships_differ;
+}
+
+int merge_membership_agreement_msg_to_client_list(membership_agreement_msg * ma, skiplist_t * merged_list, membership * m, vector_clock * my_lc, unsigned int * fastrandstate)
+{
+	int memberships_differ = 0;
+	struct sockaddr_in dummy_serveraddr;
+	int reverse_connect_to_clients = 0;
+
+	for(int i=0;i<ma->membership->no_client_nodes;i++)
+	{
+		node_description nd = ma->membership->client_membership[i];
+
+		remote_server * rs = get_remote_server(nd.hostname, nd.portno, dummy_serveraddr, dummy_serveraddr, -2, 0);
+		rs->status = nd.status;
+
+		snode_t * node = skiplist_search(merged_list, &rs->serveraddr);
+
+		if(node == NULL) // I just learned about this client
+		{
+#if (VERBOSE_RPC > 0)
+			char msg_buf[1024];
+			printf("SERVER: merge_membership_agreement_msg_to_list: Learned about client node %s from proposal, status=%d.\n", rs->id, rs->status);
+#endif
+
+			int status = 0;
+			if(reverse_connect_to_clients)
+			{
+				status = connect_remote_server(rs);
+
+				if(status != 0)
+				{
+					rs->sockfd = 0;
+					rs->status = NODE_DEAD;
+					if(nd.status == NODE_LIVE)
+						memberships_differ = 1;
+				}
+			}
+			else
+			{
+				memberships_differ = 1;
+			}
+
+			status = add_remote_server_to_list(rs, m->connected_clients, fastrandstate);
+			assert(status == 0);
+			status = add_remote_server_to_list(rs, merged_list, fastrandstate);
+			assert(status == 0);
+		}
+		else
+		{
+			free_remote_server(rs);
+
+			remote_server * rs_local = (remote_server *) node->value;
+
+			if(rs_local->status == NODE_UNKNOWN)
+			{
+#if (VERBOSE_RPC > 0)
+				printf("SERVER: merge_membership_agreement_msg_to_list: Updating status of client node %s from NODE_UNKNOWN to %d.\n", rs->id, nd.status);
+#endif
+
+				rs_local->status = nd.status;
+			}
+			else if(rs_local->status != nd.status) // if proposed server status is different than local one, and proposed clock is newer, use proposed status
+			{
+				int64_t local_counter = get_component_vc(my_lc, nd.node_id);
+				int64_t proposed_counter = get_component_vc(ma->vc, nd.node_id);
+
+				if((proposed_counter > local_counter)
+					|| (proposed_counter == -1 && local_counter == -1)) // -1 is for client (RTS membership entries), which do not participate in the vector_clock version
+				{
+#if (VERBOSE_RPC > 0)
+					printf("SERVER: merge_membership_agreement_msg_to_list: Updating status of node %s from %d to %d, because local_counter=%" PRId64 ", proposed_counter=%" PRId64 ".\n", rs->id, rs_local->status, nd.status, local_counter, proposed_counter);
+#endif
+
+					rs_local->status = nd.status;
+				}
+				else
+				{
+#if (VERBOSE_RPC > 0)
+					printf("SERVER: merge_membership_agreement_msg_to_list: Requesting membership ammend, because for node %s, local_status=%d, proposed_status=%d, local_counter=%" PRId64 ", proposed_counter=%" PRId64 ".\n", rs->id, rs_local->status, nd.status, local_counter, proposed_counter);
 #endif
 
 					memberships_differ = 1;
@@ -1571,13 +1762,15 @@ int handle_agreement_propose_message(membership_agreement_msg * ma, membership_s
 
 	// Copy local view to merged list:
 	skiplist_t * merged_list = skiplist_clone(m->local_peers, fastrandstate);
+	skiplist_t * client_merged_list = skiplist_clone(m->connected_clients, fastrandstate);
 
 	// Merge it with proposed view:
 	int memberships_differ = merge_membership_agreement_msg_to_list(ma, merged_list, m, prev_lc, fastrandstate);
+	int client_memberships_differ = merge_membership_agreement_msg_to_client_list(ma, client_merged_list, m, prev_lc, fastrandstate);
 
-	*merged_membership = get_membership_state_from_server_list(merged_list, my_lc);
+	*merged_membership = get_membership_state_from_server_list(merged_list, client_merged_list, my_lc);
 
-	return memberships_differ?PROPOSAL_STATUS_AMMENDED:PROPOSAL_STATUS_ACCEPTED;
+	return (memberships_differ | client_memberships_differ)?PROPOSAL_STATUS_AMMENDED:PROPOSAL_STATUS_ACCEPTED;
 }
 
 int handle_agreement_response_message(membership_agreement_msg * ma, membership_state ** merged_membership, membership * m, db_t * db, vector_clock * my_lc, vector_clock * prev_vc, unsigned int * fastrandstate)
@@ -1617,13 +1810,14 @@ int handle_agreement_response_message(membership_agreement_msg * ma, membership_
         		if(m->proposal_status == PROPOSAL_STATUS_ACTIVE)
         			m->proposal_status = PROPOSAL_STATUS_ACCEPTED; // my proposal was accepted
 
-    			*merged_membership = get_membership_state_from_server_list(m->merged_responses, my_lc);
+        		*merged_membership = get_membership_state_from_server_list(m->merged_responses, m->merged_client_responses, my_lc);
     			assert(*merged_membership != NULL);
     		}
     }
     else if(ma->ack_status == PROPOSAL_STATUS_AMMENDED)
     {
     		int memberships_differ = merge_membership_agreement_msg_to_list(ma, m->merged_responses, m, prev_vc, fastrandstate);
+    		int client_memberships_differ = merge_membership_agreement_msg_to_client_list(ma, m->merged_client_responses, m, prev_vc, fastrandstate);
 
 //    		assert(memberships_differ);
 
@@ -1632,7 +1826,7 @@ int handle_agreement_response_message(membership_agreement_msg * ma, membership_
 
     		if(m->proposal_status == PROPOSAL_STATUS_AMMENDED && m->outstanding_proposal_acks == 0)
     		{
-    			*merged_membership = get_membership_state_from_server_list(m->merged_responses, my_lc);
+    			*merged_membership = get_membership_state_from_server_list(m->merged_responses, m->merged_client_responses, my_lc);
     			assert(*merged_membership != NULL);
     		}
     }
@@ -1676,7 +1870,7 @@ int install_agreed_view(membership_agreement_msg * ma, membership * m, vector_cl
 	{
 		node_description nd = ma->membership->membership[i];
 
-		remote_server * rs = get_remote_server(nd.hostname, nd.portno, dummy_serveraddr, -2, 0);
+		remote_server * rs = get_remote_server(nd.hostname, nd.portno, dummy_serveraddr, dummy_serveraddr, -2, 0);
 		rs->status = nd.status;
 
 		snode_t * node = skiplist_search(m->local_peers, &rs->serveraddr);
@@ -1747,9 +1941,51 @@ int install_agreed_view(membership_agreement_msg * ma, membership * m, vector_cl
 	return local_view_disagrees;
 }
 
+int notify_new_view_to_clients(membership * m, membership_agreement_msg * ma, vector_clock * my_lc)
+{
+    void * tmp_out_buf = NULL, * q = NULL;
+    unsigned snd_msg_len;
+    char msg_buf[1024];
+
+	membership_agreement_msg * amr = NULL;
+
+	membership_state * mstate = get_membership_state_from_server_list(m->local_peers, m->connected_clients, my_lc);
+
+	int status = get_agreement_notify_packet(PROPOSAL_STATUS_ACCEPTED, mstate, ma, &amr, &tmp_out_buf, &snd_msg_len, copy_vc(my_lc), copy_vc(my_lc));
+
+	for(snode_t * crt = HEAD(m->connected_client_sockets); crt!=NULL; crt = NEXT(crt))
+	{
+		client_descriptor * cd = (client_descriptor *) crt->value;
+
+		if(cd->sockfd == 0)
+			continue;
+
+		char client_address2[INET_ADDRSTRLEN];
+		inet_ntop( AF_INET, &(cd->addr).sin_addr, client_address2, sizeof(client_address2));
+		log_debug("SERVER: Notifying new agreed view %s to client %s:%d, fd=%d",
+							to_string_membership_agreement_msg(ma, msg_buf),
+							client_address2, ntohs(cd->addr.sin_port), cd->sockfd);
+
+		int n = write(cd->sockfd, tmp_out_buf, snd_msg_len);
+
+		if (n < 0)
+			error("ERROR writing to socket");
+	}
+
+	free_membership_agreement(amr);
+
+//	free_membership_state(mstate, 0);
+
+	free(tmp_out_buf);
+
+	return 0;
+}
+
 int handle_agreement_notify_message(membership_agreement_msg * ma, membership * m, db_t * db, vector_clock * my_lc, vector_clock * prev_vc, unsigned int * fastrandstate)
 {
-	return install_agreed_view(ma, m, my_lc, fastrandstate);
+	int ret = install_agreed_view(ma, m, my_lc, fastrandstate);
+	notify_new_view_to_clients(m, ma, my_lc);
+	return ret;
 }
 
 int handle_agreement_notify_ack_message(membership_agreement_msg * ma, membership * m, db_t * db, unsigned int * fastrandstate)
@@ -1793,7 +2029,7 @@ int handle_join_message(int childfd, int msg_len, membership * m, db_t * db, uns
 
 	if(status != 0)
 	{
-		fprintf(stderr, "ERROR decoding client request");
+		fprintf(stderr, "ERROR decoding server join request");
     	    	return -1;
 	}
 
@@ -1898,7 +2134,7 @@ int handle_server_message(int childfd, int msg_len, membership * m, db_t * db, u
 
 	if(status != 0)
 	{
-		fprintf(stderr, "ERROR decoding client request");
+		fprintf(stderr, "ERROR decoding server gossip message");
     	    	return -1;
 	}
 
@@ -1972,12 +2208,13 @@ int handle_server_message(int childfd, int msg_len, membership * m, db_t * db, u
 				else if(m->proposal_status == PROPOSAL_STATUS_AMMENDED) // re-propose merged membership from previous round
 				{
 				    m->outstanding_proposal = skiplist_clone(m->merged_responses, fastrandstate);
+				    m->outstanding_proposal_clients = skiplist_clone(m->merged_client_responses, fastrandstate);
 				    m->outstanding_view_id = copy_vc(my_lc);
 				    m->outstanding_proposal_nonce = _get_nonce(fastrandstate);
 				    m->proposal_status = PROPOSAL_STATUS_ACTIVE;
 				    m->outstanding_proposal_acks = 0;
 
-					status = get_agreement_propose_packet(0, get_membership_state_from_server_list(m->outstanding_proposal, copy_vc(m->outstanding_view_id)),
+					status = get_agreement_propose_packet(0, get_membership_state_from_server_list(m->outstanding_proposal, m->outstanding_proposal_clients, copy_vc(m->outstanding_view_id)),
 																m->outstanding_proposal_nonce, &tmp_out_buf, &snd_msg_len, copy_vc(m->outstanding_view_id));
 				}
 			}
@@ -2235,7 +2472,7 @@ int main(int argc, char **argv) {
           fprintf(stderr, "ERROR: Unable to open log file (%s) for writing\n", arguments.log_file_path);
           exit(1);
       }
-      log_add_fp(logf, LOG_TRACE);
+      log_add_fp(logf, LOG_DEBUG); // LOG_TRACE
       // Turn off log output on stderr
       log_set_quiet(true);
   }
@@ -2329,6 +2566,7 @@ int main(int argc, char **argv) {
   vector_clock * my_lc = init_local_vc_id(my_id);
 
   membership * m = get_membership(my_id);
+  m->connected_client_sockets = clients;
 
   log_info("Started [%s:%d, %s:%d], my_lc = %s", inet_ntoa(serveraddr.sin_addr), ntohs(serveraddr.sin_port), my_address, my_port, to_string_vc(my_lc, msg_buf));
 
@@ -2624,14 +2862,26 @@ int main(int argc, char **argv) {
 
 		for(snode_t * crt = HEAD(clients); crt!=NULL; crt = NEXT(crt))
 		{
-			client_descriptor * rs = (client_descriptor *) crt->value;
-			if(rs->sockfd > 0 && FD_ISSET(rs->sockfd , &readfds))
+			client_descriptor * cd = (client_descriptor *) crt->value;
+			if(cd->sockfd > 0 && FD_ISSET(cd->sockfd , &readfds))
 			// Received a msg from this client:
 			{
-				if(read_full_packet(&(rs->sockfd), (char *) in_buf, SERVER_BUFSIZE, &msg_len, &ret, &handle_socket_close))
+				if(read_full_packet(&(cd->sockfd), (char *) in_buf, SERVER_BUFSIZE, &msg_len, &ret, &handle_socket_close))
+				{
+					if(ret == NODE_DEAD)
+					{
+						remote_server * rs = lookup_client_by_client_socket_addr(&(cd->addr), m->connected_clients);
+						if(rs != NULL)
+						{
+							rs->status = NODE_DEAD;
+							log_debug("Client %s, sockfd=%d, status=%d went dead, proposing new membership..", rs->id, rs->sockfd, rs->status);
+							propose_local_membership(m, copy_vc(my_lc), &seed);
+						}
+					}
 					continue;
+				}
 
-			    if(handle_client_message(rs->sockfd, msg_len, db, &seed, my_lc, my_id))
+			    if(handle_client_message(cd->sockfd, msg_len, db, m, clients, &seed, my_lc, my_id))
 			    		continue;
 			}
 		}
@@ -2645,7 +2895,7 @@ int main(int argc, char **argv) {
 			if(rs->sockfd > 0 && FD_ISSET(rs->sockfd , &readfds))
 			// Received a msg from this server:
 			{
-                log_debug("active peer %s, sockfd=%d, status=%d is ready for reading", rs->id, rs->sockfd, rs->status);
+				log_trace("active peer %s, sockfd=%d, status=%d is ready for reading", rs->id, rs->sockfd, rs->status);
 
 				ret = read_full_packet(&(rs->sockfd), (char *) in_buf, SERVER_BUFSIZE, &msg_len, &(rs->status), &handle_socket_close);
 

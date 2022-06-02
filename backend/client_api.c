@@ -19,6 +19,8 @@
  */
 
 #include "client_api.h"
+#include "hashes.h"
+#include "log.h"
 
 struct dbc_stat dbc_stats;
 
@@ -120,12 +122,16 @@ int queue_callback_cmp(WORD e1, WORD e2)
 
 void * comm_thread_loop(void * args);
 
-remote_db_t * get_remote_db(int replication_factor)
+remote_db_t * get_remote_db(int replication_factor, int rack_id, int dc_id, char * hostname, unsigned short local_rts_id,
+							int no_seeds, char ** seed_hosts, int * seed_ports, unsigned int * seedptr)
 {
-	remote_db_t * db = (remote_db_t *) malloc(sizeof(remote_db_t) + 4 * sizeof(pthread_mutex_t));
-	memset(db, 0, sizeof(remote_db_t) + 4 * sizeof(pthread_mutex_t));
+	remote_db_t * db = (remote_db_t *) malloc(sizeof(remote_db_t) + 5 * sizeof(pthread_mutex_t) + sizeof(pthread_cond_t));
+	memset(db, 0, sizeof(remote_db_t) + 5 * sizeof(pthread_mutex_t) + sizeof(pthread_cond_t));
 
 	db->servers = create_skiplist(&sockaddr_cmp);
+	db->rtses = create_skiplist(&sockaddr_cmp);
+	db->actors = create_skiplist_long();
+	db->_rts_ring = create_skiplist_long();
 	db->txn_state = create_skiplist_uuid();
 	db->queue_subscriptions = create_skiplist(&queue_callback_cmp);
 	db->msg_callbacks = create_skiplist_long();
@@ -137,10 +143,16 @@ remote_db_t * get_remote_db(int replication_factor)
 	pthread_mutex_init(db->lc_lock, NULL);
 	db->txn_state_lock = (pthread_mutex_t*) ((char*) db + sizeof(remote_db_t) + 3 * sizeof(pthread_mutex_t));
 	pthread_mutex_init(db->txn_state_lock, NULL);
+	db->gossip_lock = (pthread_mutex_t*) ((char*) db + sizeof(remote_db_t) + 4 * sizeof(pthread_mutex_t));
+	pthread_mutex_init(db->gossip_lock, NULL);
+	db->gossip_signal = (pthread_cond_t*) ((char*) db + sizeof(remote_db_t) + 5 * sizeof(pthread_mutex_t));
+	pthread_cond_init(db->gossip_signal, NULL);
 
 	db->replication_factor = replication_factor;
 	db->quorum_size = (int) (replication_factor / 2) + 1;
 	db->rpc_timeout = 10;
+
+	db->actor_replication_factor = 1;
 
 	db->stop_comm = 0;
     int r = pipe(db->wakeup_pipe);
@@ -148,6 +160,12 @@ remote_db_t * get_remote_db(int replication_factor)
 	assert(pthread_create(&(db->comm_thread), NULL, comm_thread_loop, db) == 0);
 
 	db->my_lc = init_empty_vc();
+	db->current_view_id = NULL;
+
+	for(int i=0; i<no_seeds; i++)
+		add_server_to_membership(seed_hosts[i], seed_ports[i], db, seedptr);
+
+	int status = listen_to_gossip(NODE_LIVE, rack_id, dc_id, hostname, local_rts_id, db);
 
 	return db;
 }
@@ -164,6 +182,56 @@ int handle_socket_close(int * childfd)
 	//Close the socket and mark as 0 in list for reuse
 	close(*childfd);
 	*childfd = 0;
+
+	return 0;
+}
+
+int install_gossiped_view(membership_agreement_msg * ma, remote_db_t * db, unsigned int * fastrandstate)
+{
+	char msg_buf[4096];
+
+	pthread_mutex_lock(db->gossip_lock);
+
+	if(compare_vc(db->current_view_id, ma->vc) > 0)
+	{
+#if (VERBOSE_RPC > -1)
+		fprintf(stderr, "SERVER: Skipping installing notified view %s because it is older than my installed view %s!\n",
+							to_string_vc(ma->vc, msg_buf), to_string_vc(db->current_view_id, msg_buf));
+#endif
+
+		pthread_mutex_unlock(db->gossip_lock);
+
+		return 1;
+	}
+
+	// Add DB servers we have recently found about to client's server membership:
+	for(int i=0;i<ma->membership->no_nodes;i++)
+	{
+		node_description nd = ma->membership->membership[i];
+
+		add_server_to_membership(nd.hostname, nd.portno - 1, db, fastrandstate);
+	}
+
+	// Add RTSs we have recently found about to client's RTS membership:
+	for(int i=0;i<ma->membership->no_client_nodes;i++)
+	{
+		node_description nd = ma->membership->client_membership[i];
+
+		add_rts_to_membership(nd.rack_id, nd.dc_id, nd.hostname, nd.portno, nd.status, db->rtses, db->_rts_ring, fastrandstate);
+	}
+
+	// Update actor placement:
+	update_actor_placement(db);
+
+	update_or_replace_vc(&(db->current_view_id), ma->vc);
+
+	pthread_mutex_unlock(db->gossip_lock);
+
+#if (VERBOSE_RPC > -1)
+	log_debug("CLIENT: Installed new agreed view %s\n", to_string_membership_agreement_msg(ma, msg_buf));
+#endif
+
+    log_debug("CLIENT: RTS membership: %s\n", to_string_rts_membership(db, msg_buf));
 
 	return 0;
 }
@@ -303,11 +371,12 @@ void * comm_thread_loop(void * args)
 
 			    void * tmp_out_buf = NULL, * q = NULL;
 			    short msg_type;
+			    short is_gossip_message;
 				db_schema_t * schema;
 				int64_t nonce = -1;
 
 				vector_clock * lc_read = NULL;
-			    int status = parse_message(in_buf + sizeof(int), msg_len, &q, &msg_type, &nonce, 0, &lc_read);
+			    int status = parse_message(in_buf + sizeof(int), msg_len, &q, &msg_type, &is_gossip_message, &nonce, 0, &lc_read);
 
 			    if(status != 0)
 			    {
@@ -326,11 +395,9 @@ void * comm_thread_loop(void * args)
 			    {
 			    		status = add_reply_to_nonce(q, msg_type, nonce, db);
 			    }
-			    else // A queue notification
+			    else if (msg_type == RPC_TYPE_QUEUE) // A queue notification
 			    {
 			    		// Notify local subscriber if found:
-
-			    		assert(msg_type == RPC_TYPE_QUEUE);
 
 			    		queue_query_message * qqm = (queue_query_message *) q;
 
@@ -376,6 +443,18 @@ void * comm_thread_loop(void * args)
 					printf("CLIENT: Notified local subscriber %" PRId64 " (%p/%p/%p/%p)\n", (int64_t) qqm->consumer_id, qc, qc->lock, qc->signal, qc->callback);
 #endif
 			    }
+			    else // a gossip notification
+			    {
+					assert(is_gossip_message && msg_type == MEMBERSHIP_AGREEMENT_NOTIFY);
+
+					membership_agreement_msg * ma = (membership_agreement_msg *) q;
+
+					assert(ma->msg_type == MEMBERSHIP_AGREEMENT_NOTIFY);
+
+					install_gossiped_view(ma, db, &(db->fastrandstate));
+
+					free_membership_agreement(ma);
+			    }
 
 //			    assert(status > 0);
 			}
@@ -389,7 +468,7 @@ int add_server_to_membership(char *hostname, int portno, remote_db_t * db, unsig
 {
 	struct sockaddr_in dummy_serveraddr;
 
-    remote_server * rs = get_remote_server(hostname, portno, dummy_serveraddr, -2, 1);
+    remote_server * rs = get_remote_server(hostname, portno, dummy_serveraddr, dummy_serveraddr, -2, 0);
 
     if(rs == NULL)
     {
@@ -397,12 +476,21 @@ int add_server_to_membership(char *hostname, int portno, remote_db_t * db, unsig
     		return 1;
     }
 
-    if(skiplist_search(db->servers, &rs->serveraddr) != NULL)
+    snode_t * prev_entry = skiplist_search(db->servers, &rs->serveraddr);
+
+    if(prev_entry != NULL)
     {
 		fprintf(stderr, "ERROR: Server address %s:%d was already added to membership!\n", hostname, portno);
 		free_remote_server(rs);
+		remote_server * prev_rems = (remote_server *) prev_entry->value;
+		if(prev_rems->status == NODE_DEAD)
+			prev_rems->status = NODE_LIVE;
 		return -1;
     }
+
+    free_remote_server(rs);
+
+    rs = get_remote_server(hostname, portno, dummy_serveraddr, dummy_serveraddr, -2, 1);
 
     int status = skiplist_insert(db->servers, &rs->serveraddr, rs, seedptr);
 
@@ -422,6 +510,393 @@ int add_server_to_membership(char *hostname, int portno, remote_db_t * db, unsig
 
     return 0;
 }
+
+rts_descriptor * get_rts_descriptor(int rack_id, int dc_id, char *hostname, int local_rts_id, int status)
+{
+	rts_descriptor * rts_d = (rts_descriptor *) malloc(sizeof(struct rts_descriptor));
+
+	rts_d->rack_id = rack_id;
+	rts_d->dc_id = dc_id;
+	rts_d->local_rts_id = local_rts_id;
+	rts_d->status = status;
+
+	struct hostent * host = gethostbyname(hostname);
+	if (host == NULL)
+	{
+		fprintf(stderr, "ERROR, no such host %s\n", hostname);
+		free_rts_descriptor(rts_d);
+		return NULL;
+	}
+
+	bzero((void *) &rts_d->addr, sizeof(struct sockaddr_in));
+	rts_d->addr.sin_family = AF_INET;
+	bcopy((char *) host->h_addr_list[0], (char *)&(rts_d->addr.sin_addr.s_addr), host->h_length);
+	rts_d->addr.sin_port = htons(local_rts_id);
+
+	rts_d->hostname = strndup(hostname, strnlen(hostname, 256) + 1);
+
+//	free(host);
+
+	return rts_d;
+}
+
+void free_rts_descriptor(WORD rts_d)
+{
+	free(rts_d);
+}
+
+int add_rts_to_membership(int rack_id, int dc_id, char *hostname, int local_rts_id, int node_status,
+							skiplist_t * rtss, skiplist_t * _rts_ring,
+							unsigned int * seedptr)
+{
+	rts_descriptor * rts_d = get_rts_descriptor(rack_id, dc_id, hostname, local_rts_id, node_status);
+
+	snode_t * prev_entry = skiplist_search(rtss, &(rts_d->addr));
+    if(prev_entry != NULL)
+    {
+    		log_debug("RTS address %s:%d was already added to membership, updating status and metadata!\n", hostname, local_rts_id);
+		rts_descriptor * prev_descriptor = (rts_descriptor *) prev_entry->value;
+		prev_descriptor->status = rts_d->status;
+		prev_descriptor->rack_id = rts_d->rack_id;
+		prev_descriptor->dc_id = rts_d->dc_id;
+		free_rts_descriptor(rts_d);
+		return -1;
+    }
+    rts_d->_local_rts_index = get_node_id((struct sockaddr *) &(rts_d->addr)); // rtss->no_items;
+
+    int status = skiplist_insert(rtss, &(rts_d->addr), rts_d, seedptr);
+
+    if(status != 0)
+    {
+    		log_debug("ERROR: Error adding RTS %s:%d to membership!\n", hostname, local_rts_id);
+    		free_rts_descriptor(rts_d);
+		return -2;
+    }
+
+    // Update RTS consistent hashing ring used for actor placement:
+
+    uint32_t rts_id_hash = hash32(rts_d->_local_rts_index);
+
+    assert(skiplist_search(_rts_ring, (WORD) rts_id_hash) == NULL);
+
+    status = skiplist_insert(_rts_ring, (WORD) rts_id_hash, rts_d, seedptr);
+
+    assert(status == 0);
+
+    log_debug("Added RTS %s:%d - %d (%d) to membership!", hostname, local_rts_id, rts_d->_local_rts_index, rts_id_hash);
+
+    return 0;
+}
+
+char * to_string_rts_membership(remote_db_t * db, char * msg_buff)
+{
+	char * crt_ptr = msg_buff;
+	sprintf(crt_ptr, "RTS_membership(");
+	crt_ptr += strlen(crt_ptr);
+
+	for(snode_t * crt = HEAD(db->rtses); crt!=NULL; crt = NEXT(crt))
+	{
+		rts_descriptor * nd = (rts_descriptor *) crt->value;
+		sprintf(crt_ptr, "RTS(status=%d, rack_id=%d, dc_id=%d, hostname=%s, rts_id=%d, local_index=%d)", nd->status, nd->rack_id, nd->dc_id,
+							(nd->hostname != NULL)?(nd->hostname):"NULL",
+							nd->local_rts_id, nd->_local_rts_index);
+		crt_ptr += strlen(crt_ptr);
+		sprintf(crt_ptr, ", ");
+		crt_ptr += 2;
+	}
+
+	sprintf(crt_ptr, ")");
+
+	return msg_buff;
+}
+
+
+actor_descriptor * get_actor_descriptor(long actor_id, rts_descriptor * host_rts, int is_local, int status)
+{
+	actor_descriptor * a = (actor_descriptor *) malloc(sizeof(struct actor_descriptor));
+	a->actor_id = actor_id;
+	a->host_rts = host_rts;
+	a->is_local = is_local;
+	a->status = status;
+	return a;
+}
+
+void free_actor_descriptor(actor_descriptor * a)
+{
+	free(a);
+}
+
+skiplist_t * get_rtses_for_actor(long actor_id, remote_db_t * db)
+{
+	skiplist_t * result = create_skiplist_long();
+	rts_descriptor * crt_rts = NULL;
+	int live_nodes=0, status = 0;
+
+	for(snode_t * crt = HEAD(db->rtses); crt!=NULL; crt = NEXT(crt))
+	{
+		rts_descriptor * rts_d = (rts_descriptor *) crt->value;
+		if(rts_d->status == NODE_LIVE)
+			live_nodes++;
+	}
+
+	int replicas = (db->actor_replication_factor < live_nodes)?db->actor_replication_factor:live_nodes;
+
+	if(replicas == 0)
+	{
+		return NULL;
+	}
+
+	snode_t * snode = skiplist_search_higher(db->_rts_ring, (WORD) hash32((int) actor_id));
+
+	while(result->no_items < replicas)
+	{
+		if(snode == NULL)
+		{
+			// Wrap back to the beginning of the ring:
+			snode = HEAD(db->_rts_ring);
+		}
+
+		crt_rts = (rts_descriptor *) snode->value;
+
+		if(crt_rts->status == NODE_LIVE)
+		{
+			status = skiplist_insert(result, (WORD) crt_rts->_local_rts_index, crt_rts, &(db->fastrandstate));
+
+			assert(status == 0);
+		}
+
+		snode = NEXT(snode);
+	}
+
+	return result;
+}
+
+rts_descriptor * get_first_rts_for_actor(long actor_id, remote_db_t * db)
+{
+	rts_descriptor * crt_rts = NULL;
+	int live_nodes=0, status = 0, visited = 0;
+
+	for(snode_t * crt = HEAD(db->rtses); crt!=NULL; crt = NEXT(crt))
+	{
+		rts_descriptor * rts_d = (rts_descriptor *) crt->value;
+		if(rts_d->status == NODE_LIVE)
+			live_nodes++;
+	}
+
+	if(live_nodes == 0)
+	{
+		return NULL;
+	}
+
+	snode_t * snode = skiplist_search_higher(db->_rts_ring, (WORD) hash32((int) actor_id));
+	while(visited < db->rtses->no_items)
+	{
+		if(snode == NULL)
+		{
+			// Actor falls at the end of the ring, return first RTS:
+			snode = HEAD(db->_rts_ring);
+			continue;
+		}
+
+		crt_rts = (rts_descriptor *) snode->value;
+
+		if(crt_rts->status == NODE_LIVE)
+		{
+			return crt_rts;
+		}
+
+		snode = NEXT(snode);
+
+		visited++;
+	}
+
+	return NULL;
+}
+
+skiplist_t * get_local_actors(remote_db_t * db)
+{
+	skiplist_t * result = create_skiplist_long();
+	int status = 0;
+
+	for(snode_t * crt = HEAD(db->actors); crt!=NULL; crt = NEXT(crt))
+	{
+		actor_descriptor * a = (actor_descriptor *) crt->value;
+		if(a->is_local)
+		{
+			status = skiplist_insert(result, (WORD) a->actor_id, a, &(db->fastrandstate));
+
+			assert(status == 0);
+		}
+	}
+
+	return result;
+}
+
+skiplist_t * get_remote_actors(remote_db_t * db)
+{
+	skiplist_t * result = create_skiplist_long();
+	int status = 0;
+
+	for(snode_t * crt = HEAD(db->actors); crt!=NULL; crt = NEXT(crt))
+	{
+		actor_descriptor * a = (actor_descriptor *) crt->value;
+		if(!a->is_local)
+		{
+			status = skiplist_insert(result, (WORD) a->actor_id, a, &(db->fastrandstate));
+
+			assert(status == 0);
+		}
+	}
+
+	return result;
+}
+
+int is_actor_local(long actor_id, remote_db_t * db)
+{
+	int host_id = -1;
+
+	if(db->actor_replication_factor == 1)
+	{
+		rts_descriptor * host_rts = get_first_rts_for_actor(actor_id, db);
+
+	    assert(host_rts != NULL);
+
+	    host_id = get_node_id((struct sockaddr *) &(host_rts->addr));
+
+	    return (host_id == db->local_rts_id);
+	}
+	else
+	{
+		skiplist_t * rtses = get_rtses_for_actor(actor_id, db);
+		for(snode_t * crt = HEAD(rtses); crt!=NULL; crt = NEXT(crt))
+		{
+			rts_descriptor * rts_d = (rts_descriptor *) crt->value;
+			host_id = get_node_id((struct sockaddr *) &(rts_d->addr));
+			if(host_id == db->local_rts_id)
+				return 1;
+		}
+		return 0;
+	}
+}
+
+int update_actor_placement(remote_db_t * db)
+{
+	char msg_buf[4096];
+
+    log_debug("CLIENT: Updating actor placement. Previous actor membership: %s\n", to_string_actor_membership(db, msg_buf));
+
+	int host_id = -1;
+	for(snode_t * crt = HEAD(db->actors); crt!=NULL; crt = NEXT(crt))
+	{
+		actor_descriptor * a = (actor_descriptor *) crt->value;
+
+		if(db->actor_replication_factor == 1)
+		{
+			rts_descriptor * first_rts = get_first_rts_for_actor(a->actor_id, db);
+
+		    assert(first_rts != NULL);
+
+		    a->host_rts = first_rts;
+
+		    a->is_local = (first_rts->_local_rts_index == db->local_rts_id);
+		}
+		else
+		{
+			skiplist_t * rtses = get_rtses_for_actor(a->actor_id, db);
+			int replica_no = 0;
+			a->is_local = 0;
+			for(snode_t * crt = HEAD(rtses); crt!=NULL; crt = NEXT(crt))
+			{
+				rts_descriptor * rts_d = (rts_descriptor *) crt->value;
+				host_id = get_node_id((struct sockaddr *) &(rts_d->addr));
+				if(host_id == db->local_rts_id)
+					a->is_local = 1;
+				if(replica_no == 0)
+				{
+					a->host_rts = rts_d;
+				}
+				replica_no++;
+			}
+		}
+	}
+
+    log_debug("CLIENT: Actor membership: %s\n", to_string_actor_membership(db, msg_buf));
+
+	return 0;
+}
+
+int add_actor_to_membership(long actor_id, remote_db_t * db)
+{
+	char msg_buf[4096];
+
+    log_debug("Adding actor %ld to membership!", actor_id);
+
+	actor_descriptor * a = get_actor_descriptor(actor_id, NULL, 1, ACTOR_STATUS_RUNNING);
+
+	snode_t * prev_entry = skiplist_search(db->actors, (WORD) a->actor_id);
+    if(prev_entry != NULL)
+    {
+    		log_debug("Actor %ld was already added to membership, skipping.\n", a->actor_id);
+		return -1;
+    }
+
+    int status = skiplist_insert(db->actors, (WORD) a->actor_id, a, &(db->fastrandstate));
+
+    if(status != 0)
+    {
+    		log_debug("ERROR: Error adding actor %ld to membership!\n", a->actor_id);
+    		free_actor_descriptor(a);
+		return -2;
+    }
+
+    a->host_rts = get_first_rts_for_actor(actor_id, db);
+
+    if(a->host_rts != NULL)
+    {
+    		int host_id = get_node_id((struct sockaddr *) &(a->host_rts->addr));
+
+    		a->is_local = (host_id == db->local_rts_id);
+    }
+    else // RTS node has not installed a gossiped view yet, consider actors local until it does
+    {
+    		a->is_local = 1;
+    }
+
+    log_debug("Added actor %ld (%d) to membership!", a->actor_id, hash32((int) actor_id));
+
+    log_debug("CLIENT: Actor membership: %s\n", to_string_actor_membership(db, msg_buf));
+
+    return 0;
+}
+
+char * to_string_actor_membership(remote_db_t * db, char * msg_buff)
+{
+	char * crt_ptr = msg_buff;
+	sprintf(crt_ptr, "actor_membership(");
+	crt_ptr += strlen(crt_ptr);
+
+	for(snode_t * crt = HEAD(db->actors); crt!=NULL; crt = NEXT(crt))
+	{
+		actor_descriptor * a = (actor_descriptor *) crt->value;
+		sprintf(crt_ptr, "Actor(actor_id=%ld (%d), rts=%s:%d, rts_index=%d, rack_id=%d, dc_id=%d, status=%d)",
+						a->actor_id, hash32((int) a->actor_id),
+						(a->host_rts != NULL && a->host_rts->hostname != NULL)?(a->host_rts->hostname):"local",
+						(a->host_rts != NULL)?a->host_rts->local_rts_id:-1,
+						(a->host_rts != NULL)?a->host_rts->_local_rts_index:-1,
+						(a->host_rts != NULL)?a->host_rts->rack_id:-1,
+						(a->host_rts != NULL)?a->host_rts->dc_id:-1,
+						a->status);
+		crt_ptr += strlen(crt_ptr);
+		sprintf(crt_ptr, ", ");
+		crt_ptr += 2;
+	}
+
+	sprintf(crt_ptr, ")");
+
+	return msg_buff;
+}
+
+
 
 msg_callback * add_msg_callback(int64_t nonce, void (*callback)(void *), remote_db_t * db)
 {
@@ -595,6 +1070,9 @@ int free_remote_db(remote_db_t * db)
 	skiplist_free_val(db->servers, &free_remote_server_ptr);
 	skiplist_free(db->txn_state);
 	skiplist_free(db->queue_subscriptions);
+	skiplist_free_val(db->rtses, &free_rts_descriptor);
+	skiplist_free(db->actors);
+	skiplist_free(db->_rts_ring);
 	free(db);
 	free_vc(db->my_lc);
 	return 0;
@@ -2456,6 +2934,125 @@ void free_msg_callback(msg_callback * mc)
 	free(mc->reply_types);
 	free(mc);
 }
+
+// Gossip listener:
+
+#define DEBUG_GOSSIP_CALLBACK 0
+
+gossip_callback_args * get_gossip_callback_args(membership_state * membership, int status)
+{
+	gossip_callback_args * qca = (gossip_callback_args *) malloc(sizeof(gossip_callback_args));
+	qca->membership = membership;
+	qca->status = status;
+	return qca;
+}
+
+void free_gossip_callback_args(gossip_callback_args * qca)
+{
+	free(qca);
+}
+
+gossip_callback * get_gossip_callback(void (*callback)(gossip_callback_args *))
+{
+	gossip_callback * qc = (gossip_callback *) malloc(sizeof(gossip_callback) + sizeof(pthread_mutex_t) + sizeof(pthread_cond_t));
+	qc->lock = (pthread_mutex_t *) ((char *)qc + sizeof(gossip_callback));
+	qc->signal = (pthread_cond_t *) ((char *)qc + sizeof(gossip_callback) + sizeof(pthread_mutex_t));
+	pthread_mutex_init(qc->lock, NULL);
+	pthread_cond_init(qc->signal, NULL);
+	qc->callback = callback;
+	return qc;
+}
+
+int wait_on_gossip_callback(gossip_callback * qc)
+{
+	int ret = pthread_mutex_lock(qc->lock);
+
+#if DEBUG_GOSSIP_CALLBACK > 0
+	printf("Locked gossip lock %p/%p\n", qc, qc->lock);
+#endif
+
+	struct timespec ts;
+	clock_gettime(CLOCK_REALTIME, &ts);
+	ts.tv_sec += 3;
+	ret = pthread_cond_timedwait(qc->signal, qc->lock, &ts);
+
+	pthread_mutex_unlock(qc->lock);
+
+#if DEBUG_GOSSIP_CALLBACK > 0
+	printf("Unlocked gossip lock %p/%p\n", qc, qc->lock);
+#endif
+
+	return ret;
+}
+
+void free_gossip_callback(gossip_callback * qc)
+{
+	free(qc);
+}
+
+int listen_to_gossip(int status, int rack_id, int dc_id, char * hostname, unsigned short local_rts_id, remote_db_t * db)
+{
+	unsigned len = 0;
+	void * tmp_out_buf = NULL;
+
+	node_description * nd = init_node_description(status, -1, rack_id, dc_id, hostname, local_rts_id);
+	nd->node_id = get_node_id((struct sockaddr *) &(nd->address));
+	db->local_rts_id = nd->node_id;
+
+	gossip_listen_message * q = build_gossip_listen_msg(nd, get_nonce(db));
+
+	int success = serialize_gossip_listen_msg(q, (void **) &tmp_out_buf, &len);
+
+	if(db->servers->no_items < 1)
+	{
+		fprintf(stderr, "At least 1 server must be configured for the client to subscribe to gossip (%d servers configured)\n", db->servers->no_items);
+		return NO_QUORUM_ERR;
+	}
+	remote_server * rs = (remote_server *) (HEAD(db->servers))->value;
+
+#if CLIENT_VERBOSITY > 0
+	char print_buff[1024];
+	to_string_gossip_listen_msg(q, (char *) print_buff);
+	printf("Sending gossip listen message to server %s: %s\n", rs->id, print_buff);
+#endif
+
+	// Send packet to server and wait for reply:
+
+	msg_callback * mc = NULL;
+	success = send_packet_wait_replies_sync(tmp_out_buf, len, q->nonce, &mc, db);
+	assert(success == 0);
+	free_gossip_listen_msg(q);
+
+	if(mc->no_replies < db->quorum_size)
+	{
+		fprintf(stderr, "No quorum (%d/%d replies received)\n", mc->no_replies, db->replication_factor);
+		delete_msg_callback(mc->nonce, db);
+		return NO_QUORUM_ERR;
+	}
+
+	int ok_status = 0;
+
+	for(int i=0;i<mc->no_replies;i++)
+	{
+		assert(mc->reply_types[i] == RPC_TYPE_ACK);
+		ack_message * ack = (ack_message *) mc->replies[i];
+	    if(ack->status == CLIENT_ERR_SUBSCRIPTION_EXISTS)
+	    {
+	    		delete_msg_callback(mc->nonce, db);
+	    		return CLIENT_ERR_SUBSCRIPTION_EXISTS;
+	    }
+
+#if CLIENT_VERBOSITY > 0
+		to_string_ack_message(ack, (char *) print_buff);
+		printf("Got back response from server %s: %s\n", rs->id, print_buff);
+#endif
+	}
+
+	delete_msg_callback(mc->nonce, db);
+
+	return 0;
+}
+
 
 
 
