@@ -111,6 +111,11 @@ transCall (Dot _ (Var _ n) m) ts [e1,e2]
   | n == primWrapAction, m == attrWrap  = Just $ eCall (tApp (eQVar primWRAP) ts) [e1,e2]
   | n == primWrapMut,    m == attrWrap  = Just e2
   | n == primWrapPure,   m == attrWrap  = Just e2
+transCall (Dot _ (Var _ n) m) ts [(TApp _ (Call _ (TApp _ (Var _ x) _) (PosArg e1 PosNil) KwdNil) _)]
+  | n == primWrapProc,   m == attrExec,
+    x == primLIFT                       = Just $ eAsync e1
+  | n == primWrapProc,   m == attrExec,
+    x == primLIFT                       = Just $ eAwait $ eAsync e1
 transCall (Dot _ (Var _ n) m) ts [e1]
   | n == primWrapProc,   m == attrExec  = Just $ eCall (tApp (eQVar primEXEC) ts) [e1]
   | n == primWrapProc,   m == attrEval  = Just e1
@@ -122,7 +127,6 @@ transCall (Dot _ (Var _ n) m) ts [e1]
   | n == primWrapPure,   m == attrEval  = Just e1
 transCall _ _ _                         = Nothing
 
-
 instance Transform Expr where
     trans env (Var l (NoQ n))
       | Just e <- trfind n env          = trans (blockscope [n] env) e
@@ -131,24 +135,8 @@ instance Transform Expr where
       | Lambda{} <- e',
         Just s1 <- pzip (ppar e') p',
         Just s2 <-  kzip (kpar e') k'   = termsubst (s1++s2) (exp1 e')
-
       | TApp _ e0 ts <- e',
         Just e1 <- transCall e0 ts es   = e1
-{-
-      | TApp _ (Var _ n) _ <- e',
-        n == primMapFX,
-        PosArg e1 (PosArg e2 _) <- p',
-        TApp _ (Var _ n1) _ <- e1,
-        n1 == primIdFX                  = e2
-      | TApp _ e0 _ <- e',
-        Dot _ (Var _ n) n1 <- e0,
-        isExecEval n n1,
-        PosArg e1 _ <- p'               = trace ("### Removing " ++ prstr e0 ++ " call") e1
-      | TApp _ e0 _ <- e',
-        Dot _ (Var _ n) n1 <- e0,
-        isWrap n n1,
-        PosArg _ (PosArg e2 _) <- p'    = trace ("### Removing " ++ prstr e0 ++ " call") e2
--}
       | otherwise                       = Call l e' p' k'
       where e'                          = trans env e
             p'                          = trans env p
