@@ -670,15 +670,14 @@ matchActorAssumption env n0 p k te      = do --traceM ("## matchActorAssumption 
         te1                             = unSig $ te `restrict` (ns ++ map exportName ns)
         check1 (n, i) | isHidden n      = return ([], [])
         check1 (n, NVar t0)             = do --traceM ("## matchActorAssumption for attribute " ++ prstr n)
-                                             unify t t0
-                                             return ([],[])
+                                             return ([Cast t t0],[])
           where t                       = case lookup n te1 of
                                              Just (NVar t) -> t
                                              x -> error ("(internal) Lookup of " ++ prstr n ++ " = " ++ show x)
         check1 (n, NDef sc0 _)          = do (cs1,_,t) <- instantiate env sc
                                              --traceM ("## matchActorAssumption for method " ++ prstr n)
-                                             unify t (sctype sc0)
-                                             (cs2,eq) <- solveScoped (defineTVars q env) (qbound q) te0 tNone cs1
+                                             let c = Cast t (sctype sc0)
+                                             (cs2,eq) <- solveScoped (defineTVars q env) (qbound q) te0 tNone (c:cs1)
                                              checkNoEscape env (qbound q)
                                              return (cs2, eq)
           where q                       = scbind sc
