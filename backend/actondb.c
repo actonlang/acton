@@ -2438,6 +2438,27 @@ const char* membership_to_json (membership *m) {
     char view_id[1024];
     yyjson_mut_obj_add_str(doc, j_mbm, "view_id", to_string_vc(m->view_id, view_id));
 
+    yyjson_mut_val *j_nodes = yyjson_mut_obj(doc);
+    yyjson_mut_obj_add_val(doc, root, "nodes", j_nodes);
+    for(snode_t * crt = HEAD(m->agreed_peers); crt!=NULL; crt = NEXT(crt)) {
+        remote_server * rs = (remote_server *) crt->value;
+
+        yyjson_mut_val *j_node = yyjson_mut_obj(doc);
+        yyjson_mut_obj_add_val(doc, j_nodes, rs->id, j_node);
+        yyjson_mut_obj_add_str(doc, j_node, "type", "DDB");
+        yyjson_mut_obj_add_str(doc, j_node, "hostname", rs->hostname);
+        yyjson_mut_obj_add_str(doc, j_node, "status", RS_status_name[rs->status]);
+    }
+    for(snode_t * crt = HEAD(m->connected_clients); crt!=NULL; crt = NEXT(crt)) {
+        remote_server * rs = (remote_server *) crt->value;
+
+        yyjson_mut_val *j_node = yyjson_mut_obj(doc);
+        yyjson_mut_obj_add_val(doc, j_nodes, rs->id, j_node);
+        yyjson_mut_obj_add_str(doc, j_node, "type", "RTS");
+        yyjson_mut_obj_add_str(doc, j_node, "hostname", rs->hostname);
+        yyjson_mut_obj_add_str(doc, j_node, "status", RS_status_name[rs->status]);
+    }
+
     const char *json = yyjson_mut_write(doc, 0, NULL);
     yyjson_mut_doc_free(doc);
     return json;
