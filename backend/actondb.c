@@ -46,6 +46,7 @@
 #include <string.h>
 #include <limits.h>
 #include <signal.h>
+#include "log.h"
 
 #define LOGPFX "#ActDB# "
 
@@ -136,7 +137,7 @@ typedef struct membership
 
 int add_remote_server_to_list(remote_server * rs, skiplist_t * peer_list, unsigned int * seedptr);
 int add_client_to_membership(struct sockaddr_in addr, int sockfd, char *hostname, int portno, skiplist_t * clients, unsigned int * seedptr);
-int propose_local_membership(membership * m, vector_clock * my_vc, unsigned int * fastrandstate);
+int propose_local_membership(membership * m, vector_clock * my_vc, membership_agreement_msg ** amr, int64_t nonce, unsigned int * fastrandstate);
 
 membership * get_membership(int my_id)
 {
@@ -571,7 +572,8 @@ remote_server * lookup_client_by_client_socket_addr(struct sockaddr_in * client_
 	return NULL;
 }
 
-int handle_gossip_listen_message(gossip_listen_message * msg, client_descriptor * cd, membership * m, vector_clock * my_lc, unsigned int * fastrandstate)
+int handle_gossip_listen_message(gossip_listen_message * msg, client_descriptor * cd,
+		membership * m, vector_clock * my_lc, membership_agreement_msg ** amr, unsigned int * fastrandstate)
 {
 	struct sockaddr_in dummy_serveraddr;
 	remote_server * rs = get_remote_server(msg->node_description->hostname, msg->node_description->portno, dummy_serveraddr, cd->addr, -2, 0);
@@ -581,7 +583,7 @@ int handle_gossip_listen_message(gossip_listen_message * msg, client_descriptor 
 
 	int status = add_remote_server_to_list(rs, m->connected_clients, fastrandstate);
 
-	return propose_local_membership(m, my_lc, fastrandstate);
+	return propose_local_membership(m, my_lc, amr, msg->nonce, fastrandstate);
 }
 
 int get_range_read_response_packet(snode_t* start_row, snode_t* end_row, int no_results, range_read_query * q,
@@ -1043,6 +1045,7 @@ int handle_client_message(int childfd, int msg_len, db_t * db, membership * m, s
     short is_gossip_message;
 	db_schema_t * schema;
 	int64_t nonce = -1;
+	membership_agreement_msg * amr = NULL;
 
 	vector_clock * lc_read = NULL;
     int status = parse_message(in_buf + sizeof(int), msg_len, &q, &msg_type, &is_gossip_message, &nonce, 1, &lc_read);
@@ -1230,9 +1233,10 @@ int handle_client_message(int childfd, int msg_len, db_t * db, membership * m, s
     		case RPC_TYPE_GOSSIP_LISTEN:
     		{
     			client_descriptor * cd = lookup_client_by_fd(childfd, clients);
-    			int status = handle_gossip_listen_message((gossip_listen_message *) q, cd, m, copy_vc(my_lc), fastrandstate);
-//			assert(status == 0);
-			status = get_gossip_ack_packet(status, (gossip_listen_message *) q, &tmp_out_buf, &snd_msg_len, NULL);
+    			int status = handle_gossip_listen_message((gossip_listen_message *) q, cd, m, copy_vc(my_lc),
+    														&amr, fastrandstate);
+
+    			assert(get_gossip_ack_packet(status, (gossip_listen_message *) q, &tmp_out_buf, &snd_msg_len, NULL) == 0);
 			free_gossip_listen_msg(q);
     			break;
     		}
@@ -1251,7 +1255,17 @@ int handle_client_message(int childfd, int msg_len, db_t * db, membership * m, s
 
     int n = write(childfd, tmp_out_buf, snd_msg_len);
     if (n < 0)
-      error("ERROR writing to socket");
+      log_error("ERROR writing to socket");
+
+    // There might be a view notification to send to client:
+	if(amr != NULL)
+	{
+		assert(serialize_membership_agreement_msg(amr, &tmp_out_buf, &snd_msg_len) == 0);
+		free_membership_agreement(amr);
+	    n = write(childfd, tmp_out_buf, snd_msg_len);
+	    if (n < 0)
+	        log_error("ERROR writing to socket");
+	}
 
     free(tmp_out_buf);
 
@@ -1499,33 +1513,51 @@ int send_join_message(int rack_id, int dc_id, char * hostname, unsigned short po
 }
 
 
-int propose_local_membership(membership * m, vector_clock * my_vc, unsigned int * fastrandstate)
+int propose_local_membership(membership * m, vector_clock * my_vc, membership_agreement_msg ** amr, int64_t nonce, unsigned int * fastrandstate)
 {
     void * tmp_out_buf = NULL;
     unsigned snd_msg_len;
+    int status = 0, skip_proposal = 0;
+	char msg_buf[1024];
 
     if(no_live_nodes(m->local_peers) <= 1)
     {
 #if (VERBOSE_RPC > 0)
-		char msg_buf[1024];
 		fprintf(stderr, "SERVER: Skipping proposing new view, as no other nodes are live in local membership!\n");
 #endif
-		return -1;
+		skip_proposal = 1;
     }
 
     if(is_min_live_node(m->my_id, m->local_peers) != 1)
     {
 #if (VERBOSE_RPC > 0)
-		char msg_buf[1024];
-		fprintf(stderr, "SERVER: Skipping proposing new view, as I am not the min live node!\n");
+		log_debug("SERVER: Skipping proposing new view, as I am not the min live node!\n");
 #endif
+		skip_proposal = 1;
+    }
+
+    if(skip_proposal)
+    {
+		// In this case, there won't be an agreement proposal, but we must still notify the clients of the current local view if
+		// this came from a listen_to_gossip(), for it to learn the client memberships in case we are the only server in the system:
+		if(amr != NULL)
+		{
+			*amr = get_membership_notify_msg(0,
+										get_membership_state_from_server_list(skiplist_clone(m->local_peers, fastrandstate),
+																		 	 skiplist_clone(m->connected_clients, fastrandstate),
+																			 copy_vc(my_vc)),
+										nonce, copy_vc(my_vc));
+#if (VERBOSE_RPC > 0)
+		to_string_membership_agreement_msg(*amr, (char *) msg_buf);
+		log_debug("Sending Membership Notify message to clients: %s", msg_buf);
+#endif
+		}
 		return -1;
     }
 
     if(m->outstanding_view_id != NULL)
     {
 #if (VERBOSE_RPC > 0)
-		char msg_buf[1024];
 		fprintf(stderr, "SERVER: Proposing new view, aborting already outstanding view proposal %s!\n",
 							to_string_vc(m->outstanding_view_id, msg_buf));
 #endif
@@ -1543,15 +1575,15 @@ int propose_local_membership(membership * m, vector_clock * my_vc, unsigned int 
 	m->merged_responses = skiplist_clone(m->local_peers, fastrandstate); // init merged responses for server list to "my response"
 	m->merged_client_responses = skiplist_clone(m->connected_clients, fastrandstate); // init merged responses for client list to "my response"
 
-	int status = get_agreement_propose_packet(0, get_membership_state_from_server_list(m->outstanding_proposal, m->outstanding_proposal_clients, copy_vc(m->outstanding_view_id)),
+	status = get_agreement_propose_packet(0, get_membership_state_from_server_list(m->outstanding_proposal, m->outstanding_proposal_clients, copy_vc(m->outstanding_view_id)),
 												m->outstanding_proposal_nonce, &tmp_out_buf, &snd_msg_len, copy_vc(m->outstanding_view_id));
+
 
 	for(snode_t * crt = HEAD(m->local_peers); crt!=NULL; crt = NEXT(crt))
 	{
 		remote_server * rs = (remote_server *) crt->value;
 
 #if (VERBOSE_RPC > 0)
-		char msg_buf[1024];
 		fprintf(stderr, "SERVER: propose_local_membership: Evaluating node (%s, %d, %d, %d), my_id = %d..\n", rs->id, rs->status, rs->sockfd, get_node_id((struct sockaddr *) &(rs->serveraddr)), m->my_id);
 #endif
 
@@ -2646,7 +2678,7 @@ int main(int argc, char **argv) {
 #endif
   }
 
-  ret = propose_local_membership(m, copy_vc(my_lc), &seed);
+  ret = propose_local_membership(m, copy_vc(my_lc), NULL, -1, &seed);
 
   clientlen = sizeof(clientaddr);
 
@@ -2875,7 +2907,7 @@ int main(int argc, char **argv) {
 						{
 							rs->status = NODE_DEAD;
 							log_debug("Client %s, sockfd=%d, status=%d went dead, proposing new membership..", rs->id, rs->sockfd, rs->status);
-							propose_local_membership(m, copy_vc(my_lc), &seed);
+							propose_local_membership(m, copy_vc(my_lc), NULL, -1, &seed);
 						}
 					}
 					continue;
@@ -2901,7 +2933,7 @@ int main(int argc, char **argv) {
 
 				if(rs->status == NODE_DEAD || rs->sockfd <= 0) // If peer closed socket, propose it removed from agreed membership
 				{
-					propose_local_membership(m, copy_vc(my_lc), &seed);
+					propose_local_membership(m, copy_vc(my_lc), NULL, -1, &seed);
 					continue;
 				}
 
@@ -2942,7 +2974,7 @@ int main(int argc, char **argv) {
 					if(verbosity > 0)
 						log_debug("Membership changed after %s/%d/%d joined, proposing new membership", rs->id, rs->sockfd, rs->status);
 
-					propose_local_membership(m, copy_vc(my_lc), &seed);
+					propose_local_membership(m, copy_vc(my_lc), NULL, -1, &seed);
 				}
 				else
 				{
