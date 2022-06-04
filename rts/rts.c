@@ -1887,12 +1887,6 @@ int main(int argc, char **argv) {
         log_info("Detected %ld CPUs: Using %ld worker threads. No CPU affinity used.\n", num_cores, num_wthreads);
     }
 
-    if (ddb_host && ddb_no_host < ddb_replication) {
-        fprintf(stderr, "ERROR: Not enough DDB servers specified (%d) for replication factor %d.\n", ddb_no_host, ddb_replication);
-        fprintf(stderr, "HINT: Supply multiple --rts-ddb-host HOST arguments for all DDB servers.\n");
-        exit(1);
-    }
-
     // Zeroize statistics
     for (uint i=0; i < MAX_WTHREADS; i++) {
         wt_stats[i].idx = i;
