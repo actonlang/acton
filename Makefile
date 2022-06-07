@@ -91,7 +91,7 @@ backend/actondb: backend/actondb.c lib/libActonDB.a
 		-lActonDB \
 		$(LDLIBS)
 
-backend/%.o: backend/%.c
+backend/%.o: backend/%.c backend/%.h
 	$(CC) -DLOG_USE_COLOR -g -o$@ $< -c $(CFLAGS)
 
 backend/failure_detector/%.o: backend/failure_detector/%.c
