@@ -740,6 +740,12 @@ isSig _                             = False
 isDecl Decl{}                       = True
 isDecl _                            = False
 
+isQVar (Var _ n)                    = Just n
+isQVar (TApp _ e _)                 = isQVar e
+isQVar e                            = Nothing
+
+isVar e                             = case isQVar e of Just (NoQ n) -> Just n; _ -> Nothing
+
 isTVar TVar{}                       = True
 isTVar _                            = False
 

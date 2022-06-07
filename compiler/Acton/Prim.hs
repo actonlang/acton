@@ -199,13 +199,13 @@ clCont              = NClass [quant x, quant p] (leftpath [TC qnFunction [tVar x
         p           = TV PRow (name "P")
 
 
---  $ASYNCf         : [A] => action($Actor, proc()->A) -> Msg[A]
+--  $ASYNCf         : [A] => mut($Actor, proc()->A) -> Msg[A]
 scASYNCf            = tSchema [quant a] tASYNC
-  where tASYNC      = tFun fxAction (posRow tActor $ posRow tFun' posNil) kwdNil (tMsg $ tVar a)
+  where tASYNC      = tFun fxMut (posRow tActor $ posRow tFun' posNil) kwdNil (tMsg $ tVar a)
         a           = TV KType $ name "A"
         tFun'       = tFun fxProc posNil kwdNil (tVar a)
 
---  $AFTERf         : [A] => proc(int, proc()->A) -> Msg[A]
+--  $AFTERf         : [A] => mut(int, proc()->A) -> Msg[A]
 scAFTERf            = tSchema [quant a] tAFTER
   where tAFTER      = tFun fxProc (posRow tFloat $ posRow tFun' posNil) kwdNil (tMsg $ tVar a)
         a           = TV KType $ name "A"
