@@ -535,7 +535,7 @@ remote_server * get_remote_server(char *hostname, unsigned short portno,
 	rs->sockfd_lock = (pthread_mutex_t*) malloc (sizeof(pthread_mutex_t));
 	pthread_mutex_init(rs->sockfd_lock, NULL);
 
-    snprintf((char *) &rs->id, 256, "%s:%d", hostname, portno);
+    snprintf((char *) &rs->id, 262, "%s:%d", hostname, portno);
 
     strncpy((char *) &(rs->hostname), hostname, strnlen(hostname, 256) + 1);
     rs->portno = portno;
@@ -554,9 +554,6 @@ int update_listen_socket(remote_server * rs, char *hostname, unsigned short port
 		rs->server = old_hostent;
 		return -1;
 	}
-
-//	if(old_hostent != NULL)
-//		free(old_hostent);
 
 	bzero((void *) &rs->serveraddr, sizeof(struct sockaddr_in));
 	rs->serveraddr.sin_family = AF_INET;
@@ -595,7 +592,7 @@ int update_listen_socket(remote_server * rs, char *hostname, unsigned short port
 
 	log_debug("SERVER: Updating listen socket of %s/%s:%d (%d) to %s:%d", rs->id, rs->hostname, rs->portno, rs->sockfd, hostname, portno);
 
-    snprintf((char *) &rs->id, 256, "%s:%d", hostname, portno);
+    snprintf((char *) &rs->id, 262, "%s:%d", hostname, portno);
 
     strncpy((char *) &(rs->hostname), hostname, strnlen(hostname, 256) + 1);
 
