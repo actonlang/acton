@@ -242,6 +242,59 @@ def mon(address, interval, once):
         time.sleep(interval)
 
 
+def actors(address, interval, once):
+    ms = MonSock(address)
+    while True:
+        data = ms.cmd("actors")
+        print("Actor#  RTS              Local  Status")
+        print("--------------------------------------------------------------------------------")
+        for k, v in data['actors'].items():
+            print(f"{k:>6}: {v['rts']:16} {v['local']:6} {v['status']}")
+
+        if once:
+            break
+        time.sleep(interval)
+
+
+def rich_actors(address, interval, once):
+    from rich.live import Live
+    from rich.table import Table
+
+    ms = MonSock(address)
+
+    def generate_table() -> Table:
+        table = Table(title="Actors")
+
+        table.add_column("ID", style="cyan", no_wrap=True)
+        table.add_column("RTS", style="magenta")
+        table.add_column("Local", style="magenta")
+        table.add_column("Status")
+
+        while True:
+            try:
+                data = ms.cmd("actors")
+                break
+            except ConnectionError:
+                time.sleep(0.5)
+
+        status_to_color = {
+            'running': 'green',
+            'migrating': 'orange',
+            'stopped': 'yellow'
+        }
+        for k,v in data['actors'].items():
+            table.add_row(k, v['rts'], v['local'], f"[{status_to_color[v['status']]}]{v['status']}")
+
+        return table
+
+    with Live(generate_table(), refresh_per_second=(1.0/interval)) as live:
+        while True:
+            time.sleep(interval)
+            live.update(generate_table())
+            if once:
+                break
+
+
 def actdb_membership(address, interval, once):
     ms = MonSock(address)
     while True:
@@ -489,11 +542,17 @@ if __name__ == '__main__':
     parser.add_argument("--rich", action="store_true")
     parser.add_argument("--once", action="store_true", default=False)
     parser.add_argument("--prom", action="store_true")
+    parser.add_argument("--actors", action="store_true")
     parser.add_argument("--actdb-membership", action="store_true")
 
     args = parser.parse_args()
 
-    if args.actdb_membership:
+    if args.actors:
+        if args.rich:
+            rich_actors(args.socket, args.interval, args.once)
+        else:
+            actors(args.socket, args.interval, args.once)
+    elif args.actdb_membership:
         if args.rich:
             rich_actdb_membership(args.socket, args.interval, args.once)
         else:

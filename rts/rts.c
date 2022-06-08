@@ -1516,6 +1516,48 @@ const char* db_membership_to_json () {
     return json;
 }
 
+const char* actors_to_json () {
+    yyjson_mut_doc *doc = yyjson_mut_doc_new(NULL);
+    yyjson_mut_val *root = yyjson_mut_obj(doc);
+    yyjson_mut_doc_set_root(doc, root);
+
+    yyjson_mut_obj_add_str(doc, root, "name", appname);
+
+    yyjson_mut_obj_add_int(doc, root, "pid", pid);
+
+    struct timeval tv;
+    struct tm tm;
+    gettimeofday(&tv, NULL);
+    localtime_r(&tv.tv_sec, &tm);
+    char dt[32];    // = "YYYY-MM-ddTHH:mm:ss.SSS+0000";
+    strftime(dt, 32, "%Y-%m-%dT%H:%M:%S.000%z", &tm);
+    sprintf(dt + 20, "%03hu%s", (unsigned short)(tv.tv_usec / 1000), dt + 23);
+
+    yyjson_mut_obj_add_str(doc, root, "datetime", dt);
+
+    // Actual topology
+    yyjson_mut_val *j_actors = yyjson_mut_obj(doc);
+    yyjson_mut_obj_add_val(doc, root, "actors", j_actors);
+    for(snode_t * crt = HEAD(db->actors); crt!=NULL; crt = NEXT(crt))
+    {
+        actor_descriptor * a = (actor_descriptor *) crt->value;
+
+        char a_id_str[21]; // up to length of unsigned long long
+        snprintf(a_id_str, 21, "%lld", (unsigned long long)a->actor_id);
+        yyjson_mut_val *act_id = yyjson_mut_strcpy(doc, a_id_str);
+
+        yyjson_mut_val *j_a = yyjson_mut_obj(doc);
+        yyjson_mut_obj_put(j_actors, act_id, j_a);
+        yyjson_mut_obj_add_str(doc, j_a, "rts", a->host_rts->id);
+        yyjson_mut_obj_add_str(doc, j_a, "local", a->is_local?"yes":"no");
+        yyjson_mut_obj_add_str(doc, j_a, "status", Actor_status_name[a->status]);
+    }
+
+    const char *json = yyjson_mut_write(doc, 0, NULL);
+    yyjson_mut_doc_free(doc);
+    return json;
+}
+
 
 void *$mon_log_loop(void *period) {
     log_info("Starting monitor log, with %d second(s) period, to: %s\n", (uint)period, mon_log_path);
@@ -1611,6 +1653,19 @@ void *$mon_socket_loop() {
                 if (r != 0) {
                     log_info("Mon socket: Error reading netstring: %d\n", r);
                     break;
+                }
+
+                if (memcmp(str, "actors", len) == 0) {
+                    const char *json = actors_to_json();
+                    char *send_buf = malloc(strlen(json)+14); // 14 = maximum digits for length is 9 (999999999) + : + ; + \0
+                    sprintf(send_buf, "%lu:%s,", strlen(json), json);
+                    int send_res = send(client_sock, send_buf, strlen(send_buf), 0);
+                    free((void *)json);
+                    free((void *)send_buf);
+                    if (send_res < 0) {
+                        log_info("Mon socket: Error sending\n");
+                        break;
+                    }
                 }
 
                 if (memcmp(str, "membership", len) == 0) {

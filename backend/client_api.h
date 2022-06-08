@@ -306,6 +306,8 @@ char * to_string_rts_membership(remote_db_t * db, char * msg_buff);
 #define ACTOR_STATUS_RUNNING 0
 #define ACTOR_STATUS_MIGRATING 1
 #define ACTOR_STATUS_STOPPED 2
+static const char *Actor_status_name[] = {"running", "migrating", "stopped"};
+
 
 typedef struct actor_descriptor
 {
