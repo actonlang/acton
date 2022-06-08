@@ -515,6 +515,8 @@ rts_descriptor * get_rts_descriptor(int rack_id, int dc_id, char *hostname, int 
 {
 	rts_descriptor * rts_d = (rts_descriptor *) malloc(sizeof(struct rts_descriptor));
 
+    snprintf((char *) &rts_d->id, 262, "%s/%d", hostname, local_rts_id);
+
 	rts_d->rack_id = rack_id;
 	rts_d->dc_id = dc_id;
 	rts_d->local_rts_id = local_rts_id;

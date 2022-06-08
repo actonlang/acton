@@ -253,10 +253,46 @@ def actdb_membership(address, interval, once):
         time.sleep(interval)
 
 
-def richmon(address, interval, once):
-    import random
-    import time
+def rich_actdb_membership(address, interval, once):
+    from rich.live import Live
+    from rich.table import Table
 
+    ms = MonSock(address)
+
+    def generate_table() -> Table:
+        table = Table(title="Distributed Acton Members")
+
+        table.add_column("Node", style="cyan", no_wrap=True)
+        table.add_column("Type", style="magenta")
+        table.add_column("Status")
+
+        while True:
+            try:
+                data = ms.cmd("membership")
+                break
+            except ConnectionError:
+                time.sleep(0.5)
+
+        status_to_color = {
+            'live': 'green',
+            'dead': 'red',
+            'unknown': 'orange',
+            'prejoined': 'blue'
+        }
+        for k,v in data['nodes'].items():
+            table.add_row(k, v['type'], f"[{status_to_color[v['status']]}]{v['status']}")
+
+        return table
+
+    with Live(generate_table(), refresh_per_second=(1.0/interval)) as live:
+        while True:
+            time.sleep(interval)
+            live.update(generate_table())
+            if once:
+                break
+
+
+def richmon(address, interval, once):
     from rich.live import Live
     from rich.table import Table
 
@@ -458,7 +494,10 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     if args.actdb_membership:
-        actdb_membership(args.socket, args.interval, args.once)
+        if args.rich:
+            rich_actdb_membership(args.socket, args.interval, args.once)
+        else:
+            actdb_membership(args.socket, args.interval, args.once)
     elif args.prom:
         prompom(args.socket)
     elif args.rich:

@@ -286,6 +286,7 @@ int listen_to_gossip(int status, int rack_id, int dc_id, char * hostname, unsign
 
 typedef struct rts_descriptor
 {
+    char id[262];
 	int rack_id;
 	int dc_id;
 	char * hostname;

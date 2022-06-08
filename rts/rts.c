@@ -1467,6 +1467,55 @@ LIST_OF_DBC_OPS
     return json;
 }
 
+const char* db_membership_to_json () {
+    yyjson_mut_doc *doc = yyjson_mut_doc_new(NULL);
+    yyjson_mut_val *root = yyjson_mut_obj(doc);
+    yyjson_mut_doc_set_root(doc, root);
+
+    yyjson_mut_obj_add_str(doc, root, "name", appname);
+
+    yyjson_mut_obj_add_int(doc, root, "pid", pid);
+
+    struct timeval tv;
+    struct tm tm;
+    gettimeofday(&tv, NULL);
+    localtime_r(&tv.tv_sec, &tm);
+    char dt[32];    // = "YYYY-MM-ddTHH:mm:ss.SSS+0000";
+    strftime(dt, 32, "%Y-%m-%dT%H:%M:%S.000%z", &tm);
+    sprintf(dt + 20, "%03hu%s", (unsigned short)(tv.tv_usec / 1000), dt + 23);
+
+    yyjson_mut_obj_add_str(doc, root, "datetime", dt);
+
+    // Actual topology
+    yyjson_mut_val *j_nodes = yyjson_mut_obj(doc);
+    yyjson_mut_obj_add_val(doc, root, "nodes", j_nodes);
+    for (snode_t * crt = HEAD(db->servers); crt!=NULL; crt = NEXT(crt)) {
+        remote_server * rs = (remote_server *) crt->value;
+
+        yyjson_mut_val *j_node = yyjson_mut_obj(doc);
+        yyjson_mut_obj_add_val(doc, j_nodes, rs->id, j_node);
+        yyjson_mut_obj_add_str(doc, j_node, "type", "DDB");
+        yyjson_mut_obj_add_str(doc, j_node, "hostname", rs->hostname);
+        yyjson_mut_obj_add_str(doc, j_node, "status", RS_status_name[rs->status]);
+    }
+    for (snode_t * crt = HEAD(db->rtses); crt!=NULL; crt = NEXT(crt)) {
+        rts_descriptor * nd = (rts_descriptor *) crt->value;
+
+        yyjson_mut_val *j_node = yyjson_mut_obj(doc);
+        yyjson_mut_obj_add_val(doc, j_nodes, nd->id, j_node);
+        yyjson_mut_obj_add_str(doc, j_node, "type", "RTS");
+        yyjson_mut_obj_add_str(doc, j_node, "hostname", nd->hostname);
+        yyjson_mut_obj_add_str(doc, j_node, "status", RS_status_name[nd->status]);
+        yyjson_mut_obj_add_int(doc, j_node, "local_rts_id", nd->local_rts_id);
+        yyjson_mut_obj_add_int(doc, j_node, "dc_id", nd->dc_id);
+        yyjson_mut_obj_add_int(doc, j_node, "rack_id", nd->rack_id);
+    }
+
+    const char *json = yyjson_mut_write(doc, 0, NULL);
+    yyjson_mut_doc_free(doc);
+    return json;
+}
+
 
 void *$mon_log_loop(void *period) {
     log_info("Starting monitor log, with %d second(s) period, to: %s\n", (uint)period, mon_log_path);
@@ -1564,9 +1613,22 @@ void *$mon_socket_loop() {
                     break;
                 }
 
+                if (memcmp(str, "membership", len) == 0) {
+                    const char *json = db_membership_to_json();
+                    char *send_buf = malloc(strlen(json)+14); // 14 = maximum digits for length is 9 (999999999) + : + ; + \0
+                    sprintf(send_buf, "%lu:%s,", strlen(json), json);
+                    int send_res = send(client_sock, send_buf, strlen(send_buf), 0);
+                    free((void *)json);
+                    free((void *)send_buf);
+                    if (send_res < 0) {
+                        log_info("Mon socket: Error sending\n");
+                        break;
+                    }
+                }
+
                 if (memcmp(str, "WTS", len) == 0) {
                     const char *json = stats_to_json();
-                    char *send_buf = malloc(strlen(json)+14); // maximum digits for length is 9 (999999999) + : + ; + \0
+                    char *send_buf = malloc(strlen(json)+14); // 14 = maximum digits for length is 9 (999999999) + : + ; + \0
                     sprintf(send_buf, "%lu:%s,", strlen(json), json);
                     int send_res = send(client_sock, send_buf, strlen(send_buf), 0);
                     free((void *)json);
