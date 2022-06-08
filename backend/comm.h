@@ -51,7 +51,7 @@ typedef struct remote_server
 	char in_buf[BUFSIZE];
 } remote_server;
 
-remote_server * get_remote_server(char *hostname, unsigned short portno, struct sockaddr_in serveraddr, struct sockaddr_in client_socket_addr, int serverfd, int do_connect);
+remote_server * get_remote_server(char *hostname, unsigned short portno, struct sockaddr_in serveraddr, struct sockaddr_in client_socket_addr, int serverfd, int do_connect, int is_rts);
 int update_listen_socket(remote_server * rs, char *hostname, unsigned short portno, int do_connect);
 int connect_remote_server(remote_server * rs);
 void free_remote_server(remote_server * rs);

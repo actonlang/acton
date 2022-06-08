@@ -576,7 +576,7 @@ int handle_gossip_listen_message(gossip_listen_message * msg, client_descriptor 
 		membership * m, vector_clock * my_lc, membership_agreement_msg ** amr, unsigned int * fastrandstate)
 {
 	struct sockaddr_in dummy_serveraddr;
-	remote_server * rs = get_remote_server(msg->node_description->hostname, msg->node_description->portno, dummy_serveraddr, cd->addr, -2, 0);
+	remote_server * rs = get_remote_server(msg->node_description->hostname, msg->node_description->portno, dummy_serveraddr, cd->addr, -2, 0, 1);
 	rs->status = 0;
 
 	log_debug("Adding client %s:%d/%d/%d to membership.", rs->hostname, msg->node_description->portno, msg->node_description->node_id, rs->portno);
@@ -1016,7 +1016,7 @@ int add_remote_server_to_membership(remote_server * rs, membership * m, short li
 int add_peer_to_membership(char *hostname, unsigned short portno, struct sockaddr_in serveraddr, int serverfd, int do_connect, membership * m, short list, remote_server ** rs, unsigned int * seedptr)
 {
 	struct sockaddr_in dummy_serveraddr;
-    *rs = get_remote_server(hostname, portno, serveraddr, dummy_serveraddr, serverfd, do_connect);
+    *rs = get_remote_server(hostname, portno, serveraddr, dummy_serveraddr, serverfd, do_connect, 0);
 
     if(rs == NULL)
     {
@@ -1615,7 +1615,7 @@ int merge_membership_agreement_msg_to_list(membership_agreement_msg * ma, skipli
 	{
 		node_description nd = ma->membership->membership[i];
 
-		remote_server * rs = get_remote_server(nd.hostname, nd.portno, dummy_serveraddr, dummy_serveraddr, -2, 0);
+		remote_server * rs = get_remote_server(nd.hostname, nd.portno, dummy_serveraddr, dummy_serveraddr, -2, 0, 0);
 		rs->status = nd.status;
 
 		snode_t * node = skiplist_search(merged_list, &rs->serveraddr);
@@ -1695,7 +1695,7 @@ int merge_membership_agreement_msg_to_client_list(membership_agreement_msg * ma,
 	{
 		node_description nd = ma->membership->client_membership[i];
 
-		remote_server * rs = get_remote_server(nd.hostname, nd.portno, dummy_serveraddr, dummy_serveraddr, -2, 0);
+		remote_server * rs = get_remote_server(nd.hostname, nd.portno, dummy_serveraddr, dummy_serveraddr, -2, 0, 1);
 		rs->status = nd.status;
 
 		snode_t * node = skiplist_search(merged_list, &rs->serveraddr);
@@ -1902,7 +1902,7 @@ int install_agreed_view(membership_agreement_msg * ma, membership * m, vector_cl
 	{
 		node_description nd = ma->membership->membership[i];
 
-		remote_server * rs = get_remote_server(nd.hostname, nd.portno, dummy_serveraddr, dummy_serveraddr, -2, 0);
+		remote_server * rs = get_remote_server(nd.hostname, nd.portno, dummy_serveraddr, dummy_serveraddr, -2, 0, 0);
 		rs->status = nd.status;
 
 		snode_t * node = skiplist_search(m->local_peers, &rs->serveraddr);
