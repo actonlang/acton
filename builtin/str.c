@@ -34,7 +34,7 @@ $str $str_deserialize($str,$Serial$state);
 $str $str_capitalize($str s);
 $str $str_center($str s, $int width, $str fill);
 $int $str_count($str s, $str sub, $int start, $int end);
-$bytearray $str_encode($str s);
+$bytes $str_encode($str s);
 $bool $str_endswith($str s, $str suffix, $int start, $int end);
 $str $str_expandtabs($str s, $int tabsize);      
 $int $str_find($str s, $str sub, $int start, $int end);
@@ -930,9 +930,9 @@ $int $str_count($str s, $str sub, $int start, $int end) {
   return to$int(res);
 }
 
-$bytearray $str_encode($str s) {
-  $bytearray res;
-  NEW_UNFILLED_BYTEARRAY(res,s->nbytes);
+$bytes $str_encode($str s) {
+  $bytes res;
+  NEW_UNFILLED_BYTES(res,s->nbytes);
   memcpy(res->str,s->str,s->nbytes);
   return res;
 }
@@ -4097,14 +4097,23 @@ $bool $bytes_bool($bytes s) {
 };
 
 $str $bytes_str($bytes s) {
-  int lens = s->nbytes+4;
-  char * str = malloc(lens);
-  str[0] = 'b';
-  str[1] = '\'';
-  str[lens-2] = '\'';
-  str[lens-1] = '\0';
-  memcpy(str+2,s->str,lens-4);
-  return to$str(str);
+  int lens = s->nbytes+3;
+  $str str;
+  NEW_UNFILLED_STR(str,lens,lens);
+  unsigned char *p = str->str;
+  /*
+  The function $ascii escapes all occurrences of quotes. We do not want that 
+  for the delimiter pair, so we use the hackish solution to first set p[1] and
+  p[lens-1] to space, then call $ascii and afterwards introduce the delimiting quotes.
+  */
+  p[0] = 'b';
+  p[1] = ' ';
+  p[lens-1] = ' ';
+  memcpy(p+2,s->str,lens-3);
+  $str res = $ascii(str);
+  res->str[1] = '"';
+  res->str[res->nbytes-1] = '"';
+  return res;
 }
 
 
@@ -4141,7 +4150,7 @@ $str $ascii($str s) {
   unsigned char c;
   for (int i=0; i<s->nbytes; i++) {
     c = s->str[i];
-    if ((c < 32 || c > 126)&& c != '\t' && c != '\r' && c != '\n')
+    if ((c < 32 || c > 126) && c != '\t' && c != '\r' && c != '\n')
       non_printable++;
     else if (c=='\\' || c=='\'' || c=='"' || c=='\n' || c=='\t' || c=='\r')
       escaped++;

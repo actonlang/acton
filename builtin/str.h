@@ -19,7 +19,7 @@ struct $str$class {
   $str (*capitalize)($str s);
   $str (*center)($str s, $int width, $str fill);                 // raises TYPEERROR if fill is not a single char
   $int (*count)($str s, $str sub, $int start, $int end);
-  $bytearray (*encode)($str s);                                    // only utf-8 encoding and strict error handling
+  $bytes (*encode)($str s);                                    // only utf-8 encoding and strict error handling
   $bool (*endswith)($str s, $str suffix, $int start, $int end);
   $str (*expandtabs)($str s, $int tabsize);     
   $int (*find)($str s, $str sub, $int start, $int end);         // returns -1 when not found
