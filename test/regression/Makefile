@@ -13,7 +13,6 @@ TESTS=$(TEST_SOURCES:.act=)
 FAILING_COMPILATION= \
 	11-int-float \
 	rtail \
-	quotes-in-triquotes \
 
 FAILING_SEGFAULT= \
 	366-async-return \

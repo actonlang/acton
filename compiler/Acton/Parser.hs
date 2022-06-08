@@ -383,7 +383,7 @@ someTillEsc p esc end = do
     return $ a : b
 
 stringTempl :: String -> Parser String -> Parser String -> String -> Parser String
-stringTempl q single esc prefix = (surround q . concat) <$> lexeme (string (prefix++q) >> manyTillEsc single esc (string q))
+stringTempl q single esc prefix = concat <$> lexeme (string (prefix++q) >> manyTillEsc single esc (string q))
    where surround s str     = s ++ str ++ s
 
 newlineEscape =  "" <$ newline
