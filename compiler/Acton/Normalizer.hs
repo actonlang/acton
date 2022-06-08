@@ -207,15 +207,12 @@ instance Norm Decl where
 
 
 
-catStrings ['"':s]                  = '"' : s
-catStrings ss                       = '"' : (escape '"' (concatMap stripQuotes ss)) ++ ['"']
+catStrings ss                       = '"' : (escape '"' (concat ss)) ++ ['"']
   where escape c []                 = []
         escape c ('\\':x:xs)        = '\\' : x : escape c xs
         escape c (x:xs)
           | x == c                  = '\\' : x : escape c xs
           | otherwise               = x : escape c xs
-        stripQuotes ('"':'"':'"':xs)= take ((length xs) - 3) xs
-        stripQuotes s               = init $ tail s
 
 
 normInst env ts e                   = norm env e
