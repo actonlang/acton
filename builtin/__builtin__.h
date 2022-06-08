@@ -20,6 +20,9 @@ typedef struct $str *$str;
 struct $bytearray;
 typedef struct $bytearray *$bytearray;
 
+struct $bytes;
+typedef struct $bytes *$bytes;
+
 struct $NoneType;
 typedef struct $NoneType *$NoneType;
 
@@ -495,6 +498,36 @@ typedef struct $Container$bytearray *$Container$bytearray;
 
 struct $Container$bytearray$class;
 typedef struct $Container$bytearray$class *$Container$bytearray$class;
+
+struct $Ord$bytes;
+typedef struct $Ord$bytes *$Ord$bytes;
+
+struct $Ord$bytes$class;
+typedef struct $Ord$bytes$class *$Ord$bytes$class;
+
+struct $Container$bytes;
+typedef struct $Container$bytes *$Container$bytes;
+
+struct $Container$bytes$class;
+typedef struct $Container$bytes$class *$Container$bytes$class;
+
+struct $Sliceable$bytes;
+typedef struct $Sliceable$bytes *$Sliceable$bytes;
+
+struct $Sliceable$bytes$class;
+typedef struct $Sliceable$bytes$class *$Sliceable$bytes$class;
+
+struct $Times$bytes;
+typedef struct $Times$bytes *$Times$bytes;
+
+struct $Times$bytes$class;
+typedef struct $Times$bytes$class *$Times$bytes$class;
+
+struct $Hashable$bytes;
+typedef struct $Hashable$bytes *$Hashable$bytes;
+
+struct $Hashable$bytes$class;
+typedef struct $Hashable$bytes$class *$Hashable$bytes$class;
 
 struct $Hashable$WORD;
 typedef struct $Hashable$WORD *$Hashable$WORD;
@@ -1517,14 +1550,13 @@ $bool $Ord$str$__ge__ ($Ord$str, $str, $str);
 
 struct $Container$str {
     $Container$str$class $class;
-    $Eq w$Eq$A$Container$str;
 };
 
 struct $Container$str$class {
     char *$GCINFO;
     int $class_id;
     $Super$class $superclass;
-    void (*__init__)($Container$str, $Eq);
+    void (*__init__)($Container$str);
     void (*__serialize__)($Container$str,$Serial$state);
     $Container$str (*__deserialize__)($Container$str,$Serial$state);
     $bool (*__bool__)($Container$str);
@@ -1536,7 +1568,7 @@ struct $Container$str$class {
     $bool (*__containsnot__)($Container$str, $str, $str);
 };
 
-void $Container$str$__init__ ($Container$str, $Eq);
+void $Container$str$__init__ ($Container$str);
 void $Container$str$__serialize__($Container$str, $Serial$state);
 $Container$str $Container$str$__deserialize__($Container$str, $Serial$state);
 $Iterator $Container$str$__iter__ ($Container$str, $str);
@@ -2429,14 +2461,13 @@ $bytearray $Times$bytearray$__mul__ ($Times$bytearray, $bytearray, $int);
 
 struct $Container$bytearray {
     $Container$bytearray$class $class;
-    $Eq w$Eq$A$Container$bytearray;
 };
 
 struct $Container$bytearray$class {
     char *$GCINFO;
     int $class_id;
     $Super$class $superclass;
-    void (*__init__)($Container$bytearray, $Eq);
+    void (*__init__)($Container$bytearray);
     void (*__serialize__)($Container$bytearray,$Serial$state);
     $Container$bytearray (*__deserialize__)($Container$bytearray,$Serial$state);
     $bool (*__bool__)($Container$bytearray);
@@ -2447,7 +2478,7 @@ struct $Container$bytearray$class {
     $bool (*__containsnot__)($Container$bytearray, $bytearray, $int);
 };
 
-void $Container$bytearray$__init__ ($Container$bytearray, $Eq);
+void $Container$bytearray$__init__ ($Container$bytearray);
 void $Container$bytearray$__serialize__($Container$bytearray, $Serial$state);
 $Container$bytearray $Container$bytearray$__deserialize__($Container$bytearray, $Serial$state);
 $bool $Container$bytearray$__bool__($Container$bytearray);
@@ -2456,5 +2487,157 @@ $Iterator $Container$bytearray$__iter__ ($Container$bytearray, $bytearray);
 $int $Container$bytearray$__len__ ($Container$bytearray, $bytearray);
 $bool $Container$bytearray$__contains__ ($Container$bytearray, $bytearray, $int);
 $bool $Container$bytearray$__containsnot__ ($Container$bytearray, $bytearray, $int);
+
+// $Ord$bytes ////////////////////////////////////////////////////////////
+
+struct $Ord$bytes {
+    $Ord$bytes$class $class;
+};
+
+struct $Ord$bytes$class {
+    char *$GCINFO;
+    int $class_id;
+    $Super$class $superclass;
+    void (*__init__)($Ord$bytes);
+    void (*__serialize__)($Ord$bytes,$Serial$state);
+    $Ord$bytes (*__deserialize__)($Ord$bytes,$Serial$state);
+    $bool (*__bool__)($Ord$bytes);
+    $str (*__str__)($Ord$bytes);
+    $bool (*__eq__)($Ord$bytes, $bytes, $bytes);
+    $bool (*__ne__)($Ord$bytes, $bytes, $bytes);
+    $bool (*__lt__)($Ord$bytes, $bytes, $bytes);
+    $bool (*__le__)($Ord$bytes, $bytes, $bytes);
+    $bool (*__gt__)($Ord$bytes, $bytes, $bytes);
+    $bool (*__ge__)($Ord$bytes, $bytes, $bytes);
+};
+
+void $Ord$bytes$__init__ ($Ord$bytes);
+void $Ord$bytes$__serialize__($Ord$bytes, $Serial$state);
+$Ord$bytes $Ord$bytes$__deserialize__($Ord$bytes, $Serial$state);
+$bool $Ord$bytes$__eq__ ($Ord$bytes, $bytes, $bytes);
+$bool $Ord$bytes$__ne__ ($Ord$bytes, $bytes, $bytes);
+$bool $Ord$bytes$__lt__ ($Ord$bytes, $bytes, $bytes);
+$bool $Ord$bytes$__le__ ($Ord$bytes, $bytes, $bytes);
+$bool $Ord$bytes$__gt__ ($Ord$bytes, $bytes, $bytes);
+$bool $Ord$bytes$__ge__ ($Ord$bytes, $bytes, $bytes);
+
+// $Container$bytes ////////////////////////////////////////////////////////////
+
+struct $Container$bytes {
+    $Container$bytes$class $class;
+};
+
+struct $Container$bytes$class {
+    char *$GCINFO;
+    int $class_id;
+    $Super$class $superclass;
+    void (*__init__)($Container$bytes);
+    void (*__serialize__)($Container$bytes,$Serial$state);
+    $Container$bytes (*__deserialize__)($Container$bytes,$Serial$state);
+    $bool (*__bool__)($Container$bytes);
+    $str (*__str__)($Container$bytes);
+    $Iterator (*__iter__)($Container$bytes, $bytes);
+    $bytes (*__fromiter__)($Container$bytes, $Iterable, $WORD);
+    $int (*__len__)($Container$bytes, $bytes);
+    $bool (*__contains__)($Container$bytes, $bytes, $bytes);
+    $bool (*__containsnot__)($Container$bytes, $bytes, $bytes);
+};
+
+void $Container$bytes$__init__ ($Container$bytes);
+void $Container$bytes$__serialize__($Container$bytes, $Serial$state);
+$Container$bytes $Container$bytes$__deserialize__($Container$bytes, $Serial$state);
+$Iterator $Container$bytes$__iter__ ($Container$bytes, $bytes);
+$int $Container$bytes$__len__ ($Container$bytes, $bytes);
+$bool $Container$bytes$__contains__ ($Container$bytes, $bytes, $bytes);
+$bool $Container$bytes$__containsnot__ ($Container$bytes, $bytes, $bytes);
+
+// $Sliceable$bytes ////////////////////////////////////////////////////////////
+
+struct $Sliceable$bytes {
+    $Sliceable$bytes$class $class;
+};
+
+struct $Sliceable$bytes$class {
+    char *$GCINFO;
+    int $class_id;
+    $Super$class $superclass;
+    void (*__init__)($Sliceable$bytes);
+    void (*__serialize__)($Sliceable$bytes,$Serial$state);
+    $Sliceable$bytes (*__deserialize__)($Sliceable$bytes,$Serial$state);
+    $bool (*__bool__)($Sliceable$bytes);
+    $str (*__str__)($Sliceable$bytes);
+    $int (*__getitem__)($Sliceable$bytes, $bytes, $int);
+    void (*__setitem__)($Sliceable$bytes, $bytes, $int, $bytes);
+    void (*__delitem__)($Sliceable$bytes, $bytes, $int);
+    $bytes (*__getslice__)($Sliceable$bytes, $bytes, $slice);
+    void (*__setslice__)($Sliceable$bytes, $bytes, $Iterable, $slice, $WORD);
+    void (*__delslice__)($Sliceable$bytes, $bytes, $slice);
+};
+
+void $Sliceable$bytes$__init__ ($Sliceable$bytes);
+void $Sliceable$bytes$__serialize__($Sliceable$bytes, $Serial$state);
+$Sliceable$bytes $Sliceable$bytes$__deserialize__($Sliceable$bytes, $Serial$state);
+$int $Sliceable$bytes$__getitem__ ($Sliceable$bytes, $bytes, $int);
+void $Sliceable$bytes$__setitem__ ($Sliceable$bytes, $bytes, $int, $bytes);
+void $Sliceable$bytes$__delitem__ ($Sliceable$bytes, $bytes, $int);
+$bytes $Sliceable$bytes$__getslice__ ($Sliceable$bytes, $bytes, $slice);
+void $Sliceable$bytes$__setslice__ ($Sliceable$bytes, $bytes, $Iterable, $slice, $WORD);
+void $Sliceable$bytes$__delslice__ ($Sliceable$bytes, $bytes, $slice);
+
+// $Times$bytes ////////////////////////////////////////////////////////////
+
+struct $Times$bytes {
+    $Times$bytes$class $class;
+};
+
+struct $Times$bytes$class {
+    char *$GCINFO;
+    int $class_id;
+    $Super$class $superclass;
+    void (*__init__)($Times$bytes);
+    void (*__serialize__)($Times$bytes,$Serial$state);
+    $Times$bytes (*__deserialize__)($Times$bytes,$Serial$state);
+    $bool (*__bool__)($Times$bytes);
+    $str (*__str__)($Times$bytes);
+    $bytes (*__add__)($Times$bytes, $bytes, $bytes);
+    $bytes (*__iadd__)($Times$bytes, $bytes, $bytes);
+    $bytes (*__mul__)($Times$bytes, $bytes, $int);
+    $bytes (*__imul__)($Times$bytes, $bytes, $int);
+};
+
+void $Times$bytes$__init__ ($Times$bytes);
+void $Times$bytes$__serialize__($Times$bytes, $Serial$state);
+$Times$bytes $Times$bytes$__deserialize__($Times$bytes, $Serial$state);
+$bool $Times$bytes$__bool__($Times$bytes);
+$bytes $Times$bytes$__str__($Times$bytes);
+$bytes $Times$bytes$__add__ ($Times$bytes, $bytes, $bytes);
+$bytes $Times$bytes$__mul__($Times$bytes, $bytes, $int);
+
+// $Hashable$bytes ////////////////////////////////////////////////////////////
+
+struct $Hashable$bytes {
+    $Hashable$bytes$class $class;
+};
+
+struct $Hashable$bytes$class {
+    char *$GCINFO;
+    int $class_id;
+    $Super$class $superclass;
+    void (*__init__)($Hashable$bytes);
+    void (*__serialize__)($Hashable$bytes,$Serial$state);
+    $Hashable$bytes (*__deserialize__)($Hashable$bytes,$Serial$state);
+    $bool (*__bool__)($Hashable$bytes);
+    $str (*__str__)($Hashable$bytes);
+    $bool (*__eq__)($Hashable$bytes, $bytes, $bytes);
+    $bool (*__ne__)($Hashable$bytes, $bytes, $bytes);
+    $int (*__hash__)($Hashable$bytes, $bytes);
+};
+
+void $Hashable$bytes$__init__ ($Hashable$bytes);
+void $Hashable$bytes$__serialize__($Hashable$bytes, $Serial$state);
+$Hashable$bytes $Hashable$bytes$__deserialize__($Hashable$bytes, $Serial$state);
+$bool $Hashable$bytes$__eq__ ($Hashable$bytes, $bytes, $bytes);
+$bool $Hashable$bytes$__ne__ ($Hashable$bytes, $bytes, $bytes);
+$int $Hashable$bytes$__hash__ ($Hashable$bytes, $bytes);
 
 void $register_builtin_protocols();

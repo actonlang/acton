@@ -211,6 +211,7 @@ primToInt                           = name "to$int"
 primToFloat                         = name "to$float"
 primToStr                           = name "to$str"
 primToBytearray                     = name "to$bytearray"
+primToBytes                         = name "to$bytes"
 
 tmpV                                = primKW "tmp"
 
@@ -637,7 +638,7 @@ instance Gen Expr where
     gen env (Bool _ False)          = gen env primFalse
     gen env (None _)                = gen env primNone
     gen env e@Strings{}             = gen env primToStr <> parens (genStr env e)
-    gen env e@BStrings{}            = gen env primToBytearray <> parens (genStr env e)
+    gen env e@BStrings{}            = gen env primToBytes <> parens(genStr env e)
     gen env (Call _ e p _)          = genCall env [] e p
     gen env (TApp _ e ts)           = genInst env ts e
     gen env (IsInstance _ e c)      = gen env primISINSTANCE <> parens (gen env e <> comma <+> gen env c)
@@ -665,7 +666,7 @@ instance Gen Expr where
       where t                       = typeOf env e
     gen env (Cond _ e1 e e2)        = parens (parens (genBool env e) <> text "->val" <+> text "?" <+> gen env e1 <+> text ":" <+> gen env e2)
 
-genStr env s                        = doubleQuotes $ text $ tail $ init $ concat $ sval s
+genStr env s                        = text $ head $ sval s
 
 genBool env e                       = genExp env tBool e
   where t                           = typeOf env e

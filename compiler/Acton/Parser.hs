@@ -186,6 +186,18 @@ instance HasLoc IndentationError where
 indentationError     :: IndentationError -> (SrcLoc, String)
 indentationError err = (loc err, "Too much indentation")
 
+-- Fail fast error ----------------------------------------------------------
+
+data FailFastError = FailFastError SrcLoc String deriving (Show, Eq)
+
+instance Control.Exception.Exception FailFastError
+
+
+failFastError :: FailFastError -> (SrcLoc, String)
+failFastError (FailFastError loc str) = (loc, str)
+
+failImmediately loc msg =  Control.Exception.throw $ FailFastError loc msg
+
 --- Whitespace consumers ----------------------------------------------------
 
 -- Whitespace consumer, which *does not* consume newlines
@@ -320,35 +332,154 @@ newline1 = const [] <$> (eol *> sc2)
 
 --- Strings in their many variants -----------------------------------------------
 
-stringPP prefix = longString prefix <|> shortString prefix
+{-
 
-stringP = stringPP []
+The following principles for bytes and string literals are implemented by the following parse functions and
+the transformations in Acton.Normalize
 
-surround s str = s ++ str ++ s
+Literal syntax is as in subsections 2.4.1 and 2.4.2 in the Python Language Reference, version 3.10.4, 
+except that only the following prefixes are allowed:
+- no prefix: plain string literal
+- prefix 'b': plain bytes literal
+- prefix 'r': raw string literal
+- prefix 'rb': raw bytes literals. 
 
-stringTempl q prefix = (prefix++) . surround q <$> (lexeme (string (prefix++q) >>  manyTill anySingle (string q)))
+Thus we disallow
+- upper case versions of the above prefixes (for no particular reason other than the opinion that it is not an 
+  unreasonable burden on the programmer to have to stick to lower case prefixes). For similar reasons we disallow 
+  prefix 'br' and thus just form a raw literal by prefixing a plain literal with 'r'.)
+- the 'u' prefix which only exists in Python for legacy reasons.
+- the 'f' prefix for formatted string literals; a version of these is instead supported in Acton
+  using the % operator in the print statement.
 
-longString prefix = stringTempl  "\"\"\"" prefix <|> stringTempl "'''" prefix
+Prefix sequences are also as in subsection 2.4.1 with the following exceptions
+- unrecognized escape sequences (like \p or \z or any other sequence not listed in the table of 2.4.1)
+  are disallowed (unlike Python where they are allowed but the language reference declares that they will
+  become illegal in a future Python version.).
+- universal character names \uxxxx and \Uxxxxxxxx are unrecognized in bytes literals.
+- \x must be followed by exactly two hex digits (unlike in C). To avoid a compilation error in the
+  generated C code, e.g. the string "\x12a" is changed to "\x12" "a" so that the 'a' is not interpreted by 
+  the C compiler as a third hexadecimal digit in the \x... sequence. Note that C allows sequences of string 
+  literals which are concatenated during C compilation.
 
-shortString prefix =
-      (prefix++) . surround "\"" . concat <$> lexeme (string (prefix++"\"") >> manyTill charLit1 (char '"'))
-    <|>
-      (prefix++) . surround "'" . concat <$> lexeme (string (prefix++"'") >> manyTill charLit2 (char '\''))
-   where charLit1 =  string "\\\\" <|> string "\\\"" <|>  ((:[]) <$> anySingle)
-         charLit2 =  string "\\\\" <|> string "\\'" <|>  ((:[]) <$> anySingle)
-
---raw strings
-shortStringR prefix = stringTempl "\"" prefix  <|> stringTempl "'" prefix
-
-stringPPR prefix = longString prefix <|> shortStringR prefix
+-}
 
 strings :: Parser S.Expr
-strings = addLoc $ do
-     ss <- some (stringP <|> stringPP "b" <|> stringPPR  "r" <|> stringPPR  "br")
-     if all (\s -> head s == 'b') ss 
-        then return $ S.BStrings NoLoc ss
-        else return $ S.Strings NoLoc ss
-      
+strings = addLoc $
+       S.BStrings NoLoc <$> some bytesLiteral
+       <|>
+       S.Strings NoLoc <$> some stringLiteral
+
+bytesLiteral, stringLiteral :: Parser String
+bytesLiteral =  plainbytesLiteral <|> rawbytesLiteral <?> "bytes literal"
+stringLiteral = plainstrLiteral <|> rawstrLiteral <?> "string literal"
+
+manyTillEsc, someTillEsc :: Parser String -> Parser String -> Parser String -> Parser [String]
+manyTillEsc p esc end =  (const [] <$> end) <|> (someTillEsc p esc end)
+
+someTillEsc p esc end = do
+    a <- (char '\\' *> esc) <|> p
+    b <- manyTillEsc p esc end
+    return $ a : b
+
+stringTempl :: String -> Parser String -> Parser String -> String -> Parser String
+stringTempl q single esc prefix = (surround q . concat) <$> lexeme (string (prefix++q) >> manyTillEsc single esc (string q))
+   where surround s str     = s ++ str ++ s
+
+newlineEscape =  "" <$ newline
+singleCharEscape =  (\c -> '\\':c:[]) <$> (oneOf ("\'\"abfnrtv"))
+hexEscape = do
+      char 'x'
+      (loc,cs) <- withLoc (many hexDigitChar)
+      if length cs == 2
+       then return ("\\x" ++ cs)
+       else failImmediately loc "\"\\x\" must be followed by exactly two hexadecimal digits"
+octEscape = do
+       (loc,cs) <- withLoc (count' 1 3 octDigitChar)
+       if length cs == 3 && head cs > '3'
+          then  failImmediately loc "octal escape sequence out of range"
+          else return ("\\" ++ cs) 
+univ1Escape = do
+      char 'u'
+      (loc,cs) <- withLoc (count' 0 4 hexDigitChar)
+      if length cs < 4
+        then failImmediately loc "Incomplete universal character name (4 hex digits needed)"
+        else return ("\\u" ++ cs)
+univ2Escape = do
+      char 'U'
+      (loc,cs) <- withLoc (count' 0 8 hexDigitChar)
+      if length cs < 8
+        then failImmediately loc "Incomplete universal character name (8 hex digits needed)"
+        else return ("\\U" ++ cs)
+
+asciiC   = do
+      (loc,c) <- withLoc anySingle
+      if c == '\n'
+         then failImmediately loc "unescaped newline in single-quoted bytes literal"
+         else if isAscii c
+              then return [c]
+              else failImmediately loc "Only ASCII chars allowed in bytes literal"
+
+anyC  = do
+      (loc,c) <- withLoc anySingle
+      if c == '\n'
+         then failImmediately loc "unescaped newline in single-quoted string literal"
+         else return [c]
+
+unknownEscape charParser = do
+         (loc,c) <- withLoc charParser
+         failImmediately loc "unknown escape sequence in bytes literal"
+             
+plainLiteral charParser prefix tailEscapes = stringTempl "\"\"\"" longItem esc prefix
+                                          <|> stringTempl "'''" longItem esc prefix
+                                          <|> stringTempl "\"" charParser esc prefix
+                                          <|> stringTempl "'" charParser esc prefix
+    where longItem = ("\\n" <$ newline) <|> charParser  -- newlines allowed in triple-quoted literals
+          esc =  newlineEscape <|> singleCharEscape <|> hexEscape <|> octEscape <|> tailEscapes
+
+plainbytesLiteral = plainLiteral asciiC "b" (unknownEscape asciiC)
+
+plainstrLiteral = plainLiteral anyC "" ( univ1Escape <|> univ2Escape <|> unknownEscape anyC)
+
+
+{-
+plainbytesLiteral = stringTempl "\"\"\"" longItem esc "b"
+                <|> stringTempl "'''" longItem esc "b"
+                <|> stringTempl "\"" asciiC esc "b"
+                <|> stringTempl "'" asciiC esc "b"
+    where longItem = ("\\n" <$ newline) <|> asciiC  -- newlines allowed in triple-quoted literals
+          esc =  newlineEscape <|> singleCharEscape <|> hexEscape <|> octEscape <|> unknownEscape
+          unknownEscape = do
+             (loc,c) <- withLoc asciiC
+             failImmediately loc "unknown escape sequence in bytes literal"
+
+plainstrLiteral = stringTempl "\"\"\"" longItem esc ""
+                <|> stringTempl "'''" longItem esc ""
+                <|> stringTempl "\"" charLit2 esc ""
+                <|> stringTempl "'" charLit2 esc ""
+    where longItem = ("\\n" <$ newline) <|> charLit2
+          charLit2 = ( :[]) <$> anySingle
+          esc =  newlineEscape <|> singleCharEscape <|> hexEscape <|> octEscape <|> univ1Escape <|> univ2Escape <|> unknownEscape
+          unknownEscape = do
+            (loc,c) <- withLoc charLit2
+            failImmediately loc "unknown escape sequence in string literal"
+-}
+
+rawLiteral charParser prefix = stringTempl "\"\"\"" longItem esc prefix
+              <|> stringTempl "'''" longItem esc prefix
+              <|> stringTempl "\"" charParser esc prefix
+              <|> stringTempl "'"  charParser  esc prefix 
+   where longItem =  ("\\n" <$ newline) <|> charParser
+         esc = newlineEscapeRaw <|> singleCharEscapeRaw <|> generalEscapeRaw
+         newlineEscapeRaw = "\\\\\\n" <$ newline
+         singleCharEscapeRaw = (\c -> "\\\\\\" ++ [c]) <$> (oneOf ("\'\""))
+         generalEscapeRaw = return "\\\\"
+
+rawbytesLiteral = rawLiteral asciiC "rb"
+
+rawstrLiteral = rawLiteral ((:[]) <$> anySingle) "r"
+
+ 
 -- Reserved words, other symbols and names ----------------------------------------------------------
 
 rword :: String -> Parser ()
@@ -391,7 +522,7 @@ name = do off <- getOffset
             then parseError  (TrivialError off (Just (Tokens (N.fromList x))) (S.fromList [Label (N.fromList "name (not type variable)")]))
             else return $ S.Name (Loc off (off+length x)) x
 
-escname = name <|> addLoc ((\str -> S.Name NoLoc  (init (tail str))) <$> stringP)
+escname = name <|> addLoc ((\str -> S.Name NoLoc  (init (tail str))) <$> plainstrLiteral)
 
 tvarname = do off <- getOffset
               x <- identifier
@@ -1077,7 +1208,7 @@ atom_expr = do
                         i <- lexeme L.decimal
                         return (\a -> maybe (S.DotI NoLoc a i) (const $ S.RestI NoLoc a i) mb)
                  strdot = do
-                        (p,str) <- withPos stringP 
+                        (p,str) <- withPos plainstrLiteral 
                         return (\a -> S.Dot NoLoc a (S.Name NoLoc (init(tail str))))
 
                  bslicelist = (:) <$> bslice <*> commaList bslice

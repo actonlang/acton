@@ -14,7 +14,6 @@ FAILING_COMPILATION= \
 	11-int-float \
 	rtail \
 	quotes-in-triquotes \
-	triquotes-across-lines \
 
 FAILING_SEGFAULT= \
 	366-async-return \

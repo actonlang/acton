@@ -151,8 +151,8 @@ instance Pretty Expr where
     pretty (None _)                 = text "None"
     pretty (NotImplemented _)       = text "NotImplemented"
     pretty (Ellipsis _)             = text "..."
-    pretty (Strings _ ss)           = hcat (map pretty ss)
-    pretty (BStrings _ ss)          = hcat (map pretty ss)
+    pretty (Strings _ ss)           = hsep (map pretty ss)
+    pretty (BStrings _ ss)          = hsep (map (\s -> text " b" <> quotes (pretty s)) ss)
     pretty (Call _ e ps ks)
         | atomic e                  = pretty e <> parens (pretty (ps,ks))
         | otherwise                 = parens (pretty e) <> parens (pretty (ps,ks))

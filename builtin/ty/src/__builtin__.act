@@ -54,7 +54,7 @@ class str (atom):
   capitalize   : () -> str
   center       : (int,?str) -> str
   count        : (str,?int,?int) -> int
-  encode       : () -> bytearray
+  encode       : () -> bytes
   endswith     : (str,?int,?int) -> bool
   expandtabs   : (?int) -> str
   find         : (str,?int,?int) -> int
@@ -86,8 +86,45 @@ class str (atom):
   upper        : () -> str
   zfill        : (str,int) -> str
 
+class bytes (value):
+  __init__     : (Iterable[int]) -> None
+  capitalize   : () -> bytes
+  center       : (int,?bytes) -> bytes
+  count        : (bytes,?int,?int) -> int
+  decode       : () -> str
+  endswith     : (bytes,?int,?int) -> bool
+  expandtabs   : (?int) -> bytes
+  find         : (bytes,?int,?int) -> int
+  index        : (bytes,?int,?int) -> int
+  isalnum      : () -> bool
+  isalpha      : () -> bool
+  isascii      : () -> bool
+  isdigit      : () -> bool
+  islower      : () -> bool
+  isprintable  : () -> bool
+  isspace      : () -> bool
+  istitle      : () -> bool
+  isupper      : () -> bool
+  join         : (Iterable[bytes]) -> bytes
+  ljust        : (int,?bytes) -> bytes
+  lower        : () -> bytes
+  lstrip       : (bytes) -> bytes
+  partition    : (bytes) -> (bytes,bytes,bytes)
+  replace      : (bytes,bytes,?int) -> bytes
+  rfind        : (bytes,?int,?int) -> int
+  rindex       : (bytes,?int,?int) -> int
+  rjust        : (int,?bytes) -> bytes
+  rpartition   : (bytes) -> (bytes,bytes,bytes)
+  rstrip       : (?bytes) -> bytes
+  split        : (bytes,?int) -> list[bytes]
+  splitlines   : (?bool) -> list[bytes]
+  startswith   : (bytes,?int,?int) -> bool
+  strip        : (?bytes) -> bytes
+  upper        : () -> bytes
+  zfill        : (bytes,int) -> bytes
+
 class bytearray (object):
-  __init__     : (value) -> None
+  __init__     : (bytes) -> None
   capitalize   : () -> bytearray
   center       : (int,?bytearray) -> bytearray
   count        : (bytearray,?int,?int) -> int
@@ -494,6 +531,16 @@ extension bytearray (Ord): pass
 extension bytearray (Sequence[int]): pass
 
 extension bytearray (Container[int]): pass
+
+extension bytes (Ord): pass
+
+extension bytes (Sliceable[int]): pass
+
+extension bytes (Container[int]): pass
+
+extension bytes (Times[int]): pass
+
+extension bytes (Hashable): pass
 
 ## Builtin functions #####################################################
 
