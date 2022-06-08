@@ -241,7 +241,7 @@ stdlib_project: $(STDLIB_ACTFILES_NS) dist/types/__builtin__.ty $(DIST_HFILES) $
 	cd stdlib && ../$(ACTC) build --dev
 	cp -a stdlib/out/types/. dist/types/
 
-stdlib/out/dev/lib/libActonProject.a stdlib/out/rel/lib/libActonProject.a: $(STDLIB_ACTFILES) $(ACTONC)
+stdlib/out/dev/lib/libActonProject.a stdlib/out/rel/lib/libActonProject.a: $(STDLIB_ACTFILES) dist/types/__builtin__.ty $(ACTONC)
 	$(MAKE) stdlib_project
 
 
