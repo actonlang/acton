@@ -91,17 +91,41 @@ backend/actondb: backend/actondb.c lib/libActonDB.a
 		-lActonDB \
 		$(LDLIBS)
 
-backend/%.o: backend/%.c backend/%.h
+backend/comm.o: backend/comm.c backend/comm.h backend/failure_detector/db_queries.h
 	$(CC) -DLOG_USE_COLOR -g -o$@ $< -c $(CFLAGS)
 
-backend/failure_detector/%.o: backend/failure_detector/%.c
-	$(CC) -g -o$@ $< -c $(CFLAGS)
+backend/db.o: backend/db.c backend/db.h backend/skiplist.h
+	$(CC) -DLOG_USE_COLOR -g -o$@ $< -c $(CFLAGS)
 
-# This target is just to override the above target and turn it into a NOP for
-# the protobuf files. We have the generated files committed to git, so this
-# isn't something we normally want to regenerate anyway.
-backend/failure_detector/db_messages.pb-c.c: backend/failure_detector/db_messages.proto
-	true
+backend/queue.o: backend/queue.c backend/queue.h backend/log.h backend/failure_detector/cells.h backend/failure_detector/db_queries.h
+	$(CC) -DLOG_USE_COLOR -g -o$@ $< -c $(CFLAGS)
+
+backend/skiplist.o: backend/skiplist.c backend/skiplist.h backend/log.h backend/fastrand.h
+	$(CC) -DLOG_USE_COLOR -g -o$@ $< -c $(CFLAGS)
+
+backend/txn_state.o: backend/txn_state.c backend/txn_state.h
+	$(CC) -DLOG_USE_COLOR -g -o$@ $< -c $(CFLAGS)
+
+backend/txns.o: backend/txns.c backend/txns.h
+	$(CC) -DLOG_USE_COLOR -g -o$@ $< -c $(CFLAGS)
+
+backend/client_api.o: backend/client_api.c backend/client_api.h backend/log.h backend/hashes.h
+	$(CC) -DLOG_USE_COLOR -g -o$@ $< -c $(CFLAGS)
+
+backend/failure_detector/db_messages.pb-c.o: backend/failure_detector/db_messages.pb-c.c backend/failure_detector/db_messages.pb-c.h
+	$(CC) -DLOG_USE_COLOR -g -o$@ $< -c $(CFLAGS)
+
+backend/failure_detector/cells.o: backend/failure_detector/cells.c backend/failure_detector/cells.h
+	$(CC) -DLOG_USE_COLOR -g -o$@ $< -c $(CFLAGS)
+
+backend/failure_detector/db_queries.o: backend/failure_detector/db_queries.c backend/failure_detector/db_queries.h backend/log.h backend/failure_detector/db_messages.pb-c.h
+	$(CC) -DLOG_USE_COLOR -g -o$@ $< -c $(CFLAGS)
+
+backend/failure_detector/fd.o: backend/failure_detector/fd.c backend/failure_detector/fd.h backend/failure_detector/db_messages.pb-c.h
+	$(CC) -DLOG_USE_COLOR -g -o$@ $< -c $(CFLAGS)
+
+backend/failure_detector/vector_clock.o: backend/failure_detector/vector_clock.c backend/failure_detector/vector_clock.h backend/failure_detector/db_messages.pb-c.h
+	$(CC) -DLOG_USE_COLOR -g -o$@ $< -c $(CFLAGS)
 
 # backend tests
 BACKEND_TESTS=backend/failure_detector/db_messages_test \
@@ -251,6 +275,7 @@ VC_OFILES += backend/failure_detector/vector_clock.o
 BACKEND_OFILES=$(COMM_OFILES) $(DB_OFILES) $(DBCLIENT_OFILES) $(REMOTE_OFILES) $(VC_OFILES) backend/log.o deps/netstring_rel.o deps/yyjson_rel.o
 OFILES += $(BACKEND_OFILES)
 lib/libActonDB.a: $(BACKEND_OFILES)
+	rm -f $@
 	ar rcs $@ $^
 
 
@@ -303,7 +328,7 @@ clean: clean-compiler clean-distribution clean-backend clean-rts
 
 .PHONY: clean-backend
 clean-backend:
-	rm -f $(BACKEND_OFILES) backend/actondb
+	rm -f $(DBARCHIVE) $(BACKEND_OFILES) backend/actondb
 
 .PHONY: clean-rts
 clean-rts:
