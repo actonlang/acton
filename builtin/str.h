@@ -179,7 +179,7 @@ $Collection$bytearray $Collection$bytearray$new($Sequence);
 extern struct $Times$bytearray$class $Times$bytearray$methods;
 $Times$bytearray $Times$bytearray$new($Sequence);
 extern struct $Container$bytearray$class $Container$bytearray$methods;
-$Container$bytearray $Container$bytearray$new($Eq);
+$Container$bytearray $Container$bytearray$new();
 
 extern struct $Ord$bytearray *$Ord$bytearray$witness;
 extern struct $Sequence$bytearray *$Sequence$bytearray$witness;
