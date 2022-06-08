@@ -1,0 +1,5 @@
+import foo
+
+actor main(env):
+    b = foo.Bar()
+    await async env.exit(0)

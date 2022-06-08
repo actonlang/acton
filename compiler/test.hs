@@ -19,11 +19,19 @@ main = do
     let exampleFilesExp = map exampleExpFail exampleFiles
         exampleTests = map genExampleTests exampleFilesExp
     defaultMain $ testGroup "Tests" $ [
+        actoncBasicTests,
         actoncProjTests,
         actoncRootArgTests,
         testGroup "Examples" exampleTests
         ]
 
+
+actoncBasicTests =
+  testGroup "actonc basic tests"
+  [ expectFail $ testCase "create imported actor" $ do
+        (returnCode, cmdOut, cmdErr) <- buildProject "test/actonc/regressions/import_actor" "build"
+        assertEqual "actonc should return success" ExitSuccess returnCode
+  ]
 
 actoncProjTests =
   testGroup "actonc project tests"
