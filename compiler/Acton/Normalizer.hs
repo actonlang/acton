@@ -214,6 +214,7 @@ catStrings ss                       = '"' : (escape '"' (concatMap stripQuotes s
         escape c (x:xs)
           | x == c                  = '\\' : x : escape c xs
           | otherwise               = x : escape c xs
+        stripQuotes ('"':'"':'"':xs)= take ((length xs) - 3) xs
         stripQuotes s               = init $ tail s
 
 

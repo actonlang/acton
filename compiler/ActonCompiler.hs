@@ -211,6 +211,7 @@ readActFile args actFile = do
             `catch` handle "Syntax error" Acton.Parser.parserError "" paths (modName paths)
             `catch` handle "Context error" Acton.Parser.contextError src paths (modName paths)
             `catch` handle "Indentation error" Acton.Parser.indentationError src paths (modName paths)
+            `catch` handle "Syntax error" Acton.Parser.failFastError src paths (modName paths)
     iff (parse args) $ dump "parse" (Pretty.print m)
     stubMode <- detectStubMode actFile args
     return $ ActonTask (modName paths) src m stubMode

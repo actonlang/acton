@@ -54,7 +54,7 @@ class str (atom):
   capitalize   : () -> str
   center       : (int,?str) -> str
   count        : (str,?int,?int) -> int
-  encode       : () -> bytearray
+  encode       : () -> bytes
   endswith     : (str,?int,?int) -> bool
   expandtabs   : (?int) -> str
   find         : (str,?int,?int) -> int
