@@ -474,7 +474,7 @@ int sockaddr_cmp(WORD a1, WORD a2)
 
 remote_server * get_remote_server(char *hostname, unsigned short portno,
 		struct sockaddr_in serveraddr, struct sockaddr_in client_socket_addr,
-		int serverfd, int do_connect)
+		int serverfd, int do_connect, int is_rts)
 {
 	remote_server * rs = (remote_server *) malloc(sizeof(remote_server));
     bzero(rs, sizeof(remote_server));
@@ -535,7 +535,7 @@ remote_server * get_remote_server(char *hostname, unsigned short portno,
 	rs->sockfd_lock = (pthread_mutex_t*) malloc (sizeof(pthread_mutex_t));
 	pthread_mutex_init(rs->sockfd_lock, NULL);
 
-    snprintf((char *) &rs->id, 262, "%s:%d", hostname, portno);
+    snprintf((char *) &rs->id, 262, "%s%s%d", hostname, is_rts?"/":":", portno);
 
     strncpy((char *) &(rs->hostname), hostname, strnlen(hostname, 256) + 1);
     rs->portno = portno;

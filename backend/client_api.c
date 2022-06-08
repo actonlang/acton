@@ -468,7 +468,7 @@ int add_server_to_membership(char *hostname, int portno, remote_db_t * db, unsig
 {
 	struct sockaddr_in dummy_serveraddr;
 
-    remote_server * rs = get_remote_server(hostname, portno, dummy_serveraddr, dummy_serveraddr, -2, 0);
+    remote_server * rs = get_remote_server(hostname, portno, dummy_serveraddr, dummy_serveraddr, -2, 0, 0);
 
     if(rs == NULL)
     {
@@ -490,7 +490,7 @@ int add_server_to_membership(char *hostname, int portno, remote_db_t * db, unsig
 
     free_remote_server(rs);
 
-    rs = get_remote_server(hostname, portno, dummy_serveraddr, dummy_serveraddr, -2, 1);
+    rs = get_remote_server(hostname, portno, dummy_serveraddr, dummy_serveraddr, -2, 1, 0);
 
     int status = skiplist_insert(db->servers, &rs->serveraddr, rs, seedptr);
 
