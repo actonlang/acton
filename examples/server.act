@@ -3,9 +3,9 @@ actor main(env):
     def stdout_w(conn,str):
         env.stdout_write(str)
 
-    def echo(conn,str):
-        env.stdout_write(str)
-        conn.write(str)
+    def echo(conn,b):
+        env.stdout_write(b.decode())
+        conn.write(b)
         
     def connect_handler(conn):
         print("Got a connection...")

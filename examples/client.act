@@ -1,14 +1,20 @@
 actor client(env):
 
-    session : action(?Connection) -> None
-
     def stdout_w(conn,str):
-      env.stdout_write(str)
-    
+        env.stdout_write(str)
+      
+    def stdout_wb(conn,b):
+        env.stdout_write(b.decode())
+       
     def session(conn):
         if conn is not None:
-           conn.on_receive(stdout_w, stdout_w)
-           env.stdin_install(conn.write)
+           conn_write : action(str)->None
+           
+           def conn_write(s):
+               conn.write(s.encode())
+        
+           conn.on_receive(stdout_wb, stdout_w)
+           env.stdin_install(conn_write)
         else:
            print("couldn't connect to",env.argv[1])
            env.exit(0)

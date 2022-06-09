@@ -195,7 +195,7 @@ struct $l$8lambda$class {
     char *$GCINFO;
     int $class_id;
     $Super$class $superclass;
-    $NoneType (*__init__) ($l$8lambda, $Connection, $str);
+    $NoneType (*__init__) ($l$8lambda, $Connection, $bytes);
     void (*__serialize__) ($l$8lambda, $Serial$state);
     $l$8lambda (*__deserialize__) ($l$8lambda, $Serial$state);
     $bool (*__bool__) ($l$8lambda);
@@ -205,7 +205,7 @@ struct $l$8lambda$class {
 struct $l$8lambda {
     struct $l$8lambda$class *$class;
     $Connection __self__;
-    $str s;
+    $bytes s;
 };
 struct $l$9lambda$class {
     char *$GCINFO;
@@ -345,7 +345,7 @@ $l$6lambda $l$6lambda$new($Env, $str);
 extern struct $l$7lambda$class $l$7lambda$methods;
 $l$7lambda $l$7lambda$new($Env, $str);
 extern struct $l$8lambda$class $l$8lambda$methods;
-$l$8lambda $l$8lambda$new($Connection, $str);
+$l$8lambda $l$8lambda$new($Connection, $bytes);
 extern struct $l$9lambda$class $l$9lambda$methods;
 $l$9lambda $l$9lambda$new($Connection);
 extern struct $l$10lambda$class $l$10lambda$methods;
@@ -440,10 +440,10 @@ struct $Connection$class {
     $bool (*__bool__) ($Connection);
     $str (*__str__) ($Connection);
     $NoneType (*__resume__) ($Connection);
-    $R (*write$local) ($Connection, $str, $Cont);
+    $R (*write$local) ($Connection, $bytes, $Cont);
     $R (*close$local) ($Connection, $Cont);
     $R (*on_receive$local) ($Connection, $function, $function, $Cont);
-    $Msg (*write) ($Connection, $str);
+    $Msg (*write) ($Connection, $bytes);
     $Msg (*close) ($Connection);
     $Msg (*on_receive) ($Connection, $function, $function);
 };
