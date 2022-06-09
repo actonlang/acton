@@ -1,21 +1,29 @@
-import Filesystem.Path.CurrentOS
+import Data.List
+import Data.Maybe
+import Data.Ord
+
 import System.Directory
+import System.Directory.Recursive
 import System.Exit
+import System.FilePath
+import System.FilePath.Posix
 import System.Process
 
 import Test.Tasty
+import Test.Tasty.ExpectedFailure
 import Test.Tasty.HUnit
 
-import Data.List
-import Data.Ord
 
-main = defaultMain tests
+main = do
+    exampleFiles <- findExamplesFiles "../examples"
+    let exampleFilesExp = map exampleExpFail exampleFiles
+        exampleTests = map genExampleTests exampleFilesExp
+    defaultMain $ testGroup "Tests" $ [
+        actoncProjTests,
+        actoncRootArgTests,
+        testGroup "Examples" exampleTests
+        ]
 
-tests :: TestTree
-tests = testGroup "Tests" [
-    actoncProjTests,
-    actoncRootArgTests
-    ]
 
 actoncProjTests =
   testGroup "actonc project tests"
@@ -48,6 +56,42 @@ actoncRootArgTests =
         (returnCode, cmdOut, cmdErr) <- buildFile "test/actonc/root/test.act" "--root main"
         assertEqual "actonc should return success" ExitSuccess returnCode
   ]
+
+
+findExamplesFiles dir = do
+                    allFiles <- getFilesRecursive dir
+                    let srcFiles = catMaybes $ map filterActFile allFiles
+                    return srcFiles
+
+filterActFile :: FilePath -> Maybe FilePath
+filterActFile file =
+    case fileExt of
+        ".act" -> Just file
+        _ -> Nothing
+  where (fileBody, fileExt) = splitExtension $ takeFileName file
+
+exampleExpFail :: FilePath -> (Bool, FilePath)
+exampleExpFail file =
+    case fileBody of
+        --"my-failing-example" -> (True, file)
+        _ -> (False, file)
+  where (fileBody, fileExt) = splitExtension $ takeFileName file
+
+genExampleTests tp =
+    testExampleFile file fail
+  where (fail, file) = tp
+
+testExampleFile :: String -> Bool -> TestTree
+testExampleFile file True =
+    expectFail $ testCase fileBody $ do
+        (returnCode, cmdOut, cmdErr) <- buildFile file ""
+        assertEqual "actonc should return success" ExitSuccess returnCode
+  where (fileBody, fileExt) = splitExtension $ takeFileName file
+testExampleFile file False =
+    testCase fileBody $ do
+        (returnCode, cmdOut, cmdErr) <- buildFile file ""
+        assertEqual "actonc should return success" ExitSuccess returnCode
+  where (fileBody, fileExt) = splitExtension $ takeFileName file
 
 
 buildFile actFile opts = do
