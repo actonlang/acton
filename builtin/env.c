@@ -1360,7 +1360,7 @@ void *$eventloop(void *arg) {
         if (EVENT_is_eof(&kev)) {
             $str msg = $Times$str$witness->$class->__add__($Times$str$witness,$getName(fd),to$str(" closed connection\n"));
             if (fd_data[fd].errhandler)
-                fd_data[fd].errhandler->$class ->__call__(fd_data[fd].errhandler,msg);
+                fd_data[fd].errhandler->$class ->__call__(fd_data[fd].errhandler,fd_data[fd].conn,msg);
             else {
                 perror("Remote host closed connection");
                 exit(-1);
@@ -1395,7 +1395,10 @@ void *$eventloop(void *arg) {
                     count = read(fd,&fd_data[fd].buffer,BUF_SIZE);
                     if (count < BUF_SIZE)
                         fd_data[fd].buffer[count] = 0;
-                    fd_data[fd].rhandler->$class->__call__(fd_data[fd].rhandler, fd_data[fd].conn, to$str(fd_data[fd].buffer));
+                    if (fd==STDIN_FILENO)
+                        fd_data[fd].rhandler->$class->__call__(fd_data[fd].rhandler, to$str(fd_data[fd].buffer));
+                    else
+                      fd_data[fd].rhandler->$class->__call__(fd_data[fd].rhandler, fd_data[fd].conn, to$str(fd_data[fd].buffer));
                 } else {
                     fprintf(stderr,"internal error: readhandler/event filter mismatch on descriptor %d\n",fd);
                     exit(-1);
