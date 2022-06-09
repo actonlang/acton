@@ -1,4 +1,4 @@
-actor client(env):
+actor main(env):
 
     def stdout_w(conn,str):
         env.stdout_write(str)

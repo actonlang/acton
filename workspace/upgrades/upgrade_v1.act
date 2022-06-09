@@ -1,0 +1,13 @@
+actor Counter(foo):
+    var a = 0
+    def get():
+        a += 1
+        return "%s: %d" % (foo, a)
+
+actor main(env):
+    var counter = Counter("banana")
+    def _work():
+        msg = counter.get()
+        print(msg)
+        after 1: _work()
+    _work()

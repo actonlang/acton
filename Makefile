@@ -319,9 +319,12 @@ rts: $(ARCHIVES)
 
 .PHONY: test
 test:
-	cd compiler && stack test
+	$(MAKE) test-tasty
 	$(MAKE) -C backend test
 	$(MAKE) -C test
+
+test-tasty:
+	cd compiler && stack test
 
 .PHONY: clean
 clean: clean-compiler clean-distribution clean-backend clean-rts

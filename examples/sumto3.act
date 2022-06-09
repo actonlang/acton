@@ -2,7 +2,7 @@ import numpy
 import math
 
 actor worker():
-    doTask : action (int, int, action (int) ->None) -> None
+    #doTask : action (int, int, action (int) ->None) -> None
     def doTask(m,n,report):
         a = numpy.arange(m,n,1)
         report(numpy.scalar(numpy.sum(a,None)))
