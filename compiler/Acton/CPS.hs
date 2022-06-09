@@ -387,10 +387,13 @@ instance NeedCont Stmt where
     needCont env (MutAssign _ _ e)      = contCall env e
     needCont env (If _ bs els)          = needCont env bs || needCont env els
     needCont env (While _ _ b els)      = needCont env b || needCont env els
+    needCont env (Decl _ ds)            = needCont (define (envOf ds) env) ds
     needCont env (Try _ b hs els fin)   = True
     needCont env _                      = False
 
-
+instance NeedCont Decl where
+    needCont env Class{}                = True
+    needCont env d@Def{}                = contFX (dfx d)
 
 ------------------------------------------------
 ------------------------------------------------
