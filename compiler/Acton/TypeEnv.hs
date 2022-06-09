@@ -28,14 +28,13 @@ import Acton.Unify
 data TypeX                      = TypeX {
                                     context    :: EnvCtx,
                                     indecl     :: Bool,
-                                    forced     :: Bool,
-                                    actdefs    :: [Name] }
+                                    forced     :: Bool }
 
 type Env                        = EnvF TypeX
 
 data EnvCtx                     = CtxTop | CtxDef | CtxAct | CtxClass deriving (Eq,Show)
 
-typeX env0                      = setX env0 TypeX{ context = CtxTop, indecl = False, forced = False, actdefs = [] }
+typeX env0                      = setX env0 TypeX{ context = CtxTop, indecl = False, forced = False }
 
 instance Pretty TypeX where
     pretty _                    = empty
@@ -45,9 +44,7 @@ instance Subst TypeX where
     tyfree x                    = []
 
 
-setInDef env
-  | onTop env                   = modX env $ \x -> x{ context = CtxDef }
-  | otherwise                   = env
+setInDef env                    = modX env $ \x -> x{ context = CtxDef }
 
 setInAct env                    = modX env $ \x -> x{ context = CtxAct }
 
@@ -56,10 +53,6 @@ setInClass env                  = modX env $ \x -> x{ context = CtxClass }
 setInDecl env                   = modX env $ \x -> x{ indecl = True }
 
 useForce env                    = modX env $ \x -> x{ forced = True }
-
-setActDefs te env
-  | inAct env                   = modX env $ \x -> x{ actdefs = [ n | (n,NDef{}) <- te ] ++ actdefs x }
-  | otherwise                   = env
 
 onTop env                       = context (envX env) == CtxTop
 
@@ -72,8 +65,6 @@ inClass env                     = context (envX env) == CtxClass
 inDecl env                      = indecl $ envX env
 
 isForced env                    = forced $ envX env
-
-isActDef n env                  = n `elem` actdefs (envX env)
 
 
 -- Well-formed tycon applications -------------------------------------------------------------------------------------------------

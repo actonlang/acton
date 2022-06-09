@@ -229,7 +229,7 @@ instance (InfEnv a) => InfEnv [a] where
     infEnv env []                       = return ([], [], [])
     infEnv env (s : ss)                 = do (cs1,te1,s1) <- infEnv env s
                                              let te1' = if inDecl env then noDefs te1 else te1      -- TODO: also stop class instantiation!
-                                                 env' = setActDefs te1' $ define te1' env
+                                                 env' = define te1' env
                                              (cs2,te2,ss2) <- infEnv env' ss
                                              return (cs1++cs2, te1++te2, s1:ss2)
 
@@ -318,7 +318,7 @@ instance InfEnv Stmt where
       | inDecl env && nodup ds          = do (cs1,te1,ds1) <- infEnv env ds
                                              return (cs1, te1, Decl l ds1)
       | nodup ds                        = do (cs1,te1,ds1) <- infEnv (setInDecl env) ds
-                                             (cs2,ds2) <- checkEnv (setActDefs te1 $ define te1 env) ds1
+                                             (cs2,ds2) <- checkEnv (define te1 env) ds1
                                              (cs3,te2,eq,ds3) <- genEnv env cs2 te1 ds2
                                              return (cs1++cs3, te2, withLocal (bindWits eq) $ Decl l ds3)
 
@@ -453,14 +453,14 @@ matchDefAssumption env cs def
                                              let t1 = tFun (dfx def) (prowOf $ pos def) (krowOf $ kwd def) (fromJust $ ann def)
                                              (cs2,eq1) <- solveScoped env0 (qbound q0) [] t1 (Cast t1 t2 : cs++cs1)
                                              checkNoEscape env (qbound q0)
-                                             return (cs2, def{ qbinds = noqual env q0, pos = pos0 def, dbody = bindWits (eq0++eq1) ++ dbody def })
+                                             return (cs2, def{ qbinds = noqual env q0, pos = pos0, dbody = bindWits (eq0++eq1) ++ dbody def })
   where NDef (TSchema _ q0 t0) dec      = findName (dname def) env
         t2 | inClass env                = addSelf t0 (Just dec)
            | inAct env                  = case t0 of TFun{} | effect t0 == fxAction -> t0{ effect = fxProc }; _ -> t0
            | otherwise                  = t0
         q1                              = qbinds def
         env0                            = defineTVars q1 $ defineTVars q0 env
-        pos0 def
+        pos0
           | inClass env && dec/=Static  = case pos def of
                                             PosPar nSelf t' e' pos' -> PosPar nSelf t' e' $ qualWPar env q0 pos'
                                             _ -> err1 (dname def) "Missing self parameter"
@@ -707,25 +707,24 @@ infProperties env as b
         infProps self _                 = return []
 
 infDefBody env n (PosPar x _ _ _) b
-  | inClass env && n == initKW          = infInitEnv env x b
+  | inClass env && n == initKW          = infInitEnv (setInDef env) x b
 infDefBody env _ _ b
   | isNotImpl b                         = return ([], b)
-  | otherwise                           = do (cs,_,b') <- infSuiteEnv env b; return (cs, b')
+  | otherwise                           = infSuiteEnv (setInDef env) b
 
 infInitEnv env self (MutAssign l (Dot l' e1@(Var _ (NoQ x)) n) e2 : b)
   | x == self                           = do (cs1,t1,e1') <- infer env e1
                                              t2 <- newTVar
                                              (cs2,e2') <- inferSub env t2 e2
-                                             (cs3,b') <- infInitEnv env self b
+                                             (cs3,te,b') <- infInitEnv env self b
                                              return (Mut t1 n t2 : 
-                                                     cs1++cs2++cs3, MutAssign l (Dot l' e1' n) e2' : b')
+                                                     cs1++cs2++cs3, te, MutAssign l (Dot l' e1' n) e2' : b')
 infInitEnv env self (Expr l e : b)
   | Call{fun=Dot _ (Var _ c) n} <- e,
     isClass env c, n == initKW          = do (cs1,_,e') <- infer env e
-                                             (cs2,b') <- infInitEnv env self b
-                                             return (cs1++cs2, Expr l e' : b')
-infInitEnv env self b                   = do (cs,_,b') <- infSuiteEnv env b
-                                             return (cs, b')
+                                             (cs2,te,b') <- infInitEnv env self b
+                                             return (cs1++cs2, te, Expr l e' : b')
+infInitEnv env self b                   = infSuiteEnv env b
 
 abstractDefs env q eq b                 = map absDef b
   where absDef (Decl l ds)              = Decl l (map absDef' ds)
@@ -740,7 +739,7 @@ abstractDefs env q eq b                 = map absDef b
 
 
 instance Check Decl where
-    checkEnv' env (Def l n q p k a b dec fx)
+    checkEnv env (Def l n q p k a b dec fx)
                                         = do --traceM ("## checkEnv def " ++ prstr n ++ " (q = [" ++ prstrs q ++ "])")
                                              t <- maybe newTVar return a
                                              pushFX fx' t
@@ -749,7 +748,7 @@ instance Check Decl where
                                              wellformed env1 a
                                              (csp,te0,p') <- infEnv env1 p
                                              (csk,te1,k') <- infEnv (define te0 env1) k
-                                             (csb,b') <- infDefBody (define te1 (define te0 env1)) n p' b
+                                             (csb,_,b') <- infDefBody (define te1 (define te0 env1)) n p' b
                                              popFX
                                              let cst = if fallsthru b then [Cast tNone t] else []
                                                  t1 = tFun fx' (prowOf p') (krowOf k') t
@@ -757,16 +756,13 @@ instance Check Decl where
                                              checkNoEscape env tvs
                                              -- At this point, n has the type given by its def annotations.
                                              -- Now check that this type is no less general than its recursion assumption in env.
-                                             (cs2, d) <- matchDefAssumption env cs1 (Def l n q (noDefaultsP p') (noDefaultsK k') (Just t)
-                                                                                     (bindWits eq1 ++ defaultsP p' ++ defaultsK k' ++ b') dec fx')
-                                             if inAct env
-                                                 then return (cs2, [d])
-                                                 else return (cs2, [d])
-      where env1                        = reserve (bound (p,k) ++ bound b \\ stateScope env) $ defineTVars q $ setInDef env
+                                             matchDefAssumption env cs1 (Def l n q (noDefaultsP p') (noDefaultsK k') (Just t)
+                                                                             (bindWits eq1 ++ defaultsP p' ++ defaultsK k' ++ b') dec fx')
+      where env1                        = reserve (bound (p,k) ++ bound b \\ stateScope env) $ defineTVars q env
             tvs                         = qbound q
             fx'                         = if fx == fxAction && inAct env then fxProc else fx
 
-    checkEnv' env (Actor l n q p k b)   = do --traceM ("## checkEnv actor " ++ prstr n)
+    checkEnv env (Actor l n q p k b)   = do --traceM ("## checkEnv actor " ++ prstr n)
                                              pushFX fxProc tNone
                                              wellformed env1 q
                                              (csp,te1,p') <- infEnv env1 p
@@ -778,8 +774,8 @@ instance Check Decl where
                                              (cs1,eq1) <- solveScoped env1 tvs te tNone (csp++csk++csb++cs0)
                                              checkNoEscape env tvs
                                              fvs <- tyfree <$> msubst env
-                                             return (cs1, [Actor l n (noqual env q) (qualWPar env q $ noDefaultsP p') (noDefaultsK k')
-                                                           (bindWits (eq1++eq0) ++ defsigs ++ defaultsP p' ++ defaultsK k' ++ b')])
+                                             return (cs1, (Actor l n (noqual env q) (qualWPar env q $ noDefaultsP p') (noDefaultsK k')
+                                                           (bindWits (eq1++eq0) ++ defsigs ++ defaultsP p' ++ defaultsK k' ++ b')))
       where env1                        = reserve (bound (p,k) ++ bound b) $ defineTVars q $
                                           define [(selfKW, NVar tRef)] $ reserve (statevars b) $ setInAct env
             tvs                         = qbound q
@@ -831,6 +827,9 @@ instance Check Decl where
             n'                          = extensionName (head us) c
             NExt _ _ ps te              = findName n' env
             s                           = [(tvSelf, tCon $ TC n (map tVar $ qbound q))]
+
+    checkEnv' env x                     = do (cs,x') <- checkEnv env x
+                                             return (cs, [x'])
 
 
 instance Check Stmt where
