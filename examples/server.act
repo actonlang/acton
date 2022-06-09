@@ -1,10 +1,17 @@
 actor main(env):
 
+    def stdout_w(conn,str):
+        env.stdout_write(str)
+
+    def echo(conn,str):
+        env.stdout_write(str)
+        conn.write(str)
+        
     def connect_handler(conn):
         print("Got a connection...")
-        conn.on_receive(conn.write, env.stdout_write)
+        conn.on_receive(echo, stdout_w)
 
-    def err_handler():
+    def err_handler(sock):
         print("An error occurred trying to establish listening socket")
         env.exit(1)
 
