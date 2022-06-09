@@ -102,20 +102,11 @@ instance Transform Decl where
       where env1                        = blockscope (bound q) env
 
 
-transCall (Var _ n) [_,_,a,b,c] [TApp _ (Var _ n1) _, e2]
-  | n == primMapFX, n1 == primIdFX      = Just e2
-transCall (Var _ n) [_,_,a,b,c] [Var _ n1, e2]
-  | n == primMapFX, n1 == primLiftFX    = Just $ eCall (tApp (eQVar primLIFT) [a,b,c]) [e2]
 transCall (Dot _ (Var _ n) m) ts [e1,e2]
   | n == primWrapProc,   m == attrWrap  = Just e2
   | n == primWrapAction, m == attrWrap  = Just $ eCall (tApp (eQVar primWRAP) ts) [e1,e2]
   | n == primWrapMut,    m == attrWrap  = Just e2
   | n == primWrapPure,   m == attrWrap  = Just e2
-transCall (Dot _ (Var _ n) m) ts [(TApp _ (Call _ (TApp _ (Var _ x) _) (PosArg e1 PosNil) KwdNil) _)]
-  | n == primWrapProc,   m == attrExec,
-    x == primLIFT                       = Just $ eAsync e1
-  | n == primWrapProc,   m == attrExec,
-    x == primLIFT                       = Just $ eAwait $ eAsync e1
 transCall (Dot _ (Var _ n) m) ts [e1]
   | n == primWrapProc,   m == attrExec  = Just $ eCall (tApp (eQVar primEXEC) ts) [e1]
   | n == primWrapProc,   m == attrEval  = Just e1

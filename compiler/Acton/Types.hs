@@ -656,10 +656,6 @@ infActorEnv env ss                      = do dsigs <- mapM mkNDef (dvars ss \\ d
         mkNVar n                        = do t <- newTVar
                                              return (n, NVar t)
 
-exportActorDefs b                       = sequence [ export n q p k a | Decl _ ds <- b, Def _ n q p k a _ _ _ <- ds, not $ isHidden n, False ]      -- DEACT!
-  where export n q p k a                = do fx <- newTVarOfKind KFX
-                                             return $ Def NoLoc (exportName n) q p k a [sReturn $ Call NoLoc (eVar n) (pArg p) (kArg k)] NoDec fx
-
 matchActorAssumption env n0 p k te      = do --traceM ("## matchActorAssumption " ++ prstr n0)
                                              (cs,eq) <- simplify env te0 tNone [Cast (prowOf p) p0, Cast (krowOf k) k0]
                                              (css,eqs) <- unzip <$> mapM check1 te0
@@ -681,9 +677,7 @@ matchActorAssumption env n0 p k te      = do --traceM ("## matchActorAssumption 
                                              checkNoEscape env (qbound q)
                                              return (cs2, eq)
           where q                       = scbind sc
---                n'                      = exportName n                        -- DEACT!
-                n'                      = n
-                sc                      = case lookup n' te1 of
+                sc                      = case lookup n te1 of
                                              Just (NDef sc _) -> sc
                                              x -> error ("(internal) Lookup of " ++ prstr n ++ " = " ++ show x)
         check1 (n, i)                   = return ([], [])
@@ -767,8 +761,7 @@ instance Check Decl where
                                              wellformed env1 q
                                              (csp,te1,p') <- infEnv env1 p
                                              (csk,te2,k') <- infEnv (define te1 env1) k
-                                             s0 <- Decl NoLoc <$> exportActorDefs b
-                                             (csb,te,b') <- (if stub env then infEnv else infSuiteEnv) (define te2 $ define te1 env1) (b++[s0])
+                                             (csb,te,b') <- (if stub env then infEnv else infSuiteEnv) (define te2 $ define te1 env1) b
                                              (cs0,eq0) <- matchActorAssumption env1 n p' k' (unSig te)
                                              popFX
                                              (cs1,eq1) <- solveScoped env1 tvs te tNone (csp++csk++csb++cs0)
@@ -1005,11 +998,8 @@ instance Infer Expr where
                                             NDef sc d -> do 
                                                 (cs,tvs,t) <- instantiate env sc
                                                 let e = app t (tApp x tvs) $ witsOf cs
-                                                case n of
---                                                  NoQ n' | isActDef n' env -> do                                            -- DEACT!
---                                                    wrapped attrWrap env cs [tActor,t] [eVar selfKW,e]                      -- DEACT!
-                                                  _ ->
-                                                    return (cs, t, e)
+--                                                wrapped attrWrap env cs [tActor,t] [eVar selfKW,e]                      -- DEACT!
+                                                return (cs, t, e)
                                             NClass q _ _ -> do
                                                 (cs0,ts) <- instQBinds env q
                                                 --traceM ("## Instantiating " ++ prstr n)

@@ -588,32 +588,18 @@ sub'                                        :: Env -> Equations -> Name -> Type 
 sub' env eq w t1@TWild{} t2                 = return (idwit env w t1 t2 : eq)
 sub' env eq w t1 t2@TWild{}                 = return (idwit env w t1 t2 : eq)
 
-sub' env eq w t1@(TFX _ fx1) t2@(TFX _ fx2)
-  | Just e <- subFX fx1 fx2                 = return (Eqn w (fxFun t1 t2) e : eq)
-  where subFX FXPure   FXPure               = Just $ idFX FXPure
-        subFX FXPure   FXMut                = Just $ idFX FXMut
-        subFX FXPure   FXProc               = Just $ idFX FXProc
-        subFX FXMut    FXMut                = Just $ idFX FXMut
-        subFX FXMut    FXProc               = Just $ idFX FXProc
-        subFX FXProc   FXProc               = Just $ idFX FXProc
-        subFX FXAction FXAction             = Just $ idFX FXAction
-        subFX FXAction FXProc               = Just $ eQVar primLiftFX
-        subFX _        _                    = Nothing
-        idFX fx                             = tApp (eQVar primIdFX) [tTFX fx]
-
 --                as declared               as called
 --                existing                  expected
 sub' env eq w t1@(TFun _ fx1 p1 k1 t1') t2@(TFun _ fx2 p2 k2 t2')                   -- TODO: implement pos/kwd argument shifting
-                                            = do wx <- newWitness
-                                                 wp <- newWitness
+                                            = do wp <- newWitness
                                                  wk <- newWitness
                                                  wt <- newWitness
-                                                 let e = eLambda [(px0,t1)] (eCall (tApp (eQVar primMapFX) [fx1,fx2,p2,k2,t2']) [eVar wx, e'])
+                                                 let e = eLambda [(px0,t1)] e'
                                                      e' = Lambda l0 (PosSTAR px1 $ Just $ tTupleP p2) (KwdSTAR px2 $ Just $ tTupleK k2) e0 fx1
                                                      e0 = eCall (eVar wt) [Call l0 (eVar px0) (PosStar e1) (KwdStar e2)]
                                                      e1 = eCall (eVar wp) [eVar px1]
                                                      e2 = eCall (eVar wk) [eVar px2]
-                                                     cs = [Sub wx fx1 fx2, Sub wp p2 p1, Sub wk k2 k1, Sub wt t1' t2']
+                                                     cs = [Cast fx1 fx2, Sub wp p2 p1, Sub wk k2 k1, Sub wt t1' t2']
 
                                                  reduce env (Eqn w (wFun t1 t2) e : eq) cs
 
@@ -1050,9 +1036,7 @@ app2nd _ tx e es                        = Lambda NoLoc p' k' (Call NoLoc e (PosA
         (p',k')                         = (pPar pNames p, kPar kNames k)
         PosArg pSelf pArgs              = pArg p'                    
 
-idwit env w t1 t2
-  | kindOf env t1 == KFX                = Eqn w (fxFun t1 t2) (tApp (eQVar primIdFX) [t2])
-  | otherwise                           = Eqn w (wFun t1 t2) (eLambda [(px0,t1)] (eVar px0))
+idwit env w t1 t2                       = Eqn w (wFun t1 t2) (eLambda [(px0,t1)] (eVar px0))
 
 rowFun PRow r1 r2                       = tFun fxPure (posRow (tTupleP r1) posNil) kwdNil (tTupleP r2)
 rowFun KRow r1 r2                       = tFun fxPure (posRow (tTupleK r1) posNil) kwdNil (tTupleK r2)

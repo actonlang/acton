@@ -76,10 +76,6 @@ primISNONE          = gPrim "ISNONE"
 primSKIPRESc        = gPrim "SKIPRESc"
 primSKIPRES         = gPrim "SKIPRES"
 
-primLiftFX          = gPrim "LiftFX"
-primIdFX            = gPrim "IdFX"
-primMapFX           = gPrim "MapFX"
-
 cActor              = TC primActor []
 tActor              = tCon cActor
 tR                  = tCon $ TC primR []
@@ -102,7 +98,6 @@ primWrapPure        = gPrim "wWrapPure"
 
 primWRAP            = gPrim "WRAP"
 primEXEC            = gPrim "EXEC"
-primLIFT            = gPrim "LIFT"
 
 
 primEnv             = [     (noq primASYNCf,        NDef scASYNCf NoDec),
@@ -155,18 +150,13 @@ primEnv             = [     (noq primASYNCf,        NDef scASYNCf NoDec),
                             (noq primSKIPRESc,      NDef scSKIPRESc NoDec),
                             (noq primSKIPRES,       NDef scSKIPRES NoDec),
 
-                            (noq primLiftFX,        NDef scLiftFX NoDec),
-                            (noq primIdFX,          NDef scIdFX NoDec),
-                            (noq primMapFX,         NDef scMapFX NoDec),
-                            
                             (noq primWrapped,       proWrapped),
                             (noq primWrappedC,      clWrapped),
                             (noq primWrapProc,      NVar $ tWrapped fxProc fxProc),
                             (noq primWrapAction,    NVar $ tWrapped fxAction fxProc),
 
                             (noq primWRAP,          NDef scWRAP NoDec),
-                            (noq primEXEC,          NDef scEXEC NoDec),
-                            (noq primLIFT,          NDef scLIFT NoDec)
+                            (noq primEXEC,          NDef scEXEC NoDec)
                       ]
 
 tSequenceListWild   = tCon (TC qnSequence [tList tWild, tWild])
@@ -387,28 +377,6 @@ scSKIPRES           = tSchema [quant x, quant a] tSKIPRES
         x           = TV KFX $ name "X"
         a           = TV KType $ name "A"
 
---  $LiftFX         : (action()->None) -> proc()->None
-scLiftFX            = tSchema [] tLiftFX
-  where tLiftFX     = tFun fxPure (posRow tActFun posNil) kwdNil tProcFun
-        tActFun     = tFun fxAction posNil kwdNil tNone
-        tProcFun    = tFun fxProc posNil kwdNil tNone
-
---  $IdFX           : [X] => (X()->None) -> X()->None
-scIdFX              = tSchema [quant x] tIdFX
-  where tIdFX       = tFun fxPure (posRow tXFun posNil) kwdNil tXFun
-        tXFun       = tFun (tVar x) posNil kwdNil tNone
-        x           = TV KFX $ name "X"
-
---  $MapFX          : [X1,X2,A,B,C] => ((X1()->None)->X2()->None, X1(*A,**B)->C) -> X2(*A,**B)->C
-scMapFX             = tSchema [quant x1, quant x2, quant a, quant b, quant c] tMapFX
-  where tMapFX      = tFun fxPure (posRow (fxFun (tVar x1) (tVar x2)) $ posRow (tRealFun x1) posNil) kwdNil (tRealFun x2)
-        tRealFun x  = tFun (tVar x) (tVar a) (tVar b) (tVar c)
-        x1          = TV KFX $ name "X1"
-        x2          = TV KFX $ name "X2"
-        a           = TV PRow $ name "A"
-        b           = TV KRow $ name "B"
-        c           = TV KType $ name "C"
-
 --  $WRAP           : [A,B,C] => ($Actor, proc(*A,**B)->C) -> action(*A,**B)->C
 scWRAP              = tSchema [quant a, quant b, quant c] tWRAP
   where tWRAP       = tFun0 [tActor, abcFun fxProc] (abcFun fxAction)
@@ -421,14 +389,6 @@ scWRAP              = tSchema [quant a, quant b, quant c] tWRAP
 scEXEC              = tSchema [quant a, quant b, quant c] tEXEC
   where tEXEC       = tFun0 [procFun $ tVar c] (procFun tNone)
         procFun c   = tFun fxProc (tVar a) (tVar b) c
-        a           = TV KType (name "A")
-        b           = TV KType (name "B")
-        c           = TV KType (name "C")
-
---  $LIFT           : [A,B,C] => (action(*A,**B)->C) -> proc(*A,**B)->C
-scLIFT              = tSchema [quant a, quant b, quant c] tLIFT
-  where tLIFT       = tFun0 [abcFun fxAction] (abcFun fxProc)
-        abcFun fx   = tFun fx (tVar a) (tVar b) (tVar c)
         a           = TV KType (name "A")
         b           = TV KType (name "B")
         c           = TV KType (name "C")
