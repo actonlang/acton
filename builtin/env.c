@@ -438,14 +438,14 @@ $l$7lambda $l$7lambda$new($Env p$1, $str p$2) {
     return $tmp;
 }
 struct $l$7lambda$class $l$7lambda$methods;
-$NoneType $l$8lambda$__init__ ($l$8lambda p$self, $Connection __self__, $str s) {
+$NoneType $l$8lambda$__init__ ($l$8lambda p$self, $Connection __self__, $bytes s) {
     p$self->__self__ = __self__;
     p$self->s = s;
     return $None;
 }
 $R $l$8lambda$__call__ ($l$8lambda p$self, $Cont c$cont) {
     $Connection __self__ = p$self->__self__;
-    $str s = p$self->s;
+    $bytes s = p$self->s;
     return __self__->$class->write$local(__self__, s, c$cont);
 }
 void $l$8lambda$__serialize__ ($l$8lambda self, $Serial$state state) {
@@ -465,7 +465,7 @@ $l$8lambda $l$8lambda$__deserialize__ ($l$8lambda self, $Serial$state state) {
     self->s = $step_deserialize(state);
     return self;
 }
-$l$8lambda $l$8lambda$new($Connection p$1, $str p$2) {
+$l$8lambda $l$8lambda$new($Connection p$1, $bytes p$2) {
     $l$8lambda $tmp = malloc(sizeof(struct $l$8lambda));
     $tmp->$class = &$l$8lambda$methods;
     $l$8lambda$methods.__init__($tmp, p$1, p$2);
@@ -917,7 +917,7 @@ $NoneType $Connection$__resume__($Connection self) {
         self->cb_err->$class->__call__(self->cb_err, self);
     return $None;
 }
-$R $Connection$write$local ($Connection __self__, $str s, $Cont c$cont) {
+$R $Connection$write$local ($Connection __self__, $bytes s, $Cont c$cont) {
     memcpy(fd_data[__self__->descriptor].buffer,s->str,s->nbytes+1);
     int chunk_size = s->nbytes > BUF_SIZE ? BUF_SIZE : s->nbytes; 
     int r = write(__self__->descriptor,fd_data[__self__->descriptor].buffer,chunk_size);
@@ -937,7 +937,7 @@ $R $Connection$on_receive$local ($Connection __self__, $function cb1, $function 
     EVENT_add_read(__self__->descriptor);
     return $R_CONT(c$cont, $None);
 }
-$Msg $Connection$write ($Connection __self__, $str s) {
+$Msg $Connection$write ($Connection __self__, $bytes s) {
     return $ASYNC((($Actor)__self__), (($Cont)$l$8lambda$new(__self__, s)));
 }
 $Msg $Connection$close ($Connection __self__) {
@@ -1396,7 +1396,7 @@ void *$eventloop(void *arg) {
                     if (count < BUF_SIZE)
                         fd_data[fd].buffer[count] = 0;
                     if (fd==STDIN_FILENO)
-                        fd_data[fd].rhandler->$class->__call__(fd_data[fd].rhandler, to$str(fd_data[fd].buffer));
+                        fd_data[fd].rhandler->$class->__call__(fd_data[fd].rhandler, to$bytes(fd_data[fd].buffer));
                     else
                       fd_data[fd].rhandler->$class->__call__(fd_data[fd].rhandler, fd_data[fd].conn, to$str(fd_data[fd].buffer));
                 } else {

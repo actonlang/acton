@@ -638,9 +638,9 @@ actor Env (args):
 actor Connection (on_error):
     cb_err = on_error
 
-    write       : action(str) -> None
+    write       : action(bytes) -> None
     close       : action() -> None
-    on_receive  : action(action(Connection, str)->None, action(Connection, str)->None) -> None
+    on_receive  : action(action(Connection, bytes)->None, action(Connection, str)->None) -> None
 
     def write(s): pass
     def close() : pass

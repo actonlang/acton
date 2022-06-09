@@ -2,10 +2,10 @@ actor main(env):
     port = int(env.argv[1])
 
     def recv_handler(conn, msg):
-        if msg == "0":
+        if msg == b"0":
             print("Got a 0, doing noooothing...")
 
-        if msg == "1":
+        if msg == b"1":
             print("Got a 1, I'm happy, exiting...")
             await async env.exit(0)
 
@@ -13,7 +13,7 @@ actor main(env):
         if conn is not None:
             print("Installing on_receive handler...")
             await async conn.on_receive(recv_handler, err_handler)
-            conn.write("GET")
+            conn.write(b"GET")
 
     def err_handler(conn, msg):
         print("Error with our connection occurred, attempting to re-establish connection")

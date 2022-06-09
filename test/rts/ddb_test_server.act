@@ -11,12 +11,12 @@ actor Tester(env, port):
         lsock = init_listen()
 
     def recv_handler(conn, msg):
-        print("RECV", conn, msg)
-        if msg == "GET":
-            conn.write(str(i))
-        if msg == "INC":
+        print("RECV", conn, msg.decode())
+        if msg == b"GET":
+            conn.write(str(i).encode())
+        if msg == b"INC":
             i += 1
-            conn.write("OK")
+            conn.write(b"OK")
 
     def err_handler(conn, msg):
         print("Some error, probably client disconnecting")
