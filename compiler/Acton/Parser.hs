@@ -366,11 +366,11 @@ Prefix sequences are also as in subsection 2.4.1 with the following exceptions
 
 strings :: Parser S.Expr
 strings = addLoc $
-       S.BStrings NoLoc <$> some bytesLiteral
+       S.BStrings NoLoc . concat<$> some bytesLiteral
        <|>
-       S.Strings NoLoc <$> some stringLiteral
+       S.Strings NoLoc . concat <$> some stringLiteral
 
-bytesLiteral, stringLiteral :: Parser String
+bytesLiteral, stringLiteral :: Parser [String]
 bytesLiteral =  plainbytesLiteral <|> rawbytesLiteral <?> "bytes literal"
 stringLiteral = plainstrLiteral <|> rawstrLiteral <?> "string literal"
 
@@ -382,18 +382,34 @@ someTillEsc p esc end = do
     b <- manyTillEsc p esc end
     return $ a : b
 
-stringTempl :: String -> Parser String -> Parser String -> String -> Parser String
-stringTempl q single esc prefix = concat <$> lexeme (string (prefix++q) >> manyTillEsc single esc (string q))
+hexSplit ss = hS ss [] []
+   where hS :: [String] -> [String] -> [String] -> [String]
+   -- first arg: list of short (single-char or escape sequence chunks) produced by manyTillEsc
+   -- second arg: accumulates next piece, until we find a hex escape sequence where the next chunk is a hex digit.
+   -- third arg: accumulates complete pieces (each ending with a hex escape sequences where the next piece starts with a hex digit)
+   -- We need to do this since C allows hex escape sequences with more than two hex digits
+         hS [] ps as = reverse (rev2 ps [] : as) 
+         hS (h@('\\':'x':_):k@[d]:ss) ps as
+           |isHex d = hS (k:ss) [] ((rev2 ps h) : as)
+         hS (s:ss) ps as = hS ss (s:ps) as
+         rev [] ys = ys
+         rev (x:xs) ys = rev xs (x:ys)
+         rev2 [] y = y
+         rev2 (x:xs) ys = rev2 xs (x++ys)
+         isHex c = c `elem` "012346789abcdef"
+         
+stringTempl :: String -> Parser String -> Parser String -> String -> Parser [String]
+stringTempl q single esc prefix = hexSplit <$> lexeme (string (prefix++q) >> manyTillEsc single esc (string q))
    where surround s str     = s ++ str ++ s
 
 newlineEscape =  "" <$ newline
 singleCharEscape =  (\c -> '\\':c:[]) <$> (oneOf ("\'\"abfnrtv"))
 hexEscape = do
       char 'x'
-      (loc,cs) <- withLoc (many hexDigitChar)
+      (loc,cs) <- withLoc (count' 0 2 hexDigitChar)
       if length cs == 2
        then return ("\\x" ++ cs)
-       else failImmediately loc "\"\\x\" must be followed by exactly two hexadecimal digits"
+       else failImmediately loc "\"\\x\" must be followed by two hexadecimal digits"
 octEscape = do
        (loc,cs) <- withLoc (count' 1 3 octDigitChar)
        if length cs == 3 && head cs > '3'
@@ -440,30 +456,6 @@ plainLiteral charParser prefix tailEscapes = stringTempl "\"\"\"" longItem esc p
 plainbytesLiteral = plainLiteral asciiC "b" (unknownEscape asciiC)
 
 plainstrLiteral = plainLiteral anyC "" ( univ1Escape <|> univ2Escape <|> unknownEscape anyC)
-
-
-{-
-plainbytesLiteral = stringTempl "\"\"\"" longItem esc "b"
-                <|> stringTempl "'''" longItem esc "b"
-                <|> stringTempl "\"" asciiC esc "b"
-                <|> stringTempl "'" asciiC esc "b"
-    where longItem = ("\\n" <$ newline) <|> asciiC  -- newlines allowed in triple-quoted literals
-          esc =  newlineEscape <|> singleCharEscape <|> hexEscape <|> octEscape <|> unknownEscape
-          unknownEscape = do
-             (loc,c) <- withLoc asciiC
-             failImmediately loc "unknown escape sequence in bytes literal"
-
-plainstrLiteral = stringTempl "\"\"\"" longItem esc ""
-                <|> stringTempl "'''" longItem esc ""
-                <|> stringTempl "\"" charLit2 esc ""
-                <|> stringTempl "'" charLit2 esc ""
-    where longItem = ("\\n" <$ newline) <|> charLit2
-          charLit2 = ( :[]) <$> anySingle
-          esc =  newlineEscape <|> singleCharEscape <|> hexEscape <|> octEscape <|> univ1Escape <|> univ2Escape <|> unknownEscape
-          unknownEscape = do
-            (loc,c) <- withLoc charLit2
-            failImmediately loc "unknown escape sequence in string literal"
--}
 
 rawLiteral charParser prefix = stringTempl "\"\"\"" longItem esc prefix
               <|> stringTempl "'''" longItem esc prefix
@@ -522,7 +514,7 @@ name = do off <- getOffset
             then parseError  (TrivialError off (Just (Tokens (N.fromList x))) (S.fromList [Label (N.fromList "name (not type variable)")]))
             else return $ S.Name (Loc off (off+length x)) x
 
-escname = name <|> addLoc ((\str -> S.Name NoLoc  (init (tail str))) <$> plainstrLiteral)
+escname = name <|> addLoc (S.Name NoLoc . head <$> plainstrLiteral)  -- Assumes an escname cannot contain hex escape sequences
 
 tvarname = do off <- getOffset
               x <- identifier
@@ -1208,8 +1200,8 @@ atom_expr = do
                         i <- lexeme L.decimal
                         return (\a -> maybe (S.DotI NoLoc a i) (const $ S.RestI NoLoc a i) mb)
                  strdot = do
-                        (p,str) <- withPos plainstrLiteral 
-                        return (\a -> S.Dot NoLoc a (S.Name NoLoc (init(tail str))))
+                        (p,ss) <- withPos plainstrLiteral 
+                        return (\a -> S.Dot NoLoc a (S.Name NoLoc (head ss)))
 
                  bslicelist = (:) <$> bslice <*> commaList bslice
                  tailslice = (,) <$> (colon *> optional expr) <*> (maybe Nothing id <$> optional (colon *> optional expr))

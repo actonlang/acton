@@ -207,12 +207,13 @@ instance Norm Decl where
 
 
 
-catStrings ss                       = '"' : (escape '"' (concat ss)) ++ ['"']
+catStrings ss                       = map (quote . escape '"') ss
   where escape c []                 = []
         escape c ('\\':x:xs)        = '\\' : x : escape c xs
         escape c (x:xs)
           | x == c                  = '\\' : x : escape c xs
           | otherwise               = x : escape c xs
+        quote s                     = '"' : s ++ "\""
 
 
 normInst env ts e                   = norm env e
@@ -232,8 +233,8 @@ instance Norm Expr where
     norm env (None l)               = return $ None l
     norm env (NotImplemented l)     = return $ NotImplemented l
     norm env (Ellipsis l)           = return $ Ellipsis l
-    norm env (Strings l ss)         = return $ Strings l [catStrings ss]
-    norm env (BStrings l ss)        = return $ BStrings l [catStrings ss]
+    norm env (Strings l ss)         = return $ Strings l (catStrings ss)
+    norm env (BStrings l ss)        = return $ BStrings l (catStrings ss)
     norm env (Call l e p k)         = Call l <$> norm env e <*> norm env (joinArg p k) <*> pure KwdNil
     norm env (TApp l e ts)          = TApp l <$> normInst env ts e <*> pure ts
     norm env (Dot l (Var l' x) n)

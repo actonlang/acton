@@ -637,8 +637,8 @@ instance Gen Expr where
     gen env (Bool _ True)           = gen env primTrue
     gen env (Bool _ False)          = gen env primFalse
     gen env (None _)                = gen env primNone
-    gen env e@Strings{}             = gen env primToStr <> parens (genStr env e)
-    gen env e@BStrings{}            = gen env primToBytes <> parens(genStr env e)
+    gen env e@Strings{}             = gen env primToStr <> parens(hsep (map pretty (sval e)))
+    gen env e@BStrings{}            = gen env primToBytes <> parens(hsep (map pretty (sval e)))
     gen env (Call _ e p _)          = genCall env [] e p
     gen env (TApp _ e ts)           = genInst env ts e
     gen env (IsInstance _ e c)      = gen env primISINSTANCE <> parens (gen env e <> comma <+> gen env c)
