@@ -31,6 +31,9 @@ actoncBasicTests =
   [ expectFail $ testCase "create imported actor" $ do
         (returnCode, cmdOut, cmdErr) <- buildProject "test/actonc/regressions/import_actor" "build"
         assertEqual "actonc should return success" ExitSuccess returnCode
+  , expectFail $ testCase "instantiate concrete actor" $ do
+        (returnCode, cmdOut, cmdErr) <- buildProject "test/actonc/regressions/abstract_actor_from_type_signature" "build"
+        assertEqual "actonc should return success" ExitSuccess returnCode
   ]
 
 actoncProjTests =

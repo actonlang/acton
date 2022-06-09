@@ -1,0 +1,12 @@
+
+actor Foo():
+    # actonc will interpret this type signature to mean the actor is abstract - clearly wrong
+    # If we remove the type signature, this program works
+    hello : action() -> None
+    def hello():
+        print("Hello World!")
+
+actor main(env):
+    f = Foo()
+    f.hello()
+    await async env.exit(0)
