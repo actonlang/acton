@@ -1,0 +1,12 @@
+* abstract_actor_from_type_signature
+abstract_actor_from_type_signature is a cool Acton project!
+
+** Compile
+#+BEGIN_SRC shell
+actonc build
+#+END_SRC
+
+** Run
+#+BEGIN_SRC shell
+out/rel/bin/abstract_actor_from_type_signature
+#+END_SRC
