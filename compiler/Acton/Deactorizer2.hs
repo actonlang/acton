@@ -124,8 +124,8 @@ instance Deact Stmt where
 
 instance Deact Decl where
     deact env (Actor l n q params KwdNIL body)
-                                    = do inits' <- deactSuite env2 inits
-                                         decls' <- mapM deactDecl decls
+                                    = do inits' <- deactSuite (define (envOf decls) env1) inits
+                                         decls' <- deactSuite (define (envOf inits) env1) decls
                                          let _init_ = Def l0 initKW [] (addSelfPar $ conv params) KwdNIL (Just tNone) (mkBody $ copies++inits') NoDec fxProc
                                          return $ Class l n (conv q) [TC primActor [], cValue] (propsigs ++ [Decl l0 [_init_]] ++ decls')
       where env1                    = setActor exports stvars (locals++meths) $ define (envOf params) $ define [(selfKW, NVar tSelf)] $ defineTVars q env
@@ -154,14 +154,6 @@ instance Deact Decl where
             props' _                = []
 
             copies                  = [ MutAssign l0 (selfRef n) (Var l0 (NoQ n)) | n <- bound params, n `elem` locals ]
-
-            deactDecl (Decl l ds)   = Decl l <$> mapM deactMeth ds
-
-            deactMeth (Def l n q p KwdNIL (Just t) b d fx)
-                                    = do b' <- deactSuite env3 b
-                                         return $ Def l n q (addSelfPar p) KwdNIL (Just t) b' d fx
-              where env3            = defineAndShadow (envOf p) $ defineTVars q env2
-
 
     deact env (Def l n q p KwdNIL (Just t) b d fx)
                                     = do b <- deactSuite env1 b
@@ -246,6 +238,7 @@ instance Deact Expr where
     deact env (Call l (TApp _ (Var _ n) ts) (PosArg s (PosArg e PosNil)) KwdNil)
       | n == primWRAP,
         isExportMeth env e          = deact env e
+-----------------------------------------------------------------
     deact env (Call l e ps KwdNil)  = Call l <$> deact env e <*> deact env ps <*> pure KwdNil
     deact env (TApp l e ts)         = TApp l <$> deact env e <*> pure ts
     deact env (Cond l e1 e e2)      = Cond l <$> deact env e1 <*> deact env e <*> deact env e2
