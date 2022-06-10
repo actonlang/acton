@@ -25,42 +25,27 @@ main = do
 
 actoncBasicTests =
   testGroup "actonc basic tests"
-  [ expectFail $ testCase "create imported actor" $ do
-        (returnCode, cmdOut, cmdErr) <- buildProject "test/actonc/regressions/import_actor" "build"
-        assertEqual "actonc should return success" ExitSuccess returnCode
-  , expectFail $ testCase "instantiate concrete actor" $ do
-        (returnCode, cmdOut, cmdErr) <- buildProject "test/actonc/regressions/abstract_actor_from_type_signature" "build"
-        assertEqual "actonc should return success" ExitSuccess returnCode
+  [ buildTestCase "test/actonc/regressions/import_actor" "" True ExitSuccess
+  , buildTestCase "test/actonc/regressions/abstract_actor_from_type_signature" "" True ExitSuccess
   ]
 
 actoncProjTests =
   testGroup "actonc project tests"
-  [ testCase "simple project" $ do
-        (returnCode, cmdOut, cmdErr) <- buildProject "test/actonc/project/simple" "build"
-        assertEqual "actonc should return success" ExitSuccess returnCode
-
-  , testCase "with missing src/ dir" $ do
-        (returnCode, cmdOut, cmdErr) <- buildProject "test/actonc/project/missing_src" "build"
-        assertEqual "actonc should error out" (ExitFailure 1) returnCode
-
-  , testCase "qualified --root test.main" $ do
-        (returnCode, cmdOut, cmdErr) <- buildProject "test/actonc/project/qualified_root" "build --root test.main"
-        assertEqual "actonc should return success" ExitSuccess returnCode
-
+  [buildTestCase "test/actonc/project/simple" "" False ExitSuccess
+  , buildTestCase "test/actonc/project/missing_src" "" False (ExitFailure 1)
+  , buildTestCase "test/actonc/project/qualified_root" "--root test.main" False ExitSuccess
   -- after used to avoid races on files in same project dir as above test
-  , after AllFinish "qualified --root test.main" $
+  , after AllFinish "qualified_root" $
     testCase "unqualified --root main" $ do
-        (returnCode, cmdOut, cmdErr) <- buildProject "test/actonc/project/qualified_root" "build --root main"
+        (returnCode, cmdOut, cmdErr) <- buildThing "test/actonc/project/qualified_root" " --root main"
         assertEqual "actonc should error out" (ExitFailure 1) returnCode
         assertEqual "actonc should report error" "actonc: Project build requires a qualified root actor name, like foo.main\n" cmdErr
   ]
 
 actoncRootArgTests =
   testGroup "actonc --root tests"
-  [ testCase "qualified --root test.main" $
-        testBuildFile "test/actonc/root/test.act" "--root test.main" False ExitSuccess
-  , testCase "unqualified --root main" $
-        testBuildFile "test/actonc/root/test.act" "--root main" False ExitSuccess
+  [ buildTestCase "test/actonc/root/test.act" "--root test.main" False ExitSuccess
+  , buildTestCase "test/actonc/root/test.act" "--root main" False ExitSuccess
   ]
 
 
@@ -70,7 +55,7 @@ testFiles name dir fails = do
 
 testFile fails file = do
     let expFail = elem fileBody fails
-    buildTestCase file expFail
+    buildTestCase file "" expFail ExitSuccess
   where (fileBody, fileExt) = splitExtension $ takeFileName file
 
 findActFiles dir = do
@@ -83,38 +68,35 @@ findActFiles dir = do
               _ -> Nothing
           where (fileBody, fileExt) = splitExtension $ takeFileName file
 
-buildTestCase file True =
-    expectFail $ fileTestCase file True ExitSuccess
-buildTestCase file False =
-    fileTestCase file False ExitSuccess
+buildTestCase thing opts True expRet =
+    expectFail $ thingTestCase thing opts True expRet
+buildTestCase thing opts False expRet =
+    thingTestCase thing opts False expRet
 
-fileTestCase file expFail expRet =
+-- TODO: thingify, it is probably file specific now
+thingTestCase thing opts expFail expRet =
     testCase fileBody $ do
-        testBuildFile file "" expFail expRet
-  where (fileBody, fileExt) = splitExtension $ takeFileName file
+        testBuildThing thing opts expFail expRet
+  where (fileBody, fileExt) = splitExtension $ takeFileName thing
 
-
-testBuildFile file opts expFail expRet = do
-    (returnCode, cmdOut, cmdErr) <- buildFile file opts
+testBuildThing thing opts expFail expRet = do
+    (returnCode, cmdOut, cmdErr) <- buildThing thing opts
     iff (expFail == False && returnCode /= expRet) (
         putStrLn("\nERROR: actonc return code (" ++ (show returnCode) ++ ") not as expected (" ++ (show expRet) ++ ")\nSTDOUT:\n" ++ cmdOut ++ "STDERR:\n" ++ cmdErr)
         )
     assertEqual ("actonc should return " ++ (show expRet)) expRet returnCode
 
 
-buildFile actFile opts = do
-    wd <- canonicalizePath actFile
+buildThing thing opts = do
     actonc <- canonicalizePath "../dist/bin/actonc"
-    let actCmd    = (id actonc) ++ " " ++ wd ++ " " ++ opts
-    (returnCode, cmdOut, cmdErr) <- readCreateProcessWithExitCode (shell $ actCmd) ""
-    return (returnCode, cmdOut, cmdErr)
-
-buildProject projPath cmd = do
-    wd <- canonicalizePath projPath
-    actonc <- canonicalizePath "../dist/bin/actonc"
-    let actCmd    = (id actonc) ++ " " ++ cmd
+    proj <- doesDirectoryExist thing
+    projPath <- canonicalizePath thing
+    curDir <- getCurrentDirectory
+    let wd = if proj then projPath else curDir
+    let actCmd    = (id actonc) ++ " " ++ if proj then "build " ++ opts else thing ++ " " ++ opts
     (returnCode, cmdOut, cmdErr) <- readCreateProcessWithExitCode (shell $ actCmd){ cwd = Just wd } ""
     return (returnCode, cmdOut, cmdErr)
+
 
 iff True m                      = m >> return ()
 iff False _                     = return ()
