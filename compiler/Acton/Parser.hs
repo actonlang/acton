@@ -403,7 +403,7 @@ stringTempl q single esc prefix = hexSplit <$> lexeme (string (prefix++q) >> man
    where surround s str     = s ++ str ++ s
 
 newlineEscape =  "" <$ newline
-singleCharEscape =  (\c -> '\\':c:[]) <$> (oneOf ("\'\"abfnrtv"))
+singleCharEscape =  (\c -> '\\':c:[]) <$> (oneOf ("\'\"\\abfnrtv"))
 hexEscape = do
       char 'x'
       (loc,cs) <- withLoc (count' 0 2 hexDigitChar)
@@ -444,7 +444,7 @@ anyC  = do
 
 unknownEscape charParser = do
          (loc,c) <- withLoc charParser
-         failImmediately loc "unknown escape sequence in bytes literal"
+         failImmediately loc "unknown escape sequence in string/bytes literal"
              
 plainLiteral charParser prefix tailEscapes = stringTempl "\"\"\"" longItem esc prefix
                                           <|> stringTempl "'''" longItem esc prefix
