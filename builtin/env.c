@@ -1396,9 +1396,9 @@ void *$eventloop(void *arg) {
                     if (count < BUF_SIZE)
                         fd_data[fd].buffer[count] = 0;
                     if (fd==STDIN_FILENO)
-                        fd_data[fd].rhandler->$class->__call__(fd_data[fd].rhandler, to$bytes(fd_data[fd].buffer));
+                        fd_data[fd].rhandler->$class->__call__(fd_data[fd].rhandler, to$str(fd_data[fd].buffer));
                     else
-                      fd_data[fd].rhandler->$class->__call__(fd_data[fd].rhandler, fd_data[fd].conn, to$str(fd_data[fd].buffer));
+                      fd_data[fd].rhandler->$class->__call__(fd_data[fd].rhandler, fd_data[fd].conn, to$bytes(fd_data[fd].buffer));
                 } else {
                     fprintf(stderr,"internal error: readhandler/event filter mismatch on descriptor %d\n",fd);
                     exit(-1);
