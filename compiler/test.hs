@@ -15,7 +15,7 @@ import Test.Tasty.HUnit
 
 
 main = do
-    exampleTests <- testFiles "Examples" "../examples" []
+    exampleTests <- createTests "Examples" "../examples" [] (testBuild "" False ExitSuccess)
     defaultMain $ testGroup "Tests" $
       [ actoncBasicTests
       , actoncProjTests
@@ -25,15 +25,21 @@ main = do
 
 actoncBasicTests =
   testGroup "actonc basic tests"
-  [ buildTestCase "test/actonc/regressions/import_actor" "" True ExitSuccess
-  , buildTestCase "test/actonc/regressions/abstract_actor_from_type_signature" "" True ExitSuccess
+  [ failWrap (testBuild "" True ExitSuccess) "test/actonc/regressions/import_actor" True
+  , failWrap (testBuild "" True ExitSuccess) "test/actonc/regressions/abstract_actor_from_type_signature" True
   ]
 
 actoncProjTests =
   testGroup "actonc project tests"
-  [buildTestCase "test/actonc/project/simple" "" False ExitSuccess
-  , buildTestCase "test/actonc/project/missing_src" "" False (ExitFailure 1)
-  , buildTestCase "test/actonc/project/qualified_root" "--root test.main" False ExitSuccess
+  [ testCase "simple project" $ do
+        testBuild "" False ExitSuccess "test/actonc/project/simple"
+
+  , testCase "with missing src/ dir" $ do
+        testBuild "" False (ExitFailure 1) "test/actonc/project/missing_src"
+
+  , testCase "qualified --root test.main" $ do
+        testBuild "build --root test.main" False ExitSuccess "test/actonc/project/qualified_root"
+
   -- after used to avoid races on files in same project dir as above test
   , after AllFinish "qualified_root" $
     testCase "unqualified --root main" $ do
@@ -44,23 +50,29 @@ actoncProjTests =
 
 actoncRootArgTests =
   testGroup "actonc --root tests"
-  [ buildTestCase "test/actonc/root/test.act" "--root test.main" False ExitSuccess
-  , buildTestCase "test/actonc/root/test.act" "--root main" False ExitSuccess
+  [ testCase "qualified --root test.main" $
+        testBuild "--root test.main" False ExitSuccess "test/actonc/root/test.act"
+  , testCase "unqualified --root main" $
+        testBuild "--root main" False ExitSuccess "test/actonc/root/test.act"
   ]
 
 
-testFiles name dir fails = do
-    actFiles <- findActFiles dir
-    return $ testGroup name $ map (testFile fails) actFiles
 
-testFile fails file = do
+-- Creates testgroup from .act files found in specified directory
+--createTests :: String -> String -> List -> TestTree
+createTests name dir fails testFunc = do
+    actFiles <- findActFiles dir
+    return $ testGroup name $ map (createTest fails testFunc) actFiles
+
+createTest fails testFunc file = do
     let expFail = elem fileBody fails
-    buildTestCase file "" expFail ExitSuccess
+    failWrap testFunc file expFail
   where (fileBody, fileExt) = splitExtension $ takeFileName file
 
 findActFiles dir = do
                     allFiles <- getFilesRecursive dir
-                    let srcFiles = catMaybes $ map filterActFile allFiles
+                    let allFilesAbs = map (dir ++) allFiles
+                        srcFiles = catMaybes $ map filterActFile allFiles
                     return srcFiles
   where filterActFile file =
           case fileExt of
@@ -68,10 +80,34 @@ findActFiles dir = do
               _ -> Nothing
           where (fileBody, fileExt) = splitExtension $ takeFileName file
 
-buildTestCase thing opts True expRet =
-    expectFail $ thingTestCase thing opts True expRet
-buildTestCase thing opts False expRet =
-    thingTestCase thing opts False expRet
+failWrap testFunc thing True =
+    expectFail $ testWrap testFunc thing
+failWrap testFunc thing False =
+    testWrap testFunc thing
+
+testWrap testFunc thing =
+    testCase fileBody $ testFunc thing
+  where (fileBody, fileExt) = splitExtension $ takeFileName thing
+
+-- Actual test functions
+-- expRet refers to the return code of actonc
+testBuild opts expFail expRet thing = do
+    testBuildThing thing opts expFail expRet
+
+-- expFail & expRet refers to the acton program, we always assume compilation
+-- with actonc succeeds
+testBuildAndRun opts expFail expRet thing = do
+    testBuildThing thing opts False ExitSuccess
+    wd <- canonicalizePath $ takeDirectory thing
+    let cmd = "./" ++ fileBody
+    (returnCode, cmdOut, cmdErr) <- readCreateProcessWithExitCode (shell $ cmd){ cwd = Just wd } ""
+    iff (expFail == False && returnCode /= expRet) (
+        putStrLn("\nERROR: application return code (" ++ (show returnCode) ++ ") not as expected (" ++ (show expRet) ++ ")\nSTDOUT:\n" ++ cmdOut ++ "STDERR:\n" ++ cmdErr)
+        )
+    assertEqual ("application should return " ++ (show expRet)) expRet returnCode
+  where (fileBody, fileExt) = splitExtension $ takeFileName thing
+
+
 
 -- TODO: thingify, it is probably file specific now
 thingTestCase thing opts expFail expRet =
