@@ -1,41 +1,4 @@
 actor main(env):
-   print(
-r"""
-This text describes plain/raw string/bytes literals as currently implemented (mid-June 2022).  
-
-Literal syntax is as in subsections 2.4.1 and 2.4.2 in the Python Language Reference, version 3.10.4, 
-except that only the following prefixes are allowed:
-- no prefix: plain string literal
-- prefix 'b': plain bytes literal
-- prefix 'r': raw string literal
-- prefix 'rb': raw bytes literal. 
-
-Thus we disallow
-- upper case versions of the above prefixes, for no particular reason other than the opinion that it is not an 
-  unreasonable burden on the programmer to have to stick to lower case prefixes. 
-- the prefix 'br' (synonymous with 'rb') for similar reasons. Thus we form a raw literal by prefixing a plain 
-  literal with 'r'.
-- the 'u' prefix which only exists in Python for legacy reasons.
-- the 'f' prefix for formatted string literals; a version of these is instead supported in Acton
-  using the % operator in the print statement.
-
-Escape sequences are also as in subsection 2.4.1 with the following exceptions:
-- unrecognized escape sequences (like \p or \z or any other sequence not listed in the table of 2.4.1)
-  are disallowed (unlike Python where they are allowed, but the language reference declares that they will
-  become illegal in a future Python version). It is also good from an implementation standpoint to disallow
-  them since Python and C treat them differently.
-- universal character names \uxxxx and \Uxxxxxxxx are unrecognized (and thus disallowed) in bytes literals.
- 
-  This entire text is a triple-quoted raw string, which means that we do not have to worry about escape 
-  sequences and can just type the string as it is read.
-
-  Below follows a few examples of unicode text strings and their encodings as bytes strings. To understand them, 
-  look at the Acton source code. Note that we can encode() a string to a bytes object and decode() it back to a 
-  (UTF-8) string. Note also that the first example, "\x48ello, world", has to be split in the C code to 
-  to$str("\x48" "ello, world"); since C allows arbitrarily many hex digits in a \x escape sequence.
-
-  End of triple-quoted string. 
-""")
    s = "\x48ello, world"
    print(s)
    limdef = "\u2200 \u03b5>0 \u2203 \u03b4>0 . |x - a| < \u03b4 \u21d2 |f(x) - c| < \u03b5."
