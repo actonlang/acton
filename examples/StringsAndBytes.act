@@ -1,0 +1,7 @@
+actor main(env):
+
+   s = "\x48ello, world"
+   print(s)
+
+   env.exit(0)
+

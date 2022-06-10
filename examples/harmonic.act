@@ -1,27 +1,13 @@
 import numpy as np
-import math
 
 def harmonic(n):
-    sum = 0
-    for i in range(1,n+1,1):
-        sum += 1/i
-    return sum
-
-def harmonic2(n):
     return np.sum(1/np.arange(1,n+1,1),0)
 
+def interact(input):
+    n = int(input.strip("\n"))
+    print(harmonic(n))
     
 actor main(env):
-    response : action(str) -> None
-    def response(input):
-        n = int(input.strip("\n"))
-        print(n)
-        print(harmonic(n))
-        print(harmonic2(n))
-
-    env.stdin_install(response)
-#    n = int(env.argv[1])
-#    print(harmonic(n))
-#    print(harmonic2(n))
+    env.stdin_install(interact)
     
     
