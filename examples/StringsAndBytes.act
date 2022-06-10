@@ -2,15 +2,6 @@ actor main(env):
 
    s = "\x48ello, world"
    print(s)
-   limdef = "\u2200 \u03b5>0 \u2203 \u03b4>0 . |x - a| < \u03b4 \u21d2 |f(x) - c| < \u03b5."
-   print(limdef)
-   
-   limdef2 = "∀ ε>0 ∃ δ>0 . |x - a| < δ ⇒ |f(x) - c| < ε."
-   print(limdef2==limdef)
-
-   blimdef = limdef.encode()
-   print(blimdef)
-   print(blimdef.decode())
 
    env.exit(0)
 
