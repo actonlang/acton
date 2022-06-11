@@ -9,13 +9,9 @@ TESTS= \
 	test_random \
 	test_time \
 	rts_sleep \
-	regression \
 	stdlib/test_numpy
 test:
 	$(MAKE) $(TESTS)
-
-regression:
-	$(MAKE) -C regression
 
 
 ENV_TESTS=env/listen_err
@@ -119,4 +115,4 @@ stdlib/test_numpy: stdlib/test_numpy.act
 	$(ACTONC) --root main $<
 	./$@
 
-.PHONY: test_acton_rts_sleep test_async test_random test_time regression rts_sleep
+.PHONY: test_acton_rts_sleep test_async test_random test_time rts_sleep
