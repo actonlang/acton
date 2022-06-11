@@ -115,4 +115,4 @@ stdlib/test_numpy: stdlib/test_numpy.act
 	$(ACTONC) --root main $<
 	./$@
 
-.PHONY: test_acton_rts_sleep test_async test_random test_time regression rts_sleep
+.PHONY: test_acton_rts_sleep test_async test_random test_time rts_sleep
