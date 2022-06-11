@@ -17,12 +17,14 @@ import Test.Tasty.HUnit
 main = do
     exampleTests <- createTests "Examples" "../examples" False [] (testBuild "" False ExitSuccess)
     regressionTests <- createTests "Regression (should succeed)" "../test/regression" False [] (testBuildAndRun "--root main" False ExitSuccess)
+    regressionBuildFailureTests <- createTests "Regression build failures" "../test/regression_build" True [] (testBuild "" True ExitSuccess)
     defaultMain $ testGroup "Tests" $
       [ actoncBasicTests
       , actoncProjTests
       , actoncRootArgTests
       , exampleTests
       , regressionTests
+      , regressionBuildFailureTests
       ]
 
 actoncBasicTests =
