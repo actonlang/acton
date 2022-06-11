@@ -9,13 +9,9 @@ TESTS= \
 	test_random \
 	test_time \
 	rts_sleep \
-	regression \
 	stdlib/test_numpy
 test:
 	$(MAKE) $(TESTS)
-
-regression:
-	$(MAKE) -C regression
 
 
 ENV_TESTS=env/listen_err

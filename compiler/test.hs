@@ -21,7 +21,8 @@ main = do
     regressionRunFailureTests <- createTests "Regression run time failures" "../test/regression_run" True [] (testBuildAndRun "--root main" ExitSuccess)
     regressionSegfaultTests <- createTests "Regression segfaults" "../test/regression_segfault" True [] (testBuildAndRun "--root main" ExitSuccess)
     defaultMain $ testGroup "Tests" $
-      [ actoncProjTests
+      [ coreLangTests
+      , actoncProjTests
       , actoncRootArgTests
       , exampleTests
       , regressionTests
@@ -29,6 +30,15 @@ main = do
       , regressionRunFailureTests
       , regressionSegfaultTests
       ]
+
+coreLangTests =
+  testGroup "core language"
+  [
+    testCase "async context" $ do
+        (returnCode, cmdOut, cmdErr) <- buildAndRun "--root main" "../test/core/async-context.act"
+        assertEqual "should compile" ExitSuccess returnCode
+        assertEqual "should see 2 pongs" "pong\npong\n" cmdOut
+  ]
 
 actoncProjTests =
   testGroup "actonc project tests"
@@ -113,16 +123,23 @@ testBuild opts expRet expFail thing = do
 -- with actonc succeeds
 testBuildAndRun opts expRet expFail thing = do
     testBuildThing opts ExitSuccess False thing
-    wd <- canonicalizePath $ takeDirectory thing
-    let cmd = "./" ++ fileBody
-    (returnCode, cmdOut, cmdErr) <- readCreateProcessWithExitCode (shell $ cmd){ cwd = Just wd } ""
+    (returnCode, cmdOut, cmdErr) <- runThing thing
     iff (expFail == False && returnCode /= expRet) (
         putStrLn("\nERROR: application return code (" ++ (show returnCode) ++ ") not as expected (" ++ (show expRet) ++ ")\nSTDOUT:\n" ++ cmdOut ++ "STDERR:\n" ++ cmdErr)
         )
     assertEqual ("application should return " ++ (show expRet)) expRet returnCode
+
+buildAndRun opts thing = do
+    buildThing opts thing
+    (returnCode, cmdOut, cmdErr) <- runThing thing
+    return (returnCode, cmdOut, cmdErr)
+
+runThing thing = do
+    wd <- canonicalizePath $ takeDirectory thing
+    let cmd = "./" ++ fileBody
+    (returnCode, cmdOut, cmdErr) <- readCreateProcessWithExitCode (shell $ cmd){ cwd = Just wd } ""
+    return (returnCode, cmdOut, cmdErr)
   where (fileBody, fileExt) = splitExtension $ takeFileName thing
-
-
 
 -- TODO: thingify, it is probably file specific now
 thingTestCase thing opts expRet expFail =
