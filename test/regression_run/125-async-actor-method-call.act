@@ -12,12 +12,12 @@ actor main(env):
         t1 = time.time()
         # this is not an assignment, so sleep() should run async and thus take
         # like 0 time
-        s1.sleep(1)
-        s2.sleep(1)
+        s1.sleep(0.1)
+        s2.sleep(0.1)
         t2 = time.time()
         diff = (t2-t1)
         print(diff)
-        if diff > 0.5:
+        if diff > 0.1:
             print("Diff (", diff, ") is larger than expected")
             await async env.exit(1)
 
