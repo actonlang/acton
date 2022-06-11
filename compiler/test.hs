@@ -15,8 +15,8 @@ import Test.Tasty.HUnit
 
 
 main = do
-    exampleTests <- createTests "Examples" "../examples" [] (testBuild "" False ExitSuccess)
-    regressionTests <- createTests "Regression (should succeed)" "../test/regression" [] (testBuildAndRun "--root main" False ExitSuccess)
+    exampleTests <- createTests "Examples" "../examples" False [] (testBuild "" False ExitSuccess)
+    regressionTests <- createTests "Regression (should succeed)" "../test/regression" False [] (testBuildAndRun "--root main" False ExitSuccess)
     defaultMain $ testGroup "Tests" $
       [ actoncBasicTests
       , actoncProjTests
@@ -62,12 +62,15 @@ actoncRootArgTests =
 
 -- Creates testgroup from .act files found in specified directory
 --createTests :: String -> String -> List -> TestTree
-createTests name dir fails testFunc = do
+createTests name dir allExpFail fails testFunc = do
     actFiles <- findActFiles dir
-    return $ testGroup name $ map (createTest fails testFunc) actFiles
+    return $ testGroup name $ map (createTest allExpFail fails testFunc) actFiles
 
-createTest fails testFunc file = do
-    let expFail = elem fileBody fails
+createTest allExpFail fails testFunc file = do
+    let fileExpFail = elem fileBody fails
+        expFail = if fileExpFail == True
+                    then fileExpFail
+                    else allExpFail
     failWrap testFunc file expFail
   where (fileBody, fileExt) = splitExtension $ takeFileName file
 
