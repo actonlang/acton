@@ -47,7 +47,7 @@ actoncProjTests =
   -- after used to avoid races on files in same project dir as above test
   , after AllFinish "qualified_root" $
     testCase "unqualified --root main" $ do
-        (returnCode, cmdOut, cmdErr) <- buildThing "test/actonc/project/qualified_root" " --root main"
+        (returnCode, cmdOut, cmdErr) <- buildThing "--root main" "test/actonc/project/qualified_root"
         assertEqual "actonc should error out" (ExitFailure 1) returnCode
         assertEqual "actonc should report error" "actonc: Project build requires a qualified root actor name, like foo.main\n" cmdErr
   ]
@@ -99,12 +99,12 @@ testWrap testFunc thing =
 -- Actual test functions
 -- expRet refers to the return code of actonc
 testBuild opts expRet expFail thing = do
-    testBuildThing thing opts expRet expFail
+    testBuildThing opts expRet expFail thing
 
 -- expFail & expRet refers to the acton program, we always assume compilation
 -- with actonc succeeds
 testBuildAndRun opts expRet expFail thing = do
-    testBuildThing thing opts ExitSuccess False
+    testBuildThing opts ExitSuccess False thing
     wd <- canonicalizePath $ takeDirectory thing
     let cmd = "./" ++ fileBody
     (returnCode, cmdOut, cmdErr) <- readCreateProcessWithExitCode (shell $ cmd){ cwd = Just wd } ""
@@ -119,18 +119,18 @@ testBuildAndRun opts expRet expFail thing = do
 -- TODO: thingify, it is probably file specific now
 thingTestCase thing opts expRet expFail =
     testCase fileBody $ do
-        testBuildThing thing opts expRet expFail
+        testBuildThing opts expRet expFail thing
   where (fileBody, fileExt) = splitExtension $ takeFileName thing
 
-testBuildThing thing opts expRet expFail = do
-    (returnCode, cmdOut, cmdErr) <- buildThing thing opts
+testBuildThing opts expRet expFail thing = do
+    (returnCode, cmdOut, cmdErr) <- buildThing opts thing
     iff (expFail == False && returnCode /= expRet) (
         putStrLn("\nERROR: actonc return code (" ++ (show returnCode) ++ ") not as expected (" ++ (show expRet) ++ ")\nSTDOUT:\n" ++ cmdOut ++ "STDERR:\n" ++ cmdErr)
         )
     assertEqual ("actonc should return " ++ (show expRet)) expRet returnCode
 
 
-buildThing thing opts = do
+buildThing opts thing = do
     actonc <- canonicalizePath "../dist/bin/actonc"
     proj <- doesDirectoryExist thing
     projPath <- canonicalizePath thing
