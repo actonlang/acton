@@ -15,13 +15,15 @@ import Test.Tasty.HUnit
 
 
 main = do
+    builtinsAutoTests <- createTests "Builtins auto" "../test/builtins_auto" False [] (testBuildAndRun "--root main" ExitSuccess)
     exampleTests <- createTests "Examples" "../examples" False [] (testBuild "" ExitSuccess)
     regressionTests <- createTests "Regression (should succeed)" "../test/regression" False [] (testBuildAndRun "--root main" ExitSuccess)
     regressionBuildFailureTests <- createTests "Regression build failures" "../test/regression_build" True [] (testBuild "" ExitSuccess)
     regressionRunFailureTests <- createTests "Regression run time failures" "../test/regression_run" True [] (testBuildAndRun "--root main" ExitSuccess)
     regressionSegfaultTests <- createTests "Regression segfaults" "../test/regression_segfault" True [] (testBuildAndRun "--root main" ExitSuccess)
     defaultMain $ testGroup "Tests" $
-      [ coreLangTests
+      [ builtinsAutoTests
+      , coreLangTests
       , actoncProjTests
       , actoncRootArgTests
       , exampleTests
