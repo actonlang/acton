@@ -69,7 +69,7 @@ actoncRootArgTests =
 -- Creates testgroup from .act files found in specified directory
 --createTests :: String -> String -> List -> TestTree
 createTests name dir allExpFail fails testFunc = do
-    actFiles <- findActFiles dir
+    actFiles <- findThings dir
     return $ testGroup name $ map (createTest allExpFail fails (testFunc allExpFail)) actFiles
 
 createTest allExpFail fails testFunc file = do
@@ -80,16 +80,27 @@ createTest allExpFail fails testFunc file = do
     failWrap testFunc file expFail
   where (fileBody, fileExt) = splitExtension $ takeFileName file
 
-findActFiles dir = do
-                    allFiles <- getFilesRecursive dir
-                    let allFilesAbs = map (dir ++) allFiles
-                        srcFiles = catMaybes $ map filterActFile allFiles
-                    return srcFiles
+findThings dir = do
+    items <- listDirectory dir
+    let absItems = map ((dir ++ "/") ++) items
+        actFiles = catMaybes $ map filterActFile absItems
+    projDirs <- catMaybes <$> mapM isActProj absItems
+    return $ actFiles ++ projDirs
   where filterActFile file =
           case fileExt of
               ".act" -> Just file
               _ -> Nothing
           where (fileBody, fileExt) = splitExtension $ takeFileName file
+
+isActProj dir = do
+    isDir <- doesDirectoryExist dir
+    if isDir
+      then do
+          isProj <- doesFileExist $ dir ++ "/Acton.toml"
+          if isProj
+            then return $ Just dir
+            else return Nothing
+      else return Nothing
 
 failWrap testFunc thing True =
     expectFail $ testWrap testFunc thing
