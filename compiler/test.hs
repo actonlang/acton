@@ -16,6 +16,7 @@ import Test.Tasty.HUnit
 
 main = do
     builtinsAutoTests <- createTests "Builtins auto" "../test/builtins_auto" False [] (testBuildAndRun "--root main" ExitSuccess)
+    coreAutoTests <- createTests "Core language (auto)" "../test/core_auto" False [] (testBuildAndRun "--root main" ExitSuccess)
     exampleTests <- createTests "Examples" "../examples" False [] (testBuild "" ExitSuccess)
     regressionTests <- createTests "Regression (should succeed)" "../test/regression" False [] (testBuildAndRun "--root main" ExitSuccess)
     regressionBuildFailureTests <- createTests "Regression build failures" "../test/regression_build" True [] (testBuild "" ExitSuccess)
@@ -23,6 +24,7 @@ main = do
     regressionSegfaultTests <- createTests "Regression segfaults" "../test/regression_segfault" True [] (testBuildAndRun "--root main" ExitSuccess)
     defaultMain $ testGroup "Tests" $
       [ builtinsAutoTests
+      , coreAutoTests
       , coreLangTests
       , actoncProjTests
       , actoncRootArgTests
@@ -34,7 +36,7 @@ main = do
       ]
 
 coreLangTests =
-  testGroup "core language"
+  testGroup "Core language"
   [
     testCase "async context" $ do
         (returnCode, cmdOut, cmdErr) <- buildAndRun "--root main" "../test/core/async-context.act"
