@@ -1094,7 +1094,7 @@ instance Infer Expr where
                                                             t' = subst [(tvSelf,t0)] t{ restype = tSelf }
                                                         return (cs0++cs1, t', app t' (tApp x (ts++tvs)) $ witsOf (cs0++cs1))
                                             NAct q p k _ -> do
-                                                when (abstractActor env n) (err1 n "Abstract actor cannot be instantiated:")
+--                                                when (abstractActor env n) (err1 n "Abstract actor cannot be instantiated:")
                                                 (cs,tvs,t) <- instantiate env (tSchema q (tFun fxAction p k (tCon0 (unalias env n) q)))
                                                 return (cs, t, app t (tApp x tvs) $ witsOf cs)
                                             NSig _ _ -> nameReserved n
