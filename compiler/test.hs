@@ -15,13 +15,17 @@ import Test.Tasty.HUnit
 
 
 main = do
+    builtinsAutoTests <- createTests "Builtins auto" "../test/builtins_auto" False [] (testBuildAndRun "--root main" ExitSuccess)
+    coreAutoTests <- createTests "Core language (auto)" "../test/core_auto" False [] (testBuildAndRun "--root main" ExitSuccess)
     exampleTests <- createTests "Examples" "../examples" False [] (testBuild "" ExitSuccess)
     regressionTests <- createTests "Regression (should succeed)" "../test/regression" False [] (testBuildAndRun "--root main" ExitSuccess)
     regressionBuildFailureTests <- createTests "Regression build failures" "../test/regression_build" True [] (testBuild "" ExitSuccess)
     regressionRunFailureTests <- createTests "Regression run time failures" "../test/regression_run" True [] (testBuildAndRun "--root main" ExitSuccess)
     regressionSegfaultTests <- createTests "Regression segfaults" "../test/regression_segfault" True [] (testBuildAndRun "--root main" ExitSuccess)
     defaultMain $ testGroup "Tests" $
-      [ coreLangTests
+      [ builtinsAutoTests
+      , coreAutoTests
+      , coreLangTests
       , actoncProjTests
       , actoncRootArgTests
       , exampleTests
@@ -32,7 +36,7 @@ main = do
       ]
 
 coreLangTests =
-  testGroup "core language"
+  testGroup "Core language"
   [
     testCase "async context" $ do
         (returnCode, cmdOut, cmdErr) <- buildAndRun "--root main" "../test/core/async-context.act"
@@ -73,14 +77,14 @@ actoncRootArgTests =
 --createTests :: String -> String -> List -> TestTree
 createTests name dir allExpFail fails testFunc = do
     actFiles <- findThings dir
-    return $ testGroup name $ map (createTest allExpFail fails (testFunc allExpFail)) actFiles
+    return $ testGroup name $ map (createTest allExpFail fails testFunc) actFiles
 
 createTest allExpFail fails testFunc file = do
     let fileExpFail = elem fileBody fails
         expFail = if fileExpFail == True
                     then fileExpFail
                     else allExpFail
-    failWrap testFunc file expFail
+    failWrap (testFunc expFail) file expFail
   where (fileBody, fileExt) = splitExtension $ takeFileName file
 
 findThings dir = do
@@ -150,7 +154,7 @@ thingTestCase thing opts expRet expFail =
 testBuildThing opts expRet expFail thing = do
     (returnCode, cmdOut, cmdErr) <- buildThing opts thing
     iff (expFail == False && returnCode /= expRet) (
-        putStrLn("\nERROR: actonc return code (" ++ (show returnCode) ++ ") not as expected (" ++ (show expRet) ++ ")\nSTDOUT:\n" ++ cmdOut ++ "STDERR:\n" ++ cmdErr)
+        putStrLn("\nERROR: when building " ++ thing ++ ", actonc returned code (" ++ (show returnCode) ++ ") not as expected (" ++ (show expRet) ++ ")\nSTDOUT:\n" ++ cmdOut ++ "STDERR:\n" ++ cmdErr)
         )
     assertEqual ("actonc should return " ++ (show expRet)) expRet returnCode
 

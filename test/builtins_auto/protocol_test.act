@@ -1,0 +1,18 @@
+def concat(seq, zero):
+    print("rtail workaround")
+    res = zero
+    for s in seq:
+        res += s
+    return res
+
+actor main(env):
+    var lst = []
+    for i in range(1,10,1):
+        lst.append(list(range(i,2*i,1)))
+        
+    lst2 = concat(lst, [])
+    print(lst2)
+# TODO: uncomment - how can this lead to compilation errors?
+#    print(concat(lst2, 0))
+    print(concat('Complicated identity function',''))
+    env.exit(0)

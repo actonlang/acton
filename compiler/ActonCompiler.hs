@@ -14,6 +14,8 @@
 
 module Main where
 
+import Prelude hiding (readFile, writeFile)
+
 import qualified Acton.Parser
 import qualified Acton.Syntax as A
 
@@ -44,7 +46,7 @@ import Data.Version (showVersion)
 import qualified Data.List
 import qualified Filesystem.Path.CurrentOS as Fsco
 import System.Directory.Recursive
-import System.IO
+import System.IO hiding (readFile, writeFile)
 import System.IO.Temp
 import System.Info
 import System.Directory
@@ -607,3 +609,18 @@ buildExecutable env args paths binTask
                                " -o" ++ binFile ++
                                libPaths ++
                                libFiles)
+
+
+-- our own readFile & writeFile with hard-coded utf-8 encoding
+readFile f = do
+    h <- openFile f ReadMode
+    hSetEncoding h utf8
+    c <- hGetContents h
+    return c
+
+writeFile :: FilePath -> String -> IO ()
+writeFile f c = do
+    h <- openFile f WriteMode
+    hSetEncoding h utf8
+    hPutStr h c
+    hClose h
