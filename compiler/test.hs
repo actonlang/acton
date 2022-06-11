@@ -73,14 +73,14 @@ actoncRootArgTests =
 --createTests :: String -> String -> List -> TestTree
 createTests name dir allExpFail fails testFunc = do
     actFiles <- findThings dir
-    return $ testGroup name $ map (createTest allExpFail fails (testFunc allExpFail)) actFiles
+    return $ testGroup name $ map (createTest allExpFail fails testFunc) actFiles
 
 createTest allExpFail fails testFunc file = do
     let fileExpFail = elem fileBody fails
         expFail = if fileExpFail == True
                     then fileExpFail
                     else allExpFail
-    failWrap testFunc file expFail
+    failWrap (testFunc expFail) file expFail
   where (fileBody, fileExt) = splitExtension $ takeFileName file
 
 findThings dir = do
