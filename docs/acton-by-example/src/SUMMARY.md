@@ -4,6 +4,8 @@
 
 - [Hello World](hello.md)
   - [Program Arguments](hello/args.md)
+- [Acton Projects](projects.md)
+  - [Directory structure](projects/directory_structure.md)
 - [Variable data types](primitives.md)
   - [Scalars](primitives/scalars.md)
   - [Lists](primitives/lists.md)
