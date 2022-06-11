@@ -21,8 +21,7 @@ main = do
     regressionRunFailureTests <- createTests "Regression run time failures" "../test/regression_run" True [] (testBuildAndRun "--root main" ExitSuccess)
     regressionSegfaultTests <- createTests "Regression segfaults" "../test/regression_segfault" True [] (testBuildAndRun "--root main" ExitSuccess)
     defaultMain $ testGroup "Tests" $
-      [ actoncBasicTests
-      , actoncProjTests
+      [ actoncProjTests
       , actoncRootArgTests
       , exampleTests
       , regressionTests
@@ -30,12 +29,6 @@ main = do
       , regressionRunFailureTests
       , regressionSegfaultTests
       ]
-
-actoncBasicTests =
-  testGroup "actonc basic tests"
-  [ failWrap (testBuild "" ExitSuccess True) "test/actonc/regressions/import_actor" True
-  , failWrap (testBuild "" ExitSuccess True) "test/actonc/regressions/abstract_actor_from_type_signature" True
-  ]
 
 actoncProjTests =
   testGroup "actonc project tests"
