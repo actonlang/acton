@@ -150,7 +150,7 @@ thingTestCase thing opts expRet expFail =
 testBuildThing opts expRet expFail thing = do
     (returnCode, cmdOut, cmdErr) <- buildThing opts thing
     iff (expFail == False && returnCode /= expRet) (
-        putStrLn("\nERROR: actonc return code (" ++ (show returnCode) ++ ") not as expected (" ++ (show expRet) ++ ")\nSTDOUT:\n" ++ cmdOut ++ "STDERR:\n" ++ cmdErr)
+        putStrLn("\nERROR: when building " ++ thing ++ ", actonc returned code (" ++ (show returnCode) ++ ") not as expected (" ++ (show expRet) ++ ")\nSTDOUT:\n" ++ cmdOut ++ "STDERR:\n" ++ cmdErr)
         )
     assertEqual ("actonc should return " ++ (show expRet)) expRet returnCode
 
