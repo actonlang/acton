@@ -121,9 +121,13 @@ decl env (Class _ n q a b)          = (text "struct" <+> classname env n <+> cha
 decl env (Def _ n q p _ a b _ fx)   = gen env (fromJust a) <+> genTopName env n <+> parens (params env $ prowOf p) <> semi
 
 methstub env (Class _ n q a b)      = text "extern" <+> text "struct" <+> classname env n <+> methodtable env n <> semi $+$
-                                      gen env t <+> newcon env n <> parens (params env r) <> semi
+                                      constub env t n r
   where TFun _ _ r _ t              = sctype $ fst $ schemaOf env (eVar n)
 methstub env Def{}                  = empty
+
+constub env t n r
+  | abstractClass env (NoQ n)       = empty
+  | otherwise                       = gen env t <+> newcon env n <> parens (params env r) <> semi
 
 fields env c                        = map field (subst [(tvSelf,tCon c)] te)
   where te                          = fullAttrEnv env c
@@ -555,7 +559,9 @@ classCast env ts x q n              = parens . (parens (gen env t) <>)
 
 genNew env n p                      = newcon' env n <> parens (gen env p)
 
-declCon env n q                     = (gen env tRes <+> newcon env n <> parens (gen env pars) <+> char '{') $+$
+declCon env n q
+  | abstractClass env (NoQ n)       = empty
+  | otherwise                       = (gen env tRes <+> newcon env n <> parens (gen env pars) <+> char '{') $+$
                                       nest 4 (gen env tObj <+> gen env tmpV <+> equals <+> malloc env (gname env n) <> semi $+$
                                               gen env tmpV <> text "->" <> gen env1 classKW <+> equals <+> char '&' <> methodtable env1 n <> semi $+$
                                               initcall env1) $+$
