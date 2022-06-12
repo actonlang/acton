@@ -16,6 +16,7 @@ struct $str$class {
   $str (*__deserialize__)($str,$Serial$state);
   $bool (*__bool__)($str);
   $str (*__str__)($str);
+  $str (*__repr__)($str);
   $str (*capitalize)($str s);
   $str (*center)($str s, $int width, $str fill);                 // raises TYPEERROR if fill is not a single char
   $int (*count)($str s, $str sub, $int start, $int end);
@@ -97,6 +98,7 @@ struct $Iterator$str$class {
   $Iterator$str (*__deserialize__)($Iterator$str,$Serial$state);
   $bool (*__bool__)($Iterator$str);
   $str (*__str__)($Iterator$str);
+  $str (*__repr__)($Iterator$str);
   $str (*__next__)($Iterator$str);
 };
 
@@ -130,6 +132,7 @@ struct $bytearray$class {
   $bytearray (*__deserialize__)($bytearray,$Serial$state);
   $bool (*__bool__)($bytearray);
   $str (*__str__)($bytearray);
+  $str (*__repr__)($bytearray);
   $bytearray (*capitalize)($bytearray s);
   $bytearray (*center)($bytearray s, $int width, $bytearray fill);                 
   $int (*count)($bytearray s, $bytearray sub, $int start, $int end);
@@ -203,6 +206,7 @@ struct $Iterator$bytearray$class {
   $Iterator$bytearray (*__deserialize__)($Iterator$bytearray,$Serial$state);
   $bool (*__bool__)($Iterator$bytearray);
   $str (*__str__)($Iterator$bytearray);
+  $str (*__repr__)($Iterator$bytearray);
   $int (*__next__)($Iterator$bytearray);
 };
 
@@ -236,6 +240,7 @@ struct $bytes$class {
   $bytes (*__deserialize__)($bytes,$Serial$state);
   $bool (*__bool__)($bytes);
   $str (*__str__)($bytes);
+  $str (*__repr__)($bytes);
   $bytes (*capitalize)($bytes s);
   $bytes (*center)($bytes s, $int width, $bytes fill);                 
   $int (*count)($bytes s, $bytes sub, $int start, $int end);
@@ -311,6 +316,7 @@ struct $Iterator$bytes$class {
   $Iterator$bytes (*__deserialize__)($Iterator$bytes,$Serial$state);
   $bool (*__bool__)($Iterator$bytes);
   $str (*__str__)($Iterator$bytes);
+  $str (*__repr__)($Iterator$bytes);
   $int (*__next__)($Iterator$bytes);
 };
 

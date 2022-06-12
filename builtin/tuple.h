@@ -7,6 +7,7 @@ struct $tuple$class {
   $tuple (*__deserialize__)($tuple,$Serial$state);
   $bool (*__bool__)($tuple);
   $str (*__str__)($tuple);
+  $str (*__repr__)($tuple);
 };
 
 struct $tuple {
@@ -47,6 +48,7 @@ struct $Iterator$tuple$class {
   $Iterator$tuple (*__deserialize__)($Iterator$tuple,$Serial$state);
   $bool (*__bool__)($Iterator$tuple);
   $str (*__str__)($Iterator$tuple);
+  $str (*__repr__)($Iterator$tuple);
   $WORD(*__next__)($Iterator$tuple);
 };
 

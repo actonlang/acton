@@ -74,7 +74,7 @@ $WORD $Integral$__irshift__ ($Integral wit, $WORD a, $int b) {
     return wit->$class->__rshift__(wit, a, b);
 }
 
-struct $Eq$class $Eq$methods = {"$Eq$class", UNASSIGNED, NULL, (void (*)($Eq))$default__init__, NULL, NULL, ($bool (*)($Eq))$default__bool__,  ($str (*)($Eq))$default__str__,
+struct $Eq$class $Eq$methods = {"$Eq$class", UNASSIGNED, NULL, (void (*)($Eq))$default__init__, NULL, NULL, ($bool (*)($Eq))$default__bool__,  ($str (*)($Eq))$default__str__, ($str (*)($Eq))$default__str__,
                                 NULL, NULL};
 
 $Eq $Eq$new() {
@@ -83,7 +83,7 @@ $Eq $Eq$new() {
   return res;
 }
 
-struct $Ord$class $Ord$methods = {"$Ord$class", UNASSIGNED, ($Super$class)&$Eq$methods, (void (*)($Ord))$default__init__, NULL, NULL, ($bool (*)($Ord))$default__bool__,  ($str (*)($Ord))$default__str__,
+struct $Ord$class $Ord$methods = {"$Ord$class", UNASSIGNED, ($Super$class)&$Eq$methods, (void (*)($Ord))$default__init__, NULL, NULL, ($bool (*)($Ord))$default__bool__,  ($str (*)($Ord))$default__str__, ($str (*)($Ord))$default__str__,
                                   NULL, NULL, NULL, NULL, NULL, NULL};
 
 $Ord $Ord$new() {
@@ -92,7 +92,7 @@ $Ord $Ord$new() {
   return res;
 }
 
-struct $Logical$class $Logical$methods = {"$Logical$class", UNASSIGNED, NULL, (void (*)($Logical))$default__init__, NULL, NULL, ($bool (*)($Logical))$default__bool__,  ($str (*)($Logical))$default__str__,
+struct $Logical$class $Logical$methods = {"$Logical$class", UNASSIGNED, NULL, (void (*)($Logical))$default__init__, NULL, NULL, ($bool (*)($Logical))$default__bool__,  ($str (*)($Logical))$default__str__, ($str (*)($Logical))$default__str__,
                                           NULL, NULL, NULL};
 
 $Logical $Logical$new() {
@@ -101,7 +101,7 @@ $Logical $Logical$new() {
   return res;
 }
 
-struct $Plus$class $Plus$methods = {"$Plus$class", UNASSIGNED, NULL, (void (*)($Plus))$default__init__, NULL, NULL, ($bool (*)($Plus))$default__bool__,  ($str (*)($Plus))$default__str__,
+struct $Plus$class $Plus$methods = {"$Plus$class", UNASSIGNED, NULL, (void (*)($Plus))$default__init__, NULL, NULL, ($bool (*)($Plus))$default__bool__,  ($str (*)($Plus))$default__str__, ($str (*)($Plus))$default__str__,
                                     NULL, $Plus$__iadd__};
 
 $Plus $Plus$new() {
@@ -110,7 +110,7 @@ $Plus $Plus$new() {
   return res;
 }
 
-struct $Times$class $Times$methods = {"$Times$class", UNASSIGNED, NULL, (void (*)($Times))$default__init__, NULL, NULL, ($bool (*)($Times))$default__bool__,  ($str (*)($Times))$default__str__,
+struct $Times$class $Times$methods = {"$Times$class", UNASSIGNED, NULL, (void (*)($Times))$default__init__, NULL, NULL, ($bool (*)($Times))$default__bool__,  ($str (*)($Times))$default__str__, ($str (*)($Times))$default__str__,
                                       NULL, ($WORD (*)($Times,$WORD,$WORD))$Plus$__iadd__, $Times$__imul__};
 
 $Times $Times$new() {
@@ -119,7 +119,7 @@ $Times $Times$new() {
   return res;
 }
 
-struct $Div$class $Div$methods = {"$Div$class", UNASSIGNED, NULL, (void (*)($Div))$default__init__, NULL, NULL, ($bool (*)($Div))$default__bool__,  ($str (*)($Div))$default__str__,
+struct $Div$class $Div$methods = {"$Div$class", UNASSIGNED, NULL, (void (*)($Div))$default__init__, NULL, NULL, ($bool (*)($Div))$default__bool__,  ($str (*)($Div))$default__str__, ($str (*)($Div))$default__str__,
                                     NULL, $Div$__itruediv__};
 
 $Div $Div$new() {
@@ -128,7 +128,7 @@ $Div $Div$new() {
   return res;
 }
 
-struct $Minus$class $Minus$methods = {"$Minus$class", UNASSIGNED, NULL, (void (*)($Minus))$default__init__, NULL, NULL, ($bool (*)($Minus))$default__bool__,  ($str (*)($Minus))$default__str__,
+struct $Minus$class $Minus$methods = {"$Minus$class", UNASSIGNED, NULL, (void (*)($Minus))$default__init__, NULL, NULL, ($bool (*)($Minus))$default__bool__,  ($str (*)($Minus))$default__str__, ($str (*)($Minus))$default__str__,
                                       NULL, $Minus$__isub__};
 
 $Minus $Minus$new() {
@@ -137,7 +137,7 @@ $Minus $Minus$new() {
   return res;
 }
 
-struct $Hashable$class $Hashable$methods = {"$Hashable$class", UNASSIGNED, NULL, (void (*)($Hashable))$default__init__, NULL, NULL, ($bool (*)($Hashable))$default__bool__,  ($str (*)($Hashable))$default__str__,
+struct $Hashable$class $Hashable$methods = {"$Hashable$class", UNASSIGNED, NULL, (void (*)($Hashable))$default__init__, NULL, NULL, ($bool (*)($Hashable))$default__bool__,  ($str (*)($Hashable))$default__str__, ($str (*)($Hashable))$default__str__,
                                             NULL, NULL, NULL};
 
 $Hashable $Hashable$new() {
@@ -150,7 +150,7 @@ static void $Indexed$__init__($Indexed self, $Eq w$Eq$A$Indexed) {
   self->w$Eq$A$Indexed = w$Eq$A$Indexed;
 }
 
-struct $Indexed$class $Indexed$methods = {"$Indexed$class", UNASSIGNED, NULL, $Indexed$__init__, NULL, NULL, ($bool (*)($Indexed))$default__bool__,  ($str (*)($Indexed))$default__str__,
+struct $Indexed$class $Indexed$methods = {"$Indexed$class", UNASSIGNED, NULL, $Indexed$__init__, NULL, NULL, ($bool (*)($Indexed))$default__bool__,  ($str (*)($Indexed))$default__str__, ($str (*)($Indexed))$default__str__, 
                                           NULL, NULL, NULL};
 
 $Indexed $Indexed$new($Eq w$Eq$A$Indexed) {
@@ -160,7 +160,7 @@ $Indexed $Indexed$new($Eq w$Eq$A$Indexed) {
   return res;
 }
 
-struct $Sliceable$class $Sliceable$methods = {"$Sliceable$class", UNASSIGNED, ($Super$class)&$Indexed$methods, (void (*)($Sliceable))$default__init__, NULL, NULL, ($bool (*)($Sliceable))$default__bool__,  ($str (*)($Sliceable))$default__str__,
+struct $Sliceable$class $Sliceable$methods = {"$Sliceable$class", UNASSIGNED, ($Super$class)&$Indexed$methods, (void (*)($Sliceable))$default__init__, NULL, NULL, ($bool (*)($Sliceable))$default__bool__,  ($str (*)($Sliceable))$default__str__,($str (*)($Sliceable))$default__str__,
                                               NULL, NULL, NULL, NULL, NULL, NULL};
 
 $Sliceable $Sliceable$new() {
@@ -169,7 +169,7 @@ $Sliceable $Sliceable$new() {
   return res;
 }
 
-struct $Iterable$class $Iterable$methods = {"$Iterable$class", UNASSIGNED, NULL, (void (*)($Iterable))$default__init__, NULL, NULL, ($bool (*)($Iterable))$default__bool__,  ($str (*)($Iterable))$default__str__,
+struct $Iterable$class $Iterable$methods = {"$Iterable$class", UNASSIGNED, NULL, (void (*)($Iterable))$default__init__, NULL, NULL, ($bool (*)($Iterable))$default__bool__,  ($str (*)($Iterable))$default__str__,($str (*)($Iterable))$default__str__,
                                             NULL};
 
 $Iterable $Iterable$new() {
@@ -178,7 +178,7 @@ $Iterable $Iterable$new() {
   return res;
 }
 
-struct $Collection$class $Collection$methods = {"$Collection$class", UNASSIGNED, ($Super$class)&$Iterable$methods, (void (*)($Collection))$default__init__, NULL, NULL, ($bool (*)($Collection))$default__bool__,  ($str (*)($Collection))$default__str__,
+struct $Collection$class $Collection$methods = {"$Collection$class", UNASSIGNED, ($Super$class)&$Iterable$methods, (void (*)($Collection))$default__init__, NULL, NULL, ($bool (*)($Collection))$default__bool__,  ($str (*)($Collection))$default__str__, ($str (*)($Collection))$default__str__,
                                                 NULL, NULL, NULL};
 
 $Collection $Collection$new() {
@@ -191,7 +191,7 @@ static void $Container$__init__($Container self, $Eq w$Eq$A$Container) {
   self->w$Eq$A$Container = w$Eq$A$Container;
 }
 
-struct $Container$class $Container$methods = {"$Container$class", UNASSIGNED, ($Super$class)&$Collection$methods, $Container$__init__, NULL, NULL, ($bool (*)($Container))$default__bool__,  ($str (*)($Container))$default__str__,
+struct $Container$class $Container$methods = {"$Container$class", UNASSIGNED, ($Super$class)&$Collection$methods, $Container$__init__, NULL, NULL, ($bool (*)($Container))$default__bool__,  ($str (*)($Container))$default__str__, ($str (*)($Container))$default__str__,
                                               NULL, NULL, NULL, NULL, NULL};
 
 $Container $Container$new($Eq w$Eq$A$Container) {
@@ -206,7 +206,7 @@ static void $Sequence$__init__($Sequence self) {
   self->w$Times = $Times$new();
 }
 
-struct $Sequence$class $Sequence$methods = {"$Sequence$class", UNASSIGNED, ($Super$class)&$Sliceable$methods, $Sequence$__init__, NULL, NULL, ($bool (*)($Sequence))$default__bool__,  ($str (*)($Sequence))$default__str__,
+struct $Sequence$class $Sequence$methods = {"$Sequence$class", UNASSIGNED, ($Super$class)&$Sliceable$methods, $Sequence$__init__, NULL, NULL, ($bool (*)($Sequence))$default__bool__,  ($str (*)($Sequence))$default__str__,($str (*)($Sequence))$default__str__,
                                             NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL};
 
 $Sequence $Sequence$new() {
@@ -222,7 +222,7 @@ void $Mapping$__init__($Mapping self, $Eq w$Eq$A$Mapping) {
   self->w$Eq$A$Mapping = w$Eq$A$Mapping;
 }
 
-struct $Mapping$class $Mapping$methods = {"$Mapping$class", UNASSIGNED, ($Super$class)&$Container$methods, $Mapping$__init__, NULL, NULL, ($bool (*)($Mapping))$default__bool__,  ($str (*)($Mapping))$default__str__,
+struct $Mapping$class $Mapping$methods = {"$Mapping$class", UNASSIGNED, ($Super$class)&$Container$methods, $Mapping$__init__, NULL, NULL, ($bool (*)($Mapping))$default__bool__,  ($str (*)($Mapping))$default__str__, ($str (*)($Mapping))$default__str__,
                                           NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL};
 
 $Mapping $Mapping$new($Eq w$Eq$A$Mapping) {
@@ -240,7 +240,7 @@ void $Set$__init__($Set self, $Eq w$Eq$A$Set) {
   self->w$Eq$A$Set = w$Eq$A$Set;
 }
   
-struct $Set$class $Set$methods = {"$Set$class", UNASSIGNED, ($Super$class)&$Container$methods, $Set$__init__, NULL, NULL, ($bool (*)($Set))$default__bool__,  ($str (*)($Set))$default__str__,
+struct $Set$class $Set$methods = {"$Set$class", UNASSIGNED, ($Super$class)&$Container$methods, $Set$__init__, NULL, NULL, ($bool (*)($Set))$default__bool__,  ($str (*)($Set))$default__str__, ($str (*)($Set))$default__str__,
                                 NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL};
 
 $Set $Set$new($Eq w$Eq$A$Set) {
@@ -257,7 +257,7 @@ void $Number$__init__($Number self) {
   self->w$Minus = $Minus$new();
 }
 
-struct $Number$class $Number$methods = {"$Number$class", UNASSIGNED, ($Super$class)&$Times$methods, $Number$__init__, NULL, NULL, ($bool (*)($Number))$default__bool__,  ($str (*)($Number))$default__str__,
+struct $Number$class $Number$methods = {"$Number$class", UNASSIGNED, ($Super$class)&$Times$methods, $Number$__init__, NULL, NULL, ($bool (*)($Number))$default__bool__,  ($str (*)($Number))$default__str__,($str (*)($Number))$default__str__,
                                         NULL, ($WORD (*)($Number,$WORD,$WORD))$Plus$__iadd__, NULL, ($WORD (*)($Number,$WORD,$WORD))$Plus$__iadd__, NULL, NULL, NULL, $Number$__ipow__, NULL, NULL, NULL, NULL, NULL, NULL};
 
 
@@ -269,7 +269,7 @@ $Number $Number$new() {
 }
 
 
-struct $Real$class $Real$methods = {"$Real$class", UNASSIGNED, ($Super$class)&$Number$methods, (void (*)($Real))$default__init__, NULL, NULL, ($bool (*)($Real))$default__bool__,  ($str (*)($Real))$default__str__,
+struct $Real$class $Real$methods = {"$Real$class", UNASSIGNED, ($Super$class)&$Number$methods, (void (*)($Real))$default__init__, NULL, NULL, ($bool (*)($Real))$default__bool__,  ($str (*)($Real))$default__str__, ($str (*)($Real))$default__str__,
                                     NULL, ($WORD (*)($Real,$WORD,$WORD))$Plus$__iadd__, NULL, ($WORD (*)($Real,$WORD,$WORD))$Times$__imul__, NULL, NULL, NULL, ($WORD (*)($Real,$WORD,$WORD))$Number$__ipow__, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL};
 
 
@@ -279,7 +279,7 @@ $Real $Real$new() {
   return res;
 }
 
-struct $Rational$class $Rational$methods = {"$Rational$class", UNASSIGNED, ($Super$class)&$Real$methods, (void (*)($Rational))$default__init__, NULL, NULL, ($bool (*)($Rational))$default__bool__,  ($str (*)($Rational))$default__str__,
+struct $Rational$class $Rational$methods = {"$Rational$class", UNASSIGNED, ($Super$class)&$Real$methods, (void (*)($Rational))$default__init__, NULL, NULL, ($bool (*)($Rational))$default__bool__,  ($str (*)($Rational))$default__str__, ($str (*)($Rational))$default__str__,
                                             NULL, ($WORD (*)($Rational,$WORD,$WORD))$Plus$__iadd__, NULL,  ($WORD (*)($Rational,$WORD,$WORD))$Times$__imul__, NULL, NULL, NULL, ($WORD (*)($Rational,$WORD,$WORD))$Number$__ipow__, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL};
 
 
@@ -294,7 +294,7 @@ void $Integral$__init__($Integral self) {
   self->w$Minus = $Minus$new();
 }
   
-struct $Integral$class $Integral$methods = {"$Integral$class", UNASSIGNED, ($Super$class)&$Rational$methods, $Integral$__init__, NULL, NULL, ($bool (*)($Integral))$default__bool__,  ($str (*)($Integral))$default__str__,
+struct $Integral$class $Integral$methods = {"$Integral$class", UNASSIGNED, ($Super$class)&$Rational$methods, $Integral$__init__, NULL, NULL, ($bool (*)($Integral))$default__bool__,  ($str (*)($Integral))$default__str__, ($str (*)($Integral))$default__str__,
                                             NULL,  ($WORD (*)($Integral,$WORD,$WORD))$Plus$__iadd__, NULL,  ($WORD (*)($Integral,$WORD,$WORD))$Times$__imul__, NULL, NULL, NULL,  ($WORD (*)($Integral,$WORD,$WORD))$Number$__ipow__, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, $Integral$__ifloordiv__, $Integral$__imod__, $Integral$__ilshift__, $Integral$__irshift__, NULL};
 
 $Integral $Integral$new() {

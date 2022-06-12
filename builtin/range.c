@@ -114,6 +114,7 @@ struct $range$class $range$methods = {
    $range$__serialize__,
    $range$__deserialize__,
    $range$__bool__,
+   $range$__str__,
    $range$__str__
 };
 
@@ -126,6 +127,7 @@ struct $Iterator$range$class $Iterator$range$methods = {
     $Iterator$range_serialize,
     $Iterator$range$_deserialize,
     $Iterator$range_bool,
+    $Iterator$range_str,
     $Iterator$range_str,
     $Iterator$range_next
 };
@@ -163,6 +165,7 @@ struct $Iterable$range$class $Iterable$range$methods = {
     $Iterable$range$__serialize__,
     $Iterable$range$__deserialize__,
     ($bool (*)($Iterable$range))$default__bool__,
+    ($str (*)($Iterable$range))$default__str__,
     ($str (*)($Iterable$range))$default__str__,
     $Iterable$range$__iter__
 };

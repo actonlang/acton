@@ -1,0 +1,14 @@
+actor main(env):
+  print(["abc","def"])
+  print([["abc","def"],["ghi"]])
+  print(repr("kalle"))
+  s = {"abc"}
+  s.add("def")
+  print(s)
+  d = {}
+  for i in range(0,10,1):
+      d[i] = str(i)
+  print(d)
+  env.exit(0)
+  
+  

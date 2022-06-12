@@ -27,6 +27,7 @@
 void $str_init($str, $value);
 $bool $str_bool($str);
 $str $str_str($str);
+$str $str_repr($str);
 void $str_serialize($str,$Serial$state);
 $str $str_deserialize($str,$Serial$state);
 
@@ -70,7 +71,7 @@ $str $str_upper($str s);
 $str $str_zfill($str s, $int width);
 
 struct $str$class $str$methods =
-  {"$str",UNASSIGNED,($Super$class)&$atom$methods, $str_init, $str_serialize, $str_deserialize, $str_bool, $str_str, $str_capitalize, $str_center, $str_count, $str_encode, $str_endswith,
+  {"$str",UNASSIGNED,($Super$class)&$atom$methods, $str_init, $str_serialize, $str_deserialize, $str_bool, $str_str, $str_repr, $str_capitalize, $str_center, $str_count, $str_encode, $str_endswith,
    $str_expandtabs, $str_find, $str_index, $str_isalnum, $str_isalpha, $str_isascii, $str_isdecimal, $str_islower, $str_isprintable, $str_isspace,
    $str_istitle, $str_isupper, $str_join, $str_ljust, $str_lower, $str_lstrip, $str_partition, $str_replace, $str_rfind, $str_rindex, $str_rjust,
    $str_rpartition, $str_rstrip, $str_split, $str_splitlines, $str_startswith, $str_strip, $str_upper, $str_zfill};
@@ -264,6 +265,7 @@ struct $Ord$str$class  $Ord$str$methods = {
     $Ord$str$__deserialize__,
     ($bool (*)($Ord$str))$default__bool__,
     ($str (*)($Ord$str))$default__str__,
+    ($str (*)($Ord$str))$default__str__,
     $Ord$str$__eq__,
     $Ord$str$__ne__,
     $Ord$str$__lt__,
@@ -282,6 +284,7 @@ struct $Container$str$class  $Container$str$methods = {
     $Container$str$__serialize__,
     $Container$str$__deserialize__,
     ($bool (*)($Container$str))$default__bool__,
+    ($str (*)($Container$str))$default__str__,
     ($str (*)($Container$str))$default__str__,
     $Container$str$__iter__,
     NULL,
@@ -302,6 +305,7 @@ struct $Sliceable$str$class  $Sliceable$str$methods = {
     $Sliceable$str$__deserialize__,
     ($bool (*)($Sliceable$str))$default__bool__,
     ($str (*)($Sliceable$str))$default__str__,
+    ($str (*)($Sliceable$str))$default__str__,
     $Sliceable$str$__getitem__,
     $Sliceable$str$__setitem__,
     $Sliceable$str$__delitem__,
@@ -321,6 +325,7 @@ struct $Times$str$class  $Times$str$methods = {
     $Times$str$__deserialize__,
     ($bool (*)($Times$str))$default__bool__,
     ($str (*)($Times$str))$default__str__,
+    ($str (*)($Times$str))$default__str__,
     $Times$str$__add__,
     ($str (*)($Times$str, $str, $str))$Plus$__iadd__,
     $Times$str$__mul__,
@@ -338,6 +343,7 @@ struct $Hashable$str$class  $Hashable$str$methods = {
     $Hashable$str$__serialize__,
     $Hashable$str$__deserialize__,
     ($bool (*)($Hashable$str))$default__bool__,
+    ($str (*)($Hashable$str))$default__str__,
     ($str (*)($Hashable$str))$default__str__,
     $Hashable$str$__eq__,
     $Hashable$str$__ne__,
@@ -766,7 +772,7 @@ $Iterator $str_iter($str str) {
 
 struct $Iterator$str$class $Iterator$str$methods = {"$Iterator$str",UNASSIGNED,($Super$class)&$Iterator$methods, $Iterator$str_init,
                                                     $Iterator$str_serialize, $Iterator$str$_deserialize,
-                                                    $Iterator$str_bool, $Iterator$str_str, $Iterator$str_next};
+                                                    $Iterator$str_bool, $Iterator$str_str, $Iterator$str_str, $Iterator$str_next};
 
 
 // Indexed ///////////////////////////////////////////////////////////////////////////
@@ -826,6 +832,14 @@ $bool $str_bool($str s) {
 
 $str $str_str($str s) {
   return s;
+}
+
+$str $str_repr($str s) {
+  $str $res = NEW_UNFILLED_STR($res,s->nchars+2,s->nbytes+2);
+  $res->str[0] = '"';
+  $res->str[$res->nbytes-1] = '"';
+  memcpy($res->str+1, s->str,s->nbytes);
+  return $res;
 }
 
 
@@ -1610,7 +1624,7 @@ $bytearray $bytearray_zfill($bytearray s, $int width);
 
 struct $bytearray$class $bytearray$methods =
   {"$bytearray",UNASSIGNED,($Super$class)&$value$methods, $bytearray_init, $bytearray_serialize, $bytearray_deserialize, $bytearray_bool,
-   $bytearray_str, $bytearray_capitalize, $bytearray_center, $bytearray_count,  $bytearray_decode, $bytearray_endswith,
+   $bytearray_str, $bytearray_str, $bytearray_capitalize, $bytearray_center, $bytearray_count,  $bytearray_decode, $bytearray_endswith,
    $bytearray_expandtabs, $bytearray_find, $bytearray_index,
    $bytearray_isalnum, $bytearray_isalpha, $bytearray_isascii, $bytearray_isdigit, $bytearray_islower, $bytearray_isspace,
    $bytearray_istitle, $bytearray_isupper, $bytearray_join, $bytearray_ljust, $bytearray_lower, $bytearray_lstrip, $bytearray_partition, $bytearray_replace,
@@ -2440,6 +2454,7 @@ struct $Ord$bytearray$class  $Ord$bytearray$methods = {
     $Ord$bytearray$__deserialize__,
     ($bool (*)($Ord$bytearray))$default__bool__,
     ($str (*)($Ord$bytearray))$default__str__,
+    ($str (*)($Ord$bytearray))$default__str__,
     $Ord$bytearray$__eq__, $Ord$bytearray$__ne__,
     $Ord$bytearray$__lt__, $Ord$bytearray$__le__,
     $Ord$bytearray$__gt__, $Ord$bytearray$__ge__
@@ -2455,6 +2470,7 @@ struct $Sequence$bytearray$class $Sequence$bytearray$methods = {
     $Sequence$bytearray$__serialize__,
     $Sequence$bytearray$__deserialize__,
     ($bool (*)($Sequence$bytearray))$default__bool__,
+    ($str (*)($Sequence$bytearray))$default__str__,
     ($str (*)($Sequence$bytearray))$default__str__,
     $Sequence$bytearray$__getitem__,
     $Sequence$bytearray$__setitem__,
@@ -2483,6 +2499,7 @@ struct $Collection$bytearray$class $Collection$bytearray$methods = {
     $Collection$bytearray$__deserialize__,
     ($bool (*)($Collection$bytearray))$default__bool__,
     ($str (*)($Collection$bytearray))$default__str__,
+    ($str (*)($Collection$bytearray))$default__str__,
     $Collection$bytearray$__iter__,
     $Collection$bytearray$__fromiter__,
     $Collection$bytearray$__len__
@@ -2498,6 +2515,7 @@ struct $Times$bytearray$class  $Times$bytearray$methods = {
     $Times$bytearray$__serialize__,
     $Times$bytearray$__deserialize__,
     ($bool (*)($Times$bytearray))$default__bool__,
+    ($str (*)($Times$bytearray))$default__str__,
     ($str (*)($Times$bytearray))$default__str__,
     $Times$bytearray$__add__,
     ($bytearray (*)($Times$bytearray, $bytearray, $bytearray))$Plus$__iadd__,
@@ -2515,6 +2533,7 @@ struct $Container$bytearray$class $Container$bytearray$methods = {
     $Container$bytearray$__serialize__,
     $Container$bytearray$__deserialize__,
     ($bool (*)($Container$bytearray))$default__bool__,
+    ($str (*)($Container$bytearray))$default__str__,
     ($str (*)($Container$bytearray))$default__str__,
     $Container$bytearray$__iter__,
     $Container$bytearray$__len__,
@@ -2751,6 +2770,7 @@ struct $Iterator$bytearray$class $Iterator$bytearray$methods = {
     $Iterator$bytearray$_deserialize,
     $Iterator$bytearray_bool,
     $Iterator$bytearray_str,
+    $Iterator$bytearray_str,
     $Iterator$bytearray_next
 };
 
@@ -2968,7 +2988,7 @@ $bytes $bytes_zfill($bytes s, $int width);
 
 struct $bytes$class $bytes$methods =
   {"$bytes",UNASSIGNED,($Super$class)&$value$methods, $bytes_init, $bytes_serialize, $bytes_deserialize, $bytes_bool,
-   $bytes_str, $bytes_capitalize, $bytes_center, $bytes_count,  $bytes_decode, $bytes_endswith,
+   $bytes_str,  $bytes_str, $bytes_capitalize, $bytes_center, $bytes_count,  $bytes_decode, $bytes_endswith,
    $bytes_expandtabs, $bytes_find, $bytes_index,
    $bytes_isalnum, $bytes_isalpha, $bytes_isascii, $bytes_isdigit, $bytes_islower, $bytes_isspace,
    $bytes_istitle, $bytes_isupper, $bytes_join, $bytes_ljust, $bytes_lower, $bytes_lstrip, $bytes_partition,
@@ -3818,6 +3838,7 @@ struct $Ord$bytes$class  $Ord$bytes$methods = {
     $Ord$bytes$__deserialize__,
     ($bool (*)($Ord$bytes))$default__bool__,
     ($str (*)($Ord$bytes))$default__str__,
+    ($str (*)($Ord$bytes))$default__str__,
     $Ord$bytes$__eq__,
     $Ord$bytes$__ne__,
     $Ord$bytes$__lt__,
@@ -3836,6 +3857,7 @@ struct $Container$bytes$class  $Container$bytes$methods = {
     $Container$bytes$__serialize__,
     $Container$bytes$__deserialize__,
     ($bool (*)($Container$bytes))$default__bool__,
+    ($str (*)($Container$bytes))$default__str__,
     ($str (*)($Container$bytes))$default__str__,
     $Container$bytes$__iter__,
     NULL,
@@ -3856,6 +3878,7 @@ struct $Sliceable$bytes$class  $Sliceable$bytes$methods = {
     $Sliceable$bytes$__deserialize__,
     ($bool (*)($Sliceable$bytes))$default__bool__,
     ($str (*)($Sliceable$bytes))$default__str__,
+    ($str (*)($Sliceable$bytes))$default__str__,
     $Sliceable$bytes$__getitem__,
     $Sliceable$bytes$__setitem__,
     $Sliceable$bytes$__delitem__,
@@ -3875,6 +3898,7 @@ struct $Times$bytes$class  $Times$bytes$methods = {
     $Times$bytes$__deserialize__,
     ($bool (*)($Times$bytes))$default__bool__,
     ($str (*)($Times$bytes))$default__str__,
+    ($str (*)($Times$bytes))$default__str__,
     $Times$bytes$__add__,
     ($bytes (*)($Times$bytes, $bytes, $bytes))$Plus$__iadd__,
     $Times$bytes$__mul__,
@@ -3892,6 +3916,7 @@ struct $Hashable$bytes$class  $Hashable$bytes$methods = {
     $Hashable$bytes$__serialize__,
     $Hashable$bytes$__deserialize__,
     ($bool (*)($Hashable$bytes))$default__bool__,
+    ($str (*)($Hashable$bytes))$default__str__,
     ($str (*)($Hashable$bytes))$default__str__,
     $Hashable$bytes$__eq__,
     $Hashable$bytes$__ne__,
@@ -4041,7 +4066,7 @@ $Iterator $bytes_iter($bytes str) {
 
 struct $Iterator$bytes$class $Iterator$bytes$methods = {"$Iterator$bytes",UNASSIGNED,($Super$class)&$Iterator$methods, $Iterator$bytes_init,
                                                     $Iterator$bytes_serialize, $Iterator$bytes$_deserialize,
-                                                    $Iterator$bytes_bool, $Iterator$bytes_str, $Iterator$bytes_next};
+                                                    $Iterator$bytes_bool, $Iterator$bytes_str,  $Iterator$bytes_str, $Iterator$bytes_next};
 
 
 // Indexed ///////////////////////////////////////////////////////////////////////////

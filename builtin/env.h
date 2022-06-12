@@ -84,6 +84,7 @@ struct $l$1lambda$class {
     $l$1lambda (*__deserialize__) ($l$1lambda, $Serial$state);
     $bool (*__bool__) ($l$1lambda);
     $str (*__str__) ($l$1lambda);
+    $str (*__repr__) ($l$1lambda);
     $R (*__call__) ($l$1lambda, $Cont);
 };
 struct $l$1lambda {
@@ -100,6 +101,7 @@ struct $l$2lambda$class {
     $l$2lambda (*__deserialize__) ($l$2lambda, $Serial$state);
     $bool (*__bool__) ($l$2lambda);
     $str (*__str__) ($l$2lambda);
+    $str (*__repr__) ($l$2lambda);
     $R (*__call__) ($l$2lambda, $Cont);
 };
 struct $l$2lambda {
@@ -116,6 +118,7 @@ struct $l$3lambda$class {
     $l$3lambda (*__deserialize__) ($l$3lambda, $Serial$state);
     $bool (*__bool__) ($l$3lambda);
     $str (*__str__) ($l$3lambda);
+    $str (*__repr__) ($l$3lambda);
     $R (*__call__) ($l$3lambda, $Cont);
 };
 struct $l$3lambda {
@@ -134,6 +137,7 @@ struct $l$4lambda$class {
     $l$4lambda (*__deserialize__) ($l$4lambda, $Serial$state);
     $bool (*__bool__) ($l$4lambda);
     $str (*__str__) ($l$4lambda);
+    $str (*__repr__) ($l$4lambda);
     $R (*__call__) ($l$4lambda, $Cont);
 };
 struct $l$4lambda {
@@ -152,6 +156,7 @@ struct $l$5lambda$class {
     $l$5lambda (*__deserialize__) ($l$5lambda, $Serial$state);
     $bool (*__bool__) ($l$5lambda);
     $str (*__str__) ($l$5lambda);
+    $str (*__repr__) ($l$5lambda);
     $R (*__call__) ($l$5lambda, $Cont);
 };
 struct $l$5lambda {
@@ -168,6 +173,7 @@ struct $l$6lambda$class {
     $l$6lambda (*__deserialize__) ($l$6lambda, $Serial$state);
     $bool (*__bool__) ($l$6lambda);
     $str (*__str__) ($l$6lambda);
+    $str (*__repr__) ($l$6lambda);
     $R (*__call__) ($l$6lambda, $Cont);
 };
 struct $l$6lambda {
@@ -184,6 +190,7 @@ struct $l$7lambda$class {
     $l$7lambda (*__deserialize__) ($l$7lambda, $Serial$state);
     $bool (*__bool__) ($l$7lambda);
     $str (*__str__) ($l$7lambda);
+    $str (*__repr__) ($l$7lambda);
     $R (*__call__) ($l$7lambda, $Cont);
 };
 struct $l$7lambda {
@@ -200,6 +207,7 @@ struct $l$8lambda$class {
     $l$8lambda (*__deserialize__) ($l$8lambda, $Serial$state);
     $bool (*__bool__) ($l$8lambda);
     $str (*__str__) ($l$8lambda);
+    $str (*__repr__) ($l$8lambda);
     $R (*__call__) ($l$8lambda, $Cont);
 };
 struct $l$8lambda {
@@ -216,6 +224,7 @@ struct $l$9lambda$class {
     $l$9lambda (*__deserialize__) ($l$9lambda, $Serial$state);
     $bool (*__bool__) ($l$9lambda);
     $str (*__str__) ($l$9lambda);
+    $str (*__repr__) ($l$9lambda);
     $R (*__call__) ($l$9lambda, $Cont);
 };
 struct $l$9lambda {
@@ -231,6 +240,7 @@ struct $l$10lambda$class {
     $l$10lambda (*__deserialize__) ($l$10lambda, $Serial$state);
     $bool (*__bool__) ($l$10lambda);
     $str (*__str__) ($l$10lambda);
+    $str (*__repr__) ($l$10lambda);
     $R (*__call__) ($l$10lambda, $Cont);
 };
 struct $l$10lambda {
@@ -248,6 +258,7 @@ struct $l$11lambda$class {
     $l$11lambda (*__deserialize__) ($l$11lambda, $Serial$state);
     $bool (*__bool__) ($l$11lambda);
     $str (*__str__) ($l$11lambda);
+    $str (*__repr__) ($l$11lambda);
     $R (*__call__) ($l$11lambda, $Cont);
 };
 struct $l$11lambda {
@@ -263,6 +274,7 @@ struct $l$12lambda$class {
     $l$12lambda (*__deserialize__) ($l$12lambda, $Serial$state);
     $bool (*__bool__) ($l$12lambda);
     $str (*__str__) ($l$12lambda);
+    $str (*__repr__) ($l$12lambda);
     $R (*__call__) ($l$12lambda, $Cont);
 };
 struct $l$12lambda {
@@ -278,6 +290,7 @@ struct $l$13lambda$class {
     $l$13lambda (*__deserialize__) ($l$13lambda, $Serial$state);
     $bool (*__bool__) ($l$13lambda);
     $str (*__str__) ($l$13lambda);
+    $str (*__repr__) ($l$13lambda);
     $R (*__call__) ($l$13lambda, $Cont);
 };
 struct $l$13lambda {
@@ -294,6 +307,7 @@ struct $l$14lambda$class {
     $l$14lambda (*__deserialize__) ($l$14lambda, $Serial$state);
     $bool (*__bool__) ($l$14lambda);
     $str (*__str__) ($l$14lambda);
+    $str (*__repr__) ($l$14lambda);
     $R (*__call__) ($l$14lambda, $Cont);
 };
 struct $l$14lambda {
@@ -309,6 +323,7 @@ struct $l$15lambda$class {
     $l$15lambda (*__deserialize__) ($l$15lambda, $Serial$state);
     $bool (*__bool__) ($l$15lambda);
     $str (*__str__) ($l$15lambda);
+    $str (*__repr__) ($l$15lambda);
     $R (*__call__) ($l$15lambda, $Cont);
 };
 struct $l$15lambda {
@@ -324,6 +339,7 @@ struct $l$16lambda$class {
     $l$16lambda (*__deserialize__) ($l$16lambda, $Serial$state);
     $bool (*__bool__) ($l$16lambda);
     $str (*__str__) ($l$16lambda);
+    $str (*__repr__) ($l$16lambda);
     $R (*__call__) ($l$16lambda, $Cont);
 };
 struct $l$16lambda {
@@ -374,6 +390,7 @@ struct $Env$class {
     $Env (*__deserialize__) ($Env, $Serial$state);
     $bool (*__bool__) ($Env);
     $str (*__str__) ($Env);
+    $str (*__repr__) ($Env);
     $NoneType (*__resume__) ($Env);
     $R (*stdout_write$local) ($Env, $str, $Cont);
     $R (*stdin_install$local) ($Env, $function, $Cont);
@@ -412,6 +429,7 @@ struct $ListenSocket$class {
     $ListenSocket (*__deserialize__) ($ListenSocket, $Serial$state);
     $bool (*__bool__) ($ListenSocket);
     $str (*__str__) ($ListenSocket);
+    $str (*__repr__) ($ListenSocket);
     $NoneType (*__resume__) ($ListenSocket);
     $R (*close$local) ($ListenSocket, $Cont);
     $Msg (*close) ($ListenSocket);
@@ -439,6 +457,7 @@ struct $Connection$class {
     $Connection (*__deserialize__) ($Connection, $Serial$state);
     $bool (*__bool__) ($Connection);
     $str (*__str__) ($Connection);
+    $str (*__repr__) ($Connection);
     $NoneType (*__resume__) ($Connection);
     $R (*write$local) ($Connection, $bytes, $Cont);
     $R (*close$local) ($Connection, $Cont);
@@ -470,6 +489,7 @@ struct $RFile$class {
     $RFile (*__deserialize__) ($RFile, $Serial$state);
     $bool (*__bool__) ($RFile);
     $str (*__str__) ($RFile);
+    $str (*__repr__) ($RFile);
     $NoneType (*__resume__) ($RFile);
     $R (*readln$local) ($RFile, $Cont);
     $R (*close$local) ($RFile, $Cont);
@@ -498,6 +518,7 @@ struct $WFile$class {
     $WFile (*__deserialize__) ($WFile, $Serial$state);
     $bool (*__bool__) ($WFile);
     $str (*__str__) ($WFile);
+    $str (*__repr__) ($WFile);
     $NoneType (*__resume__) ($WFile);
     $R (*write$local) ($WFile, $str, $Cont);
     $R (*close$local) ($WFile, $Cont);

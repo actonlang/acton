@@ -5,8 +5,9 @@ struct $slice$class {
   void (*__init__)($slice,$int,$int,$int);
   void (*__serialize__)($slice,$Serial$state);
   $slice (*__deserialize__)($slice,$Serial$state);
-  $bool (*__bool__)($float);
-  $str (*__str__)($float);
+  $bool (*__bool__)($slice);
+  $str (*__str__)($slice);
+  $str (*__repr__)($slice);
 };
 
 typedef struct $slice {

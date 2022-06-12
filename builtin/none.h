@@ -7,6 +7,7 @@ struct $NoneType$class {
   $NoneType (*__deserialize__)($NoneType,$Serial$state);
   $bool (*__bool__)($NoneType);
   $str (*__str__)($NoneType);
+  $str (*__repr__)($NoneType);
 };
 
 struct $NoneType {

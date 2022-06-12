@@ -36,4 +36,4 @@ $str $NoneType__str__($NoneType self) {
 }
 
 struct $NoneType$class $NoneType$methods = {"$NoneType",UNASSIGNED,($Super$class)&$value$methods,(void (*)($NoneType))$default__init__,
-                                            $NoneType__serialize__,  $NoneType__deserialize__, $NoneType__bool__, $NoneType__str__};
+                                            $NoneType__serialize__,  $NoneType__deserialize__, $NoneType__bool__, $NoneType__str__, $NoneType__str__};

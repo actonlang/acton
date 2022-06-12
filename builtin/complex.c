@@ -55,7 +55,7 @@ $str $complex_str($complex c) {
   return to$str(s);
 }
   
-struct $complex$class $complex$methods = {"$complex",UNASSIGNED,($Super$class)&$value$methods,$complex_init,$complex_serialize,$complex_deserialize,$complex_bool,$complex_str};
+struct $complex$class $complex$methods = {"$complex",UNASSIGNED,($Super$class)&$value$methods,$complex_init,$complex_serialize,$complex_deserialize,$complex_bool,$complex_str,$complex_str};
 
 // $Number$complex  ////////////////////////////////////////////////////////////////////////////////////////
 
@@ -233,6 +233,7 @@ struct $Number$complex$class $Number$complex$methods = {
     $Number$complex$__deserialize__,
     ($bool (*)($Number$complex))$default__bool__,
     ($str (*)($Number$complex))$default__str__,
+    ($str (*)($Number$complex))$default__str__,
     $Number$complex$__add__,
     ($complex (*)($Number$complex, $complex, $complex))$Plus$__iadd__,
     $Number$complex$__mul__,
@@ -260,6 +261,7 @@ struct $Div$complex$class $Div$complex$methods = {
     $Div$complex$__deserialize__,
     ($bool (*)($Div$complex))$default__bool__,
     ($str (*)($Div$complex))$default__str__,
+    ($str (*)($Div$complex))$default__str__,
     $Div$complex$__truediv__,
     ($complex (*)($Div$complex, $complex, $complex))$Div$__itruediv__,
 };
@@ -276,6 +278,7 @@ struct $Minus$complex$class $Minus$complex$methods = {
     $Minus$complex$__deserialize__,
     ($bool (*)($Minus$complex))$default__bool__,
     ($str (*)($Minus$complex))$default__str__,
+    ($str (*)($Minus$complex))$default__str__,
     $Minus$complex$__sub__,
     ($complex (*)($Minus$complex, $complex, $complex))$Minus$__isub__
 };
@@ -291,6 +294,7 @@ struct $Eq$complex$class $Eq$complex$methods = {
     $Eq$complex$__deserialize__,
     ($bool (*)($Eq$complex))$default__bool__,
     ($str (*)($Eq$complex))$default__str__,
+    ($str (*)($Eq$complex))$default__str__,
     $Eq$complex$__eq__,
     $Eq$complex$__ne__
 };
@@ -305,6 +309,7 @@ struct $Hashable$complex$class $Hashable$complex$methods = {
     $Hashable$complex$__serialize__,
     $Hashable$complex$__deserialize__,
     ($bool (*)($Hashable$complex))$default__bool__,
+    ($str (*)($Hashable$complex))$default__str__,
     ($str (*)($Hashable$complex))$default__str__,
     $Hashable$complex$__eq__,
     $Hashable$complex$__ne__,

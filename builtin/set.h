@@ -7,6 +7,7 @@ struct $set$class {
   $set (*__deserialize__)($set, $Serial$state);
   $bool (*__bool__)($set);
   $str (*__str__)($set);
+  $str (*__repr__)($set);
   $set(*copy)($set, $Hashable);
 };
 
@@ -52,6 +53,7 @@ struct $Iterator$set$class {
   $Iterator$set (*__deserialize__)($Iterator$set, $Serial$state);
   $bool (*__bool__)($Iterator$set);
   $str (*__str__)($Iterator$set);
+  $str (*__repr__)($Iterator$set);
   $WORD(*__next__)($Iterator$set);
 };
 

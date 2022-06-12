@@ -78,7 +78,7 @@ $WORD $Iterator$enumerate_next($Iterator$enumerate it) {
 
 struct $Iterator$enumerate$class $Iterator$enumerate$methods = {"$Iterator$enumerate",UNASSIGNED,($Super$class)&$Iterator$methods,$Iterator$enumerate_init,
                                                                 $Iterator$enumerate_serialize, $Iterator$enumerate$_deserialize, 
-                                                                $Iterator$enumerate_bool,$Iterator$enumerate_str, $Iterator$enumerate_next};
+                                                                $Iterator$enumerate_bool,$Iterator$enumerate_str,$Iterator$enumerate_str, $Iterator$enumerate_next};
 
 
 $Iterator$enumerate $Iterator$enumerate$new($Iterator it, $int n) {
@@ -130,7 +130,7 @@ $WORD $Iterator$filter_next($Iterator$filter it) {
 
 struct $Iterator$filter$class $Iterator$filter$methods = {"$Iterator$filter",UNASSIGNED,($Super$class)&$Iterator$methods,$Iterator$filter_init,
                                                           $Iterator$filter_serialize, $Iterator$filter$_deserialize, 
-                                                          $Iterator$filter_bool,$Iterator$filter_str, $Iterator$filter_next};
+                                                          $Iterator$filter_bool,$Iterator$filter_str,$Iterator$filter_str, $Iterator$filter_next};
 
 $Iterator$filter $Iterator$filter$new($Iterator it, $function f) {
     return $NEW($Iterator$filter, it, f);
@@ -179,7 +179,7 @@ $WORD $Iterator$map_next($Iterator$map it) {
 
 struct $Iterator$map$class $Iterator$map$methods = {"$Iterator$map",UNASSIGNED,($Super$class)&$Iterator$methods,$Iterator$map_init,
                                                                 $Iterator$map_serialize, $Iterator$map$_deserialize,  
-                                                                $Iterator$map_bool,$Iterator$map_str, $Iterator$map_next};
+                                                                $Iterator$map_bool,$Iterator$map_str,$Iterator$map_str, $Iterator$map_next};
 
 $Iterator$map $Iterator$map$new($Iterator it, $function f) {
     return $NEW($Iterator$map, it, f);
@@ -277,7 +277,7 @@ $WORD $Iterator$zip_next($Iterator$zip it) {
 
 struct $Iterator$zip$class $Iterator$zip$methods = {" $Iterator$zip",UNASSIGNED,($Super$class)&$Iterator$methods,$Iterator$zip_init,
                                                     $Iterator$zip_serialize, $Iterator$zip$_deserialize, 
-                                                    $Iterator$zip_bool,$Iterator$zip_str, $Iterator$zip_next};
+                                                    $Iterator$zip_bool,$Iterator$zip_str,$Iterator$zip_str, $Iterator$zip_next};
 
 $Iterator$zip $Iterator$zip$new($Iterator iter1, $Iterator iter2) {
     return $NEW($Iterator$zip, iter1, iter2);
@@ -361,6 +361,11 @@ $int $len ($Collection w$301, $WORD x) {
 $WORD $pow ($Number w$344, $WORD a, $WORD b) {
     return w$344->$class->__pow__(w$344, a, b);
 }
+
+$str $repr($value x) {
+  return x->$class->__repr__(x);
+}
+
 $Iterator $reversed ($Sequence w$369, $WORD seq) {
     return w$369->$class->__reversed__(w$369, seq);
 }

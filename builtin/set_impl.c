@@ -63,7 +63,7 @@ $str $set_str($set self) {
   $value elem;
   for (int i=0; i<self->numelements; i++) {
     elem = ($value)iter->$class->__next__(iter);
-    $list_append(s2,elem->$class->__str__(elem));
+    $list_append(s2,elem->$class->__repr__(elem));
   }
   return $str_join_par('{',s2,'}');
 }
@@ -116,7 +116,7 @@ $set $set_deserialize ($set res, $Serial$state state) {
 }
 
 // Maybe we should  offer union, intersection and symmetric difference under those names.
-struct $set$class $set$methods = {"$set",UNASSIGNED,($Super$class)&$object$methods,$set_init,$set_serialize,$set_deserialize,$set_bool,$set_str,$set_copy}; 
+struct $set$class $set$methods = {"$set",UNASSIGNED,($Super$class)&$object$methods,$set_init,$set_serialize,$set_deserialize,$set_bool,$set_str,$set_str,$set_copy}; 
 
 
 static void $set_insert_clean($setentry *table, long mask, $WORD *key, long hash) {
@@ -543,7 +543,7 @@ $Iterator$set $Iterator$set$_deserialize($Iterator$set res, $Serial$state state)
 }
 
 struct $Iterator$set$class $Iterator$set$methods = {"$Iterator$set",UNASSIGNED,($Super$class)&$Iterator$methods, $Iterator$set_init,
-                                                      $Iterator$set_serialize, $Iterator$set$_deserialize,$Iterator$set_bool,$Iterator$set_str, $Iterator$set_next};
+                                                      $Iterator$set_serialize, $Iterator$set$_deserialize,$Iterator$set_bool,$Iterator$set_str,$Iterator$set_str, $Iterator$set_next};
 
 
 $Iterator $set_iter($set set) {

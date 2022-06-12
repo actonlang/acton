@@ -39,7 +39,7 @@ $str $list_str($list self) {
   $list s2 = $list_new(self->length);
   for (int i=0; i< self->length; i++) {
     $value elem = ($value)self->data[i];
-    $list_append(s2,elem->$class->__str__(elem));
+    $list_append(s2,elem->$class->__repr__(elem));
   }
   return $str_join_par('[',s2,']');
 }
@@ -75,7 +75,7 @@ $list $list_deserialize($list res, $Serial$state state) {
   }
 }
 
-struct $list$class $list$methods = {"$list",UNASSIGNED,($Super$class)&$object$methods, $list_init, $list_serialize,$list_deserialize, $list_bool, $list_str, $list_copy};
+struct $list$class $list$methods = {"$list",UNASSIGNED,($Super$class)&$object$methods, $list_init, $list_serialize,$list_deserialize, $list_bool, $list_str, $list_str,$list_copy};
 
 // Auxiliary functions /////////////////////////////////////////////////////////////////////////////////////////////////////
  
@@ -215,7 +215,7 @@ $Iterator$list $Iterator$list$_deserialize($Iterator$list res, $Serial$state sta
 }
 
 struct $Iterator$list$class $Iterator$list$methods = {"$Iterator$list",UNASSIGNED,($Super$class)&$Iterator$methods, $Iterator$list_init,
-                                                      $Iterator$list_serialize, $Iterator$list$_deserialize,$Iterator$list_bool,$Iterator$list_str,$Iterator$list_next};
+                                                      $Iterator$list_serialize, $Iterator$list$_deserialize,$Iterator$list_bool,$Iterator$list_str,$Iterator$list_str,$Iterator$list_next};
 
 $Iterator $list_iter($list lst) {
   return ($Iterator)$NEW($Iterator$list,lst);

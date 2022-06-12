@@ -83,6 +83,7 @@ struct $value$class {
   $value (*__deserialize__)($value, $Serial$state);
   $bool (*__bool__)($value);
   $str (*__str__)($value);
+  $str (*__repr__)($value);
 };
 
 struct $value {
@@ -110,6 +111,7 @@ struct $object$class {
   $object (*__deserialize__)($object, $Serial$state);
   $bool (*__bool__)($object);
   $str (*__str__)($object);
+  $str (*__repr__)($object);
 };
 
 struct $object {

@@ -67,6 +67,7 @@ struct $float$class $float$methods = {
     $float_serialize,
     $float_deserialize,
     $float_bool,
+    $float_str,
     $float_str
 };
   
@@ -303,6 +304,7 @@ struct $Real$float$class $Real$float$methods = {
     $Real$float$__deserialize__,
     ($bool (*)($Real$float))$default__bool__,
     ($str (*)($Real$float))$default__str__,
+    ($str (*)($Real$float))$default__str__,
     $Real$float$__add__,
     ($float (*)($Real$float, $float, $float))$Plus$__iadd__,
     $Real$float$__mul__,
@@ -335,6 +337,7 @@ struct $Minus$float$class $Minus$float$methods = {
     $Minus$float$__deserialize__,
     ($bool (*)($Minus$float))$default__bool__,
     ($str (*)($Minus$float))$default__str__,
+    ($str (*)($Minus$float))$default__str__,
     $Minus$float$__sub__,
     ($float (*)($Minus$float, $float, $float))$Minus$__isub__,
 
@@ -350,6 +353,7 @@ struct $Div$float$class $Div$float$methods = {
     $Div$float$__serialize__,
     $Div$float$__deserialize__,
     ($bool (*)($Div$float))$default__bool__,
+    ($str (*)($Div$float))$default__str__,
     ($str (*)($Div$float))$default__str__,
     $Div$float$__truediv__,
     ($float (*)($Div$float, $float, $float))$Div$__itruediv__,
@@ -367,6 +371,7 @@ struct $Ord$float$class $Ord$float$methods = {
     $Ord$float$__serialize__,
     $Ord$float$__deserialize__,
     ($bool (*)($Ord$float))$default__bool__,
+    ($str (*)($Ord$float))$default__str__,
     ($str (*)($Ord$float))$default__str__,
     $Ord$float$__eq__ ,
     $Ord$float$__ne__ ,
@@ -386,6 +391,7 @@ struct $Hashable$float$class $Hashable$float$methods = {
     $Hashable$float$__serialize__,
     $Hashable$float$__deserialize__,
     ($bool (*)($Hashable$float))$default__bool__,
+    ($str (*)($Hashable$float))$default__str__,
     ($str (*)($Hashable$float))$default__str__,
     $Hashable$float$__eq__,
     $Hashable$float$__neq__,

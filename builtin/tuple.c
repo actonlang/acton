@@ -32,7 +32,7 @@ $str $tuple_str($tuple self) {
   $list s2 = $list_new(self->size);
   for (int i=0; i< self->size; i++) {
     $value elem = ($value)self->components[i];
-    $list_append(s2,elem->$class->__str__(elem));
+    $list_append(s2,elem->$class->__repr__(elem));
   }
   return $str_join_par('(',s2,')');
 }
@@ -79,6 +79,7 @@ struct $tuple$class $tuple$methods = {
     $tuple_serialize,
     $tuple_deserialize,
     $tuple_bool,
+    $tuple_str,
     $tuple_str
 };
 
@@ -116,7 +117,7 @@ $Iterator$tuple $Iterator$tuple$_deserialize($Iterator$tuple res, $Serial$state 
 }
 
 struct $Iterator$tuple$class $Iterator$tuple$methods = {"$Iterator$tuple",UNASSIGNED,($Super$class)&$Iterator$methods,$Iterator$tuple_init,
-                                                        $Iterator$tuple_serialize,$Iterator$tuple$_deserialize,$Iterator$tuple_bool,$Iterator$tuple_str,$Iterator$tuple_next};
+                                                        $Iterator$tuple_serialize,$Iterator$tuple$_deserialize,$Iterator$tuple_bool,$Iterator$tuple_str,$Iterator$tuple_str,$Iterator$tuple_next};
 
 
 // Iterable ///////////////////////////////////////////////////////////////
@@ -144,6 +145,7 @@ struct $Iterable$tuple$class $Iterable$tuple$methods = {
     $Iterable$tuple$__serialize__,
     $Iterable$tuple$__deserialize__,
     ($bool (*)($Iterable$tuple))$default__bool__,
+    ($str (*)($Iterable$tuple))$default__str__,
     ($str (*)($Iterable$tuple))$default__str__,
     $Iterable$tuple$__iter__
 };
@@ -223,6 +225,7 @@ struct $Sliceable$tuple$class $Sliceable$tuple$methods = {
     $Sliceable$tuple$__deserialize__,
     ($bool (*)($Sliceable$tuple))$default__bool__,
     ($str (*)($Sliceable$tuple))$default__str__,
+    ($str (*)($Sliceable$tuple))$default__str__,
     $Sliceable$tuple$__getitem__,
     $Sliceable$tuple$__setitem__,
     $Sliceable$tuple$__delitem__,
@@ -277,6 +280,7 @@ struct $Hashable$tuple$class $Hashable$tuple$methods = {
     $Hashable$tuple$__serialize__,
     $Hashable$tuple$__deserialize__,
     ($bool (*)($Hashable$tuple))$default__bool__,
+    ($str (*)($Hashable$tuple))$default__str__,
     ($str (*)($Hashable$tuple))$default__str__,
     $Hashable$tuple$__eq__,
     $Hashable$tuple$__ne__,

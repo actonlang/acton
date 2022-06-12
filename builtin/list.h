@@ -7,6 +7,7 @@ struct $list$class {
   $list (*__deserialize__)($list,$Serial$state);
   $bool (*__bool__)($list);
   $str (*__str__)($list);
+  $str (*__repr__)($list);
   $list(*copy)($list);
   //  $int (*sort)($list self, int (*cmp)($WORD,$WORD));
 };
@@ -49,6 +50,7 @@ struct $Iterator$list$class {
   $Iterator$list (*__deserialize__)($Iterator$list,$Serial$state);
   $bool (*__bool__)($Iterator$list);
   $str (*__str__)($Iterator$list);
+  $str (*__repr__)($Iterator$list);
   $WORD(*__next__)($Iterator$list);
 };
 

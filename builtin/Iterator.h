@@ -9,6 +9,7 @@ struct $Iterator$class {
   $Iterator (*__deserialize__)($Iterator,$Serial$state);
   $bool (*__bool__)($Iterator);
   $str (*__str__)($Iterator);
+  $str (*__repr__)($Iterator);
   $WORD (*__next__)($Iterator);
 };
 

@@ -16,6 +16,7 @@ struct $Iterator$enumerate$class {
   $Iterator$enumerate (*__deserialize__)($Iterator$enumerate,$Serial$state);
   $bool (*__bool__)($Iterator$enumerate);
   $str (*__str__)($Iterator$enumerate);
+  $str (*__repr__)($Iterator$enumerate);
   $WORD(*__next__)($Iterator$enumerate);
 };
 
@@ -44,6 +45,7 @@ struct $Iterator$filter$class {
   $Iterator$filter (*__deserialize__)($Iterator$filter,$Serial$state);
   $bool (*__bool__)($Iterator$filter);
   $str (*__str__)($Iterator$filter);
+  $str (*__repr__)($Iterator$filter);
   $WORD(*__next__)($Iterator$filter);
 };
 
@@ -72,6 +74,7 @@ struct $Iterator$map$class {
   $Iterator$map (*__deserialize__)($Iterator$map,$Serial$state);
   $bool (*__bool__)($Iterator$map);
   $str (*__str__)($Iterator$map);
+  $str (*__repr__)($Iterator$map);
   $WORD(*__next__)($Iterator$map);
 };
 
@@ -101,6 +104,7 @@ struct $Iterator$zip$class {
   $Iterator$zip (*__deserialize__)($Iterator$zip,$Serial$state);
   $bool (*__bool__)($Iterator$zip);
   $str (*__str__)($Iterator$zip);
+  $str (*__repr__)($Iterator$zip);
   $WORD(*__next__)($Iterator$zip);
 };
 
@@ -154,6 +158,7 @@ $Iterator $iter ($Iterable, $WORD);
 $int $len ($Collection, $WORD);
 $WORD $next ($Iterator);
 $WORD $pow ($Number, $WORD, $WORD);
+$str $repr($value);
 $Iterator $reversed ($Sequence, $WORD);
 $WORD $round ($Real, $WORD, $int);
 $WORD $sum($Plus, $Iterable, $WORD, $WORD);

@@ -442,6 +442,7 @@ struct $Msg$class $Msg$methods = {
     $Msg$__serialize__,
     $Msg$__deserialize__,
     $Msg$__bool__,
+    $Msg$__str__,
     $Msg$__str__
 };
 
@@ -454,6 +455,7 @@ struct $Actor$class $Actor$methods = {
     $Actor$__deserialize__,
     $Actor$__bool__,
     $Actor$__str__,
+    $Actor$__str__,
     $Actor$__resume__
 };
 
@@ -465,6 +467,7 @@ struct $Catcher$class $Catcher$methods = {
     $Catcher$__serialize__,
     $Catcher$__deserialize__,
     $Catcher$__bool__,
+    $Catcher$__str__,
     $Catcher$__str__
 };
 
@@ -477,6 +480,7 @@ struct $Cont$class $Cont$methods = {
     $Cont$__deserialize__,
     $Cont$__bool__,
     $Cont$__str__,
+    $Cont$__str__,
     NULL
 };
 
@@ -488,6 +492,7 @@ struct $ConstCont$class $ConstCont$methods = {
     $ConstCont$__serialize__,
     $ConstCont$__deserialize__,
     $ConstCont$__bool__,
+    $ConstCont$__str__,
     $ConstCont$__str__,
     $ConstCont$__call__
 };
@@ -664,6 +669,7 @@ struct $Cont$class $Done$methods = {
     $Done__deserialize__,
     $Done$__bool__,
     $Done$__str__,
+    $Done$__str__,
     ($R (*)($Cont, ...))$DONE$__call__
 };
 struct $Cont $Done$instance = {
@@ -683,6 +689,7 @@ struct $Cont$class $InitRoot$methods = {
     $Cont$__serialize__,
     $Cont$__deserialize__,
     $Cont$__bool__,
+    $Cont$__str__,
     $Cont$__str__,
     ($R (*)($Cont, ...))$InitRoot$__call__
 };
