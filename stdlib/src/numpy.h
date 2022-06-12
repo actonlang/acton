@@ -14,6 +14,7 @@ struct numpy$$ndselect$class {
     numpy$$ndselect (*__deserialize__) (numpy$$ndselect, $Serial$state);
     $bool (*__bool__) (numpy$$ndselect);
     $str (*__str__) (numpy$$ndselect);
+    $str (*__repr__) (numpy$$ndselect);
 };
 struct numpy$$ndselect {
     struct numpy$$ndselect$class *$class;
@@ -31,6 +32,7 @@ struct numpy$$ndindex$class {
     numpy$$ndindex (*__deserialize__) (numpy$$ndindex, $Serial$state);
     $bool (*__bool__) (numpy$$ndindex);
     $str (*__str__) (numpy$$ndindex);
+    $str (*__repr__) (numpy$$ndindex);
 };
 struct numpy$$ndindex {
     struct numpy$$ndindex$class *$class;
@@ -51,6 +53,7 @@ struct numpy$$ndslice$class {
     numpy$$ndslice (*__deserialize__) (numpy$$ndslice, $Serial$state);
     $bool (*__bool__) (numpy$$ndslice);
     $str (*__str__) (numpy$$ndslice);
+    $repr (*__str__) (numpy$$ndslice);
 };
 struct numpy$$ndslice {
     struct numpy$$ndslice$class *$class;
@@ -108,6 +111,7 @@ struct numpy$$Primitive$class {
   numpy$$Primitive (*__deserialize__)(numpy$$Primitive,$Serial$state);
   $bool (*__bool__)(numpy$$Primitive);
   $str (*__str__)(numpy$$Primitive);
+  $str (*__repr__)(numpy$$Primitive);
   enum ElemType elem_type;
   $WORD (*to$obj)(union $Bytes8);
   union $Bytes8 (*from$obj)($WORD);
@@ -167,6 +171,7 @@ struct numpy$$Primitive$int$class {
   numpy$$Primitive$int (*__deserialize__)(numpy$$Primitive$int,$Serial$state);
   $bool (*__bool__)(numpy$$Primitive$int);
   $str (*__str__)(numpy$$Primitive$int);
+  $str (*__repr__)(numpy$$Primitive$int);
   enum ElemType elem_type;
   $WORD (*to$obj)(union $Bytes8);
   union $Bytes8 (*from$obj)($WORD);
@@ -223,6 +228,7 @@ struct numpy$$Primitive$float$class {
   numpy$$Primitive$float (*__deserialize__)(numpy$$Primitive$float,$Serial$state);
   $bool (*__bool__)(numpy$$Primitive$float);
   $str (*__str__)(numpy$$Primitive$float);
+  $str (*__repr__)(numpy$$Primitive$float);
   enum ElemType elem_type;
   $WORD (*to$obj)(union $Bytes8);
   union $Bytes8 (*from$obj)($WORD);

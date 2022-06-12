@@ -109,6 +109,7 @@ void math$$__init__ () {
         math$$RealFuns$float$methods.__deserialize__ = math$$RealFuns$float$__deserialize__,
         math$$RealFuns$float$methods.__bool__ = ($bool (*)(math$$RealFuns$float))$default__bool__,
         math$$RealFuns$float$methods.__str__ = ($str (*)(math$$RealFuns$float))$default__str__,
+        math$$RealFuns$float$methods.__repr__ = ($str (*)(math$$RealFuns$float))$default__str__,
         math$$RealFuns$float$methods.__init__ = math$$RealFuns$float$__init__;
         math$$RealFuns$float$methods.sqrt = math$$RealFuns$float$sqrt;        
         math$$RealFuns$float$methods.exp = math$$RealFuns$float$exp;        

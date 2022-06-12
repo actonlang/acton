@@ -378,6 +378,7 @@ struct numpy$$Integral$ndarray$int$class numpy$$Integral$ndarray$int$methods = {
     numpy$$Integral$ndarray$int$__deserialize__,
     ($bool (*)(numpy$$Integral$ndarray$int))$default__bool__,
     ($str (*)(numpy$$Integral$ndarray$int))$default__str__,
+    ($str (*)(numpy$$Integral$ndarray$int))$default__str__,
     numpy$$Integral$ndarray$int$__add__,
     (numpy$$ndarray (*)(numpy$$Integral$ndarray$int, numpy$$ndarray, numpy$$ndarray))$Plus$__iadd__,    
     numpy$$Integral$ndarray$int$__mul__,
@@ -426,6 +427,7 @@ struct numpy$$Logical$ndarray$int$class numpy$$Logical$ndarray$int$methods =  {
     numpy$$Logical$ndarray$int$__deserialize__,
     ($bool (*)(numpy$$Logical$ndarray$int))$default__bool__,
     ($str (*)(numpy$$Logical$ndarray$int))$default__str__,
+    ($str (*)(numpy$$Logical$ndarray$int))$default__str__,
     numpy$$Logical$ndarray$int$__and__,
     numpy$$Logical$ndarray$int$__or__,
     numpy$$Logical$ndarray$int$__xor__,
@@ -446,6 +448,7 @@ struct numpy$$Minus$ndarray$int$class numpy$$Minus$ndarray$int$methods = {
     numpy$$Minus$ndarray$int$__deserialize__,
     ($bool (*)(numpy$$Minus$ndarray$int))$default__bool__,
     ($str (*)(numpy$$Minus$ndarray$int))$default__str__,
+    ($str (*)(numpy$$Minus$ndarray$int))$default__str__,
     numpy$$Minus$ndarray$int$__sub__,
     (numpy$$ndarray (*)(numpy$$Minus$ndarray$int, numpy$$ndarray, numpy$$ndarray))$Minus$__isub__
 };
@@ -460,6 +463,7 @@ struct numpy$$Real$ndarray$class numpy$$Real$ndarray$methods = {
     numpy$$Real$ndarray$__serialize__,
     numpy$$Real$ndarray$__deserialize__,
     ($bool (*)(numpy$$Real$ndarray))$default__bool__,
+    ($str (*)(numpy$$Real$ndarray))$default__str__,
     ($str (*)(numpy$$Real$ndarray))$default__str__,
     numpy$$Real$ndarray$__add__,
     (numpy$$ndarray (*)(numpy$$Real$ndarray, numpy$$ndarray, numpy$$ndarray))$Plus$__iadd__,    
@@ -491,6 +495,7 @@ struct numpy$$Minus$ndarray$class numpy$$Minus$ndarray$methods = {
     numpy$$Minus$ndarray$__deserialize__,
     ($bool (*)(numpy$$Minus$ndarray))$default__bool__,
     ($str (*)(numpy$$Minus$ndarray))$default__str__,
+    ($str (*)(numpy$$Minus$ndarray))$default__str__,
     numpy$$Minus$ndarray$__sub__,
     (numpy$$ndarray (*)(numpy$$Minus$ndarray, numpy$$ndarray, numpy$$ndarray))$Minus$__isub__
 };
@@ -506,6 +511,7 @@ struct numpy$$Div$ndarray$int$class numpy$$Div$ndarray$int$methods = {
     numpy$$Div$ndarray$int$__serialize__,
     numpy$$Div$ndarray$int$__deserialize__,
     ($bool (*)(numpy$$Div$ndarray$int))$default__bool__,
+    ($str (*)(numpy$$Div$ndarray$int))$default__str__,
     ($str (*)(numpy$$Div$ndarray$int))$default__str__,
     numpy$$Div$ndarray$int$__truediv__,
     (numpy$$ndarray (*)(numpy$$Div$ndarray$int, numpy$$ndarray, numpy$$ndarray))$Div$__itruediv__
@@ -523,6 +529,7 @@ struct numpy$$Div$ndarray$float$class numpy$$Div$ndarray$float$methods = {
     numpy$$Div$ndarray$float$__deserialize__,
     ($bool (*)(numpy$$Div$ndarray$float))$default__bool__,
     ($str (*)(numpy$$Div$ndarray$float))$default__str__,
+    ($str (*)(numpy$$Div$ndarray$float))$default__str__,
     numpy$$Div$ndarray$float$__truediv__,
     (numpy$$ndarray (*)(numpy$$Div$ndarray$float, numpy$$ndarray, numpy$$ndarray))$Div$__itruediv__
 };
@@ -538,6 +545,7 @@ struct numpy$$Sliceable$ndarray$class numpy$$Sliceable$ndarray$methods = {
     numpy$$Sliceable$ndarray$__serialize__,
     numpy$$Sliceable$ndarray$__deserialize__,
     ($bool (*)(numpy$$Sliceable$ndarray))$default__bool__,
+    ($str (*)(numpy$$Sliceable$ndarray))$default__str__,
     ($str (*)(numpy$$Sliceable$ndarray))$default__str__,
     numpy$$Sliceable$ndarray$__getitem__,
     numpy$$Sliceable$ndarray$__setitem__,
@@ -591,6 +599,7 @@ struct numpy$$Collection$ndarray$class numpy$$Collection$ndarray$methods = {
     numpy$$Collection$ndarray$__serialize__,
     numpy$$Collection$ndarray$__deserialize__,
     ($bool (*)(numpy$$Collection$ndarray))$default__bool__,
+    ($str (*)(numpy$$Collection$ndarray))$default__str__,
     ($str (*)(numpy$$Collection$ndarray))$default__str__,
     numpy$$Collection$ndarray$__iter__,
     numpy$$Collection$ndarray$__fromiter__,
@@ -698,6 +707,7 @@ struct numpy$$RealFuns$math$ndarray$class numpy$$RealFuns$math$ndarray$methods =
     numpy$$RealFuns$math$ndarray$__serialize__,
     numpy$$RealFuns$math$ndarray$__deserialize__,
     ($bool (*)(numpy$$RealFuns$math$ndarray))$default__bool__,
+    ($str (*)(numpy$$RealFuns$math$ndarray))$default__str__,
     ($str (*)(numpy$$RealFuns$math$ndarray))$default__str__,
     numpy$$RealFuns$math$ndarray$sqrt,        
     numpy$$RealFuns$math$ndarray$exp,        
