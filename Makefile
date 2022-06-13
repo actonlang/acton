@@ -317,14 +317,37 @@ backend:
 .PHONY: rts
 rts: $(ARCHIVES)
 
-.PHONY: test
+
+.PHONY: test test-builtins test-compiler test-db test-examples test-lang test-regressions test-rts test-stdlib
 test:
-	$(MAKE) test-tasty
+	cd compiler && stack test
 	$(MAKE) -C backend test
 	$(MAKE) -C test
 
-test-tasty:
-	cd compiler && stack test
+test-builtins:
+	cd compiler && stack test --ta '-p "Builtins"'
+
+test-compiler:
+	cd compiler && stack test --ta '-p "actonc"'
+
+test-db:
+	cd compiler && stack test --ta '-p "DB"'
+
+test-examples:
+	cd compiler && stack test --ta '-p "Examples"'
+
+test-lang:
+	cd compiler && stack test --ta '-p "Core language"'
+
+test-regressions:
+	cd compiler && stack test --ta '-p "Regression"'
+
+test-rts:
+	cd compiler && stack test --ta '-p "RTS"'
+
+test-stdlib:
+	cd compiler && stack test --ta '-p "stdlib"'
+
 
 .PHONY: clean
 clean: clean-compiler clean-distribution clean-backend clean-rts
