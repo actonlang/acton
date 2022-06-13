@@ -53,7 +53,7 @@ struct numpy$$ndslice$class {
     numpy$$ndslice (*__deserialize__) (numpy$$ndslice, $Serial$state);
     $bool (*__bool__) (numpy$$ndslice);
     $str (*__str__) (numpy$$ndslice);
-    $repr (*__str__) (numpy$$ndslice);
+    $str (*__repr__) (numpy$$ndslice);
 };
 struct numpy$$ndslice {
     struct numpy$$ndslice$class *$class;
