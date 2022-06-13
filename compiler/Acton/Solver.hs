@@ -527,8 +527,8 @@ cast' env (TFX _ fx1) (TFX _ fx2)
         castFX FXMut    FXProc              = True
         castFX FXProc   FXProc              = True
         castFX FXAction FXAction            = True
-        castFX FXAction FXProc              = True      -- temporary
-        castFX fx1      fx2                 = False
+        castFX FXAction FXProc              = True
+        castFX _        _                   = False
 
 cast' env (TNil _ k1) (TNil _ k2)
   | k1 == k2                                = return ()

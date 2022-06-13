@@ -877,12 +877,24 @@ glb env t1 (TNone _)                    = pure tNone
 glb env (TOpt _ t1) t2                  = glb env t1 t2
 glb env t1 (TOpt _ t2)                  = glb env t1 t2
 
-glb env t1@(TFX _ fx1) t2@(TFX _ fx2)   = pure $ tTFX (glfx fx1 fx2)
-  where glfx FXPure   _                 = FXPure
-        glfx _        FXPure            = FXPure
-        glfx FXMut    _                 = FXMut
-        glfx _        FXMut             = FXMut
-        glfx FXProc   FXProc            = FXProc
+glb env t1@(TFX _ fx1) t2@(TFX _ fx2)
+  | Just fx <- glfx fx1 fx2             = pure $ tTFX fx
+  where glfx FXPure   FXPure            = Just FXPure
+        glfx FXPure   FXMut             = Just FXPure
+        glfx FXPure   FXProc            = Just FXPure
+        glfx FXPure   FXAction          = Nothing
+        glfx FXMut    FXPure            = Just FXPure
+        glfx FXMut    FXMut             = Just FXMut
+        glfx FXMut    FXProc            = Just FXMut
+        glfx FXMut    FXAction          = Nothing
+        glfx FXProc   FXPure            = Just FXPure
+        glfx FXProc   FXMut             = Just FXMut
+        glfx FXProc   FXProc            = Just FXProc
+        glfx FXProc   FXAction          = Just FXAction
+        glfx FXAction FXPure            = Nothing
+        glfx FXAction FXMut             = Nothing
+        glfx FXAction FXProc            = Just FXAction
+        glfx FXAction FXAction          = Just FXAction
 
 glb env (TNil _ k1) (TNil _ k2)
   | k1 == k2                            = pure $ tNil k1
@@ -928,11 +940,22 @@ lub env (TOpt _ t1) t2                  = tOpt <$> lub env t1 t2
 lub env t1 (TOpt _ t2)                  = tOpt <$> lub env t1 t2
 
 lub env t1@(TFX _ fx1) t2@(TFX _ fx2)   = pure $ tTFX (lufx fx1 fx2)
-  where lufx FXProc   _                 = FXProc
-        lufx _        FXProc            = FXProc
-        lufx FXMut    _                 = FXMut
-        lufx _        FXMut             = FXMut
-        lufx FXPure   FXPure            = FXPure
+  where lufx FXPure   FXPure            = FXPure
+        lufx FXPure   FXMut             = FXMut
+        lufx FXPure   FXProc            = FXProc
+        lufx FXPure   FXAction          = FXProc
+        lufx FXMut    FXPure            = FXMut
+        lufx FXMut    FXMut             = FXMut
+        lufx FXMut    FXProc            = FXProc
+        lufx FXMut    FXAction          = FXProc
+        lufx FXProc   FXPure            = FXProc
+        lufx FXProc   FXMut             = FXProc
+        lufx FXProc   FXProc            = FXProc
+        lufx FXProc   FXAction          = FXProc
+        lufx FXAction FXPure            = FXProc
+        lufx FXAction FXMut             = FXProc
+        lufx FXAction FXProc            = FXProc
+        lufx FXAction FXAction          = FXAction
 
 lub env (TNil _ k1) (TNil _ k2)
   | k1 == k2                            = pure $ tNil k1
