@@ -74,14 +74,6 @@ rts/argv3:
 	./$@ --rts-wthreads 2>&1 | grep "ERROR: --rts-wthreads requires an argument."
 	@echo "Test success, saw expected error message"
 
-rts/exit_0:
-	$(ACTONC) --root main $@.act
-	./$@
-
-rts/exit_1:
-	$(ACTONC) --root main $@.act
-	./$@; EXIT_CODE=$$?; if [ $$EXIT_CODE -ne 1 ]; then exit 1; fi
-
 # Expect 9 threads given 7 workers + main process + IO
 rts/wthreads1:
 	$(ACTONC) --root main $@.act
