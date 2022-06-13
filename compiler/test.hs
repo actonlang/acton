@@ -22,6 +22,7 @@ main = do
     regressionBuildFailureTests <- createTests "Regression build failures" "../test/regression_build" True [] (testBuild "" ExitSuccess)
     regressionRunFailureTests <- createTests "Regression run time failures" "../test/regression_run" True [] (testBuildAndRun "--root main" ExitSuccess)
     regressionSegfaultTests <- createTests "Regression segfaults" "../test/regression_segfault" True [] (testBuildAndRun "--root main" ExitSuccess)
+    stdlibAutoTests <- createTests "stdlib auto" "../test/stdlib_auto" False [] (testBuildAndRun "--root main" ExitSuccess)
     defaultMain $ testGroup "Tests" $
       [ builtinsAutoTests
       , coreAutoTests
@@ -33,6 +34,7 @@ main = do
       , regressionBuildFailureTests
       , regressionRunFailureTests
       , regressionSegfaultTests
+      , stdlibAutoTests
       ]
 
 coreLangTests =
