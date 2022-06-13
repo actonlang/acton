@@ -241,7 +241,7 @@ stdlib_project: $(STDLIB_ACTFILES_NS) dist/types/__builtin__.ty $(DIST_HFILES) $
 	cd stdlib && ../$(ACTC) build --dev
 	cp -a stdlib/out/types/. dist/types/
 
-stdlib/out/dev/lib/libActonProject.a stdlib/out/rel/lib/libActonProject.a: $(STDLIB_ACTFILES) dist/types/__builtin__.ty $(ACTONC)
+stdlib/out/dev/lib/libActonProject.a stdlib/out/rel/lib/libActonProject.a: stdlib/Makefile $(STDLIB_ACTFILES) dist/types/__builtin__.ty $(ACTONC)
 	$(MAKE) stdlib_project
 
 
@@ -255,7 +255,7 @@ ARCHIVES=lib/dev/libActon.a lib/rel/libActon.a
 
 LIBACTON_DEV_OFILES=builtin/builtin_dev.o builtin/env_dev.o rts/empty.o rts/log.o rts/rts_dev.o deps/netstring_dev.o deps/yyjson_dev.o
 OFILES += $(LIBACTON_DEV_OFILES)
-lib/dev/libActon.a: stdlib/out/dev/lib/libActonProject.a  $(LIBACTON_DEV_OFILES)
+lib/dev/libActon.a: stdlib/out/dev/lib/libActonProject.a $(LIBACTON_DEV_OFILES)
 	@mkdir -p $(dir $@)
 	cp -a $< $@
 	ar rcs $@ $(filter-out stdlib/out/dev/lib/libActonProject.a,$^)
@@ -362,7 +362,7 @@ dist/rts/%: rts/%
 	@mkdir -p $(dir $@)
 	cp $< $@
 
-dist/types/%: stdlib/out/types/% stdlib
+dist/types/%: stdlib/out/types/%
 	@mkdir -p $(dir $@)
 	cp $< $@
 

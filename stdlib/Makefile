@@ -27,11 +27,11 @@ NUMPY_CFLAGS+=-lbsd -ldl -lmd
 endif
 out/dev/lib/numpy.o: src/numpy.c src/numpy.h out/types/math.h $(NUMPY_CFILES) out/dev/lib/math.o
 	@mkdir -p $(dir $@)
-	$(CC) $(CFLAGS) $(CFLAGS_DEV) -Wno-unused-result -r -Iout/ $< -o$@ $(NUMPY_CFLAGS) out/dev/lib/math.o
+	$(CC) $(CFLAGS) $(CFLAGS_DEV) -Wno-unused-result -r -Iout/ $< -o$@ $(NUMPY_CFLAGS)
 
 out/rel/lib/numpy.o: src/numpy.c src/numpy.h out/types/math.h $(NUMPY_CFILES) out/rel/lib/math.o
 	@mkdir -p $(dir $@)
-	$(CC) $(CFLAGS) $(CFLAGS_REL) -Wno-unused-result -r -Iout/ $< -o$@ $(NUMPY_CFLAGS) out/rel/lib/math.o
+	$(CC) $(CFLAGS) $(CFLAGS_REL) -Wno-unused-result -r -Iout/ $< -o$@ $(NUMPY_CFLAGS)
 
 out/dev/lib/random.o: src/random.c
 	@mkdir -p $(dir $@)
