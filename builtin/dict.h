@@ -7,6 +7,7 @@ struct $dict$class {
   $dict (*__deserialize__)($dict,$Serial$state);
   $bool (*__bool__)($dict);
   $str (*__str__)($dict);
+  $str (*__repr__)($dict);
 };
 
 typedef struct $table_struct *$table;
@@ -40,6 +41,7 @@ struct $Iterator$dict$class {
   $Iterator$dict (*__deserialize__)($Iterator$dict,$Serial$state);
   $bool (*__bool__)($Iterator$dict);
   $str (*__str__)($Iterator$dict);
+  $str (*__repr__)($Iterator$dict);
   $WORD(*__next__)($Iterator$dict);
 };
 
@@ -65,6 +67,7 @@ struct $Iterator$dict$values$class {
   $Iterator$dict$values (*__deserialize__)($Iterator$dict$values,$Serial$state);
   $bool (*__bool__)($Iterator$dict$values);
   $str (*__str__)($Iterator$dict$values);
+  $str (*__repr__)($Iterator$dict$values);
   $WORD(*__next__)($Iterator$dict$values);
 };
 
@@ -90,6 +93,7 @@ struct $Iterator$dict$items$class {
   $Iterator$dict$items (*__deserialize__)($Iterator$dict$items,$Serial$state);
   $bool (*__bool__)($Iterator$dict$items);
   $str (*__str__)($Iterator$dict$items);
+  $str (*__repr__)($Iterator$dict$items);
   $WORD(*__next__)($Iterator$dict$items);
 };
 

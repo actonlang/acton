@@ -7,6 +7,7 @@ struct $float$class {
   $float (*__deserialize__)($float,$Serial$state);
   $bool (*__bool__)($float);
   $str (*__str__)($float);
+  $str (*__repr__)($float);
 };
 
 

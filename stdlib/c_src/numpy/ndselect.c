@@ -32,6 +32,7 @@ struct numpy$$ndselect$class numpy$$ndselect$methods = {
     numpy$$ndselect$__deserialize__,
     ($bool (*)(numpy$$ndselect))$default__bool__,
     ($str (*)(numpy$$ndselect))$default__str__,
+    ($str (*)(numpy$$ndselect))$default__str__
 };
 
 numpy$$ndselect numpy$$ndselect$new() {
@@ -68,6 +69,7 @@ struct numpy$$ndindex$class numpy$$ndindex$methods = {
     numpy$$ndindex$__deserialize__,
     ($bool (*)(numpy$$ndindex))$default__bool__,
     ($str (*)(numpy$$ndindex))$default__str__,
+    ($str (*)(numpy$$ndindex))$default__str__
 };
 
 numpy$$ndindex numpy$$ndindex$new($int p$1) {
@@ -103,6 +105,7 @@ struct numpy$$ndslice$class numpy$$ndslice$methods = {
     numpy$$ndslice$__deserialize__,
     ($bool (*)(numpy$$ndslice))$default__bool__,
     ($str (*)(numpy$$ndslice))$default__str__,
+    ($str (*)(numpy$$ndslice))$default__str__
 };
 
 numpy$$ndslice numpy$$ndslice$new($slice p$1) {

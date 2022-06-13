@@ -7,6 +7,7 @@ struct $atom$class {
   $atom (*__deserialize__)($atom,$Serial$state);
   $bool (*__bool__)($atom);
   $str (*__str__)($atom);
+  $str (*__repr__)($atom);
 };
 
 struct $atom {

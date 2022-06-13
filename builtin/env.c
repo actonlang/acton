@@ -1217,6 +1217,7 @@ void $__init__ () {
         $Env$methods.$superclass = ($Super$class)&$Actor$methods;
         $Env$methods.__bool__ = ($bool (*) ($Env))$Actor$methods.__bool__;
         $Env$methods.__str__ = ($str (*) ($Env))$Actor$methods.__str__;
+        $Env$methods.__repr__ = ($str (*) ($Env))$Actor$methods.__str__;
         $Env$methods.__resume__ = ($NoneType (*) ($Env))$Actor$methods.__resume__;
         $Env$methods.__init__ = $Env$__init__;
         $Env$methods.stdout_write$local = $Env$stdout_write$local;
@@ -1242,6 +1243,7 @@ void $__init__ () {
         $Connection$methods.$superclass = ($Super$class)&$Actor$methods;
         $Connection$methods.__bool__ = ($bool (*) ($Connection))$Actor$methods.__bool__;
         $Connection$methods.__str__ = ($str (*) ($Connection))$Actor$methods.__str__;
+        $Connection$methods.__repr__ = ($str (*) ($Connection))$Actor$methods.__str__;
         $Connection$methods.__resume__ = ($NoneType (*) ($Connection))$Connection$__resume__;
         $Connection$methods.__init__ = $Connection$__init__;
         $Connection$methods.write$local = $Connection$write$local;
@@ -1259,6 +1261,7 @@ void $__init__ () {
         $RFile$methods.$superclass = ($Super$class)&$Actor$methods;
         $RFile$methods.__bool__ = ($bool (*) ($RFile))$Actor$methods.__bool__;
         $RFile$methods.__str__ = ($str (*) ($RFile))$Actor$methods.__str__;
+        $RFile$methods.__repr__ = ($str (*) ($RFile))$Actor$methods.__str__;
         $RFile$methods.__resume__ = ($NoneType (*) ($RFile))$Actor$methods.__resume__;
         $RFile$methods.__init__ = $RFile$__init__;
         $RFile$methods.readln$local = $RFile$readln$local;
@@ -1274,6 +1277,7 @@ void $__init__ () {
         $WFile$methods.$superclass = ($Super$class)&$Actor$methods;
         $WFile$methods.__bool__ = ($bool (*) ($WFile))$Actor$methods.__bool__;
         $WFile$methods.__str__ = ($str (*) ($WFile))$Actor$methods.__str__;
+        $WFile$methods.__repr__ = ($str (*) ($WFile))$Actor$methods.__str__;
         $WFile$methods.__resume__ = ($NoneType (*) ($WFile))$Actor$methods.__resume__;
         $WFile$methods.__init__ = $WFile$__init__;
         $WFile$methods.write$local = $WFile$write$local;
@@ -1289,6 +1293,7 @@ void $__init__ () {
         $ListenSocket$methods.$superclass = ($Super$class)&$Actor$methods;
         $ListenSocket$methods.__bool__ = ($bool (*) ($ListenSocket))$Actor$methods.__bool__;
         $ListenSocket$methods.__str__ = ($str (*) ($ListenSocket))$Actor$methods.__str__;
+        $ListenSocket$methods.__repr__ = ($str (*) ($ListenSocket))$Actor$methods.__str__;
         $ListenSocket$methods.__resume__ = ($NoneType (*) ($ListenSocket))$ListenSocket$__resume__; // XXX: manually modified, do not touch
         $ListenSocket$methods.__init__ = $ListenSocket$__init__;
         $ListenSocket$methods.close$local = $ListenSocket$close$local;

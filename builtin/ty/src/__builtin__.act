@@ -16,6 +16,7 @@
 class value:
   __bool__ : () -> bool
   __str__ : () -> str
+  __repr__ : () -> str
 
 class object (value):
   pass
@@ -597,6 +598,9 @@ def pow [A(Number)] (a : A, b : A) -> A:
   return Number.__pow__(a,b)
 
 print :  (*A) -> None
+
+def repr(x : value):
+    return x.__repr__()
 
 def reversed(seq : Sequence[A]) -> Iterator[A]:
   return seq.__reversed__()

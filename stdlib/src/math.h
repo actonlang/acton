@@ -13,6 +13,7 @@ struct math$$RealFuns$class {
     math$$RealFuns (*__deserialize__) (math$$RealFuns, $Serial$state);
     $bool (*__bool__)(math$$RealFuns);
     $str (*__str__)(math$$RealFuns);
+    $str (*__repr__)(math$$RealFuns);
     $WORD (*sqrt) (math$$RealFuns, $WORD);
     $WORD (*exp) (math$$RealFuns, $WORD);
     $WORD (*log) (math$$RealFuns, $WORD);
@@ -45,6 +46,7 @@ struct math$$RealFuns$float$class {
     math$$RealFuns$float (*__deserialize__) (math$$RealFuns$float, $Serial$state);
     $bool (*__bool__)(math$$RealFuns$float);
     $str (*__str__)(math$$RealFuns$float);
+    $str (*__repr__)(math$$RealFuns$float);
     $float (*sqrt) (math$$RealFuns$float, $float);
     $float (*exp) (math$$RealFuns$float, $float);
     $float (*log) (math$$RealFuns$float, $float);

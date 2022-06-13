@@ -71,6 +71,7 @@ struct $int$class $int$methods = {
     $int_serialize,
     $int_deserialize,
     $int_bool,
+    $int_str,
     $int_str
 };
 
@@ -400,6 +401,7 @@ struct $Integral$int$class $Integral$int$methods = {
     $Integral$int$__deserialize__,
     ($bool (*)($Integral$int))$default__bool__,
     ($str (*)($Integral$int))$default__str__,
+    ($str (*)($Integral$int))$default__str__,
     $Integral$int$__add__,
     ($int (*)($Integral$int, $int, $int))$Plus$__iadd__,
     $Integral$int$__mul__,
@@ -447,6 +449,7 @@ struct $Logical$int$class $Logical$int$methods =  {
     $Logical$int$__deserialize__,
     ($bool (*)($Logical$int))$default__bool__,
     ($str (*)($Logical$int))$default__str__,
+    ($str (*)($Logical$int))$default__str__,
     $Logical$int$__and__,
     $Logical$int$__or__,
     $Logical$int$__xor__,
@@ -467,6 +470,7 @@ struct $Minus$int$class $Minus$int$methods = {
     $Minus$int$__deserialize__,
     ($bool (*)($Minus$int))$default__bool__,
     ($str (*)($Minus$int))$default__str__,
+    ($str (*)($Minus$int))$default__str__,
     $Minus$int$__sub__,
     ($int (*)($Minus$int, $int, $int))$Minus$__isub__,
 
@@ -482,6 +486,7 @@ struct $Ord$int$class $Ord$int$methods = {
     $Ord$int$__serialize__,
     $Ord$int$__deserialize__,
     ($bool (*)($Ord$int))$default__bool__,
+    ($str (*)($Ord$int))$default__str__,
     ($str (*)($Ord$int))$default__str__,
     $Ord$int$__eq__,
     $Ord$int$__ne__,
@@ -503,6 +508,7 @@ struct $Div$int$class $Div$int$methods = {
     $Div$int$__deserialize__,
     ($bool (*)($Div$int))$default__bool__,
     ($str (*)($Div$int))$default__str__,
+    ($str (*)($Div$int))$default__str__,
     $Div$int$__truediv__,
     ($float (*)($Div$int, $int, $int))$Div$__itruediv__,
 };
@@ -518,6 +524,7 @@ struct $Hashable$int$class $Hashable$int$methods = {
     $Hashable$int$__serialize__,
     $Hashable$int$__deserialize__,
     ($bool (*)($Hashable$int))$default__bool__,
+    ($str (*)($Hashable$int))$default__str__,
     ($str (*)($Hashable$int))$default__str__,
     $Hashable$int$__eq__,
     $Hashable$int$__neq__,

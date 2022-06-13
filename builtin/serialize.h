@@ -70,6 +70,7 @@ struct $Hashable$WORD$class {
     $Hashable$WORD (*__deserialize__)($Hashable$WORD,$Serial$state);
     $bool (*__bool__)($Hashable$WORD);
     $str (*__str__)($Hashable$WORD);
+    $str (*__repr__)($Hashable$WORD);
     $bool (*__eq__)($Hashable$WORD, $WORD, $WORD);
     $bool (*__ne__)($Hashable$WORD, $WORD, $WORD);
     $int (*__hash__)($Hashable$WORD, $WORD);

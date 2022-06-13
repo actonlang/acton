@@ -44,5 +44,6 @@ struct $function$class $function$methods = {
     $function$__deserialize__,
     $function$__bool__,
     $function$__str__,
+    $function$__str__,
     NULL
 };

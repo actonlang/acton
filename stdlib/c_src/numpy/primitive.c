@@ -180,7 +180,7 @@ numpy$$Primitive$float numpy$$Primitive$float$deserialize(numpy$$Primitive$float
 
 
 struct numpy$$Primitive$int$class numpy$$Primitive$int$methods = {"numpy$$Primitive$int",UNASSIGNED,NULL,(void (*)(numpy$$Primitive$int))$default__init__,
-                                                                  numpy$$Primitive$int$serialize,numpy$$Primitive$int$deserialize,NULL,NULL,
+                                                                  numpy$$Primitive$int$serialize,numpy$$Primitive$int$deserialize,NULL,NULL,NULL,
                                                                   LongType,to$obj$int,from$obj$int,l$prim_str,
                                                                   l$add,l$sub,l$mul,l$truediv,l$floordiv,l$mod,l$land,l$lor,l$band,l$bor,l$bxor,l$lsh,l$rsh,l$pow,
                                                                   l$iadd,l$isub,l$imul,l$itruediv,l$ifloordiv,l$imod,l$iband,l$ibor,l$ibxor,l$ilsh,l$irsh,
@@ -188,7 +188,7 @@ struct numpy$$Primitive$int$class numpy$$Primitive$int$methods = {"numpy$$Primit
 
 
 struct numpy$$Primitive$float$class numpy$$Primitive$float$methods = {"numpy$$Primitive$float",UNASSIGNED,NULL,(void (*)(numpy$$Primitive$float))$default__init__, 
-                                                                      numpy$$Primitive$float$serialize,numpy$$Primitive$float$deserialize,NULL,NULL,
+                                                                      numpy$$Primitive$float$serialize,numpy$$Primitive$float$deserialize,NULL,NULL,NULL,
                                                                       DblType,to$obj$float,from$obj$float,d$prim_str,
                                                                       d$add,d$sub,d$mul,d$truediv,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,d$pow,
                                                                       d$iadd,d$isub,d$imul,d$itruediv,NULL,NULL,NULL,NULL,NULL,NULL,NULL,

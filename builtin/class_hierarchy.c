@@ -42,6 +42,6 @@ struct $Initializable$class $Initializable$methods = {"$Initializable",UNASSIGNE
 
 struct $Serializable$class $Serializable$methods = {"$Serializable",UNASSIGNED,($Super$class)&$Initializable$methods, $Serializable$__init__,NULL,NULL};
 
-struct $value$class $value$methods = {"$value",UNASSIGNED,($Super$class)&$Serializable$methods,$value$__init__,NULL,NULL,NULL,NULL};
+struct $value$class $value$methods = {"$value",UNASSIGNED,($Super$class)&$Serializable$methods,$value$__init__,NULL,NULL,NULL,NULL,NULL};
 
-struct $object$class $object$methods = {"$value",UNASSIGNED,($Super$class)&$value$methods,$object$__init__,NULL,NULL,NULL,NULL};
+struct $object$class $object$methods = {"$value",UNASSIGNED,($Super$class)&$value$methods,$object$__init__,NULL,NULL,NULL,NULL,NULL};

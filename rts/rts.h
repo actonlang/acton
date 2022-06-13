@@ -74,6 +74,7 @@ struct $Msg$class {
     $Msg (*__deserialize__)($Msg, $Serial$state);
     $bool (*__bool__)($Msg);
     $str (*__str__)($Msg);
+    $str (*__repr__)($Msg);
 };
 struct $Msg {
     struct $Msg$class *$class;
@@ -96,6 +97,7 @@ struct $Actor$class {
     $Actor (*__deserialize__)($Actor, $Serial$state);
     $bool (*__bool__)($Actor);
     $str (*__str__)($Actor);
+    $str (*__repr__)($Actor);
     $NoneType (*__resume__)($Actor);
 };
 struct $Actor {
@@ -119,6 +121,7 @@ struct $Catcher$class {
     $Catcher (*__deserialize__)($Catcher, $Serial$state);
     $bool (*__bool__)($Catcher);
     $str (*__str__)($Catcher);
+    $str (*__repr__)($Catcher);
 };
 struct $Catcher {
     struct $Catcher$class *$class;
@@ -136,6 +139,7 @@ struct $Cont$class {
     $Cont (*__deserialize__)($Cont, $Serial$state);
     $bool (*__bool__)($Cont);
     $str (*__str__)($Cont);
+    $str (*__repr__)($Cont);
     $R (*__call__)($Cont, ...);
 };
 struct $Cont {
@@ -151,6 +155,7 @@ struct $ConstCont$class {
     $ConstCont (*__deserialize__)($ConstCont, $Serial$state);
     $bool (*__bool__)($ConstCont);
     $str (*__str__)($ConstCont);
+    $str (*__repr__)($ConstCont);
     $R (*__call__)($ConstCont, $WORD);
 };
 struct $ConstCont {

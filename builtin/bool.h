@@ -7,6 +7,7 @@ struct $bool$class {
   $bool (*__deserialize__)($bool, $Serial$state);
   $bool (*__bool__)($bool);
   $str (*__str__)($bool);
+  $str (*__repr__)($bool);
 };
 
 struct $bool {

@@ -14,6 +14,7 @@ struct numpy$$ndselect$class {
     numpy$$ndselect (*__deserialize__) (numpy$$ndselect, $Serial$state);
     $bool (*__bool__) (numpy$$ndselect);
     $str (*__str__) (numpy$$ndselect);
+    $str (*__repr__) (numpy$$ndselect);
 };
 struct numpy$$ndselect {
     struct numpy$$ndselect$class *$class;
@@ -31,6 +32,7 @@ struct numpy$$ndindex$class {
     numpy$$ndindex (*__deserialize__) (numpy$$ndindex, $Serial$state);
     $bool (*__bool__) (numpy$$ndindex);
     $str (*__str__) (numpy$$ndindex);
+    $str (*__repr__) (numpy$$ndindex);
 };
 struct numpy$$ndindex {
     struct numpy$$ndindex$class *$class;
@@ -51,6 +53,7 @@ struct numpy$$ndslice$class {
     numpy$$ndslice (*__deserialize__) (numpy$$ndslice, $Serial$state);
     $bool (*__bool__) (numpy$$ndslice);
     $str (*__str__) (numpy$$ndslice);
+    $str (*__repr__) (numpy$$ndslice);
 };
 struct numpy$$ndslice {
     struct numpy$$ndslice$class *$class;
@@ -108,6 +111,7 @@ struct numpy$$Primitive$class {
   numpy$$Primitive (*__deserialize__)(numpy$$Primitive,$Serial$state);
   $bool (*__bool__)(numpy$$Primitive);
   $str (*__str__)(numpy$$Primitive);
+  $str (*__repr__)(numpy$$Primitive);
   enum ElemType elem_type;
   $WORD (*to$obj)(union $Bytes8);
   union $Bytes8 (*from$obj)($WORD);
@@ -167,6 +171,7 @@ struct numpy$$Primitive$int$class {
   numpy$$Primitive$int (*__deserialize__)(numpy$$Primitive$int,$Serial$state);
   $bool (*__bool__)(numpy$$Primitive$int);
   $str (*__str__)(numpy$$Primitive$int);
+  $str (*__repr__)(numpy$$Primitive$int);
   enum ElemType elem_type;
   $WORD (*to$obj)(union $Bytes8);
   union $Bytes8 (*from$obj)($WORD);
@@ -223,6 +228,7 @@ struct numpy$$Primitive$float$class {
   numpy$$Primitive$float (*__deserialize__)(numpy$$Primitive$float,$Serial$state);
   $bool (*__bool__)(numpy$$Primitive$float);
   $str (*__str__)(numpy$$Primitive$float);
+  $str (*__repr__)(numpy$$Primitive$float);
   enum ElemType elem_type;
   $WORD (*to$obj)(union $Bytes8);
   union $Bytes8 (*from$obj)($WORD);
@@ -290,6 +296,7 @@ struct numpy$$ndarray$class {
   numpy$$ndarray (*__deserialize__)(numpy$$ndarray,$Serial$state);
   $bool (*__bool__)(numpy$$ndarray);
   $str (*__str__)(numpy$$ndarray);
+  $str (*__repr__)(numpy$$ndarray);
   numpy$$ndarray (*reshape)(numpy$$ndarray,$list);
   numpy$$ndarray (*transpose)(numpy$$ndarray,$list);
   numpy$$ndarray (*flatten)(numpy$$ndarray);
@@ -340,6 +347,7 @@ struct numpy$$Iterator$ndarray$class {
   numpy$$Iterator$ndarray (*__deserialize__)(numpy$$Iterator$ndarray,$Serial$state);
   $bool (*__bool__)(numpy$$Iterator$ndarray);
   $str (*__str__)(numpy$$Iterator$ndarray);
+  $str (*__repr__)(numpy$$Iterator$ndarray);
   $WORD (*__next__)(numpy$$Iterator$ndarray);
 };
 
@@ -463,6 +471,7 @@ struct numpy$$Integral$ndarray$int$class {
     numpy$$Integral$ndarray$int (*__deserialize__)(numpy$$Integral$ndarray$int,$Serial$state);
     $bool (*__bool__)(numpy$$Integral$ndarray$int);
     $str (*__str__)(numpy$$Integral$ndarray$int);
+    $str (*__repr__)(numpy$$Integral$ndarray$int);
     numpy$$ndarray (*__add__)(numpy$$Integral$ndarray$int, numpy$$ndarray, numpy$$ndarray);
     numpy$$ndarray (*__iadd__)(numpy$$Integral$ndarray$int, numpy$$ndarray, numpy$$ndarray);
     numpy$$ndarray (*__mul__)(numpy$$Integral$ndarray$int, numpy$$ndarray, numpy$$ndarray);
@@ -545,6 +554,7 @@ struct numpy$$Logical$ndarray$int$class {
     numpy$$Logical$ndarray$int (*__deserialize__)(numpy$$Logical$ndarray$int,$Serial$state);
     $bool (*__bool__)(numpy$$Logical$ndarray$int);
     $str (*__str__)(numpy$$Logical$ndarray$int);
+    $str (*__repr__)(numpy$$Logical$ndarray$int);
     numpy$$ndarray (*__and__)(numpy$$Logical$ndarray$int, numpy$$ndarray, numpy$$ndarray);
     numpy$$ndarray (*__or__)(numpy$$Logical$ndarray$int, numpy$$ndarray, numpy$$ndarray);
     numpy$$ndarray (*__xor__)(numpy$$Logical$ndarray$int, numpy$$ndarray, numpy$$ndarray);
@@ -576,6 +586,7 @@ struct numpy$$Minus$ndarray$int$class {
     numpy$$Minus$ndarray$int (*__deserialize__)(numpy$$Minus$ndarray$int,$Serial$state);
     $bool (*__bool__)(numpy$$Minus$ndarray$int);
     $str (*__str__)(numpy$$Minus$ndarray$int);
+    $str (*__repr__)(numpy$$Minus$ndarray$int);
     numpy$$ndarray (*__sub__)(numpy$$Minus$ndarray$int, numpy$$ndarray, numpy$$ndarray);
     numpy$$ndarray (*__isub__)(numpy$$Minus$ndarray$int, numpy$$ndarray, numpy$$ndarray);
 };
@@ -602,6 +613,7 @@ struct numpy$$Real$ndarray$class {
     numpy$$Real$ndarray (*__deserialize__)(numpy$$Real$ndarray,$Serial$state);
     $bool (*__bool__)(numpy$$Real$ndarray);
     $str (*__str__)(numpy$$Real$ndarray);
+    $str (*__repr__)(numpy$$Real$ndarray);
     numpy$$ndarray (*__add__)(numpy$$Real$ndarray, numpy$$ndarray, numpy$$ndarray);
     numpy$$ndarray (*__iadd__)(numpy$$Real$ndarray, numpy$$ndarray, numpy$$ndarray);
     numpy$$ndarray (*__mul__)(numpy$$Real$ndarray, numpy$$ndarray, numpy$$ndarray);
@@ -660,6 +672,7 @@ struct numpy$$Minus$ndarray$class {
     numpy$$Minus$ndarray (*__deserialize__)(numpy$$Minus$ndarray,$Serial$state);
     $bool (*__bool__)(numpy$$Minus$ndarray);
     $str (*__str__)(numpy$$Minus$ndarray);
+    $str (*__repr__)(numpy$$Minus$ndarray);
     numpy$$ndarray (*__sub__)(numpy$$Minus$ndarray, numpy$$ndarray, numpy$$ndarray);
     numpy$$ndarray (*__isub__)(numpy$$Minus$ndarray, numpy$$ndarray, numpy$$ndarray);
 };
@@ -685,6 +698,7 @@ struct numpy$$Div$ndarray$int$class {
     numpy$$Div$ndarray$int (*__deserialize__)(numpy$$Div$ndarray$int,$Serial$state);
     $bool (*__bool__)(numpy$$Div$ndarray$int);
     $str (*__str__)(numpy$$Div$ndarray$int);
+    $str (*__repr__)(numpy$$Div$ndarray$int);
     numpy$$ndarray (*__truediv__)(numpy$$Div$ndarray$int, numpy$$ndarray, numpy$$ndarray);
     numpy$$ndarray (*__itruediv__)(numpy$$Div$ndarray$int, numpy$$ndarray, numpy$$ndarray);
 };
@@ -710,6 +724,7 @@ struct numpy$$Div$ndarray$float$class {
     numpy$$Div$ndarray$float (*__deserialize__)(numpy$$Div$ndarray$float,$Serial$state);
     $bool (*__bool__)(numpy$$Div$ndarray$float);
     $str (*__str__)(numpy$$Div$ndarray$float);
+    $str (*__repr__)(numpy$$Div$ndarray$float);
     numpy$$ndarray (*__truediv__)(numpy$$Div$ndarray$float, numpy$$ndarray, numpy$$ndarray);
     numpy$$ndarray (*__itruediv__)(numpy$$Div$ndarray$float, numpy$$ndarray, numpy$$ndarray);
 };
@@ -733,6 +748,7 @@ struct numpy$$Sliceable$ndarray$class {
     numpy$$Sliceable$ndarray (*__deserialize__) (numpy$$Sliceable$ndarray, $Serial$state);
     $bool (*__bool__)(numpy$$Sliceable$ndarray);
     $str (*__str__)(numpy$$Sliceable$ndarray);
+    $str (*__repr__)(numpy$$Sliceable$ndarray);
     numpy$$ndarray (*__getitem__) (numpy$$Sliceable$ndarray, numpy$$ndarray, $int);
     void (*__setitem__) (numpy$$Sliceable$ndarray, numpy$$ndarray, $int, $WORD);
     void (*__delitem__) (numpy$$Sliceable$ndarray, numpy$$ndarray, $int);
@@ -761,6 +777,7 @@ struct numpy$$Collection$ndarray$class {
     numpy$$Collection$ndarray (*__deserialize__)(numpy$$Collection$ndarray,$Serial$state);
     $bool (*__bool__)(numpy$$Collection$ndarray);
     $str (*__str__)(numpy$$Collection$ndarray);
+    $str (*__repr__)(numpy$$Collection$ndarray);
     $Iterator (*__iter__)(numpy$$Collection$ndarray, numpy$$ndarray);
     numpy$$ndarray (*__fromiter__)(numpy$$Collection$ndarray, $Iterable);
     $int (*__len__)(numpy$$Collection$ndarray, numpy$$ndarray);
@@ -791,6 +808,7 @@ struct numpy$$RealFuns$math$ndarray$class {
     numpy$$RealFuns$math$ndarray (*__deserialize__) (numpy$$RealFuns$math$ndarray, $Serial$state);
     $bool (*__bool__)(numpy$$RealFuns$math$ndarray);
     $str (*__str__)(numpy$$RealFuns$math$ndarray);
+    $str (*__repr__)(numpy$$RealFuns$math$ndarray);
     numpy$$ndarray (*sqrt) (numpy$$RealFuns$math$ndarray, numpy$$ndarray);
     numpy$$ndarray (*exp) (numpy$$RealFuns$math$ndarray, numpy$$ndarray);
     numpy$$ndarray (*log) (numpy$$RealFuns$math$ndarray, numpy$$ndarray);

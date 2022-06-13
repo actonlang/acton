@@ -14,6 +14,7 @@ struct $complex$class {
   $complex (*__deserialize__)($complex,$Serial$state);
   $bool (*__bool__)($complex);
   $str (*__str__)($complex);
+  $str (*__repr__)($complex);
 };
 
 struct $complex {

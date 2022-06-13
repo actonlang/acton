@@ -47,6 +47,7 @@ struct $bool$class $bool$methods = {
     $bool_serialize,
     $bool_deserialize,
     $bool_bool,
+    $bool_str,
     $bool_str
 };
 

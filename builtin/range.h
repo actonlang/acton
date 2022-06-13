@@ -7,6 +7,7 @@ struct $range$class {
   $range (*__deserialize__)($range,$Serial$state);
   $bool (*__bool__)($range);
   $str (*__str__)($range);
+  $str (*__repr__)($range);
 };
 
 struct $range {
@@ -37,6 +38,7 @@ struct $Iterator$range$class {
   $Iterator$range (*__deserialize__)($Iterator$range,$Serial$state);
   $bool (*__bool__)($Iterator$range);
   $str (*__str__)($Iterator$range);
+  $str (*__repr__)($Iterator$range);
   $WORD(*__next__)($Iterator$range);
 };
 

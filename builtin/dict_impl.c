@@ -80,8 +80,8 @@ $str $dict_str($dict self) {
     item = ($tuple)iter->$class->__next__(iter);
     $value key = (($value)item->components[0]);
     $value value = (($value)item->components[1]);
-    $str keystr = key->$class->__str__(key);
-    $str valuestr = value->$class->__str__(value);
+    $str keystr = key->$class->__repr__(key);
+    $str valuestr = value->$class->__repr__(value);
     $str elem = malloc(sizeof(struct $str));
     elem->$class = &$str$methods;
     elem->nbytes = keystr->nbytes+valuestr->nbytes+1;
@@ -146,7 +146,7 @@ $dict $dict_deserialize($dict res, $Serial$state state) {
   }
 }
 
-struct $dict$class $dict$methods = {"$dict", UNASSIGNED,($Super$class)&$object$methods, $dict_init, $dict_serialize,$dict_deserialize, $dict_bool, $dict_str}; 
+struct $dict$class $dict$methods = {"$dict", UNASSIGNED,($Super$class)&$object$methods, $dict_init, $dict_serialize,$dict_deserialize, $dict_bool, $dict_str, $dict_str}; 
 
 // Internal routines //////////////////////////////////////////////////////////////////
 
@@ -357,7 +357,7 @@ $Iterator$dict $Iterator$dict$_deserialize($Iterator$dict res, $Serial$state sta
 
 
 struct $Iterator$dict$class $Iterator$dict$methods = {"$Iterator$dict",UNASSIGNED,($Super$class)&$Iterator$methods, $Iterator$dict_init,
-                                                      $Iterator$dict_serialize, $Iterator$dict$_deserialize, $Iterator$dict_bool,$Iterator$dict_str, $Iterator$dict_next};
+                                                      $Iterator$dict_serialize, $Iterator$dict$_deserialize, $Iterator$dict_bool,$Iterator$dict_str,$Iterator$dict_str, $Iterator$dict_next};
 
 $Iterator $dict_iter($dict dict) {
   return ($Iterator)$NEW($Iterator$dict,dict);
@@ -484,7 +484,7 @@ $Iterator$dict$values $Iterator$dict$values_deserialize($Iterator$dict$values re
 }
 
 struct $Iterator$dict$values$class $Iterator$dict$values$methods = {"$Iterator$dict$values",UNASSIGNED,($Super$class)&$Iterator$methods, $Iterator$dict$values_init,
-                                                                    $Iterator$dict$values_serialize, $Iterator$dict$values_deserialize, $Iterator$dict$values_bool, $Iterator$dict$values_str,
+                                                                    $Iterator$dict$values_serialize, $Iterator$dict$values_deserialize, $Iterator$dict$values_bool, $Iterator$dict$values_str,$Iterator$dict$values_str,
                                                                     $Iterator$dict$values_next};
 
 // items iterator
@@ -540,7 +540,7 @@ $Iterator$dict$items $Iterator$dict$items_deserialize($Iterator$dict$items res, 
 
 
 struct $Iterator$dict$items$class $Iterator$dict$items$methods = {"$Iterator$dict$items",UNASSIGNED,($Super$class)&$Iterator$methods, $Iterator$dict$items_init,
-                                                                  $Iterator$dict$items_serialize, $Iterator$dict$items_deserialize,$Iterator$dict$items_bool, $Iterator$dict$items_str, $Iterator$dict$items_next};
+                                                                  $Iterator$dict$items_serialize, $Iterator$dict$items_deserialize,$Iterator$dict$items_bool, $Iterator$dict$items_str, $Iterator$dict$items_str, $Iterator$dict$items_next};
 
 
 $Iterator $dict_keys($dict dict) {

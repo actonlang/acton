@@ -62,6 +62,7 @@ struct $Hashable$WORD$class $Hashable$WORD$methods = {
     $Hashable$WORD$__deserialize__,
     ($bool (*)($Hashable$WORD))$default__bool__,
     ($str (*)($Hashable$WORD))$default__str__,
+    ($str (*)($Hashable$WORD))$default__str__,
     $Hashable$WORD_eq,
     $Hashable$WORD_ne,
     $Hashable$WORD_hash
