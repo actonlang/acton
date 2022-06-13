@@ -1,0 +1,4 @@
+import math
+
+actor main(env):
+    env.exit(0)
