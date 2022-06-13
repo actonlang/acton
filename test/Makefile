@@ -8,8 +8,7 @@ TESTS= \
 	test_acton_rts_sleep \
 	test_random \
 	test_time \
-	rts_sleep \
-	stdlib/test_numpy
+	rts_sleep
 test:
 	$(MAKE) $(TESTS)
 
@@ -109,10 +108,5 @@ rts_sleep:
 test_time:
 	$(ACTONC) --root main $@.act
 	./test_time $(shell date "+%s")
-
-.PHONY: stdlib/test_numpy
-stdlib/test_numpy: stdlib/test_numpy.act
-	$(ACTONC) --root main $<
-	./$@
 
 .PHONY: test_acton_rts_sleep test_async test_random test_time rts_sleep
