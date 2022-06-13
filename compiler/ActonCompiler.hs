@@ -113,8 +113,15 @@ descr           = fullDesc <> progDesc "Compile an Acton source file with recomp
 
 getVer          = showVersion Paths_acton.version
 getVerExtra     = unwords ["compiled by", compilerName, showVersion compilerVersion, "on", os, arch]
-getCcVer        = do verStr <- readProcess "cc" ["--version"] []
-                     return $ unwords $ take 1 $ lines verStr
+
+getCcVer        = do
+    verStr <- readProcess "cc" ["--version"] []
+                `catch` handleNoCc
+    return $ unwords $ take 1 $ lines verStr
+  where handleNoCc :: IOException -> IO String
+        handleNoCc e = do
+            putStrLn("ERROR: Unable to find cc (the C compiler)\nHINT: Ensure cc is in your PATH")
+            System.Exit.exitFailure
 
 showVer cv      = "acton " ++ getVer ++ "\n" ++ getVerExtra ++ "\ncc: " ++ cv
 
