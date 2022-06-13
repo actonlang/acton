@@ -361,6 +361,7 @@ struct numpy$$ndarray$class numpy$$ndarray$methods = {
     numpy$$ndarray$__deserialize__,
     numpy$$ndarray$__bool__,
     numpy$$ndarray$__str__,
+    numpy$$ndarray$__str__,
     numpy$$ndarray$reshape,
     numpy$$ndarray$transpose,
     numpy$$ndarray$flatten,
@@ -833,7 +834,8 @@ numpy$$Iterator$ndarray numpy$$Iterator$ndarray$_deserialize(numpy$$Iterator$nda
 }
 
 struct numpy$$Iterator$ndarray$class numpy$$Iterator$ndarray$methods = {"",UNASSIGNED,($Super$class)&$Iterator$methods, numpy$$Iterator$init,
-                                                      numpy$$Iterator$$serialize, numpy$$Iterator$ndarray$_deserialize,numpy$$Iterator$bool,numpy$$Iterator$str,numpy$$Iterator$ndarray$__next__};
+                                                      numpy$$Iterator$$serialize, numpy$$Iterator$ndarray$_deserialize,numpy$$Iterator$bool,
+                                                                        numpy$$Iterator$str,numpy$$Iterator$str,numpy$$Iterator$ndarray$__next__};
 
 $int numpy$$newaxis;
 
