@@ -2,18 +2,9 @@ MK_PATH:=$(shell dirname $(dir $(abspath $(lastword $(MAKEFILE_LIST)))))
 ACTONC=$(MK_PATH)/dist/bin/actonc --cpedantic
 DDB_SERVER=../dist/bin/actondb
 TESTS= \
-	$(ENV_TESTS) \
-	$(RTS_TESTS) \
 	$(DDB_TESTS)
 test:
 	$(MAKE) $(TESTS)
-
-
-ENV_TESTS=env/listen_err
-.PHONY: $(ENV_TESTS)
-env/listen_err:
-	$(ACTONC) --root main $@.act
-	./$@
 
 
 ddb-tests:
