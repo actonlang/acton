@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP #-}
 import Data.List
 import Data.List.Split
 import Data.Maybe
@@ -24,12 +25,17 @@ import Test.Tasty.HUnit
 -- the file with __rf.act (for Run Failure).
 
 main = do
+#if defined(darwin_HOST_OS)
+    let segfault_exitcode = (ExitFailure (-11))
+#else
+    let segfault_exitcode = (ExitFailure 139)
+#endif
     builtinsAutoTests <- createAutoTests "Builtins auto" "../test/builtins_auto"
     coreLangAutoTests <- createAutoTests "Core language auto" "../test/core_lang_auto"
     dbAutoTests <- createAutoTests "DB auto" "../test/db_auto"
     exampleTests <- createTests "Examples" "../examples" False [] (testBuild "" ExitSuccess)
     regressionTests <- createAutoTests "Regression auto" "../test/regression_auto"
-    regressionSegfaultTests <- createTests "Regression segfaults" "../test/regression_segfault" False [] (testBuildAndRun "--root main" "" (ExitFailure 139))
+    regressionSegfaultTests <- createTests "Regression segfaults" "../test/regression_segfault" False [] (testBuildAndRun "--root main" "" segfault_exitcode)
     rtsAutoTests <- createAutoTests "RTS auto" "../test/rts_auto"
     stdlibAutoTests <- createAutoTests "stdlib auto" "../test/stdlib_auto"
     defaultMain $ testGroup "Tests" $
