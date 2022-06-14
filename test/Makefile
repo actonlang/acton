@@ -6,7 +6,6 @@ TESTS= \
 	$(RTS_TESTS) \
 	$(DDB_TESTS) \
 	test_acton_rts_sleep \
-	test_random \
 	test_time \
 	rts_sleep
 test:
@@ -63,10 +62,6 @@ test_async:
 	$(ACTONC) --root main $@.act
 	./$@
 
-test_random:
-	$(ACTONC) --root main $@.act
-	./$@
-
 rts_sleep:
 	$(ACTONC) --root main $@.act
 	./$@
@@ -75,4 +70,4 @@ test_time:
 	$(ACTONC) --root main $@.act
 	./test_time $(shell date "+%s")
 
-.PHONY: test_acton_rts_sleep test_async test_random test_time rts_sleep
+.PHONY: test_acton_rts_sleep test_async test_time rts_sleep
