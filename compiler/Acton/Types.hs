@@ -756,7 +756,7 @@ instance Check Decl where
             tvs                         = qbound q
             fx'                         = if fx == fxAction && inAct env then fxProc else fx
 
-    checkEnv env (Actor l n q p k b)   = do --traceM ("## checkEnv actor " ++ prstr n)
+    checkEnv env (Actor l n q p k b)    = do --traceM ("## checkEnv actor " ++ prstr n)
                                              pushFX fxProc tNone
                                              wellformed env1 q
                                              (csp,te1,p') <- infEnv env1 p
