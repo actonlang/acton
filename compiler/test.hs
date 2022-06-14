@@ -1,6 +1,9 @@
+{-# LANGUAGE CPP #-}
 import Data.List
+import Data.List.Split
 import Data.Maybe
 import Data.Ord
+import Data.Time.Clock.POSIX
 
 import System.Directory
 import System.Directory.Recursive
@@ -8,38 +11,54 @@ import System.Exit
 import System.FilePath
 import System.FilePath.Posix
 import System.Process
+import System.TimeIt
 
 import Test.Tasty
 import Test.Tasty.ExpectedFailure
 import Test.Tasty.HUnit
 
 
+-- The default is to build and run each test program with the expectation that
+-- both compilation and running the program is successful as determined by exit
+-- status of 0. If a test is expected to fail compilation, it should be named
+-- __bf.act (for Build Failure). If a test is expected to fail at run time, name
+-- the file with __rf.act (for Run Failure).
+
 main = do
-    builtinsAutoTests <- createTests "Builtins auto" "../test/builtins_auto" False [] (testBuildAndRun "--root main" ExitSuccess)
-    coreAutoTests <- createTests "Core language (auto)" "../test/core_auto" False [] (testBuildAndRun "--root main" ExitSuccess)
+#if defined(darwin_HOST_OS)
+    let segfault_exitcode = (ExitFailure (-11))
+#else
+    let segfault_exitcode = (ExitFailure 139)
+#endif
+    builtinsAutoTests <- createAutoTests "Builtins auto" "../test/builtins_auto"
+    coreLangAutoTests <- createAutoTests "Core language auto" "../test/core_lang_auto"
+    dbAutoTests <- createAutoTests "DB auto" "../test/db_auto"
     exampleTests <- createTests "Examples" "../examples" False [] (testBuild "" ExitSuccess)
-    regressionTests <- createTests "Regression (should succeed)" "../test/regression" False [] (testBuildAndRun "--root main" ExitSuccess)
-    regressionBuildFailureTests <- createTests "Regression build failures" "../test/regression_build" True [] (testBuild "" ExitSuccess)
-    regressionRunFailureTests <- createTests "Regression run time failures" "../test/regression_run" True [] (testBuildAndRun "--root main" ExitSuccess)
-    regressionSegfaultTests <- createTests "Regression segfaults" "../test/regression_segfault" True [] (testBuildAndRun "--root main" ExitSuccess)
+    regressionTests <- createAutoTests "Regression auto" "../test/regression_auto"
+    regressionSegfaultTests <- createTests "Regression segfaults" "../test/regression_segfault" False [] (testBuildAndRun "--root main" "" segfault_exitcode)
+    rtsAutoTests <- createAutoTests "RTS auto" "../test/rts_auto"
+    stdlibAutoTests <- createAutoTests "stdlib auto" "../test/stdlib_auto"
     defaultMain $ testGroup "Tests" $
       [ builtinsAutoTests
-      , coreAutoTests
+      , coreLangAutoTests
       , coreLangTests
+      , dbAutoTests
       , actoncProjTests
       , actoncRootArgTests
       , exampleTests
       , regressionTests
-      , regressionBuildFailureTests
-      , regressionRunFailureTests
       , regressionSegfaultTests
+      , rtsAutoTests
+      , rtsTests
+      , stdlibAutoTests
+      , stdlibTests
       ]
 
 coreLangTests =
   testGroup "Core language"
   [
     testCase "async context" $ do
-        (returnCode, cmdOut, cmdErr) <- buildAndRun "--root main" "../test/core/async-context.act"
+        (returnCode, cmdOut, cmdErr) <- buildAndRun "--root main" "" "../test/core_lang/async-context.act"
         assertEqual "should compile" ExitSuccess returnCode
         assertEqual "should see 2 pongs" "pong\npong\n" cmdOut
   ]
@@ -72,6 +91,48 @@ actoncRootArgTests =
   ]
 
 
+rtsTests =
+  testGroup "RTS"
+  [
+      testCase "arg parsing: foo --bar --rts-verbose" $ do
+          testBuildAndRun "--root main" "foo --bar --rts-verbose" ExitSuccess False "../test/rts/argv1.act"
+
+  ,   testCase "arg parsing: --rts-verbose --rts-wthreads 7 foo --bar" $ do
+          testBuildAndRun "--root main" "--rts-verbose --rts-wthreads 7 foo --bar" ExitSuccess False "../test/rts/argv2.act"
+
+  ,   testCase "arg parsing: --rts-verbose --rts-wthreads=7 foo --bar" $ do
+          testBuildAndRun "--root main" "--rts-verbose --rts-wthreads=7 foo --bar" ExitSuccess False "../test/rts/argv3.act"
+
+  ,   testCase "arg parsing: --rts-wthreads 7 count" $ do
+          testBuildThing "--root main" ExitSuccess False "../test/rts/argv4.act"
+          (returnCode, cmdOut, cmdErr) <- runThing "--rts-verbose --rts-wthreads 7 foo --bar" "../test/rts/argv4.act"
+          assertEqual "RTS wthreads success retCode" ExitSuccess returnCode
+          assertEqual "RTS wthreads output" True (isInfixOf "Using 7 worker threads" cmdErr)
+
+  ,   testCase "arg parsing: --rts-wthreads 7 count" $ do
+          testBuildThing "--root main" ExitSuccess False "../test/rts/argv5.act"
+          (returnCode, cmdOut, cmdErr) <- runThing "--rts-verbose --rts-wthreads=7 foo --bar" "../test/rts/argv5.act"
+          assertEqual "RTS wthreads success retCode" ExitSuccess returnCode
+          assertEqual "RTS wthreads output" True (isInfixOf "Using 7 worker threads" cmdErr)
+
+  ,   testCase "arg parsing: --rts-verbose --rts-wthreads=7 -- foo --bar --rts-verbose" $ do
+          testBuildAndRun "--root main" "--rts-verbose --rts-wthreads=7 -- foo --bar --rts-verbose" ExitSuccess False "../test/rts/argv6.act"
+
+  ,   testCase "arg parsing: --rts-wthreads" $ do
+          testBuildThing "--root main" ExitSuccess False "../test/rts/argv7.act"
+          (returnCode, cmdOut, cmdErr) <- runThing "--rts-wthreads" "../test/rts/argv7.act"
+          assertEqual "RTS wthreads error retCode" (ExitFailure 1) returnCode
+          assertEqual "RTS wthreads error cmdErr" "ERROR: --rts-wthreads requires an argument.\n" cmdErr
+  ]
+
+stdlibTests =
+  testGroup "stdlib"
+  [
+      testCase "time" $ do
+          epoch <- getCurrentTime >>= pure . (1000*) . utcTimeToPOSIXSeconds >>= pure . round
+          testBuildAndRun "--root main" (show epoch) ExitSuccess False "../test/stdlib/test_time.act"
+  ]
+
 
 -- Creates testgroup from .act files found in specified directory
 --createTests :: String -> String -> List -> TestTree
@@ -86,6 +147,33 @@ createTest allExpFail fails testFunc file = do
                     else allExpFail
     failWrap (testFunc expFail) file expFail
   where (fileBody, fileExt) = splitExtension $ takeFileName file
+
+createAutoTests name dir = do
+    actFiles <- findThings dir
+    return $ testGroup name $ map createAutoTest actFiles
+
+createAutoTest file = do
+    -- guesstimate how to run this test
+    -- no suffix = compile and run test program and expect success (exit 0)
+    -- __bf = build failure, expect actonc to exit 1
+    -- __rf = run failure: compile, run and expect exit 1
+    let fileParts = splitOn "__" fileBody
+        testExp   = if (length fileParts) == 2
+                      then last fileParts
+                      else ""
+        testName  = if testExp == ""
+                      then head fileParts
+                      else (head fileParts) ++ " (" ++testExp ++ ")"
+        testFunc  = case testExp of
+                        "bf" -> testBuild "--root main"
+                        _    -> testBuildAndRun "--root main" ""
+        expRet    = case testExp of
+                        "bf" -> (ExitFailure 1)
+                        "rf" -> (ExitFailure 1)
+                        _    -> ExitSuccess
+    testCase testName $ testFunc expRet False file
+  where (fileBody, fileExt) = splitExtension $ takeFileName file
+
 
 findThings dir = do
     items <- listDirectory dir
@@ -125,22 +213,23 @@ testBuild opts expRet expFail thing = do
 
 -- expFail & expRet refers to the acton program, we always assume compilation
 -- with actonc succeeds
-testBuildAndRun opts expRet expFail thing = do
-    testBuildThing opts ExitSuccess False thing
-    (returnCode, cmdOut, cmdErr) <- runThing thing
+testBuildAndRun buildOpts runOpts expRet expFail thing = do
+    testBuildThing buildOpts ExitSuccess False thing
+    (returnCode, cmdOut, cmdErr) <- runThing runOpts thing
     iff (expFail == False && returnCode /= expRet) (
         putStrLn("\nERROR: application return code (" ++ (show returnCode) ++ ") not as expected (" ++ (show expRet) ++ ")\nSTDOUT:\n" ++ cmdOut ++ "STDERR:\n" ++ cmdErr)
         )
     assertEqual ("application should return " ++ (show expRet)) expRet returnCode
 
-buildAndRun opts thing = do
-    buildThing opts thing
-    (returnCode, cmdOut, cmdErr) <- runThing thing
+buildAndRun :: String -> String -> FilePath -> IO (ExitCode, String, String)
+buildAndRun buildOpts runOpts thing = do
+    buildThing buildOpts thing
+    (returnCode, cmdOut, cmdErr) <- runThing runOpts thing
     return (returnCode, cmdOut, cmdErr)
 
-runThing thing = do
+runThing opts thing = do
     wd <- canonicalizePath $ takeDirectory thing
-    let cmd = "./" ++ fileBody
+    let cmd = "./" ++ fileBody ++ " " ++ opts
     (returnCode, cmdOut, cmdErr) <- readCreateProcessWithExitCode (shell $ cmd){ cwd = Just wd } ""
     return (returnCode, cmdOut, cmdErr)
   where (fileBody, fileExt) = splitExtension $ takeFileName thing

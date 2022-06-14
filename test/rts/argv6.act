@@ -1,5 +1,5 @@
 actor main(env):
-    var exp = ["foo", "--bar"]
+    var exp = ["--", "foo", "--bar", "--rts-verbose"]
     var i = 0
     print("Expected:", exp)
     print("env.argv:", env.argv[1:])

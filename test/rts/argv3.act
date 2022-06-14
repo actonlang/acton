@@ -1,5 +1,21 @@
 actor main(env):
-    # Never expected to get here as we should be invoked with invalid command
-    # line argument
+    var exp = ["foo", "--bar"]
+    var i = 0
+    print("Expected:", exp)
+    print("env.argv:", env.argv[1:])
+
+    for arg in env.argv[1:]:
+        if arg != exp[i]:
+            print("Oh noes:", arg, "!=", exp[i])
+            await async env.exit(1)
+        i += 1
+
+    i = 1
+    for ex in exp:
+        if ex != env.argv[i]:
+            print("Oh noes:", ex, "!=", env.argv[i])
+            await async env.exit(1)
+        i += 1
+
     print("All is well")
     await async env.exit(0)

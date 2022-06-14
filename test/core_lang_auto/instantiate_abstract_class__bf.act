@@ -1,0 +1,20 @@
+# Verify that it is possible to define an abstract class (Abstract!) that cannot
+# be directly instantiated. It is the lack of __init__() that prevent it from
+# being instantiated. A class, Concrete, inherit Abstract and define its own
+# __init__() so that it can be instantiated!
+
+class Abstract ():
+    pass
+
+# This should lead to compilation error
+bad = Abstract()
+
+class Concrete (Abstract):
+    def __init__(self, x: Abstract):
+        pass
+
+def fun(x: Abstract):
+    return Concrete(x)
+
+actor main(env):
+    await async env.exit(0)
