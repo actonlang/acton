@@ -28,9 +28,7 @@ main = do
     coreLangAutoTests <- createAutoTests "Core language auto" "../test/core_lang_auto"
     dbAutoTests <- createAutoTests "DB auto" "../test/db_auto"
     exampleTests <- createTests "Examples" "../examples" False [] (testBuild "" ExitSuccess)
-    regressionTests <- createTests "Regression (should succeed)" "../test/regression" False [] (testBuildAndRun "--root main" "" ExitSuccess)
-    regressionBuildFailureTests <- createTests "Regression build failures" "../test/regression_build" False [] (testBuild "" (ExitFailure 1))
-    regressionRunFailureTests <- createTests "Regression run time failures" "../test/regression_run" False [] (testBuildAndRun "--root main" "" (ExitFailure 1))
+    regressionTests <- createAutoTests "Regression auto" "../test/regression_auto"
     regressionSegfaultTests <- createTests "Regression segfaults" "../test/regression_segfault" False [] (testBuildAndRun "--root main" "" (ExitFailure 139))
     rtsAutoTests <- createAutoTests "RTS auto" "../test/rts_auto"
     stdlibAutoTests <- createAutoTests "stdlib auto" "../test/stdlib_auto"
@@ -43,8 +41,6 @@ main = do
       , actoncRootArgTests
       , exampleTests
       , regressionTests
-      , regressionBuildFailureTests
-      , regressionRunFailureTests
       , regressionSegfaultTests
       , rtsAutoTests
       , rtsTests
