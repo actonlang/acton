@@ -156,10 +156,12 @@ createAutoTest file = do
     -- __bf = build failure, expect actonc to exit 1
     -- __rf = run failure: compile, run and expect exit 1
     let fileParts = splitOn "__" fileBody
-        testName  = head fileParts
         testExp   = if (length fileParts) == 2
                       then last fileParts
                       else ""
+        testName  = if testExp == ""
+                      then head fileParts
+                      else (head fileParts) ++ " (" ++testExp ++ ")"
         testFunc  = case testExp of
                         "bf" -> testBuild "--root main"
                         _    -> testBuildAndRun "--root main" ""
