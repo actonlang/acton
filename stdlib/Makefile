@@ -1,5 +1,5 @@
 
-CFLAGS+= -I.. -Ideps -Wno-int-to-pointer-cast -Wno-pointer-to-int-cast -Wformat -Werror=format-security
+CFLAGS+= -fno-common -I.. -Ideps -Wno-int-to-pointer-cast -Wno-pointer-to-int-cast -Wformat -Werror=format-security
 CFLAGS_REL= -O3 -DREL
 CFLAGS_DEV= -g -DDEV
 
@@ -25,13 +25,13 @@ NUMPY_CFILES=$(wildcard c_src/numpy/*.h)
 ifeq ($(shell uname -s),Linux)
 NUMPY_CFLAGS+=-lbsd -ldl -lmd
 endif
-out/dev/lib/numpy.o: src/numpy.c src/numpy.h out/types/math.h $(NUMPY_CFILES) out/dev/lib/math.o
+out/dev/lib/numpy.o: src/numpy.c src/numpy.h out/types/math.h $(NUMPY_CFILES)
 	@mkdir -p $(dir $@)
-	$(CC) $(CFLAGS) $(CFLAGS_DEV) -Wno-unused-result -r -Iout/ $< -o$@ $(NUMPY_CFLAGS) out/dev/lib/math.o
+	$(CC) $(CFLAGS) $(CFLAGS_DEV) -Wno-unused-result -r -Iout/ $< -o$@ $(NUMPY_CFLAGS)
 
-out/rel/lib/numpy.o: src/numpy.c src/numpy.h out/types/math.h $(NUMPY_CFILES) out/rel/lib/math.o
+out/rel/lib/numpy.o: src/numpy.c src/numpy.h out/types/math.h $(NUMPY_CFILES)
 	@mkdir -p $(dir $@)
-	$(CC) $(CFLAGS) $(CFLAGS_REL) -Wno-unused-result -r -Iout/ $< -o$@ $(NUMPY_CFLAGS) out/rel/lib/math.o
+	$(CC) $(CFLAGS) $(CFLAGS_REL) -Wno-unused-result -r -Iout/ $< -o$@ $(NUMPY_CFLAGS)
 
 out/dev/lib/random.o: src/random.c
 	@mkdir -p $(dir $@)
