@@ -4,8 +4,7 @@ DDB_SERVER=../dist/bin/actondb
 TESTS= \
 	$(ENV_TESTS) \
 	$(RTS_TESTS) \
-	$(DDB_TESTS) \
-	test_time
+	$(DDB_TESTS)
 test:
 	$(MAKE) $(TESTS)
 
@@ -56,8 +55,4 @@ test_async:
 	$(ACTONC) --root main $@.act
 	./$@
 
-test_time:
-	$(ACTONC) --root main $@.act
-	./test_time $(shell date "+%s")
-
-.PHONY: test_async test_time
+.PHONY: test_async

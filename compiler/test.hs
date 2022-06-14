@@ -2,6 +2,7 @@ import Data.List
 import Data.List.Split
 import Data.Maybe
 import Data.Ord
+import Data.Time.Clock.POSIX
 
 import System.Directory
 import System.Directory.Recursive
@@ -48,6 +49,7 @@ main = do
       , rtsAutoTests
       , rtsTests
       , stdlibAutoTests
+      , stdlibTests
       ]
 
 coreLangTests =
@@ -119,6 +121,14 @@ rtsTests =
           (returnCode, cmdOut, cmdErr) <- runThing "--rts-wthreads" "../test/rts/argv7.act"
           assertEqual "RTS wthreads error retCode" (ExitFailure 1) returnCode
           assertEqual "RTS wthreads error cmdErr" "ERROR: --rts-wthreads requires an argument.\n" cmdErr
+  ]
+
+stdlibTests =
+  testGroup "stdlib"
+  [
+      testCase "time" $ do
+          epoch <- getCurrentTime >>= pure . (1000*) . utcTimeToPOSIXSeconds >>= pure . round
+          testBuildAndRun "--root main" (show epoch) ExitSuccess False "../test/stdlib/test_time.act"
   ]
 
 
