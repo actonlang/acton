@@ -87,9 +87,9 @@ pWrapped x          = TC primWrapped [x]
 primWrappedC        = gPrim "WrappedC"
 tWrapped s x        = tCon $ TC primWrappedC [s,x]
 
-attrWrap            = name "$wrap"
-attrExec            = name "$exec"
-attrEval            = name "$eval"
+attrWrap            = name "wrap"
+attrUnwrap          = name "unwrap"
+attrUnwrap1         = name "unwrap1"
 
 primWrapProc        = gPrim "wWrapProc"
 primWrapAction      = gPrim "wWrapAction"
@@ -395,10 +395,10 @@ scEXEC              = tSchema [quant a, quant b, quant c] tEXEC
 
 --  protocol $Wrapped[X]: pass
 proWrapped          = NProto [quant x] [] te
-  where te          = [(attrWrap,scWrap), (attrExec,scExec), (attrEval,scEval)]
-        scWrap      = NSig (tSchema q (tFun0 [tActor, abFun tX tC] (abFun tSelf tC))) Static
-        scExec      = NSig (tSchema q (tFun0 [abFun tSelf tC] (abFun tX tNone))) Static
-        scEval      = NSig (tSchema q (tFun0 [abFun tSelf tC] (abFun tX tC))) Static
+  where te          = [(attrWrap,scWrap), (attrUnwrap,scUnwrap), (attrUnwrap1,scUnwrap1)]
+        scWrap      = NSig (tSchema q (tFun0 [tActor, abFun tX tC] (abFun tSelf tC)))  Static
+        scUnwrap    = NSig (tSchema q (tFun0 [abFun tSelf tC] (abFun tX tC))) Static
+        scUnwrap1   = NSig (tSchema q (tFun0 [abFun tSelf tC] (abFun tX tNone))) Static
         abFun fx c  = tFun fx (tVar a) (tVar b) c
         tX          = tVar x
         tC          = tVar c
@@ -411,10 +411,10 @@ proWrapped          = NProto [quant x] [] te
 
 --  class $WrappedC[S,X]: pass
 clWrapped           = NClass [quant s, quant x] [] te
-  where te          = [(attrWrap,scWrap), (attrExec,scExec), (attrEval,scEval)]
+  where te          = [(attrWrap,scWrap), (attrUnwrap,scUnwrap), (attrUnwrap1,scUnwrap1)]
         scWrap      = NDef (tSchema q (tFun0 [tActor, abFun tX tC] (abFun tS tC))) NoDec
-        scExec      = NDef (tSchema q (tFun0 [abFun tS tC] (abFun tX tNone))) NoDec
-        scEval      = NDef (tSchema q (tFun0 [abFun tS tC] (abFun tX tC))) NoDec
+        scUnwrap    = NDef (tSchema q (tFun0 [abFun tS tC] (abFun tX tC))) NoDec
+        scUnwrap1   = NDef (tSchema q (tFun0 [abFun tS tC] (abFun tX tNone))) NoDec
         abFun fx c  = tFun fx (tVar a) (tVar b) c
         tS          = tVar s
         tX          = tVar x
