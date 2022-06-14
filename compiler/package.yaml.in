@@ -62,6 +62,7 @@ tests:
       - tasty
       - tasty-expected-failure
       - tasty-hunit
+      - timeit
     ghc-options:
       - -threaded
       - -rtsopts

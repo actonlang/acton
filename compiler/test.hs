@@ -9,6 +9,7 @@ import System.Exit
 import System.FilePath
 import System.FilePath.Posix
 import System.Process
+import System.TimeIt
 
 import Test.Tasty
 import Test.Tasty.ExpectedFailure
@@ -19,7 +20,7 @@ import Test.Tasty.HUnit
 -- both compilation and running the program is successful as determined by exit
 -- status of 0. If a test is expected to fail compilation, it should be named
 -- __bf.act (for Build Failure). If a test is expected to fail at run time, name
--- the file with the expected exit code in the name, e.g. foo__exit1.act
+-- the file with __rf.act (for Run Failure).
 
 main = do
     builtinsAutoTests <- createAutoTests "Builtins auto" "../test/builtins_auto"

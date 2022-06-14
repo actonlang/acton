@@ -5,9 +5,7 @@ TESTS= \
 	$(ENV_TESTS) \
 	$(RTS_TESTS) \
 	$(DDB_TESTS) \
-	test_acton_rts_sleep \
-	test_time \
-	rts_sleep
+	test_time
 test:
 	$(MAKE) $(TESTS)
 
@@ -54,15 +52,7 @@ rts/wthreads1:
 
 #--
 
-test_acton_rts_sleep:
-	$(ACTONC) --root main $@.act
-	./$@
-
 test_async:
-	$(ACTONC) --root main $@.act
-	./$@
-
-rts_sleep:
 	$(ACTONC) --root main $@.act
 	./$@
 
@@ -70,4 +60,4 @@ test_time:
 	$(ACTONC) --root main $@.act
 	./test_time $(shell date "+%s")
 
-.PHONY: test_acton_rts_sleep test_async test_time rts_sleep
+.PHONY: test_async test_time
