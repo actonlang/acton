@@ -45,6 +45,7 @@ main = do
       , regressionRunFailureTests
       , regressionSegfaultTests
       , rtsAutoTests
+      , rtsTests
       , stdlibAutoTests
       ]
 
@@ -84,6 +85,40 @@ actoncRootArgTests =
         testBuild "--root main" ExitSuccess False "test/actonc/root/test.act"
   ]
 
+
+rtsTests =
+  testGroup "RTS"
+  [
+      testCase "arg parsing: foo --bar --rts-verbose" $ do
+          testBuildAndRun "--root main" "foo --bar --rts-verbose" ExitSuccess False "../test/rts/argv1.act"
+
+  ,   testCase "arg parsing: --rts-verbose --rts-wthreads 7 foo --bar" $ do
+          testBuildAndRun "--root main" "--rts-verbose --rts-wthreads 7 foo --bar" ExitSuccess False "../test/rts/argv2.act"
+
+  ,   testCase "arg parsing: --rts-verbose --rts-wthreads=7 foo --bar" $ do
+          testBuildAndRun "--root main" "--rts-verbose --rts-wthreads=7 foo --bar" ExitSuccess False "../test/rts/argv3.act"
+
+  ,   testCase "arg parsing: --rts-wthreads 7 count" $ do
+          testBuildThing "--root main" ExitSuccess False "../test/rts/argv4.act"
+          (returnCode, cmdOut, cmdErr) <- runThing "--rts-verbose --rts-wthreads 7 foo --bar" "../test/rts/argv4.act"
+          assertEqual "RTS wthreads success retCode" ExitSuccess returnCode
+          assertEqual "RTS wthreads output" True (isInfixOf "Using 7 worker threads" cmdErr)
+
+  ,   testCase "arg parsing: --rts-wthreads 7 count" $ do
+          testBuildThing "--root main" ExitSuccess False "../test/rts/argv5.act"
+          (returnCode, cmdOut, cmdErr) <- runThing "--rts-verbose --rts-wthreads=7 foo --bar" "../test/rts/argv5.act"
+          assertEqual "RTS wthreads success retCode" ExitSuccess returnCode
+          assertEqual "RTS wthreads output" True (isInfixOf "Using 7 worker threads" cmdErr)
+
+  ,   testCase "arg parsing: --rts-verbose --rts-wthreads=7 -- foo --bar --rts-verbose" $ do
+          testBuildAndRun "--root main" "--rts-verbose --rts-wthreads=7 -- foo --bar --rts-verbose" ExitSuccess False "../test/rts/argv6.act"
+
+  ,   testCase "arg parsing: --rts-wthreads" $ do
+          testBuildThing "--root main" ExitSuccess False "../test/rts/argv7.act"
+          (returnCode, cmdOut, cmdErr) <- runThing "--rts-wthreads" "../test/rts/argv7.act"
+          assertEqual "RTS wthreads error retCode" (ExitFailure 1) returnCode
+          assertEqual "RTS wthreads error cmdErr" "ERROR: --rts-wthreads requires an argument.\n" cmdErr
+  ]
 
 
 -- Creates testgroup from .act files found in specified directory

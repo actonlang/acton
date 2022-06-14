@@ -48,32 +48,6 @@ test_db_app_resume_tcp_client:
 	./test_db.py TestDbApps.test_app_resume_tcp_client
 
 
-# -- RTS --
-RTS_TESTS = rts/argv1 rts/argv2 rts/argv3 rts/exit_0 rts/exit_1
-.PHONY: $(RTS_TESTS)
-
-test-rts: $(RTS_TESTS)
-
-# Test normal argument parsing
-rts/argv1:
-	$(ACTONC) --root main $@.act
-	./$@ --rts-verbose foo --bar --rts-verbose
-	./$@ --rts-verbose --rts-wthreads 7 foo --bar
-	./$@ --rts-verbose --rts-wthreads=7 foo --bar
-	./$@ --rts-verbose --rts-wthreads 7 foo --bar 2>&1 | grep "Using 7 worker threads"
-	./$@ --rts-verbose --rts-wthreads=7 foo --bar 2>&1 | grep "Using 7 worker threads"
-
-# Test argument parsing when using --
-rts/argv2:
-	$(ACTONC) --root main $@.act
-	./$@ --rts-verbose --rts-wthreads=7 -- foo --bar --rts-verbose
-
-# Test argument parsing for lacking argument to option
-rts/argv3:
-	$(ACTONC) --root main $@.act
-	./$@ --rts-wthreads 2>&1 | grep "ERROR: --rts-wthreads requires an argument."
-	@echo "Test success, saw expected error message"
-
 # Expect 9 threads given 7 workers + main process + IO
 rts/wthreads1:
 	$(ACTONC) --root main $@.act
