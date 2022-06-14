@@ -48,11 +48,3 @@ test_db_app_resume_tcp_client:
 rts/wthreads1:
 	$(ACTONC) --root main $@.act
 	./$@ --rts-wthreads 7 & PID=$$! && ps -o thcount $${PID} | tail -n1 | awk '{ print $$1 }' | grep "^9$$"
-
-#--
-
-test_async:
-	$(ACTONC) --root main $@.act
-	./$@
-
-.PHONY: test_async
