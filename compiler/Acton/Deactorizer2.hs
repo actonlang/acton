@@ -236,7 +236,7 @@ instance Deact Expr where
       | n == primEXEC,
         isProcMeth env e            = deact env e
     deact env (Call l (TApp _ (Var _ n) ts) (PosArg s (PosArg e PosNil)) KwdNil)
-      | n == primWRAP,
+      | n == primSEAL,
         isExportMeth env e          = deact env e
 -----------------------------------------------------------------
     deact env (Call l e ps KwdNil)  = Call l <$> deact env e <*> deact env ps <*> pure KwdNil

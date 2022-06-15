@@ -104,7 +104,7 @@ instance Transform Decl where
 
 transCall (Dot _ (Var _ n) m) ts [e1,e2]
   | n == primWrapProc,   m == attrWrap  = Just e2
-  | n == primWrapAction, m == attrWrap  = Just $ eCall (tApp (eQVar primWRAP) ts) [e1,e2]
+  | n == primWrapAction, m == attrWrap  = Just $ eCall (tApp (eQVar primSEAL) ts) [e1,e2]
   | n == primWrapMut,    m == attrWrap  = Just e2
   | n == primWrapPure,   m == attrWrap  = Just e2
 transCall (Dot _ (Var _ n) m) ts [e1]
