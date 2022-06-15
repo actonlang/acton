@@ -862,7 +862,7 @@ $R $Env$listen$local ($Env __self__, $int port, $function on_connect, $function 
 }
 $R $Env$exit$local ($Env __self__, $int n, $Cont c$cont) {
     return_val = n->val;
-    rts_exit = 1;
+    rts_shutdown();
     return $R_CONT(c$cont, $None);
 }
 $R $Env$openR$local ($Env __self__, $str nm, $Cont c$cont) {

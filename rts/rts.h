@@ -188,6 +188,7 @@ extern $Msg timerQ;
 time_t current_time();
 time_t next_timeout();
 void handle_timeout();
+void rts_shutdown();
 
 //typedef $int $Env;
 

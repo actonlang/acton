@@ -262,7 +262,7 @@ ARCHIVES=lib/dev/libActon.a lib/rel/libActon.a lib/libuv_a.a
 # in the stdlib directory, which we would need to join together with rts.o etc
 # to form the final libActon (or maybe produce a libActonStdlib and link with?)
 
-LIBACTON_DEV_OFILES=builtin/builtin_dev.o builtin/env_dev.o rts/empty.o rts/log.o rts/rts_dev.o deps/netstring_dev.o deps/yyjson_dev.o
+LIBACTON_DEV_OFILES=builtin/builtin_dev.o builtin/env_dev.o rts/empty.o rts/io_dev.o rts/log.o rts/rts_dev.o deps/netstring_dev.o deps/yyjson_dev.o
 OFILES += $(LIBACTON_DEV_OFILES)
 lib/dev/libActon.a: stdlib/out/dev/lib/libActonProject.a  $(LIBACTON_DEV_OFILES)
 	@mkdir -p $(dir $@)
@@ -295,7 +295,15 @@ lib/libActonDB.a: $(BACKEND_OFILES)
 
 
 # /rts --------------------------------------------------
-OFILES += rts/log.o rts/rts_dev.o rts/rts_rel.o rts/empty.o
+OFILES += rts/io_dev.o rts/io_rel.o rts/log.o rts/rts_dev.o rts/rts_rel.o rts/empty.o
+rts/io_dev.o: rts/io.c rts/io.h
+	$(CC) $(CFLAGS) $(CFLAGS_DEV) $(LDFLAGS) \
+		-c $< -o $@
+
+rts/io_rel.o: rts/io.c rts/io.h
+	$(CC) $(CFLAGS) $(CFLAGS_REL) $(LDFLAGS) \
+		-c $< -o $@
+
 rts/log.o: rts/log.c rts/log.h
 	$(CC) $(CFLAGS) $(CFLAGS_DEV) -DLOG_USE_COLOR -c $< -o$@
 
