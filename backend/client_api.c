@@ -1277,14 +1277,15 @@ int remote_insert_in_txn(WORD * column_values, int no_cols, int no_primary_keys,
 		return NO_QUORUM_ERR;
 	}
 
-	int ok_status = 0;
+	int ok_status = 0, err_status = 0;
 
 	for(int i=0;i<mc->no_replies;i++)
 	{
-//		assert(mc->reply_types[i] == RPC_TYPE_ACK);
 		ack_message * ack = (ack_message *) mc->replies[i];
 		if(ack->status == 0)
 			ok_status++;
+		else
+			err_status = ack->status;
 
 #if CLIENT_VERBOSITY > 0
 		to_string_ack_message(ack, (char *) print_buff);
@@ -1292,10 +1293,13 @@ int remote_insert_in_txn(WORD * column_values, int no_cols, int no_primary_keys,
 #endif
 	}
 
+	if(ok_status >= db->quorum_size)
+		err_status = 0;
+
 	delete_msg_callback(mc->nonce, db);
 
-	stat_stop(dbc_stats.remote_insert_in_txn, &ts_start, !(ok_status >= db->quorum_size));
-	return !(ok_status >= db->quorum_size);
+	stat_stop(dbc_stats.remote_insert_in_txn, &ts_start, err_status);
+	return err_status;
 }
 
 int remote_update_in_txn(int * col_idxs, int no_cols, WORD * column_values, WORD blob, size_t blob_size, WORD table_key, uuid_t * txnid, remote_db_t * db)
@@ -1343,7 +1347,7 @@ int remote_delete_row_in_txn(WORD * column_values, int no_primary_keys, WORD tab
 		return NO_QUORUM_ERR;
 	}
 
-	int ok_status = 0;
+	int ok_status = 0, err_status = 0;
 
 	for(int i=0;i<mc->no_replies;i++)
 	{
@@ -1351,6 +1355,8 @@ int remote_delete_row_in_txn(WORD * column_values, int no_primary_keys, WORD tab
 		ack_message * ack = (ack_message *) mc->replies[i];
 		if(ack->status == 0)
 			ok_status++;
+		else
+			err_status = ack->status;
 
 #if CLIENT_VERBOSITY > 0
 		to_string_ack_message(ack, (char *) print_buff);
@@ -1358,10 +1364,13 @@ int remote_delete_row_in_txn(WORD * column_values, int no_primary_keys, WORD tab
 #endif
 	}
 
+	if(ok_status >= db->quorum_size)
+		err_status = 0;
+
 	delete_msg_callback(mc->nonce, db);
 
-	stat_stop(dbc_stats.remote_delete_row_in_txn, &ts_start, !(ok_status >= db->quorum_size));
-	return !(ok_status >= db->quorum_size);
+	stat_stop(dbc_stats.remote_delete_row_in_txn, &ts_start, err_status);
+	return err_status;
 }
 
 int remote_delete_cell_in_txn(WORD * column_values, int no_primary_keys, int no_clustering_keys, WORD table_key, uuid_t * txnid, remote_db_t * db)
@@ -1403,7 +1412,7 @@ int remote_delete_cell_in_txn(WORD * column_values, int no_primary_keys, int no_
 		return NO_QUORUM_ERR;
 	}
 
-	int ok_status = 0;
+	int ok_status = 0, err_status = 0;
 
 	for(int i=0;i<mc->no_replies;i++)
 	{
@@ -1411,6 +1420,8 @@ int remote_delete_cell_in_txn(WORD * column_values, int no_primary_keys, int no_
 		ack_message * ack = (ack_message *) mc->replies[i];
 		if(ack->status == 0)
 			ok_status++;
+		else
+			err_status = ack->status;
 
 #if CLIENT_VERBOSITY > 0
 		to_string_ack_message(ack, (char *) print_buff);
@@ -1418,10 +1429,13 @@ int remote_delete_cell_in_txn(WORD * column_values, int no_primary_keys, int no_
 #endif
 	}
 
+	if(ok_status >= db->quorum_size)
+		err_status = 0;
+
 	delete_msg_callback(mc->nonce, db);
 
-    stat_stop(dbc_stats.remote_delete_cell_in_txn, &ts_start, !(ok_status >= db->quorum_size));
-	return !(ok_status >= db->quorum_size);
+    stat_stop(dbc_stats.remote_delete_cell_in_txn, &ts_start, err_status);
+	return err_status;
 }
 
 int remote_delete_by_index_in_txn(WORD index_key, int idx_idx, WORD table_key, uuid_t * txnid, remote_db_t * db)
@@ -1595,7 +1609,6 @@ db_row_t* remote_search_in_txn(WORD* primary_keys, int no_primary_keys, WORD tab
 		return NULL;
 	}
 
-	int ok_status = 0;
 	db_row_t * result = NULL;
 
 	for(int i=0;i<mc->no_replies;i++)
@@ -1661,7 +1674,6 @@ db_row_t* remote_search_clustering_in_txn(WORD* primary_keys, int no_primary_key
 		return NULL;
 	}
 
-	int ok_status = 0;
 	db_row_t * result = NULL;
 
 	for(int i=0;i<mc->no_replies;i++)
@@ -1741,7 +1753,6 @@ int remote_range_search_in_txn(WORD* start_primary_keys, WORD* end_primary_keys,
 		return NO_QUORUM_ERR;
 	}
 
-	int ok_status = 0;
 	int result = -1;
 
 	for(int i=0;i<mc->no_replies;i++)
@@ -1809,7 +1820,6 @@ int remote_range_search_clustering_in_txn(WORD* primary_keys, int no_primary_key
 		return NO_QUORUM_ERR;
 	}
 
-	int ok_status = 0;
 	int result = -1;
 
 	for(int i=0;i<mc->no_replies;i++)
@@ -1828,7 +1838,7 @@ int remote_range_search_clustering_in_txn(WORD* primary_keys, int no_primary_key
 
 	delete_msg_callback(mc->nonce, db);
 
-    stat_stop(dbc_stats.remote_range_search_clustering_in_txn, &ts_start, !(ok_status >= db->quorum_size));
+    stat_stop(dbc_stats.remote_range_search_clustering_in_txn, &ts_start, 0);
 	return result;
 }
 
@@ -1881,7 +1891,6 @@ int remote_read_full_table_in_txn(snode_t** start_row, snode_t** end_row,
 		return NO_QUORUM_ERR;
 	}
 
-	int ok_status = 0;
 	int result = -1;
 
 	for(int i=0;i<mc->no_replies;i++)
@@ -1965,7 +1974,7 @@ int remote_create_queue_in_txn(WORD table_key, WORD queue_id, uuid_t * txnid, re
 		return NO_QUORUM_ERR;
 	}
 
-	int ok_status = 0;
+	int ok_status = 0, err_status = 0;
 
 	for(int i=0;i<mc->no_replies;i++)
 	{
@@ -1973,6 +1982,8 @@ int remote_create_queue_in_txn(WORD table_key, WORD queue_id, uuid_t * txnid, re
 		ack_message * ack = (ack_message *) mc->replies[i];
 		if(ack->status == 0)
 			ok_status++;
+		else
+			err_status = ack->status;
 
 #if CLIENT_VERBOSITY > 0
 		to_string_ack_message(ack, (char *) print_buff);
@@ -1980,10 +1991,13 @@ int remote_create_queue_in_txn(WORD table_key, WORD queue_id, uuid_t * txnid, re
 #endif
 	}
 
+	if(ok_status >= db->quorum_size)
+		err_status = 0;
+
 	delete_msg_callback(mc->nonce, db);
 
-    stat_stop(dbc_stats.remote_create_queue_in_txn, &ts_start, !(ok_status >= db->quorum_size));
-	return !(ok_status >= db->quorum_size);
+    stat_stop(dbc_stats.remote_create_queue_in_txn, &ts_start, err_status);
+	return err_status;
 }
 
 int remote_delete_queue_in_txn(WORD table_key, WORD queue_id, uuid_t * txnid, remote_db_t * db)
@@ -2026,7 +2040,7 @@ int remote_delete_queue_in_txn(WORD table_key, WORD queue_id, uuid_t * txnid, re
 		return NO_QUORUM_ERR;
 	}
 
-	int ok_status = 0;
+	int ok_status = 0, err_status = 0;
 
 	for(int i=0;i<mc->no_replies;i++)
 	{
@@ -2034,6 +2048,8 @@ int remote_delete_queue_in_txn(WORD table_key, WORD queue_id, uuid_t * txnid, re
 		ack_message * ack = (ack_message *) mc->replies[i];
 		if(ack->status == 0)
 			ok_status++;
+		else
+			err_status = ack->status;
 
 #if CLIENT_VERBOSITY > 0
 		to_string_ack_message(ack, (char *) print_buff);
@@ -2041,10 +2057,13 @@ int remote_delete_queue_in_txn(WORD table_key, WORD queue_id, uuid_t * txnid, re
 #endif
 	}
 
+	if(ok_status >= db->quorum_size)
+		err_status = 0;
+
 	delete_msg_callback(mc->nonce, db);
 
-    stat_stop(dbc_stats.remote_delete_queue_in_txn, &ts_start, !(ok_status >= db->quorum_size));
-	return !(ok_status >= db->quorum_size);
+    stat_stop(dbc_stats.remote_delete_queue_in_txn, &ts_start, err_status);
+	return err_status;
 }
 
 int remote_enqueue_in_txn(WORD * column_values, int no_cols, WORD blob, size_t blob_size, WORD table_key, WORD queue_id, uuid_t * txnid, remote_db_t * db)
@@ -2087,7 +2106,7 @@ int remote_enqueue_in_txn(WORD * column_values, int no_cols, WORD blob, size_t b
 		return NO_QUORUM_ERR;
 	}
 
-	int ok_status = 0;
+	int ok_status = 0, err_status = 0;
 
 	for(int i=0;i<mc->no_replies;i++)
 	{
@@ -2095,6 +2114,8 @@ int remote_enqueue_in_txn(WORD * column_values, int no_cols, WORD blob, size_t b
 		ack_message * ack = (ack_message *) mc->replies[i];
 		if(ack->status == 0)
 			ok_status++;
+		else
+			err_status = ack->status;
 
 #if CLIENT_VERBOSITY > 0
 		to_string_ack_message(ack, (char *) print_buff);
@@ -2102,10 +2123,13 @@ int remote_enqueue_in_txn(WORD * column_values, int no_cols, WORD blob, size_t b
 #endif
 	}
 
+	if(ok_status >= db->quorum_size)
+		err_status = 0;
+
 	delete_msg_callback(mc->nonce, db);
 
-    stat_stop(dbc_stats.remote_enqueue_in_txn, &ts_start, !(ok_status >= db->quorum_size));
-	return !(ok_status >= db->quorum_size);
+    stat_stop(dbc_stats.remote_enqueue_in_txn, &ts_start, err_status);
+	return err_status;
 }
 
 int remote_read_queue_in_txn(WORD consumer_id, WORD shard_id, WORD app_id, WORD table_key, WORD queue_id,
@@ -2235,7 +2259,7 @@ int remote_consume_queue_in_txn(WORD consumer_id, WORD shard_id, WORD app_id, WO
 		return NO_QUORUM_ERR;
 	}
 
-	int ok_status = 0;
+	int ok_status = 0, err_status = 0;
 
 	for(int i=0;i<mc->no_replies;i++)
 	{
@@ -2243,6 +2267,8 @@ int remote_consume_queue_in_txn(WORD consumer_id, WORD shard_id, WORD app_id, WO
 		ack_message * ack = (ack_message *) mc->replies[i];
 		if(ack->status == 0)
 			ok_status++;
+		else
+			err_status = ack->status;
 
 #if CLIENT_VERBOSITY > 0
 		to_string_ack_message(ack, (char *) print_buff);
@@ -2250,10 +2276,13 @@ int remote_consume_queue_in_txn(WORD consumer_id, WORD shard_id, WORD app_id, WO
 #endif
 	}
 
+	if(ok_status >= db->quorum_size)
+		err_status = 0;
+
 	delete_msg_callback(mc->nonce, db);
 
-    stat_stop(dbc_stats.remote_consume_queue_in_txn, &ts_start, !(ok_status >= db->quorum_size));
-	return !(ok_status >= db->quorum_size);
+    stat_stop(dbc_stats.remote_consume_queue_in_txn, &ts_start, err_status);
+	return err_status;
 }
 
 int remote_subscribe_queue(WORD consumer_id, WORD shard_id, WORD app_id, WORD table_key, WORD queue_id,
@@ -2297,8 +2326,6 @@ int remote_subscribe_queue(WORD consumer_id, WORD shard_id, WORD app_id, WORD ta
         stat_stop(dbc_stats.remote_subscribe_queue, &ts_start, NO_QUORUM_ERR);
 		return NO_QUORUM_ERR;
 	}
-
-	int ok_status = 0;
 
 	for(int i=0;i<mc->no_replies;i++)
 	{
@@ -2367,8 +2394,6 @@ int remote_unsubscribe_queue(WORD consumer_id, WORD shard_id, WORD app_id, WORD 
 		return NO_QUORUM_ERR;
 	}
 
-	int ok_status = 0;
-
 	for(int i=0;i<mc->no_replies;i++)
 	{
 		assert(mc->reply_types[i] == RPC_TYPE_ACK);
@@ -2376,7 +2401,7 @@ int remote_unsubscribe_queue(WORD consumer_id, WORD shard_id, WORD app_id, WORD 
 	    if(ack->status == CLIENT_ERR_NO_SUBSCRIPTION_EXISTS)
 	    {
 	    		delete_msg_callback(mc->nonce, db);
-				stat_stop(dbc_stats.remote_unsubscribe_queue, &ts_start, SUBSCRIPTION_EXISTS);
+				stat_stop(dbc_stats.remote_unsubscribe_queue, &ts_start, NO_SUBSCRIPTION_EXISTS);
 	    		return CLIENT_ERR_NO_SUBSCRIPTION_EXISTS;
 	    }
 
@@ -2538,7 +2563,7 @@ uuid_t * remote_new_txn(remote_db_t * db)
 			return NULL;
 		}
 
-		int ok_status = 0;
+		int ok_status = 0, err_status = 0;
 
 		for(int i=0;i<mc->no_replies;i++)
 		{
@@ -2546,6 +2571,8 @@ uuid_t * remote_new_txn(remote_db_t * db)
 			ack_message * ack = (ack_message *) mc->replies[i];
 			if(ack->status == 0)
 				ok_status++;
+			else
+				err_status = ack->status;
 
 #if CLIENT_VERBOSITY > 0
 			to_string_ack_message(ack, (char *) print_buff);
@@ -2555,11 +2582,12 @@ uuid_t * remote_new_txn(remote_db_t * db)
 
 		// TO DO: Update my_lc from each ACK reply received from servers:
 
-
+		if(ok_status >= db->quorum_size)
+			err_status = 0;
 
 		delete_msg_callback(mc->nonce, db);
 
-		status = !(ok_status >= db->quorum_size);
+		status = err_status;
 	}
 
 	assert(status == 0);
@@ -2602,7 +2630,7 @@ int _remote_validate_txn(uuid_t * txnid, vector_clock * version, remote_server *
 		return NO_QUORUM_ERR;
 	}
 
-	int ok_status = 0;
+	int ok_status = 0, err_status = 0;
 
 	for(int i=0;i<mc->no_replies;i++)
 	{
@@ -2610,6 +2638,8 @@ int _remote_validate_txn(uuid_t * txnid, vector_clock * version, remote_server *
 		ack_message * ack = (ack_message *) mc->replies[i];
 		if(ack->status == 0)
 			ok_status++;
+		else
+			err_status = ack->status;
 
 #if CLIENT_VERBOSITY > 0
 		to_string_ack_message(ack, (char *) print_buff);
@@ -2617,9 +2647,12 @@ int _remote_validate_txn(uuid_t * txnid, vector_clock * version, remote_server *
 #endif
 	}
 
+	if(ok_status >= db->quorum_size)
+		err_status = 0;
+
 	delete_msg_callback(mc->nonce, db);
 
-	return !(ok_status >= db->quorum_size);
+	return err_status;
 }
 
 int remote_validate_txn(uuid_t * txnid, remote_db_t * db)
@@ -2677,7 +2710,7 @@ int _remote_abort_txn(uuid_t * txnid, remote_server * rs_in, remote_db_t * db)
 		return NO_QUORUM_ERR;
 	}
 
-	int ok_status = 0;
+	int ok_status = 0, err_status = 0;
 
 	for(int i=0;i<mc->no_replies;i++)
 	{
@@ -2685,6 +2718,8 @@ int _remote_abort_txn(uuid_t * txnid, remote_server * rs_in, remote_db_t * db)
 		ack_message * ack = (ack_message *) mc->replies[i];
 		if(ack->status == 0)
 			ok_status++;
+		else
+			err_status = ack->status;
 
 #if CLIENT_VERBOSITY > 0
 		to_string_ack_message(ack, (char *) print_buff);
@@ -2692,10 +2727,13 @@ int _remote_abort_txn(uuid_t * txnid, remote_server * rs_in, remote_db_t * db)
 #endif
 	}
 
+	if(ok_status >= db->quorum_size)
+		err_status = 0;
+
 	delete_msg_callback(mc->nonce, db);
 
 	stat_stop(dbc_stats.remote_abort_txn, &ts_start, 0);
-	return !(ok_status >= db->quorum_size);
+	return err_status;
 }
 
 int remote_abort_txn(uuid_t * txnid, remote_db_t * db)
@@ -2738,7 +2776,7 @@ int _remote_persist_txn(uuid_t * txnid, vector_clock * version, remote_server * 
 		return NO_QUORUM_ERR;
 	}
 
-	int ok_status = 0;
+	int ok_status = 0, err_status = 0;
 
 	for(int i=0;i<mc->no_replies;i++)
 	{
@@ -2746,6 +2784,8 @@ int _remote_persist_txn(uuid_t * txnid, vector_clock * version, remote_server * 
 		ack_message * ack = (ack_message *) mc->replies[i];
 		if(ack->status == 0)
 			ok_status++;
+		else
+			err_status = ack->status;
 
 #if CLIENT_VERBOSITY > 0
 		to_string_ack_message(ack, (char *) print_buff);
@@ -2753,9 +2793,12 @@ int _remote_persist_txn(uuid_t * txnid, vector_clock * version, remote_server * 
 #endif
 	}
 
+	if(ok_status >= db->quorum_size)
+		err_status = 0;
+
 	delete_msg_callback(mc->nonce, db);
 
-	return !(ok_status >= db->quorum_size);
+	return err_status;
 }
 
 int remote_commit_txn(uuid_t * txnid, remote_db_t * db)
@@ -3031,8 +3074,6 @@ int listen_to_gossip(int status, int rack_id, int dc_id, char * hostname, unsign
 		delete_msg_callback(mc->nonce, db);
 		return NO_QUORUM_ERR;
 	}
-
-	int ok_status = 0;
 
 	for(int i=0;i<mc->no_replies;i++)
 	{
