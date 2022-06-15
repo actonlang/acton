@@ -311,7 +311,6 @@ instance CPS Decl where
             q'                          = conv q
             p'                          = conv p
             t'                          = conv t
-            addContPar                  = if inClass env && d /= Static then addContPar1 else addContPar0
 
     cps env d                           = error ("cps unexpected: " ++ prstr d)
     
@@ -327,11 +326,8 @@ addContArg env (Call l e pos KwdNil) c  = Call NoLoc e (add pos c) KwdNil
   where add PosNil c                    = PosArg c PosNil
         add (PosArg e p) c              = PosArg e (add p c)
 
-addContPar0 PosNIL fx t                 = PosPar contKW (Just $ tCont1 fx t) Nothing PosNIL
-addContPar0 (PosPar n a Nothing p) fx t = PosPar n a Nothing (addContPar0 p fx t)
-
-addContPar1 p fx t                      = addContPar0 p fx t
-
+addContPar PosNIL fx t                  = PosPar contKW (Just $ tCont1 fx t) Nothing PosNIL
+addContPar (PosPar n a Nothing p) fx t  = PosPar n a Nothing (addContPar p fx t)
 
 tCont0                                  = tFun fxPure posNil kwdNil tR
 
@@ -485,7 +481,7 @@ instance PreCPS Expr where
                                              case prefixes of
                                                 [] -> let p' = conv p; t' = conv t
                                                           e1 = if contCall env e then addContArg env1 e' (eVar contKW) else eCallCont fx t' contKW e'
-                                                      in return $ Lambda l (addContPar0 p' fx t') KwdNIL e1 fx
+                                                      in return $ Lambda l (addContPar p' fx t') KwdNIL e1 fx
                                                 _ -> do
                                                     f <- newName "lambda"
                                                     prefix [sDecl [Def l f [] p KwdNIL (Just t) (prefixes ++ [sReturn e']) NoDec fx]]
