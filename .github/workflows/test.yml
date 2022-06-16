@@ -129,7 +129,7 @@ jobs:
       - name: "Install build prerequisites"
         run: |
           apt-get update
-          apt-get install -qy build-essential debhelper devscripts gcc haskell-stack libbsd-dev libprotobuf-c-dev libutf8proc-dev libuv1-dev make pkg-config uuid-dev zlib1g-dev
+          apt-get install -qy build-essential debhelper devscripts gcc ghc haskell-stack libbsd-dev libprotobuf-c-dev libutf8proc-dev libuv1-dev make pkg-config uuid-dev zlib1g-dev
       - name: "Build Debian packages"
         run: make -C ${GITHUB_WORKSPACE} debs BUILD_RELEASE=${{ env.BUILD_RELEASE }}
       - name: "Compute variables"

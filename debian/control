@@ -5,6 +5,7 @@ Maintainer: Kristian Larsson <kristian@spritelink.net>
 Build-Depends:
  debhelper-compat (= 13),
  gcc,
+ ghc,
  haskell-stack,
  libbsd-dev,
  libprotobuf-c-dev,
