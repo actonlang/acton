@@ -65,9 +65,13 @@ jobs:
 
 
   test-linux:
+    strategy:
+      fail-fast: false
+      matrix:
+        image: [ "debian:bullseye", "ubuntu:21.10", "ubuntu:22.04", "ubuntu:22.10"]
     runs-on: ubuntu-latest
     container:
-      image: debian:bullseye
+      image: ${{ matrix.image }}
     steps:
       - name: "Print env"
         run: env
@@ -82,7 +86,7 @@ jobs:
         with:
           path: |
             ~/.stack
-          key: ${{ runner.os }}-${{ secrets.CACHE_VERSION }}
+          key: ${{ matrix.image }}-${{ secrets.CACHE_VERSION }}
       - name: "Install build prerequisites"
         run: |
           apt-get update
