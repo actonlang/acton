@@ -703,7 +703,7 @@ infProperties env as b
 infDefBody env n (PosPar x _ _ _) b
   | inClass env && n == initKW          = infInitEnv (setInDef env) x b
 infDefBody env _ _ b
-  | isNotImpl b                         = return ([], b)
+  | isNotImpl b                         = return ([], [], b)
   | otherwise                           = infSuiteEnv (setInDef env) b
 
 infInitEnv env self (MutAssign l (Dot l' e1@(Var _ (NoQ x)) n) e2 : b)
