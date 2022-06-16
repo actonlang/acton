@@ -49,10 +49,6 @@ $Iterable$Iterator $Iterable$Iterator$__deserialize__($Iterable$Iterator self, $
    return res;
 }
 
-$bool $Iterable$Iterator$__eq__($Iterable$Iterator wit, $complex a, $complex b) {
-  return to$bool(creal(a->val) == creal(b->val) && cimag(a->val) == cimag(b->val));
-}
-
 $WORD $next($Iterator it) {
   return it->$class->__next__(it);
 }

@@ -325,12 +325,16 @@ void $register_builtin_protocols() {
   $register(&$Number$methods);
   $register(&$Real$methods);
   $register(&$Rational$methods);
+  $register(&$Eq$bool$methods);
+  $register(&$Hashable$bool$methods);
   $register(&$Sequence$list$methods);
   $register(&$Collection$list$methods);
   $register(&$Times$list$methods);
+  $register(&$Eq$list$methods);
   $register(&$Container$list$methods);
   $register(&$Mapping$dict$methods);
   $register(&$Indexed$dict$methods);
+  $register(&$Eq$dict$methods);
   $register(&$Set$set$methods);
   $register(&$Ord$set$methods);
   $register(&$Logical$set$methods);

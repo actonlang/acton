@@ -1,4 +1,5 @@
-//void $dict_init($dict dict, $Hashable hashwit, $Mapping mwit, $WORD mapping);
+int $lookdict($dict dict, $Hashable hashwit, long hash, $WORD key, $WORD *res);
+
 $Iterator $dict_iter($dict dict);
 $str $dict_str($dict);
 
@@ -18,3 +19,4 @@ $WORD $dict_setdefault($dict dict, $Hashable hashwit, $WORD key, $WORD deflt);
 $Iterator $dict_keys($dict dict);
 $Iterator $dict_values($dict dict);
 $Iterator $dict_items($dict dict);
+
