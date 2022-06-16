@@ -1,6 +1,11 @@
 include common.mk
 CHANGELOG_VERSION=$(shell grep '^\#\# \[[0-9]' CHANGELOG.md | sed 's/\#\# \[\([^]]\{1,\}\)].*/\1/' | head -n1)
 
+PKGCONFIG=$(shell which pkg-config)
+ifeq ($(PKGCONFIG),)
+$(error "pkg-config must be installed")
+endif
+
 ACTONC=dist/bin/actonc
 ACTC=dist/bin/actonc
 
@@ -247,7 +252,11 @@ stdlib/out/dev/lib/libActonProject.a stdlib/out/rel/lib/libActonProject.a: $(STD
 
 # /lib --------------------------------------------------
 DBARCHIVE=lib/libActonDB.a
-ARCHIVES=lib/dev/libActon.a lib/rel/libActon.a
+# TODO: maybe lift out libuv. ARCHIVES becomes DIST_ARCHIVES which used to only
+# be libActon, and we compile that serialized to avoid collisions between dev &
+# rel profiles... this now also hits libuv. Maybe better to keep separate for
+# concurrency?
+ARCHIVES=lib/dev/libActon.a lib/rel/libActon.a lib/libuv_a.a
 
 # If we later let actonc build things, it would produce a libActonProject.a file
 # in the stdlib directory, which we would need to join together with rts.o etc
@@ -266,6 +275,12 @@ lib/rel/libActon.a: stdlib/out/rel/lib/libActonProject.a $(LIBACTON_REL_OFILES)
 	@mkdir -p $(dir $@)
 	cp -a $< $@
 	ar rcs $@ $(filter-out stdlib/out/rel/lib/libActonProject.a,$^)
+
+# No proper dependencies means we
+LIBUV_LIBDIR:=$(shell pkg-config --variable=libdir libuv)
+LIBUV_A:=$(shell ls $(LIBUV_LIBDIR)/libuv_a.a $(LIBUV_LIBDIR)/libuv.a 2>/dev/null | head -n1)
+lib/libuv_a.a: $(LIBUV_A)
+	cp $< $@
 
 COMM_OFILES += backend/comm.o rts/empty.o
 DB_OFILES += backend/db.o backend/queue.o backend/skiplist.o backend/txn_state.o backend/txns.o rts/empty.o
@@ -394,7 +409,8 @@ dist/lib/%: lib/%
 	cp $< $@
 
 DIST_BINS=$(ACTONC) dist/bin/actondb
-DIST_HFILES=dist/rts/rts.h \
+DIST_HFILES=\
+	dist/rts/rts.h \
 	dist/builtin/env.h \
 	$(addprefix dist/,$(BUILTIN_HFILES))
 DIST_DBARCHIVE=$(addprefix dist/,$(DBARCHIVE))

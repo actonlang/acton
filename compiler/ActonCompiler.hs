@@ -530,7 +530,8 @@ runRestPasses args paths env0 parsed stubMode = do
                               buildF = joinPath [projPath paths, "build.sh"]
                               ccCmd = ("cc " ++ pedantArg ++
                                        (if (dev args) then " -g " else "") ++
-                                       " -c -I" ++ projOut paths ++
+                                       " -c " ++
+                                       " -I" ++ projOut paths ++
                                        " -I" ++ sysPath paths ++
                                        " -o" ++ oFile ++
                                        " " ++ cFile)
@@ -590,7 +591,7 @@ buildExecutable env args paths binTask
         buildF              = joinPath [projPath paths, "build.sh"]
         outbase             = outBase paths mn
         rootFile            = outbase ++ ".root.c"
-        libFilesBase        = " -lActonProject -lActon -lActonDB -lprotobuf-c -lutf8proc -lpthread -lm"
+        libFilesBase        = " -lActonProject -lActon -lActonDB -lprotobuf-c -lutf8proc -luv_a -lpthread -lm -ldl "
         libPathsBase        = " -L " ++ sysPath paths ++ "/lib -L" ++ sysLib paths ++ " -L" ++ projLib paths
 #if defined(darwin_HOST_OS) && defined(aarch64_HOST_ARCH)
         libFiles            = libFilesBase
