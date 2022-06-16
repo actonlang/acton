@@ -786,7 +786,9 @@ infProperties env as b
 
 infDefBody env n (PosPar x _ _ _) b
   | inClass env && n == initKW          = infInitEnv env x b
-infDefBody env _ _ b                    = do (cs,_,b') <- infSuiteEnv env b; return (cs, b')
+infDefBody env _ _ b
+  | isNotImpl b                         = return ([], b)
+  | otherwise                           = do (cs,_,b') <- infSuiteEnv env b; return (cs, b')
 
 infInitEnv env self (MutAssign l (Dot l' e1@(Var _ (NoQ x)) n) e2 : b)
   | x == self                           = do (cs1,t1,e1') <- infer env e1

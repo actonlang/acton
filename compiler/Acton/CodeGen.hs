@@ -29,11 +29,11 @@ import Acton.Subst
 import Prelude hiding ((<>))
 import System.FilePath.Posix
 
-generate                            :: Acton.Env.Env0 -> Module -> IO (String,String,String)
-generate env m                      = do return (n, h,c)
+generate                            :: Acton.Env.Env0 -> FilePath -> Module -> IO (String,String,String)
+generate env srcbase m              = do return (n, h,c)
   where n                           = render $ quotes $ gen env0 (modname m)
         h                           = render $ hModule env0 m
-        c                           = render $ cModule env0 m
+        c                           = render $ cModule env0 srcbase m
         env0                        = genEnv $ setMod (modname m) env
 
 genRoot                            :: Acton.Env.Env0 -> QName -> IO String
@@ -118,7 +118,7 @@ decl env (Class _ n q a b)          = (text "struct" <+> classname env n <+> cha
   where tc                          = TC (NoQ n) [ tVar v | Quant v _ <- q ]
         initdef : meths             = fields env tc
         properties                  = [ varsig env n (sctype sc) <> semi | (n, NSig sc Property) <- fullAttrEnv env tc ]
-decl env (Def _ n q p _ a b _ fx)   = gen env (fromJust a) <+> genTopName env n <+> parens (params env $ prowOf p) <> semi
+decl env (Def _ n q p _ a _ _ _)    = gen env (fromJust a) <+> genTopName env n <+> parens (params env $ prowOf p) <> semi
 
 methstub env (Class _ n q a b)      = text "extern" <+> text "struct" <+> classname env n <+> methodtable env n <> semi $+$
                                       constub env t n r
@@ -228,7 +228,9 @@ primNEWTUPLE                        = gPrim "NEWTUPLE"
 
 -- Implementation -----------------------------------------------------------------------------------
 
-cModule env (Module m imps stmts)   = include env "types" m $+$
+cModule env srcbase (Module m imps stmts)
+                                    = include env "types" m $+$
+                                      ext_include $+$
                                       declModule env stmts $+$
                                       text "int" <+> genTopName env initFlag <+> equals <+> text "0" <> semi $+$
                                       (text "void" <+> genTopName env initKW <+> parens empty <+> char '{') $+$
@@ -238,6 +240,8 @@ cModule env (Module m imps stmts)   = include env "types" m $+$
                                               initModule env stmts) $+$
                                       char '}'
   where initImports                 = vcat [ gen env (GName m initKW) <> parens empty <> semi | m <- modNames imps ]
+        stubs                       = [ dname d | Decl _ ds <- stmts, d@Def{} <- ds, isNotImpl (dbody d) ]
+        ext_include                 = if null stubs then empty else text "#include" <+> doubleQuotes (text srcbase <> text ".ext.c")
 
 
 declModule env []                   = empty
@@ -251,7 +255,8 @@ declModule env (s : ss)             = vcat [ gen env t <+> genTopName env n <> s
         env1                        = gdefine te env
 
 declDecl env (Def _ n q p KwdNIL (Just t) b d m)
-                                    = (gen env t <+> genTopName env n <+> parens (gen env p) <+> char '{') $+$
+  | isNotImpl b                     = gen env t <+> genTopName env n <+> parens (gen env p) <> semi
+  | otherwise                       = (gen env t <+> genTopName env n <+> parens (gen env p) <+> char '{') $+$
                                       nest 4 (genSuite env1 b) $+$
                                       char '}'
   where env1                        = setRet t $ ldefine (envOf p) $ defineTVars q env

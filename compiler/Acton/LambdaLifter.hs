@@ -218,9 +218,13 @@ instance Lift Stmt where
     ll env (Signature l ns sc dec)      = pure $ Signature l ns (convTop sc) dec
     ll env s                            = error ("ll unexpected: " ++ prstr s)
 
+llBody env b
+  | isNotImpl b                         = return b
+  | otherwise                           = llSuite env b
+
 instance Lift Decl where
     ll env (Def l n q p KwdNIL a b d fx)
-                                        = do b' <- llSuite (setCtxt InDef env1) b
+                                        = do b' <- llBody (setCtxt InDef env1) b
                                              return $ Def l n' q' p' KwdNIL (conv a) b' d fx
       where env1                        = extLocals p $ define (envOf p) $ defineTVars q env
             q'                          = if ctxt env == InDef then quantScope env ++ q else q

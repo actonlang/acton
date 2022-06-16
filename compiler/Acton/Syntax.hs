@@ -646,6 +646,9 @@ isKeyword x                         = x `Data.Set.member` rws
                                         "while","with","yield"
                                       ]
 
+isNotImpl [Expr _ (NotImplemented _)]   = True
+isNotImpl _                             = False
+
 isHidden (Name _ str)               = length (takeWhile (=='_') str) == 1
 isHidden _                          = True
 
