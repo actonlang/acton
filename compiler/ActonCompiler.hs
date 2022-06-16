@@ -450,7 +450,8 @@ printIce errMsg = do ccVer <- getCcVer
 runRestPasses :: Args -> Paths -> Acton.Env.Env0 -> A.Module -> Bool -> IO (Acton.Env.Env0, Acton.Env.TEnv)
 runRestPasses args paths env0 parsed stubMode = do
                       let outbase = outBase paths (A.modname parsed)
-                      let actFile = srcBase paths (A.modname parsed) ++ ".act"
+                      let srcbase = srcBase paths (A.modname parsed)
+                      let actFile = srcbase ++ ".act"
                       envTmp <- Acton.Env.mkEnv (sysTypes paths) (projTypes paths) env0 parsed
                       let env = envTmp { Acton.Env.stub = stubMode }
 
@@ -481,7 +482,7 @@ runRestPasses args paths env0 parsed stubMode = do
                       --traceM ("#################### lifteded env0:")
                       --traceM (Pretty.render (Pretty.pretty liftEnv))
 
-                      (n,h,c) <- Acton.CodeGen.generate liftEnv lifted
+                      (n,h,c) <- Acton.CodeGen.generate liftEnv srcbase lifted
                       iff (hgen args) $ do
                           putStrLn(h)
                           System.Exit.exitSuccess

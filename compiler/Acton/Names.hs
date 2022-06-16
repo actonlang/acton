@@ -74,6 +74,8 @@ instance Fallsthru a => Fallsthru [a] where
     fallsthru                       = all fallsthru
     
 instance Fallsthru Stmt where
+    fallsthru (Expr _ (NotImplemented _))
+                                    = False
     fallsthru Return{}              = False
     fallsthru Raise{}               = False
     fallsthru Break{}               = False

@@ -293,13 +293,18 @@ instance CPS [Stmt] where
 
     cps env []                          = return []
 
+cpsBody env b
+  | isNotImpl b                         = return b
+  | otherwise                           = cpsSuite env b
+
+
 instance CPS Decl where
     cps env (Class l n q cs b)          = do b' <- cpsSuite env1 b
                                              return $ Class l n (conv q) (conv cs) b'
       where env1                        = defineSelf (NoQ n) q $ defineTVars q $ setClassCtxt env
 
     cps env (Def l n q p KwdNIL (Just t) b d fx)
-      | contFX fx                       = do b' <- cpsSuite env1 b
+      | contFX fx                       = do b' <- cpsBody env1 b
                                              return $ Def l n q' (addContPar p' fx t') KwdNIL (Just tR) b' d fx
       | otherwise                       = return $ Def l n q' p' KwdNIL (Just t') (conv b) d fx
       where env1                        = define (envOf p) $ defineTVars q $ Meth contKW t fx +: setDefCtxt env

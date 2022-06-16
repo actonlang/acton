@@ -1,0 +1,17 @@
+def here():
+    return there("hello")
+
+def there(x: str) -> int:
+    NotImplemented
+
+def generic[A(Eq)](x: A) -> A:
+    NotImplemented
+
+actor main(env):
+    var s = 0
+    def present(i):
+        s = i
+    action def absent(i: int) -> int:
+        NotImplemented
+    after 2: absent(7)
+    await async env.exit(0)

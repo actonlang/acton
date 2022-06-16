@@ -149,6 +149,9 @@ instance Deact a => Deact (Maybe a) where
 instance Deact a => Deact [a] where
     deact env                       = traverse (deact env)
 
+deactBody env b
+  | isNotImpl b                     = return b
+  | otherwise                       = deactSuite env b
 
 deactSuite env []                   = return []
 deactSuite env (s : ss)             = do s' <- deact (setSampled ns env) s
@@ -231,7 +234,7 @@ instance Deact Decl where
             deactMeths (Decl l ds)  = Decl l <$> mapM deactMeth ds
 
             deactMeth (Def l n q p KwdNIL (Just t) b d fx)
-                                    = do b' <- deactSuite env' b
+                                    = do b' <- deactBody env' b
                                          return $ Def l n' q' (addSelfPar p') KwdNIL (Just t') b' d fx
               where env'            = extendAndShadow (envOf p) $ setRet t' $ defineTVars q' env2
                     n'              = if n `elem` actions then localName n else n
@@ -252,7 +255,7 @@ instance Deact Decl where
 
 
     deact env (Def l n q p KwdNIL (Just t) b d fx)
-                                    = do b <- deactSuite env1 b
+                                    = do b <- deactBody env1 b
                                          return $ Def l n q p KwdNIL (Just t) b d fx
       where env1                    = extendAndShadow (envOf p) $ setRet t $ defineTVars q env
     deact env (Class l n q u b)     = Class l n q u <$> deactSuite env1 b
