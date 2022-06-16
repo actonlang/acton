@@ -217,7 +217,7 @@ testBuildAndRun buildOpts runOpts expRet expFail thing = do
     testBuildThing buildOpts ExitSuccess False thing
     (returnCode, cmdOut, cmdErr) <- runThing runOpts thing
     iff (expFail == False && returnCode /= expRet) (
-        putStrLn("\nERROR: application return code (" ++ (show returnCode) ++ ") not as expected (" ++ (show expRet) ++ ")\nSTDOUT:\n" ++ cmdOut ++ "STDERR:\n" ++ cmdErr)
+        putStrLn("\nERROR: when running application " ++ thing ++ ", the return code (" ++ (show returnCode) ++ ") not as expected (" ++ (show expRet) ++ ")\nSTDOUT:\n" ++ cmdOut ++ "STDERR:\n" ++ cmdErr)
         )
     assertEqual ("application should return " ++ (show expRet)) expRet returnCode
 
