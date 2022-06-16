@@ -52,6 +52,65 @@ struct $Indexed$dict$class $Indexed$dict$methods = {
     $Indexed$dict$__delitem__
 };
 
+
+struct $Eq$dict$class $Eq$dict$methods = {
+    "$Eq$dict",
+    UNASSIGNED,
+    ($Super$class)&$Eq$methods,
+    $Eq$dict$__init__,
+    $Eq$dict$__serialize__,
+    $Eq$dict$__deserialize__,
+    ($bool (*)($Eq$dict))$default__bool__,
+    ($str (*)($Eq$dict))$default__str__,
+    ($str (*)($Eq$dict))$default__str__,
+    $Eq$dict$__eq__,
+    $Eq$dict$__ne__
+};
+
+
+void $Eq$dict$__serialize__($Eq$dict self, $Serial$state state) {
+  $step_serialize(self->w$Eq$A$Eq$dict, state);
+  $step_serialize(self->w$Eq$B$Eq$dict, state);
+}
+
+$Eq$dict $Eq$dict$__deserialize__($Eq$dict self, $Serial$state state) {
+   $Eq$dict res = $DNEW($Eq$dict,state);
+   res->w$Eq$A$Eq$dict = ($Eq)$step_deserialize(state);
+   res->w$Eq$B$Eq$dict = ($Eq)$step_deserialize(state);
+   return res;
+}
+
+void $Eq$dict$__init__($Eq$dict self, $Hashable hA, $Eq eB) {
+  self->w$Hashable$A$Eq$dict = hA;
+  self->w$Eq$A$Eq$dict = ($Eq)hA;
+  self->w$Eq$B$Eq$dict = eB;
+}
+
+$Eq$dict $Eq$dict$new($Hashable hA, $Eq eB) {
+  return $NEW($Eq$dict,hA,eB);
+}
+
+$bool $Eq$dict$__eq__ ($Eq$dict w, $dict a, $dict b) {
+  if (a->numelements != b->numelements) {
+    return $False;
+  }; 
+  $Hashable wH = w->w$Hashable$A$Eq$dict;
+  $Eq wB = w->w$Eq$B$Eq$dict;
+  $Mapping$dict m = $Mapping$dict$new(wH);
+  $Iterator it = m->$class->keys(m,a);
+  $WORD x,resa,resb;
+  while ((x = $next(it))) {
+    int ixa = $lookdict(b, wH, wH->$class->__hash__(wH,x)->val,x,&resa);
+    int ixb = $lookdict(b, wH, wH->$class->__hash__(wH,x)->val,x,&resb);
+    if (ixb<0 || wB->$class->__ne__(wB,resa,resb)->val) return $False;
+  }
+  return $True;
+}
+
+$bool $Eq$dict$__ne__ ($Eq$dict w, $dict a, $dict b) {
+  return to$bool(!(w->$class->__eq__(w,a,b)->val));
+}
+
 void $Mapping$dict$__serialize__($Mapping$dict self, $Serial$state state) {
   $step_serialize(self->w$Indexed, state);
   $step_serialize(self->w$Eq$A$Mapping$dict, state);

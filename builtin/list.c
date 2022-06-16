@@ -38,9 +38,9 @@ struct $Sequence$list$class $Sequence$list$methods = {
     $Sequence$list$append,
     $Sequence$list$reverse
 };
-struct $Sequence$list $Sequence$list_instance = {
-    &$Sequence$list$methods,
-    ($Collection)&$Collection$list_instance, 
+struct $Sequence$list $Sequence$list_instance = { 
+    &$Sequence$list$methods, 
+    ($Collection)&$Collection$list_instance,
     ($Times)&$Times$list_instance
 };
 $Sequence$list $Sequence$list$witness = &$Sequence$list_instance;
@@ -63,6 +63,7 @@ struct $Collection$list $Collection$list_instance = {
     &$Collection$list$methods,
     ($Sequence)&$Sequence$list_instance
 };
+
 $Collection$list $Collection$list$witness = &$Collection$list_instance;
 
 
@@ -104,6 +105,51 @@ struct $Container$list$class $Container$list$methods = {
     $Container$list$__containsnot__
 };
 
+struct $Eq$list$class $Eq$list$methods = {
+    "$Eq$list",
+    UNASSIGNED,
+    ($Super$class)&$Eq$methods,
+    $Eq$list$__init__,
+    $Eq$list$__serialize__,
+    $Eq$list$__deserialize__,
+    ($bool (*)($Eq$list))$default__bool__,
+    ($str (*)($Eq$list))$default__str__,
+    ($str (*)($Eq$list))$default__str__,
+    $Eq$list$__eq__,
+    $Eq$list$__ne__
+};
+
+
+void $Eq$list$__serialize__($Eq$list self, $Serial$state state) {
+  $step_serialize(self->w$Eq$A$Eq$list, state);
+}
+
+$Eq$list $Eq$list$__deserialize__($Eq$list self, $Serial$state state) {
+   $Eq$list res = $DNEW($Eq$list,state);
+   res->w$Eq$A$Eq$list = ($Eq)$step_deserialize(state);
+   return res;
+}
+
+$bool $Eq$list$__eq__ ($Eq$list w, $list a, $list b) {
+  if (a->length != b->length) return $False;                                
+  $Eq w2 = w->w$Eq$A$Eq$list;
+  for (int i = 0; i<a->length; i++)
+    if ((w2->$class->__ne__(w2,a->data[i],b->data[i]))->val) return $False;
+  return $True;
+}
+
+$bool $Eq$list$__ne__ ($Eq$list w, $list a, $list b) {
+  return to$bool(!(w->$class->__eq__(w,a,b)->val));
+}
+
+$Eq$list $Eq$list$new($Eq e) {
+  return $NEW($Eq$list,e);
+}
+
+void $Eq$list$__init__($Eq$list self, $Eq e) {
+  self->w$Eq$A$Eq$list = e;
+}
+  
 void $Times$list$__serialize__($Times$list self, $Serial$state state) {
   $step_serialize(self->w$Sequence, state);
 }

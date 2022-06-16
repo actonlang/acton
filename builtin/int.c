@@ -325,7 +325,7 @@ $bool $Hashable$int$__eq__($Hashable$int wit, $int a, $int b) {
   return to$bool(a->val == b->val);
 }
 
-$bool $Hashable$int$__neq__($Hashable$int wit, $int a, $int b) {
+$bool $Hashable$int$__ne__($Hashable$int wit, $int a, $int b) {
   return to$bool(a->val != b->val);
 }
 
@@ -527,7 +527,7 @@ struct $Hashable$int$class $Hashable$int$methods = {
     ($str (*)($Hashable$int))$default__str__,
     ($str (*)($Hashable$int))$default__str__,
     $Hashable$int$__eq__,
-    $Hashable$int$__neq__,
+    $Hashable$int$__ne__,
     $Hashable$int$__hash__
 };
 

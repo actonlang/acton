@@ -1,0 +1,84 @@
+actor main(env):
+   a = [1,2,3]
+   if a == [1,2,3]:
+      print("Equal, correct")
+   else:
+      print("Not equal, wrong")
+
+   if a == [1,2]:
+      print("Equal, wrong")
+   else:
+      print("Not equal, correct")
+      
+   if a == [1,5,2]:
+      print("Equal, wrong")
+   else:
+      print("Not equal, correct")
+
+   if [3.5,7.2] == [3.5, 7.2]:
+      print("Equal, correct")
+   else:
+      print("Not equal, wrong")
+
+   if [a,a] == [[1,2,3],[1,2,3]]:
+         print("Equal, correct")
+   else:
+      print("Not equal, wrong")
+      
+   if [a,a] == [[1,2,3],[1,3]]:
+      print("Equal, wrong")
+   else:
+      print("Not equal, correct")
+
+   if ["hello", "world"]==["Hello","word"]:
+      print("Equal, wrong")
+   else:
+      print("Not equal, correct")
+
+   d1, d2 : dict[str,str]
+   d1 = {}
+   d1["Sweden"] = "Stockholm"
+   d1["Norway"] ="Oslo"
+   d1["Denmark"] = "Copenhagen"
+   
+   d2 = {}
+   d2["Norway"] ="Oslo"
+   d2["Denmark"] = "Copenhagen"
+   d2["Sweden"] = "Stockholm"
+
+   if d1==d2:
+      print("Equal, correct")
+   else:
+      print("Not equal, wrong")
+
+   d2["Finland"] = "Helsinki"
+
+   if d1==d2:
+      print("Equal, wrong")
+   else:
+      print("Not equal, correct")
+
+   d3, d4 : dict[bool,dict[str,str]]
+   d3 = {}
+   d3[True] = d1
+   d3[False] = d2
+
+   d4 = {}
+   d4[False] = d2
+   d4[True] = d1
+
+   if d3==d4:
+      print("Equal, correct")
+   else:
+      print("Not equal, wrong")
+
+   d2["Estonia"] = "Tallinn"
+
+   if d3==d4:
+      print("Equal, correct")
+   else:
+      print("Not equal, ")
+
+   env.exit(0)
+   
+   

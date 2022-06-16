@@ -76,3 +76,93 @@ $bool $False = &$f;
 $bool $default__bool__($value self) {
   return $True;
 }
+
+// $Eq$bool ///////////////////////////////////////////////////////////////////////////////////
+
+struct $Eq$bool$class $Eq$bool$methods = {
+    "$Eq$bool",
+    UNASSIGNED,
+    ($Super$class)&$Eq$methods,
+    $Eq$bool$__init__,
+    $Eq$bool$__serialize__,
+    $Eq$bool$__deserialize__,
+    ($bool (*)($Eq$bool))$default__bool__,
+    ($str (*)($Eq$bool))$default__str__,
+    ($str (*)($Eq$bool))$default__str__,
+    $Eq$bool$__eq__,
+    $Eq$bool$__ne__
+};
+
+struct $Eq$bool $Eq$bool_instance = {&$Eq$bool$methods};
+$Eq$bool $Eq$bool$witness = &$Eq$bool_instance;
+
+void $Eq$bool$__serialize__($Eq$bool self, $Serial$state state) {
+}
+
+$Eq$bool $Eq$bool$__deserialize__($Eq$bool self, $Serial$state state) {
+   $Eq$bool res = $DNEW($Eq$bool,state);
+   return res;
+}
+
+$bool $Eq$bool$__eq__ ($Eq$bool self, $bool a, $bool b) {
+  return to$bool(a->val == b->val);
+}
+
+$bool $Eq$bool$__ne__ ($Eq$bool self, $bool a, $bool b) {
+  return to$bool(a->val != b->val);
+}
+
+$Eq$bool $Eq$bool$new() {
+   return $NEW($Eq$bool);
+}
+
+void $Eq$bool$__init__($Eq$bool self) {
+   return;
+}
+
+// $Hashable$bool ///////////////////////////////////////////////////////////////////////////////////////////////////////
+
+struct $Hashable$bool$class $Hashable$bool$methods = {
+    "$Hashable$bool",
+    UNASSIGNED,
+    ($Super$class)&$Hashable$methods,
+    $Hashable$bool$__init__,
+    $Hashable$bool$__serialize__,
+    $Hashable$bool$__deserialize__,
+    ($bool (*)($Hashable$bool))$default__bool__,
+    ($str (*)($Hashable$bool))$default__str__,
+    ($str (*)($Hashable$bool))$default__str__,
+    $Hashable$bool$__eq__,
+    $Hashable$bool$__ne__,
+    $Hashable$bool$__hash__
+};
+
+$Hashable$bool $Hashable$bool$new() {
+   return $NEW($Hashable$bool);
+}
+
+void $Hashable$bool$__init__($Hashable$bool self) {
+   return;
+}
+void $Hashable$bool$__serialize__($Hashable$bool self, $Serial$state state) {
+}
+
+$Hashable$bool $Hashable$bool$__deserialize__($Hashable$bool self, $Serial$state state) {
+   $Hashable$bool res = $DNEW($Hashable$bool,state);
+   return res;
+}
+
+$bool $Hashable$bool$__eq__($Hashable$bool wit, $bool a, $bool b) {
+  return to$bool(a->val == b->val);
+}
+
+$bool $Hashable$bool$__ne__($Hashable$bool wit, $bool a, $bool b) {
+  return to$bool(a->val != b->val);
+}
+
+$bool $Hashable$bool$__hash__($Hashable$bool wit, $bool a) {
+  return to$bool($int_hash(($int)a));
+}
+struct $Hashable$bool $Hashable$bool_instance = {&$Hashable$bool$methods};
+$Hashable$bool $Hashable$bool$witness = &$Hashable$bool_instance;
+

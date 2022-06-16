@@ -38,7 +38,6 @@ struct $table_struct {
 };
 
 
-
 #define DKIX_EMPTY (-1)
 #define DKIX_DUMMY (-2)  /* Used internally */
 #define TB_ENTRIES(tb) \
@@ -215,7 +214,7 @@ static int dictresize($dict d) {
 
 
 // Search index of hash table from offset of entry table 
-static int lookdict_index($table table, long hash, int index) {
+static int $lookdict_index($table table, long hash, int index) {
     unsigned long mask =  (table->tb_size)-1;
     unsigned long perturb = hash;
     unsigned long i = (unsigned long)hash & mask;
@@ -237,7 +236,7 @@ static int lookdict_index($table table, long hash, int index) {
 // Returns index into compact array where hash/key is found
 // (and returns corresponding value in *res)
 // or DKIX_EMPTY if no such entry exists
-static int lookdict($dict dict, $Hashable hashwit, long hash, $WORD key, $WORD *res) {
+int $lookdict($dict dict, $Hashable hashwit, long hash, $WORD key, $WORD *res) {
   $table table = dict->table;
   unsigned long mask = (table->tb_size)-1, i = ( unsigned long)hash & mask, perturb = hash;
   int ix;
@@ -284,7 +283,7 @@ static int insertdict($dict dict, $Hashable hashwit, long hash, $WORD key, $WORD
   $WORD old_value;
   $table table;
   $entry_t ep;
-  int ix = lookdict(dict,hashwit,hash,key,&old_value);
+  int ix = $lookdict(dict,hashwit,hash,key,&old_value);
   if (ix == DKIX_EMPTY) {
     if (dict->table->tb_usable <= 0 && dictresize(dict) < 0)
         return -1;
@@ -368,16 +367,16 @@ $Iterator $dict_iter($dict dict) {
 void $dict_setitem($dict dict, $Hashable hashwit, $WORD key, $WORD value) {
   long hash = from$int(hashwit->$class->__hash__(hashwit,key));
   if (insertdict(dict, hashwit, hash, key, value)<0) {
-    $RAISE(($BaseException)$NEW($IndexError,to$str("getitem: key not in dictionary")));
+    $RAISE(($BaseException)$NEW($IndexError,to$str("setitem: key not in dictionary")));
   }      
 }
 
 $WORD $dict_getitem($dict dict, $Hashable hashwit, $WORD key) {
   long hash = from$int(hashwit->$class->__hash__(hashwit,key));
   $WORD res;
-  int ix = lookdict(dict,hashwit,hash,key,&res);
+  int ix = $lookdict(dict,hashwit,hash,key,&res);
   if (ix < 0)  {
-    $RAISE(($BaseException)$NEW($IndexError,to$str("setitem: key not in dictionary")));
+    $RAISE(($BaseException)$NEW($IndexError,to$str("getitem: key not in dictionary")));
   }      
   return res;
 }
@@ -386,11 +385,11 @@ $WORD $dict_getitem($dict dict, $Hashable hashwit, $WORD key) {
 void $dict_delitem($dict dict, $Hashable hashwit, $WORD key) {
   long hash = from$int(hashwit->$class->__hash__(hashwit,key));
   $WORD res;
-  int ix = lookdict(dict,hashwit,hash,key,&res);
+  int ix = $lookdict(dict,hashwit,hash,key,&res);
   $table table = dict->table;
   if (ix >= 0) {
     $entry_t entry = &TB_ENTRIES(table)[ix];
-    int i = lookdict_index(table,hash,ix);
+    int i = $lookdict_index(table,hash,ix);
     table->tb_indices[i] = DKIX_DUMMY;
     res = entry->value;
     if (res == NULL) {
@@ -428,7 +427,7 @@ long $dict_len($dict dict) {
 
 int $dict_contains($dict dict, $Hashable hashwit, $WORD key) {
   $WORD res;
-  return lookdict(dict,hashwit,from$int(hashwit->$class->__hash__(hashwit,key)),key,&res) >= 0;
+  return $lookdict(dict,hashwit,from$int(hashwit->$class->__hash__(hashwit,key)),key,&res) >= 0;
 }
 
 // Mapping /////////////////////////////////////////////////////////////////////////////
@@ -558,7 +557,7 @@ $Iterator $dict_items($dict dict) {
 $WORD $dict_get($dict dict, $Hashable hashwit, $WORD key, $WORD deflt) {
   long hash = from$int(hashwit->$class->__hash__(hashwit,key));
   $WORD res;
-  int ix = lookdict(dict,hashwit,hash,key,&res);
+  int ix = $lookdict(dict,hashwit,hash,key,&res);
   if (ix < 0) 
     return deflt;
   else
@@ -572,7 +571,7 @@ $tuple $dict_popitem($dict dict, $Hashable hashwit) {
     $entry_t entry =  &TB_ENTRIES(table)[ix];
     if (entry->value != NULL) {
       long hash = from$int(hashwit->$class->__hash__(hashwit,entry->key));
-      int i = lookdict_index(table,hash,ix);
+      int i = $lookdict_index(table,hash,ix);
       table->tb_indices[i] = DKIX_DUMMY;
       dict->numelements--;
       table->tb_nentries = ix;
@@ -593,9 +592,10 @@ $WORD $dict_setdefault($dict dict, $Hashable hashwit, $WORD key, $WORD deflt) {
   // if (!deflt) deflt = void; what is the name of void here?...
   long hash = from$int(hashwit->$class->__hash__(hashwit,key));
   $WORD value;
-  int ix = lookdict(dict,hashwit,hash,key,&value);
+  int ix = $lookdict(dict,hashwit,hash,key,&value);
   if (ix >= 0)
     return value;
   TB_ENTRIES(dict->table)[ix].value = deflt;
   return deflt;
 }
+ 
