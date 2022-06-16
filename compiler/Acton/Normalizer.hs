@@ -188,13 +188,9 @@ normItem env (WithItem e (Just p))  = do e' <- norm env e
                                          (p',ss) <- normPat env p
                                          return (e', Just p', ss)
 
-normBody env b
-  | isNotImpl b                     = return b
-  | otherwise                       = norm env b
-
 instance Norm Decl where
     norm env (Def l n q p k t b d x)= do p' <- joinPar <$> norm env0 p <*> norm (define (envOf p) env0) k
-                                         b' <- normBody env1 b
+                                         b' <- norm env1 b
                                          return $ Def l n q p' KwdNIL t (ret b') d x
       where env1                    = define (envOf p ++ envOf k) env0
             env0                    = defineTVars q env

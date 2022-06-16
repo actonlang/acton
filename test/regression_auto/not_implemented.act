@@ -5,6 +5,8 @@ def there(x: str) -> int:
     NotImplemented
 
 def generic[A(Eq)](x: A) -> A:
+    """Now including a docstring
+    """
     NotImplemented
 
 actor main(env):
