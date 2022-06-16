@@ -607,7 +607,7 @@ numpy$$ndarray numpy$$unirandint($int a, $int b, $int n) {
   return res;
 }
 
-#define MAX 1000000000
+#define NDARRAY_MAX 1000000000
 numpy$$ndarray numpy$$unirandfloat($float a, $float b, $int n) {
   if (a->val >= b->val)
      $RAISE(($BaseException)$NEW($ValueError,to$str("lower limit not smaller than upper in numpy.unirand")));
@@ -618,7 +618,7 @@ numpy$$ndarray numpy$$unirandfloat($float a, $float b, $int n) {
   double s = (b->val - a->val);
   numpy$$ndarray res = $newarray(DblType,1,n,shape,strides,true);
   for (int i = 0; i<n->val; i++)
-    res->data[i].d = a->val + s * (double)arc4random_uniform(MAX)/(double)MAX;
+    res->data[i].d = a->val + s * (double)arc4random_uniform(NDARRAY_MAX)/(double)NDARRAY_MAX;
   return res;
 }
 
