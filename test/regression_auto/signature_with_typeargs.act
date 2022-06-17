@@ -1,0 +1,6 @@
+lst : list[int]
+lst = list(range(10,14,1))
+
+actor main(env):
+   print(lst==[10,11,12,13])
+   env.exit(0)
