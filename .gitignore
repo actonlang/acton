@@ -47,3 +47,7 @@ test/**
 !test/**/*.*
 test/**/*.log
 !test/**/*/
+
+# tests organized as acton projects; ignore all but source
+test/*/*/out/**
+test/*/*/build.sh

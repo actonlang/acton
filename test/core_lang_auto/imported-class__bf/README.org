@@ -1,0 +1,12 @@
+* import-class__bf
+import-class__bf is a cool Acton project!
+
+** Compile
+#+BEGIN_SRC shell
+actonc build
+#+END_SRC
+
+** Run
+#+BEGIN_SRC shell
+out/rel/bin/import-class__bf
+#+END_SRC
