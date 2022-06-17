@@ -602,7 +602,14 @@ witsByTName env tn          = [ w | w <- witnesses env, eqname (wtype w) ]
         eqname (TVar _ v)   = NoQ (tvname v) == tn
         eqname _            = False
 
-schematic (TC n ts)         = TC n [ tWild | _ <- ts ]
+schematic (TCon _ tc)       = tCon (schematic' tc)
+schematic (TFun _ _ _ _ _)  = tFun tWild tWild tWild tWild
+schematic (TTuple _ _ _)    = tTuple tWild tWild
+schematic (TOpt _ _)        = tOpt tWild
+schematic (TRow _ k n _ _)  = tRow k n tWild tWild
+schematic t                 = t
+
+schematic' (TC n ts)         = TC n [ tWild | _ <- ts ]
 
 wild t                      = subst [ (v,tWild) | v <- nub (tyfree t) ] t
 
@@ -667,7 +674,7 @@ directAncestors env qn      = [ tcname p | (ws,p) <- us, null $ catRight ws ]
   where (q,us,te)           = findConName qn env
 
 allAncestors                :: EnvF x -> TCon -> [TCon]
-allAncestors env tc         = [ schematic c | (_, c) <- us ]
+allAncestors env tc         = [ schematic' c | (_, c) <- us ]
   where (us,te)             = findCon env tc
 
 allAncestors'               :: EnvF x -> QName -> [QName]
