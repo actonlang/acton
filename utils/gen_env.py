@@ -141,11 +141,11 @@ def get_stuff(lines, input_generated=False):
 
 
 def cgen_builtin():
-    ac = subprocess.run([ACTONC, "--stub", "--cgen", "stdlib/src/__builtin__.act"], stdout=subprocess.PIPE)
+    ac = subprocess.run([ACTONC, "--stub", "--cgen", "builtin/ty/src/__builtin__.act"], stdout=subprocess.PIPE)
     return ac.stdout.decode('utf-8').splitlines()
 
 def hgen_builtin():
-    ac = subprocess.run([ACTONC, "--stub", "--hgen", "stdlib/src/__builtin__.act"], stdout=subprocess.PIPE)
+    ac = subprocess.run([ACTONC, "--stub", "--hgen", "builtin/ty/src/__builtin__.act"], stdout=subprocess.PIPE)
     return ac.stdout.decode('utf-8').splitlines()
 
 
