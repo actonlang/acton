@@ -39,7 +39,7 @@ jobs:
             ~/.stack
           key: ${{ matrix.os }}-${{ secrets.CACHE_VERSION }}
       - name: "Install build prerequisites"
-        run: brew install argp-standalone haskell-stack protobuf-c
+        run: brew install argp-standalone haskell-stack libuv protobuf-c
       - name: "Build Acton"
         run: make -j2 -C ${{ github.workspace }} BUILD_RELEASE=${{ env.BUILD_RELEASE }}
       - name: "Build a release"
@@ -97,8 +97,9 @@ jobs:
           key: ${{ matrix.os }}-${{ matrix.version }}-${{ secrets.CACHE_VERSION }}
       - name: "Install build prerequisites"
         run: |
+          export DEBIAN_FRONTEND=noninteractive
           apt-get update
-          apt-get install -qy bzip2 gcc haskell-stack libbsd-dev libprotobuf-c-dev libutf8proc-dev make procps python3 uuid-dev zlib1g-dev
+          apt-get install -qy bzip2 gcc haskell-stack libbsd-dev libprotobuf-c-dev libutf8proc-dev libuv1-dev make pkg-config procps python3 uuid-dev zlib1g-dev
       - name: chown our home dir to avoid stack complaining
         run: chown -R root:root /github/home
       - name: "Build Acton"
@@ -128,7 +129,7 @@ jobs:
       - name: "Install build prerequisites"
         run: |
           apt-get update
-          apt-get install -qy build-essential debhelper devscripts gcc haskell-stack libbsd-dev libprotobuf-c-dev libutf8proc-dev make uuid-dev zlib1g-dev
+          apt-get install -qy build-essential debhelper devscripts gcc haskell-stack libbsd-dev libprotobuf-c-dev libutf8proc-dev libuv1-dev make pkg-config uuid-dev zlib1g-dev
       - name: "Build Debian packages"
         run: make -C ${GITHUB_WORKSPACE} debs BUILD_RELEASE=${{ env.BUILD_RELEASE }}
       - name: "Compute variables"

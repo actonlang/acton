@@ -12,6 +12,8 @@
 #include <pthread.h>
 
 #include "builtin.h"
+#include "../rts/io.h"
+#include "../rts/log.h"
 #include "../rts/rts.h"
 
 #ifdef IS_MACOS

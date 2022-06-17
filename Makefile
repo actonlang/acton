@@ -1,6 +1,11 @@
 include common.mk
 CHANGELOG_VERSION=$(shell grep '^\#\# \[[0-9]' CHANGELOG.md | sed 's/\#\# \[\([^]]\{1,\}\)].*/\1/' | head -n1)
 
+PKGCONFIG=$(shell which pkg-config)
+ifeq ($(PKGCONFIG),)
+$(error "pkg-config must be installed")
+endif
+
 ACTONC=dist/bin/actonc
 ACTC=dist/bin/actonc
 
@@ -247,13 +252,17 @@ stdlib/out/dev/lib/libActonProject.a stdlib/out/rel/lib/libActonProject.a: $(STD
 
 # /lib --------------------------------------------------
 DBARCHIVE=lib/libActonDB.a
-ARCHIVES=lib/dev/libActon.a lib/rel/libActon.a
+# TODO: maybe lift out libuv. ARCHIVES becomes DIST_ARCHIVES which used to only
+# be libActon, and we compile that serialized to avoid collisions between dev &
+# rel profiles... this now also hits libuv. Maybe better to keep separate for
+# concurrency?
+ARCHIVES=lib/dev/libActon.a lib/rel/libActon.a lib/libprotobuf-c_a.a lib/libutf8proc_a.a lib/libuv_a.a
 
 # If we later let actonc build things, it would produce a libActonProject.a file
 # in the stdlib directory, which we would need to join together with rts.o etc
 # to form the final libActon (or maybe produce a libActonStdlib and link with?)
 
-LIBACTON_DEV_OFILES=builtin/builtin_dev.o builtin/env_dev.o rts/empty.o rts/log.o rts/rts_dev.o deps/netstring_dev.o deps/yyjson_dev.o
+LIBACTON_DEV_OFILES=builtin/builtin_dev.o builtin/env_dev.o rts/empty.o rts/io_dev.o rts/log.o rts/rts_dev.o deps/netstring_dev.o deps/yyjson_dev.o
 OFILES += $(LIBACTON_DEV_OFILES)
 lib/dev/libActon.a: stdlib/out/dev/lib/libActonProject.a  $(LIBACTON_DEV_OFILES)
 	@mkdir -p $(dir $@)
@@ -266,6 +275,22 @@ lib/rel/libActon.a: stdlib/out/rel/lib/libActonProject.a $(LIBACTON_REL_OFILES)
 	@mkdir -p $(dir $@)
 	cp -a $< $@
 	ar rcs $@ $(filter-out stdlib/out/rel/lib/libActonProject.a,$^)
+
+# Include static libs
+LIBPROTOBUFC_LIBDIR:=$(shell pkg-config --variable=libdir libprotobuf-c)
+LIBPROTOBUFC_A:=$(shell ls $(LIBPROTOBUFC_LIBDIR)/libprotobuf-c_a.a $(LIBPROTOBUFC_LIBDIR)/libprotobuf-c.a 2>/dev/null | head -n1)
+lib/libprotobuf-c_a.a: $(LIBPROTOBUFC_A)
+	cp $< $@
+
+LIBUTF8PROC_LIBDIR:=$(shell pkg-config --variable=libdir libutf8proc)
+LIBUTF8PROC_A:=$(shell ls $(LIBUTF8PROC_LIBDIR)/libutf8proc_a.a $(LIBUTF8PROC_LIBDIR)/libutf8proc.a 2>/dev/null | head -n1)
+lib/libutf8proc_a.a: $(LIBUTF8PROC_A)
+	cp $< $@
+
+LIBUV_LIBDIR:=$(shell pkg-config --variable=libdir libuv)
+LIBUV_A:=$(shell ls $(LIBUV_LIBDIR)/libuv_a.a $(LIBUV_LIBDIR)/libuv.a 2>/dev/null | head -n1)
+lib/libuv_a.a: $(LIBUV_A)
+	cp $< $@
 
 COMM_OFILES += backend/comm.o rts/empty.o
 DB_OFILES += backend/db.o backend/queue.o backend/skiplist.o backend/txn_state.o backend/txns.o rts/empty.o
@@ -280,7 +305,15 @@ lib/libActonDB.a: $(BACKEND_OFILES)
 
 
 # /rts --------------------------------------------------
-OFILES += rts/log.o rts/rts_dev.o rts/rts_rel.o rts/empty.o
+OFILES += rts/io_dev.o rts/io_rel.o rts/log.o rts/rts_dev.o rts/rts_rel.o rts/empty.o
+rts/io_dev.o: rts/io.c rts/io.h
+	$(CC) $(CFLAGS) $(CFLAGS_DEV) $(LDFLAGS) \
+		-c $< -o $@
+
+rts/io_rel.o: rts/io.c rts/io.h
+	$(CC) $(CFLAGS) $(CFLAGS_REL) $(LDFLAGS) \
+		-c $< -o $@
+
 rts/log.o: rts/log.c rts/log.h
 	$(CC) $(CFLAGS) $(CFLAGS_DEV) -DLOG_USE_COLOR -c $< -o$@
 
@@ -394,7 +427,8 @@ dist/lib/%: lib/%
 	cp $< $@
 
 DIST_BINS=$(ACTONC) dist/bin/actondb
-DIST_HFILES=dist/rts/rts.h \
+DIST_HFILES=\
+	dist/rts/rts.h \
 	dist/builtin/env.h \
 	$(addprefix dist/,$(BUILTIN_HFILES))
 DIST_DBARCHIVE=$(addprefix dist/,$(DBARCHIVE))

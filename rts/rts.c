@@ -33,6 +33,8 @@
 #include "yyjson.h"
 #include "rts.h"
 
+#include "io.h"
+
 #include "log.h"
 #include "netstring.h"
 #include "../builtin/env.h"
@@ -1713,6 +1715,7 @@ void *$mon_socket_loop() {
 
 void rts_shutdown() {
     rts_exit = 1;
+    stop_ioloop();
     pthread_mutex_lock(&sleep_lock);
     pthread_cond_broadcast(&work_to_do);
     pthread_mutex_unlock(&sleep_lock);
@@ -2122,17 +2125,25 @@ int main(int argc, char **argv) {
     }
 
     // Start IO + worker threads
-    pthread_t threads[1 + num_wthreads];
+    pthread_t threads[2 + num_wthreads];
 
-    // eventloop
-    pthread_create(&threads[0], NULL, $eventloop, NULL);
+    // ioloop (our "new" IO thread)
+    pthread_create(&threads[0], NULL, (void*)ioloop, NULL);
     if (cpu_pin) {
         CPU_ZERO(&cpu_set);
         CPU_SET(0, &cpu_set);
         pthread_setaffinity_np(threads[0], sizeof(cpu_set), &cpu_set);
     }
 
-    for(int idx = 1; idx < num_wthreads+1; idx++) {
+    // eventloop (our "old" IO thread)
+    pthread_create(&threads[1], NULL, $eventloop, NULL);
+    if (cpu_pin) {
+        CPU_ZERO(&cpu_set);
+        CPU_SET(0, &cpu_set);
+        pthread_setaffinity_np(threads[1], sizeof(cpu_set), &cpu_set);
+    }
+
+    for(int idx = 2; idx < num_wthreads+2; idx++) {
         pthread_create(&threads[idx], NULL, main_loop, (void*)idx);
         // Index start at 1 and we pin wthreads to CPU 1...n
         // We use CPU 0 for misc threads, like IO / mon etc
@@ -2145,9 +2156,11 @@ int main(int argc, char **argv) {
 
     // -- SHUTDOWN --
 
-    // Only join the worker threads, starting at 1, we don't care about
-    // gracefully shutting down IO (thread 0)
-    for(int idx = 1; idx <= num_wthreads; idx++) {
+    // Join threads
+    for(int idx = 0; idx < num_wthreads+2; idx++) {
+        // Skip old IO thread, it doesn't support shutting down gracefully
+        if (idx == 1)
+            continue;
         pthread_join(threads[idx], NULL);
         pthread_mutex_lock(&sleep_lock);
         pthread_cond_broadcast(&work_to_do);
