@@ -186,7 +186,7 @@ rank env (Cast t1 t2@TVar{})
   | univar (tvar t2)                        = RTry t2 (allAbove env t1) True
 
 rank env c@(Impl _ t p)
-  | wild t `elem` ts                        = ROvl t
+  | schematic t `elem` ts                   = ROvl t
   | otherwise                               = RTry t ts False
   where ts                                  = allExtProto env t p
 
@@ -251,7 +251,7 @@ univars cs                              = concat $ map uni cs
 
 allAbove env (TCon _ tc)                = tOpt tWild : map tCon tcons
   where n                               = tcname tc
-        tcons                           = allAncestors env tc ++ [wild tc]
+        tcons                           = allAncestors env tc ++ [schematic' tc]
 allAbove env (TVar _ tv)
   | not $ univar tv                     = [tOpt tWild, tCon tc, tVar tv]
   where tc                              = findTVBound env tv
@@ -265,7 +265,7 @@ allAbove env (TFX _ FXAction)           = [fxAction]
 allAbove env (TFX _ FXMut)              = [fxAction, fxMut]
 allAbove env (TFX _ FXPure)             = [fxAction, fxMut, fxPure]
 
-allBelow env (TCon _ tc)                = map tCon $ wild tc : allDescendants env tc
+allBelow env (TCon _ tc)                = map tCon $ schematic' tc : allDescendants env tc
 allBelow env (TVar _ tv)                = [tVar tv]
 allBelow env (TOpt _ t)                 = tOpt tWild : allBelow env t ++ [tNone]
 allBelow env (TNone _)                  = [tNone]
@@ -429,15 +429,15 @@ findWitness env t p         = case elim [] match_ws of
 
 findProtoByAttr env cn n    = case filter hasAttr $ witsByTName env cn of
                                 [] -> Nothing
-                                w:_ -> Just $ schematic $ proto w
+                                w:_ -> Just $ schematic' $ proto w
   where hasAttr w           = n `elem` conAttrs env (tcname $ proto w)
 
 hasWitness                  :: Env -> Type -> PCon -> Bool
 hasWitness env t p          =  isJust $ findWitness env t p
 
 allExtProto                 :: Env -> Type -> PCon -> [Type]
-allExtProto env t p         = reverse [ wild (wtype w) | w <- witsByPName env (tcname p), matching t0 w {- && wild (wtype w) /= t0 -} ]
-  where t0                  = wild t                    -- matching against a wild t also accepts witnesses that would instantiate t
+allExtProto env t p         = reverse [ schematic (wtype w) | w <- witsByPName env (tcname p), matching t0 w {- && schematic (wtype w) /= t0 -} ]
+  where t0                  = wild t                    -- matching against wild t also accepts witnesses that would instantiate t
 
 allExtProtoAttr             :: Env -> Name -> [Type]
 allExtProtoAttr env n       = [ tCon tc | tc <- allCons env, any ((n `elem`) . allAttrs env . proto) (witsByTName env $ tcname tc) ]
