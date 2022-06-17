@@ -249,6 +249,7 @@ declModule env (Decl _ ds : ss)     = vcat [ declDecl env1 d | d <- ds ] $+$
                                       declModule env1 ss
   where env1                        = gdefine (envOf ds) env
         te                          = envOf ds
+declModule env (Signature{} : ss)   = declModule env ss
 declModule env (s : ss)             = vcat [ gen env t <+> genTopName env n <> semi | (n,NVar t) <- te ] $+$
                                       declModule env1 ss
   where te                          = envOf s `exclude` defined env
@@ -432,9 +433,6 @@ instance Gen Stmt where
     gen env (Continue _)            = text "continue" <> semi
     gen env (If _ (b:bs) b2)        = genBranch env "if" b $+$ vmap (genBranch env "else if") bs $+$ genElse env b2
     gen env (While _ e b [])        = (text "while" <+> parens (genBool env e <> text "->val") <+> char '{') $+$ nest 4 (genSuite env b) $+$ char '}'
-    gen env (Signature _ ns sc _)
-      | TFun{} <- sctype sc         = vcat [ funsig env n (sctype sc) <> semi | n <- ns ]
-      | otherwise                   = vcat [ varsig env n (sctype sc) <> semi | n <- ns ]
     gen env _                       = empty
 
 genBranch env kw (Branch e b)       = (text kw <+> parens (genBool env e <> text "->val") <+> char '{') $+$ nest 4 (genSuite env b) $+$ char '}'
