@@ -53,49 +53,54 @@ struct $Indexed$dict$class $Indexed$dict$methods = {
 };
 
 
-struct $Eq$dict$class $Eq$dict$methods = {
-    "$Eq$dict",
+struct $Ord$dict$class $Ord$dict$methods = {
+    "$Ord$dict",
     UNASSIGNED,
-    ($Super$class)&$Eq$methods,
-    $Eq$dict$__init__,
-    $Eq$dict$__serialize__,
-    $Eq$dict$__deserialize__,
-    ($bool (*)($Eq$dict))$default__bool__,
-    ($str (*)($Eq$dict))$default__str__,
-    ($str (*)($Eq$dict))$default__str__,
-    $Eq$dict$__eq__,
-    $Eq$dict$__ne__
+    ($Super$class)&$Ord$methods,
+    $Ord$dict$__init__,
+    $Ord$dict$__serialize__,
+    $Ord$dict$__deserialize__,
+    ($bool (*)($Ord$dict))$default__bool__,
+    ($str (*)($Ord$dict))$default__str__,
+    ($str (*)($Ord$dict))$default__str__,
+    $Ord$dict$__eq__,
+    $Ord$dict$__ne__,
+    $Ord$dict$__lt__,
+    $Ord$dict$__le__,
+    $Ord$dict$__gt__,
+    $Ord$dict$__ge__
 };
 
 
-void $Eq$dict$__serialize__($Eq$dict self, $Serial$state state) {
-  $step_serialize(self->w$Eq$A$Eq$dict, state);
-  $step_serialize(self->w$Eq$B$Eq$dict, state);
+void $Ord$dict$__serialize__($Ord$dict self, $Serial$state state) {
+  $step_serialize(self->w$Hashable$A$Ord$dict, state);
+  $step_serialize(self->w$Eq$B$Ord$dict, state);
 }
 
-$Eq$dict $Eq$dict$__deserialize__($Eq$dict self, $Serial$state state) {
-   $Eq$dict res = $DNEW($Eq$dict,state);
-   res->w$Eq$A$Eq$dict = ($Eq)$step_deserialize(state);
-   res->w$Eq$B$Eq$dict = ($Eq)$step_deserialize(state);
+$Ord$dict $Ord$dict$__deserialize__($Ord$dict self, $Serial$state state) {
+   $Ord$dict res = $DNEW($Ord$dict,state);
+   res->w$Hashable$A$Ord$dict = ($Hashable)$step_deserialize(state);
+   res->w$Eq$B$Ord$dict = ($Eq)$step_deserialize(state);
+   res->w$Eq$A$Ord$dict = ($Eq)res->w$Hashable$A$Ord$dict;
    return res;
 }
 
-void $Eq$dict$__init__($Eq$dict self, $Hashable hA, $Eq eB) {
-  self->w$Hashable$A$Eq$dict = hA;
-  self->w$Eq$A$Eq$dict = ($Eq)hA;
-  self->w$Eq$B$Eq$dict = eB;
+void $Ord$dict$__init__($Ord$dict self, $Hashable hA, $Eq eB) {
+  self->w$Hashable$A$Ord$dict = hA;
+  self->w$Eq$A$Ord$dict = ($Eq)hA;
+  self->w$Eq$B$Ord$dict = eB;
 }
 
-$Eq$dict $Eq$dict$new($Hashable hA, $Eq eB) {
-  return $NEW($Eq$dict,hA,eB);
+$Ord$dict $Ord$dict$new($Hashable hA, $Eq eB) {
+  return $NEW($Ord$dict,hA,eB);
 }
 
-$bool $Eq$dict$__eq__ ($Eq$dict w, $dict a, $dict b) {
-  if (a->numelements != b->numelements) {
+$bool $dictrel(bool directfalse,$Ord$dict w, $dict a, $dict b) {
+  if (directfalse) {
     return $False;
   }; 
-  $Hashable wH = w->w$Hashable$A$Eq$dict;
-  $Eq wB = w->w$Eq$B$Eq$dict;
+  $Hashable wH = w->w$Hashable$A$Ord$dict;
+  $Eq wB = w->w$Eq$B$Ord$dict;
   $Mapping$dict m = $Mapping$dict$new(wH);
   $Iterator it = m->$class->keys(m,a);
   $WORD x,resa,resb;
@@ -107,8 +112,28 @@ $bool $Eq$dict$__eq__ ($Eq$dict w, $dict a, $dict b) {
   return $True;
 }
 
-$bool $Eq$dict$__ne__ ($Eq$dict w, $dict a, $dict b) {
+$bool $Ord$dict$__eq__ ($Ord$dict w, $dict a, $dict b) {
+  return $dictrel(a->numelements != b->numelements,w,a,b);
+}
+
+$bool $Ord$dict$__ne__ ($Ord$dict w, $dict a, $dict b) {
   return to$bool(!(w->$class->__eq__(w,a,b)->val));
+}
+
+$bool $Ord$dict$__lt__ ($Ord$dict w, $dict a, $dict b) {
+  return $dictrel(a->numelements >= b->numelements,w,a,b);
+}
+
+$bool $Ord$dict$__le__ ($Ord$dict w, $dict a, $dict b) {
+  return $dictrel(a->numelements > b->numelements,w,a,b);
+}
+
+$bool $Ord$dict$__gt__ ($Ord$dict w, $dict a, $dict b) {
+  return to$bool(!(w->$class->__lt__(w,b,a)->val));
+}
+
+$bool $Ord$dict$__ge__ ($Ord$dict w, $dict a, $dict b) {
+  return to$bool(!(w->$class->__le__(w,b,a)->val));
 }
 
 void $Mapping$dict$__serialize__($Mapping$dict self, $Serial$state state) {
@@ -217,5 +242,4 @@ void $Indexed$dict$__init__($Indexed$dict self, $Mapping master, $Eq e) {
   self->w$Eq$A$Mapping$dict = e;
   self->w$Hashable$A$Mapping$dict = ($Hashable)e;
 }
-
 

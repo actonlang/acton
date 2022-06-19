@@ -30,8 +30,8 @@ extern struct $Times$list$class $Times$list$methods;
 $Times$list $Times$list$new($Sequence);
 extern struct $Container$list$class $Container$list$methods;
 $Container$list $Container$list$new($Eq);
-extern struct $Eq$list$class $Eq$list$methods;
-$Eq$list $Eq$list$new($Eq);
+extern struct $Ord$list$class $Ord$list$methods;
+$Ord$list $Ord$list$new($Ord);
 
 extern struct $Sequence$list *$Sequence$list$witness;
 extern struct $Collection$list *$Collection$list$witness;

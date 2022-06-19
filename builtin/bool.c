@@ -77,49 +77,6 @@ $bool $default__bool__($value self) {
   return $True;
 }
 
-// $Eq$bool ///////////////////////////////////////////////////////////////////////////////////
-
-struct $Eq$bool$class $Eq$bool$methods = {
-    "$Eq$bool",
-    UNASSIGNED,
-    ($Super$class)&$Eq$methods,
-    $Eq$bool$__init__,
-    $Eq$bool$__serialize__,
-    $Eq$bool$__deserialize__,
-    ($bool (*)($Eq$bool))$default__bool__,
-    ($str (*)($Eq$bool))$default__str__,
-    ($str (*)($Eq$bool))$default__str__,
-    $Eq$bool$__eq__,
-    $Eq$bool$__ne__
-};
-
-struct $Eq$bool $Eq$bool_instance = {&$Eq$bool$methods};
-$Eq$bool $Eq$bool$witness = &$Eq$bool_instance;
-
-void $Eq$bool$__serialize__($Eq$bool self, $Serial$state state) {
-}
-
-$Eq$bool $Eq$bool$__deserialize__($Eq$bool self, $Serial$state state) {
-   $Eq$bool res = $DNEW($Eq$bool,state);
-   return res;
-}
-
-$bool $Eq$bool$__eq__ ($Eq$bool self, $bool a, $bool b) {
-  return to$bool(a->val == b->val);
-}
-
-$bool $Eq$bool$__ne__ ($Eq$bool self, $bool a, $bool b) {
-  return to$bool(a->val != b->val);
-}
-
-$Eq$bool $Eq$bool$new() {
-   return $NEW($Eq$bool);
-}
-
-void $Eq$bool$__init__($Eq$bool self) {
-   return;
-}
-
 // $Hashable$bool ///////////////////////////////////////////////////////////////////////////////////////////////////////
 
 struct $Hashable$bool$class $Hashable$bool$methods = {

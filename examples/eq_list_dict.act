@@ -77,8 +77,46 @@ actor main(env):
    if d3==d4:
       print("Equal, correct")
    else:
-      print("Not equal, ")
+      print("Not equal, wrong")
+
+   print("now to Ord")
+
+   if ([3,4,5] < [3,4,5,8]):
+      print("lt, correct")
+   else:
+      print("Not lt, wrong")
+
+   if ([3,4,5] < [3,4,6,8]):
+      print("lt, correct")
+   else:
+      print("Not lt, wrong")
+
+   if ([3,4,5,6,7] < [3,4,6,1,2,3,4]):
+      print("lt, correct")
+   else:
+      print("Not lt, wrong")
+
+   if ([3,4,5,6,7] <= [3,4,6,1,2,3,4]):
+      print("le, correct")
+   else:
+      print("Not le, wrong")
+
+   if ([3,4,6,1,2,3,4] > [3,4,5,6,7]):
+      print("gt, correct")
+   else:
+      print("Not gt, wrong")
+
+   if d1 < d2:
+      print("lt, correct")
+   else:
+      print("Not lt, wrong")
+
+   if d3 <= d4:
+      print("le, correct")
+   else:
+      print("Not le, wrong")
+      
 
    env.exit(0)
-   
+    
    

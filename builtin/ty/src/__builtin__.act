@@ -407,7 +407,7 @@ protocol Integral (Rational,Logical):
 
 ## Number protocol extensions ######################################################################
 
-extension bool (Eq): pass
+#extension bool (Eq): pass
 extension bool (Hashable):pass
 
 extension int (Integral):pass
@@ -511,11 +511,11 @@ extension list[A] (Sequence[A]): pass
 
 extension list[A(Eq)] (Container[A]):pass
 
-extension list[A(Eq)] (Eq):pass
+extension list[A(Ord)] (Ord):pass
 
 extension dict[A(Hashable),B] (Mapping[A,B]): pass
 
-extension dict[A(Hashable),B(Eq)] (Eq): pass
+extension dict[A(Hashable),B(Eq)] (Ord): pass
 
 extension set[A(Hashable)] (Set[A]): pass
 

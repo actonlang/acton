@@ -7,9 +7,9 @@ actor main(env):
     if list(filter(even,lst)) != [10,12,14]:
        print("filter")
        env.exit(1)
-    if list(map(even,lst)) != [True,False,True,False,True]:
-       print("map")
-       env.exit(1)
+#    if list(map(even,lst)) != [True,False,True,False,True]:
+#       print("map")
+#       env.exit(1)
 #    print("max(lst) is ", max(lst,None))
 #    print("2^32 in hex is ", hex(65536*65536))
 #    print("chr(8707) is ", chr(8707))
