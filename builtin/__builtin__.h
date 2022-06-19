@@ -253,12 +253,6 @@ typedef struct $Integral *$Integral;
 struct $Integral$class;
 typedef struct $Integral$class *$Integral$class;
 
-struct $Eq$bool;
-typedef struct $Eq$bool *$Eq$bool;
-
-struct $Eq$bool$class;
-typedef struct $Eq$bool$class *$Eq$bool$class;
-
 struct $Hashable$bool;
 typedef struct $Hashable$bool *$Hashable$bool;
 
@@ -289,11 +283,11 @@ typedef struct $Container$list *$Container$list;
 struct $Container$list$class;
 typedef struct $Container$list$class *$Container$list$class;
 
-struct $Eq$list;
-typedef struct $Eq$list *$Eq$list;
+struct $Ord$list;
+typedef struct $Ord$list *$Ord$list;
 
-struct $Eq$list$class;
-typedef struct $Eq$list$class *$Eq$list$class;
+struct $Ord$list$class;
+typedef struct $Ord$list$class *$Ord$list$class;
 
 struct $Mapping$dict;
 typedef struct $Mapping$dict *$Mapping$dict;
@@ -307,11 +301,11 @@ typedef struct $Indexed$dict *$Indexed$dict;
 struct $Indexed$dict$class;
 typedef struct $Indexed$dict$class *$Indexed$dict$class;
 
-struct $Eq$dict;
-typedef struct $Eq$dict *$Eq$dict;
+struct $Ord$dict;
+typedef struct $Ord$dict *$Ord$dict;
 
-struct $Eq$dict$class;
-typedef struct $Eq$dict$class *$Eq$dict$class;
+struct $Ord$dict$class;
+typedef struct $Ord$dict$class *$Ord$dict$class;
 
 struct $Set$set;
 typedef struct $Set$set *$Set$set;
@@ -1190,33 +1184,6 @@ $WORD $Integral$__irshift__($Integral, $WORD, $int);
 
 extern struct $Integral$class $Integral$methods;
 
-
-// $Eq$bool //////////////////////////////////////////////////////////////////////
-
-struct $Eq$bool {
-    $Eq$bool$class $class;
-};
-
-struct $Eq$bool$class {  
-    char *$GCINFO;
-    int $class_id;
-    $Super$class $superclass;
-  void (*__init__)($Eq$bool);
-    void (*__serialize__)($Eq$bool,$Serial$state);
-    $Eq$bool (*__deserialize__)($Eq$bool,$Serial$state);
-    $bool (*__bool__)($Eq$bool);
-    $str (*__str__)($Eq$bool);
-    $str (*__repr__)($Eq$bool);
-    $bool (*__eq__)($Eq$bool, $bool, $bool);
-    $bool (*__ne__)($Eq$bool, $bool, $bool);
-};
-
-void $Eq$bool$__init__ ($Eq$bool);
-void $Eq$bool$__serialize__($Eq$bool, $Serial$state);
-$Eq$bool $Eq$bool$__deserialize__($Eq$bool, $Serial$state);
-$bool $Eq$bool$__eq__ ($Eq$bool, $bool, $bool);
-$bool $Eq$bool$__ne__ ($Eq$bool, $bool, $bool);
-
 // $Hashable$bool ////////////////////////////////////////////////////////////
 
 struct $Hashable$bool {
@@ -1381,32 +1348,40 @@ $bool $Container$list$__contains__ ($Container$list, $list, $WORD);
 $bool $Container$list$__containsnot__ ($Container$list, $list, $WORD);
 
 
-// $Eq$list //////////////////////////////////////////////////////////////////////
+// $Ord$list //////////////////////////////////////////////////////////////////////
 
-struct $Eq$list {
-    $Eq$list$class $class;
-    $Eq w$Eq$A$Eq$list;
+struct $Ord$list {
+    $Ord$list$class $class;
+    $Ord w$Ord$A$Ord$list;
 };
 
-struct $Eq$list$class {  
+struct $Ord$list$class {  
     char *$GCINFO;
     int $class_id;
     $Super$class $superclass;
-  void (*__init__)($Eq$list,$Eq);
-    void (*__serialize__)($Eq$list,$Serial$state);
-    $Eq$list (*__deserialize__)($Eq$list,$Serial$state);
-    $bool (*__bool__)($Eq$list);
-    $str (*__str__)($Eq$list);
-    $str (*__repr__)($Eq$list);
-    $bool (*__eq__)($Eq$list, $list, $list);
-    $bool (*__ne__)($Eq$list, $list, $list);
+  void (*__init__)($Ord$list,$Ord);
+    void (*__serialize__)($Ord$list,$Serial$state);
+    $Ord$list (*__deserialize__)($Ord$list,$Serial$state);
+    $bool (*__bool__)($Ord$list);
+    $str (*__str__)($Ord$list);
+    $str (*__repr__)($Ord$list);
+    $bool (*__eq__)($Ord$list, $list, $list);
+    $bool (*__ne__)($Ord$list, $list, $list);
+    $bool (*__lt__)($Ord$list, $list, $list);
+    $bool (*__le__)($Ord$list, $list, $list);
+    $bool (*__gt__)($Ord$list, $list, $list);
+    $bool (*__ge__)($Ord$list, $list, $list);
 };
 
-void $Eq$list$__init__ ($Eq$list, $Eq);
-void $Eq$list$__serialize__($Eq$list, $Serial$state);
-$Eq$list $Eq$list$__deserialize__($Eq$list, $Serial$state);
-$bool $Eq$list$__eq__ ($Eq$list, $list, $list);
-$bool $Eq$list$__ne__ ($Eq$list, $list, $list);
+void $Ord$list$__init__ ($Ord$list, $Ord);
+void $Ord$list$__serialize__($Ord$list, $Serial$state);
+$Ord$list $Ord$list$__deserialize__($Ord$list, $Serial$state);
+$bool $Ord$list$__eq__ ($Ord$list, $list, $list);
+$bool $Ord$list$__ne__ ($Ord$list, $list, $list);
+$bool $Ord$list$__lt__ ($Ord$list, $list, $list);
+$bool $Ord$list$__le__ ($Ord$list, $list, $list);
+$bool $Ord$list$__gt__ ($Ord$list, $list, $list);
+$bool $Ord$list$__ge__ ($Ord$list, $list, $list);
 
   
 // $Mapping$dict ////////////////////////////////////////////////////////////
@@ -1489,34 +1464,42 @@ $WORD $Indexed$dict$__getitem__ ($Indexed$dict, $dict, $WORD);
 void $Indexed$dict$__setitem__ ($Indexed$dict, $dict, $WORD, $WORD);
 void $Indexed$dict$__delitem__ ($Indexed$dict, $dict, $WORD);
 
-// $Eq$dict //////////////////////////////////////////////////////////////////////
+// $Ord$dict //////////////////////////////////////////////////////////////////////
 
-struct $Eq$dict {
-    $Eq$dict$class $class;
-    $Eq w$Eq$A$Eq$dict;
-    $Hashable w$Hashable$A$Eq$dict;
-    $Eq w$Eq$B$Eq$dict;
+struct $Ord$dict {
+    $Ord$dict$class $class;
+    $Eq w$Eq$A$Ord$dict;
+    $Hashable w$Hashable$A$Ord$dict;
+    $Eq w$Eq$B$Ord$dict;
 };
 
-struct $Eq$dict$class {  
+struct $Ord$dict$class {  
     char *$GCINFO;
     int $class_id;
     $Super$class $superclass;
-  void (*__init__)($Eq$dict, $Hashable, $Eq);
-    void (*__serialize__)($Eq$dict,$Serial$state);
-    $Eq$dict (*__deserialize__)($Eq$dict,$Serial$state);
-    $bool (*__bool__)($Eq$dict);
-    $str (*__str__)($Eq$dict);
-    $str (*__repr__)($Eq$dict);
-    $bool (*__eq__)($Eq$dict, $dict, $dict);
-    $bool (*__ne__)($Eq$dict, $dict, $dict);
+  void (*__init__)($Ord$dict, $Hashable, $Eq);
+    void (*__serialize__)($Ord$dict,$Serial$state);
+    $Ord$dict (*__deserialize__)($Ord$dict,$Serial$state);
+    $bool (*__bool__)($Ord$dict);
+    $str (*__str__)($Ord$dict);
+    $str (*__repr__)($Ord$dict);
+    $bool (*__eq__)($Ord$dict, $dict, $dict);
+    $bool (*__ne__)($Ord$dict, $dict, $dict);
+    $bool (*__lt__)($Ord$dict, $dict, $dict);
+    $bool (*__le__)($Ord$dict, $dict, $dict);
+    $bool (*__gt__)($Ord$dict, $dict, $dict);
+    $bool (*__ge__)($Ord$dict, $dict, $dict);
 };
 
-void $Eq$dict$__init__ ($Eq$dict, $Hashable, $Eq);
-void $Eq$dict$__serialize__($Eq$dict, $Serial$state);
-$Eq$dict $Eq$dict$__deserialize__($Eq$dict, $Serial$state);
-$bool $Eq$dict$__eq__ ($Eq$dict, $dict, $dict);
-$bool $Eq$dict$__ne__ ($Eq$dict, $dict, $dict);
+void $Ord$dict$__init__ ($Ord$dict, $Hashable, $Eq);
+void $Ord$dict$__serialize__($Ord$dict, $Serial$state);
+$Ord$dict $Ord$dict$__deserialize__($Ord$dict, $Serial$state);
+$bool $Ord$dict$__eq__ ($Ord$dict, $dict, $dict);
+$bool $Ord$dict$__ne__ ($Ord$dict, $dict, $dict);
+$bool $Ord$dict$__lt__ ($Ord$dict, $dict, $dict);
+$bool $Ord$dict$__le__ ($Ord$dict, $dict, $dict);
+$bool $Ord$dict$__gt__ ($Ord$dict, $dict, $dict);
+$bool $Ord$dict$__ge__ ($Ord$dict, $dict, $dict);
   
 // $Set$set ////////////////////////////////////////////////////////////
 

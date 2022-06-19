@@ -105,49 +105,85 @@ struct $Container$list$class $Container$list$methods = {
     $Container$list$__containsnot__
 };
 
-struct $Eq$list$class $Eq$list$methods = {
-    "$Eq$list",
+struct $Ord$list$class $Ord$list$methods = {
+    "$Ord$list",
     UNASSIGNED,
-    ($Super$class)&$Eq$methods,
-    $Eq$list$__init__,
-    $Eq$list$__serialize__,
-    $Eq$list$__deserialize__,
-    ($bool (*)($Eq$list))$default__bool__,
-    ($str (*)($Eq$list))$default__str__,
-    ($str (*)($Eq$list))$default__str__,
-    $Eq$list$__eq__,
-    $Eq$list$__ne__
+    ($Super$class)&$Ord$methods,
+    $Ord$list$__init__,
+    $Ord$list$__serialize__,
+    $Ord$list$__deserialize__,
+    ($bool (*)($Ord$list))$default__bool__,
+    ($str (*)($Ord$list))$default__str__,
+    ($str (*)($Ord$list))$default__str__,
+    $Ord$list$__eq__,
+    $Ord$list$__ne__,
+    $Ord$list$__lt__,
+    $Ord$list$__le__,
+    $Ord$list$__gt__,
+    $Ord$list$__ge__
 };
 
 
-void $Eq$list$__serialize__($Eq$list self, $Serial$state state) {
-  $step_serialize(self->w$Eq$A$Eq$list, state);
+void $Ord$list$__serialize__($Ord$list self, $Serial$state state) {
+  $step_serialize(self->w$Ord$A$Ord$list, state);
 }
 
-$Eq$list $Eq$list$__deserialize__($Eq$list self, $Serial$state state) {
-   $Eq$list res = $DNEW($Eq$list,state);
-   res->w$Eq$A$Eq$list = ($Eq)$step_deserialize(state);
+$Ord$list $Ord$list$__deserialize__($Ord$list self, $Serial$state state) {
+   $Ord$list res = $DNEW($Ord$list,state);
+   res->w$Ord$A$Ord$list = ($Ord)$step_deserialize(state);
    return res;
 }
 
-$bool $Eq$list$__eq__ ($Eq$list w, $list a, $list b) {
+$bool $Ord$list$__eq__ ($Ord$list w, $list a, $list b) {
   if (a->length != b->length) return $False;                                
-  $Eq w2 = w->w$Eq$A$Eq$list;
+  $Ord w2 = w->w$Ord$A$Ord$list;
   for (int i = 0; i<a->length; i++)
     if ((w2->$class->__ne__(w2,a->data[i],b->data[i]))->val) return $False;
   return $True;
 }
 
-$bool $Eq$list$__ne__ ($Eq$list w, $list a, $list b) {
+$bool $Ord$list$__ne__ ($Ord$list w, $list a, $list b) {
   return to$bool(!(w->$class->__eq__(w,a,b)->val));
 }
 
-$Eq$list $Eq$list$new($Eq e) {
-  return $NEW($Eq$list,e);
+$bool $Ord$list$__lt__ ($Ord$list w, $list a, $list b) {
+  int minl = a->length<b->length ? a->length : b->length;
+  $Ord wA = w->w$Ord$A$Ord$list;
+  int i=0;
+  while (i<minl && wA->$class->__eq__(wA,a->data[i],b->data[i])) i++;
+  if (i==a->length)
+    return to$bool(i<b->length);
+  if (i==b->length)
+    return $False;
+  return  wA->$class->__lt__(wA,a->data[i],b->data[i]);
 }
 
-void $Eq$list$__init__($Eq$list self, $Eq e) {
-  self->w$Eq$A$Eq$list = e;
+$bool $Ord$list$__le__ ($Ord$list w, $list a, $list b) {
+  int minl = a->length<b->length ? a->length : b->length;
+  $Ord wA = w->w$Ord$A$Ord$list;
+  int i=0;
+  while (i<minl && wA->$class->__eq__(wA,a->data[i],b->data[i])) i++;
+  if (i==a->length)
+    return to$bool(i<=b->length);
+  if (i==b->length)
+    return $False;
+  return  wA->$class->__lt__(wA,a->data[i],b->data[i]);
+}
+
+$bool $Ord$list$__gt__ ($Ord$list w, $list a, $list b) {
+  return  $Ord$list$__lt__ (w,b,a);
+}
+
+$bool $Ord$list$__ge__ ($Ord$list w, $list a, $list b) {
+  return  $Ord$list$__le__ (w,b,a);
+}
+
+$Ord$list $Ord$list$new($Ord e) {
+  return $NEW($Ord$list,e);
+}
+
+void $Ord$list$__init__($Ord$list self, $Ord e) {
+  self->w$Ord$A$Ord$list = e;
 }
   
 void $Times$list$__serialize__($Times$list self, $Serial$state state) {

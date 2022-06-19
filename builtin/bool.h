@@ -18,13 +18,13 @@ struct $bool {
 extern struct $bool$class $bool$methods;
 $bool $bool$new($value);
 
-extern struct $Eq$bool$class $Eq$bool$methods;
-$Eq$bool $Eq$bool$new();
+//extern struct $Eq$bool$class $Eq$bool$methods;
+//$Eq$bool $Eq$bool$new();
 
 extern struct $Hashable$bool$class $Hashable$bool$methods;
 $Hashable$bool $Hashable$bool$new();
 
-extern struct $Eq$bool *$Eq$bool$witness;
+//extern struct $Eq$bool *$Eq$bool$witness;
 extern struct $Hashable$bool *$Hashable$bool$witness;
 
 $bool to$bool(long b);

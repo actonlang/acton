@@ -25,8 +25,8 @@ extern struct  $Mapping$dict$class $Mapping$dict$methods;
 $Mapping$dict $Mapping$dict$new($Hashable);
 extern struct  $Indexed$dict$class $Indexed$dict$methods;
 $Indexed$dict $Indexed$dict$new($Mapping, $Eq);
-extern struct  $Eq$dict$class $Eq$dict$methods;
-$Eq$dict $Eq$dict$new($Hashable, $Eq);
+extern struct  $Ord$dict$class $Ord$dict$methods;
+$Ord$dict $Ord$dict$new($Hashable, $Eq);
 
 // Iterators over dicts ///////////////////////////////////////////////////////
 
