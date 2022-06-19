@@ -20,6 +20,8 @@
 
 #include "env.h"
 
+#include "../rts/log.h"
+
 struct FileDescriptorData fd_data[MAX_FD];
 int wakeup_pipe[2];
 

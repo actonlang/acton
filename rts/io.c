@@ -2,6 +2,8 @@
 
 #include <uv.h>
 
+#include "log.h"
+
 extern char rts_exit;
 uv_async_t stop_event;
 
