@@ -21,7 +21,6 @@ Architecture: any
 Depends:
  ${shlibs:Depends},
  ${misc:Depends},
- gcc,
- uuid-dev
+ gcc
 Description: Acton Programming Language
  An awesome programming language.

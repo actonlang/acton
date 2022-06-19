@@ -257,6 +257,9 @@ DBARCHIVE=lib/libActonDB.a
 # rel profiles... this now also hits libuv. Maybe better to keep separate for
 # concurrency?
 ARCHIVES=lib/dev/libActon.a lib/rel/libActon.a lib/libprotobuf-c_a.a lib/libutf8proc_a.a lib/libuv_a.a
+ifeq ($(shell uname -s),Linux)
+ARCHIVES=lib/libuuid_a.a
+endif
 
 # If we later let actonc build things, it would produce a libActonProject.a file
 # in the stdlib directory, which we would need to join together with rts.o etc
@@ -285,6 +288,11 @@ lib/libprotobuf-c_a.a: $(LIBPROTOBUFC_A)
 LIBUTF8PROC_LIBDIR:=$(shell pkg-config --variable=libdir libutf8proc)
 LIBUTF8PROC_A:=$(shell ls $(LIBUTF8PROC_LIBDIR)/libutf8proc_a.a $(LIBUTF8PROC_LIBDIR)/libutf8proc.a 2>/dev/null | head -n1)
 lib/libutf8proc_a.a: $(LIBUTF8PROC_A)
+	cp $< $@
+
+LIBUUID_LIBDIR:=$(shell pkg-config --variable=libdir uuid)
+LIBUUID_A:=$(shell ls $(LIBUUID_LIBDIR)/libuuid_a.a $(LIBUUID_LIBDIR)/libuuid.a 2>/dev/null | head -n1)
+lib/libuuid_a.a: $(LIBUUID_A)
 	cp $< $@
 
 LIBUV_LIBDIR:=$(shell pkg-config --variable=libdir libuv)
