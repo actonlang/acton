@@ -428,6 +428,7 @@ dist/lib/%: lib/%
 
 DIST_BINS=$(ACTONC) dist/bin/actondb
 DIST_HFILES=\
+	dist/rts/io.h \
 	dist/rts/rts.h \
 	dist/builtin/env.h \
 	$(addprefix dist/,$(BUILTIN_HFILES))
