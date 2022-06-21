@@ -12,7 +12,7 @@
 --
 
 {-# LANGUAGE MultiParamTypeClasses, FlexibleInstances, FlexibleContexts #-}
-module Acton.Types(reconstruct, showTyFile, typeError) where
+module Acton.Types(reconstruct, showTyFile, typeError, TypeError(..)) where
 
 import Control.Monad
 import Pretty
