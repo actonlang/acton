@@ -27,7 +27,7 @@ import Pretty
 import Control.Monad.State.Strict
 
 deactorize                          :: Env0 -> Module -> IO (Module, Env0)
-deactorize env0 (Module m imps b)   = return (Module m imps (runDeactM $ deactSuite env b), mapModules1 conv env0)
+deactorize env0 (Module m imps b)   = return (Module m imps (runDeactM $ deactSuite env b), mapModules conv env0)
   where env                         = deactEnv env0
 
 
@@ -98,7 +98,7 @@ instance Deact Stmt where
     deact env (Expr l e)            = Expr l <$> deact env e
     deact env (Assign l [p@(PVar _ n _)] e)
       | n `elem` locals env         = MutAssign l (selfRef n) <$> deact env e
-      | otherwise                   = Assign l [conv p] <$> deact env e
+      | otherwise                   = Assign l [p] <$> deact env e
       where t                       = typeOf env p
     deact env (MutAssign l tg e)    = MutAssign l <$> deact env tg <*> deact env e
       where t                       = typeOf env tg
@@ -123,15 +123,15 @@ instance Deact Stmt where
     deact env (Decl l ds)           = do ds1 <- deact env1 ds
                                          return $ Decl l $ ds1 ++ [ newact env1 n q p | Actor _ n q p _ _ <- ds, not $ abstractActor env1 (NoQ n) ]
       where env1                    = define (envOf ds) env
-    deact env (Signature l ns t d)  = return $ Signature l ns (conv t) d
+    deact env (Signature l ns t d)  = return $ Signature l ns t d
     deact env s                     = error ("deact unexpected stmt: " ++ prstr s)
 
 instance Deact Decl where
     deact env (Actor l n q params KwdNIL body)
                                     = do inits' <- deactSuite (define (envOf decls) env1) inits
                                          decls' <- deactSuite (define (envOf inits) env1) decls
-                                         let _init_ = Def l0 initKW [] (addSelfPar $ conv params) KwdNIL (Just tNone) (mkBody $ copies++inits') NoDec fxProc
-                                         return $ Class l n (conv q) [TC primActor [], cValue] (propsigs ++ [Decl l0 [_init_]] ++ decls')
+                                         let _init_ = Def l0 initKW [] (addSelfPar params) KwdNIL (Just tNone) (mkBody $ copies++inits') NoDec fxProc
+                                         return $ Class l n q [TC primActor [], cValue] (propsigs ++ [Decl l0 [_init_]] ++ decls')
       where env1                    = setActor exports stvars (locals++meths) $ define (envOf params) $ define [(selfKW, NVar tSelf)] $ defineTVars q env
             env2                    = define (envOf decls ++ envOf inits) env1
 
@@ -143,7 +143,7 @@ instance Deact Decl where
             locals                  = nub $ (bound params `intersect` fvs) ++ [ n | n <- dom $ envOf inits, not (isHidden n) || n `elem` fvs ]
             exports                 = [ n | Decl _ ds <- decls, Def{dname=n, dfx=fx} <- ds, fx == fxProc ]
 
-            propsigs                = [ Signature l0 [n] (monotype $ conv t) Property | (n,t) <- concat $ props' params : map props inits ]
+            propsigs                = [ Signature l0 [n] (monotype t) Property | (n,t) <- concat $ props' params : map props inits ]
 
             props (VarAssign _ p _) = [ (n, t) | PVar _ n (Just t) <- p ]
             props (Assign _ p _)    = [ (n, t) | PVar _ n (Just t) <- p, n `elem` locals ]
@@ -254,7 +254,7 @@ instance Deact Expr where
     deact env (DotI l e i)          = DotI l <$> deact env e <*> return i
     deact env (RestI l e i)         = RestI l <$> deact env e <*> return i
     deact env (Lambda l p KwdNIL e fx)
-                                    = Lambda l (conv p) KwdNIL <$> deact env1 e <*> return fx
+                                    = Lambda l p KwdNIL <$> deact env1 e <*> return fx
       where env1                    = defineAndShadow (envOf p) env
     deact env (Yield l e)           = Yield l <$> deact env e
     deact env (YieldFrom l e)       = YieldFrom l <$> deact env e
@@ -326,59 +326,10 @@ instance LambdaFree Elem where
 
 -- Convert types and environments -----------------------------------------------------------------------
 
-class Conv a where
-    conv                                :: a -> a
-
-instance (Conv a) => Conv [a] where
-    conv                                = map conv
-
-instance (Conv a) => Conv (Maybe a) where
-    conv                                = fmap conv
-
-instance (Conv a) => Conv (Name, a) where
-    conv (n, x)                         = (n, conv x)
-
-instance Conv NameInfo where
-    conv (NClass q ps te)               = NClass (conv q) (conv ps) (conv te)
-    conv (NAct q p TNil{} te)           = NClass q' (leftpath [TC primActor [], cValue]) (envInit q' (conv p) : conv te)
-      where q'                          = conv q
-            envInit q0 p                = (initKW, NDef t0 NoDec)
-              where t0                  = tSchema q0 (TFun NoLoc fxProc p kwdNil tNone)
-    conv (NSig sc dec)                  = NSig (conv sc) dec
-    conv (NDef sc dec)                  = NDef (conv sc) dec
-    conv (NVar t)                       = NVar (conv t)
-    conv (NSVar t)                      = NSVar (conv t)
-    conv ni                             = ni
-
-instance Conv WTCon where
-    conv (w,c)                          = (w, conv c)
-
-instance Conv TSchema where
-    conv (TSchema l q t)                = TSchema l (conv q) (conv t)
-
-instance Conv QBind where
-    conv (Quant v cs)                   = Quant v (conv cs)
-
-instance Conv Type where
-    conv (TFun l fx p TNil{} t)         = TFun l (conv fx) (conv p) kwdNil (conv t)
-    conv (TCon l c)                     = TCon l (conv c)
-    conv (TTuple l p k)                 = TTuple l (conv p) (conv k)
-    conv (TOpt l t)                     = TOpt l (conv t)
-    conv (TRow l k n t r)               = TRow l k n (conv t) (conv r)
-    conv (TFX l fx)                     = TFX l (conv fx)
-    conv t                              = t
-
-instance Conv FX where
-    conv FXAction                       = FXMut
-    conv fx                             = fx
-
-instance Conv TCon where
-    conv (TC c ts)                      = TC c (conv ts)
-
-instance Conv PosPar where
-    conv (PosPar n t e p)               = PosPar n (conv t) e (conv p)
-    conv (PosSTAR n t)                  = PosSTAR n (conv t)
-    conv PosNIL                         = PosNIL
-
-instance Conv Pattern where
-    conv (PVar l n t)                   = PVar l n (conv t)
+conv env m (n, NAct q p k te')      = (n, NClass q (leftpath [TC primActor [], cValue]) (convActorEnv q p k te')) :
+                                      (newactName n, NDef (tSchema q (tFun fxAction p k t)) NoDec) :
+                                      []
+  where convActorEnv q0 p k te'     = (initKW, NDef t0 NoDec) : te'
+          where t0                  = tSchema q0 (tFun fxProc p k tNone)
+        t                           = tCon $ TC (GName m n) (map tVar $ qbound q)
+conv env m ni                       = [ni]

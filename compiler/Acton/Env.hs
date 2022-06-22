@@ -654,7 +654,7 @@ allAncestors' env qn        = map (tcname . snd) us
   where (q,us,te)           = findConName qn env
 
 allDescendants              :: EnvF x -> TCon -> [TCon]
-allDescendants env tc       = [ schematic c | c <- allCons env, hasAncestor' env (tcname c) (tcname tc) ]
+allDescendants env tc       = [ schematic' c | c <- allCons env, hasAncestor' env (tcname c) (tcname tc) ]
 
 findCon                     :: EnvF x -> TCon -> ([WTCon],TEnv)
 findCon env (TC n ts)
