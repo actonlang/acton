@@ -569,7 +569,7 @@ handle errKind f src paths mn ex = do putStrLn ("\n******************** " ++ err
 buildExecutable env args paths binTask
                          = case lookup n (fromJust (Acton.Env.lookupMod m env)) of
                                Just (Acton.Env.NAct [] (A.TRow _ _ _ t A.TNil{}) A.TNil{} _) 
-                                   | prstr t == "Env" || prstr t == "None" -> do   -- !!!!!!!!!!!!!!!! Todo: proper check of parameter type !!!!!!!!!!!!!!!!!!!
+                                   | prstr t == "Env" || prstr t == "None" -> do   -- !! To do: proper check of parameter type !!
                                       c <- Acton.CodeGen.genRoot env qn
                                       writeFile rootFile c
                                       iff (ccmd args) $ do
@@ -585,9 +585,10 @@ buildExecutable env args paths binTask
                                                               System.Exit.exitFailure
                                       return ()
                                    | otherwise -> handle "Type error" Acton.Types.typeError "" paths m (Acton.Types.TypeError NoLoc ("Illegal type "++ prstr t ++ " of parameter to root actor " ++ prstr qn))
-                               _ -> if not (isDefaultRoot binTask)
-                                        then handle "Compilation error" Acton.Env.compilationError "" paths m (Acton.Env.NoItem m n)
-                                        else return ()
+                               Just t -> handle "Type error" Acton.Types.typeError "" paths m (Acton.Types.TypeError NoLoc (prstr qn ++ " has not actor type."))
+                               Nothing -> if not (isDefaultRoot binTask)
+                                            then handle "Compilation error" Acton.Env.compilationError "" paths m (Acton.Env.NoItem m n)
+                                            else return ()
   where mn                  = A.mname qn
         qn@(A.GName m n)    = (rootActor binTask)
         (sc,_)              = Acton.QuickType.schemaOf env (A.eQVar qn)
