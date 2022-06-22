@@ -248,15 +248,15 @@ createProject name args = do
     writeFile (joinPath [ curDir, name, "Acton.toml" ]) ""
     paths <- findPaths (joinPath [ curDir, name, "Acton.toml" ]) args
     writeFile (joinPath [ curDir, name, "README.org" ]) (
-      "* " ++ name ++ "\n" ++ name ++ " is a cool Acton project!\n\n"
-      ++ "** Compile\n#+BEGIN_SRC shell\nactonc build\n#+END_SRC\n\n"
-      ++ "** Run\n#+BEGIN_SRC shell\nout/rel/bin/" ++ name ++ "\n#+END_SRC\n"
+      "* " ++ name ++ "\n" ++ name ++ " is a cool Acton project!\n\n\n"
+      ++ "** Compile\n\n#+BEGIN_SRC shell\nactonc build\n#+END_SRC\n\n\n"
+      ++ "** Run\n\n#+BEGIN_SRC shell\nout/rel/bin/" ++ name ++ "\n#+END_SRC\n\n"
       )
     createDirectoryIfMissing True (srcDir paths)
     writeFile (joinPath [(srcDir paths), name ++ ".act"]) "#\n#\n\nactor main(env):\n    print(\"Hello World!\")\n    await async env.exit(0)\n"
     putStrLn("Created project " ++ name)
     putStrLn("Enter your new project directory with:\n  cd " ++ name)
-    putStrLn("Compile:\n  actonc build --root " ++ name ++ ".main")
+    putStrLn("Compile:\n  actonc build")
     putStrLn("Run:\n  ./out/rel/bin/" ++ name)
 
 
