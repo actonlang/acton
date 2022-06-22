@@ -347,7 +347,7 @@ findPaths actFile args  = do execDir <- takeDirectory <$> System.Environment.get
                                     return $ (False, False, pre, drop 1 ds)
 
 data CompileTask        = ActonTask { name :: A.ModName, src :: String, atree:: A.Module, stubmode :: Bool } deriving (Show)
-data BinTask            = BinTask {  isDefaultRoot :: Bool, binName :: String, rootActor :: A.QName } deriving (Show)
+data BinTask            = BinTask { isDefaultRoot :: Bool, binName :: String, rootActor :: A.QName } deriving (Show)
 
 importsOf :: CompileTask -> [A.ModName]
 importsOf t = A.importsOf (atree t)
@@ -408,11 +408,11 @@ doTask :: Args -> Paths -> Acton.Env.Env0 -> CompileTask -> IO Acton.Env.Env0
 doTask args paths env t@(ActonTask mn src m stubMode)
                             = do let outfiles = [hFile] ++ if stubMode then [] else [oFile]
                                  ok <- checkUptoDate paths actFile tyFile outfiles (importsOf t)
-                                 if ok && mn /= modName paths then do
-                                          iff (verbose args) (putStrLn ("Skipping  "++ actFile ++ " (files are up to date)."))
-                                          return env
+                                 if ok then do
+                                          iff (verbose args) (putStrLn ("Skipping  "++ makeRelative (srcDir paths) actFile ++ " (files are up to date).") >> hFlush stdout)
+                                          te <- InterfaceFiles.readFile tyFile
+                                          return (Acton.Env.addMod mn te env)
                                   else do createDirectoryIfMissing True (getModPath (projTypes paths) mn)
-                                          iff (verbose args) (putStrLn ("Compiling "++ actFile ++ "... ") >> hFlush stdout)
                                           (env',te) <- runRestPasses args paths env m stubMode
                                                            `catch` handle "Compilation error" generalError src paths mn
                                                            `catch` handle "Compilation error" Acton.Env.compilationError src paths mn
@@ -423,7 +423,7 @@ doTask args paths env t@(ActonTask mn src m stubMode)
         tyFile              = outbase ++ ".ty"
         hFile               = outbase ++ ".h"
         cFile               = outbase ++ ".c"
-        oFile               = joinPath (projLib paths : A.modPath mn) ++  ".o"
+        oFile               = joinPath [projLib paths, prstr mn] ++  ".o"
 
 checkUptoDate :: Paths -> FilePath -> FilePath -> [FilePath] -> [A.ModName] -> IO Bool
 checkUptoDate paths actFile iFile outBases imps
@@ -485,6 +485,7 @@ runRestPasses args paths env0 parsed stubMode = do
                       --traceM (Pretty.render (Pretty.pretty liftEnv))
 
                       (n,h,c) <- Acton.CodeGen.generate liftEnv srcbase lifted
+                      print n
                       iff (hgen args) $ do
                           putStrLn(h)
                           System.Exit.exitSuccess
@@ -498,10 +499,9 @@ runRestPasses args paths env0 parsed stubMode = do
                           oFile = joinPath [projLib paths, n ++ ".o"]
                           aFile = joinPath [projLib paths, "libActonProject.a"]
 
-                      putStrLn("Compiling " ++ makeRelative (srcDir paths) actFile
+                      iff (verbose args)  (putStrLn("Compiling " ++ makeRelative (srcDir paths) actFile
                                ++ (if (dev args) then " for development" else " for release")
-                               ++ (if stubMode then " in stub mode" else "")
-                              )
+                               ++ (if stubMode then " in stub mode" else "")))
                       if stubMode then do
                           let makeFile = projPath paths ++ "/Makefile"
                           makeExist <- doesFileExist makeFile
@@ -569,7 +569,8 @@ handle errKind f src paths mn ex = do putStrLn ("\n******************** " ++ err
 buildExecutable env args paths binTask
                          = case lookup n (fromJust (Acton.Env.lookupMod m env)) of
                                Just (Acton.Env.NAct [] (A.TRow _ _ _ t A.TNil{}) A.TNil{} _) 
-                                   | prstr t == "Env" || prstr t == "None" -> do   -- !! To do: proper check of parameter type !!
+                                   | prstr t == "Env" || prstr t == "None"
+                                      || prstr t == "__builtin__.Env"|| prstr t == "__builtin__.None"-> do   -- !! To do: proper check of parameter type !!
                                       c <- Acton.CodeGen.genRoot env qn
                                       writeFile rootFile c
                                       iff (ccmd args) $ do
@@ -578,13 +579,14 @@ buildExecutable env args paths binTask
                                       setFileMode buildF 0o755
                                       (returnCode, ccStdout, ccStderr) <- readCreateProcessWithExitCode (shell $ ccCmd) ""
                                       case returnCode of
-                                          ExitSuccess ->  putStrLn ("Building executable "++ binFile)
+                                          ExitSuccess ->  putStrLn ("Building executable "++ makeRelative (projPath paths) binFile)
                                           ExitFailure _ -> do printIce "compilation of generated C code of the root actor failed"
                                                               putStrLn $ "cc stdout:\n" ++ ccStdout
                                                               putStrLn $ "cc stderr:\n" ++ ccStderr
                                                               System.Exit.exitFailure
                                       return ()
-                                   | otherwise -> handle "Type error" Acton.Types.typeError "" paths m (Acton.Types.TypeError NoLoc ("Illegal type "++ prstr t ++ " of parameter to root actor " ++ prstr qn))
+                                   | otherwise -> handle "Type error" Acton.Types.typeError "" paths m
+                                     (Acton.Types.TypeError NoLoc ("Illegal type "++ prstr t ++ " of parameter to root actor " ++ prstr qn))
                                Just t -> handle "Type error" Acton.Types.typeError "" paths m (Acton.Types.TypeError NoLoc (prstr qn ++ " has not actor type."))
                                Nothing -> if not (isDefaultRoot binTask)
                                             then handle "Compilation error" Acton.Env.compilationError "" paths m (Acton.Env.NoItem m n)
@@ -621,7 +623,7 @@ buildExecutable env args paths binTask
                                " " ++ rootFile ++
                                " -o" ++ binFile ++
                                libPaths ++
-                               libFiles)
+                               libFiles ++ "\n")
 
 
 -- our own readFile & writeFile with hard-coded utf-8 encoding

@@ -15,6 +15,7 @@
 module Acton.CodeGen where
 
 import qualified Data.Set
+import qualified Data.List
 import qualified Acton.Env
 import Utils
 import Pretty
@@ -31,7 +32,7 @@ import System.FilePath.Posix
 
 generate                            :: Acton.Env.Env0 -> FilePath -> Module -> IO (String,String,String)
 generate env srcbase m              = do return (n, h,c)
-  where n                           = render $ quotes $ gen env0 (modname m)
+  where n                           = concat (Data.List.intersperse "." (modPath (modname m))) --render $ quotes $ gen env0 (modname m)
         h                           = render $ hModule env0 m
         c                           = render $ cModule env0 srcbase m
         env0                        = genEnv $ setMod (modname m) env
