@@ -3,12 +3,12 @@ CFLAGS+= -fno-common -I.. -I../dist -I../dist/include -L../lib -Wno-int-to-point
 CFLAGS_REL= -O3 -DREL
 CFLAGS_DEV= -g -DDEV
 
-out/dev/lib/acton$$rts.o: src/acton/rts.c
+out/dev/lib/acton.rts.o: src/acton/rts.c
 	@mkdir -p $(dir $@)
 	$(CC) $(CFLAGS) $(CFLAGS_DEV) -I. -Iout/ -c $< -o'$@'
 
 
-out/rel/lib/acton$$rts.o: src/acton/rts.c
+out/rel/lib/acton.rts.o: src/acton/rts.c
 	@mkdir -p $(dir $@)
 	$(CC) $(CFLAGS) $(CFLAGS_REL) -I. -Iout/ -c $< -o'$@'
 

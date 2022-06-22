@@ -485,7 +485,6 @@ runRestPasses args paths env0 parsed stubMode = do
                       --traceM (Pretty.render (Pretty.pretty liftEnv))
 
                       (n,h,c) <- Acton.CodeGen.generate liftEnv srcbase lifted
-                      print n
                       iff (hgen args) $ do
                           putStrLn(h)
                           System.Exit.exitSuccess
