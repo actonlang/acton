@@ -182,7 +182,7 @@ tableName (GName m n)               = GName m (Derived n $ name "methods")
 newcon env n                        = gen env (conName $ gname env n)
 
 newcon' env (NoQ n)                 = newcon env n
-newcon' env n                       = gen env $ conName n
+newcon' env n                       = gen env $ conName $ unalias env n
 
 conName (GName m n)                 = GName m (Derived n $ name "new")
 
