@@ -138,7 +138,7 @@ main = do
     args <- execParser (info (getArgs (showVer cv) <**> helper) descr)
     cmdIsFile <- checkCmdIsFile (cmd args)
     if cmdIsFile
-      then compileFiles args [(cmd args)]
+      then compileFiles args [cmd args]
       else
         case (cmd args) of
             "build" -> do
@@ -207,8 +207,10 @@ compileFiles args srcFiles = do
     let rootParts = splitOn "." (root args)
         rootMod   = init rootParts
         guessMod  = if length rootParts == 1 then modName paths else A.modName rootMod
-        binTask   = BinTask (prstr guessMod) (A.GName guessMod (A.name $ last rootParts))
-        binTasks  = [binTask]
+        binTask   = BinTask False (prstr guessMod) (A.GName guessMod (A.name $ last rootParts))
+        binTasks
+          | null (root args) = map (\t -> BinTask True (prstr (name t)) (A.GName (name t) (A.name "main"))) (filter (not . stubmode) tasks)
+          | otherwise        = [binTask]
     compileTasks args paths tasks binTasks
 
 
@@ -345,7 +347,7 @@ findPaths actFile args  = do execDir <- takeDirectory <$> System.Environment.get
                                     return $ (False, False, pre, drop 1 ds)
 
 data CompileTask        = ActonTask { name :: A.ModName, src :: String, atree:: A.Module, stubmode :: Bool } deriving (Show)
-data BinTask            = BinTask { binName :: String, rootActor :: A.QName }
+data BinTask            = BinTask {  isDefaultRoot :: Bool, binName :: String, rootActor :: A.QName } deriving (Show)
 
 importsOf :: CompileTask -> [A.ModName]
 importsOf t = A.importsOf (atree t)
@@ -565,10 +567,9 @@ handle errKind f src paths mn ex = do putStrLn ("\n******************** " ++ err
 
 
 buildExecutable env args paths binTask
-  | null $ root args        = return ()
-  | otherwise               = case Acton.Env.findQName qn env of
-                                  i@(Acton.Env.NAct [] (A.TRow _ _ _ t A.TNil{}) A.TNil{} _) -> do
-                                      -- putStrLn ("## Env is " ++ prstr t)
+                         = case lookup n (fromJust (Acton.Env.lookupMod m env)) of
+                               Just (Acton.Env.NAct [] (A.TRow _ _ _ t A.TNil{}) A.TNil{} _) 
+                                   | prstr t == "Env" || prstr t == "None" -> do   -- !! To do: proper check of parameter type !!
                                       c <- Acton.CodeGen.genRoot env qn
                                       writeFile rootFile c
                                       iff (ccmd args) $ do
@@ -577,16 +578,19 @@ buildExecutable env args paths binTask
                                       setFileMode buildF 0o755
                                       (returnCode, ccStdout, ccStderr) <- readCreateProcessWithExitCode (shell $ ccCmd) ""
                                       case returnCode of
-                                          ExitSuccess -> return()
+                                          ExitSuccess ->  putStrLn ("Building executable "++ binFile)
                                           ExitFailure _ -> do printIce "compilation of generated C code of the root actor failed"
                                                               putStrLn $ "cc stdout:\n" ++ ccStdout
                                                               putStrLn $ "cc stderr:\n" ++ ccStderr
                                                               System.Exit.exitFailure
                                       return ()
-                                  _ ->
-                                      error ("********************\nRoot " ++ prstr qn ++ " : " ++ prstr sc ++ " is not instantiable")
+                                   | otherwise -> handle "Type error" Acton.Types.typeError "" paths m (Acton.Types.TypeError NoLoc ("Illegal type "++ prstr t ++ " of parameter to root actor " ++ prstr qn))
+                               Just t -> handle "Type error" Acton.Types.typeError "" paths m (Acton.Types.TypeError NoLoc (prstr qn ++ " has not actor type."))
+                               Nothing -> if not (isDefaultRoot binTask)
+                                            then handle "Compilation error" Acton.Env.compilationError "" paths m (Acton.Env.NoItem m n)
+                                            else return ()
   where mn                  = A.mname qn
-        qn                  = (rootActor binTask)
+        qn@(A.GName m n)    = (rootActor binTask)
         (sc,_)              = Acton.QuickType.schemaOf env (A.eQVar qn)
         buildF              = joinPath [projPath paths, "build.sh"]
         outbase             = outBase paths mn
