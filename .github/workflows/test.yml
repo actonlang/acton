@@ -190,6 +190,8 @@ jobs:
       matrix:
         include:
           - os: "debian"
+            version: "10"
+          - os: "debian"
             version: "11"
           - os: "ubuntu"
             version: "20.04"
