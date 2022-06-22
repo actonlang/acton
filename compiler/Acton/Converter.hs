@@ -212,13 +212,13 @@ convStmts t0 eq stmts                   = map conv stmts
 -- Convert a TEnv -------------------------------------------------------------------------------------------
 
 convEnvProtos env                       = mapModules conv env
-  where conv env1 (n, NDef sc d)        = [(n, NDef (convS sc) d)]
-        conv env1 (n, NSig sc d)        = [(n, NSig (convS sc) d)]
-        conv env1 (n, NAct q p k te)    = [(n, NAct (noqual env q) (qualWRow env q p) k (concat $ map (conv env1) te))]
-        conv env1 (n, NProto q us te)   = map (fromClass env1) $ convProtocol env n q us [] [] (fromSigs env te)
-        conv env1 (n, NExt q c us te)   = map (fromClass env1) $ convExtension env n c q us [] [] []
-        conv env1 (n, NClass q us te)   = [(n, NClass (noqual env q) us (convClassTEnv env q te))]
-        conv env1 ni                    = [ni]
+  where conv env1 m (n, NDef sc d)      = [(n, NDef (convS sc) d)]
+        conv env1 m (n, NSig sc d)      = [(n, NSig (convS sc) d)]
+        conv env1 m (n, NAct q p k te)  = [(n, NAct (noqual env q) (qualWRow env q p) k (concat $ map (conv env1 m) te))]
+        conv env1 m (n, NProto q us te) = map (fromClass env1) $ convProtocol env n q us [] [] (fromSigs env te)
+        conv env1 m (n, NExt q c us te) = map (fromClass env1) $ convExtension env n c q us [] [] []
+        conv env1 m (n, NClass q us te) = [(n, NClass (noqual env q) us (convClassTEnv env q te))]
+        conv env1 m ni                  = [ni]
         convS (TSchema l q t)           = TSchema l (noqual env q) (convT q t)
         convT q (TFun l x p k t)        = TFun l x (qualWRow env q p) k t
         convT q t                       = t
