@@ -1,0 +1,41 @@
+"""Network IO
+"""
+
+class NetAuth():
+    # TODO: this should take a WorldAuth token
+    def __init__(self, auth: None):
+        pass
+
+class DNSAuth():
+    def __init__(self, auth: NetAuth):
+        pass
+
+class TCPAuth():
+    def __init__(self, auth: NetAuth):
+        pass
+
+class TCPConnectAuth():
+    def __init__(self, auth: TCPAuth):
+        pass
+
+class TCPListenAuth():
+    def __init__(self, auth: TCPAuth):
+        pass
+
+
+def lookup_a(auth: DNSAuth, name: str, on_resolve: (list[str]) -> None, on_error: (str) -> None) -> None:
+    """Perform DNS lookup for name of record type A
+    """
+    _lookup_a(name, on_resolve, on_error)
+
+def lookup_aaaa(auth: DNSAuth, name: str, on_resolve: (list[str]) -> None, on_error: (str) -> None) -> None:
+    """Perform DNS lookup for name of record type AAAA
+    """
+    _lookup_aaaa(name, on_resolve, on_error)
+
+# Internal implementations
+def _lookup_a(name: str, on_resolve: (list[str]) -> None, on_error: (str) -> None) -> None:
+    NotImplemented
+
+def _lookup_aaaa(name: str, on_resolve: (list[str]) -> None, on_error: (str) -> None) -> None:
+    NotImplemented

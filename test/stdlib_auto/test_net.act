@@ -1,0 +1,26 @@
+import net
+#import test
+
+
+actor main(env):
+    def test_dns():
+        def on_resolved(result):
+            print("got a result:", result)
+            # TODO: enable this and do some checking of the result
+            # env.exit(0)
+
+        def on_error(msg):
+            print("Got some form of error during DNS resolution:", msg)
+            # TODO: enable this
+            # env.exit(1)
+
+        print("== DNS test")
+        da = net.DNSAuth(net.NetAuth(None))
+        net.lookup_a(da, "localhost", on_resolved, on_error)
+        net.lookup_aaaa(da, "localhost", on_resolved, on_error)
+
+    def exit():
+        env.exit(0)
+
+    test_dns()
+    after 1: exit()
