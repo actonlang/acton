@@ -1069,6 +1069,7 @@ headvar (Seal (TVar _ v))           = v
 
 data CompilationError               = KindError SrcLoc Kind Kind
                                     | InfiniteKind SrcLoc KVar Kind
+                                    | VariableFX TVar
 
                                     | FileNotFound ModName
                                     | NameNotFound Name
@@ -1093,6 +1094,7 @@ instance Control.Exception.Exception CompilationError
 instance HasLoc CompilationError where
     loc (KindError l _ _)           = l
     loc (InfiniteKind l _ _)        = l
+    loc (VariableFX tv)             = loc tv
 
     loc (FileNotFound n)            = loc n
     loc (NameNotFound n)            = loc n
@@ -1117,6 +1119,7 @@ compilationError err                = (loc err, render (expl err))
   where
     expl (KindError l k1 k2)        = text "Expected a" <+> pretty k2 <> comma <+> text "actual kind is" <+> pretty k1
     expl (InfiniteKind l v k)       = text "Infinite kind inferred:" <+> pretty v <+> equals <+> pretty k
+    expl (VariableFX tv)            = text "Effect annotation cannot be a variable:" <+> pretty tv
 
     expl (FileNotFound n)           = text "Type interface file not found for" <+> pretty n
     expl (NameNotFound n)           = text "Name" <+> pretty n <+> text "is not in scope"
@@ -1138,6 +1141,7 @@ compilationError err                = (loc err, render (expl err))
 
 noKUnify l k1 k2                    = Control.Exception.throw $ KindError l k1 k2
 infiniteKind l v k                  = Control.Exception.throw $ InfiniteKind l v k
+variableFX tv                       = Control.Exception.throw $ VariableFX tv
 
 nameNotFound n                      = Control.Exception.throw $ NameNotFound n
 nameReserved n                      = Control.Exception.throw $ NameReserved n

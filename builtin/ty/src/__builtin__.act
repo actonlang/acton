@@ -163,9 +163,6 @@ class bytearray (object):
   upper        : () -> bytearray
   zfill        : (bytearray,int) -> bytearray
 
-class function[X,P,K,A] (value):
-    __call__   : X(*P,**K) -> A
-
 class Msg[A] (value):
   pass
 

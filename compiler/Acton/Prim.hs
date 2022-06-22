@@ -24,6 +24,8 @@ gPrim s             = GName mPrim (name s)
 
 primKW s            = name ("$" ++ s)
 
+primFunction        = gPrim "function"
+
 primActor           = gPrim "Actor"
 primR               = gPrim "R"
 primCont            = gPrim "Cont"
@@ -127,7 +129,9 @@ primEnv             = [     (noq primASYNCf,        NDef scASYNCf NoDec),
                             (noq primCONSTCONT,     NDef scCONSTCONT NoDec),
 
                             (noq primFORMAT,        NDef scFORMAT NoDec),
-                        
+
+                            (noq primFunction,      clFunction),
+
                             (noq primActor,         clActor),
                             (noq primR,             clR),
                             (noq primCont,          clCont),
@@ -162,6 +166,20 @@ primEnv             = [     (noq primASYNCf,        NDef scASYNCf NoDec),
 tSequenceListWild   = tCon (TC qnSequence [tList tWild, tWild])
 tCollectionListWild = tCon (TC qnCollection [tList tWild, tWild])
 
+
+
+--  class function[X,A,B,C] (value):
+--    __call__   : X(*A,**B) -> C
+clFunction          = NClass [quant x, quant a, quant b, quant c] (leftpath [cValue]) te
+  where te          = [ (callKW, NSig (monotype $ tFun (tVar x) (tVar a) (tVar b) (tVar c)) NoDec) ]
+        x           = TV KFX (name "X")
+        a           = TV PRow (name "A")
+        b           = TV KRow (name "B")
+        c           = TV KType (name "C")
+
+callKW              = name "__call__"
+
+
 --  class $Actor (): pass
 clActor             = NClass [] (leftpath [cValue]) te
   where te          = [ (primKW "next",       NSig (monotype tActor) Property),
@@ -184,7 +202,7 @@ clR                 = NClass [] [] []
 
 --  class $Cont[X,P] (function[X,P,(),$R]):
 --      pass
-clCont              = NClass [quant x, quant p] (leftpath [TC qnFunction [tVar x, tVar p, kwdNil, tR], cValue]) []
+clCont              = NClass [quant x, quant p] (leftpath [TC primFunction [tVar x, tVar p, kwdNil, tR], cValue]) []
   where x           = TV KFX (name "X")
         p           = TV PRow (name "P")
 
