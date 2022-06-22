@@ -346,8 +346,8 @@ instance Norm Elem where
 
 -- Convert function types ---------------------------------------------------------------------------------
 
-convEnv env (n, NClass q ps te)     = [(n, NClass q (mro1 env $ map snd ps) te)]
-convEnv env (n, i)                  = [(n, conv i)]
+convEnv env m (n, NClass q ps te)   = [(n, NClass q (mro1 env $ map snd ps) te)]
+convEnv env m (n, i)                = [(n, conv i)]
 
 
 class Conv a where

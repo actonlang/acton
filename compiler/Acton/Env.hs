@@ -65,9 +65,9 @@ modX env f                  = env{ envX = f (envX env) }
 
 
 mapModules1                 :: ((Name,NameInfo) -> (Name,NameInfo)) -> Env0 -> Env0
-mapModules1 f env           = mapModules (\_ ni -> [f ni]) env
+mapModules1 f env           = mapModules (\_ _ ni -> [f ni]) env
 
-mapModules                  :: (Env0 -> (Name,NameInfo) -> TEnv) -> Env0 -> Env0
+mapModules                  :: (Env0 -> ModName -> (Name,NameInfo) -> TEnv) -> Env0 -> Env0
 mapModules f env            = walk env0 [] mods
   where env0                = env{ modules = [prim] }
         prim : mods         = modules env
@@ -78,7 +78,7 @@ mapModules f env            = walk env0 [] mods
           where env1        = env{ modules = app ns (modules env) [(n, NModule [])] }
                 env2        = walk env1 (ns++[n]) te1
         walk env ns (ni:te) = walk env1 ns te
-          where env1        = env{ modules = app ns (modules env) (f env ni) }
+          where env1        = env{ modules = app ns (modules env) (f env (ModName ns) ni) }
 
         app (n:ns) ((m,NModule te1):te) te'
           | n == m          = (m, NModule $ app ns te1 te') : te

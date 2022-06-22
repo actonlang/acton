@@ -27,7 +27,7 @@ import Pretty
 import Control.Monad.State.Strict
 
 deactorize                          :: Env0 -> Module -> IO (Module, Env0)
-deactorize env0 (Module m imps b)   = return (Module m imps (runDeactM $ deactTop env b), mapModules1 conv env1)
+deactorize env0 (Module m imps b)   = return (Module m imps (runDeactM $ deactTop env b), mapModules conv env1)
   where env                         = deactEnv env1
         env1                        = mapModules1 sealActors env0
 
@@ -457,7 +457,10 @@ instance LambdaFree Elem where
 
 -- Convert environments -----------------------------------------------------------------------------------------
 
-conv (n, NAct q p k te')            = (n, NClass q (leftpath [TC primActor [], cValue]) (convActorEnv q p k te'))
+conv env m (n, NAct q p k te')      = (n, NClass q (leftpath [TC primActor [], cValue]) (convActorEnv q p k te')) :
+                                      (newactName n, NDef (tSchema q (tFun fxAction p k t)) NoDec) :
+                                      []
   where convActorEnv q0 p k te'     = (initKW, NDef t0 NoDec) : te'
-          where t0                  = tSchema q0 (TFun NoLoc fxAction p k tNone)
-conv ni                             = ni
+          where t0                  = tSchema q0 (tFun fxAction p k tNone)
+        t                           = tCon $ TC (GName m n) (map tVar $ qbound q)
+conv env m ni                       = [ni]
