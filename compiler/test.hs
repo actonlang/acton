@@ -43,6 +43,7 @@ main = do
       , coreLangAutoTests
       , coreLangTests
       , dbAutoTests
+      , compilerTests
       , actoncProjTests
       , actoncRootArgTests
       , exampleTests
@@ -63,8 +64,18 @@ coreLangTests =
         assertEqual "should see 2 pongs" "pong\npong\n" cmdOut
   ]
 
+compilerTests =
+  testGroup "compiler tests"
+  [
+    testCase "partial rebuild" $ do
+        (returnCode, cmdOut, cmdErr) <- readCreateProcessWithExitCode (shell $ "rm -rf ../test/compiler/rebuild/out") ""
+        testBuild "" ExitSuccess True "../test/compiler/rebuild/"
+        (returnCode, cmdOut, cmdErr) <- readCreateProcessWithExitCode (shell $ "touch ../test/compiler/rebuild/src/rebuild.act") ""
+        testBuild "" ExitSuccess True "../test/compiler/rebuild/"
+  ]
+
 actoncProjTests =
-  testGroup "actonc project tests"
+  testGroup "compiler project tests"
   [ testCase "simple project" $ do
         testBuild "" ExitSuccess True "test/actonc/project/simple"
 
@@ -83,11 +94,15 @@ actoncProjTests =
   ]
 
 actoncRootArgTests =
-  testGroup "actonc --root tests"
+  testGroup "compiler actonc --root tests"
   [ testCase "qualified --root test.main" $
         testBuild "--root test.main" ExitSuccess False "test/actonc/root/test.act"
   , testCase "unqualified --root main" $
         testBuild "--root main" ExitSuccess False "test/actonc/root/test.act"
+  , after AllFinish "qualified --root" $
+    after AllFinish "unqualified --root" $
+    testCase "discover root actor" $
+        testBuildAndRun "" "" ExitSuccess False "test/actonc/root/test.act"
   ]
 
 

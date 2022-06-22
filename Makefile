@@ -361,7 +361,7 @@ test-builtins:
 	cd compiler && stack test --ta '-p "Builtins"'
 
 test-compiler:
-	cd compiler && stack test --ta '-p "actonc"'
+	cd compiler && stack test --ta '-p "compiler"'
 
 test-db:
 	cd compiler && stack test --ta '-p "DB"'
