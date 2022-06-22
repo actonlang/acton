@@ -70,8 +70,14 @@ compilerTests =
     testCase "partial rebuild" $ do
         (returnCode, cmdOut, cmdErr) <- readCreateProcessWithExitCode (shell $ "rm -rf ../test/compiler/rebuild/out") ""
         testBuild "" ExitSuccess True "../test/compiler/rebuild/"
+
         (returnCode, cmdOut, cmdErr) <- readCreateProcessWithExitCode (shell $ "touch ../test/compiler/rebuild/src/rebuild.act") ""
-        testBuild "" ExitSuccess True "../test/compiler/rebuild/"
+        -- force a.ty to be newer than its source; this is to work around weird issues in github CI
+        (returnCode, cmdOut, cmdErr) <- readCreateProcessWithExitCode (shell $ "touch ../test/compiler/rebuild/out/types/a.ty") ""
+
+        (returnCode, cmdOut, cmdErr) <- buildThing "--verbose" "../test/compiler/rebuild/"
+        putStrLn ("STDOUT:\n" ++ cmdOut ++ "\nSTDERR:\n" ++ cmdErr ++ "\n")
+        assertEqual "compilation should work" ExitSuccess returnCode
   ]
 
 actoncProjTests =
