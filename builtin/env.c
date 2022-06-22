@@ -726,6 +726,23 @@ $l$16lambda $l$16lambda$new($ListenSocket p$1) {
     return $tmp;
 }
 struct $l$16lambda$class $l$16lambda$methods;
+$NoneType $WorldAuth$__init__ ($WorldAuth self) {
+    return $None;
+}
+void $WorldAuth$__serialize__ ($WorldAuth self, $Serial$state state) {
+}
+$WorldAuth $WorldAuth$__deserialize__ ($WorldAuth self, $Serial$state state) {
+    if (!self) {
+        if (!state) {
+            self = malloc(sizeof(struct $WorldAuth));
+            self->$class = &$WorldAuth$methods;
+            return self;
+        }
+        self = $DNEW($WorldAuth, state);
+    }
+    return self;
+}
+struct $WorldAuth$class $WorldAuth$methods;
 $Msg $Env$stdout_write ($Env __self__, $str s) {
     return $ASYNC((($Actor)__self__), (($Cont)$l$1lambda$new((($Env)__self__), s)));
 }
@@ -801,10 +818,17 @@ struct $ListenSocket$class $ListenSocket$methods;
 ///////////////////////////////////////////////////////////////////////////////////////////
 
 
+$WorldAuth $WorldAuth$new() {
+    $WorldAuth $tmp = malloc(sizeof(struct $WorldAuth));
+    $tmp->$class = &$WorldAuth$methods;
+    $WorldAuth$methods.__init__($tmp);
+    return $tmp;
+}
+
 // Env /////////////////////////////////////////////////////////////////////////
 
-$NoneType $Env$__init__ ($Env __self__, $list argv) {
-struct $l$14lambda$class $l$14lambda$methods;
+$NoneType $Env$__init__ ($Env __self__, $WorldAuth token, $list argv) {
+    __self__->auth = token;
     __self__->argv = argv;
     return $None;
 }
@@ -898,9 +922,9 @@ $Env $Env$__deserialize__ ($Env self, $Serial$state state) {
     self->argv = $step_deserialize(state);
     return self;
 }
-$Env $Env$newact($list p$1) {
+$Env $Env$newact($WorldAuth token, $list p$1) {
     $Env $tmp = $NEWACTOR($Env);
-    $tmp->$class->__init__($tmp, p$1);  // Inline this message, note that $Env$__init__ is *not* CPS'ed
+    $tmp->$class->__init__($tmp, token, p$1);  // Inline this message, note that $Env$__init__ is *not* CPS'ed
     serialize_state_shortcut(($Actor)$tmp);
     return $tmp;
 }
@@ -1215,11 +1239,20 @@ void $__init__ () {
         $register(&$l$16lambda$methods);
     }
     {
+        $WorldAuth$methods.$GCINFO = "$WorldAuth";
+        $WorldAuth$methods.$superclass = ($Super$class)&$value$methods;
+        ;
+        $WorldAuth$methods.__init__ = $WorldAuth$__init__;
+        $WorldAuth$methods.__serialize__ = $WorldAuth$__serialize__;
+        $WorldAuth$methods.__deserialize__ = $WorldAuth$__deserialize__;
+        $register(&$WorldAuth$methods);
+    }
+    {
         $Env$methods.$GCINFO = "$Env";
         $Env$methods.$superclass = ($Super$class)&$Actor$methods;
         $Env$methods.__bool__ = ($bool (*) ($Env))$Actor$methods.__bool__;
         $Env$methods.__str__ = ($str (*) ($Env))$Actor$methods.__str__;
-        $Env$methods.__repr__ = ($str (*) ($Env))$Actor$methods.__str__;
+        $Env$methods.__repr__ = ($str (*) ($Env))$Actor$methods.__repr__;
         $Env$methods.__resume__ = ($NoneType (*) ($Env))$Actor$methods.__resume__;
         $Env$methods.__init__ = $Env$__init__;
         $Env$methods.stdout_write$local = $Env$stdout_write$local;
@@ -1245,8 +1278,8 @@ void $__init__ () {
         $Connection$methods.$superclass = ($Super$class)&$Actor$methods;
         $Connection$methods.__bool__ = ($bool (*) ($Connection))$Actor$methods.__bool__;
         $Connection$methods.__str__ = ($str (*) ($Connection))$Actor$methods.__str__;
-        $Connection$methods.__repr__ = ($str (*) ($Connection))$Actor$methods.__str__;
         $Connection$methods.__resume__ = ($NoneType (*) ($Connection))$Connection$__resume__;
+        $Connection$methods.__repr__ = ($str (*) ($Connection))$Actor$methods.__repr__;
         $Connection$methods.__init__ = $Connection$__init__;
         $Connection$methods.write$local = $Connection$write$local;
         $Connection$methods.close$local = $Connection$close$local;
@@ -1263,7 +1296,7 @@ void $__init__ () {
         $RFile$methods.$superclass = ($Super$class)&$Actor$methods;
         $RFile$methods.__bool__ = ($bool (*) ($RFile))$Actor$methods.__bool__;
         $RFile$methods.__str__ = ($str (*) ($RFile))$Actor$methods.__str__;
-        $RFile$methods.__repr__ = ($str (*) ($RFile))$Actor$methods.__str__;
+        $RFile$methods.__repr__ = ($str (*) ($RFile))$Actor$methods.__repr__;
         $RFile$methods.__resume__ = ($NoneType (*) ($RFile))$Actor$methods.__resume__;
         $RFile$methods.__init__ = $RFile$__init__;
         $RFile$methods.readln$local = $RFile$readln$local;
@@ -1279,7 +1312,7 @@ void $__init__ () {
         $WFile$methods.$superclass = ($Super$class)&$Actor$methods;
         $WFile$methods.__bool__ = ($bool (*) ($WFile))$Actor$methods.__bool__;
         $WFile$methods.__str__ = ($str (*) ($WFile))$Actor$methods.__str__;
-        $WFile$methods.__repr__ = ($str (*) ($WFile))$Actor$methods.__str__;
+        $WFile$methods.__repr__ = ($str (*) ($WFile))$Actor$methods.__repr__;
         $WFile$methods.__resume__ = ($NoneType (*) ($WFile))$Actor$methods.__resume__;
         $WFile$methods.__init__ = $WFile$__init__;
         $WFile$methods.write$local = $WFile$write$local;
@@ -1295,8 +1328,8 @@ void $__init__ () {
         $ListenSocket$methods.$superclass = ($Super$class)&$Actor$methods;
         $ListenSocket$methods.__bool__ = ($bool (*) ($ListenSocket))$Actor$methods.__bool__;
         $ListenSocket$methods.__str__ = ($str (*) ($ListenSocket))$Actor$methods.__str__;
-        $ListenSocket$methods.__repr__ = ($str (*) ($ListenSocket))$Actor$methods.__str__;
         $ListenSocket$methods.__resume__ = ($NoneType (*) ($ListenSocket))$ListenSocket$__resume__; // XXX: manually modified, do not touch
+        $ListenSocket$methods.__repr__ = ($str (*) ($ListenSocket))$Actor$methods.__repr__;
         $ListenSocket$methods.__init__ = $ListenSocket$__init__;
         $ListenSocket$methods.close$local = $ListenSocket$close$local;
         $ListenSocket$methods.close = $ListenSocket$close;
