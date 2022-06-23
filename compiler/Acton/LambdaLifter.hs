@@ -268,7 +268,7 @@ closureConvert env lambda t0 vts0 es    = do n <- newName "lambda"
         initDef                         = Def l0 initKW [] initPars KwdNIL (Just tNone) (initBody++[sReturn eNone]) NoDec fxPure
         initPars                        = PosPar llSelf (Just tSelf) Nothing $ pospar vts
         initBody                        = mkBody [ MutAssign l0 (eDot (eVar llSelf) v) (eVar v) | (v,t) <- vts ]
-        callDef                         = Def l0 callKW [] callPars KwdNIL (Just t) callBody NoDec fx
+        callDef                         = Def l0 attrCall [] callPars KwdNIL (Just t) callBody NoDec fx
         callPars                        = PosPar llSelf (Just tSelf) Nothing p
         callBody                        = [ Assign l0 [PVar l0 v (Just t)] (eDot (eVar llSelf) v) | (v,t) <- vts ] ++ [Return l0 (Just e)]
 
@@ -286,7 +286,7 @@ instance Lift Expr where
                                              return $ Call l e' (addArgs vts p') KwdNil
       | closedType env e                = do e' <- llSub env e
                                              p' <- ll env p
-                                             return $ Call l (eDot e' callKW) p' KwdNil
+                                             return $ Call l (eDot e' attrCall) p' KwdNil
       | otherwise                       = do e' <- llSub env e
                                              p' <- ll env p
                                              return $ Call l e' p' KwdNil

@@ -25,6 +25,14 @@ gPrim s             = GName mPrim (name s)
 primKW s            = name ("$" ++ s)
 
 primFunction        = gPrim "function"
+primProc            = gPrim "proc"
+primAction          = gPrim "action"
+primMut             = gPrim "mut"
+primPure            = gPrim "pure"
+
+attrCall            = name "__call__"
+attrExec            = name "__exec__"
+attrAsyn            = name "__asyn__"
 
 primActor           = gPrim "Actor"
 primR               = gPrim "R"
@@ -131,6 +139,10 @@ primEnv             = [     (noq primASYNCf,        NDef scASYNCf NoDec),
                             (noq primFORMAT,        NDef scFORMAT NoDec),
 
                             (noq primFunction,      clFunction),
+                            (noq primProc,          clProc),
+                            (noq primAction,        clAction),
+                            (noq primMut,           clMut),
+                            (noq primPure,          clPure),
 
                             (noq primActor,         clActor),
                             (noq primR,             clR),
@@ -171,13 +183,35 @@ tCollectionListWild = tCon (TC qnCollection [tList tWild, tWild])
 --  class function[X,A,B,C] (value):
 --    __call__   : X(*A,**B) -> C
 clFunction          = NClass [quant x, quant a, quant b, quant c] (leftpath [cValue]) te
-  where te          = [ (callKW, NSig (monotype $ tFun (tVar x) (tVar a) (tVar b) (tVar c)) NoDec) ]
+  where te          = [ (attrCall, NSig (monotype $ tFun (tVar x) (tVar a) (tVar b) (tVar c)) NoDec) ]
         x           = TV KFX (name "X")
         a           = TV PRow (name "A")
         b           = TV KRow (name "B")
         c           = TV KType (name "C")
 
-callKW              = name "__call__"
+clProc              = NClass [quant r, quant t] (leftpath [cValue]) te
+  where te          = [ (attrCall, NSig (monotype $ tFun fxProc (tVar r) kwdNil (tVar t)) NoDec),
+                        (attrExec, NDef (monotype $ tFun fxProc (tVar r) kwdNil tNone) NoDec) ]
+        r           = TV PRow (name "R")
+        t           = TV KType (name "T")
+
+clAction            = NClass [quant r, quant t] (leftpath [cValue]) te
+  where te          = [ (attrCall, NDef (monotype $ tFun fxProc (tVar r) kwdNil (tVar t)) NoDec),
+                        (attrExec, NDef (monotype $ tFun fxProc (tVar r) kwdNil tNone) NoDec),
+                        (attrAsyn, NSig (monotype $ tFun fxAction (tVar r) kwdNil (tMsg $ tVar t)) NoDec) ]
+        r           = TV PRow (name "R")
+        t           = TV KType (name "T")
+
+
+clMut               = NClass [quant r, quant t] (leftpath [TC primProc [tVar r, tVar t], cValue]) te
+  where te          = [ ]
+        r           = TV PRow (name "R")
+        t           = TV KType (name "T")
+
+clPure              = NClass [quant r, quant t] (leftpath [TC primMut [tVar r,tVar t], TC primProc [tVar r,tVar t], cValue]) te
+  where te          = [ ]
+        r           = TV PRow (name "R")
+        t           = TV KType (name "T")
 
 
 --  class $Actor (): pass

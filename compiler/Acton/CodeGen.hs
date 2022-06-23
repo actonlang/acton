@@ -536,7 +536,7 @@ genCall env ts e@(Var _ n) p
   | NDef{} <- info                  = (instCast env ts e $ gen env e) <> parens (gen env p)
   where info                        = findQName n env
 genCall env ts e0@(Dot _ e n) p     = genDotCall env ts (snd $ schemaOf env e0) e n p
-genCall env ts e p                  = genEnter env ts e callKW p
+genCall env ts e p                  = genEnter env ts e attrCall p
 
 instCast env [] e                   = id
 instCast env ts (Var _ x)
@@ -592,12 +592,12 @@ comma' x                            = if isEmpty x then empty else comma <+> x
 genDotCall env ts dec e@(Var _ x) n p
   | NClass q _ _ <- info,
     Just _ <- dec                   = classCast env ts x q n (methodtable' env x <> text "." <> gen env n) <> parens (gen env p)
-  | NClass{} <- info                = genEnter env ts (eDot e n) callKW p       -- In case n is a closure...
+  | NClass{} <- info                = genEnter env ts (eDot e n) attrCall p       -- In case n is a closure...
   where info                        = findQName x env
 genDotCall env ts dec e n p
   | Just NoDec <- dec               = genEnter env ts e n p
   | Just Static <- dec              = dotCast env False ts e n (gen env e <> text "->" <> gen env classKW <> text "->") <> gen env n <> parens (gen env p)
-  | otherwise                       = genEnter env ts (eDot e n) callKW p
+  | otherwise                       = genEnter env ts (eDot e n) attrCall p
 
 
 genDot env ts e@(Var _ x) n
