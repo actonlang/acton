@@ -242,18 +242,23 @@ buildAndRun buildOpts runOpts thing = do
     (returnCode, cmdOut, cmdErr) <- runThing runOpts thing
     return (returnCode, cmdOut, cmdErr)
 
+-- when in a project, expect the binary to be named the same as the project
+-- without our ending, like __bf. For example, if the project is
+-- import_actor__bf, then we will run ./import_actor in
+-- import_actor__bf/out/rel/bin
 runThing opts thing = do
-    wd <- canonicalizePath $ takeDirectory thing
-    let cmd = "./" ++ fileBody ++ " " ++ opts
+    twd <- canonicalizePath $ takeDirectory thing
+    isProj <- doesDirectoryExist thing
+    projBinPath <- canonicalizePath $ thing ++ "/out/rel/bin"
+    let wd = if isProj then projBinPath else twd
+    let exe = if isProj then binName else fileBody
+    let cmd = "./" ++ exe ++ " " ++ opts
     (returnCode, cmdOut, cmdErr) <- readCreateProcessWithExitCode (shell $ cmd){ cwd = Just wd } ""
     return (returnCode, cmdOut, cmdErr)
   where (fileBody, fileExt) = splitExtension $ takeFileName thing
+        fileParts = splitOn "__" fileBody
+        binName = head fileParts
 
--- TODO: thingify, it is probably file specific now
-thingTestCase thing opts expRet expFail =
-    testCase fileBody $ do
-        testBuildThing opts expRet expFail thing
-  where (fileBody, fileExt) = splitExtension $ takeFileName thing
 
 testBuildThing opts expRet expFail thing = do
     (returnCode, cmdOut, cmdErr) <- buildThing opts thing
