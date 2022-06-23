@@ -50,6 +50,7 @@ struct $l$13lambda;
 struct $l$14lambda;
 struct $l$15lambda;
 struct $l$16lambda;
+struct $WorldAuth;
 struct $Env;
 struct $Connection;
 struct $RFile;
@@ -71,6 +72,7 @@ typedef struct $l$13lambda *$l$13lambda;
 typedef struct $l$14lambda *$l$14lambda;
 typedef struct $l$15lambda *$l$15lambda;
 typedef struct $l$16lambda *$l$16lambda;
+typedef struct $WorldAuth *$WorldAuth;
 typedef struct $Env *$Env;
 typedef struct $Connection *$Connection;
 typedef struct $RFile *$RFile;
@@ -347,6 +349,21 @@ struct $l$16lambda {
     struct $l$16lambda$class *$class;
     $ListenSocket __self__;
 };
+struct $WorldAuth$class {
+    char *$GCINFO;
+    int $class_id;
+    $Super$class $superclass;
+    $NoneType (*__init__) ($WorldAuth);
+    void (*__serialize__) ($WorldAuth, $Serial$state);
+    $WorldAuth (*__deserialize__) ($WorldAuth, $Serial$state);
+    $bool (*__bool__) ($WorldAuth);
+    $str (*__str__) ($WorldAuth);
+    $str (*__repr__) ($WorldAuth);
+};
+struct $WorldAuth {
+    struct $WorldAuth$class *$class;
+};
+$WorldAuth $WorldAuth$new();
 extern struct $l$1lambda$class $l$1lambda$methods;
 $l$1lambda $l$1lambda$new($Env, $str);
 extern struct $l$2lambda$class $l$2lambda$methods;
@@ -379,6 +396,7 @@ extern struct $l$15lambda$class $l$15lambda$methods;
 $l$15lambda $l$15lambda$new($function);
 extern struct $l$16lambda$class $l$16lambda$methods;
 $l$16lambda $l$16lambda$new($ListenSocket);
+extern struct $WorldAuth$class $WorldAuth$methods;
 // END GENERATED __builtin__.act
 ///////////////////////////////////////////////////////////////////////////////////////////
 
@@ -386,7 +404,7 @@ struct $Env$class {
     char *$GCINFO;
     int $class_id;
     $Super$class $superclass;
-    $NoneType (*__init__) ($Env, $list);
+    $NoneType (*__init__) ($Env, $WorldAuth, $list);
     void (*__serialize__) ($Env, $Serial$state);
     $Env (*__deserialize__) ($Env, $Serial$state);
     $bool (*__bool__) ($Env);
@@ -418,6 +436,7 @@ struct $Env {
     $Catcher $catcher;
     $Lock $msg_lock;
     $long $globkey;
+    $WorldAuth auth;
     $list argv;
 };
 
@@ -540,7 +559,7 @@ struct $WFile {
 };
 
 extern struct $Env$class $Env$methods;
-$Env $Env$newact($list);
+$Env $Env$newact($WorldAuth, $list);
 extern struct $Connection$class $Connection$methods;
 $Connection $Connection$newact(int);
 extern struct $ListenSocket$class $ListenSocket$methods;

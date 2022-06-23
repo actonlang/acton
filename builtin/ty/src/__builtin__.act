@@ -623,7 +623,15 @@ zip : (Iterable[A], Iterable[B]) -> Iterator[(A,B)]
 
 ## Environment ################################################
 
-actor Env (args):
+class WorldAuth():
+    """WorldAuth is the root of the capability based authentication chain,
+    providing access to everything.
+    """
+    pass
+
+actor Env (token : WorldAuth, args):
+    auth : WorldAuth
+    auth = token
     argv : list[str]
     argv = args
 

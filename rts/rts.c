@@ -1177,7 +1177,7 @@ void BOOTSTRAP(int argc, char *argv[]) {
     for (int i=0; i< argc; i++)
       $list_append(args,to$str(argv[i]));
 
-    env_actor = $Env$newact(args);
+    env_actor = $Env$newact($WorldAuth$new(), args);
 
     root_actor = $ROOT();                           // Assumed to return $NEWACTOR(X) for the selected root actor X
     time_t now = current_time();
