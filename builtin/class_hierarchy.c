@@ -36,12 +36,30 @@ void $object$__init__ ($object self) {
   return;
 }
 
+$str $value$__str__($value self) {
+  char *s;
+  asprintf(&s,"<%s object at %p>",self->$class->$GCINFO,self);
+  return to$str(s);
+}
+
+$str $object$__str__($object self) {
+  char *s;
+  asprintf(&s,"<%s object at %p>",self->$class->$GCINFO,self);
+  return to$str(s);
+}
+
+$bool $value$__bool__($value self) {
+  return $True;
+}
+$bool $object$__bool__($object self) {
+  return $True;
+}
 
 
 struct $Initializable$class $Initializable$methods = {"$Initializable",UNASSIGNED,NULL,NULL};
 
 struct $Serializable$class $Serializable$methods = {"$Serializable",UNASSIGNED,($Super$class)&$Initializable$methods, $Serializable$__init__,NULL,NULL};
 
-struct $value$class $value$methods = {"$value",UNASSIGNED,($Super$class)&$Serializable$methods,$value$__init__,NULL,NULL,NULL,NULL,NULL};
+struct $value$class $value$methods = {"$value",UNASSIGNED,($Super$class)&$Serializable$methods,$value$__init__,NULL,NULL, $value$__bool__,$value$__str__,$value$__str__};
 
-struct $object$class $object$methods = {"$value",UNASSIGNED,($Super$class)&$value$methods,$object$__init__,NULL,NULL,NULL,NULL,NULL};
+struct $object$class $object$methods = {"$value",UNASSIGNED,($Super$class)&$value$methods,$object$__init__,NULL,NULL,$object$__bool__,$object$__str__,$object$__str__};
