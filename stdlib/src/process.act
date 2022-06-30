@@ -1,0 +1,34 @@
+"""Constructs for spawning and interacting with sub-processes
+"""
+
+class ProcessAuth():
+    def __init__(self, auth: WorldAuth):
+        pass
+
+actor Process(auth: ProcessAuth, cmd: list[str], on_stdout: action(bytes) -> None, on_stderr: action(bytes) -> None, on_exit: action(int, int) -> None):
+    """A process
+    """
+    def _force_persistance():
+        """Trick compiler into persisting the actor arguments we need.
+
+        Compiler optimizes so that only variables that are used are persisted to
+        the DB. Since we use these variables from C, the compiler doesn't see
+        them, thus we need to trick it. This method should never be called.
+        """
+        print(cmd, on_stdout, on_stderr, on_exit)
+
+    def _create_process():
+        """Do the C magic to actually create a process and talk to it
+        """
+        NotImplemented
+
+    _create_process()
+
+
+def _force_ext():
+    """Force compilation using .ext.c
+
+    Only top level functions are recognized as externally defined by actonc
+    TODO: fix in actonc and remove this
+    """
+    NotImplemented
