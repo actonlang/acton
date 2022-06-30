@@ -1,6 +1,7 @@
 #include "io.h"
 
 #include <uv.h>
+#include <unistd.h>
 
 #include "log.h"
 
@@ -8,6 +9,16 @@ extern char rts_exit;
 uv_async_t stop_event;
 
 bool ioloop_started = false;
+
+void await_ioloop_started() {
+    int i = 0;
+    while (!ioloop_started) {
+        i++;
+        usleep(100);
+    }
+    if (i > 1)
+        log_debug("Took %d spins for ioloop to start", i);
+}
 
 void stop_ioloop() {
     // We are not allowed to call uv_async_send before the ioloop has started.

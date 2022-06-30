@@ -9,7 +9,7 @@ struct dns_cb_data {
     $function on_error;
 };
 
-void net$$_lookup_a__on_resolve (uv_getaddrinfo_t *req, int status, struct addrinfo *dns_res) {
+void net$$DNS$lookup_a__on_resolve (uv_getaddrinfo_t *req, int status, struct addrinfo *dns_res) {
     struct dns_cb_data *cb_data = req->data;
     $list $res = $list$new(NULL, NULL);
 
@@ -38,7 +38,7 @@ void net$$_lookup_a__on_resolve (uv_getaddrinfo_t *req, int status, struct addri
     free(req);
 }
 
-$NoneType net$$_lookup_a ($str name, $function on_resolve, $function on_error) {
+$NoneType net$$DNS$lookup_a (net$$DNS __self__, $str name, $function on_resolve, $function on_error) {
     struct addrinfo *hints = (struct addrinfo *)malloc(sizeof(struct addrinfo));
     hints->ai_family = PF_INET;
     hints->ai_socktype = SOCK_STREAM;
@@ -53,14 +53,14 @@ $NoneType net$$_lookup_a ($str name, $function on_resolve, $function on_error) {
     uv_getaddrinfo_t *req = (uv_getaddrinfo_t*)malloc(sizeof(uv_getaddrinfo_t));
     req->data = cb_data;
 
-    int r = uv_getaddrinfo(uv_default_loop(), req, net$$_lookup_a__on_resolve, from$str(name), NULL, hints);
+    int r = uv_getaddrinfo(uv_default_loop(), req, net$$DNS$lookup_a__on_resolve, from$str(name), NULL, hints);
     if (r != 0)
         $RAISE((($BaseException)$RuntimeError$new(to$str("Unable to run DNS query"))));
 
     return $None;
 }
 
-void net$$lookup_aaaa__on_resolve (uv_getaddrinfo_t *req, int status, struct addrinfo *dns_res) {
+void net$$DNS$lookup_aaaa__on_resolve (uv_getaddrinfo_t *req, int status, struct addrinfo *dns_res) {
     struct dns_cb_data *cb_data = req->data;
     $list $res = $list$new(NULL, NULL);
 
@@ -90,7 +90,7 @@ void net$$lookup_aaaa__on_resolve (uv_getaddrinfo_t *req, int status, struct add
     free(req);
 }
 
-$NoneType net$$_lookup_aaaa ($str name, $function on_resolve, $function on_error) {
+$NoneType net$$DNS$lookup_aaaa (net$$DNS __self__, $str name, $function on_resolve, $function on_error) {
     struct addrinfo *hints = (struct addrinfo *)malloc(sizeof(struct addrinfo));
     hints->ai_family = PF_INET6;
     hints->ai_socktype = SOCK_STREAM;
@@ -105,7 +105,7 @@ $NoneType net$$_lookup_aaaa ($str name, $function on_resolve, $function on_error
     uv_getaddrinfo_t *req = (uv_getaddrinfo_t*)malloc(sizeof(uv_getaddrinfo_t));
     req->data = cb_data;
 
-    int r = uv_getaddrinfo(uv_default_loop(), req, net$$lookup_aaaa__on_resolve, from$str(name), NULL, hints);
+    int r = uv_getaddrinfo(uv_default_loop(), req, net$$DNS$lookup_aaaa__on_resolve, from$str(name), NULL, hints);
     if (r != 0)
         $RAISE((($BaseException)$RuntimeError$new(to$str("Unable to run DNS query"))));
 

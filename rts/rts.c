@@ -2143,6 +2143,11 @@ int main(int argc, char **argv) {
         pthread_setaffinity_np(threads[1], sizeof(cpu_set), &cpu_set);
     }
 
+    // await ioloop startup
+    // We cannot make calls to register callback in the ioloop before it has
+    // started.
+    await_ioloop_started();
+
     for(int idx = 2; idx < num_wthreads+2; idx++) {
         pthread_create(&threads[idx], NULL, main_loop, (void*)idx);
         // Index start at 1 and we pin wthreads to CPU 1...n
