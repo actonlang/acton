@@ -1,13 +1,19 @@
-import _time
+def monotonic() -> float:
+    """Get monotonic time
+    """
+    NotImplemented
 
-def monotonic():
-    return _time.monotonic()
+def monotonic_ns() -> int:
+    """Get monotonic time
+    """
+    NotImplemented
 
-def monotonic_ns():
-    return _time.monotonic_ns()
+def time() -> float:
+    """Get real time
+    """
+    NotImplemented
 
-def time():
-    return _time.time()
-
-def time_ns():
-    return _time.time_ns()
+def time_ns() -> int:
+    """Get real time
+    """
+    NotImplemented
