@@ -21,6 +21,7 @@ void await_ioloop_started() {
 }
 
 void stop_ioloop() {
+    log_debug("Stopping ioloop");
     // We are not allowed to call uv_async_send before the ioloop has started.
     // We set ioloop_stop_request so that if the loop has not yet started, it
     // will see this value once it has started up and immediately exit.
@@ -57,8 +58,7 @@ int ioloop(void *arg) {
 
     uv_async_init(uv_default_loop(), &stop_event, stop_cb);
 
-    log_debug("starting uv_run");
     int r = uv_run(uv_default_loop(), UV_RUN_DEFAULT);
-    log_debug("uv_run has stopped");
+    log_debug("ioloop has stopped");
     return r;
 }
