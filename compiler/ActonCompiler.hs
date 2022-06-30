@@ -465,7 +465,7 @@ printIce errMsg = do ccVer <- getCcVer
 runRestPasses :: Args -> Paths -> Acton.Env.Env0 -> A.Module -> Bool -> IO (Acton.Env.Env0, Acton.Env.TEnv)
 runRestPasses args paths env0 parsed stubMode = do
                       let outbase = outBase paths (A.modname parsed)
-                      let srcbase = srcBase paths (A.modname parsed)
+                      let srcbase = makeRelative (projPath paths) (srcBase paths (A.modname parsed))
                       let actFile = srcbase ++ ".act"
                       envTmp <- Acton.Env.mkEnv (sysTypes paths) (projTypes paths) env0 parsed
                       let env = envTmp { Acton.Env.stub = stubMode }
@@ -539,26 +539,32 @@ runRestPasses args paths env0 parsed stubMode = do
                             iff (hExist) (do
                               copyFile srcH hFile))
                       else do
+                          -- cc is invoked with parent directory of project
+                          -- directory as working directory, this is so that the
+                          -- paths used in logging will reflect the project name
+                          -- and the relative path within
                           let cFile = outbase ++ ".c"
                               hFile = outbase ++ ".h"
                               oFile = joinPath [projLib paths, n ++ ".o"]
                               aFile = joinPath [projLib paths, "libActonProject.a"]
                               buildF = joinPath [projPath paths, "build.sh"]
+                              wd = takeFileName (projPath paths)
                               ccCmd = ("cc " ++ pedantArg ++
                                        (if (dev args) then " -g " else "") ++
                                        " -c " ++
-                                       " -I" ++ projOut paths ++
+                                       " -I" ++ wd ++
+                                       " -I" ++ wd ++ "/out" ++
                                        " -I" ++ sysPath paths ++
                                        " -o" ++ oFile ++
-                                       " " ++ cFile)
+                                       " " ++ makeRelative (takeDirectory (projPath paths)) cFile)
                               arCmd = "ar rcs " ++ aFile ++ " " ++ oFile
                           writeFile hFile h
                           writeFile cFile c
                           iff (ccmd args) $ do
                               putStrLn ccCmd
                               putStrLn arCmd
-                          writeFile buildF $ unlines ["#!/bin/sh", ccCmd, arCmd]
-                          (returnCode, ccStdout, ccStderr) <- readCreateProcessWithExitCode (shell $ ccCmd ++ " && " ++ arCmd) ""
+                          writeFile buildF $ unlines ["#!/bin/sh", "cd ..", ccCmd, arCmd]
+                          (returnCode, ccStdout, ccStderr) <- readCreateProcessWithExitCode (shell $ ccCmd ++ " && " ++ arCmd){ cwd = Just (takeDirectory (projPath paths)) } ""
                           case returnCode of
                               ExitSuccess -> return()
                               ExitFailure _ -> do printIce "compilation of generated C code failed"
