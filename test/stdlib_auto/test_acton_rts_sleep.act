@@ -2,13 +2,16 @@ import acton.rts
 import time
 
 actor main(env):
-    def work():
+    def test():
         t1 = time.time_ns()
         acton.rts.sleep(0.1)
         t2 = time.time_ns()
         diff = (t2-t1) / 1000000000
         if diff < 0.1:
             print("Sleep seems to have been below 1 second :(")
-            await async env.exit(1)
-    work()
-    await async env.exit(0)
+            return 1
+        else:
+            return 0
+
+    r = test()
+    env.exit(r)
