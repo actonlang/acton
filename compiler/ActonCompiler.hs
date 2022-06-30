@@ -108,6 +108,19 @@ getArgs ver     = infoOption (showVersion Paths_acton.version) (long "numeric-ve
                     <*> optional (argument str (metavar "ARG"))
                   )
 
+forceCompilation :: Args -> Bool
+forceCompilation args =
+    (parse args) ||
+    (kinds args) ||
+    (types args) ||
+    (sigs args) ||
+    (norm args) ||
+    (deact args) ||
+    (cps args) ||
+    (llift args) ||
+    (hgen args) ||
+    (cgen args)
+
 descr           = fullDesc <> progDesc "Compile an Acton source file with recompilation of imported modules as needed"
                     <> header "actonc - the Acton compiler"
 
@@ -408,7 +421,7 @@ doTask :: Args -> Paths -> Acton.Env.Env0 -> CompileTask -> IO Acton.Env.Env0
 doTask args paths env t@(ActonTask mn src m stubMode)
                             = do let outfiles = [hFile] ++ if stubMode then [] else [oFile]
                                  ok <- checkUptoDate paths actFile tyFile outfiles (importsOf t)
-                                 if ok then do
+                                 if ok && not (forceCompilation args) then do
                                           iff (verbose args) (putStrLn ("Skipping  "++ makeRelative (srcDir paths) actFile ++ " (files are up to date).") >> hFlush stdout)
                                           te <- InterfaceFiles.readFile tyFile
                                           return (Acton.Env.addMod mn te env)
@@ -491,6 +504,8 @@ runRestPasses args paths env0 parsed stubMode = do
                       iff (cgen args) $ do
                           putStrLn(c)
                           System.Exit.exitSuccess
+
+                      iff ((cgen args) || (hgen args)) System.Exit.exitSuccess
 
                       let pedantArg = if (cpedantic args) then "-Werror" else ""
 
