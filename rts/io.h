@@ -16,3 +16,5 @@
 
 int ioloop(void *);
 void stop_ioloop();
+
+void await_ioloop_started();
