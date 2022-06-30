@@ -38,7 +38,7 @@ main = do
     regressionSegfaultTests <- createTests "Regression segfaults" "../test/regression_segfault" False [] (testBuildAndRun "" "" segfault_exitcode)
     rtsAutoTests <- createAutoTests "RTS auto" "../test/rts_auto"
     stdlibAutoTests <- createAutoTests "stdlib auto" "../test/stdlib_auto"
-    defaultMain $ testGroup "Tests" $
+    defaultMain $ localOption timeout $ testGroup "Tests" $
       [ builtinsAutoTests
       , coreLangAutoTests
       , coreLangTests
@@ -54,6 +54,8 @@ main = do
       , stdlibAutoTests
       , stdlibTests
       ]
+  where timeout :: Timeout
+        timeout = mkTimeout (60*1000000) -- 60 second timeout
 
 coreLangTests =
   testGroup "Core language"
