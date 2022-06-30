@@ -22,20 +22,22 @@ class TCPListenAuth():
     def __init__(self, auth: TCPAuth):
         pass
 
+actor DNS(auth: DNSAuth):
+    def lookup_a(name: str, on_resolve: action(list[str]) -> None, on_error: action(str) -> None) -> None:
+        """Perform DNS lookup for name of record type A
+        """
+        NotImplemented
 
-def lookup_a(auth: DNSAuth, name: str, on_resolve: (list[str]) -> None, on_error: (str) -> None) -> None:
-    """Perform DNS lookup for name of record type A
+    def lookup_aaaa(name: str, on_resolve: action(list[str]) -> None, on_error: action(str) -> None) -> None:
+        """Perform DNS lookup for name of record type AAAA
+        """
+        NotImplemented
+
+
+def _force_ext():
+    """Force compilation using .ext.c
+
+    Only top level functions are recognized as externally defined by actonc
+    TODO: fix in actonc and remove this
     """
-    _lookup_a(name, on_resolve, on_error)
-
-def lookup_aaaa(auth: DNSAuth, name: str, on_resolve: (list[str]) -> None, on_error: (str) -> None) -> None:
-    """Perform DNS lookup for name of record type AAAA
-    """
-    _lookup_aaaa(name, on_resolve, on_error)
-
-# Internal implementations
-def _lookup_a(name: str, on_resolve: (list[str]) -> None, on_error: (str) -> None) -> None:
-    NotImplemented
-
-def _lookup_aaaa(name: str, on_resolve: (list[str]) -> None, on_error: (str) -> None) -> None:
     NotImplemented
