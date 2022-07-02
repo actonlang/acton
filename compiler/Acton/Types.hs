@@ -588,7 +588,7 @@ toSigs te                               = map makeSig te
 
 stubSigs te                             = [ makeDef n sc dec | (n, NSig sc dec) <- te, dec /= Property ]
   where makeDef n (TSchema l q t) dec
-          | TFun{} <- t                 = (n, NDef (TSchema l q $ addSelf t (Just dec)) dec)
+          | TFun{} <- t                 = (n, NDef (TSchema l q t) dec)
           | otherwise                   = (n, NVar t)
 
 
