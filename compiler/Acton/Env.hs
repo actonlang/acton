@@ -319,16 +319,12 @@ instance Unalias (Either QName QName) where
 nSigs                       :: TEnv -> TEnv
 nSigs te                    = [ (n,i) | (n, i@(NSig sc dec)) <- te, not $ isProp dec sc ]
 
-splitSigs                   :: TEnv -> (TEnv, TEnv)
-splitSigs te                = partition isSig te
-  where isSig (_, NSig{})   = True
-        isSig _             = False
-
 nTerms                      :: TEnv -> TEnv
-nTerms te                   = [ (n,i) | (n,i) <- te, keep i ]
-  where keep NDef{}         = True
-        keep NVar{}         = True
-        keep _              = False
+nTerms te                   = [ (n,i) | (n,i) <- te, isNTerm i ]
+
+isNTerm NDef{}              = True
+isNTerm NVar{}              = True
+isNTerm _                   = False
 
 noDefs                      :: TEnv -> TEnv
 noDefs te                   = [ (n,i) | (n,i) <- te, keep i ]
@@ -598,34 +594,35 @@ wildargs i                  = [ tWild | _ <- nbinds i ]
 findAttr                    :: EnvF x -> TCon -> Name -> Maybe (Expr->Expr, TSchema, Maybe Deco)
 findAttr env tc n           = fmap summarize $ findAttrInfo env tc n
 
-summarize (w, NSig sc d)    = (w, sc, Just d)
-summarize (w, NDef sc d)    = (w, sc, Just d)
-summarize (w, NVar t)       = (w, monotype t, Nothing)
-summarize (w, NSVar t)      = (w, monotype t, Nothing)
+findAttr__                  :: EnvF x -> TCon -> Name -> Maybe (Expr->Expr, TSchema, Maybe Deco)
+findAttr__ env tc n         = fmap summarize $ findAttrInfo__ env tc n
 
-findAttrInfo                :: EnvF x -> TCon -> Name -> Maybe (Expr->Expr, NameInfo)
-findAttrInfo env tc n       = findIn [ (w,u,te') | (w,u) <- findAncestry env tc, let (_,te') = findCon env u ]
-  where findIn ((w,u,te):tes) = case lookup n te of
-                                Just ni -> Just (wexpr w, ni)
-                                Nothing -> findIn tes
-        findIn []           = Nothing
-
-abstractAttr                :: EnvF x -> TCon -> Name -> Bool
-abstractAttr env tc n       = case lookup n $ snd $ splitSigs $ concat [ attrEnv env c | (_,c) <- findAncestry env tc ] of
-                                Just i -> False
-                                _  -> True
+summarize (w, NSig sc d)    = (wexpr w, sc, Just d)
+summarize (w, NDef sc d)    = (wexpr w, sc, Just d)
+summarize (w, NVar t)       = (wexpr w, monotype t, Nothing)
+summarize (w, NSVar t)      = (wexpr w, monotype t, Nothing)
 
 findAttr'                   :: EnvF x -> TCon -> Name -> (TSchema, Maybe Deco)
 findAttr' env tc n          = case findAttr env tc n of
                                   Just (_, sc, mbdec) -> (sc, mbdec)
                                   Nothing -> error ("#### findAttr' fails for " ++ prstr tc ++ " . " ++ prstr n)
 
+findAttrInfo                :: EnvF x -> TCon -> Name -> Maybe (WPath, NameInfo)
+findAttrInfo env tc n       = findIn [ (w, attrEnv env u) | (w,u) <- findAncestry env tc ]
+  where findIn ((w,te):tes) = case lookup n te of
+                                Just ni -> Just (w, ni)
+                                Nothing -> findIn tes
+        findIn []           = Nothing
+
+findAttrInfo__              :: EnvF x -> TCon -> Name -> Maybe (WPath, NameInfo)
+findAttrInfo__ env tc n     = lookup n (fullAttrEnv__ env tc)
+
 splitTC                     :: EnvF x -> TCon -> (Substitution, TCon)
 splitTC env (TC n ts)       = (qbound q `zip` ts, TC n $ map tVar $ qbound q)
   where (q,_,_)             = findConName n env
 
 findAncestry                :: EnvF x -> TCon -> [WTCon]
-findAncestry env tc         = ([Left (tcname tc)],tc) : fst (findCon env tc)
+findAncestry env tc         = ([],tc) : fst (findCon env tc)
 
 findAncestor                :: EnvF x -> TCon -> QName -> Maybe (Expr->Expr,TCon)
 findAncestor env p qn       = listToMaybe [ (wexpr ws, p') | (ws,p') <- findAncestry env p, tcname p' == qn ]
@@ -683,16 +680,28 @@ allAttrs                    :: EnvF x -> TCon -> [Name]
 allAttrs env c              = concat [ conAttrs env qn' | qn' <- qn : allAncestors' env qn ]
   where qn                  = tcname c
 
+allAttrs__                  :: EnvF x -> TCon -> [Name]
+allAttrs__ env c            = dom $ fullAttrEnv env c
+
 attrEnv                     :: EnvF x -> TCon -> TEnv
 attrEnv env c               = snd $ findCon env c
 
 fullAttrEnv                 :: EnvF x -> TCon -> TEnv
 fullAttrEnv env tc          = normTEnv $ init ++ concat (reverse tes)   -- reverse guarantees inherited methods are listed in original order
-  where tes                 = [ attrEnv env c | (_,c) <- findAncestry env tc ]
+  where tes                 = [ attrEnv env c | (wp,c) <- findAncestry env tc ]
         init                = take 1 $ filter ((==initKW) . fst) $ concat tes
 
+fullAttrEnv__               :: EnvF x -> TCon -> [(Name,(WPath,NameInfo))]
+fullAttrEnv__ env tc        = [ (n, (wp,i)) | n <- ns, let Just (wp,i) = lookup n te1 ]
+  where te0                 = [ (n,(wp,i)) | (wp,c) <- findAncestry env tc, (n,i) <- attrEnv env c ]
+        ns                  = nub $ dom te0
+        te1                 = reverse te0
+
+inheritedAttrs__            :: EnvF x -> TCon -> [(QName,Name)]
+inheritedAttrs__ env c      = [ (w,n) | (n,(wp,i)) <- fullAttrEnv__ env c, isNTerm i, Left w : _ <- [reverse wp] ]
+
 inheritedAttrs              :: EnvF x -> QName -> [(QName,[Name])]
-inheritedAttrs env n        = inh (dom $ snd $ splitSigs te) us
+inheritedAttrs env n        = inh (dom $ nTerms te) us
   where (_,us,te)           = findConName n env
         inh ns0 []          = []
         inh ns0 (u:us)
@@ -700,7 +709,7 @@ inheritedAttrs env n        = inh (dom $ snd $ splitSigs te) us
           | otherwise       = (c,ns1) : inh (ns1++ns0) us
           where c           = tcname (snd u)
                 (_,_,te)    = findConName c env
-                ns1         = (dom $ snd $ splitSigs te) \\ ns0
+                ns1         = (dom $ nTerms te) \\ ns0
 
 abstractAttrs               :: EnvF x -> QName -> [Name] -> [Name]
 abstractAttrs env n ns      = (ns ++ dom sigs) \\ dom terms
@@ -710,6 +719,10 @@ abstractAttrs env n ns      = (ns ++ dom sigs) \\ dom terms
 abstractClass env n         = not $ null (abstractAttrs env n [initKW])
 
 abstractActor env n         = not $ null (abstractAttrs env n [])
+
+abstractAttr                :: EnvF x -> TCon -> Name -> Bool
+abstractAttr env tc n       = n `elem` abstractAttrs env (tcname tc) []
+
 
 allCons                     :: EnvF x -> [CCon]
 allCons env                 = reverse locals ++ concat [ cons m (lookupMod m env) | m <- moduleRefs (names env), m /= mPrim ]
@@ -737,9 +750,9 @@ allProtoAttr env n          = [ tCon p | p <- allProtos env, n `elem` allAttrs e
 
 
 wexpr                       :: WPath -> Expr -> Expr
-wexpr []                    = id
-wexpr (Left _ : w)          = wexpr w
-wexpr (Right n : w)         = wexpr w . (\e -> eDot e (witAttr n))
+wexpr [] e                  = e
+wexpr (Left _ : w) e        = wexpr w e
+wexpr (Right n : w) e       = wexpr w $ eDot e (witAttr n)
 
 
 -- TVar queries ------------------------------------------------------------------------------------------------------------------

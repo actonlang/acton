@@ -279,18 +279,18 @@ declDecl env (Class _ n q as b)     = vcat [ declDecl env1 d{ dname = methodname
         special_repr                = [primActor]                                               -- To be extended...
 
 declSerialize env n c props sup_c   = (text "void" <+> genTopName env (methodname n serializeKW) <+> parens (gen env pars) <+> char '{') $+$
-                                      nest 4 (super_step $+$ vcat [ step i | i <- props \\ super_props ]) $+$
+                                      nest 4 (super_step $+$ vcat [ step i | i <- props \\ super_attrs ]) $+$
                                       char '}'
   where pars                        = PosPar self (Just $ tCon c) Nothing $ PosPar st (Just tSerialstate) Nothing PosNIL
         st                          = name "state"
         self                        = name "self"
         super_step | [c] <- sup_c   = serializeSup env (tcname c) <> parens (parens (gen env $ tcname c) <> gen env self <> comma <+> gen env st) <> semi
                    | otherwise      = empty
-        super_props                 = [ i | c <- sup_c, (i,_) <- attrEnv env c ]
+        super_attrs                 = [ i | c <- sup_c, i <- conAttrs env (tcname c) ]
         step i                      = gen env primStepSerialize <> parens (gen env self <> text "->" <> gen env i <> comma <+> gen env st) <> semi
 
 declDeserialize env n c props sup_c = (gen env (tCon c) <+> genTopName env (methodname n deserializeKW) <+> parens (gen env pars) <+> char '{') $+$
-                                      nest 4 (optcreate $+$ super_step $+$ vcat [ step i | i <- props \\ super_props ] $+$ ret) $+$
+                                      nest 4 (optcreate $+$ super_step $+$ vcat [ step i | i <- props \\ super_attrs ] $+$ ret) $+$
                                       char '}'
   where pars                        = PosPar self (Just $ tCon c) Nothing $ PosPar st (Just tSerialstate) Nothing PosNIL
         st                          = name "state"
@@ -307,7 +307,7 @@ declDeserialize env n c props sup_c = (gen env (tCon c) <+> genTopName env (meth
                                       gen env self <> text "->" <> gen env1 classKW <+> equals <+> char '&' <> methodtable env1 n <> semi
         super_step | [c] <- sup_c   = deserializeSup env (tcname c) <> parens (parens (gen env $ tcname c) <> gen env self <> comma <+> gen env st) <> semi
                    | otherwise      = empty
-        super_props                 = [ i | c <- sup_c, (i,_) <- attrEnv env c ]
+        super_attrs                 = [ i | c <- sup_c, i <- conAttrs env (tcname c) ]
         step i                      = gen env self <> text "->" <> gen env i <+> text "=" <+> gen env primStepDeserialize <> parens (gen env st) <> semi
         ret                         = text "return" <+> gen env self <> semi
 
@@ -326,9 +326,11 @@ initModule env (s : ss)             = genStmt env s $+$
 
 initClassBase env c q as            = methodtable env c <> dot <> gen env gcinfoKW <+> equals <+> doubleQuotes (genTopName env c) <> semi $+$
                                       methodtable env c <> dot <> gen env superclassKW <+> equals <+> super <> semi $+$
-                                      vcat [ inherit c' n | (c',ns) <- inheritedAttrs env (NoQ c), n <- ns ]
+                                      vcat [ inherit c' n | (c',n) <- inheritedAttrs__ env tc ]
+--                                      vcat [ inherit c' n | (c',ns) <- inheritedAttrs env (NoQ c), n <- ns ]
   where super                       = if null as then text "NULL" else parens (gen env qnSuperClass) <> text "&" <> methodtable' env (tcname $ head as)
-        selfsubst                   = subst [(tvSelf, tCon $ TC (NoQ c) [])]
+        selfsubst                   = subst [(tvSelf, tCon tc)]
+        tc                          = TC (NoQ c) [ tVar v | Quant v _ <- q ]
         inherit c' n                = methodtable env c <> dot <> gen env n <+> equals <+> cast (fromJust $ lookup n te) <> methodtable' env c' <> dot <> gen env n <> semi
         cast (NSig sc dec)          = parens (gen env (selfsubst $ addSelf (sctype sc) (Just dec)))
         cast (NDef sc dec)          = parens (gen env (selfsubst $ addSelf (sctype sc) (Just dec)))
