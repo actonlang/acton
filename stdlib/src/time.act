@@ -1,19 +1,720 @@
-def monotonic() -> float:
+"""Stopwatch, time, dates and calendars
+
+There are primarily two uses of time
+- measuring elapsed time (e.g. for benchmarking)
+- telling the current date and time (e.g. for logging)
+
+Use a Stopwatch to measure elapsed time, e.g.:
+
+    s = time.Stopwatch()
+    # do something
+    elapsed = s.elapsed()
+    print("Elapsed time:", elapsed.str_us())
+    # Elapsed time: 1.234567 s
+
+Call `now()` to get the current date and time:
+
+    dt = time.now()
+    print("Current time:", dt)
+    # Current time: 2023-03-07T15:33:02.238251863+01
+
+`utcnow()` returns the current date and time in UTC:
+
+    dt = time.utcnow()
+    print("UTC time:", dt)
+    # UTC time: 2023-03-07T14:33:02.238251863Z
+
+Instant and Duration store time using two 64 bit fields for seconds and
+fractional seconds. It amounts to a range of +-292 billion years for Instant and
+an elapsed time of 585 billion years for Duration. The resolution is 1 attosecond.
+It's a lot of zeros, which is why you might want to use str_us(), str_ms() or
+str_ns() to get a more humanly readable representation.
+
+Information about the clock source is kept and used as part of various
+operations to indicate precision and error in resulting values.
+"""
+
+# TODO: localization?
+MONTHS = [
+    "January",
+    "February",
+    "March",
+    "April",
+    "May",
+    "June",
+    "July",
+    "August",
+    "September",
+    "October",
+    "November",
+    "December"
+]
+
+MNTHS = [
+    "Jan",
+    "Feb",
+    "Mar",
+    "Apr",
+    "May",
+    "Jun",
+    "Jul",
+    "Aug",
+    "Sep",
+    "Oct",
+    "Nov",
+    "Dec"
+]
+
+WEEKDAYS = [
+    "Sunday",
+    "Monday",
+    "Tuesday",
+    "Wednesday",
+    "Thursday",
+    "Friday",
+    "Saturday"
+]
+
+WKDAYS = [
+    "Sun",
+    "Mon",
+    "Tue",
+    "Wed",
+    "Thu",
+    "Fri",
+    "Sat"
+]
+
+def _get_incarnation() -> int:
+    """Get clock instance ID
+    """
+    NotImplemented
+
+def get_realtime() -> (int, int):
+    """clock_gettime for CLOCK_REALTIME
+
+    Returns time represented as seconds and nanoseconds since the Epoch, 1st of
+    January 1970 00:00:00 UTC.
+    """
+    NotImplemented
+
+def get_monotonic() -> (int, int):
+    """clock_gettime for CLOCK_MONOTONIC
+
+    Returns time represented as seconds and nanoseconds since an arbitrary start
+    time.
+    """
+    NotImplemented
+
+
+class clock_data:
+    def __init__(self, status: int, offset: int, error: int) -> (status: int, offset: int, error: int):
+        return (status=status, offset=offset, error=error)
+
+def get_clock_data() -> (status: int, offset: int, error: int):
+    """Get clock data
+
+    This uses ntp_adjtime to get the current clock data. The returned tuple
+    contains the synchronization status, the offset and the estimated error in
+    microseconds.
+    """
+    NotImplemented
+
+# TODO: use named tuple for return value
+def localtime(seconds: int) -> (int, int, int, int, int, int, int, int, int, str, int):
+    """C localtime() function
+    """
+    NotImplemented
+
+# TODO: use named tuple for return value
+def gmtime(seconds: int) -> (int, int, int, int, int, int, int, int, int):
+    """C gmtime() function
+    """
+    NotImplemented
+
+
+class Clock:
+    """Clock information
+
+    A clock is a source of time. A Clock object stores information about a
+    clock and additional data about the precision and error of a particular
+    reading from the clock. Every object that represent time, like Instant and
+    DateTime, has a clock attribute which is used to trace where the time came
+    from and if it is comparable to other time.
+
+    There are two types of clocks on most POSIX systems today:
+    - real time clock - `RealtimeClock()`
+    - monotonic clock - `MonotonicClock()`
+
+    It is not possible to compare time between different clock types as they
+    have different starting points. The monotonic clock has an arbitrary
+    starting point whereas the realtime clock starts at Epoch (1970-01-01
+    00:00:00 UTC).
+
+    For an Instant from a monotonic clock, it is only comparable with another
+    Instant from the same monotonic clock. The start time of a monotonic clock
+    is arbitrary which means that not only is it not comparable between two
+    machines, it is also not comparable on the same machines between reboots. In
+    order to determine if we are on the same machine and have not rebooted, we
+    keep track of the clock incarnation which is essentially a unique identifier
+    for the start of a clock. On Linux, this is the boot-id, which is unique per
+    machine and boot. On other platforms we use a random incarnation identifier
+    per start of an Acton node, so time will only be comparable within that
+    running instance of the RTS.
+
+    The local real time clock is typically used to track real world time, which
+    on planet earth practically means Coordinated Universal Time (UTC). Like a
+    wristwatch or any other clock, the local clock needs to be periodically set.
+    The NTP/NTS protocols can be used to synchronize the clock over a network
+    connection. A computer clock without some form of clock synchronization can
+    be wildly incorrect and suffer from discontinuous jumps in time if a system
+    administrator changes the local clock, rendering comparisons of different
+    instants invalid even when they are from the same computer.
+
+    Across multiple computers, as is the case for for distributed Acton systems,
+    there has to be clock synchronization in use for time to be comparable. The
+    precision of comparisons will only be as good as the clock synchronization
+    allows.
+
+    NTP is the most common clock synchronization protocol and it can usually
+    achieve synchronization on the order of milliseconds, even sub-ms on local
+    networks. It largely depends on how good the network is. PTP can achieve
+    sub-microsecond synchronization. It is not possible to compare time from two
+    unsynchronized clocks as we have no idea of their drift from UTC.
+
+    Linux, MacOS and various BSD platforms provides detail information about the
+    real time clock, like if it is synchronized, the estimated error etc. This
+    information is retrieved and kept in a Clock object associated with the
+    retrieved time so that we may track the precision of the final result. The
+    information is provided by the NTP or PTP daemon and is only accurate while
+    that daemon is running. A particularly nasty scenario is when an NTPd has
+    been running, updating the kernel information that the clock is synchronized
+    and with a certain error, but has since stopped, leaving the clock
+    information stale. The kernel has no facility to mark it as stale and thus,
+    we will run under the belief that we get good precision time when in fact we
+    are free running, uncoordinated with UTC. It is ultimately up to the system
+    administrator to ensure that clocks on the system(s) running an Acton system
+    are synchronized, preferrably using NTP or similar.
+    """
+    # TODO: turn into constants? but getting actonc compiler error
+    @property
+    standard: str
+    # Which time standard this clock provides
+    # "monotonic": monotonic clock
+    # "UTC": real time (UTC) clock
+    @property
+    incarnation: int
+    @property
+    sync: int
+    @property
+    offset: int
+    @property
+    error: int
+
+    def comparable(self, other: Clock) -> bool:
+        """Check if two clocks produce comparable time
+        """
+        if isinstance(self, MonotonicClock) and isinstance(other, MonotonicClock):
+            return self.incarnation == other.incarnation
+        elif isinstance(self, RealtimeClock) and isinstance(other, RealtimeClock):
+            return self.standard == other.standard and self.sync == other.sync
+        else:
+            return False
+
+
+class RealtimeClock(Clock):
+    """Realtime clock
+    """
+    # TODO: add standard argument with default = UTC
+    def __init__(self, sync: int, offset: int, error: int):
+        self.standard = "UTC"
+        self.incarnation = _get_incarnation()
+        self.sync = sync
+        self.offset = offset
+        self.error = error
+
+
+class MonotonicClock(Clock):
+    """Monotonic clock
+    """
+    def __init__(self, sync: int, offset: int, error: int):
+        self.standard = "monotonic"
+        self.incarnation = _get_incarnation()
+        self.sync = sync
+        self.offset = offset
+        self.error = error
+
+
+class Calendar(object):
+    """A calendar, like gregorian or julian.
+    """
+    pass
+
+class Timezone:
+    @property
+    name: str
+    @property
+    offset: int
+
+    def __init__(self, name: str, offset: int):
+        self.name = name
+        self.offset = offset
+
+    def str_offset(self) -> str:
+        """Return the timezone offset from UTC in ISO8601 style
+        """
+        tz_str = ""
+        if self.offset == 0:
+            tz_str = "Z"
+        else:
+            if self.offset > 0:
+                tz_str = "+"
+            else:
+                tz_str = "-"
+            tz_str += "%02d" % (self.offset // 3600)
+            if self.offset % 3600 > 0:
+                tz_str += ":%02d" % ((self.offset % 3600) // 60)
+        return tz_str
+
+
+class DateTime(object):
+    """A date and time according to a calendar and time zone.
+    """
+    @property
+    calendar: ?Calendar
+    @property
+    timezone: ?Timezone
+    @property
+    clock: ?Clock
+    @property
+    era: ?int
+    @property
+    year: int
+    @property
+    month: int
+    @property
+    day: int
+    @property
+    hour: int
+    @property
+    minute: int
+    @property
+    second: int
+    @property
+    attosecond: int
+    @property
+    weekday: int
+    @property
+    yearday: int
+
+    def __init__(self, calendar: ?Calendar, timezone: ?Timezone, clock: ?Clock,
+                 era: ?int, year: int, month: int, day: int, hour: int,
+                 minute: int, second: int, attosecond: int, weekday: int,
+                 yearday: int):
+        self.calendar = calendar
+        self.timezone = timezone
+        self.clock = clock
+        self.era = era
+        self.year = year
+        self.month = month
+        self.day = day
+        self.hour = hour
+        self.minute = minute
+        self.second = second
+        self.attosecond = attosecond
+        self.weekday = weekday
+        self.yearday = yearday
+
+    def __str__(self):
+        return self.str_iso8601_ns()
+
+    def str_iso8601_ns(self):
+        tz_str = ""
+#        if self.timezone is not None:
+#            tz_str = self.timezone.str_short()
+        # TODO: remove this superfluous t variable and use above code, which
+        # currently actonc borks out on
+        t = self.timezone
+        if t is not None:
+            tz_str = t.str_offset()
+
+        # Most of the clocks
+        return "%04d-%02d-%02dT%02d:%02d:%02d.%09d%s" % (
+            self.year, self.month, self.day,
+            self.hour, self.minute, self.second,
+            self.attosecond // 10**9, tz_str)
+
+    @staticmethod
+    def now():
+        cd = get_clock_data()
+        c = RealtimeClock(cd.status, cd.offset, cd.error)
+        s, ns = get_realtime()
+
+        tm = localtime(s)
+        tm_year = tm.0
+        tm_month = tm.1
+        tm_day = tm.2
+        tm_hour = tm.3
+        tm_minute = tm.4
+        tm_second = tm.5
+        tm_wday = tm.6
+        tm_yday = tm.7
+        tm_isdst = tm.8
+
+        attosecond = ns * 10**9
+        return DateTime(None, None, None, None, tm_year, tm_month, tm_day, tm_hour, tm_minute, tm_second, attosecond, tm_wday, tm_yday)
+
+    @staticmethod
+    def utcnow():
+        cd = get_clock_data()
+        c = RealtimeClock(cd.status, cd.offset, cd.error)
+        s, ns = get_realtime()
+
+        tm = gmtime(s)
+        tm_year = tm.0
+        tm_month = tm.1
+        tm_day = tm.2
+        tm_hour = tm.3
+        tm_minute = tm.4
+        tm_second = tm.5
+        tm_wday = tm.6
+        tm_yday = tm.7
+        tm_isdst = tm.8
+
+        attosecond = ns * 10**9
+        return DateTime(None, None, None, None, tm_year, tm_month, tm_day, tm_hour, tm_minute, tm_second, attosecond, tm_wday, tm_yday)
+
+    def str_rfc1123(self):
+        # TODO: heh, lol, actually convert to GMT first
+        # web servers want rfc1123 and it should always be in GMT, but I suppose there are other uses of rfc1123
+        return "%s, %02d %s %04d %02d:%02d:%02d GMT" % (
+            WKDAYS[self.weekday], self.day, MNTHS[self.month], self.year,
+            self.hour, self.minute, self.second)
+
+    def str_asctime(self):
+        return "%s %s %2d %02d:%02d:%02d %04d" % (
+            WEEKDAYS[self.weekday][0:3], MONTHS[self.month][0:3], self.day,
+            self.hour, self.minute, self.second, self.year)
+
+
+
+class Instant:
+    """A specific point in time as measured with a monotonically increasing
+    clock. Only useful with ~Duration~ and ~Stopwatch~ to measure elapsed time.
+
+    An Instant does not carry calendar or time zone information.
+
+    Stores time using:
+    - i64 second
+    - u64 attosecond
+    Which gives a range of ±292 billion years with a precision down to
+    atto-second (2^10-18).
+    """
+    # TODO: use i64 instead of int
+    @property
+    second: int
+    # TODO: use u64 instead of int
+    @property
+    attosecond: int
+    @property
+    clock: Clock
+
+    # TODO: compiler bug? why isn't c allowed to be maybe Clock? the effect of
+    # __init__ is that self.clock is always a Clock anyway...
+    #def __init__(self, sec: int, asec: int, c: ?Clock=None):
+    def __init__(self, sec: int, asec: int, c: Clock):
+        self.second = sec
+        self.attosecond = asec
+        self.clock = c
+
+    def __str__(self):
+        return "%d.%018d" % (self.second, self.attosecond)
+
+    def __repr__(self):
+        return "Instant(%d, %d)" % (self.second, self.attosecond)
+
+    def str_ms(self):
+        """Return a string representation of the duration with milliseconds.
+        """
+        return "%d.%03d" % (self.second, self.attosecond // 10**15)
+
+    def str_us(self):
+        """Return a string representation of the duration with microseconds.
+        """
+        return "%d.%06d" % (self.second, self.attosecond // 10**12)
+
+    def str_ns(self):
+        """Return a string representation of the duration with nanoseconds.
+        """
+        return "%d.%09d" % (self.second, self.attosecond // 10**9)
+
+#    TODO: fix this
+#    def __sub__(self, other: Instant) -> Duration:
+#        if (self.second == other.second and self.attosecond > other.attosecond) or self.second > other.second:
+#            return Duration(self.second - other.second, self.attosecond - other.attosecond)
+#        else:
+#            return Duration(other.second - self.second, other.attosecond - self.attosecond)
+
+    def since(self, other: Instant) -> Duration:
+        """Return the duration since this instant.
+        """
+#        TODO: fix __eq__ on Clock
+#        c = self.clock
+#        if c != other.clock:
+#            c = UnknownClock()
+        if (self.second == other.second and self.attosecond > other.attosecond) or self.second > other.second:
+            return Duration(self.second - other.second, self.attosecond - other.attosecond, self.clock)
+        else:
+            return Duration(other.second - self.second, other.attosecond - self.attosecond, self.clock)
+
+    def comparable(self, other: Instant) -> bool:
+        return self.clock.comparable(other.clock)
+
+
+
+class Duration:
+    """Duration represents elapsed time
+
+    Stored using seconds and attoseconds.
+    """
+    @property
+    second: int
+    @property
+    attosecond: int
+    @property
+    clock: ?Clock
+
+    def __init__(self, sec: int, asec: int, c: Clock):
+        self.second = sec
+        self.attosecond = asec
+        self.clock = c
+
+    def __str__(self):
+        return self.str_human()
+
+    def __repr__(self):
+        return "%d.%018d" % (self.second, self.attosecond)
+
+    @staticmethod
+    def from_parts(week: int, day: int, hour: int, minute: int, second: int, attosecond: int, c: Clock) -> Duration:
+        return Duration(
+            week * 7 * 24 * 60 * 60
+            + day * 24 * 60 * 60
+            + hour * 60 * 60
+            + minute * 60
+            + second,
+            attosecond, c)
+
+    def str_human(self) -> str:
+        """Return a human readable string representation
+
+        Like: 4w 3d 2h 1m 5s 123ms
+
+        Weeks is the biggest unit as it has a fixed size (7 days). Months vary
+        in length so we cannot convert to months without having absolute point
+        in times to compare with. Years are explicitly not used since they are
+        not exact, a year is usually thought of as 365 days but they're actually
+        365.25 (actually actually 365.2422) so it becomes error prone and less
+        precise.
+        """
+        weeks = self.second // (7 * 24 * 60 * 60)
+        days = (self.second % (7 * 24 * 60 * 60)) // (24 * 60 * 60)
+        hours = (self.second % (24 * 60 * 60)) // (60 * 60)
+        minutes = (self.second % (60 * 60)) // 60
+        seconds = self.second % 60
+        return "%dw %dd %dh %dm %ds %dns" % (
+            weeks, days, hours, minutes, seconds, self.attosecond // 10**9)
+
+    def str_ms(self):
+        """Return a string representation of the duration with milliseconds.
+        """
+        return "%d.%03d" % (self.second, self.attosecond // 10**15)
+
+    def str_us(self):
+        """Return a string representation of the duration with microseconds.
+        """
+        return "%d.%06d" % (self.second, self.attosecond // 10**12)
+
+    def str_ns(self):
+        """Return a string representation of the duration with nanoseconds.
+        """
+        return "%d.%09d" % (self.second, self.attosecond // 10**9)
+
+    def to_float(self) -> float:
+        return float(self.second) + (float(self.attosecond) / 10**18)
+
+
+def monotonic() -> Instant:
     """Get monotonic time
     """
-    NotImplemented
+    c = MonotonicClock(0, 0, 0)
+    t = get_monotonic()
+    return Instant(t.0, t.1 * 10**9, c)
 
-def monotonic_ns() -> int:
-    """Get monotonic time
+def time() -> Instant:
+    """Get real clock time
     """
-    NotImplemented
+    cd = get_clock_data()
+    c = RealtimeClock(cd.status, cd.offset, cd.error)
+    t = get_realtime()
+    return Instant(t.0, t.1 * 10**9, c)
 
-def time() -> float:
-    """Get real time
+def now() -> DateTime:
+    """Get the current date and time in the local timezone
     """
-    NotImplemented
+    t = time()
 
-def time_ns() -> int:
-    """Get real time
+    tm = localtime(t.second)
+    tm_year = tm.0
+    tm_month = tm.1
+    tm_day = tm.2
+    tm_hour = tm.3
+    tm_minute = tm.4
+    tm_second = tm.5
+    tm_wday = tm.6
+    tm_yday = tm.7
+    tm_isdst = tm.8
+
+    tz = Timezone(tm.9, tm.10)
+    return DateTime(None, tz, None, None, tm_year, tm_month, tm_day, tm_hour, tm_minute, tm_second, t.attosecond, tm_wday, tm_yday)
+
+def utcnow() -> DateTime:
+    """Get the current date and time in UTC
     """
-    NotImplemented
+    t = time()
+
+    tm = gmtime(t.second)
+    tm_year = tm.0
+    tm_month = tm.1
+    tm_day = tm.2
+    tm_hour = tm.3
+    tm_minute = tm.4
+    tm_second = tm.5
+    tm_wday = tm.6
+    tm_yday = tm.7
+    tm_isdst = tm.8
+
+    tz = Timezone("UTC", 0)
+    return DateTime(None, tz, None, None, tm_year, tm_month, tm_day, tm_hour, tm_minute, tm_second, t.attosecond, tm_wday, tm_yday)
+
+
+class Stopwatch:
+    """Stopwatch measures elapsed time
+
+    The watch is started when it is created and the elapsed time can be
+    retrieved using the elapsed() method. The watch can be reset using the
+    reset() method.
+
+    The system's monotonic clock is primarily used but a real clock time
+    measurement is also kept as a fallback.
+
+    Normally the monotonic clock is excellent for measuring elapsed time as it
+    has high precision and is not affected by discontinuous jumps in the system
+    time. However, the start time of the monotonic clock is arbitrary and thus
+    is only comparable to itself on the same machine while that machine is
+    running. Rebooting might reset the monotonic time. Actor migrations might
+    mean that the Stopwatch was started on one machine and later migrated to
+    another at which point comparing to the monotonic start time is no longer
+    valid. In this case we fall back to comparing the real time, which is not as
+    precise but is at least theoretically comparable between machines or after
+    reboots.
+
+    > A man with a watch knows what time it is. A man with two watches is never
+    > sure.
+       -- Segal’s Law
+
+    The precision of the real clock is normally high when compared on the same
+    machine (intra-machine). It is affected by reboots, where it relies on a
+    hardware clock to keep the time, and is affected by discontinuous jumps in
+    the system time (e.g., if the system administrator manually changes the
+    clock), but otherwise it is comparable to the monotonic clock. When compared
+    between different machines (inter-machine) it is entirely up to the
+    precision and accuracy of the synchronization solution. NTP usually achieves
+    a level on the order milliseconds while PTP is on the order of microseconds
+    or tens of microseconds. There is no way to capture the monotonic and real
+    clock time at the same time, so there will be a slight offset between them.
+    We capture the monotonic time first, which is what we use for precise
+    measurements. If we need to fall back to using the real clock, the offset to
+    the monotonic clock is negligible compared to other sources of error.
+
+    Each Instant keeps information about the source clock which is used to
+    produce a result with an estimated precision and error.
+
+    Use PrecisionStopwatch if you need guaranteed precision (but which will fail
+    if that precision is unattainable).
+    """
+    def __init__(self):
+        self.start_mono = monotonic()
+        self.start_real = time()
+
+# TODO: actonc bug not allowing this method?
+#    def reset(self):
+#        self.start_mono = monotonic()
+#        self.start_real = time()
+
+    def elapsed(self) -> Duration:
+        """Return the elapsed time since the timer was started.
+        """
+        n = monotonic()
+        if n.comparable(self.start_mono):
+            return n.since(self.start_mono)
+        return time().since(self.start_real)
+
+
+class PrecisionStopwatch:
+    """A precision timer that measures elapsed time using the monotonic clock.
+
+    Similar to Stopwatch but if there is no reliable monotonic clock available,
+    such as after actor migration, PrecisionStopwatch will fail rather than
+    produce lower precision measurements like Stopwatch will.
+
+    The monotonic clock has an arbitrary start time and as such only works
+    reliably on the same machine while that machine is running. Rebooting will
+    reset the monotonic time. Actor migrations might mean that the
+    PrecisionStopwatch was started on one machine and later migrated to another
+    at which point comparing to the monotonic start time is no longer valid. In
+    this case we throw an exception since we can not guarantee the precision of
+    the result.
+
+    Use Stopwatch if you want to be able to always compare the elapsed time,
+    such as after actor resumption or migrations between machines, even when
+    that means that the precision is lower.
+    """
+    def __init__(self):
+        self.start = monotonic()
+
+# TODO: actonc bug not allowing this method?
+#    def reset(self):
+#        self.start_mono = monotonic()
+#        self.start_real = time()
+
+    def elapsed(self) -> Duration:
+        """Return the elapsed time since the timer was started.
+        """
+        n = monotonic()
+        if not n.comparable(self.start):
+            raise Exception("Monotonic clock not comparable")
+        return n.since(self.start)
+
+
+# TODO: get rid of these
+# For some reason, we can't call these functions etc from elsewhere
+# (tests/stdlib_auto/test_time.act), so we use this test function here and at
+# least we are able to test basic functionality.
+def test():
+#    t1 = Instant.now()
+    t = Stopwatch()
+    d1 = Duration.from_parts(1, 2, 3, 4, 5, 6, RealtimeClock(1, 0, 0))
+    print("My local time is :", now())
+    print("While UTC time is:", utcnow())
+    print(d1)
+#    print(Duration(1814400+69, 0))
+    print("Elapsed time:" + str(t.elapsed().str_us()))
+    print("Elapsed time:" + str(t.elapsed().str_us()))
+#    t2 = Instant.now()
+#    d = t2.since(t1)
+#    print(str(d))
+#
+#    dt = DateTime.now()
+#    print("Current time:", dt)
+#    print("Current time:", dt.str_rfc1123())

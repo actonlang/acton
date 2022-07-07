@@ -15,6 +15,7 @@
     #define IS_MACOS
 #endif
 
+extern uv_loop_t *aux_uv_loop;
 uv_loop_t *get_uv_loop();
 
 void alloc_buffer(uv_handle_t *handle, size_t size, uv_buf_t *buf);

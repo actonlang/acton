@@ -2,10 +2,20 @@ import time
 
 actor main(env):
     def test():
-        print(time.monotonic())
-        print(time.monotonic_ns())
-        print(time.time())
-        print(time.time_ns())
+        print("Local datetime    :", time.now())
+        print("UTC datetime      :", time.utcnow())
+        print("Monotonic instant :", time.monotonic())
+        print("Wall clock instant:", time.time())
+# TODO: fix so this runs, some compiler bug?
+#        t1 = time.Instant.now()
+#        t2 = time.Instant.now()
+#        d = t2.since(t1)
+#        print(d)
+        time.test()
+#        a = time.Instant.now()
+
 
     test()
-    env.exit(0)
+
+
+    await async env.exit(0)
