@@ -1,5 +1,8 @@
-#include "random.h"
 #include <stdlib.h>
+
+void random$$__ext_init__() {
+    srand(time(NULL));
+}
 
 // NOTE: the standard srand / rand functions are not thread safe, but what does
 // that really mean in this context? While we could use thread safe functions
@@ -32,13 +35,4 @@ $int random$$randint ($int min, $int max) {
     while ((r = rand()) >= end);
     // normalize back to the requested range
     return to$int(minval + r%range);
-}
-
-int random$$done$ = 0;
-int random$$seeded = 0;
-void random$$__init__ () {
-    // default to just seeding
-    srand(time(NULL));
-    if (random$$done$) return;
-    random$$done$ = 1;
 }

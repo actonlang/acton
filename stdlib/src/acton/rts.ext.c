@@ -1,4 +1,5 @@
 #include <uv.h>
+#include <unistd.h>
 
 void acton$rts$$__ext_init__() {
     // NOP
