@@ -418,19 +418,21 @@ chaseImportedFiles args paths itasks
 
 
 doTask :: Args -> Paths -> Acton.Env.Env0 -> CompileTask -> IO Acton.Env.Env0
-doTask args paths env t@(ActonTask mn src m stubMode)
-                            = do let outfiles = [hFile] ++ if stubMode then [] else [oFile]
-                                 ok <- checkUptoDate paths actFile tyFile outfiles (importsOf t)
-                                 if ok && not (forceCompilation args) then do
-                                          iff (verbose args) (putStrLn ("Skipping  "++ makeRelative (srcDir paths) actFile ++ " (files are up to date).") >> hFlush stdout)
-                                          te <- InterfaceFiles.readFile tyFile
-                                          return (Acton.Env.addMod mn te env)
-                                  else do createDirectoryIfMissing True (getModPath (projTypes paths) mn)
-                                          (env',te) <- runRestPasses args paths env m stubMode
-                                                           `catch` handle "Compilation error" generalError src paths mn
-                                                           `catch` handle "Compilation error" Acton.Env.compilationError src paths mn
-                                                           `catch` handle "Type error" Acton.Types.typeError src paths mn
-                                          return (Acton.Env.addMod mn te env')
+doTask args paths env t@(ActonTask mn src m stubMode) = do
+    let outfiles = [hFile] ++ if stubMode then [] else [oFile]
+    ok <- checkUptoDate paths actFile tyFile outfiles (importsOf t)
+    if ok && not (forceCompilation args)
+      then do
+        iff (verbose args) (putStrLn ("Skipping  "++ makeRelative (srcDir paths) actFile ++ " (files are up to date).") >> hFlush stdout)
+        te <- InterfaceFiles.readFile tyFile
+        return (Acton.Env.addMod mn te env)
+      else do
+        createDirectoryIfMissing True (getModPath (projTypes paths) mn)
+        (env',te) <- runRestPasses args paths env m stubMode
+          `catch` handle "Compilation error" generalError src paths mn
+          `catch` handle "Compilation error" Acton.Env.compilationError src paths mn
+          `catch` handle "Type error" Acton.Types.typeError src paths mn
+        return (Acton.Env.addMod mn te env')
   where actFile             = srcFile paths mn
         outbase             = outBase paths mn
         tyFile              = outbase ++ ".ty"
@@ -439,14 +441,16 @@ doTask args paths env t@(ActonTask mn src m stubMode)
         oFile               = joinPath [projLib paths, prstr mn] ++  ".o"
 
 checkUptoDate :: Paths -> FilePath -> FilePath -> [FilePath] -> [A.ModName] -> IO Bool
-checkUptoDate paths actFile iFile outBases imps
-                        = do srcExists <- System.Directory.doesFileExist actFile
-                             outExists <- mapM System.Directory.doesFileExist (iFile:outBases)
-                             if not (srcExists && and outExists) then return False
-                              else do srcTime  <-  System.Directory.getModificationTime actFile
-                                      outTimes <- mapM System.Directory.getModificationTime (iFile:outBases)
-                                      impsOK   <- mapM (impOK (head outTimes)) imps
-                                      return (all (srcTime <) outTimes && and impsOK)
+checkUptoDate paths actFile iFile outBases imps = do
+    srcExists <- System.Directory.doesFileExist actFile
+    outExists <- mapM System.Directory.doesFileExist (iFile:outBases)
+    if not (srcExists && and outExists)
+        then return False
+        else do
+            srcTime  <-  System.Directory.getModificationTime actFile
+            outTimes <- mapM System.Directory.getModificationTime (iFile:outBases)
+            impsOK   <- mapM (impOK (head outTimes)) imps
+            return (all (srcTime <) outTimes && and impsOK)
   where impOK iTime mn = do let impFile = outBase paths mn ++ ".ty"
                             ok <- System.Directory.doesFileExist impFile
                             if ok then do impfileTime <- System.Directory.getModificationTime impFile
