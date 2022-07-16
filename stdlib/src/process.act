@@ -5,7 +5,7 @@ class ProcessAuth():
     def __init__(self, auth: WorldAuth):
         pass
 
-actor Process(auth: ProcessAuth, cmd: list[str], workdir: ?str, env: ?dict[str, str], on_stdout: action(Process, bytes) -> None, on_stderr: action(Process, bytes) -> None, on_exit: action(Process, int, int) -> None, on_error: action(Process,str) -> None):
+actor Process(auth: ProcessAuth, cmd: list[str], workdir: ?str, env: ?dict[str, str], on_stdout: proc(Process, bytes) -> None, on_stderr: proc(Process, bytes) -> None, on_exit: proc(Process, int, int) -> None, on_error: proc(Process,str) -> None):
     """A process
     - auth: authentication token
     - cmd: the command to run

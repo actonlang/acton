@@ -30,14 +30,12 @@ class _TCPListenConnectAuth():
     """Internal use only"""
     pass
 
-
-actor DNS(auth: DNSAuth):
-    action def lookup_a(name: str, on_resolve: action(list[str]) -> None, on_error: action(str, str) -> None) -> None:
+    proc def lookup_a(name: str, on_resolve: proc(list[str]) -> None, on_error: proc(str, str) -> None) -> None:
         """Perform DNS lookup for name of record type A
         """
         NotImplemented
 
-    action def lookup_aaaa(name: str, on_resolve: action(list[str]) -> None, on_error: action(str, str) -> None) -> None:
+    proc def lookup_aaaa(name: str, on_resolve: proc(list[str]) -> None, on_error: proc(str, str) -> None) -> None:
         """Perform DNS lookup for name of record type AAAA
         """
         NotImplemented
