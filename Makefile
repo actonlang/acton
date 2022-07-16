@@ -236,18 +236,12 @@ builtin/ty/out/types/__builtin__.ty: builtin/ty/src/__builtin__.act $(ACTONC)
 	$(ACTC) $<
 
 # Build our standard library
-# We use a single target as a focal point to get serialization since we cannot
-# build these things in parallel
-# Compiling these .act files with and with --dev will produce
-# stdlib/out/lib/libActonProject_rel.a and stdlib/out/lib/libActonProject_dev.a which we then rename
-.PHONY: stdlib_project
-stdlib_project: $(STDLIB_ACTFILES_NS) dist/types/__builtin__.ty $(DIST_HFILES) $(ACTONC)
-	cd stdlib && ../$(ACTC) build
+stdlib/out/dev/lib/libActonProject.a: $(STDLIB_ACTFILES) dist/types/__builtin__.ty $(DIST_HFILES) $(ACTONC)
 	cd stdlib && ../$(ACTC) build --dev
-	cp -a stdlib/out/types/. dist/types/
 
-stdlib/out/dev/lib/libActonProject.a stdlib/out/rel/lib/libActonProject.a: $(STDLIB_ACTFILES) dist/types/__builtin__.ty $(ACTONC)
-	$(MAKE) stdlib_project
+stdlib/out/rel/lib/libActonProject.a: $(STDLIB_ACTFILES) dist/types/__builtin__.ty $(DIST_HFILES) $(ACTONC)
+	cd stdlib && ../$(ACTC) build
+	cp -a stdlib/out/types/. dist/types/
 
 
 # /lib --------------------------------------------------
@@ -436,10 +430,7 @@ DIST_DBARCHIVE=$(addprefix dist/,$(DBARCHIVE))
 DIST_ARCHIVES=$(addprefix dist/,$(ARCHIVES))
 
 .PHONY: distribution clean-distribution
-# Our stdlib (via DIST_ARCHIVES) must not be compiled concurrently, so we avoid
-# listing it as a dependency and instead run it in the target
-distribution: $(DIST_BINS) $(DIST_HFILES) $(DIST_TYFILES) $(DIST_DBARCHIVE)
-	$(MAKE) -j1 $(DIST_ARCHIVES)
+distribution: $(DIST_ARCHIVES) $(DIST_BINS) $(DIST_HFILES) $(DIST_TYFILES) $(DIST_DBARCHIVE)
 
 clean-distribution:
 	rm -rf dist
