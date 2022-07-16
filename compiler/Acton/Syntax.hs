@@ -730,10 +730,6 @@ isKeyword x                         = x `Data.Set.member` rws
                                         "var","while","with","yield"
                                       ]
 
-isNotImpl [Expr _ (NotImplemented _)]   = True
-isNotImpl (Expr _ (Strings _ _) : b)    = isNotImpl b
-isNotImpl _                             = False
-
 isSig Signature{}                   = True
 isSig _                             = False
 

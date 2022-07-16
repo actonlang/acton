@@ -244,6 +244,8 @@ instance InfEnv Stmt where
                                              return (Sub w t (tFun fx prow krow t0) :
                                                      cs1++cs2++cs3, [], Expr l $ Call l (eCall (eVar w) [e]) p k)
 
+    infEnv env s@(Expr l (NotImplemented _))
+                                        = return ([], [], s)
     infEnv env (Expr l e)               = do (cs,_,e') <- infer env e
                                              return (cs, [], Expr l e')
 
@@ -702,9 +704,7 @@ infProperties env as b
 
 infDefBody env n (PosPar x _ _ _) b
   | inClass env && n == initKW          = infInitEnv (setInDef env) x b
-infDefBody env _ _ b
-  | isNotImpl b                         = return ([], [], b)
-  | otherwise                           = infSuiteEnv (setInDef env) b
+infDefBody env _ _ b                    = infSuiteEnv (setInDef env) b
 
 infInitEnv env self (MutAssign l (Dot l' e1@(Var _ (NoQ x)) n) e2 : b)
   | x == self                           = do (cs1,t1,e1') <- infer env e1

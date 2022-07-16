@@ -81,10 +81,6 @@ instance Deact a => Deact [a] where
     deact env                       = traverse (deact env)
 
 
-deactBody env b
-  | isNotImpl b                     = return b
-  | otherwise                       = deactSuite env b
-
 deactSuite env []                   = return []
 deactSuite env (s : ss)             = do s' <- deact (setSampled ns env) s
                                          ss' <- deactSuite env1 ss
@@ -95,6 +91,8 @@ deactSuite env (s : ss)             = do s' <- deact (setSampled ns env) s
 
 
 instance Deact Stmt where
+    deact env s@(Expr _ (NotImplemented _))
+                                    = return s
     deact env (Expr l e)            = Expr l <$> deact env e
     deact env (Assign l [p@(PVar _ n _)] e)
       | n `elem` locals env         = MutAssign l (selfRef n) <$> deact env e
@@ -160,7 +158,7 @@ instance Deact Decl where
             copies                  = [ MutAssign l0 (selfRef n) (Var l0 (NoQ n)) | n <- bound params, n `elem` locals ]
 
     deact env (Def l n q p KwdNIL (Just t) b d fx)
-                                    = do b <- deactBody env1 b
+                                    = do b <- deactSuite env1 b
                                          return $ Def l n q p KwdNIL (Just t) b d fx
       where env1                    = defineAndShadow (envOf p) $ defineTVars q env
 
