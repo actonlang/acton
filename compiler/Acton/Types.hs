@@ -663,7 +663,7 @@ matchActorAssumption env n0 p k te      = do --traceM ("## matchActorAssumption 
                                              return (cs ++ concat css, eq ++ concat eqs)
   where NAct _ p0 k0 te0                = findName n0 env
         ns                              = dom te0
-        te1                             = unSig $ te `restrict` (ns ++ map exportName ns)
+        te1                             = unSig $ te `restrict` ns
         check1 (n, i) | isHidden n      = return ([], [])
         check1 (n, NVar t0)             = do --traceM ("## matchActorAssumption for attribute " ++ prstr n)
                                              return ([Cast t t0],[])

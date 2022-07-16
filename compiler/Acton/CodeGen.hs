@@ -323,10 +323,9 @@ initModule env (s : ss)             = genStmt env s $+$
   where te                          = envOf s `exclude` defined env
         env1                        = gdefine te env
 
-
 initClassBase env c q as            = methodtable env c <> dot <> gen env gcinfoKW <+> equals <+> doubleQuotes (genTopName env c) <> semi $+$
                                       methodtable env c <> dot <> gen env superclassKW <+> equals <+> super <> semi $+$
-                                      vcat [ inherit c' n | (c',n) <- inheritedAttrs__ env tc ]
+                                      vcat [ inherit c' n | (c',n) <- inheritedAttrs__ env (NoQ c) ]
 --                                      vcat [ inherit c' n | (c',ns) <- inheritedAttrs env (NoQ c), n <- ns ]
   where super                       = if null as then text "NULL" else parens (gen env qnSuperClass) <> text "&" <> methodtable' env (tcname $ head as)
         selfsubst                   = subst [(tvSelf, tCon tc)]

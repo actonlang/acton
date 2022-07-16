@@ -57,15 +57,6 @@ closedType env (Dot _ e n)          = case typeOf env e of
 closedType env (TApp _ e _)         = closedType env e
 closedType env _                    = True
 
-isClosed (NVar _)                   = True
-isClosed (NSVar _)                  = True
-isClosed (NSig _ Property)          = True
-isClosed (NSig sc _)
-  | TFun{} <- sctype sc             = False
-  | otherwise                       = True      -- 'closed' ~ 'not a function'
-isClosed _                          = False
-
-
 
 qSchema                             :: EnvF x -> Checker -> Expr -> (TSchema, Maybe Deco, Expr)
 qSchema env f e@(Var _ n)           = case findQName n env of
