@@ -533,14 +533,22 @@ matchingDec n sc dec dec'
   | dec == dec'                         = True
   | otherwise                           = decorationMismatch n sc dec
 
-matchDefAssumption env cs def           = do --traceM ("## matchDefAssumption " ++ prstr (dname def))
+matchDefAssumption env cs def
+  | q0 == q1                            = do --traceM ("## matchDefAssumption A " ++ prstr (dname def) ++ "[" ++ prstrs q1 ++ "]")
+                                             let t1 = tFun (dfx def) (prowOf $ pos def) (krowOf $ kwd def) (fromJust $ ann def)
+                                             (cs2,eq1) <- solveScoped env0 (qbound q0) [] t1 (Cast t1 (if inClass env then addSelf t0 (Just dec) else t0) : cs)
+                                             checkNoEscape env (qbound q0)
+                                             cs2 <- msubst cs2
+                                             return (cs2, def{ qbinds = noqual env q0, pos = pos0 def, dbody = bindWits eq1 ++ dbody def, dfx = fx t0 })
+  | otherwise                           = do --traceM ("## matchDefAssumption B " ++ prstr (dname def) ++ "[" ++ prstrs q1 ++ "]")
                                              (cs1, tvs) <- instQBinds env q1
                                              let eq0 = witSubst env q1 cs1
-                                                 s = qbound q1 `zip` tvs           -- This cannot just be memoized in the global TypeM substitution,
+                                                 s = qbound q1 `zip` tvs            -- This cannot just be memoized in the global TypeM substitution,
                                              def <- msubstWith s def{ qbinds = [] } -- since the variables in (qbound q1) aren't necessarily globally unique
                                              let t1 = tFun (dfx def) (prowOf $ pos def) (krowOf $ kwd def) (fromJust $ ann def)
                                              (cs2,eq1) <- solveScoped env0 (qbound q0) [] t1 (Cast t1 (if inClass env then addSelf t0 (Just dec) else t0) : cs++cs1)
                                              checkNoEscape env (qbound q0)
+                                             cs2 <- msubst cs2
                                              return (cs2, def{ qbinds = noqual env q0, pos = pos0 def, dbody = bindWits (eq0++eq1) ++ dbody def, dfx = fx t0 })
   where NDef (TSchema _ q0 t0) dec      = findName (dname def) env
         q1                              = qbinds def
@@ -560,11 +568,12 @@ instance InfEnv Decl where
                                                  --traceM ("\n## infEnv (sig) def " ++ prstr (n, NDef sc dec))
                                                  return ([], [(n, NDef sc dec)], d)
                                              NReserved -> do
-                                                 prow <- newTVarOfKind PRow
-                                                 krow <- newTVarOfKind KRow
-                                                 t <- tFun fx prow krow <$> newTVar
-                                                 --traceM ("\n## infEnv def " ++ prstr (n, NDef (monotype t) (deco d)))
-                                                 return ([], [(n, NDef (monotype t) (deco d))], d)
+                                                 prow <- instwild env PRow $ prowOf p
+                                                 krow <- instwild env KRow $ krowOf k
+                                                 t <- tFun fx prow krow <$> maybe newTVar return a
+                                                 let sc = tSchema q (if inClass env then dropSelf t (deco d) else t)
+                                                 --traceM ("\n## infEnv def " ++ prstr (n, NDef sc (deco d)))
+                                                 return ([], [(n, NDef sc (deco d))], d)
                                              _ ->
                                                  illegalRedef n
 
@@ -594,7 +603,7 @@ instance InfEnv Decl where
                                                  let te1 = stubAttributes env te
                                                  return (cs1, [(n, NClass q as' (te0++te1))], Class l n q us (bindWits eq1 ++ props te0 ++ b'))
                                              _ -> illegalRedef n
-      where env1                        = define (exclude (toSigs te') [initKW]) $ reserve (bound b) $ defineSelfOpaque $ defineTVars (stripQual q) env
+      where env1                        = define (exclude (toSigs te') [initKW]) $ reserve (bound b) $ defineSelfOpaque $ defineTVars (stripQual q) $ setInClass env
             (as,ps)                     = mro2 env us
             as'                         = if null as && not (inBuiltin env && n == nValue) then leftpath [cValue] else as
             te'                         = parentTEnv env as'
@@ -615,7 +624,7 @@ instance InfEnv Decl where
                                                  when (not $ null noself) $ err2 noself "A static protocol signature must mention Self"
                                                  return (cs1, [(n, NProto q ps te)], Protocol l n q us (bindWits eq1 ++ b'))
                                              _ -> illegalRedef n
-      where env1                        = define (toSigs te') $ reserve (bound b) $ defineSelfOpaque $ defineTVars (stripQual q) env
+      where env1                        = define (toSigs te') $ reserve (bound b) $ defineSelfOpaque $ defineTVars (stripQual q) $ setInClass env
             ps                          = mro1 env us
             te'                         = parentTEnv env ps
 
@@ -638,7 +647,7 @@ instance InfEnv Decl where
                                              -- w <- newWitness
                                              return (cs1, [(extensionName (head us) c, NExt q c ps te)], Extension l q c us (bindWits eq1 ++ b'))
       where TC n ts                     = c
-            env1                        = define (toSigs te') $ reserve (bound b) $ defineSelfOpaque $ defineTVars (stripQual q) env
+            env1                        = define (toSigs te') $ reserve (bound b) $ defineSelfOpaque $ defineTVars (stripQual q) $ setInClass env
             witsearch                   = [ w | w <- witsByPName env (tcname $ head us), matching (tCon c) w, matching' (wtype w) (qbound q) (tCon c) ]
             ps                          = mro1 env us     -- TODO: check that ps doesn't contradict any previous extension mro for c
             final                       = concat [ conAttrs env (tcname p) | (_,p) <- tail ps, hasWitness env (tCon c) p ]
