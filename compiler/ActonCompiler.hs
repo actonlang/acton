@@ -41,6 +41,7 @@ import Control.Monad
 import Options.Applicative
 import Data.List.Split
 import Data.Monoid ((<>))
+import Data.Ord
 import Data.Graph
 import Data.Version (showVersion)
 import qualified Data.List
@@ -418,19 +419,26 @@ chaseImportedFiles args paths itasks
 
 
 doTask :: Args -> Paths -> Acton.Env.Env0 -> CompileTask -> IO Acton.Env.Env0
-doTask args paths env t@(ActonTask mn src m stubMode)
-                            = do let outfiles = [hFile] ++ if stubMode then [] else [oFile]
-                                 ok <- checkUptoDate paths actFile tyFile outfiles (importsOf t)
-                                 if ok && not (forceCompilation args) then do
-                                          iff (verbose args) (putStrLn ("Skipping  "++ makeRelative (srcDir paths) actFile ++ " (files are up to date).") >> hFlush stdout)
-                                          te <- InterfaceFiles.readFile tyFile
-                                          return (Acton.Env.addMod mn te env)
-                                  else do createDirectoryIfMissing True (getModPath (projTypes paths) mn)
-                                          (env',te) <- runRestPasses args paths env m stubMode
-                                                           `catch` handle "Compilation error" generalError src paths mn
-                                                           `catch` handle "Compilation error" Acton.Env.compilationError src paths mn
-                                                           `catch` handle "Type error" Acton.Types.typeError src paths mn
-                                          return (Acton.Env.addMod mn te env')
+doTask args paths env t@(ActonTask mn src m stubMode) = do
+    -- run custom make target compilation for modules implemented in C
+    -- Note how this does not include .ext.c style modules
+    iff stubMode (runCustomMake paths mn)
+
+    -- no need to list the cFile since it is intermediate; oFile is final output
+    let outFiles = [tyFile, hFile] ++ if stubMode then [] else [oFile]
+    ok <- checkUptoDate paths actFile outFiles (importsOf t)
+    if ok && not (forceCompilation args)
+      then do
+        iff (verbose args) (putStrLn ("Skipping " ++ makeRelative (srcDir paths) actFile ++ " (files are up to date).") >> hFlush stdout)
+        te <- InterfaceFiles.readFile tyFile
+        return (Acton.Env.addMod mn te env)
+      else do
+        createDirectoryIfMissing True (getModPath (projTypes paths) mn)
+        (env',te) <- runRestPasses args paths env m stubMode
+          `catch` handle "Compilation error" generalError src paths mn
+          `catch` handle "Compilation error" Acton.Env.compilationError src paths mn
+          `catch` handle "Type error" Acton.Types.typeError src paths mn
+        return (Acton.Env.addMod mn te env')
   where actFile             = srcFile paths mn
         outbase             = outBase paths mn
         tyFile              = outbase ++ ".ty"
@@ -438,20 +446,67 @@ doTask args paths env t@(ActonTask mn src m stubMode)
         cFile               = outbase ++ ".c"
         oFile               = joinPath [projLib paths, prstr mn] ++  ".o"
 
-checkUptoDate :: Paths -> FilePath -> FilePath -> [FilePath] -> [A.ModName] -> IO Bool
-checkUptoDate paths actFile iFile outBases imps
-                        = do srcExists <- System.Directory.doesFileExist actFile
-                             outExists <- mapM System.Directory.doesFileExist (iFile:outBases)
-                             if not (srcExists && and outExists) then return False
-                              else do srcTime  <-  System.Directory.getModificationTime actFile
-                                      outTimes <- mapM System.Directory.getModificationTime (iFile:outBases)
-                                      impsOK   <- mapM (impOK (head outTimes)) imps
-                                      return (all (srcTime <) outTimes && and impsOK)
-  where impOK iTime mn = do let impFile = outBase paths mn ++ ".ty"
-                            ok <- System.Directory.doesFileExist impFile
-                            if ok then do impfileTime <- System.Directory.getModificationTime impFile
-                                          return (impfileTime < iTime)
-                             else error ("********************\nError: cannot find interface file "++impFile)
+
+runCustomMake paths mn = do
+    -- copy header file in place, if it exists
+    let srcH = replaceExtension actFile ".h"
+    hExist <- doesFileExist srcH
+    let hFile = outbase ++ ".h"
+    iff (hExist) (do
+      copyFile srcH hFile)
+
+    -- run custom make target, if we find a Makefile
+    -- since we have no visibility into make target dependencies, we always
+    -- run custom make targets
+    let makeFile = projPath paths ++ "/Makefile"
+    makeExist <- doesFileExist makeFile
+    iff (makeExist) (do
+      cExist <- doesFileExist $ replaceExtension actFile ".c"
+      iff (cExist) (do
+        let roFile = makeRelative (projPath paths) oFile
+            aFile = joinPath [projLib paths, "libActonProject.a"]
+            makeCmd = "make " ++ roFile
+            arCmd = "ar rcs " ++ aFile ++ " " ++ oFile
+        (returnCode, makeStdout, makeStderr) <- readCreateProcessWithExitCode (shell $ makeCmd ++ " && " ++ arCmd){ cwd = Just (projPath paths) } ""
+        case returnCode of
+            ExitSuccess -> return()
+            ExitFailure _ -> do printIce "compilation of C code failed"
+                                putStrLn $ "make stdout:\n" ++ makeStdout
+                                putStrLn $ "make stderr:\n" ++ makeStderr
+                                System.Exit.exitFailure)
+                    )
+  where actFile             = srcFile paths mn
+        outbase             = outBase paths mn
+        oFile               = joinPath [projLib paths, prstr mn] ++  ".o"
+
+
+checkUptoDate :: Paths -> FilePath -> [FilePath] -> [A.ModName] -> IO Bool
+checkUptoDate paths actFile outFiles imps = do
+    srcFiles  <- filterM System.Directory.doesFileExist potSrcFiles
+    outExists <- mapM System.Directory.doesFileExist outFiles
+    if not (and outExists)
+        then return False
+        else do
+            -- get the time of the last modified source file
+            srcTime  <- head <$> sortBy (comparing Down) <$> mapM System.Directory.getModificationTime srcFiles
+            outTimes <- mapM System.Directory.getModificationTime outFiles
+            impsOK   <- mapM (impOK (head outTimes)) imps
+            return (all (srcTime <) outTimes && and impsOK)
+  where
+        srcBase         = joinPath [takeDirectory actFile, takeBaseName actFile]
+        srcCFile        = srcBase ++ ".c"
+        srcHFile        = srcBase ++ ".h"
+        extCFile        = srcBase ++ ".ext.c"
+        -- except for actFile, these are *potential* source files which might
+        -- not actually exist...
+        potSrcFiles     = [actFile, extCFile, srcCFile, srcHFile]
+        impOK iTime mn  = do let impFile = outBase paths mn ++ ".ty"
+                             ok <- System.Directory.doesFileExist impFile
+                             if ok
+                               then do
+                                   impfileTime <- System.Directory.getModificationTime impFile
+                                   return (impfileTime < iTime)
+                               else error ("********************\nError: cannot find interface file "++impFile)
 
 printIce errMsg = do ccVer <- getCcVer
                      putStrLn(
@@ -465,8 +520,9 @@ printIce errMsg = do ccVer <- getCcVer
 runRestPasses :: Args -> Paths -> Acton.Env.Env0 -> A.Module -> Bool -> IO (Acton.Env.Env0, Acton.Env.TEnv)
 runRestPasses args paths env0 parsed stubMode = do
                       let outbase = outBase paths (A.modname parsed)
-                      let srcbase = makeRelative (projPath paths) (srcBase paths (A.modname parsed))
-                      let actFile = srcbase ++ ".act"
+                      let absSrcBase = srcBase paths (A.modname parsed)
+                      let relSrcBase = makeRelative (projPath paths) (srcBase paths (A.modname parsed))
+                      let actFile = absSrcBase ++ ".act"
                       envTmp <- Acton.Env.mkEnv (sysTypes paths) (projTypes paths) env0 parsed
                       let env = envTmp { Acton.Env.stub = stubMode }
 
@@ -497,7 +553,7 @@ runRestPasses args paths env0 parsed stubMode = do
                       --traceM ("#################### lifteded env0:")
                       --traceM (Pretty.render (Pretty.pretty liftEnv))
 
-                      (n,h,c) <- Acton.CodeGen.generate liftEnv srcbase lifted
+                      (n,h,c) <- Acton.CodeGen.generate liftEnv relSrcBase lifted
                       iff (hgen args) $ do
                           putStrLn(h)
                           System.Exit.exitSuccess
@@ -516,29 +572,8 @@ runRestPasses args paths env0 parsed stubMode = do
                       iff (verbose args)  (putStrLn("Compiling " ++ makeRelative (srcDir paths) actFile
                                ++ (if (dev args) then " for development" else " for release")
                                ++ (if stubMode then " in stub mode" else "")))
-                      if stubMode then do
-                          let makeFile = projPath paths ++ "/Makefile"
-                          makeExist <- doesFileExist makeFile
-                          iff (makeExist) (do
-                            cExist <- doesFileExist $ replaceExtension actFile ".c"
-                            iff (cExist) (do
-                              let roFile = makeRelative (projPath paths) oFile
-                                  makeCmd = "make " ++ roFile
-                                  arCmd = "ar rcs " ++ aFile ++ " " ++ oFile
-                              (returnCode, makeStdout, makeStderr) <- readCreateProcessWithExitCode (shell $ makeCmd ++ " && " ++ arCmd){ cwd = Just (projPath paths) } ""
-                              case returnCode of
-                                  ExitSuccess -> return()
-                                  ExitFailure _ -> do printIce "compilation of C code failed"
-                                                      putStrLn $ "make stdout:\n" ++ makeStdout
-                                                      putStrLn $ "make stderr:\n" ++ makeStderr
-                                                      System.Exit.exitFailure)
 
-                            let srcH = replaceExtension actFile ".h"
-                            hExist <- doesFileExist srcH
-                            let hFile = outbase ++ ".h"
-                            iff (hExist) (do
-                              copyFile srcH hFile))
-                      else do
+                      iff (not stubMode) (do
                           -- cc is invoked with parent directory of project
                           -- directory as working directory, this is so that the
                           -- paths used in logging will reflect the project name
@@ -571,6 +606,7 @@ runRestPasses args paths env0 parsed stubMode = do
                                                   putStrLn $ "cc stdout:\n" ++ ccStdout
                                                   putStrLn $ "cc stderr:\n" ++ ccStderr
                                                   System.Exit.exitFailure
+                                         )
 
                       return (env0 `Acton.Env.withModulesFrom` env,iface)
 
