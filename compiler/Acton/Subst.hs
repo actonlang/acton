@@ -28,6 +28,11 @@ addSelf                                 :: Type -> Maybe Deco -> Type
 addSelf (TFun l x p k t) (Just NoDec)   = TFun l x (posRow tSelf p) k t
 addSelf t _                             = t
 
+dropSelf                                :: Type -> Deco -> Type
+dropSelf (TFun l x p k t) NoDec
+  | TRow _ _ _ _ p' <- p                = TFun l x p' k t
+dropSelf t _                            = t
+
 
 closeDepVars vs cs
   | null vs'                        = nub vs
