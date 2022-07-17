@@ -47,6 +47,7 @@ import Data.Version (showVersion)
 import qualified Data.List
 import qualified Filesystem.Path.CurrentOS as Fsco
 import System.Directory.Recursive
+import System.FileLock
 import System.IO hiding (readFile, writeFile)
 import System.IO.Temp
 import System.Info
@@ -169,6 +170,8 @@ main = do
                     errorWithoutStackTrace("Missing src/ directory")
                     System.Exit.exitFailure
                   else do
+                    -- grab project lock
+                    lockFile (joinPath [projPath paths, ".actonc.lock"]) Exclusive
                     allFiles <- getFilesRecursive (srcDir paths)
                     let srcFiles = catMaybes $ map filterActFile allFiles
                     compileFiles args srcFiles
