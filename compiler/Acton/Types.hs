@@ -510,8 +510,7 @@ instance InfEnv Decl where
                                                  (cs1,eq1) <- solveScoped env1 (qbound q) te tNone cs
                                                  checkNoEscape env (qbound q)
                                                  (nterms,_,_) <- checkAttributes [] te' te
-                                                 let te1 = if stub env then te ++ stubSigs te else te
-                                                 return (cs1, [(n, NClass q as' (te0++te1))], Class l n q us (bindWits eq1 ++ props te0 ++ b'))
+                                                 return (cs1, [(n, NClass q as' (te0++te))], Class l n q us (bindWits eq1 ++ props te0 ++ b'))
                                              _ -> illegalRedef n
       where env1                        = define (exclude (toSigs te') [initKW]) $ reserve (bound b) $ defineSelfOpaque $ defineTVars (stripQual q) $ setInClass env
             (as,ps)                     = mro2 env us
@@ -587,12 +586,6 @@ toSigs te                               = map makeSig te
   where makeSig (n, NDef sc dec)        = (n, NSig sc dec)
         makeSig (n, NVar t)             = (n, NSig (monotype t) Static)
         makeSig (n, i)                  = (n,i)
-
-
-stubSigs te                             = [ makeDef n sc dec | (n, NSig sc dec) <- te, dec /= Property ]
-  where makeDef n (TSchema l q t) dec
-          | TFun{} <- t                 = (n, NDef (TSchema l q t) dec)
-          | otherwise                   = (n, NVar t)
 
 
 --------------------------------------------------------------------------------------------------------------------------

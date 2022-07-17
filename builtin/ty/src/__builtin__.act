@@ -14,9 +14,13 @@
 ## Built-in types ##################################################################################
 
 class value:
-  __bool__ : () -> bool
-  __str__ : () -> str
-  __repr__ : () -> str
+  __init__ : () -> None
+  def __bool__(self) -> bool:
+      NotImplemented
+  def __str__(self) -> str:
+      NotImplemented
+  def __repr__(self) -> str:
+      NotImplemented
 
 class object (value):
   pass
@@ -25,143 +29,256 @@ class atom (value):
   pass
 
 class int (atom):
-  __init__ : (atom) -> None
+  def __init__(self, val: atom) -> None:
+      NotImplemented
 
 class i64 (atom):
   __init__ : (atom) -> None
 
 class float (atom):
-  __init__ : (atom) -> None
+  def __init__(self, val: atom) -> None:
+      NotImplemented
 
 class bool (atom):
-  __init__ : (value) -> None
+  def __init__(self, val: value) -> None:
+      NotImplemented
 
 class slice (value):
-  __init__     : (?int,?int,?int) -> None
+  def __init__(self, start: ?int, stop: ?int, step: ?int) -> None:
+      NotImplemented
   
 class list[A] (object):
-  __init__     : (?Iterable[A]) -> None
-  copy         : () -> list[A]
+  def __init__(self, val: ?Iterable[A]) -> None:
+      NotImplemented
+  def copy(self) -> list[A]:
+      NotImplemented
 
 class range (value):
-  __init__     : (int,?int,?int) -> None
+  def __init__(self, start: int, stop: ?int, step: ?int) -> None:
+      NotImplemented
 
 class Iterator[A] (object):
-  __next__     : () -> A
+  def __next__(self) -> A:
+      NotImplemented
   
 protocol Iterable[A]:
   __iter__     : () -> Iterator[A]
   
 class str (atom):
-  __init__     : (value) -> None
-  capitalize   : () -> str
-  center       : (int,?str) -> str
-  count        : (str,?int,?int) -> int
-  encode       : () -> bytes
-  endswith     : (str,?int,?int) -> bool
-  expandtabs   : (?int) -> str
-  find         : (str,?int,?int) -> int
-  index        : (str,?int,?int) -> int
-  isalnum      : () -> bool
-  isalpha      : () -> bool
-  isascii      : () -> bool
-  isdecimal    : () -> bool
-  islower      : () -> bool
-  isprintable  : () -> bool
-  isspace      : () -> bool
-  istitle      : () -> bool
-  isupper      : () -> bool
-  join         : (Iterable[str]) -> str
-  ljust        : (int,?str) -> str
-  lower        : () -> str
-  lstrip       : (str) -> str
-  partition    : (str) -> (str,str,str)
-  replace      : (str,str,?int) -> str
-  rfind        : (str,?int,?int) -> int
-  rindex       : (str,?int,?int) -> int
-  rjust        : (int,?str) -> str
-  rpartition   : (str) -> (str,str,str)
-  rstrip       : (?str) -> str
-  split        : (str,?int) -> list[str]
-  splitlines   : (?bool) -> list[str]
-  startswith   : (str,?int,?int) -> bool
-  strip        : (?str) -> str
-  upper        : () -> str
-  zfill        : (str,int) -> str
+  def __init__     (self, val: value) -> None:
+      NotImplemented
+  def capitalize   (self) -> str:
+      NotImplemented
+  def center       (self, width: int, fillchar: ?str) -> str:
+      NotImplemented
+  def count        (self, sub: str, start: ?int, end: ?int) -> int:
+      NotImplemented
+  def encode       (self) -> bytes:
+      NotImplemented
+  def endswith     (self, suffix: str, start: ?int, end: ?int) -> bool:
+      NotImplemented
+  def expandtabs   (self, tabsize: ?int) -> str:
+      NotImplemented
+  def find         (self, sub: str, start: ?int, end: ?int) -> int:
+      NotImplemented
+  def index        (self, sub: str, start: ?int, end: ?int) -> int:
+      NotImplemented
+  def isalnum      (self) -> bool:
+      NotImplemented
+  def isalpha      (self) -> bool:
+      NotImplemented
+  def isascii      (self) -> bool:
+      NotImplemented
+  def isdecimal    (self) -> bool:
+      NotImplemented
+  def islower      (self) -> bool:
+      NotImplemented
+  def isprintable  (self) -> bool:
+      NotImplemented
+  def isspace      (self) -> bool:
+      NotImplemented
+  def istitle      (self) -> bool:
+      NotImplemented
+  def isupper      (self) -> bool:
+      NotImplemented
+  def join         (self, iterable: Iterable[str]) -> str:
+      NotImplemented
+  def ljust        (self, width: int, fillchar: ?str) -> str:
+      NotImplemented
+  def lower        (self) -> str:
+      NotImplemented
+  def lstrip       (self, chars: str) -> str:
+      NotImplemented
+  def partition    (self, sep: str) -> (str,str,str):
+      NotImplemented
+  def replace      (self, old: str, new: str, count: ?int) -> str:
+      NotImplemented
+  def rfind        (self, sub: str, start: ?int, end: ?int) -> int:
+      NotImplemented
+  def rindex       (self, sub: str, start: ?int, end: ?int) -> int:
+      NotImplemented
+  def rjust        (self, width: int, fillchar: ?str) -> str:
+      NotImplemented
+  def rpartition   (self, sep: str) -> (str,str,str):
+      NotImplemented
+  def rstrip       (self, chars: ?str) -> str:
+      NotImplemented
+  def split        (self, sep: str, maxsplit: ?int) -> list[str]:
+      NotImplemented
+  def splitlines   (self, keepends: ?bool) -> list[str]:
+      NotImplemented
+  def startswith   (self, prefix: str, start: ?int, end: ?int) -> bool:
+      NotImplemented
+  def strip        (self, chars: ?str) -> str:
+      NotImplemented
+  def upper        (self) -> str:
+      NotImplemented
+  def zfill        (self, width: int) -> str:
+      NotImplemented
 
 class bytes (value):
-  __init__     : (Iterable[int]) -> None
-  capitalize   : () -> bytes
-  center       : (int,?bytes) -> bytes
-  count        : (bytes,?int,?int) -> int
-  decode       : () -> str
-  endswith     : (bytes,?int,?int) -> bool
-  expandtabs   : (?int) -> bytes
-  find         : (bytes,?int,?int) -> int
-  index        : (bytes,?int,?int) -> int
-  isalnum      : () -> bool
-  isalpha      : () -> bool
-  isascii      : () -> bool
-  isdigit      : () -> bool
-  islower      : () -> bool
-  isprintable  : () -> bool
-  isspace      : () -> bool
-  istitle      : () -> bool
-  isupper      : () -> bool
-  join         : (Iterable[bytes]) -> bytes
-  ljust        : (int,?bytes) -> bytes
-  lower        : () -> bytes
-  lstrip       : (bytes) -> bytes
-  partition    : (bytes) -> (bytes,bytes,bytes)
-  replace      : (bytes,bytes,?int) -> bytes
-  rfind        : (bytes,?int,?int) -> int
-  rindex       : (bytes,?int,?int) -> int
-  rjust        : (int,?bytes) -> bytes
-  rpartition   : (bytes) -> (bytes,bytes,bytes)
-  rstrip       : (?bytes) -> bytes
-  split        : (bytes,?int) -> list[bytes]
-  splitlines   : (?bool) -> list[bytes]
-  startswith   : (bytes,?int,?int) -> bool
-  strip        : (?bytes) -> bytes
-  upper        : () -> bytes
-  zfill        : (bytes,int) -> bytes
+  def __init__     (self, iterable: Iterable[int]) -> None:
+      NotImplemented
+  def capitalize   (self) -> bytes:
+      NotImplemented
+  def center       (self, width: int, fillchar: ?bytes) -> bytes:
+      NotImplemented
+  def count        (self, sub: bytes, start: ?int, end: ?int) -> int:
+      NotImplemented
+  def decode       (self) -> str:
+      NotImplemented
+  def endswith     (self, suffix: bytes, start: ?int, end: ?int) -> bool:
+      NotImplemented
+  def expandtabs   (self, tabsize: ?int) -> bytes:
+      NotImplemented
+  def find         (self, sub: bytes, start: ?int, end: ?int) -> int:
+      NotImplemented
+  def index        (self, sub: bytes, start: ?int, end: ?int) -> int:
+      NotImplemented
+  def isalnum      (self) -> bool:
+      NotImplemented
+  def isalpha      (self) -> bool:
+      NotImplemented
+  def isascii      (self) -> bool:
+      NotImplemented
+  def isdigit      (self) -> bool:
+      NotImplemented
+  def islower      (self) -> bool:
+      NotImplemented
+  def isprintable  (self) -> bool:
+      NotImplemented
+  def isspace      (self) -> bool:
+      NotImplemented
+  def istitle      (self) -> bool:
+      NotImplemented
+  def isupper      (self) -> bool:
+      NotImplemented
+  def join         (self, iterable: Iterable[bytes]) -> bytes:
+      NotImplemented
+  def ljust        (self, width: int, fillchar: ?bytes) -> bytes:
+      NotImplemented
+  def lower        (self) -> bytes:
+      NotImplemented
+  def lstrip       (self, chars: bytes) -> bytes:
+      NotImplemented
+  def partition    (self, sep: bytes) -> (bytes,bytes,bytes):
+      NotImplemented
+  def replace      (self, old: bytes, new: bytes, count: ?int) -> bytes:
+      NotImplemented
+  def rfind        (self, sub: bytes, start: ?int, end: ?int) -> int:
+      NotImplemented
+  def rindex       (self, sub: bytes, start: ?int, end: ?int) -> int:
+      NotImplemented
+  def rjust        (self, width: int, fillchar: ?bytes) -> bytes:
+      NotImplemented
+  def rpartition   (self, sep: bytes) -> (bytes,bytes,bytes):
+      NotImplemented
+  def rstrip       (self, chars: ?bytes) -> bytes:
+      NotImplemented
+  def split        (self, sep: bytes, maxsplit: ?int) -> list[bytes]:
+      NotImplemented
+  def splitlines   (self, keepends: ?bool) -> list[bytes]:
+      NotImplemented
+  def startswith   (self, prefix: bytes, start: ?int, end: ?int) -> bool:
+      NotImplemented
+  def strip        (self, chars: ?bytes) -> bytes:
+      NotImplemented
+  def upper        (self) -> bytes:
+      NotImplemented
+  def zfill        (self, width: int) -> bytes:
+      NotImplemented
 
 class bytearray (object):
-  __init__     : (bytes) -> None
-  capitalize   : () -> bytearray
-  center       : (int,?bytearray) -> bytearray
-  count        : (bytearray,?int,?int) -> int
-  decode       : () -> str
-  endswith     : (bytearray,?int,?int) -> bool
-  expandtabs   : (?int) -> bytearray
-  find         : (bytearray,?int,?int) -> int
-  index        : (bytearray,?int,?int) -> int
-  isalnum      : () -> bool
-  isalpha      : () -> bool
-  isascii      : () -> bool
-  isdigit      : () -> bool
-  islower      : () -> bool
-  isprintable  : () -> bool
-  isspace      : () -> bool
-  istitle      : () -> bool
-  isupper      : () -> bool
-  join         : (Iterable[bytearray]) -> bytearray
-  ljust        : (int,?bytearray) -> bytearray
-  lower        : () -> bytearray
-  lstrip       : (bytearray) -> bytearray
-  partition    : (bytearray) -> (bytearray,bytearray,bytearray)
-  replace      : (bytearray,bytearray,?int) -> bytearray
-  rfind        : (bytearray,?int,?int) -> int
-  rindex       : (bytearray,?int,?int) -> int
-  rjust        : (int,?bytearray) -> bytearray
-  rpartition   : (bytearray) -> (bytearray,bytearray,bytearray)
-  rstrip       : (?bytearray) -> bytearray
-  split        : (bytearray,?int) -> list[bytearray]
-  splitlines   : (?bool) -> list[bytearray]
-  startswith   : (bytearray,?int,?int) -> bool
-  strip        : (?bytearray) -> bytearray
-  upper        : () -> bytearray
-  zfill        : (bytearray,int) -> bytearray
+  def __init__     (self, val: bytes) -> None:
+      NotImplemented
+  def capitalize   (self) -> bytearray:
+      NotImplemented
+  def center       (self, width: int, fillchar: ?bytearray) -> bytearray:
+      NotImplemented
+  def count        (self, sub: bytearray, start: ?int, end: ?int) -> int:
+      NotImplemented
+  def decode       (self) -> str:
+      NotImplemented
+  def endswith     (self, suffix: bytearray, start: ?int, end: ?int) -> bool:
+      NotImplemented
+  def expandtabs   (self, tabsize: ?int) -> bytearray:
+      NotImplemented
+  def find         (self, sub: bytearray, start: ?int, end: ?int) -> int:
+      NotImplemented
+  def index        (self, sub: bytearray, start: ?int, end: ?int) -> int:
+      NotImplemented
+  def isalnum      (self) -> bool:
+      NotImplemented
+  def isalpha      (self) -> bool:
+      NotImplemented
+  def isascii      (self) -> bool:
+      NotImplemented
+  def isdigit      (self) -> bool:
+      NotImplemented
+  def islower      (self) -> bool:
+      NotImplemented
+  def isprintable  (self) -> bool:
+      NotImplemented
+  def isspace      (self) -> bool:
+      NotImplemented
+  def istitle      (self) -> bool:
+      NotImplemented
+  def isupper      (self) -> bool:
+      NotImplemented
+  def join         (self, iterable: Iterable[bytearray]) -> bytearray:
+      NotImplemented
+  def ljust        (self, width: int, fillchar: ?bytearray) -> bytearray:
+      NotImplemented
+  def lower        (self) -> bytearray:
+      NotImplemented
+  def lstrip       (self, chars: bytearray) -> bytearray:
+      NotImplemented
+  def partition    (self, sep: bytearray) -> (bytearray,bytearray,bytearray):
+      NotImplemented
+  def replace      (self, old: bytearray, new: bytearray, count: ?int) -> bytearray:
+      NotImplemented
+  def rfind        (self, sub: bytearray, start: ?int, end: ?int) -> int:
+      NotImplemented
+  def rindex       (self, sub: bytearray, start: ?int, end: ?int) -> int:
+      NotImplemented
+  def rjust        (self, width: int, fillchar: ?bytearray) -> bytearray:
+      NotImplemented
+  def rpartition   (self, sep: bytearray) -> (bytearray,bytearray,bytearray):
+      NotImplemented
+  def rstrip       (self, chars: ?bytearray) -> bytearray:
+      NotImplemented
+  def split        (self, sep: bytearray, maxsplit: ?int) -> list[bytearray]:
+      NotImplemented
+  def splitlines   (self, keepends: ?bool) -> list[bytearray]:
+      NotImplemented
+  def startswith   (self, prefix: bytearray, start: ?int, end: ?int) -> bool:
+      NotImplemented
+  def strip        (self, chars: ?bytearray) -> bytearray:
+      NotImplemented
+  def upper        (self) -> bytearray:
+      NotImplemented
+  def zfill        (self, width: int) -> bytearray:
+      NotImplemented
 
 class Msg[A] (value):
   pass
@@ -169,7 +286,8 @@ class Msg[A] (value):
 ## Exceptions ##################################################################################
 
 class BaseException (value):
-  __init__ : (str) -> None
+  def __init__(self, msg: str) -> None:
+      NotImplemented
 
 class SystemExit (BaseException):
   pass
@@ -301,13 +419,16 @@ protocol Hashable (Eq):
 
 
 class complex (value):
-  __init__ : (Number) -> None
+  def __init__(self, val: Number) -> None:
+      NotImplemented
 
 class dict[A(Hashable),B] (object):
-  __init__     : (?Iterable[(A,B)]) -> None
+  def __init__(self, iterable: ?Iterable[(A,B)]) -> None:
+      NotImplemented
 
 class set[A(Hashable)] (object):
-  __init__     : (?Iterable[A]) -> None
+  def __init__(self, iterable: ?Iterable[A]) -> None:
+      NotImplemented
 
 ## Number protocols ################################################################################
 
