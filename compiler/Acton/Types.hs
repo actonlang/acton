@@ -455,7 +455,8 @@ matchDefAssumption env cs def
                                              let t1 = tFun (dfx def) (prowOf $ pos def) (krowOf $ kwd def) (fromJust $ ann def)
                                              (cs2,eq1) <- solveScoped env0 (qbound q0) [] t1 (Cast t1 t2 : cs++cs1)
                                              checkNoEscape env (qbound q0)
-                                             return (cs2, def{ qbinds = noqual env q0, pos = pos0, dbody = bindWits (eq0++eq1) ++ dbody def })
+                                             cs2 <- msubst cs2
+                                             return (cs2, def{ qbinds = noqual env q0, pos = pos0 def, dbody = bindWits (eq0++eq1) ++ dbody def, dfx = fx t0 })
   where NDef (TSchema _ q0 t0) dec      = findName (dname def) env
         t2 | inClass env                = addSelf t0 (Just dec)
            | inAct env                  = case t0 of TFun{} | effect t0 == fxAction -> t0{ effect = fxProc }; _ -> t0
