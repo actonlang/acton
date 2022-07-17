@@ -446,7 +446,7 @@ matchDefAssumption env cs def
                                              (cs2,eq1) <- solveScoped env0 (qbound q0) [] t1 (Cast t1 (if inClass env then addSelf t0 (Just dec) else t0) : cs)
                                              checkNoEscape env (qbound q0)
                                              cs2 <- msubst cs2
-                                             return (cs2, def{ qbinds = noqual env q0, pos = pos0 def, dbody = bindWits eq1 ++ dbody def, dfx = fx t0 })
+                                             return (cs2, def{ qbinds = noqual env q0, pos = pos0, dbody = bindWits eq1 ++ dbody def, dfx = effect t0 })
   | otherwise                           = do --traceM ("## matchDefAssumption B " ++ prstr (dname def) ++ "[" ++ prstrs q1 ++ "]")
                                              (cs1, tvs) <- instQBinds env q1
                                              let eq0 = witSubst env q1 cs1
@@ -456,7 +456,7 @@ matchDefAssumption env cs def
                                              (cs2,eq1) <- solveScoped env0 (qbound q0) [] t1 (Cast t1 t2 : cs++cs1)
                                              checkNoEscape env (qbound q0)
                                              cs2 <- msubst cs2
-                                             return (cs2, def{ qbinds = noqual env q0, pos = pos0 def, dbody = bindWits (eq0++eq1) ++ dbody def, dfx = fx t0 })
+                                             return (cs2, def{ qbinds = noqual env q0, pos = pos0, dbody = bindWits (eq0++eq1) ++ dbody def, dfx = effect t0 })
   where NDef (TSchema _ q0 t0) dec      = findName (dname def) env
         t2 | inClass env                = addSelf t0 (Just dec)
            | inAct env                  = case t0 of TFun{} | effect t0 == fxAction -> t0{ effect = fxProc }; _ -> t0
@@ -472,7 +472,7 @@ matchDefAssumption env cs def
 --------------------------------------------------------------------------------------------------------------------------
 
 instance InfEnv Decl where
-    infEnv env d@(Def _ n q p k a _ _ _)
+    infEnv env d@(Def _ n q p k a _ _ fx)
       | nodup (p,k)                     = case findName n env of
                                              NSig sc dec | matchingDec n sc dec (deco d) -> do
                                                  --traceM ("\n## infEnv (sig) def " ++ prstr (n, NDef sc dec))

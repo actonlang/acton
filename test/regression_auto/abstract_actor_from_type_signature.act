@@ -2,7 +2,7 @@
 actor Foo():
     # actonc will interpret this type signature to mean the actor is abstract - clearly wrong
     # If we remove the type signature, this program works
-    hello : action() -> None
+    hello : proc() -> None
     def hello():
         print("Hello World!")
 
