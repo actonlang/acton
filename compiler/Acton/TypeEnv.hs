@@ -150,6 +150,13 @@ instQuals env q ts          = do let s = qbound q `zip` ts
 wvars                       :: Constraints -> [Expr]
 wvars cs                    = [ eVar v | Impl v _ _ <- cs ]
 
+mkPRow (PosPar n a _ p)     = posRow <$> maybe (newTVarOfKind PRow) return a <*> mkPRow p
+mkPRow (PosSTAR n a)        = maybe (newTVarOfKind PRow) return a
+mkPRow PosNIL               = return posNil
+
+mkKRow (KwdPar n a _ k)     = kwdRow n <$> maybe (newTVarOfKind KRow) return a <*> mkKRow k
+mkKRow (KwdSTAR n a)        = maybe (newTVarOfKind KRow) return a
+mkKRow KwdNIL               = return kwdNil
 
 -- Misc. ---------------------------------------------------------------------------------------------------------------------------
 

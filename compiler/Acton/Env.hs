@@ -525,6 +525,7 @@ tconKind n env              = case findQName n env of
                                 NAct q _ _ _ -> kind KType q
                                 NClass q _ _ -> kind KType q
                                 NProto q _ _ -> kind KProto q
+                                NReserved    -> nameReserved n
                                 _            -> notClassOrProto n
   where kind k []           = k
         kind k q            = KFun [ tvkind v | Quant v _ <- q ] k
