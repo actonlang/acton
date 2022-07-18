@@ -213,6 +213,7 @@ deps/yyjson_rel.o: deps/yyjson.c
 STDLIB_ACTFILES=$(wildcard stdlib/src/*.act stdlib/src/**/*.act)
 STDLIB_ACTFILES_NS=$(filter-out stdlib/src/__builtin__.act,$(STDLIB_ACTFILES))
 STDLIB_CFILES=$(wildcard stdlib/src/*.c stdlib/src/**/*.c)
+STDLIB_SRCFILES=$(wildcard stdlib/src/* stdlib/src/**/* stdlib/c_src/* stdlib/c_src/**/*)
 STDLIB_ACTON_MODULES=$(filter-out $(STDLIB_CFILES:.c=.act),$(STDLIB_ACTFILES_NS))
 STDLIB_TYFILES=$(subst src,out/types,$(STDLIB_ACTFILES:.act=.ty))
 STDLIB_TYFILES_C=$(subst src,out/types,$(STDLIB_CFILES:.c=.ty))
@@ -236,29 +237,21 @@ builtin/ty/out/types/__builtin__.ty: builtin/ty/src/__builtin__.act $(ACTONC)
 	$(ACTC) $<
 
 # Build our standard library
-stdlib/out/dev/lib/libActonProject.a: $(STDLIB_ACTFILES) dist/types/__builtin__.ty $(DIST_HFILES) $(ACTONC)
+stdlib/out/dev/lib/libActonProject.a: $(STDLIB_SRCFILES) dist/types/__builtin__.ty $(DIST_HFILES) $(ACTONC)
 	cd stdlib && ../$(ACTC) build --dev
 
-stdlib/out/rel/lib/libActonProject.a: $(STDLIB_ACTFILES) dist/types/__builtin__.ty $(DIST_HFILES) $(ACTONC)
+stdlib/out/rel/lib/libActonProject.a: $(STDLIB_SRCFILES) dist/types/__builtin__.ty $(DIST_HFILES) $(ACTONC)
 	cd stdlib && ../$(ACTC) build
 	cp -a stdlib/out/types/. dist/types/
 
 
 # /lib --------------------------------------------------
 DBARCHIVE=lib/libActonDB.a
-# TODO: maybe lift out libuv. ARCHIVES becomes DIST_ARCHIVES which used to only
-# be libActon, and we compile that serialized to avoid collisions between dev &
-# rel profiles... this now also hits libuv. Maybe better to keep separate for
-# concurrency?
 ARCHIVES=lib/dev/libActon.a lib/rel/libActon.a lib/libprotobuf-c_a.a lib/libutf8proc_a.a lib/libuv_a.a
-
-# If we later let actonc build things, it would produce a libActonProject.a file
-# in the stdlib directory, which we would need to join together with rts.o etc
-# to form the final libActon (or maybe produce a libActonStdlib and link with?)
 
 LIBACTON_DEV_OFILES=builtin/builtin_dev.o builtin/env_dev.o rts/empty.o rts/io_dev.o rts/log.o rts/rts_dev.o deps/netstring_dev.o deps/yyjson_dev.o
 OFILES += $(LIBACTON_DEV_OFILES)
-lib/dev/libActon.a: stdlib/out/dev/lib/libActonProject.a  $(LIBACTON_DEV_OFILES)
+lib/dev/libActon.a: stdlib/out/dev/lib/libActonProject.a $(LIBACTON_DEV_OFILES)
 	@mkdir -p $(dir $@)
 	cp -a $< $@
 	ar rcs $@ $(filter-out stdlib/out/dev/lib/libActonProject.a,$^)
