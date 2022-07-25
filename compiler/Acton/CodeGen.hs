@@ -336,8 +336,7 @@ initModule env (s : ss)             = genStmt env s $+$
 
 initClassBase env c q as            = methodtable env c <> dot <> gen env gcinfoKW <+> equals <+> doubleQuotes (genTopName env c) <> semi $+$
                                       methodtable env c <> dot <> gen env superclassKW <+> equals <+> super <> semi $+$
-                                      vcat [ inherit c' n | (c',n) <- inheritedAttrs__ env (NoQ c) ]
---                                      vcat [ inherit c' n | (c',ns) <- inheritedAttrs env (NoQ c), n <- ns ]
+                                      vcat [ inherit c' n | (c',n) <- inheritedAttrs env (NoQ c) ]
   where super                       = if null as then text "NULL" else parens (gen env qnSuperClass) <> text "&" <> methodtable' env (tcname $ head as)
         selfsubst                   = subst [(tvSelf, tCon tc)]
         tc                          = TC (NoQ c) [ tVar v | Quant v _ <- q ]

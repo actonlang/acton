@@ -463,7 +463,7 @@ allExtProto env t p         = reverse [ schematic (wtype w) | w <- witsByPName e
   where t0                  = wild t                    -- matching against wild t also accepts witnesses that would instantiate t
 
 allExtProtoAttr             :: Env -> Name -> [Type]
-allExtProtoAttr env n       = [ tCon tc | tc <- allCons env, any ((n `elem`) . allAttrs env . proto) (witsByTName env $ tcname tc) ]
+allExtProtoAttr env n       = [ tCon tc | tc <- allCons env, any ((n `elem`) . allAttrs' env . proto) (witsByTName env $ tcname tc) ]
 
 
 matching t w                = matching' t (qbound $ binds w) (wtype w)

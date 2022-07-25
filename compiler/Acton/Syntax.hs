@@ -266,6 +266,7 @@ sExpr e         = Expr NoLoc e
 sDecl ds        = Decl NoLoc ds
 sIf bs els      = If NoLoc bs els
 sIf1 e b els    = sIf [Branch e b] els
+sNotImpl        = Expr NoLoc (NotImplemented NoLoc)
 
 handler qn b    = Handler (Except NoLoc qn) b
 

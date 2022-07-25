@@ -212,16 +212,17 @@ convStmts t0 eq stmts                   = map conv stmts
 -- Convert a TEnv -------------------------------------------------------------------------------------------
 
 convEnvProtos env                       = mapModules conv env
-  where conv env1 m (n, NDef sc d)      = [(n, NDef (convS sc) d)]
-        conv env1 m (n, NSig sc d)      = [(n, NSig (convS sc) d)]
-        conv env1 m (n, NAct q p k te)  = [(n, NAct (noqual env q) (qualWRow env q p) k (concat $ map (conv env1 m) te))]
-        conv env1 m (n, NProto q us te) = map (fromClass env1) $ convProtocol env n q us [] [] (fromSigs env te)
-        conv env1 m (n, NExt q c us te) = map (fromClass env1) $ convExtension env n c q us [] [] []
-        conv env1 m (n, NClass q us te) = [(n, NClass (noqual env q) us (convClassTEnv env q te))]
-        conv env1 m ni                  = [ni]
-        convS (TSchema l q t)           = TSchema l (noqual env q) (convT q t)
-        convT q (TFun l x p k t)        = TFun l x (qualWRow env q p) k t
-        convT q t                       = t
+  where
+    conv env1 m (n, NDef sc d)          = [(n, NDef (convS sc) d)]
+    conv env1 m (n, NSig sc d)          = [(n, NSig (convS sc) d)]
+    conv env1 m (n, NAct q p k te)      = [(n, NAct (noqual env q) (qualWRow env q p) k (concat $ map (conv env1 m) te))]
+    conv env1 m ni@(n, NProto q us te)  = map (fromClass env1) $ convProtocol (define [ni] env) n q us [] [] (fromSigs env te)
+    conv env1 m ni@(n, NExt q c us te)  = map (fromClass env1) $ convExtension (define [ni] env) n c q us [] [] []
+    conv env1 m (n, NClass q us te)     = [(n, NClass (noqual env q) us (convClassTEnv env q te))]
+    conv env1 m ni                      = [ni]
+    convS (TSchema l q t)               = TSchema l (noqual env q) (convT q t)
+    convT q (TFun l x p k t)            = TFun l x (qualWRow env q p) k t
+    convT q t                           = t
 
 fromClass env (Class _ n q us b)        = (n, NClass q (leftpath us) (fromStmts b))
 
@@ -230,7 +231,7 @@ fromStmts (Decl _ ds : ss)              = fromDefs ds ++ fromStmts ss
 fromStmts (_ : ss)                      = fromStmts ss
 fromStmts []                            = []
 
-fromDefs (Def l n q p k a b d fx : ds)  = (n, NDef (TSchema NoLoc q (TFun NoLoc fx (prowOf' p d) (krowOf k) (fromJust a))) d) : fromDefs ds
+fromDefs (Def l n q p k a _ d fx : ds)  = (n, NDef (TSchema NoLoc q (TFun NoLoc fx (prowOf' p d) (krowOf k) (fromJust a))) d) : fromDefs ds
   where prowOf' p Static                = prowOf p
         prowOf' (PosPar _ _ _ p) _      = prowOf p
 fromDefs (_ : ds)                       = fromDefs ds
@@ -240,6 +241,9 @@ fromSigs env ((n, NSig sc dec) : te)    = Signature NoLoc [n] (convS sc) dec : f
   where convS (TSchema l q t)           = TSchema l (noqual env q) (convT q t)
         convT q (TFun l x p k t)        = TFun l x (qualWRow env q p) k t
         convT q t                       = t
+--fromSigs env ((n, NDef sc dec) : te)    = Decl NoLoc [def] : fromSigs env te
+--  where TSchema _ q (TFun _ fx p k t)   = sc
+--        def                             = Def NoLoc n q (pPar pNames p) (kPar kNames k) (Just t) [sNotImpl] dec fx
 fromSigs env (_ : te)                   = fromSigs env te
 fromSigs env []                         = []
 

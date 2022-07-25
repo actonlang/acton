@@ -48,11 +48,10 @@ schemaOf env e                      = (sc, dec)
 closedType                          :: EnvF x -> Expr -> Bool
 closedType env (Var _ n)            = isClosed $ findQName n env
 closedType env (Dot _ (Var _ x) n)
-  | NClass q _ _ <- findQName x env = case findAttrInfo env (TC x (map tVar $ qbound q)) n of
-                                        Just (w,i) -> isClosed i
+  | NClass q _ _ <- findQName x env = closedAttr env (TC x (map tVar $ qbound q)) n
 closedType env (Dot _ e n)          = case typeOf env e of
-                                        TCon _ c -> case findAttrInfo env c n of Just (w,i) -> isClosed i
-                                        TVar _ v  -> case findAttrInfo env (findTVBound env v) n of Just (w,i) -> isClosed i; _ -> error ("## Tyvar " ++ prstr v ++ " not found")
+                                        TCon _ c -> closedAttr env c n
+                                        TVar _ v  -> closedAttr env (findTVBound env v) n
                                         TTuple _ p k -> True
 closedType env (TApp _ e _)         = closedType env e
 closedType env _                    = True
