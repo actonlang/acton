@@ -65,7 +65,7 @@ convProtocol env n0 q ps0 eq wmap b     = mainClass : sibClasses
           where sib ws ws0 p            = (ws, tcname p, us, witArgs w0 wmap, inherited ws0)
                   where us              = us0 ++ us1
                         us1             = [ convProto p | (ws',p) <- ps0, catRight ws' == ws ] ++ [cValue]
-                        us0             = [ TC (modOf w0 $ baseName w) (tcargs $ head us1) | w <- zipWith (:) (wheads ws0) (wtails ws0) ]
+                        us0             = [ TC (baseGName w) (tcargs $ head us1) | w <- zipWith (:) (wheads ws0) (wtails ws0) ]
                         w0              = if inherited ws0 then tcname main else tcname p
 
         sibClasses                      = [ Class NoLoc (sibName ws n0) q1 us (sibClassBody ws n (head us) wes inh) | (ws,n,us,wes,inh) <- allsibs ]
@@ -123,7 +123,7 @@ convExtension env n1 c0 q ps0 eq wmap b = mainClass : sibClasses
           where sib ws ws0 p            = (ws, tcname p, us, witArgs w0 wmap, inherited ws0)
                   where us              = us0 ++ us1
                         us1             = [ instProto t0 p | (ws',p) <- ps0, catRight ws' == ws ] ++ [cValue]
-                        us0             = [ TC (modOf w0 $ baseName w) (tcargs $ head us1) | w <- zipWith (:) (wheads ws0) (wtails ws0) ]
+                        us0             = [ TC (baseGName w) (tcargs $ head us1) | w <- zipWith (:) (wheads ws0) (wtails ws0) ]
                         w0              = if inherited ws0 then tcname main else tcname p
 
         sibClasses                      = [ Class NoLoc (sibName ws n1) q1 us (sibClassBody ws n (head us) wes inh) | (ws,n,us,wes,inh) <- allsibs ]
@@ -179,6 +179,8 @@ sibName ws n                            = Derived (baseName ws) n
 
 baseName [w]                            = deriveQ w
 baseName (w : ws)                       = Derived (baseName ws) (deriveQ w)
+
+baseGName ws                            = modOf (head ws) $ baseName ws
 
 modOf (NoQ _)                           = NoQ
 modOf (QName m _)                       = QName m
