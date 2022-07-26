@@ -22,3 +22,6 @@ protocol Cepa(Minus, Bepa):
 
 protocol Realistic(Real):
     pass
+
+actor main(env):
+    env.exit(0)
