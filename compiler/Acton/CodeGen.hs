@@ -558,15 +558,17 @@ instCast env ts e                   = parens . (parens (gen env t) <>)
 dotCast env ent ts (Var _ x) n
   | GName m _ <- x, m == mPrim      = id
 dotCast env ent ts e n
-  | null ts && null argsubst        = id
-  | otherwise                       = parens . (parens (gen env t) <>)
+  | gen_t == gen env t1             = id
+  | otherwise                       = parens . (parens gen_t <>)
   where t0                          = typeOf env e
         (argsubst, c0)              = case t0 of
                                          TCon _ tc -> splitTC env tc
                                          TVar _ tv -> splitTC env (findTVBound env tv)
         (sc, dec)                   = findAttr' env c0 n
-        t                           = subst fullsubst $ if ent then addSelf (sctype sc) dec else sctype sc
+        t                           = subst fullsubst $ if ent then addSelf t1 dec else t1
+        t1                          = sctype sc
         fullsubst                   = (tvSelf,t0) : (qbound (scbind sc) `zip` ts) ++ argsubst
+        gen_t                       = gen env t
 
 classCast env ts x q n              = parens . (parens (gen env t) <>)
   where (ts0,ts1)                   = splitAt (length q) ts
@@ -607,7 +609,7 @@ genDotCall env ts dec e@(Var _ x) n p
   where info                        = findQName x env
 genDotCall env ts dec e n p
   | Just NoDec <- dec               = genEnter env ts e n p
-  | Just Static <- dec              = dotCast env False ts e n (gen env e <> text "->" <> gen env classKW <> text "->") <> gen env n <> parens (gen env p)
+  | Just Static <- dec              = dotCast env False ts e n (gen env e <> text "->" <> gen env classKW <> text "->" <> gen env n) <> parens (gen env p)
   | otherwise                       = genEnter env ts (eDot e n) attrCall p
 
 
