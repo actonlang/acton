@@ -960,6 +960,20 @@ struct $Sequence$class {
 extern struct $Sequence$class $Sequence$methods;
 $Sequence $Sequence$new();
 
+// $Collection$Sequence ////////////////////////////////////////////////
+
+#define $Collection$Sequence $Collection
+#define $Collection$Sequence$class $Collection$class
+#define $Collection$Sequence$methods $Collection$methods
+#define $Collection$Sequence$new(...) $Collection$new(__VA_ARGS__)
+
+// $Times$Sequence /////////////////////////////////////////////////////
+
+#define $Times$Sequence $Times
+#define $Times$Sequence$class $Times$class
+#define $Times$Sequence$methods $Times$methods
+#define $Times$Sequence$new(...) $Times$new(__VA_ARGS__)
+
 // $Mapping ////////////////////////////////////////////////////////////
 
 struct $Mapping {
@@ -995,6 +1009,13 @@ struct $Mapping$class {
 extern struct $Mapping$class $Mapping$methods;
 $Mapping $Mapping$new($Eq w$Eq$A$Mapping);
 
+// $Indexed$Mapping ////////////////////////////////////////////////
+
+#define $Indexed$Mapping $Indexed
+#define $Indexed$Mapping$class $Indexed$class
+#define $Indexed$Mapping$methods $Indexed$methods
+#define $Indexed$Mapping$new(...) $Indexed$new(__VA_ARGS__)
+
 // $Set ////////////////////////////////////////////////////////////
 
 struct $Set {
@@ -1027,6 +1048,27 @@ struct $Set$class {
 };
 
 extern struct $Set$class $Set$methods;
+
+// $Ord$Set ///////////////////////////////////////////////////////////
+
+#define $Ord$Set $Ord
+#define $Ord$Set$class $Ord$class
+#define $Ord$Set$methods $Ord$methods
+#define $Ord$Set$new(...) $Ord$new(__VA_ARGS__)
+
+// $Logical$Set ///////////////////////////////////////////////////////
+
+#define $Logical$Set $Logical
+#define $Logical$Set$class $Logical$class
+#define $Logical$Set$methods $Logical$methods
+#define $Logical$Set$new(...) $Logical$new(__VA_ARGS__)
+
+// $Minus$Set /////////////////////////////////////////////////////////
+
+#define $Minus$Set $Minus
+#define $Minus$Set$class $Minus$class
+#define $Minus$Set$methods $Minus$methods
+#define $Minus$Set$new(...) $Minus$new(__VA_ARGS__)
 
 // $Number ////////////////////////////////////////////////////////////
 
@@ -1069,6 +1111,12 @@ $WORD $Number$__ipow__($Number, $WORD, $WORD);
 extern struct $Number$class $Number$methods;
 $Number $Number$new();
 
+// $Minus$Number ////////////////////////////////////////////////////
+
+#define $Minus$Number $Minus
+#define $Minus$Number$class $Minus$class
+#define $Minus$Number$methods $Minus$methods
+#define $Minus$Number$new(...) $Minus$new(__VA_ARGS__)
 
 // $Real ////////////////////////////////////////////////////////////
 
@@ -1112,10 +1160,26 @@ struct $Real$class {
 extern struct $Real$class $Real$methods;
 $Real $Real$new();
 
+// $Minus$Real //////////////////////////////////////////////////////////
+
+#define $Minus$Real $Minus
+#define $Minus$Real$class $Minus$class
+#define $Minus$Real$methods $Minus$methods
+#define $Minus$Real$new(...) $Minus$new(__VA_ARGS__)
+
 // $RealFloat ///////////////////////////////////////////////////////////
 
 #define $RealFloat $Real
+#define $RealFloat$class $Real$class
+#define $RealFloat$methods $Real$methods
 #define $RealFloat$new(...) $Real$new(__VA_ARGS__)
+
+// $Minus$RealFloat /////////////////////////////////////////////////////
+
+#define $Minus$RealFloat $Minus
+#define $Minus$RealFloat$class $Minus$class
+#define $Minus$RealFloat$methods $Minus$methods
+#define $Minus$RealFloat$new(...) $Minus$new(__VA_ARGS__)
 
 // $Rational ////////////////////////////////////////////////////////////
 
@@ -1160,6 +1224,13 @@ struct $Rational$class {
 
 extern struct $Rational$class $Rational$methods;
 $Rational $Rational$new();
+
+// $Minus$Rational //////////////////////////////////////////////////////
+
+#define $Minus$Rational $Minus
+#define $Minus$Rational$class $Minus$class
+#define $Minus$Rational$methods $Minus$methods
+#define $Minus$Rational$new(...) $Minus$new(__VA_ARGS__)
 
 // $Integral ////////////////////////////////////////////////////////////
 
@@ -1222,6 +1293,20 @@ $WORD $Integral$__ilshift__($Integral, $WORD, $int);
 $WORD $Integral$__irshift__($Integral, $WORD, $int);
 
 extern struct $Integral$class $Integral$methods;
+
+// $Minus$Integral ///////////////////////////////////////////////////////////
+
+#define $Minus$Integral $Minus
+#define $Minus$Integral$class $Minus$class
+#define $Minus$Integral$methods $Minus$methods
+#define $Minus$Integral$new(...) $Minus$new(__VA_ARGS__)
+
+// $Logical$Integral /////////////////////////////////////////////////////////
+
+#define $Logical$Integral $Logical
+#define $Logical$Integral$class $Logical$class
+#define $Logical$Integral$methods $Logical$methods
+#define $Logical$Integral$new(...) $Logical$new(__VA_ARGS__)
 
 // $Hashable$bool ////////////////////////////////////////////////////////////
 
@@ -1324,6 +1409,13 @@ $Iterator $Collection$list$__iter__ ($Collection$list, $list);
 $list $Collection$list$__fromiter__ ($Collection$list, $Iterable, $WORD);
 $int $Collection$list$__len__ ($Collection$list, $list);
 
+// $Collection$Sequence ////////////////////////////////////////////////
+
+#define $Collection$Sequence$list $Collection$list
+#define $Collection$Sequence$list$class $Collection$list$class
+#define $Collection$Sequence$list$methods $Collection$list$methods
+#define $Collection$Sequence$list$new(...) $Collection$list$new(__VA_ARGS__)
+
 // $Times$list ////////////////////////////////////////////////////////////
 
 struct $Times$list {
@@ -1352,6 +1444,13 @@ void $Times$list$__serialize__($Times$list, $Serial$state);
 $Times$list $Times$list$__deserialize__($Times$list, $Serial$state);
 $list $Times$list$__add__ ($Times$list, $list, $list);
 $list $Times$list$__mul__($Times$list, $list, $int);
+
+// $Times$Sequence /////////////////////////////////////////////////////
+
+#define $Times$Sequence$list $Times$list
+#define $Times$Sequence$list$class $Times$list$class
+#define $Times$Sequence$list$methods $Times$list$methods
+#define $Times$Sequence$list$new(...) $Times$list$new(__VA_ARGS__)
 
 // $Container$list ////////////////////////////////////////////////////////////
 
@@ -1503,6 +1602,13 @@ $WORD $Indexed$dict$__getitem__ ($Indexed$dict, $dict, $WORD);
 void $Indexed$dict$__setitem__ ($Indexed$dict, $dict, $WORD, $WORD);
 void $Indexed$dict$__delitem__ ($Indexed$dict, $dict, $WORD);
 
+// $Indexed$Mapping$dict /////////////////////////////////////////////////////////
+
+#define $Indexed$Mapping$dict $Indexed$dict
+#define $Indexed$Mapping$dict$class $Indexed$dict$class
+#define $Indexed$Mapping$dict$methods $Indexed$dict$methods
+#define $Indexed$Mapping$dict$new(...) $Indexed$dict$new(__VA_ARGS__)
+
 // $Ord$dict //////////////////////////////////////////////////////////////////////
 
 struct $Ord$dict {
@@ -1620,7 +1726,28 @@ $bool $Ord$set$__le__ ($Ord$set, $set, $set);
 $bool $Ord$set$__gt__ ($Ord$set, $set, $set);
 $bool $Ord$set$__ge__ ($Ord$set, $set, $set);
 
-// $Logical$set ////////////////////////////////////////////////////////////
+// $Ord$Set$set ///////////////////////////////////////////////////////
+
+#define $Ord$Set$set $Ord
+#define $Ord$Set$set$class $Ord$set$class
+#define $Ord$Set$set$methods $Ord$set$methods
+#define $Ord$Set$set$new(...) $Ord$set$new(__VA_ARGS__)
+
+// $Logical$Set$set ///////////////////////////////////////////////////
+
+#define $Logical$Set$set $Logical$set
+#define $Logical$Set$set$class $Logical$set$class
+#define $Logical$Set$set$methods $Logical$set$methods
+#define $Logical$Set$set$new(...) $Logical$set$new(__VA_ARGS__)
+
+// $Minus$Set$set /////////////////////////////////////////////////////
+
+#define $Minus$Set$set $Minus$set
+#define $Minus$Set$set$class $Minus$set$class
+#define $Minus$Set$set$methods $Minus$set$methods
+#define $Minus$Set$set$new(...) $Minus$set$new(__VA_ARGS__)
+
+// $Logical$set ///////////////////////////////////////////////////////
 
 struct $Logical$set {
     $Logical$set$class $class;
@@ -2208,6 +2335,13 @@ $int $Logical$int$__and__ ($Logical$int, $int, $int);
 $int $Logical$int$__or__ ($Logical$int, $int, $int);
 $int $Logical$int$__xor__ ($Logical$int, $int, $int);
 
+// $Logical$Integral$int /////////////////////////////////////////////////
+
+#define $Logical$Integral$int $Logical$int
+#define $Logical$Integral$int$class $Logical$int$class
+#define $Logical$Integral$int$methods $Logical$int$methods
+#define $Logical$Integral$int$new(...) $Logical$int$new(__VA_ARGS__)
+
 // $Minus$int ////////////////////////////////////////////////////////////
 
 struct $Minus$int {
@@ -2233,6 +2367,13 @@ void $Minus$int$__init__ ($Minus$int, $Integral);
 void $Minus$int$__serialize__($Minus$int, $Serial$state);
 $Minus$int $Minus$int$__deserialize__($Minus$int, $Serial$state);
 $int $Minus$int$__sub__ ($Minus$int, $int, $int);
+
+// $Minus$Integral$int ///////////////////////////////////////////////////////////
+
+#define $Minus$Integral$int $Minus$int
+#define $Minus$Integral$int$class $Minus$int$class
+#define $Minus$Integral$int$methods $Minus$int$methods
+#define $Minus$Integral$int$new(...) $Minus$int$new(__VA_ARGS__)
 
 // $Div$int ////////////////////////////////////////////////////////////
 
@@ -2875,6 +3016,13 @@ $Iterator $Collection$bytearray$__iter__ ($Collection$bytearray, $bytearray);
 $bytearray $Collection$bytearray$__fromiter__ ($Collection$bytearray, $Iterable, $WORD);
 $int $Collection$bytearray$__len__ ($Collection$bytearray, $bytearray);
 
+// $Collection$Sequence$bytearray //////////////////////////////////////////////
+
+#define $Collection$Sequence$bytearray $Collection$bytearray
+#define $Collection$Sequence$bytearray$class $Collection$bytearray$class
+#define $Collection$Sequence$bytearray$methods $Collection$bytearray$methods
+#define $Collection$Sequence$bytearray$new(...) $Collection$bytearray$new(__VA_ARGS__)
+
 // $Times$bytearray ////////////////////////////////////////////////////////////
 
 struct $Times$bytearray {
@@ -2905,6 +3053,13 @@ $bool $Times$bytearray$__bool__($Times$bytearray);
 $str $Times$bytearray$__str__($Times$bytearray);
 $bytearray $Times$bytearray$__add__ ($Times$bytearray, $bytearray, $bytearray);
 $bytearray $Times$bytearray$__mul__ ($Times$bytearray, $bytearray, $int);
+
+// $Times$Sequence$bytearray ///////////////////////////////////////////////////////
+
+#define $Times$Sequence$bytearray $Times$bytearray
+#define $Times$Sequence$bytearray$class $Times$bytearray$class
+#define $Times$Sequence$bytearray$methods $Times$bytearray$methods
+#define $Times$Sequence$bytearray$new(...) $Times$bytearray$new(__VA_ARGS__)
 
 // $Container$bytearray ////////////////////////////////////////////////////////////
 
