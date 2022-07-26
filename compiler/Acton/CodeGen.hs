@@ -439,8 +439,8 @@ instance Gen Stmt where
     gen env (Expr _ e)              = genExp' env e <> semi
     gen env (Assign _ [p] e)        = gen env p <+> equals <+> genExp env t e <> semi
       where t                       = typeOf env p
-    gen env (MutAssign _ tg e)      = gen env tg <+> equals <+> genExp env t e <> semi
-      where t                       = typeOf env tg
+    gen env (MutAssign _ tg e)      = genTarget env tg <+> equals <+> genExp env t e <> semi
+      where t                       = targetType env tg
     gen env (Pass _)                = empty
     gen env (Return _ Nothing)      = text "return" <+> gen env eNone <> semi
     gen env (Return _ (Just e))     = text "return" <+> genExp env (ret env) e <> semi
@@ -555,6 +555,14 @@ instCast env ts (Var _ x)
 instCast env ts e                   = parens . (parens (gen env t) <>)
   where t                           = typeInstOf env ts e
 
+targetType env (Dot _ e n)          = sctype sc
+  where t0                          = typeOf env e
+        (_,c0)                      = case t0 of
+                                         TCon _ tc -> splitTC env tc
+                                         TVar _ tv -> splitTC env (findTVBound env tv)
+        (sc, dec)                   = findAttr' env c0 n
+targetType env e                    = typeOf env e                  -- Must be a Var with a monomorphic type since it is assignable
+
 dotCast env ent ts (Var _ x) n
   | GName m _ <- x, m == mPrim      = id
 dotCast env ent ts e n
@@ -617,6 +625,9 @@ genDot env ts e@(Var _ x) n
   | NClass q _ _ <- findQName x env = classCast env ts x q n $ methodtable' env x <> text "." <> gen env n
 genDot env ts e n                   = dotCast env False ts e n $ gen env e <> text "->" <> gen env n
 -- NOTE: all method references are eta-expanded by the lambda-lifter at this point, so n cannot be a method (i.e., require methodtable lookup) here
+
+genTarget env (Dot _ e n)           = gen env e <> text "->" <> gen env n
+genTarget env e                     = gen env e
 
 
 genEnter env ts e n p
