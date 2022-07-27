@@ -902,7 +902,7 @@ improve env te tt eq cs
   | not $ null closLBnd                 = do --traceM ("  *Simplify lower closed bound " ++ prstrs closLBnd)
                                              sequence [ unify (tVar v) t | (v,t) <- closLBnd ]
                                              simplify' env te tt eq cs
-  | not $ null redEq                    = do --traceM ("  *(Context red) " ++ prstrs [ w | (w,_,_) <- redEq ])
+  | not $ null redEq                    = do --traceM ("  *(Context red) " ++ prstrs [ w | Eqn w _ _ <- redEq ])
                                              sequence [ unify t1 t2 | (t1,t2) <- redUni ]
                                              simplify' env te tt (redEq++eq) (remove [ w | Eqn w _ _ <- redEq ] cs)
   | not $ null dots                     = do --traceM ("  *Implied mutation/selection solutions " ++ prstrs dots)

@@ -596,7 +596,7 @@ solveAll env te tt cs                   = do --traceM ("\n\n### solveAll " ++ pr
                                              return eq
 
 solveScoped env [] te tt cs             = simplify env te tt cs
-solveScoped env vs te tt cs             = do --traceM ("\n\n### solveScoped: " ++ prstrs vs)
+solveScoped env vs te tt cs             = do --traceM ("\n\n### solveScoped: " ++ prstrs cs)
                                              (cs,eq) <- simplify env te tt cs
                                              solve env (any (`elem` vs) . tyfree) te tt eq cs
 
@@ -773,12 +773,12 @@ instance Check Decl where
                                              pushFX fxPure tNone
                                              wellformed env1 q
                                              wellformed env1 us
-                                             (csb,b') <- checkEnv env1 b
+                                             (csb,b') <- checkEnv (define (subst s te) env1) b
                                              popFX
                                              (cs1,eq1) <- solveScoped env1 tvs te tNone csb
                                              checkNoEscape env tvs
                                              return (cs1, [Class l n (noqual env q) (map snd as) (abstractDefs env q eq1 b')])
-      where env1                        = define (subst s te) $ defineSelf (NoQ n) q $ defineTVars q $ setInClass env
+      where env1                        = defineSelf (NoQ n) q $ defineTVars q $ setInClass env
             tvs                         = tvSelf : qbound q
             NClass _ as te              = findName n env
             s                           = [(tvSelf, tCon (TC (NoQ n) (map tVar $ qbound q)))]
@@ -787,13 +787,13 @@ instance Check Decl where
                                              pushFX fxPure tNone
                                              wellformed env1 q
                                              (csu,wmap) <- wellformedProtos env1 us
-                                             (csb,b') <- checkEnv env1 b
+                                             (csb,b') <- checkEnv (define te env1) b
                                              popFX
                                              (cs1,eq1) <- solveScoped env1 tvs te tNone (csu++csb)
                                              checkNoEscape env tvs
                                              b' <- msubst b'
                                              return (cs1, convProtocol env n q ps eq1 wmap b')
-      where env1                        = define te $ defineSelf (NoQ n) q $ defineTVars q $ setInClass env
+      where env1                        = defineSelf (NoQ n) q $ defineTVars q $ setInClass env
             tvs                         = tvSelf : qbound q
             NProto _ ps te              = findName n env
 
@@ -802,13 +802,13 @@ instance Check Decl where
                                              pushFX fxPure tNone
                                              wellformed env1 q
                                              (csu,wmap) <- wellformedProtos env1 us
-                                             (csb,b') <- checkEnv env1 b
+                                             (csb,b') <- checkEnv (define (subst s te) env1) b
                                              popFX
                                              (cs1,eq1) <- solveScoped env1 tvs te tNone (csu++csb)
                                              checkNoEscape env tvs
                                              b' <- msubst b'
                                              return (cs1, convExtension env n' c q ps eq1 wmap b')
-      where env1                        = define (subst s te) $ defineInst c ps thisKW' $ defineSelf n q $ defineTVars q $ setInClass env
+      where env1                        = defineInst c ps thisKW' $ defineSelf n q $ defineTVars q $ setInClass env
             tvs                         = tvSelf : qbound q
             n                           = tcname c
             n'                          = extensionName (head us) c
