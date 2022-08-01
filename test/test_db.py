@@ -379,7 +379,7 @@ class TestDbApps(unittest.TestCase):
 
 
     def test_app(self):
-        cmd = ["./test_db_app", "--rts-verbose",
+        cmd = ["./rts/ddb_test_app", "--rts-verbose",
                "--rts-ddb-replication", str(self.replication_factor)
                ] + get_db_args(self.dbc.port_chunk, self.replication_factor)
         self.p = subprocess.run(cmd, capture_output=True, timeout=3)

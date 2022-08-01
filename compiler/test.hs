@@ -51,6 +51,7 @@ main = do
       , regressionSegfaultTests
       , rtsAutoTests
       , rtsTests
+      , rtsDDBTests
       , stdlibAutoTests
       , stdlibTests
       ]
@@ -140,6 +141,35 @@ rtsTests =
           (returnCode, cmdOut, cmdErr) <- runThing "--rts-wthreads" "../test/rts/argv7.act"
           assertEqual "RTS wthreads error retCode" (ExitFailure 1) returnCode
           assertEqual "RTS wthreads error cmdErr" "ERROR: --rts-wthreads requires an argument.\n" cmdErr
+
+  ]
+
+rtsDDBTests =
+  testGroup "RTS DDB"
+  [
+      testCase "DDB: db app test" $ do
+          testBuild "" ExitSuccess False "../test/rts/ddb_test_app.act"
+          let cmd = "./test_db.py TestDbApps.test_app"
+              wd = "../test"
+          (returnCode, cmdOut, cmdErr) <- readCreateProcessWithExitCode (shell $ cmd){ cwd = Just wd } ""
+          assertEqual "DB client test success retCode" ExitSuccess returnCode
+
+  ,   testCase "DDB: TCP server resume" $ do
+          testBuild "" ExitSuccess False "../test/rts/ddb_test_server.act"
+          let cmd = "./test_db.py TestDbApps.test_app_resume_tcp_server"
+              wd = "../test"
+          (returnCode, cmdOut, cmdErr) <- readCreateProcessWithExitCode (shell $ cmd){ cwd = Just wd } ""
+          assertEqual "DB client test success retCode" ExitSuccess returnCode
+
+  , after AllFinish "TCP server resume" $
+      testCase "DDB: TCP client resume" $ do
+          testBuild "" ExitSuccess False "../test/rts/ddb_test_server.act"
+          testBuild "" ExitSuccess False "../test/rts/ddb_test_client.act"
+          let cmd = "./test_db.py TestDbApps.test_app_resume_tcp_client"
+              wd = "../test"
+          (returnCode, cmdOut, cmdErr) <- readCreateProcessWithExitCode (shell $ cmd){ cwd = Just wd } ""
+          assertEqual "DB server test success retCode" ExitSuccess returnCode
+
   ]
 
 stdlibTests =
@@ -149,6 +179,8 @@ stdlibTests =
           epoch <- getCurrentTime >>= pure . (1000*) . utcTimeToPOSIXSeconds >>= pure . round
           testBuildAndRun "" (show epoch) ExitSuccess False "../test/stdlib/test_time.act"
   ]
+
+
 
 
 -- Creates testgroup from .act files found in specified directory
