@@ -1,10 +1,10 @@
 {-# LANGUAGE CPP #-}
+import Control.Concurrent
 import Data.List
 import Data.List.Split
 import Data.Maybe
 import Data.Ord
 import Data.Time.Clock.POSIX
-
 import System.Directory
 import System.Directory.Recursive
 import System.Exit
@@ -140,6 +140,29 @@ rtsTests =
           (returnCode, cmdOut, cmdErr) <- runThing "--rts-wthreads" "../test/rts/argv7.act"
           assertEqual "RTS wthreads error retCode" (ExitFailure 1) returnCode
           assertEqual "RTS wthreads error cmdErr" "ERROR: --rts-wthreads requires an argument.\n" cmdErr
+
+  ,   testCase "thread count" $ do
+          -- check the number of threads, which should be 10, consisting of 7
+          -- worker threads (as specified on command line), IO+new IO & main
+          testBuild "" ExitSuccess False "../test/rts/wthreads1.act"
+          (pin, pout, perr, ph) <- runInteractiveProcess "../test/rts/wthreads1" ["--rts-wthreads=7"] Nothing Nothing
+          threadDelay 100000
+          mpid <- getPid ph
+          case mpid of
+              Just pid -> do
+#if defined(darwin_HOST_OS)
+                  let cmd = "ps -M " ++ show pid ++ " | tail -n +2 | wc -l"
+#else
+                  let cmd = "ps -o thcount " ++ show pid
+#endif
+                  (returnCode, cmdOut, cmdErr) <- readCreateProcessWithExitCode (shell $ cmd) ""
+                  let tCount = read (last $ lines cmdOut)::Int
+                  assertEqual "RTS thread count" 10 tCount
+              Nothing -> do
+                  assertFailure "whtreads1 program should be running"
+          terminateProcess ph
+          waitForProcess ph
+          return ()
   ]
 
 stdlibTests =
