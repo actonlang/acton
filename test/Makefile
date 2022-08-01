@@ -1,17 +1,10 @@
 MK_PATH:=$(shell dirname $(dir $(abspath $(lastword $(MAKEFILE_LIST)))))
 ACTONC=$(MK_PATH)/dist/bin/actonc --cpedantic
-DDB_SERVER=../dist/bin/actondb
-TESTS= \
-	$(DDB_TESTS)
+TESTS=test_db_app_no_quorum rts/wthreads1
 test:
 	$(MAKE) $(TESTS)
 
-
-ddb-tests:
-	$(MAKE) $(DDB_TESTS)
-
-DDB_TESTS=test_db_app_no_quorum
-.PHONY: $(DDB_TESTS)
+.PHONY: $(TESTS)
 
 test_db_app_no_quorum:
 	@echo "Skipping because this is essentially broken"
@@ -19,7 +12,7 @@ test_db_app_no_quorum:
 	#./test_db.py TestDbAppsNoQuorum
 
 
-# Expect 9 threads given 7 workers + main process + IO
+# Expect 10 threads given 7 workers + main process + IO + new IO
 rts/wthreads1:
-	$(ACTONC) --root main $@.act
-	./$@ --rts-wthreads 7 & PID=$$! && ps -o thcount $${PID} | tail -n1 | awk '{ print $$1 }' | grep "^9$$"
+	$(ACTONC) $@.act
+	./$@ --rts-wthreads 7 & PID=$$! && ps -o thcount $${PID} | tail -n1 | awk '{ print $$1 }' | grep "^10$$"
