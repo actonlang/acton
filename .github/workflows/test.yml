@@ -72,8 +72,6 @@ jobs:
           - os: "debian"
             version: "11"
           - os: "ubuntu"
-            version: "21.10"
-          - os: "ubuntu"
             version: "22.04"
           - os: "ubuntu"
             version: "22.10"
@@ -160,8 +158,6 @@ jobs:
         include:
           - os: "debian"
             version: "11"
-          - os: "ubuntu"
-            version: "21.10"
           - os: "ubuntu"
             version: "22.04"
           - os: "ubuntu"
