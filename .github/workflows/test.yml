@@ -95,13 +95,18 @@ jobs:
           path: |
             ~/.stack
           key: ${{ matrix.os }}-${{ matrix.version }}-${{ secrets.CACHE_VERSION }}
+      - name: "chown our home dir to avoid stack complaining"
+        run: chown -R root:root /github/home
       - name: "Install build prerequisites"
         run: |
           export DEBIAN_FRONTEND=noninteractive
           apt-get update
-          apt-get install -qy bzip2 gcc haskell-stack libbsd-dev libprotobuf-c-dev libutf8proc-dev libuv1-dev make pkg-config procps python3 uuid-dev zlib1g-dev
-      - name: chown our home dir to avoid stack complaining
-        run: chown -R root:root /github/home
+          apt-get install -qy bzip2 gcc haskell-stack libbsd-dev libmd-dev libprotobuf-c-dev libutf8proc-dev libuv1-dev make pkg-config procps python3 uuid-dev zlib1g-dev
+      - name: "Upgrade stack on old distributions"
+        if: ${{ (matrix.os == 'ubuntu') && (matrix.version == '20.04') }}
+        run: |
+          stack upgrade
+          echo "PATH=~/.local/bin:$PATH" >> $GITHUB_ENV
       - name: "Build Acton"
         run: make -j2 -C ${GITHUB_WORKSPACE} BUILD_RELEASE=${{ env.BUILD_RELEASE }}
       - name: "Build a release"
