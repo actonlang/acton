@@ -1,4 +1,5 @@
 {-# LANGUAGE CPP #-}
+import Control.Concurrent
 import Data.List
 import Data.List.Split
 import Data.Maybe
@@ -146,6 +147,7 @@ rtsTests =
           -- worker threads (as specified on command line), IO+new IO & main
           testBuild "" ExitSuccess False "../test/rts/wthreads1.act"
           (pin, pout, perr, ph) <- runInteractiveProcess "../test/rts/wthreads1" ["--rts-wthreads=7"] Nothing Nothing
+          threadDelay 100000
           mpid <- getPid ph
           case mpid of
               Just pid -> do
