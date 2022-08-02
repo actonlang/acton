@@ -1,5 +1,7 @@
 #pragma once
 
+#include "__builtin__.h"
+
 struct $Iterator$class {
   char *$GCINFO;
   int $class_id;
