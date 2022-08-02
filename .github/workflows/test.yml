@@ -157,6 +157,32 @@ jobs:
           if-no-files-found: error
 
 
+  run-macos:
+    needs: test-darwin
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-10.15, macos-11, macos-12]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: "Download artifacts for Macos, built on macos-11"
+        uses: actions/download-artifact@v2
+        with:
+          name: acton-macos-11
+      - name: "Extract acton"
+        run: |
+          ls
+          tar jxvf acton-darwin*.tar.bz2
+      - name: "Compile acton program"
+        run: |
+          echo 'actor main(env):'          > test-runtime.act
+          echo '    print("Hello, world")' >> test-runtime.act
+          echo '    env.exit(0)'           >> test-runtime.act
+          ls
+          acton/bin/actonc --root main test-runtime.act
+          ./test-runtime
+          ./test-runtime | grep "Hello, world"
+
   run-linux:
     needs: build-debs
     strategy:
