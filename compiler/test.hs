@@ -1,10 +1,10 @@
 {-# LANGUAGE CPP #-}
+import Control.Concurrent
 import Data.List
 import Data.List.Split
 import Data.Maybe
 import Data.Ord
 import Data.Time.Clock.POSIX
-
 import System.Directory
 import System.Directory.Recursive
 import System.Exit
@@ -51,6 +51,7 @@ main = do
       , regressionSegfaultTests
       , rtsAutoTests
       , rtsTests
+      , rtsDDBTests
       , stdlibAutoTests
       , stdlibTests
       ]
@@ -140,6 +141,66 @@ rtsTests =
           (returnCode, cmdOut, cmdErr) <- runThing "--rts-wthreads" "../test/rts/argv7.act"
           assertEqual "RTS wthreads error retCode" (ExitFailure 1) returnCode
           assertEqual "RTS wthreads error cmdErr" "ERROR: --rts-wthreads requires an argument.\n" cmdErr
+
+  ,   testCase "thread count" $ do
+          -- check the number of threads, which should be 10, consisting of 7
+          -- worker threads (as specified on command line), IO+new IO & main
+          testBuild "" ExitSuccess False "../test/rts/wthreads1.act"
+          (pin, pout, perr, ph) <- runInteractiveProcess "../test/rts/wthreads1" ["--rts-wthreads=7"] Nothing Nothing
+          threadDelay 100000
+          mpid <- getPid ph
+          case mpid of
+              Just pid -> do
+#if defined(darwin_HOST_OS)
+                  let cmd = "ps -M " ++ show pid ++ " | tail -n +2 | wc -l"
+#else
+                  let cmd = "ps -o thcount " ++ show pid
+#endif
+                  (returnCode, cmdOut, cmdErr) <- readCreateProcessWithExitCode (shell $ cmd) ""
+                  let tCount = read (last $ lines cmdOut)::Int
+                  assertEqual "RTS thread count" 10 tCount
+              Nothing -> do
+                  assertFailure "whtreads1 program should be running"
+          terminateProcess ph
+          waitForProcess ph
+          return ()
+  ]
+
+rtsDDBTests =
+  testGroup "RTS DDB"
+  [
+      testCase "DDB: db app test" $ do
+          testBuild "" ExitSuccess False "../test/rts/ddb_test_app.act"
+          let cmd = "./test_db.py TestDbApps.test_app"
+              wd = "../test"
+          (returnCode, cmdOut, cmdErr) <- readCreateProcessWithExitCode (shell $ cmd){ cwd = Just wd } ""
+          iff (returnCode /= ExitSuccess) (
+              putStrLn("\nERROR: when running test application\nSTDOUT: " ++ cmdOut ++ "\nSTDERR: " ++ cmdErr)
+              )
+          assertEqual "DB client test success retCode" ExitSuccess returnCode
+
+  ,   testCase "DDB: TCP server resume" $ do
+          testBuild "" ExitSuccess False "../test/rts/ddb_test_server.act"
+          let cmd = "./test_db.py TestDbApps.test_app_resume_tcp_server"
+              wd = "../test"
+          (returnCode, cmdOut, cmdErr) <- readCreateProcessWithExitCode (shell $ cmd){ cwd = Just wd } ""
+          iff (returnCode /= ExitSuccess) (
+              putStrLn("\nERROR: when running test application\nSTDOUT: " ++ cmdOut ++ "\nSTDERR: " ++ cmdErr)
+              )
+          assertEqual "DB client test success retCode" ExitSuccess returnCode
+
+  , after AllFinish "TCP server resume" $
+      testCase "DDB: TCP client resume" $ do
+          testBuild "" ExitSuccess False "../test/rts/ddb_test_server.act"
+          testBuild "" ExitSuccess False "../test/rts/ddb_test_client.act"
+          let cmd = "./test_db.py TestDbApps.test_app_resume_tcp_client"
+              wd = "../test"
+          (returnCode, cmdOut, cmdErr) <- readCreateProcessWithExitCode (shell $ cmd){ cwd = Just wd } ""
+          iff (returnCode /= ExitSuccess) (
+              putStrLn("\nERROR: when running test application\nSTDOUT: " ++ cmdOut ++ "\nSTDERR: " ++ cmdErr)
+              )
+          assertEqual "DB server test success retCode" ExitSuccess returnCode
+
   ]
 
 stdlibTests =
@@ -149,6 +210,8 @@ stdlibTests =
           epoch <- getCurrentTime >>= pure . (1000*) . utcTimeToPOSIXSeconds >>= pure . round
           testBuildAndRun "" (show epoch) ExitSuccess False "../test/stdlib/test_time.act"
   ]
+
+
 
 
 -- Creates testgroup from .act files found in specified directory

@@ -1,7 +1,7 @@
 # Basic test case of the Acton RTS together with the database backend. We want
 # to focus on things that lead to database interaction, so in essence calling
-# actor methods / sending methods and execution of continuations. We also want
-# to test the timer queue.
+# actor methods / sending methods and execution of continuations, including
+# using an "after" statement to test the timer queue.
 #
 # main -> Foo."init" -> timerQ after 0 -> Foo.callback() -> main.final() -> exit
 

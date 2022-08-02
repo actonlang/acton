@@ -342,7 +342,6 @@ rts: $(ARCHIVES)
 test:
 	cd compiler && stack test
 	$(MAKE) -C backend test
-	$(MAKE) -C test
 
 test-builtins:
 	cd compiler && stack test --ta '-p "Builtins"'
