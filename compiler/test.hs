@@ -174,6 +174,9 @@ rtsDDBTests =
           let cmd = "./test_db.py TestDbApps.test_app"
               wd = "../test"
           (returnCode, cmdOut, cmdErr) <- readCreateProcessWithExitCode (shell $ cmd){ cwd = Just wd } ""
+          iff (returnCode /= ExitSuccess) (
+              putStrLn("\nERROR: when running test application\nSTDOUT: " ++ cmdOut ++ "\nSTDERR: " ++ cmdErr)
+              )
           assertEqual "DB client test success retCode" ExitSuccess returnCode
 
   ,   testCase "DDB: TCP server resume" $ do
@@ -181,6 +184,9 @@ rtsDDBTests =
           let cmd = "./test_db.py TestDbApps.test_app_resume_tcp_server"
               wd = "../test"
           (returnCode, cmdOut, cmdErr) <- readCreateProcessWithExitCode (shell $ cmd){ cwd = Just wd } ""
+          iff (returnCode /= ExitSuccess) (
+              putStrLn("\nERROR: when running test application\nSTDOUT: " ++ cmdOut ++ "\nSTDERR: " ++ cmdErr)
+              )
           assertEqual "DB client test success retCode" ExitSuccess returnCode
 
   , after AllFinish "TCP server resume" $
@@ -190,6 +196,9 @@ rtsDDBTests =
           let cmd = "./test_db.py TestDbApps.test_app_resume_tcp_client"
               wd = "../test"
           (returnCode, cmdOut, cmdErr) <- readCreateProcessWithExitCode (shell $ cmd){ cwd = Just wd } ""
+          iff (returnCode /= ExitSuccess) (
+              putStrLn("\nERROR: when running test application\nSTDOUT: " ++ cmdOut ++ "\nSTDERR: " ++ cmdErr)
+              )
           assertEqual "DB server test success retCode" ExitSuccess returnCode
 
   ]
