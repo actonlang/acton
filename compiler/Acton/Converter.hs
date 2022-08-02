@@ -207,7 +207,7 @@ convStmts t0 eq stmts                   = map conv stmts
         convS (TSchema l q t)           = TSchema l (q) (convT t)
         convT (TFun l fx p k t)         = TFun l fx (posRow (tVar tvSelf) p) k t
         convT t                         = t
-        convD (Def l n q p k t b d x)   = Def l n (convSelf t0 q) (wit2par [(selfKW',tSelf)] $ convSelf t0 p) (convSelf t0 k) (convSelf t0 t) b' d x
+        convD (Def l n q p k t b _ x)   = Def l n (convSelf t0 q) (wit2par [(selfKW',tSelf)] $ convSelf t0 p) (convSelf t0 k) (convSelf t0 t) b' NoDec x
           where b'                      = bindWits eq ++ b
         convD d                         = d
 
@@ -243,9 +243,9 @@ fromSigs env ((n, NSig sc dec) : te)    = Signature NoLoc [n] (convS sc) dec : f
   where convS (TSchema l q t)           = TSchema l (noqual env q) (convT q t)
         convT q (TFun l x p k t)        = TFun l x (qualWRow env q p) k t
         convT q t                       = t
---fromSigs env ((n, NDef sc dec) : te)    = Decl NoLoc [def] : fromSigs env te
---  where TSchema _ q (TFun _ fx p k t)   = sc
---        def                             = Def NoLoc n q (pPar pNames p) (kPar kNames k) (Just t) [sNotImpl] dec fx
+fromSigs env ((n, NDef sc dec) : te)    = Decl NoLoc [def] : fromSigs env te
+  where TSchema _ q (TFun _ fx p k t)   = sc
+        def                             = Def NoLoc n q (pPar pNames p) (kPar kNames k) (Just t) [sNotImpl] dec fx
 fromSigs env (_ : te)                   = fromSigs env te
 fromSigs env []                         = []
 

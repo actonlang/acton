@@ -1304,13 +1304,11 @@ funargs = do r <- funItems S.PosArg S.PosStar S.PosNil expr expr kwdarg S.KwdNil
 
 effect  :: Parser S.Type
 effect  = addLoc $  
-            S.TVar NoLoc <$> tvar
-        <|> rword "_" *> return (S.TWild NoLoc)
+            rword "_" *> return (S.TWild NoLoc)
         <|> rword "proc" *> return S.fxProc
         <|> rword "mut" *> return S.fxMut
         <|> rword "pure" *> return S.fxPure
         <|> rword "action" *> return S.fxAction
-  where optvar f = brackets (f <$> (addLoc $ S.TVar NoLoc <$> tvar)) <|> return S.tWild
 
 posrow :: Parser S.PosRow 
 posrow = posItems S.posRow S.posVar S.posNil ttype (optional tvar)

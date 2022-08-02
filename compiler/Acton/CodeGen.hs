@@ -260,16 +260,6 @@ declModule env (s : ss)             = vcat [ gen env t <+> genTopName env n <> s
         env1                        = gdefine te env
 
 
-isNotImpl []                        = False
-isNotImpl (s : ss)                  = notImpl s || isNotImpl ss
-  where notImpl (Expr _ (NotImplemented _))
-                                    = True
-        notImpl (If _ bs els)       = any isNotImpl [ b | Branch _ b <- bs ] || isNotImpl els
-        notImpl (While _ _ b els)   = isNotImpl b || isNotImpl els
-        notImpl (For _ _ _ b els)   = isNotImpl b || isNotImpl els
-        notImpl _                   = False
-
-
 declDecl env (Def _ n q p KwdNIL (Just t) b d m)
   | isNotImpl b                     = gen env t <+> genTopName env n <+> parens (gen env p) <> semi
   | otherwise                       = (gen env t <+> genTopName env n <+> parens (gen env p) <+> char '{') $+$

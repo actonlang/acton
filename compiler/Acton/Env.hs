@@ -108,7 +108,7 @@ instance Pretty Witness where
                                       equals <+> pretty (wexpr ws (eQVar w))
         
 instance Pretty TEnv where
-    pretty tenv                 = vcat (map pretty tenv)
+    pretty tenv                 = vcat (map pretty $ normTEnv tenv)
 
 instance (Pretty x) => Pretty (EnvF x) where
     pretty env                  = text "--- modules:"  $+$
@@ -128,13 +128,13 @@ instance Pretty (Name,NameInfo) where
     pretty (n, NVar t)          = pretty n <+> colon <+> pretty t
     pretty (n, NSVar t)         = text "var" <+> pretty n <+> colon <+> pretty t
     pretty (n, NDef t d)        = prettyDec d $ pretty n <+> colon <+> pretty t
-    pretty (n, NSig t d)        = prettyDec d $ pretty n <+> text ":" <+> pretty t
+    pretty (n, NSig t d)        = prettyDec d $ pretty n <+> colon <+> pretty t
     pretty (n, NAct q p k te)   = text "actor" <+> pretty n <> nonEmpty brackets commaList q <+>
                                   parens (prettyFunRow p k) <> colon $+$ (nest 4 $ prettyOrPass te)
     pretty (n, NClass q us te)  = text "class" <+> pretty n <> nonEmpty brackets commaList q <+>
-                                  nonEmpty parens commaList us <> colon $+$ (nest 4 $ prettyOrPass $ normTEnv te)
+                                  nonEmpty parens commaList us <> colon $+$ (nest 4 $ prettyOrPass te)
     pretty (n, NProto q us te)  = text "protocol" <+> pretty n <> nonEmpty brackets commaList q <+>
-                                  nonEmpty parens commaList us <> colon $+$ (nest 4 $ prettyOrPass $ normTEnv te)
+                                  nonEmpty parens commaList us <> colon $+$ (nest 4 $ prettyOrPass te)
     pretty (w, NExt [] c ps te) = {-pretty w  <+> colon <+> -}
                                   text "extension" <+> pretty c <+> parens (commaList ps) <>
                                   colon $+$ (nest 4 $ prettyOrPass te)

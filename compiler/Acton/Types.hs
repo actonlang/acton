@@ -71,16 +71,11 @@ simpQuant env q vs0                 = (subst s [ Quant v ps | Quant v ps <- q2, 
         isEX (Quant v [p])          = length (filter (==v) vs) == 1
         isEX _                      = False
         vs                          = concat [ tyfree ps | Quant v ps <- q ] ++ vs0
-        s                           = s1 ++ s2 ++ s3 ++ s4
+        s                           = s1 ++ s2
         s1                          = [ (v, tCon p) | Quant v [p] <- q1 ]                       -- Inline existentials
         s2                          = univars `zip` beautyvars                                  -- Beautify univars
-        s3                          = fxvars1 `zip` repeat fxPure                               -- Eliminate unconstrained effects
-        s4                          = fxvars2 `zip` beautyfx                                    -- Beautify effects
-        (fxvars,univars)            = partition ((==KFX) . tvkind) $ filter univar $ qbound q2
-        (fxvars1,fxvars2)           = partition (\v -> length (filter (==v) vs) == 1) fxvars
-        isFX v                      = tvkind v == KFX && length (filter (==v) vs) == 1
+        univars                     = filter univar $ qbound q2
         beautyvars                  = map tVar $ tvarSupply \\ tvarScope env
-        beautyfx                    = map tVar $ fxSupply \\ tvarScope env
 
 instance Simp QBind where
     simp env (Quant v ps)           = Quant v (simp env ps)
@@ -145,8 +140,7 @@ infTop env ss                           = do --traceM ("\n## infEnv top")
                                              eq <- solveAll (define (filter typeDecl te) env) te tNone cs
                                              te <- defaultVars te
                                              ss1 <- termred <$> msubst (bindWits eq ++ ss)
-                                             let te1 = normTEnv $ if stub env then unSig te else te
-                                             return (te1, ss1)
+                                             return (te, ss1)
 
 class Infer a where
     infer                               :: Env -> a -> TypeM (Constraints,Type,a)
@@ -551,9 +545,8 @@ instance InfEnv Decl where
                                              checkNoEscape env (qbound q)
                                              (nterms,asigs,sigs) <- checkAttributes final te' te
                                              when (not $ null nterms) $ err2 (dom nterms) "Method/attribute not in listed protocols:"
-                                             when (not (null asigs || stub env)) $ err3 l asigs "Protocol method/attribute lacks implementation:"
+                                             when (not (null asigs || stub env)) $ err3 l (dom asigs) "Protocol method/attribute lacks implementation:"
                                              when (not $ null sigs) $ err2 sigs "Extension with new methods/attributes not supported"
-                                             -- w <- newWitness
                                              return (cs1, [(extensionName (head us) c, NExt q c ps te)], Extension l q c us (bindWits eq1 ++ b'))
       where TC n ts                     = c
             env1                        = define (toSigs te') $ reserve (bound b) $ defineSelfOpaque $ defineTVars (stripQual q) $ setInClass env
@@ -574,7 +567,7 @@ checkAttributes final te' te
         (sigs',terms')                  = sigTerms te'
         (allsigs,allterms)              = (sigs ++ sigs', terms ++ terms')
         nterms                          = exclude terms (dom allsigs)
-        abssigs                         = dom allsigs \\ (dom allterms ++ final)
+        abssigs                         = allsigs `exclude` (dom allterms ++ final)
         osigs                           = (dom sigs `intersect` dom sigs') \\ [initKW]
         props                           = dom terms `intersect` dom (propSigs allsigs)
         nodef                           = dom terms `intersect` final
@@ -756,7 +749,7 @@ instance Check Decl where
                                              (csp,te1,p') <- infEnv env1 p
                                              (csk,te2,k') <- infEnv (define te1 env1) k
                                              (csb,te,b') <- (if stub env then infEnv else infSuiteEnv) (define te2 $ define te1 env1) b
-                                             (cs0,eq0) <- matchActorAssumption env1 n p' k' (unSig te)
+                                             (cs0,eq0) <- matchActorAssumption env1 n p' k' te
                                              popFX
                                              (cs1,eq1) <- solveScoped env1 tvs te tNone (csp++csk++csb++cs0)
                                              checkNoEscape env tvs
@@ -858,7 +851,9 @@ refine env cs te eq
         safe_vs                         = if null def_vss then [] else nub $ foldr1 intersect def_vss
         def_vss                         = [ nub $ filter canGen $ tyfree sc | (_, NDef sc _) <- te, null $ scbind sc ]
         gen_vs                          = nub (foldr union (tyfree cs) def_vss)
-        
+
+        canGen tv                       = tvkind tv /= KFX
+
         canQual (Impl _ (TVar _ v) _)   = univar v
         canQual _                       = False
 
