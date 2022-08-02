@@ -212,6 +212,7 @@ jobs:
           apt-get update
           dpkg -i deb/acton_*.deb || true
           apt-get -fy install
+          env
           actonc --version
       - name: "Compile acton program"
         run: |
