@@ -2,8 +2,7 @@
 """
 
 class NetAuth():
-    # TODO: this should take a WorldAuth token
-    def __init__(self, auth: None):
+    def __init__(self, auth: WorldAuth):
         pass
 
 class DNSAuth():
