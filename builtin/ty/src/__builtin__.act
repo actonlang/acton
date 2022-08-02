@@ -533,7 +533,13 @@ extension bool (Hashable):pass
 
 extension int (Integral):pass
 extension int (Div[float]):pass
-extension int (Ord):pass
+extension int (Ord):
+    def __eq__(a,b):
+        NotImplemented
+    def __lt__(a,b):
+        NotImplemented
+    def __le__(a,b):
+        NotImplemented
 extension int (Hashable):pass
 
 extension i64 (Integral):pass
@@ -692,60 +698,74 @@ def any(it : Iterable[A]) -> bool:
             return True
     return False
 
-ascii : (*A) -> str
+def ascii(*args) -> str:
+    NotImplemented
 
-bin : (Integral) -> str
+def bin(x: Integral) -> str:
+    NotImplemented
 
-chr : (Integral) -> str
+def chr(i: Integral) -> str:
+    NotImplemented
 
 def divmod [A(Integral)] (a : A, b : A) -> (A, A): 
-  return Integral.__divmod__(a,b)
+    return Integral.__divmod__(a,b)
 
-enumerate : (Iterable[A],?int) -> Iterator[(int,A)]
+def enumerate(iterable: Iterable[A], start: ?int) -> Iterator[(int,A)]:
+    NotImplemented
 
-filter : (?((A) -> B), Iterable[A]) -> Iterator[A]
+def filter (function: ?((A) -> B), iterable: Iterable[A]) -> Iterator[A]:
+    NotImplemented
 
-def hash(x : Hashable) -> int:
-  return x.__hash__()
+def hash(x: Hashable) -> int:
+    return x.__hash__()
 
-hex : (Integral) -> str
+def hex(i: Integral) -> str:
+    NotImplemented
 
 def iter(x : Iterable[A]) -> Iterator[A]:
-  return x.__iter__()
+    return x.__iter__()
 
 def len(x : Collection[A]) -> int:
-  return x.__len__()
+    return x.__len__()
 
-map : ((A) -> B,Iterable[A]) -> Iterator[B]
+def map(function: (A) -> B, iterable: Iterable[A]) -> Iterator[B]:
+    NotImplemented
 
-max : [A(Ord)] => (Iterable[A],?A) -> A 
+def max [A(Ord)] (iter: Iterable[A], dflt: ?A) -> A:
+    NotImplemented
 
-min : [A(Ord)] => (Iterable[A],?A) -> A 
+def min [A(Ord)] (iter: Iterable[A], dflt: ?A) -> A:
+    NotImplemented
 
 def next(x : Iterator[A]) -> A:
-  return x.__next__()
+    return x.__next__()
 
-ord : (str) -> int
+def ord(c: str) -> int:
+    NotImplemented
 
 def pow [A(Number)] (a : A, b : A) -> A:
-  return Number.__pow__(a,b)
+    return Number.__pow__(a,b)
 
-print :  (*A) -> None
+def print(*args) -> None:
+    NotImplemented
 
 def repr(x : value):
     return x.__repr__()
 
 def reversed(seq : Sequence[A]) -> Iterator[A]:
-  return seq.__reversed__()
+    return seq.__reversed__()
 
 def round [A(Real)] (x : A, n : ?int) -> A:
-  return x.__round__(n)
+    return x.__round__(n)
 
-sorted : [A(Ord)] => (Iterable[A]) -> list[A]
+def sorted [A(Ord)] (iter: Iterable[A]) -> list[A]:
+    NotImplemented
 
-sum : [A(Plus)] => (Iterable[A],?A) -> A
+def sum [A(Plus)] (iter: Iterable[A], start: ?A) -> A:
+    NotImplemented
 
-zip : (Iterable[A], Iterable[B]) -> Iterator[(A,B)]
+def zip (a: Iterable[A], b: Iterable[B]) -> Iterator[(A,B)]:
+    NotImplemented
 
 ## Environment ################################################
 
