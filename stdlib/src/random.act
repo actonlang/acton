@@ -1,1 +1,2 @@
-randint : (int, int) -> int
+def randint(min: int, max: int) -> int:
+    NotImplemented
