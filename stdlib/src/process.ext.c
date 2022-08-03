@@ -2,6 +2,10 @@
 #include <uv.h>
 #include "../rts/log.h"
 
+void process$$__ext_init__() {
+    // NOP
+}
+
 #define MAX_CMD_ARGS 32768
 
 struct process_data {

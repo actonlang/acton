@@ -3,6 +3,10 @@
 #include <uv.h>
 #include "../rts/log.h"
 
+void net$$__ext_init__() {
+    // NOP
+}
+
 struct dns_cb_data {
     struct addrinfo *hints;
     $function on_resolve;
