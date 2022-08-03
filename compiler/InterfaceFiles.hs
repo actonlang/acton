@@ -20,12 +20,12 @@ import qualified System.Exit
 import qualified Acton.Syntax
 import System.IO
 
-writeFile :: Data.Binary.Binary a => FilePath -> a -> IO ()
-writeFile f a = do h <- openFile f WriteMode
-                   Data.ByteString.Lazy.hPut h (compress (encode (Acton.Syntax.version,a)))
-                   hClose h
+writeFile :: FilePath -> [Acton.Syntax.ModName] -> Acton.Syntax.TEnv -> IO ()
+writeFile f ms a = do h <- openFile f WriteMode
+                      Data.ByteString.Lazy.hPut h (compress (encode (Acton.Syntax.version, (ms,a))))
+                      hClose h
 
-readFile :: Data.Binary.Binary a => FilePath -> IO a
+readFile :: FilePath -> IO ([Acton.Syntax.ModName], Acton.Syntax.TEnv)
 readFile f = do
       h <- openFile f ReadMode
       bs <- Data.ByteString.Lazy.hGetContents h
