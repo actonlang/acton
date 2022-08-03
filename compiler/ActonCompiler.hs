@@ -453,7 +453,7 @@ doTask opts paths env t@(ActonTask mn src m stubMode) = do
       then do
         iff (C.debug opts) (putStrLn ("    Skipping " ++ makeRelative (srcDir paths) actFile ++ " (files are up to date).") >> hFlush stdout)
         timeBeforeTy <- getTime Monotonic
-        te <- InterfaceFiles.readFile tyFile
+        (_,te) <- InterfaceFiles.readFile tyFile
         timeReadTy <- getTime Monotonic
         iff (C.timing opts) $ putStrLn("Read .ty file " ++ makeRelative (projPath paths) tyFile ++ ": " ++ fmtTime(timeReadTy - timeBeforeTy))
         timeEnd <- getTime Monotonic
@@ -585,7 +585,7 @@ runRestPasses opts paths env0 parsed stubMode = do
 
                       (iface,tchecked,typeEnv) <- Acton.Types.reconstruct outbase env kchecked
                       iff (C.types opts) $ dump "types" (Pretty.print tchecked)
-                      iff (C.sigs opts) $ dump "sigs" (Pretty.vprint (A.imps tchecked) ++ "\n\n" ++ Pretty.vprint iface ++ "\n")
+                      iff (C.sigs opts) $ dump "sigs" (Acton.Types.prettySigs env mn iface)
                       timeTypeCheck <- getTime Monotonic
                       iff (C.timing opts) $ putStrLn("    Pass: Type check      : " ++ fmtTime (timeTypeCheck - timeKindsCheck))
 

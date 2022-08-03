@@ -22,7 +22,7 @@ import Prelude hiding((<>))
 
 
 version :: [Int]
-version = [0,1]
+version = [0,2]
 
 data Module     = Module        { modname::ModName, imps::[Import], mbody::Suite } deriving (Eq,Show)
 

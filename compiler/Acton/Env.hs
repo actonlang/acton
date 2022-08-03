@@ -376,7 +376,7 @@ initEnv path True          = return $ EnvF{ names = [(nPrim,NMAlias mPrim)],
                                             thismod = Nothing,
                                             stub = False,
                                             envX = () }
-initEnv path False         = do envBuiltin <- InterfaceFiles.readFile (joinPath [path,"__builtin__.ty"])
+initEnv path False         = do (_,envBuiltin) <- InterfaceFiles.readFile (joinPath [path,"__builtin__.ty"])
                                 let env0 = EnvF{ names = [(nPrim,NMAlias mPrim), (nBuiltin,NMAlias mBuiltin)],
                                                  modules = [(nPrim,NModule primEnv), (nBuiltin,NModule envBuiltin)],
                                                  witnesses = primWits,
@@ -1006,6 +1006,8 @@ impModule _ _ _ i               = illegalImport (loc i)
 
 moduleRefs te                   = nub $ [ m | (_,NMAlias m) <- te ] ++ [ m | (_,NAlias (GName m _)) <- te ]
 
+moduleRefs1 env                 = moduleRefs (names env) \\ [mPrim, mBuiltin]
+
 subImp sys proj env []          = return env
 subImp sys proj env (m:ms)      = do (env',_) <- doImp sys proj env m
                                      subImp sys proj env' ms
@@ -1015,12 +1017,12 @@ doImp sys proj env m            = case lookupMod m env of
                                     Nothing -> do
                                         found <- doesFileExist fpath1
                                         --traceM ("## Does " ++ fpath1 ++ " exist? " ++ show found)
-                                        te <- if found then InterfaceFiles.readFile fpath1 else do
+                                        (ms,te) <- if found then InterfaceFiles.readFile fpath1 else do
                                                 found <- doesFileExist fpath2
                                                 --traceM ("## Does " ++ fpath2 ++ " exist? " ++ show found)
                                                 unless found (fileNotFound m)
                                                 InterfaceFiles.readFile fpath2
-                                        env' <- subImp sys proj env (moduleRefs te)
+                                        env' <- subImp sys proj env ms
                                         return (addMod m te env', te)
   where fpath1                  = joinPath (proj : modPath m) ++ ".ty"
         fpath2                  = joinPath (sys : modPath m) ++ ".ty"

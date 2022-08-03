@@ -12,7 +12,7 @@
 --
 
 {-# LANGUAGE MultiParamTypeClasses, FlexibleInstances, FlexibleContexts #-}
-module Acton.Types(reconstruct, showTyFile, typeError, TypeError(..)) where
+module Acton.Types(reconstruct, showTyFile, prettySigs, typeError, TypeError(..)) where
 
 import Control.Monad
 import Pretty
@@ -33,22 +33,27 @@ import qualified InterfaceFiles
 import qualified Data.Map
 
 reconstruct                             :: String -> Env0 -> Module -> IO (TEnv, Module, Env0)
-reconstruct fname env0 (Module m i ss)  = do --traceM ("#################### original env0:")
+reconstruct fname env0 (Module m i ss)  = do --traceM ("#################### original env0 for " ++ prstr m ++ ":")
                                              --traceM (render (pretty env0))
-                                             InterfaceFiles.writeFile (fname ++ ".ty") (unalias (setMod m env2) te)
+                                             InterfaceFiles.writeFile (fname ++ ".ty") mrefs iface
                                              --traceM ("#################### converted env0:")
                                              --traceM (render (pretty env0'))
-                                             return (simp env2 te, Module m i ss1, env0')
+                                             return (iface, Module m i ss1, env0')
   where env1                            = reserve (bound ss) (typeX env0)
         (te,ss1)                        = runTypeM $ infTop env1 ss
-        env2                            = define te env0
+        env2                            = define te (setMod m env0)
+        iface                           = unalias env2 te
+        mrefs                           = moduleRefs1 env0
         env0'                           = convEnvProtos env0
 
-showTyFile env0 fname           = do te <- InterfaceFiles.readFile fname
-                                     putStrLn ("\n#################################### Interface:\n")
-                                     let env2 = define te env0
-                                     putStrLn (vprint (simp env2 te))
+showTyFile env0 m fname         = do (ms,te) <- InterfaceFiles.readFile fname
+                                     putStrLn ("\n#################################### Interface:")
+                                     let env1 = define [ (name "_",NMAlias m) | m <- ms ] env0
+                                     putStrLn $ prettySigs env1 m te
 
+prettySigs env m te             = render $ vcat [ text "import" <+> pretty m | m <- moduleRefs1 env ] $++$
+                                           vpretty (simp env1 te)
+  where env1                    = define te $ setMod m env
 
 nodup x
   | not $ null vs               = err2 vs "Duplicate names:"
