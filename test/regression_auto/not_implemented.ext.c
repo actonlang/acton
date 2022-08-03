@@ -1,3 +1,7 @@
+void not_implemented$$__ext_init__() {
+    // NOP
+}
+
 $int not_implemented$$there ($str x) {
     return to$int(0);
 }

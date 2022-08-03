@@ -1,3 +1,6 @@
+void time$$__ext_init__() {
+    // NOP
+}
 
 $float time$$monotonic () {
     struct timespec ts;

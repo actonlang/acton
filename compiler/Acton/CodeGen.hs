@@ -237,12 +237,14 @@ cModule env srcbase (Module m imps stmts)
                                       (text "void" <+> genTopName env initKW <+> parens empty <+> char '{') $+$
                                       nest 4 (text "if" <+> parens (genTopName env initFlag) <+> text "return" <> semi $+$
                                               genTopName env initFlag <+> equals <+> text "1" <> semi $+$
+                                              ext_init $+$
                                               initImports $+$
                                               initModule env stmts) $+$
                                       char '}'
   where initImports                 = vcat [ gen env (GName m initKW) <> parens empty <> semi | m <- modNames imps ]
         stubs                       = [ dname d | Decl _ ds <- stmts, d@Def{} <- ds, isNotImpl (dbody d) ]
         ext_include                 = if null stubs then empty else text "#include" <+> doubleQuotes (text srcbase <> text ".ext.c")
+        ext_init                    = if null stubs then empty else genTopName env (name "__ext_init__") <+> parens empty <> semi
 
 
 declModule env []                   = empty
