@@ -88,6 +88,22 @@ ifneq ($(VERSION), $(CHANGELOG_VERSION))
 	$(error Version in common.mk ($(VERSION)) differs from last version in CHANGELOG.md ($(CHANGELOG_VERSION)))
 endif
 
+ENV_FILES=$(wildcard builtin/env.*)
+BUILTIN_HFILES=$(filter-out $(ENV_FILES),$(wildcard builtin/*.h))
+BUILTIN_CFILES=$(filter-out $(ENV_FILES),$(wildcard builtin/*.c))
+
+DBARCHIVE=lib/libActonDB.a
+ARCHIVES=lib/dev/libActon.a lib/rel/libActon.a lib/libprotobuf-c_a.a lib/libutf8proc_a.a lib/libuv_a.a
+
+DIST_BINS=$(ACTONC) dist/bin/actondb
+DIST_HFILES=\
+	dist/rts/io.h \
+	dist/rts/rts.h \
+	dist/builtin/env.h \
+	$(addprefix dist/,$(BUILTIN_HFILES))
+DIST_DBARCHIVE=$(addprefix dist/,$(DBARCHIVE))
+DIST_ARCHIVES=$(addprefix dist/,$(ARCHIVES))
+
 
 # /backend ----------------------------------------------
 backend/actondb: backend/actondb.c lib/libActonDB.a
@@ -164,9 +180,6 @@ backend/test/skiplist_test: backend/test/skiplist_test.c backend/skiplist.c
 		$(LDLIBS)
 
 # /builtin ----------------------------------------------
-ENV_FILES=$(wildcard builtin/env.*)
-BUILTIN_HFILES=$(filter-out $(ENV_FILES),$(wildcard builtin/*.h))
-BUILTIN_CFILES=$(filter-out $(ENV_FILES),$(wildcard builtin/*.c))
 builtin/builtin_dev.o: builtin/builtin.c $(BUILTIN_HFILES) $(BUILTIN_CFILES)
 	$(CC) $(CFLAGS) $(CFLAGS_DEV) -Wno-unused-result -c $< -o$@
 
@@ -246,8 +259,6 @@ stdlib/out/rel/lib/libActonProject.a: $(STDLIB_SRCFILES) dist/types/__builtin__.
 
 
 # /lib --------------------------------------------------
-DBARCHIVE=lib/libActonDB.a
-ARCHIVES=lib/dev/libActon.a lib/rel/libActon.a lib/libprotobuf-c_a.a lib/libutf8proc_a.a lib/libuv_a.a
 
 LIBACTON_DEV_OFILES=builtin/builtin_dev.o builtin/env_dev.o rts/empty.o rts/io_dev.o rts/log.o rts/rts_dev.o deps/netstring_dev.o deps/yyjson_dev.o
 OFILES += $(LIBACTON_DEV_OFILES)
@@ -412,15 +423,6 @@ dist/types/%: stdlib/out/types/% stdlib
 dist/lib/%: lib/%
 	@mkdir -p $(dir $@)
 	cp $< $@
-
-DIST_BINS=$(ACTONC) dist/bin/actondb
-DIST_HFILES=\
-	dist/rts/io.h \
-	dist/rts/rts.h \
-	dist/builtin/env.h \
-	$(addprefix dist/,$(BUILTIN_HFILES))
-DIST_DBARCHIVE=$(addprefix dist/,$(DBARCHIVE))
-DIST_ARCHIVES=$(addprefix dist/,$(ARCHIVES))
 
 .PHONY: distribution clean-distribution
 distribution: $(DIST_ARCHIVES) $(DIST_BINS) $(DIST_HFILES) $(DIST_TYFILES) $(DIST_DBARCHIVE)
