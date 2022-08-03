@@ -266,7 +266,7 @@ sExpr e         = Expr NoLoc e
 sDecl ds        = Decl NoLoc ds
 sIf bs els      = If NoLoc bs els
 sIf1 e b els    = sIf [Branch e b] els
-sNotImpl        = Expr NoLoc (NotImplemented NoLoc)
+sNotImpl        = Expr NoLoc eNotImpl
 
 handler qn b    = Handler (Except NoLoc qn) b
 
@@ -288,6 +288,7 @@ eLambda nts e   = Lambda NoLoc (pospar nts) KwdNIL e fxPure
 eLambda' ns e   = Lambda NoLoc (pospar' ns) KwdNIL e fxWild
 eAsync e        = Async NoLoc e
 eAwait e        = Await NoLoc e
+eNotImpl        = NotImplemented NoLoc
 
 pospar nts      = foldr (\(n,t) p -> PosPar n (Just t) Nothing p) PosNIL nts
 pospar' ns      = foldr (\n p -> PosPar n Nothing Nothing p) PosNIL ns
