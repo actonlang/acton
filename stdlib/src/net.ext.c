@@ -42,7 +42,7 @@ void net$$DNS$lookup_a__on_resolve (uv_getaddrinfo_t *req, int status, struct ad
     free(req);
 }
 
-$NoneType net$$DNS$lookup_a (net$$DNS __self__, $str name, $function on_resolve, $function on_error) {
+$R net$$DNS$lookup_a$local (net$$DNS __self__, $str name, $function on_resolve, $function on_error, $Cont c$cont) {
     struct addrinfo *hints = (struct addrinfo *)malloc(sizeof(struct addrinfo));
     hints->ai_family = PF_INET;
     hints->ai_socktype = SOCK_STREAM;
@@ -61,7 +61,7 @@ $NoneType net$$DNS$lookup_a (net$$DNS __self__, $str name, $function on_resolve,
     if (r != 0)
         $RAISE((($BaseException)$RuntimeError$new(to$str("Unable to run DNS query"))));
 
-    return $None;
+    return $R_CONT(c$cont, $None);
 }
 
 void net$$DNS$lookup_aaaa__on_resolve (uv_getaddrinfo_t *req, int status, struct addrinfo *dns_res) {
@@ -94,7 +94,7 @@ void net$$DNS$lookup_aaaa__on_resolve (uv_getaddrinfo_t *req, int status, struct
     free(req);
 }
 
-$NoneType net$$DNS$lookup_aaaa (net$$DNS __self__, $str name, $function on_resolve, $function on_error) {
+$R net$$DNS$lookup_aaaa$local (net$$DNS __self__, $str name, $function on_resolve, $function on_error, $Cont c$cont) {
     struct addrinfo *hints = (struct addrinfo *)malloc(sizeof(struct addrinfo));
     hints->ai_family = PF_INET6;
     hints->ai_socktype = SOCK_STREAM;
@@ -113,5 +113,5 @@ $NoneType net$$DNS$lookup_aaaa (net$$DNS __self__, $str name, $function on_resol
     if (r != 0)
         $RAISE((($BaseException)$RuntimeError$new(to$str("Unable to run DNS query"))));
 
-    return $None;
+    return $R_CONT(c$cont, $None);
 }

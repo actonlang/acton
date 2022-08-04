@@ -22,12 +22,12 @@ class TCPListenAuth():
         pass
 
 actor DNS(auth: DNSAuth):
-    def lookup_a(name: str, on_resolve: action(list[str]) -> None, on_error: action(str) -> None) -> None:
+    action def lookup_a(name: str, on_resolve: action(list[str]) -> None, on_error: action(str) -> None) -> None:
         """Perform DNS lookup for name of record type A
         """
         NotImplemented
 
-    def lookup_aaaa(name: str, on_resolve: action(list[str]) -> None, on_error: action(str) -> None) -> None:
+    action def lookup_aaaa(name: str, on_resolve: action(list[str]) -> None, on_error: action(str) -> None) -> None:
         """Perform DNS lookup for name of record type AAAA
         """
         NotImplemented
