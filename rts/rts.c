@@ -180,8 +180,14 @@ extern $Actor $ROOT();
 $Actor root_actor = NULL;
 $Env env_actor = NULL;
 
-$Actor readyQ = NULL;
-$Lock readyQ_lock;
+struct readyqs {
+    $Actor head;
+    $Actor tail;
+    unsigned long long count;
+    $Lock lock;
+};
+struct readyqs rqs[MAX_WTHREADS+1];
+
 
 $Msg timerQ = NULL;
 $Lock timerQ_lock;
@@ -208,8 +214,9 @@ void new_work() {
     // We are sometimes optimistically called, i.e. the caller sometimes does
     // not really know whether there is new work or not. We check and if there
     // is not, then there is no need to wake anyone up.
-    if (!readyQ)
-        return;
+//    if (!readyQ)
+//        return;
+//TODO KLL: do something more here
 
     pthread_mutex_lock(&sleep_lock);
     pthread_cond_signal(&work_to_do);
@@ -501,31 +508,47 @@ struct $ConstCont$class $ConstCont$methods = {
 
 ////////////////////////////////////////////////////////////////////////////////////////
 
-// Atomically enqueue actor "a" onto the global ready-queue.
+// Atomically enqueue actor "a" onto the right ready-queue, either a thread
+// local one or the "default" of 0 which is a shared queue among all worker
+// threads. The index is offset by 1 so worker thread 0 is at index 1.
 void ENQ_ready($Actor a) {
-    spinlock_lock(&readyQ_lock);
-    if (readyQ) {
-        $Actor x = readyQ;
+    int i = a->$affinity;
+    spinlock_lock(&rqs[i].lock);
+    if (rqs[i].head) {
+        $Actor x = rqs[i].head;
         while (x->$next)
             x = x->$next;
         x->$next = a;
     } else {
-        readyQ = a;
+        rqs[i].head = a;
     }
     a->$next = NULL;
-    spinlock_unlock(&readyQ_lock);
+    spinlock_unlock(&rqs[i].lock);
 }
 
-// Atomically dequeue and return the first actor from the global ready-queue, 
-// or return NULL.
-$Actor DEQ_ready() {
-    spinlock_lock(&readyQ_lock);
-    $Actor res = readyQ;
+// Atomically dequeue and return the first actor from a ready-queue, first
+// dequeueing from the thread specific queue and second from the global shared
+// readyQ or return NULL if no work is found.
+$Actor _DEQ_ready(int idx) {
+    $Actor res = NULL;
+    if (rqs[idx].head == NULL)
+        return res;
+
+    spinlock_lock(&rqs[idx].lock);
+    res = rqs[idx].head;
     if (res) {
-        readyQ = res->$next;
+        rqs[idx].head = res->$next;
         res->$next = NULL;
     }
-    spinlock_unlock(&readyQ_lock);
+    spinlock_unlock(&rqs[idx].lock);
+    return res;
+}
+$Actor DEQ_ready(int idx) {
+    $Actor res = _DEQ_ready(idx);
+    if (res)
+        return res;
+
+    res = _DEQ_ready(0);
     return res;
 }
 
@@ -1215,7 +1238,7 @@ void *main_loop(void *idx) {
             pthread_mutex_unlock(&sleep_lock);
             break;
         }
-        $Actor current = DEQ_ready();
+        $Actor current = DEQ_ready((int)idx);
         if (current) {
             new_work();
             pthread_setspecific(self_key, current);
@@ -2050,6 +2073,13 @@ int main(int argc, char **argv) {
         wt_stats[i].bkeep_inf = 0;
     }
     init_dbc_stats();
+
+
+    for (uint i=0; i <= MAX_WTHREADS; i++) {
+        rqs[i].head = NULL;
+        rqs[i].tail = NULL;
+        rqs[i].count = 0;
+    }
 
     $register_builtin();
     $__init__();
