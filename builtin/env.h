@@ -436,6 +436,7 @@ struct $Env {
     $Catcher $catcher;
     $Lock $msg_lock;
     $long $globkey;
+    $int64 $affinity;
     $WorldAuth auth;
     $list argv;
 };
@@ -464,6 +465,7 @@ struct $ListenSocket {
     $Catcher $catcher;
     $Lock $msg_lock;
     $long $globkey;
+    $int64 $affinity;
     int fd;
     $function cb_err;
 };
@@ -496,6 +498,7 @@ struct $Connection {
     $Catcher $catcher;
     $Lock $msg_lock;
     $long $globkey;
+    $int64 $affinity;
     int descriptor;
     $function cb_err;
 };
@@ -526,6 +529,7 @@ struct $RFile {
     $Catcher $catcher;
     $Lock $msg_lock;
     $long $globkey;
+    $int64 $affinity;
     FILE *file;
 };
 
@@ -555,6 +559,7 @@ struct $WFile {
     $Catcher $catcher;
     $Lock $msg_lock;
     $long $globkey;
+    $int64 $affinity;
     int descriptor;
 };
 

@@ -830,6 +830,7 @@ $WorldAuth $WorldAuth$new() {
 $NoneType $Env$__init__ ($Env __self__, $WorldAuth token, $list argv) {
     __self__->auth = token;
     __self__->argv = argv;
+    __self__->$affinity = 0;
     return $None;
 }
 $R $Env$stdout_write$local ($Env __self__, $str s, $Cont c$cont) {

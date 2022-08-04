@@ -308,6 +308,7 @@ void $Actor$__init__($Actor a) {
     a->$catcher = NULL;
     atomic_flag_clear(&a->$msg_lock);
     a->$globkey = get_next_key();
+    a->$affinity = 0;
     rtsd_printf("# New Actor %ld at %p of class %s", a->$globkey, a, a->$class->$GCINFO);
 }
 
@@ -347,6 +348,7 @@ $Actor $Actor$__deserialize__($Actor res, $Serial$state state) {
     res->$consume_hd = (long)$val_deserialize(state);
     res->$catcher = $step_deserialize(state);
     atomic_flag_clear(&res->$msg_lock);
+    res->$affinity = 0;
     return res;
 }
 
