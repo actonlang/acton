@@ -1451,9 +1451,7 @@ void *$eventloop(void *arg) {
             }
         }
 
-        pthread_mutex_lock(&sleep_lock);
-        pthread_cond_signal(&work_to_do);
-        pthread_mutex_unlock(&sleep_lock);
+        wake_wt(0);
 
     }
     return NULL;

@@ -22,6 +22,9 @@ class TCPListenAuth():
         pass
 
 actor DNS(auth: DNSAuth):
+    def _pin_affinity() -> None:
+        NotImplemented
+
     action def lookup_a(name: str, on_resolve: action(list[str]) -> None, on_error: action(str) -> None) -> None:
         """Perform DNS lookup for name of record type A
         """
@@ -31,6 +34,8 @@ actor DNS(auth: DNSAuth):
         """Perform DNS lookup for name of record type AAAA
         """
         NotImplemented
+
+    _pin_affinity()
 
 
 def _force_ext():

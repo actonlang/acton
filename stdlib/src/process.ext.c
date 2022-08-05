@@ -1,5 +1,6 @@
 
 #include <uv.h>
+#include "../rts/io.h"
 #include "../rts/log.h"
 
 void process$$__ext_init__() {
@@ -46,6 +47,7 @@ void read_stderrout(uv_stream_t *stream, ssize_t nread, const uv_buf_t *buf) {
 }
 
 $R process$$Process$_create_process (process$$Process __self__, $Cont c$cont) {
+    pin_actor_affinity(($Actor)__self__);
     struct process_data *process_data = calloc(1, sizeof(struct process_data));
     process_data->on_stdout = __self__->on_stdout;
     process_data->on_stderr = __self__->on_stderr;
@@ -67,10 +69,10 @@ $R process$$Process$_create_process (process$$Process __self__, $Cont c$cont) {
     }
     args[++i] = NULL;
 
-    uv_pipe_init(uv_default_loop(), &process_data->stdin_pipe, 0);
-    uv_pipe_init(uv_default_loop(), &process_data->stdout_pipe, 0);
+    uv_pipe_init(get_uv_loop(), &process_data->stdin_pipe, 0);
+    uv_pipe_init(get_uv_loop(), &process_data->stdout_pipe, 0);
     process_data->stdout_pipe.data = __self__->on_stdout;
-    uv_pipe_init(uv_default_loop(), &process_data->stderr_pipe, 0);
+    uv_pipe_init(get_uv_loop(), &process_data->stderr_pipe, 0);
     process_data->stderr_pipe.data = __self__->on_stderr;
 
     uv_stdio_container_t process_stdio[3];
@@ -92,7 +94,7 @@ $R process$$Process$_create_process (process$$Process __self__, $Cont c$cont) {
     options->args = args;
 
     int r;
-    if ((r = uv_spawn(uv_default_loop(), req, options))) {
+    if ((r = uv_spawn(get_uv_loop(), req, options))) {
         log_debug("Failed to spawn process: %s", uv_strerror(r));
         $RAISE((($BaseException)$RuntimeError$new(to$str("Unable to spawn process"))));
     }
