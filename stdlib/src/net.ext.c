@@ -1,6 +1,6 @@
-//#include "net.ext.h"
 
 #include <uv.h>
+#include "../rts/io.h"
 #include "../rts/log.h"
 
 void net$$__ext_init__() {
@@ -59,7 +59,7 @@ $R net$$DNS$lookup_a$local (net$$DNS __self__, $str name, $function on_resolve, 
     uv_getaddrinfo_t *req = (uv_getaddrinfo_t*)malloc(sizeof(uv_getaddrinfo_t));
     req->data = cb_data;
 
-    int r = uv_getaddrinfo(uv_default_loop(), req, net$$DNS$lookup_a__on_resolve, from$str(name), NULL, hints);
+    int r = uv_getaddrinfo(get_uv_loop(), req, net$$DNS$lookup_a__on_resolve, from$str(name), NULL, hints);
     // TODO: use on_error callback instead!
     if (r != 0)
         $RAISE((($BaseException)$RuntimeError$new(to$str("Unable to run DNS query"))));
@@ -114,11 +114,15 @@ $R net$$DNS$lookup_aaaa$local (net$$DNS __self__, $str name, $function on_resolv
     uv_getaddrinfo_t *req = (uv_getaddrinfo_t*)malloc(sizeof(uv_getaddrinfo_t));
     req->data = cb_data;
 
-    int r = uv_getaddrinfo(uv_default_loop(), req, net$$DNS$lookup_aaaa__on_resolve, from$str(name), NULL, hints);
+    int r = uv_getaddrinfo(get_uv_loop(), req, net$$DNS$lookup_aaaa__on_resolve, from$str(name), NULL, hints);
     // TODO: use on_error callback instead!
     if (r != 0)
         $RAISE((($BaseException)$RuntimeError$new(to$str("Unable to run DNS query"))));
 
     return $R_CONT(c$cont, $None);
 }
+
+$R net$$DNS$_pin_affinity (net$$DNS __self__, $Cont c$cont) {
+    pin_actor_affinity(($Actor)__self__);
+    return $R_CONT(c$cont, $None);
 }

@@ -16,6 +16,12 @@
 
 #include "../builtin/builtin.h"
 
+#define MAX_WTHREADS 256
+
+extern long num_wthreads;
+
+extern pthread_key_t pkey_wtid;
+extern pthread_key_t pkey_uv_loop;
 struct $Msg;
 struct $Actor;
 struct $Catcher;
@@ -187,10 +193,14 @@ void $POP();
 
 extern $Msg timerQ;
 
+void wake_wt(int wtid);
+
 time_t current_time();
 time_t next_timeout();
 void handle_timeout();
 void rts_shutdown();
+
+void pin_actor_affinity($Actor);
 
 //typedef $int $Env;
 

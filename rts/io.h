@@ -7,6 +7,7 @@
 #endif
 
 #include <pthread.h>
+#include <uv.h>
 
 #ifdef __gnu_linux__
     #define IS_GNU_LINUX
@@ -14,7 +15,4 @@
     #define IS_MACOS
 #endif
 
-int ioloop(void *);
-void stop_ioloop();
-
-void await_ioloop_started();
+uv_loop_t *get_uv_loop();
