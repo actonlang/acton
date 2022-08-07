@@ -2005,13 +2005,13 @@ int main(int argc, char **argv) {
     if (num_wthreads < 4) {
         num_wthreads = 4;
         cpu_pin = 0;
-        log_info("Detected %ld CPUs: Using %ld worker threads, due to low CPU count. No CPU affinity used.\n", num_cores, num_wthreads);
+        log_info("Detected %ld CPUs: Using %ld worker threads, due to low CPU count. No CPU affinity used.", num_cores, num_wthreads);
     } else if (num_wthreads == num_cores) {
         cpu_pin = 1;
-        log_info("Detected %ld CPUs: Using %ld worker threads for 1:1 mapping with CPU affinity set.\n", num_cores, num_wthreads);
+        log_info("Detected %ld CPUs: Using %ld worker threads for 1:1 mapping with CPU affinity set.", num_cores, num_wthreads);
     } else {
         cpu_pin = 0;
-        log_info("Detected %ld CPUs: Using %ld worker threads. No CPU affinity used.\n", num_cores, num_wthreads);
+        log_info("Detected %ld CPUs: Using %ld worker threads. No CPU affinity used.", num_cores, num_wthreads);
     }
 
     // Zeroize statistics
