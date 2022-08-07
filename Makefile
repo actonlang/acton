@@ -350,50 +350,50 @@ rts: $(ARCHIVES)
 
 test-net:
 	dist/bin/actonc --dev test/stdlib_auto/test_net.act
-	test/stdlib_auto/test_net --rts-verbose --rts-debug
-	test/stdlib_auto/test_net --rts-verbose --rts-debug
-	test/stdlib_auto/test_net --rts-verbose --rts-debug
-	test/stdlib_auto/test_net --rts-verbose --rts-debug
-	test/stdlib_auto/test_net --rts-verbose --rts-debug
-	test/stdlib_auto/test_net --rts-verbose --rts-debug
-	test/stdlib_auto/test_net --rts-verbose --rts-debug
-	test/stdlib_auto/test_net --rts-verbose --rts-debug
-	test/stdlib_auto/test_net --rts-verbose --rts-debug
-	test/stdlib_auto/test_net --rts-verbose --rts-debug
-	test/stdlib_auto/test_net --rts-verbose --rts-debug
-	test/stdlib_auto/test_net --rts-verbose --rts-debug
-	test/stdlib_auto/test_net --rts-verbose --rts-debug
-	test/stdlib_auto/test_net --rts-verbose --rts-debug
-	test/stdlib_auto/test_net --rts-verbose --rts-debug
-	test/stdlib_auto/test_net --rts-verbose --rts-debug
-	test/stdlib_auto/test_net --rts-verbose --rts-debug
-	test/stdlib_auto/test_net --rts-verbose --rts-debug
-	test/stdlib_auto/test_net --rts-verbose --rts-debug
-	test/stdlib_auto/test_net --rts-verbose --rts-debug
-	test/stdlib_auto/test_net --rts-verbose --rts-debug
-	test/stdlib_auto/test_net --rts-verbose --rts-debug
-	test/stdlib_auto/test_net --rts-verbose --rts-debug
-	test/stdlib_auto/test_net --rts-verbose --rts-debug
-	test/stdlib_auto/test_net --rts-verbose --rts-debug
-	test/stdlib_auto/test_net --rts-verbose --rts-debug
-	test/stdlib_auto/test_net --rts-verbose --rts-debug
-	test/stdlib_auto/test_net --rts-verbose --rts-debug
-	test/stdlib_auto/test_net --rts-verbose --rts-debug
-	test/stdlib_auto/test_net --rts-verbose --rts-debug
-	test/stdlib_auto/test_net --rts-verbose --rts-debug
-	test/stdlib_auto/test_net --rts-verbose --rts-debug
-	test/stdlib_auto/test_net --rts-verbose --rts-debug
-	test/stdlib_auto/test_net --rts-verbose --rts-debug
-	test/stdlib_auto/test_net --rts-verbose --rts-debug
-	test/stdlib_auto/test_net --rts-verbose --rts-debug
-	test/stdlib_auto/test_net --rts-verbose --rts-debug
-	test/stdlib_auto/test_net --rts-verbose --rts-debug
-	test/stdlib_auto/test_net --rts-verbose --rts-debug
-	test/stdlib_auto/test_net --rts-verbose --rts-debug
-	test/stdlib_auto/test_net --rts-verbose --rts-debug
-	test/stdlib_auto/test_net --rts-verbose --rts-debug
-	test/stdlib_auto/test_net --rts-verbose --rts-debug
-	test/stdlib_auto/test_net --rts-verbose --rts-debug
+	timeout 1 test/stdlib_auto/test_net --rts-verbose --rts-debug
+	timeout 1 test/stdlib_auto/test_net --rts-verbose --rts-debug
+	timeout 1 test/stdlib_auto/test_net --rts-verbose --rts-debug
+	timeout 1 test/stdlib_auto/test_net --rts-verbose --rts-debug
+	timeout 1 test/stdlib_auto/test_net --rts-verbose --rts-debug
+	timeout 1 test/stdlib_auto/test_net --rts-verbose --rts-debug
+	timeout 1 test/stdlib_auto/test_net --rts-verbose --rts-debug
+	timeout 1 test/stdlib_auto/test_net --rts-verbose --rts-debug
+	timeout 1 test/stdlib_auto/test_net --rts-verbose --rts-debug
+	timeout 1 test/stdlib_auto/test_net --rts-verbose --rts-debug
+	timeout 1 test/stdlib_auto/test_net --rts-verbose --rts-debug
+	timeout 1 test/stdlib_auto/test_net --rts-verbose --rts-debug
+	timeout 1 test/stdlib_auto/test_net --rts-verbose --rts-debug
+	timeout 1 test/stdlib_auto/test_net --rts-verbose --rts-debug
+	timeout 1 test/stdlib_auto/test_net --rts-verbose --rts-debug
+	timeout 1 test/stdlib_auto/test_net --rts-verbose --rts-debug
+	timeout 1 test/stdlib_auto/test_net --rts-verbose --rts-debug
+	timeout 1 test/stdlib_auto/test_net --rts-verbose --rts-debug
+	timeout 1 test/stdlib_auto/test_net --rts-verbose --rts-debug
+	timeout 1 test/stdlib_auto/test_net --rts-verbose --rts-debug
+	timeout 1 test/stdlib_auto/test_net --rts-verbose --rts-debug
+	timeout 1 test/stdlib_auto/test_net --rts-verbose --rts-debug
+	timeout 1 test/stdlib_auto/test_net --rts-verbose --rts-debug
+	timeout 1 test/stdlib_auto/test_net --rts-verbose --rts-debug
+	timeout 1 test/stdlib_auto/test_net --rts-verbose --rts-debug
+	timeout 1 test/stdlib_auto/test_net --rts-verbose --rts-debug
+	timeout 1 test/stdlib_auto/test_net --rts-verbose --rts-debug
+	timeout 1 test/stdlib_auto/test_net --rts-verbose --rts-debug
+	timeout 1 test/stdlib_auto/test_net --rts-verbose --rts-debug
+	timeout 1 test/stdlib_auto/test_net --rts-verbose --rts-debug
+	timeout 1 test/stdlib_auto/test_net --rts-verbose --rts-debug
+	timeout 1 test/stdlib_auto/test_net --rts-verbose --rts-debug
+	timeout 1 test/stdlib_auto/test_net --rts-verbose --rts-debug
+	timeout 1 test/stdlib_auto/test_net --rts-verbose --rts-debug
+	timeout 1 test/stdlib_auto/test_net --rts-verbose --rts-debug
+	timeout 1 test/stdlib_auto/test_net --rts-verbose --rts-debug
+	timeout 1 test/stdlib_auto/test_net --rts-verbose --rts-debug
+	timeout 1 test/stdlib_auto/test_net --rts-verbose --rts-debug
+	timeout 1 test/stdlib_auto/test_net --rts-verbose --rts-debug
+	timeout 1 test/stdlib_auto/test_net --rts-verbose --rts-debug
+	timeout 1 test/stdlib_auto/test_net --rts-verbose --rts-debug
+	timeout 1 test/stdlib_auto/test_net --rts-verbose --rts-debug
+	timeout 1 test/stdlib_auto/test_net --rts-verbose --rts-debug
+	timeout 1 test/stdlib_auto/test_net --rts-verbose --rts-debug
 
 
 .PHONY: test test-builtins test-compiler test-db test-examples test-lang test-regressions test-rts test-stdlib
