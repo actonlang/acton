@@ -579,8 +579,11 @@ $Actor DEQ_ready(int idx) {
     }
 
     res = _DEQ_ready(0);
-    if (res)
+    if (res) {
         log_debug("DEQ of %d (%s) from %d", res->$globkey, res->$class->$GCINFO, 0);
+    } else {
+        log_debug("DEQ got nothing...");
+    }
     return res;
 }
 
@@ -1397,8 +1400,11 @@ void wt_stop_cb(uv_async_t *ev) {
 
 void wt_work_cb(uv_async_t *ev) {
     bool more_work = run_cont();
-    if (more_work)
+    if (more_work) {
         uv_async_send(ev);
+    } else {
+        log_debug("No more work, going back to sleep...");
+    }
 }
 
 void *main_loop(void *idx) {
