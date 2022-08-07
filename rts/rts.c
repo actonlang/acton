@@ -535,6 +535,7 @@ struct $ConstCont$class $ConstCont$methods = {
 // threads. The index is offset by 1 so worker thread 0 is at index 1.
 int ENQ_ready($Actor a) {
     int i = a->$affinity;
+    log_debug("ENQ of %d (%s) to %d", a->$globkey, a->$class->$GCINFO, i);
     spinlock_lock(&rqs[i].lock);
     if (rqs[i].head) {
         $Actor x = rqs[i].head;
@@ -572,10 +573,14 @@ $Actor _DEQ_ready(int idx) {
 }
 $Actor DEQ_ready(int idx) {
     $Actor res = _DEQ_ready(idx);
-    if (res)
+    if (res) {
+        log_debug("DEQ of %d (%s) from %d", res->$globkey, res->$class->$GCINFO, idx);
         return res;
+    }
 
     res = _DEQ_ready(0);
+    if (res)
+        log_debug("DEQ of %d (%s) from %d", res->$globkey, res->$class->$GCINFO, 0);
     return res;
 }
 
@@ -1409,6 +1414,7 @@ void *main_loop(void *idx) {
     pthread_setspecific(pkey_uv_loop, (void *)uv_loop);
 
     int r = uv_run(uv_loop, UV_RUN_DEFAULT);
+    log_debug("rqs[%d]: %p   rqs[0]: %p", rqs[(int)idx].head, rqs[0].head);
     rtsd_printf("Exiting...");
 }
 
