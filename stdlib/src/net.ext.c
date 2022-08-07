@@ -17,8 +17,10 @@ void net$$DNS$lookup_a__on_resolve (uv_getaddrinfo_t *req, int status, struct ad
     struct dns_cb_data *cb_data = req->data;
     $list $res = $list$new(NULL, NULL);
 
-    if (status == -1) {
-        cb_data->on_error->$class->__call__(cb_data->on_error, to$str("Error during DNS lookup"));
+    if (status != 0) {
+        char errmsg[1024] = "DNS lookup error: ";
+        uv_strerror_r(status, errmsg + strlen(errmsg), sizeof(errmsg)-strlen(errmsg));
+        cb_data->on_error->$class->__call__(cb_data->on_error, to$str(errmsg));
 
         uv_freeaddrinfo(dns_res);
         free(cb_data->hints);
@@ -58,6 +60,7 @@ $NoneType net$$DNS$lookup_a (net$$DNS __self__, $str name, $function on_resolve,
     req->data = cb_data;
 
     int r = uv_getaddrinfo(uv_default_loop(), req, net$$DNS$lookup_a__on_resolve, from$str(name), NULL, hints);
+    // TODO: use on_error callback instead!
     if (r != 0)
         $RAISE((($BaseException)$RuntimeError$new(to$str("Unable to run DNS query"))));
 
@@ -68,8 +71,10 @@ void net$$DNS$lookup_aaaa__on_resolve (uv_getaddrinfo_t *req, int status, struct
     struct dns_cb_data *cb_data = req->data;
     $list $res = $list$new(NULL, NULL);
 
-    if (status == -1) {
-        cb_data->on_error->$class->__call__(cb_data->on_error, to$str("Error during DNS lookup"));
+    if (status != 0) {
+        char errmsg[1024] = "DNS lookup error: ";
+        uv_strerror_r(status, errmsg + strlen(errmsg), sizeof(errmsg)-strlen(errmsg));
+        cb_data->on_error->$class->__call__(cb_data->on_error, to$str(errmsg));
 
         uv_freeaddrinfo(dns_res);
         free(cb_data->hints);
@@ -110,6 +115,7 @@ $NoneType net$$DNS$lookup_aaaa (net$$DNS __self__, $str name, $function on_resol
     req->data = cb_data;
 
     int r = uv_getaddrinfo(uv_default_loop(), req, net$$DNS$lookup_aaaa__on_resolve, from$str(name), NULL, hints);
+    // TODO: use on_error callback instead!
     if (r != 0)
         $RAISE((($BaseException)$RuntimeError$new(to$str("Unable to run DNS query"))));
 
