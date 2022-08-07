@@ -33,10 +33,14 @@ pruneStmts xs (Decl l ds : ss)
   | null ds'                            = pruneStmts xs ss
   | otherwise                           = Decl l ds' : pruneStmts xs ss
   where ds'                             = filter ((`elem`xs) . dname) ds
+pruneStmts xs (s@Assign{} : ss)
+  | null ns                             = pruneStmts xs ss
+  | otherwise                           = s : pruneStmts xs ss
+  where ns                              = bound s `intersect` xs
 pruneStmts xs (s : ss)                  = s : pruneStmts xs ss
 pruneStmts xs []                        = []
 
-pruneDefs env n ss                      = pruneStmts xs ss
+pruneBody env n ss                      = pruneStmts xs ss
   where xs                              = directAttrs env n
 
 convProtocol env n0 q ps0 eq wmap b     = mainClass : sibClasses
@@ -51,7 +55,7 @@ convProtocol env n0 q ps0 eq wmap b     = mainClass : sibClasses
         immsibs                         = [ (witAttr w, tCon $ convProto p, inherited ws0) | ([w],ws0,p) <- ps ]
 
         mainClass                       = Class NoLoc n0 q1 bases mainClassBody
-          where mainClassBody           = qsigs ++ psigs ++ Decl NoLoc [mainInit] : pruneDefs env (NoQ n0) (convStmts tSelf' eq1 b)
+          where mainClassBody           = qsigs ++ psigs ++ Decl NoLoc [mainInit] : convStmts tSelf' eq1 (pruneBody env (NoQ n0) b)
                 psigs                   = [ Signature NoLoc [n] (monotype t) Property | (n,t,False) <- immsibs ]
                 mainInit                = Def NoLoc initKW [] mainParams KwdNIL (Just tNone) (mkBody mainInitBody) NoDec fxPure
                 mainParams              = wit2par ((selfKW',tSelf) : qpars ++ [ (n,t) | (n,t,_) <- immsibs ]) PosNIL
@@ -70,7 +74,7 @@ convProtocol env n0 q ps0 eq wmap b     = mainClass : sibClasses
 
         sibClasses                      = [ Class NoLoc (sibName ws n0) q1 us (sibClassBody ws n (head us) wes inh) | (ws,n,us,wes,inh) <- allsibs ]
 
-        sibClassBody ws n p wes inh     = qsigs ++ psigs ++ Decl NoLoc [sibInit] : pruneDefs env n (convStmts tSelf' eq1 b)
+        sibClassBody ws n p wes inh     = qsigs ++ psigs ++ Decl NoLoc [sibInit] : convStmts tSelf' eq1 (pruneBody env n b)
           where psigs                   = [ Signature NoLoc [w0] (monotype t0) Property ]
                 sibInit                 = Def NoLoc initKW [] sibParams KwdNIL (Just tNone) (mkBody sibInitBody) NoDec fxPure
                 sibParams               = wit2par ((selfKW',tSelf) : qpars ++ sibSubParams ++ sibCtxt) PosNIL
@@ -97,7 +101,7 @@ wtails (w:ws)
   where ws'                             = catRight ws
 
 wheads (Right w:ws)
-  | null $ catRight ws                  = [w]
+  | null $ catRight ws                  = []
   | otherwise                           = w : wheads ws
 wheads (Left w:ws)                      = w : wheads ws
 
@@ -112,7 +116,7 @@ convExtension env n1 c0 q ps0 eq wmap b = mainClass : sibClasses
         bases                           = [ instProto t0 p | (ws,p) <- ps0, null (catRight ws) ] ++ [cValue]
 
         mainClass                       = Class NoLoc n1 q1 bases mainClassBody
-          where mainClassBody           = qsigs ++ Decl NoLoc [mainInit] : pruneDefs env (tcname main) (convStmts t0 eq1 b)
+          where mainClassBody           = qsigs ++ Decl NoLoc [mainInit] : convStmts t0 eq1 (pruneBody env (tcname main) b)
                 mainInit                = Def NoLoc initKW [] mainParams KwdNIL (Just tNone) (mkBody mainInitBody) NoDec fxPure
                 mainParams              = wit2par ((selfKW',tSelf) : qpars) PosNIL
                 mainInitBody            = bindWits eq0 ++ initCall ts (witArgs (tcname main) wmap ++ sibSubs []) main ++ qcopies
@@ -128,7 +132,7 @@ convExtension env n1 c0 q ps0 eq wmap b = mainClass : sibClasses
 
         sibClasses                      = [ Class NoLoc (sibName ws n1) q1 us (sibClassBody ws n (head us) wes inh) | (ws,n,us,wes,inh) <- allsibs ]
 
-        sibClassBody ws n p wes inh     = qsigs ++ Decl NoLoc [sibInit] : pruneDefs env n (convStmts t0 eq1 b)
+        sibClassBody ws n p wes inh     = qsigs ++ Decl NoLoc [sibInit] : convStmts t0 eq1 (pruneBody env n b)
           where sibInit                 = Def NoLoc initKW [] sibParams KwdNIL (Just tNone) (mkBody sibInitBody) NoDec fxPure
                 sibParams               = wit2par ((selfKW',tSelf) : qpars ++ sibCtxt) PosNIL
                 sibCtxt                 = witCtxt ps ws ++ [(w0,tCon main)]
@@ -218,8 +222,8 @@ convEnvProtos env                       = mapModules conv env
     conv env1 m (n, NDef sc d)          = [(n, NDef (convS sc) d)]
     conv env1 m (n, NSig sc d)          = [(n, NSig (convS sc) d)]
     conv env1 m (n, NAct q p k te)      = [(n, NAct (noqual env q) (qualWRow env q p) k (concat $ map (conv env m) te))]
-    conv env1 m ni@(n, NProto q us te)  = map (fromClass env) $ convProtocol (define [ni] env) n q us [] [] (fromTEnv env te)
-    conv env1 m ni@(n, NExt q c us te)  = map (fromClass env) $ convExtension (define [ni] env) n c q us [] [] (fromTEnv env te)
+    conv env1 m ni@(n, NProto q us te)  = map (fromClass env) $ convProtocol (define [ni] env) n q us [] [] (fromTEnv te)
+    conv env1 m ni@(n, NExt q c us te)  = map (fromClass env) $ convExtension (define [ni] env) n c q us [] [] (fromTEnv te)
     conv env1 m (n, NClass q us te)     = [(n, NClass (noqual env q) us (convClassTEnv env q te))]
     conv env1 m ni                      = [ni]
     convS (TSchema l q t)               = TSchema l (noqual env q) (convT q t)
@@ -245,13 +249,15 @@ fromDefs env (Def l n q p k a _ d fx : ds)
 fromDefs env (_ : ds)                   = fromDefs env ds
 fromDefs env []                         = []
 
-fromTEnv env ((n, NSig sc dec) : te)    = Signature NoLoc [n] sc dec : fromTEnv env te
-fromTEnv env ((n, NDef sc dec) : te)    = Decl NoLoc [def] : fromTEnv env te
+fromTEnv ((n, NSig sc dec) : te)        = Signature NoLoc [n] sc dec : fromTEnv te
+fromTEnv ((n, NDef sc dec) : te)        = Decl NoLoc [def] : fromTEnv te
   where TSchema _ q (TFun _ fx p k t)   = sc
-        def                             = Def NoLoc n q (pPar pNames p) (kPar kNames k) (Just t) [sNotImpl] dec fx
-fromTEnv env ((n, NVar t) : te)         = sAssign (pVar n t) eNotImpl : fromTEnv env te
-fromTEnv env (_ : te)                   = fromTEnv env te
-fromTEnv env []                         = []
+        def                             = Def NoLoc n q (pPar' dec p) (kPar kNames k) (Just t) [sNotImpl] dec fx
+        pPar' Static p                  = pPar pNames p
+        pPar' _ p                       = pPar pNames (posRow tSelf p)
+fromTEnv ((n, NVar t) : te)             = sAssign (pVar n t) eNotImpl : fromTEnv te
+fromTEnv (_ : te)                       = fromTEnv te
+fromTEnv []                             = []
 
 convClassTEnv env q0 te                 = [ (n, conv i) | (n,i) <- te ]
   where conv (NSig sc dec)              = NSig (convS sc) NoDec

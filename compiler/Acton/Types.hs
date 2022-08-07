@@ -243,13 +243,15 @@ instance InfEnv Stmt where
                                              return (Sub w t (tFun fx prow krow t0) :
                                                      cs1++cs2++cs3, [], Expr l $ Call l (eCall (eVar w) [e]) p k)
 
-    infEnv env s@(Expr l (NotImplemented _))
-                                        = return ([], [], s)
-    infEnv env (Expr l e)               = do (cs,_,e') <- infer env e
+    infEnv env (Expr l e)
+      | e == eNotImpl                   = return ([], [], Expr l e)
+      | otherwise                       = do (cs,_,e') <- infer env e
                                              return (cs, [], Expr l e')
 
     infEnv env (Assign l pats e)
-      | nodup pats                      = do (cs1,te,t,pats') <- infEnvT env pats
+      | nodup pats, e == eNotImpl       = do (cs1,te,t,pats') <- infEnvT env pats
+                                             return (cs1, te, Assign l pats' e)
+      | otherwise                       = do (cs1,te,t,pats') <- infEnvT env pats
                                              (cs2,e') <- inferSub env t e
                                              return (cs1++cs2, te, Assign l pats' e')
 
@@ -544,21 +546,25 @@ instance InfEnv Decl where
       | not $ null witsearch            = err (loc n) ("Extension already exists: " ++ prstr (head witsearch))
       | otherwise                       = do --traceM ("\n## infEnv extension " ++ prstr c)
                                              pushFX fxPure tNone
-                                             (cs,te,b') <- infEnv env1 b
+                                             (cs,te,b1) <- infEnv env1 b
                                              popFX
                                              (cs1,eq1) <- solveScoped env1 (qbound q) te tNone cs
                                              checkNoEscape env (qbound q)
                                              (nterms,asigs,sigs) <- checkAttributes final te' te
                                              when (not $ null nterms) $ err2 (dom nterms) "Method/attribute not in listed protocols:"
-                                             when (not (null asigs || stub env)) $ err3 l (dom asigs) "Protocol method/attribute lacks implementation:"
                                              when (not $ null sigs) $ err2 sigs "Extension with new methods/attributes not supported"
-                                             return (cs1, [(extensionName (head us) c, NExt q c ps te)], Extension l q c us (bindWits eq1 ++ b'))
+                                             when (not (null asigs || hasNotImpl b)) $ err3 l (dom asigs) "Protocol method/attribute lacks implementation:"
+                                             let te1 = unSig $ subst s asigs
+                                                 te2 = te ++ te1
+                                                 b2 = addImpl te1 b1
+                                             return (cs1, [(extensionName (head us) c, NExt q c ps te2)], Extension l q c us (bindWits eq1 ++ b2))
       where TC n ts                     = c
             env1                        = define (toSigs te') $ reserve (bound b) $ defineSelfOpaque $ defineTVars (stripQual q) $ setInClass env
             witsearch                   = [ w | w <- witsByPName env (tcname $ head us), matching (tCon c) w, matching' (wtype w) (qbound q) (tCon c) ]
             ps                          = mro1 env us     -- TODO: check that ps doesn't contradict any previous extension mro for c
             final                       = concat [ conAttrs env (tcname p) | (_,p) <- tail ps, hasWitness env (tCon c) p ]
             te'                         = parentTEnv env ps
+            s                           = [(tvSelf, tCon c)]
 
 --------------------------------------------------------------------------------------------------------------------------
 
@@ -577,6 +583,11 @@ checkAttributes final te' te
         props                           = dom terms `intersect` dom (propSigs allsigs)
         nodef                           = dom terms `intersect` final
         nself                           = negself te
+
+addImpl [] ss                           = ss
+addImpl asigs (s : ss)
+  | isNotImpl s                         = fromTEnv (unSig asigs) ++ s : ss
+  | otherwise                           = s : addImpl asigs ss
 
 stripQual q                             = [ Quant v [] | Quant v us <- q ]
 
@@ -796,7 +807,7 @@ instance Check Decl where
             NProto _ ps te              = findName n env
 
     checkEnv' env (Extension l q c us b)
-                                        = do --traceM ("## checkEnv extension " ++ prstr n)
+                                        = do --traceM ("## checkEnv extension " ++ prstr n ++ "(" ++ prstrs us ++ ")")
                                              pushFX fxPure tNone
                                              wellformed env1 q
                                              (csu,wmap) <- wellformedProtos env1 us
@@ -997,7 +1008,8 @@ instance Infer Expr where
                                             NClass q _ _ -> do
                                                 (cs0,ts) <- instQBinds env q
                                                 --traceM ("## Instantiating " ++ prstr n)
-                                                when (abstractClass env n) (err1 n "Abstract class cannot be instantiated:")
+                                                let ns = abstractAttrs env n
+                                                when (not $ null ns) (err3 (loc n) ns "Abstract attributes prevent instantiation:")
                                                 case findAttr env (TC n ts) initKW of
                                                     Just (_,sc,_) -> do
                                                         (cs1,tvs,t) <- instantiate env sc

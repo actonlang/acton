@@ -438,6 +438,7 @@ solveMutAttr env (wf,sc,dec) (Mut t1 n t2)  = do when (dec /= Just Property) (no
 -- witness lookup
 ----------------------------------------------------------------------------------------------------------------------
 
+findWitness                 :: Env -> Type -> PCon -> Maybe Witness
 findWitness env t p         = case elim [] match_ws of
                                 [w] | null uni_ws  -> Just w
                                 w:_ | isForced env -> Just w

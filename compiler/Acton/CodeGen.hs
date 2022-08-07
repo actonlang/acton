@@ -127,8 +127,9 @@ methstub env (Class _ n q a b)      = text "extern" <+> text "struct" <+> classn
 methstub env Def{}                  = empty
 
 constub env t n r
-  | abstractClass env (NoQ n)       = empty
+  | not $ null ns                   = empty
   | otherwise                       = gen env t <+> newcon env n <> parens (params env r) <> semi
+  where ns                          = abstractAttrs env (NoQ n)
 
 fields env c                        = map field (subst [(tvSelf,tCon c)] te)
   where te                          = fullAttrEnv env c
@@ -243,7 +244,7 @@ cModule env srcbase (Module m imps stmts)
                                               initModule env stmts) $+$
                                       char '}'
   where initImports                 = vcat [ gen env (GName m initKW) <> parens empty <> semi | m <- modNames imps ]
-        stubs                       = [ dname d | Decl _ ds <- stmts, d@Def{} <- ds, isNotImpl (dbody d) ]
+        stubs                       = [ dname d | Decl _ ds <- stmts, d@Def{} <- ds, hasNotImpl (dbody d) ]
         ext_include                 = if null stubs then empty else text "#include" <+> doubleQuotes (text srcbase <> text ".ext.c")
         ext_init                    = if null stubs then empty else genTopName env (name "__ext_init__") <+> parens empty <> semi
 
@@ -261,7 +262,7 @@ declModule env (s : ss)             = vcat [ gen env t <+> genTopName env n <> s
 
 
 declDecl env (Def _ n q p KwdNIL (Just t) b d m)
-  | isNotImpl b                     = gen env t <+> genTopName env n <+> parens (gen env p) <> semi
+  | hasNotImpl b                    = gen env t <+> genTopName env n <+> parens (gen env p) <> semi
   | otherwise                       = (gen env t <+> genTopName env n <+> parens (gen env p) <+> char '{') $+$
                                       nest 4 (genSuite env1 b) $+$
                                       char '}'
@@ -578,7 +579,8 @@ classCast env ts x q n              = parens . (parens (gen env t) <>)
 genNew env n p                      = newcon' env n <> parens (gen env p)
 
 declCon env n q
-  | abstractClass env (NoQ n)       = empty
+  | not $ null ns                   = --trace ("### NOT GENERATING CONS FOR " ++ prstr n ++ " BECAUSE OF " ++ prstrs ns) $
+                                      empty
   | otherwise                       = (gen env tRes <+> newcon env n <> parens (gen env pars) <+> char '{') $+$
                                       nest 4 (gen env tObj <+> gen env tmpV <+> equals <+> malloc env (gname env n) <> semi $+$
                                               gen env tmpV <> text "->" <> gen env1 classKW <+> equals <+> char '&' <> methodtable env1 n <> semi $+$
@@ -595,6 +597,7 @@ declCon env n q
         retobj (PosArg e PosNil)    = PosArg (eCall (tApp (eQVar primCONSTCONT) [fx,tObj]) [eVar tmpV, e]) PosNil
         retobj (PosArg e p)         = PosArg e (retobj p)
         env1                        = ldefine ((tmpV, NVar tObj) : envOf pars) env
+        ns                          = abstractAttrs env (NoQ n)
 
 malloc env n                        = text "malloc" <> parens (text "sizeof" <> parens (text "struct" <+> gen env n))
 

@@ -744,10 +744,11 @@ isQVar e                            = Nothing
 
 isVar e                             = case isQVar e of Just (NoQ n) -> Just n; _ -> Nothing
 
-isNotImpl []                        = False
-isNotImpl (s : ss)
-  | Expr _ (NotImplemented _) <- s  = True
-  | otherwise                       = isNotImpl ss
+hasNotImpl ss                       = any isNotImpl ss
+
+isNotImpl (Expr _ e)                = e == eNotImpl
+isNotImpl (Assign _ _ e)            = e == eNotImpl
+isNotImpl _                         = False
 
 isTVar TVar{}                       = True
 isTVar _                            = False

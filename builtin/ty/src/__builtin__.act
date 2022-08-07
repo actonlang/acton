@@ -58,8 +58,7 @@ class range (value):
       NotImplemented
 
 class Iterator[A] (object):
-  def __next__(self) -> A:
-      NotImplemented
+  __next__      : () -> ?A
   
 protocol Iterable[A]:
   __iter__     : () -> Iterator[A]
@@ -351,6 +350,8 @@ protocol Ord (Eq):
   @staticmethod
   __ge__       : (Self,Self) -> bool 
 
+  def __le__(a,b):
+      return a < b or a == b
   def __gt__(a,b):
       return b < a
   def __ge__(a,b):
@@ -529,33 +530,44 @@ protocol Integral (Rational,Logical):
 ## Number protocol extensions ######################################################################
 
 #extension bool (Eq): pass
-extension bool (Hashable):pass
+extension bool (Hashable):
+    NotImplemented
 
-extension int (Integral):pass
-extension int (Div[float]):pass
+extension int (Integral):
+    NotImplemented
+extension int (Div[float]):
+    NotImplemented
 extension int (Ord):
-    def __eq__(a,b):
-        NotImplemented
-    def __lt__(a,b):
-        NotImplemented
-    def __le__(a,b):
-        NotImplemented
-extension int (Hashable):pass
+    NotImplemented
+extension int (Hashable):
+    NotImplemented
 
-extension i64 (Integral):pass
-extension i64 (Div[float]):pass
-extension i64 (Ord):pass
-extension i64 (Hashable):pass
+extension i64 (Integral):
+    NotImplemented
+extension i64 (Div[float]):
+    NotImplemented
+extension i64 (Ord):
+    NotImplemented
+extension i64 (Hashable):
+    NotImplemented
 
-extension float (RealFloat):pass
-extension float (Div[float]):pass
-extension float (Ord):pass
-extension float (Hashable):pass
+extension float (RealFloat):
+    NotImplemented
+extension float (Div[float]):
+    NotImplemented
+extension float (Ord):
+    NotImplemented
+extension float (Hashable):
+    NotImplemented
 
-extension complex (Number):pass
-extension complex (Div[complex]):pass
-extension complex (Eq):pass
-extension complex (Hashable):pass
+extension complex (Number):
+    NotImplemented
+extension complex (Div[complex]):
+    NotImplemented
+extension complex (Eq):
+    NotImplemented
+extension complex (Hashable):
+    NotImplemented
 
 ## Collection protocols ############################################################################
 
@@ -639,47 +651,55 @@ protocol Set[A (Eq)] (Container[A], Ord, Logical, Minus):
 
 ## Collection protocol extensions ########################################
 
-extension list[A] (Sequence[A]): pass
+extension list[A] (Sequence[A]):
+    NotImplemented
+extension list[A(Eq)] (Container[A]):
+    NotImplemented
+extension list[A(Ord)] (Ord):
+    NotImplemented
 
-extension list[A(Eq)] (Container[A]):pass
+extension dict[A(Hashable),B] (Mapping[A,B]):
+    NotImplemented
+extension dict[A(Hashable),B(Eq)] (Ord):
+    NotImplemented
 
-extension list[A(Ord)] (Ord):pass
+extension set[A(Hashable)] (Set[A]):
+    NotImplemented
 
-extension dict[A(Hashable),B] (Mapping[A,B]): pass
+extension Iterator[A](Iterable[A]):
+    NotImplemented
 
-extension dict[A(Hashable),B(Eq)] (Ord): pass
+extension range (Iterable[int]):
+    NotImplemented
 
-extension set[A(Hashable)] (Set[A]): pass
+extension str (Ord):
+    NotImplemented
+extension str (Container[str]):
+    NotImplemented
+extension str (Sliceable[str]):
+    NotImplemented
+extension str (Times[int]):
+    NotImplemented
+extension str (Hashable):
+    NotImplemented
 
-extension Iterator[A](Iterable[A]): pass
+extension bytearray (Ord):
+    NotImplemented
+extension bytearray (Sequence[int]):
+    NotImplemented
+extension bytearray (Container[int]):
+    NotImplemented
 
-extension range (Iterable[int]): pass
-
-extension str (Ord): pass
-
-extension str (Container[str]): pass
-
-extension str (Sliceable[str]): pass
-
-extension str (Times[int]): pass
-
-extension str (Hashable): pass
-
-extension bytearray (Ord): pass
-
-extension bytearray (Sequence[int]): pass
-
-extension bytearray (Container[int]): pass
-
-extension bytes (Ord): pass
-
-extension bytes (Sliceable[int]): pass
-
-extension bytes (Container[int]): pass
-
-extension bytes (Times[int]): pass
-
-extension bytes (Hashable): pass
+extension bytes (Ord):
+    NotImplemented
+extension bytes (Sliceable[int]):
+    NotImplemented
+extension bytes (Container[int]):
+    NotImplemented
+extension bytes (Times[int]):
+    NotImplemented
+extension bytes (Hashable):
+    NotImplemented
 
 ## Builtin functions #####################################################
 
@@ -737,7 +757,7 @@ def max [A(Ord)] (iter: Iterable[A], dflt: ?A) -> A:
 def min [A(Ord)] (iter: Iterable[A], dflt: ?A) -> A:
     NotImplemented
 
-def next(x : Iterator[A]) -> A:
+def next(x : Iterator[A]) -> ?A:
     return x.__next__()
 
 def ord(c: str) -> int:
