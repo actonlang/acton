@@ -172,7 +172,7 @@ jobs:
       - name: "Extract acton"
         run: |
           ls
-          tar jxvf acton-darwin*.tar.bz2
+          tar jxvf $(ls acton-darwin*.tar.bz2 | tail -n1)
       - name: "Compile acton program"
         run: |
           echo 'actor main(env):'          > test-runtime.act

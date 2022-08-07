@@ -1847,7 +1847,7 @@ int main(int argc, char **argv) {
      * argument or it does not.
      */
     static struct option long_options[] = {
-        {"rts-debug", NULL, 'd', "RTS debug, requires program compiled with "},
+        {"rts-debug", NULL, 'd', "RTS debug, requires program to be compiled with --dev"},
         {"rts-ddb-host", "HOST", 'h', "DDB hostname"},
         {"rts-ddb-port", "PORT", 'p', "DDB port [32000]"},
         {"rts-ddb-replication", "FACTOR", 'r', "DDB replication factor [3]"},
@@ -1916,7 +1916,7 @@ int main(int argc, char **argv) {
             case 'd':
                 #ifndef DEV
                 fprintf(stderr, "ERROR: RTS debug not supported.\n");
-                fprintf(stderr, "HINT: Recompile this program using: actonc --rts-debug ...\n");
+                fprintf(stderr, "HINT: Recompile this program using: actonc --dev ...\n");
                 exit(1);
                 #endif
                 log_set_quiet(false);
