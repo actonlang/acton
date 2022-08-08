@@ -57,6 +57,7 @@ pid_t pid;
 uv_loop_t *uv_loops[MAX_WTHREADS];
 uv_async_t stop_ev[MAX_WTHREADS];
 uv_async_t work_ev[MAX_WTHREADS];
+uv_check_t check_ev[MAX_WTHREADS];
 
 char *mon_log_path = NULL;
 int mon_log_period = 30;
@@ -1395,13 +1396,23 @@ bool run_cont() {
 }
 
 void wt_stop_cb(uv_async_t *ev) {
+    log_info("stop cb");
+    int wtid = (int)pthread_getspecific(pkey_wtid);
+    uv_check_stop(&check_ev[wtid-1]);
     uv_stop(get_uv_loop());
 }
 
 void wt_work_cb(uv_async_t *ev) {
+}
+
+void wt_check_work_cb(uv_check_t *ev) {
+    log_info("Wooo, I was called!");
+
+    int wtid = (int)pthread_getspecific(pkey_wtid);
+
     bool more_work = run_cont();
     if (more_work) {
-        uv_async_send(ev);
+        uv_async_send(&work_ev[wtid-1]);
     } else {
         log_debug("No more work, going back to sleep...");
     }
@@ -1419,9 +1430,8 @@ void *main_loop(void *idx) {
     pthread_setspecific(pkey_wtid, idx);
     pthread_setspecific(pkey_uv_loop, (void *)uv_loop);
 
-    uv_check_t wt_check_work;
-    uv_check_init(uv_loop, &wt_check_work);
-    uv_check_start(&wt_check_work, (uv_check_cb)wt_work_cb);
+    uv_check_init(uv_loop, &check_ev[(int)idx-1]);
+    uv_check_start(&check_ev[(int)idx-1], (uv_check_cb)wt_check_work_cb);
 
     int r = uv_run(uv_loop, UV_RUN_DEFAULT);
     log_debug("rqs[%d]: %p   rqs[0]: %p", (int)idx, rqs[(int)idx].head, rqs[0].head);
