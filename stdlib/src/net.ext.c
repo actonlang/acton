@@ -14,6 +14,7 @@ struct dns_cb_data {
 };
 
 void net$$DNS$lookup_a__on_resolve (uv_getaddrinfo_t *req, int status, struct addrinfo *dns_res) {
+    log_debug("lookup_a__on_resolve");
     struct dns_cb_data *cb_data = req->data;
     $list $res = $list$new(NULL, NULL);
 
@@ -45,6 +46,7 @@ void net$$DNS$lookup_a__on_resolve (uv_getaddrinfo_t *req, int status, struct ad
 }
 
 $R net$$DNS$lookup_a$local (net$$DNS __self__, $str name, $function on_resolve, $function on_error, $Cont c$cont) {
+    log_debug("lookup_a");
     struct addrinfo *hints = (struct addrinfo *)malloc(sizeof(struct addrinfo));
     hints->ai_family = PF_INET;
     hints->ai_socktype = SOCK_STREAM;
@@ -68,6 +70,7 @@ $R net$$DNS$lookup_a$local (net$$DNS __self__, $str name, $function on_resolve, 
 }
 
 void net$$DNS$lookup_aaaa__on_resolve (uv_getaddrinfo_t *req, int status, struct addrinfo *dns_res) {
+    log_debug("lookup_aaaa__on_resolve");
     struct dns_cb_data *cb_data = req->data;
     $list $res = $list$new(NULL, NULL);
 
@@ -100,6 +103,7 @@ void net$$DNS$lookup_aaaa__on_resolve (uv_getaddrinfo_t *req, int status, struct
 }
 
 $R net$$DNS$lookup_aaaa$local (net$$DNS __self__, $str name, $function on_resolve, $function on_error, $Cont c$cont) {
+    log_debug("lookup_aaaa");
     struct addrinfo *hints = (struct addrinfo *)malloc(sizeof(struct addrinfo));
     hints->ai_family = PF_INET6;
     hints->ai_socktype = SOCK_STREAM;
