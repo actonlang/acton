@@ -1419,6 +1419,10 @@ void *main_loop(void *idx) {
     pthread_setspecific(pkey_wtid, idx);
     pthread_setspecific(pkey_uv_loop, (void *)uv_loop);
 
+    uv_check_t wt_check_work;
+    uv_check_init(uv_loop, &wt_check_work);
+    uv_check_start(&wt_check_work, (uv_check_cb)wt_work_cb);
+
     int r = uv_run(uv_loop, UV_RUN_DEFAULT);
     log_debug("rqs[%d]: %p   rqs[0]: %p", (int)idx, rqs[(int)idx].head, rqs[0].head);
     rtsd_printf("Exiting...");
