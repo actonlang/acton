@@ -559,8 +559,8 @@ int ENQ_ready($Actor a) {
 // readyQ or return NULL if no work is found.
 $Actor _DEQ_ready(int idx) {
     $Actor res = NULL;
-    if (rqs[idx].head == NULL)
-        return res;
+//    if (rqs[idx].head == NULL)
+//        return res;
 
     spinlock_lock(&rqs[idx].lock);
     res = rqs[idx].head;
