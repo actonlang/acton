@@ -830,6 +830,7 @@ $WorldAuth $WorldAuth$new() {
 $NoneType $Env$__init__ ($Env __self__, $WorldAuth token, $list argv) {
     __self__->auth = token;
     __self__->argv = argv;
+    __self__->$affinity = 0;
     return $None;
 }
 $R $Env$stdout_write$local ($Env __self__, $str s, $Cont c$cont) {
@@ -1450,9 +1451,7 @@ void *$eventloop(void *arg) {
             }
         }
 
-        pthread_mutex_lock(&sleep_lock);
-        pthread_cond_signal(&work_to_do);
-        pthread_mutex_unlock(&sleep_lock);
+        wake_wt(0);
 
     }
     return NULL;

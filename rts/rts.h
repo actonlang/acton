@@ -16,6 +16,12 @@
 
 #include "../builtin/builtin.h"
 
+#define MAX_WTHREADS 256
+
+extern long num_wthreads;
+
+extern pthread_key_t pkey_wtid;
+extern pthread_key_t pkey_uv_loop;
 struct $Msg;
 struct $Actor;
 struct $Catcher;
@@ -110,6 +116,7 @@ struct $Actor {
     $Catcher $catcher;
     $Lock $msg_lock;
     $long $globkey;
+    $int64 $affinity;
 };
 
 struct $Catcher$class {
@@ -176,6 +183,7 @@ void serialize_state_shortcut($Actor);
 #define $NEWACTOR($T)       ({ $T $t = malloc(sizeof(struct $T)); \
                                $t->$class = &$T ## $methods; \
                                $Actor$methods.__init__(($Actor)$t); \
+                               $t->$affinity = 0; \
                                init_db_queue($t->$globkey); \
                                register_actor($t->$globkey); \
                                $t; })
@@ -185,10 +193,14 @@ void $POP();
 
 extern $Msg timerQ;
 
+void wake_wt(int wtid);
+
 time_t current_time();
 time_t next_timeout();
 void handle_timeout();
 void rts_shutdown();
+
+void pin_actor_affinity($Actor);
 
 //typedef $int $Env;
 
