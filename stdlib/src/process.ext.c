@@ -56,6 +56,12 @@ $R process$$Process$_create_process (process$$Process __self__, $Cont c$cont) {
     uv_process_options_t *options = calloc(1, sizeof(uv_process_options_t));
 
     uv_process_t *req = calloc(1, sizeof(uv_process_t));
+    // NOTE: storing a uv_process_t pointer as a hex formatted Acton str
+    // This sucks but how else?
+    char pihas[] = "0x7f563c001700"; // pointer in hex as string
+    snprintf(pihas, sizeof(pihas), "%p", req);
+    __self__->_p = to$str(pihas);
+
     req->data = process_data;
 
     char *args[MAX_CMD_ARGS];
@@ -104,4 +110,15 @@ $R process$$Process$_create_process (process$$Process __self__, $Cont c$cont) {
     uv_read_start((uv_stream_t*)&process_data->stderr_pipe, alloc_buffer, read_stderrout);
 
     return $R_CONT(c$cont, $None);
+}
+
+$R process$$Process$signal$local (process$$Process __self__, $int signal, $Cont c$cont) {
+    uv_process_t *p = (uv_process_t *)strtol(from$str(__self__->_p), NULL, 16);
+    uv_process_kill(p, from$int(signal));
+    return $R_CONT(c$cont, $None);
+}
+
+$R process$$Process$pid$local (process$$Process __self__, $Cont c$cont) {
+    uv_process_t *p = (uv_process_t *)strtol(from$str(__self__->_p), NULL, 16);
+    return $R_CONT(c$cont, ($atom)to$int(p->pid));
 }
