@@ -8,6 +8,8 @@ class ProcessAuth():
 actor Process(auth: ProcessAuth, cmd: list[str], on_stdout: action(bytes) -> None, on_stderr: action(bytes) -> None, on_exit: action(int, int) -> None):
     """A process
     """
+    _p = "0xffffffffffffffff" # uv_process_t pointer as string
+
     def _force_persistance():
         """Trick compiler into persisting the actor arguments we need.
 
@@ -15,10 +17,15 @@ actor Process(auth: ProcessAuth, cmd: list[str], on_stdout: action(bytes) -> Non
         the DB. Since we use these variables from C, the compiler doesn't see
         them, thus we need to trick it. This method should never be called.
         """
-        print(cmd, on_stdout, on_stderr, on_exit)
+        print(cmd, on_stdout, on_stderr, on_exit, _p)
 
     def _create_process():
         """Do the C magic to actually create a process and talk to it
+        """
+        NotImplemented
+
+    action def pid() -> ?int:
+        """Get PID of process or None if the process is not running
         """
         NotImplemented
 

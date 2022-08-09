@@ -1,0 +1,39 @@
+import process
+
+
+actor main(env):
+    def on_stderr(data):
+        print("Received output on stderr:", data)
+        print("... but not expecting any, exiting with error")
+        await async env.exit(1)
+
+    def on_stdout(data):
+        print("Received output on stdout:", data)
+        print("... but not expecting any, exiting with error")
+        await async env.exit(1)
+
+    def on_exit(exit_code, term_signal):
+        print("Process exited with code: ", exit_code, " terminated with signal:", term_signal)
+        print("Not expecting to see end of program... exiting with error")
+        await async env.exit(1)
+
+    def test():
+        print("Starting process..")
+        pa = process.ProcessAuth(env.auth)
+        p = process.Process(pa, ["sleep", "2"], on_stdout, on_stderr, on_exit)
+        pid = p.pid()
+
+        print("PID:", pid)
+        if pid is None:
+            print("PID is None, bad...")
+            await async env.exit(1)
+        else:
+            print("Good PID, yay")
+            await async env.exit(0)
+
+    def ex():
+        print("Test timeout, exiting with error")
+        env.exit(1)
+
+    test()
+    after 3: ex()
