@@ -14,8 +14,12 @@ actor main(env):
 
     def on_exit(exit_code, term_signal):
         print("Process exited with code: ", exit_code, " terminated with signal:", term_signal)
-        print("Not expecting to see end of program... exiting with error")
-        await async env.exit(1)
+        if term_signal == 15:
+            print("Got expected terminal signal 15, yay")
+            await async env.exit(0)
+        else:
+            print("Exited in unexpected way, error...")
+            await async env.exit(1)
 
     def test():
         print("Starting process..")
@@ -28,8 +32,8 @@ actor main(env):
             print("PID is None, bad...")
             await async env.exit(1)
         else:
-            print("Good PID, yay")
-            await async env.exit(0)
+            print("Good PID, yay, now killing process")
+            p.stop()
 
     def ex():
         print("Test timeout, exiting with error")
