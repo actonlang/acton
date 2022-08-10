@@ -123,8 +123,10 @@ $R process$$Process$_create_process (process$$Process __self__, $Cont c$cont) {
 
     int r;
     if ((r = uv_spawn(get_uv_loop(), req, options))) {
-        log_debug("Failed to spawn process: %s", uv_strerror(r));
-        $RAISE((($BaseException)$RuntimeError$new(to$str("Unable to spawn process"))));
+        char errmsg[1024] = "Failed to spawn process: ";
+        uv_strerror_r(r, errmsg + strlen(errmsg), sizeof(errmsg)-strlen(errmsg));
+        log_warn(errmsg);
+        $RAISE((($BaseException)$RuntimeError$new(to$str(errmsg))));
     }
     // TODO: do we need to do some magic to read any data produced before this
     // callback is installed?
