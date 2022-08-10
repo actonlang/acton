@@ -22,7 +22,10 @@ struct process_data {
 
 void exit_handler(uv_process_t *req, int64_t exit_status, int term_signal) {
     struct process_data *process_data = req->data;
-    uv_close((uv_handle_t *)&process_data->stdin_pipe, NULL);
+    uv_stream_t *stdin = (uv_stream_t *)&process_data->stdin_pipe;
+    // stdin might be closed already from done_writing
+    if (uv_is_closing(stdin) == 0)
+        uv_close((uv_handle_t *)stdin, NULL);
     uv_close((uv_handle_t *)req, NULL);
     process_data->on_exit->$class->__call__(process_data->on_exit, process_data->process, to$int(exit_status), to$int(term_signal));
 }
@@ -136,13 +139,44 @@ $R process$$Process$_create_process (process$$Process __self__, $Cont c$cont) {
     return $R_CONT(c$cont, $None);
 }
 
-$R process$$Process$signal$local (process$$Process __self__, $int signal, $Cont c$cont) {
+void close_cb(uv_handle_t *handle) {
+    // TODO: clean something up?
+}
+
+$R process$$Process$done_writing$local (process$$Process __self__, $Cont c$cont) {
     uv_process_t *p = (uv_process_t *)strtol(from$str(__self__->_p), NULL, 16);
-    uv_process_kill(p, from$int(signal));
+    struct process_data *process_data = (struct process_data *)p->data;
+    uv_stream_t *stdin = (uv_stream_t *)&process_data->stdin_pipe;
+    uv_close(stdin, close_cb);
     return $R_CONT(c$cont, $None);
 }
 
 $R process$$Process$pid$local (process$$Process __self__, $Cont c$cont) {
     uv_process_t *p = (uv_process_t *)strtol(from$str(__self__->_p), NULL, 16);
     return $R_CONT(c$cont, ($atom)to$int(p->pid));
+}
+
+$R process$$Process$signal$local (process$$Process __self__, $int signal, $Cont c$cont) {
+    uv_process_t *p = (uv_process_t *)strtol(from$str(__self__->_p), NULL, 16);
+    uv_process_kill(p, from$int(signal));
+    return $R_CONT(c$cont, $None);
+}
+
+$R process$$Process$write$local (process$$Process __self__, $bytes data, $Cont c$cont) {
+    uv_process_t *p = (uv_process_t *)strtol(from$str(__self__->_p), NULL, 16);
+
+    uv_write_t *req = (uv_write_t *)malloc(sizeof(uv_write_t));
+    uv_buf_t buf = uv_buf_init(data->str, data->nbytes);
+
+    struct process_data *process_data = (struct process_data *)p->data;
+    uv_stream_t *stdin = (uv_stream_t *)&process_data->stdin_pipe;
+
+    int r = uv_write(req, stdin, &buf, 1, NULL);
+    if (r != 0) {
+        char errmsg[1024] = "Error writing to stdin of process: ";
+        uv_strerror_r(r, errmsg + strlen(errmsg), sizeof(errmsg)-strlen(errmsg));
+        log_warn(errmsg);
+    }
+
+    return $R_CONT(c$cont, $None);
 }

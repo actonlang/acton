@@ -1,0 +1,39 @@
+import process
+
+
+actor main(env):
+    def on_stderr(p, data):
+        print("Received output on stderr:", data)
+        print("... but not expecting any, exiting with error")
+        await async env.exit(1)
+
+    def on_stdout(p, data):
+        print("Received output on stdout:", data)
+        if data == b"hejsan\n":
+            print("All good, now closing stdin so cat can exit..")
+            p.done_writing()
+        else:
+            print("Unexpected output, blargh")
+            await async env.exit(1)
+
+    def on_exit(p, exit_code, term_signal):
+        print("Process exited with code: ", exit_code, " terminated with signal:", term_signal)
+        if exit_code == 0:
+            print("Exited with 0, all good, yay!")
+            await async env.exit(0)
+        else:
+            print("Exited in unexpected way, error...")
+            await async env.exit(1)
+
+    def test():
+        print("Starting process..")
+        pa = process.ProcessAuth(env.auth)
+        p = process.Process(pa, ["cat"], on_stdout, on_stderr, on_exit)
+        p.write(b"hejsan\n")
+
+    def ex():
+        print("Test timeout, exiting with error")
+        env.exit(1)
+
+    test()
+    after 3: ex()
