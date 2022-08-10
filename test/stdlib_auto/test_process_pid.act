@@ -2,17 +2,17 @@ import process
 
 
 actor main(env):
-    def on_stderr(data):
+    def on_stderr(p, data):
         print("Received output on stderr:", data)
         print("... but not expecting any, exiting with error")
         await async env.exit(1)
 
-    def on_stdout(data):
+    def on_stdout(p, data):
         print("Received output on stdout:", data)
         print("... but not expecting any, exiting with error")
         await async env.exit(1)
 
-    def on_exit(exit_code, term_signal):
+    def on_exit(p, exit_code, term_signal):
         print("Process exited with code: ", exit_code, " terminated with signal:", term_signal)
         if term_signal == 15:
             print("Got expected terminal signal 15, yay")

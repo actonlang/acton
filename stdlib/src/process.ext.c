@@ -10,6 +10,7 @@ void process$$__ext_init__() {
 #define MAX_CMD_ARGS 32768
 
 struct process_data {
+    process$$Process process;
     $function on_stdout;
     $function on_stderr;
     $function on_exit;
@@ -23,22 +24,40 @@ void exit_handler(uv_process_t *req, int64_t exit_status, int term_signal) {
     struct process_data *process_data = req->data;
     uv_close((uv_handle_t *)&process_data->stdin_pipe, NULL);
     uv_close((uv_handle_t *)req, NULL);
-    process_data->on_exit->$class->__call__(process_data->on_exit, to$int(exit_status), to$int(term_signal));
+    process_data->on_exit->$class->__call__(process_data->on_exit, process_data->process, to$int(exit_status), to$int(term_signal));
 }
 
 void alloc_buffer(uv_handle_t *handle, size_t size, uv_buf_t *buf) {
     *buf = uv_buf_init((char*) malloc(size), size);
 }
 
-void read_stderrout(uv_stream_t *stream, ssize_t nread, const uv_buf_t *buf) {
+void read_stderr(uv_stream_t *stream, ssize_t nread, const uv_buf_t *buf) {
     if (nread < 0){
         if (nread == UV_EOF) {
             uv_close((uv_handle_t *)stream, NULL);
         }
     } else if (nread > 0) {
         if (stream->data) {
-            $function cb = stream->data;
-            cb->$class->__call__(cb, to$bytes(buf->base));
+            struct process_data *process_data = (struct process_data *)stream->data;
+            $function cb = process_data->on_stderr;
+            cb->$class->__call__(cb, process_data->process, to$bytes(buf->base));
+        }
+    }
+
+    if (buf->base)
+        free(buf->base);
+}
+
+void read_stdout(uv_stream_t *stream, ssize_t nread, const uv_buf_t *buf) {
+    if (nread < 0){
+        if (nread == UV_EOF) {
+            uv_close((uv_handle_t *)stream, NULL);
+        }
+    } else if (nread > 0) {
+        if (stream->data) {
+            struct process_data *process_data = (struct process_data *)stream->data;
+            $function cb = process_data->on_stdout;
+            cb->$class->__call__(cb, process_data->process, to$bytes(buf->base));
         }
     }
 
@@ -49,6 +68,7 @@ void read_stderrout(uv_stream_t *stream, ssize_t nread, const uv_buf_t *buf) {
 $R process$$Process$_create_process (process$$Process __self__, $Cont c$cont) {
     pin_actor_affinity(($Actor)__self__);
     struct process_data *process_data = calloc(1, sizeof(struct process_data));
+    process_data->process = __self__;
     process_data->on_stdout = __self__->on_stdout;
     process_data->on_stderr = __self__->on_stderr;
     process_data->on_exit = __self__->on_exit;
@@ -58,6 +78,8 @@ $R process$$Process$_create_process (process$$Process __self__, $Cont c$cont) {
     uv_process_t *req = calloc(1, sizeof(uv_process_t));
     // NOTE: storing a uv_process_t pointer as a hex formatted Acton str
     // This sucks but how else?
+    // TODO: replace with u64 once that is implemented, see:
+    //       https://github.com/actonlang/acton/issues/793
     char pihas[] = "0x7f563c001700"; // pointer in hex as string
     snprintf(pihas, sizeof(pihas), "%p", req);
     __self__->_p = to$str(pihas);
@@ -77,9 +99,9 @@ $R process$$Process$_create_process (process$$Process __self__, $Cont c$cont) {
 
     uv_pipe_init(get_uv_loop(), &process_data->stdin_pipe, 0);
     uv_pipe_init(get_uv_loop(), &process_data->stdout_pipe, 0);
-    process_data->stdout_pipe.data = __self__->on_stdout;
+    process_data->stdout_pipe.data = process_data;
     uv_pipe_init(get_uv_loop(), &process_data->stderr_pipe, 0);
-    process_data->stderr_pipe.data = __self__->on_stderr;
+    process_data->stderr_pipe.data = process_data;
 
     uv_stdio_container_t process_stdio[3];
     options->stdio = process_stdio;
@@ -106,8 +128,8 @@ $R process$$Process$_create_process (process$$Process __self__, $Cont c$cont) {
     }
     // TODO: do we need to do some magic to read any data produced before this
     // callback is installed?
-    uv_read_start((uv_stream_t*)&process_data->stdout_pipe, alloc_buffer, read_stderrout);
-    uv_read_start((uv_stream_t*)&process_data->stderr_pipe, alloc_buffer, read_stderrout);
+    uv_read_start((uv_stream_t*)&process_data->stdout_pipe, alloc_buffer, read_stdout);
+    uv_read_start((uv_stream_t*)&process_data->stderr_pipe, alloc_buffer, read_stderr);
 
     return $R_CONT(c$cont, $None);
 }
