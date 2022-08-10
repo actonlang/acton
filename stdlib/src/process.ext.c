@@ -79,13 +79,7 @@ $R process$$Process$_create_process (process$$Process __self__, $Cont c$cont) {
     uv_process_options_t *options = calloc(1, sizeof(uv_process_options_t));
 
     uv_process_t *req = calloc(1, sizeof(uv_process_t));
-    // NOTE: storing a uv_process_t pointer as a hex formatted Acton str
-    // This sucks but how else?
-    // TODO: replace with u64 once that is implemented, see:
-    //       https://github.com/actonlang/acton/issues/793
-    char pihas[] = "0x7f563c001700"; // pointer in hex as string
-    snprintf(pihas, sizeof(pihas), "%p", req);
-    __self__->_p = to$str(pihas);
+    __self__->_p = to$int(req);
 
     req->data = process_data;
 
@@ -144,7 +138,7 @@ void close_cb(uv_handle_t *handle) {
 }
 
 $R process$$Process$done_writing$local (process$$Process __self__, $Cont c$cont) {
-    uv_process_t *p = (uv_process_t *)strtol(from$str(__self__->_p), NULL, 16);
+    uv_process_t *p = (uv_process_t *)from$int(__self__->_p);
     struct process_data *process_data = (struct process_data *)p->data;
     uv_stream_t *stdin = (uv_stream_t *)&process_data->stdin_pipe;
     uv_close(stdin, close_cb);
@@ -152,18 +146,18 @@ $R process$$Process$done_writing$local (process$$Process __self__, $Cont c$cont)
 }
 
 $R process$$Process$pid$local (process$$Process __self__, $Cont c$cont) {
-    uv_process_t *p = (uv_process_t *)strtol(from$str(__self__->_p), NULL, 16);
+    uv_process_t *p = (uv_process_t *)from$int(__self__->_p);
     return $R_CONT(c$cont, ($atom)to$int(p->pid));
 }
 
 $R process$$Process$signal$local (process$$Process __self__, $int signal, $Cont c$cont) {
-    uv_process_t *p = (uv_process_t *)strtol(from$str(__self__->_p), NULL, 16);
+    uv_process_t *p = (uv_process_t *)from$int(__self__->_p);
     uv_process_kill(p, from$int(signal));
     return $R_CONT(c$cont, $None);
 }
 
 $R process$$Process$write$local (process$$Process __self__, $bytes data, $Cont c$cont) {
-    uv_process_t *p = (uv_process_t *)strtol(from$str(__self__->_p), NULL, 16);
+    uv_process_t *p = (uv_process_t *)from$int(__self__->_p);
 
     uv_write_t *req = (uv_write_t *)malloc(sizeof(uv_write_t));
     uv_buf_t buf = uv_buf_init(data->str, data->nbytes);
