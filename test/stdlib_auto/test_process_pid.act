@@ -24,7 +24,7 @@ actor main(env):
     def test():
         print("Starting process..")
         pa = process.ProcessAuth(env.auth)
-        p = process.Process(pa, ["sleep", "2"], on_stdout, on_stderr, on_exit)
+        p = process.Process(pa, ["sleep", "2"], None, None, on_stdout, on_stderr, on_exit)
         pid = p.pid()
 
         print("PID:", pid)
