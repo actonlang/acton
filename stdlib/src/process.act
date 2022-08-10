@@ -53,7 +53,7 @@ actor Process(auth: ProcessAuth, cmd: list[str], on_stdout: action(Process, byte
         """
         signal(9)
 
-    def term():
+    def terminate():
         """Stop process by sending SIGTERM
         """
         signal(15)
@@ -61,10 +61,11 @@ actor Process(auth: ProcessAuth, cmd: list[str], on_stdout: action(Process, byte
     def stop():
         """Stop process
 
-        Attempts to stop process using normal means, SIGTERM that is. If that
-        does not work after 1 second, it will kill the process with SIGKILL
+        Attempts to stop process using normal means, which means SIGTERM on a
+        Unix system. After 1 second, SIGKILL is sent to ensure the process is
+        stopped.
         """
-        term()
+        terminate()
         after 1: kill()
 
     _create_process()
