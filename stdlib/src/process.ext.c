@@ -95,8 +95,8 @@ $R process$$Process$_create_process (process$$Process __self__, $Cont c$cont) {
     }
     args[++i] = NULL;
 
-    if (__self__->wdir != $None) {
-        options->cwd = from$str(__self__->wdir);
+    if (__self__->workdir != $None) {
+        options->cwd = from$str(__self__->workdir);
     };
 
     if (__self__->env == $None) {
