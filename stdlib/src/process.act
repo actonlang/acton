@@ -5,7 +5,7 @@ class ProcessAuth():
     def __init__(self, auth: WorldAuth):
         pass
 
-actor Process(auth: ProcessAuth, cmd: list[str], on_stdout: action(bytes) -> None, on_stderr: action(bytes) -> None, on_exit: action(int, int) -> None):
+actor Process(auth: ProcessAuth, cmd: list[str], on_stdout: action(Process, bytes) -> None, on_stderr: action(Process, bytes) -> None, on_exit: action(Process, int, int) -> None):
     """A process
     """
     _p = "0xffffffffffffffff" # uv_process_t pointer as string
@@ -24,6 +24,13 @@ actor Process(auth: ProcessAuth, cmd: list[str], on_stdout: action(bytes) -> Non
         """
         NotImplemented
 
+    action def done_writing() -> None:
+        """Close stdin of process
+
+        Closing stdin allows cat to terminate
+        """
+        NotImplemented
+
     action def pid() -> ?int:
         """Get PID of process or None if the process is not running
         """
@@ -36,12 +43,17 @@ actor Process(auth: ProcessAuth, cmd: list[str], on_stdout: action(bytes) -> Non
         """
         NotImplemented
 
+    action def write(data: bytes) -> None:
+        """Write data to stdin of process
+        """
+        NotImplemented
+
     def kill():
         """Abrubtly kill process by sending SIGKILL
         """
         signal(9)
 
-    def term():
+    def terminate():
         """Stop process by sending SIGTERM
         """
         signal(15)
@@ -49,10 +61,11 @@ actor Process(auth: ProcessAuth, cmd: list[str], on_stdout: action(bytes) -> Non
     def stop():
         """Stop process
 
-        Attempts to stop process using normal means, SIGTERM that is. If that
-        does not work after 1 second, it will kill the process with SIGKILL
+        Attempts to stop process using normal means, which means SIGTERM on a
+        Unix system. After 1 second, SIGKILL is sent to ensure the process is
+        stopped.
         """
-        term()
+        terminate()
         after 1: kill()
 
     _create_process()

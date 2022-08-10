@@ -9,13 +9,17 @@ actor main(env):
 
     def on_stdout(p, data):
         print("Received output on stdout:", data)
-        print("... but not expecting any, exiting with error")
-        await async env.exit(1)
+        if data == b"hejsan\n":
+            print("All good, now closing stdin so cat can exit..")
+            p.done_writing()
+        else:
+            print("Unexpected output, blargh")
+            await async env.exit(1)
 
     def on_exit(p, exit_code, term_signal):
         print("Process exited with code: ", exit_code, " terminated with signal:", term_signal)
-        if term_signal == 15:
-            print("Got expected terminal signal 15, yay")
+        if exit_code == 0:
+            print("Exited with 0, all good, yay!")
             await async env.exit(0)
         else:
             print("Exited in unexpected way, error...")
@@ -24,16 +28,8 @@ actor main(env):
     def test():
         print("Starting process..")
         pa = process.ProcessAuth(env.auth)
-        p = process.Process(pa, ["sleep", "2"], on_stdout, on_stderr, on_exit)
-        pid = p.pid()
-
-        print("PID:", pid)
-        if pid is None:
-            print("PID is None, bad...")
-            await async env.exit(1)
-        else:
-            print("Good PID, yay, now killing process")
-            p.stop()
+        p = process.Process(pa, ["cat"], on_stdout, on_stderr, on_exit)
+        p.write(b"hejsan\n")
 
     def ex():
         print("Test timeout, exiting with error")

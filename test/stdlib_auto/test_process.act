@@ -2,11 +2,11 @@ import process
 
 
 actor main(env):
-    def on_stderr(data):
+    def on_stderr(p, data):
         print("Received output on stderr:", data)
         env.exit(0)
 
-    def on_stdout(data):
+    def on_stdout(p, data):
         print("Received output on stdout:", data.decode())
         if data == b"HELLO\n":
             print("All good, exiting..")
@@ -15,7 +15,7 @@ actor main(env):
             print("Unexpected output, blargh")
             await async env.exit(1)
 
-    def on_exit(exit_code, term_signal):
+    def on_exit(p, exit_code, term_signal):
         print("Process exited with code: ", exit_code, " terminated with signal:", term_signal)
 
     def test():
