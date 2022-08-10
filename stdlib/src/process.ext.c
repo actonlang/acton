@@ -8,6 +8,7 @@ void process$$__ext_init__() {
 }
 
 #define MAX_CMD_ARGS 32768
+#define MAX_ENV 128
 
 struct process_data {
     process$$Process process;
@@ -93,6 +94,34 @@ $R process$$Process$_create_process (process$$Process __self__, $Cont c$cont) {
         args[i] = from$str($list_getitem(__self__->cmd, i));
     }
     args[++i] = NULL;
+
+    if (__self__->wdir != $None) {
+        options->cwd = from$str(__self__->wdir);
+    };
+
+    if (__self__->env == $None) {
+        options->env = NULL;
+    } else {
+        char **env = (char *)calloc(128, sizeof(char *));
+        $Iterator$dict$items iter = $NEW($Iterator$dict$items, __self__->env);
+        $tuple item;
+        for (i=0; i < $dict_len(__self__->env); i++) {
+            item = ($tuple)iter->$class->__next__(iter);
+            char *key = from$str(($str)item->components[0]);
+            char *value = from$str(($str)item->components[1]);
+            size_t env_size = strlen(key) + strlen(value) + 2;
+            char *env_var = malloc(env_size);
+            snprintf(env_var, env_size, "%s=%s", key, value);
+            env[i] = env_var;
+            if (i>MAX_ENV-1) {
+                log_error("MAX_ENV reached");
+                break;
+            }
+        }
+        env[i] = NULL;
+
+        options->env = env;
+    }
 
     uv_pipe_init(get_uv_loop(), &process_data->stdin_pipe, 0);
     uv_pipe_init(get_uv_loop(), &process_data->stdout_pipe, 0);

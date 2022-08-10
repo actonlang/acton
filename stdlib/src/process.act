@@ -5,8 +5,15 @@ class ProcessAuth():
     def __init__(self, auth: WorldAuth):
         pass
 
-actor Process(auth: ProcessAuth, cmd: list[str], on_stdout: action(Process, bytes) -> None, on_stderr: action(Process, bytes) -> None, on_exit: action(Process, int, int) -> None):
+actor Process(auth: ProcessAuth, cmd: list[str], wdir: ?str, env: ?dict[str, str], on_stdout: action(Process, bytes) -> None, on_stderr: action(Process, bytes) -> None, on_exit: action(Process, int, int) -> None):
     """A process
+    - auth
+    - cmd
+    - working directory, use None for current directory
+    - environment variables
+    - stdout callback
+    - stderr callback
+    - exit and error callback
     """
     _p = 0
 
@@ -17,7 +24,7 @@ actor Process(auth: ProcessAuth, cmd: list[str], on_stdout: action(Process, byte
         the DB. Since we use these variables from C, the compiler doesn't see
         them, thus we need to trick it. This method should never be called.
         """
-        print(cmd, on_stdout, on_stderr, on_exit, _p)
+        print(cmd, wdir, env, on_stdout, on_stderr, on_exit, _p)
 
     def _create_process():
         """Do the C magic to actually create a process and talk to it
