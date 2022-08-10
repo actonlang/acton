@@ -8,7 +8,7 @@ class ProcessAuth():
 actor Process(auth: ProcessAuth, cmd: list[str], on_stdout: action(Process, bytes) -> None, on_stderr: action(Process, bytes) -> None, on_exit: action(Process, int, int) -> None):
     """A process
     """
-    _p = "0xffffffffffffffff" # uv_process_t pointer as string
+    _p = 0
 
     def _force_persistance():
         """Trick compiler into persisting the actor arguments we need.
