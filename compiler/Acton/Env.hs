@@ -153,7 +153,7 @@ prettyOrPass te
   where doc                     = pretty te
 
 instance Pretty WTCon where
-    pretty (ws,u)               = --dotCat prettyW ws <+> colon <+> 
+    pretty (ws,u)               = --dotCat prettyW ws <+> colon <+>
                                   pretty u
       where prettyW (Left n)    = text "L"
             prettyW (Right n)   = text "R"

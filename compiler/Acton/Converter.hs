@@ -54,7 +54,9 @@ convProtocol env n0 q ps0 eq wmap b     = mainClass : sibClasses
 
         immsibs                         = [ (witAttr w, tCon $ convProto p, inherited ws0) | ([w],ws0,p) <- ps ]
 
-        mainClass                       = Class NoLoc n0 q1 bases mainClassBody
+        mainClass                       = --trace ("###  MRO for " ++ prstr n0 ++ ": " ++ prstrs ps0) $
+                                          --trace ("  # SIBS for " ++ prstr n0 ++ ": " ++ prstrs [ sibName ws n0 | (ws,_,_,_,_) <- allsibs ]) $
+                                          Class NoLoc n0 q1 bases mainClassBody
           where mainClassBody           = qsigs ++ psigs ++ Decl NoLoc [mainInit] : convStmts tSelf' eq1 (pruneBody env (NoQ n0) b)
                 psigs                   = [ Signature NoLoc [n] (monotype t) Property | (n,t,False) <- immsibs ]
                 mainInit                = Def NoLoc initKW [] mainParams KwdNIL (Just tNone) (mkBody mainInitBody) NoDec fxPure
@@ -75,8 +77,7 @@ convProtocol env n0 q ps0 eq wmap b     = mainClass : sibClasses
         sibClasses                      = [ Class NoLoc (sibName ws n0) q1 us (sibClassBody ws n (head us) wes inh) | (ws,n,us,wes,inh) <- allsibs ]
 
         sibClassBody ws n p wes inh     = qsigs ++ psigs ++ Decl NoLoc [sibInit] : convStmts tSelf' eq1 (pruneBody env n b)
-          where psigs                   = [ Signature NoLoc [w0] (monotype t0) Property ]
-                sibInit                 = Def NoLoc initKW [] sibParams KwdNIL (Just tNone) (mkBody sibInitBody) NoDec fxPure
+          where sibInit                 = Def NoLoc initKW [] sibParams KwdNIL (Just tNone) (mkBody sibInitBody) NoDec fxPure
                 sibParams               = wit2par ((selfKW',tSelf) : qpars ++ sibSubParams ++ sibCtxt) PosNIL
                 sibCtxt                 = witCtxt ps ws ++ [(w0,t0)]
                 sibInitBody             = bindWits eq0 ++ initCall (tcargs p) (wes ++ sibSubArgs ++ sibCtxtArgs) p ++ sibCopies
@@ -88,6 +89,7 @@ convProtocol env n0 q ps0 eq wmap b     = mainClass : sibClasses
                 eq1                     = Eqn (tvarWit tvSelf p0) t0 (eDot (eVar selfKW') w0) : qcopies' ++ eq
 
         qsigs                           = [ Signature NoLoc [qualAttr p v n0] (monotype $ impl2type (tVar v) p) Property | (v,p) <- quals env q ]
+        psigs                           = [ Signature NoLoc [w0] (monotype t0) Property ]
         qpars                           = [ (tvarWit v p, impl2type (tVar v) p) | (v,p) <- quals env q ]
         qcopies                         = [ MutAssign NoLoc (eDot (eVar selfKW') $ qualAttr p v n0) (eVar $ tvarWit v p) | (v,p) <- quals env q ]
         qcopies'                        = [ Eqn (tvarWit v p) (impl2type (tVar v) p) (eDot (eVar selfKW') $ qualAttr p v n0) | (v,p) <- quals env q ]
@@ -115,7 +117,9 @@ convExtension env n1 c0 q ps0 eq wmap b = mainClass : sibClasses
         main                            = head bases
         bases                           = [ instProto t0 p | (ws,p) <- ps0, null (catRight ws) ] ++ [cValue]
 
-        mainClass                       = Class NoLoc n1 q1 bases mainClassBody
+        mainClass                       = --trace ("###  mro for " ++ prstr n1 ++ ": " ++ prstrs ps0) $
+                                          --trace ("  # sibs for " ++ prstr n1 ++ ": " ++ prstrs [ sibName ws n1 | (ws,_,_,_,_) <- allsibs ]) $
+                                          Class NoLoc n1 q1 bases mainClassBody
           where mainClassBody           = qsigs ++ Decl NoLoc [mainInit] : convStmts t0 eq1 (pruneBody env (tcname main) b)
                 mainInit                = Def NoLoc initKW [] mainParams KwdNIL (Just tNone) (mkBody mainInitBody) NoDec fxPure
                 mainParams              = wit2par ((selfKW',tSelf) : qpars) PosNIL

@@ -544,7 +544,7 @@ instance InfEnv Decl where
       | length us == 0                  = err (loc n) "Extension lacks a protocol"
 --      | length us > 1                   = notYet (loc n) "Extensions with multiple protocols"
       | not $ null witsearch            = err (loc n) ("Extension already exists: " ++ prstr (head witsearch))
-      | otherwise                       = do --traceM ("\n## infEnv extension " ++ prstr c)
+      | otherwise                       = do --traceM ("\n## infEnv extension " ++ prstr (extensionName (head us) c))
                                              pushFX fxPure tNone
                                              (cs,te,b1) <- infEnv env1 b
                                              popFX

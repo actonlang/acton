@@ -112,8 +112,9 @@ instance QType Expr where
 --  qType env f (Imaginary _ i s)   = undefined
 --  qType env f (NotImplemented _)  = undefined
 --  qType env f (Ellipsis _)        = undefined
-    qType env f (Call l e ps ks)
-      | TFun{} <- t                 = (restype t, Call l e' (qMatch f p (posrow t) ps') (qMatch f k (kwdrow t) ks'))
+    qType env f e0@(Call l e ps ks)
+      | TFun{} <- t                 = --trace ("## qType " ++ prstr e0 ++ ", t = " ++ prstr t) $
+                                      (restype t, Call l e' (qMatch f p (posrow t) ps') (qMatch f k (kwdrow t) ks'))
       | otherwise                   = error ("###### qType Fun " ++ prstr e ++ " : " ++ prstr t)
       where (t, e')                 = qType env f e
             (p, ps')                = qType env f ps
