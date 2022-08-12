@@ -99,18 +99,26 @@ def unirandint (a: int, b: int, n: int) -> ndarray[int]:
 def unirandfloat (a: float, b: float, n: int) -> ndarray[float]:
     NotImplemented
 
-extension ndarray[int] (Integral): pass
-extension ndarray[int] (Div[ndarray[float]]): pass
-extension ndarray[A (Primitive)] (Real): pass
-extension ndarray[float] (Div[ndarray[float]]): pass
-extension ndarray[A (Primitive)] (Sliceable[ndarray[A]]): pass
-extension ndarray[A (Primitive)] (Collection[A]): pass
-extension ndarray[A (Primitive, math.RealFuns)] (math.RealFuns): pass
-extension ndarray[A (Primitive, RealFloat)] (RealFloat): pass
+extension ndarray[int] (Integral):
+    NotImplemented
+extension ndarray[int] (Div[ndarray[float]]):
+    NotImplemented
+extension ndarray[A (Primitive)] (Real):
+    NotImplemented
+extension ndarray[float] (Div[ndarray[float]]):
+    NotImplemented
+extension ndarray[A (Primitive)] (Sliceable[ndarray[A]]):
+    NotImplemented
+extension ndarray[A (Primitive)] (Collection[A]):
+    NotImplemented
+extension ndarray[A (Primitive, math.RealFuns)] (math.RealFuns):
+    NotImplemented
+extension ndarray[A (Primitive, RealFloat)] (RealFloat):
+    NotImplemented
 
-extension int (Primitive): pass
-extension float (Primitive): pass
+extension int (Primitive):
+    NotImplemented
+extension float (Primitive):
+    NotImplemented
 
 newaxis : int  # unspecified value guaranteed not to be used for indexing (e.g. LONG_MIN)
-
-
