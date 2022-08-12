@@ -96,7 +96,7 @@ $R process$$Process$_create_process (process$$Process __self__, $Cont c$cont) {
     if (__self__->env == $None) {
         options->env = NULL;
     } else {
-        char **env = (char *)calloc(($dict_len(__self__->env)+1), sizeof(char *));
+        char **env = (char **)calloc(($dict_len(__self__->env)+1), sizeof(char *));
         $Iterator$dict$items iter = $NEW($Iterator$dict$items, __self__->env);
         $tuple item;
         for (i=0; i < $dict_len(__self__->env); i++) {
@@ -142,7 +142,7 @@ $R process$$Process$_create_process (process$$Process __self__, $Cont c$cont) {
         char errmsg[1024] = "Failed to spawn process: ";
         uv_strerror_r(r, errmsg + strlen(errmsg), sizeof(errmsg)-strlen(errmsg));
         log_warn(errmsg);
-        $RAISE((($BaseException)$RuntimeError$new(to$str(errmsg))));
+        __self__->on_error->$class->__call__(__self__->on_exit, process_data->process, to$str(errmsg));
     }
     // TODO: do we need to do some magic to read any data produced before this
     // callback is installed?

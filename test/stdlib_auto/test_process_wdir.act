@@ -21,10 +21,14 @@ actor main(env):
         print("Exited in unexpected way, error...")
         await async env.exit(1)
 
+    def on_error(error):
+        print("Error from process:", error)
+        await async env.exit(1)
+
     def test():
         print("Starting process..")
         pa = process.ProcessAuth(env.auth)
-        p = process.Process(pa, ["pwd"], "/", None, on_stdout, on_stderr, on_exit)
+        p = process.Process(pa, ["pwd"], "/", None, on_stdout, on_stderr, on_exit, on_error)
 
     def ex():
         print("Test timeout, exiting with error")

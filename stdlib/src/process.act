@@ -5,7 +5,7 @@ class ProcessAuth():
     def __init__(self, auth: WorldAuth):
         pass
 
-actor Process(auth: ProcessAuth, cmd: list[str], workdir: ?str, env: ?dict[str, str], on_stdout: action(Process, bytes) -> None, on_stderr: action(Process, bytes) -> None, on_exit: action(Process, int, int) -> None):
+actor Process(auth: ProcessAuth, cmd: list[str], workdir: ?str, env: ?dict[str, str], on_stdout: action(Process, bytes) -> None, on_stderr: action(Process, bytes) -> None, on_exit: action(Process, int, int) -> None, on_error: action(str) -> None):
     """A process
     - auth: authentication token
     - cmd: the command to run
@@ -13,7 +13,11 @@ actor Process(auth: ProcessAuth, cmd: list[str], workdir: ?str, env: ?dict[str, 
     - env: environment for process, use None to inherit current environment
     - on_stdout: stdout callback actor method
     - on_stderr: stderr callback actor method
-    - on_exit: exit callback, also used for errors
+    - on_exit: exit callback
+      - process
+      - exit code
+      - signal that caused program to exit
+    - on_error: error callback
     """
     _p = 0
 
@@ -24,7 +28,7 @@ actor Process(auth: ProcessAuth, cmd: list[str], workdir: ?str, env: ?dict[str, 
         the DB. Since we use these variables from C, the compiler doesn't see
         them, thus we need to trick it. This method should never be called.
         """
-        print(cmd, workdir, env, on_stdout, on_stderr, on_exit, _p)
+        print(cmd, workdir, env, on_stdout, on_stderr, on_exit, on_error, _p)
 
     def _create_process():
         """Do the C magic to actually create a process and talk to it
