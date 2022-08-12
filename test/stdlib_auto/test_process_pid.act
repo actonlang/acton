@@ -12,14 +12,18 @@ actor main(env):
         print("... but not expecting any, exiting with error")
         await async env.exit(1)
 
-    def on_exit(p, exit_code, term_signal):
-        print("Process exited with code: ", exit_code, " terminated with signal:", term_signal)
-        if term_signal == 15:
-            print("Got expected terminal signal 15, yay")
-            await async env.exit(0)
-        else:
-            print("Exited in unexpected way, error...")
+    def on_exit(p, error, exit_code, term_signal):
+        if error is not None:
+            print("Error from process:", error)
             await async env.exit(1)
+        else:
+            print("Process exited with code: ", exit_code, " terminated with signal:", term_signal)
+            if term_signal == 15:
+                print("Got expected terminal signal 15, yay")
+                await async env.exit(0)
+            else:
+                print("Exited in unexpected way, error...")
+                await async env.exit(1)
 
     def test():
         print("Starting process..")

@@ -25,7 +25,7 @@ void exit_handler(uv_process_t *req, int64_t exit_status, int term_signal) {
     if (uv_is_closing(stdin) == 0)
         uv_close((uv_handle_t *)stdin, NULL);
     uv_close((uv_handle_t *)req, NULL);
-    process_data->on_exit->$class->__call__(process_data->on_exit, process_data->process, to$int(exit_status), to$int(term_signal));
+    process_data->on_exit->$class->__call__(process_data->on_exit, process_data->process, $None, to$int(exit_status), to$int(term_signal));
 }
 
 void alloc_buffer(uv_handle_t *handle, size_t size, uv_buf_t *buf) {
@@ -96,7 +96,7 @@ $R process$$Process$_create_process (process$$Process __self__, $Cont c$cont) {
     if (__self__->env == $None) {
         options->env = NULL;
     } else {
-        char **env = (char *)calloc(($dict_len(__self__->env)+1), sizeof(char *));
+        char **env = (char **)calloc(($dict_len(__self__->env)+1), sizeof(char *));
         $Iterator$dict$items iter = $NEW($Iterator$dict$items, __self__->env);
         $tuple item;
         for (i=0; i < $dict_len(__self__->env); i++) {
@@ -142,7 +142,7 @@ $R process$$Process$_create_process (process$$Process __self__, $Cont c$cont) {
         char errmsg[1024] = "Failed to spawn process: ";
         uv_strerror_r(r, errmsg + strlen(errmsg), sizeof(errmsg)-strlen(errmsg));
         log_warn(errmsg);
-        $RAISE((($BaseException)$RuntimeError$new(to$str(errmsg))));
+        __self__->on_exit->$class->__call__(__self__->on_exit, process_data->process, to$str(errmsg), to$int(0), to$int(0));
     }
     // TODO: do we need to do some magic to read any data produced before this
     // callback is installed?

@@ -5,7 +5,7 @@ class ProcessAuth():
     def __init__(self, auth: WorldAuth):
         pass
 
-actor Process(auth: ProcessAuth, cmd: list[str], workdir: ?str, env: ?dict[str, str], on_stdout: action(Process, bytes) -> None, on_stderr: action(Process, bytes) -> None, on_exit: action(Process, int, int) -> None):
+actor Process(auth: ProcessAuth, cmd: list[str], workdir: ?str, env: ?dict[str, str], on_stdout: action(Process, bytes) -> None, on_stderr: action(Process, bytes) -> None, on_exit: action(Process, ?str, int, int) -> None):
     """A process
     - auth: authentication token
     - cmd: the command to run
@@ -14,6 +14,10 @@ actor Process(auth: ProcessAuth, cmd: list[str], workdir: ?str, env: ?dict[str, 
     - on_stdout: stdout callback actor method
     - on_stderr: stderr callback actor method
     - on_exit: exit callback, also used for errors
+      - process
+      - error, or None if no error
+      - exit code
+      - signal that caused program to exit
     """
     _p = 0
 
