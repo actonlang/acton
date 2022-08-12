@@ -7,9 +7,6 @@ void process$$__ext_init__() {
     // NOP
 }
 
-#define MAX_CMD_ARGS 32768
-#define MAX_ENV 128
-
 struct process_data {
     process$$Process process;
     $function on_stdout;
@@ -84,16 +81,13 @@ $R process$$Process$_create_process (process$$Process __self__, $Cont c$cont) {
 
     req->data = process_data;
 
-    char *args[MAX_CMD_ARGS];
+    char **args = (char **)malloc(($list_len(__self__->cmd)+1) * sizeof(char *));
 
-    if ($list_len(__self__->cmd) > MAX_CMD_ARGS) {
-        $RAISE((($BaseException)$RuntimeError$new(to$str("Unable to span process; cmd too large (>MAX_CMD_ARGS)"))));
-    }
     int i;
     for (i = 0; i < $list_len(__self__->cmd); i++) {
         args[i] = from$str($list_getitem(__self__->cmd, i));
     }
-    args[++i] = NULL;
+    args[i] = NULL;
 
     if (__self__->workdir != $None) {
         options->cwd = from$str(__self__->workdir);
@@ -102,7 +96,7 @@ $R process$$Process$_create_process (process$$Process __self__, $Cont c$cont) {
     if (__self__->env == $None) {
         options->env = NULL;
     } else {
-        char **env = (char *)calloc(128, sizeof(char *));
+        char **env = (char *)calloc(($dict_len(__self__->env)+1), sizeof(char *));
         $Iterator$dict$items iter = $NEW($Iterator$dict$items, __self__->env);
         $tuple item;
         for (i=0; i < $dict_len(__self__->env); i++) {
@@ -113,10 +107,6 @@ $R process$$Process$_create_process (process$$Process __self__, $Cont c$cont) {
             char *env_var = malloc(env_size);
             snprintf(env_var, env_size, "%s=%s", key, value);
             env[i] = env_var;
-            if (i>MAX_ENV-1) {
-                log_error("MAX_ENV reached");
-                break;
-            }
         }
         env[i] = NULL;
 
