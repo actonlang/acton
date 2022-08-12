@@ -592,9 +592,9 @@ protocol Container[A(Eq)] (Collection[A]):
 
 
 
-#   Indexed         Iterable
-#    |               |
-#    |               |
+#   Indexed         Iterable        Plus
+#    |               |               |
+#    |               |               |
 #   Sliceable       Collection      Times
 #    |               |               |
 #    |               |               |

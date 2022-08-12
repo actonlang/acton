@@ -83,6 +83,8 @@ prcat xs                        = render (vcat $ (map pretty xs))
 
 traceF f x                      = trace (f x) x
 
+tr s f x                        = trace (s ++ ": " ++ prstr x) $ f x
+
 ptrace doc                      = trace (render doc)
 
 ptraceM doc                     = traceM (render doc)
