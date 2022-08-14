@@ -37,7 +37,7 @@ $R file$$ReadFile$close$local (file$$ReadFile __self__, $Cont c$cont) {
 $R file$$ReadFile$read$local (file$$ReadFile __self__, $Cont c$cont) {
     uv_fs_t *req = (uv_fs_t *)calloc(1, sizeof(uv_fs_t));
     // TODO: handle arbitrary sized files
-    char buf[1024];
+    char buf[1024] = {0};
     uv_buf_t iovec = uv_buf_init(buf, sizeof(buf));
 
     int r = uv_fs_read(get_uv_loop(), req, (uv_file)from$int(__self__->_fd), &iovec, 1, 0, NULL);
@@ -48,6 +48,7 @@ $R file$$ReadFile$read$local (file$$ReadFile __self__, $Cont c$cont) {
         $RAISE((($BaseException)$RuntimeError$new(to$str(errmsg))));
 
     }
+    iovec.len = r;
     return $R_CONT(c$cont, to$bytes(buf));
 }
 
