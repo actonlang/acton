@@ -200,7 +200,7 @@ time_t next_timeout();
 void handle_timeout();
 void rts_shutdown();
 
-void pin_actor_affinity($Actor);
+void pin_actor_affinity();
 
 //typedef $int $Env;
 

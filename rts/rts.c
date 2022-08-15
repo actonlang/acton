@@ -215,7 +215,8 @@ pthread_key_t pkey_uv_loop;
 pthread_mutex_t rts_exit_lock = PTHREAD_MUTEX_INITIALIZER;
 pthread_cond_t rts_exit_signal = PTHREAD_COND_INITIALIZER;
 
-void pin_actor_affinity($Actor a) {
+void pin_actor_affinity() {
+    $Actor a = ($Actor)pthread_getspecific(self_key);
     int i = (int)pthread_getspecific(pkey_wtid);
     log_debug("Pinning affinity for actor to current WT %d", i);
     a->$affinity = i;
