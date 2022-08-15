@@ -638,13 +638,11 @@ actor Env (token : WorldAuth, args):
     stdout_write : action(str) -> None
     stdin_install: action(action(str)->None) -> None
     connect      : action(str, int, action(?Connection)->None) -> None
-    listen       : action(int, action(Connection)->None, action(ListenSocket)->None) -> ?ListenSocket
     exit         : action(int) -> None
 
     def stdout_write(s): pass
     def stdin_install(cb): pass
     def connect(host,port,cb): pass
-    def listen(port, on_connect, on_error): pass
     def exit(n): pass
 
     _abstract   : () -> None
@@ -659,14 +657,5 @@ actor Connection (on_error):
     def write(s): pass
     def close() : pass
     def on_receive(cb1, cb2): pass
-
-    _abstract   : () -> None
-
-actor ListenSocket (on_connect: action() -> None, on_error: action() -> None):
-    cb_err = on_error
-
-    close       : action() -> None
-
-    def close(): pass
 
     _abstract   : () -> None

@@ -1,29 +1,33 @@
+import net
+
 actor Tester(env, port):
     var lsock = None
     var i = 0
 
-    def init_listen():
-        s = env.listen(port, connect_handler, sock_err_handler)
-        return s
-
-    def sock_err_handler(lsock):
+    def on_listen_error(l, error):
         print("Error with our listening socket, attempting to re-establish listening socket")
         lsock = init_listen()
 
-    def recv_handler(conn, msg):
-        print("RECV", conn, msg.decode())
-        if msg == b"GET":
-            conn.write(str(i).encode())
-        if msg == b"INC":
+    def on_server_accept(c):
+        pass
+
+    def on_server_receive(c, data):
+        print("RECV", c, data.decode())
+        if data == b"GET":
+            c.write(str(i).encode())
+        if data == b"INC":
             i += 1
-            conn.write(b"OK")
+            c.write(b"OK")
 
-    def err_handler(conn, msg):
-        print("Some error, probably client disconnecting")
+    def on_server_error(c, error):
+        print("There was an error:", error, " from:", c)
 
-    def connect_handler(conn : Connection):
-        print("Got connection")
-        conn.on_receive(recv_handler, err_handler)
+
+    def init_listen():
+        listen_auth = net.TCPListenAuth(net.TCPAuth(net.NetAuth(env.auth)))
+        s = net.TCPListener(listen_auth, "0.0.0.0", port, on_listen_error, on_server_accept, on_server_receive, on_server_error)
+
+        return s
 
     lsock = init_listen()
 

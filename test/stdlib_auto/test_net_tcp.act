@@ -1,0 +1,61 @@
+# Test stdlib net module by first starting a server which listens to a TCP port
+# and then creating a TCP client connection which connects to the server, sends
+# a message and expects a reply. This exercices both ends of the TCP connection.
+
+import net
+import random
+
+
+actor Server(env, port):
+    def on_lsock_error(l, error):
+        print("There was an error with the TCPListener socket:", error)
+
+    def on_server_accept(c):
+        pass
+
+    def on_server_receive(c, data):
+        print("Server Received some data:", data, " from:", c)
+        if data == b"PING":
+            c.write(b"PONG")
+
+    def on_server_error(c, error):
+        print("There was an error:", error, " from:", c)
+
+    listen_auth = net.TCPListenAuth(net.TCPAuth(net.NetAuth(env.auth)))
+    server = net.TCPListener(listen_auth, "0.0.0.0", port, on_lsock_error, on_server_accept, on_server_receive, on_server_error)
+
+
+actor Client(env: Env, port: int):
+    def recv_handler(c, msg):
+        print("Client RECV", msg)
+        if msg == b"PONG":
+            print("Got PONG, all good, yay")
+            await async env.exit(0)
+        else:
+            print("Got bad response, exiting with error..")
+            await async env.exit(1)
+
+    def err_handler(c, msg):
+        print("Client ERR", msg)
+
+    def conn_handler(conn):
+        print("Client established connection")
+        if conn is not None:
+            await async conn.on_receive(recv_handler, err_handler)
+            await async conn.write(b"PING")
+
+    print("Client connecting...")
+    env.connect("127.0.0.1", port, conn_handler)
+
+actor main(env):
+    def timeout_error():
+        print("Timeout reached, exiting with error...")
+        await async env.exit(1)
+
+    after 2: timeout_error()
+
+    port = random.randint(10000, 20000)
+    print("Using port", port)
+    s = Server(env, port)
+    c = Client(env, port)
+

@@ -126,3 +126,123 @@ $R net$$DNS$_pin_affinity (net$$DNS __self__, $Cont c$cont) {
     pin_actor_affinity();
     return $R_CONT(c$cont, $None);
 }
+
+void on_new_connection(uv_stream_t *server, int status) {
+    log_info("on_new_connection %d", status);
+    net$$TCPListener __self__ = (net$$TCPListener)server->data;
+
+    if (status != 0) {
+        char errmsg[1024] = "Error on new TCP client connection: ";
+        uv_strerror_r(status, errmsg + strlen(errmsg), sizeof(errmsg)-strlen(errmsg));
+        log_warn(errmsg);
+        __self__->on_error->$class->__call__(__self__->on_error, __self__, to$str(errmsg));
+        // TODO: free()
+        return;
+    }
+
+    uv_tcp_t *client = (uv_tcp_t*) malloc(sizeof(uv_tcp_t));
+    uv_tcp_init(get_uv_loop(), client);
+    int r = uv_accept(server, (uv_stream_t *)client);
+    if (r != 0) {
+        char errmsg[1024] = "Error in accepting TCP client connection: ";
+        uv_strerror_r(r, errmsg + strlen(errmsg), sizeof(errmsg)-strlen(errmsg));
+        log_warn(errmsg);
+        __self__->on_error->$class->__call__(__self__->on_error, __self__, to$str(errmsg));
+        // TODO: free()
+        return;
+    }
+
+    __self__->$class->create_tcp_listen_connection(__self__, $None, to$int((int *)client));
+    // TODO: free()
+}
+
+
+$R net$$TCPListener$_init (net$$TCPListener __self__, $Cont c$cont) {
+    pin_actor_affinity(($Actor)__self__);
+
+    uv_tcp_t *server = (uv_tcp_t *)malloc(sizeof(uv_tcp_t));
+    uv_tcp_init(get_uv_loop(), server);
+    server->data = (void *)__self__;
+    int r;
+    struct sockaddr_in addr;
+    r = uv_ip4_addr(from$str(__self__->address), from$int(__self__->port), &addr);
+    if (r != 0) {
+        char errmsg[1024] = "Unable to parse address: ";
+        uv_strerror_r(r, errmsg + strlen(errmsg), sizeof(errmsg)-strlen(errmsg));
+        log_warn(errmsg);
+        __self__->on_listen_error->$class->__call__(__self__->on_listen_error, __self__, to$str(errmsg));
+        // TODO: free() & return
+        return $R_CONT(c$cont, $None);
+    }
+
+    r = uv_tcp_bind(server, (const struct sockaddr*)&addr, 0);
+    if (r != 0) {
+        char errmsg[1024] = "Error in TCP bind: ";
+        uv_strerror_r(r, errmsg + strlen(errmsg), sizeof(errmsg)-strlen(errmsg));
+        log_warn(errmsg);
+        __self__->on_listen_error->$class->__call__(__self__->on_listen_error, __self__, to$str(errmsg));
+        // TODO: free() & return
+        return $R_CONT(c$cont, $None);
+    }
+
+    r = uv_listen((uv_stream_t*) server, 1024, on_new_connection);
+    if (r != 0) {
+        char errmsg[1024] = "Error in TCP listen: ";
+        uv_strerror_r(r, errmsg + strlen(errmsg), sizeof(errmsg)-strlen(errmsg));
+        log_warn(errmsg);
+        __self__->on_listen_error->$class->__call__(__self__->on_listen_error, __self__, to$str(errmsg));
+        // TODO: free()
+        return $R_CONT(c$cont, $None);
+    }
+
+    return $R_CONT(c$cont, $None);
+}
+
+$NoneType net$$TCPListener$__resume__ (net$$TCPListener __self__) {
+    __self__->on_listen_error->$class->__call__(__self__->on_listen_error, __self__, to$str("resume"));
+    return $None;
+}
+
+void net$$TCPListenConnection__on_receive(uv_stream_t *stream, ssize_t nread, const uv_buf_t *buf) {
+    if (nread < 0){
+        if (nread == UV_EOF) {
+            uv_close((uv_handle_t *)stream, NULL);
+        }
+    } else if (nread > 0) {
+        if (stream->data) {
+            net$$TCPListenConnection __self__ = stream->data;
+            __self__->on_receive->$class->__call__(__self__->on_receive, __self__, to$bytes(buf->base));
+        }
+    }
+
+    if (buf->base)
+        free(buf->base);
+}
+
+$R net$$TCPListenConnection$_init (net$$TCPListenConnection __self__, $Cont c$cont) {
+    uv_stream_t *client = from$int(__self__->client);
+    client->data = __self__;
+    int r = uv_read_start(client, alloc_buffer, net$$TCPListenConnection__on_receive);
+    if (r < 0) {
+        char errmsg[1024] = "Failed to start reading from TCP socket: ";
+        uv_strerror_r(r, errmsg + strlen(errmsg), sizeof(errmsg)-strlen(errmsg));
+        log_warn(errmsg);
+        __self__->on_error->$class->__call__(__self__->on_error, __self__, to$str(errmsg));
+    }
+
+    return $R_CONT(c$cont, $None);
+}
+
+$R net$$TCPListenConnection$write$local (net$$TCPListenConnection __self__, $bytes data, $Cont c$cont) {
+    uv_write_t *req = (uv_write_t *)malloc(sizeof(uv_write_t));
+    uv_buf_t buf = uv_buf_init(data->str, data->nbytes);
+    uv_stream_t *stream = (uv_stream_t *)from$int(__self__->client);
+    int r = uv_write(req, stream, &buf, 1, NULL);
+    if (r < 0) {
+        char errmsg[1024] = "Failed to write to TCP socket: ";
+        uv_strerror_r(r, errmsg + strlen(errmsg), sizeof(errmsg)-strlen(errmsg));
+        log_warn(errmsg);
+        __self__->on_error->$class->__call__(__self__->on_error, __self__, to$str(errmsg));
+    }
+    return $R_CONT(c$cont, $None);
+}
