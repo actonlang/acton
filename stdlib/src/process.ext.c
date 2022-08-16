@@ -28,10 +28,6 @@ void exit_handler(uv_process_t *req, int64_t exit_status, int term_signal) {
     process_data->on_exit->$class->__call__(process_data->on_exit, process_data->process, to$int(exit_status), to$int(term_signal));
 }
 
-void alloc_buffer(uv_handle_t *handle, size_t size, uv_buf_t *buf) {
-    *buf = uv_buf_init((char*) malloc(size), size);
-}
-
 void read_stderr(uv_stream_t *stream, ssize_t nread, const uv_buf_t *buf) {
     if (nread < 0){
         if (nread == UV_EOF) {
