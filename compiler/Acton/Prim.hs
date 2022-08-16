@@ -224,6 +224,7 @@ clActor             = NClass [] (leftpath [cValue]) te
                         (primKW "catcher",    NSig (monotype $ tCon $ TC (gPrim "Catcher") []) Property),
                         (primKW "msg_lock",   NSig (monotype $ tCon $ TC (gPrim "Lock") []) Property),
                         (primKW "globkey",    NSig (monotype $ tCon $ TC (gPrim "long") []) Property),
+                        (primKW "affinity",   NSig (monotype $ tCon $ TC (gPrim "int64") []) Property),
                         (boolKW,              NDef (monotype $ tFun fxPure posNil kwdNil tBool) NoDec),
                         (strKW,               NDef (monotype $ tFun fxPure posNil kwdNil tStr) NoDec),
                         (reprKW,              NDef (monotype $ tFun fxPure posNil kwdNil tStr) NoDec),

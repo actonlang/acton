@@ -42,26 +42,26 @@ actor Process(auth: ProcessAuth, cmd: list[str], workdir: ?str, env: ?dict[str, 
         """
         NotImplemented
 
-    action def done_writing() -> None:
+    proc def done_writing() -> None:
         """Close stdin of process
 
         Closing stdin allows cat to terminate
         """
         NotImplemented
 
-    action def pid() -> ?int:
+    proc def pid() -> ?int:
         """Get PID of process or None if the process is not running
         """
         NotImplemented
 
-    action def signal(signal: int) -> None:
+    proc def signal(signal: int) -> None:
         """Send signal to process
 
         Sends the provided signal to the process.
         """
         NotImplemented
 
-    action def write(data: bytes) -> None:
+    proc def write(data: bytes) -> None:
         """Write data to stdin of process
         """
         NotImplemented
