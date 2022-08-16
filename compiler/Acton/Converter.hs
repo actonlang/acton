@@ -24,6 +24,8 @@ import Acton.Env
 import Acton.Subst
 import Acton.TypeM
 import Acton.TypeEnv
+import qualified Data.Map.Strict as Map
+import Data.Map.Strict (Map)
 
 pruneStmts xs (Signature l ns t d : ss)
   | null ns'                            = pruneStmts xs ss
@@ -107,8 +109,12 @@ wheads (Right w:ws)
   | otherwise                           = w : wheads ws
 wheads (Left w:ws)                      = w : wheads ws
 
+groupBranch ([],_) m                    = m
+groupBranch p@(w:_,_) m                 = Map.insertWith (++) w [p] m
+
 convExtension env n1 c0 q ps0 eq wmap b = mainClass : sibClasses
-  where ps                              = trim ps0
+  where pss                             = Map.elems $ foldr groupBranch Map.empty ps0
+        ps                              = trim ps0
         q1                              = noqual env q
         tvs                             = map tVar $ qbound q1
         t0                              = tCon c0
@@ -118,6 +124,7 @@ convExtension env n1 c0 q ps0 eq wmap b = mainClass : sibClasses
         bases                           = [ instProto t0 p | (ws,p) <- ps0, null (catRight ws) ] ++ [cValue]
 
         mainClass                       = --trace ("###  mro for " ++ prstr n1 ++ ": " ++ prstrs ps0) $
+                                          --trace ("### branches for " ++ prstr n1 ++ "\n" ++ render (nest 4 $ vcat [ commaSep pretty ps1 | ps1 <- pss ])) $
                                           --trace ("  # sibs for " ++ prstr n1 ++ ": " ++ prstrs [ sibName ws n1 | (ws,_,_,_,_) <- allsibs ]) $
                                           Class NoLoc n1 q1 bases mainClassBody
           where mainClassBody           = qsigs ++ Decl NoLoc [mainInit] : convStmts t0 eq1 (pruneBody env (tcname main) b)
