@@ -310,10 +310,14 @@ instance InfEnv Stmt where
                                              return (Cast fxProc fx :
                                                      cs1++cs2, [], After l e1' e2')
     
-    infEnv env (Signature l ns sc dec)
-      | not $ null redefs               = illegalRedef (head redefs)
+    infEnv env (Signature l ns sc@(TSchema _ q t) dec)
+      | not $ null bad                  = illegalSigOverride (head bad)
       | otherwise                       = return ([], [(n, NSig sc dec) | n <- ns], Signature l ns sc dec)
-      where redefs                      = [ n | n <- ns, findName n env /= NReserved ]
+      where
+        redefs                          = [ (n,i) | n <- ns, let i = findName n env, i /= NReserved ]
+        bad                             = [ n | (n,i) <- redefs, not $ ok i ]
+        ok (NSig (TSchema _ [] t') d)   = null q && castable env t t' && dec == d
+        ok _                            = False
 
     infEnv env (Data l _ _)             = notYet l "data syntax"
 
@@ -569,7 +573,7 @@ instance InfEnv Decl where
 --------------------------------------------------------------------------------------------------------------------------
 
 checkAttributes final te' te
-  | not $ null osigs                    = err2 osigs "Inherited signatures cannot be overridden:"
+  | not $ null dupsigs                  = err2 dupsigs "Duplicate signatures for"
   | not $ null props                    = err2 props "Property attributes cannot have class-level definitions:"
   | not $ null nodef                    = err2 nodef "Methods finalized in a previous extension cannot be overridden:"
 --  | not $ null nself                    = err0 nself "Negative Self in non-static method signature"
@@ -577,9 +581,9 @@ checkAttributes final te' te
   where (sigs,terms)                    = sigTerms te
         (sigs',terms')                  = sigTerms te'
         (allsigs,allterms)              = (sigs ++ sigs', terms ++ terms')
+        dupsigs                         = duplicates (dom sigs)
         nterms                          = exclude terms (dom allsigs)
         abssigs                         = allsigs `exclude` (dom allterms ++ final)
-        osigs                           = (dom sigs `intersect` dom sigs') \\ [initKW]
         props                           = dom terms `intersect` dom (propSigs allsigs)
         nodef                           = dom terms `intersect` final
         nself                           = negself te

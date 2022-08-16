@@ -1090,6 +1090,7 @@ data CompilationError               = KindError SrcLoc Kind Kind
                                     | NameUnexpected QName
                                     | TypedReassign Pattern
                                     | IllegalRedef Name
+                                    | IllegalSigOverride Name
                                     | IllegalExtension QName
                                     | MissingSelf Name
                                     | IllegalImport SrcLoc
@@ -1115,6 +1116,7 @@ instance HasLoc CompilationError where
     loc (NameUnexpected n)          = loc n
     loc (TypedReassign p)           = loc p
     loc (IllegalRedef n)            = loc n
+    loc (IllegalSigOverride n)      = loc n
     loc (IllegalExtension n)        = loc n
     loc (MissingSelf n)             = loc n
     loc (IllegalImport l)           = l
@@ -1140,6 +1142,7 @@ compilationError err                = (loc err, render (expl err))
     expl (NameUnexpected n)         = text "Unexpected variable name:" <+> pretty n
     expl (TypedReassign p)          = text "Type annotation on reassignment:" <+> pretty p
     expl (IllegalRedef n)           = text "Illegal redefinition of" <+> pretty n
+    expl (IllegalSigOverride n)     = text "Illegal signature override:" <+> pretty n
     expl (IllegalExtension n)       = text "Illegal extension of" <+> pretty n
     expl (MissingSelf n)            = text "Missing 'self' parameter in definition of"
     expl (IllegalImport l)          = text "Relative import not yet supported"
@@ -1161,6 +1164,7 @@ nameBlocked n                       = Control.Exception.throw $ NameBlocked n
 nameUnexpected n                    = Control.Exception.throw $ NameUnexpected n
 typedReassign p                     = Control.Exception.throw $ TypedReassign p
 illegalRedef n                      = Control.Exception.throw $ IllegalRedef n
+illegalSigOverride n                = Control.Exception.throw $ IllegalSigOverride n
 illegalExtension n                  = Control.Exception.throw $ IllegalExtension n
 missingSelf n                       = Control.Exception.throw $ MissingSelf n
 fileNotFound n                      = Control.Exception.throw $ FileNotFound n
