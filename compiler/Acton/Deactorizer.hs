@@ -195,7 +195,8 @@ instance Deact Stmt where
 
 instance Deact Decl where
     deact env (Actor l n q params KwdNIL body)
-                                    = do inits' <- deactSuite env2 inits
+                                    = do --traceM ("### deact actor " ++ prstr n)
+                                         inits' <- deactSuite env2 inits
                                          decls' <- mapM deactMeths decls
                                          let _init_ = Def l0 initKW [] (addSelfPar params') KwdNIL (Just tNone) (mkBody $ copies++inits') NoDec fxProc
                                          return $ Class l n q [TC primActor [], cValue] (propsigs ++ [Decl l0 [_init_]] ++ decls' ++ wrapped)
@@ -252,10 +253,12 @@ instance Deact Decl where
 
 
     deact env (Def l n q p KwdNIL (Just t) b d fx)
-                                    = do b <- deactSuite env1 b
+                                    = do --traceM ("### deact def " ++ prstr n)
+                                         b <- deactSuite env1 b
                                          return $ Def l n q p KwdNIL (Just t) b d fx
       where env1                    = extendAndShadow (envOf p) $ setRet t $ defineTVars q env
-    deact env (Class l n q u b)     = Class l n q u <$> deactSuite env1 b
+    deact env (Class l n q u b)     = --trace ("### deact class " ++ prstr n) $
+                                      Class l n q u <$> deactSuite env1 b
       where env1                    = defineSelf (NoQ n) q $ defineTVars q env
     deact env d                     = error ("deact unexpected decl: " ++ prstr d)
 
