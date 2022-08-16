@@ -340,7 +340,7 @@ $bool $Actor$__bool__($Actor self) {
 
 $str $Actor$__str__($Actor self) {
   char *s;
-  asprintf(&s,"<$Actor object at %p>",self);
+  asprintf(&s,"<$Actor %ld %s at %p>", self->$globkey, self->$class->$GCINFO, self);
   return to$str(s);
 }
 
