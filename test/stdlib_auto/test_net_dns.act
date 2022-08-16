@@ -1,0 +1,38 @@
+import net
+#import test
+
+actor main(env):
+    def test_dns():
+        res = {
+            "ipv4": False,
+            "ipv6": False
+        }
+
+        def on_resolved(result):
+            print("got a result:", result)
+            for r in result:
+                if r == "127.0.0.1":
+                   res["ipv4"] = True
+                if r == "::1":
+                   res["ipv6"] = True
+
+            if res["ipv4"] and res["ipv6"]:
+                print("Got both IPv4 and IPv6 result, exiting happily")
+                env.exit(0)
+
+
+        def on_error(name, msg):
+            print("Got error during DNS resolution of", name, ", error:", msg)
+            env.exit(1)
+
+        print("== DNS test")
+        da = net.DNSAuth(net.NetAuth(env.auth))
+        dns = net.DNS(da)
+        dns.lookup_a("localhost", on_resolved, on_error)
+        dns.lookup_aaaa("localhost", on_resolved, on_error)
+
+    def exit():
+        env.exit(1)
+
+    test_dns()
+    after 1: exit()

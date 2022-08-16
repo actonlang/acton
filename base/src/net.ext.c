@@ -1,4 +1,3 @@
-
 #include <uv.h>
 #include "../rts/io.h"
 #include "../rts/log.h"
@@ -10,7 +9,7 @@ void netQ___ext_init__() {
 struct dns_cb_data {
     struct addrinfo *hints;
     $action on_resolve;
-    $action on_error;
+    $action2 on_error;
 };
 
 void netQ_DNSD_lookup_a__on_resolve (uv_getaddrinfo_t *req, int status, struct addrinfo *dns_res) {
@@ -20,8 +19,8 @@ void netQ_DNSD_lookup_a__on_resolve (uv_getaddrinfo_t *req, int status, struct a
     if (status != 0) {
         char errmsg[1024] = "DNS lookup error: ";
         uv_strerror_r(status, errmsg + strlen(errmsg), sizeof(errmsg)-strlen(errmsg));
-        $action f = cb_data->on_error;
-        f->$class->__asyn__(f, to$str(errmsg));
+        $action2 f = cb_data->on_error;
+        f->$class->__asyn__(f, "", to$str(errmsg));
 
         uv_freeaddrinfo(dns_res);
         free(cb_data->hints);
@@ -62,9 +61,14 @@ $R netQ_DNSD_lookup_aG_local (netQ_DNS self, $Cont c$cont, B_str name, $action o
     req->data = cb_data;
 
     int r = uv_getaddrinfo(get_uv_loop(), req, netQ_DNSD_lookup_a__on_resolve, fromB_str(name), NULL, hints);
-    // TODO: use on_error callback instead!
-    if (r != 0)
-        $RAISE(((B_BaseException)B_RuntimeErrorG_new(to$str("Unable to run DNS query"))));
+    if (r != 0) {
+        char errmsg[1024] = "Unable to run DNS query: ";
+        uv_strerror_r(r, errmsg + strlen(errmsg), sizeof(errmsg)-strlen(errmsg));
+        log_warn(errmsg);
+        (($action2) on_error)->$class->__asyn__(on_error, name, to$str(errmsg));
+        // TODO: free()
+        return $R_CONT(c$cont, B_None);
+    }
 
     return $R_CONT(c$cont, B_None);
 }
@@ -89,8 +93,7 @@ void netQ_DNSD_lookup_aaaa__on_resolve (uv_getaddrinfo_t *req, int status, struc
     struct addrinfo *rp;
     char addr[40] = {'\0'};
     for (rp = dns_res; rp != NULL; rp = rp->ai_next) {
-        //uv_ip6_name((struct sockaddr_in6*) rp->ai_addr, addr, 39);
-        uv_ip6_name((struct sockaddr_in6*)(rp->ai_addr), addr, 39);
+        uv_ip6_name((struct sockaddr_in6*)rp->ai_addr, addr, 39);
         B_SequenceD_listG_witness->$class->append(B_SequenceD_listG_witness, $res, to$str(addr));
     }
 
@@ -119,9 +122,14 @@ $R netQ_DNSD_lookup_aaaaG_local (netQ_DNS self, $Cont c$cont, B_str name, $actio
     req->data = cb_data;
 
     int r = uv_getaddrinfo(get_uv_loop(), req, netQ_DNSD_lookup_aaaa__on_resolve, fromB_str(name), NULL, hints);
-    // TODO: use on_error callback instead!
-    if (r != 0)
-        $RAISE(((B_BaseException)B_RuntimeErrorG_new(to$str("Unable to run DNS query"))));
+    if (r != 0) {
+        char errmsg[1024] = "Unable to run DNS query: ";
+        uv_strerror_r(r, errmsg + strlen(errmsg), sizeof(errmsg)-strlen(errmsg));
+        log_warn(errmsg);
+        (($action2) on_error)->$class->__asyn__(on_error, name, to$str(errmsg));
+        // TODO: free()
+        return $R_CONT(c$cont, B_None);
+    }
 
     return $R_CONT(c$cont, B_None);
 }
