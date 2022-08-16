@@ -587,7 +587,7 @@ runRestPasses args paths env0 parsed stubMode = do
                               aFile = joinPath [projLib paths, "libActonProject.a"]
                               buildF = joinPath [projPath paths, "build.sh"]
                               wd = takeFileName (projPath paths)
-                              ccCmd = ("cc " ++ pedantArg ++
+                              ccCmd = ("cc -Werror=return-type " ++ pedantArg ++
                                        (if (dev args) then " -g " else "") ++
                                        " -c " ++
                                        " -I" ++ wd ++
