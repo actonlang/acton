@@ -142,7 +142,7 @@ $R process$$Process$_create_process (process$$Process __self__, $Cont c$cont) {
         char errmsg[1024] = "Failed to spawn process: ";
         uv_strerror_r(r, errmsg + strlen(errmsg), sizeof(errmsg)-strlen(errmsg));
         log_warn(errmsg);
-        __self__->on_error->$class->__call__(__self__->on_exit, process_data->process, to$str(errmsg));
+        __self__->on_error->$class->__call__(__self__->on_error, process_data->process, to$str(errmsg));
     }
     // TODO: do we need to do some magic to read any data produced before this
     // callback is installed?
