@@ -67,7 +67,7 @@ void read_stdout(uv_stream_t *stream, ssize_t nread, const uv_buf_t *buf) {
 }
 
 $R process$$Process$_create_process (process$$Process __self__, $Cont c$cont) {
-    pin_actor_affinity(($Actor)__self__);
+    pin_actor_affinity();
     struct process_data *process_data = calloc(1, sizeof(struct process_data));
     process_data->process = __self__;
     process_data->on_stdout = __self__->on_stdout;

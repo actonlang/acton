@@ -123,6 +123,6 @@ $R net$$DNS$lookup_aaaa$local (net$$DNS __self__, $str name, $function on_resolv
 }
 
 $R net$$DNS$_pin_affinity (net$$DNS __self__, $Cont c$cont) {
-    pin_actor_affinity(($Actor)__self__);
+    pin_actor_affinity();
     return $R_CONT(c$cont, $None);
 }
