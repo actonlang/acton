@@ -2,40 +2,97 @@
 """
 
 class NetAuth():
+    """Token for general network access"""
     def __init__(self, auth: WorldAuth):
         pass
 
 class DNSAuth():
+    """Token for performing DNS queries"""
     def __init__(self, auth: NetAuth):
         pass
 
 class TCPAuth():
+    """Token for connecting or listening with TCP"""
     def __init__(self, auth: NetAuth):
         pass
 
 class TCPConnectAuth():
+    """Token to connect using TCP to a remote host"""
     def __init__(self, auth: TCPAuth):
         pass
 
 class TCPListenAuth():
+    """Token for opening a TCP socket"""
     def __init__(self, auth: TCPAuth):
         pass
 
-actor DNS(auth: DNSAuth):
-    def _pin_affinity() -> None:
-        NotImplemented
+class _TCPListenConnectAuth():
+    """Internal use only"""
+    pass
 
-    action def lookup_a(name: str, on_resolve: action(list[str]) -> None, on_error: action(str) -> None) -> None:
+
+actor DNS(auth: DNSAuth):
+    action def lookup_a(name: str, on_resolve: action(list[str]) -> None, on_error: action(str, str) -> None) -> None:
         """Perform DNS lookup for name of record type A
         """
         NotImplemented
 
-    action def lookup_aaaa(name: str, on_resolve: action(list[str]) -> None, on_error: action(str) -> None) -> None:
+    action def lookup_aaaa(name: str, on_resolve: action(list[str]) -> None, on_error: action(str, str) -> None) -> None:
         """Perform DNS lookup for name of record type AAAA
         """
         NotImplemented
 
+    def _pin_affinity() -> None:
+        """Implementation internal"""
+        NotImplemented
     _pin_affinity()
+
+
+actor TCPListenConnection(auth: _TCPListenConnectAuth, client: int, on_receive: action(TCPListenConnection, bytes) -> None, on_error: action(TCPListenConnection, str) -> None):
+    """TCP Listener Connection"""
+    action def write(data: bytes) -> None:
+        """Write data to remote"""
+        NotImplemented
+
+    def _force_persistance():
+        """Trick compiler into persisting the actor arguments we need.
+
+        Compiler optimizes so that only variables that are used are persisted to
+        the DB. Since we use these variables from C, the compiler doesn't see
+        them, thus we need to trick it. This method should never be called.
+        """
+        print(client, on_receive, on_error)
+
+    def _init():
+        """Implementation internal"""
+        NotImplemented
+    _init()
+
+
+actor TCPListener(auth: TCPListenAuth, address: str, port: int, on_listen_error: action(TCPListener, str) -> None, on_accept: action(TCPListenConnection) -> None, on_receive: action(TCPListenConnection, bytes) -> None, on_error: action(TCPListenConnection, str) -> None):
+    """TCP Listener"""
+    _stream = -1
+    def create_tcp_listen_connection(auth: _TCPListenConnectAuth, client: int):
+        """Implementation internal"""
+        c = TCPListenConnection(auth, client, on_receive, on_error)
+        on_accept(c)
+
+    def _force_persistance():
+        """Trick compiler into persisting the actor arguments we need.
+
+        Compiler optimizes so that only variables that are used are persisted to
+        the DB. Since we use these variables from C, the compiler doesn't see
+        them, thus we need to trick it. This method should never be called.
+        """
+        print(address, port, on_listen_error, on_accept, on_error, _stream)
+
+    def __resume__() -> None:
+        NotImplemented
+
+    def _init():
+        """Implementation internal"""
+        NotImplemented
+    _init()
 
 
 def _force_ext():
