@@ -127,8 +127,86 @@ $R net$$DNS$_pin_affinity (net$$DNS __self__, $Cont c$cont) {
     return $R_CONT(c$cont, $None);
 }
 
+
+void net$$TCPIPConnection__on_receive(uv_stream_t *stream, ssize_t nread, const uv_buf_t *buf) {
+    if (nread < 0){
+        if (nread == UV_EOF) {
+            uv_close((uv_handle_t *)stream, NULL);
+        }
+    } else if (nread > 0) {
+        if (stream->data) {
+            net$$TCPIPConnection __self__ = stream->data;
+            __self__->on_receive->$class->__call__(__self__->on_receive, __self__, to$bytes_len(buf->base, nread));
+        }
+    }
+
+    if (buf->base)
+        free(buf->base);
+}
+
+void on_connect(uv_connect_t *connect_req, int status) {
+    net$$TCPIPConnection __self__ = (net$$TCPIPConnection)connect_req->data;
+
+    if (status != 0) {
+        char errmsg[1024] = "Error in TCP connect: ";
+        uv_strerror_r(status, errmsg + strlen(errmsg), sizeof(errmsg)-strlen(errmsg));
+        log_warn(errmsg);
+        __self__->on_error->$class->__call__(__self__->on_error, __self__, to$str(errmsg));
+        // TODO: free()
+        return;
+    }
+
+    connect_req->handle->data = __self__;
+    int r = uv_read_start(connect_req->handle, alloc_buffer, net$$TCPIPConnection__on_receive);
+    if (r < 0) {
+        char errmsg[1024] = "Failed to start reading from TCP client socket: ";
+        uv_strerror_r(r, errmsg + strlen(errmsg), sizeof(errmsg)-strlen(errmsg));
+        log_warn(errmsg);
+        __self__->on_error->$class->__call__(__self__->on_error, __self__, to$str(errmsg));
+        return;
+    }
+
+    __self__->on_connect->$class->__call__(__self__->on_connect, __self__);
+}
+
+$R net$$TCPIPConnection$_init (net$$TCPIPConnection __self__, $Cont c$cont) {
+    pin_actor_affinity();
+    uv_tcp_t* socket = (uv_tcp_t*)malloc(sizeof(uv_tcp_t));
+    uv_tcp_init(get_uv_loop(), socket);
+    __self__->_socket = to$int(socket);
+
+    uv_connect_t* connect_req = (uv_connect_t*)malloc(sizeof(uv_connect_t));
+    connect_req->data = (void *)__self__;
+
+    struct sockaddr_in dest;
+    uv_ip4_addr(from$str(__self__->address), from$int(__self__->port), &dest);
+
+    uv_tcp_connect(connect_req, socket, (const struct sockaddr*)&dest, on_connect);
+
+    return $R_CONT(c$cont, $None);
+}
+
+$R net$$TCPIPConnection$write$local (net$$TCPIPConnection __self__, $bytes data, $Cont c$cont) {
+    uv_write_t *req = (uv_write_t *)malloc(sizeof(uv_write_t));
+    uv_buf_t buf = uv_buf_init(data->str, data->nbytes);
+    uv_stream_t *stream = (uv_stream_t *)from$int(__self__->_socket);
+    int r = uv_write(req, stream, &buf, 1, NULL);
+    if (r < 0) {
+        char errmsg[1024] = "Failed to write to TCP socket: ";
+        uv_strerror_r(r, errmsg + strlen(errmsg), sizeof(errmsg)-strlen(errmsg));
+        log_warn(errmsg);
+        __self__->on_error->$class->__call__(__self__->on_error, __self__, to$str(errmsg));
+    }
+
+    return $R_CONT(c$cont, $None);
+}
+
+$NoneType net$$TCPIPConnection$__resume__ (net$$TCPIPConnection __self__) {
+    __self__->on_error->$class->__call__(__self__->on_error, __self__, to$str("resume"));
+    return $None;
+}
+
 void on_new_connection(uv_stream_t *server, int status) {
-    log_info("on_new_connection %d", status);
     net$$TCPListener __self__ = (net$$TCPListener)server->data;
 
     if (status != 0) {
@@ -211,7 +289,7 @@ void net$$TCPListenConnection__on_receive(uv_stream_t *stream, ssize_t nread, co
     } else if (nread > 0) {
         if (stream->data) {
             net$$TCPListenConnection __self__ = stream->data;
-            __self__->on_receive->$class->__call__(__self__->on_receive, __self__, to$bytes(buf->base));
+            __self__->on_receive->$class->__call__(__self__->on_receive, __self__, to$bytes_len(buf->base, nread));
         }
     }
 
@@ -228,6 +306,7 @@ $R net$$TCPListenConnection$_init (net$$TCPListenConnection __self__, $Cont c$co
         uv_strerror_r(r, errmsg + strlen(errmsg), sizeof(errmsg)-strlen(errmsg));
         log_warn(errmsg);
         __self__->on_error->$class->__call__(__self__->on_error, __self__, to$str(errmsg));
+        return $R_CONT(c$cont, $None);
     }
 
     return $R_CONT(c$cont, $None);

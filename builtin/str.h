@@ -298,7 +298,8 @@ extern struct $Times$bytes *$Times$bytes$witness;
 extern struct $Sliceable$bytes *$Sliceable$bytes$witness;
 extern struct $Container$bytes *$Container$bytes$witness;
 
-$bytes to$bytes(char *str); 
+$bytes to$bytes(char *str);
+$bytes to$bytes_len(char *str, int len);
 unsigned char *from$bytes($bytes b);
 
 

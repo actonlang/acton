@@ -2911,6 +2911,13 @@ $bytes to$bytes(char *str) {
   return res;
 }
 
+$bytes to$bytes_len(char *str, int len) {
+  $bytes res;
+  NEW_UNFILLED_BYTES(res, len);
+  memcpy(res->str, str, len);
+  return res;
+}
+
 unsigned char *from$bytes($bytes b) {
   return b->str;
 }
