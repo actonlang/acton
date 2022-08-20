@@ -240,7 +240,7 @@ void wake_wt(int wtid) {
         }
     } else {
         // thread specific queue
-        uv_async_send(&wake_ev[wtid-1]);
+        uv_async_send(&wake_ev[wtid]);
     }
 
 }
@@ -1249,7 +1249,7 @@ void BOOTSTRAP(int argc, char *argv[]) {
 
 void wt_stop_cb(uv_async_t *ev) {
     int wtid = (int)pthread_getspecific(pkey_wtid);
-    uv_check_stop(&work_ev[wtid-1]);
+    uv_check_stop(&work_ev[wtid]);
     uv_stop(get_uv_loop());
 }
 
@@ -1413,7 +1413,7 @@ void wt_work_cb(uv_check_t *ev) {
 
     // if there's more work, wake up ourselves again to process more but
     // interleave with some IO
-    uv_async_send(&wake_ev[wtid-1]);
+    uv_async_send(&wake_ev[wtid]);
 }
 
 void *main_loop(void *idx) {
@@ -1425,12 +1425,12 @@ void *main_loop(void *idx) {
 #else
     pthread_setname_np(pthread_self(), tname);
 #endif
-    uv_loop_t *uv_loop = uv_loops[wtid-1];
+    uv_loop_t *uv_loop = uv_loops[wtid];
     pthread_setspecific(pkey_wtid, (void *)wtid);
     pthread_setspecific(pkey_uv_loop, (void *)uv_loop);
 
-    uv_check_init(uv_loop, &work_ev[wtid-1]);
-    uv_check_start(&work_ev[wtid-1], (uv_check_cb)wt_work_cb);
+    uv_check_init(uv_loop, &work_ev[wtid]);
+    uv_check_start(&work_ev[wtid], (uv_check_cb)wt_work_cb);
 
     int r = uv_run(uv_loop, UV_RUN_DEFAULT);
     wt_stats[wtid].state = WT_NoExist;
@@ -1788,7 +1788,8 @@ void *$mon_socket_loop() {
 
 void rts_shutdown() {
     rts_exit = 1;
-    for (int i = 0; i < num_wthreads; i++) {
+    // 0 = main thread, rest is wthreads, thus +1
+    for (int i = 0; i < num_wthreads+1; i++) {
         uv_async_send(&stop_ev[i]);
     }
 }
@@ -2136,7 +2137,7 @@ int main(int argc, char **argv) {
     }
     init_dbc_stats();
 
-    for (uint i=0; i < num_wthreads; i++) {
+    for (uint i=0; i < num_wthreads+1; i++) {
         uv_loop_t *loop = malloc(sizeof(uv_loop_t));
         check_uv_fatal(uv_loop_init(loop), "Error initializing libuv loop: ");
         uv_loops[i] = loop;
