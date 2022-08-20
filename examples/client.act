@@ -1,27 +1,23 @@
+import net
+
 actor main(env):
 
-    def stdout_w(conn,str):
-        env.stdout_write(str)
-      
-    def stdout_wb(conn,b):
-        env.stdout_write(b.decode())
-       
-    def session(conn):
-        if conn is not None:
-           conn_write : action(str)->None
-           
-           def conn_write(s):
-               conn.write(s.encode())
-        
-           conn.on_receive(stdout_wb, stdout_w)
-           env.stdin_install(conn_write)
-        else:
-           print("couldn't connect to",env.argv[1])
-           env.exit(0)
+    def on_connect(c):
+        print("Client established connection")
+        def conn_write(s):
+            c.write(s.encode())
+
+        env.stdin_install(conn_write)
+
+    def on_receive(c, data):
+        env.stdout_write(data.decode())
+
+    def on_error(c, msg):
+        print("Client ERR", msg)
 
     if len(env.argv) != 3:
-        print("usage: client host port")
-        env.exit(-1)
-    else:
-        env.connect(env.argv[1],int(env.argv[2]),session)
+        print("usage: client [HOST] [PORT]")
+        await async env.exit(-1)
 
+    connect_auth = net.TCPConnectAuth(net.TCPAuth(net.NetAuth(env.auth)))
+    client = net.TCPIPConnection(connect_auth, env.argv[1], int(env.argv[2]), on_connect, on_receive, on_error)

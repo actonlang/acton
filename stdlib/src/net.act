@@ -48,6 +48,30 @@ actor DNS(auth: DNSAuth):
     _pin_affinity()
 
 
+actor TCPIPConnection(auth: TCPConnectAuth, address: str, port: int, on_connect: action(TCPIPConnection) -> None, on_receive: action(TCPIPConnection, bytes) -> None, on_error: action(TCPIPConnection, str) -> None):
+    """TCP IP Connection"""
+    _socket = -1
+
+    action def write(data: bytes) -> None:
+        """Write data to remote"""
+        NotImplemented
+
+    def __resume__() -> None:
+        NotImplemented
+
+    def _force_persistance():
+        """Trick compiler into persisting the actor arguments we need.
+
+        Compiler optimizes so that only variables that are used are persisted to
+        the DB. Since we use these variables from C, the compiler doesn't see
+        them, thus we need to trick it. This method should never be called.
+        """
+        print(address, port, on_connect, on_receive, on_error, _socket)
+
+    def _init():
+        NotImplemented
+    _init()
+
 actor TCPListenConnection(auth: _TCPListenConnectAuth, client: int, on_receive: action(TCPListenConnection, bytes) -> None, on_error: action(TCPListenConnection, str) -> None):
     """TCP Listener Connection"""
     action def write(data: bytes) -> None:
