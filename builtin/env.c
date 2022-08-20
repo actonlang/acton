@@ -834,7 +834,7 @@ $NoneType $Env$__init__ ($Env __self__, $WorldAuth token, $list argv) {
     return $None;
 }
 $R $Env$stdout_write$local ($Env __self__, $str s, $Cont c$cont) {
-    printf("%s",s->str);
+    printf("%s", s->str);
     return $R_CONT(c$cont, $None);
 }
 $R $Env$stdin_install$local ($Env __self__, $function cb, $Cont c$cont) {
