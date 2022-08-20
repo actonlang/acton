@@ -629,18 +629,13 @@ class WorldAuth():
     """
     pass
 
-actor Env (token : WorldAuth, args):
-    auth : WorldAuth
+actor Env (token: WorldAuth, args: list[str]):
     auth = token
-    argv : list[str]
     argv = args
 
-    stdout_write : action(str) -> None
-    stdin_install: action(action(str)->None) -> None
-    exit         : action(int) -> None
-
-    def stdout_write(s): pass
-    def stdin_install(cb): pass
-    def exit(n): pass
-
-    _abstract   : () -> None
+    def stdout_write(s: str) -> None:
+        NotImplemented
+    action def stdin_install(cb: action(str) -> None) -> None:
+        NotImplemented
+    def exit(n: int):
+        NotImplemented
