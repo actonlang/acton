@@ -255,7 +255,7 @@ closureConvert env lambda t0 vts0 es    = do n <- newName "lambda"
         s                               = selfSubst env
         Lambda _ p _ e fx               = subst s lambda
         t                               = subst s t0
-        base | t == tR                  = TC primCont [fx,prowOf p] : base0
+        base | t == tR                  = TC primCont [prowOf p] : base0
              | otherwise                = base0
         base0                           = [TC primFunction [fx,prowOf p,kwdNil,t], cValue]
         vts                             = subst s vts0
@@ -399,7 +399,7 @@ instance Conv TSchema where
 
 instance Conv Type where
     conv (TFun l fx p TNil{} t)
-      | t == tR                         = TCon l (TC primCont [conv fx, conv p])
+      | t == tR                         = TCon l (TC primCont [conv p])
       | otherwise                       = TCon l (TC primFunction [conv fx, conv p, kwdNil, conv t])
     conv (TCon l c)                     = TCon l (conv c)
     conv (TTuple l p k)                 = TTuple l (conv p) (conv k)

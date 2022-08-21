@@ -594,7 +594,7 @@ declCon env n q
         initcall env | t == tR      = text "return" <+> methodtable env n <> dot <> gen env initKW <> parens (gen env tmpV <> comma <+> gen env (retobj args)) <> semi
                      | otherwise    = methodtable env n <> dot <> gen env initKW <> parens (gen env tmpV <> comma' (gen env args)) <> semi $+$
                                       text "return" <+> gen env tmpV <> semi
-        retobj (PosArg e PosNil)    = PosArg (eCall (tApp (eQVar primCONSTCONT) [fx,tObj]) [eVar tmpV, e]) PosNil
+        retobj (PosArg e PosNil)    = PosArg (eCall (tApp (eQVar primCONSTCONT) [tObj]) [eVar tmpV, e]) PosNil
         retobj (PosArg e p)         = PosArg e (retobj p)
         env1                        = ldefine ((tmpV, NVar tObj) : envOf pars) env
         ns                          = abstractAttrs env (NoQ n)

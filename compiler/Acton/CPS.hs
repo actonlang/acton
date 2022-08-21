@@ -59,7 +59,7 @@ withPrefixes m                          = do ss0 <- swapPrefixes []
                                              return (reverse ss1, r)
 
 
-data Frame                              = Meth   Name Type TFX              -- contParam, with type and effect
+data Frame                              = Meth   Name Type                  -- contParam with type
                                         | Seq    Name                       -- nextCont
                                         | Loop   Name                       -- loopEntry
                                         | Wrap   Name                       -- finalizer
@@ -68,7 +68,7 @@ data Frame                              = Meth   Name Type TFX              -- c
                                         deriving (Eq,Show)
 
 instance Pretty Frame where
-    pretty (Meth n t fx)                = text "Meth" <+> pretty t <+> pretty fx
+    pretty (Meth n t)                   = text "Meth" <+> pretty t
     pretty (Seq n)                      = text "Seq" <+> pretty n
     pretty (Loop n)                     = text "Loop" <+> pretty n
     pretty (Wrap n)                     = text "Wrap" <+> pretty n
@@ -98,15 +98,11 @@ inClass env                             = whereX (envX env) == InClass
 
 inDef env                               = whereX (envX env) == InDef
 
-methFX (Meth c t fx : ctx)              = fx
-methFX (f : ctx)                        = methFX ctx
-methFX []                               = fxPure
-
-eCallCont fx t c arg                    = eCall (tApp (eQVar primRContc) [fx,t]) [eVar c, arg]
+eCallCont t c arg                       = eCall (tApp (eQVar primRContc) [t]) [eVar c, arg]
 
 eCallCont2 c args                       = eCall (eVar c) args
 
-pushH env h                             = sExpr (eCall (tApp (eQVar primPUSHc) [methFX $ ctxt env]) [h])
+pushH env h                             = sExpr (eCall (eQVar primPUSHc) [h])
 
 format (Int _ 0 _, cont)                = [sReturn cont]
 format (lvl, cont)                      = [sExpr (eCall (eQVar primPOP) [lvl]), sReturn cont]
@@ -118,15 +114,15 @@ unwrapL 0 lvl                           = eVar lvl
 unwrapL n lvl                           = eCall (eDot (eQVar primWIntegralInt) addKW) [eInt n, unwrapL 0 lvl]
 
 seqcont n (Pop : ctx)                   = seqcont (n+1) ctx
-seqcont n (Seq c : ctx)                 = (eInt n, eCallCont (methFX ctx) tNone c eNone)
-seqcont n (Loop c : ctx)                = (eInt n, eCallCont (methFX ctx) tNone c eNone)
-seqcont n (Meth c t fx : _)             = (eInt n, eCallCont fx tNone c eNone)
+seqcont n (Seq c : ctx)                 = (eInt n, eCallCont tNone c eNone)
+seqcont n (Loop c : ctx)                = (eInt n, eCallCont tNone c eNone)
+seqcont n (Meth c t : _)                = (eInt n, eCallCont tNone c eNone)
 seqcont n (Wrap c : ctx)                = (eInt n, wrapC c seqcont ctx)
 seqcont n (Unwrap lvl cnt : _)          = (unwrapL n lvl, eCallCont2 cnt [])
 
 cntcont n (Pop : ctx)                   = cntcont (n+1) ctx
 cntcont n (Seq c : ctx)                 = cntcont n ctx
-cntcont n (Loop c : ctx)                = (eInt n, eCallCont (methFX ctx) tNone c eNone)
+cntcont n (Loop c : ctx)                = (eInt n, eCallCont tNone c eNone)
 cntcont n (Wrap c : ctx)                = (eInt n, wrapC c cntcont ctx)
 cntcont n (Unwrap lvl cnt : ctx)        = cntcont n ctx
 
@@ -139,13 +135,13 @@ brkcont n (Unwrap lvl cnt : ctx)        = brkcont n ctx
 retcont e n (Pop : ctx)                 = retcont e (n+1) ctx
 retcont e n (Seq c : ctx)               = retcont e n ctx
 retcont e n (Loop c : ctx)              = retcont e n ctx
-retcont e n (Meth c t fx : _)           = (eInt n, eCallCont fx t c e)
+retcont e n (Meth c t : _)              = (eInt n, eCallCont t c e)
 retcont e n (Wrap c : ctx)              = (eInt n, wrapC c (retcont e) ctx)
 retcont e n (Unwrap lvl cnt : ctx)      = retcont e n ctx
 
 quicknext (Seq c : _)                   = Just (eVar c)
 quicknext (Loop c : _)                  = Just (eVar c)
-quicknext (Meth c t fx : _)             = Just (eVar c)
+quicknext (Meth c t : _)                = Just (eVar c)
 quicknext (Wrap c : ctx)                = Just (wrapC c seqcont ctx)
 quicknext _                             = Nothing
 
@@ -178,7 +174,7 @@ instance CPS [Stmt] where
       | contCall env e,
         Just c <- quicknext (ctxt env)  = return $ sReturn (addContArg env (conv e) (cont c)) : []
       where t                           = typeOf env e
-            cont c                      = if t == tNone then c else eCall (tApp (eQVar primSKIPRESc) [methFX $ ctxt env, t]) [c]
+            cont c                      = if t == tNone then c else eCall (tApp (eQVar primSKIPRESc) [t]) [c]
 
     cps env (Expr _ e : ss)
       | contCall env e                  = do k <- newName "cont"
@@ -303,7 +299,7 @@ instance CPS Decl where
       | contFX fx                       = do b' <- cpsSuite env1 b
                                              return $ Def l n q' (addContPar p' fx t') KwdNIL (Just tR) b' d fx
       | otherwise                       = return $ Def l n q' p' KwdNIL (Just t') (conv b) d fx
-      where env1                        = define (envOf p) $ defineTVars q $ Meth contKW t fx +: setDefCtxt env
+      where env1                        = define (envOf p) $ defineTVars q $ Meth contKW t +: setDefCtxt env
             q'                          = conv q
             p'                          = conv p
             t'                          = conv t
@@ -341,7 +337,7 @@ hbody env x hs                          = do bs <- mapM h hs
           where env1                    = define [(z,NVar t)] env
                 t                       = tCon $ TC y []
 
-kDef env k p b                          = sDef k (conv p) tR b (conv $ methFX $ ctxt env)
+kDef env k p b                          = sDef k (conv p) tR b fxProc
 
 fxCall env test (Call _ (TApp _ (Var _ n) _) p k)
   | n `elem` primNoCont                 = False
@@ -476,7 +472,7 @@ instance PreCPS Expr where
       | contFX fx                       = do (prefixes,e') <- withPrefixes $ preTop env1 e
                                              case prefixes of
                                                 [] -> let p' = conv p; t' = conv t
-                                                          e1 = if contCall env e then addContArg env1 e' (eVar contKW) else eCallCont fx t' contKW e'
+                                                          e1 = if contCall env e then addContArg env1 e' (eVar contKW) else eCallCont t' contKW e'
                                                       in return $ Lambda l (addContPar p' fx t') KwdNIL e1 fx
                                                 _ -> do
                                                     f <- newName "lambda"
