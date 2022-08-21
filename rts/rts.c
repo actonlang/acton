@@ -58,6 +58,7 @@ uv_loop_t *uv_loops[MAX_WTHREADS];
 uv_async_t stop_ev[MAX_WTHREADS];
 uv_async_t wake_ev[MAX_WTHREADS];
 uv_check_t work_ev[MAX_WTHREADS];
+uv_timer_t *timer_ev;
 
 char *mon_log_path = NULL;
 int mon_log_period = 30;
@@ -243,6 +244,11 @@ void wake_wt(int wtid) {
         uv_async_send(&wake_ev[wtid]);
     }
 
+}
+
+void reset_timeout() {
+    // Wake up timerQ thread
+    uv_async_send(&wake_ev[0]);
 }
 
 static inline void spinlock_lock($Lock *f) {
@@ -1247,6 +1253,39 @@ void BOOTSTRAP(int argc, char *argv[]) {
 
 ////////////////////////////////////////////////////////////////////////////////////////
 
+void main_stop_cb(uv_async_t *ev) {
+    uv_stop(uv_loops[0]);
+}
+
+
+void arm_timer_ev();
+void main_wake_cb(uv_async_t *ev) {
+    // Wäjky-päjky
+    arm_timer_ev();
+}
+
+void main_timer_cb(uv_timer_t *ev) {
+    handle_timeout();
+    arm_timer_ev();
+}
+
+void arm_timer_ev() {
+    time_t next_time = next_timeout();
+    if (next_time) {
+        time_t now = current_time();
+        time_t offset = next_time - now;
+        long long unsigned ms = offset / 1000;
+        int r = uv_timer_start(timer_ev, main_timer_cb, ms, 0);
+        if (r != 0) {
+            char errmsg[1024] = "Unable to set timer: ";
+            uv_strerror_r(r, errmsg + strlen(errmsg), sizeof(errmsg)-strlen(errmsg));
+            log_fatal(errmsg);
+        }
+    } else {
+        int r = uv_timer_stop(timer_ev);
+    }
+}
+
 void wt_stop_cb(uv_async_t *ev) {
     int wtid = (int)pthread_getspecific(pkey_wtid);
     uv_check_stop(&work_ev[wtid]);
@@ -2142,9 +2181,15 @@ int main(int argc, char **argv) {
         check_uv_fatal(uv_loop_init(loop), "Error initializing libuv loop: ");
         uv_loops[i] = loop;
 
-        check_uv_fatal(uv_async_init(uv_loops[i], &stop_ev[i], wt_stop_cb), "Error initializing libuv stop event: ");
-        check_uv_fatal(uv_async_init(uv_loops[i], &wake_ev[i], wt_wake_cb), "Error initializing libuv wake event: ");
-        check_uv_fatal(uv_async_send(&wake_ev[i]), "Error sending initial work event: ");
+        if (i == 0) {
+            check_uv_fatal(uv_async_init(uv_loops[i], &stop_ev[i], main_stop_cb), "Error initializing libuv stop event: ");
+            check_uv_fatal(uv_async_init(uv_loops[i], &wake_ev[i], main_wake_cb), "Error initializing libuv wake event: ");
+            check_uv_fatal(uv_async_send(&wake_ev[i]), "Error sending initial work event: ");
+        } else {
+            check_uv_fatal(uv_async_init(uv_loops[i], &stop_ev[i], wt_stop_cb), "Error initializing libuv stop event: ");
+            check_uv_fatal(uv_async_init(uv_loops[i], &wake_ev[i], wt_wake_cb), "Error initializing libuv wake event: ");
+            check_uv_fatal(uv_async_send(&wake_ev[i]), "Error sending initial work event: ");
+        }
     }
 
     for (uint i=0; i <= MAX_WTHREADS; i++) {
@@ -2247,6 +2292,13 @@ int main(int argc, char **argv) {
             pthread_setaffinity_np(threads[idx], sizeof(cpu_set), &cpu_set);
         }
     }
+
+    // Run the timer queue and keep track of other periodic tasks
+    uv_loop_t *uv_loop = uv_loops[0];
+    timer_ev = malloc(sizeof(uv_timer_t));
+    uv_timer_init(uv_loops[0], timer_ev);
+    uv_timer_start(timer_ev, main_timer_cb, 0, 0);
+    int r = uv_run(uv_loop, UV_RUN_DEFAULT);
 
     // -- SHUTDOWN --
 

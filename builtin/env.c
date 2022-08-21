@@ -1344,10 +1344,6 @@ void $__init__ () {
     EVENT_init();
 }
 
-void reset_timeout() {
-    int r = write(wakeup_pipe[1], "!", 1);      // Write dummy data that wakes up the eventloop thread
-}
-
 void *$eventloop(void *arg) {
 #if defined(IS_MACOS)
     pthread_setname_np("IO");
@@ -1363,23 +1359,9 @@ void *$eventloop(void *arg) {
         socklen_t socklen = sizeof(addr);
         int fd2;
         int count;
-        struct timespec tspec, *timeout;
-
-        handle_timeout();
-        time_t next_time = next_timeout();
-        if (next_time) {
-            time_t now = current_time();
-            time_t offset = next_time - now;
-            tspec.tv_sec = offset / 1000000;
-            tspec.tv_nsec = 1000 * (offset % 1000000);
-            //printf("## Current time is setting timer offset %ld sec, %ld nsec\n", tspec.tv_sec, tspec.tv_nsec);
-            timeout = &tspec;
-        } else {
-            timeout = NULL;
-        }
 
         // Blocking call
-        int nready = EVENT_wait(&kev, timeout);
+        int nready = EVENT_wait(&kev, NULL);
 
         if (nready<0) {
             fprintf(stderr, "EVENT error: %s\n", strerror(errno));
