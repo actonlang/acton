@@ -1489,7 +1489,6 @@ void $register_rts () {
   $register(&$Done$methods);
   $register(&$InitRoot$methods);
   $register(&$Env$methods);
-  $register(&$Connection$methods);
 }
  
 ////////////////////////////////////////////////////////////////////////////////////////

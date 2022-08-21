@@ -163,20 +163,6 @@ static void $init_FileDescriptorData(int fd) {
   bzero(fd_data[fd].buffer, BUF_SIZE);
 }
 
-int new_socket ($function handler) {
-  int fd = socket(PF_INET,SOCK_STREAM,0);
-  fcntl(fd,F_SETFL,O_NONBLOCK);
-  fd_data[fd].kind = connecthandler;
-  fd_data[fd].chandler = handler;
-  return fd;
-}
-
-void setupConnection (int fd) {
-  $Connection conn = $Connection$newact(fd);
-  fd_data[fd].conn = conn;
-  fd_data[fd].chandler->$class->__call__(fd_data[fd].chandler, conn);
-}
-
 $str $getName(int fd) {
   socklen_t socklen = sizeof(struct sockaddr_in);
   char *buf = malloc(100);
@@ -749,71 +735,9 @@ $Msg $Env$stdout_write ($Env __self__, $str s) {
 $Msg $Env$stdin_install ($Env __self__, $function cb) {
     return $ASYNC((($Actor)__self__), (($Cont)$l$2lambda$new((($Env)__self__), cb)));
 }
-$Msg $Env$connect ($Env __self__, $str host, $int port, $function cb) {
-    return $ASYNC((($Actor)__self__), (($Cont)$l$3lambda$new((($Env)__self__), host, port, cb)));
-}
-$Msg $Env$listen ($Env __self__, $int port, $function on_connect, $function on_error) {
-    return $ASYNC((($Actor)__self__), (($Cont)$l$4lambda$new((($Env)__self__), port, on_connect, on_error)));
-}
 $Msg $Env$exit ($Env __self__, $int n) {
     return $ASYNC((($Actor)__self__), (($Cont)$l$5lambda$new((($Env)__self__), n)));
 }
-$Msg $Env$openR ($Env __self__, $str nm) {
-    return $ASYNC((($Actor)__self__), (($Cont)$l$6lambda$new((($Env)__self__), nm)));
-}
-$Msg $Env$openW ($Env __self__, $str nm) {
-    return $ASYNC((($Actor)__self__), (($Cont)$l$7lambda$new((($Env)__self__), nm)));
-}
-void $Connection$__serialize__ ($Connection self, $Serial$state state) {
-    $Actor$methods.__serialize__(($Actor)self, state);
-    $step_serialize(self->cb_err, state);
-}
-$Connection $Connection$__deserialize__ ($Connection self, $Serial$state state) {
-    if (!self) {
-        if (!state) {
-            self = malloc(sizeof(struct $Connection));
-            self->$class = &$Connection$methods;
-            return self;
-        }
-        self = $DNEW($Connection, state);
-    }
-    $Actor$methods.__deserialize__(($Actor)self, state);
-    self->cb_err = $step_deserialize(state);
-    return self;
-}
-$Msg $RFile$readln ($RFile __self__) {
-    return $ASYNC((($Actor)__self__), (($Cont)$l$11lambda$new((($RFile)__self__))));
-}
-$Msg $RFile$close ($RFile __self__) {
-    return $ASYNC((($Actor)__self__), (($Cont)$l$12lambda$new((($RFile)__self__))));
-}
-$Msg $WFile$write ($WFile __self__, $str s) {
-    return $ASYNC((($Actor)__self__), (($Cont)$l$13lambda$new((($WFile)__self__), s)));
-}
-$Msg $WFile$close ($WFile __self__) {
-    return $ASYNC((($Actor)__self__), (($Cont)$l$14lambda$new((($WFile)__self__))));
-}
-$Msg $ListenSocket$close ($ListenSocket __self__) {
-    return $ASYNC((($Actor)__self__), (($Cont)$l$16lambda$new((($ListenSocket)__self__))));
-}
-void $ListenSocket$__serialize__ ($ListenSocket self, $Serial$state state) {
-    $Actor$methods.__serialize__(($Actor)self, state);
-    $step_serialize(self->cb_err, state);
-}
-$ListenSocket $ListenSocket$__deserialize__ ($ListenSocket self, $Serial$state state) {
-    if (!self) {
-        if (!state) {
-            self = malloc(sizeof(struct $ListenSocket));
-            self->$class = &$ListenSocket$methods;
-            return self;
-        }
-        self = $DNEW($ListenSocket, state);
-    }
-    $Actor$methods.__deserialize__(($Actor)self, state);
-    self->cb_err = $step_deserialize(state);
-    return self;
-}
-struct $ListenSocket$class $ListenSocket$methods;
 // END GENERATED __builtin__.act
 ///////////////////////////////////////////////////////////////////////////////////////////
 
@@ -837,38 +761,6 @@ $R $Env$stdout_write$local ($Env __self__, $str s, $Cont c$cont) {
     printf("%s", s->str);
     return $R_CONT(c$cont, $None);
 }
-$R $Env$stdin_install$local ($Env __self__, $function cb, $Cont c$cont) {
-    fd_data[STDIN_FILENO].kind = readhandler;
-    fd_data[STDIN_FILENO].rhandler = cb;
-    EVENT_add_read(STDIN_FILENO);
-    return $R_CONT(c$cont, $None);
-}
-$R $Env$connect$local ($Env __self__, $str host, $int port, $function cb, $Cont c$cont) {
-    struct sockaddr_in addr;
-    struct in_addr iaddr;
-    struct hostent *ent;
-    int hostid;
-    int fd = new_socket(cb);
-    ent = gethostbyname((char *)host->str); //this should be replaced by calling getaddrinfo
-    if(ent==NULL) {
-      fd_data[fd].chandler->$class->__call__(fd_data[fd].chandler, NULL);
-      //fprintf(stderr,"Name lookup error"); 
-    }
-    else {
-      memcpy(&hostid, ent->h_addr_list[0], sizeof hostid);
-      iaddr.s_addr = hostid;
-      fd_data[fd].sock_addr.sin_addr = iaddr;
-      fd_data[fd].sock_addr.sin_port = htons(port->val);
-      fd_data[fd].sock_addr.sin_family = AF_INET;
-      if (connect(fd,(struct sockaddr *)&fd_data[fd].sock_addr,sizeof(struct sockaddr)) < 0) { // couldn't connect immediately, 
-        if (errno==EINPROGRESS)  {                                                             // so check if attempt continues asynchronously.
-          EVENT_add_write_once(fd);
-        } else {
-          fd_data[fd].chandler->$class->__call__(fd_data[fd].chandler, NULL);
-          //fprintf(stderr,"Connect failed");
-         }
-      } else // connect succeeded immediately (can this ever happen for a non-blocking socket?)
-        setupConnection(fd);
     }
     return $R_CONT(c$cont, $None);
 }
@@ -891,20 +783,6 @@ $R $Env$exit$local ($Env __self__, $int n, $Cont c$cont) {
     return_val = n->val;
     rts_shutdown();
     return $R_CONT(c$cont, $None);
-}
-$R $Env$openR$local ($Env __self__, $str nm, $Cont c$cont) {
-    FILE *file = fopen((char *)nm->str,"r");
-    if (file)
-        return $R_CONT(c$cont, $RFile$newact(file));
-    else
-        return $R_CONT(c$cont, $None);
-}
-$R $Env$openW$local ($Env __self__, $str nm, $Cont c$cont) {
-    int descr = open((char *)nm->str, O_WRONLY | O_CREAT | O_APPEND, S_IWUSR|S_IRUSR|S_IRGRP|S_IROTH);
-    if (descr < 0)
-        return $R_CONT(c$cont, $None);
-    else
-        return $R_CONT(c$cont, $WFile$newact(descr));
 }
 void $Env$__serialize__ ($Env self, $Serial$state state) {
     $Actor$methods.__serialize__(($Actor)self, state);
@@ -930,163 +808,6 @@ $Env $Env$newact($WorldAuth token, $list p$1) {
     return $tmp;
 }
 struct $Env$class $Env$methods;
-
-
-// Connection //////////////////////////////////////////////////////////////////
-
-$NoneType $Connection$__init__ ($Connection __self__, int descr) {
-    __self__->descriptor = descr;
-    __self__->cb_err = NULL;
-    return $None;
-}
-$NoneType $Connection$__resume__($Connection self) {
-    if (self->cb_err)
-        self->cb_err->$class->__call__(self->cb_err, self);
-    return $None;
-}
-$R $Connection$write$local ($Connection __self__, $bytes s, $Cont c$cont) {
-    memcpy(fd_data[__self__->descriptor].buffer,s->str,s->nbytes+1);
-    int chunk_size = s->nbytes > BUF_SIZE ? BUF_SIZE : s->nbytes; 
-    int r = write(__self__->descriptor,fd_data[__self__->descriptor].buffer,chunk_size);
-    //  for now, assume str->nbytes < BUF_SIZE
-    return $R_CONT(c$cont, $None);
-}
-$R $Connection$close$local ($Connection __self__, $Cont c$cont) {
-    close(__self__->descriptor); 
-    $init_FileDescriptorData(__self__->descriptor);
-    return $R_CONT(c$cont, $None);
-}
-$R $Connection$on_receive$local ($Connection __self__, $function cb1, $function cb2, $Cont c$cont) {
-    __self__->cb_err = cb2;
-    fd_data[__self__->descriptor].kind = readhandler;
-    fd_data[__self__->descriptor].rhandler = cb1;
-    fd_data[__self__->descriptor].errhandler = cb2;
-    EVENT_add_read(__self__->descriptor);
-    return $R_CONT(c$cont, $None);
-}
-$Msg $Connection$write ($Connection __self__, $bytes s) {
-    return $ASYNC((($Actor)__self__), (($Cont)$l$8lambda$new(__self__, s)));
-}
-$Msg $Connection$close ($Connection __self__) {
-    return $ASYNC((($Actor)__self__), (($Cont)$l$9lambda$new(__self__)));
-}
-$Msg $Connection$on_receive ($Connection __self__, $function cb1, $function cb2) {
-    return $ASYNC((($Actor)__self__), (($Cont)$l$10lambda$new(__self__, cb1, cb2)));
-}
-$Connection $Connection$newact(int descr) {
-    $Connection $tmp = $NEWACTOR($Connection);
-    $tmp->$class->__init__($tmp, descr);          // Inline this message, note that $Connection$__init__ is *not* CPS'ed
-    serialize_state_shortcut(($Actor)$tmp);
-    return $tmp;
-}
-struct $Connection$class $Connection$methods;
-
-
-// ListenSocket ////////////////////////////////////////////////////////////////
-
-$NoneType $ListenSocket$__init__ ($ListenSocket __self__, int fd, $function on_error) {
-    __self__->fd = fd;
-    __self__->cb_err = on_error;
-    return $None;
-}
-$NoneType $ListenSocket$__resume__($ListenSocket self) {
-    self->cb_err->$class->__call__(self->cb_err, self);
-    return $None;
-}
-$R $ListenSocket$close$local ($ListenSocket __self__, $Cont c$cont) {
-    close(__self__->fd);
-    return $R_CONT(c$cont, $None);
-}
-$ListenSocket $ListenSocket$newact(int fd, $function on_error) {
-    $ListenSocket $tmp = $NEWACTOR($ListenSocket);
-    $tmp->$class->__init__($tmp, fd, on_error);
-    serialize_state_shortcut(($Actor)$tmp);
-    return $tmp;
-}
-
-
-// RFile ///////////////////////////////////////////////////////////////////////
-
-$NoneType $RFile$__init__ ($RFile __self__, FILE *file) {
-    __self__->file = file;
-    return $None;
-}
-$R $RFile$readln$local ($RFile __self__, $Cont c$cont) {
-    char buf[BUF_SIZE];
-    char *res = fgets(buf, BUF_SIZE, __self__->file);
-    if (res)
-       return $R_CONT(c$cont, to$str(res));
-    else
-      return $R_CONT(c$cont, $None);      
-}
-$R $RFile$close$local ($RFile __self__, $Cont c$cont) {
-    fclose(__self__->file); 
-    return $R_CONT(c$cont, $None);
-}
-void $RFile$__serialize__ ($RFile self, $Serial$state state) {
-    $Actor$methods.__serialize__(($Actor)self, state);
-}
-$RFile $RFile$__deserialize__ ($RFile self, $Serial$state state) {
-    if (!self) {
-        if (!state) {
-            self = malloc(sizeof(struct $RFile));
-            self->$class = &$RFile$methods;
-            return self;
-        }
-        self = $DNEW($RFile, state);
-    }
-    $Actor$methods.__deserialize__(($Actor)self, state);
-    return self;
-}
-$RFile $RFile$newact(FILE *file) {
-    $RFile $tmp = $NEWACTOR($RFile);
-    $tmp->$class->__init__($tmp, file);     // Inline this message, note that $RFile$__init__ is *not* CPS'ed
-    serialize_state_shortcut(($Actor)$tmp);
-    return $tmp;
-}
-struct $RFile$class $RFile$methods;
-$NoneType $WFile$__init__ ($WFile __self__, int descr) {
-    __self__->descriptor = descr;
-    return $None;
-}
-
-
-// WFile ///////////////////////////////////////////////////////////////////////
-
-$R $WFile$write$local ($WFile __self__, $str s, $Cont c$cont) {
-    memcpy(fd_data[__self__->descriptor].buffer,s->str,s->nbytes+1);
-    int chunk_size = s->nbytes > BUF_SIZE ? BUF_SIZE : s->nbytes; 
-    int r = write(__self__->descriptor,fd_data[__self__->descriptor].buffer,chunk_size);
-    //  for now, assume str->nbytes < BUF_SIZE
-    return $R_CONT(c$cont, $None);
-}
-$R $WFile$close$local ($WFile __self__, $Cont c$cont) {
-    close(__self__->descriptor); 
-    $init_FileDescriptorData(__self__->descriptor);
-    return $R_CONT(c$cont, $None);
-}
-void $WFile$__serialize__ ($WFile self, $Serial$state state) {
-    $Actor$methods.__serialize__(($Actor)self, state);
-}
-$WFile $WFile$__deserialize__ ($WFile self, $Serial$state state) {
-    if (!self) {
-        if (!state) {
-            self = malloc(sizeof(struct $WFile));
-            self->$class = &$WFile$methods;
-            return self;
-        }
-        self = $DNEW($WFile, state);
-    }
-    $Actor$methods.__deserialize__(($Actor)self, state);
-    return self;
-}
-$WFile $WFile$newact(int descr) {
-    $WFile $tmp = $NEWACTOR($WFile);
-    $tmp->$class->__init__($tmp, descr);     // Inline this message, note that $WFile$__init__ is *not* CPS'ed
-    serialize_state_shortcut(($Actor)$tmp);
-    return $tmp;
-}
-struct $WFile$class $WFile$methods;
 
 
 int $done$ = 0;
@@ -1258,85 +979,13 @@ void $__init__ () {
         $Env$methods.__init__ = $Env$__init__;
         $Env$methods.stdout_write$local = $Env$stdout_write$local;
         $Env$methods.stdin_install$local = $Env$stdin_install$local;
-        $Env$methods.connect$local = $Env$connect$local;
-        $Env$methods.listen$local = $Env$listen$local;
         $Env$methods.exit$local = $Env$exit$local;
-        $Env$methods.openR$local = $Env$openR$local;
-        $Env$methods.openW$local = $Env$openW$local;
         $Env$methods.stdout_write = $Env$stdout_write;
         $Env$methods.stdin_install = $Env$stdin_install;
-        $Env$methods.connect = $Env$connect;
-        $Env$methods.listen = $Env$listen;
         $Env$methods.exit = $Env$exit;
-        $Env$methods.openR = $Env$openR;
-        $Env$methods.openW = $Env$openW;
         $Env$methods.__serialize__ = $Env$__serialize__;
         $Env$methods.__deserialize__ = $Env$__deserialize__;
         $register(&$Env$methods);
-    }
-    {
-        $Connection$methods.$GCINFO = "$Connection";
-        $Connection$methods.$superclass = ($Super$class)&$Actor$methods;
-        $Connection$methods.__bool__ = ($bool (*) ($Connection))$Actor$methods.__bool__;
-        $Connection$methods.__str__ = ($str (*) ($Connection))$Actor$methods.__str__;
-        $Connection$methods.__resume__ = ($NoneType (*) ($Connection))$Connection$__resume__;
-        $Connection$methods.__repr__ = ($str (*) ($Connection))$Actor$methods.__repr__;
-        $Connection$methods.__init__ = $Connection$__init__;
-        $Connection$methods.write$local = $Connection$write$local;
-        $Connection$methods.close$local = $Connection$close$local;
-        $Connection$methods.on_receive$local = $Connection$on_receive$local;
-        $Connection$methods.write = $Connection$write;
-        $Connection$methods.close = $Connection$close;
-        $Connection$methods.on_receive = $Connection$on_receive;
-        $Connection$methods.__serialize__ = $Connection$__serialize__;
-        $Connection$methods.__deserialize__ = $Connection$__deserialize__;
-        $register(&$Connection$methods);
-    }
-    {
-        $RFile$methods.$GCINFO = "$RFile";
-        $RFile$methods.$superclass = ($Super$class)&$Actor$methods;
-        $RFile$methods.__bool__ = ($bool (*) ($RFile))$Actor$methods.__bool__;
-        $RFile$methods.__str__ = ($str (*) ($RFile))$Actor$methods.__str__;
-        $RFile$methods.__repr__ = ($str (*) ($RFile))$Actor$methods.__repr__;
-        $RFile$methods.__resume__ = ($NoneType (*) ($RFile))$Actor$methods.__resume__;
-        $RFile$methods.__init__ = $RFile$__init__;
-        $RFile$methods.readln$local = $RFile$readln$local;
-        $RFile$methods.close$local = $RFile$close$local;
-        $RFile$methods.readln = $RFile$readln;
-        $RFile$methods.close = $RFile$close;
-        $RFile$methods.__serialize__ = $RFile$__serialize__;
-        $RFile$methods.__deserialize__ = $RFile$__deserialize__;
-        $register(&$RFile$methods);
-    }
-    {
-        $WFile$methods.$GCINFO = "$WFile";
-        $WFile$methods.$superclass = ($Super$class)&$Actor$methods;
-        $WFile$methods.__bool__ = ($bool (*) ($WFile))$Actor$methods.__bool__;
-        $WFile$methods.__str__ = ($str (*) ($WFile))$Actor$methods.__str__;
-        $WFile$methods.__repr__ = ($str (*) ($WFile))$Actor$methods.__repr__;
-        $WFile$methods.__resume__ = ($NoneType (*) ($WFile))$Actor$methods.__resume__;
-        $WFile$methods.__init__ = $WFile$__init__;
-        $WFile$methods.write$local = $WFile$write$local;
-        $WFile$methods.close$local = $WFile$close$local;
-        $WFile$methods.write = $WFile$write;
-        $WFile$methods.close = $WFile$close;
-        $WFile$methods.__serialize__ = $WFile$__serialize__;
-        $WFile$methods.__deserialize__ = $WFile$__deserialize__;
-        $register(&$WFile$methods);
-    }
-    {
-        $ListenSocket$methods.$GCINFO = "$ListenSocket";
-        $ListenSocket$methods.$superclass = ($Super$class)&$Actor$methods;
-        $ListenSocket$methods.__bool__ = ($bool (*) ($ListenSocket))$Actor$methods.__bool__;
-        $ListenSocket$methods.__str__ = ($str (*) ($ListenSocket))$Actor$methods.__str__;
-        $ListenSocket$methods.__resume__ = ($NoneType (*) ($ListenSocket))$ListenSocket$__resume__; // XXX: manually modified, do not touch
-        $ListenSocket$methods.__repr__ = ($str (*) ($ListenSocket))$Actor$methods.__repr__;
-        $ListenSocket$methods.__init__ = $ListenSocket$__init__;
-        $ListenSocket$methods.close$local = $ListenSocket$close$local;
-        $ListenSocket$methods.close = $ListenSocket$close;
-        $ListenSocket$methods.__serialize__ = $ListenSocket$__serialize__;
-        $ListenSocket$methods.__deserialize__ = $ListenSocket$__deserialize__;
-        $register(&$ListenSocket$methods);
     }
     // END GENERATED __builtin__.act $__init__
     ///////////////////////////////////////////////////////////////////////////////////////
@@ -1393,26 +1042,6 @@ void *$eventloop(void *arg) {
             close(fd);
         } else {
             switch (fd_data[fd].kind) {
-            case connecthandler:
-                if (EVENT_is_read(&kev)) {              // we are a listener and someone tries to connect
-                    while ((fd2 = accept(fd, (struct sockaddr *)&fd_data[fd].sock_addr,&socklen)) != -1) {
-                        fcntl(fd2,F_SETFL,O_NONBLOCK);
-                        fd_data[fd2].kind = connecthandler;
-                        fd_data[fd2].chandler = fd_data[fd].chandler;
-                        fd_data[fd2].sock_addr = fd_data[fd].sock_addr;
-                        bzero(fd_data[fd2].buffer,BUF_SIZE);
-                        EVENT_add_read(fd2);
-                        EVENT_mod_read_once(fd);
-                        setupConnection(fd2);
-                    }
-                } else { // we are a client and a delayed connection attempt has succeeded
-#ifdef IS_GNU_LINUX
-                    // Need to clear write bit in epoll
-                    EVENT_del_write_once(fd);
-#endif
-                    setupConnection(fd);
-                }
-                break;
             case readhandler:  // data has arrived on fd to fd_data[fd].buffer
                 if (EVENT_fd_is_read(fd)) {
                     count = read(fd,&fd_data[fd].buffer,BUF_SIZE);
