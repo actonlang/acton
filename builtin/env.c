@@ -18,8 +18,10 @@
 #endif
 #endif
 
+#include <uv.h>
 #include "env.h"
 
+#include "../rts/io.h"
 #include "../rts/log.h"
 
 struct FileDescriptorData fd_data[MAX_FD];
@@ -761,23 +763,32 @@ $R $Env$stdout_write$local ($Env __self__, $str s, $Cont c$cont) {
     printf("%s", s->str);
     return $R_CONT(c$cont, $None);
 }
-    }
-    return $R_CONT(c$cont, $None);
-}
-$R $Env$listen$local ($Env __self__, $int port, $function on_connect, $function on_error, $Cont c$cont) {
-    struct sockaddr_in addr;
-    int fd = new_socket(on_connect);
-    $ListenSocket lsock = $ListenSocket$newact(fd, on_error);
-    addr.sin_addr.s_addr = INADDR_ANY;
-    addr.sin_port = htons(port->val);
-    addr.sin_family = AF_INET;
-    if (bind(fd,(struct sockaddr *)&addr,sizeof(struct sockaddr)) < 0)
-        on_error->$class->__call__(on_error, lsock);
-    if (listen(fd, 5) < 0)
-        on_error->$class->__call__(on_error, lsock);
-    EVENT_add_read_once(fd);
+void read_stdin(uv_stream_t *stream, ssize_t nread, const uv_buf_t *buf) {
+    log_info("read_stdin: %p", stream->data);
 
-    return $R_CONT(c$cont, lsock);
+    if (nread < 0){
+        if (nread == UV_EOF) {
+            uv_close((uv_handle_t *)stream, NULL);
+        }
+    } else if (nread > 0) {
+        if (stream->data) {
+            $function cb = stream->data;
+            cb->$class->__call__(cb, to$bytes_len(buf->base, nread));
+        }
+    }
+
+    if (buf->base)
+        free(buf->base);
+}
+$R $Env$stdin_install$local ($Env __self__, $function cb, $Cont c$cont) {
+    // This should be the only call in env that does IO stuff, so it is safe to
+    // pin affinity here (and not earlier)..
+    pin_actor_affinity();
+    uv_tty_t *tty = malloc(sizeof(uv_tty_t));
+    uv_tty_init(get_uv_loop(), tty, 0, 1);
+    tty->data = cb;
+    uv_read_start((uv_stream_t*)tty, alloc_buffer, read_stdin);
+    return $R_CONT(c$cont, $None);
 }
 $R $Env$exit$local ($Env __self__, $int n, $Cont c$cont) {
     return_val = n->val;
