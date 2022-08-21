@@ -128,10 +128,8 @@ instance Seal TCon where
     seal (TC c ts)                  = TC c (seal ts)
 
 instance Seal FX where
-    seal FXMut                      = FXMut
-    seal FXPure                     = FXPure
     seal FXProc                     = FXAction         -- the sealing essence!
-    seal FXAction                   = FXAction
+    seal fx                         = fx
 
 instance Seal PosPar where
     seal (PosPar n (Just t) _ p)    = PosPar n (Just $ seal t) Nothing (seal p)

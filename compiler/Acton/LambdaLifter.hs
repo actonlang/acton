@@ -405,14 +405,8 @@ instance Conv Type where
     conv (TTuple l p k)                 = TTuple l (conv p) (conv k)
     conv (TOpt l t)                     = TOpt l (conv t)
     conv (TRow l k n t r)               = TRow l k n (conv t) (conv r)
-    conv (TFX l x)                      = TFX l (conv x)
+    conv (TFX l x)                      = TFX l x
     conv t                              = t
-
-instance Conv FX where
-    conv FXProc                         = FXMut
-    conv FXMut                          = FXMut
-    conv FXPure                         = FXPure
-    conv FXAction                       = FXAction
 
 instance Conv TCon where
     conv (TC c ts)                      = TC c (conv ts)
