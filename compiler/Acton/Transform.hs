@@ -108,14 +108,14 @@ transCall (Dot _ (Var _ n) m) ts [e1,e2]
   | n == primWrapMut,    m == attrWrap  = Just e2
   | n == primWrapPure,   m == attrWrap  = Just e2
 transCall (Dot _ (Var _ n) m) ts [e1]
-  | n == primWrapProc,   m == attrUnwrap  = Just e1
-  | n == primWrapProc,   m == attrUnwrap1 = Just $ eCall (tApp (eQVar primEXEC) ts) [e1]
-  | n == primWrapAction, m == attrUnwrap  = Just $ eAwait $ eAsync e1
-  | n == primWrapAction, m == attrUnwrap1 = Just $ eAsync e1
-  | n == primWrapMut,    m == attrUnwrap  = Just e1
-  | n == primWrapMut,    m == attrUnwrap1 = Just e1
-  | n == primWrapPure,   m == attrUnwrap  = Just e1
-  | n == primWrapPure,   m == attrUnwrap1 = Just e1
+  | n == primWrapProc,   m == attrEVAL  = Just e1
+  | n == primWrapProc,   m == attrEXEC  = Just $ eCall (tApp (eQVar primEXEC) ts) [e1]
+  | n == primWrapAction, m == attrEVAL  = Just $ eAwait $ eAsync e1
+  | n == primWrapAction, m == attrEXEC  = Just $ eAsync e1
+  | n == primWrapMut,    m == attrEVAL  = Just e1
+  | n == primWrapMut,    m == attrEXEC  = Just e1
+  | n == primWrapPure,   m == attrEVAL  = Just e1
+  | n == primWrapPure,   m == attrEXEC  = Just e1
 transCall _ _ _                         = Nothing
 
 instance Transform Expr where
