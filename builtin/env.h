@@ -574,24 +574,4 @@ extern struct $WFile$class $WFile$methods;
 $WFile $WFile$newact(int);
 void $__init__();
 
-struct FileDescriptorData {
-  HandlerCase kind;
-  $function rhandler;
-  $function errhandler;
-  $function chandler;
-  $Connection conn;
-  struct sockaddr_in sock_addr;
-  EVENT_type event_spec;
-  char buffer[BUF_SIZE];
-  int bufnxt;              // only used for RFiles; index of first unreported char
-  int bufused;             //        -"-          ; nr of read chars in buffer. Equal to BUF_SIZE except before first read and (possibly) after last read.
-};
-
-extern struct FileDescriptorData fd_data[MAX_FD];
-extern int kq;
-
 void reset_timeout();
-
-void setupConnection (int fd);
-$str $getName(int fd);
-void *$eventloop(void *);

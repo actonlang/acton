@@ -2273,14 +2273,6 @@ int main(int argc, char **argv) {
     // Start IO + worker threads
     pthread_t threads[1 + num_wthreads];
 
-    // eventloop (our "old" IO thread)
-    pthread_create(&threads[0], NULL, $eventloop, NULL);
-    if (cpu_pin) {
-        CPU_ZERO(&cpu_set);
-        CPU_SET(0, &cpu_set);
-        pthread_setaffinity_np(threads[0], sizeof(cpu_set), &cpu_set);
-    }
-
     for(int idx = 1; idx < num_wthreads+1; idx++) {
         pthread_create(&threads[idx], NULL, main_loop, (void*)idx);
         // Index start at 1 and we pin wthreads to CPU 1...n
