@@ -25,7 +25,7 @@ actor main(env):
             print("Exited in unexpected way, error...")
             await async env.exit(1)
 
-    def on_error(error):
+    def on_error(p, error):
         print("Error from process:", error)
         await async env.exit(1)
 

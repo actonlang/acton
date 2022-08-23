@@ -627,7 +627,7 @@ void read_stdin(uv_stream_t *stream, ssize_t nread, const uv_buf_t *buf) {
         }
     } else if (nread > 0) {
         if (stream->data) {
-            $function cb = stream->data;
+            $function1 cb = stream->data;
             cb->$class->__call__(cb, to$bytes_len(buf->base, nread));
         }
     }

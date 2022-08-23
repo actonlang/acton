@@ -20,7 +20,8 @@ void net$$DNS$lookup_a__on_resolve (uv_getaddrinfo_t *req, int status, struct ad
     if (status != 0) {
         char errmsg[1024] = "DNS lookup error: ";
         uv_strerror_r(status, errmsg + strlen(errmsg), sizeof(errmsg)-strlen(errmsg));
-        cb_data->on_error->$class->__call__(cb_data->on_error, to$str(errmsg));
+        $function1 f = cb_data->on_error;
+        f->$class->__call__(f, to$str(errmsg));
 
         uv_freeaddrinfo(dns_res);
         free(cb_data->hints);
@@ -36,7 +37,8 @@ void net$$DNS$lookup_a__on_resolve (uv_getaddrinfo_t *req, int status, struct ad
         $Sequence$list$witness->$class->append($Sequence$list$witness, $res, to$str(addr));
     }
 
-    cb_data->on_resolve->$class->__call__(cb_data->on_resolve, $res);
+    $function1 f = cb_data->on_resolve;
+    f->$class->__call__(f, $res);
 
     uv_freeaddrinfo(dns_res);
     free(cb_data->hints);
@@ -74,7 +76,8 @@ void net$$DNS$lookup_aaaa__on_resolve (uv_getaddrinfo_t *req, int status, struct
     if (status != 0) {
         char errmsg[1024] = "DNS lookup error: ";
         uv_strerror_r(status, errmsg + strlen(errmsg), sizeof(errmsg)-strlen(errmsg));
-        cb_data->on_error->$class->__call__(cb_data->on_error, to$str(errmsg));
+        $function1 f = cb_data->on_error;
+        f->$class->__call__(f, to$str(errmsg));
 
         uv_freeaddrinfo(dns_res);
         free(cb_data->hints);
@@ -91,7 +94,8 @@ void net$$DNS$lookup_aaaa__on_resolve (uv_getaddrinfo_t *req, int status, struct
         $Sequence$list$witness->$class->append($Sequence$list$witness, $res, to$str(addr));
     }
 
-    cb_data->on_resolve->$class->__call__(cb_data->on_resolve, $res);
+    $function1 f = cb_data->on_resolve;
+    f->$class->__call__(f, $res);
 
     uv_freeaddrinfo(dns_res);
     free(cb_data->hints);
@@ -136,7 +140,8 @@ void net$$TCPIPConnection__on_receive(uv_stream_t *stream, ssize_t nread, const 
     } else if (nread > 0) {
         if (stream->data) {
             net$$TCPIPConnection __self__ = stream->data;
-            __self__->on_receive->$class->__call__(__self__->on_receive, __self__, to$bytes_len(buf->base, nread));
+            $function2 f = __self__->on_receive;
+            f->$class->__call__(f, __self__, to$bytes_len(buf->base, nread));
         }
     }
 
@@ -151,7 +156,8 @@ void on_connect(uv_connect_t *connect_req, int status) {
         char errmsg[1024] = "Error in TCP connect: ";
         uv_strerror_r(status, errmsg + strlen(errmsg), sizeof(errmsg)-strlen(errmsg));
         log_warn(errmsg);
-        __self__->on_error->$class->__call__(__self__->on_error, __self__, to$str(errmsg));
+        $function2 f = __self__->on_error;
+        f->$class->__call__(f, __self__, to$str(errmsg));
         // TODO: free()
         return;
     }
@@ -162,11 +168,13 @@ void on_connect(uv_connect_t *connect_req, int status) {
         char errmsg[1024] = "Failed to start reading from TCP client socket: ";
         uv_strerror_r(r, errmsg + strlen(errmsg), sizeof(errmsg)-strlen(errmsg));
         log_warn(errmsg);
-        __self__->on_error->$class->__call__(__self__->on_error, __self__, to$str(errmsg));
+        $function2 f = __self__->on_error;
+        f->$class->__call__(f, __self__, to$str(errmsg));
         return;
     }
 
-    __self__->on_connect->$class->__call__(__self__->on_connect, __self__);
+    $function1 f = __self__->on_connect;
+    f->$class->__call__(f, __self__);
 }
 
 $R net$$TCPIPConnection$_init (net$$TCPIPConnection __self__, $Cont c$cont) {
@@ -195,14 +203,16 @@ $R net$$TCPIPConnection$write$local (net$$TCPIPConnection __self__, $bytes data,
         char errmsg[1024] = "Failed to write to TCP socket: ";
         uv_strerror_r(r, errmsg + strlen(errmsg), sizeof(errmsg)-strlen(errmsg));
         log_warn(errmsg);
-        __self__->on_error->$class->__call__(__self__->on_error, __self__, to$str(errmsg));
+        $function2 f = __self__->on_error;
+        f->$class->__call__(f, __self__, to$str(errmsg));
     }
 
     return $R_CONT(c$cont, $None);
 }
 
 $NoneType net$$TCPIPConnection$__resume__ (net$$TCPIPConnection __self__) {
-    __self__->on_error->$class->__call__(__self__->on_error, __self__, to$str("resume"));
+    $function2 f = __self__->on_error;
+    f->$class->__call__(f, __self__, to$str("resume"));
     return $None;
 }
 
@@ -213,7 +223,8 @@ void on_new_connection(uv_stream_t *server, int status) {
         char errmsg[1024] = "Error on new TCP client connection: ";
         uv_strerror_r(status, errmsg + strlen(errmsg), sizeof(errmsg)-strlen(errmsg));
         log_warn(errmsg);
-        __self__->on_error->$class->__call__(__self__->on_error, __self__, to$str(errmsg));
+        $function2 f = __self__->on_error;
+        f->$class->__call__(f, __self__, to$str(errmsg));
         // TODO: free()
         return;
     }
@@ -225,7 +236,8 @@ void on_new_connection(uv_stream_t *server, int status) {
         char errmsg[1024] = "Error in accepting TCP client connection: ";
         uv_strerror_r(r, errmsg + strlen(errmsg), sizeof(errmsg)-strlen(errmsg));
         log_warn(errmsg);
-        __self__->on_error->$class->__call__(__self__->on_error, __self__, to$str(errmsg));
+        $function2 f = __self__->on_error;
+        f->$class->__call__(f, __self__, to$str(errmsg));
         // TODO: free()
         return;
     }
@@ -248,7 +260,8 @@ $R net$$TCPListener$_init (net$$TCPListener __self__, $Cont c$cont) {
         char errmsg[1024] = "Unable to parse address: ";
         uv_strerror_r(r, errmsg + strlen(errmsg), sizeof(errmsg)-strlen(errmsg));
         log_warn(errmsg);
-        __self__->on_listen_error->$class->__call__(__self__->on_listen_error, __self__, to$str(errmsg));
+        $function2 f = __self__->on_listen_error;
+        f->$class->__call__(f, __self__, to$str(errmsg));
         // TODO: free() & return
         return $R_CONT(c$cont, $None);
     }
@@ -258,7 +271,8 @@ $R net$$TCPListener$_init (net$$TCPListener __self__, $Cont c$cont) {
         char errmsg[1024] = "Error in TCP bind: ";
         uv_strerror_r(r, errmsg + strlen(errmsg), sizeof(errmsg)-strlen(errmsg));
         log_warn(errmsg);
-        __self__->on_listen_error->$class->__call__(__self__->on_listen_error, __self__, to$str(errmsg));
+        $function2 f = __self__->on_listen_error;
+        f->$class->__call__(f, __self__, to$str(errmsg));
         // TODO: free() & return
         return $R_CONT(c$cont, $None);
     }
@@ -268,7 +282,8 @@ $R net$$TCPListener$_init (net$$TCPListener __self__, $Cont c$cont) {
         char errmsg[1024] = "Error in TCP listen: ";
         uv_strerror_r(r, errmsg + strlen(errmsg), sizeof(errmsg)-strlen(errmsg));
         log_warn(errmsg);
-        __self__->on_listen_error->$class->__call__(__self__->on_listen_error, __self__, to$str(errmsg));
+        $function2 f = __self__->on_listen_error;
+        f->$class->__call__(f, __self__, to$str(errmsg));
         // TODO: free()
         return $R_CONT(c$cont, $None);
     }
@@ -277,7 +292,8 @@ $R net$$TCPListener$_init (net$$TCPListener __self__, $Cont c$cont) {
 }
 
 $NoneType net$$TCPListener$__resume__ (net$$TCPListener __self__) {
-    __self__->on_listen_error->$class->__call__(__self__->on_listen_error, __self__, to$str("resume"));
+    $function2 f = __self__->on_listen_error;
+    f->$class->__call__(f, __self__, to$str("resume"));
     return $None;
 }
 
@@ -289,7 +305,8 @@ void net$$TCPListenConnection__on_receive(uv_stream_t *stream, ssize_t nread, co
     } else if (nread > 0) {
         if (stream->data) {
             net$$TCPListenConnection __self__ = stream->data;
-            __self__->on_receive->$class->__call__(__self__->on_receive, __self__, to$bytes_len(buf->base, nread));
+            $function2 f = __self__->on_receive;
+            f->$class->__call__(f, __self__, to$bytes_len(buf->base, nread));
         }
     }
 
@@ -298,14 +315,15 @@ void net$$TCPListenConnection__on_receive(uv_stream_t *stream, ssize_t nread, co
 }
 
 $R net$$TCPListenConnection$_init (net$$TCPListenConnection __self__, $Cont c$cont) {
-    uv_stream_t *client = from$int(__self__->client);
+    uv_stream_t *client = (uv_stream_t *)from$int(__self__->client);
     client->data = __self__;
     int r = uv_read_start(client, alloc_buffer, net$$TCPListenConnection__on_receive);
     if (r < 0) {
         char errmsg[1024] = "Failed to start reading from TCP socket: ";
         uv_strerror_r(r, errmsg + strlen(errmsg), sizeof(errmsg)-strlen(errmsg));
         log_warn(errmsg);
-        __self__->on_error->$class->__call__(__self__->on_error, __self__, to$str(errmsg));
+        $function2 f = __self__->on_error;
+        f->$class->__call__(f, __self__, to$str(errmsg));
         return $R_CONT(c$cont, $None);
     }
 
@@ -321,7 +339,8 @@ $R net$$TCPListenConnection$write$local (net$$TCPListenConnection __self__, $byt
         char errmsg[1024] = "Failed to write to TCP socket: ";
         uv_strerror_r(r, errmsg + strlen(errmsg), sizeof(errmsg)-strlen(errmsg));
         log_warn(errmsg);
-        __self__->on_error->$class->__call__(__self__->on_error, __self__, to$str(errmsg));
+        $function2 f = __self__->on_error;
+        f->$class->__call__(f, __self__, to$str(errmsg));
     }
     return $R_CONT(c$cont, $None);
 }
