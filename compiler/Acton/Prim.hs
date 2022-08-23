@@ -210,9 +210,9 @@ clProc              = NClass [quant r, quant t] (leftpath [cValue]) te
         t           = TV KType (name "T")
 
 --  class $action[R,T] ($proc[R,T], value):
---      __asyn__    : proc(*R) -> Msg[T]
+--      __asyn__    : action(*R) -> T
 clAction            = NClass [quant r, quant t] (leftpath [cProc (tVar r) (tVar t), cValue]) te
-  where te          = [ (attrAsyn, NSig (monotype $ tFun fxMut (tVar r) kwdNil (tMsg $ tVar t)) NoDec) ]
+  where te          = [ (attrAsyn, NSig (monotype $ tFun fxAction (tVar r) kwdNil (tVar t)) NoDec) ]
         r           = TV PRow (name "R")
         t           = TV KType (name "T")
 
@@ -259,15 +259,15 @@ clCont              = NClass [quant a] (leftpath [TC primFunction [fxProc, posRo
   where a           = TV KType (name "A")
 
 
---  $ASYNCf         : [A] => mut($Actor, proc()->A) -> Msg[A]
+--  $ASYNCf         : [A] => action($Actor, proc()->A) -> A
 scASYNCf            = tSchema [quant a] tASYNC
-  where tASYNC      = tFun fxMut (posRow tActor $ posRow tFun' posNil) kwdNil (tMsg $ tVar a)
+  where tASYNC      = tFun fxAction (posRow tActor $ posRow tFun' posNil) kwdNil (tVar a)
         a           = TV KType $ name "A"
         tFun'       = tFun fxProc posNil kwdNil (tVar a)
 
---  $AFTERf         : [A] => mut(int, proc()->A) -> Msg[A]
+--  $AFTERf         : [A] => action(int, proc()->A) -> A
 scAFTERf            = tSchema [quant a] tAFTER
-  where tAFTER      = tFun fxProc (posRow tFloat $ posRow tFun' posNil) kwdNil (tMsg $ tVar a)
+  where tAFTER      = tFun fxAction (posRow tFloat $ posRow tFun' posNil) kwdNil (tVar a)
         a           = TV KType $ name "A"
         tFun'       = tFun fxProc posNil kwdNil (tVar a)
 
@@ -277,37 +277,37 @@ scAWAITf            = tSchema [quant a] tAWAIT
         a           = TV KType $ name "T"
 
 
---  $ASYNCc         : [A] => mut($Actor, mut(mut(A)->$R)->$R) -> Msg[A]
+--  $ASYNCc         : [A] => action($Actor, proc(proc(A)->$R)->$R) -> A
 scASYNCc            = tSchema [quant a] tASYNC
-  where tASYNC      = tFun fxMut (posRow tActor $ posRow tCont' posNil) kwdNil (tMsg $ tVar a)
+  where tASYNC      = tFun fxAction (posRow tActor $ posRow tCont' posNil) kwdNil (tVar a)
         a           = TV KType $ name "A"
-        tCont'      = tFun fxMut (posRow tCont'' posNil) kwdNil tR
-        tCont''     = tFun fxMut (posRow (tVar a) posNil) kwdNil tR
+        tCont'      = tFun fxProc (posRow tCont'' posNil) kwdNil tR
+        tCont''     = tFun fxProc (posRow (tVar a) posNil) kwdNil tR
 
---  $AFTERc         : [A] => mut(float, mut(mut(A)->$R)->$R) -> Msg[A]
+--  $AFTERc         : [A] => action(int, proc(proc(A)->$R)->$R) -> A
 scAFTERc            = tSchema [quant a] tAFTER
-  where tAFTER      = tFun fxMut (posRow tFloat $ posRow tCont' posNil) kwdNil (tMsg $ tVar a)
+  where tAFTER      = tFun fxAction (posRow tFloat $ posRow tCont' posNil) kwdNil (tVar a)
         a           = TV KType $ name "A"
-        tCont'      = tFun fxMut (posRow tCont'' posNil) kwdNil tR
-        tCont''     = tFun fxMut (posRow (tVar a) posNil) kwdNil tR
+        tCont'      = tFun fxProc (posRow tCont'' posNil) kwdNil tR
+        tCont''     = tFun fxProc (posRow (tVar a) posNil) kwdNil tR
 
---  $AWAITc         : [A] => mut(Msg[A], mut(A)->$R) -> $R
+--  $AWAITc         : [A] => proc(Msg[A], proc(A)->$R) -> $R
 scAWAITc            = tSchema [quant a] tAWAIT
-  where tAWAIT      = tFun fxMut (posRow (tMsg $ tVar a) $ posRow tCont' posNil) kwdNil tR
+  where tAWAIT      = tFun fxProc (posRow (tMsg $ tVar a) $ posRow tCont' posNil) kwdNil tR
         a           = TV KType $ name "A"
-        tCont'      = tFun fxMut (posRow (tVar a) posNil) kwdNil tR
+        tCont'      = tFun fxProc (posRow (tVar a) posNil) kwdNil tR
 
 
---  $ASYNC          : [A] => action($Actor, $Cont[$Cont[A]]) -> Msg[A]
+--  $ASYNC          : [A] => action($Actor, $Cont[$Cont[A]]) -> A
 scASYNC             = tSchema [quant a] tASYNC
-  where tASYNC      = tFun fxAction (posRow tActor $ posRow tCont' posNil) kwdNil (tMsg $ tVar a)
+  where tASYNC      = tFun fxAction (posRow tActor $ posRow tCont' posNil) kwdNil (tVar a)
         a           = TV KType $ name "A"
         tCont'      = tCont tCont''
         tCont''     = tCont (tVar a)
 
---  $AFTER          : [A] => action(int, $Cont[$Cont[A]]) -> Msg[A]
+--  $AFTER          : [A] => action(int, $Cont[$Cont[A]]) -> A
 scAFTER             = tSchema [quant a] tAFTER
-  where tAFTER      = tFun fxAction (posRow tFloat $ posRow tCont' posNil) kwdNil (tMsg $ tVar a)
+  where tAFTER      = tFun fxAction (posRow tFloat $ posRow tCont' posNil) kwdNil (tVar a)
         a           = TV KType $ name "A"
         tCont'      = tCont tCont''
         tCont''     = tCont (tVar a)
