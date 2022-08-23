@@ -255,9 +255,10 @@ closureConvert env lambda t0 vts0 es    = do n <- newName "lambda"
         s                               = selfSubst env
         Lambda _ p _ e fx               = subst s lambda
         t                               = subst s t0
-        base | t == tR                  = TC primCont [prowOf p] : base0
+        p'                              = prowOf p
+        base | Just x <- isCont fx p' t = TC primCont [x] : base0
              | otherwise                = base0
-        base0                           = [TC primFunction [fx,prowOf p,kwdNil,t], cValue]
+        base0                           = [TC primFunction [fx,p',kwdNil,t], cValue]
         vts                             = subst s vts0
         te                              = props ++ [Decl l0 [initDef], Decl l0 [callDef]]
         props                           = [ Signature l0 [v] (monotype t) Property | (v,t) <- subst s vts ]
@@ -267,6 +268,10 @@ closureConvert env lambda t0 vts0 es    = do n <- newName "lambda"
         callDef                         = Def l0 attrCall [] callPars KwdNIL (Just t) callBody NoDec fx
         callPars                        = PosPar llSelf (Just tSelf) Nothing p
         callBody                        = [ Assign l0 [PVar l0 v (Just t)] (eDot (eVar llSelf) v) | (v,t) <- vts ] ++ [Return l0 (Just e)]
+
+isCont fx (TRow _ _ _ x TNil{}) t
+  | fx == fxProc && t == tR             = Just x
+isCont _ _ _                            = Nothing
 
 instance Lift Expr where
     ll env e@(Var l (NoQ n))
@@ -399,7 +404,7 @@ instance Conv TSchema where
 
 instance Conv Type where
     conv (TFun l fx p TNil{} t)
-      | t == tR                         = TCon l (TC primCont [conv p])
+      | Just x <- isCont fx p t         = TCon l (TC primCont [x])
       | otherwise                       = TCon l (TC primFunction [conv fx, conv p, kwdNil, conv t])
     conv (TCon l c)                     = TCon l (conv c)
     conv (TTuple l p k)                 = TTuple l (conv p) (conv k)

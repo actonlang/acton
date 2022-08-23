@@ -97,7 +97,7 @@ primSKIPRES         = gPrim "SKIPRES"
 cActor              = TC primActor []
 tActor              = tCon cActor
 tR                  = tCon $ TC primR []
-tCont t             = tCon $ TC primCont [posRow t posNil]
+tCont t             = tCon $ TC primCont [t]
 
 primWrapped         = gPrim "Wrapped"
 pWrapped x          = TC primWrapped [x]
@@ -253,10 +253,10 @@ clActor             = NClass [] (leftpath [cValue]) te
 --  class $R (): pass
 clR                 = NClass [] [] []
 
---  fxProc[P] (function[proc,P,(),$R]):
+--  fxProc[A] (function[proc,(A,),(),$R]):
 --      pass
-clCont              = NClass [quant p] (leftpath [TC primFunction [fxProc, tVar p, kwdNil, tR], cValue]) []
-  where p           = TV PRow (name "P")
+clCont              = NClass [quant a] (leftpath [TC primFunction [fxProc, posRow (tVar a) posNil, kwdNil, tR], cValue]) []
+  where a           = TV KType (name "A")
 
 
 --  $ASYNCf         : [A] => mut($Actor, proc()->A) -> Msg[A]
@@ -298,21 +298,21 @@ scAWAITc            = tSchema [quant a] tAWAIT
         tCont'      = tFun fxMut (posRow (tVar a) posNil) kwdNil tR
 
 
---  $ASYNC          : [A] => action($Actor, $Cont[($Cont[A],)]) -> Msg[A]
+--  $ASYNC          : [A] => action($Actor, $Cont[$Cont[A]]) -> Msg[A]
 scASYNC             = tSchema [quant a] tASYNC
   where tASYNC      = tFun fxAction (posRow tActor $ posRow tCont' posNil) kwdNil (tMsg $ tVar a)
         a           = TV KType $ name "A"
         tCont'      = tCont tCont''
         tCont''     = tCont (tVar a)
 
---  $AFTER          : [A] => action(int, $Cont[($Cont[A],)]) -> Msg[A]
+--  $AFTER          : [A] => action(int, $Cont[$Cont[A]]) -> Msg[A]
 scAFTER             = tSchema [quant a] tAFTER
   where tAFTER      = tFun fxAction (posRow tFloat $ posRow tCont' posNil) kwdNil (tMsg $ tVar a)
         a           = TV KType $ name "A"
         tCont'      = tCont tCont''
         tCont''     = tCont (tVar a)
 
---  $AWAIT          : [A] => proc(Msg[A], $Cont[(A,)]) -> $R
+--  $AWAIT          : [A] => proc(Msg[A], $Cont[A]) -> $R
 scAWAIT             = tSchema [quant a] tAWAIT
   where tAWAIT      = tFun fxProc (posRow (tMsg $ tVar a) $ posRow tCont' posNil) kwdNil tR
         a           = TV KType $ name "A"
@@ -325,7 +325,7 @@ scPUSHc             = tSchema [] tPUSH
   where tPUSH       = tFun fxPure (posRow tCont' posNil) kwdNil tNone
         tCont'      = tFun fxProc (posRow tBaseException posNil) kwdNil tR
 
---  $PUSH           : pure ($Cont[(BaseException,)]) -> None
+--  $PUSH           : pure ($Cont[BaseException]) -> None
 scPUSH              = tSchema [] tPUSH
   where tPUSH       = tFun fxPure (posRow tCont' posNil) kwdNil tNone
         a           = TV KType $ name "A"
@@ -386,7 +386,7 @@ scRContc            = tSchema [quant a] tRCont
         tCont'      = tFun fxProc (posRow (tVar a) posNil) kwdNil tR
         a           = TV KType $ name "A"
 
---  $R_CONT         : [A] => proc($Cont[(A,)], A) -> $R
+--  $R_CONT         : [A] => proc($Cont[A], A) -> $R
 scRCont             = tSchema [quant a] tRCont
   where tRCont      = tFun fxProc (posRow tCont' $ posRow (tVar a) posNil) kwdNil tR
         tCont'      = tCont (tVar a)
@@ -433,7 +433,7 @@ scSKIPRESc          = tSchema [quant a] tSKIPRES
         tCont''     = tFun fxProc (posRow (tVar a) posNil) kwdNil tR
         a           = TV KType $ name "A"
 
---  $SKIPRES        : [X,A] => pure($Cont[(None,)]) -> $Cont[(A,)]
+--  $SKIPRES        : [X,A] => pure($Cont[None]) -> $Cont[A]
 scSKIPRES           = tSchema [quant a] tSKIPRES
   where tSKIPRES    = tFun fxPure (posRow tCont' posNil) kwdNil tCont''
         tCont'      = tCont tNone
