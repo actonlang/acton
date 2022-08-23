@@ -9,9 +9,9 @@ void process$$__ext_init__() {
 
 struct process_data {
     process$$Process process;
-    $function on_stdout;
-    $function on_stderr;
-    $function on_exit;
+    $function2 on_stdout;
+    $function2 on_stderr;
+    $function3 on_exit;
     uv_pipe_t stdin_pipe;
     uv_pipe_t stdout_pipe;
     uv_pipe_t stderr_pipe;
@@ -36,7 +36,7 @@ void read_stderr(uv_stream_t *stream, ssize_t nread, const uv_buf_t *buf) {
     } else if (nread > 0) {
         if (stream->data) {
             struct process_data *process_data = (struct process_data *)stream->data;
-            $function cb = process_data->on_stderr;
+            $function2 cb = process_data->on_stderr;
             cb->$class->__call__(cb, process_data->process, to$bytes(buf->base));
         }
     }
@@ -53,7 +53,7 @@ void read_stdout(uv_stream_t *stream, ssize_t nread, const uv_buf_t *buf) {
     } else if (nread > 0) {
         if (stream->data) {
             struct process_data *process_data = (struct process_data *)stream->data;
-            $function cb = process_data->on_stdout;
+            $function2 cb = process_data->on_stdout;
             cb->$class->__call__(cb, process_data->process, to$bytes(buf->base));
         }
     }
@@ -138,7 +138,8 @@ $R process$$Process$_create_process (process$$Process __self__, $Cont c$cont) {
         char errmsg[1024] = "Failed to spawn process: ";
         uv_strerror_r(r, errmsg + strlen(errmsg), sizeof(errmsg)-strlen(errmsg));
         log_warn(errmsg);
-        __self__->on_error->$class->__call__(__self__->on_error, process_data->process, to$str(errmsg));
+        $function2 f = __self__->on_error;
+        f->$class->__call__(f, process_data->process, to$str(errmsg));
     }
     // TODO: do we need to do some magic to read any data produced before this
     // callback is installed?
