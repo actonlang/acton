@@ -94,7 +94,7 @@ $Iterator $enumerate($Iterable wit, $WORD iter, $int start) {
 
 // filter ////////////////////////////////////////////////////////////////////////////////
 
-void $Iterator$filter_init($Iterator$filter self, $Iterator it,  $function f) {
+void $Iterator$filter_init($Iterator$filter self, $Iterator it,  $function1 f) {
   self->it = it;
   self->f = f;
 }
@@ -132,18 +132,18 @@ struct $Iterator$filter$class $Iterator$filter$methods = {"$Iterator$filter",UNA
                                                           $Iterator$filter_serialize, $Iterator$filter$_deserialize, 
                                                           $Iterator$filter_bool,$Iterator$filter_str,$Iterator$filter_str, $Iterator$filter_next};
 
-$Iterator$filter $Iterator$filter$new($Iterator it, $function f) {
+$Iterator$filter $Iterator$filter$new($Iterator it, $function1 f) {
     return $NEW($Iterator$filter, it, f);
 }
 
-$Iterator $filter($Iterable wit, $function f, $WORD iter) {
+$Iterator $filter($Iterable wit, $function1 f, $WORD iter) {
   $Iterator it = wit->$class->__iter__(wit,iter);
   return ($Iterator)$Iterator$filter$new(it,f);
 }
 
 // map ////////////////////////////////////////////////////////////////////////////////
 
-void $Iterator$map_init($Iterator$map self, $Iterator it, $function f) {
+void $Iterator$map_init($Iterator$map self, $Iterator it, $function1 f) {
   self->it = it;
   self->f = f;
 }
@@ -181,11 +181,11 @@ struct $Iterator$map$class $Iterator$map$methods = {"$Iterator$map",UNASSIGNED,(
                                                                 $Iterator$map_serialize, $Iterator$map$_deserialize,  
                                                                 $Iterator$map_bool,$Iterator$map_str,$Iterator$map_str, $Iterator$map_next};
 
-$Iterator$map $Iterator$map$new($Iterator it, $function f) {
+$Iterator$map $Iterator$map$new($Iterator it, $function1 f) {
     return $NEW($Iterator$map, it, f);
 }
 
-$Iterator $map($Iterable wit, $function f, $WORD iter) {
+$Iterator $map($Iterable wit, $function1 f, $WORD iter) {
   $Iterator it = wit->$class->__iter__(wit,iter);
   return ($Iterator)$Iterator$map$new(it,f);
 }

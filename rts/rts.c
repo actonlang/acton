@@ -696,7 +696,7 @@ char *RTAG_name($RTAG tag) {
     }
 }
 ////////////////////////////////////////////////////////////////////////////////////////
-$R $DONE$__call__($Cont $this, $WORD val) {
+$R $Done$__call__($Cont $this, $WORD val) {
     return $R_DONE(val);
 }
 
@@ -730,7 +730,7 @@ struct $Cont$class $Done$methods = {
     $Done$__bool__,
     $Done$__str__,
     $Done$__str__,
-    ($R (*)($Cont, ...))$DONE$__call__
+    $Done$__call__
 };
 struct $Cont $Done$instance = {
     &$Done$methods
@@ -751,7 +751,7 @@ struct $Cont$class $InitRoot$methods = {
     $Cont$__bool__,
     $Cont$__str__,
     $Cont$__str__,
-    ($R (*)($Cont, ...))$InitRoot$__call__
+    $InitRoot$__call__
 };
 struct $Cont $InitRoot$cont = {
     &$InitRoot$methods
@@ -1474,6 +1474,7 @@ void *main_loop(void *idx) {
     int r = uv_run(uv_loop, UV_RUN_DEFAULT);
     wt_stats[wtid].state = WT_NoExist;
     rtsd_printf("Exiting...");
+    return NULL;
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////

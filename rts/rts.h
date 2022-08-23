@@ -25,7 +25,6 @@ extern pthread_key_t pkey_uv_loop;
 struct $Msg;
 struct $Actor;
 struct $Catcher;
-struct $function;
 struct $Cont;
 struct $ConstCont;
 
@@ -36,14 +35,12 @@ extern pthread_cond_t work_to_do;
 typedef struct $Msg *$Msg;
 typedef struct $Actor *$Actor;
 typedef struct $Catcher *$Catcher;
-typedef struct $function *$function;
 typedef struct $Cont *$Cont;
 typedef struct $ConstCont *$ConstCont;
 
 extern struct $Msg$class $Msg$methods;
 extern struct $Actor$class $Actor$methods;
 extern struct $Catcher$class $Catcher$methods;
-extern struct $function$class $function$methods;
 extern struct $Cont$class $Cont$methods;
 extern struct $Cont$class $Done$methods;
 extern struct $ConstCont$class $ConstCont$methods;
@@ -147,7 +144,7 @@ struct $Cont$class {
     $bool (*__bool__)($Cont);
     $str (*__str__)($Cont);
     $str (*__repr__)($Cont);
-    $R (*__call__)($Cont, ...);
+    $R (*__call__)($Cont, $WORD);
 };
 struct $Cont {
     struct $Cont$class *$class;
