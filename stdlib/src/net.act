@@ -30,6 +30,7 @@ class _TCPListenConnectAuth():
     """Internal use only"""
     pass
 
+actor DNS(auth: DNSAuth):
     proc def lookup_a(name: str, on_resolve: proc(list[str]) -> None, on_error: proc(str, str) -> None) -> None:
         """Perform DNS lookup for name of record type A
         """
@@ -46,11 +47,11 @@ class _TCPListenConnectAuth():
     _pin_affinity()
 
 
-actor TCPIPConnection(auth: TCPConnectAuth, address: str, port: int, on_connect: action(TCPIPConnection) -> None, on_receive: action(TCPIPConnection, bytes) -> None, on_error: action(TCPIPConnection, str) -> None):
+actor TCPIPConnection(auth: TCPConnectAuth, address: str, port: int, on_connect: proc(TCPIPConnection) -> None, on_receive: proc(TCPIPConnection, bytes) -> None, on_error: proc(TCPIPConnection, str) -> None):
     """TCP IP Connection"""
     _socket = -1
 
-    action def write(data: bytes) -> None:
+    proc def write(data: bytes) -> None:
         """Write data to remote"""
         NotImplemented
 
@@ -70,9 +71,9 @@ actor TCPIPConnection(auth: TCPConnectAuth, address: str, port: int, on_connect:
         NotImplemented
     _init()
 
-actor TCPListenConnection(auth: _TCPListenConnectAuth, client: int, on_receive: action(TCPListenConnection, bytes) -> None, on_error: action(TCPListenConnection, str) -> None):
+actor TCPListenConnection(auth: _TCPListenConnectAuth, client: int, on_receive: proc(TCPListenConnection, bytes) -> None, on_error: proc(TCPListenConnection, str) -> None):
     """TCP Listener Connection"""
-    action def write(data: bytes) -> None:
+    proc def write(data: bytes) -> None:
         """Write data to remote"""
         NotImplemented
 
@@ -94,7 +95,7 @@ actor TCPListenConnection(auth: _TCPListenConnectAuth, client: int, on_receive: 
     _init()
 
 
-actor TCPListener(auth: TCPListenAuth, address: str, port: int, on_listen_error: action(TCPListener, str) -> None, on_accept: action(TCPListenConnection) -> None, on_receive: action(TCPListenConnection, bytes) -> None, on_error: action(TCPListenConnection, str) -> None):
+actor TCPListener(auth: TCPListenAuth, address: str, port: int, on_listen_error: proc(TCPListener, str) -> None, on_accept: proc(TCPListenConnection) -> None, on_receive: proc(TCPListenConnection, bytes) -> None, on_error: proc(TCPListenConnection, str) -> None):
     """TCP Listener"""
     _stream = -1
     def create_tcp_listen_connection(auth: _TCPListenConnectAuth, client: int):
