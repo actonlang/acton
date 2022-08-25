@@ -25,7 +25,6 @@ extern pthread_key_t pkey_uv_loop;
 struct $Msg;
 struct $Actor;
 struct $Catcher;
-struct $Cont;
 struct $ConstCont;
 
 extern pthread_key_t self_key;
@@ -35,36 +34,18 @@ extern pthread_cond_t work_to_do;
 typedef struct $Msg *$Msg;
 typedef struct $Actor *$Actor;
 typedef struct $Catcher *$Catcher;
-typedef struct $Cont *$Cont;
 typedef struct $ConstCont *$ConstCont;
 
 extern struct $Msg$class $Msg$methods;
 extern struct $Actor$class $Actor$methods;
 extern struct $Catcher$class $Catcher$methods;
-extern struct $Cont$class $Cont$methods;
 extern struct $Cont$class $Done$methods;
 extern struct $ConstCont$class $ConstCont$methods;
-
-enum $RTAG { $RDONE, $RFAIL, $RCONT, $RWAIT };
-typedef enum $RTAG $RTAG;
-
-struct $R {
-    $RTAG tag;
-    $Cont cont;
-    $WORD value;
-};
-typedef struct $R $R;
-
-#define $R_CONT(cont, arg)      ($R){$RCONT, (cont), ($WORD)(arg)}
-#define $R_DONE(value)          ($R){$RDONE, NULL,   (value)}
-#define $R_FAIL(value)          ($R){$RFAIL, NULL,   (value)}
-#define $R_WAIT(cont, value)    ($R){$RWAIT, (cont), (value)}
 
 #define MSG_HEADER              "Msg"
 #define ACTOR_HEADER            "Actor"
 #define CATCHER_HEADER          "Catcher"
 #define CLOS_HEADER             "Clos"
-#define CONT_HEADER             "Cont"
 
 #define $Lock                   volatile atomic_flag
 
@@ -133,22 +114,6 @@ struct $Catcher {
     $Cont $cont;
 };
 
-
-struct $Cont$class {
-    char *$GCINFO;
-    int $class_id;
-    $Super$class $superclass;
-    void (*__init__)($Cont);
-    void (*__serialize__)($Cont, $Serial$state);
-    $Cont (*__deserialize__)($Cont, $Serial$state);
-    $bool (*__bool__)($Cont);
-    $str (*__str__)($Cont);
-    $str (*__repr__)($Cont);
-    $R (*__call__)($Cont, $WORD);
-};
-struct $Cont {
-    struct $Cont$class *$class;
-};
 
 struct $ConstCont$class {
     char *$GCINFO;

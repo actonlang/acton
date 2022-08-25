@@ -14,6 +14,131 @@
 
 ////////////////////////////////////////////////////////////////////////////////////////
 
+$bool $proc$__bool__($proc self) {
+  return $True;
+}
+$str $proc$__str__($proc self) {
+  char *s;
+  asprintf(&s,"<proc closure at %p>",self);
+  return to$str(s);
+}
+
+$bool $action$__bool__($action self) {
+  return $True;
+}
+$str $action$__str__($action self) {
+  char *s;
+  asprintf(&s,"<action closure at %p>",self);
+  return to$str(s);
+}
+
+$bool $mut$__bool__($mut self) {
+  return $True;
+}
+$str $mut$__str__($mut self) {
+  char *s;
+  asprintf(&s,"<mut closure at %p>",self);
+  return to$str(s);
+}
+
+$bool $pure$__bool__($pure self) {
+  return $True;
+}
+$str $pure$__str__($pure self) {
+  char *s;
+  asprintf(&s,"<pure closure at %p>",self);
+  return to$str(s);
+}
+
+void $Cont$__init__($Cont $this) {
+    // Empty
+}
+$bool $Cont$__bool__($Cont self) {
+  return $True;
+}
+$str $Cont$__str__($Cont self) {
+  char *s;
+  asprintf(&s,"<$Cont closure at %p>",self);
+  return to$str(s);
+}
+void $Cont$__serialize__($Cont self, $Serial$state state) {
+    // Empty
+}
+$Cont $Cont$__deserialize__($Cont self, $Serial$state state) {
+    return $DNEW($Cont,state);
+}
+
+struct $proc$class $proc$methods = {
+    "$proc",
+    UNASSIGNED,
+    NULL,
+    NULL,               /* __init__ */
+    NULL,               /* __serialize__ */
+    NULL,               /* __deserialize__ */
+    $proc$__bool__,
+    $proc$__str__,
+    $proc$__str__,
+    NULL,               /* __eval__ */
+    NULL                /* __exec__ */
+};
+struct $action$class $action$methods = {
+    "$action",
+    UNASSIGNED,
+    NULL,
+    NULL,               /* __init__ */
+    NULL,               /* __serialize__ */
+    NULL,               /* __deserialize__ */
+    $action$__bool__,
+    $action$__str__,
+    $action$__str__,
+    NULL,               /* __eval__ */
+    NULL,               /* __exec__ */
+    NULL                /* __asyn__ */
+};
+struct $mut$class $mut$methods = {
+    "$mut",
+    UNASSIGNED,
+    NULL,
+    NULL,               /* __init__ */
+    NULL,               /* __serialize__ */
+    NULL,               /* __deserialize__ */
+    $mut$__bool__,
+    $mut$__str__,
+    $mut$__str__,
+    NULL,               /* __eval__ */
+    NULL,               /* __exec__ */
+    NULL                /* __call__ */
+};
+struct $pure$class $pure$methods = {
+    "$pure",
+    UNASSIGNED,
+    NULL,
+    NULL,               /* __init__ */
+    NULL,               /* __serialize__ */
+    NULL,               /* __deserialize__ */
+    $pure$__bool__,
+    $pure$__str__,
+    $pure$__str__,
+    NULL,               /* __eval__ */
+    NULL,               /* __exec__ */
+    NULL                /* __call__ */
+};
+
+struct $Cont$class $Cont$methods = {
+    "$Cont",
+    UNASSIGNED,
+    NULL,
+    $Cont$__init__,
+    $Cont$__serialize__,
+    $Cont$__deserialize__,
+    $Cont$__bool__,
+    $Cont$__str__,
+    $Cont$__str__,
+    NULL
+};
+
+///////////////////////////////////////////////////////
+
 void $function$__init__($function $this) { }
 
 $bool $function$__bool__($function self) {

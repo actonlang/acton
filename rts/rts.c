@@ -410,28 +410,6 @@ $Catcher $Catcher$__deserialize__($Catcher self, $Serial$state state) {
 }
 ///////////////////////////////////////////////////////////////////////////////////////
 
-void $Cont$__init__($Cont $this) { }
-
-$bool $Cont$__bool__($Cont self) {
-  return $True;
-}
-
-$str $Cont$__str__($Cont self) {
-  char *s;
-  asprintf(&s,"<$Cont object at %p>",self);
-  return to$str(s);
-}
-
-void $Cont$__serialize__($Cont self, $Serial$state state) {
-    // Empty
-}
-
-$Cont $Cont$__deserialize__($Cont self, $Serial$state state) {
-    return $DNEW($Cont,state);
-}
-
-////////////////////////////////////////////////////////////////////////////////////////
-
 void $ConstCont$__init__($ConstCont $this, $WORD val, $Cont cont) {
     $this->val = val;
     $this->cont = cont;
@@ -508,19 +486,6 @@ struct $Catcher$class $Catcher$methods = {
     $Catcher$__bool__,
     $Catcher$__str__,
     $Catcher$__str__
-};
-
-struct $Cont$class $Cont$methods = {
-    CONT_HEADER,
-    UNASSIGNED,
-    NULL,
-    $Cont$__init__,
-    $Cont$__serialize__,
-    $Cont$__deserialize__,
-    $Cont$__bool__,
-    $Cont$__str__,
-    $Cont$__str__,
-    NULL
 };
 
 struct $ConstCont$class $ConstCont$methods = {
