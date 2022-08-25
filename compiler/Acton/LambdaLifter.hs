@@ -249,7 +249,7 @@ freefun env e                           = Nothing
 
 closureConvert env lambda t0 vts0 es    = do n <- newName "lambda"
                                              --traceM ("## closureConvert " ++ prstr lambda ++ "  as  " ++ prstr n)
-                                             liftToTop [Class l0 n q base te]
+                                             liftToTop [Class l0 n q base body]
                                              return $ eCall (tApp (eVar n) (map tVar $ tvarScope env)) es
   where q                               = quantScope env
         s                               = selfSubst env
@@ -260,7 +260,7 @@ closureConvert env lambda t0 vts0 es    = do n <- newName "lambda"
              | otherwise                = base0
         base0                           = [TC primFunction [fx,p',kwdNil,t], cValue]
         vts                             = subst s vts0
-        te                              = props ++ [Decl l0 [initDef], Decl l0 [callDef]]
+        body                            = props ++ [Decl l0 [initDef], Decl l0 [callDef]]
         props                           = [ Signature l0 [v] (monotype t) Property | (v,t) <- subst s vts ]
         initDef                         = Def l0 initKW [] initPars KwdNIL (Just tNone) (initBody++[sReturn eNone]) NoDec fxPure
         initPars                        = PosPar llSelf (Just tSelf) Nothing $ pospar vts

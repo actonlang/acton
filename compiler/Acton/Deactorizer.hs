@@ -239,7 +239,7 @@ instance Deact Decl where
                     q'              = seal q
 
             wrapMeth (Def l n q p KwdNIL (Just t) _ d fx)
-                                    = Decl l0 [Def l0 n q (addSelfPar p') KwdNIL (Just $ tMsg t') [Return l0 (Just $ async)] d fxAction]
+                                    = Decl l0 [Def l0 n q (addSelfPar p') KwdNIL (Just t') [Return l0 (Just $ async)] d fxAction]
               where n'              = localName n
                     p'              = seal p
                     t'              = seal t

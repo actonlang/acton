@@ -220,7 +220,7 @@ instance Deact Expr where
     deact env (Var l n)
       | isActor env n               = return $ Var l $ newactQName n
       | otherwise                   = return $ Var l n
-    deact env (Async l e)           = deact env e
+    deact env (Async l e)           = Async l <$> deact env e
     deact env (Await l e)           = do e' <- deact env e
                                          return $ Call l (tApp (eQVar primAWAITf) ts) (PosArg e' PosNil) KwdNil
       where TCon _ msg              = typeOf env e

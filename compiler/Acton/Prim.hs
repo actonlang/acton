@@ -204,8 +204,8 @@ clFunction          = NClass [quant x, quant a, quant b, quant c] (leftpath [cVa
 --      __eval__    : proc(*R) -> T
 --      __exec__    : proc(*R) -> None
 clProc              = NClass [quant r, quant t] (leftpath [cValue]) te
-  where te          = [ (attrCall, NSig (monotype $ tFun fxProc (tVar r) kwdNil (tVar t)) NoDec),
-                        (attrExec, NDef (monotype $ tFun fxProc (tVar r) kwdNil tNone) NoDec) ]
+  where te          = [ (attrEval, NSig (monotype $ tFun fxProc (tVar r) kwdNil (tVar t)) NoDec),
+                        (attrExec, NSig (monotype $ tFun fxProc (tVar r) kwdNil tNone) NoDec) ]
         r           = TV PRow (name "R")
         t           = TV KType (name "T")
 
