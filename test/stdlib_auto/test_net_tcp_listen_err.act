@@ -1,0 +1,29 @@
+import net
+
+actor main(env):
+    def on_lsock_error(l, error):
+        print("Some socket error occurred on socket1, not supposed to happen..")
+        await async env.exit(1)
+
+    def on_lsock_error2(l, error):
+        print("We do expect an error on socket2, since the port is already taken, all good")
+        await async env.exit(0)
+
+    def on_server_accept(c):
+        print("Not expecting any connection on socket1... fail :/")
+        await async env.exit(1)
+
+    def on_server_receive(c, data):
+        pass
+
+    def on_server_error(c, error):
+        pass
+
+    port = 2134
+    la = net.TCPListenAuth(net.TCPAuth(net.NetAuth(env.auth)))
+    server1 = net.TCPListener(la, "0.0.0.0", port, on_lsock_error, on_server_accept, on_server_receive, on_server_error)
+    server1 = net.TCPListener(la, "0.0.0.0", port, on_lsock_error2, on_server_accept, on_server_receive, on_server_error)
+    def timeout_error():
+        print("Timeout occured, exiting with error...")
+        await async env.exit(1)
+    after 2: timeout_error()
