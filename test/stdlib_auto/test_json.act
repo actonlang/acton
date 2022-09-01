@@ -1,0 +1,28 @@
+
+import json
+
+actor main(env):
+    # TODO: issue report that we can't declare nested dict
+    d1 = {"b": "1", "c": 2, "d": [1, 2]}
+    l1 = [1, 2, 3]
+    test_data = [
+        {"a": True, "b": False},
+        {"a": "1", "b": 2},
+        {"a": d1},
+        {"a": [1, 2, 3]},
+        {"a": [l1, l1]},
+        {"a": [d1, d1]},
+    ]
+    for s in test_data:
+        print(s)
+        e = json.encode(s)
+        print(e)
+        d = json.decode(e)
+        print(d)
+#        if s is not None and d is not None and s != d:
+#            print("MISMATCH")
+#            await async env.exit(1)
+
+        print()
+
+    await async env.exit(0)
