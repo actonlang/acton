@@ -53,7 +53,7 @@ actor main(env):
 Compile the program and run it:
 
 ```
-$ actonc --root main helloworld.act
+$ actonc helloworld.act
 $ ./helloworld
 Hello, world!
 ```
