@@ -36,8 +36,9 @@ void read_stderr(uv_stream_t *stream, ssize_t nread, const uv_buf_t *buf) {
     } else if (nread > 0) {
         if (stream->data) {
             struct process_data *process_data = (struct process_data *)stream->data;
-            $function2 cb = process_data->on_stderr;
-            cb->$class->__call__(cb, process_data->process, to$bytes(buf->base));
+            process$$Process __self__ = process_data->process;
+            $function2 f = process_data->on_stderr;
+            f->$class->__call__(f, __self__, to$bytes_len(buf->base, nread));
         }
     }
 
@@ -53,8 +54,9 @@ void read_stdout(uv_stream_t *stream, ssize_t nread, const uv_buf_t *buf) {
     } else if (nread > 0) {
         if (stream->data) {
             struct process_data *process_data = (struct process_data *)stream->data;
-            $function2 cb = process_data->on_stdout;
-            cb->$class->__call__(cb, process_data->process, to$bytes(buf->base));
+            process$$Process __self__ = process_data->process;
+            $function2 f = process_data->on_stdout;
+            f->$class->__call__(f, __self__, to$bytes_len(buf->base, nread));
         }
     }
 
