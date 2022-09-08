@@ -614,7 +614,7 @@ runRestPasses args paths env0 parsed stubMode = do
                       return (env0 `Acton.Env.withModulesFrom` env,iface)
 
 
-handle errKind f src paths mn ex = do putStrLn ("\n******************** " ++ errKind)
+handle errKind f src paths mn ex = do putStrLn ("\nERROR: Error when compiling " ++ (prstr mn) ++ " module: " ++ errKind)
                                       putStrLn (Acton.Parser.makeReport (f ex) src)
                                       removeIfExists (outbase++".ty")
                                       when (rmTmp paths) $ removeDirectoryRecursive (projPath paths)
