@@ -27,6 +27,7 @@ executables:
       - base >= 4.7 && < 5
       - binary
       - bytestring
+      - clock
       - containers
       - deepseq
       - dir-traverse
