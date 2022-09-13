@@ -46,6 +46,7 @@ import Data.Graph
 import Data.Version (showVersion)
 import qualified Data.List
 import qualified Filesystem.Path.CurrentOS as Fsco
+import System.Clock
 import System.Directory.Recursive
 import System.FileLock
 import System.IO hiding (readFile, writeFile)
@@ -59,6 +60,7 @@ import System.FilePath.Posix
 import qualified System.Environment
 import qualified System.Exit
 import qualified Paths_acton
+import Text.Printf
 
 data Args       = Args {
                     parse     :: Bool,
@@ -72,7 +74,10 @@ data Args       = Args {
                     hgen      :: Bool,
                     cgen      :: Bool,
                     ccmd      :: Bool,
+                    quiet     :: Bool,
                     verbose   :: Bool,
+                    debug     :: Bool,
+                    timing     :: Bool,
                     stub      :: Bool,
                     dev       :: Bool,
                     cpedantic :: Bool,
@@ -99,7 +104,10 @@ getArgs ver     = infoOption (showVersion Paths_acton.version) (long "numeric-ve
                     <*> switch (long "hgen"    <> help "Show the generated .h header")
                     <*> switch (long "cgen"    <> help "Show the generated .c code")
                     <*> switch (long "ccmd"    <> help "Show CC / LD commands")
+                    <*> switch (long "quiet"   <> help "Don't print stuff")
                     <*> switch (long "verbose" <> help "Print progress info during execution")
+                    <*> switch (long "debug"   <> help "Print debug stuff")
+                    <*> switch (long "timing"   <> help "Print timing information")
                     <*> switch (long "stub"    <> help "Stub (.ty) file generation only")
                     <*> switch (long "dev"     <> help "Development mode; include debug symbols etc")
                     <*> switch (long "cpedantic"<> help "Pedantic C compilation with -Werror")
@@ -208,18 +216,26 @@ compileFiles args srcFiles = do
     -- we only care about project level path stuff and all source files are
     -- known to be in the same project
     paths <- findPaths (head srcFiles) args
-    when (verbose args) $ do
-        putStrLn ("## sysPath  : " ++ sysPath paths)
-        putStrLn ("## sysTypes : " ++ sysTypes paths)
-        putStrLn ("## sysLib   : " ++ sysLib paths)
-        putStrLn ("## projPath : " ++ projPath paths)
-        putStrLn ("## projOut  : " ++ projOut paths)
-        putStrLn ("## projTypes: " ++ projTypes paths)
-        putStrLn ("## projLib  : " ++ projLib paths)
-        putStrLn ("## binDir   : " ++ binDir paths)
-        putStrLn ("## srcDir   : " ++ srcDir paths)
-        iff (length srcFiles == 1) (putStrLn ("## modName  : " ++ prstr (modName paths)))
-    tasks <- mapM (readActFile args) srcFiles
+    iff (not(quiet args)) $ do
+        if isTmp paths
+          then
+            putStrLn("Building file " ++ head srcFiles)
+          else
+            putStrLn("Building project in " ++ projPath paths)
+
+    when (debug args) $ do
+        putStrLn ("  Paths:")
+        putStrLn ("    sysPath  : " ++ sysPath paths)
+        putStrLn ("    sysTypes : " ++ sysTypes paths)
+        putStrLn ("    sysLib   : " ++ sysLib paths)
+        putStrLn ("    projPath : " ++ projPath paths)
+        putStrLn ("    projOut  : " ++ projOut paths)
+        putStrLn ("    projTypes: " ++ projTypes paths)
+        putStrLn ("    projLib  : " ++ projLib paths)
+        putStrLn ("    binDir   : " ++ binDir paths)
+        putStrLn ("    srcDir   : " ++ srcDir paths)
+        iff (length srcFiles == 1) (putStrLn ("    modName  : " ++ prstr (modName paths)))
+    tasks <- mapM (readActFile args paths) srcFiles
     -- figure out binTasks, currently just based on --root
     let rootParts = splitOn "." (root args)
         rootMod   = init rootParts
@@ -231,23 +247,28 @@ compileFiles args srcFiles = do
     compileTasks args paths tasks binTasks
 
 
-readActFile :: Args -> String -> IO CompileTask
-readActFile args actFile = do
+readActFile :: Args -> Paths -> String -> IO CompileTask
+readActFile args paths actFile = do
+    timingtart <- getTime Monotonic
     paths <- findPaths actFile args
     src <- readFile actFile
+    timeRead <- getTime Monotonic
+    iff (timing args) $ putStrLn("Reading file " ++ makeRelative (srcDir paths) actFile ++ ": " ++ fmtTime(timeRead - timingtart))
     m <- Acton.Parser.parseModule (modName paths) actFile src
             `catch` handle "Syntax error" Acton.Parser.parserError "" paths (modName paths)
             `catch` handle "Context error" Acton.Parser.contextError src paths (modName paths)
             `catch` handle "Indentation error" Acton.Parser.indentationError src paths (modName paths)
             `catch` handle "Syntax error" Acton.Parser.failFastError src paths (modName paths)
     iff (parse args) $ dump "parse" (Pretty.print m)
-    stubMode <- detectStubMode actFile args
+    timeParse <- getTime Monotonic
+    iff (timing args) $ putStrLn("Parsing file " ++ makeRelative (srcDir paths) actFile ++ ": " ++ fmtTime(timeParse - timeRead))
+    stubMode <- detectStubMode paths actFile args
     return $ ActonTask (modName paths) src m stubMode
 
 
-detectStubMode srcfile args = do
+detectStubMode paths srcfile args = do
     exists <- doesFileExist cFile
-    when (exists && verbose args) $ do putStrLn("Found matching C file (" ++ cFile ++ "), assuming stub compilation")
+    when (exists && debug args) $ do putStrLn("Found matching C file (" ++ makeRelative (srcDir paths) cFile ++ "), assuming stub compilation for " ++ makeRelative (srcDir paths) srcfile)
     if ((takeFileName srcfile) == "__builtin__.act" || stub args || exists)
       then return True
       else return False
@@ -401,7 +422,7 @@ chaseImportedFiles args paths itasks
                                  Nothing -> do let actFile = srcFile paths mn
                                                ok <- System.Directory.doesFileExist actFile
                                                if ok then do
-                                                   task <- readActFile args actFile
+                                                   task <- readActFile args paths actFile
                                                    return $ Just task
                                                  else return Nothing
 
@@ -423,17 +444,30 @@ chaseImportedFiles args paths itasks
 
 doTask :: Args -> Paths -> Acton.Env.Env0 -> CompileTask -> IO Acton.Env.Env0
 doTask args paths env t@(ActonTask mn src m stubMode) = do
+    iff (not (quiet args))  (putStrLn("  Compiling " ++ makeRelative (srcDir paths) actFile
+              ++ (if (dev args) then " for development" else " for release")
+              ++ (if stubMode then " in stub mode" else "")))
+
+    timingtart <- getTime Monotonic
     -- run custom make target compilation for modules implemented in C
     -- Note how this does not include .ext.c style modules
-    iff stubMode (runCustomMake paths mn)
+    iff stubMode $ do
+        runCustomMake paths mn
+        timeCustomMake <- getTime Monotonic
+        iff (timing args) $ putStrLn("    Custom make           : " ++ fmtTime(timeCustomMake - timingtart))
 
     -- no need to list the cFile since it is intermediate; oFile is final output
     let outFiles = [tyFile, hFile] ++ if stubMode then [] else [oFile]
     ok <- checkUptoDate paths actFile outFiles (importsOf t)
     if ok && not (forceCompilation args)
       then do
-        iff (verbose args) (putStrLn ("Skipping " ++ makeRelative (srcDir paths) actFile ++ " (files are up to date).") >> hFlush stdout)
+        iff (debug args) (putStrLn ("    Skipping " ++ makeRelative (srcDir paths) actFile ++ " (files are up to date).") >> hFlush stdout)
+        timeBeforeTy <- getTime Monotonic
         te <- InterfaceFiles.readFile tyFile
+        timeReadTy <- getTime Monotonic
+        iff (timing args) $ putStrLn("Read .ty file " ++ makeRelative (projPath paths) tyFile ++ ": " ++ fmtTime(timeReadTy - timeBeforeTy))
+        timeEnd <- getTime Monotonic
+        iff (not (quiet args)) $ putStrLn("   Already up to date, in   " ++ fmtTime(timeEnd - timingtart))
         return (Acton.Env.addMod mn te env)
       else do
         createDirectoryIfMissing True (getModPath (projTypes paths) mn)
@@ -441,6 +475,8 @@ doTask args paths env t@(ActonTask mn src m stubMode) = do
           `catch` handle "Compilation error" generalError src paths mn
           `catch` handle "Compilation error" Acton.Env.compilationError src paths mn
           `catch` handle "Type error" Acton.Types.typeError src paths mn
+        timeEnd <- getTime Monotonic
+        iff (not (quiet args)) $ putStrLn("   Finished compilation in  " ++ fmtTime(timeEnd - timingtart))
         return (Acton.Env.addMod mn te env')
   where actFile             = srcFile paths mn
         outbase             = outBase paths mn
@@ -492,9 +528,9 @@ checkUptoDate paths actFile outFiles imps = do
         else do
             -- get the time of the last modified source file
             srcTime  <- head <$> sortBy (comparing Down) <$> mapM System.Directory.getModificationTime srcFiles
-            outTimes <- mapM System.Directory.getModificationTime outFiles
-            impsOK   <- mapM (impOK (head outTimes)) imps
-            return (all (srcTime <) outTimes && and impsOK)
+            outTiming <- mapM System.Directory.getModificationTime outFiles
+            impsOK   <- mapM (impOK (head outTiming)) imps
+            return (all (srcTime <) outTiming && and impsOK)
   where
         srcBase         = joinPath [takeDirectory actFile, takeBaseName actFile]
         srcCFile        = srcBase ++ ".c"
@@ -520,49 +556,78 @@ printIce errMsg = do ccVer <- getCcVer
                         "\nNOTE: cc: " ++ ccVer
                         )
 
+fmtTime t =
+    printf "%6.3f s" secs
+  where
+    secs :: Float
+    secs = (fromIntegral(sec t)) + (fromIntegral (nsec t) / 1000000000)
+
 runRestPasses :: Args -> Paths -> Acton.Env.Env0 -> A.Module -> Bool -> IO (Acton.Env.Env0, Acton.Env.TEnv)
 runRestPasses args paths env0 parsed stubMode = do
                       let outbase = outBase paths (A.modname parsed)
                       let absSrcBase = srcBase paths (A.modname parsed)
                       let relSrcBase = makeRelative (projPath paths) (srcBase paths (A.modname parsed))
                       let actFile = absSrcBase ++ ".act"
+
+                      timingtart <- getTime Monotonic
+
                       envTmp <- Acton.Env.mkEnv (sysTypes paths) (projTypes paths) env0 parsed
                       let env = envTmp { Acton.Env.stub = stubMode }
+                      timeEnv <- getTime Monotonic
+                      iff (timing args) $ putStrLn("    Pass: Make environment: " ++ fmtTime (timeEnv - timingtart))
 
                       kchecked <- Acton.Kinds.check env parsed
                       iff (kinds args) $ dump "kinds" (Pretty.print kchecked)
+                      timeKindsCheck <- getTime Monotonic
+                      iff (timing args) $ putStrLn("    Pass: Kinds check     : " ++ fmtTime (timeKindsCheck - timeEnv))
 
                       (iface,tchecked,typeEnv) <- Acton.Types.reconstruct outbase env kchecked
                       iff (types args) $ dump "types" (Pretty.print tchecked)
                       iff (sigs args) $ dump "sigs" (Pretty.vprint (A.imps tchecked) ++ "\n\n" ++ Pretty.vprint iface ++ "\n")
+                      timeTypeCheck <- getTime Monotonic
+                      iff (timing args) $ putStrLn("    Pass: Type check      : " ++ fmtTime (timeTypeCheck - timeKindsCheck))
 
                       (normalized, normEnv) <- Acton.Normalizer.normalize typeEnv tchecked
                       iff (norm args) $ dump "norm" (Pretty.print normalized)
                       --traceM ("#################### normalized env0:")
                       --traceM (Pretty.render (Pretty.pretty normEnv))
+                      timeNormalized <- getTime Monotonic
+                      iff (timing args) $ putStrLn("    Pass: Normalizer      : " ++ fmtTime (timeNormalized - timeTypeCheck))
 
                       (deacted,deactEnv) <- Acton.Deactorizer.deactorize normEnv normalized
                       iff (deact args) $ dump "deact" (Pretty.print deacted)
                       --traceM ("#################### deacted env0:")
                       --traceM (Pretty.render (Pretty.pretty deactEnv))
+                      timeDeactorizer <- getTime Monotonic
+                      iff (timing args) $ putStrLn("    Pass: Deactorizer     : " ++ fmtTime (timeDeactorizer - timeNormalized))
 
                       (cpstyled,cpsEnv) <- Acton.CPS.convert deactEnv deacted
                       iff (cps args) $ dump "cps" (Pretty.print cpstyled)
                       --traceM ("#################### cps'ed env0:")
                       --traceM (Pretty.render (Pretty.pretty cpsEnv))
+                      timeCPS <- getTime Monotonic
+                      iff (timing args) $ putStrLn("    Pass: CPS             : " ++ fmtTime (timeCPS - timeDeactorizer))
 
                       (lifted,liftEnv) <- Acton.LambdaLifter.liftModule cpsEnv cpstyled
                       iff (llift args) $ dump "llift" (Pretty.print lifted)
                       --traceM ("#################### lifteded env0:")
                       --traceM (Pretty.render (Pretty.pretty liftEnv))
+                      timeLLift <- getTime Monotonic
+                      iff (timing args) $ putStrLn("    Pass: Lambda Lifting  : " ++ fmtTime (timeLLift - timeCPS))
 
                       (n,h,c) <- Acton.CodeGen.generate liftEnv relSrcBase lifted
+                      timeCodeGen <- getTime Monotonic
+                      iff (timing args) $ putStrLn("    Pass: Generating code : " ++ fmtTime (timeCodeGen - timeLLift))
+
                       iff (hgen args) $ do
                           putStrLn(h)
                           System.Exit.exitSuccess
                       iff (cgen args) $ do
                           putStrLn(c)
                           System.Exit.exitSuccess
+
+                      timeCodeWrite <- getTime Monotonic
+                      iff (timing args) $ putStrLn("    Pass: Writing code    : " ++ fmtTime (timeCodeWrite - timeCodeGen))
 
                       iff ((cgen args) || (hgen args)) System.Exit.exitSuccess
 
@@ -571,10 +636,6 @@ runRestPasses args paths env0 parsed stubMode = do
                       let hFile = outbase ++ ".h"
                           oFile = joinPath [projLib paths, n ++ ".o"]
                           aFile = joinPath [projLib paths, "libActonProject.a"]
-
-                      iff (verbose args)  (putStrLn("Compiling " ++ makeRelative (srcDir paths) actFile
-                               ++ (if (dev args) then " for development" else " for release")
-                               ++ (if stubMode then " in stub mode" else "")))
 
                       iff (not stubMode) (do
                           -- cc is invoked with parent directory of project
@@ -603,6 +664,8 @@ runRestPasses args paths env0 parsed stubMode = do
                               putStrLn arCmd
                           writeFile buildF $ unlines ["#!/bin/sh", "cd ..", ccCmd, arCmd]
                           (returnCode, ccStdout, ccStderr) <- readCreateProcessWithExitCode (shell $ ccCmd ++ " && " ++ arCmd){ cwd = Just (takeDirectory (projPath paths)) } ""
+                          timeCC <- getTime Monotonic
+                          iff (timing args) $ putStrLn("    Pass: C compilation   : " ++ fmtTime (timeCC - timeCodeWrite))
                           case returnCode of
                               ExitSuccess -> return()
                               ExitFailure _ -> do printIce "compilation of generated C code failed"
