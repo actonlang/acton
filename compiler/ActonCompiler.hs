@@ -739,7 +739,7 @@ buildExecutable env args paths binTask
         ccArgs              = ""
 -- Linux? and what else? maybe split
 #else
-        libFiles            = libFilesBase ++ " -luuid "
+        libFiles            = libFilesBase ++ " -luuid -lbsd_a -lmd_a "
         libPaths            = libPathsBase
         ccArgs              = " -no-pie "
 #endif

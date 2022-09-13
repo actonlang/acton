@@ -22,16 +22,13 @@ out/rel/lib/math.o: src/math.c
 
 
 NUMPY_CFILES=$(wildcard c_src/numpy/*.h)
-ifeq ($(shell uname -s),Linux)
-NUMPY_CFLAGS+=-lbsd -ldl -lmd
-endif
 out/dev/lib/numpy.o: src/numpy.c src/numpy.h out/types/math.h $(NUMPY_CFILES)
 	@mkdir -p $(dir $@)
-	$(CC) $(CFLAGS) $(CFLAGS_DEV) -Wno-unused-result -r -Iout/ $< -o$@ $(NUMPY_CFLAGS)
+	$(CC) $(CFLAGS) $(CFLAGS_DEV) -Wno-unused-result -Iout/ -c $< -o$@
 
 out/rel/lib/numpy.o: src/numpy.c src/numpy.h out/types/math.h $(NUMPY_CFILES)
 	@mkdir -p $(dir $@)
-	$(CC) $(CFLAGS) $(CFLAGS_REL) -Wno-unused-result -r -Iout/ $< -o$@ $(NUMPY_CFLAGS)
+	$(CC) $(CFLAGS) $(CFLAGS_REL) -Wno-unused-result -Iout/ -c $< -o$@
 
 out/dev/lib/random.o: src/random.c
 	@mkdir -p $(dir $@)
