@@ -170,7 +170,7 @@ struct $ConstCont {
 $Cont $CONSTCONT($WORD, $Cont);
 
 $Msg $ASYNC($Actor, $Cont);
-$Msg $AFTER($int, $Cont);
+$Msg $AFTER($float, $Cont);
 $R $AWAIT($Msg, $Cont);
 
 void init_db_queue(long);

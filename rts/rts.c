@@ -815,7 +815,7 @@ $Msg $ASYNC($Actor to, $Cont cont) {
     return m;
 }
 
-$Msg $AFTER($int sec, $Cont cont) {
+$Msg $AFTER($float sec, $Cont cont) {
     $Actor self = ($Actor)pthread_getspecific(self_key);
     rtsd_printf("# AFTER by %ld", self->$globkey);
     time_t baseline = self->$msg->$baseline + sec->val * 1000000;

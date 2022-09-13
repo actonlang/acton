@@ -278,7 +278,7 @@ instance InfEnv Stmt where
                                              (cs2,e') <- inferSub env t e
                                              return (cs1++cs2, [ (n,NSVar t) | (n,NVar t) <- te], VarAssign l pats' e')
     
-    infEnv env (After l e1 e2)          = do (cs1,e1') <- inferSub env tInt e1
+    infEnv env (After l e1 e2)          = do (cs1,e1') <- inferSub env tFloat e1
                                              (cs2,t,e2') <- infer env e2
                                              fx <- currFX
                                              return (Cast fxAction fx :
