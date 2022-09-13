@@ -3,13 +3,66 @@
 ## Unreleased
 
 ### Added
+- Apple M1 / M2 CPUs are now supported [#823]
+  - aarch64 calling conventions are different for variadic vs fixed functions
+    and this is a problem when we alias a fixed function as a variadic function,
+    which is exactly what we did in a number of places in the stdlib where we
+    manually write C code
+  - Now fixed by calling $function2, $function3 etc for 2 vs 3 args
 - `actonc new foobar` will create a new project called foobar according to the
   standard project directory layout
-- Improve DB schema creation messages [#586]
-  - Messages contained "test", which is misleading. The DB server creates the
-    schemas, i.e. the schema is hard-coded. This is per design and a
-    simplification (no need for schema management RPCs) as the DB and RTS are
-    tightly coupled anyway.
+- Completely rewritten IO system & RTS workers [#698]
+  - libuv is now used for all IO operations instead of our own home grown IO
+    subsystem.
+  - Rather than a single thread dedicated to IO, all RTS worker threads now also
+    perform IO work. IO actors are pinned to a particular worker thread on
+    initialization.
+- New `net` module [#733]
+  - replaces `env.connect()` & `env.listen()`
+  - adds DNS lookup functions
+- New `process` module [#752] [#796] [#797] [#798] [#799] [#800] [#801] [#804]
+  [#808]
+  - runs sub-processes
+- New `file` module which allows reading and writing files [#806]
+  - Replaces `env.openR` & `env.openW`
+- New `json` module to encode and decode Acton data to JSON document (strings)
+  [#829]
+  - built on yyjson C library, which is a very fast (3.5GB/s) JSON library
+- Do token based authentication
+  - Capability based authentication has previously been based around access to
+    the env actor, which was initially fed into the system as an argument to the
+    root actor
+  - We wanted to modularize the code of the env actor and so instead we've opted
+    to use a token based authentication scheme
+  - A WorldAuth token is passed to the root actor, accessible as `env.auth`
+  - Tokens are organized in a hierarchy, e.g.
+    - WorldAuth > NetAuth > TCPAuth > TCPConnectAuth
+  - Performing actions always require most specific auth token
+    - This is to encourage users NOT to pass around the WorldAuth token but make
+      it more specific
+  - For example creating `net.TCPIPConnection` requires a `TCPConnectAuth` token
+- actonc now outputs some information about what it is doing per default [#840]
+  - Previous quieter output can be achieved with `--quiet`
+  - `--timing` includes extra timing information on how long compiler passes and
+    other operations take
+  - all `--verbose` output now under `--debug`
+- actonc now takes a lock on a project when compiling, which ensures that two
+  invokations of actonc to build the same project do not step on each others
+  toes [#760]
+  - lock is implemented using flock(), so even if actonc dies and lock file
+    stays in place, it is not considered locked (flock only keeps lock while
+    process that acquired lock is running)
+  - Our own stdlib is built concurrently with development and release profile,
+    which can now be run "concurrently", i.e. we do not have to ensure
+    serialization of these two builds from the Makefile and since all other
+    targets are run concurrenctly this simplifies the Makefile quite a bit,
+    however since there is a lock there won't be an actual concurrent build
+- actonc now automatically sets the root actor to `main`, if a program contains
+  such an actor. This means `--root` argument is mostly superfluous now [#726]
+- actonc --root argument now takes a qualified name, like <module>.<actor>
+  [#628]
+  - this is required to build an executable in a project with:
+    `actonc build --root test.main`
 - RTS has improved logging, including timestamps, log levels etc. Also supports
   file output [#584]
   - Log output is sent to stderr
@@ -17,18 +70,16 @@
     particular thread is doing.
   - stderr output has millisecond time resolution
   - file output (--rts-log-path) has nanosecond precision
+  - Using pretty, short relative paths
 - ActonDB has improved logging, including timestamps, log levels etc and
   supports file output [#588]
   - supports logging to file with --log-file
   - similar implementation as RTS (based on same log.c library but modified)
 - actonc automatically detects stub mode compilation based on presence of .c
   file [#601] [#624]
-- stdlib time module (written in C) has been moved to _time & new time module
-  written in Acton wraps all current functions in _time [#599]
-  - Preparatory move for adding more functionality to the time module
-  - The idea is to use leading _ for modules implemented in C. They should be
-    small, i.e. wrap C syscalls etc as tightly as possible and additional data
-    wrangling to be done in Acton.
+- actonc supports new .ext.c style definition of C functions where individual
+  functions in an .act file can be externally defined in the .ext.c file by
+  using `NotImplemented` as the function body [#706]
 - actonc is now aware of development / release profile [#599] [#612]
   - output placed in correct location, i.e. out/rel or out/dev
 - actonc now supports custom compilation of modules via Makefile [#602]
@@ -44,12 +95,27 @@
     everything else, and trying to add extra logic to get it to build first when
     building the stdlib project doesn't make sense; it's now special rules in
     the Acton Makefile
-- actonc --root argument now takes a qualified name, like <module>.<actor>
-  [#628]
-  - this is required to build an executable in a project with:
-    `actonc build --root test.main`
+- Improve DB schema creation messages [#586]
+  - Messages contained "test", which is misleading. The DB server creates the
+    schemas, i.e. the schema is hard-coded. This is per design and a
+    simplification (no need for schema management RPCs) as the DB and RTS are
+    tightly coupled anyway.
+- ActonDB will now gossip RTS node membership, forming the foundation for doing
+  distributed computing
+- ActonDB monitor membership information now contains all nodes [#645]
+- RTS mon now has a membership view [#645]
+- `bytes` type added [#655]
+- Library dependencies are now included in the Acton distribution [#698]
+- Added `__repr__` method to class value & subclasses [#685]
+- Added Ord instances for lists & dicts [#719]
 
 ### Changed
+- `after` now takes a float argument [#846]
+  - Allows sub-second delays
+- IO subsystem has been replaced with libuv
+- `env.connect()`, `env.listen()` has been replaced with `net` module, i.e.
+  `net.TCPIPConnection` and `net.TCPListener`
+- file access via `env` has been replaced with the `file` module
 - RTS log output is now sent to stderr rather than stdout
 - `actonc dump foo.ty` now takes the filename of the `.ty` file to dump as a
   positional argument rather than the old way of using an option (`actonc dump
@@ -83,16 +149,48 @@
     statically as possible (sort of, not including libc but most other things)
   - Now installing the .deb file will pull in all the correct dependencies on
     Debian 11 / bullseye and Ubuntu 20.04
+- Correct handling of plain and raw bytes / string literals [#655] [#657]
+- UTF-8 encoding is now enforced for source files
+- All library dependencies are now included in the Acton [#693]
+  - For example libuv, libutf8proc, libbsd (on Linux)
+  - No longer partially linking some modules like math & numpy
+  - We used to partially link in e.g. libbsd into math
+    - numpy imports math so importing both math and numpy means we got duplicate
+      symbols
+    - This was likely a faulty design in the first place as it lead to symbol
+      collisions
+  - Now all library dependencies are part of the Acton distribution and are
+    linked in with the final application at actonc build time
+  - Files are stored as e.g. dist/lib/libuv_a.a. The _a suffix is to ensure we
+    get the statically compiled library and do not link with a shared .so
+    library if one happens to be present on the system.
+- C lib guide rewritten for new .ext.c style [#766][#766]
+- Custom make file invocations are now more idempotent [#845]
+  - Avoid copying .h files which forces make to rebuild targets
+    
 
 ### Testing / CI
-- Tasty (Haskell test library & runner) is now used for testing actonc. Some
+- Tasty (Haskell test library & runner) is now used for testing actonc. Most
   tests have been migrated from test/Makefile to compiler/test.hs [#631]
   - Tasty offers different style testing; unit, golden, property etc, with
     flexible runners that can execute tests in paralell. Has nice, compact and
     colorized output in the terminal and can output to richer formats as well as
-    run benchmarking tests. We should use it for a lot more testing!
+    run benchmarking tests.
+  - There are now timeouts for all tests run by Tasty
 - TCP servers stress test for opening & closing fds in RTS [#570]
 - actonc build of projects have some test cases [#623] [#625]
+- Now testing on MacOS 12 [#527]
+- Stopped testing on MacOS 10 []
+- Now testing on Ubuntu 20.04, 22.04 & 22.10 [#700]
+- New test jobs for running actonc and its output on a clean machine [#]
+  - This installs acton from a .deb file on Linux and from artifact .zip file on
+    Mac
+  - Ensure that we have all dependencies declared correctly and that we ship all
+    necessary files
+  - Running on same platforms as normal test, i.e.:
+    - MacOS 11 & 12
+    - Debian 11
+    - Ubuntu 20.04, 22.04 & 22.10
 
 
 ## [0.10.0] (2022-02-25)
@@ -887,6 +985,7 @@ first incarnation of Acton. It was more of a proof of concept based on Python as
 a runtime and with a hacked up Cassandra database as a backend store. Since
 then, this second incarnation has been in focus and 0.2.0 was its first version.
 
+
 [#1]: https://github.com/actonlang/acton/pull/1
 [#2]: https://github.com/actonlang/acton/pull/2
 [#14]: https://github.com/actonlang/acton/pull/14
@@ -1048,6 +1147,7 @@ then, this second incarnation has been in focus and 0.2.0 was its first version.
 [#629]: https://github.com/actonlang/acton/pull/629
 [#631]: https://github.com/actonlang/acton/pull/631
 [#633]: https://github.com/actonlang/acton/pull/633
+
 [0.3.0]: https://github.com/actonlang/acton/releases/tag/v0.3.0
 [0.4.0]: https://github.com/actonlang/acton/compare/v0.3.0...v0.4.0
 [0.4.1]: https://github.com/actonlang/acton/compare/v0.4.0...v0.4.1
