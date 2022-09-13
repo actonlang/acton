@@ -40,11 +40,3 @@ out/dev/lib/random.o: src/random.c
 out/rel/lib/random.o: src/random.c
 	@mkdir -p $(dir $@)
 	$(CC) $(CFLAGS) $(CFLAGS_REL) -c $< -o$@
-
-out/dev/lib/_time.o: src/_time.c
-	@mkdir -p $(dir $@)
-	$(CC) $(CFLAGS) $(CFLAGS_DEV) -I -Iout/ -c $< -o$@
-
-out/rel/lib/_time.o: src/_time.c
-	@mkdir -p $(dir $@)
-	$(CC) $(CFLAGS) $(CFLAGS_REL) -I -Iout/ -c $< -o$@
