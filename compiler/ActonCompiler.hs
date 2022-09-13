@@ -249,11 +249,11 @@ compileFiles args srcFiles = do
 
 readActFile :: Args -> Paths -> String -> IO CompileTask
 readActFile args paths actFile = do
-    timingtart <- getTime Monotonic
+    timeStart <- getTime Monotonic
     paths <- findPaths actFile args
     src <- readFile actFile
     timeRead <- getTime Monotonic
-    iff (timing args) $ putStrLn("Reading file " ++ makeRelative (srcDir paths) actFile ++ ": " ++ fmtTime(timeRead - timingtart))
+    iff (timing args) $ putStrLn("Reading file " ++ makeRelative (srcDir paths) actFile ++ ": " ++ fmtTime(timeRead - timeStart))
     m <- Acton.Parser.parseModule (modName paths) actFile src
             `catch` handle "Syntax error" Acton.Parser.parserError "" paths (modName paths)
             `catch` handle "Context error" Acton.Parser.contextError src paths (modName paths)
@@ -448,13 +448,13 @@ doTask args paths env t@(ActonTask mn src m stubMode) = do
               ++ (if (dev args) then " for development" else " for release")
               ++ (if stubMode then " in stub mode" else "")))
 
-    timingtart <- getTime Monotonic
+    timeStart <- getTime Monotonic
     -- run custom make target compilation for modules implemented in C
     -- Note how this does not include .ext.c style modules
     iff stubMode $ do
         runCustomMake paths mn
         timeCustomMake <- getTime Monotonic
-        iff (timing args) $ putStrLn("    Custom make           : " ++ fmtTime(timeCustomMake - timingtart))
+        iff (timing args) $ putStrLn("    Custom make           : " ++ fmtTime(timeCustomMake - timeStart))
 
     -- no need to list the cFile since it is intermediate; oFile is final output
     let outFiles = [tyFile, hFile] ++ if stubMode then [] else [oFile]
@@ -467,7 +467,7 @@ doTask args paths env t@(ActonTask mn src m stubMode) = do
         timeReadTy <- getTime Monotonic
         iff (timing args) $ putStrLn("Read .ty file " ++ makeRelative (projPath paths) tyFile ++ ": " ++ fmtTime(timeReadTy - timeBeforeTy))
         timeEnd <- getTime Monotonic
-        iff (not (quiet args)) $ putStrLn("   Already up to date, in   " ++ fmtTime(timeEnd - timingtart))
+        iff (not (quiet args)) $ putStrLn("   Already up to date, in   " ++ fmtTime(timeEnd - timeStart))
         return (Acton.Env.addMod mn te env)
       else do
         createDirectoryIfMissing True (getModPath (projTypes paths) mn)
@@ -476,7 +476,7 @@ doTask args paths env t@(ActonTask mn src m stubMode) = do
           `catch` handle "Compilation error" Acton.Env.compilationError src paths mn
           `catch` handle "Type error" Acton.Types.typeError src paths mn
         timeEnd <- getTime Monotonic
-        iff (not (quiet args)) $ putStrLn("   Finished compilation in  " ++ fmtTime(timeEnd - timingtart))
+        iff (not (quiet args)) $ putStrLn("   Finished compilation in  " ++ fmtTime(timeEnd - timeStart))
         return (Acton.Env.addMod mn te env')
   where actFile             = srcFile paths mn
         outbase             = outBase paths mn
@@ -577,12 +577,12 @@ runRestPasses args paths env0 parsed stubMode = do
                       let relSrcBase = makeRelative (projPath paths) (srcBase paths (A.modname parsed))
                       let actFile = absSrcBase ++ ".act"
 
-                      timingtart <- getTime Monotonic
+                      timeStart <- getTime Monotonic
 
                       envTmp <- Acton.Env.mkEnv (sysTypes paths) (projTypes paths) env0 parsed
                       let env = envTmp { Acton.Env.stub = stubMode }
                       timeEnv <- getTime Monotonic
-                      iff (timing args) $ putStrLn("    Pass: Make environment: " ++ fmtTime (timeEnv - timingtart))
+                      iff (timing args) $ putStrLn("    Pass: Make environment: " ++ fmtTime (timeEnv - timeStart))
 
                       kchecked <- Acton.Kinds.check env parsed
                       iff (kinds args) $ dump "kinds" (Pretty.print kchecked)
@@ -709,7 +709,7 @@ buildExecutable env args paths binTask
                                       setFileMode buildF 0o755
                                       (returnCode, ccStdout, ccStderr) <- readCreateProcessWithExitCode (shell $ ccCmd) ""
                                       case returnCode of
-                                          ExitSuccess ->  putStrLn ("Building executable "++ makeRelative (projPath paths) binFile)
+                                          ExitSuccess -> iff (not (quiet args)) $ putStrLn ("Building executable "++ makeRelative (projPath paths) binFile)
                                           ExitFailure _ -> do printIce "compilation of generated C code of the root actor failed"
                                                               putStrLn $ "cc stdout:\n" ++ ccStdout
                                                               putStrLn $ "cc stderr:\n" ++ ccStderr
