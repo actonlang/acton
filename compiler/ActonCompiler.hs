@@ -485,14 +485,22 @@ doTask args paths env t@(ActonTask mn src m stubMode) = do
         cFile               = outbase ++ ".c"
         oFile               = joinPath [projLib paths, prstr mn] ++  ".o"
 
+cmpFiles a b = liftM2 (==) (readFile a) (readFile b)
 
 runCustomMake paths mn = do
     -- copy header file in place, if it exists
     let srcH = replaceExtension actFile ".h"
-    hExist <- doesFileExist srcH
+    hSrcExist <- doesFileExist srcH
     let hFile = outbase ++ ".h"
-    iff (hExist) (do
-      copyFile srcH hFile)
+    iff (hSrcExist) $ do
+        hFileExist <- doesFileExist hFile
+        if hFileExist
+          then do
+            hSame <- cmpFiles srcH hFile
+            iff (not hSame) $ do
+                copyFile srcH hFile
+          else
+            copyFile srcH hFile
 
     -- run custom make target, if we find a Makefile
     -- since we have no visibility into make target dependencies, we always
