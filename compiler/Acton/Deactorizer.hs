@@ -184,7 +184,7 @@ instance Deact Stmt where
     deact env (VarAssign l [p@(PVar _ n _)] e)
                                     = MutAssign l (selfRef n) <$> deactExp env t e
       where t                       = typeOf env p
-    deact env (After l e1 e2)       = do delta <- deactExp env tInt e1
+    deact env (After l e1 e2)       = do delta <- deactExp env tFloat e1
                                          lambda <- deactExp env t $ Lambda l0 PosNIL KwdNIL e2 fxAction
                                          return $ Expr l $ Call l0 (tApp (eQVar primAFTERf) [t2]) (PosArg delta $ PosArg lambda PosNil) KwdNil
       where t2                      = typeOf env e2

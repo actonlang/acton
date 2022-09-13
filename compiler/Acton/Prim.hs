@@ -170,9 +170,9 @@ scASYNCf            = tSchema [quant a] tASYNC
         a           = TV KType $ name "A"
         tFun'       = tFun fxAsync posNil kwdNil (tVar a)
 
---  $AFTERf         : [A] => action(int, action()->A) -> Msg[A]
+--  $AFTERf         : [A] => action(float, action()->A) -> Msg[A]
 scAFTERf            = tSchema [quant a] tAFTER
-  where tAFTER      = tFun fxAction (posRow tInt $ posRow tFun' posNil) kwdNil (tMsg $ tVar a)
+  where tAFTER      = tFun fxAction (posRow tFloat $ posRow tFun' posNil) kwdNil (tMsg $ tVar a)
         a           = TV KType $ name "A"
         tFun'       = tFun fxAction posNil kwdNil (tVar a)
 
@@ -189,9 +189,9 @@ scASYNCc            = tSchema [quant a] tASYNC
         tCont'      = tFun fxMut (posRow tCont'' posNil) kwdNil tR
         tCont''     = tFun fxMut (posRow (tVar a) posNil) kwdNil tR
 
---  $AFTERc         : [A] => mut(int, mut(mut(A)->$R)->$R) -> Msg[A]
+--  $AFTERc         : [A] => mut(float, mut(mut(A)->$R)->$R) -> Msg[A]
 scAFTERc            = tSchema [quant a] tAFTER
-  where tAFTER      = tFun fxMut (posRow tInt $ posRow tCont' posNil) kwdNil (tMsg $ tVar a)
+  where tAFTER      = tFun fxMut (posRow tFloat $ posRow tCont' posNil) kwdNil (tMsg $ tVar a)
         a           = TV KType $ name "A"
         tCont'      = tFun fxMut (posRow tCont'' posNil) kwdNil tR
         tCont''     = tFun fxMut (posRow (tVar a) posNil) kwdNil tR
@@ -210,9 +210,9 @@ scASYNC             = tSchema [quant a] tASYNC
         tCont'      = tCont fxMut tCont''
         tCont''     = tCont fxMut (tVar a)
 
---  $AFTER          : [A] => mut(int, $Cont[mut,($Cont[mut,A],)]) -> Msg[A]
+--  $AFTER          : [A] => mut(float, $Cont[mut,($Cont[mut,A],)]) -> Msg[A]
 scAFTER             = tSchema [quant a] tAFTER
-  where tAFTER      = tFun fxMut (posRow tInt $ posRow tCont' posNil) kwdNil (tMsg $ tVar a)
+  where tAFTER      = tFun fxMut (posRow tFloat $ posRow tCont' posNil) kwdNil (tMsg $ tVar a)
         a           = TV KType $ name "A"
         tCont'      = tCont fxMut tCont''
         tCont''     = tCont fxMut (tVar a)

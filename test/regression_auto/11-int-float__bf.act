@@ -1,9 +1,0 @@
-# https://github.com/actonlang/acton/issues/11
-actor main(env):
-    var foo = 1
-    var bar = foo * 0.5
-
-    def finish():
-        env.exit(0)
-
-    after foo: finish()
