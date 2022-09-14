@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+
+## [0.11.0] (2022-09-14)
+
 ### Added
 - Apple M1 / M2 CPUs are now supported [#823]
   - aarch64 calling conventions are different for variadic vs fixed functions
