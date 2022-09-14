@@ -3,6 +3,12 @@
 ## Unreleased
 
 
+## [0.11.1] (2022-09-14)
+
+### Testing / CI
+- Fix APT repo job
+
+
 ## [0.11.0] (2022-09-14)
 
 ### Added
@@ -1198,6 +1204,7 @@ then, this second incarnation has been in focus and 0.2.0 was its first version.
 [0.9.0]: https://github.com/actonlang/acton/compare/v0.8.0...v0.9.0
 [0.10.0]: https://github.com/actonlang/acton/compare/v0.9.0...v0.10.0
 [0.11.0]: https://github.com/actonlang/acton/compare/v0.10.0...v0.11.0
+[0.11.1]: https://github.com/actonlang/acton/compare/v0.11.0...v0.11.1
 
 [homebrew-acton#7]: https://github.com/actonlang/homebrew-acton/pull/7
 [homebrew-acton#28]: https://github.com/actonlang/homebrew-acton/pull/28
