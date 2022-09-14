@@ -381,17 +381,18 @@ class TestDbApps(unittest.TestCase):
     p = None
     p2 = None
 
-    def setUp(self):
+    def start_dbc(self):
         self.dbc = DbCluster(self.replication_factor)
         self.dbc.start()
 
-    def tearDown(self):
-        try:
-            dbm = self.dbc.check_membership()
-            if not dbm:
-                print(f"DB membership status on shutdown: {dbm}, check the log files")
-        except Exception as exc:
-            print(f"Got exception during check membership on shutdown: {exc}")
+    def stop_dbc(self):
+        if self.dbc is not None:
+            try:
+                dbm = self.dbc.check_membership()
+                if not dbm:
+                    print(f"DB membership status on shutdown: {dbm}, check the log files")
+            except Exception as exc:
+                print(f"Got exception during check membership on shutdown: {exc}")
 
         if self.p:
             try:
@@ -405,11 +406,21 @@ class TestDbApps(unittest.TestCase):
                 self.p2.wait()
             except:
                 pass
-        self.dbc.stop()
+        try:
+            self.dbc.stop()
+        except:
+            pass
 
+    def restart_dbc(self):
+        self.stop_dbc()
+        self.start_dbc()
+
+    def tearDown(self):
+        self.stop_dbc()
 
     @flakey()
     def test_app(self):
+        self.restart_dbc()
         cmd = ["./test_db_app", "--rts-verbose",
                "--rts-ddb-replication", str(self.replication_factor)
                ] + get_db_args(self.dbc.port_chunk, self.replication_factor)
@@ -424,6 +435,7 @@ class TestDbApps(unittest.TestCase):
 
     @flakey()
     def test_app_resume_tcp_server(self):
+        self.restart_dbc()
         app_port = self.dbc.port_chunk+199
         cmd = ["./rts/ddb_test_server", str(app_port), "--rts-verbose",
                "--rts-ddb-replication", str(self.replication_factor)
@@ -442,6 +454,7 @@ class TestDbApps(unittest.TestCase):
 
     @flakey()
     def test_app_resume_tcp_client(self):
+        self.restart_dbc()
         app_port = self.dbc.port_chunk+199
         # Start TCP server
         srv_cmd = ["./rts/ddb_test_server", str(app_port)]
