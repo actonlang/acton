@@ -177,7 +177,7 @@ class DbCluster:
         if not self.port_chunk:
             # compute random base port between PORT_CHUNK_MIN and PORT_CHUNK_MAX
             # in increments of PORT_CHUNK_SIZE
-            self.port_chunk = random.randint(PORT_CHUNK_MIN/PORT_CHUNK_SIZE, PORT_CHUNK_MAX/PORT_CHUNK_SIZE) * PORT_CHUNK_SIZE
+            self.port_chunk = random.randint(int(PORT_CHUNK_MIN/PORT_CHUNK_SIZE), int(PORT_CHUNK_MAX/PORT_CHUNK_SIZE)) * PORT_CHUNK_SIZE
 
     def start(self):
         """Start up a cluster of num nodes and ensure that memberships look alright
