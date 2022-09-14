@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+### Added
+- Add runacton wrapper to run .act files using shebang [#238]
+  - Write an Acton program in a .act file and add shebang line at top:
+    - `#!/usr/bin/env runacton`
+  - ... and then run the .act file. It will be seamlessly compiled and executed!
+    Magic *whosh*
+
 ### Testing / CI
 - Retry DB test jobs [#853]
   - No longer have to manually re-run CI jobs on failures
