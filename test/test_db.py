@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 
+import functools
 import json
 import locale
 import logging
@@ -23,6 +24,35 @@ PORT_CHUNK_MIN=10000
 PORT_CHUNK_MAX=60000
 
 ACTONDB="../dist/bin/actondb"
+
+def flakey(repeats: int = 5):
+    """Decorator that marks test as flakey (flaky).
+    If applied, executes the test up to three times, marking it as failed only if it fails each time.
+    Note, that use of this decorator is generally discouraged---tests should pass reliably when their assertions are upheld.
+    Example usage
+        @flakey()
+        def test_feature_in_fragile_manner():
+            self.assertTrue(...)
+    """
+
+    def decorator(f):
+        @functools.wraps(f)
+        def inner(*args, **kwargs):
+            # Python 3 clears the exception upon leaving the `except` block
+            # https://docs.python.org/3/reference/compound_stmts.html#the-try-statement
+            preserved_exc = None
+            for _ in range(repeats):
+                try:
+                    return f(*args, **kwargs)
+                except Exception as exc:
+                    preserved_exc = exc
+                    logging.info("Test marked as flaky has failed: %s", exc)
+            raise AssertionError("Flaky test has failed too many times") from preserved_exc
+
+        return inner
+
+    return decorator
+
 
 class MonIntermittentError(Exception):
     pass
@@ -378,6 +408,7 @@ class TestDbApps(unittest.TestCase):
         self.dbc.stop()
 
 
+    @flakey()
     def test_app(self):
         cmd = ["./test_db_app", "--rts-verbose",
                "--rts-ddb-replication", str(self.replication_factor)
@@ -391,6 +422,7 @@ class TestDbApps(unittest.TestCase):
         self.assertEqual(self.p.returncode, 0)
 
 
+    @flakey()
     def test_app_resume_tcp_server(self):
         app_port = self.dbc.port_chunk+199
         cmd = ["./rts/ddb_test_server", str(app_port), "--rts-verbose",
@@ -408,6 +440,7 @@ class TestDbApps(unittest.TestCase):
         self.p.communicate()
 
 
+    @flakey()
     def test_app_resume_tcp_client(self):
         app_port = self.dbc.port_chunk+199
         # Start TCP server

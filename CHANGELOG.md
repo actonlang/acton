@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+### Testing / CI
+- Retry DB test jobs [#853]
+  - No longer have to manually re-run CI jobs on failures
+  - Retry just the DB test itself, which takes a few seconds instead of
+    rerunning entire CI job which takes minutes
+
 
 ## [0.11.1] (2022-09-14)
 
@@ -1181,6 +1187,7 @@ then, this second incarnation has been in focus and 0.2.0 was its first version.
 [#840]: https://github.com/actonlang/acton/pull/840
 [#845]: https://github.com/actonlang/acton/pull/845
 [#846]: https://github.com/actonlang/acton/pull/846
+[#853]: https://github.com/actonlang/acton/issues/853
 
 [0.3.0]: https://github.com/actonlang/acton/releases/tag/v0.3.0
 [0.4.0]: https://github.com/actonlang/acton/compare/v0.3.0...v0.4.0
