@@ -1048,6 +1048,7 @@ then, this second incarnation has been in focus and 0.2.0 was its first version.
 [#307]: https://github.com/actonlang/acton/pull/307
 [#308]: https://github.com/actonlang/acton/pull/308
 [#313]: https://github.com/actonlang/acton/pull/313
+[#315]: https://github.com/actonlang/acton/pull/315
 [#320]: https://github.com/actonlang/acton/pull/320
 [#325]: https://github.com/actonlang/acton/pull/325
 [#327]: https://github.com/actonlang/acton/pull/327
@@ -1084,6 +1085,7 @@ then, this second incarnation has been in focus and 0.2.0 was its first version.
 [#428]: https://github.com/actonlang/acton/pull/428
 [#429]: https://github.com/actonlang/acton/pull/429
 [#430]: https://github.com/actonlang/acton/pull/430
+[#431]: https://github.com/actonlang/acton/issues/431
 [#432]: https://github.com/actonlang/acton/issues/432
 [#434]: https://github.com/actonlang/acton/pull/434
 [#445]: https://github.com/actonlang/acton/issues/445
@@ -1113,11 +1115,14 @@ then, this second incarnation has been in focus and 0.2.0 was its first version.
 [#504]: https://github.com/actonlang/acton/pull/504
 [#506]: https://github.com/actonlang/acton/pull/506
 [#509]: https://github.com/actonlang/acton/pull/509
+[#512]: https://github.com/actonlang/acton/pull/512
+[#514]: https://github.com/actonlang/acton/pull/514
 [#516]: https://github.com/actonlang/acton/pull/516
 [#517]: https://github.com/actonlang/acton/pull/517
 [#518]: https://github.com/actonlang/acton/pull/518
 [#521]: https://github.com/actonlang/acton/pull/521
 [#522]: https://github.com/actonlang/acton/pull/522
+[#527]: https://github.com/actonlang/acton/issues/527
 [#528]: https://github.com/actonlang/acton/pull/528
 [#529]: https://github.com/actonlang/acton/pull/529
 [#530]: https://github.com/actonlang/acton/pull/530
@@ -1125,6 +1130,7 @@ then, this second incarnation has been in focus and 0.2.0 was its first version.
 [#538]: https://github.com/actonlang/acton/pull/538
 [#542]: https://github.com/actonlang/acton/pull/542
 [#546]: https://github.com/actonlang/acton/pull/546
+[#547]: https://github.com/actonlang/acton/issues/547
 [#559]: https://github.com/actonlang/acton/pull/559
 [#570]: https://github.com/actonlang/acton/pull/570
 [#571]: https://github.com/actonlang/acton/pull/571
@@ -1147,6 +1153,25 @@ then, this second incarnation has been in focus and 0.2.0 was its first version.
 [#629]: https://github.com/actonlang/acton/pull/629
 [#631]: https://github.com/actonlang/acton/pull/631
 [#633]: https://github.com/actonlang/acton/pull/633
+[#645]: https://github.com/actonlang/acton/pull/645
+[#655]: https://github.com/actonlang/acton/pull/655
+[#685]: https://github.com/actonlang/acton/pull/685
+[#693]: https://github.com/actonlang/acton/pull/693
+[#698]: https://github.com/actonlang/acton/pull/698
+[#700]: https://github.com/actonlang/acton/pull/700
+[#706]: https://github.com/actonlang/acton/pull/706
+[#719]: https://github.com/actonlang/acton/pull/719
+[#726]: https://github.com/actonlang/acton/pull/726
+[#733]: https://github.com/actonlang/acton/pull/733
+[#752]: https://github.com/actonlang/acton/pull/752
+[#760]: https://github.com/actonlang/acton/pull/760
+[#806]: https://github.com/actonlang/acton/pull/806
+[#808]: https://github.com/actonlang/acton/pull/808
+[#823]: https://github.com/actonlang/acton/pull/823
+[#829]: https://github.com/actonlang/acton/pull/829
+[#840]: https://github.com/actonlang/acton/pull/840
+[#845]: https://github.com/actonlang/acton/pull/845
+[#846]: https://github.com/actonlang/acton/pull/846
 
 [0.3.0]: https://github.com/actonlang/acton/releases/tag/v0.3.0
 [0.4.0]: https://github.com/actonlang/acton/compare/v0.3.0...v0.4.0
