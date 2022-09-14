@@ -247,7 +247,7 @@ jobs:
       - name: "Download artifacts for Debian Linux"
         uses: actions/download-artifact@v2
         with:
-          name: acton-debian
+          name: acton-debs
       - name: "Include new deb in Apt repository"
         run: |
           cd apt
