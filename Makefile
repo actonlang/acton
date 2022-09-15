@@ -278,27 +278,27 @@ lib/rel/libActon.a: stdlib/out/rel/lib/libActonProject.a $(LIBACTON_REL_OFILES)
 	ar rcs $@ $(filter-out stdlib/out/rel/lib/libActonProject.a,$^)
 
 # Include static libs
-LIBBSD_LIBDIR:=$(shell pkg-config --variable=libdir libbsd)
+LIBBSD_LIBDIR:=$(shell pkg-config --variable=libdir libbsd 2>/dev/null)
 LIBBSD_A:=$(shell ls $(LIBBSD_LIBDIR)/libbsd_a.a $(LIBBSD_LIBDIR)/libbsd.a 2>/dev/null | head -n1)
 lib/libbsd_a.a: $(LIBBSD_A)
 	cp $< $@
 
-LIBMD_LIBDIR:=$(shell pkg-config --variable=libdir libmd)
+LIBMD_LIBDIR:=$(shell pkg-config --variable=libdir libmd 2>/dev/null)
 LIBMD_A:=$(shell ls $(LIBMD_LIBDIR)/libmd_a.a $(LIBMD_LIBDIR)/libmd.a 2>/dev/null | head -n1)
 lib/libmd_a.a: $(LIBMD_A)
 	cp $< $@
 
-LIBPROTOBUFC_LIBDIR:=$(shell pkg-config --variable=libdir libprotobuf-c)
+LIBPROTOBUFC_LIBDIR:=$(shell pkg-config --variable=libdir libprotobuf-c 2>/dev/null)
 LIBPROTOBUFC_A:=$(shell ls $(LIBPROTOBUFC_LIBDIR)/libprotobuf-c_a.a $(LIBPROTOBUFC_LIBDIR)/libprotobuf-c.a 2>/dev/null | head -n1)
 lib/libprotobuf-c_a.a: $(LIBPROTOBUFC_A)
 	cp $< $@
 
-LIBUTF8PROC_LIBDIR:=$(shell pkg-config --variable=libdir libutf8proc)
+LIBUTF8PROC_LIBDIR:=$(shell pkg-config --variable=libdir libutf8proc 2>/dev/null)
 LIBUTF8PROC_A:=$(shell ls $(LIBUTF8PROC_LIBDIR)/libutf8proc_a.a $(LIBUTF8PROC_LIBDIR)/libutf8proc.a 2>/dev/null | head -n1)
 lib/libutf8proc_a.a: $(LIBUTF8PROC_A)
 	cp $< $@
 
-LIBUV_LIBDIR:=$(shell pkg-config --variable=libdir libuv)
+LIBUV_LIBDIR:=$(shell pkg-config --variable=libdir libuv 2>/dev/null)
 LIBUV_A:=$(shell ls $(LIBUV_LIBDIR)/libuv_a.a $(LIBUV_LIBDIR)/libuv.a 2>/dev/null | head -n1)
 lib/libuv_a.a: $(LIBUV_A)
 	cp $< $@
