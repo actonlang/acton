@@ -41,12 +41,13 @@ def flakey(repeats: int = 5):
             # Python 3 clears the exception upon leaving the `except` block
             # https://docs.python.org/3/reference/compound_stmts.html#the-try-statement
             preserved_exc = None
-            for _ in range(repeats):
+            for i in range(repeats):
                 try:
                     return f(*args, **kwargs)
                 except Exception as exc:
                     preserved_exc = exc
-                    logging.info("Test marked as flaky has failed: %s", exc)
+                    print("Test marked as flaky has failed: %s", exc)
+                print(f"Retrying... remaining {repeats-i}")
             raise AssertionError("Flaky test has failed too many times") from preserved_exc
 
         return inner
