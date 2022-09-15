@@ -98,7 +98,7 @@ ifeq ($(shell uname -s),Linux)
 ARCHIVES+=lib/libbsd_a.a lib/libmd_a.a
 endif
 
-DIST_BINS=$(ACTONC) dist/bin/actondb
+DIST_BINS=$(ACTONC) dist/bin/actondb dist/bin/runacton
 DIST_HFILES=\
 	dist/rts/io.h \
 	dist/rts/rts.h \
@@ -421,6 +421,12 @@ dist/bin/actondb: backend/actondb
 	cp $< $@.tmp
 	mv $@.tmp $@
 
+dist/bin/runacton: bin/runacton
+	@mkdir -p $(dir $@)
+	cp $< $@.tmp
+	mv $@.tmp $@
+
+
 dist/builtin/%: builtin/%
 	@mkdir -p $(dir $@)
 	cp $< $@
@@ -468,6 +474,7 @@ install:
 	cp -a dist/. $(DESTDIR)/usr/lib/acton/
 	cd $(DESTDIR)/usr/bin && ln -s ../lib/acton/bin/actonc
 	cd $(DESTDIR)/usr/bin && ln -s ../lib/acton/bin/actondb
+	cd $(DESTDIR)/usr/bin && ln -s ../lib/acton/bin/runacton
 
 .PHONY: debian/changelog
 debian/changelog: debian/changelog.in CHANGELOG.md

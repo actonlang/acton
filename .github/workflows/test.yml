@@ -171,17 +171,17 @@ jobs:
           name: acton-macos-11
       - name: "Extract acton"
         run: |
-          ls
           tar jxvf $(ls acton-darwin*.tar.bz2 | tail -n1)
       - name: "Compile acton program"
         run: |
-          echo 'actor main(env):'          > test-runtime.act
+          echo '#!/usr/bin/env runacton'   > test-runtime.act
+          echo 'actor main(env):'          >> test-runtime.act
           echo '    print("Hello, world")' >> test-runtime.act
           echo '    env.exit(0)'           >> test-runtime.act
-          ls
-          acton/bin/actonc --root main test-runtime.act
-          ./test-runtime
-          ./test-runtime | grep "Hello, world"
+          chmod a+x test-runtime.act
+          export PATH=$(pwd)/acton/bin:$PATH
+          ./test-runtime.act
+          ./test-runtime.act | grep "Hello, world"
 
   run-linux:
     needs: build-debs
@@ -213,13 +213,13 @@ jobs:
           actonc --version
       - name: "Compile acton program"
         run: |
-          echo 'actor main(env):'          > test-runtime.act
+          echo '#!/usr/bin/env runacton'   > test-runtime.act
+          echo 'actor main(env):'          >> test-runtime.act
           echo '    print("Hello, world")' >> test-runtime.act
           echo '    env.exit(0)'           >> test-runtime.act
-          ls
-          actonc --root main test-runtime.act
-          ./test-runtime
-          ./test-runtime | grep "Hello, world"
+          chmod a+x test-runtime.act
+          ./test-runtime.act
+          ./test-runtime.act | grep "Hello, world"
 
 
   update-apt-repo:
