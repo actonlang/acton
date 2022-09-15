@@ -207,9 +207,8 @@ jobs:
           name: acton-debs
       - name: "Install acton from .deb"
         run: |
-          apt-get update
-          dpkg -i deb/acton_*.deb || true
-          apt-get -fy install
+          apt update
+          apt install -y ./deb/acton_*.deb
           actonc --version
       - name: "Compile acton program"
         run: |
