@@ -285,12 +285,26 @@ instance Lift Expr where
     ll env (Call l e p KwdNil)
       | Just (e',vts) <- freefun env e  = do p' <- ll env p
                                              return $ Call l e' (addArgs vts p') KwdNil
+      | e == eQVar primEVAL,                                                                      -- DEACT!
+        PosArg e' PosNil <- p,
+        closedType env e'               = do e' <- ll env e'
+                                             return $ Dot l e' attrEval
+      | e == eQVar primEXEC,                                                                      -- DEACT!
+        PosArg e' PosNil <- p,
+        closedType env e'               = do e' <- ll env e'
+                                             return $ Dot l e' attrExec
       | closedType env e                = do e' <- llSub env e
                                              p' <- ll env p
                                              return $ Call l (eDot e' attrCall) p' KwdNil
       | otherwise                       = do e' <- llSub env e
                                              p' <- ll env p
                                              return $ Call l e' p' KwdNil
+
+    ll env (Async l e)
+      | closedType env e                = do e <- ll env e                                        -- DEACT!
+                                             return $ Dot l e attrAsyn
+      | otherwise                       = do e <- ll env e
+                                             return $ Async l e
 
     ll env e0@(Lambda l p KwdNIL e fx)  = do e' <- ll env1 e
                                              let vts = restrict (locals env) (free e' \\ bound p)
@@ -328,14 +342,13 @@ instance Lift Expr where
 llDot env l e n ts
   | closedType env e0                   = Dot l <$> llSub env e <*> pure n
   | Var _ x <- e,
-    NClass{} <- findQName x env         = closureConvert env (Lambda l0 par KwdNIL (call' x) fx) t [] []
+    NClass{} <- findQName x env         = closureConvert env (Lambda l0 par KwdNIL (calldot x n) fx) t [] []
   | otherwise                           = do e' <- llSub env e
-                                             n' <- newName "obj"
-                                             closureConvert env (Lambda l0 par KwdNIL (call n') fx) t [(n',t')] [e']
+                                             x <- newName "obj"
+                                             closureConvert env (Lambda l0 par KwdNIL (calldot (NoQ x) n) fx) t [(x,t')] [e']
   where par                             = pPar paramNames' (conv p)
         TFun _ fx p _ t                 = typeOf env e0
-        call n'                         = Call l0 (eDot (eVar n') n) (pArg par) KwdNil
-        call' x                         = Call l0 (eDot (eQVar x) n) (pArg par) KwdNil
+        calldot x n                     = Call l0 (eDot (eQVar x) n) (pArg par) KwdNil
         t'                              = typeOf env e
         e0                              = tApp (Dot l e n) (conv ts)
 
