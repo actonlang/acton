@@ -134,7 +134,7 @@ struct $Cont$class $Cont$methods = {
     $Cont$__bool__,
     $Cont$__str__,
     $Cont$__str__,
-    NULL
+    NULL                /* __call__ */
 };
 
 ///////////////////////////////////////////////////////

@@ -455,7 +455,7 @@ scEVAL              = tSchema [quant r, quant t] tEVAL
         r           = TV PRow (name "R")
         t           = TV KType (name "T")
 
---  $EXEC           : [A,B,C] => (proc(*A,**B)->C) -> proc(*A,**B)->Nonenew....
+--  $EXEC           : [A,B,C] => (proc(*A,**B)->C) -> proc(*A,**B)->None
 scEXEC              = tSchema [quant a, quant b, quant c] tEXEC
   where tEXEC       = tFun0 [procFun $ tVar c] (procFun tNone)
         procFun c   = tFun fxProc (tVar a) (tVar b) c

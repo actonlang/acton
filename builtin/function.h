@@ -4,6 +4,7 @@ struct $proc;
 struct $action;
 struct $mut;
 struct $pure;
+struct $function;
 struct $Cont;
 struct $Msg;
 
@@ -11,6 +12,7 @@ typedef struct $proc *$proc;
 typedef struct $action *$action;
 typedef struct $mut *$mut;
 typedef struct $pure *$pure;
+typedef struct $function *$function;
 typedef struct $Cont *$Cont;
 typedef struct $Msg *$Msg;
 
@@ -134,8 +136,6 @@ $str $Cont$__str__($Cont);
 void $Cont$__serialize__($Cont, $Serial$state);
 $Cont $Cont$__deserialize__($Cont, $Serial$state);
 
-struct $function;
-typedef struct $function *$function;
 struct $function$class {
     char *$GCINFO;
     int $class_id;
