@@ -10,6 +10,11 @@
     Magic *whosh*
 
 ### Testing / CI
+- Homebrew Formula moved to actonlang/acton repo [#868]
+  - Building a brew bottle is now part of regular CI testing
+  - Ensures that our Homebrew Formula is correct with regards to dependencies
+    etc, which has previously been a long standing issue
+  - mirrored to actonlang/homebrew-acton when we release
 - Retry DB test jobs [#853]
   - No longer have to manually re-run CI jobs on failures
   - Retry just the DB test itself, which takes a few seconds instead of
@@ -1195,6 +1200,7 @@ then, this second incarnation has been in focus and 0.2.0 was its first version.
 [#845]: https://github.com/actonlang/acton/pull/845
 [#846]: https://github.com/actonlang/acton/pull/846
 [#853]: https://github.com/actonlang/acton/issues/853
+[#868]: https://github.com/actonlang/acton/pull/868
 
 [0.3.0]: https://github.com/actonlang/acton/releases/tag/v0.3.0
 [0.4.0]: https://github.com/actonlang/acton/compare/v0.3.0...v0.4.0
