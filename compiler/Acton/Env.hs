@@ -821,8 +821,7 @@ castable env (TCon _ c1) (TCon _ c2)
   where search                              = findAncestor env c1 (tcname c2)
 
 castable env (TFun _ fx1 p1 k1 t1) (TFun _ fx2 p2 k2 t2)
-  | fx1 == fxProc , fx2 /= fxProc           = castable env fx1 fx2 && castable env p2 p1 && castable env k2 k1 && castable env (tMsg t1) t2
-  | otherwise                               = castable env fx1 fx2 && castable env p2 p1 && castable env k2 k1 && castable env t1 t2
+                                            = castable env fx1 fx2 && castable env p2 p1 && castable env k2 k1 && castable env t1 t2
 
 castable env (TTuple _ p1 k1) (TTuple _ p2 k2)
                                             = castable env p1 p2 && castable env k1 k2
