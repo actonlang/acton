@@ -216,10 +216,17 @@ jobs:
         #       /usr/local to /usr/local/Homebrew so we can find
         #       /usr/local/Homewbrew/Library while on M1 it is in
         #       /opt/homebrew/Library.
+        # COMMIT_SHA is either the SHA from the pull request or read directly
+        # from GITHUB_SHA. It is needed because GITHUB_SHA, which works
+        # correctly for a push event, does not work for pull_request events as
+        # GITHUB_SHA points to a PR merge commit or something like that... it's
+        # weird and doesn't work.
         run: |
           mkdir -p $(brew --prefix | sed -e 's,^/usr/local,/usr/local/Homebrew,')/Library/Taps/actonlang/
           sed -i -e 's,^  url.*,  url "https://github.com/actonlang/acton/archive/refs/tags/v${{ steps.get_version.outputs.version }}.tar.gz",' homebrew/Formula/acton.rb
-          sed -i -e 's/^\(  head.*,\) branch.*/\1 revision: "${{github.event.pull_request.head.sha}}"/' homebrew/Formula/acton.rb
+          export PR_SHA=${{github.event.pull_request.head.sha}}
+          export COMMIT_SHA=${PR_SHA:-${GITHUB_SHA}}
+          sed -i -e "s/^\(  head.*,\) branch.*/\1 revision: \"${COMMIT_SHA}\"/" homebrew/Formula/acton.rb
           cat homebrew/Formula/acton.rb
           git diff homebrew/Formula/acton.rb
           cp -av homebrew $(brew --prefix | sed -e 's,^/usr/local,/usr/local/Homebrew,')/Library/Taps/actonlang/homebrew-acton
