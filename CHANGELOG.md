@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Fixed
+- Homebrew Formula test [#882]
+
+
 ## [0.11.4] (2022-09-19)
 
 ### Testing / CI
@@ -1224,6 +1228,7 @@ then, this second incarnation has been in focus and 0.2.0 was its first version.
 [#846]: https://github.com/actonlang/acton/pull/846
 [#853]: https://github.com/actonlang/acton/issues/853
 [#868]: https://github.com/actonlang/acton/pull/868
+[#882]: https://github.com/actonlang/acton/issues/882
 
 [0.3.0]: https://github.com/actonlang/acton/releases/tag/v0.3.0
 [0.4.0]: https://github.com/actonlang/acton/compare/v0.3.0...v0.4.0
