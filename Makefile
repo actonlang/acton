@@ -1,6 +1,6 @@
 include common.mk
 CHANGELOG_VERSION=$(shell grep '^\#\# \[[0-9]' CHANGELOG.md | sed 's/\#\# \[\([^]]\{1,\}\)].*/\1/' | head -n1)
-GIT_VERSION_TAG=$(shell git tag --points-at HEAD | sed -e 's/^v//')
+GIT_VERSION_TAG=$(shell git tag --points-at HEAD 2>/dev/null | sed -e 's/^v//')
 
 PKGCONFIG=$(shell which pkg-config)
 ifeq ($(PKGCONFIG),)
