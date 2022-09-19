@@ -6,7 +6,7 @@ class Acton < Formula
   license "BSD-3-Clause"
   head "https://github.com/actonlang/acton.git", branch: "main"
 
-  depends_on "ghc" => :build
+  depends_on "ghc@8.10" => :build
   depends_on "haskell-stack" => :build
   depends_on "libuv" => :build
   depends_on "pkg-config" => :build

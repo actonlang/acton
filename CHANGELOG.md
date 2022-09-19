@@ -4,6 +4,8 @@
 
 ### Fixed
 - Homebrew Formula test [#882]
+- Homebrew Formula now pins GHC dependency to version 8.10 [#885]
+  - This is aligned with the stack resolver version we're currently using
 
 
 ## [0.11.4] (2022-09-19)
@@ -1229,6 +1231,7 @@ then, this second incarnation has been in focus and 0.2.0 was its first version.
 [#853]: https://github.com/actonlang/acton/issues/853
 [#868]: https://github.com/actonlang/acton/pull/868
 [#882]: https://github.com/actonlang/acton/issues/882
+[#885]: https://github.com/actonlang/acton/issues/885
 
 [0.3.0]: https://github.com/actonlang/acton/releases/tag/v0.3.0
 [0.4.0]: https://github.com/actonlang/acton/compare/v0.3.0...v0.4.0
