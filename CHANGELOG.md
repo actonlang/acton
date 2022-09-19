@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+
+## [0.11.2] (2022-09-19)
+
+There are additions but they're so minor you get 'em for free in a patch
+release! ;)
+
 ### Added
 - Add runacton wrapper to run .act files using shebang [#238]
   - Write an Acton program in a .act file and add shebang line at top:
@@ -1225,6 +1231,7 @@ then, this second incarnation has been in focus and 0.2.0 was its first version.
 [0.10.0]: https://github.com/actonlang/acton/compare/v0.9.0...v0.10.0
 [0.11.0]: https://github.com/actonlang/acton/compare/v0.10.0...v0.11.0
 [0.11.1]: https://github.com/actonlang/acton/compare/v0.11.0...v0.11.1
+[0.11.2]: https://github.com/actonlang/acton/compare/v0.11.1...v0.11.2
 
 [homebrew-acton#7]: https://github.com/actonlang/homebrew-acton/pull/7
 [homebrew-acton#28]: https://github.com/actonlang/homebrew-acton/pull/28
