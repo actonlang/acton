@@ -501,7 +501,7 @@ jobs:
       - run: wget https://github.com/actonlang/acton/archive/refs/tags/v${{ steps.get_version.outputs.version }}.tar.gz
       - run: sha256sum v${{ steps.get_version.outputs.version }}.tar.gz
       - id: shasum
-        run: echo "::set-output name=sum::$(sha256sum ${{ steps.get_version.outputs.version }}.tar.gz | cut -d' ' -f1)"
+        run: echo "::set-output name=sum::$(sha256sum v${{ steps.get_version.outputs.version }}.tar.gz | cut -d' ' -f1)"
       - name: "Check out code of our brew repo"
         uses: actions/checkout@v2
         with:
