@@ -498,8 +498,8 @@ jobs:
       - name: "Get the version from common.mk"
         id: get_version
         run: echo ::set-output name=version::$(grep VERSION= common.mk | cut -d = -f 2)
-      - run: wget https://github.com/actonlang/acton/archive/refs/tags/${{ steps.get_version.outputs.version }}.tar.gz
-      - run: sha256sum ${{ steps.get_version.outputs.version }}.tar.gz
+      - run: wget https://github.com/actonlang/acton/archive/refs/tags/v${{ steps.get_version.outputs.version }}.tar.gz
+      - run: sha256sum v${{ steps.get_version.outputs.version }}.tar.gz
       - id: shasum
         run: echo "::set-output name=sum::$(sha256sum ${{ steps.get_version.outputs.version }}.tar.gz | cut -d' ' -f1)"
       - name: "Check out code of our brew repo"
@@ -512,16 +512,16 @@ jobs:
           cp homebrew/Formula/acton.rb homebrew-acton/Formula/acton.rb
       - name: "Update brew formula for acton with new version"
         run: |
-          sed -i -e 's,^  url.*,  url "https://github.com/actonlang/acton/archive/refs/tags/${{ steps.get_version.outputs.version }}.tar.gz",' -e 's/^  sha256.*/  sha256 "${{ steps.shasum.outputs.sum }}"/' homebrew-acton/Formula/acton.rb
+          sed -i -e 's,^  url.*,  url "https://github.com/actonlang/acton/archive/refs/tags/v${{ steps.get_version.outputs.version }}.tar.gz",' -e 's/^  sha256.*/  sha256 "${{ steps.shasum.outputs.sum }}"/' homebrew-acton/Formula/acton.rb
       - name: "Create Pull Request"
         uses: peter-evans/create-pull-request@v3
         with:
           path: homebrew-acton
           token: ${{ secrets.ACTBOT_PAT }}
-          branch: acton-${{ steps.get_version.outputs.version }}
-          title: "acton ${{ steps.get_version.outputs.version }}"
+          branch: acton-v${{ steps.get_version.outputs.version }}
+          title: "acton v${{ steps.get_version.outputs.version }}"
           body: |
             Automatic update triggered by release on actonlang/acton.
           committer: Acton Bot <actbot@acton-lang.org>
-          commit-message: "acton ${{ steps.get_version.outputs.version }}"
+          commit-message: "acton v${{ steps.get_version.outputs.version }}"
           signoff: false
