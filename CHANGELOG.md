@@ -3,6 +3,12 @@
 ## Unreleased
 
 
+## [0.11.3] (2022-09-19)
+
+### Testing / CI
+- Minor correction to Homebrew release automation
+
+
 ## [0.11.2] (2022-09-19)
 
 There are additions but they're so minor you get 'em for free in a patch

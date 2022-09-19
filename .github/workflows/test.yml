@@ -493,6 +493,11 @@ jobs:
     # Depend on all test jobs so we don't update brew repo in case anything fails
     needs: [test-macos, test-linux, build-debs, brew-macos]
     steps:
+      - name: "Check out code of main acton repo"
+        uses: actions/checkout@v2
+      - name: "Get the version from common.mk"
+        id: get_version
+        run: echo ::set-output name=version::$(grep VERSION= common.mk | cut -d = -f 2)
       - run: wget https://github.com/actonlang/acton/archive/refs/tags/${{ steps.get_version.outputs.version }}.tar.gz
       - run: sha256sum ${{ steps.get_version.outputs.version }}.tar.gz
       - id: shasum
@@ -501,23 +506,17 @@ jobs:
         uses: actions/checkout@v2
         with:
           repository: actonlang/homebrew-acton
-      - name: "Check out code of main acton repo"
-        uses: actions/checkout@v2
-        with:
-          repository: actonlang/acton
-          path: acton
-      - name: "Get the version"
-        id: get_version
-        run: echo ::set-output name=version::$(grep VERSION= acton/common.mk | cut -d = -f 2)
+          path: homebrew-acton
       - name: "Update formula in homebrew-acton from acton repo"
         run: |
-          cp acton/homebrew/Formula/acton.rb Formula/acton.rb
+          cp homebrew/Formula/acton.rb homebrew-acton/Formula/acton.rb
       - name: "Update brew formula for acton with new version"
         run: |
-          sed -i -e 's,^  url.*,  url "https://github.com/actonlang/acton/archive/refs/tags/${{ steps.get_version.outputs.version }}.tar.gz",' -e 's/^  sha256.*/  sha256 "${{ steps.shasum.outputs.sum }}"/' Formula/acton.rb
+          sed -i -e 's,^  url.*,  url "https://github.com/actonlang/acton/archive/refs/tags/${{ steps.get_version.outputs.version }}.tar.gz",' -e 's/^  sha256.*/  sha256 "${{ steps.shasum.outputs.sum }}"/' homebrew-acton/Formula/acton.rb
       - name: "Create Pull Request"
         uses: peter-evans/create-pull-request@v3
         with:
+          path: homebrew-acton
           token: ${{ secrets.ACTBOT_PAT }}
           branch: acton-${{ steps.get_version.outputs.version }}
           title: "acton ${{ steps.get_version.outputs.version }}"
