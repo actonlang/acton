@@ -40,13 +40,14 @@ class Acton < Formula
   end
 
   test do
-    system "#{bin}/actonc", "--version"
-    (testpath/"hello.act").write <<~EOS
+    testapp = (testpath/"hello.act")
+    testapp.write <<~EOS
       #!/usr/bin/env runacton
       actor main(env):
           print("Hello World!")
           await async env.exit(0)
     EOS
-    assert_equal "Hello World!\n", shell_output("./hello")
+    testapp.chmod 0755
+    assert_equal "Hello World!\n", shell_output(testapp)
   end
 end

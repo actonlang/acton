@@ -243,6 +243,7 @@ jobs:
           brew fetch --HEAD --retry actonlang/acton/acton --build-bottle --force
           brew install --HEAD --only-dependencies --verbose --build-bottle actonlang/acton/acton
           brew install --HEAD --verbose --build-bottle actonlang/acton/acton
+          brew test --verbose actonlang/acton/acton
           # Cannot run on --HEAD
           #brew audit actonlang/acton/acton --online --git --skip-style
       - name: "Test compile acton program"
