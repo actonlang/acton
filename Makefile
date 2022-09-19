@@ -34,7 +34,7 @@ CFLAGS+= -I. -Ideps -Wno-int-to-pointer-cast -Wno-pointer-to-int-cast -Wformat -
 CFLAGS_REL= -O3 -DREL
 CFLAGS_DEV= -g -DDEV
 LDFLAGS+=-Llib
-LDLIBS+=-lprotobuf-c -lm -lpthread
+LDLIBS+=-lprotobuf-c_a -lm -lpthread
 
 # look for jemalloc
 JEM_LIB?=$(wildcard /usr/lib/x86_64-linux-gnu/libjemalloc.a)
