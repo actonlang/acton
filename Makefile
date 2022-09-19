@@ -1,5 +1,6 @@
 include common.mk
 CHANGELOG_VERSION=$(shell grep '^\#\# \[[0-9]' CHANGELOG.md | sed 's/\#\# \[\([^]]\{1,\}\)].*/\1/' | head -n1)
+GIT_VERSION_TAG=$(shell git tag --points-at HEAD | sed -e 's/^v//')
 
 PKGCONFIG=$(shell which pkg-config)
 ifeq ($(PKGCONFIG),)
@@ -86,6 +87,11 @@ help:
 version-check:
 ifneq ($(VERSION), $(CHANGELOG_VERSION))
 	$(error Version in common.mk ($(VERSION)) differs from last version in CHANGELOG.md ($(CHANGELOG_VERSION)))
+endif
+ifneq ($(GIT_VERSION_TAG),) # if we are on a git tag..
+ifneq ($(VERSION),$(GIT_VERSION_TAG)) # ..ensure the git tag is same as version in common.mk
+	$(error Current git tag ($(GIT_VERSION_TAG)) differs from version in common.mk ($(VERSION)))
+endif
 endif
 
 ENV_FILES=$(wildcard builtin/env.*)
