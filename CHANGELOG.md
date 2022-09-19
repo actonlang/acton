@@ -25,6 +25,11 @@ release! ;)
   - No longer have to manually re-run CI jobs on failures
   - Retry just the DB test itself, which takes a few seconds instead of
     rerunning entire CI job which takes minutes
+- New automatic release process
+  - Removes adding git tag as manual step
+  - Now push branch `release-vX.Y.Z` updating `common.mk` & version in
+    `CHANGELOG.md`, once this PR is merged, a new workflow adds the git tag
+    which in turn triggers the release build
 
 
 ## [0.11.1] (2022-09-14)
