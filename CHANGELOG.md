@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+
+## [0.11.5] (2022-09-20)
+
 ### Fixed
 - Homebrew Formula test [#882]
 - Homebrew Formula now pins GHC dependency to version 8.10 [#885]
