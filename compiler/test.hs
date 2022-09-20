@@ -71,15 +71,20 @@ compilerTests =
   [
     testCase "partial rebuild" $ do
         (returnCode, cmdOut, cmdErr) <- readCreateProcessWithExitCode (shell $ "rm -rf ../test/compiler/rebuild/out") ""
-        testBuild "" ExitSuccess True "../test/compiler/rebuild/"
+        testBuild "" ExitSuccess False "../test/compiler/rebuild/"
         (returnCode, cmdOut, cmdErr) <- readCreateProcessWithExitCode (shell $ "touch ../test/compiler/rebuild/src/rebuild.act") ""
-        testBuild "" ExitSuccess True "../test/compiler/rebuild/"
+        testBuild "" ExitSuccess False "../test/compiler/rebuild/"
+  , testCase "rebuild with stdlib import" $ do
+        (returnCode, cmdOut, cmdErr) <- readCreateProcessWithExitCode (shell $ "rm -rf ../test/compiler/rebuild-import/out") ""
+        testBuild "" ExitSuccess False "../test/compiler/rebuild-import/"
+        testBuild "" ExitSuccess False "../test/compiler/rebuild-import/"
   ]
 
 actoncProjTests =
   testGroup "compiler project tests"
   [ testCase "simple project" $ do
-        testBuild "" ExitSuccess True "test/actonc/project/simple"
+        testBuild "" ExitSuccess False "test/actonc/project/simple"
+        testBuild "" ExitSuccess False "test/actonc/project/simple"
 
   , testCase "with missing src/ dir" $ do
         testBuild "" (ExitFailure 1) False "test/actonc/project/missing_src"
