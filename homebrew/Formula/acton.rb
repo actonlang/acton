@@ -21,6 +21,7 @@ class Acton < Formula
     depends_on "libbsd" => :build
     depends_on "gcc"
     depends_on "gmp"
+    depends_on "util-linux"
   end
 
   def install
