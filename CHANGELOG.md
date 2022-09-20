@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Fixed
+- Homebrew Formula now includes util-linux for Linux
+  - required for <uuid/uuid.h>
+
 
 ## [0.11.5] (2022-09-20)
 
