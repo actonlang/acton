@@ -461,13 +461,13 @@ doTask opts paths env t@(ActonTask mn src m stubMode) = do
         return (Acton.Env.addMod mn te env)
       else do
         createDirectoryIfMissing True (getModPath (projTypes paths) mn)
-        runRestPasses opts paths env m stubMode
+        env' <- runRestPasses opts paths env m stubMode
           `catch` handle "Compilation error" generalError src paths mn
           `catch` handle "Compilation error" Acton.Env.compilationError src paths mn
           `catch` handle "Type error" Acton.Types.typeError src paths mn
         timeEnd <- getTime Monotonic
         iff (not (C.quiet opts)) $ putStrLn("   Finished compilation in  " ++ fmtTime(timeEnd - timeStart))
-        return (Acton.Env.addMod mn te env')
+        return env'
   where actFile             = srcFile paths mn
         outbase             = outBase paths mn
         tyFile              = outbase ++ ".ty"
