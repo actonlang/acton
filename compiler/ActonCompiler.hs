@@ -659,6 +659,9 @@ runRestPasses args paths env0 parsed stubMode = do
                               ccCmd = ("cc -Werror=return-type " ++ pedantArg ++
                                        (if (dev args) then " -g " else "") ++
                                        " -c " ++
+                                       " -I/opt/homebrew/include" ++
+                                       " -I/usr/local/include" ++
+                                       " -I/usr/include" ++
                                        " -I" ++ wd ++
                                        " -I" ++ wd ++ "/out" ++
                                        " -I" ++ sysPath paths ++
