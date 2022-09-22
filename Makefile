@@ -551,7 +551,7 @@ test-stdlib:
 
 
 .PHONY: clean
-clean: clean-compiler clean-deps clean-distribution clean-backend clean-rts
+clean: clean-deps clean-distribution clean-backend clean-rts
 
 .PHONY: clean-backend
 clean-backend:
