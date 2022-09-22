@@ -443,19 +443,20 @@ scSEAL              = tSchema [quant a, quant b, quant c] tWRAP
         b           = TV KType (name "B")
         c           = TV KType (name "C")
 
---  $EVAL           : [R,T] => (proc(*R)->T) -> proc(*R)->T
-scEVAL              = tSchema [quant r, quant t] tEVAL
+--  $EVAL           : [A,B,C] => (proc(*A,**B)->C) -> proc(*A,**B)->C
+scEVAL              = tSchema [quant a, quant b, quant c] tEVAL
   where tEVAL       = tFun0 [procFun] procFun
-        procFun     = tFun fxProc (tVar r) kwdNil (tVar t)
-        r           = TV PRow (name "R")
-        t           = TV KType (name "T")
+        procFun     = tFun fxProc (tVar a) (tVar b) (tVar c)
+        a           = TV PRow (name "A")
+        b           = TV KRow (name "B")
+        c           = TV KType (name "C")
 
 --  $EXEC           : [A,B,C] => (proc(*A,**B)->C) -> proc(*A,**B)->None
 scEXEC              = tSchema [quant a, quant b, quant c] tEXEC
   where tEXEC       = tFun0 [procFun $ tVar c] (procFun tNone)
         procFun c   = tFun fxProc (tVar a) (tVar b) c
-        a           = TV KType (name "A")
-        b           = TV KType (name "B")
+        a           = TV PRow (name "A")
+        b           = TV KRow (name "B")
         c           = TV KType (name "C")
 
 --  protocol $Wrapped[X]: pass
@@ -470,8 +471,8 @@ proWrapped          = NProto [quant x] [] te
         tSelf       = tVar fxSelf
         q           = [quant a, quant b, quant c]
         x           = TV KFX (name "X")
-        a           = TV KType (name "A")
-        b           = TV KType (name "B")
+        a           = TV PRow (name "A")
+        b           = TV KRow (name "B")
         c           = TV KType (name "C")
 
 --  class $WrappedC[S,X]: pass
@@ -487,8 +488,8 @@ clWrapped           = NClass [quant s, quant x] [] te
         q           = [quant a, quant b, quant c]
         s           = TV KFX (name "S")
         x           = TV KFX (name "X")
-        a           = TV KType (name "A")
-        b           = TV KType (name "B")
+        a           = TV PRow (name "A")
+        b           = TV KRow (name "B")
         c           = TV KType (name "C")
 
 
