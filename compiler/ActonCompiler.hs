@@ -547,13 +547,22 @@ checkUptoDate paths actFile outFiles imps = do
         -- except for actFile, these are *potential* source files which might
         -- not actually exist...
         potSrcFiles     = [actFile, extCFile, srcCFile, srcHFile]
-        impOK iTime mn  = do let impFile = outBase paths mn ++ ".ty"
-                             ok <- System.Directory.doesFileExist impFile
-                             if ok
-                               then do
-                                   impfileTime <- System.Directory.getModificationTime impFile
-                                   return (impfileTime < iTime)
-                               else error ("********************\nError: cannot find interface file "++impFile)
+        impOK iTime mn  = do
+                             impFile <- findTy paths mn
+                             impfileTime <- System.Directory.getModificationTime impFile
+                             return (impfileTime < iTime)
+        -- find .ty file by looking both in local project and in stdlib
+        findTy paths mn = do
+                             let localImpName = outBase paths mn ++ ".ty"
+                                 stdlibImpName = joinPath (sysTypes paths : A.modPath mn) ++ ".ty"
+                             projExist <- System.Directory.doesFileExist localImpName
+                             stdlibExist <- System.Directory.doesFileExist stdlibImpName
+                             let filePath = case (projExist, stdlibExist) of
+                                   (True, True) -> localImpName
+                                   (True, False) -> localImpName
+                                   (False, True) -> stdlibImpName
+                                   (False, False) -> error("ERROR: Unable to find interface file")
+                             return filePath
 
 printIce errMsg = do ccVer <- getCcVer
                      putStrLn(
