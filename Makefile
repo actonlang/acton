@@ -432,7 +432,6 @@ dist/bin/runacton: bin/runacton
 	cp $< $@.tmp
 	mv $@.tmp $@
 
-
 dist/builtin/%: builtin/%
 	@mkdir -p $(dir $@)
 	cp $< $@
@@ -447,6 +446,10 @@ dist/types/%: stdlib/out/types/% stdlib
 
 dist/lib/%: lib/%
 	@mkdir -p $(dir $@)
+	cp $< $@
+
+dist/completion/acton.bash-completion: completion/acton.bash-completion
+	mkdir -p $(dir $@)
 	cp $< $@
 
 .PHONY: distribution clean-distribution

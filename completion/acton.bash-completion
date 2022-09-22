@@ -1,0 +1,1 @@
+source <(actonc --bash-completion-script `which actonc`)
