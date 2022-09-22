@@ -24,12 +24,16 @@ gPrim s             = GName mPrim (name s)
 
 primKW s            = name ("$" ++ s)
 
-primFunction        = gPrim "function"
-
 primProc            = gPrim "proc"
 primAction          = gPrim "action"
 primMut             = gPrim "mut"
 primPure            = gPrim "pure"
+
+primClosure fx
+  | fx == fxProc    = primProc
+  | fx == fxAction  = primAction
+  | fx == fxMut     = primMut
+  | fx == fxPure    = primPure
 
 cProc r t           = TC primProc [r,t]
 cAction r t         = TC primAction [r,t]
@@ -147,7 +151,6 @@ primEnv             = [     (noq primASYNCf,        NDef scASYNCf NoDec),
 
                             (noq primFORMAT,        NDef scFORMAT NoDec),
 
-                            (noq primFunction,      clFunction),
                             (noq primProc,          clProc),
                             (noq primAction,        clAction),
                             (noq primMut,           clMut),
@@ -187,17 +190,6 @@ primEnv             = [     (noq primASYNCf,        NDef scASYNCf NoDec),
 
 tSequenceListWild   = tCon (TC qnSequence [tList tWild, tWild])
 tCollectionListWild = tCon (TC qnCollection [tList tWild, tWild])
-
-
-
---  class function[X,A,B,C] (value):
---    __call__   : X(*A,**B) -> C
-clFunction          = NClass [quant x, quant a, quant b, quant c] (leftpath [cValue]) te
-  where te          = [ (attrCall, NSig (monotype $ tFun (tVar x) (tVar a) (tVar b) (tVar c)) NoDec) ]
-        x           = TV KFX (name "X")
-        a           = TV PRow (name "A")
-        b           = TV KRow (name "B")
-        c           = TV KType (name "C")
 
 
 --  class $proc[R,T] (value):
@@ -257,9 +249,8 @@ clActor             = NClass [] (leftpath [cValue]) te
 --  class $R (): pass
 clR                 = NClass [] [] []
 
---  fxProc[A] (function[proc,(A,),(),$R]):
---      pass
-clCont              = NClass [quant a] (leftpath [TC primFunction [fxProc, posRow (tVar a) posNil, kwdNil, tR], cValue]) []
+--  class $cont[A] ($proc[(A,),$R]): pass
+clCont              = NClass [quant a] (leftpath [TC primProc [posRow (tVar a) posNil, tR], cValue]) []
   where a           = TV KType (name "A")
 
 

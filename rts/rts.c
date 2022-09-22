@@ -1629,7 +1629,6 @@ void $register_rts () {
   $register_force(ACTION_ID,&$action$methods);
   $register_force(MUT_ID,&$mut$methods);
   $register_force(PURE_ID,&$pure$methods);
-  $register_force(CLOS_ID,&$function$methods);
   $register_force(CONT_ID,&$Cont$methods);
   $register_force(DONE_ID,&$Done$methods);
   $register_force(CONSTCONT_ID,&$ConstCont$methods);

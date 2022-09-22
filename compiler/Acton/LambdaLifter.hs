@@ -258,7 +258,7 @@ closureConvert env lambda t0 vts0 es    = do n <- newName "lambda"
         p'                              = prowOf p
         base | Just x <- isCont fx p' t = TC primCont [x] : base0
              | otherwise                = base0
-        base0                           = [TC primFunction [fx,p',kwdNil,t], cValue]
+        base0                           = [TC (primClosure fx) [p',t], cValue]
         vts                             = subst s vts0
         body                            = props ++ [Decl l0 [initDef], Decl l0 [callDef]]
         props                           = [ Signature l0 [v] (monotype t) Property | (v,t) <- subst s vts ]
@@ -418,13 +418,7 @@ instance Conv TSchema where
 instance Conv Type where
     conv (TFun l fx p TNil{} t)
       | Just x <- isCont fx p t         = TCon l (TC primCont [x])
---      | otherwise                       = TCon l (TC primFunction [conv fx, conv p, kwdNil, conv t])
-      | otherwise                       = TCon l (TC clos [conv p, conv t])
-      where clos                        = case tfx fx of
-                                              FXProc -> primProc
-                                              FXAction -> primAction
-                                              FXMut -> primMut
-                                              FXPure -> primPure
+      | otherwise                       = TCon l (TC (primClosure fx) [conv p, conv t])
     conv (TCon l c)                     = TCon l (conv c)
     conv (TTuple l p k)                 = TTuple l (conv p) (conv k)
     conv (TOpt l t)                     = TOpt l (conv t)
