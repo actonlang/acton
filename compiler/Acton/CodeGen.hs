@@ -261,12 +261,13 @@ declModule env (s : ss)             = vcat [ gen env t <+> genTopName env n <> s
         env1                        = gdefine te env
 
 
-declDecl env (Def _ n q p KwdNIL (Just t) b d m)
+declDecl env (Def _ n q p KwdNIL (Just t) b d fx)
   | hasNotImpl b                    = gen env t <+> genTopName env n <+> parens (gen env p) <> semi
-  | otherwise                       = (gen env t <+> genTopName env n <+> parens (gen env p) <+> char '{') $+$
+  | otherwise                       = (gen env t1 <+> genTopName env n <+> parens (gen env p) <+> char '{') $+$
                                       nest 4 (genSuite env1 b) $+$
                                       char '}'
   where env1                        = setRet t $ ldefine (envOf p) $ defineTVars q env
+        t1                          = if fx == fxAction then tMsg t else t
 
 declDecl env (Class _ n q as b)     = vcat [ declDecl env1 d{ dname = methodname n (dname d) } | Decl _ ds <- b', d@Def{} <- ds ] $+$
                                       declSerialize env1 n c props sup_c $+$
@@ -533,6 +534,8 @@ genCall env [row] (Var _ n) (PosArg s@Strings{} (PosArg tup PosNil))
         flatten e                   = foldr PosArg PosNil $ map (DotI l0 e) [0..]
 genCall env [t] (Var _ n) PosNil
   | n == primNEWACTOR               = gen env n <> parens (gen env t)
+genCall env ts (Var _ n) (PosArg e PosNil)
+  | n `elem` [primEVAL,primEXEC]    = gen env (tApp e ts)
 genCall env ts e@(Var _ n) p
   | NClass{} <- info                = genNew env n p
   | NDef{} <- info                  = (instCast env ts e $ gen env e) <> parens (gen env p)
@@ -667,6 +670,7 @@ instance Gen Expr where
     gen env e@Strings{}             = gen env primToStr <> parens(hsep (map pretty (sval e)))
     gen env e@BStrings{}            = gen env primToBytes <> parens(hsep (map pretty (sval e)))
     gen env (Call _ e p _)          = genCall env [] e p
+    gen env (Async _ e)             = gen env e
     gen env (TApp _ e ts)           = genInst env ts e
     gen env (IsInstance _ e c)      = gen env primISINSTANCE <> parens (gen env e <> comma <+> gen env c)
     gen env (Dot _ e n)             = genDot env [] e n
