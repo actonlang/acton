@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+### Fixed
+- Add /opt/homebrew/include to header include path [#892]
+  - Actually fixes builds on M1!
+  - This has "worked" because the only M2 where Acton was tested also had header
+    files in /usr/local/include but on a fresh install it errored out.
+- Fix up-to-date check in compiler for imported modules from stdlib [#890]
+
 
 ## [0.11.6] (2022-09-20)
 
