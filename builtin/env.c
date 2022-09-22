@@ -29,108 +29,110 @@ extern int return_val;
 
 ///////////////////////////////////////////////////////////////////////////////////////////
 // START GENERATED __builtin__.act
-$NoneType $l$1lambda$__init__ ($l$1lambda p$self, $Env __self__, $str s) {
+$NoneType $l$1cont$__init__ ($l$1cont p$self, $Env __self__, $str s) {
     p$self->__self__ = __self__;
     p$self->s = s;
     return $None;
 }
-$R $l$1lambda$__call__ ($l$1lambda p$self, $Cont c$cont) {
+$R $l$1cont$__call__ ($l$1cont p$self, $Cont c$cont) {                          // REALLY __eval__, __exec__
     $Env __self__ = p$self->__self__;
     $str s = p$self->s;
     return __self__->$class->stdout_write$local(__self__, s, c$cont);
 }
-void $l$1lambda$__serialize__ ($l$1lambda self, $Serial$state state) {
+void $l$1cont$__serialize__ ($l$1cont self, $Serial$state state) {
     $step_serialize(self->__self__, state);
     $step_serialize(self->s, state);
 }
-$l$1lambda $l$1lambda$__deserialize__ ($l$1lambda self, $Serial$state state) {
+$l$1cont $l$1cont$__deserialize__ ($l$1cont self, $Serial$state state) {
     if (!self) {
         if (!state) {
-            self = malloc(sizeof(struct $l$1lambda));
-            self->$class = &$l$1lambda$methods;
+            self = malloc(sizeof(struct $l$1cont));
+            self->$class = &$l$1cont$methods;
             return self;
         }
-        self = $DNEW($l$1lambda, state);
+        self = $DNEW($l$1cont, state);
     }
     self->__self__ = $step_deserialize(state);
     self->s = $step_deserialize(state);
     return self;
 }
-$l$1lambda $l$1lambda$new($Env p$1, $str p$2) {
-    $l$1lambda $tmp = malloc(sizeof(struct $l$1lambda));
-    $tmp->$class = &$l$1lambda$methods;
-    $l$1lambda$methods.__init__($tmp, p$1, p$2);
+$l$1cont $l$1cont$new($Env p$1, $str p$2) {
+    $l$1cont $tmp = malloc(sizeof(struct $l$1cont));
+    $tmp->$class = &$l$1cont$methods;
+    $l$1cont$methods.__init__($tmp, p$1, p$2);
     return $tmp;
 }
-struct $l$1lambda$class $l$1lambda$methods;
-$NoneType $l$2lambda$__init__ ($l$2lambda p$self, $Env __self__, $function cb) {
+struct $l$1cont$class $l$1cont$methods;
+
+$NoneType $l$2cont$__init__ ($l$2cont p$self, $Env __self__, $action cb) {
     p$self->__self__ = __self__;
     p$self->cb = cb;
     return $None;
 }
-$R $l$2lambda$__call__ ($l$2lambda p$self, $Cont c$cont) {
+$R $l$2cont$__call__ ($l$2cont p$self, $Cont c$cont) {                              // REALLY __eval__, __exec__
     $Env __self__ = p$self->__self__;
-    $function cb = p$self->cb;
+    $action cb = p$self->cb;
     return __self__->$class->stdin_install$local(__self__, cb, c$cont);
 }
-void $l$2lambda$__serialize__ ($l$2lambda self, $Serial$state state) {
+void $l$2cont$__serialize__ ($l$2cont self, $Serial$state state) {
     $step_serialize(self->__self__, state);
     $step_serialize(self->cb, state);
 }
-$l$2lambda $l$2lambda$__deserialize__ ($l$2lambda self, $Serial$state state) {
+$l$2cont $l$2cont$__deserialize__ ($l$2cont self, $Serial$state state) {
     if (!self) {
         if (!state) {
-            self = malloc(sizeof(struct $l$2lambda));
-            self->$class = &$l$2lambda$methods;
+            self = malloc(sizeof(struct $l$2cont));
+            self->$class = &$l$2cont$methods;
             return self;
         }
-        self = $DNEW($l$2lambda, state);
+        self = $DNEW($l$2cont, state);
     }
     self->__self__ = $step_deserialize(state);
     self->cb = $step_deserialize(state);
     return self;
 }
-$l$2lambda $l$2lambda$new($Env p$1, $function p$2) {
-    $l$2lambda $tmp = malloc(sizeof(struct $l$2lambda));
-    $tmp->$class = &$l$2lambda$methods;
-    $l$2lambda$methods.__init__($tmp, p$1, p$2);
+$l$2cont $l$2cont$new($Env p$1, $action p$2) {
+    $l$2cont $tmp = malloc(sizeof(struct $l$2cont));
+    $tmp->$class = &$l$2cont$methods;
+    $l$2cont$methods.__init__($tmp, p$1, p$2);
     return $tmp;
 }
-struct $l$2lambda$class $l$2lambda$methods;
-$NoneType $l$3lambda$__init__ ($l$3lambda p$self, $Env __self__, $int n) {
+struct $l$2cont$class $l$2cont$methods;
+
+$NoneType $l$3cont$__init__ ($l$3cont p$self, $Env __self__, $int n) {
     p$self->__self__ = __self__;
     p$self->n = n;
     return $None;
 }
-$R $l$3lambda$__call__ ($l$3lambda p$self, $Cont c$cont) {
+$R $l$3cont$__call__ ($l$3cont p$self, $Cont c$cont) {                              // REALLY __eval__, __exec__
     $Env __self__ = p$self->__self__;
     $int n = p$self->n;
     return __self__->$class->exit$local(__self__, n, c$cont);
 }
-void $l$3lambda$__serialize__ ($l$3lambda self, $Serial$state state) {
+void $l$3cont$__serialize__ ($l$3cont self, $Serial$state state) {
     $step_serialize(self->__self__, state);
     $step_serialize(self->n, state);
 }
-$l$3lambda $l$3lambda$__deserialize__ ($l$3lambda self, $Serial$state state) {
+$l$3cont $l$3cont$__deserialize__ ($l$3cont self, $Serial$state state) {
     if (!self) {
         if (!state) {
-            self = malloc(sizeof(struct $l$3lambda));
-            self->$class = &$l$3lambda$methods;
+            self = malloc(sizeof(struct $l$3cont));
+            self->$class = &$l$3cont$methods;
             return self;
         }
-        self = $DNEW($l$3lambda, state);
+        self = $DNEW($l$3cont, state);
     }
     self->__self__ = $step_deserialize(state);
     self->n = $step_deserialize(state);
     return self;
 }
-$l$3lambda $l$3lambda$new($Env p$1, $int p$2) {
-    $l$3lambda $tmp = malloc(sizeof(struct $l$3lambda));
-    $tmp->$class = &$l$3lambda$methods;
-    $l$3lambda$methods.__init__($tmp, p$1, p$2);
+$l$3cont $l$3cont$new($Env p$1, $int p$2) {
+    $l$3cont $tmp = malloc(sizeof(struct $l$3cont));
+    $tmp->$class = &$l$3cont$methods;
+    $l$3cont$methods.__init__($tmp, p$1, p$2);
     return $tmp;
 }
-struct $l$3lambda$class $l$3lambda$methods;
+struct $l$3cont$class $l$3cont$methods;
 $NoneType $WorldAuth$__init__ ($WorldAuth self) {
     return $None;
 }
@@ -149,13 +151,13 @@ $WorldAuth $WorldAuth$__deserialize__ ($WorldAuth self, $Serial$state state) {
 }
 struct $WorldAuth$class $WorldAuth$methods;
 $Msg $Env$stdout_write ($Env __self__, $str s) {
-    return $ASYNC((($Actor)__self__), (($Cont)$l$1lambda$new((($Env)__self__), s)));
+    return $ASYNC((($Actor)__self__), (($Cont)$l$1cont$new((($Env)__self__), s)));
 }
-$Msg $Env$stdin_install ($Env __self__, $function cb) {
-    return $ASYNC((($Actor)__self__), (($Cont)$l$2lambda$new((($Env)__self__), cb)));
+$Msg $Env$stdin_install ($Env __self__, $action cb) {
+    return $ASYNC((($Actor)__self__), (($Cont)$l$2cont$new((($Env)__self__), cb)));
 }
 $Msg $Env$exit ($Env __self__, $int n) {
-    return $ASYNC((($Actor)__self__), (($Cont)$l$3lambda$new((($Env)__self__), n)));
+    return $ASYNC((($Actor)__self__), (($Cont)$l$3cont$new((($Env)__self__), n)));
 }
 // END GENERATED __builtin__.act
 ///////////////////////////////////////////////////////////////////////////////////////////
@@ -189,15 +191,15 @@ void read_stdin(uv_stream_t *stream, ssize_t nread, const uv_buf_t *buf) {
         }
     } else if (nread > 0) {
         if (stream->data) {
-            $function1 cb = stream->data;
-            cb->$class->__call__(cb, to$bytes_len(buf->base, nread));
+            $action cb = stream->data;
+            cb->$class->__call__(cb, to$bytes_len(buf->base, nread));           // REALLY __asyn__
         }
     }
 
     if (buf->base)
         free(buf->base);
 }
-$R $Env$stdin_install$local ($Env __self__, $function cb, $Cont c$cont) {
+$R $Env$stdin_install$local ($Env __self__, $action cb, $Cont c$cont) {
     // This should be the only call in env that does IO stuff, so it is safe to
     // pin affinity here (and not earlier)..
     pin_actor_affinity();
@@ -245,31 +247,31 @@ void $__init__ () {
     ///////////////////////////////////////////////////////////////////////////////////////
     // START GENERATED __builtin__.act $__init__
     {
-        $l$1lambda$methods.$GCINFO = "$l$1lambda";
-        $l$1lambda$methods.$superclass = ($Super$class)&$Cont$methods;
-        $l$1lambda$methods.__init__ = $l$1lambda$__init__;
-        $l$1lambda$methods.__call__ = $l$1lambda$__call__;
-        $l$1lambda$methods.__serialize__ = $l$1lambda$__serialize__;
-        $l$1lambda$methods.__deserialize__ = $l$1lambda$__deserialize__;
-        $register(&$l$1lambda$methods);
+        $l$1cont$methods.$GCINFO = "$l$1cont";
+        $l$1cont$methods.$superclass = ($Super$class)&$Cont$methods;
+        $l$1cont$methods.__init__ = $l$1cont$__init__;
+        $l$1cont$methods.__call__ = $l$1cont$__call__;
+        $l$1cont$methods.__serialize__ = $l$1cont$__serialize__;
+        $l$1cont$methods.__deserialize__ = $l$1cont$__deserialize__;
+        $register(&$l$1cont$methods);
     }
     {
-        $l$2lambda$methods.$GCINFO = "$l$2lambda";
-        $l$2lambda$methods.$superclass = ($Super$class)&$Cont$methods;
-        $l$2lambda$methods.__init__ = $l$2lambda$__init__;
-        $l$2lambda$methods.__call__ = $l$2lambda$__call__;
-        $l$2lambda$methods.__serialize__ = $l$2lambda$__serialize__;
-        $l$2lambda$methods.__deserialize__ = $l$2lambda$__deserialize__;
-        $register(&$l$2lambda$methods);
+        $l$2cont$methods.$GCINFO = "$l$2cont";
+        $l$2cont$methods.$superclass = ($Super$class)&$Cont$methods;
+        $l$2cont$methods.__init__ = $l$2cont$__init__;
+        $l$2cont$methods.__call__ = $l$2cont$__call__;
+        $l$2cont$methods.__serialize__ = $l$2cont$__serialize__;
+        $l$2cont$methods.__deserialize__ = $l$2cont$__deserialize__;
+        $register(&$l$2cont$methods);
     }
     {
-        $l$3lambda$methods.$GCINFO = "$l$3lambda";
-        $l$3lambda$methods.$superclass = ($Super$class)&$Cont$methods;
-        $l$3lambda$methods.__init__ = $l$3lambda$__init__;
-        $l$3lambda$methods.__call__ = $l$3lambda$__call__;
-        $l$3lambda$methods.__serialize__ = $l$3lambda$__serialize__;
-        $l$3lambda$methods.__deserialize__ = $l$3lambda$__deserialize__;
-        $register(&$l$3lambda$methods);
+        $l$3cont$methods.$GCINFO = "$l$3cont";
+        $l$3cont$methods.$superclass = ($Super$class)&$Cont$methods;
+        $l$3cont$methods.__init__ = $l$3cont$__init__;
+        $l$3cont$methods.__call__ = $l$3cont$__call__;
+        $l$3cont$methods.__serialize__ = $l$3cont$__serialize__;
+        $l$3cont$methods.__deserialize__ = $l$3cont$__deserialize__;
+        $register(&$l$3cont$methods);
     }
     {
         $WorldAuth$methods.$GCINFO = "$WorldAuth";

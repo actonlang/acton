@@ -58,7 +58,12 @@
 #define             NOTIMPLEMENTEDERROR_ID      43
 #define         VALUEERROR_ID                   44
 
-#define PREASSIGNED 45
+#define PROC_ID 45
+#define ACTION_ID 46
+#define MUT_ID 47
+#define PURE_ID 48
+
+#define PREASSIGNED 49
 
 
 /* 

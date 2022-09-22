@@ -94,9 +94,9 @@ $Iterator $enumerate($Iterable wit, $WORD iter, $int start) {
 
 // filter ////////////////////////////////////////////////////////////////////////////////
 
-void $Iterator$filter_init($Iterator$filter self, $Iterator it,  $function1 f) {
-    self->it = it;
-    self->f = f;
+void $Iterator$filter_init($Iterator$filter self, $Iterator it,  $pure f) {
+  self->it = it;
+  self->f = f;
 }
 
 $bool $Iterator$filter_bool($Iterator$filter self) {
@@ -132,20 +132,20 @@ struct $Iterator$filter$class $Iterator$filter$methods = {"$Iterator$filter",UNA
                                                           $Iterator$filter_serialize, $Iterator$filter$_deserialize, 
                                                           $Iterator$filter_bool,$Iterator$filter_str,$Iterator$filter_str, $Iterator$filter_next};
 
-$Iterator$filter $Iterator$filter$new($Iterator it, $function1 f) {
+$Iterator$filter $Iterator$filter$new($Iterator it, $pure f) {
     return $NEW($Iterator$filter, it, f);
 }
 
-$Iterator $filter($Iterable wit, $function1 f, $WORD iter) {
-    $Iterator it = wit->$class->__iter__(wit,iter);
-    return ($Iterator)$Iterator$filter$new(it,f);
+$Iterator $filter($Iterable wit, $pure f, $WORD iter) {
+  $Iterator it = wit->$class->__iter__(wit,iter);
+  return ($Iterator)$Iterator$filter$new(it,f);
 }
 
 // map ////////////////////////////////////////////////////////////////////////////////
 
-void $Iterator$map_init($Iterator$map self, $Iterator it, $function1 f) {
-    self->it = it;
-    self->f = f;
+void $Iterator$map_init($Iterator$map self, $Iterator it, $pure f) {
+  self->it = it;
+  self->f = f;
 }
 
 $bool $Iterator$map_bool($Iterator$map self) {
@@ -181,13 +181,13 @@ struct $Iterator$map$class $Iterator$map$methods = {"$Iterator$map",UNASSIGNED,(
                                                     $Iterator$map_serialize, $Iterator$map$_deserialize,  
                                                     $Iterator$map_bool,$Iterator$map_str,$Iterator$map_str, $Iterator$map_next};
 
-$Iterator$map $Iterator$map$new($Iterator it, $function1 f) {
+$Iterator$map $Iterator$map$new($Iterator it, $pure f) {
     return $NEW($Iterator$map, it, f);
 }
 
-$Iterator $map($Iterable wit, $function1 f, $WORD iter) {
-    $Iterator it = wit->$class->__iter__(wit,iter);
-    return ($Iterator)$Iterator$map$new(it,f);
+$Iterator $map($Iterable wit, $pure f, $WORD iter) {
+  $Iterator it = wit->$class->__iter__(wit,iter);
+  return ($Iterator)$Iterator$map$new(it,f);
 }
 
 

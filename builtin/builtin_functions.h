@@ -43,7 +43,7 @@ struct $Iterator$filter$class {
   char *$GCINFO;
   int $class_id;
   $Super$class $superclass;
-  void (*__init__)($Iterator$filter, $Iterator, $function1);
+  void (*__init__)($Iterator$filter, $Iterator, $pure);
   void (*__serialize__)($Iterator$filter,$Serial$state);
   $Iterator$filter (*__deserialize__)($Iterator$filter,$Serial$state);
   $bool (*__bool__)($Iterator$filter);
@@ -55,13 +55,13 @@ struct $Iterator$filter$class {
 struct $Iterator$filter {
   struct $Iterator$filter$class *$class;
   $Iterator it;
-  $function1 f;
+  $pure f;
 };
 
 extern struct $Iterator$filter$class $Iterator$filter$methods;
-$Iterator$filter $Iterator$filter$new($Iterator, $function1);
+$Iterator$filter $Iterator$filter$new($Iterator, $pure);
 
-$Iterator $filter($Iterable wit, $function1, $WORD iter);
+$Iterator $filter($Iterable wit, $pure, $WORD iter);
 
 // map ////////////////////////////////////////////////////////////
 
@@ -72,7 +72,7 @@ struct $Iterator$map$class {
   char *$GCINFO;
   int $class_id;
   $Super$class $superclass;
-  void (*__init__)($Iterator$map, $Iterator, $function1);
+  void (*__init__)($Iterator$map, $Iterator, $pure);
   void (*__serialize__)($Iterator$map,$Serial$state);
   $Iterator$map (*__deserialize__)($Iterator$map,$Serial$state);
   $bool (*__bool__)($Iterator$map);
@@ -84,13 +84,13 @@ struct $Iterator$map$class {
 struct $Iterator$map {
   struct $Iterator$map$class *$class;
   $Iterator it;
-  $function1 f;
+  $pure f;
 };
 
 extern struct $Iterator$map$class $Iterator$map$methods;
-$Iterator$map $Iterator$map$new($Iterator, $function1);
+$Iterator$map $Iterator$map$new($Iterator, $pure);
 
-$Iterator $map($Iterable wit, $function1, $WORD iter);
+$Iterator $map($Iterable wit, $pure, $WORD iter);
 
 
 // zip ////////////////////////////////////////////////////////////

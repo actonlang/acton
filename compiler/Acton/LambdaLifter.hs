@@ -418,7 +418,13 @@ instance Conv TSchema where
 instance Conv Type where
     conv (TFun l fx p TNil{} t)
       | Just x <- isCont fx p t         = TCon l (TC primCont [x])
-      | otherwise                       = TCon l (TC primFunction [conv fx, conv p, kwdNil, conv t])
+--      | otherwise                       = TCon l (TC primFunction [conv fx, conv p, kwdNil, conv t])
+      | otherwise                       = TCon l (TC clos [conv p, conv t])
+      where clos                        = case tfx fx of
+                                              FXProc -> primProc
+                                              FXAction -> primAction
+                                              FXMut -> primMut
+                                              FXPure -> primPure
     conv (TCon l c)                     = TCon l (conv c)
     conv (TTuple l p k)                 = TTuple l (conv p) (conv k)
     conv (TOpt l t)                     = TOpt l (conv t)

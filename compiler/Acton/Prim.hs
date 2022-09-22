@@ -204,15 +204,17 @@ clFunction          = NClass [quant x, quant a, quant b, quant c] (leftpath [cVa
 --      __eval__    : proc(*R) -> T
 --      __exec__    : proc(*R) -> None
 clProc              = NClass [quant r, quant t] (leftpath [cValue]) te
-  where te          = [ (attrEval, NSig (monotype $ tFun fxProc (tVar r) kwdNil (tVar t)) NoDec),
-                        (attrExec, NSig (monotype $ tFun fxProc (tVar r) kwdNil tNone) NoDec) ]
+  where te          = [ --(attrEval, NSig (monotype $ tFun fxProc (tVar r) kwdNil (tVar t)) NoDec),
+                        --(attrExec, NSig (monotype $ tFun fxProc (tVar r) kwdNil tNone) NoDec) ]
+                        (attrCall, NSig (monotype $ tFun fxProc (tVar r) kwdNil tNone) NoDec) ]
         r           = TV PRow (name "R")
         t           = TV KType (name "T")
 
 --  class $action[R,T] ($proc[R,T], value):
 --      __asyn__    : action(*R) -> T
 clAction            = NClass [quant r, quant t] (leftpath [cProc (tVar r) (tVar t), cValue]) te
-  where te          = [ (attrAsyn, NSig (monotype $ tFun fxAction (tVar r) kwdNil (tVar t)) NoDec) ]
+  where te          = [ --(attrAsyn, NSig (monotype $ tFun fxAction (tVar r) kwdNil (tVar t)) NoDec) ]
+                      ]
         r           = TV PRow (name "R")
         t           = TV KType (name "T")
 
@@ -220,14 +222,16 @@ clAction            = NClass [quant r, quant t] (leftpath [cProc (tVar r) (tVar 
 --  class $mut[R,T] ($proc[R,T], value):
 --      __call__    : mut(*R) -> T
 clMut               = NClass [quant r, quant t] (leftpath [cProc (tVar r) (tVar t), cValue]) te
-  where te          = [ (attrCall, NSig (monotype $ tFun fxMut (tVar r) kwdNil (tVar t)) NoDec) ]
+  where te          = [ --(attrCall, NSig (monotype $ tFun fxMut (tVar r) kwdNil (tVar t)) NoDec) ]
+                      ]
         r           = TV PRow (name "R")
         t           = TV KType (name "T")
 
 --  class $pure[R,T] ($mut[R,T], $proc[R,T], value):
 --      __call__    : pure(*R) -> T
 clPure              = NClass [quant r, quant t] (leftpath [cMut (tVar r) (tVar t), cProc (tVar r) (tVar t), cValue]) te
-  where te          = [ (attrCall, NSig (monotype $ tFun fxPure (tVar r) kwdNil (tVar t)) NoDec) ]
+  where te          = [ --(attrCall, NSig (monotype $ tFun fxPure (tVar r) kwdNil (tVar t)) NoDec) ]
+                      ]
         r           = TV PRow (name "R")
         t           = TV KType (name "T")
 
