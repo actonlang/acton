@@ -3,6 +3,7 @@ Section: devel
 Priority: optional
 Maintainer: Kristian Larsson <kristian@spritelink.net>
 Build-Depends:
+ bash-completion,
  debhelper-compat (= 13),
  gcc,
  haskell-stack,

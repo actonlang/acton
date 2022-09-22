@@ -38,6 +38,7 @@ class Acton < Formula
     bin.install "dist/bin/actondb"
     bin.install "dist/bin/runacton"
     prefix.install Dir["dist/*"]
+    bash_completion.install "completion/acton.bash-completion"
   end
 
   test do

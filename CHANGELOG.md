@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+### Added
+- Bash completion is now part of the Debian packages & brew formula
+
 ### Fixed
 - Add /opt/homebrew/include to header include path [#892]
   - Actually fixes builds on M1!
