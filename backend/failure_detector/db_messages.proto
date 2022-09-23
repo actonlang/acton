@@ -175,17 +175,18 @@ message QueueQueryMessage {
 	required int32 app_id=3;
 	required int32 shard_id=4;
 	required int32 consumer_id=5;
+	required int32 group_id=6;
 
-	required int32 queue_index=6;
+	required int32 queue_index=7;
 
-	required int32 status=7;
+	required int32 status=8;
 	
-	repeated VersionedCellMessage cells=8;
+	repeated VersionedCellMessage cells=9;
 
-	required bytes txnid=9;
-	required int64 nonce=10;
+	required bytes txnid=10;
+	required int64 nonce=11;
 	
-	required int32 mtype=11;
+	required int32 mtype=12;
 }
 
 
