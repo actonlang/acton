@@ -21,7 +21,7 @@ void net$$DNS$lookup_a__on_resolve (uv_getaddrinfo_t *req, int status, struct ad
         char errmsg[1024] = "DNS lookup error: ";
         uv_strerror_r(status, errmsg + strlen(errmsg), sizeof(errmsg)-strlen(errmsg));
         $action f = cb_data->on_error;
-        f->$class->__call__(f, to$str(errmsg));                     // REALLY __asyn__
+        f->$class->__asyn__(f, to$str(errmsg));
 
         uv_freeaddrinfo(dns_res);
         free(cb_data->hints);
@@ -38,7 +38,7 @@ void net$$DNS$lookup_a__on_resolve (uv_getaddrinfo_t *req, int status, struct ad
     }
 
     $action f = cb_data->on_resolve;
-    f->$class->__call__(f, $res);                                   // REALLY __asyn__
+    f->$class->__asyn__(f, $res);
 
     uv_freeaddrinfo(dns_res);
     free(cb_data->hints);
@@ -77,7 +77,7 @@ void net$$DNS$lookup_aaaa__on_resolve (uv_getaddrinfo_t *req, int status, struct
         char errmsg[1024] = "DNS lookup error: ";
         uv_strerror_r(status, errmsg + strlen(errmsg), sizeof(errmsg)-strlen(errmsg));
         $action f = cb_data->on_error;
-        f->$class->__call__(f, to$str(errmsg));                             // REALLY __asyn__
+        f->$class->__asyn__(f, to$str(errmsg));
 
         uv_freeaddrinfo(dns_res);
         free(cb_data->hints);
@@ -95,7 +95,7 @@ void net$$DNS$lookup_aaaa__on_resolve (uv_getaddrinfo_t *req, int status, struct
     }
 
     $action f = cb_data->on_resolve;
-    f->$class->__call__(f, $res);                                           // REALLY __asyn__
+    f->$class->__asyn__(f, $res);
 
     uv_freeaddrinfo(dns_res);
     free(cb_data->hints);
@@ -141,7 +141,7 @@ void net$$TCPIPConnection__on_receive(uv_stream_t *stream, ssize_t nread, const 
         if (stream->data) {
             net$$TCPIPConnection __self__ = stream->data;
             $action2 f = __self__->on_receive;
-            f->$class->__call__(f, __self__, to$bytes_len(buf->base, nread));   // REALLY __asyn__
+            f->$class->__asyn__(f, __self__, to$bytes_len(buf->base, nread));
         }
     }
 
@@ -157,7 +157,7 @@ void on_connect(uv_connect_t *connect_req, int status) {
         uv_strerror_r(status, errmsg + strlen(errmsg), sizeof(errmsg)-strlen(errmsg));
         log_warn(errmsg);
         $action2 f = __self__->on_error;
-        f->$class->__call__(f, __self__, to$str(errmsg));                       // REALLY __asyn__
+        f->$class->__asyn__(f, __self__, to$str(errmsg));
         // TODO: free()
         return;
     }
@@ -169,12 +169,12 @@ void on_connect(uv_connect_t *connect_req, int status) {
         uv_strerror_r(r, errmsg + strlen(errmsg), sizeof(errmsg)-strlen(errmsg));
         log_warn(errmsg);
         $action2 f = __self__->on_error;
-        f->$class->__call__(f, __self__, to$str(errmsg));                       // REALLY __asyn__
+        f->$class->__asyn__(f, __self__, to$str(errmsg));
         return;
     }
 
     $action f = __self__->on_connect;
-    f->$class->__call__(f, __self__);                                           // REALLY __asyn__
+    f->$class->__asyn__(f, __self__);
 }
 
 $R net$$TCPIPConnection$_init (net$$TCPIPConnection __self__, $Cont c$cont) {
@@ -208,7 +208,7 @@ $R net$$TCPIPConnection$write$local (net$$TCPIPConnection __self__, $bytes data,
         uv_strerror_r(r, errmsg + strlen(errmsg), sizeof(errmsg)-strlen(errmsg));
         log_warn(errmsg);
         $action2 f = __self__->on_error;
-        f->$class->__call__(f, __self__, to$str(errmsg));                       // REALLY __asyn__
+        f->$class->__asyn__(f, __self__, to$str(errmsg));
     }
     return $R_CONT(c$cont, $None);
 }
@@ -216,7 +216,7 @@ $R net$$TCPIPConnection$write$local (net$$TCPIPConnection __self__, $bytes data,
 $NoneType net$$TCPIPConnection$__resume__ (net$$TCPIPConnection __self__) {
     __self__->_socket = to$int(-1);
     $action2 f = __self__->on_error;
-    f->$class->__call__(f, __self__, to$str("resume"));                         // REALLY __asyn__
+    f->$class->__asyn__(f, __self__, to$str("resume"));
     return $None;
 }
 
@@ -228,7 +228,7 @@ void on_new_connection(uv_stream_t *server, int status) {
         uv_strerror_r(status, errmsg + strlen(errmsg), sizeof(errmsg)-strlen(errmsg));
         log_warn(errmsg);
         $action2 f = __self__->on_error;
-        f->$class->__call__(f, __self__, to$str(errmsg));                       // REALLY __asyn__
+        f->$class->__asyn__(f, __self__, to$str(errmsg));
         // TODO: free()
         return;
     }
@@ -241,7 +241,7 @@ void on_new_connection(uv_stream_t *server, int status) {
         uv_strerror_r(r, errmsg + strlen(errmsg), sizeof(errmsg)-strlen(errmsg));
         log_warn(errmsg);
         $action2 f = __self__->on_error;
-        f->$class->__call__(f, __self__, to$str(errmsg));                       // REALLY __asyn__
+        f->$class->__asyn__(f, __self__, to$str(errmsg));
         // TODO: free()
         return;
     }
@@ -265,7 +265,7 @@ $R net$$TCPListener$_init (net$$TCPListener __self__, $Cont c$cont) {
         uv_strerror_r(r, errmsg + strlen(errmsg), sizeof(errmsg)-strlen(errmsg));
         log_warn(errmsg);
         $action2 f = __self__->on_listen_error;
-        f->$class->__call__(f, __self__, to$str(errmsg));                       // REALLY __asyn__
+        f->$class->__asyn__(f, __self__, to$str(errmsg));
         // TODO: free() & return
         return $R_CONT(c$cont, $None);
     }
@@ -276,7 +276,7 @@ $R net$$TCPListener$_init (net$$TCPListener __self__, $Cont c$cont) {
         uv_strerror_r(r, errmsg + strlen(errmsg), sizeof(errmsg)-strlen(errmsg));
         log_warn(errmsg);
         $action2 f = __self__->on_listen_error;
-        f->$class->__call__(f, __self__, to$str(errmsg));                       // REALLY __asyn__
+        f->$class->__asyn__(f, __self__, to$str(errmsg));
         // TODO: free() & return
         return $R_CONT(c$cont, $None);
     }
@@ -287,7 +287,7 @@ $R net$$TCPListener$_init (net$$TCPListener __self__, $Cont c$cont) {
         uv_strerror_r(r, errmsg + strlen(errmsg), sizeof(errmsg)-strlen(errmsg));
         log_warn(errmsg);
         $action2 f = __self__->on_listen_error;
-        f->$class->__call__(f, __self__, to$str(errmsg));                       // REALLY __asyn__
+        f->$class->__asyn__(f, __self__, to$str(errmsg));
         // TODO: free()
         return $R_CONT(c$cont, $None);
     }
@@ -298,7 +298,7 @@ $R net$$TCPListener$_init (net$$TCPListener __self__, $Cont c$cont) {
 $NoneType net$$TCPListener$__resume__ (net$$TCPListener __self__) {
     __self__->_stream = to$int(-1);
     $action2 f = __self__->on_listen_error;
-    f->$class->__call__(f, __self__, to$str("resume"));                         // REALLY __asyn__
+    f->$class->__asyn__(f, __self__, to$str("resume"));
     return $None;
 }
 
@@ -311,7 +311,7 @@ void net$$TCPListenConnection__on_receive(uv_stream_t *stream, ssize_t nread, co
         if (stream->data) {
             net$$TCPListenConnection __self__ = stream->data;
             $action2 f = __self__->on_receive;
-            f->$class->__call__(f, __self__, to$bytes_len(buf->base, nread));   // REALLY __asyn__
+            f->$class->__asyn__(f, __self__, to$bytes_len(buf->base, nread));
         }
     }
 
@@ -328,7 +328,7 @@ $R net$$TCPListenConnection$_init (net$$TCPListenConnection __self__, $Cont c$co
         uv_strerror_r(r, errmsg + strlen(errmsg), sizeof(errmsg)-strlen(errmsg));
         log_warn(errmsg);
         $action2 f = __self__->on_error;
-        f->$class->__call__(f, __self__, to$str(errmsg));                       // REALLY __asyn__
+        f->$class->__asyn__(f, __self__, to$str(errmsg));
         return $R_CONT(c$cont, $None);
     }
 
@@ -349,7 +349,7 @@ $R net$$TCPListenConnection$write$local (net$$TCPListenConnection __self__, $byt
         uv_strerror_r(r, errmsg + strlen(errmsg), sizeof(errmsg)-strlen(errmsg));
         log_warn(errmsg);
         $action2 f = __self__->on_error;
-        f->$class->__call__(f, __self__, to$str(errmsg));                       // REALLY __asyn__
+        f->$class->__asyn__(f, __self__, to$str(errmsg));
     }
     return $R_CONT(c$cont, $None);
 }

@@ -26,7 +26,7 @@ void exit_handler(uv_process_t *req, int64_t exit_status, int term_signal) {
         uv_close((uv_handle_t *)stdin, NULL);
     uv_close((uv_handle_t *)req, NULL);
     $action3 f = process_data->on_exit;
-    f->$class->__call__(f, process_data->process, to$int(exit_status), to$int(term_signal));    // REALLY __asyn__
+    f->$class->__asyn__(f, process_data->process, to$int(exit_status), to$int(term_signal));
 }
 
 void read_stderr(uv_stream_t *stream, ssize_t nread, const uv_buf_t *buf) {
@@ -39,7 +39,7 @@ void read_stderr(uv_stream_t *stream, ssize_t nread, const uv_buf_t *buf) {
             struct process_data *process_data = (struct process_data *)stream->data;
             process$$Process __self__ = process_data->process;
             $action2 f = process_data->on_stderr;
-            f->$class->__call__(f, __self__, to$bytes_len(buf->base, nread));           // REALLY __asyn__
+            f->$class->__asyn__(f, __self__, to$bytes_len(buf->base, nread));
         }
     }
 
@@ -57,7 +57,7 @@ void read_stdout(uv_stream_t *stream, ssize_t nread, const uv_buf_t *buf) {
             struct process_data *process_data = (struct process_data *)stream->data;
             process$$Process __self__ = process_data->process;
             $action2 f = process_data->on_stdout;
-            f->$class->__call__(f, __self__, to$bytes_len(buf->base, nread));           // REALLY __asyn__
+            f->$class->__asyn__(f, __self__, to$bytes_len(buf->base, nread));
         }
     }
 
@@ -146,7 +146,7 @@ $R process$$Process$_create_process (process$$Process __self__, $Cont c$cont) {
         uv_strerror_r(r, errmsg + strlen(errmsg), sizeof(errmsg)-strlen(errmsg));
         log_warn(errmsg);
         $action2 f = __self__->on_error;
-        f->$class->__call__(f, process_data->process, to$str(errmsg));                      // REALLY __asyn__
+        f->$class->__asyn__(f, process_data->process, to$str(errmsg));
     }
     // TODO: do we need to do some magic to read any data produced before this
     // callback is installed?

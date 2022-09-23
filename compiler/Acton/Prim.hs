@@ -40,11 +40,16 @@ cAction r t         = TC primAction [r,t]
 cMut r t            = TC primMut [r,t]
 cPure r t           = TC primPure [r,t]
 
-attrCall            = name "__call__"
-
 attrEval            = name "__eval__"
 attrExec            = name "__exec__"
 attrAsyn            = name "__asyn__"
+attrCall            = name "__call__"
+
+attrInvoke fx
+  | fx == fxProc    = attrEval
+  | fx == fxAction  = attrAsyn
+  | fx == fxMut     = attrCall
+  | fx == fxPure    = attrCall
 
 primActor           = gPrim "Actor"
 primR               = gPrim "R"
@@ -196,34 +201,30 @@ tCollectionListWild = tCon (TC qnCollection [tList tWild, tWild])
 --      __eval__    : proc(*R) -> T
 --      __exec__    : proc(*R) -> None
 clProc              = NClass [quant r, quant t] (leftpath [cValue]) te
-  where te          = [ --(attrEval, NSig (monotype $ tFun fxProc (tVar r) kwdNil (tVar t)) NoDec),
-                        --(attrExec, NSig (monotype $ tFun fxProc (tVar r) kwdNil tNone) NoDec) ]
-                        (attrCall, NSig (monotype $ tFun fxProc (tVar r) kwdNil tNone) NoDec) ]
+  where te          = [ (attrEval, NSig (monotype $ tFun fxProc (tVar r) kwdNil (tVar t)) NoDec)  {-,
+                        (attrExec, NSig (monotype $ tFun fxProc (tVar r) kwdNil tNone) NoDec) -} ]
         r           = TV PRow (name "R")
         t           = TV KType (name "T")
 
 --  class $action[R,T] ($proc[R,T], value):
 --      __asyn__    : action(*R) -> T
-clAction            = NClass [quant r, quant t] (leftpath [cProc (tVar r) (tVar t), cValue]) te
-  where te          = [ --(attrAsyn, NSig (monotype $ tFun fxAction (tVar r) kwdNil (tVar t)) NoDec) ]
-                      ]
+clAction            = NClass [quant r, quant t] (leftpath [ {- cProc (tVar r) (tVar t), -} cValue]) te
+  where te          = [ (attrAsyn, NSig (monotype $ tFun fxAction (tVar r) kwdNil (tVar t)) NoDec) ]
         r           = TV PRow (name "R")
         t           = TV KType (name "T")
 
 
 --  class $mut[R,T] ($proc[R,T], value):
 --      __call__    : mut(*R) -> T
-clMut               = NClass [quant r, quant t] (leftpath [cProc (tVar r) (tVar t), cValue]) te
-  where te          = [ --(attrCall, NSig (monotype $ tFun fxMut (tVar r) kwdNil (tVar t)) NoDec) ]
-                      ]
+clMut               = NClass [quant r, quant t] (leftpath [ {- cProc (tVar r) (tVar t), -} cValue]) te
+  where te          = [ (attrCall, NSig (monotype $ tFun fxMut (tVar r) kwdNil (tVar t)) NoDec) ]
         r           = TV PRow (name "R")
         t           = TV KType (name "T")
 
 --  class $pure[R,T] ($mut[R,T], $proc[R,T], value):
 --      __call__    : pure(*R) -> T
-clPure              = NClass [quant r, quant t] (leftpath [cMut (tVar r) (tVar t), cProc (tVar r) (tVar t), cValue]) te
-  where te          = [ --(attrCall, NSig (monotype $ tFun fxPure (tVar r) kwdNil (tVar t)) NoDec) ]
-                      ]
+clPure              = NClass [quant r, quant t] (leftpath [ {- cMut (tVar r) (tVar t), cProc (tVar r) (tVar t), -} cValue]) te
+  where te          = [ (attrCall, NSig (monotype $ tFun fxPure (tVar r) kwdNil (tVar t)) NoDec) ]
         r           = TV PRow (name "R")
         t           = TV KType (name "T")
 

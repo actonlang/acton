@@ -437,9 +437,9 @@ $ConstCont $ConstCont$__deserialize__($ConstCont self, $Serial$state state) {
     return res;
 }
 
-$R $ConstCont$__call__($ConstCont $this, $WORD _ignore) {               // REALLY __eval__
+$R $ConstCont$__call__($ConstCont $this, $WORD _ignore) {
     $Cont cont = $this->cont;
-    return cont->$class->__call__(cont, $this->val);                    // REALLY __eval__
+    return cont->$class->__call__(cont, $this->val);
 }
 
 $Cont $CONSTCONT($WORD val, $Cont cont){
@@ -498,7 +498,7 @@ struct $ConstCont$class $ConstCont$methods = {
     $ConstCont$__bool__,
     $ConstCont$__str__,
     $ConstCont$__str__,
-    $ConstCont$__call__                                 // REALLY __eval__
+    $ConstCont$__call__
 };
 
 ////////////////////////////////////////////////////////////////////////////////////////
@@ -661,7 +661,7 @@ char *RTAG_name($RTAG tag) {
     }
 }
 ////////////////////////////////////////////////////////////////////////////////////////
-$R $Done$__call__($Cont $this, $WORD val) {                         // REALLY __eval__
+$R $Done$__call__($Cont $this, $WORD val) {
     return $R_DONE(val);
 }
 
@@ -695,13 +695,13 @@ struct $Cont$class $Done$methods = {
     $Done$__bool__,
     $Done$__str__,
     $Done$__str__,
-    $Done$__call__                                              // REALLY __eval__
+    $Done$__call__
 };
 struct $Cont $Done$instance = {
     &$Done$methods
 };
 ////////////////////////////////////////////////////////////////////////////////////////
-$R $InitRoot$__call__ ($Cont $this, $WORD val) {                // REALLY __eval__
+$R $InitRoot$__call__ ($Cont $this, $WORD val) {
     typedef $R(*ROOT__init__t)($Actor, $Env, $Cont);    // Assumed type of the ROOT actor's __init__ method
     return ((ROOT__init__t)root_actor->$class->__init__)(root_actor, env_actor, ($Cont)val);
 }
@@ -716,7 +716,7 @@ struct $Cont$class $InitRoot$methods = {
     $Cont$__bool__,
     $Cont$__str__,
     $Cont$__str__,
-    $InitRoot$__call__                                          // REALLY __eval__
+    $InitRoot$__call__
 };
 struct $Cont $InitRoot$cont = {
     &$InitRoot$methods
@@ -1436,7 +1436,7 @@ void wt_work_cb(uv_check_t *ev) {
         wt_stats[wtid].state = WT_Working;
 
         rtsd_printf("## Running actor %ld : %s", current->$globkey, current->$class->$GCINFO);
-        $R r = cont->$class->__call__(cont, val);                       // REALLY __eval__
+        $R r = cont->$class->__call__(cont, val);
 
         clock_gettime(CLOCK_MONOTONIC, &ts2);
         long long int diff = (ts2.tv_sec * 1000000000 + ts2.tv_nsec) - (ts1.tv_sec * 1000000000 + ts1.tv_nsec);

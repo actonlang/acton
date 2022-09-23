@@ -34,7 +34,7 @@ $NoneType $l$1cont$__init__ ($l$1cont p$self, $Env __self__, $str s) {
     p$self->s = s;
     return $None;
 }
-$R $l$1cont$__call__ ($l$1cont p$self, $Cont c$cont) {                          // REALLY __eval__, __exec__
+$R $l$1cont$__call__ ($l$1cont p$self, $Cont c$cont) {
     $Env __self__ = p$self->__self__;
     $str s = p$self->s;
     return __self__->$class->stdout_write$local(__self__, s, c$cont);
@@ -69,7 +69,7 @@ $NoneType $l$2cont$__init__ ($l$2cont p$self, $Env __self__, $action cb) {
     p$self->cb = cb;
     return $None;
 }
-$R $l$2cont$__call__ ($l$2cont p$self, $Cont c$cont) {                              // REALLY __eval__, __exec__
+$R $l$2cont$__call__ ($l$2cont p$self, $Cont c$cont) {
     $Env __self__ = p$self->__self__;
     $action cb = p$self->cb;
     return __self__->$class->stdin_install$local(__self__, cb, c$cont);
@@ -104,7 +104,7 @@ $NoneType $l$3cont$__init__ ($l$3cont p$self, $Env __self__, $int n) {
     p$self->n = n;
     return $None;
 }
-$R $l$3cont$__call__ ($l$3cont p$self, $Cont c$cont) {                              // REALLY __eval__, __exec__
+$R $l$3cont$__call__ ($l$3cont p$self, $Cont c$cont) {
     $Env __self__ = p$self->__self__;
     $int n = p$self->n;
     return __self__->$class->exit$local(__self__, n, c$cont);
@@ -192,7 +192,7 @@ void read_stdin(uv_stream_t *stream, ssize_t nread, const uv_buf_t *buf) {
     } else if (nread > 0) {
         if (stream->data) {
             $action cb = stream->data;
-            cb->$class->__call__(cb, to$bytes_len(buf->base, nread));           // REALLY __asyn__
+            cb->$class->__asyn__(cb, to$bytes_len(buf->base, nread));
         }
     }
 
