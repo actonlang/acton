@@ -228,6 +228,12 @@ clPure              = NClass [quant r, quant t] (leftpath [ {- cMut (tVar r) (tV
         r           = TV PRow (name "R")
         t           = TV KType (name "T")
 
+--  class $cont[T] (value): pass
+--      __call__    : proc(T) -> $R
+clCont              = NClass [quant t] (leftpath [cValue]) []
+  where te          = [ (attrCall, NSig (monotype $ tFun fxProc (posRow (tVar t) posNil) kwdNil tR) NoDec) ]
+        t           = TV KType (name "T")
+
 
 --  class $Actor (): pass
 clActor             = NClass [] (leftpath [cValue]) te
@@ -249,11 +255,6 @@ clActor             = NClass [] (leftpath [cValue]) te
 
 --  class $R (): pass
 clR                 = NClass [] [] []
-
---  class $cont[A] ($proc[(A,),$R]): pass
-clCont              = NClass [quant a] (leftpath [TC primProc [posRow (tVar a) posNil, tR], cValue]) []
-  where a           = TV KType (name "A")
-
 
 --  $ASYNCf         : [A] => action($Actor, proc()->A) -> A
 scASYNCf            = tSchema [quant a] tASYNC
