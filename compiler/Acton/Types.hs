@@ -568,9 +568,7 @@ instance InfEnv Decl where
                                                  --traceM ("\n## infEnv (sig) def " ++ prstr (n, NDef sc dec))
                                                  return ([], [(n, NDef sc dec)], d)
                                              NReserved -> do
-                                                 prow <- instwild env PRow $ prowOf p
-                                                 krow <- instwild env KRow $ krowOf k
-                                                 t <- tFun fx prow krow <$> maybe newTVar return a
+                                                 t <- tFun fx (prowOf p) (krowOf k) <$> maybe newTVar return a
                                                  let sc = tSchema q (if inClass env then dropSelf t (deco d) else t)
                                                  --traceM ("\n## infEnv def " ++ prstr (n, NDef sc (deco d)))
                                                  return ([], [(n, NDef sc (deco d))], d)

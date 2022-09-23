@@ -171,8 +171,9 @@ instance ConvTWild QBinds where
     convTWild q                     = mapM instq q
       where instq (Quant v us)      = Quant v <$> mapM convTWild us
 
-instance (ConvTWild a) => ConvTWild (Maybe a) where
-    convTWild t                     = sequence (fmap convTWild t)
+instance ConvTWild (Maybe Type) where
+    convTWild Nothing               = Just <$> convTWild tWild
+    convTWild (Just t)              = Just <$> convTWild t
 
 instance ConvTWild PosPar where
     convTWild (PosPar n t e p)      = PosPar n <$> convTWild t <*> return e <*> convTWild p
