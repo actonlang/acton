@@ -2336,80 +2336,70 @@ typedef struct argp_arguments
   char *log_file_path;
 } argp_arguments;
 
-error_t parse_opt (int key, char *arg, struct argp_state *state)
-{
-	argp_arguments * arguments = (argp_arguments *) state->input;
-	char tmp_buff[10];
+error_t parse_opt (int key, char *arg, struct argp_state *state) {
+    argp_arguments * arguments = (argp_arguments *) state->input;
+    char tmp_buff[10];
 
-	switch (key)
-	{
-	  case 'v':
-		  arguments->verbosity = 2;
-		  break;
-	  case 'q':
-		  arguments->verbosity = 0;
-		  break;
-	  case 'p':
-		  arguments->portno = atoi(arg);
-		  break;
-	  case 'm':
-		  arguments->gportno = atoi(arg);
-		  break;
-	  case 's':
-	  {
-		  assert(strnlen(arg, 256) > 1);
-		  arguments->no_seeds = 1;
-		  for(char * end_ptr = strchr(arg, ',');end_ptr != NULL;end_ptr = strchr(end_ptr + 1, ','), arguments->no_seeds++);
-		  arguments->seeds = (char **) malloc(arguments->no_seeds * sizeof(char *));
-		  arguments->seed_ports = (unsigned short *) malloc(arguments->no_seeds * sizeof(int));
-		  char * start_ptr = arg, * end_ptr = NULL;
-		  int stop = 0;
-		  for(int i = 0;!stop;i++)
-		  {
-			  end_ptr = strchr(start_ptr, ',');
+    switch (key)
+        {
+        case 'v':
+            arguments->verbosity = 2;
+            break;
+        case 'q':
+            arguments->verbosity = 0;
+            break;
+        case 'p':
+            arguments->portno = atoi(arg);
+            break;
+        case 'm':
+            arguments->gportno = atoi(arg);
+            break;
+        case 's':
+            assert(strnlen(arg, 256) > 1);
+            arguments->no_seeds = 1;
+            for (char * end_ptr = strchr(arg, ','); end_ptr != NULL; end_ptr = strchr(end_ptr + 1, ','), arguments->no_seeds++);
+            arguments->seeds = (char **) malloc(arguments->no_seeds * sizeof(char *));
+            arguments->seed_ports = (unsigned short *) malloc(arguments->no_seeds * sizeof(int));
+            char * start_ptr = arg;
+            char * end_ptr = NULL;
+            int stop = 0;
+            for(int i = 0; !stop; i++) {
+                end_ptr = strchr(start_ptr, ',');
 
-			  char * separator_ptr = strchr(start_ptr, ':');
-			  assert(separator_ptr != NULL);
-			  *separator_ptr = '\0';
+                char * separator_ptr = strchr(start_ptr, ':');
+                assert(separator_ptr != NULL);
+                *separator_ptr = '\0';
 
-			  arguments->seeds[i] = strndup(start_ptr, separator_ptr - start_ptr);
-			  arguments->seed_ports[i] = (unsigned short) atoi(separator_ptr + 1);
+                arguments->seeds[i] = strndup(start_ptr, separator_ptr - start_ptr);
+                arguments->seed_ports[i] = (unsigned short) atoi(separator_ptr + 1);
 
-			  if(end_ptr == NULL)
-			  {
-				  stop = 1;
-			  }
-			  else
-			  {
-				  *end_ptr = '\0';
-                  start_ptr = end_ptr + 1;
-			  }
-		  }
-		  break;
-	  }
-      case 'S':
-          arguments->mon_socket_path = arg;
-          break;
-      case 'i':
-	  {
-		  assert(strnlen(arg, 256) > 1);
-		  arguments->local_iface = strndup(arg, 256);
-		  break;
-	  }
-      case 'l':
-	  {
-		  arguments->log_file_path = arg;
-		  break;
-	  }
-	  case ARGP_KEY_ARG:
-  	  case ARGP_KEY_END:
-//		  argp_usage (state);
-		  break;
-  	  default:
-	  	return ARGP_ERR_UNKNOWN;
-	}
+                if(end_ptr == NULL) {
+                    stop = 1;
+                } else {
+                    *end_ptr = '\0';
+                    start_ptr = end_ptr + 1;
+                }
+            }
+            break;
+        case 'S':
+            arguments->mon_socket_path = arg;
+            break;
+        case 'i':
+            assert(strnlen(arg, 256) > 1);
+            arguments->local_iface = strndup(arg, 256);
+            break;
+        case 'l':
+            arguments->log_file_path = arg;
+            break;
+        case ARGP_KEY_ARG:
+        case ARGP_KEY_END:
+            //		  argp_usage (state);
+            break;
+        default:
+            return ARGP_ERR_UNKNOWN;
+        }
 
-	return 0;
+    return 0;
 }
 
 
