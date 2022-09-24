@@ -2,18 +2,15 @@
 import json
 
 actor main(env):
-    # TODO: issue report that we can't declare nested dict
-    d1 = {"b": "1", "c": 2, "d": [1, 2]}
-    l1 = [1, 2, 3]
 
     print("Testing: data -> JSON str -> data")
     test_data = [
         {"a": True, "b": False},
         {"a": "1", "b": 2},
-        {"a": d1},
+        {"a": {"b": 1, "c": 2, "d": [1, 2]}},
         {"a": [1, 2, 3]},
-        {"a": [l1, l1]},
-        {"a": [d1, d1]},
+        {"a": [[1, 2, 3], [1, 2, 3]]},
+        {"a": [{"b": 1, "c": 2, "d": [1, 2]}, {"b": 1, "c": 2, "d": [1, 2]}]},
     ]
     for s in test_data:
         print(s)

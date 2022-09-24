@@ -13,6 +13,8 @@
     files in /usr/local/include but on a fresh install it errored out.
 - Fix up-to-date check in compiler for imported modules from stdlib [#890]
 - Fix seed arg parsing in actondb that lead to "Illegal instruction" error
+- Fix nested dicts definitions [#869]
+  - Now possible to directly define nested dicts
 
 
 ## [0.11.6] (2022-09-20)
@@ -1254,6 +1256,7 @@ then, this second incarnation has been in focus and 0.2.0 was its first version.
 [#846]: https://github.com/actonlang/acton/pull/846
 [#853]: https://github.com/actonlang/acton/issues/853
 [#868]: https://github.com/actonlang/acton/pull/868
+[#869]: https://github.com/actonlang/acton/issues/869
 [#882]: https://github.com/actonlang/acton/issues/882
 [#885]: https://github.com/actonlang/acton/issues/885
 [#887]: https://github.com/actonlang/acton/issues/887
