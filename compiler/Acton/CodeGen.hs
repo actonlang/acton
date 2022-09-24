@@ -225,6 +225,7 @@ primStepSerialize                   = gPrim "step_serialize"
 primStepDeserialize                 = gPrim "step_deserialize"
 primDNEW                            = gPrim "DNEW"
 primNEWTUPLE                        = gPrim "NEWTUPLE"
+primNEWTUPLE0                       = gPrim "NEWTUPLE0"
 
 
 -- Implementation -----------------------------------------------------------------------------------
@@ -657,7 +658,10 @@ instance Gen Expr where
     gen env (Dot _ e n)             = genDot env [] e n
     gen env (DotI _ e i)            = gen env e <> text "->" <> gen env componentsKW <> brackets (pretty i)
     gen env (RestI _ e i)           = gen env eNone <> semi <+> text "// CodeGen for tuple tail not implemented"
-    gen env (Tuple _ p KwdNil)      = gen env primNEWTUPLE <> parens (text (show $ nargs p) <> comma' (gen env p))
+    gen env (Tuple _ p KwdNil)      
+       | n == 0                    = gen env primNEWTUPLE0
+       | otherwise                 = gen env primNEWTUPLE <> parens (text (show n) <> comma' (gen env p))
+       where n                     = nargs p
     gen env (List _ es)
       | null es                     = newcon' env n <> parens (text "NULL" <> comma <+> text "NULL")
       | otherwise                   = parens (lbrace <+> (

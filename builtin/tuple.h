@@ -21,7 +21,12 @@ $tuple $tuple$new(int,...);
 
 #define $NEWTUPLE($len, ...)  ({ $tuple $t = malloc(sizeof(struct $tuple)+$len*sizeof($WORD)); \
                                  $t->$class = &$tuple$methods; \
-                                 $t->$class->__init__($t, $len, ##__VA_ARGS__); \
+                                 $t->$class->__init__($t, $len, __VA_ARGS__); \
+                                 $t; })
+
+#define $NEWTUPLE0  ({ $tuple $t = malloc(sizeof(struct $tuple)); \
+                                 $t->$class = &$tuple$methods; \
+                                 $t->$class->__init__($t); \
                                  $t; })
 
 extern struct $Iterable$tuple$class $Iterable$tuple$methods;
