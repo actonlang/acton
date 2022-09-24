@@ -465,7 +465,7 @@ class TestDbApps(unittest.TestCase):
                "--rts-ddb-replication", str(self.replication_factor)
                ] + get_db_args(self.dbc.port_chunk, self.replication_factor)
         self.p = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-        time.sleep(0.1)
+        time.sleep(0.5)
         self.p.terminate()
 
         tcp_cmd(self.p2, app_port, "INC")
