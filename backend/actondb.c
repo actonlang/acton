@@ -2367,14 +2367,6 @@ error_t parse_opt (int key, char *arg, struct argp_state *state)
 		  for(int i = 0;!stop;i++)
 		  {
 			  end_ptr = strchr(start_ptr, ',');
-			  if(end_ptr == NULL)
-			  {
-				  stop = 1;
-			  }
-			  else
-			  {
-				  *end_ptr = '\0';
-			  }
 
 			  char * separator_ptr = strchr(start_ptr, ':');
 			  assert(separator_ptr != NULL);
@@ -2383,7 +2375,15 @@ error_t parse_opt (int key, char *arg, struct argp_state *state)
 			  arguments->seeds[i] = strndup(start_ptr, separator_ptr - start_ptr);
 			  arguments->seed_ports[i] = (unsigned short) atoi(separator_ptr + 1);
 
-			  start_ptr = end_ptr + 1;
+			  if(end_ptr == NULL)
+			  {
+				  stop = 1;
+			  }
+			  else
+			  {
+				  *end_ptr = '\0';
+                  start_ptr = end_ptr + 1;
+			  }
 		  }
 		  break;
 	  }
