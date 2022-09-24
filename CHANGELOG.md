@@ -6,11 +6,13 @@
 - Bash completion is now part of the Debian packages & brew formula
 
 ### Fixed
-- Add /opt/homebrew/include to header include path [#892]
+- Fixed include path for M1 
+  - /opt/homebrew/include added to header include path [#892]
   - Actually fixes builds on M1!
   - This has "worked" because the only M2 where Acton was tested also had header
     files in /usr/local/include but on a fresh install it errored out.
 - Fix up-to-date check in compiler for imported modules from stdlib [#890]
+- Fix seed arg parsing in actondb that lead to "Illegal instruction" error
 
 
 ## [0.11.6] (2022-09-20)
