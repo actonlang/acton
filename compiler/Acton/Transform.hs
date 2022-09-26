@@ -108,7 +108,7 @@ transCall (Dot _ (Var _ n) m) ts [e1,e2]
   | n == primWrapMut,    m == attrWrap  = Just e2
   | n == primWrapPure,   m == attrWrap  = Just e2
 transCall (Dot _ (Var _ n) m) ts [e1]
-  | n == primWrapProc,   m == attrEVAL  = Just $ eCall (tApp (eQVar primEVAL) ts) [e1]
+  | n == primWrapProc,   m == attrEVAL  = Just e1
   | n == primWrapProc,   m == attrEXEC  = Just $ eCall (tApp (eQVar primEXEC) ts) [e1]
   | n == primWrapAction, m == attrEVAL  = Just $ eAwait $ eAsync e1
   | n == primWrapAction, m == attrEXEC  = Just $ eAsync e1

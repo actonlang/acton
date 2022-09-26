@@ -124,7 +124,6 @@ primWrapMut         = gPrim "wWrapMut"
 primWrapPure        = gPrim "wWrapPure"
 
 primSEAL            = gPrim "SEAL"
-primEVAL            = gPrim "EVAL"
 primEXEC            = gPrim "EXEC"
 
 
@@ -189,7 +188,6 @@ primEnv             = [     (noq primASYNCf,        NDef scASYNCf NoDec),
                             (noq primWrapAction,    NVar $ tWrapped fxAction fxProc),
 
                             (noq primSEAL,          NDef scSEAL NoDec),
-                            (noq primEVAL,          NDef scEVAL NoDec),
                             (noq primEXEC,          NDef scEXEC NoDec)
                       ]
 

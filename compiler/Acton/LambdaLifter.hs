@@ -286,11 +286,6 @@ instance Lift Expr where
       | Just (e',vts) <- freefun env e  = do p' <- ll env p
                                              return $ Call l e' (addArgs vts p') KwdNil
       | TApp _ (Var _ n) ts <- e,
-        n == primEVAL,                                                                      -- DEACT!
-        PosArg e' PosNil <- p,
-        closedType env e'               = do e' <- ll env e'
-                                             return $ Dot l e' attrEval
-      | TApp _ (Var _ n) ts <- e,
         n == primEXEC,                                                                      -- DEACT!
         PosArg e' PosNil <- p,
         closedType env e'               = do e' <- ll env e'

@@ -535,7 +535,7 @@ genCall env [row] (Var _ n) (PosArg s@Strings{} (PosArg tup PosNil))
 genCall env [t] (Var _ n) PosNil
   | n == primNEWACTOR               = gen env n <> parens (gen env t)
 genCall env ts (Var _ n) (PosArg e PosNil)
-  | n `elem` [primEVAL,primEXEC]    = gen env (tApp e ts)
+  | n == primEXEC                   = gen env (tApp e ts)
 genCall env ts e@(Var _ n) p
   | NClass{} <- info                = genNew env n p
   | NDef{} <- info                  = (instCast env ts e $ gen env e) <> parens (gen env p)
