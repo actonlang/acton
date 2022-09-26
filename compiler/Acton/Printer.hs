@@ -425,14 +425,14 @@ prettyPosRow (TRow _ _ _ t (TNil _ _))
                                     = pretty t
 prettyPosRow (TRow _ _ _ t p)       = pretty t <> comma <+> prettyPosRow p
 prettyPosRow (TVar _ v)             = text "*" <> pretty v
-prettyPosRow (TWild _)              = text "*"
+prettyPosRow (TWild _)              = text "*_"
 prettyPosRow (TNil _ _)             = empty
     
 prettyKwdRow (TRow _ _ n t (TNil _ _))
                                     = pretty n <> colon <+> pretty t
 prettyKwdRow (TRow _ _ n t k)       = pretty n <> colon <+> pretty t <> comma <+> prettyKwdRow k
 prettyKwdRow (TVar _ v)             = text "**" <> pretty v
-prettyKwdRow (TWild _)              = text "**"
+prettyKwdRow (TWild _)              = text "**_"
 prettyKwdRow (TNil _ _)             = empty
     
 prettyFunRow (TNil _ _) k           = prettyKwdRow k
