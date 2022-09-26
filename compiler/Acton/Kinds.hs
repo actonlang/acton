@@ -177,12 +177,18 @@ instance ConvTWild (Maybe Type) where
 
 instance ConvTWild PosPar where
     convTWild (PosPar n t e p)      = PosPar n <$> convTWild t <*> return e <*> convTWild p
-    convTWild (PosSTAR n t)         = PosSTAR n <$> convTWild t
+    convTWild (PosSTAR n Nothing)   = PosSTAR n <$> Just <$> (TTuple NoLoc <$> convTWild tWild <*> pure kwdNil)
+    convTWild (PosSTAR n (Just t))
+      | TTuple{} <- t               = PosSTAR n <$> Just <$> convTWild t
+      | otherwise                   = err1 t "Tuple type expected"
     convTWild PosNIL                = return PosNIL
     
 instance ConvTWild KwdPar where
     convTWild (KwdPar n t e k)      = KwdPar n <$> convTWild t <*> return e <*> convTWild k
-    convTWild (KwdSTAR n t)         = KwdSTAR n <$> convTWild t
+    convTWild (KwdSTAR n Nothing)   = KwdSTAR n <$> Just <$> (TTuple NoLoc posNil <$> convTWild tWild)
+    convTWild (KwdSTAR n (Just t))
+      | TTuple{} <- t               = KwdSTAR n <$> Just <$> convTWild t
+      | otherwise                   = err1 t "Tuple type expected"
     convTWild KwdNIL                = return KwdNIL
 
 
