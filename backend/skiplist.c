@@ -87,7 +87,6 @@ int skiplist_insert(skiplist_t *list, WORD key, WORD value, unsigned int * seedp
 //		log_debug("Item %" PRId64 " will update node %" PRId64 " at level %d", key, x->key, i);
         	update[i] = x;
     }
-//    x = x->forward[0];
 
     if (x->forward[0] != NULL && list->cmp(key, x->forward[0]->key) == 0) {
         x->forward[0]->value = value;
