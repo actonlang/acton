@@ -195,8 +195,46 @@ int install_gossiped_view(membership_agreement_msg * ma, remote_db_t * db, unsig
 	if(compare_vc(db->current_view_id, ma->vc) > 0)
 	{
 #if (VERBOSE_RPC > -1)
-		fprintf(stderr, "SERVER: Skipping installing notified view %s because it is older than my installed view %s!\n",
+		log_debug("CLIENT: Skipping installing notified view %s because it is older than my installed view %s!\n",
 							to_string_vc(ma->vc, msg_buf), to_string_vc(db->current_view_id, msg_buf));
+#endif
+
+		pthread_mutex_unlock(db->gossip_lock);
+
+		return 1;
+	}
+
+	// The local RTS might transiently be marked dead in the gossip message, or might be missing from the view altogether,
+	// in which case we should wait for the gossip to settle before installing local view.
+	// This can happen for instance if a node quickly crashes and rejoins, or if a transient partition happens
+	// and the gossip agreement round does not complete before the partition heals
+	// This leads to issue https://github.com/actonlang/acton/issues/788
+	int found_local = 0;
+	for(int i=0;i<ma->membership->no_client_nodes;i++)
+	{
+		node_description nd = ma->membership->client_membership[i];
+		if(get_node_id((struct sockaddr *) &(nd.address)) == db->local_rts_id)
+		{
+			found_local = 1;
+			if(nd.status != NODE_LIVE)
+			{
+#if (VERBOSE_RPC > -1)
+				log_debug("CLIENT: Skipping installing notified view %s because it transiently marks local RTS as dead.\n",
+							to_string_vc(ma->vc, msg_buf));
+#endif
+
+				pthread_mutex_unlock(db->gossip_lock);
+
+				return 1;
+			}
+		}
+	}
+
+	if(found_local == 0)
+	{
+#if (VERBOSE_RPC > -1)
+		log_debug("CLIENT: Skipping installing notified view %s because it transiently lacks knowledge of local RTS.\n",
+							to_string_vc(ma->vc, msg_buf));
 #endif
 
 		pthread_mutex_unlock(db->gossip_lock);
