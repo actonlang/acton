@@ -83,7 +83,7 @@ void error(char *msg) {
 #define SERVER_VERBOSITY 1
 
 #define DEFAULT_DATA_PORT 32000
-#define DEFAULT_GOSSIP_PORT 34000
+#define DEFAULT_GOSSIP_PORT 32001
 
 #define RANDOM_NONCES
 int64_t requests = 0;
