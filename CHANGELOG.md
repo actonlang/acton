@@ -5,6 +5,17 @@
 ### Added
 - Bash completion is now part of the Debian packages & brew formula
 
+### Changed
+- actondb now uses a default value for gossip port of RPC port +1 [#913]
+  - The gossip protocol only propagates the RPC port & parts of the
+    implementation has a hard-coded assumption that the gossip port has a +1
+    offset
+  - In order to avoid configuration errors, the default gossip port is now RPC
+    port + 1 and if another gossip port is explicitly configured, an error log
+    message is emitted on startup.
+  - While this is marked as a change, it could really be considered a fix as any
+    other configuration of the system was invalid anyway.
+
 ### Fixed
 - Fixed include path for M1 
   - /opt/homebrew/include added to header include path [#892]
@@ -15,6 +26,11 @@
 - Fix seed arg parsing in actondb that lead to "Illegal instruction" error
 - Fix nested dicts definitions [#869]
   - Now possible to directly define nested dicts
+- Avoid inconsistent view between RTS & DB in certain situations [#788]
+  - If an RTS node was stopped & quickly rejoins or if a transient partition
+    happens and the gossip round does not complete before the partition heals.
+  - We now wait for gossip round to complete.
+  - This ensures that local actor placement doesn't fail during such events.
 
 
 ## [0.11.6] (2022-09-20)
@@ -1247,6 +1263,7 @@ then, this second incarnation has been in focus and 0.2.0 was its first version.
 [#733]: https://github.com/actonlang/acton/pull/733
 [#752]: https://github.com/actonlang/acton/pull/752
 [#760]: https://github.com/actonlang/acton/pull/760
+[#788]: https://github.com/actonlang/acton/issues/788
 [#806]: https://github.com/actonlang/acton/pull/806
 [#808]: https://github.com/actonlang/acton/pull/808
 [#823]: https://github.com/actonlang/acton/pull/823
@@ -1260,6 +1277,7 @@ then, this second incarnation has been in focus and 0.2.0 was its first version.
 [#882]: https://github.com/actonlang/acton/issues/882
 [#885]: https://github.com/actonlang/acton/issues/885
 [#887]: https://github.com/actonlang/acton/issues/887
+[#913]: https://github.com/actonlang/acton/issues/913
 
 [0.3.0]: https://github.com/actonlang/acton/releases/tag/v0.3.0
 [0.4.0]: https://github.com/actonlang/acton/compare/v0.3.0...v0.4.0

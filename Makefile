@@ -127,6 +127,9 @@ backend/comm.o: backend/comm.c backend/comm.h backend/failure_detector/db_querie
 backend/db.o: backend/db.c backend/db.h backend/skiplist.h
 	$(CC) -DLOG_USE_COLOR -g -o$@ $< -c $(CFLAGS)
 
+backend/log.o: backend/log.c
+	$(CC) -DLOG_USE_COLOR -g -o$@ $< -c $(CFLAGS)
+
 backend/queue.o: backend/queue.c backend/queue.h backend/log.h backend/failure_detector/cells.h backend/failure_detector/db_queries.h
 	$(CC) -DLOG_USE_COLOR -g -o$@ $< -c $(CFLAGS)
 
