@@ -31,6 +31,14 @@
     happens and the gossip round does not complete before the partition heals.
   - We now wait for gossip round to complete.
   - This ensures that local actor placement doesn't fail during such events.
+- Fix handling of missed timed events [#907]
+  - Circumstances such as suspending the Acton RTS or resuming a system from the
+    database could lead to negative timeout, i.e. sleep for less than 0 seconds.
+  - The libuv timeout argument is an uint64 and feeding in a negative signed
+    integer results in a value like 18446744073709550271, which roughly meant
+    sleeping for 584 million years, i.e. effectively blocking the RTS timerQ.
+  - It's now fixed by treating negative timeouts as 0, so we immediately wake up
+    to handle the event, however late we might be.
 
 
 ## [0.11.6] (2022-09-20)
@@ -1277,6 +1285,7 @@ then, this second incarnation has been in focus and 0.2.0 was its first version.
 [#882]: https://github.com/actonlang/acton/issues/882
 [#885]: https://github.com/actonlang/acton/issues/885
 [#887]: https://github.com/actonlang/acton/issues/887
+[#907]: https://github.com/actonlang/acton/issues/907
 [#913]: https://github.com/actonlang/acton/issues/913
 
 [0.3.0]: https://github.com/actonlang/acton/releases/tag/v0.3.0

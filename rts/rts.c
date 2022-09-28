@@ -1273,9 +1273,12 @@ void arm_timer_ev() {
     time_t next_time = next_timeout();
     if (next_time) {
         time_t now = current_time();
-        time_t offset = next_time - now;
-        long long unsigned ms = offset / 1000;
-        int r = uv_timer_start(timer_ev, main_timer_cb, ms, 0);
+        long long int offset = (next_time - now) / 1000; // offset in milliseconds
+        // Negative offset means we missed to trigger in time. Set timeout to 0
+        // to directly run on next uv cycle.
+        if (offset < 0)
+            offset = 0;
+        int r = uv_timer_start(timer_ev, main_timer_cb, offset, 0);
         if (r != 0) {
             char errmsg[1024] = "Unable to set timer: ";
             uv_strerror_r(r, errmsg + strlen(errmsg), sizeof(errmsg)-strlen(errmsg));
