@@ -31,7 +31,7 @@
     happens and the gossip round does not complete before the partition heals.
   - We now wait for gossip round to complete.
   - This ensures that local actor placement doesn't fail during such events.
-- Fix handling of missed timed events [#907]
+- Fix handling of missed timer events [#907]
   - Circumstances such as suspending the Acton RTS or resuming a system from the
     database could lead to negative timeout, i.e. sleep for less than 0 seconds.
   - The libuv timeout argument is an uint64 and feeding in a negative signed
@@ -39,6 +39,18 @@
     sleeping for 584 million years, i.e. effectively blocking the RTS timerQ.
   - It's now fixed by treating negative timeouts as 0, so we immediately wake up
     to handle the event, however late we might be.
+- Timer events now wake up WT threads after system resumption [#907]
+  - Worker Threads (WT) are created in `NoExist` state and should transition
+    into `Idle` once initiated, however that was missing leading to a deadlock.
+  - This was masked as in most cases, a WT and will transition into `Working`
+    once they've carried out some work and then back into `Idle`
+  - `wake_wt` function, which is called to wake up a WT after a timer event is
+    triggered, wakes up threads that are currently in `Idle` state, if they are
+    in `NoExist`, it will do nothing.
+  - If there is no work, such as the case after system resumption from the DB,
+    WTs will stay in the `NoExist` state and then `wake_wt` will do nothing, so
+    the system is blocked.
+  - WT now properly transition into `Idle`.
 
 
 ## [0.11.6] (2022-09-20)

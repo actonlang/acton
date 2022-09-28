@@ -1286,6 +1286,11 @@ void arm_timer_ev() {
         }
     } else {
         int r = uv_timer_stop(timer_ev);
+        if (r != 0) {
+            char errmsg[1024] = "Unable to stop timer: ";
+            uv_strerror_r(r, errmsg + strlen(errmsg), sizeof(errmsg)-strlen(errmsg));
+            log_fatal(errmsg);
+        }
     }
 }
 
@@ -1474,6 +1479,7 @@ void *main_loop(void *idx) {
     uv_check_init(uv_loop, &work_ev[wtid]);
     uv_check_start(&work_ev[wtid], (uv_check_cb)wt_work_cb);
 
+    wt_stats[wtid].state = WT_Idle;
     int r = uv_run(uv_loop, UV_RUN_DEFAULT);
     wt_stats[wtid].state = WT_NoExist;
     rtsd_printf("Exiting...");
