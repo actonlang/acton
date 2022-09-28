@@ -2501,7 +2501,7 @@ int main(int argc, char **argv) {
   /* Default values. */
   arguments.verbosity = 1;
   arguments.portno = DEFAULT_DATA_PORT;
-  arguments.gportno = DEFAULT_GOSSIP_PORT;
+  arguments.gportno = -1;
   arguments.local_iface = "127.0.0.1";
   arguments.no_seeds = 0;
   arguments.mon_socket_path = NULL;
@@ -2532,7 +2532,21 @@ int main(int argc, char **argv) {
 	  error("sigaction(SIG_IGN SIGPIPE) failed");
   }
 
-  log_info("Using args: portno=%d, gportno=%d, verbosity=%d, seeds:", arguments.portno, arguments.gportno, arguments.verbosity);
+  portno = arguments.portno;
+  // NOTE: gossip port is expected to be +1 from the RPC port. This is a current
+  //  limitation of the gossip protocol as it doesn't carry information about a
+  //  separate gossip port.
+  if (arguments.gportno > 0) {
+      // TODO: remove this once gossip protocol carries gossip port info
+      if (arguments.gportno != arguments.portno)
+          log_warn("Using a gossip port other than RPC port + 1 is not a supported configuration");
+      gportno = arguments.gportno;
+  } else {
+      gportno = arguments.portno+1;
+  }
+  verbosity = arguments.verbosity;
+  log_info("Using args: portno=%d, gportno=%d, verbosity=%d, seeds:", portno, gportno, verbosity);
+
   for(int i=0;i<arguments.no_seeds;i++)
   {
 	  struct hostent * host = gethostbyname(arguments.seeds[i]);
@@ -2549,10 +2563,6 @@ int main(int argc, char **argv) {
   }
 
   skiplist_t * clients = create_skiplist(&sockaddr_cmp); // List of remote clients
-
-  portno = arguments.portno;
-  gportno = arguments.gportno;
-  verbosity = arguments.verbosity;
 
   GET_RANDSEED(&seed, 0); // thread_id
 
