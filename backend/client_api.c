@@ -1215,6 +1215,8 @@ int send_packet_wait_replies_async(void * out_buf, unsigned out_len, int64_t non
 	for(snode_t * server_node = HEAD(db->servers); server_node!=NULL; server_node=NEXT(server_node))
 	{
 		remote_server * rs = (remote_server *) server_node->value;
+		if (rs->status != NODE_LIVE)
+			continue;
 #if SYNC_SOCKET > 0
 		pthread_mutex_lock(rs->sockfd_lock);
 #endif
