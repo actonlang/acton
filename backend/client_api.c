@@ -179,9 +179,9 @@ int handle_socket_close(int * childfd)
 	printf("Host disconnected , ip %s , port %d \n" ,
 		  inet_ntoa(address.sin_addr) , ntohs(address.sin_port));
 
-	//Close the socket and mark as 0 in list for reuse
+	//Close the socket and mark as -1 in list for reuse
 	close(*childfd);
-	*childfd = 0;
+	*childfd = -1;
 
 	return 0;
 }
@@ -1129,6 +1129,11 @@ void error(char *msg) {
 
 int send_packet(void * buf, unsigned len, int sockfd)
 {
+	if(sockfd == 0)
+	{
+		log_error("ERROR: Attempted to write packet to fd 0!");
+		return -1;
+	}
     int n = write(sockfd, buf, len);
     if (n < 0)
     {
@@ -1215,7 +1220,7 @@ int send_packet_wait_replies_async(void * out_buf, unsigned out_len, int64_t non
 	for(snode_t * server_node = HEAD(db->servers); server_node!=NULL; server_node=NEXT(server_node))
 	{
 		remote_server * rs = (remote_server *) server_node->value;
-		if (rs->status != NODE_LIVE)
+		if (rs->status != NODE_LIVE || rs->sockfd <= 0)
 			continue;
 #if SYNC_SOCKET > 0
 		pthread_mutex_lock(rs->sockfd_lock);

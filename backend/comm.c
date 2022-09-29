@@ -506,7 +506,9 @@ remote_server * get_remote_server(char *hostname, unsigned short portno,
 
         if(do_connect)
         {
-			rs->sockfd = socket(AF_INET, SOCK_STREAM, 0);
+			rs->status = NODE_LIVE;
+
+        		rs->sockfd = socket(AF_INET, SOCK_STREAM, 0);
 			if (rs->sockfd < 0)
 			{
 				fprintf(stderr, "ERROR opening socket!\n");
@@ -521,9 +523,8 @@ remote_server * get_remote_server(char *hostname, unsigned short portno,
         			if(connect_success != 0)
         				sleep(1);
         		}
-			if (connect_success == 0) {
-				rs->status = NODE_LIVE;
-			} else {
+			if (connect_success != 0)
+			{
 				fprintf(stderr, "get_remote_server: ERROR connecting to %s:%d\n", hostname, portno);
 				rs->status = NODE_DEAD;
 				rs->sockfd = -1;

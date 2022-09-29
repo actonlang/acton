@@ -961,9 +961,9 @@ int handle_socket_close(int * childfd, int * status)
 	log_info("Host disconnected, ip %s, port %d, old_status=%d, closing fd %d" ,
 			  inet_ntoa(address.sin_addr) , ntohs(address.sin_port), *status, *childfd);
 
-	//Close the socket and mark as 0 for reuse:
+	//Close the socket and mark as -1 for reuse:
 	close(*childfd);
-	*childfd = 0;
+	*childfd = -1;
 
 	*status = NODE_DEAD;
 
