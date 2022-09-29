@@ -211,6 +211,7 @@ $R net$$TCPIPConnection$write$local (net$$TCPIPConnection __self__, $bytes data,
 }
 
 $NoneType net$$TCPIPConnection$__resume__ (net$$TCPIPConnection __self__) {
+    __self__->_socket = to$int(-1);
     $function2 f = __self__->on_error;
     f->$class->__call__(f, __self__, to$str("resume"));
     return $None;
@@ -292,6 +293,7 @@ $R net$$TCPListener$_init (net$$TCPListener __self__, $Cont c$cont) {
 }
 
 $NoneType net$$TCPListener$__resume__ (net$$TCPListener __self__) {
+    __self__->_stream = to$int(-1);
     $function2 f = __self__->on_listen_error;
     f->$class->__call__(f, __self__, to$str("resume"));
     return $None;
@@ -343,4 +345,9 @@ $R net$$TCPListenConnection$write$local (net$$TCPListenConnection __self__, $byt
         f->$class->__call__(f, __self__, to$str(errmsg));
     }
     return $R_CONT(c$cont, $None);
+}
+
+$NoneType net$$TCPListenConnection$__resume__ (net$$TCPListenConnection __self__) {
+    __self__->client = to$int(-1);
+    return $None;
 }
