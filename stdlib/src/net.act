@@ -78,6 +78,9 @@ actor TCPListenConnection(auth: _TCPListenConnectAuth, client: int, on_receive: 
         """Write data to remote"""
         NotImplemented
 
+    def __resume__() -> None:
+        NotImplemented
+
     def _force_persistance():
         """Trick compiler into persisting the actor arguments we need.
 
