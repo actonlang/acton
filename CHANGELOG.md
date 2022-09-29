@@ -51,6 +51,14 @@
     WTs will stay in the `NoExist` state and then `wake_wt` will do nothing, so
     the system is blocked.
   - WT now properly transition into `Idle`.
+- Only communicate with live DB nodes from RTS DB client [#910] [#916]
+  - When the RTS communicates with the DB nodes, we've broadcast messages to all
+    servers we know about. If they are down, they've had their socket fd set to
+    0 to signal that the server is down. However, fd=0 is not invalid, it is
+    stdin, so we ended up sending data to stdin creating lots of garbage output
+    on the terminal.
+  - fd -1 is used to signal an invalid fd, which prevents similar mistakes.
+  - The DB node status is inspected and messages are only sent to live servers.
 
 
 ## [0.11.6] (2022-09-20)

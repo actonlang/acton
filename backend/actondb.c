@@ -961,9 +961,9 @@ int handle_socket_close(int * childfd, int * status)
 	log_info("Host disconnected, ip %s, port %d, old_status=%d, closing fd %d" ,
 			  inet_ntoa(address.sin_addr) , ntohs(address.sin_port), *status, *childfd);
 
-	//Close the socket and mark as 0 for reuse:
+	//Close the socket and mark as -1 for reuse:
 	close(*childfd);
-	*childfd = 0;
+	*childfd = -1;
 
 	*status = NODE_DEAD;
 
@@ -1631,8 +1631,8 @@ int merge_membership_agreement_msg_to_list(membership_agreement_msg * ma, skipli
 
 			if(status != 0)
 			{
-				rs->sockfd = 0;
 				rs->status = NODE_DEAD;
+				rs->sockfd = -1;
 				if(nd.status == NODE_LIVE)
 					memberships_differ = 1;
 			}
@@ -1714,8 +1714,8 @@ int merge_membership_agreement_msg_to_client_list(membership_agreement_msg * ma,
 
 				if(status != 0)
 				{
-					rs->sockfd = 0;
 					rs->status = NODE_DEAD;
+					rs->sockfd = -1;
 					if(nd.status == NODE_LIVE)
 						memberships_differ = 1;
 				}
@@ -1913,8 +1913,8 @@ int install_agreed_view(membership_agreement_msg * ma, membership * m, vector_cl
 
 			if(status != 0)
 			{
-				rs->sockfd = 0;
 				rs->status = NODE_DEAD;
+				rs->sockfd = -1;
 				local_view_disagrees = 1;
 			}
 
