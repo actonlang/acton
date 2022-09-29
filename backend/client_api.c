@@ -1129,11 +1129,7 @@ void error(char *msg) {
 
 int send_packet(void * buf, unsigned len, int sockfd)
 {
-	if(sockfd == 0)
-	{
-		log_error("ERROR: Attempted to write packet to fd 0!");
-		return -1;
-	}
+	assert(sockfd > 0);
     int n = write(sockfd, buf, len);
     if (n < 0)
     {
