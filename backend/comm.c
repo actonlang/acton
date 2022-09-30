@@ -478,10 +478,11 @@ remote_server * get_remote_server(char *hostname, unsigned short portno,
 {
 	remote_server * rs = (remote_server *) malloc(sizeof(remote_server));
     bzero(rs, sizeof(remote_server));
-    rs->status = NODE_UNKNOWN;
+    rs->status = NODE_DEAD;
+    assert(serverfd != NULL_FD);
     memcpy(&(rs->client_socket_addr), &client_socket_addr, sizeof(struct sockaddr_in));
 
-    if(serverfd > 0 || serverfd == -1) // For own node (-1), use provided serveraddr
+    if(serverfd > 0 || serverfd == OWN_FD) // For own node, use provided serveraddr and mark as live
     {
     		memcpy(&(rs->serveraddr), &serveraddr, sizeof(struct sockaddr_in));
     		rs->sockfd = serverfd;

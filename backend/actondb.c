@@ -576,8 +576,8 @@ int handle_gossip_listen_message(gossip_listen_message * msg, client_descriptor 
 		membership * m, vector_clock * my_lc, membership_agreement_msg ** amr, unsigned int * fastrandstate)
 {
 	struct sockaddr_in dummy_serveraddr;
-	remote_server * rs = get_remote_server(msg->node_description->hostname, msg->node_description->portno, dummy_serveraddr, cd->addr, -2, 0, 1);
-	rs->status = 0;
+	remote_server * rs = get_remote_server(msg->node_description->hostname, msg->node_description->portno, dummy_serveraddr, cd->addr, DUMMY_FD, 0, 1);
+	rs->status = NODE_LIVE;
 
 	log_debug("Adding client %s:%d/%d/%d to membership.", rs->hostname, msg->node_description->portno, msg->node_description->node_id, rs->portno);
 
@@ -1411,7 +1411,7 @@ int no_live_or_unknown_nodes(skiplist_t * list)
 	{
 		remote_server * rs = (remote_server *) crt->value;
 
-		if(rs->status == NODE_LIVE || rs->status == NODE_UNKNOWN)
+		if(rs->status == NODE_LIVE)
 			no_nodes++;
 	}
 
@@ -1432,7 +1432,7 @@ int is_min_live_node(int id, skiplist_t * list)
 		if(node_id == id)
 			id_in_list = 1;
 
-		if(rs->status == NODE_LIVE || rs->status == NODE_UNKNOWN)
+		if(rs->status == NODE_LIVE)
 		{
 			min_id = (node_id < min_id)?node_id:min_id;
 		}
@@ -1615,7 +1615,7 @@ int merge_membership_agreement_msg_to_list(membership_agreement_msg * ma, skipli
 	{
 		node_description nd = ma->membership->membership[i];
 
-		remote_server * rs = get_remote_server(nd.hostname, nd.portno, dummy_serveraddr, dummy_serveraddr, -2, 0, 0);
+		remote_server * rs = get_remote_server(nd.hostname, nd.portno, dummy_serveraddr, dummy_serveraddr, DUMMY_FD, 0, 0);
 		rs->status = nd.status;
 
 		snode_t * node = skiplist_search(merged_list, &rs->serveraddr);
@@ -1648,15 +1648,7 @@ int merge_membership_agreement_msg_to_list(membership_agreement_msg * ma, skipli
 
 			remote_server * rs_local = (remote_server *) node->value;
 
-			if(rs_local->status == NODE_UNKNOWN)
-			{
-#if (VERBOSE_RPC > 0)
-				log_debug("SERVER: merge_membership_agreement_msg_to_list: Updating status of node %s from NODE_UNKNOWN to %d.", rs->id, nd.status);
-#endif
-
-				rs_local->status = nd.status;
-			}
-			else if(rs_local->status != nd.status) // if proposed server status is different than local one, and proposed clock is newer, use proposed status
+			if(rs_local->status != nd.status) // if proposed server status is different than local one, and proposed clock is newer, use proposed status
 			{
 				int64_t local_counter = get_component_vc(my_lc, nd.node_id);
 				int64_t proposed_counter = get_component_vc(ma->vc, nd.node_id);
@@ -1695,7 +1687,7 @@ int merge_membership_agreement_msg_to_client_list(membership_agreement_msg * ma,
 	{
 		node_description nd = ma->membership->client_membership[i];
 
-		remote_server * rs = get_remote_server(nd.hostname, nd.portno, dummy_serveraddr, dummy_serveraddr, -2, 0, 1);
+		remote_server * rs = get_remote_server(nd.hostname, nd.portno, dummy_serveraddr, dummy_serveraddr, DUMMY_FD, 0, 1);
 		rs->status = nd.status;
 
 		snode_t * node = skiplist_search(merged_list, &rs->serveraddr);
@@ -1736,15 +1728,7 @@ int merge_membership_agreement_msg_to_client_list(membership_agreement_msg * ma,
 
 			remote_server * rs_local = (remote_server *) node->value;
 
-			if(rs_local->status == NODE_UNKNOWN)
-			{
-#if (VERBOSE_RPC > 0)
-				printf("SERVER: merge_membership_agreement_msg_to_list: Updating status of client node %s from NODE_UNKNOWN to %d.\n", rs->id, nd.status);
-#endif
-
-				rs_local->status = nd.status;
-			}
-			else if(rs_local->status != nd.status) // if proposed server status is different than local one, and proposed clock is newer, use proposed status
+			if(rs_local->status != nd.status) // if proposed server status is different than local one, and proposed clock is newer, use proposed status
 			{
 				int64_t local_counter = get_component_vc(my_lc, nd.node_id);
 				int64_t proposed_counter = get_component_vc(ma->vc, nd.node_id);
@@ -1902,7 +1886,7 @@ int install_agreed_view(membership_agreement_msg * ma, membership * m, vector_cl
 	{
 		node_description nd = ma->membership->membership[i];
 
-		remote_server * rs = get_remote_server(nd.hostname, nd.portno, dummy_serveraddr, dummy_serveraddr, -2, 0, 0);
+		remote_server * rs = get_remote_server(nd.hostname, nd.portno, dummy_serveraddr, dummy_serveraddr, DUMMY_FD, 0, 0);
 		rs->status = nd.status;
 
 		snode_t * node = skiplist_search(m->local_peers, &rs->serveraddr);
@@ -1930,11 +1914,7 @@ int install_agreed_view(membership_agreement_msg * ma, membership * m, vector_cl
 
 			remote_server * rs_local = (remote_server *) node->value;
 
-			if(rs_local->status == NODE_UNKNOWN)
-			{
-				rs_local->status = nd.status;
-			}
-			else if(rs_local->status != nd.status) // if proposed server status is different than local one, and proposed clock is newer, use proposed status
+			if(rs_local->status != nd.status) // if proposed server status is different than local one, and proposed clock is newer, use proposed status
 			{
 				int64_t local_counter = get_component_vc(my_lc, nd.node_id);
 				int64_t proposed_counter = get_component_vc(ma->vc, nd.node_id);
@@ -2662,7 +2642,7 @@ int main(int argc, char **argv) {
   // Add myself to local membership:
 
   remote_server * rsp = NULL;
-  ret = add_peer_to_membership(my_address, my_port, gserveraddr, -1, 0, m, LOCAL_PEERS, &rsp, &seed);
+  ret = add_peer_to_membership(my_address, my_port, gserveraddr, OWN_FD, 0, m, LOCAL_PEERS, &rsp, &seed);
 
   // Now add seed servers:
 
@@ -2689,7 +2669,7 @@ int main(int argc, char **argv) {
 	  {
 #endif
 	  	  log_debug("SERVER: Connecting to %s:%d..", arguments.seeds[i], arguments.seed_ports[i]);
-		  ret = add_peer_to_membership(arguments.seeds[i], arguments.seed_ports[i], dummy_serveraddr, -2, 1, m, LOCAL_PEERS, &rsp, &seed);
+		  ret = add_peer_to_membership(arguments.seeds[i], arguments.seed_ports[i], dummy_serveraddr, DUMMY_FD, 1, m, LOCAL_PEERS, &rsp, &seed);
 		  if(ret == 0 && rsp->status == NODE_LIVE)
 		  {
 			  ret = send_join_message(0, 0, my_address, my_port, my_lc, rsp, &seed);
