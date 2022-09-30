@@ -163,7 +163,7 @@ remote_db_t * get_remote_db(int replication_factor, int rack_id, int dc_id, char
 	db->current_view_id = NULL;
 
 	for(int i=0; i<no_seeds; i++)
-		add_server_to_membership(seed_hosts[i], seed_ports[i], db, seedptr);
+		add_server_to_membership(seed_hosts[i], seed_ports[i], NODE_LIVE, db, seedptr);
 
 	int status = listen_to_gossip(NODE_LIVE, rack_id, dc_id, hostname, local_rts_id, db);
 
@@ -247,7 +247,7 @@ int install_gossiped_view(membership_agreement_msg * ma, remote_db_t * db, unsig
 	{
 		node_description nd = ma->membership->membership[i];
 
-		add_server_to_membership(nd.hostname, nd.portno - 1, db, fastrandstate);
+		add_server_to_membership(nd.hostname, nd.portno - 1, nd.status, db, fastrandstate);
 	}
 
 	// Add RTSs we have recently found about to client's RTS membership:
@@ -502,15 +502,16 @@ void * comm_thread_loop(void * args)
 	return NULL;
 }
 
-int add_server_to_membership(char *hostname, int portno, remote_db_t * db, unsigned int * seedptr)
+int add_server_to_membership(char *hostname, int portno, int status, remote_db_t * db, unsigned int * seedptr)
 {
 	struct sockaddr_in dummy_serveraddr;
 
-    remote_server * rs = get_remote_server(hostname, portno, dummy_serveraddr, dummy_serveraddr, -2, 0, 0);
+    remote_server * rs = get_remote_server(hostname, portno, dummy_serveraddr, dummy_serveraddr, DUMMY_FD, 0, 0);
+    rs->status = status;
 
     if(rs == NULL)
     {
-		printf("ERROR: Failed joining server %s:%d (DNS/network problem?)!\n", hostname, portno);
+		log_error("ERROR: Failed joining server %s:%d (DNS/network problem?)!\n", hostname, portno);
     		return 1;
     }
 
@@ -518,30 +519,36 @@ int add_server_to_membership(char *hostname, int portno, remote_db_t * db, unsig
 
     if(prev_entry != NULL)
     {
-		fprintf(stderr, "ERROR: Server address %s:%d was already added to membership!\n", hostname, portno);
-		free_remote_server(rs);
+    		log_info("Server address %s:%d was already added to membership!\n", hostname, portno);
 		remote_server * prev_rems = (remote_server *) prev_entry->value;
-		if(prev_rems->status == NODE_DEAD)
-			prev_rems->status = NODE_LIVE;
-		return -1;
+		if(rs->status == NODE_LIVE && (prev_rems->status == NODE_DEAD || prev_rems->sockfd <= 0))
+		{
+			// Delete previous entry, reconnect to node and update socket descriptor if we've been disconnected in the mean time:
+			log_info("Reconnecting to server %s:%d\n", hostname, portno);
+			skiplist_delete(db->servers, &rs->serveraddr);
+		}
+		else
+		{
+			prev_rems->status = rs->status;
+			free_remote_server(rs);
+			return -1;
+		}
     }
 
     free_remote_server(rs);
 
-    rs = get_remote_server(hostname, portno, dummy_serveraddr, dummy_serveraddr, -2, 1, 0);
+    rs = get_remote_server(hostname, portno, dummy_serveraddr, dummy_serveraddr, DUMMY_FD, 1, 0);
 
-    int status = skiplist_insert(db->servers, &rs->serveraddr, rs, seedptr);
-
-    if(status != 0)
+    if((skiplist_insert(db->servers, &rs->serveraddr, rs, seedptr)) != 0)
     {
-		fprintf(stderr, "ERROR: Error adding server address %s:%d to membership!\n", hostname, portno);
+    		log_error("ERROR: Error adding server address %s:%d to membership!\n", hostname, portno);
 		free_remote_server(rs);
 		return -2;
     }
 
     if(rs->status == NODE_DEAD)
     {
-		printf("ERROR: Failed joining server %s:%d (it looks down)!\n", hostname, portno);
+    		log_error("ERROR: Failed joining server %s:%d (it looks down)!\n", hostname, portno);
     		return 1;
     }
 	comm_wake_up(db);
