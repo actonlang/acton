@@ -1136,7 +1136,7 @@ void error(char *msg) {
 
 int send_packet(void * buf, unsigned len, int sockfd)
 {
-	assert(sockfd > 0);
+	assert(sockfd != 0);
     int n = write(sockfd, buf, len);
     if (n < 0)
     {
