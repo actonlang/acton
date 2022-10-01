@@ -195,9 +195,13 @@ $R net$$TCPIPConnection$_init (net$$TCPIPConnection __self__, $Cont c$cont) {
 }
 
 $R net$$TCPIPConnection$write$local (net$$TCPIPConnection __self__, $bytes data, $Cont c$cont) {
+    uv_stream_t *stream = (uv_stream_t *)from$int(__self__->_socket);
+    // fd == -1 means invalid FD and can happen after __resume__
+    if (stream == -1)
+        return $R_CONT(c$cont, $None);
+
     uv_write_t *req = (uv_write_t *)malloc(sizeof(uv_write_t));
     uv_buf_t buf = uv_buf_init(data->str, data->nbytes);
-    uv_stream_t *stream = (uv_stream_t *)from$int(__self__->_socket);
     int r = uv_write(req, stream, &buf, 1, NULL);
     if (r < 0) {
         char errmsg[1024] = "Failed to write to TCP socket: ";
@@ -206,7 +210,6 @@ $R net$$TCPIPConnection$write$local (net$$TCPIPConnection __self__, $bytes data,
         $function2 f = __self__->on_error;
         f->$class->__call__(f, __self__, to$str(errmsg));
     }
-
     return $R_CONT(c$cont, $None);
 }
 
@@ -333,9 +336,13 @@ $R net$$TCPListenConnection$_init (net$$TCPListenConnection __self__, $Cont c$co
 }
 
 $R net$$TCPListenConnection$write$local (net$$TCPListenConnection __self__, $bytes data, $Cont c$cont) {
+    uv_stream_t *stream = (uv_stream_t *)from$int(__self__->client);
+    // fd == -1 means invalid FD and can happen after __resume__
+    if (stream == -1)
+        return $R_CONT(c$cont, $None);
+
     uv_write_t *req = (uv_write_t *)malloc(sizeof(uv_write_t));
     uv_buf_t buf = uv_buf_init(data->str, data->nbytes);
-    uv_stream_t *stream = (uv_stream_t *)from$int(__self__->client);
     int r = uv_write(req, stream, &buf, 1, NULL);
     if (r < 0) {
         char errmsg[1024] = "Failed to write to TCP socket: ";
