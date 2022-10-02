@@ -422,7 +422,7 @@ class TestDbApps(unittest.TestCase):
     @flakey()
     def test_app(self):
         self.restart_dbc()
-        cmd = ["./test_db_app", "--rts-verbose",
+        cmd = ["rts_db/ddb_test_app", "--rts-verbose",
                "--rts-ddb-replication", str(self.replication_factor)
                ] + get_db_args(self.dbc.port_chunk, self.replication_factor)
         self.p = subprocess.run(cmd, capture_output=True, timeout=3)
@@ -438,7 +438,7 @@ class TestDbApps(unittest.TestCase):
     def test_app_resume_tcp_server(self):
         self.restart_dbc()
         app_port = self.dbc.port_chunk+199
-        cmd = ["./rts/ddb_test_server", str(app_port), "--rts-verbose",
+        cmd = ["./rts_db/ddb_test_server", str(app_port), "--rts-verbose",
                "--rts-ddb-replication", str(self.replication_factor)
                ] + get_db_args(self.dbc.port_chunk, self.replication_factor)
         self.p = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
@@ -458,10 +458,10 @@ class TestDbApps(unittest.TestCase):
         self.restart_dbc()
         app_port = self.dbc.port_chunk+199
         # Start TCP server
-        srv_cmd = ["./rts/ddb_test_server", str(app_port)]
+        srv_cmd = ["./rts_db/ddb_test_server", str(app_port)]
         self.p2 = subprocess.Popen(srv_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
 
-        cmd = ["./rts/ddb_test_client", str(app_port), "--rts-verbose",
+        cmd = ["./rts_db/ddb_test_client", str(app_port), "--rts-verbose",
                "--rts-ddb-replication", str(self.replication_factor)
                ] + get_db_args(self.dbc.port_chunk, self.replication_factor)
         self.p = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
@@ -477,7 +477,7 @@ class TestDbApps(unittest.TestCase):
 class TestTcpServer(unittest.TestCase):
     def test_tcp_server(self):
         app_port = random.randint(10000, 20000)
-        cmd = ["./rts/ddb_test_server", str(app_port), "--rts-verbose"]
+        cmd = ["./rts_db/ddb_test_server", str(app_port), "--rts-verbose"]
         self.p = subprocess.Popen(cmd)
         for i in range(2000):
             self.assertEqual(tcp_cmd(self.p, app_port, "GET"), str(i))
