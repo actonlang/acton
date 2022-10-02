@@ -188,7 +188,7 @@ tCollectionListWild = tCon (TC qnCollection [tList tWild, tWild])
 --      __exec__    : proc(*R) -> None
 clProc              = NClass [quant r, quant t] (leftpath [cValue]) te
   where te          = [ (attrEval, NSig (monotype $ tFun fxProc (tVar r) kwdNil (tVar t)) NoDec)  {-,
-                        (attrExec, NSig (monotype $ tFun fxProc (tVar r) kwdNil tNone) NoDec) -} ]
+                        (attrExec, NSig (monotype $ tFun fxProc (tVar r) kwdNil tValue) NoDec) -} ]
         r           = TV PRow (name "R")
         t           = TV KType (name "T")
 
@@ -439,9 +439,9 @@ scEVAL              = tSchema [quant a, quant b, quant c] tEVAL
         b           = TV KRow (name "B")
         c           = TV KType (name "C")
 
---  $EXEC           : [A,B,C] => (proc(*A,**B)->C) -> proc(*A,**B)->None
+--  $EXEC           : [A,B,C] => (proc(*A,**B)->C) -> proc(*A,**B)->value
 scEXEC              = tSchema [quant a, quant b, quant c] tEXEC
-  where tEXEC       = tFun0 [procFun $ tVar c] (procFun tNone)
+  where tEXEC       = tFun0 [procFun $ tVar c] (procFun tValue)
         procFun c   = tFun fxProc (tVar a) (tVar b) c
         a           = TV PRow (name "A")
         b           = TV KRow (name "B")
@@ -452,7 +452,7 @@ proWrapped          = NProto [quant x] [] te
   where te          = [(attrWrap,scWrap), (attrEVAL,scEval), (attrEXEC,scExec)]
         scWrap      = NSig (tSchema q (tFun0 [tActor, abFun tX tC] (abFun tSelf tC)))  Static
         scEval      = NSig (tSchema q (tFun0 [abFun tSelf tC] (abFun tX tC))) Static
-        scExec      = NSig (tSchema q (tFun0 [abFun tSelf tC] (abFun tX tNone))) Static
+        scExec      = NSig (tSchema q (tFun0 [abFun tSelf tC] (abFun tX tValue))) Static
         abFun fx c  = tFun fx (tVar a) (tVar b) c
         tX          = tVar x
         tC          = tVar c
@@ -468,7 +468,7 @@ clWrapped           = NClass [quant s, quant x] [] te
   where te          = [(attrWrap,scWrap), (attrEVAL,scEVAL), (attrEXEC,scEXEC)]
         scWrap      = NDef (tSchema q (tFun0 [tActor, abFun tX tC] (abFun tS tC))) NoDec
         scEVAL      = NDef (tSchema q (tFun0 [abFun tS tC] (abFun tX tC))) NoDec
-        scEXEC      = NDef (tSchema q (tFun0 [abFun tS tC] (abFun tX tNone))) NoDec
+        scEXEC      = NDef (tSchema q (tFun0 [abFun tS tC] (abFun tX tValue))) NoDec
         abFun fx c  = tFun fx (tVar a) (tVar b) c
         tS          = tVar s
         tX          = tVar x
