@@ -88,6 +88,11 @@ liftedToTop                     :: LiftM [Decl]
 liftedToTop                     = state (\(totop,supply) -> (totop, ([],supply)))
 
 
+llCont                          = Internal LLiftPass "cont" 0
+
+llSelf                          = paramName0 "self"
+
+
 -- Environment ---------------------------------------------------------------------------------------------------------
 
 type LiftEnv                    = EnvF LiftX
@@ -138,8 +143,6 @@ liftedName env n                = case lookup n (namemap env) of
 extraArgs env n                 = case findFree n env of
                                     Just vts -> vts
                                     _        -> []
-
-llSelf                          = paramName0 "self"
 
 
 -- Helpers ------------------------------------------------------------------------------------------------------------------
@@ -249,30 +252,48 @@ freefun env e                           = Nothing
 
 closureConvert env lambda t0 vts0 es    = do n <- newName (nstr $ noq basename)
                                              --traceM ("## closureConvert " ++ prstr lambda ++ "  as  " ++ prstr n)
-                                             liftToTop [Class l0 n q [cBase,cValue] body]
+                                             liftToTop [Class l0 n q bases body]
                                              return $ eCall (tApp (eVar n) (map tVar $ tvarScope env)) es
   where q                               = quantScope env
         s                               = selfSubst env
         Lambda _ p _ e fx               = subst s lambda
-        t                               = subst s t0
+        t1                              = subst s t0
         p'                              = prowOf p
-        cBase                           = closureCon fx p' t
+        cBase                           = closureCon fx p' t1
         basename                        = tcname cBase
+        bases                           = map snd $ findAncestry env cBase
         vts                             = subst s vts0
-        body                            = props ++ [Decl l0 [initDef], Decl l0 [mainDef]]
+        body                            = props ++ [Decl l0 [initDef], Decl l0 defs]
         props                           = [ Signature l0 [v] (monotype t) Property | (v,t) <- subst s vts ]
         initDef                         = Def l0 initKW [] initPars KwdNIL (Just tNone) (initBody++[sReturn eNone]) NoDec fxPure
         initPars                        = PosPar llSelf (Just tSelf) Nothing $ pospar vts
         initBody                        = mkBody [ MutAssign l0 (eDot (eVar llSelf) v) (eVar v) | (v,t) <- vts ]
-        mainDef                         = Def l0 mainAttr [] mainPars KwdNIL (Just t) mainBody NoDec fx
-        mainPars                        = PosPar llSelf (Just tSelf) Nothing p
-        mainBody                        = [ Assign l0 [PVar l0 v (Just t)] (eDot (eVar llSelf) v) | (v,t) <- vts ] ++ [Return l0 (Just e)]
-        mainAttr
-          | basename == primCont        = attrCall
-          | basename == primProc        = attrEval
-          | basename == primAction      = attrAsyn
-          | basename == primMut         = attrCall
-          | basename == primPure        = attrCall
+        mainDef attr                    = Def l0 attr [] pars KwdNIL (Just t1) mainBody NoDec fx
+        pars                            = PosPar llSelf (Just tSelf) Nothing p
+        args                            = pArg p
+        methCall to                     = eCallP (eDot (eVar llSelf) to) args
+        parsC tc                        = addContPar pars tc
+        mainBody                        = [ sAssign (pVar v t) (eDot (eVar llSelf) v) | (v,t) <- vts ] ++ [sReturn e]
+        evalDef                         = mainDef attrEval
+        execDef                         = Def l0 attrExec [] pars KwdNIL (Just t1) [ sReturn (methCall attrEval) ] NoDec fxProc
+        asynDef                         = mainDef attrAsyn
+        evalDefA                        = Def l0 attrEval [] (parsC t1) KwdNIL (Just tR) evalBodyA NoDec fxProc
+        evalBodyA                       = [ sReturn $ eCall (tApp (eQVar primAWAIT) [t1]) [methCall attrAsyn, eVar llCont] ]
+        execDefA                        = delegate attrExec attrAsyn tValue
+        callDef                         = mainDef attrCall
+        evalDefF                        = delegate attrEval attrCall t1
+        execDefF                        = delegate attrExec attrCall tValue
+        delegate name to tc             = Def l0 name [] (parsC tc) KwdNIL (Just tR) (delegateBody to tc) NoDec fxProc
+        delegateBody to tc              = [ sReturn $ eCall (tApp (eQVar primRCont) [tValue]) [eVar llCont, methCall to] ]
+        defs
+          | basename == primCont        = [callDef]
+          | basename == primProc        = [evalDef, execDef]
+          | basename == primAction      = [evalDefA, execDefA, asynDef]
+          | basename == primMut         = [evalDefF, execDefF, callDef]
+          | basename == primPure        = [evalDefF, execDefF, callDef]
+
+addContPar PosNIL t                     = PosPar llCont (Just $ tCont t) Nothing PosNIL        -- TODO: move the $Cont param *first*
+addContPar (PosPar n a Nothing p) t     = PosPar n a Nothing (addContPar p t)
 
 closureCon fx p t
   | t == tR, TRow _ _ _ x TNil{} <- p   = TC primCont [x]

@@ -276,6 +276,7 @@ tApp e ts       = TApp NoLoc e ts
 eCall e es      = Call NoLoc e (posarg es) KwdNil
 eCallVar c es   = eCall (eVar c) es
 eCallV c es     = eCall (Var NoLoc c) es
+eCallP e as     = Call NoLoc e as KwdNil
 eTuple es       = Tuple NoLoc (posarg es) KwdNil
 eQVar n         = Var NoLoc n
 eVar n          = Var NoLoc (NoQ n)

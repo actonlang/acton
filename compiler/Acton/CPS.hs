@@ -314,11 +314,11 @@ instance CPS Branch where
 jump k                                  = sReturn (eCall (eVar k) [eNone]) : []
 
 
-addContArg env (Call l e pos KwdNil) c  = Call NoLoc e (add pos c) KwdNil
+addContArg env (Call l e pos KwdNil) c  = Call NoLoc e (add pos c) KwdNil                       -- TODO: move the cont param *first*
   where add PosNil c                    = PosArg c PosNil
         add (PosArg e p) c              = PosArg e (add p c)
 
-addContPar PosNIL fx t                  = PosPar contKW (Just $ tCont1 fx t) Nothing PosNIL
+addContPar PosNIL fx t                  = PosPar contKW (Just $ tCont1 fx t) Nothing PosNIL     -- TODO: move the cont param *first*
 addContPar (PosPar n a Nothing p) fx t  = PosPar n a Nothing (addContPar p fx t)
 
 tCont0                                  = tFun fxPure posNil kwdNil tR
@@ -532,7 +532,7 @@ instance Conv Type where
     conv t0@(TFun l fx p TNil{} t)
        | contFX fx && t /= tR           = TFun l fx (addCont (conv p) (conv t)) kwdNil tR
        | otherwise                      = TFun l fx (conv p) kwdNil (conv t)
-       where addCont (TRow l k n t p) c = TRow l k n t (addCont p c)
+       where addCont (TRow l k n t p) c = TRow l k n t (addCont p c)                            -- TODO: move the cont param *first*
              addCont p c                = posRow (tFun fx (posRow c posNil) kwdNil tR) p
     conv (TCon l c)                     = TCon l (conv c)
     conv (TTuple l p k)                 = TTuple l (conv p) (conv k)

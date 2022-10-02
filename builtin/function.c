@@ -78,7 +78,7 @@ struct $proc$class $proc$methods = {
     $proc$__bool__,
     $proc$__str__,
     $proc$__str__,
-//    NULL,               /* __eval__ */
+    NULL,               /* __eval__ */
     NULL                /* __exec__ */
 };
 struct $action$class $action$methods = {
@@ -91,8 +91,8 @@ struct $action$class $action$methods = {
     $action$__bool__,
     $action$__str__,
     $action$__str__,
-//    NULL,               /* __eval__ */
-//    NULL,               /* __exec__ */
+    NULL,               /* __eval__ */
+    NULL,               /* __exec__ */
     NULL                /* __asyn__ */
 };
 struct $mut$class $mut$methods = {
@@ -105,8 +105,8 @@ struct $mut$class $mut$methods = {
     $mut$__bool__,
     $mut$__str__,
     $mut$__str__,
-//    NULL,               /* __eval__ */
-//    NULL,               /* __exec__ */
+    NULL,               /* __eval__ */
+    NULL,               /* __exec__ */
     NULL                /* __call__ */
 };
 struct $pure$class $pure$methods = {
@@ -119,8 +119,8 @@ struct $pure$class $pure$methods = {
     $pure$__bool__,
     $pure$__str__,
     $pure$__str__,
-//    NULL,               /* __eval__ */
-//    NULL,               /* __exec__ */
+    NULL,               /* __eval__ */
+    NULL,               /* __exec__ */
     NULL                /* __call__ */
 };
 
