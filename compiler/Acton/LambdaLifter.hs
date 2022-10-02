@@ -247,31 +247,39 @@ freefun env (TApp l (Var l' n) ts)
   | isDefOrClass env n                  = Just (TApp l (Var l' (primSubst n)) (conv ts), [])
 freefun env e                           = Nothing
 
-closureConvert env lambda t0 vts0 es    = do n <- newName "lambda"
+closureConvert env lambda t0 vts0 es    = do n <- newName (nstr $ noq basename)
                                              --traceM ("## closureConvert " ++ prstr lambda ++ "  as  " ++ prstr n)
-                                             liftToTop [Class l0 n q base body]
+                                             liftToTop [Class l0 n q [cBase,cValue] body]
                                              return $ eCall (tApp (eVar n) (map tVar $ tvarScope env)) es
   where q                               = quantScope env
         s                               = selfSubst env
         Lambda _ p _ e fx               = subst s lambda
         t                               = subst s t0
         p'                              = prowOf p
-        base | Just x <- isCont fx p' t = TC primCont [x] : base0
-             | otherwise                = base0
-        base0                           = [TC (primClosure fx) [p',t], cValue]
+        cBase                           = closureCon fx p' t
+        basename                        = tcname cBase
         vts                             = subst s vts0
-        body                            = props ++ [Decl l0 [initDef], Decl l0 [callDef]]
+        body                            = props ++ [Decl l0 [initDef], Decl l0 [mainDef]]
         props                           = [ Signature l0 [v] (monotype t) Property | (v,t) <- subst s vts ]
         initDef                         = Def l0 initKW [] initPars KwdNIL (Just tNone) (initBody++[sReturn eNone]) NoDec fxPure
         initPars                        = PosPar llSelf (Just tSelf) Nothing $ pospar vts
         initBody                        = mkBody [ MutAssign l0 (eDot (eVar llSelf) v) (eVar v) | (v,t) <- vts ]
-        callDef                         = Def l0 (attrInvoke fx) [] callPars KwdNIL (Just t) callBody NoDec fx
-        callPars                        = PosPar llSelf (Just tSelf) Nothing p
-        callBody                        = [ Assign l0 [PVar l0 v (Just t)] (eDot (eVar llSelf) v) | (v,t) <- vts ] ++ [Return l0 (Just e)]
+        mainDef                         = Def l0 mainAttr [] mainPars KwdNIL (Just t) mainBody NoDec fx
+        mainPars                        = PosPar llSelf (Just tSelf) Nothing p
+        mainBody                        = [ Assign l0 [PVar l0 v (Just t)] (eDot (eVar llSelf) v) | (v,t) <- vts ] ++ [Return l0 (Just e)]
+        mainAttr
+          | basename == primCont        = attrCall
+          | basename == primProc        = attrEval
+          | basename == primAction      = attrAsyn
+          | basename == primMut         = attrCall
+          | basename == primPure        = attrCall
 
-isCont fx (TRow _ _ _ x TNil{}) t
-  | fx == fxProc && t == tR             = Just x
-isCont _ _ _                            = Nothing
+closureCon fx p t
+  | t == tR, TRow _ _ _ x TNil{} <- p   = TC primCont [x]
+  | fx == fxProc                        = TC primProc [p,t]
+  | fx == fxAction                      = TC primAction [p,t]
+  | fx == fxMut                         = TC primMut [p,t]
+  | fx == fxPure                        = TC primPure [p,t]
 
 instance Lift Expr where
     ll env e@(Var l (NoQ n))
@@ -286,23 +294,36 @@ instance Lift Expr where
       | Just (e',vts) <- freefun env e  = do p' <- ll env p
                                              return $ Call l e' (addArgs vts p') KwdNil
       | TApp _ (Var _ n) ts <- e,
-        n == primEXEC,                                                                      -- DEACT!
+        n == primEXEC,
         PosArg e' PosNil <- p,
         closedType env e'               = do e' <- ll env e'
                                              return $ Dot l e' attrExec
+      | Async _ e' <- e,
+        closedType env e'               = do e' <- ll env e'
+                                             p' <- ll env p
+                                             return $ Call l (eDot e' attrAsyn) p' KwdNil      
       | closedType env e                = do e' <- llSub env e
                                              p' <- ll env p
-                                             let t = typeOf env e'
-                                             return $ Call l (eDot e' $ attrInvoke $ effect t) p' KwdNil
+                                             let TFun _ fx p _ t = typeOf env e'
+                                                 attr | t == tR         = attrCall      -- attrCont
+                                                      | fx == fxProc    = attrEval
+                                                      | fx == fxAction  = attrAsyn      -- Will disapperar -- DEACT!
+                                                      | fx == fxMut     = attrCall
+                                                      | fx == fxPure    = attrCall
+                                             return $ Call l (eDot e' attr) p' KwdNil
       | otherwise                       = do e' <- llSub env e
                                              p' <- ll env p
                                              return $ Call l e' p' KwdNil
 
     ll env (Async l e)
-      | closedType env e                = do e <- ll env e                                        -- DEACT!
-                                             return $ Dot l e attrAsyn
+      | closedType env e                = do e <- ll env e
+                                             let vts = restrict (locals env) (free e)
+                                                 call = Call l0 (eDot e attrAsyn) (pArg par) KwdNil
+                                             closureConvert env (Lambda l0 par KwdNIL call fxProc) (tMsg t) vts (map (eVar . fst) vts)
       | otherwise                       = do e <- ll env e
                                              return $ Async l e
+      where par                         = pPar paramNames' (conv p)
+            TFun _ fx p _ t             = typeOf env e
 
     ll env e0@(Lambda l p KwdNIL e fx)  = do e' <- ll env1 e
                                              let vts = restrict (locals env) (free e' \\ bound p)
@@ -414,9 +435,7 @@ instance Conv TSchema where
     conv (TSchema l q t)                = TSchema l (conv q) (conv t)
 
 instance Conv Type where
-    conv (TFun l fx p TNil{} t)
-      | Just x <- isCont fx p t         = TCon l (TC primCont [x])
-      | otherwise                       = TCon l (TC (primClosure fx) [conv p, conv t])
+    conv (TFun l fx p _ t)              = TCon l (conv $ closureCon fx p t)
     conv (TCon l c)                     = TCon l (conv c)
     conv (TTuple l p k)                 = TTuple l (conv p) (conv k)
     conv (TOpt l t)                     = TOpt l (conv t)

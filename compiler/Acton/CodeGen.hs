@@ -534,8 +534,6 @@ genCall env [row] (Var _ n) (PosArg s@Strings{} (PosArg tup PosNil))
         flatten e                   = foldr PosArg PosNil $ map (DotI l0 e) [0..]
 genCall env [t] (Var _ n) PosNil
   | n == primNEWACTOR               = gen env n <> parens (gen env t)
-genCall env ts (Var _ n) (PosArg e PosNil)
-  | n == primEXEC                   = gen env (tApp e ts)
 genCall env ts e@(Var _ n) p
   | NClass{} <- info                = genNew env n p
   | NDef{} <- info                  = (instCast env ts e $ gen env e) <> parens (gen env p)

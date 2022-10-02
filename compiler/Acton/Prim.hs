@@ -29,12 +29,6 @@ primAction          = gPrim "action"
 primMut             = gPrim "mut"
 primPure            = gPrim "pure"
 
-primClosure fx
-  | fx == fxProc    = primProc
-  | fx == fxAction  = primAction
-  | fx == fxMut     = primMut
-  | fx == fxPure    = primPure
-
 cProc r t           = TC primProc [r,t]
 cAction r t         = TC primAction [r,t]
 cMut r t            = TC primMut [r,t]
@@ -44,12 +38,6 @@ attrEval            = name "__eval__"
 attrExec            = name "__exec__"
 attrAsyn            = name "__asyn__"
 attrCall            = name "__call__"
-
-attrInvoke fx
-  | fx == fxProc    = attrEval
-  | fx == fxAction  = attrAsyn
-  | fx == fxMut     = attrCall
-  | fx == fxPure    = attrCall
 
 primActor           = gPrim "Actor"
 primR               = gPrim "R"
