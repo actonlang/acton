@@ -64,10 +64,6 @@ actor Tester(env, verbose, port_chunk):
         error_msg = msg
         stop(True)
 
-    # FIXME: get rid of this, process.Process should support Eq
-    def p_id(p: process.Process) -> int:
-        NotImplemented
-
     def report():
         if error_encountered:
             print("There was an error :/")
@@ -89,8 +85,9 @@ actor Tester(env, verbose, port_chunk):
 
 
     def log_process_output(p, prefix, data):
+        paid = p.aid()
         for line in data.decode().splitlines(False):
-            combined_output += psp[p_id(p)] + " " + prefix + ": " + line + "\n"
+            combined_output += psp[paid] + " " + prefix + ": " + line + "\n"
 
     def on_stderr(p, data):
         log_process_output(p, "ERR", data)
@@ -135,7 +132,8 @@ actor Tester(env, verbose, port_chunk):
             p = process.Process(process_auth, cmd, None, None, on_stdout, on_stderr, db_on_exit, on_error)
             p_alive += 1
             ps.append(p)
-            psp[p_id(p)] = "db%d" % i
+            paid = p.aid()
+            psp[paid] = "db%d" % i
 
     def db_args(start_port, replication_factor) -> list[str]:
         #a = ["127.0.0.1:" for idx in range(0, replication_factor, 1)]
@@ -228,7 +226,8 @@ actor Tester(env, verbose, port_chunk):
                     ps.append(p)
                     p_alive += 1
                     if p is not None:
-                        psp[p_id(p)] = "app"
+                        paid = p.aid()
+                        psp[paid] = "app"
                 else:
                     error("App exited in state %d with an unexpected exit code %d and termination signal %d" % (state, exit_code, term_signal))
             elif state == 8:
@@ -252,7 +251,8 @@ actor Tester(env, verbose, port_chunk):
         p_alive += 1
         if p is not None:
             ps.append(p)
-            psp[p_id(p)] = "app"
+            paid = p.aid()
+            psp[paid] = "app"
 
         #
 
@@ -278,12 +278,3 @@ actor main(env):
 
     after 5: test_timeout()
     after 9: unconditional_exit()
-
-
-def _force_ext():
-    """Force compilation using .ext.c
-
-    Only top level functions are recognized as externally defined by actonc
-    TODO: fix in actonc and remove this
-    """
-    NotImplemented

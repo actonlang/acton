@@ -42,10 +42,6 @@ actor Tester(env, verbose, port_chunk):
         error_msg = msg
         stop(True)
 
-    # FIXME: get rid of this, process.Process should support Eq
-    def p_id(p: process.Process) -> int:
-        NotImplemented
-
     def report():
         if error_encountered:
             print("There was an error :/")
@@ -66,8 +62,9 @@ actor Tester(env, verbose, port_chunk):
         report()
 
     def log_process_output(p, prefix, data):
+        paid = p.aid()
         for line in data.decode().splitlines(False):
-            combined_output += psp[p_id(p)] + " " + prefix + ": " + line + "\n"
+            combined_output += psp[paid] + " " + prefix + ": " + line + "\n"
 
     def on_stderr(p, data):
         log_process_output(p, "ERR", data)
@@ -113,7 +110,8 @@ actor Tester(env, verbose, port_chunk):
             p = process.Process(process_auth, cmd, None, None, on_stdout, on_stderr, db_on_exit, on_error)
             p_alive += 1
             ps.append(p)
-            psp[p_id(p)] = "db%d" % i
+            paid = p.aid()
+            psp[paid] = "db%d" % i
 
     def db_args(start_port, replication_factor) -> list[str]:
         #a = ["127.0.0.1:" for idx in range(0, replication_factor, 1)]
@@ -130,7 +128,8 @@ actor Tester(env, verbose, port_chunk):
         cmd = ["rts_db/ddb_test_app", "--rts-verbose"] + db_args(port_chunk, 3)
         p = process.Process(process_auth, cmd, None, None, on_stdout, on_stderr, app_on_exit, on_error)
         p_alive += 1
-        psp[p_id(p)] = "app"
+        paid = p.aid()
+        psp[paid] = "app"
 
     test_ddb_app()
 
@@ -154,12 +153,3 @@ actor main(env):
 
     after 2: test_timeout()
     after 4: unconditional_exit()
-
-
-def _force_ext():
-    """Force compilation using .ext.c
-
-    Only top level functions are recognized as externally defined by actonc
-    TODO: fix in actonc and remove this
-    """
-    NotImplemented

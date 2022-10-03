@@ -64,10 +64,6 @@ actor Tester(env, verbose, port_chunk):
         error_msg = msg
         stop(True)
 
-    # FIXME: get rid of this, process.Process should support Eq
-    def p_id(p: process.Process) -> int:
-        NotImplemented
-
     def report():
         if error_encountered:
             print("There was an error :/")
@@ -88,8 +84,9 @@ actor Tester(env, verbose, port_chunk):
         report()
 
     def log_process_output(p, prefix, data):
+        paid = p.aid()
         for line in data.decode().splitlines(False):
-            combined_output += psp[p_id(p)] + " " + prefix + ": " + line + "\n"
+            combined_output += psp[paid] + " " + prefix + ": " + line + "\n"
 
     def on_stderr(p, data):
         log_process_output(p, "ERR", data)
@@ -134,7 +131,8 @@ actor Tester(env, verbose, port_chunk):
             p = process.Process(process_auth, cmd, None, None, on_stdout, on_stderr, db_on_exit, on_error)
             p_alive += 1
             ps.append(p)
-            psp[p_id(p)] = "db%d" % i
+            paid = p.aid()
+            psp[paid] = "db%d" % i
 
     def db_args(start_port, replication_factor) -> list[str]:
         #a = ["127.0.0.1:" for idx in range(0, replication_factor, 1)]
@@ -166,9 +164,11 @@ actor Tester(env, verbose, port_chunk):
         def app_server_on_exit(p, exit_code, term_signal):
             log("Server app exited in state %d with exit code %d and termination signal %d" % (state, exit_code, term_signal))
             p_alive -= 1
+            paid = p.aid()
             # TODO: port this to test_tcp_server.act
             for i in range(0, len(ps), 1):
-                if p_id(ps[i]) == p_id(p):
+                ps_aid = ps[i].aid()
+                if ps_aid == paid:
                     del ps[i]
                     break
             are_we_done()
@@ -177,7 +177,8 @@ actor Tester(env, verbose, port_chunk):
         p_alive += 1
         if p_srv is not None:
             ps.append(p_srv)
-            psp[p_id(p_srv)] = "srv"
+            paid_srv = p_srv.aid()
+            psp[paid_srv] = "srv"
 
         # TCP client
         def tcpc_on_connect(c):
@@ -197,7 +198,8 @@ actor Tester(env, verbose, port_chunk):
                     p_alive += 1
                     if p is not None:
                         ps.append(p)
-                        psp[p_id(p)] = "app"
+                        paid = p.aid()
+                        psp[paid] = "app"
                 else:
                     error("Got unexpected data from server in state %d: %s" % (state, data.decode()))
 
@@ -218,8 +220,10 @@ actor Tester(env, verbose, port_chunk):
         def app_client_on_exit(p, exit_code, term_signal):
             log("App exited in state %d with exit code %d and termination signal %d" % (state, exit_code, term_signal))
             p_alive -= 1
+            paid = p.aid()
             for i in range(0, len(ps), 1):
-                if p_id(ps[i]) == p_id(p):
+                ps_aid = ps[i].aid()
+                if ps_aid == paid:
                     del ps[i]
                     break
 
@@ -242,7 +246,8 @@ actor Tester(env, verbose, port_chunk):
         p_alive += 1
         if p is not None:
             ps.append(p)
-            psp[p_id(p)] = "app"
+            paid = p.aid()
+            psp[paid] = "app"
 
 
     test_ddb_client()
@@ -267,12 +272,3 @@ actor main(env):
 
     after 2: test_timeout()
     after 4: unconditional_exit()
-
-
-def _force_ext():
-    """Force compilation using .ext.c
-
-    Only top level functions are recognized as externally defined by actonc
-    TODO: fix in actonc and remove this
-    """
-    NotImplemented
