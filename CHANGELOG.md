@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+Foo
+
 ### Added
 - Bash completion is now part of the Debian packages & brew formula
 
