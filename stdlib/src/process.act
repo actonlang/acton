@@ -30,6 +30,13 @@ actor Process(auth: ProcessAuth, cmd: list[str], workdir: ?str, env: ?dict[str, 
         """
         print(cmd, workdir, env, on_stdout, on_stderr, on_exit, on_error, _p)
 
+    action def aid() -> int:
+        """Actor ID of process actor
+
+        Workaround for lack of working repr on actors.
+        """
+        NotImplemented
+
     def _create_process():
         """Do the C magic to actually create a process and talk to it
         """
