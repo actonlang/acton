@@ -59,6 +59,7 @@
     on the terminal.
   - fd -1 is used to signal an invalid fd, which prevents similar mistakes.
   - The DB node status is inspected and messages are only sent to live servers.
+- Remove remaining ending new linse from RTS log messages [#926]
 
 
 ## [0.11.6] (2022-09-20)
@@ -1307,6 +1308,7 @@ then, this second incarnation has been in focus and 0.2.0 was its first version.
 [#887]: https://github.com/actonlang/acton/issues/887
 [#907]: https://github.com/actonlang/acton/issues/907
 [#913]: https://github.com/actonlang/acton/issues/913
+[#926]: https://github.com/actonlang/acton/issues/926
 
 [0.3.0]: https://github.com/actonlang/acton/releases/tag/v0.3.0
 [0.4.0]: https://github.com/actonlang/acton/compare/v0.3.0...v0.4.0
