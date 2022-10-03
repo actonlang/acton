@@ -165,7 +165,6 @@ actor Tester(env, verbose, port_chunk):
             log("Server app exited in state %d with exit code %d and termination signal %d" % (state, exit_code, term_signal))
             p_alive -= 1
             paid = p.aid()
-            # TODO: port this to test_tcp_server.act
             for i in range(0, len(ps), 1):
                 ps_aid = ps[i].aid()
                 if ps_aid == paid:

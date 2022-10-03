@@ -217,7 +217,12 @@ actor Tester(env, verbose, port_chunk):
         def app_server_on_exit(p, exit_code, term_signal):
             log("App exited in state %d with exit code %d and termination signal %d" % (state, exit_code, term_signal))
             p_alive -= 1
-            ps = ps[:-1]
+            paid = p.aid()
+            for i in range(0, len(ps), 1):
+                ps_aid = ps[i].aid()
+                if ps_aid == paid:
+                    del ps[i]
+                    break
             if state == 5:
                 if exit_code == 0 and term_signal == 0:
                     log("App successfully exited in state %d with exit code %d and termination signal %d" % (state, exit_code, term_signal))
