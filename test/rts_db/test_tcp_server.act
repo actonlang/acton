@@ -87,17 +87,16 @@ actor Tester(env, verbose, port_chunk):
 
         report()
 
-    def on_stderr(p, data):
+
+    def log_process_output(p, prefix, data):
         for line in data.decode().splitlines(True):
-            combined_output += psp[p_id(p)]
-            combined_output += " ERR: "
-            combined_output += line
+            combined_output += psp[p_id(p)] + " " + prefix + ": " + line
+
+    def on_stderr(p, data):
+        log_process_output(p, "ERR", data)
 
     def on_stdout(p, data):
-        for line in data.decode().splitlines(True):
-            combined_output += psp[p_id(p)]
-            combined_output += " OUT: "
-            combined_output += line
+        log_process_output(p, "OUT", data)
 
     def db_on_exit(p, exit_code, term_signal):
         log("DB Process exited with code: %d terminated with signal: %d" % (exit_code, term_signal))
@@ -145,18 +144,6 @@ actor Tester(env, verbose, port_chunk):
             args.append("--rts-ddb-host")
             args.append("127.0.0.1:" + str(start_port + idx*2))
         return args
-
-
-    # Tests go here
-    def test_ddb_app():
-        dbc_start()
-        cmd = ["./test_db_app", "--rts-verbose"] + db_args(port_chunk, 3)
-        p = process.Process(process_auth, cmd, None, None, on_stdout, on_stderr, app_on_exit, on_error)
-        p_alive += 1
-        psp[p_id(p)] = "app"
-
-    def test_ddb_client():
-        pass
 
 
     def test_ddb_server():
@@ -210,7 +197,7 @@ actor Tester(env, verbose, port_chunk):
             error("Client ERR: %s" % (msg))
 
         def app_server_on_stdout(p, data):
-            on_stdout(p, data)
+            log_process_output(p, "OUT: state " + str(state), data)
             if state == 0:
                 if data == b"NOW LISTENING\n":
                     log("Server app listening in state %d, starting TCP client" % state)
