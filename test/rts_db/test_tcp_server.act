@@ -199,15 +199,19 @@ actor Tester(env, verbose, port_chunk):
         def app_server_on_stdout(p, data):
             log_process_output(p, "OUT: state " + str(state), data)
             if state == 0:
-                if data == b"NOW LISTENING\n":
+                if data.find(b"NOW LISTENING\n", None, None) > -1:
                     log("Server app listening in state %d, starting TCP client" % state)
                     state = 1
                     tcp_client = net.TCPIPConnection(connect_auth, "127.0.0.1", port, tcpc_on_connect, tcpc_on_receive, tcpc_on_error)
+                else:
+                    log("Read unexpected output from server app:" + str(data))
             elif state == 6:
-                if data == b"NOW LISTENING\n":
+                if data.find(b"NOW LISTENING\n", None, None) > -1:
                     log("Server app listening in state %d, starting TCP client" % state)
                     state = 7
                     tcp_client = net.TCPIPConnection(connect_auth, "127.0.0.1", port, tcpc_on_connect, tcpc_on_receive, tcpc_on_error)
+                else:
+                    log("Read unexpected output from server app:" + str(data))
 
         log("Running server test")
         dbc_start()
