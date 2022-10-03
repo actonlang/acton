@@ -32,7 +32,7 @@ actor Tester(env, verbose, port_chunk):
 
     def log(msg: str) -> None:
         if verbose:
-            print(log)
+            print(msg)
         combined_output += "testOUT: " + msg + "\n"
 
     def error(msg: str):
@@ -85,14 +85,13 @@ actor Tester(env, verbose, port_chunk):
         are_we_done()
 
     def app_on_exit(p, exit_code, term_signal):
-        print("App Process exited with code: ", exit_code, " terminated with signal:", term_signal)
+        log("App Process exited with code: %d terminated with signal: %d" % (exit_code, term_signal))
         p_alive -= 1
         if exit_code == 0 and term_signal == 0:
-            if verbose:
-                print("App Process successfully exited with code: ", exit_code, " terminated with signal:", term_signal)
+            log("App Process successfully exited with code: %d terminated with signal: %d" % (exit_code, term_signal))
             stop(False)
         else:
-            print("App Process erroneously exited with code: ", exit_code, " terminated with signal:", term_signal)
+            log("App Process erroneously exited with code: %d terminated with signal: %d" % (exit_code, term_signal))
         are_we_done()
 
     def on_error(p, error):
@@ -145,11 +144,11 @@ actor main(env):
     t = Tester(env, verbose, port_chunk)
 
     def test_timeout():
-        print("Test failed - timeout reached")
+        t.log("Test failed - timeout reached")
         await async t.stop(True)
 
     def unconditional_exit():
-        print("Giving up...")
+        t.log("Giving up...")
         t.report()
         await async env.exit(1)
 
