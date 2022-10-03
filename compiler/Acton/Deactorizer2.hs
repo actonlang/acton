@@ -237,11 +237,21 @@ instance Deact Expr where
     deact env (Call l (TApp _ (Var _ n) ts) (PosArg e PosNil) KwdNil)
       | n == primEXEC,
         isProcMeth env e            = deact env e
-    deact env (Call l (TApp _ (Var _ n) ts) (PosArg s (PosArg e PosNil)) KwdNil)
+    deact env (Call l (TApp _ (Var _ n) ts) (PosArg self (PosArg e PosNil)) KwdNil)
       | n == primSEAL,
         isExportMeth env e          = deact env e
------------------------------------------------------------------
-    deact env (Call l e ps KwdNil)  = Call l <$> deact env e <*> deact env ps <*> pure KwdNil
+      | n == primSEAL               = do e <- deact env e
+                                         self <- deact env self
+                                         let lam = Lambda l0 PosNIL KwdNIL (eCallP e (pArg ps)) fxProc
+                                         return $ Lambda l0 ps KwdNIL (eCall (tApp (eQVar primASYNCf) [t]) [self,lam]) fxAction
+      where TFun _ fx p _ t         = typeOf env e
+            ps                      = pPar paramNames' p
+    deact env (Call l e as KwdNil)  = do e <- deact env e
+                                         as <- deact env as
+                                         case e of
+                                            Lambda _ ps KwdNIL e' _ | Just s <- pzip ps as ->
+                                                 return $ termsubst s e'
+                                            _ -> return $ Call l e as KwdNil
     deact env (TApp l e ts)         = TApp l <$> deact env e <*> pure ts
     deact env (Cond l e1 e e2)      = Cond l <$> deact env e1 <*> deact env e <*> deact env e2
     deact env (IsInstance l e c)    = IsInstance l <$> deact env e <*> return c
