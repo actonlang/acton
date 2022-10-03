@@ -1690,7 +1690,7 @@ const char* actors_to_json () {
 
 
 void *$mon_log_loop(void *period) {
-    log_info("Starting monitor log, with %d second(s) period, to: %s\n", (uint)period, mon_log_path);
+    log_info("Starting monitor log, with %d second(s) period, to: %s", (uint)period, mon_log_path);
 
 #if defined(IS_MACOS)
     pthread_setname_np("Monitor Log");
@@ -1710,7 +1710,7 @@ void *$mon_log_loop(void *period) {
         fputs(json, f);
         fputs("\n", f);
         if (rts_exit > 0) {
-            log_info("Shutting down RTS Monitor log thread.\n");
+            log_info("Shutting down RTS Monitor log thread.");
             break;
         }
 
@@ -1727,7 +1727,7 @@ void *$mon_log_loop(void *period) {
 
 
 void *$mon_socket_loop() {
-    log_info("Starting monitor socket listen on %s\n", mon_socket_path);
+    log_info("Starting monitor socket listen on %s", mon_socket_path);
 
 #if defined(IS_MACOS)
     pthread_setname_np("Monitor Socket");
@@ -1781,7 +1781,7 @@ void *$mon_socket_loop() {
                     break;
                 int r = netstring_read(&buf_base, &buf_used, &str, &len);
                 if (r != 0) {
-                    log_info("Mon socket: Error reading netstring: %d\n", r);
+                    log_info("Mon socket: Error reading netstring: %d", r);
                     break;
                 }
 
@@ -1793,7 +1793,7 @@ void *$mon_socket_loop() {
                     free((void *)json);
                     free((void *)send_buf);
                     if (send_res < 0) {
-                        log_info("Mon socket: Error sending\n");
+                        log_info("Mon socket: Error sending");
                         break;
                     }
                 }
@@ -1806,7 +1806,7 @@ void *$mon_socket_loop() {
                     free((void *)json);
                     free((void *)send_buf);
                     if (send_res < 0) {
-                        log_info("Mon socket: Error sending\n");
+                        log_info("Mon socket: Error sending");
                         break;
                     }
                 }
@@ -1819,7 +1819,7 @@ void *$mon_socket_loop() {
                     free((void *)json);
                     free((void *)send_buf);
                     if (send_res < 0) {
-                        log_info("Mon socket: Error sending\n");
+                        log_info("Mon socket: Error sending");
                         break;
                     }
                 }
@@ -1845,20 +1845,20 @@ void rts_shutdown() {
 
 void sigint_handler(int signum) {
     if (rts_exit == 0) {
-        log_info("Received SIGINT, shutting down gracefully...\n");
+        log_info("Received SIGINT, shutting down gracefully...");
         rts_shutdown();
     } else {
-        log_info("Received SIGINT during graceful shutdown, exiting immediately\n");
+        log_info("Received SIGINT during graceful shutdown, exiting immediately");
         exit(return_val);
     }
 }
 
 void sigterm_handler(int signum) {
     if (rts_exit == 0) {
-        log_info("Received SIGTERM, shutting down gracefully...\n");
+        log_info("Received SIGTERM, shutting down gracefully...");
         rts_shutdown();
     } else {
-        log_info("Received SIGTERM during graceful shutdown, exiting immediately\n");
+        log_info("Received SIGTERM during graceful shutdown, exiting immediately");
         exit(return_val);
     }
 }
@@ -2215,8 +2215,8 @@ int main(int argc, char **argv) {
     unsigned int seed;
     if (ddb_host) {
         GET_RANDSEED(&seed, 0);
-        log_info("Starting distributed RTS node, host=%s, node_id=%d, rack_id=%d, datacenter_id=%d\n", rts_host, rts_node_id, rts_rack_id, rts_dc_id);
-        log_info("Using distributed database backend replication factor of %d\n", ddb_replication);
+        log_info("Starting distributed RTS node, host=%s, node_id=%d, rack_id=%d, datacenter_id=%d", rts_host, rts_node_id, rts_rack_id, rts_dc_id);
+        log_info("Using distributed database backend replication factor of %d", ddb_replication);
         char ** seed_hosts = (char **) malloc(ddb_no_host * sizeof(char *));
         int * seed_ports = (int *) malloc(ddb_no_host * sizeof(int));
 
@@ -2228,7 +2228,7 @@ int main(int argc, char **argv) {
                 *colon = '\0';
                 seed_ports[i] = atoi(colon + 1);
             }
-            log_info("Using distributed database backend (DDB): %s:%d\n", seed_hosts[i], seed_ports[i]);
+            log_info("Using distributed database backend (DDB): %s:%d", seed_hosts[i], seed_ports[i]);
         }
         db = get_remote_db(ddb_replication, rts_rack_id, rts_dc_id, rts_host, rts_node_id, ddb_no_host, seed_hosts, seed_ports, &seed);
         free(seed_hosts);
@@ -2237,20 +2237,20 @@ int main(int argc, char **argv) {
 
     if (db) {
         snode_t* start_row = NULL, * end_row = NULL;
-        log_info("Checking for existing actor state in DDB.\n");
+        log_info("Checking for existing actor state in DDB.");
         int no_items = remote_read_full_table_in_txn(&start_row, &end_row, ACTORS_TABLE, NULL, db);
         if (no_items > 0) {
-            log_info("Found %d existing actors; Restoring actor state from DDB.\n", no_items);
+            log_info("Found %d existing actors; Restoring actor state from DDB.", no_items);
             deserialize_system(start_row);
-            log_info("Actor state restored from DDB.\n");
+            log_info("Actor state restored from DDB.");
         } else {
-            log_info("No previous state in DDB; Initializing database...\n");
+            log_info("No previous state in DDB; Initializing database...");
             int indices[] = {0};
             db_schema_t* db_schema = db_create_schema(NULL, 1, indices, 1, indices, 0, indices, 0);
             create_db_queue(TIMER_QUEUE);
             timer_consume_hd = 0;
             BOOTSTRAP(new_argc, new_argv);
-            log_info("Database intialization complete.\n");
+            log_info("Database intialization complete.");
         }
     } else {
         BOOTSTRAP(new_argc, new_argv);
