@@ -4,6 +4,7 @@
 
 
 ## [0.11.7] (2022-10-03)
+Many important fixes for RTS/DB and the language in general!
 
 ### Added
 - Bash completion is now part of the Debian packages & brew formula
