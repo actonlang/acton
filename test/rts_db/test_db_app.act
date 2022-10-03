@@ -65,17 +65,16 @@ actor Tester(env, verbose, port_chunk):
 
         report()
 
+    def log_process_output(p, prefix, data):
+        for line in data.decode().splitlines(False):
+            combined_output += psp[p_id(p)] + " " + prefix + ": " + line + "\n"
+
     def on_stderr(p, data):
-        for line in data.decode().splitlines(True):
-            combined_output += psp[p_id(p)]
-            combined_output += " ERR: "
-            combined_output += line
+        log_process_output(p, "ERR", data)
 
     def on_stdout(p, data):
-        for line in data.decode().splitlines(True):
-            combined_output += psp[p_id(p)]
-            combined_output += " OUT: "
-            combined_output += line
+        log_process_output(p, "OUT", data)
+
 
     def db_on_exit(p, exit_code, term_signal):
         log("DB Process exited with code: %d terminated with signal: %d" % (exit_code, term_signal))

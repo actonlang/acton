@@ -195,7 +195,7 @@ int install_gossiped_view(membership_agreement_msg * ma, remote_db_t * db, unsig
 	if(compare_vc(db->current_view_id, ma->vc) > 0)
 	{
 #if (VERBOSE_RPC > -1)
-		log_debug("CLIENT: Skipping installing notified view %s because it is older than my installed view %s!\n",
+		log_debug("CLIENT: Skipping installing notified view %s because it is older than my installed view %s!",
 							to_string_vc(ma->vc, msg_buf), to_string_vc(db->current_view_id, msg_buf));
 #endif
 
@@ -219,7 +219,7 @@ int install_gossiped_view(membership_agreement_msg * ma, remote_db_t * db, unsig
 			if(nd.status != NODE_LIVE)
 			{
 #if (VERBOSE_RPC > -1)
-				log_debug("CLIENT: Skipping installing notified view %s because it transiently marks local RTS as dead.\n",
+				log_debug("CLIENT: Skipping installing notified view %s because it transiently marks local RTS as dead.",
 							to_string_vc(ma->vc, msg_buf));
 #endif
 
@@ -233,7 +233,7 @@ int install_gossiped_view(membership_agreement_msg * ma, remote_db_t * db, unsig
 	if(found_local == 0)
 	{
 #if (VERBOSE_RPC > -1)
-		log_debug("CLIENT: Skipping installing notified view %s because it transiently lacks knowledge of local RTS.\n",
+		log_debug("CLIENT: Skipping installing notified view %s because it transiently lacks knowledge of local RTS.",
 							to_string_vc(ma->vc, msg_buf));
 #endif
 
@@ -266,10 +266,10 @@ int install_gossiped_view(membership_agreement_msg * ma, remote_db_t * db, unsig
 	pthread_mutex_unlock(db->gossip_lock);
 
 #if (VERBOSE_RPC > -1)
-	log_debug("CLIENT: Installed new agreed view %s\n", to_string_membership_agreement_msg(ma, msg_buf));
+	log_debug("CLIENT: Installed new agreed view %s", to_string_membership_agreement_msg(ma, msg_buf));
 #endif
 
-    log_debug("CLIENT: RTS membership: %s\n", to_string_rts_membership(db, msg_buf));
+    log_debug("CLIENT: RTS membership: %s", to_string_rts_membership(db, msg_buf));
 
 	return 0;
 }
@@ -511,7 +511,7 @@ int add_server_to_membership(char *hostname, int portno, int status, remote_db_t
 
     if(rs == NULL)
     {
-		log_error("ERROR: Failed joining server %s:%d (DNS/network problem?)!\n", hostname, portno);
+		log_error("ERROR: Failed joining server %s:%d (DNS/network problem?)!", hostname, portno);
     		return 1;
     }
 
@@ -519,12 +519,12 @@ int add_server_to_membership(char *hostname, int portno, int status, remote_db_t
 
     if(prev_entry != NULL)
     {
-    		log_info("Server address %s:%d was already added to membership!\n", hostname, portno);
+		log_info("Server address %s:%d already in membership!", hostname, portno);
 		remote_server * prev_rems = (remote_server *) prev_entry->value;
 		if(rs->status == NODE_LIVE && (prev_rems->status == NODE_DEAD || prev_rems->sockfd <= 0))
 		{
 			// Delete previous entry, reconnect to node and update socket descriptor if we've been disconnected in the mean time:
-			log_info("Reconnecting to server %s:%d\n", hostname, portno);
+			log_info("Reconnecting to server %s:%d", hostname, portno);
 			skiplist_delete(db->servers, &rs->serveraddr);
 		}
 		else
@@ -541,14 +541,14 @@ int add_server_to_membership(char *hostname, int portno, int status, remote_db_t
 
     if((skiplist_insert(db->servers, &rs->serveraddr, rs, seedptr)) != 0)
     {
-    		log_error("ERROR: Error adding server address %s:%d to membership!\n", hostname, portno);
+    		log_error("ERROR: Error adding server address %s:%d to membership!", hostname, portno);
 		free_remote_server(rs);
 		return -2;
     }
 
     if(rs->status == NODE_DEAD)
     {
-    		log_error("ERROR: Failed joining server %s:%d (it looks down)!\n", hostname, portno);
+    		log_error("ERROR: Failed joining server %s:%d (it looks down)!", hostname, portno);
     		return 1;
     }
 	comm_wake_up(db);
@@ -601,7 +601,7 @@ int add_rts_to_membership(int rack_id, int dc_id, char *hostname, int local_rts_
 	snode_t * prev_entry = skiplist_search(rtss, &(rts_d->addr));
     if(prev_entry != NULL)
     {
-    		log_debug("RTS address %s:%d was already added to membership, updating status and metadata!\n", hostname, local_rts_id);
+		log_debug("RTS address %s:%d already in membership, updating status and metadata!", hostname, local_rts_id);
 		rts_descriptor * prev_descriptor = (rts_descriptor *) prev_entry->value;
 		prev_descriptor->status = rts_d->status;
 		prev_descriptor->rack_id = rts_d->rack_id;
@@ -615,7 +615,7 @@ int add_rts_to_membership(int rack_id, int dc_id, char *hostname, int local_rts_
 
     if(status != 0)
     {
-    		log_debug("ERROR: Error adding RTS %s:%d to membership!\n", hostname, local_rts_id);
+    		log_debug("ERROR: Error adding RTS %s:%d to membership!", hostname, local_rts_id);
     		free_rts_descriptor(rts_d);
 		return -2;
     }
@@ -830,7 +830,7 @@ int update_actor_placement(remote_db_t * db)
 {
 	char msg_buf[4096];
 
-    log_debug("CLIENT: Updating actor placement. Previous actor membership: %s\n", to_string_actor_membership(db, msg_buf));
+    log_debug("CLIENT: Updating actor placement. Previous actor membership: %s", to_string_actor_membership(db, msg_buf));
 
 	int host_id = -1;
 	for(snode_t * crt = HEAD(db->actors); crt!=NULL; crt = NEXT(crt))
@@ -867,7 +867,7 @@ int update_actor_placement(remote_db_t * db)
 		}
 	}
 
-    log_debug("CLIENT: Actor membership: %s\n", to_string_actor_membership(db, msg_buf));
+    log_debug("CLIENT: Actor membership: %s", to_string_actor_membership(db, msg_buf));
 
 	return 0;
 }
@@ -883,7 +883,7 @@ int add_actor_to_membership(long actor_id, remote_db_t * db)
 	snode_t * prev_entry = skiplist_search(db->actors, (WORD) a->actor_id);
     if(prev_entry != NULL)
     {
-    		log_debug("Actor %ld was already added to membership, skipping.\n", a->actor_id);
+		log_debug("Actor %ld already in membership, skipping.", a->actor_id);
 		return -1;
     }
 
@@ -891,7 +891,7 @@ int add_actor_to_membership(long actor_id, remote_db_t * db)
 
     if(status != 0)
     {
-    		log_debug("ERROR: Error adding actor %ld to membership!\n", a->actor_id);
+    		log_debug("ERROR: Error adding actor %ld to membership!", a->actor_id);
     		free_actor_descriptor(a);
 		return -2;
     }
@@ -911,7 +911,7 @@ int add_actor_to_membership(long actor_id, remote_db_t * db)
 
     log_debug("Added actor %ld (%d) to membership!", a->actor_id, hash32((int) actor_id));
 
-    log_debug("CLIENT: Actor membership: %s\n", to_string_actor_membership(db, msg_buf));
+    log_debug("CLIENT: Actor membership: %s", to_string_actor_membership(db, msg_buf));
 
     return 0;
 }

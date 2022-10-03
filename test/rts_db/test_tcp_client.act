@@ -87,17 +87,15 @@ actor Tester(env, verbose, port_chunk):
 
         report()
 
+    def log_process_output(p, prefix, data):
+        for line in data.decode().splitlines(False):
+            combined_output += psp[p_id(p)] + " " + prefix + ": " + line + "\n"
+
     def on_stderr(p, data):
-        for line in data.decode().splitlines(True):
-            combined_output += psp[p_id(p)]
-            combined_output += " ERR: "
-            combined_output += line
+        log_process_output(p, "ERR", data)
 
     def on_stdout(p, data):
-        for line in data.decode().splitlines(True):
-            combined_output += psp[p_id(p)]
-            combined_output += " OUT: "
-            combined_output += line
+        log_process_output(p, "OUT", data)
 
     def db_on_exit(p, exit_code, term_signal):
         log("DB Process exited with code: %d terminated with signal: %d" % (exit_code, term_signal))
@@ -163,7 +161,7 @@ actor Tester(env, verbose, port_chunk):
 
         # TCP server
         def app_server_on_stdout(p, data):
-            on_stdout(p, data)
+            log_process_output(p, "OUT: state " + str(state), data)
 
         def app_server_on_exit(p, exit_code, term_signal):
             log("Server app exited in state %d with exit code %d and termination signal %d" % (state, exit_code, term_signal))

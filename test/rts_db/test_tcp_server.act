@@ -89,8 +89,8 @@ actor Tester(env, verbose, port_chunk):
 
 
     def log_process_output(p, prefix, data):
-        for line in data.decode().splitlines(True):
-            combined_output += psp[p_id(p)] + " " + prefix + ": " + line
+        for line in data.decode().splitlines(False):
+            combined_output += psp[p_id(p)] + " " + prefix + ": " + line + "\n"
 
     def on_stderr(p, data):
         log_process_output(p, "ERR", data)
