@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+
+## [0.11.7] (2022-10-03)
+
 ### Added
 - Bash completion is now part of the Debian packages & brew formula
 
@@ -59,7 +62,10 @@
     on the terminal.
   - fd -1 is used to signal an invalid fd, which prevents similar mistakes.
   - The DB node status is inspected and messages are only sent to live servers.
-- Remove remaining ending new linse from RTS log messages [#926]
+- Avoid segfault on resuming TCP listener & TCP listener connection [#922]
+  - Invalidate fds on actor resumption [#917]
+- Remove remaining ending new lines from RTS log messages [#926]
+- Remove ending new lines from DB log messages [#932]
 
 ### Testing / CI
 - Rewritten RTS / DB tests [#925] [#929]
@@ -1317,10 +1323,15 @@ then, this second incarnation has been in focus and 0.2.0 was its first version.
 [#885]: https://github.com/actonlang/acton/issues/885
 [#887]: https://github.com/actonlang/acton/issues/887
 [#907]: https://github.com/actonlang/acton/issues/907
+[#910]: https://github.com/actonlang/acton/pull/910
 [#913]: https://github.com/actonlang/acton/issues/913
+[#916]: https://github.com/actonlang/acton/pull/916
+[#917]: https://github.com/actonlang/acton/pull/917
+[#922]: https://github.com/actonlang/acton/pull/922
 [#926]: https://github.com/actonlang/acton/issues/926
 [#925]: https://github.com/actonlang/acton/pull/925
 [#929]: https://github.com/actonlang/acton/pull/929
+[#932]: https://github.com/actonlang/acton/pull/932
 
 [0.3.0]: https://github.com/actonlang/acton/releases/tag/v0.3.0
 [0.4.0]: https://github.com/actonlang/acton/compare/v0.3.0...v0.4.0
@@ -1346,6 +1357,11 @@ then, this second incarnation has been in focus and 0.2.0 was its first version.
 [0.11.0]: https://github.com/actonlang/acton/compare/v0.10.0...v0.11.0
 [0.11.1]: https://github.com/actonlang/acton/compare/v0.11.0...v0.11.1
 [0.11.2]: https://github.com/actonlang/acton/compare/v0.11.1...v0.11.2
+[0.11.3]: https://github.com/actonlang/acton/compare/v0.11.2...v0.11.3
+[0.11.4]: https://github.com/actonlang/acton/compare/v0.11.3...v0.11.4
+[0.11.5]: https://github.com/actonlang/acton/compare/v0.11.4...v0.11.5
+[0.11.6]: https://github.com/actonlang/acton/compare/v0.11.5...v0.11.6
+[0.11.7]: https://github.com/actonlang/acton/compare/v0.11.6...v0.11.7
 
 [homebrew-acton#7]: https://github.com/actonlang/homebrew-acton/pull/7
 [homebrew-acton#28]: https://github.com/actonlang/homebrew-acton/pull/28
