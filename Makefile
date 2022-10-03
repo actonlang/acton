@@ -375,7 +375,7 @@ rts: $(ARCHIVES)
 test:
 	cd compiler && stack test
 	$(MAKE) -C backend test
-	$(MAKE) -C test
+	$(MAKE) test-rts-db
 
 test-builtins:
 	cd compiler && stack test --ta '-p "Builtins"'
@@ -397,6 +397,9 @@ test-regressions:
 
 test-rts:
 	cd compiler && stack test --ta '-p "RTS"'
+
+test-rts-db:
+	$(MAKE) -C test
 
 test-stdlib:
 	cd compiler && stack test --ta '-p "stdlib"'

@@ -87,16 +87,17 @@ actor Tester(env, verbose, port_chunk):
 
         report()
 
-
-    def log_process_output(p, prefix, data):
-        for line in data.decode().splitlines(True):
-            combined_output += psp[p_id(p)] + " " + prefix + ": " + line
-
     def on_stderr(p, data):
-        log_process_output(p, "ERR", data)
+        for line in data.decode().splitlines(True):
+            combined_output += psp[p_id(p)]
+            combined_output += " ERR: "
+            combined_output += line
 
     def on_stdout(p, data):
-        log_process_output(p, "OUT", data)
+        for line in data.decode().splitlines(True):
+            combined_output += psp[p_id(p)]
+            combined_output += " OUT: "
+            combined_output += line
 
     def db_on_exit(p, exit_code, term_signal):
         log("DB Process exited with code: %d terminated with signal: %d" % (exit_code, term_signal))
@@ -146,113 +147,107 @@ actor Tester(env, verbose, port_chunk):
         return args
 
 
-    def test_ddb_server():
+    # Tests go here
+    def test_ddb_client():
+        # 1. start DBC cluster
+        # 2. start TCP client app, which will connect to TCP server & fetch current value, which will be 0 / "wrong"
+        # 3. terminate TCP client app
+        # 4. connect using our TCP client to TCP server and send INC to increase counter to 1
+        # 5. start TCP client app, which will connect to TCP server & fetch current value, which will be 1 / correct and we exit 0
         connect_auth = net.TCPConnectAuth(net.TCPAuth(net.NetAuth(env.auth)))
         port = port_chunk+199
-        cmd = ["./rts_db/ddb_test_server", str(port), "--rts-verbose"] + db_args(port_chunk, 3)
+        cmd_srv = ["./rts_db/ddb_test_server", str(port), "--rts-verbose"]
+        p_srv = None
+        cmd = ["./rts_db/ddb_test_client", str(port), "--rts-verbose"] + db_args(port_chunk, 3)
         p = None
 
-        def tcpc_on_connect(c):
-            if state == 1:
-                state = 2
-                await async c.write(b"GET")
+        # TCP server
+        def app_server_on_stdout(p, data):
+            on_stdout(p, data)
 
-            if state == 7:
-                state = 8
-                await async c.write(b"GET")
+        def app_server_on_exit(p, exit_code, term_signal):
+            log("Server app exited in state %d with exit code %d and termination signal %d" % (state, exit_code, term_signal))
+            p_alive -= 1
+            # TODO: port this to test_tcp_server.act
+            for i in range(0, len(ps), 1):
+                if p_id(ps[i]) == p_id(p):
+                    del ps[i]
+                    break
+            are_we_done()
+
+        p_srv = process.Process(process_auth, cmd_srv, None, None, app_server_on_stdout, on_stderr, app_server_on_exit, on_error)
+        p_alive += 1
+        if p_srv is not None:
+            ps.append(p_srv)
+            psp[p_id(p_srv)] = "srv"
+
+        # TCP client
+        def tcpc_on_connect(c):
+            if state == 2:
+                log("TCP client connected to server, sending INC")
+                state = 3
+                await async c.write(b"INC")
 
         def tcpc_on_receive(c, data):
-            if state == 2:
-                if int(data.decode()) == tcp_expect:
-                    state = 3
-                    tcp_expect += 1
-                    c.write(b"INC")
-                else:
-                    error("Got unexpected data from server in state %d: %s" % (state, data.decode()))
-            elif state == 3:
+            if state == 3:
                 if data == b"OK":
+                    log("state 2: Got OK from server (for INC request)")
                     state = 4
-                    c.write(b"GET")
-                else:
-                    error("Got unexpected data from server in state %d: %s" % (state, data.decode()))
-            elif state == 4:
-                if int(data.decode()) == tcp_expect:
-                    state = 5
+                    tcp_expect += 1
+                    log("state 2: Starting test tcp client app")
+                    p = process.Process(process_auth, cmd, None, None, app_client_on_stdout, on_stderr, app_client_on_exit, on_error)
+                    p_alive += 1
                     if p is not None:
-                        log("YAY, got expected data, terminating server")
-                        p.terminate()
+                        ps.append(p)
+                        psp[p_id(p)] = "app"
                 else:
                     error("Got unexpected data from server in state %d: %s" % (state, data.decode()))
-            elif state == 8:
-                if int(data.decode()) == tcp_expect:
-                    log("YAY, got the right response after server restart, test success!!!!")
-                    state = 9
-                    if p is not None:
-                        p.terminate()
-                else:
-                    error("Got unexpected data from server in state %d: %s" % (state, data.decode()))
-
 
         def tcpc_on_error(c, msg):
             error("Client ERR: %s" % (msg))
 
-        def app_server_on_stdout(p, data):
-            log_process_output(p, "OUT: state " + str(state), data)
+        def app_client_on_stdout(p, data):
+            on_stdout(p, data)
             if state == 0:
-                if data == b"NOW LISTENING\n":
-                    log("Server app listening in state %d, starting TCP client" % state)
+                if data == b"Got a 0, doing noooothing...\n":
                     state = 1
-                    tcp_client = net.TCPIPConnection(connect_auth, "127.0.0.1", port, tcpc_on_connect, tcpc_on_receive, tcpc_on_error)
-            elif state == 6:
-                if data == b"NOW LISTENING\n":
-                    log("Server app listening in state %d, starting TCP client" % state)
-                    state = 7
-                    tcp_client = net.TCPIPConnection(connect_auth, "127.0.0.1", port, tcpc_on_connect, tcpc_on_receive, tcpc_on_error)
+                    log("YAY, got expected data, terminating client, current p_alive: " + str(p_alive))
+                    p.terminate()
+                else:
+                    error("Got unexpected data from server in state %d: %s" % (state, str(data)))
 
-        log("Running server test")
-        dbc_start()
 
-        def app_server_on_exit(p, exit_code, term_signal):
+        def app_client_on_exit(p, exit_code, term_signal):
             log("App exited in state %d with exit code %d and termination signal %d" % (state, exit_code, term_signal))
             p_alive -= 1
-            ps = ps[:-1]
-            if state == 5:
+            for i in range(0, len(ps), 1):
+                if p_id(ps[i]) == p_id(p):
+                    del ps[i]
+                    break
+
+            if state == 1:
+                log("TCP client app exited, doing our TCP client to increase counter...")
                 if exit_code == 0 and term_signal == 0:
-                    log("App successfully exited in state %d with exit code %d and termination signal %d" % (state, exit_code, term_signal))
-                    state = 6
-                    p = process.Process(process_auth, cmd, None, None, app_server_on_stdout, on_stderr, app_server_on_exit, on_error)
-                    ps.append(p)
-                    p_alive += 1
-                    if p is not None:
-                        psp[p_id(p)] = "app"
-                else:
-                    error("App exited in state %d with an unexpected exit code %d and termination signal %d" % (state, exit_code, term_signal))
-            elif state == 8:
+                    state = 2
+                    tcp_client = net.TCPIPConnection(connect_auth, "127.0.0.1", port, tcpc_on_connect, tcpc_on_receive, tcpc_on_error)
+
+            if state == 4:
                 if exit_code == 0 and term_signal == 0:
-                    log("App successfully exited in state %d with exit code %d and termination signal %d" % (state, exit_code, term_signal))
-                else:
-                    error("App exited in state %d with an unexpected exit code %d and termination signal %d" % (state, exit_code, term_signal))
-            elif state == 9:
-                if exit_code == 0 and term_signal == 0:
-                    log("App successfully exited in state %d with exit code %d and termination signal %d" % (state, exit_code, term_signal))
+                    log("YAY, TCP client application exited happily")
                     stop(False)
-                else:
-                    error("App exited in state %d with an unexpected exit code %d and termination signal %d" % (state, exit_code, term_signal))
-            else:
-                error("App unexpected exited in state %d with exit code %d and termination signal %d" % (state, exit_code, term_signal))
             are_we_done()
 
-
-        # Start server
-        p = process.Process(process_auth, cmd, None, None, app_server_on_stdout, on_stderr, app_server_on_exit, on_error)
+        log("Running TCP client test")
+        dbc_start()
+        log("Starting TCP client app: " + " ".join(cmd))
+        p = process.Process(process_auth, cmd, None, None, app_client_on_stdout, on_stderr, app_client_on_exit, on_error)
         p_alive += 1
         if p is not None:
             ps.append(p)
             psp[p_id(p)] = "app"
 
-        #
 
-    test_ddb_server()
+    test_ddb_client()
 
 actor main(env):
     verbose = '--verbose' in set(env.argv)
@@ -272,8 +267,8 @@ actor main(env):
         t.report()
         await async env.exit(1)
 
-    after 5: test_timeout()
-    after 9: unconditional_exit()
+    after 2: test_timeout()
+    after 4: unconditional_exit()
 
 
 def _force_ext():

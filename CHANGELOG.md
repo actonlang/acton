@@ -61,6 +61,16 @@
   - The DB node status is inspected and messages are only sent to live servers.
 - Remove remaining ending new linse from RTS log messages [#926]
 
+### Testing / CI
+- Rewritten RTS / DB tests [#925] [#929]
+  - More robust event handling, directly reacting when something happens, for
+    example if a DB server segfaults or we see unexpected output we can abort
+    the test
+  - Now has much better combined output of DB & app output for simple
+    correlation during failures
+  - Test orchestrator now written in Acton (previously Python), at least async
+    IO callback style is better supported to directly react to events...
+
 
 ## [0.11.6] (2022-09-20)
 
@@ -1309,6 +1319,8 @@ then, this second incarnation has been in focus and 0.2.0 was its first version.
 [#907]: https://github.com/actonlang/acton/issues/907
 [#913]: https://github.com/actonlang/acton/issues/913
 [#926]: https://github.com/actonlang/acton/issues/926
+[#925]: https://github.com/actonlang/acton/pull/925
+[#929]: https://github.com/actonlang/acton/pull/929
 
 [0.3.0]: https://github.com/actonlang/acton/releases/tag/v0.3.0
 [0.4.0]: https://github.com/actonlang/acton/compare/v0.3.0...v0.4.0

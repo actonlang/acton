@@ -1,0 +1,167 @@
+#!/usr/bin/env runacton
+
+import acton.rts
+import random
+import net
+import process
+
+# Tests that involve running an Acton program together with the database
+# requires communication over localhost. By dynamically allocating ports we can
+# run multiple tests concurrently. Each test invocation gets a "chunk" of ports,
+# and can use the ports within its chunk freely. Port chunks are in the
+# specified range (10000-30000). We deliberately stay below 32768 which is what
+# Linux and many other OSes use for the lower end of ephemeral ports.
+PORT_CHUNK_SIZE=20
+PORT_CHUNK_MIN=10000
+PORT_CHUNK_MAX=30000
+
+# NOTE: the term signal for when an Acton RTS exits masks the termination
+# signal, so when we terminate it with SIGTERM we'd normally expect to see
+# termination signal 15 but instead we 0... so this is currently our expectation
+# given how RTS works, but maybe that should be fixed...
+
+
+actor Tester(env, verbose, port_chunk):
+    process_auth = process.ProcessAuth(env.auth)
+    var ps = []
+    var psp: dict[int, str] = {}
+    var combined_output = ""
+    var p_alive = 0
+    var error_encountered = False
+    var state = 0
+
+    def log(msg: str) -> None:
+        if verbose:
+            print(log)
+        combined_output += "testOUT: " + msg + "\n"
+
+    def error(msg: str):
+        print("Encountered error:", msg)
+        combined_output += "testERR: " + msg + "\n"
+        error_encountered = True
+        error_msg = msg
+        stop(True)
+
+    # FIXME: get rid of this, process.Process should support Eq
+    def p_id(p: process.Process) -> int:
+        NotImplemented
+
+    def report():
+        if error_encountered:
+            print("There was an error :/")
+            print(combined_output)
+            await async env.exit(1)
+        else:
+            print("Test success!")
+            if verbose:
+                print("Combined DB & App output:")
+                print(combined_output)
+            await async env.exit(0)
+
+    def are_we_done():
+        if p_alive > 0 :
+            log("ps still alive.. %d remaining" % p_alive)
+            return
+
+        report()
+
+    def on_stderr(p, data):
+        for line in data.decode().splitlines(True):
+            combined_output += psp[p_id(p)]
+            combined_output += " ERR: "
+            combined_output += line
+
+    def on_stdout(p, data):
+        for line in data.decode().splitlines(True):
+            combined_output += psp[p_id(p)]
+            combined_output += " OUT: "
+            combined_output += line
+
+    def db_on_exit(p, exit_code, term_signal):
+        log("DB Process exited with code: %d terminated with signal: %d" % (exit_code, term_signal))
+        p_alive -= 1
+        if not (exit_code == 0 and term_signal == 15):
+            log("DB Process exited with code: %d terminated with signal: %d" % (exit_code, term_signal))
+            error_encountered = True
+        are_we_done()
+
+    def app_on_exit(p, exit_code, term_signal):
+        print("App Process exited with code: ", exit_code, " terminated with signal:", term_signal)
+        p_alive -= 1
+        if exit_code == 0 and term_signal == 0:
+            if verbose:
+                print("App Process successfully exited with code: ", exit_code, " terminated with signal:", term_signal)
+            stop(False)
+        else:
+            print("App Process erroneously exited with code: ", exit_code, " terminated with signal:", term_signal)
+        are_we_done()
+
+    def on_error(p, error):
+        print("Error from process:", p, error)
+
+
+    def stop(error: bool):
+        log("stopping everything...")
+        if error:
+            error_encountered = True
+        for p in ps:
+            p.terminate()
+        are_we_done()
+
+    def dbc_start():
+        for i in range(0, 3, 1):
+            port = port_chunk + (2*i)
+            cmd = ["../dist/bin/actondb", "-p", str(port)]
+            p = process.Process(process_auth, cmd, None, None, on_stdout, on_stderr, db_on_exit, on_error)
+            p_alive += 1
+            ps.append(p)
+            psp[p_id(p)] = "db%d" % i
+
+    def db_args(start_port, replication_factor) -> list[str]:
+        #a = ["127.0.0.1:" for idx in range(0, replication_factor, 1)]
+        args = ["--rts-ddb-replication", str(replication_factor)]
+        for idx in range(0, replication_factor, 1):
+            args.append("--rts-ddb-host")
+            args.append("127.0.0.1:" + str(start_port + idx*2))
+        return args
+
+
+    # Tests go here
+    def test_ddb_app():
+        dbc_start()
+        cmd = ["rts_db/ddb_test_app", "--rts-verbose"] + db_args(port_chunk, 3)
+        p = process.Process(process_auth, cmd, None, None, on_stdout, on_stderr, app_on_exit, on_error)
+        p_alive += 1
+        psp[p_id(p)] = "app"
+
+    test_ddb_app()
+
+actor main(env):
+    verbose = '--verbose' in set(env.argv)
+
+    # compute random base port between PORT_CHUNK_MIN and PORT_CHUNK_MAX
+    # in increments of PORT_CHUNK_SIZE
+    port_chunk = random.randint(int(PORT_CHUNK_MIN/PORT_CHUNK_SIZE), int(PORT_CHUNK_MAX/PORT_CHUNK_SIZE)) * PORT_CHUNK_SIZE
+
+    t = Tester(env, verbose, port_chunk)
+
+    def test_timeout():
+        print("Test failed - timeout reached")
+        await async t.stop(True)
+
+    def unconditional_exit():
+        print("Giving up...")
+        t.report()
+        await async env.exit(1)
+
+    after 2: test_timeout()
+    after 4: unconditional_exit()
+
+
+def _force_ext():
+    """Force compilation using .ext.c
+
+    Only top level functions are recognized as externally defined by actonc
+    TODO: fix in actonc and remove this
+    """
+    NotImplemented
