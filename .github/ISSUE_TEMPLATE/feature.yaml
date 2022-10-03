@@ -5,12 +5,9 @@ body:
   - type: markdown
     attributes:
       value: |
-        A feature is when you would like to add new functionality or change
-        current functionality / behavior.
+        A feature is when you would like to add new functionality or change current functionality / behavior.
         ## Remember to search before filing a new report
-        Please search for this feature request in the issue tracker, and use a
-        feature request title that would have made your feature request turn up
-        in the search results for your search query.
+        Please search for this feature request in the issue tracker, and use a feature request title that would have made your feature request turn up in the search results for your search query.
   - type: textarea
     id: repro
     attributes:
