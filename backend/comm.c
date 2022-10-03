@@ -265,7 +265,7 @@ int parse_message(void * rcv_buf, size_t rcv_msg_len, void ** out_msg, short * o
 					gossip_listen_message * wq = (gossip_listen_message *) *(out_msg);
 #if (VERBOSE_RPC > 0)
 					to_string_gossip_listen_msg(wq, (char *) print_buff);
-					log_debug("Received gossip listen message: %s\n", print_buff);
+					log_debug("Received gossip listen message: %s", print_buff);
 #endif
 					*nonce = wq->nonce;
 					return 0;

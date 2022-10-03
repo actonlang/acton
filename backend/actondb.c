@@ -329,7 +329,7 @@ int get_gossip_ack_packet(int status, gossip_listen_message * q,
 #if (VERBOSE_RPC > 0)
 	char print_buff[1024];
 	to_string_ack_message(ack, (char *) print_buff);
-	log_debug("Sending ack message: %s\n", print_buff);
+	log_debug("Sending ack message: %s", print_buff);
 #endif
 
 	int ret = serialize_ack_message(ack, snd_buf, snd_msg_len, vc);
@@ -1531,7 +1531,7 @@ int propose_local_membership(membership * m, vector_clock * my_vc, membership_ag
     if(is_min_live_node(m->my_id, m->local_peers) != 1)
     {
 #if (VERBOSE_RPC > 0)
-		log_debug("SERVER: Skipping proposing new view, as I am not the min live node!\n");
+		log_debug("SERVER: Skipping proposing new view, as I am not the min live node!");
 #endif
 		skip_proposal = 1;
     }
@@ -2953,7 +2953,7 @@ int main(int argc, char **argv) {
 			if(rs->status == NODE_PREJOINED && rs->sockfd > 0 && FD_ISSET(rs->sockfd , &readfds))
 			// Received a msg from this server:
 			{
-                log_trace("pre-joined peer %s, sockfd=%d, status=%d is ready for reading\n", rs->id, rs->sockfd, rs->status);
+                log_trace("pre-joined peer %s, sockfd=%d, status=%d is ready for reading", rs->id, rs->sockfd, rs->status);
 
 				ret = read_full_packet(&(rs->sockfd), (char *) in_buf, SERVER_BUFSIZE, &msg_len, &(rs->status), &handle_socket_nop);
 
