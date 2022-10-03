@@ -110,7 +110,10 @@ transCall (Dot _ (Var _ n) m) ts [e1,e2]
 transCall (Dot _ (Var _ n) m) ts [e1]
   | n == primWrapProc,   m == attrEVAL  = Just e1
   | n == primWrapProc,   m == attrEXEC  = Just $ eCall (tApp (eQVar primEXEC) ts) [e1]
-  | n == primWrapAction, m == attrEVAL  = Just $ eAwait $ eAsync e1
+  | n == primWrapAction, m == attrEVAL  = let [p,k,_] = ts
+                                              ps = pPar pNames p
+                                              ks = kPar kNames k
+                                          in Just $ Lambda l0 ps ks (eAwait $ eAsync $ Call l0 e1 (pArg ps) (kArg ks)) fxProc
   | n == primWrapAction, m == attrEXEC  = Just $ eAsync e1
   | n == primWrapMut,    m == attrEVAL  = Just e1
   | n == primWrapMut,    m == attrEXEC  = Just e1
