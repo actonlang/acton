@@ -127,19 +127,19 @@ instance Deact Stmt where
 instance Deact Decl where
     deact env (Actor l n q params KwdNIL body)
                                     = do inits' <- deactSuite (define (envOf decls) env1) inits
-                                         decls' <- deactSuite (define (envOf inits) env1) decls
+                                         decls' <- deactMeths (define (envOf inits) env1) decls
                                          let _init_ = Def l0 initKW [] (addSelfPar params) KwdNIL (Just tNone) (mkBody $ copies++inits') NoDec fxProc
-                                         return $ Class l n q [TC primActor [], cValue] (propsigs ++ [Decl l0 [_init_]] ++ decls')
-      where env1                    = setActor exports stvars (locals++meths) $ define (envOf params) $ define [(selfKW, NVar t0)] $ defineTVars q env
+                                         return $ Class l n q [TC primActor [], cValue] (propsigs ++ [Decl l0 [_init_]] ++ decls' ++ wraps)
+      where env1                    = setActor exports stvars locals $ define (envOf params) $ define [(selfKW, NVar t0)] $ defineTVars q env
             t0                      = tCon $ TC (NoQ n) (map tVar $ qbound q)
 
             (decls,ss)              = partition isDecl body
             inits                   = filter (not . isSig) ss
             stvars                  = statevars body
-            meths                   = bound decls
             fvs                     = free decls
-            locals                  = nub $ (bound params `intersect` fvs) ++ [ n | n <- dom $ envOf inits, not (isHidden n) || n `elem` fvs ]
-            exports                 = [ n | Decl _ ds <- decls, Def{dname=n, dfx=fx} <- ds, fx == fxProc ]
+            locals                  = nub $ (bound params `intersect` fvs) ++ [ n | n <- dom $ envOf inits, not (isHidden n) || n `elem` fvs ] ++ bound decls
+            exports                 = bound expdefs
+            expdefs                 = [ d | Decl _ ds <- decls, d@Def{} <- ds, dfx d == fxProc, not (isHidden $ dname d) ]
 
             propsigs                = [ Signature l0 [n] (monotype t) Property | (n,t) <- concat $ props' params : map props inits ]
 
@@ -156,6 +156,13 @@ instance Deact Decl where
             props' _                = []
 
             copies                  = [ MutAssign l0 (selfRef n) (Var l0 (NoQ n)) | n <- bound params, n `elem` locals ]
+            
+            wraps                   = [ wrap n q p t | Def _ n q p KwdNIL (Just t) _ _ _ <- expdefs ]
+            
+            wrap n q p t            = Decl l0 [Def l0 n q (addSelfPar p) KwdNIL (Just t) [ret] NoDec fxAction]
+              where ret             = sReturn $ eCall (tApp (eQVar primASYNCf) [t]) [self,lam]
+                    lam             = Lambda l0 PosNIL KwdNIL (eCallP (eDot self $ localName n) (pArg p)) fxProc
+                    self            = eVar selfKW
 
     deact env (Def l n q p KwdNIL (Just t) b d fx)
                                     = do b <- deactSuite env1 b
@@ -166,6 +173,14 @@ instance Deact Decl where
       where env1                    = defineSelf (NoQ n) q $ defineTVars q env
 
     deact env d                     = error ("deact unexpected decl: " ++ prstr d)
+
+deactMeths env decls                = mapM deactDecl decls
+  where deactDecl (Decl l ds)       = Decl l <$> mapM deactDef ds
+        deactDef (Def l n q p KwdNIL t b d fx)
+                                    = do b <- deactSuite env1 b
+                                         return $ Def l n' q (addSelfPar p) KwdNIL t b d fx
+          where env1                = defineAndShadow (envOf p) $ defineTVars q env
+                n'                  = if n `elem` exports env then localName n else n
 
 
 newact env n q p                    = Def l0 (newactName n) q p KwdNIL (Just t) [newassign, waitinit, sReturn x] NoDec fxProc
@@ -216,7 +231,8 @@ isExportMeth env _                  = False
 instance Deact Expr where
     deact env (Var l (NoQ n))
       | n `elem` sampled env        = return $ Var l (NoQ n)
-      | n `elem` locals env         = return $ Dot l (Var l (NoQ selfKW)) n
+      | n `elem` locals env         = return $ Dot l (Var l (NoQ selfKW)) n'
+      where n'                      = if n `elem` exports env then localName n else n
     deact env (Var l n)
       | isActor env n               = return $ Var l $ newactQName n
       | otherwise                   = return $ Var l n
