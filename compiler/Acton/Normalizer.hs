@@ -200,8 +200,8 @@ instance Norm Decl where
                                          b' <- norm env1 b
                                          return $ Actor l n q p' KwdNIL b'
       where env1                    = define (envOf p ++ envOf k) env0
-            env0                    = define [(selfKW, NVar (tCon tc))] $ defineTVars q env
-            tc                      = TC (NoQ n) (map tVar $ qbound q)
+            env0                    = define [(selfKW, NVar t0)] $ defineTVars q env
+            t0                      = tCon $ TC (NoQ n) (map tVar $ qbound q)
     norm env (Class l n q as b)     = Class l n q as <$> norm env1 b
       where env1                    = defineSelf (NoQ n) q $ defineTVars q env
     norm env d                      = error ("norm unexpected: " ++ prstr d)
