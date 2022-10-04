@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+### Testing / CI
+- Simplify and clean up RTS DB test orchestrator [#941]
+
 
 ## [0.11.7] (2022-10-03)
 Many important fixes for RTS/DB and the language in general!

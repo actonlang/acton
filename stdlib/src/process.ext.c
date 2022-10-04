@@ -64,6 +64,10 @@ void read_stdout(uv_stream_t *stream, ssize_t nread, const uv_buf_t *buf) {
         free(buf->base);
 }
 
+$R process$$Process$aid$local (process$$Process __self__, $Cont c$cont) {
+    return $R_CONT(c$cont, to$int(__self__->$globkey));
+}
+
 $R process$$Process$_create_process (process$$Process __self__, $Cont c$cont) {
     pin_actor_affinity();
     struct process_data *process_data = calloc(1, sizeof(struct process_data));

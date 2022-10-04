@@ -32,7 +32,7 @@ actor Tester(env, verbose, port_chunk):
 
     def log(msg: str) -> None:
         if verbose:
-            print(log)
+            print(msg)
         combined_output += "testOUT: " + msg + "\n"
 
     def error(msg: str):
@@ -41,10 +41,6 @@ actor Tester(env, verbose, port_chunk):
         error_encountered = True
         error_msg = msg
         stop(True)
-
-    # FIXME: get rid of this, process.Process should support Eq
-    def p_id(p: process.Process) -> int:
-        NotImplemented
 
     def report():
         if error_encountered:
@@ -66,8 +62,9 @@ actor Tester(env, verbose, port_chunk):
         report()
 
     def log_process_output(p, prefix, data):
+        paid = p.aid()
         for line in data.decode().splitlines(False):
-            combined_output += psp[p_id(p)] + " " + prefix + ": " + line + "\n"
+            combined_output += psp[paid] + " " + prefix + ": " + line + "\n"
 
     def on_stderr(p, data):
         log_process_output(p, "ERR", data)
@@ -85,14 +82,13 @@ actor Tester(env, verbose, port_chunk):
         are_we_done()
 
     def app_on_exit(p, exit_code, term_signal):
-        print("App Process exited with code: ", exit_code, " terminated with signal:", term_signal)
+        log("App Process exited with code: %d terminated with signal: %d" % (exit_code, term_signal))
         p_alive -= 1
         if exit_code == 0 and term_signal == 0:
-            if verbose:
-                print("App Process successfully exited with code: ", exit_code, " terminated with signal:", term_signal)
+            log("App Process successfully exited with code: %d terminated with signal: %d" % (exit_code, term_signal))
             stop(False)
         else:
-            print("App Process erroneously exited with code: ", exit_code, " terminated with signal:", term_signal)
+            log("App Process erroneously exited with code: %d terminated with signal: %d" % (exit_code, term_signal))
         are_we_done()
 
     def on_error(p, error):
@@ -114,7 +110,8 @@ actor Tester(env, verbose, port_chunk):
             p = process.Process(process_auth, cmd, None, None, on_stdout, on_stderr, db_on_exit, on_error)
             p_alive += 1
             ps.append(p)
-            psp[p_id(p)] = "db%d" % i
+            paid = p.aid()
+            psp[paid] = "db%d" % i
 
     def db_args(start_port, replication_factor) -> list[str]:
         #a = ["127.0.0.1:" for idx in range(0, replication_factor, 1)]
@@ -131,7 +128,8 @@ actor Tester(env, verbose, port_chunk):
         cmd = ["rts_db/ddb_test_app", "--rts-verbose"] + db_args(port_chunk, 3)
         p = process.Process(process_auth, cmd, None, None, on_stdout, on_stderr, app_on_exit, on_error)
         p_alive += 1
-        psp[p_id(p)] = "app"
+        paid = p.aid()
+        psp[paid] = "app"
 
     test_ddb_app()
 
@@ -145,22 +143,13 @@ actor main(env):
     t = Tester(env, verbose, port_chunk)
 
     def test_timeout():
-        print("Test failed - timeout reached")
+        t.log("Test failed - timeout reached")
         await async t.stop(True)
 
     def unconditional_exit():
-        print("Giving up...")
+        t.log("Giving up...")
         t.report()
         await async env.exit(1)
 
     after 2: test_timeout()
     after 4: unconditional_exit()
-
-
-def _force_ext():
-    """Force compilation using .ext.c
-
-    Only top level functions are recognized as externally defined by actonc
-    TODO: fix in actonc and remove this
-    """
-    NotImplemented
