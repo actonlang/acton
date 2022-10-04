@@ -130,8 +130,9 @@ instance Deact Decl where
                                          decls' <- deactSuite (define (envOf inits) env1) decls
                                          let _init_ = Def l0 initKW [] (addSelfPar params) KwdNIL (Just tNone) (mkBody $ copies++inits') NoDec fxProc
                                          return $ Class l n q [TC primActor [], cValue] (propsigs ++ [Decl l0 [_init_]] ++ decls')
-      where env1                    = setActor exports stvars (locals++meths) $ define (envOf params) $ define [(selfKW, NVar tSelf)] $ defineTVars q env
+      where env1                    = setActor exports stvars (locals++meths) $ define (envOf params) $ define [(selfKW, NVar (tCon tc))] $ defineTVars q env
             env2                    = define (envOf decls ++ envOf inits) env1
+            tc                      = TC (NoQ n) (map tVar $ qbound q)
 
             (decls,ss)              = partition isDecl body
             inits                   = filter (not . isSig) ss

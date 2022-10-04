@@ -777,7 +777,8 @@ instance Check Decl where
                                              return (cs1, (Actor l n (noqual env q) (qualWPar env q $ noDefaultsP p') (noDefaultsK k')
                                                            (bindWits (eq1++eq0) ++ defsigs ++ defaultsP p' ++ defaultsK k' ++ b')))
       where env1                        = reserve (bound (p,k) ++ bound b) $ defineTVars q $
-                                          define [(selfKW, NVar tRef)] $ reserve (statevars b) $ setInAct env
+                                          define [(selfKW, NVar (tCon tc))] $ reserve (statevars b) $ setInAct env
+            tc                          = TC (NoQ n) (map tVar tvs)
             tvs                         = qbound q
             defsigs                     = [ Signature NoLoc [n] sc dec | (n,NDef sc dec) <- te0 ]
             NAct _ _ _ te0              = findName n env
