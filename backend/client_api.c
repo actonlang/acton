@@ -2964,7 +2964,7 @@ int close_client_txn(uuid_t txnid, remote_db_t * db)
 	if(ts == NULL) { // No such txn
 	    pthread_mutex_unlock(db->txn_state_lock);
         stat_stop(dbc_stats.close_client_txn, &ts_start, NO_SUCH_TXN);
-		return -2;
+		return NO_SUCH_TXN;
 	}
 
 	skiplist_delete(db->txn_state, (WORD) txnid);
