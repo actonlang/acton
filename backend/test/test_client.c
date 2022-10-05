@@ -129,7 +129,8 @@ int test_search_pk(db_schema_t * schema, remote_db_t * db, uuid_t * txnid, unsig
 
 	for(int64_t aid=0;aid<no_actors;aid++)
 	{
-		db_row_t * row = remote_search_in_txn((WORD *) &aid, schema->no_primary_keys, (WORD) 0, txnid, db);
+		db_row_t * row = NULL;
+		remote_search_in_txn((WORD *) &aid, schema->no_primary_keys, &row, (WORD) 0, txnid, db);
 
 		if(txnid != NULL && row == NULL)
 			continue;
@@ -162,7 +163,9 @@ int test_search_pk_ck1(db_schema_t * schema, remote_db_t * db, uuid_t * txnid, u
 	{
 		for(int64_t cid=0;cid<no_collections;cid++)
 		{
-			db_row_t * row = remote_search_clustering_in_txn((WORD *) &aid, schema->no_primary_keys, (WORD *) &cid, 1, (WORD) 0, txnid, db);
+			db_row_t * row = NULL;
+
+			remote_search_clustering_in_txn((WORD *) &aid, schema->no_primary_keys, (WORD *) &cid, 1, &row, (WORD) 0, txnid, db);
 
 			if(txnid != NULL && row == NULL)
 				continue;
@@ -202,7 +205,9 @@ int test_search_pk_ck1_ck2(db_schema_t * schema, remote_db_t * db, uuid_t * txni
 				cks[0] = (WORD) cid;
 				cks[1] = (WORD) iid;
 
-				db_row_t * row = remote_search_clustering_in_txn((WORD *) &aid, schema->no_primary_keys, cks, 2, (WORD) 0, txnid, db);
+				db_row_t * row = NULL;
+
+				remote_search_clustering_in_txn((WORD *) &aid, schema->no_primary_keys, cks, 2, &row, (WORD) 0, txnid, db);
 
 				if(txnid != NULL && row == NULL)
 					continue;
