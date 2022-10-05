@@ -761,7 +761,7 @@ struct $Cont $InitRoot$cont = {
 void dummy_callback(queue_callback_args * qca) { }
 
 void create_db_queue(long key) {
-    while (1) {
+    while (rts_exit == 0) {
         int ret = remote_create_queue_in_txn(MSG_QUEUE, ($WORD)key, NULL, db);
         rtsd_printf("#### Create queue %ld returns %d", key, ret);
         if (ret == NO_QUORUM_ERR) {
@@ -775,7 +775,7 @@ void create_db_queue(long key) {
     queue_callback * qc = get_queue_callback(dummy_callback);
     int64_t prev_read_head = -1, prev_consume_head = -1;
 
-    while (1) {
+    while (rts_exit == 0) {
         int ret = remote_subscribe_queue(($WORD)key, 0, 0, MSG_QUEUE, ($WORD)key, qc, &prev_read_head, &prev_consume_head, db);
         rtsd_printf("   # Subscribe queue %ld returns %d", key, ret);
         if (ret == NO_QUORUM_ERR) {
@@ -886,7 +886,7 @@ void FLUSH_outgoing($Actor self, uuid_t *txnid) {
             dest = 0;
         }
         if (db) {
-            while (1) {
+            while (rts_exit == 0) {
                 int ret = remote_enqueue_in_txn(($WORD*)&m->$globkey, 1, NULL, 0, MSG_QUEUE, (WORD)dest, txnid, db);
                 if (ret == NO_QUORUM_ERR) {
                     log_debug("Failed to reach quorum, retrying...");
@@ -919,7 +919,7 @@ void handle_timeout() {
             wake_wt(wtid);
         }
         if (db) {
-            while (1) {
+            while (rts_exit == 0) {
                 uuid_t *txnid = remote_new_txn(db);
                 if (!txnid) {
                     log_debug("Failed to reach quorum, retrying...");
@@ -982,7 +982,7 @@ long read_queued_msg(long key, int64_t *read_head) {
     int entries_read = 0;
     
     int ret;
-    while (1) {
+    while (rts_exit == 0) {
         ret = remote_read_queue_in_txn(($WORD)key, 0, 0, MSG_QUEUE, ($WORD)key,
                                        1, &entries_read, read_head, &m_start, &m_end, NULL, db);
         if (ret == NO_QUORUM_ERR) {
@@ -1068,7 +1068,7 @@ void print_actor($Actor a) {
 void deserialize_system(snode_t *actors_start) {
     rtsd_printf("Deserializing system");
     snode_t *msgs_start, *msgs_end;
-    while (1) {
+    while (rts_exit == 0) {
         int ret = remote_read_full_table_in_txn(&msgs_start, &msgs_end, MSGS_TABLE, NULL, db);
         if (ret == NO_QUORUM_ERR) {
             log_debug("Failed to reach quorum, retrying...");
@@ -1162,7 +1162,7 @@ void deserialize_system(snode_t *actors_start) {
             rtsd_printf("#### Reading msgs queue %ld contents:", key);
             queue_callback * qc = get_queue_callback(dummy_callback);
             int64_t prev_read_head = -1, prev_consume_head = -1;
-            while (1) {
+            while (rts_exit == 0) {
                 int ret = remote_subscribe_queue(($WORD)key, 0, 0, MSG_QUEUE, ($WORD)key, qc, &prev_read_head, &prev_consume_head, db);
                 if (ret == NO_QUORUM_ERR) {
                     log_debug("Failed to reach quorum, retrying...");
@@ -1201,7 +1201,7 @@ void deserialize_system(snode_t *actors_start) {
     time_t now = current_time();
     queue_callback * qc = get_queue_callback(dummy_callback);
     int64_t prev_read_head = -1, prev_consume_head = -1;
-    while (1) {
+    while (rts_exit == 0) {
         int ret = remote_subscribe_queue(TIMER_QUEUE, 0, 0, MSG_QUEUE, TIMER_QUEUE, qc, &prev_read_head, &prev_consume_head, db);
         if (ret == NO_QUORUM_ERR) {
             log_debug("Failed to reach quorum, retrying...");
@@ -1285,7 +1285,7 @@ void insert_row(long key, size_t total, $ROW row, $WORD table, uuid_t *txnid) {
     //$ROW row1 = extract_row(blob, total*sizeof($WORD));
     //print_rows(row1);
 
-    while (1) {
+    while (rts_exit == 0) {
         int ret = remote_insert_in_txn(column, 2, 1, 1, blob, total*sizeof($WORD), table, txnid, db);
         if (ret == NO_QUORUM_ERR) {
             log_debug("Failed to reach quorum, retrying...");
@@ -1319,7 +1319,7 @@ void serialize_actor($Actor a, uuid_t *txnid) {
 
 void serialize_state_shortcut($Actor a) {
     if (db) {
-        while (1) {
+        while (rts_exit == 0) {
             uuid_t * txnid = remote_new_txn(db);
             if (txnid == NULL) { // NULL means NO_QUORUM_ERR
                 log_debug("Failed to reach quorum, retrying...");
@@ -1350,7 +1350,7 @@ void BOOTSTRAP(int argc, char *argv[]) {
     $Msg m = $NEW($Msg, root_actor, &$InitRoot$cont, now, &$Done$instance);
     if (db) {
         int ret;
-        while (1) {
+        while (rts_exit == 0) {
             ret = remote_enqueue_in_txn(($WORD*)&m->$globkey, 1, NULL, 0, MSG_QUEUE, (WORD)root_actor->$globkey, NULL, db);
             if (ret == NO_QUORUM_ERR) {
                 log_debug("Failed to reach quorum, retrying...");
@@ -1471,7 +1471,7 @@ void wt_work_cb(uv_check_t *ev) {
         switch (r.tag) {
         case $RDONE: {
             if (db) {
-                while (1) {
+                while (rts_exit == 0) {
                     uuid_t * txnid = remote_new_txn(db);
                     if (txnid == NULL) { // NULL means NO_QUORUM_ERR
                         log_debug("Failed to reach quorum, retrying...");
@@ -1547,7 +1547,7 @@ void wt_work_cb(uv_check_t *ev) {
         }
         case $RWAIT: {
             if (db) {
-                while (1) {
+                while (rts_exit == 0) {
                     uuid_t * txnid = remote_new_txn(db);
                     if (txnid == NULL) { // NULL means NO_QUORUM_ERR
                         log_debug("Failed to reach quorum, retrying...");
@@ -2391,7 +2391,7 @@ int main(int argc, char **argv) {
     if (db) {
         snode_t* start_row = NULL, * end_row = NULL;
         log_info("Checking for existing actor state in DDB.");
-        while (1) {
+        while (rts_exit == 0) {
             int no_items = remote_read_full_table_in_txn(&start_row, &end_row, ACTORS_TABLE, NULL, db);
             if (no_items == NO_QUORUM_ERR) {
                 log_debug("Failed to reach quorum, retrying...");
