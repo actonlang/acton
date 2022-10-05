@@ -1740,7 +1740,7 @@ int remote_search_clustering_in_txn(WORD* primary_keys, int no_primary_keys, WOR
 	return 0;
 }
 
-db_row_t* remote_search_columns_in_txn(WORD* primary_keys, int no_primary_keys, WORD* clustering_keys, int no_clustering_keys,
+int remote_search_columns_in_txn(WORD* primary_keys, int no_primary_keys, WORD* clustering_keys, int no_clustering_keys,
 									WORD* col_keys, int no_columns, db_row_t** result_row, WORD table_key,
 									uuid_t * txnid, remote_db_t * db)
 {
@@ -1748,7 +1748,7 @@ db_row_t* remote_search_columns_in_txn(WORD* primary_keys, int no_primary_keys, 
 	return 0;
 }
 
-db_row_t* remote_search_index_in_txn(WORD index_key, int idx_idx, db_row_t** result_row, WORD table_key, uuid_t * txnid, remote_db_t * db)
+int remote_search_index_in_txn(WORD index_key, int idx_idx, db_row_t** result_row, WORD table_key, uuid_t * txnid, remote_db_t * db)
 {
 	assert (0); // Not supported; TO DO
 	return 0;
