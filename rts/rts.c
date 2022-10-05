@@ -769,6 +769,7 @@ void create_db_queue(long key) {
             usleep(500000);
             continue;
         }
+        assert(ret >= 0);
         break;
     }
 
@@ -782,7 +783,11 @@ void create_db_queue(long key) {
             log_debug("Failed to reach quorum, retrying...");
             usleep(500000);
             continue;
+        } else if (ret == CLIENT_ERR_SUBSCRIPTION_EXISTS) {
+            // If subscription already exists, we're happy
+            break;
         }
+        assert(ret == 0);
         break;
     }
 }
@@ -893,6 +898,7 @@ void FLUSH_outgoing($Actor self, uuid_t *txnid) {
                     usleep(500000);
                     continue;
                 }
+                assert(ret >= 0);
                 if (dest) {
                     rtsd_printf("   # enqueue msg %ld to queue %ld returns %d", m->$globkey, dest, ret);
                 } else {
@@ -926,6 +932,7 @@ void handle_timeout() {
                     usleep(500000);
                     continue;
                 }
+                assert(txnid > 0);
                 timer_consume_hd++;
 
                 long key = TIMER_QUEUE;
