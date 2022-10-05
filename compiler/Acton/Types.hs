@@ -954,11 +954,13 @@ refine env cs te eq
         ambig_vs                        = tyfree cs \\ closeDepVars safe_vs cs
 
         safe_vs                         = if null def_vss then [] else nub $ foldr1 intersect def_vss
-        def_vss                         = [ nub $ tyfree sc | (_, NDef sc _) <- te, null $ scbind sc ]
+        def_vss                         = [ nub $ filter canGen $ tyfree sc | (_, NDef sc _) <- te, null $ scbind sc ]
         gen_vs                          = nub (foldr union (tyfree cs) def_vss)
         
         canQual (Impl _ (TVar _ v) _)   = univar v
         canQual _                       = False
+
+        canGen tv                       = tvkind tv /= KFX
 
         ambig c                         = any (`elem` ambig_vs) (tyfree c)
 
