@@ -19,6 +19,7 @@
 
 #include "fd.h"
 #include "db_messages.pb-c.h"
+#include "../log.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -62,7 +63,7 @@ int copy_node_description(node_description * nd, int status, int node_id, int ra
 		struct hostent * host = gethostbyname(hostname);
 	    if (host == NULL)
 	    {
-	        fprintf(stderr, "ERROR, no such host %s\n", hostname);
+	        log_error("ERROR, no such host %s", hostname);
 	        assert(0);
 	        return -1;
 	    }
@@ -161,7 +162,7 @@ int deserialize_gs(void * buf, unsigned msg_len, gossip_state ** gs)
 
 	  if (msg == NULL)
 	  { // Something failed
-	    fprintf(stderr, "error unpacking gossip_state message\n");
+	    log_error("error unpacking gossip_state message");
 	    return 1;
 	  }
 
@@ -318,7 +319,7 @@ int deserialize_membership_state(void * buf, unsigned msg_len, membership_state 
 
 	if (msg == NULL)
 	{
-		fprintf(stderr, "error unpacking membership view message\n");
+		log_error("error unpacking membership view message");
 	    return 1;
 	}
 
@@ -479,7 +480,7 @@ int deserialize_membership_agreement_msg(void * buf, unsigned msg_len, membershi
 
 	if (msg == NULL)
 	{
-		fprintf(stderr, "error unpacking membership agreement message\n");
+		log_error("error unpacking membership agreement message");
 		return 1;
 	}
 

@@ -46,7 +46,6 @@
 #include <string.h>
 #include <limits.h>
 #include <signal.h>
-#include "log.h"
 
 #define LOGPFX "#ActDB# "
 
@@ -77,7 +76,7 @@ int no_queue_cols = 1;                  // 2;
 
 
 void error(char *msg) {
-  perror(msg);
+  log_error(msg);
 }
 
 #define SERVER_VERBOSITY 1
@@ -219,7 +218,7 @@ int add_client_to_membership(struct sockaddr_in addr, int sockfd, char *hostname
 
     if(skiplist_search(clients, &(cd->addr)) != NULL)
     {
-		fprintf(stderr, "ERROR: Client address %s:%d was already added to membership!\n", hostname, portno);
+		log_info("Client address %s:%d was already added to membership!", hostname, portno);
 		free_client_descriptor(cd);
 		return -1;
     }
@@ -228,7 +227,7 @@ int add_client_to_membership(struct sockaddr_in addr, int sockfd, char *hostname
 
     if(status != 0)
     {
-		fprintf(stderr, "ERROR: Error adding client address %s:%d to membership!\n", hostname, portno);
+		log_error("Error adding client address %s:%d to membership!", hostname, portno);
 		free_client_descriptor(cd);
 		return -2;
     }
@@ -265,11 +264,11 @@ int create_state_schema(db_t * db, unsigned int * fastrandstate)
 
 	int ret = db_create_table(ACTORS_TABLE, db_schema, db, fastrandstate);
 
-	log_debug("%s - %s (%d)", "Create ACTORS_TABLE", ret==0?"OK":"FAILED", ret);
+	log_info("%s - %s (%d)", "Create ACTORS_TABLE", ret==0?"OK":"FAILED", ret);
 
 	ret = db_create_table(MSGS_TABLE, db_schema, db, fastrandstate);
 
-	log_debug("%s - %s (%d)", "Create MSGS_TABLE", ret==0?"OK":"FAILED", ret);
+	log_info("%s - %s (%d)", "Create MSGS_TABLE", ret==0?"OK":"FAILED", ret);
 
 	return ret;
 }
@@ -282,7 +281,7 @@ int create_queue_schema(db_t * db, unsigned int * fastrandstate)
 	col_types[no_queue_cols] = DB_TYPE_BLOB; // Include blob
 
 	int ret = create_queue_table(MSG_QUEUE, no_queue_cols + 1, col_types, db,  fastrandstate);
-	log_debug("%s - %s (%d)", "Create MSG_QUEUE table", ret==0?"OK":"FAILED", ret);
+	log_info("%s - %s (%d)", "Create MSG_QUEUE table", ret==0?"OK":"FAILED", ret);
 
 	return ret;
 }
@@ -311,7 +310,7 @@ int get_ack_packet(int status, write_query * q,
 #if (VERBOSE_RPC > 0)
 	char print_buff[1024];
 	to_string_ack_message(ack, (char *) print_buff);
-	log_debug("Sending ack message: %s", print_buff);
+	log_info("Sending ack message: %s", print_buff);
 #endif
 
 	int ret = serialize_ack_message(ack, snd_buf, snd_msg_len, vc);
@@ -329,7 +328,7 @@ int get_gossip_ack_packet(int status, gossip_listen_message * q,
 #if (VERBOSE_RPC > 0)
 	char print_buff[1024];
 	to_string_ack_message(ack, (char *) print_buff);
-	log_debug("Sending ack message: %s", print_buff);
+	log_info("Sending ack message: %s", print_buff);
 #endif
 
 	int ret = serialize_ack_message(ack, snd_buf, snd_msg_len, vc);
@@ -532,7 +531,7 @@ int get_read_response_packet(db_row_t* result, read_query * q, db_schema_t * sch
 #if (VERBOSE_RPC > 0)
 	char print_buff[PRINT_BUFSIZE];
 	to_string_range_read_response_message(m, (char *) print_buff);
-	log_debug("Sending range read response message: %s", print_buff);
+	log_info("Sending range read response message: %s", print_buff);
 #endif
 
 	int ret = serialize_range_read_response_message(m, snd_buf, snd_msg_len, vc);
@@ -579,7 +578,7 @@ int handle_gossip_listen_message(gossip_listen_message * msg, client_descriptor 
 	remote_server * rs = get_remote_server(msg->node_description->hostname, msg->node_description->portno, dummy_serveraddr, cd->addr, DUMMY_FD, 0, 1);
 	rs->status = NODE_LIVE;
 
-	log_debug("Adding client %s:%d/%d/%d to membership.", rs->hostname, msg->node_description->portno, msg->node_description->node_id, rs->portno);
+	log_info("Adding client %s:%d/%d/%d to membership.", rs->hostname, msg->node_description->portno, msg->node_description->node_id, rs->portno);
 
 	int status = add_remote_server_to_list(rs, m->connected_clients, fastrandstate);
 
@@ -633,7 +632,7 @@ int get_range_read_response_packet(snode_t* start_row, snode_t* end_row, int no_
 #if (VERBOSE_RPC > 0)
 		char print_buff[PRINT_BUFSIZE];
 		to_string_range_read_response_message(m, (char *) print_buff);
-		log_debug("Sending range read response message: %s", print_buff);
+		log_info("Sending range read response message: %s", print_buff);
 #endif
 
 		int ret = serialize_range_read_response_message(m, snd_buf, snd_msg_len, vc);
@@ -679,7 +678,7 @@ int get_queue_ack_packet(int status, queue_query_message * q,
 #if (VERBOSE_RPC > 0)
 	char print_buff[1024];
 	to_string_ack_message(ack, (char *) print_buff);
-	log_debug("Sending queue ack message: %s", print_buff);
+	log_info("Sending queue ack message: %s", print_buff);
 #endif
 
 	int ret = serialize_ack_message(ack, snd_buf, snd_msg_len, vc);
@@ -734,7 +733,7 @@ int get_queue_read_response_packet(snode_t* start_row, snode_t* end_row, int no_
 #if (VERBOSE_RPC > 0)
 		char print_buff[1024];
 		to_string_queue_message(m, (char *) print_buff);
-		log_debug("Sending read queue response message: %s", print_buff);
+		log_info("Sending read queue response message: %s", print_buff);
 #endif
 
 		int ret = serialize_queue_message(m, snd_buf, snd_msg_len, 0, vc);
@@ -863,7 +862,7 @@ int get_txn_ack_packet(int status, txn_message * q,
 #if (VERBOSE_RPC > 0)
 	char print_buff[1024];
 	to_string_ack_message(ack, (char *) print_buff);
-	log_debug("Sending txn ack message: %s", print_buff);
+	log_info("Sending txn ack message: %s", print_buff);
 #endif
 
 	int ret = serialize_ack_message(ack, snd_buf, snd_msg_len, vc);
@@ -976,7 +975,7 @@ int add_remote_server_to_list(remote_server * rs, skiplist_t * peer_list, unsign
 
     if(snode != NULL)
     {
-		fprintf(stderr, "ERROR: Server address %s:%d was already added to membership, marking it as live!\n", rs->hostname, rs->portno);
+		log_info("Server address %s:%d was already added to membership, marking it as live!", rs->hostname, rs->portno);
 		remote_server * existing_rs = (remote_server *) snode->value;
 		existing_rs->status = NODE_LIVE;
 		// Update client socket address:
@@ -988,7 +987,7 @@ int add_remote_server_to_list(remote_server * rs, skiplist_t * peer_list, unsign
 
     if(status != 0)
     {
-		fprintf(stderr, "ERROR: Error adding server address %s:%d to membership!\n", rs->hostname, rs->portno);
+		log_error("Error adding server address %s:%d to membership!", rs->hostname, rs->portno);
 		assert(0);
 		return -2;
     }
@@ -1052,8 +1051,7 @@ int handle_client_message(int childfd, int msg_len, db_t * db, membership * m, s
 
     if(status != 0)
     {
-//    		error("ERROR decoding client request");
-    		fprintf(stderr, "ERROR decoding client request");
+    		log_error( "ERROR decoding client request");
     		return -1;
     }
 
@@ -1074,7 +1072,7 @@ int handle_client_message(int childfd, int msg_len, db_t * db, membership * m, s
     			status = handle_write_query((write_query *) q, db, fastrandstate);
     			if(status != 0)
     			{
-    				printf("ERROR: handle_write_query returned %d!", status);
+    				log_error("handle_write_query returned %d!", status);
     				assert(0);
     			}
     		    vector_clock * vc = (((write_query *) q)->txnid != NULL)?(copy_vc(my_lc)):(NULL);
@@ -1282,7 +1280,7 @@ int get_join_packet(int status, int rack_id, int dc_id, char * hostname, unsigne
 #if (VERBOSE_RPC > 0)
 	char print_buff[1024];
 	to_string_membership_agreement_msg(jm, (char *) print_buff);
-	log_debug("Sending Join message: %s", print_buff);
+	log_info("Sending Join message: %s", print_buff);
 #endif
 
 	int ret = serialize_membership_agreement_msg(jm, snd_buf, snd_msg_len);
@@ -1300,7 +1298,7 @@ int get_agreement_propose_packet(int status, membership_state * membership, int6
 #if (VERBOSE_RPC > 0)
 	char print_buff[1024];
 	to_string_membership_agreement_msg(amr, (char *) print_buff);
-	log_debug("Sending Membership Propose message: %s", print_buff);
+	log_info("Sending Membership Propose message: %s", print_buff);
 #endif
 
 	int ret = serialize_membership_agreement_msg(amr, snd_buf, snd_msg_len);
@@ -1318,7 +1316,7 @@ int get_agreement_response_packet(int status, membership_state * membership, mem
 #if (VERBOSE_RPC > 0)
 	char print_buff[1024];
 	to_string_membership_agreement_msg(amr, (char *) print_buff);
-	log_debug("Sending Membership Response message: %s", print_buff);
+	log_info("Sending Membership Response message: %s", print_buff);
 #endif
 
 	int ret = serialize_membership_agreement_msg(amr, snd_buf, snd_msg_len);
@@ -1337,7 +1335,7 @@ int get_agreement_notify_packet(int status, membership_state * membership, membe
 #if (VERBOSE_RPC > 0)
 	char print_buff[1024];
 	to_string_membership_agreement_msg(*amr, (char *) print_buff);
-	log_debug("Sending Membership Notify message: %s", print_buff);
+	log_info("Sending Membership Notify message: %s", print_buff);
 #endif
 
 	int ret = serialize_membership_agreement_msg(*amr, snd_buf, snd_msg_len);
@@ -1353,7 +1351,7 @@ int get_agreement_notify_ack_packet(int status, membership_agreement_msg * am,
 #if (VERBOSE_RPC > 0)
 	char print_buff[1024];
 	to_string_membership_agreement_msg(amr, (char *) print_buff);
-	log_debug("Sending Membership Notify ACK message: %s", print_buff);
+	log_info("Sending Membership Notify ACK message: %s", print_buff);
 #endif
 
 	int ret = serialize_membership_agreement_msg(amr, snd_buf, snd_msg_len);
@@ -1492,7 +1490,7 @@ int send_join_message(int rack_id, int dc_id, char * hostname, unsigned short po
     {
 #if (VERBOSE_RPC > 0)
 		char msg_buf[1024];
-		fprintf(stderr, "SERVER: Not sending JOIN request to %s, as its status is %d!\n", dest_rs->id, dest_rs->status);
+		log_warn("SERVER: Not sending JOIN request to %s, as its status is %d!", dest_rs->id, dest_rs->status);
 #endif
 
     		return 1;
@@ -1523,7 +1521,7 @@ int propose_local_membership(membership * m, vector_clock * my_vc, membership_ag
     if(no_live_nodes(m->local_peers) <= 1)
     {
 #if (VERBOSE_RPC > 0)
-		fprintf(stderr, "SERVER: Skipping proposing new view, as no other nodes are live in local membership!\n");
+		log_warn("SERVER: Skipping proposing new view, as no other nodes are live in local membership!");
 #endif
 		skip_proposal = 1;
     }
@@ -1531,7 +1529,7 @@ int propose_local_membership(membership * m, vector_clock * my_vc, membership_ag
     if(is_min_live_node(m->my_id, m->local_peers) != 1)
     {
 #if (VERBOSE_RPC > 0)
-		log_debug("SERVER: Skipping proposing new view, as I am not the min live node!");
+		log_info("SERVER: Skipping proposing new view, as I am not the min live node!");
 #endif
 		skip_proposal = 1;
     }
@@ -1549,7 +1547,7 @@ int propose_local_membership(membership * m, vector_clock * my_vc, membership_ag
 										nonce, copy_vc(my_vc));
 #if (VERBOSE_RPC > 0)
 		to_string_membership_agreement_msg(*amr, (char *) msg_buf);
-		log_debug("Sending Membership Notify message to clients: %s", msg_buf);
+		log_info("Sending Membership Notify message to clients: %s", msg_buf);
 #endif
 		}
 		return -1;
@@ -1558,7 +1556,7 @@ int propose_local_membership(membership * m, vector_clock * my_vc, membership_ag
     if(m->outstanding_view_id != NULL)
     {
 #if (VERBOSE_RPC > 0)
-		fprintf(stderr, "SERVER: Proposing new view, aborting already outstanding view proposal %s!\n",
+		log_warn("SERVER: Proposing new view, aborting already outstanding view proposal %s!",
 							to_string_vc(m->outstanding_view_id, msg_buf));
 #endif
 		skiplist_free(m->outstanding_proposal);
@@ -1584,13 +1582,13 @@ int propose_local_membership(membership * m, vector_clock * my_vc, membership_ag
 		remote_server * rs = (remote_server *) crt->value;
 
 #if (VERBOSE_RPC > 0)
-		fprintf(stderr, "SERVER: propose_local_membership: Evaluating node (%s, %d, %d, %d), my_id = %d..\n", rs->id, rs->status, rs->sockfd, get_node_id((struct sockaddr *) &(rs->serveraddr)), m->my_id);
+		log_info("SERVER: propose_local_membership: Evaluating node (%s, %d, %d, %d), my_id = %d..", rs->id, rs->status, rs->sockfd, get_node_id((struct sockaddr *) &(rs->serveraddr)), m->my_id);
 #endif
 
 		if(rs->status == NODE_LIVE && rs->sockfd > 0 && get_node_id((struct sockaddr *) &(rs->serveraddr)) != m->my_id) // skip myself, and nodes that are "down" in membership
 		{
 #if (VERBOSE_RPC > 0)
-			fprintf(stderr, "SERVER: Sending proposal!\n");
+			log_info("SERVER: Sending proposal!");
 #endif
 			int n = write(rs->sockfd, tmp_out_buf, snd_msg_len);
 
@@ -1624,7 +1622,7 @@ int merge_membership_agreement_msg_to_list(membership_agreement_msg * ma, skipli
 		{
 #if (VERBOSE_RPC > 0)
 			char msg_buf[1024];
-			log_debug("SERVER: merge_membership_agreement_msg_to_list: Learned about node %s from proposal, status=%d.", rs->id, rs->status);
+			log_info("SERVER: merge_membership_agreement_msg_to_list: Learned about node %s from proposal, status=%d.", rs->id, rs->status);
 #endif
 
 			int status = connect_remote_server(rs);
@@ -1657,7 +1655,7 @@ int merge_membership_agreement_msg_to_list(membership_agreement_msg * ma, skipli
 						|| (proposed_counter == -1 && local_counter == -1)) // -1 is for client (RTS membership entries), which do not participate in the vector_clock version
 				{
 #if (VERBOSE_RPC > 0)
-					log_debug("SERVER: merge_membership_agreement_msg_to_list: Updating status of node %s from %d to %d, because local_counter=%" PRId64 ", proposed_counter=%" PRId64 ".", rs->id, rs_local->status, nd.status, local_counter, proposed_counter);
+					log_info("SERVER: merge_membership_agreement_msg_to_list: Updating status of node %s from %d to %d, because local_counter=%" PRId64 ", proposed_counter=%" PRId64 ".", rs->id, rs_local->status, nd.status, local_counter, proposed_counter);
 #endif
 
 					rs_local->status = nd.status;
@@ -1665,7 +1663,7 @@ int merge_membership_agreement_msg_to_list(membership_agreement_msg * ma, skipli
 				else
 				{
 #if (VERBOSE_RPC > 0)
-					log_debug("SERVER: merge_membership_agreement_msg_to_list: Requesting membership ammend, because for node %s, local_status=%d, proposed_status=%d, local_counter=%" PRId64 ", proposed_counter=%" PRId64 ".", rs->id, rs_local->status, nd.status, local_counter, proposed_counter);
+					log_info("SERVER: merge_membership_agreement_msg_to_list: Requesting membership ammend, because for node %s, local_status=%d, proposed_status=%d, local_counter=%" PRId64 ", proposed_counter=%" PRId64 ".", rs->id, rs_local->status, nd.status, local_counter, proposed_counter);
 #endif
 
 					memberships_differ = 1;
@@ -1696,7 +1694,7 @@ int merge_membership_agreement_msg_to_client_list(membership_agreement_msg * ma,
 		{
 #if (VERBOSE_RPC > 0)
 			char msg_buf[1024];
-			printf("SERVER: merge_membership_agreement_msg_to_list: Learned about client node %s from proposal, status=%d.\n", rs->id, rs->status);
+			log_info("SERVER: merge_membership_agreement_msg_to_list: Learned about client node %s from proposal, status=%d.", rs->id, rs->status);
 #endif
 
 			int status = 0;
@@ -1737,7 +1735,7 @@ int merge_membership_agreement_msg_to_client_list(membership_agreement_msg * ma,
 					|| (proposed_counter == -1 && local_counter == -1)) // -1 is for client (RTS membership entries), which do not participate in the vector_clock version
 				{
 #if (VERBOSE_RPC > 0)
-					printf("SERVER: merge_membership_agreement_msg_to_list: Updating status of node %s from %d to %d, because local_counter=%" PRId64 ", proposed_counter=%" PRId64 ".\n", rs->id, rs_local->status, nd.status, local_counter, proposed_counter);
+					log_info("SERVER: merge_membership_agreement_msg_to_list: Updating status of node %s from %d to %d, because local_counter=%" PRId64 ", proposed_counter=%" PRId64 ".", rs->id, rs_local->status, nd.status, local_counter, proposed_counter);
 #endif
 
 					rs_local->status = nd.status;
@@ -1745,7 +1743,7 @@ int merge_membership_agreement_msg_to_client_list(membership_agreement_msg * ma,
 				else
 				{
 #if (VERBOSE_RPC > 0)
-					printf("SERVER: merge_membership_agreement_msg_to_list: Requesting membership ammend, because for node %s, local_status=%d, proposed_status=%d, local_counter=%" PRId64 ", proposed_counter=%" PRId64 ".\n", rs->id, rs_local->status, nd.status, local_counter, proposed_counter);
+					log_info("SERVER: merge_membership_agreement_msg_to_list: Requesting membership ammend, because for node %s, local_status=%d, proposed_status=%d, local_counter=%" PRId64 ", proposed_counter=%" PRId64 ".", rs->id, rs_local->status, nd.status, local_counter, proposed_counter);
 #endif
 
 					memberships_differ = 1;
@@ -1761,13 +1759,13 @@ int handle_agreement_propose_message(membership_agreement_msg * ma, membership_s
 {
 #if (VERBOSE_RPC > 0)
 	char msg_buf[1024];
-	log_debug("SERVER: Received new view proposal %s!", to_string_membership_agreement_msg(ma, msg_buf));
+	log_info("SERVER: Received new view proposal %s!", to_string_membership_agreement_msg(ma, msg_buf));
 #endif
 
 	if(compare_vc(m->view_id, ma->vc) > 0)
 	{
 #if (VERBOSE_RPC > 0)
-		fprintf(stderr, "SERVER: Rejecting proposed view %s because it is older than my installed view %s!\n",
+		log_info("SERVER: Rejecting proposed view %s because it is older than my installed view %s!",
 							to_string_vc(m->view_id, msg_buf), to_string_vc(ma->vc, msg_buf));
 #endif
 
@@ -1793,7 +1791,7 @@ int handle_agreement_response_message(membership_agreement_msg * ma, membership_
 {
 #if (VERBOSE_RPC > 0)
 	char msg_buf[1024];
-	log_debug("SERVER: Received agreement response message %s, outstanding_proposal_acks=%d!", to_string_membership_agreement_msg(ma, msg_buf), m->outstanding_proposal_acks);
+	log_info("SERVER: Received agreement response message %s, outstanding_proposal_acks=%d!", to_string_membership_agreement_msg(ma, msg_buf), m->outstanding_proposal_acks);
 #endif
 
 	*merged_membership = NULL;
@@ -1801,7 +1799,7 @@ int handle_agreement_response_message(membership_agreement_msg * ma, membership_
     if(m->outstanding_view_id == NULL)
     {
 #if (VERBOSE_RPC > 0)
-		fprintf(stderr, "SERVER: Received Agreement Response message, but no outstanding view proposal is active!\n");
+		log_warn("SERVER: Received Agreement Response message, but no outstanding view proposal is active!");
 #endif
 		return -2;
     }
@@ -1809,7 +1807,7 @@ int handle_agreement_response_message(membership_agreement_msg * ma, membership_
     if(m->outstanding_proposal_nonce != ma->nonce)
     {
 #if (VERBOSE_RPC > 0)
-		fprintf(stderr, "SERVER: Received Agreement Response message, but nonce (%" PRId64 ") does not match outstanding view proposal nonce (%" PRId64 ")!\n",
+		log_warn("SERVER: Received Agreement Response message, but nonce (%" PRId64 ") does not match outstanding view proposal nonce (%" PRId64 ")!",
 							ma->nonce, m->outstanding_proposal_nonce);
 #endif
 		return -1;
@@ -1868,7 +1866,7 @@ int install_agreed_view(membership_agreement_msg * ma, membership * m, vector_cl
 	if(compare_vc(m->view_id, ma->vc) > 0)
 	{
 #if (VERBOSE_RPC > -1)
-		fprintf(stderr, "SERVER: Skipping installing notified view %s because it is older than my installed view %s!\n",
+		log_info("SERVER: Skipping installing notified view %s because it is older than my installed view %s!",
 							to_string_vc(ma->vc, msg_buf), to_string_vc(m->view_id, msg_buf));
 #endif
 
@@ -1945,7 +1943,7 @@ int install_agreed_view(membership_agreement_msg * ma, membership * m, vector_cl
 	update_or_replace_vc(&(m->view_id), ma->vc);
 
 #if (VERBOSE_RPC > -1)
-	log_debug("SERVER: Installed new agreed view %s, local_view_disagrees=%d",
+	log_info("SERVER: Installed new agreed view %s, local_view_disagrees=%d",
 					to_string_membership_agreement_msg(ma, msg_buf),
 					local_view_disagrees);
 #endif
@@ -1974,7 +1972,7 @@ int notify_new_view_to_clients(membership * m, membership_agreement_msg * ma, ve
 
 		char client_address2[INET_ADDRSTRLEN];
 		inet_ntop( AF_INET, &(cd->addr).sin_addr, client_address2, sizeof(client_address2));
-		log_debug("SERVER: Notifying new agreed view %s to client %s:%d, fd=%d",
+		log_info("SERVER: Notifying new agreed view %s to client %s:%d, fd=%d",
 							to_string_membership_agreement_msg(ma, msg_buf),
 							client_address2, ntohs(cd->addr.sin_port), cd->sockfd);
 
@@ -2017,7 +2015,7 @@ int parse_gossip_message(void * rcv_buf, size_t rcv_msg_len, membership_agreemen
 #if (VERBOSE_RPC > 0)
 		char print_buff[PRINT_BUFSIZE];
 		to_string_membership_agreement_msg((*ma), (char *) print_buff);
-		log_debug("Received gossip message: %s", print_buff);
+		log_info("Received gossip message: %s", print_buff);
 #endif
 	}
 	else
@@ -2041,7 +2039,7 @@ int handle_join_message(int childfd, int msg_len, membership * m, db_t * db, uns
 
 	if(status != 0)
 	{
-		fprintf(stderr, "ERROR decoding server join request");
+		log_error("ERROR decoding server join request");
     	    	return -1;
 	}
 
@@ -2052,7 +2050,7 @@ int handle_join_message(int childfd, int msg_len, membership * m, db_t * db, uns
 
 #if (VERBOSE_RPC > 0)
 	char msg_buf[1024];
-	log_debug("SERVER: Received new join message %s!", to_string_membership_agreement_msg(ma, msg_buf));
+	log_info("SERVER: Received new join message %s!", to_string_membership_agreement_msg(ma, msg_buf));
 #endif
 
 	// Update peer socket address to announced one:
@@ -2076,7 +2074,7 @@ int handle_join_message(int childfd, int msg_len, membership * m, db_t * db, uns
 		if(strcmp((char *) &(rs->id), (char *) &(old_rs_local->id)) != 0)
 		{
 #if (VERBOSE_RPC > 0)
-			log_debug("SERVER: Removing old peer entry from local_peers: %s", old_rs_local->id);
+			log_info("SERVER: Removing old peer entry from local_peers: %s", old_rs_local->id);
 #endif
 			skiplist_delete(m->local_peers, &rs->serveraddr);
 
@@ -2094,7 +2092,7 @@ int handle_join_message(int childfd, int msg_len, membership * m, db_t * db, uns
 				assert(old_rs_local->sockfd <= 0 || my_id < new_joiner_id);
 
 #if (VERBOSE_RPC > 0)
-				log_debug("SERVER: Peer %s %s. Updating its sockfd from %d to %d, old_status=%d, and marking node live!",
+				log_info("SERVER: Peer %s %s. Updating its sockfd from %d to %d, old_status=%d, and marking node live!",
 												old_rs_local->id, (old_status == NODE_DEAD)?"came back up":"sent join request",
 												old_rs_local->sockfd, rs->sockfd, old_rs_local->status);
 #endif
@@ -2146,7 +2144,7 @@ int handle_server_message(int childfd, int msg_len, membership * m, db_t * db, u
 
 	if(status != 0)
 	{
-		fprintf(stderr, "ERROR decoding server gossip message");
+		log_error("ERROR decoding server gossip message");
     	    	return -1;
 	}
 
@@ -2492,7 +2490,7 @@ int main(int argc, char **argv) {
   if (arguments.log_file_path) {
       logf = fopen(arguments.log_file_path, "w");
       if (!logf) {
-          fprintf(stderr, "ERROR: Unable to open log file (%s) for writing\n", arguments.log_file_path);
+          log_error("Unable to open log file (%s) for writing", arguments.log_file_path);
           exit(1);
       }
       log_add_fp(logf, LOG_DEBUG); // LOG_TRACE
@@ -2532,14 +2530,14 @@ int main(int argc, char **argv) {
 	  struct hostent * host = gethostbyname(arguments.seeds[i]);
       if (host == NULL)
       {
-          fprintf(stderr, "ERROR, no such host %s\n", arguments.seeds[i]);
+          log_error("ERROR, no such host %s", arguments.seeds[i]);
           return -1;
       }
 
       free(arguments.seeds[i]);
       arguments.seeds[i] = strdup(host->h_name);
 
-	  log_info("%s:%d\n", arguments.seeds[i], arguments.seed_ports[i]);
+	  log_info("%s:%d", arguments.seeds[i], arguments.seed_ports[i]);
   }
 
   skiplist_t * clients = create_skiplist(&sockaddr_cmp); // List of remote clients
@@ -2610,7 +2608,7 @@ int main(int argc, char **argv) {
   size_t mon_buf_used = 0;
   if (arguments.mon_socket_path) {
       if ((mon_sock = socket(AF_UNIX, SOCK_STREAM, 0)) == -1) {
-          fprintf(stderr, LOGPFX "ERROR: Unable to create Monitor Socket\n");
+          log_error(LOGPFX "ERROR: Unable to create Monitor Socket");
           exit(1);
       }
 
@@ -2618,11 +2616,11 @@ int main(int argc, char **argv) {
       strcpy(mon_addr.sun_path, arguments.mon_socket_path);
       unlink(mon_addr.sun_path);
       if (bind(mon_sock, (struct sockaddr *)&mon_addr, sizeof(mon_addr.sun_path) + sizeof(mon_addr.sun_family)) == -1) {
-          fprintf(stderr, LOGPFX "ERROR: Unable to bind to Monitor Socket\n");
+    log_error(LOGPFX "ERROR: Unable to bind to Monitor Socket");
           exit(1);
       }
       if (listen(mon_sock, 5) == -1) {
-          fprintf(stderr, LOGPFX "ERROR: Unable to listen on Monitor Socket\n");
+          log_error(LOGPFX "ERROR: Unable to listen on Monitor Socket");
           exit(1);
       }
   }
@@ -2806,7 +2804,7 @@ int main(int argc, char **argv) {
                         break;
                     int r = netstring_read(&buf_base, &mon_buf_used, &str, &len);
                     if (r != 0) {
-                        printf(LOGPFX "Mon socket: Error reading netstring: %d\n", r);
+                        log_error(LOGPFX "Mon socket: Error reading netstring: %d", r);
                         break;
                     }
 
@@ -2849,7 +2847,7 @@ int main(int argc, char **argv) {
 			    error("ERROR on gethostbyaddr");
 			  hostaddrp = strdup(inet_ntoa(clientaddr.sin_addr));
 			  if (hostaddrp == NULL)
-			    error("ERROR on inet_ntoa\n");
+			    error("ERROR on inet_ntoa");
 
               log_info("SERVER: accepted connection from client: %s (%s:%d)", hostp->h_name, hostaddrp, ntohs(clientaddr.sin_port));
 
@@ -2879,7 +2877,7 @@ int main(int argc, char **argv) {
 			    error("ERROR on gethostbyaddr");
 			  hostaddrp = strdup(inet_ntoa(clientaddr.sin_addr));
 			  if (hostaddrp == NULL)
-			    error("ERROR on inet_ntoa\n");
+			    error("ERROR on inet_ntoa");
 
               log_info("SERVER: accepted connection from peer: %s (%s:%d), sockfd=%d", hostp->h_name, hostaddrp, ntohs(clientaddr.sin_port), childfd);
 

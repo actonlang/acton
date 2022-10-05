@@ -88,7 +88,7 @@ void stat_stop(struct dbc_ops_stat *ops_stat, struct timespec *ts_start, int sta
 	} else if (status < 0) {
 		ops_stat->error++;
 	} else {
-		printf("Unknown ops status %d\n", status);
+		log_error("Unknown ops status %d", status);
 		assert(0);
 	}
 }
@@ -176,7 +176,7 @@ int handle_socket_close(int * childfd)
 	int addrlen;
 	getpeername(*childfd , (struct sockaddr*)&address,
 				(socklen_t*)&addrlen);
-	printf("Host disconnected , ip %s , port %d \n" ,
+	log_info("Host disconnected , ip %s , port %d " ,
 		  inet_ntoa(address.sin_addr) , ntohs(address.sin_port));
 
 	//Close the socket and mark as -1 in list for reuse
@@ -301,13 +301,13 @@ void * comm_thread_loop(void * args)
 			remote_server * rs = (remote_server *) crt->value;
 			if(rs->sockfd > 0)
 			{
-//				printf("Listening to server socket %s..\n", rs->id);
+//				log_info("Listening to server socket %s..", rs->id);
 				FD_SET(rs->sockfd, &(db->readfds));
 				max_fd = (rs->sockfd > max_fd)? rs->sockfd : max_fd;
 			}
 			else
 			{
-//				printf("Not listening to disconnected server socket %s..\n", rs->id);
+//				log_info("Not listening to disconnected server socket %s..", rs->id);
 			}
 		}
 
@@ -315,7 +315,7 @@ void * comm_thread_loop(void * args)
 
         if ((status < 0) && (errno!=EINTR))
         {
-            printf("select error!\n");
+            log_error("select error!");
             assert(0);
         }
 
@@ -347,7 +347,6 @@ void * comm_thread_loop(void * args)
 
 						if (size_len < 0)
 						{
-//							fprintf(stderr, "ERROR reading from socket\n");
 							continue;
 						}
 						else if (size_len == 0)
@@ -373,12 +372,12 @@ void * comm_thread_loop(void * args)
 				    msg_len = read(rs->sockfd, in_buf + sizeof(int) + read_buf_offset, announced_msg_len - read_buf_offset);
 
 #if CLIENT_VERBOSITY > 1
-					printf("announced_msg_len=%d, msg_len=%d, read_buf_offset=%d\n", announced_msg_len, msg_len, read_buf_offset);
+					log_info("announced_msg_len=%d, msg_len=%d, read_buf_offset=%d", announced_msg_len, msg_len, read_buf_offset);
 #endif
 
 				    if (msg_len < 0)
 				    {
-				    		fprintf(stderr, "ERROR reading from socket\n");
+				    		log_error("ERROR reading from socket");
 						continue;
 				    }
 					else if(msg_len == 0) // client closed socket
@@ -404,7 +403,7 @@ void * comm_thread_loop(void * args)
 			    read_buf_offset = 0; // Reset
 
 #if CLIENT_VERBOSITY > 1
-			    printf("client received %d / %d bytes\n", announced_msg_len, msg_len);
+			    log_info("client received %d / %d bytes", announced_msg_len, msg_len);
 #endif
 
 			    void * tmp_out_buf = NULL, * q = NULL;
@@ -418,7 +417,7 @@ void * comm_thread_loop(void * args)
 
 			    if(status != 0)
 			    {
-			    		fprintf(stderr, "ERROR decoding server response!\n");
+			    		log_error("ERROR decoding server response!");
 			    		continue;
 			    		assert(0);
 			    }
@@ -450,7 +449,7 @@ void * comm_thread_loop(void * args)
 
 			    		if(qc == NULL)
 			    		{
-						fprintf(stderr, "CLIENT: No local subscriber subscriber %" PRId64 "/%" PRId64 "/%" PRId64 " exists for queue %" PRId64 "/%" PRId64 "!\n",
+						log_error("CLIENT: No local subscriber subscriber %" PRId64 "/%" PRId64 "/%" PRId64 " exists for queue %" PRId64 "/%" PRId64 "!",
 																		(int64_t) qqm->consumer_id, (int64_t) qqm->shard_id, (int64_t) qqm->app_id,
 																		(int64_t) notif_table_key, (int64_t) notif_queue_id);
 						continue;
@@ -459,13 +458,13 @@ void * comm_thread_loop(void * args)
 					queue_callback_args * qca = get_queue_callback_args(notif_table_key, notif_queue_id, (WORD) qqm->app_id, (WORD) qqm->shard_id, (WORD) qqm->consumer_id, QUEUE_NOTIF_ENQUEUED);
 
 #if (CLIENT_VERBOSITY > 0)
-					printf("CLIENT: Attempting to notify local subscriber %" PRId64 " (%p/%p/%p/%p)\n", (int64_t) qqm->consumer_id, qc, qc->lock, qc->signal, qc->callback);
+					log_info("CLIENT: Attempting to notify local subscriber %" PRId64 " (%p/%p/%p/%p)", (int64_t) qqm->consumer_id, qc, qc->lock, qc->signal, qc->callback);
 #endif
 
 					status = pthread_mutex_lock(qc->lock);
 
 #if (CLIENT_LOCK_VERBOSITY > 0)
-					printf("CLIENT: Locked consumer lock of %" PRId64 " (%p/%p), status=%d\n", (int64_t) qqm->consumer_id, qc, qc->lock, status);
+					log_info("CLIENT: Locked consumer lock of %" PRId64 " (%p/%p), status=%d", (int64_t) qqm->consumer_id, qc, qc->lock, status);
 #endif
 
 					pthread_cond_signal(qc->signal);
@@ -474,11 +473,11 @@ void * comm_thread_loop(void * args)
 					assert(status == 0);
 
 #if (CLIENT_LOCK_VERBOSITY > 0)
-					printf("CLIENT: Unlocked consumer lock of %" PRId64 " (%p/%p), status=%d\n", (int64_t) qqm->consumer_id, qc, qc->lock, status);
+					log_info("CLIENT: Unlocked consumer lock of %" PRId64 " (%p/%p), status=%d", (int64_t) qqm->consumer_id, qc, qc->lock, status);
 #endif
 
 #if (CLIENT_VERBOSITY > 0)
-					printf("CLIENT: Notified local subscriber %" PRId64 " (%p/%p/%p/%p)\n", (int64_t) qqm->consumer_id, qc, qc->lock, qc->signal, qc->callback);
+					log_info("CLIENT: Notified local subscriber %" PRId64 " (%p/%p/%p/%p)", (int64_t) qqm->consumer_id, qc, qc->lock, qc->signal, qc->callback);
 #endif
 			    }
 			    else // a gossip notification
@@ -570,7 +569,7 @@ rts_descriptor * get_rts_descriptor(int rack_id, int dc_id, char *hostname, int 
 	struct hostent * host = gethostbyname(hostname);
 	if (host == NULL)
 	{
-		fprintf(stderr, "ERROR, no such host %s\n", hostname);
+		log_error("ERROR, no such host %s", hostname);
 		free_rts_descriptor(rts_d);
 		return NULL;
 	}
@@ -979,7 +978,7 @@ int add_reply_to_nonce(void * reply, short reply_type, int64_t nonce, remote_db_
 	{
 		pthread_mutex_unlock(db->msg_callbacks_lock);
 
-//		printf("Nonce %" PRId64 " not found!\n", nonce);
+//		log_info("Nonce %" PRId64 " not found!", nonce);
 
 		return -1;
 	}
@@ -1001,7 +1000,7 @@ int add_reply_to_nonce(void * reply, short reply_type, int64_t nonce, remote_db_
 		pthread_cond_signal(mc->signal);
 		if((mc->callback) != NULL)
 		{
-//			fprintf(stderr, "mc = %p, mc->callback = %p, calling..\n", mc, mc->callback);
+//			log_debug("mc = %p, mc->callback = %p, calling..", mc, mc->callback);
 			(mc->callback)(NULL);
 		}
 		ret = pthread_mutex_unlock(mc->lock);
@@ -1145,7 +1144,7 @@ int send_packet(void * buf, unsigned len, int sockfd)
     else
     {
 #if CLIENT_VERBOSITY > 2
-		printf("Wrote %d bytes to socket\n", n);
+		log_info("Wrote %d bytes to socket", n);
 #endif
     }
 
@@ -1169,7 +1168,7 @@ int send_packet_wait_reply(void * out_buf, unsigned out_len, int sockfd, void * 
 		else
 		{
 #if CLIENT_VERBOSITY > 2
-			printf("Read %d bytes from socket\n", *in_len);
+			log_info("Read %d bytes from socket", *in_len);
 #endif
 		}
     }
@@ -1206,7 +1205,7 @@ int wait_on_msg_callback(msg_callback * mc, remote_db_t * db)
 
 	if(ret != 0 && ret != ETIMEDOUT)
 	{
-		printf("pthread_cond_timedwait returned %d/%d\n", ret, errno);
+		log_info("pthread_cond_timedwait returned %d/%d", ret, errno);
 		assert(0);
 	}
 
@@ -1236,7 +1235,7 @@ int send_packet_wait_replies_async(void * out_buf, unsigned out_len, int64_t non
 		{
 			assert(0);
 #if CLIENT_VERBOSITY > 0
-			printf("Server %s seems down.\n", rs->id);
+			log_error("Server %s seems down.", rs->id);
 #endif
 		}
 	}
@@ -1289,7 +1288,7 @@ int remote_insert_in_txn(WORD * column_values, int no_cols, int no_primary_keys,
 	}
 	sprintf(crt_ptr, "}");
 	crt_ptr += strlen(crt_ptr);
-	printf("remote_insert_in_txn: %s\n", printbuf);
+	log_info("remote_insert_in_txn: %s", printbuf);
 	free(printbuf);
 #endif
 
@@ -1298,7 +1297,7 @@ int remote_insert_in_txn(WORD * column_values, int no_cols, int no_primary_keys,
 
 	if(db->servers->no_items < db->quorum_size)
 	{
-		fprintf(stderr, "Not enough servers configured for quorum (%d/%d servers configured)\n", db->servers->no_items, db->replication_factor);
+		log_error("Not enough servers configured for quorum (%d/%d servers configured)", db->servers->no_items, db->replication_factor);
 		stat_stop(dbc_stats.remote_insert_in_txn, &ts_start, NO_QUORUM_ERR);
 		return NO_QUORUM_ERR;
 	}
@@ -1307,7 +1306,7 @@ int remote_insert_in_txn(WORD * column_values, int no_cols, int no_primary_keys,
 #if CLIENT_VERBOSITY > 0
 	char print_buff[1024];
 	to_string_write_query(wq, (char *) print_buff);
-	printf("Sending write query to server %s: %s\n", rs->id, print_buff);
+	log_info("Sending write query to server %s: %s", rs->id, print_buff);
 #endif
 
 	// Send packet to server and wait for reply:
@@ -1319,7 +1318,7 @@ int remote_insert_in_txn(WORD * column_values, int no_cols, int no_primary_keys,
 
 	if(mc->no_replies < db->quorum_size)
 	{
-		fprintf(stderr, "No quorum (%d/%d replies received)\n", mc->no_replies, db->replication_factor);
+		log_error("No quorum (%d/%d replies received)", mc->no_replies, db->replication_factor);
 		delete_msg_callback(mc->nonce, db);
 		stat_stop(dbc_stats.remote_insert_in_txn, &ts_start, NO_QUORUM_ERR);
 		return NO_QUORUM_ERR;
@@ -1337,7 +1336,7 @@ int remote_insert_in_txn(WORD * column_values, int no_cols, int no_primary_keys,
 
 #if CLIENT_VERBOSITY > 0
 		to_string_ack_message(ack, (char *) print_buff);
-		printf("Got back response from server %s: %s\n", rs->id, print_buff);
+		log_info("Got back response from server %s: %s", rs->id, print_buff);
 #endif
 	}
 
@@ -1368,7 +1367,7 @@ int remote_delete_row_in_txn(WORD * column_values, int no_primary_keys, WORD tab
 
 	if(db->servers->no_items < db->quorum_size)
 	{
-		fprintf(stderr, "No quorum (%d/%d servers alive)\n", db->servers->no_items, db->replication_factor);
+		log_error("No quorum (%d/%d servers alive)", db->servers->no_items, db->replication_factor);
 		stat_stop(dbc_stats.remote_delete_row_in_txn, &ts_start, NO_QUORUM_ERR);
 		return NO_QUORUM_ERR;
 	}
@@ -1377,7 +1376,7 @@ int remote_delete_row_in_txn(WORD * column_values, int no_primary_keys, WORD tab
 #if CLIENT_VERBOSITY > 0
 	char print_buff[1024];
 	to_string_write_query(wq, (char *) print_buff);
-	printf("Sending delete row query to server %s: %s\n", rs->id, print_buff);
+	log_info("Sending delete row query to server %s: %s", rs->id, print_buff);
 #endif
 
 	// Send packet to server and wait for reply:
@@ -1389,7 +1388,7 @@ int remote_delete_row_in_txn(WORD * column_values, int no_primary_keys, WORD tab
 
 	if(mc->no_replies < db->quorum_size)
 	{
-		fprintf(stderr, "No quorum (%d/%d replies received)\n", mc->no_replies, db->replication_factor);
+		log_error("No quorum (%d/%d replies received)", mc->no_replies, db->replication_factor);
 		delete_msg_callback(mc->nonce, db);
 		stat_stop(dbc_stats.remote_delete_row_in_txn, &ts_start, NO_QUORUM_ERR);
 		return NO_QUORUM_ERR;
@@ -1408,7 +1407,7 @@ int remote_delete_row_in_txn(WORD * column_values, int no_primary_keys, WORD tab
 
 #if CLIENT_VERBOSITY > 0
 		to_string_ack_message(ack, (char *) print_buff);
-		printf("Got back response from server %s: %s\n", rs->id, print_buff);
+		log_info("Got back response from server %s: %s", rs->id, print_buff);
 #endif
 	}
 
@@ -1433,7 +1432,7 @@ int remote_delete_cell_in_txn(WORD * column_values, int no_primary_keys, int no_
 
 	if(db->servers->no_items < db->quorum_size)
 	{
-		fprintf(stderr, "No quorum (%d/%d servers alive)\n", db->servers->no_items, db->replication_factor);
+		log_error("No quorum (%d/%d servers alive)", db->servers->no_items, db->replication_factor);
         stat_stop(dbc_stats.remote_delete_cell_in_txn, &ts_start, NO_QUORUM_ERR);
 		return NO_QUORUM_ERR;
 	}
@@ -1442,7 +1441,7 @@ int remote_delete_cell_in_txn(WORD * column_values, int no_primary_keys, int no_
 #if CLIENT_VERBOSITY > 0
 	char print_buff[1024];
 	to_string_write_query(wq, (char *) print_buff);
-	printf("Sending delete cell query to server %s: %s\n", rs->id, print_buff);
+	log_info("Sending delete cell query to server %s: %s", rs->id, print_buff);
 #endif
 
 	// Send packet to server and wait for reply:
@@ -1454,7 +1453,7 @@ int remote_delete_cell_in_txn(WORD * column_values, int no_primary_keys, int no_
 
 	if(mc->no_replies < db->quorum_size)
 	{
-		fprintf(stderr, "No quorum (%d/%d replies received)\n", mc->no_replies, db->replication_factor);
+		log_error("No quorum (%d/%d replies received)", mc->no_replies, db->replication_factor);
 		delete_msg_callback(mc->nonce, db);
         stat_stop(dbc_stats.remote_delete_cell_in_txn, &ts_start, NO_QUORUM_ERR);
 		return NO_QUORUM_ERR;
@@ -1473,7 +1472,7 @@ int remote_delete_cell_in_txn(WORD * column_values, int no_primary_keys, int no_
 
 #if CLIENT_VERBOSITY > 0
 		to_string_ack_message(ack, (char *) print_buff);
-		printf("Got back response from server %s: %s\n", rs->id, print_buff);
+		log_info("Got back response from server %s: %s", rs->id, print_buff);
 #endif
 	}
 
@@ -1520,7 +1519,7 @@ int get_db_rows_forest_from_read_response(range_read_response_message * response
 
 		if(root_cell_node == NULL)
 		{
-//			printf("Creating new root cell for cell %d (%" PRId64 ")\n", i, response->cells[i].keys[0]);
+//			log_info("Creating new root cell for cell %d (%" PRId64 ")", i, response->cells[i].keys[0]);
 
 			root_cell = create_db_row_schemaless2((WORD *) response->cells[i].keys, response->cells[i].no_keys,
 					(WORD *) response->cells[i].columns, response->cells[i].no_columns,
@@ -1544,7 +1543,7 @@ int get_db_rows_forest_from_read_response(range_read_response_message * response
 						(WORD *) response->cells[i].columns, response->cells[i].no_columns,
 						response->cells[i].last_blob, response->cells[i].last_blob_size, &(db->fastrandstate));
 
-//				printf("Inserting cell %d (%" PRId64 ") into tree at level %d\n", i, response->cells[i].keys[j], j);
+//				log_info("Inserting cell %d (%" PRId64 ") into tree at level %d", i, response->cells[i].keys[j], j);
 
 				skiplist_insert(cell->cells, (WORD) response->cells[i].keys[j], (WORD) new_cell, &(db->fastrandstate));
 
@@ -1596,7 +1595,7 @@ db_row_t* get_db_rows_tree_from_read_response(range_read_response_message * resp
 						(WORD *) response->cells[i].columns, response->cells[i].no_columns,
 						response->cells[i].last_blob, response->cells[i].last_blob_size, &(db->fastrandstate));
 
-//				printf("Inserting cell %d (%" PRId64 ") into tree at level %d\n", i, response->cells[i].keys[j], j);
+//				log_info("Inserting cell %d (%" PRId64 ") into tree at level %d", i, response->cells[i].keys[j], j);
 
 				skiplist_insert(cell->cells, (WORD) response->cells[i].keys[j], (WORD) new_cell, &(db->fastrandstate));
 
@@ -1631,7 +1630,7 @@ int remote_search_in_txn(WORD* primary_keys, int no_primary_keys, db_row_t** res
 
 	if(db->servers->no_items < db->quorum_size)
 	{
-		fprintf(stderr, "No quorum (%d/%d servers alive)\n", db->servers->no_items, db->replication_factor);
+		log_error("No quorum (%d/%d servers alive)", db->servers->no_items, db->replication_factor);
 		stat_stop(dbc_stats.remote_search_in_txn, &ts_start, NO_QUORUM_ERR);
 		return NO_QUORUM_ERR;
 	}
@@ -1640,7 +1639,7 @@ int remote_search_in_txn(WORD* primary_keys, int no_primary_keys, db_row_t** res
 #if CLIENT_VERBOSITY > 0
 	char print_buff[1024];
 	to_string_read_query(q, (char *) print_buff);
-	printf("Sending read row query to server %s: %s\n", rs->id, print_buff);
+	log_info("Sending read row query to server %s: %s", rs->id, print_buff);
 #endif
 
 	// Send packet to server and wait for reply:
@@ -1652,7 +1651,7 @@ int remote_search_in_txn(WORD* primary_keys, int no_primary_keys, db_row_t** res
 
 	if(mc->no_replies < db->quorum_size)
 	{
-		fprintf(stderr, "No quorum (%d/%d replies received)\n", mc->no_replies, db->replication_factor);
+		log_error("No quorum (%d/%d replies received)", mc->no_replies, db->replication_factor);
 		delete_msg_callback(mc->nonce, db);
 		stat_stop(dbc_stats.remote_search_in_txn, &ts_start, NO_QUORUM_ERR);
 		return NO_QUORUM_ERR;
@@ -1665,7 +1664,7 @@ int remote_search_in_txn(WORD* primary_keys, int no_primary_keys, db_row_t** res
 
 #if CLIENT_VERBOSITY > 0
 		to_string_range_read_response_message(response, (char *) print_buff);
-		printf("Got back response from server %s: %s\n", rs->id, print_buff);
+		log_info("Got back response from server %s: %s", rs->id, print_buff);
 #endif
 
 		// If result returned multiple cells, accumulate them all in a single tree rooted at "result":
@@ -1693,7 +1692,7 @@ int remote_search_clustering_in_txn(WORD* primary_keys, int no_primary_keys, WOR
 
 	if(db->servers->no_items < db->quorum_size)
 	{
-		fprintf(stderr, "No quorum (%d/%d servers alive)\n", db->servers->no_items, db->replication_factor);
+		log_error("No quorum (%d/%d servers alive)", db->servers->no_items, db->replication_factor);
 		stat_stop(dbc_stats.remote_search_clustering_in_txn, &ts_start, NO_QUORUM_ERR);
 		return NO_QUORUM_ERR;
 	}
@@ -1702,7 +1701,7 @@ int remote_search_clustering_in_txn(WORD* primary_keys, int no_primary_keys, WOR
 #if CLIENT_VERBOSITY > 0
 	char print_buff[1024];
 	to_string_read_query(q, (char *) print_buff);
-	printf("Sending read cell query to server %s: %s\n", rs->id, print_buff);
+	log_info("Sending read cell query to server %s: %s", rs->id, print_buff);
 #endif
 
 	// Send packet to server and wait for reply:
@@ -1714,7 +1713,7 @@ int remote_search_clustering_in_txn(WORD* primary_keys, int no_primary_keys, WOR
 
 	if(mc->no_replies < db->quorum_size)
 	{
-		fprintf(stderr, "No quorum (%d/%d replies received)\n", mc->no_replies, db->replication_factor);
+		log_error("No quorum (%d/%d replies received)", mc->no_replies, db->replication_factor);
 		delete_msg_callback(mc->nonce, db);
 		stat_stop(dbc_stats.remote_search_clustering_in_txn, &ts_start, NO_QUORUM_ERR);
 		return NO_QUORUM_ERR;
@@ -1727,7 +1726,7 @@ int remote_search_clustering_in_txn(WORD* primary_keys, int no_primary_keys, WOR
 
 #if CLIENT_VERBOSITY > 0
 		to_string_range_read_response_message(response, (char *) print_buff);
-		printf("Got back response from server %s: %s\n", rs->id, print_buff);
+		log_info("Got back response from server %s: %s", rs->id, print_buff);
 #endif
 
 		// If result returned multiple cells, accumulate them all in a single tree rooted at "result":
@@ -1770,7 +1769,7 @@ int remote_range_search_in_txn(WORD* start_primary_keys, WORD* end_primary_keys,
 
 	if(db->servers->no_items < db->quorum_size)
 	{
-		fprintf(stderr, "No quorum (%d/%d servers alive)\n", db->servers->no_items, db->replication_factor);
+		log_error("No quorum (%d/%d servers alive)", db->servers->no_items, db->replication_factor);
         stat_stop(dbc_stats.remote_range_search_in_txn, &ts_start, NO_QUORUM_ERR);
 		return NO_QUORUM_ERR;
 	}
@@ -1779,7 +1778,7 @@ int remote_range_search_in_txn(WORD* start_primary_keys, WORD* end_primary_keys,
 #if CLIENT_VERBOSITY > 0
 	char print_buff[1024];
 	to_string_range_read_query(q, (char *) print_buff);
-	printf("Sending range read row query to server %s: %s\n", rs->id, print_buff);
+	log_info("Sending range read row query to server %s: %s", rs->id, print_buff);
 #endif
 
 	// Send packet to server and wait for reply:
@@ -1791,7 +1790,7 @@ int remote_range_search_in_txn(WORD* start_primary_keys, WORD* end_primary_keys,
 
 	if(mc->no_replies < db->quorum_size)
 	{
-		fprintf(stderr, "No quorum (%d/%d replies received)\n", mc->no_replies, db->replication_factor);
+		log_error("No quorum (%d/%d replies received)", mc->no_replies, db->replication_factor);
 		delete_msg_callback(mc->nonce, db);
         stat_stop(dbc_stats.remote_range_search_in_txn, &ts_start, NO_QUORUM_ERR);
 		return NO_QUORUM_ERR;
@@ -1806,7 +1805,7 @@ int remote_range_search_in_txn(WORD* start_primary_keys, WORD* end_primary_keys,
 
 #if CLIENT_VERBOSITY > 0
 		to_string_range_read_response_message(response, (char *) print_buff);
-		printf("Got back response from server %s: %s\n", rs->id, print_buff);
+		log_info("Got back response from server %s: %s", rs->id, print_buff);
 #endif
 
 		// If result returned multiple cells, accumulate them all in a forest of db_rows rooted at elements of list start_row->end_row:
@@ -1837,7 +1836,7 @@ int remote_range_search_clustering_in_txn(WORD* primary_keys, int no_primary_key
 
 	if(db->servers->no_items < db->quorum_size)
 	{
-		fprintf(stderr, "No quorum (%d/%d servers alive)\n", db->servers->no_items, db->replication_factor);
+		log_error("No quorum (%d/%d servers alive)", db->servers->no_items, db->replication_factor);
         stat_stop(dbc_stats.remote_range_search_clustering_in_txn, &ts_start, NO_QUORUM_ERR);
 		return NO_QUORUM_ERR;
 	}
@@ -1846,7 +1845,7 @@ int remote_range_search_clustering_in_txn(WORD* primary_keys, int no_primary_key
 #if CLIENT_VERBOSITY > 0
 	char print_buff[1024];
 	to_string_range_read_query(q, (char *) print_buff);
-	printf("Sending range read cell query to server %s: %s\n", rs->id, print_buff);
+	log_info("Sending range read cell query to server %s: %s", rs->id, print_buff);
 #endif
 
 	// Send packet to server and wait for reply:
@@ -1858,7 +1857,7 @@ int remote_range_search_clustering_in_txn(WORD* primary_keys, int no_primary_key
 
 	if(mc->no_replies < db->quorum_size)
 	{
-		fprintf(stderr, "No quorum (%d/%d replies received)\n", mc->no_replies, db->replication_factor);
+		log_error("No quorum (%d/%d replies received)", mc->no_replies, db->replication_factor);
 		delete_msg_callback(mc->nonce, db);
         stat_stop(dbc_stats.remote_range_search_clustering_in_txn, &ts_start, NO_QUORUM_ERR);
 		return NO_QUORUM_ERR;
@@ -1873,7 +1872,7 @@ int remote_range_search_clustering_in_txn(WORD* primary_keys, int no_primary_key
 
 #if CLIENT_VERBOSITY > 0
 		to_string_range_read_response_message(response, (char *) print_buff);
-		printf("Got back response from server %s: %s\n", rs->id, print_buff);
+		log_info("Got back response from server %s: %s", rs->id, print_buff);
 #endif
 
 		// If result returned multiple cells, accumulate them all in a forest of db_rows rooted at elements of list start_row->end_row:
@@ -1908,7 +1907,7 @@ int remote_read_full_table_in_txn(snode_t** start_row, snode_t** end_row,
 
 	if(db->servers->no_items < db->quorum_size)
 	{
-		fprintf(stderr, "No quorum (%d/%d servers alive)\n", db->servers->no_items, db->replication_factor);
+		log_error("No quorum (%d/%d servers alive)", db->servers->no_items, db->replication_factor);
         stat_stop(dbc_stats.remote_read_full_table_in_txn, &ts_start, NO_QUORUM_ERR);
 		return NO_QUORUM_ERR;
 	}
@@ -1917,7 +1916,7 @@ int remote_read_full_table_in_txn(snode_t** start_row, snode_t** end_row,
 #if CLIENT_VERBOSITY > 0
 	char print_buff[1024];
 	to_string_range_read_query(q, (char *) print_buff);
-	printf("Sending full table read query to server %s: %s\n", rs->id, print_buff);
+	log_info("Sending full table read query to server %s: %s", rs->id, print_buff);
 #endif
 
 	// Send packet to server and wait for reply:
@@ -1929,7 +1928,7 @@ int remote_read_full_table_in_txn(snode_t** start_row, snode_t** end_row,
 
 	if(mc->no_replies < db->quorum_size)
 	{
-		fprintf(stderr, "No quorum (%d/%d replies received)\n", mc->no_replies, db->replication_factor);
+		log_error("No quorum (%d/%d replies received)", mc->no_replies, db->replication_factor);
 		delete_msg_callback(mc->nonce, db);
         stat_stop(dbc_stats.remote_read_full_table_in_txn, &ts_start, NO_QUORUM_ERR);
 		return NO_QUORUM_ERR;
@@ -1944,7 +1943,7 @@ int remote_read_full_table_in_txn(snode_t** start_row, snode_t** end_row,
 
 #if CLIENT_VERBOSITY > 0
 		to_string_range_read_response_message(response, (char *) print_buff);
-		printf("Got back response from server %s: %s\n", rs->id, print_buff);
+		log_info("Got back response from server %s: %s", rs->id, print_buff);
 #endif
 
 		// If result returned multiple cells, accumulate them all in a forest of db_rows rooted at elements of list start_row->end_row:
@@ -1954,7 +1953,7 @@ int remote_read_full_table_in_txn(snode_t** start_row, snode_t** end_row,
 	delete_msg_callback(mc->nonce, db);
 
 #if DEBUG_BLOBS > 0
-	printf("remote_read_full_table_in_txn: Returning %" PRId64 " [%d rows]:\n", (int64_t) table_key, result);
+	log_info("remote_read_full_table_in_txn: Returning %" PRId64 " [%d rows]:", (int64_t) table_key, result);
 
 	for(snode_t * node = *start_row; node!=NULL; node=NEXT(node))
 		print_long_row((db_row_t*) node->value);
@@ -1969,7 +1968,7 @@ void remote_print_long_table(WORD table_key, remote_db_t * db)
 	snode_t* start_row = NULL, * end_row = NULL;
 	int no_items = remote_read_full_table_in_txn(&start_row, &end_row, table_key, NULL, db);
 
-	printf("DB_TABLE: %" PRId64 " [%d rows]\n", (int64_t) table_key, no_items);
+	log_info("DB_TABLE: %" PRId64 " [%d rows]", (int64_t) table_key, no_items);
 
 	for(snode_t * node = start_row; node!=NULL; node=NEXT(node))
 		print_long_row((db_row_t*) node->value);
@@ -1991,7 +1990,7 @@ int remote_create_queue_in_txn(WORD table_key, WORD queue_id, uuid_t * txnid, re
 
 	if(db->servers->no_items < db->quorum_size)
 	{
-		fprintf(stderr, "No quorum (%d/%d servers alive)\n", db->servers->no_items, db->replication_factor);
+		log_error("No quorum (%d/%d servers alive)", db->servers->no_items, db->replication_factor);
         stat_stop(dbc_stats.remote_create_queue_in_txn, &ts_start, NO_QUORUM_ERR);
 		return NO_QUORUM_ERR;
 	}
@@ -2000,7 +1999,7 @@ int remote_create_queue_in_txn(WORD table_key, WORD queue_id, uuid_t * txnid, re
 #if CLIENT_VERBOSITY > 0
 	char print_buff[1024];
 	to_string_queue_message(q, (char *) print_buff);
-	printf("Sending queue message to server %s: %s\n", rs->id, print_buff);
+	log_info("Sending queue message to server %s: %s", rs->id, print_buff);
 #endif
 
 	// Send packet to server and wait for reply:
@@ -2012,7 +2011,7 @@ int remote_create_queue_in_txn(WORD table_key, WORD queue_id, uuid_t * txnid, re
 
 	if(mc->no_replies < db->quorum_size)
 	{
-		fprintf(stderr, "No quorum (%d/%d replies received)\n", mc->no_replies, db->replication_factor);
+		log_error("No quorum (%d/%d replies received)", mc->no_replies, db->replication_factor);
 		delete_msg_callback(mc->nonce, db);
         stat_stop(dbc_stats.remote_create_queue_in_txn, &ts_start, NO_QUORUM_ERR);
 		return NO_QUORUM_ERR;
@@ -2031,7 +2030,7 @@ int remote_create_queue_in_txn(WORD table_key, WORD queue_id, uuid_t * txnid, re
 
 #if CLIENT_VERBOSITY > 0
 		to_string_ack_message(ack, (char *) print_buff);
-		printf("Got back response from server %s: %s\n", rs->id, print_buff);
+		log_info("Got back response from server %s: %s", rs->id, print_buff);
 #endif
 	}
 
@@ -2057,7 +2056,7 @@ int remote_delete_queue_in_txn(WORD table_key, WORD queue_id, uuid_t * txnid, re
 
 	if(db->servers->no_items < db->quorum_size)
 	{
-		fprintf(stderr, "No quorum (%d/%d servers alive)\n", db->servers->no_items, db->replication_factor);
+		log_error("No quorum (%d/%d servers alive)", db->servers->no_items, db->replication_factor);
         stat_stop(dbc_stats.remote_delete_queue_in_txn, &ts_start, NO_QUORUM_ERR);
 		return NO_QUORUM_ERR;
 	}
@@ -2066,7 +2065,7 @@ int remote_delete_queue_in_txn(WORD table_key, WORD queue_id, uuid_t * txnid, re
 #if CLIENT_VERBOSITY > 0
 	char print_buff[1024];
 	to_string_queue_message(q, (char *) print_buff);
-	printf("Sending queue message to server %s: %s\n", rs->id, print_buff);
+	log_info("Sending queue message to server %s: %s", rs->id, print_buff);
 #endif
 
 	// Send packet to server and wait for reply:
@@ -2078,7 +2077,7 @@ int remote_delete_queue_in_txn(WORD table_key, WORD queue_id, uuid_t * txnid, re
 
 	if(mc->no_replies < db->quorum_size)
 	{
-		fprintf(stderr, "No quorum (%d/%d replies received)\n", mc->no_replies, db->replication_factor);
+		log_error("No quorum (%d/%d replies received)", mc->no_replies, db->replication_factor);
 		delete_msg_callback(mc->nonce, db);
         stat_stop(dbc_stats.remote_delete_queue_in_txn, &ts_start, NO_QUORUM_ERR);
 		return NO_QUORUM_ERR;
@@ -2097,7 +2096,7 @@ int remote_delete_queue_in_txn(WORD table_key, WORD queue_id, uuid_t * txnid, re
 
 #if CLIENT_VERBOSITY > 0
 		to_string_ack_message(ack, (char *) print_buff);
-		printf("Got back response from server %s: %s\n", rs->id, print_buff);
+		log_info("Got back response from server %s: %s", rs->id, print_buff);
 #endif
 	}
 
@@ -2123,7 +2122,7 @@ int remote_enqueue_in_txn(WORD * column_values, int no_cols, WORD blob, size_t b
 
 	if(db->servers->no_items < db->quorum_size)
 	{
-		fprintf(stderr, "No quorum (%d/%d servers alive)\n", db->servers->no_items, db->replication_factor);
+		log_error("No quorum (%d/%d servers alive)", db->servers->no_items, db->replication_factor);
         stat_stop(dbc_stats.remote_enqueue_in_txn, &ts_start, NO_QUORUM_ERR);
 		return NO_QUORUM_ERR;
 	}
@@ -2132,7 +2131,7 @@ int remote_enqueue_in_txn(WORD * column_values, int no_cols, WORD blob, size_t b
 #if CLIENT_VERBOSITY > 0
 	char print_buff[1024];
 	to_string_queue_message(q, (char *) print_buff);
-	printf("Sending queue message to server %s: %s\n", rs->id, print_buff);
+	log_info("Sending queue message to server %s: %s", rs->id, print_buff);
 #endif
 
 	// Send packet to server and wait for reply:
@@ -2144,7 +2143,7 @@ int remote_enqueue_in_txn(WORD * column_values, int no_cols, WORD blob, size_t b
 
 	if(mc->no_replies < db->quorum_size)
 	{
-		fprintf(stderr, "No quorum (%d/%d replies received)\n", mc->no_replies, db->replication_factor);
+		log_error("No quorum (%d/%d replies received)", mc->no_replies, db->replication_factor);
 		delete_msg_callback(mc->nonce, db);
         stat_stop(dbc_stats.remote_enqueue_in_txn, &ts_start, NO_QUORUM_ERR);
 		return NO_QUORUM_ERR;
@@ -2163,7 +2162,7 @@ int remote_enqueue_in_txn(WORD * column_values, int no_cols, WORD blob, size_t b
 
 #if CLIENT_VERBOSITY > 0
 		to_string_ack_message(ack, (char *) print_buff);
-		printf("Got back response from server %s: %s\n", rs->id, print_buff);
+		log_info("Got back response from server %s: %s", rs->id, print_buff);
 #endif
 	}
 
@@ -2192,7 +2191,7 @@ int remote_read_queue_in_txn(WORD consumer_id, WORD shard_id, WORD app_id, WORD 
 
 	if(db->servers->no_items < db->quorum_size)
 	{
-		fprintf(stderr, "No quorum (%d/%d servers alive)\n", db->servers->no_items, db->replication_factor);
+		log_error("No quorum (%d/%d servers alive)", db->servers->no_items, db->replication_factor);
         stat_stop(dbc_stats.remote_read_queue_in_txn, &ts_start, NO_QUORUM_ERR);
 		return NO_QUORUM_ERR;
 	}
@@ -2201,7 +2200,7 @@ int remote_read_queue_in_txn(WORD consumer_id, WORD shard_id, WORD app_id, WORD 
 #if CLIENT_VERBOSITY > 0
 	char print_buff[1024];
 	to_string_queue_message(q, (char *) print_buff);
-	printf("Sending queue message to server %s: %s\n", rs->id, print_buff);
+	log_info("Sending queue message to server %s: %s", rs->id, print_buff);
 #endif
 
 	// Send packet to server and wait for reply:
@@ -2213,7 +2212,7 @@ int remote_read_queue_in_txn(WORD consumer_id, WORD shard_id, WORD app_id, WORD 
 
 	if(mc->no_replies < db->quorum_size)
 	{
-		fprintf(stderr, "No quorum (%d/%d replies received)\n", mc->no_replies, db->replication_factor);
+		log_error("No quorum (%d/%d replies received)", mc->no_replies, db->replication_factor);
 		delete_msg_callback(mc->nonce, db);
         stat_stop(dbc_stats.remote_read_queue_in_txn, &ts_start, NO_QUORUM_ERR);
 		return NO_QUORUM_ERR;
@@ -2229,7 +2228,7 @@ int remote_read_queue_in_txn(WORD consumer_id, WORD shard_id, WORD app_id, WORD 
 
 #if CLIENT_VERBOSITY > 0
 		to_string_queue_message(response, (char *) print_buff);
-		printf("Got back response from server %s: %s\n", rs->id, print_buff);
+		log_info("Got back response from server %s: %s", rs->id, print_buff);
 #endif
 		break;
 	}
@@ -2276,7 +2275,7 @@ int remote_consume_queue_in_txn(WORD consumer_id, WORD shard_id, WORD app_id, WO
 
 	if(db->servers->no_items < db->quorum_size)
 	{
-		fprintf(stderr, "No quorum (%d/%d servers alive)\n", db->servers->no_items, db->replication_factor);
+		log_error("No quorum (%d/%d servers alive)", db->servers->no_items, db->replication_factor);
         stat_stop(dbc_stats.remote_consume_queue_in_txn, &ts_start, NO_QUORUM_ERR);
 		return NO_QUORUM_ERR;
 	}
@@ -2285,7 +2284,7 @@ int remote_consume_queue_in_txn(WORD consumer_id, WORD shard_id, WORD app_id, WO
 #if CLIENT_VERBOSITY > 0
 	char print_buff[1024];
 	to_string_queue_message(q, (char *) print_buff);
-	printf("Sending queue message to server %s: %s\n", rs->id, print_buff);
+	log_info("Sending queue message to server %s: %s", rs->id, print_buff);
 #endif
 
 	// Send packet to server and wait for reply:
@@ -2297,7 +2296,7 @@ int remote_consume_queue_in_txn(WORD consumer_id, WORD shard_id, WORD app_id, WO
 
 	if(mc->no_replies < db->quorum_size)
 	{
-		fprintf(stderr, "No quorum (%d/%d replies received)\n", mc->no_replies, db->replication_factor);
+		log_error("No quorum (%d/%d replies received)", mc->no_replies, db->replication_factor);
 		delete_msg_callback(mc->nonce, db);
         stat_stop(dbc_stats.remote_consume_queue_in_txn, &ts_start, NO_QUORUM_ERR);
 		return NO_QUORUM_ERR;
@@ -2316,7 +2315,7 @@ int remote_consume_queue_in_txn(WORD consumer_id, WORD shard_id, WORD app_id, WO
 
 #if CLIENT_VERBOSITY > 0
 		to_string_ack_message(ack, (char *) print_buff);
-		printf("Got back response from server %s: %s\n", rs->id, print_buff);
+		log_info("Got back response from server %s: %s", rs->id, print_buff);
 #endif
 	}
 
@@ -2344,7 +2343,7 @@ int remote_subscribe_queue(WORD consumer_id, WORD shard_id, WORD app_id, WORD ta
 
 	if(db->servers->no_items < db->quorum_size)
 	{
-		fprintf(stderr, "No quorum (%d/%d servers alive)\n", db->servers->no_items, db->replication_factor);
+		log_error("No quorum (%d/%d servers alive)", db->servers->no_items, db->replication_factor);
         stat_stop(dbc_stats.remote_subscribe_queue, &ts_start, NO_QUORUM_ERR);
 		return NO_QUORUM_ERR;
 	}
@@ -2353,7 +2352,7 @@ int remote_subscribe_queue(WORD consumer_id, WORD shard_id, WORD app_id, WORD ta
 #if CLIENT_VERBOSITY > 0
 	char print_buff[1024];
 	to_string_queue_message(q, (char *) print_buff);
-	printf("Sending queue message to server %s: %s\n", rs->id, print_buff);
+	log_info("Sending queue message to server %s: %s", rs->id, print_buff);
 #endif
 
 	// Send packet to server and wait for reply:
@@ -2365,7 +2364,7 @@ int remote_subscribe_queue(WORD consumer_id, WORD shard_id, WORD app_id, WORD ta
 
 	if(mc->no_replies < db->quorum_size)
 	{
-		fprintf(stderr, "No quorum (%d/%d replies received)\n", mc->no_replies, db->replication_factor);
+		log_error("No quorum (%d/%d replies received)", mc->no_replies, db->replication_factor);
 		delete_msg_callback(mc->nonce, db);
         stat_stop(dbc_stats.remote_subscribe_queue, &ts_start, NO_QUORUM_ERR);
 		return NO_QUORUM_ERR;
@@ -2385,7 +2384,7 @@ int remote_subscribe_queue(WORD consumer_id, WORD shard_id, WORD app_id, WORD ta
 
 #if CLIENT_VERBOSITY > 0
 		to_string_ack_message(ack, (char *) print_buff);
-		printf("Got back response from server %s: %s\n", rs->id, print_buff);
+		log_info("Got back response from server %s: %s", rs->id, print_buff);
 #endif
 	}
 
@@ -2411,7 +2410,7 @@ int remote_unsubscribe_queue(WORD consumer_id, WORD shard_id, WORD app_id, WORD 
 
 	if(db->servers->no_items < db->quorum_size)
 	{
-		fprintf(stderr, "No quorum (%d/%d servers alive)\n", db->servers->no_items, db->replication_factor);
+		log_error("No quorum (%d/%d servers alive)", db->servers->no_items, db->replication_factor);
         stat_stop(dbc_stats.remote_unsubscribe_queue, &ts_start, NO_QUORUM_ERR);
 		return NO_QUORUM_ERR;
 	}
@@ -2420,7 +2419,7 @@ int remote_unsubscribe_queue(WORD consumer_id, WORD shard_id, WORD app_id, WORD 
 #if CLIENT_VERBOSITY > 0
 	char print_buff[1024];
 	to_string_queue_message(q, (char *) print_buff);
-	printf("Sending queue message to server %s: %s\n", rs->id, print_buff);
+	log_info("Sending queue message to server %s: %s", rs->id, print_buff);
 #endif
 
 	// Send packet to server and wait for reply:
@@ -2432,7 +2431,7 @@ int remote_unsubscribe_queue(WORD consumer_id, WORD shard_id, WORD app_id, WORD 
 
 	if(mc->no_replies < db->quorum_size)
 	{
-		fprintf(stderr, "No quorum (%d/%d replies received)\n", mc->no_replies, db->replication_factor);
+		log_error("No quorum (%d/%d replies received)", mc->no_replies, db->replication_factor);
 		delete_msg_callback(mc->nonce, db);
         stat_stop(dbc_stats.remote_unsubscribe_queue, &ts_start, NO_QUORUM_ERR);
 		return NO_QUORUM_ERR;
@@ -2451,7 +2450,7 @@ int remote_unsubscribe_queue(WORD consumer_id, WORD shard_id, WORD app_id, WORD 
 
 #if CLIENT_VERBOSITY > 0
 		to_string_ack_message(ack, (char *) print_buff);
-		printf("Got back response from server %s: %s\n", rs->id, print_buff);
+		log_info("Got back response from server %s: %s", rs->id, print_buff);
 #endif
 	}
 
@@ -2510,7 +2509,7 @@ int subscribe_queue_client(WORD consumer_id, WORD shard_id, WORD app_id, WORD ta
 	assert(status == 0);
 
 #if (VERBOSITY > 0)
-	printf("CLIENT: Subscriber %" PRId64 "/%" PRId64 "/%" PRId64 " subscribed queue %" PRId64 "/%" PRId64 " with callback %p\n",
+	log_info("CLIENT: Subscriber %" PRId64 "/%" PRId64 "/%" PRId64 " subscribed queue %" PRId64 "/%" PRId64 " with callback %p",
 					(int64_t) app_id, (int64_t) shard_id, (int64_t) consumer_id,
 					(int64_t) table_key, (int64_t) queue_id, cs->callback);
 #endif
@@ -2555,7 +2554,7 @@ int unsubscribe_queue_client(WORD consumer_id, WORD shard_id, WORD app_id, WORD 
 	free_queue_callback(callback);
 
 #if (VERBOSITY > 0)
-	printf("CLIENT: Subscriber %" PRId64 "/%" PRId64 "/%" PRId64 " unsubscribed queue %" PRId64 "/%" PRId64 " with callback %p\n",
+	log_info("CLIENT: Subscriber %" PRId64 "/%" PRId64 "/%" PRId64 " unsubscribed queue %" PRId64 "/%" PRId64 " with callback %p",
 					(int64_t) app_id, (int64_t) shard_id, (int64_t) consumer_id,
 					(int64_t) table_key, (int64_t) queue_id, cs->callback);
 #endif
@@ -2576,7 +2575,7 @@ uuid_t * remote_new_txn(remote_db_t * db)
 
 	if(db->servers->no_items < db->quorum_size)
 	{
-		fprintf(stderr, "No quorum (%d/%d servers alive)\n", db->servers->no_items, db->replication_factor);
+		log_error("No quorum (%d/%d servers alive)", db->servers->no_items, db->replication_factor);
 		return NULL;
 	}
 	remote_server * rs = (remote_server *) (HEAD(db->servers))->value;
@@ -2590,7 +2589,7 @@ uuid_t * remote_new_txn(remote_db_t * db)
 #if CLIENT_VERBOSITY > 0
 		char print_buff[1024];
 		to_string_txn_message(q, (char *) print_buff);
-		printf("Sending new txn to server %s: %s\n", rs->id, print_buff);
+		log_info("Sending new txn to server %s: %s", rs->id, print_buff);
 #endif
 
 		// Send packet to server and wait for reply:
@@ -2602,7 +2601,7 @@ uuid_t * remote_new_txn(remote_db_t * db)
 
 		if(mc->no_replies < db->quorum_size)
 		{
-			fprintf(stderr, "No quorum (%d/%d replies received)\n", mc->no_replies, db->replication_factor);
+			log_error("No quorum (%d/%d replies received)", mc->no_replies, db->replication_factor);
 			delete_msg_callback(mc->nonce, db);
 			return NULL;
 		}
@@ -2620,7 +2619,7 @@ uuid_t * remote_new_txn(remote_db_t * db)
 
 #if CLIENT_VERBOSITY > 0
 			to_string_ack_message(ack, (char *) print_buff);
-			printf("Got back response from server %s: %s\n", rs->id, print_buff);
+			log_info("Got back response from server %s: %s", rs->id, print_buff);
 #endif
 		}
 
@@ -2649,7 +2648,7 @@ int _remote_validate_txn(uuid_t * txnid, vector_clock * version, remote_server *
 
 	if(db->servers->no_items < db->quorum_size)
 	{
-		fprintf(stderr, "No quorum (%d/%d servers alive)\n", db->servers->no_items, db->replication_factor);
+		log_error("No quorum (%d/%d servers alive)", db->servers->no_items, db->replication_factor);
 		return NO_QUORUM_ERR;
 	}
 	remote_server * rs = (rs_in != NULL)?(rs_in):((remote_server *) (HEAD(db->servers))->value);
@@ -2657,7 +2656,7 @@ int _remote_validate_txn(uuid_t * txnid, vector_clock * version, remote_server *
 #if CLIENT_VERBOSITY > 0
 	char print_buff[1024];
 	to_string_txn_message(q, (char *) print_buff);
-	printf("Sending validate txn: %s\n", print_buff);
+	log_info("Sending validate txn: %s", print_buff);
 #endif
 
 	// Send packet to server and wait for reply:
@@ -2669,7 +2668,7 @@ int _remote_validate_txn(uuid_t * txnid, vector_clock * version, remote_server *
 
 	if(mc->no_replies < db->quorum_size)
 	{
-		fprintf(stderr, "No quorum (%d/%d replies received)\n", mc->no_replies, db->replication_factor);
+		log_error("No quorum (%d/%d replies received)", mc->no_replies, db->replication_factor);
 		delete_msg_callback(mc->nonce, db);
 		return NO_QUORUM_ERR;
 	}
@@ -2687,7 +2686,7 @@ int _remote_validate_txn(uuid_t * txnid, vector_clock * version, remote_server *
 
 #if CLIENT_VERBOSITY > 0
 		to_string_ack_message(ack, (char *) print_buff);
-		printf("Got back response from server %s: %s\n", rs->id, print_buff);
+		log_info("Got back response from server %s: %s", rs->id, print_buff);
 #endif
 	}
 
@@ -2727,7 +2726,7 @@ int _remote_abort_txn(uuid_t * txnid, remote_server * rs_in, remote_db_t * db)
 
 	if(db->servers->no_items < db->quorum_size)
 	{
-		fprintf(stderr, "No quorum (%d/%d servers alive)\n", db->servers->no_items, db->replication_factor);
+		log_error("No quorum (%d/%d servers alive)", db->servers->no_items, db->replication_factor);
         stat_stop(dbc_stats.remote_abort_txn, &ts_start, NO_QUORUM_ERR);
 		return NO_QUORUM_ERR;
 	}
@@ -2736,7 +2735,7 @@ int _remote_abort_txn(uuid_t * txnid, remote_server * rs_in, remote_db_t * db)
 #if CLIENT_VERBOSITY > 0
 	char print_buff[1024];
 	to_string_txn_message(q, (char *) print_buff);
-	printf("Sending abort txn: %s\n", print_buff);
+	log_info("Sending abort txn: %s", print_buff);
 #endif
 
 	// Send packet to server and wait for reply:
@@ -2748,7 +2747,7 @@ int _remote_abort_txn(uuid_t * txnid, remote_server * rs_in, remote_db_t * db)
 
 	if(mc->no_replies < db->quorum_size)
 	{
-		fprintf(stderr, "No quorum (%d/%d replies received)\n", mc->no_replies, db->replication_factor);
+		log_error("No quorum (%d/%d replies received)", mc->no_replies, db->replication_factor);
 		delete_msg_callback(mc->nonce, db);
         stat_stop(dbc_stats.remote_abort_txn, &ts_start, NO_QUORUM_ERR);
 		return NO_QUORUM_ERR;
@@ -2767,7 +2766,7 @@ int _remote_abort_txn(uuid_t * txnid, remote_server * rs_in, remote_db_t * db)
 
 #if CLIENT_VERBOSITY > 0
 		to_string_ack_message(ack, (char *) print_buff);
-		printf("Got back response from server %s: %s\n", rs->id, print_buff);
+		log_info("Got back response from server %s: %s", rs->id, print_buff);
 #endif
 	}
 
@@ -2795,7 +2794,7 @@ int _remote_persist_txn(uuid_t * txnid, vector_clock * version, remote_server * 
 
 	if(db->servers->no_items < db->quorum_size)
 	{
-		fprintf(stderr, "No quorum (%d/%d servers alive)\n", db->servers->no_items, db->replication_factor);
+		log_error("No quorum (%d/%d servers alive)", db->servers->no_items, db->replication_factor);
 		return NO_QUORUM_ERR;
 	}
 	remote_server * rs = (rs_in != NULL)?(rs_in):((remote_server *) (HEAD(db->servers))->value);
@@ -2803,7 +2802,7 @@ int _remote_persist_txn(uuid_t * txnid, vector_clock * version, remote_server * 
 #if CLIENT_VERBOSITY > 0
 	char print_buff[1024];
 	to_string_txn_message(q, (char *) print_buff);
-	printf("Sending commit txn: %s\n", print_buff);
+	log_info("Sending commit txn: %s", print_buff);
 #endif
 
 	// Send packet to server and wait for reply:
@@ -2815,7 +2814,7 @@ int _remote_persist_txn(uuid_t * txnid, vector_clock * version, remote_server * 
 
 	if(mc->no_replies < db->quorum_size)
 	{
-		fprintf(stderr, "No quorum (%d/%d replies received)\n", mc->no_replies, db->replication_factor);
+		log_error("No quorum (%d/%d replies received)", mc->no_replies, db->replication_factor);
 		delete_msg_callback(mc->nonce, db);
 		return NO_QUORUM_ERR;
 	}
@@ -2833,7 +2832,7 @@ int _remote_persist_txn(uuid_t * txnid, vector_clock * version, remote_server * 
 
 #if CLIENT_VERBOSITY > 0
 		to_string_ack_message(ack, (char *) print_buff);
-		printf("Got back response from server %s: %s\n", rs->id, print_buff);
+		log_info("Got back response from server %s: %s", rs->id, print_buff);
 #endif
 	}
 
@@ -2858,12 +2857,12 @@ int remote_commit_txn(uuid_t * txnid, remote_db_t * db)
 	uuid_unparse_lower(*txnid, uuid_str);
 #endif
 #if (CLIENT_VERBOSITY > 1)
-	printf("CLIENT: Attempting to validate txn %s\n", uuid_str);
+	log_info("CLIENT: Attempting to validate txn %s", uuid_str);
 #endif
 
 	if(db->servers->no_items < db->quorum_size)
 	{
-		fprintf(stderr, "No quorum (%d/%d servers alive)\n", db->servers->no_items, db->replication_factor);
+		log_error("No quorum (%d/%d servers alive)", db->servers->no_items, db->replication_factor);
         stat_stop(dbc_stats.remote_commit_txn, &ts_start, NO_QUORUM_ERR);
 		return NO_QUORUM_ERR;
 	}
@@ -2874,7 +2873,7 @@ int remote_commit_txn(uuid_t * txnid, remote_db_t * db)
 	int val_res = _remote_validate_txn(txnid, commit_stamp, rs, db);
 
 #if (CLIENT_VERBOSITY > 1)
-	printf("CLIENT: validate txn %s from server %s returned %d\n", uuid_str, rs->id, val_res);
+	log_info("CLIENT: validate txn %s from server %s returned %d", uuid_str, rs->id, val_res);
 #endif
 
 	if(val_res == VAL_STATUS_COMMIT)
@@ -2885,14 +2884,14 @@ int remote_commit_txn(uuid_t * txnid, remote_db_t * db)
 			persist_status = _remote_persist_txn(txnid, commit_stamp, rs, db);
 
 #if (CLIENT_VERBOSITY > 0)
-			printf("CLIENT: persist txn %s from server %s returned %d\n", uuid_str, rs->id, persist_status);
+			log_info("CLIENT: persist txn %s from server %s returned %d", uuid_str, rs->id, persist_status);
 #endif
 		}
 
 		int res = close_client_txn(*txnid, db); // Clear local cached txn state on client
 
 #if (CLIENT_VERBOSITY > 1)
-		printf("CLIENT: close txn %s returned %d\n", uuid_str, res);
+		log_info("CLIENT: close txn %s returned %d", uuid_str, res);
 #endif
 	}
 	else if(val_res == VAL_STATUS_ABORT)
@@ -2900,7 +2899,7 @@ int remote_commit_txn(uuid_t * txnid, remote_db_t * db)
 		int res = _remote_abort_txn(txnid, rs, db);
 
 #if (CLIENT_VERBOSITY > 0)
-		printf("CLIENT: abort txn %s from server %s returned %d\n", uuid_str, rs->id, res);
+		log_info("CLIENT: abort txn %s from server %s returned %d", uuid_str, rs->id, res);
 #endif
 	}
 	else
@@ -2923,7 +2922,7 @@ txn_state * get_client_txn_state(uuid_t txnid, remote_db_t * db)
 #if (CLIENT_VERBOSITY > 0)
 	char uuid_str[37];
 	uuid_unparse_lower(txnid, uuid_str);
-	printf("CLIENT: get_client_txn_state(%s): skiplist_search() returned: %p / %p\n", uuid_str, txn_node, (txn_node != NULL)? (txn_state *) txn_node->value : NULL);
+	log_info("CLIENT: get_client_txn_state(%s): skiplist_search() returned: %p / %p", uuid_str, txn_node, (txn_node != NULL)? (txn_state *) txn_node->value : NULL);
 #endif
 
 	return (txn_node != NULL)? (txn_state *) txn_node->value : NULL;
@@ -3057,7 +3056,7 @@ int wait_on_gossip_callback(gossip_callback * qc)
 	int ret = pthread_mutex_lock(qc->lock);
 
 #if DEBUG_GOSSIP_CALLBACK > 0
-	printf("Locked gossip lock %p/%p\n", qc, qc->lock);
+	log_info("Locked gossip lock %p/%p", qc, qc->lock);
 #endif
 
 	struct timespec ts;
@@ -3068,7 +3067,7 @@ int wait_on_gossip_callback(gossip_callback * qc)
 	pthread_mutex_unlock(qc->lock);
 
 #if DEBUG_GOSSIP_CALLBACK > 0
-	printf("Unlocked gossip lock %p/%p\n", qc, qc->lock);
+	log_info("Unlocked gossip lock %p/%p", qc, qc->lock);
 #endif
 
 	return ret;
@@ -3094,7 +3093,7 @@ int listen_to_gossip(int status, int rack_id, int dc_id, char * hostname, unsign
 
 	if(db->servers->no_items < 1)
 	{
-		fprintf(stderr, "At least 1 server must be configured for the client to subscribe to gossip (%d servers configured)\n", db->servers->no_items);
+		log_error("At least 1 server must be configured for the client to subscribe to gossip (%d servers configured)", db->servers->no_items);
 		return NO_QUORUM_ERR;
 	}
 	remote_server * rs = (remote_server *) (HEAD(db->servers))->value;
@@ -3102,7 +3101,7 @@ int listen_to_gossip(int status, int rack_id, int dc_id, char * hostname, unsign
 #if CLIENT_VERBOSITY > 0
 	char print_buff[1024];
 	to_string_gossip_listen_msg(q, (char *) print_buff);
-	printf("Sending gossip listen message to server %s: %s\n", rs->id, print_buff);
+	log_info("Sending gossip listen message to server %s: %s", rs->id, print_buff);
 #endif
 
 	// Send packet to server and wait for reply:
@@ -3114,7 +3113,7 @@ int listen_to_gossip(int status, int rack_id, int dc_id, char * hostname, unsign
 
 	if(mc->no_replies < db->quorum_size)
 	{
-		fprintf(stderr, "No quorum (%d/%d replies received)\n", mc->no_replies, db->replication_factor);
+		log_error("No quorum (%d/%d replies received)", mc->no_replies, db->replication_factor);
 		delete_msg_callback(mc->nonce, db);
 		return NO_QUORUM_ERR;
 	}
@@ -3131,7 +3130,7 @@ int listen_to_gossip(int status, int rack_id, int dc_id, char * hostname, unsign
 
 #if CLIENT_VERBOSITY > 0
 		to_string_ack_message(ack, (char *) print_buff);
-		printf("Got back response from server %s: %s\n", rs->id, print_buff);
+		log_info("Got back response from server %s: %s", rs->id, print_buff);
 #endif
 	}
 
