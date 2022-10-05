@@ -143,7 +143,7 @@ int notify_remote_queue_subscribers(WORD table_key, WORD queue_id, db_t * db)
 		    int n = write(*(cs->sockfd), snd_buf, snd_msg_len);
 		    if (n < 0)
 		    {
-		    		fprintf(stderr, "ERROR writing notification to socket!\n");
+		    		log_error("ERROR writing notification to socket!");
 		    		continue;
 		    }
 
@@ -259,7 +259,7 @@ int enqueue(WORD * column_values, int no_cols, size_t last_blob_size, WORD table
 				int n = write(*(cs->sockfd), snd_buf, snd_msg_len);
 				if (n < 0)
 				{
-				      fprintf(stderr, "ERROR writing notification to socket!\n");
+				      log_error("ERROR writing notification to socket!");
 				      continue;
 				}
 

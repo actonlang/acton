@@ -19,6 +19,7 @@
  */
 
 #include "cells.h"
+#include "../log.h"
 
 #include <stdlib.h>
 #include <stdio.h>
@@ -48,7 +49,7 @@ int deserialize_vc(void * buf, unsigned msg_len, vector_clock ** vc)
 
 	  if (msg == NULL)
 	  { // Something failed
-	    fprintf(stderr, "error unpacking vector_clock message\n");
+	    log_error("error unpacking vector_clock message");
 	    return 1;
 	  }
 
@@ -171,7 +172,7 @@ int deserialize_cell_address(void * buf, unsigned msg_len, cell_address ** ca)
 
 	if (msg == NULL)
 	{
-		fprintf(stderr, "error unpacking cell_address message\n");
+		log_error("error unpacking cell_address message");
 	    return 1;
 	}
 
@@ -393,7 +394,7 @@ int deserialize_cell(void * buf, unsigned msg_len, cell ** ca)
 
 	if (msg == NULL)
 	{
-		fprintf(stderr, "error unpacking cell message\n");
+		log_error("error unpacking cell message");
 	    return 1;
 	}
 

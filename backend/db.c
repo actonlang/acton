@@ -26,6 +26,7 @@
 
 #include "db.h"
 #include "skiplist.h"
+#include "log.h"
 
 // DB API:
 
@@ -350,7 +351,7 @@ int table_insert(WORD * column_values, int no_cols, int no_clustering_keys, size
 
 	if(no_clustering_keys < schema->min_no_clustering_keys)
 	{
-		fprintf(stderr, "SERVER: Row insert must contain at least %d schema clustering keys, only has %d keys\n", schema->min_no_clustering_keys, no_clustering_keys);
+		log_error("SERVER: Row insert must contain at least %d schema clustering keys, only has %d keys", schema->min_no_clustering_keys, no_clustering_keys);
 		assert(0);
 	}
 
@@ -385,8 +386,6 @@ int table_insert(WORD * column_values, int no_cols, int no_clustering_keys, size
 				{
 					new_cell->cells = create_skiplist_long();
 				}
-
-//				printf("Inserting into cell at level %d\n", i);
 
 				skiplist_insert(cell->cells, column_values[col_index], (WORD) new_cell, fastrandstate);
 			}
@@ -472,7 +471,6 @@ int table_update(WORD * column_values, int no_cols, int no_clustering_keys, size
 	int i=schema->no_primary_keys + no_clustering_keys;
 	for(;i<no_cols - 1;i++)
 	{
-//		printf("Updating col %d / %d to value %" PRId64 "\n", col_idxs[i], i, column_values[i]);
 		row->column_array[col_idxs[i] - schema->no_primary_keys - no_clustering_keys] = column_values[i];
 	}
 
@@ -595,8 +593,12 @@ db_row_t* table_search_clustering(WORD* primary_keys, WORD* clustering_keys, int
 	db_row_t* row = table_search(primary_keys, table);
 
 	if(row == NULL)
+	{
+#if (VERBOSE_BACKEND > 0)
+		log_error("Row not found by primary key %" PRId64 "!", (int64_t) primary_keys[0]);
+#endif
 		return NULL;
-//		printf("Row not found by primary key %" PRId64 "!\n", (int64_t) primary_keys[0]);
+	}
 
 	for(int i=0;i<no_clustering_keys;i++)
 	{
@@ -608,7 +610,9 @@ db_row_t* table_search_clustering(WORD* primary_keys, WORD* clustering_keys, int
 		}
 		else
 		{
-//			printf("Row not found by clustering key %d / %" PRId64 "!\n", i, (int64_t) clustering_keys[i]);
+#if (VERBOSE_BACKEND > 0)
+			log_error("Row not found by clustering key %d / %" PRId64 "!", i, (int64_t) clustering_keys[i]);
+#endif
 
 			return NULL;
 		}
@@ -686,7 +690,7 @@ int table_range_search_clustering(WORD* primary_keys, WORD* start_clustering_key
 
 void print_long_db(db_t * db)
 {
-	printf("DB: [%d tables]\n", db->tables->no_items);
+	log_info("DB: [%d tables]", db->tables->no_items);
 
 	for(snode_t * node = HEAD(db->tables);node!=NULL;node=NEXT(node))
 		print_long_table((db_table_t *) node->value);
@@ -694,7 +698,7 @@ void print_long_db(db_t * db)
 
 void print_long_table(db_table_t * table)
 {
-	printf("DB_TABLE: %" PRId64 " [%d rows]\n", (int64_t) table->table_key, table->rows->no_items);
+	log_info("DB_TABLE: %" PRId64 " [%d rows]", (int64_t) table->table_key, table->rows->no_items);
 
 	for(snode_t * node = HEAD(table->rows);node!=NULL;node=NEXT(node))
 		print_long_row((db_row_t*) node->value);
@@ -707,7 +711,7 @@ void print_long_row(db_row_t* row)
 
 	long_row_to_string(row, (char *) to_string, &len, (char *) to_string);
 
-	printf("DB_ROW [%d cells]: %s\n", (row->cells != NULL)?(row->cells->no_items):(0), to_string);
+	log_info("DB_ROW [%d cells]: %s", (row->cells != NULL)?(row->cells->no_items):(0), to_string);
 }
 
 void long_row_to_string(db_row_t* row, char * to_string, int * len, char * orig_offset)
@@ -948,7 +952,7 @@ int table_delete_row(WORD* primary_keys, vector_clock * version, db_table_t * ta
 	}
 	else
 	{
-		printf("table_delete_row(): Row with pk %" PRId64 " doesn't exist!\n", (int64_t) primary_keys[0]);
+		log_warn("table_delete_row(): Row with pk %" PRId64 " doesn't exist!", (int64_t) primary_keys[0]);
 	}
 
 	return row == NULL;
@@ -976,9 +980,9 @@ int table_delete_by_index(WORD index_key, int idx_idx, db_table_t * table)
 int db_insert_transactional(WORD * column_values, int no_cols, int no_clustering_keys, size_t last_blob_size, vector_clock * version, WORD table_key, db_t * db, unsigned int * fastrandstate)
 {
 #if (VERBOSE_BACKEND > 0)
-	printf("BACKEND: db_insert_transactional: Attempting to insert %d total columns into backend:\n", min_no_cols);
+	log_info("BACKEND: db_insert_transactional: Attempting to insert %d total columns into backend:", min_no_cols);
 	for(int i=0;i<min_no_cols;i++)
-		printf("column_values[%d] = %" PRId64 "\n", i, (int64_t) column_values[i]);
+		log_info("column_values[%d] = %" PRId64 "", i, (int64_t) column_values[i]);
 #endif
 
 	snode_t * node = skiplist_search(db->tables, table_key);
@@ -1180,7 +1184,7 @@ int db_delete_row_transactional(WORD* primary_keys, vector_clock * version, WORD
 
 	if(node == NULL)
 	{
-		printf("db_delete_row(): Table with pk %" PRId64 " doesn't exist!\n", (int64_t) table_key);
+		log_warn("db_delete_row(): Table with pk %" PRId64 " doesn't exist!", (int64_t) table_key);
 		return -1;
 	}
 
@@ -1244,7 +1248,7 @@ int wait_on_queue_callback(queue_callback * qc)
 	int ret = pthread_mutex_lock(qc->lock);
 
 #if DEBUG_QUEUE_CALLBACK > 0
-	printf("Locked consumer lock %p/%p\n", qc, qc->lock);
+	log_info("Locked consumer lock %p/%p", qc, qc->lock);
 #endif
 
 	struct timespec ts;
@@ -1255,7 +1259,7 @@ int wait_on_queue_callback(queue_callback * qc)
 	pthread_mutex_unlock(qc->lock);
 
 #if DEBUG_QUEUE_CALLBACK > 0
-	printf("Unlocked consumer lock %p/%p\n", qc, qc->lock);
+	log_info("Unlocked consumer lock %p/%p", qc, qc->lock);
 #endif
 
 	return ret;
