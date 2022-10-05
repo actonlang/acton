@@ -30,7 +30,7 @@ actor main(env):
 
 Compile and run:
 ```sh
-actonc actors.act --root main
+actonc actors.act
 ./actors
 ```
 

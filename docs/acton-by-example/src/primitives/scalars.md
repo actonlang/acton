@@ -22,7 +22,7 @@ actor main(env):
 
 Compile and run:
 ```sh
-actonc scalars.act --root main
+actonc scalars.act
 ./scalars
 ```
 
