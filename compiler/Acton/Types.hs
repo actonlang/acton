@@ -906,6 +906,7 @@ genEnv env cs te ds
                                                  te1 = map (generalize q) te
                                                  (eq1,eq2) = splitEqs (dom ws) eq
                                                  ds1 = map (abstract q ds ws eq1) ds
+                                             te1 <- defaultVars te1
                                              --traceM ("## genEnv 3 [" ++ prstrs gen_vs ++ "]\n" ++ render (nest 6 $ pretty te1))
                                              return ([], te1, eq2, ds1)
   | otherwise                           = do te <- msubst te
