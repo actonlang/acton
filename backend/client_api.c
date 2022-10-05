@@ -1616,7 +1616,7 @@ db_row_t* get_db_rows_tree_from_read_response(range_read_response_message * resp
 	return result;
 }
 
-db_row_t* remote_search_in_txn(WORD* primary_keys, int no_primary_keys, WORD table_key,
+int remote_search_in_txn(WORD* primary_keys, int no_primary_keys, db_row_t** result_row, WORD table_key,
 		uuid_t * txnid, remote_db_t * db)
 {
     struct timespec ts_start;
@@ -1624,6 +1624,7 @@ db_row_t* remote_search_in_txn(WORD* primary_keys, int no_primary_keys, WORD tab
 
 	unsigned len = 0;
 	void * tmp_out_buf = NULL;
+	*result_row = NULL;
 
 	read_query * q = build_search_in_txn(primary_keys, no_primary_keys, table_key, txnid, get_nonce(db));
 	int success = serialize_read_query(q, (void **) &tmp_out_buf, &len, NULL);
@@ -1632,7 +1633,7 @@ db_row_t* remote_search_in_txn(WORD* primary_keys, int no_primary_keys, WORD tab
 	{
 		fprintf(stderr, "No quorum (%d/%d servers alive)\n", db->servers->no_items, db->replication_factor);
 		stat_stop(dbc_stats.remote_search_in_txn, &ts_start, NO_QUORUM_ERR);
-		return NULL;
+		return NO_QUORUM_ERR;
 	}
 	remote_server * rs = (remote_server *) (HEAD(db->servers))->value;
 
@@ -1654,10 +1655,8 @@ db_row_t* remote_search_in_txn(WORD* primary_keys, int no_primary_keys, WORD tab
 		fprintf(stderr, "No quorum (%d/%d replies received)\n", mc->no_replies, db->replication_factor);
 		delete_msg_callback(mc->nonce, db);
 		stat_stop(dbc_stats.remote_search_in_txn, &ts_start, NO_QUORUM_ERR);
-		return NULL;
+		return NO_QUORUM_ERR;
 	}
-
-	db_row_t * result = NULL;
 
 	for(int i=0;i<mc->no_replies;i++)
 	{
@@ -1670,19 +1669,18 @@ db_row_t* remote_search_in_txn(WORD* primary_keys, int no_primary_keys, WORD tab
 #endif
 
 		// If result returned multiple cells, accumulate them all in a single tree rooted at "result":
-		result = get_db_rows_tree_from_read_response(response, db);
+		*result_row = get_db_rows_tree_from_read_response(response, db);
 	}
 
 	delete_msg_callback(mc->nonce, db);
 
 	stat_stop(dbc_stats.remote_search_in_txn, &ts_start, 0);
-	return result;
+	return 0;
 }
 
 
-db_row_t* remote_search_clustering_in_txn(WORD* primary_keys, int no_primary_keys, WORD* clustering_keys, int no_clustering_keys,
-														WORD table_key, uuid_t * txnid,
-														remote_db_t * db)
+int remote_search_clustering_in_txn(WORD* primary_keys, int no_primary_keys, WORD* clustering_keys, int no_clustering_keys,
+											db_row_t** result_row, WORD table_key, uuid_t * txnid, remote_db_t * db)
 {
     struct timespec ts_start;
 	stat_start(dbc_stats.remote_search_clustering_in_txn, &ts_start);
@@ -1697,7 +1695,7 @@ db_row_t* remote_search_clustering_in_txn(WORD* primary_keys, int no_primary_key
 	{
 		fprintf(stderr, "No quorum (%d/%d servers alive)\n", db->servers->no_items, db->replication_factor);
 		stat_stop(dbc_stats.remote_search_clustering_in_txn, &ts_start, NO_QUORUM_ERR);
-		return NULL;
+		return NO_QUORUM_ERR;
 	}
 	remote_server * rs = (remote_server *) (HEAD(db->servers))->value;
 
@@ -1719,10 +1717,8 @@ db_row_t* remote_search_clustering_in_txn(WORD* primary_keys, int no_primary_key
 		fprintf(stderr, "No quorum (%d/%d replies received)\n", mc->no_replies, db->replication_factor);
 		delete_msg_callback(mc->nonce, db);
 		stat_stop(dbc_stats.remote_search_clustering_in_txn, &ts_start, NO_QUORUM_ERR);
-		return NULL;
+		return NO_QUORUM_ERR;
 	}
-
-	db_row_t * result = NULL;
 
 	for(int i=0;i<mc->no_replies;i++)
 	{
@@ -1735,24 +1731,24 @@ db_row_t* remote_search_clustering_in_txn(WORD* primary_keys, int no_primary_key
 #endif
 
 		// If result returned multiple cells, accumulate them all in a single tree rooted at "result":
-		result = get_db_rows_tree_from_read_response(response, db);
+		*result_row = get_db_rows_tree_from_read_response(response, db);
 	}
 
 	delete_msg_callback(mc->nonce, db);
 
 	stat_stop(dbc_stats.remote_search_clustering_in_txn, &ts_start, 0);
-	return result;
+	return 0;
 }
 
 db_row_t* remote_search_columns_in_txn(WORD* primary_keys, int no_primary_keys, WORD* clustering_keys, int no_clustering_keys,
-									WORD* col_keys, int no_columns, WORD table_key,
+									WORD* col_keys, int no_columns, db_row_t** result_row, WORD table_key,
 									uuid_t * txnid, remote_db_t * db)
 {
 	assert (0); // Not supported
 	return 0;
 }
 
-db_row_t* remote_search_index_in_txn(WORD index_key, int idx_idx, WORD table_key, uuid_t * txnid, remote_db_t * db)
+db_row_t* remote_search_index_in_txn(WORD index_key, int idx_idx, db_row_t** result_row, WORD table_key, uuid_t * txnid, remote_db_t * db)
 {
 	assert (0); // Not supported; TO DO
 	return 0;

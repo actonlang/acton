@@ -206,14 +206,14 @@ int remote_delete_by_index_in_txn(WORD index_key, int idx_idx, WORD table_key, u
 
 // Read ops:
 
-db_row_t* remote_search_in_txn(WORD* primary_keys, int no_primary_keys, WORD table_key,
+int remote_search_in_txn(WORD* primary_keys, int no_primary_keys, db_row_t** result_row, WORD table_key,
 								uuid_t * txnid, remote_db_t * db);
-db_row_t* remote_search_clustering_in_txn(WORD* primary_keys, int no_primary_keys, WORD* clustering_keys, int no_clustering_keys,
-											WORD table_key, uuid_t * txnid, remote_db_t * db);
-db_row_t* remote_search_columns_in_txn(WORD* primary_keys, int no_primary_keys, WORD* clustering_keys, int no_clustering_keys,
-									WORD* col_keys, int no_columns, WORD table_key,
+int remote_search_clustering_in_txn(WORD* primary_keys, int no_primary_keys, WORD* clustering_keys, int no_clustering_keys,
+									db_row_t** result_row, WORD table_key, uuid_t * txnid, remote_db_t * db);
+int remote_search_columns_in_txn(WORD* primary_keys, int no_primary_keys, WORD* clustering_keys, int no_clustering_keys,
+									WORD* col_keys, int no_columns, db_row_t** result_row, WORD table_key,
 									uuid_t * txnid, remote_db_t * db);
-db_row_t* remote_search_index_in_txn(WORD index_key, int idx_idx, WORD table_key, uuid_t * txnid, remote_db_t * db);
+int remote_search_index_in_txn(WORD index_key, int idx_idx, db_row_t** result_row, WORD table_key, uuid_t * txnid, remote_db_t * db);
 int remote_range_search_in_txn(WORD* start_primary_keys, WORD* end_primary_keys, int no_primary_keys,
 							snode_t** start_row, snode_t** end_row,
 							WORD table_key, uuid_t * txnid, remote_db_t * db);
