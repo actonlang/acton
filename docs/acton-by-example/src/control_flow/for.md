@@ -24,7 +24,7 @@ actor main(env):
 
 Compile and run:
 ```sh
-actonc while.act --root main
+actonc while.act
 ```
 
 Note that the output is random and you could get a different result.

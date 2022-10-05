@@ -3,6 +3,7 @@
 [Introduction](index.md)
 
 - [Hello World](hello.md)
+  - [Run as script](hello/shebang.md)
   - [Program Arguments](hello/args.md)
 - [Acton Projects](projects.md)
   - [Directory structure](projects/directory_structure.md)

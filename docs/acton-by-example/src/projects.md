@@ -13,7 +13,7 @@ Created project foo
 Enter your new project directory with:
   cd foo
 Compile:
-  actonc build --root foo.main
+  actonc build
 Run:
   ./out/rel/bin/foo
 ```
@@ -22,4 +22,4 @@ Run:
 
 Use `actonc build` to build a project. The current working directory must be the project directory or a sub-directory to the project directory. `actonc` will discover all source files and compile them according to dependency order.
 
-Specify a root actor with a qualified name, like `foo.main`, to produce an executable.
+Add a `main` actor to any source file directly under `src/` to produce an executable binary. For example, if `src/hello.act` contains a `main` actor, it will produce `out/rel/bin/hello` using `main` as the root actor.

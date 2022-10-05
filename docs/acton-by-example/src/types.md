@@ -37,7 +37,7 @@ actor main(env):
 
 Compile and run:
 ```sh
-actonc types.act --root main
+actonc types.act
 ./types
 ```
 
