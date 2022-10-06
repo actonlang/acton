@@ -1,0 +1,14 @@
+class Tag():
+   def __init__(self, name : ?str, nsdefs : ?list[(?str,str)], prefix : ?str, attributes : list[(str, str)], content : ?str, children : list[Tag]): 
+      self.name = name                  # Tags with name==None are text nodes; they have content but no attributes or children
+      self.nsdefs = nsdefs              # If (prefix,href) (prefix may be None)
+      self.prefix = prefix              # namespace prefix to use
+      self.attributes = attributes
+      self.content = content            # Only non-None for text nodes
+      self.children = children
+
+pure def decode(data : str) -> Tag:
+    NotImplemented
+
+def encode(root : Tag) -> str:
+    NotImplemented
