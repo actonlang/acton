@@ -41,9 +41,6 @@ void read_stderr(uv_stream_t *stream, ssize_t nread, const uv_buf_t *buf) {
             f->$class->__call__(f, __self__, to$bytes_len(buf->base, nread));
         }
     }
-
-    if (buf->base)
-        free(buf->base);
 }
 
 void read_stdout(uv_stream_t *stream, ssize_t nread, const uv_buf_t *buf) {
@@ -59,9 +56,6 @@ void read_stdout(uv_stream_t *stream, ssize_t nread, const uv_buf_t *buf) {
             f->$class->__call__(f, __self__, to$bytes_len(buf->base, nread));
         }
     }
-
-    if (buf->base)
-        free(buf->base);
 }
 
 $R process$$Process$aid$local (process$$Process __self__, $Cont c$cont) {
@@ -83,7 +77,7 @@ $R process$$Process$_create_process (process$$Process __self__, $Cont c$cont) {
 
     req->data = process_data;
 
-    char **args = (char **)malloc(($list_len(__self__->cmd)+1) * sizeof(char *));
+    char **args = (char **)GC_MALLOC(($list_len(__self__->cmd)+1) * sizeof(char *));
 
     int i;
     for (i = 0; i < $list_len(__self__->cmd); i++) {
@@ -106,7 +100,7 @@ $R process$$Process$_create_process (process$$Process __self__, $Cont c$cont) {
             char *key = from$str(($str)item->components[0]);
             char *value = from$str(($str)item->components[1]);
             size_t env_size = strlen(key) + strlen(value) + 2;
-            char *env_var = malloc(env_size);
+            char *env_var = GC_MALLOC(env_size);
             snprintf(env_var, env_size, "%s=%s", key, value);
             env[i] = env_var;
         }
@@ -181,7 +175,7 @@ $R process$$Process$signal$local (process$$Process __self__, $int signal, $Cont 
 $R process$$Process$write$local (process$$Process __self__, $bytes data, $Cont c$cont) {
     uv_process_t *p = (uv_process_t *)from$int(__self__->_p);
 
-    uv_write_t *req = (uv_write_t *)malloc(sizeof(uv_write_t));
+    uv_write_t *req = (uv_write_t *)GC_MALLOC(sizeof(uv_write_t));
     uv_buf_t buf = uv_buf_init(data->str, data->nbytes);
 
     struct process_data *process_data = (struct process_data *)p->data;

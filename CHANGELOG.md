@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+### Added
+- Garbage collection [#952]
+  - This uses libgc which is a generic garbage collection library for C
+    programs. It works great but a GC optimized for Acton can perform way
+    better, with higher performance, lower latency etc, which is why this is
+    considered an interim solution. Nonetheless, performance seems to be quite
+    okay.
+
 ### Testing / CI
 - Simplify and clean up RTS DB test orchestrator [#941]
 
