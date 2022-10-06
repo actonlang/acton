@@ -99,7 +99,7 @@ BUILTIN_HFILES=$(filter-out $(ENV_FILES),$(wildcard builtin/*.h))
 BUILTIN_CFILES=$(filter-out $(ENV_FILES),$(wildcard builtin/*.c))
 
 DBARCHIVE=lib/libActonDB.a
-ARCHIVES=lib/dev/libActon.a lib/rel/libActon.a lib/libprotobuf-c_a.a lib/libutf8proc_a.a lib/libuv_a.a
+ARCHIVES=lib/dev/libActon.a lib/rel/libActon.a lib/libgc_a.a lib/libprotobuf-c_a.a lib/libutf8proc_a.a lib/libuv_a.a
 ifeq ($(shell uname -s),Linux)
 ARCHIVES+=lib/libbsd_a.a lib/libmd_a.a
 endif
@@ -290,6 +290,11 @@ lib/rel/libActon.a: stdlib/out/rel/lib/libActonProject.a $(LIBACTON_REL_OFILES)
 LIBBSD_LIBDIR:=$(shell pkg-config --variable=libdir libbsd 2>/dev/null)
 LIBBSD_A:=$(shell ls $(LIBBSD_LIBDIR)/libbsd_a.a $(LIBBSD_LIBDIR)/libbsd.a 2>/dev/null | head -n1)
 lib/libbsd_a.a: $(LIBBSD_A)
+	cp $< $@
+
+LIBGC_LIBDIR:=$(shell pkg-config --variable=libdir bdw-gc 2>/dev/null)
+LIBGC_A:=$(shell ls $(LIBGC_LIBDIR)/libgc_a.a $(LIBGC_LIBDIR)/libgc.a 2>/dev/null | head -n1)
+lib/libgc_a.a: $(LIBGC_A)
 	cp $< $@
 
 LIBMD_LIBDIR:=$(shell pkg-config --variable=libdir libmd 2>/dev/null)
