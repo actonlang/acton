@@ -43,7 +43,7 @@ $int to$int(long n);
 long from$int($int n);
 
 /*
-#define to$int(n)  ({$int $res = malloc(sizeof(struct $int)); \
+#define to$int(n)  ({$int $res = GC_MALLOC(sizeof(struct $int)); \
                      $res->$class = &$int$methods; \
                      $res->val = n; \
                      $res;})

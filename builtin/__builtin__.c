@@ -78,7 +78,7 @@ struct $Eq$class $Eq$methods = {"$Eq$class", UNASSIGNED, NULL, (void (*)($Eq))$d
                                 NULL, NULL};
 
 $Eq $Eq$new() {
-  $Eq res = malloc(sizeof(struct $Eq));
+  $Eq res = GC_MALLOC(sizeof(struct $Eq));
   res->$class = &$Eq$methods;
   return res;
 }
@@ -87,7 +87,7 @@ struct $Ord$class $Ord$methods = {"$Ord$class", UNASSIGNED, ($Super$class)&$Eq$m
                                   NULL, NULL, NULL, NULL, NULL, NULL};
 
 $Ord $Ord$new() {
-  $Ord res = malloc(sizeof(struct $Eq));
+  $Ord res = GC_MALLOC(sizeof(struct $Eq));
   res->$class = &$Ord$methods;
   return res;
 }
@@ -96,7 +96,7 @@ struct $Logical$class $Logical$methods = {"$Logical$class", UNASSIGNED, NULL, (v
                                           NULL, NULL, NULL};
 
 $Logical $Logical$new() {
-  $Logical res = malloc(sizeof(struct $Logical));
+  $Logical res = GC_MALLOC(sizeof(struct $Logical));
   res->$class = &$Logical$methods;
   return res;
 }
@@ -105,7 +105,7 @@ struct $Plus$class $Plus$methods = {"$Plus$class", UNASSIGNED, NULL, (void (*)($
                                     NULL, $Plus$__iadd__};
 
 $Plus $Plus$new() {
-  $Plus res = malloc(sizeof(struct $Plus));
+  $Plus res = GC_MALLOC(sizeof(struct $Plus));
   res->$class = &$Plus$methods;
   return res;
 }
@@ -114,7 +114,7 @@ struct $Times$class $Times$methods = {"$Times$class", UNASSIGNED, NULL, (void (*
                                       NULL, ($WORD (*)($Times,$WORD,$WORD))$Plus$__iadd__, $Times$__imul__};
 
 $Times $Times$new() {
-  $Times res = malloc(sizeof(struct $Times));
+  $Times res = GC_MALLOC(sizeof(struct $Times));
   res->$class = &$Times$methods;
   return res;
 }
@@ -123,7 +123,7 @@ struct $Div$class $Div$methods = {"$Div$class", UNASSIGNED, NULL, (void (*)($Div
                                     NULL, $Div$__itruediv__};
 
 $Div $Div$new() {
-  $Div res = malloc(sizeof(struct $Div));
+  $Div res = GC_MALLOC(sizeof(struct $Div));
   res->$class = &$Div$methods;
   return res;
 }
@@ -132,7 +132,7 @@ struct $Minus$class $Minus$methods = {"$Minus$class", UNASSIGNED, NULL, (void (*
                                       NULL, $Minus$__isub__};
 
 $Minus $Minus$new() {
-  $Minus res = malloc(sizeof(struct $Minus));
+  $Minus res = GC_MALLOC(sizeof(struct $Minus));
   res->$class = &$Minus$methods;
   return res;
 }
@@ -141,7 +141,7 @@ struct $Hashable$class $Hashable$methods = {"$Hashable$class", UNASSIGNED, NULL,
                                             NULL, NULL, NULL};
 
 $Hashable $Hashable$new() {
-  $Hashable res = malloc(sizeof(struct $Hashable));
+  $Hashable res = GC_MALLOC(sizeof(struct $Hashable));
   res->$class = &$Hashable$methods;
   return res;
 }
@@ -154,7 +154,7 @@ struct $Indexed$class $Indexed$methods = {"$Indexed$class", UNASSIGNED, NULL, $I
                                           NULL, NULL, NULL};
 
 $Indexed $Indexed$new($Eq w$Eq$A$Indexed) {
-  $Indexed res = malloc(sizeof(struct $Indexed));
+  $Indexed res = GC_MALLOC(sizeof(struct $Indexed));
   res->$class = &$Indexed$methods;
   res->w$Eq$A$Indexed = w$Eq$A$Indexed;
   return res;
@@ -164,7 +164,7 @@ struct $Sliceable$class $Sliceable$methods = {"$Sliceable$class", UNASSIGNED, ($
                                               NULL, NULL, NULL, NULL, NULL, NULL};
 
 $Sliceable $Sliceable$new() {
-  $Sliceable res = malloc(sizeof(struct $Sliceable));
+  $Sliceable res = GC_MALLOC(sizeof(struct $Sliceable));
   res->$class = &$Sliceable$methods;
   return res;
 }
@@ -173,7 +173,7 @@ struct $Iterable$class $Iterable$methods = {"$Iterable$class", UNASSIGNED, NULL,
                                             NULL};
 
 $Iterable $Iterable$new() {
-  $Iterable res = malloc(sizeof(struct $Iterable));
+  $Iterable res = GC_MALLOC(sizeof(struct $Iterable));
   res->$class = &$Iterable$methods;
   return res;
 }
@@ -182,7 +182,7 @@ struct $Collection$class $Collection$methods = {"$Collection$class", UNASSIGNED,
                                                 NULL, NULL, NULL};
 
 $Collection $Collection$new() {
-  $Collection res = malloc(sizeof(struct $Collection));
+  $Collection res = GC_MALLOC(sizeof(struct $Collection));
   res->$class = &$Collection$methods;
   return res;
 }
@@ -195,7 +195,7 @@ struct $Container$class $Container$methods = {"$Container$class", UNASSIGNED, ($
                                               NULL, NULL, NULL, NULL, NULL};
 
 $Container $Container$new($Eq w$Eq$A$Container) {
-  $Container res = malloc(sizeof(struct $Container));
+  $Container res = GC_MALLOC(sizeof(struct $Container));
   res->$class = &$Container$methods;
   res->w$Eq$A$Container = w$Eq$A$Container;
   return res;
@@ -210,7 +210,7 @@ struct $Sequence$class $Sequence$methods = {"$Sequence$class", UNASSIGNED, ($Sup
                                             NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL};
 
 $Sequence $Sequence$new() {
-  $Sequence res = malloc(sizeof(struct $Sequence));
+  $Sequence res = GC_MALLOC(sizeof(struct $Sequence));
   res->$class = &$Sequence$methods;
   res->w$Collection = $Collection$new();
   res->w$Times = $Times$new();
@@ -226,7 +226,7 @@ struct $Mapping$class $Mapping$methods = {"$Mapping$class", UNASSIGNED, ($Super$
                                           NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL};
 
 $Mapping $Mapping$new($Eq w$Eq$A$Mapping) {
-  $Mapping res = malloc(sizeof(struct $Mapping));
+  $Mapping res = GC_MALLOC(sizeof(struct $Mapping));
   res->$class = &$Mapping$methods;
   res->w$Indexed = $Indexed$new(w$Eq$A$Mapping);
   res->w$Eq$A$Mapping = w$Eq$A$Mapping;
@@ -244,7 +244,7 @@ struct $Set$class $Set$methods = {"$Set$class", UNASSIGNED, ($Super$class)&$Cont
                                 NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL};
 
 $Set $Set$new($Eq w$Eq$A$Set) {
-  $Set res = malloc(sizeof(struct $Set));
+  $Set res = GC_MALLOC(sizeof(struct $Set));
   res->$class = &$Set$methods;
   res->w$Ord = $Ord$new();
   res->w$Logical = $Logical$new();
@@ -262,7 +262,7 @@ struct $Number$class $Number$methods = {"$Number$class", UNASSIGNED, ($Super$cla
 
 
 $Number $Number$new() {
-  $Number res = malloc(sizeof(struct $Number));
+  $Number res = GC_MALLOC(sizeof(struct $Number));
   res->$class = &$Number$methods;
   res->w$Minus = $Minus$new();
   return res;
@@ -274,7 +274,7 @@ struct $Real$class $Real$methods = {"$Real$class", UNASSIGNED, ($Super$class)&$N
 
 
 $Real $Real$new() {
-  $Real res = malloc(sizeof(struct $Real));
+  $Real res = GC_MALLOC(sizeof(struct $Real));
   res->$class = &$Real$methods;
   return res;
 }
@@ -284,7 +284,7 @@ struct $Rational$class $Rational$methods = {"$Rational$class", UNASSIGNED, ($Sup
 
 
 $Rational $Rational$new() {
-  $Rational res = malloc(sizeof(struct $Rational));
+  $Rational res = GC_MALLOC(sizeof(struct $Rational));
   res->$class = &$Rational$methods;
   return res;
 }
@@ -298,7 +298,7 @@ struct $Integral$class $Integral$methods = {"$Integral$class", UNASSIGNED, ($Sup
                                             NULL,  ($WORD (*)($Integral,$WORD,$WORD))$Plus$__iadd__, NULL,  ($WORD (*)($Integral,$WORD,$WORD))$Times$__imul__, NULL, NULL, NULL,  ($WORD (*)($Integral,$WORD,$WORD))$Number$__ipow__, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, $Integral$__ifloordiv__, $Integral$__imod__, $Integral$__ilshift__, $Integral$__irshift__, NULL};
 
 $Integral $Integral$new() {
-  $Integral res = malloc(sizeof(struct $Integral));
+  $Integral res = GC_MALLOC(sizeof(struct $Integral));
   res->$class = &$Integral$methods;
   res->w$Logical = $Logical$new();
   res->w$Minus = $Minus$new();

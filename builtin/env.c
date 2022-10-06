@@ -18,6 +18,10 @@
 #endif
 #endif
 
+#define GC_DEBUG 1
+#define GC_THREADS 1
+#include <gc.h>
+
 #include <uv.h>
 #include "env.h"
 
@@ -46,7 +50,7 @@ void $l$1lambda$__serialize__ ($l$1lambda self, $Serial$state state) {
 $l$1lambda $l$1lambda$__deserialize__ ($l$1lambda self, $Serial$state state) {
     if (!self) {
         if (!state) {
-            self = malloc(sizeof(struct $l$1lambda));
+            self = GC_MALLOC(sizeof(struct $l$1lambda));
             self->$class = &$l$1lambda$methods;
             return self;
         }
@@ -57,7 +61,7 @@ $l$1lambda $l$1lambda$__deserialize__ ($l$1lambda self, $Serial$state state) {
     return self;
 }
 $l$1lambda $l$1lambda$new($Env p$1, $str p$2) {
-    $l$1lambda $tmp = malloc(sizeof(struct $l$1lambda));
+    $l$1lambda $tmp = GC_MALLOC(sizeof(struct $l$1lambda));
     $tmp->$class = &$l$1lambda$methods;
     $l$1lambda$methods.__init__($tmp, p$1, p$2);
     return $tmp;
@@ -80,7 +84,7 @@ void $l$2lambda$__serialize__ ($l$2lambda self, $Serial$state state) {
 $l$2lambda $l$2lambda$__deserialize__ ($l$2lambda self, $Serial$state state) {
     if (!self) {
         if (!state) {
-            self = malloc(sizeof(struct $l$2lambda));
+            self = GC_MALLOC(sizeof(struct $l$2lambda));
             self->$class = &$l$2lambda$methods;
             return self;
         }
@@ -91,7 +95,7 @@ $l$2lambda $l$2lambda$__deserialize__ ($l$2lambda self, $Serial$state state) {
     return self;
 }
 $l$2lambda $l$2lambda$new($Env p$1, $function p$2) {
-    $l$2lambda $tmp = malloc(sizeof(struct $l$2lambda));
+    $l$2lambda $tmp = GC_MALLOC(sizeof(struct $l$2lambda));
     $tmp->$class = &$l$2lambda$methods;
     $l$2lambda$methods.__init__($tmp, p$1, p$2);
     return $tmp;
@@ -120,7 +124,7 @@ void $l$3lambda$__serialize__ ($l$3lambda self, $Serial$state state) {
 $l$3lambda $l$3lambda$__deserialize__ ($l$3lambda self, $Serial$state state) {
     if (!self) {
         if (!state) {
-            self = malloc(sizeof(struct $l$3lambda));
+            self = GC_MALLOC(sizeof(struct $l$3lambda));
             self->$class = &$l$3lambda$methods;
             return self;
         }
@@ -133,7 +137,7 @@ $l$3lambda $l$3lambda$__deserialize__ ($l$3lambda self, $Serial$state state) {
     return self;
 }
 $l$3lambda $l$3lambda$new($Env p$1, $str p$2, $int p$3, $function p$4) {
-    $l$3lambda $tmp = malloc(sizeof(struct $l$3lambda));
+    $l$3lambda $tmp = GC_MALLOC(sizeof(struct $l$3lambda));
     $tmp->$class = &$l$3lambda$methods;
     $l$3lambda$methods.__init__($tmp, p$1, p$2, p$3, p$4);
     return $tmp;
@@ -162,7 +166,7 @@ void $l$4lambda$__serialize__ ($l$4lambda self, $Serial$state state) {
 $l$4lambda $l$4lambda$__deserialize__ ($l$4lambda self, $Serial$state state) {
     if (!self) {
         if (!state) {
-            self = malloc(sizeof(struct $l$4lambda));
+            self = GC_MALLOC(sizeof(struct $l$4lambda));
             self->$class = &$l$4lambda$methods;
             return self;
         }
@@ -175,7 +179,7 @@ $l$4lambda $l$4lambda$__deserialize__ ($l$4lambda self, $Serial$state state) {
     return self;
 }
 $l$4lambda $l$4lambda$new($Env p$1, $int p$2, $function p$3, $function p$4) {
-    $l$4lambda $tmp = malloc(sizeof(struct $l$4lambda));
+    $l$4lambda $tmp = GC_MALLOC(sizeof(struct $l$4lambda));
     $tmp->$class = &$l$4lambda$methods;
     $l$4lambda$methods.__init__($tmp, p$1, p$2, p$3, p$4);
     return $tmp;
@@ -198,7 +202,7 @@ void $l$5lambda$__serialize__ ($l$5lambda self, $Serial$state state) {
 $l$5lambda $l$5lambda$__deserialize__ ($l$5lambda self, $Serial$state state) {
     if (!self) {
         if (!state) {
-            self = malloc(sizeof(struct $l$5lambda));
+            self = GC_MALLOC(sizeof(struct $l$5lambda));
             self->$class = &$l$5lambda$methods;
             return self;
         }
@@ -209,7 +213,7 @@ $l$5lambda $l$5lambda$__deserialize__ ($l$5lambda self, $Serial$state state) {
     return self;
 }
 $l$5lambda $l$5lambda$new($Env p$1, $int p$2) {
-    $l$5lambda $tmp = malloc(sizeof(struct $l$5lambda));
+    $l$5lambda $tmp = GC_MALLOC(sizeof(struct $l$5lambda));
     $tmp->$class = &$l$5lambda$methods;
     $l$5lambda$methods.__init__($tmp, p$1, p$2);
     return $tmp;
@@ -232,7 +236,7 @@ void $l$6lambda$__serialize__ ($l$6lambda self, $Serial$state state) {
 $l$6lambda $l$6lambda$__deserialize__ ($l$6lambda self, $Serial$state state) {
     if (!self) {
         if (!state) {
-            self = malloc(sizeof(struct $l$6lambda));
+            self = GC_MALLOC(sizeof(struct $l$6lambda));
             self->$class = &$l$6lambda$methods;
             return self;
         }
@@ -243,7 +247,7 @@ $l$6lambda $l$6lambda$__deserialize__ ($l$6lambda self, $Serial$state state) {
     return self;
 }
 $l$6lambda $l$6lambda$new($Env p$1, $str p$2) {
-    $l$6lambda $tmp = malloc(sizeof(struct $l$6lambda));
+    $l$6lambda $tmp = GC_MALLOC(sizeof(struct $l$6lambda));
     $tmp->$class = &$l$6lambda$methods;
     $l$6lambda$methods.__init__($tmp, p$1, p$2);
     return $tmp;
@@ -266,7 +270,7 @@ void $l$7lambda$__serialize__ ($l$7lambda self, $Serial$state state) {
 $l$7lambda $l$7lambda$__deserialize__ ($l$7lambda self, $Serial$state state) {
     if (!self) {
         if (!state) {
-            self = malloc(sizeof(struct $l$7lambda));
+            self = GC_MALLOC(sizeof(struct $l$7lambda));
             self->$class = &$l$7lambda$methods;
             return self;
         }
@@ -277,7 +281,7 @@ $l$7lambda $l$7lambda$__deserialize__ ($l$7lambda self, $Serial$state state) {
     return self;
 }
 $l$7lambda $l$7lambda$new($Env p$1, $str p$2) {
-    $l$7lambda $tmp = malloc(sizeof(struct $l$7lambda));
+    $l$7lambda $tmp = GC_MALLOC(sizeof(struct $l$7lambda));
     $tmp->$class = &$l$7lambda$methods;
     $l$7lambda$methods.__init__($tmp, p$1, p$2);
     return $tmp;
@@ -300,7 +304,7 @@ void $l$8lambda$__serialize__ ($l$8lambda self, $Serial$state state) {
 $l$8lambda $l$8lambda$__deserialize__ ($l$8lambda self, $Serial$state state) {
     if (!self) {
         if (!state) {
-            self = malloc(sizeof(struct $l$8lambda));
+            self = GC_MALLOC(sizeof(struct $l$8lambda));
             self->$class = &$l$8lambda$methods;
             return self;
         }
@@ -311,7 +315,7 @@ $l$8lambda $l$8lambda$__deserialize__ ($l$8lambda self, $Serial$state state) {
     return self;
 }
 $l$8lambda $l$8lambda$new($Connection p$1, $bytes p$2) {
-    $l$8lambda $tmp = malloc(sizeof(struct $l$8lambda));
+    $l$8lambda $tmp = GC_MALLOC(sizeof(struct $l$8lambda));
     $tmp->$class = &$l$8lambda$methods;
     $l$8lambda$methods.__init__($tmp, p$1, p$2);
     return $tmp;
@@ -331,7 +335,7 @@ void $l$9lambda$__serialize__ ($l$9lambda self, $Serial$state state) {
 $l$9lambda $l$9lambda$__deserialize__ ($l$9lambda self, $Serial$state state) {
     if (!self) {
         if (!state) {
-            self = malloc(sizeof(struct $l$9lambda));
+            self = GC_MALLOC(sizeof(struct $l$9lambda));
             self->$class = &$l$9lambda$methods;
             return self;
         }
@@ -341,7 +345,7 @@ $l$9lambda $l$9lambda$__deserialize__ ($l$9lambda self, $Serial$state state) {
     return self;
 }
 $l$9lambda $l$9lambda$new($Connection p$1) {
-    $l$9lambda $tmp = malloc(sizeof(struct $l$9lambda));
+    $l$9lambda $tmp = GC_MALLOC(sizeof(struct $l$9lambda));
     $tmp->$class = &$l$9lambda$methods;
     $l$9lambda$methods.__init__($tmp, p$1);
     return $tmp;
@@ -367,7 +371,7 @@ void $l$10lambda$__serialize__ ($l$10lambda self, $Serial$state state) {
 $l$10lambda $l$10lambda$__deserialize__ ($l$10lambda self, $Serial$state state) {
     if (!self) {
         if (!state) {
-            self = malloc(sizeof(struct $l$10lambda));
+            self = GC_MALLOC(sizeof(struct $l$10lambda));
             self->$class = &$l$10lambda$methods;
             return self;
         }
@@ -379,7 +383,7 @@ $l$10lambda $l$10lambda$__deserialize__ ($l$10lambda self, $Serial$state state) 
     return self;
 }
 $l$10lambda $l$10lambda$new($Connection p$1, $function p$2, $function p$3) {
-    $l$10lambda $tmp = malloc(sizeof(struct $l$10lambda));
+    $l$10lambda $tmp = GC_MALLOC(sizeof(struct $l$10lambda));
     $tmp->$class = &$l$10lambda$methods;
     $l$10lambda$methods.__init__($tmp, p$1, p$2, p$3);
     return $tmp;
@@ -399,7 +403,7 @@ void $l$11lambda$__serialize__ ($l$11lambda self, $Serial$state state) {
 $l$11lambda $l$11lambda$__deserialize__ ($l$11lambda self, $Serial$state state) {
     if (!self) {
         if (!state) {
-            self = malloc(sizeof(struct $l$11lambda));
+            self = GC_MALLOC(sizeof(struct $l$11lambda));
             self->$class = &$l$11lambda$methods;
             return self;
         }
@@ -409,7 +413,7 @@ $l$11lambda $l$11lambda$__deserialize__ ($l$11lambda self, $Serial$state state) 
     return self;
 }
 $l$11lambda $l$11lambda$new($RFile p$1) {
-    $l$11lambda $tmp = malloc(sizeof(struct $l$11lambda));
+    $l$11lambda $tmp = GC_MALLOC(sizeof(struct $l$11lambda));
     $tmp->$class = &$l$11lambda$methods;
     $l$11lambda$methods.__init__($tmp, p$1);
     return $tmp;
@@ -429,7 +433,7 @@ void $l$12lambda$__serialize__ ($l$12lambda self, $Serial$state state) {
 $l$12lambda $l$12lambda$__deserialize__ ($l$12lambda self, $Serial$state state) {
     if (!self) {
         if (!state) {
-            self = malloc(sizeof(struct $l$12lambda));
+            self = GC_MALLOC(sizeof(struct $l$12lambda));
             self->$class = &$l$12lambda$methods;
             return self;
         }
@@ -439,7 +443,7 @@ $l$12lambda $l$12lambda$__deserialize__ ($l$12lambda self, $Serial$state state) 
     return self;
 }
 $l$12lambda $l$12lambda$new($RFile p$1) {
-    $l$12lambda $tmp = malloc(sizeof(struct $l$12lambda));
+    $l$12lambda $tmp = GC_MALLOC(sizeof(struct $l$12lambda));
     $tmp->$class = &$l$12lambda$methods;
     $l$12lambda$methods.__init__($tmp, p$1);
     return $tmp;
@@ -462,7 +466,7 @@ void $l$13lambda$__serialize__ ($l$13lambda self, $Serial$state state) {
 $l$13lambda $l$13lambda$__deserialize__ ($l$13lambda self, $Serial$state state) {
     if (!self) {
         if (!state) {
-            self = malloc(sizeof(struct $l$13lambda));
+            self = GC_MALLOC(sizeof(struct $l$13lambda));
             self->$class = &$l$13lambda$methods;
             return self;
         }
@@ -473,7 +477,7 @@ $l$13lambda $l$13lambda$__deserialize__ ($l$13lambda self, $Serial$state state) 
     return self;
 }
 $l$13lambda $l$13lambda$new($WFile p$1, $str p$2) {
-    $l$13lambda $tmp = malloc(sizeof(struct $l$13lambda));
+    $l$13lambda $tmp = GC_MALLOC(sizeof(struct $l$13lambda));
     $tmp->$class = &$l$13lambda$methods;
     $l$13lambda$methods.__init__($tmp, p$1, p$2);
     return $tmp;
@@ -493,7 +497,7 @@ void $l$14lambda$__serialize__ ($l$14lambda self, $Serial$state state) {
 $l$14lambda $l$14lambda$__deserialize__ ($l$14lambda self, $Serial$state state) {
     if (!self) {
         if (!state) {
-            self = malloc(sizeof(struct $l$14lambda));
+            self = GC_MALLOC(sizeof(struct $l$14lambda));
             self->$class = &$l$14lambda$methods;
             return self;
         }
@@ -503,7 +507,7 @@ $l$14lambda $l$14lambda$__deserialize__ ($l$14lambda self, $Serial$state state) 
     return self;
 }
 $l$14lambda $l$14lambda$new($WFile p$1) {
-    $l$14lambda $tmp = malloc(sizeof(struct $l$14lambda));
+    $l$14lambda $tmp = GC_MALLOC(sizeof(struct $l$14lambda));
     $tmp->$class = &$l$14lambda$methods;
     $l$14lambda$methods.__init__($tmp, p$1);
     return $tmp;
@@ -523,7 +527,7 @@ void $l$15lambda$__serialize__ ($l$15lambda self, $Serial$state state) {
 $l$15lambda $l$15lambda$__deserialize__ ($l$15lambda self, $Serial$state state) {
     if (!self) {
         if (!state) {
-            self = malloc(sizeof(struct $l$15lambda));
+            self = GC_MALLOC(sizeof(struct $l$15lambda));
             self->$class = &$l$15lambda$methods;
             return self;
         }
@@ -533,7 +537,7 @@ $l$15lambda $l$15lambda$__deserialize__ ($l$15lambda self, $Serial$state state) 
     return self;
 }
 $l$15lambda $l$15lambda$new($function p$1) {
-    $l$15lambda $tmp = malloc(sizeof(struct $l$15lambda));
+    $l$15lambda $tmp = GC_MALLOC(sizeof(struct $l$15lambda));
     $tmp->$class = &$l$15lambda$methods;
     $l$15lambda$methods.__init__($tmp, p$1);
     return $tmp;
@@ -553,7 +557,7 @@ void $l$16lambda$__serialize__ ($l$16lambda self, $Serial$state state) {
 $l$16lambda $l$16lambda$__deserialize__ ($l$16lambda self, $Serial$state state) {
     if (!self) {
         if (!state) {
-            self = malloc(sizeof(struct $l$16lambda));
+            self = GC_MALLOC(sizeof(struct $l$16lambda));
             self->$class = &$l$16lambda$methods;
             return self;
         }
@@ -563,7 +567,7 @@ $l$16lambda $l$16lambda$__deserialize__ ($l$16lambda self, $Serial$state state) 
     return self;
 }
 $l$16lambda $l$16lambda$new($ListenSocket p$1) {
-    $l$16lambda $tmp = malloc(sizeof(struct $l$16lambda));
+    $l$16lambda $tmp = GC_MALLOC(sizeof(struct $l$16lambda));
     $tmp->$class = &$l$16lambda$methods;
     $l$16lambda$methods.__init__($tmp, p$1);
     return $tmp;
@@ -577,7 +581,7 @@ void $WorldAuth$__serialize__ ($WorldAuth self, $Serial$state state) {
 $WorldAuth $WorldAuth$__deserialize__ ($WorldAuth self, $Serial$state state) {
     if (!self) {
         if (!state) {
-            self = malloc(sizeof(struct $WorldAuth));
+            self = GC_MALLOC(sizeof(struct $WorldAuth));
             self->$class = &$WorldAuth$methods;
             return self;
         }
@@ -600,7 +604,7 @@ $Msg $Env$exit ($Env __self__, $int n) {
 
 
 $WorldAuth $WorldAuth$new() {
-    $WorldAuth $tmp = malloc(sizeof(struct $WorldAuth));
+    $WorldAuth $tmp = GC_MALLOC(sizeof(struct $WorldAuth));
     $tmp->$class = &$WorldAuth$methods;
     $WorldAuth$methods.__init__($tmp);
     return $tmp;
@@ -639,7 +643,7 @@ $R $Env$stdin_install$local ($Env __self__, $function cb, $Cont c$cont) {
     // This should be the only call in env that does IO stuff, so it is safe to
     // pin affinity here (and not earlier)..
     pin_actor_affinity();
-    uv_tty_t *tty = malloc(sizeof(uv_tty_t));
+    uv_tty_t *tty = GC_MALLOC(sizeof(uv_tty_t));
     uv_tty_init(get_uv_loop(), tty, 0, 1);
     tty->data = cb;
     uv_read_start((uv_stream_t*)tty, alloc_buffer, read_stdin);
@@ -657,7 +661,7 @@ void $Env$__serialize__ ($Env self, $Serial$state state) {
 $Env $Env$__deserialize__ ($Env self, $Serial$state state) {
     if (!self) {
         if (!state) {
-            self = malloc(sizeof(struct $Env));
+            self = GC_MALLOC(sizeof(struct $Env));
             self->$class = &$Env$methods;
             return self;
         }

@@ -56,7 +56,7 @@ $bool $bool$new($value s) {
 }
 
 $bool to$bool(long b) {
-  $bool res = malloc(sizeof(struct $bool));
+  $bool res = GC_MALLOC(sizeof(struct $bool));
   res->$class = &$bool$methods;
   res->val = b;
   return res;

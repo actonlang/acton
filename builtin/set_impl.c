@@ -42,7 +42,7 @@ void $set_init($set set, $Hashable hashwit, $Iterable wit, $WORD iterable) {
   set->fill = 0;
   set->mask = MIN_SIZE-1;
   set->finger = 0;
-  set->table = malloc(MIN_SIZE*sizeof($setentry));
+  set->table = GC_MALLOC(MIN_SIZE*sizeof($setentry));
   memset(set->table,0,MIN_SIZE*sizeof($setentry));
   if (wit && iterable) {
     $Iterator it = wit->$class->__iter__(wit,iterable);
@@ -95,14 +95,14 @@ $set $set_deserialize ($set res, $Serial$state state) {
     return $dict_get(state->done,($Hashable)$Hashable$int$witness,to$int((long)this->blob[0]),NULL);
   } else {
     if (!res)
-       res = malloc(sizeof(struct $set));
+       res = GC_MALLOC(sizeof(struct $set));
     $dict_setitem(state->done,($Hashable)$Hashable$int$witness,to$int(state->row_no-1),res);
     res->$class = &$set$methods;
     res->numelements = (long)this->blob[0];
     res->fill = (long)this->blob[1];
     res->mask = (long)this->blob[2];
     res->finger = (long)this->blob[3];
-    res->table = malloc((res->mask+1)*sizeof($setentry));
+    res->table = GC_MALLOC((res->mask+1)*sizeof($setentry));
     memset(res->table,0,(res->mask+1)*sizeof($setentry));
     for (int i=0; i<=res->mask;i++) {
       $setentry *entry = &res->table[i];
@@ -151,7 +151,7 @@ static int $set_table_resize($set so, int minsize) {
     /* Get space for a new table. */
     oldtable = so->table;
 
-    newtable = malloc(sizeof($setentry) * newsize);
+    newtable = GC_MALLOC(sizeof($setentry) * newsize);
     if (newtable == NULL) {
       return -1;
     }
@@ -179,7 +179,7 @@ static int $set_table_resize($set so, int minsize) {
         }
     }
 
-    free(oldtable);
+    GC_FREE(oldtable);
     return 0;
 }
 
@@ -273,9 +273,9 @@ static void $set_add_entry($set set, $Hashable hashwit, $WORD key, long hash) {
 
 
 $set $set_copy($set set, $Hashable hashwit) {
-  $set res = malloc(sizeof(struct $set));
+  $set res = GC_MALLOC(sizeof(struct $set));
   memcpy(res,set,sizeof(struct $set));
-  res->table = malloc((set->mask+1)*sizeof($setentry));
+  res->table = GC_MALLOC((set->mask+1)*sizeof($setentry));
   memcpy(res->table,set->table,(set->mask+1)*sizeof($setentry));
   return res;
 }
@@ -456,7 +456,7 @@ $set $set_fromiter($Hashable hashwit,$Iterator it) {
   res->fill = 0;
   res->mask = MIN_SIZE-1;
   res->finger = 0;
-  res->table = malloc(MIN_SIZE*sizeof($setentry));
+  res->table = GC_MALLOC(MIN_SIZE*sizeof($setentry));
   memset(res->table,0,MIN_SIZE*sizeof($setentry));
   $WORD nxt;
   while((nxt = it->$class->__next__(it))) {
@@ -493,8 +493,8 @@ static $WORD $Iterator$set_next_entry($Iterator$set self) {
 }
 
 static $Iterator $set_iter_entry($set set) {
-  $Iterator$set iter =  malloc(sizeof(struct $Iterator$set));
-  struct $Iterator$set$class *methods = malloc(sizeof(struct $Iterator$set$class));
+  $Iterator$set iter =  GC_MALLOC(sizeof(struct $Iterator$set));
+  struct $Iterator$set$class *methods = GC_MALLOC(sizeof(struct $Iterator$set$class));
   iter->$class = methods;
   methods->__next__ =  $Iterator$set_next_entry;
   iter->src = set;

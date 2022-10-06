@@ -5,6 +5,10 @@
 #endif
 #endif
 
+#define GC_DEBUG 1
+#define GC_THREADS 1
+#include <gc.h>
+
 #include <stdlib.h>
 #include <stddef.h>
 #include <stdio.h>

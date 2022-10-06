@@ -13,7 +13,7 @@
  */
 
 $complex to$complex(complex double c) {
-  $complex res = malloc(sizeof(struct $complex));
+  $complex res = GC_MALLOC(sizeof(struct $complex));
   res->$class = &$complex$methods;
   res->val = c;
   return res;

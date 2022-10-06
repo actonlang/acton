@@ -87,8 +87,8 @@ static void expand($list lst,int n) {
    while (newcapacity < lst->length+n)
      newcapacity <<= 1;
    $WORD* newptr = lst->data==NULL
-     ? malloc(newcapacity*sizeof($WORD))
-     : realloc(lst->data,newcapacity*sizeof($WORD));
+     ? GC_MALLOC(newcapacity*sizeof($WORD))
+     : GC_REALLOC(lst->data,newcapacity*sizeof($WORD));
    if (newptr == NULL) {
     $RAISE(($BaseException)$NEW($MemoryError,to$str("memory allocation failed")));
    }
@@ -101,12 +101,12 @@ $list $list_new(int capacity) {
     fprintf(stderr,"Internal error list_new: negative capacity");
     exit(-1);
   } 
-  $list lst = malloc(sizeof(struct $list));
+  $list lst = GC_MALLOC(sizeof(struct $list));
   if (lst == NULL) {
      $RAISE(($BaseException)$NEW($MemoryError,to$str("memory allocation failed")));
   }
   if (capacity>0) {
-    lst->data = malloc(capacity*sizeof($WORD));
+    lst->data = GC_MALLOC(capacity*sizeof($WORD));
     if (lst->data == NULL) {
        $RAISE(($BaseException)$NEW($MemoryError,to$str("memory allocation failed")));
     }

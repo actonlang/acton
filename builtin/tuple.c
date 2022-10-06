@@ -18,7 +18,7 @@ void $tuple_init($tuple self,int size ,...) {
   va_list args;
   va_start(args,size);
   self->size = size;
-  self->components = malloc(size*sizeof($WORD));
+  self->components = GC_MALLOC(size*sizeof($WORD));
   for (int i=0; i<size; i++)
     self->components[i] = va_arg(args,$WORD);
   va_end(args);
@@ -60,9 +60,9 @@ $tuple $tuple_deserialize($tuple self, $Serial$state state) {
     return ($tuple)$dict_get(state->done,($Hashable)$Hashable$int$witness,to$int((long)this->blob[0]),NULL);
   } else {
     int len = (int)(long)this->blob[0];
-    $tuple res = malloc(sizeof(struct $tuple));
+    $tuple res = GC_MALLOC(sizeof(struct $tuple));
     $dict_setitem(state->done,($Hashable)$Hashable$int$witness,to$int(state->row_no-1),res);
-    res->components = malloc(len * sizeof($WORD));
+    res->components = GC_MALLOC(len * sizeof($WORD));
     res->$class = &$tuple$methods;
     res->size = len;
     for (int i = 0; i < len; i++) 
@@ -194,10 +194,10 @@ $tuple $Sliceable$tuple$__getslice__ ($Sliceable$tuple wit, $tuple self, $slice 
   normalize_slice(slc, size, &slen, &start, &stop, &step);
   //slice notation have been eliminated and default values applied.
   // slen now is the length of the slice
-  $tuple res = malloc(sizeof(struct $tuple));
+  $tuple res = GC_MALLOC(sizeof(struct $tuple));
   res->$class = self->$class;
   res->size = slen;
-  res->components = malloc(slen * sizeof($WORD));
+  res->components = GC_MALLOC(slen * sizeof($WORD));
   int t = start;
   for (int i=0; i<slen; i++) {
     res->components[i] = self->components[t];

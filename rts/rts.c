@@ -18,6 +18,11 @@
 #endif
 #endif
 
+#define GC_DEBUG 1
+#define GC_THREADS 1
+#include <gc.h>
+
+
 #include <unistd.h>
 #include <pthread.h>
 #include <stdio.h>
@@ -309,7 +314,7 @@ void $Msg$__serialize__($Msg self, $Serial$state state) {
 $Msg $Msg$__deserialize__($Msg res, $Serial$state state) {
     if (!res) {
         if (!state) {
-            res = malloc(sizeof (struct $Msg));
+            res = GC_MALLOC(sizeof (struct $Msg));
             res->$class = &$Msg$methods;
             return res;
         }
@@ -363,7 +368,7 @@ void $Actor$__serialize__($Actor self, $Serial$state state) {
 $Actor $Actor$__deserialize__($Actor res, $Serial$state state) {
     if (!res) {
         if (!state) {
-            res = malloc(sizeof(struct $Actor));
+            res = GC_MALLOC(sizeof(struct $Actor));
             res->$class = &$Actor$methods;
             return res;
         }
@@ -465,7 +470,7 @@ $R $ConstCont$__call__($ConstCont $this, $WORD _ignore) {
 }
 
 $Cont $CONSTCONT($WORD val, $Cont cont){
-    $ConstCont obj = malloc(sizeof(struct $ConstCont));
+    $ConstCont obj = GC_MALLOC(sizeof(struct $ConstCont));
     obj->$class = &$ConstCont$methods;
     $ConstCont$methods.__init__(obj, val, cont);
     return ($Cont)obj;
@@ -948,7 +953,7 @@ $ROW extract_row($WORD *blob, size_t blob_size) {
     if (words_left == 0)
         return NULL;
     BlobHd* head = (BlobHd*)blob;
-    $ROW fst = malloc(sizeof(struct $ROW) + head->blob_size*sizeof($WORD));
+    $ROW fst = GC_MALLOC(sizeof(struct $ROW) + head->blob_size*sizeof($WORD));
     $ROW row = fst;
     while (1) {
         long size = 1 + head->blob_size;
@@ -958,7 +963,7 @@ $ROW extract_row($WORD *blob, size_t blob_size) {
         if (words_left == 0)
             break;
         head = (BlobHd*)blob;
-        row->next = malloc(sizeof(struct $ROW) + head->blob_size*sizeof($WORD));
+        row->next = GC_MALLOC(sizeof(struct $ROW) + head->blob_size*sizeof($WORD));
         row = row->next;
     };
     row->next = NULL;
@@ -1920,6 +1925,8 @@ int main(int argc, char **argv) {
     appname = argv[0];
     pid_t pid = getpid();
 
+    GC_INIT();
+
     // Do line buffered output
     setlinebuf(stdout);
 
@@ -2296,7 +2303,7 @@ int main(int argc, char **argv) {
 
     // Run the timer queue and keep track of other periodic tasks
     uv_loop_t *uv_loop = uv_loops[0];
-    timer_ev = malloc(sizeof(uv_timer_t));
+    timer_ev = GC_MALLOC(sizeof(uv_timer_t));
     uv_timer_init(uv_loops[0], timer_ev);
     uv_timer_start(timer_ev, main_timer_cb, 0, 0);
     int r = uv_run(uv_loop, UV_RUN_DEFAULT);

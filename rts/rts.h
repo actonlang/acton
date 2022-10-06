@@ -1,5 +1,9 @@
 #pragma once
 
+#define GC_DEBUG 1
+#define GC_THREADS 1
+#include <gc.h>
+
 #include <stdatomic.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -177,7 +181,7 @@ void init_db_queue(long);
 void register_actor(long key);
 void serialize_state_shortcut($Actor);
 
-#define $NEWACTOR($T)       ({ $T $t = malloc(sizeof(struct $T)); \
+#define $NEWACTOR($T)       ({ $T $t = GC_MALLOC(sizeof(struct $T)); \
                                $t->$class = &$T ## $methods; \
                                $Actor$methods.__init__(($Actor)$t); \
                                $t->$affinity = 0; \

@@ -72,7 +72,7 @@ struct $float$class $float$methods = {
 };
   
 $float to$float(double x) {
-  $float res = malloc(sizeof(struct $float));
+  $float res = GC_MALLOC(sizeof(struct $float));
   res->$class = &$float$methods;
   res->val = x;
   return res;

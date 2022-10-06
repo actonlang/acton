@@ -53,7 +53,7 @@ $dict $dict$new($Hashable hashwit, $Iterable wit, $WORD iterable) {
 
 void $dict_init($dict dict, $Hashable hashwit, $Iterable wit, $WORD iterable) {
   dict->numelements = 0;
-  dict->table = malloc(sizeof(char*)+3*sizeof(long) + 8*sizeof(int) + 5*sizeof(struct $entry_struct));
+  dict->table = GC_MALLOC(sizeof(char*)+3*sizeof(long) + 8*sizeof(int) + 5*sizeof(struct $entry_struct));
   dict->table->tb_size = 8;
   dict->table->tb_usable = 5;
   dict->table->tb_nentries = 0;
@@ -81,11 +81,11 @@ $str $dict_str($dict self) {
     $value value = (($value)item->components[1]);
     $str keystr = key->$class->__repr__(key);
     $str valuestr = value->$class->__repr__(value);
-    $str elem = malloc(sizeof(struct $str));
+    $str elem = GC_MALLOC(sizeof(struct $str));
     elem->$class = &$str$methods;
     elem->nbytes = keystr->nbytes+valuestr->nbytes+1;
     elem->nchars = keystr->nchars+valuestr->nchars+1;
-    elem->str = malloc(elem->nbytes+1);
+    elem->str = GC_MALLOC(elem->nbytes+1);
     memcpy(elem->str,keystr->str,keystr->nbytes);
     elem->str[keystr->nbytes] = ':';
     memcpy(&elem->str[keystr->nbytes+1],valuestr->str,valuestr->nbytes);
@@ -125,12 +125,12 @@ $dict $dict_deserialize($dict res, $Serial$state state) {
     return $dict_get(state->done,($Hashable)$Hashable$int$witness,to$int((long)this->blob[0]),NULL);
   } else {
     if (!res)
-       res = malloc(sizeof(struct $dict));
+       res = GC_MALLOC(sizeof(struct $dict));
     $dict_setitem(state->done,($Hashable)$Hashable$int$witness,to$int(state->row_no-1),res);
     res->$class = &$dict$methods;
     res->numelements = (long)this->blob[0];
     long tb_size = (long)this->blob[1];
-    res->table = malloc(sizeof(char*) + 3*sizeof(long) + tb_size*sizeof(int) + (2*tb_size/3)*sizeof(struct $entry_struct));
+    res->table = GC_MALLOC(sizeof(char*) + 3*sizeof(long) + tb_size*sizeof(int) + (2*tb_size/3)*sizeof(struct $entry_struct));
     res->table->tb_size = tb_size;
     res->table->tb_usable = (long)this->blob[2];
     res->table->tb_nentries = (long)this->blob[3];
@@ -189,7 +189,7 @@ static int dictresize($dict d) {
     }
   */
   /* Allocate a new table. */
-  $table newtable =  malloc(sizeof(char*) + 3*sizeof(long) + newsize*sizeof(int) + (2*newsize/3)*sizeof(struct $entry_struct));
+  $table newtable =  GC_MALLOC(sizeof(char*) + 3*sizeof(long) + newsize*sizeof(int) + (2*newsize/3)*sizeof(struct $entry_struct));
   newtable->tb_size = newsize;
   newtable->tb_usable = 2*newsize/3-numelements;
   newtable->tb_nentries = numelements;
@@ -207,7 +207,7 @@ static int dictresize($dict d) {
     }
   }
   d->table = newtable;
-  free(oldtable);
+  GC_FREE(oldtable);
   build_indices(newtable, newentries, numelements);
   return 0;
 }
@@ -407,7 +407,7 @@ void $dict_delitem($dict dict, $Hashable hashwit, $WORD key) {
 $dict $dict_fromiter($Hashable hashwit, $Iterator it) {
   $dict dict = $NEW($dict,hashwit,NULL,NULL);
   dict->numelements = 0;
-  dict->table = malloc(sizeof(char*)+3*sizeof(long) + 8*sizeof(int) + 5*sizeof(struct $entry_struct));
+  dict->table = GC_MALLOC(sizeof(char*)+3*sizeof(long) + 8*sizeof(int) + 5*sizeof(struct $entry_struct));
   dict->table->tb_size = 8;
   dict->table->tb_usable = 5;
   dict->table->tb_nentries = 0;

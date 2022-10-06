@@ -61,17 +61,17 @@ $slice $slice$new($int start,$int stop,$int step) {
 
 void $slice__init__($slice s, $int start, $int stop, $int step) {
   if (start) {
-    s->start = malloc(sizeof(int));
+    s->start = GC_MALLOC(sizeof(int));
     *s->start = start->val;
   } else
     s->start = NULL;
  if (stop) {
-    s->stop = malloc(sizeof(int));
+    s->stop = GC_MALLOC(sizeof(int));
     *s->stop = stop->val;
   } else
    s->stop = NULL;
  if (step) {
-    s->step = malloc(sizeof(int));
+    s->step = GC_MALLOC(sizeof(int));
     *s->step = step->val;
   } else
    s->step = NULL;

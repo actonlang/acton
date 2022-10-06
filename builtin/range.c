@@ -58,7 +58,7 @@ $range $range$__deserialize__($range self, $Serial$state state) {
   $ROW this = state->row;
   state->row = this->next;
   state->row_no++;
-  $range res = malloc(sizeof(struct $range));
+  $range res = GC_MALLOC(sizeof(struct $range));
   res->$class = &$range$methods;
   res->start = (long)this->blob[0];
   res->stop = (long)this->blob[1];

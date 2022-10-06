@@ -585,7 +585,7 @@ declCon env n q
         retobj (PosArg e p)         = PosArg e (retobj p)
         env1                        = ldefine ((tmpV, NVar tObj) : envOf pars) env
 
-malloc env n                        = text "malloc" <> parens (text "sizeof" <> parens (text "struct" <+> gen env n))
+malloc env n                        = text "GC_MALLOC" <> parens (text "sizeof" <> parens (text "struct" <+> gen env n))
 
 comma' x                            = if isEmpty x then empty else comma <+> x
 

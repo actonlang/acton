@@ -373,26 +373,26 @@ static struct $str whitespace_struct = {&$str$methods,6,6,(unsigned char *)" \t\
 static $str whitespace_str = &whitespace_struct;
 
 #define NEW_UNFILLED_STR(nm,nchrs,nbtes)         \
-nm = malloc(sizeof(struct $str)); \
+nm = GC_MALLOC(sizeof(struct $str)); \
 (nm)->$class = &$str$methods; \
 (nm)->nchars = nchrs;            \
 (nm)->nbytes = nbtes;            \
-(nm)->str = malloc((nm)->nbytes + 1);    \
+(nm)->str = GC_MALLOC((nm)->nbytes + 1);    \
 (nm)->str[(nm)->nbytes] = 0
 
 #define NEW_UNFILLED_BYTEARRAY(nm,nbtes)         \
-nm = malloc(sizeof(struct $bytearray)); \
+nm = GC_MALLOC(sizeof(struct $bytearray)); \
 (nm)->$class = &$bytearray$methods; \
 (nm)->nbytes = nbtes;            \
 (nm)->capacity = nbtes;            \
-(nm)->str = malloc((nm)->nbytes + 1);    \
+(nm)->str = GC_MALLOC((nm)->nbytes + 1);    \
 (nm)->str[(nm)->nbytes] = 0
 
 #define NEW_UNFILLED_BYTES(nm,nbtes)\
-nm = malloc(sizeof(struct $bytes));\
+nm = GC_MALLOC(sizeof(struct $bytes));\
 (nm)->$class = &$bytes$methods;\
 (nm)->nbytes = nbtes;\
-(nm)->str = malloc(nbtes + 1);\
+(nm)->str = GC_MALLOC(nbtes + 1);\
 (nm)->str[nbtes] = 0
 
 // Conversion to and from C strings
@@ -534,7 +534,7 @@ static int get_index(int i, int nchars) {
 
 static int fix_start_end(int nchars, $int *start, $int *end) {
   if (*start==NULL) {
-    *start = malloc(sizeof(struct $int));
+    *start = GC_MALLOC(sizeof(struct $int));
     *start = to$int(0);
   }
   long st = from$int(*start);
@@ -546,7 +546,7 @@ static int fix_start_end(int nchars, $int *start, $int *end) {
   *start = to$int(st);
 
   if (*end==NULL) {
-    *end = malloc(sizeof(struct $int));
+    *end = GC_MALLOC(sizeof(struct $int));
     *end = to$int(nchars);
   }
   long en = from$int(*end);
@@ -857,7 +857,7 @@ $str $str_deserialize($str self, $Serial$state state) {
   $ROW this = state->row;
   state->row =this->next;
   state->row_no++;
-  $str res = malloc(sizeof(struct $str));
+  $str res = GC_MALLOC(sizeof(struct $str));
   long nbytes;
   memcpy(&nbytes,this->blob,sizeof($WORD));
   res->$class = &$str$methods;
@@ -865,7 +865,7 @@ $str $str_deserialize($str self, $Serial$state state) {
   long nchars;
   memcpy(&nchars,this->blob+1,sizeof($WORD));
   res->nchars = (int)nchars;
-  res->str = malloc(nbytes+1);
+  res->str = GC_MALLOC(nbytes+1);
   memcpy(res->str,this->blob+2,nbytes+1);
   return res;
 }
@@ -1562,7 +1562,7 @@ static void expand_bytearray($bytearray b,int n) {
    while (newcapacity < b->nbytes+n)
      newcapacity <<= 1;
    unsigned char *newstr = b->str==NULL
-     ? malloc(newcapacity+1)
+     ? GC_MALLOC(newcapacity+1)
      : realloc(b->str,newcapacity+1);
    if (newstr == NULL) {
     $RAISE(($BaseException)$NEW($MemoryError,to$str("memory allocation failed")));
@@ -2847,7 +2847,7 @@ void $bytearray_init($bytearray self, $bytes b) {
   int len = b->nbytes;
   self->nbytes = len;
   self->capacity = len;
-  self->str = malloc(len+1);
+  self->str = GC_MALLOC(len+1);
   memcpy(self->str,b->str,len+1);
 }
  
@@ -2883,12 +2883,12 @@ $bytearray $bytearray_deserialize($bytearray res, $Serial$state state) {
   state->row =this->next;
   state->row_no++;
   if(!res)
-    res = malloc(sizeof(struct $bytearray));
+    res = GC_MALLOC(sizeof(struct $bytearray));
   long nbytes;
   memcpy(&nbytes,this->blob,sizeof($WORD));
   res->$class = &$bytearray$methods;
   res->nbytes = (int)nbytes;
-  res->str = malloc(nbytes+1);
+  res->str = GC_MALLOC(nbytes+1);
   memcpy(res->str,this->blob+1,nbytes+1);
   return res;
 }
@@ -2931,7 +2931,7 @@ static void expand_bytes($bytes b,int n) {
    while (newcapacity < b->nbytes+n)
      newcapacity <<= 1;
    unsigned char *newstr = b->str==NULL
-     ? malloc(newcapacity+1)
+     ? GC_MALLOC(newcapacity+1)
      : realloc(b->str,newcapacity+1);
    if (newstr == NULL) {
     $RAISE(($BaseException)$NEW($MemoryError,to$str("memory allocation failed")));
@@ -4113,7 +4113,7 @@ void $bytes_init($bytes self, $Iterable wit, $WORD iter) {
   $list lst = $list_fromiter(wit->$class->__iter__(wit,iter));
   int len = lst->length;
   self->nbytes = len;
-  self->str = malloc(len+1);
+  self->str = GC_MALLOC(len+1);
   self->str[len] = 0;
   for (int i=0; i< len; i++) {
     long n = (($int)lst->data[i])->val;
@@ -4161,12 +4161,12 @@ $bytes $bytes_deserialize($bytes self, $Serial$state state) {
   $ROW this = state->row;
   state->row =this->next;
   state->row_no++;
-  $bytes res = malloc(sizeof(struct $bytes));
+  $bytes res = GC_MALLOC(sizeof(struct $bytes));
   long nbytes;
   memcpy(&nbytes,this->blob,sizeof($WORD));
   res->$class = &$bytes$methods;
   res->nbytes = (int)nbytes;
-  res->str = malloc(nbytes+1);
+  res->str = GC_MALLOC(nbytes+1);
   memcpy(res->str,this->blob+2,nbytes+1);
   return res;
 }

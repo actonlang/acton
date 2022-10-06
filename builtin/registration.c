@@ -40,7 +40,7 @@ void $register($WORD meths) {
  * special main and handling of $ROOT. Doing so would complicate testing of builtin types significantly.
  */
 void $register_builtin() {
-  $methods = $list_new(2*PREASSIGNED); //preallocate space for PREASSIGNED user classes before doubling needed
+  $methods = $list_new(2*PREASSIGNED); //pGC_REALLOCate space for PREASSIGNED user classes before doubling needed
   memset($methods->data,0,PREASSIGNED*sizeof($WORD)); // initiate PREASSIGNED first slots to NULL;
   $methods->length = PREASSIGNED;
   $register_force(NONE_ID,&$NoneType$methods);

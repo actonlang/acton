@@ -76,7 +76,7 @@ struct $int$class $int$methods = {
 };
 
 $int to$int(long i) {
-  $int res = malloc(sizeof(struct $int));
+  $int res = GC_MALLOC(sizeof(struct $int));
   res->$class = &$int$methods;
   res->val = i;
   return res;
