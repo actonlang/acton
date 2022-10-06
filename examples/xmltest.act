@@ -1,0 +1,13 @@
+import xml
+import file
+ 
+actor main(env):
+    fa = file.FileAuth(env.auth)
+    rfa = file.ReadFileAuth(fa)
+    rf  = file.ReadFile(rfa,env.argv[1])
+    bs = rf.read()
+    s = bs.decode()
+    t : xml.Tag = xml.decode(s)
+    print(xml.encode(t))
+    env.exit(0)
+
