@@ -7,4 +7,9 @@
 # in a benchmark we can pretend some actors are doing relatively heavy work, yet
 # our CPU usage will be lower, so this is like laptop airplane mode friendly
 # (consumes less battery).
-sleep : (float) -> None
+def sleep(duration: float) -> None:
+    NotImplemented
+
+
+def heap_size() -> int:
+    NotImplemented
