@@ -8,6 +8,7 @@ class Acton < Formula
 
   depends_on "ghc@8.10" => :build
   depends_on "haskell-stack" => :build
+  depends_on "libgc" => :build
   depends_on "libuv" => :build
   depends_on "pkg-config" => :build
   depends_on "protobuf-c" => :build
