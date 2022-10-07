@@ -15,7 +15,7 @@ nm = malloc(sizeof(struct $str)); \
 (nm)->str = malloc((nm)->nbytes + 1);    \
 (nm)->str[(nm)->nbytes] = 0
 
-#define TABSTEP 4
+#define INDENTSTEP 4
 
 xml$$Tag $Doc2Tag(xmlNodePtr root) {
   $Hashable w1 = ($Hashable)$Hashable$str$witness;
@@ -84,6 +84,19 @@ $str xml$$mk_node(int indent, $str tag, $str nsdefs, $str prefix, $str attrs, $s
   int cont_len = cont->nbytes;
   int res_bytes = 2*tag->nbytes + 2*(prefix ? prefix->nbytes+1:0) + nsdefs->nbytes + attrs->nbytes + cont->nbytes +2*indent + 7; // 7 = len ("<" + ">" + "\n" + "</" + ">" + "\n")
   int res_chars = 2*tag->nchars + 2*(prefix ? prefix->nchars+1:0) + nsdefs->nchars + attrs->nchars + cont->nchars +2*indent + 7;
+  int one_line = 0;
+  if (cont->nbytes<30) {
+    one_line = 1;
+    for (int i=0; i<cont->nbytes; i++)
+      if (cont->str[i] == '\n') {
+        one_line = 0;
+        break;
+      }
+  }
+  if (one_line) {
+    res_bytes -= (2+indent);
+    res_chars -= (2+indent);
+  }
   $str res;
   NEW_UNFILLED_STR(res,res_bytes,res_chars);
   unsigned char *p = res->str;
@@ -97,10 +110,12 @@ $str xml$$mk_node(int indent, $str tag, $str nsdefs, $str prefix, $str attrs, $s
   memcpy(p, nsdefs->str, nsdefs->nbytes); p += nsdefs->nbytes;
   memcpy(p, attrs->str, attrs->nbytes); p += attrs->nbytes;
   *p++ = '>';
-  *p++ = '\n';
+  if (!one_line) *p++ = '\n';
   memcpy(p, cont->str, cont_len); p += cont_len;
-  *p++ = '\n';
-  memset(p,' ',indent); p += indent;
+  if (!one_line) {
+    *p++ = '\n';
+    memset(p,' ',indent); p += indent;
+  }
   *p++ = '<';
   *p++ = '/';
   if (prefix) {
@@ -111,7 +126,6 @@ $str xml$$mk_node(int indent, $str tag, $str nsdefs, $str prefix, $str attrs, $s
   *p++ = '>';  
   return res;
 }
-
 
 static $str xml$$encode_node(int indent, xml$$Tag node);
 
@@ -186,7 +200,7 @@ static $str xml$$encode_node(int indent, xml$$Tag node) {
   $str nl = to$str("\n");
   if (node->name) {
     $Iterable wit = (($Iterable)(($Collection)$Sequence$list$new()->w$Collection));
-    $list children = xml$$encode_nodes(indent+TABSTEP,node->children);
+    $list children = xml$$encode_nodes(indent+INDENTSTEP,node->children);
     $str s =  nl->$class->join(nl,wit,children);
     $str nsdefs = xml$$encode_nsdefs(node->nsdefs);
     $str attrs = xml$$encode_attrs(node->attributes);
@@ -200,7 +214,7 @@ $str xml$$encode(xml$$Tag root) {
   $str res;
   if (root->name) {
     $Iterable wit = (($Iterable)(($Collection)$Sequence$list$new()->w$Collection));
-    $str s = nl->$class->join(nl,wit,xml$$encode_nodes(3,root->children));
+    $str s = nl->$class->join(nl,wit,xml$$encode_nodes(INDENTSTEP,root->children));
     $str nsdefs = xml$$encode_nsdefs(root->nsdefs);
     $str attrs = xml$$encode_attrs(root->attributes);
     res = xml$$mk_node(0,root->name,nsdefs,root->prefix,attrs,s); 
