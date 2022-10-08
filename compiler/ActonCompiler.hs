@@ -596,8 +596,8 @@ runRestPasses opts paths env0 parsed stubMode = do
                       timeNormalized <- getTime Monotonic
                       iff (C.timing opts) $ putStrLn("    Pass: Normalizer      : " ++ fmtTime (timeNormalized - timeTypeCheck))
 
-                      (deacted,deactEnv) <- Acton.Deactorizer.deactorize normEnv normalized
---                      (deacted,deactEnv) <- Acton.Deactorizer2.deactorize normEnv normalized               -- DEACT!
+--                      (deacted,deactEnv) <- Acton.Deactorizer.deactorize normEnv normalized
+                      (deacted,deactEnv) <- Acton.Deactorizer2.deactorize normEnv normalized               -- DEACT!
                       iff (C.deact opts) $ dump "deact" (Pretty.print deacted)
                       --traceM ("#################### deacted env0:")
                       --traceM (Pretty.render (Pretty.pretty deactEnv))
