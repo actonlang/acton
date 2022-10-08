@@ -445,6 +445,7 @@ instance Leaves NameInfo where
     leaves (NProto q ps te) = leaves q ++ leaves ps ++ leaves te
     leaves (NAct q p k te)  = leaves q ++ leaves [p,k] ++ leaves te
     leaves (NExt q c ps te) = leaves q ++ leaves c ++ leaves ps ++ leaves te
+    leaves (NDef sc dec)    = leaves sc
     leaves _                = []
 
 instance Leaves QBind where

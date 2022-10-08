@@ -68,6 +68,7 @@ instance Eq Rank where
     RTry t1 _ _ == RTry t2 _ _              = t1 == t2
     RUni t1 _   == RUni t2 _                = t1 == t2
     ROvl t1     == ROvl t2                  = True
+    RSkip       == RSkip                    = True
     _           == _                        = False
 
 instance Pretty Rank where
@@ -98,7 +99,7 @@ solveGroups env select te tt (cs:css)       = do --traceM ("\n\n######### solveG
                                                  return (cs1++cs2, eq1++eq2)
 
 solve' env select hist te tt eq cs
-  | null solve_cs                           = return (keep_cs, eq)
+  | null solve_cs || null goals             = return (keep_cs, eq)
   | otherwise                               = do st <- currentState
                                                  --traceM ("## keep:\n" ++ render (nest 8 $ vcat $ map pretty keep_cs))
                                                  --traceM ("## solve:\n" ++ render (nest 8 $ vcat $ map pretty solve_cs))
@@ -152,6 +153,7 @@ solve' env select hist te tt eq cs
                 rev'                        = (or $ r : map rev rs) || tvar t `elem` posvs
         condense (RUni t as : rs)           = RUni t (foldr union as $ map alts rs)
         condense (ROvl t : rs)              = ROvl t
+        condense rs                         = error ("### condense " ++ show rs)
 
         optvs                               = optvars cs ++ optvars hist
         embvs                               = embvars cs
@@ -389,12 +391,13 @@ reduce' env eq (Seal t@(TVar _ tv))
   | univar tv                               = do defer [Seal t]; return eq
   | otherwise                               = return eq
 reduce' env eq (Seal t@(TCon _ tc))
-  | castable env t tObject                  = tyerr t "Leaking actor seal:"
+--  | castable env t tObject                  = tyerr t "Leaking actor seal:"                       -- DEACT! (when we prohibit sharing of mutable data)
   | otherwise                               = reduce env eq (map Seal $ tcargs tc)
 reduce' env eq (Seal t@(TFX _ fx))
   | fx `elem` [FXMut,FXProc]                = tyerr t "Leaking actor seal:"
   | otherwise                               = return eq
-reduce' env eq (Seal t)                     = reduce env eq (map Seal $ leaves t)
+reduce' env eq (Seal t)                     = reduce env eq (map Seal ts)
+  where ts                                  = leaves t
 
 reduce' env eq c                            = noRed c
 
@@ -941,9 +944,8 @@ improve env te tt eq cs
         boundvars                       = Map.keys (ubounds vi) ++ Map.keys (lbounds vi)
         boundprot                       = tyfree (Map.elems $ ubounds vi) ++ tyfree (Map.elems $ lbounds vi)
         cyclic                          = if null (boundvars\\boundprot) then [ c | c <- cs, headvar c `elem` boundvars ] else []
-        redSeal                         = [ v | v <- sealed vi, (v1,v2) <- varvars vi, v/=v1, v/=v2 ] \\ embedded vi \\
-                                          Map.keys (ubounds vi) \\ Map.keys (lbounds vi) \\ Map.keys (pbounds vi) \\
-                                          Map.keys (mutattrs vi) \\ Map.keys (selattrs vi)
+        redSeal                         = sealed vi \\ (posvars ++ negvars ++ embedded vi ++ Map.keys (ubounds vi) ++ Map.keys (lbounds vi)
+                                          ++ Map.keys (pbounds vi) ++ Map.keys (mutattrs vi) ++ Map.keys (selattrs vi))
 
 noOpt ts                                = filter chk ts
   where chk TOpt{}                      = False
