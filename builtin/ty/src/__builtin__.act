@@ -799,10 +799,9 @@ actor Env (token: WorldAuth, args: list[str]):
     auth = token
     argv = args
 
-# NOTE: the proc effects below are VERY temporary!!! Will be replaced by action when the deactorizer refactoring is complete
-    proc def stdout_write(s: str) -> None:
+    action def stdout_write(s: str) -> None:
         NotImplemented
-    proc def stdin_install(cb: proc(str) -> None) -> None:
+    action def stdin_install(cb: action(str) -> None) -> None:
         NotImplemented
-    proc def exit(n: int):
+    action def exit(n: int):
         NotImplemented
