@@ -232,23 +232,24 @@ void remote_print_long_table(WORD table_key, remote_db_t * db);
 
 int remote_create_queue_in_txn(WORD table_key, WORD queue_id, uuid_t * txnid, remote_db_t * db);
 int remote_delete_queue_in_txn(WORD table_key, WORD queue_id, uuid_t * txnid, remote_db_t * db);
-int remote_enqueue_in_txn(WORD * column_values, int no_cols, WORD blob, size_t blob_size, WORD table_key, WORD queue_id, uuid_t * txnid, remote_db_t * db);
+int remote_enqueue_in_txn(WORD * column_values, int no_cols, WORD blob, size_t blob_size, WORD table_key,
+						WORD queue_id, int * minority_status, uuid_t * txnid, remote_db_t * db);
 int remote_read_queue_in_txn(WORD consumer_id, WORD shard_id, WORD app_id, WORD table_key, WORD queue_id,
 		int max_entries, int * entries_read, int64_t * new_read_head,
-		snode_t** start_row, snode_t** end_row, uuid_t * txnid,
+		snode_t** start_row, snode_t** end_row, int * minority_status, uuid_t * txnid,
 		remote_db_t * db);
 int remote_consume_queue_in_txn(WORD consumer_id, WORD shard_id, WORD app_id, WORD table_key, WORD queue_id,
-					int64_t new_consume_head, uuid_t * txnid, remote_db_t * db);
+					int64_t new_consume_head, int * minority_status, uuid_t * txnid, remote_db_t * db);
 int remote_subscribe_queue(WORD consumer_id, WORD shard_id, WORD app_id, WORD table_key, WORD queue_id,
 						queue_callback * callback, int64_t * prev_read_head, int64_t * prev_consume_head,
-						remote_db_t * db);
+						int * minority_status, remote_db_t * db);
 int remote_unsubscribe_queue(WORD consumer_id, WORD shard_id, WORD app_id, WORD table_key, WORD queue_id,
-						remote_db_t * db);
+							int * minority_status, remote_db_t * db);
 int remote_subscribe_queue_in_txn(WORD consumer_id, WORD shard_id, WORD app_id, WORD table_key, WORD queue_id,
 						queue_callback * callback, int64_t * prev_read_head, int64_t * prev_consume_head,
-						uuid_t * txnid, remote_db_t * db);
+						int * minority_status, uuid_t * txnid, remote_db_t * db);
 int remote_unsubscribe_queue_in_txn(WORD consumer_id, WORD shard_id, WORD app_id, WORD table_key, WORD queue_id,
-								uuid_t * txnid, remote_db_t * db);
+									int * minority_status, uuid_t * txnid, remote_db_t * db);
 
 // Subscription handling client-side:
 
@@ -265,7 +266,7 @@ int unsubscribe_queue_client(WORD consumer_id, WORD shard_id, WORD app_id, WORD 
 uuid_t * remote_new_txn(remote_db_t * db);
 int remote_validate_txn(uuid_t * txnid, remote_db_t * db);
 int remote_abort_txn(uuid_t * txnid, remote_db_t * db);
-int remote_commit_txn(uuid_t * txnid, remote_db_t * db);
+int remote_commit_txn(uuid_t * txnid, int * minority_status, remote_db_t * db);
 
 // Txn state handling client-side:
 

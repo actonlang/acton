@@ -546,11 +546,12 @@ int persist_txn(txn_state * ts, db_t * db, unsigned int * fastrandstate)
 
 			if(res != 0)
 				printf("BACKEND: persist_write for txn, of type %d returned %d\n", tw->query_type, res);
-			assert (res == 0);
 		}
 	}
 
-	return close_txn_state(ts, db);
+	close_txn_state(ts, db);
+
+	return res;
 }
 
 int abort_txn(uuid_t * txnid, db_t * db)
