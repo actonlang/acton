@@ -25,7 +25,8 @@ void exit_handler(uv_process_t *req, int64_t exit_status, int term_signal) {
     if (uv_is_closing(stdin) == 0)
         uv_close((uv_handle_t *)stdin, NULL);
     uv_close((uv_handle_t *)req, NULL);
-    process_data->on_exit->$class->__call__(process_data->on_exit, process_data->process, to$int(exit_status), to$int(term_signal));
+    $function3 f = process_data->on_exit;
+    f->$class->__call__(f, process_data->process, to$int(exit_status), to$int(term_signal));
 }
 
 void read_stderr(uv_stream_t *stream, ssize_t nread, const uv_buf_t *buf) {
