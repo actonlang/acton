@@ -1012,6 +1012,8 @@ void handle_timeout() {
                 while(!success && !rts_exit)
                 {
                 uuid_t *txnid = remote_new_txn(db);
+                if(txnid == NULL)
+                    continue;
                 timer_consume_hd++;
 
                 long key = TIMER_QUEUE;
@@ -1375,6 +1377,8 @@ void serialize_state_shortcut($Actor a) {
             int success = 0, ret = 0, minority_status = 0;
             while(!success && !rts_exit) {
             uuid_t * txnid = remote_new_txn(db);
+            if(txnid == NULL)
+                continue;
             serialize_actor(a, txnid);
             ret = remote_commit_txn(txnid, &minority_status, db);
             rtsd_printf("############## Commit returned %d, minority_status %d", ret, minority_status);
@@ -1519,6 +1523,8 @@ void wt_work_cb(uv_check_t *ev) {
                 reverse_outgoing_queue(current);
                 while(!success && !rts_exit) {
                     uuid_t * txnid = remote_new_txn(db);
+                    if(txnid == NULL)
+                        continue;
                     current->$consume_hd++;
                     serialize_actor(current, txnid);
                     FLUSH_outgoing_db(current, txnid);
@@ -1587,6 +1593,8 @@ void wt_work_cb(uv_check_t *ev) {
                 reverse_outgoing_queue(current);
                 while(!success && !rts_exit) {
                     uuid_t * txnid = remote_new_txn(db);
+                    if(txnid == NULL)
+                        continue;
                     serialize_actor(current, txnid);
                     FLUSH_outgoing_db(current, txnid);
                     serialize_msg(current->$msg, txnid);
