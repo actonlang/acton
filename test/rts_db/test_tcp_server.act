@@ -99,8 +99,7 @@ actor Tester(env, verbose, port_chunk):
         log("DB Process exited with code: %d terminated with signal: %d" % (exit_code, term_signal))
         p_alive -= 1
         if not (exit_code == 0 and term_signal == 15):
-            log("DB Process exited with code: %d terminated with signal: %d" % (exit_code, term_signal))
-            error_encountered = True
+            error("DB Process exited with code: %d terminated with signal: %d" % (exit_code, term_signal))
         are_we_done()
 
     def app_on_exit(p, exit_code, term_signal):
@@ -273,11 +272,11 @@ actor main(env):
     t = Tester(env, verbose, port_chunk)
 
     def test_timeout():
-        t.log("Test failed - timeout reached")
+        t.error("Test failed - timeout reached")
         await async t.stop(True)
 
     def unconditional_exit():
-        t.log("Giving up...")
+        t.error("Giving up...")
         t.report()
         await async env.exit(1)
 
