@@ -95,6 +95,7 @@ jobs:
     runs-on: ubuntu-latest
     container:
       image: ${{ matrix.os }}:${{ matrix.version }}
+      options: --privileged --ulimit core=-1 --security-opt seccomp=unconfined
     steps:
       - name: "Print env"
         run: env
@@ -125,6 +126,9 @@ jobs:
       - name: "Enable dumping core files"
         run: |
           ulimit -c unlimited
+          sysctl kernel.core_pattern=/cores/core.%P
+          mkdir /cores
+          chmod a+w /cores
       - name: "Build Acton"
         run: make -j2 -C ${GITHUB_WORKSPACE} BUILD_RELEASE=${{ env.BUILD_RELEASE }}
       - name: "Build a release"
@@ -143,7 +147,7 @@ jobs:
         with:
           name: test-debug-${{ matrix.os }}-${{ github.run_id }}
           path: |
-            ${{ github.workspace }}/test/core
+            /cores
             ${{ github.workspace }}/test/db*.log
             ${{ github.workspace }}/test/rts_db
 
