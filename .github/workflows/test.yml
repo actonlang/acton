@@ -148,8 +148,10 @@ jobs:
           name: test-debug-${{ matrix.os }}-${{ github.run_id }}
           path: |
             /cores
-            ${{ github.workspace }}/test/db*.log
             ${{ github.workspace }}/test/rts_db
+            ${GITHUB_WORKSPACE}/test/rts_db
+            ${{ github.workspace }}/test/rts_db
+            ${{ github.workspace }}/test/rts_db/ddb*
 
 
   build-debs:
