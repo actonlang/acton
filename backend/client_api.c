@@ -22,6 +22,9 @@
 #include "hashes.h"
 #include "log.h"
 
+#define GC_THREADS 1
+#include "gc.h"
+
 struct dbc_stat dbc_stats;
 
 void zeroize_dbc_ops_stats(struct dbc_ops_stat *ops_stat, const char *name) {
