@@ -1344,7 +1344,7 @@ int remote_insert_in_txn(WORD * column_values, int no_cols, int no_primary_keys,
 
 	if(ok_status < db->quorum_size)
 	{
-		log_error("No valid quorum (%d/%d valid replies received)", ok_status, db->replication_factor);
+		log_error("No valid quorum (%d/%d valid replies received, minority_status=%d)", ok_status, db->replication_factor, minority_status);
 		delete_msg_callback(mc->nonce, db);
         stat_stop(dbc_stats.remote_insert_in_txn, &ts_start, NO_QUORUM_ERR);
 		return NO_QUORUM_ERR;
@@ -1422,7 +1422,7 @@ int remote_delete_row_in_txn(WORD * column_values, int no_primary_keys, WORD tab
 
 	if(ok_status < db->quorum_size)
 	{
-		log_error("No valid quorum (%d/%d valid replies received)", ok_status, db->replication_factor);
+		log_error("No valid quorum (%d/%d valid replies received, minority_status=%d)", ok_status, db->replication_factor, minority_status);
 		delete_msg_callback(mc->nonce, db);
         stat_stop(dbc_stats.remote_delete_row_in_txn, &ts_start, NO_QUORUM_ERR);
 		return NO_QUORUM_ERR;
@@ -1494,7 +1494,7 @@ int remote_delete_cell_in_txn(WORD * column_values, int no_primary_keys, int no_
 
 	if(ok_status < db->quorum_size)
 	{
-		log_error("No valid quorum (%d/%d valid replies received)", ok_status, db->replication_factor);
+		log_error("No valid quorum (%d/%d valid replies received, minority_status=%d)", ok_status, db->replication_factor, minority_status);
 		delete_msg_callback(mc->nonce, db);
         stat_stop(dbc_stats.remote_delete_cell_in_txn, &ts_start, NO_QUORUM_ERR);
 		return NO_QUORUM_ERR;
@@ -1706,7 +1706,7 @@ int remote_search_in_txn(WORD* primary_keys, int no_primary_keys, db_row_t** res
 
     if(ok_status < db->quorum_size)
     {
-        log_error("No valid quorum (%d/%d valid replies received)", ok_status, db->replication_factor);
+        log_error("No valid quorum (%d/%d valid replies received, minority_status=%d)", ok_status, db->replication_factor, minority_status);
         delete_msg_callback(mc->nonce, db);
         stat_stop(dbc_stats.remote_search_in_txn, &ts_start, NO_QUORUM_ERR);
         return NO_QUORUM_ERR;
@@ -1793,7 +1793,7 @@ int remote_search_clustering_in_txn(WORD* primary_keys, int no_primary_keys, WOR
 
     if(ok_status < db->quorum_size)
     {
-        log_error("No valid quorum (%d/%d valid replies received)", ok_status, db->replication_factor);
+        log_error("No valid quorum (%d/%d valid replies received, minority_status=%d)", ok_status, db->replication_factor, minority_status);
         delete_msg_callback(mc->nonce, db);
         stat_stop(dbc_stats.remote_search_clustering_in_txn, &ts_start, NO_QUORUM_ERR);
         return NO_QUORUM_ERR;
@@ -1894,7 +1894,7 @@ int remote_range_search_in_txn(WORD* start_primary_keys, WORD* end_primary_keys,
 
     if(ok_status < db->quorum_size)
     {
-        log_error("No valid quorum (%d/%d valid replies received)", ok_status, db->replication_factor);
+        log_error("No valid quorum (%d/%d valid replies received, minority_status=%d)", ok_status, db->replication_factor, minority_status);
         delete_msg_callback(mc->nonce, db);
         stat_stop(dbc_stats.remote_range_search_in_txn, &ts_start, NO_QUORUM_ERR);
         return NO_QUORUM_ERR;
@@ -1984,7 +1984,7 @@ int remote_range_search_clustering_in_txn(WORD* primary_keys, int no_primary_key
 
     if(ok_status < db->quorum_size)
     {
-        log_error("No valid quorum (%d/%d valid replies received)", ok_status, db->replication_factor);
+        log_error("No valid quorum (%d/%d valid replies received, minority_status=%d)", ok_status, db->replication_factor, minority_status);
         delete_msg_callback(mc->nonce, db);
         stat_stop(dbc_stats.remote_range_search_clustering_in_txn, &ts_start, NO_QUORUM_ERR);
         return NO_QUORUM_ERR;
@@ -2078,7 +2078,7 @@ int remote_read_full_table_in_txn(snode_t** start_row, snode_t** end_row, WORD t
 
     if(ok_status < db->quorum_size)
     {
-        log_error("No valid quorum (%d/%d valid replies received)", ok_status, db->replication_factor);
+        log_error("No valid quorum (%d/%d valid replies received, minority_status=%d)", ok_status, db->replication_factor, minority_status);
         delete_msg_callback(mc->nonce, db);
         stat_stop(dbc_stats.remote_read_full_table_in_txn, &ts_start, NO_QUORUM_ERR);
         return NO_QUORUM_ERR;
@@ -2187,7 +2187,7 @@ int remote_create_queue_in_txn(WORD table_key, WORD queue_id, int * minority_sta
 	{
 		assert(mc->reply_types[i] == RPC_TYPE_ACK);
 		ack_message * ack = (ack_message *) mc->replies[i];
-		if(ack->status == 0)
+		if(ack->status == 0 || ack->status == DB_ERR_DUPLICATE_QUEUE)
 			ok_status++;
 		else
 			*minority_status = ack->status;
@@ -2200,7 +2200,7 @@ int remote_create_queue_in_txn(WORD table_key, WORD queue_id, int * minority_sta
 
 	if(ok_status < db->quorum_size)
 	{
-		log_error("No valid quorum (%d/%d valid replies received)", ok_status, db->replication_factor);
+		log_error("No valid quorum (%d/%d valid replies received, minority_status=%d)", ok_status, db->replication_factor, minority_status);
 		delete_msg_callback(mc->nonce, db);
         stat_stop(dbc_stats.remote_create_queue_in_txn, &ts_start, NO_QUORUM_ERR);
 		return NO_QUORUM_ERR;
@@ -2272,7 +2272,7 @@ int remote_delete_queue_in_txn(WORD table_key, WORD queue_id, int * minority_sta
 
 	if(ok_status < db->quorum_size)
 	{
-		log_error("No valid quorum (%d/%d valid replies received)", ok_status, db->replication_factor);
+		log_error("No valid quorum (%d/%d valid replies received, minority_status=%d)", ok_status, db->replication_factor, minority_status);
 		delete_msg_callback(mc->nonce, db);
         stat_stop(dbc_stats.remote_delete_queue_in_txn, &ts_start, NO_QUORUM_ERR);
 		return NO_QUORUM_ERR;
@@ -2345,7 +2345,7 @@ int remote_enqueue_in_txn(WORD * column_values, int no_cols, WORD blob, size_t b
 
 	if(ok_status < db->quorum_size)
 	{
-		log_error("No valid quorum (%d/%d valid replies received)", ok_status, db->replication_factor);
+		log_error("No valid quorum (%d/%d valid replies received, minority_status=%d)", ok_status, db->replication_factor, minority_status);
 		delete_msg_callback(mc->nonce, db);
         stat_stop(dbc_stats.remote_enqueue_in_txn, &ts_start, NO_QUORUM_ERR);
 		return NO_QUORUM_ERR;
@@ -2524,7 +2524,7 @@ int remote_consume_queue_in_txn(WORD consumer_id, WORD shard_id, WORD app_id, WO
 
 	if(ok_status < db->quorum_size)
 	{
-		log_error("No valid quorum (%d/%d valid replies received)", ok_status, db->replication_factor);
+		log_error("No valid quorum (%d/%d valid replies received, minority_status=%d)", ok_status, db->replication_factor, minority_status);
 		delete_msg_callback(mc->nonce, db);
         stat_stop(dbc_stats.remote_consume_queue_in_txn, &ts_start, NO_QUORUM_ERR);
 		return NO_QUORUM_ERR;
@@ -2603,7 +2603,7 @@ int remote_subscribe_queue(WORD consumer_id, WORD shard_id, WORD app_id, WORD ta
 
 	if(ok_status < db->quorum_size)
 	{
-		log_error("No valid quorum (%d/%d valid replies received)", ok_status, db->replication_factor);
+		log_error("No valid quorum (%d/%d valid replies received, minority_status=%d)", ok_status, db->replication_factor, minority_status);
 		delete_msg_callback(mc->nonce, db);
         stat_stop(dbc_stats.remote_subscribe_queue, &ts_start, NO_QUORUM_ERR);
 		return NO_QUORUM_ERR;
@@ -2686,7 +2686,7 @@ int remote_unsubscribe_queue(WORD consumer_id, WORD shard_id, WORD app_id, WORD 
 
 	if(ok_status < db->quorum_size)
 	{
-		log_error("No valid quorum (%d/%d valid replies received)", ok_status, db->replication_factor);
+		log_error("No valid quorum (%d/%d valid replies received, minority_status=%d)", ok_status, db->replication_factor, minority_status);
 		delete_msg_callback(mc->nonce, db);
         stat_stop(dbc_stats.remote_unsubscribe_queue, &ts_start, NO_QUORUM_ERR);
 		return NO_QUORUM_ERR;
@@ -3060,7 +3060,7 @@ int _remote_persist_txn(uuid_t * txnid, vector_clock * version, remote_server * 
 		return NO_QUORUM_ERR;
 	}
 
-	int ok_status = 0, err_status = 0;
+	int ok_status = 0;
 
 	for(int i=0;i<mc->no_replies;i++)
 	{
@@ -3079,7 +3079,7 @@ int _remote_persist_txn(uuid_t * txnid, vector_clock * version, remote_server * 
 
 	if(ok_status < db->quorum_size)
 	{
-		log_error("No valid quorum (%d/%d valid replies received)", ok_status, db->replication_factor);
+		log_error("No valid quorum (%d/%d valid replies received), minority_status = %d", ok_status, db->replication_factor, *minority_status);
 		delete_msg_callback(mc->nonce, db);
 		return NO_QUORUM_ERR;
 	}
@@ -3123,15 +3123,17 @@ int remote_commit_txn(uuid_t * txnid, int * minority_status, remote_db_t * db)
 
 	if(val_res == VAL_STATUS_COMMIT)
 	{
-		int persist_status = -2;
+	    int persist_status = -2;
 		while(persist_status != 0)
 		{
-			persist_status = _remote_persist_txn(txnid, commit_stamp, rs, minority_status, db);
-
+		    persist_status = _remote_persist_txn(txnid, commit_stamp, rs, minority_status, db);
 #if (CLIENT_VERBOSITY > 0)
 			log_info("CLIENT: persist txn %s from server %s returned %d, minority_status %d", uuid_str, rs->id, persist_status, *minority_status);
 #endif
 		}
+
+//        if(persist_status != 0)
+//            val_res = VAL_STATUS_ABORT;
 
 		int res = close_client_txn(*txnid, db); // Clear local cached txn state on client
 
