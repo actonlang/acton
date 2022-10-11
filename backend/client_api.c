@@ -2059,9 +2059,9 @@ int remote_read_full_table_in_txn(snode_t** start_row, snode_t** end_row, WORD t
 		assert(mc->reply_types[i] == RPC_TYPE_RANGE_READ_RESPONSE);
 		range_read_response_message * candidate_response = (range_read_response_message *) mc->replies[i];
 
-#if CLIENT_VERBOSITY > 0
+#if CLIENT_VERBOSITY > 2
 		to_string_range_read_response_message(candidate_response, (char *) print_buff);
-		log_info("Got back response from server %s: %s", rs->id, print_buff);
+		log_info("Got back response from server: %s", print_buff);
 #endif
 
         if(candidate_response->no_cells >= 0)
@@ -2429,7 +2429,7 @@ int remote_read_queue_in_txn(WORD consumer_id, WORD shard_id, WORD app_id, WORD 
 
 	if(valid_responses < db->quorum_size)
 	{
-		log_error("No quorum of valid replies (%d/%d valid replies received)", valid_responses, db->replication_factor);
+		log_error("No quorum of valid replies (%d/%d valid replies received, minority_status=%d)", valid_responses, db->replication_factor, minority_status);
 		delete_msg_callback(mc->nonce, db);
         stat_stop(dbc_stats.remote_read_queue_in_txn, &ts_start, NO_QUORUM_ERR);
 		return NO_QUORUM_ERR;
@@ -3123,13 +3123,16 @@ int remote_commit_txn(uuid_t * txnid, int * minority_status, remote_db_t * db)
 
 	if(val_res == VAL_STATUS_COMMIT)
 	{
-	    int persist_status = -2;
+	    int persist_status = NO_SUCH_TXN; //, retry = 0;
 		while(persist_status != 0)
 		{
 		    persist_status = _remote_persist_txn(txnid, commit_stamp, rs, minority_status, db);
 #if (CLIENT_VERBOSITY > 0)
 			log_info("CLIENT: persist txn %s from server %s returned %d, minority_status %d", uuid_str, rs->id, persist_status, *minority_status);
 #endif
+//			if(retry==1)
+//			    sleep(3);
+//			retry=1;
 		}
 
 //        if(persist_status != 0)

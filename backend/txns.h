@@ -13,6 +13,9 @@
 #define VAL_STATUS_COMMIT 0
 #define VAL_STATUS_ABORT 1
 
+#define DUPLICATE_TXN -2
+#define NO_SUCH_TXN -3
+
 
 // DB queries:
 

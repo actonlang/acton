@@ -889,7 +889,7 @@ int handle_new_txn(txn_message * q, db_t * db, unsigned int * fastrandstate)
 		pthread_mutex_unlock(db->txn_state_lock);
 #endif
 
-		return -2; // txnid already exists on server
+		return DUPLICATE_TXN; // txnid already exists on server
 	}
 
 	ts = init_txn_state();
@@ -922,7 +922,7 @@ int handle_commit_txn(txn_message * q, db_t * db, unsigned int * fastrandstate)
 	// Make sure the txn has the right commit stamp (it c'd be that the current server missed the previous validation packet so the version was not set then):
 
 	if(ts == NULL)
-		return -2; // txnid doesn't exist on server
+		return NO_SUCH_TXN; // txnid doesn't exist on server
 
 	set_version(ts, q->version);
 
@@ -1190,7 +1190,7 @@ int handle_client_message(int childfd, int msg_len, db_t * db, membership * m, s
     				case DB_TXN_BEGIN:
     				{
     					status = handle_new_txn(tm, db, fastrandstate);
-    					assert(status == 0 || status == -2);
+    					assert(status == 0 || status == DUPLICATE_TXN);
     					status = get_txn_ack_packet(status, tm, &tmp_out_buf, &snd_msg_len, vc);
 
     					break;
