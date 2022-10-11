@@ -158,7 +158,7 @@ jobs:
         with:
           name: test-debug-full-${{ matrix.os }}-${{ github.run_id }}
           path: |
-            ${{ github.workspace }}/
+            ${{ github.workspace }}/test/
 
 
   build-debs:
