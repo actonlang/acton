@@ -761,8 +761,9 @@ struct $Cont $InitRoot$cont = {
 void dummy_callback(queue_callback_args * qca) { }
 
 void create_db_queue(long key) {
+    int minority_status = 0;
     while(!rts_exit) {
-        int ret = remote_create_queue_in_txn(MSG_QUEUE, ($WORD)key, NULL, db);
+        int ret = remote_create_queue_in_txn(MSG_QUEUE, ($WORD)key, &minority_status, NULL, db);
         rtsd_printf("#### Create queue %ld returns %d", key, ret);
         if(ret == NO_QUORUM_ERR) {
             sleep(3);
@@ -770,7 +771,6 @@ void create_db_queue(long key) {
         }
         queue_callback * qc = get_queue_callback(dummy_callback);
         int64_t prev_read_head = -1, prev_consume_head = -1;
-        int minority_status = 0;
         // We might have lost quorum since we created the queue above, so check again and re-create queue until success.
         ret = remote_subscribe_queue(($WORD)key, 0, 0, MSG_QUEUE, ($WORD)key, qc, &prev_read_head, &prev_consume_head, &minority_status, db);
         rtsd_printf("   # create_db_queue(): Subscribe queue %ld returns %d, minority_status %d", key, ret, minority_status);
@@ -860,7 +860,6 @@ int handle_status_and_schema_mismatch(int ret, int minority_status, long key)
     // If schema was missing on a majority of servers, we'll in addition get NO_QUORUM_ERR, and
     // we also need to retry the operation.
     switch(minority_status) {
-        case DB_ERR_NO_TABLE:
         case DB_ERR_NO_QUEUE:
         case DB_ERR_NO_CONSUMER: {
             // Schema errs:
@@ -875,7 +874,7 @@ int handle_status_and_schema_mismatch(int ret, int minority_status, long key)
             // These are OK:
             break;
         }
-        default: { // DB_ERR_QUEUE_HEAD_INVALID
+        default: { // DB_ERR_QUEUE_HEAD_INVALID, DB_ERR_NO_TABLE
             assert(0);
         }
     }
@@ -1144,7 +1143,12 @@ void print_actor($Actor a) {
 void deserialize_system(snode_t *actors_start) {
     rtsd_printf("Deserializing system");
     snode_t *msgs_start, *msgs_end;
-    remote_read_full_table_in_txn(&msgs_start, &msgs_end, MSGS_TABLE, NULL, db);
+    int ret = 0,  minority_status = 0, no_items = 0;
+    while(!rts_exit) {
+        ret = remote_read_full_table_in_txn(&msgs_start, &msgs_end, MSGS_TABLE, &no_items, &minority_status, NULL, db);
+        if(!handle_status_and_schema_mismatch(ret, minority_status, 0))
+            break;
+    }
     
     globdict = $NEW($dict,($Hashable)$Hashable$int$witness,NULL,NULL);
 
@@ -1267,7 +1271,6 @@ void deserialize_system(snode_t *actors_start) {
     time_t now = current_time();
     queue_callback * qc = get_queue_callback(dummy_callback);
     int64_t prev_read_head = -1, prev_consume_head = -1;
-    int minority_status = 0;
     while(!rts_exit) {
         int ret = remote_subscribe_queue(TIMER_QUEUE, 0, 0, MSG_QUEUE, TIMER_QUEUE, qc, &prev_read_head, &prev_consume_head, &minority_status, db);
         rtsd_printf("   # Subscribe queue 0 returns %d", ret);
@@ -1347,9 +1350,13 @@ void insert_row(long key, size_t total, $ROW row, $WORD table, uuid_t *txnid) {
     //printf("\n## Sanity check extract row:\n");
     //$ROW row1 = extract_row(blob, total*sizeof($WORD));
     //print_rows(row1);
-
-    int ret = remote_insert_in_txn(column, 2, 1, 1, blob, total*sizeof($WORD), table, txnid, db);
-    rtsd_printf("   # insert to table %ld, row %ld, returns %d", (long)table, key, ret);
+    int ret = 0, minority_status = 0;
+    while(!rts_exit) {
+        ret = remote_insert_in_txn(column, 2, 1, 1, blob, total*sizeof($WORD), table, &minority_status, txnid, db);
+        rtsd_printf("   # insert to table %ld, row %ld, returns %d", (long)table, key, ret);
+        if(!handle_status_and_schema_mismatch(ret, minority_status, 0))
+            break;
+    }
 }
 
 void serialize_msg($Msg m, uuid_t *txnid) {
@@ -2431,7 +2438,12 @@ int main(int argc, char **argv) {
     if (db) {
         snode_t* start_row = NULL, * end_row = NULL;
         log_info("Checking for existing actor state in DDB.");
-        int no_items = remote_read_full_table_in_txn(&start_row, &end_row, ACTORS_TABLE, NULL, db);
+        int ret = 0,  minority_status = 0, no_items = 0;
+        while(!rts_exit) {
+            ret = remote_read_full_table_in_txn(&start_row, &end_row, ACTORS_TABLE, &no_items, &minority_status, NULL, db);
+            if(!handle_status_and_schema_mismatch(ret, minority_status, 0))
+                break;
+        }
         if (no_items > 0) {
             log_info("Found %d existing actors; Restoring actor state from DDB.", no_items);
             deserialize_system(start_row);

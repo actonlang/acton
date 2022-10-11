@@ -198,40 +198,46 @@ int queue_callback_cmp(WORD e1, WORD e2);
 
 // Write ops:
 
-int remote_insert_in_txn(WORD * column_values, int no_cols, int no_primary_keys, int no_clustering_keys, WORD blob, size_t blob_size, WORD table_key, uuid_t * txnid, remote_db_t * db);
-int remote_update_in_txn(int * col_idxs, int no_cols, WORD * column_values, WORD blob, size_t blob_size, WORD table_key, uuid_t * txnid, remote_db_t * db);
-int remote_delete_row_in_txn(WORD * column_values, int no_primary_keys, WORD table_key, uuid_t * txnid, remote_db_t * db);
-int remote_delete_cell_in_txn(WORD * column_values, int no_primary_keys, int no_clustering_keys, WORD table_key, uuid_t * txnid, remote_db_t * db);
-int remote_delete_by_index_in_txn(WORD index_key, int idx_idx, WORD table_key, uuid_t * txnid, remote_db_t * db);
+int remote_insert_in_txn(WORD * column_values, int no_cols, int no_primary_keys, int no_clustering_keys,
+                        WORD blob, size_t blob_size, WORD table_key, int * minority_status,
+                        uuid_t * txnid, remote_db_t * db);
+int remote_update_in_txn(int * col_idxs, int no_cols, WORD * column_values, WORD blob, size_t blob_size,
+                        WORD table_key, int * minority_status, uuid_t * txnid, remote_db_t * db);
+int remote_delete_row_in_txn(WORD * column_values, int no_primary_keys, WORD table_key, int * minority_status,
+                                uuid_t * txnid, remote_db_t * db);
+int remote_delete_cell_in_txn(WORD * column_values, int no_primary_keys, int no_clustering_keys,
+                               WORD table_key, int * minority_status, uuid_t * txnid, remote_db_t * db);
+int remote_delete_by_index_in_txn(WORD index_key, int idx_idx, WORD table_key, int * minority_status, uuid_t * txnid, remote_db_t * db);
 
 // Read ops:
 
 int remote_search_in_txn(WORD* primary_keys, int no_primary_keys, db_row_t** result_row, WORD table_key,
-								uuid_t * txnid, remote_db_t * db);
+						int * minority_status, uuid_t * txnid, remote_db_t * db);
 int remote_search_clustering_in_txn(WORD* primary_keys, int no_primary_keys, WORD* clustering_keys, int no_clustering_keys,
-									db_row_t** result_row, WORD table_key, uuid_t * txnid, remote_db_t * db);
+									db_row_t** result_row, WORD table_key, int * minority_status, uuid_t * txnid, remote_db_t * db);
 int remote_search_columns_in_txn(WORD* primary_keys, int no_primary_keys, WORD* clustering_keys, int no_clustering_keys,
 									WORD* col_keys, int no_columns, db_row_t** result_row, WORD table_key,
-									uuid_t * txnid, remote_db_t * db);
-int remote_search_index_in_txn(WORD index_key, int idx_idx, db_row_t** result_row, WORD table_key, uuid_t * txnid, remote_db_t * db);
+									int * minority_status, uuid_t * txnid, remote_db_t * db);
+int remote_search_index_in_txn(WORD index_key, int idx_idx, db_row_t** result_row, WORD table_key,
+                                int * minority_status, uuid_t * txnid, remote_db_t * db);
 int remote_range_search_in_txn(WORD* start_primary_keys, WORD* end_primary_keys, int no_primary_keys,
 							snode_t** start_row, snode_t** end_row,
-							WORD table_key, uuid_t * txnid, remote_db_t * db);
+							WORD table_key, int * no_items, int * minority_status, uuid_t * txnid, remote_db_t * db);
 int remote_range_search_clustering_in_txn(WORD* primary_keys, int no_primary_keys,
 									 WORD* start_clustering_keys, WORD* end_clustering_keys, int no_clustering_keys,
 									 snode_t** start_row, snode_t** end_row,
-									 WORD table_key, uuid_t * txnid, remote_db_t * db);
+									 WORD table_key, int * no_items, int * minority_status, uuid_t * txnid, remote_db_t * db);
 int remote_range_search_index_in_txn(int idx_idx, WORD start_idx_key, WORD end_idx_key,
-								snode_t** start_row, snode_t** end_row,
-								WORD table_key, uuid_t * txnid, remote_db_t * db);
-int remote_read_full_table_in_txn(snode_t** start_row, snode_t** end_row,
-									WORD table_key, uuid_t * txnid, remote_db_t * db);
+								    snode_t** start_row, snode_t** end_row,
+								    WORD table_key, int * no_items, int * minority_status, uuid_t * txnid, remote_db_t * db);
+int remote_read_full_table_in_txn(snode_t** start_row, snode_t** end_row, WORD table_key,
+                                    int * no_items, int * minority_status, uuid_t * txnid, remote_db_t * db);
 void remote_print_long_table(WORD table_key, remote_db_t * db);
 
 // Queue ops:
 
-int remote_create_queue_in_txn(WORD table_key, WORD queue_id, uuid_t * txnid, remote_db_t * db);
-int remote_delete_queue_in_txn(WORD table_key, WORD queue_id, uuid_t * txnid, remote_db_t * db);
+int remote_create_queue_in_txn(WORD table_key, WORD queue_id, int * minority_status, uuid_t * txnid, remote_db_t * db);
+int remote_delete_queue_in_txn(WORD table_key, WORD queue_id, int * minority_status, uuid_t * txnid, remote_db_t * db);
 int remote_enqueue_in_txn(WORD * column_values, int no_cols, WORD blob, size_t blob_size, WORD table_key,
 						WORD queue_id, int * minority_status, uuid_t * txnid, remote_db_t * db);
 int remote_read_queue_in_txn(WORD consumer_id, WORD shard_id, WORD app_id, WORD table_key, WORD queue_id,
