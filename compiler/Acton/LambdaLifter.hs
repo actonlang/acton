@@ -274,15 +274,15 @@ closureConvert env lambda t0 vts0 es    = do n <- newName (nstr $ noq basename)
         methCall to                     = eCallP (eDot (eVar llSelf) to) args
         parsC tc                        = addContPar pars tc
         mainBody                        = [ sAssign (pVar v t) (eDot (eVar llSelf) v) | (v,t) <- vts ] ++ [sReturn e]
-        evalDef                         = mainDef attrEval
-        execDef                         = Def l0 attrExec [] pars KwdNIL (Just t1) [ sReturn (methCall attrEval) ] NoDec fxProc
-        asynDef                         = mainDef attrAsyn
-        evalDefA                        = Def l0 attrEval [] (parsC t1) KwdNIL (Just tR) evalBodyA NoDec fxProc
-        evalBodyA                       = [ sReturn $ eCall (tApp (eQVar primAWAIT) [t1]) [methCall attrAsyn, eVar llCont] ]
-        execDefA                        = delegate attrExec attrAsyn tValue
-        callDef                         = mainDef attrCall
-        evalDefF                        = delegate attrEval attrCall t1
-        execDefF                        = delegate attrExec attrCall tValue
+        evalDef                         = mainDef attr_eval_
+        execDef                         = Def l0 attr_exec_ [] pars KwdNIL (Just t1) [ sReturn (methCall attr_eval_) ] NoDec fxProc
+        asynDef                         = mainDef attr_asyn_
+        evalDefA                        = Def l0 attr_eval_ [] (parsC t1) KwdNIL (Just tR) evalBodyA NoDec fxProc
+        evalBodyA                       = [ sReturn $ eCall (tApp (eQVar primAWAIT) [t1]) [methCall attr_asyn_, eVar llCont] ]
+        execDefA                        = delegate attr_exec_ attr_asyn_ tValue
+        callDef                         = mainDef attr_call_
+        evalDefF                        = delegate attr_eval_ attr_call_ t1
+        execDefF                        = delegate attr_exec_ attr_call_ tValue
         delegate name to tc             = Def l0 name [] (parsC tc) KwdNIL (Just tR) (delegateBody to tc) NoDec fxProc
         delegateBody to tc              = [ sReturn $ eCall (tApp (eQVar primRCont) [tValue]) [eVar llCont, methCall to] ]
         defs
@@ -318,19 +318,19 @@ instance Lift Expr where
         n == primEXEC,
         PosArg e' PosNil <- p,
         closedType env e'               = do e' <- ll env e'
-                                             return $ Dot l e' attrExec
+                                             return $ Dot l e' attr_exec_
       | Async _ e' <- e,
         closedType env e'               = do e' <- ll env e'
                                              p' <- ll env p
-                                             return $ Call l (eDot e' attrAsyn) p' KwdNil      
+                                             return $ Call l (eDot e' attr_asyn_) p' KwdNil      
       | closedType env e                = do e' <- llSub env e
                                              p' <- ll env p
                                              let TFun _ fx p _ t = typeOf env e'
-                                                 attr | t == tR         = attrCall      -- attrCont
-                                                      | fx == fxProc    = attrEval
-                                                      | fx == fxAction  = attrAsyn      -- Will disapperar -- DEACT!
-                                                      | fx == fxMut     = attrCall
-                                                      | fx == fxPure    = attrCall
+                                                 attr | t == tR         = attr_call_      -- attr_cont_ ...
+                                                      | fx == fxProc    = attr_eval_
+                                                      | fx == fxAction  = attr_asyn_      -- Will disapperar -- DEACT!
+                                                      | fx == fxMut     = attr_call_
+                                                      | fx == fxPure    = attr_call_
                                              return $ Call l (eDot e' attr) p' KwdNil
       | otherwise                       = do e' <- llSub env e
                                              p' <- ll env p
@@ -339,7 +339,7 @@ instance Lift Expr where
     ll env (Async l e)
       | closedType env e                = do e <- ll env e
                                              let vts = restrict (locals env) (free e)
-                                                 call = Call l0 (eDot e attrAsyn) (pArg par) KwdNil
+                                                 call = Call l0 (eDot e attr_asyn_) (pArg par) KwdNil
                                              closureConvert env (Lambda l0 par KwdNIL call fxProc) (tMsg t) vts (map (eVar . fst) vts)
       | otherwise                       = do e <- ll env e
                                              return $ Async l e

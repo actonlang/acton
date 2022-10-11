@@ -34,10 +34,10 @@ cAction r t         = TC primAction [r,t]
 cMut r t            = TC primMut [r,t]
 cPure r t           = TC primPure [r,t]
 
-attrEval            = name "__eval__"
-attrExec            = name "__exec__"
-attrAsyn            = name "__asyn__"
-attrCall            = name "__call__"
+attr_eval_          = name "__eval__"
+attr_exec_          = name "__exec__"
+attr_asyn_          = name "__asyn__"
+attr_call_          = name "__call__"
 
 primActor           = gPrim "Actor"
 primR               = gPrim "R"
@@ -103,8 +103,8 @@ primWrappedC        = gPrim "WrappedC"
 tWrapped s x        = tCon $ TC primWrappedC [s,x]
 
 attrWrap            = name "wrap"
-attrEVAL            = name "eval"
-attrEXEC            = name "exec"
+attrEval            = name "eval"
+attrExec            = name "exec"
 
 primWrapProc        = gPrim "wWrapProc"
 primWrapAction      = gPrim "wWrapAction"
@@ -187,15 +187,15 @@ tCollectionListWild = tCon (TC qnCollection [tList tWild, tWild])
 --      __eval__    : proc(*R, $Cont[T]) -> $R                              -- TODO: move the $Cont param *first*
 --      __exec__    : proc(*R, $Cont[value]) -> $R                          -- TODO: move the $Cont param *first*
 clProc              = NClass [quant r, quant t] (leftpath [cValue]) te
-  where te          = [ (attrEval, NSig (monotype $ tFun fxProc (posRow (tVar r) (tCont (tVar t))) kwdNil tR) NoDec),
-                        (attrExec, NSig (monotype $ tFun fxProc (posRow (tVar r) (tCont tValue)) kwdNil tR) NoDec) ]
+  where te          = [ (attr_eval_, NSig (monotype $ tFun fxProc (posRow (tVar r) (tCont (tVar t))) kwdNil tR) NoDec),
+                        (attr_exec_, NSig (monotype $ tFun fxProc (posRow (tVar r) (tCont tValue)) kwdNil tR) NoDec) ]
         r           = TV PRow (name "R")
         t           = TV KType (name "T")
 
 --  class $action[R,T] ($proc[R,T], value):
 --      __asyn__    : action(*R) -> T
 clAction            = NClass [quant r, quant t] (leftpath [ cProc (tVar r) (tVar t), cValue]) te
-  where te          = [ (attrAsyn, NSig (monotype $ tFun fxAction (tVar r) kwdNil (tVar t)) NoDec) ]
+  where te          = [ (attr_asyn_, NSig (monotype $ tFun fxAction (tVar r) kwdNil (tVar t)) NoDec) ]
         r           = TV PRow (name "R")
         t           = TV KType (name "T")
 
@@ -203,21 +203,21 @@ clAction            = NClass [quant r, quant t] (leftpath [ cProc (tVar r) (tVar
 --  class $mut[R,T] ($proc[R,T], value):
 --      __call__    : mut(*R) -> T
 clMut               = NClass [quant r, quant t] (leftpath [ cProc (tVar r) (tVar t), cValue]) te
-  where te          = [ (attrCall, NSig (monotype $ tFun fxMut (tVar r) kwdNil (tVar t)) NoDec) ]
+  where te          = [ (attr_call_, NSig (monotype $ tFun fxMut (tVar r) kwdNil (tVar t)) NoDec) ]
         r           = TV PRow (name "R")
         t           = TV KType (name "T")
 
 --  class $pure[R,T] ($mut[R,T], $proc[R,T], value):
 --      __call__    : pure(*R) -> T
 clPure              = NClass [quant r, quant t] (leftpath [ cMut (tVar r) (tVar t), cProc (tVar r) (tVar t), cValue]) te
-  where te          = [ (attrCall, NSig (monotype $ tFun fxPure (tVar r) kwdNil (tVar t)) NoDec) ]
+  where te          = [ (attr_call_, NSig (monotype $ tFun fxPure (tVar r) kwdNil (tVar t)) NoDec) ]
         r           = TV PRow (name "R")
         t           = TV KType (name "T")
 
 --  class $Cont[T] (value): pass
 --      __call__    : proc(T) -> $R
 clCont              = NClass [quant t] (leftpath [cValue]) []
-  where te          = [ (attrCall, NSig (monotype $ tFun fxProc (posRow (tVar t) posNil) kwdNil tR) NoDec) ]
+  where te          = [ (attr_call_, NSig (monotype $ tFun fxProc (posRow (tVar t) posNil) kwdNil tR) NoDec) ]
         t           = TV KType (name "T")
 
 
@@ -449,7 +449,7 @@ scEXEC              = tSchema [quant a, quant b, quant c] tEXEC
 
 --  protocol $Wrapped[X]: pass
 proWrapped          = NProto [quant x] [] te
-  where te          = [(attrWrap,scWrap), (attrEVAL,scEval), (attrEXEC,scExec)]
+  where te          = [(attrWrap,scWrap), (attrEval,scEval), (attrExec,scExec)]
         scWrap      = NSig (tSchema q (tFun0 [tActor, abFun tX tC] (abFun tSelf tC)))  Static
         scEval      = NSig (tSchema q (tFun0 [abFun tSelf tC] (abFun tX tC))) Static
         scExec      = NSig (tSchema q (tFun0 [abFun tSelf tC] (abFun tX tValue))) Static
@@ -465,10 +465,10 @@ proWrapped          = NProto [quant x] [] te
 
 --  class $WrappedC[S,X]: pass
 clWrapped           = NClass [quant s, quant x] [] te
-  where te          = [(attrWrap,scWrap), (attrEVAL,scEVAL), (attrEXEC,scEXEC)]
+  where te          = [(attrWrap,scWrap), (attrEval,scEval), (attrExec,scExec)]
         scWrap      = NDef (tSchema q (tFun0 [tActor, abFun tX tC] (abFun tS tC))) NoDec
-        scEVAL      = NDef (tSchema q (tFun0 [abFun tS tC] (abFun tX tC))) NoDec
-        scEXEC      = NDef (tSchema q (tFun0 [abFun tS tC] (abFun tX tValue))) NoDec
+        scEval      = NDef (tSchema q (tFun0 [abFun tS tC] (abFun tX tC))) NoDec
+        scExec      = NDef (tSchema q (tFun0 [abFun tS tC] (abFun tX tValue))) NoDec
         abFun fx c  = tFun fx (tVar a) (tVar b) c
         tS          = tVar s
         tX          = tVar x

@@ -244,7 +244,7 @@ instance (InfEnv a) => InfEnv [a] where
 
 instance InfEnv Stmt where
     infEnv env (Expr l (Call _ e p k))  = do (cs1,t,e) <- infer env e
-                                             (cs1,t,e) <- wrapped attrEXEC env cs1 [t] [e]               -- DEACT!
+                                             (cs1,t,e) <- wrapped attrExec env cs1 [t] [e]               -- DEACT!
                                              (cs2,prow,p) <- infer env p
                                              (cs3,krow,k) <- infer env k
                                              t0 <- newTVar
@@ -1054,7 +1054,7 @@ instance Infer Expr where
     infer env e@(Strings _ ss)          = return ([], tStr, e)
     infer env e@(BStrings _ ss)         = return ([], tBytes, e)
     infer env (Call l e ps ks)          = do (cs1,t,e) <- infer env e
-                                             (cs1,t,e) <- wrapped attrEVAL env cs1 [t] [e]             -- DEACT!
+                                             (cs1,t,e) <- wrapped attrEval env cs1 [t] [e]             -- DEACT!
                                              (cs2,prow,ps) <- infer env ps
                                              (cs3,krow,ks) <- infer env ks
                                              t0 <- newTVar
