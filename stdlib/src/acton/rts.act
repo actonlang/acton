@@ -1,3 +1,4 @@
+
 # sleep is sort of dangerous - it will actually put the RTS thread executing the
 # actor calling this function to sleep. This could be seen as ultrabad, like we
 # would want to just pause execution of one actor and let the RTS thread process
@@ -7,4 +8,10 @@
 # in a benchmark we can pretend some actors are doing relatively heavy work, yet
 # our CPU usage will be lower, so this is like laptop airplane mode friendly
 # (consumes less battery).
-sleep : (float) -> None
+def sleep(duration: float) -> None:
+    """Put RTS worker thread to sleep"""
+    NotImplemented
+
+def rss(auth: WorldAuth) -> int:
+    """Get Resident Set Size"""
+    NotImplemented
