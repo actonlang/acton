@@ -947,52 +947,6 @@ void FLUSH_outgoing_local($Actor self) {
     }
 }
 
-// Actually send all buffered messages of the sender
-void FLUSH_outgoing_merged($Actor self, uuid_t *txnid) {
-    rtsd_printf("#### FLUSH_outgoing messages from %ld", self->$globkey);
-    $Msg prev = NULL;
-    $Msg m = self->$outgoing;
-    self->$outgoing = NULL;
-    while (m) {
-        $Msg next = m->$next;
-        m->$next = prev;
-        prev = m;
-        m = next;
-    }
-    m = prev;
-    while (m) {
-        $Msg next = m->$next;
-        m->$next = NULL;
-        long dest;
-        if (m->$baseline == self->$msg->$baseline) {
-            $Actor to = m->$to;
-            if (ENQ_msg(m, to)) {
-                ENQ_ready(to);
-            }
-            dest = to->$globkey;
-        } else {
-            if (ENQ_timed(m))
-                reset_timeout();
-            dest = 0;
-        }
-        if (db) {
-                int ret = 0, minority_status = 0;
-                while(!rts_exit) {
-                ret = remote_enqueue_in_txn(($WORD*)&m->$globkey, 1, NULL, 0, MSG_QUEUE, (WORD)dest, &minority_status, txnid, db);
-                if (dest) {
-                        rtsd_printf("   # enqueue msg %ld to queue %ld returns %d, minority_status=%d", m->$globkey, dest, ret, minority_status);
-                } else {
-                        rtsd_printf("   # enqueue msg %ld to TIMER_QUEUE returns %d, minority_status=%d", m->$globkey, ret, minority_status);
-                }
-                if(!handle_status_and_schema_mismatch(ret, minority_status, dest))
-                    break;
-                }
-        }
-        m = next;
-    }
-}
-
-
 time_t next_timeout() {
     return timerQ ? timerQ->$baseline : 0;
 }
