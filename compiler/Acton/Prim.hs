@@ -431,14 +431,6 @@ scSEAL              = tSchema [quant a, quant b, quant c] tWRAP
         b           = TV KType (name "B")
         c           = TV KType (name "C")
 
---  $EVAL           : [A,B,C] => (proc(*A,**B)->C) -> proc(*A,**B)->C
-scEVAL              = tSchema [quant a, quant b, quant c] tEVAL
-  where tEVAL       = tFun0 [procFun] procFun
-        procFun     = tFun fxProc (tVar a) (tVar b) (tVar c)
-        a           = TV PRow (name "A")
-        b           = TV KRow (name "B")
-        c           = TV KType (name "C")
-
 --  $EXEC           : [A,B,C] => (proc(*A,**B)->C) -> proc(*A,**B)->value
 scEXEC              = tSchema [quant a, quant b, quant c] tEXEC
   where tEXEC       = tFun0 [procFun $ tVar c] (procFun tValue)
