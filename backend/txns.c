@@ -283,7 +283,7 @@ int is_read_invalidated(txn_read * tr, txn_state * rts, db_t * db)
                 if(rw_conflict(tr, tw, 0))
                 {
 #if (VERBOSE_TXNS > 0)
-                        printf("Invalidating txn due to rw conflict\n");
+                        log_debug("Invalidating txn due to rw conflict");
 #endif
 
 #if (MULTI_THREADED == 1)
@@ -398,7 +398,7 @@ int is_write_invalidated(txn_write * tw, txn_state * rts, int * schema_status, d
                     uuid_unparse_lower(rts->txnid, uuid_str1);
                     uuid_unparse_lower(ts->txnid, uuid_str2);
 
-                    printf("Invalidating txn due to ww conflict on table=%" PRId64 "/%" PRId64 ", write_type=%d/%d, key=%" PRId64 "/%" PRId64 ", txn=%s/%s\n",
+                    log_debug("Invalidating txn due to ww conflict on table=%" PRId64 "/%" PRId64 ", write_type=%d/%d, key=%" PRId64 "/%" PRId64 ", txn=%s/%s",
                                 (int64_t) tw->table_key, (int64_t) tw2->table_key,
                                 tw->query_type, tw2->query_type,
                                 ((int64_t *) tw->column_values)[0], ((int64_t *) tw2->column_values)[0],
@@ -550,7 +550,7 @@ int persist_txn(txn_state * ts, db_t * db, unsigned int * fastrandstate)
 #if (VERBOSE_TXNS_PERSIST > 0)
         char uuid_str[37];
         uuid_unparse_lower(ts->txnid, uuid_str);
-        printf("BACKEND: Txn %s has %d writes\n", uuid_str, ts->write_set->no_items);
+        log_debug("BACKEND: Txn %s has %d writes", uuid_str, ts->write_set->no_items);
 #endif
 
     for(snode_t * write_op_n=HEAD(ts->write_set); write_op_n!=NULL; write_op_n=NEXT(write_op_n))
@@ -560,17 +560,17 @@ int persist_txn(txn_state * ts, db_t * db, unsigned int * fastrandstate)
             txn_write * tw = (txn_write *) write_op_n->value;
 
 #if (VERBOSE_TXNS_PERSIST > 0)
-                printf("BACKEND: Txn %s attempting to persist write of type %d\n", uuid_str, tw->query_type);
+            log_debug("BACKEND: Txn %s attempting to persist write of type %d", uuid_str, tw->query_type);
 #endif
 
             res = persist_write(tw, ts->version, db, fastrandstate);
 
 #if (VERBOSE_TXNS_PERSIST > 0)
-                printf("BACKEND: Txn %s successfully persisted write of type %d\n", uuid_str, tw->query_type);
+            log_debug("BACKEND: Txn %s successfully persisted write of type %d", uuid_str, tw->query_type);
 #endif
 
             if(res != 0)
-                printf("BACKEND: persist_write for txn, of type %d returned %d\n", tw->query_type, res);
+                log_debug("BACKEND: persist_write for txn, of type %d returned %d", tw->query_type, res);
         }
     }
 
@@ -595,13 +595,13 @@ int commit_txn(uuid_t * txnid, vector_clock * version, db_t * db, unsigned int *
     uuid_unparse_lower(*txnid, uuid_str);
 #endif
 #if (VERBOSE_TXNS > 1)
-    printf("BACKEND: Attempting to validate txn %s\n", uuid_str);
+    log_debug("BACKEND: Attempting to validate txn %s", uuid_str);
 #endif
 
     int res = validate_txn(txnid, version, db);
 
 #if (VERBOSE_TXNS > 1)
-    printf("BACKEND: validate txn %s returned %d\n", uuid_str, res);
+    log_debug("BACKEND: validate txn %s returned %d", uuid_str, res);
 #endif
 
     if(res == VAL_STATUS_COMMIT)
@@ -609,7 +609,7 @@ int commit_txn(uuid_t * txnid, vector_clock * version, db_t * db, unsigned int *
         res = persist_txn(ts, db, fastrandstate);
 
 #if (VERBOSE_TXNS > 0)
-        printf("BACKEND: persist txn %s returned %d\n", uuid_str, res);
+        log_debug("BACKEND: persist txn %s returned %d", uuid_str, res);
 #endif
     }
     else if(res == VAL_STATUS_ABORT || res == VAL_STATUS_ABORT_SCHEMA)
@@ -617,7 +617,7 @@ int commit_txn(uuid_t * txnid, vector_clock * version, db_t * db, unsigned int *
         res = abort_txn(txnid, db);
 
 #if (VERBOSE_TXNS > 0)
-        printf("BACKEND: abort txn %s returned %d\n", uuid_str, res);
+        log_debug("BACKEND: abort txn %s returned %d", uuid_str, res);
 #endif
     }
     else
