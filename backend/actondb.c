@@ -1059,10 +1059,20 @@ int handle_client_message(int childfd, int msg_len, db_t * db, membership * m, s
     {
             // If we were multi-threaded, we'd have to protect this snippet:
 
+#if (VERBOSE_RPC > 2)
+        char msg_buf[1024];
+        log_debug("SERVER: Received client message with LC %s.", to_string_vc(lc_read, msg_buf));
+        log_debug("SERVER: My LC before update is %s.", to_string_vc(my_lc, msg_buf));
+#endif
+
             update_vc(my_lc, lc_read);
             increment_vc(my_lc, my_id);
 
             free_vc(lc_read);
+
+#if (VERBOSE_RPC > 2)
+        log_debug("SERVER: Updated local LC to %s.", to_string_vc(my_lc, msg_buf));
+#endif
     }
 
     switch(msg_type)
@@ -1963,7 +1973,7 @@ int notify_new_view_to_clients(membership * m, membership_agreement_msg * ma, ve
 
     membership_state * mstate = get_membership_state_from_server_list(m->local_peers, m->connected_clients, my_lc);
 
-    int status = get_agreement_notify_packet(PROPOSAL_STATUS_ACCEPTED, mstate, ma, &amr, &tmp_out_buf, &snd_msg_len, copy_vc(my_lc), copy_vc(my_lc));
+    int status = get_agreement_notify_packet(PROPOSAL_STATUS_ACCEPTED, mstate, ma, &amr, &tmp_out_buf, &snd_msg_len, my_lc, my_lc);
 
     for(snode_t * crt = HEAD(m->connected_client_sockets); crt!=NULL; crt = NEXT(crt))
     {
@@ -2160,18 +2170,22 @@ int handle_server_message(int childfd, int msg_len, membership * m, db_t * db, u
         // If we were multi-threaded, we'd have to protect this snippet:
 
 #if (VERBOSE_RPC > 2)
-                char msg_buf[1024];
-        log_debug("SERVER: Received message with LC %s.", to_string_vc(lc_read, msg_buf));
+        char msg_buf[1024];
+        log_debug("SERVER: Received server message with LC %s.", to_string_vc(lc_read, msg_buf));
         log_debug("SERVER: My LC before update is %s.", to_string_vc(my_lc, msg_buf));
 #endif
 
-                update_vc(my_lc, lc_read);
+        update_vc(my_lc, lc_read);
 
 #if (VERBOSE_RPC > 2)
         log_debug("SERVER: Updated local LC to %s.", to_string_vc(my_lc, msg_buf));
 #endif
 
-                increment_vc(my_lc, m->my_id);
+        increment_vc(my_lc, m->my_id);
+
+#if (VERBOSE_RPC > 2)
+        log_debug("SERVER: Incremented local LC to %s.", to_string_vc(my_lc, msg_buf));
+#endif
     }
 #endif
 
@@ -2207,6 +2221,8 @@ int handle_server_message(int childfd, int msg_len, membership * m, db_t * db, u
                     status = get_agreement_notify_packet(PROPOSAL_STATUS_ACCEPTED, merged_membership, ma, &amr, &tmp_out_buf, &snd_msg_len, copy_vc(my_lc), prev_vc);
 
                     int local_view_disagrees = install_agreed_view(amr, m, copy_vc(my_lc), fastrandstate);
+
+                    notify_new_view_to_clients(m, amr, copy_vc(my_lc));
 
                     free_membership_agreement(amr);
 
