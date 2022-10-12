@@ -114,16 +114,16 @@ void init_dbc_stats();
 
 typedef struct msg_callback
 {
-	void (*callback)(void *);
-	WORD client_id;
-	int64_t nonce;
-	pthread_mutex_t * lock;
-	pthread_cond_t * signal;
+    void (*callback)(void *);
+    WORD client_id;
+    int64_t nonce;
+    pthread_mutex_t * lock;
+    pthread_cond_t * signal;
 
-	pthread_mutex_t * reply_lock;
-	void ** replies;
-	short * reply_types;
-	short no_replies;
+    pthread_mutex_t * reply_lock;
+    void ** replies;
+    short * reply_types;
+    short no_replies;
     short no_valid_replies;
 } msg_callback;
 
@@ -144,25 +144,25 @@ typedef struct remote_db {
     pthread_mutex_t* msg_callbacks_lock;
     pthread_mutex_t* txn_state_lock;
 
-	int replication_factor;
-	int quorum_size;
-	int rpc_timeout;
+    int replication_factor;
+    int quorum_size;
+    int rpc_timeout;
     int actor_replication_factor;
 
-	pthread_t comm_thread;
-	short stop_comm;
-	fd_set readfds;
+    pthread_t comm_thread;
+    short stop_comm;
+    fd_set readfds;
     int wakeup_pipe[2];
 
-	int64_t requests;
-	unsigned int fastrandstate;
+    int64_t requests;
+    unsigned int fastrandstate;
 
     pthread_mutex_t* lc_lock;
-	vector_clock * my_lc;
+    vector_clock * my_lc;
 
-	vector_clock * current_view_id;
-	pthread_mutex_t * gossip_lock;
-	pthread_cond_t * gossip_signal;
+    vector_clock * current_view_id;
+    pthread_mutex_t * gossip_lock;
+    pthread_cond_t * gossip_signal;
 
     skiplist_t * _rts_ring; // Consistent hashing skiplist of rts-es for actor-to-rts placement
     int local_rts_id;
@@ -170,19 +170,19 @@ typedef struct remote_db {
 
 typedef struct gossip_callback_args
 {
-	membership_state * membership;
-	int status;
+    membership_state * membership;
+    int status;
 } gossip_callback_args;
 
 typedef struct gossip_callback
 {
-	void (*callback)(gossip_callback_args *);
-	pthread_mutex_t * lock;
-	pthread_cond_t * signal;
+    void (*callback)(gossip_callback_args *);
+    pthread_mutex_t * lock;
+    pthread_cond_t * signal;
 } gossip_callback;
 
 remote_db_t * get_remote_db(int replication_factor, int rack_id, int dc_id, char * hostname, unsigned short local_rts_id,
-							int no_seeds, char ** seed_hosts, int * seed_ports, unsigned int * seedptr);
+                            int no_seeds, char ** seed_hosts, int * seed_ports, unsigned int * seedptr);
 int add_server_to_membership(char *hostname, int portno, int status, remote_db_t * db, unsigned int * seedptr);
 msg_callback * add_msg_callback(int64_t nonce, void (*callback)(void *), remote_db_t * db);
 int delete_msg_callback(int64_t nonce, remote_db_t * db);
@@ -213,24 +213,24 @@ int remote_delete_by_index_in_txn(WORD index_key, int idx_idx, WORD table_key, i
 // Read ops:
 
 int remote_search_in_txn(WORD* primary_keys, int no_primary_keys, db_row_t** result_row, WORD table_key,
-						int * minority_status, uuid_t * txnid, remote_db_t * db);
+                        int * minority_status, uuid_t * txnid, remote_db_t * db);
 int remote_search_clustering_in_txn(WORD* primary_keys, int no_primary_keys, WORD* clustering_keys, int no_clustering_keys,
-									db_row_t** result_row, WORD table_key, int * minority_status, uuid_t * txnid, remote_db_t * db);
+                                    db_row_t** result_row, WORD table_key, int * minority_status, uuid_t * txnid, remote_db_t * db);
 int remote_search_columns_in_txn(WORD* primary_keys, int no_primary_keys, WORD* clustering_keys, int no_clustering_keys,
-									WORD* col_keys, int no_columns, db_row_t** result_row, WORD table_key,
-									int * minority_status, uuid_t * txnid, remote_db_t * db);
+                                    WORD* col_keys, int no_columns, db_row_t** result_row, WORD table_key,
+                                    int * minority_status, uuid_t * txnid, remote_db_t * db);
 int remote_search_index_in_txn(WORD index_key, int idx_idx, db_row_t** result_row, WORD table_key,
                                 int * minority_status, uuid_t * txnid, remote_db_t * db);
 int remote_range_search_in_txn(WORD* start_primary_keys, WORD* end_primary_keys, int no_primary_keys,
-							snode_t** start_row, snode_t** end_row,
-							WORD table_key, int * no_items, int * minority_status, uuid_t * txnid, remote_db_t * db);
+                            snode_t** start_row, snode_t** end_row,
+                            WORD table_key, int * no_items, int * minority_status, uuid_t * txnid, remote_db_t * db);
 int remote_range_search_clustering_in_txn(WORD* primary_keys, int no_primary_keys,
-									 WORD* start_clustering_keys, WORD* end_clustering_keys, int no_clustering_keys,
-									 snode_t** start_row, snode_t** end_row,
-									 WORD table_key, int * no_items, int * minority_status, uuid_t * txnid, remote_db_t * db);
+                                     WORD* start_clustering_keys, WORD* end_clustering_keys, int no_clustering_keys,
+                                     snode_t** start_row, snode_t** end_row,
+                                     WORD table_key, int * no_items, int * minority_status, uuid_t * txnid, remote_db_t * db);
 int remote_range_search_index_in_txn(int idx_idx, WORD start_idx_key, WORD end_idx_key,
-								    snode_t** start_row, snode_t** end_row,
-								    WORD table_key, int * no_items, int * minority_status, uuid_t * txnid, remote_db_t * db);
+                                    snode_t** start_row, snode_t** end_row,
+                                    WORD table_key, int * no_items, int * minority_status, uuid_t * txnid, remote_db_t * db);
 int remote_read_full_table_in_txn(snode_t** start_row, snode_t** end_row, WORD table_key,
                                     int * no_items, int * minority_status, uuid_t * txnid, remote_db_t * db);
 void remote_print_long_table(WORD table_key, remote_db_t * db);
@@ -240,32 +240,32 @@ void remote_print_long_table(WORD table_key, remote_db_t * db);
 int remote_create_queue_in_txn(WORD table_key, WORD queue_id, int * minority_status, uuid_t * txnid, remote_db_t * db);
 int remote_delete_queue_in_txn(WORD table_key, WORD queue_id, int * minority_status, uuid_t * txnid, remote_db_t * db);
 int remote_enqueue_in_txn(WORD * column_values, int no_cols, WORD blob, size_t blob_size, WORD table_key,
-						WORD queue_id, int * minority_status, uuid_t * txnid, remote_db_t * db);
+                        WORD queue_id, int * minority_status, uuid_t * txnid, remote_db_t * db);
 int remote_read_queue_in_txn(WORD consumer_id, WORD shard_id, WORD app_id, WORD table_key, WORD queue_id,
-		int max_entries, int * entries_read, int64_t * new_read_head,
-		snode_t** start_row, snode_t** end_row, int * minority_status, uuid_t * txnid,
-		remote_db_t * db);
+        int max_entries, int * entries_read, int64_t * new_read_head,
+        snode_t** start_row, snode_t** end_row, int * minority_status, uuid_t * txnid,
+        remote_db_t * db);
 int remote_consume_queue_in_txn(WORD consumer_id, WORD shard_id, WORD app_id, WORD table_key, WORD queue_id,
-					int64_t new_consume_head, int * minority_status, uuid_t * txnid, remote_db_t * db);
+                    int64_t new_consume_head, int * minority_status, uuid_t * txnid, remote_db_t * db);
 int remote_subscribe_queue(WORD consumer_id, WORD shard_id, WORD app_id, WORD table_key, WORD queue_id,
-						queue_callback * callback, int64_t * prev_read_head, int64_t * prev_consume_head,
-						int * minority_status, remote_db_t * db);
+                        queue_callback * callback, int64_t * prev_read_head, int64_t * prev_consume_head,
+                        int * minority_status, remote_db_t * db);
 int remote_unsubscribe_queue(WORD consumer_id, WORD shard_id, WORD app_id, WORD table_key, WORD queue_id,
-							int * minority_status, remote_db_t * db);
+                            int * minority_status, remote_db_t * db);
 int remote_subscribe_queue_in_txn(WORD consumer_id, WORD shard_id, WORD app_id, WORD table_key, WORD queue_id,
-						queue_callback * callback, int64_t * prev_read_head, int64_t * prev_consume_head,
-						int * minority_status, uuid_t * txnid, remote_db_t * db);
+                        queue_callback * callback, int64_t * prev_read_head, int64_t * prev_consume_head,
+                        int * minority_status, uuid_t * txnid, remote_db_t * db);
 int remote_unsubscribe_queue_in_txn(WORD consumer_id, WORD shard_id, WORD app_id, WORD table_key, WORD queue_id,
-									int * minority_status, uuid_t * txnid, remote_db_t * db);
+                                    int * minority_status, uuid_t * txnid, remote_db_t * db);
 
 // Subscription handling client-side:
 
 int subscribe_queue_client(WORD consumer_id, WORD shard_id, WORD app_id, WORD table_key, WORD queue_id,
-					queue_callback * callback, short use_lock, remote_db_t * db);
+                    queue_callback * callback, short use_lock, remote_db_t * db);
 queue_callback * get_queue_client_callback(WORD consumer_id, WORD shard_id, WORD app_id, WORD table_key, WORD queue_id,
-					short use_lock, remote_db_t * db);
+                    short use_lock, remote_db_t * db);
 int unsubscribe_queue_client(WORD consumer_id, WORD shard_id, WORD app_id, WORD table_key, WORD queue_id,
-						short use_lock, remote_db_t * db);
+                        short use_lock, remote_db_t * db);
 
 
 // Txn mgmt:
@@ -295,13 +295,13 @@ int listen_to_gossip(int status, int rack_id, int dc_id, char * hostname, unsign
 typedef struct rts_descriptor
 {
     char id[262];
-	int rack_id;
-	int dc_id;
-	char * hostname;
-	unsigned short local_rts_id;
-	unsigned int _local_rts_index;
-	struct sockaddr_in addr;
-	int status;
+    int rack_id;
+    int dc_id;
+    char * hostname;
+    unsigned short local_rts_id;
+    unsigned int _local_rts_index;
+    struct sockaddr_in addr;
+    int status;
 } rts_descriptor;
 
 rts_descriptor * get_rts_descriptor(int rack_id, int dc_id, char *hostname, int local_rts_id, int status);
@@ -319,10 +319,10 @@ static const char *Actor_status_name[] = {"running", "migrating", "stopped"};
 
 typedef struct actor_descriptor
 {
-	long actor_id;
-	rts_descriptor * host_rts;
-	int is_local;
-	int status;
+    long actor_id;
+    rts_descriptor * host_rts;
+    int is_local;
+    int status;
 } actor_descriptor;
 
 actor_descriptor * get_actor_descriptor(long actor_id, rts_descriptor * host_rts, int is_local, int status);
