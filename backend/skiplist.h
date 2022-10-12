@@ -14,7 +14,7 @@ typedef void *WORD;
 #define NEXT(snode) ((snode)->forward[0])
 
 typedef struct snode {
-	WORD key;
+    WORD key;
     WORD value;
     struct snode **forward;
 } snode_t;

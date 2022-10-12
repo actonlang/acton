@@ -44,16 +44,16 @@ int sockaddr_cmp(WORD a1, WORD a2);
 
 typedef struct remote_server
 {
-	char hostname[256];
-	unsigned short portno;
-	int sockfd;
+    char hostname[256];
+    unsigned short portno;
+    int sockfd;
     pthread_mutex_t* sockfd_lock;
-	struct sockaddr_in serveraddr;
-	struct sockaddr_in client_socket_addr;
-	struct hostent *server;
-	char id[262];
-	int status;
-	char in_buf[BUFSIZE];
+    struct sockaddr_in serveraddr;
+    struct sockaddr_in client_socket_addr;
+    struct hostent *server;
+    char id[262];
+    int status;
+    char in_buf[BUFSIZE];
 } remote_server;
 
 remote_server * get_remote_server(char *hostname, unsigned short portno, struct sockaddr_in serveraddr, struct sockaddr_in client_socket_addr, int serverfd, int do_connect, int is_rts);

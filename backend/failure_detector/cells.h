@@ -14,9 +14,9 @@ typedef void * WORD;
 
 typedef struct cell_address
 {
-	int64_t table_key;
-	int64_t * keys;
-	int no_keys;
+    int64_t table_key;
+    int64_t * keys;
+    int no_keys;
 } cell_address;
 
 cell_address * init_cell_address(int64_t table_key, int64_t * keys, int no_keys);
@@ -35,14 +35,14 @@ char * to_string_cell_address(cell_address * ca, char * msg_buff);
 
 typedef struct cell
 {
-	int64_t table_key;
-	int64_t * keys;
-	int no_keys;
-	int64_t * columns;
-	int no_columns;
-	WORD last_blob;
-	size_t last_blob_size;
-	vector_clock * version;
+    int64_t table_key;
+    int64_t * keys;
+    int no_keys;
+    int64_t * columns;
+    int no_columns;
+    WORD last_blob;
+    size_t last_blob_size;
+    vector_clock * version;
 } cell;
 
 cell * init_cell(int64_t table_key, int64_t * keys, int no_keys, int64_t * columns, int no_columns, WORD last_blob, size_t last_blob_size, vector_clock * version);

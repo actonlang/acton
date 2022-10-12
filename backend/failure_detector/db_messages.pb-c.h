@@ -188,7 +188,7 @@ struct  VersionedCellMessage
   int64_t *columns;
   ProtobufCBinaryData blob;
   /*
-   *	optional int64 version_no=6;
+   *    optional int64 version_no=6;
    */
   VectorClockMessage *version;
 };
