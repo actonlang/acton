@@ -11,6 +11,8 @@
 
 #define MAX_MSG_SIZE_GS (MAX_MSG_SIZE_VC + 16)
 
+#define SKIP_PROPOSAL_STATUS 10
+
 /* Node description: */
 
 typedef struct node_description

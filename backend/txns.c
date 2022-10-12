@@ -19,6 +19,7 @@
  */
 
 #include "txns.h"
+#include "log.h"
 
 #include <stdio.h>
 
@@ -320,23 +321,47 @@ int is_read_invalidated(txn_read * tr, txn_state * rts, db_t * db)
 	return 0;
 }
 
-int is_write_invalidated(txn_write * tw, txn_state * rts, db_t * db)
+int is_write_invalidated(txn_write * tw, txn_state * rts, int * schema_status, db_t * db)
 {
 	// Check for invalidated queue reads / creation / deletion ops with backend DB:
 
+    *schema_status = 0;
 	switch(tw->query_type)
 	{
-		case QUERY_TYPE_READ_QUEUE:
+	    case QUERY_TYPE_READ_QUEUE:
 		{
-			return db_verify_cell_version(&tw->queue_id, 1, NULL, 0, tw->table_key, tw->prh_version, db);
+			int status = db_verify_cell_version(&tw->queue_id, 1, NULL, 0, tw->table_key, tw->prh_version, db);
+			if(status == DB_ERR_NO_TABLE || status == DB_ERR_NO_QUEUE)
+			{
+#if (VERBOSE_TXNS > 0)
+			    log_debug("read_queue(%ld) invalidating txn", tw->queue_id);
+#endif
+			    *schema_status = 1;
+			}
+			return (status != 0);
 		}
 		case QUERY_TYPE_CREATE_QUEUE:
 		{
 			return (db_search(&tw->queue_id, tw->table_key, db) != NULL);
 		}
-		case QUERY_TYPE_DELETE_QUEUE:
+        case QUERY_TYPE_DELETE_QUEUE:
+        case QUERY_TYPE_UNSUBSCRIBE_QUEUE:
+        {
+            return (db_search(&tw->queue_id, tw->table_key, db) == NULL);
+        }
+		case QUERY_TYPE_ENQUEUE:
+		case QUERY_TYPE_CONSUME_QUEUE:
+		case QUERY_TYPE_SUBSCRIBE_QUEUE:
 		{
-			return (db_search(&tw->queue_id, tw->table_key, db) == NULL);
+		    if(db_search(&tw->queue_id, tw->table_key, db) == NULL)
+		    {
+#if (VERBOSE_TXNS > 0)
+                log_debug("Query type %d (%ld) invalidating txn", tw->query_type, tw->queue_id);
+#endif
+                *schema_status = 1;
+		        return 1;
+		    }
+		    return 0;
 		}
 	}
 
@@ -426,6 +451,7 @@ int is_write_invalidated(txn_write * tw, txn_state * rts, db_t * db)
 int validate_txn(uuid_t * txnid, vector_clock * version, db_t * db)
 {
 	txn_state * ts = get_txn_state(txnid, db);
+	int schema_status = 0;
 	if(ts == NULL)
 		return NO_SUCH_TXN; // No such txn
 
@@ -454,9 +480,9 @@ int validate_txn(uuid_t * txnid, vector_clock * version, db_t * db)
 		{
 			txn_write * tw = (txn_write *) write_op_n->value;
 
-			if(is_write_invalidated(tw, ts, db))
+			if(is_write_invalidated(tw, ts, &schema_status, db))
 			{
-				return VAL_STATUS_ABORT;
+				return (schema_status == 0)?VAL_STATUS_ABORT:VAL_STATUS_ABORT_SCHEMA;
 			}
 		}
 	}
@@ -587,7 +613,7 @@ int commit_txn(uuid_t * txnid, vector_clock * version, db_t * db, unsigned int *
 		printf("BACKEND: persist txn %s returned %d\n", uuid_str, res);
 #endif
 	}
-	else if(res == VAL_STATUS_ABORT)
+	else if(res == VAL_STATUS_ABORT || res == VAL_STATUS_ABORT_SCHEMA)
 	{
 		res = abort_txn(txnid, db);
 

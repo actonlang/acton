@@ -9,20 +9,6 @@
 #ifndef BACKEND_QUEUE_H_
 #define BACKEND_QUEUE_H_
 
-#define DB_ERR_NO_TABLE -1
-#define DB_ERR_NO_QUEUE -2
-#define DB_ERR_NO_CONSUMER -3
-#define DB_ERR_QUEUE_COMPLETE -4
-#define DB_ERR_QUEUE_HEAD_INVALID -5
-#define DB_ERR_DUPLICATE_QUEUE -6
-#define DB_ERR_DUPLICATE_CONSUMER -7
-
-#define QUEUE_STATUS_READ_INCOMPLETE 0
-#define QUEUE_STATUS_READ_COMPLETE 1
-
-#define QUEUE_NOTIF_ENQUEUED 0
-#define QUEUE_NOTIF_DELETED 1
-
 int enqueue(WORD * column_values, int no_cols, size_t last_blob_size, WORD table_key, WORD queue_id, short use_lock, db_t * db, unsigned int * fastrandstate);
 int read_queue(WORD consumer_id, WORD shard_id, WORD app_id, WORD table_key, WORD queue_id,
 		int max_entries, int * entries_read, int64_t * new_read_head, vector_clock ** prh_version,

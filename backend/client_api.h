@@ -124,6 +124,7 @@ typedef struct msg_callback
 	void ** replies;
 	short * reply_types;
 	short no_replies;
+    short no_valid_replies;
 } msg_callback;
 
 msg_callback * get_msg_callback(int64_t nonce, WORD client_id, void (*callback)(void *), int replication_factor);
@@ -270,7 +271,7 @@ int unsubscribe_queue_client(WORD consumer_id, WORD shard_id, WORD app_id, WORD 
 // Txn mgmt:
 
 uuid_t * remote_new_txn(remote_db_t * db);
-int remote_validate_txn(uuid_t * txnid, remote_db_t * db);
+int remote_validate_txn(uuid_t * txnid, int * minority_status, remote_db_t * db);
 int remote_abort_txn(uuid_t * txnid, remote_db_t * db);
 int remote_commit_txn(uuid_t * txnid, int * minority_status, remote_db_t * db);
 

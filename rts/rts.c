@@ -853,17 +853,27 @@ void $POP() {
     POP_catcher(self);
 }
 
+void create_all_actor_queues() {
+    for(snode_t * node = HEAD(db->actors); node!=NULL; node=NEXT(node)) {
+        create_db_queue((long) node->key);
+    }
+}
+
 int handle_status_and_schema_mismatch(int ret, int minority_status, long key)
 {
     // If schema on any of the DB servers needs updating (based on minority_status), do that.
     // If there was a quorum of healthy servers, we can go on after this, the operation succeeded.
     // If schema was missing on a majority of servers, we'll in addition get NO_QUORUM_ERR, and
     // we also need to retry the operation.
+    int queues_created = 0;
     switch(minority_status) {
         case DB_ERR_NO_QUEUE:
-        case DB_ERR_NO_CONSUMER: {
+        case DB_ERR_NO_CONSUMER:
+        case VAL_STATUS_ABORT_SCHEMA: {
             // Schema errs:
+//            create_all_actor_queues();
             create_db_queue(key);
+            queues_created = 1;
             break;
         }
         case QUEUE_STATUS_READ_INCOMPLETE:
@@ -877,6 +887,11 @@ int handle_status_and_schema_mismatch(int ret, int minority_status, long key)
         default: { // DB_ERR_QUEUE_HEAD_INVALID, DB_ERR_NO_TABLE
             assert(0);
         }
+    }
+
+    if(ret == VAL_STATUS_ABORT_SCHEMA && !queues_created) {
+//        create_all_actor_queues();
+        create_db_queue(key);
     }
 
     if(ret == NO_QUORUM_ERR) {
@@ -990,10 +1005,9 @@ void handle_timeout() {
                     continue;
 
                 int ret3 = remote_commit_txn(txnid, &minority_status, db);
+                rtsd_printf("############## Commit returned %d, minority_status %d", ret3, minority_status);
                 if(handle_status_and_schema_mismatch(ret3, minority_status, key))
                     continue;
-
-                rtsd_printf("############## Commit");
                 if(ret3 == VAL_STATUS_COMMIT)
                     success = 1;
                 }

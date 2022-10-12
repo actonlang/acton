@@ -1198,7 +1198,9 @@ int handle_client_message(int childfd, int msg_len, db_t * db, membership * m, s
     				case DB_TXN_VALIDATION:
     				{
     					status = handle_validate_txn(tm, db, fastrandstate);
-    					assert(status == VAL_STATUS_COMMIT || status == VAL_STATUS_ABORT);
+    					if(status != VAL_STATUS_COMMIT)
+    					    log_warn("BACKEND: handle_validate_txn() returned %d\n", status);
+    					assert(status == VAL_STATUS_COMMIT || status == VAL_STATUS_ABORT || status == VAL_STATUS_ABORT_SCHEMA || status == NO_SUCH_TXN);
     					status = get_txn_ack_packet(status, tm, &tmp_out_buf, &snd_msg_len, vc);
 
     					break;
@@ -1550,7 +1552,7 @@ int propose_local_membership(membership * m, vector_clock * my_vc, membership_ag
 		log_info("Sending Membership Notify message to clients: %s", msg_buf);
 #endif
 		}
-		return -1;
+		return SKIP_PROPOSAL_STATUS;
     }
 
     if(m->outstanding_view_id != NULL)
