@@ -52,6 +52,8 @@ int no_actors = 2;
 int no_collections = 2;
 int no_items = 2;
 
+int minority_status = 0;
+
 
 db_schema_t * create_schema() {
 	int primary_key_idx = 0;
@@ -91,7 +93,7 @@ int populate_db(db_schema_t * schema, remote_db_t * db, uuid_t * txnid, unsigned
 				column_values[2] = (WORD) iid;
 				column_values[3] = (WORD) iid + 1;
 
-				if(remote_insert_in_txn(column_values, no_cols, schema->no_primary_keys, schema->min_no_clustering_keys, NULL, 0, (WORD) 0, txnid, db) != 0)
+				if(remote_insert_in_txn(column_values, no_cols, schema->no_primary_keys, schema->min_no_clustering_keys, NULL, 0, (WORD) 0, &minority_status, txnid, db) != 0)
 					return -1;
 			}
 		}
@@ -106,7 +108,7 @@ int delete_test(db_schema_t * schema, remote_db_t * db, uuid_t * txnid, unsigned
 	printf("TEST: delete_test\n");
 
 	WORD row_key = (WORD) no_actors - 1;
-	return remote_delete_row_in_txn(&row_key, schema->no_primary_keys, (WORD) 0, txnid, db);
+	return remote_delete_row_in_txn(&row_key, schema->no_primary_keys, (WORD) 0, &minority_status, txnid, db);
 }
 
 int delete_all(db_schema_t * schema, remote_db_t * db, uuid_t * txnid, unsigned int * fastrandstate)
@@ -116,7 +118,7 @@ int delete_all(db_schema_t * schema, remote_db_t * db, uuid_t * txnid, unsigned 
 
 	int ret = 0;
 	for(int64_t aid = 0; aid<no_actors; aid++)
-		ret |= remote_delete_row_in_txn((WORD *) &aid, schema->no_primary_keys, (WORD) 0, txnid, db);
+		ret |= remote_delete_row_in_txn((WORD *) &aid, schema->no_primary_keys, (WORD) 0, &minority_status, txnid, db);
 
 	return ret;
 }
@@ -130,7 +132,7 @@ int test_search_pk(db_schema_t * schema, remote_db_t * db, uuid_t * txnid, unsig
 	for(int64_t aid=0;aid<no_actors;aid++)
 	{
 		db_row_t * row = NULL;
-		remote_search_in_txn((WORD *) &aid, schema->no_primary_keys, &row, (WORD) 0, txnid, db);
+		remote_search_in_txn((WORD *) &aid, schema->no_primary_keys, &row, (WORD) 0, &minority_status, txnid, db);
 
 		if(txnid != NULL && row == NULL)
 			continue;
@@ -165,7 +167,7 @@ int test_search_pk_ck1(db_schema_t * schema, remote_db_t * db, uuid_t * txnid, u
 		{
 			db_row_t * row = NULL;
 
-			remote_search_clustering_in_txn((WORD *) &aid, schema->no_primary_keys, (WORD *) &cid, 1, &row, (WORD) 0, txnid, db);
+			remote_search_clustering_in_txn((WORD *) &aid, schema->no_primary_keys, (WORD *) &cid, 1, &row, (WORD) 0, &minority_status, txnid, db);
 
 			if(txnid != NULL && row == NULL)
 				continue;
@@ -207,7 +209,7 @@ int test_search_pk_ck1_ck2(db_schema_t * schema, remote_db_t * db, uuid_t * txni
 
 				db_row_t * row = NULL;
 
-				remote_search_clustering_in_txn((WORD *) &aid, schema->no_primary_keys, cks, 2, &row, (WORD) 0, txnid, db);
+				remote_search_clustering_in_txn((WORD *) &aid, schema->no_primary_keys, cks, 2, &row, (WORD) 0, &minority_status, txnid, db);
 
 				if(txnid != NULL && row == NULL)
 					continue;
@@ -242,8 +244,8 @@ int test_create_queue(remote_db_t * db, uuid_t * txnid)
 {
 	printf("TEST: create_queue\n");
 
-	int ret = remote_create_queue_in_txn((WORD) 1, (WORD) 1, txnid, db);
-	ret |= remote_create_queue_in_txn((WORD) 1, (WORD) 2, txnid, db);
+	int ret = remote_create_queue_in_txn((WORD) 1, (WORD) 1, &minority_status, txnid, db);
+	ret |= remote_create_queue_in_txn((WORD) 1, (WORD) 2, &minority_status, txnid, db);
 
 	return ret;
 }
@@ -252,8 +254,8 @@ int test_delete_queue(remote_db_t * db, uuid_t * txnid)
 {
 	printf("TEST: delete_queue\n");
 
-	int ret = remote_delete_queue_in_txn((WORD) 1, (WORD) 1, txnid, db);
-	ret |= remote_delete_queue_in_txn((WORD) 1, (WORD) 2, txnid, db);
+	int ret = remote_delete_queue_in_txn((WORD) 1, (WORD) 1, &minority_status, txnid, db);
+	ret |= remote_delete_queue_in_txn((WORD) 1, (WORD) 2, &minority_status, txnid, db);
 
 	return ret;
 }
@@ -264,13 +266,13 @@ int test_subscribe_queue(remote_db_t * db, WORD consumer_id, WORD queue_id)
 	int64_t prev_read_head = -1, prev_consume_head = -1;
 	queue_callback * qc = get_queue_callback(consumer_callback);
 
-	return remote_subscribe_queue(consumer_id, (WORD) 1, (WORD) 2, (WORD) 1, queue_id, qc, &prev_read_head, &prev_consume_head, db); // &txnid
+	return remote_subscribe_queue(consumer_id, (WORD) 1, (WORD) 2, (WORD) 1, queue_id, qc, &prev_read_head, &prev_consume_head, &minority_status, db); // &txnid
 }
 
 int test_unsubscribe_queue(remote_db_t * db, WORD consumer_id, WORD queue_id)
 {
 	printf("TEST: unsubscribe_queue\n");
-	return remote_unsubscribe_queue(consumer_id, (WORD) 1, (WORD) 2, (WORD) 1, queue_id, db); // &txnid
+	return remote_unsubscribe_queue(consumer_id, (WORD) 1, (WORD) 2, (WORD) 1, queue_id, &minority_status, db); // &txnid
 }
 
 int test_enqueue(remote_db_t * db, WORD queue_id, uuid_t * txnid)
@@ -284,7 +286,7 @@ int test_enqueue(remote_db_t * db, WORD queue_id, uuid_t * txnid)
 		column_values[0] = (WORD) i;
 		column_values[1] = (WORD) i + 1;
 
-		if(remote_enqueue_in_txn(column_values, no_queue_cols, NULL, 0, (WORD) 1, queue_id, txnid, db) != 0)
+		if(remote_enqueue_in_txn(column_values, no_queue_cols, NULL, 0, (WORD) 1, queue_id, &minority_status, txnid, db) != 0)
 			return -1;
 	}
 
@@ -300,7 +302,7 @@ int test_read_queue(remote_db_t * db, WORD consumer_id, WORD queue_id, uuid_t * 
 	snode_t* start_row, * end_row;
 	int ret = remote_read_queue_in_txn(consumer_id, (WORD) 1, (WORD) 2, (WORD) 1, queue_id,
 									max_entries, &entries_read, &new_read_head,
-									&start_row, &end_row, txnid, db);
+									&start_row, &end_row, &minority_status, txnid, db);
 
 	assert(ret == QUEUE_STATUS_READ_COMPLETE);
 	assert(entries_read == no_enqueues);
@@ -313,7 +315,7 @@ int test_read_queue(remote_db_t * db, WORD consumer_id, WORD queue_id, uuid_t * 
 int test_consume_queue(remote_db_t * db, WORD consumer_id, WORD queue_id, uuid_t * txnid)
 {
 	printf("TEST: consume_queue\n");
-	return remote_consume_queue_in_txn(consumer_id, (WORD) 1, (WORD) 2, (WORD) 1, queue_id, no_enqueues - 1, txnid, db); // &txnid
+	return remote_consume_queue_in_txn(consumer_id, (WORD) 1, (WORD) 2, (WORD) 1, queue_id, no_enqueues - 1, &minority_status, txnid, db); // &txnid
 }
 
 int test_txn(remote_db_t * db, db_schema_t * schema, unsigned * fastrandstate)

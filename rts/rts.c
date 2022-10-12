@@ -160,10 +160,10 @@ int sched_getaffinity(pid_t pid, size_t cpu_size, cpu_set_t *cpu_set)
 }
 
 kern_return_t thread_policy_set(
-					thread_t thread,
-					thread_policy_flavor_t flavor,
-					thread_policy_t policy_info,
-					mach_msg_type_number_t count);
+                    thread_t thread,
+                    thread_policy_flavor_t flavor,
+                    thread_policy_t policy_info,
+                    mach_msg_type_number_t count);
 
 int pthread_setaffinity_np(pthread_t thread, size_t cpu_size, cpu_set_t *cpu_set) {
     int core = 0;
@@ -761,12 +761,26 @@ struct $Cont $InitRoot$cont = {
 void dummy_callback(queue_callback_args * qca) { }
 
 void create_db_queue(long key) {
-    int ret = remote_create_queue_in_txn(MSG_QUEUE, ($WORD)key, NULL, db);
-    rtsd_printf("#### Create queue %ld returns %d", key, ret);
-    queue_callback * qc = get_queue_callback(dummy_callback);
-	int64_t prev_read_head = -1, prev_consume_head = -1;
-	ret = remote_subscribe_queue(($WORD)key, 0, 0, MSG_QUEUE, ($WORD)key, qc, &prev_read_head, &prev_consume_head, db);
-    rtsd_printf("   # Subscribe queue %ld returns %d", key, ret);
+    int minority_status = 0;
+    while(!rts_exit) {
+        int ret = remote_create_queue_in_txn(MSG_QUEUE, ($WORD)key, &minority_status, NULL, db);
+        rtsd_printf("#### Create queue %ld returns %d", key, ret);
+        if(ret == NO_QUORUM_ERR) {
+            sleep(3);
+            continue;
+        }
+        queue_callback * qc = get_queue_callback(dummy_callback);
+        int64_t prev_read_head = -1, prev_consume_head = -1;
+        // We might have lost quorum since we created the queue above, so check again and re-create queue until success.
+        ret = remote_subscribe_queue(($WORD)key, 0, 0, MSG_QUEUE, ($WORD)key, qc, &prev_read_head, &prev_consume_head, &minority_status, db);
+        rtsd_printf("   # create_db_queue(): Subscribe queue %ld returns %d, minority_status %d", key, ret, minority_status);
+        if(ret == NO_QUORUM_ERR || minority_status == DB_ERR_NO_QUEUE) {
+            sleep(3);
+            continue;
+        }
+        if(ret == 0 || ret == CLIENT_ERR_SUBSCRIPTION_EXISTS)
+            break;
+    }
 }
 
 void init_db_queue(long key) {
@@ -839,19 +853,96 @@ void $POP() {
     POP_catcher(self);
 }
 
-// Actually send all buffered messages of the sender
-void FLUSH_outgoing($Actor self, uuid_t *txnid) {
-    rtsd_printf("#### FLUSH_outgoing messages from %ld", self->$globkey);
+void create_all_actor_queues() {
+    for(snode_t * node = HEAD(db->actors); node!=NULL; node=NEXT(node)) {
+        create_db_queue((long) node->key);
+    }
+}
+
+int handle_status_and_schema_mismatch(int ret, int minority_status, long key)
+{
+    // If schema on any of the DB servers needs updating (based on minority_status), do that.
+    // If there was a quorum of healthy servers, we can go on after this, the operation succeeded.
+    // If schema was missing on a majority of servers, we'll in addition get NO_QUORUM_ERR, and
+    // we also need to retry the operation.
+    int queues_created = 0;
+    switch(minority_status) {
+        case DB_ERR_NO_QUEUE:
+        case DB_ERR_NO_CONSUMER:
+        case VAL_STATUS_ABORT_SCHEMA: {
+            // Schema errs:
+//            create_all_actor_queues();
+            create_db_queue(key);
+            queues_created = 1;
+            break;
+        }
+        case QUEUE_STATUS_READ_INCOMPLETE:
+        case QUEUE_STATUS_READ_COMPLETE:
+        case DB_ERR_DUPLICATE_CONSUMER:
+        case DB_ERR_QUEUE_COMPLETE:
+        case DB_ERR_DUPLICATE_QUEUE: {
+            // These are OK:
+            break;
+        }
+        default: { // DB_ERR_QUEUE_HEAD_INVALID, DB_ERR_NO_TABLE
+            assert(0);
+        }
+    }
+
+    if(ret == VAL_STATUS_ABORT_SCHEMA && !queues_created) {
+//        create_all_actor_queues();
+        create_db_queue(key);
+    }
+
+    if(ret == NO_QUORUM_ERR) {
+        sleep(3);
+        return 1;
+    }
+
+    return 0;
+}
+
+void reverse_outgoing_queue($Actor self) {
     $Msg prev = NULL;
     $Msg m = self->$outgoing;
-    self->$outgoing = NULL;
     while (m) {
         $Msg next = m->$next;
         m->$next = prev;
         prev = m;
         m = next;
     }
-    m = prev;
+    self->$outgoing = prev;
+}
+
+// Send all buffered messages of the sender to global DB queues in a single txn, and retry it until success
+// Leaves no side effects in local queues if txns need to abort
+// Assumes the actor's outgoing queue has already been reversed in FIFO order
+void FLUSH_outgoing_db($Actor self, uuid_t *txnid) {
+    rtsd_printf("#### FLUSH_outgoing messages from %ld to DB queues", self->$globkey);
+    $Msg m = self->$outgoing;
+    while (m) {
+        long dest = (m->$baseline == self->$msg->$baseline)? m->$to->$globkey : 0;
+        int ret = 0, minority_status = 0;
+        while(!rts_exit) {
+            ret = remote_enqueue_in_txn(($WORD*)&m->$globkey, 1, NULL, 0, MSG_QUEUE, (WORD)dest, &minority_status, txnid, db);
+            if (dest) {
+                    rtsd_printf("   # enqueue msg %ld to queue %ld returns %d, minority_status=%d", m->$globkey, dest, ret, minority_status);
+            } else {
+                    rtsd_printf("   # enqueue msg %ld to TIMER_QUEUE returns %d, minority_status=%d", m->$globkey, ret, minority_status);
+            }
+            if(!handle_status_and_schema_mismatch(ret, minority_status, dest))
+                break;
+        }
+        m = m->$next;
+    }
+}
+
+// Actually send all buffered messages of the sender, using internal queues only
+// Assumes the actor's outgoing queue has already been reversed in FIFO order
+void FLUSH_outgoing_local($Actor self) {
+    rtsd_printf("#### FLUSH_outgoing messages from %ld to RTS-internal queues", self->$globkey);
+    $Msg m = self->$outgoing;
+    self->$outgoing = NULL;
     while (m) {
         $Msg next = m->$next;
         m->$next = NULL;
@@ -866,14 +957,6 @@ void FLUSH_outgoing($Actor self, uuid_t *txnid) {
             if (ENQ_timed(m))
                 reset_timeout();
             dest = 0;
-        }
-        if (db) {
-            int ret = remote_enqueue_in_txn(($WORD*)&m->$globkey, 1, NULL, 0, MSG_QUEUE, (WORD)dest, txnid, db);
-            if (dest) {
-                rtsd_printf("   # enqueue msg %ld to queue %ld returns %d", m->$globkey, dest, ret);
-            } else {
-                rtsd_printf("   # enqueue msg %ld to TIMER_QUEUE returns %d", m->$globkey, ret);
-            }
         }
         m = next;
     }
@@ -893,22 +976,41 @@ void handle_timeout() {
             wake_wt(wtid);
         }
         if (db) {
-            uuid_t *txnid = remote_new_txn(db);
-            timer_consume_hd++;
+                int success = 0;
+                while(!success && !rts_exit)
+                {
+                uuid_t *txnid = remote_new_txn(db);
+                if(txnid == NULL)
+                    continue;
+                timer_consume_hd++;
 
-            long key = TIMER_QUEUE;
-            snode_t *m_start, *m_end;
-            int entries_read = 0;
-            int64_t read_head = -1;
-            int ret0 = remote_read_queue_in_txn(($WORD)key, 0, 0, MSG_QUEUE, ($WORD)key, 1, &entries_read, &read_head, &m_start, &m_end, NULL, db);
-            rtsd_printf("   # dummy read msg from TIMER_QUEUE returns %d, entries read: %d", ret0, entries_read);
+                long key = TIMER_QUEUE;
+                snode_t *m_start, *m_end;
+                int entries_read = 0, minority_status = 0;
+                int64_t read_head = -1;
 
-            int ret = remote_consume_queue_in_txn(($WORD)key, 0, 0, MSG_QUEUE, ($WORD)key, read_head, txnid, db);
-            rtsd_printf("   # consume msg %ld from TIMER_QUEUE returns %d", m->$globkey, ret);
-            int ret2 = remote_enqueue_in_txn(($WORD*)&m->$globkey, 1, NULL, 0, MSG_QUEUE, (WORD)m->$to->$globkey, txnid, db);
-            rtsd_printf("   # (timed) enqueue msg %ld to queue %ld returns %d", m->$globkey, m->$to->$globkey, ret2);
-            remote_commit_txn(txnid, db);
-            rtsd_printf("############## Commit");
+                int ret0 = remote_read_queue_in_txn(($WORD)key, 0, 0, MSG_QUEUE, ($WORD)key, 1, &entries_read, &read_head, &m_start, &m_end, &minority_status, NULL, db);
+                rtsd_printf("   # dummy read msg from TIMER_QUEUE returns %d, entries read: %d", ret0, entries_read);
+                if(handle_status_and_schema_mismatch(ret0, minority_status, key))
+                    continue;
+
+                int ret1 = remote_consume_queue_in_txn(($WORD)key, 0, 0, MSG_QUEUE, ($WORD)key, read_head, &minority_status, txnid, db);
+                rtsd_printf("   # consume msg %ld from TIMER_QUEUE returns %d", m->$globkey, ret1);
+                if(handle_status_and_schema_mismatch(ret1, minority_status, key))
+                    continue;
+
+                int ret2 = remote_enqueue_in_txn(($WORD*)&m->$globkey, 1, NULL, 0, MSG_QUEUE, (WORD)m->$to->$globkey, &minority_status, txnid, db);
+                rtsd_printf("   # (timed) enqueue msg %ld to queue %ld returns %d", m->$globkey, m->$to->$globkey, ret2);
+                if(handle_status_and_schema_mismatch(ret2, minority_status, key))
+                    continue;
+
+                int ret3 = remote_commit_txn(txnid, &minority_status, db);
+                rtsd_printf("############## Commit returned %d, minority_status %d", ret3, minority_status);
+                if(handle_status_and_schema_mismatch(ret3, minority_status, key))
+                    continue;
+                if(ret3 == VAL_STATUS_COMMIT)
+                    success = 1;
+                }
         }
     }
 }
@@ -925,11 +1027,15 @@ $WORD try_globdict($WORD w) {
 
 long read_queued_msg(long key, int64_t *read_head) {
     snode_t *m_start, *m_end;
-    int entries_read = 0;
+    int entries_read = 0, minority_status = 0, ret = 0;
     
-    int ret = remote_read_queue_in_txn(($WORD)key, 0, 0, MSG_QUEUE, ($WORD)key, 
-                                       1, &entries_read, read_head, &m_start, &m_end, NULL, db);
-    rtsd_printf("   # read msg from queue %ld returns %d, entries read: %d", key, ret, entries_read);
+    while(!rts_exit) {
+        ret = remote_read_queue_in_txn(($WORD)key, 0, 0, MSG_QUEUE, ($WORD)key,
+                                           1, &entries_read, read_head, &m_start, &m_end, &minority_status, NULL, db);
+        rtsd_printf("   # read msg from queue %ld returns %d, entries read: %d, minority_status: %d", key, ret, entries_read, minority_status);
+        if(!handle_status_and_schema_mismatch(ret, minority_status, key))
+            break;
+    }
 
     if (!entries_read)
         return 0;
@@ -950,7 +1056,7 @@ $ROW extract_row($WORD *blob, size_t blob_size) {
     BlobHd* head = (BlobHd*)blob;
     $ROW fst = malloc(sizeof(struct $ROW) + head->blob_size*sizeof($WORD));
     $ROW row = fst;
-    while (1) {
+    while (!rts_exit) {
         long size = 1 + head->blob_size;
         memcpy(&row->class_id, blob, size*sizeof($WORD));
         blob += size;
@@ -1005,7 +1111,12 @@ void print_actor($Actor a) {
 void deserialize_system(snode_t *actors_start) {
     rtsd_printf("Deserializing system");
     snode_t *msgs_start, *msgs_end;
-    remote_read_full_table_in_txn(&msgs_start, &msgs_end, MSGS_TABLE, NULL, db);
+    int ret = 0,  minority_status = 0, no_items = 0;
+    while(!rts_exit) {
+        ret = remote_read_full_table_in_txn(&msgs_start, &msgs_end, MSGS_TABLE, &no_items, &minority_status, NULL, db);
+        if(!handle_status_and_schema_mismatch(ret, minority_status, 0))
+            break;
+    }
     
     globdict = $NEW($dict,($Hashable)$Hashable$int$witness,NULL,NULL);
 
@@ -1013,10 +1124,10 @@ void deserialize_system(snode_t *actors_start) {
 
     rtsd_printf("#### Msg allocation:");
     for(snode_t * node = msgs_start; node!=NULL; node=NEXT(node)) {
-		db_row_t* r = (db_row_t*) node->value;
+        db_row_t* r = (db_row_t*) node->value;
         rtsd_printf("# r %p, key: %ld, cells: %p, columns: %p, no_cols: %d, blobsize: %d", r, (long)r->key, r->cells, r->column_array, r->no_columns, r->last_blob_size);
         long key = (long)r->key;
-		if (r->cells) {
+        if (r->cells) {
             db_row_t* r2 = (HEAD(r->cells))->value;
             rtsd_printf("# r2 %p, key: %ld, cells: %p, columns: %p, no_cols: %d, blobsize: %d", r2, (long)r2->key, r2->cells, r2->column_array, r2->no_columns, r2->last_blob_size);
             BlobHd *head = (BlobHd*)r2->column_array[0];
@@ -1050,9 +1161,9 @@ void deserialize_system(snode_t *actors_start) {
 
     rtsd_printf("#### Msg contents:");
     for(snode_t * node = msgs_start; node!=NULL; node=NEXT(node)) {
-		db_row_t* r = (db_row_t*) node->value;
+        db_row_t* r = (db_row_t*) node->value;
         long key = (long)r->key;
-		if (r->cells) {
+        if (r->cells) {
             db_row_t* r2 = (HEAD(r->cells))->value;
             $WORD *blob = ($WORD*)r2->column_array[0];
             int blob_size = r2->last_blob_size;
@@ -1067,9 +1178,9 @@ void deserialize_system(snode_t *actors_start) {
 
     rtsd_printf("#### Actor contents:");
     for(snode_t * node = actors_start; node!=NULL; node=NEXT(node)) {
-		db_row_t* r = (db_row_t*) node->value;
+        db_row_t* r = (db_row_t*) node->value;
         long key = (long)r->key;
-		if (r->cells) {
+        if (r->cells) {
             db_row_t* r2 = (HEAD(r->cells))->value;
             $WORD *blob = ($WORD*)r2->column_array[0];
             int blob_size = r2->last_blob_size;
@@ -1091,10 +1202,16 @@ void deserialize_system(snode_t *actors_start) {
             rtsd_printf("#### Reading msgs queue %ld contents:", key);
             queue_callback * qc = get_queue_callback(dummy_callback);
             int64_t prev_read_head = -1, prev_consume_head = -1;
-            int ret = remote_subscribe_queue(($WORD)key, 0, 0, MSG_QUEUE, ($WORD)key, qc, &prev_read_head, &prev_consume_head, db);
-            rtsd_printf("   # Subscribe queue %ld returns %d", key, ret);
-            while (1) {
-                long msg_key = read_queued_msg(key, &prev_read_head);
+            int ret = 0, minority_status = 0;
+            while(!rts_exit) {
+                ret = remote_subscribe_queue(($WORD)key, 0, 0, MSG_QUEUE, ($WORD)key, qc, &prev_read_head, &prev_consume_head, &minority_status, db);
+                rtsd_printf("   # Subscribe queue %ld returns %d, minority_status %d", key, ret, minority_status);
+                if(!handle_status_and_schema_mismatch(ret, minority_status, key))
+                    break;
+            }
+
+            while (!rts_exit) {
+                    long msg_key = read_queued_msg(key, &prev_read_head);
                 if (!msg_key)
                     break;
                 m = $dict_get(globdict, ($Hashable)$Hashable$int$witness, to$int(msg_key), NULL);
@@ -1121,10 +1238,14 @@ void deserialize_system(snode_t *actors_start) {
     rtsd_printf("#### Reading timer queue contents:");
     time_t now = current_time();
     queue_callback * qc = get_queue_callback(dummy_callback);
-	int64_t prev_read_head = -1, prev_consume_head = -1;
-	int ret = remote_subscribe_queue(TIMER_QUEUE, 0, 0, MSG_QUEUE, TIMER_QUEUE, qc, &prev_read_head, &prev_consume_head, db);
-    rtsd_printf("   # Subscribe queue 0 returns %d", ret);
-    while (1) {
+    int64_t prev_read_head = -1, prev_consume_head = -1;
+    while(!rts_exit) {
+        int ret = remote_subscribe_queue(TIMER_QUEUE, 0, 0, MSG_QUEUE, TIMER_QUEUE, qc, &prev_read_head, &prev_consume_head, &minority_status, db);
+        rtsd_printf("   # Subscribe queue 0 returns %d", ret);
+        if(!handle_status_and_schema_mismatch(ret, minority_status, TIMER_QUEUE))
+            break;
+    }
+    while(!rts_exit) {
         long msg_key = read_queued_msg(TIMER_QUEUE, &prev_read_head);
         if (!msg_key)
             break;
@@ -1197,9 +1318,13 @@ void insert_row(long key, size_t total, $ROW row, $WORD table, uuid_t *txnid) {
     //printf("\n## Sanity check extract row:\n");
     //$ROW row1 = extract_row(blob, total*sizeof($WORD));
     //print_rows(row1);
-
-    int ret = remote_insert_in_txn(column, 2, 1, 1, blob, total*sizeof($WORD), table, txnid, db);
-    rtsd_printf("   # insert to table %ld, row %ld, returns %d", (long)table, key, ret);
+    int ret = 0, minority_status = 0;
+    while(!rts_exit) {
+        ret = remote_insert_in_txn(column, 2, 1, 1, blob, total*sizeof($WORD), table, &minority_status, txnid, db);
+        rtsd_printf("   # insert to table %ld, row %ld, returns %d", (long)table, key, ret);
+        if(!handle_status_and_schema_mismatch(ret, minority_status, 0))
+            break;
+    }
 }
 
 void serialize_msg($Msg m, uuid_t *txnid) {
@@ -1224,9 +1349,19 @@ void serialize_actor($Actor a, uuid_t *txnid) {
 
 void serialize_state_shortcut($Actor a) {
     if (db) {
-        uuid_t * txnid = remote_new_txn(db);
-        serialize_actor(a, txnid);
-        remote_commit_txn(txnid, db);
+            int success = 0, ret = 0, minority_status = 0;
+            while(!success && !rts_exit) {
+            uuid_t * txnid = remote_new_txn(db);
+            if(txnid == NULL)
+                continue;
+            serialize_actor(a, txnid);
+            ret = remote_commit_txn(txnid, &minority_status, db);
+            rtsd_printf("############## Commit returned %d, minority_status %d", ret, minority_status);
+            if(handle_status_and_schema_mismatch(ret, minority_status, a->$globkey))
+                continue;
+            if(ret == VAL_STATUS_COMMIT)
+                success = 1;
+            }
     }
 }
 
@@ -1241,8 +1376,13 @@ void BOOTSTRAP(int argc, char *argv[]) {
     time_t now = current_time();
     $Msg m = $NEW($Msg, root_actor, &$InitRoot$cont, now, &$Done$instance);
     if (db) {
-        int ret = remote_enqueue_in_txn(($WORD*)&m->$globkey, 1, NULL, 0, MSG_QUEUE, (WORD)root_actor->$globkey, NULL, db);
-        rtsd_printf("   # enqueue bootstrap msg %ld to root actor queue %ld returns %d", m->$globkey, root_actor->$globkey, ret);
+            int ret = 0, minority_status = 0;
+            while(!rts_exit) {
+                ret = remote_enqueue_in_txn(($WORD*)&m->$globkey, 1, NULL, 0, MSG_QUEUE, (WORD)root_actor->$globkey, &minority_status, NULL, db);
+                rtsd_printf("   # enqueue bootstrap msg %ld to root actor queue %ld returns %d, minority_status %d", m->$globkey, root_actor->$globkey, ret, minority_status);
+                if(!handle_status_and_schema_mismatch(ret, minority_status, root_actor->$globkey))
+                    break;
+            }
     }
     if (ENQ_msg(m, root_actor)) {
         ENQ_ready(root_actor);
@@ -1354,25 +1494,42 @@ void wt_work_cb(uv_check_t *ev) {
         switch (r.tag) {
         case $RDONE: {
             if (db) {
-                uuid_t * txnid = remote_new_txn(db);
-                current->$consume_hd++;
-                serialize_actor(current, txnid);
-                FLUSH_outgoing(current, txnid);
-                serialize_msg(current->$msg, txnid);
+                int success = 0;
+                reverse_outgoing_queue(current);
+                while(!success && !rts_exit) {
+                    uuid_t * txnid = remote_new_txn(db);
+                    if(txnid == NULL)
+                        continue;
+                    current->$consume_hd++;
+                    serialize_actor(current, txnid);
+                    FLUSH_outgoing_db(current, txnid);
+                    serialize_msg(current->$msg, txnid);
 
-                long key = current->$globkey;
-                snode_t *m_start, *m_end;
-                int entries_read = 0;
-                int64_t read_head = -1;
-                int ret0 = remote_read_queue_in_txn(($WORD)key, 0, 0, MSG_QUEUE, ($WORD)key, 1, &entries_read, &read_head, &m_start, &m_end, NULL, db);
-                rtsd_printf("   # dummy read msg from queue %ld returns %d, entries read: %d", key, ret0, entries_read);
+                    long key = current->$globkey;
+                    snode_t *m_start, *m_end;
+                    int entries_read = 0, minority_status = 0;
+                    int64_t read_head = -1;
 
-                int ret = remote_consume_queue_in_txn(($WORD)key, 0, 0, MSG_QUEUE, ($WORD)key, read_head, txnid, db);
-                rtsd_printf("   # consume msg %ld from queue %ld returns %d", m->$globkey, key, ret);
-                remote_commit_txn(txnid, db);
-                rtsd_printf("############## Commit");
+                    int ret0 = remote_read_queue_in_txn(($WORD)key, 0, 0, MSG_QUEUE, ($WORD)key, 1, &entries_read, &read_head, &m_start, &m_end, &minority_status, NULL, db);
+                    rtsd_printf("   # dummy read msg from queue %ld returns %d, entries read: %d", key, ret0, entries_read);
+                    if(handle_status_and_schema_mismatch(ret0, minority_status, key))
+                        continue;
+
+                    int ret1 = remote_consume_queue_in_txn(($WORD)key, 0, 0, MSG_QUEUE, ($WORD)key, read_head, &minority_status, txnid, db);
+                    rtsd_printf("   # consume msg %ld from queue %ld returns %d", m->$globkey, key, ret1);
+                    if(handle_status_and_schema_mismatch(ret1, minority_status, key))
+                        continue;
+
+                    int ret2 = remote_commit_txn(txnid, &minority_status, db);
+                    rtsd_printf("############## Commit returned %d, minority_status %d", ret2, minority_status);
+                    if(handle_status_and_schema_mismatch(ret2, minority_status, key))
+                        continue;
+                    if(ret2 == VAL_STATUS_COMMIT)
+                        success = 1;
+                }
+                FLUSH_outgoing_local(current);
             } else {
-                FLUSH_outgoing(current, NULL);
+                FLUSH_outgoing_local(current);
             }
 
             m->$value = r.value;                 // m->value holds the response,
@@ -1407,14 +1564,25 @@ void wt_work_cb(uv_check_t *ev) {
         }
         case $RWAIT: {
             if (db) {
-                uuid_t * txnid = remote_new_txn(db);
-                serialize_actor(current, txnid);
-                FLUSH_outgoing(current, txnid);
-                serialize_msg(current->$msg, txnid);
-                remote_commit_txn(txnid, db);
-                rtsd_printf("############## Commit");
+                int success = 0, ret = 0, minority_status = 0;
+                reverse_outgoing_queue(current);
+                while(!success && !rts_exit) {
+                    uuid_t * txnid = remote_new_txn(db);
+                    if(txnid == NULL)
+                        continue;
+                    serialize_actor(current, txnid);
+                    FLUSH_outgoing_db(current, txnid);
+                    serialize_msg(current->$msg, txnid);
+                    ret = remote_commit_txn(txnid, &minority_status, db);
+                    rtsd_printf("############## Commit returned %d, minority_status %d", ret, minority_status);
+                    if(handle_status_and_schema_mismatch(ret, minority_status, current->$globkey))
+                        continue;
+                    if(ret == VAL_STATUS_COMMIT)
+                        success = 1;
+                }
+                FLUSH_outgoing_local(current);
             } else {
-                FLUSH_outgoing(current, NULL);
+                FLUSH_outgoing_local(current);
             }
             m->$cont = r.cont;
             $Msg x = ($Msg)r.value;
@@ -2238,7 +2406,12 @@ int main(int argc, char **argv) {
     if (db) {
         snode_t* start_row = NULL, * end_row = NULL;
         log_info("Checking for existing actor state in DDB.");
-        int no_items = remote_read_full_table_in_txn(&start_row, &end_row, ACTORS_TABLE, NULL, db);
+        int ret = 0,  minority_status = 0, no_items = 0;
+        while(!rts_exit) {
+            ret = remote_read_full_table_in_txn(&start_row, &end_row, ACTORS_TABLE, &no_items, &minority_status, NULL, db);
+            if(!handle_status_and_schema_mismatch(ret, minority_status, 0))
+                break;
+        }
         if (no_items > 0) {
             log_info("Found %d existing actors; Restoring actor state from DDB.", no_items);
             deserialize_system(start_row);

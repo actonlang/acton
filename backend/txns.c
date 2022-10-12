@@ -19,6 +19,7 @@
  */
 
 #include "txns.h"
+#include "log.h"
 
 #include <stdio.h>
 
@@ -82,7 +83,7 @@ int close_txn(uuid_t * txnid, db_t * db)
 {
 	txn_state * ts = get_txn_state(txnid, db);
 	if(ts == NULL)
-		return -2; // No such txn
+		return NO_SUCH_TXN; // No such txn
 
 	return close_txn_state(ts, db);
 }
@@ -320,23 +321,47 @@ int is_read_invalidated(txn_read * tr, txn_state * rts, db_t * db)
 	return 0;
 }
 
-int is_write_invalidated(txn_write * tw, txn_state * rts, db_t * db)
+int is_write_invalidated(txn_write * tw, txn_state * rts, int * schema_status, db_t * db)
 {
 	// Check for invalidated queue reads / creation / deletion ops with backend DB:
 
+    *schema_status = 0;
 	switch(tw->query_type)
 	{
-		case QUERY_TYPE_READ_QUEUE:
+	    case QUERY_TYPE_READ_QUEUE:
 		{
-			return db_verify_cell_version(&tw->queue_id, 1, NULL, 0, tw->table_key, tw->prh_version, db);
+			int status = db_verify_cell_version(&tw->queue_id, 1, NULL, 0, tw->table_key, tw->prh_version, db);
+			if(status == DB_ERR_NO_TABLE || status == DB_ERR_NO_QUEUE)
+			{
+#if (VERBOSE_TXNS > 0)
+			    log_debug("read_queue(%ld) invalidating txn", tw->queue_id);
+#endif
+			    *schema_status = 1;
+			}
+			return (status != 0);
 		}
 		case QUERY_TYPE_CREATE_QUEUE:
 		{
 			return (db_search(&tw->queue_id, tw->table_key, db) != NULL);
 		}
-		case QUERY_TYPE_DELETE_QUEUE:
+        case QUERY_TYPE_DELETE_QUEUE:
+        case QUERY_TYPE_UNSUBSCRIBE_QUEUE:
+        {
+            return (db_search(&tw->queue_id, tw->table_key, db) == NULL);
+        }
+		case QUERY_TYPE_ENQUEUE:
+		case QUERY_TYPE_CONSUME_QUEUE:
+		case QUERY_TYPE_SUBSCRIBE_QUEUE:
 		{
-			return (db_search(&tw->queue_id, tw->table_key, db) == NULL);
+		    if(db_search(&tw->queue_id, tw->table_key, db) == NULL)
+		    {
+#if (VERBOSE_TXNS > 0)
+                log_debug("Query type %d (%ld) invalidating txn", tw->query_type, tw->queue_id);
+#endif
+                *schema_status = 1;
+		        return 1;
+		    }
+		    return 0;
 		}
 	}
 
@@ -426,8 +451,9 @@ int is_write_invalidated(txn_write * tw, txn_state * rts, db_t * db)
 int validate_txn(uuid_t * txnid, vector_clock * version, db_t * db)
 {
 	txn_state * ts = get_txn_state(txnid, db);
+	int schema_status = 0;
 	if(ts == NULL)
-		return -2; // No such txn
+		return NO_SUCH_TXN; // No such txn
 
 	assert(ts->state == TXN_STATUS_ACTIVE);
 
@@ -454,9 +480,9 @@ int validate_txn(uuid_t * txnid, vector_clock * version, db_t * db)
 		{
 			txn_write * tw = (txn_write *) write_op_n->value;
 
-			if(is_write_invalidated(tw, ts, db))
+			if(is_write_invalidated(tw, ts, &schema_status, db))
 			{
-				return VAL_STATUS_ABORT;
+				return (schema_status == 0)?VAL_STATUS_ABORT:VAL_STATUS_ABORT_SCHEMA;
 			}
 		}
 	}
@@ -546,11 +572,12 @@ int persist_txn(txn_state * ts, db_t * db, unsigned int * fastrandstate)
 
 			if(res != 0)
 				printf("BACKEND: persist_write for txn, of type %d returned %d\n", tw->query_type, res);
-			assert (res == 0);
 		}
 	}
 
-	return close_txn_state(ts, db);
+	close_txn_state(ts, db);
+
+	return res;
 }
 
 int abort_txn(uuid_t * txnid, db_t * db)
@@ -562,7 +589,7 @@ int commit_txn(uuid_t * txnid, vector_clock * version, db_t * db, unsigned int *
 {
     txn_state * ts = get_txn_state(txnid, db);
 	if(ts == NULL)
-		return -2; // No such txn
+		return NO_SUCH_TXN; // No such txn
 
 #if (VERBOSE_TXNS > 0)
 	char uuid_str[37];
@@ -586,7 +613,7 @@ int commit_txn(uuid_t * txnid, vector_clock * version, db_t * db, unsigned int *
 		printf("BACKEND: persist txn %s returned %d\n", uuid_str, res);
 #endif
 	}
-	else if(res == VAL_STATUS_ABORT)
+	else if(res == VAL_STATUS_ABORT || res == VAL_STATUS_ABORT_SCHEMA)
 	{
 		res = abort_txn(txnid, db);
 
@@ -607,7 +634,7 @@ int db_insert_in_txn(WORD * column_values, int no_cols, int no_primary_keys, int
 {
 	txn_state * ts = get_txn_state(txnid, db);
 	if(ts == NULL)
-		return -2; // No such txn
+		return NO_SUCH_TXN; // No such txn
 
 	return add_write_to_txn(QUERY_TYPE_UPDATE, column_values, no_cols, no_primary_keys, no_clustering_keys, blob_size, table_key, ts, fastrandstate);
 }
@@ -635,7 +662,7 @@ int db_range_search_in_txn(WORD* start_primary_keys, WORD* end_primary_keys, int
 {
 	txn_state * ts = get_txn_state(txnid, db);
 	if(ts == NULL)
-		return -2; // No such txn
+		return NO_SUCH_TXN; // No such txn
 
 	int no_rows = db_range_search(start_primary_keys, end_primary_keys, start_row, end_row, table_key, db);
 
@@ -666,7 +693,7 @@ int db_range_search_clustering_in_txn(WORD* primary_keys, int no_primary_keys, W
 {
 	txn_state * ts = get_txn_state(txnid, db);
 	if(ts == NULL)
-		return -2; // No such txn
+		return NO_SUCH_TXN; // No such txn
 
 	// Note that if ret == 0 (no rows read), we still add that query to the txn read set (to allow txn to be invalidated by "shadow writes")
 
@@ -686,7 +713,7 @@ db_row_t* db_search_columns_in_txn(WORD* primary_keys, int no_primary_keys, WORD
 /*
 	txn_state * ts = get_txn_state(txnid, db);
 	if(ts == NULL)
-		return -2; // No such txn
+		return NO_SUCH_TXN; // No such txn
 
 //	db_search_columns(primary_keys, clustering_keys, int* column_idxs, no_columns, table_key, db_t * db);
 
@@ -716,7 +743,7 @@ int db_range_search_index_in_txn(int idx_idx, WORD start_idx_key, WORD end_idx_k
 {
 	txn_state * ts = get_txn_state(txnid, db);
 	if(ts == NULL)
-		return -2; // No such txn
+		return NO_SUCH_TXN; // No such txn
 
 	int no_results = db_range_search_index(idx_idx, start_idx_key, end_idx_key, start_row, end_row, table_key, db);
 
@@ -727,7 +754,7 @@ int db_delete_row_in_txn(WORD* primary_keys, int no_primary_keys, WORD table_key
 {
 	txn_state * ts = get_txn_state(txnid, db);
 	if(ts == NULL)
-		return -2; // No such txn
+		return NO_SUCH_TXN; // No such txn
 
 	return add_write_to_txn(QUERY_TYPE_DELETE, primary_keys, no_primary_keys, no_primary_keys, 0, 0, table_key, ts, fastrandstate);
 }
@@ -736,7 +763,7 @@ int db_delete_cell_in_txn(WORD* keys, int no_primary_keys, int no_clustering_key
 {
 	txn_state * ts = get_txn_state(txnid, db);
 	if(ts == NULL)
-		return -2; // No such txn
+		return NO_SUCH_TXN; // No such txn
 
 	return add_write_to_txn(QUERY_TYPE_DELETE, keys, no_primary_keys+no_clustering_keys, no_primary_keys, no_clustering_keys, 0, table_key, ts, fastrandstate);
 }
@@ -749,7 +776,7 @@ int db_delete_by_index_in_txn(WORD index_key, int idx_idx, WORD table_key, uuid_
 /*
 	txn_state * ts = get_txn_state(txnid, db);
 	if(ts == NULL)
-		return -2; // No such txn
+		return NO_SUCH_TXN; // No such txn
 */
 }
 
@@ -765,7 +792,7 @@ int enqueue_in_txn(WORD * column_values, int no_cols, size_t blob_size, WORD tab
 {
 	txn_state * ts = get_txn_state(txnid, db);
 	if(ts == NULL)
-		return -2; // No such txn
+		return NO_SUCH_TXN; // No such txn
 
 	return add_enqueue_to_txn(column_values, no_cols, blob_size, table_key, queue_id, ts, fastrandstate);
 }
@@ -777,7 +804,7 @@ int read_queue_in_txn(WORD consumer_id, WORD shard_id, WORD app_id, WORD table_k
 {
 	txn_state * ts = get_txn_state(txnid, db);
 	if(ts == NULL)
-		return -2; // No such txn
+		return NO_SUCH_TXN; // No such txn
 
 	int64_t prev_read_head = -1;
 
@@ -816,7 +843,7 @@ int consume_queue_in_txn(WORD consumer_id, WORD shard_id, WORD app_id, WORD tabl
 {
 	txn_state * ts = get_txn_state(txnid, db);
 	if(ts == NULL)
-		return -2; // No such txn
+		return NO_SUCH_TXN; // No such txn
 
 	return add_consume_queue_to_txn(consumer_id, shard_id, app_id, table_key, queue_id,
 			new_consume_head, ts, fastrandstate);
@@ -841,7 +868,7 @@ int create_queue_in_txn(WORD table_key, WORD queue_id, uuid_t * txnid, db_t * db
 {
 	txn_state * ts = get_txn_state(txnid, db);
 	if(ts == NULL)
-		return -2; // No such txn
+		return NO_SUCH_TXN; // No such txn
 
 	return add_create_queue_to_txn(table_key, queue_id, ts, fastrandstate);
 }
@@ -850,7 +877,7 @@ int delete_queue_in_txn(WORD table_key, WORD queue_id, uuid_t * txnid, db_t * db
 {
 	txn_state * ts = get_txn_state(txnid, db);
 	if(ts == NULL)
-		return -2; // No such txn
+		return NO_SUCH_TXN; // No such txn
 
 	return add_delete_queue_to_txn(table_key, queue_id, ts, fastrandstate);
 }

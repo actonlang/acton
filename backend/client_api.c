@@ -1257,13 +1257,15 @@ int send_packet_wait_replies_sync(void * out_buf, unsigned out_len, int64_t nonc
 
 // Write ops:
 
-int remote_insert_in_txn(WORD * column_values, int no_cols, int no_primary_keys, int no_clustering_keys, WORD blob, size_t blob_size, WORD table_key, uuid_t * txnid, remote_db_t * db)
+int remote_insert_in_txn(WORD * column_values, int no_cols, int no_primary_keys, int no_clustering_keys, WORD blob, size_t blob_size,
+						WORD table_key, int * minority_status, uuid_t * txnid, remote_db_t * db)
 {
     struct timespec ts_start;
 	stat_start(dbc_stats.remote_insert_in_txn, &ts_start);
 
 	unsigned len = 0;
 	void * tmp_out_buf = NULL;
+	*minority_status = 0;
 
 #if (DEBUG_BLOBS > 0)
 	size_t print_size = 256 + no_cols * sizeof(long) + blob_size;
@@ -1324,7 +1326,7 @@ int remote_insert_in_txn(WORD * column_values, int no_cols, int no_primary_keys,
 		return NO_QUORUM_ERR;
 	}
 
-	int ok_status = 0, err_status = 0;
+	int ok_status = 0;
 
 	for(int i=0;i<mc->no_replies;i++)
 	{
@@ -1332,7 +1334,7 @@ int remote_insert_in_txn(WORD * column_values, int no_cols, int no_primary_keys,
 		if(ack->status == 0)
 			ok_status++;
 		else
-			err_status = ack->status;
+			*minority_status = ack->status;
 
 #if CLIENT_VERBOSITY > 0
 		to_string_ack_message(ack, (char *) print_buff);
@@ -1340,25 +1342,32 @@ int remote_insert_in_txn(WORD * column_values, int no_cols, int no_primary_keys,
 #endif
 	}
 
-	if(ok_status >= db->quorum_size)
-		err_status = 0;
+	if(ok_status < db->quorum_size)
+	{
+		log_error("No valid quorum (%d/%d valid replies received, minority_status=%d)", ok_status, db->replication_factor, *minority_status);
+		delete_msg_callback(mc->nonce, db);
+        stat_stop(dbc_stats.remote_insert_in_txn, &ts_start, NO_QUORUM_ERR);
+		return NO_QUORUM_ERR;
+	}
 
 	delete_msg_callback(mc->nonce, db);
 
-	stat_stop(dbc_stats.remote_insert_in_txn, &ts_start, err_status);
-	return err_status;
+	stat_stop(dbc_stats.remote_insert_in_txn, &ts_start, 0);
+	return 0;
 }
 
-int remote_update_in_txn(int * col_idxs, int no_cols, WORD * column_values, WORD blob, size_t blob_size, WORD table_key, uuid_t * txnid, remote_db_t * db)
+int remote_update_in_txn(int * col_idxs, int no_cols, WORD * column_values, WORD blob, size_t blob_size, WORD table_key, int * minority_status, uuid_t * txnid, remote_db_t * db)
 {
 	assert (0); // Not supported
 	return 0;
 }
 
-int remote_delete_row_in_txn(WORD * column_values, int no_primary_keys, WORD table_key, uuid_t * txnid, remote_db_t * db)
+int remote_delete_row_in_txn(WORD * column_values, int no_primary_keys, WORD table_key,
+							int * minority_status, uuid_t * txnid, remote_db_t * db)
 {
 	struct timespec ts_start;
 	stat_start(dbc_stats.remote_delete_row_in_txn, &ts_start);
+	*minority_status = 0;
 
 	unsigned len = 0;
 	write_query * wq = build_delete_row_in_txn(column_values, no_primary_keys, table_key, txnid, get_nonce(db));
@@ -1394,7 +1403,7 @@ int remote_delete_row_in_txn(WORD * column_values, int no_primary_keys, WORD tab
 		return NO_QUORUM_ERR;
 	}
 
-	int ok_status = 0, err_status = 0;
+	int ok_status = 0;
 
 	for(int i=0;i<mc->no_replies;i++)
 	{
@@ -1403,7 +1412,7 @@ int remote_delete_row_in_txn(WORD * column_values, int no_primary_keys, WORD tab
 		if(ack->status == 0)
 			ok_status++;
 		else
-			err_status = ack->status;
+			*minority_status = ack->status;
 
 #if CLIENT_VERBOSITY > 0
 		to_string_ack_message(ack, (char *) print_buff);
@@ -1411,19 +1420,26 @@ int remote_delete_row_in_txn(WORD * column_values, int no_primary_keys, WORD tab
 #endif
 	}
 
-	if(ok_status >= db->quorum_size)
-		err_status = 0;
+	if(ok_status < db->quorum_size)
+	{
+		log_error("No valid quorum (%d/%d valid replies received, minority_status=%d)", ok_status, db->replication_factor, *minority_status);
+		delete_msg_callback(mc->nonce, db);
+        stat_stop(dbc_stats.remote_delete_row_in_txn, &ts_start, NO_QUORUM_ERR);
+		return NO_QUORUM_ERR;
+	}
 
 	delete_msg_callback(mc->nonce, db);
 
-	stat_stop(dbc_stats.remote_delete_row_in_txn, &ts_start, err_status);
-	return err_status;
+	stat_stop(dbc_stats.remote_delete_row_in_txn, &ts_start, 0);
+	return 0;
 }
 
-int remote_delete_cell_in_txn(WORD * column_values, int no_primary_keys, int no_clustering_keys, WORD table_key, uuid_t * txnid, remote_db_t * db)
+int remote_delete_cell_in_txn(WORD * column_values, int no_primary_keys, int no_clustering_keys, WORD table_key,
+								int * minority_status, uuid_t * txnid, remote_db_t * db)
 {
 	struct timespec ts_start;
 	stat_start(dbc_stats.remote_delete_cell_in_txn, &ts_start);
+	*minority_status = 0;
 
 	unsigned len = 0;
 	write_query * wq = build_delete_cell_in_txn(column_values, no_primary_keys, no_clustering_keys, table_key, txnid, get_nonce(db));
@@ -1459,7 +1475,7 @@ int remote_delete_cell_in_txn(WORD * column_values, int no_primary_keys, int no_
 		return NO_QUORUM_ERR;
 	}
 
-	int ok_status = 0, err_status = 0;
+	int ok_status = 0;
 
 	for(int i=0;i<mc->no_replies;i++)
 	{
@@ -1468,7 +1484,7 @@ int remote_delete_cell_in_txn(WORD * column_values, int no_primary_keys, int no_
 		if(ack->status == 0)
 			ok_status++;
 		else
-			err_status = ack->status;
+			*minority_status = ack->status;
 
 #if CLIENT_VERBOSITY > 0
 		to_string_ack_message(ack, (char *) print_buff);
@@ -1476,16 +1492,21 @@ int remote_delete_cell_in_txn(WORD * column_values, int no_primary_keys, int no_
 #endif
 	}
 
-	if(ok_status >= db->quorum_size)
-		err_status = 0;
+	if(ok_status < db->quorum_size)
+	{
+		log_error("No valid quorum (%d/%d valid replies received, minority_status=%d)", ok_status, db->replication_factor, *minority_status);
+		delete_msg_callback(mc->nonce, db);
+        stat_stop(dbc_stats.remote_delete_cell_in_txn, &ts_start, NO_QUORUM_ERR);
+		return NO_QUORUM_ERR;
+	}
 
 	delete_msg_callback(mc->nonce, db);
 
-    stat_stop(dbc_stats.remote_delete_cell_in_txn, &ts_start, err_status);
-	return err_status;
+    stat_stop(dbc_stats.remote_delete_cell_in_txn, &ts_start, 0);
+	return 0;
 }
 
-int remote_delete_by_index_in_txn(WORD index_key, int idx_idx, WORD table_key, uuid_t * txnid, remote_db_t * db)
+int remote_delete_by_index_in_txn(WORD index_key, int idx_idx, WORD table_key, int * minority_status, uuid_t * txnid, remote_db_t * db)
 {
 	assert (0); // Not supported
 	return 0;
@@ -1616,7 +1637,7 @@ db_row_t* get_db_rows_tree_from_read_response(range_read_response_message * resp
 }
 
 int remote_search_in_txn(WORD* primary_keys, int no_primary_keys, db_row_t** result_row, WORD table_key,
-		uuid_t * txnid, remote_db_t * db)
+                        int * minority_status, uuid_t * txnid, remote_db_t * db)
 {
     struct timespec ts_start;
 	stat_start(dbc_stats.remote_search_in_txn, &ts_start);
@@ -1624,6 +1645,7 @@ int remote_search_in_txn(WORD* primary_keys, int no_primary_keys, db_row_t** res
 	unsigned len = 0;
 	void * tmp_out_buf = NULL;
 	*result_row = NULL;
+	*minority_status = 0;
 
 	read_query * q = build_search_in_txn(primary_keys, no_primary_keys, table_key, txnid, get_nonce(db));
 	int success = serialize_read_query(q, (void **) &tmp_out_buf, &len, NULL);
@@ -1657,19 +1679,41 @@ int remote_search_in_txn(WORD* primary_keys, int no_primary_keys, db_row_t** res
 		return NO_QUORUM_ERR;
 	}
 
+    range_read_response_message * response = NULL;
+    int ok_status = 0;
+
 	for(int i=0;i<mc->no_replies;i++)
 	{
 		assert(mc->reply_types[i] == RPC_TYPE_RANGE_READ_RESPONSE);
-		range_read_response_message * response = (range_read_response_message *) mc->replies[i];
+		range_read_response_message * candidate_response = (range_read_response_message *) mc->replies[i];
 
 #if CLIENT_VERBOSITY > 0
-		to_string_range_read_response_message(response, (char *) print_buff);
+		to_string_range_read_response_message(candidate_response, (char *) print_buff);
 		log_info("Got back response from server %s: %s", rs->id, print_buff);
 #endif
 
-		// If result returned multiple cells, accumulate them all in a single tree rooted at "result":
-		*result_row = get_db_rows_tree_from_read_response(response, db);
+        if(candidate_response->no_cells >= 0)
+        {
+            ok_status++;
+            if(response == NULL)
+                response = candidate_response;
+        }
+        else
+        {
+            *minority_status = candidate_response->no_cells;
+        }
 	}
+
+    if(ok_status < db->quorum_size)
+    {
+        log_error("No valid quorum (%d/%d valid replies received, minority_status=%d)", ok_status, db->replication_factor, *minority_status);
+        delete_msg_callback(mc->nonce, db);
+        stat_stop(dbc_stats.remote_search_in_txn, &ts_start, NO_QUORUM_ERR);
+        return NO_QUORUM_ERR;
+    }
+
+	// If result returned multiple cells, accumulate them all in a single tree rooted at "result":
+	*result_row = get_db_rows_tree_from_read_response(response, db);
 
 	delete_msg_callback(mc->nonce, db);
 
@@ -1679,13 +1723,16 @@ int remote_search_in_txn(WORD* primary_keys, int no_primary_keys, db_row_t** res
 
 
 int remote_search_clustering_in_txn(WORD* primary_keys, int no_primary_keys, WORD* clustering_keys, int no_clustering_keys,
-											db_row_t** result_row, WORD table_key, uuid_t * txnid, remote_db_t * db)
+											db_row_t** result_row, WORD table_key,
+											int * minority_status, uuid_t * txnid, remote_db_t * db)
 {
     struct timespec ts_start;
 	stat_start(dbc_stats.remote_search_clustering_in_txn, &ts_start);
 
 	unsigned len = 0;
 	void * tmp_out_buf = NULL;
+	*result_row = NULL;
+	*minority_status = 0;
 
 	read_query * q = build_search_clustering_in_txn(primary_keys, no_primary_keys, clustering_keys, no_clustering_keys, table_key, txnid, get_nonce(db));
 	int success = serialize_read_query(q, (void **) &tmp_out_buf, &len, NULL);
@@ -1719,19 +1766,41 @@ int remote_search_clustering_in_txn(WORD* primary_keys, int no_primary_keys, WOR
 		return NO_QUORUM_ERR;
 	}
 
+	range_read_response_message * response = NULL;
+	int ok_status = 0;
+
 	for(int i=0;i<mc->no_replies;i++)
 	{
 		assert(mc->reply_types[i] == RPC_TYPE_RANGE_READ_RESPONSE);
-		range_read_response_message * response = (range_read_response_message *) mc->replies[i];
+		range_read_response_message * candidate_response = (range_read_response_message *) mc->replies[i];
 
 #if CLIENT_VERBOSITY > 0
-		to_string_range_read_response_message(response, (char *) print_buff);
+		to_string_range_read_response_message(candidate_response, (char *) print_buff);
 		log_info("Got back response from server %s: %s", rs->id, print_buff);
 #endif
 
-		// If result returned multiple cells, accumulate them all in a single tree rooted at "result":
-		*result_row = get_db_rows_tree_from_read_response(response, db);
+        if(candidate_response->no_cells >= 0)
+        {
+            ok_status++;
+            if(response == NULL)
+                response = candidate_response;
+        }
+        else
+        {
+            *minority_status = candidate_response->no_cells;
+        }
 	}
+
+    if(ok_status < db->quorum_size)
+    {
+        log_error("No valid quorum (%d/%d valid replies received, minority_status=%d)", ok_status, db->replication_factor, *minority_status);
+        delete_msg_callback(mc->nonce, db);
+        stat_stop(dbc_stats.remote_search_clustering_in_txn, &ts_start, NO_QUORUM_ERR);
+        return NO_QUORUM_ERR;
+    }
+
+	// If result returned multiple cells, accumulate them all in a single tree rooted at "result":
+	*result_row = get_db_rows_tree_from_read_response(response, db);
 
 	delete_msg_callback(mc->nonce, db);
 
@@ -1741,13 +1810,13 @@ int remote_search_clustering_in_txn(WORD* primary_keys, int no_primary_keys, WOR
 
 int remote_search_columns_in_txn(WORD* primary_keys, int no_primary_keys, WORD* clustering_keys, int no_clustering_keys,
 									WORD* col_keys, int no_columns, db_row_t** result_row, WORD table_key,
-									uuid_t * txnid, remote_db_t * db)
+									int * minority_status, uuid_t * txnid, remote_db_t * db)
 {
 	assert (0); // Not supported
 	return 0;
 }
 
-int remote_search_index_in_txn(WORD index_key, int idx_idx, db_row_t** result_row, WORD table_key, uuid_t * txnid, remote_db_t * db)
+int remote_search_index_in_txn(WORD index_key, int idx_idx, db_row_t** result_row, WORD table_key, int * minority_status, uuid_t * txnid, remote_db_t * db)
 {
 	assert (0); // Not supported; TO DO
 	return 0;
@@ -1756,13 +1825,15 @@ int remote_search_index_in_txn(WORD index_key, int idx_idx, db_row_t** result_ro
 
 int remote_range_search_in_txn(WORD* start_primary_keys, WORD* end_primary_keys, int no_primary_keys,
 							snode_t** start_row, snode_t** end_row,
-							WORD table_key, uuid_t * txnid, remote_db_t * db)
+							WORD table_key, int * no_items, int * minority_status, uuid_t * txnid, remote_db_t * db)
 {
     struct timespec ts_start;
     stat_start(dbc_stats.remote_range_search_in_txn, &ts_start);
 
 	unsigned len = 0;
 	void * tmp_out_buf = NULL;
+	*no_items = 0;
+	*minority_status = 0;
 
 	range_read_query * q = build_range_search_in_txn(start_primary_keys, end_primary_keys, no_primary_keys, table_key, txnid, get_nonce(db));
 	int success = serialize_range_read_query(q, (void **) &tmp_out_buf, &len, NULL);
@@ -1796,38 +1867,61 @@ int remote_range_search_in_txn(WORD* start_primary_keys, WORD* end_primary_keys,
 		return NO_QUORUM_ERR;
 	}
 
-	int result = -1;
+	range_read_response_message * response;
+	int ok_status = 0;
 
 	for(int i=0;i<mc->no_replies;i++)
 	{
 		assert(mc->reply_types[i] == RPC_TYPE_RANGE_READ_RESPONSE);
-		range_read_response_message * response = (range_read_response_message *) mc->replies[i];
+		range_read_response_message * candidate_response = (range_read_response_message *) mc->replies[i];
 
 #if CLIENT_VERBOSITY > 0
-		to_string_range_read_response_message(response, (char *) print_buff);
+		to_string_range_read_response_message(candidate_response, (char *) print_buff);
 		log_info("Got back response from server %s: %s", rs->id, print_buff);
 #endif
 
-		// If result returned multiple cells, accumulate them all in a forest of db_rows rooted at elements of list start_row->end_row:
-		result = get_db_rows_forest_from_read_response(response, start_row, end_row, db);
+        if(candidate_response->no_cells >= 0)
+        {
+            ok_status++;
+            if(response == NULL)
+                response = candidate_response;
+        }
+        else
+        {
+            *minority_status = candidate_response->no_cells;
+        }
 	}
+
+    if(ok_status < db->quorum_size)
+    {
+        log_error("No valid quorum (%d/%d valid replies received, minority_status=%d)", ok_status, db->replication_factor, *minority_status);
+        delete_msg_callback(mc->nonce, db);
+        stat_stop(dbc_stats.remote_range_search_in_txn, &ts_start, NO_QUORUM_ERR);
+        return NO_QUORUM_ERR;
+    }
+
+	// If result returned multiple cells, accumulate them all in a forest of db_rows rooted at elements of list start_row->end_row:
+	*no_items = get_db_rows_forest_from_read_response(response, start_row, end_row, db);
 
 	delete_msg_callback(mc->nonce, db);
 
     stat_stop(dbc_stats.remote_range_search_in_txn, &ts_start, 0);
-	return result;
+	return 0;
 }
 
 int remote_range_search_clustering_in_txn(WORD* primary_keys, int no_primary_keys,
 									 WORD* start_clustering_keys, WORD* end_clustering_keys, int no_clustering_keys,
 									 snode_t** start_row, snode_t** end_row,
-									 WORD table_key, uuid_t * txnid, remote_db_t * db)
+									 WORD table_key, int * no_items, int * minority_status,
+									 uuid_t * txnid, remote_db_t * db)
 {
     struct timespec ts_start;
     stat_start(dbc_stats.remote_range_search_clustering_in_txn, &ts_start);
 
 	unsigned len = 0;
 	void * tmp_out_buf = NULL;
+    *no_items = 0;
+	*minority_status = 0;
 
 	range_read_query * q = build_range_search_clustering_in_txn(primary_keys, no_primary_keys,
 															start_clustering_keys, end_clustering_keys, no_clustering_keys,
@@ -1863,44 +1957,67 @@ int remote_range_search_clustering_in_txn(WORD* primary_keys, int no_primary_key
 		return NO_QUORUM_ERR;
 	}
 
-	int result = -1;
+	range_read_response_message * response = NULL;
+	int ok_status = 0;
 
 	for(int i=0;i<mc->no_replies;i++)
 	{
 		assert(mc->reply_types[i] == RPC_TYPE_RANGE_READ_RESPONSE);
-		range_read_response_message * response = (range_read_response_message *) mc->replies[i];
+		range_read_response_message * candidate_response = (range_read_response_message *) mc->replies[i];
 
 #if CLIENT_VERBOSITY > 0
-		to_string_range_read_response_message(response, (char *) print_buff);
+		to_string_range_read_response_message(candidate_response, (char *) print_buff);
 		log_info("Got back response from server %s: %s", rs->id, print_buff);
 #endif
 
-		// If result returned multiple cells, accumulate them all in a forest of db_rows rooted at elements of list start_row->end_row:
-		result = get_db_rows_forest_from_read_response(response, start_row, end_row, db);
+        if(candidate_response->no_cells >= 0)
+        {
+            ok_status++;
+            if(response == NULL)
+                response = candidate_response;
+        }
+        else
+        {
+            *minority_status = candidate_response->no_cells;
+        }
 	}
+
+    if(ok_status < db->quorum_size)
+    {
+        log_error("No valid quorum (%d/%d valid replies received, minority_status=%d)", ok_status, db->replication_factor, *minority_status);
+        delete_msg_callback(mc->nonce, db);
+        stat_stop(dbc_stats.remote_range_search_clustering_in_txn, &ts_start, NO_QUORUM_ERR);
+        return NO_QUORUM_ERR;
+    }
+
+	// If result returned multiple cells, accumulate them all in a forest of db_rows rooted at elements of list start_row->end_row:
+	*no_items = get_db_rows_forest_from_read_response(response, start_row, end_row, db);
 
 	delete_msg_callback(mc->nonce, db);
 
     stat_stop(dbc_stats.remote_range_search_clustering_in_txn, &ts_start, 0);
-	return result;
+	return 0;
 }
 
 int remote_range_search_index_in_txn(int idx_idx, WORD start_idx_key, WORD end_idx_key,
 								snode_t** start_row, snode_t** end_row,
-								WORD table_key, uuid_t * txnid, remote_db_t * db)
+								WORD table_key, int * no_items, int * minority_status,
+								uuid_t * txnid, remote_db_t * db)
 {
 	assert (0); // Not supported; TO DO
 	return 0;
 }
 
-int remote_read_full_table_in_txn(snode_t** start_row, snode_t** end_row,
-									WORD table_key, uuid_t * txnid, remote_db_t * db)
+int remote_read_full_table_in_txn(snode_t** start_row, snode_t** end_row, WORD table_key, int * no_items, int * minority_status,
+								uuid_t * txnid, remote_db_t * db)
 {
     struct timespec ts_start;
     stat_start(dbc_stats.remote_read_full_table_in_txn, &ts_start);
 
 	unsigned len = 0;
 	void * tmp_out_buf = NULL;
+    *no_items = 0;
+	*minority_status = 0;
 
 	range_read_query * q = build_wildcard_range_search_in_txn(table_key, txnid, get_nonce(db));
 	int success = serialize_range_read_query(q, (void **) &tmp_out_buf, &len, NULL);
@@ -1934,21 +2051,41 @@ int remote_read_full_table_in_txn(snode_t** start_row, snode_t** end_row,
 		return NO_QUORUM_ERR;
 	}
 
-	int result = -1;
+	range_read_response_message * response = NULL;
+	int ok_status = 0;
 
 	for(int i=0;i<mc->no_replies;i++)
 	{
 		assert(mc->reply_types[i] == RPC_TYPE_RANGE_READ_RESPONSE);
-		range_read_response_message * response = (range_read_response_message *) mc->replies[i];
+		range_read_response_message * candidate_response = (range_read_response_message *) mc->replies[i];
 
-#if CLIENT_VERBOSITY > 0
-		to_string_range_read_response_message(response, (char *) print_buff);
-		log_info("Got back response from server %s: %s", rs->id, print_buff);
+#if CLIENT_VERBOSITY > 2
+		to_string_range_read_response_message(candidate_response, (char *) print_buff);
+		log_info("Got back response from server: %s", print_buff);
 #endif
 
-		// If result returned multiple cells, accumulate them all in a forest of db_rows rooted at elements of list start_row->end_row:
-		result = get_db_rows_forest_from_read_response(response, start_row, end_row, db);
+        if(candidate_response->no_cells >= 0)
+        {
+            ok_status++;
+            if(response == NULL)
+                response = candidate_response;
+        }
+        else
+        {
+            *minority_status = candidate_response->no_cells;
+        }
 	}
+
+    if(ok_status < db->quorum_size)
+    {
+        log_error("No valid quorum (%d/%d valid replies received, minority_status=%d)", ok_status, db->replication_factor, *minority_status);
+        delete_msg_callback(mc->nonce, db);
+        stat_stop(dbc_stats.remote_read_full_table_in_txn, &ts_start, NO_QUORUM_ERR);
+        return NO_QUORUM_ERR;
+    }
+
+	// If result returned multiple cells, accumulate them all in a forest of db_rows rooted at elements of list start_row->end_row:
+	*no_items = get_db_rows_forest_from_read_response(response, start_row, end_row, db);
 
 	delete_msg_callback(mc->nonce, db);
 
@@ -1960,30 +2097,57 @@ int remote_read_full_table_in_txn(snode_t** start_row, snode_t** end_row,
 #endif
 
     stat_stop(dbc_stats.remote_read_full_table_in_txn, &ts_start, 0);
-	return result;
+	return 0;
 }
 
 void remote_print_long_table(WORD table_key, remote_db_t * db)
 {
 	snode_t* start_row = NULL, * end_row = NULL;
-	int no_items = remote_read_full_table_in_txn(&start_row, &end_row, table_key, NULL, db);
+	int no_items = 0, minority_status = 0;
+	int ret = remote_read_full_table_in_txn(&start_row, &end_row, table_key, &no_items, &minority_status, NULL, db);
 
 	log_info("DB_TABLE: %" PRId64 " [%d rows]", (int64_t) table_key, no_items);
 
-	for(snode_t * node = start_row; node!=NULL; node=NEXT(node))
-		print_long_row((db_row_t*) node->value);
+	if(ret == 0 && no_items > 0)
+	{
+        for(snode_t * node = start_row; node!=NULL; node=NEXT(node))
+            print_long_row((db_row_t*) node->value);
+	}
 }
 
 
 // Queue ops:
 
-int remote_create_queue_in_txn(WORD table_key, WORD queue_id, uuid_t * txnid, remote_db_t * db)
+/*
+ *
+ * Note on status returns of queue operations:
+ *
+ * If there is a quorum of valid replies from servers, we return the appropriate non-err status.
+ * In the case of a queue read for instance, this is QUEUE_STATUS_READ_INCOMPLETE or QUEUE_STATUS_READ_COMPLETE.
+ * In addition, if there also were non-valid replies received (and there was still a quorum),
+ * we also set the err status of the minority error response in the 'minority_status' variable to advise
+ * the client that some schemas on a minority of nodes might need repairs.
+ * If there is no quorum of *valid* replies, but there was a quorum of received replies
+ * (e.g. we received schema mismatch errors), we return NO_QUORUM_ERR and set the minority status
+ * with the received error status.
+ * If there was no quorum of replies at all (not enough servers responded), we return NO_QUORUM_ERR and fill
+ * in no minority_status (the client will not be able to recreate schemas anyway until there is a quorum).
+ * As a result, in all cases when the client receives NO_QUORUM_ERR, he has to retry the operation.
+ * In addition, if minority_status is set to a schema mismatch flavor of error, he can attempt schema correction after this,
+ * whether or not he also needs to re-try the operation (if the operation succeeded, this will still help to install correct schemas on
+ * the minority nodes).
+ *
+ */
+
+
+int remote_create_queue_in_txn(WORD table_key, WORD queue_id, int * minority_status, uuid_t * txnid, remote_db_t * db)
 {
     struct timespec ts_start;
     stat_start(dbc_stats.remote_create_queue_in_txn, &ts_start);
 
 	unsigned len = 0;
 	void * tmp_out_buf = NULL;
+	*minority_status = 0;
 
 	queue_query_message * q = build_create_queue_in_txn(table_key, queue_id, txnid, get_nonce(db));
 	int success = serialize_queue_message(q, (void **) &tmp_out_buf, &len, 1, NULL);
@@ -2017,16 +2181,16 @@ int remote_create_queue_in_txn(WORD table_key, WORD queue_id, uuid_t * txnid, re
 		return NO_QUORUM_ERR;
 	}
 
-	int ok_status = 0, err_status = 0;
+	int ok_status = 0;
 
 	for(int i=0;i<mc->no_replies;i++)
 	{
 		assert(mc->reply_types[i] == RPC_TYPE_ACK);
 		ack_message * ack = (ack_message *) mc->replies[i];
-		if(ack->status == 0)
+		if(ack->status == 0 || ack->status == DB_ERR_DUPLICATE_QUEUE)
 			ok_status++;
 		else
-			err_status = ack->status;
+			*minority_status = ack->status;
 
 #if CLIENT_VERBOSITY > 0
 		to_string_ack_message(ack, (char *) print_buff);
@@ -2034,22 +2198,28 @@ int remote_create_queue_in_txn(WORD table_key, WORD queue_id, uuid_t * txnid, re
 #endif
 	}
 
-	if(ok_status >= db->quorum_size)
-		err_status = 0;
+	if(ok_status < db->quorum_size)
+	{
+		log_error("No valid quorum (%d/%d valid replies received, minority_status=%d)", ok_status, db->replication_factor, *minority_status);
+		delete_msg_callback(mc->nonce, db);
+        stat_stop(dbc_stats.remote_create_queue_in_txn, &ts_start, NO_QUORUM_ERR);
+		return NO_QUORUM_ERR;
+	}
 
 	delete_msg_callback(mc->nonce, db);
 
-    stat_stop(dbc_stats.remote_create_queue_in_txn, &ts_start, err_status);
-	return err_status;
+    stat_stop(dbc_stats.remote_create_queue_in_txn, &ts_start, 0);
+	return 0;
 }
 
-int remote_delete_queue_in_txn(WORD table_key, WORD queue_id, uuid_t * txnid, remote_db_t * db)
+int remote_delete_queue_in_txn(WORD table_key, WORD queue_id, int * minority_status, uuid_t * txnid, remote_db_t * db)
 {
     struct timespec ts_start;
     stat_start(dbc_stats.remote_delete_queue_in_txn, &ts_start);
 
 	unsigned len = 0;
 	void * tmp_out_buf = NULL;
+	*minority_status = 0;
 
 	queue_query_message * q = build_delete_queue_in_txn(table_key, queue_id, txnid, get_nonce(db));
 	int success = serialize_queue_message(q, (void **) &tmp_out_buf, &len, 1, NULL);
@@ -2083,7 +2253,7 @@ int remote_delete_queue_in_txn(WORD table_key, WORD queue_id, uuid_t * txnid, re
 		return NO_QUORUM_ERR;
 	}
 
-	int ok_status = 0, err_status = 0;
+	int ok_status = 0;
 
 	for(int i=0;i<mc->no_replies;i++)
 	{
@@ -2092,7 +2262,7 @@ int remote_delete_queue_in_txn(WORD table_key, WORD queue_id, uuid_t * txnid, re
 		if(ack->status == 0)
 			ok_status++;
 		else
-			err_status = ack->status;
+			*minority_status = ack->status;
 
 #if CLIENT_VERBOSITY > 0
 		to_string_ack_message(ack, (char *) print_buff);
@@ -2100,22 +2270,29 @@ int remote_delete_queue_in_txn(WORD table_key, WORD queue_id, uuid_t * txnid, re
 #endif
 	}
 
-	if(ok_status >= db->quorum_size)
-		err_status = 0;
+	if(ok_status < db->quorum_size)
+	{
+		log_error("No valid quorum (%d/%d valid replies received, minority_status=%d)", ok_status, db->replication_factor, *minority_status);
+		delete_msg_callback(mc->nonce, db);
+        stat_stop(dbc_stats.remote_delete_queue_in_txn, &ts_start, NO_QUORUM_ERR);
+		return NO_QUORUM_ERR;
+	}
 
 	delete_msg_callback(mc->nonce, db);
 
-    stat_stop(dbc_stats.remote_delete_queue_in_txn, &ts_start, err_status);
-	return err_status;
+    stat_stop(dbc_stats.remote_delete_queue_in_txn, &ts_start, 0);
+	return 0;
 }
 
-int remote_enqueue_in_txn(WORD * column_values, int no_cols, WORD blob, size_t blob_size, WORD table_key, WORD queue_id, uuid_t * txnid, remote_db_t * db)
+int remote_enqueue_in_txn(WORD * column_values, int no_cols, WORD blob, size_t blob_size, WORD table_key, WORD queue_id,
+							int * minority_status, uuid_t * txnid, remote_db_t * db)
 {
     struct timespec ts_start;
     stat_start(dbc_stats.remote_enqueue_in_txn, &ts_start);
 
 	unsigned len = 0;
 	void * tmp_out_buf = NULL;
+	*minority_status = 0;
 
 	queue_query_message * q = build_enqueue_in_txn(column_values, no_cols, blob, blob_size, table_key, queue_id, txnid, get_nonce(db));
 	int success = serialize_queue_message(q, (void **) &tmp_out_buf, &len, 1, NULL);
@@ -2149,7 +2326,7 @@ int remote_enqueue_in_txn(WORD * column_values, int no_cols, WORD blob, size_t b
 		return NO_QUORUM_ERR;
 	}
 
-	int ok_status = 0, err_status = 0;
+	int ok_status = 0;
 
 	for(int i=0;i<mc->no_replies;i++)
 	{
@@ -2158,7 +2335,7 @@ int remote_enqueue_in_txn(WORD * column_values, int no_cols, WORD blob, size_t b
 		if(ack->status == 0)
 			ok_status++;
 		else
-			err_status = ack->status;
+			*minority_status = ack->status;
 
 #if CLIENT_VERBOSITY > 0
 		to_string_ack_message(ack, (char *) print_buff);
@@ -2166,18 +2343,23 @@ int remote_enqueue_in_txn(WORD * column_values, int no_cols, WORD blob, size_t b
 #endif
 	}
 
-	if(ok_status >= db->quorum_size)
-		err_status = 0;
+	if(ok_status < db->quorum_size)
+	{
+		log_error("No valid quorum (%d/%d valid replies received, minority_status=%d)", ok_status, db->replication_factor, *minority_status);
+		delete_msg_callback(mc->nonce, db);
+        stat_stop(dbc_stats.remote_enqueue_in_txn, &ts_start, NO_QUORUM_ERR);
+		return NO_QUORUM_ERR;
+	}
 
 	delete_msg_callback(mc->nonce, db);
 
-    stat_stop(dbc_stats.remote_enqueue_in_txn, &ts_start, err_status);
-	return err_status;
+    stat_stop(dbc_stats.remote_enqueue_in_txn, &ts_start, 0);
+	return 0;
 }
 
 int remote_read_queue_in_txn(WORD consumer_id, WORD shard_id, WORD app_id, WORD table_key, WORD queue_id,
 		int max_entries, int * entries_read, int64_t * new_read_head,
-		snode_t** start_row, snode_t** end_row, uuid_t * txnid,
+		snode_t** start_row, snode_t** end_row, int * minority_status, uuid_t * txnid,
 		remote_db_t * db)
 {
     struct timespec ts_start;
@@ -2185,6 +2367,7 @@ int remote_read_queue_in_txn(WORD consumer_id, WORD shard_id, WORD app_id, WORD 
 
 	unsigned len = 0;
 	void * tmp_out_buf = NULL;
+	*minority_status = 0;
 
 	queue_query_message * q = build_read_queue_in_txn(consumer_id, shard_id, app_id, table_key, queue_id, max_entries, txnid, get_nonce(db));
 	int success = serialize_queue_message(q, (void **) &tmp_out_buf, &len, 1, NULL);
@@ -2218,19 +2401,38 @@ int remote_read_queue_in_txn(WORD consumer_id, WORD shard_id, WORD app_id, WORD 
 		return NO_QUORUM_ERR;
 	}
 
-	queue_query_message * response = NULL;
-
+	queue_query_message * candidate_response = NULL, * response = NULL;
+	int valid_responses = 0;
 	for(int i=0;i<mc->no_replies;i++)
 	{
 		assert(mc->reply_types[i] == RPC_TYPE_QUEUE);
-		response = (queue_query_message *) mc->replies[i];
-		assert(response->msg_type == QUERY_TYPE_READ_QUEUE_RESPONSE);
-
+		candidate_response = (queue_query_message *) mc->replies[i];
+		assert(candidate_response->msg_type == QUERY_TYPE_READ_QUEUE_RESPONSE);
 #if CLIENT_VERBOSITY > 0
-		to_string_queue_message(response, (char *) print_buff);
-		log_info("Got back response from server %s: %s", rs->id, print_buff);
+		to_string_queue_message(candidate_response, (char *) print_buff);
+		log_info("Got back response: %s", print_buff);
 #endif
-		break;
+		if(candidate_response->status < 0)
+		{
+			*minority_status = candidate_response->status;
+		}
+		else
+		{
+			 // To determine whether the read was complete or incomplete, we use the status from the server reply
+			 // with the highest queue_index (since it will contain the latest persisted enqueues):
+
+			if(response == NULL || candidate_response->queue_index > response->queue_index)
+				response = candidate_response;
+			valid_responses++;
+		}
+	}
+
+	if(valid_responses < db->quorum_size)
+	{
+		log_error("No valid quorum (%d/%d valid replies received, minority_status=%d)", valid_responses, db->replication_factor, *minority_status);
+		delete_msg_callback(mc->nonce, db);
+        stat_stop(dbc_stats.remote_read_queue_in_txn, &ts_start, NO_QUORUM_ERR);
+		return NO_QUORUM_ERR;
 	}
 
     // Parse queue read response message to row list:
@@ -2262,13 +2464,14 @@ int remote_read_queue_in_txn(WORD consumer_id, WORD shard_id, WORD app_id, WORD 
 }
 
 int remote_consume_queue_in_txn(WORD consumer_id, WORD shard_id, WORD app_id, WORD table_key, WORD queue_id,
-					int64_t new_consume_head, uuid_t * txnid, remote_db_t * db)
+								int64_t new_consume_head, int * minority_status, uuid_t * txnid, remote_db_t * db)
 {
     struct timespec ts_start;
     stat_start(dbc_stats.remote_consume_queue_in_txn, &ts_start);
 
 	unsigned len = 0;
 	void * tmp_out_buf = NULL;
+	*minority_status = 0;
 
 	queue_query_message * q = build_consume_queue_in_txn(consumer_id, shard_id, app_id, table_key, queue_id, new_consume_head, txnid, get_nonce(db));
 	int success = serialize_queue_message(q, (void **) &tmp_out_buf, &len, 1, NULL);
@@ -2302,7 +2505,7 @@ int remote_consume_queue_in_txn(WORD consumer_id, WORD shard_id, WORD app_id, WO
 		return NO_QUORUM_ERR;
 	}
 
-	int ok_status = 0, err_status = 0;
+	int ok_status = 0;
 
 	for(int i=0;i<mc->no_replies;i++)
 	{
@@ -2311,7 +2514,7 @@ int remote_consume_queue_in_txn(WORD consumer_id, WORD shard_id, WORD app_id, WO
 		if(ack->status == 0)
 			ok_status++;
 		else
-			err_status = ack->status;
+			*minority_status = ack->status;
 
 #if CLIENT_VERBOSITY > 0
 		to_string_ack_message(ack, (char *) print_buff);
@@ -2319,24 +2522,30 @@ int remote_consume_queue_in_txn(WORD consumer_id, WORD shard_id, WORD app_id, WO
 #endif
 	}
 
-	if(ok_status >= db->quorum_size)
-		err_status = 0;
+	if(ok_status < db->quorum_size)
+	{
+		log_error("No valid quorum (%d/%d valid replies received, minority_status=%d)", ok_status, db->replication_factor, *minority_status);
+		delete_msg_callback(mc->nonce, db);
+        stat_stop(dbc_stats.remote_consume_queue_in_txn, &ts_start, NO_QUORUM_ERR);
+		return NO_QUORUM_ERR;
+	}
 
 	delete_msg_callback(mc->nonce, db);
 
-    stat_stop(dbc_stats.remote_consume_queue_in_txn, &ts_start, err_status);
-	return err_status;
+    stat_stop(dbc_stats.remote_consume_queue_in_txn, &ts_start, 0);
+	return 0;
 }
 
 int remote_subscribe_queue(WORD consumer_id, WORD shard_id, WORD app_id, WORD table_key, WORD queue_id,
 						queue_callback * callback, int64_t * prev_read_head, int64_t * prev_consume_head,
-						remote_db_t * db)
+						int * minority_status, remote_db_t * db)
 {
     struct timespec ts_start;
     stat_start(dbc_stats.remote_subscribe_queue, &ts_start);
 
 	unsigned len = 0;
 	void * tmp_out_buf = NULL;
+	*minority_status = 0;
 
 	queue_query_message * q = build_subscribe_queue_in_txn(consumer_id, shard_id, app_id, table_key, queue_id, NULL, get_nonce(db)); // txnid
 	int success = serialize_queue_message(q, (void **) &tmp_out_buf, &len, 1, NULL);
@@ -2370,17 +2579,21 @@ int remote_subscribe_queue(WORD consumer_id, WORD shard_id, WORD app_id, WORD ta
 		return NO_QUORUM_ERR;
 	}
 
+	int ok_status = 0, subscription_exists = 0;
 	for(int i=0;i<mc->no_replies;i++)
 	{
 		assert(mc->reply_types[i] == RPC_TYPE_ACK);
 		ack_message * ack = (ack_message *) mc->replies[i];
-	    if(ack->status == CLIENT_ERR_SUBSCRIPTION_EXISTS)
-	    {
-	    		delete_msg_callback(mc->nonce, db);
-				stat_stop(dbc_stats.remote_subscribe_queue, &ts_start, SUBSCRIPTION_EXISTS);
-				// TODO: align return value to use client API codes rather than server API?
-	    		return CLIENT_ERR_SUBSCRIPTION_EXISTS;
-	    }
+		if(ack->status == 0 || ack->status == DB_ERR_DUPLICATE_CONSUMER)
+		{
+			ok_status++;
+			if(ack->status == DB_ERR_DUPLICATE_CONSUMER)
+				subscription_exists = 1;
+		}
+		else
+		{
+			*minority_status = ack->status;
+		}
 
 #if CLIENT_VERBOSITY > 0
 		to_string_ack_message(ack, (char *) print_buff);
@@ -2388,22 +2601,34 @@ int remote_subscribe_queue(WORD consumer_id, WORD shard_id, WORD app_id, WORD ta
 #endif
 	}
 
+	if(ok_status < db->quorum_size)
+	{
+		log_error("No valid quorum (%d/%d valid replies received, minority_status=%d)", ok_status, db->replication_factor, *minority_status);
+		delete_msg_callback(mc->nonce, db);
+        stat_stop(dbc_stats.remote_subscribe_queue, &ts_start, NO_QUORUM_ERR);
+		return NO_QUORUM_ERR;
+	}
+
 	delete_msg_callback(mc->nonce, db);
 
     // Add local subscription on client:
 
+    int local_ret = subscribe_queue_client(consumer_id, shard_id, app_id, table_key, queue_id, callback, 1, db);
+
     stat_stop(dbc_stats.remote_subscribe_queue, &ts_start, 0);
-    return subscribe_queue_client(consumer_id, shard_id, app_id, table_key, queue_id, callback, 1, db);
+
+    return (subscription_exists || local_ret == CLIENT_ERR_SUBSCRIPTION_EXISTS)?CLIENT_ERR_SUBSCRIPTION_EXISTS:0;
 }
 
 int remote_unsubscribe_queue(WORD consumer_id, WORD shard_id, WORD app_id, WORD table_key, WORD queue_id,
-						remote_db_t * db)
+							int * minority_status, remote_db_t * db)
 {
     struct timespec ts_start;
     stat_start(dbc_stats.remote_unsubscribe_queue, &ts_start);
 
 	unsigned len = 0;
 	void * tmp_out_buf = NULL;
+	*minority_status = 0;
 
 	queue_query_message * q = build_unsubscribe_queue_in_txn(consumer_id, shard_id, app_id, table_key, queue_id, NULL, get_nonce(db)); // txnid
 	int success = serialize_queue_message(q, (void **) &tmp_out_buf, &len, 1, NULL);
@@ -2437,16 +2662,21 @@ int remote_unsubscribe_queue(WORD consumer_id, WORD shard_id, WORD app_id, WORD 
 		return NO_QUORUM_ERR;
 	}
 
+	int ok_status = 0, subscription_missing = 0;
 	for(int i=0;i<mc->no_replies;i++)
 	{
 		assert(mc->reply_types[i] == RPC_TYPE_ACK);
 		ack_message * ack = (ack_message *) mc->replies[i];
-	    if(ack->status == CLIENT_ERR_NO_SUBSCRIPTION_EXISTS)
-	    {
-	    		delete_msg_callback(mc->nonce, db);
-				stat_stop(dbc_stats.remote_unsubscribe_queue, &ts_start, NO_SUBSCRIPTION_EXISTS);
-	    		return CLIENT_ERR_NO_SUBSCRIPTION_EXISTS;
-	    }
+		if(ack->status == 0 || ack->status == DB_ERR_NO_CONSUMER)
+		{
+			ok_status++;
+			if(ack->status == DB_ERR_NO_CONSUMER)
+				subscription_missing = 1;
+		}
+		else
+		{
+			*minority_status = ack->status;
+		}
 
 #if CLIENT_VERBOSITY > 0
 		to_string_ack_message(ack, (char *) print_buff);
@@ -2454,24 +2684,34 @@ int remote_unsubscribe_queue(WORD consumer_id, WORD shard_id, WORD app_id, WORD 
 #endif
 	}
 
+	if(ok_status < db->quorum_size)
+	{
+		log_error("No valid quorum (%d/%d valid replies received, minority_status=%d)", ok_status, db->replication_factor, *minority_status);
+		delete_msg_callback(mc->nonce, db);
+        stat_stop(dbc_stats.remote_unsubscribe_queue, &ts_start, NO_QUORUM_ERR);
+		return NO_QUORUM_ERR;
+	}
+
 	delete_msg_callback(mc->nonce, db);
 
     // Remove local subscription from client:
 
+    int local_ret = unsubscribe_queue_client(consumer_id, shard_id, app_id, table_key, queue_id, 1, db);
     stat_stop(dbc_stats.remote_unsubscribe_queue, &ts_start, 0);
-    return unsubscribe_queue_client(consumer_id, shard_id, app_id, table_key, queue_id, 1, db);
+
+    return (subscription_missing || local_ret == CLIENT_ERR_NO_SUBSCRIPTION_EXISTS)?CLIENT_ERR_NO_SUBSCRIPTION_EXISTS:0;
 }
 
 int remote_subscribe_queue_in_txn(WORD consumer_id, WORD shard_id, WORD app_id, WORD table_key, WORD queue_id,
 						queue_callback * callback, int64_t * prev_read_head, int64_t * prev_consume_head,
-						uuid_t * txnid, remote_db_t * db)
+						int * minority_status, uuid_t * txnid, remote_db_t * db)
 {
 	assert (0); // Not supported
 	return 0;
 }
 
 int remote_unsubscribe_queue_in_txn(WORD consumer_id, WORD shard_id, WORD app_id, WORD table_key, WORD queue_id,
-								uuid_t * txnid, remote_db_t * db)
+									int * minority_status, uuid_t * txnid, remote_db_t * db)
 {
 	assert (0); // Not supported
 	return 0;
@@ -2638,10 +2878,11 @@ uuid_t * remote_new_txn(remote_db_t * db)
 	return txnid;
 }
 
-int _remote_validate_txn(uuid_t * txnid, vector_clock * version, remote_server * rs_in, remote_db_t * db)
+int _remote_validate_txn(uuid_t * txnid, vector_clock * version, remote_server * rs_in, int * minority_status, remote_db_t * db)
 {
 	unsigned len = 0;
 	void * tmp_out_buf = NULL;
+	*minority_status = 0;
 
 	txn_message * q = build_validate_txn(txnid, version, get_nonce(db));
 	int success = serialize_txn_message(q, (void **) &tmp_out_buf, &len, 1, version);
@@ -2673,16 +2914,18 @@ int _remote_validate_txn(uuid_t * txnid, vector_clock * version, remote_server *
 		return NO_QUORUM_ERR;
 	}
 
-	int ok_status = 0, err_status = 0;
+	int ok_status = 0, abort_status = 0;
 
 	for(int i=0;i<mc->no_replies;i++)
 	{
 		assert(mc->reply_types[i] == RPC_TYPE_ACK);
 		ack_message * ack = (ack_message *) mc->replies[i];
-		if(ack->status == 0)
+		if(ack->status == VAL_STATUS_COMMIT)
 			ok_status++;
-		else
-			err_status = ack->status;
+		else if(ack->status == VAL_STATUS_ABORT)
+		    abort_status++;
+		else if(ack->status == VAL_STATUS_ABORT_SCHEMA)
+		    *minority_status = ack->status;
 
 #if CLIENT_VERBOSITY > 0
 		to_string_ack_message(ack, (char *) print_buff);
@@ -2690,22 +2933,26 @@ int _remote_validate_txn(uuid_t * txnid, vector_clock * version, remote_server *
 #endif
 	}
 
-	if(ok_status >= db->quorum_size)
-		err_status = 0;
+	if(ok_status < db->quorum_size)
+    {
+        log_error("No valid quorum (%d/%d valid replies received (%d aborts), minority_status=%d)", ok_status, db->replication_factor, abort_status, *minority_status);
+        delete_msg_callback(mc->nonce, db);
+        return VAL_STATUS_ABORT;
+    }
 
 	delete_msg_callback(mc->nonce, db);
 
-	return err_status;
+	return VAL_STATUS_COMMIT;
 }
 
-int remote_validate_txn(uuid_t * txnid, remote_db_t * db)
+int remote_validate_txn(uuid_t * txnid, int * minority_status, remote_db_t * db)
 {
     struct timespec ts_start;
     stat_start(dbc_stats.remote_validate_txn, &ts_start);
 
 	vector_clock * version = get_lc(db);
 
-	int ret = _remote_validate_txn(txnid, get_lc(db), NULL, db);
+	int ret = _remote_validate_txn(txnid, get_lc(db), NULL, minority_status, db);
 
 	free_vc(version);
 
@@ -2784,13 +3031,14 @@ int remote_abort_txn(uuid_t * txnid, remote_db_t * db)
 	return _remote_abort_txn(txnid, NULL, db);
 }
 
-int _remote_persist_txn(uuid_t * txnid, vector_clock * version, remote_server * rs_in, remote_db_t * db)
+int _remote_persist_txn(uuid_t * txnid, vector_clock * version, remote_server * rs_in, int * minority_status, remote_db_t * db)
 {
 	unsigned len = 0;
 	void * tmp_out_buf = NULL;
 
 	txn_message * q = build_commit_txn(txnid, version, get_nonce(db));
 	int success = serialize_txn_message(q, (void **) &tmp_out_buf, &len, 1, version);
+	*minority_status = 0;
 
 	if(db->servers->no_items < db->quorum_size)
 	{
@@ -2819,7 +3067,7 @@ int _remote_persist_txn(uuid_t * txnid, vector_clock * version, remote_server * 
 		return NO_QUORUM_ERR;
 	}
 
-	int ok_status = 0, err_status = 0;
+	int ok_status = 0;
 
 	for(int i=0;i<mc->no_replies;i++)
 	{
@@ -2828,7 +3076,7 @@ int _remote_persist_txn(uuid_t * txnid, vector_clock * version, remote_server * 
 		if(ack->status == 0)
 			ok_status++;
 		else
-			err_status = ack->status;
+			*minority_status = ack->status;
 
 #if CLIENT_VERBOSITY > 0
 		to_string_ack_message(ack, (char *) print_buff);
@@ -2836,15 +3084,19 @@ int _remote_persist_txn(uuid_t * txnid, vector_clock * version, remote_server * 
 #endif
 	}
 
-	if(ok_status >= db->quorum_size)
-		err_status = 0;
+	if(ok_status < db->quorum_size)
+	{
+		log_error("No valid quorum (%d/%d valid replies received), minority_status = %d", ok_status, db->replication_factor, *minority_status);
+		delete_msg_callback(mc->nonce, db);
+		return NO_QUORUM_ERR;
+	}
 
 	delete_msg_callback(mc->nonce, db);
 
-	return err_status;
+	return 0;
 }
 
-int remote_commit_txn(uuid_t * txnid, remote_db_t * db)
+int remote_commit_txn(uuid_t * txnid, int * minority_status, remote_db_t * db)
 {
     struct timespec ts_start;
     stat_start(dbc_stats.remote_commit_txn, &ts_start);
@@ -2870,41 +3122,61 @@ int remote_commit_txn(uuid_t * txnid, remote_db_t * db)
 
 	vector_clock * commit_stamp = get_lc(db);
 
-	int val_res = _remote_validate_txn(txnid, commit_stamp, rs, db);
-
-#if (CLIENT_VERBOSITY > 1)
-	log_info("CLIENT: validate txn %s from server %s returned %d", uuid_str, rs->id, val_res);
-#endif
-
-	if(val_res == VAL_STATUS_COMMIT)
-	{
-		int persist_status = -2;
-		while(persist_status != 0)
-		{
-			persist_status = _remote_persist_txn(txnid, commit_stamp, rs, db);
+	int val_res = _remote_validate_txn(txnid, commit_stamp, rs, minority_status, db);
 
 #if (CLIENT_VERBOSITY > 0)
-			log_info("CLIENT: persist txn %s from server %s returned %d", uuid_str, rs->id, persist_status);
+	log_info("CLIENT: validate txn %s from server %s returned %d, minority_status %d", uuid_str, rs->id, val_res, *minority_status);
 #endif
-		}
 
-		int res = close_client_txn(*txnid, db); // Clear local cached txn state on client
+	switch(val_res)
+	{
+        case VAL_STATUS_COMMIT:
+        {
+            int persist_status = NO_SUCH_TXN, minority_status_persist, retry = 0;
+            while(persist_status != 0)
+            {
+                persist_status = _remote_persist_txn(txnid, commit_stamp, rs, &minority_status_persist, db);
+#if (CLIENT_VERBOSITY > 0)
+                log_info("CLIENT: persist txn %s from server %s returned %d, minority_status %d", uuid_str, rs->id, persist_status, minority_status_persist);
+#endif
+                if(retry==1)
+                    sleep(1);
+                retry=1;
+            }
+            int res = close_client_txn(*txnid, db); // Clear local cached txn state on client
 
 #if (CLIENT_VERBOSITY > 1)
-		log_info("CLIENT: close txn %s returned %d", uuid_str, res);
+            log_info("CLIENT: close txn %s returned %d", uuid_str, res);
 #endif
-	}
-	else if(val_res == VAL_STATUS_ABORT)
-	{
-		int res = _remote_abort_txn(txnid, rs, db);
+            break;
+        }
+        case VAL_STATUS_ABORT:
+        case VAL_STATUS_ABORT_SCHEMA:
+        {
+            int res = _remote_abort_txn(txnid, rs, db);
 
 #if (CLIENT_VERBOSITY > 0)
-		log_info("CLIENT: abort txn %s from server %s returned %d", uuid_str, rs->id, res);
+            log_info("CLIENT: abort txn %s from server %s returned %d", uuid_str, rs->id, res);
 #endif
-	}
-	else
-	{
-		assert(0);
+            res = close_client_txn(*txnid, db); // Clear local cached txn state on client
+
+#if (CLIENT_VERBOSITY > 1)
+            log_info("CLIENT: close txn %s returned %d", uuid_str, res);
+#endif
+
+            break;
+        }
+        case NO_QUORUM_ERR:
+        {
+            log_error("Validation round achieved no quorum");
+            free_vc(commit_stamp);
+            stat_stop(dbc_stats.remote_commit_txn, &ts_start, NO_QUORUM_ERR);
+            return NO_QUORUM_ERR;
+        }
+        default:
+        {
+            assert(0);
+        }
 	}
 
 	free_vc(commit_stamp);
@@ -2990,6 +3262,7 @@ msg_callback * get_msg_callback(int64_t nonce, WORD client_id, void (*callback)(
 	mc->callback = callback;
 
 	mc->no_replies = 0;
+    mc->no_valid_replies = 0;
 	mc->reply_lock = (pthread_mutex_t *) ((char *)mc + sizeof(msg_callback) + sizeof(pthread_mutex_t) + sizeof(pthread_cond_t));
 	pthread_mutex_init(mc->reply_lock, NULL);
 //	mc->replies = (void **) ((char *)mc + sizeof(msg_callback) + 2 * sizeof(pthread_mutex_t) + sizeof(pthread_cond_t));
@@ -3008,8 +3281,28 @@ int add_reply_to_msg_callback(void * reply, short reply_type, msg_callback * mc)
 
 	mc->replies[mc->no_replies] = reply;
 	mc->reply_types[mc->no_replies] = reply_type;
-	mc->no_replies++;
-	no_replies = mc->no_replies;
+    mc->no_replies++;
+
+	int status = 0, invalid_reply = 0;
+	if(reply_type == RPC_TYPE_ACK)
+	    status = ((ack_message *) reply)->status;
+	else if(reply_type == RPC_TYPE_QUEUE)
+	    status = ((queue_query_message *) reply)->status;
+
+	if(status < 0 &&
+       status != DB_ERR_DUPLICATE_QUEUE &&
+       status != DB_ERR_DUPLICATE_CONSUMER) // valid statuses
+	{
+#if (CLIENT_VERBOSITY > 0)
+	    log_debug("Received invalid ack with status %d", status);
+#endif
+	    invalid_reply=1;
+	}
+
+    if(!invalid_reply)
+        mc->no_valid_replies++;
+
+	no_replies = mc->no_valid_replies;
 
 	ret = pthread_mutex_unlock(mc->reply_lock);
 

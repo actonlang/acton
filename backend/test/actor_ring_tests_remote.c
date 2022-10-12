@@ -132,6 +132,7 @@ db_schema_t* create_state_schema()
 int create_queue_schema(remote_db_t * db, unsigned int * fastrandstate)
 {
 	assert(no_queue_cols == 2);
+	int minority_status = 0;
 
 	// Create input queues for all actors:
 
@@ -139,7 +140,7 @@ int create_queue_schema(remote_db_t * db, unsigned int * fastrandstate)
 
 	for(int64_t queue_id=0;queue_id<no_actors;queue_id++)
 	{
-		ret = remote_create_queue_in_txn(queue_table_key, (WORD) queue_id, NULL, db);
+		ret = remote_create_queue_in_txn(queue_table_key, (WORD) queue_id, &minority_status, NULL, db);
 		printf("Test %s - %s (%d)\n", "create_queue", ret==0?"OK":"FAILED", ret);
 	}
 
@@ -157,14 +158,14 @@ void consumer_callback(queue_callback_args * qca)
 
 int read_queue_while_not_empty(actor_args * ca, int * entries_read, snode_t ** start_row, snode_t ** end_row)
 {
-	int read_status = QUEUE_STATUS_READ_INCOMPLETE;
+	int read_status = QUEUE_STATUS_READ_INCOMPLETE, minority_status = 0;
 
 	while(read_status != QUEUE_STATUS_READ_COMPLETE)
 	{
 		read_status = remote_read_queue_in_txn(ca->consumer_id, ca->shard_id, ca->app_id,
 						ca->queue_table_key, ca->queue_id,
 						2, entries_read, &ca->read_head,
-						start_row, end_row, NULL, ca->db);
+						start_row, end_row, &minority_status, NULL, ca->db);
 
 		if(read_status < 0)
 		{
@@ -195,7 +196,7 @@ char digits[10][10] = { "zero", "one", "two", "three", "four", "five", "six", "s
 
 int checkpoint_local_state(actor_args * ca, uuid_t * txnid, unsigned int * fastrandstate)
 {
-	int ret = 0;
+	int ret = 0, minority_status = 0;
 
 	WORD * column_values = (WORD *) malloc(4 * sizeof(WORD));
 
@@ -212,7 +213,7 @@ int checkpoint_local_state(actor_args * ca, uuid_t * txnid, unsigned int * fastr
 
 		ret = remote_insert_in_txn(column_values, 4, no_state_primary_keys, 2,
 									(WORD) str_value, strnlen((const char *) str_value, 10) + 1,
-									ca->state_table_key, txnid, ca->db);
+									ca->state_table_key, &minority_status, txnid, ca->db);
 
 		assert(ret == 0);
 	}
@@ -226,7 +227,7 @@ int checkpoint_local_state(actor_args * ca, uuid_t * txnid, unsigned int * fastr
 
 		ret = remote_insert_in_txn(column_values, 4, no_state_primary_keys, 2,
 									(WORD) str_value, strnlen((const char *) str_value, 10) + 1,
-									ca->state_table_key, txnid, ca->db);
+									ca->state_table_key, &minority_status, txnid, ca->db);
 
 		assert(ret == 0);
 	}
@@ -238,7 +239,7 @@ int checkpoint_local_state(actor_args * ca, uuid_t * txnid, unsigned int * fastr
 
 	ret = remote_insert_in_txn(column_values, 3, no_state_primary_keys, 1,
 								NULL, 0,
-								ca->state_table_key, txnid, ca->db);
+								ca->state_table_key, &minority_status, txnid, ca->db);
 
 	char * str_value = ((int) ca->total_rcv <= 9)?(digits[(int) ca->total_rcv]):"NaN";
 
@@ -246,7 +247,7 @@ int checkpoint_local_state(actor_args * ca, uuid_t * txnid, unsigned int * fastr
 
 	ret = remote_insert_in_txn(column_values, 2, no_state_primary_keys, 1,
 								(WORD) str_value, strnlen((const char *) str_value, 10) + 1,
-								ca->state_table_key, txnid, ca->db);
+								ca->state_table_key, &minority_status, txnid, ca->db);
 
 	free(column_values);
 
@@ -266,6 +267,7 @@ int send_seed_msgs(actor_args * ca, int * msgs_sent, unsigned int * fastrandstat
 	assert(no_queue_cols == 2);
 
 	WORD * column_values = (WORD *) malloc(no_queue_cols * sizeof(WORD));
+	int minority_status = 0;
 
 	for(int i=0;i<no_outgoing_counters;i++)
 	{
@@ -273,7 +275,7 @@ int send_seed_msgs(actor_args * ca, int * msgs_sent, unsigned int * fastrandstat
 		column_values[1] = (WORD) i;
 		char * str_value = (i <= 9)?(digits[i]):"NaN";
 
-		ret = remote_enqueue_in_txn(column_values, no_queue_cols, (WORD) str_value, strnlen((const char *) str_value, 10) + 1, ca->queue_table_key, (WORD) dest_id, NULL, ca->db);
+		ret = remote_enqueue_in_txn(column_values, no_queue_cols, (WORD) str_value, strnlen((const char *) str_value, 10) + 1, ca->queue_table_key, (WORD) dest_id, &minority_status, NULL, ca->db);
 
 		assert(ret == 0);
 
@@ -305,6 +307,7 @@ int send_outgoing_msgs(actor_args * ca, int outgoing_counters[], int no_outgoing
 	*msgs_sent=0;
 
 	WORD * column_values = (WORD *) malloc(no_queue_cols * sizeof(WORD));
+	int minority_status = 0;
 
 	for(int i=0;i<no_outgoing_counters;i++)
 	{
@@ -312,7 +315,7 @@ int send_outgoing_msgs(actor_args * ca, int outgoing_counters[], int no_outgoing
 		column_values[1] = (WORD) outgoing_counters[i];
 		char * str_value = (outgoing_counters[i] <= 9)?(digits[outgoing_counters[i]]):"NaN";
 
-		ret = remote_enqueue_in_txn(column_values, no_queue_cols, (WORD) str_value, strnlen((const char *) str_value, 10) + 1, ca->queue_table_key, (WORD) dest_id, txnid, ca->db);
+		ret = remote_enqueue_in_txn(column_values, no_queue_cols, (WORD) str_value, strnlen((const char *) str_value, 10) + 1, ca->queue_table_key, (WORD) dest_id, &minority_status, txnid, ca->db);
 
 		assert(ret == 0);
 
@@ -403,7 +406,7 @@ int produce_effects(uuid_t * txnid, actor_args * ca,
 void * actor(void * cargs)
 {
 	unsigned int seed, randno;
-	int ret = 0;
+	int ret = 0, minority_status = 0;
 	snode_t * start_row, * end_row;
 	int msgs_sent = 0;
 	int outgoing_counters[100];
@@ -416,8 +419,9 @@ void * actor(void * cargs)
 	GET_RANDSEED(&seed, 0); // thread_id
 
 	int64_t prev_read_head = -1, prev_consume_head = -1;
+    int minority_status = 0;
 	ret = remote_subscribe_queue(ca->consumer_id, ca->shard_id, ca->app_id, ca->queue_table_key, ca->queue_id, qc,
-							&prev_read_head, &prev_consume_head, ca->db);
+							&prev_read_head, &prev_consume_head, &minority_status, ca->db);
 	printf("Test %s - %s (%d)\n", "subscribe_queue", ret==0?"OK":"FAILED", ret);
 	if(ret)
 		return NULL;
@@ -450,6 +454,7 @@ void * actor(void * cargs)
 
 	no_outgoing_counters = 0;
 	ret = process_messages(start_row, end_row, entries_read, outgoing_counters, &no_outgoing_counters, ca, &seed);
+	int minority_status = 0;
 
 	if(entries_read > 0)
 	{
@@ -465,7 +470,7 @@ void * actor(void * cargs)
 			// Consume input queue in same txn:
 
 			ret = remote_consume_queue_in_txn(ca->consumer_id, ca->shard_id, ca->app_id, ca->queue_table_key, ca->queue_id,
-										(int64_t) ca->read_head, txnid, ca->db);
+										(int64_t) ca->read_head, &minority_status, txnid, ca->db);
 
 			if(ret < 0 && ret != DB_ERR_QUEUE_COMPLETE)
 				printf("ERROR: consume_queue returned %d\n", ret);
@@ -473,7 +478,7 @@ void * actor(void * cargs)
 			if(debug)
 				printf("ACTOR %" PRId64 ": consumed input queue up to %" PRId64 " in txn.\n", (int64_t) ca->consumer_id, (int64_t) ca->read_head);
 
-			ret = remote_commit_txn(txnid, ca->db);
+			ret = remote_commit_txn(txnid, &minority_status, ca->db);
 
 			if(debug)
 				printf("ACTOR %" PRId64 ": Commit returned %d.\n", (int64_t) ca->consumer_id, ret);
@@ -532,7 +537,7 @@ void * actor(void * cargs)
 				// Consume input queue in same txn:
 
 				ret = remote_consume_queue_in_txn(ca->consumer_id, ca->shard_id, ca->app_id, ca->queue_table_key, ca->queue_id,
-											(int64_t) ca->read_head, txnid, ca->db);
+											(int64_t) ca->read_head, &minority_status, txnid, ca->db);
 
 				if(ret < 0 && ret != DB_ERR_QUEUE_COMPLETE)
 					printf("ERROR: consume_queue returned %d\n", ret);
@@ -567,7 +572,7 @@ void * actor(void * cargs)
 		}
 	}
 
-	ret = remote_unsubscribe_queue(ca->consumer_id, ca->shard_id, ca->app_id, ca->queue_table_key, ca->queue_id, ca->db);
+	ret = remote_unsubscribe_queue(ca->consumer_id, ca->shard_id, ca->app_id, ca->queue_table_key, ca->queue_id, &minority_status, ca->db);
 	printf("Test %s - %s (%d)\n", "unsubscribe_queue", ret==0?"OK":"FAILED", ret);
 
 //	free_queue_callback(qc);

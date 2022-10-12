@@ -628,7 +628,7 @@ int table_verify_cell_version(WORD* primary_keys, int no_primary_keys, WORD* clu
 	snode_t * row_node = skiplist_search(table->rows, primary_keys[0]);
 
 	if(row_node == NULL)
-		return -1;
+		return DB_ERR_NO_QUEUE;
 
 	db_row_t* row = (db_row_t *) row_node->value;
 
@@ -637,7 +637,7 @@ int table_verify_cell_version(WORD* primary_keys, int no_primary_keys, WORD* clu
 		snode_t * row_node = skiplist_search(row->cells, clustering_keys[i]);
 
 		if(row_node == NULL)
-			return -1;
+			return DB_ERR_NO_QUEUE;
 
 		row = (db_row_t *) row_node->value;
 	}
@@ -1084,7 +1084,7 @@ int db_verify_cell_version(WORD* primary_keys, int no_primary_keys, WORD* cluste
 	snode_t * node = skiplist_search(db->tables, table_key);
 
 	if(node == NULL)
-		return -1;
+		return DB_ERR_NO_TABLE;
 
 	db_table_t * table = (db_table_t *) (node->value);
 
