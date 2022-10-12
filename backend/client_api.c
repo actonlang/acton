@@ -3293,8 +3293,10 @@ int add_reply_to_msg_callback(void * reply, short reply_type, msg_callback * mc)
        status != DB_ERR_DUPLICATE_QUEUE &&
        status != DB_ERR_DUPLICATE_CONSUMER) // valid statuses
 	{
+#if (CLIENT_VERBOSITY > 0)
 	    log_debug("Received invalid ack with status %d", status);
-        invalid_reply=1;
+#endif
+	    invalid_reply=1;
 	}
 
     if(!invalid_reply)
