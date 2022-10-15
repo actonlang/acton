@@ -419,15 +419,16 @@ clean-rts:
 # == DIST ==
 #
 
-$(ACTONC): compiler/actonc
-	@mkdir -p $(dir $@)
-	cp $< $@
-
 # This does a little hack, first copying and then moving the file in place. This
-# is to avoid an error if actondb is currently running. cp tries to open the
-# file and modify it, which the Linux kernel (and perhaps others?) will prevent
-# if the file to be modified is an executable program that is currently running.
-# We work around it by moving / renaming the file in place instead!
+# is to avoid an error if the executable is currently running. cp tries to open
+# the file and modify it, which the Linux kernel (and perhaps others?) will
+# prevent if the file to be modified is an executable program that is currently
+# running.  We work around it by moving / renaming the file in place instead!
+dist/bin/actonc: compiler/actonc
+	@mkdir -p $(dir $@)
+	cp $< $@.tmp
+	mv $@.tmp $@
+
 dist/bin/actondb: backend/actondb
 	@mkdir -p $(dir $@)
 	cp $< $@.tmp
