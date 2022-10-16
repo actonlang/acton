@@ -90,7 +90,7 @@ actoncProjTests =
         testBuild "" (ExitFailure 1) False "test/actonc/project/missing_src"
 
   , testCase "qualified --root test.main" $ do
-        testBuild "build --root test.main" ExitSuccess False "test/actonc/project/qualified_root"
+        testBuild "--root test.main" ExitSuccess False "test/actonc/project/qualified_root"
 
   -- after used to avoid races on files in same project dir as above test
   , after AllFinish "qualified_root" $
