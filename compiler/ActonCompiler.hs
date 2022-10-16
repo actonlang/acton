@@ -631,6 +631,9 @@ runRestPasses opts paths env0 parsed stubMode = do
                                        " -c " ++
                                        " -I/opt/homebrew/include" ++
                                        " -I/usr/local/include" ++
+                                       -- required for XML module
+                                       -- TODO: invent some other way to specify this for .ext.c modules
+                                       " -I/usr/include/libxml2" ++
                                        " -I/usr/include" ++
                                        " -I" ++ wd ++
                                        " -I" ++ wd ++ "/out" ++
@@ -698,6 +701,7 @@ buildExecutable env opts paths binTask
         buildF              = joinPath [projPath paths, "build.sh"]
         outbase             = outBase paths mn
         rootFile            = outbase ++ ".root.c"
+        -- our xml module depends on: lz lzma iconv xml2
         libFilesBase        = " -lActonProject -lActon -lActonDB -lprotobuf-c_a -lutf8proc_a -luv_a -lpthread -lm -ldl -lz -llzma -liconv -lxml2 "
         libPathsBase        = " -L " ++ sysPath paths ++ "/lib -L" ++ sysLib paths ++ " -L" ++ projLib paths
 #if defined(darwin_HOST_OS) && defined(aarch64_HOST_ARCH)
