@@ -75,7 +75,23 @@ xml$$Tag xml$$decode($str data) {
   }
   xmlNodePtr root = xmlDocGetRootElement(doc);
   xmlNodePtr c = root->children;
-  return $Doc2Tag(root);
+  xml$$Tag t = $Doc2Tag(root);
+  xmlFreeDoc(doc);
+  return t;
+}
+
+xml$$Tag xml$$decodeFile($str filename) {
+  xmlDocPtr doc = xmlReadFile((char *)filename->str,NULL,XML_PARSE_NOBLANKS);
+  if (!doc) {
+    // xmlErrorPtr err = xmlGetLastError();
+    fprintf(stderr,"xml parse error; quitting\n");
+    exit(1);
+  }
+  xmlNodePtr root = xmlDocGetRootElement(doc);
+  xmlNodePtr c = root->children;
+  xml$$Tag t = $Doc2Tag(root);
+  xmlFreeDoc(doc);
+  return t;
 }
 
 

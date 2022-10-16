@@ -10,5 +10,8 @@ class Tag():
 pure def decode(data : str) -> Tag:
     NotImplemented
 
+pure def decodeFile(filename : str) -> Tag:
+    NotImplemented
+
 def encode(root : Tag) -> str:
     NotImplemented
