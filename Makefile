@@ -99,7 +99,7 @@ BUILTIN_HFILES=$(filter-out $(ENV_FILES),$(wildcard builtin/*.h))
 BUILTIN_CFILES=$(filter-out $(ENV_FILES),$(wildcard builtin/*.c))
 
 DBARCHIVE=lib/libActonDB.a
-ARCHIVES=lib/dev/libActon.a lib/rel/libActon.a lib/libprotobuf-c_a.a lib/libutf8proc_a.a lib/libuv_a.a
+ARCHIVES=lib/dev/libActon.a lib/rel/libActon.a lib/libprotobuf-c_a.a lib/libutf8proc_a.a lib/libuv_a.a lib/libxml2_a.a
 ifeq ($(shell uname -s),Linux)
 ARCHIVES+=lib/libbsd_a.a lib/libmd_a.a
 endif
@@ -310,6 +310,11 @@ lib/libutf8proc_a.a: $(LIBUTF8PROC_A)
 LIBUV_LIBDIR:=$(shell pkg-config --variable=libdir libuv 2>/dev/null)
 LIBUV_A:=$(shell ls $(LIBUV_LIBDIR)/libuv_a.a $(LIBUV_LIBDIR)/libuv.a 2>/dev/null | head -n1)
 lib/libuv_a.a: $(LIBUV_A)
+	cp $< $@
+
+LIBXML2_LIBDIR:=$(shell pkg-config --variable=libdir libxml-2.0 2>/dev/null)
+LIBXML2_A:=$(shell ls $(LIBXML2_LIBDIR)/libxml2_a.a $(LIBXML2_LIBDIR)/libxml2.a 2>/dev/null | head -n1)
+lib/libxml2_a.a: $(LIBXML2_A)
 	cp $< $@
 
 COMM_OFILES += backend/comm.o rts/empty.o

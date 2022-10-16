@@ -670,6 +670,9 @@ runRestPasses args paths env0 parsed stubMode = do
                                        " -c " ++
                                        " -I/opt/homebrew/include" ++
                                        " -I/usr/local/include" ++
+                                       -- required for XML module
+                                       -- TODO: invent some other way to specify this for .ext.c modules
+                                       " -I/usr/include/libxml2" ++
                                        " -I/usr/include" ++
                                        " -I" ++ wd ++
                                        " -I" ++ wd ++ "/out" ++
@@ -739,19 +742,23 @@ buildExecutable env args paths binTask
         buildF              = joinPath [projPath paths, "build.sh"]
         outbase             = outBase paths mn
         rootFile            = outbase ++ ".root.c"
-        libFilesBase        = " -lActonProject -lActon -lActonDB -lprotobuf-c_a -lutf8proc_a -luv_a -lpthread -lm -ldl -lz -llzma -liconv -lxml2 "
-        libPathsBase        = " -L " ++ sysPath paths ++ "/lib -L" ++ sysLib paths ++ " -L" ++ projLib paths
+        -- our xml module depends on: lz lzma iconv xml2
+-- NOTE: our xml module uses libxml2 which in turn depends on lz, lzma and some
+-- lib for conversation, which on macos is iconv while on Linux it is ICU;
+-- icuuc, icui18n & icudata
+        libFilesBase        = " -lActonProject -lActon -lActonDB -lprotobuf-c_a -lutf8proc_a -luv_a -lpthread -lm -ldl -lxml2_a -lz -llzma "
+        libPathsBase        = " -L " ++ sysPath paths ++ "/lib -L" ++ sysLib paths ++ " -L" ++ projLib paths ++ " -L/usr/lib/x86_64-linux-gnu "
 #if defined(darwin_HOST_OS) && defined(aarch64_HOST_ARCH)
-        libFiles            = libFilesBase
+        libFiles            = libFilesBase ++ " -liconv "
         libPaths            = libPathsBase ++ " -L/opt/homebrew/lib "
         ccArgs              = ""
 #elif defined(darwin_HOST_OS) && defined(x86_64_HOST_ARCH)
-        libFiles            = libFilesBase
+        libFiles            = libFilesBase ++ " -liconv "
         libPaths            = libPathsBase ++ " -L/usr/local/lib "
         ccArgs              = ""
 -- Linux? and what else? maybe split
 #else
-        libFiles            = libFilesBase ++ " -luuid -lbsd_a -lmd_a "
+        libFiles            = libFilesBase ++ " -licuuc -licui18n -licudata -luuid -lbsd_a -lmd_a "
         libPaths            = libPathsBase
         ccArgs              = " -no-pie "
 #endif
