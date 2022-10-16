@@ -51,6 +51,7 @@ actor Tester(env, verbose, port_chunk):
     var tcp_client = None
     var tcp_expect = 0
     var state = 0
+    var app_pid = None
 
     def log(msg: str) -> None:
         if verbose:
@@ -62,7 +63,7 @@ actor Tester(env, verbose, port_chunk):
         combined_output += "testERR: " + msg + "\n"
         error_encountered = True
         error_msg = msg
-        stop(True)
+        stop(True, "error encountered")
 
     def report():
         if error_encountered:
@@ -102,22 +103,13 @@ actor Tester(env, verbose, port_chunk):
             error("DB Process exited with code: %d terminated with signal: %d" % (exit_code, term_signal))
         are_we_done()
 
-    def app_on_exit(p, exit_code, term_signal):
-        p_alive -= 1
-        if exit_code == 0 and term_signal == 0:
-            if verbose:
-                print("App Process successfully exited with code: ", exit_code, " terminated with signal:", term_signal)
-            stop(False)
-        else:
-            print("App Process erroneously exited with code: ", exit_code, " terminated with signal:", term_signal)
-        are_we_done()
 
     def on_error(p, error):
         print("Error from process:", p, error)
 
 
-    def stop(error: bool):
-        log("stopping everything...")
+    def stop(error: bool, msg: str):
+        log("stopping everything, reason: " + msg)
         if error:
             error_encountered = True
         for p in ps:
@@ -196,19 +188,19 @@ actor Tester(env, verbose, port_chunk):
         def app_server_on_stdout(p, data):
             log_process_output(p, "OUT: state " + str(state), data)
             if state == 0:
-                if data.find(b"NOW LISTENING\n", None, None) > -1:
+                if data.find(b"NOW LISTENING", None, None) > -1:
                     log("Server app listening in state %d, starting TCP client" % state)
                     state = 1
                     tcp_client = net.TCPIPConnection(connect_auth, "127.0.0.1", port, tcpc_on_connect, tcpc_on_receive, tcpc_on_error)
                 else:
-                    log("Read unexpected output from server app:" + str(data))
+                    log("In state " + str(state) + ", read unexpected output from server app:" + str(data))
             elif state == 6:
-                if data.find(b"NOW LISTENING\n", None, None) > -1:
+                if data.find(b"NOW LISTENING", None, None) > -1:
                     log("Server app listening in state %d, starting TCP client" % state)
                     state = 7
                     tcp_client = net.TCPIPConnection(connect_auth, "127.0.0.1", port, tcpc_on_connect, tcpc_on_receive, tcpc_on_error)
                 else:
-                    log("Read unexpected output from server app:" + str(data))
+                    log("In state " + str(state) + ", read unexpected output from server app:" + str(data))
 
         log("Running server test")
         dbc_start()
@@ -242,7 +234,7 @@ actor Tester(env, verbose, port_chunk):
             elif state == 9:
                 if exit_code == 0 and term_signal == 0:
                     log("App successfully exited in state %d with exit code %d and termination signal %d" % (state, exit_code, term_signal))
-                    stop(False)
+                    stop(False, "success")
                 else:
                     error("App exited in state %d with an unexpected exit code %d and termination signal %d" % (state, exit_code, term_signal))
             else:
@@ -254,6 +246,11 @@ actor Tester(env, verbose, port_chunk):
         p = process.Process(process_auth, cmd, None, None, app_server_on_stdout, on_stderr, app_server_on_exit, on_error)
         p_alive += 1
         if p is not None:
+            app_pid = p.pid()
+            if app_pid is not None:
+                log("App started with PID: " + str(app_pid))
+            else:
+                error("App not running!?")
             ps.append(p)
             paid = p.aid()
             psp[paid] = "app"
@@ -272,13 +269,15 @@ actor main(env):
     t = Tester(env, verbose, port_chunk)
 
     def test_timeout():
-        t.error("Test failed - timeout reached")
-        await async t.stop(True)
+        print("Test timeout")
+        await async t.error("Test failed - timeout reached")
+        await async t.stop(True, "timeout")
 
     def unconditional_exit():
-        t.error("Giving up...")
-        t.report()
+        print("Unconditional exit")
+        await async t.error("Giving up...")
+        await async t.report()
         await async env.exit(1)
 
-    after 5: test_timeout()
-    after 9: unconditional_exit()
+    after 90: test_timeout()
+    after 100: unconditional_exit()

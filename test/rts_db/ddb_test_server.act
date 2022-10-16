@@ -5,7 +5,12 @@ actor Tester(env, port):
     var i = 0
 
     def on_listen_error(l, error):
-        print("Error with our listening socket, attempting to re-establish listening socket")
+        print("Error with our listening socket on port" + str(port) + ": " + error)
+        if error == "resume":
+            pass
+        else:
+            print("Unhandled error:", error)
+        print("Attempting to re-establish listening socket")
         lsock = init_listen()
 
     def on_server_accept(c):
@@ -28,8 +33,9 @@ actor Tester(env, port):
 
     def init_listen():
         listen_auth = net.TCPListenAuth(net.TCPAuth(net.NetAuth(env.auth)))
+        print("Starting to listen...")
         s = net.TCPListener(listen_auth, "0.0.0.0", port, on_listen_error, on_server_accept, on_server_receive, on_server_error)
-        print("NOW LISTENING")
+        print("NOW LISTENING ON", str(port))
 
         return s
 
