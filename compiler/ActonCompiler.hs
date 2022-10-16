@@ -702,14 +702,14 @@ buildExecutable env opts paths binTask
         outbase             = outBase paths mn
         rootFile            = outbase ++ ".root.c"
         -- our xml module depends on: lz lzma iconv xml2
-        libFilesBase        = " -lActonProject -lActon -lActonDB -lprotobuf-c_a -lutf8proc_a -luv_a -lpthread -lm -ldl -lz -llzma -liconv -lxml2 "
+        libFilesBase        = " -lActonProject -lActon -lActonDB -lprotobuf-c_a -lutf8proc_a -luv_a -lpthread -lm -ldl -lz -lxml2 "
         libPathsBase        = " -L " ++ sysPath paths ++ "/lib -L" ++ sysLib paths ++ " -L" ++ projLib paths
 #if defined(darwin_HOST_OS) && defined(aarch64_HOST_ARCH)
-        libFiles            = libFilesBase
+        libFiles            = libFilesBase ++ " -llzma -liconv "
         libPaths            = libPathsBase ++ " -L/opt/homebrew/lib "
         ccArgs              = ""
 #elif defined(darwin_HOST_OS) && defined(x86_64_HOST_ARCH)
-        libFiles            = libFilesBase
+        libFiles            = libFilesBase ++ " -llzma -liconv "
         libPaths            = libPathsBase ++ " -L/usr/local/lib "
         ccArgs              = ""
 -- Linux? and what else? maybe split
