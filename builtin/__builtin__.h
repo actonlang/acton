@@ -954,7 +954,7 @@ struct $Mapping$class {
 };
 
 extern struct $Mapping$class $Mapping$methods;
-$Mapping $Mapping$new();
+$Mapping $Mapping$new($Eq w$Eq$A$Mapping);
 
 // $Set ////////////////////////////////////////////////////////////
 
