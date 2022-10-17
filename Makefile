@@ -34,7 +34,7 @@ CFLAGS+= -I. -Ideps -Wno-int-to-pointer-cast -Wno-pointer-to-int-cast -Wformat -
 CFLAGS_REL= -O3 -DREL
 CFLAGS_DEV= -g -DDEV
 LDFLAGS+=-Llib
-LDLIBS+=-lprotobuf-c_a -lm -lpthread
+LDLIBS+=$(LIBPROTOBUF_C) -lm -lpthread
 
 # look for jemalloc
 JEM_LIB?=$(wildcard /usr/lib/x86_64-linux-gnu/libjemalloc.a)
@@ -99,10 +99,7 @@ BUILTIN_HFILES=$(filter-out $(ENV_FILES),$(wildcard builtin/*.h))
 BUILTIN_CFILES=$(filter-out $(ENV_FILES),$(wildcard builtin/*.c))
 
 DBARCHIVE=lib/libActonDB.a
-ARCHIVES=lib/dev/libActon.a lib/rel/libActon.a lib/libprotobuf-c_a.a lib/libutf8proc_a.a lib/libuv_a.a
-ifeq ($(shell uname -s),Linux)
-ARCHIVES+=lib/libbsd_a.a lib/libmd_a.a
-endif
+ARCHIVES=lib/dev/libActon.a lib/rel/libActon.a lib/libActonDeps.a
 
 DIST_BINS=$(ACTONC) dist/bin/actondb dist/bin/runacton
 DIST_HFILES=\
@@ -286,31 +283,35 @@ lib/rel/libActon.a: stdlib/out/rel/lib/libActonProject.a $(LIBACTON_REL_OFILES)
 	cp -a $< $@
 	ar rcs $@ $(filter-out stdlib/out/rel/lib/libActonProject.a,$^)
 
-# Include static libs
-LIBBSD_LIBDIR:=$(shell pkg-config --variable=libdir libbsd 2>/dev/null)
-LIBBSD_A:=$(shell ls $(LIBBSD_LIBDIR)/libbsd_a.a $(LIBBSD_LIBDIR)/libbsd.a 2>/dev/null | head -n1)
-lib/libbsd_a.a: $(LIBBSD_A)
-	cp $< $@
-
-LIBMD_LIBDIR:=$(shell pkg-config --variable=libdir libmd 2>/dev/null)
-LIBMD_A:=$(shell ls $(LIBMD_LIBDIR)/libmd_a.a $(LIBMD_LIBDIR)/libmd.a 2>/dev/null | head -n1)
-lib/libmd_a.a: $(LIBMD_A)
-	cp $< $@
-
-LIBPROTOBUFC_LIBDIR:=$(shell pkg-config --variable=libdir libprotobuf-c 2>/dev/null)
-LIBPROTOBUFC_A:=$(shell ls $(LIBPROTOBUFC_LIBDIR)/libprotobuf-c_a.a $(LIBPROTOBUFC_LIBDIR)/libprotobuf-c.a 2>/dev/null | head -n1)
-lib/libprotobuf-c_a.a: $(LIBPROTOBUFC_A)
-	cp $< $@
-
-LIBUTF8PROC_LIBDIR:=$(shell pkg-config --variable=libdir libutf8proc 2>/dev/null)
-LIBUTF8PROC_A:=$(shell ls $(LIBUTF8PROC_LIBDIR)/libutf8proc_a.a $(LIBUTF8PROC_LIBDIR)/libutf8proc.a 2>/dev/null | head -n1)
-lib/libutf8proc_a.a: $(LIBUTF8PROC_A)
-	cp $< $@
+# -- libActonDeps.a
+# This is an archive of all external libraries that we depend on. Each library
+# comes in its own .a archive but in order to hide this and free the compiler
+# from having to juggle a bunch of -l options, we bake the contents of all these
+# .a archives into one big archive and link with that. We have to extract into
+# subdirectories to prevent overwriting if there are name collisions between
+# different library archives.
+LIBBSD:=$(shell pkg-config --variable=libdir libbsd 2>/dev/null)/lib$(shell pkg-config --libs-only-l libbsd 2>/dev/null | cut -d' ' -f1 | cut -c3-).a
+LIBMD:=$(shell pkg-config --variable=libdir libmd 2>/dev/null)/lib$(shell pkg-config --libs-only-l libmd 2>/dev/null | cut -d' ' -f1 | cut -c3-).a
+LIBPROTOBUF_C:=$(shell pkg-config --variable=libdir libprotobuf-c 2>/dev/null)/lib$(shell pkg-config --libs-only-l libprotobuf-c 2>/dev/null | cut -d' ' -f1 | cut -c3-).a
+LIBUTF8PROC:=$(shell pkg-config --variable=libdir libutf8proc 2>/dev/null)/lib$(shell pkg-config --libs-only-l libutf8proc 2>/dev/null | cut -d' ' -f1 | cut -c3-).a
 
 LIBUV_LIBDIR:=$(shell pkg-config --variable=libdir libuv 2>/dev/null)
-LIBUV_A:=$(shell ls $(LIBUV_LIBDIR)/libuv_a.a $(LIBUV_LIBDIR)/libuv.a 2>/dev/null | head -n1)
-lib/libuv_a.a: $(LIBUV_A)
-	cp $< $@
+LIBUV:=$(shell ls $(LIBUV_LIBDIR)/libuv_a.a $(LIBUV_LIBDIR)/libuv.a 2>/dev/null | head -n1)
+
+DEP_LIBS:=$(LIBPROTOBUF_C) $(LIBUTF8PROC) $(LIBUV)
+ifeq ($(shell uname -s),Linux)
+DEP_LIBS+=$(LIBBSD) $(LIBMD)
+endif
+
+lib/libActonDeps.a: $(DEP_LIBS)
+	mkdir -p lib_deps
+	for LIB in $^; do \
+		LIBNAME=$$(basename $${LIB} .a); \
+		mkdir -p lib_deps/$${LIBNAME}; \
+		$$(cd lib_deps/$${LIBNAME} && ar x $${LIB}); \
+	done
+	cd lib_deps && ar -qc ../lib/libActonDeps.a */*.o
+# ---
 
 COMM_OFILES += backend/comm.o rts/empty.o
 DB_OFILES += backend/db.o backend/queue.o backend/skiplist.o backend/txn_state.o backend/txns.o rts/empty.o
@@ -414,7 +415,7 @@ clean-backend:
 
 .PHONY: clean-rts
 clean-rts:
-	rm -rf $(ARCHIVES) $(DBARCHIVE) $(OFILES) $(STDLIB_HFILES) $(STDLIB_OFILES) $(STDLIB_TYFILES) stdlib/out/
+	rm -rf $(ARCHIVES) $(DBARCHIVE) $(OFILES) $(STDLIB_HFILES) $(STDLIB_OFILES) $(STDLIB_TYFILES) stdlib/out/ lib_deps
 
 # == DIST ==
 #
