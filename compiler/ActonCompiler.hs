@@ -698,7 +698,7 @@ buildExecutable env opts paths binTask
         buildF              = joinPath [projPath paths, "build.sh"]
         outbase             = outBase paths mn
         rootFile            = outbase ++ ".root.c"
-        libFilesBase        = " -lActonProject -lActon -lActonDB -lprotobuf-c_a -lutf8proc_a -luv_a -lpthread -lm -ldl "
+        libFilesBase        = " -lActonProject -lActon -lActonDB -lActonDeps -lpthread -lm -ldl "
         libPathsBase        = " -L " ++ sysPath paths ++ "/lib -L" ++ sysLib paths ++ " -L" ++ projLib paths
 #if defined(darwin_HOST_OS) && defined(aarch64_HOST_ARCH)
         libFiles            = libFilesBase
@@ -710,7 +710,7 @@ buildExecutable env opts paths binTask
         ccArgs              = ""
 -- Linux? and what else? maybe split
 #else
-        libFiles            = libFilesBase ++ " -luuid -lbsd_a -lmd_a "
+        libFiles            = libFilesBase ++ " -luuid"
         libPaths            = libPathsBase
         ccArgs              = " -no-pie "
 #endif
