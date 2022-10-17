@@ -150,5 +150,5 @@ actor main(env):
         t.report()
         await async env.exit(1)
 
-    after 2: test_timeout()
-    after 4: unconditional_exit()
+    after 20: test_timeout()
+    after 30: unconditional_exit()
