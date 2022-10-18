@@ -474,8 +474,8 @@ clWrapped           = NClass [quant s, quant x] [] te
 
 
 
-primWits            = [ WInst [] fxProc   (pWrapped fxProc) primWrapProc path,
-                        WInst [] fxAction (pWrapped fxProc) primWrapAction path,
+primWits            = [ WInst [] fxAction (pWrapped fxProc) primWrapAction path,
+                        WInst [] fxProc   (pWrapped fxProc) primWrapProc path,
                         WInst [] fxMut    (pWrapped fxMut)  primWrapMut path,
                         WInst [] fxPure   (pWrapped fxPure) primWrapPure path
                       ]
