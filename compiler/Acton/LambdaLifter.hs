@@ -314,11 +314,12 @@ instance Lift Expr where
     ll env (Call l e p KwdNil)
       | Just (e',vts) <- freefun env e  = do p' <- ll env p
                                              return $ Call l e' (addArgs vts p') KwdNil
-      | TApp _ (Var _ n) ts <- e,
+      | Call _ (TApp _ (Var _ n) _) p1 KwdNil <- e,
         n == primEXEC,
-        PosArg e' PosNil <- p,
-        closedType env e'               = do e' <- ll env e'
-                                             return $ Dot l e' attr_exec_
+        PosArg e' PosNil <- p1,
+        closedType env e'               = do e' <- ll env e'                              -- (closedType e' is reduntant, must be true!)
+                                             p' <- ll env p
+                                             return $ Call l (Dot l e' attr_exec_) p' KwdNil
       | Async _ e' <- e,
         closedType env e'               = do e' <- ll env e'
                                              p' <- ll env p
