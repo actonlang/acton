@@ -223,13 +223,10 @@ wrapped kw env cs ts args               = do tvx <- newTVarOfKind KFX
                                              fx <- newTVarOfKind KFX
                                              t' <- newTVar
                                              let t1 = subst [(fxSelf,fx)] t0
-                                                 t2 = tFun fx (foldr posRow posNil ts) kwdNil t'
-                                                 TFun{restype=TFun{effect=fx1}} = t1
-                                             fx2 <- currFX
+                                                 t2 = tFun fxPure (foldr posRow posNil ts) kwdNil t'
                                              w <- newWitness
                                              return (Impl w fx p :
                                                      Cast t1 t2 :
-                                                     Cast fx1 fx2 :
                                                      cs, t', eCall (tApp (Dot l0 (eVar w) kw) tvs) args)
 
 --------------------------------------------------------------------------------------------------------------------------
