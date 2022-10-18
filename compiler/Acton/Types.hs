@@ -782,12 +782,11 @@ instance Check Decl where
                                              checkNoEscape env tvs
                                              fvs <- tyfree <$> msubst env
                                              return (cs1, (Actor l n (noqual env q) (qualWPar env q $ noDefaultsP p') (noDefaultsK k')
-                                                           (bindWits (eq1++eq0) ++ defsigs ++ defaultsP p' ++ defaultsK k' ++ b')))
+                                                           (bindWits (eq1++eq0) ++ defaultsP p' ++ defaultsK k' ++ b')))
       where env1                        = reserve (bound (p,k) ++ bound b) $ defineTVars q $
                                           define [(selfKW, NVar t0)] $ reserve (statevars b) $ setInAct env
             t0                          = tCon $ TC (NoQ n) (map tVar tvs)
             tvs                         = qbound q
-            defsigs                     = [ Signature NoLoc [n] sc dec | (n,NDef sc dec) <- te0 ]
             NAct _ _ _ te0              = findName n env
 
     checkEnv' env (Class l n q us b)    = do --traceM ("## checkEnv class " ++ prstr n)
