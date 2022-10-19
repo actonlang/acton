@@ -10,6 +10,11 @@ endif
 
 ACTONC=dist/bin/actonc
 ACTC=dist/bin/actonc
+ZIG_VERSION:=0.10.0-dev.4460+14c173b20
+CC=$(TD)/dist/zig/zig cc
+CXX=$(TD)/dist/zig/zig c++
+export CC
+export CXX
 
 # Determine which xargs we have. BSD xargs does not have --no-run-if-empty,
 # rather, it is the default behavior so the argument is superfluous. We check if
@@ -31,20 +36,12 @@ else
 export VERSION_INFO?=$(VERSION).$(BUILD_TIME)
 endif
 
-CFLAGS+= -I. -I$(TD)/deps/instdir/include -Ideps -Wno-int-to-pointer-cast -Wno-pointer-to-int-cast -Wformat -Werror=format-security
+# TODO: remove -fno-sanitize=undefined, which is zig default as to help catch UB
+CFLAGS+= -fno-sanitize=undefined -I. -I$(TD)/deps/instdir/include -Ideps -Wno-int-to-pointer-cast -Wno-pointer-to-int-cast -Wformat -Werror=format-security
 CFLAGS_REL= -O3 -DREL
 CFLAGS_DEV= -g -DDEV
 LDFLAGS+=-L$(TD)/lib -L$(TD)/deps/instdir/lib
 LDLIBS+=$(LIBPROTOBUF_C) -lm -lpthread
-
-# look for jemalloc
-JEM_LIB?=$(wildcard /usr/lib/x86_64-linux-gnu/libjemalloc.a)
-ifneq ($(JEM_LIB),)
-$(info Using jemalloc: $(JEM_LIB))
-CFLAGS+=-DUSE_JEMALLOC
-LDFLAGS+=-L$(dir $(JEM_LIB))
-LDLIBS+=-ljemalloc
-endif
 
 # -- Apple Mac OS X ------------------------------------------------------------
 ifeq ($(shell uname -s),Darwin)
@@ -54,10 +51,15 @@ LDLIBS+=-largp
 ifeq ($(shell uname -m),arm64)
 CFLAGS += -I/opt/homebrew/include
 LDFLAGS += -L/opt/homebrew/lib
+ZIG_ARCH:=aarch64
+ZIG_OS:=macos
 endif
 
 # -- Intel CPU
 ifeq ($(shell uname -m),x86_64)
+CFLAGS += -I/usr/local/include
+ZIG_ARCH:=x86_64
+ZIG_OS:=macos
 endif
 
 endif # -- END: Apple Mac OS X -------------------------------------------------
@@ -68,10 +70,22 @@ ifeq ($(shell uname -s),Linux)
 CFLAGS += -Werror
 CFLAGS += -I$(TD)/deps/instdir/include
 LDLIBS+=-luuid
+ZIG_OS:=linux
+ifeq ($(shell uname -m),x86_64)
+CFLAGS_TARGET := -target x86_64-linux-gnu.2.28
+ZIG_ARCH:=x86_64
+else
+$(error "Unsupported architecture for Linux?")
+endif
 endif # -- END: Linux ----------------------------------------------------------
+CFLAGS_DEPS=$(CFLAGS_TARGET)
+export CFLAGS
+export LDFLAGS
 
 .PHONY: all
-all: version-check distribution
+all: version-check
+	$(MAKE) $(DIST_ZIG)
+	$(MAKE) distribution
 
 .PHONY: help
 help:
@@ -111,6 +125,7 @@ DIST_HFILES=\
 	$(addprefix dist/,$(BUILTIN_HFILES))
 DIST_DBARCHIVE=$(addprefix dist/,$(DBARCHIVE))
 DIST_ARCHIVES=$(addprefix dist/,$(ARCHIVES))
+DIST_ZIG=dist/zig
 
 
 # /backend ----------------------------------------------
@@ -278,11 +293,16 @@ LIBBSDNT_REF=97053f366618b0e987a76bc6d6992165c8ea843e
 deps/libbsdnt:
 	ls $@ >/dev/null 2>&1 || git clone https://github.com/wbhart/bsdnt.git $@
 
+# NOTE: we don't pass in CFLAGS_DEPS which includes setting -target to zig,
+# because the autoconf stuff in bsdnt is so old it doesn't accept this style of
+# argument passing it seems? -target=foo works whereas -target foo does not. It
+# seems fine for now since this is likely a pure library, not interacting
+# anything with libc, but maybe we should fix it?
 deps/instdir/lib/libbsdnt.a: deps/libbsdnt
 	mkdir -p $(dir $@)
 	cd $< \
 	&& git checkout $(LIBBSDNT_REF) \
-	&& ./configure --prefix=$(TD)/deps/instdir --enable-static --disable-shared CFLAGS="$(CFLAGS_DEPS)" \
+	&& ./configure --prefix=$(TD)/deps/instdir --enable-static --disable-shared \
 	&& make -j && make install
 
 # /deps/libbsd --------------------------------------------
@@ -311,7 +331,7 @@ deps/instdir/lib/libbsd.a: deps/libbsd deps/instdir/lib/libmd.a
 	&& rm -rf incbsd \
 	&& cp -av include/bsd incbsd \
 	&& ./autogen \
-	&& ./configure --disable-LIBBSD_OVERLAY --prefix=$(TD)/deps/instdir --enable-static --disable-shared CFLAGS="-I$(TD)/deps/instdir/include -L$(TD)/deps/instdir/lib" \
+	&& ./configure --prefix=$(TD)/deps/instdir --enable-static --disable-shared CFLAGS="-I../incbsd -I$(TD)/deps/instdir/include -L$(TD)/deps/instdir/lib $(CFLAGS_DEPS)" \
 	&& make -j && make install
 
 # /deps/libmd --------------------------------------------
@@ -569,7 +589,7 @@ clean-rts:
 # the file and modify it, which the Linux kernel (and perhaps others?) will
 # prevent if the file to be modified is an executable program that is currently
 # running.  We work around it by moving / renaming the file in place instead!
-dist/bin/actonc: compiler/actonc
+dist/bin/actonc: compiler/actonc dist/zig
 	@mkdir -p $(dir $@)
 	cp $< $@.tmp
 	mv $@.tmp $@
@@ -608,8 +628,18 @@ dist/completion/acton.bash-completion: completion/acton.bash-completion
 	mkdir -p $(dir $@)
 	cp $< $@
 
+dist/zig: deps/zig-$(ZIG_OS)-$(ZIG_ARCH)-$(ZIG_VERSION).tar.xz
+	mkdir -p $@
+	cd $@ && tar Jx --strip-components=1 -f ../../$^
+
+deps/zig-$(ZIG_OS)-$(ZIG_ARCH)-$(ZIG_VERSION).tar.xz:
+	curl -o $@ https://ziglang.org/builds/zig-$(ZIG_OS)-$(ZIG_ARCH)-$(ZIG_VERSION).tar.xz
+
+# For releases, URL looks like:
+#curl -o $@ https://ziglang.org/download/$(ZIG_VERSION)/zig-$(ZIG_OS)-$(ZIG_ARCH)-$(ZIG_VERSION).tar.xz
+
 .PHONY: distribution clean-distribution
-distribution: $(DIST_ARCHIVES) dist/include/bsdnt $(DIST_BINS) $(DIST_HFILES) $(DIST_TYFILES) $(DIST_DBARCHIVE)
+distribution: $(DIST_ARCHIVES) dist/include/bsdnt $(DIST_BINS) $(DIST_HFILES) $(DIST_TYFILES) $(DIST_DBARCHIVE) $(DIST_ZIG)
 
 clean-distribution:
 	rm -rf dist
