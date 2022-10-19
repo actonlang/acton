@@ -14,7 +14,7 @@ class WriteFileAuth():
 
 actor FS(auth: FileAuth):
     """File system operations """
-    proc def mkdir(filename: str):
+    action def mkdir(filename: str):
         """Make a directory"""
         pass
 
@@ -24,16 +24,16 @@ actor ReadFile(auth: ReadFileAuth, filename: str):
     """
     var _fd = -1
 
-    def _open_file():
+    proc def _open_file():
         """C magic"""
         NotImplemented
     _open_file()
 
-    proc def read() -> bytes:
+    action def read() -> bytes:
         """Read content of file"""
         NotImplemented
 
-    proc def close() -> None:
+    action def close() -> None:
         """Close file"""
         NotImplemented
 
@@ -51,16 +51,16 @@ actor WriteFile(auth: WriteFileAuth, filename: str):
     """Write a file
     """
     var _fd = -1
-    def _open_file():
+    proc def _open_file():
         """C magic"""
         NotImplemented
     _open_file()
 
-    proc def write(data: bytes) -> None:
+    action def write(data: bytes) -> None:
         """Write data to file"""
         NotImplemented
 
-    proc def close() -> None:
+    action def close() -> None:
         """Close file"""
         NotImplemented
 

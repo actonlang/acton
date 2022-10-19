@@ -41,7 +41,7 @@ actor DNS(auth: DNSAuth):
         """
         NotImplemented
 
-    def _pin_affinity() -> None:
+    proc def _pin_affinity() -> None:
         """Implementation internal"""
         NotImplemented
     _pin_affinity()
@@ -55,8 +55,8 @@ actor TCPIPConnection(auth: TCPConnectAuth, address: str, port: int, on_connect:
         """Write data to remote"""
         NotImplemented
 
-    def __resume__() -> None:
-        NotImplemented
+#    def __resume__() -> None:
+#        NotImplemented
 
     def _force_persistance():
         """Trick compiler into persisting the actor arguments we need.
@@ -67,7 +67,7 @@ actor TCPIPConnection(auth: TCPConnectAuth, address: str, port: int, on_connect:
         """
         print(address, port, on_connect, on_receive, on_error, _socket)
 
-    def _init():
+    proc def _init():
         NotImplemented
     _init()
 
@@ -77,8 +77,8 @@ actor TCPListenConnection(auth: _TCPListenConnectAuth, client: int, on_receive: 
         """Write data to remote"""
         NotImplemented
 
-    def __resume__() -> None:
-        NotImplemented
+#    def __resume__() -> None:
+#        NotImplemented
 
     def _force_persistance():
         """Trick compiler into persisting the actor arguments we need.
@@ -89,7 +89,7 @@ actor TCPListenConnection(auth: _TCPListenConnectAuth, client: int, on_receive: 
         """
         print(client, on_receive, on_error)
 
-    def _init():
+    proc def _init():
         """Implementation internal"""
         NotImplemented
     _init()
@@ -112,10 +112,10 @@ actor TCPListener(auth: TCPListenAuth, address: str, port: int, on_listen_error:
         """
         print(address, port, on_listen_error, on_accept, on_error, _stream)
 
-    def __resume__() -> None:
-        NotImplemented
+#    def __resume__() -> None:
+#        NotImplemented
 
-    def _init():
+    proc def _init():
         """Implementation internal"""
         NotImplemented
     _init()

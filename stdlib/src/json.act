@@ -7,10 +7,10 @@
 # invocation of encode / decode will also allocate a new actor.
 
 actor Json():
-    proc def decode(data: str) -> dict[str, value]:
+    action def decode(data: str) -> dict[str, value]:
         NotImplemented
 
-    proc def encode(data: dict[str, value]) -> str:
+    action def encode(data: dict[str, value]) -> str:
         NotImplemented
 
 
