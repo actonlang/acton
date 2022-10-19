@@ -397,6 +397,7 @@ llSub                                   :: LiftEnv -> Expr -> LiftM Expr
 llSub env (Var l n)                     = pure $ Var l (primSubst n)
 llSub env (Dot l e n)                   = Dot l <$> llSub env e <*> pure n
 llSub env (TApp l e ts)                 = TApp l <$> llSub env e <*> pure (conv ts)
+llSub env (Async l e)                   = Async l <$> llSub env e
 llSub env e                             = ll env e
 
 primSubst n

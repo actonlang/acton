@@ -54,6 +54,7 @@ closedType env (Dot _ e n)          = case typeOf env e of
                                         TVar _ v  -> closedAttr env (findTVBound env v) n
                                         TTuple _ p k -> True
 closedType env (TApp _ e _)         = closedType env e
+closedType env (Async _ e)          = closedType env e
 closedType env _                    = True
 
 
@@ -303,7 +304,11 @@ instance EnvOf Decl where
                                     = [(n, NDef (TSchema NoLoc q $ TFun NoLoc fx (prowOf p) (krowOf k) t) dec)]
     envOf (Class _ n q as ss)       = [(n, NClass q (leftpath as) (map dropDefSelf $ envOf ss))]
 
-    envOf (Actor _ n q p k ss)      = [(n, NAct q (prowOf p) (krowOf k) (filter (not . isHidden . fst) $ envOf ss `exclude` statevars ss))]
+    envOf (Actor _ n q p k ss)      = [(n, NAct q (prowOf p) (krowOf k) (map wrap te))]
+      where te                      = filter (not . isHidden . fst) $ envOf ss `exclude` statevars ss
+            wrap (n, NDef sc dec)   = (n, NDef (wrapFX sc) dec)
+            wrap (n, i)             = (n, i)
+            wrapFX (TSchema l q t)  = TSchema l q (if effect t == fxProc then t{ effect = fxAction } else t)
 
 dropDefSelf (n, NDef (TSchema l q t) dec)
                                     = (n, NDef (TSchema l q (dropSelf t dec)) dec)
