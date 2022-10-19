@@ -6,12 +6,14 @@ class Acton < Formula
   license "BSD-3-Clause"
   head "https://github.com/actonlang/acton.git", branch: "main"
 
+  depends_on "autoconf" => :build
+  depends_on "automake" => :build
+  depends_on "gettext" => :build
   depends_on "ghc@8.10" => :build
   depends_on "haskell-stack" => :build
-  depends_on "libuv" => :build
+  depends_on "libtool" => :build
   depends_on "pkg-config" => :build
   depends_on "protobuf-c" => :build
-  depends_on "utf8proc" => :build
 
   on_macos do
     depends_on "argp-standalone" => :build

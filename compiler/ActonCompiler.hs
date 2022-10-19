@@ -629,12 +629,13 @@ runRestPasses opts paths env0 parsed stubMode = do
                               ccCmd = ("cc -Werror=return-type " ++ pedantArg ++
                                        (if (C.dev opts) then " -g " else "") ++
                                        " -c " ++
-                                       " -I/opt/homebrew/include" ++
-                                       " -I/usr/local/include" ++
-                                       " -I/usr/include" ++
                                        " -I" ++ wd ++
                                        " -I" ++ wd ++ "/out" ++
                                        " -I" ++ sysPath paths ++
+                                       -- TODO: how to get rid of this? we need
+                                       -- to specify the include path for C
+                                       -- libraries we depend on...
+                                       " -I" ++ sysPath paths ++ "/../deps/instdir/include" ++
                                        " -o" ++ oFile ++
                                        " " ++ makeRelative (takeDirectory (projPath paths)) cFile)
                               arCmd = "ar rcs " ++ aFile ++ " " ++ oFile
@@ -710,7 +711,7 @@ buildExecutable env opts paths binTask
         ccArgs              = ""
 -- Linux? and what else? maybe split
 #else
-        libFiles            = libFilesBase ++ " -luuid"
+        libFiles            = libFilesBase
         libPaths            = libPathsBase
         ccArgs              = " -no-pie "
 #endif

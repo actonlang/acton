@@ -1,4 +1,5 @@
 include common.mk
+TD:=$(shell dirname $(realpath $(firstword $(MAKEFILE_LIST))))
 CHANGELOG_VERSION=$(shell grep '^\#\# \[[0-9]' CHANGELOG.md | sed 's/\#\# \[\([^]]\{1,\}\)].*/\1/' | head -n1)
 GIT_VERSION_TAG=$(shell git tag --points-at HEAD 2>/dev/null | grep "v[0-9]" | sed -e 's/^v//')
 
@@ -30,10 +31,10 @@ else
 export VERSION_INFO?=$(VERSION).$(BUILD_TIME)
 endif
 
-CFLAGS+= -I. -Ideps -Wno-int-to-pointer-cast -Wno-pointer-to-int-cast -Wformat -Werror=format-security
+CFLAGS+= -I. -I$(TD)/deps/instdir/include -Ideps -Wno-int-to-pointer-cast -Wno-pointer-to-int-cast -Wformat -Werror=format-security
 CFLAGS_REL= -O3 -DREL
 CFLAGS_DEV= -g -DDEV
-LDFLAGS+=-Llib
+LDFLAGS+=-L$(TD)/lib -L$(TD)/deps/instdir/lib
 LDLIBS+=$(LIBPROTOBUF_C) -lm -lpthread
 
 # look for jemalloc
@@ -65,6 +66,7 @@ endif # -- END: Apple Mac OS X -------------------------------------------------
 # -- Linux ---------------------------------------------------------------------
 ifeq ($(shell uname -s),Linux)
 CFLAGS += -Werror
+CFLAGS += -I$(TD)/deps/instdir/include
 LDLIBS+=-luuid
 endif # -- END: Linux ----------------------------------------------------------
 
@@ -118,7 +120,9 @@ backend/actondb: backend/actondb.c lib/libActonDB.a
 		-lActonDB \
 		$(LDLIBS)
 
-backend/comm.o: backend/comm.c backend/comm.h backend/failure_detector/db_queries.h
+DEPSA:=lib/libActonDeps.a
+
+backend/comm.o: backend/comm.c backend/comm.h backend/failure_detector/db_queries.h $(DEPSA)
 	$(CC) -DLOG_USE_COLOR -g -o$@ $< -c $(CFLAGS)
 
 backend/db.o: backend/db.c backend/db.h backend/skiplist.h
@@ -127,19 +131,19 @@ backend/db.o: backend/db.c backend/db.h backend/skiplist.h
 backend/log.o: backend/log.c
 	$(CC) -DLOG_USE_COLOR -g -o$@ $< -c $(CFLAGS)
 
-backend/queue.o: backend/queue.c backend/queue.h backend/log.h backend/failure_detector/cells.h backend/failure_detector/db_queries.h
+backend/queue.o: backend/queue.c backend/queue.h backend/log.h backend/failure_detector/cells.h backend/failure_detector/db_queries.h $(DEPSA)
 	$(CC) -DLOG_USE_COLOR -g -o$@ $< -c $(CFLAGS)
 
-backend/skiplist.o: backend/skiplist.c backend/skiplist.h backend/log.h backend/fastrand.h
+backend/skiplist.o: backend/skiplist.c backend/skiplist.h backend/log.h backend/fastrand.h $(DEPSA)
 	$(CC) -DLOG_USE_COLOR -g -o$@ $< -c $(CFLAGS)
 
-backend/txn_state.o: backend/txn_state.c backend/txn_state.h
+backend/txn_state.o: backend/txn_state.c backend/txn_state.h $(DEPSA)
 	$(CC) -DLOG_USE_COLOR -g -o$@ $< -c $(CFLAGS)
 
-backend/txns.o: backend/txns.c backend/txns.h
+backend/txns.o: backend/txns.c backend/txns.h $(DEPSA)
 	$(CC) -DLOG_USE_COLOR -g -o$@ $< -c $(CFLAGS)
 
-backend/client_api.o: backend/client_api.c backend/client_api.h backend/log.h backend/hashes.h
+backend/client_api.o: backend/client_api.c backend/client_api.h backend/log.h backend/hashes.h $(DEPSA)
 	$(CC) -DLOG_USE_COLOR -g -o$@ $< -c $(CFLAGS)
 
 backend/failure_detector/db_messages.pb-c.o: backend/failure_detector/db_messages.pb-c.c backend/failure_detector/db_messages.pb-c.h
@@ -148,7 +152,7 @@ backend/failure_detector/db_messages.pb-c.o: backend/failure_detector/db_message
 backend/failure_detector/cells.o: backend/failure_detector/cells.c backend/failure_detector/cells.h
 	$(CC) -DLOG_USE_COLOR -g -o$@ $< -c $(CFLAGS)
 
-backend/failure_detector/db_queries.o: backend/failure_detector/db_queries.c backend/failure_detector/db_queries.h backend/log.h backend/failure_detector/db_messages.pb-c.h
+backend/failure_detector/db_queries.o: backend/failure_detector/db_queries.c backend/failure_detector/db_queries.h backend/log.h backend/failure_detector/db_messages.pb-c.h $(DEPSA)
 	$(CC) -DLOG_USE_COLOR -g -o$@ $< -c $(CFLAGS)
 
 backend/failure_detector/fd.o: backend/failure_detector/fd.c backend/failure_detector/fd.h backend/failure_detector/db_messages.pb-c.h
@@ -189,10 +193,10 @@ backend/test/skiplist_test: backend/test/skiplist_test.c backend/skiplist.c
 		$(LDLIBS)
 
 # /builtin ----------------------------------------------
-builtin/builtin_dev.o: builtin/builtin.c $(BUILTIN_HFILES) $(BUILTIN_CFILES)
+builtin/builtin_dev.o: builtin/builtin.c $(BUILTIN_HFILES) $(BUILTIN_CFILES) lib/libActonDeps.a
 	$(CC) $(CFLAGS) $(CFLAGS_DEV) -Wno-unused-result -c $< -o$@
 
-builtin/builtin_rel.o: builtin/builtin.c $(BUILTIN_HFILES) $(BUILTIN_CFILES)
+builtin/builtin_rel.o: builtin/builtin.c $(BUILTIN_HFILES) $(BUILTIN_CFILES) lib/libActonDeps.a
 	$(CC) $(CFLAGS) $(CFLAGS_REL) -Wno-unused-result -c $< -o$@
 
 builtin/env_dev.o: builtin/env.c builtin/env.h builtin/builtin_dev.o
@@ -217,6 +221,161 @@ clean-compiler:
 	cd compiler && stack clean >/dev/null 2>&1 || true
 	rm -f compiler/actonc compiler/package.yaml compiler/acton.cabal
 
+# /deps --------------------------------------------------
+DEPS_DIRS=deps/libbsd deps/libmd deps/libprotobuf_c deps/libutf8proc deps/libuv deps/libxml2 deps/util-linux
+
+# libActonDeps.a
+# This is an archive of all external libraries that we depend on. Each library
+# comes in its own .a archive but in order to hide this and free the compiler
+# from having to juggle a bunch of -l options, we bake the contents of all these
+# .a archives into one big archive and link with that. We have to extract into
+# subdirectories to prevent overwriting if there are name collisions between
+# different library archives.
+
+# These are .a archives of libraries we get using the system package manager
+LIBPROTOBUF_C:=$(shell pkg-config --variable=libdir libprotobuf-c 2>/dev/null)/lib$(shell pkg-config --libs-only-l libprotobuf-c 2>/dev/null | cut -d' ' -f1 | cut -c3-).a
+DEP_LIBS_PKGS=$(LIBPROTOBUF_C)
+
+# The rest is what we built from source
+ifeq ($(shell uname -s),Linux)
+DEP_LIBS+=deps/instdir/lib/libbsd.a
+DEP_LIBS+=deps/instdir/lib/libmd.a
+endif
+
+DEP_LIBS+=deps/instdir/lib/libutf8proc.a
+DEP_LIBS+=deps/instdir/lib/libuuid.a
+DEP_LIBS+=deps/instdir/lib/libuv.a
+DEP_LIBS+=deps/instdir/lib/libxml2.a
+
+lib/libActonDeps.a: $(DEP_LIBS)
+	mkdir -p lib_deps
+	for LIB in $^; do \
+		LIBNAME=$$(basename $${LIB} .a); \
+		mkdir -p lib_deps/$${LIBNAME}; \
+		$$(cd lib_deps/$${LIBNAME} && ar x $(TD)/$${LIB}); \
+	done
+	for LIB in $(DEP_LIBS_PKGS); do \
+		LIBNAME=$$(basename $${LIB} .a); \
+		mkdir -p lib_deps/$${LIBNAME}; \
+		$$(cd lib_deps/$${LIBNAME} && ar x $${LIB}); \
+	done
+	cd lib_deps && ar -qc ../lib/libActonDeps.a */*.o
+
+
+.PHONY: clean-deps
+clean-deps:
+	-for I in $(DEPS_DIRS); do ls $${I}; echo Cleaning $${I}; make -C $(TD)/$${I} clean; done
+	rm -rf deps/instdir lib/libActonDeps.a
+
+clean-deps-rm:
+	rm -rf $(DEPS_DIRS) deps/zig-*.tar*
+
+# /deps/libbsd --------------------------------------------
+LIBBSD_REF=0.11.7
+deps/libbsd:
+	ls $@ >/dev/null 2>&1 || git clone https://gitlab.freedesktop.org/libbsd/libbsd.git $@
+
+# NOTE: there's a silly copy going on in here to work around an issue with
+# include paths. Files in the libbsd/src directory include things like
+# <unistd.h> which are available in libbsd/include/bsd and some part of automake
+# adds a -I../include/bsd argument but zig already has other paths, like
+# /usr/include ahead of this path so when it's looking for unistd.h it's going
+# to find the system wide one and not the one in include/bsd. While specifying
+# an include directory with -I in CFLAGS adds it at the start of the search
+# list, we can't do this for ../include/bsd as it considers it a duplicate arg
+# and ignores it - it only gets added late in the path list. It doesn't appear
+# possible to influence and add something earlier in the search path and I don't
+# understand automake well enough to determine if we could somehow add it
+# earlier. Thus, the only workaround I found is to use a different name, which
+# we achieve simply by copying libbsd/include/bsd to libbsd/incbsd and adding
+# that with -I../incbsd
+deps/instdir/lib/libbsd.a: deps/libbsd deps/instdir/lib/libmd.a
+	mkdir -p $(dir $@)
+	cd $< \
+	&& git checkout $(LIBBSD_REF) \
+	&& rm -rf incbsd \
+	&& cp -av include/bsd incbsd \
+	&& ./autogen \
+	&& ./configure --disable-LIBBSD_OVERLAY --prefix $(TD)/deps/instdir --enable-static --disable-shared CFLAGS="-I$(TD)/deps/instdir/include -L$(TD)/deps/instdir/lib" \
+	&& make -j && make install
+
+# /deps/libmd --------------------------------------------
+LIBMD_REF=1.0.4
+deps/libmd:
+	ls $@ >/dev/null 2>&1 || git clone https://gitlab.freedesktop.org/libbsd/libmd.git $@
+
+deps/instdir/lib/libmd.a: deps/libmd
+	mkdir -p $(dir $@)
+	cd $< \
+	&& git checkout $(LIBMD_REF) \
+	&& ./autogen \
+	&& ./configure --prefix $(TD)/deps/instdir --enable-static --disable-shared CFLAGS="$(CFLAGS_DEPS)" \
+	&& make -j && make install
+
+# /deps/libprotobuf_c --------------------------------------------
+LIBPROTOBUF_C_REF=abc67a11c6db271bedbb9f58be85d6f4e2ea8389
+deps/libprotobuf_c:
+	ls $@ >/dev/null 2>&1 || git clone https://github.com/protobuf-c/protobuf-c.git $@
+
+deps/instdir/lib/libprotobuf-c.a: deps/libprotobuf_c
+	mkdir -p $(dir $@)
+	cd $< \
+	&& git checkout $(LIBPROTOBUF_C_REF) \
+	&& ./autogen.sh \
+	&& ./configure --prefix $(TD)/deps/instdir --enable-static --disable-shared CFLAGS="--verbose $(CFLAGS_DEPS)" CXXFLAGS="--verbose $(CFLAGS_TARGET)" \
+	&& make -j && make install
+
+# /deps/libutf8proc --------------------------------------
+LIBUTF8PROC_REF=63f31c908ef7656415f73d6c178f08181239f74c
+deps/libutf8proc:
+	ls $@ >/dev/null 2>&1 || git clone https://github.com/JuliaStrings/utf8proc.git $@
+
+deps/instdir/lib/libutf8proc.a: deps/libutf8proc
+	mkdir -p $(dir $@)
+	cd $< \
+	&& git checkout $(LIBUTF8PROC_REF) \
+	&& make CFLAGS="$(CFLAGS_DEPS)" \
+	&& make install prefix=$(TD)/deps/instdir
+
+# /deps/libuuid ------------------------------------------
+LIBUUID_REF=v2.38.1
+deps/util-linux:
+	ls $@ >/dev/null 2>&1 || git clone https://github.com/util-linux/util-linux.git $@
+
+deps/instdir/lib/libuuid.a: deps/util-linux
+	mkdir -p $(dir $@)
+	cd $< \
+	&& git checkout $(LIBUUID_REF) \
+	&& ./autogen.sh \
+	&& ./configure --prefix $(TD)/deps/instdir --disable-nls --disable-poman --disable-all-programs --enable-libuuid --enable-static --disable-shared CFLAGS="$(CFLAGS_DEPS)" \
+	&& make -j && make install
+
+# /deps/libuv --------------------------------------------
+LIBUV_REF=3e7d2a649275cce3c2d43c67205e627931bda55e
+deps/libuv:
+	ls $@ >/dev/null 2>&1 || git clone https://github.com/libuv/libuv.git $@
+
+deps/instdir/lib/libuv.a: deps/libuv
+	mkdir -p $(dir $@)
+	cd $< \
+	&& git checkout $(LIBUV_REF) \
+	&& ./autogen.sh \
+	&& ./configure --prefix $(TD)/deps/instdir --enable-static --disable-shared CFLAGS="$(CFLAGS_DEPS)" \
+	&& make -j && make install
+
+# /deps/libxml2 ------------------------------------------
+LIBXML2_REF=644a89e080bced793295f61f18aac8cfad6bece2
+deps/libxml2:
+	ls $@ >/dev/null 2>&1 || git clone https://gitlab.gnome.org/GNOME/libxml2.git $@
+
+deps/instdir/lib/libxml2.a: deps/libxml2
+	mkdir -p $(dir $@)
+	cd $< \
+	&& git checkout $(LIBXML2_REF) \
+	&& ./autogen.sh --without-python --without-iconv --without-zlib --without-lzma --prefix $(TD)/deps/instdir --enable-static --disable-shared CFLAGS="$(CFLAGS_DEPS)" \
+	&& make -j && make install
+
+# --
 OFILES += deps/netstring_dev.o deps/netstring_rel.o deps/yyjson_dev.o deps/yyjson_rel.o
 deps/netstring_dev.o: deps/netstring.c
 	$(CC) $(CFLAGS) $(CFLAGS_DEV) -c $< -o$@
@@ -259,10 +418,10 @@ builtin/ty/out/types/__builtin__.ty: builtin/ty/src/__builtin__.act $(ACTONC)
 	$(ACTC) $<
 
 # Build our standard library
-stdlib/out/dev/lib/libActonProject.a: $(STDLIB_SRCFILES) dist/types/__builtin__.ty $(DIST_HFILES) $(ACTONC)
+stdlib/out/dev/lib/libActonProject.a: $(STDLIB_SRCFILES) dist/types/__builtin__.ty $(DIST_HFILES) $(ACTONC) lib/libActonDeps.a
 	cd stdlib && ../$(ACTC) build --dev
 
-stdlib/out/rel/lib/libActonProject.a: $(STDLIB_SRCFILES) dist/types/__builtin__.ty $(DIST_HFILES) $(ACTONC)
+stdlib/out/rel/lib/libActonProject.a: $(STDLIB_SRCFILES) dist/types/__builtin__.ty $(DIST_HFILES) $(ACTONC) lib/libActonDeps.a
 	cd stdlib && ../$(ACTC) build
 	cp -a stdlib/out/types/. dist/types/
 
@@ -283,36 +442,6 @@ lib/rel/libActon.a: stdlib/out/rel/lib/libActonProject.a $(LIBACTON_REL_OFILES)
 	cp -a $< $@
 	ar rcs $@ $(filter-out stdlib/out/rel/lib/libActonProject.a,$^)
 
-# -- libActonDeps.a
-# This is an archive of all external libraries that we depend on. Each library
-# comes in its own .a archive but in order to hide this and free the compiler
-# from having to juggle a bunch of -l options, we bake the contents of all these
-# .a archives into one big archive and link with that. We have to extract into
-# subdirectories to prevent overwriting if there are name collisions between
-# different library archives.
-LIBBSD:=$(shell pkg-config --variable=libdir libbsd 2>/dev/null)/lib$(shell pkg-config --libs-only-l libbsd 2>/dev/null | cut -d' ' -f1 | cut -c3-).a
-LIBMD:=$(shell pkg-config --variable=libdir libmd 2>/dev/null)/lib$(shell pkg-config --libs-only-l libmd 2>/dev/null | cut -d' ' -f1 | cut -c3-).a
-LIBPROTOBUF_C:=$(shell pkg-config --variable=libdir libprotobuf-c 2>/dev/null)/lib$(shell pkg-config --libs-only-l libprotobuf-c 2>/dev/null | cut -d' ' -f1 | cut -c3-).a
-LIBUTF8PROC:=$(shell pkg-config --variable=libdir libutf8proc 2>/dev/null)/lib$(shell pkg-config --libs-only-l libutf8proc 2>/dev/null | cut -d' ' -f1 | cut -c3-).a
-
-LIBUV_LIBDIR:=$(shell pkg-config --variable=libdir libuv 2>/dev/null)
-LIBUV:=$(shell ls $(LIBUV_LIBDIR)/libuv_a.a $(LIBUV_LIBDIR)/libuv.a 2>/dev/null | head -n1)
-
-DEP_LIBS:=$(LIBPROTOBUF_C) $(LIBUTF8PROC) $(LIBUV)
-ifeq ($(shell uname -s),Linux)
-DEP_LIBS+=$(LIBBSD) $(LIBMD)
-endif
-
-lib/libActonDeps.a: $(DEP_LIBS)
-	mkdir -p lib_deps
-	for LIB in $^; do \
-		LIBNAME=$$(basename $${LIB} .a); \
-		mkdir -p lib_deps/$${LIBNAME}; \
-		$$(cd lib_deps/$${LIBNAME} && ar x $${LIB}); \
-	done
-	cd lib_deps && ar -qc ../lib/libActonDeps.a */*.o
-# ---
-
 COMM_OFILES += backend/comm.o rts/empty.o
 DB_OFILES += backend/db.o backend/queue.o backend/skiplist.o backend/txn_state.o backend/txns.o rts/empty.o
 DBCLIENT_OFILES += backend/client_api.o rts/empty.o
@@ -327,23 +456,23 @@ lib/libActonDB.a: $(BACKEND_OFILES)
 
 # /rts --------------------------------------------------
 OFILES += rts/io_dev.o rts/io_rel.o rts/log.o rts/rts_dev.o rts/rts_rel.o rts/empty.o
-rts/io_dev.o: rts/io.c rts/io.h
+rts/io_dev.o: rts/io.c rts/io.h lib/libActonDeps.a
 	$(CC) $(CFLAGS) $(CFLAGS_DEV) $(LDFLAGS) \
 		-c $< -o $@
 
-rts/io_rel.o: rts/io.c rts/io.h
+rts/io_rel.o: rts/io.c rts/io.h lib/libActonDeps.a
 	$(CC) $(CFLAGS) $(CFLAGS_REL) $(LDFLAGS) \
 		-c $< -o $@
 
 rts/log.o: rts/log.c rts/log.h
 	$(CC) $(CFLAGS) $(CFLAGS_DEV) -DLOG_USE_COLOR -c $< -o$@
 
-rts/rts_dev.o: rts/rts.c rts/rts.h
+rts/rts_dev.o: rts/rts.c rts/rts.h lib/libActonDeps.a
 	$(CC) $(CFLAGS) $(CFLAGS_DEV) \
 		-Wno-int-to-void-pointer-cast -Wno-unused-result \
 		-c $< -o $@
 
-rts/rts_rel.o: rts/rts.c rts/rts.h
+rts/rts_rel.o: rts/rts.c rts/rts.h lib/libActonDeps.a
 	$(CC) $(CFLAGS) $(CFLAGS_REL) \
 		-Wno-int-to-void-pointer-cast -Wno-unused-result \
 		-c $< -o $@
@@ -407,7 +536,7 @@ test-stdlib:
 
 
 .PHONY: clean
-clean: clean-compiler clean-distribution clean-backend clean-rts
+clean: clean-compiler clean-deps clean-distribution clean-backend clean-rts
 
 .PHONY: clean-backend
 clean-backend:
