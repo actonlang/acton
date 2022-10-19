@@ -538,6 +538,7 @@ genCall env ts e@(Var _ n) p
   | NClass{} <- info                = genNew env n p
   | NDef{} <- info                  = (instCast env ts e $ gen env e) <> parens (gen env p)
   where info                        = findQName n env
+genCall env ts (Async _ e) p        = genCall env ts e p
 genCall env ts e0@(Dot _ e n) p     = genDotCall env ts (snd $ schemaOf env e0) e n p
 
 instCast env [] e                   = id
