@@ -181,7 +181,7 @@ $R net$$TCPIPConnection$_init (net$$TCPIPConnection __self__, $Cont c$cont) {
     pin_actor_affinity();
     uv_tcp_t* socket = (uv_tcp_t*)malloc(sizeof(uv_tcp_t));
     uv_tcp_init(get_uv_loop(), socket);
-    __self__->_socket = to$int(socket);
+    __self__->_socket = to$int((long)socket);
 
     uv_connect_t* connect_req = (uv_connect_t*)malloc(sizeof(uv_connect_t));
     connect_req->data = (void *)__self__;
@@ -246,7 +246,7 @@ void on_new_connection(uv_stream_t *server, int status) {
         return;
     }
 
-    __self__->$class->create_tcp_listen_connection(__self__, $None, to$int((int *)client));
+    __self__->$class->create_tcp_listen_connection(__self__, $None, to$int((long *)client));
     // TODO: free()
 }
 

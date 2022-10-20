@@ -80,7 +80,7 @@ $R process$$Process$_create_process (process$$Process __self__, $Cont c$cont) {
     uv_process_options_t *options = calloc(1, sizeof(uv_process_options_t));
 
     uv_process_t *req = calloc(1, sizeof(uv_process_t));
-    __self__->_p = to$int(req);
+    __self__->_p = to$int((long)req);
 
     req->data = process_data;
 
