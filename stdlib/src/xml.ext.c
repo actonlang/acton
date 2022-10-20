@@ -15,7 +15,8 @@ nm = malloc(sizeof(struct $str)); \
 (nm)->str = malloc((nm)->nbytes + 1);    \
 (nm)->str[(nm)->nbytes] = 0
 
-#define INDENTSTEP 4
+ 
+#define TABSTEP 4
 
 xml$$Tag $Doc2Tag(xmlNodePtr root) {
   $Hashable w1 = ($Hashable)$Hashable$str$witness;
@@ -84,6 +85,7 @@ $str xml$$mk_node(int indent, $str tag, $str nsdefs, $str prefix, $str attrs, $s
   int cont_len = cont->nbytes;
   int res_bytes = 2*tag->nbytes + 2*(prefix ? prefix->nbytes+1:0) + nsdefs->nbytes + attrs->nbytes + cont->nbytes +2*indent + 7; // 7 = len ("<" + ">" + "\n" + "</" + ">" + "\n")
   int res_chars = 2*tag->nchars + 2*(prefix ? prefix->nchars+1:0) + nsdefs->nchars + attrs->nchars + cont->nchars +2*indent + 7;
+<<<<<<< HEAD
   int one_line = 0;
   if (cont->nbytes<30) {
     one_line = 1;
@@ -97,6 +99,8 @@ $str xml$$mk_node(int indent, $str tag, $str nsdefs, $str prefix, $str attrs, $s
     res_bytes -= (2+indent);
     res_chars -= (2+indent);
   }
+=======
+>>>>>>> a4c946da (first version of xml support)
   $str res;
   NEW_UNFILLED_STR(res,res_bytes,res_chars);
   unsigned char *p = res->str;
