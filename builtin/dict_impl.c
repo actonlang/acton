@@ -153,7 +153,7 @@ struct $dict$class $dict$methods = {"$dict", UNASSIGNED,($Super$class)&$object$m
   Internal routine used by dictresize() to build a hashtable of entries.
 */
 static void build_indices($table tbl, $entry_t ep, long n) {
-    int mask = tbl->tb_size - 1;
+    long mask = tbl->tb_size - 1;
     for (int ix = 0; ix != n; ix++, ep++) {
         long hash = ep->hash;
 
@@ -236,7 +236,7 @@ static int $lookdict_index($table table, long hash, int index) {
 // Returns index into compact array where hash/key is found
 // (and returns corresponding value in *res)
 // or DKIX_EMPTY if no such entry exists
-int $lookdict($dict dict, $Hashable hashwit, int hash, $WORD key, $WORD *res) {
+int $lookdict($dict dict, $Hashable hashwit, long hash, $WORD key, $WORD *res) {
     $table table = dict->table;
     unsigned long mask = (table->tb_size)-1, i = (unsigned long)hash & mask, perturb = hash;
     int ix;
