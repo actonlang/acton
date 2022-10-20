@@ -646,7 +646,7 @@ $R $Env$stdin_install$local ($Env __self__, $function cb, $Cont c$cont) {
     return $R_CONT(c$cont, $None);
 }
 $R $Env$exit$local ($Env __self__, $int n, $Cont c$cont) {
-    return_val = n->val;
+    return_val = from$int(n);
     rts_shutdown();
     return $R_CONT(c$cont, $None);
 }

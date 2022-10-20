@@ -22,7 +22,7 @@ void $printobj(char *mess,$WORD obj);
 
 #define $DNEW($T, $state)   ({ $T $t = malloc(sizeof(struct $T)); \
                                $t->$class = &$T ## $methods;                                     \
-                               $dict_setitem($state->done,($Hashable)$Hashable$int$witness,to$int($state->row_no-1),$t); \
+                               $dict_setitem($state->done,($Hashable)$Hashable$int$witness,to$i64($state->row_no-1),$t); \
                                $t; })
 
 #define $AND(T, a, b)       ({ T $a = (a); ($a && (($value)$a)->$class->__bool__(($value)$a)->val) ? (b) : $a; })

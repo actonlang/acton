@@ -6,20 +6,20 @@
 #include <complex.h>
 
 struct $complex$class {
-  char *$GCINFO;
-  int $class_id;
-  $Super$class $superclass;
-  void (*__init__)($complex, $Number, $WORD);
-  void (*__serialize__)($complex,$Serial$state);
-  $complex (*__deserialize__)($complex,$Serial$state);
-  $bool (*__bool__)($complex);
-  $str (*__str__)($complex);
-  $str (*__repr__)($complex);
+    char *$GCINFO;
+    int $class_id;
+    $Super$class $superclass;
+    void (*__init__)($complex, $Number, $WORD);
+    void (*__serialize__)($complex,$Serial$state);
+    $complex (*__deserialize__)($complex,$Serial$state);
+    $bool (*__bool__)($complex);
+    $str (*__str__)($complex);
+    $str (*__repr__)($complex);
 };
 
 struct $complex {
-  struct $complex$class *$class;
-  complex double val;
+    struct $complex$class *$class;
+    complex double val;
 };
 
 extern struct $complex$class $complex$methods;

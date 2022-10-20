@@ -630,6 +630,7 @@ runRestPasses opts paths env0 parsed stubMode = do
                                        (if (C.dev opts) then " -g " else "") ++
                                        " -c " ++
                                        " -I/opt/homebrew/include" ++
+                                       " -I/Users/sydow/bsdnt" ++
                                        " -I/usr/local/include" ++
                                        -- required for XML module
                                        -- TODO: invent some other way to specify this for .ext.c modules
@@ -702,11 +703,11 @@ buildExecutable env opts paths binTask
         outbase             = outBase paths mn
         rootFile            = outbase ++ ".root.c"
         -- our xml module depends on: lz lzma iconv xml2
-        libFilesBase        = " -lActonProject -lActon -lActonDB -lprotobuf-c_a -lutf8proc_a -luv_a -lpthread -lm -ldl -lz -lxml2 "
+        libFilesBase        = " -lActonProject -lActon -lActonDB -lprotobuf-c_a -lutf8proc_a -luv_a -lpthread -lm -ldl -lz -lxml2 -lbsdnt "
         libPathsBase        = " -L " ++ sysPath paths ++ "/lib -L" ++ sysLib paths ++ " -L" ++ projLib paths
 #if defined(darwin_HOST_OS) && defined(aarch64_HOST_ARCH)
         libFiles            = libFilesBase ++ " -llzma -liconv "
-        libPaths            = libPathsBase ++ " -L/opt/homebrew/lib "
+        libPaths            = libPathsBase ++ " -L/opt/homebrew/lib  -L/Users/sydow/bsdnt "
         ccArgs              = ""
 #elif defined(darwin_HOST_OS) && defined(x86_64_HOST_ARCH)
         libFiles            = libFilesBase ++ " -llzma -liconv "

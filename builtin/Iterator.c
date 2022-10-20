@@ -13,11 +13,11 @@
  */
 
 $Iterator $Iterable$Iterator_iter($Iterable$Iterator wit, $Iterator self) {
-  return self;
+    return self;
 }
 
 $Iterable$Iterator $Iterable$Iterator$new() {
-  return $NEW($Iterable$Iterator);
+    return $NEW($Iterable$Iterator);
 }
 
 struct $Iterable$Iterator$class $Iterable$Iterator$methods = {
@@ -45,10 +45,10 @@ void $Iterable$Iterator$__serialize__( $Iterable$Iterator self, $Serial$state st
 }
 
 $Iterable$Iterator $Iterable$Iterator$__deserialize__($Iterable$Iterator self, $Serial$state state) {
-   $Iterable$Iterator res = $DNEW($Iterable$Iterator,state);
-   return res;
+    $Iterable$Iterator res = $DNEW($Iterable$Iterator,state);
+    return res;
 }
 
 $WORD $next($Iterator it) {
-  return it->$class->__next__(it);
+    return it->$class->__next__(it);
 }

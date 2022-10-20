@@ -33,6 +33,7 @@
 #include "set.h"
 #include "set_impl.h"
 #include "tuple.h"
+#include "i64.h"
 #include "range.h"
 #include "exceptions.h"
 #include "function.h"

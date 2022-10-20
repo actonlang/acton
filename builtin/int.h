@@ -1,18 +1,20 @@
+#include "/Users/sydow/bsdnt/zz.h"
+
 struct $int$class {
-  char *$GCINFO;
-  int $class_id;
-  $Super$class $superclass;
-  void (*__init__)($int, $atom);
-  void (*__serialize__)($int,$Serial$state);
-  $int (*__deserialize__)($int,$Serial$state);
-  $bool (*__bool__)($int);
-  $str (*__str__)($int);
-  $str (*__repr__)($int);
+    char *$GCINFO;
+    int $class_id;
+    $Super$class $superclass;
+    void (*__init__)($int, $atom);
+    void (*__serialize__)($int,$Serial$state);
+    $int (*__deserialize__)($int,$Serial$state);
+    $bool (*__bool__)($int);
+    $str (*__str__)($int);
+    $str (*__repr__)($int);
 };
 
 struct $int {
-  struct $int$class *$class;
-  long val;
+    struct $int$class *$class;
+    zz_ptr val;
 };
 
 extern struct $int$class $int$methods;
@@ -38,21 +40,11 @@ extern struct $Div$int *$Div$int$witness;
 extern struct $Ord$int *$Ord$int$witness;
 extern struct $Hashable$int *$Hashable$int$witness;
 
+$int zz$to$int(zz_ptr val);
 
-$int to$int(long n);
 long from$int($int n);
-
-/*
-#define to$int(n)  ({$int $res = malloc(sizeof(struct $int)); \
-                     $res->$class = &$int$methods; \
-                     $res->val = n; \
-                     $res;})
-
-#define from$int(n)  ((($int)n)->val)
-*/
-
+$int to$int(long n);
+ 
 $int $int$new($atom a);
 
-// only called with e>=0.
-long longpow(long a, long e); // used also for ndarrays
 
