@@ -1,20 +1,20 @@
 struct $range$class {
-  char *$GCINFO;
-  int $class_id;
-  $Super$class $superclass;
-  void (*__init__)($range, $int, $int, $int);
-  void (*__serialize__)($range,$Serial$state);
-  $range (*__deserialize__)($range,$Serial$state);
-  $bool (*__bool__)($range);
-  $str (*__str__)($range);
-  $str (*__repr__)($range);
+    char *$GCINFO;
+    int $class_id;
+    $Super$class $superclass;
+    void (*__init__)($range, $int, $int, $int);
+    void (*__serialize__)($range,$Serial$state);
+    $range (*__deserialize__)($range,$Serial$state);
+    $bool (*__bool__)($range);
+    $str (*__str__)($range);
+    $str (*__repr__)($range);
 };
 
 struct $range {
-  struct $range$class *$class;
-  long start;
-  long stop;
-  long step;
+    struct $range$class *$class;
+    long start;
+    long stop;
+    long step;
 };
 
 
@@ -30,22 +30,22 @@ extern $Iterable$range $Iterable$range$witness;
 typedef struct $Iterator$range *$Iterator$range;
 
 struct $Iterator$range$class {
-  char *$GCINFO;
-  int $class_id;
-  $Super$class $superclass;
-  void (*__init__)($Iterator$range, $range);
-  void (*__serialize__)($Iterator$range,$Serial$state);
-  $Iterator$range (*__deserialize__)($Iterator$range,$Serial$state);
-  $bool (*__bool__)($Iterator$range);
-  $str (*__str__)($Iterator$range);
-  $str (*__repr__)($Iterator$range);
-  $WORD(*__next__)($Iterator$range);
+    char *$GCINFO;
+    int $class_id;
+    $Super$class $superclass;
+    void (*__init__)($Iterator$range, $range);
+    void (*__serialize__)($Iterator$range,$Serial$state);
+    $Iterator$range (*__deserialize__)($Iterator$range,$Serial$state);
+    $bool (*__bool__)($Iterator$range);
+    $str (*__str__)($Iterator$range);
+    $str (*__repr__)($Iterator$range);
+    $WORD(*__next__)($Iterator$range);
 };
 
 struct $Iterator$range {
-  struct $Iterator$range$class *$class;
-  $range src;
-  int nxt;
+    struct $Iterator$range$class *$class;
+    $range src;
+    int nxt;
 };
 
 extern struct $Iterator$range$class  $Iterator$range$methods;

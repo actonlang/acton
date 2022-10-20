@@ -29,6 +29,9 @@ typedef struct $NoneType *$NoneType;
 struct $int;
 typedef struct $int *$int;
 
+struct $i64;
+typedef struct $i64 *$i64;
+
 struct $float;
 typedef struct $float *$float;
 
@@ -366,6 +369,42 @@ typedef struct $Hashable$str *$Hashable$str;
 
 struct $Hashable$str$class;
 typedef struct $Hashable$str$class *$Hashable$str$class;
+
+struct $Integral$i64;
+typedef struct $Integral$i64 *$Integral$i64;
+
+struct $Integral$i64$class;
+typedef struct $Integral$i64$class *$Integral$i64$class;
+
+struct $Logical$i64;
+typedef struct $Logical$i64 *$Logical$i64;
+
+struct $Logical$i64$class;
+typedef struct $Logical$i64$class *$Logical$i64$class;
+
+struct $Minus$i64;
+typedef struct $Minus$i64 *$Minus$i64;
+
+struct $Minus$i64$class;
+typedef struct $Minus$i64$class *$Minus$i64$class;
+
+struct $Div$i64;
+typedef struct $Div$i64 *$Div$i64;
+
+struct $Div$i64$class;
+typedef struct $Div$i64$class *$Div$i64$class;
+
+struct $Ord$i64;
+typedef struct $Ord$i64 *$Ord$i64;
+
+struct $Ord$i64$class;
+typedef struct $Ord$i64$class *$Ord$i64$class;
+
+struct $Hashable$i64;
+typedef struct $Hashable$i64 *$Hashable$i64;
+
+struct $Hashable$i64$class;
+typedef struct $Hashable$i64$class *$Hashable$i64$class;
 
 struct $Integral$int;
 typedef struct $Integral$int *$Integral$int;
@@ -809,7 +848,7 @@ struct $Sliceable$class {
     void (*__setitem__)($Sliceable, $WORD, $int, $WORD);
     void (*__delitem__)($Sliceable, $WORD, $int);
     $WORD (*__getslice__)($Sliceable, $WORD, $slice);
-   void (*__setslice__)($Sliceable, $WORD, $Iterable, $slice, $WORD);
+    void (*__setslice__)($Sliceable, $WORD, $Iterable, $slice, $WORD);
     void (*__delslice__)($Sliceable, $WORD, $slice);
 };
 
@@ -1012,9 +1051,9 @@ struct $Number$class {
     $WORD (*__imul__)($Number, $WORD, $WORD);
     $WORD (*__fromatom__)($Number,$atom);
     $complex (*__complx__)($Number, $WORD);
-  //    $WORD (*__truediv__)($Number, $WORD, $WORD);
+    //    $WORD (*__truediv__)($Number, $WORD, $WORD);
     $WORD (*__pow__)($Number, $WORD, $WORD);
-  //    $WORD (*__itruediv__)($Number, $WORD, $WORD);
+    //    $WORD (*__itruediv__)($Number, $WORD, $WORD);
     $WORD (*__ipow__)($Number, $WORD, $WORD);
     $WORD (*__neg__)($Number, $WORD);
     $WORD (*__pos__)($Number, $WORD);
@@ -1053,9 +1092,9 @@ struct $Real$class {
     $WORD (*__imul__)($Real, $WORD, $WORD);
     $WORD (*__fromatom__)($Real,$atom);
     $complex (*__complx__)($Real, $WORD);
-  //    $WORD (*__truediv__)($Real, $WORD, $WORD);
+    //    $WORD (*__truediv__)($Real, $WORD, $WORD);
     $WORD (*__pow__)($Real, $WORD, $WORD);
-  //    $WORD (*__itruediv__)($Real, $WORD, $WORD);
+    //    $WORD (*__itruediv__)($Real, $WORD, $WORD);
     $WORD (*__ipow__)($Real, $WORD, $WORD);
     $WORD (*__neg__)($Real, $WORD);
     $WORD (*__pos__)($Real, $WORD);
@@ -1100,9 +1139,9 @@ struct $Rational$class {
     $WORD (*__imul__)($Rational, $WORD, $WORD);
     $WORD (*__fromatom__)($Rational,$atom);
     $complex (*__complx__)($Rational, $WORD);
-  //    $WORD (*__truediv__)($Rational, $WORD, $WORD);
+    //    $WORD (*__truediv__)($Rational, $WORD, $WORD);
     $WORD (*__pow__)($Rational, $WORD, $WORD);
-  //    $WORD (*__itruediv__)($Rational, $WORD, $WORD);
+    //    $WORD (*__itruediv__)($Rational, $WORD, $WORD);
     $WORD (*__ipow__)($Rational, $WORD, $WORD);
     $WORD (*__neg__)($Rational, $WORD);
     $WORD (*__pos__)($Rational, $WORD);
@@ -1146,9 +1185,9 @@ struct $Integral$class {
     $WORD (*__imul__)($Integral, $WORD, $WORD);
     $WORD (*__fromatom__)($Integral,$atom);
     $complex (*__complx__)($Integral, $WORD);
-  //    $WORD (*__truediv__)($Integral, $WORD, $WORD);
+    //    $WORD (*__truediv__)($Integral, $WORD, $WORD);
     $WORD (*__pow__)($Integral, $WORD, $WORD);
-  //    $WORD (*__itruediv__)($Integral, $WORD, $WORD);
+    //    $WORD (*__itruediv__)($Integral, $WORD, $WORD);
     $WORD (*__ipow__)($Integral, $WORD, $WORD);
     $WORD (*__neg__)($Integral, $WORD);
     $WORD (*__pos__)($Integral, $WORD);
@@ -1202,7 +1241,7 @@ struct $Hashable$bool$class {
     $str (*__repr__)($Hashable$bool);
     $bool (*__eq__)($Hashable$bool, $bool, $bool);
     $bool (*__ne__)($Hashable$bool, $bool, $bool);
-    $bool (*__hash__)($Hashable$bool, $bool);
+    $int (*__hash__)($Hashable$bool, $bool);
 };
 
 void $Hashable$bool$__init__ ($Hashable$bool);
@@ -1210,7 +1249,7 @@ void $Hashable$bool$__serialize__($Hashable$bool, $Serial$state);
 $Hashable$bool $Hashable$bool$__deserialize__($Hashable$bool, $Serial$state);
 $bool $Hashable$bool$__eq__ ($Hashable$bool, $bool, $bool);
 $bool $Hashable$bool$__ne__ ($Hashable$bool, $bool, $bool);
-$bool $Hashable$bool$__hash__ ($Hashable$bool, $bool);
+$int $Hashable$bool$__hash__ ($Hashable$bool, $bool);
 
 // $Sequence$list ////////////////////////////////////////////////////////////
 
@@ -1359,7 +1398,7 @@ struct $Ord$list$class {
     char *$GCINFO;
     int $class_id;
     $Super$class $superclass;
-  void (*__init__)($Ord$list,$Ord);
+    void (*__init__)($Ord$list,$Ord);
     void (*__serialize__)($Ord$list,$Serial$state);
     $Ord$list (*__deserialize__)($Ord$list,$Serial$state);
     $bool (*__bool__)($Ord$list);
@@ -1477,7 +1516,7 @@ struct $Ord$dict$class {
     char *$GCINFO;
     int $class_id;
     $Super$class $superclass;
-  void (*__init__)($Ord$dict, $Hashable, $Eq);
+    void (*__init__)($Ord$dict, $Hashable, $Eq);
     void (*__serialize__)($Ord$dict,$Serial$state);
     $Ord$dict (*__deserialize__)($Ord$dict,$Serial$state);
     $bool (*__bool__)($Ord$dict);
@@ -1821,6 +1860,236 @@ $bool $Hashable$str$__eq__ ($Hashable$str, $str, $str);
 $bool $Hashable$str$__ne__ ($Hashable$str, $str, $str);
 $int $Hashable$str$__hash__ ($Hashable$str, $str);
 
+// $Integral$i64 ////////////////////////////////////////////////////////////
+
+struct $Integral$i64 {
+    $Integral$i64$class $class;
+    $Minus w$Minus;
+    $Logical w$Logical;
+};
+
+struct $Integral$i64$class {
+    char *$GCINFO;
+    int $class_id;
+    $Super$class $superclass;
+    void (*__init__)($Integral$i64);
+    void (*__serialize__)($Integral$i64,$Serial$state);
+    $Integral$i64 (*__deserialize__)($Integral$i64,$Serial$state);
+    $bool (*__bool__)($Integral$i64);
+    $str (*__str__)($Integral$i64);
+    $str (*__repr__)($Integral$i64);
+    $i64 (*__add__)($Integral$i64, $i64, $i64);
+    $i64 (*__iadd__)($Integral$i64, $i64, $i64);
+    $i64 (*__mul__)($Integral$i64, $i64, $i64);
+    $i64 (*__imul__)($Integral$i64, $i64, $i64);
+    $i64 (*__fromatom__)($Integral$i64,$atom);
+    $complex (*__complx__)($Integral$i64, $i64);
+    //    $i64 (*__truediv__)($Integral$i64, $i64, $i64);
+    $i64 (*__pow__)($Integral$i64, $i64, $i64);
+    //    $i64 (*__itruediv__)($Integral$i64, $i64, $i64);
+    $i64 (*__ipow__)($Integral$i64, $i64, $i64);
+    $i64 (*__neg__)($Integral$i64, $i64);
+    $i64 (*__pos__)($Integral$i64, $i64);
+    $WORD (*real)($Integral$i64, $i64, $Real);
+    $WORD (*imag)($Integral$i64, $i64, $Real);
+    $WORD (*__abs__)($Integral$i64, $i64, $Real);
+    $i64 (*conjugate)($Integral$i64, $i64);
+    $float (*__float__)($Integral$i64, $i64);
+    $WORD (*__trunc__)($Integral$i64, $i64, $Integral);
+    $WORD (*__floor__)($Integral$i64, $i64, $Integral);
+    $WORD (*__ceil__)($Integral$i64, $i64, $Integral);
+    $i64 (*__round__)($Integral$i64, $i64, $i64);
+    $WORD (*numerator)($Integral$i64, $i64, $Integral);
+    $WORD (*denominator)($Integral$i64, $i64, $Integral);
+    $i64 (*__int__)($Integral$i64, $int);
+    $i64 (*__index__)($Integral$i64, $int);
+    $tuple (*__divmod__)($Integral$i64, $i64, $i64);
+    $i64 (*__floordiv__)($Integral$i64, $i64, $i64);
+    $i64 (*__mod__)($Integral$i64, $i64, $i64);
+    $i64 (*__lshift__)($Integral$i64, $i64, $int);
+    $i64 (*__rshift__)($Integral$i64, $i64, $int);
+    $i64 (*__ifloordiv__)($Integral$i64, $i64, $i64);
+    $i64 (*__imod__)($Integral$i64, $i64, $i64);
+    $i64 (*__ilshift__)($Integral$i64, $i64, $int);
+    $i64 (*__irshift__)($Integral$i64, $i64, $int);
+    $i64 (*__invert__)($Integral$i64, $i64);
+};
+
+void $Integral$i64$__init__ ($Integral$i64);
+void $Integral$i64$__serialize__($Integral$i64, $Serial$state);
+$Integral$i64 $Integral$i64$__deserialize__($Integral$i64, $Serial$state);
+$i64 $Integral$i64$__add__($Integral$i64, $i64, $i64);
+$i64 $Integral$i64$__fromatom__($Integral$i64,$atom);
+$complex $Integral$i64$__complx__($Integral$i64, $i64);
+$i64 $Integral$i64$__mul__($Integral$i64, $i64, $i64);
+//$i64 $Integral$i64$__truediv__($Integral$i64, $i64, $i64);
+$i64 $Integral$i64$__pow__($Integral$i64, $i64, $i64);
+$i64 $Integral$i64$__neg__($Integral$i64, $i64);
+$i64 $Integral$i64$__pos__($Integral$i64, $i64);
+$WORD $Integral$i64$real($Integral$i64, $i64, $Real);
+$WORD $Integral$i64$imag($Integral$i64, $i64, $Real);
+$WORD $Integral$i64$__abs__($Integral$i64, $i64, $Real);
+$i64 $Integral$i64$conjugate($Integral$i64, $i64);
+$float $Integral$i64$__float__ ($Integral$i64, $i64);
+$WORD $Integral$i64$__trunc__ ($Integral$i64, $i64, $Integral);
+$WORD $Integral$i64$__floor__ ($Integral$i64, $i64, $Integral);
+$WORD $Integral$i64$__ceil__ ($Integral$i64, $i64, $Integral);
+$i64 $Integral$i64$__round__ ($Integral$i64, $i64, $i64);
+$WORD $Integral$i64$numerator ($Integral$i64, $i64, $Integral);
+$WORD $Integral$i64$denominator ($Integral$i64, $i64, $Integral);
+$i64 $Integral$i64$__int__ ($Integral$i64, $int);
+$i64 $Integral$i64$__index__ ($Integral$i64, $int);
+$tuple $Integral$i64$__divmod__ ($Integral$i64, $i64, $i64);
+$i64 $Integral$i64$__floordiv__ ($Integral$i64, $i64, $i64);
+$i64 $Integral$i64$__mod__ ($Integral$i64, $i64, $i64);
+$i64 $Integral$i64$__lshift__ ($Integral$i64, $i64, $int);
+$i64 $Integral$i64$__rshift__ ($Integral$i64, $i64, $int);
+$i64 $Integral$i64$__invert__ ($Integral$i64, $i64);
+
+// $Logical$i64 ////////////////////////////////////////////////////////////
+
+struct $Logical$i64 {
+    $Logical$i64$class $class;
+    $Integral w$Integral;
+};
+
+struct $Logical$i64$class {
+    char *$GCINFO;
+    int $class_id;
+    $Super$class $superclass;
+    void (*__init__)($Logical$i64, $Integral);
+    void (*__serialize__)($Logical$i64,$Serial$state);
+    $Logical$i64 (*__deserialize__)($Logical$i64,$Serial$state);
+    $bool (*__bool__)($Logical$i64);
+    $str (*__str__)($Logical$i64);
+    $str (*__repr__)($Logical$i64);
+    $i64 (*__and__)($Logical$i64, $i64, $i64);
+    $i64 (*__or__)($Logical$i64, $i64, $i64);
+    $i64 (*__xor__)($Logical$i64, $i64, $i64);
+    $i64 (*__iand__)($Logical$i64, $i64, $i64);
+    $i64 (*__ior__)($Logical$i64, $i64, $i64);
+    $i64 (*__ixor__)($Logical$i64, $i64, $i64);
+};
+
+void $Logical$i64$__init__ ($Logical$i64, $Integral);
+void $Logical$i64$__serialize__($Logical$i64, $Serial$state);
+$Logical$i64 $Logical$i64$__deserialize__($Logical$i64, $Serial$state);
+$i64 $Logical$i64$__and__ ($Logical$i64, $i64, $i64);
+$i64 $Logical$i64$__or__ ($Logical$i64, $i64, $i64);
+$i64 $Logical$i64$__xor__ ($Logical$i64, $i64, $i64);
+
+// $Minus$i64 ////////////////////////////////////////////////////////////
+
+struct $Minus$i64 {
+    $Minus$i64$class $class;
+    $Integral w$Integral;
+};
+
+struct $Minus$i64$class {
+    char *$GCINFO;
+    int $class_id;
+    $Super$class $superclass;
+    void (*__init__)($Minus$i64, $Integral);
+    void (*__serialize__)($Minus$i64,$Serial$state);
+    $Minus$i64 (*__deserialize__)($Minus$i64,$Serial$state);
+    $bool (*__bool__)($Minus$i64);
+    $str (*__str__)($Minus$i64);
+    $str (*__repr__)($Minus$i64);
+    $i64 (*__sub__)($Minus$i64, $i64, $i64);
+    $i64 (*__isub__)($Minus$i64, $i64, $i64);
+};
+
+void $Minus$i64$__init__ ($Minus$i64, $Integral);
+void $Minus$i64$__serialize__($Minus$i64, $Serial$state);
+$Minus$i64 $Minus$i64$__deserialize__($Minus$i64, $Serial$state);
+$i64 $Minus$i64$__sub__ ($Minus$i64, $i64, $i64);
+
+// $Div$i64 ////////////////////////////////////////////////////////////
+
+struct $Div$i64 {
+    $Div$i64$class $class;
+};
+
+struct $Div$i64$class {
+    char *$GCINFO;
+    int $class_id;
+    $Super$class $superclass;
+    void (*__init__)($Div$i64);
+    void (*__serialize__)($Div$i64,$Serial$state);
+    $Div$i64 (*__deserialize__)($Div$i64,$Serial$state);
+    $bool (*__bool__)($Div$i64);
+    $str (*__str__)($Div$i64);
+    $str (*__repr__)($Div$i64);
+    $float (*__truediv__)($Div$i64, $i64, $i64);
+    $float (*__itruediv__)($Div$i64, $i64, $i64);
+};
+
+$float $Div$i64$__truediv__ ($Div$i64, $i64, $i64);
+$float $Div$i64$__itruediv__ ($Div$i64, $i64, $i64);
+
+// $Ord$i64 /////////////////////////////////////////////////////////////////
+
+struct $Ord$i64 {
+    $Ord$i64$class $class;
+};
+
+struct $Ord$i64$class {  
+    char *$GCINFO;
+    int $class_id;
+    $Super$class $superclass;
+    void (*__init__)($Ord$i64);
+    void (*__serialize__)($Ord$i64,$Serial$state);
+    $Ord$i64 (*__deserialize__)($Ord$i64,$Serial$state);
+    $bool (*__bool__)($Ord$i64);
+    $str (*__str__)($Ord$i64);
+    $str (*__repr__)($Ord$i64);
+    $bool (*__eq__)($Ord$i64, $i64, $i64);
+    $bool (*__ne__)($Ord$i64, $i64, $i64);
+    $bool (*__lt__)($Ord$i64, $i64, $i64);
+    $bool (*__le__)($Ord$i64, $i64, $i64);
+    $bool (*__gt__)($Ord$i64, $i64, $i64);
+    $bool (*__ge__)($Ord$i64, $i64, $i64);
+};
+
+void $Ord$i64$__init__ ($Ord$i64);
+void $Ord$i64$__serialize__($Ord$i64, $Serial$state);
+$Ord$i64 $Ord$i64$__deserialize__($Ord$i64, $Serial$state);
+$bool $Ord$i64$__eq__ ($Ord$i64, $i64, $i64);
+$bool $Ord$i64$__ne__ ($Ord$i64, $i64, $i64);
+$bool $Ord$i64$__lt__ ($Ord$i64, $i64, $i64);
+$bool $Ord$i64$__le__ ($Ord$i64, $i64, $i64);
+$bool $Ord$i64$__gt__ ($Ord$i64, $i64, $i64);
+$bool $Ord$i64$__ge__ ($Ord$i64, $i64, $i64);
+  
+
+// $Hashable$i64 ////////////////////////////////////////////////////////////
+
+struct $Hashable$i64 {
+    $Hashable$i64$class $class;
+};
+
+struct $Hashable$i64$class {
+    char *$GCINFO;
+    int $class_id;
+    $Super$class $superclass;
+    void (*__init__)($Hashable$i64);
+    void (*__serialize__)($Hashable$i64,$Serial$state);
+    $Hashable$i64 (*__deserialize__)($Hashable$i64,$Serial$state);
+    $bool (*__bool__)($Hashable$i64);
+    $str (*__str__)($Hashable$i64);
+    $str (*__repr__)($Hashable$i64);
+    $bool (*__eq__)($Hashable$i64, $i64, $i64);
+    $bool (*__ne__)($Hashable$i64, $i64, $i64);
+    $int (*__hash__)($Hashable$i64, $i64);
+};
+
+void $Hashable$i64$__init__ ($Hashable$i64);
+void $Hashable$i64$__serialize__($Hashable$i64, $Serial$state);
+$Hashable$i64 $Hashable$i64$__deserialize__($Hashable$i64, $Serial$state);
+$bool $Hashable$i64$__eq__ ($Hashable$i64, $i64, $i64);
+$bool $Hashable$i64$__ne__ ($Hashable$i64, $i64, $i64);
+$int $Hashable$i64$__hash__ ($Hashable$i64, $i64);
+
 // $Integral$int ////////////////////////////////////////////////////////////
 
 struct $Integral$int {
@@ -1845,9 +2114,9 @@ struct $Integral$int$class {
     $int (*__imul__)($Integral$int, $int, $int);
     $int (*__fromatom__)($Integral$int,$atom);
     $complex (*__complx__)($Integral$int, $int);
-  //    $int (*__truediv__)($Integral$int, $int, $int);
+    //    $int (*__truediv__)($Integral$int, $int, $int);
     $int (*__pow__)($Integral$int, $int, $int);
-  //    $int (*__itruediv__)($Integral$int, $int, $int);
+    //    $int (*__itruediv__)($Integral$int, $int, $int);
     $int (*__ipow__)($Integral$int, $int, $int);
     $int (*__neg__)($Integral$int, $int);
     $int (*__pos__)($Integral$int, $int);
@@ -2074,9 +2343,9 @@ struct $Real$float$class {
     $float (*__imul__)($Real$float, $float, $float);
     $float (*__fromatom__)($Real$float,$atom);
     $complex (*__complx__)($Real$float, $float);
-  //    $float (*__truediv__)($Real$float, $float, $float);
+    //    $float (*__truediv__)($Real$float, $float, $float);
     $float (*__pow__)($Real$float, $float, $float);
-  //    $float (*__itruediv__)($Real$float, $float, $float);
+    //    $float (*__itruediv__)($Real$float, $float, $float);
     $float (*__ipow__)($Real$float, $float, $float);
     $float (*__neg__)($Real$float, $float);
     $float (*__pos__)($Real$float, $float);
@@ -2246,9 +2515,9 @@ struct $Number$complex$class {
     $complex (*__imul__)($Number$complex, $complex, $complex);
     $complex (*__fromatom__)($Number$complex,$atom);
     $complex (*__complx__)($Number$complex, $complex);
-  //    $complex (*__truediv__)($Number$complex, $complex, $complex);
+    //    $complex (*__truediv__)($Number$complex, $complex, $complex);
     $complex (*__pow__)($Number$complex, $complex, $complex);
-  //    $complex (*__itruediv__)($Number$complex, $complex, $complex);
+    //    $complex (*__itruediv__)($Number$complex, $complex, $complex);
     $complex (*__ipow__)($Number$complex, $complex, $complex);
     $complex (*__neg__)($Number$complex, $complex);
     $complex (*__pos__)($Number$complex, $complex);
@@ -2466,9 +2735,9 @@ void $Sliceable$tuple$__delslice__ ($Sliceable$tuple, $tuple, $slice);
 // $Hashable$tuple ////////////////////////////////////////////////////////////
 
 struct $Hashable$tuple {
-  $Hashable$tuple$class $class;
-  int w$Hashable$tuple$size;
-  $Hashable *w$Hashable;
+    $Hashable$tuple$class $class;
+    int w$Hashable$tuple$size;
+    $Hashable *w$Hashable;
 };
 
 struct $Hashable$tuple$class {
@@ -2813,7 +3082,7 @@ struct $Hashable$bytes$class {
     $Hashable$bytes (*__deserialize__)($Hashable$bytes,$Serial$state);
     $bool (*__bool__)($Hashable$bytes);
     $str (*__str__)($Hashable$bytes);
-   $str (*__repr__)($Hashable$bytes);
+    $str (*__repr__)($Hashable$bytes);
     $bool (*__eq__)($Hashable$bytes, $bytes, $bytes);
     $bool (*__ne__)($Hashable$bytes, $bytes, $bytes);
     $int (*__hash__)($Hashable$bytes, $bytes);

@@ -1,4 +1,4 @@
-int $lookdict($dict dict, $Hashable hashwit, long hash, $WORD key, $WORD *res);
+int $lookdict($dict dict, $Hashable hashwit, int hash, $WORD key, $WORD *res);
 
 $Iterator $dict_iter($dict dict);
 $str $dict_str($dict);

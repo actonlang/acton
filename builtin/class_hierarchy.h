@@ -9,13 +9,13 @@ struct $Super;
 typedef struct $Super *$Super;
 
 struct $Super$class {
-  char *$GCINFO;
-  int $class_id;
-  $Super$class $superclass;
+    char *$GCINFO;
+    int $class_id;
+    $Super$class $superclass;
 };
 
 struct $Super {
-  $Super$class $class;
+    $Super$class $class;
 };
 
 
@@ -28,14 +28,14 @@ typedef struct $Initializable$class *$Initializable$class;
 typedef struct $Initializable  *$Initializable;
 
 struct $Initializable$class {
-  char *$GCINFO;
-  int $class_id;
-  $Super$class $superclass;                   // = NULL
-  void (*__init__)($Initializable);
+    char *$GCINFO;
+    int $class_id;
+    $Super$class $superclass;                   // = NULL
+    void (*__init__)($Initializable);
 };
 
 struct $Initializable {
-  struct $Initializable$class *$class;
+    struct $Initializable$class *$class;
 };
 
 extern struct $Initializable$class $Initializable$methods;
@@ -48,16 +48,16 @@ typedef struct $Serializable$class *$Serializable$class;
 typedef struct $Serializable  *$Serializable;
 
 struct $Serializable$class {
-  char *$GCINFO;
-  int $class_id;
-  $Super$class $superclass;                   // = Initializable$methods
-  void (*__init__)($Serializable);
-  void (*__serialize__)($Serializable, $Serial$state);
-  $Serializable (*__deserialize__)($Serializable, $Serial$state);
+    char *$GCINFO;
+    int $class_id;
+    $Super$class $superclass;                   // = Initializable$methods
+    void (*__init__)($Serializable);
+    void (*__serialize__)($Serializable, $Serial$state);
+    $Serializable (*__deserialize__)($Serializable, $Serial$state);
 };
 
 struct $Serializable {
-  struct $Serializable$class *$class;
+    struct $Serializable$class *$class;
 };
 
 extern struct $Serializable$class $Serializable$methods;
@@ -75,19 +75,19 @@ typedef struct $value$class *$value$class;
 typedef struct $value  *$value;
 
 struct $value$class {
-  char *$GCINFO;
-  int $class_id;
-  $Super$class $superclass;                      // = Serializable$methods
-  void (*__init__)($value);
-  void (*__serialize__)($value, $Serial$state);
-  $value (*__deserialize__)($value, $Serial$state);
-  $bool (*__bool__)($value);
-  $str (*__str__)($value);
-  $str (*__repr__)($value);
+    char *$GCINFO;
+    int $class_id;
+    $Super$class $superclass;                      // = Serializable$methods
+    void (*__init__)($value);
+    void (*__serialize__)($value, $Serial$state);
+    $value (*__deserialize__)($value, $Serial$state);
+    $bool (*__bool__)($value);
+    $str (*__str__)($value);
+    $str (*__repr__)($value);
 };
 
 struct $value {
-  struct $value$class *$class;
+    struct $value$class *$class;
 };
 
 extern struct $value$class $value$methods;
@@ -103,19 +103,19 @@ typedef struct $object$class *$object$class;
 typedef struct $object  *$object;
 
 struct $object$class {
-  char *$GCINFO;
-  int $class_id;
-  $Super$class $superclass;                      // = $value$methods
-  void (*__init__)($object);
-  void (*__serialize__)($object, $Serial$state);
-  $object (*__deserialize__)($object, $Serial$state);
-  $bool (*__bool__)($object);
-  $str (*__str__)($object);
-  $str (*__repr__)($object);
+    char *$GCINFO;
+    int $class_id;
+    $Super$class $superclass;                      // = $value$methods
+    void (*__init__)($object);
+    void (*__serialize__)($object, $Serial$state);
+    $object (*__deserialize__)($object, $Serial$state);
+    $bool (*__bool__)($object);
+    $str (*__str__)($object);
+    $str (*__repr__)($object);
 };
 
 struct $object {
-  struct $object$class *$class;
+    struct $object$class *$class;
 };
 
 extern struct $object$class $object$methods;

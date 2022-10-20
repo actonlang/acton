@@ -66,6 +66,7 @@ primWEqNone         = gPrim "wEqNone"
 primWIdentityNone   = gPrim "wIdentityNone"
 
 primWIntegralInt    = gPrim "Integral$int$witness"
+primWI64Int         = gPrim "Integral$i64$witness"
 primWSequenceList   = gPrim "Sequence$list$witness"
 primWCollectionList = gPrim "Collection$list$witness"
 
@@ -321,6 +322,9 @@ tIdentityNone       = tCon $ TC qnIdentity [tNone]
 
 --  $Integral$Int$witness : Integral[int]
 tIntegralInt        = tCon $ TC qnIntegral [tInt]
+
+--  $Integral$I64$witness : Integral[i64]
+tIntegralI64        = tCon $ TC qnIntegral [tI64]
 
 
 --  $ISNOTNONE      : [A] => pure (?A) -> bool

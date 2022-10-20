@@ -18,8 +18,8 @@
 // print //////////////////////////////////////////////////////////////////////////////
 
 static $WORD mkstr($WORD w) {
-  $value w1 = ($value)w;
-  return w1->$class->__str__(w);
+    $value w1 = ($value)w;
+    return w1->$class->__str__(w);
 }
 
 void $print(int size, ...) {
@@ -41,39 +41,39 @@ void $print(int size, ...) {
 // enumerate //////////////////////////////////////////////////////////////////////////
 
 void $Iterator$enumerate_init($Iterator$enumerate self, $Iterator it, $int n) {
-  self->it = it;
-  self->nxt = n->val;
+    self->it = it;
+    self->nxt = from$int(n);
 }
 
 $bool $Iterator$enumerate_bool($Iterator$enumerate self) {
-  return $True;
+    return $True;
 }
 
 $str $Iterator$enumerate_str($Iterator$enumerate self) {
-  char *s;
-  asprintf(&s,"<enumerate iterator object at %p>",self);
-  return to$str(s);
+    char *s;
+    asprintf(&s,"<enumerate iterator object at %p>",self);
+    return to$str(s);
 }
 
 void $Iterator$enumerate_serialize($Iterator$enumerate self,$Serial$state state) {
-  $step_serialize(self->it,state);
-  $step_serialize(to$int(self->nxt),state);
+    $step_serialize(self->it,state);
+    $step_serialize(to$int(self->nxt),state);
 }
 
 $Iterator$enumerate $Iterator$enumerate$_deserialize($Iterator$enumerate res,$Serial$state state) {
     if (!res)
-       res = $DNEW($Iterator$enumerate,state);
-   res->it = $step_deserialize(state);
-   res->nxt = from$int(($int)$step_deserialize(state));
-   return res;
+        res = $DNEW($Iterator$enumerate,state);
+    res->it = $step_deserialize(state);
+    res->nxt = from$int(($int)$step_deserialize(state));
+    return res;
 }
 
 $WORD $Iterator$enumerate_next($Iterator$enumerate it) {
-  $WORD w = it->it->$class->__next__(it->it);
-  if (w)
-    return $NEWTUPLE(2,to$int(it->nxt++),w);
-  else
-    return NULL;
+    $WORD w = it->it->$class->__next__(it->it);
+    if (w)
+        return $NEWTUPLE(2,to$int(it->nxt++),w);
+    else
+        return NULL;
 }
 
 struct $Iterator$enumerate$class $Iterator$enumerate$methods = {"$Iterator$enumerate",UNASSIGNED,($Super$class)&$Iterator$methods,$Iterator$enumerate_init,
@@ -86,46 +86,46 @@ $Iterator$enumerate $Iterator$enumerate$new($Iterator it, $int n) {
 }
 
 $Iterator $enumerate($Iterable wit, $WORD iter, $int start) {
-  $Iterator it = wit->$class->__iter__(wit,iter);
-  if (!start)
-    start = to$int(0);
-  return ($Iterator)$Iterator$enumerate$new(it,start); 
+    $Iterator it = wit->$class->__iter__(wit,iter);
+    if (!start)
+        start = to$int(0);
+    return ($Iterator)$Iterator$enumerate$new(it,start); 
 }
 
 // filter ////////////////////////////////////////////////////////////////////////////////
 
 void $Iterator$filter_init($Iterator$filter self, $Iterator it,  $function1 f) {
-  self->it = it;
-  self->f = f;
+    self->it = it;
+    self->f = f;
 }
 
 $bool $Iterator$filter_bool($Iterator$filter self) {
-  return $True;
+    return $True;
 }
 
 $str $Iterator$filter_str($Iterator$filter self) {
-  char *s;
-  asprintf(&s,"<filter iterator object at %p>",self);
-  return to$str(s);
+    char *s;
+    asprintf(&s,"<filter iterator object at %p>",self);
+    return to$str(s);
 }
 
 void $Iterator$filter_serialize($Iterator$filter self,$Serial$state state) {
-  $step_serialize(self->it,state);
+    $step_serialize(self->it,state);
 }
 
 $Iterator$filter $Iterator$filter$_deserialize($Iterator$filter res, $Serial$state state) {
-   if (!res)
-      res = $DNEW($Iterator$filter,state);
-   res->it = $step_deserialize(state);
-   return res;
+    if (!res)
+        res = $DNEW($Iterator$filter,state);
+    res->it = $step_deserialize(state);
+    return res;
 }
 
 $WORD $Iterator$filter_next($Iterator$filter it) {
-  $WORD w;
-  do
-    w = it->it->$class->__next__(it->it);
-  while (w && !from$bool(it->f->$class->__call__(it->f, w)));
-  return w;
+    $WORD w;
+    do
+        w = it->it->$class->__next__(it->it);
+    while (w && !from$bool(it->f->$class->__call__(it->f, w)));
+    return w;
 }
 
 struct $Iterator$filter$class $Iterator$filter$methods = {"$Iterator$filter",UNASSIGNED,($Super$class)&$Iterator$methods,$Iterator$filter_init,
@@ -137,142 +137,142 @@ $Iterator$filter $Iterator$filter$new($Iterator it, $function1 f) {
 }
 
 $Iterator $filter($Iterable wit, $function1 f, $WORD iter) {
-  $Iterator it = wit->$class->__iter__(wit,iter);
-  return ($Iterator)$Iterator$filter$new(it,f);
+    $Iterator it = wit->$class->__iter__(wit,iter);
+    return ($Iterator)$Iterator$filter$new(it,f);
 }
 
 // map ////////////////////////////////////////////////////////////////////////////////
 
 void $Iterator$map_init($Iterator$map self, $Iterator it, $function1 f) {
-  self->it = it;
-  self->f = f;
+    self->it = it;
+    self->f = f;
 }
 
 $bool $Iterator$map_bool($Iterator$map self) {
-  return $True;
+    return $True;
 }
 
 $str $Iterator$map_str($Iterator$map self) {
-  char *s;
-  asprintf(&s,"<map iterator object at %p>",self);
-  return to$str(s);
+    char *s;
+    asprintf(&s,"<map iterator object at %p>",self);
+    return to$str(s);
 }
 
 void $Iterator$map_serialize($Iterator$map self,$Serial$state state) {
-  $step_serialize(self->it,state);
+    $step_serialize(self->it,state);
 }
 
 $Iterator$map $Iterator$map$_deserialize($Iterator$map res, $Serial$state state) {
-   if (!res)
-      res = $DNEW($Iterator$map,state);
-   res->it = $step_deserialize(state);
-   return res;
+    if (!res)
+        res = $DNEW($Iterator$map,state);
+    res->it = $step_deserialize(state);
+    return res;
 }
 
 $WORD $Iterator$map_next($Iterator$map it) {
-  $WORD w = it->it->$class->__next__(it->it);
-  if (w)
-    return it->f->$class->__call__(it->f, w);
-  else
-    return NULL;
+    $WORD w = it->it->$class->__next__(it->it);
+    if (w)
+        return it->f->$class->__call__(it->f, w);
+    else
+        return NULL;
 }
 
 struct $Iterator$map$class $Iterator$map$methods = {"$Iterator$map",UNASSIGNED,($Super$class)&$Iterator$methods,$Iterator$map_init,
-                                                                $Iterator$map_serialize, $Iterator$map$_deserialize,  
-                                                                $Iterator$map_bool,$Iterator$map_str,$Iterator$map_str, $Iterator$map_next};
+                                                    $Iterator$map_serialize, $Iterator$map$_deserialize,  
+                                                    $Iterator$map_bool,$Iterator$map_str,$Iterator$map_str, $Iterator$map_next};
 
 $Iterator$map $Iterator$map$new($Iterator it, $function1 f) {
     return $NEW($Iterator$map, it, f);
 }
 
 $Iterator $map($Iterable wit, $function1 f, $WORD iter) {
-  $Iterator it = wit->$class->__iter__(wit,iter);
-  return ($Iterator)$Iterator$map$new(it,f);
+    $Iterator it = wit->$class->__iter__(wit,iter);
+    return ($Iterator)$Iterator$map$new(it,f);
 }
 
 
 // max, min ///////////////////////////////////////////////////////////////////////////////////
 
 $WORD $max($Ord wit, $Iterable wit2, $WORD iter, $WORD deflt) {
-  $Iterator it = wit2->$class->__iter__(wit2,iter);  
-  $WORD res, nxt;
-  res = it->$class->__next__(it);
-  if (res) {
-    while ((nxt = it->$class->__next__(it))) {
-      if (wit->$class->__lt__(wit,res,nxt))
-        res = nxt;
-    }
-    return res;
-  } else
-    return deflt;
+    $Iterator it = wit2->$class->__iter__(wit2,iter);  
+    $WORD res, nxt;
+    res = it->$class->__next__(it);
+    if (res) {
+        while ((nxt = it->$class->__next__(it))) {
+            if (wit->$class->__lt__(wit,res,nxt))
+                res = nxt;
+        }
+        return res;
+    } else
+        return deflt;
 }
 
 $WORD $min($Ord wit, $Iterable wit2, $WORD iter, $WORD deflt) {
-  $Iterator it = wit2->$class->__iter__(wit2,iter);  
-  $WORD res, nxt;
-  res = it->$class->__next__(it);
-  if (res) {
-    while ((nxt = it->$class->__next__(it))) {
-      if (wit->$class->__gt__(wit,res,nxt))
-        res = nxt;
-    }
-    return res;
-  } else
-    return deflt;
+    $Iterator it = wit2->$class->__iter__(wit2,iter);  
+    $WORD res, nxt;
+    res = it->$class->__next__(it);
+    if (res) {
+        while ((nxt = it->$class->__next__(it))) {
+            if (wit->$class->__gt__(wit,res,nxt))
+                res = nxt;
+        }
+        return res;
+    } else
+        return deflt;
 }
  
 $list $sorted($Ord wit, $Iterable wit2, $WORD iter) {
-  return NULL;
+    return NULL;
 }
 
 // sum /////////////////////////////////////////////////////////////////////////////////
 
 $WORD $sum($Plus wit, $Iterable wit2, $WORD iter, $WORD start) {
-  $Iterator it = wit2->$class->__iter__(wit2,iter);  
-  $WORD res = start;
-  $WORD nxt;
-  while ((nxt = it->$class->__next__(it))) 
-    res = wit->$class->__add__(wit,res,nxt);
-  return res;
+    $Iterator it = wit2->$class->__iter__(wit2,iter);  
+    $WORD res = start;
+    $WORD nxt;
+    while ((nxt = it->$class->__next__(it))) 
+        res = wit->$class->__add__(wit,res,nxt);
+    return res;
 }
 
 // zip ////////////////////////////////////////////////////////////////////////////////
 
 void $Iterator$zip_init($Iterator$zip self, $Iterator it1, $Iterator it2) {
-  self->it1 = it1;
-  self->it2 = it2;
+    self->it1 = it1;
+    self->it2 = it2;
 }
 
 $bool $Iterator$zip_bool($Iterator$zip self) {
-  return $True;
+    return $True;
 }
 
 $str $Iterator$zip_str($Iterator$zip self) {
-  char *s;
-  asprintf(&s,"<zip iterator object at %p>",self);
-  return to$str(s);
+    char *s;
+    asprintf(&s,"<zip iterator object at %p>",self);
+    return to$str(s);
 }
 
 void $Iterator$zip_serialize($Iterator$zip self,$Serial$state state) {
-  $step_serialize(self->it1,state);
-  $step_serialize(self->it2,state);
+    $step_serialize(self->it1,state);
+    $step_serialize(self->it2,state);
 }
 
 $Iterator$zip $Iterator$zip$_deserialize($Iterator$zip res, $Serial$state state) {
-   if (!res)
-      res = $DNEW($Iterator$zip,state);
-   res->it1 = $step_deserialize(state);
-   res->it2 = $step_deserialize(state);
-   return res;
+    if (!res)
+        res = $DNEW($Iterator$zip,state);
+    res->it1 = $step_deserialize(state);
+    res->it2 = $step_deserialize(state);
+    return res;
 }
 
 $WORD $Iterator$zip_next($Iterator$zip it) {
-  $WORD w1 = it->it1->$class->__next__(it->it1);
-  $WORD w2 = it->it2->$class->__next__(it->it2);
-  if (w1 && w2)
-    return $NEWTUPLE(2,w1,w2);
-  else
-    return NULL;
+    $WORD w1 = it->it1->$class->__next__(it->it1);
+    $WORD w2 = it->it2->$class->__next__(it->it2);
+    if (w1 && w2)
+        return $NEWTUPLE(2,w1,w2);
+    else
+        return NULL;
 }
 
 struct $Iterator$zip$class $Iterator$zip$methods = {" $Iterator$zip",UNASSIGNED,($Super$class)&$Iterator$methods,$Iterator$zip_init,
@@ -284,9 +284,9 @@ $Iterator$zip $Iterator$zip$new($Iterator iter1, $Iterator iter2) {
 }
 
 $Iterator $zip ($Iterable wit1, $Iterable wit2, $WORD iter1, $WORD iter2) {
-  $Iterator it1 = wit1->$class->__iter__(wit1,iter1);
-  $Iterator it2 = wit2->$class->__iter__(wit2,iter2);
-  return ($Iterator)$Iterator$zip$new(it1,it2);
+    $Iterator it1 = wit1->$class->__iter__(wit1,iter1);
+    $Iterator it2 = wit2->$class->__iter__(wit2,iter2);
+    return ($Iterator)$Iterator$zip$new(it1,it2);
 }
 
 // EqOpt //////////////////////////////////////////////////////
@@ -363,7 +363,7 @@ $WORD $pow ($Number w$344, $WORD a, $WORD b) {
 }
 
 $str $repr($value x) {
-  return x->$class->__repr__(x);
+    return x->$class->__repr__(x);
 }
 
 $Iterator $reversed ($Sequence w$369, $WORD seq) {
