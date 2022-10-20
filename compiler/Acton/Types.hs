@@ -671,13 +671,13 @@ infActorEnv env ss                      = do dsigs <- mapM mkNDef (dvars ss \\ d
                                              return (n, NVar t)
 
 matchActorAssumption env n0 p k te      = do --traceM ("## matchActorAssumption " ++ prstr n0)
-                                             let cs = Cast (prowOf p) p0 : Cast (krowOf k) k0 : 
-                                                      map Seal (p0 : k0 : leaves te0)                   -- DEACT!
-                                             (cs,eq) <- simplify env te0 tNone cs
                                              (css,eqs) <- unzip <$> mapM check1 te0
-                                             return (cs ++ concat css, eq ++ concat eqs)
+                                             let cs = [Cast (prowOf p) p0, Cast (krowOf k) k0, Seal p0, Seal k0]
+                                             (cs,eq) <- simplify env obs tNone (cs ++ concat css)
+                                             return (cs, eq ++ concat eqs)
   where NAct _ p0 k0 te0                = findName n0 env
         ns                              = dom te0
+        obs                             = te0 ++ te
         te1                             = unSig $ te `restrict` ns
         check1 (n, i) | isHidden n      = return ([], [])
         check1 (n, NVar t0)             = do --traceM ("## matchActorAssumption for attribute " ++ prstr n)
@@ -685,11 +685,12 @@ matchActorAssumption env n0 p k te      = do --traceM ("## matchActorAssumption 
           where t                       = case lookup n te1 of
                                              Just (NVar t) -> t
                                              x -> error ("(internal) Lookup of " ++ prstr n ++ " = " ++ show x)
-        check1 (n, NDef sc0 _)          = do (cs1,_,t) <- instantiate env sc
-                                             --traceM ("## matchActorAssumption for method " ++ prstr n ++ ": " ++ prstr t)
-                                             (c',t') <- wrap t
-                                             let c = Cast t' (sctype sc0)
-                                             (cs2,eq) <- solveScoped (defineTVars q env) (qbound q) te0 tNone (c:c':cs1)
+        check1 (n, NDef sc0 _)          = do (cs0,_,t) <- instantiate env sc
+                                             (c0,t') <- wrap t
+                                             let c1 = Cast t' (sctype sc0)
+                                                 cs1 = map Seal (leaves sc0)
+                                             --traceM ("## matchActorAssumption for method " ++ prstr n ++ ": " ++ prstr c1)
+                                             (cs2,eq) <- solveScoped (defineTVars q env) (qbound q) obs tNone (c0:c1:cs0++cs1)
                                              checkNoEscape env (qbound q)
                                              return (cs2, eq)
           where q                       = scbind sc

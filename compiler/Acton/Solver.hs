@@ -940,7 +940,7 @@ improve env te tt eq cs
         pvars                           = Map.keys (pbounds vi) ++ tyfree (Map.elems (pbounds vi))
         (posvars0,negvars0)             = polvars te `polcat` polvars tt
         (posvars,negvars)               = (posvars0++fixedvars++vvsL, negvars0++fixedvars++vvsU)
-        obsvars                         = posvars0 ++ negvars0 ++ fixedvars ++ pvars ++ embedded vi
+        obsvars                         = posvars0 ++ negvars0 ++ fixedvars ++ pvars ++ embedded vi ++ sealed vi
         boundvars                       = Map.keys (ubounds vi) ++ Map.keys (lbounds vi)
         boundprot                       = tyfree (Map.elems $ ubounds vi) ++ tyfree (Map.elems $ lbounds vi)
         cyclic                          = if null (boundvars\\boundprot) then [ c | c <- cs, headvar c `elem` boundvars ] else []
