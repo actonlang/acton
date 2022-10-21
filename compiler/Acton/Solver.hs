@@ -58,13 +58,15 @@ simplify' env te tt eq cs                   = do eq1 <- reduce env eq cs
 -- solve
 ----------------------------------------------------------------------------------------------------------------------
 
-data Rank                                   = RTry { tgt :: Type, alts :: [Type], rev :: Bool }
+data Rank                                   = RSealed { tgt :: Type }
+                                            | RTry { tgt :: Type, alts :: [Type], rev :: Bool }
                                             | RUni { tgt :: Type, alts :: [Type] }
                                             | ROvl { tgt :: Type }
                                             | RSkip
                                             deriving (Show)
 
 instance Eq Rank where
+    RSealed t1  == RSealed t2               = t1 == t2
     RTry t1 _ _ == RTry t2 _ _              = t1 == t2
     RUni t1 _   == RUni t2 _                = t1 == t2
     ROvl t1     == ROvl t2                  = True
@@ -72,6 +74,7 @@ instance Eq Rank where
     _           == _                        = False
 
 instance Pretty Rank where
+    pretty (RSealed t)                      = pretty t <+> text "sealed"
     pretty (RTry t ts rev)                  = pretty t <+> braces (commaSep pretty ts) Pretty.<> (if rev then char '\'' else empty)
     pretty (RUni t ts)                      = pretty t <+> char '=' <+> commaSep pretty ts
     pretty (ROvl t)                         = pretty t <+> text "..."
@@ -108,6 +111,8 @@ solve' env select hist te tt eq cs
                                                  --traceM ("## posvs: " ++ prstrs posvs)
                                                  --traceM ("## negvs: " ++ prstrs negvs)
                                                  case head goals of
+                                                    RSealed t ->
+                                                        tryAlts st t [fxAction, fxPure]
                                                     RTry t alts r -> do
                                                         --traceM ("### goal " ++ prstr t ++ ", candidates: " ++ prstrs alts ++ if r then " (rev)" else "")
                                                         tryAlts st t alts
@@ -119,13 +124,15 @@ solve' env select hist te tt eq cs
                                                         (cs,eq) <- simplify' (useForce env) te tt eq cs
                                                         hist <- msubst hist
                                                         solve' env select hist te tt eq cs
+                                                    RSkip ->
+                                                        return (keep_cs, eq)
 
   where (solve_cs, keep_cs)                 = partition select cs
         goals                               = sortOn deco $ map condense $ group rnks
         group []                            = []
         group (r:rs)                        = (r : rs1) : group rs2
           where (rs1,rs2)                   = partition (==r) rs
-        rnks                                = map (rank env) solve_cs \\ [RSkip]
+        rnks                                = map (rank env) solve_cs -- \\ [RSkip]
         tryAlts st t0 []                    = --trace ("### Out of alternatives for " ++ prstr t0) $
                                               noSolve cs
         tryAlts st t0 (t:ts)                = tryAlt t0 t `catchError` const ({-traceM ("### ROLLBACK " ++ prstr t0) >> -}rollbackState st >> tryAlts st t0 ts)
@@ -145,6 +152,7 @@ solve' env select hist te tt eq cs
                                                  hist <- msubst hist
                                                  solve' env select hist te tt eq cs
 
+        condense (RSealed t : rs)           = RSealed t
         condense (RTry t as r : rs)
           | TVar{} <- t                     = RTry t (if rev' then subrev ts' else ts') rev'
           | otherwise                       = RTry t ts r
@@ -153,6 +161,7 @@ solve' env select hist te tt eq cs
                 rev'                        = (or $ r : map rev rs) || tvar t `elem` posvs
         condense (RUni t as : rs)           = RUni t (foldr union as $ map alts rs)
         condense (ROvl t : rs)              = ROvl t
+        condense (RSkip : rs)               = RSkip
         condense rs                         = error ("### condense " ++ show rs)
 
         optvs                               = optvars cs ++ optvars hist
@@ -160,10 +169,12 @@ solve' env select hist te tt eq cs
         univs                               = univars cs
         (posvs, negvs)                      = polvars te `polcat` polvars tt
 
-        deco (RTry (TVar _ v) as r)         = (0, length $ filter (==v) embvs, length $ filter (==v) univs, length as)
-        deco (RTry t as r)                  = (1, 0, 0, length as)
-        deco (RUni t as)                    = (2, 0, 0, length as)
-        deco (ROvl t)                       = (3, 0, 0, 0)
+        deco (RSealed t)                    = (0, 0, 0, 0)
+        deco (RTry (TVar _ v) as r)         = (1, length $ filter (==v) embvs, length $ filter (==v) univs, length as)
+        deco (RTry t as r)                  = (2, 0, 0, length as)
+        deco (RUni t as)                    = (3, 0, 0, length as)
+        deco (ROvl t)                       = (4, 0, 0, 0)
+        deco (RSkip)                        = (5, 0, 0, 0)
 
         subrev []                           = []
         subrev (t:ts)                       = subrev ts1 ++ t : subrev ts2
@@ -199,7 +210,7 @@ rank env (Sel _ t n _)                      = RTry t (allConAttr env n ++ allPro
 rank env (Mut t n _)                        = RTry t (allConAttr env n `intersect` allBelow env tObject) False
 
 rank env (Seal t@TVar{})
-  | tvkind (tvar t) == KFX                  = RTry t [fxAction, fxPure] False
+  | tvkind (tvar t) == KFX                  = RSealed t
   | otherwise                               = RSkip
 
 
