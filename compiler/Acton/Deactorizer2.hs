@@ -220,9 +220,10 @@ isProcMeth env e
     TFun{effect=fx} <- sctype sc    = fx == fxProc
 isProcMeth env _                    = False
 
-isSealedMeth env e
-  | Just n <- isVar e               = n `elem` wrapped env
-isSealedMeth env _                  = False
+sealedMeth env e
+  | Just n <- isVar e,
+    n `elem` wrapped env            = Just n
+xealedMeth env _                    = Nothing
 
 instance Deact Expr where
     deact env (Var l (NoQ n))
@@ -251,7 +252,7 @@ instance Deact Expr where
         isProcMeth env e            = deact env e
     deact env (Call l (TApp _ (Var _ n) ts) (PosArg self (PosArg e PosNil)) KwdNil)
       | n == primSEAL,
-        isSealedMeth env e          = deact env e
+        Just n' <- sealedMeth env e = return $ Dot l (Var l (NoQ selfKW)) n'
       | n == primSEAL               = do e <- deact env e
                                          self <- deact env self
                                          let lam = Lambda l0 PosNIL KwdNIL (eCallP e (pArg ps)) fxProc
