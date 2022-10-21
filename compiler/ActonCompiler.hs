@@ -66,12 +66,12 @@ main                     =  do arg <- C.parseCmdLine
                                case arg of
                                    C.VersionOpt opts       -> printVersion opts
                                    C.CmdOpt (C.New opts)   -> createProject (C.file opts)
-                                   C.CmdOpt (C.Build opts) -> buildProject $ defaultOpts {C.dev = C.devB opts, C.root = C.rootB opts, C.quiet = C.quietB opts}
+                                   C.CmdOpt (C.Build opts) -> buildProject $ defaultOpts {C.alwaysbuild = C.alwaysB opts, C.dev = C.devB opts, C.root = C.rootB opts, C.quiet = C.quietB opts}
                                    C.CmdOpt (C.Cloud opts) -> undefined
                                    C.CmdOpt (C.Doc opts)   -> printDocs opts
                                    C.CompileOpt nms opts   -> compileFiles opts (catMaybes $ map filterActFile nms)
 
-defaultOpts   = C.CompileOptions False False False False False False False False False False
+defaultOpts   = C.CompileOptions False False False False False False False False False False False
                                  False False False False False False False False "" "" ""
 
 
@@ -458,8 +458,8 @@ doTask opts paths env t@(ActonTask mn src m stubMode) = do
         cFile               = outbase ++ ".c"
         oFile               = joinPath [projLib paths, prstr mn] ++  ".o"
         forceCompilation :: C.CompileOptions -> Bool
-        forceCompilation args = (C.parse args) || (C.kinds args) || (C.types args) || (C.sigs args)  ||  (C.norm args) 
-                              || (C.deact args) || (C.cps args)  || (C.llift args) || (C.hgen args)  ||(C.cgen args)
+        forceCompilation args = (C.alwaysbuild args) || (C.parse args) || (C.kinds args) || (C.types args) || (C.sigs args)
+                                || (C.norm args) || (C.deact args) || (C.cps args) || (C.llift args) || (C.hgen args) ||(C.cgen args)
 
 runCustomMake paths mn = do
     -- copy header file in place, if it exists
