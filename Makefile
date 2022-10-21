@@ -120,6 +120,8 @@ backend/actondb: backend/actondb.c lib/libActonDB.a
 		-lActonDB \
 		$(LDLIBS)
 
+# Listing DEPSA as prerequisites in a target means it is dependent upon at least
+# one of  the external libraries that we place in libActonDeps
 DEPSA:=lib/libActonDeps.a
 
 backend/comm.o: backend/comm.c backend/comm.h backend/failure_detector/db_queries.h $(DEPSA)
@@ -193,10 +195,10 @@ backend/test/skiplist_test: backend/test/skiplist_test.c backend/skiplist.c
 		$(LDLIBS)
 
 # /builtin ----------------------------------------------
-builtin/builtin_dev.o: builtin/builtin.c $(BUILTIN_HFILES) $(BUILTIN_CFILES) lib/libActonDeps.a
+builtin/builtin_dev.o: builtin/builtin.c $(BUILTIN_HFILES) $(BUILTIN_CFILES) $(DEPSA)
 	$(CC) $(CFLAGS) $(CFLAGS_DEV) -Wno-unused-result -c $< -o$@
 
-builtin/builtin_rel.o: builtin/builtin.c $(BUILTIN_HFILES) $(BUILTIN_CFILES) lib/libActonDeps.a
+builtin/builtin_rel.o: builtin/builtin.c $(BUILTIN_HFILES) $(BUILTIN_CFILES) $(DEPSA)
 	$(CC) $(CFLAGS) $(CFLAGS_REL) -Wno-unused-result -c $< -o$@
 
 builtin/env_dev.o: builtin/env.c builtin/env.h builtin/builtin_dev.o
@@ -222,7 +224,7 @@ clean-compiler:
 	rm -f compiler/actonc compiler/package.yaml compiler/acton.cabal
 
 # /deps --------------------------------------------------
-DEPS_DIRS=deps/libbsd deps/libmd deps/libprotobuf_c deps/libutf8proc deps/libuv deps/libxml2 deps/util-linux
+DEPS_DIRS=deps/bsdnt deps/libbsd deps/libmd deps/libprotobuf_c deps/libutf8proc deps/libuv deps/libxml2 deps/util-linux
 
 # libActonDeps.a
 # This is an archive of all external libraries that we depend on. Each library
@@ -242,6 +244,7 @@ DEP_LIBS+=deps/instdir/lib/libbsd.a
 DEP_LIBS+=deps/instdir/lib/libmd.a
 endif
 
+DEP_LIBS+=deps/instdir/lib/libbsdnt.a
 DEP_LIBS+=deps/instdir/lib/libutf8proc.a
 DEP_LIBS+=deps/instdir/lib/libuuid.a
 DEP_LIBS+=deps/instdir/lib/libuv.a
@@ -270,6 +273,18 @@ clean-deps:
 clean-deps-rm:
 	rm -rf $(DEPS_DIRS) deps/zig-*.tar*
 
+# /deps/libbsdnt --------------------------------------------
+LIBBSDNT_REF=97053f366618b0e987a76bc6d6992165c8ea843e
+deps/libbsdnt:
+	ls $@ >/dev/null 2>&1 || git clone https://github.com/wbhart/bsdnt.git $@
+
+deps/instdir/lib/libbsdnt.a: deps/libbsdnt
+	mkdir -p $(dir $@)
+	cd $< \
+	&& git checkout $(LIBBSDNT_REF) \
+	&& ./configure --prefix=$(TD)/deps/instdir --enable-static --disable-shared CFLAGS="$(CFLAGS_DEPS)" \
+	&& make -j && make install
+
 # /deps/libbsd --------------------------------------------
 LIBBSD_REF=0.11.7
 deps/libbsd:
@@ -296,7 +311,7 @@ deps/instdir/lib/libbsd.a: deps/libbsd deps/instdir/lib/libmd.a
 	&& rm -rf incbsd \
 	&& cp -av include/bsd incbsd \
 	&& ./autogen \
-	&& ./configure --disable-LIBBSD_OVERLAY --prefix $(TD)/deps/instdir --enable-static --disable-shared CFLAGS="-I$(TD)/deps/instdir/include -L$(TD)/deps/instdir/lib" \
+	&& ./configure --disable-LIBBSD_OVERLAY --prefix=$(TD)/deps/instdir --enable-static --disable-shared CFLAGS="-I$(TD)/deps/instdir/include -L$(TD)/deps/instdir/lib" \
 	&& make -j && make install
 
 # /deps/libmd --------------------------------------------
@@ -309,7 +324,7 @@ deps/instdir/lib/libmd.a: deps/libmd
 	cd $< \
 	&& git checkout $(LIBMD_REF) \
 	&& ./autogen \
-	&& ./configure --prefix $(TD)/deps/instdir --enable-static --disable-shared CFLAGS="$(CFLAGS_DEPS)" \
+	&& ./configure --prefix=$(TD)/deps/instdir --enable-static --disable-shared CFLAGS="$(CFLAGS_DEPS)" \
 	&& make -j && make install
 
 # /deps/libprotobuf_c --------------------------------------------
@@ -322,7 +337,7 @@ deps/instdir/lib/libprotobuf-c.a: deps/libprotobuf_c
 	cd $< \
 	&& git checkout $(LIBPROTOBUF_C_REF) \
 	&& ./autogen.sh \
-	&& ./configure --prefix $(TD)/deps/instdir --enable-static --disable-shared CFLAGS="--verbose $(CFLAGS_DEPS)" CXXFLAGS="--verbose $(CFLAGS_TARGET)" \
+	&& ./configure --prefix=$(TD)/deps/instdir --enable-static --disable-shared CFLAGS="--verbose $(CFLAGS_DEPS)" CXXFLAGS="--verbose $(CFLAGS_TARGET)" \
 	&& make -j && make install
 
 # /deps/libutf8proc --------------------------------------
@@ -347,7 +362,7 @@ deps/instdir/lib/libuuid.a: deps/util-linux
 	cd $< \
 	&& git checkout $(LIBUUID_REF) \
 	&& ./autogen.sh \
-	&& ./configure --prefix $(TD)/deps/instdir --disable-nls --disable-poman --disable-all-programs --enable-libuuid --enable-static --disable-shared CFLAGS="$(CFLAGS_DEPS)" \
+	&& ./configure --prefix=$(TD)/deps/instdir --disable-nls --disable-poman --disable-all-programs --enable-libuuid --enable-static --disable-shared CFLAGS="$(CFLAGS_DEPS)" \
 	&& make -j && make install
 
 # /deps/libuv --------------------------------------------
@@ -360,7 +375,7 @@ deps/instdir/lib/libuv.a: deps/libuv
 	cd $< \
 	&& git checkout $(LIBUV_REF) \
 	&& ./autogen.sh \
-	&& ./configure --prefix $(TD)/deps/instdir --enable-static --disable-shared CFLAGS="$(CFLAGS_DEPS)" \
+	&& ./configure --prefix=$(TD)/deps/instdir --enable-static --disable-shared CFLAGS="$(CFLAGS_DEPS)" \
 	&& make -j && make install
 
 # /deps/libxml2 ------------------------------------------
@@ -372,7 +387,7 @@ deps/instdir/lib/libxml2.a: deps/libxml2
 	mkdir -p $(dir $@)
 	cd $< \
 	&& git checkout $(LIBXML2_REF) \
-	&& ./autogen.sh --without-python --without-iconv --without-zlib --without-lzma --prefix $(TD)/deps/instdir --enable-static --disable-shared CFLAGS="$(CFLAGS_DEPS)" \
+	&& ./autogen.sh --without-python --without-iconv --without-zlib --without-lzma --prefix=$(TD)/deps/instdir --enable-static --disable-shared CFLAGS="$(CFLAGS_DEPS)" \
 	&& make -j && make install
 
 # --
@@ -418,10 +433,10 @@ builtin/ty/out/types/__builtin__.ty: builtin/ty/src/__builtin__.act $(ACTONC)
 	$(ACTC) --always-build $<
 
 # Build our standard library
-stdlib/out/dev/lib/libActonProject.a: $(STDLIB_SRCFILES) dist/types/__builtin__.ty $(DIST_HFILES) $(ACTONC) lib/libActonDeps.a
+stdlib/out/dev/lib/libActonProject.a: $(STDLIB_SRCFILES) dist/types/__builtin__.ty $(DIST_HFILES) $(ACTONC) $(DEPSA)
 	cd stdlib && ../$(ACTC) build --always-build --dev
 
-stdlib/out/rel/lib/libActonProject.a: $(STDLIB_SRCFILES) dist/types/__builtin__.ty $(DIST_HFILES) $(ACTONC) lib/libActonDeps.a
+stdlib/out/rel/lib/libActonProject.a: $(STDLIB_SRCFILES) dist/types/__builtin__.ty $(DIST_HFILES) $(ACTONC) $(DEPSA)
 	cd stdlib && ../$(ACTC) build --always-build
 	cp -a stdlib/out/types/. dist/types/
 
@@ -456,23 +471,23 @@ lib/libActonDB.a: $(BACKEND_OFILES)
 
 # /rts --------------------------------------------------
 OFILES += rts/io_dev.o rts/io_rel.o rts/log.o rts/rts_dev.o rts/rts_rel.o rts/empty.o
-rts/io_dev.o: rts/io.c rts/io.h lib/libActonDeps.a
+rts/io_dev.o: rts/io.c rts/io.h $(DEPSA)
 	$(CC) $(CFLAGS) $(CFLAGS_DEV) $(LDFLAGS) \
 		-c $< -o $@
 
-rts/io_rel.o: rts/io.c rts/io.h lib/libActonDeps.a
+rts/io_rel.o: rts/io.c rts/io.h $(DEPSA)
 	$(CC) $(CFLAGS) $(CFLAGS_REL) $(LDFLAGS) \
 		-c $< -o $@
 
-rts/log.o: rts/log.c rts/log.h
+rts/log.o: rts/log.c rts/log.h $(DEPSA)
 	$(CC) $(CFLAGS) $(CFLAGS_DEV) -DLOG_USE_COLOR -c $< -o$@
 
-rts/rts_dev.o: rts/rts.c rts/rts.h lib/libActonDeps.a
+rts/rts_dev.o: rts/rts.c rts/rts.h $(DEPSA)
 	$(CC) $(CFLAGS) $(CFLAGS_DEV) \
 		-Wno-int-to-void-pointer-cast -Wno-unused-result \
 		-c $< -o $@
 
-rts/rts_rel.o: rts/rts.c rts/rts.h lib/libActonDeps.a
+rts/rts_rel.o: rts/rts.c rts/rts.h $(DEPSA)
 	$(CC) $(CFLAGS) $(CFLAGS_REL) \
 		-Wno-int-to-void-pointer-cast -Wno-unused-result \
 		-c $< -o $@
@@ -573,6 +588,10 @@ dist/builtin/%: builtin/%
 	@mkdir -p $(dir $@)
 	cp $< $@
 
+dist/include/bsdnt: $(DEPSA)
+	@mkdir -p $(dir $@)
+	cp -a deps/instdir/include/bsdnt $@
+
 dist/rts/%: rts/%
 	@mkdir -p $(dir $@)
 	cp $< $@
@@ -590,7 +609,7 @@ dist/completion/acton.bash-completion: completion/acton.bash-completion
 	cp $< $@
 
 .PHONY: distribution clean-distribution
-distribution: $(DIST_ARCHIVES) $(DIST_BINS) $(DIST_HFILES) $(DIST_TYFILES) $(DIST_DBARCHIVE)
+distribution: $(DIST_ARCHIVES) dist/include/bsdnt $(DIST_BINS) $(DIST_HFILES) $(DIST_TYFILES) $(DIST_DBARCHIVE)
 
 clean-distribution:
 	rm -rf dist
