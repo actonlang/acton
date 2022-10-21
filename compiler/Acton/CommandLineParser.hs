@@ -27,33 +27,35 @@ data NewOptions     = NewOptions {
                     }  deriving Show
 
 data CompileOptions   = CompileOptions {
-                         parse     :: Bool,
-                         kinds     :: Bool,
-                         types     :: Bool,
-                         sigs      :: Bool,
-                         norm      :: Bool,
-                         deact     :: Bool,
-                         cps       :: Bool,
-                         llift     :: Bool,
-                         hgen      :: Bool,
-                         cgen      :: Bool,
-                         ccmd      :: Bool,
-                         verbose   :: Bool,
-                         timing    :: Bool,
-                         stub      :: Bool,
-                         cpedantic :: Bool,
-                         quiet     :: Bool,
-                         debug     :: Bool,
-                         dev       :: Bool,
-                         root      :: String,
-                         tempdir   :: String,
-                         syspath   :: String
+                         alwaysbuild :: Bool,
+                         parse       :: Bool,
+                         kinds       :: Bool,
+                         types       :: Bool,
+                         sigs        :: Bool,
+                         norm        :: Bool,
+                         deact       :: Bool,
+                         cps         :: Bool,
+                         llift       :: Bool,
+                         hgen        :: Bool,
+                         cgen        :: Bool,
+                         ccmd        :: Bool,
+                         verbose     :: Bool,
+                         timing      :: Bool,
+                         stub        :: Bool,
+                         cpedantic   :: Bool,
+                         quiet       :: Bool,
+                         debug       :: Bool,
+                         dev         :: Bool,
+                         root        :: String,
+                         tempdir     :: String,
+                         syspath     :: String
                      } deriving Show
 
 data BuildOptions = BuildOptions {
-                         devB       :: Bool,
-                         rootB      :: String,
-                         quietB     :: Bool
+                         alwaysB     :: Bool,
+                         devB        :: Bool,
+                         rootB       :: String,
+                         quietB      :: Bool
                      } deriving Show
                          
 
@@ -97,45 +99,50 @@ generalOptions         = GeneralOptions <$>
                          <*> switch (long "dev"        <> help "Development mode; include debug symbols etc")
  -}                       
 
-newCommand          = New <$> (NewOptions <$> argument (str :: ReadM String) (metavar "PROJECTDIR"))
+newCommand = New <$> (NewOptions <$> argument (str :: ReadM String) (metavar "PROJECTDIR"))
 
-compileOptions      = CompileOptions
-                         <$> switch (long "parse"   <> help "Show the result of parsing")
-                         <*> switch (long "kinds"   <> help "Show all the result after kind-checking")
-                         <*> switch (long "types"   <> help "Show all inferred expression types")
-                         <*> switch (long "sigs"    <> help "Show the inferred type signatures")
-                         <*> switch (long "norm"    <> help "Show the result after syntactic normalization")
-                         <*> switch (long "deact"   <> help "Show the result after deactorization")
-                         <*> switch (long "cps"     <> help "Show the result after CPS conversion")
-                         <*> switch (long "llift"   <> help "Show the result of lambda-lifting")
-                         <*> switch (long "hgen"    <> help "Show the generated .h header")
-                         <*> switch (long "cgen"    <> help "Show the generated .c code")
-                         <*> switch (long "ccmd"    <> help "Show CC / LD commands")
-                         <*> switch (long "verbose" <> help "Print progress info during execution")
-                         <*> switch (long "timing"  <> help "Print timing information")
-                         <*> switch (long "stub"    <> help "Stub (.ty) file generation only")
-                         <*> switch (long "cpedantic"<> help "Pedantic C compilation with -Werror")
-                         <*> switch (long "quiet"   <> help "Don't print stuff")
-                         <*> switch (long "debug"   <> help "Print debug stuff")
-                         <*> switch (long "dev"     <> help "Development mode; include debug symbols etc")
-                         <*> strOption (long "root" <> metavar "ROOTACTOR" <> value "" <> help "Set root actor")
-                         <*> strOption (long "tempdir" <> metavar "TEMPDIR" <> value "" <> help "Set directory for build files")
-                         <*> strOption (long "syspath" <> metavar "TARGETDIR" <>  value "" <> help "Set syspath")
+compileOptions = CompileOptions
+        <$> switch (long "always-build" <> help "Show the result of parsing")
+        <*> switch (long "parse"        <> help "Show the result of parsing")
+        <*> switch (long "kinds"        <> help "Show all the result after kind-checking")
+        <*> switch (long "types"        <> help "Show all inferred expression types")
+        <*> switch (long "sigs"         <> help "Show the inferred type signatures")
+        <*> switch (long "norm"         <> help "Show the result after syntactic normalization")
+        <*> switch (long "deact"        <> help "Show the result after deactorization")
+        <*> switch (long "cps"          <> help "Show the result after CPS conversion")
+        <*> switch (long "llift"        <> help "Show the result of lambda-lifting")
+        <*> switch (long "hgen"         <> help "Show the generated .h header")
+        <*> switch (long "cgen"         <> help "Show the generated .c code")
+        <*> switch (long "ccmd"         <> help "Show CC / LD commands")
+        <*> switch (long "verbose"      <> help "Print progress info during execution")
+        <*> switch (long "timing"       <> help "Print timing information")
+        <*> switch (long "stub"         <> help "Stub (.ty) file generation only")
+        <*> switch (long "cpedantic"    <> help "Pedantic C compilation with -Werror")
+        <*> switch (long "quiet"        <> help "Don't print stuff")
+        <*> switch (long "debug"        <> help "Print debug stuff")
+        <*> switch (long "dev"          <> help "Development mode; include debug symbols etc")
+        <*> strOption (long "root"      <> metavar "ROOTACTOR" <> value "" <> help "Set root actor")
+        <*> strOption (long "tempdir"   <> metavar "TEMPDIR" <> value "" <> help "Set directory for build files")
+        <*> strOption (long "syspath"   <> metavar "TARGETDIR" <>  value "" <> help "Set syspath")
 
-buildCommand          = Build <$> (BuildOptions
-                          <$> switch (long "dev"     <> help "Development mode; include debug symbols etc")
-                          <*> strOption (long "root" <> metavar "ROOTACTOR" <> value "" <> help "Set root actor")
-                          <*> switch (long "quiet"   <> help "Don't print stuff"))
+buildCommand          = Build <$> (
+    BuildOptions
+        <$> switch (long "always-build" <> help "Development mode; include debug symbols etc")
+        <*> switch (long "dev"          <> help "Development mode; include debug symbols etc")
+        <*> strOption (long "root"      <> metavar "ROOTACTOR" <> value "" <> help "Set root actor")
+        <*> switch (long "quiet"        <> help "Don't print stuff"))
                  
-cloudCommand        = Cloud <$> (CloudOptions
-                        <$> switch (long "run" <> help "Help run!")
-                        <*> switch (long "list" <> help "Help list!")
-                        <*> switch (long "show" <> help "Help show!")
-                        <*> switch (long "stop" <> help "Help stop!"))
+cloudCommand        = Cloud <$> (
+    CloudOptions
+        <$> switch (long "run"          <> help "Help run!")
+        <*> switch (long "list"         <> help "Help list!")
+        <*> switch (long "show"         <> help "Help show!")
+        <*> switch (long "stop"         <> help "Help stop!"))
 
-docCommand          = Doc <$> (DocOptions
-                        <$> strOption (long "signs" <> metavar "TYFILE" <> value "" <> help "Show type signatures")
-                        <*> strOption (long "full" <> metavar "ACTONFILE" <> value "" <> help "Show type signatures and docstrings"))
+docCommand          = Doc <$> (
+    DocOptions
+        <$> strOption (long "signs" <> metavar "TYFILE" <> value "" <> help "Show type signatures")
+        <*> strOption (long "full" <> metavar "ACTONFILE" <> value "" <> help "Show type signatures and docstrings"))
 
 descr               = fullDesc <> progDesc "Compilation and management of Acton source code and projects"
                       <> header "actonc - the Acton compiler"

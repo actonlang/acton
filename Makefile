@@ -415,14 +415,14 @@ dist/types/__builtin__.ty: builtin/ty/out/types/__builtin__.ty
 
 builtin/ty/out/types/__builtin__.ty: builtin/ty/src/__builtin__.act $(ACTONC)
 	@mkdir -p $(dir $@)
-	$(ACTC) $<
+	$(ACTC) --always-build $<
 
 # Build our standard library
 stdlib/out/dev/lib/libActonProject.a: $(STDLIB_SRCFILES) dist/types/__builtin__.ty $(DIST_HFILES) $(ACTONC) lib/libActonDeps.a
-	cd stdlib && ../$(ACTC) build --dev
+	cd stdlib && ../$(ACTC) build --always-build --dev
 
 stdlib/out/rel/lib/libActonProject.a: $(STDLIB_SRCFILES) dist/types/__builtin__.ty $(DIST_HFILES) $(ACTONC) lib/libActonDeps.a
-	cd stdlib && ../$(ACTC) build
+	cd stdlib && ../$(ACTC) build --always-build
 	cp -a stdlib/out/types/. dist/types/
 
 
