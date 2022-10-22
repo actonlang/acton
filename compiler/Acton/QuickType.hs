@@ -114,7 +114,7 @@ instance QType Expr where
 --  qType env f (NotImplemented _)  = undefined
 --  qType env f (Ellipsis _)        = undefined
     qType env f e0@(Call l e ps ks)
-      | TFun{} <- t                 = --trace ("## qType " ++ prstr e0 ++ ", t = " ++ prstr t) $
+      | TFun{} <- t                 = --trace ("## qType Call " ++ prstr e0 ++ ", t = " ++ prstr t) $
                                       (restype t, Call l e' (qMatch f p (posrow t) ps') (qMatch f k (kwdrow t) ks'))
       | otherwise                   = error ("###### qType Fun " ++ prstr e ++ " : " ++ prstr t)
       where (t, e')                 = qType env f e
@@ -190,7 +190,10 @@ instance QType PosArg where
 
     qMatch f TVar{} r p             = p
     qMatch f r TVar{} p             = p
-    qMatch f r r' (PosArg e p)      = PosArg (qMatch f (rtype r) (rtype r') e) (qMatch f (rtail r) (rtail r') p)
+    qMatch f r r' (PosArg e p)
+      | TRow{} <- r,
+        TRow{} <- r'                = PosArg (qMatch f (rtype r) (rtype r') e) (qMatch f (rtail r) (rtail r') p)
+      | otherwise                   = error ("#### rtail " ++ prstr r ++ " < " ++ prstr r' ++ " for " ++ prstr (PosArg e p))
     qMatch f _ _ PosNil             = PosNil
 
 instance QType KwdArg where
@@ -203,7 +206,10 @@ instance QType KwdArg where
 
     qMatch f TVar{} r k             = k
     qMatch f r TVar{} k             = k
-    qMatch f r r' (KwdArg n e k)    = KwdArg n (qMatch f (rtype r) (rtype r') e) (qMatch f (rtail r) (rtail r') k)
+    qMatch f r r' (KwdArg n e k)
+      | TRow{} <- r,
+        TRow{} <- r'                = KwdArg n (qMatch f (rtype r) (rtype r') e) (qMatch f (rtail r) (rtail r') k)
+      | otherwise                   = error ("#### rtail " ++ prstr r ++ " < " ++ prstr r' ++ " for " ++ prstr (KwdArg n e k))
     qMatch f _ _ KwdNil             = KwdNil
 
 instance QType Pattern where
