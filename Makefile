@@ -624,7 +624,9 @@ else
 TAR_TRANSFORM_OPT=-s ,^dist,acton,
 endif
 
-ACTONC_VERSION=$(shell $(ACTONC) --numeric-version 2>/dev/null)
+# Do grep to only get a version number. If there's an error, we get an empty
+# string which is better than getting the error message itself.
+ACTONC_VERSION=$(shell $(ACTONC) --numeric-version 2>/dev/null | grep -E "^[0-9.]+$$")
 .PHONY: acton-$(ARCH)-$(ACTONC_VERSION).tar.bz2
 acton-$(ARCH)-$(ACTONC_VERSION).tar.bz2:
 	tar jcvf $@ $(TAR_TRANSFORM_OPT) --exclude .gitignore dist
