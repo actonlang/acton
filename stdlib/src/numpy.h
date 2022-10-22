@@ -848,7 +848,7 @@ extern struct numpy$$Collection$ndarray$class numpy$$Collection$ndarray$methods;
 numpy$$Integral$ndarray$int numpy$$Integral$ndarray$int$new();
 numpy$$Logical$ndarray$int numpy$$Logical$ndarray$int$new($Integral);
 numpy$$Minus$ndarray$int numpy$$Minus$ndarray$int$new($Integral);
-numpy$$Real$ndarray numpy$$Real$ndarray$new();
+numpy$$Real$ndarray numpy$$Real$ndarray$new(numpy$$Primitive w$Primitive$A$numpy);
 numpy$$Minus$ndarray numpy$$Minus$ndarray$new($Real);
 numpy$$Div$ndarray$int numpy$$Div$ndarray$int$new();
 numpy$$Div$ndarray$float numpy$$Div$ndarray$float$new();
