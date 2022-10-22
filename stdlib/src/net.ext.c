@@ -246,7 +246,7 @@ void on_new_connection(uv_stream_t *server, int status) {
         return;
     }
 
-    __self__->$class->create_tcp_listen_connection(__self__, $None, to$int((long *)client));
+    __self__->$class->create_tcp_listen_connection(__self__, $None, to$int((long)client));
     // TODO: free()
 }
 
