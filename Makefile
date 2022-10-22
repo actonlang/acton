@@ -227,8 +227,10 @@ builtin/env_rel.o: builtin/env.c builtin/env.h builtin/builtin_rel.o
 ACTONC_ALL_HS=$(wildcard compiler/*.hs compiler/**/*.hs)
 ACTONC_TEST_HS=$(wildcard compiler/tests/*.hs)
 ACTONC_HS=$(filter-out $(ACTONC_TEST_HS),$(ACTONC_ALL_HS))
+# NOTE: we're unsetting CC to avoid using zig cc for stack / ghc, which doesn't
+# seem to work properly
 compiler/actonc: compiler/package.yaml.in compiler/stack.yaml $(ACTONC_HS)
-	cd compiler && stack build --dry-run 2>&1 | grep "Nothing to build" || \
+	cd compiler && unset CC && stack build --dry-run 2>&1 | grep "Nothing to build" || \
 		(sed 's,^version:.*,version:      "$(VERSION_INFO)",' < package.yaml.in > package.yaml \
 		&& stack build --ghc-options -j4 \
 		&& stack --local-bin-path=. install 2>/dev/null)
