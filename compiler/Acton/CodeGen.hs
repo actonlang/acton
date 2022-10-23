@@ -119,7 +119,7 @@ decl env (Class _ n q a b)          = (text "struct" <+> classname env n <+> cha
   where tc                          = TC (NoQ n) [ tVar v | Quant v _ <- q ]
         initdef : meths             = fields env tc
         properties                  = [ varsig env n (sctype sc) <> semi | (n, NSig sc Property) <- fullAttrEnv env tc ]
-decl env (Def _ n q p _ a _ _ _)    = gen env (fromJust a) <+> genTopName env n <+> parens (params env $ prowOf p) <> semi
+decl env (Def _ n q p _ a _ _ fx)   = gen env (exposeMsg fx $ fromJust a) <+> genTopName env n <+> parens (params env $ prowOf p) <> semi
 
 methstub env (Class _ n q a b)      = text "extern" <+> text "struct" <+> classname env n <+> methodtable env n <> semi $+$
                                       constub env t n r
@@ -143,7 +143,7 @@ fields env c                        = map field (subst [(tvSelf,tCon c)] te)
 funsig env n (TFun _ _ r _ t)       = gen env t <+> parens (char '*' <> gen env n) <+> parens (params env r)
 funsig env n t                      = varsig env n t
 
-methsig env c n (TFun _ _ r _ t)    = gen env t <+> parens (char '*' <> gen env n) <+> parens (params env $ posRow (tCon c) r)
+methsig env c n (TFun _ fx r _ t)   = gen env (exposeMsg fx t) <+> parens (char '*' <> gen env n) <+> parens (params env $ posRow (tCon c) r)
 methsig env c n t                   = varsig env n t
 
 params env (TNil _ _)               = empty
@@ -151,6 +151,11 @@ params env (TRow _ _ _ t r@TRow{})  = gen env t <> comma <+> params env r
 params env (TRow _ _ _ t TNil{})    = gen env t
 params env (TRow _ _ _ t TVar{})    = gen env t                                         -- Ignore param tails for now...
 params env t                        = error ("codegen unexpected row: " ++ prstr t)
+
+exposeMsg fx t                      = if fx == fxAction then tMsg t else t
+
+exposeMsg' t@TFun{}                 = t{ restype = exposeMsg (effect t) (restype t) }
+exposeMsg' t                        = t
 
 varsig env n t                      = gen env t <+> gen env n
 
@@ -266,8 +271,8 @@ declDecl env (Def _ n q p KwdNIL (Just t) b d fx)
   | otherwise                       = (gen env t1 <+> genTopName env n <+> parens (gen env p) <+> char '{') $+$
                                       nest 4 (genSuite env1 b) $+$
                                       char '}'
-  where env1                        = setRet t $ ldefine (envOf p) $ defineTVars q env
-        t1                          = if fx == fxAction then tMsg t else t
+  where env1                        = setRet t1 $ ldefine (envOf p) $ defineTVars q env
+        t1                          = exposeMsg fx t
 
 declDecl env (Class _ n q as b)     = vcat [ declDecl env1 d{ dname = methodname n (dname d) } | Decl _ ds <- b', d@Def{} <- ds ] $+$
                                       declSerialize env1 n c props sup_c $+$
@@ -566,7 +571,7 @@ dotCast env ent ts e n
                                          TVar _ tv -> splitTC env (findTVBound env tv)
         (sc, dec)                   = findAttr' env c0 n
         t                           = subst fullsubst $ if ent then addSelf t1 dec else t1
-        t1                          = sctype sc
+        t1                          = exposeMsg' (sctype sc)
         fullsubst                   = (tvSelf,t0) : (qbound (scbind sc) `zip` ts) ++ argsubst
         gen_t                       = gen env t
 
