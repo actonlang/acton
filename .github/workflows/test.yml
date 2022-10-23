@@ -115,7 +115,7 @@ jobs:
         run: |
           export DEBIAN_FRONTEND=noninteractive
           apt-get update
-          apt-get install -qy automake autopoint bison bzip2 git gcc haskell-stack libtool make pkg-config procps python3
+          apt-get install -qy automake autopoint bison bzip2 curl git gcc haskell-stack libtool make pkg-config procps python3
           apt-get install -qy libprotobuf-c-dev zlib1g-dev
       - name: "Upgrade stack on old distributions"
         if: ${{ (matrix.os == 'ubuntu') && (matrix.version == '20.04') }}
@@ -150,7 +150,7 @@ jobs:
       - name: "Install build prerequisites"
         run: |
           apt-get update
-          apt-get install -qy automake autopoint bison bzip2 git gcc haskell-stack libtool make pkg-config procps python3
+          apt-get install -qy automake autopoint bison bzip2 curl git gcc haskell-stack libtool make pkg-config procps python3
           apt-get install -qy libprotobuf-c-dev zlib1g-dev
           apt-get install -qy bash-completion build-essential debhelper devscripts
       - name: "Build Debian packages"
@@ -163,7 +163,8 @@ jobs:
       - name: "Move deb files into place for easy artifact extraction"
         run: |
           mkdir -p ${{ steps.vars.outputs.debdir }}
-          mv ${{ steps.vars.outputs.debdir }}/../acton_* ${{ steps.vars.outputs.debdir }}/../acton-dbgsym_* ${{ steps.vars.outputs.debdir }}/
+          ls ${{ steps.vars.outputs.debdir }}/../
+          mv ${{ steps.vars.outputs.debdir }}/../acton_* ${{ steps.vars.outputs.debdir }}/
       - name: "Upload artifact"
         uses: actions/upload-artifact@v2
         with:

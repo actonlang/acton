@@ -61,6 +61,14 @@ import qualified System.Exit
 import qualified Paths_acton
 import Text.Printf
 
+#if defined(darwin_HOST_OS) && defined(aarch64_HOST_ARCH)
+ccTarget = " -target aarch64-macos-none "
+#elif defined(darwin_HOST_OS) && defined(x86_64_HOST_ARCH)
+ccTarget = " -target x86_64-macos-none "
+-- Linux? and what else? maybe split
+#else
+ccTarget = " -target x86_64-linux-gnu.2.28 "
+#endif
 
 main                     =  do arg <- C.parseCmdLine
                                case arg of
@@ -76,6 +84,11 @@ defaultOpts   = C.CompileOptions False False False False False False False False
 
 
 -- Auxiliary functions ---------------------------------------------------------------------------------------
+
+zig paths =
+    sysPath paths ++ "/zig/zig"
+cc paths = zig paths ++ " cc "
+ar paths = zig paths ++ " ar "
 
 dump h txt      = putStrLn ("\n\n#################################### " ++ h ++ ":\n" ++ txt)
 
@@ -119,7 +132,9 @@ getVer          = showVersion Paths_acton.version
 getVerExtra     = unwords ["compiled by", compilerName, showVersion compilerVersion, "on", os, arch]
 
 getCcVer        = do
-    verStr <- readProcess "cc" ["--version"] []
+    sysPath <- takeDirectory <$> System.Environment.getExecutablePath
+    zigPath <- canonicalizePath (sysPath ++ "/../zig/zig")
+    verStr <- readProcess zigPath ["version"] []
                 `catch` handleNoCc                    -- NOTE: the error is not handled (but actonc would terminate anyhow)
     return $ unwords $ take 1 $ lines verStr
   where handleNoCc :: IOException -> IO String
@@ -487,7 +502,7 @@ runCustomMake paths mn = do
         let roFile = makeRelative (projPath paths) oFile
             aFile = joinPath [projLib paths, "libActonProject.a"]
             makeCmd = "make " ++ roFile
-            arCmd = "ar rcs " ++ aFile ++ " " ++ oFile
+            arCmd = ar paths ++ " rcs " ++ aFile ++ " " ++ oFile
         (returnCode, makeStdout, makeStderr) <- readCreateProcessWithExitCode (shell $ makeCmd ++ " && " ++ arCmd){ cwd = Just (projPath paths) } ""
         case returnCode of
             ExitSuccess -> return()
@@ -626,7 +641,8 @@ runRestPasses opts paths env0 parsed stubMode = do
                               aFile = joinPath [projLib paths, "libActonProject.a"]
                               buildF = joinPath [projPath paths, "build.sh"]
                               wd = takeFileName (projPath paths)
-                              ccCmd = ("cc -Werror=return-type " ++ pedantArg ++
+                              ccCmd = (cc paths ++ ccTarget ++
+                                       " -Werror=return-type " ++ pedantArg ++
                                        (if (C.dev opts) then " -g " else "") ++
                                        " -c " ++
                                        " -isystem " ++ sysPath paths ++ "/include" ++
@@ -639,7 +655,7 @@ runRestPasses opts paths env0 parsed stubMode = do
                                        " -I" ++ sysPath paths ++ "/../deps/instdir/include" ++
                                        " -o" ++ oFile ++
                                        " " ++ makeRelative (takeDirectory (projPath paths)) cFile)
-                              arCmd = "ar rcs " ++ aFile ++ " " ++ oFile
+                              arCmd = ar paths ++ " rcs " ++ aFile ++ " " ++ oFile
                           writeFile hFile h
                           writeFile cFile c
                           iff (C.ccmd opts) $ do
@@ -719,7 +735,8 @@ buildExecutable env opts paths binTask
         binFile             = joinPath [binDir paths, (binName binTask)]
         srcbase             = srcFile paths mn
         pedantArg           = if (C.cpedantic opts) then "-Werror" else ""
-        ccCmd               = ("cc " ++ ccArgs ++ pedantArg ++
+        ccCmd               = (cc paths ++ ccTarget ++
+                               ccArgs ++ pedantArg ++
                                (if (C.dev opts) then " -g " else " -O3 ") ++
                                " -isystem " ++ sysPath paths ++ "/include" ++
                                " -I" ++ projOut paths ++
@@ -727,5 +744,5 @@ buildExecutable env opts paths binTask
                                " " ++ rootFile ++
                                " -o" ++ binFile ++
                                libPaths ++
-                               libFiles ++ "\n")
-
+                               libFiles ++
+                               "\n")

@@ -1,4 +1,5 @@
 TD:=$(shell dirname $(realpath ../$(firstword $(MAKEFILE_LIST))))
+CC=$(TD)/dist/zig/zig cc
 CFLAGS+= -L$(TD)/deps/instdir/lib -I$(TD)/deps/instdir/include -fno-common -I.. -I../dist -I../dist/include -L../lib -Wno-int-to-pointer-cast -Wno-pointer-to-int-cast -Wformat -Werror=format-security
 CFLAGS_REL= -O3 -DREL
 CFLAGS_DEV= -g -DDEV
