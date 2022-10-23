@@ -163,7 +163,8 @@ jobs:
       - name: "Move deb files into place for easy artifact extraction"
         run: |
           mkdir -p ${{ steps.vars.outputs.debdir }}
-          mv ${{ steps.vars.outputs.debdir }}/../acton_* ${{ steps.vars.outputs.debdir }}/../acton-dbgsym_* ${{ steps.vars.outputs.debdir }}/
+          ls ${{ steps.vars.outputs.debdir }}/../
+          mv ${{ steps.vars.outputs.debdir }}/../acton_* ${{ steps.vars.outputs.debdir }}/
       - name: "Upload artifact"
         uses: actions/upload-artifact@v2
         with:
