@@ -183,16 +183,16 @@ tSequenceListWild   = tCon (TC qnSequence [tList tWild, tWild])
 tCollectionListWild = tCon (TC qnCollection [tList tWild, tWild])
 
 
---  class $proc[R,T] (value):
---      __eval__    : proc(*R, $Cont[T]) -> $R                              -- TODO: move the $Cont param *first*
---      __exec__    : proc(*R, $Cont[value]) -> $R                          -- TODO: move the $Cont param *first*
+--  class $proc[R,T] (value):                                                                                   -- NB: only used CPS style
+--      __eval__    : proc(*R) -> T
+--      __exec__    : proc(*R) -> T
 clProc              = NClass [quant r, quant t] (leftpath [cValue]) te
-  where te          = [ (attr_eval_, NSig (monotype $ tFun fxProc (posRow (tVar r) (tCont (tVar t))) kwdNil tR) NoDec),
-                        (attr_exec_, NSig (monotype $ tFun fxProc (posRow (tVar r) (tCont tValue)) kwdNil tR) NoDec) ]
+  where te          = [ (attr_eval_, NSig (monotype $ tFun fxProc (tVar r) kwdNil (tVar t)) NoDec),
+                        (attr_exec_, NSig (monotype $ tFun fxProc (tVar r) kwdNil (tVar t)) NoDec) ]
         r           = TV PRow (name "R")
         t           = TV KType (name "T")
 
---  class $action[R,T] ($proc[R,T], value):
+--  class $action[R,T] ($proc[R,T], value):                                                                     -- TODO: Add continuation to $proc[R,T]
 --      __asyn__    : action(*R) -> T
 clAction            = NClass [quant r, quant t] (leftpath [ cProc (tVar r) (tVar t), cValue]) te
   where te          = [ (attr_asyn_, NSig (monotype $ tFun fxAction (tVar r) kwdNil (tVar t)) NoDec) ]
@@ -200,14 +200,14 @@ clAction            = NClass [quant r, quant t] (leftpath [ cProc (tVar r) (tVar
         t           = TV KType (name "T")
 
 
---  class $mut[R,T] ($proc[R,T], value):
+--  class $mut[R,T] ($proc[R,T], value):                                                                        -- TODO: Add continuation to $proc[R,T]
 --      __call__    : mut(*R) -> T
 clMut               = NClass [quant r, quant t] (leftpath [ cProc (tVar r) (tVar t), cValue]) te
   where te          = [ (attr_call_, NSig (monotype $ tFun fxMut (tVar r) kwdNil (tVar t)) NoDec) ]
         r           = TV PRow (name "R")
         t           = TV KType (name "T")
 
---  class $pure[R,T] ($mut[R,T], $proc[R,T], value):
+--  class $pure[R,T] ($mut[R,T], $proc[R,T], value):                                                            -- TODO: Add continuation to $proc[R,T]
 --      __call__    : pure(*R) -> T
 clPure              = NClass [quant r, quant t] (leftpath [ cMut (tVar r) (tVar t), cProc (tVar r) (tVar t), cValue]) te
   where te          = [ (attr_call_, NSig (monotype $ tFun fxPure (tVar r) kwdNil (tVar t)) NoDec) ]

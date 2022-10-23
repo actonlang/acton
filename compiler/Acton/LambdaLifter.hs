@@ -279,11 +279,11 @@ closureConvert env lambda t0 vts0 es    = do n <- newName (nstr $ noq basename)
         asynDef                         = mainDef attr_asyn_
         evalDefA                        = Def l0 attr_eval_ [] (parsC t1) KwdNIL (Just tR) evalBodyA NoDec fxProc
         evalBodyA                       = [ sReturn $ eCall (tApp (eQVar primAWAIT) [t1]) [methCall attr_asyn_, eVar llCont] ]
-        execDefA                        = delegate attr_exec_ attr_asyn_ tValue
+        execDefA                        = delegateC attr_exec_ attr_asyn_ tValue
         callDef                         = mainDef attr_call_
-        evalDefF                        = delegate attr_eval_ attr_call_ t1
-        execDefF                        = delegate attr_exec_ attr_call_ tValue
-        delegate name to tc             = Def l0 name [] (parsC tc) KwdNIL (Just tR) (delegateBody to tc) NoDec fxProc
+        evalDefF                        = delegateC attr_eval_ attr_call_ t1
+        execDefF                        = delegateC attr_exec_ attr_call_ tValue
+        delegateC name to tc            = Def l0 name [] (parsC tc) KwdNIL (Just tR) (delegateBody to tc) NoDec fxProc
         delegateBody to tc              = [ sReturn $ eCall (tApp (eQVar primRCont) [tValue]) [eVar llCont, methCall to] ]
         defs
           | basename == primCont        = [callDef]
