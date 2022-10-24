@@ -247,9 +247,6 @@ instance Deact Expr where
     deact env (Ellipsis l)          = return $ Ellipsis l
     deact env (Strings l s)         = return $ Strings l s
     deact env (BStrings l s)        = return $ BStrings l s
-    deact env (Call l (TApp _ (Var _ n) ts) (PosArg e PosNil) KwdNil)
-      | n == primEXEC,
-        isProcMeth env e            = deact env e
     deact env (Call l (TApp _ (Var _ n) ts) (PosArg self (PosArg e PosNil)) KwdNil)
       | n == primSEAL,
         Just n' <- sealedMeth env e = return $ Dot l (Var l (NoQ selfKW)) n'

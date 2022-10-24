@@ -208,6 +208,11 @@ llSuite env (s : ss)
 
 
 instance Lift Stmt where
+    ll env (Return l (Just (Call _ e p KwdNil)))
+      | closedType env e, fx == fxProc  = do e' <- llSub env e
+                                             p' <- ll env p
+                                             return $ Return l $ Just $ Call l (eDot e' attr_exec_) p' KwdNil
+      where TFun{effect = fx}           = typeOf env e
     ll env (Expr l e)                   = Expr l <$> ll env e
     ll env (Assign l pats e)            = Assign l <$> ll env pats <*> ll env e
     ll env (MutAssign l t e)            = MutAssign l <$> ll env t <*> ll env e
@@ -314,12 +319,6 @@ instance Lift Expr where
     ll env (Call l e p KwdNil)
       | Just (e',vts) <- freefun env e  = do p' <- ll env p
                                              return $ Call l e' (addArgs vts p') KwdNil
-      | Call _ (TApp _ (Var _ n) _) p1 KwdNil <- e,
-        n == primEXEC,
-        PosArg e' PosNil <- p1,
-        closedType env e'               = do e' <- ll env e'                              -- (closedType e' is reduntant, must be true!)
-                                             p' <- ll env p
-                                             return $ Call l (Dot l e' attr_exec_) p' KwdNil
       | Async _ e' <- e,
         closedType env e'               = do e' <- ll env e'
                                              p' <- ll env p

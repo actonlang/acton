@@ -109,7 +109,7 @@ transCall (Dot _ (Var _ n) m) ts [e1,e2]
   | n == primWrapPure,   m == attrWrap  = Just e2
 transCall (Dot _ (Var _ n) m) ts [e1]
   | n == primWrapProc,   m == attrEval  = Just e1
-  | n == primWrapProc,   m == attrExec  = Just $ eCall (tApp (eQVar primEXEC) ts) [e1]
+  | n == primWrapProc,   m == attrExec  = Just e1
   | n == primWrapAction, m == attrEval  = let [p,k,_] = ts
                                               ps = pPar pNames p
                                               ks = kPar kNames k

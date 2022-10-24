@@ -112,7 +112,6 @@ primWrapMut         = gPrim "wWrapMut"
 primWrapPure        = gPrim "wWrapPure"
 
 primSEAL            = gPrim "SEAL"
-primEXEC            = gPrim "EXEC"
 
 
 primEnv             = [     (noq primASYNCf,        NDef scASYNCf NoDec),
@@ -175,8 +174,7 @@ primEnv             = [     (noq primASYNCf,        NDef scASYNCf NoDec),
                             (noq primWrapProc,      NVar $ tWrapped fxProc fxProc),
                             (noq primWrapAction,    NVar $ tWrapped fxAction fxProc),
 
-                            (noq primSEAL,          NDef scSEAL NoDec),
-                            (noq primEXEC,          NDef scEXEC NoDec)
+                            (noq primSEAL,          NDef scSEAL NoDec)
                       ]
 
 tSequenceListWild   = tCon (TC qnSequence [tList tWild, tWild])
@@ -429,14 +427,6 @@ scSEAL              = tSchema [quant a, quant b, quant c] tWRAP
         abcFun fx   = tFun fx (tVar a) (tVar b) (tVar c)
         a           = TV KType (name "A")
         b           = TV KType (name "B")
-        c           = TV KType (name "C")
-
---  $EXEC           : [A,B,C] => (proc(*A,**B)->C) -> proc(*A,**B)->value
-scEXEC              = tSchema [quant a, quant b, quant c] tEXEC
-  where tEXEC       = tFun0 [procFun $ tVar c] (procFun tValue)
-        procFun c   = tFun fxProc (tVar a) (tVar b) c
-        a           = TV PRow (name "A")
-        b           = TV KRow (name "B")
         c           = TV KType (name "C")
 
 --  protocol $Wrapped[X]: pass
