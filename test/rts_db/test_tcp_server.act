@@ -119,7 +119,7 @@ actor Tester(env, verbose, port_chunk):
     def dbc_start():
         for i in range(0, 3, 1):
             port = port_chunk + (2*i)
-            cmd = ["../dist/bin/actondb", "-p", str(port)]
+            cmd = ["../dist/bin/actondb", "-p", str(port), "-s", "127.0.0.1:" + str(port_chunk+1)]
             p = process.Process(process_auth, cmd, None, None, on_stdout, on_stderr, db_on_exit, on_error)
             p_alive += 1
             ps.append(p)
