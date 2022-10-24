@@ -79,6 +79,7 @@ $(error "Unsupported architecture for Linux?")
 endif
 endif # -- END: Linux ----------------------------------------------------------
 CFLAGS_DEPS=$(CFLAGS_TARGET)
+CFLAGS+=$(CFLAGS_TARGET)
 export CFLAGS
 export LDFLAGS
 
@@ -230,7 +231,7 @@ ACTONC_HS=$(filter-out $(ACTONC_TEST_HS),$(ACTONC_ALL_HS))
 # NOTE: we're unsetting CC to avoid using zig cc for stack / ghc, which doesn't
 # seem to work properly
 compiler/actonc: compiler/package.yaml.in compiler/stack.yaml $(ACTONC_HS)
-	cd compiler && unset CC && stack build --dry-run 2>&1 | grep "Nothing to build" || \
+	cd compiler && unset CC && unset CFLAGS && stack build --dry-run 2>&1 | grep "Nothing to build" || \
 		(sed 's,^version:.*,version:      "$(VERSION_INFO)",' < package.yaml.in > package.yaml \
 		&& stack build --ghc-options -j4 \
 		&& stack --local-bin-path=. install 2>/dev/null)
@@ -267,9 +268,14 @@ DEP_LIBS+=deps/instdir/lib/libuuid.a
 DEP_LIBS+=deps/instdir/lib/libuv.a
 DEP_LIBS+=deps/instdir/lib/libxml2.a
 
-lib/libActonDeps.a: $(DEP_LIBS)
+
+deps/instdir/include/protobuf-c:
+	mkdir -p $(dir $@)
+	cp -av $$(realpath /usr/include/protobuf-c /usr/local/include/protobuf-c /opt/homebrew/include/protobuf-c 2>/dev/null | head -n1) $@
+
+lib/libActonDeps.a: $(DEP_LIBS) deps/instdir/include/protobuf-c
 	mkdir -p lib_deps
-	for LIB in $^; do \
+	for LIB in $(DEP_LIBS); do \
 		LIBNAME=$$(basename $${LIB} .a); \
 		mkdir -p lib_deps/$${LIBNAME}; \
 		$$(cd lib_deps/$${LIBNAME} && ar x $(TD)/$${LIB}); \
