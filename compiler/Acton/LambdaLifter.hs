@@ -208,10 +208,16 @@ llSuite env (s : ss)
 
 
 instance Lift Stmt where
-    ll env (Return l (Just (Call _ e p KwdNil)))
-      | closedType env e, fx == fxProc  = do e' <- llSub env e
+    ll env (Return l (Just (Call _ e p KwdNil)))                        -- For a CPS converted proc
+      | closedType env e,
+        fx == fxProc, t == tR           = do e' <- llSub env e
                                              p' <- ll env p
                                              return $ Return l $ Just $ Call l (eDot e' attr_exec_) p' KwdNil
+      where TFun _ fx _ _ t             = typeOf env e
+    ll env (Expr l (Call _ e p KwdNil))                                 -- In case a proc isn't CPS converted
+      | closedType env e, fx == fxProc  = do e' <- llSub env e
+                                             p' <- ll env p
+                                             return $ Expr l $ Call l (eDot e' attr_exec_) p' KwdNil
       where TFun{effect = fx}           = typeOf env e
     ll env (Expr l e)                   = Expr l <$> ll env e
     ll env (Assign l pats e)            = Assign l <$> ll env pats <*> ll env e

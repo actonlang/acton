@@ -93,6 +93,9 @@ deactSuite env (s : ss)             = do s' <- deact (setSampled ns env) s
 instance Deact Stmt where
     deact env s@(Expr _ (NotImplemented _))
                                     = return s
+    deact env (Expr l (Call l' e p KwdNil))
+      | fx == fxAction              = Expr l <$> (Call l' <$> deact env (eAsync e) <*> deact env p <*> pure KwdNil)
+      where TFun{effect=fx}         = typeOf env e
     deact env (Expr l e)            = Expr l <$> deact env e
     deact env (Assign l [p@(PVar _ n _)] e)
       | n `elem` locals env         = MutAssign l (selfRef n) <$> deact env e
@@ -256,12 +259,15 @@ instance Deact Expr where
                                          return $ Lambda l0 ps KwdNIL (eCall (tApp (eQVar primASYNCf) [t]) [self,lam]) fxAction
       where TFun _ fx p _ t         = typeOf env e
             ps                      = pPar paramNames' p
-    deact env (Call l e as KwdNil)  = do e <- deact env e
+    deact env (Call l e as KwdNil)
+      | fx == fxAction              = deact env (eAwait $ Call l (eAsync e) as KwdNil)
+      | otherwise                   = do e <- deact env e
                                          as <- deact env as
                                          case e of
                                             Lambda _ ps KwdNIL e' _ | Just s <- pzip ps as ->
                                                  return $ termsubst s e'
                                             _ -> return $ Call l e as KwdNil
+      where TFun{effect=fx}         = typeOf env e
     deact env (TApp l e ts)         = TApp l <$> deact env e <*> pure ts
     deact env (Cond l e1 e e2)      = Cond l <$> deact env e1 <*> deact env e <*> deact env e2
     deact env (IsInstance l e c)    = IsInstance l <$> deact env e <*> return c
