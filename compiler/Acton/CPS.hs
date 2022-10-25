@@ -339,8 +339,6 @@ hbody env x hs                          = do bs <- mapM h hs
 
 kDef env k p b                          = sDef k (conv p) tR b fxProc
 
-fxCall env test (Call _ (TApp _ (Var _ n) _) p k)
-  | n `elem` primNoCont                 = False
 fxCall env test (Call _ Async{} p k)    = False
 fxCall env test (Call _ e p k)          = test fx
   where TFun _ fx _ _ _                 = typeOf env e
@@ -349,8 +347,6 @@ fxCall env test e                       = False
 contCall env e                          = fxCall env contFX e
 
 mutCall env e                           = fxCall env mutFX e
-
-primNoCont                              = [primASYNCf, primAFTERf]
 
 contFX (TFX _ FXProc)                   = True
 contFX _                                = False
