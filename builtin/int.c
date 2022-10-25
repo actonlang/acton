@@ -65,16 +65,37 @@ void $int_init($int self, $atom a){
     self->val = $int$new(a)->val;
 }
 
-void $int_serialize($int n,$Serial$state state) {
-    //  $val_serialize(INT_ID,&n->val,state);            !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+void $int_serialize($int self,$Serial$state state) {
+    $int prevkey = ($int)$dict_get(state->done,($Hashable)$Hashable$WORD$witness,self,NULL);
+    if (prevkey) {
+        long pk = from$int(prevkey);
+        $val_serialize(-INT_ID,&pk,state);
+        return;
+    }
+    int blobsize = 1 + labs(self->val->size);
+    $ROW row = $add_header(INT_ID,blobsize,state);
+    row->blob[0] = ($WORD)self->val->size;
+    memcpy(&row->blob[1],self->val->n,labs(self->val->size)*sizeof(long));
 }
 
-$int $int_deserialize($int n,$Serial$state state) {
-    // return to$i64((long)$val_deserialize(state));
-    zz_ptr val = malloc(sizeof(zz_struct));
-    zz_init(val);
-    zz_seti(val,0);
-    return zz$to$int(val);
+$int $int_deserialize($int res,$Serial$state state) {
+    $ROW this = state->row;
+    state->row = this->next;
+    state->row_no++;
+    if (this->class_id < 0) {
+        return ($int)$dict_get(state->done,($Hashable)$Hashable$int$witness,to$int((int)this->blob[0]),NULL);
+    } else {
+        if (!res)
+            res = malloc(sizeof($int));
+        res->val = malloc(sizeof(zz_struct));
+        res->val->size = (long)this->blob[0];
+        res->val->alloc = labs(res->val->size);
+        res->val->n = malloc(res->val->alloc*sizeof(long));
+        memcpy(res->val->n,&this->blob[1],res->val->alloc*sizeof(long));
+        $dict_setitem(state->done,($Hashable)$Hashable$int$witness,to$int(state->row_no-1),res);
+        res->$class = &$int$methods;
+        return res;
+    }
 }
 
 $bool $int_bool($int n) {

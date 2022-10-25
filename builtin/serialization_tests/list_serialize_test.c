@@ -12,6 +12,9 @@
  * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
+
+// gcc -g list_serialize_test.c -L../../deps/instdir/lib -L../../lib/dev -I../../deps/instdir/include -lbsdnt -lActon -lutf8proc
+
 #include "../builtin.h"
 #include "../list_impl.h"
 #include <stdio.h>
@@ -31,11 +34,12 @@ int main() {
       $list_append(lst2,sublst);
     }
   }
-  $ROW row = $serialize(($Serializable)lst2);
-  $write_serialized(row,"test2.bin");
+  $print(1,lst2);
+  $ROW row = $serialize(($Serializable)lst2,NULL);
+  //  $write_serialized(row,"test2.bin");
   $list lst3 = ($list)$deserialize(row, NULL);
-  $ROW row2 = $read_serialized("test2.bin");
-  $write_serialized(row2,"test3.bin");
-  $list lst0 = $list_getitem(lst3,4);
+  //  $ROW row2 = $read_serialized("test2.bin");
+  // $write_serialized(row2,"test3.bin");
+  // $list lst0 = $list_getitem(lst3,4);
   $print(1,lst3);
 }

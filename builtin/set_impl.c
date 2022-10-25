@@ -71,7 +71,8 @@ $str $set_str($set self) {
 void $set_serialize($set self, $Serial$state state) {
     $int prevkey = ($int)$dict_get(state->done,($Hashable)$Hashable$WORD$witness,self,NULL);
     if (prevkey) {
-        $val_serialize(-SET_ID,&prevkey->val,state);
+        long pk = from$int(prevkey);
+        $val_serialize(-SET_ID,&pk,state);
         return;
     }
     $dict_setitem(state->done,($Hashable)$Hashable$WORD$witness,self,to$int(state->row_no));
