@@ -269,17 +269,16 @@ closureConvert env lambda t0 vts0 es    = do n <- newName (nstr $ noq basename)
         s                               = selfSubst env
         Lambda _ p _ e fx               = subst s lambda
         t1                              = subst s t0
-        p'                              = prowOf p
-        cBase                           = closureCon fx p' t1
+        cBase                           = conv $ closureCon fx (prowOf p) t1
         basename                        = tcname cBase
         bases                           = map snd $ findAncestry env cBase
-        vts                             = subst s vts0
+        vts                             = conv $ subst s vts0
         body                            = props ++ [Decl l0 [initDef], Decl l0 defs]
         props                           = [ Signature l0 [v] (monotype t) Property | (v,t) <- subst s vts ]
         initDef                         = Def l0 initKW [] initPars KwdNIL (Just tNone) (initBody++[sReturn eNone]) NoDec fxPure
         initPars                        = PosPar llSelf (Just tSelf) Nothing $ pospar vts
         initBody                        = mkBody [ MutAssign l0 (eDot (eVar llSelf) v) (eVar v) | (v,t) <- vts ]
-        mainDef attr                    = Def l0 attr [] pars KwdNIL (Just t1) mainBody NoDec fx
+        mainDef attr                    = Def l0 attr [] pars KwdNIL (Just $ conv t1) mainBody NoDec fx
         pars                            = PosPar llSelf (Just tSelf) Nothing p
         args                            = pArg p
         methCall to                     = eCallP (eDot (eVar llSelf) to) args
@@ -307,11 +306,18 @@ addContPar PosNIL t                     = PosPar llCont (Just $ tCont t) Nothing
 addContPar (PosPar n a Nothing p) t     = PosPar n a Nothing (addContPar p t)
 
 closureCon fx p t
-  | t == tR, TRow _ _ _ x TNil{} <- p   = TC primCont [x]
+  | isCont (tFun fx p kwdNil t)         = TC primCont [rtype p]
+--  | fx == fxProc                        = TC primProc [rtail p, contArg (rtype p)]
   | fx == fxProc                        = TC primProc [p,t]
   | fx == fxAction                      = TC primAction [p,t]
   | fx == fxMut                         = TC primMut [p,t]
   | fx == fxPure                        = TC primPure [p,t]
+
+
+isCont (TFun _ fx p@TRow{} _ r)         = fx == fxProc && r == tR && rtail p == posNil && not (isCont $ rtype p)
+isCont _                                = False
+
+contArg (TFun _ fx p _ r)               = rtype p
 
 instance Lift Expr where
     ll env e@(Var l (NoQ n))
