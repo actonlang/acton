@@ -28,6 +28,11 @@
 #include <time.h>
 #include <stdlib.h>
 
+#include <sys/wait.h>
+#ifdef __linux__
+#include <sys/prctl.h>
+#endif
+
 #include <uv.h>
 
 #include "yyjson.h"
@@ -41,6 +46,8 @@
 
 #include "../backend/client_api.h"
 #include "../backend/fastrand.h"
+
+struct sigaction sa_ill, sa_int, sa_pipe, sa_segv, sa_term;
 
 extern struct dbc_stat dbc_stats;
 
@@ -1981,6 +1988,63 @@ void rts_shutdown() {
 }
 
 
+void print_trace() {
+    char pid_buf[30];
+    sprintf(pid_buf, "%d", getpid());
+    char name_buf[512];
+    name_buf[readlink("/proc/self/exe", name_buf, 511)]=0;
+#ifdef __linux__
+    prctl(PR_SET_PTRACER, PR_SET_PTRACER_ANY, 0, 0, 0);
+#endif
+    int child_pid = fork();
+    if (!child_pid) {
+        dup2(2, 1); // redirect output to stderr
+        // TODO: enable using LLDB for MacOS support
+        //execlp("lldb", "lldb", "-p", pid_buf, "--batch", "-o", "thread backtrace all", "-o", "exit", "--one-line-on-crash", "exit", name_buf, NULL);
+        execlp("gdb", "gdb", "--batch", "-n", "-ex", "thread", "-ex", "thread apply all backtrace full", name_buf, pid_buf, NULL);
+        fprintf(stderr, "Unable to get detailed backtrace using lldb or gdb");
+        exit(0); /* If lldb/gdb failed to start */
+    } else {
+        waitpid(child_pid, NULL, 0);
+    }
+}
+
+void sigillsegv_handler(int signum) {
+    if (signum == SIGILL)
+        fprintf(stderr, "\nERROR: illegal instruction\n");
+    if (signum == SIGSEGV)
+        fprintf(stderr, "\nERROR: segmentation fault\n");
+    fprintf(stderr, "NOTE: this is likely a bug in acton, please report this at:\n");
+    fprintf(stderr, "NOTE: https://github.com/actonlang/acton/issues/new\n");
+    fprintf(stderr, "NOTE: include the backtrace printed below between -- 8< -- lines\n");
+
+    fprintf(stderr, "\n-- 8< --------- BACKTRACE --------------------\n");
+    print_trace();
+    fprintf(stderr, "\n-- 8< --------- END BACKTRACE ----------------\n");
+
+    if (signum == SIGILL)
+        fprintf(stderr, "\nERROR: illegal instruction\n");
+    if (signum == SIGSEGV)
+        fprintf(stderr, "\nERROR: segmentation fault\n");
+    fprintf(stderr, "NOTE: this is likely a bug in acton, please report this at:\n");
+    fprintf(stderr, "NOTE: https://github.com/actonlang/acton/issues/new\n");
+    fprintf(stderr, "NOTE: include the backtrace printed above between -- 8< -- lines\n");
+
+    // Restore / uninstall signal handlers for SIGILL & SIGSEGV
+    sa_ill.sa_handler = NULL;
+    if (sigaction(SIGILL, &sa_ill, NULL) == -1) {
+        log_fatal("Failed to install signal handler for SIGILL: %s", strerror(errno));
+        exit(1);
+    }
+    sa_segv.sa_handler = NULL;
+    if (sigaction(SIGSEGV, &sa_segv, NULL) == -1) {
+        log_fatal("Failed to install signal handler for SIGSEGV: %s", strerror(errno));
+        exit(1);
+    }
+    // Kill ourselves with original signal sent to us
+    kill(getpid(), signum);
+}
+
 void sigint_handler(int signum) {
     if (rts_exit == 0) {
         log_info("Received SIGINT, shutting down gracefully...");
@@ -2062,27 +2126,40 @@ int main(int argc, char **argv) {
     setlinebuf(stdout);
 
     // Signal handling
-    struct sigaction sa_int, sa_pipe, sa_term;
+    sigfillset(&sa_ill.sa_mask);
     sigfillset(&sa_int.sa_mask);
     sigfillset(&sa_pipe.sa_mask);
+    sigfillset(&sa_segv.sa_mask);
     sigfillset(&sa_term.sa_mask);
+    sa_ill.sa_flags = SA_RESTART;
     sa_int.sa_flags = SA_RESTART;
     sa_pipe.sa_flags = SA_RESTART;
+    sa_segv.sa_flags = SA_RESTART;
     sa_term.sa_flags = SA_RESTART;
 
     // Ignore SIGPIPE, like we get if the other end talking to us on the Monitor
     // socket (which is a Unix domain socket) goes away.
     sa_pipe.sa_handler = SIG_IGN;
-    // Handle SIGINT & SIGTERM
+    // Handle signals
+    sa_ill.sa_handler = &sigillsegv_handler;
     sa_int.sa_handler = &sigint_handler;
+    sa_segv.sa_handler = &sigillsegv_handler;
     sa_term.sa_handler = &sigterm_handler;
 
     if (sigaction(SIGPIPE, &sa_pipe, NULL) == -1) {
         log_fatal("Failed to install signal handler for SIGPIPE: %s", strerror(errno));
         exit(1);
     }
+    if (sigaction(SIGILL, &sa_ill, NULL) == -1) {
+        log_fatal("Failed to install signal handler for SIGILL: %s", strerror(errno));
+        exit(1);
+    }
     if (sigaction(SIGINT, &sa_int, NULL) == -1) {
         log_fatal("Failed to install signal handler for SIGINT: %s", strerror(errno));
+        exit(1);
+    }
+    if (sigaction(SIGSEGV, &sa_segv, NULL) == -1) {
+        log_fatal("Failed to install signal handler for SIGSEGV: %s", strerror(errno));
         exit(1);
     }
     if (sigaction(SIGTERM, &sa_term, NULL) == -1) {
