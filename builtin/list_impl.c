@@ -135,10 +135,10 @@ $list $list_add($list lst, $list other) {
 
 $list $list_mul($list lst, $int n) {
     int lstlen = lst->length;
-    if (n->val <= 0)
+    if (n->val.size <= 0)
         return $list_new(0);
     else {
-        int n64 =  from$int(n);
+        long n64 =  from$int(n);
         $list res = $list_new(lstlen * n64);
         for (int i=0; i<n64; i++)
             memcpy(res->data + i*lstlen, lst->data, lstlen * sizeof($WORD));

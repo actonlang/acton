@@ -26,11 +26,11 @@ long longpow(long a, long e) {
 
 $i64 $i64$new($atom a) {
   if ($ISINSTANCE(a,$int)->val){
-    zz_ptr n = (($int)a)-> val;
-    if (labs(n->size)>1) {
+    zz_struct n = (($int)a)-> val;
+    if (n.n[0] > LONG_MAX || (labs(n.size))>1) {
       $RAISE(($BaseException)$NEW($ValueError,to$str("i64(): int argument out of range")));
     }
-    return to$i64(n->size*n->n[0]);
+    return to$i64(n.size*n.n[0]);
   }
   if ($ISINSTANCE(a,$i64)->val) return ($i64)a;
   if ($ISINSTANCE(a,$float)->val) return to$i64(round((($float)a)->val));

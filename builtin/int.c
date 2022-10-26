@@ -24,6 +24,16 @@
 
 // General methods ///////////////////////////////////////////////////////////////////////
 
+$int $malloc$int() {
+    $int res = malloc(sizeof(struct $int));
+    res->$class = &$int$methods;
+    res->val.n = malloc(sizeof(unsigned long));
+    res->val.size = 0;
+    res->val.alloc = 1;
+    return res;
+}
+
+
 $int $int$new($atom a) {
     if ($ISINSTANCE(a,$int)->val) return ($int)a;
     if ($ISINSTANCE(a,$i64)->val) {
@@ -31,33 +41,29 @@ $int $int$new($atom a) {
     }
     if ($ISINSTANCE(a,$float)->val) {
         double aval = (($float)a)->val;
-        zz_ptr res = malloc(sizeof(zz_struct));
-        zz_init(res);
         int e;
         double m = frexp(aval,&e);
         if (e>52) {
-            long x = (long)(m*4503599627370496.0); // (1<< 52); 
-            zz_seti(res,x);
-            $int c = zz$to$int(res);
+            $int c = to$int((long)(m*4503599627370496.0)); // (1<< 52); 
             $int d = to$int(e-52);
             return  $Integral$int$__lshift__(NULL,c,d);
         } else {
-            long x = (long)aval;
-            zz_seti(res,x);
-            return zz$to$int(res);
+            long al = (long)aval;
+            $int res = to$int(al);
+            return res;
         }
     }
     if ($ISINSTANCE(a,$bool)->val) return to$int((($bool)a)->val);
     if ($ISINSTANCE(a,$str)->val) {
-        zz_ptr val = malloc(sizeof(zz_struct));
-        zz_init(val);
-        int digits = zz_set_str(val,(char *)(($str)a)->str);
+        $int res = $malloc$int();
+        res->$class = &$int$methods;
+        int digits = zz_set_str(&(res->val),(char *)(($str)a)->str);
         if (digits>0)
-            return zz$to$int(val);
+            return res;
         else 
             $RAISE(($BaseException)$NEW($ValueError,to$str("int(): invalid str value for type int")));
     }
-    fprintf(stderr,"internal error: $i64$new: argument not of atomic type");
+    fprintf(stderr,"internal error: $int$new: argument not of atomic type\n");
     exit(-1);
 }
 
@@ -72,10 +78,10 @@ void $int_serialize($int self,$Serial$state state) {
         $val_serialize(-INT_ID,&pk,state);
         return;
     }
-    int blobsize = 1 + labs(self->val->size);
+    int blobsize = 1 + labs(self->val.size);
     $ROW row = $add_header(INT_ID,blobsize,state);
-    row->blob[0] = ($WORD)self->val->size;
-    memcpy(&row->blob[1],self->val->n,labs(self->val->size)*sizeof(long));
+    row->blob[0] = ($WORD)self->val.size;
+    memcpy(&row->blob[1],self->val.n,labs(self->val.size)*sizeof(long));
 }
 
 $int $int_deserialize($int res,$Serial$state state) {
@@ -86,12 +92,11 @@ $int $int_deserialize($int res,$Serial$state state) {
         return ($int)$dict_get(state->done,($Hashable)$Hashable$int$witness,to$int((int)this->blob[0]),NULL);
     } else {
         if (!res)
-            res = malloc(sizeof($int));
-        res->val = malloc(sizeof(zz_struct));
-        res->val->size = (long)this->blob[0];
-        res->val->alloc = labs(res->val->size);
-        res->val->n = malloc(res->val->alloc*sizeof(long));
-        memcpy(res->val->n,&this->blob[1],res->val->alloc*sizeof(long));
+            res = $malloc$int();
+        res->val.size = (long)this->blob[0];
+        res->val.alloc = labs(res->val.size);
+        res->val.n = malloc(res->val.alloc*sizeof(long));
+        memcpy(res->val.n,&this->blob[1],res->val.alloc*sizeof(long));
         $dict_setitem(state->done,($Hashable)$Hashable$int$witness,to$int(state->row_no-1),res);
         res->$class = &$int$methods;
         return res;
@@ -99,11 +104,11 @@ $int $int_deserialize($int res,$Serial$state state) {
 }
 
 $bool $int_bool($int n) {
-    return to$bool(zz_cmpi(n->val,0));
+    return to$bool(zz_cmpi(&n->val,0));
 }
 
 $str $int_str($int n) {
-    return to$str(zz_get_str(n->val));
+    return to$str(zz_get_str(&n->val));
 }
   
 struct $int$class $int$methods = {
@@ -118,12 +123,12 @@ struct $int$class $int$methods = {
     $int_str
 };
 
-$int zz$to$int(zz_ptr n) {
-    $int res = malloc(sizeof(struct $int));
-    res->$class = &$int$methods;
-    res->val = n;
-    return res;
-}
+//$int zz$to$int(zz_ptr n) {
+//    $int res = $malloc$int();
+//    res->$class = &$int$methods;
+//    res->val = n;
+//    return res;
+//}
 
 // $Integral$int /////////////////////////////////////////////////////////////////////////
 
@@ -140,14 +145,13 @@ $Integral$int $Integral$int$__deserialize__($Integral$int self, $Serial$state st
 }
 
 $int $Integral$int$__add__($Integral$int wit,  $int a, $int b) {
-    zz_ptr res = malloc(sizeof(zz_struct));
-    zz_init(res);
-    zz_add(res,a->val,b->val);
-    return zz$to$int(res);
+    $int res = $malloc$int();
+    zz_add(&res->val,&a->val,&b->val);
+    return res;
 }
 
 $int $Integral$int$__iadd__($Integral$int wit,  $int a, $int b) {
-    zz_add(a->val,a->val,b->val);
+    zz_add(&a->val,&a->val,&b->val);
     return a;
 }  
 
@@ -161,34 +165,31 @@ $int $Integral$int$__fromatom__($Integral$int wit, $atom a) {
 }
 
 $int $Integral$int$__mul__($Integral$int wit,  $int a, $int b) {
-    zz_ptr res = malloc(sizeof(zz_struct));
-    zz_init(res);
-    zz_mul(res,a->val,b->val);
-    return zz$to$int(res);
+    $int res = $malloc$int();
+    zz_mul(&res->val,&a->val,&b->val);
+    return res;
 }  
   
 $int $Integral$int$__imul__($Integral$int wit,  $int a, $int b) {
-    zz_mul(a->val,a->val,b->val);
+    zz_mul(&a->val,&a->val,&b->val);
     return a;
 }  
 
 $int $Integral$int$__pow__($Integral$int wit, $int a, $int b) {
-    zz_ptr val_b = b->val;
+    zz_ptr val_b = &b->val;
     if (zz_cmpi(val_b,0) < 0)
         $RAISE(($BaseException)$NEW($ValueError,to$str("__pow__: exponent negative")));
     if (zz_cmpi(val_b,LONG_MAX) > 0)
         $RAISE(($BaseException)$NEW($ValueError,to$str("__pow__: exponent out of range (> LONG_MAX)")));
-    zz_ptr res = malloc(sizeof(zz_struct));
-    zz_init(res);
-    zz_powi(res,a->val,val_b->n[0]); // __pow__ should have an int64 exponent in the Acton protocol
-    return zz$to$int(res);
+    $int res = $malloc$int();
+    zz_powi(&res->val,&a->val,val_b->n[0]); // __pow__ should have an int64 exponent in the Acton protocol
+    return res;
 }
 
 $int $Integral$int$__neg__($Integral$int wit,  $int a) {
-    zz_ptr res = malloc(sizeof(zz_struct));
-    zz_init(res);
-    zz_neg(res,a->val);
-    return zz$to$int(res);
+    $int res = $malloc$int();
+    zz_neg(&res->val,&a->val);
+    return res;
 }
 
 $int $Integral$int$__pos__($Integral$int wit,  $int a) {
@@ -206,11 +207,10 @@ $WORD $Integral$int$imag($Integral$int wit, $int a, $Real wit2) {
 }
 
 $WORD $Integral$int$__abs__($Integral$int wit, $int a, $Real wit2) {
-    zz_ptr res = malloc(sizeof(zz_struct));
-    zz_init(res);
-    zz_set(res,a->val);
-    res->size = labs(a->val->size);
-    return wit2->$class->__fromatom__(wit2,($atom)zz$to$int(res));
+    $int res = $malloc$int();
+    zz_set(&res->val,&a->val);
+    res->val.size = labs(a->val.size);
+    return wit2->$class->__fromatom__(wit2,($atom)res);
 }
 
 $int $Integral$int$__conjugate__($Integral$int wit,  $int a) {
@@ -234,33 +234,21 @@ $WORD $Integral$int$__ceil__ ($Integral$int wit, $int n, $Integral wit2) {
 }
   
 $int $Integral$int$__round__ ($Integral$int wit, $int n, $int p) {
-    zz_ptr nval = n->val;
-    if (zz_cmpi(nval,0)<0) {
-        zz_ptr n1 = malloc(sizeof(zz_struct));
-        zz_init(n1);
-        zz_neg(n1,nval);
-        zz_ptr negrel =  $Integral$int$__round__ (wit,zz$to$int(n1),p)->val;
-        zz_neg(negrel,negrel);
-        return zz$to$int(negrel);
+    zz_struct nval = n->val;
+    if (nval.size < 0) {
+        $int n1 = $malloc$int();
+        zz_neg(&n1->val,&nval);
+        $int res = $Integral$int$__round__(wit,n1,p);
+        zz_neg(&res->val,&res->val);
+        return res;
     }
-    if (zz_cmpi(p->val,-LONG_MAX) < 0)
+    if (labs(p->val.size) >1)
         $RAISE(($BaseException)$NEW($ValueError,to$str("__round__: precision out of range")));
-    long pval = p==NULL ? 0 : p->val->n[0];
+    long pval = from$int(p);
     if (pval>=0)
         return n;
-    zz_ptr ten;
-    zz_init(ten);
-    zz_seti(ten,10);
-    zz_ptr p10 = malloc(sizeof(zz_struct));
-    zz_init(p10);
-    zz_powi(p10,ten,-pval);
-    zz_ptr q = malloc(sizeof(zz_struct));
-    zz_ptr r = malloc(sizeof(zz_struct));
-    zz_init(q);
-    zz_init(r);
-    zz_divrem(q,r,n->val,p10);
-    zz_mul(q,q,p10);
-    return zz$to$int(q);  // TODO: Ensure correct rounding: if r*2 > p10, add 1 to q before final multiplication
+    $int p10 = $Integral$int$__pow__(NULL,to$int(10), $Integral$int$__neg__(NULL,p));
+    return $Integral$int$__mul__(NULL,n,p10);
 }
   
 $WORD $Integral$int$numerator ($Integral$int wit, $int n, $Integral wit2) {
@@ -268,10 +256,8 @@ $WORD $Integral$int$numerator ($Integral$int wit, $int n, $Integral wit2) {
 }
   
 $WORD $Integral$int$denominator ($Integral$int wit, $int n, $Integral wit2) {
-    zz_ptr res = malloc(sizeof(zz_struct));
-    zz_init(res);
-    zz_seti(res,1L);
-    return wit2->$class->__fromatom__(wit2,($atom)zz$to$int(res));
+    $int res = to$int(1L);
+    return wit2->$class->__fromatom__(wit2,($atom)res);
 }
   
 $int $Integral$int$__int__ ($Integral$int wit, $int n) {
@@ -283,86 +269,81 @@ $int $Integral$int$__index__($Integral$int wit, $int n) {
 }
 
 $tuple $Integral$int$__divmod__($Integral$int wit, $int a, $int b) {
-    zz_ptr q = malloc(sizeof(zz_struct));
-    zz_ptr r = malloc(sizeof(zz_struct));
-    zz_init(q);
-    zz_init(r);
-    zz_divrem(q,r,a->val,b->val);
-    return $NEWTUPLE(2, zz$to$int(q), zz$to$int(r));
+    $int q = $malloc$int();
+    $int r = $malloc$int();
+    zz_divrem(&q->val,&r->val,&a->val,&b->val);
+    return $NEWTUPLE(2, q, r);
 }
 
 $int $Integral$int$__floordiv__($Integral$int wit, $int a, $int b) {
-    zz_ptr res = malloc(sizeof(zz_struct));
-    zz_init(res);
-    zz_div(res,a->val, b->val);
-    return zz$to$int(res);
+    $int res = $malloc$int();
+    zz_div(&res->val,&a->val,&b->val);
+    return res;
 }
 
 $int $Integral$int$__mod__($Integral$int wit, $int a, $int b) {
-    zz_ptr q = malloc(sizeof(zz_struct));
-    zz_init(q);
-    zz_ptr r = malloc(sizeof(zz_struct));
-    zz_init(r);
-    zz_divrem(q,r,a->val,b->val);
-    return zz$to$int(r);
+    $tuple t = $Integral$int$__divmod__(wit,a,b);
+    return t->components[1];
 }
 
 $int $Integral$int$__lshift__($Integral$int wit,  $int a, $int b) {
-    zz_ptr aval = a->val;
-    long ma = aval->size;
+    zz_struct aval = a->val;
+    long ma = aval.size;
     long bval = from$int(b);
     if (ma==0 || bval==0)
         return a;
     if (bval<0)
         $RAISE(($BaseException)$NEW($ValueError,to$str("__lshift: negative shift count")));
-    zz_ptr res = malloc(sizeof(zz_struct));
     long shw = bval/64;
     long shb = bval%64;
     long mres = labs(ma) + shw + (shb > 0);
-    zz_init_fit(res,mres);
+    $int res = $malloc$int();
+    zz_ptr rval = &res->val;
+    zz_init_fit(rval,mres);
     if (shb>0) {
-        word_t ci = nn_shl(res->n, aval->n, labs(ma), shb);
+        word_t ci = nn_shl(rval->n, aval.n, labs(ma), shb);
         if (ci>0)
-            res->n[labs(ma)] = ci;
+            rval->n[labs(ma)] = ci;
     }
     if (shw>0) {
         for (int i = labs(ma); i >= 0; i--)
-            res->n[i+shw] = res->n[i];
+            rval->n[i+shw] = rval->n[i];
         for (int i = 0; i < shw; i++)
-            res->n[i] = 0;
+            rval->n[i] = 0;
     }
-    mres = mres - (res->n[mres-1]==0);
+    mres = mres - (rval->n[mres-1]==0);
     mres = ma<0? -mres:mres;
-    res->size = mres;
-    return zz$to$int(res); 
+    rval->size = mres;
+    return res; 
 }
 
 $int $Integral$int$__rshift__($Integral$int wit,  $int a, $int b) {
-    zz_ptr aval = a->val;
-    long ma = aval->size;
+    zz_struct aval = a->val;
+    long ma = aval.size;
     long bval = from$int(b);
     if (ma==0 || bval==0)
         return a;
     if (bval<0)
         $RAISE(($BaseException)$NEW($ValueError,to$str("__rshift: negative shift count")));
-    zz_ptr res = malloc(sizeof(zz_struct));
+    $int res = $malloc$int();
+    zz_ptr rval = &res->val;
     long shw = bval/64;
     long shb = bval%64;
     long mres = labs(ma) - shw;
-    zz_init_fit(res,mres);
+    zz_init_fit(rval,mres);
     unsigned long tmp[mres];
     for (int i = 0; i < mres; i++)
-        tmp[i] = aval->n[i+shw];
-    word_t ci = nn_shr(res->n, tmp, mres, shb);
-    mres = mres - (res->n[mres-1]==0);
+        tmp[i] = aval.n[i+shw];
+    word_t ci = nn_shr(rval->n, tmp, mres, shb);
+    mres = mres - (rval->n[mres-1]==0);
     mres = ma<0?-mres:mres;
-    res->size = mres;
-    return zz$to$int(res); 
+    res->val.size = mres;
+    return res; 
 }
  
 $int $Integral$int$__invert__($Integral$int wit,  $int a) {
     //return to$i64(~a->val);
-    fprintf(stderr,"Number.__invert__ not yet implemented for int");
+    fprintf(stderr,"Number.__invert__ not implemented for int\n");
     exit(1);
 }
 
@@ -371,7 +352,7 @@ $int $Integral$int$__invert__($Integral$int wit,  $int a) {
 
 void $Logical$int$__serialize__($Logical$int self, $Serial$state state) {
     //$step_serialize(self->w$Integral, state);
-    fprintf(stderr,"Protocol Logical not yet implemented for int");
+    fprintf(stderr,"Protocol Logical not implemented for int; use i64\n");
     exit(1);
 }
 
@@ -379,25 +360,25 @@ $Logical$int $Logical$int$__deserialize__($Logical$int self, $Serial$state state
     // $Logical$i64 res = $DNEW($Logical$i64,state);
     //  res->w$Integral = ($Integral)$step_deserialize(state);
     //  return res;
-    fprintf(stderr,"Protocol Logical not yet implemented for int");
+    fprintf(stderr,"Protocol Logical not implemented for int; use i64\n");
     exit(1);
 }
 
 $int $Logical$int$__and__($Logical$int wit,  $int a, $int b) {
     // return to$i64(a->val & b->val);
-    fprintf(stderr,"Protocol Logical not yet implemented for int");
+    fprintf(stderr,"Protocol Logical not implemented for int; use i64\n");
     exit(1);
 }
                                                  
 $int $Logical$int$__or__($Logical$int wit,  $int a, $int b) {
     // return to$i64(a->val | b->val);
-    fprintf(stderr,"Protocol Logical not yet implemented for int");
+    fprintf(stderr,"Protocol Logical not implemented for int; use i64\n");
     exit(1);
 }
                                                  
 $int $Logical$int$__xor__($Logical$int wit,  $int a, $int b) {
     // return to$i64(a->val ^ b->val);
-    fprintf(stderr,"Protocol Logical not yet implemented for int");
+    fprintf(stderr,"Protocol Logical not implemented for int; use i64\n");
     exit(1);
 }  
  
@@ -414,14 +395,13 @@ $Minus$int $Minus$int$__deserialize__($Minus$int self, $Serial$state state) {
 }
 
 $int $Minus$int$__sub__($Minus$int wit,  $int a, $int b) {
-    zz_ptr res = malloc(sizeof(zz_struct));
-    zz_init(res);
-    zz_sub(res,a->val,b->val);
-    return zz$to$int(res);
+    $int res = $malloc$int();
+    zz_sub(&res->val,&a->val,&b->val);
+    return res;
 }
 
 $int $Minus$int$__isub__($Minus$int wit,  $int a, $int b) {
-    zz_sub(a->val,a->val,b->val);
+    zz_sub(&a->val,&a->val,&b->val);
     return a;
 }  
 
@@ -437,19 +417,16 @@ $Div$int $Div$int$__deserialize__($Div$int self, $Serial$state state) {
 }
 
 $float $Div$int$__truediv__ ($Div$int wit, $int a, $int b) {
-    zz_ptr aval = a->val;
-    zz_ptr bval = b->val;
-    zz_ptr q = malloc(sizeof(zz_struct));
-    zz_ptr r = malloc(sizeof(zz_struct));
-    zz_ptr g = malloc(sizeof(zz_struct));
-    zz_init(q);
-    zz_init(r);
-    zz_init(g);
-    zz_gcd(g,aval,bval);
-    zz_div(aval,aval,g);
-    zz_div(bval,bval,g);
-    zz_divrem(q,r,aval,bval);
-    return to$float($float$new(($atom)zz$to$int(q))->val +  $float$new(($atom)zz$to$int(r))->val/ $float$new(($atom)zz$to$int(bval))->val);
+    zz_ptr aval = &a->val;
+    zz_ptr bval = &b->val;
+    $int q = $malloc$int();
+    $int r = $malloc$int();
+    $int g = $malloc$int();
+    zz_gcd(&g->val,aval,bval);
+    zz_div(aval,aval,&g->val);
+    zz_div(bval,bval,&g->val);
+    zz_divrem(&q->val,&r->val,aval,bval);
+    return to$float($float$new(($atom)q)->val +  $float$new(($atom)r)->val/ $float$new(($atom)b)->val);
 }
 
 // $Ord$int  ////////////////////////////////////////////////////////////////////////////////////////
@@ -463,27 +440,27 @@ $Ord$int $Ord$int$__deserialize__($Ord$int self, $Serial$state state) {
 }
 
 $bool $Ord$int$__eq__ ($Ord$int wit, $int a, $int b) {
-    return to$bool(zz_equal(a->val,b->val));
+    return to$bool(zz_equal(&a->val,&b->val));
 }
 
 $bool $Ord$int$__ne__ ($Ord$int wit, $int a, $int b) {
-    return to$bool(1-zz_equal(a->val,b->val));
+    return to$bool(1-zz_equal(&a->val,&b->val));
 }
 
 $bool $Ord$int$__lt__ ($Ord$int wit, $int a, $int b) {
-    return to$bool(zz_cmp(a->val,b->val) < 0);
+    return to$bool(zz_cmp(&a->val,&b->val) < 0);
 }
 
 $bool $Ord$int$__le__ ($Ord$int wit, $int a, $int b) {
-    return to$bool(zz_cmp(a->val,b->val) <= 0);
+    return to$bool(zz_cmp(&a->val,&b->val) <= 0);
 }
 
 $bool $Ord$int$__gt__ ($Ord$int wit, $int a, $int b) {
-    return to$bool(zz_cmp(a->val,b->val) > 0);
+    return to$bool(zz_cmp(&a->val,&b->val) > 0);
 }
 
 $bool $Ord$int$__ge__ ($Ord$int wit, $int a, $int b) {
-    return to$bool(zz_cmp(a->val,b->val) >= 0);
+    return to$bool(zz_cmp(&a->val,&b->val) >= 0);
 }
 
 // $Hashable$int ///////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -497,20 +474,20 @@ $Hashable$int $Hashable$int$__deserialize__($Hashable$int self, $Serial$state st
 }
 
 $bool $Hashable$int$__eq__($Hashable$int wit, $int a, $int b) {
-    return to$bool(zz_equal(a->val,b->val));
+    return to$bool(zz_equal(&a->val,&b->val));
 }
 
 $bool $Hashable$int$__ne__($Hashable$int wit, $int a, $int b) {
-    return to$bool(1-zz_equal(a->val,b->val));
+    return to$bool(1-zz_equal(&a->val,&b->val));
 }
 
 $int $Hashable$int$__hash__($Hashable$int wit, $int a) {
-    zz_ptr res = malloc(sizeof(zz_struct));
-    zz_ptr q = malloc(sizeof(zz_struct));
-    zz_init(res);
-    zz_init(q);
-    zz_seti(res,zz_divremi(q,a->val,LONG_MAX/4));    // This hash algorithm should be reconsidered!!!
-    return zz$to$int(res);
+    //    $int res = $malloc$int();
+    //    zz_ptr q = malloc(sizeof(zz_struct));
+    //    zz_init_fit(q,1);
+    //    zz_seti(&res->val,zz_divremi(q,&a->val,LONG_MAX/4));    // This hash algorithm should be reconsidered!!!
+
+    return to$int($i64_hash(to$i64(from$int(a))));
 }
 
 // Initialization ////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -714,16 +691,27 @@ struct $Hashable$int$class $Hashable$int$methods = {
 struct $Hashable$int $Hashable$int_instance = {&$Hashable$int$methods};
 $Hashable$int $Hashable$int$witness = &$Hashable$int_instance;
 
-long from$int($int n) {         // We don't check if n is too large to fit!!
-    long sz = n->val->size;
+long from$int($int n) { 
+    long sz = n->val.size;
     if (sz==0) return 0;
-    long res = n->val->n[0];
+    unsigned long res = n->val.n[0];
+    if (res > LONG_MAX || labs(sz) > 1) {
+        fprintf(stderr,"internal error: overflow in converting int to bounded int\n");
+        exit(1);
+    }
     return sz<0 ? -res : res;
 }
             
 $int to$int(long n) {
-    zz_ptr res = malloc(sizeof(zz_struct));
-    zz_init(res);
-    zz_seti(res,n);
-    return zz$to$int(res);
+    $int res = malloc(sizeof(struct $int));
+    res->$class = &$int$methods;
+    res->val.n = malloc(sizeof(unsigned long));
+    res->val.n[0] = n<0?-n:n;
+    res->val.alloc = 1;
+    if (n==0)
+        res->val.size=0;
+    else
+        res->val.size = n>0?1:-1;
+    return res;
 }
+

@@ -14,7 +14,7 @@ struct $int$class {
 
 struct $int {
     struct $int$class *$class;
-    zz_ptr val;
+    zz_struct val;
 };
 
 extern struct $int$class $int$methods;

@@ -19,18 +19,18 @@
 $float $float$new($atom a) {
     if ($ISINSTANCE(a,$i64)->val) return to$float((double)(($i64)a)->val);
     if ($ISINSTANCE(a,$int)->val) {
-        zz_ptr aval = (($int)a)->val;
-        if (aval->size == 0)
+        zz_struct aval = (($int)a)->val;
+        if (aval.size == 0)
             return to$float(0.0);
-        if (labs(aval->size) > 16)
+        if (labs(aval.size) > 16)
             $RAISE(($BaseException)$NEW($ValueError,to$str("float(): int value too big for type float")));
         double pow = 1.0;  
         double res = 0.0;
-        for (int i = 0; i<(labs(aval->size)); i++) {
-            res += aval->n[i] * pow;
+        for (int i = 0; i<(labs(aval.size)); i++) {
+            res += aval.n[i] * pow;
             pow *= 18446744073709551616.0; // literal is 2^64
         }
-        return to$float(aval->size<0 ? -res : res);
+        return to$float(aval.size<0 ? -res : res);
     }
     if ($ISINSTANCE(a,$float)->val) return ($float)a;
     if ($ISINSTANCE(a,$bool)->val) return to$float((double)(($bool)a)->val);

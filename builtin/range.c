@@ -67,7 +67,7 @@ $range $range$__deserialize__($range self, $Serial$state state) {
 }
 
 static $WORD $Iterator$range_next($Iterator$range self) {
-    int res = self->src->start + self->nxt++*self->src->step;
+    long res = self->src->start + self->nxt++*self->src->step;
     if (self->src->step>0)
         return res < self->src->stop ? to$int(res) : NULL;
     else

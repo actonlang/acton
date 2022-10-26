@@ -1769,7 +1769,7 @@ $int $bytearray_find($bytearray s, $bytearray sub, $int start, $int end) {
 
 $int $bytearray_index($bytearray s, $bytearray sub, $int start, $int end) {
     $int n = $bytearray_find(s,sub,start,end);
-    if (n->val<0) {
+    if (from$int(n)<0) {
         $RAISE(($BaseException)$NEW($ValueError,to$str("index: substring not found")));
     }
     return n;
@@ -2719,13 +2719,13 @@ void $bytearray_insert($bytearray self, int ix, $int elem) {
     memmove(self->str + (ix0 + 1),
             self->str + ix0 ,
             len - ix0 + 1); // +1 to move also terminating '\0'
-    self->str[ix0] = (unsigned char)elem->val & 0xff;
+    self->str[ix0] = (unsigned char)from$int(elem) & 0xff;
     self->nbytes++;
 }
 
 void $bytearray_append($bytearray self, $int elem) {
     expand_bytearray(self,1);
-    self->str[self->nbytes++] = (unsigned char)elem->val & 0xff;
+    self->str[self->nbytes++] = (unsigned char)from$int(elem) & 0xff;
     self->str[self->nbytes] = '\0';
 }
 
@@ -3187,7 +3187,7 @@ $int $bytes_find($bytes s, $bytes sub, $int start, $int end) {
 
 $int $bytes_index($bytes s, $bytes sub, $int start, $int end) {
     $int n = $bytes_find(s,sub,start,end);
-    if (n->val<0) {
+    if (from$int(n)<0) {
         $RAISE(($BaseException)$NEW($ValueError,to$str("index: substring not found")));
     }
     return n;
