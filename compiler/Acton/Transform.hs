@@ -104,21 +104,9 @@ instance Transform Decl where
 
 transCall (Dot _ (Var _ n) m) ts [e1,e2]
   | n == primWrapProc,   m == attrWrap  = Just e2
-  | n == primWrapAction, m == attrWrap  = Just $ eCall (tApp (eQVar primSEAL) ts) [e1,e2]
+  | n == primWrapAction, m == attrWrap  = Just $ eCall (tApp (eQVar primWRAP) ts) [e1,e2]
   | n == primWrapMut,    m == attrWrap  = Just e2
   | n == primWrapPure,   m == attrWrap  = Just e2
-transCall (Dot _ (Var _ n) m) ts [e1]
-  | n == primWrapProc,   m == attrEval  = Just e1
-  | n == primWrapProc,   m == attrExec  = Just e1
-  | n == primWrapAction, m == attrEval  = let [p,k,_] = ts
-                                              ps = pPar pNames p
-                                              ks = kPar kNames k
-                                          in Just $ Lambda l0 ps ks (eAwait $ Call l0 (eAsync e1) (pArg ps) (kArg ks)) fxProc
-  | n == primWrapAction, m == attrExec  = Just $ eAsync e1
-  | n == primWrapMut,    m == attrEval  = Just e1
-  | n == primWrapMut,    m == attrExec  = Just e1
-  | n == primWrapPure,   m == attrEval  = Just e1
-  | n == primWrapPure,   m == attrExec  = Just e1
 transCall _ _ _                         = Nothing
 
 instance Transform Expr where

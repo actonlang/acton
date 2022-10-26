@@ -103,15 +103,13 @@ primWrappedC        = gPrim "WrappedC"
 tWrapped s x        = tCon $ TC primWrappedC [s,x]
 
 attrWrap            = name "wrap"
-attrEval            = name "eval"
-attrExec            = name "exec"
 
 primWrapProc        = gPrim "wWrapProc"
 primWrapAction      = gPrim "wWrapAction"
 primWrapMut         = gPrim "wWrapMut"
 primWrapPure        = gPrim "wWrapPure"
 
-primSEAL            = gPrim "SEAL"
+primWRAP            = gPrim "WRAP"
 
 
 primEnv             = [     (noq primASYNCf,        NDef scASYNCf NoDec),
@@ -174,7 +172,7 @@ primEnv             = [     (noq primASYNCf,        NDef scASYNCf NoDec),
                             (noq primWrapProc,      NVar $ tWrapped fxProc fxProc),
                             (noq primWrapAction,    NVar $ tWrapped fxAction fxProc),
 
-                            (noq primSEAL,          NDef scSEAL NoDec)
+                            (noq primWRAP,          NDef scWRAP NoDec)
                       ]
 
 tSequenceListWild   = tCon (TC qnSequence [tList tWild, tWild])
@@ -420,8 +418,8 @@ scSKIPRES           = tSchema [quant a] tSKIPRES
         tCont''     = tCont (tVar a)
         a           = TV KType $ name "A"
 
---  $SEAL           : [A,B,C] => ($Actor, proc(*A,**B)->C) -> action(*A,**B)->C
-scSEAL              = tSchema [quant a, quant b, quant c] tWRAP
+--  $WRAP           : [A,B,C] => ($Actor, proc(*A,**B)->C) -> action(*A,**B)->C
+scWRAP              = tSchema [quant a, quant b, quant c] tWRAP
   where tWRAP       = tFun0 [tActor, abcFun fxProc] (abcFun fxAction)
         abcFun fx   = tFun fx (tVar a) (tVar b) (tVar c)
         a           = TV KType (name "A")
@@ -430,11 +428,9 @@ scSEAL              = tSchema [quant a, quant b, quant c] tWRAP
 
 --  protocol $Wrapped[X]: pass
 proWrapped          = NProto [quant x] [] te
-  where te          = [(attrWrap,scWrap), (attrEval,scEval), (attrExec,scExec)]
-        scWrap      = NSig (tSchema q (tFun0 [tActor, abFun tX tC] (abFun tSelf tC)))  Static
-        scEval      = NSig (tSchema q (tFun0 [abFun tSelf tC] (abFun tX tC))) Static
-        scExec      = NSig (tSchema q (tFun0 [abFun tSelf tC] (abFun tX tValue))) Static
-        abFun fx c  = tFun fx (tVar a) (tVar b) c
+  where te          = [(attrWrap,scWrap)]
+        scWrap      = NSig (tSchema q (tFun0 [tActor, fxFun tX] (fxFun tSelf)))  Static
+        fxFun fx    = tFun fx (tVar a) (tVar b) tC
         tX          = tVar x
         tC          = tVar c
         tSelf       = tVar fxSelf
@@ -446,11 +442,9 @@ proWrapped          = NProto [quant x] [] te
 
 --  class $WrappedC[S,X]: pass
 clWrapped           = NClass [quant s, quant x] [] te
-  where te          = [(attrWrap,scWrap), (attrEval,scEval), (attrExec,scExec)]
-        scWrap      = NDef (tSchema q (tFun0 [tActor, abFun tX tC] (abFun tS tC))) NoDec
-        scEval      = NDef (tSchema q (tFun0 [abFun tS tC] (abFun tX tC))) NoDec
-        scExec      = NDef (tSchema q (tFun0 [abFun tS tC] (abFun tX tValue))) NoDec
-        abFun fx c  = tFun fx (tVar a) (tVar b) c
+  where te          = [(attrWrap,scWrap)]
+        scWrap      = NDef (tSchema q (tFun0 [tActor, fxFun tX] (fxFun tS))) NoDec
+        fxFun fx    = tFun fx (tVar a) (tVar b) tC
         tS          = tVar s
         tX          = tVar x
         tC          = tVar c

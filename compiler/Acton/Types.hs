@@ -216,9 +216,9 @@ wrap t@TFun{}                           = do tvx <- newTVarOfKind KFX
                                              w <- newWitness
                                              return (Impl w tvx (pWrapped $ effect t), t{ effect = tvx })
 
-wrapped kw env cs ts args               = do tvx <- newTVarOfKind KFX
+wrapped env cs ts args                  = do tvx <- newTVarOfKind KFX
                                              let p = pWrapped tvx
-                                                 Just (_, sc, Just Static) = findAttr env p kw
+                                                 Just (_, sc, Just Static) = findAttr env p attrWrap
                                              (_,tvs,t0) <- instantiate env sc
                                              fx <- newTVarOfKind KFX
                                              t' <- newTVar
@@ -227,7 +227,7 @@ wrapped kw env cs ts args               = do tvx <- newTVarOfKind KFX
                                              w <- newWitness
                                              return (Impl w fx p :
                                                      Cast t1 t2 :
-                                                     cs, t', eCall (tApp (Dot l0 (eVar w) kw) tvs) args)
+                                                     cs, t', eCall (tApp (Dot l0 (eVar w) attrWrap) tvs) args)
 
 --------------------------------------------------------------------------------------------------------------------------
 
@@ -240,16 +240,6 @@ instance (InfEnv a) => InfEnv [a] where
                                              return (cs1++cs2, te1++te2, s1:ss2)
 
 instance InfEnv Stmt where
-    infEnv env (Expr l (Call _ e p k))  = do (cs1,t,e) <- infer env e
-                                             (cs1,t,e) <- wrapped attrExec env cs1 [t] [e]               -- DEACT!
-                                             (cs2,prow,p) <- infer env p
-                                             (cs3,krow,k) <- infer env k
-                                             t0 <- newTVar
-                                             fx <- currFX
-                                             w <- newWitness
-                                             return (Sub w t (tFun fx prow krow t0) :
-                                                     cs1++cs2++cs3, [], Expr l $ Call l (eCall (eVar w) [e]) p k)
-
     infEnv env (Expr l e)
       | e == eNotImpl                   = return ([], [], Expr l e)
       | otherwise                       = do (cs,_,e') <- infer env e
@@ -1016,8 +1006,7 @@ instance Infer Expr where
                                             NDef sc d -> do 
                                                 (cs,tvs,t) <- instantiate env sc
                                                 let e = app t (tApp x tvs) $ witsOf cs
-                                                wrapped attrWrap env cs [tActor,t] [eVar selfKW,e]                      -- DEACT!
---                                                return (cs, t, e)
+                                                wrapped env cs [tActor,t] [eVar selfKW,e]
                                             NClass q _ _ -> do
                                                 (cs0,ts) <- instQBinds env q
                                                 --traceM ("## Instantiating " ++ prstr n)
@@ -1051,7 +1040,6 @@ instance Infer Expr where
     infer env e@(Strings _ ss)          = return ([], tStr, e)
     infer env e@(BStrings _ ss)         = return ([], tBytes, e)
     infer env (Call l e ps ks)          = do (cs1,t,e) <- infer env e
-                                             (cs1,t,e) <- wrapped attrEval env cs1 [t] [e]             -- DEACT!
                                              (cs2,prow,ps) <- infer env ps
                                              (cs3,krow,ks) <- infer env ks
                                              t0 <- newTVar
@@ -1066,8 +1054,7 @@ instance Infer Expr where
                                              krow <- newTVarOfKind KRow
                                              t' <- newTVar
                                              let tf fx = tFun fx prow krow
-                                             return (Cast t (tf fxAction t') :            -- DEACT!
---                                             return (Cast t (tf fxProc t') :
+                                             return (Cast t (tf fxAction t') :
                                                      cs, tf fxProc (tMsg t'), Async l e)    -- produce a proc returning Msg[t']
     infer env (Await l e)               = do t0 <- newTVar
                                              (cs1,e') <- inferSub env (tMsg t0) e
