@@ -403,14 +403,15 @@ deps/instdir/lib/libuv.a: deps/libuv
 # /deps/libxml2 ------------------------------------------
 LIBXML2_REF=644a89e080bced793295f61f18aac8cfad6bece2
 deps/libxml2:
-	ls $@ >/dev/null 2>&1 || git clone https://gitlab.gnome.org/GNOME/libxml2.git $@
+	ls $@ >/dev/null 2>&1 || git clone https://github.com/GNOME/libxml2.git $@
 
 deps/instdir/lib/libxml2.a: deps/libxml2
 	mkdir -p $(dir $@)
 	cd $< \
 	&& git checkout $(LIBXML2_REF) \
 	&& ./autogen.sh --without-python --without-iconv --without-zlib --without-lzma --prefix=$(TD)/deps/instdir --enable-static --disable-shared CFLAGS="$(CFLAGS_DEPS)" \
-	&& make -j && make install
+	&& make -j && make install \
+	&& mv $(TD)/deps/instdir/include/libxml2/libxml $(TD)/deps/instdir/include/libxml
 
 # --
 OFILES += deps/netstring_dev.o deps/netstring_rel.o deps/yyjson_dev.o deps/yyjson_rel.o
