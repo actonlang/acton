@@ -124,7 +124,7 @@ $WORD $Iterator$filter_next($Iterator$filter it) {
     $WORD w;
     do
         w = it->it->$class->__next__(it->it);
-    while (w && !from$bool(it->f->$class->__call__(it->f, w)));
+    while (w && !from$bool(it->f->$class->__eval__(it->f, w)));
     return w;
 }
 
@@ -172,7 +172,7 @@ $Iterator$map $Iterator$map$_deserialize($Iterator$map res, $Serial$state state)
 $WORD $Iterator$map_next($Iterator$map it) {
     $WORD w = it->it->$class->__next__(it->it);
     if (w)
-        return it->f->$class->__call__(it->f, w);
+        return it->f->$class->__eval__(it->f, w);
     else
         return NULL;
 }

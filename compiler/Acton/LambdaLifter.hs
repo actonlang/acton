@@ -280,23 +280,23 @@ closureConvert env lambda t0 vts0 es    = do n <- newName (nstr $ noq basename)
         methCall to                     = eCallP (eDot (eVar llSelf) to) args
         parsC tc                        = conv $ addSelfPar $ addContPar tc p
         mainBody                        = [ sAssign (pVar v t) (eDot (eVar llSelf) v) | (v,t) <- vts ] ++ [sReturn e]
-        evalDef                         = mainDef attr_eval_
-        execDef                         = Def l0 attr_exec_ [] pars KwdNIL (Just t1) [ sReturn (methCall attr_eval_) ] NoDec fxProc
-        asynDef                         = mainDef attr_asyn_
-        evalDefA                        = Def l0 attr_eval_ [] (parsC t1) KwdNIL (Just tR) evalBodyA NoDec fxProc
-        evalBodyA                       = [ sReturn $ eCall (tApp (eQVar primAWAIT) [t1]) [methCall attr_asyn_, eVar llCont] ]
-        execDefA                        = delegateC attr_exec_ attr_asyn_ tValue
         callDef                         = mainDef attr_call_
-        evalDefF                        = delegateC attr_eval_ attr_call_ t1
-        execDefF                        = delegateC attr_exec_ attr_call_ tValue
-        delegateC name to tc            = Def l0 name [] (parsC tc) KwdNIL (Just tR) (delegateBody to tc) NoDec fxProc
+        execDef                         = Def l0 attr_exec_ [] pars KwdNIL (Just t1) [ sReturn (methCall attr_call_) ] NoDec fxProc
+        asynDef                         = mainDef attr_asyn_
+        callDefA                        = Def l0 attr_call_ [] (parsC t1) KwdNIL (Just tR) callBodyA NoDec fxProc
+        callBodyA                       = [ sReturn $ eCall (tApp (eQVar primAWAIT) [t1]) [methCall attr_asyn_, eVar llCont] ]
+        execDefA                        = delegate attr_exec_ attr_asyn_ tValue
+        evalDef                         = mainDef attr_eval_
+        callDefF                        = delegate attr_call_ attr_eval_ t1
+        execDefF                        = delegate attr_exec_ attr_eval_ tValue
+        delegate name to tc             = Def l0 name [] (parsC tc) KwdNIL (Just tR) (delegateBody to tc) NoDec fxProc
         delegateBody to tc              = [ sReturn $ eCall (tApp (eQVar primRCont) [tValue]) [eVar llCont, methCall to] ]
         defs
           | basename == primCont        = [callDef]
-          | basename == primProc        = [evalDef, execDef]
-          | basename == primAction      = [evalDefA, execDefA, asynDef]
-          | basename == primMut         = [evalDefF, execDefF, callDef]
-          | basename == primPure        = [evalDefF, execDefF, callDef]
+          | basename == primProc        = [callDef, execDef]
+          | basename == primAction      = [callDefA, execDefA, asynDef]
+          | basename == primMut         = [callDefF, execDefF, evalDef]
+          | basename == primPure        = [callDefF, execDefF, evalDef]
 
 addSelfPar p                            = PosPar llSelf (Just tSelf) Nothing p
 
@@ -332,12 +332,12 @@ instance Lift Expr where
                                              return $ Call l (eDot e' attr_asyn_) p' KwdNil      
       | closedType env e                = do e' <- llSub env e
                                              p' <- ll env p
-                                             let TFun _ fx p _ t = typeOf env e'
-                                                 attr | t == tR         = attr_call_      -- attr_cont_ ...
-                                                      | fx == fxProc    = attr_eval_
+                                             let t@TFun{effect = fx}   = typeOf env e'
+                                                 attr | isCont t        = attr_call_      -- attr_cont_ ...
+                                                      | fx == fxProc    = attr_call_
                                                       | fx == fxAction  = attr_asyn_      -- Will disapperar -- DEACT!
-                                                      | fx == fxMut     = attr_call_
-                                                      | fx == fxPure    = attr_call_
+                                                      | fx == fxMut     = attr_eval_
+                                                      | fx == fxPure    = attr_eval_
                                              return $ Call l (eDot e' attr) p' KwdNil
       | otherwise                       = do e' <- llSub env e
                                              p' <- ll env p

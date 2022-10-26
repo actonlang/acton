@@ -68,6 +68,18 @@ $Cont $Cont$__deserialize__($Cont self, $Serial$state state) {
     return $DNEW($Cont,state);
 }
 
+struct $Cont$class $Cont$methods = {
+    "$Cont",
+    UNASSIGNED,
+    NULL,
+    $Cont$__init__,
+    $Cont$__serialize__,
+    $Cont$__deserialize__,
+    $Cont$__bool__,
+    $Cont$__str__,
+    $Cont$__str__,
+    NULL                /* __call__ */
+};
 struct $proc$class $proc$methods = {
     "$proc",
     UNASSIGNED,
@@ -78,7 +90,7 @@ struct $proc$class $proc$methods = {
     $proc$__bool__,
     $proc$__str__,
     $proc$__str__,
-    NULL,               /* __eval__ */
+    NULL,               /* __call__ */
     NULL                /* __exec__ */
 };
 struct $action$class $action$methods = {
@@ -91,7 +103,7 @@ struct $action$class $action$methods = {
     $action$__bool__,
     $action$__str__,
     $action$__str__,
-    NULL,               /* __eval__ */
+    NULL,               /* __call__ */
     NULL,               /* __exec__ */
     NULL                /* __asyn__ */
 };
@@ -105,9 +117,9 @@ struct $mut$class $mut$methods = {
     $mut$__bool__,
     $mut$__str__,
     $mut$__str__,
-    NULL,               /* __eval__ */
+    NULL,               /* __call__ */
     NULL,               /* __exec__ */
-    NULL                /* __call__ */
+    NULL                /* __eval__ */
 };
 struct $pure$class $pure$methods = {
     "$pure",
@@ -119,20 +131,7 @@ struct $pure$class $pure$methods = {
     $pure$__bool__,
     $pure$__str__,
     $pure$__str__,
-    NULL,               /* __eval__ */
+    NULL,               /* __call__ */
     NULL,               /* __exec__ */
-    NULL                /* __call__ */
-};
-
-struct $Cont$class $Cont$methods = {
-    "$Cont",
-    UNASSIGNED,
-    NULL,
-    $Cont$__init__,
-    $Cont$__serialize__,
-    $Cont$__deserialize__,
-    $Cont$__bool__,
-    $Cont$__str__,
-    $Cont$__str__,
-    NULL                /* __call__ */
+    NULL                /* __eval__ */
 };
