@@ -147,7 +147,7 @@ printIce errMsg = do ccVer <- getCcVer
                      putStrLn(
                         "ERROR: internal compiler error: " ++ errMsg ++
                         "\nNOTE: this is likely a bug in actonc, please report this at:" ++
-                        "\nNOTE: https://github.com/actonlang/acton/issues/new?template=ice.md" ++
+                        "\nNOTE: https://github.com/actonlang/acton/issues/new?template=ice.yaml" ++
                         "\nNOTE: acton " ++ getVer ++ " " ++ getVerExtra ++
                         "\nNOTE: cc: " ++ ccVer
                         )
