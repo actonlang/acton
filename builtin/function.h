@@ -42,8 +42,8 @@ struct $proc$class {
     $bool (*__bool__)($proc);
     $str (*__str__)($proc);
     $str (*__repr__)($proc);
-    $R (*__eval__)($proc, $WORD, $Cont);
-    $R (*__exec__)($proc, $WORD, $Cont);
+    $R (*__eval__)($proc, $Cont, $WORD);
+    $R (*__exec__)($proc, $Cont, $WORD);
 };
 struct $proc {
     struct $proc$class *$class;
@@ -61,8 +61,8 @@ struct $action$class {
     $bool (*__bool__)($action);
     $str (*__str__)($action);
     $str (*__repr__)($action);
-    $R (*__eval__)($action, $WORD, $Cont);
-    $R (*__exec__)($action, $WORD, $Cont);
+    $R (*__eval__)($action, $Cont, $WORD);
+    $R (*__exec__)($action, $Cont, $WORD);
     $Msg (*__asyn__)($action, $WORD);
 };
 struct $action {
@@ -81,8 +81,8 @@ struct $mut$class {
     $bool (*__bool__)($mut);
     $str (*__str__)($mut);
     $str (*__repr__)($mut);
-    $R (*__eval__)($mut, $WORD, $Cont);
-    $R (*__exec__)($mut, $WORD, $Cont);
+    $R (*__eval__)($mut, $Cont, $WORD);
+    $R (*__exec__)($mut, $Cont, $WORD);
     $WORD (*__call__)($mut, $WORD);
 };
 struct $mut {
@@ -101,8 +101,8 @@ struct $pure$class {
     $bool (*__bool__)($pure);
     $str (*__str__)($pure);
     $str (*__repr__)($pure);
-    $R (*__eval__)($pure, $WORD, $Cont);
-    $R (*__exec__)($pure, $WORD, $Cont);
+    $R (*__eval__)($pure, $Cont, $WORD);
+    $R (*__exec__)($pure, $Cont, $WORD);
     $WORD (*__call__)($pure, $WORD);
 };
 struct $pure {
@@ -124,8 +124,8 @@ struct $action2$class {
     $bool (*__bool__)($action2);
     $str (*__str__)($action2);
     $str (*__repr__)($action2);
-    $R (*__eval__)($action2, $WORD, $WORD, $Cont);
-    $R (*__exec__)($action2, $WORD, $WORD, $Cont);
+    $R (*__eval__)($action2, $Cont, $WORD, $WORD);
+    $R (*__exec__)($action2, $Cont, $WORD, $WORD);
     $Msg (*__asyn__)($action2, $WORD, $WORD);
 };
 struct $action2 {
@@ -144,8 +144,8 @@ struct $action3$class {
     $bool (*__bool__)($action3);
     $str (*__str__)($action3);
     $str (*__repr__)($action3);
-    $R (*__eval__)($action3, $WORD, $WORD, $WORD, $Cont);
-    $R (*__exec__)($action3, $WORD, $WORD, $WORD, $Cont);
+    $R (*__eval__)($action3, $Cont, $WORD, $WORD, $WORD);
+    $R (*__exec__)($action3, $WORD, $WORD, $WORD);
     $Msg (*__asyn__)($action3, $WORD, $WORD, $WORD);
 };
 struct $action3 {

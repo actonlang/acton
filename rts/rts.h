@@ -136,7 +136,7 @@ $Cont $CONSTCONT($WORD, $Cont);
 
 $Msg $ASYNC($Actor, $Cont);
 $Msg $AFTER($float, $Cont);
-$R $AWAIT($Msg, $Cont);
+$R $AWAIT($Cont, $Msg);
 
 void init_db_queue(long);
 void register_actor(long key);

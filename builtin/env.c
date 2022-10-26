@@ -37,7 +37,7 @@ $NoneType $l$1cont$__init__ ($l$1cont p$self, $Env __self__, $str s) {
 $R $l$1cont$__call__ ($l$1cont p$self, $Cont c$cont) {
     $Env __self__ = p$self->__self__;
     $str s = p$self->s;
-    return __self__->$class->stdout_write$local(__self__, s, c$cont);
+    return __self__->$class->stdout_write$local(__self__, c$cont, s);
 }
 void $l$1cont$__serialize__ ($l$1cont self, $Serial$state state) {
     $step_serialize(self->__self__, state);
@@ -72,7 +72,7 @@ $NoneType $l$2cont$__init__ ($l$2cont p$self, $Env __self__, $action cb) {
 $R $l$2cont$__call__ ($l$2cont p$self, $Cont c$cont) {
     $Env __self__ = p$self->__self__;
     $action cb = p$self->cb;
-    return __self__->$class->stdin_install$local(__self__, cb, c$cont);
+    return __self__->$class->stdin_install$local(__self__, c$cont, cb);
 }
 void $l$2cont$__serialize__ ($l$2cont self, $Serial$state state) {
     $step_serialize(self->__self__, state);
@@ -107,7 +107,7 @@ $NoneType $l$3cont$__init__ ($l$3cont p$self, $Env __self__, $int n) {
 $R $l$3cont$__call__ ($l$3cont p$self, $Cont c$cont) {
     $Env __self__ = p$self->__self__;
     $int n = p$self->n;
-    return __self__->$class->exit$local(__self__, n, c$cont);
+    return __self__->$class->exit$local(__self__, c$cont, n);
 }
 void $l$3cont$__serialize__ ($l$3cont self, $Serial$state state) {
     $step_serialize(self->__self__, state);
@@ -178,7 +178,7 @@ $NoneType $Env$__init__ ($Env __self__, $WorldAuth token, $list argv) {
     __self__->$affinity = 0;
     return $None;
 }
-$R $Env$stdout_write$local ($Env __self__, $str s, $Cont c$cont) {
+$R $Env$stdout_write$local ($Env __self__, $Cont c$cont, $str s) {
     printf("%s", s->str);
     return $R_CONT(c$cont, $None);
 }
@@ -199,7 +199,7 @@ void read_stdin(uv_stream_t *stream, ssize_t nread, const uv_buf_t *buf) {
     if (buf->base)
         free(buf->base);
 }
-$R $Env$stdin_install$local ($Env __self__, $action cb, $Cont c$cont) {
+$R $Env$stdin_install$local ($Env __self__, $Cont c$cont, $action cb) {
     // This should be the only call in env that does IO stuff, so it is safe to
     // pin affinity here (and not earlier)..
     pin_actor_affinity();
@@ -209,7 +209,7 @@ $R $Env$stdin_install$local ($Env __self__, $action cb, $Cont c$cont) {
     uv_read_start((uv_stream_t*)tty, alloc_buffer, read_stdin);
     return $R_CONT(c$cont, $None);
 }
-$R $Env$exit$local ($Env __self__, $int n, $Cont c$cont) {
+$R $Env$exit$local ($Env __self__, $Cont c$cont, $int n) {
     return_val = from$int(n);
     rts_shutdown();
     return $R_CONT(c$cont, $None);

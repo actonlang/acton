@@ -295,10 +295,10 @@ instance CPS Decl where
                                              return $ Class l n (conv q) (conv cs) b'
       where env1                        = defineSelf (NoQ n) q $ defineTVars q $ setClassCtxt env
 
-    cps env (Def l n q p KwdNIL (Just t) b d fx)
+    cps env (Def l n q p KwdNIL (Just t) b dec fx)
       | contFX fx                       = do b' <- cpsSuite env1 b
-                                             return $ Def l n q' (addContPar p' fx t') KwdNIL (Just tR) b' d fx
-      | otherwise                       = return $ Def l n q' p' KwdNIL (Just t') (conv b) d fx
+                                             return $ Def l n q' (addContPar env dec p' fx t') KwdNIL (Just tR) b' dec fx
+      | otherwise                       = return $ Def l n q' p' KwdNIL (Just t') (conv b) dec fx
       where env1                        = define (envOf p) $ defineTVars q $ Meth contKW t +: setDefCtxt env
             q'                          = conv q
             p'                          = conv p
@@ -314,12 +314,13 @@ instance CPS Branch where
 jump k                                  = sReturn (eCall (eVar k) [eNone]) : []
 
 
-addContArg env (Call l e pos KwdNil) c  = Call NoLoc e (add pos c) KwdNil                       -- TODO: move the cont param *first*
-  where add PosNil c                    = PosArg c PosNil
-        add (PosArg e p) c              = PosArg e (add p c)
+addContArg env (Call l e p KwdNil) c    = Call NoLoc e (PosArg c p) KwdNil
 
-addContPar PosNIL fx t                  = PosPar contKW (Just $ tCont1 fx t) Nothing PosNIL     -- TODO: move the cont param *first*
-addContPar (PosPar n a Nothing p) fx t  = PosPar n a Nothing (addContPar p fx t)
+addContPar env dec (PosPar n a Nothing p) fx t
+  | inClass env && dec /= Static        = PosPar n a Nothing (addContPar0 p fx t)
+addContPar env dec p fx t               = addContPar0 p fx t
+
+addContPar0 p fx t                      = PosPar contKW (Just $ tCont1 fx t) Nothing p
 
 tCont0                                  = tFun fxPure posNil kwdNil tR
 
@@ -470,7 +471,7 @@ instance PreCPS Expr where
                                              case prefixes of
                                                 [] -> let p' = conv p; t' = conv t
                                                           e1 = if contCall env e then addContArg env1 e' (eVar contKW) else eCallCont t' contKW e'
-                                                      in return $ Lambda l (addContPar p' fx t') KwdNIL e1 fx
+                                                      in return $ Lambda l (addContPar0 p' fx t') KwdNIL e1 fx
                                                 _ -> do
                                                     f <- newName "lambda"
                                                     prefix [sDecl [Def l f [] p KwdNIL (Just t) (prefixes ++ [sReturn e']) NoDec fx]]
@@ -529,8 +530,7 @@ instance Conv Type where
     conv t0@(TFun l fx p TNil{} t)
        | contFX fx && t /= tR           = TFun l fx (addCont (conv p) (conv t)) kwdNil tR
        | otherwise                      = TFun l fx (conv p) kwdNil (conv t)
-       where addCont (TRow l k n t p) c = TRow l k n t (addCont p c)                            -- TODO: move the cont param *first*
-             addCont p c                = posRow (tFun fx (posRow c posNil) kwdNil tR) p
+       where addCont p c                = posRow (tFun fx (posRow c posNil) kwdNil tR) p
     conv (TCon l c)                     = TCon l (conv c)
     conv (TTuple l p k)                 = TTuple l (conv p) (conv k)
     conv (TOpt l t)                     = TOpt l (conv t)

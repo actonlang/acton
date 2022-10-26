@@ -130,9 +130,9 @@ struct $Env$class {
     $str (*__str__) ($Env);
     $str (*__repr__) ($Env);
     $NoneType (*__resume__) ($Env);
-    $R (*stdout_write$local) ($Env, $str, $Cont);
-    $R (*stdin_install$local) ($Env, $action, $Cont);
-    $R (*exit$local) ($Env, $int, $Cont);
+    $R (*stdout_write$local) ($Env, $Cont, $str);
+    $R (*stdin_install$local) ($Env, $Cont, $action);
+    $R (*exit$local) ($Env, $Cont, $int);
     $Msg (*stdout_write) ($Env, $str);
     $Msg (*stdin_install) ($Env, $action);
     $Msg (*exit) ($Env, $int);

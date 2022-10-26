@@ -702,8 +702,8 @@ struct $Cont $Done$instance = {
 };
 ////////////////////////////////////////////////////////////////////////////////////////
 $R $InitRoot$__call__ ($Cont $this, $WORD val) {
-    typedef $R(*ROOT__init__t)($Actor, $Env, $Cont);    // Assumed type of the ROOT actor's __init__ method
-    return ((ROOT__init__t)root_actor->$class->__init__)(root_actor, env_actor, ($Cont)val);
+    typedef $R(*ROOT__init__t)($Actor, $Cont, $Env);    // Assumed type of the ROOT actor's __init__ method
+    return ((ROOT__init__t)root_actor->$class->__init__)(root_actor, ($Cont)val, env_actor);
 }
 
 struct $Cont$class $InitRoot$methods = {
@@ -803,7 +803,7 @@ $Msg $AFTER($float sec, $Cont cont) {
     return m;
 }
 
-$R $AWAIT($Msg m, $Cont cont) {
+$R $AWAIT($Cont cont, $Msg m) {
     return $R_WAIT(cont, m);
 }
 
