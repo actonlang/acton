@@ -1,0 +1,49 @@
+# Acton port of https://benchmarksgame-team.pages.debian.net/benchmarksgame/program/pidigits-python3-4.html
+actor main(env):
+    n=int(env.argv[1])
+
+    var tmp1 = 0
+    var tmp2 = 0
+
+    var acc = 0
+    var den = 1
+    var num = 1
+
+    def extract_Digit(nth):
+        tmp1 = num * nth
+        tmp2 = tmp1 + acc
+        tmp1 = tmp2 // den
+
+        return tmp1
+
+    def eliminate_Digit(d):
+        acc = acc - den * d
+        acc = acc * 10
+        num = num * 10
+
+    def next_Term(k):
+        k2=k*2+1
+        acc = acc + num * 2
+        acc = acc * k2
+        den = den * k2
+        num = num * k
+
+    var i=0
+    var k=0
+    var res = ""
+    while i<n:
+        k+=1
+        next_Term(k)
+
+        if num > acc:
+            continue
+
+        d=extract_Digit(3)
+        if d!=extract_Digit(4):
+            continue
+
+        res += chr(48+d)
+        i += 1
+        eliminate_Digit(d)
+    print("3." + res[1:])
+    await async env.exit(0)
