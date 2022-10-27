@@ -645,17 +645,19 @@ instance (Check a) => Check [a] where
 
 ------------------
 
-infActorEnv env ss                      = do dsigs <- mapM mkNDef (dvars ss \\ dom sigs)                -- exposed defs (without sigs)
-                                             bsigs <- mapM mkNVar (pvars ss \\ dom (sigs++dsigs))       -- exposed assigns (without sigs)
-                                             return (unSig sigs ++ dsigs ++ bsigs)                      -- exposed sigs + all the above
+infActorEnv env ss                      = do dsigs <- mapM mkNDef dvars                                 -- exposed defs without sigs
+                                             bsigs <- mapM mkNVar pvars                                 -- exposed assigns without sigs
+                                             return (abssigs ++ unSig concsigs ++ dsigs ++ bsigs)       -- abstract sigs ++ exposed sigs + the above
   where sigs                            = [ (n, NSig sc dec) | Signature _ ns sc dec <- ss, n <- ns, not $ isHidden n ]
-        svars                           = statevars ss
-        dvars ss                        = notHidden $ methods ss
+        (concsigs, abssigs)             = partition ((`elem`(dvars++pvars)) . fst) sigs
+        dvars                           = notHidden $ methods ss \\ dom sigs
         mkNDef n                        = do t <- newTVar
                                              return (n, NDef (monotype $ t) NoDec)
-        pvars ss                        = nub $ concat $ map pvs ss
+        svars                           = statevars ss
+        pvars                           = pvarsF ss \\ dom (sigs) \\ dvars
+        pvarsF ss                       = nub $ concat $ map pvs ss
           where pvs (Assign _ pats _)   = notHidden $ bound pats \\ svars
-                pvs (If _ bs els)       = foldr intersect (pvars els) [ pvars ss | Branch _ ss <- bs ]
+                pvs (If _ bs els)       = foldr intersect (pvarsF els) [ pvarsF ss | Branch _ ss <- bs ]
                 pvs _                   = []
         mkNVar n                        = do t <- newTVar
                                              return (n, NVar t)
@@ -668,25 +670,21 @@ matchActorAssumption env n0 p k te      = do --traceM ("## matchActorAssumption 
   where NAct _ p0 k0 te0                = findName n0 env
         ns                              = dom te0
         obs                             = te0 ++ te
-        te1                             = unSig $ te `restrict` ns
-        check1 (n, i) | isHidden n      = return ([], [])
+        te1                             = nTerms $ te `restrict` ns
+        check1 (n, NSig _ _)            = return ([], [])
         check1 (n, NVar t0)             = do --traceM ("## matchActorAssumption for attribute " ++ prstr n)
                                              return ([Cast t t0],[])
-          where t                       = case lookup n te1 of
-                                             Just (NVar t) -> t
-                                             x -> error ("(internal) Lookup of " ++ prstr n ++ " = " ++ show x)
+          where Just (NVar t)           = lookup n te1
         check1 (n, NDef sc0 _)          = do (cs0,_,t) <- instantiate env sc
                                              (c0,t') <- wrap t
                                              let c1 = Cast t' (sctype sc0)
                                                  cs1 = map Seal (leaves sc0)
+                                                 q = scbind sc
                                              --traceM ("## matchActorAssumption for method " ++ prstr n ++ ": " ++ prstr c1)
                                              (cs2,eq) <- solveScoped (defineTVars q env) (qbound q) obs tNone (c0:c1:cs0++cs1)
                                              checkNoEscape env (qbound q)
                                              return (cs2, eq)
-          where q                       = scbind sc
-                sc                      = case lookup n te1 of
-                                             Just (NDef sc _) -> sc
-                                             x -> error ("(internal) Lookup of " ++ prstr n ++ " = " ++ show x)
+          where Just (NDef sc _)        = lookup n te1
         check1 (n, i)                   = return ([], [])
 
 
