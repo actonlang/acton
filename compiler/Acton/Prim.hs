@@ -269,9 +269,9 @@ scAFTERc            = tSchema [quant a] tAFTER
         tCont'      = tFun fxProc (posRow tCont'' posNil) kwdNil tR
         tCont''     = tFun fxProc (posRow (tVar a) posNil) kwdNil tR
 
---  $AWAITc         : [A] => proc(Msg[A], proc(A)->$R) -> $R
+--  $AWAITc         : [A] => proc(proc(A)->$R, Msg[A]) -> $R
 scAWAITc            = tSchema [quant a] tAWAIT
-  where tAWAIT      = tFun fxProc (posRow (tMsg $ tVar a) $ posRow tCont' posNil) kwdNil tR
+  where tAWAIT      = tFun fxProc (posRow tCont' $ posRow (tMsg $ tVar a) posNil) kwdNil tR
         a           = TV KType $ name "A"
         tCont'      = tFun fxProc (posRow (tVar a) posNil) kwdNil tR
 
@@ -290,9 +290,9 @@ scAFTER             = tSchema [quant a] tAFTER
         tCont'      = tCont tCont''
         tCont''     = tCont (tVar a)
 
---  $AWAIT          : [A] => proc(Msg[A], $Cont[A]) -> $R
+--  $AWAIT          : [A] => proc($Cont[A], Msg[A]) -> $R
 scAWAIT             = tSchema [quant a] tAWAIT
-  where tAWAIT      = tFun fxProc (posRow (tMsg $ tVar a) $ posRow tCont' posNil) kwdNil tR
+  where tAWAIT      = tFun fxProc (posRow tCont' $ posRow (tMsg $ tVar a) posNil) kwdNil tR
         a           = TV KType $ name "A"
         tCont'      = tCont (tVar a)
 
