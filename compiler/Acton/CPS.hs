@@ -90,7 +90,7 @@ frame +: env                            = modX env $ \x -> x{ ctxtX = frame : ct
 
 setClassCtxt env                        = modX env $ \x -> x{ ctxtX = [], whereX = InClass }
 
-setDefCtxt env                          = modX env $ \x -> x{ whereX = InClass }
+setDefCtxt env                          = modX env $ \x -> x{ whereX = InDef }
 
 onTop env                               = whereX (envX env) == OnTop
 
