@@ -2,8 +2,119 @@
 
 ## Unreleased
 
+## [0.12.0] (2022-10-27)
+Edvin's second birthday, only 10 minor releases behind Acton ;)
+
+### Added
+- Zig is now used as the C compiler for Acton [#972]
+  - Many parts of Acton, like the run time system, builtins and parts of the
+    standard library are written in C
+  - actonc compiles Acton programs into C which are then compiled into binary
+    executables using a C compiler
+  - zig is now used for both of these use cases
+  - zig is bundled with Acton so that we know what version of zig we get, which
+    is the same across Linux and MacOS
+- Acton programs on Linux are now backwards compatible to GNU libc v2.28
+  - Previously, acton programs would be built for the GNU libc version on the
+    compiling computer, making it impossible to run on older distributions
+  - Now compatible with for example Ubuntu 20.04 LTS & Debian 10
+  - This is made possible by zigs incredible cross-compilation functionality,
+    which isn't just about targetting other OS, CPUs but also older libc
+    versions
+  - v2.28 appears to be the oldest version we can practically target without
+    code changes, even earlier versions fail compilation
+  - We could reduce backwards compatible, for example by targetting glibc 2.31,
+    if we find things that we would like access to, i.e. don't regard glibc 2.28
+    compatibility as a hard promise
+- Added `--always-build` to actonc [#988]
+  - Used in test suite so that we always force compilation in order to ensure
+    valid test results
+- `actonc` argument parsing now done using sub-parsers, allowing greater freedom
+  in constructing more complex commands [#976]
+- All external library dependencies are combined in one .a archive [#849]
+  - Decouples library dependency in builtins, RTS & stdlib from actonc compiler
+    arguments
+- All external library dependencies are now built from source [#984]
+  - Allows us to compile them with zig, thus power to select target libc
+- Add `xml` module [#835]
+  - Offers simple `encode()` and `decode()` operations
+  - Based on libxml2
+- The `int` type now supports arbitrary precision [#146]
+  - Add some big numbers!
+  - The previous implementation of `int` was as a signed 64 bit integer, this is
+    now available as the `i64` type in Acton, although its use is currently
+    quite limited.
+  - Longer term, fixed size integers like `i64` or `u64` (for an unsigned) are
+    available and can be chosen for high performance use cases. Developers
+    familiar with this level of coding are likely able to make an informed
+    choice about what integer type to choose. Using `int` for the arbitrary
+    precision type is the safer choice which will make most users happy.
+  - Using BSDNT library, which is a reasonably fast C implementation of
+    arbitrary precision types and arithmetic operations. It is not as fast as
+    MPL but has a more liberal license.
+
+### Fixed
+- Fixed seed arg parsing in actondb [#900]
+- Avoid crash during TCP client resume
+- DB now using logging rather fprintf(stderr, ...)
+- Reduce unprovoked CPS & 'rtail' bugs [#949]
+- Update docs for --root & `runacton` [#950]
+- `file.ReadFile` can now read arbitrarily large files [#955]
+- RTS does proper error handling of DB interaction [#957]
+  - This is a huge improvement!!!
+  - The run time system now properly reads the return code from all DB query
+    operations and acts appropriately. For example, lacking a quorum, the RTS
+    will continuously retry an operation until quorum can be reached.
+  - For some failures a larger chunk of operations needs to be retried, i.e. we
+    can't just wrap up a small function in a retry loop but need a larger retry
+    loop around a group of operations.
+  - DB API now returns a minority status which the RTS can and does react on
+    - Typical example is with 3 DB nodes and a commit goes through on 2, i.e.
+      with a quorum and is thus considered a success, however the 3rd node
+      rejected it because of a schema mismatch. The RTS can now be notified
+      through the minority status and attempt to repair the schema.
+      - A typical example of schema repairs necessary are for the queues, which
+        are dynamic. Every actor gets a queue in the database, so when new
+        actors are created, new queues also need to be created and if a
+        particular DB server is not up when the queue is created, it will be
+        missing and needs to be repaired later on.
+      - We should have proper sync up between DB servers, so that they query
+        each other and converge on the latest state. Until then, repair
+        initiated from RTS is our way of fixing it.
+- Notify gossip view to clients (RTS) from agreement round leader [#951]
+  - For example, in this scenario:
+    - db1 is started
+    - RTS is started & connected to db1 but unable to progress due to no quorum
+    - db2 is connected, gossips with db1 and we now have quorum
+    - RTS continues to be stalled as it is never notified about db2 and thus
+      unable to reach a quorum
+- Avoid MacOS quarantine shenanigans that kills actonc [#971]
+  - MacOS has some quarantine concept, so like if a file is downloaded from the
+    Internet, it is marked as quarantine and the user is asked "Are you sure you
+    want to run this" after which the quarantine flag, which is stored as a file
+    system extended attribute, is cleared.
+  - Somehow we trigger this quarantine, presumably by that we overwrite, through
+    cp, a binary executable that macos has run and this triggers it to set the
+    quarantine flag. The effect is that whenever we execute actonc, MacOS kills
+    -9 it, which is obviously rather annoying.
+  - By copying to a temporary file and then moving it in place, we avoid MacOS
+    setting the quarantine flag. We already did this, though for other reasons,
+    for actondb, so in a way this is a unification for the files in bin/
+
 ### Testing / CI
-- Simplify and clean up RTS DB test orchestrator [#941]
+- Simplify and clean up RTS DB test orchestrator [#941] [#973]
+- Stop testing on Ubuntu 20.04
+  - It's not possible to compile libxml2 on a stock Ubuntu 20.04 as a newer
+    version of automake is required than is shipped
+  - We mainly want to uphold run time compatibility with Ubuntu 20.04, like it
+    should be possible to run Acton applications but utilizing Ubuntu 20.04 as a
+    development platform for Acton is not a high priority target, thus dropping
+    it is quite fine.
+- Revamp Increase timeout
+- Avoid kill -9 on macos [#969]
+  - MacOS quarantine functionality thinks we are doing something fishy and kill
+    -9 our process
+  - Worked around by doing cp & mv instead of just a cp
 
 
 ## [0.11.7] (2022-10-03)
