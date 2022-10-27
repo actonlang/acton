@@ -29,6 +29,8 @@ debian/debhelper-build-stamp
 debian/changelog
 debian/files
 
+deps/*
+
 dist
 
 examples/*
