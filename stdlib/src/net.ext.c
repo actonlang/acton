@@ -46,7 +46,7 @@ void net$$DNS$lookup_a__on_resolve (uv_getaddrinfo_t *req, int status, struct ad
     free(req);
 }
 
-$R net$$DNS$lookup_a$local (net$$DNS __self__, $str name, $action on_resolve, $action on_error, $Cont c$cont) {
+$R net$$DNS$lookup_a$local (net$$DNS __self__, $Cont c$cont, $str name, $action on_resolve, $action on_error) {
     struct addrinfo *hints = (struct addrinfo *)malloc(sizeof(struct addrinfo));
     hints->ai_family = PF_INET;
     hints->ai_socktype = SOCK_STREAM;
@@ -103,7 +103,7 @@ void net$$DNS$lookup_aaaa__on_resolve (uv_getaddrinfo_t *req, int status, struct
     free(req);
 }
 
-$R net$$DNS$lookup_aaaa$local (net$$DNS __self__, $str name, $action on_resolve, $action on_error, $Cont c$cont) {
+$R net$$DNS$lookup_aaaa$local (net$$DNS __self__, $Cont c$cont, $str name, $action on_resolve, $action on_error) {
     struct addrinfo *hints = (struct addrinfo *)malloc(sizeof(struct addrinfo));
     hints->ai_family = PF_INET6;
     hints->ai_socktype = SOCK_STREAM;
@@ -194,7 +194,7 @@ $R net$$TCPIPConnection$_init (net$$TCPIPConnection __self__, $Cont c$cont) {
     return $R_CONT(c$cont, $None);
 }
 
-$R net$$TCPIPConnection$write$local (net$$TCPIPConnection __self__, $bytes data, $Cont c$cont) {
+$R net$$TCPIPConnection$write$local (net$$TCPIPConnection __self__, $Cont c$cont, $bytes data) {
     uv_stream_t *stream = (uv_stream_t *)from$int(__self__->_socket);
     // fd == -1 means invalid FD and can happen after __resume__
     if (stream == -1)
@@ -335,7 +335,7 @@ $R net$$TCPListenConnection$_init (net$$TCPListenConnection __self__, $Cont c$co
     return $R_CONT(c$cont, $None);
 }
 
-$R net$$TCPListenConnection$write$local (net$$TCPListenConnection __self__, $bytes data, $Cont c$cont) {
+$R net$$TCPListenConnection$write$local (net$$TCPListenConnection __self__, $Cont c$cont, $bytes data) {
     uv_stream_t *stream = (uv_stream_t *)from$int(__self__->client);
     // fd == -1 means invalid FD and can happen after __resume__
     if (stream == -1)

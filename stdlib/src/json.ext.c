@@ -77,7 +77,7 @@ void json$$encode_list(yyjson_mut_doc *doc, yyjson_mut_val *node, $list data) {
     }
 }
 
-$R json$$Json$encode$local (json$$Json __self__, $dict data, $Cont c$cont) {
+$R json$$Json$encode$local (json$$Json __self__, $Cont c$cont, $dict data) {
     // Create JSON document
     yyjson_mut_doc *doc = yyjson_mut_doc_new(NULL);
     yyjson_mut_val *root = yyjson_mut_obj(doc);
@@ -167,7 +167,7 @@ $list json$$decode_arr(yyjson_val *arr) {
     return res;
 }
 
-$R json$$Json$decode$local (json$$Json __self__, $str data, $Cont c$cont) {
+$R json$$Json$decode$local (json$$Json __self__, $Cont c$cont, $str data) {
     // Read JSON and get root
     yyjson_read_err err;
     yyjson_doc *doc = yyjson_read_opts(from$str(data), strlen(from$str(data)), 0, NULL, &err);

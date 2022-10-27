@@ -173,13 +173,13 @@ $R process$$Process$pid$local (process$$Process __self__, $Cont c$cont) {
     return $R_CONT(c$cont, ($atom)to$int(p->pid));
 }
 
-$R process$$Process$signal$local (process$$Process __self__, $int signal, $Cont c$cont) {
+$R process$$Process$signal$local (process$$Process __self__, $Cont c$cont, $int signal) {
     uv_process_t *p = (uv_process_t *)from$int(__self__->_p);
     uv_process_kill(p, from$int(signal));
     return $R_CONT(c$cont, $None);
 }
 
-$R process$$Process$write$local (process$$Process __self__, $bytes data, $Cont c$cont) {
+$R process$$Process$write$local (process$$Process __self__, $Cont c$cont, $bytes data) {
     uv_process_t *p = (uv_process_t *)from$int(__self__->_p);
 
     uv_write_t *req = (uv_write_t *)malloc(sizeof(uv_write_t));
