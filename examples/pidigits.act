@@ -1,0 +1,46 @@
+# A program to compute digits of PI.
+# At the time of writing this program, it is severely limited by the size of the
+# builtin int, which caps out at 32 bits. Acton needs a variable size integer
+# (like Python) in order to run this program correctly.
+#
+actor main(env):
+    def pi(limit):
+        i = k = ns = 0
+        k1 = 1
+        n,a,d,t,u = (1,0,1,0,0)
+        while(1):
+            print("state1 i:%d k:%d t:%d n:%d a:%d k1:%d a:%d d:%d" % (i, k, t, n, a, k1, a, d))
+            k += 1
+            t = n<<1
+            n *= k
+            a += t
+            k1 += 2
+            a *= k1
+            d *= k1
+            print("state2 i:%d k:%d t:%d n:%d a:%d k1:%d a:%d d:%d" % (i, k, t, n, a, k1, a, d))
+            if a >= n:
+                t,u = divmod(n*3+a,d)
+                print("state2.1: t:%d u:%d from divmod(%d, %d)" % (t, u, n*3+a, d))
+                u += n
+                print("state2.5: d:%d u:%d" % (d, u))
+                if d > u:
+                    print("road not taken")
+                    ns = ns*10 + t
+                    i += 1
+                    if i % 10 == 0:
+                        print ('%010d\t:%d' % (ns, i))
+                        ns = 0
+                    if i > limit or i == limit:
+                        print("breaking")
+                        break
+                    a -= d*t
+                    a *= 10
+                    n *= 10
+                print("state3 i:%d k:%d t:%d n:%d a:%d k1:%d a:%d d:%d" % (i, k, t, n, a, k1, a, d))
+            print("")
+
+    limit = 100
+    if len(env.argv) > 1:
+        limit = int(env.argv[1])
+    pi(limit)
+    await async env.exit(0)
