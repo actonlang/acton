@@ -568,7 +568,7 @@ instance Conv Expr where
       | n == primAWAITf                 = Var l primAWAITc
       | otherwise                       = Var l n
     conv (Call l e ps KwdNil)           = Call l (conv e) (conv ps) KwdNil
-    conv (TApp l e ts)                  = TApp l (conv e) ts
+    conv (TApp l e ts)                  = TApp l (conv e) (conv ts)
     conv (Cond l e1 e e2)               = Cond l (conv e1) (conv e) (conv e2)
     conv (IsInstance l e c)             = IsInstance l (conv e) c
     conv (BinOp l e1 Or e2)             = BinOp l (conv e1) Or (conv e2)
