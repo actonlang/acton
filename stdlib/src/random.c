@@ -14,11 +14,13 @@
 
 $int random$$randint ($int min, $int max) {
     // ensure we have a valid range where min is smaller than max
-    if (min->val > max->val) {
+    long minval = from$int(min);
+    long maxval = from$int(max);
+    if (minval > maxval) {
         $RAISE((($BaseException)$ValueError$new(to$str("min value must be smaller than max"))));
     }
     // upper end of the range we want when "based to 0"
-    int range = max->val - min->val;
+    int range = maxval - minval;
     // chop off all values that would cause skew, leaving only things within the
     // range that maps up to a multiple of the specified range
     int end = RAND_MAX / range;
@@ -29,7 +31,7 @@ $int random$$randint ($int min, $int max) {
     // spin getting new values until we find one in range
     while ((r = rand()) >= end);
     // normalize back to the requested range
-    return to$int(min->val + r%range);
+    return to$int(minval + r%range);
 }
 
 int random$$done$ = 0;

@@ -13,46 +13,46 @@
  */
 
 $Serializable $Serializable$new() {
-  return $NEW($Serializable);
+    return $NEW($Serializable);
 }
 
 void $Serializable$__init__ ($Serializable self) {
-  return;
+    return;
 }
 
 $value $value$new() {
-  return $NEW($value);
+    return $NEW($value);
 }
 
 void $value$__init__ ($value self) {
-  return;
+    return;
 }
 
 $object $object$new() {
-  return $NEW($object);
+    return $NEW($object);
 }
 
 void $object$__init__ ($object self) {
-  return;
+    return;
 }
 
 $str $value$__str__($value self) {
-  char *s;
-  asprintf(&s,"<%s object at %p>",self->$class->$GCINFO,self);
-  return to$str(s);
+    char *s;
+    asprintf(&s,"<%s object at %p>",self->$class->$GCINFO,self);
+    return to$str(s);
 }
 
 $str $object$__str__($object self) {
-  char *s;
-  asprintf(&s,"<%s object at %p>",self->$class->$GCINFO,self);
-  return to$str(s);
+    char *s;
+    asprintf(&s,"<%s object at %p>",self->$class->$GCINFO,self);
+    return to$str(s);
 }
 
 $bool $value$__bool__($value self) {
-  return $True;
+    return $True;
 }
 $bool $object$__bool__($object self) {
-  return $True;
+    return $True;
 }
 
 

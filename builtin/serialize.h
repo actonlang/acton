@@ -9,26 +9,26 @@
 typedef struct $ROW *$ROW;
 
 struct $ROW {
-  $ROW next;
-  int class_id;
-  int blob_size;
-  $WORD blob[];
+    $ROW next;
+    int class_id;
+    int blob_size;
+    $WORD blob[];
 };
 
 struct $ROWLISTHEADER {
-  $ROW fst;
-  $ROW last;
+    $ROW fst;
+    $ROW last;
 };
 
 //typedef struct $Serial$state *$Serial$state;
 
 struct $Serial$state {
-  char *$GCINFO;
-  $dict done;
-  $WORD (*globmap)($WORD);
-  long row_no;
-  $ROW row;
-  $ROW fst; //not used in deserialization
+    char *$GCINFO;
+    $dict done;
+    $WORD (*globmap)($WORD);
+    long row_no;
+    $ROW row;
+    $ROW fst; //not used in deserialization
 };
 
 // small-step helpers for defining serializations //////////////////////////////////////////////////

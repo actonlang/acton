@@ -1,17 +1,17 @@
 struct $NoneType$class {
-  char *$GCINFO;
-  int $class_id;
-  $Super$class $superclass;
-  void (*__init__)($NoneType);
-  void (*__serialize__)($NoneType,$Serial$state);
-  $NoneType (*__deserialize__)($NoneType,$Serial$state);
-  $bool (*__bool__)($NoneType);
-  $str (*__str__)($NoneType);
-  $str (*__repr__)($NoneType);
+    char *$GCINFO;
+    int $class_id;
+    $Super$class $superclass;
+    void (*__init__)($NoneType);
+    void (*__serialize__)($NoneType,$Serial$state);
+    $NoneType (*__deserialize__)($NoneType,$Serial$state);
+    $bool (*__bool__)($NoneType);
+    $str (*__str__)($NoneType);
+    $str (*__repr__)($NoneType);
 };
 
 struct $NoneType {
-  struct $NoneType$class *$class;
+    struct $NoneType$class *$class;
 };
 
 extern struct $NoneType$class $NoneType$methods;

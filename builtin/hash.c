@@ -21,15 +21,15 @@
 #include "builtin.h"
 
 /* 
-Hashing of primitive types as in 
+   Hashing of primitive types as in 
 
-https://github.com/python/cpython/blob/master/Python/pyhash.c
+   https://github.com/python/cpython/blob/master/Python/pyhash.c
 
-One of the design criteria for the Python hash algorithms is that e.g. 15 and 15.0 should hash to the same value.
-This is not relevant in the typed context of Acton, but we still stick to this algorithm.
+   One of the design criteria for the Python hash algorithms is that e.g. 15 and 15.0 should hash to the same value.
+   This is not relevant in the typed context of Acton, but we still stick to this algorithm.
 
-In Python, hash values may be negative, but -1 is used to signal an error. (When can hash computation fail in Acton?)
-However, CPython uses unsigned type size_t for hash values.
+   In Python, hash values may be negative, but -1 is used to signal an error. (When can hash computation fail in Acton?)
+   However, CPython uses unsigned type size_t for hash values.
 
 
 */
@@ -50,27 +50,27 @@ However, CPython uses unsigned type size_t for hash values.
 #define SIZEOF_PY_UHASH_T 8
 
 /* 
-BvS 191002: For the moment, stick to little endian. In CPython, this is set in pyport.h based on info from the configure script.
+   BvS 191002: For the moment, stick to little endian. In CPython, this is set in pyport.h based on info from the configure script.
 */
 
 #define PY_BIG_ENDIAN 0
 #define PY_LITTLE_ENDIAN 1
 
 static long long_hash (long u) {
-  long sign=1;
-  if (u<0)  {
+    long sign=1;
+    if (u<0)  {
 
-    sign=-1;
-    u = -u;
-  }
-  long h = u % _PyHASH_MODULUS * sign;
-  if (h == (long)-1)
-    h = (long)-2;
-  return h;
+        sign=-1;
+        u = -u;
+    }
+    long h = u % _PyHASH_MODULUS * sign;
+    if (h == (long)-1)
+        h = (long)-2;
+    return h;
 }
 
-long $int_hash ($int n) {
-  return long_hash(from$int(n));
+long $i64_hash ($i64 n) {
+    return long_hash(from$i64(n));
 }
 
 static long double_hash(double d) {
@@ -118,22 +118,22 @@ static long double_hash(double d) {
 }
 
 long $float_hash($float v) {
-  return double_hash(from$float(v));
+    return double_hash(from$float(v));
 }
 
 long $complex_hash($complex c) {
-  // we use the tuple_hash algorithm (see below)
-  long h1 = double_hash(creal(c->val));
-  long h2 = double_hash(cimag(c->val));
-  long x = 0x345678UL;
-  long mult = _PyHASH_MULTIPLIER;
-  x = (x ^ h1) * mult;
-  mult +=  (long)82522UL;
-  x = (x ^ h2) * mult;
-  x += 97531UL;
-  if (x == (long)-1) 
-    x = -2;
-  return x;
+    // we use the tuple_hash algorithm (see below)
+    long h1 = double_hash(creal(c->val));
+    long h2 = double_hash(cimag(c->val));
+    long x = 0x345678UL;
+    long mult = _PyHASH_MULTIPLIER;
+    x = (x ^ h1) * mult;
+    mult +=  (long)82522UL;
+    x = (x ^ h2) * mult;
+    x += 97531UL;
+    if (x == (long)-1) 
+        x = -2;
+    return x;
 }  
  
 long $pointer_hash($WORD p) {
@@ -180,12 +180,12 @@ _Py_HashSecret_t _Py_HashSecret = {{0}};
 
 static long pysiphash(void *src, long src_sz) {
     return (long)siphash24(
-        _le64toh(_Py_HashSecret.siphash.k0), _le64toh(_Py_HashSecret.siphash.k1),
-        src, src_sz);
+                           _le64toh(_Py_HashSecret.siphash.k0), _le64toh(_Py_HashSecret.siphash.k1),
+                           src, src_sz);
 }
 
 long $string_hash($str s) {
-  int len = s->nbytes;
+    int len = s->nbytes;
     long x;
     /*
       We make the hash of the empty string be 0, rather than using
@@ -194,7 +194,7 @@ long $string_hash($str s) {
     if (len == 0) {
         return 0;
     }
-         x = pysiphash(s->str, len);
+    x = pysiphash(s->str, len);
 
     if (x == -1)
         return -2;
@@ -202,7 +202,7 @@ long $string_hash($str s) {
 }
 
 long $bytes_hash($bytes s) {
-  int len = s->nbytes;
+    int len = s->nbytes;
     long x;
     /*
       We make the hash of the empty string be 0, rather than using
@@ -211,7 +211,7 @@ long $bytes_hash($bytes s) {
     if (len == 0) {
         return 0;
     }
-         x = pysiphash(s->str, len);
+    x = pysiphash(s->str, len);
 
     if (x == -1)
         return -2;
@@ -220,22 +220,22 @@ long $bytes_hash($bytes s) {
 
    
 /*
- "Old" hash algorithm for tuples; used in Python versions <= 3.7. 
-    From 3.8 the xxHash-based algorithm above is used.
+  "Old" hash algorithm for tuples; used in Python versions <= 3.7. 
+  From 3.8 the xxHash-based algorithm above is used.
 */
 long $tuple_hash($Hashable$tuple wit,$tuple tup) {
-  int size = tup->size;
-  long x = 0x345678UL;
-  long y;
-  long mult = _PyHASH_MULTIPLIER;
-  for (int i=0; i < size; i++) {
-    $Hashable h = wit->w$Hashable[i];
-    y = from$int(h->$class->__hash__(h,tup->components[i]));
-    x = (x ^ y) * mult;
-    mult += (long)(82520UL + 2*(size-i-1));
-  }
-  x += 97531UL;
-  if (x == (long)-1) 
-    x = -2;
-  return x;
+    int size = tup->size;
+    long x = 0x345678UL;
+    long y;
+    long mult = _PyHASH_MULTIPLIER;
+    for (int i=0; i < size; i++) {
+        $Hashable h = wit->w$Hashable[i];
+        y = from$int(h->$class->__hash__(h,tup->components[i]));
+        x = (x ^ y) * mult;
+        mult += (long)(82520UL + 2*(size-i-1));
+    }
+    x += 97531UL;
+    if (x == (long)-1) 
+        x = -2;
+    return x;
 }

@@ -488,14 +488,14 @@ castLit env (Strings l ss) p        = format (concat ss) p
           | f `elem` "#0- +"        = flags s p
         flags s p                   = width s p
         width ('*':s) (PosArg e p)  = comma <+> parens (text "int") <> expr <> dot s p
-          where expr                = parens (parens (gen env tInt) <> gen env e) <> text "->val"
+          where expr                = text "from$int" <> parens (gen env e) 
         width (n:s) p
           | n `elem` "123456789"    = let (n',s') = span (`elem` "0123456789") s in dot s' p
         width s p                   = dot s p
         dot ('.':s) p               = prec s p
         dot s p                     = len s p
         prec ('*':s) (PosArg e p)   = comma <+> parens (text "int") <> expr <> len s p
-          where expr                = parens (parens (gen env tInt) <> gen env e) <> text "->val"
+          where expr                = text "from$int" <> parens (gen env e)  --parens (parens (gen env tInt) <> gen env e) <> text "->val"
         prec (n:s) p
           | n `elem` "0123456789"   = let (n',s') = span (`elem` "0123456789") s in len s' p
         prec s p                    = len s p
@@ -504,7 +504,7 @@ castLit env (Strings l ss) p        = format (concat ss) p
         len s p                     = conv s p
         conv (t:s) (PosArg e p)
           | t `elem` "diouxXc"      = comma <+> expr <> format s p
-          where expr                = parens (parens (gen env tInt) <> gen env e) <> text "->val"
+          where expr                = text "from$int" <> parens (gen env e) --parens (parens (gen env tInt) <> gen env e) <> text "->val"
         conv (t:s) (PosArg e p)
           | t `elem` "eEfFgG"       = comma <+> expr <> format s p
           where expr                = parens (parens (gen env tFloat) <> gen env e) <> text "->val"
@@ -645,7 +645,7 @@ instance Gen Expr where
     gen env (Var _ n)
       | NClass{} <- findQName n env = newcon' env n
       | otherwise                   = gen env n
-    gen env (Int _ _ str)           = gen env primToInt <> parens (text str)
+    gen env (Int _ _ str)           = gen env primToStr <> parens (text "\"" <> text str <> text "\"")
     gen env (Float _ _ str)         = gen env primToFloat <> parens (text str)
     gen env (Bool _ True)           = gen env primTrue
     gen env (Bool _ False)          = gen env primFalse

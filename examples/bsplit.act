@@ -1,0 +1,27 @@
+import math
+
+def bsplit(a,b):
+    if b-a == 1:
+        return (1,b)
+    else:
+        m = a + (b-a)//2
+        p1,q = bsplit(a,m)
+        p,q2 = bsplit(m,b)
+        p1 *= q2
+        p += p1
+        q *= q2
+        return (p,q)
+
+def e(prec):
+     fp = float(prec)
+     n = int(3 * fp / math.log(fp) + 20)
+     p,q = bsplit(0,n)
+     p += q
+     p *= 10**prec
+     return p//q
+
+
+actor main(env):
+     print(e(10000))
+     env.exit(0)
+
