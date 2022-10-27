@@ -226,7 +226,7 @@ isProcMeth env _                    = False
 sealedMeth env e
   | Just n <- isVar e,
     n `elem` wrapped env            = Just n
-xealedMeth env _                    = Nothing
+sealedMeth env _                    = Nothing
 
 instance Deact Expr where
     deact env (Var l (NoQ n))
