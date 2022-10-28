@@ -457,6 +457,7 @@ instance PreCPS Expr where
                                              return (eVar v)
       | otherwise                       = Call l <$> pre env e <*> pre env ps <*> pure KwdNil
       where t                           = typeOf env e0
+    pre env (Async l e)                 = Async l <$> pre env e
     pre env (TApp l e ts)               = TApp l <$> pre env e <*> pure ts
     pre env (Cond l e1 e e2)            = Cond l <$> pre env e1 <*> pre env e <*> pre env e2
     pre env (IsInstance l e c)          = IsInstance l <$> pre env e <*> return c
