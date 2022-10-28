@@ -868,8 +868,6 @@ refine env cs te eq
         def_vss                         = [ nub $ filter canGen $ tyfree sc | (_, NDef sc _) <- te, null $ scbind sc ]
         gen_vs                          = nub (foldr union (tyfree cs) def_vss)
 
-        canGen tv                       = tvkind tv /= KFX
-
         canQual (Impl _ (TVar _ v) _)   = univar v
         canQual _                       = False
 

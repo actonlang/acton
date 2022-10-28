@@ -200,15 +200,16 @@ buildProject opts = do
 
 printDocs :: C.DocOptions -> IO ()
 printDocs opts = do
-              iff (not (null $ C.signs opts)) $ do
-                     let filename = C.signs opts
-                         (fileBody,fileExt) = splitExtension $ takeFileName filename
-                     case fileExt of
-                            ".ty" -> do
-                                paths <- findPaths filename defaultOpts
-                                env0 <- Acton.Env.initEnv (sysTypes paths) False
-                                Acton.Types.showTyFile (Acton.Env.setMod (modName paths) env0) filename
-                            _     -> printErrorAndExit ("Unknown filetype: " ++ filename)
+-- TODO: re-enable after figuring out extra args to showTyFile
+--              iff (not (null $ C.signs opts)) $ do
+--                     let filename = C.signs opts
+--                         (fileBody,fileExt) = splitExtension $ takeFileName filename
+--                     case fileExt of
+--                            ".ty" -> do
+--                                paths <- findPaths filename defaultOpts
+--                                env0 <- Acton.Env.initEnv (sysTypes paths) False
+--                                Acton.Types.showTyFile (Acton.Env.setMod (modName paths) env0) filename
+--                            _     -> printErrorAndExit ("Unknown filetype: " ++ filename)
               iff (not (null $ C.full opts)) $
                    putStrLn "Full documentation not implemented"           -- issue #708
 
@@ -555,12 +556,6 @@ checkUptoDate paths actFile outFiles imps = do
                                    (False, False) -> error("ERROR: Unable to find interface file")
                              return filePath
 
-
-fmtTime t =
-    printf "%6.3f s" secs
-  where
-    secs :: Float
-    secs = (fromIntegral(sec t)) + (fromIntegral (nsec t) / 1000000000)
 
 runRestPasses :: C.CompileOptions -> Paths -> Acton.Env.Env0 -> A.Module -> Bool -> IO Acton.Env.Env0
 runRestPasses opts paths env0 parsed stubMode = do
