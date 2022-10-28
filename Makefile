@@ -271,7 +271,7 @@ DEP_LIBS+=deps/instdir/lib/libxml2.a
 
 deps/instdir/include/protobuf-c:
 	mkdir -p $(dir $@)
-	cp -av $$(realpath /usr/include/protobuf-c /usr/local/include/protobuf-c /opt/homebrew/include/protobuf-c 2>/dev/null | head -n1) $@
+	cp -av $$(pkg-config --variable includedir libprotobuf-c 2>/dev/null)/protobuf-c $@
 
 lib/libActonDeps.a: $(DEP_LIBS) deps/instdir/include/protobuf-c
 	mkdir -p lib_deps
