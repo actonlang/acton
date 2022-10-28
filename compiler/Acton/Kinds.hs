@@ -304,7 +304,7 @@ instance KCheck Decl where
                                          q' <- swapXVars tmp
                                          env1 <- extvars (tybound (q++q')) env
                                          q <- kchkQBinds env1 (q++q')
-                                         Def l n q <$> kchk env1 p <*> kchk env1 k <*> kexp KType env1 t <*> kchkSuite env1 b <*> pure d <*> kexp KFX env1 x
+                                         Def l n q <$> kchk env1 p <*> kchk env1 k <*> kexp KType env1 t <*> kchkSuite env1 b <*> pure d <*> kfx env1 x
       where ambig                   = qualbound q \\ closeDepVarsQ (tyfree p ++ tyfree k ++ tyfree t ++ tyfree x) q
     kchk env (Actor l n q p k b)    = do env1 <- extvars (qbound q) env
                                          Actor l n <$> kchkQBinds env1 q <*> kchk env1 p <*> kchk env1 k <*> kchkSuite env1 b
@@ -354,7 +354,7 @@ instance KCheck Expr where
     kchk env (DotI l e i)           = DotI l <$> kchk env e <*> return i
     kchk env (RestI l e i)          = RestI l <$> kchk env e <*> return i
     kchk env (Lambda l p k e x)     = Lambda l <$> (kchk env =<< convTWild p) <*> (kchk env =<< convTWild k) <*> 
-                                                   kchk env e <*> (kexp KFX env =<< convTWild x)
+                                                   kchk env e <*> (kfx env =<< convTWild x)
     kchk env (Yield l e)            = Yield l <$> kchk env e
     kchk env (YieldFrom l e)        = YieldFrom l <$> kchk env e
     kchk env (Tuple l es ks)        = Tuple l <$> kchk env es <*> kchk env ks
@@ -502,7 +502,7 @@ instance KInfer Type where
                                          return (k, TVar l v)
     kinfer env (TCon l c)           = do c <- kexp KType env c
                                          return (KType, TCon l c)
-    kinfer env (TFun l fx p k t)    = do fx <- kexp KFX env fx
+    kinfer env (TFun l fx p k t)    = do fx <- kfx env fx
                                          p <- kexp PRow env p
                                          k <- kexp KRow env k
                                          t <- kexp KType env t
@@ -519,6 +519,10 @@ instance KInfer Type where
                                          r <- kexp k env r
                                          return (k, TRow l k n t r)
     kinfer env (TFX l fx)           = return (KFX, TFX l fx)
+
+kfx env (TVar _ tv)
+  | not $ univar tv                 = variableFX tv
+kfx env t                           = kexp KFX env t
 
 kexp k env t                        = do (k',t) <- kinfer env t
                                          kunify (loc t) k' k

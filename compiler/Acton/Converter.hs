@@ -24,6 +24,8 @@ import Acton.Env
 import Acton.Subst
 import Acton.TypeM
 import Acton.TypeEnv
+import qualified Data.Map.Strict as Map
+import Data.Map.Strict (Map)
 
 pruneStmts xs (Signature l ns t d : ss)
   | null ns'                            = pruneStmts xs ss
@@ -33,10 +35,14 @@ pruneStmts xs (Decl l ds : ss)
   | null ds'                            = pruneStmts xs ss
   | otherwise                           = Decl l ds' : pruneStmts xs ss
   where ds'                             = filter ((`elem`xs) . dname) ds
+pruneStmts xs (s@Assign{} : ss)
+  | null ns                             = pruneStmts xs ss
+  | otherwise                           = s : pruneStmts xs ss
+  where ns                              = bound s `intersect` xs
 pruneStmts xs (s : ss)                  = s : pruneStmts xs ss
 pruneStmts xs []                        = []
 
-pruneDefs env n ss                      = pruneStmts xs ss
+pruneBody env n ss                      = pruneStmts xs ss
   where xs                              = directAttrs env n
 
 convProtocol env n0 q ps0 eq wmap b     = mainClass : sibClasses
@@ -50,29 +56,30 @@ convProtocol env n0 q ps0 eq wmap b     = mainClass : sibClasses
 
         immsibs                         = [ (witAttr w, tCon $ convProto p, inherited ws0) | ([w],ws0,p) <- ps ]
 
-        mainClass                       = Class NoLoc n0 q1 bases mainClassBody
-          where mainClassBody           = qsigs ++ psigs ++ Decl NoLoc [mainInit] : pruneDefs env (NoQ n0) (convStmts tSelf' eq1 b)
+        mainClass                       = --trace ("###  MRO for " ++ prstr n0 ++ ": " ++ prstrs ps0) $
+                                          --trace ("  # SIBS for " ++ prstr n0 ++ ": " ++ prstrs [ sibName ws n0 | (ws,_,_,_,_) <- allsibs ]) $
+                                          Class NoLoc n0 q1 bases mainClassBody
+          where mainClassBody           = qsigs ++ psigs ++ Decl NoLoc [mainInit] : convStmts tSelf' eq1 (pruneBody env (NoQ n0) b)
                 psigs                   = [ Signature NoLoc [n] (monotype t) Property | (n,t,False) <- immsibs ]
                 mainInit                = Def NoLoc initKW [] mainParams KwdNIL (Just tNone) (mkBody mainInitBody) NoDec fxPure
                 mainParams              = wit2par ((selfKW',tSelf) : qpars ++ [ (n,t) | (n,t,_) <- immsibs ]) PosNIL
                 mainInitBody            = bindWits eq0 ++ initCall (tcargs main) mainArgs main ++ mainCopies
                 mainArgs                = witArgs (tcname main) wmap ++ [ eVar n | (n,_,True) <- immsibs ]
                 mainCopies              = qcopies ++ [ MutAssign NoLoc (eDot (eVar selfKW') n) (eVar n) | (n,t,False) <- immsibs ]
-                eq0                     = (tvarWit tvSelf p0, t0, eVar selfKW') : eq
-                eq1                     = (tvarWit tvSelf p0, t0, eVar selfKW') : qcopies' ++ eq
+                eq0                     = Eqn (tvarWit tvSelf p0) t0 (eVar selfKW') : eq
+                eq1                     = Eqn (tvarWit tvSelf p0) t0 (eVar selfKW') : qcopies' ++ eq
 
         allsibs                         = [ sib ws ws0 p | (ws,ws0,p) <- ps, not (null ws) ]
           where sib ws ws0 p            = (ws, tcname p, us, witArgs w0 wmap, inherited ws0)
                   where us              = us0 ++ us1
                         us1             = [ convProto p | (ws',p) <- ps0, catRight ws' == ws ] ++ [cValue]
-                        us0             = [ TC (modOf w0 $ baseName w) (tcargs $ head us1) | w <- zipWith (:) (wheads ws0) (wtails ws0) ]
+                        us0             = [ TC (baseGName w) (tcargs $ head us1) | w <- zipWith (:) (wheads ws0) (wtails ws0) ]
                         w0              = if inherited ws0 then tcname main else tcname p
 
         sibClasses                      = [ Class NoLoc (sibName ws n0) q1 us (sibClassBody ws n (head us) wes inh) | (ws,n,us,wes,inh) <- allsibs ]
 
-        sibClassBody ws n p wes inh     = qsigs ++ psigs ++ Decl NoLoc [sibInit] : pruneDefs env n (convStmts tSelf' eq1 b)
-          where psigs                   = [ Signature NoLoc [w0] (monotype t0) Property ]
-                sibInit                 = Def NoLoc initKW [] sibParams KwdNIL (Just tNone) (mkBody sibInitBody) NoDec fxPure
+        sibClassBody ws n p wes inh     = qsigs ++ psigs ++ Decl NoLoc [sibInit] : convStmts tSelf' eq1 (pruneBody env n b)
+          where sibInit                 = Def NoLoc initKW [] sibParams KwdNIL (Just tNone) (mkBody sibInitBody) NoDec fxPure
                 sibParams               = wit2par ((selfKW',tSelf) : qpars ++ sibSubParams ++ sibCtxt) PosNIL
                 sibCtxt                 = witCtxt ps ws ++ [(w0,t0)]
                 sibInitBody             = bindWits eq0 ++ initCall (tcargs p) (wes ++ sibSubArgs ++ sibCtxtArgs) p ++ sibCopies
@@ -80,13 +87,14 @@ convProtocol env n0 q ps0 eq wmap b     = mainClass : sibClasses
                 sibSubParams            = [ (witAttr (last ws'), tCon $ convProto p') | (ws',_,p') <- ps, truePrefix ws ws' ]
                 sibSubArgs              = [ eVar (witAttr (last ws')) | (ws',_,p') <- ps, truePrefix ws ws' ]
                 sibCtxtArgs             = (if inh then id else init) [ eVar n | (n,t) <- sibCtxt ]
-                eq0                     = (tvarWit tvSelf p0, t0, eVar w0) : eq
-                eq1                     = (tvarWit tvSelf p0, t0, eDot (eVar selfKW') w0) : qcopies' ++ eq
+                eq0                     = Eqn (tvarWit tvSelf p0) t0 (eVar w0) : eq
+                eq1                     = Eqn (tvarWit tvSelf p0) t0 (eDot (eVar selfKW') w0) : qcopies' ++ eq
 
         qsigs                           = [ Signature NoLoc [qualAttr p v n0] (monotype $ impl2type (tVar v) p) Property | (v,p) <- quals env q ]
+        psigs                           = [ Signature NoLoc [w0] (monotype t0) Property ]
         qpars                           = [ (tvarWit v p, impl2type (tVar v) p) | (v,p) <- quals env q ]
         qcopies                         = [ MutAssign NoLoc (eDot (eVar selfKW') $ qualAttr p v n0) (eVar $ tvarWit v p) | (v,p) <- quals env q ]
-        qcopies'                        = [ (tvarWit v p, impl2type (tVar v) p, eDot (eVar selfKW') $ qualAttr p v n0) | (v,p) <- quals env q ]
+        qcopies'                        = [ Eqn (tvarWit v p) (impl2type (tVar v) p) (eDot (eVar selfKW') $ qualAttr p v n0) | (v,p) <- quals env q ]
 
 inherited (Left _ : _)                  = True
 inherited _                             = False
@@ -97,12 +105,16 @@ wtails (w:ws)
   where ws'                             = catRight ws
 
 wheads (Right w:ws)
-  | null $ catRight ws                  = [w]
+  | null $ catRight ws                  = []
   | otherwise                           = w : wheads ws
 wheads (Left w:ws)                      = w : wheads ws
 
+groupBranch ([],_) m                    = m
+groupBranch p@(w:_,_) m                 = Map.insertWith (++) w [p] m
+
 convExtension env n1 c0 q ps0 eq wmap b = mainClass : sibClasses
-  where ps                              = trim ps0
+  where pss                             = Map.elems $ foldr groupBranch Map.empty ps0
+        ps                              = trim ps0
         q1                              = noqual env q
         tvs                             = map tVar $ qbound q1
         t0                              = tCon c0
@@ -111,30 +123,33 @@ convExtension env n1 c0 q ps0 eq wmap b = mainClass : sibClasses
         main                            = head bases
         bases                           = [ instProto t0 p | (ws,p) <- ps0, null (catRight ws) ] ++ [cValue]
 
-        mainClass                       = Class NoLoc n1 q1 bases mainClassBody
-          where mainClassBody           = qsigs ++ Decl NoLoc [mainInit] : pruneDefs env (tcname main) (convStmts t0 eq1 b)
+        mainClass                       = --trace ("###  mro for " ++ prstr n1 ++ ": " ++ prstrs ps0) $
+                                          --trace ("### branches for " ++ prstr n1 ++ "\n" ++ render (nest 4 $ vcat [ commaSep pretty ps1 | ps1 <- pss ])) $
+                                          --trace ("  # sibs for " ++ prstr n1 ++ ": " ++ prstrs [ sibName ws n1 | (ws,_,_,_,_) <- allsibs ]) $
+                                          Class NoLoc n1 q1 bases mainClassBody
+          where mainClassBody           = qsigs ++ Decl NoLoc [mainInit] : convStmts t0 eq1 (pruneBody env (tcname main) b)
                 mainInit                = Def NoLoc initKW [] mainParams KwdNIL (Just tNone) (mkBody mainInitBody) NoDec fxPure
                 mainParams              = wit2par ((selfKW',tSelf) : qpars) PosNIL
                 mainInitBody            = bindWits eq0 ++ initCall ts (witArgs (tcname main) wmap ++ sibSubs []) main ++ qcopies
-                eq0                     = (thisKW', tCon main, eVar selfKW') : eq
-                eq1                     = (thisKW', tCon main, eVar selfKW') : qcopies' ++ eq
+                eq0                     = Eqn thisKW' (tCon main) (eVar selfKW') : eq
+                eq1                     = Eqn thisKW' (tCon main) (eVar selfKW') : qcopies' ++ eq
 
         allsibs                         = [ sib ws ws0 p | (ws,ws0,p) <- ps, not (null ws) ]
           where sib ws ws0 p            = (ws, tcname p, us, witArgs w0 wmap, inherited ws0)
                   where us              = us0 ++ us1
                         us1             = [ instProto t0 p | (ws',p) <- ps0, catRight ws' == ws ] ++ [cValue]
-                        us0             = [ TC (modOf w0 $ baseName w) (tcargs $ head us1) | w <- zipWith (:) (wheads ws0) (wtails ws0) ]
+                        us0             = [ TC (baseGName w) (tcargs $ head us1) | w <- zipWith (:) (wheads ws0) (wtails ws0) ]
                         w0              = if inherited ws0 then tcname main else tcname p
 
         sibClasses                      = [ Class NoLoc (sibName ws n1) q1 us (sibClassBody ws n (head us) wes inh) | (ws,n,us,wes,inh) <- allsibs ]
 
-        sibClassBody ws n p wes inh     = qsigs ++ Decl NoLoc [sibInit] : pruneDefs env n (convStmts t0 eq1 b)
+        sibClassBody ws n p wes inh     = qsigs ++ Decl NoLoc [sibInit] : convStmts t0 eq1 (pruneBody env n b)
           where sibInit                 = Def NoLoc initKW [] sibParams KwdNIL (Just tNone) (mkBody sibInitBody) NoDec fxPure
                 sibParams               = wit2par ((selfKW',tSelf) : qpars ++ sibCtxt) PosNIL
                 sibCtxt                 = witCtxt ps ws ++ [(w0,tCon main)]
                 sibInitBody             = bindWits eq0 ++ initCall ts (wes ++ sibSubs ws ++ sibArgs ws) p ++ qcopies
-                eq0                     = (thisKW', tCon main, eVar  w0) : eq
-                eq1                     = (thisKW', tCon main, eDot (eVar selfKW') w0) : qcopies' ++ eq
+                eq0                     = Eqn thisKW' (tCon main) (eVar  w0) : eq
+                eq1                     = Eqn thisKW' (tCon main) (eDot (eVar selfKW') w0) : qcopies' ++ eq
 
         sibSubs ws                      = [ eCall (tApp (eVar $ sibName ws' n1) tvs) (qargs ++ eVar selfKW' : sibArgs ws) | (ws',_,p') <- ps, truePrefix ws ws' ]
 
@@ -145,7 +160,7 @@ convExtension env n1 c0 q ps0 eq wmap b = mainClass : sibClasses
         qpars                           = [ (tvarWit v p, impl2type (tVar v) p) | (v,p) <- quals env q ]
         qargs                           = [ eVar n | (n,p) <- qpars ]
         qcopies                         = [ MutAssign NoLoc (eDot (eVar selfKW') $ qualAttr p v n1) (eVar $ tvarWit v p) | (v,p) <- quals env q ]
-        qcopies'                        = [ (tvarWit v p, impl2type (tVar v) p, eDot (eVar selfKW') $ qualAttr p v n1) | (v,p) <- quals env q ]
+        qcopies'                        = [ Eqn (tvarWit v p) (impl2type (tVar v) p) (eDot (eVar selfKW') $ qualAttr p v n1) | (v,p) <- quals env q ]
 
 
 trim ps0                                = nubBy eqWit [ (catRight ws0, ws0, p) | (ws0,p) <- ps0 ]
@@ -180,6 +195,8 @@ sibName ws n                            = Derived (baseName ws) n
 baseName [w]                            = deriveQ w
 baseName (w : ws)                       = Derived (baseName ws) (deriveQ w)
 
+baseGName ws                            = modOf (head ws) $ baseName ws
+
 modOf (NoQ _)                           = NoQ
 modOf (QName m _)                       = QName m
 modOf (GName m _)                       = GName m
@@ -205,43 +222,53 @@ convStmts t0 eq stmts                   = map conv stmts
         convS (TSchema l q t)           = TSchema l (q) (convT t)
         convT (TFun l fx p k t)         = TFun l fx (posRow (tVar tvSelf) p) k t
         convT t                         = t
-        convD (Def l n q p k t b d x)   = Def l n (convSelf t0 q) (wit2par [(selfKW',tSelf)] $ convSelf t0 p) (convSelf t0 k) (convSelf t0 t) b' d x
+        convD (Def l n q p k t b _ x)   = Def l n (convSelf t0 q) (wit2par [(selfKW',tSelf)] $ convSelf t0 p) (convSelf t0 k) (convSelf t0 t) b' NoDec x
           where b'                      = bindWits eq ++ b
         convD d                         = d
 
 -- Convert a TEnv -------------------------------------------------------------------------------------------
 
 convEnvProtos env                       = mapModules conv env
-  where conv env1 m (n, NDef sc d)      = [(n, NDef (convS sc) d)]
-        conv env1 m (n, NSig sc d)      = [(n, NSig (convS sc) d)]
-        conv env1 m (n, NAct q p k te)  = [(n, NAct (noqual env q) (qualWRow env q p) k (concat $ map (conv env1 m) te))]
-        conv env1 m (n, NProto q us te) = map (fromClass env1) $ convProtocol env n q us [] [] (fromSigs env te)
-        conv env1 m (n, NExt q c us te) = map (fromClass env1) $ convExtension env n c q us [] [] []
-        conv env1 m (n, NClass q us te) = [(n, NClass (noqual env q) us (convClassTEnv env q te))]
-        conv env1 m ni                  = [ni]
-        convS (TSchema l q t)           = TSchema l (noqual env q) (convT q t)
-        convT q (TFun l x p k t)        = TFun l x (qualWRow env q p) k t
-        convT q t                       = t
+  where
+    conv env1 m (n, NDef sc d)          = [(n, NDef (convS sc) d)]
+    conv env1 m (n, NSig sc d)          = [(n, NSig (convS sc) d)]
+    conv env1 m (n, NAct q p k te)      = [(n, NAct (noqual env q) (qualWRow env q p) k (concat $ map (conv env m) te))]
+    conv env1 m ni@(n, NProto q us te)  = map (fromClass env) $ convProtocol (define [ni] env) n q us [] [] (fromTEnv te)
+    conv env1 m ni@(n, NExt q c us te)  = map (fromClass env) $ convExtension (define [ni] env) n c q us [] [] (fromTEnv te)
+    conv env1 m (n, NClass q us te)     = [(n, NClass (noqual env q) us (convClassTEnv env q te))]
+    conv env1 m ni                      = [ni]
+    convS (TSchema l q t)               = TSchema l (noqual env q) (convT q t)
+    convT q (TFun l x p k t)            = TFun l x (qualWRow env q p) k t
+    convT q t                           = t
 
-fromClass env (Class _ n q us b)        = (n, NClass q (leftpath us) (fromStmts b))
+fromClass env (Class _ n q us b)        = (n, NClass q (leftpath us) (fromStmts env b))
 
-fromStmts (Signature _ ns sc dec : ss)  = [ (n, NSig sc dec) | n <- ns ] ++ fromStmts ss
-fromStmts (Decl _ ds : ss)              = fromDefs ds ++ fromStmts ss
-fromStmts (_ : ss)                      = fromStmts ss
-fromStmts []                            = []
-
-fromDefs (Def l n q p k a b d fx : ds)  = (n, NDef (TSchema NoLoc q (TFun NoLoc fx (prowOf' p d) (krowOf k) (fromJust a))) d) : fromDefs ds
-  where prowOf' p Static                = prowOf p
-        prowOf' (PosPar _ _ _ p) _      = prowOf p
-fromDefs (_ : ds)                       = fromDefs ds
-fromDefs []                             = []
-
-fromSigs env ((n, NSig sc dec) : te)    = Signature NoLoc [n] (convS sc) dec : fromSigs env te
+fromStmts env (Signature _ ns sc d : ss)= [ (n, NSig (convS sc) d) | n <- ns ] ++ fromStmts env ss
   where convS (TSchema l q t)           = TSchema l (noqual env q) (convT q t)
         convT q (TFun l x p k t)        = TFun l x (qualWRow env q p) k t
         convT q t                       = t
-fromSigs env (_ : te)                   = fromSigs env te
-fromSigs env []                         = []
+fromStmts env (Decl _ ds : ss)          = fromDefs env ds ++ fromStmts env ss
+fromStmts env (Assign _ [PVar _ n (Just t)] _ : ss)
+                                        = (n, NVar t) : fromStmts env ss
+fromStmts env (_ : ss)                  = fromStmts env ss
+fromStmts env []                        = []
+
+fromDefs env (Def l n q p k a _ d fx : ds)
+                                        = (n, NDef (TSchema NoLoc q (TFun NoLoc fx (prowOf' p d) (krowOf k) (fromJust a))) d) : fromDefs env ds
+  where prowOf' p Static                = prowOf p
+        prowOf' (PosPar _ _ _ p) _      = prowOf p
+fromDefs env (_ : ds)                   = fromDefs env ds
+fromDefs env []                         = []
+
+fromTEnv ((n, NSig sc dec) : te)        = Signature NoLoc [n] sc dec : fromTEnv te
+fromTEnv ((n, NDef sc dec) : te)        = Decl NoLoc [def] : fromTEnv te
+  where TSchema _ q (TFun _ fx p k t)   = sc
+        def                             = Def NoLoc n q (pPar' dec p) (kPar kNames k) (Just t) [sNotImpl] dec fx
+        pPar' Static p                  = pPar pNames p
+        pPar' _ p                       = pPar pNames (posRow tSelf p)
+fromTEnv ((n, NVar t) : te)             = sAssign (pVar n t) eNotImpl : fromTEnv te
+fromTEnv (_ : te)                       = fromTEnv te
+fromTEnv []                             = []
 
 convClassTEnv env q0 te                 = [ (n, conv i) | (n,i) <- te ]
   where conv (NSig sc dec)              = NSig (convS sc) NoDec
@@ -271,7 +298,7 @@ extension c[A(Eq),B] (p[A,B]):                              class p$c[A,B] (p[c[
 
 actor[ a[A(Eq),B] (b[A]):                                   class a[A,B] ($Actor[]):
     f : [C(Ord)] => action(A,B) -> C                            __init__ : (Eq[A],b[A]) -> None
-                                                                f        : [C] => async(Ord[C],A,B) -> C
-                                                                f$local  : [C] => action(Ord[C],A,B) -> C
+                                                                f        : [C] => action(Ord[C],A,B) -> C
+                                                                f$local  : [C] => proc(Ord[C],A,B) -> C
 
 -}

@@ -48,23 +48,14 @@ schemaOf env e                      = (sc, dec)
 closedType                          :: EnvF x -> Expr -> Bool
 closedType env (Var _ n)            = isClosed $ findQName n env
 closedType env (Dot _ (Var _ x) n)
-  | NClass q _ _ <- findQName x env = case findAttrInfo env (TC x (map tVar $ qbound q)) n of
-                                        Just (w,i) -> isClosed i
+  | NClass q _ _ <- findQName x env = closedAttr env (TC x (map tVar $ qbound q)) n
 closedType env (Dot _ e n)          = case typeOf env e of
-                                        TCon _ c -> case findAttrInfo env c n of Just (w,i) -> isClosed i
-                                        TVar _ v  -> case findAttrInfo env (findTVBound env v) n of Just (w,i) -> isClosed i
+                                        TCon _ c -> closedAttr env c n
+                                        TVar _ v  -> closedAttr env (findTVBound env v) n
                                         TTuple _ p k -> True
 closedType env (TApp _ e _)         = closedType env e
+closedType env (Async _ e)          = closedType env e
 closedType env _                    = True
-
-isClosed (NVar _)                   = True
-isClosed (NSVar _)                  = True
-isClosed (NSig _ Property)          = True
-isClosed (NSig sc _)
-  | TFun{} <- sctype sc             = False
-  | otherwise                       = True      -- 'closed' ~ 'not a function'
-isClosed _                          = False
-
 
 
 qSchema                             :: EnvF x -> Checker -> Expr -> (TSchema, Maybe Deco, Expr)
@@ -83,7 +74,7 @@ qSchema env f e@(Var _ n)           = case findQName n env of
                                                 t' = if restype t == tR then t else t{ restype = tSelf }
                                             in (tSchema (q++q') $ subst [(tvSelf,tCon tc)] t', Just NoDec, e)
                                         NAct q p k _ ->
-                                            (tSchema q (tFun fxAction p k (tCon0 n q)), Just NoDec, e)
+                                            (tSchema q (tFun fxProc p k (tCon0 n q)), Just NoDec, e)
                                         i -> error ("### qSchema Var unexpected " ++ prstr (noq n,i))
 qSchema env f e@(Dot _ (Var _ x) n)
   | NClass q _ _ <- info            = let tc = TC x (map tVar $ qbound q)
@@ -93,7 +84,7 @@ qSchema env f e@(Dot _ (Var _ x) n)
 qSchema env f e0@(Dot l e n)        = case t of
                                         TCon _ c -> addE e' $ findAttr' env c n
                                         TTuple _ p k -> addE e' $ (monotype $ pick n k, Nothing)
-                                        TVar _ v  -> addE (qMatch f t (tCon tc) e') $ findAttr' env tc n
+                                        TVar _ v  -> addE e' $ findAttr' env tc n
                                            where tc = findTVBound env v
                                         t -> error ("### qSchema Dot unexpected " ++ prstr e0 ++ "  ::  " ++ prstr t)
   where (t, e')                     = qType env f e
@@ -122,13 +113,15 @@ instance QType Expr where
 --  qType env f (Imaginary _ i s)   = undefined
 --  qType env f (NotImplemented _)  = undefined
 --  qType env f (Ellipsis _)        = undefined
-    qType env f (Call l e ps ks)
-      | TFun{} <- t                 = (restype t, Call l e' (qMatch f p (posrow t) ps') (qMatch f k (kwdrow t) ks'))
+    qType env f e0@(Call l e ps ks)
+      | TFun{} <- t                 = --trace ("## qType Call " ++ prstr e0 ++ ", t = " ++ prstr t) $
+                                      (restype t, Call l e' (qMatch f p (posrow t) ps') (qMatch f k (kwdrow t) ks'))
       | otherwise                   = error ("###### qType Fun " ++ prstr e ++ " : " ++ prstr t)
       where (t, e')                 = qType env f e
             (p, ps')                = qType env f ps
             (k, ks')                = qType env f ks
-    qType env f (Async l e)         = (tMsg t, Async l e')
+    qType env f (Async l e)         = case t of
+                                        TFun _ (TFX _ FXAction) p k t' -> (tFun fxProc p k (tMsg t'), Async l e')
       where (t, e')                 = qType env f e
     qType env f (Await l e)         = case t of
                                         TCon _ (TC c [t]) | c == qnMsg -> (t, Await l e')
@@ -141,17 +134,17 @@ instance QType Expr where
       where (t1, e1')               = qType env f e1
             (t2, e2')               = qType env f e2
             t                       = upbound env [t1,t2]
-    qType env f (UnOp l Not e)      = (tBool, UnOp l Not e')
-      where (_, e')                 = qType env f e
-    qType env f (Cond l e1 e e2)    = (t', Cond l (qMatch f t1 t' e1') e' (qMatch f t2 t' e2'))
+    qType env f (UnOp l Not e)      = (tBool, UnOp l Not (qMatch f t tBool e'))
+      where (t, e')                 = qType env f e
+    qType env f (Cond l e1 e e2)    = (t', Cond l (qMatch f t1 t' e1') (qMatch f t tBool e') (qMatch f t2 t' e2'))
       where (t1, e1')               = qType env f e1
-            (_, e')                 = qType env f e
+            (t, e')                 = qType env f e
             (t2, e2')               = qType env f e2
             t'                      = upbound env [t1,t2]
     qType env f (IsInstance l e c)  = (tBool, IsInstance l e' c)
       where (t, e')                 = qType env f e
     qType env f (DotI l e i)        = case t of
-                                        TTuple _ p _ -> (pick i p, qMatch f tWild (pick i p) $ DotI l e' i)
+                                        TTuple _ p _ -> (pick i p, DotI l e' i)
       where (t, e')                 = qType env f e
             pick i (TRow _ _ _ t' p) = if i == 0 then t' else pick (i-1) p
     qType env f (RestI l e i)       = case t of
@@ -197,7 +190,10 @@ instance QType PosArg where
 
     qMatch f TVar{} r p             = p
     qMatch f r TVar{} p             = p
-    qMatch f r r' (PosArg e p)      = PosArg (qMatch f (rtype r) (rtype r') e) (qMatch f (rtail r) (rtail r') p)
+    qMatch f r r' (PosArg e p)
+      | TRow{} <- r,
+        TRow{} <- r'                = PosArg (qMatch f (rtype r) (rtype r') e) (qMatch f (rtail r) (rtail r') p)
+      | otherwise                   = error ("#### rtail " ++ prstr r ++ " < " ++ prstr r' ++ " for " ++ prstr (PosArg e p))
     qMatch f _ _ PosNil             = PosNil
 
 instance QType KwdArg where
@@ -210,7 +206,10 @@ instance QType KwdArg where
 
     qMatch f TVar{} r k             = k
     qMatch f r TVar{} k             = k
-    qMatch f r r' (KwdArg n e k)    = KwdArg n (qMatch f (rtype r) (rtype r') e) (qMatch f (rtail r) (rtail r') k)
+    qMatch f r r' (KwdArg n e k)
+      | TRow{} <- r,
+        TRow{} <- r'                = KwdArg n (qMatch f (rtype r) (rtype r') e) (qMatch f (rtail r) (rtail r') k)
+      | otherwise                   = error ("#### rtail " ++ prstr r ++ " < " ++ prstr r' ++ " for " ++ prstr (KwdArg n e k))
     qMatch f _ _ KwdNil             = KwdNil
 
 instance QType Pattern where
@@ -298,7 +297,7 @@ instance EnvOf Stmt where
     envOf (Signature _ ns sc dec)   = [ (n, NSig sc dec) | n <- ns ]
     envOf (If _ bs els)             = commonEnvOf $ [ ss | Branch _ ss <- bs ] ++ [els]
     envOf (Try _ b hs els fin)      = commonEnvOf $ [ ss | Handler _ ss <- hs ] ++ [b++els]
-    envOf (With _ items b)          = exclude (envOf b) (bound items)
+    envOf (With _ items b)          = envOf b `exclude` bound items
     envOf s                         = []
 
 commonEnvOf suites
@@ -311,7 +310,11 @@ instance EnvOf Decl where
                                     = [(n, NDef (TSchema NoLoc q $ TFun NoLoc fx (prowOf p) (krowOf k) t) dec)]
     envOf (Class _ n q as ss)       = [(n, NClass q (leftpath as) (map dropDefSelf $ envOf ss))]
 
-    envOf (Actor _ n q p k ss)      = [(n, NAct q (prowOf p) (krowOf k) (envOf ss))]
+    envOf (Actor _ n q p k ss)      = [(n, NAct q (prowOf p) (krowOf k) (map wrap te))]
+      where te                      = filter (not . isHidden . fst) $ envOf ss `exclude` statevars ss
+            wrap (n, NDef sc dec)   = (n, NDef (wrapFX sc) dec)
+            wrap (n, i)             = (n, i)
+            wrapFX (TSchema l q t)  = TSchema l q (if effect t == fxProc then t{ effect = fxAction } else t)
 
 dropDefSelf (n, NDef (TSchema l q t) dec)
                                     = (n, NDef (TSchema l q (dropSelf t dec)) dec)

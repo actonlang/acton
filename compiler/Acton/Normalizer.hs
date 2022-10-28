@@ -200,7 +200,8 @@ instance Norm Decl where
                                          b' <- norm env1 b
                                          return $ Actor l n q p' KwdNIL b'
       where env1                    = define (envOf p ++ envOf k) env0
-            env0                    = defineTVars q env
+            env0                    = define [(selfKW, NVar t0)] $ defineTVars q env
+            t0                      = tCon $ TC (NoQ n) (map tVar $ qbound q)
     norm env (Class l n q as b)     = Class l n q as <$> norm env1 b
       where env1                    = defineSelf (NoQ n) q $ defineTVars q env
     norm env d                      = error ("norm unexpected: " ++ prstr d)
@@ -245,7 +246,7 @@ instance Norm Expr where
       where t                       = typeOf env e
     norm env (Async l e)            = Async l <$> norm env e
     norm env (Await l e)            = Await l <$> norm env e
-    norm env (Cond l e1 e2 e3)      = Cond l <$> normBool env e1 <*> norm env e2 <*> norm env e3
+    norm env (Cond l e1 e2 e3)      = Cond l <$> norm env e1 <*> normBool env e2 <*> norm env e3
     norm env (IsInstance l e c)     = IsInstance l <$> norm env e <*> pure c
     norm env (BinOp l e1 Or e2)     = BinOp l <$> norm env e1 <*> pure Or <*> norm env e2
     norm env (BinOp l e1 And e2)    = BinOp l <$> norm env e1 <*> pure And <*> norm env e2

@@ -43,11 +43,13 @@ closeDepVars vs cs
         heads (Sub w t _)           = tyfree t
         heads (Sel w t n _)         = tyfree t
         heads (Mut t n _)           = tyfree t
+        heads (Seal t)              = tyfree t
         deps (Impl w _ p)           = tyfree p
         deps (Cast _ t)             = typars t
         deps (Sub w _ t)            = typars t
         deps (Sel w _ n t)          = typars t
         deps (Mut _ n t)            = typars t
+        deps (Seal _)               = []
         typars (TOpt _ t)           = typars t
         typars (TCon _ c)           = tyfree c
         typars _                    = []
@@ -106,12 +108,14 @@ instance Subst Constraint where
     msubst (Impl w t p)             = Impl w <$> msubst t <*> msubst p
     msubst (Sel w t1 n t2)          = Sel w <$> msubst t1 <*> return n <*> msubst t2
     msubst (Mut t1 n t2)            = Mut <$> msubst t1 <*> return n <*> msubst t2
+    msubst (Seal t)                 = Seal <$> msubst t
 
     tyfree (Cast t1 t2)             = tyfree t1 ++ tyfree t2
     tyfree (Sub w t1 t2)            = tyfree t1 ++ tyfree t2
     tyfree (Impl w t p)             = tyfree t ++ tyfree p
     tyfree (Sel w t1 n t2)          = tyfree t1 ++ tyfree t2
     tyfree (Mut t1 n t2)            = tyfree t1 ++ tyfree t2
+    tyfree (Seal t)                 = tyfree t
 
 instance Subst TSchema where
     msubst (TSchema l [] t)         = TSchema l [] <$> msubst t

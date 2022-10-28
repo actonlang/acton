@@ -1,0 +1,28 @@
+class Apa ():
+    def __init__(self):
+        pass
+
+class Bepa (Apa):
+    pass
+
+class Parent ():
+    def __init__(self):
+        pass
+    
+    meth : (int) -> Apa
+    
+    def meth(self, i):
+        return Apa()
+
+class Child (Parent):
+    meth : (int) -> Bepa
+
+def check(c:Child) -> Bepa:
+    return c.meth(7)
+
+p = Parent()
+
+c = Child()     # Must fail!
+
+actor main(env):
+    env.exit(0)

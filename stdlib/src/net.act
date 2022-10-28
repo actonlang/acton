@@ -30,7 +30,6 @@ class _TCPListenConnectAuth():
     """Internal use only"""
     pass
 
-
 actor DNS(auth: DNSAuth):
     action def lookup_a(name: str, on_resolve: action(list[str]) -> None, on_error: action(str, str) -> None) -> None:
         """Perform DNS lookup for name of record type A
@@ -42,7 +41,7 @@ actor DNS(auth: DNSAuth):
         """
         NotImplemented
 
-    def _pin_affinity() -> None:
+    proc def _pin_affinity() -> None:
         """Implementation internal"""
         NotImplemented
     _pin_affinity()
@@ -56,7 +55,7 @@ actor TCPIPConnection(auth: TCPConnectAuth, address: str, port: int, on_connect:
         """Write data to remote"""
         NotImplemented
 
-    def __resume__() -> None:
+    pure def __resume__() -> None:
         NotImplemented
 
     def _force_persistance():
@@ -68,7 +67,7 @@ actor TCPIPConnection(auth: TCPConnectAuth, address: str, port: int, on_connect:
         """
         print(address, port, on_connect, on_receive, on_error, _socket)
 
-    def _init():
+    proc def _init():
         NotImplemented
     _init()
 
@@ -78,7 +77,7 @@ actor TCPListenConnection(auth: _TCPListenConnectAuth, client: int, on_receive: 
         """Write data to remote"""
         NotImplemented
 
-    def __resume__() -> None:
+    pure def __resume__() -> None:
         NotImplemented
 
     def _force_persistance():
@@ -90,7 +89,7 @@ actor TCPListenConnection(auth: _TCPListenConnectAuth, client: int, on_receive: 
         """
         print(client, on_receive, on_error)
 
-    def _init():
+    proc def _init():
         """Implementation internal"""
         NotImplemented
     _init()
@@ -113,10 +112,10 @@ actor TCPListener(auth: TCPListenAuth, address: str, port: int, on_listen_error:
         """
         print(address, port, on_listen_error, on_accept, on_error, _stream)
 
-    def __resume__() -> None:
+    pure def __resume__() -> None:
         NotImplemented
 
-    def _init():
+    proc def _init():
         """Implementation internal"""
         NotImplemented
     _init()

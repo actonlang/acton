@@ -9,9 +9,9 @@ void process$$__ext_init__() {
 
 struct process_data {
     process$$Process process;
-    $function2 on_stdout;
-    $function2 on_stderr;
-    $function3 on_exit;
+    $action on_stdout;
+    $action on_stderr;
+    $action on_exit;
     uv_pipe_t stdin_pipe;
     uv_pipe_t stdout_pipe;
     uv_pipe_t stderr_pipe;
@@ -25,8 +25,8 @@ void exit_handler(uv_process_t *req, int64_t exit_status, int term_signal) {
     if (uv_is_closing(stdin) == 0)
         uv_close((uv_handle_t *)stdin, NULL);
     uv_close((uv_handle_t *)req, NULL);
-    $function3 f = process_data->on_exit;
-    f->$class->__call__(f, process_data->process, to$int(exit_status), to$int(term_signal));
+    $action3 f = process_data->on_exit;
+    f->$class->__asyn__(f, process_data->process, to$int(exit_status), to$int(term_signal));
 }
 
 void read_stderr(uv_stream_t *stream, ssize_t nread, const uv_buf_t *buf) {
@@ -38,8 +38,8 @@ void read_stderr(uv_stream_t *stream, ssize_t nread, const uv_buf_t *buf) {
         if (stream->data) {
             struct process_data *process_data = (struct process_data *)stream->data;
             process$$Process __self__ = process_data->process;
-            $function2 f = process_data->on_stderr;
-            f->$class->__call__(f, __self__, to$bytes_len(buf->base, nread));
+            $action2 f = process_data->on_stderr;
+            f->$class->__asyn__(f, __self__, to$bytes_len(buf->base, nread));
         }
     }
 
@@ -56,8 +56,8 @@ void read_stdout(uv_stream_t *stream, ssize_t nread, const uv_buf_t *buf) {
         if (stream->data) {
             struct process_data *process_data = (struct process_data *)stream->data;
             process$$Process __self__ = process_data->process;
-            $function2 f = process_data->on_stdout;
-            f->$class->__call__(f, __self__, to$bytes_len(buf->base, nread));
+            $action2 f = process_data->on_stdout;
+            f->$class->__asyn__(f, __self__, to$bytes_len(buf->base, nread));
         }
     }
 
@@ -145,8 +145,8 @@ $R process$$Process$_create_process (process$$Process __self__, $Cont c$cont) {
         char errmsg[1024] = "Failed to spawn process: ";
         uv_strerror_r(r, errmsg + strlen(errmsg), sizeof(errmsg)-strlen(errmsg));
         log_warn(errmsg);
-        $function2 f = __self__->on_error;
-        f->$class->__call__(f, process_data->process, to$str(errmsg));
+        $action2 f = __self__->on_error;
+        f->$class->__asyn__(f, process_data->process, to$str(errmsg));
     }
     // TODO: do we need to do some magic to read any data produced before this
     // callback is installed?
@@ -173,13 +173,13 @@ $R process$$Process$pid$local (process$$Process __self__, $Cont c$cont) {
     return $R_CONT(c$cont, ($atom)to$int(p->pid));
 }
 
-$R process$$Process$signal$local (process$$Process __self__, $int signal, $Cont c$cont) {
+$R process$$Process$signal$local (process$$Process __self__, $Cont c$cont, $int signal) {
     uv_process_t *p = (uv_process_t *)from$int(__self__->_p);
     uv_process_kill(p, from$int(signal));
     return $R_CONT(c$cont, $None);
 }
 
-$R process$$Process$write$local (process$$Process __self__, $bytes data, $Cont c$cont) {
+$R process$$Process$write$local (process$$Process __self__, $Cont c$cont, $bytes data) {
     uv_process_t *p = (uv_process_t *)from$int(__self__->_p);
 
     uv_write_t *req = (uv_write_t *)malloc(sizeof(uv_write_t));

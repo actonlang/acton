@@ -35,7 +35,6 @@ getsliceKW                          = name "__getslice__"
 setsliceKW                          = name "__setslice__"
 delsliceKW                          = name "__delslice__"
 appendKW                            = name "append"
-callKW                              = name "__call__"
 boolKW                              = name "__bool__"
 strKW                               = name "__str__"
 reprKW                               = name "__repr__"
@@ -104,7 +103,6 @@ nBaseException                      = name "BaseException"
 nException                          = name "Exception"
 nStopIteration                      = name "StopIteration"
 nValueError                         = name "ValueError"
-nFunction                           = name "function"
 ---
 nRange                              = name "range"
 nLen                                = name "len"
@@ -156,7 +154,6 @@ qnBaseException                     = gBuiltin nBaseException
 qnException                         = gBuiltin nException
 qnStopIteration                     = gBuiltin nStopIteration
 qnValueError                        = gBuiltin nValueError
-qnFunction                          = gBuiltin nFunction
 ---
 qnRange                             = gBuiltin nRange
 qnPrint                             = gBuiltin nPrint
@@ -211,7 +208,6 @@ cBaseException                      = TC qnBaseException []
 cException                          = TC qnException []
 cStopIteration                      = TC qnStopIteration []
 cValueError                         = TC qnValueError []
-cFunction x p k a                   = TC qnFunction [x,p,k,a]
 ---
 pSequence a                         = TC qnSequence [a]
 pMapping a b                        = TC qnMapping [a,b]
@@ -258,7 +254,6 @@ tBaseException                      = tCon cBaseException
 tException                          = tCon cException
 tStopIteration                      = tCon cStopIteration
 tValueError                         = tCon cValueError
-tFunction x p k a                   = tCon (cFunction x p k a)
 ---
 tSequence a                         = tCon (pSequence a)
 tMapping a b                        = tCon (pMapping a b)

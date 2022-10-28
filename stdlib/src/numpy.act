@@ -13,61 +13,112 @@
 
 import math
 
-protocol Primitive: pass
+protocol Primitive:
+    pass
 
 class ndselect(value):
     pass
 
 class ndindex(ndselect):
-    __init__: (int) -> None
+    def __init__(self, index: int) -> None:
+        NotImplemented
 
 class ndslice(ndselect):
-    __init__: (slice) -> None
+    def __init__(self, slc: slice) -> None:
+        NotImplemented
 
 class ndarray[A] ():
-    __init__        : (atom) -> None
+    def __init__(self, val: atom) -> None:
+        NotImplemented
     shape           : list[int]                      # should be a method? (at least until we have immutable lists)
     strides         : list[int]                      #      -"-
     size            : int
-    reshape         : (list[int]) -> Self
-    transpose       : (?list[int]) -> Self
-    flatten         : () -> Self                     # the same as reshape([-1])
-    copy            : () -> Self                     # makes a contiguous deep copy
-    __ndgetslice__  : (list[ndselect]) -> Self
+    def reshape (self, newshape: list[int]) -> Self:
+        NotImplemented
+    def transpose(self, axes: ?list[int]) -> Self:
+        NotImplemented
+    def flatten(self) -> Self:                       # the same as reshape([-1])
+        NotImplemented
+    def copy(self) -> Self:                          # makes a contiguous deep copy
+        NotImplemented
+    def __ndgetslice__(self, ix: list[ndselect]) -> Self:
+        NotImplemented
 
 
-partition           : [A (Primitive)] => (ndarray[A],int)        -> ndarray[A]
-clip                : [A (Primitive)] => (ndarray[A],?A,?A)      -> ndarray[A]
-dot                 : [A (Primitive)] => (ndarray[A],ndarray[A]) -> ndarray[A]
-sum                 : [A (Primitive)] => (ndarray[A],?int)       -> ndarray[A]
-sort                : [A (Primitive)] => (ndarray[A],?int)       -> ndarray[A]
-abs                 : [A (Primitive)] => (ndarray[A])            -> ndarray[A]
-scalar              : [A (Primitive)] => (ndarray[A])            -> A           #only for 0-dim array
-roll                : [A (Primitive)] => (ndarray[A], int)       -> ndarray[A]           
-tile                : [A (Primitive)] => (ndarray[A], int)       -> ndarray[A]           
-zeros               : [A (Primitive)] => (int)                   -> ndarray[A]  
-concatenate         : [A (Primitive)] => (list[ndarray[A]])      -> ndarray[A]      
-mean                : [A (Primitive)] => (ndarray[A],?int)       -> ndarray[float]      
+def partition [A (Primitive)] (a: ndarray[A], k: int) -> ndarray[A]:
+    NotImplemented
 
-arange              :                    (?int,int,?int)         -> ndarray[int]       
-linspace            :                    (float, float, int)     -> ndarray[float]
-array               : [A (Primitive)] => (list[A])               -> ndarray[A]            
-full                : [A (Primitive)] => (list[int],A)           -> ndarray[A]           
-unirandint          :                    (int, int, int)         -> ndarray[int]
-unirandfloat        :                    (float, float, int)     -> ndarray[float]
+def clip [A (Primitive)] (a: ndarray[A], low: ?A, high: ?A) -> ndarray[A]:
+    NotImplemented
 
-extension ndarray[int] (Integral): pass
-extension ndarray[int] (Div[ndarray[float]]): pass
-extension ndarray[A (Primitive)] (Real): pass
-extension ndarray[float] (Div[ndarray[float]]): pass
-extension ndarray[A (Primitive)] (Sliceable[ndarray[A]]): pass
-extension ndarray[A (Primitive)] (Collection[A]): pass
-extension ndarray[A (Primitive, math.RealFuns)] (math.RealFuns): pass
-extension ndarray[A (Primitive, RealFloat)] (RealFloat): pass
+def dot [A (Primitive)] (a: ndarray[A], b: ndarray[A]) -> ndarray[A]:
+    NotImplemented
 
-extension int (Primitive): pass
-extension float (Primitive): pass
+def sum [A (Primitive)] (array: ndarray[A], axis: ?int) -> ndarray[A]:
+    NotImplemented
+
+def sort [A (Primitive)] (a: ndarray[A], axis: ?int) -> ndarray[A]:
+    NotImplemented
+
+def abs [A (Primitive)] (a: ndarray[A]) -> ndarray[A]:
+    NotImplemented
+
+def scalar [A (Primitive)] (a: ndarray[A]) -> A:           #only for 0-dim array
+    NotImplemented
+
+def roll [A (Primitive)] (a: ndarray[A], n: int) -> ndarray[A]:
+    NotImplemented
+
+def tile [A (Primitive)] (a: ndarray[A], n: int) -> ndarray[A]:
+    NotImplemented
+
+def zeros [A (Primitive)] (n: int) -> ndarray[A]:
+    NotImplemented
+
+def concatenate [A (Primitive)] (arrays: list[ndarray[A]]) -> ndarray[A]:
+    NotImplemented
+
+def mean [A (Primitive)] (a: ndarray[A], axis: ?int) -> ndarray[float]:
+    NotImplemented
+
+def arange(start: ?int, stop: int, step: ?int) -> ndarray[int]:
+    NotImplemented
+
+def linspace(a: float, b: float, n: int) -> ndarray[float]:
+    NotImplemented
+
+def array [A (Primitive)] (elems: list[A]) -> ndarray[A]:
+    NotImplemented
+
+def full [A (Primitive)] (shape: list[int], val: A) -> ndarray[A]:
+    NotImplemented
+
+def unirandint (a: int, b: int, n: int) -> ndarray[int]:
+    NotImplemented
+
+def unirandfloat (a: float, b: float, n: int) -> ndarray[float]:
+    NotImplemented
+
+extension ndarray[int] (Integral):
+    NotImplemented
+extension ndarray[int] (Div[ndarray[float]]):
+    NotImplemented
+extension ndarray[A (Primitive)] (Real):
+    NotImplemented
+extension ndarray[float] (Div[ndarray[float]]):
+    NotImplemented
+extension ndarray[A (Primitive)] (Sliceable[ndarray[A]]):
+    NotImplemented
+extension ndarray[A (Primitive)] (Collection[A]):
+    NotImplemented
+extension ndarray[A (Primitive, math.RealFuns)] (math.RealFuns):
+    NotImplemented
+extension ndarray[A (Primitive, RealFloat)] (RealFloat):
+    NotImplemented
+
+extension int (Primitive):
+    NotImplemented
+extension float (Primitive):
+    NotImplemented
 
 newaxis : int  # unspecified value guaranteed not to be used for indexing (e.g. LONG_MIN)
-
-

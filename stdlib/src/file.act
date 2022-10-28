@@ -24,7 +24,7 @@ actor ReadFile(auth: ReadFileAuth, filename: str):
     """
     var _fd = -1
 
-    def _open_file():
+    proc def _open_file():
         """C magic"""
         NotImplemented
     _open_file()
@@ -51,7 +51,7 @@ actor WriteFile(auth: WriteFileAuth, filename: str):
     """Write a file
     """
     var _fd = -1
-    def _open_file():
+    proc def _open_file():
         """C magic"""
         NotImplemented
     _open_file()

@@ -200,15 +200,16 @@ buildProject opts = do
 
 printDocs :: C.DocOptions -> IO ()
 printDocs opts = do
-              iff (not (null $ C.signs opts)) $ do
-                     let filename = C.signs opts
-                         (fileBody,fileExt) = splitExtension $ takeFileName filename
-                     case fileExt of
-                            ".ty" -> do
-                                paths <- findPaths filename defaultOpts
-                                env0 <- Acton.Env.initEnv (sysTypes paths) False
-                                Acton.Types.showTyFile (Acton.Env.setMod (modName paths) env0) filename
-                            _     -> printErrorAndExit ("Unknown filetype: " ++ filename)
+-- TODO: re-enable after figuring out extra args to showTyFile
+--              iff (not (null $ C.signs opts)) $ do
+--                     let filename = C.signs opts
+--                         (fileBody,fileExt) = splitExtension $ takeFileName filename
+--                     case fileExt of
+--                            ".ty" -> do
+--                                paths <- findPaths filename defaultOpts
+--                                env0 <- Acton.Env.initEnv (sysTypes paths) False
+--                                Acton.Types.showTyFile (Acton.Env.setMod (modName paths) env0) filename
+--                            _     -> printErrorAndExit ("Unknown filetype: " ++ filename)
               iff (not (null $ C.full opts)) $
                    putStrLn "Full documentation not implemented"           -- issue #708
 
@@ -321,10 +322,11 @@ findPaths actFile opts  = do execDir <- takeDirectory <$> System.Environment.get
         analyze pre ds  = do exists <- doesFileExist (joinPath [pre, "Acton.toml"])
                              if not exists 
                                 then analyze (takeDirectory pre) (takeFileName pre : ds)
-                                else do
--- TODO: reimplement this check where it makes sense
---                                    when (take 1 ds /= ["src"]) $ error ("************* Project source file is not in 'src' directory")
-                                    return $ (False, False, pre, drop 1 ds)
+                                else case ds of
+                                    [] -> return $ (False, False, pre, [])
+                                    "src":dirs -> return $ (False, False, pre, dirs)
+                                    "out":"types":dirs -> return $ (False, False, pre, dirs)
+                                    _ -> error ("************* Source file is not in a valid project directory: " ++ joinPath ds)
 
 
 -- Handling Acton files -----------------------------------------------------------------------------
@@ -451,7 +453,7 @@ doTask opts paths env t@(ActonTask mn src m stubMode) = do
       then do
         iff (C.debug opts) (putStrLn ("    Skipping " ++ makeRelative (srcDir paths) actFile ++ " (files are up to date).") >> hFlush stdout)
         timeBeforeTy <- getTime Monotonic
-        te <- InterfaceFiles.readFile tyFile
+        (_,te) <- InterfaceFiles.readFile tyFile
         timeReadTy <- getTime Monotonic
         iff (C.timing opts) $ putStrLn("Read .ty file " ++ makeRelative (projPath paths) tyFile ++ ": " ++ fmtTime(timeReadTy - timeBeforeTy))
         timeEnd <- getTime Monotonic
@@ -459,13 +461,13 @@ doTask opts paths env t@(ActonTask mn src m stubMode) = do
         return (Acton.Env.addMod mn te env)
       else do
         createDirectoryIfMissing True (getModPath (projTypes paths) mn)
-        (env',te) <- runRestPasses opts paths env m stubMode
+        env' <- runRestPasses opts paths env m stubMode
           `catch` handle "Compilation error" generalError src paths mn
           `catch` handle "Compilation error" Acton.Env.compilationError src paths mn
           `catch` handle "Type error" Acton.Types.typeError src paths mn
         timeEnd <- getTime Monotonic
         iff (not (C.quiet opts)) $ putStrLn("   Finished compilation in  " ++ fmtTime(timeEnd - timeStart))
-        return (Acton.Env.addMod mn te env')
+        return env'
   where actFile             = srcFile paths mn
         outbase             = outBase paths mn
         tyFile              = outbase ++ ".ty"
@@ -555,11 +557,12 @@ checkUptoDate paths actFile outFiles imps = do
                              return filePath
 
 
-runRestPasses :: C.CompileOptions -> Paths -> Acton.Env.Env0 -> A.Module -> Bool -> IO (Acton.Env.Env0, Acton.Env.TEnv)
+runRestPasses :: C.CompileOptions -> Paths -> Acton.Env.Env0 -> A.Module -> Bool -> IO Acton.Env.Env0
 runRestPasses opts paths env0 parsed stubMode = do
-                      let outbase = outBase paths (A.modname parsed)
-                      let absSrcBase = srcBase paths (A.modname parsed)
-                      let relSrcBase = makeRelative (projPath paths) (srcBase paths (A.modname parsed))
+                      let mn = A.modname parsed
+                      let outbase = outBase paths mn
+                      let absSrcBase = srcBase paths mn
+                      let relSrcBase = makeRelative (projPath paths) (srcBase paths mn)
                       let actFile = absSrcBase ++ ".act"
 
                       timeStart <- getTime Monotonic
@@ -576,7 +579,7 @@ runRestPasses opts paths env0 parsed stubMode = do
 
                       (iface,tchecked,typeEnv) <- Acton.Types.reconstruct outbase env kchecked
                       iff (C.types opts) $ dump "types" (Pretty.print tchecked)
-                      iff (C.sigs opts) $ dump "sigs" (Pretty.vprint (A.imps tchecked) ++ "\n\n" ++ Pretty.vprint iface ++ "\n")
+                      iff (C.sigs opts) $ dump "sigs" (Acton.Types.prettySigs env mn iface)
                       timeTypeCheck <- getTime Monotonic
                       iff (C.timing opts) $ putStrLn("    Pass: Type check      : " ++ fmtTime (timeTypeCheck - timeKindsCheck))
 
@@ -673,7 +676,7 @@ runRestPasses opts paths env0 parsed stubMode = do
                                                   System.Exit.exitFailure
                                          )
 
-                      return (env0 `Acton.Env.withModulesFrom` env,iface)
+                      return $ Acton.Env.addMod mn iface (env0 `Acton.Env.withModulesFrom` env)
 
 handle errKind f src paths mn ex = do putStrLn ("\nERROR: Error when compiling " ++ (prstr mn) ++ " module: " ++ errKind)
                                       putStrLn (Acton.Parser.makeReport (f ex) src)
@@ -687,7 +690,7 @@ handle errKind f src paths mn ex = do putStrLn ("\nERROR: Error when compiling "
 
 buildExecutable env opts paths binTask
                          = case lookup n (fromJust (Acton.Env.lookupMod m env)) of
-                               Just (Acton.Env.NAct [] (A.TRow _ _ _ t A.TNil{}) A.TNil{} _) 
+                               Just (A.NAct [] (A.TRow _ _ _ t A.TNil{}) A.TNil{} _) 
                                    | prstr t == "Env" || prstr t == "None"
                                       || prstr t == "__builtin__.Env"|| prstr t == "__builtin__.None"-> do   -- !! To do: proper check of parameter type !!
                                       c <- Acton.CodeGen.genRoot env qn
@@ -711,7 +714,7 @@ buildExecutable env opts paths binTask
                                             then handle "Compilation error" Acton.Env.compilationError "" paths m (Acton.Env.NoItem m n)
                                             else return ()
   where mn                  = A.mname qn
-        qn@(A.GName m n)    = (rootActor binTask)
+        qn@(A.GName m n)    = rootActor binTask
         (sc,_)              = Acton.QuickType.schemaOf env (A.eQVar qn)
         buildF              = joinPath [projPath paths, "build.sh"]
         outbase             = outBase paths mn

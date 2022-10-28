@@ -87,7 +87,7 @@ $R file$$WriteFile$close$local (file$$WriteFile __self__, $Cont c$cont) {
     return $R_CONT(c$cont, $None);
 }
 
-$R file$$WriteFile$write$local (file$$WriteFile __self__, $bytes data, $Cont c$cont) {
+$R file$$WriteFile$write$local (file$$WriteFile __self__, $Cont c$cont, $bytes data) {
     uv_fs_t *req = (uv_fs_t *)calloc(1, sizeof(uv_fs_t));
     uv_buf_t buf = uv_buf_init((char *)data->str, data->nbytes);
 

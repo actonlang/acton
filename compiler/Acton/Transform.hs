@@ -51,6 +51,7 @@ instance Pretty (Name,Expr) where
 
 wtrans env (Assign l p@[PVar _ n (Just t)] e : ss)
   | Lambda{} <- e                       = wtrans (extsubst [(n,e1)] env) ss
+  | TApp _ Var{} _ <- e                 = wtrans (extsubst [(n,e1)] env) ss
   | Var{} <- e                          = wtrans (extsubst [(n,e1)] env) ss
   | Dot _ Var{} _ <- e                  = wtrans (extsubst [(n,e1)] env) ss
   | not $ null hits                     = wtrans (extsubst [(n,head hits)] env) ss
@@ -100,18 +101,29 @@ instance Transform Decl where
     trans env (Extension l n q us b)    = Extension l n q us (wtrans env1 b)
       where env1                        = blockscope (bound q) env
 
+
+transCall (Dot _ (Var _ n) m) ts [e1,e2]
+  | n == primWrapProc,   m == attrWrap  = Just e2
+  | n == primWrapAction, m == attrWrap  = Just $ eCall (tApp (eQVar primWRAP) ts) [e1,e2]
+  | n == primWrapMut,    m == attrWrap  = Just e2
+  | n == primWrapPure,   m == attrWrap  = Just e2
+transCall _ _ _                         = Nothing
+
 instance Transform Expr where
     trans env (Var l (NoQ n))
       | Just e <- trfind n env          = trans (blockscope [n] env) e
 
-    trans env e0@(Call l e p k)
+    trans env (Call l e p k)
       | Lambda{} <- e',
         Just s1 <- pzip (ppar e') p',
         Just s2 <-  kzip (kpar e') k'   = termsubst (s1++s2) (exp1 e')
+      | TApp _ e0 ts <- e',
+        Just e1 <- transCall e0 ts es   = e1
       | otherwise                       = Call l e' p' k'
       where e'                          = trans env e
             p'                          = trans env p
             k'                          = trans env k
+            es                          = posargs p'
     trans env (TApp l e ts)             = TApp l (trans env e) ts
     trans env (Async l e)               = Async l (trans env e)
     trans env (Await l e)               = Await l (trans env e)

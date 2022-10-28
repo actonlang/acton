@@ -59,7 +59,7 @@ withPrefixes m                          = do ss0 <- swapPrefixes []
                                              return (reverse ss1, r)
 
 
-data Frame                              = Meth   Name Type TFX              -- contParam, with type and effect
+data Frame                              = Meth   Name Type                  -- contParam with type
                                         | Seq    Name                       -- nextCont
                                         | Loop   Name                       -- loopEntry
                                         | Wrap   Name                       -- finalizer
@@ -68,7 +68,7 @@ data Frame                              = Meth   Name Type TFX              -- c
                                         deriving (Eq,Show)
 
 instance Pretty Frame where
-    pretty (Meth n t fx)                = text "Meth" <+> pretty t <+> pretty fx
+    pretty (Meth n t)                   = text "Meth" <+> pretty t
     pretty (Seq n)                      = text "Seq" <+> pretty n
     pretty (Loop n)                     = text "Loop" <+> pretty n
     pretty (Wrap n)                     = text "Wrap" <+> pretty n
@@ -90,7 +90,7 @@ frame +: env                            = modX env $ \x -> x{ ctxtX = frame : ct
 
 setClassCtxt env                        = modX env $ \x -> x{ ctxtX = [], whereX = InClass }
 
-setDefCtxt env                          = modX env $ \x -> x{ whereX = InClass }
+setDefCtxt env                          = modX env $ \x -> x{ whereX = InDef }
 
 onTop env                               = whereX (envX env) == OnTop
 
@@ -98,15 +98,11 @@ inClass env                             = whereX (envX env) == InClass
 
 inDef env                               = whereX (envX env) == InDef
 
-methFX (Meth c t fx : ctx)              = fx
-methFX (f : ctx)                        = methFX ctx
-methFX []                               = fxPure
-
-eCallCont fx t c arg                    = eCall (tApp (eQVar primRContc) [fx,t]) [eVar c, arg]
+eCallCont t c arg                       = eCall (tApp (eQVar primRContc) [t]) [eVar c, arg]
 
 eCallCont2 c args                       = eCall (eVar c) args
 
-pushH env h                             = sExpr (eCall (tApp (eQVar primPUSHc) [methFX $ ctxt env]) [h])
+pushH env h                             = sExpr (eCall (eQVar primPUSHc) [h])
 
 format (Int _ 0 _, cont)                = [sReturn cont]
 format (lvl, cont)                      = [sExpr (eCall (eQVar primPOP) [lvl]), sReturn cont]
@@ -118,15 +114,15 @@ unwrapL 0 lvl                           = eVar lvl
 unwrapL n lvl                           = eCall (eDot (eQVar primWIntegralInt) addKW) [eInt n, unwrapL 0 lvl]
 
 seqcont n (Pop : ctx)                   = seqcont (n+1) ctx
-seqcont n (Seq c : ctx)                 = (eInt n, eCallCont (methFX ctx) tNone c eNone)
-seqcont n (Loop c : ctx)                = (eInt n, eCallCont (methFX ctx) tNone c eNone)
-seqcont n (Meth c t fx : _)             = (eInt n, eCallCont fx tNone c eNone)
+seqcont n (Seq c : ctx)                 = (eInt n, eCallCont tNone c eNone)
+seqcont n (Loop c : ctx)                = (eInt n, eCallCont tNone c eNone)
+seqcont n (Meth c t : _)                = (eInt n, eCallCont tNone c eNone)
 seqcont n (Wrap c : ctx)                = (eInt n, wrapC c seqcont ctx)
 seqcont n (Unwrap lvl cnt : _)          = (unwrapL n lvl, eCallCont2 cnt [])
 
 cntcont n (Pop : ctx)                   = cntcont (n+1) ctx
 cntcont n (Seq c : ctx)                 = cntcont n ctx
-cntcont n (Loop c : ctx)                = (eInt n, eCallCont (methFX ctx) tNone c eNone)
+cntcont n (Loop c : ctx)                = (eInt n, eCallCont tNone c eNone)
 cntcont n (Wrap c : ctx)                = (eInt n, wrapC c cntcont ctx)
 cntcont n (Unwrap lvl cnt : ctx)        = cntcont n ctx
 
@@ -139,13 +135,13 @@ brkcont n (Unwrap lvl cnt : ctx)        = brkcont n ctx
 retcont e n (Pop : ctx)                 = retcont e (n+1) ctx
 retcont e n (Seq c : ctx)               = retcont e n ctx
 retcont e n (Loop c : ctx)              = retcont e n ctx
-retcont e n (Meth c t fx : _)           = (eInt n, eCallCont fx t c e)
+retcont e n (Meth c t : _)              = (eInt n, eCallCont t c e)
 retcont e n (Wrap c : ctx)              = (eInt n, wrapC c (retcont e) ctx)
 retcont e n (Unwrap lvl cnt : ctx)      = retcont e n ctx
 
 quicknext (Seq c : _)                   = Just (eVar c)
 quicknext (Loop c : _)                  = Just (eVar c)
-quicknext (Meth c t fx : _)             = Just (eVar c)
+quicknext (Meth c t : _)                = Just (eVar c)
 quicknext (Wrap c : ctx)                = Just (wrapC c seqcont ctx)
 quicknext _                             = Nothing
 
@@ -178,7 +174,7 @@ instance CPS [Stmt] where
       | contCall env e,
         Just c <- quicknext (ctxt env)  = return $ sReturn (addContArg env (conv e) (cont c)) : []
       where t                           = typeOf env e
-            cont c                      = if t == tNone then c else eCall (tApp (eQVar primSKIPRESc) [methFX $ ctxt env, t]) [c]
+            cont c                      = if t == tNone then c else eCall (tApp (eQVar primSKIPRESc) [t]) [c]
 
     cps env (Expr _ e : ss)
       | contCall env e                  = do k <- newName "cont"
@@ -293,25 +289,20 @@ instance CPS [Stmt] where
 
     cps env []                          = return []
 
-cpsBody env b
-  | isNotImpl b                         = return b
-  | otherwise                           = cpsSuite env b
-
 
 instance CPS Decl where
     cps env (Class l n q cs b)          = do b' <- cpsSuite env1 b
                                              return $ Class l n (conv q) (conv cs) b'
       where env1                        = defineSelf (NoQ n) q $ defineTVars q $ setClassCtxt env
 
-    cps env (Def l n q p KwdNIL (Just t) b d fx)
-      | contFX fx                       = do b' <- cpsBody env1 b
-                                             return $ Def l n q' (addContPar p' fx t') KwdNIL (Just tR) b' d fx
-      | otherwise                       = return $ Def l n q' p' KwdNIL (Just t') (conv b) d fx
-      where env1                        = define (envOf p) $ defineTVars q $ Meth contKW t fx +: setDefCtxt env
+    cps env (Def l n q p KwdNIL (Just t) b dec fx)
+      | contFX fx                       = do b' <- cpsSuite env1 b
+                                             return $ Def l n q' (addContPar env dec p' fx t') KwdNIL (Just tR) b' dec fx
+      | otherwise                       = return $ Def l n q' p' KwdNIL (Just t') (conv b) dec fx
+      where env1                        = define (envOf p) $ defineTVars q $ Meth contKW t +: setDefCtxt env
             q'                          = conv q
             p'                          = conv p
             t'                          = conv t
-            addContPar                  = if inClass env && d /= Static then addContPar1 else addContPar0
 
     cps env d                           = error ("cps unexpected: " ++ prstr d)
     
@@ -323,15 +314,13 @@ instance CPS Branch where
 jump k                                  = sReturn (eCall (eVar k) [eNone]) : []
 
 
-addContArg env (Call l e pos KwdNil) c  = Call NoLoc e (add pos c) KwdNil
-  where add PosNil c                    = PosArg c PosNil
-        add (PosArg e p) c              = PosArg e (add p c)
+addContArg env (Call l e p KwdNil) c    = Call NoLoc e (PosArg c p) KwdNil
 
-addContPar0 PosNIL fx t                 = PosPar contKW (Just $ tCont1 fx t) Nothing PosNIL
-addContPar0 (PosPar n a Nothing p) fx t = PosPar n a Nothing (addContPar0 p fx t)
+addContPar env dec (PosPar n a Nothing p) fx t
+  | inClass env && dec /= Static        = PosPar n a Nothing (addContPar0 p fx t)
+addContPar env dec p fx t               = addContPar0 p fx t
 
-addContPar1 p fx t                      = addContPar0 p fx t
-
+addContPar0 p fx t                      = PosPar contKW (Just $ tCont1 fx t) Nothing p
 
 tCont0                                  = tFun fxPure posNil kwdNil tR
 
@@ -349,10 +338,9 @@ hbody env x hs                          = do bs <- mapM h hs
           where env1                    = define [(z,NVar t)] env
                 t                       = tCon $ TC y []
 
-kDef env k p b                          = sDef k (conv p) tR b (conv $ methFX $ ctxt env)
+kDef env k p b                          = sDef k (conv p) tR b fxProc
 
-fxCall env test (Call _ (TApp _ (Var _ n) _) p k)
-  | n `elem` primNoCont                 = False
+fxCall env test (Call _ Async{} p k)    = False
 fxCall env test (Call _ e p k)          = test fx
   where TFun _ fx _ _ _                 = typeOf env e
 fxCall env test e                       = False
@@ -361,13 +349,11 @@ contCall env e                          = fxCall env contFX e
 
 mutCall env e                           = fxCall env mutFX e
 
-primNoCont                              = [primASYNCf, primAFTERf]
-
-contFX (TFX _ FXAction)                 = True                              -- TODO: refine this test using finer-grained effects?
+contFX (TFX _ FXProc)                   = True
 contFX _                                = False
 
 mutFX (TFX _ FXMut)                     = True
-mutFX (TFX _ FXAction)                  = True
+mutFX (TFX _ FXProc)                    = True
 mutFX _                                 = False
 
 inCont env                              = length (ctxt env) > 0
@@ -471,6 +457,7 @@ instance PreCPS Expr where
                                              return (eVar v)
       | otherwise                       = Call l <$> pre env e <*> pre env ps <*> pure KwdNil
       where t                           = typeOf env e0
+    pre env (Async l e)                 = Async l <$> pre env e
     pre env (TApp l e ts)               = TApp l <$> pre env e <*> pure ts
     pre env (Cond l e1 e e2)            = Cond l <$> pre env e1 <*> pre env e <*> pre env e2
     pre env (IsInstance l e c)          = IsInstance l <$> pre env e <*> return c
@@ -484,7 +471,7 @@ instance PreCPS Expr where
       | contFX fx                       = do (prefixes,e') <- withPrefixes $ preTop env1 e
                                              case prefixes of
                                                 [] -> let p' = conv p; t' = conv t
-                                                          e1 = if contCall env e then addContArg env1 e' (eVar contKW) else eCallCont fx t' contKW e'
+                                                          e1 = if contCall env e then addContArg env1 e' (eVar contKW) else eCallCont t' contKW e'
                                                       in return $ Lambda l (addContPar0 p' fx t') KwdNIL e1 fx
                                                 _ -> do
                                                     f <- newName "lambda"
@@ -544,8 +531,7 @@ instance Conv Type where
     conv t0@(TFun l fx p TNil{} t)
        | contFX fx && t /= tR           = TFun l fx (addCont (conv p) (conv t)) kwdNil tR
        | otherwise                      = TFun l fx (conv p) kwdNil (conv t)
-       where addCont (TRow l k n t p) c = TRow l k n t (addCont p c)
-             addCont p c                = posRow (tFun fx (posRow c posNil) kwdNil tR) p
+       where addCont p c                = posRow (tFun fx (posRow c posNil) kwdNil tR) p
     conv (TCon l c)                     = TCon l (conv c)
     conv (TTuple l p k)                 = TTuple l (conv p) (conv k)
     conv (TOpt l t)                     = TOpt l (conv t)
@@ -583,7 +569,7 @@ instance Conv Expr where
       | n == primAWAITf                 = Var l primAWAITc
       | otherwise                       = Var l n
     conv (Call l e ps KwdNil)           = Call l (conv e) (conv ps) KwdNil
-    conv (TApp l e ts)                  = TApp l (conv e) ts
+    conv (TApp l e ts)                  = TApp l (conv e) (conv ts)
     conv (Cond l e1 e e2)               = Cond l (conv e1) (conv e) (conv e2)
     conv (IsInstance l e c)             = IsInstance l (conv e) c
     conv (BinOp l e1 Or e2)             = BinOp l (conv e1) Or (conv e2)

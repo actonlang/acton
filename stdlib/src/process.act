@@ -37,7 +37,7 @@ actor Process(auth: ProcessAuth, cmd: list[str], workdir: ?str, env: ?dict[str, 
         """
         NotImplemented
 
-    def _create_process():
+    proc def _create_process():
         """Do the C magic to actually create a process and talk to it
         """
         NotImplemented
@@ -66,12 +66,12 @@ actor Process(auth: ProcessAuth, cmd: list[str], workdir: ?str, env: ?dict[str, 
         """
         NotImplemented
 
-    def kill():
+    action def kill():
         """Abrubtly kill process by sending SIGKILL
         """
         signal(9)
 
-    def terminate():
+    action def terminate():
         """Stop process by sending SIGTERM
         """
         signal(15)

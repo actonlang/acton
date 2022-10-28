@@ -27,15 +27,8 @@ import Pretty
 import Control.Monad.State.Strict
 
 deactorize                          :: Env0 -> Module -> IO (Module, Env0)
-deactorize env0 (Module m imps b)   = return (Module m imps (runDeactM $ deactTop env b), mapModules conv env1)
-  where env                         = deactEnv env1
-        env1                        = mapModules1 sealActors env0
-
-deactTop env []                     = return []
-deactTop env (s : ss)               = do s' <- deact env s
-                                         ss' <- deactTop env1 ss
-                                         return (s' : ss')
-  where env1                        = extend (map sealActors $ envOf s) env
+deactorize env0 (Module m imps b)   = return (Module m imps (runDeactM $ deactSuite env b), mapModules conv env0)
+  where env                         = deactEnv env0
 
 
 -- Deactorizing monad
@@ -48,24 +41,20 @@ runDeactM m                         = evalState m [1..]
 
 type DeactEnv                       = EnvF DeactX
 
-data DeactX                         = DeactX { actionsX :: [Name], stvarsX :: [Name], localsX :: [Name], sampledX :: [Name], retX :: Maybe Type }
+data DeactX                         = DeactX { wrappedX :: [Name], stvarsX :: [Name], localsX :: [Name], sampledX :: [Name] }
 
 deactEnv                            :: Env0 -> DeactEnv
-deactEnv env0                       = setX env0 DeactX{ actionsX = [], stvarsX = [], localsX = [], sampledX = [], retX = Nothing }
+deactEnv env0                       = setX env0 DeactX{ wrappedX = [], stvarsX = [], localsX = [], sampledX = [] }
 
-extend                              :: TEnv -> DeactEnv -> DeactEnv
-extend te env                       = define te env
-
-extendAndShadow                     :: TEnv -> DeactEnv -> DeactEnv
-extendAndShadow te env              = modX (define te env) $ \x -> x{ actionsX = actions env \\ ns, localsX = locals env \\ ns }
+defineAndShadow                     :: TEnv -> DeactEnv -> DeactEnv
+defineAndShadow te env              = modX (define te env) $ \x -> x{ wrappedX = wrapped env \\ ns, localsX = locals env \\ ns }
   where ns                          = dom te
 
 newName                             :: String -> DeactM Name
 newName s                           = state (\(uniq:supply) -> (Internal DeactPass s uniq, supply))
 
 
-
-actions env                         = actionsX $ envX env
+wrapped env                         = wrappedX $ envX env
 
 stvars env                          = stvarsX $ envX env
 
@@ -73,69 +62,11 @@ locals env                          = localsX $ envX env
 
 sampled env                         = sampledX $ envX env
 
-ret env                             = fromJust $ retX $ envX env
-
-setActor acts stvars locals env     = modX env $ \x -> x{ actionsX = acts, stvarsX = stvars, localsX = locals, sampledX = [] }
+setActor wrapped stvars locals env  = modX env $ \x -> x{ wrappedX = wrapped, stvarsX = stvars, localsX = locals, sampledX = [] }
 
 setSampled ns env                   = modX env $ \x -> x{ sampledX = ns ++ sampled env }
 
 clearSampled env                    = modX env $ \x -> x{ sampledX = [] }
-
-setRet t env                        = modX env $ \x -> x{ retX = Just t }
-
-
--- Actor interface sealing --------------------------------------------------------------------------------
-
-sealActors (n, NAct q p k te)       = (n, NAct (seal q) (seal p) (seal k) (seal te))
-sealActors ni                       = ni
-
-class Seal a where
-    seal                            :: a -> a
-
-instance (Seal a) => Seal [a] where
-    seal                            = map seal
-
-instance Seal (Name, NameInfo) where
-    seal (n, i)                     = (n, seal i)
-
-instance Seal NameInfo where
-    seal (NSig sc dec)              = NSig (seal sc) dec
-    seal (NDef sc dec)              = NDef (seal sc) dec
-    seal (NVar t)                   = NVar (seal t)
-    seal i                          = i
-
-instance Seal QBind where
-    seal (Quant c ps)               = Quant c (seal ps)
-
-instance Seal TSchema where
-    seal (TSchema l q t)            = TSchema l (seal q) (seal t)
-
-instance Seal Type where
-    seal (TVar l v)                 = TVar l v
-    seal (TCon l c)                 = TCon l $ seal c
-    seal (TFun l fx p k t)
-      | fx == fxAction              = TFun l (seal fx) (seal p) (seal k) (tMsg (seal t))
-      | otherwise                   = TFun l (seal fx) (seal p) (seal k) (seal t)
-    seal (TTuple l p k)             = TTuple l (seal p) (seal k)
-    seal (TOpt l t)                 = TOpt l (seal t)
-    seal (TNone l)                  = TNone l
-    seal (TWild l)                  = TWild l
-    seal (TNil l k)                 = TNil l k
-    seal (TRow l k n t r)           = TRow l k n (seal t) (seal r)
-    seal (TFX l fx)                 = TFX l (seal fx)
-
-instance Seal TCon where
-    seal (TC c ts)                  = TC c (seal ts)
-
-instance Seal FX where
-    seal FXMut                      = FXMut
-    seal FXPure                     = FXPure
-    seal FXAction                   = FXAsync         -- the sealing essence!
-
-instance Seal PosPar where
-    seal (PosPar n (Just t) _ p)    = PosPar n (Just $ seal t) Nothing (seal p)
-    seal (PosSTAR n (Just t))       = PosSTAR n (Just $ seal t)
-    seal PosNIL                     = PosNIL
 
 
 -- Deactorize actor declarations -----------------------------------------------------------------------
@@ -149,73 +80,72 @@ instance Deact a => Deact (Maybe a) where
 instance Deact a => Deact [a] where
     deact env                       = traverse (deact env)
 
-deactBody env b
-  | isNotImpl b                     = return b
-  | otherwise                       = deactSuite env b
 
 deactSuite env []                   = return []
 deactSuite env (s : ss)             = do s' <- deact (setSampled ns env) s
                                          ss' <- deactSuite env1 ss
                                          return (samples ++ s' : ss')
-  where env1                        = extend (map sealActors $ envOf s) env
+  where env1                        = define (envOf s) env
         ns                          = nub $ stvars env `intersect` lamfree s
         samples                     = [ sAssign (pVar n $ typeOf env (eVar n)) (eDot (eVar selfKW) n) | n <- ns ]
 
 
 instance Deact Stmt where
-    deact env (Expr l e)            = Expr l <$> deactExpTop env e
+    deact env s@(Expr _ (NotImplemented _))
+                                    = return s
+    deact env (Expr l (Call l' e p KwdNil))
+      | fx == fxAction              = Expr l <$> (Call l' <$> deact env (eAsync e) <*> deact env p <*> pure KwdNil)
+      where TFun{effect=fx}         = typeOf env e
+    deact env (Expr l e)            = Expr l <$> deact env e
     deact env (Assign l [p@(PVar _ n _)] e)
-      | n `elem` stvars env         = MutAssign l (selfRef n) <$> deactExp env t e
-      | n `elem` locals env         = MutAssign l (selfRef n) <$> deactExp env t e
-      | otherwise                   = Assign l [p] <$> deactExp env t e
+      | n `elem` locals env         = MutAssign l (selfRef n) <$> deact env e
+      | otherwise                   = Assign l [p] <$> deact env e
       where t                       = typeOf env p
-    deact env (MutAssign l tg e)    = MutAssign l <$> deactExp env tWild tg <*> deactExp env t e
+    deact env (MutAssign l tg e)    = MutAssign l <$> deact env tg <*> deact env e
       where t                       = typeOf env tg
     deact env (Pass l)              = return $ Pass l
     deact env (Return l Nothing)    = return $ Return l Nothing
-    deact env (Return l (Just e))   = Return l . Just <$> deactExp env (ret env) e
+    deact env (Return l (Just e))   = Return l . Just <$> deact env e
     deact env (Break l)             = return $ Break l
     deact env (Continue l)          = return $ Continue l
     deact env (If l bs els)         = If l <$> deact env bs <*> deactSuite env1 els
       where env1                    = clearSampled env
-    deact env (While l e b els)     = While l <$> deactExp env tWild e <*> deactSuite env1 b <*> deactSuite env1 els
+    deact env (While l e b els)     = While l <$> deact env e <*> deactSuite env1 b <*> deactSuite env1 els
       where env1                    = clearSampled env
     deact env (Try l b hs els fin)  = Try l <$> deactSuite env b <*> deact env hs <*> deactSuite env els <*> deactSuite env fin
     deact env (VarAssign l [p@(PVar _ n _)] e)
-                                    = MutAssign l (selfRef n) <$> deactExp env t e
+                                    = MutAssign l (selfRef n) <$> deact env e
       where t                       = typeOf env p
-    deact env (After l e1 e2)       = do delta <- deactExp env tFloat e1
-                                         lambda <- deactExp env t $ Lambda l0 PosNIL KwdNIL e2 fxAction
+    deact env (After l e1 e2)       = do delta <- deact env e1
+                                         lambda <- deact env $ Lambda l0 PosNIL KwdNIL e2 fxProc
                                          return $ Expr l $ Call l0 (tApp (eQVar primAFTERf) [t2]) (PosArg delta $ PosArg lambda PosNil) KwdNil
       where t2                      = typeOf env e2
-            t                       = tFun fxAction posNil kwdNil t2
+            t                       = tFun fxProc posNil kwdNil t2
     deact env (Decl l ds)           = do ds1 <- deact env1 ds
                                          return $ Decl l $ ds1 ++ [ newact env1 n q p | Actor _ n q p _ _ <- ds, not $ abstractActor env1 (NoQ n) ]
-      where env1                    = extend (map sealActors $ envOf ds) env
+      where env1                    = define (envOf ds) env
     deact env (Signature l ns t d)  = return $ Signature l ns t d
     deact env s                     = error ("deact unexpected stmt: " ++ prstr s)
 
 instance Deact Decl where
-    deact env (Actor l n q p KwdNIL b)
-                                    = do inits' <- deactSuite env2 inits
-                                         decls' <- mapM deactMeths decls
-                                         let _init_ = Def l0 initKW [] (addSelfPar p') KwdNIL (Just tNone) (copies++inits') NoDec fxAction
-                                         return $ Class l n q [TC primActor [], cValue] (propsigs ++ [Decl l0 [_init_]] ++ decls' ++ wrapped)
-      where env1                    = setActor actions stvars locals $ extend (envOf p') $ define [(selfKW, NVar tSelf)] $ defineTVars q env
-            env2                    = define (envOf decls ++ envOf inits) env1
+    deact env (Actor l n q params KwdNIL body)
+                                    = do inits1 <- deactSuite (define (envOf decls) env1) inits
+                                         decls1 <- deactSuite (define (envOf inits) env1) decls
+                                         let _init_ = Def l0 initKW [] (addSelfPar params) KwdNIL (Just tNone) (mkBody $ copies++inits1) NoDec fxProc
+                                             decls2 = [ Decl l $ map deactMeth ds | Decl l ds <- decls1 ]
+                                         return $ Class l n q [TC primActor [], cValue] (propsigs ++ [Decl l0 [_init_]] ++ decls2 ++ wraps)
+      where env1                    = setActor wrapped stvars locals $ define (envOf params) $ define [(selfKW, NVar t0)] $ defineTVars q env
+            t0                      = tCon $ TC (NoQ n) (map tVar $ qbound q)
 
-            p'                      = seal p
-            (decls,ss)              = partition isDecl b
-            meths                   = bound decls
+            (decls,ss)              = partition isDecl body
             inits                   = filter (not . isSig) ss
-            stvars                  = statevars b
+            stvars                  = statevars body
             fvs                     = free decls
-            fvs'                    = free inits `intersect` bound decls
-            locals                  = nub $ (bound p' `intersect` fvs) ++ [ n | n <- dom $ envOf b, not (isHidden n) || n `elem` (fvs++fvs') ]
-            wrapped                 = [ wrapMeth def | Decl _ ds <- decls, def <- ds, dname def `elem` actions ]
-            actions                 = [ n | Signature _ ns (TSchema _ _ (TFun _ fx _ _ _)) _ <- b, fx == fxAction, n <- ns ]
+            locals                  = nub $ (bound params `intersect` fvs) ++ [ n | n <- dom $ envOf inits, not (isHidden n) || n `elem` fvs ] ++ bound decls
+            wrapped                 = bound wrapdefs
+            wrapdefs                = [ d | Decl _ ds <- decls, d@Def{dname=n, dfx=fx} <- ds, fx == fxProc && not (isHidden n) || fx == fxAction ]
 
-            propsigs                = [ Signature l0 [n] (monotype t) Property | (n,t) <- concat $ props' p' : map props inits ]
+            propsigs                = [ Signature l0 [n] (monotype t) Property | (n,t) <- concat $ props' params : map props inits ]
 
             props (VarAssign _ p _) = [ (n, t) | PVar _ n (Just t) <- p ]
             props (Assign _ p _)    = [ (n, t) | PVar _ n (Just t) <- p, n `elem` locals ]
@@ -229,57 +159,43 @@ instance Deact Decl where
               | n `elem` locals     = [(n, fromJust a)]
             props' _                = []
 
-            copies                  = [ MutAssign l0 (selfRef n) (Var l0 (NoQ n)) | n <- bound p, n `elem` locals ]
+            copies                  = [ MutAssign l0 (selfRef n) (Var l0 (NoQ n)) | n <- bound params, n `elem` locals ]
+            
+            deactMeth (Def l n q p KwdNIL t b d fx)
+                                    = Def l n' q (addSelfPar p) KwdNIL t b d fx
+              where n'              = if n `elem` wrapped then localName n else n
 
-            deactMeths (Decl l ds)  = Decl l <$> mapM deactMeth ds
-
-            deactMeth (Def l n q p KwdNIL (Just t) b d fx)
-                                    = do b' <- deactBody env' b
-                                         return $ Def l n' q' (addSelfPar p') KwdNIL (Just t') b' d fx
-              where env'            = extendAndShadow (envOf p) $ setRet t' $ defineTVars q' env2
-                    n'              = if n `elem` actions then localName n else n
-                    p'              = seal p
-                    t'              = seal t
-                    q'              = seal q
-
-            wrapMeth (Def l n q p KwdNIL (Just t) _ d fx)
-                                    = Decl l0 [Def l0 n q (addSelfPar p') KwdNIL (Just $ tMsg t') [Return l0 (Just $ async)] d fxAsync]
-              where n'              = localName n
-                    p'              = seal p
-                    t'              = seal t
-                    q'              = seal q
-                    async           = Call l0 (tApp (eQVar primASYNCf) [t']) (PosArg self (PosArg clos PosNil)) KwdNil
-                    self            = Var l0 (NoQ selfKW)
-                    clos            = Lambda l0 PosNIL KwdNIL (Call l0 (tApp (selfRef n') ts) (pArg p') KwdNil) fxAction
-                    ts              = map tVar (qbound q')
-
+            wraps                   = [ wrap n q p t | Def _ n q p KwdNIL (Just t) _ _ _ <- wrapdefs ]
+            
+            wrap n q p t            = Decl l0 [Def l0 n q (addSelfPar p) KwdNIL (Just t) [ret] NoDec fxAction]
+              where ret             = sReturn $ eCall (tApp (eQVar primASYNCf) [t]) [self,lam]
+                    lam             = Lambda l0 PosNIL KwdNIL (eCallP (eDot self $ localName n) (pArg p)) fxProc
+                    self            = eVar selfKW
 
     deact env (Def l n q p KwdNIL (Just t) b d fx)
-                                    = do b <- deactBody env1 b
+                                    = do b <- deactSuite env1 b
                                          return $ Def l n q p KwdNIL (Just t) b d fx
-      where env1                    = extendAndShadow (envOf p) $ setRet t $ defineTVars q env
+      where env1                    = defineAndShadow (envOf p) $ defineTVars q env
+
     deact env (Class l n q u b)     = Class l n q u <$> deactSuite env1 b
       where env1                    = defineSelf (NoQ n) q $ defineTVars q env
+
     deact env d                     = error ("deact unexpected decl: " ++ prstr d)
 
-
-newact env n q p                    = Def l0 (newactName n) q p KwdNIL (Just t) [newassign, waitinit, sReturn x] NoDec fxAction
-  where p'                          = seal p
-        t                           = tCon $ TC (NoQ n) (map tVar $ qbound q)
+newact env n q p                    = Def l0 (newactName n) q p KwdNIL (Just t) [newassign, waitinit, sReturn x] NoDec fxProc
+  where t                           = tCon $ TC (NoQ n) (map tVar $ qbound q)
         x                           = eVar tmpName
         newassign                   = sAssign (pVar tmpName t) (eCall (tApp (eQVar primNEWACTOR) [t]) [])
         waitinit                    = sExpr $ eCall (tApp (eQVar primAWAITf) [tNone]) [asyncmsg]
         asyncmsg                    = eCall (tApp (eQVar primASYNCf) [tNone]) [x, closure]
-        closure                     = Lambda l0 PosNIL KwdNIL initcall fxAction
-        initcall                    = Call l0 (eDot x initKW) (pArg p') KwdNil
+        closure                     = Lambda l0 PosNIL KwdNIL initcall fxProc
+        initcall                    = Call l0 (eDot x initKW) (pArg p) KwdNil
 
 newactQName (QName m n)             = QName m (newactName n)
 newactQName (NoQ n)                 = NoQ (newactName n)
 newactQName (GName m n)             = GName m (newactName n)
 
 newactName n                        = Derived n (name "newact")
-
-localName n                         = Derived n (name "local")
 
 tmpName                             = Internal DeactPass "tmp" 0
 
@@ -288,79 +204,39 @@ addSelfPar p                        = PosPar selfKW (Just tSelf) Nothing p
 selfRef n                           = Dot l0 (Var l0 (NoQ selfKW)) n
 
 
--- $ASYNCf : [A] => async($Actor, action()->A) -> Msg[A]
--- $AFTERf : [A] => action(int,   action()->A) -> Msg[A]
--- $AWAITf : [A] => action(Msg[A])             -> A
+-- $ASYNCf : [A] => action($Actor, proc()->A) -> Msg[A]
+-- $AFTERf : [A] => proc(int,      proc()->A) -> Msg[A]
+-- $AWAITf : [A] => proc(Msg[A])              -> A
 
 
 instance Deact Branch where
-    deact env (Branch e ss)         = Branch <$> deactExp env tWild e <*> deactSuite env1 ss
+    deact env (Branch e ss)         = Branch <$> deact env e <*> deactSuite env1 ss
       where env1                    = clearSampled env
 
 instance Deact Handler where
     deact env (Handler ex b)        = Handler ex <$> deactSuite env1 b
-      where env1                    = extendAndShadow (envOf ex) env
+      where env1                    = defineAndShadow (envOf ex) env
 
+isProcMeth env e
+  | Just n <- isQVar e,
+    NDef sc _ <- findQName n env,
+    TFun{effect=fx} <- sctype sc    = fx == fxProc
+isProcMeth env _                    = False
 
-fxfree (TVar _ v)                   = []
-fxfree (TCon _ c)                   = concat $ map fxfree $ tcargs c
-fxfree (TFun _ fx p k t)            = fxfree fx ++ fxfree p ++ fxfree k ++ fxfree t
-fxfree (TTuple _ p k)               = fxfree p ++ fxfree k
-fxfree (TOpt _ t)                   = fxfree t
-fxfree (TNone _)                    = []
-fxfree (TWild _)                    = []
-fxfree (TNil _ _)                   = []
-fxfree (TRow _ _ _ t r)             = fxfree t ++ fxfree r
-fxfree (TFX l fx)                   = [fx]
-
-
-adapt env t0@(TFun _ fx@(TFX _ x) p _ t) t1@(TFun _ fx'@(TFX _ x') p' _ t') e
-  | (FXAction, FXAction) <- (x,x')  = eta
-  | (_,        FXAction) <- (x,x')  = etaF
-  | (FXAsync,  FXAsync)  <- (x,x')  = eta
-  | (FXAction, FXAsync)  <- (x,x')  = async clos
-  | (_,        FXAsync)  <- (x,x')  = async closF
-  | (_,        _)        <- (x,x')  = eta
-  where pars                        = pPar paramNames' p'
-        args                        = qMatch (adapt env) p' p (pArg pars)
-        e0                          = Call l0 e args KwdNil
-        e1                          = qMatch (adapt env) t t' e0
-        etaF                        = Lambda l0 pars KwdNIL e1 fx'
-        eta                         = if args == pArg pars && e1 == e0 then e else etaF
-        closF                       = Lambda l0 PosNIL KwdNIL e1 fxAction
-        clos                        = if args == PosNil && e1 == e0 then e else closF
-        async cl                    = Lambda l0 pars KwdNIL (Call l0 (tApp (eQVar primASYNCf) [unmsg t']) (PosArg (eVar selfKW) $ PosArg cl PosNil) KwdNil) fx'
-        unmsg (TCon _ (TC n [t]))
-          | unalias env n == qnMsg  = t
-adapt env t0 t1 e
-  | all (`elem`[FXPure,FXMut]) fxs  = e
-  | all (`elem`[FXAction]) fxs      = e
-  | TCon _ tc <- t0                 = notYet (loc e) "Methods embedded in data structures"
-  where fxs                         = fxfree t0 ++ fxfree t1
-
-
-deactExpTop env e                   = deact env $ qMatch (adapt env) t' tWild e'
-  where (t',e')                     = qType env (adapt env) e
-
-deactExp env t (Call l e p KwdNil)
-  | TFX _ FXAsync <- fx             = do e1 <- deact env $ qMatch (adapt env) t' t $ Call l e' (qMatch (adapt env) r r' p) KwdNil
-                                         return $ Call l (tApp (eQVar primAWAITf) [t]) (PosArg e1 PosNil) KwdNil
-  where (TFun _ fx r' _ t', e')     = qType env (adapt env) e
-        (r,p')                      = qType env (adapt env) p
-deactExp env t e                    = deact env $ qMatch (adapt env) t' t e'
-  where (t',e')                     = qType env (adapt env) e
-
+sealedMeth env e
+  | Just n <- isVar e,
+    n `elem` wrapped env            = Just n
+sealedMeth env _                    = Nothing
 
 instance Deact Expr where
     deact env (Var l (NoQ n))
-      | n `elem` actions env        = return $ Dot l (Var l (NoQ selfKW)) (localName n)
       | n `elem` sampled env        = return $ Var l (NoQ n)
-      | n `elem` stvars env         = return $ Dot l (Var l (NoQ selfKW)) n
-      | n `elem` locals env         = return $ Dot l (Var l (NoQ selfKW)) n
+      | n `elem` locals env         = return $ Dot l (Var l (NoQ selfKW)) n'
+      where n'                      = if n `elem` wrapped env then localName n else n
     deact env (Var l n)
       | isActor env n               = return $ Var l $ newactQName n
       | otherwise                   = return $ Var l n
-    deact env (Async l e)           = deact env e
+    deact env (Async l e)           = Async l <$> deact env e
     deact env (Await l e)           = do e' <- deact env e
                                          return $ Call l (tApp (eQVar primAWAITf) ts) (PosArg e' PosNil) KwdNil
       where TCon _ msg              = typeOf env e
@@ -374,7 +250,24 @@ instance Deact Expr where
     deact env (Ellipsis l)          = return $ Ellipsis l
     deact env (Strings l s)         = return $ Strings l s
     deact env (BStrings l s)        = return $ BStrings l s
-    deact env (Call l e ps KwdNil)  = Call l <$> deact env e <*> deact env ps <*> pure KwdNil
+    deact env (Call l (TApp _ (Var _ n) ts) (PosArg self (PosArg e PosNil)) KwdNil)
+      | n == primWRAP,
+        Just n' <- sealedMeth env e = return $ Dot l (Var l (NoQ selfKW)) n'
+      | n == primWRAP               = do e <- deact env e
+                                         self <- deact env self
+                                         let lam = Lambda l0 PosNIL KwdNIL (eCallP e (pArg ps)) fxProc
+                                         return $ Lambda l0 ps KwdNIL (eCall (tApp (eQVar primASYNCf) [t]) [self,lam]) fxAction
+      where TFun _ fx p _ t         = typeOf env e
+            ps                      = pPar paramNames' p
+    deact env (Call l e as KwdNil)
+      | fx == fxAction              = deact env (eAwait $ Call l (eAsync e) as KwdNil)
+      | otherwise                   = do e <- deact env e
+                                         as <- deact env as
+                                         case e of
+                                            Lambda _ ps KwdNIL e' _ | Just s <- pzip ps as ->
+                                                 return $ termsubst s e'
+                                            _ -> return $ Call l e as KwdNil
+      where TFun{effect=fx}         = typeOf env e
     deact env (TApp l e ts)         = TApp l <$> deact env e <*> pure ts
     deact env (Cond l e1 e e2)      = Cond l <$> deact env e1 <*> deact env e <*> deact env e2
     deact env (IsInstance l e c)    = IsInstance l <$> deact env e <*> return c
@@ -386,7 +279,7 @@ instance Deact Expr where
     deact env (RestI l e i)         = RestI l <$> deact env e <*> return i
     deact env (Lambda l p KwdNIL e fx)
                                     = Lambda l p KwdNIL <$> deact env1 e <*> return fx
-      where env1                    = extendAndShadow (envOf p) env
+      where env1                    = defineAndShadow (envOf p) env
     deact env (Yield l e)           = Yield l <$> deact env e
     deact env (YieldFrom l e)       = YieldFrom l <$> deact env e
     deact env (Tuple l es KwdNil)   = Tuple l <$> deact env es <*> pure KwdNil
@@ -455,12 +348,12 @@ instance LambdaFree Elem where
     lamfree (Elem e)                = lamfree e
 
 
--- Convert environments -----------------------------------------------------------------------------------------
+-- Convert types and environments -----------------------------------------------------------------------
 
 conv env m (n, NAct q p k te')      = (n, NClass q (leftpath [TC primActor [], cValue]) (convActorEnv q p k te')) :
-                                      (newactName n, NDef (tSchema q (tFun fxAction p k t)) NoDec) :
+                                      (newactName n, NDef (tSchema q (tFun fxProc p k t)) NoDec) :
                                       []
   where convActorEnv q0 p k te'     = (initKW, NDef t0 NoDec) : te'
-          where t0                  = tSchema q0 (tFun fxAction p k tNone)
+          where t0                  = tSchema q0 (tFun fxProc p k tNone)
         t                           = tCon $ TC (GName m n) (map tVar $ qbound q)
 conv env m ni                       = [ni]

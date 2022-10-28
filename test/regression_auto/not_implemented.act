@@ -13,7 +13,7 @@ actor main(env):
     var s = 0
     def present(i):
         s = i
-    action def absent(i: int) -> int:
+    proc def absent(i: int) -> int:
         NotImplemented
     after 2: absent(7)
     await async env.exit(0)

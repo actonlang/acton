@@ -24,6 +24,21 @@ gPrim s             = GName mPrim (name s)
 
 primKW s            = name ("$" ++ s)
 
+primProc            = gPrim "proc"
+primAction          = gPrim "action"
+primMut             = gPrim "mut"
+primPure            = gPrim "pure"
+
+cProc r t           = TC primProc [r,t]
+cAction r t         = TC primAction [r,t]
+cMut r t            = TC primMut [r,t]
+cPure r t           = TC primPure [r,t]
+
+attr_call_          = name "__call__"
+attr_exec_          = name "__exec__"
+attr_asyn_          = name "__asyn__"
+attr_eval_          = name "__eval__"
+
 primActor           = gPrim "Actor"
 primR               = gPrim "R"
 primCont            = gPrim "Cont"
@@ -79,165 +94,220 @@ primSKIPRES         = gPrim "SKIPRES"
 cActor              = TC primActor []
 tActor              = tCon cActor
 tR                  = tCon $ TC primR []
-tCont x t           = tCon $ TC primCont [x,posRow t posNil]
+tCont t             = tCon $ TC primCont [t]
+
+primWrapped         = gPrim "Wrapped"
+pWrapped x          = TC primWrapped [x]
+
+primWrappedC        = gPrim "WrappedC"
+tWrapped s x        = tCon $ TC primWrappedC [s,x]
+
+attrWrap            = name "wrap"
+
+primWrapProc        = gPrim "wWrapProc"
+primWrapAction      = gPrim "wWrapAction"
+primWrapMut         = gPrim "wWrapMut"
+primWrapPure        = gPrim "wWrapPure"
+
+primWRAP            = gPrim "WRAP"
 
 
-primMkEnv cls def var sig = 
-                        [   (noq primASYNCf,        def scASYNCf NoDec),
-                            (noq primAFTERf,        def scAFTERf NoDec),
-                            (noq primAWAITf,        def scAWAITf NoDec),
+primEnv             = [     (noq primASYNCf,        NDef scASYNCf NoDec),
+                            (noq primAFTERf,        NDef scAFTERf NoDec),
+                            (noq primAWAITf,        NDef scAWAITf NoDec),
 
-                            (noq primASYNCc,        def scASYNCc NoDec),
-                            (noq primAFTERc,        def scAFTERc NoDec),
-                            (noq primAWAITc,        def scAWAITc NoDec),
+                            (noq primASYNCc,        NDef scASYNCc NoDec),
+                            (noq primAFTERc,        NDef scAFTERc NoDec),
+                            (noq primAWAITc,        NDef scAWAITc NoDec),
 
-                            (noq primASYNC,         def scASYNC NoDec),
-                            (noq primAFTER,         def scAFTER NoDec),
-                            (noq primAWAIT,         def scAWAIT NoDec),
+                            (noq primASYNC,         NDef scASYNC NoDec),
+                            (noq primAFTER,         NDef scAFTER NoDec),
+                            (noq primAWAIT,         NDef scAWAIT NoDec),
                         
-                            (noq primPUSHc,         def scPUSHc NoDec),
-                            (noq primPUSH,          def scPUSH NoDec),
+                            (noq primPUSHc,         NDef scPUSHc NoDec),
+                            (noq primPUSH,          NDef scPUSH NoDec),
                         
-                            (noq primPOP,           def scPOP NoDec),
-                            (noq primRERAISE,       def scRERAISE NoDec),
-                            (noq primRAISE,         def scRAISE NoDec),
-                            (noq primRAISEFROM,     def scRAISEFROM NoDec),
-                            (noq primASSERT,        def scASSERT NoDec),
-                            (noq primNEWACTOR,      def scNEWACTOR NoDec),
+                            (noq primPOP,           NDef scPOP NoDec),
+                            (noq primRERAISE,       NDef scRERAISE NoDec),
+                            (noq primRAISE,         NDef scRAISE NoDec),
+                            (noq primRAISEFROM,     NDef scRAISEFROM NoDec),
+                            (noq primASSERT,        NDef scASSERT NoDec),
+                            (noq primNEWACTOR,      NDef scNEWACTOR NoDec),
 
-                            (noq primISINSTANCE,    def scISINSTANCE NoDec),
-                            (noq primCAST,          def scCAST NoDec),
-                            (noq primCONSTCONT,     def scCONSTCONT NoDec),
+                            (noq primISINSTANCE,    NDef scISINSTANCE NoDec),
+                            (noq primCAST,          NDef scCAST NoDec),
+                            (noq primCONSTCONT,     NDef scCONSTCONT NoDec),
 
-                            (noq primFORMAT,        def scFORMAT NoDec),
-                        
-                            (noq primActor,         clActor cls def sig),
-                            (noq primR,             clR cls def),
-                            (noq primCont,          clCont cls def),
+                            (noq primFORMAT,        NDef scFORMAT NoDec),
 
-                            (noq primRContc,        def scRContc NoDec),
-                            (noq primRCont,         def scRCont NoDec),
+                            (noq primProc,          clProc),
+                            (noq primAction,        clAction),
+                            (noq primMut,           clMut),
+                            (noq primPure,          clPure),
 
-                            (noq primEqOpt,         clEqOpt cls def),
-                            (noq primIdentityOpt,   clIdentityOpt cls def),
+                            (noq primActor,         clActor),
+                            (noq primR,             clR),
+                            (noq primCont,          clCont),
 
-                            (noq primWEqNone,       var tEqNone),
-                            (noq primWIdentityNone, var tIdentityNone),
-                            (noq primWIntegralInt,  var tIntegralInt),
-                            (noq primWSequenceList, var tSequenceListWild),
-                            (noq primWCollectionList,var tCollectionListWild),
+                            (noq primRContc,        NDef scRContc NoDec),
+                            (noq primRCont,         NDef scRCont NoDec),
 
-                            (noq primISNOTNONE,     def scISNOTNONE NoDec),
-                            (noq primISNONE,        def scISNONE NoDec),
+                            (noq primEqOpt,         clEqOpt),
+                            (noq primIdentityOpt,   clIdentityOpt),
 
-                            (noq primSKIPRESc,      def scSKIPRESc NoDec),
-                            (noq primSKIPRES,       def scSKIPRES NoDec)
+                            (noq primWEqNone,       NVar tEqNone),
+                            (noq primWIdentityNone, NVar tIdentityNone),
+                            (noq primWIntegralInt,  NVar tIntegralInt),
+                            (noq primWSequenceList, NVar tSequenceListWild),
+                            (noq primWCollectionList,NVar tCollectionListWild),
+
+                            (noq primISNOTNONE,     NDef scISNOTNONE NoDec),
+                            (noq primISNONE,        NDef scISNONE NoDec),
+
+                            (noq primSKIPRESc,      NDef scSKIPRESc NoDec),
+                            (noq primSKIPRES,       NDef scSKIPRES NoDec),
+
+                            (noq primWrapped,       proWrapped),
+                            (noq primWrappedC,      clWrapped),
+                            (noq primWrapProc,      NVar $ tWrapped fxProc fxProc),
+                            (noq primWrapAction,    NVar $ tWrapped fxAction fxProc),
+
+                            (noq primWRAP,          NDef scWRAP NoDec)
                       ]
 
 tSequenceListWild   = tCon (TC qnSequence [tList tWild, tWild])
 tCollectionListWild = tCon (TC qnCollection [tList tWild, tWild])
 
+--  class $Cont[T] (value): pass
+--      __call__    : proc(T) -> $R
+clCont              = NClass [quant t] (leftpath [cValue]) []
+  where te          = [ (attr_call_, NSig (monotype $ tFun fxProc (posRow (tVar t) posNil) kwdNil tR) NoDec) ]
+        t           = TV KType (name "T")
+
+--  class $proc[R,T] (value):
+--      __call__    : proc($Cont[T], *R) -> $R
+--      __exec__    : proc($Cont[value], *R) -> $R
+clProc              = NClass [quant r, quant t] (leftpath [cValue]) te
+  where te          = [ (attr_call_, NSig (monotype $ tFun fxProc (posRow (tVar t) (tVar r)) kwdNil tR) NoDec),
+                        (attr_exec_, NSig (monotype $ tFun fxProc (posRow tValue (tVar r)) kwdNil tR) NoDec) ]
+        r           = TV PRow (name "R")
+        t           = TV KType (name "T")
+
+--  class $action[R,T] ($proc[R,T], value):
+--      __asyn__    : action(*R) -> T
+clAction            = NClass [quant r, quant t] (leftpath [ cProc (tVar r) (tVar t), cValue]) te
+  where te          = [ (attr_asyn_, NSig (monotype $ tFun fxAction (tVar r) kwdNil (tVar t)) NoDec) ]
+        r           = TV PRow (name "R")
+        t           = TV KType (name "T")
+
+
+--  class $mut[R,T] ($proc[R,T], value):
+--      __eval__    : mut(*R) -> T
+clMut               = NClass [quant r, quant t] (leftpath [ cProc (tVar r) (tVar t), cValue]) te
+  where te          = [ (attr_eval_, NSig (monotype $ tFun fxMut (tVar r) kwdNil (tVar t)) NoDec) ]
+        r           = TV PRow (name "R")
+        t           = TV KType (name "T")
+
+--  class $pure[R,T] ($mut[R,T], $proc[R,T], value):
+--      __eval__    : pure(*R) -> T
+clPure              = NClass [quant r, quant t] (leftpath [ cMut (tVar r) (tVar t), cProc (tVar r) (tVar t), cValue]) te
+  where te          = [ (attr_eval_, NSig (monotype $ tFun fxPure (tVar r) kwdNil (tVar t)) NoDec) ]
+        r           = TV PRow (name "R")
+        t           = TV KType (name "T")
+
+
 --  class $Actor (): pass
-clActor cls def sig = cls [] (leftpath [cValue]) te
-  where te          = [ (primKW "next",       sig (monotype tActor) Property),
-                        (primKW "msg",        sig (monotype (tMsg tWild)) Property),
-                        (primKW "outgoing",   sig (monotype (tMsg tWild)) Property),
-                        (primKW "waitsfor",   sig (monotype (tMsg tWild)) Property),
-                        (primKW "consume_hd", sig (monotype $ tCon $ TC (gPrim "int64") []) Property),
-                        (primKW "catcher",    sig (monotype $ tCon $ TC (gPrim "Catcher") []) Property),
-                        (primKW "msg_lock",   sig (monotype $ tCon $ TC (gPrim "Lock") []) Property),
-                        (primKW "globkey",    sig (monotype $ tCon $ TC (gPrim "long") []) Property),
-                        (primKW "affinity",   sig (monotype $ tCon $ TC (gPrim "int64") []) Property),
-                        (boolKW,              def (monotype $ tFun fxPure posNil kwdNil tBool) NoDec),
-                        (strKW,               def (monotype $ tFun fxPure posNil kwdNil tStr) NoDec),
-                        (reprKW,              def (monotype $ tFun fxPure posNil kwdNil tStr) NoDec),
-                        (resumeKW,            def (monotype $ tFun fxPure posNil kwdNil tNone) NoDec)
+clActor             = NClass [] (leftpath [cValue]) te
+  where te          = [ (primKW "next",       NSig (monotype tActor) Property),
+                        (primKW "msg",        NSig (monotype (tMsg tWild)) Property),
+                        (primKW "outgoing",   NSig (monotype (tMsg tWild)) Property),
+                        (primKW "waitsfor",   NSig (monotype (tMsg tWild)) Property),
+                        (primKW "consume_hd", NSig (monotype $ tCon $ TC (gPrim "int64") []) Property),
+                        (primKW "catcher",    NSig (monotype $ tCon $ TC (gPrim "Catcher") []) Property),
+                        (primKW "msg_lock",   NSig (monotype $ tCon $ TC (gPrim "Lock") []) Property),
+                        (primKW "globkey",    NSig (monotype $ tCon $ TC (gPrim "long") []) Property),
+                        (primKW "affinity",   NSig (monotype $ tCon $ TC (gPrim "int64") []) Property),
+                        (boolKW,              NDef (monotype $ tFun fxPure posNil kwdNil tBool) NoDec),
+                        (strKW,               NDef (monotype $ tFun fxPure posNil kwdNil tStr) NoDec),
+                        (reprKW,              NDef (monotype $ tFun fxPure posNil kwdNil tStr) NoDec),
+                        (resumeKW,            NDef (monotype $ tFun fxPure posNil kwdNil tNone) NoDec)
                       ]
         
 
 --  class $R (): pass
-clR cls def         = cls [] [] []
+clR                 = NClass [] [] []
 
---  class $Cont[X,P] (function[X,P,(),$R]):
---      pass
-clCont cls def      = cls [quant x, quant p] (leftpath [TC qnFunction [tVar x, tVar p, kwdNil, tR], cValue]) []
-  where x           = TV KFX (name "X")
-        p           = TV PRow (name "P")
-
-
---  $ASYNCf         : [A] => async($Actor, action()->A) -> Msg[A]
+--  $ASYNCf         : [A] => action($Actor, proc()->A) -> A
 scASYNCf            = tSchema [quant a] tASYNC
-  where tASYNC      = tFun fxAction (posRow tActor $ posRow tFun' posNil) kwdNil (tMsg $ tVar a)
+  where tASYNC      = tFun fxAction (posRow tActor $ posRow tFun' posNil) kwdNil (tVar a)
         a           = TV KType $ name "A"
-        tFun'       = tFun fxAsync posNil kwdNil (tVar a)
+        tFun'       = tFun fxProc posNil kwdNil (tVar a)
 
---  $AFTERf         : [A] => action(float, action()->A) -> Msg[A]
+--  $AFTERf         : [A] => action(int, proc()->A) -> A
 scAFTERf            = tSchema [quant a] tAFTER
-  where tAFTER      = tFun fxAction (posRow tFloat $ posRow tFun' posNil) kwdNil (tMsg $ tVar a)
+  where tAFTER      = tFun fxAction (posRow tFloat $ posRow tFun' posNil) kwdNil (tVar a)
         a           = TV KType $ name "A"
-        tFun'       = tFun fxAction posNil kwdNil (tVar a)
+        tFun'       = tFun fxProc posNil kwdNil (tVar a)
 
---  $AWAITf         : [A] => action(Msg[A]) -> A
+--  $AWAITf         : [A] => proc(Msg[A]) -> A
 scAWAITf            = tSchema [quant a] tAWAIT
-  where tAWAIT      = tFun fxAction (posRow (tMsg $ tVar a) posNil) kwdNil (tVar a)
+  where tAWAIT      = tFun fxProc (posRow (tMsg $ tVar a) posNil) kwdNil (tVar a)
         a           = TV KType $ name "T"
 
 
---  $ASYNCc         : [A] => mut($Actor, mut(mut(A)->$R)->$R) -> Msg[A]
+--  $ASYNCc         : [A] => action($Actor, proc(proc(A)->$R)->$R) -> A
 scASYNCc            = tSchema [quant a] tASYNC
-  where tASYNC      = tFun fxMut (posRow tActor $ posRow tCont' posNil) kwdNil (tMsg $ tVar a)
+  where tASYNC      = tFun fxAction (posRow tActor $ posRow tCont' posNil) kwdNil (tVar a)
         a           = TV KType $ name "A"
-        tCont'      = tFun fxMut (posRow tCont'' posNil) kwdNil tR
-        tCont''     = tFun fxMut (posRow (tVar a) posNil) kwdNil tR
+        tCont'      = tFun fxProc (posRow tCont'' posNil) kwdNil tR
+        tCont''     = tFun fxProc (posRow (tVar a) posNil) kwdNil tR
 
---  $AFTERc         : [A] => mut(float, mut(mut(A)->$R)->$R) -> Msg[A]
+--  $AFTERc         : [A] => action(int, proc(proc(A)->$R)->$R) -> A
 scAFTERc            = tSchema [quant a] tAFTER
-  where tAFTER      = tFun fxMut (posRow tFloat $ posRow tCont' posNil) kwdNil (tMsg $ tVar a)
+  where tAFTER      = tFun fxAction (posRow tFloat $ posRow tCont' posNil) kwdNil (tVar a)
         a           = TV KType $ name "A"
-        tCont'      = tFun fxMut (posRow tCont'' posNil) kwdNil tR
-        tCont''     = tFun fxMut (posRow (tVar a) posNil) kwdNil tR
+        tCont'      = tFun fxProc (posRow tCont'' posNil) kwdNil tR
+        tCont''     = tFun fxProc (posRow (tVar a) posNil) kwdNil tR
 
---  $AWAITc         : [A] => mut(Msg[A], mut(A)->$R) -> $R
+--  $AWAITc         : [A] => proc(proc(A)->$R, Msg[A]) -> $R
 scAWAITc            = tSchema [quant a] tAWAIT
-  where tAWAIT      = tFun fxMut (posRow (tMsg $ tVar a) $ posRow tCont' posNil) kwdNil tR
+  where tAWAIT      = tFun fxProc (posRow tCont' $ posRow (tMsg $ tVar a) posNil) kwdNil tR
         a           = TV KType $ name "A"
-        tCont'      = tFun fxMut (posRow (tVar a) posNil) kwdNil tR
+        tCont'      = tFun fxProc (posRow (tVar a) posNil) kwdNil tR
 
 
---  $ASYNC          : [A] => mut($Actor, $Cont[mut,($Cont[mut,A],)]) -> Msg[A]
+--  $ASYNC          : [A] => action($Actor, $Cont[$Cont[A]]) -> A
 scASYNC             = tSchema [quant a] tASYNC
-  where tASYNC      = tFun fxMut (posRow tActor $ posRow tCont' posNil) kwdNil (tMsg $ tVar a)
+  where tASYNC      = tFun fxAction (posRow tActor $ posRow tCont' posNil) kwdNil (tVar a)
         a           = TV KType $ name "A"
-        tCont'      = tCont fxMut tCont''
-        tCont''     = tCont fxMut (tVar a)
+        tCont'      = tCont tCont''
+        tCont''     = tCont (tVar a)
 
---  $AFTER          : [A] => mut(float, $Cont[mut,($Cont[mut,A],)]) -> Msg[A]
+--  $AFTER          : [A] => action(int, $Cont[$Cont[A]]) -> A
 scAFTER             = tSchema [quant a] tAFTER
-  where tAFTER      = tFun fxMut (posRow tFloat $ posRow tCont' posNil) kwdNil (tMsg $ tVar a)
+  where tAFTER      = tFun fxAction (posRow tFloat $ posRow tCont' posNil) kwdNil (tVar a)
         a           = TV KType $ name "A"
-        tCont'      = tCont fxMut tCont''
-        tCont''     = tCont fxMut (tVar a)
+        tCont'      = tCont tCont''
+        tCont''     = tCont (tVar a)
 
---  $AWAIT          : [A] => mut(Msg[A], $Cont[mut,(A,)]) -> $R
+--  $AWAIT          : [A] => proc($Cont[A], Msg[A]) -> $R
 scAWAIT             = tSchema [quant a] tAWAIT
-  where tAWAIT      = tFun fxMut (posRow (tMsg $ tVar a) $ posRow tCont' posNil) kwdNil tR
+  where tAWAIT      = tFun fxProc (posRow tCont' $ posRow (tMsg $ tVar a) posNil) kwdNil tR
         a           = TV KType $ name "A"
-        tCont'      = tCont fxMut (tVar a)
+        tCont'      = tCont (tVar a)
 
 
 
---  $PUSHc          : [X] => pure (X(BaseException)->$R) -> None
-scPUSHc             = tSchema [quant x] tPUSH
+--  $PUSHc          : pure (proc(BaseException)->$R) -> None
+scPUSHc             = tSchema [] tPUSH
   where tPUSH       = tFun fxPure (posRow tCont' posNil) kwdNil tNone
-        x           = TV KFX $ name "X"
-        tCont'      = tFun (tVar x) (posRow tBaseException posNil) kwdNil tR
+        tCont'      = tFun fxProc (posRow tBaseException posNil) kwdNil tR
 
---  $PUSH           : [X] => pure ($Cont[X,(BaseException,)]) -> None
-scPUSH              = tSchema [quant x] tPUSH
+--  $PUSH           : pure ($Cont[BaseException]) -> None
+scPUSH              = tSchema [] tPUSH
   where tPUSH       = tFun fxPure (posRow tCont' posNil) kwdNil tNone
-        x           = TV KFX $ name "X" 
         a           = TV KType $ name "A"
-        tCont'      = tCont (tVar x) tBaseException
+        tCont'      = tCont tBaseException
 
 
 
@@ -276,12 +346,11 @@ scCAST              = tSchema [quant a, quant b] tCAST
         a           = TV KType $ name "A"
         b           = TV KType $ name "B"
 
---  $CONSTCONT      : [X,A] => (A, $Cont[X,A]) -> $Cont[X,tNone]
-scCONSTCONT         = tSchema [quant x, quant a] tCONSTCONT
+--  $CONSTCONT      : [A] => (A, $Cont[A]) -> $Cont[tNone]
+scCONSTCONT         = tSchema [quant a] tCONSTCONT
   where tCONSTCONT  = tFun fxPure (posRow (tVar a) $ posRow tCont' posNil) kwdNil tCont''
-        tCont'      = tCont (tVar x) (tVar a)
-        tCont''     = tCont (tVar x) tNone
-        x           = TV KFX $ name "X"
+        tCont'      = tCont (tVar a)
+        tCont''     = tCont tNone
         a           = TV KType $ name "A"
 
 --  $FORMAT         : [P] => (str, (*P)) -> str
@@ -289,29 +358,27 @@ scFORMAT            = tSchema [quant p] tFORMAT
   where tFORMAT     = tFun fxPure (posRow tStr $ posRow (tTuple (tVar p) kwdNil) posNil) kwdNil tStr
         p           = TV KType $ name "P"
 
---  $R_CONTc        : [X,A] => X(X(A)->$R, A) -> $R
-scRContc            = tSchema [quant x, quant a] tRCont
-  where tRCont      = tFun (tVar x) (posRow tCont' $ posRow (tVar a) posNil) kwdNil tR
-        tCont'      = tFun (tVar x) (posRow (tVar a) posNil) kwdNil tR
-        x           = TV KFX $ name "X" 
+--  $R_CONTc        : [A] => proc(proc(A)->$R, A) -> $R
+scRContc            = tSchema [quant a] tRCont
+  where tRCont      = tFun fxProc (posRow tCont' $ posRow (tVar a) posNil) kwdNil tR
+        tCont'      = tFun fxProc (posRow (tVar a) posNil) kwdNil tR
         a           = TV KType $ name "A"
 
---  $R_CONT         : [X,A] => X($Cont[X,(A,)], A) -> $R
-scRCont             = tSchema [quant x, quant a] tRCont
-  where tRCont      = tFun (tVar x) (posRow tCont' $ posRow (tVar a) posNil) kwdNil tR
-        tCont'      = tCont (tVar x) (tVar a)
-        x           = TV KFX $ name "X" 
+--  $R_CONT         : [A] => proc($Cont[A], A) -> $R
+scRCont             = tSchema [quant a] tRCont
+  where tRCont      = tFun fxProc (posRow tCont' $ posRow (tVar a) posNil) kwdNil tR
+        tCont'      = tCont (tVar a)
         a           = TV KType $ name "A"
 
 
 --  class $EqOpt[A] (Eq[?A]): pass
-clEqOpt cls def     = cls [quant a] (leftpath [TC qnEq [tOpt $ tVar a]]) clTEnv
-  where clTEnv      = [ (initKW, def scInit NoDec) ]
+clEqOpt             = NClass [quant a] (leftpath [TC qnEq [tOpt $ tVar a]]) clTEnv
+  where clTEnv      = [ (initKW, NDef scInit NoDec) ]
         scInit      = tSchema [] $ tFun fxPure (posRow (tCon $ TC qnEq [tVar a]) posNil) kwdNil tNone
         a           = TV KType (name "A")
 
 --  class $EqOpt[A] (Eq[?A]): pass
-clIdentityOpt cls def = cls [quant a] (leftpath [TC qnIdentity [tOpt $ tVar a]]) []
+clIdentityOpt       = NClass [quant a] (leftpath [TC qnIdentity [tOpt $ tVar a]]) []
   where a           = TV KType (name "A")
 
 --  w$EqNone        : Eq[None]
@@ -337,18 +404,62 @@ scISNONE            = tSchema [quant a] tISNONE
   where tISNONE     = tFun fxPure (posRow (tOpt $ tVar a) posNil) kwdNil tBool
         a           = TV KType (name "A")
 
---  $SKIPRESc       : [X,A] => X(X(None)->$R) -> X(A)->$R
-scSKIPRESc          = tSchema [quant x, quant a] tSKIPRES
-  where tSKIPRES    = tFun (tVar x) (posRow tCont' posNil) kwdNil tCont''
-        tCont'      = tFun (tVar x) (posRow tNone posNil) kwdNil tR
-        tCont''     = tFun (tVar x) (posRow (tVar a) posNil) kwdNil tR
-        x           = TV KFX $ name "X"
+--  $SKIPRESc       : [A] => pure(proc(None)->$R) -> proc(A)->$R
+scSKIPRESc          = tSchema [quant a] tSKIPRES
+  where tSKIPRES    = tFun fxPure (posRow tCont' posNil) kwdNil tCont''
+        tCont'      = tFun fxProc (posRow tNone posNil) kwdNil tR
+        tCont''     = tFun fxProc (posRow (tVar a) posNil) kwdNil tR
         a           = TV KType $ name "A"
 
---  $SKIPRES        : [X,A] => X($Cont[X,(None,)]) -> $Cont[X,(A,)]
-scSKIPRES           = tSchema [quant x, quant a] tSKIPRES
-  where tSKIPRES    = tFun (tVar x) (posRow tCont' posNil) kwdNil tCont''
-        tCont'      = tCont (tVar x) tNone
-        tCont''     = tCont (tVar x) (tVar a)
-        x           = TV KFX $ name "X"
+--  $SKIPRES        : [X,A] => pure($Cont[None]) -> $Cont[A]
+scSKIPRES           = tSchema [quant a] tSKIPRES
+  where tSKIPRES    = tFun fxPure (posRow tCont' posNil) kwdNil tCont''
+        tCont'      = tCont tNone
+        tCont''     = tCont (tVar a)
         a           = TV KType $ name "A"
+
+--  $WRAP           : [A,B,C] => ($Actor, proc(*A,**B)->C) -> action(*A,**B)->C
+scWRAP              = tSchema [quant a, quant b, quant c] tWRAP
+  where tWRAP       = tFun0 [tActor, abcFun fxProc] (abcFun fxAction)
+        abcFun fx   = tFun fx (tVar a) (tVar b) (tVar c)
+        a           = TV KType (name "A")
+        b           = TV KType (name "B")
+        c           = TV KType (name "C")
+
+--  protocol $Wrapped[X]: pass
+proWrapped          = NProto [quant x] [] te
+  where te          = [(attrWrap,scWrap)]
+        scWrap      = NSig (tSchema q (tFun0 [tActor, fxFun tX] (fxFun tSelf)))  Static
+        fxFun fx    = tFun fx (tVar a) (tVar b) tC
+        tX          = tVar x
+        tC          = tVar c
+        tSelf       = tVar fxSelf
+        q           = [quant a, quant b, quant c]
+        x           = TV KFX (name "X")
+        a           = TV PRow (name "A")
+        b           = TV KRow (name "B")
+        c           = TV KType (name "C")
+
+--  class $WrappedC[S,X]: pass
+clWrapped           = NClass [quant s, quant x] [] te
+  where te          = [(attrWrap,scWrap)]
+        scWrap      = NDef (tSchema q (tFun0 [tActor, fxFun tX] (fxFun tS))) NoDec
+        fxFun fx    = tFun fx (tVar a) (tVar b) tC
+        tS          = tVar s
+        tX          = tVar x
+        tC          = tVar c
+        q           = [quant a, quant b, quant c]
+        s           = TV KFX (name "S")
+        x           = TV KFX (name "X")
+        a           = TV PRow (name "A")
+        b           = TV KRow (name "B")
+        c           = TV KType (name "C")
+
+
+
+primWits            = [ WInst [] fxAction (pWrapped fxProc) primWrapAction path,
+                        WInst [] fxProc   (pWrapped fxProc) primWrapProc path,
+                        WInst [] fxMut    (pWrapped fxMut)  primWrapMut path,
+                        WInst [] fxPure   (pWrapped fxPure) primWrapPure path
+                      ]
+  where path        = [Left (noQ "_")]

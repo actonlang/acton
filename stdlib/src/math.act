@@ -43,7 +43,8 @@ protocol RealFuns:
     @staticmethod
     atanh       : (Self) -> Self
 
-extension float (RealFuns): pass
+extension float (RealFuns):
+    NotImplemented
 
 def sqrt(x):
    return RealFuns.sqrt(x)
@@ -75,6 +76,3 @@ def acosh(x):
    return RealFuns.acosh(x)
 def atanh(x):
    return RealFuns.atanh(x)
-   
-
-

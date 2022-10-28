@@ -21,6 +21,7 @@ import Acton.Env
 import Acton.TypeM
 import Acton.Printer
 import Acton.Names
+import Acton.Builtin
 import Acton.Subst
 import Acton.Unify
 
@@ -43,9 +44,7 @@ instance Subst TypeX where
     tyfree x                    = []
 
 
-setInDef env
-  | onTop env                   = modX env $ \x -> x{ context = CtxDef }
-  | otherwise                   = env
+setInDef env                    = modX env $ \x -> x{ context = CtxDef }
 
 setInAct env                    = modX env $ \x -> x{ context = CtxAct }
 
@@ -66,7 +65,6 @@ inClass env                     = context (envX env) == CtxClass
 inDecl env                      = indecl $ envX env
 
 isForced env                    = forced $ envX env
-
 
 
 -- Well-formed tycon applications -------------------------------------------------------------------------------------------------
@@ -152,10 +150,21 @@ instQuals env q ts          = do let s = qbound q `zip` ts
 wvars                       :: Constraints -> [Expr]
 wvars cs                    = [ eVar v | Impl v _ _ <- cs ]
 
+mkPRow (PosPar n a _ p)     = posRow <$> maybe (newTVarOfKind PRow) return a <*> mkPRow p
+mkPRow (PosSTAR n a)        = maybe (newTVarOfKind PRow) return a
+mkPRow PosNIL               = return posNil
+
+mkKRow (KwdPar n a _ k)     = kwdRow n <$> maybe (newTVarOfKind KRow) return a <*> mkKRow k
+mkKRow (KwdSTAR n a)        = maybe (newTVarOfKind KRow) return a
+mkKRow KwdNIL               = return kwdNil
 
 -- Misc. ---------------------------------------------------------------------------------------------------------------------------
 
-bindWits eqs                            = [ Assign l0 [PVar l0 n (Just t)] e | (n,t,e) <- eqs ]
+data Equation                           = Eqn Name Type Expr
+
+type Equations                          = [Equation]
+
+bindWits eqs                            = [ Assign l0 [PVar l0 w (Just t)] e | Eqn w t e <- eqs ]
 
 impl2type t (TC n ts)                   = tCon $ TC n (t:ts)
 
@@ -181,7 +190,7 @@ qualWRow env q                          = wit2row (qualWits env q)
 
 qualWits env q                          = [ (tvarWit tv p, impl2type (tVar tv) p) | Quant tv ps <- q, p <- ps, isProto env (tcname p) ]
 
-witSubst env q cs                       = [ (w0,t,eVar w) | ((w,t),w0) <- ws `zip` ws0 ]
+witSubst env q cs                       = [ Eqn w0 t (eVar w) | ((w,t),w0) <- ws `zip` ws0 ]
   where ws                              = [ (w, impl2type t p) | Impl w t p <- cs ]
         ws0                             = [ tvarWit tv p | Quant tv ps <- q, p <- ps, isProto env (tcname p) ]
 

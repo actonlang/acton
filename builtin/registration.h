@@ -28,7 +28,7 @@
 #define MSG_ID 14
 #define ACTOR_ID 15
 #define CATCHER_ID 16
-#define CLOS_ID 17
+
 #define CONT_ID 18
 #define DONE_ID 19
 #define CONSTCONT_ID 20
@@ -58,7 +58,12 @@
 #define             NOTIMPLEMENTEDERROR_ID      43
 #define         VALUEERROR_ID                   44
 
-#define PREASSIGNED 45
+#define PROC_ID 45
+#define ACTION_ID 46
+#define MUT_ID 47
+#define PURE_ID 48
+
+#define PREASSIGNED 49
 
 
 /* 
