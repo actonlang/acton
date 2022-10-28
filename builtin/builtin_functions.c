@@ -95,8 +95,8 @@ $Iterator $enumerate($Iterable wit, $WORD iter, $int start) {
 // filter ////////////////////////////////////////////////////////////////////////////////
 
 void $Iterator$filter_init($Iterator$filter self, $Iterator it,  $pure f) {
-  self->it = it;
-  self->f = f;
+    self->it = it;
+    self->f = f;
 }
 
 $bool $Iterator$filter_bool($Iterator$filter self) {
@@ -137,15 +137,15 @@ $Iterator$filter $Iterator$filter$new($Iterator it, $pure f) {
 }
 
 $Iterator $filter($Iterable wit, $pure f, $WORD iter) {
-  $Iterator it = wit->$class->__iter__(wit,iter);
-  return ($Iterator)$Iterator$filter$new(it,f);
+    $Iterator it = wit->$class->__iter__(wit,iter);
+    return ($Iterator)$Iterator$filter$new(it,f);
 }
 
 // map ////////////////////////////////////////////////////////////////////////////////
 
 void $Iterator$map_init($Iterator$map self, $Iterator it, $pure f) {
-  self->it = it;
-  self->f = f;
+    self->it = it;
+    self->f = f;
 }
 
 $bool $Iterator$map_bool($Iterator$map self) {
@@ -186,8 +186,8 @@ $Iterator$map $Iterator$map$new($Iterator it, $pure f) {
 }
 
 $Iterator $map($Iterable wit, $pure f, $WORD iter) {
-  $Iterator it = wit->$class->__iter__(wit,iter);
-  return ($Iterator)$Iterator$map$new(it,f);
+    $Iterator it = wit->$class->__iter__(wit,iter);
+    return ($Iterator)$Iterator$map$new(it,f);
 }
 
 
