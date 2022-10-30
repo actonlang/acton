@@ -673,7 +673,7 @@ matchActorAssumption env n0 p k te      = do --traceM ("## matchActorAssumption 
         te1                             = nTerms $ te `restrict` ns
         check1 (n, NSig _ _)            = return ([], [])
         check1 (n, NVar t0)             = do --traceM ("## matchActorAssumption for attribute " ++ prstr n)
-                                             return ([Cast t t0],[])
+                                             return ([Cast t t0, Seal t0],[])
           where Just (NVar t)           = lookup n te1
         check1 (n, NDef sc0 _)          = do (cs0,_,t) <- instantiate env sc
                                              (c0,t') <- wrap t
