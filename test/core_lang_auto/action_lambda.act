@@ -1,0 +1,22 @@
+def fun(x:int):
+    return x*2
+
+actor Foo():
+    var c = 0
+    def inc(x):
+        c += x
+    
+    double_inc = lambda v: inc(fun(v))
+    
+    def read():
+        return c
+
+actor main(env):
+    foo = Foo()
+    foo.inc(1)
+    c = foo.read()
+    print("Expect 1:", c)
+    foo.double_inc(1)
+    c = foo.read()
+    print("Expect 3:", c)
+    env.exit(0)
