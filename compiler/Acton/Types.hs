@@ -213,12 +213,14 @@ unwrap (TFX l FXAction)                 = TFX l FXProc
 unwrap t                                = t
 
 wrap t@TFun{}                           = do tvx <- newTVarOfKind KFX
+                                             tvy <- newTVarOfKind KFX
                                              w <- newWitness
-                                             return (Impl w tvx (pWrapped $ effect t), t{ effect = tvx })
+                                             return (Impl w tvx (pWrapped (effect t) tvy), t{ effect = tvx })
 
-wrapped env cs ts args                  = do tvx <- newTVarOfKind KFX
-                                             let p = pWrapped tvx
-                                                 Just (_, sc, Just Static) = findAttr env p attrWrap
+wrapped kw env cs ts args               = do tvx <- newTVarOfKind KFX
+                                             tvy <- newTVarOfKind KFX
+                                             let p = pWrapped tvx tvy
+                                                 Just (_, sc, Just Static) = findAttr env p kw
                                              (_,tvs,t0) <- instantiate env sc
                                              fx <- newTVarOfKind KFX
                                              t' <- newTVar
@@ -227,7 +229,7 @@ wrapped env cs ts args                  = do tvx <- newTVarOfKind KFX
                                              w <- newWitness
                                              return (Impl w fx p :
                                                      Cast t1 t2 :
-                                                     cs, t', eCall (tApp (Dot l0 (eVar w) attrWrap) tvs) args)
+                                                     cs, t', eCall (tApp (Dot l0 (eVar w) kw) tvs) args)
 
 --------------------------------------------------------------------------------------------------------------------------
 
@@ -1002,7 +1004,7 @@ instance Infer Expr where
                                             NDef sc d -> do 
                                                 (cs,tvs,t) <- instantiate env sc
                                                 let e = app t (tApp x tvs) $ witsOf cs
-                                                wrapped env cs [tActor,t] [eVar selfKW,e]
+                                                wrapped attrWrap env cs [tActor,t] [eVar selfKW,e]
                                             NClass q _ _ -> do
                                                 (cs0,ts) <- instQBinds env q
                                                 --traceM ("## Instantiating " ++ prstr n)
@@ -1036,6 +1038,7 @@ instance Infer Expr where
     infer env e@(Strings _ ss)          = return ([], tStr, e)
     infer env e@(BStrings _ ss)         = return ([], tBytes, e)
     infer env (Call l e ps ks)          = do (cs1,t,e) <- infer env e
+                                             (cs1,t,e) <- wrapped attrUnwrap env cs1 [t] [e]
                                              (cs2,prow,ps) <- infer env ps
                                              (cs3,krow,ks) <- infer env ks
                                              t0 <- newTVar

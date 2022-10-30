@@ -103,10 +103,15 @@ instance Transform Decl where
 
 
 transCall (Dot _ (Var _ n) m) ts [e1,e2]
-  | n == primWrapProc,   m == attrWrap  = Just e2
-  | n == primWrapAction, m == attrWrap  = Just $ eCall (tApp (eQVar primWRAP) ts) [e1,e2]
-  | n == primWrapMut,    m == attrWrap  = Just e2
-  | n == primWrapPure,   m == attrWrap  = Just e2
+  | n == primWrapProc,  m == attrWrap   = Just e2
+  | n == primWrapAction,m == attrWrap   = Just $ eCall (tApp (eQVar primWRAP) ts) [e1,e2]
+  | n == primWrapMut,   m == attrWrap   = Just e2
+  | n == primWrapPure,  m == attrWrap   = Just e2
+transCall (Dot _ (Var _ n) m) ts [e1]
+  | n == primWrapProc,  m == attrUnwrap = Just e1
+  | n == primWrapAction,m == attrUnwrap = Just e1
+  | n == primWrapMut,   m == attrUnwrap = Just e1
+  | n == primWrapPure,  m == attrUnwrap = Just e1
 transCall _ _ _                         = Nothing
 
 instance Transform Expr where
