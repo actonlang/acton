@@ -213,12 +213,14 @@ unwrap (TFX l FXAction)                 = TFX l FXProc
 unwrap t                                = t
 
 wrap t@TFun{}                           = do tvx <- newTVarOfKind KFX
+                                             tvy <- newTVarOfKind KFX
                                              w <- newWitness
-                                             return (Impl w tvx (pWrapped $ effect t), t{ effect = tvx })
+                                             return (Impl w tvx (pWrapped (effect t) tvy), t{ effect = tvx })
 
-wrapped env cs ts args                  = do tvx <- newTVarOfKind KFX
-                                             let p = pWrapped tvx
-                                                 Just (_, sc, Just Static) = findAttr env p attrWrap
+wrapped kw env cs ts args               = do tvx <- newTVarOfKind KFX
+                                             tvy <- newTVarOfKind KFX
+                                             let p = pWrapped tvx tvy
+                                                 Just (_, sc, Just Static) = findAttr env p kw
                                              (_,tvs,t0) <- instantiate env sc
                                              fx <- newTVarOfKind KFX
                                              t' <- newTVar
@@ -227,7 +229,7 @@ wrapped env cs ts args                  = do tvx <- newTVarOfKind KFX
                                              w <- newWitness
                                              return (Impl w fx p :
                                                      Cast t1 t2 :
-                                                     cs, t', eCall (tApp (Dot l0 (eVar w) attrWrap) tvs) args)
+                                                     cs, t', eCall (tApp (Dot l0 (eVar w) kw) tvs) args)
 
 --------------------------------------------------------------------------------------------------------------------------
 
@@ -673,7 +675,7 @@ matchActorAssumption env n0 p k te      = do --traceM ("## matchActorAssumption 
         te1                             = nTerms $ te `restrict` ns
         check1 (n, NSig _ _)            = return ([], [])
         check1 (n, NVar t0)             = do --traceM ("## matchActorAssumption for attribute " ++ prstr n)
-                                             return ([Cast t t0],[])
+                                             return ([Cast t t0, Seal t0],[])
           where Just (NVar t)           = lookup n te1
         check1 (n, NDef sc0 _)          = do (cs0,_,t) <- instantiate env sc
                                              (c0,t') <- wrap t
@@ -1002,7 +1004,7 @@ instance Infer Expr where
                                             NDef sc d -> do 
                                                 (cs,tvs,t) <- instantiate env sc
                                                 let e = app t (tApp x tvs) $ witsOf cs
-                                                wrapped env cs [tActor,t] [eVar selfKW,e]
+                                                wrapped attrWrap env cs [tActor,t] [eVar selfKW,e]
                                             NClass q _ _ -> do
                                                 (cs0,ts) <- instQBinds env q
                                                 --traceM ("## Instantiating " ++ prstr n)
@@ -1035,15 +1037,7 @@ instance Infer Expr where
     infer env e@(Ellipsis _)            = notYetExpr e
     infer env e@(Strings _ ss)          = return ([], tStr, e)
     infer env e@(BStrings _ ss)         = return ([], tBytes, e)
-    infer env (Call l e ps ks)          = do (cs1,t,e) <- infer env e
-                                             (cs2,prow,ps) <- infer env ps
-                                             (cs3,krow,ks) <- infer env ks
-                                             t0 <- newTVar
-                                             fx <- currFX
-                                             w <- newWitness
-                                             return (Sub w t (tFun fx prow krow t0) :
-                                                     cs1++cs2++cs3, t0, Call l (eCall (eVar w) [e]) ps ks)
-
+    infer env (Call l e ps ks)          = inferCall env True l e ps ks
     infer env (TApp l e ts)             = internal l "Unexpected TApp in infer"
     infer env (Async l e)               = do (cs,t,e) <- infer env e                        -- expect an action returning t'
                                              prow <- newTVarOfKind PRow
@@ -1301,7 +1295,10 @@ instance Infer Expr where
       | nodup (p,k)                     = do pushFX fx tNone
                                              (cs0,te0,p') <- infEnv env1 p
                                              (cs1,te1,k') <- infEnv (define te0 env1) k
-                                             (cs2,t,e') <- infer (define te1 (define te0 env1)) e
+                                             let env2 = define te1 $ define te0 env1
+                                             (cs2,t,e') <- case e of
+                                                             Call l' e' ps ks -> inferCall env2 False l' e' ps ks
+                                                             _ -> infer env2 e
                                              popFX
                                              return (cs0++cs1++cs2, tFun fx (prowOf p') (krowOf k') t, Lambda l (noDefaultsP p') (noDefaultsK k') e' fx)
                                                      -- TODO: replace defaulted params with Conds
@@ -1374,6 +1371,15 @@ instance Infer Expr where
     infer env (Paren l e)               = do (cs,t,e') <- infer env e
                                              return (cs, t, Paren l e')
 
+inferCall env unwrap l e ps ks          = do (cs1,t,e) <- infer env e
+                                             (cs1,t,e) <- if unwrap then wrapped attrUnwrap env cs1 [t] [e] else pure (cs1,t,e)
+                                             (cs2,prow,ps) <- infer env ps
+                                             (cs3,krow,ks) <- infer env ks
+                                             t0 <- newTVar
+                                             fx <- currFX
+                                             w <- newWitness
+                                             return (Sub w t (tFun fx prow krow t0) :
+                                                     cs1++cs2++cs3, t0, Call l (eCall (eVar w) [e]) ps ks)
 
 
 tupleTemplate i                         = do ts <- mapM (const newTVar) [0..i]

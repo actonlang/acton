@@ -21,12 +21,3 @@ def decode(data: str) -> dict[str, value]:
 def encode(data: dict[str, value]) -> str:
     j = Json()
     return j.encode(data)
-
-
-def _force_ext():
-    """Force compilation using .ext.c
-
-    Only top level functions are recognized as externally defined by actonc
-    TODO: fix in actonc and remove this
-    """
-    NotImplemented

@@ -1494,6 +1494,7 @@ void wt_work_cb(uv_check_t *ev) {
                 }
                 FLUSH_outgoing_local(current);
             } else {
+                reverse_outgoing_queue(current);
                 FLUSH_outgoing_local(current);
             }
 
@@ -1547,6 +1548,7 @@ void wt_work_cb(uv_check_t *ev) {
                 }
                 FLUSH_outgoing_local(current);
             } else {
+                reverse_outgoing_queue(current);
                 FLUSH_outgoing_local(current);
             }
             m->$cont = r.cont;

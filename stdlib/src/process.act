@@ -21,15 +21,6 @@ actor Process(auth: ProcessAuth, cmd: list[str], workdir: ?str, env: ?dict[str, 
     """
     _p = 0
 
-    def _force_persistance():
-        """Trick compiler into persisting the actor arguments we need.
-
-        Compiler optimizes so that only variables that are used are persisted to
-        the DB. Since we use these variables from C, the compiler doesn't see
-        them, thus we need to trick it. This method should never be called.
-        """
-        print(cmd, workdir, env, on_stdout, on_stderr, on_exit, on_error, _p)
-
     action def aid() -> int:
         """Actor ID of process actor
 
@@ -87,12 +78,3 @@ actor Process(auth: ProcessAuth, cmd: list[str], workdir: ?str, env: ?dict[str, 
         after 1: kill()
 
     _create_process()
-
-
-def _force_ext():
-    """Force compilation using .ext.c
-
-    Only top level functions are recognized as externally defined by actonc
-    TODO: fix in actonc and remove this
-    """
-    NotImplemented
