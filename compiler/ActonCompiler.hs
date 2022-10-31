@@ -723,7 +723,7 @@ buildExecutable env opts paths binTask
         libPathsBase        = " -L " ++ sysPath paths ++ "/lib -L" ++ sysLib paths ++ " -L" ++ projLib paths
 #if defined(darwin_HOST_OS) && defined(aarch64_HOST_ARCH)
         libFiles            = libFilesBase
-        libPaths            = libPathsBase ++ " -L/opt/homebrew/lib  -L/Users/sydow/bsdnt "
+        libPaths            = libPathsBase ++ " -L/opt/homebrew/lib "
         ccArgs              = ""
 #elif defined(darwin_HOST_OS) && defined(x86_64_HOST_ARCH)
         libFiles            = libFilesBase
