@@ -249,9 +249,9 @@ cModule env srcbase (Module m imps stmts)
                                               initModule env stmts) $+$
                                       char '}'
   where initImports                 = vcat [ gen env (GName m initKW) <> parens empty <> semi | m <- modNames imps ]
-        stubs                       = [ dname d | Decl _ ds <- stmts, d@Def{} <- ds, hasNotImpl (dbody d) ]
-        ext_include                 = if null stubs then empty else text "#include" <+> doubleQuotes (text srcbase <> text ".ext.c")
-        ext_init                    = if null stubs then empty else genTopName env (name "__ext_init__") <+> parens empty <> semi
+        external                    = hasNotImpl stmts
+        ext_include                 = if external then text "#include" <+> doubleQuotes (text srcbase <> text ".ext.c") else empty
+        ext_init                    = if external then genTopName env (name "__ext_init__") <+> parens empty <> semi else empty
 
 
 declModule env []                   = empty

@@ -119,12 +119,3 @@ actor TCPListener(auth: TCPListenAuth, address: str, port: int, on_listen_error:
         """Implementation internal"""
         NotImplemented
     _init()
-
-
-def _force_ext():
-    """Force compilation using .ext.c
-
-    Only top level functions are recognized as externally defined by actonc
-    TODO: fix in actonc and remove this
-    """
-    NotImplemented

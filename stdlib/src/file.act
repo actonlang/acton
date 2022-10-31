@@ -72,12 +72,3 @@ actor WriteFile(auth: WriteFileAuth, filename: str):
         them, thus we need to trick it. this method should never be called.
         """
         print(filename, _fd)
-
-
-def _force_ext():
-    """Force compilation using .ext.c
-
-    Only top level functions are recognized as externally defined by actonc
-    TODO: fix in actonc and remove this
-    """
-    NotImplemented

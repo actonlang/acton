@@ -750,6 +750,7 @@ hasNotImpl ss                       = any isNotImpl ss
 
 isNotImpl (Expr _ e)                = e == eNotImpl
 isNotImpl (Assign _ _ e)            = e == eNotImpl
+isNotImpl (Decl _ ds)               = any (hasNotImpl . dbody) ds
 isNotImpl _                         = False
 
 isTVar TVar{}                       = True
