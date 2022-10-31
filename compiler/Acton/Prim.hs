@@ -231,7 +231,7 @@ clActor             = NClass [] (leftpath [cValue]) te
                         (boolKW,              NDef (monotype $ tFun fxPure posNil kwdNil tBool) NoDec),
                         (strKW,               NDef (monotype $ tFun fxPure posNil kwdNil tStr) NoDec),
                         (reprKW,              NDef (monotype $ tFun fxPure posNil kwdNil tStr) NoDec),
-                        (resumeKW,            NDef (monotype $ tFun fxPure posNil kwdNil tNone) NoDec)
+                        (resumeKW,            NDef (monotype $ tFun fxMut posNil kwdNil tNone) NoDec)
                       ]
         
 

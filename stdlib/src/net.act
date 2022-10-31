@@ -55,7 +55,7 @@ actor TCPIPConnection(auth: TCPConnectAuth, address: str, port: int, on_connect:
         """Write data to remote"""
         NotImplemented
 
-    pure def __resume__() -> None:
+    mut def __resume__() -> None:
         NotImplemented
 
     def _force_persistance():
@@ -77,7 +77,7 @@ actor TCPListenConnection(auth: _TCPListenConnectAuth, client: int, on_receive: 
         """Write data to remote"""
         NotImplemented
 
-    pure def __resume__() -> None:
+    mut def __resume__() -> None:
         NotImplemented
 
     def _force_persistance():
@@ -112,7 +112,7 @@ actor TCPListener(auth: TCPListenAuth, address: str, port: int, on_listen_error:
         """
         print(address, port, on_listen_error, on_accept, on_error, _stream)
 
-    pure def __resume__() -> None:
+    mut def __resume__() -> None:
         NotImplemented
 
     proc def _init():
