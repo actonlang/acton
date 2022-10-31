@@ -58,15 +58,6 @@ actor TCPIPConnection(auth: TCPConnectAuth, address: str, port: int, on_connect:
     mut def __resume__() -> None:
         NotImplemented
 
-    def _force_persistance():
-        """Trick compiler into persisting the actor arguments we need.
-
-        Compiler optimizes so that only variables that are used are persisted to
-        the DB. Since we use these variables from C, the compiler doesn't see
-        them, thus we need to trick it. This method should never be called.
-        """
-        print(address, port, on_connect, on_receive, on_error, _socket)
-
     proc def _init():
         NotImplemented
     _init()
@@ -79,15 +70,6 @@ actor TCPListenConnection(auth: _TCPListenConnectAuth, client: int, on_receive: 
 
     mut def __resume__() -> None:
         NotImplemented
-
-    def _force_persistance():
-        """Trick compiler into persisting the actor arguments we need.
-
-        Compiler optimizes so that only variables that are used are persisted to
-        the DB. Since we use these variables from C, the compiler doesn't see
-        them, thus we need to trick it. This method should never be called.
-        """
-        print(client, on_receive, on_error)
 
     proc def _init():
         """Implementation internal"""
@@ -102,15 +84,6 @@ actor TCPListener(auth: TCPListenAuth, address: str, port: int, on_listen_error:
         """Implementation internal"""
         c = TCPListenConnection(auth, client, on_receive, on_error)
         on_accept(c)
-
-    def _force_persistance():
-        """Trick compiler into persisting the actor arguments we need.
-
-        Compiler optimizes so that only variables that are used are persisted to
-        the DB. Since we use these variables from C, the compiler doesn't see
-        them, thus we need to trick it. This method should never be called.
-        """
-        print(address, port, on_listen_error, on_accept, on_error, _stream)
 
     mut def __resume__() -> None:
         NotImplemented

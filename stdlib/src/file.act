@@ -37,15 +37,6 @@ actor ReadFile(auth: ReadFileAuth, filename: str):
         """Close file"""
         NotImplemented
 
-    def _force_persistance():
-        """Trick compiler into persisting the actor arguments we need.
-
-        Compiler optimizes so that only variables that are used are persisted to
-        the db. Since we use these variables from c, the compiler doesn't see
-        them, thus we need to trick it. This method should never be called.
-        """
-        print(filename, _fd)
-
 
 actor WriteFile(auth: WriteFileAuth, filename: str):
     """Write a file
@@ -63,12 +54,3 @@ actor WriteFile(auth: WriteFileAuth, filename: str):
     action def close() -> None:
         """Close file"""
         NotImplemented
-
-    def _force_persistance():
-        """trick compiler into persisting the actor arguments we need.
-
-        compiler optimizes so that only variables that are used are persisted to
-        the db. since we use these variables from c, the compiler doesn't see
-        them, thus we need to trick it. this method should never be called.
-        """
-        print(filename, _fd)
