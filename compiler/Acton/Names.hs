@@ -130,7 +130,8 @@ methods b                           = [ n | Decl _ ds <- b, Def{dname=n} <- ds ]
 
 statevars b                         = concat [ bound ps | VarAssign _ ps _ <- b ]
 
-isHidden (Name _ str)               = length (takeWhile (=='_') str) == 1
+
+isHidden n@(Name _ str)             = length (takeWhile (=='_') str) == 1 || n == resumeKW
 isHidden _                          = True
 
 notHidden                           = filter (not . isHidden)
