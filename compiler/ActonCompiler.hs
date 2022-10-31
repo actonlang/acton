@@ -693,15 +693,18 @@ buildExecutable env opts paths binTask
                                Just (A.NAct [] (A.TRow _ _ _ t A.TNil{}) A.TNil{} _) 
                                    | prstr t == "Env" || prstr t == "None"
                                       || prstr t == "__builtin__.Env"|| prstr t == "__builtin__.None"-> do   -- !! To do: proper check of parameter type !!
+                                      iff (not (C.quiet opts)) $ putStrLn ("Building executable "++ makeRelative (projPath paths) binFile)
                                       c <- Acton.CodeGen.genRoot env qn
                                       writeFile rootFile c
                                       iff (C.ccmd opts) $ do
                                           putStrLn ccCmd
                                       appendFile buildF ccCmd
                                       setFileMode buildF 0o755
+                                      timeStart <- getTime Monotonic
                                       (returnCode, ccStdout, ccStderr) <- readCreateProcessWithExitCode (shell $ ccCmd) ""
+                                      timeEnd <- getTime Monotonic
                                       case returnCode of
-                                          ExitSuccess -> iff (not (C.quiet opts)) $ putStrLn ("Building executable "++ makeRelative (projPath paths) binFile)
+                                          ExitSuccess -> iff (C.timing opts) $ putStrLn(" Finished in " ++ fmtTime(timeEnd - timeStart))
                                           ExitFailure _ -> do printIce "compilation of generated C code of the root actor failed"
                                                               putStrLn $ "cc stdout:\n" ++ ccStdout
                                                               putStrLn $ "cc stderr:\n" ++ ccStderr
