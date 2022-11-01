@@ -10,7 +10,7 @@ endif
 
 ACTONC=dist/bin/actonc
 ACTC=dist/bin/actonc
-ZIG_VERSION:=0.10.0-dev.4460+14c173b20
+ZIG_VERSION:=0.10.0
 CC=$(TD)/dist/zig/zig cc
 CXX=$(TD)/dist/zig/zig c++
 ZIG=dist/zig
@@ -59,6 +59,7 @@ endif
 # -- Intel CPU
 ifeq ($(shell uname -m),x86_64)
 CFLAGS += -I/usr/local/include
+LDFLAGS += -L/usr/local/lib
 ZIG_ARCH:=x86_64
 ZIG_OS:=macos
 endif
@@ -630,10 +631,12 @@ dist/zig: deps/zig-$(ZIG_OS)-$(ZIG_ARCH)-$(ZIG_VERSION).tar.xz
 	cd $@ && tar Jx --strip-components=1 -f ../../$^
 
 deps/zig-$(ZIG_OS)-$(ZIG_ARCH)-$(ZIG_VERSION).tar.xz:
-	curl -o $@ https://ziglang.org/builds/zig-$(ZIG_OS)-$(ZIG_ARCH)-$(ZIG_VERSION).tar.xz
+	curl -o $@ https://ziglang.org/download/$(ZIG_VERSION)/zig-$(ZIG_OS)-$(ZIG_ARCH)-$(ZIG_VERSION).tar.xz
 
 # For releases, URL looks like:
 #curl -o $@ https://ziglang.org/download/$(ZIG_VERSION)/zig-$(ZIG_OS)-$(ZIG_ARCH)-$(ZIG_VERSION).tar.xz
+# Nightlies:
+#curl -o $@ https://ziglang.org/builds/zig-$(ZIG_OS)-$(ZIG_ARCH)-$(ZIG_VERSION).tar.xz
 
 .PHONY: distribution clean-distribution
 distribution: $(DIST_ARCHIVES) dist/include/bsdnt $(DIST_BINS) $(DIST_HFILES) $(DIST_TYFILES) $(DIST_DBARCHIVE) $(DIST_ZIG)
