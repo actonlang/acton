@@ -55,7 +55,8 @@ data BuildOptions = BuildOptions {
                          alwaysB     :: Bool,
                          devB        :: Bool,
                          rootB       :: String,
-                         quietB      :: Bool
+                         quietB      :: Bool,
+                         timingB     :: Bool
                      } deriving Show
                          
 
@@ -130,7 +131,9 @@ buildCommand          = Build <$> (
         <$> switch (long "always-build" <> help "Development mode; include debug symbols etc")
         <*> switch (long "dev"          <> help "Development mode; include debug symbols etc")
         <*> strOption (long "root"      <> metavar "ROOTACTOR" <> value "" <> help "Set root actor")
-        <*> switch (long "quiet"        <> help "Don't print stuff"))
+        <*> switch (long "quiet"        <> help "Don't print stuff")
+        <*> switch (long "timing"       <> help "Print timing information")
+    )
                  
 cloudCommand        = Cloud <$> (
     CloudOptions
