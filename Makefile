@@ -41,7 +41,7 @@ CFLAGS+= -fno-sanitize=undefined -I. -I$(TD)/deps/instdir/include -Ideps -Wno-in
 CFLAGS_REL= -O3 -DREL
 CFLAGS_DEV= -g -DDEV
 LDFLAGS+=-L$(TD)/lib -L$(TD)/deps/instdir/lib
-LDLIBS+=$(LIBPROTOBUF_C) -lm -lpthread
+LDLIBS+=-lActonDeps -lm -lpthread
 
 # -- Apple Mac OS X ------------------------------------------------------------
 ifeq ($(shell uname -s),Darwin)
@@ -78,7 +78,9 @@ else
 $(error "Unsupported architecture for Linux?")
 endif
 endif # -- END: Linux ----------------------------------------------------------
-CFLAGS_DEPS=$(CFLAGS_TARGET)
+# NOTE: we allow UB in deps since it is not really our job to clean up... but in
+# a better world?
+CFLAGS_DEPS=-fno-sanitize=undefined $(CFLAGS_TARGET)
 CFLAGS+=$(CFLAGS_TARGET)
 export CFLAGS
 export LDFLAGS
@@ -143,7 +145,7 @@ DEPSA:=lib/libActonDeps.a
 backend/comm.o: backend/comm.c backend/comm.h backend/failure_detector/db_queries.h $(DEPSA)
 	$(CC) -DLOG_USE_COLOR -g -o$@ $< -c $(CFLAGS)
 
-backend/db.o: backend/db.c backend/db.h backend/skiplist.h
+backend/db.o: backend/db.c backend/db.h backend/skiplist.h $(DEPSA)
 	$(CC) -DLOG_USE_COLOR -g -o$@ $< -c $(CFLAGS)
 
 backend/log.o: backend/log.c
@@ -164,19 +166,19 @@ backend/txns.o: backend/txns.c backend/txns.h $(DEPSA)
 backend/client_api.o: backend/client_api.c backend/client_api.h backend/log.h backend/hashes.h $(DEPSA)
 	$(CC) -DLOG_USE_COLOR -g -o$@ $< -c $(CFLAGS)
 
-backend/failure_detector/db_messages.pb-c.o: backend/failure_detector/db_messages.pb-c.c backend/failure_detector/db_messages.pb-c.h
+backend/failure_detector/db_messages.pb-c.o: backend/failure_detector/db_messages.pb-c.c backend/failure_detector/db_messages.pb-c.h $(DEPSA)
 	$(CC) -DLOG_USE_COLOR -g -o$@ $< -c $(CFLAGS)
 
-backend/failure_detector/cells.o: backend/failure_detector/cells.c backend/failure_detector/cells.h
+backend/failure_detector/cells.o: backend/failure_detector/cells.c backend/failure_detector/cells.h $(DEPSA)
 	$(CC) -DLOG_USE_COLOR -g -o$@ $< -c $(CFLAGS)
 
 backend/failure_detector/db_queries.o: backend/failure_detector/db_queries.c backend/failure_detector/db_queries.h backend/log.h backend/failure_detector/db_messages.pb-c.h $(DEPSA)
 	$(CC) -DLOG_USE_COLOR -g -o$@ $< -c $(CFLAGS)
 
-backend/failure_detector/fd.o: backend/failure_detector/fd.c backend/failure_detector/fd.h backend/failure_detector/db_messages.pb-c.h
+backend/failure_detector/fd.o: backend/failure_detector/fd.c backend/failure_detector/fd.h backend/failure_detector/db_messages.pb-c.h $(DEPSA)
 	$(CC) -DLOG_USE_COLOR -g -o$@ $< -c $(CFLAGS)
 
-backend/failure_detector/vector_clock.o: backend/failure_detector/vector_clock.c backend/failure_detector/vector_clock.h backend/failure_detector/db_messages.pb-c.h
+backend/failure_detector/vector_clock.o: backend/failure_detector/vector_clock.c backend/failure_detector/vector_clock.h backend/failure_detector/db_messages.pb-c.h $(DEPSA)
 	$(CC) -DLOG_USE_COLOR -g -o$@ $< -c $(CFLAGS)
 
 # backend tests
@@ -252,41 +254,26 @@ DEPS_DIRS=deps/bsdnt deps/libbsd deps/libmd deps/libprotobuf_c deps/libutf8proc 
 # subdirectories to prevent overwriting if there are name collisions between
 # different library archives.
 
-# These are .a archives of libraries we get using the system package manager
-LIBPROTOBUF_C:=$(shell pkg-config --variable=libdir libprotobuf-c 2>/dev/null)/lib$(shell pkg-config --libs-only-l libprotobuf-c 2>/dev/null | cut -d' ' -f1 | cut -c3-).a
-DEP_LIBS_PKGS=$(LIBPROTOBUF_C)
-
-# The rest is what we built from source
 ifeq ($(shell uname -s),Linux)
 DEP_LIBS+=deps/instdir/lib/libbsd.a
 DEP_LIBS+=deps/instdir/lib/libmd.a
 endif
 
 DEP_LIBS+=deps/instdir/lib/libbsdnt.a
+DEP_LIBS+=deps/instdir/lib/libprotobuf-c.a
 DEP_LIBS+=deps/instdir/lib/libutf8proc.a
 DEP_LIBS+=deps/instdir/lib/libuuid.a
 DEP_LIBS+=deps/instdir/lib/libuv.a
 DEP_LIBS+=deps/instdir/lib/libxml2.a
 
-
-deps/instdir/include/protobuf-c:
-	mkdir -p $(dir $@)
-	cp -av $$(pkg-config --variable includedir libprotobuf-c 2>/dev/null)/protobuf-c $@
-
-lib/libActonDeps.a: $(DEP_LIBS) deps/instdir/include/protobuf-c
+lib/libActonDeps.a: $(DEP_LIBS)
 	mkdir -p lib_deps
 	for LIB in $(DEP_LIBS); do \
 		LIBNAME=$$(basename $${LIB} .a); \
 		mkdir -p lib_deps/$${LIBNAME}; \
 		$$(cd lib_deps/$${LIBNAME} && ar x $(TD)/$${LIB}); \
 	done
-	for LIB in $(DEP_LIBS_PKGS); do \
-		LIBNAME=$$(basename $${LIB} .a); \
-		mkdir -p lib_deps/$${LIBNAME}; \
-		$$(cd lib_deps/$${LIBNAME} && ar x $${LIB}); \
-	done
 	cd lib_deps && ar -qc ../lib/libActonDeps.a */*.o
-
 
 .PHONY: clean-deps
 clean-deps:
@@ -365,7 +352,7 @@ deps/instdir/lib/libprotobuf-c.a: deps/libprotobuf_c
 	cd $< \
 	&& git checkout $(LIBPROTOBUF_C_REF) \
 	&& ./autogen.sh \
-	&& ./configure --prefix=$(TD)/deps/instdir --enable-static --disable-shared CFLAGS="--verbose $(CFLAGS_DEPS)" CXXFLAGS="--verbose $(CFLAGS_TARGET)" \
+	&& ./configure --prefix=$(TD)/deps/instdir --enable-static --disable-shared --disable-protoc CFLAGS="--verbose $(CFLAGS_DEPS)" CXXFLAGS="--verbose $(CFLAGS_TARGET)" \
 	&& make -j && make install
 
 # /deps/libutf8proc --------------------------------------
