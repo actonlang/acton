@@ -290,7 +290,7 @@ lib/libActonDeps.a: $(DEP_LIBS) deps/instdir/include/protobuf-c
 
 .PHONY: clean-deps
 clean-deps:
-	-for I in $(DEPS_DIRS); do ls $${I}; echo Cleaning $${I}; make -C $(TD)/$${I} clean; done
+	-for I in $(DEPS_DIRS); do ls $${I} >/dev/null 2>&1 && echo Cleaning $${I} && make -C $(TD)/$${I} clean; done
 	rm -rf deps/instdir lib/libActonDeps.a
 
 clean-deps-rm:
