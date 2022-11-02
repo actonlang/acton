@@ -13,6 +13,7 @@ ACTC=dist/bin/actonc
 ZIG_VERSION:=0.10.0-dev.4460+14c173b20
 CC=$(TD)/dist/zig/zig cc
 CXX=$(TD)/dist/zig/zig c++
+ZIG=dist/zig
 export CC
 export CXX
 
@@ -41,7 +42,7 @@ CFLAGS+= -fno-sanitize=undefined -I. -I$(TD)/deps/instdir/include -Ideps -Wno-in
 CFLAGS_REL= -O3 -DREL
 CFLAGS_DEV= -g -DDEV
 LDFLAGS+=-L$(TD)/lib -L$(TD)/deps/instdir/lib
-LDLIBS+=$(LIBPROTOBUF_C) -lm -lpthread
+LDLIBS+=-lActonDeps -lm -lpthread
 
 # -- Apple Mac OS X ------------------------------------------------------------
 ifeq ($(shell uname -s),Darwin)
@@ -78,7 +79,9 @@ else
 $(error "Unsupported architecture for Linux?")
 endif
 endif # -- END: Linux ----------------------------------------------------------
-CFLAGS_DEPS=$(CFLAGS_TARGET)
+# NOTE: we allow UB in deps since it is not really our job to clean up... but in
+# a better world?
+CFLAGS_DEPS=-fno-sanitize=undefined $(CFLAGS_TARGET)
 CFLAGS+=$(CFLAGS_TARGET)
 export CFLAGS
 export LDFLAGS
@@ -130,7 +133,7 @@ DIST_ZIG=dist/zig
 
 
 # /backend ----------------------------------------------
-backend/actondb: backend/actondb.c lib/libActonDB.a
+backend/actondb: backend/actondb.c lib/libActonDB.a $(DEPSA)
 	$(CC) -o$@ $< $(CFLAGS) \
 		$(LDFLAGS) \
 		-lActonDB \
@@ -143,7 +146,7 @@ DEPSA:=lib/libActonDeps.a
 backend/comm.o: backend/comm.c backend/comm.h backend/failure_detector/db_queries.h $(DEPSA)
 	$(CC) -DLOG_USE_COLOR -g -o$@ $< -c $(CFLAGS)
 
-backend/db.o: backend/db.c backend/db.h backend/skiplist.h
+backend/db.o: backend/db.c backend/db.h backend/skiplist.h $(DEPSA)
 	$(CC) -DLOG_USE_COLOR -g -o$@ $< -c $(CFLAGS)
 
 backend/log.o: backend/log.c
@@ -164,19 +167,19 @@ backend/txns.o: backend/txns.c backend/txns.h $(DEPSA)
 backend/client_api.o: backend/client_api.c backend/client_api.h backend/log.h backend/hashes.h $(DEPSA)
 	$(CC) -DLOG_USE_COLOR -g -o$@ $< -c $(CFLAGS)
 
-backend/failure_detector/db_messages.pb-c.o: backend/failure_detector/db_messages.pb-c.c backend/failure_detector/db_messages.pb-c.h
+backend/failure_detector/db_messages.pb-c.o: backend/failure_detector/db_messages.pb-c.c backend/failure_detector/db_messages.pb-c.h $(DEPSA)
 	$(CC) -DLOG_USE_COLOR -g -o$@ $< -c $(CFLAGS)
 
-backend/failure_detector/cells.o: backend/failure_detector/cells.c backend/failure_detector/cells.h
+backend/failure_detector/cells.o: backend/failure_detector/cells.c backend/failure_detector/cells.h $(DEPSA)
 	$(CC) -DLOG_USE_COLOR -g -o$@ $< -c $(CFLAGS)
 
 backend/failure_detector/db_queries.o: backend/failure_detector/db_queries.c backend/failure_detector/db_queries.h backend/log.h backend/failure_detector/db_messages.pb-c.h $(DEPSA)
 	$(CC) -DLOG_USE_COLOR -g -o$@ $< -c $(CFLAGS)
 
-backend/failure_detector/fd.o: backend/failure_detector/fd.c backend/failure_detector/fd.h backend/failure_detector/db_messages.pb-c.h
+backend/failure_detector/fd.o: backend/failure_detector/fd.c backend/failure_detector/fd.h backend/failure_detector/db_messages.pb-c.h $(DEPSA)
 	$(CC) -DLOG_USE_COLOR -g -o$@ $< -c $(CFLAGS)
 
-backend/failure_detector/vector_clock.o: backend/failure_detector/vector_clock.c backend/failure_detector/vector_clock.h backend/failure_detector/db_messages.pb-c.h
+backend/failure_detector/vector_clock.o: backend/failure_detector/vector_clock.c backend/failure_detector/vector_clock.h backend/failure_detector/db_messages.pb-c.h $(DEPSA)
 	$(CC) -DLOG_USE_COLOR -g -o$@ $< -c $(CFLAGS)
 
 # backend tests
@@ -252,41 +255,26 @@ DEPS_DIRS=deps/bsdnt deps/libbsd deps/libmd deps/libprotobuf_c deps/libutf8proc 
 # subdirectories to prevent overwriting if there are name collisions between
 # different library archives.
 
-# These are .a archives of libraries we get using the system package manager
-LIBPROTOBUF_C:=$(shell pkg-config --variable=libdir libprotobuf-c 2>/dev/null)/lib$(shell pkg-config --libs-only-l libprotobuf-c 2>/dev/null | cut -d' ' -f1 | cut -c3-).a
-DEP_LIBS_PKGS=$(LIBPROTOBUF_C)
-
-# The rest is what we built from source
 ifeq ($(shell uname -s),Linux)
 DEP_LIBS+=deps/instdir/lib/libbsd.a
 DEP_LIBS+=deps/instdir/lib/libmd.a
 endif
 
 DEP_LIBS+=deps/instdir/lib/libbsdnt.a
+DEP_LIBS+=deps/instdir/lib/libprotobuf-c.a
 DEP_LIBS+=deps/instdir/lib/libutf8proc.a
 DEP_LIBS+=deps/instdir/lib/libuuid.a
 DEP_LIBS+=deps/instdir/lib/libuv.a
 DEP_LIBS+=deps/instdir/lib/libxml2.a
 
-
-deps/instdir/include/protobuf-c:
-	mkdir -p $(dir $@)
-	cp -av $$(pkg-config --variable includedir libprotobuf-c 2>/dev/null)/protobuf-c $@
-
-lib/libActonDeps.a: $(DEP_LIBS) deps/instdir/include/protobuf-c
+lib/libActonDeps.a: $(DEP_LIBS) dist/zig
 	mkdir -p lib_deps
 	for LIB in $(DEP_LIBS); do \
 		LIBNAME=$$(basename $${LIB} .a); \
 		mkdir -p lib_deps/$${LIBNAME}; \
 		$$(cd lib_deps/$${LIBNAME} && ar x $(TD)/$${LIB}); \
 	done
-	for LIB in $(DEP_LIBS_PKGS); do \
-		LIBNAME=$$(basename $${LIB} .a); \
-		mkdir -p lib_deps/$${LIBNAME}; \
-		$$(cd lib_deps/$${LIBNAME} && ar x $${LIB}); \
-	done
 	cd lib_deps && ar -qc ../lib/libActonDeps.a */*.o
-
 
 .PHONY: clean-deps
 clean-deps:
@@ -306,7 +294,7 @@ deps/libbsdnt:
 # argument passing it seems? -target=foo works whereas -target foo does not. It
 # seems fine for now since this is likely a pure library, not interacting
 # anything with libc, but maybe we should fix it?
-deps/instdir/lib/libbsdnt.a: deps/libbsdnt
+deps/instdir/lib/libbsdnt.a: deps/libbsdnt $(ZIG)
 	mkdir -p $(dir $@)
 	cd $< \
 	&& git checkout $(LIBBSDNT_REF) \
@@ -332,7 +320,7 @@ deps/libbsd:
 # earlier. Thus, the only workaround I found is to use a different name, which
 # we achieve simply by copying libbsd/include/bsd to libbsd/incbsd and adding
 # that with -I../incbsd
-deps/instdir/lib/libbsd.a: deps/libbsd deps/instdir/lib/libmd.a
+deps/instdir/lib/libbsd.a: deps/libbsd deps/instdir/lib/libmd.a $(ZIG)
 	mkdir -p $(dir $@)
 	cd $< \
 	&& git checkout $(LIBBSD_REF) \
@@ -347,7 +335,7 @@ LIBMD_REF=1.0.4
 deps/libmd:
 	ls $@ >/dev/null 2>&1 || git clone https://gitlab.freedesktop.org/libbsd/libmd.git $@
 
-deps/instdir/lib/libmd.a: deps/libmd
+deps/instdir/lib/libmd.a: deps/libmd $(ZIG)
 	mkdir -p $(dir $@)
 	cd $< \
 	&& git checkout $(LIBMD_REF) \
@@ -360,12 +348,12 @@ LIBPROTOBUF_C_REF=abc67a11c6db271bedbb9f58be85d6f4e2ea8389
 deps/libprotobuf_c:
 	ls $@ >/dev/null 2>&1 || git clone https://github.com/protobuf-c/protobuf-c.git $@
 
-deps/instdir/lib/libprotobuf-c.a: deps/libprotobuf_c
+deps/instdir/lib/libprotobuf-c.a: deps/libprotobuf_c $(ZIG)
 	mkdir -p $(dir $@)
 	cd $< \
 	&& git checkout $(LIBPROTOBUF_C_REF) \
 	&& ./autogen.sh \
-	&& ./configure --prefix=$(TD)/deps/instdir --enable-static --disable-shared CFLAGS="--verbose $(CFLAGS_DEPS)" CXXFLAGS="--verbose $(CFLAGS_TARGET)" \
+	&& ./configure --prefix=$(TD)/deps/instdir --enable-static --disable-shared --disable-protoc CFLAGS="--verbose $(CFLAGS_DEPS)" CXXFLAGS="--verbose $(CFLAGS_TARGET)" \
 	&& make -j && make install
 
 # /deps/libutf8proc --------------------------------------
@@ -373,7 +361,7 @@ LIBUTF8PROC_REF=63f31c908ef7656415f73d6c178f08181239f74c
 deps/libutf8proc:
 	ls $@ >/dev/null 2>&1 || git clone https://github.com/JuliaStrings/utf8proc.git $@
 
-deps/instdir/lib/libutf8proc.a: deps/libutf8proc
+deps/instdir/lib/libutf8proc.a: deps/libutf8proc $(ZIG)
 	mkdir -p $(dir $@)
 	cd $< \
 	&& git checkout $(LIBUTF8PROC_REF) \
@@ -385,7 +373,7 @@ LIBUUID_REF=v2.38.1
 deps/util-linux:
 	ls $@ >/dev/null 2>&1 || git clone https://github.com/util-linux/util-linux.git $@
 
-deps/instdir/lib/libuuid.a: deps/util-linux
+deps/instdir/lib/libuuid.a: deps/util-linux $(ZIG)
 	mkdir -p $(dir $@)
 	cd $< \
 	&& git checkout $(LIBUUID_REF) \
@@ -398,7 +386,7 @@ LIBUV_REF=3e7d2a649275cce3c2d43c67205e627931bda55e
 deps/libuv:
 	ls $@ >/dev/null 2>&1 || git clone https://github.com/libuv/libuv.git $@
 
-deps/instdir/lib/libuv.a: deps/libuv
+deps/instdir/lib/libuv.a: deps/libuv $(ZIG)
 	mkdir -p $(dir $@)
 	cd $< \
 	&& git checkout $(LIBUV_REF) \
@@ -411,7 +399,7 @@ LIBXML2_REF=644a89e080bced793295f61f18aac8cfad6bece2
 deps/libxml2:
 	ls $@ >/dev/null 2>&1 || git clone https://github.com/GNOME/libxml2.git $@
 
-deps/instdir/lib/libxml2.a: deps/libxml2
+deps/instdir/lib/libxml2.a: deps/libxml2 $(ZIG)
 	mkdir -p $(dir $@)
 	cd $< \
 	&& git checkout $(LIBXML2_REF) \
@@ -598,7 +586,7 @@ clean-rts:
 # the file and modify it, which the Linux kernel (and perhaps others?) will
 # prevent if the file to be modified is an executable program that is currently
 # running.  We work around it by moving / renaming the file in place instead!
-dist/bin/actonc: compiler/actonc dist/zig
+dist/bin/actonc: compiler/actonc $(ZIG)
 	@mkdir -p $(dir $@)
 	cp $< $@.tmp
 	mv $@.tmp $@
