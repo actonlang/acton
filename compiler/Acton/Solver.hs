@@ -41,7 +41,14 @@ simplify env te tt cs                       = do cs <- msubst cs
                                                  te <- msubst te
                                                  --traceM ("  -simplify:\n" ++ render (nest 8 $ vcat $ map pretty cs))
                                                  --traceM ("  -for:\n" ++ render (nest 8 $ vcat $ map pretty te))
-                                                 simplify' env te tt [] cs `catchError` \err -> Control.Exception.throw err
+                                                 simplifyGroups env te tt (groupCs env cs)
+
+simplifyGroups env te tt []                 = return ([], [])
+simplifyGroups env te tt (cs:css)           = do --traceM ("\n\n######### simplifyGroup " ++ prstrs cs)
+                                                 (cs1,eq1) <- simplify' env te tt [] cs `catchError` \err -> Control.Exception.throw err
+                                                 env <- msubst env
+                                                 (cs2,eq2) <- simplifyGroups env te tt css
+                                                 return (cs1++cs2, eq1++eq2)
 
 simplify'                                   :: (Polarity a, Pretty a) => Env -> TEnv -> a -> Equations -> Constraints -> TypeM (Constraints,Equations)
 simplify' env te tt eq []                   = return ([], eq)
@@ -52,6 +59,15 @@ simplify' env te tt eq cs                   = do eq1 <- reduce env eq cs
                                                  te1 <- msubst te
                                                  tt1 <- msubst tt
                                                  improve env1 te1 tt1 eq1 cs1
+
+groupCs env []                              = []
+groupCs env (c:cs)                          = close (tyfree c ++ attrfree [c]) [c] cs
+  where close tvs cs0 cs
+          | null cs1                        = cs0 : groupCs env cs2
+          | otherwise                       = close (tvs++tyfree cs1++attrfree cs1) (cs0++cs1) cs2
+          where (cs1,cs2)                   = partition (not . null . intersect tvs . tyfree) cs
+        attrs cs                            = [ n | Sel _ t n _ <- cs ] ++ [ n | Mut t n _ <- cs ]
+        attrfree cs                         = [ tv | n <- attrs cs, tv <- allConAttrFree env n ]
 
 
 ----------------------------------------------------------------------------------------------------------------------
@@ -82,17 +98,9 @@ instance Pretty Rank where
 
 solve                                       :: (Polarity a, Pretty a) => Env -> (Constraint -> Bool) ->
                                                TEnv -> a -> Equations -> Constraints -> TypeM (Constraints,Equations)
-solve env select te tt eq cs                = do (cs',eq') <- solveGroups env select te tt (group cs)
+solve env select te tt eq cs                = do (cs',eq') <- solveGroups env select te tt (groupCs env cs)
                                                  eq <- msubst eq
                                                  return (cs', eq'++eq)
-  where group []                            = []
-        group (c:cs)                        = close (tyfree c ++ attrfree [c]) [c] cs
-        close tvs cs0 cs
-          | null cs1                        = cs0 : group cs2
-          | otherwise                       = close (tvs++tyfree cs1++attrfree cs1) (cs0++cs1) cs2
-          where (cs1,cs2)                   = partition (not . null . intersect tvs . tyfree) cs
-        attrs cs                            = [ n | Sel _ t n _ <- cs ] ++ [ n | Mut t n _ <- cs ]
-        attrfree cs                         = [ tv | n <- attrs cs, tv <- allConAttrFree env n ]
 
 solveGroups env select te tt []             = return ([], [])
 solveGroups env select te tt (cs:css)       = do --traceM ("\n\n######### solveGroup " ++ prstrs cs)
