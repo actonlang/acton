@@ -13,6 +13,7 @@ ACTC=dist/bin/actonc
 ZIG_VERSION:=0.10.0-dev.4460+14c173b20
 CC=$(TD)/dist/zig/zig cc
 CXX=$(TD)/dist/zig/zig c++
+ZIG=dist/zig
 export CC
 export CXX
 
@@ -132,7 +133,7 @@ DIST_ZIG=dist/zig
 
 
 # /backend ----------------------------------------------
-backend/actondb: backend/actondb.c lib/libActonDB.a
+backend/actondb: backend/actondb.c lib/libActonDB.a $(DEPSA)
 	$(CC) -o$@ $< $(CFLAGS) \
 		$(LDFLAGS) \
 		-lActonDB \
@@ -266,7 +267,7 @@ DEP_LIBS+=deps/instdir/lib/libuuid.a
 DEP_LIBS+=deps/instdir/lib/libuv.a
 DEP_LIBS+=deps/instdir/lib/libxml2.a
 
-lib/libActonDeps.a: $(DEP_LIBS)
+lib/libActonDeps.a: $(DEP_LIBS) dist/zig
 	mkdir -p lib_deps
 	for LIB in $(DEP_LIBS); do \
 		LIBNAME=$$(basename $${LIB} .a); \
@@ -293,7 +294,7 @@ deps/libbsdnt:
 # argument passing it seems? -target=foo works whereas -target foo does not. It
 # seems fine for now since this is likely a pure library, not interacting
 # anything with libc, but maybe we should fix it?
-deps/instdir/lib/libbsdnt.a: deps/libbsdnt
+deps/instdir/lib/libbsdnt.a: deps/libbsdnt $(ZIG)
 	mkdir -p $(dir $@)
 	cd $< \
 	&& git checkout $(LIBBSDNT_REF) \
@@ -319,7 +320,7 @@ deps/libbsd:
 # earlier. Thus, the only workaround I found is to use a different name, which
 # we achieve simply by copying libbsd/include/bsd to libbsd/incbsd and adding
 # that with -I../incbsd
-deps/instdir/lib/libbsd.a: deps/libbsd deps/instdir/lib/libmd.a
+deps/instdir/lib/libbsd.a: deps/libbsd deps/instdir/lib/libmd.a $(ZIG)
 	mkdir -p $(dir $@)
 	cd $< \
 	&& git checkout $(LIBBSD_REF) \
@@ -334,7 +335,7 @@ LIBMD_REF=1.0.4
 deps/libmd:
 	ls $@ >/dev/null 2>&1 || git clone https://gitlab.freedesktop.org/libbsd/libmd.git $@
 
-deps/instdir/lib/libmd.a: deps/libmd
+deps/instdir/lib/libmd.a: deps/libmd $(ZIG)
 	mkdir -p $(dir $@)
 	cd $< \
 	&& git checkout $(LIBMD_REF) \
@@ -347,7 +348,7 @@ LIBPROTOBUF_C_REF=abc67a11c6db271bedbb9f58be85d6f4e2ea8389
 deps/libprotobuf_c:
 	ls $@ >/dev/null 2>&1 || git clone https://github.com/protobuf-c/protobuf-c.git $@
 
-deps/instdir/lib/libprotobuf-c.a: deps/libprotobuf_c
+deps/instdir/lib/libprotobuf-c.a: deps/libprotobuf_c $(ZIG)
 	mkdir -p $(dir $@)
 	cd $< \
 	&& git checkout $(LIBPROTOBUF_C_REF) \
@@ -360,7 +361,7 @@ LIBUTF8PROC_REF=63f31c908ef7656415f73d6c178f08181239f74c
 deps/libutf8proc:
 	ls $@ >/dev/null 2>&1 || git clone https://github.com/JuliaStrings/utf8proc.git $@
 
-deps/instdir/lib/libutf8proc.a: deps/libutf8proc
+deps/instdir/lib/libutf8proc.a: deps/libutf8proc $(ZIG)
 	mkdir -p $(dir $@)
 	cd $< \
 	&& git checkout $(LIBUTF8PROC_REF) \
@@ -372,7 +373,7 @@ LIBUUID_REF=v2.38.1
 deps/util-linux:
 	ls $@ >/dev/null 2>&1 || git clone https://github.com/util-linux/util-linux.git $@
 
-deps/instdir/lib/libuuid.a: deps/util-linux
+deps/instdir/lib/libuuid.a: deps/util-linux $(ZIG)
 	mkdir -p $(dir $@)
 	cd $< \
 	&& git checkout $(LIBUUID_REF) \
@@ -385,7 +386,7 @@ LIBUV_REF=3e7d2a649275cce3c2d43c67205e627931bda55e
 deps/libuv:
 	ls $@ >/dev/null 2>&1 || git clone https://github.com/libuv/libuv.git $@
 
-deps/instdir/lib/libuv.a: deps/libuv
+deps/instdir/lib/libuv.a: deps/libuv $(ZIG)
 	mkdir -p $(dir $@)
 	cd $< \
 	&& git checkout $(LIBUV_REF) \
@@ -398,7 +399,7 @@ LIBXML2_REF=644a89e080bced793295f61f18aac8cfad6bece2
 deps/libxml2:
 	ls $@ >/dev/null 2>&1 || git clone https://github.com/GNOME/libxml2.git $@
 
-deps/instdir/lib/libxml2.a: deps/libxml2
+deps/instdir/lib/libxml2.a: deps/libxml2 $(ZIG)
 	mkdir -p $(dir $@)
 	cd $< \
 	&& git checkout $(LIBXML2_REF) \
@@ -585,7 +586,7 @@ clean-rts:
 # the file and modify it, which the Linux kernel (and perhaps others?) will
 # prevent if the file to be modified is an executable program that is currently
 # running.  We work around it by moving / renaming the file in place instead!
-dist/bin/actonc: compiler/actonc dist/zig
+dist/bin/actonc: compiler/actonc $(ZIG)
 	@mkdir -p $(dir $@)
 	cp $< $@.tmp
 	mv $@.tmp $@
