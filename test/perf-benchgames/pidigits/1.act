@@ -1,4 +1,4 @@
-# Acton port of https://benchmarksgame-team.pages.debian.net/benchmarksgame/program/pidigits-python3-4.html
+# Acton port of https://github.com/actonlang/Programming-Language-Benchmarks/blob/main/bench/algorithm/pidigits/4.py
 actor main(env):
     n=int(env.argv[1])
 
