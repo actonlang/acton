@@ -452,10 +452,10 @@ builtin/ty/out/types/__builtin__.ty: builtin/ty/src/__builtin__.act $(ACTONC)
 
 # Build our standard library
 stdlib/out/dev/lib/libActonProject.a: $(STDLIB_SRCFILES) dist/types/__builtin__.ty $(DIST_HFILES) $(ACTONC) $(DEPSA)
-	cd stdlib && ../$(ACTC) build --always-build --dev
+	cd stdlib && ../$(ACTC) build --always-build --auto-stub --dev
 
 stdlib/out/rel/lib/libActonProject.a: $(STDLIB_SRCFILES) dist/types/__builtin__.ty $(DIST_HFILES) $(ACTONC) $(DEPSA)
-	cd stdlib && ../$(ACTC) build --always-build
+	cd stdlib && ../$(ACTC) build --always-build --auto-stub
 	cp -a stdlib/out/types/. dist/types/
 
 

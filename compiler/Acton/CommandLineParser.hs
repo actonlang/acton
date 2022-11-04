@@ -41,6 +41,7 @@ data CompileOptions   = CompileOptions {
                          ccmd        :: Bool,
                          verbose     :: Bool,
                          timing      :: Bool,
+                         autostub    :: Bool,
                          stub        :: Bool,
                          cpedantic   :: Bool,
                          quiet       :: Bool,
@@ -54,6 +55,7 @@ data CompileOptions   = CompileOptions {
 data BuildOptions = BuildOptions {
                          alwaysB     :: Bool,
                          devB        :: Bool,
+                         autostubB   :: Bool,
                          rootB       :: String,
                          quietB      :: Bool,
                          timingB     :: Bool
@@ -117,6 +119,7 @@ compileOptions = CompileOptions
         <*> switch (long "ccmd"         <> help "Show CC / LD commands")
         <*> switch (long "verbose"      <> help "Print progress info during execution")
         <*> switch (long "timing"       <> help "Print timing information")
+        <*> switch (long "auto-stub"    <> help "Allow automatic stub detection")
         <*> switch (long "stub"         <> help "Stub (.ty) file generation only")
         <*> switch (long "cpedantic"    <> help "Pedantic C compilation with -Werror")
         <*> switch (long "quiet"        <> help "Don't print stuff")
@@ -130,6 +133,7 @@ buildCommand          = Build <$> (
     BuildOptions
         <$> switch (long "always-build" <> help "Development mode; include debug symbols etc")
         <*> switch (long "dev"          <> help "Development mode; include debug symbols etc")
+        <*> switch (long "auto-stub"    <> help "Allow automatic stub detection")
         <*> strOption (long "root"      <> metavar "ROOTACTOR" <> value "" <> help "Set root actor")
         <*> switch (long "quiet"        <> help "Don't print stuff")
         <*> switch (long "timing"       <> help "Print timing information")
