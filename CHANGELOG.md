@@ -2,6 +2,50 @@
 
 ## Unreleased
 
+## [0.13.0] (2022-11-04)
+New "deactorizer", which unlocks proper async / sync actor method calls.
+
+### Added
+- Added new "deactorizer" pass in compiler [#374]
+  - No real user visible change, like no change in syntax, but we now properly
+    compile programs with regards to async / sync calling behavior of methods.
+  - Briefly, an actor method called from the local method is called directly.
+    This effect is called "proc". Remote actor methods are normally called
+    asynchronously and these are called "action". If we assign the return value
+    of an action, we are locking for a synchronous behavior which is achieved by
+    an await. These semantics are now correctly implemented.
+  - In particular, passing methods as arguments, a method might not know whether
+    it is passed an action or proc and thus needs to handle this in a generic
+    way. This is particularly tricky as we don't want to to any run time
+    inspection of arguments and thus need to have it all figured out at compile
+    time.
+  - Many many many other things are fixed through the merge of the new
+    deactorizer. There are improvements and fixes to various passes in the
+    compiler. This has been in the works for almost a year.
+- Added `--auto-stub` to `actonc` [#1047]
+  - Enables automatic detection of stub mode compilation
+- Extended actor argument pruning analysis to honour `NotImplemented` [#524]
+  - Pruning analysis prunes away arguments that are not used under the lifetime
+    of an actor, e.g. an argument only used for actor body initialization code.
+    Pruned arguments are not persisted.
+  - Pruning analysis does not cover C code, so when one or more methods are
+    implemented in C and defined as `NotImplemented` in the Acton module, we
+    cannot reliably determine what arguments are used or unused.
+  - The safe choice is to assume all arguments are used, which is what we are
+    now doing.
+  - This removes a bunch of `_force_persistance` methods in stdlib.
+
+### Changed
+- Default is now to not automatically detect stub mode [#1047]
+  - Use `--auto-stub` to enable automatic stub mode detection
+
+### Fixed
+- Now using zig v0.10.0, which was recently released [#1029]
+  - Previously using a nightly build of v0.10
+- Correct arithmetic operations using hexadecimal literals [#1027]
+- Build actondb using zig with -target [#1003]
+
+
 ## [0.12.0] (2022-10-27)
 Edvin's second birthday, only 10 minor releases behind Acton ;)
 
@@ -1279,6 +1323,7 @@ then, this second incarnation has been in focus and 0.2.0 was its first version.
 [#139]: https://github.com/actonlang/acton/pull/139
 [#140]: https://github.com/actonlang/acton/pull/140
 [#142]: https://github.com/actonlang/acton/pull/142
+[#146]: https://github.com/actonlang/acton/issues/146
 [#152]: https://github.com/actonlang/acton/pull/152
 [#153]: https://github.com/actonlang/acton/pull/153
 [#155]: https://github.com/actonlang/acton/pull/155
@@ -1293,6 +1338,7 @@ then, this second incarnation has been in focus and 0.2.0 was its first version.
 [#204]: https://github.com/actonlang/acton/pull/204
 [#206]: https://github.com/actonlang/acton/pull/206
 [#212]: https://github.com/actonlang/acton/pull/212
+[#238]: https://github.com/actonlang/acton/issues/238
 [#243]: https://github.com/actonlang/acton/pull/243
 [#263]: https://github.com/actonlang/acton/pull/264
 [#277]: https://github.com/actonlang/acton/pull/277
@@ -1324,6 +1370,7 @@ then, this second incarnation has been in focus and 0.2.0 was its first version.
 [#369]: https://github.com/actonlang/acton/pull/369
 [#370]: https://github.com/actonlang/acton/pull/370
 [#371]: https://github.com/actonlang/acton/pull/371
+[#374]: https://github.com/actonlang/acton/issues/374
 [#375]: https://github.com/actonlang/acton/pull/375
 [#382]: https://github.com/actonlang/acton/pull/382
 [#383]: https://github.com/actonlang/acton/pull/383
@@ -1380,6 +1427,7 @@ then, this second incarnation has been in focus and 0.2.0 was its first version.
 [#518]: https://github.com/actonlang/acton/pull/518
 [#521]: https://github.com/actonlang/acton/pull/521
 [#522]: https://github.com/actonlang/acton/pull/522
+[#524]: https://github.com/actonlang/acton/issues/524
 [#527]: https://github.com/actonlang/acton/issues/527
 [#528]: https://github.com/actonlang/acton/pull/528
 [#529]: https://github.com/actonlang/acton/pull/529
@@ -1428,15 +1476,20 @@ then, this second incarnation has been in focus and 0.2.0 was its first version.
 [#808]: https://github.com/actonlang/acton/pull/808
 [#823]: https://github.com/actonlang/acton/pull/823
 [#829]: https://github.com/actonlang/acton/pull/829
+[#835]: https://github.com/actonlang/acton/issues/835
 [#840]: https://github.com/actonlang/acton/pull/840
 [#845]: https://github.com/actonlang/acton/pull/845
 [#846]: https://github.com/actonlang/acton/pull/846
+[#849]: https://github.com/actonlang/acton/issues/849
 [#853]: https://github.com/actonlang/acton/issues/853
 [#868]: https://github.com/actonlang/acton/pull/868
 [#869]: https://github.com/actonlang/acton/issues/869
 [#882]: https://github.com/actonlang/acton/issues/882
 [#885]: https://github.com/actonlang/acton/issues/885
 [#887]: https://github.com/actonlang/acton/issues/887
+[#890]: https://github.com/actonlang/acton/issues/890
+[#892]: https://github.com/actonlang/acton/pull/892
+[#900]: https://github.com/actonlang/acton/pull/900
 [#907]: https://github.com/actonlang/acton/issues/907
 [#910]: https://github.com/actonlang/acton/pull/910
 [#913]: https://github.com/actonlang/acton/issues/913
@@ -1447,6 +1500,22 @@ then, this second incarnation has been in focus and 0.2.0 was its first version.
 [#925]: https://github.com/actonlang/acton/pull/925
 [#929]: https://github.com/actonlang/acton/pull/929
 [#932]: https://github.com/actonlang/acton/pull/932
+[#941]: https://github.com/actonlang/acton/issues/941
+[#949]: https://github.com/actonlang/acton/pull/949
+[#950]: https://github.com/actonlang/acton/pull/950
+[#951]: https://github.com/actonlang/acton/issues/951
+[#955]: https://github.com/actonlang/acton/pull/955
+[#957]: https://github.com/actonlang/acton/pull/957
+[#969]: https://github.com/actonlang/acton/issues/969
+[#971]: https://github.com/actonlang/acton/pull/971
+[#972]: https://github.com/actonlang/acton/issues/972
+[#976]: https://github.com/actonlang/acton/pull/976
+[#984]: https://github.com/actonlang/acton/pull/984
+[#1003]: https://github.com/actonlang/acton/issues/1003
+[#1027]: https://github.com/actonlang/acton/issues/1027
+[#1029]: https://github.com/actonlang/acton/issues/1029
+[#1047]: https://github.com/actonlang/acton/issues/1047
+
 
 [0.3.0]: https://github.com/actonlang/acton/releases/tag/v0.3.0
 [0.4.0]: https://github.com/actonlang/acton/compare/v0.3.0...v0.4.0
@@ -1477,6 +1546,8 @@ then, this second incarnation has been in focus and 0.2.0 was its first version.
 [0.11.5]: https://github.com/actonlang/acton/compare/v0.11.4...v0.11.5
 [0.11.6]: https://github.com/actonlang/acton/compare/v0.11.5...v0.11.6
 [0.11.7]: https://github.com/actonlang/acton/compare/v0.11.6...v0.11.7
+[0.12.0]: https://github.com/actonlang/acton/compare/v0.11.7...v0.12.0
+[0.13.0]: https://github.com/actonlang/acton/compare/v0.12.0...v0.13.0
 
 [homebrew-acton#7]: https://github.com/actonlang/homebrew-acton/pull/7
 [homebrew-acton#28]: https://github.com/actonlang/homebrew-acton/pull/28
