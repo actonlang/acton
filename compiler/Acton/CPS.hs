@@ -299,7 +299,7 @@ instance CPS Decl where
       | contFX fx                       = do b' <- cpsSuite env1 b
                                              return $ Def l n q' (addContPar env dec p' fx t') KwdNIL (Just tR) b' dec fx
       | otherwise                       = return $ Def l n q' p' KwdNIL (Just t') (conv b) dec fx
-      where env1                        = define (envOf p) $ defineTVars q $ Meth contKW t +: setDefCtxt env
+      where env1                        = define (envOf p) $ defineTVars q $ Meth contKW t' +: setDefCtxt env
             q'                          = conv q
             p'                          = conv p
             t'                          = conv t
