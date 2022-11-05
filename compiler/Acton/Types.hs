@@ -424,13 +424,13 @@ infTarg env e@(Var l (NoQ n))           = case findName n env of
                                                  err1 n "Variable not assignable:"
 infTarg env (Index _ e ix)              = do (cs,t,e) <- infer env e
                                              fx <- currFX
-                                             return ([Cast fxMut fx, Cast t tObject], t, e, TgIndex ix)
+                                             return (Cast fxMut fx : Cast t tObject : cs, t, e, TgIndex ix)
 infTarg env (Slice _ e sl)              = do (cs,t,e) <- infer env e
                                              fx <- currFX
-                                             return ([Cast fxMut fx, Cast t tObject], t, e, TgSlice sl)
+                                             return (Cast fxMut fx : Cast t tObject : cs, t, e, TgSlice sl)
 infTarg env (Dot _ e n)                 = do (cs,t,e) <- infer env e
                                              fx <- currFX
-                                             return ([Cast t tObject], t, e, TgDot n)
+                                             return (Cast fxMut fx : Cast t tObject : cs, t, e, TgDot n)
 
 sliz2exp (Sliz _ e1 e2 e3)              = eCall (eQVar qnSlice) $ map (maybe eNone id) [e1,e2,e3]
 

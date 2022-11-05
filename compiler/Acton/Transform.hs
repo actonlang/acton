@@ -22,7 +22,7 @@ import Acton.Printer
 
 
 termred                                 :: Suite -> Suite
-termred b                               = -- trace ("### termred:\n" ++ render (nest 4 $ vcat $ map pretty b)) $
+termred b                               = --trace ("### termred:\n" ++ render (nest 4 $ vcat $ map pretty b)) $
                                           wtrans env0 b
 
 termsubst                               :: (Transform a) => [(Name,Expr)] -> a -> a
