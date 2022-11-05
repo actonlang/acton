@@ -271,8 +271,8 @@ fromTEnv (_ : te)                       = fromTEnv te
 fromTEnv []                             = []
 
 convClassTEnv env q0 te                 = [ (n, conv i) | (n,i) <- te ]
-  where conv (NSig sc dec)              = NSig (convS sc) NoDec
-        conv (NDef sc dec)              = NDef (convS sc) NoDec
+  where conv (NSig sc dec)              = NSig (convS sc) dec
+        conv (NDef sc dec)              = NDef (convS sc) dec
         conv i                          = i
         convS (TSchema l q t)           = TSchema l (noqual env q) (convT q t)
         convT q (TFun l x p k t)        = TFun l x (qualWRow env (q0++q) p) k t
