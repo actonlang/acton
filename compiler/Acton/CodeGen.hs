@@ -676,7 +676,7 @@ instance Gen Expr where
     gen env (Call _ e p _)          = genCall env [] e p
     gen env (Async _ e)             = gen env e
     gen env (TApp _ e ts)           = genInst env ts e
-    gen env (IsInstance _ e c)      = gen env primISINSTANCE <> parens (gen env e <> comma <+> gen env c)
+    gen env (IsInstance _ e c)      = gen env primISINSTANCE <> parens (gen env e <> comma <+> gen env (eQVar c))
     gen env (Dot _ e n)             = genDot env [] e n
     gen env (DotI _ e i)            = gen env e <> text "->" <> gen env componentsKW <> brackets (pretty i)
     gen env (RestI _ e i)           = gen env eNone <> semi <+> text "// CodeGen for tuple tail not implemented"
