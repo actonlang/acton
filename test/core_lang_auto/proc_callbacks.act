@@ -1,0 +1,20 @@
+actor Foo(on_done):
+    var callbacks = []
+
+    def _push_cb(cb):
+        callbacks.append(cb)
+
+    def _head_cb():
+        return callbacks[-1]
+
+    def _do_stuff_cb():
+        on_done()
+        return True
+
+    def poll():
+        _head_cb()()
+
+    _push_cb(_do_stuff_cb)
+
+actor main(env):
+    env.exit(0)
