@@ -46,7 +46,6 @@ LDLIBS+=-lActonDeps -lm -lpthread
 
 # -- Apple Mac OS X ------------------------------------------------------------
 ifeq ($(shell uname -s),Darwin)
-LDLIBS+=-largp
 
 # -- M1
 ifeq ($(shell uname -m),arm64)
@@ -256,6 +255,8 @@ DEPS_DIRS=deps/bsdnt deps/libbsd deps/libmd deps/libprotobuf_c deps/libutf8proc 
 # subdirectories to prevent overwriting if there are name collisions between
 # different library archives.
 
+DEP_LIBS+=deps/instdir/lib/libargp.a
+
 ifeq ($(shell uname -s),Linux)
 DEP_LIBS+=deps/instdir/lib/libbsd.a
 DEP_LIBS+=deps/instdir/lib/libmd.a
@@ -284,6 +285,29 @@ clean-deps:
 
 clean-deps-rm:
 	rm -rf $(DEPS_DIRS) deps/zig-*.tar*
+
+# /deps/libargp --------------------------------------------
+LIBARGP_REF=1.5.0
+deps/libargp:
+	ls $@ >/dev/null 2>&1 || git clone https://github.com/argp-standalone/argp-standalone.git $@
+
+# NOTE: autoconf incantataion taken from (now removed) CI config of
+# argp-standalone repo:
+# https://github.com/argp-standalone/argp-standalone/commit/0297fd805e760499cdca605466851729e377169a
+deps/instdir/lib/libargp.a: deps/libargp $(ZIG)
+	mkdir -p $(dir $@)
+	mkdir -p $(shell dirname $(dir $@))/include
+	cd $< \
+	&& git checkout $(LIBARGP_REF) \
+	&& aclocal \
+	&& autoheader \
+	&& autoconf \
+	&& automake --add-missing \
+	&& autoreconf \
+	&& ./configure --prefix=$(TD)/deps/instdir --enable-static --disable-shared CFLAGS="-I../incbsd -I$(TD)/deps/instdir/include -L$(TD)/deps/instdir/lib $(CFLAGS_DEPS)" \
+	&& make -j \
+	&& cp argp.h ../instdir/include/ \
+	&& cp libargp.a ../instdir/lib/
 
 # /deps/libbsdnt --------------------------------------------
 LIBBSDNT_REF=97053f366618b0e987a76bc6d6992165c8ea843e
