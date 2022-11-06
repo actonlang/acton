@@ -137,7 +137,7 @@ backend/actondb: backend/actondb.c lib/libActonDB.a $(DEPSA)
 	$(CC) -o$@ $< $(CFLAGS) \
 		$(LDFLAGS) \
 		-lActonDB \
-		$(LDLIBS)
+		$(LDLIBS) -lActonDeps
 
 # Listing DEPSA as prerequisites in a target means it is dependent upon at least
 # one of  the external libraries that we place in libActonDeps
