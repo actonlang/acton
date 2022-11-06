@@ -29,18 +29,18 @@ extern int return_val;
 
 ///////////////////////////////////////////////////////////////////////////////////////////
 // START GENERATED __builtin__.act
-$NoneType $l$1cont$__init__ ($l$1cont p$self, $Env __self__, $str s) {
-    p$self->__self__ = __self__;
+$NoneType $l$1cont$__init__ ($l$1cont p$self, $Env self, $str s) {
+    p$self->self = self;
     p$self->s = s;
     return $None;
 }
 $R $l$1cont$__call__ ($l$1cont p$self, $Cont c$cont) {
-    $Env __self__ = p$self->__self__;
+    $Env self = p$self->self;
     $str s = p$self->s;
-    return __self__->$class->stdout_write$local(__self__, c$cont, s);
+    return self->$class->stdout_write$local(self, c$cont, s);
 }
 void $l$1cont$__serialize__ ($l$1cont self, $Serial$state state) {
-    $step_serialize(self->__self__, state);
+    $step_serialize(self->self, state);
     $step_serialize(self->s, state);
 }
 $l$1cont $l$1cont$__deserialize__ ($l$1cont self, $Serial$state state) {
@@ -52,7 +52,7 @@ $l$1cont $l$1cont$__deserialize__ ($l$1cont self, $Serial$state state) {
         }
         self = $DNEW($l$1cont, state);
     }
-    self->__self__ = $step_deserialize(state);
+    self->self = $step_deserialize(state);
     self->s = $step_deserialize(state);
     return self;
 }
@@ -64,18 +64,18 @@ $l$1cont $l$1cont$new($Env p$1, $str p$2) {
 }
 struct $l$1cont$class $l$1cont$methods;
 
-$NoneType $l$2cont$__init__ ($l$2cont p$self, $Env __self__, $action cb) {
-    p$self->__self__ = __self__;
+$NoneType $l$2cont$__init__ ($l$2cont p$self, $Env self, $action cb) {
+    p$self->self = self;
     p$self->cb = cb;
     return $None;
 }
 $R $l$2cont$__call__ ($l$2cont p$self, $Cont c$cont) {
-    $Env __self__ = p$self->__self__;
+    $Env self = p$self->self;
     $action cb = p$self->cb;
-    return __self__->$class->stdin_install$local(__self__, c$cont, cb);
+    return self->$class->stdin_install$local(self, c$cont, cb);
 }
 void $l$2cont$__serialize__ ($l$2cont self, $Serial$state state) {
-    $step_serialize(self->__self__, state);
+    $step_serialize(self->self, state);
     $step_serialize(self->cb, state);
 }
 $l$2cont $l$2cont$__deserialize__ ($l$2cont self, $Serial$state state) {
@@ -87,7 +87,7 @@ $l$2cont $l$2cont$__deserialize__ ($l$2cont self, $Serial$state state) {
         }
         self = $DNEW($l$2cont, state);
     }
-    self->__self__ = $step_deserialize(state);
+    self->self = $step_deserialize(state);
     self->cb = $step_deserialize(state);
     return self;
 }
@@ -99,18 +99,18 @@ $l$2cont $l$2cont$new($Env p$1, $action p$2) {
 }
 struct $l$2cont$class $l$2cont$methods;
 
-$NoneType $l$3cont$__init__ ($l$3cont p$self, $Env __self__, $int n) {
-    p$self->__self__ = __self__;
+$NoneType $l$3cont$__init__ ($l$3cont p$self, $Env self, $int n) {
+    p$self->self = self;
     p$self->n = n;
     return $None;
 }
 $R $l$3cont$__call__ ($l$3cont p$self, $Cont c$cont) {
-    $Env __self__ = p$self->__self__;
+    $Env self = p$self->self;
     $int n = p$self->n;
-    return __self__->$class->exit$local(__self__, c$cont, n);
+    return self->$class->exit$local(self, c$cont, n);
 }
 void $l$3cont$__serialize__ ($l$3cont self, $Serial$state state) {
-    $step_serialize(self->__self__, state);
+    $step_serialize(self->self, state);
     $step_serialize(self->n, state);
 }
 $l$3cont $l$3cont$__deserialize__ ($l$3cont self, $Serial$state state) {
@@ -122,7 +122,7 @@ $l$3cont $l$3cont$__deserialize__ ($l$3cont self, $Serial$state state) {
         }
         self = $DNEW($l$3cont, state);
     }
-    self->__self__ = $step_deserialize(state);
+    self->self = $step_deserialize(state);
     self->n = $step_deserialize(state);
     return self;
 }
@@ -150,14 +150,14 @@ $WorldAuth $WorldAuth$__deserialize__ ($WorldAuth self, $Serial$state state) {
     return self;
 }
 struct $WorldAuth$class $WorldAuth$methods;
-$Msg $Env$stdout_write ($Env __self__, $str s) {
-    return $ASYNC((($Actor)__self__), (($Cont)$l$1cont$new((($Env)__self__), s)));
+$Msg $Env$stdout_write ($Env self, $str s) {
+    return $ASYNC((($Actor)self), (($Cont)$l$1cont$new((($Env)self), s)));
 }
-$Msg $Env$stdin_install ($Env __self__, $action cb) {
-    return $ASYNC((($Actor)__self__), (($Cont)$l$2cont$new((($Env)__self__), cb)));
+$Msg $Env$stdin_install ($Env self, $action cb) {
+    return $ASYNC((($Actor)self), (($Cont)$l$2cont$new((($Env)self), cb)));
 }
-$Msg $Env$exit ($Env __self__, $int n) {
-    return $ASYNC((($Actor)__self__), (($Cont)$l$3cont$new((($Env)__self__), n)));
+$Msg $Env$exit ($Env self, $int n) {
+    return $ASYNC((($Actor)self), (($Cont)$l$3cont$new((($Env)self), n)));
 }
 // END GENERATED __builtin__.act
 ///////////////////////////////////////////////////////////////////////////////////////////
@@ -172,13 +172,13 @@ $WorldAuth $WorldAuth$new() {
 
 // Env /////////////////////////////////////////////////////////////////////////
 
-$NoneType $Env$__init__ ($Env __self__, $WorldAuth token, $list argv) {
-    __self__->auth = token;
-    __self__->argv = argv;
-    __self__->$affinity = 0;
+$NoneType $Env$__init__ ($Env self, $WorldAuth token, $list argv) {
+    self->auth = token;
+    self->argv = argv;
+    self->$affinity = 0;
     return $None;
 }
-$R $Env$stdout_write$local ($Env __self__, $Cont c$cont, $str s) {
+$R $Env$stdout_write$local ($Env self, $Cont c$cont, $str s) {
     printf("%s", s->str);
     return $R_CONT(c$cont, $None);
 }
@@ -199,7 +199,7 @@ void read_stdin(uv_stream_t *stream, ssize_t nread, const uv_buf_t *buf) {
     if (buf->base)
         free(buf->base);
 }
-$R $Env$stdin_install$local ($Env __self__, $Cont c$cont, $action cb) {
+$R $Env$stdin_install$local ($Env self, $Cont c$cont, $action cb) {
     // This should be the only call in env that does IO stuff, so it is safe to
     // pin affinity here (and not earlier)..
     pin_actor_affinity();
@@ -209,7 +209,7 @@ $R $Env$stdin_install$local ($Env __self__, $Cont c$cont, $action cb) {
     uv_read_start((uv_stream_t*)tty, alloc_buffer, read_stdin);
     return $R_CONT(c$cont, $None);
 }
-$R $Env$exit$local ($Env __self__, $Cont c$cont, $int n) {
+$R $Env$exit$local ($Env self, $Cont c$cont, $int n) {
     return_val = from$int(n);
     rts_shutdown();
     return $R_CONT(c$cont, $None);

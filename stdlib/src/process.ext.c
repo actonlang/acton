@@ -37,9 +37,9 @@ void read_stderr(uv_stream_t *stream, ssize_t nread, const uv_buf_t *buf) {
     } else if (nread > 0) {
         if (stream->data) {
             struct process_data *process_data = (struct process_data *)stream->data;
-            process$$Process __self__ = process_data->process;
+            process$$Process self = process_data->process;
             $action2 f = process_data->on_stderr;
-            f->$class->__asyn__(f, __self__, to$bytes_len(buf->base, nread));
+            f->$class->__asyn__(f, self, to$bytes_len(buf->base, nread));
         }
     }
 
@@ -55,9 +55,9 @@ void read_stdout(uv_stream_t *stream, ssize_t nread, const uv_buf_t *buf) {
     } else if (nread > 0) {
         if (stream->data) {
             struct process_data *process_data = (struct process_data *)stream->data;
-            process$$Process __self__ = process_data->process;
+            process$$Process self = process_data->process;
             $action2 f = process_data->on_stdout;
-            f->$class->__asyn__(f, __self__, to$bytes_len(buf->base, nread));
+            f->$class->__asyn__(f, self, to$bytes_len(buf->base, nread));
         }
     }
 
@@ -65,44 +65,44 @@ void read_stdout(uv_stream_t *stream, ssize_t nread, const uv_buf_t *buf) {
         free(buf->base);
 }
 
-$R process$$Process$aid$local (process$$Process __self__, $Cont c$cont) {
-    return $R_CONT(c$cont, to$int(__self__->$globkey));
+$R process$$Process$aid$local (process$$Process self, $Cont c$cont) {
+    return $R_CONT(c$cont, to$int(self->$globkey));
 }
 
-$R process$$Process$_create_process (process$$Process __self__, $Cont c$cont) {
+$R process$$Process$_create_process (process$$Process self, $Cont c$cont) {
     pin_actor_affinity();
     struct process_data *process_data = calloc(1, sizeof(struct process_data));
-    process_data->process = __self__;
-    process_data->on_stdout = __self__->on_stdout;
-    process_data->on_stderr = __self__->on_stderr;
-    process_data->on_exit = __self__->on_exit;
+    process_data->process = self;
+    process_data->on_stdout = self->on_stdout;
+    process_data->on_stderr = self->on_stderr;
+    process_data->on_exit = self->on_exit;
 
     uv_process_options_t *options = calloc(1, sizeof(uv_process_options_t));
 
     uv_process_t *req = calloc(1, sizeof(uv_process_t));
-    __self__->_p = to$int((long)req);
+    self->_p = to$int((long)req);
 
     req->data = process_data;
 
-    char **args = (char **)malloc(($list_len(__self__->cmd)+1) * sizeof(char *));
+    char **args = (char **)malloc(($list_len(self->cmd)+1) * sizeof(char *));
 
     int i;
-    for (i = 0; i < $list_len(__self__->cmd); i++) {
-        args[i] = from$str($list_getitem(__self__->cmd, i));
+    for (i = 0; i < $list_len(self->cmd); i++) {
+        args[i] = from$str($list_getitem(self->cmd, i));
     }
     args[i] = NULL;
 
-    if (__self__->workdir != $None) {
-        options->cwd = from$str(__self__->workdir);
+    if (self->workdir != $None) {
+        options->cwd = from$str(self->workdir);
     };
 
-    if (__self__->env == $None) {
+    if (self->env == $None) {
         options->env = NULL;
     } else {
-        char **env = (char **)calloc(($dict_len(__self__->env)+1), sizeof(char *));
-        $Iterator$dict$items iter = $NEW($Iterator$dict$items, __self__->env);
+        char **env = (char **)calloc(($dict_len(self->env)+1), sizeof(char *));
+        $Iterator$dict$items iter = $NEW($Iterator$dict$items, self->env);
         $tuple item;
-        for (i=0; i < $dict_len(__self__->env); i++) {
+        for (i=0; i < $dict_len(self->env); i++) {
             item = ($tuple)iter->$class->__next__(iter);
             char *key = from$str(($str)item->components[0]);
             char *value = from$str(($str)item->components[1]);
@@ -145,7 +145,7 @@ $R process$$Process$_create_process (process$$Process __self__, $Cont c$cont) {
         char errmsg[1024] = "Failed to spawn process: ";
         uv_strerror_r(r, errmsg + strlen(errmsg), sizeof(errmsg)-strlen(errmsg));
         log_warn(errmsg);
-        $action2 f = __self__->on_error;
+        $action2 f = self->on_error;
         f->$class->__asyn__(f, process_data->process, to$str(errmsg));
     }
     // TODO: do we need to do some magic to read any data produced before this
@@ -160,27 +160,27 @@ void close_cb(uv_handle_t *handle) {
     // TODO: clean something up?
 }
 
-$R process$$Process$done_writing$local (process$$Process __self__, $Cont c$cont) {
-    uv_process_t *p = (uv_process_t *)from$int(__self__->_p);
+$R process$$Process$done_writing$local (process$$Process self, $Cont c$cont) {
+    uv_process_t *p = (uv_process_t *)from$int(self->_p);
     struct process_data *process_data = (struct process_data *)p->data;
     uv_stream_t *stdin = (uv_stream_t *)&process_data->stdin_pipe;
     uv_close(stdin, close_cb);
     return $R_CONT(c$cont, $None);
 }
 
-$R process$$Process$pid$local (process$$Process __self__, $Cont c$cont) {
-    uv_process_t *p = (uv_process_t *)from$int(__self__->_p);
+$R process$$Process$pid$local (process$$Process self, $Cont c$cont) {
+    uv_process_t *p = (uv_process_t *)from$int(self->_p);
     return $R_CONT(c$cont, ($atom)to$int(p->pid));
 }
 
-$R process$$Process$signal$local (process$$Process __self__, $Cont c$cont, $int signal) {
-    uv_process_t *p = (uv_process_t *)from$int(__self__->_p);
+$R process$$Process$signal$local (process$$Process self, $Cont c$cont, $int signal) {
+    uv_process_t *p = (uv_process_t *)from$int(self->_p);
     uv_process_kill(p, from$int(signal));
     return $R_CONT(c$cont, $None);
 }
 
-$R process$$Process$write$local (process$$Process __self__, $Cont c$cont, $bytes data) {
-    uv_process_t *p = (uv_process_t *)from$int(__self__->_p);
+$R process$$Process$write$local (process$$Process self, $Cont c$cont, $bytes data) {
+    uv_process_t *p = (uv_process_t *)from$int(self->_p);
 
     uv_write_t *req = (uv_write_t *)malloc(sizeof(uv_write_t));
     uv_buf_t buf = uv_buf_init(data->str, data->nbytes);

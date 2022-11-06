@@ -16,7 +16,7 @@ module Acton.Builtin where
 import Utils
 import Acton.Syntax
     
-selfKW                              = name "__self__"
+selfKW                              = name "self"
 
 initKW                              = name "__init__"
 fromiterKW                          = name "__fromiter__"

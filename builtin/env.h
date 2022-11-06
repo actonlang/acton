@@ -57,7 +57,7 @@ struct $l$1cont$class {
 };
 struct $l$1cont {
     struct $l$1cont$class *$class;
-    $Env __self__;
+    $Env self;
     $str s;
 };
 struct $l$2cont$class {
@@ -74,7 +74,7 @@ struct $l$2cont$class {
 };
 struct $l$2cont {
     struct $l$2cont$class *$class;
-    $Env __self__;
+    $Env self;
     $action cb;
 };
 struct $l$3cont$class {
@@ -91,7 +91,7 @@ struct $l$3cont$class {
 };
 struct $l$3cont {
     struct $l$3cont$class *$class;
-    $Env __self__;
+    $Env self;
     $int n;
 };
 struct $WorldAuth$class {
