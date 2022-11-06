@@ -15,10 +15,6 @@ class Acton < Formula
   depends_on "pkg-config" => :build
   depends_on "protobuf-c" => :build
 
-  on_macos do
-    depends_on "argp-standalone" => :build
-  end
-
   on_linux do
     depends_on "libbsd" => :build
     depends_on "gcc"
