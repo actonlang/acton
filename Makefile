@@ -37,8 +37,7 @@ else
 export VERSION_INFO?=$(VERSION).$(BUILD_TIME)
 endif
 
-# TODO: remove -fno-sanitize=undefined, which is zig default as to help catch UB
-CFLAGS+= -fno-sanitize=undefined -I. -I$(TD)/deps/instdir/include -Ideps -Wno-int-to-pointer-cast -Wno-pointer-to-int-cast -Wformat -Werror=format-security
+CFLAGS+= -I. -I$(TD)/deps/instdir/include -Ideps -Wno-int-to-pointer-cast -Wno-pointer-to-int-cast -Wformat -Werror=format-security
 CFLAGS_REL= -O3 -DREL
 CFLAGS_DEV= -g -DDEV
 LDFLAGS+=-L$(TD)/lib -L$(TD)/deps/instdir/lib
