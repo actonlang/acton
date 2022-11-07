@@ -1607,6 +1607,9 @@ instance InfEnvT KwdPat where
 
 
 instance InfEnvT Pattern where
+    infEnvT env (PWild l a)             = do t <- maybe newTVar return a
+                                             wellformed env t
+                                             return ([], [], t, PWild l (Just t))
     infEnvT env (PVar l n a)            = do t <- maybe newTVar return a
                                              wellformed env t
                                              case findName n env of

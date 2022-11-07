@@ -373,11 +373,13 @@ instance Subst Branch where
     tyfree (Branch e b)             = tyfree e ++ tyfree b
 
 instance Subst Pattern where
+    msubst (PWild l t)              = PWild l <$> msubst t
     msubst (PVar l n t)             = PVar l n <$> msubst t
     msubst (PParen l p)             = PParen l <$> msubst p
     msubst (PTuple l p k)           = PTuple l <$> msubst p <*> msubst k
     msubst (PList l ps p)           = PList l <$> msubst ps <*> msubst p
     
+    tyfree (PWild _ t)              = tyfree t
     tyfree (PVar _ n t)             = tyfree t
     tyfree (PParen _ p)             = tyfree p
     tyfree (PTuple _ p k)           = tyfree p ++ tyfree k

@@ -365,12 +365,14 @@ instance Vars KwdPat where
     bound KwdPatNil                 = []
     
 instance Vars Pattern where
+    free (PWild _ _)                = []
     free (PVar _ n a)               = []
     free (PTuple _ ps ks)           = free ps ++ free ks
     free (PList _ ps p)             = free ps ++ free p
     free (PParen _ p)               = free p
     free (PData _ n ixs)            = free ixs
 
+    bound (PWild _ _)               = []
     bound (PVar _ n a)              = [n]
     bound (PTuple _ ps ks)          = bound ps ++ bound ks
     bound (PList _ ps p)            = bound ps ++ bound p

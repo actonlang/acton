@@ -656,6 +656,8 @@ pelems = do
 
 apat :: Parser S.Pattern
 apat = addLoc (
+            (try $ rword "_" *> (S.PWild NoLoc <$> optannot))
+        <|>
             (try $ S.PVar NoLoc <$> name <*> optannot)
         <|>
             ((try . parens) $ return $ S.PParen NoLoc (S.PTuple NoLoc S.PosPatNil S.KwdPatNil))

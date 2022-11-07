@@ -63,7 +63,9 @@ normEnv env0                        = env0
 -- Normalize terms ---------------------------------------------------------------------------------------
 
 normPat                             :: NormEnv -> Pattern -> NormM (Pattern,Suite)
-normPat _ p@(PVar _ _ _)            = return (p,[])
+normPat _ (PWild l a)               = do n <- newName "ignore"
+                                         return (PVar l n a,[])
+normPat _ p@PVar{}                  = return (p,[])
 normPat env (PParen _ p)            = normPat env p
 normPat env p@(PTuple _ pp kp)      = do v <- newName "tup"
                                          ss <- norm (define (envOf (pVar v t)) env) $ normPP v 0 pp ++ normKP v [] kp
@@ -130,7 +132,7 @@ instance Norm Stmt where
     norm env (If l bs els)          = If l <$> norm env bs <*> norm env els
     norm env (While l e b els)      = While l <$> normBool env e <*> norm env b <*> norm env els
     norm env (Try l b hs els fin)   = Try l <$> norm env b <*> norm env hs <*> norm env els <*> norm env fin
-    norm env (Data l mbt ss)        = Data l <$> norm env mbt <*> norm env ss
+    norm env (Data l mbp ss)        = Data l <$> norm env mbp <*> norm env ss
     norm env (VarAssign l ps e)     = VarAssign l <$> norm env ps <*> norm env e
     norm env (After l e e')         = After l <$> norm env e <*> norm env e'
     norm env (Decl l ds)            = Decl l <$> norm env1 ds
@@ -273,6 +275,7 @@ nargs p@TRow{}                      = 1 + nargs (rtail p)
 narg n k@TRow{}                     = if n == label k then 0 else 1 + narg n (rtail k)
 
 instance Norm Pattern where
+    norm env (PWild l a)            = return $ PWild l (conv a)
     norm env (PVar l n a)           = return $ PVar l n (conv a)
     norm env (PTuple l ps ks)       = PTuple l <$> norm env ps <*> norm env ks
     norm env (PList l ps p)         = PList l <$> norm env ps <*> norm env p        -- TODO: eliminate here

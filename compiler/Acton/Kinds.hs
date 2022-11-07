@@ -367,6 +367,7 @@ instance KCheck Expr where
     kchk env (Paren l e)            = Paren l <$> kchk env e
 
 instance KCheck Pattern where
+    kchk env (PWild l t)            = PWild l <$> (kexp KType env =<< convTWild t)
     kchk env (PVar l n t)           = PVar l n <$> (kexp KType env =<< convTWild t)
     kchk env (PTuple l ps ks)       = PTuple l <$> kchk env ps <*> kchk env ks
     kchk env (PList l ps p)         = PList l <$> kchk env ps <*> kchk env p
@@ -668,6 +669,7 @@ instance KSubst Expr where
     ksubst g (Paren l e)            = Paren l <$> ksubst g e
 
 instance KSubst Pattern where
+    ksubst g (PWild l a)            = PWild l <$> ksubst g a
     ksubst g (PVar l n a)           = PVar l n <$> ksubst g a
     ksubst g (PTuple l ps ks)       = PTuple l <$> ksubst g ps <*> ksubst g ks
     ksubst g (PList l ps p)         = PList l <$> ksubst g ps <*> ksubst g p

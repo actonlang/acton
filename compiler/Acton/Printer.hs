@@ -324,6 +324,7 @@ instance Pretty (PosPat,KwdPat) where
     pretty (ps, ks)                 = pretty ps <> comma <+> pretty ks    
 
 instance Pretty Pattern where
+    pretty (PWild _ a)              = text "_" <> prettyAnn a
     pretty (PVar _ n a)             = pretty n <> prettyAnn a
     pretty (PTuple _ ps KwdPatNil)
       | singlePosPat ps             = pretty ps <> comma
