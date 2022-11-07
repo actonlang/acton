@@ -44,7 +44,7 @@ numpy$$ndarray numpy$$Integral$ndarray$int$__add__(numpy$$Integral$ndarray$int w
 }
 
 numpy$$ndarray numpy$$Integral$ndarray$int$__fromatom__(numpy$$Integral$ndarray$int wit,$atom a) {
-    return numpy$$fromatom(a);
+    return numpy$$fromatom((numpy$$Primitive)numpy$$Primitive$int$witness,a);
 }
 
 $complex numpy$$Integral$ndarray$int$__complx__(numpy$$Integral$ndarray$int wit, numpy$$ndarray a) {
@@ -153,6 +153,15 @@ numpy$$ndarray numpy$$Minus$ndarray$int$__sub__ (numpy$$Minus$ndarray$int wit, n
     return numpy$$oper(numpy$$Primitive$int$witness->$class->$sub,a,b);
 }
 
+// numpy$$RealFloat$ndarray //////////////////////////////////////////////////////////////////////////////////////
+
+numpy$$Real$ndarray numpy$$RealFloat$ndarray$new(numpy$$Primitive w$Primitive$A$numpy, $RealFloat dummy) {
+    numpy$$Real$ndarray res = malloc(sizeof (struct numpy$$Real$ndarray));
+    res->$class = &numpy$$Real$ndarray$methods;
+    numpy$$Real$ndarray$__init__(res, w$Primitive$A$numpy);
+    return res;
+}
+
 // numpy$$Real$ndarray /////////////////////////////////////////////////////////////////////////////////////////////
 
 void numpy$$Real$ndarray$__init__(numpy$$Real$ndarray wit, numpy$$Primitive w$Primitive$A$numpy) {
@@ -183,7 +192,7 @@ numpy$$ndarray numpy$$Real$ndarray$__add__(numpy$$Real$ndarray wit, numpy$$ndarr
 }
 
 numpy$$ndarray numpy$$Real$ndarray$__fromatom__(numpy$$Real$ndarray wit,$atom a) {
-    return numpy$$fromatom(a);
+    return numpy$$fromatom((numpy$$Primitive)numpy$$Primitive$float$witness, a);
 }
 
 $complex numpy$$Real$ndarray$__complx__(numpy$$Real$ndarray wit, numpy$$ndarray a) {
@@ -313,15 +322,17 @@ numpy$$ndarray numpy$$Div$ndarray$float$__truediv__ (numpy$$Div$ndarray$float wi
 
 // Sliceable$ndarray ///////////////////////////////////////////////////////////////////////////////
 
-void numpy$$Sliceable$ndarray$__init__ (numpy$$Sliceable$ndarray self) {
+void numpy$$Sliceable$ndarray$__init__ (numpy$$Sliceable$ndarray self, numpy$$Primitive pwit) {
+    self->pwit = pwit;
 }
 
 void numpy$$Sliceable$ndarray$__serialize__(numpy$$Sliceable$ndarray wit, $Serial$state state) {
 }
 
-numpy$$Sliceable$ndarray numpy$$Sliceable$ndarray$new() {
+numpy$$Sliceable$ndarray numpy$$Sliceable$ndarray$new(numpy$$Primitive pwit) {
     numpy$$Sliceable$ndarray res = malloc(sizeof(struct numpy$$Sliceable$ndarray));
     res->$class = &numpy$$Sliceable$ndarray$methods;
+    numpy$$Sliceable$ndarray$__init__(res, pwit);
     return res;
 }
 
@@ -361,6 +372,41 @@ void numpy$$Sliceable$ndarray$__delslice__ (numpy$$Sliceable$ndarray wit, numpy$
     fprintf(stderr,"Internal error: call to mutating method delslice on ndarray");
     exit(-1);
 }
+
+// numpy$$Collection$ndarray ////////////////////////////////////////////////////////
+
+
+void numpy$$Collection$ndarray$__init__(numpy$$Collection$ndarray self, numpy$$Primitive pwit) {
+    self->pwit = pwit;
+}
+  
+numpy$$Collection$ndarray numpy$$Collection$ndarray$new(numpy$$Primitive pwit) {
+    numpy$$Collection$ndarray res = malloc(sizeof (struct numpy$$Collection$ndarray));
+    res->$class = &numpy$$Collection$ndarray$methods;
+    numpy$$Collection$ndarray$__init__(res, pwit);
+    return res;
+}
+
+void numpy$$Collection$ndarray$__serialize__(numpy$$Collection$ndarray wit, $Serial$state state) {
+}
+
+numpy$$Collection$ndarray numpy$$Collection$ndarray$__deserialize__(numpy$$Collection$ndarray wit, $Serial$state state) {
+    numpy$$Collection$ndarray res = $DNEW(numpy$$Collection$ndarray,state);
+    return res;
+}
+
+
+$Iterator numpy$$Collection$ndarray$__iter__(numpy$$Collection$ndarray self, numpy$$ndarray a) {
+    return ($Iterator)numpy$$Iterator$ndarray$new(self->pwit,a);
+}
+
+numpy$$ndarray numpy$$Collection$ndarray$__fromiter__(numpy$$Collection$ndarray wit, $Iterable iter) {
+    return NULL;
+}
+$int numpy$$Collection$ndarray$__len__(numpy$$Collection$ndarray wit, numpy$$ndarray a) {
+    return $list_getitem(a->shape,-1);
+}
+
 
 struct numpy$$Integral$ndarray$int numpy$$Integral$ndarray$int$instance;
 struct numpy$$Logical$ndarray$int numpy$$Logical$ndarray$int$instance;
@@ -557,39 +603,6 @@ struct numpy$$Sliceable$ndarray$class numpy$$Sliceable$ndarray$methods = {
 struct numpy$$Sliceable$ndarray numpy$$Sliceable$instance = {&numpy$$Sliceable$ndarray$methods};
 numpy$$Sliceable$ndarray numpy$$Sliceable$ndarray$witness = &numpy$$Sliceable$instance;
 
-// numpy$$Collection$ndarray ////////////////////////////////////////////////////////
-
-
-void numpy$$Collection$ndarray$__init__(numpy$$Collection$ndarray self, numpy$$Primitive pwit) {
-    self->pwit = pwit;
-}
-  
-numpy$$Collection$ndarray numpy$$Collection$ndarray$new(numpy$$Primitive pwit) {
-    numpy$$Collection$ndarray res = malloc(sizeof (struct numpy$$Collection$ndarray));
-    res->$class = &numpy$$Collection$ndarray$methods;
-    numpy$$Collection$ndarray$__init__(res, pwit);
-    return res;
-}
-
-void numpy$$Collection$ndarray$__serialize__(numpy$$Collection$ndarray wit, $Serial$state state) {
-}
-
-numpy$$Collection$ndarray numpy$$Collection$ndarray$__deserialize__(numpy$$Collection$ndarray wit, $Serial$state state) {
-    numpy$$Collection$ndarray res = $DNEW(numpy$$Collection$ndarray,state);
-    return res;
-}
-
-
-$Iterator numpy$$Collection$ndarray$__iter__(numpy$$Collection$ndarray self, numpy$$ndarray a) {
-    return ($Iterator)numpy$$Iterator$ndarray$new(self->pwit,a);
-}
-
-numpy$$ndarray numpy$$Collection$ndarray$__fromiter__(numpy$$Collection$ndarray wit, $Iterable iter) {
-    return NULL;
-}
-$int numpy$$Collection$ndarray$__len__(numpy$$Collection$ndarray wit, numpy$$ndarray a) {
-    return $list_getitem(a->shape,-1);
-}
 
 struct numpy$$Collection$ndarray$class numpy$$Collection$ndarray$methods = {
     "numpy$$Collection$ndarray",
@@ -605,6 +618,9 @@ struct numpy$$Collection$ndarray$class numpy$$Collection$ndarray$methods = {
     numpy$$Collection$ndarray$__fromiter__,
     numpy$$Collection$ndarray$__len__
 };
+
+struct numpy$$Collection$ndarray numpy$$Collection$instance = {&numpy$$Collection$ndarray$methods};
+numpy$$Collection$ndarray numpy$$Collection$ndarray$witness = &numpy$$Collection$instance;
 
 
 // numpy$$RealFuns$math$ndarray ///////////////////////////////////////////////////////////

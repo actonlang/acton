@@ -32,6 +32,7 @@ class ndarray[A] ():
         NotImplemented
     shape           : list[int]                      # should be a method? (at least until we have immutable lists)
     strides         : list[int]                      #      -"-
+
     size            : int
     def reshape (self, newshape: list[int]) -> Self:
         NotImplemented
@@ -121,4 +122,5 @@ extension int (Primitive):
 extension float (Primitive):
     NotImplemented
 
-newaxis : int  # unspecified value guaranteed not to be used for indexing (e.g. LONG_MIN)
+  # unspecified value guaranteed not to be used for indexing (e.g. LONG_MIN)
+newaxis : int = -9223372036854775808

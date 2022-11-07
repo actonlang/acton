@@ -1,13 +1,11 @@
 actor main(env):
     lst = list(range(0,100,1))
-# TODO: uncomment and fix compilation errors?
-#    lst2 = lst[-1:0:-2]
-#    lst2[10:30:2] = range(100,110,1)
-#    print('lst2 =', lst2)
-#    lst4 = list(range(0,10000,1))
-#    for i in range(1000,1,-1):
-#        del lst4[0:10000:i]
-#    print(lst4)
-
+    lst2 = lst[-1:0:-2]
+    lst2[10:30:2] = range(100,110,1)
+    lst4 = list(range(0,1000,1))
+    for i in range(100,1,-1):
+        del lst4[1:1000:i]
+    if sum(lst4,0) != 4500:
+        env.exit(1)
     env.exit(0)
     

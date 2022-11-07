@@ -25,6 +25,8 @@ numpy$$array_iterator_state $mk_iterator(numpy$$ndarray a);
 union $Bytes8 *iter_next(numpy$$array_iterator_state it);
 
 
+$int numpy$$newaxis;
+
 // Auxiliary functions ///////////////////////////////////////////////////////////////////////////////
 
 // method for creating ndarray structs.
@@ -77,8 +79,8 @@ $list $mk_strides($list shape) {
 
 // Superclass methods /////////////////////////////////////////////////////////////////////////
 
-void numpy$$ndarray$__init__(numpy$$ndarray self, $WORD w) {
-    numpy$$ndarray r = numpy$$fromatom(w);
+void numpy$$ndarray$__init__(numpy$$ndarray self, numpy$$Primitive wit, $atom a) {
+    numpy$$ndarray r = numpy$$fromatom(wit,a);
     memcpy(self,r,sizeof(struct numpy$$ndarray));
 }
 
@@ -164,11 +166,8 @@ $str numpy$$ndarray$__str__(numpy$$ndarray a) {
     }
 }
 
-numpy$$ndarray numpy$$ndarray$new($WORD w) {
-    numpy$$ndarray res = malloc(sizeof(struct numpy$$ndarray));
-    res->$class = &numpy$$ndarray$methods;
-    numpy$$ndarray$__init__(res, w);
-    return res;
+numpy$$ndarray numpy$$ndarray$new(numpy$$Primitive wit, $atom a) {
+    return numpy$$fromatom(wit, a);
 }
 //ndarray methods /////////////////////////////////////////////////////////////////////////////////
 
@@ -519,21 +518,18 @@ numpy$$ndarray numpy$$oper(union $Bytes8 (*f)(union $Bytes8, union $Bytes8),nump
 
 // The ndarray constructor takes an atomic argument and builds a 0-dimensional array.
 
-numpy$$ndarray numpy$$fromatom($atom a) {
-    if ($ISINSTANCE(a,$int)->val) {
+numpy$$ndarray numpy$$fromatom(numpy$$Primitive wit, $atom a) {
+    if ($ISINSTANCE(wit,numpy$$Primitive$int)->val) {
         numpy$$ndarray res = $newarray(LongType,0,to$int(1),$NEW($list,NULL,NULL),$NEW($list,NULL,NULL),true);
-        res->data->l = from$int(($int)a);
+        $Integral$int iwit = $Integral$int$witness;
+        res->data->l = from$int(iwit->$class->__fromatom__(iwit, a));
         return res;
-    }
-    if ($ISINSTANCE(a,$float)->val) {
+    } else {
         numpy$$ndarray res = $newarray(DblType,0,to$int(1),$NEW($list,NULL,NULL),$NEW($list,NULL,NULL),true);
-        res->data->d = (($float)a)->val;
+        $Real$float rwit = $Real$float$witness;
+        res->data->d = rwit->$class->__fromatom__(rwit, a)->val;
         return res;
     }
-    if ($ISINSTANCE(a,$bool)->val) return NULL;
-    if ($ISINSTANCE(a,$str)->val) return NULL;
-    fprintf(stderr,"internal error: fromatom: argument not of atomic type");
-    exit(-1);
 }
 
 // Functions to create arrays /////////////////////////////////////////////////////////////
@@ -632,7 +628,7 @@ numpy$$ndarray numpy$$unirandfloat($float a, $float b, $int n) {
 
 numpy$$ndarray numpy$$partition(numpy$$Primitive wit, numpy$$ndarray a, $int k) {
     numpy$$ndarray res = numpy$$ndarray$copy(a);
-    res->ndim--;
+    res->ndim--; 
     numpy$$array_iterator_state it = $mk_iterator(res); //gives an iterator that successively selects start of each last dimension column.
     res->ndim++;
     for (int i=0; i < $LONGELEM(res->shape,res->ndim-2); i++) {
@@ -841,8 +837,6 @@ struct numpy$$Iterator$ndarray$class numpy$$Iterator$ndarray$methods = {"",UNASS
                                                                         numpy$$Iterator$$serialize, numpy$$Iterator$ndarray$_deserialize,numpy$$Iterator$bool,
                                                                         numpy$$Iterator$str,numpy$$Iterator$str,numpy$$Iterator$ndarray$__next__};
 
-$int numpy$$newaxis;
-
 numpy$$ndarray numpy$$roll(numpy$$Primitive wit, numpy$$ndarray a, $int n) {
     if (from$int(n)==0)
         return a;
@@ -874,7 +868,7 @@ numpy$$ndarray numpy$$mean(numpy$$Primitive wit, numpy$$ndarray a, $int axis) {
         sums = numpy$$func($convert_to_double,sums);
         sums->elem_type = DblType;
     }
-    numpy$$ndarray len = numpy$$fromatom(($atom)to$float((double)(axis ? from$int(($int)$list_getitem(a->shape,from$int(axis))) : from$int(a->size))));
+    numpy$$ndarray len = numpy$$fromatom((numpy$$Primitive)numpy$$Primitive$float$witness,($atom)to$float((double)(axis ? from$int(($int)$list_getitem(a->shape,from$int(axis))) : from$int(a->size))));
     return numpy$$oper(d$truediv,sums,len);
 }
   

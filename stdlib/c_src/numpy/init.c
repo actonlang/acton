@@ -19,6 +19,7 @@ int numpy$$done = 0;
 void numpy$$__init__() {
     if (numpy$$done) return;
     numpy$$done = 1;
+    numpy$$newaxis = to$int(LONG_MIN);
     $register_force(ATOM_ID,&numpy$$ndarray$methods);
     $register(&numpy$$Iterator$ndarray$methods);
     $register(&numpy$$Primitive$int$methods);
@@ -36,6 +37,5 @@ void numpy$$__init__() {
     $register(&numpy$$Sliceable$ndarray$methods);
     $register(&numpy$$Collection$ndarray$methods);
     $register(&numpy$$RealFuns$math$ndarray$methods);
-    numpy$$newaxis = to$int(LONG_MIN);
 }
 
