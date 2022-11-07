@@ -2068,7 +2068,7 @@ char * to_string_gossip_listen_msg(gossip_listen_message * gs, char * msg_buff)
 {
     sprintf(msg_buff, "GossipListenMessage(node_description=");
     to_string_node_description(gs->node_description, msg_buff + strlen(msg_buff));
-    sprintf(msg_buff, ", nonce=%ld)", gs->nonce);
+    sprintf(msg_buff, ", nonce=%" PRId64 ")", gs->nonce);
     return msg_buff;
 }
 
