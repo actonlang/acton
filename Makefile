@@ -46,21 +46,16 @@ LDLIBS+=-lActonDeps -lm -lpthread
 
 # -- Apple Mac OS X ------------------------------------------------------------
 ifeq ($(shell uname -s),Darwin)
+ZIG_OS:=macos
 
 # -- M1
 ifeq ($(shell uname -m),arm64)
-CFLAGS += -I/opt/homebrew/include
-LDFLAGS += -L/opt/homebrew/lib
 ZIG_ARCH:=aarch64
-ZIG_OS:=macos
 endif
 
 # -- Intel CPU
 ifeq ($(shell uname -m),x86_64)
-CFLAGS += -I/usr/local/include
-LDFLAGS += -L/usr/local/lib
 ZIG_ARCH:=x86_64
-ZIG_OS:=macos
 endif
 
 endif # -- END: Apple Mac OS X -------------------------------------------------
