@@ -627,7 +627,7 @@ instance KSubst Decl where
     ksubst g (Actor l n q p k b)    = Actor l n <$> ksubst g q <*> ksubst g p <*> ksubst g k <*> ksubst g b
     ksubst g (Class l n q as b)     = Class l n <$> ksubst g q <*> ksubst g as <*> ksubst g b
     ksubst g (Protocol l n q as b)  = Protocol l n <$> ksubst g q <*> ksubst g as <*> ksubst g b
-    ksubst g (Extension l n q as b) = Extension l n <$> ksubst g q <*> ksubst g as <*> ksubst g b
+    ksubst g (Extension l q c as b) = Extension l <$> ksubst g q <*> ksubst g c <*> ksubst g as <*> ksubst g b
 
 instance KSubst Expr where
     ksubst g (Var l n)              = return $ Var l n
