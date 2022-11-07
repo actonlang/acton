@@ -66,9 +66,9 @@ endif
 endif # -- END: Apple Mac OS X -------------------------------------------------
 
 
+CFLAGS += -Werror
 # -- Linux ---------------------------------------------------------------------
 ifeq ($(shell uname -s),Linux)
-CFLAGS += -Werror
 CFLAGS += -I$(TD)/deps/instdir/include
 LDLIBS+=-luuid
 ZIG_OS:=linux
