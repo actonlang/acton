@@ -2604,8 +2604,7 @@ int main(int argc, char **argv) {
   setsockopt(gparentfd, SOL_SOCKET, SO_REUSEADDR, (const void *)&optval , sizeof(int));
   bzero((char *) &gserveraddr, sizeof(serveraddr));
   gserveraddr.sin_family = AF_INET;
-  bcopy(local_iface_hostent->h_addr_list[0], (char *)&(gserveraddr.sin_addr.s_addr), local_iface_hostent->h_length);
-//  gserveraddr.sin_addr.s_addr = htonl(INADDR_ANY);
+  gserveraddr.sin_addr.s_addr = htonl(INADDR_ANY);
   gserveraddr.sin_port = htons((uint16_t) gportno);
 
   int my_id = get_node_id((struct sockaddr *) &gserveraddr);
