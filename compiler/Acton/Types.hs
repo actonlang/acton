@@ -125,10 +125,12 @@ instance Simp QName where
       where aliases                 = [ n1 | (n1, NAlias n2) <- names env, n2 == n ]
 
 
-defaultVars                         :: TEnv -> TypeM TEnv
-defaultVars te                      = do te <- msubst te
-                                         sequence [ substitute tv (dflt (tvkind tv)) | tv <- tyfree te ]
+defaultTE                           :: TEnv -> TypeM TEnv
+defaultTE te                        = do defaultVars (tyfree te)
                                          msubst te
+
+defaultVars tvs                     = do tvs' <- tyfree <$> msubst (map tVar tvs)
+                                         sequence [ substitute tv (dflt (tvkind tv)) | tv <- tvs' ]
   where dflt KType                  = tNone
         dflt KFX                    = fxPure
         dflt PRow                   = posNil
@@ -143,7 +145,8 @@ infTop env ss                           = do --traceM ("\n## infEnv top")
                                              ss <- msubst ss
                                              popFX
                                              eq <- solveAll (define (filter typeDecl te) env) te tNone cs
-                                             te <- defaultVars te
+                                             defaultVars (tyfree ss)
+                                             te <- defaultTE te
                                              ss1 <- termred <$> msubst (bindWits eq ++ ss)
                                              return (te, ss1)
 
@@ -887,7 +890,7 @@ genEnv env cs te ds
   | any typeDecl te                     = do te <- msubst te
                                              --traceM ("## genEnv types 1\n" ++ render (nest 6 $ pretty te))
                                              eq <- solveAll (define te env) te tNone cs
-                                             te <- defaultVars te
+                                             te <- defaultTE te
                                              --traceM ("## genEnv  types 2\n" ++ render (nest 6 $ pretty te))
                                              return ([], te, eq, ds)
   | onTop env                           = do te <- msubst te
@@ -901,7 +904,7 @@ genEnv env cs te ds
                                                  te1 = map (generalize q) te
                                                  (eq1,eq2) = splitEqs (dom ws) eq
                                                  ds1 = map (abstract q ds ws eq1) ds
-                                             te1 <- defaultVars te1
+                                             te1 <- defaultTE te1
                                              --traceM ("## genEnv defs 3 [" ++ prstrs gen_vs ++ "]\n" ++ render (nest 6 $ pretty te1))
                                              return ([], te1, eq2, ds1)
   | otherwise                           = do te <- msubst te
@@ -1607,6 +1610,9 @@ instance InfEnvT KwdPat where
 
 
 instance InfEnvT Pattern where
+    infEnvT env (PWild l a)             = do t <- maybe newTVar return a
+                                             wellformed env t
+                                             return ([], [], t, PWild l (Just t))
     infEnvT env (PVar l n a)            = do t <- maybe newTVar return a
                                              wellformed env t
                                              case findName n env of

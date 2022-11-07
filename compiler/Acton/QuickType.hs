@@ -213,6 +213,7 @@ instance QType KwdArg where
     qMatch f _ _ KwdNil             = KwdNil
 
 instance QType Pattern where
+    qType env f (PWild l (Just t))  = (t, PWild l (Just t))
     qType env f (PVar l n (Just t)) = (t, PVar l n (Just t))
     qType env f (PVar l n Nothing)  = (typeOf env (eVar n), PVar l n Nothing)
     qType env f (PTuple l ps ks)    = (tTuple (typeOf env ps) (typeOf env ks), PTuple l ps ks)
@@ -274,6 +275,7 @@ instance EnvOf Comp where
     envOf NoComp                    = []
 
 instance EnvOf Pattern where
+    envOf (PWild _ (Just t))        = []
     envOf (PVar _ n (Just t))       = [(n, NVar t)]
     envOf (PVar _ n Nothing)        = []
     envOf (PTuple _ ps ks)          = envOf ps ++ envOf ks

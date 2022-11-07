@@ -324,6 +324,7 @@ instance Pretty (PosPat,KwdPat) where
     pretty (ps, ks)                 = pretty ps <> comma <+> pretty ks    
 
 instance Pretty Pattern where
+    pretty (PWild _ a)              = text "_" <> prettyAnn a
     pretty (PVar _ n a)             = pretty n <> prettyAnn a
     pretty (PTuple _ ps KwdPatNil)
       | singlePosPat ps             = pretty ps <> comma
@@ -402,7 +403,7 @@ prettyQual []                       = empty
 prettyQual q                        = pretty q <+> text "=>"
 
 instance Pretty TVar where
-    pretty (TV k n)                 = pretty n
+    pretty (TV k n)                 = pretty n -- <> parens (colon <> pretty k)
 
 instance Pretty TCon where
     pretty (TC n [])                = pretty n
@@ -420,24 +421,24 @@ instance Pretty QBind where
     pretty (Quant v [])             = pretty v
     pretty (Quant v cs)             = pretty v <> parens (commaList cs)
 
-prettyPosRow (TRow _ _ _ t (TNil _ _))
+prettyPosRow (TRow _ PRow _ t (TNil _ PRow))
                                     = pretty t
-prettyPosRow (TRow _ _ _ t p)       = pretty t <> comma <+> prettyPosRow p
+prettyPosRow (TRow _ PRow _ t p)    = pretty t <> comma <+> prettyPosRow p
 prettyPosRow (TVar _ v)             = text "*" <> pretty v
 prettyPosRow (TWild _)              = text "*_"
-prettyPosRow (TNil _ _)             = empty
+prettyPosRow (TNil _ PRow)          = empty
 prettyPosRow t                      = text "!!" <>  pretty t
     
-prettyKwdRow (TRow _ _ n t (TNil _ _))
+prettyKwdRow (TRow _ KRow n t (TNil _ KRow))
                                     = pretty n <> colon <+> pretty t
-prettyKwdRow (TRow _ _ n t k)       = pretty n <> colon <+> pretty t <> comma <+> prettyKwdRow k
+prettyKwdRow (TRow _ KRow n t k)    = pretty n <> colon <+> pretty t <> comma <+> prettyKwdRow k
 prettyKwdRow (TVar _ v)             = text "**" <> pretty v
 prettyKwdRow (TWild _)              = text "**_"
-prettyKwdRow (TNil _ _)             = empty
+prettyKwdRow (TNil _ KRow)          = empty
 prettyKwdRow t                      = text "!!" <>  pretty t
     
-prettyFunRow (TNil _ _) k           = prettyKwdRow k
-prettyFunRow p (TNil _ _)           = prettyPosRow p
+prettyFunRow (TNil _ PRow) k        = prettyKwdRow k
+prettyFunRow p (TNil _ KRow)        = prettyPosRow p
 prettyFunRow p k                    = prettyPosRow p <> comma <+> prettyKwdRow k
 
 instance Pretty Type where

@@ -656,6 +656,8 @@ pelems = do
 
 apat :: Parser S.Pattern
 apat = addLoc (
+            (try $ rword "_" *> (S.PWild NoLoc <$> optannot))
+        <|>
             (try $ S.PVar NoLoc <$> name <*> optannot)
         <|>
             ((try . parens) $ return $ S.PParen NoLoc (S.PTuple NoLoc S.PosPatNil S.KwdPatNil))
@@ -825,7 +827,7 @@ decl_group = do p <- L.indentLevel
                 return [ S.Decl (loc ds) ds | ds <- Names.splitDeclGroup g ]
 
 decl :: Parser S.Decl
-decl = funcdef <|> classdef <|> protodef <|> extdef <|> actordef
+decl = try funcdef <|> classdef <|> protodef <|> extdef <|> actordef
 
 decorator :: Bool -> Parser S.Deco
 decorator sig = do

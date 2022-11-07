@@ -103,7 +103,8 @@ data Expr       = Var           { eloc::SrcLoc, var::QName }
                 | Paren         { eloc::SrcLoc, exp1::Expr }
                 deriving (Show)
 
-data Pattern    = PVar          { ploc::SrcLoc, pn::Name, pann::Maybe Type }
+data Pattern    = PWild         { ploc::SrcLoc, pann::Maybe Type }
+                | PVar          { ploc::SrcLoc, pn::Name, pann::Maybe Type }
                 | PParen        { ploc::SrcLoc, pat::Pattern }
                 | PTuple        { ploc::SrcLoc, ppat::PosPat, kpat::KwdPat}
                 | PList         { ploc::SrcLoc, pats::[Pattern], ptail::Maybe Pattern }
@@ -662,6 +663,7 @@ instance Eq Comp where
     _                   ==  _                   = False
 
 instance Eq Pattern where
+    PWild _ a1          == PWild _ a2           = a1 == a2
     PVar _ n1 a1        == PVar _ n2 a2         = n1 == n2 && a1 == a2
     PTuple _ p1 k1      == PTuple _ p2 k2       = p1 == p2 && k1 == k2
     PList _ ps1 p1      == PList _ ps2 p2       = ps1 == ps2 && p1 == p2
@@ -731,7 +733,7 @@ isKeyword x                         = x `Data.Set.member` rws
                                         "assert","async","await","break","class","continue","def","del","elif","else",
                                         "except","extension","finally","for","from","if","import","in","is","isinstance",
                                         "lambda","mut","not","or","pass","proc","protocol","pure","raise","return","try",
-                                        "var","while","with","yield"
+                                        "var","while","with","yield","_"
                                       ]
 
 isSig Signature{}                   = True
