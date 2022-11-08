@@ -127,6 +127,7 @@ DIST_ZIG=dist/zig
 
 
 CFLAGS_DB = -I. -Ideps -I$(TD)/deps/instdir/include -DLOG_USE_COLOR -g
+CFLAGS_DB+= $(CFLAGS_TARGET)
 # TODO: enable sanitization of undefined behavior!
 CFLAGS_DB+= -fno-sanitize=undefined -Werror
 # TODO: clean up casts and remove this!
