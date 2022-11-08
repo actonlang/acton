@@ -70,7 +70,6 @@ CFLAGS += -Werror
 # -- Linux ---------------------------------------------------------------------
 ifeq ($(shell uname -s),Linux)
 CFLAGS += -I$(TD)/deps/instdir/include
-LDLIBS+=-luuid
 ZIG_OS:=linux
 ifeq ($(shell uname -m),x86_64)
 CFLAGS_TARGET := -target x86_64-linux-gnu.2.28
