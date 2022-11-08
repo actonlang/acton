@@ -126,55 +126,60 @@ DIST_ARCHIVES=$(addprefix dist/,$(ARCHIVES))
 DIST_ZIG=dist/zig
 
 
+CFLAGS_DB = -I. -Ideps -I$(TD)/deps/instdir/include -DLOG_USE_COLOR -g
+# TODO: enable sanitization of undefined behavior!
+CFLAGS_DB+= -fno-sanitize=undefined -Werror
+# TODO: clean up casts and remove this!
+CFLAGS_DB+= -Wno-int-to-pointer-cast -Wno-pointer-to-int-cast
 # /backend ----------------------------------------------
 backend/actondb: backend/actondb.c lib/libActonDB.a $(DEPSA)
-	$(CC) -o$@ $< $(CFLAGS) \
+	$(CC) -o$@ $< $(CFLAGS_DB) \
 		$(LDFLAGS) \
 		-lActonDB \
-		$(LDLIBS) -lActonDeps
+		$(LDLIBS)
 
 # Listing DEPSA as prerequisites in a target means it is dependent upon at least
 # one of  the external libraries that we place in libActonDeps
 DEPSA:=lib/libActonDeps.a
 
 backend/comm.o: backend/comm.c backend/comm.h backend/failure_detector/db_queries.h $(DEPSA)
-	$(CC) -DLOG_USE_COLOR -g -o$@ $< -c $(CFLAGS)
+	$(CC) -o$@ $< -c $(CFLAGS_DB)
 
 backend/db.o: backend/db.c backend/db.h backend/skiplist.h $(DEPSA)
-	$(CC) -DLOG_USE_COLOR -g -o$@ $< -c $(CFLAGS)
+	$(CC) -o$@ $< -c $(CFLAGS_DB)
 
 backend/log.o: backend/log.c
-	$(CC) -DLOG_USE_COLOR -g -o$@ $< -c $(CFLAGS)
+	$(CC) -o$@ $< -c $(CFLAGS_DB)
 
 backend/queue.o: backend/queue.c backend/queue.h backend/log.h backend/failure_detector/cells.h backend/failure_detector/db_queries.h $(DEPSA)
-	$(CC) -DLOG_USE_COLOR -g -o$@ $< -c $(CFLAGS)
+	$(CC) -o$@ $< -c $(CFLAGS_DB)
 
 backend/skiplist.o: backend/skiplist.c backend/skiplist.h backend/log.h backend/fastrand.h $(DEPSA)
-	$(CC) -DLOG_USE_COLOR -g -o$@ $< -c $(CFLAGS)
+	$(CC) -o$@ $< -c $(CFLAGS_DB)
 
 backend/txn_state.o: backend/txn_state.c backend/txn_state.h $(DEPSA)
-	$(CC) -DLOG_USE_COLOR -g -o$@ $< -c $(CFLAGS)
+	$(CC) -o$@ $< -c $(CFLAGS_DB)
 
 backend/txns.o: backend/txns.c backend/txns.h $(DEPSA)
-	$(CC) -DLOG_USE_COLOR -g -o$@ $< -c $(CFLAGS)
+	$(CC) -o$@ $< -c $(CFLAGS_DB)
 
 backend/client_api.o: backend/client_api.c backend/client_api.h backend/log.h backend/hashes.h $(DEPSA)
-	$(CC) -DLOG_USE_COLOR -g -o$@ $< -c $(CFLAGS)
+	$(CC) -o$@ $< -c $(CFLAGS_DB)
 
 backend/failure_detector/db_messages.pb-c.o: backend/failure_detector/db_messages.pb-c.c backend/failure_detector/db_messages.pb-c.h $(DEPSA)
-	$(CC) -DLOG_USE_COLOR -g -o$@ $< -c $(CFLAGS)
+	$(CC) -o$@ $< -c $(CFLAGS_DB)
 
 backend/failure_detector/cells.o: backend/failure_detector/cells.c backend/failure_detector/cells.h $(DEPSA)
-	$(CC) -DLOG_USE_COLOR -g -o$@ $< -c $(CFLAGS)
+	$(CC) -o$@ $< -c $(CFLAGS_DB)
 
 backend/failure_detector/db_queries.o: backend/failure_detector/db_queries.c backend/failure_detector/db_queries.h backend/log.h backend/failure_detector/db_messages.pb-c.h $(DEPSA)
-	$(CC) -DLOG_USE_COLOR -g -o$@ $< -c $(CFLAGS)
+	$(CC) -o$@ $< -c $(CFLAGS_DB)
 
 backend/failure_detector/fd.o: backend/failure_detector/fd.c backend/failure_detector/fd.h backend/failure_detector/db_messages.pb-c.h $(DEPSA)
-	$(CC) -DLOG_USE_COLOR -g -o$@ $< -c $(CFLAGS)
+	$(CC) -o$@ $< -c $(CFLAGS_DB)
 
 backend/failure_detector/vector_clock.o: backend/failure_detector/vector_clock.c backend/failure_detector/vector_clock.h backend/failure_detector/db_messages.pb-c.h $(DEPSA)
-	$(CC) -DLOG_USE_COLOR -g -o$@ $< -c $(CFLAGS)
+	$(CC) -o$@ $< -c $(CFLAGS_DB)
 
 # backend tests
 BACKEND_TESTS=backend/failure_detector/db_messages_test \
@@ -195,16 +200,16 @@ test-backend: $(BACKEND_TESTS)
 	./backend/test/skiplist_test
 
 backend/failure_detector/db_messages_test: backend/failure_detector/db_messages_test.c lib/libActonDB.a
-	$(CC) -o$@ $< $(CFLAGS) \
+	$(CC) -o$@ $< $(CFLAGS_DB) \
 		$(LDFLAGS) \
 		-lActonDB $(LDLIBS)
 
 backend/test/%: backend/test/%.c lib/libActonDB.a
-	$(CC) -o$@ $< $(CFLAGS) -Ibackend \
+	$(CC) -o$@ $< $(CFLAGS_DB) -Ibackend \
 		$(LDFLAGS) -lActonDB $(LDLIBS)
 
 backend/test/skiplist_test: backend/test/skiplist_test.c backend/skiplist.c
-	$(CC) -o$@ $^ $(CFLAGS) -Ibackend \
+	$(CC) -o$@ $^ $(CFLAGS_DB) -Ibackend \
 		$(LDLIBS)
 
 # /builtin ----------------------------------------------
