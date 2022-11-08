@@ -41,7 +41,7 @@ endif
 CFLAGS+= -fno-sanitize=undefined -I. -I$(TD)/deps/instdir/include -Ideps -Wno-int-to-pointer-cast -Wno-pointer-to-int-cast -Wformat -Werror=format-security
 CFLAGS_REL= -O3 -DREL
 CFLAGS_DEV= -g -DDEV
-LDFLAGS+=-L$(TD)/lib -L$(TD)/deps/instdir/lib
+LDFLAGS+=-L$(TD)/lib
 LDLIBS+=-lActonDeps -lm -lpthread
 
 # -- Apple Mac OS X ------------------------------------------------------------
