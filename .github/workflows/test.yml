@@ -47,9 +47,9 @@ jobs:
           sudo sysctl kern.corefile=core.%P
           ulimit -c unlimited
       - name: "Check out repository code"
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
       - name: "Cache ~/.stack"
-        uses: actions/cache@v2
+        uses: actions/cache@v3
         with:
           path: |
             ~/.stack
@@ -61,7 +61,7 @@ jobs:
       - name: "Build a release"
         run: make -C ${{ github.workspace }} release
       - name: "Upload artifact"
-        uses: actions/upload-artifact@v2
+        uses: actions/upload-artifact@v3
         with:
           name: acton-${{ matrix.os }}
           path: ${{ github.workspace }}/acton-darwin-x86_64*
@@ -70,7 +70,7 @@ jobs:
         run: make -C ${{ github.workspace }} test
       - name: "Upload core file & binaries as artifacts on test failure"
         if: failure()
-        uses: actions/upload-artifact@v2
+        uses: actions/upload-artifact@v3
         with:
           name: test-debug-${{ matrix.os }}-${{ github.run_id }}.zip
           path: |
@@ -102,9 +102,9 @@ jobs:
         run: |
           echo "BUILD_RELEASE=1" >> $GITHUB_ENV
       - name: "Check out repository code"
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
       - name: "Cache ~/.stack"
-        uses: actions/cache@v2
+        uses: actions/cache@v3
         with:
           path: |
             ~/.stack
@@ -127,7 +127,7 @@ jobs:
       - name: "Build a release"
         run: make -C ${GITHUB_WORKSPACE} release
       - name: "Upload artifact"
-        uses: actions/upload-artifact@v2
+        uses: actions/upload-artifact@v3
         with:
           name: acton-${{ matrix.os }}-${{ matrix.version }}
           path: ${{ github.workspace }}/acton-linux-x86_64*
@@ -146,7 +146,7 @@ jobs:
           echo "BUILD_RELEASE=1" >> $GITHUB_ENV
         if: startsWith(github.ref, 'refs/tags/v')
       - name: "Check out repository code"
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
       - name: "Install build prerequisites"
         run: |
           apt-get update
@@ -166,7 +166,7 @@ jobs:
           ls ${{ steps.vars.outputs.debdir }}/../
           mv ${{ steps.vars.outputs.debdir }}/../acton_* ${{ steps.vars.outputs.debdir }}/
       - name: "Upload artifact"
-        uses: actions/upload-artifact@v2
+        uses: actions/upload-artifact@v3
         with:
           name: acton-debs
           # Using a wildcard and then deb here to force the entire directory to
@@ -207,7 +207,7 @@ jobs:
           sudo sysctl kern.corefile=core.%P
           ulimit -c unlimited
       - name: "Check out repository code"
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
       - name: "Get the version"
         id: get_version
         run: echo ::set-output name=version::$(grep VERSION= common.mk | cut -d = -f 2)
@@ -285,7 +285,7 @@ jobs:
     runs-on: ${{ matrix.os }}
     steps:
       - name: "Download artifacts for Macos, built on macos-11"
-        uses: actions/download-artifact@v2
+        uses: actions/download-artifact@v3
         with:
           name: acton-macos-11
       - name: "Extract acton"
@@ -322,7 +322,7 @@ jobs:
       image: ${{ matrix.os }}:${{ matrix.version }}
     steps:
       - name: "Download .deb files"
-        uses: actions/download-artifact@v2
+        uses: actions/download-artifact@v3
         with:
           name: acton-debs
       - name: "Install acton from .deb"
@@ -360,17 +360,17 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - name: "Check out repository code"
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
       - name: "Download artifacts for Macos, built on macos-11"
-        uses: actions/download-artifact@v2
+        uses: actions/download-artifact@v3
         with:
           name: acton-macos-11
       - name: "Download artifacts for Linux, built on Debian:11"
-        uses: actions/download-artifact@v2
+        uses: actions/download-artifact@v3
         with:
           name: acton-debian-11
       - name: "Download artifacts for Debian Linux"
-        uses: actions/download-artifact@v2
+        uses: actions/download-artifact@v3
         with:
           name: acton-debs
       - name: "List downloaded artifacts"
@@ -419,17 +419,17 @@ jobs:
     needs: [test-macos, test-linux, build-debs, brew-macos]
     steps:
       - name: "Check out repository code"
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
       - name: "Download artifacts for Macos, built on macos-11"
-        uses: actions/download-artifact@v2
+        uses: actions/download-artifact@v3
         with:
           name: acton-macos-11
       - name: "Download artifacts for Linux, built on Debian:11"
-        uses: actions/download-artifact@v2
+        uses: actions/download-artifact@v3
         with:
           name: acton-debian-11
       - name: "Download artifacts for Debian Linux"
-        uses: actions/download-artifact@v2
+        uses: actions/download-artifact@v3
         with:
           name: acton-debs
       - name: "List downloaded artifacts"
@@ -466,13 +466,13 @@ jobs:
         with:
           gpg_private_key: ${{ secrets.APT_GPG_PRIVATE_KEY }}
       - name: Check out code of apt.acton-lang.io repo
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
         with:
           repository: actonlang/apt.acton-lang.io
           path: apt
           ssh-key: ${{ secrets.APT_DEPLOY_KEY }}
       - name: "Download artifacts for Debian Linux"
-        uses: actions/download-artifact@v2
+        uses: actions/download-artifact@v3
         with:
           name: acton-debs
       - name: "Include new deb in Apt repository"
@@ -499,7 +499,7 @@ jobs:
     needs: [test-macos, test-linux, build-debs, brew-macos]
     steps:
       - name: "Check out code of main acton repo"
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
       - name: "Get the version from common.mk"
         id: get_version
         run: echo ::set-output name=version::$(grep VERSION= common.mk | cut -d = -f 2)
@@ -508,7 +508,7 @@ jobs:
       - id: shasum
         run: echo "::set-output name=sum::$(sha256sum v${{ steps.get_version.outputs.version }}.tar.gz | cut -d' ' -f1)"
       - name: "Check out code of our brew repo"
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
         with:
           repository: actonlang/homebrew-acton
           path: homebrew-acton
