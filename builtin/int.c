@@ -419,18 +419,16 @@ $Div$int $Div$int$__deserialize__($Div$int self, $Serial$state state) {
 $float $Div$int$__truediv__ ($Div$int wit, $int a, $int b) {
     zz_ptr aval = &a->val;
     zz_ptr bval = &b->val;
-    zz_ptr ared = malloc(sizeof(zz_struct));
-    zz_ptr bred = malloc(sizeof(zz_struct));
-    zz_init(ared);
-    zz_init(bred);
+    $int ared = $malloc$int();
+    $int bred = $malloc$int();
     $int q = $malloc$int();
     $int r = $malloc$int();
     $int g = $malloc$int();
     zz_gcd(&g->val,aval,bval);
-    zz_div(ared,aval,&g->val);
-    zz_div(bred,bval,&g->val);
-    zz_divrem(&q->val,&r->val,ared,bred);
-    return to$float($float$new(($atom)q)->val +  $float$new(($atom)r)->val/ $float$new(($atom)b)->val);
+    zz_div(&ared->val,aval,&g->val);
+    zz_div(&bred->val,bval,&g->val);
+    zz_divrem(&q->val,&r->val,&ared->val,&bred->val);
+    return to$float($float$new(($atom)q)->val +  $float$new(($atom)r)->val/ $float$new(($atom)bred)->val);
 }
 
 // $Ord$int  ////////////////////////////////////////////////////////////////////////////////////////
