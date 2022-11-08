@@ -137,12 +137,12 @@ long $complex_hash($complex c) {
 }  
  
 long $pointer_hash($WORD p) {
-    long x;
-    long y = (long)p;
+    unsigned long x;
+    unsigned long y = (unsigned long)p;
     // bottom 3 or 4 bits are likely to be 0; rotate y by 4 to avoid
     //  excessive hash collisions for dicts and sets 
     y = (y >> 4) | (y << 60);
-    x = (long)y;
+    x = (unsigned long)y;
     if (x == -1)
         x = -2;
     return x;
