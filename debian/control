@@ -18,7 +18,6 @@ Package: acton
 Architecture: any
 Depends:
  ${shlibs:Depends},
- ${misc:Depends},
- gcc
+ ${misc:Depends}
 Description: Acton Programming Language
  An awesome programming language.
