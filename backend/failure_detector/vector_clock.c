@@ -52,17 +52,17 @@ int compare_vc(vector_clock * vc1, vector_clock * vc2)
         return 0;
 
     if(vc1 == NULL || vc2 == NULL)
-        return -2;
+        return VC_INCOMPARABLE;
 
     if(vc1->no_nodes != vc2->no_nodes)
-        return -2;
+        return VC_INCOMPARABLE;
 
     int first_bigger = 0, second_bigger = 0;
 
     for(int i=0;i<vc1->no_nodes;i++)
     {
         if(vc1->node_ids[i].node_id != vc2->node_ids[i].node_id)
-            return -2;
+            return VC_INCOMPARABLE;
 
         if(vc1->node_ids[i].counter > vc2->node_ids[i].counter)
             first_bigger = 1;
@@ -71,7 +71,7 @@ int compare_vc(vector_clock * vc1, vector_clock * vc2)
     }
 
     if(first_bigger && second_bigger)
-        return -2;
+        return VC_DISJOINT;
     else if(first_bigger)
         return 1;
     else if(second_bigger)

@@ -10,6 +10,9 @@
 #define DEFAULT_SIZE 8
 #define GROWTH_RATE 2.0
 
+#define VC_INCOMPARABLE -2
+#define VC_DISJOINT -3
+
 #include "db_messages.pb-c.h"
 #include <sys/socket.h>
 #include <netinet/in.h>

@@ -192,7 +192,19 @@ int install_gossiped_view(membership_agreement_msg * ma, remote_db_t * db, unsig
 
     pthread_mutex_lock(db->gossip_lock);
 
-    if(compare_vc(db->current_view_id, ma->vc) > 0)
+    if(db->current_view_id != NULL && compare_vc(db->current_view_id, ma->vc) == VC_INCOMPARABLE)
+    {
+#if (VERBOSE_RPC > -1)
+        log_debug("CLIENT: Skipping installing notified view %s because it is incomparable to my installed view %s (client is remaining sticky to previous partition)!",
+                            to_string_vc(ma->vc, msg_buf), to_string_vc(db->current_view_id, msg_buf));
+#endif
+
+        pthread_mutex_unlock(db->gossip_lock);
+
+        return 1;
+    }
+
+    if(db->current_view_id != NULL && compare_vc(db->current_view_id, ma->vc) > 0)
     {
 #if (VERBOSE_RPC > -1)
         log_debug("CLIENT: Skipping installing notified view %s because it is older than my installed view %s!",
