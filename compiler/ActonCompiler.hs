@@ -723,27 +723,13 @@ buildExecutable env opts paths binTask
         buildF              = joinPath [projPath paths, "build.sh"]
         outbase             = outBase paths mn
         rootFile            = outbase ++ ".root.c"
-        libFilesBase        = " -lActonProject -lActon -lActonDB -lActonDeps -lpthread -lm -ldl "
-        libPathsBase        = " -L " ++ sysPath paths ++ "/lib -L" ++ sysLib paths ++ " -L" ++ projLib paths
-#if defined(darwin_HOST_OS) && defined(aarch64_HOST_ARCH)
-        libFiles            = libFilesBase
-        libPaths            = libPathsBase ++ " -L/opt/homebrew/lib "
-        ccArgs              = ""
-#elif defined(darwin_HOST_OS) && defined(x86_64_HOST_ARCH)
-        libFiles            = libFilesBase
-        libPaths            = libPathsBase ++ " -L/usr/local/lib "
-        ccArgs              = ""
--- Linux? and what else? maybe split
-#else
-        libFiles            = libFilesBase
-        libPaths            = libPathsBase
-        ccArgs              = " -no-pie "
-#endif
+        libFiles            = " -lActonProject -lActon -lActonDB -lActonDeps -lpthread -lm -ldl "
+        libPaths            = " -L " ++ sysPath paths ++ "/lib -L" ++ sysLib paths ++ " -L" ++ projLib paths
         binFile             = joinPath [binDir paths, (binName binTask)]
         srcbase             = srcFile paths mn
         pedantArg           = if (C.cpedantic opts) then "-Werror" else ""
         ccCmd               = (cc paths ++ ccTarget ++
-                               ccArgs ++ pedantArg ++
+                               pedantArg ++
                                (if (C.dev opts) then " -g " else " -O3 ") ++
                                " -isystem " ++ sysPath paths ++ "/include" ++
                                " -I" ++ projOut paths ++
