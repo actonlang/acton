@@ -283,8 +283,6 @@ void * comm_thread_loop(void * args)
 {
     remote_db_t * db = (remote_db_t *) args;
     struct timeval timeout;
-    timeout.tv_sec = 3;
-    timeout.tv_usec = 0;
     char in_buf[BUFSIZE];
     int msg_len = -1;
     int announced_msg_len = -1;
@@ -292,6 +290,8 @@ void * comm_thread_loop(void * args)
 
     while(!db->stop_comm)
     {
+        timeout.tv_sec = 3;
+        timeout.tv_usec = 0;
         FD_ZERO(&(db->readfds));
         FD_SET(db->wakeup_pipe[0], &(db->readfds));
         int max_fd = db->wakeup_pipe[0];
