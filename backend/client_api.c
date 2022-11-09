@@ -192,7 +192,8 @@ int install_gossiped_view(membership_agreement_msg * ma, remote_db_t * db, unsig
 
     pthread_mutex_lock(db->gossip_lock);
 
-    if(db->current_view_id != NULL && compare_vc(db->current_view_id, ma->vc) == VC_INCOMPARABLE)
+    if(db->current_view_id != NULL && (compare_vc(db->current_view_id, ma->vc) == VC_INCOMPARABLE ||
+                                        compare_vc(db->current_view_id, ma->vc) == VC_DISJOINT))
     {
 #if (VERBOSE_RPC > -1)
         log_debug("CLIENT: Skipping installing notified view %s because it is incomparable to my installed view %s (client is remaining sticky to previous partition)!",
