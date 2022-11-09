@@ -188,7 +188,7 @@ int handle_socket_close(int * childfd)
 
 int install_gossiped_view(membership_agreement_msg * ma, remote_db_t * db, unsigned int * fastrandstate)
 {
-    char msg_buf[4096];
+    char msg_buf[4096], msg_buf2[1024];
 
     pthread_mutex_lock(db->gossip_lock);
 
@@ -197,7 +197,7 @@ int install_gossiped_view(membership_agreement_msg * ma, remote_db_t * db, unsig
     {
 #if (VERBOSE_RPC > -1)
         log_debug("CLIENT: Skipping installing notified view %s because it is incomparable to my installed view %s (client is remaining sticky to previous partition)!",
-                            to_string_vc(ma->vc, msg_buf), to_string_vc(db->current_view_id, msg_buf));
+                            to_string_vc(ma->vc, msg_buf), to_string_vc(db->current_view_id, msg_buf2));
 #endif
 
         pthread_mutex_unlock(db->gossip_lock);
@@ -209,7 +209,7 @@ int install_gossiped_view(membership_agreement_msg * ma, remote_db_t * db, unsig
     {
 #if (VERBOSE_RPC > -1)
         log_debug("CLIENT: Skipping installing notified view %s because it is older than my installed view %s!",
-                            to_string_vc(ma->vc, msg_buf), to_string_vc(db->current_view_id, msg_buf));
+                            to_string_vc(ma->vc, msg_buf), to_string_vc(db->current_view_id, msg_buf2));
 #endif
 
         pthread_mutex_unlock(db->gossip_lock);
