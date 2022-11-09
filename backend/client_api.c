@@ -326,10 +326,10 @@ void * comm_thread_loop(void * args)
 
         int status = select(max_fd + 1 , &(db->readfds) , NULL , NULL , &timeout);
 
-        if ((status < 0) && (errno!=EINTR))
-        {
-            log_error("select error!");
-            assert(0);
+        if (status < 0) {
+            if (errno != EINTR)
+                log_error("select error, errno: %d", errno);
+            continue;
         }
 
         if (FD_ISSET(db->wakeup_pipe[0], &(db->readfds))) {
