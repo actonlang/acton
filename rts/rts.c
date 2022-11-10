@@ -35,6 +35,8 @@
 
 #include <uv.h>
 
+#define GC_THREADS 1
+#include "gc.h"
 #include "yyjson.h"
 #include "rts.h"
 
@@ -2100,8 +2102,12 @@ void print_help(struct option *opt) {
     exit(0);
 }
 
+void DaveNull () {}
 
 int main(int argc, char **argv) {
+    // Init garbage collector and suppress warnings
+    GC_INIT();
+    GC_set_warn_proc(DaveNull);
     uint ddb_no_host = 0;
     char **ddb_host = NULL;
     char *rts_host = "localhost";

@@ -14,6 +14,7 @@ ZIG_VERSION:=0.10.0
 CC=$(TD)/dist/zig/zig cc
 CXX=$(TD)/dist/zig/zig c++
 ZIG=dist/zig
+LIBGC=lib/libactongc.a
 export CC
 export CXX
 
@@ -113,7 +114,7 @@ BUILTIN_HFILES=$(filter-out $(ENV_FILES),$(wildcard builtin/*.h))
 BUILTIN_CFILES=$(filter-out $(ENV_FILES),$(wildcard builtin/*.c))
 
 DBARCHIVE=lib/libActonDB.a
-ARCHIVES=lib/dev/libActon.a lib/rel/libActon.a lib/libActonDeps.a
+ARCHIVES=lib/dev/libActon.a lib/rel/libActon.a lib/libActonDeps.a lib/libactongc.a
 
 DIST_BINS=$(ACTONC) dist/bin/actondb dist/bin/runacton
 DIST_HFILES=\
@@ -164,7 +165,7 @@ backend/txn_state.o: backend/txn_state.c backend/txn_state.h $(DEPSA)
 backend/txns.o: backend/txns.c backend/txns.h $(DEPSA)
 	$(CC) -o$@ $< -c $(CFLAGS_DB)
 
-backend/client_api.o: backend/client_api.c backend/client_api.h backend/log.h backend/hashes.h $(DEPSA)
+backend/client_api.o: backend/client_api.c backend/client_api.h backend/log.h backend/hashes.h $(DEPSA) $(LIBGC)
 	$(CC) -o$@ $< -c $(CFLAGS_DB)
 
 backend/failure_detector/db_messages.pb-c.o: backend/failure_detector/db_messages.pb-c.c backend/failure_detector/db_messages.pb-c.h $(DEPSA)
@@ -278,9 +279,13 @@ lib/libActonDeps.a: $(DEP_LIBS) dist/zig
 	done
 	cd lib_deps && ar -qc ../lib/libActonDeps.a */*.o
 
+lib/libactongc.a: deps/instdir/lib/libgc.a
+	cp $< $@
+
 .PHONY: clean-deps
 clean-deps:
 	-for I in $(DEPS_DIRS); do ls $${I} >/dev/null 2>&1 && echo Cleaning $${I} && make -C $(TD)/$${I} clean; done
+	-$(MAKE) -C deps/libgc/ -f Makefile.direct clean
 	rm -rf deps/instdir lib/libActonDeps.a
 
 clean-deps-rm:
@@ -354,6 +359,23 @@ deps/instdir/lib/libbsd.a: deps/libbsd deps/instdir/lib/libmd.a $(ZIG)
 	&& ./autogen \
 	&& ./configure --prefix=$(TD)/deps/instdir --enable-static --disable-shared CFLAGS="-I../incbsd -I$(TD)/deps/instdir/include -L$(TD)/deps/instdir/lib $(CFLAGS_DEPS)" \
 	&& make -j && make install
+
+# /deps/libgc --------------------------------------------
+LIBGC_REF=54522af853de28f45195044dadfd795c4e5942aa
+deps/libgc:
+	ls $@ >/dev/null 2>&1 || git clone https://github.com/ivmai/bdwgc.git $@
+
+deps/instdir/lib/libgc.a: deps/libgc $(ZIG)
+	mkdir -p $(dir $@)
+	cd $< \
+	&& git checkout $(LIBGC_REF) \
+	&& sed -i -e '/REDIRECT_MALLOC with THREADS works at most on Linux/d' include/private/gcconfig.h \
+	&& sed -i -e 's/^CC=/CC?=/' Makefile.direct \
+	&& unset CFLAGS \
+	&& export CFLAGS_EXTRA="-DGC_BUILTIN_ATOMIC -DGC_THREADS -DNO_PROC_FOR_LIBRARIES -DREDIRECT_MALLOC=GC_malloc -DIGNORE_FREE -DGC_ASSERTIONS $(CFLAGS_DEPS)" \
+	&& make -f Makefile.direct -j base_lib \
+	&& cp $(TD)/deps/libgc/libgc.a $(TD)/$@ \
+	&& cp -r $(TD)/deps/libgc/include/gc* $(TD)/deps/instdir/include/
 
 # /deps/libmd --------------------------------------------
 LIBMD_REF=1.0.4
@@ -434,6 +456,7 @@ deps/instdir/lib/libxml2.a: deps/libxml2 $(ZIG)
 	&& mv $(TD)/deps/instdir/include/libxml2/libxml $(TD)/deps/instdir/include/libxml
 
 # --
+
 OFILES += deps/netstring_dev.o deps/netstring_rel.o deps/yyjson_dev.o deps/yyjson_rel.o
 deps/netstring_dev.o: deps/netstring.c
 	$(CC) $(CFLAGS) $(CFLAGS_DEV) -c $< -o$@
@@ -525,7 +548,7 @@ rts/io_rel.o: rts/io.c rts/io.h $(DEPSA)
 rts/log.o: rts/log.c rts/log.h $(DEPSA)
 	$(CC) $(CFLAGS) $(CFLAGS_DEV) -DLOG_USE_COLOR -c $< -o$@
 
-rts/rts_dev.o: rts/rts.c rts/rts.h $(DEPSA)
+rts/rts_dev.o: rts/rts.c rts/rts.h $(DEPSA) $(LIBGC)
 	$(CC) $(CFLAGS) $(CFLAGS_DEV) \
 		-Wno-int-to-void-pointer-cast -Wno-unused-result \
 		-c $< -o $@

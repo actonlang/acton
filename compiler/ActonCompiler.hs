@@ -723,7 +723,7 @@ buildExecutable env opts paths binTask
         buildF              = joinPath [projPath paths, "build.sh"]
         outbase             = outBase paths mn
         rootFile            = outbase ++ ".root.c"
-        libFiles            = " -lActonProject -lActon -lActonDB -lActonDeps -lpthread -lm -ldl "
+        libFiles            = " -lActonProject -lActon -lActonDB -lActonDeps -lactongc -lpthread -lm -ldl "
         libPaths            = " -L " ++ sysPath paths ++ "/lib -L" ++ sysLib paths ++ " -L" ++ projLib paths
         binFile             = joinPath [binDir paths, (binName binTask)]
         srcbase             = srcFile paths mn
