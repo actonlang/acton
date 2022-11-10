@@ -2,6 +2,75 @@
 
 ## Unreleased
 
+## [0.13.1] (2022-11-10)
+
+### Changed
+- Allow `_` as a dummy variable name [#1020] [#1061]
+  - `_` can be used in an assignment to effectively throw away a result
+  - Unlike using a variable like `dummy`, `_` acts as a wildcard from a type
+    perspective, so that we can do `_ = 3` and `_ = "a"`, while if we attempt to
+    use another dummy variable name we will get a type error as we try to assign
+    it values with different types
+- `__self__` has been renamed to `self` [#1056]
+  - it is a reference to the own actor and holds the "external" view, i.e. it
+    can be passed to another actor as a reference to the local actor
+
+### Fixed
+- Correct DB client comm thread to avoid potential deadlock [#1088]
+  - Incorrect handling of error return status from select meant we could attempt
+    to read on fds that had no data and thus the comm thread would deadlock.
+  - Now we do proper error handling, always continuing for another spin &
+    attempt at select in case we get an error back.
+  - The (under development) garbage collector (GC) uses signals to instruct
+    threads to pause for stop the world events and thus we end up interrupting
+    the select loop a lot more frequently than before, thus surfacing this bug.
+- Correct DB client comm thread to avoid busy waiting [#1089]
+  - On Linux, using `select()` with a timeout, if the select is interrupted the
+    timeout value will be modified to reflect the time not slept. Thus the next
+    select in our comm thread loop would sleep for a shorter period of time.
+    Depending on the timing of the interrupt, the sleep might be shortened to
+    effectively form a busy wait.
+  - The (under development) garbage collector (GC) uses signals to instruct
+    threads to pause for stop the world events and thus we end up interrupting
+    the select loop a lot more frequently than before, thus surfacing this bug.
+  - Fixed by always resetting the timeout value in the loop.
+- Make RTS DB clients stick to one partition [#1087]
+  - Make sure RTS (a DB client) does not hop between different DB server
+    partitions even if they learn about disjoint gossip views.
+  - Prevents incorrect operation when DB servers are not aware of each other but
+    are "joined" by a RTS that see all the servers.
+  - This scenario is most easily reproduced by starting DB servers without
+    specifying a seed, and so the DB servers won't see each other, and then let
+    a RTS connect to the DB servers, which then sees a view of all 3 servers.
+    - This is now rejected as invalid.
+  - Using vector clocks to determine and reject invalid views. Very elegant =)
+- Correct `time.monotonic()` [#1097]
+  - It returned a wildly incorrect results as the nanoseconds part was not
+    properly added up with seconds.
+- Include argp-standalone library in libActonDeps [#1058]
+  - No more external dependencies!
+  - argp is available as part of the system on GNU/Linux but on MacOS we have
+    relied on the argp-standalone package installed via brew. We now prefer to
+    use our own on both Linux and MacOS.
+- Acton system is now compiled with `-Werror` to improve code quality [#1060]
+  - There are some exceptions to this but the overall goal is to be essentially
+    free of compilation warnings
+- Fix bug in truediv for `int` [#1076]
+- Fix bad codegen of classname argument to `isinstance()` [#1055]
+- Correct effect declaration to `mut` for some builtin protocols [#1053]
+- Method decorators like `@staticmethod` now work [#1054]
+- Added lost constraints inferred on target expressions [#1050]
+- Avoid undefined behavior in builtin object hash [#1065]
+- Clean up library include paths etc [#1068] [#1077] [#1080] [#1092]
+  - Made possible by including all of our external dependencies in libActonDeps
+
+### Testing / CI
+- Add back testing on Ubuntu 20.04 [#1093]
+  - libxml2 requires a newer automake (1.16.3) than is available on Ubuntu 20.04
+  - We fix this by hacking the configure.ac file to require the version
+    available on Ubuntu 20.04 (1.16.1)
+
+
 ## [0.13.0] (2022-11-04)
 New "deactorizer", which unlocks proper async / sync actor method calls.
 
