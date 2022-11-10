@@ -335,7 +335,8 @@ jobs:
         run: |
           export DEBIAN_FRONTEND=noninteractive
           apt-get update
-          apt-get install -qy bzip2 curl git gcc haskell-stack libtool make pkg-config procps python3 wget
+          apt-get install -qy gnupg wget
+          apt-get install -qy bzip2 curl git gcc haskell-stack libtool make pkg-config procps python3
       - name: "Install acton"
         run: |
           wget -q -O - https://apt.acton-lang.io/acton.gpg | apt-key add -
