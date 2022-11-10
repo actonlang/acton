@@ -7,7 +7,7 @@ $float time$$monotonic () {
     if (clock_gettime(CLOCK_MONOTONIC, &ts) == -1) {
         $RAISE((($BaseException)$RuntimeError$new(to$str("Unable to get time"))));
     }
-    return to$float(ts.tv_sec + ts.tv_nsec);
+    return to$float(ts.tv_sec + 0.000000001*ts.tv_nsec);
 }
 
 $int time$$monotonic_ns () {
