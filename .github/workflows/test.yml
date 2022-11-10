@@ -306,7 +306,7 @@ jobs:
 
 
   run-linux:
-    needs: build-debs
+#    needs: build-debs
     strategy:
       fail-fast: false
       matrix:
@@ -323,15 +323,34 @@ jobs:
     container:
       image: ${{ matrix.os }}:${{ matrix.version }}
     steps:
-      - name: "Download .deb files"
-        uses: actions/download-artifact@v3
+      - name: "Check out repository code"
+        uses: actions/checkout@v3
+      - name: "Cache ~/.stack"
+        uses: actions/cache@v3
         with:
-          name: acton-debs
-      - name: "Install acton from .deb"
+          path: |
+            ~/.stack
+          key: run-${{ matrix.os }}-${{ matrix.version }}-${{ secrets.CACHE_VERSION }}
+      - name: "Install build prerequisites"
         run: |
-          apt update
-          apt install -y ./deb/acton_*.deb
-          actonc --version
+          export DEBIAN_FRONTEND=noninteractive
+          apt-get update
+          apt-get install -qy bzip2 curl git gcc haskell-stack libtool make pkg-config procps python3 wget
+      - name: "Install acton"
+        run: |
+          wget -q -O - https://apt.acton-lang.io/acton.gpg | apt-key add -
+          echo "deb [arch=amd64] http://apt.acton-lang.io/ bullseye main" | tee /etc/apt/sources.list.d/acton.list
+          apt-get update
+          apt-get install -qy acton
+#      - name: "Download .deb files"
+#        uses: actions/download-artifact@v3
+#        with:
+#          name: acton-debs
+#      - name: "Install acton from .deb"
+#        run: |
+#          apt update
+#          apt install -y ./deb/acton_*.deb
+#          actonc --version
       - name: "Compile acton program"
         run: |
           echo '#!/usr/bin/env runacton'   > test-runtime.act
@@ -341,8 +360,10 @@ jobs:
           chmod a+x test-runtime.act
           ./test-runtime.act
           ./test-runtime.act | grep "Hello, world"
-#
-#
+      - name: "Run tests"
+        run: make -C ${GITHUB_WORKSPACE} test
+
+
 #  # If we are on the main branch, we'll create or update a pre-release called
 #  # 'tip' which holds the latest build output from the main branch!  We upload
 #  # artifacts twice, first with the version number held in the filename and a
