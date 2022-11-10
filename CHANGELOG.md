@@ -2,6 +2,25 @@
 
 ## Unreleased
 
+## [0.14.0] (2022-11-10)
+Acton RTS now does garbage collection!
+
+### Added
+- The Acton RTS now does garbage collection [#1091]
+  - Using libgc a.k.a the Boehm-Demers-Weiser garbage collector
+  - The GC stops the world to perform garbage collection during which all Acton
+    RTS worker threads are paused. It is likely this will be visible as pauses
+    of the whole system.
+  - Performance appears to be largely on par with and without GC but this is
+    based on small artificial programs.
+  - It is possible to disable the GC at run time by setting the environment
+    variable `export GC_DONT_GC=1` before starting the Acton application
+    - This will be removed in the future when the GC has been field proven.
+  - Long term is to implement an Acton specific GC that can, for example, avoid
+    stop the world events by doing collection per actor. This is quite far into
+    the future. Until then, this will have to do!
+
+
 ## [0.13.1] (2022-11-10)
 
 ### Changed
@@ -1580,10 +1599,28 @@ then, this second incarnation has been in focus and 0.2.0 was its first version.
 [#972]: https://github.com/actonlang/acton/issues/972
 [#976]: https://github.com/actonlang/acton/pull/976
 [#984]: https://github.com/actonlang/acton/pull/984
+[#988]: https://github.com/actonlang/acton/pull/988
 [#1003]: https://github.com/actonlang/acton/issues/1003
+[#1020]: https://github.com/actonlang/acton/pull/1020
 [#1027]: https://github.com/actonlang/acton/issues/1027
 [#1029]: https://github.com/actonlang/acton/issues/1029
 [#1047]: https://github.com/actonlang/acton/issues/1047
+[#1050]: https://github.com/actonlang/acton/issues/1050
+[#1053]: https://github.com/actonlang/acton/pull/1053
+[#1054]: https://github.com/actonlang/acton/pull/1054
+[#1055]: https://github.com/actonlang/acton/pull/1055
+[#1056]: https://github.com/actonlang/acton/pull/1056
+[#1058]: https://github.com/actonlang/acton/pull/1058
+[#1060]: https://github.com/actonlang/acton/pull/1060
+[#1065]: https://github.com/actonlang/acton/pull/1065
+[#1068]: https://github.com/actonlang/acton/pull/1068
+[#1076]: https://github.com/actonlang/acton/pull/1076
+[#1087]: https://github.com/actonlang/acton/pull/1087
+[#1088]: https://github.com/actonlang/acton/pull/1088
+[#1089]: https://github.com/actonlang/acton/pull/1089
+[#1091]: https://github.com/actonlang/acton/issues/1091
+[#1093]: https://github.com/actonlang/acton/pull/1093
+[#1097]: https://github.com/actonlang/acton/pull/1097
 
 
 [0.3.0]: https://github.com/actonlang/acton/releases/tag/v0.3.0
@@ -1617,6 +1654,7 @@ then, this second incarnation has been in focus and 0.2.0 was its first version.
 [0.11.7]: https://github.com/actonlang/acton/compare/v0.11.6...v0.11.7
 [0.12.0]: https://github.com/actonlang/acton/compare/v0.11.7...v0.12.0
 [0.13.0]: https://github.com/actonlang/acton/compare/v0.12.0...v0.13.0
+[0.13.1]: https://github.com/actonlang/acton/compare/v0.13.0...v0.13.1
 
 [homebrew-acton#7]: https://github.com/actonlang/homebrew-acton/pull/7
 [homebrew-acton#28]: https://github.com/actonlang/homebrew-acton/pull/28
