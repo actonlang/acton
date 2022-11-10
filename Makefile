@@ -428,6 +428,7 @@ deps/instdir/lib/libxml2.a: deps/libxml2 $(ZIG)
 	mkdir -p $(dir $@)
 	cd $< \
 	&& git checkout $(LIBXML2_REF) \
+	&& sed -i -e 's/1.16.3/1.16.1/' configure.ac \
 	&& ./autogen.sh --without-python --without-iconv --without-zlib --without-lzma --prefix=$(TD)/deps/instdir --enable-static --disable-shared CFLAGS="$(CFLAGS_DEPS)" \
 	&& make -j && make install \
 	&& mv $(TD)/deps/instdir/include/libxml2/libxml $(TD)/deps/instdir/include/libxml
