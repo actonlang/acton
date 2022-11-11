@@ -74,20 +74,26 @@ main                     =  do arg <- C.parseCmdLine
                                case arg of
                                    C.VersionOpt opts       -> printVersion opts
                                    C.CmdOpt (C.New opts)   -> createProject (C.file opts)
-                                   C.CmdOpt (C.Build opts) -> buildProject $ defaultOpts {C.alwaysbuild = C.alwaysB opts, C.autostub = C.autostubB opts, C.dev = C.devB opts, C.root = C.rootB opts, C.quiet = C.quietB opts, C.timing = C.timingB opts}
+                                   C.CmdOpt (C.Build opts) -> buildProject $ defaultOpts {C.alwaysbuild = C.alwaysB opts, C.autostub = C.autostubB opts, C.dev = C.devB opts, C.root = C.rootB opts, C.quiet = C.quietB opts, C.timing = C.timingB opts, C.cc = C.ccB opts}
                                    C.CmdOpt (C.Cloud opts) -> undefined
                                    C.CmdOpt (C.Doc opts)   -> printDocs opts
                                    C.CompileOpt nms opts   -> compileFiles opts (catMaybes $ map filterActFile nms)
 
 defaultOpts   = C.CompileOptions False False False False False False False False False False False
-                                 False False False False False False False False False "" "" ""
+                                 False False False False False False False False False "" "" "" ""
 
 
 -- Auxiliary functions ---------------------------------------------------------------------------------------
 
-zig paths =
-    sysPath paths ++ "/zig/zig"
-cc paths = zig paths ++ " cc "
+zig :: Paths -> FilePath
+zig paths = sysPath paths ++ "/zig/zig"
+
+cc :: Paths -> C.CompileOptions -> FilePath
+cc paths opts = if not (C.cc opts == "")
+             then C.cc opts
+             else zig paths ++ " cc " ++ ccTarget
+
+ar :: Paths -> FilePath
 ar paths = zig paths ++ " ar "
 
 dump h txt      = putStrLn ("\n\n#################################### " ++ h ++ ":\n" ++ txt)
@@ -645,7 +651,7 @@ runRestPasses opts paths env0 parsed stubMode = do
                               aFile = joinPath [projLib paths, "libActonProject.a"]
                               buildF = joinPath [projPath paths, "build.sh"]
                               wd = takeFileName (projPath paths)
-                              ccCmd = (cc paths ++ ccTarget ++
+                              ccCmd = (cc paths opts ++
                                        " -Werror=return-type " ++ pedantArg ++
                                        (if (C.dev opts) then " -g " else "") ++
                                        " -c " ++
@@ -728,7 +734,7 @@ buildExecutable env opts paths binTask
         binFile             = joinPath [binDir paths, (binName binTask)]
         srcbase             = srcFile paths mn
         pedantArg           = if (C.cpedantic opts) then "-Werror" else ""
-        ccCmd               = (cc paths ++ ccTarget ++
+        ccCmd               = (cc paths opts ++
                                pedantArg ++
                                (if (C.dev opts) then " -g " else " -O3 ") ++
                                " -isystem " ++ sysPath paths ++ "/include" ++
