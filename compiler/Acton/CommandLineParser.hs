@@ -49,7 +49,8 @@ data CompileOptions   = CompileOptions {
                          dev         :: Bool,
                          root        :: String,
                          tempdir     :: String,
-                         syspath     :: String
+                         syspath     :: String,
+                         cc          :: String
                      } deriving Show
 
 data BuildOptions = BuildOptions {
@@ -58,7 +59,8 @@ data BuildOptions = BuildOptions {
                          autostubB   :: Bool,
                          rootB       :: String,
                          quietB      :: Bool,
-                         timingB     :: Bool
+                         timingB     :: Bool,
+                         ccB         :: String
                      } deriving Show
                          
 
@@ -128,6 +130,7 @@ compileOptions = CompileOptions
         <*> strOption (long "root"      <> metavar "ROOTACTOR" <> value "" <> help "Set root actor")
         <*> strOption (long "tempdir"   <> metavar "TEMPDIR" <> value "" <> help "Set directory for build files")
         <*> strOption (long "syspath"   <> metavar "TARGETDIR" <>  value "" <> help "Set syspath")
+        <*> strOption (long "cc"        <> metavar "PATH" <>  value "" <> help "CC")
 
 buildCommand          = Build <$> (
     BuildOptions
@@ -137,6 +140,7 @@ buildCommand          = Build <$> (
         <*> strOption (long "root"      <> metavar "ROOTACTOR" <> value "" <> help "Set root actor")
         <*> switch (long "quiet"        <> help "Don't print stuff")
         <*> switch (long "timing"       <> help "Print timing information")
+        <*> strOption (long "cc"        <> metavar "PATH" <>  value "" <> help "CC")
     )
                  
 cloudCommand        = Cloud <$> (
