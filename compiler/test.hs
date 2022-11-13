@@ -151,7 +151,7 @@ stdlibTests =
   testGroup "stdlib"
   [
       testCase "time" $ do
-          epoch <- getCurrentTime >>= pure . (1000*) . utcTimeToPOSIXSeconds >>= pure . round
+          epoch <- getCurrentTime >>= pure . utcTimeToPOSIXSeconds >>= pure . round
           testBuildAndRun "" (show epoch) ExitSuccess False "../test/stdlib/test_time.act"
   ]
 

@@ -4,7 +4,7 @@ actor main(env):
     def check(ts):
         diff = ts - int(env.argv[1])
         print("diff:", diff)
-        if int(diff) > 5:
+        if abs(int(diff)) > 5:
             print("ERROR: diff seems too large, time.time*() should be roughly same as provided UNIX timestamp input")
             return 1
         else:
