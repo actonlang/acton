@@ -150,11 +150,6 @@ $int $Integral$int$__add__($Integral$int wit,  $int a, $int b) {
     return res;
 }
 
-$int $Integral$int$__iadd__($Integral$int wit,  $int a, $int b) {
-    zz_add(&a->val,&a->val,&b->val);
-    return a;
-}  
-
 $complex $Integral$int$__complx__($Integral$int wit, $int a) {
     fprintf(stderr,"Number.__complex__ not implemented for int");
     exit(1);
@@ -170,11 +165,6 @@ $int $Integral$int$__mul__($Integral$int wit,  $int a, $int b) {
     return res;
 }  
   
-$int $Integral$int$__imul__($Integral$int wit,  $int a, $int b) {
-    zz_mul(&a->val,&a->val,&b->val);
-    return a;
-}  
-
 $int $Integral$int$__pow__($Integral$int wit, $int a, $int b) {
     zz_ptr val_b = &b->val;
     if (zz_cmpi(val_b,0) < 0)
@@ -400,11 +390,6 @@ $int $Minus$int$__sub__($Minus$int wit,  $int a, $int b) {
     return res;
 }
 
-$int $Minus$int$__isub__($Minus$int wit,  $int a, $int b) {
-    zz_sub(&a->val,&a->val,&b->val);
-    return a;
-}  
-
 
 // $Div$int  ////////////////////////////////////////////////////////////////////////////////////////
 
@@ -562,9 +547,9 @@ struct $Integral$int$class $Integral$int$methods = {
     ($str (*)($Integral$int))$default__str__,
     ($str (*)($Integral$int))$default__str__,
     $Integral$int$__add__,
-    $Integral$int$__iadd__,
+    ($int (*)($Integral$int, $int, $int))$Plus$__iadd__,
     $Integral$int$__mul__,
-    $Integral$int$__imul__,
+    ($int (*)($Integral$int, $int, $int))$Times$__imul__,
     $Integral$int$__fromatom__,
     $Integral$int$__complx__,
     $Integral$int$__pow__,
@@ -631,8 +616,7 @@ struct $Minus$int$class $Minus$int$methods = {
     ($str (*)($Minus$int))$default__str__,
     ($str (*)($Minus$int))$default__str__,
     $Minus$int$__sub__,
-    ($int (*)($Minus$int, $int, $int))$Minus$__isub__,
-
+    ($int (*)($Minus$int, $int, $int))$Minus$__isub__
 };
 struct $Minus$int $Minus$int_instance = {&$Minus$int$methods, ($Integral)&$Integral$int_instance};
 $Minus$int $Minus$int$witness = &$Minus$int_instance;
