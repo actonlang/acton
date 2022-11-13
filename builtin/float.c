@@ -236,7 +236,7 @@ $bool $Ord$float$__gt__ ($Ord$float wit, $float a, $float b) {
 }
 
 $bool $Ord$float$__ge__ ($Ord$float wit, $float a, $float b) {
-    return to$bool(a->val == b->val);
+    return to$bool(a->val >= b->val);
 }
 
 
