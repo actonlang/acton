@@ -107,8 +107,10 @@ $bool $int_bool($int n) {
     return to$bool(zz_cmpi(&n->val,0));
 }
 
+char * $intconv(zz_ptr);
+
 $str $int_str($int n) {
-    return to$str(zz_get_str(&n->val));
+    return to$str($intconv(&n->val));
 }
   
 struct $int$class $int$methods = {
@@ -123,12 +125,14 @@ struct $int$class $int$methods = {
     $int_str
 };
 
-//$int zz$to$int(zz_ptr n) {
-//    $int res = $malloc$int();
-//    res->$class = &$int$methods;
-//    res->val = n;
-//    return res;
-//}
+$int zz$to$int(zz_ptr n) {
+    $int res = $malloc$int();
+    res->$class = &$int$methods;
+    res->val.n = n->n;
+    res->val.size = n->size;
+    res->val.alloc = n->alloc;
+    return res;
+}
 
 // $Integral$int /////////////////////////////////////////////////////////////////////////
 
@@ -701,3 +705,96 @@ $int to$int(long n) {
     return res;
 }
 
+// Conversion to strings /////////////////////////////////////////////////////////////////////////////
+
+struct $elem;
+typedef struct $elem *$elem;
+
+struct $elem {
+    char *str;
+    int len;
+    $elem next;
+};
+
+double CCCC = 2.0051640911794344e-2; // 6 - log2 (19 - log2 (log2(10)))
+
+
+$elem $intconv0(bool ishead, zz_ptr n, zz_ptr dens[], int d, $elem next) {
+    if (d >= 0) {
+        zz_ptr hi = malloc(sizeof(zz_struct));
+        zz_ptr lo = malloc(sizeof(zz_struct));
+        zz_init_fit(hi,dens[d]->size);
+        zz_init_fit(lo,dens[d]->size);
+        zz_divrem(hi, lo, n, dens[d]);
+        //        printf("hi: %s, dens[d]: %s, d: %d\n", zz_get_str(hi),zz_get_str(dens[d]), d);
+        //        printf("lo: %s, dens[d]: %s, d: %d\n", zz_get_str(lo),zz_get_str(dens[d]), d);           
+        if (hi->size==0 && ishead) {
+            return $intconv0(ishead, lo, dens, d-1, next);
+        } else {
+            $elem ello = $intconv0(false, lo, dens, d-1, next);            
+            $elem elhi = $intconv0(ishead, hi, dens, d-1, ello);        
+            return elhi;
+        }
+    } else {
+        $elem el = malloc(sizeof(struct $elem));
+        asprintf(&el->str,"%lu",(unsigned long)n->n[0]);
+        el->next = next;
+        el->len = strlen(el->str);
+        return el;
+    }
+}
+        
+
+char * $intconv(zz_ptr nval) {
+    if (nval->size == 0)
+        return "0";
+    long nlen = BSDNT_ABS(nval->size);
+    zz_ptr npos = malloc(sizeof(zz_struct));
+    zz_init_fit(npos,nlen);
+    nn_copy(npos->n, nval->n, nlen);
+    npos->size = nlen;
+    int is_neg_n = nval->size < 0;
+    int d;
+    zz_ptr *dens;
+    if (nlen == 1) {
+        d = 0;
+        dens = NULL;
+    } else {
+        d = ceil(log2((double)nlen) + CCCC);  //number of squarings
+        dens = malloc(d * sizeof($WORD));
+        dens[0] = malloc(sizeof(zz_struct));
+        zz_init_fit(dens[0], 1);
+        zz_seti(dens[0], 1000000000000000000UL);  //10^18; cannot set to 10^19 because snd arg is signed
+        zz_muli(dens[0], dens[0], 10);
+        for (int i=1; i < d; i++) {
+            dens[i] = malloc(sizeof(zz_struct));
+            zz_init_fit(dens[i], i+1);
+            zz_mul(dens[i], dens[i-1], dens[i-1]);
+        }
+    }
+    $elem digs = $intconv0(true, npos, dens, d-1, NULL);
+    int elems = 1;
+    $elem nxt = digs;
+    while (nxt->next) {
+        nxt = nxt->next;
+        elems++;
+    }
+    int strlen = is_neg_n + digs->len + 19*(elems-1);
+    char *res = malloc(strlen+1);
+    memset(res,'0', strlen);
+    res[strlen] = '\0';
+    int pos = 0;
+    if (is_neg_n) {
+        res[0] = '-';
+        pos++;
+    }
+    memcpy(&res[pos], digs->str, digs->len);
+    pos += digs->len;
+    digs = digs->next;
+    while (digs) {
+        memcpy(&res[pos + 19 - digs->len],digs->str,digs->len);
+        digs = digs->next;
+        pos += 19;
+    }
+    return res;
+}
