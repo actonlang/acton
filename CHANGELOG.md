@@ -2,6 +2,22 @@
 
 ## Unreleased
 
+
+## [0.14.1] (2022-11-14)
+
+### Added
+- `actonc --cc` to specify which C compiler to use to compile a module and
+  binary executables [#1103]
+  - Note that the Acton system is still compiled by `zig cc`. On Linux we are
+    targeting GNU libc 2.28, which might affect compilation of individual
+    modules or executables.
+
+### Fixed
+- `float.__ge__` is now working correctly [#1105]
+- Removed incremental operations from integers [#1106]
+- Improved `int` to `str` conversion [#1107]
+
+
 ## [0.14.0] (2022-11-10)
 Acton RTS now does garbage collection!
 
