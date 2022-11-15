@@ -152,7 +152,7 @@ jobs:
       - name: "Install build prerequisites"
         run: |
           apt-get update
-          apt-get install -qy automake autopoint bison bzip2 curl git gcc haskell-stack libtool make pkg-config procps python3
+          apt-get install -qy automake autopoint bison bzip2 curl git haskell-stack libtool make pkg-config procps python3
           apt-get install -qy libprotobuf-c-dev zlib1g-dev
           apt-get install -qy bash-completion build-essential debhelper devscripts
       - name: "Build Debian packages"
