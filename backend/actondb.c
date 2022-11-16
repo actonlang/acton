@@ -2784,11 +2784,14 @@ int main(int argc, char **argv) {
 
         int status = select(max_fd + 1, &readfds, NULL, NULL, NULL); // &timeout
 
-        if ((status < 0) && (errno != EINTR) && (errno != EBADF))
+        if (status < 0)
         {
-            log_debug("select error %d/%d!", status, errno);
-
-            assert(0);
+            if ((errno != EINTR) && (errno != EBADF))
+            {
+                log_error("select error, errno: %d", errno);
+                assert(0); // EINVAL, ENOMEM
+            }
+            continue;
         }
 
         if(verbosity > 3)
