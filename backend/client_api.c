@@ -414,7 +414,11 @@ void * comm_thread_loop(void * args)
                 if(skip_parsing)
                     continue;
 
-                assert(announced_msg_len == msg_len);
+                if(announced_msg_len != msg_len)
+                {
+                    log_info("2: announced_msg_len=%d, msg_len=%d, read_buf_offset=%d", announced_msg_len, msg_len, read_buf_offset);
+                    assert(0);
+                }
 
                 read_buf_offset = 0; // Reset
 
@@ -2524,7 +2528,11 @@ int remote_consume_queue_in_txn(WORD consumer_id, WORD shard_id, WORD app_id, WO
 
     for(int i=0;i<mc->no_replies;i++)
     {
-        assert(mc->reply_types[i] == RPC_TYPE_ACK);
+        if(mc->reply_types[i] != RPC_TYPE_ACK)
+        {
+            log_error("Received unexpected reply type: %d", mc->reply_types[i]);
+            assert(0);
+        }
         ack_message * ack = (ack_message *) mc->replies[i];
         if(ack->status == 0)
             ok_status++;
@@ -3086,7 +3094,11 @@ int _remote_persist_txn(uuid_t * txnid, vector_clock * version, remote_server * 
 
     for(int i=0;i<mc->no_replies;i++)
     {
-        assert(mc->reply_types[i] == RPC_TYPE_ACK);
+        if(mc->reply_types[i] != RPC_TYPE_ACK)
+        {
+            log_error("Received unexpected reply type: %d", mc->reply_types[i]);
+            assert(0);
+        }
         ack_message * ack = (ack_message *) mc->replies[i];
         if(ack->status == 0)
             ok_status++;
