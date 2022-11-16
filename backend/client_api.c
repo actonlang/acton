@@ -329,9 +329,13 @@ void * comm_thread_loop(void * args)
 
         int status = select(max_fd + 1 , &(db->readfds) , NULL , NULL , &timeout);
 
-        if (status < 0) {
-            if (errno != EINTR)
+        if (status < 0)
+        {
+            if (errno != EINTR && errno != EBADF)
+            {
                 log_error("select error, errno: %d", errno);
+                assert(0); // EINVAL, ENOMEM
+            }
             continue;
         }
 
