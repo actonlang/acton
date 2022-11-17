@@ -289,7 +289,7 @@ clean-deps:
 	rm -rf deps/instdir lib/libActonDeps.a
 
 clean-deps-rm:
-	rm -rf $(DEPS_DIRS) deps/zig-*.tar*
+	rm -rf $(DEPS_DIRS) deps/libgc deps/zig-*.tar*
 
 # /deps/libargp --------------------------------------------
 LIBARGP_REF=1.5.0
@@ -361,7 +361,7 @@ deps/instdir/lib/libbsd.a: deps/libbsd deps/instdir/lib/libmd.a $(ZIG)
 	&& make -j && make install
 
 # /deps/libgc --------------------------------------------
-LIBGC_REF=54522af853de28f45195044dadfd795c4e5942aa
+LIBGC_REF=daea2f19089c32f38de916b8949fde42d73daf6f
 deps/libgc:
 	ls $@ >/dev/null 2>&1 || git clone https://github.com/ivmai/bdwgc.git $@
 
@@ -369,8 +369,6 @@ deps/instdir/lib/libgc.a: deps/libgc $(ZIG)
 	mkdir -p $(dir $@)
 	cd $< \
 	&& git checkout $(LIBGC_REF) \
-	&& sed -i -e '/REDIRECT_MALLOC with THREADS works at most on Linux/d' include/private/gcconfig.h \
-	&& sed -i -e 's/^CC=/CC?=/' Makefile.direct \
 	&& unset CFLAGS \
 	&& export CFLAGS_EXTRA="-DGC_BUILTIN_ATOMIC -DGC_THREADS -DNO_PROC_FOR_LIBRARIES -DREDIRECT_MALLOC=GC_malloc -DIGNORE_FREE -DGC_ASSERTIONS $(CFLAGS_DEPS)" \
 	&& make -f Makefile.direct -j base_lib \
