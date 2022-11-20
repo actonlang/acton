@@ -24,6 +24,9 @@
 
 // General methods ///////////////////////////////////////////////////////////////////////
 
+int $set$str(zz_ptr a, char *str);
+char *$get$str(zz_ptr n);
+
 $int $malloc$int() {
     $int res = malloc(sizeof(struct $int));
     res->$class = &$int$methods;
@@ -57,11 +60,11 @@ $int $int$new($atom a) {
     if ($ISINSTANCE(a,$str)->val) {
         $int res = $malloc$int();
         res->$class = &$int$methods;
-        int digits = zz_set_str(&(res->val),(char *)(($str)a)->str);
+        int digits = $set$str(&res->val, (char *)(($str)a)->str);
         if (digits>0)
             return res;
         else 
-            $RAISE(($BaseException)$NEW($ValueError,to$str("int(): invalid str value for type int")));
+            $RAISE(($BaseException)$NEW($ValueError,to$str("int(): string arg has no digit in prefix")));
     }
     fprintf(stderr,"internal error: $int$new: argument not of atomic type\n");
     exit(-1);
@@ -107,10 +110,8 @@ $bool $int_bool($int n) {
     return to$bool(zz_cmpi(&n->val,0));
 }
 
-char * $intconv(zz_ptr);
-
 $str $int_str($int n) {
-    return to$str($intconv(&n->val));
+    return to$str($get$str(&n->val));
 }
   
 struct $int$class $int$methods = {
@@ -707,45 +708,40 @@ $int to$int(long n) {
 
 // Conversion to strings /////////////////////////////////////////////////////////////////////////////
 
-struct $elem;
-typedef struct $elem *$elem;
+// These three constants must be changed for a 32 bit machine
 
-struct $elem {
-    char *str;
-    int len;
-    $elem next;
-};
+int POW10INWORD = 18; // Largest power of 10 that fits in a signed long 
+double CCCC = 9.805415291306852e-2;  // log2(WORD_BITS) - log2 (POW10INWORD) - log2 (log2(10))
+char * fstr =  "%18lu";
 
-double CCCC = 2.0051640911794344e-2; // 6 - log2 (19 - log2 (log2(10)))
-
-
-$elem $intconv0(bool ishead, zz_ptr n, zz_ptr dens[], int d, $elem next) {
+int $get$str0(bool ishead, zz_ptr n, zz_ptr dens[], int d, char *res, int pos) {
     if (d >= 0) {
         zz_ptr hi = malloc(sizeof(zz_struct));
         zz_ptr lo = malloc(sizeof(zz_struct));
         zz_init_fit(hi,dens[d]->size);
         zz_init_fit(lo,dens[d]->size);
         zz_divrem(hi, lo, n, dens[d]);
-        //        printf("hi: %s, dens[d]: %s, d: %d\n", zz_get_str(hi),zz_get_str(dens[d]), d);
-        //        printf("lo: %s, dens[d]: %s, d: %d\n", zz_get_str(lo),zz_get_str(dens[d]), d);           
         if (hi->size==0 && ishead) {
-            return $intconv0(ishead, lo, dens, d-1, next);
+            return $get$str0(ishead, lo, dens, d-1, res, pos);
         } else {
-            $elem ello = $intconv0(false, lo, dens, d-1, next);            
-            $elem elhi = $intconv0(ishead, hi, dens, d-1, ello);        
-            return elhi;
+            int newpos = $get$str0(ishead, hi, dens, d-1, res, pos);        
+            return $get$str0(false, lo, dens, d-1, res, newpos);          
         }
     } else {
-        $elem el = malloc(sizeof(struct $elem));
-        asprintf(&el->str,"%lu",(unsigned long)n->n[0]);
-        el->next = next;
-        el->len = strlen(el->str);
-        return el;
+        char *buf = malloc(POW10INWORD);
+        asprintf(&buf,"%lu",(unsigned long)n->n[0]);
+        int len = strlen(buf);
+        if (ishead) {
+            memcpy(&res[pos], buf, len);
+            return pos + len;
+        } else {
+            memcpy(&res[pos + POW10INWORD - len], buf, len);
+            return pos + POW10INWORD;
+        }
     }
 }
-        
 
-char * $intconv(zz_ptr nval) {
+char * $get$str(zz_ptr nval) {
     if (nval->size == 0)
         return "0";
     long nlen = BSDNT_ABS(nval->size);
@@ -761,40 +757,85 @@ char * $intconv(zz_ptr nval) {
         dens = NULL;
     } else {
         d = ceil(log2((double)nlen) + CCCC);  //number of squarings
-        dens = malloc(d * sizeof($WORD));
+        dens = malloc(d * sizeof(zz_ptr));
         dens[0] = malloc(sizeof(zz_struct));
         zz_init_fit(dens[0], 1);
-        zz_seti(dens[0], 1000000000000000000UL);  //10^18; cannot set to 10^19 because snd arg is signed
-        zz_muli(dens[0], dens[0], 10);
+        zz_seti(dens[0], 10); 
+        zz_powi(dens[0], dens[0], POW10INWORD);
         for (int i=1; i < d; i++) {
             dens[i] = malloc(sizeof(zz_struct));
-            zz_init_fit(dens[i], i+1);
+            zz_init_fit(dens[i], 2 * dens[i-1]->size);
             zz_mul(dens[i], dens[i-1], dens[i-1]);
         }
     }
-    $elem digs = $intconv0(true, npos, dens, d-1, NULL);
-    int elems = 1;
-    $elem nxt = digs;
-    while (nxt->next) {
-        nxt = nxt->next;
-        elems++;
-    }
-    int strlen = is_neg_n + digs->len + 19*(elems-1);
-    char *res = malloc(strlen+1);
+    // strlen is for most n one more than necessary; this is a precaution for values of n
+    // where the ... in ceil(...) is very close to an integer. So we often waste one byte.
+    int strlen = ceil(log10((float)npos->n[nlen - 1]) + (nlen - 1) * WORD_BITS * log10(2) + is_neg_n) + 2;
+    char *res = malloc(strlen);    
     memset(res,'0', strlen);
-    res[strlen] = '\0';
     int pos = 0;
     if (is_neg_n) {
         res[0] = '-';
         pos++;
     }
-    memcpy(&res[pos], digs->str, digs->len);
-    pos += digs->len;
-    digs = digs->next;
-    while (digs) {
-        memcpy(&res[pos + 19 - digs->len],digs->str,digs->len);
-        digs = digs->next;
-        pos += 19;
-    }
+    int newpos = $get$str0(true, npos, dens, d-1, res, pos);
+    res[newpos] = '\0';
     return res;
+}
+
+int $set$str0(zz_ptr a, char *nstr, int parts) {
+    // assert(parts > 0);
+    if (parts == 1) {
+        unsigned long val;
+        sscanf(nstr, fstr, &val); 
+        zz_seti(a, val);
+        return POW10INWORD;
+    } else {
+        int hi = parts/2;
+        int lo = parts - hi;
+        zz_ptr hires = malloc(sizeof(zz_struct));
+        zz_ptr lores = malloc(sizeof(zz_struct));
+        zz_init(hires);
+        zz_init(lores);
+        int hidigs = $set$str0(hires, nstr, hi);
+        int lodigs = $set$str0(lores, &nstr[hi * POW10INWORD], lo);
+        zz_seti(a, 10);
+        zz_powi(a, a, POW10INWORD * lo);
+        zz_mul(a, a, hires);
+        zz_add(a, a, lores);
+        return hidigs + lodigs;
+    }
+}
+
+int $set$str(zz_ptr a, char *nstr) {
+    int len = 0;
+    while (isdigit(nstr[len]))
+        len++;
+    if (len == 0) {
+        $RAISE(($BaseException)$NEW($ValueError,to$str("int.__fromatom__: no digits in string prefix")));
+    }
+    int parts = len / POW10INWORD;
+    int offset =  len % POW10INWORD;
+    if (offset == 0)
+        return $set$str0(a, nstr, parts);
+    else {
+        zz_ptr res0 = malloc(sizeof(zz_struct));
+        zz_init(res0);
+        char *buf = malloc(offset+1);
+        memcpy(buf, nstr, offset);
+        buf[offset] = '\0';
+        unsigned long headval;
+        int partdigits = 0;
+        sscanf(buf, "%lu", &headval);
+        if (parts > 0) {
+            partdigits = $set$str0(res0, &nstr[offset], parts);
+            zz_seti(a, 10);
+            zz_powi(a, a, POW10INWORD * parts);
+            zz_muli(a, a, headval);
+            zz_add(a, a, res0);
+        } else {
+            zz_seti(a, headval);
+        }
+        return offset + partdigits;
+    } 
 }
