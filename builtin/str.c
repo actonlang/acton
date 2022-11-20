@@ -1374,6 +1374,7 @@ $list $str_split($str s, $str sep, $int maxsplit) {
         if (remaining==0) {
             return res;
         }
+        wordlength = 0;
         int inword = 0;
         unsigned char *q;
         while (remaining > 0) {
@@ -1394,6 +1395,7 @@ $list $str_split($str s, $str sep, $int maxsplit) {
                     NEW_UNFILLED_STR(word,wordlength,p-q);
                     memcpy(word->str,q,p-q);
                     $list_append(res,word);
+                    wordlength = 0;
                 }
             }
             remaining--;
@@ -1449,6 +1451,7 @@ $list $str_splitlines($str s, $bool keepends) {
     if (s->nbytes==0) {
         return res;
     }
+    linelength = 0;
     while (p < s->str + s->nbytes) {
         nbytes = utf8proc_iterate(p,-1,&codepoint);
         utf8proc_category_t cat = utf8proc_category(codepoint);
@@ -1465,6 +1468,7 @@ $list $str_splitlines($str s, $bool keepends) {
             p += 1 + winend;
             q = p;
             $list_append(res,line);
+            linelength = 0;
         }
     }
     if (q < p) {
