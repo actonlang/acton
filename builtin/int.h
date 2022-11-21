@@ -47,4 +47,6 @@ $int to$int(long n);
  
 $int $int$new($atom a);
 
+$int $gcd($int, $int);
+$tuple $xgcd($int, $int);
 

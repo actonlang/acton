@@ -839,3 +839,20 @@ int $set$str(zz_ptr a, char *nstr) {
         return offset + partdigits;
     } 
 }
+
+
+// gcd functions from BSDNT //////////////////////////////////
+$int $gcd($int a, $int b) {
+    $int res = $malloc$int();
+    zz_gcd(&res->val, &a->val, &b->val);
+    return res;
+}
+
+$tuple $xgcd($int a, $int b) {
+    $int d = $malloc$int();
+    $int s = $malloc$int();
+    $int t = $malloc$int();
+    zz_xgcd(&d->val, &s->val, &t->val, &a->val, &b->val);
+    return $NEWTUPLE(3, d, s, t);
+}
+    
