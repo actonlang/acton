@@ -787,6 +787,12 @@ def sum [A(Plus)] (iter: Iterable[A], start: ?A) -> A:
 def zip (a: Iterable[A], b: Iterable[B]) -> Iterator[(A,B)]:
     NotImplemented
 
+def gcd(a : int, b : int) -> int:
+    NotImplemented
+
+def xgcd(a : int, b : int) -> (int, int, int):
+    NotImplemented
+
 ## Environment ################################################
 
 class WorldAuth():
