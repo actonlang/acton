@@ -33,7 +33,8 @@ class int (atom):
       NotImplemented
 
 class i64 (atom):
-  __init__ : (atom) -> None
+  def __init__(self, val: atom) -> None:
+      NotImplemented 
 
 class float (atom):
   def __init__(self, val: atom) -> None:
