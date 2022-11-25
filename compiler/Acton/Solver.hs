@@ -103,7 +103,7 @@ solve env select te tt eq cs                = do (cs',eq') <- solveGroups env se
                                                  return (cs', eq'++eq)
 
 solveGroups env select te tt []             = return ([], [])
-solveGroups env select te tt (cs:css)       = do --traceM ("\n\n######### solveGroup " ++ prstrs cs)
+solveGroups env select te tt (cs:css)       = do --traceM ("\n\n######### solveGroup\n" ++ render (nest 4 $ vcat $ map pretty cs))
                                                  (cs1,eq1) <- solve' env select [] te tt [] cs `catchError` \err -> Control.Exception.throw err
                                                  env <- msubst env
                                                  (cs2,eq2) <- solveGroups env select te tt css
@@ -140,8 +140,8 @@ solve' env select hist te tt eq cs
         group []                            = []
         group (r:rs)                        = (r : rs1) : group rs2
           where (rs1,rs2)                   = partition (==r) rs
-        rnks                                = map (rank env) solve_cs -- \\ [RSkip]
-        tryAlts st t0 []                    = --trace ("### Out of alternatives for " ++ prstr t0) $
+        rnks                                = map (rank env) solve_cs
+        tryAlts st t0 []                    = --trace ("### FAIL " ++ prstr t0) $
                                               noSolve cs
         tryAlts st t0 (t:ts)                = tryAlt t0 t `catchError` const ({-traceM ("### ROLLBACK " ++ prstr t0) >> -}rollbackState st >> tryAlts st t0 ts)
         tryAlt t0 (TCon _ c)
@@ -178,9 +178,9 @@ solve' env select hist te tt eq cs
         (posvs, negvs)                      = polvars te `polcat` polvars tt
 
         deco (RSealed t)                    = (0, 0, 0, 0)
-        deco (RTry (TVar _ v) as r)         = (1, length $ filter (==v) embvs, length $ filter (==v) univs, length as)
-        deco (RTry t as r)                  = (2, 0, 0, length as)
-        deco (RUni t as)                    = (3, 0, 0, length as)
+        deco (RTry (TVar _ v) as r)         = (1, length $ filter (==v) embvs, length as, length $ filter (==v) univs)
+        deco (RTry t as r)                  = (2, 0, length as, 0)
+        deco (RUni t as)                    = (3, 0, length as, 0)
         deco (ROvl t)                       = (4, 0, 0, 0)
         deco (RSkip)                        = (5, 0, 0, 0)
 
@@ -896,7 +896,7 @@ mkLUB env (v,ts)
 improve                                 :: (Polarity a, Pretty a) => Env -> TEnv -> a -> Equations -> Constraints -> TypeM (Constraints,Equations)
 improve env te tt eq []                 = return ([], eq)
 improve env te tt eq cs
-  | Nothing <- info                     = do --traceM ("  *Resubmit")
+  | Nothing <- info                     = do --traceM ("  *Resubmit " ++ show (length cs))
                                              simplify' env te tt eq cs
   | Left (v,vs) <- closure              = do --traceM ("  *Unify cycle " ++ prstr v ++ " = " ++ prstrs vs)
                                              sequence [ unify (tVar v) (tVar v') | v' <- vs ]
@@ -933,7 +933,7 @@ improve env te tt eq cs
                                              simplify' env te tt (eq'++eq) cs'
   | not $ null redSeal                  = do --traceM ("  *removing redundant Seal constraints on: " ++ prstrs redSeal)
                                              return (cs \\ map (Seal . tVar) redSeal, eq)
-  | otherwise                           = do --traceM ("  *improvement done")
+  | otherwise                           = do --traceM ("  *improvement done " ++ show (length cs))
                                              return (cs, eq)
   where info                            = varinfo cs
         Just vi                         = info
