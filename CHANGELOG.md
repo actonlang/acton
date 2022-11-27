@@ -2,6 +2,32 @@
 
 ## Unreleased
 
+## [0.14.2] (2022-11-27)
+
+### Fixed
+- Improve `actonc` performance [#1119]
+  - The constraint solver can have a massive performance impact on the
+    compilation process, in particular if it has a very large amount of
+    solutions to evaluate.
+  - The number of alternative solutions had too little weight during constraint
+    sorting which would result in a very large amount of potential solutions to
+    evaluate. An example program took 31 minutes to compile, which after the fix
+    compiles in milliseconds.
+  - For a 100 constraints, with the wrong strategy we might need to evaluate
+    5^100 solutions (heat death of universe etc) whereas if we do things
+    correctly we can solve all constraints in perhaps 100*3 tries. Exponential
+    is exponential.
+- Fixed size `i64` integer type is now instantiable [#1118]
+- Improved str to int conversion [#1115]
+- Corrected str `.split` and `.splitlines()`
+- Correct DB server & client comm loop select handling [#1111]
+  - Ignores EBADF and have ensured this design is correct with regards to timing
+    of invalid fds.
+- Drop explicit `gcc` dependency for Debian package [#1110]
+  - Haskell GHC still depends on it though, so it still gets installed.
+- Use slightly newer bsdgc / libgc version [#1112]
+  - Slight build simplification as we've upstreamed some modifications.
+
 
 ## [0.14.1] (2022-11-14)
 
