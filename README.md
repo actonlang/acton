@@ -27,17 +27,25 @@ recovered by restoring actor state. Your system can run forever!
 NOTE: Acton is in an experimental phase and although much of the syntax has been
 worked out, there may be changes.
 
-NOTE: The RTS currently does not have a garbage collector, severely limiting it
-for long running tasks. However, for smaller shorter lived processes, it can
-work fairly well.
-
 
 # Getting started with Acton
 
+## Install Acton
 
-## Install acton
+Check out the [installation guide](https://www.acton-lang.org/install) for more details.
 
-Check out the [installation guide](https://www.acton-lang.org/install)
+### Debian / Ubuntu
+```sh
+wget -q -O - https://apt.acton-lang.io/acton.gpg | sudo apt-key add -
+echo "deb [arch=amd64] http://apt.acton-lang.io/ bullseye main" | sudo tee /etc/apt/sources.list.d/acton.list
+sudo apt-get update
+sudo apt-get install -qy acton
+```
+
+### Mac OS X
+```sh
+brew install actonlang/acton/acton
+```
 
 ## Writing and compiling your first Acton program
 
