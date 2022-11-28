@@ -384,6 +384,14 @@ instance Gen QName where
 instance Gen Name where
     gen env nm                      = text $ unCkeyword $ mkCident $ nstr nm
 
+genTopName env n                    = gen env (gname env n)
+
+genQName env (NoQ n)
+  | n `elem` global env             = genTopName env n
+  | isAlias n env                   = genTopName env n
+genQName env n                      = gen env n
+
+gname env n                         = unalias env (NoQ n)
 
 mkCident "complex"                  = "complx"
 mkCident "__complex__"              = "__complx__"
@@ -412,10 +420,6 @@ unCkeyword str
                                       ]
 
 preEscape str                       = "_$" ++ str
-
-genTopName env n                    = gen env (gname env n)
-
-gname env n                         = unalias env (NoQ n)
 
 word                                = text "$WORD"
 
@@ -649,8 +653,6 @@ adjust TNone{} t' e                 = e
 adjust t t'@TVar{} e                = e
 adjust (TCon _ c) (TCon _ c') e
   | tcname c == tcname c'           = e
---adjust TFun{} _ e                   = e
---adjust _ TFun{} e                   = e
 adjust t t' e                       = typecast t t' e
 
 genExp env t' e                     = gen env (adjust t t' e')
@@ -660,12 +662,9 @@ genExp' env e                       = gen env e'
   where (t, e')                     = qType env adjust e
 
 instance Gen Expr where
-    gen env (Var _ (NoQ n))
-      | n `elem` global env         = genTopName env n
-      | isAlias n env               = genTopName env n
     gen env (Var _ n)
       | NClass{} <- findQName n env = newcon' env n
-      | otherwise                   = gen env n
+      | otherwise                   = genQName env n
     gen env (Int _ i str)           = gen env primToStr <> parens (text "\"" <> text (show i) <> text "\"")
     gen env (Float _ _ str)         = gen env primToFloat <> parens (text str)
     gen env (Bool _ True)           = gen env primTrue
@@ -676,7 +675,7 @@ instance Gen Expr where
     gen env (Call _ e p _)          = genCall env [] e p
     gen env (Async _ e)             = gen env e
     gen env (TApp _ e ts)           = genInst env ts e
-    gen env (IsInstance _ e c)      = gen env primISINSTANCE <> parens (gen env e <> comma <+> gen env (eQVar c))
+    gen env (IsInstance _ e c)      = gen env primISINSTANCE <> parens (gen env e <> comma <+> genQName env c)
     gen env (Dot _ e n)             = genDot env [] e n
     gen env (DotI _ e i)            = gen env e <> text "->" <> gen env componentsKW <> brackets (pretty i)
     gen env (RestI _ e i)           = gen env eNone <> semi <+> text "// CodeGen for tuple tail not implemented"
