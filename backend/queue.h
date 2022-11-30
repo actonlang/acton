@@ -4,10 +4,13 @@
  *      Author: aagapi
  */
 
-#include "db.h"
-
 #ifndef BACKEND_QUEUE_H_
 #define BACKEND_QUEUE_H_
+
+#include "db.h"
+#include "queue_callback.h"
+#include "consumer_state.h"
+#include "queue_groups.h"
 
 #define DB_ERR_NO_TABLE -1
 #define DB_ERR_NO_QUEUE -2
@@ -16,12 +19,14 @@
 #define DB_ERR_QUEUE_HEAD_INVALID -5
 #define DB_ERR_DUPLICATE_QUEUE -6
 #define DB_ERR_DUPLICATE_CONSUMER -7
+#define DB_ERR_NO_GROUP -8
 
 #define QUEUE_STATUS_READ_INCOMPLETE 0
 #define QUEUE_STATUS_READ_COMPLETE 1
 
 #define QUEUE_NOTIF_ENQUEUED 0
 #define QUEUE_NOTIF_DELETED 1
+#define GROUP_NOTIF_ENQUEUED 2
 
 int enqueue(WORD * column_values, int no_cols, size_t last_blob_size, WORD table_key, WORD queue_id, short use_lock, db_t * db, unsigned int * fastrandstate);
 int read_queue(WORD consumer_id, WORD shard_id, WORD app_id, WORD table_key, WORD queue_id,
@@ -41,10 +46,12 @@ int consume_queue(WORD consumer_id, WORD shard_id, WORD app_id, WORD table_key, 
 int subscribe_queue(WORD consumer_id, WORD shard_id, WORD app_id, WORD table_key, WORD queue_id,
 						queue_callback * callback, int64_t * prev_read_head, int64_t * prev_consume_head,
 						short use_lock, db_t * db, unsigned int * fastrandstate);
-int register_remote_subscribe_queue(WORD consumer_id, WORD shard_id, WORD app_id, WORD table_key, WORD queue_id,
+int register_remote_subscribe_queue(WORD consumer_id, WORD shard_id, WORD app_id, WORD table_key, WORD queue_id, WORD group_id,
 					int * sockfd, int64_t * prev_read_head, int64_t * prev_consume_head,
 					short use_lock, db_t * db, unsigned int * fastrandstate);
-int unsubscribe_queue(WORD consumer_id, WORD shard_id, WORD app_id, WORD table_key, WORD queue_id,
+int register_remote_unsubscribe_queue(WORD consumer_id, WORD shard_id, WORD app_id, WORD table_key, WORD queue_id, WORD group_id,
+										short use_lock, db_t * db);
+int unsubscribe_queue(WORD consumer_id, WORD shard_id, WORD app_id, WORD table_key, WORD queue_id, WORD group_id,
 						short use_lock, db_t * db);
 int create_queue(WORD table_key, WORD queue_id, vector_clock * version, short use_lock,
 					db_t * db, unsigned int * fastrandstate);
@@ -55,5 +62,11 @@ int set_private_read_head(WORD consumer_id, WORD shard_id, WORD app_id, WORD tab
 							int64_t new_read_head, vector_clock * version, short use_lock, db_t * db);
 int set_private_consume_head(WORD consumer_id, WORD shard_id, WORD app_id, WORD table_key, WORD queue_id,
 							int64_t new_consume_head, vector_clock * version, db_t * db);
+
+consumer_state * get_consumer_state(WORD consumer_id, WORD shard_id, WORD app_id, WORD group_id, queue_callback* callback, int * sockfd);
+
+void free_consumer_state(consumer_state * cs);
+void free_consumer_state_sl(void * cs);
+void free_queue_table_state(WORD queue_table_state);
 
 #endif /* BACKEND_QUEUE_H_ */

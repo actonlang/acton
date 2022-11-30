@@ -22,10 +22,10 @@
 #include "log.h"
 #include "failure_detector/cells.h"
 #include "failure_detector/db_queries.h"
+
 #include <limits.h>
 #include <assert.h>
 #include <stdlib.h>
-
 #include <stdio.h>
 
 #define MIN(x, y) (((x)<(y))?(x):(y))
@@ -73,7 +73,7 @@ int create_queue_table(WORD table_id, int no_cols, int * col_types, db_t * db, u
 
 // Functions for handling remote notifications:
 
-int get_queue_notification_packet(WORD table_key, WORD queue_id, WORD app_id, WORD shard_id, WORD consumer_id,
+int get_queue_notification_packet(WORD table_key, WORD queue_id, WORD app_id, WORD shard_id, WORD consumer_id, WORD group_id,
 									int64_t new_no_entries, int status,
 									void ** snd_buf, unsigned * snd_msg_len)
 {
@@ -81,7 +81,7 @@ int get_queue_notification_packet(WORD table_key, WORD queue_id, WORD app_id, WO
 
 	copy_cell_address(&ca, (int64_t) table_key, (int64_t *) &queue_id, 1);
 
-	queue_query_message * m = init_queue_notification(&ca, NULL, 0, (int) app_id, (int) shard_id, (int) consumer_id, new_no_entries, status, NULL, -1);
+	queue_query_message * m = init_queue_notification(&ca, NULL, 0, (int) app_id, (int) shard_id, (int) consumer_id, (int) group_id, new_no_entries, status, NULL, -1);
 
 #if (VERBOSE_RPC > 0)
 	char print_buff[1024];
@@ -135,7 +135,8 @@ int notify_remote_queue_subscribers(WORD table_key, WORD queue_id, db_t * db)
 
 			void * snd_buf = NULL;
 			unsigned snd_msg_len = -1;
-			status = get_queue_notification_packet(table_key, queue_id, cs->app_id, cs->shard_id, cs->consumer_id,
+			status = get_queue_notification_packet(table_key, queue_id, cs->app_id, cs->shard_id,
+														cs->consumer_id, cs->group_id,
 														db_row->no_entries, 0,
 														&snd_buf, &snd_msg_len);
 			assert(status == 0);
@@ -160,6 +161,91 @@ int notify_remote_queue_subscribers(WORD table_key, WORD queue_id, db_t * db)
 	return status;
 }
 
+void notify_subscriber(consumer_state * cs, WORD table_key, WORD queue_id, db_row_t * db_row)
+{
+	int status = 0, ret = 0;
+
+	if(cs->notified > 0) // Skip already notified subscribers (whether local or remote)
+	{
+// #if (VERBOSITY > 0)
+//        log_debug("BACKEND: Skipping notifying subscriber %" PRId64 " for queue %d because it was already notified", (int64_t) cs->consumer_id);
+// #endif
+		return;
+	}
+
+	if(cs->callback != NULL) // Local subscriber
+	{
+		assert(cs->sockfd == NULL);
+
+		queue_callback_args * qca = get_queue_callback_args(table_key, queue_id, cs->app_id, cs->shard_id, cs->consumer_id, cs->group_id, QUEUE_NOTIF_ENQUEUED);
+
+#if (VERBOSITY > 0)
+		log_debug("BACKEND: Attempting to notify local subscriber %" PRId64 " (%p/%p/%p/%p)", (int64_t) qca->consumer_id, cs->callback, cs->callback->lock, cs->callback->signal, cs->callback->callback);
+#endif
+
+		ret = pthread_mutex_lock(cs->callback->lock);
+
+#if (LOCK_VERBOSITY > 0)
+		log_debug("BACKEND: Locked consumer lock of %" PRId64 " (%p/%p), status=%d", (int64_t) qca->consumer_id, cs->callback, cs->callback->lock, ret);
+#endif
+
+		pthread_cond_signal(cs->callback->signal);
+		cs->callback->callback(qca);
+		ret = pthread_mutex_unlock(cs->callback->lock);
+
+#if (LOCK_VERBOSITY > 0)
+		log_debug("BACKEND: Unlocked consumer lock of %" PRId64 " (%p/%p), status=%d", (int64_t) qca->consumer_id, cs->callback, cs->callback->lock, ret);
+#endif
+	}
+	else // remote subscriber
+	{
+		assert(cs->sockfd != NULL);
+
+		if(*(cs->sockfd) == 0)
+		{
+#if (VERBOSITY > 0)
+			log_debug("SERVER: Skipping notifying disconnected remote subscriber %" PRId64 "", (int64_t) cs->consumer_id);
+#endif
+			return;
+		}
+
+		void * snd_buf = NULL;
+		unsigned snd_msg_len = -1;
+		status = get_queue_notification_packet(table_key, queue_id,
+												cs->app_id, cs->shard_id, cs->consumer_id, cs->group_id,
+												db_row->no_entries, 0,
+												&snd_buf, &snd_msg_len);
+		assert(status == 0);
+
+		int n = write(*(cs->sockfd), snd_buf, snd_msg_len);
+		if (n < 0)
+		{
+		      fprintf(stderr, "ERROR writing notification to socket!\n");
+		      return;
+		}
+
+		free(snd_buf);
+	}
+
+	cs->notified=1;
+
+#if (VERBOSITY > 0)
+	log_debug("BACKEND: Notified %s subscriber %" PRId64 "", (cs->callback != NULL)?"local":"remote", (int64_t) cs->consumer_id);
+#endif
+}
+
+void notify_subscribers(skiplist_t * subscriber_list, WORD table_key, WORD queue_id, db_row_t * db_row)
+{
+	for(snode_t * cell=HEAD(subscriber_list);cell!=NULL;cell=NEXT(cell))
+	{
+		if(cell->value != NULL)
+		{
+			consumer_state * cs = (consumer_state *) (cell->value);
+
+			notify_subscriber(cs, table_key, queue_id, db_row);
+		}
+	}
+}
 
 int enqueue(WORD * column_values, int no_cols, size_t last_blob_size, WORD table_key, WORD queue_id, short use_lock, db_t * db, unsigned int * fastrandstate)
 {
@@ -202,79 +288,103 @@ int enqueue(WORD * column_values, int no_cols, size_t last_blob_size, WORD table
 	log_debug("BACKEND: Inserted queue entry %" PRId64 " in queue %" PRId64 "/%" PRId64 ", status=%d", entry_id, (int64_t) table_key, (int64_t) queue_id, status);
 #endif
 
-	// Notify subscribers if they haven't been notified:
+	// Notify individual queue subscribers if they haven't been notified:
 
-	for(snode_t * cell=HEAD(db_row->consumer_state);cell!=NULL;cell=NEXT(cell))
+	notify_subscribers(db_row->consumer_state, table_key, queue_id, db_row);
+
+	// Similarly notify all group subscribers:
+
+	if(db_row->group_subscriptions != NULL)
 	{
-		if(cell->value != NULL)
+		if(db->queue_group_replication_factor > 1)
 		{
-			consumer_state * cs = (consumer_state *) (cell->value);
-
-			if(cs->notified > 0) // Skip already notified subscribers (whether local or remote)
-				continue;
-
-			if(cs->callback != NULL) // Local subscriber
+			for(snode_t * cell=HEAD((skiplist_t *) db_row->group_subscriptions);cell!=NULL;cell=NEXT(cell))
 			{
-				assert(cs->sockfd == NULL);
+				group_state * gs = (group_state *) (cell->value);
 
-				queue_callback_args * qca = get_queue_callback_args(table_key, queue_id, cs->app_id, cs->shard_id, cs->consumer_id, QUEUE_NOTIF_ENQUEUED);
-
-#if (VERBOSITY > 0)
-				log_debug("BACKEND: Attempting to notify local subscriber %" PRId64 " (%p/%p/%p/%p)", (int64_t) qca->consumer_id, cs->callback, cs->callback->lock, cs->callback->signal, cs->callback->callback);
-#endif
-
-				ret = pthread_mutex_lock(cs->callback->lock);
-
-#if (LOCK_VERBOSITY > 0)
-				log_debug("BACKEND: Locked consumer lock of %" PRId64 " (%p/%p), status=%d", (int64_t) qca->consumer_id, cs->callback, cs->callback->lock, ret);
-#endif
-
-				pthread_cond_signal(cs->callback->signal);
-				cs->callback->callback(qca);
-				ret = pthread_mutex_unlock(cs->callback->lock);
-
-#if (LOCK_VERBOSITY > 0)
-				log_debug("BACKEND: Unlocked consumer lock of %" PRId64 " (%p/%p), status=%d", (int64_t) qca->consumer_id, cs->callback, cs->callback->lock, ret);
-#endif
+				notify_subscribers(gs->consumers, table_key, queue_id, db_row);
 			}
-			else // remote subscriber
-			{
-				assert(cs->sockfd != NULL);
-
-				if(*(cs->sockfd) == 0)
-				{
-#if (VERBOSITY > 0)
-					log_debug("SERVER: Skipping notifying disconnected remote subscriber %" PRId64 "", (int64_t) cs->consumer_id);
-#endif
-					continue;
-				}
-
-				void * snd_buf = NULL;
-				unsigned snd_msg_len = -1;
-				status = get_queue_notification_packet(table_key, queue_id, cs->app_id, cs->shard_id, cs->consumer_id,
-															db_row->no_entries, 0,
-															&snd_buf, &snd_msg_len);
-				assert(status == 0);
-
-				int n = write(*(cs->sockfd), snd_buf, snd_msg_len);
-				if (n < 0)
-				{
-				      fprintf(stderr, "ERROR writing notification to socket!\n");
-				      continue;
-				}
-
-				free(snd_buf);
-			}
-
-			cs->notified=1;
+		}
+		else
+		{
+			notify_subscribers(((group_state *) db_row->group_subscriptions)->consumers, table_key, queue_id, db_row);
 
 #if (VERBOSITY > 0)
-			log_debug("BACKEND: Notified %s subscriber %" PRId64 "", (cs->callback != NULL)?"local":"remote", (int64_t) cs->consumer_id);
+            log_debug("BACKEND: Notified group subscribers from group %d (%d subscribers)",
+                            (int) ((group_state *) db_row->group_subscriptions)->group_id,
+                            ((group_state *) db_row->group_subscriptions)->consumers->no_items);
 #endif
 		}
 	}
 
 	return status;
+}
+
+int lookup_consumer_state_in_group(WORD queue_id, WORD consumer_id, db_row_t * db_row,
+                                    consumer_state ** cs, db_t * db)
+{
+    if(db_row->group_subscriptions == NULL) // Queue's group is already cached by 'auto_update_group_queue_subscriptions()', no need to call 'get_buckets_for_object()' again
+    {
+        log_debug("SERVER: lookup_consumer_state_in_group(%d), found no group state!", (int) queue_id);
+
+        *cs = NULL;
+
+        return DB_ERR_NO_GROUP;
+    }
+
+    if(db->queue_group_replication_factor == 1)
+    {
+        group_state * gs = (group_state *) db_row->group_subscriptions;
+
+        log_debug("SERVER: lookup_consumer_state_in_group(%d, %d), found group state: group_id = %d, status = %d, consumers = %d",
+                (int) queue_id, (int) consumer_id, ((gs != NULL)?((int) gs->group_id):(-1)),
+                ((gs != NULL)?((int) gs->status):(-1)),
+                ((gs != NULL)?((int) gs->consumers->no_items):(-1)));
+
+        return lookup_listener_in_group(gs, consumer_id, cs);
+    }
+    else
+    {
+        skiplist_t * gss = (skiplist_t *) db_row->group_subscriptions;
+
+        for(snode_t * cell=HEAD(gss);cell!=NULL;cell=NEXT(cell))
+        {
+            if(cell->value != NULL)
+            {
+                group_state * gs = (group_state *) cell->value;
+
+                int ret = lookup_listener_in_group(gs, consumer_id, cs);
+
+                if(ret == 0)
+                {
+                    log_debug("SERVER: lookup_consumer_state_in_group(%d), found group state: group_id = %d, status = %d, consumers = %d",
+                            (int) queue_id, ((gs != NULL)?((int) gs->group_id):(-1)),
+                            ((gs != NULL)?((int) gs->status):(-1)),
+                            ((gs != NULL)?((int) gs->consumers->no_items):(-1)));
+
+                    return 0;
+                }
+            }
+        }
+
+        return DB_ERR_NO_CONSUMER;
+    }
+}
+
+int lookup_consumer_state_in_row_or_group(WORD queue_id, WORD consumer_id, db_row_t * db_row,
+                                           consumer_state ** cs, db_t * db)
+{
+    *cs = NULL;
+    snode_t * consumer_node = skiplist_search(db_row->consumer_state, consumer_id);
+    if(consumer_node != NULL)
+    {
+        *cs = (consumer_state *) (consumer_node->value);
+        return 0;
+    }
+    else
+    {
+        return lookup_consumer_state_in_group(queue_id, consumer_id, db_row, cs, db);
+    }
 }
 
 int set_private_read_head(WORD consumer_id, WORD shard_id, WORD app_id, WORD table_key, WORD queue_id,
@@ -291,16 +401,17 @@ int set_private_read_head(WORD consumer_id, WORD shard_id, WORD app_id, WORD tab
 
 	int64_t no_entries = db_row->no_entries;
 
-	snode_t * consumer_node = skiplist_search(db_row->consumer_state, consumer_id);
-	if(consumer_node == NULL)
-		return DB_ERR_NO_CONSUMER; // Consumer doesn't exist
+	consumer_state * cs = NULL;
+
+	int ret = lookup_consumer_state_in_row_or_group(queue_id, consumer_id, db_row, &cs, db);
+
+	if(ret != 0)
+	    return ret; // Consumer or group doesn't exist
 
 	if(use_lock)
 	{
 		pthread_mutex_lock(db_row->read_lock);
 	}
-
-	consumer_state * cs = (consumer_state *) (consumer_node->value);
 
 	assert(new_read_head <= no_entries - 1);
 
@@ -336,11 +447,12 @@ int set_private_consume_head(WORD consumer_id, WORD shard_id, WORD app_id, WORD 
 
 	int64_t no_entries = db_row->no_entries;
 
-	snode_t * consumer_node = skiplist_search(db_row->consumer_state, consumer_id);
-	if(consumer_node == NULL)
-		return DB_ERR_NO_CONSUMER; // Consumer doesn't exist
+    consumer_state * cs = NULL;
 
-	consumer_state * cs = (consumer_state *) (consumer_node->value);
+    int ret = lookup_consumer_state_in_row_or_group(queue_id, consumer_id, db_row, &cs, db);
+
+    if(ret != 0)
+        return ret; // Consumer or group doesn't exist
 
 //	assert(new_consume_head <= no_entries - 1);
 
@@ -377,16 +489,17 @@ int read_queue(WORD consumer_id, WORD shard_id, WORD app_id, WORD table_key, WOR
 
 	int64_t no_entries = db_row->no_entries;
 
-	snode_t * consumer_node = skiplist_search(db_row->consumer_state, consumer_id);
-	if(consumer_node == NULL)
-		return DB_ERR_NO_CONSUMER; // Consumer doesn't exist
+    consumer_state * cs = NULL;
+
+    int ret = lookup_consumer_state_in_row_or_group(queue_id, consumer_id, db_row, &cs, db);
+
+    if(ret != 0)
+        return ret; // Consumer or group doesn't exist
 
 	if(use_lock)
 	{
 		pthread_mutex_lock(db_row->read_lock);
 	}
-
-	consumer_state * cs = (consumer_state *) (consumer_node->value);
 
 	assert(cs->private_read_head <= no_entries - 1);
 
@@ -426,7 +539,7 @@ int read_queue(WORD consumer_id, WORD shard_id, WORD app_id, WORD table_key, WOR
 
 	*entries_read = (int) no_results;
 
-	int ret = ((*new_read_head) == (no_entries - 1))? QUEUE_STATUS_READ_COMPLETE : QUEUE_STATUS_READ_INCOMPLETE;
+	ret = ((*new_read_head) == (no_entries - 1))? QUEUE_STATUS_READ_COMPLETE : QUEUE_STATUS_READ_INCOMPLETE;
 
 	cs->notified=(ret==QUEUE_STATUS_READ_INCOMPLETE);
 
@@ -451,11 +564,12 @@ int peek_queue(WORD consumer_id, WORD shard_id, WORD app_id, WORD table_key, WOR
 
 	int64_t no_entries = db_row->no_entries;
 
-	snode_t * consumer_node = skiplist_search(db_row->consumer_state, consumer_id);
-	if(consumer_node == NULL)
-		return DB_ERR_NO_CONSUMER; // Consumer doesn't exist
+    consumer_state * cs = NULL;
 
-	consumer_state * cs = (consumer_state *) (consumer_node->value);
+    int ret = lookup_consumer_state_in_row_or_group(queue_id, consumer_id, db_row, &cs, db);
+
+    if(ret != 0)
+        return ret; // Consumer or group doesn't exist
 
 	int64_t start_offset = (offset >= 0)?offset:cs->private_read_head;
 	assert(start_offset <= no_entries - 1);
@@ -484,7 +598,7 @@ int peek_queue(WORD consumer_id, WORD shard_id, WORD app_id, WORD table_key, WOR
 
 	*entries_read = (int) no_results;
 
-	int ret = ((*new_read_head) == (no_entries - 1))? QUEUE_STATUS_READ_COMPLETE : QUEUE_STATUS_READ_INCOMPLETE;
+	ret = ((*new_read_head) == (no_entries - 1))? QUEUE_STATUS_READ_COMPLETE : QUEUE_STATUS_READ_INCOMPLETE;
 
 	return ret;
 }
@@ -509,11 +623,12 @@ int replay_queue(WORD consumer_id, WORD shard_id, WORD app_id, WORD table_key, W
 
 	int64_t no_entries = db_row->no_entries;
 
-	snode_t * consumer_node = skiplist_search(db_row->consumer_state, consumer_id);
-	if(consumer_node == NULL)
-		return DB_ERR_NO_CONSUMER; // Consumer doesn't exist
+    consumer_state * cs = NULL;
 
-	consumer_state * cs = (consumer_state *) (consumer_node->value);
+    int ret = lookup_consumer_state_in_row_or_group(queue_id, consumer_id, db_row, &cs, db);
+
+    if(ret != 0)
+        return ret; // Consumer or group doesn't exist
 
 //	cs->notified=0; // Replays don't count as notification consumptions
 
@@ -545,7 +660,7 @@ int replay_queue(WORD consumer_id, WORD shard_id, WORD app_id, WORD table_key, W
 					(int64_t) cs->consumer_id, no_results, *new_replay_offset);
 #endif
 
-	int ret = ((*new_replay_offset) == cs->private_read_head)? QUEUE_STATUS_READ_COMPLETE : QUEUE_STATUS_READ_INCOMPLETE;
+	ret = ((*new_replay_offset) == cs->private_read_head)? QUEUE_STATUS_READ_COMPLETE : QUEUE_STATUS_READ_INCOMPLETE;
 
 	return ret;
 }
@@ -564,11 +679,12 @@ int consume_queue(WORD consumer_id, WORD shard_id, WORD app_id, WORD table_key, 
 
 	db_row_t * db_row = (db_row_t *) (node->value);
 
-	snode_t * consumer_node = skiplist_search(db_row->consumer_state, consumer_id);
-	if(consumer_node == NULL)
-		return DB_ERR_NO_CONSUMER; // Consumer doesn't exist
+    consumer_state * cs = NULL;
 
-	consumer_state * cs = (consumer_state *) (consumer_node->value);
+    int ret = lookup_consumer_state_in_row_or_group(queue_id, consumer_id, db_row, &cs, db);
+
+    if(ret != 0)
+        return ret; // Consumer or group doesn't exist
 
 	cs->notified=0;
 
@@ -594,7 +710,7 @@ int consume_queue(WORD consumer_id, WORD shard_id, WORD app_id, WORD table_key, 
 	return (int) new_consume_head;
 }
 
-int _subscribe_queue(WORD consumer_id, WORD shard_id, WORD app_id, WORD table_key, WORD queue_id,
+int _subscribe_queue(WORD consumer_id, WORD shard_id, WORD app_id, WORD table_key, WORD queue_id, WORD group_id,
 					queue_callback * callback, int * sockfd, int64_t * prev_read_head, int64_t * prev_consume_head,
 					short use_lock, db_t * db, unsigned int * fastrandstate)
 {
@@ -631,17 +747,7 @@ int _subscribe_queue(WORD consumer_id, WORD shard_id, WORD app_id, WORD table_ke
 		return DB_ERR_DUPLICATE_CONSUMER; // Consumer already exists!
 	}
 
-	consumer_state * cs = (consumer_state *) malloc(sizeof(consumer_state));
-	cs->consumer_id = consumer_id;
-	cs->shard_id = shard_id;
-	cs->app_id = app_id;
-	cs->private_read_head = -1;
-	cs->private_consume_head = -1;
-	cs->callback = callback;
-	cs->sockfd = sockfd;
-	cs->notified=0;
-	cs->prh_version=NULL;
-	cs->pch_version=NULL;
+	consumer_state * cs = get_consumer_state(consumer_id, shard_id, app_id, group_id, callback, sockfd);
 
 	int ret = skiplist_insert(db_row->consumer_state, consumer_id, cs, fastrandstate);
 
@@ -649,13 +755,77 @@ int _subscribe_queue(WORD consumer_id, WORD shard_id, WORD app_id, WORD table_ke
 		pthread_mutex_unlock(db_row->subscribe_lock);
 
 #if (VERBOSITY > 0)
-	log_debug("BACKEND: Subscriber %" PRId64 "/%" PRId64 "/%" PRId64 " subscribed queue %" PRId64 "/%" PRId64 " with callback %p",
-					(int64_t) cs->app_id, (int64_t) cs->shard_id, (int64_t) cs->consumer_id,
+	log_debug("BACKEND: Subscriber %" PRId64 "/%" PRId64 "/%" PRId64 "/%" PRId64 " subscribed queue %" PRId64 "/%" PRId64 " with callback %p",
+					(int64_t) cs->app_id, (int64_t) cs->shard_id, (int64_t) cs->consumer_id, (int64_t) cs->group_id,
 					(int64_t) table_key, (int64_t) queue_id, cs->callback);
 #endif
 
 	return ret;
 }
+
+int _subscribe_group(WORD consumer_id, WORD shard_id, WORD app_id, WORD group_id,
+					queue_callback * callback, int * sockfd,
+					short use_lock, db_t * db, unsigned int * fastrandstate)
+{
+    group_state * found_group = NULL;
+    snode_t * group_node = lookup_bucket(db->queue_groups, group_id);
+	int ret = 0;
+	if(group_node == NULL) // Group doesn't exist
+	{
+        found_group = get_group((WORD) group_id);
+
+        ret = add_listener_to_group(found_group, consumer_id, shard_id, app_id,
+                               callback, sockfd, fastrandstate);
+
+        log_debug("BACKEND: Bucket %d not found, adding it as %p", group_id, found_group);
+
+        add_bucket(db->queue_groups, found_group, &get_group_state_key, &get_group_state_live_field, fastrandstate);
+	}
+	else
+	{
+	    found_group = (group_state *) (group_node->value);
+
+        ret = add_listener_to_group(found_group,
+                                consumer_id, shard_id, app_id,
+                                callback,
+                                sockfd,
+                                fastrandstate);
+        if(ret == DB_ERR_DUPLICATE_CONSUMER)
+        {
+            log_debug("BACKEND: Warning: Found previously existing consumer state in queue group %p, group_id = %" PRId64 " when searching for consumer_id %" PRId64 "!", found_group, (int64_t) group_id, (int64_t) consumer_id);
+        }
+	}
+
+#if (VERBOSITY > 0)
+	log_debug("BACKEND: Subscriber %" PRId64 "/%" PRId64 "/%" PRId64 " subscribed to group %p, group_id=%" PRId64 " with callback %p, fd %d, group now has %d consumers",
+					(int64_t) app_id, (int64_t) shard_id, (int64_t) consumer_id, found_group, (int64_t) group_id, callback, *sockfd, found_group->consumers->no_items);
+#endif
+
+	return ret;
+}
+
+int _unsubscribe_group(WORD consumer_id, WORD group_id, db_t * db)
+{
+    snode_t * group_node = lookup_bucket(db->queue_groups, group_id);
+	if(group_node == NULL)
+		return DB_ERR_NO_GROUP; // Group doesn't exist
+
+	group_state * found_group = (group_state *) (group_node->value);
+
+	int ret = remove_listener_from_group(found_group, consumer_id);
+
+	if(ret == DB_ERR_NO_CONSUMER)
+	{
+		log_debug("BACKEND: Warning: Found no previously existing consumer state in queue group %" PRId64 " when attempting to remove consumer_id %" PRId64 "!", (int64_t) group_id, (int64_t) consumer_id);
+	}
+
+#if (VERBOSITY > 0)
+	log_debug("BACKEND: Subscriber %" PRId64 " unsubscribed from group %" PRId64 "", (int64_t) consumer_id, (int64_t) group_id);
+#endif
+
+	return ret;
+}
+
 
 int subscribe_queue(WORD consumer_id, WORD shard_id, WORD app_id, WORD table_key, WORD queue_id,
 					queue_callback * callback, int64_t * prev_read_head, int64_t * prev_consume_head,
@@ -663,24 +833,38 @@ int subscribe_queue(WORD consumer_id, WORD shard_id, WORD app_id, WORD table_key
 {
 	assert(callback != NULL);
 
-	return _subscribe_queue(consumer_id, shard_id, app_id, table_key, queue_id,
+	return _subscribe_queue(consumer_id, shard_id, app_id, table_key, queue_id, (WORD) -1,
 			callback, NULL, prev_read_head, prev_consume_head,
 			use_lock, db, fastrandstate);
 }
 
-int register_remote_subscribe_queue(WORD consumer_id, WORD shard_id, WORD app_id, WORD table_key, WORD queue_id,
+int register_remote_subscribe_queue(WORD consumer_id, WORD shard_id, WORD app_id, WORD table_key, WORD queue_id, WORD group_id,
 					int * sockfd, int64_t * prev_read_head, int64_t * prev_consume_head,
 					short use_lock, db_t * db, unsigned int * fastrandstate)
 {
 	assert(sockfd != NULL);
 
-	return _subscribe_queue(consumer_id, shard_id, app_id, table_key, queue_id,
-			NULL, sockfd, prev_read_head, prev_consume_head,
-			use_lock, db, fastrandstate);
+#if (VERBOSITY > 0)
+	log_debug("BACKEND: register_remote_subscribe_queue %" PRId64 "/%" PRId64 "/%" PRId64 " for group_id %" PRId64 ", queue_id %" PRId64 "/%" PRId64 "",
+					(int64_t) app_id, (int64_t) shard_id, (int64_t) consumer_id, (int64_t) group_id,
+					(int64_t) table_key, (int64_t) queue_id);
+#endif
+
+	if((int) group_id == -1)
+	{
+		return _subscribe_queue(consumer_id, shard_id, app_id, table_key, queue_id, group_id,
+				NULL, sockfd, prev_read_head, prev_consume_head,
+				use_lock, db, fastrandstate);
+	}
+	else
+	{
+		return _subscribe_group(consumer_id, shard_id, app_id, group_id,
+					NULL, sockfd, use_lock, db, fastrandstate);
+	}
 }
 
 
-int unsubscribe_queue(WORD consumer_id, WORD shard_id, WORD app_id, WORD table_key, WORD queue_id,
+int _unsubscribe_queue(WORD consumer_id, WORD shard_id, WORD app_id, WORD table_key, WORD queue_id, WORD group_id,
 						short use_lock, db_t * db)
 {
 	db_table_t * table = get_table_by_key(table_key, db);
@@ -706,12 +890,31 @@ int unsubscribe_queue(WORD consumer_id, WORD shard_id, WORD app_id, WORD table_k
 		return DB_ERR_NO_CONSUMER; // Consumer didn't exist
 
 #if (VERBOSITY > 0)
-	log_debug("BACKEND: Subscriber %" PRId64 "/%" PRId64 "/%" PRId64 " unsubscribed queue %" PRId64 "/%" PRId64 "",
-					(int64_t) app_id, (int64_t) shard_id, (int64_t) consumer_id,
+	log_debug("BACKEND: Subscriber %" PRId64 "/%" PRId64 "/%" PRId64 "/%" PRId64 " unsubscribed queue %" PRId64 "/%" PRId64 "",
+					(int64_t) app_id, (int64_t) shard_id, (int64_t) consumer_id, (int64_t) group_id,
 					(int64_t) table_key, (int64_t) queue_id);
 #endif
 
 	return 0;
+}
+
+int unsubscribe_queue(WORD consumer_id, WORD shard_id, WORD app_id, WORD table_key, WORD queue_id, WORD group_id,
+						short use_lock, db_t * db)
+{
+	return _unsubscribe_queue(consumer_id, shard_id, app_id, table_key, queue_id, group_id, use_lock, db);
+}
+
+int register_remote_unsubscribe_queue(WORD consumer_id, WORD shard_id, WORD app_id, WORD table_key, WORD queue_id, WORD group_id,
+										short use_lock, db_t * db)
+{
+	if((int) group_id == -1)
+	{
+		return _unsubscribe_queue(consumer_id, shard_id, app_id, table_key, queue_id, group_id, use_lock, db);
+	}
+	else
+	{
+		return _unsubscribe_group(consumer_id, group_id, db);
+	}
 }
 
 int create_queue(WORD table_key, WORD queue_id, vector_clock * version, short use_lock, db_t * db, unsigned int * fastrandstate)
@@ -741,11 +944,6 @@ int create_queue(WORD table_key, WORD queue_id, vector_clock * version, short us
 	queue_column_values[0]=queue_id;
 	queue_column_values[1]=(WORD) - 2;
 	queue_column_values[2]=0;
-
-/*
-	for(int64_t i=2;i<schema->no_cols;i++)
-		queue_column_values[i]=0;
-*/
 
 	int status = table_insert(queue_column_values, 3, 1, 0, NULL, table, fastrandstate); // version? // schema->no_cols
 
@@ -787,8 +985,18 @@ int create_queue(WORD table_key, WORD queue_id, vector_clock * version, short us
 	db_row->subscribe_lock = (pthread_mutex_t*) malloc(sizeof(pthread_mutex_t));
 	pthread_mutex_init(db_row->subscribe_lock, NULL);
 
+	db_row->group_subscriptions = get_buckets_for_object(db->queue_groups, (int) db_row->key, db->queue_group_replication_factor,
+                                                            &get_group_state_key, &get_group_state_live_field,
+                                                            fastrandstate);
+
+    group_state * gs = (group_state *) db_row->group_subscriptions;
+
+    log_debug("SERVER: Updated queue group bucket for queue %d, group_pointer=%p, group_id = %d, status = %d, consumers = %d", (int) db_row->key, gs, (int) gs->group_id, gs->status, gs->consumers->no_items);
+
 	if(version != NULL)
 		update_or_replace_vc(&(db_row->version), version);
+
+	skiplist_insert(table->queues, queue_id, (WORD) db_row, fastrandstate);
 
 	if(use_lock)
 		pthread_mutex_unlock(table->lock);
@@ -817,6 +1025,10 @@ int delete_queue(WORD table_key, WORD queue_id, vector_clock * version, short us
 	if(use_lock)
 		pthread_mutex_lock(table->lock);
 
+	// Remove pointer to queue DB row from queue cache table:
+
+	skiplist_delete(table->queues, queue_id);
+
 	// Notify consumers of queue deletion:
 
 	for(snode_t * cell=HEAD(db_row->consumer_state);cell!=NULL;cell=NEXT(cell))
@@ -828,7 +1040,7 @@ int delete_queue(WORD table_key, WORD queue_id, vector_clock * version, short us
 			if(cs->callback == NULL || cs->notified > 0)
 				continue;
 
-			queue_callback_args * qca = get_queue_callback_args(table_key, queue_id, cs->app_id, cs->shard_id, cs->consumer_id, QUEUE_NOTIF_DELETED);
+			queue_callback_args * qca = get_queue_callback_args(table_key, queue_id, cs->app_id, cs->shard_id, cs->consumer_id, cs->group_id, QUEUE_NOTIF_DELETED);
 
 #if (VERBOSITY > 0)
 			log_debug("BACKEND: Attempting to notify subscriber %" PRId64 " (%p/%p/%p/%p)", (int64_t) qca->consumer_id, cs->callback, cs->callback->lock, cs->callback->signal, cs->callback->callback);
@@ -848,8 +1060,6 @@ int delete_queue(WORD table_key, WORD queue_id, vector_clock * version, short us
 			log_debug("BACKEND: Unlocked consumer lock of %" PRId64 " (%p/%p), status=%d", (int64_t) qca->consumer_id, cs->callback, cs->callback->lock, ret);
 #endif
 
-//			cs->notified=1;
-
 #if (VERBOSITY > 0)
 			log_debug("BACKEND: Notified subscriber %" PRId64 " (%p/%p/%p/%p)", (int64_t) qca->consumer_id, cs->callback, cs->callback->lock, cs->callback->signal, cs->callback->callback);
 #endif
@@ -857,9 +1067,9 @@ int delete_queue(WORD table_key, WORD queue_id, vector_clock * version, short us
 		}
 	}
 
-	skiplist_free(db_row->consumer_state);
+	skiplist_free_val(db_row->consumer_state, free_consumer_state_sl);
 
-	ret = table_delete_row((WORD*) &(queue_id), version, table, fastrandstate);
+	ret = table_delete_row((WORD*) &(queue_id), version, table, db, fastrandstate);
 
 	if(use_lock)
 		pthread_mutex_unlock(table->lock);
@@ -870,6 +1080,51 @@ int delete_queue(WORD table_key, WORD queue_id, vector_clock * version, short us
 
 	return ret;
 }
+
+consumer_state * get_consumer_state(WORD consumer_id, WORD shard_id, WORD app_id, WORD group_id, queue_callback* callback, int * sockfd)
+{
+	consumer_state * cs = (consumer_state *) malloc(sizeof(consumer_state));
+	cs->consumer_id = consumer_id;
+	cs->shard_id = shard_id;
+	cs->app_id = app_id;
+	cs->group_id = group_id;
+	cs->private_read_head = -1;
+	cs->private_consume_head = -1;
+	cs->callback = callback;
+	cs->sockfd = sockfd;
+	cs->notified=0;
+	cs->prh_version=NULL;
+	cs->pch_version=NULL;
+
+	return cs;
+}
+
+void free_consumer_state(consumer_state * cs)
+{
+	if(cs->prh_version != NULL)
+		free_vc(cs->prh_version);
+
+	if(cs->pch_version != NULL)
+		free_vc(cs->pch_version);
+
+	if(cs->callback != NULL)
+		free_queue_callback(cs->callback);
+
+	free(cs);
+}
+
+void free_consumer_state_sl(void * cs)
+{
+	free_consumer_state((consumer_state *) cs);
+}
+
+
+void free_queue_table_state(WORD queue_table_state)
+{
+	skiplist_free(queue_table_state);
+}
+
+
 
 
 
