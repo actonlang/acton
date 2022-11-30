@@ -701,14 +701,18 @@ struct $Cont $InitRoot$cont = {
 ////////////////////////////////////////////////////////////////////////////////////////
 
 void dummy_callback(queue_callback_args * qca) { }
+void queue_group_message_callback(queue_callback_args * qca) {
+//	rtsd_printf("   # There are messages in actor queues for group %d, subscriber %d, status %d", qca->group_id, qca->consumer_id, qca->status);
+    printf("   # There are messages in actor queues for group %d, subscriber %d, status %d\n", (int) qca->group_id, (int) qca->consumer_id, qca->status);
+}
 
 void create_db_queue(long key) {
     int ret = remote_create_queue_in_txn(MSG_QUEUE, ($WORD)key, NULL, db);
     rtsd_printf("#### Create queue %ld returns %d", key, ret);
-    queue_callback * qc = get_queue_callback(dummy_callback);
-	int64_t prev_read_head = -1, prev_consume_head = -1;
-	ret = remote_subscribe_queue(($WORD)key, 0, 0, MSG_QUEUE, ($WORD)key, qc, &prev_read_head, &prev_consume_head, db);
-    rtsd_printf("   # Subscribe queue %ld returns %d", key, ret);
+//    queue_callback * qc = get_queue_callback(dummy_callback);
+//	int64_t prev_read_head = -1, prev_consume_head = -1;
+//	ret = remote_subscribe_queue(($WORD)key, 0, 0, MSG_QUEUE, ($WORD)key, qc, &prev_read_head, &prev_consume_head, db);
+//    rtsd_printf("   # Subscribe queue %ld returns %d", key, ret);
 }
 
 void init_db_queue(long key) {
@@ -842,10 +846,10 @@ void handle_timeout() {
             snode_t *m_start, *m_end;
             int entries_read = 0;
             int64_t read_head = -1;
-            int ret0 = remote_read_queue_in_txn(($WORD)key, 0, 0, MSG_QUEUE, ($WORD)key, 1, &entries_read, &read_head, &m_start, &m_end, NULL, db);
+            int ret0 = remote_read_queue_in_txn(($WORD) db->local_rts_id, 0, 0, MSG_QUEUE, ($WORD)key, 1, &entries_read, &read_head, &m_start, &m_end, NULL, db);
             rtsd_printf("   # dummy read msg from TIMER_QUEUE returns %d, entries read: %d", ret0, entries_read);
 
-            int ret = remote_consume_queue_in_txn(($WORD)key, 0, 0, MSG_QUEUE, ($WORD)key, read_head, txnid, db);
+            int ret = remote_consume_queue_in_txn(($WORD) db->local_rts_id, 0, 0, MSG_QUEUE, ($WORD)key, read_head, txnid, db);
             rtsd_printf("   # consume msg %ld from TIMER_QUEUE returns %d", m->$globkey, ret);
             int ret2 = remote_enqueue_in_txn(($WORD*)&m->$globkey, 1, NULL, 0, MSG_QUEUE, (WORD)m->$to->$globkey, txnid, db);
             rtsd_printf("   # (timed) enqueue msg %ld to queue %ld returns %d", m->$globkey, m->$to->$globkey, ret2);
@@ -869,7 +873,7 @@ long read_queued_msg(long key, int64_t *read_head) {
     snode_t *m_start, *m_end;
     int entries_read = 0;
     
-    int ret = remote_read_queue_in_txn(($WORD)key, 0, 0, MSG_QUEUE, ($WORD)key, 
+    int ret = remote_read_queue_in_txn(($WORD) db->local_rts_id, 0, 0, MSG_QUEUE, ($WORD)key,
                                        1, &entries_read, read_head, &m_start, &m_end, NULL, db);
     rtsd_printf("   # read msg from queue %ld returns %d, entries read: %d", key, ret, entries_read);
 
@@ -946,6 +950,9 @@ void print_actor($Actor a) {
 
 void deserialize_system(snode_t *actors_start) {
     rtsd_printf("Deserializing system");
+    queue_callback * gqc = get_queue_callback(queue_group_message_callback);
+    printf("### remote_subscribe_group(consumer_id = %d, group_id = %d)\n", (int) db->local_rts_id, (int) db->local_rts_id);
+    remote_subscribe_group((WORD) db->local_rts_id, NULL, NULL, (WORD) db->local_rts_id, gqc, db);
     snode_t *msgs_start, *msgs_end;
     remote_read_full_table_in_txn(&msgs_start, &msgs_end, MSGS_TABLE, NULL, db);
     
@@ -1031,10 +1038,10 @@ void deserialize_system(snode_t *actors_start) {
             }
 
             rtsd_printf("#### Reading msgs queue %ld contents:", key);
-            queue_callback * qc = get_queue_callback(dummy_callback);
-            int64_t prev_read_head = -1, prev_consume_head = -1;
-            int ret = remote_subscribe_queue(($WORD)key, 0, 0, MSG_QUEUE, ($WORD)key, qc, &prev_read_head, &prev_consume_head, db);
-            rtsd_printf("   # Subscribe queue %ld returns %d", key, ret);
+//            queue_callback * qc = get_queue_callback(dummy_callback);
+            int64_t prev_read_head = -1; // , prev_consume_head = -1;
+//            int ret = remote_subscribe_queue(($WORD)key, 0, 0, MSG_QUEUE, ($WORD)key, qc, &prev_read_head, &prev_consume_head, db);
+//            rtsd_printf("   # Subscribe queue %ld returns %d", key, ret);
             while (1) {
                 long msg_key = read_queued_msg(key, &prev_read_head);
                 if (!msg_key)
@@ -1062,10 +1069,10 @@ void deserialize_system(snode_t *actors_start) {
 
     rtsd_printf("#### Reading timer queue contents:");
     time_t now = current_time();
-    queue_callback * qc = get_queue_callback(dummy_callback);
-	int64_t prev_read_head = -1, prev_consume_head = -1;
-	int ret = remote_subscribe_queue(TIMER_QUEUE, 0, 0, MSG_QUEUE, TIMER_QUEUE, qc, &prev_read_head, &prev_consume_head, db);
-    rtsd_printf("   # Subscribe queue 0 returns %d", ret);
+//    queue_callback * qc = get_queue_callback(dummy_callback);
+	int64_t prev_read_head = -1; // , prev_consume_head = -1;
+//	int ret = remote_subscribe_queue(TIMER_QUEUE, 0, 0, MSG_QUEUE, TIMER_QUEUE, qc, &prev_read_head, &prev_consume_head, db);
+//    rtsd_printf("   # Subscribe queue 0 returns %d", ret);
     while (1) {
         long msg_key = read_queued_msg(TIMER_QUEUE, &prev_read_head);
         if (!msg_key)
@@ -1260,10 +1267,10 @@ void *main_loop(void *idx) {
                         snode_t *m_start, *m_end;
                         int entries_read = 0;
                         int64_t read_head = -1;
-                        int ret0 = remote_read_queue_in_txn(($WORD)key, 0, 0, MSG_QUEUE, ($WORD)key, 1, &entries_read, &read_head, &m_start, &m_end, NULL, db);
+                        int ret0 = remote_read_queue_in_txn(($WORD) db->local_rts_id, 0, 0, MSG_QUEUE, ($WORD)key, 1, &entries_read, &read_head, &m_start, &m_end, NULL, db);
                         rtsd_printf("   # dummy read msg from queue %ld returns %d, entries read: %d", key, ret0, entries_read);
 
-                        int ret = remote_consume_queue_in_txn(($WORD)key, 0, 0, MSG_QUEUE, ($WORD)key, read_head, txnid, db);
+                        int ret = remote_consume_queue_in_txn(($WORD) db->local_rts_id, 0, 0, MSG_QUEUE, ($WORD)key, read_head, txnid, db);
                         rtsd_printf("   # consume msg %ld from queue %ld returns %d", m->$globkey, key, ret);
                         remote_commit_txn(txnid, db);
                         rtsd_printf("############## Commit");
@@ -2089,6 +2096,9 @@ int main(int argc, char **argv) {
             log_info("Actor state restored from DDB.\n");
         } else {
             log_info("No previous state in DDB; Initializing database...\n");
+            queue_callback * gqc = get_queue_callback(queue_group_message_callback);
+            printf("### initializing remote_subscribe_group(consumer_id = %d, group_id = %d)\n", (int) db->local_rts_id, (int) db->local_rts_id);
+            remote_subscribe_group((WORD) db->local_rts_id, NULL, NULL, (WORD) db->local_rts_id, gqc, db);
             int indices[] = {0};
             db_schema_t* db_schema = db_create_schema(NULL, 1, indices, 1, indices, 0, indices, 0);
             create_db_queue(TIMER_QUEUE);
