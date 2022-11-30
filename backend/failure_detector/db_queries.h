@@ -146,6 +146,7 @@ typedef struct queue_query_message
 	int app_id;
 	int shard_id;
 	int consumer_id;
+	int group_id;
 
 	// For ENQUEUE and READ_QUEUE_RESPONSE:
 
@@ -174,16 +175,22 @@ queue_query_message * build_consume_queue_in_txn(WORD consumer_id, WORD shard_id
 													int64_t new_consume_head, uuid_t * txnid, int64_t nonce);
 queue_query_message * build_subscribe_queue_in_txn(WORD consumer_id, WORD shard_id, WORD app_id, WORD table_key, WORD queue_id, uuid_t * txnid, int64_t nonce);
 queue_query_message * build_unsubscribe_queue_in_txn(WORD consumer_id, WORD shard_id, WORD app_id, WORD table_key, WORD queue_id, uuid_t * txnid, int64_t nonce);
+queue_query_message * build_subscribe_group_in_txn(WORD consumer_id, WORD shard_id, WORD app_id, WORD group_id, uuid_t * txnid, int64_t nonce);
+queue_query_message * build_unsubscribe_group_in_txn(WORD consumer_id, WORD shard_id, WORD app_id, WORD group_id, uuid_t * txnid, int64_t nonce);
+queue_query_message * build_add_queue_to_group_in_txn(WORD table_key, WORD queue_id, WORD group_id, uuid_t * txnid, int64_t nonce);
+queue_query_message * build_remove_queue_from_group_in_txn(WORD table_key, WORD queue_id, WORD group_id, uuid_t * txnid, int64_t nonce);
 
 queue_query_message * init_create_queue_message(cell_address * cell_address, uuid_t * txnid, int64_t nonce);
 queue_query_message * init_delete_queue_message(cell_address * cell_address, uuid_t * txnid, int64_t nonce);
-queue_query_message * init_subscribe_queue_message(cell_address * cell_address, int app_id, int shard_id, int consumer_id, uuid_t * txnid, int64_t nonce);
-queue_query_message * init_unsubscribe_queue_message(cell_address * cell_address, int app_id, int shard_id, int consumer_id, uuid_t * txnid, int64_t nonce);
+queue_query_message * init_subscribe_queue_message(cell_address * cell_address, int app_id, int shard_id, int consumer_id, int group_id, uuid_t * txnid, int64_t nonce);
+queue_query_message * init_unsubscribe_queue_message(cell_address * cell_address, int app_id, int shard_id, int consumer_id, int group_id, uuid_t * txnid, int64_t nonce);
+queue_query_message * init_add_queue_to_group_message(cell_address * cell_address, int group_id, uuid_t * txnid, int64_t nonce);
+queue_query_message * init_remove_queue_from_group_message(cell_address * cell_address, int group_id, uuid_t * txnid, int64_t nonce);
 queue_query_message * init_enqueue_message(cell_address * cell_address, cell * cells, int no_cells, uuid_t * txnid, int64_t nonce);
 queue_query_message * init_read_queue_message(cell_address * cell_address, int app_id, int shard_id, int consumer_id, int64_t max_entries, uuid_t * txnid, int64_t nonce);
 queue_query_message * init_consume_queue_message(cell_address * cell_address, int app_id, int shard_id, int consumer_id, int64_t new_consume_head, uuid_t * txnid, int64_t nonce);
-queue_query_message * init_read_queue_response(cell_address * cell_address, cell * cells, int no_cells, int app_id, int shard_id, int consumer_id, int64_t new_read_head, short status, uuid_t * txnid, int64_t nonce);
-queue_query_message * init_queue_notification(cell_address * cell_address, cell * cells, int no_cells, int app_id, int shard_id, int consumer_id, int64_t new_no_entries, short status, uuid_t * txnid, int64_t nonce);
+queue_query_message * init_read_queue_response(cell_address * cell_address, cell * cells, int no_cells, int app_id, int shard_id, int consumer_id, int group_id, int64_t new_read_head, short status, uuid_t * txnid, int64_t nonce);
+queue_query_message * init_queue_notification(cell_address * cell_address, cell * cells, int no_cells, int app_id, int shard_id, int consumer_id, int group_id, int64_t new_no_entries, short status, uuid_t * txnid, int64_t nonce);
 void free_queue_message(queue_query_message * ca);
 int serialize_queue_message(queue_query_message * ca, void ** buf, unsigned * len, short for_server, vector_clock * vc);
 int deserialize_queue_message(void * buf, unsigned msg_len, queue_query_message ** ca);

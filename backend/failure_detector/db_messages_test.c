@@ -422,7 +422,7 @@ int main (int argc, const char * argv[])
 
 	// Read queue response message:
 
-	cq = init_read_queue_response(cell_address, cll, no_cells, 1, 2, 3, 2, 1, &txnid, 3);
+	cq = init_read_queue_response(cell_address, cll, no_cells, 1, 2, 3, 1, 2, 1, &txnid, 3);
 	serialize_queue_message(cq, &buf_w, &len_w, 0, vc);
 	write_read_from_file(buf_w, len_w, buf_r, &len_r);
 	deserialize_client_message(((int *) buf_r + 1), len_r - sizeof(int), (void *) &cq_r, &mtype, &vc_r);
