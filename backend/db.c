@@ -25,6 +25,7 @@
 #include <assert.h>
 
 #include "db.h"
+#include "queue_groups.h"
 #include "skiplist.h"
 
 // DB API:
@@ -146,15 +147,6 @@ db_row_t * create_db_row_schemaless2(WORD * keys, int no_keys, WORD * cols, int 
 	return row;
 }
 
-/*
-db_row_t * create_db_row(WORD * column_values, db_schema_t * schema, size_t last_blob_size, unsigned int * fastrandstate)
-{
-	return create_db_row_schemaless(column_values, schema->primary_key_idxs, schema->no_primary_keys,
-										schema->clustering_key_idxs, schema->no_clustering_keys, schema->no_clustering_keys,
-										schema->no_cols, last_blob_size, fastrandstate);
-}
-*/
-
 db_row_t * create_db_row_sf(WORD * column_values, db_schema_t * schema, int no_clustering_keys, int no_cols, size_t last_blob_size, unsigned int * fastrandstate)
 {
 	return create_db_row_schemaless(column_values, schema->primary_key_idxs, schema->no_primary_keys,
@@ -162,13 +154,13 @@ db_row_t * create_db_row_sf(WORD * column_values, db_schema_t * schema, int no_c
 										no_cols, last_blob_size, fastrandstate);
 }
 
-void free_db_cell(db_row_t * row)
+void free_db_cell(db_row_t * row, db_t * db)
 {
 	if(row->cells != NULL)
 	{
 		for(snode_t * cell=HEAD(row->cells);cell!=NULL;cell=NEXT(cell))
 			if(cell->value != NULL)
-				free_db_cell(cell->value);
+				free_db_cell(cell->value, db);
 
 		skiplist_free(row->cells);
 	}
@@ -183,12 +175,17 @@ void free_db_cell(db_row_t * row)
 		free(row->column_array);
 	}
 
+	if(row->group_subscriptions != NULL && db->queue_group_replication_factor > 1)
+	{
+		skiplist_free(row->group_subscriptions);
+	}
+
 	free(row);
 }
 
-void free_db_row(db_row_t * row, db_schema_t * schema)
+void free_db_row(db_row_t * row, db_schema_t * schema, db_t * db)
 {
-	free_db_cell(row);
+	free_db_cell(row, db);
 }
 
 db_t * get_db()
@@ -201,6 +198,9 @@ db_t * get_db()
 
 	db->tables = create_skiplist_long();
 	db->txn_state = create_skiplist_uuid();
+	db->queue_groups = get_hash_ring();
+	db->queue_group_replication_factor = 1;
+	db->enable_auto_queue_group_subscriptions = ENABLE_AUTO_QUEUE_GROUP_SUBSCRIPTIONS;
 
 #if (MULTI_THREADED == 1)
 	db->txn_state_lock = (pthread_mutex_t*) ((char*) db + sizeof(db_t));
@@ -214,9 +214,8 @@ int db_delete_db(db_t * db)
 {
 	skiplist_free(db->tables);
 	skiplist_free(db->txn_state);
-
+	free_hash_ring(db->queue_groups, free_group_state);
 	free(db);
-
 	return 0;
 }
 
@@ -308,6 +307,8 @@ int db_create_table(WORD table_key, db_schema_t* schema, db_t * db, unsigned int
 	for(int i=0;i<schema->no_index_keys;i++)
 		table->indexes[i] = create_skiplist_long();
 
+	table->queues = create_skiplist_long();
+
 	table->lock = (pthread_mutex_t*) malloc(sizeof(pthread_mutex_t));
 	pthread_mutex_init(table->lock, NULL);
 
@@ -333,6 +334,7 @@ int db_delete_table(WORD table_key, db_t * db)
 		if(table->schema->no_index_keys > 0)
 			free(table->indexes);
 		free_schema(table->schema);
+		skiplist_free(table->queues);
 		free(table);
 	}
 
@@ -933,7 +935,7 @@ int table_verify_index_range_version(int idx_idx, WORD start_idx_key, WORD end_i
 	return 0;
 }
 
-int table_delete_row(WORD* primary_keys, vector_clock * version, db_table_t * table, unsigned int * fastrandstate)
+int table_delete_row(WORD* primary_keys, vector_clock * version, db_table_t * table, db_t * db, unsigned int * fastrandstate)
 {
 	db_row_t* row = (db_row_t *) (skiplist_delete(table->rows, primary_keys[0]));
 
@@ -944,7 +946,7 @@ int table_delete_row(WORD* primary_keys, vector_clock * version, db_table_t * ta
 
 	if(row != NULL)
 	{
-		free_db_row(row, table->schema);
+		free_db_row(row, table->schema, db);
 	}
 	else
 	{
@@ -1186,7 +1188,7 @@ int db_delete_row_transactional(WORD* primary_keys, vector_clock * version, WORD
 
 	db_table_t * table = (db_table_t *) (node->value);
 
-	return table_delete_row(primary_keys, version, table, fastrandstate);
+	return table_delete_row(primary_keys, version, table, db, fastrandstate);
 }
 
 int db_delete_row(WORD* primary_keys, WORD table_key, db_t * db, unsigned int * fastrandstate)
@@ -1204,64 +1206,4 @@ int db_delete_by_index(WORD index_key, int idx_idx, WORD table_key, db_t * db)
 	db_table_t * table = (db_table_t *) (node->value);
 
 	return table_delete_by_index(index_key, idx_idx, table);
-}
-
-#define DEBUG_QUEUE_CALLBACK 0
-
-queue_callback_args * get_queue_callback_args(WORD table_key, WORD queue_id, WORD app_id, WORD shard_id, WORD consumer_id, int status)
-{
-	queue_callback_args * qca = (queue_callback_args *) malloc(sizeof(queue_callback_args));
-	qca->table_key = table_key;
-	qca->queue_id = queue_id;
-
-	qca->app_id = app_id;
-	qca->shard_id = shard_id;
-	qca->consumer_id = consumer_id;
-
-	qca->status = status;
-
-	return qca;
-}
-
-void free_queue_callback_args(queue_callback_args * qca)
-{
-	free(qca);
-}
-
-queue_callback * get_queue_callback(void (*callback)(queue_callback_args *))
-{
-	queue_callback * qc = (queue_callback *) malloc(sizeof(queue_callback) + sizeof(pthread_mutex_t) + sizeof(pthread_cond_t));
-	qc->lock = (pthread_mutex_t *) ((char *)qc + sizeof(queue_callback));
-	qc->signal = (pthread_cond_t *) ((char *)qc + sizeof(queue_callback) + sizeof(pthread_mutex_t));
-	pthread_mutex_init(qc->lock, NULL);
-	pthread_cond_init(qc->signal, NULL);
-	qc->callback = callback;
-	return qc;
-}
-
-int wait_on_queue_callback(queue_callback * qc)
-{
-	int ret = pthread_mutex_lock(qc->lock);
-
-#if DEBUG_QUEUE_CALLBACK > 0
-	printf("Locked consumer lock %p/%p\n", qc, qc->lock);
-#endif
-
-	struct timespec ts;
-	clock_gettime(CLOCK_REALTIME, &ts);
-	ts.tv_sec += 3;
-	ret = pthread_cond_timedwait(qc->signal, qc->lock, &ts);
-
-	pthread_mutex_unlock(qc->lock);
-
-#if DEBUG_QUEUE_CALLBACK > 0
-	printf("Unlocked consumer lock %p/%p\n", qc, qc->lock);
-#endif
-
-	return ret;
-}
-
-void free_queue_callback(queue_callback * qc)
-{
-	free(qc);
 }

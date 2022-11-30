@@ -21,6 +21,7 @@
 // ActonDB Server:
 
 #include "db.h"
+#include "queue_callback.h"
 #include "failure_detector/db_queries.h"
 #include "failure_detector/fd.h"
 #include "comm.h"
@@ -698,7 +699,7 @@ int get_queue_read_response_packet(snode_t* start_row, snode_t* end_row, int no_
 
 	if(no_results == 0)
 	{
-		m = init_read_queue_response(q->cell_address, NULL, 0, q->app_id, q->shard_id, q->consumer_id, new_read_head, (short) status, q->txnid, q->nonce);
+		m = init_read_queue_response(q->cell_address, NULL, 0, q->app_id, q->shard_id, q->consumer_id, q->group_id, new_read_head, (short) status, q->txnid, q->nonce);
 	}
 	else
 	{
@@ -728,7 +729,7 @@ int get_queue_read_response_packet(snode_t* start_row, snode_t* end_row, int no_
 						result->version);
 		}
 
-		m = init_read_queue_response(q->cell_address, cells, no_results, q->app_id, q->shard_id, q->consumer_id, new_read_head, (short) status, q->txnid, q->nonce);
+		m = init_read_queue_response(q->cell_address, cells, no_results, q->app_id, q->shard_id, q->consumer_id, q->group_id, new_read_head, (short) status, q->txnid, q->nonce);
 	}
 
 #if (VERBOSE_RPC > 0)
@@ -768,7 +769,7 @@ int handle_subscribe_queue(queue_query_message * q, int * clientfd, int64_t * pr
 		return 1;
 	}
 	else
-		return register_remote_subscribe_queue((WORD) q->consumer_id, (WORD) q->shard_id, (WORD) q->app_id, (WORD) q->cell_address->table_key, (WORD) q->cell_address->keys[0],
+		return register_remote_subscribe_queue((WORD) q->consumer_id, (WORD) q->shard_id, (WORD) q->app_id, (WORD) q->cell_address->table_key, (WORD) q->cell_address->keys[0], (WORD) q->group_id,
 										clientfd, prev_read_head, prev_consume_head, 1, db, fastrandstate);
 }
 
@@ -780,7 +781,7 @@ int handle_unsubscribe_queue(queue_query_message * q, db_t * db, unsigned int * 
 		return 1;
 	}
 	else
-		return unsubscribe_queue((WORD) q->consumer_id, (WORD) q->shard_id, (WORD) q->app_id, (WORD) q->cell_address->table_key, (WORD) q->cell_address->keys[0], 1, db);
+		return register_remote_unsubscribe_queue((WORD) q->consumer_id, (WORD) q->shard_id, (WORD) q->app_id, (WORD) q->cell_address->table_key, (WORD) q->cell_address->keys[0], (WORD) q->group_id, 1, db);
 }
 
 int handle_enqueue(queue_query_message * q, db_t * db, unsigned int * fastrandstate)
@@ -1141,6 +1142,10 @@ int handle_client_message(int childfd, int msg_len, db_t * db, membership * m, s
     					status = get_queue_ack_packet(status, qm, &tmp_out_buf, &snd_msg_len, vc);
     					break;
     				}
+    				case QUERY_TYPE_ADD_QUEUE_TO_GROUP:
+    				{
+    					break;
+    				}
     				case QUERY_TYPE_ENQUEUE:
     				{
     					status = handle_enqueue(qm, db, fastrandstate);
@@ -1158,7 +1163,11 @@ int handle_client_message(int childfd, int msg_len, db_t * db, membership * m, s
     					db_schema_t * schema = NULL;
     					status = handle_read_queue(qm, &entries_read, &new_read_head, &prh_version,
     													&start_row, &end_row, &schema, db, fastrandstate);
-    					assert(status == QUEUE_STATUS_READ_COMPLETE || status == QUEUE_STATUS_READ_INCOMPLETE);
+    					if(status != QUEUE_STATUS_READ_COMPLETE && status != QUEUE_STATUS_READ_INCOMPLETE && status != DB_ERR_NO_CONSUMER)
+    					{
+    						log_error("Unexpected status returned by handle_read_queue(): %d", status);
+    						assert(0);
+    					}
     					status = get_queue_read_response_packet(start_row, end_row, entries_read, new_read_head, status, schema, qm, &tmp_out_buf, &snd_msg_len, vc);
 
     					break;
@@ -1875,7 +1884,252 @@ int handle_agreement_response_message(membership_agreement_msg * ma, membership_
     return m->proposal_status;
 }
 
-int install_agreed_view(membership_agreement_msg * ma, membership * m, vector_clock * my_lc, unsigned int * fastrandstate)
+int auto_update_group_queue_subscriptions(membership * m, db_t * db, unsigned int * fastrandstate)
+{
+	char msg_buf[4096];
+    log_debug("SERVER: Auto-updating actor queue mapping to groups.");
+
+    // Update queue group membership from gossip state:
+
+	for(snode_t * crt_rts = HEAD(m->connected_clients); crt_rts!=NULL; crt_rts = NEXT(crt_rts))
+	{
+		remote_server * rts = (remote_server *) (crt_rts->value);
+
+		int rts_id = get_node_id((struct sockaddr *) &(rts->serveraddr));
+
+		int update_status = set_bucket_status(db->queue_groups, (WORD) rts_id, rts->status, &get_group_state_key, &get_group_state_live_field);
+
+		if(update_status < 0) // We just learned of this group; add it
+		{
+		    log_debug("SERVER: auto_update_group_queue_subscriptions: Bucket %d not found, adding it", rts_id);
+
+			group_state * new_group = get_group((WORD) rts_id);
+
+			add_bucket(db->queue_groups, new_group, &get_group_state_key, &get_group_state_live_field, fastrandstate);
+		}
+	}
+
+    if(db->queue_groups->buckets->no_items < 1) // 2
+    {
+        log_debug("SERVER: We only have %d groups in total, nothing to do", db->queue_groups->buckets->no_items);
+        return 0;
+    }
+
+    // Update cached version of queue group subscriptions for all queues in all DB tables:
+
+	for(snode_t * crt_table = HEAD(db->tables); crt_table!=NULL; crt_table = NEXT(crt_table))
+	{
+		db_table_t * table = (db_table_t *) (crt_table->value);
+
+		for(snode_t * crt_queue = HEAD(table->queues); crt_queue!=NULL; crt_queue = NEXT(crt_queue))
+		{
+			db_row_t * row = (db_row_t *) (crt_queue->value);
+
+			WORD result = get_buckets_for_object(db->queue_groups, (int) row->key, db->queue_group_replication_factor,
+										&get_group_state_key, &get_group_state_live_field,
+										fastrandstate);
+
+			group_state * gs = (group_state *) result;
+
+            log_debug("SERVER: Updated queue group buckets for queue %d, group_id = %d, status = %d, consumers = %d",
+                    (int) row->key, ((gs != NULL)?((int) gs->group_id):(-1)),
+                    ((gs != NULL)?((int) gs->status):(-1)),
+                    ((gs != NULL)?((int) gs->consumers->no_items):(-1)));
+
+			if(db->queue_group_replication_factor > 1)
+			{
+				if(row->group_subscriptions != NULL)
+					skiplist_free(row->group_subscriptions);
+			}
+
+			row->group_subscriptions = result;
+		}
+	}
+
+	return 0;
+}
+
+/*
+int auto_update_group_queue_subscriptions_cached(membership * m, db_t * db, unsigned int * fastrandstate)
+{
+	char msg_buf[4096];
+    log_debug("SERVER: Auto-updating actor queue mapping to groups.");
+
+    if(db->queue_groups->buckets->no_items < 2)
+    {
+        log_debug("SERVER: We only have %d groups in total, nothing to do", db->queue_groups->buckets->no_items);
+        return 0;
+    }
+
+    // Get first and last active group (for ring wraparound):
+    group_state * first_active_group = NULL, * last_active_group = NULL, * last_group = NULL;
+    for(snode_t * last_group_node = HEAD(db->queue_groups->buckets); NEXT(last_group_node)!=NULL; last_group_node = NEXT(last_group_node))
+    {
+    		last_group = (group_state *) (last_group_node->value);
+    		if(last_group->status == GROUP_STATUS_ACTIVE)
+    		{
+    			last_active_group = last_group;
+    			if(first_active_group == NULL)
+    				first_active_group = last_group;
+    		}
+    }
+
+    group_state * prev_active_group = last_active_group, * prev_group = last_group;
+	for(snode_t * crt_group = HEAD(db->queue_groups->buckets); crt_group!=NULL; crt_group = NEXT(crt_group))
+	{
+		group_state * group = (group_state *) (crt_group->value);
+		group_state * next_active_group = NULL;
+
+		// Find next active group in ring:
+		for(snode_t * next_group = NEXT(crt_group); next_group!=NULL; next_group = NEXT(next_group))
+		{
+			group_state * next_group_state = (group_state *) (next_group->value);
+			if(next_group_state->status == GROUP_STATUS_ACTIVE)
+			{
+				next_active_group = next_group_state;
+				break;
+			}
+		}
+		if(next_active_group == NULL)
+			next_active_group = first_active_group;
+
+		for(snode_t * crt_table = HEAD(group->queue_tables); crt_table!=NULL; crt_table = NEXT(crt_table)) // next_active_group already handles wraparound
+		{
+			skiplist_t * queue_list = (skiplist_t *) (crt_table->value);
+			for(snode_t * crt_queue = HEAD(queue_list); crt_queue!=NULL; crt_queue = NEXT(crt_queue))
+			{
+				long queue_id = (long) crt_queue->value;
+
+				// See if queue_id belongs in this group or it should be migrated:
+				if(group->status == GROUP_STATUS_INACTIVE) // if inactive, migrate all local queues to next active group
+				{
+					add_queue_to_group(next_active_group, crt_table->key, (WORD) queue_id);
+				}
+				else
+				{
+					if((group != first_active_group) && (queue_id < prev_active_group->group_id))
+					{
+
+
+						add_queue_to_group(prev_active_group, crt_table->key, (WORD) queue_id);
+						skiplist_insert(queue_tables_to_delete, (long) crt_table->key, (long) crt_table->key, fastrandstate);
+						skiplist_insert(queue_ids_to_delete, queue_id, queue_id, fastrandstate);
+					}
+					else if((group == first_active_group) && (queue_id < prev_active_group->group_id || )) // handle wraparound
+					{
+
+					}
+				}
+			}
+		}
+
+		if(group->status == GROUP_STATUS_ACTIVE)
+		// If active, it could be that we just re-joined; migrate to myself queue_ids for which the current group is a closer match
+		// Inspect all groups following on the ring, up to and including the first active group, handling wraparounds
+		{
+			int encountered_active = 0;
+			for(snode_t * nxt_group = NEXT(crt_group); !encountered_active; nxt_group = NEXT(nxt_group))
+			{
+				if(nxt_group==NULL)
+					nxt_group = HEAD(db->queue_groups->buckets); // Handle wraparounds
+
+				group_state * nxt_group_state = (group_state *) (nxt_group->value);
+				skiplist_t * queue_tables_to_delete = create_skiplist_long();
+				skiplist_t * queue_ids_to_delete = create_skiplist_long();
+
+				for(snode_t * crt_table = HEAD(nxt_group_state->queue_tables); crt_table!=NULL; crt_table = NEXT(crt_table))
+				{
+					skiplist_t * queue_list = (skiplist_t *) (crt_table->value);
+					for(snode_t * crt_queue = HEAD(queue_list); crt_queue!=NULL; crt_queue = NEXT(crt_queue))
+					{
+						long queue_id = (long) crt_queue->value;
+						if(queue_id < group->group_id)
+						{
+							add_queue_to_group(group, crt_table->key, (WORD) queue_id);
+							skiplist_insert(queue_tables_to_delete, (long) crt_table->key, (long) crt_table->key, fastrandstate);
+							skiplist_insert(queue_ids_to_delete, queue_id, queue_id, fastrandstate);
+						}
+					}
+				}
+				// Remove from the other group those copies of queues that I migrated to myself:
+				for(snode_t * crt_table = HEAD(queue_tables_to_delete), * crt_queue = HEAD(queue_ids_to_delete); crt_table!=NULL; crt_table = NEXT(crt_table), crt_queue = NEXT(crt_queue))
+				{
+					remove_queue_from_group(group, crt_table->value, crt_queue->value);
+				}
+				skiplist_free(queue_tables_to_delete);
+				skiplist_free(queue_ids_to_delete);
+
+				if(nxt_group_state->status == GROUP_STATUS_ACTIVE)
+				{
+					encountered_active = 1;
+					break;
+				}
+			}
+			if(!encountered_active)
+			// We wrapped around, we need to iterate from the beginning of the ring to find my active succesor
+			{
+
+			}
+		}
+
+		// If active, it could be that we just re-joined. Iterate queues of all groups up to next active group to see if they have any queues for which this group is a better match:
+
+
+
+		if(group->status == GROUP_STATUS_ACTIVE)
+		{
+			prev_active_group = group;
+		}
+		else // We have migrated away all queues, delete my copies:
+		{
+			clear_group(group);
+		}
+		last_group = group;
+	}
+
+
+	int host_id = -1;
+	for(snode_t * crt = HEAD(db->actors); crt!=NULL; crt = NEXT(crt))
+	{
+		actor_descriptor * a = (actor_descriptor *) crt->value;
+
+		if(db->queue_group_replication_factor == 1)
+		{
+			rts_descriptor * first_rts = get_first_rts_for_actor(a->actor_id, db);
+
+		    assert(first_rts != NULL);
+
+		    a->host_rts = first_rts;
+
+		    a->is_local = (first_rts->_local_rts_index == db->local_rts_id);
+		}
+		else
+		{
+			skiplist_t * rtses = get_rtses_for_actor(a->actor_id, db);
+			int replica_no = 0;
+			a->is_local = 0;
+			for(snode_t * crt = HEAD(rtses); crt!=NULL; crt = NEXT(crt))
+			{
+				rts_descriptor * rts_d = (rts_descriptor *) crt->value;
+				host_id = get_node_id((struct sockaddr *) &(rts_d->addr));
+				if(host_id == db->local_rts_id)
+					a->is_local = 1;
+				if(replica_no == 0)
+				{
+					a->host_rts = rts_d;
+				}
+				replica_no++;
+			}
+		}
+	}
+
+    log_debug("SERVER: Actor membership: %s\n", to_string_actor_membership(db, msg_buf));
+
+	return 0;
+}
+*/
+
+int install_agreed_view(membership_agreement_msg * ma, membership * m, vector_clock * my_lc, db_t * db, unsigned int * fastrandstate)
 {
 #if (VERBOSE_RPC > -1)
 	char msg_buf[1024];
@@ -1964,6 +2218,11 @@ int install_agreed_view(membership_agreement_msg * ma, membership * m, vector_cl
 
 	update_or_replace_vc(&(m->view_id), ma->vc);
 
+	if(db->enable_auto_queue_group_subscriptions)
+	{
+		auto_update_group_queue_subscriptions(m, db, fastrandstate);
+	}
+
 #if (VERBOSE_RPC > -1)
 	log_debug("SERVER: Installed new agreed view %s, local_view_disagrees=%d",
 					to_string_membership_agreement_msg(ma, msg_buf),
@@ -1972,6 +2231,8 @@ int install_agreed_view(membership_agreement_msg * ma, membership * m, vector_cl
 
 	return local_view_disagrees;
 }
+
+
 
 int notify_new_view_to_clients(membership * m, membership_agreement_msg * ma, vector_clock * my_lc)
 {
@@ -2015,7 +2276,7 @@ int notify_new_view_to_clients(membership * m, membership_agreement_msg * ma, ve
 
 int handle_agreement_notify_message(membership_agreement_msg * ma, membership * m, db_t * db, vector_clock * my_lc, vector_clock * prev_vc, unsigned int * fastrandstate)
 {
-	int ret = install_agreed_view(ma, m, my_lc, fastrandstate);
+	int ret = install_agreed_view(ma, m, my_lc, db, fastrandstate);
 	notify_new_view_to_clients(m, ma, my_lc);
 	return ret;
 }
@@ -2226,7 +2487,7 @@ int handle_server_message(int childfd, int msg_len, membership * m, db_t * db, u
 
 					status = get_agreement_notify_packet(PROPOSAL_STATUS_ACCEPTED, merged_membership, ma, &amr, &tmp_out_buf, &snd_msg_len, copy_vc(my_lc), prev_vc);
 
-					int local_view_disagrees = install_agreed_view(amr, m, copy_vc(my_lc), fastrandstate);
+					int local_view_disagrees = install_agreed_view(amr, m, copy_vc(my_lc), db, fastrandstate);
 
 					free_membership_agreement(amr);
 
