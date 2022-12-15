@@ -18,7 +18,7 @@
 uint32_t hash32(uint32_t x)
 // Collision free, each input bit affects each output bit with ~50% probability
 {
-	x = ((x >> 16) ^ x) * 0x45d9f3b;
+    x = ((x >> 16) ^ x) * 0x45d9f3b;
     x = ((x >> 16) ^ x) * 0x45d9f3b;
     x = (x >> 16) ^ x;
     return x;

@@ -15,11 +15,11 @@
 #define GROUP_STATUS_INACTIVE 1
 
 typedef struct group_state {
-	WORD group_id;
-	skiplist_t * queue_tables;
-	skiplist_t * consumers;
-	pthread_mutex_t* group_lock;
-	int status;
+    WORD group_id;
+    skiplist_t * queue_tables;
+    skiplist_t * consumers;
+    pthread_mutex_t* group_lock;
+    int status;
 } group_state;
 
 // Queue group management fctns:
@@ -32,10 +32,10 @@ void deactivate_group(group_state * group);
 int add_queue_to_group(group_state * group, WORD table_key, WORD queue_id, unsigned int * fastrandstate);
 int remove_queue_from_group(group_state * group, WORD table_key, WORD queue_id);
 int add_listener_to_group(group_state * group,
-						WORD consumer_id, WORD shard_id, WORD app_id,
-						queue_callback * callback,
-						int * sockfd,
-						unsigned int * fastrandstate);
+                        WORD consumer_id, WORD shard_id, WORD app_id,
+                        queue_callback * callback,
+                        int * sockfd,
+                        unsigned int * fastrandstate);
 int remove_listener_from_group(group_state * group, WORD consumer_id);
 int lookup_listener_in_group(group_state * group, WORD consumer_id, consumer_state ** cs);
 int is_queue_in_group(group_state * group, WORD table_key, WORD queue_id);

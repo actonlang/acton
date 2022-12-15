@@ -10,23 +10,23 @@
 
 typedef struct queue_callback_args
 {
-	WORD table_key;
-	WORD queue_id;
+    WORD table_key;
+    WORD queue_id;
 
-	WORD consumer_id;
-	WORD shard_id;
-	WORD app_id;
+    WORD consumer_id;
+    WORD shard_id;
+    WORD app_id;
 
-	WORD group_id;
+    WORD group_id;
 
-	int status;
+    int status;
 } queue_callback_args;
 
 typedef struct queue_callback
 {
-	void (*callback)(queue_callback_args *);
-	pthread_mutex_t * lock;
-	pthread_cond_t * signal;
+    void (*callback)(queue_callback_args *);
+    pthread_mutex_t * lock;
+    pthread_cond_t * signal;
 } queue_callback;
 
 #define DEBUG_QUEUE_CALLBACK 0

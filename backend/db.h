@@ -47,51 +47,51 @@
 #define ENABLE_AUTO_QUEUE_GROUP_SUBSCRIPTIONS 1
 
 typedef struct db_schema {
-	int * col_types;
-	int min_no_cols;
+    int * col_types;
+    int min_no_cols;
 
-	int * primary_key_idxs;
-	int no_primary_keys;
+    int * primary_key_idxs;
+    int no_primary_keys;
 
-	int * clustering_key_idxs;
-	int min_no_clustering_keys;
+    int * clustering_key_idxs;
+    int min_no_clustering_keys;
 
-	int * index_key_idxs;
-	int no_index_keys;
+    int * index_key_idxs;
+    int no_index_keys;
 } db_schema_t;
 
 typedef struct db_table {
-	WORD table_key;
-	db_schema_t * schema;
-	skiplist_t * rows;
-	skiplist_t ** indexes;
+    WORD table_key;
+    db_schema_t * schema;
+    skiplist_t * rows;
+    skiplist_t ** indexes;
 
     skiplist_t * queues;
-	skiplist_t * row_tombstones;
+    skiplist_t * row_tombstones;
 
-	pthread_mutex_t* lock;
+    pthread_mutex_t* lock;
 } db_table_t;
 
 // Cells:
 
 typedef struct db_cell {
-	WORD key;
-	skiplist_t * cells;
-	WORD * column_array;
-	int no_columns;
-	int last_blob_size;
+    WORD key;
+    skiplist_t * cells;
+    WORD * column_array;
+    int no_columns;
+    int last_blob_size;
 
-	// Queue metadata:
-	skiplist_t * consumer_state;
-	WORD group_subscriptions; // This field is either a group_state * or a skiplist_t * of group_states (if db->queue_group_replication_factor > 1)
-	int64_t no_entries;
-	pthread_mutex_t* enqueue_lock;
-	pthread_mutex_t* read_lock;
-	pthread_mutex_t* subscribe_lock;
+    // Queue metadata:
+    skiplist_t * consumer_state;
+    WORD group_subscriptions; // This field is either a group_state * or a skiplist_t * of group_states (if db->queue_group_replication_factor > 1)
+    int64_t no_entries;
+    pthread_mutex_t* enqueue_lock;
+    pthread_mutex_t* read_lock;
+    pthread_mutex_t* subscribe_lock;
 
-	vector_clock * version;
+    vector_clock * version;
 
-	struct db_cell_t * _next;
+    struct db_cell_t * _next;
 } db_cell_t;
 
 typedef db_cell_t db_row_t;
@@ -142,18 +142,18 @@ int db_delete_row_transactional(WORD* primary_keys, vector_clock * version, WORD
 int db_delete_by_index(WORD index_key, int idx_idx, WORD table_key, db_t * db);
 int db_verify_cell_version(WORD* primary_keys, int no_primary_keys, WORD* clustering_keys, int no_clustering_keys, WORD table_key, vector_clock * version, db_t * db);
 int db_verify_row_range_version(WORD* start_primary_keys, WORD* end_primary_keys, int no_primary_keys, WORD table_key,
-									int64_t * range_result_keys, vector_clock ** range_result_versions, int no_range_results, db_t * db);
+                                    int64_t * range_result_keys, vector_clock ** range_result_versions, int no_range_results, db_t * db);
 int db_verify_cell_range_version(WORD* primary_keys, int no_primary_keys, WORD* start_clustering_keys, WORD* end_clustering_keys, int no_clustering_keys, WORD table_key,
-									int64_t * range_result_keys, vector_clock ** range_result_versions, int no_range_results, db_t * db);
+                                    int64_t * range_result_keys, vector_clock ** range_result_versions, int no_range_results, db_t * db);
 int db_verify_index_version(WORD index_key, int idx_idx, WORD table_key, vector_clock * version, db_t * db);
 int db_verify_index_range_version(int idx_idx, WORD start_idx_key, WORD end_idx_key,
-									int64_t * range_result_keys, vector_clock ** range_result_versions, int no_range_results, WORD table_key, db_t * db);
+                                    int64_t * range_result_keys, vector_clock ** range_result_versions, int no_range_results, WORD table_key, db_t * db);
 
 // Lower level API:
 
 db_row_t * create_db_row_schemaless(WORD * column_values, int * primary_key_idxs, int no_primary_keys,
-									int * clustering_key_idxs, int no_clustering_keys, int no_schema_clustering_keys,
-									int no_cols, size_t last_blob_size, unsigned int * fastrandstate);
+                                    int * clustering_key_idxs, int no_clustering_keys, int no_schema_clustering_keys,
+                                    int no_cols, size_t last_blob_size, unsigned int * fastrandstate);
 // Assumes key indexes are in order (rartition keys, followed by clustering keys, followed by columns). Also assumes a single partition key
 db_row_t * create_db_row_schemaless2(WORD * keys, int no_keys, WORD * cols, int no_cols, WORD last_blob, size_t last_blob_size, unsigned int * fastrandstate);
 void free_db_row(db_row_t * row, db_schema_t * schema, db_t * db);
@@ -176,11 +176,11 @@ int table_delete_row(WORD* primary_keys, vector_clock * version, db_table_t * ta
 int table_delete_by_index(WORD index_key, int idx_idx, db_table_t * table);
 int table_verify_cell_version(WORD* primary_keys, int no_primary_keys, WORD* clustering_keys, int no_clustering_keys, vector_clock * version, db_table_t * table);
 int table_verify_row_range_version(WORD* start_primary_keys, WORD* end_primary_keys, int no_primary_keys,
-										int64_t * range_result_keys, vector_clock ** range_result_versions, int no_range_results, db_table_t * table);
+                                        int64_t * range_result_keys, vector_clock ** range_result_versions, int no_range_results, db_table_t * table);
 int table_verify_cell_range_version(WORD* primary_keys, int no_primary_keys, WORD* start_clustering_keys, WORD* end_clustering_keys, int no_clustering_keys,
-										int64_t * range_result_keys, vector_clock ** range_result_versions, int no_range_results, db_table_t * table);
+                                        int64_t * range_result_keys, vector_clock ** range_result_versions, int no_range_results, db_table_t * table);
 int table_verify_index_version(WORD index_key, int idx_idx, vector_clock * version, db_table_t * table);
 int table_verify_index_range_version(int idx_idx, WORD start_idx_key, WORD end_idx_key,
-										int64_t * range_result_keys, vector_clock ** range_result_versions, int no_range_results, db_table_t * table);
+                                        int64_t * range_result_keys, vector_clock ** range_result_versions, int no_range_results, db_table_t * table);
 
 #endif /* BACKEND_DB_H_ */

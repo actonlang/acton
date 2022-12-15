@@ -41,10 +41,10 @@ int deserialize_client_message(void * buf, unsigned msg_len, void ** cm, short *
 
 typedef struct write_query
 {
-	cell * cell;
-	int msg_type; // {RPC_TYPE_WRITE, RPC_TYPE_DELETE}
-	uuid_t * txnid;
-	int64_t nonce;
+    cell * cell;
+    int msg_type; // {RPC_TYPE_WRITE, RPC_TYPE_DELETE}
+    uuid_t * txnid;
+    int64_t nonce;
 } write_query;
 
 typedef write_query read_response_message;
@@ -65,9 +65,9 @@ int equals_write_query(write_query * ca1, write_query * ca2);
 
 typedef struct read_query
 {
-	cell_address * cell_address;
-	uuid_t * txnid;
-	int64_t nonce;
+    cell_address * cell_address;
+    uuid_t * txnid;
+    int64_t nonce;
 } read_query;
 
 read_query * build_search_in_txn(WORD* primary_keys, int no_primary_keys, WORD table_key, uuid_t * txnid, int64_t nonce);
@@ -86,10 +86,10 @@ int equals_read_query(read_query * ca1, read_query * ca2);
 
 typedef struct ack_message
 {
-	cell_address * cell_address;
-	int status;
-	uuid_t * txnid;
-	int64_t nonce;
+    cell_address * cell_address;
+    int status;
+    uuid_t * txnid;
+    int64_t nonce;
 } ack_message;
 
 ack_message * init_ack_message(cell_address * cell_address, int status, uuid_t * txnid, int64_t nonce);
@@ -102,10 +102,10 @@ int equals_ack_message(ack_message * ca1, ack_message * ca2);
 
 typedef struct range_read_query
 {
-	cell_address * start_cell_address;
-	cell_address * end_cell_address;
-	uuid_t * txnid;
-	int64_t nonce;
+    cell_address * start_cell_address;
+    cell_address * end_cell_address;
+    uuid_t * txnid;
+    int64_t nonce;
 } range_read_query;
 
 range_read_query * build_range_search_in_txn(WORD* start_primary_keys, WORD* end_primary_keys, int no_primary_keys, WORD table_key, uuid_t * txnid, int64_t nonce);
@@ -124,10 +124,10 @@ int equals_range_read_query(range_read_query * ca1, range_read_query * ca2);
 
 typedef struct range_read_response_message
 {
-	cell * cells;
-	int no_cells;
-	uuid_t * txnid;
-	int64_t nonce;
+    cell * cells;
+    int no_cells;
+    uuid_t * txnid;
+    int64_t nonce;
 } range_read_response_message;
 
 range_read_response_message * init_range_read_response_message(cell * cells, int no_cells, uuid_t * txnid, int64_t nonce);
@@ -140,39 +140,39 @@ int equals_range_read_response_message(range_read_response_message * ca1, range_
 
 typedef struct queue_query_message
 {
-	cell_address * cell_address; // queue address
-	short msg_type; // {CREATE, DELETE, SUBSCRIBE, UNSUBSCRIBE, ENQUEUE, READ_QUEUE, CONSUME_QUEUE, READ_QUEUE_RESPONSE}
+    cell_address * cell_address; // queue address
+    short msg_type; // {CREATE, DELETE, SUBSCRIBE, UNSUBSCRIBE, ENQUEUE, READ_QUEUE, CONSUME_QUEUE, READ_QUEUE_RESPONSE}
 
-	int app_id;
-	int shard_id;
-	int consumer_id;
-	int group_id;
+    int app_id;
+    int shard_id;
+    int consumer_id;
+    int group_id;
 
-	// For ENQUEUE and READ_QUEUE_RESPONSE:
+    // For ENQUEUE and READ_QUEUE_RESPONSE:
 
-	cell * cells;
-	int no_cells;
+    cell * cells;
+    int no_cells;
 
-	// For READ_QUEUE (== max_entries) and CONSUME_QUEUE (== new_consume_head):
+    // For READ_QUEUE (== max_entries) and CONSUME_QUEUE (== new_consume_head):
 
-	int64_t queue_index;
+    int64_t queue_index;
 
 
-	// For RESPONSE type messages:
+    // For RESPONSE type messages:
 
-	short status;
+    short status;
 
-	uuid_t * txnid;
-	int64_t nonce;
+    uuid_t * txnid;
+    int64_t nonce;
 } queue_query_message;
 
 queue_query_message * build_create_queue_in_txn(WORD table_key, WORD queue_id, uuid_t * txnid, int64_t nonce);
 queue_query_message * build_delete_queue_in_txn(WORD table_key, WORD queue_id, uuid_t * txnid, int64_t nonce);
 queue_query_message * build_enqueue_in_txn(WORD * column_values, int no_cols, WORD blob, size_t blob_size, WORD table_key, WORD queue_id, uuid_t * txnid, int64_t nonce);
 queue_query_message * build_read_queue_in_txn(WORD consumer_id, WORD shard_id, WORD app_id, WORD table_key, WORD queue_id,
-												int max_entries, uuid_t * txnid, int64_t nonce);
+                                                int max_entries, uuid_t * txnid, int64_t nonce);
 queue_query_message * build_consume_queue_in_txn(WORD consumer_id, WORD shard_id, WORD app_id, WORD table_key, WORD queue_id,
-													int64_t new_consume_head, uuid_t * txnid, int64_t nonce);
+                                                    int64_t new_consume_head, uuid_t * txnid, int64_t nonce);
 queue_query_message * build_subscribe_queue_in_txn(WORD consumer_id, WORD shard_id, WORD app_id, WORD table_key, WORD queue_id, uuid_t * txnid, int64_t nonce);
 queue_query_message * build_unsubscribe_queue_in_txn(WORD consumer_id, WORD shard_id, WORD app_id, WORD table_key, WORD queue_id, uuid_t * txnid, int64_t nonce);
 queue_query_message * build_subscribe_group_in_txn(WORD consumer_id, WORD shard_id, WORD app_id, WORD group_id, uuid_t * txnid, int64_t nonce);
@@ -199,18 +199,18 @@ int equals_queue_message(queue_query_message * ca1, queue_query_message * ca2);
 
 typedef struct txn_message
 {
-	int type;
-	cell * own_read_set;
-	int no_own_read_set;
-	cell * own_write_set;
-	int no_own_write_set;
-	cell * complete_read_set;
-	int no_complete_read_set;
-	cell * complete_write_set;
-	int no_complete_write_set;
-	uuid_t * txnid;
-	vector_clock * version;
-	int64_t nonce;
+    int type;
+    cell * own_read_set;
+    int no_own_read_set;
+    cell * own_write_set;
+    int no_own_write_set;
+    cell * complete_read_set;
+    int no_complete_read_set;
+    cell * complete_write_set;
+    int no_complete_write_set;
+    uuid_t * txnid;
+    vector_clock * version;
+    int64_t nonce;
 } txn_message;
 
 txn_message * build_new_txn(uuid_t * txnid, int64_t nonce);
@@ -219,17 +219,17 @@ txn_message * build_abort_txn(uuid_t * txnid, int64_t nonce);
 txn_message * build_commit_txn(uuid_t * txnid, vector_clock * version, int64_t nonce);
 
 txn_message * init_txn_message(int type,
-								cell * own_read_set, int no_own_read_set,
-								cell * own_write_set, int no_own_write_set,
-								cell * complete_read_set, int no_complete_read_set,
-								cell * complete_write_set, int no_complete_write_set,
-								uuid_t * txnid, vector_clock * version, int64_t nonce);
+                                cell * own_read_set, int no_own_read_set,
+                                cell * own_write_set, int no_own_write_set,
+                                cell * complete_read_set, int no_complete_read_set,
+                                cell * complete_write_set, int no_complete_write_set,
+                                uuid_t * txnid, vector_clock * version, int64_t nonce);
 txn_message * init_txn_message_copy(int type,
-		cell * own_read_set, int no_own_read_set,
-		cell * own_write_set, int no_own_write_set,
-		cell * complete_read_set, int no_complete_read_set,
-		cell * complete_write_set, int no_complete_write_set,
-		uuid_t * txnid, vector_clock * version, int64_t nonce);
+        cell * own_read_set, int no_own_read_set,
+        cell * own_write_set, int no_own_write_set,
+        cell * complete_read_set, int no_complete_read_set,
+        cell * complete_write_set, int no_complete_write_set,
+        uuid_t * txnid, vector_clock * version, int64_t nonce);
 void free_txn_message(txn_message * ca);
 int serialize_txn_message(txn_message * ca, void ** buf, unsigned * len, short for_server, vector_clock * vc);
 int deserialize_txn_message(void * buf, unsigned msg_len, txn_message ** ca);
@@ -238,8 +238,8 @@ int equals_txn_message(txn_message * ca1, txn_message * ca2);
 
 typedef struct gossip_listen_message
 {
-	node_description * node_description;
-	int64_t nonce;
+    node_description * node_description;
+    int64_t nonce;
 } gossip_listen_message;
 
 gossip_listen_message * build_gossip_listen_msg(node_description * nd, int64_t nonce);
