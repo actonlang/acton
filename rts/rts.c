@@ -747,6 +747,8 @@ void create_db_queue(long key) {
             sleep(3);
             continue;
         }
+        if(ret == 0 || ret == CLIENT_ERR_SUBSCRIPTION_EXISTS)
+            break;
 /*
         queue_callback * qc = get_queue_callback(dummy_callback);
         int64_t prev_read_head = -1, prev_consume_head = -1;
@@ -757,8 +759,6 @@ void create_db_queue(long key) {
             sleep(3);
             continue;
         }
-        if(ret == 0 || ret == CLIENT_ERR_SUBSCRIPTION_EXISTS)
-            break;
 */
     }
 }
@@ -1500,12 +1500,12 @@ void wt_work_cb(uv_check_t *ev) {
                     int entries_read = 0, minority_status = 0;
                     int64_t read_head = -1;
 
-                    int ret0 = remote_read_queue_in_txn(($WORD)key, 0, 0, MSG_QUEUE, ($WORD)key, 1, &entries_read, &read_head, &m_start, &m_end, &minority_status, NULL, db);
+                    int ret0 = remote_read_queue_in_txn(($WORD) db->local_rts_id, 0, 0, MSG_QUEUE, ($WORD)key, 1, &entries_read, &read_head, &m_start, &m_end, &minority_status, NULL, db);
                     rtsd_printf("   # dummy read msg from queue %ld returns %d, entries read: %d", key, ret0, entries_read);
                     if(handle_status_and_schema_mismatch(ret0, minority_status, key))
                         continue;
 
-                    int ret1 = remote_consume_queue_in_txn(($WORD)key, 0, 0, MSG_QUEUE, ($WORD)key, read_head, &minority_status, txnid, db);
+                    int ret1 = remote_consume_queue_in_txn(($WORD) db->local_rts_id, 0, 0, MSG_QUEUE, ($WORD)key, read_head, &minority_status, txnid, db);
                     rtsd_printf("   # consume msg %ld from queue %ld returns %d", m->$globkey, key, ret1);
                     if(handle_status_and_schema_mismatch(ret1, minority_status, key))
                         continue;
@@ -2491,8 +2491,10 @@ int main(int argc, char **argv) {
             printf("### initializing remote_subscribe_group(consumer_id = %d, group_id = %d)\n", (int) db->local_rts_id, (int) db->local_rts_id);
             while(!rts_exit) {
                 ret = remote_subscribe_group((WORD) db->local_rts_id, NULL, NULL, (WORD) db->local_rts_id, gqc, &minority_status, db);
-                if(!handle_status_and_schema_mismatch(ret, minority_status, 0))
+                if(!handle_status_and_schema_mismatch(ret, minority_status, 0)) {
+                    printf("### remote_subscribe_group(consumer_id = %d, group_id = %d) successful!\n", (int) db->local_rts_id, (int) db->local_rts_id);
                     break;
+                }
             }
             int indices[] = {0};
             db_schema_t* db_schema = db_create_schema(NULL, 1, indices, 1, indices, 0, indices, 0);
