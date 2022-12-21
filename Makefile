@@ -159,7 +159,7 @@ backend/db.o: backend/db.c backend/db.h backend/skiplist.h backend/hash_ring.h b
 backend/queue.o: backend/queue.c backend/queue.h backend/queue_callback.h backend/log.h backend/failure_detector/cells.h backend/failure_detector/db_queries.h backend/common.h
 	$(CC) -o$@ $< -c $(CFLAGS_DB)
 
-backend/queue_groups.o: backend/queue_groups.c backend/queue_groups.h backend/queue_callback.h backend/skiplist.h backend/log.h backend/common.h
+backend/queue_groups.o: backend/queue_groups.c backend/queue_groups.h backend/queue_callback.h backend/skiplist.h backend/log.h backend/common.h $(DEPSA)
 	$(CC) -o$@ $< -c $(CFLAGS_DB)
 
 backend/log.o: backend/log.c
