@@ -1,0 +1,53 @@
+# Acton port of https://programtalk.com/vs2/?source=python/2753/cython/Demos/benchmarks/spectralnorm.py
+import math
+
+def eval_A(i, j):
+    ij = float(i) + float(j)
+    return 1.0 / (ij * (ij + 1) / 2 + float(i) + 1)
+
+def eval_A_times_u(u):
+    res = []
+    for i in range(0, len(u), 1):
+        res.append(part_A_times_u(i,u))
+    return res
+
+def eval_At_times_u(u):
+    res = []
+    for i in range(0, len(u), 1):
+        res.append(part_At_times_u(i,u))
+    return res
+
+def eval_AtA_times_u(u):
+    return eval_At_times_u(eval_A_times_u(u))
+
+def part_A_times_u(i, u):
+    partial_sum = 0.0
+    for j, u_j in enumerate(u, 0):
+        partial_sum += eval_A(i, j) * u_j
+    return partial_sum
+
+def part_At_times_u(i, u):
+    partial_sum = 0
+    for j, u_j in enumerate(u, 0):
+        partial_sum += eval_A(j, i) * u_j
+    return partial_sum
+
+actor main(env):
+    var u = [1] * int(env.argv[1])
+    var v = []
+
+    for dummy in range(0, 10, 1):
+        v = eval_AtA_times_u(u)
+        u = eval_AtA_times_u(v)
+
+    vBv = vv = 0
+
+    for i in range(0, len(u), 1):
+        ue = u[i]
+        ve = v[i]
+        vBv += ue * ve
+        vv  += ve * ve
+    res = math.sqrt(vBv/vv)
+    print("%.9f" % res)
+
+    await async env.exit(0)

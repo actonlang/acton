@@ -1,0 +1,39 @@
+name: "\U0001F41E Bug Report"
+description: "Create a bug report for Acton."
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        A bug is when something works differently than it is expected to.
+        ## Remember to search before filing a new report
+        Please search for this bug in the issue tracker, and use a bug report title that would have made your bug report turn up in the search results for your search query.
+  - type: input
+    id: version
+    attributes:
+      label: Acton Version
+      description: "The output of `actonc --version`"
+      placeholder: "0.11.2-20221003112345"
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: Steps to Reproduce
+      description: What exactly can someone else do, in order to observe the problem that you observed?
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected Behavior
+      description: What did you expect to happen?
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual Behavior
+      description: What happened instead? Be sure to include all error messages if any.
+    validations:
+      required: true

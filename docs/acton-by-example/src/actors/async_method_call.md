@@ -27,7 +27,7 @@ actor main(env):
 
 Compile and run:
 ```sh
-actonc async.act --root main
+actonc async.act
 ```
 
 Output:

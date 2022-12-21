@@ -1,5 +1,7 @@
 import time
 
 actor main(env):
-    print(time.time())
-    await async env.exit(0)
+    def f():
+        print(time.time())
+    f()
+    env.exit(0)

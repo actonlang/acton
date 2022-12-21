@@ -1,0 +1,94 @@
+"""Network IO
+"""
+
+class NetAuth():
+    """Token for general network access"""
+    def __init__(self, auth: WorldAuth):
+        pass
+
+class DNSAuth():
+    """Token for performing DNS queries"""
+    def __init__(self, auth: NetAuth):
+        pass
+
+class TCPAuth():
+    """Token for connecting or listening with TCP"""
+    def __init__(self, auth: NetAuth):
+        pass
+
+class TCPConnectAuth():
+    """Token to connect using TCP to a remote host"""
+    def __init__(self, auth: TCPAuth):
+        pass
+
+class TCPListenAuth():
+    """Token for opening a TCP socket"""
+    def __init__(self, auth: TCPAuth):
+        pass
+
+class _TCPListenConnectAuth():
+    """Internal use only"""
+    pass
+
+actor DNS(auth: DNSAuth):
+    action def lookup_a(name: str, on_resolve: action(list[str]) -> None, on_error: action(str, str) -> None) -> None:
+        """Perform DNS lookup for name of record type A
+        """
+        NotImplemented
+
+    action def lookup_aaaa(name: str, on_resolve: action(list[str]) -> None, on_error: action(str, str) -> None) -> None:
+        """Perform DNS lookup for name of record type AAAA
+        """
+        NotImplemented
+
+    proc def _pin_affinity() -> None:
+        """Implementation internal"""
+        NotImplemented
+    _pin_affinity()
+
+
+actor TCPIPConnection(auth: TCPConnectAuth, address: str, port: int, on_connect: action(TCPIPConnection) -> None, on_receive: action(TCPIPConnection, bytes) -> None, on_error: action(TCPIPConnection, str) -> None):
+    """TCP IP Connection"""
+    _socket = -1
+
+    action def write(data: bytes) -> None:
+        """Write data to remote"""
+        NotImplemented
+
+    mut def __resume__() -> None:
+        NotImplemented
+
+    proc def _init():
+        NotImplemented
+    _init()
+
+actor TCPListenConnection(auth: _TCPListenConnectAuth, client: int, on_receive: action(TCPListenConnection, bytes) -> None, on_error: action(TCPListenConnection, str) -> None):
+    """TCP Listener Connection"""
+    action def write(data: bytes) -> None:
+        """Write data to remote"""
+        NotImplemented
+
+    mut def __resume__() -> None:
+        NotImplemented
+
+    proc def _init():
+        """Implementation internal"""
+        NotImplemented
+    _init()
+
+
+actor TCPListener(auth: TCPListenAuth, address: str, port: int, on_listen_error: action(TCPListener, str) -> None, on_accept: action(TCPListenConnection) -> None, on_receive: action(TCPListenConnection, bytes) -> None, on_error: action(TCPListenConnection, str) -> None):
+    """TCP Listener"""
+    _stream = -1
+    def create_tcp_listen_connection(auth: _TCPListenConnectAuth, client: int):
+        """Implementation internal"""
+        c = TCPListenConnection(auth, client, on_receive, on_error)
+        on_accept(c)
+
+    mut def __resume__() -> None:
+        NotImplemented
+
+    proc def _init():
+        """Implementation internal"""
+        NotImplemented
+    _init()

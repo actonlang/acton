@@ -22,7 +22,7 @@ import Prelude hiding((<>))
 
 
 version :: [Int]
-version = [0,1]
+version = [0,2]
 
 data Module     = Module        { modname::ModName, imps::[Import], mbody::Suite } deriving (Eq,Show)
 
@@ -103,7 +103,8 @@ data Expr       = Var           { eloc::SrcLoc, var::QName }
                 | Paren         { eloc::SrcLoc, exp1::Expr }
                 deriving (Show)
 
-data Pattern    = PVar          { ploc::SrcLoc, pn::Name, pann::Maybe Type }
+data Pattern    = PWild         { ploc::SrcLoc, pann::Maybe Type }
+                | PVar          { ploc::SrcLoc, pn::Name, pann::Maybe Type }
                 | PParen        { ploc::SrcLoc, pat::Pattern }
                 | PTuple        { ploc::SrcLoc, ppat::PosPat, kpat::KwdPat}
                 | PList         { ploc::SrcLoc, pats::[Pattern], ptail::Maybe Pattern }
@@ -208,7 +209,7 @@ data TVar       = TV { tvkind::Kind, tvname::Name } deriving (Show,Read,Generic)
 
 data TCon       = TC { tcname::QName, tcargs::[Type] } deriving (Eq,Show,Read,Generic)
 
-data FX         = FXPure | FXMut | FXAction | FXAsync deriving (Eq,Show,Read,Generic)
+data FX         = FXPure | FXMut | FXProc | FXAction deriving (Eq,Show,Read,Generic)
 
 data QBind      = Quant TVar [TCon] deriving (Eq,Show,Read,Generic)
 
@@ -221,7 +222,7 @@ type KVar       = Name
 
 data Type       = TVar      { tloc::SrcLoc, tvar::TVar }
                 | TCon      { tloc::SrcLoc, tcon::TCon }
-                | TFun      { tloc::SrcLoc, fx::TFX, posrow::PosRow, kwdrow::KwdRow, restype::Type }
+                | TFun      { tloc::SrcLoc, effect::TFX, posrow::PosRow, kwdrow::KwdRow, restype::Type }
                 | TTuple    { tloc::SrcLoc, posrow::PosRow, kwdrow::KwdRow }
                 | TOpt      { tloc::SrcLoc, opttype::Type }
                 | TNone     { tloc::SrcLoc }
@@ -241,6 +242,7 @@ data Constraint = Cast  Type Type
                 | Impl  Name Type PCon
                 | Sel   Name Type Name Type
                 | Mut   Type Name Type
+                | Seal  Type
                 deriving (Eq,Show,Read,Generic)
 
 type Constraints = [Constraint]
@@ -265,6 +267,7 @@ sExpr e         = Expr NoLoc e
 sDecl ds        = Decl NoLoc ds
 sIf bs els      = If NoLoc bs els
 sIf1 e b els    = sIf [Branch e b] els
+sNotImpl        = Expr NoLoc eNotImpl
 
 handler qn b    = Handler (Except NoLoc qn) b
 
@@ -274,6 +277,7 @@ tApp e ts       = TApp NoLoc e ts
 eCall e es      = Call NoLoc e (posarg es) KwdNil
 eCallVar c es   = eCall (eVar c) es
 eCallV c es     = eCall (Var NoLoc c) es
+eCallP e as     = Call NoLoc e as KwdNil
 eTuple es       = Tuple NoLoc (posarg es) KwdNil
 eQVar n         = Var NoLoc n
 eVar n          = Var NoLoc (NoQ n)
@@ -284,11 +288,20 @@ eBool b         = Bool NoLoc b
 eBinOp e o e'   = BinOp NoLoc e o e'
 eLambda nts e   = Lambda NoLoc (pospar nts) KwdNIL e fxPure
 eLambda' ns e   = Lambda NoLoc (pospar' ns) KwdNIL e fxWild
+eAsync e        = Async NoLoc e
+eAwait e        = Await NoLoc e
+eNotImpl        = NotImplemented NoLoc
 
 pospar nts      = foldr (\(n,t) p -> PosPar n (Just t) Nothing p) PosNIL nts
 pospar' ns      = foldr (\n p -> PosPar n Nothing Nothing p) PosNIL ns
 
 posarg es       = foldr PosArg PosNil es
+
+posargs (PosArg e p) 
+                = e : posargs p
+posargs (PosStar e)
+                = [e]
+posargs PosNil  = []
 
 pVar n t        = PVar NoLoc n (Just t)
 pVar' n         = PVar NoLoc n Nothing
@@ -321,11 +334,16 @@ tSelf           = TVar NoLoc tvSelf
 tvSelf          = TV KType nSelf
 nSelf           = Name NoLoc "Self"
 
+fxSelf          = TV KFX nSelf
+
 fxPure          = tTFX FXPure
 fxMut           = tTFX FXMut
+fxProc          = tTFX FXProc
 fxAction        = tTFX FXAction
-fxAsync         = tTFX FXAsync
 fxWild          = tWild
+
+fxFun fx1 fx2   = tFun fxPure (posRow (tF0 fx1) posNil) kwdNil (tF0 fx2)
+  where tF0 fx  = tFun fx posNil kwdNil tNone
 
 posRow t r      = TRow NoLoc PRow (name "_") t r
 posVar mbv      = maybe tWild tVar mbv
@@ -385,7 +403,76 @@ tvarSupplyMap vs avoid  = map setk (vs `zip` (tvarSupply \\ avoid))
   where setk (v,v')     = (v, tVar $ v'{ tvkind = tvkind v })
 
 
-type Substitution = [(TVar,Type)]
+type Substitution       = [(TVar,Type)]
+
+type TEnv               = [(Name, NameInfo)]
+
+data NameInfo           = NVar      Type
+                        | NSVar     Type
+                        | NDef      TSchema Deco
+                        | NSig      TSchema Deco
+                        | NAct      QBinds PosRow KwdRow TEnv
+                        | NClass    QBinds [WTCon] TEnv
+                        | NProto    QBinds [WTCon] TEnv
+                        | NExt      QBinds TCon [WTCon] TEnv
+                        | NTVar     Kind CCon
+                        | NAlias    QName
+                        | NMAlias   ModName
+                        | NModule   TEnv
+                        | NReserved
+                        deriving (Eq,Show,Read,Generic)
+
+data Witness            = WClass    { binds::QBinds, wtype::Type, proto::PCon, wname::QName, wsteps::WPath }
+                        | WInst     { binds::QBinds, wtype::Type, proto::PCon, wname::QName, wsteps::WPath }
+                        deriving (Show)
+
+typeDecl (_,NDef{})     = False
+typeDecl _              = True
+
+
+-- Finding type leaves -----
+
+class Leaves a where
+    leaves                  :: a -> [Type]
+
+instance (Leaves a) => Leaves [a] where
+    leaves                  = concatMap leaves
+
+instance (Leaves a) => Leaves (Name,a) where
+    leaves (n,x)            = leaves x
+
+instance Leaves NameInfo where
+    leaves (NClass q cs te) = leaves q ++ leaves cs ++ leaves te
+    leaves (NProto q ps te) = leaves q ++ leaves ps ++ leaves te
+    leaves (NAct q p k te)  = leaves q ++ leaves [p,k] ++ leaves te
+    leaves (NExt q c ps te) = leaves q ++ leaves c ++ leaves ps ++ leaves te
+    leaves (NDef sc dec)    = leaves sc
+    leaves _                = []
+
+instance Leaves QBind where
+    leaves (Quant tv ps)    = tVar tv : leaves ps
+
+instance Leaves (WPath,PCon) where
+    leaves (wp,p)           = leaves p
+
+instance Leaves TSchema where
+    leaves (TSchema _ q t)  = leaves q ++ leaves t
+
+instance Leaves Type where
+    leaves t@TCon{}         = [t]
+    leaves t@TVar{}         = [t]
+    leaves t@TFX{}          = [t]
+    leaves (TFun _ x p k t) = leaves [x,p,k,t]
+    leaves (TTuple _ p k)   = leaves [p,k]
+    leaves (TOpt _ t)       = leaves t
+    leaves (TRow _ _ _ t r) = leaves [t,r]
+    leaves _                = []
+
+instance Leaves TCon where
+    leaves tc               = [tCon tc]
+
+instance Leaves TVar where
+    leaves tv               = [tVar tv]
 
 
 instance Data.Binary.Binary Prefix
@@ -401,6 +488,7 @@ instance Data.Binary.Binary Type
 instance Data.Binary.Binary Kind
 instance Data.Binary.Binary FX
 instance Data.Binary.Binary Constraint
+instance Data.Binary.Binary NameInfo
 
 
 -- Locations ----------------
@@ -457,6 +545,7 @@ instance HasLoc Constraint where
     loc (Impl _ _ p)    = loc p
     loc (Sel _ _ n _)   = loc n
     loc (Mut _ n _)     = loc n
+    loc (Seal t)        = loc t
 
 
 -- Eq -------------------------
@@ -574,6 +663,7 @@ instance Eq Comp where
     _                   ==  _                   = False
 
 instance Eq Pattern where
+    PWild _ a1          == PWild _ a2           = a1 == a2
     PVar _ n1 a1        == PVar _ n2 a2         = n1 == n2 && a1 == a2
     PTuple _ p1 k1      == PTuple _ p2 k2       = p1 == p2 && k1 == k2
     PList _ ps1 p1      == PList _ ps2 p2       = ps1 == ps2 && p1 == p2
@@ -642,22 +732,31 @@ isKeyword x                         = x `Data.Set.member` rws
                                         "False","None","NotImplemented","Self","True","action","actor","after","and","as",
                                         "assert","async","await","break","class","continue","def","del","elif","else",
                                         "except","extension","finally","for","from","if","import","in","is","isinstance",
-                                        "lambda","mut","not","or","pass","protocol","pure","raise","return","try","var",
-                                        "while","with","yield"
+                                        "lambda","mut","not","or","pass","proc","protocol","pure","raise","return","try",
+                                        "var","while","with","yield","_"
                                       ]
-
-isNotImpl [Expr _ (NotImplemented _)]   = True
-isNotImpl (Expr _ (Strings _ _) : b)    = isNotImpl b
-isNotImpl _                             = False
-
-isHidden (Name _ str)               = length (takeWhile (=='_') str) == 1
-isHidden _                          = True
 
 isSig Signature{}                   = True
 isSig _                             = False
 
 isDecl Decl{}                       = True
 isDecl _                            = False
+
+isQVar (Var _ n)                    = Just n
+isQVar (TApp _ e _)                 = isQVar e
+isQVar e                            = Nothing
+
+isVar e                             = case isQVar e of Just (NoQ n) -> Just n; _ -> Nothing
+
+hasNotImpl ss                       = any isNotImpl ss
+
+isNotImpl (Expr _ e)                = e == eNotImpl
+isNotImpl (Assign _ _ e)            = e == eNotImpl
+isNotImpl (Decl _ ds)               = any (hasNotImpl . dbody) ds
+isNotImpl _                         = False
+
+isTVar TVar{}                       = True
+isTVar _                            = False
 
 singlePosArg (PosArg _ PosNil)      = True
 singlePosArg _                      = False

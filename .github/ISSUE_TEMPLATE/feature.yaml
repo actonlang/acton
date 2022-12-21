@@ -1,0 +1,31 @@
+name: "\U0001F680 Feature / Enhancement Request"
+description: "Suggest a new idea / feature enhancement for Acton."
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        A feature is when you would like to add new functionality or change current functionality / behavior.
+        ## Remember to search before filing a new report
+        Please search for this feature request in the issue tracker, and use a feature request title that would have made your feature request turn up in the search results for your search query.
+  - type: textarea
+    id: repro
+    attributes:
+      label: Proposal
+      description: Provide a clear and concise description of what you want
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Motivation
+      description: Explain the problem that your proposal is attempting to address
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Alternatives
+      description: What other solutions have you tried or considered?
+    validations:
+      required: true

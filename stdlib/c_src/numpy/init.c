@@ -12,11 +12,14 @@
  * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
+#include <limits.h>
+
 int numpy$$done = 0;
 
 void numpy$$__init__() {
     if (numpy$$done) return;
     numpy$$done = 1;
+    numpy$$newaxis = to$int(LONG_MIN);
     $register_force(ATOM_ID,&numpy$$ndarray$methods);
     $register(&numpy$$Iterator$ndarray$methods);
     $register(&numpy$$Primitive$int$methods);
@@ -34,6 +37,5 @@ void numpy$$__init__() {
     $register(&numpy$$Sliceable$ndarray$methods);
     $register(&numpy$$Collection$ndarray$methods);
     $register(&numpy$$RealFuns$math$ndarray$methods);
-    numpy$$newaxis = to$int(LONG_MIN);
 }
 

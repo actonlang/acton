@@ -11,6 +11,7 @@
 #include <stdbool.h>
 #include <string.h>
 #include <math.h>
+#include <ctype.h>
 
 #include "common.h"
 #include "__builtin__.h"
@@ -33,6 +34,7 @@
 #include "set.h"
 #include "set_impl.h"
 #include "tuple.h"
+#include "i64.h"
 #include "range.h"
 #include "exceptions.h"
 #include "function.h"

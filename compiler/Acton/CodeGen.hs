@@ -15,6 +15,7 @@
 module Acton.CodeGen where
 
 import qualified Data.Set
+import qualified Data.List
 import qualified Acton.Env
 import Utils
 import Pretty
@@ -31,7 +32,7 @@ import System.FilePath.Posix
 
 generate                            :: Acton.Env.Env0 -> FilePath -> Module -> IO (String,String,String)
 generate env srcbase m              = do return (n, h,c)
-  where n                           = render $ quotes $ gen env0 (modname m)
+  where n                           = concat (Data.List.intersperse "." (modPath (modname m))) --render $ quotes $ gen env0 (modname m)
         h                           = render $ hModule env0 m
         c                           = render $ cModule env0 srcbase m
         env0                        = genEnv $ setMod (modname m) env
@@ -118,7 +119,7 @@ decl env (Class _ n q a b)          = (text "struct" <+> classname env n <+> cha
   where tc                          = TC (NoQ n) [ tVar v | Quant v _ <- q ]
         initdef : meths             = fields env tc
         properties                  = [ varsig env n (sctype sc) <> semi | (n, NSig sc Property) <- fullAttrEnv env tc ]
-decl env (Def _ n q p _ a _ _ _)    = gen env (fromJust a) <+> genTopName env n <+> parens (params env $ prowOf p) <> semi
+decl env (Def _ n q p _ a _ _ fx)   = gen env (exposeMsg fx $ fromJust a) <+> genTopName env n <+> parens (params env $ prowOf p) <> semi
 
 methstub env (Class _ n q a b)      = text "extern" <+> text "struct" <+> classname env n <+> methodtable env n <> semi $+$
                                       constub env t n r
@@ -126,8 +127,9 @@ methstub env (Class _ n q a b)      = text "extern" <+> text "struct" <+> classn
 methstub env Def{}                  = empty
 
 constub env t n r
-  | abstractClass env (NoQ n)       = empty
+  | not $ null ns                   = empty
   | otherwise                       = gen env t <+> newcon env n <> parens (params env r) <> semi
+  where ns                          = abstractAttrs env (NoQ n)
 
 fields env c                        = map field (subst [(tvSelf,tCon c)] te)
   where te                          = fullAttrEnv env c
@@ -141,7 +143,7 @@ fields env c                        = map field (subst [(tvSelf,tCon c)] te)
 funsig env n (TFun _ _ r _ t)       = gen env t <+> parens (char '*' <> gen env n) <+> parens (params env r)
 funsig env n t                      = varsig env n t
 
-methsig env c n (TFun _ _ r _ t)    = gen env t <+> parens (char '*' <> gen env n) <+> parens (params env $ posRow (tCon c) r)
+methsig env c n (TFun _ fx r _ t)   = gen env (exposeMsg fx t) <+> parens (char '*' <> gen env n) <+> parens (params env $ posRow (tCon c) r)
 methsig env c n t                   = varsig env n t
 
 params env (TNil _ _)               = empty
@@ -149,6 +151,11 @@ params env (TRow _ _ _ t r@TRow{})  = gen env t <> comma <+> params env r
 params env (TRow _ _ _ t TNil{})    = gen env t
 params env (TRow _ _ _ t TVar{})    = gen env t                                         -- Ignore param tails for now...
 params env t                        = error ("codegen unexpected row: " ++ prstr t)
+
+exposeMsg fx t                      = if fx == fxAction then tMsg t else t
+
+exposeMsg' t@TFun{}                 = t{ restype = exposeMsg (effect t) (restype t) }
+exposeMsg' t                        = t
 
 varsig env n t                      = gen env t <+> gen env n
 
@@ -224,6 +231,7 @@ primStepSerialize                   = gPrim "step_serialize"
 primStepDeserialize                 = gPrim "step_deserialize"
 primDNEW                            = gPrim "DNEW"
 primNEWTUPLE                        = gPrim "NEWTUPLE"
+primNEWTUPLE0                       = gPrim "NEWTUPLE0"
 
 
 -- Implementation -----------------------------------------------------------------------------------
@@ -236,12 +244,14 @@ cModule env srcbase (Module m imps stmts)
                                       (text "void" <+> genTopName env initKW <+> parens empty <+> char '{') $+$
                                       nest 4 (text "if" <+> parens (genTopName env initFlag) <+> text "return" <> semi $+$
                                               genTopName env initFlag <+> equals <+> text "1" <> semi $+$
+                                              ext_init $+$
                                               initImports $+$
                                               initModule env stmts) $+$
                                       char '}'
   where initImports                 = vcat [ gen env (GName m initKW) <> parens empty <> semi | m <- modNames imps ]
-        stubs                       = [ dname d | Decl _ ds <- stmts, d@Def{} <- ds, isNotImpl (dbody d) ]
-        ext_include                 = if null stubs then empty else text "#include" <+> doubleQuotes (text srcbase <> text ".ext.c")
+        external                    = hasNotImpl stmts
+        ext_include                 = if external then text "#include" <+> doubleQuotes (text srcbase <> text ".ext.c") else empty
+        ext_init                    = if external then genTopName env (name "__ext_init__") <+> parens empty <> semi else empty
 
 
 declModule env []                   = empty
@@ -255,12 +265,14 @@ declModule env (s : ss)             = vcat [ gen env t <+> genTopName env n <> s
   where te                          = envOf s `exclude` defined env
         env1                        = gdefine te env
 
-declDecl env (Def _ n q p KwdNIL (Just t) b d m)
-  | isNotImpl b                     = gen env t <+> genTopName env n <+> parens (gen env p) <> semi
-  | otherwise                       = (gen env t <+> genTopName env n <+> parens (gen env p) <+> char '{') $+$
+
+declDecl env (Def _ n q p KwdNIL (Just t) b d fx)
+  | hasNotImpl b                    = gen env t <+> genTopName env n <+> parens (gen env p) <> semi
+  | otherwise                       = (gen env t1 <+> genTopName env n <+> parens (gen env p) <+> char '{') $+$
                                       nest 4 (genSuite env1 b) $+$
                                       char '}'
-  where env1                        = setRet t $ ldefine (envOf p) $ defineTVars q env
+  where env1                        = setRet t1 $ ldefine (envOf p) $ defineTVars q env
+        t1                          = exposeMsg fx t
 
 declDecl env (Class _ n q as b)     = vcat [ declDecl env1 d{ dname = methodname n (dname d) } | Decl _ ds <- b', d@Def{} <- ds ] $+$
                                       declSerialize env1 n c props sup_c $+$
@@ -275,18 +287,18 @@ declDecl env (Class _ n q as b)     = vcat [ declDecl env1 d{ dname = methodname
         special_repr                = [primActor]                                               -- To be extended...
 
 declSerialize env n c props sup_c   = (text "void" <+> genTopName env (methodname n serializeKW) <+> parens (gen env pars) <+> char '{') $+$
-                                      nest 4 (super_step $+$ vcat [ step i | i <- props \\ super_props ]) $+$
+                                      nest 4 (super_step $+$ vcat [ step i | i <- props \\ super_attrs ]) $+$
                                       char '}'
   where pars                        = PosPar self (Just $ tCon c) Nothing $ PosPar st (Just tSerialstate) Nothing PosNIL
         st                          = name "state"
         self                        = name "self"
         super_step | [c] <- sup_c   = serializeSup env (tcname c) <> parens (parens (gen env $ tcname c) <> gen env self <> comma <+> gen env st) <> semi
                    | otherwise      = empty
-        super_props                 = [ i | c <- sup_c, (i,_) <- attrEnv env c ]
+        super_attrs                 = [ i | c <- sup_c, i <- conAttrs env (tcname c) ]
         step i                      = gen env primStepSerialize <> parens (gen env self <> text "->" <> gen env i <> comma <+> gen env st) <> semi
 
 declDeserialize env n c props sup_c = (gen env (tCon c) <+> genTopName env (methodname n deserializeKW) <+> parens (gen env pars) <+> char '{') $+$
-                                      nest 4 (optcreate $+$ super_step $+$ vcat [ step i | i <- props \\ super_props ] $+$ ret) $+$
+                                      nest 4 (optcreate $+$ super_step $+$ vcat [ step i | i <- props \\ super_attrs ] $+$ ret) $+$
                                       char '}'
   where pars                        = PosPar self (Just $ tCon c) Nothing $ PosPar st (Just tSerialstate) Nothing PosNIL
         st                          = name "state"
@@ -303,7 +315,7 @@ declDeserialize env n c props sup_c = (gen env (tCon c) <+> genTopName env (meth
                                       gen env self <> text "->" <> gen env1 classKW <+> equals <+> char '&' <> methodtable env1 n <> semi
         super_step | [c] <- sup_c   = deserializeSup env (tcname c) <> parens (parens (gen env $ tcname c) <> gen env self <> comma <+> gen env st) <> semi
                    | otherwise      = empty
-        super_props                 = [ i | c <- sup_c, (i,_) <- attrEnv env c ]
+        super_attrs                 = [ i | c <- sup_c, i <- conAttrs env (tcname c) ]
         step i                      = gen env self <> text "->" <> gen env i <+> text "=" <+> gen env primStepDeserialize <> parens (gen env st) <> semi
         ret                         = text "return" <+> gen env self <> semi
 
@@ -319,12 +331,12 @@ initModule env (s : ss)             = genStmt env s $+$
   where te                          = envOf s `exclude` defined env
         env1                        = gdefine te env
 
-
 initClassBase env c q as            = methodtable env c <> dot <> gen env gcinfoKW <+> equals <+> doubleQuotes (genTopName env c) <> semi $+$
                                       methodtable env c <> dot <> gen env superclassKW <+> equals <+> super <> semi $+$
-                                      vcat [ inherit c' n | (c',ns) <- inheritedAttrs env (NoQ c), n <- ns ]
+                                      vcat [ inherit c' n | (c',n) <- inheritedAttrs env (NoQ c) ]
   where super                       = if null as then text "NULL" else parens (gen env qnSuperClass) <> text "&" <> methodtable' env (tcname $ head as)
-        selfsubst                   = subst [(tvSelf, tCon $ TC (NoQ c) [])]
+        selfsubst                   = subst [(tvSelf, tCon tc)]
+        tc                          = TC (NoQ c) [ tVar v | Quant v _ <- q ]
         inherit c' n                = methodtable env c <> dot <> gen env n <+> equals <+> cast (fromJust $ lookup n te) <> methodtable' env c' <> dot <> gen env n <> semi
         cast (NSig sc dec)          = parens (gen env (selfsubst $ addSelf (sctype sc) (Just dec)))
         cast (NDef sc dec)          = parens (gen env (selfsubst $ addSelf (sctype sc) (Just dec)))
@@ -372,6 +384,14 @@ instance Gen QName where
 instance Gen Name where
     gen env nm                      = text $ unCkeyword $ mkCident $ nstr nm
 
+genTopName env n                    = gen env (gname env n)
+
+genQName env (NoQ n)
+  | n `elem` global env             = genTopName env n
+  | isAlias n env                   = genTopName env n
+genQName env n                      = gen env n
+
+gname env n                         = unalias env (NoQ n)
 
 mkCident "complex"                  = "complx"
 mkCident "__complex__"              = "__complx__"
@@ -401,10 +421,6 @@ unCkeyword str
 
 preEscape str                       = "_$" ++ str
 
-genTopName env n                    = gen env (gname env n)
-
-gname env n                         = unalias env (NoQ n)
-
 word                                = text "$WORD"
 
 genSuite env []                     = empty
@@ -424,8 +440,8 @@ instance Gen Stmt where
     gen env (Expr _ e)              = genExp' env e <> semi
     gen env (Assign _ [p] e)        = gen env p <+> equals <+> genExp env t e <> semi
       where t                       = typeOf env p
-    gen env (MutAssign _ tg e)      = gen env tg <+> equals <+> genExp env t e <> semi
-      where t                       = typeOf env tg
+    gen env (MutAssign _ tg e)      = genTarget env tg <+> equals <+> genExp env t e <> semi
+      where t                       = targetType env tg
     gen env (Pass _)                = empty
     gen env (Return _ Nothing)      = text "return" <+> gen env eNone <> semi
     gen env (Return _ (Just e))     = text "return" <+> genExp env (ret env) e <> semi
@@ -484,14 +500,14 @@ castLit env (Strings l ss) p        = format (concat ss) p
           | f `elem` "#0- +"        = flags s p
         flags s p                   = width s p
         width ('*':s) (PosArg e p)  = comma <+> parens (text "int") <> expr <> dot s p
-          where expr                = parens (parens (gen env tInt) <> gen env e) <> text "->val"
+          where expr                = text "from$int" <> parens (gen env e) 
         width (n:s) p
           | n `elem` "123456789"    = let (n',s') = span (`elem` "0123456789") s in dot s' p
         width s p                   = dot s p
         dot ('.':s) p               = prec s p
         dot s p                     = len s p
         prec ('*':s) (PosArg e p)   = comma <+> parens (text "int") <> expr <> len s p
-          where expr                = parens (parens (gen env tInt) <> gen env e) <> text "->val"
+          where expr                = text "from$int" <> parens (gen env e)  --parens (parens (gen env tInt) <> gen env e) <> text "->val"
         prec (n:s) p
           | n `elem` "0123456789"   = let (n',s') = span (`elem` "0123456789") s in len s' p
         prec s p                    = len s p
@@ -500,7 +516,7 @@ castLit env (Strings l ss) p        = format (concat ss) p
         len s p                     = conv s p
         conv (t:s) (PosArg e p)
           | t `elem` "diouxXc"      = comma <+> expr <> format s p
-          where expr                = parens (parens (gen env tInt) <> gen env e) <> text "->val"
+          where expr                = text "from$int" <> parens (gen env e) --parens (parens (gen env tInt) <> gen env e) <> text "->val"
         conv (t:s) (PosArg e p)
           | t `elem` "eEfFgG"       = comma <+> expr <> format s p
           where expr                = parens (parens (gen env tFloat) <> gen env e) <> text "->val"
@@ -531,8 +547,8 @@ genCall env ts e@(Var _ n) p
   | NClass{} <- info                = genNew env n p
   | NDef{} <- info                  = (instCast env ts e $ gen env e) <> parens (gen env p)
   where info                        = findQName n env
+genCall env ts (Async _ e) p        = genCall env ts e p
 genCall env ts e0@(Dot _ e n) p     = genDotCall env ts (snd $ schemaOf env e0) e n p
-genCall env ts e p                  = genEnter env ts e callKW p
 
 instCast env [] e                   = id
 instCast env ts (Var _ x)
@@ -540,18 +556,28 @@ instCast env ts (Var _ x)
 instCast env ts e                   = parens . (parens (gen env t) <>)
   where t                           = typeInstOf env ts e
 
+targetType env (Dot _ e n)          = sctype sc
+  where t0                          = typeOf env e
+        (_,c0)                      = case t0 of
+                                         TCon _ tc -> splitTC env tc
+                                         TVar _ tv -> splitTC env (findTVBound env tv)
+        (sc, dec)                   = findAttr' env c0 n
+targetType env e                    = typeOf env e                  -- Must be a Var with a monomorphic type since it is assignable
+
 dotCast env ent ts (Var _ x) n
   | GName m _ <- x, m == mPrim      = id
 dotCast env ent ts e n
-  | null ts && null argsubst        = id
-  | otherwise                       = parens . (parens (gen env t) <>)
+  | gen_t == gen env t1             = id
+  | otherwise                       = parens . (parens gen_t <>)
   where t0                          = typeOf env e
         (argsubst, c0)              = case t0 of
                                          TCon _ tc -> splitTC env tc
                                          TVar _ tv -> splitTC env (findTVBound env tv)
         (sc, dec)                   = findAttr' env c0 n
-        t                           = subst fullsubst $ if ent then addSelf (sctype sc) dec else sctype sc
+        t                           = subst fullsubst $ if ent then addSelf t1 dec else t1
+        t1                          = exposeMsg' (sctype sc)
         fullsubst                   = (tvSelf,t0) : (qbound (scbind sc) `zip` ts) ++ argsubst
+        gen_t                       = gen env t
 
 classCast env ts x q n              = parens . (parens (gen env t) <>)
   where (ts0,ts1)                   = splitAt (length q) ts
@@ -563,7 +589,8 @@ classCast env ts x q n              = parens . (parens (gen env t) <>)
 genNew env n p                      = newcon' env n <> parens (gen env p)
 
 declCon env n q
-  | abstractClass env (NoQ n)       = empty
+  | not $ null ns                   = --trace ("### NOT GENERATING CONS FOR " ++ prstr n ++ " BECAUSE OF " ++ prstrs ns) $
+                                      empty
   | otherwise                       = (gen env tRes <+> newcon env n <> parens (gen env pars) <+> char '{') $+$
                                       nest 4 (gen env tObj <+> gen env tmpV <+> equals <+> malloc env (gname env n) <> semi $+$
                                               gen env tmpV <> text "->" <> gen env1 classKW <+> equals <+> char '&' <> methodtable env1 n <> semi $+$
@@ -577,9 +604,10 @@ declCon env n q
         initcall env | t == tR      = text "return" <+> methodtable env n <> dot <> gen env initKW <> parens (gen env tmpV <> comma <+> gen env (retobj args)) <> semi
                      | otherwise    = methodtable env n <> dot <> gen env initKW <> parens (gen env tmpV <> comma' (gen env args)) <> semi $+$
                                       text "return" <+> gen env tmpV <> semi
-        retobj (PosArg e PosNil)    = PosArg (eCall (tApp (eQVar primCONSTCONT) [fx,tObj]) [eVar tmpV, e]) PosNil
+        retobj (PosArg e PosNil)    = PosArg (eCall (tApp (eQVar primCONSTCONT) [tObj]) [e, eVar tmpV]) PosNil
         retobj (PosArg e p)         = PosArg e (retobj p)
         env1                        = ldefine ((tmpV, NVar tObj) : envOf pars) env
+        ns                          = abstractAttrs env (NoQ n)
 
 malloc env n                        = text "malloc" <> parens (text "sizeof" <> parens (text "struct" <+> gen env n))
 
@@ -588,18 +616,19 @@ comma' x                            = if isEmpty x then empty else comma <+> x
 genDotCall env ts dec e@(Var _ x) n p
   | NClass q _ _ <- info,
     Just _ <- dec                   = classCast env ts x q n (methodtable' env x <> text "." <> gen env n) <> parens (gen env p)
-  | NClass{} <- info                = genEnter env ts (eDot e n) callKW p       -- In case n is a closure...
   where info                        = findQName x env
 genDotCall env ts dec e n p
   | Just NoDec <- dec               = genEnter env ts e n p
-  | Just Static <- dec              = dotCast env False ts e n (gen env e <> text "->" <> gen env classKW <> text "->") <> gen env n <> parens (gen env p)
-  | otherwise                       = genEnter env ts (eDot e n) callKW p
+  | Just Static <- dec              = dotCast env False ts e n (gen env e <> text "->" <> gen env classKW <> text "->" <> gen env n) <> parens (gen env p)
 
 
 genDot env ts e@(Var _ x) n
   | NClass q _ _ <- findQName x env = classCast env ts x q n $ methodtable' env x <> text "." <> gen env n
 genDot env ts e n                   = dotCast env False ts e n $ gen env e <> text "->" <> gen env n
 -- NOTE: all method references are eta-expanded by the lambda-lifter at this point, so n cannot be a method (i.e., require methodtable lookup) here
+
+genTarget env (Dot _ e n)           = gen env e <> text "->" <> gen env n
+genTarget env e                     = gen env e
 
 
 genEnter env ts e n p
@@ -624,8 +653,6 @@ adjust TNone{} t' e                 = e
 adjust t t'@TVar{} e                = e
 adjust (TCon _ c) (TCon _ c') e
   | tcname c == tcname c'           = e
---adjust TFun{} _ e                   = e
---adjust _ TFun{} e                   = e
 adjust t t' e                       = typecast t t' e
 
 genExp env t' e                     = gen env (adjust t t' e')
@@ -635,13 +662,10 @@ genExp' env e                       = gen env e'
   where (t, e')                     = qType env adjust e
 
 instance Gen Expr where
-    gen env (Var _ (NoQ n))
-      | n `elem` global env         = genTopName env n
-      | isAlias n env               = genTopName env n
     gen env (Var _ n)
       | NClass{} <- findQName n env = newcon' env n
-      | otherwise                   = gen env n
-    gen env (Int _ _ str)           = gen env primToInt <> parens (text str)
+      | otherwise                   = genQName env n
+    gen env (Int _ i str)           = gen env primToStr <> parens (text "\"" <> text (show i) <> text "\"")
     gen env (Float _ _ str)         = gen env primToFloat <> parens (text str)
     gen env (Bool _ True)           = gen env primTrue
     gen env (Bool _ False)          = gen env primFalse
@@ -649,12 +673,16 @@ instance Gen Expr where
     gen env e@Strings{}             = gen env primToStr <> parens(hsep (map pretty (sval e)))
     gen env e@BStrings{}            = gen env primToBytes <> parens(hsep (map pretty (sval e)))
     gen env (Call _ e p _)          = genCall env [] e p
+    gen env (Async _ e)             = gen env e
     gen env (TApp _ e ts)           = genInst env ts e
-    gen env (IsInstance _ e c)      = gen env primISINSTANCE <> parens (gen env e <> comma <+> gen env c)
+    gen env (IsInstance _ e c)      = gen env primISINSTANCE <> parens (gen env e <> comma <+> genQName env c)
     gen env (Dot _ e n)             = genDot env [] e n
     gen env (DotI _ e i)            = gen env e <> text "->" <> gen env componentsKW <> brackets (pretty i)
     gen env (RestI _ e i)           = gen env eNone <> semi <+> text "// CodeGen for tuple tail not implemented"
-    gen env (Tuple _ p KwdNil)      = gen env primNEWTUPLE <> parens (text (show $ nargs p) <> comma' (gen env p))
+    gen env (Tuple _ p KwdNil)      
+       | n == 0                    = gen env primNEWTUPLE0
+       | otherwise                 = gen env primNEWTUPLE <> parens (text (show n) <> comma' (gen env p))
+       where n                     = nargs p
     gen env (List _ es)
       | null es                     = newcon' env n <> parens (text "NULL" <> comma <+> text "NULL")
       | otherwise                   = parens (lbrace <+> (

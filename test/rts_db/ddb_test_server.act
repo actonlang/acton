@@ -1,0 +1,48 @@
+import net
+
+actor Tester(env, port):
+    var lsock = None
+    var i = 0
+
+    def on_listen_error(l, error):
+        print("Error with our listening socket on port" + str(port) + ": " + error)
+        if error == "resume":
+            pass
+        else:
+            print("Unhandled error:", error)
+        print("Attempting to re-establish listening socket")
+        lsock = init_listen()
+
+    def on_server_accept(c):
+        pass
+
+    def on_server_receive(c, data):
+        print("RECV", c, data.decode())
+        if data == b"GET":
+            response = str(i).encode()
+            print("RECV", c, data.decode(), "RESPONSE:", response)
+            c.write(str(i).encode())
+        if data == b"INC":
+            i += 1
+            print("RECV", c, data.decode(), "RESPONSE:", b"OK")
+            c.write(b"OK")
+
+    def on_server_error(c, error):
+        print("There was an error:", error, " from:", c)
+
+
+    def init_listen():
+        listen_auth = net.TCPListenAuth(net.TCPAuth(net.NetAuth(env.auth)))
+        print("Starting to listen...")
+        s = net.TCPListener(listen_auth, "0.0.0.0", port, on_listen_error, on_server_accept, on_server_receive, on_server_error)
+        print("NOW LISTENING ON", str(port))
+
+        return s
+
+    lsock = init_listen()
+
+
+actor main(env):
+    port = int(env.argv[1])
+    var t = None
+    t = Tester(env, port)

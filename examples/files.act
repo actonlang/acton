@@ -1,10 +1,10 @@
+import file
+
 actor main(env):
-    f2 = env.openR("data")
-    if f2 is not None:
-        s = f2.readln()
-        while (s is not None):
-            print(s)
-            s = f2.readln()
-    else:
-        print("cannot open file 'data' for reading")
+    # Need to construct authentication token, to prove we are allowed to read files
+    f_auth = file.ReadFileAuth(file.FileAuth(env.auth))
+    f = file.ReadFile(f_auth, env.argv[1])
+    data = f.read()
+    print(data.decode())
+
     env.exit(0)

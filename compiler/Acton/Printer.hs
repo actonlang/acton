@@ -131,7 +131,6 @@ instance Pretty (PosArg,KwdArg) where
     pretty (ps, KwdNil)             = pretty ps
     pretty (ps, ks)                 = pretty ps  <> comma <+> pretty ks
 
-atomic Async{}                      = False
 atomic Await{}                      = False
 atomic Cond{}                       = False
 atomic BinOp{}                      = False
@@ -157,7 +156,7 @@ instance Pretty Expr where
         | atomic e                  = pretty e <> parens (pretty (ps,ks))
         | otherwise                 = parens (pretty e) <> parens (pretty (ps,ks))
     pretty (TApp _ e ts)            = pretty e <> text "@" <> brackets (commaSep pretty ts)
-    pretty (Async _ e)              = text "async" <+> pretty e
+    pretty (Async _ e)              = parens (text "async" <+> pretty e)
     pretty (Await _ e)              = text "await" <+> pretty e
     pretty (Index _ e ix)           = pretty e <> brackets (pretty ix)
     pretty (Slice _ e sl)           = pretty e <> brackets (pretty sl)
@@ -255,7 +254,7 @@ instance Pretty QName where
 --    pretty (NoQ n)                  = char '~' <> pretty n
     pretty (NoQ n)                  = pretty n
     pretty (GName m n)
-      | m == mPrim                  = text "$" <> pretty n
+      | m == mPrim                  = text ("$" ++ nstr n)
 --      | m == mBuiltin               = text "$" <> pretty n
 --      | m == mBuiltin               = pretty n
       | otherwise                   = pretty m <> dot <> pretty n
@@ -325,6 +324,7 @@ instance Pretty (PosPat,KwdPat) where
     pretty (ps, ks)                 = pretty ps <> comma <+> pretty ks    
 
 instance Pretty Pattern where
+    pretty (PWild _ a)              = text "_" <> prettyAnn a
     pretty (PVar _ n a)             = pretty n <> prettyAnn a
     pretty (PTuple _ ps KwdPatNil)
       | singlePosPat ps             = pretty ps <> comma
@@ -403,7 +403,7 @@ prettyQual []                       = empty
 prettyQual q                        = pretty q <+> text "=>"
 
 instance Pretty TVar where
-    pretty (TV k n)                 = pretty n
+    pretty (TV k n)                 = pretty n -- <> parens (colon <> pretty k)
 
 instance Pretty TCon where
     pretty (TC n [])                = pretty n
@@ -421,22 +421,24 @@ instance Pretty QBind where
     pretty (Quant v [])             = pretty v
     pretty (Quant v cs)             = pretty v <> parens (commaList cs)
 
-prettyPosRow (TRow _ _ _ t (TNil _ _))
+prettyPosRow (TRow _ PRow _ t (TNil _ PRow))
                                     = pretty t
-prettyPosRow (TRow _ _ _ t p)       = pretty t <> comma <+> prettyPosRow p
+prettyPosRow (TRow _ PRow _ t p)    = pretty t <> comma <+> prettyPosRow p
 prettyPosRow (TVar _ v)             = text "*" <> pretty v
-prettyPosRow (TWild _)              = text "*"
-prettyPosRow (TNil _ _)             = empty
+prettyPosRow (TWild _)              = text "*_"
+prettyPosRow (TNil _ PRow)          = empty
+prettyPosRow t                      = text "!!" <>  pretty t
     
-prettyKwdRow (TRow _ _ n t (TNil _ _))
+prettyKwdRow (TRow _ KRow n t (TNil _ KRow))
                                     = pretty n <> colon <+> pretty t
-prettyKwdRow (TRow _ _ n t k)       = pretty n <> colon <+> pretty t <> comma <+> prettyKwdRow k
+prettyKwdRow (TRow _ KRow n t k)    = pretty n <> colon <+> pretty t <> comma <+> prettyKwdRow k
 prettyKwdRow (TVar _ v)             = text "**" <> pretty v
-prettyKwdRow (TWild _)              = text "**"
-prettyKwdRow (TNil _ _)             = empty
+prettyKwdRow (TWild _)              = text "**_"
+prettyKwdRow (TNil _ KRow)          = empty
+prettyKwdRow t                      = text "!!" <>  pretty t
     
-prettyFunRow (TNil _ _) k           = prettyKwdRow k
-prettyFunRow p (TNil _ _)           = prettyPosRow p
+prettyFunRow (TNil _ PRow) k        = prettyKwdRow k
+prettyFunRow p (TNil _ KRow)        = prettyPosRow p
 prettyFunRow p k                    = prettyPosRow p <> comma <+> prettyKwdRow k
 
 instance Pretty Type where
@@ -461,10 +463,10 @@ prettyFXnoPure (TFX _ FXPure)       = empty
 prettyFXnoPure t                    = pretty t
 
 instance Pretty FX where
-    pretty FXAction                 = text "action"
+    pretty FXProc                   = text "proc"
     pretty FXMut                    = text "mut"
     pretty FXPure                   = text "pure"
-    pretty FXAsync                  = text "async"
+    pretty FXAction                 = text "action"
 
 instance Pretty Kind where
     pretty KType                    = text "type"
@@ -482,6 +484,7 @@ instance Pretty Constraint where
     pretty (Impl w t u)             = pretty w <+> colon <+> pretty t <+> parens (pretty u)
     pretty (Sel w t1 n t2)          = pretty w <+> colon <+> pretty t1 <> text "." <> pretty n <+> text "<" <+> pretty t2
     pretty (Mut t1 n t2)            = pretty t1 <+> text "." <> pretty n <+> text ">" <+> pretty t2
+    pretty (Seal t)                 = text "$Seal" <+> pretty t
 
 
 instance Pretty (TVar,TVar) where

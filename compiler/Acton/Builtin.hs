@@ -16,7 +16,7 @@ module Acton.Builtin where
 import Utils
 import Acton.Syntax
     
-selfKW                              = name "__self__"
+selfKW                              = name "self"
 
 initKW                              = name "__init__"
 fromiterKW                          = name "__fromiter__"
@@ -35,7 +35,6 @@ getsliceKW                          = name "__getslice__"
 setsliceKW                          = name "__setslice__"
 delsliceKW                          = name "__delslice__"
 appendKW                            = name "append"
-callKW                              = name "__call__"
 boolKW                              = name "__bool__"
 strKW                               = name "__str__"
 reprKW                               = name "__repr__"
@@ -92,6 +91,7 @@ nValue                              = name "value"
 nAtom                               = name "atom"
 nObject                             = name "object"
 nInt                                = name "int"
+nI64                                = name "i64"
 nFloat                              = name "float"
 nBool                               = name "bool"
 nStr                                = name "str"
@@ -103,7 +103,6 @@ nBaseException                      = name "BaseException"
 nException                          = name "Exception"
 nStopIteration                      = name "StopIteration"
 nValueError                         = name "ValueError"
-nFunction                           = name "function"
 ---
 nRange                              = name "range"
 nLen                                = name "len"
@@ -143,6 +142,7 @@ qnValue                             = gBuiltin nValue
 qnAtom                              = gBuiltin nAtom
 qnObject                            = gBuiltin nObject
 qnInt                               = gBuiltin nInt
+qnI64                               = gBuiltin nI64
 qnFloat                             = gBuiltin nFloat
 qnBool                              = gBuiltin nBool
 qnStr                               = gBuiltin nStr
@@ -154,7 +154,6 @@ qnBaseException                     = gBuiltin nBaseException
 qnException                         = gBuiltin nException
 qnStopIteration                     = gBuiltin nStopIteration
 qnValueError                        = gBuiltin nValueError
-qnFunction                          = gBuiltin nFunction
 ---
 qnRange                             = gBuiltin nRange
 qnPrint                             = gBuiltin nPrint
@@ -193,6 +192,7 @@ cValue                              = TC qnValue []
 cAtom                               = TC qnAtom []
 cObject                             = TC qnObject []
 cInt                                = TC qnInt []
+cI64                                = TC qnI64 []
 cFloat                              = TC qnFloat []
 cBool                               = TC qnBool []
 cStr                                = TC qnStr []
@@ -208,7 +208,6 @@ cBaseException                      = TC qnBaseException []
 cException                          = TC qnException []
 cStopIteration                      = TC qnStopIteration []
 cValueError                         = TC qnValueError []
-cFunction x p k a                   = TC qnFunction [x,p,k,a]
 ---
 pSequence a                         = TC qnSequence [a]
 pMapping a b                        = TC qnMapping [a,b]
@@ -240,6 +239,7 @@ tValue                              = tCon cValue
 tAtom                               = tCon cAtom
 tObject                             = tCon cObject
 tInt                                = tCon cInt
+tI64                                = tCon cI64
 tFloat                              = tCon cFloat
 tBool                               = tCon cBool
 tStr                                = tCon cStr
@@ -254,7 +254,6 @@ tBaseException                      = tCon cBaseException
 tException                          = tCon cException
 tStopIteration                      = tCon cStopIteration
 tValueError                         = tCon cValueError
-tFunction x p k a                   = tCon (cFunction x p k a)
 ---
 tSequence a                         = tCon (pSequence a)
 tMapping a b                        = tCon (pMapping a b)

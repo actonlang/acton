@@ -10,6 +10,9 @@
 #define DEFAULT_SIZE 8
 #define GROWTH_RATE 2.0
 
+#define VC_INCOMPARABLE -2
+#define VC_DISJOINT -3
+
 #include "db_messages.pb-c.h"
 #include <sys/socket.h>
 #include <netinet/in.h>
@@ -17,39 +20,39 @@
 #include <inttypes.h>
 
 // Sets in found_idx index of node_id (if found), or first smallest index (if not found):
-#define BINARY_SEARCH_NODEID(vc, node_id, found_idx, exact_match)						\
-	   (exact_match) = 0;			  												\
-	   (found_idx) = -1;																\
-	   int first = 0, last = (vc)->no_nodes - 1; 			  						\
-	   int middle = (first+last)/2; 			  										\
-	   for(;first <= last; middle = (first + last)/2) 								\
-	   { 																			\
-		   if((vc)->node_ids[middle].node_id == (node_id)) 							\
-		   { 								  										\
-			   (found_idx) = middle; 			  									\
-			   (exact_match) = 1; 			  										\
-			   break; 						  										\
-		   } 								  										\
-		   else if((vc)->node_ids[middle].node_id < (node_id)) 						\
-		   { 								  										\
-			   (found_idx) = middle; 			  									\
-			   first = middle + 1; 				  									\
-		   } 								  										\
-		   else 								  										\
-			   last = middle - 1; 													\
-	   } 								  											\
+#define BINARY_SEARCH_NODEID(vc, node_id, found_idx, exact_match)                       \
+       (exact_match) = 0;                                                           \
+       (found_idx) = -1;                                                                \
+       int first = 0, last = (vc)->no_nodes - 1;                                    \
+       int middle = (first+last)/2;                                                     \
+       for(;first <= last; middle = (first + last)/2)                               \
+       {                                                                            \
+           if((vc)->node_ids[middle].node_id == (node_id))                          \
+           {                                                                        \
+               (found_idx) = middle;                                                \
+               (exact_match) = 1;                                                   \
+               break;                                                               \
+           }                                                                        \
+           else if((vc)->node_ids[middle].node_id < (node_id))                      \
+           {                                                                        \
+               (found_idx) = middle;                                                \
+               first = middle + 1;                                                  \
+           }                                                                        \
+           else                                                                         \
+               last = middle - 1;                                                   \
+       }                                                                            \
 
 typedef struct versioned_id
 {
-	int node_id;
-	int64_t counter;
+    int node_id;
+    int64_t counter;
 } versioned_id;
 
 typedef struct vector_clock
 {
-	int no_nodes;
-	int capacity;
-	versioned_id * node_ids;
+    int no_nodes;
+    int capacity;
+    versioned_id * node_ids;
 } vector_clock;
 
 int increment_vc(vector_clock * vc, int node_id);

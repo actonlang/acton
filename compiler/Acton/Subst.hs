@@ -28,6 +28,11 @@ addSelf                                 :: Type -> Maybe Deco -> Type
 addSelf (TFun l x p k t) (Just NoDec)   = TFun l x (posRow tSelf p) k t
 addSelf t _                             = t
 
+dropSelf                                :: Type -> Deco -> Type
+dropSelf (TFun l x p k t) NoDec
+  | TRow _ _ _ _ p' <- p                = TFun l x p' k t
+dropSelf t _                            = t
+
 
 closeDepVars vs cs
   | null vs'                        = nub vs
@@ -38,11 +43,13 @@ closeDepVars vs cs
         heads (Sub w t _)           = tyfree t
         heads (Sel w t n _)         = tyfree t
         heads (Mut t n _)           = tyfree t
+        heads (Seal t)              = tyfree t
         deps (Impl w _ p)           = tyfree p
         deps (Cast _ t)             = typars t
         deps (Sub w _ t)            = typars t
         deps (Sel w _ n t)          = typars t
         deps (Mut _ n t)            = typars t
+        deps (Seal _)               = []
         typars (TOpt _ t)           = typars t
         typars (TCon _ c)           = tyfree c
         typars _                    = []
@@ -101,12 +108,14 @@ instance Subst Constraint where
     msubst (Impl w t p)             = Impl w <$> msubst t <*> msubst p
     msubst (Sel w t1 n t2)          = Sel w <$> msubst t1 <*> return n <*> msubst t2
     msubst (Mut t1 n t2)            = Mut <$> msubst t1 <*> return n <*> msubst t2
+    msubst (Seal t)                 = Seal <$> msubst t
 
     tyfree (Cast t1 t2)             = tyfree t1 ++ tyfree t2
     tyfree (Sub w t1 t2)            = tyfree t1 ++ tyfree t2
     tyfree (Impl w t p)             = tyfree t ++ tyfree p
     tyfree (Sel w t1 n t2)          = tyfree t1 ++ tyfree t2
     tyfree (Mut t1 n t2)            = tyfree t1 ++ tyfree t2
+    tyfree (Seal t)                 = tyfree t
 
 instance Subst TSchema where
     msubst (TSchema l [] t)         = TSchema l [] <$> msubst t
@@ -317,6 +326,21 @@ instance Subst Stmt where
     msubst (Signature l ns tsc d)   = Signature l ns <$> msubst tsc <*> return d
     msubst s                        = return s
 
+    tyfree (Expr l e)               = tyfree e
+    tyfree (Assign l ps e)          = tyfree ps ++ tyfree e
+    tyfree (MutAssign l t e)        = tyfree t ++ tyfree e
+    tyfree (AugAssign l t op e)     = tyfree t ++ tyfree e
+    tyfree (Assert l e mbe)         = tyfree mbe
+    tyfree (Delete l t)             = tyfree t
+    tyfree (Return l mbe)           = tyfree mbe
+    tyfree (Raise l mbex)           = tyfree mbex
+    tyfree (If l bs els)            = tyfree bs ++ tyfree els
+    tyfree (While l e b els)        = tyfree e ++ tyfree b ++ tyfree els
+    tyfree (For l p e b els)        = tyfree p ++ tyfree e ++ tyfree b ++ tyfree els
+    tyfree (Try l b hs els fin)     = tyfree b ++ tyfree hs ++ tyfree els ++ tyfree fin
+    tyfree (With l is b)            = tyfree is ++ tyfree b
+    tyfree (VarAssign l ps e)       = tyfree ps ++ tyfree e
+    tyfree (After l e e')           = tyfree e ++ tyfree e'
     tyfree (Decl l ds)              = tyfree ds
     tyfree (Signature l ns tsc d)   = tyfree tsc
     tyfree s                        = []
@@ -351,6 +375,33 @@ instance Subst Expr where
     msubst (Paren l e)              = Paren l <$> msubst e
     msubst e                        = return e
 
+    tyfree (Call l e p k)           = tyfree e ++ tyfree p ++ tyfree k
+    tyfree (TApp l e ts)            = tyfree e ++ tyfree ts
+    tyfree (Async l e)              = tyfree e
+    tyfree (Await l e)              = tyfree e
+    tyfree (Index l e ix)           = tyfree e ++ tyfree ix
+    tyfree (Slice l e sl)           = tyfree e ++ tyfree sl
+    tyfree (NDSlice l e sl)         = tyfree e ++ tyfree sl
+    tyfree (Cond l e1 cond e2)      = tyfree e1 ++ tyfree cond ++ tyfree e2
+    tyfree (IsInstance l e c)       = tyfree e
+    tyfree (BinOp l e1 op e2)       = tyfree e1 ++ tyfree e2
+    tyfree (CompOp l e ops)         = tyfree e ++ tyfree ops
+    tyfree (UnOp l op e)            = tyfree e
+    tyfree (Dot l e n)              = tyfree e
+    tyfree (Rest l e n)             = tyfree e
+    tyfree (DotI l e i)             = tyfree e
+    tyfree (RestI l e i)            = tyfree e
+    tyfree (Lambda l p k e fx)      = tyfree p ++ tyfree k ++ tyfree e ++ tyfree fx
+    tyfree (Yield l e)              = tyfree e
+    tyfree (YieldFrom l e)          = tyfree e
+    tyfree (Tuple l p k)            = tyfree p ++ tyfree k
+    tyfree (List l es)              = tyfree es
+    tyfree (ListComp l e c)         = tyfree e ++ tyfree c
+    tyfree (Dict l as)              = tyfree as
+    tyfree (DictComp l a c)         = tyfree a ++ tyfree c
+    tyfree (Set l es)               = tyfree es
+    tyfree (SetComp l e c)          = tyfree e ++ tyfree c
+    tyfree (Paren l e)              = tyfree e
     tyfree e                        = []
 
 instance Subst Exception where
@@ -364,11 +415,13 @@ instance Subst Branch where
     tyfree (Branch e b)             = tyfree e ++ tyfree b
 
 instance Subst Pattern where
+    msubst (PWild l t)              = PWild l <$> msubst t
     msubst (PVar l n t)             = PVar l n <$> msubst t
     msubst (PParen l p)             = PParen l <$> msubst p
     msubst (PTuple l p k)           = PTuple l <$> msubst p <*> msubst k
     msubst (PList l ps p)           = PList l <$> msubst ps <*> msubst p
     
+    tyfree (PWild _ t)              = tyfree t
     tyfree (PVar _ n t)             = tyfree t
     tyfree (PParen _ p)             = tyfree p
     tyfree (PTuple _ p k)           = tyfree p ++ tyfree k

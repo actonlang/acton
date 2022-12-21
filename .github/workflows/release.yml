@@ -1,0 +1,28 @@
+name: Add git tag for release
+
+on:
+  pull_request:
+    types:
+      - closed
+
+jobs:
+  if_merged:
+    # name should be e.g. release-v1.2.3
+    if: ${{ startsWith(github.head_ref, 'release-v') && github.event.pull_request.merged == true }}
+    runs-on: ubuntu-latest
+    steps:
+      - run: |
+          echo The PR was merged
+      - name: "Check out repository code"
+        uses: actions/checkout@v2
+        with:
+          ssh-key: ${{ secrets.ACTONBOT_DEPLOY_KEY }}
+      - name: "Get the version"
+        id: get_version
+        run: echo ::set-output name=version::$(grep VERSION= common.mk | cut -d = -f 2)
+      - name: "Add version tag and push"
+        run: |
+          git config user.name "Apt Bot"
+          git config user.email apt@acton-lang.org
+          git tag v${{steps.get_version.outputs.version}}
+          git push origin v${{steps.get_version.outputs.version}}

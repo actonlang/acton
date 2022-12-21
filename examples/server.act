@@ -1,18 +1,27 @@
+import net
+
+actor Server(listen_auth, port):
+
+    def on_lsock_error(l, error):
+        print("There was an error with the TCPListener socket:", error)
+
+    def on_server_accept(c):
+        pass
+
+    def on_server_receive(c, data):
+        print("Server Received some data:", data, " from:", c)
+        if data == b"PING":
+            c.write(b"PONG")
+
+    def on_server_error(c, error):
+        print("There was an error:", error, " from:", c)
+
+    var server = net.TCPListener(listen_auth, "0.0.0.0", port, on_lsock_error, on_server_accept, on_server_receive, on_server_error)
+
 actor main(env):
+    port = 12345
 
-    def stdout_w(conn,str):
-        env.stdout_write(str)
+    # Set up specific auth token
+    listen_auth = net.TCPListenAuth(net.TCPAuth(net.NetAuth(env.auth)))
 
-    def echo(conn,b):
-        env.stdout_write(b.decode())
-        conn.write(b)
-        
-    def connect_handler(conn):
-        print("Got a connection...")
-        conn.on_receive(echo, stdout_w)
-
-    def err_handler(sock):
-        print("An error occurred trying to establish listening socket")
-        env.exit(1)
-
-    env.listen(12345, connect_handler, err_handler)
+    s = Server(listen_auth, port)

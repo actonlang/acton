@@ -40,6 +40,25 @@
 #define QUERY_TYPE_ADD_QUEUE_TO_GROUP 18
 #define QUERY_TYPE_REMOVE_QUEUE_FROM_GROUP 19
 
+// Return statuses:
+
+#define DB_ERR_NO_TABLE -1
+#define DB_ERR_NO_QUEUE -2
+#define DB_ERR_NO_CONSUMER -3
+#define DB_ERR_QUEUE_COMPLETE -4
+#define DB_ERR_QUEUE_HEAD_INVALID -5
+#define DB_ERR_DUPLICATE_QUEUE -6
+#define DB_ERR_DUPLICATE_CONSUMER -7
+#define VAL_STATUS_ABORT_SCHEMA -8
+
+#define QUEUE_STATUS_READ_INCOMPLETE 0
+#define QUEUE_STATUS_READ_COMPLETE 1
+
+#define QUEUE_NOTIF_ENQUEUED 0
+#define QUEUE_NOTIF_DELETED 1
+
+#define VERBOSE_BACKEND 0
+
 #define MAX_PRINT_BUFF 128 * 1024
 
 #define MULTI_THREADED 0
@@ -182,5 +201,4 @@ int table_verify_cell_range_version(WORD* primary_keys, int no_primary_keys, WOR
 int table_verify_index_version(WORD index_key, int idx_idx, vector_clock * version, db_table_t * table);
 int table_verify_index_range_version(int idx_idx, WORD start_idx_key, WORD end_idx_key,
                                         int64_t * range_result_keys, vector_clock ** range_result_versions, int no_range_results, db_table_t * table);
-
 #endif /* BACKEND_DB_H_ */

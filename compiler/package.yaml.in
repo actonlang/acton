@@ -27,10 +27,12 @@ executables:
       - base >= 4.7 && < 5
       - binary
       - bytestring
+      - clock
       - containers
       - deepseq
       - dir-traverse
       - directory >= 1.3.1
+      - filelock
       - filepath
       - hashable
       - megaparsec >= 9

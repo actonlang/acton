@@ -16,11 +16,15 @@
 
 #include "../builtin/builtin.h"
 
+#define MAX_WTHREADS 256
+
+extern long num_wthreads;
+
+extern pthread_key_t pkey_wtid;
+extern pthread_key_t pkey_uv_loop;
 struct $Msg;
 struct $Actor;
 struct $Catcher;
-struct $function;
-struct $Cont;
 struct $ConstCont;
 
 extern pthread_key_t self_key;
@@ -30,38 +34,18 @@ extern pthread_cond_t work_to_do;
 typedef struct $Msg *$Msg;
 typedef struct $Actor *$Actor;
 typedef struct $Catcher *$Catcher;
-typedef struct $function *$function;
-typedef struct $Cont *$Cont;
 typedef struct $ConstCont *$ConstCont;
 
 extern struct $Msg$class $Msg$methods;
 extern struct $Actor$class $Actor$methods;
 extern struct $Catcher$class $Catcher$methods;
-extern struct $function$class $function$methods;
-extern struct $Cont$class $Cont$methods;
 extern struct $Cont$class $Done$methods;
 extern struct $ConstCont$class $ConstCont$methods;
-
-enum $RTAG { $RDONE, $RFAIL, $RCONT, $RWAIT };
-typedef enum $RTAG $RTAG;
-
-struct $R {
-    $RTAG tag;
-    $Cont cont;
-    $WORD value;
-};
-typedef struct $R $R;
-
-#define $R_CONT(cont, arg)      ($R){$RCONT, (cont), ($WORD)(arg)}
-#define $R_DONE(value)          ($R){$RDONE, NULL,   (value)}
-#define $R_FAIL(value)          ($R){$RFAIL, NULL,   (value)}
-#define $R_WAIT(cont, value)    ($R){$RWAIT, (cont), (value)}
 
 #define MSG_HEADER              "Msg"
 #define ACTOR_HEADER            "Actor"
 #define CATCHER_HEADER          "Catcher"
 #define CLOS_HEADER             "Clos"
-#define CONT_HEADER             "Cont"
 
 #define $Lock                   volatile atomic_flag
 
@@ -110,6 +94,7 @@ struct $Actor {
     $Catcher $catcher;
     $Lock $msg_lock;
     $long $globkey;
+    $int64 $affinity;
 };
 
 struct $Catcher$class {
@@ -129,22 +114,6 @@ struct $Catcher {
     $Cont $cont;
 };
 
-
-struct $Cont$class {
-    char *$GCINFO;
-    int $class_id;
-    $Super$class $superclass;
-    void (*__init__)($Cont);
-    void (*__serialize__)($Cont, $Serial$state);
-    $Cont (*__deserialize__)($Cont, $Serial$state);
-    $bool (*__bool__)($Cont);
-    $str (*__str__)($Cont);
-    $str (*__repr__)($Cont);
-    $R (*__call__)($Cont, ...);
-};
-struct $Cont {
-    struct $Cont$class *$class;
-};
 
 struct $ConstCont$class {
     char *$GCINFO;
@@ -166,8 +135,8 @@ struct $ConstCont {
 $Cont $CONSTCONT($WORD, $Cont);
 
 $Msg $ASYNC($Actor, $Cont);
-$Msg $AFTER($int, $Cont);
-$R $AWAIT($Msg, $Cont);
+$Msg $AFTER($float, $Cont);
+$R $AWAIT($Cont, $Msg);
 
 void init_db_queue(long);
 void register_actor(long key);
@@ -176,6 +145,7 @@ void serialize_state_shortcut($Actor);
 #define $NEWACTOR($T)       ({ $T $t = malloc(sizeof(struct $T)); \
                                $t->$class = &$T ## $methods; \
                                $Actor$methods.__init__(($Actor)$t); \
+                               $t->$affinity = 0; \
                                init_db_queue($t->$globkey); \
                                register_actor($t->$globkey); \
                                $t; })
@@ -185,10 +155,14 @@ void $POP();
 
 extern $Msg timerQ;
 
+void wake_wt(int wtid);
+
 time_t current_time();
 time_t next_timeout();
 void handle_timeout();
 void rts_shutdown();
+
+void pin_actor_affinity();
 
 //typedef $int $Env;
 

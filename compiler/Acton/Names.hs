@@ -23,6 +23,8 @@ import Acton.Printer
 
 self                                = Name NoLoc "self"
 
+localName n                         = Derived n (name "local")
+
 deriveQ (NoQ n)                     = n
 deriveQ (QName (ModName m) n)       = deriveMod n m
 deriveQ (GName m n)
@@ -122,9 +124,17 @@ instance DataVars Pattern where
     datavars n _                    = []
 
 
--- State variables -----------------
+-- Special attributes variables ----
+
+methods b                           = [ n | Decl _ ds <- b, Def{dname=n} <- ds ]
 
 statevars b                         = concat [ bound ps | VarAssign _ ps _ <- b ]
+
+
+isHidden n@(Name _ str)             = length (takeWhile (=='_') str) == 1 || n == resumeKW
+isHidden _                          = True
+
+notHidden                           = filter (not . isHidden)
 
 
 -- Free and bound names ------------
@@ -355,12 +365,14 @@ instance Vars KwdPat where
     bound KwdPatNil                 = []
     
 instance Vars Pattern where
+    free (PWild _ _)                = []
     free (PVar _ n a)               = []
     free (PTuple _ ps ks)           = free ps ++ free ks
     free (PList _ ps p)             = free ps ++ free p
     free (PParen _ p)               = free p
     free (PData _ n ixs)            = free ixs
 
+    bound (PWild _ _)               = []
     bound (PVar _ n a)              = [n]
     bound (PTuple _ ps ks)          = bound ps ++ bound ks
     bound (PList _ ps p)            = bound ps ++ bound p
@@ -409,3 +421,4 @@ instance Vars Constraint where
     free (Impl w t p)               = free t ++ free p
     free (Sel w t1 n t2)            = free t1 ++ free t2
     free (Mut t1 n t2)              = free t1 ++ free t2
+    free (Seal t)                   = free t

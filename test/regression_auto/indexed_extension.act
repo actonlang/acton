@@ -1,0 +1,15 @@
+class tree():
+    def __init__(self, children : list[tree], data : int):
+        self.children = children
+        self.data = data
+
+extension tree (Indexed[int,tree]):
+    def __getitem__(self,n):
+        return self.children[n]
+    def __setitem__(self,n,t):
+        self.children[n] = t
+    def __delitem__(self,n):
+        del self.children[n]
+
+actor main(env):
+    env.exit(0)

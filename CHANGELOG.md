@@ -2,14 +2,499 @@
 
 ## Unreleased
 
+## [0.14.2] (2022-11-27)
+
+### Fixed
+- Improve `actonc` performance [#1119]
+  - The constraint solver can have a massive performance impact on the
+    compilation process, in particular if it has a very large amount of
+    solutions to evaluate.
+  - The number of alternative solutions had too little weight during constraint
+    sorting which would result in a very large amount of potential solutions to
+    evaluate. An example program took 31 minutes to compile, which after the fix
+    compiles in milliseconds.
+  - For a 100 constraints, with the wrong strategy we might need to evaluate
+    5^100 solutions (heat death of universe etc) whereas if we do things
+    correctly we can solve all constraints in perhaps 100*3 tries. Exponential
+    is exponential.
+- Fixed size `i64` integer type is now instantiable [#1118]
+- Improved str to int conversion [#1115]
+- Corrected str `.split` and `.splitlines()`
+- Correct DB server & client comm loop select handling [#1111]
+  - Ignores EBADF and have ensured this design is correct with regards to timing
+    of invalid fds.
+- Drop explicit `gcc` dependency for Debian package [#1110]
+  - Haskell GHC still depends on it though, so it still gets installed.
+- Use slightly newer bsdgc / libgc version [#1112]
+  - Slight build simplification as we've upstreamed some modifications.
+
+
+## [0.14.1] (2022-11-14)
+
 ### Added
+- `actonc --cc` to specify which C compiler to use to compile a module and
+  binary executables [#1103]
+  - Note that the Acton system is still compiled by `zig cc`. On Linux we are
+    targeting GNU libc 2.28, which might affect compilation of individual
+    modules or executables.
+
+### Fixed
+- `float.__ge__` is now working correctly [#1105]
+- Removed incremental operations from integers [#1106]
+- Improved `int` to `str` conversion [#1107]
+
+
+## [0.14.0] (2022-11-10)
+Acton RTS now does garbage collection!
+
+### Added
+- The Acton RTS now does garbage collection [#1091]
+  - Using libgc a.k.a the Boehm-Demers-Weiser garbage collector
+  - The GC stops the world to perform garbage collection during which all Acton
+    RTS worker threads are paused. It is likely this will be visible as pauses
+    of the whole system.
+  - Performance appears to be largely on par with and without GC but this is
+    based on small artificial programs.
+  - It is possible to disable the GC at run time by setting the environment
+    variable `export GC_DONT_GC=1` before starting the Acton application
+    - This will be removed in the future when the GC has been field proven.
+  - Long term is to implement an Acton specific GC that can, for example, avoid
+    stop the world events by doing collection per actor. This is quite far into
+    the future. Until then, this will have to do!
+
+
+## [0.13.1] (2022-11-10)
+
+### Changed
+- Allow `_` as a dummy variable name [#1020] [#1061]
+  - `_` can be used in an assignment to effectively throw away a result
+  - Unlike using a variable like `dummy`, `_` acts as a wildcard from a type
+    perspective, so that we can do `_ = 3` and `_ = "a"`, while if we attempt to
+    use another dummy variable name we will get a type error as we try to assign
+    it values with different types
+- `__self__` has been renamed to `self` [#1056]
+  - it is a reference to the own actor and holds the "external" view, i.e. it
+    can be passed to another actor as a reference to the local actor
+
+### Fixed
+- Correct DB client comm thread to avoid potential deadlock [#1088]
+  - Incorrect handling of error return status from select meant we could attempt
+    to read on fds that had no data and thus the comm thread would deadlock.
+  - Now we do proper error handling, always continuing for another spin &
+    attempt at select in case we get an error back.
+  - The (under development) garbage collector (GC) uses signals to instruct
+    threads to pause for stop the world events and thus we end up interrupting
+    the select loop a lot more frequently than before, thus surfacing this bug.
+- Correct DB client comm thread to avoid busy waiting [#1089]
+  - On Linux, using `select()` with a timeout, if the select is interrupted the
+    timeout value will be modified to reflect the time not slept. Thus the next
+    select in our comm thread loop would sleep for a shorter period of time.
+    Depending on the timing of the interrupt, the sleep might be shortened to
+    effectively form a busy wait.
+  - The (under development) garbage collector (GC) uses signals to instruct
+    threads to pause for stop the world events and thus we end up interrupting
+    the select loop a lot more frequently than before, thus surfacing this bug.
+  - Fixed by always resetting the timeout value in the loop.
+- Make RTS DB clients stick to one partition [#1087]
+  - Make sure RTS (a DB client) does not hop between different DB server
+    partitions even if they learn about disjoint gossip views.
+  - Prevents incorrect operation when DB servers are not aware of each other but
+    are "joined" by a RTS that see all the servers.
+  - This scenario is most easily reproduced by starting DB servers without
+    specifying a seed, and so the DB servers won't see each other, and then let
+    a RTS connect to the DB servers, which then sees a view of all 3 servers.
+    - This is now rejected as invalid.
+  - Using vector clocks to determine and reject invalid views. Very elegant =)
+- Correct `time.monotonic()` [#1097]
+  - It returned a wildly incorrect results as the nanoseconds part was not
+    properly added up with seconds.
+- Include argp-standalone library in libActonDeps [#1058]
+  - No more external dependencies!
+  - argp is available as part of the system on GNU/Linux but on MacOS we have
+    relied on the argp-standalone package installed via brew. We now prefer to
+    use our own on both Linux and MacOS.
+- Acton system is now compiled with `-Werror` to improve code quality [#1060]
+  - There are some exceptions to this but the overall goal is to be essentially
+    free of compilation warnings
+- Fix bug in truediv for `int` [#1076]
+- Fix bad codegen of classname argument to `isinstance()` [#1055]
+- Correct effect declaration to `mut` for some builtin protocols [#1053]
+- Method decorators like `@staticmethod` now work [#1054]
+- Added lost constraints inferred on target expressions [#1050]
+- Avoid undefined behavior in builtin object hash [#1065]
+- Clean up library include paths etc [#1068] [#1077] [#1080] [#1092]
+  - Made possible by including all of our external dependencies in libActonDeps
+
+### Testing / CI
+- Add back testing on Ubuntu 20.04 [#1093]
+  - libxml2 requires a newer automake (1.16.3) than is available on Ubuntu 20.04
+  - We fix this by hacking the configure.ac file to require the version
+    available on Ubuntu 20.04 (1.16.1)
+
+
+## [0.13.0] (2022-11-04)
+New "deactorizer", which unlocks proper async / sync actor method calls.
+
+### Added
+- Added new "deactorizer" pass in compiler [#374]
+  - No real user visible change, like no change in syntax, but we now properly
+    compile programs with regards to async / sync calling behavior of methods.
+  - Briefly, an actor method called from the local method is called directly.
+    This effect is called "proc". Remote actor methods are normally called
+    asynchronously and these are called "action". If we assign the return value
+    of an action, we are locking for a synchronous behavior which is achieved by
+    an await. These semantics are now correctly implemented.
+  - In particular, passing methods as arguments, a method might not know whether
+    it is passed an action or proc and thus needs to handle this in a generic
+    way. This is particularly tricky as we don't want to to any run time
+    inspection of arguments and thus need to have it all figured out at compile
+    time.
+  - Many many many other things are fixed through the merge of the new
+    deactorizer. There are improvements and fixes to various passes in the
+    compiler. This has been in the works for almost a year.
+- Added `--auto-stub` to `actonc` [#1047]
+  - Enables automatic detection of stub mode compilation
+- Extended actor argument pruning analysis to honour `NotImplemented` [#524]
+  - Pruning analysis prunes away arguments that are not used under the lifetime
+    of an actor, e.g. an argument only used for actor body initialization code.
+    Pruned arguments are not persisted.
+  - Pruning analysis does not cover C code, so when one or more methods are
+    implemented in C and defined as `NotImplemented` in the Acton module, we
+    cannot reliably determine what arguments are used or unused.
+  - The safe choice is to assume all arguments are used, which is what we are
+    now doing.
+  - This removes a bunch of `_force_persistance` methods in stdlib.
+
+### Changed
+- Default is now to not automatically detect stub mode [#1047]
+  - Use `--auto-stub` to enable automatic stub mode detection
+
+### Fixed
+- Now using zig v0.10.0, which was recently released [#1029]
+  - Previously using a nightly build of v0.10
+- Correct arithmetic operations using hexadecimal literals [#1027]
+- Build actondb using zig with -target [#1003]
+
+
+## [0.12.0] (2022-10-27)
+Edvin's second birthday, only 10 minor releases behind Acton ;)
+
+### Added
+- Zig is now used as the C compiler for Acton [#972]
+  - Many parts of Acton, like the run time system, builtins and parts of the
+    standard library are written in C
+  - actonc compiles Acton programs into C which are then compiled into binary
+    executables using a C compiler
+  - zig is now used for both of these use cases
+  - zig is bundled with Acton so that we know what version of zig we get, which
+    is the same across Linux and MacOS
+- Acton programs on Linux are now backwards compatible to GNU libc v2.28
+  - Previously, acton programs would be built for the GNU libc version on the
+    compiling computer, making it impossible to run on older distributions
+  - Now compatible with for example Ubuntu 20.04 LTS & Debian 10
+  - This is made possible by zigs incredible cross-compilation functionality,
+    which isn't just about targetting other OS, CPUs but also older libc
+    versions
+  - v2.28 appears to be the oldest version we can practically target without
+    code changes, even earlier versions fail compilation
+  - We could reduce backwards compatible, for example by targetting glibc 2.31,
+    if we find things that we would like access to, i.e. don't regard glibc 2.28
+    compatibility as a hard promise
+- Added `--always-build` to actonc [#988]
+  - Used in test suite so that we always force compilation in order to ensure
+    valid test results
+- `actonc` argument parsing now done using sub-parsers, allowing greater freedom
+  in constructing more complex commands [#976]
+- All external library dependencies are combined in one .a archive [#849]
+  - Decouples library dependency in builtins, RTS & stdlib from actonc compiler
+    arguments
+- All external library dependencies are now built from source [#984]
+  - Allows us to compile them with zig, thus power to select target libc
+- Add `xml` module [#835]
+  - Offers simple `encode()` and `decode()` operations
+  - Based on libxml2
+- The `int` type now supports arbitrary precision [#146]
+  - Add some big numbers!
+  - The previous implementation of `int` was as a signed 64 bit integer, this is
+    now available as the `i64` type in Acton, although its use is currently
+    quite limited.
+  - Longer term, fixed size integers like `i64` or `u64` (for an unsigned) are
+    available and can be chosen for high performance use cases. Developers
+    familiar with this level of coding are likely able to make an informed
+    choice about what integer type to choose. Using `int` for the arbitrary
+    precision type is the safer choice which will make most users happy.
+  - Using BSDNT library, which is a reasonably fast C implementation of
+    arbitrary precision types and arithmetic operations. It is not as fast as
+    MPL but has a more liberal license.
+
+### Fixed
+- Fixed seed arg parsing in actondb [#900]
+- Avoid crash during TCP client resume
+- DB now using logging rather fprintf(stderr, ...)
+- Reduce unprovoked CPS & 'rtail' bugs [#949]
+- Update docs for --root & `runacton` [#950]
+- `file.ReadFile` can now read arbitrarily large files [#955]
+- RTS does proper error handling of DB interaction [#957]
+  - This is a huge improvement!!!
+  - The run time system now properly reads the return code from all DB query
+    operations and acts appropriately. For example, lacking a quorum, the RTS
+    will continuously retry an operation until quorum can be reached.
+  - For some failures a larger chunk of operations needs to be retried, i.e. we
+    can't just wrap up a small function in a retry loop but need a larger retry
+    loop around a group of operations.
+  - DB API now returns a minority status which the RTS can and does react on
+    - Typical example is with 3 DB nodes and a commit goes through on 2, i.e.
+      with a quorum and is thus considered a success, however the 3rd node
+      rejected it because of a schema mismatch. The RTS can now be notified
+      through the minority status and attempt to repair the schema.
+      - A typical example of schema repairs necessary are for the queues, which
+        are dynamic. Every actor gets a queue in the database, so when new
+        actors are created, new queues also need to be created and if a
+        particular DB server is not up when the queue is created, it will be
+        missing and needs to be repaired later on.
+      - We should have proper sync up between DB servers, so that they query
+        each other and converge on the latest state. Until then, repair
+        initiated from RTS is our way of fixing it.
+- Notify gossip view to clients (RTS) from agreement round leader [#951]
+  - For example, in this scenario:
+    - db1 is started
+    - RTS is started & connected to db1 but unable to progress due to no quorum
+    - db2 is connected, gossips with db1 and we now have quorum
+    - RTS continues to be stalled as it is never notified about db2 and thus
+      unable to reach a quorum
+- Avoid MacOS quarantine shenanigans that kills actonc [#971]
+  - MacOS has some quarantine concept, so like if a file is downloaded from the
+    Internet, it is marked as quarantine and the user is asked "Are you sure you
+    want to run this" after which the quarantine flag, which is stored as a file
+    system extended attribute, is cleared.
+  - Somehow we trigger this quarantine, presumably by that we overwrite, through
+    cp, a binary executable that macos has run and this triggers it to set the
+    quarantine flag. The effect is that whenever we execute actonc, MacOS kills
+    -9 it, which is obviously rather annoying.
+  - By copying to a temporary file and then moving it in place, we avoid MacOS
+    setting the quarantine flag. We already did this, though for other reasons,
+    for actondb, so in a way this is a unification for the files in bin/
+
+### Testing / CI
+- Simplify and clean up RTS DB test orchestrator [#941] [#973]
+- Stop testing on Ubuntu 20.04
+  - It's not possible to compile libxml2 on a stock Ubuntu 20.04 as a newer
+    version of automake is required than is shipped
+  - We mainly want to uphold run time compatibility with Ubuntu 20.04, like it
+    should be possible to run Acton applications but utilizing Ubuntu 20.04 as a
+    development platform for Acton is not a high priority target, thus dropping
+    it is quite fine.
+- Revamp Increase timeout
+- Avoid kill -9 on macos [#969]
+  - MacOS quarantine functionality thinks we are doing something fishy and kill
+    -9 our process
+  - Worked around by doing cp & mv instead of just a cp
+
+
+## [0.11.7] (2022-10-03)
+Many important fixes for RTS/DB and the language in general!
+
+### Added
+- Bash completion is now part of the Debian packages & brew formula
+
+### Changed
+- actondb now uses a default value for gossip port of RPC port +1 [#913]
+  - The gossip protocol only propagates the RPC port & parts of the
+    implementation has a hard-coded assumption that the gossip port has a +1
+    offset
+  - In order to avoid configuration errors, the default gossip port is now RPC
+    port + 1 and if another gossip port is explicitly configured, an error log
+    message is emitted on startup.
+  - While this is marked as a change, it could really be considered a fix as any
+    other configuration of the system was invalid anyway.
+
+### Fixed
+- Fixed include path for M1 
+  - /opt/homebrew/include added to header include path [#892]
+  - Actually fixes builds on M1!
+  - This has "worked" because the only M2 where Acton was tested also had header
+    files in /usr/local/include but on a fresh install it errored out.
+- Fix up-to-date check in compiler for imported modules from stdlib [#890]
+- Fix seed arg parsing in actondb that lead to "Illegal instruction" error
+- Fix nested dicts definitions [#869]
+  - Now possible to directly define nested dicts
+- Avoid inconsistent view between RTS & DB in certain situations [#788]
+  - If an RTS node was stopped & quickly rejoins or if a transient partition
+    happens and the gossip round does not complete before the partition heals.
+  - We now wait for gossip round to complete.
+  - This ensures that local actor placement doesn't fail during such events.
+- Fix handling of missed timer events [#907]
+  - Circumstances such as suspending the Acton RTS or resuming a system from the
+    database could lead to negative timeout, i.e. sleep for less than 0 seconds.
+  - The libuv timeout argument is an uint64 and feeding in a negative signed
+    integer results in a value like 18446744073709550271, which roughly meant
+    sleeping for 584 million years, i.e. effectively blocking the RTS timerQ.
+  - It's now fixed by treating negative timeouts as 0, so we immediately wake up
+    to handle the event, however late we might be.
+- Timer events now wake up WT threads after system resumption [#907]
+  - Worker Threads (WT) are created in `NoExist` state and should transition
+    into `Idle` once initiated, however that was missing leading to a deadlock.
+  - This was masked as in most cases, a WT and will transition into `Working`
+    once they've carried out some work and then back into `Idle`
+  - `wake_wt` function, which is called to wake up a WT after a timer event is
+    triggered, wakes up threads that are currently in `Idle` state, if they are
+    in `NoExist`, it will do nothing.
+  - If there is no work, such as the case after system resumption from the DB,
+    WTs will stay in the `NoExist` state and then `wake_wt` will do nothing, so
+    the system is blocked.
+  - WT now properly transition into `Idle`.
+- Only communicate with live DB nodes from RTS DB client [#910] [#916]
+  - When the RTS communicates with the DB nodes, we've broadcast messages to all
+    servers we know about. If they are down, they've had their socket fd set to
+    0 to signal that the server is down. However, fd=0 is not invalid, it is
+    stdin, so we ended up sending data to stdin creating lots of garbage output
+    on the terminal.
+  - fd -1 is used to signal an invalid fd, which prevents similar mistakes.
+  - The DB node status is inspected and messages are only sent to live servers.
+- Avoid segfault on resuming TCP listener & TCP listener connection [#922]
+  - Invalidate fds on actor resumption [#917]
+- Remove remaining ending new lines from RTS log messages [#926]
+- Remove ending new lines from DB log messages [#932]
+
+### Testing / CI
+- Rewritten RTS / DB tests [#925] [#929]
+  - More robust event handling, directly reacting when something happens, for
+    example if a DB server segfaults or we see unexpected output we can abort
+    the test
+  - Now has much better combined output of DB & app output for simple
+    correlation during failures
+  - Test orchestrator now written in Acton (previously Python), at least async
+    IO callback style is better supported to directly react to events...
+
+
+## [0.11.6] (2022-09-20)
+
+### Fixed
+- Homebrew Formula now includes util-linux for Linux
+  - required for <uuid/uuid.h>
+
+
+## [0.11.5] (2022-09-20)
+
+### Fixed
+- Homebrew Formula test [#882]
+- Homebrew Formula now pins GHC dependency to version 8.10 [#885]
+  - This is aligned with the stack resolver version we're currently using
+- actondb is now statically linked with protobuf-c [#887]
+  - Found in brew linkage testing, which should now pass
+
+
+## [0.11.4] (2022-09-19)
+
+### Testing / CI
+- Minor correction to Homebrew release automation
+  - This is silly...
+
+
+## [0.11.3] (2022-09-19)
+
+### Testing / CI
+- Minor correction to Homebrew release automation
+
+
+## [0.11.2] (2022-09-19)
+
+There are additions but they're so minor you get 'em for free in a patch
+release! ;)
+
+### Added
+- Add runacton wrapper to run .act files using shebang [#238]
+  - Write an Acton program in a .act file and add shebang line at top:
+    - `#!/usr/bin/env runacton`
+  - ... and then run the .act file. It will be seamlessly compiled and executed!
+    Magic *whosh*
+
+### Testing / CI
+- Homebrew Formula moved to actonlang/acton repo [#868]
+  - Building a brew bottle is now part of regular CI testing
+  - Ensures that our Homebrew Formula is correct with regards to dependencies
+    etc, which has previously been a long standing issue
+  - mirrored to actonlang/homebrew-acton when we release
+- Retry DB test jobs [#853]
+  - No longer have to manually re-run CI jobs on failures
+  - Retry just the DB test itself, which takes a few seconds instead of
+    rerunning entire CI job which takes minutes
+- New automatic release process
+  - Removes adding git tag as manual step
+  - Now push branch `release-vX.Y.Z` updating `common.mk` & version in
+    `CHANGELOG.md`, once this PR is merged, a new workflow adds the git tag
+    which in turn triggers the release build
+
+
+## [0.11.1] (2022-09-14)
+
+### Testing / CI
+- Fix APT repo job
+
+
+## [0.11.0] (2022-09-14)
+
+### Added
+- Apple M1 / M2 CPUs are now supported [#823]
+  - aarch64 calling conventions are different for variadic vs fixed functions
+    and this is a problem when we alias a fixed function as a variadic function,
+    which is exactly what we did in a number of places in the stdlib where we
+    manually write C code
+  - Now fixed by calling $function2, $function3 etc for 2 vs 3 args
 - `actonc new foobar` will create a new project called foobar according to the
   standard project directory layout
-- Improve DB schema creation messages [#586]
-  - Messages contained "test", which is misleading. The DB server creates the
-    schemas, i.e. the schema is hard-coded. This is per design and a
-    simplification (no need for schema management RPCs) as the DB and RTS are
-    tightly coupled anyway.
+- Completely rewritten IO system & RTS workers [#698]
+  - libuv is now used for all IO operations instead of our own home grown IO
+    subsystem.
+  - Rather than a single thread dedicated to IO, all RTS worker threads now also
+    perform IO work. IO actors are pinned to a particular worker thread on
+    initialization.
+- New `net` module [#733]
+  - replaces `env.connect()` & `env.listen()`
+  - adds DNS lookup functions
+- New `process` module [#752] [#796] [#797] [#798] [#799] [#800] [#801] [#804]
+  [#808]
+  - runs sub-processes
+- New `file` module which allows reading and writing files [#806]
+  - Replaces `env.openR` & `env.openW`
+- New `json` module to encode and decode Acton data to JSON document (strings)
+  [#829]
+  - built on yyjson C library, which is a very fast (3.5GB/s) JSON library
+- Do token based authentication
+  - Capability based authentication has previously been based around access to
+    the env actor, which was initially fed into the system as an argument to the
+    root actor
+  - We wanted to modularize the code of the env actor and so instead we've opted
+    to use a token based authentication scheme
+  - A WorldAuth token is passed to the root actor, accessible as `env.auth`
+  - Tokens are organized in a hierarchy, e.g.
+    - WorldAuth > NetAuth > TCPAuth > TCPConnectAuth
+  - Performing actions always require most specific auth token
+    - This is to encourage users NOT to pass around the WorldAuth token but make
+      it more specific
+  - For example creating `net.TCPIPConnection` requires a `TCPConnectAuth` token
+- actonc now outputs some information about what it is doing per default [#840]
+  - Previous quieter output can be achieved with `--quiet`
+  - `--timing` includes extra timing information on how long compiler passes and
+    other operations take
+  - all `--verbose` output now under `--debug`
+- actonc now takes a lock on a project when compiling, which ensures that two
+  invokations of actonc to build the same project do not step on each others
+  toes [#760]
+  - lock is implemented using flock(), so even if actonc dies and lock file
+    stays in place, it is not considered locked (flock only keeps lock while
+    process that acquired lock is running)
+  - Our own stdlib is built concurrently with development and release profile,
+    which can now be run "concurrently", i.e. we do not have to ensure
+    serialization of these two builds from the Makefile and since all other
+    targets are run concurrenctly this simplifies the Makefile quite a bit,
+    however since there is a lock there won't be an actual concurrent build
+- actonc now automatically sets the root actor to `main`, if a program contains
+  such an actor. This means `--root` argument is mostly superfluous now [#726]
+- actonc --root argument now takes a qualified name, like <module>.<actor>
+  [#628]
+  - this is required to build an executable in a project with:
+    `actonc build --root test.main`
 - RTS has improved logging, including timestamps, log levels etc. Also supports
   file output [#584]
   - Log output is sent to stderr
@@ -17,18 +502,16 @@
     particular thread is doing.
   - stderr output has millisecond time resolution
   - file output (--rts-log-path) has nanosecond precision
+  - Using pretty, short relative paths
 - ActonDB has improved logging, including timestamps, log levels etc and
   supports file output [#588]
   - supports logging to file with --log-file
   - similar implementation as RTS (based on same log.c library but modified)
 - actonc automatically detects stub mode compilation based on presence of .c
   file [#601] [#624]
-- stdlib time module (written in C) has been moved to _time & new time module
-  written in Acton wraps all current functions in _time [#599]
-  - Preparatory move for adding more functionality to the time module
-  - The idea is to use leading _ for modules implemented in C. They should be
-    small, i.e. wrap C syscalls etc as tightly as possible and additional data
-    wrangling to be done in Acton.
+- actonc supports new .ext.c style definition of C functions where individual
+  functions in an .act file can be externally defined in the .ext.c file by
+  using `NotImplemented` as the function body [#706]
 - actonc is now aware of development / release profile [#599] [#612]
   - output placed in correct location, i.e. out/rel or out/dev
 - actonc now supports custom compilation of modules via Makefile [#602]
@@ -44,12 +527,27 @@
     everything else, and trying to add extra logic to get it to build first when
     building the stdlib project doesn't make sense; it's now special rules in
     the Acton Makefile
-- actonc --root argument now takes a qualified name, like <module>.<actor>
-  [#628]
-  - this is required to build an executable in a project with:
-    `actonc build --root test.main`
+- Improve DB schema creation messages [#586]
+  - Messages contained "test", which is misleading. The DB server creates the
+    schemas, i.e. the schema is hard-coded. This is per design and a
+    simplification (no need for schema management RPCs) as the DB and RTS are
+    tightly coupled anyway.
+- ActonDB will now gossip RTS node membership, forming the foundation for doing
+  distributed computing
+- ActonDB monitor membership information now contains all nodes [#645]
+- RTS mon now has a membership view [#645]
+- `bytes` type added [#655]
+- Library dependencies are now included in the Acton distribution [#698]
+- Added `__repr__` method to class value & subclasses [#685]
+- Added Ord instances for lists & dicts [#719]
 
 ### Changed
+- `after` now takes a float argument [#846]
+  - Allows sub-second delays
+- IO subsystem has been replaced with libuv
+- `env.connect()`, `env.listen()` has been replaced with `net` module, i.e.
+  `net.TCPIPConnection` and `net.TCPListener`
+- file access via `env` has been replaced with the `file` module
 - RTS log output is now sent to stderr rather than stdout
 - `actonc dump foo.ty` now takes the filename of the `.ty` file to dump as a
   positional argument rather than the old way of using an option (`actonc dump
@@ -83,16 +581,48 @@
     statically as possible (sort of, not including libc but most other things)
   - Now installing the .deb file will pull in all the correct dependencies on
     Debian 11 / bullseye and Ubuntu 20.04
+- Correct handling of plain and raw bytes / string literals [#655] [#657]
+- UTF-8 encoding is now enforced for source files
+- All library dependencies are now included in the Acton [#693]
+  - For example libuv, libutf8proc, libbsd (on Linux)
+  - No longer partially linking some modules like math & numpy
+  - We used to partially link in e.g. libbsd into math
+    - numpy imports math so importing both math and numpy means we got duplicate
+      symbols
+    - This was likely a faulty design in the first place as it lead to symbol
+      collisions
+  - Now all library dependencies are part of the Acton distribution and are
+    linked in with the final application at actonc build time
+  - Files are stored as e.g. dist/lib/libuv_a.a. The _a suffix is to ensure we
+    get the statically compiled library and do not link with a shared .so
+    library if one happens to be present on the system.
+- C lib guide rewritten for new .ext.c style [#766][#766]
+- Custom make file invocations are now more idempotent [#845]
+  - Avoid copying .h files which forces make to rebuild targets
+    
 
 ### Testing / CI
-- Tasty (Haskell test library & runner) is now used for testing actonc. Some
+- Tasty (Haskell test library & runner) is now used for testing actonc. Most
   tests have been migrated from test/Makefile to compiler/test.hs [#631]
   - Tasty offers different style testing; unit, golden, property etc, with
     flexible runners that can execute tests in paralell. Has nice, compact and
     colorized output in the terminal and can output to richer formats as well as
-    run benchmarking tests. We should use it for a lot more testing!
+    run benchmarking tests.
+  - There are now timeouts for all tests run by Tasty
 - TCP servers stress test for opening & closing fds in RTS [#570]
 - actonc build of projects have some test cases [#623] [#625]
+- Now testing on MacOS 12 [#527]
+- Stopped testing on MacOS 10 []
+- Now testing on Ubuntu 20.04, 22.04 & 22.10 [#700]
+- New test jobs for running actonc and its output on a clean machine [#]
+  - This installs acton from a .deb file on Linux and from artifact .zip file on
+    Mac
+  - Ensure that we have all dependencies declared correctly and that we ship all
+    necessary files
+  - Running on same platforms as normal test, i.e.:
+    - MacOS 11 & 12
+    - Debian 11
+    - Ubuntu 20.04, 22.04 & 22.10
 
 
 ## [0.10.0] (2022-02-25)
@@ -887,6 +1417,7 @@ first incarnation of Acton. It was more of a proof of concept based on Python as
 a runtime and with a hacked up Cassandra database as a backend store. Since
 then, this second incarnation has been in focus and 0.2.0 was its first version.
 
+
 [#1]: https://github.com/actonlang/acton/pull/1
 [#2]: https://github.com/actonlang/acton/pull/2
 [#14]: https://github.com/actonlang/acton/pull/14
@@ -922,6 +1453,7 @@ then, this second incarnation has been in focus and 0.2.0 was its first version.
 [#139]: https://github.com/actonlang/acton/pull/139
 [#140]: https://github.com/actonlang/acton/pull/140
 [#142]: https://github.com/actonlang/acton/pull/142
+[#146]: https://github.com/actonlang/acton/issues/146
 [#152]: https://github.com/actonlang/acton/pull/152
 [#153]: https://github.com/actonlang/acton/pull/153
 [#155]: https://github.com/actonlang/acton/pull/155
@@ -936,6 +1468,7 @@ then, this second incarnation has been in focus and 0.2.0 was its first version.
 [#204]: https://github.com/actonlang/acton/pull/204
 [#206]: https://github.com/actonlang/acton/pull/206
 [#212]: https://github.com/actonlang/acton/pull/212
+[#238]: https://github.com/actonlang/acton/issues/238
 [#243]: https://github.com/actonlang/acton/pull/243
 [#263]: https://github.com/actonlang/acton/pull/264
 [#277]: https://github.com/actonlang/acton/pull/277
@@ -949,6 +1482,7 @@ then, this second incarnation has been in focus and 0.2.0 was its first version.
 [#307]: https://github.com/actonlang/acton/pull/307
 [#308]: https://github.com/actonlang/acton/pull/308
 [#313]: https://github.com/actonlang/acton/pull/313
+[#315]: https://github.com/actonlang/acton/pull/315
 [#320]: https://github.com/actonlang/acton/pull/320
 [#325]: https://github.com/actonlang/acton/pull/325
 [#327]: https://github.com/actonlang/acton/pull/327
@@ -966,6 +1500,7 @@ then, this second incarnation has been in focus and 0.2.0 was its first version.
 [#369]: https://github.com/actonlang/acton/pull/369
 [#370]: https://github.com/actonlang/acton/pull/370
 [#371]: https://github.com/actonlang/acton/pull/371
+[#374]: https://github.com/actonlang/acton/issues/374
 [#375]: https://github.com/actonlang/acton/pull/375
 [#382]: https://github.com/actonlang/acton/pull/382
 [#383]: https://github.com/actonlang/acton/pull/383
@@ -985,6 +1520,7 @@ then, this second incarnation has been in focus and 0.2.0 was its first version.
 [#428]: https://github.com/actonlang/acton/pull/428
 [#429]: https://github.com/actonlang/acton/pull/429
 [#430]: https://github.com/actonlang/acton/pull/430
+[#431]: https://github.com/actonlang/acton/issues/431
 [#432]: https://github.com/actonlang/acton/issues/432
 [#434]: https://github.com/actonlang/acton/pull/434
 [#445]: https://github.com/actonlang/acton/issues/445
@@ -1014,11 +1550,15 @@ then, this second incarnation has been in focus and 0.2.0 was its first version.
 [#504]: https://github.com/actonlang/acton/pull/504
 [#506]: https://github.com/actonlang/acton/pull/506
 [#509]: https://github.com/actonlang/acton/pull/509
+[#512]: https://github.com/actonlang/acton/pull/512
+[#514]: https://github.com/actonlang/acton/pull/514
 [#516]: https://github.com/actonlang/acton/pull/516
 [#517]: https://github.com/actonlang/acton/pull/517
 [#518]: https://github.com/actonlang/acton/pull/518
 [#521]: https://github.com/actonlang/acton/pull/521
 [#522]: https://github.com/actonlang/acton/pull/522
+[#524]: https://github.com/actonlang/acton/issues/524
+[#527]: https://github.com/actonlang/acton/issues/527
 [#528]: https://github.com/actonlang/acton/pull/528
 [#529]: https://github.com/actonlang/acton/pull/529
 [#530]: https://github.com/actonlang/acton/pull/530
@@ -1026,6 +1566,7 @@ then, this second incarnation has been in focus and 0.2.0 was its first version.
 [#538]: https://github.com/actonlang/acton/pull/538
 [#542]: https://github.com/actonlang/acton/pull/542
 [#546]: https://github.com/actonlang/acton/pull/546
+[#547]: https://github.com/actonlang/acton/issues/547
 [#559]: https://github.com/actonlang/acton/pull/559
 [#570]: https://github.com/actonlang/acton/pull/570
 [#571]: https://github.com/actonlang/acton/pull/571
@@ -1048,6 +1589,82 @@ then, this second incarnation has been in focus and 0.2.0 was its first version.
 [#629]: https://github.com/actonlang/acton/pull/629
 [#631]: https://github.com/actonlang/acton/pull/631
 [#633]: https://github.com/actonlang/acton/pull/633
+[#645]: https://github.com/actonlang/acton/pull/645
+[#655]: https://github.com/actonlang/acton/pull/655
+[#685]: https://github.com/actonlang/acton/pull/685
+[#693]: https://github.com/actonlang/acton/pull/693
+[#698]: https://github.com/actonlang/acton/pull/698
+[#700]: https://github.com/actonlang/acton/pull/700
+[#706]: https://github.com/actonlang/acton/pull/706
+[#719]: https://github.com/actonlang/acton/pull/719
+[#726]: https://github.com/actonlang/acton/pull/726
+[#733]: https://github.com/actonlang/acton/pull/733
+[#752]: https://github.com/actonlang/acton/pull/752
+[#760]: https://github.com/actonlang/acton/pull/760
+[#788]: https://github.com/actonlang/acton/issues/788
+[#806]: https://github.com/actonlang/acton/pull/806
+[#808]: https://github.com/actonlang/acton/pull/808
+[#823]: https://github.com/actonlang/acton/pull/823
+[#829]: https://github.com/actonlang/acton/pull/829
+[#835]: https://github.com/actonlang/acton/issues/835
+[#840]: https://github.com/actonlang/acton/pull/840
+[#845]: https://github.com/actonlang/acton/pull/845
+[#846]: https://github.com/actonlang/acton/pull/846
+[#849]: https://github.com/actonlang/acton/issues/849
+[#853]: https://github.com/actonlang/acton/issues/853
+[#868]: https://github.com/actonlang/acton/pull/868
+[#869]: https://github.com/actonlang/acton/issues/869
+[#882]: https://github.com/actonlang/acton/issues/882
+[#885]: https://github.com/actonlang/acton/issues/885
+[#887]: https://github.com/actonlang/acton/issues/887
+[#890]: https://github.com/actonlang/acton/issues/890
+[#892]: https://github.com/actonlang/acton/pull/892
+[#900]: https://github.com/actonlang/acton/pull/900
+[#907]: https://github.com/actonlang/acton/issues/907
+[#910]: https://github.com/actonlang/acton/pull/910
+[#913]: https://github.com/actonlang/acton/issues/913
+[#916]: https://github.com/actonlang/acton/pull/916
+[#917]: https://github.com/actonlang/acton/pull/917
+[#922]: https://github.com/actonlang/acton/pull/922
+[#926]: https://github.com/actonlang/acton/issues/926
+[#925]: https://github.com/actonlang/acton/pull/925
+[#929]: https://github.com/actonlang/acton/pull/929
+[#932]: https://github.com/actonlang/acton/pull/932
+[#941]: https://github.com/actonlang/acton/issues/941
+[#949]: https://github.com/actonlang/acton/pull/949
+[#950]: https://github.com/actonlang/acton/pull/950
+[#951]: https://github.com/actonlang/acton/issues/951
+[#955]: https://github.com/actonlang/acton/pull/955
+[#957]: https://github.com/actonlang/acton/pull/957
+[#969]: https://github.com/actonlang/acton/issues/969
+[#971]: https://github.com/actonlang/acton/pull/971
+[#972]: https://github.com/actonlang/acton/issues/972
+[#976]: https://github.com/actonlang/acton/pull/976
+[#984]: https://github.com/actonlang/acton/pull/984
+[#988]: https://github.com/actonlang/acton/pull/988
+[#1003]: https://github.com/actonlang/acton/issues/1003
+[#1020]: https://github.com/actonlang/acton/pull/1020
+[#1027]: https://github.com/actonlang/acton/issues/1027
+[#1029]: https://github.com/actonlang/acton/issues/1029
+[#1047]: https://github.com/actonlang/acton/issues/1047
+[#1050]: https://github.com/actonlang/acton/issues/1050
+[#1053]: https://github.com/actonlang/acton/pull/1053
+[#1054]: https://github.com/actonlang/acton/pull/1054
+[#1055]: https://github.com/actonlang/acton/pull/1055
+[#1056]: https://github.com/actonlang/acton/pull/1056
+[#1058]: https://github.com/actonlang/acton/pull/1058
+[#1060]: https://github.com/actonlang/acton/pull/1060
+[#1065]: https://github.com/actonlang/acton/pull/1065
+[#1068]: https://github.com/actonlang/acton/pull/1068
+[#1076]: https://github.com/actonlang/acton/pull/1076
+[#1087]: https://github.com/actonlang/acton/pull/1087
+[#1088]: https://github.com/actonlang/acton/pull/1088
+[#1089]: https://github.com/actonlang/acton/pull/1089
+[#1091]: https://github.com/actonlang/acton/issues/1091
+[#1093]: https://github.com/actonlang/acton/pull/1093
+[#1097]: https://github.com/actonlang/acton/pull/1097
+
+
 [0.3.0]: https://github.com/actonlang/acton/releases/tag/v0.3.0
 [0.4.0]: https://github.com/actonlang/acton/compare/v0.3.0...v0.4.0
 [0.4.1]: https://github.com/actonlang/acton/compare/v0.4.0...v0.4.1
@@ -1070,6 +1687,16 @@ then, this second incarnation has been in focus and 0.2.0 was its first version.
 [0.9.0]: https://github.com/actonlang/acton/compare/v0.8.0...v0.9.0
 [0.10.0]: https://github.com/actonlang/acton/compare/v0.9.0...v0.10.0
 [0.11.0]: https://github.com/actonlang/acton/compare/v0.10.0...v0.11.0
+[0.11.1]: https://github.com/actonlang/acton/compare/v0.11.0...v0.11.1
+[0.11.2]: https://github.com/actonlang/acton/compare/v0.11.1...v0.11.2
+[0.11.3]: https://github.com/actonlang/acton/compare/v0.11.2...v0.11.3
+[0.11.4]: https://github.com/actonlang/acton/compare/v0.11.3...v0.11.4
+[0.11.5]: https://github.com/actonlang/acton/compare/v0.11.4...v0.11.5
+[0.11.6]: https://github.com/actonlang/acton/compare/v0.11.5...v0.11.6
+[0.11.7]: https://github.com/actonlang/acton/compare/v0.11.6...v0.11.7
+[0.12.0]: https://github.com/actonlang/acton/compare/v0.11.7...v0.12.0
+[0.13.0]: https://github.com/actonlang/acton/compare/v0.12.0...v0.13.0
+[0.13.1]: https://github.com/actonlang/acton/compare/v0.13.0...v0.13.1
 
 [homebrew-acton#7]: https://github.com/actonlang/homebrew-acton/pull/7
 [homebrew-acton#28]: https://github.com/actonlang/homebrew-acton/pull/28

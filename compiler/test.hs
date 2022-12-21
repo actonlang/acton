@@ -35,14 +35,15 @@ main = do
     dbAutoTests <- createAutoTests "DB auto" "../test/db_auto"
     exampleTests <- createTests "Examples" "../examples" False [] (testBuild "" ExitSuccess)
     regressionTests <- createAutoTests "Regression auto" "../test/regression_auto"
-    regressionSegfaultTests <- createTests "Regression segfaults" "../test/regression_segfault" False [] (testBuildAndRun "--root main" "" segfault_exitcode)
+    regressionSegfaultTests <- createTests "Regression segfaults" "../test/regression_segfault" False [] (testBuildAndRun "" "" segfault_exitcode)
     rtsAutoTests <- createAutoTests "RTS auto" "../test/rts_auto"
     stdlibAutoTests <- createAutoTests "stdlib auto" "../test/stdlib_auto"
-    defaultMain $ testGroup "Tests" $
+    defaultMain $ localOption timeout $ testGroup "Tests" $
       [ builtinsAutoTests
       , coreLangAutoTests
       , coreLangTests
       , dbAutoTests
+      , compilerTests
       , actoncProjTests
       , actoncRootArgTests
       , exampleTests
@@ -53,26 +54,43 @@ main = do
       , stdlibAutoTests
       , stdlibTests
       ]
+  where timeout :: Timeout
+        timeout = mkTimeout (60*1000000) -- 60 second timeout
 
 coreLangTests =
   testGroup "Core language"
   [
     testCase "async context" $ do
-        (returnCode, cmdOut, cmdErr) <- buildAndRun "--root main" "" "../test/core_lang/async-context.act"
+        (returnCode, cmdOut, cmdErr) <- buildAndRun "" "" "../test/core_lang/async-context.act"
         assertEqual "should compile" ExitSuccess returnCode
         assertEqual "should see 2 pongs" "pong\npong\n" cmdOut
   ]
 
+compilerTests =
+  testGroup "compiler tests"
+  [
+    testCase "partial rebuild" $ do
+        (returnCode, cmdOut, cmdErr) <- readCreateProcessWithExitCode (shell $ "rm -rf ../test/compiler/rebuild/out") ""
+        testBuild "" ExitSuccess False "../test/compiler/rebuild/"
+        (returnCode, cmdOut, cmdErr) <- readCreateProcessWithExitCode (shell $ "touch ../test/compiler/rebuild/src/rebuild.act") ""
+        testBuild "" ExitSuccess False "../test/compiler/rebuild/"
+  , testCase "rebuild with stdlib import" $ do
+        (returnCode, cmdOut, cmdErr) <- readCreateProcessWithExitCode (shell $ "rm -rf ../test/compiler/rebuild-import/out") ""
+        testBuild "" ExitSuccess False "../test/compiler/rebuild-import/"
+        testBuild "" ExitSuccess False "../test/compiler/rebuild-import/"
+  ]
+
 actoncProjTests =
-  testGroup "actonc project tests"
+  testGroup "compiler project tests"
   [ testCase "simple project" $ do
-        testBuild "" ExitSuccess True "test/actonc/project/simple"
+        testBuild "" ExitSuccess False "test/actonc/project/simple"
+        testBuild "" ExitSuccess False "test/actonc/project/simple"
 
   , testCase "with missing src/ dir" $ do
         testBuild "" (ExitFailure 1) False "test/actonc/project/missing_src"
 
   , testCase "qualified --root test.main" $ do
-        testBuild "build --root test.main" ExitSuccess False "test/actonc/project/qualified_root"
+        testBuild "--root test.main" ExitSuccess False "test/actonc/project/qualified_root"
 
   -- after used to avoid races on files in same project dir as above test
   , after AllFinish "qualified_root" $
@@ -83,11 +101,15 @@ actoncProjTests =
   ]
 
 actoncRootArgTests =
-  testGroup "actonc --root tests"
+  testGroup "compiler actonc --root tests"
   [ testCase "qualified --root test.main" $
         testBuild "--root test.main" ExitSuccess False "test/actonc/root/test.act"
   , testCase "unqualified --root main" $
         testBuild "--root main" ExitSuccess False "test/actonc/root/test.act"
+  , after AllFinish "qualified --root" $
+    after AllFinish "unqualified --root" $
+    testCase "discover root actor" $
+        testBuildAndRun "" "" ExitSuccess False "test/actonc/root/test.act"
   ]
 
 
@@ -95,31 +117,31 @@ rtsTests =
   testGroup "RTS"
   [
       testCase "arg parsing: foo --bar --rts-verbose" $ do
-          testBuildAndRun "--root main" "foo --bar --rts-verbose" ExitSuccess False "../test/rts/argv1.act"
+          testBuildAndRun "" "foo --bar --rts-verbose" ExitSuccess False "../test/rts/argv1.act"
 
   ,   testCase "arg parsing: --rts-verbose --rts-wthreads 7 foo --bar" $ do
-          testBuildAndRun "--root main" "--rts-verbose --rts-wthreads 7 foo --bar" ExitSuccess False "../test/rts/argv2.act"
+          testBuildAndRun "" "--rts-verbose --rts-wthreads 7 foo --bar" ExitSuccess False "../test/rts/argv2.act"
 
   ,   testCase "arg parsing: --rts-verbose --rts-wthreads=7 foo --bar" $ do
-          testBuildAndRun "--root main" "--rts-verbose --rts-wthreads=7 foo --bar" ExitSuccess False "../test/rts/argv3.act"
+          testBuildAndRun "" "--rts-verbose --rts-wthreads=7 foo --bar" ExitSuccess False "../test/rts/argv3.act"
 
   ,   testCase "arg parsing: --rts-wthreads 7 count" $ do
-          testBuildThing "--root main" ExitSuccess False "../test/rts/argv4.act"
+          testBuildThing "" ExitSuccess False "../test/rts/argv4.act"
           (returnCode, cmdOut, cmdErr) <- runThing "--rts-verbose --rts-wthreads 7 foo --bar" "../test/rts/argv4.act"
           assertEqual "RTS wthreads success retCode" ExitSuccess returnCode
           assertEqual "RTS wthreads output" True (isInfixOf "Using 7 worker threads" cmdErr)
 
   ,   testCase "arg parsing: --rts-wthreads 7 count" $ do
-          testBuildThing "--root main" ExitSuccess False "../test/rts/argv5.act"
+          testBuildThing "" ExitSuccess False "../test/rts/argv5.act"
           (returnCode, cmdOut, cmdErr) <- runThing "--rts-verbose --rts-wthreads=7 foo --bar" "../test/rts/argv5.act"
           assertEqual "RTS wthreads success retCode" ExitSuccess returnCode
           assertEqual "RTS wthreads output" True (isInfixOf "Using 7 worker threads" cmdErr)
 
   ,   testCase "arg parsing: --rts-verbose --rts-wthreads=7 -- foo --bar --rts-verbose" $ do
-          testBuildAndRun "--root main" "--rts-verbose --rts-wthreads=7 -- foo --bar --rts-verbose" ExitSuccess False "../test/rts/argv6.act"
+          testBuildAndRun "" "--rts-verbose --rts-wthreads=7 -- foo --bar --rts-verbose" ExitSuccess False "../test/rts/argv6.act"
 
   ,   testCase "arg parsing: --rts-wthreads" $ do
-          testBuildThing "--root main" ExitSuccess False "../test/rts/argv7.act"
+          testBuildThing "" ExitSuccess False "../test/rts/argv7.act"
           (returnCode, cmdOut, cmdErr) <- runThing "--rts-wthreads" "../test/rts/argv7.act"
           assertEqual "RTS wthreads error retCode" (ExitFailure 1) returnCode
           assertEqual "RTS wthreads error cmdErr" "ERROR: --rts-wthreads requires an argument.\n" cmdErr
@@ -129,8 +151,8 @@ stdlibTests =
   testGroup "stdlib"
   [
       testCase "time" $ do
-          epoch <- getCurrentTime >>= pure . (1000*) . utcTimeToPOSIXSeconds >>= pure . round
-          testBuildAndRun "--root main" (show epoch) ExitSuccess False "../test/stdlib/test_time.act"
+          epoch <- getCurrentTime >>= pure . utcTimeToPOSIXSeconds >>= pure . round
+          testBuildAndRun "" (show epoch) ExitSuccess False "../test/stdlib/test_time.act"
   ]
 
 
@@ -165,8 +187,8 @@ createAutoTest file = do
                       then head fileParts
                       else (head fileParts) ++ " (" ++testExp ++ ")"
         testFunc  = case testExp of
-                        "bf" -> testBuild "--root main"
-                        _    -> testBuildAndRun "--root main" ""
+                        "bf" -> testBuild ""
+                        _    -> testBuildAndRun "" ""
         expRet    = case testExp of
                         "bf" -> (ExitFailure 1)
                         "rf" -> (ExitFailure 1)
@@ -227,18 +249,23 @@ buildAndRun buildOpts runOpts thing = do
     (returnCode, cmdOut, cmdErr) <- runThing runOpts thing
     return (returnCode, cmdOut, cmdErr)
 
+-- when in a project, expect the binary to be named the same as the project
+-- without our ending, like __bf. For example, if the project is
+-- import_actor__bf, then we will run ./import_actor in
+-- import_actor__bf/out/rel/bin
 runThing opts thing = do
-    wd <- canonicalizePath $ takeDirectory thing
-    let cmd = "./" ++ fileBody ++ " " ++ opts
+    twd <- canonicalizePath $ takeDirectory thing
+    isProj <- doesDirectoryExist thing
+    projBinPath <- canonicalizePath $ thing ++ "/out/rel/bin"
+    let wd = if isProj then projBinPath else twd
+    let exe = if isProj then binName else fileBody
+    let cmd = "./" ++ exe ++ " " ++ opts
     (returnCode, cmdOut, cmdErr) <- readCreateProcessWithExitCode (shell $ cmd){ cwd = Just wd } ""
     return (returnCode, cmdOut, cmdErr)
   where (fileBody, fileExt) = splitExtension $ takeFileName thing
+        fileParts = splitOn "__" fileBody
+        binName = head fileParts
 
--- TODO: thingify, it is probably file specific now
-thingTestCase thing opts expRet expFail =
-    testCase fileBody $ do
-        testBuildThing opts expRet expFail thing
-  where (fileBody, fileExt) = splitExtension $ takeFileName thing
 
 testBuildThing opts expRet expFail thing = do
     (returnCode, cmdOut, cmdErr) <- buildThing opts thing
@@ -254,7 +281,7 @@ buildThing opts thing = do
     projPath <- canonicalizePath thing
     curDir <- getCurrentDirectory
     let wd = if proj then projPath else curDir
-    let actCmd    = (id actonc) ++ " " ++ if proj then "build " ++ opts else thing ++ " " ++ opts
+    let actCmd    = (id actonc) ++ " " ++ (if proj then "build " else thing) ++ " --always-build " ++ opts
     (returnCode, cmdOut, cmdErr) <- readCreateProcessWithExitCode (shell $ actCmd){ cwd = Just wd } ""
     return (returnCode, cmdOut, cmdErr)
 

@@ -4,11 +4,18 @@ actor main(env):
     def check(ts):
         diff = ts - int(env.argv[1])
         print("diff:", diff)
-        if int(diff) > 5:
+        if abs(int(diff)) > 5:
             print("ERROR: diff seems too large, time.time*() should be roughly same as provided UNIX timestamp input")
-            await async env.exit(1)
+            return 1
+        else:
+            return 0
 
-    check(int(time.time_ns() / 1000000000))
-    check(int(time.time()))
+    def test():
+        r1 = check(int(time.time()))
+        r2 = check(int(time.time_ns() / 1000000000))
+        return (r1 == 0 and r2 == 0)
 
-    await async env.exit(0)
+    if test():
+       await async env.exit(0)
+    else:
+       await async env.exit(1)

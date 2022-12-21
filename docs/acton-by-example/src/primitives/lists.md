@@ -25,7 +25,7 @@ actor main(env):
 
 Compile and run:
 ```sh
-actonc lists.act --root main
+actonc lists.act
 ./lists
 ```
 

@@ -144,7 +144,7 @@ int notify_remote_queue_subscribers(WORD table_key, WORD queue_id, db_t * db)
             int n = write(*(cs->sockfd), snd_buf, snd_msg_len);
             if (n < 0)
             {
-                    fprintf(stderr, "ERROR writing notification to socket!\n");
+                    log_error("ERROR writing notification to socket!");
                     continue;
             }
 
@@ -1059,6 +1059,8 @@ int delete_queue(WORD table_key, WORD queue_id, vector_clock * version, short us
 #if (VERBOSITY > 0)
             log_debug("BACKEND: Unlocked consumer lock of %" PRId64 " (%p/%p), status=%d", (int64_t) qca->consumer_id, cs->callback, cs->callback->lock, ret);
 #endif
+
+//          cs->notified=1;
 
 #if (VERBOSITY > 0)
             log_debug("BACKEND: Notified subscriber %" PRId64 " (%p/%p/%p/%p)", (int64_t) qca->consumer_id, cs->callback, cs->callback->lock, cs->callback->signal, cs->callback->callback);

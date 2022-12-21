@@ -18,8 +18,6 @@
 #endif
 #endif
 
-#define MAX_WTHREADS 256
-
 #include <unistd.h>
 #include <pthread.h>
 #include <stdio.h>
@@ -30,6 +28,15 @@
 #include <time.h>
 #include <stdlib.h>
 
+#include <sys/wait.h>
+#ifdef __linux__
+#include <sys/prctl.h>
+#endif
+
+#include <uv.h>
+
+#define GC_THREADS 1
+#include "gc.h"
 #include "yyjson.h"
 #include "rts.h"
 
@@ -42,6 +49,8 @@
 #include "../backend/client_api.h"
 #include "../backend/fastrand.h"
 
+struct sigaction sa_ill, sa_int, sa_pipe, sa_segv, sa_term;
+
 extern struct dbc_stat dbc_stats;
 
 char rts_verbose = 0;
@@ -53,6 +62,12 @@ int return_val = 0;
 
 char *appname = NULL;
 pid_t pid;
+
+uv_loop_t *uv_loops[MAX_WTHREADS];
+uv_async_t stop_ev[MAX_WTHREADS];
+uv_async_t wake_ev[MAX_WTHREADS];
+uv_check_t work_ev[MAX_WTHREADS];
+uv_timer_t *timer_ev;
 
 char *mon_log_path = NULL;
 int mon_log_period = 30;
@@ -154,10 +169,10 @@ int sched_getaffinity(pid_t pid, size_t cpu_size, cpu_set_t *cpu_set)
 }
 
 kern_return_t thread_policy_set(
-					thread_t thread,
-					thread_policy_flavor_t flavor,
-					thread_policy_t policy_info,
-					mach_msg_type_number_t count);
+                    thread_t thread,
+                    thread_policy_flavor_t flavor,
+                    thread_policy_t policy_info,
+                    mach_msg_type_number_t count);
 
 int pthread_setaffinity_np(pthread_t thread, size_t cpu_size, cpu_set_t *cpu_set) {
     int core = 0;
@@ -180,8 +195,14 @@ extern $Actor $ROOT();
 $Actor root_actor = NULL;
 $Env env_actor = NULL;
 
-$Actor readyQ = NULL;
-$Lock readyQ_lock;
+struct readyqs {
+    $Actor head;
+    $Actor tail;
+    unsigned long long count;
+    $Lock lock;
+};
+struct readyqs rqs[MAX_WTHREADS+1];
+
 
 $Msg timerQ = NULL;
 $Lock timerQ_lock;
@@ -198,22 +219,45 @@ time_t current_time() {
 }
 
 pthread_key_t self_key;
-pthread_mutex_t sleep_lock = PTHREAD_MUTEX_INITIALIZER;
-pthread_cond_t work_to_do = PTHREAD_COND_INITIALIZER;
+pthread_key_t pkey_wtid;
+pthread_key_t pkey_uv_loop;
 
 pthread_mutex_t rts_exit_lock = PTHREAD_MUTEX_INITIALIZER;
 pthread_cond_t rts_exit_signal = PTHREAD_COND_INITIALIZER;
 
-void new_work() {
+void pin_actor_affinity() {
+    $Actor a = ($Actor)pthread_getspecific(self_key);
+    int i = (int)pthread_getspecific(pkey_wtid);
+    log_debug("Pinning affinity for %s actor %ld to current WT %d", a->$class->$GCINFO, a->$globkey, i);
+    a->$affinity = i;
+}
+
+void wake_wt(int wtid) {
     // We are sometimes optimistically called, i.e. the caller sometimes does
     // not really know whether there is new work or not. We check and if there
     // is not, then there is no need to wake anyone up.
-    if (!readyQ)
+    if (!rqs[wtid].head)
         return;
 
-    pthread_mutex_lock(&sleep_lock);
-    pthread_cond_signal(&work_to_do);
-    pthread_mutex_unlock(&sleep_lock);
+    // wake up corresponding worker threads....
+    if (wtid == 0) {
+        // global queue
+        for (int j = 0; j < num_wthreads; j++) {
+            if (wt_stats[j].state == WT_Idle) {
+                uv_async_send(&wake_ev[j]);
+                return;
+            }
+        }
+    } else {
+        // thread specific queue
+        uv_async_send(&wake_ev[wtid]);
+    }
+
+}
+
+void reset_timeout() {
+    // Wake up timerQ thread
+    uv_async_send(&wake_ev[0]);
 }
 
 static inline void spinlock_lock($Lock *f) {
@@ -301,6 +345,7 @@ void $Actor$__init__($Actor a) {
     a->$catcher = NULL;
     atomic_flag_clear(&a->$msg_lock);
     a->$globkey = get_next_key();
+    a->$affinity = 0;
     rtsd_printf("# New Actor %ld at %p of class %s", a->$globkey, a, a->$class->$GCINFO);
 }
 
@@ -310,7 +355,7 @@ $bool $Actor$__bool__($Actor self) {
 
 $str $Actor$__str__($Actor self) {
   char *s;
-  asprintf(&s,"<$Actor object at %p>",self);
+  asprintf(&s,"<$Actor %ld %s at %p>", self->$globkey, self->$class->$GCINFO, self);
   return to$str(s);
 }
 
@@ -340,6 +385,7 @@ $Actor $Actor$__deserialize__($Actor res, $Serial$state state) {
     res->$consume_hd = (long)$val_deserialize(state);
     res->$catcher = $step_deserialize(state);
     atomic_flag_clear(&res->$msg_lock);
+    res->$affinity = 0;
     return res;
 }
 
@@ -372,28 +418,6 @@ $Catcher $Catcher$__deserialize__($Catcher self, $Serial$state state) {
     return res;
 }
 ///////////////////////////////////////////////////////////////////////////////////////
-
-void $Cont$__init__($Cont $this) { }
-
-$bool $Cont$__bool__($Cont self) {
-  return $True;
-}
-
-$str $Cont$__str__($Cont self) {
-  char *s;
-  asprintf(&s,"<$Cont object at %p>",self);
-  return to$str(s);
-}
-
-void $Cont$__serialize__($Cont self, $Serial$state state) {
-    // Empty
-}
-
-$Cont $Cont$__deserialize__($Cont self, $Serial$state state) {
-    return $DNEW($Cont,state);
-}
-
-////////////////////////////////////////////////////////////////////////////////////////
 
 void $ConstCont$__init__($ConstCont $this, $WORD val, $Cont cont) {
     $this->val = val;
@@ -473,19 +497,6 @@ struct $Catcher$class $Catcher$methods = {
     $Catcher$__str__
 };
 
-struct $Cont$class $Cont$methods = {
-    CONT_HEADER,
-    UNASSIGNED,
-    NULL,
-    $Cont$__init__,
-    $Cont$__serialize__,
-    $Cont$__deserialize__,
-    $Cont$__bool__,
-    $Cont$__str__,
-    $Cont$__str__,
-    NULL
-};
-
 struct $ConstCont$class $ConstCont$methods = {
     "$ConstCont",
     UNASSIGNED,
@@ -501,31 +512,52 @@ struct $ConstCont$class $ConstCont$methods = {
 
 ////////////////////////////////////////////////////////////////////////////////////////
 
-// Atomically enqueue actor "a" onto the global ready-queue.
-void ENQ_ready($Actor a) {
-    spinlock_lock(&readyQ_lock);
-    if (readyQ) {
-        $Actor x = readyQ;
+// Atomically enqueue actor "a" onto the right ready-queue, either a thread
+// local one or the "default" of 0 which is a shared queue among all worker
+// threads. The index is offset by 1 so worker thread 0 is at index 1.
+int ENQ_ready($Actor a) {
+    int i = a->$affinity;
+    spinlock_lock(&rqs[i].lock);
+    if (rqs[i].head) {
+        $Actor x = rqs[i].head;
         while (x->$next)
             x = x->$next;
         x->$next = a;
     } else {
-        readyQ = a;
+        rqs[i].head = a;
     }
     a->$next = NULL;
-    spinlock_unlock(&readyQ_lock);
+    spinlock_unlock(&rqs[i].lock);
+    // If we enqueue to someone who is not us, immediately wake them up...
+    int our_wtid = (int)pthread_getspecific(pkey_wtid);
+    if (our_wtid != i)
+        wake_wt(i);
+    return i;
 }
 
-// Atomically dequeue and return the first actor from the global ready-queue, 
-// or return NULL.
-$Actor DEQ_ready() {
-    spinlock_lock(&readyQ_lock);
-    $Actor res = readyQ;
+// Atomically dequeue and return the first actor from a ready-queue, first
+// dequeueing from the thread specific queue and second from the global shared
+// readyQ or return NULL if no work is found.
+$Actor _DEQ_ready(int idx) {
+    $Actor res = NULL;
+    if (rqs[idx].head == NULL)
+        return res;
+
+    spinlock_lock(&rqs[idx].lock);
+    res = rqs[idx].head;
     if (res) {
-        readyQ = res->$next;
+        rqs[idx].head = res->$next;
         res->$next = NULL;
     }
-    spinlock_unlock(&readyQ_lock);
+    spinlock_unlock(&rqs[idx].lock);
+    return res;
+}
+$Actor DEQ_ready(int idx) {
+    $Actor res = _DEQ_ready(idx);
+    if (res)
+        return res;
+
+    res = _DEQ_ready(0);
     return res;
 }
 
@@ -638,7 +670,7 @@ char *RTAG_name($RTAG tag) {
     }
 }
 ////////////////////////////////////////////////////////////////////////////////////////
-$R $DONE$__call__($Cont $this, $WORD val) {
+$R $Done$__call__($Cont $this, $WORD val) {
     return $R_DONE(val);
 }
 
@@ -672,15 +704,15 @@ struct $Cont$class $Done$methods = {
     $Done$__bool__,
     $Done$__str__,
     $Done$__str__,
-    ($R (*)($Cont, ...))$DONE$__call__
+    $Done$__call__
 };
 struct $Cont $Done$instance = {
     &$Done$methods
 };
 ////////////////////////////////////////////////////////////////////////////////////////
 $R $InitRoot$__call__ ($Cont $this, $WORD val) {
-    typedef $R(*ROOT__init__t)($Actor, $Env, $Cont);    // Assumed type of the ROOT actor's __init__ method
-    return ((ROOT__init__t)root_actor->$class->__init__)(root_actor, env_actor, ($Cont)val);
+    typedef $R(*ROOT__init__t)($Actor, $Cont, $Env);    // Assumed type of the ROOT actor's __init__ method
+    return ((ROOT__init__t)root_actor->$class->__init__)(root_actor, ($Cont)val, env_actor);
 }
 
 struct $Cont$class $InitRoot$methods = {
@@ -693,7 +725,7 @@ struct $Cont$class $InitRoot$methods = {
     $Cont$__bool__,
     $Cont$__str__,
     $Cont$__str__,
-    ($R (*)($Cont, ...))$InitRoot$__call__
+    $InitRoot$__call__
 };
 struct $Cont $InitRoot$cont = {
     &$InitRoot$methods
@@ -707,12 +739,28 @@ void queue_group_message_callback(queue_callback_args * qca) {
 }
 
 void create_db_queue(long key) {
-    int ret = remote_create_queue_in_txn(MSG_QUEUE, ($WORD)key, NULL, db);
-    rtsd_printf("#### Create queue %ld returns %d", key, ret);
-//    queue_callback * qc = get_queue_callback(dummy_callback);
-//	int64_t prev_read_head = -1, prev_consume_head = -1;
-//	ret = remote_subscribe_queue(($WORD)key, 0, 0, MSG_QUEUE, ($WORD)key, qc, &prev_read_head, &prev_consume_head, db);
-//    rtsd_printf("   # Subscribe queue %ld returns %d", key, ret);
+    int minority_status = 0;
+    while(!rts_exit) {
+        int ret = remote_create_queue_in_txn(MSG_QUEUE, ($WORD)key, &minority_status, NULL, db);
+        rtsd_printf("#### Create queue %ld returns %d", key, ret);
+        if(ret == NO_QUORUM_ERR) {
+            sleep(3);
+            continue;
+        }
+/*
+        queue_callback * qc = get_queue_callback(dummy_callback);
+        int64_t prev_read_head = -1, prev_consume_head = -1;
+        // We might have lost quorum since we created the queue above, so check again and re-create queue until success.
+        ret = remote_subscribe_queue(($WORD)key, 0, 0, MSG_QUEUE, ($WORD)key, qc, &prev_read_head, &prev_consume_head, &minority_status, db);
+        rtsd_printf("   # create_db_queue(): Subscribe queue %ld returns %d, minority_status %d", key, ret, minority_status);
+        if(ret == NO_QUORUM_ERR || minority_status == DB_ERR_NO_QUEUE) {
+            sleep(3);
+            continue;
+        }
+        if(ret == 0 || ret == CLIENT_ERR_SUBSCRIPTION_EXISTS)
+            break;
+    }
+*/
 }
 
 void init_db_queue(long key) {
@@ -754,14 +802,14 @@ $Msg $ASYNC($Actor to, $Cont cont) {
     } else {                                            // $ASYNC called by the event loop
         m->$baseline = current_time();
         if (ENQ_msg(m, to)) {
-           ENQ_ready(to);
-           new_work();
+           int wtid = ENQ_ready(to);
+           wake_wt(wtid);
         }
     }
     return m;
 }
 
-$Msg $AFTER($int sec, $Cont cont) {
+$Msg $AFTER($float sec, $Cont cont) {
     $Actor self = ($Actor)pthread_getspecific(self_key);
     rtsd_printf("# AFTER by %ld", self->$globkey);
     time_t baseline = self->$msg->$baseline + sec->val * 1000000;
@@ -770,7 +818,7 @@ $Msg $AFTER($int sec, $Cont cont) {
     return m;
 }
 
-$R $AWAIT($Msg m, $Cont cont) {
+$R $AWAIT($Cont cont, $Msg m) {
     return $R_WAIT(cont, m);
 }
 
@@ -785,19 +833,96 @@ void $POP() {
     POP_catcher(self);
 }
 
-// Actually send all buffered messages of the sender
-void FLUSH_outgoing($Actor self, uuid_t *txnid) {
-    rtsd_printf("#### FLUSH_outgoing messages from %ld", self->$globkey);
+void create_all_actor_queues() {
+    for(snode_t * node = HEAD(db->actors); node!=NULL; node=NEXT(node)) {
+        create_db_queue((long) node->key);
+    }
+}
+
+int handle_status_and_schema_mismatch(int ret, int minority_status, long key)
+{
+    // If schema on any of the DB servers needs updating (based on minority_status), do that.
+    // If there was a quorum of healthy servers, we can go on after this, the operation succeeded.
+    // If schema was missing on a majority of servers, we'll in addition get NO_QUORUM_ERR, and
+    // we also need to retry the operation.
+    int queues_created = 0;
+    switch(minority_status) {
+        case DB_ERR_NO_QUEUE:
+        case DB_ERR_NO_CONSUMER:
+        case VAL_STATUS_ABORT_SCHEMA: {
+            // Schema errs:
+//            create_all_actor_queues();
+            create_db_queue(key);
+            queues_created = 1;
+            break;
+        }
+        case QUEUE_STATUS_READ_INCOMPLETE:
+        case QUEUE_STATUS_READ_COMPLETE:
+        case DB_ERR_DUPLICATE_CONSUMER:
+        case DB_ERR_QUEUE_COMPLETE:
+        case DB_ERR_DUPLICATE_QUEUE: {
+            // These are OK:
+            break;
+        }
+        default: { // DB_ERR_QUEUE_HEAD_INVALID, DB_ERR_NO_TABLE
+            assert(0);
+        }
+    }
+
+    if(ret == VAL_STATUS_ABORT_SCHEMA && !queues_created) {
+//        create_all_actor_queues();
+        create_db_queue(key);
+    }
+
+    if(ret == NO_QUORUM_ERR) {
+        sleep(3);
+        return 1;
+    }
+
+    return 0;
+}
+
+void reverse_outgoing_queue($Actor self) {
     $Msg prev = NULL;
     $Msg m = self->$outgoing;
-    self->$outgoing = NULL;
     while (m) {
         $Msg next = m->$next;
         m->$next = prev;
         prev = m;
         m = next;
     }
-    m = prev;
+    self->$outgoing = prev;
+}
+
+// Send all buffered messages of the sender to global DB queues in a single txn, and retry it until success
+// Leaves no side effects in local queues if txns need to abort
+// Assumes the actor's outgoing queue has already been reversed in FIFO order
+void FLUSH_outgoing_db($Actor self, uuid_t *txnid) {
+    rtsd_printf("#### FLUSH_outgoing messages from %ld to DB queues", self->$globkey);
+    $Msg m = self->$outgoing;
+    while (m) {
+        long dest = (m->$baseline == self->$msg->$baseline)? m->$to->$globkey : 0;
+        int ret = 0, minority_status = 0;
+        while(!rts_exit) {
+            ret = remote_enqueue_in_txn(($WORD*)&m->$globkey, 1, NULL, 0, MSG_QUEUE, (WORD)dest, &minority_status, txnid, db);
+            if (dest) {
+                    rtsd_printf("   # enqueue msg %ld to queue %ld returns %d, minority_status=%d", m->$globkey, dest, ret, minority_status);
+            } else {
+                    rtsd_printf("   # enqueue msg %ld to TIMER_QUEUE returns %d, minority_status=%d", m->$globkey, ret, minority_status);
+            }
+            if(!handle_status_and_schema_mismatch(ret, minority_status, dest))
+                break;
+        }
+        m = m->$next;
+    }
+}
+
+// Actually send all buffered messages of the sender, using internal queues only
+// Assumes the actor's outgoing queue has already been reversed in FIFO order
+void FLUSH_outgoing_local($Actor self) {
+    rtsd_printf("#### FLUSH_outgoing messages from %ld to RTS-internal queues", self->$globkey);
+    $Msg m = self->$outgoing;
+    self->$outgoing = NULL;
     while (m) {
         $Msg next = m->$next;
         m->$next = NULL;
@@ -813,14 +938,6 @@ void FLUSH_outgoing($Actor self, uuid_t *txnid) {
                 reset_timeout();
             dest = 0;
         }
-        if (db) {
-            int ret = remote_enqueue_in_txn(($WORD*)&m->$globkey, 1, NULL, 0, MSG_QUEUE, (WORD)dest, txnid, db);
-            if (dest) {
-                rtsd_printf("   # enqueue msg %ld to queue %ld returns %d", m->$globkey, dest, ret);
-            } else {
-                rtsd_printf("   # enqueue msg %ld to TIMER_QUEUE returns %d", m->$globkey, ret);
-            }
-        }
         m = next;
     }
 }
@@ -835,26 +952,45 @@ void handle_timeout() {
     if (m) {
         rtsd_printf("## Dequeued timed msg with baseline %ld (now is %ld)", m->$baseline, now);
         if (ENQ_msg(m, m->$to)) {
-            ENQ_ready(m->$to);
-            new_work();
+            int wtid = ENQ_ready(m->$to);
+            wake_wt(wtid);
         }
         if (db) {
-            uuid_t *txnid = remote_new_txn(db);
-            timer_consume_hd++;
+                int success = 0;
+                while(!success && !rts_exit)
+                {
+                uuid_t *txnid = remote_new_txn(db);
+                if(txnid == NULL)
+                    continue;
+                timer_consume_hd++;
 
-            long key = TIMER_QUEUE;
-            snode_t *m_start, *m_end;
-            int entries_read = 0;
-            int64_t read_head = -1;
-            int ret0 = remote_read_queue_in_txn(($WORD) db->local_rts_id, 0, 0, MSG_QUEUE, ($WORD)key, 1, &entries_read, &read_head, &m_start, &m_end, NULL, db);
-            rtsd_printf("   # dummy read msg from TIMER_QUEUE returns %d, entries read: %d", ret0, entries_read);
+                long key = TIMER_QUEUE;
+                snode_t *m_start, *m_end;
+                int entries_read = 0, minority_status = 0;
+                int64_t read_head = -1;
 
-            int ret = remote_consume_queue_in_txn(($WORD) db->local_rts_id, 0, 0, MSG_QUEUE, ($WORD)key, read_head, txnid, db);
-            rtsd_printf("   # consume msg %ld from TIMER_QUEUE returns %d", m->$globkey, ret);
-            int ret2 = remote_enqueue_in_txn(($WORD*)&m->$globkey, 1, NULL, 0, MSG_QUEUE, (WORD)m->$to->$globkey, txnid, db);
-            rtsd_printf("   # (timed) enqueue msg %ld to queue %ld returns %d", m->$globkey, m->$to->$globkey, ret2);
-            remote_commit_txn(txnid, db);
-            rtsd_printf("############## Commit");
+                int ret0 = remote_read_queue_in_txn(($WORD)db->local_rts_id, 0, 0, MSG_QUEUE, ($WORD)key, 1, &entries_read, &read_head, &m_start, &m_end, &minority_status, NULL, db);
+                rtsd_printf("   # dummy read msg from TIMER_QUEUE returns %d, entries read: %d", ret0, entries_read);
+                if(handle_status_and_schema_mismatch(ret0, minority_status, key))
+                    continue;
+
+                int ret1 = remote_consume_queue_in_txn(($WORD)db->local_rts_id, 0, 0, MSG_QUEUE, ($WORD)key, read_head, &minority_status, txnid, db);
+                rtsd_printf("   # consume msg %ld from TIMER_QUEUE returns %d", m->$globkey, ret1);
+                if(handle_status_and_schema_mismatch(ret1, minority_status, key))
+                    continue;
+
+                int ret2 = remote_enqueue_in_txn(($WORD*)&m->$globkey, 1, NULL, 0, MSG_QUEUE, (WORD)m->$to->$globkey, &minority_status, txnid, db);
+                rtsd_printf("   # (timed) enqueue msg %ld to queue %ld returns %d", m->$globkey, m->$to->$globkey, ret2);
+                if(handle_status_and_schema_mismatch(ret2, minority_status, key))
+                    continue;
+
+                int ret3 = remote_commit_txn(txnid, &minority_status, db);
+                rtsd_printf("############## Commit returned %d, minority_status %d", ret3, minority_status);
+                if(handle_status_and_schema_mismatch(ret3, minority_status, key))
+                    continue;
+                if(ret3 == VAL_STATUS_COMMIT)
+                    success = 1;
+                }
         }
     }
 }
@@ -871,11 +1007,15 @@ $WORD try_globdict($WORD w) {
 
 long read_queued_msg(long key, int64_t *read_head) {
     snode_t *m_start, *m_end;
-    int entries_read = 0;
+    int entries_read = 0, minority_status = 0, ret = 0;
     
-    int ret = remote_read_queue_in_txn(($WORD) db->local_rts_id, 0, 0, MSG_QUEUE, ($WORD)key,
-                                       1, &entries_read, read_head, &m_start, &m_end, NULL, db);
-    rtsd_printf("   # read msg from queue %ld returns %d, entries read: %d", key, ret, entries_read);
+    while(!rts_exit) {
+        ret = remote_read_queue_in_txn(($WORD)local_rts_id, 0, 0, MSG_QUEUE, ($WORD)key,
+                                           1, &entries_read, read_head, &m_start, &m_end, &minority_status, NULL, db);
+        rtsd_printf("   # read msg from queue %ld returns %d, entries read: %d, minority_status: %d", key, ret, entries_read, minority_status);
+        if(!handle_status_and_schema_mismatch(ret, minority_status, key))
+            break;
+    }
 
     if (!entries_read)
         return 0;
@@ -896,7 +1036,7 @@ $ROW extract_row($WORD *blob, size_t blob_size) {
     BlobHd* head = (BlobHd*)blob;
     $ROW fst = malloc(sizeof(struct $ROW) + head->blob_size*sizeof($WORD));
     $ROW row = fst;
-    while (1) {
+    while (!rts_exit) {
         long size = 1 + head->blob_size;
         memcpy(&row->class_id, blob, size*sizeof($WORD));
         blob += size;
@@ -954,7 +1094,12 @@ void deserialize_system(snode_t *actors_start) {
     printf("### remote_subscribe_group(consumer_id = %d, group_id = %d)\n", (int) db->local_rts_id, (int) db->local_rts_id);
     remote_subscribe_group((WORD) db->local_rts_id, NULL, NULL, (WORD) db->local_rts_id, gqc, db);
     snode_t *msgs_start, *msgs_end;
-    remote_read_full_table_in_txn(&msgs_start, &msgs_end, MSGS_TABLE, NULL, db);
+    int ret = 0,  minority_status = 0, no_items = 0;
+    while(!rts_exit) {
+        ret = remote_read_full_table_in_txn(&msgs_start, &msgs_end, MSGS_TABLE, &no_items, &minority_status, NULL, db);
+        if(!handle_status_and_schema_mismatch(ret, minority_status, 0))
+            break;
+    }
     
     globdict = $NEW($dict,($Hashable)$Hashable$int$witness,NULL,NULL);
 
@@ -962,10 +1107,10 @@ void deserialize_system(snode_t *actors_start) {
 
     rtsd_printf("#### Msg allocation:");
     for(snode_t * node = msgs_start; node!=NULL; node=NEXT(node)) {
-		db_row_t* r = (db_row_t*) node->value;
+        db_row_t* r = (db_row_t*) node->value;
         rtsd_printf("# r %p, key: %ld, cells: %p, columns: %p, no_cols: %d, blobsize: %d", r, (long)r->key, r->cells, r->column_array, r->no_columns, r->last_blob_size);
         long key = (long)r->key;
-		if (r->cells) {
+        if (r->cells) {
             db_row_t* r2 = (HEAD(r->cells))->value;
             rtsd_printf("# r2 %p, key: %ld, cells: %p, columns: %p, no_cols: %d, blobsize: %d", r2, (long)r2->key, r2->cells, r2->column_array, r2->no_columns, r2->last_blob_size);
             BlobHd *head = (BlobHd*)r2->column_array[0];
@@ -999,9 +1144,9 @@ void deserialize_system(snode_t *actors_start) {
 
     rtsd_printf("#### Msg contents:");
     for(snode_t * node = msgs_start; node!=NULL; node=NEXT(node)) {
-		db_row_t* r = (db_row_t*) node->value;
+        db_row_t* r = (db_row_t*) node->value;
         long key = (long)r->key;
-		if (r->cells) {
+        if (r->cells) {
             db_row_t* r2 = (HEAD(r->cells))->value;
             $WORD *blob = ($WORD*)r2->column_array[0];
             int blob_size = r2->last_blob_size;
@@ -1016,9 +1161,9 @@ void deserialize_system(snode_t *actors_start) {
 
     rtsd_printf("#### Actor contents:");
     for(snode_t * node = actors_start; node!=NULL; node=NEXT(node)) {
-		db_row_t* r = (db_row_t*) node->value;
+        db_row_t* r = (db_row_t*) node->value;
         long key = (long)r->key;
-		if (r->cells) {
+        if (r->cells) {
             db_row_t* r2 = (HEAD(r->cells))->value;
             $WORD *blob = ($WORD*)r2->column_array[0];
             int blob_size = r2->last_blob_size;
@@ -1039,11 +1184,18 @@ void deserialize_system(snode_t *actors_start) {
 
             rtsd_printf("#### Reading msgs queue %ld contents:", key);
 //            queue_callback * qc = get_queue_callback(dummy_callback);
-            int64_t prev_read_head = -1; // , prev_consume_head = -1;
-//            int ret = remote_subscribe_queue(($WORD)key, 0, 0, MSG_QUEUE, ($WORD)key, qc, &prev_read_head, &prev_consume_head, db);
-//            rtsd_printf("   # Subscribe queue %ld returns %d", key, ret);
-            while (1) {
-                long msg_key = read_queued_msg(key, &prev_read_head);
+            int64_t prev_read_head = -1; //, prev_consume_head = -1;
+            int ret = 0, minority_status = 0;
+/*
+            while(!rts_exit) {
+                ret = remote_subscribe_queue(($WORD)key, 0, 0, MSG_QUEUE, ($WORD)key, qc, &prev_read_head, &prev_consume_head, &minority_status, db);
+                rtsd_printf("   # Subscribe queue %ld returns %d, minority_status %d", key, ret, minority_status);
+                if(!handle_status_and_schema_mismatch(ret, minority_status, key))
+                    break;
+            }
+*/
+            while (!rts_exit) {
+                    long msg_key = read_queued_msg(key, &prev_read_head);
                 if (!msg_key)
                     break;
                 m = $dict_get(globdict, ($Hashable)$Hashable$int$witness, to$int(msg_key), NULL);
@@ -1070,10 +1222,16 @@ void deserialize_system(snode_t *actors_start) {
     rtsd_printf("#### Reading timer queue contents:");
     time_t now = current_time();
 //    queue_callback * qc = get_queue_callback(dummy_callback);
-	int64_t prev_read_head = -1; // , prev_consume_head = -1;
-//	int ret = remote_subscribe_queue(TIMER_QUEUE, 0, 0, MSG_QUEUE, TIMER_QUEUE, qc, &prev_read_head, &prev_consume_head, db);
-//    rtsd_printf("   # Subscribe queue 0 returns %d", ret);
-    while (1) {
+    int64_t prev_read_head = -1; // , prev_consume_head = -1;
+/*
+    while(!rts_exit) {
+        int ret = remote_subscribe_queue(TIMER_QUEUE, 0, 0, MSG_QUEUE, TIMER_QUEUE, qc, &prev_read_head, &prev_consume_head, &minority_status, db);
+        rtsd_printf("   # Subscribe queue 0 returns %d", ret);
+        if(!handle_status_and_schema_mismatch(ret, minority_status, TIMER_QUEUE))
+            break;
+    }
+*/
+    while(!rts_exit) {
         long msg_key = read_queued_msg(TIMER_QUEUE, &prev_read_head);
         if (!msg_key)
             break;
@@ -1146,9 +1304,13 @@ void insert_row(long key, size_t total, $ROW row, $WORD table, uuid_t *txnid) {
     //printf("\n## Sanity check extract row:\n");
     //$ROW row1 = extract_row(blob, total*sizeof($WORD));
     //print_rows(row1);
-
-    int ret = remote_insert_in_txn(column, 2, 1, 1, blob, total*sizeof($WORD), table, txnid, db);
-    rtsd_printf("   # insert to table %ld, row %ld, returns %d", (long)table, key, ret);
+    int ret = 0, minority_status = 0;
+    while(!rts_exit) {
+        ret = remote_insert_in_txn(column, 2, 1, 1, blob, total*sizeof($WORD), table, &minority_status, txnid, db);
+        rtsd_printf("   # insert to table %ld, row %ld, returns %d", (long)table, key, ret);
+        if(!handle_status_and_schema_mismatch(ret, minority_status, 0))
+            break;
+    }
 }
 
 void serialize_msg($Msg m, uuid_t *txnid) {
@@ -1173,9 +1335,19 @@ void serialize_actor($Actor a, uuid_t *txnid) {
 
 void serialize_state_shortcut($Actor a) {
     if (db) {
-        uuid_t * txnid = remote_new_txn(db);
-        serialize_actor(a, txnid);
-        remote_commit_txn(txnid, db);
+            int success = 0, ret = 0, minority_status = 0;
+            while(!success && !rts_exit) {
+            uuid_t * txnid = remote_new_txn(db);
+            if(txnid == NULL)
+                continue;
+            serialize_actor(a, txnid);
+            ret = remote_commit_txn(txnid, &minority_status, db);
+            rtsd_printf("############## Commit returned %d, minority_status %d", ret, minority_status);
+            if(handle_status_and_schema_mismatch(ret, minority_status, a->$globkey))
+                continue;
+            if(ret == VAL_STATUS_COMMIT)
+                success = 1;
+            }
     }
 }
 
@@ -1184,14 +1356,19 @@ void BOOTSTRAP(int argc, char *argv[]) {
     for (int i=0; i< argc; i++)
       $list_append(args,to$str(argv[i]));
 
-    env_actor = $Env$newact(args);
+    env_actor = $Env$newact($WorldAuth$new(), args);
 
     root_actor = $ROOT();                           // Assumed to return $NEWACTOR(X) for the selected root actor X
     time_t now = current_time();
     $Msg m = $NEW($Msg, root_actor, &$InitRoot$cont, now, &$Done$instance);
     if (db) {
-        int ret = remote_enqueue_in_txn(($WORD*)&m->$globkey, 1, NULL, 0, MSG_QUEUE, (WORD)root_actor->$globkey, NULL, db);
-        rtsd_printf("   # enqueue bootstrap msg %ld to root actor queue %ld returns %d", m->$globkey, root_actor->$globkey, ret);
+            int ret = 0, minority_status = 0;
+            while(!rts_exit) {
+                ret = remote_enqueue_in_txn(($WORD*)&m->$globkey, 1, NULL, 0, MSG_QUEUE, (WORD)root_actor->$globkey, &minority_status, NULL, db);
+                rtsd_printf("   # enqueue bootstrap msg %ld to root actor queue %ld returns %d, minority_status %d", m->$globkey, root_actor->$globkey, ret, minority_status);
+                if(!handle_status_and_schema_mismatch(ret, minority_status, root_actor->$globkey))
+                    break;
+            }
     }
     if (ENQ_msg(m, root_actor)) {
         ENQ_ready(root_actor);
@@ -1202,172 +1379,266 @@ void BOOTSTRAP(int argc, char *argv[]) {
 
 ////////////////////////////////////////////////////////////////////////////////////////
 
+void main_stop_cb(uv_async_t *ev) {
+    uv_stop(uv_loops[0]);
+}
+
+
+void arm_timer_ev();
+void main_wake_cb(uv_async_t *ev) {
+    // Wäjky-päjky
+    arm_timer_ev();
+}
+
+void main_timer_cb(uv_timer_t *ev) {
+    handle_timeout();
+    arm_timer_ev();
+}
+
+void arm_timer_ev() {
+    time_t next_time = next_timeout();
+    if (next_time) {
+        time_t now = current_time();
+        long long int offset = (next_time - now) / 1000; // offset in milliseconds
+        // Negative offset means we missed to trigger in time. Set timeout to 0
+        // to directly run on next uv cycle.
+        if (offset < 0)
+            offset = 0;
+        int r = uv_timer_start(timer_ev, main_timer_cb, offset, 0);
+        if (r != 0) {
+            char errmsg[1024] = "Unable to set timer: ";
+            uv_strerror_r(r, errmsg + strlen(errmsg), sizeof(errmsg)-strlen(errmsg));
+            log_fatal(errmsg);
+        }
+    } else {
+        int r = uv_timer_stop(timer_ev);
+        if (r != 0) {
+            char errmsg[1024] = "Unable to stop timer: ";
+            uv_strerror_r(r, errmsg + strlen(errmsg), sizeof(errmsg)-strlen(errmsg));
+            log_fatal(errmsg);
+        }
+    }
+}
+
+void wt_stop_cb(uv_async_t *ev) {
+    int wtid = (int)pthread_getspecific(pkey_wtid);
+    uv_check_stop(&work_ev[wtid]);
+    uv_stop(get_uv_loop());
+}
+
+void wt_wake_cb(uv_async_t *ev) {
+    // We just wake up the uv loop here if it is blocked waiting for IO, real
+    // work is run later when wt_work_cb is called as part of the "check" phase.
+}
+
+void wt_work_cb(uv_check_t *ev) {
+    int wtid = (int)pthread_getspecific(pkey_wtid);
+
+    struct timespec ts_start, ts1, ts2, ts3;
+    long long int runtime = 0;
+
+    clock_gettime(CLOCK_MONOTONIC, &ts_start);
+    while (true) {
+        if (rts_exit) {
+            return;
+        }
+        $Actor current = DEQ_ready(wtid);
+        if (!current)
+            return;
+
+        wake_wt(0);
+
+        pthread_setspecific(self_key, current);
+        $Msg m = current->$msg;
+        $Cont cont = m->$cont;
+        $WORD val = m->$value;
+
+        clock_gettime(CLOCK_MONOTONIC, &ts1);
+        wt_stats[wtid].state = WT_Working;
+
+        rtsd_printf("## Running actor %ld : %s", current->$globkey, current->$class->$GCINFO);
+        $R r = cont->$class->__call__(cont, val);
+
+        clock_gettime(CLOCK_MONOTONIC, &ts2);
+        long long int diff = (ts2.tv_sec * 1000000000 + ts2.tv_nsec) - (ts1.tv_sec * 1000000000 + ts1.tv_nsec);
+
+        wt_stats[wtid].conts_count++;
+        wt_stats[wtid].conts_sum += diff;
+
+        if      (diff < 100)              { wt_stats[wtid].conts_100ns++; }
+        else if (diff < 1   * 1000)       { wt_stats[wtid].conts_1us++; }
+        else if (diff < 10  * 1000)       { wt_stats[wtid].conts_10us++; }
+        else if (diff < 100 * 1000)       { wt_stats[wtid].conts_100us++; }
+        else if (diff < 1   * 1000000)    { wt_stats[wtid].conts_1ms++; }
+        else if (diff < 10  * 1000000)    { wt_stats[wtid].conts_10ms++; }
+        else if (diff < 100 * 1000000)    { wt_stats[wtid].conts_100ms++; }
+        else if (diff < 1   * 1000000000) { wt_stats[wtid].conts_1s++; }
+        else if (diff < (long long int)10  * 1000000000) { wt_stats[wtid].conts_10s++; }
+        else if (diff < (long long int)100 * 1000000000) { wt_stats[wtid].conts_100s++; }
+        else                              { wt_stats[wtid].conts_inf++; }
+
+        switch (r.tag) {
+        case $RDONE: {
+            if (db) {
+                int success = 0;
+                reverse_outgoing_queue(current);
+                while(!success && !rts_exit) {
+                    uuid_t * txnid = remote_new_txn(db);
+                    if(txnid == NULL)
+                        continue;
+                    current->$consume_hd++;
+                    serialize_actor(current, txnid);
+                    FLUSH_outgoing_db(current, txnid);
+                    serialize_msg(current->$msg, txnid);
+
+                    long key = current->$globkey;
+                    snode_t *m_start, *m_end;
+                    int entries_read = 0, minority_status = 0;
+                    int64_t read_head = -1;
+
+                    int ret0 = remote_read_queue_in_txn(($WORD)key, 0, 0, MSG_QUEUE, ($WORD)key, 1, &entries_read, &read_head, &m_start, &m_end, &minority_status, NULL, db);
+                    rtsd_printf("   # dummy read msg from queue %ld returns %d, entries read: %d", key, ret0, entries_read);
+                    if(handle_status_and_schema_mismatch(ret0, minority_status, key))
+                        continue;
+
+                    int ret1 = remote_consume_queue_in_txn(($WORD)key, 0, 0, MSG_QUEUE, ($WORD)key, read_head, &minority_status, txnid, db);
+                    rtsd_printf("   # consume msg %ld from queue %ld returns %d", m->$globkey, key, ret1);
+                    if(handle_status_and_schema_mismatch(ret1, minority_status, key))
+                        continue;
+
+                    int ret2 = remote_commit_txn(txnid, &minority_status, db);
+                    rtsd_printf("############## Commit returned %d, minority_status %d", ret2, minority_status);
+                    if(handle_status_and_schema_mismatch(ret2, minority_status, key))
+                        continue;
+                    if(ret2 == VAL_STATUS_COMMIT)
+                        success = 1;
+                }
+                FLUSH_outgoing_local(current);
+            } else {
+                reverse_outgoing_queue(current);
+                FLUSH_outgoing_local(current);
+            }
+
+            m->$value = r.value;                 // m->value holds the response,
+            $Actor b = FREEZE_waiting(m);        // so set m->cont = NULL and stop further m->waiting additions
+            while (b) {
+                b->$msg->$value = r.value;
+                b->$waitsfor = NULL;
+                $Actor c = b->$next;
+                ENQ_ready(b);
+                rtsd_printf("## Waking up actor %ld : %s", b->$globkey, b->$class->$GCINFO);
+                b = c;
+            }
+            rtsd_printf("## DONE actor %ld : %s", current->$globkey, current->$class->$GCINFO);
+            if (DEQ_msg(current)) {
+                ENQ_ready(current);
+            }
+            break;
+        }
+        case $RCONT: {
+            m->$cont = r.cont;
+            m->$value = r.value;
+            rtsd_printf("## CONT actor %ld : %s", current->$globkey, current->$class->$GCINFO);
+            ENQ_ready(current);
+            break;
+        }
+        case $RFAIL: {
+            $Catcher c = POP_catcher(current);
+            m->$cont = c->$cont;
+            m->$value = r.value;
+            ENQ_ready(current);
+            break;
+        }
+        case $RWAIT: {
+            if (db) {
+                int success = 0, ret = 0, minority_status = 0;
+                reverse_outgoing_queue(current);
+                while(!success && !rts_exit) {
+                    uuid_t * txnid = remote_new_txn(db);
+                    if(txnid == NULL)
+                        continue;
+                    serialize_actor(current, txnid);
+                    FLUSH_outgoing_db(current, txnid);
+                    serialize_msg(current->$msg, txnid);
+                    ret = remote_commit_txn(txnid, &minority_status, db);
+                    rtsd_printf("############## Commit returned %d, minority_status %d", ret, minority_status);
+                    if(handle_status_and_schema_mismatch(ret, minority_status, current->$globkey))
+                        continue;
+                    if(ret == VAL_STATUS_COMMIT)
+                        success = 1;
+                }
+                FLUSH_outgoing_local(current);
+            } else {
+                reverse_outgoing_queue(current);
+                FLUSH_outgoing_local(current);
+            }
+            m->$cont = r.cont;
+            $Msg x = ($Msg)r.value;
+            if (ADD_waiting(current, x)) {      // x->cont != NULL: x is still being processed so current was added to x->waiting
+                rtsd_printf("## AWAIT actor %ld : %s", current->$globkey, current->$class->$GCINFO);
+                current->$waitsfor = x;
+            } else {                            // x->cont == NULL: x->value holds the final response, current is not in x->waiting
+                rtsd_printf("## AWAIT/wakeup actor %ld : %s", current->$globkey, current->$class->$GCINFO);
+                m->$value = x->$value;
+                ENQ_ready(current);
+            }
+            break;
+        }
+        }
+        pthread_setspecific(self_key, NULL);
+
+        clock_gettime(CLOCK_MONOTONIC, &ts3);
+        diff = (ts3.tv_sec * 1000000000 + ts3.tv_nsec) - (ts2.tv_sec * 1000000000 + ts2.tv_nsec);
+        wt_stats[wtid].bkeep_count++;
+        wt_stats[wtid].bkeep_sum += diff;
+
+        if      (diff < 100)              { wt_stats[wtid].bkeep_100ns++; }
+        else if (diff < 1   * 1000)       { wt_stats[wtid].bkeep_1us++; }
+        else if (diff < 10  * 1000)       { wt_stats[wtid].bkeep_10us++; }
+        else if (diff < 100 * 1000)       { wt_stats[wtid].bkeep_100us++; }
+        else if (diff < 1   * 1000000)    { wt_stats[wtid].bkeep_1ms++; }
+        else if (diff < 10  * 1000000)    { wt_stats[wtid].bkeep_10ms++; }
+        else if (diff < 100 * 1000000)    { wt_stats[wtid].bkeep_100ms++; }
+        else if (diff < 1   * 1000000000) { wt_stats[wtid].bkeep_1s++; }
+        else if (diff < (long long int)10  * 1000000000) { wt_stats[wtid].bkeep_10s++; }
+        else if (diff < (long long int)100 * 1000000000) { wt_stats[wtid].bkeep_100s++; }
+        else                              { wt_stats[wtid].bkeep_inf++; }
+
+        wt_stats[wtid].state = WT_Idle;
+
+        runtime = (ts3.tv_sec * 1000000000 + ts3.tv_nsec) - (ts_start.tv_sec * 1000000000 + ts_start.tv_nsec);
+        // run for max 20ms before yielding to IO
+        // NOTE: since we are not preemptive, a single long continuation can
+        // exceed this cap
+        if (runtime > 20*1000000)
+            break;
+    }
+
+    // if there's more work, wake up ourselves again to process more but
+    // interleave with some IO
+    uv_async_send(&wake_ev[wtid]);
+}
+
 void *main_loop(void *idx) {
     char tname[11]; // Enough for "Worker XXX\0"
-    snprintf(tname, sizeof(tname), "Worker %d", (int)idx);
+    int wtid = (int)idx;
+    snprintf(tname, sizeof(tname), "Worker %d", wtid);
 #if defined(IS_MACOS)
     pthread_setname_np(tname);
 #else
     pthread_setname_np(pthread_self(), tname);
 #endif
+    uv_loop_t *uv_loop = uv_loops[wtid];
+    pthread_setspecific(pkey_wtid, (void *)wtid);
+    pthread_setspecific(pkey_uv_loop, (void *)uv_loop);
 
-    struct timespec ts1, ts2, ts3;
-    while (1) {
-        if (rts_exit) {
-            wt_stats[(int)idx].state = WT_NoExist;
-            rtsd_printf("Worker thread %d exiting", (int)idx);
-            // Wake up all sleeping threads so they too can exit
-            pthread_mutex_lock(&sleep_lock);
-            pthread_cond_broadcast(&work_to_do);
-            pthread_mutex_unlock(&sleep_lock);
-            break;
-        }
-        $Actor current = DEQ_ready();
-        if (current) {
-            new_work();
-            pthread_setspecific(self_key, current);
-            $Msg m = current->$msg;
-            $Cont cont = m->$cont;
-            $WORD val = m->$value;
-            
-            clock_gettime(CLOCK_MONOTONIC, &ts1);
-            wt_stats[(int)idx].state = WT_Working;
+    uv_check_init(uv_loop, &work_ev[wtid]);
+    uv_check_start(&work_ev[wtid], (uv_check_cb)wt_work_cb);
 
-            rtsd_printf("## Running actor %ld : %s", current->$globkey, current->$class->$GCINFO);
-            $R r = cont->$class->__call__(cont, val);
-
-            clock_gettime(CLOCK_MONOTONIC, &ts2);
-            long long int diff = (ts2.tv_sec * 1000000000 + ts2.tv_nsec) - (ts1.tv_sec * 1000000000 + ts1.tv_nsec);
-
-            wt_stats[(int)idx].conts_count++;
-            wt_stats[(int)idx].conts_sum += diff;
-
-            if      (diff < 100)              { wt_stats[(int)idx].conts_100ns++; }
-            else if (diff < 1   * 1000)       { wt_stats[(int)idx].conts_1us++; }
-            else if (diff < 10  * 1000)       { wt_stats[(int)idx].conts_10us++; }
-            else if (diff < 100 * 1000)       { wt_stats[(int)idx].conts_100us++; }
-            else if (diff < 1   * 1000000)    { wt_stats[(int)idx].conts_1ms++; }
-            else if (diff < 10  * 1000000)    { wt_stats[(int)idx].conts_10ms++; }
-            else if (diff < 100 * 1000000)    { wt_stats[(int)idx].conts_100ms++; }
-            else if (diff < 1   * 1000000000) { wt_stats[(int)idx].conts_1s++; }
-            else if (diff < (long long int)10  * 1000000000) { wt_stats[(int)idx].conts_10s++; }
-            else if (diff < (long long int)100 * 1000000000) { wt_stats[(int)idx].conts_100s++; }
-            else                              { wt_stats[(int)idx].conts_inf++; }
-
-            switch (r.tag) {
-                case $RDONE: {
-                    if (db) {
-                        uuid_t * txnid = remote_new_txn(db);
-                        current->$consume_hd++;
-                        serialize_actor(current, txnid);
-                        FLUSH_outgoing(current, txnid);
-                        serialize_msg(current->$msg, txnid);
-
-                        long key = current->$globkey;
-                        snode_t *m_start, *m_end;
-                        int entries_read = 0;
-                        int64_t read_head = -1;
-                        int ret0 = remote_read_queue_in_txn(($WORD) db->local_rts_id, 0, 0, MSG_QUEUE, ($WORD)key, 1, &entries_read, &read_head, &m_start, &m_end, NULL, db);
-                        rtsd_printf("   # dummy read msg from queue %ld returns %d, entries read: %d", key, ret0, entries_read);
-
-                        int ret = remote_consume_queue_in_txn(($WORD) db->local_rts_id, 0, 0, MSG_QUEUE, ($WORD)key, read_head, txnid, db);
-                        rtsd_printf("   # consume msg %ld from queue %ld returns %d", m->$globkey, key, ret);
-                        remote_commit_txn(txnid, db);
-                        rtsd_printf("############## Commit");
-                    } else {
-                        FLUSH_outgoing(current, NULL);
-                    }
-
-                    m->$value = r.value;                 // m->value holds the response,
-                    $Actor b = FREEZE_waiting(m);        // so set m->cont = NULL and stop further m->waiting additions
-                    while (b) {
-                        b->$msg->$value = r.value;
-                        b->$waitsfor = NULL;
-                        $Actor c = b->$next;
-                        ENQ_ready(b);
-                        rtsd_printf("## Waking up actor %ld : %s", b->$globkey, b->$class->$GCINFO);
-                        b = c;
-                    }
-                    rtsd_printf("## DONE actor %ld : %s", current->$globkey, current->$class->$GCINFO);
-                    if (DEQ_msg(current)) {
-                        ENQ_ready(current);
-                    }
-                    break;
-                }
-                case $RCONT: {
-                    m->$cont = r.cont;
-                    m->$value = r.value;
-                    rtsd_printf("## CONT actor %ld : %s", current->$globkey, current->$class->$GCINFO);
-                    ENQ_ready(current);
-                    break;
-                }
-                case $RFAIL: {
-                    $Catcher c = POP_catcher(current);
-                    m->$cont = c->$cont;
-                    m->$value = r.value;
-                    ENQ_ready(current);
-                    break;
-                }
-                case $RWAIT: {
-                    if (db) {
-                        uuid_t * txnid = remote_new_txn(db);
-                        serialize_actor(current, txnid);
-                        FLUSH_outgoing(current, txnid);
-                        serialize_msg(current->$msg, txnid);
-                        remote_commit_txn(txnid, db);
-                        rtsd_printf("############## Commit");
-                    } else {
-                        FLUSH_outgoing(current, NULL);
-                    }
-                    m->$cont = r.cont;
-                    $Msg x = ($Msg)r.value;
-                    if (ADD_waiting(current, x)) {      // x->cont != NULL: x is still being processed so current was added to x->waiting
-                        rtsd_printf("## AWAIT actor %ld : %s", current->$globkey, current->$class->$GCINFO);
-                        current->$waitsfor = x;
-                    } else {                            // x->cont == NULL: x->value holds the final response, current is not in x->waiting
-                        rtsd_printf("## AWAIT/wakeup actor %ld : %s", current->$globkey, current->$class->$GCINFO);
-                        m->$value = x->$value;
-                        ENQ_ready(current);
-                    }
-                    break;
-                }
-            }
-            clock_gettime(CLOCK_MONOTONIC, &ts3);
-            diff = (ts3.tv_sec * 1000000000 + ts3.tv_nsec) - (ts2.tv_sec * 1000000000 + ts2.tv_nsec);
-            wt_stats[(int)idx].bkeep_count++;
-            wt_stats[(int)idx].bkeep_sum += diff;
-
-            if      (diff < 100)              { wt_stats[(int)idx].bkeep_100ns++; }
-            else if (diff < 1   * 1000)       { wt_stats[(int)idx].bkeep_1us++; }
-            else if (diff < 10  * 1000)       { wt_stats[(int)idx].bkeep_10us++; }
-            else if (diff < 100 * 1000)       { wt_stats[(int)idx].bkeep_100us++; }
-            else if (diff < 1   * 1000000)    { wt_stats[(int)idx].bkeep_1ms++; }
-            else if (diff < 10  * 1000000)    { wt_stats[(int)idx].bkeep_10ms++; }
-            else if (diff < 100 * 1000000)    { wt_stats[(int)idx].bkeep_100ms++; }
-            else if (diff < 1   * 1000000000) { wt_stats[(int)idx].bkeep_1s++; }
-            else if (diff < (long long int)10  * 1000000000) { wt_stats[(int)idx].bkeep_10s++; }
-            else if (diff < (long long int)100 * 1000000000) { wt_stats[(int)idx].bkeep_100s++; }
-            else                              { wt_stats[(int)idx].bkeep_inf++; }
-
-            wt_stats[(int)idx].state = WT_Idle;
-        } else {
-            pthread_mutex_lock(&sleep_lock);
-
-            if (rts_exit) {
-                wt_stats[(int)idx].state = WT_NoExist;
-                rtsd_printf("Worker thread %d exiting", (int)idx);
-                // Wake up all sleeping threads so they too can exit
-                pthread_cond_broadcast(&work_to_do);
-                pthread_mutex_unlock(&sleep_lock);
-                break;
-            }
-
-            wt_stats[(int)idx].state = WT_Sleeping;
-            wt_stats[(int)idx].sleeps++;
-            pthread_cond_wait(&work_to_do, &sleep_lock);
-            pthread_mutex_unlock(&sleep_lock);
-        }
-    }
+    wt_stats[wtid].state = WT_Idle;
+    int r = uv_run(uv_loop, UV_RUN_DEFAULT);
+    wt_stats[wtid].state = WT_NoExist;
+    rtsd_printf("Exiting...");
     return NULL;
 }
 
@@ -1377,14 +1648,16 @@ void $register_rts () {
   $register_force(MSG_ID,&$Msg$methods);
   $register_force(ACTOR_ID,&$Actor$methods);
   $register_force(CATCHER_ID,&$Catcher$methods);
-  $register_force(CLOS_ID,&$function$methods);
+  $register_force(PROC_ID,&$proc$methods);
+  $register_force(ACTION_ID,&$action$methods);
+  $register_force(MUT_ID,&$mut$methods);
+  $register_force(PURE_ID,&$pure$methods);
   $register_force(CONT_ID,&$Cont$methods);
   $register_force(DONE_ID,&$Done$methods);
   $register_force(CONSTCONT_ID,&$ConstCont$methods);
   $register(&$Done$methods);
   $register(&$InitRoot$methods);
   $register(&$Env$methods);
-  $register(&$Connection$methods);
 }
  
 ////////////////////////////////////////////////////////////////////////////////////////
@@ -1576,7 +1849,7 @@ const char* actors_to_json () {
 
 
 void *$mon_log_loop(void *period) {
-    log_info("Starting monitor log, with %d second(s) period, to: %s\n", (uint)period, mon_log_path);
+    log_info("Starting monitor log, with %d second(s) period, to: %s", (uint)period, mon_log_path);
 
 #if defined(IS_MACOS)
     pthread_setname_np("Monitor Log");
@@ -1596,7 +1869,7 @@ void *$mon_log_loop(void *period) {
         fputs(json, f);
         fputs("\n", f);
         if (rts_exit > 0) {
-            log_info("Shutting down RTS Monitor log thread.\n");
+            log_info("Shutting down RTS Monitor log thread.");
             break;
         }
 
@@ -1613,7 +1886,7 @@ void *$mon_log_loop(void *period) {
 
 
 void *$mon_socket_loop() {
-    log_info("Starting monitor socket listen on %s\n", mon_socket_path);
+    log_info("Starting monitor socket listen on %s", mon_socket_path);
 
 #if defined(IS_MACOS)
     pthread_setname_np("Monitor Socket");
@@ -1667,7 +1940,7 @@ void *$mon_socket_loop() {
                     break;
                 int r = netstring_read(&buf_base, &buf_used, &str, &len);
                 if (r != 0) {
-                    log_info("Mon socket: Error reading netstring: %d\n", r);
+                    log_info("Mon socket: Error reading netstring: %d", r);
                     break;
                 }
 
@@ -1679,7 +1952,7 @@ void *$mon_socket_loop() {
                     free((void *)json);
                     free((void *)send_buf);
                     if (send_res < 0) {
-                        log_info("Mon socket: Error sending\n");
+                        log_info("Mon socket: Error sending");
                         break;
                     }
                 }
@@ -1692,7 +1965,7 @@ void *$mon_socket_loop() {
                     free((void *)json);
                     free((void *)send_buf);
                     if (send_res < 0) {
-                        log_info("Mon socket: Error sending\n");
+                        log_info("Mon socket: Error sending");
                         break;
                     }
                 }
@@ -1705,7 +1978,7 @@ void *$mon_socket_loop() {
                     free((void *)json);
                     free((void *)send_buf);
                     if (send_res < 0) {
-                        log_info("Mon socket: Error sending\n");
+                        log_info("Mon socket: Error sending");
                         break;
                     }
                 }
@@ -1722,31 +1995,99 @@ void *$mon_socket_loop() {
 
 void rts_shutdown() {
     rts_exit = 1;
-    stop_ioloop();
-    pthread_mutex_lock(&sleep_lock);
-    pthread_cond_broadcast(&work_to_do);
-    pthread_mutex_unlock(&sleep_lock);
+    // 0 = main thread, rest is wthreads, thus +1
+    for (int i = 0; i < num_wthreads+1; i++) {
+        uv_async_send(&stop_ev[i]);
+    }
 }
 
 
+void print_trace() {
+    char pid_buf[30];
+    sprintf(pid_buf, "%d", getpid());
+    char name_buf[512];
+    name_buf[readlink("/proc/self/exe", name_buf, 511)]=0;
+#ifdef __linux__
+    prctl(PR_SET_PTRACER, PR_SET_PTRACER_ANY, 0, 0, 0);
+#endif
+    int child_pid = fork();
+    if (!child_pid) {
+        dup2(2, 1); // redirect output to stderr
+        // TODO: enable using LLDB for MacOS support
+        //execlp("lldb", "lldb", "-p", pid_buf, "--batch", "-o", "thread backtrace all", "-o", "exit", "--one-line-on-crash", "exit", name_buf, NULL);
+        execlp("gdb", "gdb", "--batch", "-n", "-ex", "thread", "-ex", "thread apply all backtrace full", name_buf, pid_buf, NULL);
+        fprintf(stderr, "Unable to get detailed backtrace using lldb or gdb");
+        exit(0); /* If lldb/gdb failed to start */
+    } else {
+        waitpid(child_pid, NULL, 0);
+    }
+}
+
+void sigillsegv_handler(int signum) {
+    if (signum == SIGILL)
+        fprintf(stderr, "\nERROR: illegal instruction\n");
+    if (signum == SIGSEGV)
+        fprintf(stderr, "\nERROR: segmentation fault\n");
+    fprintf(stderr, "NOTE: this is likely a bug in acton, please report this at:\n");
+    fprintf(stderr, "NOTE: https://github.com/actonlang/acton/issues/new\n");
+    fprintf(stderr, "NOTE: include the backtrace printed below between -- 8< -- lines\n");
+
+    fprintf(stderr, "\n-- 8< --------- BACKTRACE --------------------\n");
+    print_trace();
+    fprintf(stderr, "\n-- 8< --------- END BACKTRACE ----------------\n");
+
+    if (signum == SIGILL)
+        fprintf(stderr, "\nERROR: illegal instruction\n");
+    if (signum == SIGSEGV)
+        fprintf(stderr, "\nERROR: segmentation fault\n");
+    fprintf(stderr, "NOTE: this is likely a bug in acton, please report this at:\n");
+    fprintf(stderr, "NOTE: https://github.com/actonlang/acton/issues/new\n");
+    fprintf(stderr, "NOTE: include the backtrace printed above between -- 8< -- lines\n");
+
+    // Restore / uninstall signal handlers for SIGILL & SIGSEGV
+    sa_ill.sa_handler = NULL;
+    if (sigaction(SIGILL, &sa_ill, NULL) == -1) {
+        log_fatal("Failed to install signal handler for SIGILL: %s", strerror(errno));
+        exit(1);
+    }
+    sa_segv.sa_handler = NULL;
+    if (sigaction(SIGSEGV, &sa_segv, NULL) == -1) {
+        log_fatal("Failed to install signal handler for SIGSEGV: %s", strerror(errno));
+        exit(1);
+    }
+    // Kill ourselves with original signal sent to us
+    kill(getpid(), signum);
+}
+
 void sigint_handler(int signum) {
     if (rts_exit == 0) {
-        log_info("Received SIGINT, shutting down gracefully...\n");
+        log_info("Received SIGINT, shutting down gracefully...");
         rts_shutdown();
     } else {
-        log_info("Received SIGINT during graceful shutdown, exiting immediately\n");
+        log_info("Received SIGINT during graceful shutdown, exiting immediately");
         exit(return_val);
     }
 }
 
 void sigterm_handler(int signum) {
     if (rts_exit == 0) {
-        log_info("Received SIGTERM, shutting down gracefully...\n");
+        log_info("Received SIGTERM, shutting down gracefully...");
         rts_shutdown();
     } else {
-        log_info("Received SIGTERM during graceful shutdown, exiting immediately\n");
+        log_info("Received SIGTERM during graceful shutdown, exiting immediately");
         exit(return_val);
     }
+}
+
+void check_uv_fatal(int status, char msg[]) {
+    if (status == 0)
+        return;
+
+    char errmsg[1024];
+    snprintf(errmsg, sizeof(errmsg), "%s", msg);
+    uv_strerror_r(status, errmsg+strlen(errmsg), sizeof(errmsg)-strlen(errmsg));
+    log_fatal(errmsg);
+    exit(1);
 }
 
 
@@ -1773,8 +2114,12 @@ void print_help(struct option *opt) {
     exit(0);
 }
 
+void DaveNull () {}
 
 int main(int argc, char **argv) {
+    // Init garbage collector and suppress warnings
+    GC_INIT();
+    GC_set_warn_proc(DaveNull);
     uint ddb_no_host = 0;
     char **ddb_host = NULL;
     char *rts_host = "localhost";
@@ -1799,27 +2144,40 @@ int main(int argc, char **argv) {
     setlinebuf(stdout);
 
     // Signal handling
-    struct sigaction sa_int, sa_pipe, sa_term;
+    sigfillset(&sa_ill.sa_mask);
     sigfillset(&sa_int.sa_mask);
     sigfillset(&sa_pipe.sa_mask);
+    sigfillset(&sa_segv.sa_mask);
     sigfillset(&sa_term.sa_mask);
+    sa_ill.sa_flags = SA_RESTART;
     sa_int.sa_flags = SA_RESTART;
     sa_pipe.sa_flags = SA_RESTART;
+    sa_segv.sa_flags = SA_RESTART;
     sa_term.sa_flags = SA_RESTART;
 
     // Ignore SIGPIPE, like we get if the other end talking to us on the Monitor
     // socket (which is a Unix domain socket) goes away.
     sa_pipe.sa_handler = SIG_IGN;
-    // Handle SIGINT & SIGTERM
+    // Handle signals
+    sa_ill.sa_handler = &sigillsegv_handler;
     sa_int.sa_handler = &sigint_handler;
+    sa_segv.sa_handler = &sigillsegv_handler;
     sa_term.sa_handler = &sigterm_handler;
 
     if (sigaction(SIGPIPE, &sa_pipe, NULL) == -1) {
         log_fatal("Failed to install signal handler for SIGPIPE: %s", strerror(errno));
         exit(1);
     }
+    if (sigaction(SIGILL, &sa_ill, NULL) == -1) {
+        log_fatal("Failed to install signal handler for SIGILL: %s", strerror(errno));
+        exit(1);
+    }
     if (sigaction(SIGINT, &sa_int, NULL) == -1) {
         log_fatal("Failed to install signal handler for SIGINT: %s", strerror(errno));
+        exit(1);
+    }
+    if (sigaction(SIGSEGV, &sa_segv, NULL) == -1) {
+        log_fatal("Failed to install signal handler for SIGSEGV: %s", strerror(errno));
         exit(1);
     }
     if (sigaction(SIGTERM, &sa_term, NULL) == -1) {
@@ -1830,6 +2188,8 @@ int main(int argc, char **argv) {
 
     pthread_key_create(&self_key, NULL);
     pthread_setspecific(self_key, NULL);
+    pthread_key_create(&pkey_wtid, NULL);
+    pthread_key_create(&pkey_uv_loop, NULL);
 
     log_set_quiet(true);
     /*
@@ -1854,7 +2214,7 @@ int main(int argc, char **argv) {
      * argument or it does not.
      */
     static struct option long_options[] = {
-        {"rts-debug", NULL, 'd', "RTS debug, requires program compiled with "},
+        {"rts-debug", NULL, 'd', "RTS debug, requires program to be compiled with --dev"},
         {"rts-ddb-host", "HOST", 'h', "DDB hostname"},
         {"rts-ddb-port", "PORT", 'p', "DDB port [32000]"},
         {"rts-ddb-replication", "FACTOR", 'r', "DDB replication factor [3]"},
@@ -1923,7 +2283,7 @@ int main(int argc, char **argv) {
             case 'd':
                 #ifndef DEV
                 fprintf(stderr, "ERROR: RTS debug not supported.\n");
-                fprintf(stderr, "HINT: Recompile this program using: actonc --rts-debug ...\n");
+                fprintf(stderr, "HINT: Recompile this program using: actonc --dev ...\n");
                 exit(1);
                 #endif
                 log_set_quiet(false);
@@ -2012,13 +2372,13 @@ int main(int argc, char **argv) {
     if (num_wthreads < 4) {
         num_wthreads = 4;
         cpu_pin = 0;
-        log_info("Detected %ld CPUs: Using %ld worker threads, due to low CPU count. No CPU affinity used.\n", num_cores, num_wthreads);
+        log_info("Detected %ld CPUs: Using %ld worker threads, due to low CPU count. No CPU affinity used.", num_cores, num_wthreads);
     } else if (num_wthreads == num_cores) {
         cpu_pin = 1;
-        log_info("Detected %ld CPUs: Using %ld worker threads for 1:1 mapping with CPU affinity set.\n", num_cores, num_wthreads);
+        log_info("Detected %ld CPUs: Using %ld worker threads for 1:1 mapping with CPU affinity set.", num_cores, num_wthreads);
     } else {
         cpu_pin = 0;
-        log_info("Detected %ld CPUs: Using %ld worker threads. No CPU affinity used.\n", num_cores, num_wthreads);
+        log_info("Detected %ld CPUs: Using %ld worker threads. No CPU affinity used.", num_cores, num_wthreads);
     }
 
     // Zeroize statistics
@@ -2058,6 +2418,28 @@ int main(int argc, char **argv) {
     }
     init_dbc_stats();
 
+    for (uint i=0; i < num_wthreads+1; i++) {
+        uv_loop_t *loop = malloc(sizeof(uv_loop_t));
+        check_uv_fatal(uv_loop_init(loop), "Error initializing libuv loop: ");
+        uv_loops[i] = loop;
+
+        if (i == 0) {
+            check_uv_fatal(uv_async_init(uv_loops[i], &stop_ev[i], main_stop_cb), "Error initializing libuv stop event: ");
+            check_uv_fatal(uv_async_init(uv_loops[i], &wake_ev[i], main_wake_cb), "Error initializing libuv wake event: ");
+            check_uv_fatal(uv_async_send(&wake_ev[i]), "Error sending initial work event: ");
+        } else {
+            check_uv_fatal(uv_async_init(uv_loops[i], &stop_ev[i], wt_stop_cb), "Error initializing libuv stop event: ");
+            check_uv_fatal(uv_async_init(uv_loops[i], &wake_ev[i], wt_wake_cb), "Error initializing libuv wake event: ");
+            check_uv_fatal(uv_async_send(&wake_ev[i]), "Error sending initial work event: ");
+        }
+    }
+
+    for (uint i=0; i <= MAX_WTHREADS; i++) {
+        rqs[i].head = NULL;
+        rqs[i].tail = NULL;
+        rqs[i].count = 0;
+    }
+
     $register_builtin();
     $__init__();
     $register_rts();
@@ -2066,8 +2448,8 @@ int main(int argc, char **argv) {
     unsigned int seed;
     if (ddb_host) {
         GET_RANDSEED(&seed, 0);
-        log_info("Starting distributed RTS node, host=%s, node_id=%d, rack_id=%d, datacenter_id=%d\n", rts_host, rts_node_id, rts_rack_id, rts_dc_id);
-        log_info("Using distributed database backend replication factor of %d\n", ddb_replication);
+        log_info("Starting distributed RTS node, host=%s, node_id=%d, rack_id=%d, datacenter_id=%d", rts_host, rts_node_id, rts_rack_id, rts_dc_id);
+        log_info("Using distributed database backend replication factor of %d", ddb_replication);
         char ** seed_hosts = (char **) malloc(ddb_no_host * sizeof(char *));
         int * seed_ports = (int *) malloc(ddb_no_host * sizeof(int));
 
@@ -2079,7 +2461,7 @@ int main(int argc, char **argv) {
                 *colon = '\0';
                 seed_ports[i] = atoi(colon + 1);
             }
-            log_info("Using distributed database backend (DDB): %s:%d\n", seed_hosts[i], seed_ports[i]);
+            log_info("Using distributed database backend (DDB): %s:%d", seed_hosts[i], seed_ports[i]);
         }
         db = get_remote_db(ddb_replication, rts_rack_id, rts_dc_id, rts_host, rts_node_id, ddb_no_host, seed_hosts, seed_ports, &seed);
         free(seed_hosts);
@@ -2088,12 +2470,17 @@ int main(int argc, char **argv) {
 
     if (db) {
         snode_t* start_row = NULL, * end_row = NULL;
-        log_info("Checking for existing actor state in DDB.\n");
-        int no_items = remote_read_full_table_in_txn(&start_row, &end_row, ACTORS_TABLE, NULL, db);
+        log_info("Checking for existing actor state in DDB.");
+        int ret = 0,  minority_status = 0, no_items = 0;
+        while(!rts_exit) {
+            ret = remote_read_full_table_in_txn(&start_row, &end_row, ACTORS_TABLE, &no_items, &minority_status, NULL, db);
+            if(!handle_status_and_schema_mismatch(ret, minority_status, 0))
+                break;
+        }
         if (no_items > 0) {
-            log_info("Found %d existing actors; Restoring actor state from DDB.\n", no_items);
+            log_info("Found %d existing actors; Restoring actor state from DDB.", no_items);
             deserialize_system(start_row);
-            log_info("Actor state restored from DDB.\n");
+            log_info("Actor state restored from DDB.");
         } else {
             log_info("No previous state in DDB; Initializing database...\n");
             queue_callback * gqc = get_queue_callback(queue_group_message_callback);
@@ -2104,7 +2491,7 @@ int main(int argc, char **argv) {
             create_db_queue(TIMER_QUEUE);
             timer_consume_hd = 0;
             BOOTSTRAP(new_argc, new_argv);
-            log_info("Database intialization complete.\n");
+            log_info("Database intialization complete.");
         }
     } else {
         BOOTSTRAP(new_argc, new_argv);
@@ -2135,25 +2522,9 @@ int main(int argc, char **argv) {
     }
 
     // Start IO + worker threads
-    pthread_t threads[2 + num_wthreads];
+    pthread_t threads[1 + num_wthreads];
 
-    // ioloop (our "new" IO thread)
-    pthread_create(&threads[0], NULL, (void*)ioloop, NULL);
-    if (cpu_pin) {
-        CPU_ZERO(&cpu_set);
-        CPU_SET(0, &cpu_set);
-        pthread_setaffinity_np(threads[0], sizeof(cpu_set), &cpu_set);
-    }
-
-    // eventloop (our "old" IO thread)
-    pthread_create(&threads[1], NULL, $eventloop, NULL);
-    if (cpu_pin) {
-        CPU_ZERO(&cpu_set);
-        CPU_SET(0, &cpu_set);
-        pthread_setaffinity_np(threads[1], sizeof(cpu_set), &cpu_set);
-    }
-
-    for(int idx = 2; idx < num_wthreads+2; idx++) {
+    for(int idx = 1; idx < num_wthreads+1; idx++) {
         pthread_create(&threads[idx], NULL, main_loop, (void*)idx);
         // Index start at 1 and we pin wthreads to CPU 1...n
         // We use CPU 0 for misc threads, like IO / mon etc
@@ -2164,17 +2535,18 @@ int main(int argc, char **argv) {
         }
     }
 
+    // Run the timer queue and keep track of other periodic tasks
+    uv_loop_t *uv_loop = uv_loops[0];
+    timer_ev = malloc(sizeof(uv_timer_t));
+    uv_timer_init(uv_loops[0], timer_ev);
+    uv_timer_start(timer_ev, main_timer_cb, 0, 0);
+    int r = uv_run(uv_loop, UV_RUN_DEFAULT);
+
     // -- SHUTDOWN --
 
     // Join threads
-    for(int idx = 0; idx < num_wthreads+2; idx++) {
-        // Skip old IO thread, it doesn't support shutting down gracefully
-        if (idx == 1)
-            continue;
+    for(int idx = 1; idx < num_wthreads+1; idx++) {
         pthread_join(threads[idx], NULL);
-        pthread_mutex_lock(&sleep_lock);
-        pthread_cond_broadcast(&work_to_do);
-        pthread_mutex_unlock(&sleep_lock);
     }
 
     pthread_mutex_lock(&rts_exit_lock);

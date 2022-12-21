@@ -1,5 +1,5 @@
 
-long $int_hash($int n);
+long $i64_hash($i64 n);
 long $float_hash($float v);
 long $complex_hash($complex c);
 

@@ -1,0 +1,272 @@
+#!/usr/bin/env runacton
+
+import acton.rts
+import random
+import net
+import process
+
+# Tests that involve running an Acton program together with the database
+# requires communication over localhost. By dynamically allocating ports we can
+# run multiple tests concurrently. Each test invocation gets a "chunk" of ports,
+# and can use the ports within its chunk freely. Port chunks are in the
+# specified range (10000-30000). We deliberately stay below 32768 which is what
+# Linux and many other OSes use for the lower end of ephemeral ports.
+PORT_CHUNK_SIZE=20
+PORT_CHUNK_MIN=10000
+PORT_CHUNK_MAX=30000
+
+# NOTE: the term signal for when an Acton RTS exits masks the termination
+# signal, so when we terminate it with SIGTERM we'd normally expect to see
+# termination signal 15 but instead we 0... so this is currently our expectation
+# given how RTS works, but maybe that should be fixed...
+
+actor Client(connect_auth, port: int):
+    def on_connect(c):
+        print("Client established connection")
+        await async c.write(b"PING")
+
+    def on_receive(c, data):
+        print("Client RECV", data)
+        if data == b"PONG":
+            print("Got PONG, all good, yay")
+        else:
+            print("Got bad response, exiting with error..")
+
+    def on_error(c, msg):
+        print("Client ERR", msg)
+
+    client = net.TCPIPConnection(connect_auth, "127.0.0.1", port, on_connect, on_receive, on_error)
+
+    def write(data: bytes):
+        client.write(data)
+
+
+actor Tester(env, verbose, port_chunk):
+    process_auth = process.ProcessAuth(env.auth)
+    var ps = []
+    var psp: dict[int, str] = {}
+    var combined_output = ""
+    var p_alive = 0
+    var error_encountered = False
+    var tcp_client = None
+    var tcp_expect = 0
+    var state = 0
+
+    def log(msg: str) -> None:
+        if verbose:
+            print(msg)
+        combined_output += "testOUT: " + msg + "\n"
+
+    def error(msg: str):
+        print("Encountered error:", msg)
+        combined_output += "testERR: " + msg + "\n"
+        error_encountered = True
+        error_msg = msg
+        stop(True)
+
+    def report():
+        if error_encountered:
+            print("There was an error :/")
+            print(combined_output)
+            await async env.exit(1)
+        else:
+            print("Test success!")
+            if verbose:
+                print("Combined DB & App output:")
+                print(combined_output)
+            await async env.exit(0)
+
+    def are_we_done():
+        if p_alive > 0 :
+            log("ps still alive.. %d remaining" % p_alive)
+            return
+
+        report()
+
+    def log_process_output(p, prefix, data):
+        paid = p.aid()
+        for line in data.decode().splitlines(False):
+            combined_output += psp[paid] + " " + prefix + ": " + line + "\n"
+
+    def on_stderr(p, data):
+        log_process_output(p, "ERR", data)
+
+    def on_stdout(p, data):
+        log_process_output(p, "OUT", data)
+
+    def db_on_exit(p, exit_code, term_signal):
+        log("DB Process exited with code: %d terminated with signal: %d" % (exit_code, term_signal))
+        p_alive -= 1
+        if not (exit_code == 0 and term_signal == 15):
+            error("DB Process exited with code: %d terminated with signal: %d" % (exit_code, term_signal))
+        are_we_done()
+
+    def app_on_exit(p, exit_code, term_signal):
+        p_alive -= 1
+        if exit_code == 0 and term_signal == 0:
+            if verbose:
+                print("App Process successfully exited with code: ", exit_code, " terminated with signal:", term_signal)
+            stop(False)
+        else:
+            print("App Process erroneously exited with code: ", exit_code, " terminated with signal:", term_signal)
+        are_we_done()
+
+    def on_error(p, error):
+        print("Error from process:", p, error)
+
+
+    def stop(error: bool):
+        log("stopping everything...")
+        if error:
+            error_encountered = True
+        for p in ps:
+            p.terminate()
+        are_we_done()
+
+    def dbc_start():
+        for i in range(0, 3, 1):
+            port = port_chunk + (2*i)
+            cmd = ["../dist/bin/actondb", "-p", str(port)]
+            p = process.Process(process_auth, cmd, None, None, on_stdout, on_stderr, db_on_exit, on_error)
+            p_alive += 1
+            ps.append(p)
+            paid = p.aid()
+            psp[paid] = "db%d" % i
+
+    def db_args(start_port, replication_factor) -> list[str]:
+        #a = ["127.0.0.1:" for idx in range(0, replication_factor, 1)]
+        args = ["--rts-ddb-replication", str(replication_factor)]
+        for idx in range(0, replication_factor, 1):
+            args.append("--rts-ddb-host")
+            args.append("127.0.0.1:" + str(start_port + idx*2))
+        return args
+
+
+    # Tests go here
+    def test_ddb_client():
+        # 1. start DBC cluster
+        # 2. start TCP client app, which will connect to TCP server & fetch current value, which will be 0 / "wrong"
+        # 3. terminate TCP client app
+        # 4. connect using our TCP client to TCP server and send INC to increase counter to 1
+        # 5. start TCP client app, which will connect to TCP server & fetch current value, which will be 1 / correct and we exit 0
+        connect_auth = net.TCPConnectAuth(net.TCPAuth(net.NetAuth(env.auth)))
+        port = port_chunk+199
+        cmd_srv = ["./rts_db/ddb_test_server", str(port), "--rts-verbose"]
+        p_srv = None
+        cmd = ["./rts_db/ddb_test_client", str(port), "--rts-verbose"] + db_args(port_chunk, 3)
+        p = None
+
+        # TCP server
+        def app_server_on_stdout(p, data):
+            log_process_output(p, "OUT: state " + str(state), data)
+
+        def app_server_on_exit(p, exit_code, term_signal):
+            log("Server app exited in state %d with exit code %d and termination signal %d" % (state, exit_code, term_signal))
+            p_alive -= 1
+            paid = p.aid()
+            for i in range(0, len(ps), 1):
+                ps_aid = ps[i].aid()
+                if ps_aid == paid:
+                    del ps[i]
+                    break
+            are_we_done()
+
+        p_srv = process.Process(process_auth, cmd_srv, None, None, app_server_on_stdout, on_stderr, app_server_on_exit, on_error)
+        p_alive += 1
+        if p_srv is not None:
+            ps.append(p_srv)
+            paid_srv = p_srv.aid()
+            psp[paid_srv] = "srv"
+
+        # TCP client
+        def tcpc_on_connect(c):
+            if state == 2:
+                log("TCP client connected to server, sending INC")
+                state = 3
+                await async c.write(b"INC")
+
+        def tcpc_on_receive(c, data):
+            if state == 3:
+                if data == b"OK":
+                    log("state 2: Got OK from server (for INC request)")
+                    state = 4
+                    tcp_expect += 1
+                    log("state 2: Starting test tcp client app")
+                    p = process.Process(process_auth, cmd, None, None, app_client_on_stdout, on_stderr, app_client_on_exit, on_error)
+                    p_alive += 1
+                    if p is not None:
+                        ps.append(p)
+                        paid = p.aid()
+                        psp[paid] = "app"
+                else:
+                    error("Got unexpected data from server in state %d: %s" % (state, data.decode()))
+
+        def tcpc_on_error(c, msg):
+            error("Client ERR: %s" % (msg))
+
+        def app_client_on_stdout(p, data):
+            on_stdout(p, data)
+            if state == 0:
+                if data == b"Got a 0, doing noooothing...\n":
+                    state = 1
+                    log("YAY, got expected data, terminating client, current p_alive: " + str(p_alive))
+                    p.terminate()
+                else:
+                    error("Got unexpected data from server in state %d: %s" % (state, str(data)))
+
+
+        def app_client_on_exit(p, exit_code, term_signal):
+            log("App exited in state %d with exit code %d and termination signal %d" % (state, exit_code, term_signal))
+            p_alive -= 1
+            paid = p.aid()
+            for i in range(0, len(ps), 1):
+                ps_aid = ps[i].aid()
+                if ps_aid == paid:
+                    del ps[i]
+                    break
+
+            if state == 1:
+                log("TCP client app exited, doing our TCP client to increase counter...")
+                if exit_code == 0 and term_signal == 0:
+                    state = 2
+                    tcp_client = net.TCPIPConnection(connect_auth, "127.0.0.1", port, tcpc_on_connect, tcpc_on_receive, tcpc_on_error)
+
+            if state == 4:
+                if exit_code == 0 and term_signal == 0:
+                    log("YAY, TCP client application exited happily")
+                    stop(False)
+            are_we_done()
+
+        log("Running TCP client test")
+        dbc_start()
+        log("Starting TCP client app: " + " ".join(cmd))
+        p = process.Process(process_auth, cmd, None, None, app_client_on_stdout, on_stderr, app_client_on_exit, on_error)
+        p_alive += 1
+        if p is not None:
+            ps.append(p)
+            paid = p.aid()
+            psp[paid] = "app"
+
+
+    test_ddb_client()
+
+actor main(env):
+    verbose = '--verbose' in set(env.argv)
+
+    # compute random base port between PORT_CHUNK_MIN and PORT_CHUNK_MAX
+    # in increments of PORT_CHUNK_SIZE
+    port_chunk = random.randint(int(PORT_CHUNK_MIN/PORT_CHUNK_SIZE), int(PORT_CHUNK_MAX/PORT_CHUNK_SIZE)) * PORT_CHUNK_SIZE
+
+    t = Tester(env, verbose, port_chunk)
+
+    def test_timeout():
+        t.error("Test failed - timeout reached")
+        await async t.stop(True)
+
+    def unconditional_exit():
+        t.error("Giving up...")
+        t.report()
+        await async env.exit(1)
+
+    after 2: test_timeout()
+    after 4: unconditional_exit()

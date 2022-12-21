@@ -117,6 +117,7 @@ instance Relabel Expr where
     relabel (Paren _ e) = Paren <$> newLoc <*> relabel e
 
 instance Relabel Pattern where
+    relabel (PWild _ a) = PWild <$> newLoc <*> relabel a
     relabel (PVar _ n a) = PVar <$> newLoc <*> relabel n <*> relabel a
     relabel (PTuple _ ps ks) = PTuple <$> newLoc <*> relabel ps <*> relabel ks
     relabel (PList _ ps p) = PList <$> newLoc <*> relabel ps <*> relabel p
@@ -243,3 +244,4 @@ instance Relabel Constraint where
     relabel (Impl w t p) = Impl <$> relabel w <*> relabel t <*> relabel p
     relabel (Sel w t1 n t2) = Sel w <$> relabel t1 <*> relabel n <*> relabel t2
     relabel (Mut t1 n t2) = Mut <$> relabel t1 <*> relabel n <*> relabel t2
+    relabel (Seal t) = Seal <$> relabel t

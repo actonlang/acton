@@ -3,13 +3,10 @@ Section: devel
 Priority: optional
 Maintainer: Kristian Larsson <kristian@spritelink.net>
 Build-Depends:
+ bash-completion,
  debhelper-compat (= 13),
- gcc,
  haskell-stack,
- libbsd-dev,
  libprotobuf-c-dev,
- libutf8proc-dev,
- libuv1-dev,
  make,
  pkg-config
 Standards-Version: 4.6.0
@@ -20,8 +17,6 @@ Package: acton
 Architecture: any
 Depends:
  ${shlibs:Depends},
- ${misc:Depends},
- gcc,
- uuid-dev
+ ${misc:Depends}
 Description: Acton Programming Language
  An awesome programming language.

@@ -11,18 +11,20 @@
 
 #define MAX_MSG_SIZE_GS (MAX_MSG_SIZE_VC + 16)
 
+#define SKIP_PROPOSAL_STATUS 10
+
 /* Node description: */
 
 typedef struct node_description
 {
-	int status;
-	int node_id;
-	int rack_id;
-	int dc_id;
+    int status;
+    int node_id;
+    int rack_id;
+    int dc_id;
 
-	char * hostname;
-	unsigned short portno;
-	struct sockaddr_in address;
+    char * hostname;
+    unsigned short portno;
+    struct sockaddr_in address;
 } node_description;
 
 node_description * init_node_description(int status, int node_id, int rack_id, int dc_idm, char * hostname, unsigned short portno);
@@ -36,8 +38,8 @@ void init_ns_msg_from_description(NodeStateMessage * ns_msg, node_description * 
 
 typedef struct gossip_state
 {
-	node_description nd;
-	vector_clock * vc;
+    node_description nd;
+    vector_clock * vc;
 } gossip_state;
 
 gossip_state * init_gossip_state(int status, int node_id, int rack_id, int dc_id, char * hostname, unsigned short portno, vector_clock * vc);
@@ -51,11 +53,11 @@ char * to_string_gs(gossip_state * gs, char * msg_buff);
 
 typedef struct membership_state
 {
-	int no_nodes;
-	node_description * membership;
-	int no_client_nodes;
-	node_description * client_membership;
-	vector_clock * view_id;
+    int no_nodes;
+    node_description * membership;
+    int no_client_nodes;
+    node_description * client_membership;
+    vector_clock * view_id;
 } membership_state;
 
 membership_state * init_membership_state(int no_nodes, node_description * membership, int no_client_nodes, node_description * client_membership, vector_clock * view_id);
@@ -80,11 +82,11 @@ char * to_string_membership_state(membership_state * gs, char * msg_buff);
 
 typedef struct membership_agreement_msg
 {
-	int msg_type;
-	int ack_status;
-	membership_state * membership;
-	int64_t nonce;
-	vector_clock * vc;
+    int msg_type;
+    int ack_status;
+    membership_state * membership;
+    int64_t nonce;
+    vector_clock * vc;
 } membership_agreement_msg;
 
 membership_agreement_msg * get_membership_propose_msg(int ack_status, membership_state * membership, int64_t nonce, vector_clock * vc);

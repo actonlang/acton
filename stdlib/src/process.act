@@ -1,0 +1,80 @@
+"""Constructs for spawning and interacting with sub-processes
+"""
+
+class ProcessAuth():
+    def __init__(self, auth: WorldAuth):
+        pass
+
+actor Process(auth: ProcessAuth, cmd: list[str], workdir: ?str, env: ?dict[str, str], on_stdout: action(Process, bytes) -> None, on_stderr: action(Process, bytes) -> None, on_exit: action(Process, int, int) -> None, on_error: action(Process,str) -> None):
+    """A process
+    - auth: authentication token
+    - cmd: the command to run
+    - workdir: working directory, use None for current directory
+    - env: environment for process, use None to inherit current environment
+    - on_stdout: stdout callback actor method
+    - on_stderr: stderr callback actor method
+    - on_exit: exit callback
+      - process
+      - exit code
+      - signal that caused program to exit
+    - on_error: error callback
+    """
+    _p = 0
+
+    action def aid() -> int:
+        """Actor ID of process actor
+
+        Workaround for lack of working repr on actors.
+        """
+        NotImplemented
+
+    proc def _create_process():
+        """Do the C magic to actually create a process and talk to it
+        """
+        NotImplemented
+
+    action def done_writing() -> None:
+        """Close stdin of process
+
+        Closing stdin allows cat to terminate
+        """
+        NotImplemented
+
+    action def pid() -> ?int:
+        """Get PID of process or None if the process is not running
+        """
+        NotImplemented
+
+    action def signal(signal: int) -> None:
+        """Send signal to process
+
+        Sends the provided signal to the process.
+        """
+        NotImplemented
+
+    action def write(data: bytes) -> None:
+        """Write data to stdin of process
+        """
+        NotImplemented
+
+    action def kill():
+        """Abrubtly kill process by sending SIGKILL
+        """
+        signal(9)
+
+    action def terminate():
+        """Stop process by sending SIGTERM
+        """
+        signal(15)
+
+    def stop():
+        """Stop process
+
+        Attempts to stop process using normal means, which means SIGTERM on a
+        Unix system. After 1 second, SIGKILL is sent to ensure the process is
+        stopped.
+        """
+        terminate()
+        after 1: kill()
+
+    _create_process()

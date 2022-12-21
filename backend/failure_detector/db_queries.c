@@ -212,9 +212,11 @@ int deserialize_write_query(void * buf, unsigned msg_len, write_query ** ca)
 {
     WriteQueryMessage * msg = write_query_message__unpack (NULL, msg_len, buf);
 
-    if (msg == NULL || msg->mtype != RPC_TYPE_WRITE)
-    {
-        log_error("error unpacking write query message\n");
+    if (msg == NULL) {
+        log_error("Error unpacking write query message, msg is NULL");
+        return 1;
+    } else if (msg->mtype != RPC_TYPE_WRITE) {
+        log_error("Error unpacking write query message, msg->mtype is not RPC_TYPE_WRITE: %d", msg->mtype);
         return 1;
     }
 
@@ -397,9 +399,11 @@ int deserialize_read_query(void * buf, unsigned msg_len, read_query ** ca)
 {
     ReadQueryMessage * msg = read_query_message__unpack (NULL, msg_len, buf);
 
-    if (msg == NULL || msg->mtype != RPC_TYPE_READ)
-    {
-        log_error("error unpacking read query message\n");
+    if (msg == NULL) {
+        log_error("Error unpacking read query message, msg is NULL");
+        return 1;
+    } else if (msg->mtype != RPC_TYPE_READ) {
+        log_error("Error unpacking read query message, msg->mtype is not RPC_TYPE_READ: %d", msg->mtype);
         return 1;
     }
 
@@ -592,9 +596,10 @@ int deserialize_range_read_query(void * buf, unsigned msg_len, range_read_query 
 {
     RangeReadQueryMessage * msg = range_read_query_message__unpack (NULL, msg_len, buf);
 
-    if (msg == NULL || msg->mtype != RPC_TYPE_RANGE_READ)
-    {
-        log_error("error unpacking range read query message\n");
+    if (msg == NULL) {
+        log_error("Error unpacking range read query message, msg is NULL");
+    } else if (msg->mtype != RPC_TYPE_RANGE_READ) {
+        log_error("Error unpacking range read query message, msg->mtype is not RPC_TYPE_RANGE_READ: %d", msg->mtype);
         return 1;
     }
 
@@ -761,16 +766,18 @@ int deserialize_ack_message(void * buf, unsigned msg_len, ack_message ** ca)
     AckMessage * msg = ack_message__unpack (NULL, msg_len, buf);
     char print_buff[100];
 
-    if (msg == NULL || msg->mtype != RPC_TYPE_ACK)
-    {
-        log_error("error unpacking ack query message\n");
+    if (msg == NULL) {
+        log_error("Error unpacking ack query message, msg is NULL");
+        return 1;
+    } else if (msg->mtype != RPC_TYPE_ACK) {
+        log_error("Error unpacking ack query message, msg->mtype is not RPC_TYPE_ACK: %d", msg->mtype);
         return 1;
     }
 
     *ca = init_ack_message_from_msg(msg);
 
 //  to_string_ack_message(*ca, (char *) print_buff);
-//  log_debug("Received ACK message: %s\n", print_buff);
+//  log_debug("Received ACK message: %s", print_buff);
 
     ack_message__free_unpacked(msg, NULL);
 
@@ -952,9 +959,11 @@ int deserialize_range_read_response_message(void * buf, unsigned msg_len, range_
 {
     RangeReadResponseMessage * msg = range_read_response_message__unpack (NULL, msg_len, buf);
 
-    if (msg == NULL || msg->mtype != RPC_TYPE_RANGE_READ_RESPONSE)
-    {
-        log_error("error unpacking range read response message\n");
+    if (msg == NULL) {
+        log_error("Error unpacking range read response message, msg is NULL");
+        return 1;
+    } else if (msg->mtype != RPC_TYPE_RANGE_READ_RESPONSE) {
+        log_error("Error unpacking range read response message, msg->mtype is not RPC_TYPE_RANGE_READ_RESPONSE: %d", msg->mtype);
         return 1;
     }
 
@@ -1455,9 +1464,11 @@ int deserialize_queue_message(void * buf, unsigned msg_len, queue_query_message 
 {
     QueueQueryMessage * msg = queue_query_message__unpack (NULL, msg_len, buf);
 
-    if (msg == NULL || msg->mtype != RPC_TYPE_QUEUE)
-    {
-        log_error("error unpacking queue query message\n");
+    if (msg == NULL) {
+        log_error("Error unpacking queue query message, msg is NULL");
+        return 1;
+    } else if (msg->mtype != RPC_TYPE_QUEUE) {
+        log_error("Error unpacking queue query message, msg->mtype is not RPC_TYPE_QUEUE: %d", msg->mtype);
         return 1;
     }
 
@@ -1930,9 +1941,11 @@ int deserialize_txn_message(void * buf, unsigned msg_len, txn_message ** ca)
 {
     TxnMessage * msg = txn_message__unpack (NULL, msg_len, buf);
 
-    if (msg == NULL || msg->mtype != RPC_TYPE_TXN)
-    {
-        log_error("error unpacking read query message\n");
+    if (msg == NULL) {
+        log_error("Error unpacking txn query message, msg is NULL");
+        return 1;
+    } else if (msg->mtype != RPC_TYPE_TXN) {
+        log_error("Error unpacking txn query message, msg->mtype is not RPC_TYPE_TXN: %d", msg->mtype);
         return 1;
     }
 
@@ -2098,9 +2111,8 @@ int deserialize_gossip_listen_msg(void * buf, unsigned msg_len, gossip_listen_me
 {
     GossipListenMessage * msg = gossip_listen_message__unpack(NULL, msg_len, buf);
 
-    if (msg == NULL)
-    { // Something failed
-        log_error("error unpacking gossip_state message\n");
+    if (msg == NULL) {
+        log_error("Error unpacking gossip_state message, msg is NULL");
         return 1;
     }
 
@@ -2122,7 +2134,7 @@ char * to_string_gossip_listen_msg(gossip_listen_message * gs, char * msg_buff)
 {
     sprintf(msg_buff, "GossipListenMessage(node_description=");
     to_string_node_description(gs->node_description, msg_buff + strlen(msg_buff));
-    sprintf(msg_buff, ", nonce=%ld)", gs->nonce);
+    sprintf(msg_buff, ", nonce=%" PRId64 ")", gs->nonce);
     return msg_buff;
 }
 
@@ -2169,7 +2181,7 @@ void free_server_msg(ServerMessage * sm)
         }
         default:
         {
-            log_fatal("Wrong server message type %d\n", sm->mtype);
+            log_fatal("Wrong server message type %d", sm->mtype);
         }
     }
 
@@ -2184,7 +2196,7 @@ int deserialize_server_message(void * buf, unsigned msg_len, void ** dest_buf, s
     if (sm == NULL)
     {
         *mtype = -1;
-        log_error("error unpacking server message\n");
+        log_error("Error unpacking server message, msg is NULL");
         return 1;
     }
 
@@ -2229,7 +2241,7 @@ int deserialize_server_message(void * buf, unsigned msg_len, void ** dest_buf, s
         }
         default:
         {
-            log_fatal("Wrong server message type %d\n", sm->mtype);
+            log_fatal("Wrong server message type %d", sm->mtype);
             return 1;
         }
     }
@@ -2281,7 +2293,7 @@ void free_client_msg(ClientMessage * cm)
         }
         default:
         {
-            log_fatal("Wrong client message type %d\n", cm->mtype);
+            log_fatal("Wrong client message type %d", cm->mtype);
         }
     }
 
@@ -2296,7 +2308,7 @@ int deserialize_client_message(void * buf, unsigned msg_len, void ** dest_buf, s
 
     if (cm == NULL)
     {
-        log_error("error unpacking client message\n");
+        log_error("Error unpacking client message, msg is NULL");
 
         // This might be a gossiped membership notification:
 
@@ -2323,7 +2335,7 @@ int deserialize_client_message(void * buf, unsigned msg_len, void ** dest_buf, s
                 }
                 default:
                 {
-                    log_fatal("Wrong gossip message type %d\n", ma->msg_type);
+                    log_fatal("Wrong gossip message type %d", ma->msg_type);
                 }
             }
 
@@ -2331,7 +2343,7 @@ int deserialize_client_message(void * buf, unsigned msg_len, void ** dest_buf, s
         }
         else
         {
-            log_error("error unpacking gossip message\n");
+            log_error("Error unpacking gossip message");
             return 1;
         }
     }
@@ -2370,7 +2382,7 @@ int deserialize_client_message(void * buf, unsigned msg_len, void ** dest_buf, s
         }
         default:
         {
-            log_fatal("Wrong client message type %d\n", cm->mtype);
+            log_fatal("Wrong client message type %d", cm->mtype);
             return 1;
         }
     }

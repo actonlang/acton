@@ -1,4 +1,5 @@
-# Development Workflow
+# Development Workflow n stuff
+
 
 ## Git workflow
 
@@ -50,3 +51,16 @@ There are two types of releases, "version releases" and the `tip` release.
       available
   - the release has a stable URL:
     https://github.com/actonlang/acton/releases/tag/tip
+
+
+# Dependencies
+
+## Build time
+- automake, autopoint, bison, libtool, pkg-config
+  - required by external library dependencies
+- libprotobuf-c-dev
+  - required by libprotobuf-c, this is all very complicated
+- gcc
+  - required by ghc
+- zlib1g-dev
+  - required by ghc

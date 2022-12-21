@@ -16,7 +16,7 @@ actor main(env):
 
 Compile and run:
 ```sh
-actonc sets.act --root main
+actonc sets.act
 ./sets
 ```
 

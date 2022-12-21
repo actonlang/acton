@@ -26,8 +26,12 @@
 
 #define NODE_LIVE 0
 #define NODE_DEAD 1
-#define NODE_UNKNOWN 2
-#define NODE_PREJOINED 3
+#define NODE_PREJOINED 2
+
+#define NULL_FD -1
+#define OWN_FD -2
+#define DUMMY_FD -3
+
 static const char *RS_status_name[] = {"live", "dead", "unknown", "prejoined"};
 
 // Comm loop fctns:

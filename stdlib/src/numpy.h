@@ -281,8 +281,7 @@ extern struct numpy$$Primitive$float$class  numpy$$Primitive$float$methods;
 extern struct numpy$$Primitive$int *numpy$$Primitive$int$witness;
 extern struct numpy$$Primitive$float *numpy$$Primitive$float$witness;
 
-
-
+// numpy$$ndarray /////////////////////////////////////////////////////////////////////////////////
 
 struct numpy$$ndarray;
 typedef struct numpy$$ndarray *numpy$$ndarray;
@@ -291,7 +290,7 @@ struct numpy$$ndarray$class {
   char *$GCINFO;
   int $class_id;
   $Super$class $superclass;
-  void (*__init__)(numpy$$ndarray,$WORD);
+    void (*__init__)(numpy$$ndarray,numpy$$Primitive,$atom);
   void (*__serialize__)(numpy$$ndarray,$Serial$state); 
   numpy$$ndarray (*__deserialize__)(numpy$$ndarray,$Serial$state);
   $bool (*__bool__)(numpy$$ndarray);
@@ -351,7 +350,7 @@ struct numpy$$Iterator$ndarray$class {
   $WORD (*__next__)(numpy$$Iterator$ndarray);
 };
 
-numpy$$ndarray numpy$$ndarray$new($WORD);
+numpy$$ndarray numpy$$ndarray$new(numpy$$Primitive, $atom);
 
 struct numpy$$Iterator$ndarray {
   struct numpy$$Iterator$ndarray$class *$class;
@@ -365,7 +364,7 @@ numpy$$Iterator$ndarray numpy$$Iterator$ndarray$new(numpy$$Primitive,numpy$$ndar
 
 // Intended argument to constructor
 
-numpy$$ndarray numpy$$fromatom($atom a);
+numpy$$ndarray numpy$$fromatom(numpy$$Primitive, $atom);
 
 //numpy$$ndarray numpy$$ndarray_func(union $Bytes8(*f)(union $Bytes8),numpy$$ndarray a);
 //numpy$$ndarray numpy$$ndarray_oper(union $Bytes8 (*f)(union $Bytes8, union $Bytes8), numpy$$ndarray a, numpy$$ndarray b);
@@ -453,6 +452,12 @@ typedef struct numpy$$Collection$ndarray *numpy$$Collection$ndarray;
 
 struct numpy$$Collection$ndarray$class;
 typedef struct numpy$$Collection$ndarray$class *numpy$$Collection$ndarray$class;
+
+struct numpy$$Sliceable$ndarray;
+typedef struct numpy$$Sliceable$ndarray *numpy$$Sliceable$ndarray;
+
+struct numpy$$Sliceable$ndarray$class;
+typedef struct numpy$$Sliceable$ndarray$class *numpy$$Sliceable$ndarray$class;
 
 // numpy$$Integral$ndarray$int ////////////////////////////////////////////////////////////
 
@@ -743,7 +748,7 @@ struct numpy$$Sliceable$ndarray$class {
     char *$GCINFO;
     int $class_id;
     $Super$class $superclass;
-    void (*__init__) (numpy$$Sliceable$ndarray);
+    void (*__init__) (numpy$$Sliceable$ndarray, numpy$$Primitive);
     void (*__serialize__) (numpy$$Sliceable$ndarray, $Serial$state);
     numpy$$Sliceable$ndarray (*__deserialize__) (numpy$$Sliceable$ndarray, $Serial$state);
     $bool (*__bool__)(numpy$$Sliceable$ndarray);
@@ -757,7 +762,8 @@ struct numpy$$Sliceable$ndarray$class {
     void (*__delslice__) (numpy$$Sliceable$ndarray, numpy$$ndarray, $slice);
 };
 struct numpy$$Sliceable$ndarray {
-    struct numpy$$Sliceable$ndarray$class *$class;
+    numpy$$Sliceable$ndarray$class $class;
+    numpy$$Primitive pwit;
 };
 
 
@@ -793,7 +799,7 @@ $int numpy$$Collection$ndarray$__len__(numpy$$Collection$ndarray, numpy$$ndarray
 // numpy$$RealFloat$ndarray ////////////////////////////////////////////////////////
 
 #define numpy$$RealFloat$ndarray (($Real)numpy$$Real$ndarray)
-#define numpy$$RealFloat$ndarray$new(...) ($Real)numpy$$Real$ndarray$new(__VA_ARGS__)
+numpy$$Real$ndarray numpy$$RealFloat$ndarray$new(numpy$$Primitive,$RealFloat); // ($Real)numpy$$Real$ndarray$new(__VA_ARGS__)
 
 // numpy$$RealFuns$math$ndarray ////////////////////////////////////////////////////
 
@@ -848,11 +854,11 @@ extern struct numpy$$Collection$ndarray$class numpy$$Collection$ndarray$methods;
 numpy$$Integral$ndarray$int numpy$$Integral$ndarray$int$new();
 numpy$$Logical$ndarray$int numpy$$Logical$ndarray$int$new($Integral);
 numpy$$Minus$ndarray$int numpy$$Minus$ndarray$int$new($Integral);
-numpy$$Real$ndarray numpy$$Real$ndarray$new();
+numpy$$Real$ndarray numpy$$Real$ndarray$new(numpy$$Primitive);
 numpy$$Minus$ndarray numpy$$Minus$ndarray$new($Real);
 numpy$$Div$ndarray$int numpy$$Div$ndarray$int$new();
 numpy$$Div$ndarray$float numpy$$Div$ndarray$float$new();
-numpy$$Sliceable$ndarray numpy$$Sliceable$ndarray$new();
+numpy$$Sliceable$ndarray numpy$$Sliceable$ndarray$new(numpy$$Primitive);
 numpy$$Collection$ndarray numpy$$Collection$ndarray$new(numpy$$Primitive);
 numpy$$RealFuns$math$ndarray numpy$$RealFuns$math$ndarray$new(numpy$$Primitive, math$$RealFuns);
 

@@ -63,7 +63,9 @@ normEnv env0                        = env0
 -- Normalize terms ---------------------------------------------------------------------------------------
 
 normPat                             :: NormEnv -> Pattern -> NormM (Pattern,Suite)
-normPat _ p@(PVar _ _ _)            = return (p,[])
+normPat _ (PWild l a)               = do n <- newName "ignore"
+                                         return (PVar l n a,[])
+normPat _ p@PVar{}                  = return (p,[])
 normPat env (PParen _ p)            = normPat env p
 normPat env p@(PTuple _ pp kp)      = do v <- newName "tup"
                                          ss <- norm (define (envOf (pVar v t)) env) $ normPP v 0 pp ++ normKP v [] kp
@@ -130,7 +132,7 @@ instance Norm Stmt where
     norm env (If l bs els)          = If l <$> norm env bs <*> norm env els
     norm env (While l e b els)      = While l <$> normBool env e <*> norm env b <*> norm env els
     norm env (Try l b hs els fin)   = Try l <$> norm env b <*> norm env hs <*> norm env els <*> norm env fin
-    norm env (Data l mbt ss)        = Data l <$> norm env mbt <*> norm env ss
+    norm env (Data l mbp ss)        = Data l <$> norm env mbp <*> norm env ss
     norm env (VarAssign l ps e)     = VarAssign l <$> norm env ps <*> norm env e
     norm env (After l e e')         = After l <$> norm env e <*> norm env e'
     norm env (Decl l ds)            = Decl l <$> norm env1 ds
@@ -200,7 +202,8 @@ instance Norm Decl where
                                          b' <- norm env1 b
                                          return $ Actor l n q p' KwdNIL b'
       where env1                    = define (envOf p ++ envOf k) env0
-            env0                    = defineTVars q env
+            env0                    = define [(selfKW, NVar t0)] $ defineTVars q env
+            t0                      = tCon $ TC (NoQ n) (map tVar $ qbound q)
     norm env (Class l n q as b)     = Class l n q as <$> norm env1 b
       where env1                    = defineSelf (NoQ n) q $ defineTVars q env
     norm env d                      = error ("norm unexpected: " ++ prstr d)
@@ -245,7 +248,7 @@ instance Norm Expr where
       where t                       = typeOf env e
     norm env (Async l e)            = Async l <$> norm env e
     norm env (Await l e)            = Await l <$> norm env e
-    norm env (Cond l e1 e2 e3)      = Cond l <$> normBool env e1 <*> norm env e2 <*> norm env e3
+    norm env (Cond l e1 e2 e3)      = Cond l <$> norm env e1 <*> normBool env e2 <*> norm env e3
     norm env (IsInstance l e c)     = IsInstance l <$> norm env e <*> pure c
     norm env (BinOp l e1 Or e2)     = BinOp l <$> norm env e1 <*> pure Or <*> norm env e2
     norm env (BinOp l e1 And e2)    = BinOp l <$> norm env e1 <*> pure And <*> norm env e2
@@ -272,6 +275,7 @@ nargs p@TRow{}                      = 1 + nargs (rtail p)
 narg n k@TRow{}                     = if n == label k then 0 else 1 + narg n (rtail k)
 
 instance Norm Pattern where
+    norm env (PWild l a)            = return $ PWild l (conv a)
     norm env (PVar l n a)           = return $ PVar l n (conv a)
     norm env (PTuple l ps ks)       = PTuple l <$> norm env ps <*> norm env ks
     norm env (PList l ps p)         = PList l <$> norm env ps <*> norm env p        -- TODO: eliminate here
@@ -346,8 +350,8 @@ instance Norm Elem where
 
 -- Convert function types ---------------------------------------------------------------------------------
 
-convEnv env (n, NClass q ps te)     = [(n, NClass q (mro1 env $ map snd ps) te)]
-convEnv env (n, i)                  = [(n, conv i)]
+convEnv env m (n, NClass q ps te)   = [(n, NClass q (mro1 env $ map snd ps) te)]
+convEnv env m (n, i)                = [(n, conv i)]
 
 
 class Conv a where

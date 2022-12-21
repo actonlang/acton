@@ -656,6 +656,8 @@ pelems = do
 
 apat :: Parser S.Pattern
 apat = addLoc (
+            (try $ rword "_" *> (S.PWild NoLoc <$> optannot))
+        <|>
             (try $ S.PVar NoLoc <$> name <*> optannot)
         <|>
             ((try . parens) $ return $ S.PParen NoLoc (S.PTuple NoLoc S.PosPatNil S.KwdPatNil))
@@ -825,7 +827,7 @@ decl_group = do p <- L.indentLevel
                 return [ S.Decl (loc ds) ds | ds <- Names.splitDeclGroup g ]
 
 decl :: Parser S.Decl
-decl = funcdef <|> classdef <|> protodef <|> extdef <|> actordef
+decl = try funcdef <|> classdef <|> protodef <|> extdef <|> actordef
 
 decorator :: Bool -> Parser S.Deco
 decorator sig = do
@@ -1115,11 +1117,16 @@ atom_expr = do
               a <- atom
               ts <- many trailer
               let e = foldl app a ts
-                  e' = maybe e (app e) async
+                  e' = foldapp async a ts
               return $ maybe e' (app e') await 
               <?> "atomic expression"
   where app a (l,f) = (f a){S.eloc = S.eloc a `upto` l}
-             
+
+        foldapp async e [] = maybe e (app e) async
+        foldapp async e ((l,f):ts) = case f e of
+                                        S.Call{} -> foldl app (maybe e (app e) async) ((l,f):ts)
+                                        e' -> foldapp async e' ts
+
         atom :: Parser S.Expr
         atom =  addLoc (try strings
                <|>
@@ -1299,12 +1306,11 @@ funargs = do r <- funItems S.PosArg S.PosStar S.PosNil expr expr kwdarg S.KwdNil
 
 effect  :: Parser S.Type
 effect  = addLoc $  
-            S.TVar NoLoc <$> tvar
-        <|> rword "_" *> return (S.TWild NoLoc)
-        <|> rword "action" *> return S.fxAction
+            rword "_" *> return (S.TWild NoLoc)
+        <|> rword "proc" *> return S.fxProc
         <|> rword "mut" *> return S.fxMut
         <|> rword "pure" *> return S.fxPure
-  where optvar f = brackets (f <$> (addLoc $ S.TVar NoLoc <$> tvar)) <|> return S.tWild
+        <|> rword "action" *> return S.fxAction
 
 posrow :: Parser S.PosRow 
 posrow = posItems S.posRow S.posVar S.posNil ttype (optional tvar)

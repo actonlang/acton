@@ -1,0 +1,3 @@
+def k_print():
+    print("k")
+

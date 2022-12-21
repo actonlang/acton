@@ -13,6 +13,8 @@
  */
 
 #include "../builtin.h"
+#include "../dict_impl.h"
+#include <stdio.h>
 
 int main() {
   $register_builtin();
@@ -26,10 +28,10 @@ int main() {
   printf("lst = %s\n",(lst->$class->__str__(lst))->str);
   $dict_setitem(dict,wit, a,lst);
   $dict_setitem(dict,wit, b,lst);
-  $serialize_file(($Serializable)dict,"test4.bin");
-  $dict dict2 = ($dict)$deserialize_file("test4.bin");
-  $serialize_file(($Serializable)dict2,"test5.bin");
-  printf("dict2 = %s\n",(dict2->$class->__str__(dict2))->str);
+  $ROW r = $serialize(($Serializable)dict,NULL);
+  $dict dict2 = ($dict)$deserialize(r,NULL);
+  $print(1,dict);
+  $print(1,dict2);
   $list_setitem($dict_getitem(dict2,wit,a),1,to$int(7));
   printf("Sharing test (both values should have 2nd element changed to 7):\ndict2 = %s\n",(dict2->$class->__str__(dict2))->str);
 }

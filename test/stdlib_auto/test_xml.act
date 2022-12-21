@@ -1,0 +1,32 @@
+import xml
+
+actor main(env):
+    print("Testing: XML str -> data -> XML str")
+    # TODO: remove indent after adding argument to xml.encode() to not pretty print
+    test_xml = [
+        """<a>    <b>hello</b></a>""",
+        """<a attr="foo" battr="bar">    <b></b></a>""",
+        """<a>\n    <b1>hej</b1>\n    <b2>test</b2>\n</a>""",
+    ]
+    for s in test_xml:
+        print(s)
+        d = xml.decode(s)
+        print(d)
+        e = xml.encode(d)
+        print(e)
+        if s is not None and e is not None and s != e:
+            print("MISMATCH")
+            await async env.exit(1)
+        print()
+
+    d = xml.decode(test_xml[0])
+# TODO: fix so this works!
+#    if d.name != "a":
+#        print("Wrong tag name")
+#        await async env.exit(1)
+# TODO: fix so this works!
+#    if d.content != "hello":
+#        print("Wrong tag content")
+#        await async env.exit(1)
+
+    await async env.exit(0)

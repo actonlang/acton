@@ -171,17 +171,24 @@ instance ConvTWild QBinds where
     convTWild q                     = mapM instq q
       where instq (Quant v us)      = Quant v <$> mapM convTWild us
 
-instance (ConvTWild a) => ConvTWild (Maybe a) where
-    convTWild t                     = sequence (fmap convTWild t)
+instance ConvTWild (Maybe Type) where
+    convTWild Nothing               = Just <$> convTWild tWild
+    convTWild (Just t)              = Just <$> convTWild t
 
 instance ConvTWild PosPar where
     convTWild (PosPar n t e p)      = PosPar n <$> convTWild t <*> return e <*> convTWild p
-    convTWild (PosSTAR n t)         = PosSTAR n <$> convTWild t
+    convTWild (PosSTAR n Nothing)   = PosSTAR n <$> Just <$> (TTuple NoLoc <$> convTWild tWild <*> pure kwdNil)
+    convTWild (PosSTAR n (Just t))
+      | TTuple{} <- t               = PosSTAR n <$> Just <$> convTWild t
+      | otherwise                   = err1 t "Tuple type expected"
     convTWild PosNIL                = return PosNIL
     
 instance ConvTWild KwdPar where
     convTWild (KwdPar n t e k)      = KwdPar n <$> convTWild t <*> return e <*> convTWild k
-    convTWild (KwdSTAR n t)         = KwdSTAR n <$> convTWild t
+    convTWild (KwdSTAR n Nothing)   = KwdSTAR n <$> Just <$> (TTuple NoLoc posNil <$> convTWild tWild)
+    convTWild (KwdSTAR n (Just t))
+      | TTuple{} <- t               = KwdSTAR n <$> Just <$> convTWild t
+      | otherwise                   = err1 t "Tuple type expected"
     convTWild KwdNIL                = return KwdNIL
 
 
@@ -297,7 +304,7 @@ instance KCheck Decl where
                                          q' <- swapXVars tmp
                                          env1 <- extvars (tybound (q++q')) env
                                          q <- kchkQBinds env1 (q++q')
-                                         Def l n q <$> kchk env1 p <*> kchk env1 k <*> kexp KType env1 t <*> kchkSuite env1 b <*> pure d <*> kexp KFX env1 x
+                                         Def l n q <$> kchk env1 p <*> kchk env1 k <*> kexp KType env1 t <*> kchkSuite env1 b <*> pure d <*> kfx env1 x
       where ambig                   = qualbound q \\ closeDepVarsQ (tyfree p ++ tyfree k ++ tyfree t ++ tyfree x) q
     kchk env (Actor l n q p k b)    = do env1 <- extvars (qbound q) env
                                          Actor l n <$> kchkQBinds env1 q <*> kchk env1 p <*> kchk env1 k <*> kchkSuite env1 b
@@ -347,7 +354,7 @@ instance KCheck Expr where
     kchk env (DotI l e i)           = DotI l <$> kchk env e <*> return i
     kchk env (RestI l e i)          = RestI l <$> kchk env e <*> return i
     kchk env (Lambda l p k e x)     = Lambda l <$> (kchk env =<< convTWild p) <*> (kchk env =<< convTWild k) <*> 
-                                                   kchk env e <*> (kexp KFX env =<< convTWild x)
+                                                   kchk env e <*> (kfx env =<< convTWild x)
     kchk env (Yield l e)            = Yield l <$> kchk env e
     kchk env (YieldFrom l e)        = YieldFrom l <$> kchk env e
     kchk env (Tuple l es ks)        = Tuple l <$> kchk env es <*> kchk env ks
@@ -360,6 +367,7 @@ instance KCheck Expr where
     kchk env (Paren l e)            = Paren l <$> kchk env e
 
 instance KCheck Pattern where
+    kchk env (PWild l t)            = PWild l <$> (kexp KType env =<< convTWild t)
     kchk env (PVar l n t)           = PVar l n <$> (kexp KType env =<< convTWild t)
     kchk env (PTuple l ps ks)       = PTuple l <$> kchk env ps <*> kchk env ks
     kchk env (PList l ps p)         = PList l <$> kchk env ps <*> kchk env p
@@ -495,7 +503,7 @@ instance KInfer Type where
                                          return (k, TVar l v)
     kinfer env (TCon l c)           = do c <- kexp KType env c
                                          return (KType, TCon l c)
-    kinfer env (TFun l fx p k t)    = do fx <- kexp KFX env fx
+    kinfer env (TFun l fx p k t)    = do fx <- kfx env fx
                                          p <- kexp PRow env p
                                          k <- kexp KRow env k
                                          t <- kexp KType env t
@@ -512,6 +520,10 @@ instance KInfer Type where
                                          r <- kexp k env r
                                          return (k, TRow l k n t r)
     kinfer env (TFX l fx)           = return (KFX, TFX l fx)
+
+kfx env (TVar _ tv)
+  | not $ univar tv                 = variableFX tv
+kfx env t                           = kexp KFX env t
 
 kexp k env t                        = do (k',t) <- kinfer env t
                                          kunify (loc t) k' k
@@ -615,7 +627,7 @@ instance KSubst Decl where
     ksubst g (Actor l n q p k b)    = Actor l n <$> ksubst g q <*> ksubst g p <*> ksubst g k <*> ksubst g b
     ksubst g (Class l n q as b)     = Class l n <$> ksubst g q <*> ksubst g as <*> ksubst g b
     ksubst g (Protocol l n q as b)  = Protocol l n <$> ksubst g q <*> ksubst g as <*> ksubst g b
-    ksubst g (Extension l n q as b) = Extension l n <$> ksubst g q <*> ksubst g as <*> ksubst g b
+    ksubst g (Extension l q c as b) = Extension l <$> ksubst g q <*> ksubst g c <*> ksubst g as <*> ksubst g b
 
 instance KSubst Expr where
     ksubst g (Var l n)              = return $ Var l n
@@ -657,6 +669,7 @@ instance KSubst Expr where
     ksubst g (Paren l e)            = Paren l <$> ksubst g e
 
 instance KSubst Pattern where
+    ksubst g (PWild l a)            = PWild l <$> ksubst g a
     ksubst g (PVar l n a)           = PVar l n <$> ksubst g a
     ksubst g (PTuple l ps ks)       = PTuple l <$> ksubst g ps <*> ksubst g ks
     ksubst g (PList l ps p)         = PList l <$> ksubst g ps <*> ksubst g p
