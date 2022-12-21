@@ -7,6 +7,7 @@
 
 #include <uuid/uuid.h>
 #include "db.h"
+#include "queue_callback.h"
 
 #define TXN_STATUS_ACTIVE 0
 #define TXN_STATUS_VALIDATED 1

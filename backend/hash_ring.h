@@ -22,14 +22,14 @@ typedef struct hash_ring
 
 hash_ring * get_hash_ring();
 void free_hash_ring(hash_ring * ring, void (*free_val)(WORD));
-int add_bucket(hash_ring * ring, WORD bucket, WORD (*get_key)(WORD), WORD (*get_live_field)(WORD), unsigned int * fastrandstate);
+int add_bucket(hash_ring * ring, WORD bucket, void * (*get_key)(void *), void * (*get_live_field)(void *), unsigned int * fastrandstate);
 snode_t * lookup_bucket(hash_ring * ring, WORD bucket_id);
-int get_bucket_status(hash_ring * ring, WORD bucket, WORD (*get_key)(WORD), WORD (*get_live_field)(WORD));
-int set_bucket_status(hash_ring * ring, WORD bucket, int status, WORD (*get_key)(WORD), WORD (*get_live_field)(WORD));
-int mark_bucket_dead(hash_ring * ring, WORD bucket, WORD (*get_key)(WORD), WORD (*get_live_field)(WORD));
-int mark_bucket_live(hash_ring * ring, WORD bucket, WORD (*get_key)(WORD), WORD (*get_live_field)(WORD));
+int get_bucket_status(hash_ring * ring, WORD bucket, void * (*get_key)(void *), void * (*get_live_field)(void *));
+int set_bucket_status(hash_ring * ring, WORD bucket, int status, void * (*get_key)(void *), void * (*get_live_field)(void *));
+int mark_bucket_dead(hash_ring * ring, WORD bucket, void * (*get_key)(void *), void * (*get_live_field)(void *));
+int mark_bucket_live(hash_ring * ring, WORD bucket, void * (*get_key)(void *), void * (*get_live_field)(void *));
 WORD get_buckets_for_object(hash_ring * ring, int object_id, int replication_factor,
-                            WORD (*get_key)(WORD), WORD (*get_live_field)(WORD),
+                            void * (*get_key)(void *), void * (*get_live_field)(void *),
                             unsigned int * fastrandstate);
 
 #endif /* BACKEND_HASH_RING_H_ */

@@ -31,7 +31,7 @@ void free_hash_ring(hash_ring * ring, void (*free_val)(WORD))
     free(ring);
 }
 
-int add_bucket(hash_ring * ring, WORD bucket, WORD (*get_key)(WORD), WORD (*get_live_field)(WORD), unsigned int * fastrandstate)
+int add_bucket(hash_ring * ring, WORD bucket, void* (*get_key)(void *), void* (*get_live_field)(void *), unsigned int * fastrandstate)
 {
     pthread_mutex_lock(ring->lock);
 
@@ -59,7 +59,7 @@ snode_t * lookup_bucket(hash_ring * ring, WORD bucket_id)
     return skiplist_search(ring->buckets, id_hash);
 }
 
-int get_bucket_status(hash_ring * ring, WORD bucket, WORD (*get_key)(WORD), WORD (*get_live_field)(WORD))
+int get_bucket_status(hash_ring * ring, WORD bucket, void* (*get_key)(void *), void* (*get_live_field)(void *))
 {
     snode_t * node = NULL;
     pthread_mutex_lock(ring->lock);
@@ -81,7 +81,7 @@ int get_bucket_status(hash_ring * ring, WORD bucket, WORD (*get_key)(WORD), WORD
     return status;
 }
 
-int set_bucket_status(hash_ring * ring, WORD bucket, int status, WORD (*get_key)(WORD), WORD (*get_live_field)(WORD))
+int set_bucket_status(hash_ring * ring, WORD bucket, int status, void* (*get_key)(void *), void* (*get_live_field)(void *))
 {
     snode_t * node = NULL;
     pthread_mutex_lock(ring->lock);
@@ -111,18 +111,18 @@ int set_bucket_status(hash_ring * ring, WORD bucket, int status, WORD (*get_key)
     return 0;
 }
 
-int mark_bucket_dead(hash_ring * ring, WORD bucket, WORD (*get_key)(WORD), WORD (*get_live_field)(WORD))
+int mark_bucket_dead(hash_ring * ring, WORD bucket, void* (*get_key)(void *), void* (*get_live_field)(void *))
 {
     return set_bucket_status(ring, bucket, BUCKET_DEAD, get_key, get_live_field);
 }
 
-int mark_bucket_live(hash_ring * ring, WORD bucket, WORD (*get_key)(WORD), WORD (*get_live_field)(WORD))
+int mark_bucket_live(hash_ring * ring, WORD bucket, void* (*get_key)(void *), void* (*get_live_field)(void *))
 {
     return set_bucket_status(ring, bucket, BUCKET_LIVE, get_key, get_live_field);
 }
 
 WORD get_buckets_for_object(hash_ring * ring, int object_id, int replication_factor,
-                            WORD (*get_key)(WORD), WORD (*get_live_field)(WORD),
+                            void* (*get_key)(void *), void* (*get_live_field)(void *),
                             unsigned int * fastrandstate)
 {
     pthread_mutex_lock(ring->lock);
