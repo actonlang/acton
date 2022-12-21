@@ -759,8 +759,8 @@ void create_db_queue(long key) {
         }
         if(ret == 0 || ret == CLIENT_ERR_SUBSCRIPTION_EXISTS)
             break;
-    }
 */
+    }
 }
 
 void init_db_queue(long key) {
@@ -1010,7 +1010,7 @@ long read_queued_msg(long key, int64_t *read_head) {
     int entries_read = 0, minority_status = 0, ret = 0;
     
     while(!rts_exit) {
-        ret = remote_read_queue_in_txn(($WORD)local_rts_id, 0, 0, MSG_QUEUE, ($WORD)key,
+        ret = remote_read_queue_in_txn(($WORD)db->local_rts_id, 0, 0, MSG_QUEUE, ($WORD)key,
                                            1, &entries_read, read_head, &m_start, &m_end, &minority_status, NULL, db);
         rtsd_printf("   # read msg from queue %ld returns %d, entries read: %d, minority_status: %d", key, ret, entries_read, minority_status);
         if(!handle_status_and_schema_mismatch(ret, minority_status, key))
@@ -1091,10 +1091,14 @@ void print_actor($Actor a) {
 void deserialize_system(snode_t *actors_start) {
     rtsd_printf("Deserializing system");
     queue_callback * gqc = get_queue_callback(queue_group_message_callback);
-    printf("### remote_subscribe_group(consumer_id = %d, group_id = %d)\n", (int) db->local_rts_id, (int) db->local_rts_id);
-    remote_subscribe_group((WORD) db->local_rts_id, NULL, NULL, (WORD) db->local_rts_id, gqc, db);
-    snode_t *msgs_start, *msgs_end;
     int ret = 0,  minority_status = 0, no_items = 0;
+    printf("### remote_subscribe_group(consumer_id = %d, group_id = %d)\n", (int) db->local_rts_id, (int) db->local_rts_id);
+    while(!rts_exit) {
+        ret = remote_subscribe_group((WORD) db->local_rts_id, NULL, NULL, (WORD) db->local_rts_id, gqc, &minority_status, db);
+        if(!handle_status_and_schema_mismatch(ret, minority_status, 0))
+            break;
+    }
+    snode_t *msgs_start, *msgs_end;
     while(!rts_exit) {
         ret = remote_read_full_table_in_txn(&msgs_start, &msgs_end, MSGS_TABLE, &no_items, &minority_status, NULL, db);
         if(!handle_status_and_schema_mismatch(ret, minority_status, 0))
@@ -2485,7 +2489,11 @@ int main(int argc, char **argv) {
             log_info("No previous state in DDB; Initializing database...\n");
             queue_callback * gqc = get_queue_callback(queue_group_message_callback);
             printf("### initializing remote_subscribe_group(consumer_id = %d, group_id = %d)\n", (int) db->local_rts_id, (int) db->local_rts_id);
-            remote_subscribe_group((WORD) db->local_rts_id, NULL, NULL, (WORD) db->local_rts_id, gqc, db);
+            while(!rts_exit) {
+                ret = remote_subscribe_group((WORD) db->local_rts_id, NULL, NULL, (WORD) db->local_rts_id, gqc, &minority_status, db);
+                if(!handle_status_and_schema_mismatch(ret, minority_status, 0))
+                    break;
+            }
             int indices[] = {0};
             db_schema_t* db_schema = db_create_schema(NULL, 1, indices, 1, indices, 0, indices, 0);
             create_db_queue(TIMER_QUEUE);
