@@ -34,9 +34,11 @@ BUILD_TIME=$(shell date "+%Y%m%d.%-H.%-M.%-S")
 ifdef BUILD_RELEASE
 export VERSION_INFO?=$(VERSION)
 export DEB_DIST=stable
+export CONTAINER_TAG?=$(VERSION)
 else
 export VERSION_INFO?=$(VERSION).$(BUILD_TIME)
 export DEB_DIST=tip
+export CONTAINER_TAG?=tip
 endif
 
 ifdef CPEDANTIC
@@ -555,3 +557,12 @@ debian/changelog: debian/changelog.in CHANGELOG.md
 .PHONY: debs
 debs: debian/changelog
 	debuild --preserve-envvar VERSION_INFO -i -us -uc -b
+
+.PHONY: image push-image
+image: all
+	podman build -t acton:$(CONTAINER_TAG) --volume $(TD):/src:ro .
+
+push-image:
+	@echo "Pushing container image to GitHub Container Registry"
+	podman tag acton:$(CONTAINER_TAG) ghcr.io/actonlang/acton:$(CONTAINER_TAG)
+	podman push ghcr.io/actonlang/acton:$(CONTAINER_TAG)
