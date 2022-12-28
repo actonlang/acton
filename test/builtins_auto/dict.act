@@ -1,0 +1,71 @@
+
+actor main(env):
+    d: dict[str, str] = {"a": "A"}
+
+    d["b"] = "B"
+    if repr(d) != repr({"a": "A", "b": "B"}):
+        print("Unexpected result of dict[\"b\"]=\"b\":", d)
+        await async env.exit(1)
+
+    if len(d) != 2:
+        print("Unexpected result of len(d):", len(d))
+        await async env.exit(1)
+
+    if list(d.keys()) != ["a", "b"]:
+        print("Unexpected result of d.keys():", d.keys())
+        await async env.exit(1)
+
+    if repr(list(d.items())) != repr([("a", "A"), ("b", "B")]):
+        print("Unexpected result of d.items():", d.items())
+        await async env.exit(1)
+
+    if list(d.values()) != ["A", "B"]:
+        print("Unexpected result of d.values():", d.values())
+        await async env.exit(1)
+
+    del d["b"]
+    if repr(d) != repr({"a": "A"}):
+        print("Unexpected result of del dict[\"b\"]:", d)
+        await async env.exit(1)
+
+#    d["pop"] = 123
+#    p = d.pop("pop")
+#    if p != 123:
+#        print("Unexpected result of d.pop(\"b\"):", p)
+#        await async env.exit(1)
+
+    d["popi"] = "POPI"
+    pi = d.popitem()
+    if pi.0 != "popi" and pi.1 != "POPI":
+        print("Unexpected result of d.popitem():", str(pi.0), str(pi.1))
+        await async env.exit(1)
+
+    g = d.get("a", "")
+    if g != "A":
+        print("Unexpected result of d.get(\"a\"):", g)
+        await async env.exit(1)
+
+# TODO: fix, seemingly broken?
+#    d.update({"c": "C"})
+#    if repr(d) != repr({"a": "A", "c": "C"}):
+#        print("Unexpected result of dict.update():", d)
+#        await async env.exit(1)
+
+#    sd = d.setdefault("setdef", "a")
+#    print(d)
+#    if sd is not None and sd.0 is not None and sd.0 != "setdef":
+#        print("Unexpected result of d.setdefault(\"setdef\", 1):", str(sd))
+#        await async env.exit(1)
+
+#    d2 = d.copy()
+#    if repr(d2) != repr({"a": 1}):
+#        print("Unexpected result of d.copy():", d2)
+#        await async env.exit(1)
+
+#    d.clear()
+#    if repr(d) != repr({}):
+#        print("Unexpected result of d.clear():", d)
+#        await async env.exit(1)
+
+
+    await async env.exit(0)
