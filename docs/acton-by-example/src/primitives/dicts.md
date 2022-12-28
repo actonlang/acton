@@ -9,6 +9,8 @@ actor main(env):
     print("Dict: " + str(d))
     print("len : " + str(len(d)))
     print("item foo: " + str(d["foo"]))
+    print("item foo: " + str(d.get("foo", "default")))
+    print("get default value when key nonexistent: " + str(d.get("foobar", "DEF_val")))
     
     d["bar"] = 42
     del d["foo"]
@@ -21,6 +23,9 @@ actor main(env):
     for k, v in d.items():
         print("  dict key " + k + "=" + str(v))
 
+    print("Pop last item:", d.popitem())
+    print("Dict after .popitem():", d)
+
     await async env.exit(0)
 ```
 
@@ -32,13 +37,17 @@ actonc dicts.act
 
 Output:
 ```sh
-Dict: {foo:1, bar:2, cookie:3}
+Dict: {"foo":1, "bar":2, "cookie":3}
 len : 3
 item foo: 1
-Dict: {bar:42, cookie:3}
-Dict keys: [bar, cookie]
+item foo: 1
+get default value when key nonexistent: DEF_val
+Dict: {"bar":42, "cookie":3}
+Dict keys: ["bar", "cookie"]
 Dict values: [42, 3]
 Dict items:
   dict key bar=42
   dict key cookie=3
+Pop last item: ("cookie", 3)
+Dict after .popitem(): {"bar":42}
 ```
