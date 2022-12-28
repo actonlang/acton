@@ -123,7 +123,7 @@ nloc _          = NoLoc
 
 nstr (Name _ s)             = s
 nstr (Derived n s)          = nstr n ++ "$" ++ nstr s
-nstr (Internal p s i)       = prefix p ++ "$" ++ unique i ++ s
+nstr (Internal p s i)       = prefix p ++ "_" ++ unique i ++ s
   where prefix Globvar      = "G"
         prefix Kindvar      = "K"
         prefix Xistvar      = "X"
