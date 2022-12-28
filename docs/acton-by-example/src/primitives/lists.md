@@ -19,6 +19,14 @@ actor main(env):
     # inclusive but the stop index is exclusive, just like in Python.
     # A slice of a list is also a list, so cast to str.
     print("A slice   : " + str(l[2:4]))
+    
+    # Reverse a list inplace
+    l.reverse()
+    print("Reversed:", l)
+    
+    # Get a shallow copy of the list
+    l2 = l.copy()
+    print("Copy:", l2)
 
     await async env.exit(0)
 ```
@@ -33,8 +41,10 @@ Output:
 ```sh
 First item: Firsty
 Last item : banana
-List items: [Firsty, foo, foo, bar, banana]
-A slice   : [foo, bar]
+List items: ["Firsty", "foo", "foo", "bar", "banana"]
+A slice   : ["foo", "bar"]
+Reversed: ["banana", "bar", "foo", "foo", "Firsty"]
+Copy: ["banana", "bar", "foo", "foo", "Firsty"]
 ```
 
 
