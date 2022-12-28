@@ -2,9 +2,9 @@
 # A snapshot resolver dictates the compiler version and the set of packages
 # to be used for project dependencies.
 
-# NOTE: do not forget to update homebrew-acton/Formula/acton.rb with the
-# version of GHC that corresponds to the stack LTS release
-resolver: lts-18.12
+# NOTE: do not forget to update homebrew/Formula/acton.rb with the version of
+# GHC that corresponds to the stack LTS release, like lts-18.28 -> ghc@8.10
+resolver: lts-19.33
 
 # User packages to be built.
 # Various formats can be used as shown in the example below.
