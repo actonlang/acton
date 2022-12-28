@@ -17,6 +17,7 @@ module Acton.Syntax where
 import Utils
 import qualified Data.Binary
 import qualified Data.Set
+import Data.Char
 import GHC.Generics (Generic)
 import Prelude hiding((<>))
 
@@ -121,7 +122,11 @@ data Name       = Name SrcLoc String | Derived Name Name | Internal Prefix Strin
 nloc (Name l _) = l
 nloc _          = NoLoc
 
-nstr (Name _ s)             = s
+nstr (Name _ s)             = esc s
+  where esc (c:'_':s)
+          | isUpper c       = c : 'U' : '_' : esc s
+        esc (c:s)           = c : esc s
+        esc ""              = ""
 nstr (Derived n s)          = nstr n ++ "$" ++ nstr s
 nstr (Internal p s i)       = prefix p ++ "_" ++ unique i ++ s
   where prefix Globvar      = "G"
