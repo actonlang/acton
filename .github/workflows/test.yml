@@ -57,7 +57,7 @@ jobs:
       - name: "Install build prerequisites"
         run: brew install automake gettext haskell-stack libtool protobuf-c
       - name: "Build Acton"
-        run: make -j2 -C ${{ github.workspace }} BUILD_RELEASE=${{ env.BUILD_RELEASE }}
+        run: make -C ${{ github.workspace }} BUILD_RELEASE=${{ env.BUILD_RELEASE }}
       - name: "Build a release"
         run: make -C ${{ github.workspace }} release
       - name: "Upload artifact"
