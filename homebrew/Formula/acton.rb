@@ -9,7 +9,7 @@ class Acton < Formula
   # TODO: can gettext be removed? it was likely necessary when we built deps
   # using autoconf, but might not be needed now that we use build.zig?
   depends_on "gettext" => :build
-  depends_on "ghc@8.10" => :build
+  depends_on "ghc@9.2" => :build
   depends_on "haskell-stack" => :build
 
   on_linux do
