@@ -599,7 +599,7 @@ declCon env n q
   where TFun _ fx r _ t             = sctype $ fst $ schemaOf env (eVar n)
         tObj                        = tCon $ TC (NoQ n) (map tVar $ qbound q)
         tRes                        = if t == tR then tR else tObj
-        pars                        = pPar paramNames' r
+        pars                        = pPar paramNames r
         args                        = pArg pars
         initcall env | t == tR      = text "return" <+> methodtable env n <> dot <> gen env initKW <> parens (gen env tmpV <> comma <+> gen env (retobj args)) <> semi
                      | otherwise    = methodtable env n <> dot <> gen env initKW <> parens (gen env tmpV <> comma' (gen env args)) <> semi $+$
