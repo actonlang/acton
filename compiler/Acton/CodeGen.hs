@@ -29,6 +29,7 @@ import Acton.QuickType
 import Acton.Subst
 import Prelude hiding ((<>))
 import System.FilePath.Posix
+import Numeric
 
 generate                            :: Acton.Env.Env0 -> FilePath -> Module -> IO (String,String,String)
 generate env srcbase m              = do return (n, h,c)
@@ -398,14 +399,15 @@ mkCident "__complex__"              = "__complx__"
 mkCident "complx"                   = "complex$"
 mkCident "__complx__"               = "__complex$__"
 
-mkCident str
-  | isCident str                    = str
-  | otherwise                       = preEscape $ concat $ map esc str
-  where isCident s@(c:cs)           = isAlpha c && all isAlphaNum cs
-        isAlpha c                   = c `elem` ['a'..'z'] || c `elem` ['A'..'Z'] || c `elem` ['_','$']
+mkCident (c:s)
+  | isAlpha c                       = c : esc s
+  | otherwise                       = hex c ++ esc s
+  where isAlpha c                   = c `elem` ['a'..'z'] || c `elem` ['A'..'Z'] || c `elem` ['_','$']
         isAlphaNum c                = isAlpha c || c `elem` ['0'..'9']
-        esc c | isAlphaNum c        = [c]
-              | otherwise           = '_' : show (fromEnum c) ++ "_"
+        esc (c:s) | isAlphaNum c    = c : esc s
+                  | otherwise       = hex c ++ esc s
+        esc ""                      = ""
+        hex c                       = "X_" ++ showHex (fromEnum c) "_"
 
 unCkeyword str
   | str `Data.Set.member` rws       = preEscape str
@@ -419,7 +421,7 @@ unCkeyword str
                                         "volatile", "while"
                                       ]
 
-preEscape str                       = "_$" ++ str
+preEscape str                       = "A_" ++ str
 
 word                                = text "$WORD"
 
