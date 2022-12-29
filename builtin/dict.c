@@ -105,8 +105,8 @@ $bool $dictrel(bool directfalse,$Ord$dict w, $dict a, $dict b) {
     $Iterator it = m->$class->keys(m,a);
     $WORD x,resa,resb;
     while ((x = $next(it))) {
-        int h = from$int(wH->$class->__hash__(wH,x));
-        int ixa = $lookdict(b, wH, h, x, &resa);
+        long h = from$int(wH->$class->__hash__(wH,x));
+        int ixa = $lookdict(a, wH, h, x, &resa);
         int ixb = $lookdict(b, wH, h, x ,&resb);
         if (ixb<0 || wB->$class->__ne__(wB,resa,resb)->val) return $False;
     }
