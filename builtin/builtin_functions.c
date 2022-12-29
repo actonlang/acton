@@ -199,7 +199,7 @@ $WORD $max($Ord wit, $Iterable wit2, $WORD iter, $WORD deflt) {
     res = it->$class->__next__(it);
     if (res) {
         while ((nxt = it->$class->__next__(it))) {
-            if (wit->$class->__lt__(wit,res,nxt))
+            if (wit->$class->__lt__(wit,res,nxt)->val)
                 res = nxt;
         }
         return res;
@@ -213,7 +213,7 @@ $WORD $min($Ord wit, $Iterable wit2, $WORD iter, $WORD deflt) {
     res = it->$class->__next__(it);
     if (res) {
         while ((nxt = it->$class->__next__(it))) {
-            if (wit->$class->__gt__(wit,res,nxt))
+            if (wit->$class->__gt__(wit,res,nxt)->val)
                 res = nxt;
         }
         return res;
