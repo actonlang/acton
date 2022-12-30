@@ -3,7 +3,7 @@ actor main(env):
     d: dict[str, str] = {"a": "A"}
 
     d["b"] = "B"
-    if repr(d) != repr({"a": "A", "b": "B"}):
+    if d != {"a": "A", "b": "B"}:
         print("Unexpected result of dict[\"b\"]=\"b\":", d)
         await async env.exit(1)
 
@@ -24,7 +24,7 @@ actor main(env):
         await async env.exit(1)
 
     del d["b"]
-    if repr(d) != repr({"a": "A"}):
+    if d != {"a": "A"}:
         print("Unexpected result of del dict[\"b\"]:", d)
         await async env.exit(1)
 
@@ -47,7 +47,7 @@ actor main(env):
 
 # TODO: fix, seemingly broken?
 #    d.update({"c": "C"})
-#    if repr(d) != repr({"a": "A", "c": "C"}):
+#    if d != {"a": "A", "c": "C"}:
 #        print("Unexpected result of dict.update():", d)
 #        await async env.exit(1)
 
@@ -58,12 +58,12 @@ actor main(env):
 #        await async env.exit(1)
 
 #    d2 = d.copy()
-#    if repr(d2) != repr({"a": 1}):
+#    if d2 != {"a": 1}:
 #        print("Unexpected result of d.copy():", d2)
 #        await async env.exit(1)
 
 #    d.clear()
-#    if repr(d) != repr({}):
+#    if d != {}:
 #        print("Unexpected result of d.clear():", d)
 #        await async env.exit(1)
 
