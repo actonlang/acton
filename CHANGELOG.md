@@ -2,6 +2,24 @@
 
 ## Unreleased
 
+### Added
+- `actonc` is now statically linked in the Acton APT repo packages [#1148]
+  - enables development using Acton on Ubuntu 18.04, Debian 10 and distributions
+    of similar age
+  - static linking only works when the build platform is a slightly older Linux,
+    it works on Debian 11 which we are using, while on a newer Debian (testing
+    as of December 2022) the compilation fails
+  - our static compilation is conditioned on `STATIC_ACTONC=true`, which is set
+    in our `build-debs` CI job which builds the .deb packages used in the Acton
+    APT repo
+  - local compilation still defaults to a dynamically linked `actonc`
+
+### Fixed
+- fix bug in dict `__eq__`, so equality check now works [#1144]
+- `min()` & `max()` now work as they should [#1150]
+- `isinstance` now works correctly [#1124]
+
+
 ## [0.14.2] (2022-11-27)
 
 ### Fixed
