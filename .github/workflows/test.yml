@@ -156,7 +156,7 @@ jobs:
           apt-get install -qy libprotobuf-c-dev zlib1g-dev
           apt-get install -qy bash-completion build-essential debhelper devscripts
       - name: "Build Debian packages"
-        run: make -C ${GITHUB_WORKSPACE} debs BUILD_RELEASE=${{ env.BUILD_RELEASE }} STATIC_ACTONC=true
+        run: make -C ${GITHUB_WORKSPACE} debs BUILD_RELEASE=${{ env.BUILD_RELEASE }}
       - name: "Compute variables"
         id: vars
         run: |
