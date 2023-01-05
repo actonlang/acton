@@ -195,10 +195,6 @@ newactQName (QName m n)             = QName m (newactName n)
 newactQName (NoQ n)                 = NoQ (newactName n)
 newactQName (GName m n)             = GName m (newactName n)
 
-newactName n                        = Derived n (name "newact")
-
-actName                             = globalName "act"
-
 addSelfPar p                        = PosPar selfKW (Just tSelf) Nothing p
 
 selfRef n                           = Dot l0 (Var l0 (NoQ selfKW)) n

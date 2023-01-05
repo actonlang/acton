@@ -23,7 +23,24 @@ import Acton.Printer
 
 self                                = Name NoLoc "self"
 
-localName n                         = Derived n (name "local")
+localName n                         = Derived n suffixLocal
+newactName n                        = Derived n suffixNewact
+
+actName                             = globalName "act"
+
+suffixLocal                         = globalName "local"
+suffixNewact                        = globalName "newact"
+suffixClass                         = globalName "class"
+suffixMethods                       = globalName "methods"
+suffixNew                           = globalName "new"
+
+paramNames                          = globalNames ""
+pNames                              = globalNames "p"
+kNames                              = globalNames "k"
+xNames                              = globalNames "x"
+yNames                              = globalNames "y"
+tmpNames                            = globalNames "tmp"
+
 
 deriveQ (NoQ n)                     = n
 deriveQ (QName (ModName m) n)       = deriveMod n m
@@ -37,7 +54,7 @@ deriveMod n0 (n:m)                  = deriveMod (Derived n0 n) m
 deriveT (TVar _ v)                  = tvname v
 deriveT (TCon _ c)                  = deriveQ (tcname c)
 
-witAttr qn                          = Derived (name "w") (deriveQ qn)
+witAttr qn                          = Internal Witness (nstr $ deriveQ qn) 0
 
 extensionName p c
   | length ts == length vs          = n0

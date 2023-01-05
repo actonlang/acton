@@ -169,7 +169,7 @@ classid env                         = text "int" <+> gen env classidKW <> semi
 superlink env                       = gen env tSuperclass <+> gen env superclassKW <> semi
   where tSuperclass                 = tCon $ TC qnSuperClass []
 
-qnSuperClass                        = GName mPrim (Derived (name "Super") (name "class"))
+qnSuperClass                        = GName mPrim (name "Super$class")
 
 serialize env c                     = text "void" <+> parens (char '*' <> gen env serializeKW) <+> parens (gen env c <> comma <+> gen env tSerialstate) <> semi
 
@@ -177,14 +177,14 @@ deserialize env c                   = gen env (tCon c) <+> parens (char '*' <> g
 
 classlink env n                     = text "struct" <+> classname env n <+> text "*" <> gen env classKW <> semi
 
-classname env n                     = genTopName env (Derived n $ name "class")
+classname env n                     = genTopName env (Derived n suffixClass)
 
 methodtable env n                   = gen env (tableName $ gname env n)
 
 methodtable' env (NoQ n)            = methodtable env n
 methodtable' env n                  = gen env $ tableName n
 
-tableName (GName m n)               = GName m (Derived n $ name "methods")
+tableName (GName m n)               = GName m (Derived n suffixMethods)
 
 
 newcon env n                        = gen env (conName $ gname env n)
@@ -192,11 +192,10 @@ newcon env n                        = gen env (conName $ gname env n)
 newcon' env (NoQ n)                 = newcon env n
 newcon' env n                       = gen env $ conName $ unalias env n
 
-conName (GName m n)                 = GName m (Derived n $ name "new")
+conName (GName m n)                 = GName m (Derived n suffixNew)
 
 serializeSup env c                  = methodtable' env c <> dot <> gen env serializeKW
 deserializeSup env c                = methodtable' env c <> dot <> gen env deserializeKW
-
 
 classKW                             = primKW "class"
 gcinfoKW                            = primKW "GCINFO"
@@ -227,7 +226,7 @@ primToBytes                         = name "to$bytes"
 
 tmpV                                = primKW "tmp"
 
-tSerialstate                        = tCon $ TC (GName mPrim (Derived (name "Serial") (name "state"))) []
+tSerialstate                        = tCon $ TC (GName mPrim (name "Serial$state")) []
 primStepSerialize                   = gPrim "step_serialize"
 primStepDeserialize                 = gPrim "step_deserialize"
 primDNEW                            = gPrim "DNEW"
@@ -402,7 +401,7 @@ mkCident "__complx__"               = "A___complex__"
 mkCident (c:s)
   | isAlpha c                       = c : esc s
   | otherwise                       = hex c ++ esc s
-  where isAlpha c                   = c `elem` ['a'..'z'] || c `elem` ['A'..'Z'] || c `elem` ['_']
+  where isAlpha c                   = c `elem` ['a'..'z'] || c `elem` ['A'..'Z'] || c `elem` ['_','$']
         isAlphaNum c                = isAlpha c || c `elem` ['0'..'9']
         esc (c:s) | isAlphaNum c    = c : esc s
                   | otherwise       = hex c ++ esc s

@@ -127,7 +127,9 @@ nstr (Name _ s)             = esc s
           | isUpper c       = c : 'U' : '_' : esc s
         esc (c:s)           = c : esc s
         esc ""              = ""
-nstr (Derived n s)          = nstr n ++ "D_" ++ nstr s
+nstr (Derived n s)
+  | Internal{} <- s         = nstr n ++ nstr s
+  | otherwise               = nstr n ++ "D_" ++ nstr s
 nstr (Internal p s i)       = prefix p ++ "_" ++ unique i ++ s
   where prefix Globvar      = "G"
         prefix Kindvar      = "K"
@@ -147,12 +149,6 @@ globalName s    = Internal Globvar s 0
 
 globalNames s   = map (Internal Globvar s) [1..]
 
-paramNames      = globalNames ""
-pNames          = globalNames "p"
-kNames          = globalNames "k"
-xNames          = globalNames "x"
-yNames          = globalNames "y"
-tmpNames        = globalNames "tmp"
 
 data ModName    = ModName [Name] deriving (Show,Read,Eq,Generic)
 

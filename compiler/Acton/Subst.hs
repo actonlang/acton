@@ -19,6 +19,7 @@ import qualified Data.Map.Strict as Map
 import Data.Map.Strict (Map)
 
 import Acton.Syntax
+import Acton.Names
 import Acton.Printer
 import Acton.TypeM
 import Utils
