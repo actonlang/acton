@@ -372,13 +372,13 @@ instance (Gen a) => Gen (Maybe a) where
 
 
 instance Gen ModName where
-    gen env (ModName ns)            = hcat $ punctuate (char '$') $ map (gen env) ns
+    gen env (ModName ns)            = hcat $ punctuate (text "Q_") $ map (gen env) ns
 
 instance Gen QName where
     gen env (GName m n)
       | m == mPrim                  = char '$' <> text (nstr n)
-      | m == mBuiltin               = char '$' <> text (nstr n)
-      | otherwise                   = gen env m <> text "$$" <> text (mkCident $ nstr n)
+      | m == mBuiltin               = text "B_" <> text (nstr n)
+      | otherwise                   = gen env m <> text "Q_" <> text (mkCident $ nstr n)
     gen env (NoQ n)                 = gen env n
     gen env n@QName{}               = gen env (unalias env n)
 
@@ -396,13 +396,13 @@ gname env n                         = unalias env (NoQ n)
 
 mkCident "complex"                  = "complx"
 mkCident "__complex__"              = "__complx__"
-mkCident "complx"                   = "complex$"
-mkCident "__complx__"               = "__complex$__"
+mkCident "complx"                   = "A_complex"
+mkCident "__complx__"               = "A___complex__"
 
 mkCident (c:s)
   | isAlpha c                       = c : esc s
   | otherwise                       = hex c ++ esc s
-  where isAlpha c                   = c `elem` ['a'..'z'] || c `elem` ['A'..'Z'] || c `elem` ['_','$']
+  where isAlpha c                   = c `elem` ['a'..'z'] || c `elem` ['A'..'Z'] || c `elem` ['_']
         isAlphaNum c                = isAlpha c || c `elem` ['0'..'9']
         esc (c:s) | isAlphaNum c    = c : esc s
                   | otherwise       = hex c ++ esc s
