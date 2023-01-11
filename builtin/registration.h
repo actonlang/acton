@@ -89,10 +89,10 @@ void $register_force(int classid, $WORD meths);
 
 #define $GET_CLASSID(meths)  ((meths)->$class_id)
 
-#define $GET_METHODS(classid)  (($Serializable$class)$list_getitem($methods,classid))
+#define $GET_METHODS(classid)  (($SerializableG_class)B_listD_getitem(G_methods,classid))
 
 // list of method tables indexed by class_id. Only accessed via GET_METHODS above
 
-extern $list $methods;
+extern B_list G_methods;
 
-$bool issubtype(int sub_id, int ancestor_id); 
+B_bool issubtype(int sub_id, int ancestor_id); 

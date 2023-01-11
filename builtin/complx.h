@@ -5,40 +5,40 @@
  */
 #include <complex.h>
 
-struct $complex$class {
+struct B_complexG_class {
     char *$GCINFO;
     int $class_id;
-    $Super$class $superclass;
-    void (*__init__)($complex, $Number, $WORD);
-    void (*__serialize__)($complex,$Serial$state);
-    $complex (*__deserialize__)($complex,$Serial$state);
-    $bool (*__bool__)($complex);
-    $str (*__str__)($complex);
-    $str (*__repr__)($complex);
+    $SuperG_class $superclass;
+    void (*__init__)(B_complex, B_Number, $WORD);
+    void (*__serialize__)(B_complex,$NoneType);
+    B_complex (*__deserialize__)(B_complex,$NoneType);
+    B_bool (*__bool__)(B_complex);
+    B_str (*__str__)(B_complex);
+    B_str (*__repr__)(B_complex);
 };
 
-struct $complex {
-    struct $complex$class *$class;
+struct B_complex {
+    struct B_complexG_class *$class;
     complex double val;
 };
 
-extern struct $complex$class $complex$methods;
-$complex $complex$new($Number, $WORD);
+extern struct B_complexG_class B_complexG_methods;
+B_complex B_complexG_new(B_Number, $WORD);
 
-$complex to$complex(complex double c);
+B_complex toB_complex(complex double c);
 
-extern struct $Number$complex$class $Number$complex$methods;
-$Number$complex $Number$complex$new();
-extern struct $Div$complex$class $Div$complex$methods;
-$Div$complex $Div$complex$new();
-extern struct $Minus$complex$class $Minus$complex$methods;
-$Minus$complex $Minus$complex$new($Number);
-extern struct $Eq$complex$class $Eq$complex$methods;
-$Eq$complex $Eq$complex$new();
-extern struct $Hashable$complex$class $Hashable$complex$methods;
-$Hashable$complex $Hashable$complex$new();
+extern struct B_NumberD_complexG_class B_NumberD_complexG_methods;
+B_NumberD_complex B_NumberD_complexG_new();
+extern struct B_DivD_complexG_class B_DivD_complexG_methods;
+B_DivD_complex B_DivD_complexG_new();
+extern struct B_MinusD_NumberD_complexG_class B_MinusD_NumberD_complexG_methods;
+B_MinusD_NumberD_complex B_MinusD_NumberD_complexG_new(B_Number);
+extern struct B_EqD_complexG_class B_EqD_complexG_methods;
+B_EqD_complex B_EqD_complexG_new();
+extern struct B_HashableD_complexG_class B_HashableD_complexG_methods;
+B_HashableD_complex B_HashableD_complexG_new();
 
-extern struct $Number$complex *$Number$complex$witness;
-extern struct $Minus$complex *$Minus$complex$witness;
-extern struct $Eq$complex *$Eq$complex$witness;
-extern struct $Hashable$complex *$Hashable$complex$witness;
+extern struct B_NumberD_complex *B_NumberD_complexG_witness;
+extern struct B_MinusD_NumberD_complex *B_MinusD_NumberD_complexG_witness;
+extern struct B_EqD_complex *B_EqD_complexG_witness;
+extern struct B_HashableD_complex *B_HashableD_complexG_witness;

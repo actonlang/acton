@@ -16,110 +16,110 @@
 
 // Serialization ///////////////////////////////////////////////////////////////////////
 
-void $bool_init($bool self, $value s){
+void B_boolD_init(B_bool self, B_value s){
     self->val = (s->$class->__bool__(s))->val;
 }
 
-$bool $bool_bool($bool self) {
+B_bool B_boolD_bool(B_bool self) {
     return self;
 }
 
-$str $bool_str($bool self) {
+B_str B_boolD_str(B_bool self) {
     if (self->val)
         return to$str("True");
     else
         return to$str("False");
 }
 
-void $bool_serialize($bool self, $Serial$state state) {
+void B_boolD_serialize(B_bool self, $NoneType state) {
     $val_serialize(BOOL_ID,&self->val,state);
 }
 
-$bool $bool_deserialize($bool self, $Serial$state state) {
-    return to$bool((long)$val_deserialize(state));
+B_bool B_boolD_deserialize(B_bool self, $NoneType state) {
+    return toB_bool((long)$val_deserialize(state));
 }
 
-struct $bool$class $bool$methods = {
-    "$bool",
+struct B_boolG_class B_boolG_methods = {
+    "B_bool",
     UNASSIGNED,
-    ($Super$class)&$atom$methods,
-    $bool_init,
-    $bool_serialize,
-    $bool_deserialize,
-    $bool_bool,
-    $bool_str,
-    $bool_str
+    ($SuperG_class)&B_atomG_methods,
+    B_boolD_init,
+    B_boolD_serialize,
+    B_boolD_deserialize,
+    B_boolD_bool,
+    B_boolD_str,
+    B_boolD_str
 };
 
-$bool $bool$new($value s) {
-    return $NEW($bool, s);
+B_bool B_boolG_new(B_value s) {
+    return $NEW(B_bool, s);
 }
 
-$bool to$bool(long b) {
-    $bool res = malloc(sizeof(struct $bool));
-    res->$class = &$bool$methods;
+B_bool toB_bool(long b) {
+    B_bool res = malloc(sizeof(struct B_bool));
+    res->$class = &B_boolG_methods;
     res->val = b;
     return res;
 }
     
-long from$bool($bool b) {
+long fromB_bool(B_bool b) {
     return b->val;
 }
 
-struct $bool $t = {&$bool$methods,1L};
-struct $bool $f = {&$bool$methods,0L};
+struct B_bool $t = {&B_boolG_methods,1L};
+struct B_bool $f = {&B_boolG_methods,0L};
 
-$bool $True = &$t;
-$bool $False = &$f;
+B_bool $True = &$t;
+B_bool $False = &$f;
 
 
-$bool $default__bool__($value self) {
+B_bool $default__bool__(B_value self) {
     return $True;
 }
 
-// $Hashable$bool ///////////////////////////////////////////////////////////////////////////////////////////////////////
+// B_HashableD_bool ///////////////////////////////////////////////////////////////////////////////////////////////////////
 
-struct $Hashable$bool$class $Hashable$bool$methods = {
-    "$Hashable$bool",
+struct B_HashableD_boolG_class B_HashableD_boolG_methods = {
+    "B_HashableD_bool",
     UNASSIGNED,
-    ($Super$class)&$Hashable$methods,
-    $Hashable$bool$__init__,
-    $Hashable$bool$__serialize__,
-    $Hashable$bool$__deserialize__,
-    ($bool (*)($Hashable$bool))$default__bool__,
-    ($str (*)($Hashable$bool))$default__str__,
-    ($str (*)($Hashable$bool))$default__str__,
-    $Hashable$bool$__eq__,
-    $Hashable$bool$__ne__,
-    $Hashable$bool$__hash__
+    ($SuperG_class)&B_HashableG_methods,
+    B_HashableD_boolD___init__,
+    B_HashableD_boolD___serialize__,
+    B_HashableD_boolD___deserialize__,
+    (B_bool (*)(B_HashableD_bool))$default__bool__,
+    (B_str (*)(B_HashableD_bool))$default__str__,
+    (B_str (*)(B_HashableD_bool))$default__str__,
+    B_HashableD_boolD___eq__,
+    B_HashableD_boolD___ne__,
+    B_HashableD_boolD___hash__
 };
 
-$Hashable$bool $Hashable$bool$new() {
-    return $NEW($Hashable$bool);
+B_HashableD_bool B_HashableD_boolG_new() {
+    return $NEW(B_HashableD_bool);
 }
 
-void $Hashable$bool$__init__($Hashable$bool self) {
+void B_HashableD_boolD___init__(B_HashableD_bool self) {
     return;
 }
-void $Hashable$bool$__serialize__($Hashable$bool self, $Serial$state state) {
+void B_HashableD_boolD___serialize__(B_HashableD_bool self, $NoneType state) {
 }
 
-$Hashable$bool $Hashable$bool$__deserialize__($Hashable$bool self, $Serial$state state) {
-    $Hashable$bool res = $DNEW($Hashable$bool,state);
+B_HashableD_bool B_HashableD_boolD___deserialize__(B_HashableD_bool self, $NoneType state) {
+    B_HashableD_bool res = $DNEW(B_HashableD_bool,state);
     return res;
 }
 
-$bool $Hashable$bool$__eq__($Hashable$bool wit, $bool a, $bool b) {
-    return to$bool(a->val == b->val);
+B_bool B_HashableD_boolD___eq__(B_HashableD_bool wit, B_bool a, B_bool b) {
+    return toB_bool(a->val == b->val);
 }
 
-$bool $Hashable$bool$__ne__($Hashable$bool wit, $bool a, $bool b) {
-    return to$bool(a->val != b->val);
+B_bool B_HashableD_boolD___ne__(B_HashableD_bool wit, B_bool a, B_bool b) {
+    return toB_bool(a->val != b->val);
 }
 
-$int $Hashable$bool$__hash__($Hashable$bool wit, $bool a) {
-    return to$int($i64_hash(($i64)a));
+B_int B_HashableD_boolD___hash__(B_HashableD_bool wit, B_bool a) {
+    return toB_int(B_i64D_hash((B_i64)a));
 }
-struct $Hashable$bool $Hashable$bool_instance = {&$Hashable$bool$methods};
-$Hashable$bool $Hashable$bool$witness = &$Hashable$bool_instance;
+struct B_HashableD_bool B_HashableD_bool_instance = {&B_HashableD_boolG_methods};
+B_HashableD_bool B_HashableD_boolG_witness = &B_HashableD_bool_instance;
 

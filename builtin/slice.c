@@ -26,13 +26,13 @@
 */
 
 
-void normalize_slice($slice slc, int len, int *slen, int *start, int *stop, int *step) {
+void normalize_slice(B_slice slc, int len, int *slen, int *start, int *stop, int *step) {
     if (slc->step == NULL)
         *step = 1;
     else
         *step = *slc->step;
     if (*step == 0) {
-        $RAISE(($BaseException)$NEW($ValueError,to$str("step size 0 in slice")));
+        $RAISE((B_BaseException)$NEW(B_ValueError,to$str("step size 0 in slice")));
     }
     if (slc->start == NULL)
         *start = *step > 0 ? 0 : len-1;
@@ -55,26 +55,26 @@ void normalize_slice($slice slc, int len, int *slen, int *start, int *stop, int 
         *slen = (*stop-*start)/ *step + ((*stop-*start)%*step != 0);
 }
 
-$slice $slice$new($int start,$int stop,$int step) {
-    return $NEW($slice,start,stop,step);
+B_slice B_sliceG_new(B_int start,B_int stop,B_int step) {
+    return $NEW(B_slice,start,stop,step);
 }
 
-void $slice__init__($slice s, $int start, $int stop, $int step) {
+void B_sliceD__init__(B_slice s, B_int start, B_int stop, B_int step) {
     if (start) {
         s->start = malloc(sizeof(int));
-        *s->start = from$int(start);
+        *s->start = fromB_int(start);
     } else
         s->start = NULL;
     if (stop) {
         s->stop = malloc(sizeof(int));
-        *s->stop = from$int(stop);
+        *s->stop = fromB_int(stop);
     } else
         s->stop = NULL;
     if (step) {
         s->step = malloc(sizeof(int));
-        *s->step = from$int(step);
+        *s->step = fromB_int(step);
     } else
         s->step = NULL;
 }
 
-struct $slice$class $slice$methods = {"$slice",UNASSIGNED,($Super$class)&$value$methods,$slice__init__,NULL,NULL,NULL,NULL};
+struct B_sliceG_class B_sliceG_methods = {"B_slice",UNASSIGNED,($SuperG_class)&B_valueG_methods,B_sliceD__init__,NULL,NULL,NULL,NULL};

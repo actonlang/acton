@@ -1,109 +1,109 @@
-struct $dict$class {
+struct B_dictG_class {
     char *$GCINFO;
     int $class_id;
-    $Super$class $superclass;
-    void(*__init__)($dict, $Hashable, $Iterable, $WORD);
-    void (*__serialize__)($dict,$Serial$state);
-    $dict (*__deserialize__)($dict,$Serial$state);
-    $bool (*__bool__)($dict);
-    $str (*__str__)($dict);
-    $str (*__repr__)($dict);
+    $SuperG_class $superclass;
+    void(*__init__)(B_dict, B_Hashable, B_Iterable, $WORD);
+    void (*__serialize__)(B_dict,$NoneType);
+    B_dict (*__deserialize__)(B_dict,$NoneType);
+    B_bool (*__bool__)(B_dict);
+    B_str (*__str__)(B_dict);
+    B_str (*__repr__)(B_dict);
 };
 
 typedef struct $table_struct *$table;
 
-struct $dict {
-    struct $dict$class *$class;
+struct B_dict {
+    struct B_dictG_class *$class;
     long numelements;               // nr of elements in dictionary
     $table table;                   // the hashtable
 };
 
-extern struct $dict$class $dict$methods;
-$dict $dict$new($Hashable, $Iterable, $WORD);
+extern struct B_dictG_class B_dictG_methods;
+B_dict B_dictG_new(B_Hashable, B_Iterable, $WORD);
 
-extern struct  $Mapping$dict$class $Mapping$dict$methods;
-$Mapping$dict $Mapping$dict$new($Hashable);
-extern struct  $Indexed$dict$class $Indexed$dict$methods;
-$Indexed$dict $Indexed$dict$new($Mapping, $Eq);
-extern struct  $Ord$dict$class $Ord$dict$methods;
-$Ord$dict $Ord$dict$new($Hashable, $Eq);
+extern struct  B_MappingD_dictG_class B_MappingD_dictG_methods;
+B_MappingD_dict B_MappingD_dictG_new(B_Hashable);
+extern struct  B_IndexedD_MappingD_dictG_class B_IndexedD_MappingD_dictG_methods;
+B_IndexedD_MappingD_dict B_IndexedD_MappingD_dictG_new(B_Mapping, B_Eq);
+extern struct  B_OrdD_dictG_class B_OrdD_dictG_methods;
+B_OrdD_dict B_OrdD_dictG_new(B_Hashable, B_Eq);
 
 // Iterators over dicts ///////////////////////////////////////////////////////
 
 // keys iterator
 
-typedef struct $Iterator$dict *$Iterator$dict;
+typedef struct B_IteratorD_dict *B_IteratorD_dict;
 
-struct $Iterator$dict$class {
+struct B_IteratorD_dictG_class {
     char *$GCINFO;
     int $class_id;
-    $Super$class $superclass;
-    void (*__init__)($Iterator$dict, $dict);
-    void (*__serialize__)($Iterator$dict,$Serial$state);
-    $Iterator$dict (*__deserialize__)($Iterator$dict,$Serial$state);
-    $bool (*__bool__)($Iterator$dict);
-    $str (*__str__)($Iterator$dict);
-    $str (*__repr__)($Iterator$dict);
-    $WORD(*__next__)($Iterator$dict);
+    $SuperG_class $superclass;
+    void (*__init__)(B_IteratorD_dict, B_dict);
+    void (*__serialize__)(B_IteratorD_dict,$NoneType);
+    B_IteratorD_dict (*__deserialize__)(B_IteratorD_dict,$NoneType);
+    B_bool (*__bool__)(B_IteratorD_dict);
+    B_str (*__str__)(B_IteratorD_dict);
+    B_str (*__repr__)(B_IteratorD_dict);
+    $WORD(*__next__)(B_IteratorD_dict);
 };
 
-struct $Iterator$dict {
-    struct $Iterator$dict$class *$class;
-    $dict src;
+struct B_IteratorD_dict {
+    struct B_IteratorD_dictG_class *$class;
+    B_dict src;
     int nxt;
 };
 
-extern struct $Iterator$dict$class  $Iterator$dict$methods;
-$Iterator$dict $Iterator$dict$new($dict);
+extern struct B_IteratorD_dictG_class  B_IteratorD_dictG_methods;
+B_IteratorD_dict B_IteratorD_dictG_new(B_dict);
 
 // values iterator
 
-typedef struct $Iterator$dict$values *$Iterator$dict$values;
+typedef struct B_InteratorD_dict_values *B_InteratorD_dict_values;
 
-struct $Iterator$dict$values$class {
+struct B_InteratorD_dict_valuesG_class {
     char *$GCINFO;
     int $class_id;
-    $Super$class $superclass;
-    void (*__init__)($Iterator$dict$values, $dict);
-    void (*__serialize__)($Iterator$dict$values,$Serial$state);
-    $Iterator$dict$values (*__deserialize__)($Iterator$dict$values,$Serial$state);
-    $bool (*__bool__)($Iterator$dict$values);
-    $str (*__str__)($Iterator$dict$values);
-    $str (*__repr__)($Iterator$dict$values);
-    $WORD(*__next__)($Iterator$dict$values);
+    $SuperG_class $superclass;
+    void (*__init__)(B_InteratorD_dict_values, B_dict);
+    void (*__serialize__)(B_InteratorD_dict_values,$NoneType);
+    B_InteratorD_dict_values (*__deserialize__)(B_InteratorD_dict_values,$NoneType);
+    B_bool (*__bool__)(B_InteratorD_dict_values);
+    B_str (*__str__)(B_InteratorD_dict_values);
+    B_str (*__repr__)(B_InteratorD_dict_values);
+    $WORD(*__next__)(B_InteratorD_dict_values);
 };
 
-struct $Iterator$dict$values {
-    struct $Iterator$dict$values$class *$class;
-    $dict src;
+struct B_InteratorD_dict_values {
+    struct B_InteratorD_dict_valuesG_class *$class;
+    B_dict src;
     int nxt;
 };
 
-extern struct $Iterator$dict$values$class  $Iterator$dict$values$methods;
-$Iterator$dict$values $Iterator$dict$values$new($dict);
+extern struct B_InteratorD_dict_valuesG_class  B_InteratorD_dict_valuesG_methods;
+B_InteratorD_dict_values B_InteratorD_dict_valuesG_new(B_dict);
 
 // items iterator
 
-typedef struct $Iterator$dict$items *$Iterator$dict$items;
+typedef struct B_InteratorD_dict_items *B_InteratorD_dict_items;
 
-struct $Iterator$dict$items$class {
+struct B_InteratorD_dict_itemsG_class {
     char *$GCINFO;
     int $class_id;
-    $Super$class $superclass;
-    void (*__init__)($Iterator$dict$items, $dict);
-    void (*__serialize__)($Iterator$dict$items,$Serial$state);
-    $Iterator$dict$items (*__deserialize__)($Iterator$dict$items,$Serial$state);
-    $bool (*__bool__)($Iterator$dict$items);
-    $str (*__str__)($Iterator$dict$items);
-    $str (*__repr__)($Iterator$dict$items);
-    $WORD(*__next__)($Iterator$dict$items);
+    $SuperG_class $superclass;
+    void (*__init__)(B_InteratorD_dict_items, B_dict);
+    void (*__serialize__)(B_InteratorD_dict_items,$NoneType);
+    B_InteratorD_dict_items (*__deserialize__)(B_InteratorD_dict_items,$NoneType);
+    B_bool (*__bool__)(B_InteratorD_dict_items);
+    B_str (*__str__)(B_InteratorD_dict_items);
+    B_str (*__repr__)(B_InteratorD_dict_items);
+    $WORD(*__next__)(B_InteratorD_dict_items);
 };
 
-struct $Iterator$dict$items {
-    struct $Iterator$dict$items$class *$class;
-    $dict src;
+struct B_InteratorD_dict_items {
+    struct B_InteratorD_dict_itemsG_class *$class;
+    B_dict src;
     int nxt;
 };
 
-extern struct $Iterator$dict$items$class  $Iterator$dict$items$methods;
-$Iterator$dict$items $Iterator$dict$items$new($dict);
+extern struct B_InteratorD_dict_itemsG_class  B_InteratorD_dict_itemsG_methods;
+B_InteratorD_dict_items B_InteratorD_dict_itemsG_new(B_dict);

@@ -2,20 +2,20 @@
 
 // This is only used for typing the $superclass field in classes.
 
-struct $Super$class;
-typedef struct $Super$class *$Super$class;
+struct $SuperG_class;
+typedef struct $SuperG_class *$SuperG_class;
 
 struct $Super;
 typedef struct $Super *$Super;
 
-struct $Super$class {
+struct $SuperG_class {
     char *$GCINFO;
     int $class_id;
-    $Super$class $superclass;
+    $SuperG_class $superclass;
 };
 
 struct $Super {
-    $Super$class $class;
+    $SuperG_class $class;
 };
 
 
@@ -23,102 +23,102 @@ struct $Super {
 
 // For the moment (end of Nov, 2020), we have no use for Initializable and Serializable
 
-typedef struct $Initializable$class *$Initializable$class;
+typedef struct $InitializableG_class *$InitializableG_class;
 
 typedef struct $Initializable  *$Initializable;
 
-struct $Initializable$class {
+struct $InitializableG_class {
     char *$GCINFO;
     int $class_id;
-    $Super$class $superclass;                   // = NULL
+    $SuperG_class $superclass;                   // = NULL
     void (*__init__)($Initializable);
 };
 
 struct $Initializable {
-    struct $Initializable$class *$class;
+    struct $InitializableG_class *$class;
 };
 
-extern struct $Initializable$class $Initializable$methods;
-$Initializable $Initializable$new();
+extern struct $InitializableG_class $InitializableG_methods;
+$Initializable $InitializableG_new();
 
 // Serializable //////////////////////////////////////////////////////
 
-typedef struct $Serializable$class *$Serializable$class;
+typedef struct $SerializableG_class *$SerializableG_class;
 
 typedef struct $Serializable  *$Serializable;
 
-struct $Serializable$class {
+struct $SerializableG_class {
     char *$GCINFO;
     int $class_id;
-    $Super$class $superclass;                   // = Initializable$methods
+    $SuperG_class $superclass;                   // = InitializableG_methods
     void (*__init__)($Serializable);
-    void (*__serialize__)($Serializable, $Serial$state);
-    $Serializable (*__deserialize__)($Serializable, $Serial$state);
+    void (*__serialize__)($Serializable, $NoneType);
+    $Serializable (*__deserialize__)($Serializable, $NoneType);
 };
 
 struct $Serializable {
-    struct $Serializable$class *$class;
+    struct $SerializableG_class *$class;
 };
 
-extern struct $Serializable$class $Serializable$methods;
-$Serializable $Serializable$new();
+extern struct $SerializableG_class $SerializableG_methods;
+$Serializable $SerializableG_new();
 
 // struct //////////////////////////////////////////////////////
 
 // All user defined classes inherit from struct, as well as
-// int, float, complex, str, bytes, tuple, range, NoneType (and immutable versions of list, set and dict)
+// int, float, complex, str, bytes, tuple, range, $NoneType (and immutable versions of list, set and dict)
 // For the moment, closures, iterators and exceptions also inherit from struct
 
 
-typedef struct $value$class *$value$class;
+typedef struct B_valueG_class *B_valueG_class;
 
-typedef struct $value  *$value;
+typedef struct B_value  *B_value;
 
-struct $value$class {
+struct B_valueG_class {
     char *$GCINFO;
     int $class_id;
-    $Super$class $superclass;                      // = Serializable$methods
-    void (*__init__)($value);
-    void (*__serialize__)($value, $Serial$state);
-    $value (*__deserialize__)($value, $Serial$state);
-    $bool (*__bool__)($value);
-    $str (*__str__)($value);
-    $str (*__repr__)($value);
+    $SuperG_class $superclass;                      // = SerializableG_methods
+    void (*__init__)(B_value);
+    void (*__serialize__)(B_value, $NoneType);
+    B_value (*__deserialize__)(B_value, $NoneType);
+    B_bool (*__bool__)(B_value);
+    B_str (*__str__)(B_value);
+    B_str (*__repr__)(B_value);
 };
 
-struct $value {
-    struct $value$class *$class;
+struct B_value {
+    struct B_valueG_class *$class;
 };
 
-extern struct $value$class $value$methods;
-$value $value$new();
+extern struct B_valueG_class B_valueG_methods;
+B_value B_valueG_new();
 
 // object //////////////////////////////////////////////////////
 
 // All mutable user defined classes inherit from object, 
 // as well as list, dict, set, bytearray
 
-typedef struct $object$class *$object$class;
+typedef struct B_objectG_class *B_objectG_class;
 
-typedef struct $object  *$object;
+typedef struct B_object  *B_object;
 
-struct $object$class {
+struct B_objectG_class {
     char *$GCINFO;
     int $class_id;
-    $Super$class $superclass;                      // = $value$methods
-    void (*__init__)($object);
-    void (*__serialize__)($object, $Serial$state);
-    $object (*__deserialize__)($object, $Serial$state);
-    $bool (*__bool__)($object);
-    $str (*__str__)($object);
-    $str (*__repr__)($object);
+    $SuperG_class $superclass;                      // = B_valueG_methods
+    void (*__init__)(B_object);
+    void (*__serialize__)(B_object, $NoneType);
+    B_object (*__deserialize__)(B_object, $NoneType);
+    B_bool (*__bool__)(B_object);
+    B_str (*__str__)(B_object);
+    B_str (*__repr__)(B_object);
 };
 
-struct $object {
-    struct $object$class *$class;
+struct B_object {
+    struct B_objectG_class *$class;
 };
 
-extern struct $object$class $object$methods;
-$object $object$new();
+extern struct B_objectG_class B_objectG_methods;
+B_object B_objectG_new();
 
   

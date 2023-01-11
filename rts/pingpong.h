@@ -12,74 +12,74 @@ typedef struct lambda$2 *lambda$2;
 typedef struct lambda$3 *lambda$3;
 typedef struct Pingpong *Pingpong;
 
-struct lambda$1$class {
+struct lambda$1G_class {
     char *$GCINFO;
     int $class_id;
-    $Super$class $superclass;
-    void (*__init__)(lambda$1, Pingpong, $int, $int);
-    void (*__serialize__)(lambda$1, $Serial$state);
-    lambda$1 (*__deserialize__)(lambda$1, $Serial$state);
-    $bool (*__bool__)(lambda$1);
-    $str (*__str__)(lambda$1);
+    $SuperG_class $superclass;
+    void (*__init__)(lambda$1, Pingpong, B_int, B_int);
+    void (*__serialize__)(lambda$1, $NoneType);
+    lambda$1 (*__deserialize__)(lambda$1, $NoneType);
+    B_bool (*__bool__)(lambda$1);
+    B_str (*__str__)(lambda$1);
     $R (*__call__)(lambda$1, $Cont);
 };
 struct lambda$1 {
-    struct lambda$1$class *$class;
+    struct lambda$1G_class *$class;
     Pingpong self;
-    $int count;
-    $int q;
+    B_int count;
+    B_int q;
 };
-lambda$1 lambda$1$new(Pingpong, $int, $int);
+lambda$1 lambda$1G_new(Pingpong, B_int, B_int);
 
-struct lambda$2$class {
+struct lambda$2G_class {
     char *$GCINFO;
     int $class_id;
-    $Super$class $superclass;
-    void (*__init__)(lambda$2, Pingpong, $int);
-    void (*__serialize__)(lambda$2, $Serial$state);
-    lambda$2 (*__deserialize__)(lambda$2, $Serial$state);
-    $bool (*__bool__)(lambda$2);
-    $str (*__str__)(lambda$2);
+    $SuperG_class $superclass;
+    void (*__init__)(lambda$2, Pingpong, B_int);
+    void (*__serialize__)(lambda$2, $NoneType);
+    lambda$2 (*__deserialize__)(lambda$2, $NoneType);
+    B_bool (*__bool__)(lambda$2);
+    B_str (*__str__)(lambda$2);
     $R (*__call__)(lambda$2, $Cont);
 };
 struct lambda$2 {
-    struct lambda$2$class *$class;
+    struct lambda$2G_class *$class;
     Pingpong self;
-    $int q;
+    B_int q;
 };
-lambda$2 lambda$2$new(Pingpong, $int);
+lambda$2 lambda$2G_new(Pingpong, B_int);
 
-struct lambda$3$class {
+struct lambda$3G_class {
     char *$GCINFO;
     int $class_id;
-    $Super$class $superclass;
+    $SuperG_class $superclass;
     void (*__init__)(lambda$3, $Cont);
-    void (*__serialize__)(lambda$3, $Serial$state);
-    lambda$3 (*__deserialize__)(lambda$3, $Serial$state);
-    $bool (*__bool__)(lambda$3);
-    $str (*__str__)(lambda$3);
+    void (*__serialize__)(lambda$3, $NoneType);
+    lambda$3 (*__deserialize__)(lambda$3, $NoneType);
+    B_bool (*__bool__)(lambda$3);
+    B_str (*__str__)(lambda$3);
     $R (*__call__)(lambda$3, $NoneType);
 };
 struct lambda$3 {
-    struct lambda$3$class *$class;
+    struct lambda$3G_class *$class;
     $Cont cont;
 };
-lambda$3 lambda$3$new($Cont);
+lambda$3 lambda$3G_new($Cont);
 
-struct Pingpong$class {
+struct PingpongG_class {
     char *$GCINFO;
     int $class_id;
-    $Super$class $superclass;
-    $R (*__init__)(Pingpong, $int, $Cont);
-    void (*__serialize__)(Pingpong, $Serial$state);
-    Pingpong (*__deserialize__)(Pingpong, $Serial$state);
-    $bool (*__bool__)(Pingpong);
-    $str (*__str__)(Pingpong);
-    $R (*ping)(Pingpong, $int, $Cont);
-    $R (*pong)(Pingpong, $int, $int, $Cont);
+    $SuperG_class $superclass;
+    $R (*__init__)(Pingpong, B_int, $Cont);
+    void (*__serialize__)(Pingpong, $NoneType);
+    Pingpong (*__deserialize__)(Pingpong, $NoneType);
+    B_bool (*__bool__)(Pingpong);
+    B_str (*__str__)(Pingpong);
+    $R (*ping)(Pingpong, B_int, $Cont);
+    $R (*pong)(Pingpong, B_int, B_int, $Cont);
 };
 struct Pingpong {
-    struct Pingpong$class *$class;
+    struct PingpongG_class *$class;
     $Actor $next;
     $Msg $msg;
     $Msg $outgoing;
@@ -89,12 +89,12 @@ struct Pingpong {
     $Catcher $catcher;
     $Lock $msg_lock;
     $long $globkey;
-    $int i;
-    $int count;
+    B_int i;
+    B_int count;
 };
-$R Pingpong$new($int, $Cont);
+$R PingpongG_new(B_int, $Cont);
 
-extern struct lambda$1$class lambda$1$methods;
-extern struct lambda$2$class lambda$2$methods;
-extern struct lambda$3$class lambda$3$methods;
-extern struct Pingpong$class Pingpong$methods;
+extern struct lambda$1G_class lambda$1G_methods;
+extern struct lambda$2G_class lambda$2G_methods;
+extern struct lambda$3G_class lambda$3G_methods;
+extern struct PingpongG_class PingpongG_methods;

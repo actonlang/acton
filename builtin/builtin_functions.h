@@ -7,161 +7,161 @@ void $print(int size, ...);
 
 // enumerate ////////////////////////////////////////////////////////////
 
-struct $Iterator$enumerate;
-typedef struct $Iterator$enumerate *$Iterator$enumerate;
+struct B_IteratorD_enumerate;
+typedef struct B_IteratorD_enumerate *B_IteratorD_enumerate;
 
-struct $Iterator$enumerate$class {
+struct B_IteratorD_enumerateG_class {
   char *$GCINFO;
   int $class_id;
-  $Super$class $superclass;
-  void (*__init__)($Iterator$enumerate, $Iterator,$int);
-  void (*__serialize__)($Iterator$enumerate,$Serial$state);
-  $Iterator$enumerate (*__deserialize__)($Iterator$enumerate,$Serial$state);
-  $bool (*__bool__)($Iterator$enumerate);
-  $str (*__str__)($Iterator$enumerate);
-  $str (*__repr__)($Iterator$enumerate);
-  $WORD(*__next__)($Iterator$enumerate);
+  $SuperG_class $superclass;
+  void (*__init__)(B_IteratorD_enumerate, B_Iterator,B_int);
+  void (*__serialize__)(B_IteratorD_enumerate,$NoneType);
+  B_IteratorD_enumerate (*__deserialize__)(B_IteratorD_enumerate,$NoneType);
+  B_bool (*__bool__)(B_IteratorD_enumerate);
+  B_str (*__str__)(B_IteratorD_enumerate);
+  B_str (*__repr__)(B_IteratorD_enumerate);
+  $WORD(*__next__)(B_IteratorD_enumerate);
 };
 
-struct $Iterator$enumerate {
-  struct $Iterator$enumerate$class *$class;
-  $Iterator it;
+struct B_IteratorD_enumerate {
+  struct B_IteratorD_enumerateG_class *$class;
+  B_Iterator it;
   int nxt;
 };
 
-extern struct $Iterator$enumerate$class $Iterator$enumerate$methods;
-$Iterator$enumerate $Iterator$enumerate$new($Iterator,$int);
+extern struct B_IteratorD_enumerateG_class B_IteratorD_enumerateG_methods;
+B_IteratorD_enumerate B_IteratorD_enumerateG_new(B_Iterator,B_int);
 
-$Iterator $enumerate($Iterable wit, $WORD iter, $int start);
+B_Iterator $enumerate(B_Iterable wit, $WORD iter, B_int start);
 
 // filter ////////////////////////////////////////////////////////////
 
-struct $Iterator$filter;
-typedef struct $Iterator$filter *$Iterator$filter;
+struct B_IteratorD_filter;
+typedef struct B_IteratorD_filter *B_IteratorD_filter;
 
-struct $Iterator$filter$class {
+struct B_IteratorD_filterG_class {
   char *$GCINFO;
   int $class_id;
-  $Super$class $superclass;
-  void (*__init__)($Iterator$filter, $Iterator, $pure);
-  void (*__serialize__)($Iterator$filter,$Serial$state);
-  $Iterator$filter (*__deserialize__)($Iterator$filter,$Serial$state);
-  $bool (*__bool__)($Iterator$filter);
-  $str (*__str__)($Iterator$filter);
-  $str (*__repr__)($Iterator$filter);
-  $WORD(*__next__)($Iterator$filter);
+  $SuperG_class $superclass;
+  void (*__init__)(B_IteratorD_filter, B_Iterator, $pure);
+  void (*__serialize__)(B_IteratorD_filter,$NoneType);
+  B_IteratorD_filter (*__deserialize__)(B_IteratorD_filter,$NoneType);
+  B_bool (*__bool__)(B_IteratorD_filter);
+  B_str (*__str__)(B_IteratorD_filter);
+  B_str (*__repr__)(B_IteratorD_filter);
+  $WORD(*__next__)(B_IteratorD_filter);
 };
 
-struct $Iterator$filter {
-  struct $Iterator$filter$class *$class;
-  $Iterator it;
+struct B_IteratorD_filter {
+  struct B_IteratorD_filterG_class *$class;
+  B_Iterator it;
   $pure f;
 };
 
-extern struct $Iterator$filter$class $Iterator$filter$methods;
-$Iterator$filter $Iterator$filter$new($Iterator, $pure);
+extern struct B_IteratorD_filterG_class B_IteratorD_filterG_methods;
+B_IteratorD_filter B_IteratorD_filterG_new(B_Iterator, $pure);
 
-$Iterator $filter($Iterable wit, $pure, $WORD iter);
+B_Iterator $filter(B_Iterable wit, $pure, $WORD iter);
 
 // map ////////////////////////////////////////////////////////////
 
-struct $Iterator$map;
-typedef struct $Iterator$map *$Iterator$map;
+struct B_IteratorD_map;
+typedef struct B_IteratorD_map *B_IteratorD_map;
 
-struct $Iterator$map$class {
+struct B_IteratorD_mapG_class {
   char *$GCINFO;
   int $class_id;
-  $Super$class $superclass;
-  void (*__init__)($Iterator$map, $Iterator, $pure);
-  void (*__serialize__)($Iterator$map,$Serial$state);
-  $Iterator$map (*__deserialize__)($Iterator$map,$Serial$state);
-  $bool (*__bool__)($Iterator$map);
-  $str (*__str__)($Iterator$map);
-  $str (*__repr__)($Iterator$map);
-  $WORD(*__next__)($Iterator$map);
+  $SuperG_class $superclass;
+  void (*__init__)(B_IteratorD_map, B_Iterator, $pure);
+  void (*__serialize__)(B_IteratorD_map,$NoneType);
+  B_IteratorD_map (*__deserialize__)(B_IteratorD_map,$NoneType);
+  B_bool (*__bool__)(B_IteratorD_map);
+  B_str (*__str__)(B_IteratorD_map);
+  B_str (*__repr__)(B_IteratorD_map);
+  $WORD(*__next__)(B_IteratorD_map);
 };
 
-struct $Iterator$map {
-  struct $Iterator$map$class *$class;
-  $Iterator it;
+struct B_IteratorD_map {
+  struct B_IteratorD_mapG_class *$class;
+  B_Iterator it;
   $pure f;
 };
 
-extern struct $Iterator$map$class $Iterator$map$methods;
-$Iterator$map $Iterator$map$new($Iterator, $pure);
+extern struct B_IteratorD_mapG_class B_IteratorD_mapG_methods;
+B_IteratorD_map B_IteratorD_mapG_new(B_Iterator, $pure);
 
-$Iterator $map($Iterable wit, $pure, $WORD iter);
+B_Iterator $map(B_Iterable wit, $pure, $WORD iter);
 
 
 // zip ////////////////////////////////////////////////////////////
 
-struct $Iterator$zip;
-typedef struct $Iterator$zip *$Iterator$zip;
+struct B_IteratorD_zip;
+typedef struct B_IteratorD_zip *B_IteratorD_zip;
 
-struct $Iterator$zip$class {
+struct B_IteratorD_zipG_class {
   char *$GCINFO;
   int $class_id;
-  $Super$class $superclass;
-  void (*__init__)($Iterator$zip, $Iterator, $Iterator);
-  void (*__serialize__)($Iterator$zip,$Serial$state);
-  $Iterator$zip (*__deserialize__)($Iterator$zip,$Serial$state);
-  $bool (*__bool__)($Iterator$zip);
-  $str (*__str__)($Iterator$zip);
-  $str (*__repr__)($Iterator$zip);
-  $WORD(*__next__)($Iterator$zip);
+  $SuperG_class $superclass;
+  void (*__init__)(B_IteratorD_zip, B_Iterator, B_Iterator);
+  void (*__serialize__)(B_IteratorD_zip,$NoneType);
+  B_IteratorD_zip (*__deserialize__)(B_IteratorD_zip,$NoneType);
+  B_bool (*__bool__)(B_IteratorD_zip);
+  B_str (*__str__)(B_IteratorD_zip);
+  B_str (*__repr__)(B_IteratorD_zip);
+  $WORD(*__next__)(B_IteratorD_zip);
 };
 
-struct $Iterator$zip {
-  struct $Iterator$zip$class *$class;
-  $Iterator it1;
-  $Iterator it2;
+struct B_IteratorD_zip {
+  struct B_IteratorD_zipG_class *$class;
+  B_Iterator it1;
+  B_Iterator it2;
 };
 
-extern struct $Iterator$zip$class $Iterator$zip$methods;
-$Iterator$zip $Iterator$zip$new($Iterator, $Iterator);
+extern struct B_IteratorD_zipG_class B_IteratorD_zipG_methods;
+B_IteratorD_zip B_IteratorD_zipG_new(B_Iterator, B_Iterator);
 
-$Iterator $zip($Iterable wit1, $Iterable wit2, $WORD iter1, $WORD iter2);
+B_Iterator $zip(B_Iterable wit1, B_Iterable wit2, $WORD iter1, $WORD iter2);
 
 
 // EqOpt //////////////////////////////////////////////////////
 
-struct $EqOpt;
-typedef struct $EqOpt *$EqOpt;
+struct B_EqOpt;
+typedef struct B_EqOpt *B_EqOpt;
 
-struct $EqOpt$class {
+struct B_EqOptG_class {
     char *$GCINFO;
     int $class_id;
-    $Super$class $superclass;
-    void (*__init__)($EqOpt, $Eq);
-    $bool (*__eq__)($EqOpt, $WORD, $WORD);
-    $bool (*__ne__)($EqOpt, $WORD, $WORD);
+    $SuperG_class $superclass;
+    void (*__init__)(B_EqOpt, B_Eq);
+    B_bool (*__eq__)(B_EqOpt, $WORD, $WORD);
+    B_bool (*__ne__)(B_EqOpt, $WORD, $WORD);
 };
 
-struct $EqOpt {
-    struct $EqOpt$class *$class;
-    $Eq w$Eq$A;
+struct B_EqOpt {
+    struct B_EqOptG_class *$class;
+    B_Eq W_Eq$A;
 };
 
-$EqOpt $EqOpt$new($Eq);
+B_EqOpt B_EqOptG_new(B_Eq);
 
 
 // Various small functions //////////////////////////////////////////////////////////
 
-$WORD $min($Ord wit, $Iterable wit2, $WORD iter, $WORD deflt);
-$WORD $max($Ord wit, $Iterable wit2, $WORD iter, $WORD deflt);
+$WORD $min(B_Ord wit, B_Iterable wit2, $WORD iter, $WORD deflt);
+$WORD $max(B_Ord wit, B_Iterable wit2, $WORD iter, $WORD deflt);
 
 // Signatures generated by actonc 
 
-$WORD $abs ($Number, $Real, $WORD);
-$bool $all ($Iterable, $WORD);
-$bool $any ($Iterable, $WORD);
-$tuple $divmod ($Integral, $WORD, $WORD);
-$int $hash ($Hashable, $WORD);
-$Iterator $iter ($Iterable, $WORD);
-$int $len ($Collection, $WORD);
-$WORD $next ($Iterator);
-$WORD $pow ($Number, $WORD, $WORD);
-$str $repr($value);
-$Iterator $reversed ($Sequence, $WORD);
-$WORD $round ($Real, $WORD, $int);
-$WORD $sum($Plus, $Iterable, $WORD, $WORD);
+$WORD $abs (B_Number, B_Real, $WORD);
+B_bool $all (B_Iterable, $WORD);
+B_bool $any (B_Iterable, $WORD);
+B_tuple $divmod (B_Integral, $WORD, $WORD);
+B_int $hash (B_Hashable, $WORD);
+B_Iterator $iter (B_Iterable, $WORD);
+B_int $len (B_Collection, $WORD);
+$WORD $next (B_Iterator);
+$WORD $pow (B_Number, $WORD, $WORD);
+B_str $repr(B_value);
+B_Iterator $reversed (B_Sequence, $WORD);
+$WORD $round (B_Real, $WORD, B_int);
+$WORD $sum($Plus, B_Iterable, $WORD, $WORD);

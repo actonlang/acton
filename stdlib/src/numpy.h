@@ -5,62 +5,62 @@
 
 struct numpy$$ndselect;
 typedef struct numpy$$ndselect *numpy$$ndselect;
-struct numpy$$ndselect$class {
+struct numpy$$ndselectG_class {
     char *$GCINFO;
     int $class_id;
-    $Super$class $superclass;
+    $SuperG_class $superclass;
     void (*__init__) (numpy$$ndselect);
-    void (*__serialize__) (numpy$$ndselect, $Serial$state);
-    numpy$$ndselect (*__deserialize__) (numpy$$ndselect, $Serial$state);
-    $bool (*__bool__) (numpy$$ndselect);
-    $str (*__str__) (numpy$$ndselect);
-    $str (*__repr__) (numpy$$ndselect);
+    void (*__serialize__) (numpy$$ndselect, $NoneType);
+    numpy$$ndselect (*__deserialize__) (numpy$$ndselect, $NoneType);
+    B_bool (*__bool__) (numpy$$ndselect);
+    B_str (*__str__) (numpy$$ndselect);
+    B_str (*__repr__) (numpy$$ndselect);
 };
 struct numpy$$ndselect {
-    struct numpy$$ndselect$class *$class;
+    struct numpy$$ndselectG_class *$class;
 };
-extern struct numpy$$ndselect$class numpy$$ndselect$methods;
-numpy$$ndselect numpy$$ndselect$new();
+extern struct numpy$$ndselectG_class numpy$$ndselectG_methods;
+numpy$$ndselect numpy$$ndselectG_new();
 struct numpy$$ndindex;
 typedef struct numpy$$ndindex *numpy$$ndindex;
-struct numpy$$ndindex$class {
+struct numpy$$ndindexG_class {
     char *$GCINFO;
     int $class_id;
-    $Super$class $superclass;
-    void (*__init__) (numpy$$ndindex, $int);
-    void (*__serialize__) (numpy$$ndindex, $Serial$state);
-    numpy$$ndindex (*__deserialize__) (numpy$$ndindex, $Serial$state);
-    $bool (*__bool__) (numpy$$ndindex);
-    $str (*__str__) (numpy$$ndindex);
-    $str (*__repr__) (numpy$$ndindex);
+    $SuperG_class $superclass;
+    void (*__init__) (numpy$$ndindex, B_int);
+    void (*__serialize__) (numpy$$ndindex, $NoneType);
+    numpy$$ndindex (*__deserialize__) (numpy$$ndindex, $NoneType);
+    B_bool (*__bool__) (numpy$$ndindex);
+    B_str (*__str__) (numpy$$ndindex);
+    B_str (*__repr__) (numpy$$ndindex);
 };
 struct numpy$$ndindex {
-    struct numpy$$ndindex$class *$class;
-    $int index;
+    struct numpy$$ndindexG_class *$class;
+    B_int index;
 };
-extern struct numpy$$ndindex$class numpy$$ndindex$methods;
-numpy$$ndindex numpy$$ndindex$new($int);
+extern struct numpy$$ndindexG_class numpy$$ndindexG_methods;
+numpy$$ndindex numpy$$ndindexG_new(B_int);
 
 
 struct numpy$$ndslice;
 typedef struct numpy$$ndslice *numpy$$ndslice;
-struct numpy$$ndslice$class {
+struct numpy$$ndsliceG_class {
     char *$GCINFO;
     int $class_id;
-    $Super$class $superclass;
-    void (*__init__) (numpy$$ndslice, $slice);
-    void (*__serialize__) (numpy$$ndslice, $Serial$state);
-    numpy$$ndslice (*__deserialize__) (numpy$$ndslice, $Serial$state);
-    $bool (*__bool__) (numpy$$ndslice);
-    $str (*__str__) (numpy$$ndslice);
-    $str (*__repr__) (numpy$$ndslice);
+    $SuperG_class $superclass;
+    void (*__init__) (numpy$$ndslice, B_slice);
+    void (*__serialize__) (numpy$$ndslice, $NoneType);
+    numpy$$ndslice (*__deserialize__) (numpy$$ndslice, $NoneType);
+    B_bool (*__bool__) (numpy$$ndslice);
+    B_str (*__str__) (numpy$$ndslice);
+    B_str (*__repr__) (numpy$$ndslice);
 };
 struct numpy$$ndslice {
-    struct numpy$$ndslice$class *$class;
-    $slice slc;
+    struct numpy$$ndsliceG_class *$class;
+    B_slice slc;
 };
-extern struct numpy$$ndslice$class numpy$$ndslice$methods;
-numpy$$ndslice numpy$$ndslice$new($slice);
+extern struct numpy$$ndsliceG_class numpy$$ndsliceG_methods;
+numpy$$ndslice numpy$$ndsliceG_new(B_slice);
 
 
 // The bulk of data in an ndarray is stored in a C array of union $Bytes8 data.
@@ -74,23 +74,23 @@ numpy$$ndslice numpy$$ndslice$new($slice);
 struct numpy$$Primitive;
 typedef struct numpy$$Primitive *numpy$$Primitive;
 
-struct numpy$$Primitive$class;
-typedef struct numpy$$Primitive$class *numpy$$Primitive$class;
+struct numpy$$PrimitiveG_class;
+typedef struct numpy$$PrimitiveG_class *numpy$$PrimitiveG_class;
 
-struct numpy$$Primitive$int;
-typedef struct numpy$$Primitive$int *numpy$$Primitive$int;
+struct numpy$$PrimitiveB_int;
+typedef struct numpy$$PrimitiveB_int *numpy$$PrimitiveB_int;
 
-struct numpy$$Primitive$int$class;
-typedef struct numpy$$Primitive$int$class *numpy$$Primitive$int$class;
+struct numpy$$PrimitiveB_intG_class;
+typedef struct numpy$$PrimitiveB_intG_class *numpy$$PrimitiveB_intG_class;
 
-struct numpy$$Primitive$float;
-typedef struct numpy$$Primitive$float *numpy$$Primitive$float;
+struct numpy$$PrimitiveB_float;
+typedef struct numpy$$PrimitiveB_float *numpy$$PrimitiveB_float;
 
-struct numpy$$Primitive$float$class;
-typedef struct numpy$$Primitive$float$class *numpy$$Primitive$float$class;
+struct numpy$$PrimitiveB_floatG_class;
+typedef struct numpy$$PrimitiveB_floatG_class *numpy$$PrimitiveB_floatG_class;
 
 struct numpy$$Primitive {
-    numpy$$Primitive$class $class;
+    numpy$$PrimitiveG_class $class;
 };
 
 union $Bytes8 {
@@ -102,20 +102,20 @@ enum ElemType {LongType,DblType};
 
 int $elem_size(enum ElemType typ);
 
-struct numpy$$Primitive$class {
+struct numpy$$PrimitiveG_class {
   char *$GCINFO;
   int $class_id;
-  $Super$class $superclass;
+  $SuperG_class $superclass;
   void (*__init__)(numpy$$Primitive);
-  void (*__serialize__)(numpy$$Primitive,$Serial$state);
-  numpy$$Primitive (*__deserialize__)(numpy$$Primitive,$Serial$state);
-  $bool (*__bool__)(numpy$$Primitive);
-  $str (*__str__)(numpy$$Primitive);
-  $str (*__repr__)(numpy$$Primitive);
+  void (*__serialize__)(numpy$$Primitive,$NoneType);
+  numpy$$Primitive (*__deserialize__)(numpy$$Primitive,$NoneType);
+  B_bool (*__bool__)(numpy$$Primitive);
+  B_str (*__str__)(numpy$$Primitive);
+  B_str (*__repr__)(numpy$$Primitive);
   enum ElemType elem_type;
   $WORD (*to$obj)(union $Bytes8);
   union $Bytes8 (*from$obj)($WORD);
-  $str (*$prim_str)(union $Bytes8);
+  B_str (*$prim_str)(union $Bytes8);
   union $Bytes8 (*$add)(union $Bytes8, union $Bytes8);
   union $Bytes8 (*$sub)(union $Bytes8, union $Bytes8);
   union $Bytes8 (*$mul)(union $Bytes8, union $Bytes8);
@@ -153,29 +153,29 @@ struct numpy$$Primitive$class {
   union $Bytes8 (*$bnot)(union $Bytes8);
 };
 
-$str l$prim_str(union $Bytes8 n);
-$str d$prim_str(union $Bytes8 n);
+B_str l$prim_str(union $Bytes8 n);
+B_str d$prim_str(union $Bytes8 n);
 
 // Primitive instance for int ///////////////////////////////////////////////////////////////
 
-struct numpy$$Primitive$int {
-    numpy$$Primitive$int$class $class;
+struct numpy$$PrimitiveB_int {
+    numpy$$PrimitiveB_intG_class $class;
 };
 
-struct numpy$$Primitive$int$class {
+struct numpy$$PrimitiveB_intG_class {
   char *$GCINFO;
   int $class_id;
-  $Super$class $superclass;
-  void (*__init__)(numpy$$Primitive$int);
-  void (*__serialize__)(numpy$$Primitive$int,$Serial$state);
-  numpy$$Primitive$int (*__deserialize__)(numpy$$Primitive$int,$Serial$state);
-  $bool (*__bool__)(numpy$$Primitive$int);
-  $str (*__str__)(numpy$$Primitive$int);
-  $str (*__repr__)(numpy$$Primitive$int);
+  $SuperG_class $superclass;
+  void (*__init__)(numpy$$PrimitiveB_int);
+  void (*__serialize__)(numpy$$PrimitiveB_int,$NoneType);
+  numpy$$PrimitiveB_int (*__deserialize__)(numpy$$PrimitiveB_int,$NoneType);
+  B_bool (*__bool__)(numpy$$PrimitiveB_int);
+  B_str (*__str__)(numpy$$PrimitiveB_int);
+  B_str (*__repr__)(numpy$$PrimitiveB_int);
   enum ElemType elem_type;
   $WORD (*to$obj)(union $Bytes8);
   union $Bytes8 (*from$obj)($WORD);
-  $str (*$prim_str)(union $Bytes8);
+  B_str (*$prim_str)(union $Bytes8);
   union $Bytes8 (*$add)(union $Bytes8, union $Bytes8);
   union $Bytes8 (*$sub)(union $Bytes8, union $Bytes8);
   union $Bytes8 (*$mul)(union $Bytes8, union $Bytes8);
@@ -215,24 +215,24 @@ struct numpy$$Primitive$int$class {
 
 // Primitive instance for float ///////////////////////////////////////////////////////////////
 
-struct numpy$$Primitive$float {
-  numpy$$Primitive$float$class $class;
+struct numpy$$PrimitiveB_float {
+  numpy$$PrimitiveB_floatG_class $class;
 };
 
-struct numpy$$Primitive$float$class {
+struct numpy$$PrimitiveB_floatG_class {
   char *$GCINFO;
   int $class_id;
-  $Super$class $superclass;
-  void (*__init__)(numpy$$Primitive$float);
-  void (*__serialize__)(numpy$$Primitive$float,$Serial$state);
-  numpy$$Primitive$float (*__deserialize__)(numpy$$Primitive$float,$Serial$state);
-  $bool (*__bool__)(numpy$$Primitive$float);
-  $str (*__str__)(numpy$$Primitive$float);
-  $str (*__repr__)(numpy$$Primitive$float);
+  $SuperG_class $superclass;
+  void (*__init__)(numpy$$PrimitiveB_float);
+  void (*__serialize__)(numpy$$PrimitiveB_float,$NoneType);
+  numpy$$PrimitiveB_float (*__deserialize__)(numpy$$PrimitiveB_float,$NoneType);
+  B_bool (*__bool__)(numpy$$PrimitiveB_float);
+  B_str (*__str__)(numpy$$PrimitiveB_float);
+  B_str (*__repr__)(numpy$$PrimitiveB_float);
   enum ElemType elem_type;
   $WORD (*to$obj)(union $Bytes8);
   union $Bytes8 (*from$obj)($WORD);
-  $str (*$prim_str)(union $Bytes8);
+  B_str (*$prim_str)(union $Bytes8);
   union $Bytes8 (*$add)(union $Bytes8, union $Bytes8);
   union $Bytes8 (*$sub)(union $Bytes8, union $Bytes8);
   union $Bytes8 (*$mul)(union $Bytes8, union $Bytes8);
@@ -272,50 +272,50 @@ struct numpy$$Primitive$float$class {
 
 // Witnesses and creation ////////////////////////////////////////////////////////////////////////////
 
-numpy$$Primitive$int numpy$$Primitive$int$new();
-numpy$$Primitive$float numpy$$Primitive$float$new();
+numpy$$PrimitiveB_int numpy$$PrimitiveB_intG_new();
+numpy$$PrimitiveB_float numpy$$PrimitiveB_floatG_new();
 
-extern struct numpy$$Primitive$int$class  numpy$$Primitive$int$methods;
-extern struct numpy$$Primitive$float$class  numpy$$Primitive$float$methods;
+extern struct numpy$$PrimitiveB_intG_class  numpy$$PrimitiveB_intG_methods;
+extern struct numpy$$PrimitiveB_floatG_class  numpy$$PrimitiveB_floatG_methods;
 
-extern struct numpy$$Primitive$int *numpy$$Primitive$int$witness;
-extern struct numpy$$Primitive$float *numpy$$Primitive$float$witness;
+extern struct numpy$$PrimitiveB_int *numpy$$PrimitiveB_intG_witness;
+extern struct numpy$$PrimitiveB_float *numpy$$PrimitiveB_floatG_witness;
 
 // numpy$$ndarray /////////////////////////////////////////////////////////////////////////////////
 
 struct numpy$$ndarray;
 typedef struct numpy$$ndarray *numpy$$ndarray;
 
-struct numpy$$ndarray$class {
+struct numpy$$ndarrayG_class {
   char *$GCINFO;
   int $class_id;
-  $Super$class $superclass;
-    void (*__init__)(numpy$$ndarray,numpy$$Primitive,$atom);
-  void (*__serialize__)(numpy$$ndarray,$Serial$state); 
-  numpy$$ndarray (*__deserialize__)(numpy$$ndarray,$Serial$state);
-  $bool (*__bool__)(numpy$$ndarray);
-  $str (*__str__)(numpy$$ndarray);
-  $str (*__repr__)(numpy$$ndarray);
-  numpy$$ndarray (*reshape)(numpy$$ndarray,$list);
-  numpy$$ndarray (*transpose)(numpy$$ndarray,$list);
+  $SuperG_class $superclass;
+    void (*__init__)(numpy$$ndarray,numpy$$Primitive,B_atom);
+  void (*__serialize__)(numpy$$ndarray,$NoneType); 
+  numpy$$ndarray (*__deserialize__)(numpy$$ndarray,$NoneType);
+  B_bool (*__bool__)(numpy$$ndarray);
+  B_str (*__str__)(numpy$$ndarray);
+  B_str (*__repr__)(numpy$$ndarray);
+  numpy$$ndarray (*reshape)(numpy$$ndarray,B_list);
+  numpy$$ndarray (*transpose)(numpy$$ndarray,B_list);
   numpy$$ndarray (*flatten)(numpy$$ndarray);
   numpy$$ndarray (*copy)(numpy$$ndarray);
-  numpy$$ndarray (*__ndgetslice__)(numpy$$ndarray,$list);
+  numpy$$ndarray (*__ndgetslice__)(numpy$$ndarray,B_list);
 };
 
 struct numpy$$ndarray {
-  struct numpy$$ndarray$class *$class;
+  struct numpy$$ndarrayG_class *$class;
   enum ElemType elem_type;
   long ndim;
-  $int size;         // # of elements; equal to product of elements in shape.
+  B_int size;         // # of elements; equal to product of elements in shape.
   long offset;
   long elem_size;
-  $list shape;
-  $list strides;
+  B_list shape;
+  B_list strides;
   union $Bytes8 *data;
 };
 
-extern struct numpy$$ndarray$class numpy$$ndarray$methods;
+extern struct numpy$$ndarrayG_class numpy$$ndarrayG_methods;
 
 // iterating over an ndarray //////////////////////////////////////////
 
@@ -335,535 +335,535 @@ typedef struct numpy$$array_iterator_state {
 
 
 
-typedef struct numpy$$Iterator$ndarray *numpy$$Iterator$ndarray; ;
+typedef struct numpy$B_IteratorD_ndarray *numpy$B_IteratorD_ndarray; ;
 
-struct numpy$$Iterator$ndarray$class {
+struct numpy$B_IteratorD_ndarrayG_class {
   char *$GCINFO;
   int $class_id;
-  $Super$class $superclass;
-  void (*__init__)(numpy$$Iterator$ndarray, numpy$$Primitive, numpy$$ndarray);
-  void (*__serialize__)(numpy$$Iterator$ndarray,$Serial$state);
-  numpy$$Iterator$ndarray (*__deserialize__)(numpy$$Iterator$ndarray,$Serial$state);
-  $bool (*__bool__)(numpy$$Iterator$ndarray);
-  $str (*__str__)(numpy$$Iterator$ndarray);
-  $str (*__repr__)(numpy$$Iterator$ndarray);
-  $WORD (*__next__)(numpy$$Iterator$ndarray);
+  $SuperG_class $superclass;
+  void (*__init__)(numpy$B_IteratorD_ndarray, numpy$$Primitive, numpy$$ndarray);
+  void (*__serialize__)(numpy$B_IteratorD_ndarray,$NoneType);
+  numpy$B_IteratorD_ndarray (*__deserialize__)(numpy$B_IteratorD_ndarray,$NoneType);
+  B_bool (*__bool__)(numpy$B_IteratorD_ndarray);
+  B_str (*__str__)(numpy$B_IteratorD_ndarray);
+  B_str (*__repr__)(numpy$B_IteratorD_ndarray);
+  $WORD (*__next__)(numpy$B_IteratorD_ndarray);
 };
 
-numpy$$ndarray numpy$$ndarray$new(numpy$$Primitive, $atom);
+numpy$$ndarray numpy$$ndarrayG_new(numpy$$Primitive, B_atom);
 
-struct numpy$$Iterator$ndarray {
-  struct numpy$$Iterator$ndarray$class *$class;
+struct numpy$B_IteratorD_ndarray {
+  struct numpy$B_IteratorD_ndarrayG_class *$class;
   numpy$$Primitive pwit;
   numpy$$array_iterator_state it;
 };
 
-extern struct  numpy$$Iterator$ndarray$class  numpy$$Iterator$ndarray$methods;
+extern struct  numpy$B_IteratorD_ndarrayG_class  numpy$B_IteratorD_ndarrayG_methods;
 
-numpy$$Iterator$ndarray numpy$$Iterator$ndarray$new(numpy$$Primitive,numpy$$ndarray);
+numpy$B_IteratorD_ndarray numpy$B_IteratorD_ndarrayG_new(numpy$$Primitive,numpy$$ndarray);
 
 // Intended argument to constructor
 
-numpy$$ndarray numpy$$fromatom(numpy$$Primitive, $atom);
+numpy$$ndarray numpy$$fromatom(numpy$$Primitive, B_atom);
 
 //numpy$$ndarray numpy$$ndarray_func(union $Bytes8(*f)(union $Bytes8),numpy$$ndarray a);
 //numpy$$ndarray numpy$$ndarray_oper(union $Bytes8 (*f)(union $Bytes8, union $Bytes8), numpy$$ndarray a, numpy$$ndarray b);
 
 // Methods in ndarray class //////////////////////////////////////////////
 
-numpy$$ndarray numpy$$ndarray$reshape(numpy$$ndarray,$list);
-numpy$$ndarray numpy$$ndarray$transpose(numpy$$ndarray,$list);
+numpy$$ndarray numpy$$ndarray$reshape(numpy$$ndarray,B_list);
+numpy$$ndarray numpy$$ndarray$transpose(numpy$$ndarray,B_list);
 numpy$$ndarray numpy$$ndarray$flatten(numpy$$ndarray);
 numpy$$ndarray numpy$$ndarray$copy(numpy$$ndarray);
-numpy$$ndarray numpy$$ndarray$__ndgetslice__(numpy$$ndarray,$list);
+numpy$$ndarray numpy$$ndarrayD___ndgetslice__(numpy$$ndarray,B_list);
 
 // Functions to create ndarrays /////////////////////////////////////////
 
-numpy$$ndarray numpy$$linspace($float a, $float b, $int n);
-numpy$$ndarray numpy$$arange($int start, $int stop, $int step);
-numpy$$ndarray numpy$$array(numpy$$Primitive wit, $list elems);
-numpy$$ndarray numpy$$full(numpy$$Primitive wit, $list shape, $WORD val);
-numpy$$ndarray numpy$$unirandint($int a, $int b, $int n);
-numpy$$ndarray numpy$$unirandfloat($float a, $float b, $int n);
-numpy$$ndarray numpy$$tile(numpy$$Primitive wit, numpy$$ndarray a, $int n);
-numpy$$ndarray numpy$$roll(numpy$$Primitive wit, numpy$$ndarray a, $int n);
-numpy$$ndarray numpy$$concatenate(numpy$$Primitive wit, $list as);
-numpy$$ndarray numpy$$zeros(numpy$$Primitive wit, $int n);
+numpy$$ndarray numpy$$linspace(B_float a, B_float b, B_int n);
+numpy$$ndarray numpy$$arange(B_int start, B_int stop, B_int step);
+numpy$$ndarray numpy$$array(numpy$$Primitive wit, B_list elems);
+numpy$$ndarray numpy$$full(numpy$$Primitive wit, B_list shape, $WORD val);
+numpy$$ndarray numpy$$unirandint(B_int a, B_int b, B_int n);
+numpy$$ndarray numpy$$unirandfloat(B_float a, B_float b, B_int n);
+numpy$$ndarray numpy$$tile(numpy$$Primitive wit, numpy$$ndarray a, B_int n);
+numpy$$ndarray numpy$$roll(numpy$$Primitive wit, numpy$$ndarray a, B_int n);
+numpy$$ndarray numpy$$concatenate(numpy$$Primitive wit, B_list as);
+numpy$$ndarray numpy$$zeros(numpy$$Primitive wit, B_int n);
 
 // Various utilities /////////////////////////////////////////////////////
 
-numpy$$ndarray numpy$$sum(numpy$$Primitive wit, numpy$$ndarray a, $int axis);
-numpy$$ndarray numpy$$partition(numpy$$Primitive wit, numpy$$ndarray a, $int k);
-numpy$$ndarray numpy$$sort(numpy$$Primitive wit, numpy$$ndarray a, $int axis);
+numpy$$ndarray numpy$$sum(numpy$$Primitive wit, numpy$$ndarray a, B_int axis);
+numpy$$ndarray numpy$$partition(numpy$$Primitive wit, numpy$$ndarray a, B_int k);
+numpy$$ndarray numpy$$sort(numpy$$Primitive wit, numpy$$ndarray a, B_int axis);
 numpy$$ndarray numpy$$clip(numpy$$Primitive wit, numpy$$ndarray a, $WORD low, $WORD high);
 numpy$$ndarray numpy$$dot(numpy$$Primitive wit, numpy$$ndarray a, numpy$$ndarray b);
 numpy$$ndarray numpy$$abs(numpy$$Primitive wit, numpy$$ndarray a);
-numpy$$ndarray numpy$$mean(numpy$$Primitive wit, numpy$$ndarray a, $int axis);
+numpy$$ndarray numpy$$mean(numpy$$Primitive wit, numpy$$ndarray a, B_int axis);
 $WORD numpy$$scalar(numpy$$Primitive wit, numpy$$ndarray a);
 
 // newaxis //////////////////////////////////////////////////////////
 
-extern $int numpy$$newaxis;
+extern B_int numpy$G_newaxis;
 
-struct numpy$$Integral$ndarray$int;
-typedef struct numpy$$Integral$ndarray$int *numpy$$Integral$ndarray$int;
+struct numpy$B_IntegralD_ndarrayB_int;
+typedef struct numpy$B_IntegralD_ndarrayB_int *numpy$B_IntegralD_ndarrayB_int;
 
-struct numpy$$Integral$ndarray$int$class;
-typedef struct numpy$$Integral$ndarray$int$class *numpy$$Integral$ndarray$int$class;
+struct numpy$B_IntegralD_ndarrayB_intG_class;
+typedef struct numpy$B_IntegralD_ndarrayB_intG_class *numpy$B_IntegralD_ndarrayB_intG_class;
 
-struct numpy$$Logical$ndarray$int;
-typedef struct numpy$$Logical$ndarray$int *numpy$$Logical$ndarray$int;
+struct numpy$B_LogicalD_ndarrayB_int;
+typedef struct numpy$B_LogicalD_ndarrayB_int *numpy$B_LogicalD_ndarrayB_int;
 
-struct numpy$$Logical$ndarray$int$class;
-typedef struct numpy$$Logical$ndarray$int$class *numpy$$Logical$ndarray$int$class;
+struct numpy$B_LogicalD_ndarrayB_intG_class;
+typedef struct numpy$B_LogicalD_ndarrayB_intG_class *numpy$B_LogicalD_ndarrayB_intG_class;
 
-struct numpy$$Minus$ndarray$int;
-typedef struct numpy$$Minus$ndarray$int *numpy$$Minus$ndarray$int;
+struct numpy$B_MinusD_ndarrayB_int;
+typedef struct numpy$B_MinusD_ndarrayB_int *numpy$B_MinusD_ndarrayB_int;
 
-struct numpy$$Minus$ndarray$int$class;
-typedef struct numpy$$Minus$ndarray$int$class *numpy$$Minus$ndarray$int$class;
+struct numpy$B_MinusD_ndarrayB_intG_class;
+typedef struct numpy$B_MinusD_ndarrayB_intG_class *numpy$B_MinusD_ndarrayB_intG_class;
 
-struct numpy$$Real$ndarray;
-typedef struct numpy$$Real$ndarray *numpy$$Real$ndarray;
+struct numpy$B_RealD_ndarray;
+typedef struct numpy$B_RealD_ndarray *numpy$B_RealD_ndarray;
 
-struct numpy$$Real$ndarray$class;
-typedef struct numpy$$Real$ndarray$class *numpy$$Real$ndarray$class;
+struct numpy$B_RealD_ndarrayG_class;
+typedef struct numpy$B_RealD_ndarrayG_class *numpy$B_RealD_ndarrayG_class;
 
-struct numpy$$Minus$ndarray;
-typedef struct numpy$$Minus$ndarray *numpy$$Minus$ndarray;
+struct numpy$B_MinusD_ndarray;
+typedef struct numpy$B_MinusD_ndarray *numpy$B_MinusD_ndarray;
 
-struct numpy$$Minus$ndarray$class;
-typedef struct numpy$$Minus$ndarray$class *numpy$$Minus$ndarray$class;
+struct numpy$B_MinusD_ndarrayG_class;
+typedef struct numpy$B_MinusD_ndarrayG_class *numpy$B_MinusD_ndarrayG_class;
 
-struct numpy$$Div$ndarray$int;
-typedef struct numpy$$Div$ndarray$int *numpy$$Div$ndarray$int;
+struct numpy$B_DivD_ndarrayB_int;
+typedef struct numpy$B_DivD_ndarrayB_int *numpy$B_DivD_ndarrayB_int;
 
-struct numpy$$Div$ndarray$int$class;
-typedef struct numpy$$Div$ndarray$int$class *numpy$$Div$ndarray$int$class;
+struct numpy$B_DivD_ndarrayB_intG_class;
+typedef struct numpy$B_DivD_ndarrayB_intG_class *numpy$B_DivD_ndarrayB_intG_class;
 
-struct numpy$$Div$ndarray$float;
-typedef struct numpy$$Div$ndarray$float *numpy$$Div$ndarray$float;
+struct numpy$B_DivD_ndarrayB_float;
+typedef struct numpy$B_DivD_ndarrayB_float *numpy$B_DivD_ndarrayB_float;
 
-struct numpy$$Div$ndarray$float$class;
-typedef struct numpy$$Div$ndarray$float$class *numpy$$Div$ndarray$float$class;
+struct numpy$B_DivD_ndarrayB_floatG_class;
+typedef struct numpy$B_DivD_ndarrayB_floatG_class *numpy$B_DivD_ndarrayB_floatG_class;
 
-struct numpy$$Collection$ndarray;
-typedef struct numpy$$Collection$ndarray *numpy$$Collection$ndarray;
+struct numpy$B_CollectionD_ndarray;
+typedef struct numpy$B_CollectionD_ndarray *numpy$B_CollectionD_ndarray;
 
-struct numpy$$Collection$ndarray$class;
-typedef struct numpy$$Collection$ndarray$class *numpy$$Collection$ndarray$class;
+struct numpy$B_CollectionD_ndarrayG_class;
+typedef struct numpy$B_CollectionD_ndarrayG_class *numpy$B_CollectionD_ndarrayG_class;
 
-struct numpy$$Sliceable$ndarray;
-typedef struct numpy$$Sliceable$ndarray *numpy$$Sliceable$ndarray;
+struct numpy$B_SliceableD_ndarray;
+typedef struct numpy$B_SliceableD_ndarray *numpy$B_SliceableD_ndarray;
 
-struct numpy$$Sliceable$ndarray$class;
-typedef struct numpy$$Sliceable$ndarray$class *numpy$$Sliceable$ndarray$class;
+struct numpy$B_SliceableD_ndarrayG_class;
+typedef struct numpy$B_SliceableD_ndarrayG_class *numpy$B_SliceableD_ndarrayG_class;
 
-// numpy$$Integral$ndarray$int ////////////////////////////////////////////////////////////
+// numpy$B_IntegralD_ndarrayB_int ////////////////////////////////////////////////////////////
 
-struct numpy$$Integral$ndarray$int {
-    numpy$$Integral$ndarray$int$class $class;
-    $Logical w$Logical;
-    $Minus w$Minus;
+struct numpy$B_IntegralD_ndarrayB_int {
+    numpy$B_IntegralD_ndarrayB_intG_class $class;
+    B_Logical W_Logical;
+    B_Minus W_Minus;
 };
 
-struct numpy$$Integral$ndarray$int$class {
+struct numpy$B_IntegralD_ndarrayB_intG_class {
     char *$GCINFO;
     int $class_id;
-    $Super$class $superclass;
-    void (*__init__)(numpy$$Integral$ndarray$int);
-    void (*__serialize__)(numpy$$Integral$ndarray$int,$Serial$state);
-    numpy$$Integral$ndarray$int (*__deserialize__)(numpy$$Integral$ndarray$int,$Serial$state);
-    $bool (*__bool__)(numpy$$Integral$ndarray$int);
-    $str (*__str__)(numpy$$Integral$ndarray$int);
-    $str (*__repr__)(numpy$$Integral$ndarray$int);
-    numpy$$ndarray (*__add__)(numpy$$Integral$ndarray$int, numpy$$ndarray, numpy$$ndarray);
-    numpy$$ndarray (*__iadd__)(numpy$$Integral$ndarray$int, numpy$$ndarray, numpy$$ndarray);
-    numpy$$ndarray (*__mul__)(numpy$$Integral$ndarray$int, numpy$$ndarray, numpy$$ndarray);
-    numpy$$ndarray (*__imul__)(numpy$$Integral$ndarray$int, numpy$$ndarray, numpy$$ndarray);
-    numpy$$ndarray (*__fromatom__)(numpy$$Integral$ndarray$int,$atom);
-    $complex (*__complx__)(numpy$$Integral$ndarray$int, numpy$$ndarray);
-    numpy$$ndarray (*__pow__)(numpy$$Integral$ndarray$int, numpy$$ndarray, numpy$$ndarray);
-    numpy$$ndarray (*__ipow__)(numpy$$Integral$ndarray$int, numpy$$ndarray, numpy$$ndarray);
-    numpy$$ndarray (*__neg__)(numpy$$Integral$ndarray$int, numpy$$ndarray);
-    numpy$$ndarray (*__pos__)(numpy$$Integral$ndarray$int, numpy$$ndarray);
-    $WORD (*real)(numpy$$Integral$ndarray$int, numpy$$ndarray, $Real);
-    $WORD (*imag)(numpy$$Integral$ndarray$int, numpy$$ndarray, $Real);
-    $WORD (*__abs__)(numpy$$Integral$ndarray$int, numpy$$ndarray, $Real);
-    numpy$$ndarray (*conjugate)(numpy$$Integral$ndarray$int, numpy$$ndarray);
-    $float (*__float__)(numpy$$Integral$ndarray$int, numpy$$ndarray);
-    $WORD (*__trunc__)(numpy$$Integral$ndarray$int, numpy$$ndarray, $Integral);
-    $WORD (*__floor__)(numpy$$Integral$ndarray$int, numpy$$ndarray, $Integral);
-    $WORD (*__ceil__)(numpy$$Integral$ndarray$int, numpy$$ndarray, $Integral);
-    numpy$$ndarray (*__round__)(numpy$$Integral$ndarray$int, numpy$$ndarray, numpy$$ndarray);
-    $WORD (*numerator)(numpy$$Integral$ndarray$int, numpy$$ndarray, $Integral);
-    $WORD (*denominator)(numpy$$Integral$ndarray$int, numpy$$ndarray, $Integral);
-    numpy$$ndarray (*__int__)(numpy$$Integral$ndarray$int, numpy$$ndarray);
-    numpy$$ndarray (*__index__)(numpy$$Integral$ndarray$int, numpy$$ndarray);
-    $tuple (*__divmod__)(numpy$$Integral$ndarray$int, numpy$$ndarray, numpy$$ndarray);
-    numpy$$ndarray (*__floordiv__)(numpy$$Integral$ndarray$int, numpy$$ndarray, numpy$$ndarray);
-    numpy$$ndarray (*__mod__)(numpy$$Integral$ndarray$int, numpy$$ndarray, numpy$$ndarray);
-    numpy$$ndarray (*__lshift__)(numpy$$Integral$ndarray$int, numpy$$ndarray, numpy$$ndarray);
-    numpy$$ndarray (*__rshift__)(numpy$$Integral$ndarray$int, numpy$$ndarray, numpy$$ndarray);
-    numpy$$ndarray (*__ifloordiv__)(numpy$$Integral$ndarray$int, numpy$$ndarray, numpy$$ndarray);
-    numpy$$ndarray (*__imod__)(numpy$$Integral$ndarray$int, numpy$$ndarray, numpy$$ndarray);
-    numpy$$ndarray (*__ilshift__)(numpy$$Integral$ndarray$int, numpy$$ndarray, numpy$$ndarray);
-    numpy$$ndarray (*__irshift__)(numpy$$Integral$ndarray$int, numpy$$ndarray, numpy$$ndarray);
-    numpy$$ndarray (*__invert__)(numpy$$Integral$ndarray$int, numpy$$ndarray);
+    $SuperG_class $superclass;
+    void (*__init__)(numpy$B_IntegralD_ndarrayB_int);
+    void (*__serialize__)(numpy$B_IntegralD_ndarrayB_int,$NoneType);
+    numpy$B_IntegralD_ndarrayB_int (*__deserialize__)(numpy$B_IntegralD_ndarrayB_int,$NoneType);
+    B_bool (*__bool__)(numpy$B_IntegralD_ndarrayB_int);
+    B_str (*__str__)(numpy$B_IntegralD_ndarrayB_int);
+    B_str (*__repr__)(numpy$B_IntegralD_ndarrayB_int);
+    numpy$$ndarray (*__add__)(numpy$B_IntegralD_ndarrayB_int, numpy$$ndarray, numpy$$ndarray);
+    numpy$$ndarray (*__iadd__)(numpy$B_IntegralD_ndarrayB_int, numpy$$ndarray, numpy$$ndarray);
+    numpy$$ndarray (*__mul__)(numpy$B_IntegralD_ndarrayB_int, numpy$$ndarray, numpy$$ndarray);
+    numpy$$ndarray (*__imul__)(numpy$B_IntegralD_ndarrayB_int, numpy$$ndarray, numpy$$ndarray);
+    numpy$$ndarray (*__fromatom__)(numpy$B_IntegralD_ndarrayB_int,B_atom);
+    B_complex (*__complx__)(numpy$B_IntegralD_ndarrayB_int, numpy$$ndarray);
+    numpy$$ndarray (*__pow__)(numpy$B_IntegralD_ndarrayB_int, numpy$$ndarray, numpy$$ndarray);
+    numpy$$ndarray (*__ipow__)(numpy$B_IntegralD_ndarrayB_int, numpy$$ndarray, numpy$$ndarray);
+    numpy$$ndarray (*__neg__)(numpy$B_IntegralD_ndarrayB_int, numpy$$ndarray);
+    numpy$$ndarray (*__pos__)(numpy$B_IntegralD_ndarrayB_int, numpy$$ndarray);
+    $WORD (*real)(numpy$B_IntegralD_ndarrayB_int, numpy$$ndarray, B_Real);
+    $WORD (*imag)(numpy$B_IntegralD_ndarrayB_int, numpy$$ndarray, B_Real);
+    $WORD (*__abs__)(numpy$B_IntegralD_ndarrayB_int, numpy$$ndarray, B_Real);
+    numpy$$ndarray (*conjugate)(numpy$B_IntegralD_ndarrayB_int, numpy$$ndarray);
+    B_float (*__float__)(numpy$B_IntegralD_ndarrayB_int, numpy$$ndarray);
+    $WORD (*__trunc__)(numpy$B_IntegralD_ndarrayB_int, numpy$$ndarray, B_Integral);
+    $WORD (*__floor__)(numpy$B_IntegralD_ndarrayB_int, numpy$$ndarray, B_Integral);
+    $WORD (*__ceil__)(numpy$B_IntegralD_ndarrayB_int, numpy$$ndarray, B_Integral);
+    numpy$$ndarray (*__round__)(numpy$B_IntegralD_ndarrayB_int, numpy$$ndarray, numpy$$ndarray);
+    $WORD (*numerator)(numpy$B_IntegralD_ndarrayB_int, numpy$$ndarray, B_Integral);
+    $WORD (*denominator)(numpy$B_IntegralD_ndarrayB_int, numpy$$ndarray, B_Integral);
+    numpy$$ndarray (*__int__)(numpy$B_IntegralD_ndarrayB_int, numpy$$ndarray);
+    numpy$$ndarray (*__index__)(numpy$B_IntegralD_ndarrayB_int, numpy$$ndarray);
+    B_tuple (*__divmod__)(numpy$B_IntegralD_ndarrayB_int, numpy$$ndarray, numpy$$ndarray);
+    numpy$$ndarray (*__floordiv__)(numpy$B_IntegralD_ndarrayB_int, numpy$$ndarray, numpy$$ndarray);
+    numpy$$ndarray (*__mod__)(numpy$B_IntegralD_ndarrayB_int, numpy$$ndarray, numpy$$ndarray);
+    numpy$$ndarray (*__lshift__)(numpy$B_IntegralD_ndarrayB_int, numpy$$ndarray, numpy$$ndarray);
+    numpy$$ndarray (*__rshift__)(numpy$B_IntegralD_ndarrayB_int, numpy$$ndarray, numpy$$ndarray);
+    numpy$$ndarray (*__ifloordiv__)(numpy$B_IntegralD_ndarrayB_int, numpy$$ndarray, numpy$$ndarray);
+    numpy$$ndarray (*__imod__)(numpy$B_IntegralD_ndarrayB_int, numpy$$ndarray, numpy$$ndarray);
+    numpy$$ndarray (*__ilshift__)(numpy$B_IntegralD_ndarrayB_int, numpy$$ndarray, numpy$$ndarray);
+    numpy$$ndarray (*__irshift__)(numpy$B_IntegralD_ndarrayB_int, numpy$$ndarray, numpy$$ndarray);
+    numpy$$ndarray (*__invert__)(numpy$B_IntegralD_ndarrayB_int, numpy$$ndarray);
 };
 
-void numpy$$Integral$ndarray$int$__init__ (numpy$$Integral$ndarray$int);
-void numpy$$Integral$ndarray$int$__serialize__(numpy$$Integral$ndarray$int,$Serial$state);
-numpy$$Integral$ndarray$int numpy$$Integral$ndarray$int$__deserialize__(numpy$$Integral$ndarray$int,$Serial$state);
-numpy$$ndarray numpy$$Integral$ndarray$int$__add__(numpy$$Integral$ndarray$int, numpy$$ndarray, numpy$$ndarray);
-numpy$$ndarray numpy$$Integral$ndarray$int$__iadd__(numpy$$Integral$ndarray$int, numpy$$ndarray, numpy$$ndarray);
-numpy$$ndarray numpy$$Integral$ndarray$int$__fromatom__(numpy$$Integral$ndarray$int,$atom);
-$complex numpy$$Integral$ndarray$int$__complx__(numpy$$Integral$ndarray$int, numpy$$ndarray);
-numpy$$ndarray numpy$$Integral$ndarray$int$__mul__(numpy$$Integral$ndarray$int, numpy$$ndarray, numpy$$ndarray);
-numpy$$ndarray numpy$$Integral$ndarray$int$__pow__(numpy$$Integral$ndarray$int, numpy$$ndarray, numpy$$ndarray);
-numpy$$ndarray numpy$$Integral$ndarray$int$__neg__(numpy$$Integral$ndarray$int, numpy$$ndarray);
-numpy$$ndarray numpy$$Integral$ndarray$int$__pos__(numpy$$Integral$ndarray$int, numpy$$ndarray);
-$WORD numpy$$Integral$ndarray$int$real(numpy$$Integral$ndarray$int, numpy$$ndarray, $Real);
-$WORD numpy$$Integral$ndarray$int$imag(numpy$$Integral$ndarray$int, numpy$$ndarray, $Real);
-$WORD numpy$$Integral$ndarray$int$__abs__(numpy$$Integral$ndarray$int, numpy$$ndarray, $Real);
-numpy$$ndarray numpy$$Integral$ndarray$int$conjugate(numpy$$Integral$ndarray$int, numpy$$ndarray);
-$float numpy$$Integral$ndarray$int$__float__ (numpy$$Integral$ndarray$int, numpy$$ndarray);
-$WORD numpy$$Integral$ndarray$int$__trunc__ (numpy$$Integral$ndarray$int, numpy$$ndarray, $Integral);
-$WORD numpy$$Integral$ndarray$int$__floor__ (numpy$$Integral$ndarray$int, numpy$$ndarray, $Integral);
-$WORD numpy$$Integral$ndarray$int$__ceil__ (numpy$$Integral$ndarray$int, numpy$$ndarray, $Integral);
-numpy$$ndarray numpy$$Integral$ndarray$int$__round__ (numpy$$Integral$ndarray$int, numpy$$ndarray, numpy$$ndarray);
-$WORD numpy$$Integral$ndarray$int$numerator (numpy$$Integral$ndarray$int, numpy$$ndarray, $Integral);
-$WORD numpy$$Integral$ndarray$int$denominator (numpy$$Integral$ndarray$int, numpy$$ndarray, $Integral);
-numpy$$ndarray numpy$$Integral$ndarray$int$__int__ (numpy$$Integral$ndarray$int, numpy$$ndarray);
-numpy$$ndarray numpy$$Integral$ndarray$int$__index__ (numpy$$Integral$ndarray$int, numpy$$ndarray);
-$tuple numpy$$Integral$ndarray$int$__divmod__ (numpy$$Integral$ndarray$int, numpy$$ndarray, numpy$$ndarray);
-numpy$$ndarray numpy$$Integral$ndarray$int$__floordiv__ (numpy$$Integral$ndarray$int, numpy$$ndarray, numpy$$ndarray);
-numpy$$ndarray numpy$$Integral$ndarray$int$__mod__ (numpy$$Integral$ndarray$int, numpy$$ndarray, numpy$$ndarray);
-numpy$$ndarray numpy$$Integral$ndarray$int$__lshift__ (numpy$$Integral$ndarray$int, numpy$$ndarray, numpy$$ndarray);
-numpy$$ndarray numpy$$Integral$ndarray$int$__rshift__ (numpy$$Integral$ndarray$int, numpy$$ndarray, numpy$$ndarray);
-numpy$$ndarray numpy$$Integral$ndarray$int$__invert__ (numpy$$Integral$ndarray$int, numpy$$ndarray);
+void numpy$B_IntegralD_ndarrayB_intD___init__ (numpy$B_IntegralD_ndarrayB_int);
+void numpy$B_IntegralD_ndarrayB_intD___serialize__(numpy$B_IntegralD_ndarrayB_int,$NoneType);
+numpy$B_IntegralD_ndarrayB_int numpy$B_IntegralD_ndarrayB_intD___deserialize__(numpy$B_IntegralD_ndarrayB_int,$NoneType);
+numpy$$ndarray numpy$B_IntegralD_ndarrayB_intD___add__(numpy$B_IntegralD_ndarrayB_int, numpy$$ndarray, numpy$$ndarray);
+numpy$$ndarray numpy$B_IntegralD_ndarrayB_intD___iadd__(numpy$B_IntegralD_ndarrayB_int, numpy$$ndarray, numpy$$ndarray);
+numpy$$ndarray numpy$B_IntegralD_ndarrayB_intD___fromatom__(numpy$B_IntegralD_ndarrayB_int,B_atom);
+B_complex numpy$B_IntegralD_ndarrayB_intD___complx__(numpy$B_IntegralD_ndarrayB_int, numpy$$ndarray);
+numpy$$ndarray numpy$B_IntegralD_ndarrayB_intD___mul__(numpy$B_IntegralD_ndarrayB_int, numpy$$ndarray, numpy$$ndarray);
+numpy$$ndarray numpy$B_IntegralD_ndarrayB_intD___pow__(numpy$B_IntegralD_ndarrayB_int, numpy$$ndarray, numpy$$ndarray);
+numpy$$ndarray numpy$B_IntegralD_ndarrayB_intD___neg__(numpy$B_IntegralD_ndarrayB_int, numpy$$ndarray);
+numpy$$ndarray numpy$B_IntegralD_ndarrayB_intD___pos__(numpy$B_IntegralD_ndarrayB_int, numpy$$ndarray);
+$WORD numpy$B_IntegralD_ndarrayB_int$real(numpy$B_IntegralD_ndarrayB_int, numpy$$ndarray, B_Real);
+$WORD numpy$B_IntegralD_ndarrayB_int$imag(numpy$B_IntegralD_ndarrayB_int, numpy$$ndarray, B_Real);
+$WORD numpy$B_IntegralD_ndarrayB_intD___abs__(numpy$B_IntegralD_ndarrayB_int, numpy$$ndarray, B_Real);
+numpy$$ndarray numpy$B_IntegralD_ndarrayB_int$conjugate(numpy$B_IntegralD_ndarrayB_int, numpy$$ndarray);
+B_float numpy$B_IntegralD_ndarrayB_intD___float__ (numpy$B_IntegralD_ndarrayB_int, numpy$$ndarray);
+$WORD numpy$B_IntegralD_ndarrayB_intD___trunc__ (numpy$B_IntegralD_ndarrayB_int, numpy$$ndarray, B_Integral);
+$WORD numpy$B_IntegralD_ndarrayB_intD___floor__ (numpy$B_IntegralD_ndarrayB_int, numpy$$ndarray, B_Integral);
+$WORD numpy$B_IntegralD_ndarrayB_intD___ceil__ (numpy$B_IntegralD_ndarrayB_int, numpy$$ndarray, B_Integral);
+numpy$$ndarray numpy$B_IntegralD_ndarrayB_intD___round__ (numpy$B_IntegralD_ndarrayB_int, numpy$$ndarray, numpy$$ndarray);
+$WORD numpy$B_IntegralD_ndarrayB_int$numerator (numpy$B_IntegralD_ndarrayB_int, numpy$$ndarray, B_Integral);
+$WORD numpy$B_IntegralD_ndarrayB_int$denominator (numpy$B_IntegralD_ndarrayB_int, numpy$$ndarray, B_Integral);
+numpy$$ndarray numpy$B_IntegralD_ndarrayB_intD___int__ (numpy$B_IntegralD_ndarrayB_int, numpy$$ndarray);
+numpy$$ndarray numpy$B_IntegralD_ndarrayB_intD___index__ (numpy$B_IntegralD_ndarrayB_int, numpy$$ndarray);
+B_tuple numpy$B_IntegralD_ndarrayB_intD___divmod__ (numpy$B_IntegralD_ndarrayB_int, numpy$$ndarray, numpy$$ndarray);
+numpy$$ndarray numpy$B_IntegralD_ndarrayB_intD___floordiv__ (numpy$B_IntegralD_ndarrayB_int, numpy$$ndarray, numpy$$ndarray);
+numpy$$ndarray numpy$B_IntegralD_ndarrayB_intD___mod__ (numpy$B_IntegralD_ndarrayB_int, numpy$$ndarray, numpy$$ndarray);
+numpy$$ndarray numpy$B_IntegralD_ndarrayB_intD___lshift__ (numpy$B_IntegralD_ndarrayB_int, numpy$$ndarray, numpy$$ndarray);
+numpy$$ndarray numpy$B_IntegralD_ndarrayB_intD___rshift__ (numpy$B_IntegralD_ndarrayB_int, numpy$$ndarray, numpy$$ndarray);
+numpy$$ndarray numpy$B_IntegralD_ndarrayB_intD___invert__ (numpy$B_IntegralD_ndarrayB_int, numpy$$ndarray);
 
-// numpy$$Logical$ndarray$int ////////////////////////////////////////////////////////////
+// numpy$B_LogicalD_ndarrayB_int ////////////////////////////////////////////////////////////
 
-struct numpy$$Logical$ndarray$int {
-    numpy$$Logical$ndarray$int$class $class;
-    $Integral w$Integral;
+struct numpy$B_LogicalD_ndarrayB_int {
+    numpy$B_LogicalD_ndarrayB_intG_class $class;
+    B_Integral W_Integral;
 };
 
-struct numpy$$Logical$ndarray$int$class {
+struct numpy$B_LogicalD_ndarrayB_intG_class {
     char *$GCINFO;
     int $class_id;
-    $Super$class $superclass;
-    void (*__init__)(numpy$$Logical$ndarray$int, $Integral);
-    void (*__serialize__)(numpy$$Logical$ndarray$int,$Serial$state);
-    numpy$$Logical$ndarray$int (*__deserialize__)(numpy$$Logical$ndarray$int,$Serial$state);
-    $bool (*__bool__)(numpy$$Logical$ndarray$int);
-    $str (*__str__)(numpy$$Logical$ndarray$int);
-    $str (*__repr__)(numpy$$Logical$ndarray$int);
-    numpy$$ndarray (*__and__)(numpy$$Logical$ndarray$int, numpy$$ndarray, numpy$$ndarray);
-    numpy$$ndarray (*__or__)(numpy$$Logical$ndarray$int, numpy$$ndarray, numpy$$ndarray);
-    numpy$$ndarray (*__xor__)(numpy$$Logical$ndarray$int, numpy$$ndarray, numpy$$ndarray);
-    numpy$$ndarray (*__iand__)(numpy$$Logical$ndarray$int, numpy$$ndarray, numpy$$ndarray);
-    numpy$$ndarray (*__ior__)(numpy$$Logical$ndarray$int, numpy$$ndarray, numpy$$ndarray);
-    numpy$$ndarray (*__ixor__)(numpy$$Logical$ndarray$int, numpy$$ndarray, numpy$$ndarray);
+    $SuperG_class $superclass;
+    void (*__init__)(numpy$B_LogicalD_ndarrayB_int, B_Integral);
+    void (*__serialize__)(numpy$B_LogicalD_ndarrayB_int,$NoneType);
+    numpy$B_LogicalD_ndarrayB_int (*__deserialize__)(numpy$B_LogicalD_ndarrayB_int,$NoneType);
+    B_bool (*__bool__)(numpy$B_LogicalD_ndarrayB_int);
+    B_str (*__str__)(numpy$B_LogicalD_ndarrayB_int);
+    B_str (*__repr__)(numpy$B_LogicalD_ndarrayB_int);
+    numpy$$ndarray (*__and__)(numpy$B_LogicalD_ndarrayB_int, numpy$$ndarray, numpy$$ndarray);
+    numpy$$ndarray (*__or__)(numpy$B_LogicalD_ndarrayB_int, numpy$$ndarray, numpy$$ndarray);
+    numpy$$ndarray (*__xor__)(numpy$B_LogicalD_ndarrayB_int, numpy$$ndarray, numpy$$ndarray);
+    numpy$$ndarray (*__iand__)(numpy$B_LogicalD_ndarrayB_int, numpy$$ndarray, numpy$$ndarray);
+    numpy$$ndarray (*__ior__)(numpy$B_LogicalD_ndarrayB_int, numpy$$ndarray, numpy$$ndarray);
+    numpy$$ndarray (*__ixor__)(numpy$B_LogicalD_ndarrayB_int, numpy$$ndarray, numpy$$ndarray);
 };
 
-void numpy$$Logical$ndarray$int$__init__ (numpy$$Logical$ndarray$int, $Integral);
-void numpy$$Logical$ndarray$int$__serialize__(numpy$$Logical$ndarray$int,$Serial$state);
-numpy$$Logical$ndarray$int numpy$$Logical$ndarray$int$__deserialize__(numpy$$Logical$ndarray$int,$Serial$state);
-numpy$$ndarray numpy$$Logical$ndarray$int$__and__ (numpy$$Logical$ndarray$int, numpy$$ndarray, numpy$$ndarray);
-numpy$$ndarray numpy$$Logical$ndarray$int$__or__ (numpy$$Logical$ndarray$int, numpy$$ndarray, numpy$$ndarray);
-numpy$$ndarray numpy$$Logical$ndarray$int$__xor__ (numpy$$Logical$ndarray$int, numpy$$ndarray, numpy$$ndarray);
+void numpy$B_LogicalD_ndarrayB_intD___init__ (numpy$B_LogicalD_ndarrayB_int, B_Integral);
+void numpy$B_LogicalD_ndarrayB_intD___serialize__(numpy$B_LogicalD_ndarrayB_int,$NoneType);
+numpy$B_LogicalD_ndarrayB_int numpy$B_LogicalD_ndarrayB_intD___deserialize__(numpy$B_LogicalD_ndarrayB_int,$NoneType);
+numpy$$ndarray numpy$B_LogicalD_ndarrayB_intD___and__ (numpy$B_LogicalD_ndarrayB_int, numpy$$ndarray, numpy$$ndarray);
+numpy$$ndarray numpy$B_LogicalD_ndarrayB_intD___or__ (numpy$B_LogicalD_ndarrayB_int, numpy$$ndarray, numpy$$ndarray);
+numpy$$ndarray numpy$B_LogicalD_ndarrayB_intD___xor__ (numpy$B_LogicalD_ndarrayB_int, numpy$$ndarray, numpy$$ndarray);
 
-// numpy$$Minus$ndarray$int ////////////////////////////////////////////////////////////
+// numpy$B_MinusD_ndarrayB_int ////////////////////////////////////////////////////////////
 
-struct numpy$$Minus$ndarray$int {
-    numpy$$Minus$ndarray$int$class $class;
-    $Integral w$Integral;
+struct numpy$B_MinusD_ndarrayB_int {
+    numpy$B_MinusD_ndarrayB_intG_class $class;
+    B_Integral W_Integral;
 };
 
-struct numpy$$Minus$ndarray$int$class {
+struct numpy$B_MinusD_ndarrayB_intG_class {
     char *$GCINFO;
     int $class_id;
-    $Super$class $superclass;
-    void (*__init__)(numpy$$Minus$ndarray$int, $Integral);
-    void (*__serialize__)(numpy$$Minus$ndarray$int,$Serial$state);
-    numpy$$Minus$ndarray$int (*__deserialize__)(numpy$$Minus$ndarray$int,$Serial$state);
-    $bool (*__bool__)(numpy$$Minus$ndarray$int);
-    $str (*__str__)(numpy$$Minus$ndarray$int);
-    $str (*__repr__)(numpy$$Minus$ndarray$int);
-    numpy$$ndarray (*__sub__)(numpy$$Minus$ndarray$int, numpy$$ndarray, numpy$$ndarray);
-    numpy$$ndarray (*__isub__)(numpy$$Minus$ndarray$int, numpy$$ndarray, numpy$$ndarray);
+    $SuperG_class $superclass;
+    void (*__init__)(numpy$B_MinusD_ndarrayB_int, B_Integral);
+    void (*__serialize__)(numpy$B_MinusD_ndarrayB_int,$NoneType);
+    numpy$B_MinusD_ndarrayB_int (*__deserialize__)(numpy$B_MinusD_ndarrayB_int,$NoneType);
+    B_bool (*__bool__)(numpy$B_MinusD_ndarrayB_int);
+    B_str (*__str__)(numpy$B_MinusD_ndarrayB_int);
+    B_str (*__repr__)(numpy$B_MinusD_ndarrayB_int);
+    numpy$$ndarray (*__sub__)(numpy$B_MinusD_ndarrayB_int, numpy$$ndarray, numpy$$ndarray);
+    numpy$$ndarray (*__isub__)(numpy$B_MinusD_ndarrayB_int, numpy$$ndarray, numpy$$ndarray);
 };
 
-void numpy$$Minus$ndarray$int$__init__ (numpy$$Minus$ndarray$int, $Integral);
-void numpy$$Minus$ndarray$int$__serialize__(numpy$$Minus$ndarray$int,$Serial$state);
-numpy$$Minus$ndarray$int numpy$$Minus$ndarray$int$__deserialize__(numpy$$Minus$ndarray$int,$Serial$state);
-numpy$$ndarray numpy$$Minus$ndarray$int$__sub__ (numpy$$Minus$ndarray$int, numpy$$ndarray, numpy$$ndarray);
+void numpy$B_MinusD_ndarrayB_intD___init__ (numpy$B_MinusD_ndarrayB_int, B_Integral);
+void numpy$B_MinusD_ndarrayB_intD___serialize__(numpy$B_MinusD_ndarrayB_int,$NoneType);
+numpy$B_MinusD_ndarrayB_int numpy$B_MinusD_ndarrayB_intD___deserialize__(numpy$B_MinusD_ndarrayB_int,$NoneType);
+numpy$$ndarray numpy$B_MinusD_ndarrayB_intD___sub__ (numpy$B_MinusD_ndarrayB_int, numpy$$ndarray, numpy$$ndarray);
 
-// numpy$$Real$ndarray ////////////////////////////////////////////////////////////
+// numpy$B_RealD_ndarray ////////////////////////////////////////////////////////////
 
-struct numpy$$Real$ndarray {
-    numpy$$Real$ndarray$class $class;
-    $Minus w$Minus;
-    numpy$$Primitive w$Primitive$A$Real$ndarray;
+struct numpy$B_RealD_ndarray {
+    numpy$B_RealD_ndarrayG_class $class;
+    B_Minus W_Minus;
+    numpy$$Primitive W_PrimitiveD_AD_Real$ndarray;
 };
 
-struct numpy$$Real$ndarray$class {
+struct numpy$B_RealD_ndarrayG_class {
     char *$GCINFO;
     int $class_id;
-    $Super$class $superclass;
-  void (*__init__)(numpy$$Real$ndarray, numpy$$Primitive);
-    void (*__serialize__)(numpy$$Real$ndarray,$Serial$state);
-    numpy$$Real$ndarray (*__deserialize__)(numpy$$Real$ndarray,$Serial$state);
-    $bool (*__bool__)(numpy$$Real$ndarray);
-    $str (*__str__)(numpy$$Real$ndarray);
-    $str (*__repr__)(numpy$$Real$ndarray);
-    numpy$$ndarray (*__add__)(numpy$$Real$ndarray, numpy$$ndarray, numpy$$ndarray);
-    numpy$$ndarray (*__iadd__)(numpy$$Real$ndarray, numpy$$ndarray, numpy$$ndarray);
-    numpy$$ndarray (*__mul__)(numpy$$Real$ndarray, numpy$$ndarray, numpy$$ndarray);
-    numpy$$ndarray (*__imul__)(numpy$$Real$ndarray, numpy$$ndarray, numpy$$ndarray);
-    numpy$$ndarray (*__fromatom__)(numpy$$Real$ndarray,$atom);
-    $complex (*__complx__)(numpy$$Real$ndarray, numpy$$ndarray);
-    numpy$$ndarray (*__pow__)(numpy$$Real$ndarray, numpy$$ndarray, numpy$$ndarray);
-    numpy$$ndarray (*__ipow__)(numpy$$Real$ndarray, numpy$$ndarray, numpy$$ndarray);
-    numpy$$ndarray (*__neg__)(numpy$$Real$ndarray, numpy$$ndarray);
-    numpy$$ndarray (*__pos__)(numpy$$Real$ndarray, numpy$$ndarray);
-    $WORD (*real)(numpy$$Real$ndarray, numpy$$ndarray, $Real);
-    $WORD (*imag)(numpy$$Real$ndarray, numpy$$ndarray, $Real);
-    $WORD (*__abs__)(numpy$$Real$ndarray, numpy$$ndarray, $Real);
-    numpy$$ndarray (*conjugate)(numpy$$Real$ndarray, numpy$$ndarray);
-    $float (*__float__)(numpy$$Real$ndarray, numpy$$ndarray);
-    $WORD (*__trunc__)(numpy$$Real$ndarray, numpy$$ndarray, $Integral);
-    $WORD (*__floor__)(numpy$$Real$ndarray, numpy$$ndarray, $Integral);
-    $WORD (*__ceil__)(numpy$$Real$ndarray, numpy$$ndarray, $Integral);
-    numpy$$ndarray (*__round__)(numpy$$Real$ndarray, numpy$$ndarray, numpy$$ndarray);
+    $SuperG_class $superclass;
+  void (*__init__)(numpy$B_RealD_ndarray, numpy$$Primitive);
+    void (*__serialize__)(numpy$B_RealD_ndarray,$NoneType);
+    numpy$B_RealD_ndarray (*__deserialize__)(numpy$B_RealD_ndarray,$NoneType);
+    B_bool (*__bool__)(numpy$B_RealD_ndarray);
+    B_str (*__str__)(numpy$B_RealD_ndarray);
+    B_str (*__repr__)(numpy$B_RealD_ndarray);
+    numpy$$ndarray (*__add__)(numpy$B_RealD_ndarray, numpy$$ndarray, numpy$$ndarray);
+    numpy$$ndarray (*__iadd__)(numpy$B_RealD_ndarray, numpy$$ndarray, numpy$$ndarray);
+    numpy$$ndarray (*__mul__)(numpy$B_RealD_ndarray, numpy$$ndarray, numpy$$ndarray);
+    numpy$$ndarray (*__imul__)(numpy$B_RealD_ndarray, numpy$$ndarray, numpy$$ndarray);
+    numpy$$ndarray (*__fromatom__)(numpy$B_RealD_ndarray,B_atom);
+    B_complex (*__complx__)(numpy$B_RealD_ndarray, numpy$$ndarray);
+    numpy$$ndarray (*__pow__)(numpy$B_RealD_ndarray, numpy$$ndarray, numpy$$ndarray);
+    numpy$$ndarray (*__ipow__)(numpy$B_RealD_ndarray, numpy$$ndarray, numpy$$ndarray);
+    numpy$$ndarray (*__neg__)(numpy$B_RealD_ndarray, numpy$$ndarray);
+    numpy$$ndarray (*__pos__)(numpy$B_RealD_ndarray, numpy$$ndarray);
+    $WORD (*real)(numpy$B_RealD_ndarray, numpy$$ndarray, B_Real);
+    $WORD (*imag)(numpy$B_RealD_ndarray, numpy$$ndarray, B_Real);
+    $WORD (*__abs__)(numpy$B_RealD_ndarray, numpy$$ndarray, B_Real);
+    numpy$$ndarray (*conjugate)(numpy$B_RealD_ndarray, numpy$$ndarray);
+    B_float (*__float__)(numpy$B_RealD_ndarray, numpy$$ndarray);
+    $WORD (*__trunc__)(numpy$B_RealD_ndarray, numpy$$ndarray, B_Integral);
+    $WORD (*__floor__)(numpy$B_RealD_ndarray, numpy$$ndarray, B_Integral);
+    $WORD (*__ceil__)(numpy$B_RealD_ndarray, numpy$$ndarray, B_Integral);
+    numpy$$ndarray (*__round__)(numpy$B_RealD_ndarray, numpy$$ndarray, numpy$$ndarray);
 };
 
-void numpy$$Real$ndarray$__init__ (numpy$$Real$ndarray,numpy$$Primitive);
-void numpy$$Real$ndarray$__serialize__(numpy$$Real$ndarray,$Serial$state);
-numpy$$Real$ndarray numpy$$Real$ndarray$__deserialize__(numpy$$Real$ndarray,$Serial$state);
-numpy$$ndarray numpy$$Real$ndarray$__add__(numpy$$Real$ndarray, numpy$$ndarray, numpy$$ndarray);
-numpy$$ndarray numpy$$Real$ndarray$__iadd__(numpy$$Real$ndarray, numpy$$ndarray, numpy$$ndarray);
-numpy$$ndarray numpy$$Real$ndarray$__fromatom__(numpy$$Real$ndarray,$atom);
-$complex numpy$$Real$ndarray$__complx__(numpy$$Real$ndarray, numpy$$ndarray);
-numpy$$ndarray numpy$$Real$ndarray$__mul__(numpy$$Real$ndarray, numpy$$ndarray, numpy$$ndarray);
-numpy$$ndarray numpy$$Real$ndarray$__pow__(numpy$$Real$ndarray, numpy$$ndarray, numpy$$ndarray);
-numpy$$ndarray numpy$$Real$ndarray$__neg__(numpy$$Real$ndarray, numpy$$ndarray);
-numpy$$ndarray numpy$$Real$ndarray$__pos__(numpy$$Real$ndarray, numpy$$ndarray);
-$WORD numpy$$Real$ndarray$real(numpy$$Real$ndarray, numpy$$ndarray, $Real);
-$WORD numpy$$Real$ndarray$imag(numpy$$Real$ndarray, numpy$$ndarray, $Real);
-$WORD numpy$$Real$ndarray$__abs__(numpy$$Real$ndarray, numpy$$ndarray, $Real);
-numpy$$ndarray numpy$$Real$ndarray$conjugate(numpy$$Real$ndarray, numpy$$ndarray);
-$float numpy$$Real$ndarray$__float__ (numpy$$Real$ndarray, numpy$$ndarray);
-$WORD numpy$$Real$ndarray$__trunc__ (numpy$$Real$ndarray, numpy$$ndarray, $Integral);
-$WORD numpy$$Real$ndarray$__floor__ (numpy$$Real$ndarray, numpy$$ndarray, $Integral);
-$WORD numpy$$Real$ndarray$__ceil__ (numpy$$Real$ndarray, numpy$$ndarray, $Integral);
-numpy$$ndarray numpy$$Real$ndarray$__round__ (numpy$$Real$ndarray, numpy$$ndarray, numpy$$ndarray);
+void numpy$B_RealD_ndarrayD___init__ (numpy$B_RealD_ndarray,numpy$$Primitive);
+void numpy$B_RealD_ndarrayD___serialize__(numpy$B_RealD_ndarray,$NoneType);
+numpy$B_RealD_ndarray numpy$B_RealD_ndarrayD___deserialize__(numpy$B_RealD_ndarray,$NoneType);
+numpy$$ndarray numpy$B_RealD_ndarrayD___add__(numpy$B_RealD_ndarray, numpy$$ndarray, numpy$$ndarray);
+numpy$$ndarray numpy$B_RealD_ndarrayD___iadd__(numpy$B_RealD_ndarray, numpy$$ndarray, numpy$$ndarray);
+numpy$$ndarray numpy$B_RealD_ndarrayD___fromatom__(numpy$B_RealD_ndarray,B_atom);
+B_complex numpy$B_RealD_ndarrayD___complx__(numpy$B_RealD_ndarray, numpy$$ndarray);
+numpy$$ndarray numpy$B_RealD_ndarrayD___mul__(numpy$B_RealD_ndarray, numpy$$ndarray, numpy$$ndarray);
+numpy$$ndarray numpy$B_RealD_ndarrayD___pow__(numpy$B_RealD_ndarray, numpy$$ndarray, numpy$$ndarray);
+numpy$$ndarray numpy$B_RealD_ndarrayD___neg__(numpy$B_RealD_ndarray, numpy$$ndarray);
+numpy$$ndarray numpy$B_RealD_ndarrayD___pos__(numpy$B_RealD_ndarray, numpy$$ndarray);
+$WORD numpy$B_RealD_ndarray$real(numpy$B_RealD_ndarray, numpy$$ndarray, B_Real);
+$WORD numpy$B_RealD_ndarray$imag(numpy$B_RealD_ndarray, numpy$$ndarray, B_Real);
+$WORD numpy$B_RealD_ndarrayD___abs__(numpy$B_RealD_ndarray, numpy$$ndarray, B_Real);
+numpy$$ndarray numpy$B_RealD_ndarray$conjugate(numpy$B_RealD_ndarray, numpy$$ndarray);
+B_float numpy$B_RealD_ndarrayD___float__ (numpy$B_RealD_ndarray, numpy$$ndarray);
+$WORD numpy$B_RealD_ndarrayD___trunc__ (numpy$B_RealD_ndarray, numpy$$ndarray, B_Integral);
+$WORD numpy$B_RealD_ndarrayD___floor__ (numpy$B_RealD_ndarray, numpy$$ndarray, B_Integral);
+$WORD numpy$B_RealD_ndarrayD___ceil__ (numpy$B_RealD_ndarray, numpy$$ndarray, B_Integral);
+numpy$$ndarray numpy$B_RealD_ndarrayD___round__ (numpy$B_RealD_ndarray, numpy$$ndarray, numpy$$ndarray);
 
-// numpy$$Minus$ndarray ////////////////////////////////////////////////////////////
+// numpy$B_MinusD_ndarray ////////////////////////////////////////////////////////////
 
-struct numpy$$Minus$ndarray {
-    numpy$$Minus$ndarray$class $class;
-    $Real w$Real;
+struct numpy$B_MinusD_ndarray {
+    numpy$B_MinusD_ndarrayG_class $class;
+    B_Real W_Real;
 };
 
-struct numpy$$Minus$ndarray$class {
+struct numpy$B_MinusD_ndarrayG_class {
     char *$GCINFO;
     int $class_id;
-    $Super$class $superclass;
-    void (*__init__)(numpy$$Minus$ndarray, $Real);
-    void (*__serialize__)(numpy$$Minus$ndarray,$Serial$state);
-    numpy$$Minus$ndarray (*__deserialize__)(numpy$$Minus$ndarray,$Serial$state);
-    $bool (*__bool__)(numpy$$Minus$ndarray);
-    $str (*__str__)(numpy$$Minus$ndarray);
-    $str (*__repr__)(numpy$$Minus$ndarray);
-    numpy$$ndarray (*__sub__)(numpy$$Minus$ndarray, numpy$$ndarray, numpy$$ndarray);
-    numpy$$ndarray (*__isub__)(numpy$$Minus$ndarray, numpy$$ndarray, numpy$$ndarray);
+    $SuperG_class $superclass;
+    void (*__init__)(numpy$B_MinusD_ndarray, B_Real);
+    void (*__serialize__)(numpy$B_MinusD_ndarray,$NoneType);
+    numpy$B_MinusD_ndarray (*__deserialize__)(numpy$B_MinusD_ndarray,$NoneType);
+    B_bool (*__bool__)(numpy$B_MinusD_ndarray);
+    B_str (*__str__)(numpy$B_MinusD_ndarray);
+    B_str (*__repr__)(numpy$B_MinusD_ndarray);
+    numpy$$ndarray (*__sub__)(numpy$B_MinusD_ndarray, numpy$$ndarray, numpy$$ndarray);
+    numpy$$ndarray (*__isub__)(numpy$B_MinusD_ndarray, numpy$$ndarray, numpy$$ndarray);
 };
 
-void numpy$$Minus$ndarray$__init__ (numpy$$Minus$ndarray, $Real);
-void numpy$$Minus$ndarray$__serialize__(numpy$$Minus$ndarray,$Serial$state);
-numpy$$Minus$ndarray numpy$$Minus$ndarray$__deserialize__(numpy$$Minus$ndarray,$Serial$state);
-numpy$$ndarray numpy$$Minus$ndarray$__sub__ (numpy$$Minus$ndarray, numpy$$ndarray, numpy$$ndarray);
+void numpy$B_MinusD_ndarrayD___init__ (numpy$B_MinusD_ndarray, B_Real);
+void numpy$B_MinusD_ndarrayD___serialize__(numpy$B_MinusD_ndarray,$NoneType);
+numpy$B_MinusD_ndarray numpy$B_MinusD_ndarrayD___deserialize__(numpy$B_MinusD_ndarray,$NoneType);
+numpy$$ndarray numpy$B_MinusD_ndarrayD___sub__ (numpy$B_MinusD_ndarray, numpy$$ndarray, numpy$$ndarray);
 
-// numpy$$Div$ndarray$int ////////////////////////////////////////////////////////////
+// numpy$B_DivD_ndarrayB_int ////////////////////////////////////////////////////////////
 
-struct numpy$$Div$ndarray$int {
-    numpy$$Div$ndarray$int$class $class;
-    $Real w$Real;
+struct numpy$B_DivD_ndarrayB_int {
+    numpy$B_DivD_ndarrayB_intG_class $class;
+    B_Real W_Real;
 };
 
-struct numpy$$Div$ndarray$int$class {
+struct numpy$B_DivD_ndarrayB_intG_class {
     char *$GCINFO;
     int $class_id;
-    $Super$class $superclass;
-    void (*__init__)(numpy$$Div$ndarray$int);
-    void (*__serialize__)(numpy$$Div$ndarray$int,$Serial$state);
-    numpy$$Div$ndarray$int (*__deserialize__)(numpy$$Div$ndarray$int,$Serial$state);
-    $bool (*__bool__)(numpy$$Div$ndarray$int);
-    $str (*__str__)(numpy$$Div$ndarray$int);
-    $str (*__repr__)(numpy$$Div$ndarray$int);
-    numpy$$ndarray (*__truediv__)(numpy$$Div$ndarray$int, numpy$$ndarray, numpy$$ndarray);
-    numpy$$ndarray (*__itruediv__)(numpy$$Div$ndarray$int, numpy$$ndarray, numpy$$ndarray);
+    $SuperG_class $superclass;
+    void (*__init__)(numpy$B_DivD_ndarrayB_int);
+    void (*__serialize__)(numpy$B_DivD_ndarrayB_int,$NoneType);
+    numpy$B_DivD_ndarrayB_int (*__deserialize__)(numpy$B_DivD_ndarrayB_int,$NoneType);
+    B_bool (*__bool__)(numpy$B_DivD_ndarrayB_int);
+    B_str (*__str__)(numpy$B_DivD_ndarrayB_int);
+    B_str (*__repr__)(numpy$B_DivD_ndarrayB_int);
+    numpy$$ndarray (*__truediv__)(numpy$B_DivD_ndarrayB_int, numpy$$ndarray, numpy$$ndarray);
+    numpy$$ndarray (*__itruediv__)(numpy$B_DivD_ndarrayB_int, numpy$$ndarray, numpy$$ndarray);
 };
 
-void numpy$$Div$ndarray$int$__init__ (numpy$$Div$ndarray$int);
-void numpy$$Div$ndarray$int$__serialize__(numpy$$Div$ndarray$int,$Serial$state);
-numpy$$Div$ndarray$int numpy$$Div$ndarray$int$__deserialize__(numpy$$Div$ndarray$int,$Serial$state);
-numpy$$ndarray numpy$$Div$ndarray$int$__truediv__ (numpy$$Div$ndarray$int, numpy$$ndarray, numpy$$ndarray);
+void numpy$B_DivD_ndarrayB_intD___init__ (numpy$B_DivD_ndarrayB_int);
+void numpy$B_DivD_ndarrayB_intD___serialize__(numpy$B_DivD_ndarrayB_int,$NoneType);
+numpy$B_DivD_ndarrayB_int numpy$B_DivD_ndarrayB_intD___deserialize__(numpy$B_DivD_ndarrayB_int,$NoneType);
+numpy$$ndarray numpy$B_DivD_ndarrayB_intD___truediv__ (numpy$B_DivD_ndarrayB_int, numpy$$ndarray, numpy$$ndarray);
 
-// numpy$$Div$ndarray$float ////////////////////////////////////////////////////////////
+// numpy$B_DivD_ndarrayB_float ////////////////////////////////////////////////////////////
 
-struct numpy$$Div$ndarray$float {
-    numpy$$Div$ndarray$float$class $class;
-    $Real w$Real;
+struct numpy$B_DivD_ndarrayB_float {
+    numpy$B_DivD_ndarrayB_floatG_class $class;
+    B_Real W_Real;
 };
 
-struct numpy$$Div$ndarray$float$class {
+struct numpy$B_DivD_ndarrayB_floatG_class {
     char *$GCINFO;
     int $class_id;
-    $Super$class $superclass;
-    void (*__init__)(numpy$$Div$ndarray$float);
-    void (*__serialize__)(numpy$$Div$ndarray$float,$Serial$state);
-    numpy$$Div$ndarray$float (*__deserialize__)(numpy$$Div$ndarray$float,$Serial$state);
-    $bool (*__bool__)(numpy$$Div$ndarray$float);
-    $str (*__str__)(numpy$$Div$ndarray$float);
-    $str (*__repr__)(numpy$$Div$ndarray$float);
-    numpy$$ndarray (*__truediv__)(numpy$$Div$ndarray$float, numpy$$ndarray, numpy$$ndarray);
-    numpy$$ndarray (*__itruediv__)(numpy$$Div$ndarray$float, numpy$$ndarray, numpy$$ndarray);
+    $SuperG_class $superclass;
+    void (*__init__)(numpy$B_DivD_ndarrayB_float);
+    void (*__serialize__)(numpy$B_DivD_ndarrayB_float,$NoneType);
+    numpy$B_DivD_ndarrayB_float (*__deserialize__)(numpy$B_DivD_ndarrayB_float,$NoneType);
+    B_bool (*__bool__)(numpy$B_DivD_ndarrayB_float);
+    B_str (*__str__)(numpy$B_DivD_ndarrayB_float);
+    B_str (*__repr__)(numpy$B_DivD_ndarrayB_float);
+    numpy$$ndarray (*__truediv__)(numpy$B_DivD_ndarrayB_float, numpy$$ndarray, numpy$$ndarray);
+    numpy$$ndarray (*__itruediv__)(numpy$B_DivD_ndarrayB_float, numpy$$ndarray, numpy$$ndarray);
 };
 
-void numpy$$Div$ndarray$float$__init__ (numpy$$Div$ndarray$float);
-void numpy$$Div$ndarray$float$__serialize__(numpy$$Div$ndarray$float,$Serial$state);
-numpy$$Div$ndarray$float numpy$$Div$ndarray$float$__deserialize__(numpy$$Div$ndarray$float,$Serial$state);
-numpy$$ndarray numpy$$Div$ndarray$float$__truediv__ (numpy$$Div$ndarray$float, numpy$$ndarray, numpy$$ndarray);
+void numpy$B_DivD_ndarrayB_floatD___init__ (numpy$B_DivD_ndarrayB_float);
+void numpy$B_DivD_ndarrayB_floatD___serialize__(numpy$B_DivD_ndarrayB_float,$NoneType);
+numpy$B_DivD_ndarrayB_float numpy$B_DivD_ndarrayB_floatD___deserialize__(numpy$B_DivD_ndarrayB_float,$NoneType);
+numpy$$ndarray numpy$B_DivD_ndarrayB_floatD___truediv__ (numpy$B_DivD_ndarrayB_float, numpy$$ndarray, numpy$$ndarray);
 
-// numpy$$Sliceable$ndarray /////////////////////////////////////////////////////////////////
+// numpy$B_SliceableD_ndarray /////////////////////////////////////////////////////////////////
 
-struct numpy$$Sliceable$ndarray;
-typedef struct numpy$$Sliceable$ndarray *numpy$$Sliceable$ndarray;
+struct numpy$B_SliceableD_ndarray;
+typedef struct numpy$B_SliceableD_ndarray *numpy$B_SliceableD_ndarray;
 
-struct numpy$$Sliceable$ndarray$class {
+struct numpy$B_SliceableD_ndarrayG_class {
     char *$GCINFO;
     int $class_id;
-    $Super$class $superclass;
-    void (*__init__) (numpy$$Sliceable$ndarray, numpy$$Primitive);
-    void (*__serialize__) (numpy$$Sliceable$ndarray, $Serial$state);
-    numpy$$Sliceable$ndarray (*__deserialize__) (numpy$$Sliceable$ndarray, $Serial$state);
-    $bool (*__bool__)(numpy$$Sliceable$ndarray);
-    $str (*__str__)(numpy$$Sliceable$ndarray);
-    $str (*__repr__)(numpy$$Sliceable$ndarray);
-    numpy$$ndarray (*__getitem__) (numpy$$Sliceable$ndarray, numpy$$ndarray, $int);
-    void (*__setitem__) (numpy$$Sliceable$ndarray, numpy$$ndarray, $int, $WORD);
-    void (*__delitem__) (numpy$$Sliceable$ndarray, numpy$$ndarray, $int);
-    numpy$$ndarray (*__getslice__) (numpy$$Sliceable$ndarray, numpy$$ndarray, $slice);
-    void (*__setslice__) (numpy$$Sliceable$ndarray, numpy$$ndarray, $Iterable, $slice, $WORD);
-    void (*__delslice__) (numpy$$Sliceable$ndarray, numpy$$ndarray, $slice);
+    $SuperG_class $superclass;
+    void (*__init__) (numpy$B_SliceableD_ndarray, numpy$$Primitive);
+    void (*__serialize__) (numpy$B_SliceableD_ndarray, $NoneType);
+    numpy$B_SliceableD_ndarray (*__deserialize__) (numpy$B_SliceableD_ndarray, $NoneType);
+    B_bool (*__bool__)(numpy$B_SliceableD_ndarray);
+    B_str (*__str__)(numpy$B_SliceableD_ndarray);
+    B_str (*__repr__)(numpy$B_SliceableD_ndarray);
+    numpy$$ndarray (*__getitem__) (numpy$B_SliceableD_ndarray, numpy$$ndarray, B_int);
+    void (*__setitem__) (numpy$B_SliceableD_ndarray, numpy$$ndarray, B_int, $WORD);
+    void (*__delitem__) (numpy$B_SliceableD_ndarray, numpy$$ndarray, B_int);
+    numpy$$ndarray (*__getslice__) (numpy$B_SliceableD_ndarray, numpy$$ndarray, B_slice);
+    void (*__setslice__) (numpy$B_SliceableD_ndarray, numpy$$ndarray, B_Iterable, B_slice, $WORD);
+    void (*__delslice__) (numpy$B_SliceableD_ndarray, numpy$$ndarray, B_slice);
 };
-struct numpy$$Sliceable$ndarray {
-    numpy$$Sliceable$ndarray$class $class;
+struct numpy$B_SliceableD_ndarray {
+    numpy$B_SliceableD_ndarrayG_class $class;
     numpy$$Primitive pwit;
 };
 
 
-// numpy$$Collection$ndarray ////////////////////////////////////////////////////////////
+// numpy$B_CollectionD_ndarray ////////////////////////////////////////////////////////////
 
-struct numpy$$Collection$ndarray {
-  numpy$$Collection$ndarray$class $class;
+struct numpy$B_CollectionD_ndarray {
+  numpy$B_CollectionD_ndarrayG_class $class;
   numpy$$Primitive pwit;
 };
 
-struct numpy$$Collection$ndarray$class {
+struct numpy$B_CollectionD_ndarrayG_class {
     char *$GCINFO;
     int $class_id;
-    $Super$class $superclass;
-    void (*__init__)(numpy$$Collection$ndarray, numpy$$Primitive);
-    void (*__serialize__)(numpy$$Collection$ndarray,$Serial$state);
-    numpy$$Collection$ndarray (*__deserialize__)(numpy$$Collection$ndarray,$Serial$state);
-    $bool (*__bool__)(numpy$$Collection$ndarray);
-    $str (*__str__)(numpy$$Collection$ndarray);
-    $str (*__repr__)(numpy$$Collection$ndarray);
-    $Iterator (*__iter__)(numpy$$Collection$ndarray, numpy$$ndarray);
-    numpy$$ndarray (*__fromiter__)(numpy$$Collection$ndarray, $Iterable);
-    $int (*__len__)(numpy$$Collection$ndarray, numpy$$ndarray);
+    $SuperG_class $superclass;
+    void (*__init__)(numpy$B_CollectionD_ndarray, numpy$$Primitive);
+    void (*__serialize__)(numpy$B_CollectionD_ndarray,$NoneType);
+    numpy$B_CollectionD_ndarray (*__deserialize__)(numpy$B_CollectionD_ndarray,$NoneType);
+    B_bool (*__bool__)(numpy$B_CollectionD_ndarray);
+    B_str (*__str__)(numpy$B_CollectionD_ndarray);
+    B_str (*__repr__)(numpy$B_CollectionD_ndarray);
+    B_Iterator (*__iter__)(numpy$B_CollectionD_ndarray, numpy$$ndarray);
+    numpy$$ndarray (*__fromiter__)(numpy$B_CollectionD_ndarray, B_Iterable);
+    B_int (*__len__)(numpy$B_CollectionD_ndarray, numpy$$ndarray);
 };
 
-void numpy$$Collection$ndarray$__init__ (numpy$$Collection$ndarray, numpy$$Primitive);
-void numpy$$Collection$ndarray$__serialize__(numpy$$Collection$ndarray,$Serial$state);
-numpy$$Collection$ndarray numpy$$Collection$ndarray$__deserialize__(numpy$$Collection$ndarray,$Serial$state);
-$Iterator numpy$$Collection$ndarray$__iter__ (numpy$$Collection$ndarray, numpy$$ndarray);
-numpy$$ndarray numpy$$Collection$ndarray$__fromiter__(numpy$$Collection$ndarray, $Iterable);
-$int numpy$$Collection$ndarray$__len__(numpy$$Collection$ndarray, numpy$$ndarray);
+void numpy$B_CollectionD_ndarrayD___init__ (numpy$B_CollectionD_ndarray, numpy$$Primitive);
+void numpy$B_CollectionD_ndarrayD___serialize__(numpy$B_CollectionD_ndarray,$NoneType);
+numpy$B_CollectionD_ndarray numpy$B_CollectionD_ndarrayD___deserialize__(numpy$B_CollectionD_ndarray,$NoneType);
+B_Iterator numpy$B_CollectionD_ndarrayD___iter__ (numpy$B_CollectionD_ndarray, numpy$$ndarray);
+numpy$$ndarray numpy$B_CollectionD_ndarrayD___fromiter__(numpy$B_CollectionD_ndarray, B_Iterable);
+B_int numpy$B_CollectionD_ndarrayD___len__(numpy$B_CollectionD_ndarray, numpy$$ndarray);
 
-// numpy$$RealFloat$ndarray ////////////////////////////////////////////////////////
+// numpy$B_RealFloat$ndarray ////////////////////////////////////////////////////////
 
-#define numpy$$RealFloat$ndarray (($Real)numpy$$Real$ndarray)
-numpy$$Real$ndarray numpy$$RealFloat$ndarray$new(numpy$$Primitive,$RealFloat); // ($Real)numpy$$Real$ndarray$new(__VA_ARGS__)
+#define numpy$B_RealFloat$ndarray ((B_Real)numpy$B_RealD_ndarray)
+numpy$B_RealD_ndarray numpy$B_RealFloat$ndarrayG_new(numpy$$Primitive,B_RealFloat); // (B_Real)numpy$B_RealD_ndarrayG_new(__VA_ARGS__)
 
-// numpy$$RealFuns$math$ndarray ////////////////////////////////////////////////////
+// numpy$B_RealFuns$math$ndarray ////////////////////////////////////////////////////
 
-struct numpy$$RealFuns$math$ndarray;
-typedef struct numpy$$RealFuns$math$ndarray *numpy$$RealFuns$math$ndarray;
-struct numpy$$RealFuns$math$ndarray$class {
+struct numpy$B_RealFuns$math$ndarray;
+typedef struct numpy$B_RealFuns$math$ndarray *numpy$B_RealFuns$math$ndarray;
+struct numpy$B_RealFuns$math$ndarrayG_class {
     char *$GCINFO;
     int $class_id;
-    $Super$class $superclass;
-    $NoneType (*__init__) (numpy$$RealFuns$math$ndarray, numpy$$Primitive, math$$RealFuns);
-    $NoneType (*__serialize__) (numpy$$RealFuns$math$ndarray, $Serial$state);
-    numpy$$RealFuns$math$ndarray (*__deserialize__) (numpy$$RealFuns$math$ndarray, $Serial$state);
-    $bool (*__bool__)(numpy$$RealFuns$math$ndarray);
-    $str (*__str__)(numpy$$RealFuns$math$ndarray);
-    $str (*__repr__)(numpy$$RealFuns$math$ndarray);
-    numpy$$ndarray (*sqrt) (numpy$$RealFuns$math$ndarray, numpy$$ndarray);
-    numpy$$ndarray (*exp) (numpy$$RealFuns$math$ndarray, numpy$$ndarray);
-    numpy$$ndarray (*log) (numpy$$RealFuns$math$ndarray, numpy$$ndarray);
-    numpy$$ndarray (*sin) (numpy$$RealFuns$math$ndarray, numpy$$ndarray);
-    numpy$$ndarray (*cos) (numpy$$RealFuns$math$ndarray, numpy$$ndarray);
-    numpy$$ndarray (*tan) (numpy$$RealFuns$math$ndarray, numpy$$ndarray);
-    numpy$$ndarray (*asin) (numpy$$RealFuns$math$ndarray, numpy$$ndarray);
-    numpy$$ndarray (*acos) (numpy$$RealFuns$math$ndarray, numpy$$ndarray);
-    numpy$$ndarray (*atan) (numpy$$RealFuns$math$ndarray, numpy$$ndarray);
-    numpy$$ndarray (*sinh) (numpy$$RealFuns$math$ndarray, numpy$$ndarray);
-    numpy$$ndarray (*cosh) (numpy$$RealFuns$math$ndarray, numpy$$ndarray);
-    numpy$$ndarray (*tanh) (numpy$$RealFuns$math$ndarray, numpy$$ndarray);
-    numpy$$ndarray (*asinh) (numpy$$RealFuns$math$ndarray, numpy$$ndarray);
-    numpy$$ndarray (*acosh) (numpy$$RealFuns$math$ndarray, numpy$$ndarray);
-    numpy$$ndarray (*atanh) (numpy$$RealFuns$math$ndarray, numpy$$ndarray);
+    $SuperG_class $superclass;
+    $NoneType (*__init__) (numpy$B_RealFuns$math$ndarray, numpy$$Primitive, math$B_RealFuns);
+    $NoneType (*__serialize__) (numpy$B_RealFuns$math$ndarray, $NoneType);
+    numpy$B_RealFuns$math$ndarray (*__deserialize__) (numpy$B_RealFuns$math$ndarray, $NoneType);
+    B_bool (*__bool__)(numpy$B_RealFuns$math$ndarray);
+    B_str (*__str__)(numpy$B_RealFuns$math$ndarray);
+    B_str (*__repr__)(numpy$B_RealFuns$math$ndarray);
+    numpy$$ndarray (*sqrt) (numpy$B_RealFuns$math$ndarray, numpy$$ndarray);
+    numpy$$ndarray (*exp) (numpy$B_RealFuns$math$ndarray, numpy$$ndarray);
+    numpy$$ndarray (*log) (numpy$B_RealFuns$math$ndarray, numpy$$ndarray);
+    numpy$$ndarray (*sin) (numpy$B_RealFuns$math$ndarray, numpy$$ndarray);
+    numpy$$ndarray (*cos) (numpy$B_RealFuns$math$ndarray, numpy$$ndarray);
+    numpy$$ndarray (*tan) (numpy$B_RealFuns$math$ndarray, numpy$$ndarray);
+    numpy$$ndarray (*asin) (numpy$B_RealFuns$math$ndarray, numpy$$ndarray);
+    numpy$$ndarray (*acos) (numpy$B_RealFuns$math$ndarray, numpy$$ndarray);
+    numpy$$ndarray (*atan) (numpy$B_RealFuns$math$ndarray, numpy$$ndarray);
+    numpy$$ndarray (*sinh) (numpy$B_RealFuns$math$ndarray, numpy$$ndarray);
+    numpy$$ndarray (*cosh) (numpy$B_RealFuns$math$ndarray, numpy$$ndarray);
+    numpy$$ndarray (*tanh) (numpy$B_RealFuns$math$ndarray, numpy$$ndarray);
+    numpy$$ndarray (*asinh) (numpy$B_RealFuns$math$ndarray, numpy$$ndarray);
+    numpy$$ndarray (*acosh) (numpy$B_RealFuns$math$ndarray, numpy$$ndarray);
+    numpy$$ndarray (*atanh) (numpy$B_RealFuns$math$ndarray, numpy$$ndarray);
 };
-struct numpy$$RealFuns$math$ndarray {
-    struct numpy$$RealFuns$math$ndarray$class *$class;
-    numpy$$Primitive w$Primitive$A$RealFuns$math$ndarray;
-  math$$RealFuns w$RealFuns$math$A$RealFuns$math$ndarray;
+struct numpy$B_RealFuns$math$ndarray {
+    struct numpy$B_RealFuns$math$ndarrayG_class *$class;
+    numpy$$Primitive W_PrimitiveD_AD_RealFuns$math$ndarray;
+  math$B_RealFuns W_RealFuns$mathD_AD_RealFuns$math$ndarray;
 };
-extern struct numpy$$RealFuns$math$ndarray$class numpy$$RealFuns$math$ndarray$methods;
+extern struct numpy$B_RealFuns$math$ndarrayG_class numpy$B_RealFuns$math$ndarrayG_methods;
 
 
 // method tables /////////////////////////////////////////////////////////////////
 
-extern struct numpy$$Integral$ndarray$int$class numpy$$Integral$ndarray$int$methods;
-extern struct numpy$$Logical$ndarray$int$class numpy$$Logical$ndarray$int$methods;
-extern struct numpy$$Minus$ndarray$int$class numpy$$Minus$ndarray$int$methods;
-extern struct numpy$$Real$ndarray$class numpy$$Real$ndarray$methods;
-extern struct numpy$$Minus$ndarray$class numpy$$Minus$ndarray$methods;
-extern struct numpy$$Div$ndarray$int$class numpy$$Div$ndarray$int$methods;
-extern struct numpy$$Div$ndarray$float$class numpy$$Div$ndarray$float$methods;
-extern struct numpy$$Sliceable$ndarray$class numpy$$Sliceable$ndarray$methods;
-extern struct numpy$$Collection$ndarray$class numpy$$Collection$ndarray$methods;
+extern struct numpy$B_IntegralD_ndarrayB_intG_class numpy$B_IntegralD_ndarrayB_intG_methods;
+extern struct numpy$B_LogicalD_ndarrayB_intG_class numpy$B_LogicalD_ndarrayB_intG_methods;
+extern struct numpy$B_MinusD_ndarrayB_intG_class numpy$B_MinusD_ndarrayB_intG_methods;
+extern struct numpy$B_RealD_ndarrayG_class numpy$B_RealD_ndarrayG_methods;
+extern struct numpy$B_MinusD_ndarrayG_class numpy$B_MinusD_ndarrayG_methods;
+extern struct numpy$B_DivD_ndarrayB_intG_class numpy$B_DivD_ndarrayB_intG_methods;
+extern struct numpy$B_DivD_ndarrayB_floatG_class numpy$B_DivD_ndarrayB_floatG_methods;
+extern struct numpy$B_SliceableD_ndarrayG_class numpy$B_SliceableD_ndarrayG_methods;
+extern struct numpy$B_CollectionD_ndarrayG_class numpy$B_CollectionD_ndarrayG_methods;
 
-numpy$$Integral$ndarray$int numpy$$Integral$ndarray$int$new();
-numpy$$Logical$ndarray$int numpy$$Logical$ndarray$int$new($Integral);
-numpy$$Minus$ndarray$int numpy$$Minus$ndarray$int$new($Integral);
-numpy$$Real$ndarray numpy$$Real$ndarray$new(numpy$$Primitive);
-numpy$$Minus$ndarray numpy$$Minus$ndarray$new($Real);
-numpy$$Div$ndarray$int numpy$$Div$ndarray$int$new();
-numpy$$Div$ndarray$float numpy$$Div$ndarray$float$new();
-numpy$$Sliceable$ndarray numpy$$Sliceable$ndarray$new(numpy$$Primitive);
-numpy$$Collection$ndarray numpy$$Collection$ndarray$new(numpy$$Primitive);
-numpy$$RealFuns$math$ndarray numpy$$RealFuns$math$ndarray$new(numpy$$Primitive, math$$RealFuns);
+numpy$B_IntegralD_ndarrayB_int numpy$B_IntegralD_ndarrayB_intG_new();
+numpy$B_LogicalD_ndarrayB_int numpy$B_LogicalD_ndarrayB_intG_new(B_Integral);
+numpy$B_MinusD_ndarrayB_int numpy$B_MinusD_ndarrayB_intG_new(B_Integral);
+numpy$B_RealD_ndarray numpy$B_RealD_ndarrayG_new(numpy$$Primitive);
+numpy$B_MinusD_ndarray numpy$B_MinusD_ndarrayG_new(B_Real);
+numpy$B_DivD_ndarrayB_int numpy$B_DivD_ndarrayB_intG_new();
+numpy$B_DivD_ndarrayB_float numpy$B_DivD_ndarrayB_floatG_new();
+numpy$B_SliceableD_ndarray numpy$B_SliceableD_ndarrayG_new(numpy$$Primitive);
+numpy$B_CollectionD_ndarray numpy$B_CollectionD_ndarrayG_new(numpy$$Primitive);
+numpy$B_RealFuns$math$ndarray numpy$B_RealFuns$math$ndarrayG_new(numpy$$Primitive, math$B_RealFuns);
 
 
-void numpy$$__init__();
+void numpy$D___init__();
 
 void quickselect(union $Bytes8 *a, int left, int right, int k, bool (*lt)(union $Bytes8,union $Bytes8));
 void quicksort(union $Bytes8 *a, int left, int right, bool (*lt)(union $Bytes8,union $Bytes8));

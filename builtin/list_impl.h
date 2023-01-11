@@ -1,30 +1,30 @@
 
-void $list_init($list lst, $Iterable wit, $WORD seq);
+void B_listD_init(B_list lst, B_Iterable wit, $WORD seq);
 
-$list $list_copy($list lst);
+B_list B_listD_copy(B_list lst);
 
-$list $list_add($list lst, $list other);
-$list $list_mul($list lst, $int n);
+B_list B_listD_add(B_list lst, B_list other);
+B_list B_listD_mul(B_list lst, B_int n);
 
-$Iterator $list_iter($list lst);
+B_Iterator B_listD_iter(B_list lst);
 
-$list $list_fromiter($Iterator it);
-long $list_len($list lst);
+B_list B_listD_fromiter(B_Iterator it);
+long B_listD_len(B_list lst);
 
-int $list_contains($Eq w,$list lst, $WORD elem);
-int $list_containsnot($Eq w, $list lst, $WORD elem);
+int B_listD_contains(B_Eq w,B_list lst, $WORD elem);
+int B_listD_containsnot(B_Eq w, B_list lst, $WORD elem);
 
-$WORD $list_getitem($list lst, int ix);
-void $list_setitem($list lst, int ix, $WORD val);
-void $list_delitem($list lst,int ix);
+$WORD B_listD_getitem(B_list lst, int ix);
+void B_listD_setitem(B_list lst, int ix, $WORD val);
+void B_listD_delitem(B_list lst,int ix);
 
-$list $list_getslice($list lst, $slice slc);
-void $list_setslice($list lst, $slice slc, $Iterator it);
-void $list_delslice($list lst, $slice slc);
+B_list B_listD_getslice(B_list lst, B_slice slc);
+void B_listD_setslice(B_list lst, B_slice slc, B_Iterator it);
+void B_listD_delslice(B_list lst, B_slice slc);
 
-void $list_append($list lst, $WORD val);
-$Iterator $list_reversed($list lst);
-void $list_insert($list lst, int ix, $WORD val);
-void $list_reverse($list lst);
+void B_listD_append(B_list lst, $WORD val);
+B_Iterator B_listD_reversed(B_list lst);
+void B_listD_insert(B_list lst, int ix, $WORD val);
+void B_listD_reverse(B_list lst);
 
-$list $list_new(int capacity);
+B_list B_listD_new(int capacity);

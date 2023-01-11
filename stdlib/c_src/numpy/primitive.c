@@ -117,13 +117,13 @@ LONGUNARY(l$bnot,~)
 DBLUNARY(d$abs,fabs)
 DBLUNARY(d$neg,-)
 
-$str l$prim_str(union $Bytes8 n) {
+B_str l$prim_str(union $Bytes8 n) {
     char *s;
     asprintf(&s,"%ld",n.l);
     return to$str(s);
 }
 
-$str d$prim_str(union $Bytes8 x) {
+B_str d$prim_str(union $Bytes8 x) {
     char *s;
     asprintf(&s,"%g",x.d);
     return to$str(s);
@@ -132,7 +132,7 @@ $str d$prim_str(union $Bytes8 x) {
 union $Bytes8 l$pow(union $Bytes8 a, union $Bytes8 b) {
     union $Bytes8 res;
     if (b.l < 0)
-        $RAISE(($BaseException)$NEW($ValueError,to$str("pow for ndarray[int]: negative value in exponent array")));
+        $RAISE((B_BaseException)$NEW(B_ValueError,to$str("pow for ndarray[int]: negative value in exponent array")));
     res.l = longpow(a.l,b.l);
     return res;
 }
@@ -143,71 +143,71 @@ union $Bytes8 d$pow(union $Bytes8  a, union $Bytes8 b) {
     return res;
 }
 
-$WORD to$obj$int(union $Bytes8 x) {
-    return  to$int(x.l);
+$WORD to$objB_int(union $Bytes8 x) {
+    return  toB_int(x.l);
 }
 
-union $Bytes8 from$obj$int($WORD x) {
+union $Bytes8 from$objB_int($WORD x) {
     union $Bytes8 res;
-    res.l = from$int(($int)x);
+    res.l = fromB_int((B_int)x);
     return res;
 }
 
-$WORD to$obj$float(union $Bytes8 x) {
-    return to$float(x.d);
+$WORD to$objB_float(union $Bytes8 x) {
+    return toB_float(x.d);
 }
 
-union $Bytes8 from$obj$float($WORD x) {
+union $Bytes8 from$objB_float($WORD x) {
     union $Bytes8 res;
-    res.d = (($float)x)->val;
+    res.d = ((B_float)x)->val;
     return res;
 }
 
-void numpy$$Primitive$int$serialize(numpy$$Primitive$int self, $Serial$state state) {
+void numpy$$PrimitiveB_int$serialize(numpy$$PrimitiveB_int self, $NoneType state) {
 }
 
-numpy$$Primitive$int numpy$$Primitive$int$deserialize(numpy$$Primitive$int self, $Serial$state state) {
-    numpy$$Primitive$int res = (numpy$$Primitive$int)$DNEW(numpy$$Primitive$int,state);
+numpy$$PrimitiveB_int numpy$$PrimitiveB_int$deserialize(numpy$$PrimitiveB_int self, $NoneType state) {
+    numpy$$PrimitiveB_int res = (numpy$$PrimitiveB_int)$DNEW(numpy$$PrimitiveB_int,state);
     return res;
 }
 
-void numpy$$Primitive$float$serialize(numpy$$Primitive$float self, $Serial$state state) {
+void numpy$$PrimitiveB_float$serialize(numpy$$PrimitiveB_float self, $NoneType state) {
 }
 
-numpy$$Primitive$float numpy$$Primitive$float$deserialize(numpy$$Primitive$float self, $Serial$state state) {
-    numpy$$Primitive$float res = (numpy$$Primitive$float)$DNEW(numpy$$Primitive$float,state);
+numpy$$PrimitiveB_float numpy$$PrimitiveB_float$deserialize(numpy$$PrimitiveB_float self, $NoneType state) {
+    numpy$$PrimitiveB_float res = (numpy$$PrimitiveB_float)$DNEW(numpy$$PrimitiveB_float,state);
     return res;
 }
 
 
-struct numpy$$Primitive$int$class numpy$$Primitive$int$methods = {"numpy$$Primitive$int",UNASSIGNED,NULL,(void (*)(numpy$$Primitive$int))$default__init__,
-                                                                  numpy$$Primitive$int$serialize,numpy$$Primitive$int$deserialize,NULL,NULL,NULL,
-                                                                  LongType,to$obj$int,from$obj$int,l$prim_str,
+struct numpy$$PrimitiveB_intG_class numpy$$PrimitiveB_intG_methods = {"numpy$$PrimitiveB_int",UNASSIGNED,NULL,(void (*)(numpy$$PrimitiveB_int))$default__init__,
+                                                                  numpy$$PrimitiveB_int$serialize,numpy$$PrimitiveB_int$deserialize,NULL,NULL,NULL,
+                                                                  LongType,to$objB_int,from$objB_int,l$prim_str,
                                                                   l$add,l$sub,l$mul,l$truediv,l$floordiv,l$mod,l$land,l$lor,l$band,l$bor,l$bxor,l$lsh,l$rsh,l$pow,
                                                                   l$iadd,l$isub,l$imul,l$itruediv,l$ifloordiv,l$imod,l$iband,l$ibor,l$ibxor,l$ilsh,l$irsh,
                                                                   l$eq,l$neq,l$lt,l$le,l$gt,l$ge,l$abs,l$neg,l$lnot,l$bnot};
 
 
-struct numpy$$Primitive$float$class numpy$$Primitive$float$methods = {"numpy$$Primitive$float",UNASSIGNED,NULL,(void (*)(numpy$$Primitive$float))$default__init__, 
-                                                                      numpy$$Primitive$float$serialize,numpy$$Primitive$float$deserialize,NULL,NULL,NULL,
-                                                                      DblType,to$obj$float,from$obj$float,d$prim_str,
+struct numpy$$PrimitiveB_floatG_class numpy$$PrimitiveB_floatG_methods = {"numpy$$PrimitiveB_float",UNASSIGNED,NULL,(void (*)(numpy$$PrimitiveB_float))$default__init__, 
+                                                                      numpy$$PrimitiveB_float$serialize,numpy$$PrimitiveB_float$deserialize,NULL,NULL,NULL,
+                                                                      DblType,to$objB_float,from$objB_float,d$prim_str,
                                                                       d$add,d$sub,d$mul,d$truediv,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,d$pow,
                                                                       d$iadd,d$isub,d$imul,d$itruediv,NULL,NULL,NULL,NULL,NULL,NULL,NULL,
                                                                       d$eq,d$neq,d$lt,d$le,d$gt,d$ge,d$abs,d$neg,NULL,NULL};
 
-struct numpy$$Primitive$int numpy$$Primitive$int_instance = {&numpy$$Primitive$int$methods};
-numpy$$Primitive$int numpy$$Primitive$int$witness = &numpy$$Primitive$int_instance;
+struct numpy$$PrimitiveB_int numpy$$PrimitiveB_intD_instance = {&numpy$$PrimitiveB_intG_methods};
+numpy$$PrimitiveB_int numpy$$PrimitiveB_intG_witness = &numpy$$PrimitiveB_intD_instance;
 
-struct numpy$$Primitive$float numpy$$Primitive$float_instance = {&numpy$$Primitive$float$methods};
-numpy$$Primitive$float numpy$$Primitive$float$witness = &numpy$$Primitive$float_instance;
+struct numpy$$PrimitiveB_float numpy$$PrimitiveB_floatD_instance = {&numpy$$PrimitiveB_floatG_methods};
+numpy$$PrimitiveB_float numpy$$PrimitiveB_floatG_witness = &numpy$$PrimitiveB_floatD_instance;
 
-numpy$$Primitive$int numpy$$Primitive$int$new() {
-    numpy$$Primitive$int res = malloc(sizeof(struct numpy$$Primitive$int));
-    res->$class = &numpy$$Primitive$int$methods;
+numpy$$PrimitiveB_int numpy$$PrimitiveB_intG_new() {
+    numpy$$PrimitiveB_int res = malloc(sizeof(struct numpy$$PrimitiveB_int));
+    res->$class = &numpy$$PrimitiveB_intG_methods;
     return res;
 }
-numpy$$Primitive$float numpy$$Primitive$float$new() {
-    numpy$$Primitive$float res = malloc(sizeof(struct numpy$$Primitive$float));
-    res->$class = &numpy$$Primitive$float$methods;
+numpy$$PrimitiveB_float numpy$$PrimitiveB_floatG_new() {
+    numpy$$PrimitiveB_float res = malloc(sizeof(struct numpy$$PrimitiveB_float));
+    res->$class = &numpy$$PrimitiveB_floatG_methods;
     return res;
 }

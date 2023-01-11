@@ -16,6 +16,6 @@
 #include "../ndarray.h"
 
 int main() {
-  $ndarray a = $NEW($ndarray,to$float(3.1416));
+  $ndarray a = $NEW($ndarray,toB_float(3.1416));
   $print($NEWTUPLE(2,to$str("a="),a));
 }

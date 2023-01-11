@@ -16,28 +16,28 @@
  
 int main() {
 
-  $slice slc = $slice$new(to$int(-1),to$int(0),to$int(-2));
-  $Sequence$list wit = $Sequence$list$witness;
-  $list lst = $list$new(NULL,NULL);
+  B_slice slc = B_sliceG_new(toB_int(-1),toB_int(0),toB_int(-2));
+  B_SequenceD_list wit = B_SequenceD_listG_witness;
+  B_list lst = B_listG_new(NULL,NULL);
   for (long i=0; i<100; i++)
-    wit->$class->append(wit,lst,to$int(i));
-  $list lst2 = wit->$class->__getslice__(wit,lst,slc);
+    wit->$class->append(wit,lst,toB_int(i));
+  B_list lst2 = wit->$class->__getslice__(wit,lst,slc);
   $print(2,to$str("lst2 = "),lst2);
-  $list lst3 =  $list$new(NULL,NULL);
+  B_list lst3 =  B_listG_new(NULL,NULL);
   for (long i=100; i<110; i++)
-    wit->$class->append(wit,lst3,to$int(i));
+    wit->$class->append(wit,lst3,toB_int(i));
   $print(2,to$str("lst3 = "),lst3);
-  slc = $slice$new(to$int(10),to$int(30),to$int(2));
-  wit->$class->__setslice__(wit,($Iterable)wit->w$Collection,lst2,slc,lst3);
+  slc = B_sliceG_new(toB_int(10),toB_int(30),toB_int(2));
+  wit->$class->__setslice__(wit,(B_Iterable)wit->W_Collection,lst2,slc,lst3);
   $print(2,to$str("lst2 = "),lst2);
-  $range r = $NEW($range,to$int(10000),NULL,NULL);
-  $list lst4 = wit->w$Collection->$class->__fromiter__(wit->w$Collection,($Iterable)$Iterable$range$witness,r);
+  B_range r = $NEW(B_range,toB_int(10000),NULL,NULL);
+  B_list lst4 = wit->W_Collection->$class->__fromiter__(wit->W_Collection,(B_Iterable)B_IterableD_rangeG_witness,r);
 
-  $Iterator it = $Iterable$range$witness->$class->__iter__($Iterable$range$witness,$NEW($range,to$int(1000),to$int(1),to$int(-1)));
-  $int i;
-  while((i = ($int)it->$class->__next__(it))) {
-  slc = $slice$new(to$int(0),to$int(10000),i);
-    $list_delslice(lst4,slc);
+  B_Iterator it = B_IterableD_rangeG_witness->$class->__iter__(B_IterableD_rangeG_witness,$NEW(B_range,toB_int(1000),toB_int(1),toB_int(-1)));
+  B_int i;
+  while((i = (B_int)it->$class->__next__(it))) {
+  slc = B_sliceG_new(toB_int(0),toB_int(10000),i);
+    B_listD_delslice(lst4,slc);
   }
   $print(2,to$str("lst4 = "),lst4);
 }

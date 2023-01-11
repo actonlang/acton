@@ -1,10 +1,10 @@
 
-long $i64_hash($i64 n);
-long $float_hash($float v);
-long $complex_hash($complex c);
+long B_i64D_hash(B_i64 n);
+long B_floatD_hash(B_float v);
+long B_complexD_hash(B_complex c);
 
-long $string_hash($str s);
-long $bytes_hash($bytes s);
+long B_string_hash(B_str s);
+long B_bytesD_hash(B_bytes s);
 
 long $pointer_hash($WORD w);
-long $tuple_hash($Hashable$tuple wit,$tuple tup);
+long B_tupleD_hash(B_HashableD_tuple wit,B_tuple tup);

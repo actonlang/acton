@@ -18,128 +18,128 @@ typedef struct lambda$3 *lambda$3;
 typedef struct lambda$4 *lambda$4;
 typedef struct Root *Root;
 
-struct lambda$1$class {
+struct lambda$1G_class {
     char *$GCINFO;
     int $class_id;
-    $Super$class $superclass;
+    $SuperG_class $superclass;
     void (*__init__)(lambda$1, $Cont);
-    void (*__serialize__)(lambda$1, $Serial$state);
-    lambda$1 (*__deserialize__)(lambda$1, $Serial$state);
-    $bool (*__bool__)(lambda$1);
-    $str (*__str__)(lambda$1);
+    void (*__serialize__)(lambda$1, $NoneType);
+    lambda$1 (*__deserialize__)(lambda$1, $NoneType);
+    B_bool (*__bool__)(lambda$1);
+    B_str (*__str__)(lambda$1);
     $R (*__call__)(lambda$1, $Msg);    
 };
 struct lambda$1 {
-    struct lambda$1$class *$class;
+    struct lambda$1G_class *$class;
     $Cont cont$0;    
 };
 
-struct lambda$2$class {
+struct lambda$2G_class {
     char *$GCINFO;
     int $class_id;
-    $Super$class $superclass;
-    void (*__init__)(lambda$2, Act, $int, $list);
-    void (*__serialize__)(lambda$2, $Serial$state);
-    lambda$2 (*__deserialize__)(lambda$2, $Serial$state);
-    $bool (*__bool__)(lambda$2);
-    $str (*__str__)(lambda$2);
+    $SuperG_class $superclass;
+    void (*__init__)(lambda$2, Act, B_int, B_list);
+    void (*__serialize__)(lambda$2, $NoneType);
+    lambda$2 (*__deserialize__)(lambda$2, $NoneType);
+    B_bool (*__bool__)(lambda$2);
+    B_str (*__str__)(lambda$2);
     $R (*__call__)(lambda$2, $Cont);    
 };
 struct lambda$2 {
-    struct lambda$2$class *$class;
+    struct lambda$2G_class *$class;
     Act self;
-    $int from;
-    $list table;
+    B_int from;
+    B_list table;
 };
 
-struct Act$class {
+struct ActG_class {
     char *$GCINFO;
     int $class_id;
-    $Super$class $superclass;
-    $R (*__init__)(Act, $int, $Cont);
-    void (*__serialize__)(Act, $Serial$state);
-    Act (*__deserialize__)(Act, $Serial$state);
-    $bool (*__bool__)(Act);
-    $str (*__str__)(Act);
-    $R (*act$local)(Act, $int, $list, $Cont);
-    $R (*act)(Act, $int, $list, $Cont);
+    $SuperG_class $superclass;
+    $R (*__init__)(Act, B_int, $Cont);
+    void (*__serialize__)(Act, $NoneType);
+    Act (*__deserialize__)(Act, $NoneType);
+    B_bool (*__bool__)(Act);
+    B_str (*__str__)(Act);
+    $R (*act$local)(Act, B_int, B_list, $Cont);
+    $R (*act)(Act, B_int, B_list, $Cont);
 };
 struct Act {
     union {
-        struct Act$class *$class;
+        struct ActG_class *$class;
         struct $Actor super;
     };
-    $int i;
-    $int count;
-    $dict rcv_dict;
-    $dict snd_dict;
+    B_int i;
+    B_int count;
+    B_dict rcv_dict;
+    B_dict snd_dict;
 };
 
-struct lambda$3$class {
+struct lambda$3G_class {
     char *$GCINFO;
     int $class_id;
-    $Super$class $superclass;
-    void (*__init__)(lambda$3, Root, $Iterator, $Cont);
-    void (*__serialize__)(lambda$3, $Serial$state);
-    lambda$3 (*__deserialize__)(lambda$3, $Serial$state);
-    $bool (*__bool__)(lambda$3);
-    $str (*__str__)(lambda$3);
+    $SuperG_class $superclass;
+    void (*__init__)(lambda$3, Root, B_Iterator, $Cont);
+    void (*__serialize__)(lambda$3, $NoneType);
+    lambda$3 (*__deserialize__)(lambda$3, $NoneType);
+    B_bool (*__bool__)(lambda$3);
+    B_str (*__str__)(lambda$3);
     $R (*__call__)(lambda$3, Act);
 };
 struct lambda$3 {
-    struct lambda$3$class *$class;
+    struct lambda$3G_class *$class;
     Root self;
-    $Iterator iter$1;
+    B_Iterator iter$1;
     $Cont cont$0;
 };
 
-struct lambda$4$class {
+struct lambda$4G_class {
     char *$GCINFO;
     int $class_id;
-    $Super$class $superclass;
+    $SuperG_class $superclass;
     void (*__init__)(lambda$4, $Cont);
-    void (*__serialize__)(lambda$4, $Serial$state);
-    lambda$4 (*__deserialize__)(lambda$4, $Serial$state);
-    $bool (*__bool__)(lambda$4);
-    $str (*__str__)(lambda$4);
+    void (*__serialize__)(lambda$4, $NoneType);
+    lambda$4 (*__deserialize__)(lambda$4, $NoneType);
+    B_bool (*__bool__)(lambda$4);
+    B_str (*__str__)(lambda$4);
     $R (*__call__)(lambda$4, $WORD);
 };
 struct lambda$4 {
-    struct lambda$4$class *$class;
+    struct lambda$4G_class *$class;
     $Cont cont$0;
 };
 
-struct Root$class {
+struct RootG_class {
     char *$GCINFO;
     int $class_id;
-    $Super$class $superclass;
+    $SuperG_class $superclass;
     $R (*__init__)(Root, $Env, $Cont);
-    void (*__serialize__)(Root, $Serial$state);
-    Root (*__deserialize__)(Root, $Serial$state);
-    $bool (*__bool__)(Root);
-    $str (*__str__)(Root);
+    void (*__serialize__)(Root, $NoneType);
+    Root (*__deserialize__)(Root, $NoneType);
+    B_bool (*__bool__)(Root);
+    B_str (*__str__)(Root);
 };
 struct Root {
     union {
-        struct Root$class *$class;
+        struct RootG_class *$class;
         struct $Actor super;
     };
-    $list table;
+    B_list table;
 };
 
-$R loop$1(Root, $Iterator, $Cont, $WORD);
-$R cont$1(Root, $Iterator, $Cont, Act);
+$R loop$1(Root, B_Iterator, $Cont, $WORD);
+$R cont$1(Root, B_Iterator, $Cont, Act);
 $R join$1(Root, $Cont, $WORD);
 
-extern struct lambda$1$class lambda$1$methods;
-extern struct lambda$2$class lambda$2$methods;
-extern struct Act$class Act$methods;
-extern struct lambda$3$class lambda$3$methods;
-extern struct lambda$4$class lambda$4$methods;
-extern struct Root$class Root$methods;
+extern struct lambda$1G_class lambda$1G_methods;
+extern struct lambda$2G_class lambda$2G_methods;
+extern struct ActG_class ActG_methods;
+extern struct lambda$3G_class lambda$3G_methods;
+extern struct lambda$4G_class lambda$4G_methods;
+extern struct RootG_class RootG_methods;
 
-extern $Mapping $Mapping$dict$witness;
-extern $Indexed $Indexed$dict$witness;
+extern B_Mapping B_MappingD_dictG_witness;
+extern B_Indexed B_IndexedD_MappingD_dictG_witness;
 
-extern $int no_actors;
-extern $int total_msgs;
+extern B_int no_actors;
+extern B_int total_msgs;

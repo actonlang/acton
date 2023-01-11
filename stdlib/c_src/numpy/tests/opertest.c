@@ -16,17 +16,17 @@
 #include "../numpy.h"
 
 int main() {
-  numpy$$ndarray v = numpy$$ndarray_arange(to$int(0),to$int(60),to$int(1));
-  $list newshape = $NEW($list,NULL,NULL);
-  $list_append(newshape,to$int(3));
-  $list_append(newshape,to$int(2));
-  $list_append(newshape,to$int(2));
-  $list_append(newshape,to$int(5));
+  numpy$$ndarray v = numpy$$ndarray_arange(toB_int(0),toB_int(60),toB_int(1));
+  B_list newshape = $NEW(B_list,NULL,NULL);
+  B_listD_append(newshape,toB_int(3));
+  B_listD_append(newshape,toB_int(2));
+  B_listD_append(newshape,toB_int(2));
+  B_listD_append(newshape,toB_int(5));
   numpy$$ndarray a = numpy$$ndarray_reshape(v,newshape);
   $printobj("a.shape =",a->shape);
   $printobj("a.strides =",a->strides);
   $printobj("a =",a);
-  numpy$$Integral$ndarray wit = $NEW(numpy$$Integral$ndarray,(numpy$$Primitive)numpy$$Primitive$int$witness);
+  numpy$B_IntegralD_ndarray wit = $NEW(numpy$B_IntegralD_ndarray,(numpy$$Primitive)numpy$$PrimitiveB_intG_witness);
   numpy$$ndarray b = wit->$class->__add__(wit,a, a);
   $printobj("b.shape =",b->shape);
   $printobj("b.strides =",b->strides);

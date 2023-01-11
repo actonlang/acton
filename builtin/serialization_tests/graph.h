@@ -6,23 +6,23 @@ struct $Node;
 
 typedef struct $Node *$Node;
 
-struct $Node$class {
+struct $NodeG_class {
     char *$GCINFO;
     int $class_id;
-    $Super$class $superclass;
-    void (*__init__)($Node, $list);
-    void (*__serialize__)($Node, $Serial$state);
-    $Node (*__deserialize__)($Node, $Serial$state);
-    $bool (*__bool__)($Node);
-    $str (*__str__)($Node);
+    $SuperG_class $superclass;
+    void (*__init__)($Node, B_list);
+    void (*__serialize__)($Node, $NoneType);
+    $Node (*__deserialize__)($Node, $NoneType);
+    B_bool (*__bool__)($Node);
+    B_str (*__str__)($Node);
 };
 
 struct $Node {
-  struct $Node$class *$class;
-  $list nbors; // list of Nodes
+  struct $NodeG_class *$class;
+  B_list nbors; // list of Nodes
 };
 
-extern struct $Node$class $Node$methods;
+extern struct $NodeG_class $NodeG_methods;
 
 // IntNodes  ////////////////////////////////////////////////////////////////////////////
 
@@ -30,24 +30,24 @@ struct $IntNode;
 
 typedef struct $IntNode *$IntNode;
 
-struct $IntNode$class {
+struct $IntNodeG_class {
     char *$GCINFO;
     int $class_id;
-    $Super$class $superclass;
-    void (*__init__)($IntNode, $list, $int);
-    void (*__serialize__)($IntNode, $Serial$state);
-    $IntNode (*__deserialize__)($IntNode, $Serial$state);
-    $bool (*__bool__)($IntNode);
-    $str (*__str__)($IntNode);
+    $SuperG_class $superclass;
+    void (*__init__)($IntNode, B_list, B_int);
+    void (*__serialize__)($IntNode, $NoneType);
+    $IntNode (*__deserialize__)($IntNode, $NoneType);
+    B_bool (*__bool__)($IntNode);
+    B_str (*__str__)($IntNode);
 };
 
 struct $IntNode {
-  struct $IntNode$class *$class;
-  $list nbors; // list of Nodes
-  $int ival;
+  struct $IntNodeG_class *$class;
+  B_list nbors; // list of Nodes
+  B_int ival;
 };
 
-extern struct $IntNode$class $IntNode$methods;
+extern struct $IntNodeG_class $IntNodeG_methods;
 
 // FloatNodes  ////////////////////////////////////////////////////////////////////////////
 
@@ -55,46 +55,46 @@ struct $FloatNode;
 
 typedef struct $FloatNode *$FloatNode;
 
-struct $FloatNode$class {
+struct $FloatNodeG_class {
     char *$GCINFO;
     int $class_id;
-    $Super$class $superclass;
-    void (*__init__)($FloatNode, $list, $float);
-    void (*__serialize__)($FloatNode,$Serial$state);
-    $FloatNode (*__deserialize__)($FloatNode,$Serial$state);
-    $bool (*__bool__)($FloatNode);
-    $str (*__str__)($FloatNode);
+    $SuperG_class $superclass;
+    void (*__init__)($FloatNode, B_list, B_float);
+    void (*__serialize__)($FloatNode,$NoneType);
+    $FloatNode (*__deserialize__)($FloatNode,$NoneType);
+    B_bool (*__bool__)($FloatNode);
+    B_str (*__str__)($FloatNode);
 };
 
 struct $FloatNode {
-  struct $FloatNode$class *$class;
-  $list nbors; // list of Nodes
-  $float fval;
+  struct $FloatNodeG_class *$class;
+  B_list nbors; // list of Nodes
+  B_float fval;
 };
 
-extern struct $FloatNode$class $FloatNode$methods;
+extern struct $FloatNodeG_class $FloatNodeG_methods;
 
 // Graphs ////////////////////////////////////////////////////////////////////////////
 
 typedef struct $Graph *$Graph;
 
-struct $Graph$class {
+struct $GraphG_class {
     char *$GCINFO;
     int $class_id;
-    $Super$class $superclass;
-    void (*__init__)($Graph, $list);
-    void (*__serialize__)($Graph, $Serial$state);
-    $Graph (*__deserialize__)($Graph, $Serial$state);
-    $bool (*__bool__)($Graph);
-    $str (*__str__)($Graph);
+    $SuperG_class $superclass;
+    void (*__init__)($Graph, B_list);
+    void (*__serialize__)($Graph, $NoneType);
+    $Graph (*__deserialize__)($Graph, $NoneType);
+    B_bool (*__bool__)($Graph);
+    B_str (*__str__)($Graph);
 };
 
 struct $Graph {
-  struct $Graph$class *$class;
-  $list nodes; 
+  struct $GraphG_class *$class;
+  B_list nodes; 
 };
 
-extern struct $Graph$class $Graph$methods;
+extern struct $GraphG_class $GraphG_methods;
 
 // register classes for serialization ////////////////////////////////////////////////////////////
 

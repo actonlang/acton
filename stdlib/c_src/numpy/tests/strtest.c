@@ -17,27 +17,27 @@
 
 
 int main() {
-  $list elems = $NEW($list,NULL,NULL);
-  $list_append(elems,to$float(2.0));
-  $list_append(elems,to$float(3.0));
-  $list_append(elems,to$float(5.0));
-  $list_append(elems,to$float(7.0));
-  numpy$$ndarray q = numpy$$ndarray_array((numpy$$Primitive)numpy$$Primitive$float$witness,elems);
+  B_list elems = $NEW(B_list,NULL,NULL);
+  B_listD_append(elems,toB_float(2.0));
+  B_listD_append(elems,toB_float(3.0));
+  B_listD_append(elems,toB_float(5.0));
+  B_listD_append(elems,toB_float(7.0));
+  numpy$$ndarray q = numpy$$ndarray_array((numpy$$Primitive)numpy$$PrimitiveB_floatG_witness,elems);
   $printobj("q =",q);
-  numpy$$ndarray a = numpy$$ndarray_arange(to$int(0),to$int(10),to$int(1));
+  numpy$$ndarray a = numpy$$ndarray_arange(toB_int(0),toB_int(10),toB_int(1));
   $printobj("a =",a);
-  $list ix = $NEW($list,NULL,NULL);
-  $list_append(ix,to$int(2));
-  $list_append(ix,to$int(5));
+  B_list ix = $NEW(B_list,NULL,NULL);
+  B_listD_append(ix,toB_int(2));
+  B_listD_append(ix,toB_int(5));
   $printobj("a.reshape(2,5)=",numpy$$ndarray_reshape(a,ix));
-  numpy$$ndarray b = numpy$$ndarray_linspace(to$float(0),to$float(1),to$int(5));
+  numpy$$ndarray b = numpy$$ndarray_linspace(toB_float(0),toB_float(1),toB_int(5));
   $printobj("b =",b);
   
-  $list ix1 = $NEW($list,NULL,NULL);
-  $list_append(ix1,numpy$$ndindex$new(to$int(7)));
-  numpy$$ndarray c = numpy$$ndarray$__ndgetslice__(a,ix1);
+  B_list ix1 = $NEW(B_list,NULL,NULL);
+  B_listD_append(ix1,numpy$$ndindexG_new(toB_int(7)));
+  numpy$$ndarray c = numpy$$ndarrayD___ndgetslice__(a,ix1);
   $printobj("a[7] =",c);
-  numpy$$ndarray d = numpy$$ndarray_fromatom(to$float(3.5));
+  numpy$$ndarray d = numpy$$ndarray_fromatom(toB_float(3.5));
   $printobj("d =",d);
 }
 

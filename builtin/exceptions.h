@@ -1,290 +1,290 @@
-struct $BaseException$class {
+struct B_BaseExceptionG_class {
     char *$GCINFO;
     int $class_id;
-    $Super$class $superclass;
-    void (*__init__)($BaseException,$str);
-    void (*__serialize__)($BaseException, $Serial$state);
-    $BaseException (*__deserialize__)($BaseException, $Serial$state);
-    $bool (*__bool__)($BaseException);
-    $str (*__str__)($BaseException);
-    $str (*__repr__)($BaseException);
+    $SuperG_class $superclass;
+    void (*__init__)(B_BaseException,B_str);
+    void (*__serialize__)(B_BaseException, $NoneType);
+    B_BaseException (*__deserialize__)(B_BaseException, $NoneType);
+    B_bool (*__bool__)(B_BaseException);
+    B_str (*__str__)(B_BaseException);
+    B_str (*__repr__)(B_BaseException);
 };
 
-typedef struct $BaseException *$BaseException;
+typedef struct B_BaseException *B_BaseException;
 
-struct $BaseException {
-    struct $BaseException$class *$class;
-    $str error_message;
+struct B_BaseException {
+    struct B_BaseExceptionG_class *$class;
+    B_str error_message;
 };
 
-extern struct $BaseException$class $BaseException$methods;
-$BaseException $BaseException$new($str);
+extern struct B_BaseExceptionG_class B_BaseExceptionG_methods;
+B_BaseException B_BaseExceptionG_new(B_str);
 ////////////////////////////////////////////////////////////////////////////////////////
-struct $SystemExit$class {
+struct B_SystemExitG_class {
     char *$GCINFO;
     int $class_id;
-    $Super$class $superclass;
-    void (*__init__)($SystemExit,$str);
-    void (*__serialize__)($SystemExit,$Serial$state);
-    $SystemExit (*__deserialize__)($SystemExit,$Serial$state);
-    $bool (*__bool__)($SystemExit);
-    $str (*__str__)($SystemExit);
-    $str (*__repr__)($SystemExit);
+    $SuperG_class $superclass;
+    void (*__init__)(B_SystemExit,B_str);
+    void (*__serialize__)(B_SystemExit,$NoneType);
+    B_SystemExit (*__deserialize__)(B_SystemExit,$NoneType);
+    B_bool (*__bool__)(B_SystemExit);
+    B_str (*__str__)(B_SystemExit);
+    B_str (*__repr__)(B_SystemExit);
 };
 
-typedef struct $SystemExit *$SystemExit;
+typedef struct B_SystemExit *B_SystemExit;
 
-struct $SystemExit {
-    struct $SystemExit$class *$class;
-    $str error_message;
+struct B_SystemExit {
+    struct B_SystemExitG_class *$class;
+    B_str error_message;
 };
 
-extern struct $SystemExit$class $SystemExit$methods;
-$SystemExit $SystemExit$new($str);
+extern struct B_SystemExitG_class B_SystemExitG_methods;
+B_SystemExit B_SystemExitG_new(B_str);
 ////////////////////////////////////////////////////////////////////////////////////////
-struct $KeyboardInterrupt$class {
+struct B_KeyboardInterruptG_class {
     char *$GCINFO;
     int $class_id;
-    $Super$class $superclass;
-    void (*__init__)($KeyboardInterrupt,$str);
-    void (*__serialize__)($KeyboardInterrupt,$Serial$state);
-    $KeyboardInterrupt (*__deserialize__)($KeyboardInterrupt,$Serial$state);
-    $bool (*__bool__)($KeyboardInterrupt);
-    $str (*__str__)($KeyboardInterrupt);
-    $str (*__repr__)($KeyboardInterrupt);
+    $SuperG_class $superclass;
+    void (*__init__)(B_KeyboardInterrupt,B_str);
+    void (*__serialize__)(B_KeyboardInterrupt,$NoneType);
+    B_KeyboardInterrupt (*__deserialize__)(B_KeyboardInterrupt,$NoneType);
+    B_bool (*__bool__)(B_KeyboardInterrupt);
+    B_str (*__str__)(B_KeyboardInterrupt);
+    B_str (*__repr__)(B_KeyboardInterrupt);
 };
 
-typedef struct $KeyboardInterrupt *$KeyboardInterrupt;
+typedef struct B_KeyboardInterrupt *B_KeyboardInterrupt;
 
-struct $KeyboardInterrupt {
-    struct $KeyboardInterrupt$class *$class;
-    $str error_message;
+struct B_KeyboardInterrupt {
+    struct B_KeyboardInterruptG_class *$class;
+    B_str error_message;
 };
 
-extern struct $KeyboardInterrupt$class $KeyboardInterrupt$methods;
-$KeyboardInterrupt $KeyboardInterrupt$new($str);
+extern struct B_KeyboardInterruptG_class B_KeyboardInterruptG_methods;
+B_KeyboardInterrupt B_KeyboardInterruptG_new(B_str);
 ////////////////////////////////////////////////////////////////////////////////////////
-struct $Exception$class {
+struct B_ExceptionG_class {
     char *$GCINFO;
     int $class_id;
-    $Super$class $superclass;
-    void (*__init__)($Exception,$str);
-    void (*__serialize__)($Exception,$Serial$state);
-    $Exception (*__deserialize__)($Exception,$Serial$state);
-    $bool (*__bool__)($Exception);
-    $str (*__str__)($Exception);
-    $str (*__repr__)($Exception);
+    $SuperG_class $superclass;
+    void (*__init__)(B_Exception,B_str);
+    void (*__serialize__)(B_Exception,$NoneType);
+    B_Exception (*__deserialize__)(B_Exception,$NoneType);
+    B_bool (*__bool__)(B_Exception);
+    B_str (*__str__)(B_Exception);
+    B_str (*__repr__)(B_Exception);
 };
 
-typedef struct $Exception *$Exception;
+typedef struct B_Exception *B_Exception;
 
-struct $Exception {
-    struct $Exception$class *$class;
-    $str error_message;
+struct B_Exception {
+    struct B_ExceptionG_class *$class;
+    B_str error_message;
 };
 
-extern struct $Exception$class $Exception$methods;
-$Exception $Exception$new($str);
+extern struct B_ExceptionG_class B_ExceptionG_methods;
+B_Exception B_ExceptionG_new(B_str);
 ////////////////////////////////////////////////////////////////////////////////////////
-struct $AssertionError$class {
+struct B_AssertionErrorG_class {
     char *$GCINFO;
     int $class_id;
-    $Super$class $superclass;
-    void (*__init__)($AssertionError,$str);
-    void (*__serialize__)($AssertionError,$Serial$state);
-    $AssertionError (*__deserialize__)($AssertionError,$Serial$state);
-    $bool (*__bool__)($AssertionError);
-    $str (*__str__)($AssertionError);
-    $str (*__repr__)($AssertionError);
+    $SuperG_class $superclass;
+    void (*__init__)(B_AssertionError,B_str);
+    void (*__serialize__)(B_AssertionError,$NoneType);
+    B_AssertionError (*__deserialize__)(B_AssertionError,$NoneType);
+    B_bool (*__bool__)(B_AssertionError);
+    B_str (*__str__)(B_AssertionError);
+    B_str (*__repr__)(B_AssertionError);
 };
 
-typedef struct $AssertionError *$AssertionError;
+typedef struct B_AssertionError *B_AssertionError;
 
-struct $AssertionError {
-    struct $AssertionError$class *$class;
-    $str error_message;
+struct B_AssertionError {
+    struct B_AssertionErrorG_class *$class;
+    B_str error_message;
 };
 
-extern struct $AssertionError$class $AssertionError$methods;
-$AssertionError $AssertionError$new($str);
+extern struct B_AssertionErrorG_class B_AssertionErrorG_methods;
+B_AssertionError B_AssertionErrorG_new(B_str);
 ////////////////////////////////////////////////////////////////////////////////////////
-struct $LookupError$class {
+struct B_LookupErrorG_class {
     char *$GCINFO;
     int $class_id;
-    $Super$class $superclass;
-    void (*__init__)($LookupError,$str);
-    void (*__serialize__)($LookupError,$Serial$state);
-    $LookupError (*__deserialize__)($LookupError,$Serial$state);
-    $bool (*__bool__)($LookupError);
-    $str (*__str__)($LookupError);
-    $str (*__repr__)($LookupError);
+    $SuperG_class $superclass;
+    void (*__init__)(B_LookupError,B_str);
+    void (*__serialize__)(B_LookupError,$NoneType);
+    B_LookupError (*__deserialize__)(B_LookupError,$NoneType);
+    B_bool (*__bool__)(B_LookupError);
+    B_str (*__str__)(B_LookupError);
+    B_str (*__repr__)(B_LookupError);
 };
 
-typedef struct $LookupError *$LookupError;
+typedef struct B_LookupError *B_LookupError;
 
-struct $LookupError {
-    struct $LookupError$class *$class;
-    $str error_message;
+struct B_LookupError {
+    struct B_LookupErrorG_class *$class;
+    B_str error_message;
 };
 
-extern struct $LookupError$class $LookupError$methods;
-$LookupError $LookupError$new($str);
+extern struct B_LookupErrorG_class B_LookupErrorG_methods;
+B_LookupError B_LookupErrorG_new(B_str);
 ////////////////////////////////////////////////////////////////////////////////////////
-struct $IndexError$class {
+struct B_IndexErrorG_class {
     char *$GCINFO;
     int $class_id;
-    $Super$class $superclass;
-    void (*__init__)($IndexError,$str);
-    void (*__serialize__)($IndexError, $Serial$state);
-    $IndexError (*__deserialize__)($IndexError, $Serial$state);
-    $bool (*__bool__)($IndexError);
-    $str (*__str__)($IndexError);
-    $str (*__repr__)($IndexError);
+    $SuperG_class $superclass;
+    void (*__init__)(B_IndexError,B_str);
+    void (*__serialize__)(B_IndexError, $NoneType);
+    B_IndexError (*__deserialize__)(B_IndexError, $NoneType);
+    B_bool (*__bool__)(B_IndexError);
+    B_str (*__str__)(B_IndexError);
+    B_str (*__repr__)(B_IndexError);
 };
 
-typedef struct $IndexError *$IndexError;
+typedef struct B_IndexError *B_IndexError;
 
-struct $IndexError {
-    struct $IndexError$class *$class;
-    $str error_message;
+struct B_IndexError {
+    struct B_IndexErrorG_class *$class;
+    B_str error_message;
 };
 
-extern struct $IndexError$class $IndexError$methods;
-$IndexError $IndexError$new($str);
+extern struct B_IndexErrorG_class B_IndexErrorG_methods;
+B_IndexError B_IndexErrorG_new(B_str);
 ////////////////////////////////////////////////////////////////////////////////////////
-struct $KeyError$class {
+struct B_KeyErrorG_class {
     char *$GCINFO;
     int $class_id;
-    $Super$class $superclass;
-    void (*__init__)($KeyError,$str);
-    void (*__serialize__)($KeyError,$Serial$state);
-    $KeyError (*__deserialize__)($KeyError,$Serial$state);
-    $bool (*__bool__)($KeyError);
-    $str (*__str__)($KeyError);
-    $str (*__repr__)($KeyError);
+    $SuperG_class $superclass;
+    void (*__init__)(B_KeyError,B_str);
+    void (*__serialize__)(B_KeyError,$NoneType);
+    B_KeyError (*__deserialize__)(B_KeyError,$NoneType);
+    B_bool (*__bool__)(B_KeyError);
+    B_str (*__str__)(B_KeyError);
+    B_str (*__repr__)(B_KeyError);
 };
 
-typedef struct $KeyError *$KeyError;
+typedef struct B_KeyError *B_KeyError;
 
-struct $KeyError {
-    struct $KeyError$class *$class;
-    $str error_message;
+struct B_KeyError {
+    struct B_KeyErrorG_class *$class;
+    B_str error_message;
 };
 
-extern struct $KeyError$class $KeyError$methods;
-$KeyError $KeyError$new($str);
+extern struct B_KeyErrorG_class B_KeyErrorG_methods;
+B_KeyError B_KeyErrorG_new(B_str);
 ////////////////////////////////////////////////////////////////////////////////////////
-struct $MemoryError$class {
+struct B_MemoryErrorG_class {
     char *$GCINFO;
     int $class_id;
-    $Super$class $superclass;
-    void (*__init__)($MemoryError,$str);
-    void (*__serialize__)($MemoryError, $Serial$state);
-    $MemoryError (*__deserialize__)($MemoryError, $Serial$state);
-    $bool (*__bool__)($MemoryError);
-    $str (*__str__)($MemoryError);
-    $str (*__repr__)($MemoryError);
+    $SuperG_class $superclass;
+    void (*__init__)(B_MemoryError,B_str);
+    void (*__serialize__)(B_MemoryError, $NoneType);
+    B_MemoryError (*__deserialize__)(B_MemoryError, $NoneType);
+    B_bool (*__bool__)(B_MemoryError);
+    B_str (*__str__)(B_MemoryError);
+    B_str (*__repr__)(B_MemoryError);
 };
 
-typedef struct $$MemoryError *$$MemoryError;
+typedef struct $B_MemoryError *$B_MemoryError;
 
-struct $MemoryError {
-    struct $MemoryError$class *$class;
-    $str error_message;
+struct B_MemoryError {
+    struct B_MemoryErrorG_class *$class;
+    B_str error_message;
 };
 
-extern struct $MemoryError$class $MemoryError$methods;
-$MemoryError $MemoryError$new($str);
+extern struct B_MemoryErrorG_class B_MemoryErrorG_methods;
+B_MemoryError B_MemoryErrorG_new(B_str);
 ////////////////////////////////////////////////////////////////////////////////////////
-struct $OSError$class {
+struct B_OSErrorG_class {
     char *$GCINFO;
     int $class_id;
-    $Super$class $superclass;
-    void (*__init__)($OSError,$str);
-    void (*__serialize__)($OSError, $Serial$state);
-    $OSError (*__deserialize__)($OSError, $Serial$state);
-    $bool (*__bool__)($OSError);
-    $str (*__str__)($OSError);
-    $str (*__repr__)($OSError);
+    $SuperG_class $superclass;
+    void (*__init__)(B_OSError,B_str);
+    void (*__serialize__)(B_OSError, $NoneType);
+    B_OSError (*__deserialize__)(B_OSError, $NoneType);
+    B_bool (*__bool__)(B_OSError);
+    B_str (*__str__)(B_OSError);
+    B_str (*__repr__)(B_OSError);
 };
 
-typedef struct $OSError *$OSError;
+typedef struct B_OSError *B_OSError;
 
-struct $OSError {
-    struct $OSError$class *$class;
-    $str error_message;
+struct B_OSError {
+    struct B_OSErrorG_class *$class;
+    B_str error_message;
 };
 
-extern struct $OSError$class $OSError$methods;
-$OSError $OSError$new($str);
+extern struct B_OSErrorG_class B_OSErrorG_methods;
+B_OSError B_OSErrorG_new(B_str);
 ////////////////////////////////////////////////////////////////////////////////////////
-struct $RuntimeError$class {
+struct B_RuntimeErrorG_class {
     char *$GCINFO;
     int $class_id;
-    $Super$class $superclass;
-    void (*__init__)($RuntimeError,$str);
-    void (*__serialize__)($RuntimeError, $Serial$state);
-    $RuntimeError (*__deserialize__)($RuntimeError, $Serial$state);
-    $bool (*__bool__)($RuntimeError);
-    $str (*__str__)($RuntimeError);
-    $str (*__repr__)($RuntimeError);
+    $SuperG_class $superclass;
+    void (*__init__)(B_RuntimeError,B_str);
+    void (*__serialize__)(B_RuntimeError, $NoneType);
+    B_RuntimeError (*__deserialize__)(B_RuntimeError, $NoneType);
+    B_bool (*__bool__)(B_RuntimeError);
+    B_str (*__str__)(B_RuntimeError);
+    B_str (*__repr__)(B_RuntimeError);
 };
 
-typedef struct $RuntimeError *$RuntimeError;
+typedef struct B_RuntimeError *B_RuntimeError;
 
-struct $RuntimeError {
-    struct $RuntimeError$class *$class;
-    $str error_message;
+struct B_RuntimeError {
+    struct B_RuntimeErrorG_class *$class;
+    B_str error_message;
 };
 
-extern struct $RuntimeError$class $RuntimeError$methods;
-$RuntimeError $RuntimeError$new($str);
+extern struct B_RuntimeErrorG_class B_RuntimeErrorG_methods;
+B_RuntimeError B_RuntimeErrorG_new(B_str);
 ////////////////////////////////////////////////////////////////////////////////////////
-struct $NotImplementedError$class {
+struct B_NotImplementedErrorG_class {
     char *$GCINFO;
     int $class_id;
-    $Super$class $superclass;
-    void (*__init__)($NotImplementedError,$str);
-    void (*__serialize__)($NotImplementedError,$Serial$state);
-    $NotImplementedError (*__deserialize__)($NotImplementedError,$Serial$state);
-    $bool (*__bool__)($NotImplementedError);
-    $str (*__str__)($NotImplementedError);
-    $str (*__repr__)($NotImplementedError);
+    $SuperG_class $superclass;
+    void (*__init__)(B_NotImplementedError,B_str);
+    void (*__serialize__)(B_NotImplementedError,$NoneType);
+    B_NotImplementedError (*__deserialize__)(B_NotImplementedError,$NoneType);
+    B_bool (*__bool__)(B_NotImplementedError);
+    B_str (*__str__)(B_NotImplementedError);
+    B_str (*__repr__)(B_NotImplementedError);
 };
 
-typedef struct $NotImplementedError *$NotImplementedError;
+typedef struct B_NotImplementedError *B_NotImplementedError;
 
-struct $NotImplementedError {
-    struct $NotImplementedError$class *$class;
-    $str error_message;
+struct B_NotImplementedError {
+    struct B_NotImplementedErrorG_class *$class;
+    B_str error_message;
 };
 
-extern struct $NotImplementedError$class $NotImplementedError$methods;
-$NotImplementedError $NotImplementedError$new($str);
+extern struct B_NotImplementedErrorG_class B_NotImplementedErrorG_methods;
+B_NotImplementedError B_NotImplementedErrorG_new(B_str);
 ////////////////////////////////////////////////////////////////////////////////////////
-struct $ValueError$class {
+struct B_ValueErrorG_class {
     char *$GCINFO;
     int $class_id;
-    $Super$class $superclass;
-    void (*__init__)($ValueError,$str);
-    void (*__serialize__)($ValueError, $Serial$state);
-    $ValueError (*__deserialize__)($ValueError, $Serial$state);
-    $bool (*__bool__)($ValueError);
-    $str (*__str__)($ValueError);
-    $str (*__repr__)($ValueError);
+    $SuperG_class $superclass;
+    void (*__init__)(B_ValueError,B_str);
+    void (*__serialize__)(B_ValueError, $NoneType);
+    B_ValueError (*__deserialize__)(B_ValueError, $NoneType);
+    B_bool (*__bool__)(B_ValueError);
+    B_str (*__str__)(B_ValueError);
+    B_str (*__repr__)(B_ValueError);
 };
 
-typedef struct $ValueError *$ValueError;
+typedef struct B_ValueError *B_ValueError;
 
-struct $ValueError {
-    struct $ValueError$class *$class;
-    $str error_message;
+struct B_ValueError {
+    struct B_ValueErrorG_class *$class;
+    B_str error_message;
 };
 
-extern struct $ValueError$class $ValueError$methods;
-$ValueError $ValueError$new($str);
+extern struct B_ValueErrorG_class B_ValueErrorG_methods;
+B_ValueError B_ValueErrorG_new(B_str);
 
-void $RAISE($BaseException e);
+void $RAISE(B_BaseException e);
 
  
 /*

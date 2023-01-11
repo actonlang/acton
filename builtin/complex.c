@@ -12,22 +12,22 @@
  * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-$complex to$complex(complex double c) {
-  $complex res = malloc(sizeof(struct $complex));
-  res->$class = &$complex$methods;
+B_complex toB_complex(complex double c) {
+  B_complex res = malloc(sizeof(struct B_complex));
+  res->$class = &B_complexG_methods;
   res->val = c;
   return res;
 }
 
-$complex $complex$new($Number wit, $WORD c) {
-  return $NEW($complex,wit,c);
+B_complex B_complexG_new(B_Number wit, $WORD c) {
+  return $NEW(B_complex,wit,c);
 }
 
-void $complex_init($complex self, $Number wit, $WORD c){
+void B_complexD_init(B_complex self, B_Number wit, $WORD c){
   self->val = wit->$class->__complx__(wit,c)->val;
 }
 
-void $complex_serialize($complex c,$Serial$state state) {
+void B_complexD_serialize(B_complex c,$NoneType state) {
   $ROW row = $add_header(COMPLEX_ID,2,state);
   double re = creal(c->val);
   double im = cimag(c->val);
@@ -35,285 +35,285 @@ void $complex_serialize($complex c,$Serial$state state) {
   memcpy(row->blob+1,&im,sizeof(double));
 }
 
-$complex $complex_deserialize($complex self, $Serial$state state) {
+B_complex B_complexD_deserialize(B_complex self, $NoneType state) {
   $ROW this = state->row;
   state->row =this->next;
   state->row_no++;
   double re, im;
   memcpy(&re,this->blob,sizeof(double));
   memcpy(&im,this->blob+1,sizeof(double));
-  return to$complex(re + im * _Complex_I);
+  return toB_complex(re + im * _Complex_I);
 }
 
-$bool $complex_bool($complex n) {
-  return to$bool(n->val != 0.0);
+B_bool B_complexD_bool(B_complex n) {
+  return toB_bool(n->val != 0.0);
 }
 
-$str $complex_str($complex c) {
+B_str B_complexD_str(B_complex c) {
   char *s;
   asprintf(&s,"%f + %f*I",creal(c->val),cimag(c->val));
   return to$str(s);
 }
   
-struct $complex$class $complex$methods = {"$complex",UNASSIGNED,($Super$class)&$value$methods,$complex_init,$complex_serialize,$complex_deserialize,$complex_bool,$complex_str,$complex_str};
+struct B_complexG_class B_complexG_methods = {"B_complex",UNASSIGNED,($SuperG_class)&B_valueG_methods,B_complexD_init,B_complexD_serialize,B_complexD_deserialize,B_complexD_bool,B_complexD_str,B_complexD_str};
 
-// $Number$complex  ////////////////////////////////////////////////////////////////////////////////////////
+// B_NumberD_complex  ////////////////////////////////////////////////////////////////////////////////////////
 
-void $Number$complex$__serialize__($Number$complex self, $Serial$state state) {
-  $step_serialize(self->w$Minus, state);
+void B_NumberD_complexD___serialize__(B_NumberD_complex self, $NoneType state) {
+  $step_serialize(self->W_Minus, state);
 }
 
-$Number$complex $Number$complex$__deserialize__($Number$complex res, $Serial$state state) {
+B_NumberD_complex B_NumberD_complexD___deserialize__(B_NumberD_complex res, $NoneType state) {
    if (!res)
-      res = $DNEW($Number$complex,state);
-   res->w$Minus = ($Minus)$step_deserialize(state);
+      res = $DNEW(B_NumberD_complex,state);
+   res->W_Minus = (B_Minus)$step_deserialize(state);
    return res;
 }
 
-$complex $Number$complex$__add__($Number$complex wit, $complex a, $complex b) {
-  return to$complex(a->val + b->val);
+B_complex B_NumberD_complexD___add__(B_NumberD_complex wit, B_complex a, B_complex b) {
+  return toB_complex(a->val + b->val);
 }  
 
-$complex $Number$complex$__complx__ ($Number$complex wit, $complex c) {
+B_complex B_NumberD_complexD___complx__ (B_NumberD_complex wit, B_complex c) {
   return c;
 }
 
-$complex $Number$complex$__mul__ ($Number$complex wit, $complex a, $complex b){
-  return to$complex(a->val * b->val);
+B_complex B_NumberD_complexD___mul__ (B_NumberD_complex wit, B_complex a, B_complex b){
+  return toB_complex(a->val * b->val);
 }
 
-$complex $Number$complex$__pow__ ($Number$complex wit, $complex a, $complex b) {
-  return to$complex(cpow(a->val,b->val));
+B_complex B_NumberD_complexD___pow__ (B_NumberD_complex wit, B_complex a, B_complex b) {
+  return toB_complex(cpow(a->val,b->val));
 }
 
-$complex $Number$complex$__neg__ ($Number$complex wit, $complex c){
-  return to$complex(-c->val);
+B_complex B_NumberD_complexD___neg__ (B_NumberD_complex wit, B_complex c){
+  return toB_complex(-c->val);
 }
 
-$complex $Number$complex$__pos__ ($Number$complex wit, $complex c) {
+B_complex B_NumberD_complexD___pos__ (B_NumberD_complex wit, B_complex c) {
   return c;
 }
 
-$WORD $Number$complex$real ($Number$complex wit, $complex c, $Real wit2) {
-  return wit2->$class->__fromatom__(wit2,($atom)to$float(creal(c->val)));
+$WORD B_NumberD_complex$real (B_NumberD_complex wit, B_complex c, B_Real wit2) {
+  return wit2->$class->__fromatom__(wit2,(B_atom)toB_float(creal(c->val)));
 }
 
-$WORD $Number$complex$imag ($Number$complex wit, $complex c, $Real wit2) {
-  return wit2->$class->__fromatom__(wit2,($atom)to$float(cimag(c->val)));
+$WORD B_NumberD_complex$imag (B_NumberD_complex wit, B_complex c, B_Real wit2) {
+  return wit2->$class->__fromatom__(wit2,(B_atom)toB_float(cimag(c->val)));
 }
 
-$WORD $Number$complex$__abs__ ($Number$complex wit, $complex c, $Real wit2) {
-  return wit2->$class->__fromatom__(wit2,($atom)to$float(cabs(c->val)));
+$WORD B_NumberD_complexD___abs__ (B_NumberD_complex wit, B_complex c, B_Real wit2) {
+  return wit2->$class->__fromatom__(wit2,(B_atom)toB_float(cabs(c->val)));
 }
 
-$complex $Number$complex$conjugate ($Number$complex wit, $complex c) {
-  return to$complex(conj(c->val));
+B_complex B_NumberD_complex$conjugate (B_NumberD_complex wit, B_complex c) {
+  return toB_complex(conj(c->val));
 }
 
-// $Div$complex /////////////////////////////////////////////////////////////////////////////////////////
+// B_DivD_complex /////////////////////////////////////////////////////////////////////////////////////////
 
-void $Div$complex$__serialize__($Div$complex self, $Serial$state state) {
+void B_DivD_complexD___serialize__(B_DivD_complex self, $NoneType state) {
 }
 
-$Div$complex $Div$complex$__deserialize__($Div$complex self, $Serial$state state) {
-   $Div$complex res = $DNEW($Div$complex,state);
+B_DivD_complex B_DivD_complexD___deserialize__(B_DivD_complex self, $NoneType state) {
+   B_DivD_complex res = $DNEW(B_DivD_complex,state);
    return res;
 }
 
-$complex $Div$complex$__truediv__ ($Div$complex wit, $complex a, $complex b) {
-  return to$complex(a->val/b->val);
+B_complex B_DivD_complexD___truediv__ (B_DivD_complex wit, B_complex a, B_complex b) {
+  return toB_complex(a->val/b->val);
 }
 
-// $Minus$complex  ////////////////////////////////////////////////////////////////////////////////////////
+// B_MinusD_NumberD_complex  ////////////////////////////////////////////////////////////////////////////////////////
 
-void $Minus$complex$__serialize__($Minus$complex self, $Serial$state state) {
-  $step_serialize(self->w$Number, state);
+void B_MinusD_NumberD_complexD___serialize__(B_MinusD_NumberD_complex self, $NoneType state) {
+  $step_serialize(self->W_Number, state);
 }
 
-$Minus$complex $Minus$complex$__deserialize__($Minus$complex self, $Serial$state state) {
-   $Minus$complex res = $DNEW($Minus$complex,state);
-   res->w$Number = ($Number)$step_deserialize(state);
+B_MinusD_NumberD_complex B_MinusD_NumberD_complexD___deserialize__(B_MinusD_NumberD_complex self, $NoneType state) {
+   B_MinusD_NumberD_complex res = $DNEW(B_MinusD_NumberD_complex,state);
+   res->W_Number = (B_Number)$step_deserialize(state);
    return res;
 }
 
-$complex $Minus$complex$__sub__($Minus$complex wit, $complex a, $complex b) {
-  return to$complex(a->val - b->val);
+B_complex B_MinusD_NumberD_complexD___sub__(B_MinusD_NumberD_complex wit, B_complex a, B_complex b) {
+  return toB_complex(a->val - b->val);
 }  
-// $Eq$complex  ////////////////////////////////////////////////////////////////////////////////////////
+// B_EqD_complex  ////////////////////////////////////////////////////////////////////////////////////////
 
-void $Eq$complex$__serialize__($Eq$complex self, $Serial$state state) {
+void B_EqD_complexD___serialize__(B_EqD_complex self, $NoneType state) {
 }
 
-$Eq$complex $Eq$complex$__deserialize__($Eq$complex self, $Serial$state state) {
-   $Eq$complex res = $DNEW($Eq$complex,state);
+B_EqD_complex B_EqD_complexD___deserialize__(B_EqD_complex self, $NoneType state) {
+   B_EqD_complex res = $DNEW(B_EqD_complex,state);
    return res;
 }
 
-$bool $Eq$complex$__eq__ ($Eq$complex wit, $complex a, $complex b) {
-  return to$bool(creal(a->val) == creal(b->val) && cimag(a->val) == cimag(b->val));
+B_bool B_EqD_complexD___eq__ (B_EqD_complex wit, B_complex a, B_complex b) {
+  return toB_bool(creal(a->val) == creal(b->val) && cimag(a->val) == cimag(b->val));
 }
 
-$bool $Eq$complex$__ne__ ($Eq$complex wit, $complex a, $complex b) {
-  return to$bool(!from$bool($Eq$complex$__eq__(wit,a,b)));
+B_bool B_EqD_complexD___ne__ (B_EqD_complex wit, B_complex a, B_complex b) {
+  return toB_bool(!fromB_bool(B_EqD_complexD___eq__(wit,a,b)));
 }
 
 
-// $Hashable$complex  ////////////////////////////////////////////////////////////////////////////////////////
+// B_HashableD_complex  ////////////////////////////////////////////////////////////////////////////////////////
 
-void $Hashable$complex$__serialize__($Hashable$complex self, $Serial$state state) {
+void B_HashableD_complexD___serialize__(B_HashableD_complex self, $NoneType state) {
 }
 
-$Hashable$complex $Hashable$complex$__deserialize__($Hashable$complex self, $Serial$state state) {
-   $Hashable$complex res = $DNEW($Hashable$complex,state);
+B_HashableD_complex B_HashableD_complexD___deserialize__(B_HashableD_complex self, $NoneType state) {
+   B_HashableD_complex res = $DNEW(B_HashableD_complex,state);
    return res;
 }
 
-$bool $Hashable$complex$__eq__($Hashable$complex wit, $complex a, $complex b) {
-  return to$bool(creal(a->val) == creal(b->val) && cimag(a->val) == cimag(b->val));
+B_bool B_HashableD_complexD___eq__(B_HashableD_complex wit, B_complex a, B_complex b) {
+  return toB_bool(creal(a->val) == creal(b->val) && cimag(a->val) == cimag(b->val));
 }
 
-$bool $Hashable$complex$__ne__($Hashable$complex wit, $complex a, $complex b) {
-  return to$bool(!from$bool($Hashable$complex$__eq__(wit,a,b)));
+B_bool B_HashableD_complexD___ne__(B_HashableD_complex wit, B_complex a, B_complex b) {
+  return toB_bool(!fromB_bool(B_HashableD_complexD___eq__(wit,a,b)));
 }
 
-$int $Hashable$complex$__hash__($Hashable$complex wit, $complex a) {
-  return to$int($complex_hash(a));
+B_int B_HashableD_complexD___hash__(B_HashableD_complex wit, B_complex a) {
+  return toB_int(B_complexD_hash(a));
 }
 
 // init methods ////////////////////////////////////////////////////////////////////////////////////////////////
 
-void $Number$complex_init ($Number$complex wit) {
-  wit-> w$Minus = ($Minus)$NEW($Minus$complex,($Number)wit);
+void B_NumberD_complex_init (B_NumberD_complex wit) {
+  wit-> W_Minus = (B_Minus)$NEW(B_MinusD_NumberD_complex,(B_Number)wit);
 }
 
-void $Minus$complex_init($Minus$complex wit, $Number w$Number) {
-  wit->w$Number =  w$Number;
+void B_MinusD_NumberD_complex_init(B_MinusD_NumberD_complex wit, B_Number W_Number) {
+  wit->W_Number =  W_Number;
 }
 
-void $Eq$complex_init($Eq$complex wit) {
+void B_EqD_complex_init(B_EqD_complex wit) {
   return;
 }
 
-void $Div$complex_init($Div$complex wit) {
+void B_DivD_complex_init(B_DivD_complex wit) {
   return;
 }
 
-void $Hashable$complex_init($Hashable$complex wit) {
+void B_HashableD_complex_init(B_HashableD_complex wit) {
   return;
 }
 
-$Number$complex $Number$complex$new() {
-  return $NEW($Number$complex);
+B_NumberD_complex B_NumberD_complexG_new() {
+  return $NEW(B_NumberD_complex);
 }
 
-$Minus$complex $Minus$complex$new($Number wit) {
-  return $NEW($Minus$complex,wit);
+B_MinusD_NumberD_complex B_MinusD_NumberD_complexG_new(B_Number wit) {
+  return $NEW(B_MinusD_NumberD_complex,wit);
 }
   
-$Eq$complex $Eq$complex$new() {
-  return $NEW($Eq$complex);
+B_EqD_complex B_EqD_complexG_new() {
+  return $NEW(B_EqD_complex);
 }
 
-$Hashable$complex $Hashable$complex$new() {
-  return $NEW($Hashable$complex);
+B_HashableD_complex B_HashableD_complexG_new() {
+  return $NEW(B_HashableD_complex);
 }
 
 
-struct $Number$complex $Number$complex_instance;
-struct $Minus$complex $Minus$complex_instance;
-struct $Eq$complex $Eq$complex_instance;
-struct $Hashable$complex $Hashable$complex_instance;
+struct B_NumberD_complex B_NumberD_complex_instance;
+struct B_MinusD_NumberD_complex B_MinusD_NumberD_complex_instance;
+struct B_EqD_complex B_EqD_complex_instance;
+struct B_HashableD_complex B_HashableD_complex_instance;
 
-struct $Number$complex$class $Number$complex$methods = {
-    "$Number$complex",
+struct B_NumberD_complexG_class B_NumberD_complexG_methods = {
+    "B_NumberD_complex",
     UNASSIGNED,
-    ($Super$class)&$Number$methods,
-    $Number$complex_init,
-    $Number$complex$__serialize__,
-    $Number$complex$__deserialize__,
-    ($bool (*)($Number$complex))$default__bool__,
-    ($str (*)($Number$complex))$default__str__,
-    ($str (*)($Number$complex))$default__str__,
-    $Number$complex$__add__,
-    ($complex (*)($Number$complex, $complex, $complex))$Plus$__iadd__,
-    $Number$complex$__mul__,
-    ($complex (*)($Number$complex, $complex, $complex))$Times$__imul__,
+    ($SuperG_class)&B_NumberG_methods,
+    B_NumberD_complex_init,
+    B_NumberD_complexD___serialize__,
+    B_NumberD_complexD___deserialize__,
+    (B_bool (*)(B_NumberD_complex))$default__bool__,
+    (B_str (*)(B_NumberD_complex))$default__str__,
+    (B_str (*)(B_NumberD_complex))$default__str__,
+    B_NumberD_complexD___add__,
+    (B_complex (*)(B_NumberD_complex, B_complex, B_complex))$PlusD___iadd__,
+    B_NumberD_complexD___mul__,
+    (B_complex (*)(B_NumberD_complex, B_complex, B_complex))B_TimesD___imul__,
     NULL,        // fromatom
-    $Number$complex$__complx__,
-    $Number$complex$__pow__,
-    ($complex (*)($Number$complex, $complex, $complex))$Number$__ipow__,
-    $Number$complex$__neg__,
-    $Number$complex$__pos__,
-    $Number$complex$real,
-    $Number$complex$imag,
-    $Number$complex$__abs__,
-    $Number$complex$conjugate
+    B_NumberD_complexD___complx__,
+    B_NumberD_complexD___pow__,
+    (B_complex (*)(B_NumberD_complex, B_complex, B_complex))B_NumberD___ipow__,
+    B_NumberD_complexD___neg__,
+    B_NumberD_complexD___pos__,
+    B_NumberD_complex$real,
+    B_NumberD_complex$imag,
+    B_NumberD_complexD___abs__,
+    B_NumberD_complex$conjugate
 };
-struct $Number$complex $Number$complex_instance = {&$Number$complex$methods, ($Minus)&$Minus$complex_instance};
-$Number$complex $Number$complex$witness = &$Number$complex_instance;
+struct B_NumberD_complex B_NumberD_complex_instance = {&B_NumberD_complexG_methods, (B_Minus)&B_MinusD_NumberD_complex_instance};
+B_NumberD_complex B_NumberD_complexG_witness = &B_NumberD_complex_instance;
 
-struct $Div$complex$class $Div$complex$methods = {
-    "$Div$complex",
+struct B_DivD_complexG_class B_DivD_complexG_methods = {
+    "B_DivD_complex",
     UNASSIGNED,
-    ($Super$class)&$Div$methods,
-    $Div$complex_init,
-    $Div$complex$__serialize__,
-    $Div$complex$__deserialize__,
-    ($bool (*)($Div$complex))$default__bool__,
-    ($str (*)($Div$complex))$default__str__,
-    ($str (*)($Div$complex))$default__str__,
-    $Div$complex$__truediv__,
-    ($complex (*)($Div$complex, $complex, $complex))$Div$__itruediv__,
+    ($SuperG_class)&B_DivG_methods,
+    B_DivD_complex_init,
+    B_DivD_complexD___serialize__,
+    B_DivD_complexD___deserialize__,
+    (B_bool (*)(B_DivD_complex))$default__bool__,
+    (B_str (*)(B_DivD_complex))$default__str__,
+    (B_str (*)(B_DivD_complex))$default__str__,
+    B_DivD_complexD___truediv__,
+    (B_complex (*)(B_DivD_complex, B_complex, B_complex))B_DivD___itruediv__,
 };
 
-struct $Div$complex $Div$complex_instance = {&$Div$complex$methods};
-$Div$complex $Div$complex$witness = &$Div$complex_instance;
+struct B_DivD_complex B_DivD_complex_instance = {&B_DivD_complexG_methods};
+B_DivD_complex B_DivD_complexG_witness = &B_DivD_complex_instance;
 
-struct $Minus$complex$class $Minus$complex$methods = {
-    "$Minus$complex",
+struct B_MinusD_NumberD_complexG_class B_MinusD_NumberD_complexG_methods = {
+    "B_MinusD_NumberD_complex",
     UNASSIGNED,
-    ($Super$class)&$Minus$methods,
-    $Minus$complex_init,
-    $Minus$complex$__serialize__,
-    $Minus$complex$__deserialize__,
-    ($bool (*)($Minus$complex))$default__bool__,
-    ($str (*)($Minus$complex))$default__str__,
-    ($str (*)($Minus$complex))$default__str__,
-    $Minus$complex$__sub__,
-    ($complex (*)($Minus$complex, $complex, $complex))$Minus$__isub__
+    ($SuperG_class)&B_MinusG_methods,
+    B_MinusD_NumberD_complex_init,
+    B_MinusD_NumberD_complexD___serialize__,
+    B_MinusD_NumberD_complexD___deserialize__,
+    (B_bool (*)(B_MinusD_NumberD_complex))$default__bool__,
+    (B_str (*)(B_MinusD_NumberD_complex))$default__str__,
+    (B_str (*)(B_MinusD_NumberD_complex))$default__str__,
+    B_MinusD_NumberD_complexD___sub__,
+    (B_complex (*)(B_MinusD_NumberD_complex, B_complex, B_complex))B_MinusD___isub__
 };
-struct $Minus$complex $Minus$complex_instance = {&$Minus$complex$methods, ($Number)&$Number$complex_instance};
-$Minus$complex $Minus$complex$witness = &$Minus$complex_instance;
+struct B_MinusD_NumberD_complex B_MinusD_NumberD_complex_instance = {&B_MinusD_NumberD_complexG_methods, (B_Number)&B_NumberD_complex_instance};
+B_MinusD_NumberD_complex B_MinusD_NumberD_complexG_witness = &B_MinusD_NumberD_complex_instance;
 
-struct $Eq$complex$class $Eq$complex$methods = {
-    "$Eq$complex",
+struct B_EqD_complexG_class B_EqD_complexG_methods = {
+    "B_EqD_complex",
     UNASSIGNED,
-    ($Super$class)&$Eq$methods,
-    $Eq$complex_init,
-    $Eq$complex$__serialize__,
-    $Eq$complex$__deserialize__,
-    ($bool (*)($Eq$complex))$default__bool__,
-    ($str (*)($Eq$complex))$default__str__,
-    ($str (*)($Eq$complex))$default__str__,
-    $Eq$complex$__eq__,
-    $Eq$complex$__ne__
+    ($SuperG_class)&B_EqG_methods,
+    B_EqD_complex_init,
+    B_EqD_complexD___serialize__,
+    B_EqD_complexD___deserialize__,
+    (B_bool (*)(B_EqD_complex))$default__bool__,
+    (B_str (*)(B_EqD_complex))$default__str__,
+    (B_str (*)(B_EqD_complex))$default__str__,
+    B_EqD_complexD___eq__,
+    B_EqD_complexD___ne__
 };
-struct $Eq$complex $Eq$complex_instance = {&$Eq$complex$methods};
-$Eq$complex $Eq$complex$witness = &$Eq$complex_instance;
+struct B_EqD_complex B_EqD_complex_instance = {&B_EqD_complexG_methods};
+B_EqD_complex B_EqD_complexG_witness = &B_EqD_complex_instance;
 
-struct $Hashable$complex$class $Hashable$complex$methods = {
-    "$Hashable$complex",
+struct B_HashableD_complexG_class B_HashableD_complexG_methods = {
+    "B_HashableD_complex",
     UNASSIGNED,
-    ($Super$class)&$Hashable$methods,
-    $Hashable$complex_init,
-    $Hashable$complex$__serialize__,
-    $Hashable$complex$__deserialize__,
-    ($bool (*)($Hashable$complex))$default__bool__,
-    ($str (*)($Hashable$complex))$default__str__,
-    ($str (*)($Hashable$complex))$default__str__,
-    $Hashable$complex$__eq__,
-    $Hashable$complex$__ne__,
-    $Hashable$complex$__hash__
+    ($SuperG_class)&B_HashableG_methods,
+    B_HashableD_complex_init,
+    B_HashableD_complexD___serialize__,
+    B_HashableD_complexD___deserialize__,
+    (B_bool (*)(B_HashableD_complex))$default__bool__,
+    (B_str (*)(B_HashableD_complex))$default__str__,
+    (B_str (*)(B_HashableD_complex))$default__str__,
+    B_HashableD_complexD___eq__,
+    B_HashableD_complexD___ne__,
+    B_HashableD_complexD___hash__
 };
- struct $Hashable$complex $Hashable$complex_instance = {&$Hashable$complex$methods};
- $Hashable$complex $Hashable$complex$witness = &$Hashable$complex_instance;
+ struct B_HashableD_complex B_HashableD_complex_instance = {&B_HashableD_complexG_methods};
+ B_HashableD_complex B_HashableD_complexG_witness = &B_HashableD_complex_instance;

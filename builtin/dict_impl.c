@@ -47,11 +47,11 @@ struct $table_struct {
 
 // General methods /////////////////////////////////////////////////////////////////////////
 
-$dict $dict$new($Hashable hashwit, $Iterable wit, $WORD iterable) {
-    return $NEW($dict,hashwit, wit, iterable);
+B_dict B_dictG_new(B_Hashable hashwit, B_Iterable wit, $WORD iterable) {
+    return $NEW(B_dict,hashwit, wit, iterable);
 }
 
-void $dict_init($dict dict, $Hashable hashwit, $Iterable wit, $WORD iterable) {
+void B_dictD_init(B_dict dict, B_Hashable hashwit, B_Iterable wit, $WORD iterable) {
     dict->numelements = 0;
     dict->table = malloc(sizeof(char*)+3*sizeof(long) + 8*sizeof(int) + 5*sizeof(struct $entry_struct));
     dict->table->tb_size = 8;
@@ -59,30 +59,30 @@ void $dict_init($dict dict, $Hashable hashwit, $Iterable wit, $WORD iterable) {
     dict->table->tb_nentries = 0;
     memset(&(dict->table->tb_indices[0]), 0xff, 8*sizeof(int));
     if (wit && iterable) {
-        $Iterator it = wit->$class->__iter__(wit,iterable);
-        $tuple nxt;
-        while((nxt = ($tuple)it->$class->__next__(it))) {
-            $dict_setitem(dict,hashwit,nxt->components[0],nxt->components[1]);
+        B_Iterator it = wit->$class->__iter__(wit,iterable);
+        B_tuple nxt;
+        while((nxt = (B_tuple)it->$class->__next__(it))) {
+            B_dictD_setitem(dict,hashwit,nxt->components[0],nxt->components[1]);
         }
     }
 }
 
-$bool $dict_bool($dict self) {
-    return to$bool(self->numelements>0);
+B_bool B_dictD_bool(B_dict self) {
+    return toB_bool(self->numelements>0);
 }
 
-$str $dict_str($dict self) {
-    $list s2 = $list_new(self->numelements);
-    $Iterator$dict$items iter = $NEW($Iterator$dict$items,self);
-    $tuple item;
+B_str B_dictD_str(B_dict self) {
+    B_list s2 = B_listD_new(self->numelements);
+    B_InteratorD_dict_items iter = $NEW(B_InteratorD_dict_items,self);
+    B_tuple item;
     for (int i=0; i<self->numelements; i++) {
-        item = ($tuple)iter->$class->__next__(iter);
-        $value key = (($value)item->components[0]);
-        $value value = (($value)item->components[1]);
-        $str keystr = key->$class->__repr__(key);
-        $str valuestr = value->$class->__repr__(value);
-        $str elem = malloc(sizeof(struct $str));
-        elem->$class = &$str$methods;
+        item = (B_tuple)iter->$class->__next__(iter);
+        B_value key = ((B_value)item->components[0]);
+        B_value value = ((B_value)item->components[1]);
+        B_str keystr = key->$class->__repr__(key);
+        B_str valuestr = value->$class->__repr__(value);
+        B_str elem = malloc(sizeof(struct B_str));
+        elem->$class = &B_strG_methods;
         elem->nbytes = keystr->nbytes+valuestr->nbytes+1;
         elem->nchars = keystr->nchars+valuestr->nchars+1;
         elem->str = malloc(elem->nbytes+1);
@@ -90,19 +90,19 @@ $str $dict_str($dict self) {
         elem->str[keystr->nbytes] = ':';
         memcpy(&elem->str[keystr->nbytes+1],valuestr->str,valuestr->nbytes);
         elem->str[elem->nbytes] = '\0';    
-        $list_append(s2,elem);
+        B_listD_append(s2,elem);
     }
-    return $str_join_par('{',s2,'}');
+    return B_strD_join_par('{',s2,'}');
 }
 
-void $dict_serialize($dict self,$Serial$state state) {
-    $int prevkey = ($int)$dict_get(state->done,($Hashable)$Hashable$WORD$witness,self,NULL);
+void B_dictD_serialize(B_dict self,$NoneType state) {
+    B_int prevkey = (B_int)B_dictD_get(state->done,(B_Hashable)B_HashableD_WORDG_witness,self,NULL);
     if (prevkey) {
-        long pk = from$int(prevkey);
+        long pk = fromB_int(prevkey);
         $val_serialize(-DICT_ID,&pk,state);
         return;
     }
-    $dict_setitem(state->done,($Hashable)$Hashable$WORD$witness,self,to$int(state->row_no));
+    B_dictD_setitem(state->done,(B_Hashable)B_HashableD_WORDG_witness,self,toB_int(state->row_no));
     int blobsize = 4 + (self->table->tb_size + 1) * sizeof(int)/sizeof($WORD);
     $ROW row = $add_header(DICT_ID,blobsize,state);
     row->blob[0] = ($WORD)self->numelements;
@@ -112,23 +112,23 @@ void $dict_serialize($dict self,$Serial$state state) {
     memcpy(&row->blob[4],self->table->tb_indices,self->table->tb_size*sizeof(int));
     for (int i=0; i<self->table->tb_nentries; i++) {
         $entry_t entry = &TB_ENTRIES(self->table)[i];
-        $step_serialize(to$int(entry->hash),state);
+        $step_serialize(toB_int(entry->hash),state);
         $step_serialize(entry->key,state);
         $step_serialize(entry->value,state);
     }
 }
 
-$dict $dict_deserialize($dict res, $Serial$state state) {
+B_dict B_dictD_deserialize(B_dict res, $NoneType state) {
     $ROW this = state->row;
     state->row = this->next;
     state->row_no++;
     if (this->class_id < 0) {
-        return $dict_get(state->done,($Hashable)$Hashable$int$witness,to$int((int)this->blob[0]),NULL);
+        return B_dictD_get(state->done,(B_Hashable)B_HashableD_intG_witness,toB_int((int)this->blob[0]),NULL);
     } else {
         if (!res)
-            res = malloc(sizeof(struct $dict));
-        $dict_setitem(state->done,($Hashable)$Hashable$int$witness,to$int(state->row_no-1),res);
-        res->$class = &$dict$methods;
+            res = malloc(sizeof(struct B_dict));
+        B_dictD_setitem(state->done,(B_Hashable)B_HashableD_intG_witness,toB_int(state->row_no-1),res);
+        res->$class = &B_dictG_methods;
         res->numelements = (long)this->blob[0];
         long tb_size = (long)this->blob[1];
         res->table = malloc(sizeof(char*) + 3*sizeof(long) + tb_size*sizeof(int) + (2*tb_size/3)*sizeof(struct $entry_struct));
@@ -138,7 +138,7 @@ $dict $dict_deserialize($dict res, $Serial$state state) {
         memcpy(res->table->tb_indices,&this->blob[4],tb_size*sizeof(int));
         for (int i=0; i<res->table->tb_nentries; i++) {
             $entry_t entry = &TB_ENTRIES(res->table)[i];
-            entry->hash = from$int(($int)$step_deserialize(state));
+            entry->hash = fromB_int((B_int)$step_deserialize(state));
             entry->key =  $step_deserialize(state);
             entry->value = $step_deserialize(state);
         }
@@ -146,7 +146,7 @@ $dict $dict_deserialize($dict res, $Serial$state state) {
     }
 }
 
-struct $dict$class $dict$methods = {"$dict", UNASSIGNED,($Super$class)&$object$methods, $dict_init, $dict_serialize,$dict_deserialize, $dict_bool, $dict_str, $dict_str}; 
+struct B_dictG_class B_dictG_methods = {"B_dict", UNASSIGNED,($SuperG_class)&B_objectG_methods, B_dictD_init, B_dictD_serialize,B_dictD_deserialize, B_dictD_bool, B_dictD_str, B_dictD_str}; 
 
 // Internal routines //////////////////////////////////////////////////////////////////
 
@@ -173,7 +173,7 @@ static void build_indices($table tbl, $entry_t ep, long n) {
   actually be smaller than the old one.
 */
 
-static int dictresize($dict d) {
+static int dictresize(B_dict d) {
     $table oldtable = d->table;
     long numelements = d->numelements;
     long newsize, minsize = 3*numelements;
@@ -237,7 +237,7 @@ static int $lookdict_index($table table, long hash, int index) {
 // Returns index into compact array where hash/key is found
 // (and returns corresponding value in *res)
 // or DKIX_EMPTY if no such entry exists
-int $lookdict($dict dict, $Hashable hashwit, long hash, $WORD key, $WORD *res) {
+int $lookdict(B_dict dict, B_Hashable hashwit, long hash, $WORD key, $WORD *res) {
     $table table = dict->table;
     unsigned long mask = (table->tb_size)-1, i = (unsigned long)hash & mask, perturb = hash;
     int ix;
@@ -280,7 +280,7 @@ static long find_empty_slot($table table, long hash) {
     return i;
 }
 
-static int insertdict($dict dict, $Hashable hashwit, long hash, $WORD key, $WORD value) {
+static int insertdict(B_dict dict, B_Hashable hashwit, long hash, $WORD key, $WORD value) {
     $WORD old_value;
     $table table;
     $entry_t ep;
@@ -306,7 +306,7 @@ static int insertdict($dict dict, $Hashable hashwit, long hash, $WORD key, $WORD
 }
 // Iterable //////////////////////////////////////////////////////////////////////////////
  
-static $WORD $Iterator$dict_next($Iterator$dict self) {
+static $WORD B_IteratorD_dictD_next(B_IteratorD_dict self) {
     int i = self->nxt;
     $table table = self->src->table;
     int n = table->tb_nentries;
@@ -321,70 +321,70 @@ static $WORD $Iterator$dict_next($Iterator$dict self) {
     return NULL;
 }
 
-$Iterator$dict $Iterator$dict$new($dict dict) {
-    return $NEW($Iterator$dict, dict);
+B_IteratorD_dict B_IteratorD_dictG_new(B_dict dict) {
+    return $NEW(B_IteratorD_dict, dict);
 }
  
-void $Iterator$dict_init($Iterator$dict self, $dict dict) {
+void B_IteratorD_dictD_init(B_IteratorD_dict self, B_dict dict) {
     self->src = dict;
     self->nxt = 0;
 }
 
 
-$bool $Iterator$dict_bool($Iterator$dict self) {
+B_bool B_IteratorD_dictD_bool(B_IteratorD_dict self) {
     return $True;
 }
 
-$str $Iterator$dict_str($Iterator$dict self) {
+B_str B_IteratorD_dictD_str(B_IteratorD_dict self) {
     char *s;
     asprintf(&s,"<dict keys iterator object at %p>",self);
     return to$str(s);
 }
 
-void $Iterator$dict_serialize($Iterator$dict self, $Serial$state state) {
+void B_IteratorD_dictD_serialize(B_IteratorD_dict self, $NoneType state) {
     $step_serialize(self->src,state);
-    $step_serialize(to$int(self->nxt),state);
+    $step_serialize(toB_int(self->nxt),state);
 }
 
 
-$Iterator$dict $Iterator$dict$_deserialize($Iterator$dict res, $Serial$state state) {
+B_IteratorD_dict B_InteratorD_dict__deserialize(B_IteratorD_dict res, $NoneType state) {
     if (!res)
-        res = $DNEW( $Iterator$dict,state);
-    res->src = ($dict)$step_deserialize(state);
-    res->nxt = from$int(($int)$step_deserialize(state));
+        res = $DNEW( B_IteratorD_dict,state);
+    res->src = (B_dict)$step_deserialize(state);
+    res->nxt = fromB_int((B_int)$step_deserialize(state));
     return res;
 }
 
 
-struct $Iterator$dict$class $Iterator$dict$methods = {"$Iterator$dict",UNASSIGNED,($Super$class)&$Iterator$methods, $Iterator$dict_init,
-                                                      $Iterator$dict_serialize, $Iterator$dict$_deserialize, $Iterator$dict_bool,$Iterator$dict_str,$Iterator$dict_str, $Iterator$dict_next};
+struct B_IteratorD_dictG_class B_IteratorD_dictG_methods = {"B_IteratorD_dict",UNASSIGNED,($SuperG_class)&B_IteratorG_methods, B_IteratorD_dictD_init,
+                                                      B_IteratorD_dictD_serialize, B_InteratorD_dict__deserialize, B_IteratorD_dictD_bool,B_IteratorD_dictD_str,B_IteratorD_dictD_str, B_IteratorD_dictD_next};
 
-$Iterator $dict_iter($dict dict) {
-    return ($Iterator)$NEW($Iterator$dict,dict);
+B_Iterator B_dictD_iter(B_dict dict) {
+    return (B_Iterator)$NEW(B_IteratorD_dict,dict);
 }
 
 // Indexed ///////////////////////////////////////////////////////////////////////////////
 
-void $dict_setitem($dict dict, $Hashable hashwit, $WORD key, $WORD value) {
-    long hash = from$int(hashwit->$class->__hash__(hashwit,key));
+void B_dictD_setitem(B_dict dict, B_Hashable hashwit, $WORD key, $WORD value) {
+    long hash = fromB_int(hashwit->$class->__hash__(hashwit,key));
     if (insertdict(dict, hashwit, hash, key, value)<0) {
-        $RAISE(($BaseException)$NEW($IndexError,to$str("setitem: key not in dictionary")));
+        $RAISE((B_BaseException)$NEW(B_IndexError,to$str("setitem: key not in dictionary")));
     }      
 }
 
-$WORD $dict_getitem($dict dict, $Hashable hashwit, $WORD key) {
-    long hash = from$int(hashwit->$class->__hash__(hashwit,key));
+$WORD B_dictD_getitem(B_dict dict, B_Hashable hashwit, $WORD key) {
+    long hash = fromB_int(hashwit->$class->__hash__(hashwit,key));
     $WORD res;
     int ix = $lookdict(dict,hashwit,hash,key,&res);
     if (ix < 0)  {
-        $RAISE(($BaseException)$NEW($IndexError,to$str("getitem: key not in dictionary")));
+        $RAISE((B_BaseException)$NEW(B_IndexError,to$str("getitem: key not in dictionary")));
     }      
     return res;
 }
 
 
-void $dict_delitem($dict dict, $Hashable hashwit, $WORD key) {
-    long hash = from$int(hashwit->$class->__hash__(hashwit,key));
+void B_dictD_delitem(B_dict dict, B_Hashable hashwit, $WORD key) {
+    long hash = fromB_int(hashwit->$class->__hash__(hashwit,key));
     $WORD res;
     int ix = $lookdict(dict,hashwit,hash,key,&res);
     $table table = dict->table;
@@ -394,7 +394,7 @@ void $dict_delitem($dict dict, $Hashable hashwit, $WORD key) {
         table->tb_indices[i] = DKIX_DUMMY;
         res = entry->value;
         if (res == NULL) {
-            $RAISE(($BaseException)$NEW($IndexError,to$str("setitem: key not in dictionary")));
+            $RAISE((B_BaseException)$NEW(B_IndexError,to$str("setitem: key not in dictionary")));
         }
         entry->value = NULL;
         dict->numelements--;
@@ -405,37 +405,37 @@ void $dict_delitem($dict dict, $Hashable hashwit, $WORD key) {
 
 // Collection ///////////////////////////////////////////////////////////////////////////////
 
-$dict $dict_fromiter($Hashable hashwit, $Iterator it) {
-    $dict dict = $NEW($dict,hashwit,NULL,NULL);
+B_dict B_dictD_fromiter(B_Hashable hashwit, B_Iterator it) {
+    B_dict dict = $NEW(B_dict,hashwit,NULL,NULL);
     dict->numelements = 0;
     dict->table = malloc(sizeof(char*)+3*sizeof(long) + 8*sizeof(int) + 5*sizeof(struct $entry_struct));
     dict->table->tb_size = 8;
     dict->table->tb_usable = 5;
     dict->table->tb_nentries = 0;
     memset(&(dict->table->tb_indices[0]), 0xff, 8*sizeof(int));
-    $tuple nxt;
-    while((nxt = ($tuple)it->$class->__next__(it))) {
-        $dict_setitem(dict,hashwit,nxt->components[0],nxt->components[1]);
+    B_tuple nxt;
+    while((nxt = (B_tuple)it->$class->__next__(it))) {
+        B_dictD_setitem(dict,hashwit,nxt->components[0],nxt->components[1]);
     }
     return dict;
 }
 
-long $dict_len($dict dict) {
+long B_dictD_len(B_dict dict) {
     return dict->numelements;
 }
 
 // Container_Eq /////////////////////////////////////////////////////////////////////////////
 
-int $dict_contains($dict dict, $Hashable hashwit, $WORD key) {
+int B_dictD_contains(B_dict dict, B_Hashable hashwit, $WORD key) {
     $WORD res;
-    return $lookdict(dict,hashwit,from$int(hashwit->$class->__hash__(hashwit,key)),key,&res) >= 0;
+    return $lookdict(dict,hashwit,fromB_int(hashwit->$class->__hash__(hashwit,key)),key,&res) >= 0;
 }
 
 // Mapping /////////////////////////////////////////////////////////////////////////////
 
 // values iterator
 
-static $WORD $Iterator$dict$values_next($Iterator$dict$values self) {
+static $WORD B_InteratorD_dict_values_next(B_InteratorD_dict_values self) {
     int i = self->nxt;
     $table table = self->src->table;
     int n = table->tb_nentries;
@@ -450,46 +450,46 @@ static $WORD $Iterator$dict$values_next($Iterator$dict$values self) {
     return NULL;
 }
  
-$Iterator$dict$values $Iterator$dict$values$new($dict dict) {
-    return $NEW($Iterator$dict$values, dict);
+B_InteratorD_dict_values B_InteratorD_dict_valuesG_new(B_dict dict) {
+    return $NEW(B_InteratorD_dict_values, dict);
 }
  
-void $Iterator$dict$values_init($Iterator$dict$values self, $dict dict) {
+void B_InteratorD_dict_values_init(B_InteratorD_dict_values self, B_dict dict) {
     self->src = dict;
     self->nxt = 0;
 }
 
 
-$bool $Iterator$dict$values_bool($Iterator$dict$values self) {
+B_bool B_InteratorD_dict_values_bool(B_InteratorD_dict_values self) {
     return $True;
 }
 
-$str $Iterator$dict$values_str($Iterator$dict$values self) {
+B_str B_InteratorD_dict_values_str(B_InteratorD_dict_values self) {
     char *s;
     asprintf(&s,"<dict values iterator object at %p>",self);
     return to$str(s);
 }
 
-void $Iterator$dict$values_serialize($Iterator$dict$values self, $Serial$state state) {
+void B_InteratorD_dict_values_serialize(B_InteratorD_dict_values self, $NoneType state) {
     $step_serialize(self->src,state);
-    $step_serialize(to$int(self->nxt),state);
+    $step_serialize(toB_int(self->nxt),state);
 }
 
-$Iterator$dict$values $Iterator$dict$values_deserialize($Iterator$dict$values res, $Serial$state state) {
+B_InteratorD_dict_values B_InteratorD_dict_values_deserialize(B_InteratorD_dict_values res, $NoneType state) {
     if (!res)
-        res = $DNEW($Iterator$dict$values,state);
-    res->src = ($dict)$step_deserialize(state);
-    res->nxt = from$int(($int)$step_deserialize(state));
+        res = $DNEW(B_InteratorD_dict_values,state);
+    res->src = (B_dict)$step_deserialize(state);
+    res->nxt = fromB_int((B_int)$step_deserialize(state));
     return res;
 }
 
-struct $Iterator$dict$values$class $Iterator$dict$values$methods = {"$Iterator$dict$values",UNASSIGNED,($Super$class)&$Iterator$methods, $Iterator$dict$values_init,
-                                                                    $Iterator$dict$values_serialize, $Iterator$dict$values_deserialize, $Iterator$dict$values_bool, $Iterator$dict$values_str,$Iterator$dict$values_str,
-                                                                    $Iterator$dict$values_next};
+struct B_InteratorD_dict_valuesG_class B_InteratorD_dict_valuesG_methods = {"B_InteratorD_dict_values",UNASSIGNED,($SuperG_class)&B_IteratorG_methods, B_InteratorD_dict_values_init,
+                                                                    B_InteratorD_dict_values_serialize, B_InteratorD_dict_values_deserialize, B_InteratorD_dict_values_bool, B_InteratorD_dict_values_str,B_InteratorD_dict_values_str,
+                                                                    B_InteratorD_dict_values_next};
 
 // items iterator
 
-static $WORD $Iterator$dict$items_next($Iterator$dict$items self) {
+static $WORD B_InteratorD_dict_items_next(B_InteratorD_dict_items self) {
     int i = self->nxt;
     $table table = self->src->table;
     int n = table->tb_nentries;
@@ -504,59 +504,59 @@ static $WORD $Iterator$dict$items_next($Iterator$dict$items self) {
     return NULL;
 }
  
-$Iterator$dict$items $Iterator$dict$items$new($dict dict) {
-    return $NEW($Iterator$dict$items, dict);
+B_InteratorD_dict_items B_InteratorD_dict_itemsG_new(B_dict dict) {
+    return $NEW(B_InteratorD_dict_items, dict);
 }
  
-void $Iterator$dict$items_init($Iterator$dict$items self, $dict dict) {
+void B_InteratorD_dict_items_init(B_InteratorD_dict_items self, B_dict dict) {
     self->src = dict;
     self->nxt = 0;
 }
 
 
-$bool $Iterator$dict$items_bool($Iterator$dict$items self) {
+B_bool B_InteratorD_dict_items_bool(B_InteratorD_dict_items self) {
     return $True;
 }
 
-$str $Iterator$dict$items_str($Iterator$dict$items self) {
+B_str B_InteratorD_dict_items_str(B_InteratorD_dict_items self) {
     char *s;
     asprintf(&s,"<dict items iterator object at %p>",self);
     return to$str(s);
 }
 
-void $Iterator$dict$items_serialize($Iterator$dict$items self, $Serial$state state) {
+void B_InteratorD_dict_items_serialize(B_InteratorD_dict_items self, $NoneType state) {
     $step_serialize(self->src,state);
-    $step_serialize(to$int(self->nxt),state);
+    $step_serialize(toB_int(self->nxt),state);
 }
 
-$Iterator$dict$items $Iterator$dict$items_deserialize($Iterator$dict$items res, $Serial$state state) {
+B_InteratorD_dict_items B_InteratorD_dict_items_deserialize(B_InteratorD_dict_items res, $NoneType state) {
     if (!res)
-        res = $DNEW($Iterator$dict$items,state);
-    res->src = ($dict)$step_deserialize(state);
-    res->nxt = from$int(($int)$step_deserialize(state));
+        res = $DNEW(B_InteratorD_dict_items,state);
+    res->src = (B_dict)$step_deserialize(state);
+    res->nxt = fromB_int((B_int)$step_deserialize(state));
     return res;
 }
 
 
 
-struct $Iterator$dict$items$class $Iterator$dict$items$methods = {"$Iterator$dict$items",UNASSIGNED,($Super$class)&$Iterator$methods, $Iterator$dict$items_init,
-                                                                  $Iterator$dict$items_serialize, $Iterator$dict$items_deserialize,$Iterator$dict$items_bool, $Iterator$dict$items_str, $Iterator$dict$items_str, $Iterator$dict$items_next};
+struct B_InteratorD_dict_itemsG_class B_InteratorD_dict_itemsG_methods = {"B_InteratorD_dict_items",UNASSIGNED,($SuperG_class)&B_IteratorG_methods, B_InteratorD_dict_items_init,
+                                                                  B_InteratorD_dict_items_serialize, B_InteratorD_dict_items_deserialize,B_InteratorD_dict_items_bool, B_InteratorD_dict_items_str, B_InteratorD_dict_items_str, B_InteratorD_dict_items_next};
 
 
-$Iterator $dict_keys($dict dict) {
-    return ($Iterator)$NEW($Iterator$dict,dict);
+B_Iterator B_dictD_keys(B_dict dict) {
+    return (B_Iterator)$NEW(B_IteratorD_dict,dict);
 }
 
-$Iterator $dict_values($dict dict) {
-    return ($Iterator)$NEW($Iterator$dict$values, dict);
+B_Iterator B_dictD_values(B_dict dict) {
+    return (B_Iterator)$NEW(B_InteratorD_dict_values, dict);
 }
 
-$Iterator $dict_items($dict dict) {
-    return  ($Iterator)$NEW($Iterator$dict$items, dict);
+B_Iterator B_dictD_items(B_dict dict) {
+    return  (B_Iterator)$NEW(B_InteratorD_dict_items, dict);
 }
  
-$WORD $dict_get($dict dict, $Hashable hashwit, $WORD key, $WORD deflt) {
-    long hash = from$int(hashwit->$class->__hash__(hashwit,key));
+$WORD B_dictD_get(B_dict dict, B_Hashable hashwit, $WORD key, $WORD deflt) {
+    long hash = fromB_int(hashwit->$class->__hash__(hashwit,key));
     $WORD res;
     int ix = $lookdict(dict,hashwit,hash,key,&res);
     if (ix < 0) 
@@ -565,13 +565,13 @@ $WORD $dict_get($dict dict, $Hashable hashwit, $WORD key, $WORD deflt) {
         return res;
 }
 
-$tuple $dict_popitem($dict dict, $Hashable hashwit) {
+B_tuple B_dictD_popitem(B_dict dict, B_Hashable hashwit) {
     $table table = dict->table;
     int ix = table->tb_nentries-1;
     while (ix >= 0) {
         $entry_t entry =  &TB_ENTRIES(table)[ix];
         if (entry->value != NULL) {
-            long hash = from$int(hashwit->$class->__hash__(hashwit,entry->key));
+            long hash = fromB_int(hashwit->$class->__hash__(hashwit,entry->key));
             int i = $lookdict_index(table,hash,ix);
             table->tb_indices[i] = DKIX_DUMMY;
             dict->numelements--;
@@ -583,15 +583,15 @@ $tuple $dict_popitem($dict dict, $Hashable hashwit) {
     return NULL;
 }
 
-void $dict_update($dict dict,  $Hashable hashwit, $Iterator it) {
-    $tuple item;
-    while((item = ($tuple)it->$class->__next__(it)))
-        $dict_setitem(dict,hashwit,item->components[0],item->components[1]);
+void B_dictD_update(B_dict dict,  B_Hashable hashwit, B_Iterator it) {
+    B_tuple item;
+    while((item = (B_tuple)it->$class->__next__(it)))
+        B_dictD_setitem(dict,hashwit,item->components[0],item->components[1]);
 }
 
-$WORD $dict_setdefault($dict dict, $Hashable hashwit, $WORD key, $WORD deflt) {
+$WORD B_dictD_setdefault(B_dict dict, B_Hashable hashwit, $WORD key, $WORD deflt) {
     // if (!deflt) deflt = void; what is the name of void here?...
-    long hash = from$int(hashwit->$class->__hash__(hashwit,key));
+    long hash = fromB_int(hashwit->$class->__hash__(hashwit,key));
     $WORD value;
     int ix = $lookdict(dict,hashwit,hash,key,&value);
     if (ix >= 0)

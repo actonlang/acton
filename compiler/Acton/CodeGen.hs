@@ -169,7 +169,7 @@ classid env                         = text "int" <+> gen env classidKW <> semi
 superlink env                       = gen env tSuperclass <+> gen env superclassKW <> semi
   where tSuperclass                 = tCon $ TC qnSuperClass []
 
-qnSuperClass                        = GName mPrim (name "Super$class")
+qnSuperClass                        = GName mPrim (Derived (name "Super") suffixClass)
 
 serialize env c                     = text "void" <+> parens (char '*' <> gen env serializeKW) <+> parens (gen env c <> comma <+> gen env tSerialstate) <> semi
 
@@ -692,7 +692,7 @@ instance Gen Expr where
                                         tmp <> semi) <+> rbrace)
       where n                       = qnList
             tmp                     = gen env tmpV
-            w                       = gen env primWSequenceList
+            w                       = gen env witSequenceList
             append                  = w <> text "->" <> gen env classKW <> text "->" <> gen env appendKW
             pars e                  = w <> comma <+> tmp <> comma <+> gen env e
         -- brackets (commaSep (gen env) es)

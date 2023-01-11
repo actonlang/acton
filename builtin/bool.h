@@ -1,35 +1,35 @@
-struct $bool$class {
+struct B_boolG_class {
   char *$GCINFO;
   int $class_id;
-  $Super$class $superclass;
-  void (*__init__)($bool, $value);
-  void (*__serialize__)($bool, $Serial$state);
-  $bool (*__deserialize__)($bool, $Serial$state);
-  $bool (*__bool__)($bool);
-  $str (*__str__)($bool);
-  $str (*__repr__)($bool);
+  $SuperG_class $superclass;
+  void (*__init__)(B_bool, B_value);
+  void (*__serialize__)(B_bool, $NoneType);
+  B_bool (*__deserialize__)(B_bool, $NoneType);
+  B_bool (*__bool__)(B_bool);
+  B_str (*__str__)(B_bool);
+  B_str (*__repr__)(B_bool);
 };
 
-struct $bool {
-  struct $bool$class *$class;
+struct B_bool {
+  struct B_boolG_class *$class;
   long val;
 };
 
-extern struct $bool$class $bool$methods;
-$bool $bool$new($value);
+extern struct B_boolG_class B_boolG_methods;
+B_bool B_boolG_new(B_value);
 
-//extern struct $Eq$bool$class $Eq$bool$methods;
-//$Eq$bool $Eq$bool$new();
+//extern struct B_EqD_boolG_class B_EqD_boolG_methods;
+//B_EqD_bool B_EqD_boolG_new();
 
-extern struct $Hashable$bool$class $Hashable$bool$methods;
-$Hashable$bool $Hashable$bool$new();
+extern struct B_HashableD_boolG_class B_HashableD_boolG_methods;
+B_HashableD_bool B_HashableD_boolG_new();
 
-//extern struct $Eq$bool *$Eq$bool$witness;
-extern struct $Hashable$bool *$Hashable$bool$witness;
+//extern struct B_EqD_bool *B_EqD_boolG_witness;
+extern struct B_HashableD_bool *B_HashableD_boolG_witness;
 
-$bool to$bool(long b);
-long from$bool($bool b);
+B_bool toB_bool(long b);
+long fromB_bool(B_bool b);
 
-extern $bool $True, $False;
+extern B_bool $True, $False;
 
-$bool $default__bool__($value);
+B_bool $default__bool__(B_value);

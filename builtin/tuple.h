@@ -1,67 +1,67 @@
-struct $tuple$class {
+struct B_tupleG_class {
     char *$GCINFO;
     int $class_id;
-    $Super$class $superclass;
-    void (*__init__)($tuple,int,...);
-    void (*__serialize__)($tuple,$Serial$state); 
-    $tuple (*__deserialize__)($tuple,$Serial$state);
-    $bool (*__bool__)($tuple);
-    $str (*__str__)($tuple);
-    $str (*__repr__)($tuple);
+    $SuperG_class $superclass;
+    void (*__init__)(B_tuple,int,...);
+    void (*__serialize__)(B_tuple,$NoneType); 
+    B_tuple (*__deserialize__)(B_tuple,$NoneType);
+    B_bool (*__bool__)(B_tuple);
+    B_str (*__str__)(B_tuple);
+    B_str (*__repr__)(B_tuple);
 };
 
-struct $tuple {
-    struct $tuple$class *$class;
+struct B_tuple {
+    struct B_tupleG_class *$class;
     int size;
     $WORD *components;
 };
 
-extern struct $tuple$class $tuple$methods;
-$tuple $tuple$new(int,...);
+extern struct B_tupleG_class B_tupleG_methods;
+B_tuple B_tupleG_new(int,...);
 
-#define $NEWTUPLE($len, ...)  ({ $tuple $t = malloc(sizeof(struct $tuple)+$len*sizeof($WORD)); \
-            $t->$class = &$tuple$methods;                               \
+#define $NEWTUPLE($len, ...)  ({ B_tuple $t = malloc(sizeof(struct B_tuple)+$len*sizeof($WORD)); \
+            $t->$class = &B_tupleG_methods;                               \
             $t->$class->__init__($t, $len, __VA_ARGS__);                \
             $t; })
 
-#define $NEWTUPLE0  ({ $tuple $t = malloc(sizeof(struct $tuple));       \
-            $t->$class = &$tuple$methods;                               \
+#define $NEWTUPLE0  ({ B_tuple $t = malloc(sizeof(struct B_tuple));       \
+            $t->$class = &B_tupleG_methods;                               \
             $t->$class->__init__($t);                                   \
             $t; })
 
-extern struct $Iterable$tuple$class $Iterable$tuple$methods;
-$Iterable$tuple $Iterable$tuple$new();
-extern struct $Sliceable$tuple$class $Sliceable$tuple$methods;
-$Sliceable$tuple $Sliceable$tuple$new();
-extern struct $Hashable$tuple$class $Hashable$tuple$methods;
-$Hashable$tuple $Hashable$tuple$new();
+extern struct B_IterableD_tupleG_class B_IterableD_tupleG_methods;
+B_IterableD_tuple B_IterableD_tupleG_new();
+extern struct B_SliceableD_tupleG_class B_SliceableD_tupleG_methods;
+B_SliceableD_tuple B_SliceableD_tupleG_new();
+extern struct B_HashableD_tupleG_class B_HashableD_tupleG_methods;
+B_HashableD_tuple B_HashableD_tupleG_new();
 
-extern struct $Iterable$tuple *$Iterable$tuple$witness;
-extern struct $Sliceable$tuple *$Sliceable$tuple$witness;
-extern struct $Hashable$tuple *$Hashable$tuple_new(int,$Hashable*);
+extern struct B_IterableD_tuple *B_IterableD_tupleG_witness;
+extern struct B_SliceableD_tuple *B_SliceableD_tupleG_witness;
+extern struct B_HashableD_tuple *B_HashableD_tuple_new(int,B_Hashable*);
 
 // Iterators over tuples ///////////////////////////////////////////////////////
 
-typedef struct $Iterator$tuple *$Iterator$tuple;
+typedef struct B_IteratorB_tuple *B_IteratorB_tuple;
 
-struct $Iterator$tuple$class {
+struct B_IteratorB_tupleG_class {
     char *$GCINFO;
     int $class_id;
-    $Super$class $superclass;
-    void (*__init__)($Iterator$tuple, $tuple);
-    void (*__serialize__)($Iterator$tuple,$Serial$state);
-    $Iterator$tuple (*__deserialize__)($Iterator$tuple,$Serial$state);
-    $bool (*__bool__)($Iterator$tuple);
-    $str (*__str__)($Iterator$tuple);
-    $str (*__repr__)($Iterator$tuple);
-    $WORD(*__next__)($Iterator$tuple);
+    $SuperG_class $superclass;
+    void (*__init__)(B_IteratorB_tuple, B_tuple);
+    void (*__serialize__)(B_IteratorB_tuple,$NoneType);
+    B_IteratorB_tuple (*__deserialize__)(B_IteratorB_tuple,$NoneType);
+    B_bool (*__bool__)(B_IteratorB_tuple);
+    B_str (*__str__)(B_IteratorB_tuple);
+    B_str (*__repr__)(B_IteratorB_tuple);
+    $WORD(*__next__)(B_IteratorB_tuple);
 };
 
-struct $Iterator$tuple {
-    struct $Iterator$tuple$class *$class;
-    $tuple src;
+struct B_IteratorB_tuple {
+    struct B_IteratorB_tupleG_class *$class;
+    B_tuple src;
     int nxt;
 };
 
-extern struct $Iterator$tuple$class $Iterator$tuple$methods;
-$Iterator$tuple $Iterator$tuple$new($tuple);
+extern struct B_IteratorB_tupleG_class B_IteratorB_tupleG_methods;
+B_IteratorB_tuple B_IteratorB_tupleG_new(B_tuple);

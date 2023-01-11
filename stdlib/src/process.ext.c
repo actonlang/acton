@@ -3,7 +3,7 @@
 #include "../rts/io.h"
 #include "../rts/log.h"
 
-void process$$__ext_init__() {
+void process$D___ext_init__() {
     // NOP
 }
 
@@ -26,7 +26,7 @@ void exit_handler(uv_process_t *req, int64_t exit_status, int term_signal) {
         uv_close((uv_handle_t *)stdin, NULL);
     uv_close((uv_handle_t *)req, NULL);
     $action3 f = process_data->on_exit;
-    f->$class->__asyn__(f, process_data->process, to$int(exit_status), to$int(term_signal));
+    f->$class->__asyn__(f, process_data->process, toB_int(exit_status), toB_int(term_signal));
 }
 
 void read_stderr(uv_stream_t *stream, ssize_t nread, const uv_buf_t *buf) {
@@ -39,7 +39,7 @@ void read_stderr(uv_stream_t *stream, ssize_t nread, const uv_buf_t *buf) {
             struct process_data *process_data = (struct process_data *)stream->data;
             process$$Process self = process_data->process;
             $action2 f = process_data->on_stderr;
-            f->$class->__asyn__(f, self, to$bytes_len(buf->base, nread));
+            f->$class->__asyn__(f, self, toB_bytesD_len(buf->base, nread));
         }
     }
 
@@ -57,7 +57,7 @@ void read_stdout(uv_stream_t *stream, ssize_t nread, const uv_buf_t *buf) {
             struct process_data *process_data = (struct process_data *)stream->data;
             process$$Process self = process_data->process;
             $action2 f = process_data->on_stdout;
-            f->$class->__asyn__(f, self, to$bytes_len(buf->base, nread));
+            f->$class->__asyn__(f, self, toB_bytesD_len(buf->base, nread));
         }
     }
 
@@ -66,7 +66,7 @@ void read_stdout(uv_stream_t *stream, ssize_t nread, const uv_buf_t *buf) {
 }
 
 $R process$$Process$aid$local (process$$Process self, $Cont c$cont) {
-    return $R_CONT(c$cont, to$int(self->$globkey));
+    return $R_CONT(c$cont, toB_int(self->$globkey));
 }
 
 $R process$$Process$_create_process (process$$Process self, $Cont c$cont) {
@@ -80,32 +80,32 @@ $R process$$Process$_create_process (process$$Process self, $Cont c$cont) {
     uv_process_options_t *options = calloc(1, sizeof(uv_process_options_t));
 
     uv_process_t *req = calloc(1, sizeof(uv_process_t));
-    self->_p = to$int((long)req);
+    self->_p = toB_int((long)req);
 
     req->data = process_data;
 
-    char **args = (char **)malloc(($list_len(self->cmd)+1) * sizeof(char *));
+    char **args = (char **)malloc((B_listD_len(self->cmd)+1) * sizeof(char *));
 
     int i;
-    for (i = 0; i < $list_len(self->cmd); i++) {
-        args[i] = from$str($list_getitem(self->cmd, i));
+    for (i = 0; i < B_listD_len(self->cmd); i++) {
+        args[i] = fromB_str(B_listD_getitem(self->cmd, i));
     }
     args[i] = NULL;
 
     if (self->workdir != $None) {
-        options->cwd = from$str(self->workdir);
+        options->cwd = fromB_str(self->workdir);
     };
 
     if (self->env == $None) {
         options->env = NULL;
     } else {
-        char **env = (char **)calloc(($dict_len(self->env)+1), sizeof(char *));
-        $Iterator$dict$items iter = $NEW($Iterator$dict$items, self->env);
-        $tuple item;
-        for (i=0; i < $dict_len(self->env); i++) {
-            item = ($tuple)iter->$class->__next__(iter);
-            char *key = from$str(($str)item->components[0]);
-            char *value = from$str(($str)item->components[1]);
+        char **env = (char **)calloc((B_dictD_len(self->env)+1), sizeof(char *));
+        B_InteratorD_dict_items iter = $NEW(B_InteratorD_dict_items, self->env);
+        B_tuple item;
+        for (i=0; i < B_dictD_len(self->env); i++) {
+            item = (B_tuple)iter->$class->__next__(iter);
+            char *key = fromB_str((B_str)item->components[0]);
+            char *value = fromB_str((B_str)item->components[1]);
             size_t env_size = strlen(key) + strlen(value) + 2;
             char *env_var = malloc(env_size);
             snprintf(env_var, env_size, "%s=%s", key, value);
@@ -161,7 +161,7 @@ void close_cb(uv_handle_t *handle) {
 }
 
 $R process$$Process$done_writing$local (process$$Process self, $Cont c$cont) {
-    uv_process_t *p = (uv_process_t *)from$int(self->_p);
+    uv_process_t *p = (uv_process_t *)fromB_int(self->_p);
     struct process_data *process_data = (struct process_data *)p->data;
     uv_stream_t *stdin = (uv_stream_t *)&process_data->stdin_pipe;
     uv_close(stdin, close_cb);
@@ -169,18 +169,18 @@ $R process$$Process$done_writing$local (process$$Process self, $Cont c$cont) {
 }
 
 $R process$$Process$pid$local (process$$Process self, $Cont c$cont) {
-    uv_process_t *p = (uv_process_t *)from$int(self->_p);
-    return $R_CONT(c$cont, ($atom)to$int(p->pid));
+    uv_process_t *p = (uv_process_t *)fromB_int(self->_p);
+    return $R_CONT(c$cont, (B_atom)toB_int(p->pid));
 }
 
-$R process$$Process$signal$local (process$$Process self, $Cont c$cont, $int signal) {
-    uv_process_t *p = (uv_process_t *)from$int(self->_p);
-    uv_process_kill(p, from$int(signal));
+$R process$$Process$signal$local (process$$Process self, $Cont c$cont, B_int signal) {
+    uv_process_t *p = (uv_process_t *)fromB_int(self->_p);
+    uv_process_kill(p, fromB_int(signal));
     return $R_CONT(c$cont, $None);
 }
 
-$R process$$Process$write$local (process$$Process self, $Cont c$cont, $bytes data) {
-    uv_process_t *p = (uv_process_t *)from$int(self->_p);
+$R process$$Process$write$local (process$$Process self, $Cont c$cont, B_bytes data) {
+    uv_process_t *p = (uv_process_t *)fromB_int(self->_p);
 
     uv_write_t *req = (uv_write_t *)malloc(sizeof(uv_write_t));
     uv_buf_t buf = uv_buf_init(data->str, data->nbytes);

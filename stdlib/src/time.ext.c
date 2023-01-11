@@ -1,35 +1,35 @@
-void time$$__ext_init__() {
+void time$D___ext_init__() {
     // NOP
 }
 
-$float time$$monotonic () {
+B_float time$$monotonic () {
     struct timespec ts;
     if (clock_gettime(CLOCK_MONOTONIC, &ts) == -1) {
-        $RAISE((($BaseException)$RuntimeError$new(to$str("Unable to get time"))));
+        $RAISE(((B_BaseException)B_RuntimeErrorG_new(to$str("Unable to get time"))));
     }
-    return to$float(ts.tv_sec + 0.000000001*ts.tv_nsec);
+    return toB_float(ts.tv_sec + 0.000000001*ts.tv_nsec);
 }
 
-$int time$$monotonic_ns () {
+B_int time$$monotonic_ns () {
     struct timespec ts;
     if (clock_gettime(CLOCK_MONOTONIC, &ts) == -1) {
-        $RAISE((($BaseException)$RuntimeError$new(to$str("Unable to get time"))));
+        $RAISE(((B_BaseException)B_RuntimeErrorG_new(to$str("Unable to get time"))));
     }
-    return to$int(ts.tv_sec * 1000000000 + ts.tv_nsec);
+    return toB_int(ts.tv_sec * 1000000000 + ts.tv_nsec);
 }
 
-$float time$$time () {
+B_float time$$time () {
     struct timespec ts;
     if (clock_gettime(CLOCK_REALTIME, &ts) == -1) {
-        $RAISE((($BaseException)$RuntimeError$new(to$str("Unable to get time"))));
+        $RAISE(((B_BaseException)B_RuntimeErrorG_new(to$str("Unable to get time"))));
     }
-    return to$float(ts.tv_sec + 0.000000001*ts.tv_nsec);
+    return toB_float(ts.tv_sec + 0.000000001*ts.tv_nsec);
 }
 
-$int time$$time_ns () {
+B_int time$$time_ns () {
     struct timespec ts;
     if (clock_gettime(CLOCK_REALTIME, &ts) == -1) {
-        $RAISE((($BaseException)$RuntimeError$new(to$str("Unable to get time"))));
+        $RAISE(((B_BaseException)B_RuntimeErrorG_new(to$str("Unable to get time"))));
     }
-    return to$int(ts.tv_sec * 1000000000 + ts.tv_nsec);
+    return toB_int(ts.tv_sec * 1000000000 + ts.tv_nsec);
 }

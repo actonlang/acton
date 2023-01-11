@@ -17,20 +17,20 @@
 
 int main() {
   $register_builtin();
-  $Iterable wit = ($Iterable)$Iterable$range$new();
-  $range r1 = $range$new(to$int(2),to$int(10),to$int(3));
-  $Iterator i1 = wit->$class->__iter__(wit,r1);
-  $int n;
-  while ((n = ($int)i1->$class->__next__(i1)))
-    printf("%ld ",from$int(n));
+  B_Iterable wit = (B_Iterable)B_IterableD_rangeG_new();
+  B_range r1 = B_rangeG_new(toB_int(2),toB_int(10),toB_int(3));
+  B_Iterator i1 = wit->$class->__iter__(wit,r1);
+  B_int n;
+  while ((n = (B_int)i1->$class->__next__(i1)))
+    printf("%ld ",fromB_int(n));
   printf("\n");
-  $range r2 = $range$new(to$int(50),to$int(10),to$int(-4));
+  B_range r2 = B_rangeG_new(toB_int(50),toB_int(10),toB_int(-4));
   $serialize_file(($Serializable)r2,"range.bin");
-  $range r3 = ($range)$deserialize_file("range.bin");
-  $list lst = $list_fromiter(wit->$class->__iter__(wit,r3));
+  B_range r3 = (B_range)$deserialize_file("range.bin");
+  B_list lst = B_listD_fromiter(wit->$class->__iter__(wit,r3));
   $print(2,to$str("lst = "),lst);
-  $set s = $set_fromiter(($Hashable)$Hashable$int$witness,wit->$class->__iter__(wit,r2));
-  $Set$set wit2 = $Set$set$new(($Hashable)$Hashable$int$witness);
-  $list lst2 = $list_fromiter(wit2->$class->__iter__(wit2,s));
+  B_set s = B_set_fromiter((B_Hashable)B_HashableD_intG_witness,wit->$class->__iter__(wit,r2));
+  B_SetD_set wit2 = B_SetD_setG_new((B_Hashable)B_HashableD_intG_witness);
+  B_list lst2 = B_listD_fromiter(wit2->$class->__iter__(wit2,s));
   $print(2,to$str("lst2 = "),lst2);
 }

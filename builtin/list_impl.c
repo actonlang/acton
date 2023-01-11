@@ -14,11 +14,11 @@
 
 // General methods //////////////////////////////////////////////////////////////////////////
 
-$list $list$new($Iterable wit, $WORD iterable) {
-    return $NEW($list, wit, iterable);
+B_list B_listG_new(B_Iterable wit, $WORD iterable) {
+    return $NEW(B_list, wit, iterable);
 }
 
-void $list_init($list lst, $Iterable wit, $WORD iterable) {
+void B_listD_init(B_list lst, B_Iterable wit, $WORD iterable) {
     lst->length = 0;
     lst->capacity = 0;
     lst->data = NULL;
@@ -26,32 +26,32 @@ void $list_init($list lst, $Iterable wit, $WORD iterable) {
         return;
     }
     $WORD w;
-    $Iterator it = wit->$class->__iter__(wit,iterable);
+    B_Iterator it = wit->$class->__iter__(wit,iterable);
     while((w = it->$class->__next__(it)))
-        $list_append(lst,w);
+        B_listD_append(lst,w);
 }
   
-$bool $list_bool($list self) {
-    return to$bool(self->length>0);
+B_bool B_listD_bool(B_list self) {
+    return toB_bool(self->length>0);
 }
 
-$str $list_str($list self) {
-    $list s2 = $list_new(self->length);
+B_str B_listD_str(B_list self) {
+    B_list s2 = B_listD_new(self->length);
     for (int i=0; i< self->length; i++) {
-        $value elem = ($value)self->data[i];
-        $list_append(s2,elem->$class->__repr__(elem));
+        B_value elem = (B_value)self->data[i];
+        B_listD_append(s2,elem->$class->__repr__(elem));
     }
-    return $str_join_par('[',s2,']');
+    return B_strD_join_par('[',s2,']');
 }
 
-void $list_serialize($list self,$Serial$state state) {
-    $int prevkey = ($int)$dict_get(state->done,($Hashable)$Hashable$WORD$witness,self,NULL);
+void B_listD_serialize(B_list self,$NoneType state) {
+    B_int prevkey = (B_int)B_dictD_get(state->done,(B_Hashable)B_HashableD_WORDG_witness,self,NULL);
     if (prevkey) {
-        long pk = from$int(prevkey);
+        long pk = fromB_int(prevkey);
         $val_serialize(-LIST_ID,&pk,state);
         return;
     }
-    $dict_setitem(state->done,($Hashable)$Hashable$WORD$witness,self,to$int(state->row_no));
+    B_dictD_setitem(state->done,(B_Hashable)B_HashableD_WORDG_witness,self,toB_int(state->row_no));
     long len = (long)self->length;
     $val_serialize(LIST_ID,&len,state);
     for (int i=0; i<self->length; i++) {
@@ -59,16 +59,16 @@ void $list_serialize($list self,$Serial$state state) {
     }
 }
  
-$list $list_deserialize($list res, $Serial$state state) {
+B_list B_listD_deserialize(B_list res, $NoneType state) {
     $ROW this = state->row;
     state->row = this->next;
     state->row_no++;
     if (this->class_id < 0) {
-        return ($list)$dict_get(state->done,($Hashable)$Hashable$int$witness,to$int((int)this->blob[0]),NULL);
+        return (B_list)B_dictD_get(state->done,(B_Hashable)B_HashableD_intG_witness,toB_int((int)this->blob[0]),NULL);
     } else {
         if (!res)
-            res = $list_new((int)(long)this->blob[0]);
-        $dict_setitem(state->done,($Hashable)$Hashable$int$witness,to$int(state->row_no-1),res);
+            res = B_listD_new((int)(long)this->blob[0]);
+        B_dictD_setitem(state->done,(B_Hashable)B_HashableD_intG_witness,toB_int(state->row_no-1),res);
         res->length = res->capacity;
         for (int i = 0; i < res->length; i++) 
             res->data[i] = $step_deserialize(state);
@@ -76,12 +76,12 @@ $list $list_deserialize($list res, $Serial$state state) {
     }
 }
 
-struct $list$class $list$methods = {"$list",UNASSIGNED,($Super$class)&$object$methods, $list_init, $list_serialize,$list_deserialize, $list_bool, $list_str, $list_str,$list_copy};
+struct B_listG_class B_listG_methods = {"B_list",UNASSIGNED,($SuperG_class)&B_objectG_methods, B_listD_init, B_listD_serialize,B_listD_deserialize, B_listD_bool, B_listD_str, B_listD_str,B_listD_copy};
 
 // Auxiliary functions /////////////////////////////////////////////////////////////////////////////////////////////////////
  
 // For now, expansion doubles capacity. 
-static void expand($list lst,int n) {
+static void expand(B_list lst,int n) {
     if (lst->capacity >= lst->length + n)
         return;
     int newcapacity = lst->capacity==0 ? 1 : lst->capacity;
@@ -91,55 +91,55 @@ static void expand($list lst,int n) {
         ? malloc(newcapacity*sizeof($WORD))
         : realloc(lst->data,newcapacity*sizeof($WORD));
     if (newptr == NULL) {
-        $RAISE(($BaseException)$NEW($MemoryError,to$str("memory allocation failed")));
+        $RAISE((B_BaseException)$NEW(B_MemoryError,to$str("memory allocation failed")));
     }
     lst->data = newptr;
     lst->capacity = newcapacity;
 }  
 
-$list $list_new(int capacity) {
+B_list B_listD_new(int capacity) {
     if (capacity < 0) {
         fprintf(stderr,"Internal error list_new: negative capacity");
         exit(-1);
     } 
-    $list lst = malloc(sizeof(struct $list));
+    B_list lst = malloc(sizeof(struct B_list));
     if (lst == NULL) {
-        $RAISE(($BaseException)$NEW($MemoryError,to$str("memory allocation failed")));
+        $RAISE((B_BaseException)$NEW(B_MemoryError,to$str("memory allocation failed")));
     }
     if (capacity>0) {
         lst->data = malloc(capacity*sizeof($WORD));
         if (lst->data == NULL) {
-            $RAISE(($BaseException)$NEW($MemoryError,to$str("memory allocation failed")));
+            $RAISE((B_BaseException)$NEW(B_MemoryError,to$str("memory allocation failed")));
         }
     } else {
         lst->data = NULL;
     }
     lst->length = 0;
     lst->capacity = capacity;
-    lst->$class = &$list$methods; 
+    lst->$class = &B_listG_methods; 
     return lst;
 }
 
 // Times /////////////////////////////////////////////////////////////////////////////////////////////
 
-$list $list_add($list lst, $list other) {
+B_list B_listD_add(B_list lst, B_list other) {
     int lstlen = lst->length;
     int otherlen = other->length;
     int reslen = lstlen + otherlen;
-    $list res = $list_new(reslen);
+    B_list res = B_listD_new(reslen);
     memcpy(res->data,lst->data,lstlen*sizeof($WORD));
     memcpy(res->data+lstlen,other->data,otherlen*sizeof($WORD));
     res->length = reslen;
     return res;
 }
 
-$list $list_mul($list lst, $int n) {
+B_list B_listD_mul(B_list lst, B_int n) {
     int lstlen = lst->length;
     if (n->val.size <= 0)
-        return $list_new(0);
+        return B_listD_new(0);
     else {
-        long n64 =  from$int(n);
-        $list res = $list_new(lstlen * n64);
+        long n64 =  fromB_int(n);
+        B_list res = B_listD_new(lstlen * n64);
         for (int i=0; i<n64; i++)
             memcpy(res->data + i*lstlen, lst->data, lstlen * sizeof($WORD));
         res->length = lstlen * n64;
@@ -150,104 +150,104 @@ $list $list_mul($list lst, $int n) {
     
 // Collection ///////////////////////////////////////////////////////////////////////////////////////
 
-$list $list_fromiter($Iterator it) {
-    $list res = $list_new(4);
+B_list B_listD_fromiter(B_Iterator it) {
+    B_list res = B_listD_new(4);
     $WORD nxt;
     while ((nxt = it->$class->__next__(it))) {
-        $list_append(res,nxt);
+        B_listD_append(res,nxt);
     }
     return res;
 }
 
-long $list_len($list lst) {
+long B_listD_len(B_list lst) {
     return (long)lst->length;
 }
 
 // Container ///////////////////////////////////////////////////////////////////////////
 
-int $list_contains($Eq w, $list lst, $WORD elem) {
+int B_listD_contains(B_Eq w, B_list lst, $WORD elem) {
     for (int i=0; i < lst->length; i++) {
-        if (from$bool(w->$class->__eq__(w,elem,lst->data[i])))
+        if (fromB_bool(w->$class->__eq__(w,elem,lst->data[i])))
             return 1;
     }
     return 0;
 }
 
-int $list_containsnot($Eq w, $list lst, $WORD elem) {
-    return !$list_contains(w,lst,elem);
+int B_listD_containsnot(B_Eq w, B_list lst, $WORD elem) {
+    return !B_listD_contains(w,lst,elem);
 }
 
 // Iterable ///////////////////////////////////////////////////////////////////////////
 
 
-static $WORD $Iterator$list_next($Iterator$list self) {
+static $WORD B_IteratorD_listD_next(B_IteratorD_list self) {
     return self->nxt >= self->src->length ? NULL : self->src->data[self->nxt++];
 }
 
-$Iterator$list $Iterator$list$new($list lst) {
-    return $NEW($Iterator$list, lst);
+B_IteratorD_list B_IteratorD_listG_new(B_list lst) {
+    return $NEW(B_IteratorD_list, lst);
 }
 
-void $Iterator$list_init($Iterator$list self, $list lst) {
+void B_IteratorD_listD_init(B_IteratorD_list self, B_list lst) {
     self->src = lst;
     self->nxt = 0;
 }
 
-$bool $Iterator$list_bool($Iterator$list self) {
+B_bool B_IteratorD_listD_bool(B_IteratorD_list self) {
     return $True;
 }
 
-$str $Iterator$list_str($Iterator$list self) {
+B_str B_IteratorD_listD_str(B_IteratorD_list self) {
     char *s;
     asprintf(&s,"<list iterator object at %p>",self);
     return to$str(s);
 }
 
-void $Iterator$list_serialize($Iterator$list self,$Serial$state state) {
+void B_IteratorD_listD_serialize(B_IteratorD_list self,$NoneType state) {
     $step_serialize(self->src,state);
-    $step_serialize(to$int(self->nxt),state);
+    $step_serialize(toB_int(self->nxt),state);
 }
 
-$Iterator$list $Iterator$list$_deserialize($Iterator$list res, $Serial$state state) {
+B_IteratorD_list B_IteratorD_list$_deserialize(B_IteratorD_list res, $NoneType state) {
     if(!res)
-        res = $DNEW($Iterator$list,state);
-    res->src = ($list)$step_deserialize(state);
-    res->nxt = from$int(($int)$step_deserialize(state));
+        res = $DNEW(B_IteratorD_list,state);
+    res->src = (B_list)$step_deserialize(state);
+    res->nxt = fromB_int((B_int)$step_deserialize(state));
     return res;
 }
 
-struct $Iterator$list$class $Iterator$list$methods = {"$Iterator$list",UNASSIGNED,($Super$class)&$Iterator$methods, $Iterator$list_init,
-                                                      $Iterator$list_serialize, $Iterator$list$_deserialize,$Iterator$list_bool,$Iterator$list_str,$Iterator$list_str,$Iterator$list_next};
+struct B_IteratorD_listG_class B_IteratorD_listG_methods = {"B_IteratorD_list",UNASSIGNED,($SuperG_class)&B_IteratorG_methods, B_IteratorD_listD_init,
+                                                      B_IteratorD_listD_serialize, B_IteratorD_list$_deserialize,B_IteratorD_listD_bool,B_IteratorD_listD_str,B_IteratorD_listD_str,B_IteratorD_listD_next};
 
-$Iterator $list_iter($list lst) {
-    return ($Iterator)$NEW($Iterator$list,lst);
+B_Iterator B_listD_iter(B_list lst) {
+    return (B_Iterator)$NEW(B_IteratorD_list,lst);
 }
 
 // Indexed ///////////////////////////////////////////////////////////////////////////
 
-$WORD $list_getitem($list lst, int ix) {
+$WORD B_listD_getitem(B_list lst, int ix) {
     int len = lst->length;
     int ix0 = ix < 0 ? len + ix : ix;
     if (ix0 < 0 || ix0 >= len) {
-        $RAISE(($BaseException)$NEW($IndexError,to$str("getitem: indexing outside list")));
+        $RAISE((B_BaseException)$NEW(B_IndexError,to$str("getitem: indexing outside list")));
     }
     return lst->data[ix0];
 }
 
-void $list_setitem($list lst, int ix, $WORD val) {
+void B_listD_setitem(B_list lst, int ix, $WORD val) {
     int len = lst->length;
     int ix0 = ix < 0 ? len + ix : ix;
     if (ix0 < 0 || ix0 >= len) {
-        $RAISE(($BaseException)$NEW($IndexError,to$str("setitem: indexing outside list")));
+        $RAISE((B_BaseException)$NEW(B_IndexError,to$str("setitem: indexing outside list")));
     }
     lst->data[ix0] = val;
 }
 
-void $list_delitem($list lst,int ix) {
+void B_listD_delitem(B_list lst,int ix) {
     int len = lst->length;
     int ix0 = ix < 0 ? len + ix : ix;
     if(ix0 < 0 || ix0 >= len) {
-        $RAISE(($BaseException)$NEW($IndexError,to$str("delitem: indexing outside list")));
+        $RAISE((B_BaseException)$NEW(B_IndexError,to$str("delitem: indexing outside list")));
     }
     memmove(lst->data + ix0,
             lst->data + (ix0 + 1),
@@ -258,34 +258,34 @@ void $list_delitem($list lst,int ix) {
 
 // Sliceable //////////////////////////////////////////////////////////////////////////////////////
 
-$list $list_getslice($list lst, $slice slc) {
+B_list B_listD_getslice(B_list lst, B_slice slc) {
     int len = lst->length;
     int start, stop, step, slen;
     normalize_slice(slc, len, &slen, &start, &stop, &step);
     // slice notation has been eliminated and default values applied.
     // slen is now the length of the slice
-    $list rlst = $list_new(slen);
+    B_list rlst = B_listD_new(slen);
     int t = start;
     for (int i=0; i<slen; i++) {
         $WORD w;
-        w = $list_getitem(lst,t);
-        $list_append(rlst,w);
+        w = B_listD_getitem(lst,t);
+        B_listD_append(rlst,w);
         t += step;
     }
     return rlst;
 }
 
-void $list_setslice($list lst, $slice slc, $Iterator it) {
+void B_listD_setslice(B_list lst, B_slice slc, B_Iterator it) {
     int len = lst->length;
-    $list other = $list_new(0);
+    B_list other = B_listD_new(0);
     $WORD w;
     while((w=it->$class->__next__(it)))
-        $list_append(other,w);
+        B_listD_append(other,w);
     int olen = other->length; 
     int start, stop, step, slen;
     normalize_slice(slc, len, &slen, &start, &stop, &step);
     if (step != 1 && olen != slen) {
-        $RAISE(($BaseException)$NEW($ValueError,to$str("setslice: illegal slice")));
+        $RAISE((B_BaseException)$NEW(B_ValueError,to$str("setslice: illegal slice")));
     }
     int copy = olen <= slen ? olen : slen;
     int t = start;
@@ -315,7 +315,7 @@ void $list_setslice($list lst, $slice slc, $Iterator it) {
     }
 }
 
-void $list_delslice($list lst, $slice slc) {
+void B_listD_delslice(B_list lst, B_slice slc) {
     int len = lst->length;
     int start, stop, step, slen;
     normalize_slice(slc, len, &slen, &start, &stop, &step);
@@ -331,22 +331,22 @@ void $list_delslice($list lst, $slice slc) {
 
 // Sequence /////////////////////////////////////////////////////////////////////////////
 
-void $list_append($list lst, $WORD val) {
+void B_listD_append(B_list lst, $WORD val) {
     expand(lst,1);
     lst->data[lst->length++] = val;
 }
 
-static $WORD $Iterator$list_reversed_next($Iterator$list self) {
+static $WORD B_IteratorD_listD_reversed_next(B_IteratorD_list self) {
     return self->nxt < 0 ? NULL : self->src->data[self->nxt--];
 }
 
-$Iterator $list_reversed($list lst){
-    $list copy = $list_copy(lst);
-    $list_reverse(copy);
-    return $list_iter(copy);
+B_Iterator B_listD_reversed(B_list lst){
+    B_list copy = B_listD_copy(lst);
+    B_listD_reverse(copy);
+    return B_listD_iter(copy);
 }
 
-void $list_insert($list lst, int ix, $WORD val) {
+void B_listD_insert(B_list lst, int ix, $WORD val) {
     int len = lst->length;
     expand(lst,1);
     int ix0 = ix < 0 ? (len+ix < 0 ? 0 : len+ix) : (ix < len ? ix : len);
@@ -358,7 +358,7 @@ void $list_insert($list lst, int ix, $WORD val) {
 }
 
 // In place reversal
-void $list_reverse($list lst) {
+void B_listD_reverse(B_list lst) {
     int len = lst->length;
     for (int i = 0; i < len/2; i++) {
         $WORD tmp = lst->data[i];
@@ -369,9 +369,9 @@ void $list_reverse($list lst) {
  
 // List-specific methods /////////////////////////////////////////////////////////////////////
 
-$list $list_copy($list lst) {
+B_list B_listD_copy(B_list lst) {
     int len = lst->length;
-    $list res = $list_new(len);
+    B_list res = B_listD_new(len);
     res->length = len;
     memcpy(res->data,lst->data,len*sizeof($WORD));
     return res;

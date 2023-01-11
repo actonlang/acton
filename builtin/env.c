@@ -29,25 +29,25 @@ extern int return_val;
 
 ///////////////////////////////////////////////////////////////////////////////////////////
 // START GENERATED __builtin__.act
-$NoneType $l$1cont$__init__ ($l$1cont p$self, $Env self, $str s) {
+$NoneType $l$1contD___init__ ($l$1cont p$self, $Env self, B_str s) {
     p$self->self = self;
     p$self->s = s;
     return $None;
 }
-$R $l$1cont$__call__ ($l$1cont p$self, $Cont c$cont) {
+$R $l$1contD___call__ ($l$1cont p$self, $Cont c$cont) {
     $Env self = p$self->self;
-    $str s = p$self->s;
+    B_str s = p$self->s;
     return self->$class->stdout_write$local(self, c$cont, s);
 }
-void $l$1cont$__serialize__ ($l$1cont self, $Serial$state state) {
+void $l$1contD___serialize__ ($l$1cont self, $NoneType state) {
     $step_serialize(self->self, state);
     $step_serialize(self->s, state);
 }
-$l$1cont $l$1cont$__deserialize__ ($l$1cont self, $Serial$state state) {
+$l$1cont $l$1contD___deserialize__ ($l$1cont self, $NoneType state) {
     if (!self) {
         if (!state) {
             self = malloc(sizeof(struct $l$1cont));
-            self->$class = &$l$1cont$methods;
+            self->$class = &$l$1contG_methods;
             return self;
         }
         self = $DNEW($l$1cont, state);
@@ -56,33 +56,33 @@ $l$1cont $l$1cont$__deserialize__ ($l$1cont self, $Serial$state state) {
     self->s = $step_deserialize(state);
     return self;
 }
-$l$1cont $l$1cont$new($Env p$1, $str p$2) {
+$l$1cont $l$1contG_new($Env p$1, B_str p$2) {
     $l$1cont $tmp = malloc(sizeof(struct $l$1cont));
-    $tmp->$class = &$l$1cont$methods;
-    $l$1cont$methods.__init__($tmp, p$1, p$2);
+    $tmp->$class = &$l$1contG_methods;
+    $l$1contG_methods.__init__($tmp, p$1, p$2);
     return $tmp;
 }
-struct $l$1cont$class $l$1cont$methods;
+struct $l$1contG_class $l$1contG_methods;
 
-$NoneType $l$2cont$__init__ ($l$2cont p$self, $Env self, $action cb) {
+$NoneType $l$2contD___init__ ($l$2cont p$self, $Env self, $action cb) {
     p$self->self = self;
     p$self->cb = cb;
     return $None;
 }
-$R $l$2cont$__call__ ($l$2cont p$self, $Cont c$cont) {
+$R $l$2contD___call__ ($l$2cont p$self, $Cont c$cont) {
     $Env self = p$self->self;
     $action cb = p$self->cb;
     return self->$class->stdin_install$local(self, c$cont, cb);
 }
-void $l$2cont$__serialize__ ($l$2cont self, $Serial$state state) {
+void $l$2contD___serialize__ ($l$2cont self, $NoneType state) {
     $step_serialize(self->self, state);
     $step_serialize(self->cb, state);
 }
-$l$2cont $l$2cont$__deserialize__ ($l$2cont self, $Serial$state state) {
+$l$2cont $l$2contD___deserialize__ ($l$2cont self, $NoneType state) {
     if (!self) {
         if (!state) {
             self = malloc(sizeof(struct $l$2cont));
-            self->$class = &$l$2cont$methods;
+            self->$class = &$l$2contG_methods;
             return self;
         }
         self = $DNEW($l$2cont, state);
@@ -91,33 +91,33 @@ $l$2cont $l$2cont$__deserialize__ ($l$2cont self, $Serial$state state) {
     self->cb = $step_deserialize(state);
     return self;
 }
-$l$2cont $l$2cont$new($Env p$1, $action p$2) {
+$l$2cont $l$2contG_new($Env p$1, $action p$2) {
     $l$2cont $tmp = malloc(sizeof(struct $l$2cont));
-    $tmp->$class = &$l$2cont$methods;
-    $l$2cont$methods.__init__($tmp, p$1, p$2);
+    $tmp->$class = &$l$2contG_methods;
+    $l$2contG_methods.__init__($tmp, p$1, p$2);
     return $tmp;
 }
-struct $l$2cont$class $l$2cont$methods;
+struct $l$2contG_class $l$2contG_methods;
 
-$NoneType $l$3cont$__init__ ($l$3cont p$self, $Env self, $int n) {
+$NoneType $l$3contD___init__ ($l$3cont p$self, $Env self, B_int n) {
     p$self->self = self;
     p$self->n = n;
     return $None;
 }
-$R $l$3cont$__call__ ($l$3cont p$self, $Cont c$cont) {
+$R $l$3contD___call__ ($l$3cont p$self, $Cont c$cont) {
     $Env self = p$self->self;
-    $int n = p$self->n;
+    B_int n = p$self->n;
     return self->$class->exit$local(self, c$cont, n);
 }
-void $l$3cont$__serialize__ ($l$3cont self, $Serial$state state) {
+void $l$3contD___serialize__ ($l$3cont self, $NoneType state) {
     $step_serialize(self->self, state);
     $step_serialize(self->n, state);
 }
-$l$3cont $l$3cont$__deserialize__ ($l$3cont self, $Serial$state state) {
+$l$3cont $l$3contD___deserialize__ ($l$3cont self, $NoneType state) {
     if (!self) {
         if (!state) {
             self = malloc(sizeof(struct $l$3cont));
-            self->$class = &$l$3cont$methods;
+            self->$class = &$l$3contG_methods;
             return self;
         }
         self = $DNEW($l$3cont, state);
@@ -126,59 +126,59 @@ $l$3cont $l$3cont$__deserialize__ ($l$3cont self, $Serial$state state) {
     self->n = $step_deserialize(state);
     return self;
 }
-$l$3cont $l$3cont$new($Env p$1, $int p$2) {
+$l$3cont $l$3contG_new($Env p$1, B_int p$2) {
     $l$3cont $tmp = malloc(sizeof(struct $l$3cont));
-    $tmp->$class = &$l$3cont$methods;
-    $l$3cont$methods.__init__($tmp, p$1, p$2);
+    $tmp->$class = &$l$3contG_methods;
+    $l$3contG_methods.__init__($tmp, p$1, p$2);
     return $tmp;
 }
-struct $l$3cont$class $l$3cont$methods;
-$NoneType $WorldAuth$__init__ ($WorldAuth self) {
+struct $l$3contG_class $l$3contG_methods;
+$NoneType $WorldAuthD___init__ ($WorldAuth self) {
     return $None;
 }
-void $WorldAuth$__serialize__ ($WorldAuth self, $Serial$state state) {
+void $WorldAuthD___serialize__ ($WorldAuth self, $NoneType state) {
 }
-$WorldAuth $WorldAuth$__deserialize__ ($WorldAuth self, $Serial$state state) {
+$WorldAuth $WorldAuthD___deserialize__ ($WorldAuth self, $NoneType state) {
     if (!self) {
         if (!state) {
             self = malloc(sizeof(struct $WorldAuth));
-            self->$class = &$WorldAuth$methods;
+            self->$class = &$WorldAuthG_methods;
             return self;
         }
         self = $DNEW($WorldAuth, state);
     }
     return self;
 }
-struct $WorldAuth$class $WorldAuth$methods;
-$Msg $Env$stdout_write ($Env self, $str s) {
-    return $ASYNC((($Actor)self), (($Cont)$l$1cont$new((($Env)self), s)));
+struct $WorldAuthG_class $WorldAuthG_methods;
+$Msg $Env$stdout_write ($Env self, B_str s) {
+    return $ASYNC((($Actor)self), (($Cont)$l$1contG_new((($Env)self), s)));
 }
 $Msg $Env$stdin_install ($Env self, $action cb) {
-    return $ASYNC((($Actor)self), (($Cont)$l$2cont$new((($Env)self), cb)));
+    return $ASYNC((($Actor)self), (($Cont)$l$2contG_new((($Env)self), cb)));
 }
-$Msg $Env$exit ($Env self, $int n) {
-    return $ASYNC((($Actor)self), (($Cont)$l$3cont$new((($Env)self), n)));
+$Msg $Env$exit ($Env self, B_int n) {
+    return $ASYNC((($Actor)self), (($Cont)$l$3contG_new((($Env)self), n)));
 }
 // END GENERATED __builtin__.act
 ///////////////////////////////////////////////////////////////////////////////////////////
 
 
-$WorldAuth $WorldAuth$new() {
+$WorldAuth $WorldAuthG_new() {
     $WorldAuth $tmp = malloc(sizeof(struct $WorldAuth));
-    $tmp->$class = &$WorldAuth$methods;
-    $WorldAuth$methods.__init__($tmp);
+    $tmp->$class = &$WorldAuthG_methods;
+    $WorldAuthG_methods.__init__($tmp);
     return $tmp;
 }
 
 // Env /////////////////////////////////////////////////////////////////////////
 
-$NoneType $Env$__init__ ($Env self, $WorldAuth token, $list argv) {
+$NoneType $EnvD___init__ ($Env self, $WorldAuth token, B_list argv) {
     self->auth = token;
     self->argv = argv;
     self->$affinity = 0;
     return $None;
 }
-$R $Env$stdout_write$local ($Env self, $Cont c$cont, $str s) {
+$R $Env$stdout_write$local ($Env self, $Cont c$cont, B_str s) {
     printf("%s", s->str);
     return $R_CONT(c$cont, $None);
 }
@@ -192,7 +192,7 @@ void read_stdin(uv_stream_t *stream, ssize_t nread, const uv_buf_t *buf) {
     } else if (nread > 0) {
         if (stream->data) {
             $action cb = stream->data;
-            cb->$class->__asyn__(cb, to$bytes_len(buf->base, nread));
+            cb->$class->__asyn__(cb, toB_bytesD_len(buf->base, nread));
         }
     }
 
@@ -209,97 +209,97 @@ $R $Env$stdin_install$local ($Env self, $Cont c$cont, $action cb) {
     uv_read_start((uv_stream_t*)tty, alloc_buffer, read_stdin);
     return $R_CONT(c$cont, $None);
 }
-$R $Env$exit$local ($Env self, $Cont c$cont, $int n) {
-    return_val = from$int(n);
+$R $Env$exit$local ($Env self, $Cont c$cont, B_int n) {
+    return_val = fromB_int(n);
     rts_shutdown();
     return $R_CONT(c$cont, $None);
 }
-void $Env$__serialize__ ($Env self, $Serial$state state) {
-    $Actor$methods.__serialize__(($Actor)self, state);
+void $EnvD___serialize__ ($Env self, $NoneType state) {
+    $ActorG_methods.__serialize__(($Actor)self, state);
     $step_serialize(self->argv, state);
 }
-$Env $Env$__deserialize__ ($Env self, $Serial$state state) {
+$Env $EnvD___deserialize__ ($Env self, $NoneType state) {
     if (!self) {
         if (!state) {
             self = malloc(sizeof(struct $Env));
-            self->$class = &$Env$methods;
+            self->$class = &$EnvG_methods;
             return self;
         }
         self = $DNEW($Env, state);
     }
-    $Actor$methods.__deserialize__(($Actor)self, state);
+    $ActorG_methods.__deserialize__(($Actor)self, state);
     self->argv = $step_deserialize(state);
     return self;
 }
-$Env $Env$newact($WorldAuth token, $list p$1) {
+$Env $EnvG_newact($WorldAuth token, B_list p$1) {
     $Env $tmp = $NEWACTOR($Env);
-    $tmp->$class->__init__($tmp, token, p$1);  // Inline this message, note that $Env$__init__ is *not* CPS'ed
+    $tmp->$class->__init__($tmp, token, p$1);  // Inline this message, note that $EnvD___init__ is *not* CPS'ed
     serialize_state_shortcut(($Actor)$tmp);
     return $tmp;
 }
-struct $Env$class $Env$methods;
+struct $EnvG_class $EnvG_methods;
 
 
 int $done$ = 0;
-void $__init__ () {
+void D___init__ () {
     if ($done$) return;
     $done$ = 1;
     ///////////////////////////////////////////////////////////////////////////////////////
-    // START GENERATED __builtin__.act $__init__
+    // START GENERATED __builtin__.act D___init__
     {
-        $l$1cont$methods.$GCINFO = "$l$1cont";
-        $l$1cont$methods.$superclass = ($Super$class)&$Cont$methods;
-        $l$1cont$methods.__init__ = $l$1cont$__init__;
-        $l$1cont$methods.__call__ = $l$1cont$__call__;
-        $l$1cont$methods.__serialize__ = $l$1cont$__serialize__;
-        $l$1cont$methods.__deserialize__ = $l$1cont$__deserialize__;
-        $register(&$l$1cont$methods);
+        $l$1contG_methods.$GCINFO = "$l$1cont";
+        $l$1contG_methods.$superclass = ($SuperG_class)&$ContG_methods;
+        $l$1contG_methods.__init__ = $l$1contD___init__;
+        $l$1contG_methods.__call__ = $l$1contD___call__;
+        $l$1contG_methods.__serialize__ = $l$1contD___serialize__;
+        $l$1contG_methods.__deserialize__ = $l$1contD___deserialize__;
+        $register(&$l$1contG_methods);
     }
     {
-        $l$2cont$methods.$GCINFO = "$l$2cont";
-        $l$2cont$methods.$superclass = ($Super$class)&$Cont$methods;
-        $l$2cont$methods.__init__ = $l$2cont$__init__;
-        $l$2cont$methods.__call__ = $l$2cont$__call__;
-        $l$2cont$methods.__serialize__ = $l$2cont$__serialize__;
-        $l$2cont$methods.__deserialize__ = $l$2cont$__deserialize__;
-        $register(&$l$2cont$methods);
+        $l$2contG_methods.$GCINFO = "$l$2cont";
+        $l$2contG_methods.$superclass = ($SuperG_class)&$ContG_methods;
+        $l$2contG_methods.__init__ = $l$2contD___init__;
+        $l$2contG_methods.__call__ = $l$2contD___call__;
+        $l$2contG_methods.__serialize__ = $l$2contD___serialize__;
+        $l$2contG_methods.__deserialize__ = $l$2contD___deserialize__;
+        $register(&$l$2contG_methods);
     }
     {
-        $l$3cont$methods.$GCINFO = "$l$3cont";
-        $l$3cont$methods.$superclass = ($Super$class)&$Cont$methods;
-        $l$3cont$methods.__init__ = $l$3cont$__init__;
-        $l$3cont$methods.__call__ = $l$3cont$__call__;
-        $l$3cont$methods.__serialize__ = $l$3cont$__serialize__;
-        $l$3cont$methods.__deserialize__ = $l$3cont$__deserialize__;
-        $register(&$l$3cont$methods);
+        $l$3contG_methods.$GCINFO = "$l$3cont";
+        $l$3contG_methods.$superclass = ($SuperG_class)&$ContG_methods;
+        $l$3contG_methods.__init__ = $l$3contD___init__;
+        $l$3contG_methods.__call__ = $l$3contD___call__;
+        $l$3contG_methods.__serialize__ = $l$3contD___serialize__;
+        $l$3contG_methods.__deserialize__ = $l$3contD___deserialize__;
+        $register(&$l$3contG_methods);
     }
     {
-        $WorldAuth$methods.$GCINFO = "$WorldAuth";
-        $WorldAuth$methods.$superclass = ($Super$class)&$value$methods;
+        $WorldAuthG_methods.$GCINFO = "$WorldAuth";
+        $WorldAuthG_methods.$superclass = ($SuperG_class)&B_valueG_methods;
         ;
-        $WorldAuth$methods.__init__ = $WorldAuth$__init__;
-        $WorldAuth$methods.__serialize__ = $WorldAuth$__serialize__;
-        $WorldAuth$methods.__deserialize__ = $WorldAuth$__deserialize__;
-        $register(&$WorldAuth$methods);
+        $WorldAuthG_methods.__init__ = $WorldAuthD___init__;
+        $WorldAuthG_methods.__serialize__ = $WorldAuthD___serialize__;
+        $WorldAuthG_methods.__deserialize__ = $WorldAuthD___deserialize__;
+        $register(&$WorldAuthG_methods);
     }
     {
-        $Env$methods.$GCINFO = "$Env";
-        $Env$methods.$superclass = ($Super$class)&$Actor$methods;
-        $Env$methods.__bool__ = ($bool (*) ($Env))$Actor$methods.__bool__;
-        $Env$methods.__str__ = ($str (*) ($Env))$Actor$methods.__str__;
-        $Env$methods.__repr__ = ($str (*) ($Env))$Actor$methods.__repr__;
-        $Env$methods.__resume__ = ($NoneType (*) ($Env))$Actor$methods.__resume__;
-        $Env$methods.__init__ = $Env$__init__;
-        $Env$methods.stdout_write$local = $Env$stdout_write$local;
-        $Env$methods.stdin_install$local = $Env$stdin_install$local;
-        $Env$methods.exit$local = $Env$exit$local;
-        $Env$methods.stdout_write = $Env$stdout_write;
-        $Env$methods.stdin_install = $Env$stdin_install;
-        $Env$methods.exit = $Env$exit;
-        $Env$methods.__serialize__ = $Env$__serialize__;
-        $Env$methods.__deserialize__ = $Env$__deserialize__;
-        $register(&$Env$methods);
+        $EnvG_methods.$GCINFO = "$Env";
+        $EnvG_methods.$superclass = ($SuperG_class)&$ActorG_methods;
+        $EnvG_methods.__bool__ = (B_bool (*) ($Env))$ActorG_methods.__bool__;
+        $EnvG_methods.__str__ = (B_str (*) ($Env))$ActorG_methods.__str__;
+        $EnvG_methods.__repr__ = (B_str (*) ($Env))$ActorG_methods.__repr__;
+        $EnvG_methods.__resume__ = ($NoneType (*) ($Env))$ActorG_methods.__resume__;
+        $EnvG_methods.__init__ = $EnvD___init__;
+        $EnvG_methods.stdout_write$local = $Env$stdout_write$local;
+        $EnvG_methods.stdin_install$local = $Env$stdin_install$local;
+        $EnvG_methods.exit$local = $Env$exit$local;
+        $EnvG_methods.stdout_write = $Env$stdout_write;
+        $EnvG_methods.stdin_install = $Env$stdin_install;
+        $EnvG_methods.exit = $Env$exit;
+        $EnvG_methods.__serialize__ = $EnvD___serialize__;
+        $EnvG_methods.__deserialize__ = $EnvD___deserialize__;
+        $register(&$EnvG_methods);
     }
-    // END GENERATED __builtin__.act $__init__
+    // END GENERATED __builtin__.act D___init__
     ///////////////////////////////////////////////////////////////////////////////////////
 }

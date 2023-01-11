@@ -16,24 +16,24 @@
 #include "../builtin.h"
 
 int main() {
-  $tuple tup1 = $NEWTUPLE(3,to$int(7),to$str("A string"),to$float(3.14));
-  $Sliceable$tuple wit = $Sliceable$tuple$witness;
+  B_tuple tup1 = $NEWTUPLE(3,toB_int(7),to$str("A string"),toB_float(3.14));
+  B_SliceableD_tuple wit = B_SliceableD_tupleG_witness;
   $print(2,to$str("tup1 = "),tup1);
   int start = 0;
   int stop = 3;
   int step = 2;
-  struct $slice slc;
+  struct B_slice slc;
   slc.start = &start;
   slc.stop = &stop;
   slc.step = &step;
-  $float pi =  ($float)wit->$class->__getitem__(wit,tup1,to$int(2));
-  printf("pi = %f\n",from$float(pi));
-  $tuple tup2 = wit->$class->__getslice__(wit,tup1,&slc);
+  B_float pi =  (B_float)wit->$class->__getitem__(wit,tup1,toB_int(2));
+  printf("pi = %f\n",fromB_float(pi));
+  B_tuple tup2 = wit->$class->__getslice__(wit,tup1,&slc);
   $print(2,to$str("tup2 = "),tup2);
-  $Hashable wits[] = {($Hashable)$Hashable$int$witness, ($Hashable)$Hashable$str$witness, ($Hashable)$Hashable$float$witness};
-  $Hashable wit2 = ($Hashable)$NEW($Hashable$tuple,3, ($Hashable*)&wits);
-  $dict d = $NEW($dict,wit2,NULL,NULL);
-  $dict_setitem(d,wit2,tup1,to$int(13));
-  $int n =  ($int)$dict_getitem(d,wit2,tup1);
-  printf("n=%ld\n",from$int(n));
+  B_Hashable wits[] = {(B_Hashable)B_HashableD_intG_witness, (B_Hashable)B_HashableD_strG_witness, (B_Hashable)B_HashableD_floatG_witness};
+  B_Hashable wit2 = (B_Hashable)$NEW(B_HashableD_tuple,3, (B_Hashable*)&wits);
+  B_dict d = $NEW(B_dict,wit2,NULL,NULL);
+  B_dictD_setitem(d,wit2,tup1,toB_int(13));
+  B_int n =  (B_int)B_dictD_getitem(d,wit2,tup1);
+  printf("n=%ld\n",fromB_int(n));
 }

@@ -17,7 +17,7 @@ void $default__init__($WORD s) {
 }
 
 void $printobj(char *mess,$WORD obj) {
-    $value obj1 = ($value)obj;
+    B_value obj1 = (B_value)obj;
     printf("%s %s\n",mess,obj1->$class->__str__(obj1)->str);
 }
 

@@ -12,43 +12,43 @@
  * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-$Iterator $Iterable$Iterator_iter($Iterable$Iterator wit, $Iterator self) {
+B_Iterator B_IterableD_Iterator_iter(B_IterableD_Iterator wit, B_Iterator self) {
     return self;
 }
 
-$Iterable$Iterator $Iterable$Iterator$new() {
-    return $NEW($Iterable$Iterator);
+B_IterableD_Iterator B_IterableD_IteratorG_new() {
+    return $NEW(B_IterableD_Iterator);
 }
 
-struct $Iterable$Iterator$class $Iterable$Iterator$methods = {
-    "$Iterable$Iterator",
+struct B_IterableD_IteratorG_class B_IterableD_IteratorG_methods = {
+    "B_IterableD_Iterator",
     UNASSIGNED,
-    ($Super$class)&$Iterable$methods,
-    (void (*)($Iterable$Iterator))$default__init__,
-    $Iterable$Iterator$__serialize__,
-    $Iterable$Iterator$__deserialize__,
-    ($bool (*)($Iterable$Iterator))$default__bool__,
-    ($str (*)($Iterable$Iterator))$default__str__,
-    ($str (*)($Iterable$Iterator))$default__str__,
-    $Iterable$Iterator_iter
+    ($SuperG_class)&B_IterableG_methods,
+    (void (*)(B_IterableD_Iterator))$default__init__,
+    B_IterableD_IteratorD___serialize__,
+    B_IterableD_IteratorD___deserialize__,
+    (B_bool (*)(B_IterableD_Iterator))$default__bool__,
+    (B_str (*)(B_IterableD_Iterator))$default__str__,
+    (B_str (*)(B_IterableD_Iterator))$default__str__,
+    B_IterableD_Iterator_iter
 };
 
-struct $Iterable$Iterator $Iterable$Iterator_instance = {&$Iterable$Iterator$methods};
-$Iterable$Iterator $Iterable$Iterator$witness = &$Iterable$Iterator_instance;
+struct B_IterableD_Iterator B_IterableD_Iterator_instance = {&B_IterableD_IteratorG_methods};
+B_IterableD_Iterator B_IterableD_IteratorG_witness = &B_IterableD_Iterator_instance;
 
 
-struct $Iterator$class $Iterator$methods = {"$Iterator",UNASSIGNED,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL}; // $Iterator is an abstract class
-struct $Iterator $Iterator_instance = {&$Iterator$methods};
-struct $Iterator *$Iterator$witness = &$Iterator_instance;
+struct B_IteratorG_class B_IteratorG_methods = {"B_Iterator",UNASSIGNED,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL}; // B_Iterator is an abstract class
+struct B_Iterator B_IteratorD_instance = {&B_IteratorG_methods};
+struct B_Iterator *B_IteratorG_witness = &B_IteratorD_instance;
 
-void $Iterable$Iterator$__serialize__( $Iterable$Iterator self, $Serial$state state) {
+void B_IterableD_IteratorD___serialize__( B_IterableD_Iterator self, $NoneType state) {
 }
 
-$Iterable$Iterator $Iterable$Iterator$__deserialize__($Iterable$Iterator self, $Serial$state state) {
-    $Iterable$Iterator res = $DNEW($Iterable$Iterator,state);
+B_IterableD_Iterator B_IterableD_IteratorD___deserialize__(B_IterableD_Iterator self, $NoneType state) {
+    B_IterableD_Iterator res = $DNEW(B_IterableD_Iterator,state);
     return res;
 }
 
-$WORD $next($Iterator it) {
+$WORD $next(B_Iterator it) {
     return it->$class->__next__(it);
 }

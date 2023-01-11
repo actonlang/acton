@@ -18,7 +18,6 @@ import Utils
 import Acton.Syntax
 import Acton.Builtin
 import Debug.Trace
-import Acton.Printer
 
 
 self                                = Name NoLoc "self"
@@ -33,6 +32,7 @@ suffixNewact                        = globalName "newact"
 suffixClass                         = globalName "class"
 suffixMethods                       = globalName "methods"
 suffixNew                           = globalName "new"
+suffixWitness                       = globalName "witness"
 
 paramNames                          = globalNames ""
 pNames                              = globalNames "p"
@@ -55,6 +55,12 @@ deriveT (TVar _ v)                  = tvname v
 deriveT (TCon _ c)                  = deriveQ (tcname c)
 
 witAttr qn                          = Internal Witness (nstr $ deriveQ qn) 0
+
+witIntegralInt                      = gBuiltin $ Derived (deriveQ qnIntegral) $ Derived (deriveQ qnInt) suffixWitness
+witIntegralI64                      = gBuiltin $ Derived (deriveQ qnIntegral) $ Derived (deriveQ qnI64) suffixWitness
+witSequenceList                     = gBuiltin $ Derived (deriveQ qnSequence) $ Derived (deriveQ qnList) suffixWitness
+witCollectionList                   = gBuiltin $ Derived (deriveQ qnCollection) $ Derived (deriveQ qnList) suffixWitness
+
 
 extensionName p c
   | length ts == length vs          = n0

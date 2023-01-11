@@ -12,54 +12,54 @@
  * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-$Serializable $Serializable$new() {
+$Serializable $SerializableG_new() {
     return $NEW($Serializable);
 }
 
-void $Serializable$__init__ ($Serializable self) {
+void $SerializableD___init__ ($Serializable self) {
     return;
 }
 
-$value $value$new() {
-    return $NEW($value);
+B_value B_valueG_new() {
+    return $NEW(B_value);
 }
 
-void $value$__init__ ($value self) {
+void B_valueD___init__ (B_value self) {
     return;
 }
 
-$object $object$new() {
-    return $NEW($object);
+B_object B_objectG_new() {
+    return $NEW(B_object);
 }
 
-void $object$__init__ ($object self) {
+void B_objectD___init__ (B_object self) {
     return;
 }
 
-$str $value$__str__($value self) {
+B_str B_valueD___str__(B_value self) {
     char *s;
     asprintf(&s,"<%s object at %p>",self->$class->$GCINFO,self);
     return to$str(s);
 }
 
-$str $object$__str__($object self) {
+B_str B_objectD___str__(B_object self) {
     char *s;
     asprintf(&s,"<%s object at %p>",self->$class->$GCINFO,self);
     return to$str(s);
 }
 
-$bool $value$__bool__($value self) {
+B_bool B_valueD___bool__(B_value self) {
     return $True;
 }
-$bool $object$__bool__($object self) {
+B_bool B_objectD___bool__(B_object self) {
     return $True;
 }
 
 
-struct $Initializable$class $Initializable$methods = {"$Initializable",UNASSIGNED,NULL,NULL};
+struct $InitializableG_class $InitializableG_methods = {"$Initializable",UNASSIGNED,NULL,NULL};
 
-struct $Serializable$class $Serializable$methods = {"$Serializable",UNASSIGNED,($Super$class)&$Initializable$methods, $Serializable$__init__,NULL,NULL};
+struct $SerializableG_class $SerializableG_methods = {"$Serializable",UNASSIGNED,($SuperG_class)&$InitializableG_methods, $SerializableD___init__,NULL,NULL};
 
-struct $value$class $value$methods = {"$value",UNASSIGNED,($Super$class)&$Serializable$methods,$value$__init__,NULL,NULL, $value$__bool__,$value$__str__,$value$__str__};
+struct B_valueG_class B_valueG_methods = {"B_value",UNASSIGNED,($SuperG_class)&$SerializableG_methods,B_valueD___init__,NULL,NULL, B_valueD___bool__,B_valueD___str__,B_valueD___str__};
 
-struct $object$class $object$methods = {"$value",UNASSIGNED,($Super$class)&$value$methods,$object$__init__,NULL,NULL,$object$__bool__,$object$__str__,$object$__str__};
+struct B_objectG_class B_objectG_methods = {"B_value",UNASSIGNED,($SuperG_class)&B_valueG_methods,B_objectD___init__,NULL,NULL,B_objectD___bool__,B_objectD___str__,B_objectD___str__};

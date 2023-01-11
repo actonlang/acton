@@ -16,26 +16,26 @@
 
 int numpy$$done = 0;
 
-void numpy$$__init__() {
+void numpy$D___init__() {
     if (numpy$$done) return;
     numpy$$done = 1;
-    numpy$$newaxis = to$int(LONG_MIN);
-    $register_force(ATOM_ID,&numpy$$ndarray$methods);
-    $register(&numpy$$Iterator$ndarray$methods);
-    $register(&numpy$$Primitive$int$methods);
-    $register(&numpy$$Primitive$float$methods);
-    $register(&numpy$$ndselect$methods);
-    $register(&numpy$$ndindex$methods);
-    $register(&numpy$$ndslice$methods);
-    $register(&numpy$$Integral$ndarray$int$methods);
-    $register(&numpy$$Logical$ndarray$int$methods);
-    $register(&numpy$$Minus$ndarray$int$methods);
-    $register(&numpy$$Div$ndarray$int$methods);
-    $register(&numpy$$Div$ndarray$float$methods);
-    $register(&numpy$$Real$ndarray$methods);
-    $register(&numpy$$Minus$ndarray$methods);
-    $register(&numpy$$Sliceable$ndarray$methods);
-    $register(&numpy$$Collection$ndarray$methods);
-    $register(&numpy$$RealFuns$math$ndarray$methods);
+    numpy$G_newaxis = toB_int(LONG_MIN);
+    $register_force(ATOM_ID,&numpy$$ndarrayG_methods);
+    $register(&numpy$B_IteratorD_ndarrayG_methods);
+    $register(&numpy$$PrimitiveB_intG_methods);
+    $register(&numpy$$PrimitiveB_floatG_methods);
+    $register(&numpy$$ndselectG_methods);
+    $register(&numpy$$ndindexG_methods);
+    $register(&numpy$$ndsliceG_methods);
+    $register(&numpy$B_IntegralD_ndarrayB_intG_methods);
+    $register(&numpy$B_LogicalD_ndarrayB_intG_methods);
+    $register(&numpy$B_MinusD_ndarrayB_intG_methods);
+    $register(&numpy$B_DivD_ndarrayB_intG_methods);
+    $register(&numpy$B_DivD_ndarrayB_floatG_methods);
+    $register(&numpy$B_RealD_ndarrayG_methods);
+    $register(&numpy$B_MinusD_ndarrayG_methods);
+    $register(&numpy$B_SliceableD_ndarrayG_methods);
+    $register(&numpy$B_CollectionD_ndarrayG_methods);
+    $register(&numpy$B_RealFuns$math$ndarrayG_methods);
 }
 

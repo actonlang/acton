@@ -12,57 +12,57 @@ typedef struct lambda$1 *lambda$1;
 typedef struct lambda$2 *lambda$2;
 typedef struct Pingpong *Pingpong;
 
-struct lambda$1$class {
+struct lambda$1G_class {
     char *$GCINFO;
-    $Super$class $superclass;
-    void (*__init__)(lambda$1, Pingpong, $int);
-    void (*__serialize__)(lambda$1, $Serial$state);
-    lambda$1 (*__deserialize__)(lambda$1, $Serial$state);
+    $SuperG_class $superclass;
+    void (*__init__)(lambda$1, Pingpong, B_int);
+    void (*__serialize__)(lambda$1, $NoneType);
+    lambda$1 (*__deserialize__)(lambda$1, $NoneType);
     $R (*__call__)(lambda$1, $Cont);
 };
 struct lambda$1 {
     union {
-        struct lambda$1$class *$class;
+        struct lambda$1G_class *$class;
         struct $Cont super;
     };
     Pingpong self;
-    $int count;
+    B_int count;
 };
 
-struct lambda$2$class {
+struct lambda$2G_class {
     char *$GCINFO;
-    $Super$class $superclass;
+    $SuperG_class $superclass;
     void (*__init__)(lambda$2, Pingpong);
-    void (*__serialize__)(lambda$2, $Serial$state);
-    lambda$2 (*__deserialize__)(lambda$2, $Serial$state);
+    void (*__serialize__)(lambda$2, $NoneType);
+    lambda$2 (*__deserialize__)(lambda$2, $NoneType);
     $R (*__call__)(lambda$2, $Cont);
 };
 struct lambda$2 {
     union {
-        struct lambda$2$class *$class;
+        struct lambda$2G_class *$class;
         struct $Cont super;
     };
     Pingpong self;
 };
 
-struct Pingpong$class {
+struct PingpongG_class {
     char *$GCINFO;
-    $Super$class $superclass;
+    $SuperG_class $superclass;
     $R (*__init__)(Pingpong, $Env, $Cont);
-    void (*__serialize__)(Pingpong, $Serial$state);
-    Pingpong (*__deserialize__)(Pingpong, $Serial$state);
+    void (*__serialize__)(Pingpong, $NoneType);
+    Pingpong (*__deserialize__)(Pingpong, $NoneType);
     $R (*ping)(Pingpong, $Cont);
-    $R (*pong)(Pingpong, $int, $Cont);
+    $R (*pong)(Pingpong, B_int, $Cont);
 }; 
 struct Pingpong {
     union {
-        struct Pingpong$class *$class;
+        struct PingpongG_class *$class;
         struct $Actor super;
     };
-    $int i;
-    $int count;
+    B_int i;
+    B_int count;
 };
 
-extern struct lambda$1$class lambda$1$methods;
-extern struct lambda$2$class lambda$2$methods;
-extern struct Pingpong$class Pingpong$methods;
+extern struct lambda$1G_class lambda$1G_methods;
+extern struct lambda$2G_class lambda$2G_methods;
+extern struct PingpongG_class PingpongG_methods;

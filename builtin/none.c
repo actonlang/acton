@@ -12,28 +12,28 @@
  * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-$NoneType $NoneType$new() {
+$NoneType $NoneTypeG_new() {
   return $NEW($NoneType);
 }
 
 
-void $NoneType__serialize__($NoneType self, $Serial$state state) {
+void $NoneTypeD__serialize__($NoneType self, $NoneType state) {
   $add_header(NONE_ID,0,state);
 }
 
-$NoneType $NoneType__deserialize__($NoneType self, $Serial$state state) {
+$NoneType $NoneTypeD__deserialize__($NoneType self, $NoneType state) {
   state->row = state->row->next;
   state->row_no++;
   return NULL;
 }
 
-$bool $NoneType__bool__($NoneType self) {
+B_bool $NoneTypeD__bool__($NoneType self) {
   return $False;
 }
 
-$str $NoneType__str__($NoneType self) {
+B_str $NoneTypeD__str__($NoneType self) {
   return to$str("None");
 }
 
-struct $NoneType$class $NoneType$methods = {"$NoneType",UNASSIGNED,($Super$class)&$value$methods,(void (*)($NoneType))$default__init__,
-                                            $NoneType__serialize__,  $NoneType__deserialize__, $NoneType__bool__, $NoneType__str__, $NoneType__str__};
+struct $NoneTypeG_class $NoneTypeG_methods = {"$NoneType",UNASSIGNED,($SuperG_class)&B_valueG_methods,(void (*)($NoneType))$default__init__,
+                                            $NoneTypeD__serialize__,  $NoneTypeD__deserialize__, $NoneTypeD__bool__, $NoneTypeD__str__, $NoneTypeD__str__};

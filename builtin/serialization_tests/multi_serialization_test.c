@@ -16,14 +16,14 @@
 
 int main() {
   $register_builtin();
-  $int a = to$int(17);
-  $int b = to$int(36);
-  $list lst = $NEW($list,NULL,NULL);
-  $list_append(lst,a);
-  $list_append(lst,b);
+  B_int a = toB_int(17);
+  B_int b = toB_int(36);
+  B_list lst = $NEW(B_list,NULL,NULL);
+  B_listD_append(lst,a);
+  B_listD_append(lst,b);
   // to serialize several objects, make a tuple.
   $serialize_file(($Serializable)$NEWTUPLE(4,a,lst,b,lst),"test7.bin");
-  $tuple t = ($tuple)$deserialize_file("test7.bin");
+  B_tuple t = (B_tuple)$deserialize_file("test7.bin");
   $print(2,to$str("a1 = "),t->components[0]);
   $print(2,to$str("lst1="),t->components[1]);
   $print(2,to$str("b1 = "),t->components[2]);

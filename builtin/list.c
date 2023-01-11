@@ -13,323 +13,323 @@
  */
 
 
-struct $Sequence$list $Sequence$list_instance;
-struct $Collection$list $Collection$list_instance;
-struct $Times$list $Times$list_instance;
+struct B_SequenceD_list B_SequenceD_list_instance;
+struct B_CollectionD_SequenceD_list B_CollectionD_SequenceD_list_instance;
+struct B_TimesD_SequenceD_list B_TimesD_SequenceD_list_instance;
 
-struct $Sequence$list$class $Sequence$list$methods = {
-    "$Sequence$list", 
+struct B_SequenceD_listG_class B_SequenceD_listG_methods = {
+    "B_SequenceD_list", 
     UNASSIGNED,
-    ($Super$class)&$Sequence$methods,
-    $Sequence$list$__init__,
-    $Sequence$list$__serialize__,
-    $Sequence$list$__deserialize__,
-    ($bool (*)($Sequence$list))$default__bool__,
-    ($str (*)($Sequence$list))$default__str__,
-    ($str (*)($Sequence$list))$default__str__,
-    $Sequence$list$__getitem__,
-    $Sequence$list$__setitem__,
-    $Sequence$list$__delitem__,
-    $Sequence$list$__getslice__,
-    $Sequence$list$__setslice__,
-    $Sequence$list$__delslice__,
-    $Sequence$list$__reversed__,
-    $Sequence$list$insert,
-    $Sequence$list$append,
-    $Sequence$list$reverse
+    ($SuperG_class)&B_SequenceG_methods,
+    B_SequenceD_listD___init__,
+    B_SequenceD_listD___serialize__,
+    B_SequenceD_listD___deserialize__,
+    (B_bool (*)(B_SequenceD_list))$default__bool__,
+    (B_str (*)(B_SequenceD_list))$default__str__,
+    (B_str (*)(B_SequenceD_list))$default__str__,
+    B_SequenceD_listD___getitem__,
+    B_SequenceD_listD___setitem__,
+    B_SequenceD_listD___delitem__,
+    B_SequenceD_listD___getslice__,
+    B_SequenceD_listD___setslice__,
+    B_SequenceD_listD___delslice__,
+    B_SequenceD_listD___reversed__,
+    B_SequenceD_list$insert,
+    B_SequenceD_list$append,
+    B_SequenceD_list$reverse
 };
-struct $Sequence$list $Sequence$list_instance = { 
-    &$Sequence$list$methods, 
-    ($Collection)&$Collection$list_instance,
-    ($Times)&$Times$list_instance
+struct B_SequenceD_list B_SequenceD_list_instance = { 
+    &B_SequenceD_listG_methods, 
+    (B_Collection)&B_CollectionD_SequenceD_list_instance,
+    (B_Times)&B_TimesD_SequenceD_list_instance
 };
-$Sequence$list $Sequence$list$witness = &$Sequence$list_instance;
+B_SequenceD_list B_SequenceD_listG_witness = &B_SequenceD_list_instance;
 
-struct $Collection$list$class $Collection$list$methods = {
-    "$Collection$list",
+struct B_CollectionD_SequenceD_listG_class B_CollectionD_SequenceD_listG_methods = {
+    "B_CollectionD_SequenceD_list",
     UNASSIGNED,
-    ($Super$class)&$Collection$methods,
-    $Collection$list$__init__,
-    $Collection$list$__serialize__,
-    $Collection$list$__deserialize__,
-    ($bool (*)($Collection$list))$default__bool__,
-    ($str (*)($Collection$list))$default__str__,
-    ($str (*)($Collection$list))$default__str__,
-    $Collection$list$__iter__,
-    $Collection$list$__fromiter__,
-    $Collection$list$__len__
+    ($SuperG_class)&B_CollectionG_methods,
+    B_CollectionD_SequenceD_listD___init__,
+    B_CollectionD_SequenceD_listD___serialize__,
+    B_CollectionD_SequenceD_listD___deserialize__,
+    (B_bool (*)(B_CollectionD_SequenceD_list))$default__bool__,
+    (B_str (*)(B_CollectionD_SequenceD_list))$default__str__,
+    (B_str (*)(B_CollectionD_SequenceD_list))$default__str__,
+    B_CollectionD_SequenceD_listD___iter__,
+    B_CollectionD_SequenceD_listD___fromiter__,
+    B_CollectionD_SequenceD_listD___len__
 };
-struct $Collection$list $Collection$list_instance = {
-    &$Collection$list$methods,
-    ($Sequence)&$Sequence$list_instance
+struct B_CollectionD_SequenceD_list B_CollectionD_SequenceD_list_instance = {
+    &B_CollectionD_SequenceD_listG_methods,
+    (B_Sequence)&B_SequenceD_list_instance
 };
 
-$Collection$list $Collection$list$witness = &$Collection$list_instance;
+B_CollectionD_SequenceD_list B_CollectionD_SequenceD_listG_witness = &B_CollectionD_SequenceD_list_instance;
 
 
-struct $Times$list$class $Times$list$methods = {
-    "$Times$list",
+struct B_TimesD_SequenceD_listG_class B_TimesD_SequenceD_listG_methods = {
+    "B_TimesD_SequenceD_list",
     UNASSIGNED,
-    ($Super$class)&$Times$methods,
-    $Times$list$__init__,
-    $Times$list$__serialize__,
-    $Times$list$__deserialize__,
-    ($bool (*)($Times$list))$default__bool__,
-    ($str (*)($Times$list))$default__str__,
-    ($str (*)($Times$list))$default__str__,
-    $Times$list$__add__,
-    ($list (*)($Times$list, $list, $list))$Plus$__iadd__,
-    $Times$list$__mul__,
-    ($list (*)($Times$list, $list, $int))$Times$__imul__,
+    ($SuperG_class)&B_TimesG_methods,
+    B_TimesD_SequenceD_listD___init__,
+    B_TimesD_SequenceD_listD___serialize__,
+    B_TimesD_SequenceD_listD___deserialize__,
+    (B_bool (*)(B_TimesD_SequenceD_list))$default__bool__,
+    (B_str (*)(B_TimesD_SequenceD_list))$default__str__,
+    (B_str (*)(B_TimesD_SequenceD_list))$default__str__,
+    B_TimesD_SequenceD_listD___add__,
+    (B_list (*)(B_TimesD_SequenceD_list, B_list, B_list))$PlusD___iadd__,
+    B_TimesD_SequenceD_listD___mul__,
+    (B_list (*)(B_TimesD_SequenceD_list, B_list, B_int))B_TimesD___imul__,
 };
-struct $Times$list $Times$list_instance = {
-    &$Times$list$methods,
-    ($Sequence)&$Sequence$list_instance
+struct B_TimesD_SequenceD_list B_TimesD_SequenceD_list_instance = {
+    &B_TimesD_SequenceD_listG_methods,
+    (B_Sequence)&B_SequenceD_list_instance
 };
-$Times$list $Times$list$witness = &$Times$list_instance;
+B_TimesD_SequenceD_list B_TimesD_SequenceD_listG_witness = &B_TimesD_SequenceD_list_instance;
 
-struct $Container$list$class $Container$list$methods = {
-    "$Container$list",
+struct B_ContainerD_listG_class B_ContainerD_listG_methods = {
+    "B_ContainerD_list",
     UNASSIGNED,
-    ($Super$class)&$Container$methods,
-    $Container$list$__init__,
-    $Container$list$__serialize__,
-    $Container$list$__deserialize__,
-    ($bool (*)($Container$list))$default__bool__,
-    ($str (*)($Container$list))$default__str__,
-    ($str (*)($Container$list))$default__str__,
-    ($Iterator (*)($Container$list, $list))$Collection$list$__iter__,
-    ($list (*)($Container$list,$Iterable,$WORD))$Collection$list$__fromiter__,
-    ($int (*)($Container$list, $list))$Collection$list$__len__,
-    $Container$list$__contains__,
-    $Container$list$__containsnot__
+    ($SuperG_class)&B_ContainerG_methods,
+    B_ContainerD_listD___init__,
+    B_ContainerD_listD___serialize__,
+    B_ContainerD_listD___deserialize__,
+    (B_bool (*)(B_ContainerD_list))$default__bool__,
+    (B_str (*)(B_ContainerD_list))$default__str__,
+    (B_str (*)(B_ContainerD_list))$default__str__,
+    (B_Iterator (*)(B_ContainerD_list, B_list))B_CollectionD_SequenceD_listD___iter__,
+    (B_list (*)(B_ContainerD_list,B_Iterable,$WORD))B_CollectionD_SequenceD_listD___fromiter__,
+    (B_int (*)(B_ContainerD_list, B_list))B_CollectionD_SequenceD_listD___len__,
+    B_ContainerD_listD___contains__,
+    B_ContainerD_listD___containsnot__
 };
 
-struct $Ord$list$class $Ord$list$methods = {
-    "$Ord$list",
+struct B_OrdD_listG_class B_OrdD_listG_methods = {
+    "B_OrdD_list",
     UNASSIGNED,
-    ($Super$class)&$Ord$methods,
-    $Ord$list$__init__,
-    $Ord$list$__serialize__,
-    $Ord$list$__deserialize__,
-    ($bool (*)($Ord$list))$default__bool__,
-    ($str (*)($Ord$list))$default__str__,
-    ($str (*)($Ord$list))$default__str__,
-    $Ord$list$__eq__,
-    $Ord$list$__ne__,
-    $Ord$list$__lt__,
-    $Ord$list$__le__,
-    $Ord$list$__gt__,
-    $Ord$list$__ge__
+    ($SuperG_class)&B_OrdG_methods,
+    B_OrdD_listD___init__,
+    B_OrdD_listD___serialize__,
+    B_OrdD_listD___deserialize__,
+    (B_bool (*)(B_OrdD_list))$default__bool__,
+    (B_str (*)(B_OrdD_list))$default__str__,
+    (B_str (*)(B_OrdD_list))$default__str__,
+    B_OrdD_listD___eq__,
+    B_OrdD_listD___ne__,
+    B_OrdD_listD___lt__,
+    B_OrdD_listD___le__,
+    B_OrdD_listD___gt__,
+    B_OrdD_listD___ge__
 };
 
 
-void $Ord$list$__serialize__($Ord$list self, $Serial$state state) {
-    $step_serialize(self->w$Ord$A$Ord$list, state);
+void B_OrdD_listD___serialize__(B_OrdD_list self, $NoneType state) {
+    $step_serialize(self->W_OrdD_AD_OrdB_list, state);
 }
 
-$Ord$list $Ord$list$__deserialize__($Ord$list self, $Serial$state state) {
-    $Ord$list res = $DNEW($Ord$list,state);
-    res->w$Ord$A$Ord$list = ($Ord)$step_deserialize(state);
+B_OrdD_list B_OrdD_listD___deserialize__(B_OrdD_list self, $NoneType state) {
+    B_OrdD_list res = $DNEW(B_OrdD_list,state);
+    res->W_OrdD_AD_OrdB_list = (B_Ord)$step_deserialize(state);
     return res;
 }
 
-$bool $Ord$list$__eq__ ($Ord$list w, $list a, $list b) {
+B_bool B_OrdD_listD___eq__ (B_OrdD_list w, B_list a, B_list b) {
     if (a->length != b->length) return $False;                                
-    $Ord w2 = w->w$Ord$A$Ord$list;
+    B_Ord w2 = w->W_OrdD_AD_OrdB_list;
     for (int i = 0; i<a->length; i++)
         if ((w2->$class->__ne__(w2,a->data[i],b->data[i]))->val) return $False;
     return $True;
 }
 
-$bool $Ord$list$__ne__ ($Ord$list w, $list a, $list b) {
-    return to$bool(!(w->$class->__eq__(w,a,b)->val));
+B_bool B_OrdD_listD___ne__ (B_OrdD_list w, B_list a, B_list b) {
+    return toB_bool(!(w->$class->__eq__(w,a,b)->val));
 }
 
-$bool $Ord$list$__lt__ ($Ord$list w, $list a, $list b) {
+B_bool B_OrdD_listD___lt__ (B_OrdD_list w, B_list a, B_list b) {
     int minl = a->length<b->length ? a->length : b->length;
-    $Ord wA = w->w$Ord$A$Ord$list;
+    B_Ord wA = w->W_OrdD_AD_OrdB_list;
     int i=0;
     while (i<minl && wA->$class->__eq__(wA,a->data[i],b->data[i])) i++;
     if (i==a->length)
-        return to$bool(i<b->length);
+        return toB_bool(i<b->length);
     if (i==b->length)
         return $False;
     return  wA->$class->__lt__(wA,a->data[i],b->data[i]);
 }
 
-$bool $Ord$list$__le__ ($Ord$list w, $list a, $list b) {
+B_bool B_OrdD_listD___le__ (B_OrdD_list w, B_list a, B_list b) {
     int minl = a->length<b->length ? a->length : b->length;
-    $Ord wA = w->w$Ord$A$Ord$list;
+    B_Ord wA = w->W_OrdD_AD_OrdB_list;
     int i=0;
     while (i<minl && wA->$class->__eq__(wA,a->data[i],b->data[i])) i++;
     if (i==a->length)
-        return to$bool(i<=b->length);
+        return toB_bool(i<=b->length);
     if (i==b->length)
         return $False;
     return  wA->$class->__lt__(wA,a->data[i],b->data[i]);
 }
 
-$bool $Ord$list$__gt__ ($Ord$list w, $list a, $list b) {
-    return  $Ord$list$__lt__ (w,b,a);
+B_bool B_OrdD_listD___gt__ (B_OrdD_list w, B_list a, B_list b) {
+    return  B_OrdD_listD___lt__ (w,b,a);
 }
 
-$bool $Ord$list$__ge__ ($Ord$list w, $list a, $list b) {
-    return  $Ord$list$__le__ (w,b,a);
+B_bool B_OrdD_listD___ge__ (B_OrdD_list w, B_list a, B_list b) {
+    return  B_OrdD_listD___le__ (w,b,a);
 }
 
-$Ord$list $Ord$list$new($Ord e) {
-    return $NEW($Ord$list,e);
+B_OrdD_list B_OrdD_listG_new(B_Ord e) {
+    return $NEW(B_OrdD_list,e);
 }
 
-void $Ord$list$__init__($Ord$list self, $Ord e) {
-    self->w$Ord$A$Ord$list = e;
+void B_OrdD_listD___init__(B_OrdD_list self, B_Ord e) {
+    self->W_OrdD_AD_OrdB_list = e;
 }
   
-void $Times$list$__serialize__($Times$list self, $Serial$state state) {
-    $step_serialize(self->w$Sequence, state);
+void B_TimesD_SequenceD_listD___serialize__(B_TimesD_SequenceD_list self, $NoneType state) {
+    $step_serialize(self->W_Sequence, state);
 }
 
-$Times$list $Times$list$__deserialize__($Times$list self, $Serial$state state) {
-    $Times$list res = $DNEW($Times$list,state);
-    res->w$Sequence = ($Sequence)$step_deserialize(state);
+B_TimesD_SequenceD_list B_TimesD_SequenceD_listD___deserialize__(B_TimesD_SequenceD_list self, $NoneType state) {
+    B_TimesD_SequenceD_list res = $DNEW(B_TimesD_SequenceD_list,state);
+    res->W_Sequence = (B_Sequence)$step_deserialize(state);
     return res;
 }
 
-$list $Times$list$__add__ ($Times$list wit, $list a, $list b) {
-    return $list_add(a,b);
+B_list B_TimesD_SequenceD_listD___add__ (B_TimesD_SequenceD_list wit, B_list a, B_list b) {
+    return B_listD_add(a,b);
 }
 
-$list $Times$list$__mul__ ($Times$list wit, $list a, $int n) {
-    return $list_mul(a,n);
+B_list B_TimesD_SequenceD_listD___mul__ (B_TimesD_SequenceD_list wit, B_list a, B_int n) {
+    return B_listD_mul(a,n);
 }
 
-void $Collection$list$__serialize__($Collection$list self, $Serial$state state) {
-    $step_serialize(self->w$Sequence, state);
+void B_CollectionD_SequenceD_listD___serialize__(B_CollectionD_SequenceD_list self, $NoneType state) {
+    $step_serialize(self->W_Sequence, state);
 }
 
-$Collection$list $Collection$list$__deserialize__($Collection$list self, $Serial$state state) {
-    $Collection$list res = $DNEW($Collection$list,state);
-    res->w$Sequence = ($Sequence)$step_deserialize(state);
+B_CollectionD_SequenceD_list B_CollectionD_SequenceD_listD___deserialize__(B_CollectionD_SequenceD_list self, $NoneType state) {
+    B_CollectionD_SequenceD_list res = $DNEW(B_CollectionD_SequenceD_list,state);
+    res->W_Sequence = (B_Sequence)$step_deserialize(state);
     return res;
 }
 
-$Iterator $Collection$list$__iter__($Collection$list wit, $list self) {
-    return $list_iter(self);
+B_Iterator B_CollectionD_SequenceD_listD___iter__(B_CollectionD_SequenceD_list wit, B_list self) {
+    return B_listD_iter(self);
 }
  
-$list $Collection$list$__fromiter__ ($Collection$list wit, $Iterable wit2, $WORD iter) {
-    return $list_fromiter(wit2->$class->__iter__(wit2,iter));
+B_list B_CollectionD_SequenceD_listD___fromiter__ (B_CollectionD_SequenceD_list wit, B_Iterable wit2, $WORD iter) {
+    return B_listD_fromiter(wit2->$class->__iter__(wit2,iter));
 }
 
-$int $Collection$list$__len__($Collection$list wit, $list self) {
-    return to$int($list_len(self));
+B_int B_CollectionD_SequenceD_listD___len__(B_CollectionD_SequenceD_list wit, B_list self) {
+    return toB_int(B_listD_len(self));
 }
 
-void $Sequence$list$__serialize__($Sequence$list self, $Serial$state state) {
-    $step_serialize(self->w$Collection, state);
-    $step_serialize(self->w$Times, state);
+void B_SequenceD_listD___serialize__(B_SequenceD_list self, $NoneType state) {
+    $step_serialize(self->W_Collection, state);
+    $step_serialize(self->W_Times, state);
 }
 
-$Sequence$list $Sequence$list$__deserialize__($Sequence$list self, $Serial$state state) {
-    $Sequence$list res = $DNEW($Sequence$list,state);
-    res->w$Collection = ($Collection)$step_deserialize(state);
-    res->w$Times = ($Times)$step_deserialize(state);
+B_SequenceD_list B_SequenceD_listD___deserialize__(B_SequenceD_list self, $NoneType state) {
+    B_SequenceD_list res = $DNEW(B_SequenceD_list,state);
+    res->W_Collection = (B_Collection)$step_deserialize(state);
+    res->W_Times = (B_Times)$step_deserialize(state);
     return res;
 }
   
   
-$WORD $Sequence$list$__getitem__($Sequence$list wit, $list self, $int ix) {
-    return $list_getitem(self,from$int(ix));
+$WORD B_SequenceD_listD___getitem__(B_SequenceD_list wit, B_list self, B_int ix) {
+    return B_listD_getitem(self,fromB_int(ix));
 }
 
-void $Sequence$list$__setitem__($Sequence$list wit, $list self, $int ix, $WORD val) {
-    $list_setitem(self,from$int(ix),val);
+void B_SequenceD_listD___setitem__(B_SequenceD_list wit, B_list self, B_int ix, $WORD val) {
+    B_listD_setitem(self,fromB_int(ix),val);
 }
 
-void $Sequence$list$__delitem__($Sequence$list wit, $list self, $int ix) {
-    $list_delitem(self,from$int(ix));
+void B_SequenceD_listD___delitem__(B_SequenceD_list wit, B_list self, B_int ix) {
+    B_listD_delitem(self,fromB_int(ix));
 }
 
-$list $Sequence$list$__getslice__($Sequence$list wit, $list self, $slice slice) {
-    return $list_getslice(self,slice);
+B_list B_SequenceD_listD___getslice__(B_SequenceD_list wit, B_list self, B_slice slice) {
+    return B_listD_getslice(self,slice);
 }
 
-void $Sequence$list$__setslice__($Sequence$list wit, $list self, $Iterable wit2, $slice slice, $WORD iter) {
-    $list_setslice(self,slice,wit2->$class->__iter__(wit2,iter));
+void B_SequenceD_listD___setslice__(B_SequenceD_list wit, B_list self, B_Iterable wit2, B_slice slice, $WORD iter) {
+    B_listD_setslice(self,slice,wit2->$class->__iter__(wit2,iter));
 }
 
-void $Sequence$list$__delslice__($Sequence$list wit, $list self, $slice slice) {
-    $list_delslice(($list)self,slice);
+void B_SequenceD_listD___delslice__(B_SequenceD_list wit, B_list self, B_slice slice) {
+    B_listD_delslice((B_list)self,slice);
 }  
 
-void $Container$list$__serialize__($Container$list self, $Serial$state state) {
-    $step_serialize(self->w$Eq$A$Container$list, state);
+void B_ContainerD_listD___serialize__(B_ContainerD_list self, $NoneType state) {
+    $step_serialize(self->W_EqD_AD_ContainerB_list, state);
 }
 
-$Container$list $Container$list$__deserialize__($Container$list self, $Serial$state state) {
-    $Container$list res = $DNEW($Container$list,state);
-    res->w$Eq$A$Container$list = ($Eq)$step_deserialize(state);
+B_ContainerD_list B_ContainerD_listD___deserialize__(B_ContainerD_list self, $NoneType state) {
+    B_ContainerD_list res = $DNEW(B_ContainerD_list,state);
+    res->W_EqD_AD_ContainerB_list = (B_Eq)$step_deserialize(state);
     return res;
 }
 
-$bool $Container$list$__contains__($Container$list wit, $list self, $WORD elem) {
-    return to$bool($list_contains(wit->w$Eq$A$Container$list,self,elem));
+B_bool B_ContainerD_listD___contains__(B_ContainerD_list wit, B_list self, $WORD elem) {
+    return toB_bool(B_listD_contains(wit->W_EqD_AD_ContainerB_list,self,elem));
 }
                  
-$bool $Container$list$__containsnot__($Container$list wit, $list self, $WORD elem) {
-    return to$bool($list_containsnot(wit->w$Eq$A$Container$list,self,elem));
+B_bool B_ContainerD_listD___containsnot__(B_ContainerD_list wit, B_list self, $WORD elem) {
+    return toB_bool(B_listD_containsnot(wit->W_EqD_AD_ContainerB_list,self,elem));
 }
 
-$Iterator $Iterable$list$reversed__iter__($Iterable wit, $WORD lst) {
-    return $list_reversed(lst);
+B_Iterator B_IterableD_list$reversed__iter__(B_Iterable wit, $WORD lst) {
+    return B_listD_reversed(lst);
 }
 
-$Iterator $Sequence$list$__reversed__($Sequence$list wit, $list self) {
-    return $list_reversed(self);
+B_Iterator B_SequenceD_listD___reversed__(B_SequenceD_list wit, B_list self) {
+    return B_listD_reversed(self);
 }
 
-void $Sequence$list$insert($Sequence$list wit, $list self, $int ix, $WORD elem) {
-    $list_insert(self,from$int(ix),elem);
+void B_SequenceD_list$insert(B_SequenceD_list wit, B_list self, B_int ix, $WORD elem) {
+    B_listD_insert(self,fromB_int(ix),elem);
 }
 
-void $Sequence$list$append($Sequence$list wit, $list self, $WORD elem) {
-    $list_append(self,elem);
+void B_SequenceD_list$append(B_SequenceD_list wit, B_list self, $WORD elem) {
+    B_listD_append(self,elem);
 }
 
-void $Sequence$list$reverse($Sequence$list wit, $list self) {
-    $list_reverse(self);
+void B_SequenceD_list$reverse(B_SequenceD_list wit, B_list self) {
+    B_listD_reverse(self);
 }
 
-$Container$list $Container$list$new($Eq e) {
-    return $NEW($Container$list,e);
+B_ContainerD_list B_ContainerD_listG_new(B_Eq e) {
+    return $NEW(B_ContainerD_list,e);
 }
 
 
-void $Container$list$__init__($Container$list self, $Eq w$Eq$A$Container$list) {
-    self->w$Eq$A$Container$list = w$Eq$A$Container$list;
+void B_ContainerD_listD___init__(B_ContainerD_list self, B_Eq W_EqD_AD_ContainerB_list) {
+    self->W_EqD_AD_ContainerB_list = W_EqD_AD_ContainerB_list;
 }
 
-void $Collection$list$__init__($Collection$list self, $Sequence master) {
-    self->w$Sequence = master;
+void B_CollectionD_SequenceD_listD___init__(B_CollectionD_SequenceD_list self, B_Sequence master) {
+    self->W_Sequence = master;
 }
 
-void $Times$list$__init__($Times$list self, $Sequence master) {
-    self->w$Sequence = master;
+void B_TimesD_SequenceD_listD___init__(B_TimesD_SequenceD_list self, B_Sequence master) {
+    self->W_Sequence = master;
 }
 
-$Sequence$list $Sequence$list$new() {
-    return $NEW($Sequence$list);
+B_SequenceD_list B_SequenceD_listG_new() {
+    return $NEW(B_SequenceD_list);
 }
 
-$Collection$list $Collection$list$new($Sequence master){
-    return $NEW($Collection$list, master);
+B_CollectionD_SequenceD_list B_CollectionD_SequenceD_listG_new(B_Sequence master){
+    return $NEW(B_CollectionD_SequenceD_list, master);
 }
-$Times$list $Times$list$new($Sequence master) {
-    return $NEW($Times$list, master);
+B_TimesD_SequenceD_list B_TimesD_SequenceD_listG_new(B_Sequence master) {
+    return $NEW(B_TimesD_SequenceD_list, master);
 }
 
-void $Sequence$list$__init__($Sequence$list self) {
-    self->w$Collection = ($Collection)$Collection$list$new(($Sequence)self);
-    self->w$Times = ($Times)$Times$list$new(($Sequence)self);
+void B_SequenceD_listD___init__(B_SequenceD_list self) {
+    self->W_Collection = (B_Collection)B_CollectionD_SequenceD_listG_new((B_Sequence)self);
+    self->W_Times = (B_Times)B_TimesD_SequenceD_listG_new((B_Sequence)self);
 }

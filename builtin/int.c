@@ -24,12 +24,12 @@
 
 // General methods ///////////////////////////////////////////////////////////////////////
 
-int $set$str(zz_ptr a, char *str);
-char *$get$str(zz_ptr n);
+int B_setD_str(zz_ptr a, char *str);
+char *$getB_str(zz_ptr n);
 
-$int $malloc$int() {
-    $int res = malloc(sizeof(struct $int));
-    res->$class = &$int$methods;
+B_int $mallocB_int() {
+    B_int res = malloc(sizeof(struct B_int));
+    res->$class = &B_intG_methods;
     res->val.n = malloc(sizeof(unsigned long));
     res->val.size = 0;
     res->val.alloc = 1;
@@ -37,47 +37,47 @@ $int $malloc$int() {
 }
 
 
-$int $int$new($atom a) {
-    if ($ISINSTANCE(a,$int)->val) return ($int)a;
-    if ($ISINSTANCE(a,$i64)->val) {
-        return to$int((($i64)a)->val);
+B_int B_intG_new(B_atom a) {
+    if ($ISINSTANCE(a,B_int)->val) return (B_int)a;
+    if ($ISINSTANCE(a,B_i64)->val) {
+        return toB_int(((B_i64)a)->val);
     }
-    if ($ISINSTANCE(a,$float)->val) {
-        double aval = (($float)a)->val;
+    if ($ISINSTANCE(a,B_float)->val) {
+        double aval = ((B_float)a)->val;
         int e;
         double m = frexp(aval,&e);
         if (e>52) {
-            $int c = to$int((long)(m*4503599627370496.0)); // (1<< 52); 
-            $int d = to$int(e-52);
-            return  $Integral$int$__lshift__(NULL,c,d);
+            B_int c = toB_int((long)(m*4503599627370496.0)); // (1<< 52); 
+            B_int d = toB_int(e-52);
+            return  B_IntegralD_intD___lshift__(NULL,c,d);
         } else {
             long al = (long)aval;
-            $int res = to$int(al);
+            B_int res = toB_int(al);
             return res;
         }
     }
-    if ($ISINSTANCE(a,$bool)->val) return to$int((($bool)a)->val);
-    if ($ISINSTANCE(a,$str)->val) {
-        $int res = $malloc$int();
-        res->$class = &$int$methods;
-        int digits = $set$str(&res->val, (char *)(($str)a)->str);
+    if ($ISINSTANCE(a,B_bool)->val) return toB_int(((B_bool)a)->val);
+    if ($ISINSTANCE(a,B_str)->val) {
+        B_int res = $mallocB_int();
+        res->$class = &B_intG_methods;
+        int digits = B_setD_str(&res->val, (char *)((B_str)a)->str);
         if (digits>0)
             return res;
         else 
-            $RAISE(($BaseException)$NEW($ValueError,to$str("int(): string arg has no digit in prefix")));
+            $RAISE((B_BaseException)$NEW(B_ValueError,to$str("int(): string arg has no digit in prefix")));
     }
-    fprintf(stderr,"internal error: $int$new: argument not of atomic type\n");
+    fprintf(stderr,"internal error: B_intG_new: argument not of atomic type\n");
     exit(-1);
 }
 
-void $int_init($int self, $atom a){
-    self->val = $int$new(a)->val;
+void B_intD_init(B_int self, B_atom a){
+    self->val = B_intG_new(a)->val;
 }
 
-void $int_serialize($int self,$Serial$state state) {
-    $int prevkey = ($int)$dict_get(state->done,($Hashable)$Hashable$WORD$witness,self,NULL);
+void B_intD_serialize(B_int self,$NoneType state) {
+    B_int prevkey = (B_int)B_dictD_get(state->done,(B_Hashable)B_HashableD_WORDG_witness,self,NULL);
     if (prevkey) {
-        long pk = from$int(prevkey);
+        long pk = fromB_int(prevkey);
         $val_serialize(-INT_ID,&pk,state);
         return;
     }
@@ -87,212 +87,212 @@ void $int_serialize($int self,$Serial$state state) {
     memcpy(&row->blob[1],self->val.n,labs(self->val.size)*sizeof(long));
 }
 
-$int $int_deserialize($int res,$Serial$state state) {
+B_int B_intD_deserialize(B_int res,$NoneType state) {
     $ROW this = state->row;
     state->row = this->next;
     state->row_no++;
     if (this->class_id < 0) {
-        return ($int)$dict_get(state->done,($Hashable)$Hashable$int$witness,to$int((int)this->blob[0]),NULL);
+        return (B_int)B_dictD_get(state->done,(B_Hashable)B_HashableD_intG_witness,toB_int((int)this->blob[0]),NULL);
     } else {
         if (!res)
-            res = $malloc$int();
+            res = $mallocB_int();
         res->val.size = (long)this->blob[0];
         res->val.alloc = labs(res->val.size);
         res->val.n = malloc(res->val.alloc*sizeof(long));
         memcpy(res->val.n,&this->blob[1],res->val.alloc*sizeof(long));
-        $dict_setitem(state->done,($Hashable)$Hashable$int$witness,to$int(state->row_no-1),res);
-        res->$class = &$int$methods;
+        B_dictD_setitem(state->done,(B_Hashable)B_HashableD_intG_witness,toB_int(state->row_no-1),res);
+        res->$class = &B_intG_methods;
         return res;
     }
 }
 
-$bool $int_bool($int n) {
-    return to$bool(zz_cmpi(&n->val,0));
+B_bool B_intD_bool(B_int n) {
+    return toB_bool(zz_cmpi(&n->val,0));
 }
 
-$str $int_str($int n) {
-    return to$str($get$str(&n->val));
+B_str B_intD_str(B_int n) {
+    return to$str($getB_str(&n->val));
 }
   
-struct $int$class $int$methods = {
-    "$int",
+struct B_intG_class B_intG_methods = {
+    "B_int",
     UNASSIGNED,
-    ($Super$class)&$atom$methods,
-    $int_init,
-    $int_serialize,
-    $int_deserialize,
-    $int_bool,
-    $int_str,
-    $int_str
+    ($SuperG_class)&B_atomG_methods,
+    B_intD_init,
+    B_intD_serialize,
+    B_intD_deserialize,
+    B_intD_bool,
+    B_intD_str,
+    B_intD_str
 };
 
-$int zz$to$int(zz_ptr n) {
-    $int res = $malloc$int();
-    res->$class = &$int$methods;
+B_int zz$toB_int(zz_ptr n) {
+    B_int res = $mallocB_int();
+    res->$class = &B_intG_methods;
     res->val.n = n->n;
     res->val.size = n->size;
     res->val.alloc = n->alloc;
     return res;
 }
 
-// $Integral$int /////////////////////////////////////////////////////////////////////////
+// B_IntegralD_int /////////////////////////////////////////////////////////////////////////
 
-void $Integral$int$__serialize__($Integral$int self, $Serial$state state) {
-    $step_serialize(self->w$Logical, state);
-    $step_serialize(self->w$Minus, state);
+void B_IntegralD_intD___serialize__(B_IntegralD_int self, $NoneType state) {
+    $step_serialize(self->W_Logical, state);
+    $step_serialize(self->W_Minus, state);
 }
 
-$Integral$int $Integral$int$__deserialize__($Integral$int self, $Serial$state state) {
-    $Integral$int res = $DNEW($Integral$int,state);
-    res->w$Logical = ($Logical)$step_deserialize(state);
-    res->w$Minus = ($Minus)$step_deserialize(state);
+B_IntegralD_int B_IntegralD_intD___deserialize__(B_IntegralD_int self, $NoneType state) {
+    B_IntegralD_int res = $DNEW(B_IntegralD_int,state);
+    res->W_Logical = (B_Logical)$step_deserialize(state);
+    res->W_Minus = (B_Minus)$step_deserialize(state);
     return res;
 }
 
-$int $Integral$int$__add__($Integral$int wit,  $int a, $int b) {
-    $int res = $malloc$int();
+B_int B_IntegralD_intD___add__(B_IntegralD_int wit,  B_int a, B_int b) {
+    B_int res = $mallocB_int();
     zz_add(&res->val,&a->val,&b->val);
     return res;
 }
 
-$complex $Integral$int$__complx__($Integral$int wit, $int a) {
+B_complex B_IntegralD_intD___complx__(B_IntegralD_int wit, B_int a) {
     fprintf(stderr,"Number.__complex__ not implemented for int");
     exit(1);
 }
 
-$int $Integral$int$__fromatom__($Integral$int wit, $atom a) {
-    return $int$new(a);
+B_int B_IntegralD_intD___fromatom__(B_IntegralD_int wit, B_atom a) {
+    return B_intG_new(a);
 }
 
-$int $Integral$int$__mul__($Integral$int wit,  $int a, $int b) {
-    $int res = $malloc$int();
+B_int B_IntegralD_intD___mul__(B_IntegralD_int wit,  B_int a, B_int b) {
+    B_int res = $mallocB_int();
     zz_mul(&res->val,&a->val,&b->val);
     return res;
 }  
   
-$int $Integral$int$__pow__($Integral$int wit, $int a, $int b) {
+B_int B_IntegralD_intD___pow__(B_IntegralD_int wit, B_int a, B_int b) {
     zz_ptr val_b = &b->val;
     if (zz_cmpi(val_b,0) < 0)
-        $RAISE(($BaseException)$NEW($ValueError,to$str("__pow__: exponent negative")));
+        $RAISE((B_BaseException)$NEW(B_ValueError,to$str("__pow__: exponent negative")));
     if (zz_cmpi(val_b,LONG_MAX) > 0)
-        $RAISE(($BaseException)$NEW($ValueError,to$str("__pow__: exponent out of range (> LONG_MAX)")));
-    $int res = $malloc$int();
+        $RAISE((B_BaseException)$NEW(B_ValueError,to$str("__pow__: exponent out of range (> LONG_MAX)")));
+    B_int res = $mallocB_int();
     zz_powi(&res->val,&a->val,val_b->n[0]); // __pow__ should have an int64 exponent in the Acton protocol
     return res;
 }
 
-$int $Integral$int$__neg__($Integral$int wit,  $int a) {
-    $int res = $malloc$int();
+B_int B_IntegralD_intD___neg__(B_IntegralD_int wit,  B_int a) {
+    B_int res = $mallocB_int();
     zz_neg(&res->val,&a->val);
     return res;
 }
 
-$int $Integral$int$__pos__($Integral$int wit,  $int a) {
+B_int B_IntegralD_intD___pos__(B_IntegralD_int wit,  B_int a) {
     return a;
 }
 
-$WORD $Integral$int$real($Integral$int wit, $int a, $Real wit2) {
+$WORD B_IntegralD_int$real(B_IntegralD_int wit, B_int a, B_Real wit2) {
     fprintf(stderr,"Number.__real__ not implemented for int");
     exit(1);
 }
 
-$WORD $Integral$int$imag($Integral$int wit, $int a, $Real wit2) {
+$WORD B_IntegralD_int$imag(B_IntegralD_int wit, B_int a, B_Real wit2) {
     fprintf(stderr,"Number.__imag__ not implemented for int");
     exit(1);
 }
 
-$WORD $Integral$int$__abs__($Integral$int wit, $int a, $Real wit2) {
-    $int res = $malloc$int();
+$WORD B_IntegralD_intD___abs__(B_IntegralD_int wit, B_int a, B_Real wit2) {
+    B_int res = $mallocB_int();
     zz_set(&res->val,&a->val);
     res->val.size = labs(a->val.size);
-    return wit2->$class->__fromatom__(wit2,($atom)res);
+    return wit2->$class->__fromatom__(wit2,(B_atom)res);
 }
 
-$int $Integral$int$__conjugate__($Integral$int wit,  $int a) {
+B_int B_IntegralD_intD___conjugate__(B_IntegralD_int wit,  B_int a) {
     return a;
 }
 
-$float $Integral$int$__float__ ($Integral$int wit, $int n) {
-    return $float$new(($atom)n);
+B_float B_IntegralD_intD___float__ (B_IntegralD_int wit, B_int n) {
+    return B_floatG_new((B_atom)n);
 }
 
-$WORD $Integral$int$__trunc__ ($Integral$int wit, $int n, $Integral wit2) {
-    return wit2->$class->__fromatom__(wit2,($atom)n);
+$WORD B_IntegralD_intD___trunc__ (B_IntegralD_int wit, B_int n, B_Integral wit2) {
+    return wit2->$class->__fromatom__(wit2,(B_atom)n);
 }
   
-$WORD $Integral$int$__floor__ ($Integral$int wit, $int n, $Integral wit2) {
-    return wit2->$class->__fromatom__(wit2,($atom)n);
+$WORD B_IntegralD_intD___floor__ (B_IntegralD_int wit, B_int n, B_Integral wit2) {
+    return wit2->$class->__fromatom__(wit2,(B_atom)n);
 }
   
-$WORD $Integral$int$__ceil__ ($Integral$int wit, $int n, $Integral wit2) {
-    return wit2->$class->__fromatom__(wit2,($atom)n);
+$WORD B_IntegralD_intD___ceil__ (B_IntegralD_int wit, B_int n, B_Integral wit2) {
+    return wit2->$class->__fromatom__(wit2,(B_atom)n);
 }
   
-$int $Integral$int$__round__ ($Integral$int wit, $int n, $int p) {
+B_int B_IntegralD_intD___round__ (B_IntegralD_int wit, B_int n, B_int p) {
     zz_struct nval = n->val;
     if (nval.size < 0) {
-        $int n1 = $malloc$int();
+        B_int n1 = $mallocB_int();
         zz_neg(&n1->val,&nval);
-        $int res = $Integral$int$__round__(wit,n1,p);
+        B_int res = B_IntegralD_intD___round__(wit,n1,p);
         zz_neg(&res->val,&res->val);
         return res;
     }
     if (labs(p->val.size) >1)
-        $RAISE(($BaseException)$NEW($ValueError,to$str("__round__: precision out of range")));
-    long pval = from$int(p);
+        $RAISE((B_BaseException)$NEW(B_ValueError,to$str("__round__: precision out of range")));
+    long pval = fromB_int(p);
     if (pval>=0)
         return n;
-    $int p10 = $Integral$int$__pow__(NULL,to$int(10), $Integral$int$__neg__(NULL,p));
-    return $Integral$int$__mul__(NULL,n,p10);
+    B_int p10 = B_IntegralD_intD___pow__(NULL,toB_int(10), B_IntegralD_intD___neg__(NULL,p));
+    return B_IntegralD_intD___mul__(NULL,n,p10);
 }
   
-$WORD $Integral$int$numerator ($Integral$int wit, $int n, $Integral wit2) {
-    return wit2->$class->__fromatom__(wit2,($atom)n);
+$WORD B_IntegralD_int$numerator (B_IntegralD_int wit, B_int n, B_Integral wit2) {
+    return wit2->$class->__fromatom__(wit2,(B_atom)n);
 }
   
-$WORD $Integral$int$denominator ($Integral$int wit, $int n, $Integral wit2) {
-    $int res = to$int(1L);
-    return wit2->$class->__fromatom__(wit2,($atom)res);
+$WORD B_IntegralD_int$denominator (B_IntegralD_int wit, B_int n, B_Integral wit2) {
+    B_int res = toB_int(1L);
+    return wit2->$class->__fromatom__(wit2,(B_atom)res);
 }
   
-$int $Integral$int$__int__ ($Integral$int wit, $int n) {
+B_int B_IntegralD_intD___int__ (B_IntegralD_int wit, B_int n) {
     return n;
 }
 
-$int $Integral$int$__index__($Integral$int wit, $int n) {
+B_int B_IntegralD_intD___index__(B_IntegralD_int wit, B_int n) {
     return n;
 }
 
-$tuple $Integral$int$__divmod__($Integral$int wit, $int a, $int b) {
-    $int q = $malloc$int();
-    $int r = $malloc$int();
+B_tuple B_IntegralD_intD___divmod__(B_IntegralD_int wit, B_int a, B_int b) {
+    B_int q = $mallocB_int();
+    B_int r = $mallocB_int();
     zz_divrem(&q->val,&r->val,&a->val,&b->val);
     return $NEWTUPLE(2, q, r);
 }
 
-$int $Integral$int$__floordiv__($Integral$int wit, $int a, $int b) {
-    $int res = $malloc$int();
+B_int B_IntegralD_intD___floordiv__(B_IntegralD_int wit, B_int a, B_int b) {
+    B_int res = $mallocB_int();
     zz_div(&res->val,&a->val,&b->val);
     return res;
 }
 
-$int $Integral$int$__mod__($Integral$int wit, $int a, $int b) {
-    $tuple t = $Integral$int$__divmod__(wit,a,b);
+B_int B_IntegralD_intD___mod__(B_IntegralD_int wit, B_int a, B_int b) {
+    B_tuple t = B_IntegralD_intD___divmod__(wit,a,b);
     return t->components[1];
 }
 
-$int $Integral$int$__lshift__($Integral$int wit,  $int a, $int b) {
+B_int B_IntegralD_intD___lshift__(B_IntegralD_int wit,  B_int a, B_int b) {
     zz_struct aval = a->val;
     long ma = aval.size;
-    long bval = from$int(b);
+    long bval = fromB_int(b);
     if (ma==0 || bval==0)
         return a;
     if (bval<0)
-        $RAISE(($BaseException)$NEW($ValueError,to$str("__lshift: negative shift count")));
+        $RAISE((B_BaseException)$NEW(B_ValueError,to$str("__lshift: negative shift count")));
     long shw = bval/64;
     long shb = bval%64;
     long mres = labs(ma) + shw + (shb > 0);
-    $int res = $malloc$int();
+    B_int res = $mallocB_int();
     zz_ptr rval = &res->val;
     zz_init_fit(rval,mres);
     if (shb>0) {
@@ -312,15 +312,15 @@ $int $Integral$int$__lshift__($Integral$int wit,  $int a, $int b) {
     return res; 
 }
 
-$int $Integral$int$__rshift__($Integral$int wit,  $int a, $int b) {
+B_int B_IntegralD_intD___rshift__(B_IntegralD_int wit,  B_int a, B_int b) {
     zz_struct aval = a->val;
     long ma = aval.size;
-    long bval = from$int(b);
+    long bval = fromB_int(b);
     if (ma==0 || bval==0)
         return a;
     if (bval<0)
-        $RAISE(($BaseException)$NEW($ValueError,to$str("__rshift: negative shift count")));
-    $int res = $malloc$int();
+        $RAISE((B_BaseException)$NEW(B_ValueError,to$str("__rshift: negative shift count")));
+    B_int res = $mallocB_int();
     zz_ptr rval = &res->val;
     long shw = bval/64;
     long shb = bval%64;
@@ -336,353 +336,353 @@ $int $Integral$int$__rshift__($Integral$int wit,  $int a, $int b) {
     return res; 
 }
  
-$int $Integral$int$__invert__($Integral$int wit,  $int a) {
-    //return to$i64(~a->val);
+B_int B_IntegralD_intD___invert__(B_IntegralD_int wit,  B_int a) {
+    //return toB_i64(~a->val);
     fprintf(stderr,"Number.__invert__ not implemented for int\n");
     exit(1);
 }
 
 
-// Logical$int  ////////////////////////////////////////////////////////////////////////////////////////
+// LogicalB_int  ////////////////////////////////////////////////////////////////////////////////////////
 
-void $Logical$int$__serialize__($Logical$int self, $Serial$state state) {
-    //$step_serialize(self->w$Integral, state);
+void B_LogicalD_IntegralD_intD___serialize__(B_LogicalD_IntegralD_int self, $NoneType state) {
+    //$step_serialize(self->W_Integral, state);
     fprintf(stderr,"Protocol Logical not implemented for int; use i64\n");
     exit(1);
 }
 
-$Logical$int $Logical$int$__deserialize__($Logical$int self, $Serial$state state) {
-    // $Logical$i64 res = $DNEW($Logical$i64,state);
-    //  res->w$Integral = ($Integral)$step_deserialize(state);
+B_LogicalD_IntegralD_int B_LogicalD_IntegralD_intD___deserialize__(B_LogicalD_IntegralD_int self, $NoneType state) {
+    // B_LogicalD_IntegralD_i64 res = $DNEW(B_LogicalD_IntegralD_i64,state);
+    //  res->W_Integral = (B_Integral)$step_deserialize(state);
     //  return res;
     fprintf(stderr,"Protocol Logical not implemented for int; use i64\n");
     exit(1);
 }
 
-$int $Logical$int$__and__($Logical$int wit,  $int a, $int b) {
-    // return to$i64(a->val & b->val);
+B_int B_LogicalD_IntegralD_intD___and__(B_LogicalD_IntegralD_int wit,  B_int a, B_int b) {
+    // return toB_i64(a->val & b->val);
     fprintf(stderr,"Protocol Logical not implemented for int; use i64\n");
     exit(1);
 }
                                                  
-$int $Logical$int$__or__($Logical$int wit,  $int a, $int b) {
-    // return to$i64(a->val | b->val);
+B_int B_LogicalD_IntegralD_intD___or__(B_LogicalD_IntegralD_int wit,  B_int a, B_int b) {
+    // return toB_i64(a->val | b->val);
     fprintf(stderr,"Protocol Logical not implemented for int; use i64\n");
     exit(1);
 }
                                                  
-$int $Logical$int$__xor__($Logical$int wit,  $int a, $int b) {
-    // return to$i64(a->val ^ b->val);
+B_int B_LogicalD_IntegralD_intD___xor__(B_LogicalD_IntegralD_int wit,  B_int a, B_int b) {
+    // return toB_i64(a->val ^ b->val);
     fprintf(stderr,"Protocol Logical not implemented for int; use i64\n");
     exit(1);
 }  
  
-// $Minus$int  ////////////////////////////////////////////////////////////////////////////////////////
+// B_MinusD_IntegralD_int  ////////////////////////////////////////////////////////////////////////////////////////
 
-void $Minus$int$__serialize__($Minus$int self, $Serial$state state) {
-    $step_serialize(self->w$Integral, state);
+void B_MinusD_IntegralD_intD___serialize__(B_MinusD_IntegralD_int self, $NoneType state) {
+    $step_serialize(self->W_Integral, state);
 }
 
-$Minus$int $Minus$int$__deserialize__($Minus$int self, $Serial$state state) {
-    $Minus$int res = $DNEW($Minus$int,state);
-    res->w$Integral = ($Integral)$step_deserialize(state);
+B_MinusD_IntegralD_int B_MinusD_IntegralD_intD___deserialize__(B_MinusD_IntegralD_int self, $NoneType state) {
+    B_MinusD_IntegralD_int res = $DNEW(B_MinusD_IntegralD_int,state);
+    res->W_Integral = (B_Integral)$step_deserialize(state);
     return res;
 }
 
-$int $Minus$int$__sub__($Minus$int wit,  $int a, $int b) {
-    $int res = $malloc$int();
+B_int B_MinusD_IntegralD_intD___sub__(B_MinusD_IntegralD_int wit,  B_int a, B_int b) {
+    B_int res = $mallocB_int();
     zz_sub(&res->val,&a->val,&b->val);
     return res;
 }
 
 
-// $Div$int  ////////////////////////////////////////////////////////////////////////////////////////
+// B_DivD_int  ////////////////////////////////////////////////////////////////////////////////////////
 
-void $Div$int$__serialize__($Div$int self, $Serial$state state) {
+void B_DivD_intD___serialize__(B_DivD_int self, $NoneType state) {
 }
 
-$Div$int $Div$int$__deserialize__($Div$int self, $Serial$state state) {
-    $Div$int res = $DNEW($Div$int,state);
+B_DivD_int B_DivD_intD___deserialize__(B_DivD_int self, $NoneType state) {
+    B_DivD_int res = $DNEW(B_DivD_int,state);
     return res;
 }
 
-$float $Div$int$__truediv__ ($Div$int wit, $int a, $int b) {
+B_float B_DivD_intD___truediv__ (B_DivD_int wit, B_int a, B_int b) {
     zz_ptr aval = &a->val;
     zz_ptr bval = &b->val;
-    $int ared = $malloc$int();
-    $int bred = $malloc$int();
-    $int q = $malloc$int();
-    $int r = $malloc$int();
-    $int g = $malloc$int();
+    B_int ared = $mallocB_int();
+    B_int bred = $mallocB_int();
+    B_int q = $mallocB_int();
+    B_int r = $mallocB_int();
+    B_int g = $mallocB_int();
     zz_gcd(&g->val,aval,bval);
     zz_div(&ared->val,aval,&g->val);
     zz_div(&bred->val,bval,&g->val);
     zz_divrem(&q->val,&r->val,&ared->val,&bred->val);
-    return to$float($float$new(($atom)q)->val +  $float$new(($atom)r)->val/ $float$new(($atom)bred)->val);
+    return toB_float(B_floatG_new((B_atom)q)->val +  B_floatG_new((B_atom)r)->val/ B_floatG_new((B_atom)bred)->val);
 }
 
-// $Ord$int  ////////////////////////////////////////////////////////////////////////////////////////
+// B_OrdD_int  ////////////////////////////////////////////////////////////////////////////////////////
 
-void $Ord$int$__serialize__($Ord$int self, $Serial$state state) {
+void B_OrdD_intD___serialize__(B_OrdD_int self, $NoneType state) {
 }
 
-$Ord$int $Ord$int$__deserialize__($Ord$int self, $Serial$state state) {
-    $Ord$int res = $DNEW($Ord$int,state);
+B_OrdD_int B_OrdD_intD___deserialize__(B_OrdD_int self, $NoneType state) {
+    B_OrdD_int res = $DNEW(B_OrdD_int,state);
     return res;
 }
 
-$bool $Ord$int$__eq__ ($Ord$int wit, $int a, $int b) {
-    return to$bool(zz_equal(&a->val,&b->val));
+B_bool B_OrdD_intD___eq__ (B_OrdD_int wit, B_int a, B_int b) {
+    return toB_bool(zz_equal(&a->val,&b->val));
 }
 
-$bool $Ord$int$__ne__ ($Ord$int wit, $int a, $int b) {
-    return to$bool(1-zz_equal(&a->val,&b->val));
+B_bool B_OrdD_intD___ne__ (B_OrdD_int wit, B_int a, B_int b) {
+    return toB_bool(1-zz_equal(&a->val,&b->val));
 }
 
-$bool $Ord$int$__lt__ ($Ord$int wit, $int a, $int b) {
-    return to$bool(zz_cmp(&a->val,&b->val) < 0);
+B_bool B_OrdD_intD___lt__ (B_OrdD_int wit, B_int a, B_int b) {
+    return toB_bool(zz_cmp(&a->val,&b->val) < 0);
 }
 
-$bool $Ord$int$__le__ ($Ord$int wit, $int a, $int b) {
-    return to$bool(zz_cmp(&a->val,&b->val) <= 0);
+B_bool B_OrdD_intD___le__ (B_OrdD_int wit, B_int a, B_int b) {
+    return toB_bool(zz_cmp(&a->val,&b->val) <= 0);
 }
 
-$bool $Ord$int$__gt__ ($Ord$int wit, $int a, $int b) {
-    return to$bool(zz_cmp(&a->val,&b->val) > 0);
+B_bool B_OrdD_intD___gt__ (B_OrdD_int wit, B_int a, B_int b) {
+    return toB_bool(zz_cmp(&a->val,&b->val) > 0);
 }
 
-$bool $Ord$int$__ge__ ($Ord$int wit, $int a, $int b) {
-    return to$bool(zz_cmp(&a->val,&b->val) >= 0);
+B_bool B_OrdD_intD___ge__ (B_OrdD_int wit, B_int a, B_int b) {
+    return toB_bool(zz_cmp(&a->val,&b->val) >= 0);
 }
 
-// $Hashable$int ///////////////////////////////////////////////////////////////////////////////////////////////////////
+// B_HashableD_int ///////////////////////////////////////////////////////////////////////////////////////////////////////
 
-void $Hashable$int$__serialize__($Hashable$int self, $Serial$state state) {
+void B_HashableD_intD___serialize__(B_HashableD_int self, $NoneType state) {
 }
 
-$Hashable$int $Hashable$int$__deserialize__($Hashable$int self, $Serial$state state) {
-    $Hashable$int res = $DNEW($Hashable$int,state);
+B_HashableD_int B_HashableD_intD___deserialize__(B_HashableD_int self, $NoneType state) {
+    B_HashableD_int res = $DNEW(B_HashableD_int,state);
     return res;
 }
 
-$bool $Hashable$int$__eq__($Hashable$int wit, $int a, $int b) {
-    return to$bool(zz_equal(&a->val,&b->val));
+B_bool B_HashableD_intD___eq__(B_HashableD_int wit, B_int a, B_int b) {
+    return toB_bool(zz_equal(&a->val,&b->val));
 }
 
-$bool $Hashable$int$__ne__($Hashable$int wit, $int a, $int b) {
-    return to$bool(1-zz_equal(&a->val,&b->val));
+B_bool B_HashableD_intD___ne__(B_HashableD_int wit, B_int a, B_int b) {
+    return toB_bool(1-zz_equal(&a->val,&b->val));
 }
 
-$int $Hashable$int$__hash__($Hashable$int wit, $int a) {
-    //    $int res = $malloc$int();
+B_int B_HashableD_intD___hash__(B_HashableD_int wit, B_int a) {
+    //    B_int res = $mallocB_int();
     //    zz_ptr q = malloc(sizeof(zz_struct));
     //    zz_init_fit(q,1);
     //    zz_seti(&res->val,zz_divremi(q,&a->val,LONG_MAX/4));    // This hash algorithm should be reconsidered!!!
 
-    return to$int($i64_hash(to$i64(from$int(a))));
+    return toB_int(B_i64D_hash(toB_i64(fromB_int(a))));
 }
 
 // Initialization ////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-void $Integral$int_init($Integral$int wit) {
-    wit-> w$Logical = ($Logical)$NEW($Logical$int,($Integral)wit);
-    wit-> w$Minus = ($Minus)$NEW($Minus$int,($Integral)wit);
+void B_IntegralD_int_init(B_IntegralD_int wit) {
+    wit-> W_Logical = (B_Logical)$NEW(B_LogicalD_IntegralD_int,(B_Integral)wit);
+    wit-> W_Minus = (B_Minus)$NEW(B_MinusD_IntegralD_int,(B_Integral)wit);
 };
 
-void $Logical$int_init($Logical$int wit, $Integral w$Integral) {
-    wit->w$Integral =  w$Integral;
+void B_LogicalD_IntegralD_int_init(B_LogicalD_IntegralD_int wit, B_Integral W_Integral) {
+    wit->W_Integral =  W_Integral;
 }
 
-void $Minus$int_init($Minus$int wit, $Integral w$Integral) {
-    wit->w$Integral =  w$Integral;
+void B_MinusD_IntegralD_int_init(B_MinusD_IntegralD_int wit, B_Integral W_Integral) {
+    wit->W_Integral =  W_Integral;
 }
 
-void $Div$int_init($Div$int wit) {
+void B_DivD_int_init(B_DivD_int wit) {
     return;
 }
 
-void $Ord$int_init($Ord$int wit) {
+void B_OrdD_int_init(B_OrdD_int wit) {
     return;
 }
 
-void $Hashable$int_init($Hashable$int wit) {
+void B_HashableD_int_init(B_HashableD_int wit) {
     return;
 }
 
-$Integral$int $Integral$int$new() {
-    return $NEW($Integral$int);
+B_IntegralD_int B_IntegralD_intG_new() {
+    return $NEW(B_IntegralD_int);
 }
 
-$Logical$int $Logical$int$new($Integral wit) {
-    return $NEW($Logical$int,wit);
+B_LogicalD_IntegralD_int B_LogicalD_IntegralD_intG_new(B_Integral wit) {
+    return $NEW(B_LogicalD_IntegralD_int,wit);
 }
   
-$Minus$int $Minus$int$new($Integral wit) {
-    return $NEW($Minus$int,wit);
+B_MinusD_IntegralD_int B_MinusD_IntegralD_intG_new(B_Integral wit) {
+    return $NEW(B_MinusD_IntegralD_int,wit);
 }
   
-$Ord$int $Ord$int$new() {
-    return $NEW($Ord$int);
+B_OrdD_int B_OrdD_intG_new() {
+    return $NEW(B_OrdD_int);
 }
 
-$Div$int $Div$int$new() {
-    return $NEW($Div$int);
+B_DivD_int B_DivD_intG_new() {
+    return $NEW(B_DivD_int);
 }
 
-$Hashable$int $Hashable$int$new() {
-    return $NEW($Hashable$int);
+B_HashableD_int B_HashableD_intG_new() {
+    return $NEW(B_HashableD_int);
 }
 
 
-struct $Integral$int $Iintegral$int_instance;
-struct $Logical$int $Logical$int_instance;
-struct $Minus$int $Minus$int_instance;
-struct $Ord$int $Ord$int_instance;
-struct $Div$int $Div$int_instance;
-struct $Hashable$int $Hashable$int_instance;
+struct B_IntegralD_int $IintegralB_intD_instance;
+struct B_LogicalD_IntegralD_int B_LogicalD_IntegralD_int_instance;
+struct B_MinusD_IntegralD_int B_MinusD_IntegralD_int_instance;
+struct B_OrdD_int B_OrdD_int_instance;
+struct B_DivD_int B_DivD_int_instance;
+struct B_HashableD_int B_HashableD_int_instance;
 
-struct $Integral$int$class $Integral$int$methods = {
-    "$Integral$int",
+struct B_IntegralD_intG_class B_IntegralD_intG_methods = {
+    "B_IntegralD_int",
     UNASSIGNED,
-    ($Super$class)&$Integral$methods,
-    $Integral$int_init,
-    $Integral$int$__serialize__,
-    $Integral$int$__deserialize__,
-    ($bool (*)($Integral$int))$default__bool__,
-    ($str (*)($Integral$int))$default__str__,
-    ($str (*)($Integral$int))$default__str__,
-    $Integral$int$__add__,
-    ($int (*)($Integral$int, $int, $int))$Plus$__iadd__,
-    $Integral$int$__mul__,
-    ($int (*)($Integral$int, $int, $int))$Times$__imul__,
-    $Integral$int$__fromatom__,
-    $Integral$int$__complx__,
-    $Integral$int$__pow__,
-    ($int (*)($Integral$int, $int, $int))$Number$__ipow__,
-    $Integral$int$__neg__,
-    $Integral$int$__pos__,
-    $Integral$int$real,
-    $Integral$int$imag,
-    $Integral$int$__abs__,
-    $Integral$int$__conjugate__,
-    $Integral$int$__float__,
-    $Integral$int$__trunc__,
-    $Integral$int$__floor__,
-    $Integral$int$__ceil__,
-    $Integral$int$__round__,
-    $Integral$int$numerator,
-    $Integral$int$denominator,
-    $Integral$int$__int__,
-    $Integral$int$__index__,
-    $Integral$int$__divmod__,
-    $Integral$int$__floordiv__,
-    $Integral$int$__mod__,
-    $Integral$int$__lshift__,
-    $Integral$int$__rshift__,
-    ($int (*)($Integral$int, $int, $int))$Integral$__ifloordiv__,
-    ($int (*)($Integral$int, $int, $int))$Integral$__imod__,
-    ($int (*)($Integral$int, $int, $int))$Integral$__ilshift__,
-    ($int (*)($Integral$int, $int, $int))$Integral$__irshift__,
-    $Integral$int$__invert__
+    ($SuperG_class)&B_IntegralG_methods,
+    B_IntegralD_int_init,
+    B_IntegralD_intD___serialize__,
+    B_IntegralD_intD___deserialize__,
+    (B_bool (*)(B_IntegralD_int))$default__bool__,
+    (B_str (*)(B_IntegralD_int))$default__str__,
+    (B_str (*)(B_IntegralD_int))$default__str__,
+    B_IntegralD_intD___add__,
+    (B_int (*)(B_IntegralD_int, B_int, B_int))$PlusD___iadd__,
+    B_IntegralD_intD___mul__,
+    (B_int (*)(B_IntegralD_int, B_int, B_int))B_TimesD___imul__,
+    B_IntegralD_intD___fromatom__,
+    B_IntegralD_intD___complx__,
+    B_IntegralD_intD___pow__,
+    (B_int (*)(B_IntegralD_int, B_int, B_int))B_NumberD___ipow__,
+    B_IntegralD_intD___neg__,
+    B_IntegralD_intD___pos__,
+    B_IntegralD_int$real,
+    B_IntegralD_int$imag,
+    B_IntegralD_intD___abs__,
+    B_IntegralD_intD___conjugate__,
+    B_IntegralD_intD___float__,
+    B_IntegralD_intD___trunc__,
+    B_IntegralD_intD___floor__,
+    B_IntegralD_intD___ceil__,
+    B_IntegralD_intD___round__,
+    B_IntegralD_int$numerator,
+    B_IntegralD_int$denominator,
+    B_IntegralD_intD___int__,
+    B_IntegralD_intD___index__,
+    B_IntegralD_intD___divmod__,
+    B_IntegralD_intD___floordiv__,
+    B_IntegralD_intD___mod__,
+    B_IntegralD_intD___lshift__,
+    B_IntegralD_intD___rshift__,
+    (B_int (*)(B_IntegralD_int, B_int, B_int))B_IntegralD___ifloordiv__,
+    (B_int (*)(B_IntegralD_int, B_int, B_int))B_IntegralD___imod__,
+    (B_int (*)(B_IntegralD_int, B_int, B_int))B_IntegralD___ilshift__,
+    (B_int (*)(B_IntegralD_int, B_int, B_int))B_IntegralD___irshift__,
+    B_IntegralD_intD___invert__
 };
 
-struct $Integral$int $Integral$int_instance = {&$Integral$int$methods, ($Minus)&$Minus$int_instance, ($Logical)&$Logical$int_instance};
-$Integral$int $Integral$int$witness = &$Integral$int_instance;
+struct B_IntegralD_int B_IntegralD_int_instance = {&B_IntegralD_intG_methods, (B_Minus)&B_MinusD_IntegralD_int_instance, (B_Logical)&B_LogicalD_IntegralD_int_instance};
+B_IntegralD_int B_IntegralD_intG_witness = &B_IntegralD_int_instance;
 
-struct $Logical$int$class $Logical$int$methods =  {
-    "$Logical$int",
+struct B_LogicalD_IntegralD_intG_class B_LogicalD_IntegralD_intG_methods =  {
+    "B_LogicalD_IntegralD_int",
     UNASSIGNED,
-    ($Super$class)&$Logical$methods,
-    $Logical$int_init,
-    $Logical$int$__serialize__,
-    $Logical$int$__deserialize__,
-    ($bool (*)($Logical$int))$default__bool__,
-    ($str (*)($Logical$int))$default__str__,
-    ($str (*)($Logical$int))$default__str__,
-    $Logical$int$__and__,
-    $Logical$int$__or__,
-    $Logical$int$__xor__,
-    ($int (*)($Logical$int, $int, $int))$Logical$__iand__,
-    ($int (*)($Logical$int, $int, $int))$Logical$__ior__,
-    ($int (*)($Logical$int, $int, $int))$Logical$__ixor__
+    ($SuperG_class)&B_LogicalG_methods,
+    B_LogicalD_IntegralD_int_init,
+    B_LogicalD_IntegralD_intD___serialize__,
+    B_LogicalD_IntegralD_intD___deserialize__,
+    (B_bool (*)(B_LogicalD_IntegralD_int))$default__bool__,
+    (B_str (*)(B_LogicalD_IntegralD_int))$default__str__,
+    (B_str (*)(B_LogicalD_IntegralD_int))$default__str__,
+    B_LogicalD_IntegralD_intD___and__,
+    B_LogicalD_IntegralD_intD___or__,
+    B_LogicalD_IntegralD_intD___xor__,
+    (B_int (*)(B_LogicalD_IntegralD_int, B_int, B_int))B_LogicalD___iand__,
+    (B_int (*)(B_LogicalD_IntegralD_int, B_int, B_int))B_LogicalD___ior__,
+    (B_int (*)(B_LogicalD_IntegralD_int, B_int, B_int))B_LogicalD___ixor__
 };
 
-struct $Logical$int $Logical$int_instance = {&$Logical$int$methods, ($Integral)&$Integral$int_instance};
-$Logical$int $Logical$int$witness = &$Logical$int_instance;
+struct B_LogicalD_IntegralD_int B_LogicalD_IntegralD_int_instance = {&B_LogicalD_IntegralD_intG_methods, (B_Integral)&B_IntegralD_int_instance};
+B_LogicalD_IntegralD_int B_LogicalD_IntegralD_intG_witness = &B_LogicalD_IntegralD_int_instance;
 
-struct $Minus$int$class $Minus$int$methods = {
-    "$Minus$int",
+struct B_MinusD_IntegralD_intG_class B_MinusD_IntegralD_intG_methods = {
+    "B_MinusD_IntegralD_int",
     UNASSIGNED,
-    ($Super$class)&$Minus$methods,
-    $Minus$int_init,
-    $Minus$int$__serialize__,
-    $Minus$int$__deserialize__,
-    ($bool (*)($Minus$int))$default__bool__,
-    ($str (*)($Minus$int))$default__str__,
-    ($str (*)($Minus$int))$default__str__,
-    $Minus$int$__sub__,
-    ($int (*)($Minus$int, $int, $int))$Minus$__isub__
+    ($SuperG_class)&B_MinusG_methods,
+    B_MinusD_IntegralD_int_init,
+    B_MinusD_IntegralD_intD___serialize__,
+    B_MinusD_IntegralD_intD___deserialize__,
+    (B_bool (*)(B_MinusD_IntegralD_int))$default__bool__,
+    (B_str (*)(B_MinusD_IntegralD_int))$default__str__,
+    (B_str (*)(B_MinusD_IntegralD_int))$default__str__,
+    B_MinusD_IntegralD_intD___sub__,
+    (B_int (*)(B_MinusD_IntegralD_int, B_int, B_int))B_MinusD___isub__
 };
-struct $Minus$int $Minus$int_instance = {&$Minus$int$methods, ($Integral)&$Integral$int_instance};
-$Minus$int $Minus$int$witness = &$Minus$int_instance;
+struct B_MinusD_IntegralD_int B_MinusD_IntegralD_int_instance = {&B_MinusD_IntegralD_intG_methods, (B_Integral)&B_IntegralD_int_instance};
+B_MinusD_IntegralD_int B_MinusD_IntegralD_intG_witness = &B_MinusD_IntegralD_int_instance;
 
-struct $Ord$int$class $Ord$int$methods = {
-    "$Ord$int",
+struct B_OrdD_intG_class B_OrdD_intG_methods = {
+    "B_OrdD_int",
     UNASSIGNED,
-    ($Super$class)&$Ord$methods,
-    $Ord$int_init,
-    $Ord$int$__serialize__,
-    $Ord$int$__deserialize__,
-    ($bool (*)($Ord$int))$default__bool__,
-    ($str (*)($Ord$int))$default__str__,
-    ($str (*)($Ord$int))$default__str__,
-    $Ord$int$__eq__,
-    $Ord$int$__ne__,
-    $Ord$int$__lt__,
-    $Ord$int$__le__,
-    $Ord$int$__gt__,
-    $Ord$int$__ge__
-};
-
-struct $Ord$int $Ord$int_instance = {&$Ord$int$methods};
-$Ord$int $Ord$int$witness = &$Ord$int_instance;
-
-struct $Div$int$class $Div$int$methods = {
-    "$Div$int",
-    UNASSIGNED,
-    ($Super$class)&$Div$methods,
-    $Div$int_init,
-    $Div$int$__serialize__,
-    $Div$int$__deserialize__,
-    ($bool (*)($Div$int))$default__bool__,
-    ($str (*)($Div$int))$default__str__,
-    ($str (*)($Div$int))$default__str__,
-    $Div$int$__truediv__,
-    ($float (*)($Div$int, $int, $int))$Div$__itruediv__,
+    ($SuperG_class)&B_OrdG_methods,
+    B_OrdD_int_init,
+    B_OrdD_intD___serialize__,
+    B_OrdD_intD___deserialize__,
+    (B_bool (*)(B_OrdD_int))$default__bool__,
+    (B_str (*)(B_OrdD_int))$default__str__,
+    (B_str (*)(B_OrdD_int))$default__str__,
+    B_OrdD_intD___eq__,
+    B_OrdD_intD___ne__,
+    B_OrdD_intD___lt__,
+    B_OrdD_intD___le__,
+    B_OrdD_intD___gt__,
+    B_OrdD_intD___ge__
 };
 
-struct $Div$int $Div$int_instance = {&$Div$int$methods};
-$Div$int $Div$int$witness = &$Div$int_instance;
+struct B_OrdD_int B_OrdD_int_instance = {&B_OrdD_intG_methods};
+B_OrdD_int B_OrdD_intG_witness = &B_OrdD_int_instance;
 
-struct $Hashable$int$class $Hashable$int$methods = {
-    "$Hashable$int",
+struct B_DivD_intG_class B_DivD_intG_methods = {
+    "B_DivD_int",
     UNASSIGNED,
-    ($Super$class)&$Hashable$methods,
-    $Hashable$int_init,
-    $Hashable$int$__serialize__,
-    $Hashable$int$__deserialize__,
-    ($bool (*)($Hashable$int))$default__bool__,
-    ($str (*)($Hashable$int))$default__str__,
-    ($str (*)($Hashable$int))$default__str__,
-    $Hashable$int$__eq__,
-    $Hashable$int$__ne__,
-    $Hashable$int$__hash__
+    ($SuperG_class)&B_DivG_methods,
+    B_DivD_int_init,
+    B_DivD_intD___serialize__,
+    B_DivD_intD___deserialize__,
+    (B_bool (*)(B_DivD_int))$default__bool__,
+    (B_str (*)(B_DivD_int))$default__str__,
+    (B_str (*)(B_DivD_int))$default__str__,
+    B_DivD_intD___truediv__,
+    (B_float (*)(B_DivD_int, B_int, B_int))B_DivD___itruediv__,
 };
 
-struct $Hashable$int $Hashable$int_instance = {&$Hashable$int$methods};
-$Hashable$int $Hashable$int$witness = &$Hashable$int_instance;
+struct B_DivD_int B_DivD_int_instance = {&B_DivD_intG_methods};
+B_DivD_int B_DivD_intG_witness = &B_DivD_int_instance;
 
-long from$int($int n) { 
+struct B_HashableD_intG_class B_HashableD_intG_methods = {
+    "B_HashableD_int",
+    UNASSIGNED,
+    ($SuperG_class)&B_HashableG_methods,
+    B_HashableD_int_init,
+    B_HashableD_intD___serialize__,
+    B_HashableD_intD___deserialize__,
+    (B_bool (*)(B_HashableD_int))$default__bool__,
+    (B_str (*)(B_HashableD_int))$default__str__,
+    (B_str (*)(B_HashableD_int))$default__str__,
+    B_HashableD_intD___eq__,
+    B_HashableD_intD___ne__,
+    B_HashableD_intD___hash__
+};
+
+struct B_HashableD_int B_HashableD_int_instance = {&B_HashableD_intG_methods};
+B_HashableD_int B_HashableD_intG_witness = &B_HashableD_int_instance;
+
+long fromB_int(B_int n) { 
     long sz = n->val.size;
     if (sz==0) return 0;
     unsigned long res = n->val.n[0];
@@ -693,9 +693,9 @@ long from$int($int n) {
     return sz<0 ? -res : res;
 }
             
-$int to$int(long n) {
-    $int res = malloc(sizeof(struct $int));
-    res->$class = &$int$methods;
+B_int toB_int(long n) {
+    B_int res = malloc(sizeof(struct B_int));
+    res->$class = &B_intG_methods;
     res->val.n = malloc(sizeof(unsigned long));
     res->val.n[0] = n<0?-n:n;
     res->val.alloc = 1;
@@ -714,7 +714,7 @@ int POW10INWORD = 18; // Largest power of 10 that fits in a signed long
 double CCCC = 9.805415291306852e-2;  // log2(WORD_BITS) - log2 (POW10INWORD) - log2 (log2(10))
 char * fstr =  "%18lu";
 
-int $get$str0(bool ishead, zz_ptr n, zz_ptr dens[], int d, char *res, int pos) {
+int $getB_str0(bool ishead, zz_ptr n, zz_ptr dens[], int d, char *res, int pos) {
     if (d >= 0) {
         zz_ptr hi = malloc(sizeof(zz_struct));
         zz_ptr lo = malloc(sizeof(zz_struct));
@@ -722,10 +722,10 @@ int $get$str0(bool ishead, zz_ptr n, zz_ptr dens[], int d, char *res, int pos) {
         zz_init_fit(lo,dens[d]->size);
         zz_divrem(hi, lo, n, dens[d]);
         if (hi->size==0 && ishead) {
-            return $get$str0(ishead, lo, dens, d-1, res, pos);
+            return $getB_str0(ishead, lo, dens, d-1, res, pos);
         } else {
-            int newpos = $get$str0(ishead, hi, dens, d-1, res, pos);        
-            return $get$str0(false, lo, dens, d-1, res, newpos);          
+            int newpos = $getB_str0(ishead, hi, dens, d-1, res, pos);        
+            return $getB_str0(false, lo, dens, d-1, res, newpos);          
         }
     } else {
         char *buf = malloc(POW10INWORD);
@@ -741,7 +741,7 @@ int $get$str0(bool ishead, zz_ptr n, zz_ptr dens[], int d, char *res, int pos) {
     }
 }
 
-char * $get$str(zz_ptr nval) {
+char * $getB_str(zz_ptr nval) {
     if (nval->size == 0)
         return "0";
     long nlen = BSDNT_ABS(nval->size);
@@ -778,12 +778,12 @@ char * $get$str(zz_ptr nval) {
         res[0] = '-';
         pos++;
     }
-    int newpos = $get$str0(true, npos, dens, d-1, res, pos);
+    int newpos = $getB_str0(true, npos, dens, d-1, res, pos);
     res[newpos] = '\0';
     return res;
 }
 
-int $set$str0(zz_ptr a, char *nstr, int parts) {
+int B_setD_str0(zz_ptr a, char *nstr, int parts) {
     // assert(parts > 0);
     if (parts == 1) {
         unsigned long val;
@@ -797,8 +797,8 @@ int $set$str0(zz_ptr a, char *nstr, int parts) {
         zz_ptr lores = malloc(sizeof(zz_struct));
         zz_init(hires);
         zz_init(lores);
-        int hidigs = $set$str0(hires, nstr, hi);
-        int lodigs = $set$str0(lores, &nstr[hi * POW10INWORD], lo);
+        int hidigs = B_setD_str0(hires, nstr, hi);
+        int lodigs = B_setD_str0(lores, &nstr[hi * POW10INWORD], lo);
         zz_seti(a, 10);
         zz_powi(a, a, POW10INWORD * lo);
         zz_mul(a, a, hires);
@@ -807,17 +807,17 @@ int $set$str0(zz_ptr a, char *nstr, int parts) {
     }
 }
 
-int $set$str(zz_ptr a, char *nstr) {
+int B_setD_str(zz_ptr a, char *nstr) {
     int len = 0;
     while (isdigit(nstr[len]))
         len++;
     if (len == 0) {
-        $RAISE(($BaseException)$NEW($ValueError,to$str("int.__fromatom__: no digits in string prefix")));
+        $RAISE((B_BaseException)$NEW(B_ValueError,to$str("int.__fromatom__: no digits in string prefix")));
     }
     int parts = len / POW10INWORD;
     int offset =  len % POW10INWORD;
     if (offset == 0)
-        return $set$str0(a, nstr, parts);
+        return B_setD_str0(a, nstr, parts);
     else {
         zz_ptr res0 = malloc(sizeof(zz_struct));
         zz_init(res0);
@@ -828,7 +828,7 @@ int $set$str(zz_ptr a, char *nstr) {
         int partdigits = 0;
         sscanf(buf, "%lu", &headval);
         if (parts > 0) {
-            partdigits = $set$str0(res0, &nstr[offset], parts);
+            partdigits = B_setD_str0(res0, &nstr[offset], parts);
             zz_seti(a, 10);
             zz_powi(a, a, POW10INWORD * parts);
             zz_muli(a, a, headval);
@@ -842,16 +842,16 @@ int $set$str(zz_ptr a, char *nstr) {
 
 
 // gcd functions from BSDNT //////////////////////////////////
-$int $gcd($int a, $int b) {
-    $int res = $malloc$int();
+B_int $gcd(B_int a, B_int b) {
+    B_int res = $mallocB_int();
     zz_gcd(&res->val, &a->val, &b->val);
     return res;
 }
 
-$tuple $xgcd($int a, $int b) {
-    $int d = $malloc$int();
-    $int s = $malloc$int();
-    $int t = $malloc$int();
+B_tuple $xgcd(B_int a, B_int b) {
+    B_int d = $mallocB_int();
+    B_int s = $mallocB_int();
+    B_int t = $mallocB_int();
     zz_xgcd(&d->val, &s->val, &t->val, &a->val, &b->val);
     return $NEWTUPLE(3, d, s, t);
 }

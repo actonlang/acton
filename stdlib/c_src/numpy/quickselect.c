@@ -101,5 +101,5 @@ void quicksort(union $Bytes8 *a, int left, int right, bool (*lt)(union $Bytes8,u
   }
   }
 
-  $ndarray $ndarray_partition($ndarray a, $int k, $int axis) {
+  $ndarray $ndarray_partition($ndarray a, B_int k, B_int axis) {
 */

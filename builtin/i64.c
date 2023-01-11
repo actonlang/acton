@@ -24,159 +24,159 @@ long longpow(long a, long e) {
 
 // General methods ///////////////////////////////////////////////////////////////////////
 
-$i64 $i64$new($atom a) {
-  if ($ISINSTANCE(a,$int)->val){
-    zz_struct n = (($int)a)-> val;
+B_i64 B_i64G_new(B_atom a) {
+  if ($ISINSTANCE(a,B_int)->val){
+    zz_struct n = ((B_int)a)-> val;
     if (n.n[0] > LONG_MAX || (labs(n.size))>1) {
-      $RAISE(($BaseException)$NEW($ValueError,to$str("i64(): int argument out of range")));
+      $RAISE((B_BaseException)$NEW(B_ValueError,to$str("i64(): int argument out of range")));
     }
-    return to$i64(n.size*n.n[0]);
+    return toB_i64(n.size*n.n[0]);
   }
-  if ($ISINSTANCE(a,$i64)->val) return ($i64)a;
-  if ($ISINSTANCE(a,$float)->val) return to$i64(round((($float)a)->val));
-  if ($ISINSTANCE(a,$bool)->val) return to$i64((($bool)a)->val);
-  if ($ISINSTANCE(a,$str)->val) {
+  if ($ISINSTANCE(a,B_i64)->val) return (B_i64)a;
+  if ($ISINSTANCE(a,B_float)->val) return toB_i64(round(((B_float)a)->val));
+  if ($ISINSTANCE(a,B_bool)->val) return toB_i64(((B_bool)a)->val);
+  if ($ISINSTANCE(a,B_str)->val) {
     long x;
     int c;
-    sscanf((char *)(($str)a)->str,"%ld%n",&x,&c);
-    if (c==(($str)a)->nbytes)
-      return to$i64(x);
+    sscanf((char *)((B_str)a)->str,"%ld%n",&x,&c);
+    if (c==((B_str)a)->nbytes)
+      return toB_i64(x);
     else 
-      $RAISE(($BaseException)$NEW($ValueError,to$str("int(): invalid str value for type int")));
+      $RAISE((B_BaseException)$NEW(B_ValueError,to$str("int(): invalid str value for type int")));
   }
-  fprintf(stderr,"internal error: $i64$new: argument not of atomic type");
+  fprintf(stderr,"internal error: B_i64G_new: argument not of atomic type");
   exit(-1);
 }
 
-void $i64_init($i64 self, $atom a){
-  self->val = $i64$new(a)->val;
+void B_i64D_init(B_i64 self, B_atom a){
+  self->val = B_i64G_new(a)->val;
 }
 
-void $i64_serialize($i64 n,$Serial$state state) {
+void B_i64D_serialize(B_i64 n,$NoneType state) {
   $val_serialize(INT_ID,&n->val,state);
 }
 
-$i64 $i64_deserialize($i64 n,$Serial$state state) {
-  return to$i64((long)$val_deserialize(state));
+B_i64 B_i64D_deserialize(B_i64 n,$NoneType state) {
+  return toB_i64((long)$val_deserialize(state));
 }
 
-$bool $i64_bool($i64 n) {
-  return to$bool(n->val != 0);
+B_bool B_i64D_bool(B_i64 n) {
+  return toB_bool(n->val != 0);
 }
 
-$str $i64_str($i64 n) {
+B_str B_i64D_str(B_i64 n) {
   char *s;
   asprintf(&s,"%ld",n->val);
   return to$str(s);
 }
   
-struct $i64$class $i64$methods = {
-    "$i64",
+struct B_i64G_class B_i64G_methods = {
+    "B_i64",
     UNASSIGNED,
-    ($Super$class)&$atom$methods,
-    $i64_init,
-    $i64_serialize,
-    $i64_deserialize,
-    $i64_bool,
-    $i64_str,
-    $i64_str
+    ($SuperG_class)&B_atomG_methods,
+    B_i64D_init,
+    B_i64D_serialize,
+    B_i64D_deserialize,
+    B_i64D_bool,
+    B_i64D_str,
+    B_i64D_str
 };
 
-$i64 to$i64(long i) {
-  $i64 res = malloc(sizeof(struct $i64));
-  res->$class = &$i64$methods;
+B_i64 toB_i64(long i) {
+  B_i64 res = malloc(sizeof(struct B_i64));
+  res->$class = &B_i64G_methods;
   res->val = i;
   return res;
 }
 
-long from$i64($i64 w) {
+long fromB_i64(B_i64 w) {
   return w->val;
 }
 
                   
 
-// $Integral$i64 /////////////////////////////////////////////////////////////////////////
+// B_IntegralD_i64 /////////////////////////////////////////////////////////////////////////
 
-void $Integral$i64$__serialize__($Integral$i64 self, $Serial$state state) {
-  $step_serialize(self->w$Logical, state);
-  $step_serialize(self->w$Minus, state);
+void B_IntegralD_i64D___serialize__(B_IntegralD_i64 self, $NoneType state) {
+  $step_serialize(self->W_Logical, state);
+  $step_serialize(self->W_Minus, state);
 }
 
-$Integral$i64 $Integral$i64$__deserialize__($Integral$i64 self, $Serial$state state) {
-   $Integral$i64 res = $DNEW($Integral$i64,state);
-   res->w$Logical = ($Logical)$step_deserialize(state);
-   res->w$Minus = ($Minus)$step_deserialize(state);
+B_IntegralD_i64 B_IntegralD_i64D___deserialize__(B_IntegralD_i64 self, $NoneType state) {
+   B_IntegralD_i64 res = $DNEW(B_IntegralD_i64,state);
+   res->W_Logical = (B_Logical)$step_deserialize(state);
+   res->W_Minus = (B_Minus)$step_deserialize(state);
    return res;
 }
 
-$i64 $Integral$i64$__add__($Integral$i64 wit,  $i64 a, $i64 b) {
-  return to$i64(a->val + b->val);
+B_i64 B_IntegralD_i64D___add__(B_IntegralD_i64 wit,  B_i64 a, B_i64 b) {
+  return toB_i64(a->val + b->val);
 }  
 
-$complex $Integral$i64$__complx__($Integral$i64 wit, $i64 a) {
-  return to$complex((double)a->val);
+B_complex B_IntegralD_i64D___complx__(B_IntegralD_i64 wit, B_i64 a) {
+  return toB_complex((double)a->val);
 }
 
-$i64 $Integral$i64$__fromatom__($Integral$i64 wit, $atom a) {
-  return $i64$new(a);
+B_i64 B_IntegralD_i64D___fromatom__(B_IntegralD_i64 wit, B_atom a) {
+  return B_i64G_new(a);
 }
 
-$i64 $Integral$i64$__mul__($Integral$i64 wit,  $i64 a, $i64 b) {
-  return to$i64(a->val * b->val);
+B_i64 B_IntegralD_i64D___mul__(B_IntegralD_i64 wit,  B_i64 a, B_i64 b) {
+  return toB_i64(a->val * b->val);
 }  
   
-$i64 $Integral$i64$__pow__($Integral$i64 wit,  $i64 a, $i64 b) {
+B_i64 B_IntegralD_i64D___pow__(B_IntegralD_i64 wit,  B_i64 a, B_i64 b) {
   if ( b->val < 0) {
     // raise VALUEERROR;
     return NULL;
   }
-  return to$i64(longpow(a->val,b->val));
+  return toB_i64(longpow(a->val,b->val));
 }
 
-$i64 $Integral$i64$__neg__($Integral$i64 wit,  $i64 a) {
-  return to$i64(-a->val);
+B_i64 B_IntegralD_i64D___neg__(B_IntegralD_i64 wit,  B_i64 a) {
+  return toB_i64(-a->val);
 }
 
-$i64 $Integral$i64$__pos__($Integral$i64 wit,  $i64 a) {
+B_i64 B_IntegralD_i64D___pos__(B_IntegralD_i64 wit,  B_i64 a) {
   return a;
 }
 
-$WORD $Integral$i64$real($Integral$i64 wit, $i64 a, $Real wit2) {
-  return wit2->$class->__fromatom__(wit2,($atom)a);
+$WORD B_IntegralD_i64$real(B_IntegralD_i64 wit, B_i64 a, B_Real wit2) {
+  return wit2->$class->__fromatom__(wit2,(B_atom)a);
 }
 
-$WORD $Integral$i64$imag($Integral$i64 wit, $i64 a, $Real wit2) {
-  return wit2->$class->__fromatom__(wit2,($atom)to$i64(0L));
+$WORD B_IntegralD_i64$imag(B_IntegralD_i64 wit, B_i64 a, B_Real wit2) {
+  return wit2->$class->__fromatom__(wit2,(B_atom)toB_i64(0L));
 }
 
-$WORD $Integral$i64$__abs__($Integral$i64 wit, $i64 a, $Real wit2) {
-  return wit2->$class->__fromatom__(wit2,($atom)to$i64(labs(a->val)));
+$WORD B_IntegralD_i64D___abs__(B_IntegralD_i64 wit, B_i64 a, B_Real wit2) {
+  return wit2->$class->__fromatom__(wit2,(B_atom)toB_i64(labs(a->val)));
 }
 
-$i64 $Integral$i64$__conjugate__($Integral$i64 wit,  $i64 a) {
+B_i64 B_IntegralD_i64D___conjugate__(B_IntegralD_i64 wit,  B_i64 a) {
   return a;
 }
 
-$float $Integral$i64$__float__ ($Integral$i64 wit, $i64 n) {
-  return to$float((double)n->val);
+B_float B_IntegralD_i64D___float__ (B_IntegralD_i64 wit, B_i64 n) {
+  return toB_float((double)n->val);
 }
 
-$WORD $Integral$i64$__trunc__ ($Integral$i64 wit, $i64 n, $Integral wit2) {
-  return wit2->$class->__fromatom__(wit2,($atom)n);
+$WORD B_IntegralD_i64D___trunc__ (B_IntegralD_i64 wit, B_i64 n, B_Integral wit2) {
+  return wit2->$class->__fromatom__(wit2,(B_atom)n);
 }
   
-$WORD $Integral$i64$__floor__ ($Integral$i64 wit, $i64 n, $Integral wit2) {
-  return wit2->$class->__fromatom__(wit2,($atom)n);
+$WORD B_IntegralD_i64D___floor__ (B_IntegralD_i64 wit, B_i64 n, B_Integral wit2) {
+  return wit2->$class->__fromatom__(wit2,(B_atom)n);
 }
   
-$WORD $Integral$i64$__ceil__ ($Integral$i64 wit, $i64 n, $Integral wit2) {
-  return wit2->$class->__fromatom__(wit2,($atom)n);
+$WORD B_IntegralD_i64D___ceil__ (B_IntegralD_i64 wit, B_i64 n, B_Integral wit2) {
+  return wit2->$class->__fromatom__(wit2,(B_atom)n);
 }
   
-$i64 $Integral$i64$__round__ ($Integral$i64 wit, $i64 n, $i64 p) {
+B_i64 B_IntegralD_i64D___round__ (B_IntegralD_i64 wit, B_i64 n, B_i64 p) {
   long nval = n->val;
   if (nval<0)
-    return to$i64(-$Integral$i64$__round__(wit,to$i64(-nval),p)->val);
+    return toB_i64(-B_IntegralD_i64D___round__(wit,toB_i64(-nval),p)->val);
   long pval = p==NULL ? 0 : p->val;
   if (pval>=0)
     return n;
@@ -184,359 +184,359 @@ $i64 $Integral$i64$__round__ ($Integral$i64 wit, $i64 n, $i64 p) {
   long res = nval/p10;
   if (nval%p10 * 2 > p10)
     res++; 
-  return to$i64 (res * p10);
+  return toB_i64 (res * p10);
 }
   
-$WORD $Integral$i64$numerator ($Integral$i64 wit, $i64 n, $Integral wit2) {
-  return wit2->$class->__fromatom__(wit2,($atom)n);
+$WORD B_IntegralD_i64$numerator (B_IntegralD_i64 wit, B_i64 n, B_Integral wit2) {
+  return wit2->$class->__fromatom__(wit2,(B_atom)n);
 }
   
-$WORD $Integral$i64$denominator ($Integral$i64 wit, $i64 n, $Integral wit2) {
-  return wit2->$class->__fromatom__(wit2,($atom)to$i64(1L));
+$WORD B_IntegralD_i64$denominator (B_IntegralD_i64 wit, B_i64 n, B_Integral wit2) {
+  return wit2->$class->__fromatom__(wit2,(B_atom)toB_i64(1L));
 }
   
-$i64 $Integral$i64$__int__ ($Integral$i64 wit, $int n) {
-    return $i64$new(($atom)n);
+B_i64 B_IntegralD_i64D___int__ (B_IntegralD_i64 wit, B_int n) {
+    return B_i64G_new((B_atom)n);
 }
 
-$i64 $Integral$i64$__index__($Integral$i64 wit, $int n) {
-    return $i64$new(($atom)n);
+B_i64 B_IntegralD_i64D___index__(B_IntegralD_i64 wit, B_int n) {
+    return B_i64G_new((B_atom)n);
 }
 
-$tuple $Integral$i64$__divmod__($Integral$i64 wit, $i64 a, $i64 b) {
+B_tuple B_IntegralD_i64D___divmod__(B_IntegralD_i64 wit, B_i64 a, B_i64 b) {
   int n = a->val;
   int d = b->val;
-  return $NEWTUPLE(2, to$i64(n/d), to$i64(n%d));
+  return $NEWTUPLE(2, toB_i64(n/d), toB_i64(n%d));
 }
 
-$i64 $Integral$i64$__floordiv__($Integral$i64 wit, $i64 a, $i64 b) {
-  return to$i64(a->val / b->val);
+B_i64 B_IntegralD_i64D___floordiv__(B_IntegralD_i64 wit, B_i64 a, B_i64 b) {
+  return toB_i64(a->val / b->val);
 }
 
-$i64 $Integral$i64$__mod__($Integral$i64 wit, $i64 a, $i64 b) {
-  return to$i64(a->val % b->val);
+B_i64 B_IntegralD_i64D___mod__(B_IntegralD_i64 wit, B_i64 a, B_i64 b) {
+  return toB_i64(a->val % b->val);
 }
 
-$i64 $Integral$i64$__lshift__($Integral$i64 wit,  $i64 a, $int b) {
-    return to$i64(a->val << from$int(b));
+B_i64 B_IntegralD_i64D___lshift__(B_IntegralD_i64 wit,  B_i64 a, B_int b) {
+    return toB_i64(a->val << fromB_int(b));
 }
 
-$i64 $Integral$i64$__rshift__($Integral$i64 wit,  $i64 a, $int b) {
-  return to$i64(a->val >> from$int(b));
+B_i64 B_IntegralD_i64D___rshift__(B_IntegralD_i64 wit,  B_i64 a, B_int b) {
+  return toB_i64(a->val >> fromB_int(b));
 }
  
-$i64 $Integral$i64$__invert__($Integral$i64 wit,  $i64 a) {
-  return to$i64(~a->val);
+B_i64 B_IntegralD_i64D___invert__(B_IntegralD_i64 wit,  B_i64 a) {
+  return toB_i64(~a->val);
 }
 
 
-// Logical$i64  ////////////////////////////////////////////////////////////////////////////////////////
+// LogicalB_i64  ////////////////////////////////////////////////////////////////////////////////////////
 
-void $Logical$i64$__serialize__($Logical$i64 self, $Serial$state state) {
-  $step_serialize(self->w$Integral, state);
+void B_LogicalD_IntegralD_i64D___serialize__(B_LogicalD_IntegralD_i64 self, $NoneType state) {
+  $step_serialize(self->W_Integral, state);
 }
 
-$Logical$i64 $Logical$i64$__deserialize__($Logical$i64 self, $Serial$state state) {
-   $Logical$i64 res = $DNEW($Logical$i64,state);
-   res->w$Integral = ($Integral)$step_deserialize(state);
+B_LogicalD_IntegralD_i64 B_LogicalD_IntegralD_i64D___deserialize__(B_LogicalD_IntegralD_i64 self, $NoneType state) {
+   B_LogicalD_IntegralD_i64 res = $DNEW(B_LogicalD_IntegralD_i64,state);
+   res->W_Integral = (B_Integral)$step_deserialize(state);
    return res;
 }
 
-$i64 $Logical$i64$__and__($Logical$i64 wit,  $i64 a, $i64 b) {
-  return to$i64(a->val & b->val);
+B_i64 B_LogicalD_IntegralD_i64D___and__(B_LogicalD_IntegralD_i64 wit,  B_i64 a, B_i64 b) {
+  return toB_i64(a->val & b->val);
 }
                                                  
-$i64 $Logical$i64$__or__($Logical$i64 wit,  $i64 a, $i64 b) {
-  return to$i64(a->val | b->val);
+B_i64 B_LogicalD_IntegralD_i64D___or__(B_LogicalD_IntegralD_i64 wit,  B_i64 a, B_i64 b) {
+  return toB_i64(a->val | b->val);
 }
                                                  
-$i64 $Logical$i64$__xor__($Logical$i64 wit,  $i64 a, $i64 b) {
-  return to$i64(a->val ^ b->val);
+B_i64 B_LogicalD_IntegralD_i64D___xor__(B_LogicalD_IntegralD_i64 wit,  B_i64 a, B_i64 b) {
+  return toB_i64(a->val ^ b->val);
 }  
  
-// $Minus$i64  ////////////////////////////////////////////////////////////////////////////////////////
+// B_MinusD_IntegralD_i64  ////////////////////////////////////////////////////////////////////////////////////////
 
-void $Minus$i64$__serialize__($Minus$i64 self, $Serial$state state) {
-  $step_serialize(self->w$Integral, state);
+void B_MinusD_IntegralD_i64D___serialize__(B_MinusD_IntegralD_i64 self, $NoneType state) {
+  $step_serialize(self->W_Integral, state);
 }
 
-$Minus$i64 $Minus$i64$__deserialize__($Minus$i64 self, $Serial$state state) {
-   $Minus$i64 res = $DNEW($Minus$i64,state);
-   res->w$Integral = ($Integral)$step_deserialize(state);
+B_MinusD_IntegralD_i64 B_MinusD_IntegralD_i64D___deserialize__(B_MinusD_IntegralD_i64 self, $NoneType state) {
+   B_MinusD_IntegralD_i64 res = $DNEW(B_MinusD_IntegralD_i64,state);
+   res->W_Integral = (B_Integral)$step_deserialize(state);
    return res;
 }
 
-$i64 $Minus$i64$__sub__($Minus$i64 wit,  $i64 a, $i64 b) {
-  return to$i64(a->val - b->val);
+B_i64 B_MinusD_IntegralD_i64D___sub__(B_MinusD_IntegralD_i64 wit,  B_i64 a, B_i64 b) {
+  return toB_i64(a->val - b->val);
 }  
 
-// $Div$i64  ////////////////////////////////////////////////////////////////////////////////////////
+// B_DivD_i64  ////////////////////////////////////////////////////////////////////////////////////////
 
-void $Div$i64$__serialize__($Div$i64 self, $Serial$state state) {
+void B_DivD_i64D___serialize__(B_DivD_i64 self, $NoneType state) {
 }
 
-$Div$i64 $Div$i64$__deserialize__($Div$i64 self, $Serial$state state) {
-   $Div$i64 res = $DNEW($Div$i64,state);
+B_DivD_i64 B_DivD_i64D___deserialize__(B_DivD_i64 self, $NoneType state) {
+   B_DivD_i64 res = $DNEW(B_DivD_i64,state);
    return res;
 }
 
-$float $Div$i64$__truediv__ ($Div$i64 wit, $i64 a, $i64 b) {
-  return to$float((double)a->val/(double)b->val);
+B_float B_DivD_i64D___truediv__ (B_DivD_i64 wit, B_i64 a, B_i64 b) {
+  return toB_float((double)a->val/(double)b->val);
 }
 
-// $Ord$i64  ////////////////////////////////////////////////////////////////////////////////////////
+// B_OrdD_i64  ////////////////////////////////////////////////////////////////////////////////////////
 
-void $Ord$i64$__serialize__($Ord$i64 self, $Serial$state state) {
+void B_OrdD_i64D___serialize__(B_OrdD_i64 self, $NoneType state) {
 }
 
-$Ord$i64 $Ord$i64$__deserialize__($Ord$i64 self, $Serial$state state) {
-   $Ord$i64 res = $DNEW($Ord$i64,state);
+B_OrdD_i64 B_OrdD_i64D___deserialize__(B_OrdD_i64 self, $NoneType state) {
+   B_OrdD_i64 res = $DNEW(B_OrdD_i64,state);
    return res;
 }
 
-$bool $Ord$i64$__eq__ ($Ord$i64 wit, $i64 a, $i64 b) {
-  return to$bool(a->val == b->val);
+B_bool B_OrdD_i64D___eq__ (B_OrdD_i64 wit, B_i64 a, B_i64 b) {
+  return toB_bool(a->val == b->val);
 }
 
-$bool $Ord$i64$__ne__ ($Ord$i64 wit, $i64 a, $i64 b) {
-  return to$bool(a->val != b->val);
+B_bool B_OrdD_i64D___ne__ (B_OrdD_i64 wit, B_i64 a, B_i64 b) {
+  return toB_bool(a->val != b->val);
 }
 
-$bool $Ord$i64$__lt__ ($Ord$i64 wit, $i64 a, $i64 b) {
-  return to$bool(a->val < b->val);
+B_bool B_OrdD_i64D___lt__ (B_OrdD_i64 wit, B_i64 a, B_i64 b) {
+  return toB_bool(a->val < b->val);
 }
 
-$bool $Ord$i64$__le__ ($Ord$i64 wit, $i64 a, $i64 b) {
-  return to$bool(a->val <= b->val);
+B_bool B_OrdD_i64D___le__ (B_OrdD_i64 wit, B_i64 a, B_i64 b) {
+  return toB_bool(a->val <= b->val);
 }
 
-$bool $Ord$i64$__gt__ ($Ord$i64 wit, $i64 a, $i64 b) {
-  return to$bool(a->val > b->val);
+B_bool B_OrdD_i64D___gt__ (B_OrdD_i64 wit, B_i64 a, B_i64 b) {
+  return toB_bool(a->val > b->val);
 }
 
-$bool $Ord$i64$__ge__ ($Ord$i64 wit, $i64 a, $i64 b) {
-  return to$bool(a->val >= b->val);
+B_bool B_OrdD_i64D___ge__ (B_OrdD_i64 wit, B_i64 a, B_i64 b) {
+  return toB_bool(a->val >= b->val);
 }
 
-// $Hashable$i64 ///////////////////////////////////////////////////////////////////////////////////////////////////////
+// B_HashableD_i64 ///////////////////////////////////////////////////////////////////////////////////////////////////////
 
-void $Hashable$i64$__serialize__($Hashable$i64 self, $Serial$state state) {
+void B_HashableD_i64D___serialize__(B_HashableD_i64 self, $NoneType state) {
 }
 
-$Hashable$i64 $Hashable$i64$__deserialize__($Hashable$i64 self, $Serial$state state) {
-   $Hashable$i64 res = $DNEW($Hashable$i64,state);
+B_HashableD_i64 B_HashableD_i64D___deserialize__(B_HashableD_i64 self, $NoneType state) {
+   B_HashableD_i64 res = $DNEW(B_HashableD_i64,state);
    return res;
 }
 
-$bool $Hashable$i64$__eq__($Hashable$i64 wit, $i64 a, $i64 b) {
-  return to$bool(a->val == b->val);
+B_bool B_HashableD_i64D___eq__(B_HashableD_i64 wit, B_i64 a, B_i64 b) {
+  return toB_bool(a->val == b->val);
 }
 
-$bool $Hashable$i64$__ne__($Hashable$i64 wit, $i64 a, $i64 b) {
-  return to$bool(a->val != b->val);
+B_bool B_HashableD_i64D___ne__(B_HashableD_i64 wit, B_i64 a, B_i64 b) {
+  return toB_bool(a->val != b->val);
 }
 
-$int $Hashable$i64$__hash__($Hashable$i64 wit, $i64 a) {
-  return to$int($i64_hash(a));
+B_int B_HashableD_i64D___hash__(B_HashableD_i64 wit, B_i64 a) {
+  return toB_int(B_i64D_hash(a));
 }
 
 // Initialization ////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-void $Integral$i64_init($Integral$i64 wit) {
-  wit-> w$Logical = ($Logical)$NEW($Logical$i64,($Integral)wit);
-  wit-> w$Minus = ($Minus)$NEW($Minus$i64,($Integral)wit);
+void B_IntegralD_i64_init(B_IntegralD_i64 wit) {
+  wit-> W_Logical = (B_Logical)$NEW(B_LogicalD_IntegralD_i64,(B_Integral)wit);
+  wit-> W_Minus = (B_Minus)$NEW(B_MinusD_IntegralD_i64,(B_Integral)wit);
 };
 
-void $Logical$i64_init($Logical$i64 wit, $Integral w$Integral) {
-  wit->w$Integral =  w$Integral;
+void B_LogicalD_IntegralD_i64_init(B_LogicalD_IntegralD_i64 wit, B_Integral W_Integral) {
+  wit->W_Integral =  W_Integral;
 }
 
-void $Minus$i64_init($Minus$i64 wit, $Integral w$Integral) {
-  wit->w$Integral =  w$Integral;
+void B_MinusD_IntegralD_i64_init(B_MinusD_IntegralD_i64 wit, B_Integral W_Integral) {
+  wit->W_Integral =  W_Integral;
 }
 
-void $Div$i64_init($Div$i64 wit) {
+void B_DivD_i64_init(B_DivD_i64 wit) {
   return;
 }
 
-void $Ord$i64_init($Ord$i64 wit) {
+void B_OrdD_i64_init(B_OrdD_i64 wit) {
   return;
 }
 
-void $Hashable$i64_init($Hashable$i64 wit) {
+void B_HashableD_i64_init(B_HashableD_i64 wit) {
   return;
 }
 
-$Integral$i64 $Integral$i64$new() {
-  return $NEW($Integral$i64);
+B_IntegralD_i64 B_IntegralD_i64G_new() {
+  return $NEW(B_IntegralD_i64);
 }
 
-$Logical$i64 $Logical$i64$new($Integral wit) {
-  return $NEW($Logical$i64,wit);
+B_LogicalD_IntegralD_i64 B_LogicalD_IntegralD_i64G_new(B_Integral wit) {
+  return $NEW(B_LogicalD_IntegralD_i64,wit);
 }
   
-$Minus$i64 $Minus$i64$new($Integral wit) {
-  return $NEW($Minus$i64,wit);
+B_MinusD_IntegralD_i64 B_MinusD_IntegralD_i64G_new(B_Integral wit) {
+  return $NEW(B_MinusD_IntegralD_i64,wit);
 }
   
-$Ord$i64 $Ord$i64$new() {
-  return $NEW($Ord$i64);
+B_OrdD_i64 B_OrdD_i64G_new() {
+  return $NEW(B_OrdD_i64);
 }
 
-$Div$i64 $Div$i64$new() {
-  return $NEW($Div$i64);
+B_DivD_i64 B_DivD_i64G_new() {
+  return $NEW(B_DivD_i64);
 }
 
-$Hashable$i64 $Hashable$i64$new() {
-  return $NEW($Hashable$i64);
+B_HashableD_i64 B_HashableD_i64G_new() {
+  return $NEW(B_HashableD_i64);
 }
 
 
-struct $Integral$i64 $Integral$i64_instance;
-struct $Logical$i64 $Logical$i64_instance;
-struct $Minus$i64 $Minus$i64_instance;
-struct $Ord$i64 $Ord$i64_instance;
-struct $Div$i64 $Div$i64_instance;
-struct $Hashable$i64 $Hashable$i64_instance;
+struct B_IntegralD_i64 B_IntegralD_i64_instance;
+struct B_LogicalD_IntegralD_i64 B_LogicalD_IntegralD_i64_instance;
+struct B_MinusD_IntegralD_i64 B_MinusD_IntegralD_i64_instance;
+struct B_OrdD_i64 B_OrdD_i64_instance;
+struct B_DivD_i64 B_DivD_i64_instance;
+struct B_HashableD_i64 B_HashableD_i64_instance;
 
-struct $Integral$i64$class $Integral$i64$methods = {
-    "$Integral$i64",
+struct B_IntegralD_i64G_class B_IntegralD_i64G_methods = {
+    "B_IntegralD_i64",
     UNASSIGNED,
-    ($Super$class)&$Integral$methods,
-    $Integral$i64_init,
-    $Integral$i64$__serialize__,
-    $Integral$i64$__deserialize__,
-    ($bool (*)($Integral$i64))$default__bool__,
-    ($str (*)($Integral$i64))$default__str__,
-    ($str (*)($Integral$i64))$default__str__,
-    $Integral$i64$__add__,
-    ($i64 (*)($Integral$i64, $i64, $i64))$Plus$__iadd__,
-    $Integral$i64$__mul__,
-    ($i64 (*)($Integral$i64, $i64, $i64))$Times$__imul__,
-    $Integral$i64$__fromatom__,
-    $Integral$i64$__complx__,
-    $Integral$i64$__pow__,
-    ($i64 (*)($Integral$i64, $i64, $i64))$Number$__ipow__,
-    $Integral$i64$__neg__,
-    $Integral$i64$__pos__,
-    $Integral$i64$real,
-    $Integral$i64$imag,
-    $Integral$i64$__abs__,
-    $Integral$i64$__conjugate__,
-    $Integral$i64$__float__,
-    $Integral$i64$__trunc__,
-    $Integral$i64$__floor__,
-    $Integral$i64$__ceil__,
-    $Integral$i64$__round__,
-    $Integral$i64$numerator,
-    $Integral$i64$denominator,
-    $Integral$i64$__int__,
-    $Integral$i64$__index__,
-    $Integral$i64$__divmod__,
-    $Integral$i64$__floordiv__,
-    $Integral$i64$__mod__,
-    $Integral$i64$__lshift__,
-    $Integral$i64$__rshift__,
-    ($i64 (*)($Integral$i64, $i64, $i64))$Integral$__ifloordiv__,
-    ($i64 (*)($Integral$i64, $i64, $i64))$Integral$__imod__,
-    ($i64 (*)($Integral$i64, $i64, $int))$Integral$__ilshift__,
-    ($i64 (*)($Integral$i64, $i64, $int))$Integral$__irshift__,
-    $Integral$i64$__invert__
+    ($SuperG_class)&B_IntegralG_methods,
+    B_IntegralD_i64_init,
+    B_IntegralD_i64D___serialize__,
+    B_IntegralD_i64D___deserialize__,
+    (B_bool (*)(B_IntegralD_i64))$default__bool__,
+    (B_str (*)(B_IntegralD_i64))$default__str__,
+    (B_str (*)(B_IntegralD_i64))$default__str__,
+    B_IntegralD_i64D___add__,
+    (B_i64 (*)(B_IntegralD_i64, B_i64, B_i64))$PlusD___iadd__,
+    B_IntegralD_i64D___mul__,
+    (B_i64 (*)(B_IntegralD_i64, B_i64, B_i64))B_TimesD___imul__,
+    B_IntegralD_i64D___fromatom__,
+    B_IntegralD_i64D___complx__,
+    B_IntegralD_i64D___pow__,
+    (B_i64 (*)(B_IntegralD_i64, B_i64, B_i64))B_NumberD___ipow__,
+    B_IntegralD_i64D___neg__,
+    B_IntegralD_i64D___pos__,
+    B_IntegralD_i64$real,
+    B_IntegralD_i64$imag,
+    B_IntegralD_i64D___abs__,
+    B_IntegralD_i64D___conjugate__,
+    B_IntegralD_i64D___float__,
+    B_IntegralD_i64D___trunc__,
+    B_IntegralD_i64D___floor__,
+    B_IntegralD_i64D___ceil__,
+    B_IntegralD_i64D___round__,
+    B_IntegralD_i64$numerator,
+    B_IntegralD_i64$denominator,
+    B_IntegralD_i64D___int__,
+    B_IntegralD_i64D___index__,
+    B_IntegralD_i64D___divmod__,
+    B_IntegralD_i64D___floordiv__,
+    B_IntegralD_i64D___mod__,
+    B_IntegralD_i64D___lshift__,
+    B_IntegralD_i64D___rshift__,
+    (B_i64 (*)(B_IntegralD_i64, B_i64, B_i64))B_IntegralD___ifloordiv__,
+    (B_i64 (*)(B_IntegralD_i64, B_i64, B_i64))B_IntegralD___imod__,
+    (B_i64 (*)(B_IntegralD_i64, B_i64, B_int))B_IntegralD___ilshift__,
+    (B_i64 (*)(B_IntegralD_i64, B_i64, B_int))B_IntegralD___irshift__,
+    B_IntegralD_i64D___invert__
 };
 
-struct $Integral$i64 $Integral$i64_instance = {&$Integral$i64$methods, ($Minus)&$Minus$i64_instance, ($Logical)&$Logical$i64_instance};
-$Integral$i64 $Integral$i64$witness = &$Integral$i64_instance;
+struct B_IntegralD_i64 B_IntegralD_i64_instance = {&B_IntegralD_i64G_methods, (B_Minus)&B_MinusD_IntegralD_i64_instance, (B_Logical)&B_LogicalD_IntegralD_i64_instance};
+B_IntegralD_i64 B_IntegralD_i64G_witness = &B_IntegralD_i64_instance;
 
-struct $Logical$i64$class $Logical$i64$methods =  {
-    "$Logical$i64",
+struct B_LogicalD_IntegralD_i64G_class B_LogicalD_IntegralD_i64G_methods =  {
+    "B_LogicalD_IntegralD_i64",
     UNASSIGNED,
-    ($Super$class)&$Logical$methods,
-    $Logical$i64_init,
-    $Logical$i64$__serialize__,
-    $Logical$i64$__deserialize__,
-    ($bool (*)($Logical$i64))$default__bool__,
-    ($str (*)($Logical$i64))$default__str__,
-    ($str (*)($Logical$i64))$default__str__,
-    $Logical$i64$__and__,
-    $Logical$i64$__or__,
-    $Logical$i64$__xor__,
-    ($i64 (*)($Logical$i64, $i64, $i64))$Logical$__iand__,
-    ($i64 (*)($Logical$i64, $i64, $i64))$Logical$__ior__,
-    ($i64 (*)($Logical$i64, $i64, $i64))$Logical$__ixor__
+    ($SuperG_class)&B_LogicalG_methods,
+    B_LogicalD_IntegralD_i64_init,
+    B_LogicalD_IntegralD_i64D___serialize__,
+    B_LogicalD_IntegralD_i64D___deserialize__,
+    (B_bool (*)(B_LogicalD_IntegralD_i64))$default__bool__,
+    (B_str (*)(B_LogicalD_IntegralD_i64))$default__str__,
+    (B_str (*)(B_LogicalD_IntegralD_i64))$default__str__,
+    B_LogicalD_IntegralD_i64D___and__,
+    B_LogicalD_IntegralD_i64D___or__,
+    B_LogicalD_IntegralD_i64D___xor__,
+    (B_i64 (*)(B_LogicalD_IntegralD_i64, B_i64, B_i64))B_LogicalD___iand__,
+    (B_i64 (*)(B_LogicalD_IntegralD_i64, B_i64, B_i64))B_LogicalD___ior__,
+    (B_i64 (*)(B_LogicalD_IntegralD_i64, B_i64, B_i64))B_LogicalD___ixor__
 };
 
-struct $Logical$i64 $Logical$i64_instance = {&$Logical$i64$methods, ($Integral)&$Integral$i64_instance};
-$Logical$i64 $Logical$i64$witness = &$Logical$i64_instance;
+struct B_LogicalD_IntegralD_i64 B_LogicalD_IntegralD_i64_instance = {&B_LogicalD_IntegralD_i64G_methods, (B_Integral)&B_IntegralD_i64_instance};
+B_LogicalD_IntegralD_i64 B_LogicalD_IntegralD_i64G_witness = &B_LogicalD_IntegralD_i64_instance;
 
-struct $Minus$i64$class $Minus$i64$methods = {
-    "$Minus$i64",
+struct B_MinusD_IntegralD_i64G_class B_MinusD_IntegralD_i64G_methods = {
+    "B_MinusD_IntegralD_i64",
     UNASSIGNED,
-    ($Super$class)&$Minus$methods,
-    $Minus$i64_init,
-    $Minus$i64$__serialize__,
-    $Minus$i64$__deserialize__,
-    ($bool (*)($Minus$i64))$default__bool__,
-    ($str (*)($Minus$i64))$default__str__,
-    ($str (*)($Minus$i64))$default__str__,
-    $Minus$i64$__sub__,
-    ($i64 (*)($Minus$i64, $i64, $i64))$Minus$__isub__,
+    ($SuperG_class)&B_MinusG_methods,
+    B_MinusD_IntegralD_i64_init,
+    B_MinusD_IntegralD_i64D___serialize__,
+    B_MinusD_IntegralD_i64D___deserialize__,
+    (B_bool (*)(B_MinusD_IntegralD_i64))$default__bool__,
+    (B_str (*)(B_MinusD_IntegralD_i64))$default__str__,
+    (B_str (*)(B_MinusD_IntegralD_i64))$default__str__,
+    B_MinusD_IntegralD_i64D___sub__,
+    (B_i64 (*)(B_MinusD_IntegralD_i64, B_i64, B_i64))B_MinusD___isub__,
 
 };
-struct $Minus$i64 $Minus$i64_instance = {&$Minus$i64$methods, ($Integral)&$Integral$i64_instance};
-$Minus$i64 $Minus$i64$witness = &$Minus$i64_instance;
+struct B_MinusD_IntegralD_i64 B_MinusD_IntegralD_i64_instance = {&B_MinusD_IntegralD_i64G_methods, (B_Integral)&B_IntegralD_i64_instance};
+B_MinusD_IntegralD_i64 B_MinusD_IntegralD_i64G_witness = &B_MinusD_IntegralD_i64_instance;
 
-struct $Ord$i64$class $Ord$i64$methods = {
-    "$Ord$i64",
+struct B_OrdD_i64G_class B_OrdD_i64G_methods = {
+    "B_OrdD_i64",
     UNASSIGNED,
-    ($Super$class)&$Ord$methods,
-    $Ord$i64_init,
-    $Ord$i64$__serialize__,
-    $Ord$i64$__deserialize__,
-    ($bool (*)($Ord$i64))$default__bool__,
-    ($str (*)($Ord$i64))$default__str__,
-    ($str (*)($Ord$i64))$default__str__,
-    $Ord$i64$__eq__,
-    $Ord$i64$__ne__,
-    $Ord$i64$__lt__,
-    $Ord$i64$__le__,
-    $Ord$i64$__gt__,
-    $Ord$i64$__ge__
+    ($SuperG_class)&B_OrdG_methods,
+    B_OrdD_i64_init,
+    B_OrdD_i64D___serialize__,
+    B_OrdD_i64D___deserialize__,
+    (B_bool (*)(B_OrdD_i64))$default__bool__,
+    (B_str (*)(B_OrdD_i64))$default__str__,
+    (B_str (*)(B_OrdD_i64))$default__str__,
+    B_OrdD_i64D___eq__,
+    B_OrdD_i64D___ne__,
+    B_OrdD_i64D___lt__,
+    B_OrdD_i64D___le__,
+    B_OrdD_i64D___gt__,
+    B_OrdD_i64D___ge__
 };
 
-struct $Ord$i64 $Ord$i64_instance = {&$Ord$i64$methods};
-$Ord$i64 $Ord$i64$witness = &$Ord$i64_instance;
+struct B_OrdD_i64 B_OrdD_i64_instance = {&B_OrdD_i64G_methods};
+B_OrdD_i64 B_OrdD_i64G_witness = &B_OrdD_i64_instance;
 
-struct $Div$i64$class $Div$i64$methods = {
-    "$Div$i64",
+struct B_DivD_i64G_class B_DivD_i64G_methods = {
+    "B_DivD_i64",
     UNASSIGNED,
-    ($Super$class)&$Div$methods,
-    $Div$i64_init,
-    $Div$i64$__serialize__,
-    $Div$i64$__deserialize__,
-    ($bool (*)($Div$i64))$default__bool__,
-    ($str (*)($Div$i64))$default__str__,
-    ($str (*)($Div$i64))$default__str__,
-    $Div$i64$__truediv__,
-    ($float (*)($Div$i64, $i64, $i64))$Div$__itruediv__,
+    ($SuperG_class)&B_DivG_methods,
+    B_DivD_i64_init,
+    B_DivD_i64D___serialize__,
+    B_DivD_i64D___deserialize__,
+    (B_bool (*)(B_DivD_i64))$default__bool__,
+    (B_str (*)(B_DivD_i64))$default__str__,
+    (B_str (*)(B_DivD_i64))$default__str__,
+    B_DivD_i64D___truediv__,
+    (B_float (*)(B_DivD_i64, B_i64, B_i64))B_DivD___itruediv__,
 };
 
-struct $Div$i64 $Div$i64_instance = {&$Div$i64$methods};
-$Div$i64 $Div$i64$witness = &$Div$i64_instance;
+struct B_DivD_i64 B_DivD_i64_instance = {&B_DivD_i64G_methods};
+B_DivD_i64 B_DivD_i64G_witness = &B_DivD_i64_instance;
 
-struct $Hashable$i64$class $Hashable$i64$methods = {
-    "$Hashable$i64",
+struct B_HashableD_i64G_class B_HashableD_i64G_methods = {
+    "B_HashableD_i64",
     UNASSIGNED,
-    ($Super$class)&$Hashable$methods,
-    $Hashable$i64_init,
-    $Hashable$i64$__serialize__,
-    $Hashable$i64$__deserialize__,
-    ($bool (*)($Hashable$i64))$default__bool__,
-    ($str (*)($Hashable$i64))$default__str__,
-    ($str (*)($Hashable$i64))$default__str__,
-    $Hashable$i64$__eq__,
-    $Hashable$i64$__ne__,
-    $Hashable$i64$__hash__
+    ($SuperG_class)&B_HashableG_methods,
+    B_HashableD_i64_init,
+    B_HashableD_i64D___serialize__,
+    B_HashableD_i64D___deserialize__,
+    (B_bool (*)(B_HashableD_i64))$default__bool__,
+    (B_str (*)(B_HashableD_i64))$default__str__,
+    (B_str (*)(B_HashableD_i64))$default__str__,
+    B_HashableD_i64D___eq__,
+    B_HashableD_i64D___ne__,
+    B_HashableD_i64D___hash__
 };
 
-struct $Hashable$i64 $Hashable$i64_instance = {&$Hashable$i64$methods};
-$Hashable$i64 $Hashable$i64$witness = &$Hashable$i64_instance;
+struct B_HashableD_i64 B_HashableD_i64_instance = {&B_HashableD_i64G_methods};
+B_HashableD_i64 B_HashableD_i64G_witness = &B_HashableD_i64_instance;

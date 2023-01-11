@@ -33,146 +33,146 @@ typedef struct $R $R;
 #define $R_WAIT(cont, value)    ($R){$RWAIT, (cont), (value)}
 
 
-struct $Cont$class {
+struct $ContG_class {
     char *$GCINFO;
     int $class_id;
-    $Super$class $superclass;
+    $SuperG_class $superclass;
     void (*__init__)($Cont);
-    void (*__serialize__)($Cont, $Serial$state);
-    $Cont (*__deserialize__)($Cont, $Serial$state);
-    $bool (*__bool__)($Cont);
-    $str (*__str__)($Cont);
-    $str (*__repr__)($Cont);
+    void (*__serialize__)($Cont, $NoneType);
+    $Cont (*__deserialize__)($Cont, $NoneType);
+    B_bool (*__bool__)($Cont);
+    B_str (*__str__)($Cont);
+    B_str (*__repr__)($Cont);
     $R (*__call__)($Cont, $WORD);
 };
 struct $Cont {
-    struct $Cont$class *$class;
+    struct $ContG_class *$class;
 };
-extern struct $Cont$class $Cont$methods;
+extern struct $ContG_class $ContG_methods;
 
-void $Cont$__init__($Cont);
-$bool $Cont$__bool__($Cont);
-$str $Cont$__str__($Cont);
-void $Cont$__serialize__($Cont, $Serial$state);
-$Cont $Cont$__deserialize__($Cont, $Serial$state);
+void $ContD___init__($Cont);
+B_bool $ContD___bool__($Cont);
+B_str $ContD___str__($Cont);
+void $ContD___serialize__($Cont, $NoneType);
+$Cont $ContD___deserialize__($Cont, $NoneType);
 
 
-struct $proc$class {
+struct $procG_class {
     char *$GCINFO;
     int $class_id;
-    $Super$class $superclass;
+    $SuperG_class $superclass;
     void (*__init__)($proc);
-    void (*__serialize__)($proc, $Serial$state);
-    $proc (*__deserialize__)($proc, $Serial$state);
-    $bool (*__bool__)($proc);
-    $str (*__str__)($proc);
-    $str (*__repr__)($proc);
+    void (*__serialize__)($proc, $NoneType);
+    $proc (*__deserialize__)($proc, $NoneType);
+    B_bool (*__bool__)($proc);
+    B_str (*__str__)($proc);
+    B_str (*__repr__)($proc);
     $R (*__call__)($proc, $Cont, $WORD);
     $R (*__exec__)($proc, $Cont, $WORD);
 };
 struct $proc {
-    struct $proc$class *$class;
+    struct $procG_class *$class;
 };
-extern struct $proc$class $proc$methods;
+extern struct $procG_class $procG_methods;
 
 
-struct $action$class {
+struct $actionG_class {
     char *$GCINFO;
     int $class_id;
-    $Super$class $superclass;
+    $SuperG_class $superclass;
     void (*__init__)($action);
-    void (*__serialize__)($action, $Serial$state);
-    $action (*__deserialize__)($action, $Serial$state);
-    $bool (*__bool__)($action);
-    $str (*__str__)($action);
-    $str (*__repr__)($action);
+    void (*__serialize__)($action, $NoneType);
+    $action (*__deserialize__)($action, $NoneType);
+    B_bool (*__bool__)($action);
+    B_str (*__str__)($action);
+    B_str (*__repr__)($action);
     $R (*__call__)($action, $Cont, $WORD);
     $R (*__exec__)($action, $Cont, $WORD);
     $Msg (*__asyn__)($action, $WORD);
 };
 struct $action {
-    struct $action$class *$class;
+    struct $actionG_class *$class;
 };
-extern struct $action$class $action$methods;
+extern struct $actionG_class $actionG_methods;
 
 
-struct $mut$class {
+struct $mutG_class {
     char *$GCINFO;
     int $class_id;
-    $Super$class $superclass;
+    $SuperG_class $superclass;
     void (*__init__)($mut);
-    void (*__serialize__)($mut, $Serial$state);
-    $mut (*__deserialize__)($mut, $Serial$state);
-    $bool (*__bool__)($mut);
-    $str (*__str__)($mut);
-    $str (*__repr__)($mut);
+    void (*__serialize__)($mut, $NoneType);
+    $mut (*__deserialize__)($mut, $NoneType);
+    B_bool (*__bool__)($mut);
+    B_str (*__str__)($mut);
+    B_str (*__repr__)($mut);
     $R (*__call__)($mut, $Cont, $WORD);
     $R (*__exec__)($mut, $Cont, $WORD);
     $WORD (*__eval__)($mut, $WORD);
 };
 struct $mut {
-    struct $mut$class *$class;
+    struct $mutG_class *$class;
 };
-extern struct $mut$class $mut$methods;
+extern struct $mutG_class $mutG_methods;
 
 
-struct $pure$class {
+struct $pureG_class {
     char *$GCINFO;
     int $class_id;
-    $Super$class $superclass;
+    $SuperG_class $superclass;
     void (*__init__)($pure);
-    void (*__serialize__)($pure, $Serial$state);
-    $pure (*__deserialize__)($pure, $Serial$state);
-    $bool (*__bool__)($pure);
-    $str (*__str__)($pure);
-    $str (*__repr__)($pure);
+    void (*__serialize__)($pure, $NoneType);
+    $pure (*__deserialize__)($pure, $NoneType);
+    B_bool (*__bool__)($pure);
+    B_str (*__str__)($pure);
+    B_str (*__repr__)($pure);
     $R (*__call__)($pure, $Cont, $WORD);
     $R (*__exec__)($pure, $Cont, $WORD);
     $WORD (*__eval__)($pure, $WORD);
 };
 struct $pure {
-    struct $pure$class *$class;
+    struct $pureG_class *$class;
 };
-extern struct $pure$class $pure$methods;
+extern struct $pureG_class $pureG_methods;
 
 
 //////////////////////////////////////////////////////////////////////////////////
 struct $action2;
 typedef struct $action2 *$action2;
-struct $action2$class {
+struct $action2G_class {
     char *$GCINFO;
     int $class_id;
-    $Super$class $superclass;
+    $SuperG_class $superclass;
     void (*__init__)($action2);
-    void (*__serialize__)($action2, $Serial$state);
-    $action2 (*__deserialize__)($action2, $Serial$state);
-    $bool (*__bool__)($action2);
-    $str (*__str__)($action2);
-    $str (*__repr__)($action2);
+    void (*__serialize__)($action2, $NoneType);
+    $action2 (*__deserialize__)($action2, $NoneType);
+    B_bool (*__bool__)($action2);
+    B_str (*__str__)($action2);
+    B_str (*__repr__)($action2);
     $R (*__call__)($action2, $Cont, $WORD, $WORD);
     $R (*__exec__)($action2, $Cont, $WORD, $WORD);
     $Msg (*__asyn__)($action2, $WORD, $WORD);
 };
 struct $action2 {
-    struct $action2$class *$class;
+    struct $action2G_class *$class;
 };
 
 struct $action3;
 typedef struct $action3 *$action3;
-struct $action3$class {
+struct $action3G_class {
     char *$GCINFO;
     int $class_id;
-    $Super$class $superclass;
+    $SuperG_class $superclass;
     void (*__init__)($action3);
-    void (*__serialize__)($action3, $Serial$state);
-    $action3 (*__deserialize__)($action3, $Serial$state);
-    $bool (*__bool__)($action3);
-    $str (*__str__)($action3);
-    $str (*__repr__)($action3);
+    void (*__serialize__)($action3, $NoneType);
+    $action3 (*__deserialize__)($action3, $NoneType);
+    B_bool (*__bool__)($action3);
+    B_str (*__str__)($action3);
+    B_str (*__repr__)($action3);
     $R (*__call__)($action3, $Cont, $WORD, $WORD, $WORD);
     $R (*__exec__)($action3, $WORD, $WORD, $WORD);
     $Msg (*__asyn__)($action3, $WORD, $WORD, $WORD);
 };
 struct $action3 {
-    struct $action3$class *$class;
+    struct $action3G_class *$class;
 };

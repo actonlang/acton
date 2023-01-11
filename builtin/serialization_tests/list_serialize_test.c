@@ -23,23 +23,23 @@
  
 int main() {
   $register_builtin();
-  $list lst2 = $NEW($list,NULL,NULL);
+  B_list lst2 = $NEW(B_list,NULL,NULL);
   for (long i = 0L; i < TESTSIZE; i++) {
     if (i%2L != 0L) {
-      $list_append(lst2,$list_getitem(lst2,i/2L));
+      B_listD_append(lst2,B_listD_getitem(lst2,i/2L));
     } else {
-      $list sublst = $NEW($list,NULL,NULL);
+      B_list sublst = $NEW(B_list,NULL,NULL);
       for (long j=0L; j < i; j++)
-        $list_append(sublst,to$int(j));
-      $list_append(lst2,sublst);
+        B_listD_append(sublst,toB_int(j));
+      B_listD_append(lst2,sublst);
     }
   }
   $print(1,lst2);
   $ROW row = $serialize(($Serializable)lst2,NULL);
   //  $write_serialized(row,"test2.bin");
-  $list lst3 = ($list)$deserialize(row, NULL);
+  B_list lst3 = (B_list)$deserialize(row, NULL);
   //  $ROW row2 = $read_serialized("test2.bin");
   // $write_serialized(row2,"test3.bin");
-  // $list lst0 = $list_getitem(lst3,4);
+  // B_list lst0 = B_listD_getitem(lst3,4);
   $print(1,lst3);
 }
