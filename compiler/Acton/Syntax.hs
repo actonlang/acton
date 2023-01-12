@@ -755,6 +755,10 @@ isNotImpl (Assign _ _ e)            = e == eNotImpl
 isNotImpl (Decl _ ds)               = any (hasNotImpl . dbody) ds
 isNotImpl _                         = False
 
+notImplBody b                       = not $ null $ notImpls b
+
+notImpls b                          = [ e | Expr _ e <- b, e == eNotImpl ]
+
 isTVar TVar{}                       = True
 isTVar _                            = False
 
