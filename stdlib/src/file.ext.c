@@ -4,11 +4,11 @@
 #include "../out/types/file.h"
 
 
-void file$D___ext_init__() {
+void fileQ___ext_init__() {
 
 }
 
-$R file$$ReadFile$_open_file (file$$ReadFile self, $Cont c$cont) {
+$R fileQ_ReadFileD__open_file (fileQ_ReadFile self, $Cont c$cont) {
     pin_actor_affinity();
     uv_fs_t *req = (uv_fs_t *)calloc(1, sizeof(uv_fs_t));
     int r = uv_fs_open(get_uv_loop(), req, (char *)fromB_str(self->filename), UV_FS_O_RDONLY, 0, NULL);
@@ -24,7 +24,7 @@ $R file$$ReadFile$_open_file (file$$ReadFile self, $Cont c$cont) {
 }
 
 
-$R file$$ReadFile$close$local (file$$ReadFile self, $Cont c$cont) {
+$R fileQ_ReadFileD_close$local (fileQ_ReadFile self, $Cont c$cont) {
     uv_fs_t *req = (uv_fs_t *)calloc(1, sizeof(uv_fs_t));
     int r = uv_fs_close(get_uv_loop(), req, (uv_file)fromB_int(self->_fd), NULL);
     if (r < 0) {
@@ -36,7 +36,7 @@ $R file$$ReadFile$close$local (file$$ReadFile self, $Cont c$cont) {
     return $R_CONT(c$cont, $None);
 }
 
-$R file$$ReadFile$read$local (file$$ReadFile self, $Cont c$cont) {
+$R fileQ_ReadFileD_read$local (fileQ_ReadFile self, $Cont c$cont) {
     uv_fs_t *req = (uv_fs_t *)calloc(1, sizeof(uv_fs_t));
     char buf[1024] = {0};
     uv_buf_t iovec = uv_buf_init(buf, sizeof(buf));
@@ -60,7 +60,7 @@ $R file$$ReadFile$read$local (file$$ReadFile self, $Cont c$cont) {
 }
 
 
-$R file$$WriteFile$_open_file (file$$WriteFile self, $Cont c$cont) {
+$R fileQ_WriteFileD__open_file (fileQ_WriteFile self, $Cont c$cont) {
     pin_actor_affinity();
     uv_fs_t *req = (uv_fs_t *)calloc(1, sizeof(uv_fs_t));
     int r = uv_fs_open(get_uv_loop(), req, (char *)fromB_str(self->filename),  UV_FS_O_RDWR | UV_FS_O_CREAT, S_IWUSR|S_IRUSR|S_IRGRP|S_IROTH, NULL);
@@ -75,7 +75,7 @@ $R file$$WriteFile$_open_file (file$$WriteFile self, $Cont c$cont) {
     return $R_CONT(c$cont, $None);
 }
 
-$R file$$WriteFile$close$local (file$$WriteFile self, $Cont c$cont) {
+$R fileQ_WriteFileD_close$local (fileQ_WriteFile self, $Cont c$cont) {
     uv_fs_t *req = (uv_fs_t *)calloc(1, sizeof(uv_fs_t));
     int r = uv_fs_close(get_uv_loop(), req, (uv_file)fromB_int(self->_fd), NULL);
     if (r < 0) {
@@ -87,7 +87,7 @@ $R file$$WriteFile$close$local (file$$WriteFile self, $Cont c$cont) {
     return $R_CONT(c$cont, $None);
 }
 
-$R file$$WriteFile$write$local (file$$WriteFile self, $Cont c$cont, B_bytes data) {
+$R fileQ_WriteFileD_write$local (fileQ_WriteFile self, $Cont c$cont, B_bytes data) {
     uv_fs_t *req = (uv_fs_t *)calloc(1, sizeof(uv_fs_t));
     uv_buf_t buf = uv_buf_init((char *)data->str, data->nbytes);
 

@@ -244,7 +244,7 @@ numpy$$ndarray numpy$$ndarray$transpose(numpy$$ndarray a, B_list axes) {
         if (axes->length != a->shape->length) is_perm = false;
         long i = axes->length-1;
         while (is_perm && i >= 0) {
-            if (!B_listD_contains((B_EqD_)B_OrdD_intG_witness,axes,toB_int(i))) is_perm = false;
+            if (!B_listD_contains((B_Eq)B_OrdD_intG_witness,axes,toB_int(i))) is_perm = false;
             i--;
         }
         if (!is_perm)

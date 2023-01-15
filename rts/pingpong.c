@@ -245,7 +245,7 @@ struct PingpongG_class PingpongG_methods = {
     Pingpong$pong
 };
 
-$R $ROOT($Env env, $Cont then) {
+$R $ROOT(B_Env env, $Cont then) {
     $register(&lambda$1G_methods);
     $register(&lambda$2G_methods);
     $register(&PingpongG_methods);

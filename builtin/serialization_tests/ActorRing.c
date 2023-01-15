@@ -283,7 +283,7 @@ $R join$1(Root self, $Cont cont$0, $WORD _ignore) {
     return tmp$2->$class->act(tmp$2, no_actors, self->table, ($Cont)$NEW(lambda$4, cont$0));
 }
 
-$R RootD___init__(Root self, $Env _ignore, $Cont cont$0) {
+$R RootD___init__(Root self, B_Env _ignore, $Cont cont$0) {
     $ActorG_methods.__init__(($Actor)self);
     self->table = B_listG_new(NULL, $None);
     B_Iterator iter$1 = B_IterableD_rangeG_witness->$class->__iter__(B_IterableD_rangeG_witness, $NEW(B_range, no_actors, $None, $None));
@@ -321,7 +321,7 @@ struct RootG_class RootG_methods = {
     RootD___str__
 };
 
-$R RootG_new($Env env, $Cont cont) {
+$R RootG_new(B_Env env, $Cont cont) {
     Root $tmp = malloc(sizeof(struct Root));
     $tmp->$class = &RootG_methods;
     return RootG_methods.__init__($tmp, env, $CONSTCONT($tmp, cont));
@@ -350,7 +350,7 @@ void $init_module() {
     $register(&ActG_methods);
 }
 
-$R $ROOT ($Env env, $Cont cont) {
+$R $ROOT (B_Env env, $Cont cont) {
     $init_module();
     return RootG_new(env, cont);
 }

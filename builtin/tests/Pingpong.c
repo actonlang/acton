@@ -52,7 +52,7 @@ $R lambda$2D___call__(lambda$2 $this, $Cont then) {
     return self->$class->ping(self, then);
 }
 
-$R PingpongD___init__(Pingpong self, $Env env, $Cont then) {
+$R PingpongD___init__(Pingpong self, B_Env env, $Cont then) {
     $ActorG_methods.__init__(($Actor)self);
     self->i = toB_int(7);
     self->count = toB_int(0);
@@ -107,13 +107,13 @@ struct PingpongG_class PingpongG_methods = {
     Pingpong$pong
 };
 
-$R PingpongG_new($Env env, $Cont cont) {
+$R PingpongG_new(B_Env env, $Cont cont) {
     Pingpong $tmp = malloc(sizeof(struct Pingpong));
     $tmp->$class = &PingpongG_methods;
     return PingpongG_methods.__init__($tmp, env, $CONSTCONT($tmp, cont));
 }
 
-$R $ROOT ($Env env, $Cont cont) {
+$R $ROOT (B_Env env, $Cont cont) {
     $register(&lambda$1G_methods);
     $register(&lambda$2G_methods);
     $register(&PingpongG_methods);

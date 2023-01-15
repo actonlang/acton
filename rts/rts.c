@@ -193,7 +193,7 @@ extern void $ROOTINIT();
 extern $Actor $ROOT();
 
 $Actor root_actor = NULL;
-$Env env_actor = NULL;
+B_Env env_actor = NULL;
 
 struct readyqs {
     $Actor head;
@@ -307,7 +307,7 @@ B_str B_MsgD___str__(B_Msg self) {
   return to$str(s);
 }
 
-void B_MsgD___serialize__(B_Msg self, $NoneType state) {
+void B_MsgD___serialize__(B_Msg self, $Serial$state state) {
     $step_serialize(self->$to,state);
     $step_serialize(self->$cont,state);
     $val_serialize(ITEM_ID,&self->$baseline,state);
@@ -315,7 +315,7 @@ void B_MsgD___serialize__(B_Msg self, $NoneType state) {
 }
 
 
-B_Msg B_MsgD___deserialize__(B_Msg res, $NoneType state) {
+B_Msg B_MsgD___deserialize__(B_Msg res, $Serial$state state) {
     if (!res) {
         if (!state) {
             res = malloc(sizeof (struct B_Msg));
@@ -363,13 +363,13 @@ $NoneType $ActorD___resume__($Actor self) {
   return $None;
 }
 
-void $ActorD___serialize__($Actor self, $NoneType state) {
+void $ActorD___serialize__($Actor self, $Serial$state state) {
     $step_serialize(self->$waitsfor,state);
     $val_serialize(ITEM_ID,&self->$consume_hd,state);
     $step_serialize(self->$catcher,state);
 }
 
-$Actor $ActorD___deserialize__($Actor res, $NoneType state) {
+$Actor $ActorD___deserialize__($Actor res, $Serial$state state) {
     if (!res) {
         if (!state) {
             res = malloc(sizeof(struct $Actor));
@@ -406,12 +406,12 @@ B_str $CatcherD___str__($Catcher self) {
   return to$str(s);
 }
 
-void $CatcherD___serialize__($Catcher self, $NoneType state) {
+void $CatcherD___serialize__($Catcher self, $Serial$state state) {
     $step_serialize(self->$next,state);
     $step_serialize(self->$cont,state);
 }
 
-$Catcher $CatcherD___deserialize__($Catcher self, $NoneType state) {
+$Catcher $CatcherD___deserialize__($Catcher self, $Serial$state state) {
     $Catcher res = $DNEW($Catcher,state);
     res->$next = $step_deserialize(state);
     res->$cont = $step_deserialize(state);
@@ -434,12 +434,12 @@ B_str $ConstContD___str__($ConstCont self) {
   return to$str(s);
 }
 
-void $ConstContD___serialize__($ConstCont self, $NoneType state) {
+void $ConstContD___serialize__($ConstCont self, $Serial$state state) {
     $step_serialize(self->val,state);
     $step_serialize(self->cont,state);
 }
 
-$ConstCont $ConstContD___deserialize__($ConstCont self, $NoneType state) {
+$ConstCont $ConstContD___deserialize__($ConstCont self, $Serial$state state) {
     $ConstCont res = $DNEW($ConstCont,state);
     res->val = $step_deserialize(state);
     res->cont = $step_deserialize(state);
@@ -684,11 +684,11 @@ B_str $DoneD___str__($Cont self) {
   return to$str(s);
 }
 
-void $Done__serialize__($Cont self, $NoneType state) {
+void $Done__serialize__($Cont self, $Serial$state state) {
   return;
 }
 
-$Cont $Done__deserialize__($Cont self, $NoneType state) {
+$Cont $Done__deserialize__($Cont self, $Serial$state state) {
   $Cont res = $DNEW($Cont,state);
   res->$class = &$DoneG_methods;
   return res;
@@ -711,7 +711,7 @@ struct $Cont $Done$instance = {
 };
 ////////////////////////////////////////////////////////////////////////////////////////
 $R $InitRootD___call__ ($Cont $this, $WORD val) {
-    typedef $R(*ROOT__init__t)($Actor, $Cont, $Env);    // Assumed type of the ROOT actor's __init__ method
+    typedef $R(*ROOT__init__t)($Actor, $Cont, B_Env);    // Assumed type of the ROOT actor's __init__ method
     return ((ROOT__init__t)root_actor->$class->__init__)(root_actor, ($Cont)val, env_actor);
 }
 
@@ -1240,7 +1240,7 @@ void deserialize_system(snode_t *actors_start) {
      * These values must be kept in sync with next_key and the structure in
      * the BOOTSTRAP() function!
      */
-    env_actor  = ($Env)B_dictD_get(globdict, (B_Hashable)B_HashableD_intG_witness, toB_int(-11), NULL);
+    env_actor  = (B_Env)B_dictD_get(globdict, (B_Hashable)B_HashableD_intG_witness, toB_int(-11), NULL);
     root_actor = ($Actor)B_dictD_get(globdict, (B_Hashable)B_HashableD_intG_witness, toB_int(-12), NULL);
     globdict = NULL;
     rtsd_printf("System deserialized");
@@ -1344,7 +1344,7 @@ void BOOTSTRAP(int argc, char *argv[]) {
     for (int i=0; i< argc; i++)
       B_listD_append(args,to$str(argv[i]));
 
-    env_actor = $EnvG_newact(B_WorldAuthG_new(), args);
+    env_actor = B_EnvG_newact(B_WorldAuthG_new(), args);
 
     root_actor = $ROOT();                           // Assumed to return $NEWACTOR(X) for the selected root actor X
     time_t now = current_time();
@@ -1645,7 +1645,7 @@ void $register_rts () {
   $register_force(CONSTCONT_ID,&$ConstContG_methods);
   $register(&$DoneG_methods);
   $register(&$InitRootG_methods);
-  $register(&$EnvG_methods);
+  $register(&B_EnvG_methods);
 }
  
 ////////////////////////////////////////////////////////////////////////////////////////
