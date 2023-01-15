@@ -137,6 +137,12 @@ nContainer                          = name "Container"
 nIterable                           = name "Iterable"
 nContextManager                     = name "ContextManager"
 nShow                               = name "Show"
+---
+nTuple                              = name "tuple"
+nNoneType                           = name "NoneType"
+nNone                               = name "None"
+nTrue                               = name "True"
+nFalse                              = name "False"
 
 qnValue                             = gBuiltin nValue
 qnAtom                              = gBuiltin nAtom
@@ -187,6 +193,12 @@ qnContainer                         = gBuiltin nContainer
 qnIterable                          = gBuiltin nIterable
 qnContextManager                    = gBuiltin nContextManager
 qnShow                              = gBuiltin nShow
+---
+qnTuple                             = gBuiltin nTuple
+qnNoneType                          = gBuiltin nNoneType
+qnNone                              = gBuiltin nNone
+qnTrue                              = gBuiltin nTrue
+qnFalse                             = gBuiltin nFalse
 
 cValue                              = TC qnValue []
 cAtom                               = TC qnAtom []

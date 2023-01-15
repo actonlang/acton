@@ -13,6 +13,6 @@ $WORD not_implemented$$generic (B_Eq W_25, $WORD x) {
     return x;
 }
 
-$R not_implemented$$main$absent$local (not_implemented$$main __self__, $Cont c$cont, B_int i) {
+$R not_implemented$$mainB_absent$local (not_implemented$$main __self__, $Cont c$cont, B_int i) {
     return $R_CONT(c$cont, i);
 }

@@ -194,7 +194,7 @@ void B_IteratorD_listD_init(B_IteratorD_list self, B_list lst) {
 }
 
 B_bool B_IteratorD_listD_bool(B_IteratorD_list self) {
-    return $True;
+    return B_True;
 }
 
 B_str B_IteratorD_listD_str(B_IteratorD_list self) {

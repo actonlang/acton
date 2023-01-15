@@ -21,20 +21,20 @@
 //Select element #n in lst which is a list[int].
 #define $LONGELEM(lst,n)   (fromB_int((B_int)lst->data[n]))
 
-numpy$$array_iterator_state $mk_iterator(numpy$$ndarray a);
-union $Bytes8 *iter_next(numpy$$array_iterator_state it);
+numpyQ_array_iterator_state $mk_iterator(numpyQ_ndarray a);
+union $Bytes8 *iter_next(numpyQ_array_iterator_state it);
 
 
-B_int numpy$G_newaxis;
+B_int numpyQ_newaxis;
 
 // Auxiliary functions ///////////////////////////////////////////////////////////////////////////////
 
 // method for creating ndarray structs.
 // res->offset gets default value 0 (may be unsuitable when allocate_data = false)
 
-static numpy$$ndarray G_newarray(enum ElemType typ, long ndim, B_int size, B_list shape, B_list strides, bool allocate_data) {
-    numpy$$ndarray res = malloc(sizeof(struct numpy$$ndarray));
-    res->$class = &numpy$$ndarrayG_methods;
+static numpyQ_ndarray G_newarray(enum ElemType typ, long ndim, B_int size, B_list shape, B_list strides, bool allocate_data) {
+    numpyQ_ndarray res = malloc(sizeof(numpyQ_ndarray));
+    res->$class = &numpyQ_ndarrayG_methods;
     res->elem_type = typ;
     res->ndim = ndim;
     res->size = size;
@@ -52,7 +52,7 @@ B_int $prod(B_list lst) {
     return toB_int(res);
 }
 
-bool $is_contiguous(numpy$$ndarray a) {
+bool $is_contiguous(numpyQ_ndarray a) {
     if (a->offset != 0) return false;
     long size = $LONGELEM(a->strides,a->ndim-1);
     if (size != 1) return false;
@@ -79,12 +79,12 @@ B_list $mk_strides(B_list shape) {
 
 // Superclass methods /////////////////////////////////////////////////////////////////////////
 
-void numpy$$ndarrayD___init__(numpy$$ndarray self, numpy$$Primitive wit, B_atom a) {
-    numpy$$ndarray r = numpy$$fromatom(wit,a);
-    memcpy(self,r,sizeof(struct numpy$$ndarray));
+void numpyQ_ndarrayD___init__(numpyQ_ndarray self, numpyQ_Primitive wit, B_atom a) {
+    numpyQ_ndarray r = numpyQ_fromatom(wit,a);
+    memcpy(self,r,sizeof(struct numpyQ_ndarray));
 }
 
-void  numpy$$ndarrayD___serialize__(numpy$$ndarray self, $Serial$state state) {
+void  numpyQ_ndarrayD___serialize__(numpyQ_ndarray self, $Serial$state state) {
     B_int prevkey = (B_int)B_dictD_get(state->done,(B_Hashable)B_HashableD_WORDG_witness,self,NULL);
     if (prevkey) {
         long prevkeyval = fromB_int(prevkey);
@@ -105,7 +105,7 @@ void  numpy$$ndarrayD___serialize__(numpy$$ndarray self, $Serial$state state) {
     $step_serialize(self->strides, state);
 }
 
-numpy$$ndarray numpy$$ndarrayD___deserialize__(numpy$$ndarray res, $Serial$state state) {
+numpyQ_ndarray numpyQ_ndarrayD___deserialize__(numpyQ_ndarray res, $Serial$state state) {
     int64_t resval = fromB_int(res->size);
     $ROW this = state->row;
     state->row = this->next;
@@ -114,9 +114,9 @@ numpy$$ndarray numpy$$ndarrayD___deserialize__(numpy$$ndarray res, $Serial$state
         return B_dictD_get(state->done,(B_Hashable)B_HashableD_intG_witness,toB_int((long)this->blob[0]),NULL);
     } else {
         if (!res)
-            res = malloc(sizeof(struct numpy$$ndarray));
+            res = malloc(sizeof(numpyQ_ndarray));
         B_dictD_setitem(state->done,(B_Hashable)B_HashableD_intG_witness,toB_int(state->row_no-1),res);
-        res->$class = &numpy$$ndarrayG_methods;
+        res->$class = &numpyQ_ndarrayG_methods;
         res->elem_type = (enum ElemType)(long)this->blob[0];
         res->ndim = (long)this->blob[1];
         res->size = toB_int((long)this->blob[2]);
@@ -130,7 +130,7 @@ numpy$$ndarray numpy$$ndarrayD___deserialize__(numpy$$ndarray res, $Serial$state
     }
 }
 
-B_bool  numpy$$ndarrayD___bool__(numpy$$ndarray a) {
+B_bool  numpyQ_ndarrayD___bool__(numpyQ_ndarray a) {
     if (fromB_int(a->size) > 1) 
         $RAISE((B_BaseException)$NEW(B_ValueError,to$str("__bool__ undefined for ndarrays with more than one element")));
     switch (a->elem_type) {
@@ -141,9 +141,9 @@ B_bool  numpy$$ndarrayD___bool__(numpy$$ndarray a) {
     }
 }
 
-numpy$$ndarray numpy$$ndarrayD___ndgetslice__(numpy$$ndarray a, B_list ix);
+numpyQ_ndarray numpyQ_ndarrayD___ndgetslice__(numpyQ_ndarray a, B_list ix);
 
-B_str numpy$$ndarrayD___str__(numpy$$ndarray a) {
+B_str numpyQ_ndarrayD___str__(numpyQ_ndarray a) {
     if (a->ndim==0) {
         switch (a->elem_type) {
         case LongType:
@@ -156,24 +156,24 @@ B_str numpy$$ndarrayD___str__(numpy$$ndarray a) {
         B_list ix = B_listD_new(1);
         ix->length = 1;
         for (long i = 0; i< $LONGELEM(a->shape,0); i++) {
-            ix->data[0] = numpy$$ndindexG_new(toB_int(i));
-            numpy$$ndarray b = numpy$$ndarrayD___ndgetslice__(a,ix);
-            B_listD_append(strs,numpy$$ndarrayD___str__(b));
+            ix->data[0] = numpyQ_ndindexG_new(toB_int(i));
+            numpyQ_ndarray b = numpyQ_ndarrayD___ndgetslice__(a,ix);
+            B_listD_append(strs,numpyQ_ndarrayD___str__(b));
         }
         B_str s = B_strD_join_par('[',strs,']');
-        $Plus wit = ($Plus)B_TimesD_strG_witness;
+        B_Plus wit = (B_Plus)B_TimesD_strG_witness;
         return wit->$class->__add__(wit,s,to$str("\n"));
     }
 }
 
-numpy$$ndarray numpy$$ndarrayG_new(numpy$$Primitive wit, B_atom a) {
-    return numpy$$fromatom(wit, a);
+numpyQ_ndarray numpyQ_ndarrayG_new(numpyQ_Primitive wit, B_atom a) {
+    return numpyQ_fromatom(wit, a);
 }
 //ndarray methods /////////////////////////////////////////////////////////////////////////////////
 
 // reshape attempts to present a new view, but may have to copy data.
 
-numpy$$ndarray numpy$$ndarray$reshape(numpy$$ndarray a, B_list newshape) {
+numpyQ_ndarray numpyQ_ndarray$reshape(numpyQ_ndarray a, B_list newshape) {
     long newsize = fromB_int($prod(newshape));
     if (fromB_int(a->size) != newsize)
         $RAISE((B_BaseException)$NEW(B_ValueError,to$str("wrong number of array elements for reshape")));
@@ -211,7 +211,7 @@ numpy$$ndarray numpy$$ndarray$reshape(numpy$$ndarray a, B_list newshape) {
     for (int i = newstrides->length-2; i>=0; i--)
         newstrides->data[i] = toB_int($LONGELEM(newstrides,i+1) * $LONGELEM(newshape,i+1));
     // Build result
-    numpy$$ndarray res = G_newarray(a->elem_type,newshape->length,a->size,newshape,newstrides,false);
+    numpyQ_ndarray res = G_newarray(a->elem_type,newshape->length,a->size,newshape,newstrides,false);
     if (!needcopy) {
         res->offset = a->offset;
         res->data = a->data;
@@ -220,7 +220,7 @@ numpy$$ndarray numpy$$ndarray$reshape(numpy$$ndarray a, B_list newshape) {
         res->data = malloc(newsize * sizeof(union $Bytes8));
         union $Bytes8 *ixres = res->data;
         union $Bytes8 *ixa;
-        numpy$$array_iterator_state ita = $mk_iterator(a);
+        numpyQ_array_iterator_state ita = $mk_iterator(a);
         while ((ixa = iter_next(ita))) {
             *ixres = *ixa;
             ixres++;
@@ -232,7 +232,7 @@ numpy$$ndarray numpy$$ndarray$reshape(numpy$$ndarray a, B_list newshape) {
 // permutes axes in a to the order given by axes.
 // If second argument is NULL, reverse order of axes.
 // Does not copy data; returns a new view.
-numpy$$ndarray numpy$$ndarray$transpose(numpy$$ndarray a, B_list axes) {
+numpyQ_ndarray numpyQ_ndarray$transpose(numpyQ_ndarray a, B_list axes) {
     B_list newshape, newstrides;
     if (!axes) {
         newshape = B_listD_copy(a->shape);
@@ -259,25 +259,25 @@ numpy$$ndarray numpy$$ndarray$transpose(numpy$$ndarray a, B_list axes) {
             newstrides->data[i] = a->strides->data[n];
         }
     }
-    numpy$$ndarray res = G_newarray(a->elem_type,a->ndim,a->size,newshape,newstrides,false);
+    numpyQ_ndarray res = G_newarray(a->elem_type,a->ndim,a->size,newshape,newstrides,false);
     res->data = a->data;
     return res;
 }
 
-numpy$$ndarray numpy$$ndarray$flatten(numpy$$ndarray a) {
+numpyQ_ndarray numpyQ_ndarray$flatten(numpyQ_ndarray a) {
     B_list newshape = $NEW(B_list,NULL,NULL);
     B_listD_append(newshape,a->size);
-    return numpy$$ndarray$reshape(a,newshape);
+    return numpyQ_ndarray$reshape(a,newshape);
 }
 
 // Makes a contiguous deep copy of its argument with stride of last dimension == 1.
 
-numpy$$ndarray numpy$$ndarray$copy(numpy$$ndarray a) {
-    numpy$$ndarray res = G_newarray(a->elem_type,a->ndim,a->size,a->shape,$mk_strides(a->shape),true);
+numpyQ_ndarray numpyQ_ndarray$copy(numpyQ_ndarray a) {
+    numpyQ_ndarray res = G_newarray(a->elem_type,a->ndim,a->size,a->shape,$mk_strides(a->shape),true);
     if ($is_contiguous(a))
         memcpy(res->data,a->data,fromB_int(a->size)*sizeof($WORD)); // Hackish; what is the proper size to use?
     else {
-        numpy$$array_iterator_state it = $mk_iterator(a);
+        numpyQ_array_iterator_state it = $mk_iterator(a);
         union $Bytes8 *ixres, *ixa;
         ixres = res->data;
         while ((ixa = iter_next(it))) {
@@ -290,20 +290,20 @@ numpy$$ndarray numpy$$ndarray$copy(numpy$$ndarray a) {
 
 // basic slicing 
 
-numpy$$ndarray numpy$$ndarrayD___ndgetslice__(numpy$$ndarray a, B_list ix) {
+numpyQ_ndarray numpyQ_ndarrayD___ndgetslice__(numpyQ_ndarray a, B_list ix) {
     // assert length of ix > 0
     int nulls = 0;
     int ints = 0;
     int slices = 0;
     // first analyze index list contents
     for (int i=0; i < ix->length; i++) {
-        numpy$$ndselect ixi = (numpy$$ndselect)ix->data[i];
-        if ($ISINSTANCE(ixi,numpy$$ndindex)->val) {
-            if (((numpy$$ndindex)ixi)->index==numpy$G_newaxis)
+        numpyQ_ndselect ixi = (numpyQ_ndselect)ix->data[i];
+        if ($ISINSTANCE(ixi,numpyQ_ndindex)->val) {
+            if (((numpyQ_ndindex)ixi)->index==numpyQ_newaxis)
                 nulls++;
             else
                 ints++;
-        } else if ($ISINSTANCE(ixi,numpy$$ndslice)->val)
+        } else if ($ISINSTANCE(ixi,numpyQ_ndslice)->val)
             slices++;
         else {
             fprintf(stderr,"internal error: unexpected type of ndarray index element\n");
@@ -313,7 +313,7 @@ numpy$$ndarray numpy$$ndarrayD___ndgetslice__(numpy$$ndarray a, B_list ix) {
     if (ints+slices > a->ndim)
         $RAISE((B_BaseException)$NEW(B_ValueError,to$str("indexing too many dimensions")));
     int ndim = a->ndim + nulls - ints;
-    numpy$$ndarray res = G_newarray(a->elem_type,ndim,0,B_listD_new(ndim),B_listD_new(ndim),false); // size 0 is temporary
+    numpyQ_ndarray res = G_newarray(a->elem_type,ndim,0,B_listD_new(ndim),B_listD_new(ndim),false); // size 0 is temporary
     res->shape->length = ndim;
     res->strides->length = ndim;
     res->data = a->data;
@@ -323,24 +323,24 @@ numpy$$ndarray numpy$$ndarrayD___ndgetslice__(numpy$$ndarray a, B_list ix) {
     int apos = a->ndim-1;
     int respos = ndim-1;
     int untouched = a->ndim - (ints + slices);
-    numpy$$ndselect currindex;
+    numpyQ_ndselect currindex;
     long currstride = a->elem_size;
     while (ixpos>=0) {
         if (untouched-- > 0)
-            currindex = (numpy$$ndselect)numpy$$ndsliceG_new(allslice);
+            currindex = (numpyQ_ndselect)numpyQ_ndsliceG_new(allslice);
         else
-            currindex = (numpy$$ndselect)ix->data[ixpos--];
-        if ($ISINSTANCE(currindex,numpy$$ndindex)->val) {
-            if (((numpy$$ndindex)currindex)->index == numpy$G_newaxis) {
+            currindex = (numpyQ_ndselect)ix->data[ixpos--];
+        if ($ISINSTANCE(currindex,numpyQ_ndindex)->val) {
+            if (((numpyQ_ndindex)currindex)->index == numpyQ_newaxis) {
                 B_listD_setitem(res->strides,respos,toB_int(0));
                 B_listD_setitem(res->shape,respos--,toB_int(1));
             } else {
                 currstride = $LONGELEM(a->strides,apos--);
-                offset += currstride * fromB_int(((numpy$$ndindex)currindex)->index);
+                offset += currstride * fromB_int(((numpyQ_ndindex)currindex)->index);
             }
-        } else if ($ISINSTANCE(currindex,numpy$$ndslice)->val) {
+        } else if ($ISINSTANCE(currindex,numpyQ_ndslice)->val) {
             int slen,start,stop,step;
-            normalize_slice(((numpy$$ndslice)currindex)->slc,$LONGELEM(a->shape,apos),&slen,&start,&stop,&step);
+            normalize_slice(((numpyQ_ndslice)currindex)->slc,$LONGELEM(a->shape,apos),&slen,&start,&stop,&step);
             currstride = $LONGELEM(a->strides,apos);
             offset += start * currstride;
             B_listD_setitem(res->strides,respos,toB_int($LONGELEM(a->strides,apos--) * step));
@@ -355,28 +355,28 @@ numpy$$ndarray numpy$$ndarrayD___ndgetslice__(numpy$$ndarray a, B_list ix) {
     return res;
 }
 
-struct numpy$$ndarrayG_class numpy$$ndarrayG_methods = {
-    "numpy$$ndarray",
+struct numpyQ_ndarrayG_class numpyQ_ndarrayG_methods = {
+    "numpyQ_ndarray",
     UNASSIGNED,
     ($SuperG_class)&B_valueG_methods,
-    numpy$$ndarrayD___init__,
-    numpy$$ndarrayD___serialize__,
-    numpy$$ndarrayD___deserialize__,
-    numpy$$ndarrayD___bool__,
-    numpy$$ndarrayD___str__,
-    numpy$$ndarrayD___str__,
-    numpy$$ndarray$reshape,
-    numpy$$ndarray$transpose,
-    numpy$$ndarray$flatten,
-    numpy$$ndarray$copy,
-    numpy$$ndarrayD___ndgetslice__
+    numpyQ_ndarrayD___init__,
+    numpyQ_ndarrayD___serialize__,
+    numpyQ_ndarrayD___deserialize__,
+    numpyQ_ndarrayD___bool__,
+    numpyQ_ndarrayD___str__,
+    numpyQ_ndarrayD___str__,
+    numpyQ_ndarray$reshape,
+    numpyQ_ndarray$transpose,
+    numpyQ_ndarray$flatten,
+    numpyQ_ndarray$copy,
+    numpyQ_ndarrayD___ndgetslice__
 };
 
 // Iterating over an ndarray //////////////////////////////////////////////////////////////////////////////
 
 // Aims to be as fast as possible; used in many methods below and in protocol implementations 
-numpy$$array_iterator_state $mk_iterator(numpy$$ndarray a) {
-    numpy$$array_iterator_state res = malloc(sizeof(struct numpy$$array_iterator_state));
+numpyQ_array_iterator_state $mk_iterator(numpyQ_ndarray a) {
+    numpyQ_array_iterator_state res = malloc(sizeof(numpyQ_array_iterator_state));
     if (a->ndim==0) {
         $RAISE((B_BaseException)$NEW(B_ValueError,to$str("cannot make iterator for 0-dim array")));
     }
@@ -396,7 +396,7 @@ numpy$$array_iterator_state $mk_iterator(numpy$$ndarray a) {
     return res;
 }
 
-union $Bytes8 *iter_next(numpy$$array_iterator_state it) {
+union $Bytes8 *iter_next(numpyQ_array_iterator_state it) {
     it->current += it->currentstride;
     if (++it->lastshapepos == it->lastshapelength) { 
         it->lastshapepos = 0;
@@ -425,15 +425,15 @@ union $Bytes8 *iter_next(numpy$$array_iterator_state it) {
  
 // Auxiliary function for mapping functions and operators over an ndarray ///////////////////////////////////////////
 
-numpy$$ndarray numpy$$func(union $Bytes8(*f)(union $Bytes8),numpy$$ndarray a) {
+numpyQ_ndarray numpyQ_func(union $Bytes8(*f)(union $Bytes8),numpyQ_ndarray a) {
     B_list resstrides = $mk_strides(a->shape);
-    numpy$$ndarray res = G_newarray(a->elem_type,a->ndim,a->size,a->shape,resstrides,true);
+    numpyQ_ndarray res = G_newarray(a->elem_type,a->ndim,a->size,a->shape,resstrides,true);
     if (res->ndim == 0) 
         res->data[0] = f(a->data[a->offset]);
     else {
         union $Bytes8 *ixres = res->data;
         union $Bytes8 *ixa;
-        numpy$$array_iterator_state it = $mk_iterator(a);
+        numpyQ_array_iterator_state it = $mk_iterator(a);
         while ((ixa = iter_next(it))) {
             *ixres = f(*ixa);
             ixres++;
@@ -446,7 +446,7 @@ numpy$$ndarray numpy$$func(union $Bytes8(*f)(union $Bytes8),numpy$$ndarray a) {
 
 // returns the common extended shape and, as outparams, iterators for the two extended operands
 
-static numpy$$ndarray numpy$$broadcast(numpy$$ndarray a1, numpy$$ndarray a2, numpy$$array_iterator_state *it1, numpy$$array_iterator_state *it2) {
+static numpyQ_ndarray numpyQ_broadcast(numpyQ_ndarray a1, numpyQ_ndarray a2, numpyQ_array_iterator_state *it1, numpyQ_array_iterator_state *it2) {
     int len;
     B_list resshape, shape1, shape2, strides1, strides2;
     shape1 = B_listD_copy(a1->shape);
@@ -480,8 +480,8 @@ static numpy$$ndarray numpy$$broadcast(numpy$$ndarray a1, numpy$$ndarray a2, num
         else
             $RAISE((B_BaseException)$NEW(B_ValueError,to$str("ndarray broadcasting: shapes do not match")));
     }
-    numpy$$ndarray res = G_newarray(a1->elem_type,len,$prod(resshape),resshape,$mk_strides(resshape),true);
-    numpy$$ndarray tmparr = G_newarray(a1->elem_type,len,res->size,res->shape,strides1,false); // only for making iterators
+    numpyQ_ndarray res = G_newarray(a1->elem_type,len,$prod(resshape),resshape,$mk_strides(resshape),true);
+    numpyQ_ndarray tmparr = G_newarray(a1->elem_type,len,res->size,res->shape,strides1,false); // only for making iterators
     tmparr->offset = a1->offset; 
     tmparr->data = a1->data;
     *it1 = $mk_iterator(tmparr);
@@ -492,17 +492,17 @@ static numpy$$ndarray numpy$$broadcast(numpy$$ndarray a1, numpy$$ndarray a2, num
     return res;
 }
  
-numpy$$ndarray numpy$$oper(union $Bytes8 (*f)(union $Bytes8, union $Bytes8),numpy$$ndarray a, numpy$$ndarray b) {
+numpyQ_ndarray numpyQ_oper(union $Bytes8 (*f)(union $Bytes8, union $Bytes8),numpyQ_ndarray a, numpyQ_ndarray b) {
     union $Bytes8 *ix1, *ix2, *ixres;
     long stride1, stride2, len;
-    numpy$$array_iterator_state it1, it2;
-    numpy$$ndarray res;
+    numpyQ_array_iterator_state it1, it2;
+    numpyQ_ndarray res;
     if (a->ndim == 0 && b->ndim == 0) {
         res = G_newarray(a->elem_type,0,toB_int(1),$NEW(B_list,NULL,NULL),$NEW(B_list,NULL,NULL),true);
         res->data[0] = f(a->data[a->offset],b->data[b->offset]);
         return res;
     }
-    res = numpy$$broadcast(a,b,&it1,&it2);
+    res = numpyQ_broadcast(a,b,&it1,&it2);
     ixres = res->data;
     while ((ix1 = iter_next(it1))) {
         ix2 = iter_next(it2);
@@ -518,14 +518,14 @@ numpy$$ndarray numpy$$oper(union $Bytes8 (*f)(union $Bytes8, union $Bytes8),nump
 
 // The ndarray constructor takes an atomic argument and builds a 0-dimensional array.
 
-numpy$$ndarray numpy$$fromatom(numpy$$Primitive wit, B_atom a) {
-    if ($ISINSTANCE(wit,numpy$$PrimitiveB_int)->val) {
-        numpy$$ndarray res = G_newarray(LongType,0,toB_int(1),$NEW(B_list,NULL,NULL),$NEW(B_list,NULL,NULL),true);
+numpyQ_ndarray numpyQ_fromatom(numpyQ_Primitive wit, B_atom a) {
+    if ($ISINSTANCE(wit,numpyQ_PrimitiveB_int)->val) {
+        numpyQ_ndarray res = G_newarray(LongType,0,toB_int(1),$NEW(B_list,NULL,NULL),$NEW(B_list,NULL,NULL),true);
         B_IntegralD_int iwit = B_IntegralD_intG_witness;
         res->data->l = fromB_int(iwit->$class->__fromatom__(iwit, a));
         return res;
     } else {
-        numpy$$ndarray res = G_newarray(DblType,0,toB_int(1),$NEW(B_list,NULL,NULL),$NEW(B_list,NULL,NULL),true);
+        numpyQ_ndarray res = G_newarray(DblType,0,toB_int(1),$NEW(B_list,NULL,NULL),$NEW(B_list,NULL,NULL),true);
         B_RealD_float rwit = B_RealD_floatG_witness;
         res->data->d = rwit->$class->__fromatom__(rwit, a)->val;
         return res;
@@ -536,12 +536,12 @@ numpy$$ndarray numpy$$fromatom(numpy$$Primitive wit, B_atom a) {
 
 // n evenly spaced floats between a and b
 
-numpy$$ndarray numpy$$linspace(B_float a, B_float b, B_int n) {
+numpyQ_ndarray numpyQ_linspace(B_float a, B_float b, B_int n) {
     B_list shape = $NEW(B_list,NULL,NULL);
     B_listD_append(shape,n);
     B_list strides = $NEW(B_list,NULL,NULL);
     B_listD_append(strides,toB_int(1));
-    numpy$$ndarray res = G_newarray(DblType,1,n,shape,strides,true);
+    numpyQ_ndarray res = G_newarray(DblType,1,n,shape,strides,true);
     double step = (b->val - a->val)/fromB_int(n);
     for (long i = 0; i<fromB_int(n); i++) {
         res->data[i].d = a->val + i * step;
@@ -551,14 +551,14 @@ numpy$$ndarray numpy$$linspace(B_float a, B_float b, B_int n) {
 
 // array of ints described by a range
 
-numpy$$ndarray numpy$$arange(B_int start, B_int stop, B_int step) {
+numpyQ_ndarray numpyQ_arange(B_int start, B_int stop, B_int step) {
     B_range r = $NEW(B_range,start,stop,step);
     long len = (r->stop - r->start)/r->step;
     B_list shape = $NEW(B_list,NULL,NULL);
     B_listD_append(shape,toB_int(len));
     B_list strides = $NEW(B_list,NULL,NULL);
     B_listD_append(strides,toB_int(1));
-    numpy$$ndarray res = G_newarray(LongType,1,toB_int(len),shape,strides,true);
+    numpyQ_ndarray res = G_newarray(LongType,1,toB_int(len),shape,strides,true);
     long elem = r->start;
     for (int i=0; i < len; i++) {
         res->data[i].l = elem;
@@ -569,14 +569,14 @@ numpy$$ndarray numpy$$arange(B_int start, B_int stop, B_int step) {
 
 // make an array from a list
 
-numpy$$ndarray numpy$$array(numpy$$Primitive wit, B_list elems) {
+numpyQ_ndarray numpyQ_array(numpyQ_Primitive wit, B_list elems) {
     B_list shape = $NEW(B_list,NULL,NULL);
     B_listD_append(shape,toB_int(elems->length));
     B_list strides = $NEW(B_list,NULL,NULL);
     B_listD_append(strides,toB_int(1));
     if (elems->length == 0)
         $RAISE((B_BaseException)$NEW(B_ValueError,to$str("function numpy.array cannot create empty ndarray")));
-    numpy$$ndarray res = G_newarray(wit->$class->elem_type,1,toB_int(elems->length),shape,strides,true);
+    numpyQ_ndarray res = G_newarray(wit->$class->elem_type,1,toB_int(elems->length),shape,strides,true);
     for (int i=0; i<elems->length; i++) 
         res->data[i] = wit->$class->from$obj(elems->data[i]);
     return res;
@@ -584,16 +584,16 @@ numpy$$ndarray numpy$$array(numpy$$Primitive wit, B_list elems) {
 
 // create an array with given shape and all elements of given value
 
-numpy$$ndarray numpy$$full(numpy$$Primitive wit, B_list shape, $WORD val) {
+numpyQ_ndarray numpyQ_full(numpyQ_Primitive wit, B_list shape, $WORD val) {
     B_list strides = $mk_strides(shape);
     B_int size = $prod(shape);
-    numpy$$ndarray res = G_newarray(wit->$class->elem_type,shape->length,size,shape,strides,true);
+    numpyQ_ndarray res = G_newarray(wit->$class->elem_type,shape->length,size,shape,strides,true);
     for (int i=0; i<fromB_int(size); i++)
         res->data[i] = wit->$class->from$obj(val);
     return res;
 }
 
-numpy$$ndarray numpy$$unirandint(B_int a, B_int b, B_int n) {
+numpyQ_ndarray numpyQ_unirandint(B_int a, B_int b, B_int n) {
     if (fromB_int(a) >= fromB_int(b))
         $RAISE((B_BaseException)$NEW(B_ValueError,to$str("lower limit not smaller than upper in numpy.unirand")));
     B_list shape = $NEW(B_list,NULL,NULL);
@@ -601,14 +601,14 @@ numpy$$ndarray numpy$$unirandint(B_int a, B_int b, B_int n) {
     B_list strides = $NEW(B_list,NULL,NULL);
     B_listD_append(strides,toB_int(1));
     long s = (fromB_int(b) - fromB_int(a));
-    numpy$$ndarray res = G_newarray(DblType,1,n,shape,strides,true);
+    numpyQ_ndarray res = G_newarray(DblType,1,n,shape,strides,true);
     for (int i = 0; i<fromB_int(n); i++)
         res->data[i].l = fromB_int(a) + arc4random_uniform(s);
     return res;
 }
 
 #define NDARRAY_MAX 1000000000
-numpy$$ndarray numpy$$unirandfloat(B_float a, B_float b, B_int n) {
+numpyQ_ndarray numpyQ_unirandfloat(B_float a, B_float b, B_int n) {
     if (a->val >= b->val)
         $RAISE((B_BaseException)$NEW(B_ValueError,to$str("lower limit not smaller than upper in numpy.unirand")));
     B_list shape = $NEW(B_list,NULL,NULL);
@@ -616,7 +616,7 @@ numpy$$ndarray numpy$$unirandfloat(B_float a, B_float b, B_int n) {
     B_list strides = $NEW(B_list,NULL,NULL);
     B_listD_append(strides,toB_int(1));
     double s = (b->val - a->val);
-    numpy$$ndarray res = G_newarray(DblType,1,n,shape,strides,true);
+    numpyQ_ndarray res = G_newarray(DblType,1,n,shape,strides,true);
     for (int i = 0; i<fromB_int(n); i++)
         res->data[i].d = a->val + s * (double)arc4random_uniform(NDARRAY_MAX)/(double)NDARRAY_MAX;
     return res;
@@ -626,10 +626,10 @@ numpy$$ndarray numpy$$unirandfloat(B_float a, B_float b, B_int n) {
 
 // Most of these are yet only defined with default parameters.
 
-numpy$$ndarray numpy$$partition(numpy$$Primitive wit, numpy$$ndarray a, B_int k) {
-    numpy$$ndarray res = numpy$$ndarray$copy(a);
+numpyQ_ndarray numpyQ_partition(numpyQ_Primitive wit, numpyQ_ndarray a, B_int k) {
+    numpyQ_ndarray res = numpyQ_ndarray$copy(a);
     res->ndim--; 
-    numpy$$array_iterator_state it = $mk_iterator(res); //gives an iterator that successively selects start of each last dimension column.
+    numpyQ_array_iterator_state it = $mk_iterator(res); //gives an iterator that successively selects start of each last dimension column.
     res->ndim++;
     for (int i=0; i < $LONGELEM(res->shape,res->ndim-2); i++) {
         union $Bytes8 *start =iter_next(it);
@@ -638,8 +638,8 @@ numpy$$ndarray numpy$$partition(numpy$$Primitive wit, numpy$$ndarray a, B_int k)
     return res;
 }
 
-numpy$$ndarray numpy$$sort(numpy$$Primitive wit, numpy$$ndarray a, B_int axis) {
-    numpy$$ndarray res = numpy$$ndarray$copy(a);
+numpyQ_ndarray numpyQ_sort(numpyQ_Primitive wit, numpyQ_ndarray a, B_int axis) {
+    numpyQ_ndarray res = numpyQ_ndarray$copy(a);
     if (!axis) {
         quicksort(res->data,0,fromB_int(res->size)-1,wit->$class->$lt);
         B_list newshape = B_listD_new(1);
@@ -651,7 +651,7 @@ numpy$$ndarray numpy$$sort(numpy$$Primitive wit, numpy$$ndarray a, B_int axis) {
         res->ndim = 1;
     } else if (fromB_int(axis) == -1 || fromB_int(axis) == a->ndim-1) {
         res->ndim--;
-        numpy$$array_iterator_state it = $mk_iterator(res); //gives an iterator that successively selects start of each last dimension column.
+        numpyQ_array_iterator_state it = $mk_iterator(res); //gives an iterator that successively selects start of each last dimension column.
         res->ndim++;
         union $Bytes8 *start;
         while ((start = iter_next(it))) 
@@ -662,9 +662,9 @@ numpy$$ndarray numpy$$sort(numpy$$Primitive wit, numpy$$ndarray a, B_int axis) {
 }
 
 
-numpy$$ndarray numpy$$clip(numpy$$Primitive wit, numpy$$ndarray a, $WORD low, $WORD high) {
-    numpy$$ndarray res = numpy$$ndarray$copy(a);
-    numpy$$array_iterator_state it = $mk_iterator(res);
+numpyQ_ndarray numpyQ_clip(numpyQ_Primitive wit, numpyQ_ndarray a, $WORD low, $WORD high) {
+    numpyQ_ndarray res = numpyQ_ndarray$copy(a);
+    numpyQ_array_iterator_state it = $mk_iterator(res);
     union $Bytes8 lo, hi, x, *ix, *ixres = res->data;
     if (low) lo = wit->$class->from$obj(low);
     if (high) hi = wit->$class->from$obj(high);
@@ -681,7 +681,7 @@ numpy$$ndarray numpy$$clip(numpy$$Primitive wit, numpy$$ndarray a, $WORD low, $W
     return res;
 }
 
-union $Bytes8 $dot1dim(numpy$$Primitive wit, union $Bytes8 *a, union $Bytes8 *b, long size, long stridea, long strideb) {
+union $Bytes8 $dot1dim(numpyQ_Primitive wit, union $Bytes8 *a, union $Bytes8 *b, long size, long stridea, long strideb) {
     // a has stride 1 since it is copied except for dot(a,b) when both a and b are 1dim
     union $Bytes8 res = (union $Bytes8)0L;
     union $Bytes8 *ixa, *ixb, *ixaend;
@@ -696,11 +696,11 @@ union $Bytes8 $dot1dim(numpy$$Primitive wit, union $Bytes8 *a, union $Bytes8 *b,
     return res;
 }
  
-numpy$$ndarray numpy$$dot(numpy$$Primitive wit, numpy$$ndarray a, numpy$$ndarray b) {
-    numpy$$ndarray res;
+numpyQ_ndarray numpyQ_dot(numpyQ_Primitive wit, numpyQ_ndarray a, numpyQ_ndarray b) {
+    numpyQ_ndarray res;
     if (a->ndim==0 || b->ndim==0) {
         // following  Python's numpy, we multiply elementwise...
-        numpy$B_RealD_ndarray wit2 = $NEW(numpy$B_RealD_ndarray,wit);
+        numpyQ_RealD_ndarray wit2 = $NEW(numpyQ_RealD_ndarray,wit);
         res = wit2->$class->__mul__(wit2,a,b);
     } else if (b->ndim==1) {
         long len = $LONGELEM(b->shape,0);
@@ -715,7 +715,7 @@ numpy$$ndarray numpy$$dot(numpy$$Primitive wit, numpy$$ndarray a, numpy$$ndarray
         } else {
             union $Bytes8 *ixres = res->data, *ixa;
             a->ndim--;
-            numpy$$array_iterator_state ita = $mk_iterator(a);
+            numpyQ_array_iterator_state ita = $mk_iterator(a);
             a->ndim++;
             while ((ixa = iter_next(ita))) {
                 *ixres = $dot1dim(wit,ixa,b->data,len,stridea,strideb);
@@ -728,7 +728,7 @@ numpy$$ndarray numpy$$dot(numpy$$Primitive wit, numpy$$ndarray a, numpy$$ndarray
     return res; 
 }
 
-union $Bytes8 $sum1dim(numpy$$Primitive wit, union $Bytes8 *a, long size, long stridea) { 
+union $Bytes8 B_sum1dim(numpyQ_Primitive wit, union $Bytes8 *a, long size, long stridea) { 
     union $Bytes8 res = (union $Bytes8)0L;
     union $Bytes8 *ixa, *ixaend;
     ixa = a;
@@ -741,8 +741,8 @@ union $Bytes8 $sum1dim(numpy$$Primitive wit, union $Bytes8 *a, long size, long s
 }
 
 
-numpy$$ndarray numpy$$sum(numpy$$Primitive wit, numpy$$ndarray a, B_int axis) {
-    numpy$$ndarray res;
+numpyQ_ndarray numpyQ_sum(numpyQ_Primitive wit, numpyQ_ndarray a, B_int axis) {
+    numpyQ_ndarray res;
     long laxis;
     if(axis) {
         laxis = fromB_int(axis) < 0 ? fromB_int(axis) + a->ndim : fromB_int(axis);
@@ -755,7 +755,7 @@ numpy$$ndarray numpy$$sum(numpy$$Primitive wit, numpy$$ndarray a, B_int axis) {
             for (int i=0; i<fromB_int(a->size); i++)
                 wit->$class->$iadd(&resd,a->data[i]); 
         } else {
-            numpy$$array_iterator_state it = $mk_iterator(a);
+            numpyQ_array_iterator_state it = $mk_iterator(a);
             union $Bytes8 *ixa;
             while ((ixa = iter_next(it)))
                 wit->$class->$iadd(&resd,*ixa);
@@ -769,26 +769,26 @@ numpy$$ndarray numpy$$sum(numpy$$Primitive wit, numpy$$ndarray a, B_int axis) {
         B_listD_delitem(newshape,laxis);
         B_list newstrides = B_listD_copy(a->strides);
         B_listD_delitem(newstrides,laxis);
-        numpy$$ndarray a1 = G_newarray(a->elem_type,a->ndim-1,$prod(newshape),newshape,newstrides,false);
+        numpyQ_ndarray a1 = G_newarray(a->elem_type,a->ndim-1,$prod(newshape),newshape,newstrides,false);
         a1->offset = a->offset;
         res = G_newarray(a->elem_type,a->ndim-1,$prod(newshape),newshape,$mk_strides(newshape),true);
         a1->data = a->data;
-        numpy$$array_iterator_state ita = $mk_iterator(a1);
+        numpyQ_array_iterator_state ita = $mk_iterator(a1);
         union $Bytes8 *ixa;
         union $Bytes8 *ixres = res->data;
         while ((ixa = iter_next(ita))) {
-            *ixres = $sum1dim(wit,ixa,len,stridea);
+            *ixres = B_sum1dim(wit,ixa,len,stridea);
             ixres++;
         }
     }
     return res;
 }         
 
-numpy$$ndarray numpy$$abs(numpy$$Primitive wit, numpy$$ndarray a) {
-    return numpy$$func(wit->$class->$abs,a);
+numpyQ_ndarray numpyQ_abs(numpyQ_Primitive wit, numpyQ_ndarray a) {
+    return numpyQ_func(wit->$class->B_abs,a);
 }
 
-$WORD numpy$$scalar (numpy$$Primitive wit, numpy$$ndarray a) {
+$WORD numpyQ_scalar (numpyQ_Primitive wit, numpyQ_ndarray a) {
     if (a->ndim > 0)
         $RAISE((B_BaseException)$NEW(B_ValueError,to$str("scalar only for zero-dim arrays")));
     return wit->$class->to$obj(a->data[a->offset]);
@@ -797,63 +797,63 @@ $WORD numpy$$scalar (numpy$$Primitive wit, numpy$$ndarray a) {
 
 // Iterator over ndarrays ////////////////////////////////////////////////////////////////////////
 
-void numpy$B_IteratorD_init(numpy$B_IteratorD_ndarray self, numpy$$Primitive pwit, numpy$$ndarray a) {
+void numpyQ_IteratorD_init(numpyQ_IteratorD_ndarray self, numpyQ_Primitive pwit, numpyQ_ndarray a) {
     self->pwit = pwit;
     self->it = $mk_iterator(a);
 }
 
-numpy$B_IteratorD_ndarray numpy$B_IteratorD_ndarrayG_new(numpy$$Primitive pwit, numpy$$ndarray a) {
-    numpy$B_IteratorD_ndarray res = malloc(sizeof(struct numpy$B_IteratorD_ndarray ));
-    res->$class = &numpy$B_IteratorD_ndarrayG_methods;
-    numpy$B_IteratorD_init(res,pwit,a);
+numpyQ_IteratorD_ndarray numpyQ_IteratorD_ndarrayG_new(numpyQ_Primitive pwit, numpyQ_ndarray a) {
+    numpyQ_IteratorD_ndarray res = malloc(sizeof(numpyQ_IteratorD_ndarray ));
+    res->$class = &numpyQ_IteratorD_ndarrayG_methods;
+    numpyQ_IteratorD_init(res,pwit,a);
     return res;
 }
 
-B_bool numpy$B_IteratorB_bool(numpy$B_IteratorD_ndarray self) {
-    return $True;
+B_bool numpyQ_IteratorB_bool(numpyQ_IteratorD_ndarray self) {
+    return B_True;
 }
 
-B_str numpy$B_IteratorB_str(numpy$B_IteratorD_ndarray self) {
+B_str numpyQ_IteratorB_str(numpyQ_IteratorD_ndarray self) {
     char *s;
     asprintf(&s,"<ndarray iterator object at %p>",self);
     return to$str(s);
 }
 
-$WORD numpy$B_IteratorD_ndarrayD___next__(numpy$B_IteratorD_ndarray self) {
+$WORD numpyQ_IteratorD_ndarrayD___next__(numpyQ_IteratorD_ndarray self) {
     union $Bytes8 *n = iter_next(self->it);
     return n ? self->pwit->$class->to$obj(*n) : NULL;
 }
 
-void numpy$B_IteratorD_$serialize(numpy$B_IteratorD_ndarray self,$Serial$state state) {
+void numpyQ_IteratorD_$serialize(numpyQ_IteratorD_ndarray self,$Serial$state state) {
     $RAISE((B_BaseException)$NEW(B_ValueError,to$str("(de)serialization not implemented for ndarray iterators")));
 }
 
-numpy$B_IteratorD_ndarray numpy$B_IteratorD_ndarray$_deserialize(numpy$B_IteratorD_ndarray self,$Serial$state state) {
+numpyQ_IteratorD_ndarray numpyQ_IteratorD_ndarray$_deserialize(numpyQ_IteratorD_ndarray self,$Serial$state state) {
     $RAISE((B_BaseException)$NEW(B_ValueError,to$str("(de)serialization not implemented for ndarray iterators")));
     return NULL;
 }
 
-struct numpy$B_IteratorD_ndarrayG_class numpy$B_IteratorD_ndarrayG_methods = {"",UNASSIGNED,($SuperG_class)&B_IteratorG_methods, numpy$B_IteratorD_init,
-                                                                        numpy$B_IteratorD_$serialize, numpy$B_IteratorD_ndarray$_deserialize,numpy$B_IteratorB_bool,
-                                                                        numpy$B_IteratorB_str,numpy$B_IteratorB_str,numpy$B_IteratorD_ndarrayD___next__};
+struct numpyQ_IteratorD_ndarrayG_class numpyQ_IteratorD_ndarrayG_methods = {"",UNASSIGNED,($SuperG_class)&B_IteratorG_methods, numpyQ_IteratorD_init,
+                                                                        numpyQ_IteratorD_$serialize, numpyQ_IteratorD_ndarray$_deserialize,numpyQ_IteratorB_bool,
+                                                                        numpyQ_IteratorB_str,numpyQ_IteratorB_str,numpyQ_IteratorD_ndarrayD___next__};
 
-numpy$$ndarray numpy$$roll(numpy$$Primitive wit, numpy$$ndarray a, B_int n) {
+numpyQ_ndarray numpyQ_roll(numpyQ_Primitive wit, numpyQ_ndarray a, B_int n) {
     if (fromB_int(n)==0)
         return a;
-    numpy$$ndarray b = numpy$$ndarray$flatten(a);
+    numpyQ_ndarray b = numpyQ_ndarray$flatten(a);
     B_list newshape = B_listD_new(1);
     B_listD_append(newshape,a->size);
     B_list newstrides = B_listD_new(1);
     B_listD_append(newstrides,toB_int(1));
-    numpy$$ndarray res = G_newarray(b->elem_type,1,b->size,newshape,newstrides,true);
-    numpy$B_CollectionD_ndarray wit2 = numpy$B_CollectionD_ndarrayG_new(wit);
+    numpyQ_ndarray res = G_newarray(b->elem_type,1,b->size,newshape,newstrides,true);
+    numpyQ_CollectionD_ndarray wit2 = numpyQ_CollectionD_ndarrayG_new(wit);
     int len = fromB_int(wit2->$class->__len__(wit2,a));
     int nval = fromB_int(n);
     int start = nval < 0 ? -nval : len-nval;
     int stride =  fromB_int((B_int)b->strides->data[0]);
     for (int i = 0; i < fromB_int(b->size); i++)
         res->data[i] = b->data[b->offset + (start+i) %fromB_int( b->size) * stride];
-    return numpy$$ndarray$reshape(res,a->shape);
+    return numpyQ_ndarray$reshape(res,a->shape);
 }
 
 union $Bytes8 $convert_to_double(union $Bytes8 a) {
@@ -862,20 +862,20 @@ union $Bytes8 $convert_to_double(union $Bytes8 a) {
     return res;
 }
    
-numpy$$ndarray numpy$$mean(numpy$$Primitive wit, numpy$$ndarray a, B_int axis) {
-    numpy$$ndarray sums = numpy$$sum(wit,a,axis);
+numpyQ_ndarray numpyQ_mean(numpyQ_Primitive wit, numpyQ_ndarray a, B_int axis) {
+    numpyQ_ndarray sums = numpyQ_sum(wit,a,axis);
     if (a->elem_type == LongType) {
-        sums = numpy$$func($convert_to_double,sums);
+        sums = numpyQ_func($convert_to_double,sums);
         sums->elem_type = DblType;
     }
-    numpy$$ndarray len = numpy$$fromatom((numpy$$Primitive)numpy$$PrimitiveB_floatG_witness,(B_atom)toB_float((double)(axis ? fromB_int((B_int)B_listD_getitem(a->shape,fromB_int(axis))) : fromB_int(a->size))));
-    return numpy$$oper(d$truediv,sums,len);
+    numpyQ_ndarray len = numpyQ_fromatom((numpyQ_Primitive)numpyQ_PrimitiveB_floatG_witness,(B_atom)to$float((double)(axis ? fromB_int((B_int)B_listD_getitem(a->shape,fromB_int(axis))) : fromB_int(a->size))));
+    return numpyQ_oper(d$truediv,sums,len);
 }
   
    
 
   
-numpy$$ndarray numpy$$tile(numpy$$Primitive wit, numpy$$ndarray a, B_int n) {
+numpyQ_ndarray numpyQ_tile(numpyQ_Primitive wit, numpyQ_ndarray a, B_int n) {
     if (fromB_int(n)<=0) 
         $RAISE((B_BaseException)$NEW(B_ValueError,to$str("numpy.tile: non-positive number of tiles")));
     B_int sz = toB_int(fromB_int(a->size)*fromB_int(n));
@@ -883,20 +883,20 @@ numpy$$ndarray numpy$$tile(numpy$$Primitive wit, numpy$$ndarray a, B_int n) {
     B_listD_append(newshape,sz);
     B_list newstrides = B_listD_new(1);
     B_listD_append(newstrides,toB_int(1));
-    numpy$$ndarray res = G_newarray(a->elem_type,1,sz,newshape,newstrides,true);
+    numpyQ_ndarray res = G_newarray(a->elem_type,1,sz,newshape,newstrides,true);
     for (int i=0; i < fromB_int(sz); i++) 
         res->data[i] = a->data[a->offset + i % fromB_int(a->size)];
     return res;    
 }
 
-numpy$$ndarray numpy$$zeros(numpy$$Primitive wit, B_int n) {
+numpyQ_ndarray numpyQ_zeros(numpyQ_Primitive wit, B_int n) {
     if (fromB_int(n)<=0) 
         $RAISE((B_BaseException)$NEW(B_ValueError,to$str("numpy.zeros: non-positive size")));
     B_list newshape = B_listD_new(1);
     B_listD_append(newshape,n);
     B_list newstrides = B_listD_new(1);
     B_listD_append(newstrides,toB_int(1));
-    numpy$$ndarray res = G_newarray(wit->$class->elem_type,1,n,newshape,newstrides,true);
+    numpyQ_ndarray res = G_newarray(wit->$class->elem_type,1,n,newshape,newstrides,true);
     union $Bytes8 zero;
     switch (wit->$class->elem_type) {
     case LongType:
@@ -911,19 +911,19 @@ numpy$$ndarray numpy$$zeros(numpy$$Primitive wit, B_int n) {
     return res;
 }
 
-numpy$$ndarray numpy$$concatenate(numpy$$Primitive wit, B_list as) {
+numpyQ_ndarray numpyQ_concatenate(numpyQ_Primitive wit, B_list as) {
     int size = 0;
     for (int i = 0; i < as->length; i++)
-        size += fromB_int(((numpy$$ndarray)B_listD_getitem(as, i))->size);
+        size += fromB_int(((numpyQ_ndarray)B_listD_getitem(as, i))->size);
     B_int sz = toB_int(size);
     B_list newshape = B_listD_new(1);
     B_listD_append(newshape,sz);
     B_list newstrides = B_listD_new(1);
     B_listD_append(newstrides,toB_int(1));
-    numpy$$ndarray res = G_newarray(wit->$class->elem_type,1,sz,newshape,newstrides,true);
+    numpyQ_ndarray res = G_newarray(wit->$class->elem_type,1,sz,newshape,newstrides,true);
     size = 0;
     for (int i=0; i < as->length; i++) {
-        numpy$$ndarray a = (numpy$$ndarray)B_listD_getitem(as, i);
+        numpyQ_ndarray a = (numpyQ_ndarray)B_listD_getitem(as, i);
         for (int j=0; j < fromB_int(a->size); j++)
             res->data[size+j] = a->data[a->offset+j*fromB_int((B_int)B_listD_getitem(a->strides,-1))];
         size +=  fromB_int(a->size);

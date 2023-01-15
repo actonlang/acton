@@ -84,7 +84,7 @@ void B_IteratorB_rangeD_init(B_IteratorB_range self, B_range rng) {
 }                                    
 
 B_bool B_IteratorB_rangeD_bool(B_IteratorB_range self) {
-    return $True;
+    return B_True;
 }
 
 B_str B_IteratorB_rangeD_str(B_IteratorB_range self) {

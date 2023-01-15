@@ -18,7 +18,7 @@
 int main(int argc, char *argv[]) {
   long n;
   sscanf(argv[1],"%ld",&n);
-  $ndarray x = $ndarray_linspace(toB_float(0.0),toB_float(1.0), toB_int(n));
+  $ndarray x = $ndarray_linspace(to$float(0.0),to$float(1.0), toB_int(n));
   //$ndarray x = $ndarray_arange(toB_int(n*n));
   printf("x=%s\n",x->$class->__str__(x)->str);
   B_list newshape = $NEW(B_list,NULL,NULL);

@@ -29,7 +29,7 @@ int main(int argc, char *argv[]) {
   $ndarray d =  $ndarray_partition(c,toB_int(4));
   printf("d=%s\n",d->$class->__str__(d)->str);
 
-  $ndarray e = $ndarray_linspace(toB_float(0),toB_float(1),toB_int(101));
-  $ndarray f = $ndarray_clipB_float(e,toB_float(0.2),toB_float(0.6));
+  $ndarray e = $ndarray_linspace(to$float(0),to$float(1),toB_int(101));
+  $ndarray f = $ndarray_clipB_float(e,to$float(0.2),to$float(0.6));
   printf("f=%s\n",f->$class->__str__(f)->str);
 }

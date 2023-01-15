@@ -17,8 +17,8 @@ struct lambda$1G_class {
     int $class_id;
     $SuperG_class $superclass;
     void (*__init__)(lambda$1, Pingpong, B_int, B_int);
-    void (*__serialize__)(lambda$1, $NoneType);
-    lambda$1 (*__deserialize__)(lambda$1, $NoneType);
+    void (*__serialize__)(lambda$1, B_NoneType);
+    lambda$1 (*__deserialize__)(lambda$1, B_NoneType);
     B_bool (*__bool__)(lambda$1);
     B_str (*__str__)(lambda$1);
     $R (*__call__)(lambda$1, $Cont);
@@ -36,8 +36,8 @@ struct lambda$2G_class {
     int $class_id;
     $SuperG_class $superclass;
     void (*__init__)(lambda$2, Pingpong, B_int);
-    void (*__serialize__)(lambda$2, $NoneType);
-    lambda$2 (*__deserialize__)(lambda$2, $NoneType);
+    void (*__serialize__)(lambda$2, B_NoneType);
+    lambda$2 (*__deserialize__)(lambda$2, B_NoneType);
     B_bool (*__bool__)(lambda$2);
     B_str (*__str__)(lambda$2);
     $R (*__call__)(lambda$2, $Cont);
@@ -54,11 +54,11 @@ struct lambda$3G_class {
     int $class_id;
     $SuperG_class $superclass;
     void (*__init__)(lambda$3, $Cont);
-    void (*__serialize__)(lambda$3, $NoneType);
-    lambda$3 (*__deserialize__)(lambda$3, $NoneType);
+    void (*__serialize__)(lambda$3, B_NoneType);
+    lambda$3 (*__deserialize__)(lambda$3, B_NoneType);
     B_bool (*__bool__)(lambda$3);
     B_str (*__str__)(lambda$3);
-    $R (*__call__)(lambda$3, $NoneType);
+    $R (*__call__)(lambda$3, B_NoneType);
 };
 struct lambda$3 {
     struct lambda$3G_class *$class;
@@ -71,8 +71,8 @@ struct PingpongG_class {
     int $class_id;
     $SuperG_class $superclass;
     $R (*__init__)(Pingpong, B_int, $Cont);
-    void (*__serialize__)(Pingpong, $NoneType);
-    Pingpong (*__deserialize__)(Pingpong, $NoneType);
+    void (*__serialize__)(Pingpong, B_NoneType);
+    Pingpong (*__deserialize__)(Pingpong, B_NoneType);
     B_bool (*__bool__)(Pingpong);
     B_str (*__str__)(Pingpong);
     $R (*ping)(Pingpong, B_int, $Cont);

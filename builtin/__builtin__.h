@@ -23,8 +23,8 @@ typedef struct B_bytearray *B_bytearray;
 struct B_bytes;
 typedef struct B_bytes *B_bytes;
 
-struct $NoneType;
-typedef struct $NoneType *$NoneType;
+struct B_NoneType;
+typedef struct B_NoneType *B_NoneType;
 
 struct B_int;
 typedef struct B_int *B_int;
@@ -154,11 +154,11 @@ typedef struct B_Logical *B_Logical;
 struct B_LogicalG_class;
 typedef struct B_LogicalG_class *B_LogicalG_class;
 
-struct $Plus;
-typedef struct $Plus *$Plus;
+struct B_Plus;
+typedef struct B_Plus *B_Plus;
 
-struct $PlusG_class;
-typedef struct $PlusG_class *$PlusG_class;
+struct B_PlusG_class;
+typedef struct B_PlusG_class *B_PlusG_class;
 
 struct B_Times;
 typedef struct B_Times *B_Times;
@@ -679,30 +679,30 @@ $WORD B_LogicalD___ixor__(B_Logical, $WORD, $WORD);
 extern struct B_LogicalG_class B_LogicalG_methods;
 B_Logical B_LogicalG_new();
 
-// $Plus ////////////////////////////////////////////////////////////
+// B_Plus ////////////////////////////////////////////////////////////
 
-struct $Plus {
-    $PlusG_class $class;
+struct B_Plus {
+    B_PlusG_class $class;
 };
 
-struct $PlusG_class {
+struct B_PlusG_class {
     char *$GCINFO;
     int $class_id;
     $SuperG_class $superclass;
-    void (*__init__)($Plus);
-    void (*__serialize__)($Plus,$Serial$state);
-    $Plus (*__deserialize__)($Plus,$Serial$state);
-    B_bool (*__bool__)($Plus);
-    B_str (*__str__)($Plus);
-    B_str (*__repr__)($Plus);
-    $WORD (*__add__)($Plus, $WORD, $WORD);
-    $WORD (*__iadd__)($Plus, $WORD, $WORD);
+    void (*__init__)(B_Plus);
+    void (*__serialize__)(B_Plus,$Serial$state);
+    B_Plus (*__deserialize__)(B_Plus,$Serial$state);
+    B_bool (*__bool__)(B_Plus);
+    B_str (*__str__)(B_Plus);
+    B_str (*__repr__)(B_Plus);
+    $WORD (*__add__)(B_Plus, $WORD, $WORD);
+    $WORD (*__iadd__)(B_Plus, $WORD, $WORD);
 };
 
-$WORD $PlusD___iadd__ ($Plus, $WORD, $WORD);
+$WORD B_PlusD___iadd__ (B_Plus, $WORD, $WORD);
 
-extern struct $PlusG_class $PlusG_methods;
-$Plus $PlusG_new();
+extern struct B_PlusG_class B_PlusG_methods;
+B_Plus B_PlusG_new();
 
 // B_Times ////////////////////////////////////////////////////////////
 

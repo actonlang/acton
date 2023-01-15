@@ -69,12 +69,12 @@ long fromB_bool(B_bool b) {
 struct B_bool $t = {&B_boolG_methods,1L};
 struct B_bool $f = {&B_boolG_methods,0L};
 
-B_bool $True = &$t;
-B_bool $False = &$f;
+B_bool B_True = &$t;
+B_bool B_False = &$f;
 
 
 B_bool $default__bool__(B_value self) {
-    return $True;
+    return B_True;
 }
 
 // B_HashableD_bool ///////////////////////////////////////////////////////////////////////////////////////////////////////

@@ -20,13 +20,13 @@ int main(int argc, char *argv[]) {
   long iters;
   sscanf(argv[1],"%ld",&n);
   sscanf(argv[2],"%ld",&iters);
-  $ndarray x = $ndarray_linspace(toB_float(0.0),toB_float(1.0), toB_int(n));
+  $ndarray x = $ndarray_linspace(to$float(0.0),to$float(1.0), toB_int(n));
   // printf("x=%s\n",x->$class->__str__(x)->str);
   B_list ix = $NEW(B_list,NULL,NULL);
   $Slice s = $NEW($Slice,NULL,NULL,NULL);
   B_listD_append(ix,s);
   B_listD_append(ix,NULL);
-  $Plus$ndarrayB_float wit = $Plus$ndarrayB_floatG_witness;
+  B_Plus$ndarrayD_float wit = B_Plus$ndarrayD_floatG_witness;
   for (int i=0;i<iters; i++) {
     $ndarray r = wit->$class->__add__(wit,$nd_getslice(x,ix),x);
     //printf("r=%s\n",r->$class->__str__(r)->str);

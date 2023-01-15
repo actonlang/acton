@@ -16,8 +16,8 @@ struct lambda$1G_class {
     char *$GCINFO;
     $SuperG_class $superclass;
     void (*__init__)(lambda$1, Pingpong, B_int);
-    void (*__serialize__)(lambda$1, $NoneType);
-    lambda$1 (*__deserialize__)(lambda$1, $NoneType);
+    void (*__serialize__)(lambda$1, B_NoneType);
+    lambda$1 (*__deserialize__)(lambda$1, B_NoneType);
     $R (*__call__)(lambda$1, $Cont);
 };
 struct lambda$1 {
@@ -33,8 +33,8 @@ struct lambda$2G_class {
     char *$GCINFO;
     $SuperG_class $superclass;
     void (*__init__)(lambda$2, Pingpong);
-    void (*__serialize__)(lambda$2, $NoneType);
-    lambda$2 (*__deserialize__)(lambda$2, $NoneType);
+    void (*__serialize__)(lambda$2, B_NoneType);
+    lambda$2 (*__deserialize__)(lambda$2, B_NoneType);
     $R (*__call__)(lambda$2, $Cont);
 };
 struct lambda$2 {
@@ -49,8 +49,8 @@ struct PingpongG_class {
     char *$GCINFO;
     $SuperG_class $superclass;
     $R (*__init__)(Pingpong, B_Env, $Cont);
-    void (*__serialize__)(Pingpong, $NoneType);
-    Pingpong (*__deserialize__)(Pingpong, $NoneType);
+    void (*__serialize__)(Pingpong, B_NoneType);
+    Pingpong (*__deserialize__)(Pingpong, B_NoneType);
     $R (*ping)(Pingpong, $Cont);
     $R (*pong)(Pingpong, B_int, $Cont);
 }; 

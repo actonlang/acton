@@ -15,7 +15,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////
 
 B_bool $procD___bool__($proc self) {
-  return $True;
+  return B_True;
 }
 B_str $procD___str__($proc self) {
   char *s;
@@ -24,7 +24,7 @@ B_str $procD___str__($proc self) {
 }
 
 B_bool $actionD___bool__($action self) {
-  return $True;
+  return B_True;
 }
 B_str $actionD___str__($action self) {
   char *s;
@@ -33,7 +33,7 @@ B_str $actionD___str__($action self) {
 }
 
 B_bool $mutD___bool__($mut self) {
-  return $True;
+  return B_True;
 }
 B_str $mutD___str__($mut self) {
   char *s;
@@ -42,7 +42,7 @@ B_str $mutD___str__($mut self) {
 }
 
 B_bool $pureD___bool__($pure self) {
-  return $True;
+  return B_True;
 }
 B_str $pureD___str__($pure self) {
   char *s;
@@ -54,7 +54,7 @@ void $ContD___init__($Cont $this) {
     // Empty
 }
 B_bool $ContD___bool__($Cont self) {
-  return $True;
+  return B_True;
 }
 B_str $ContD___str__($Cont self) {
   char *s;

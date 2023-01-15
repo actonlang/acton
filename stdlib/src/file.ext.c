@@ -20,7 +20,7 @@ $R fileQ_ReadFileD__open_file (fileQ_ReadFile self, $Cont c$cont) {
 
     }
     self->_fd = toB_int(r);
-    return $R_CONT(c$cont, $None);
+    return $R_CONT(c$cont, B_None);
 }
 
 
@@ -33,7 +33,7 @@ $R fileQ_ReadFileD_close$local (fileQ_ReadFile self, $Cont c$cont) {
         log_warn(errmsg);
         $RAISE(((B_BaseException)B_RuntimeErrorG_new(to$str(errmsg))));
     }
-    return $R_CONT(c$cont, $None);
+    return $R_CONT(c$cont, B_None);
 }
 
 $R fileQ_ReadFileD_read$local (fileQ_ReadFile self, $Cont c$cont) {
@@ -44,7 +44,7 @@ $R fileQ_ReadFileD_read$local (fileQ_ReadFile self, $Cont c$cont) {
     B_list res = B_listD_new(0);
     res->length = 0;
     while (r > 0) {
-      B_listD_append(res, toB_bytesD_len(buf,r));
+      B_listD_append(res, to$bytesD_len(buf,r));
         iovec = uv_buf_init(buf, sizeof(buf));
         r = uv_fs_read(get_uv_loop(), req, (uv_file)fromB_int(self->_fd), &iovec, 1, -1, NULL);
     }
@@ -54,7 +54,7 @@ $R fileQ_ReadFileD_read$local (fileQ_ReadFile self, $Cont c$cont) {
         log_warn(errmsg);
         $RAISE(((B_BaseException)B_RuntimeErrorG_new(to$str(errmsg))));
     }
-    B_bytes nullb = toB_bytes("");
+    B_bytes nullb = to$bytes("");
     B_Iterable wit = ((B_Iterable)((B_Collection)B_SequenceD_listG_new()->W_Collection));
     return $R_CONT(c$cont, nullb->$class->join(nullb,wit,res));
 }
@@ -72,7 +72,7 @@ $R fileQ_WriteFileD__open_file (fileQ_WriteFile self, $Cont c$cont) {
 
     }
     self->_fd = toB_int(r);
-    return $R_CONT(c$cont, $None);
+    return $R_CONT(c$cont, B_None);
 }
 
 $R fileQ_WriteFileD_close$local (fileQ_WriteFile self, $Cont c$cont) {
@@ -84,7 +84,7 @@ $R fileQ_WriteFileD_close$local (fileQ_WriteFile self, $Cont c$cont) {
         log_warn(errmsg);
         $RAISE(((B_BaseException)B_RuntimeErrorG_new(to$str(errmsg))));
     }
-    return $R_CONT(c$cont, $None);
+    return $R_CONT(c$cont, B_None);
 }
 
 $R fileQ_WriteFileD_write$local (fileQ_WriteFile self, $Cont c$cont, B_bytes data) {
@@ -99,5 +99,5 @@ $R fileQ_WriteFileD_write$local (fileQ_WriteFile self, $Cont c$cont, B_bytes dat
         $RAISE(((B_BaseException)B_RuntimeErrorG_new(to$str(errmsg))));
 
     }
-    return $R_CONT(c$cont, $None);
+    return $R_CONT(c$cont, B_None);
 }

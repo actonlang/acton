@@ -7,7 +7,7 @@ B_float time$$monotonic () {
     if (clock_gettime(CLOCK_MONOTONIC, &ts) == -1) {
         $RAISE(((B_BaseException)B_RuntimeErrorG_new(to$str("Unable to get time"))));
     }
-    return toB_float(ts.tv_sec + 0.000000001*ts.tv_nsec);
+    return to$float(ts.tv_sec + 0.000000001*ts.tv_nsec);
 }
 
 B_int time$$monotonic_ns () {
@@ -23,7 +23,7 @@ B_float time$$time () {
     if (clock_gettime(CLOCK_REALTIME, &ts) == -1) {
         $RAISE(((B_BaseException)B_RuntimeErrorG_new(to$str("Unable to get time"))));
     }
-    return toB_float(ts.tv_sec + 0.000000001*ts.tv_nsec);
+    return to$float(ts.tv_sec + 0.000000001*ts.tv_nsec);
 }
 
 B_int time$$time_ns () {

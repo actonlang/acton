@@ -82,7 +82,7 @@ struct $ActorG_class {
     B_bool (*__bool__)($Actor);
     B_str (*__str__)($Actor);
     B_str (*__repr__)($Actor);
-    $NoneType (*__resume__)($Actor);
+    B_NoneType (*__resume__)($Actor);
 };
 struct $Actor {
     struct $ActorG_class *$class;
@@ -166,8 +166,8 @@ void pin_actor_affinity();
 
 //typedef B_int B_Env;
 
-void $Actor$serialize($Actor, $NoneType);
-void $Actor$deserialize($Actor, $NoneType);
+void $Actor$serialize($Actor, B_NoneType);
+void $Actor$deserialize($Actor, B_NoneType);
 
 $ROW $serialize_rts();
 void $deserialize_rts($ROW);

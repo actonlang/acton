@@ -19,7 +19,7 @@ int main() {
   B_range r = B_rangeG_new(toB_int(50),toB_int(250),toB_int(50));
   B_list lst0 = B_listD_fromiter((B_Iterator)$NEW(B_IteratorB_range,r));
   B_bytearray b = B_bytearrayG_new((B_value)lst0);
-  $print(1,b->$class->center(b,toB_int(25),NULL));
+  B_print(1,b->$class->center(b,toB_int(25),NULL));
   B_range r2 = B_rangeG_new(toB_int(65),toB_int(91),NULL);
   B_range r3 = B_rangeG_new(toB_int(75),toB_int(77),NULL);
   B_list lst2 = B_listD_fromiter((B_Iterator)B_IteratorB_rangeG_new(r2));
@@ -30,21 +30,21 @@ int main() {
   wit->$class->__delitem__(wit,b3,toB_int(0));
   wit->$class->__delitem__(wit,b3,toB_int(-1));
   B_int n = b2->$class->find(b2,b3,NULL,NULL);
-  $print(5,b3,to$str(" occurs in "),b2,to$str(" at pos "),n);
+  B_print(5,b3,to$str(" occurs in "),b2,to$str(" at pos "),n);
   B_bytearray b4 = b->$class->center(b,toB_int(20),NULL);
-  $print(1,b->$class->lstrip(b4,NULL));
+  B_print(1,b->$class->lstrip(b4,NULL));
   B_range rsep = $NEW(B_range,toB_int(70),toB_int(72),toB_int(5));
   B_bytearray sep = $NEW(B_bytearray,(B_value)rsep);
-  $print(1,b2->$class->split(b2,sep,NULL));
+  B_print(1,b2->$class->split(b2,sep,NULL));
   B_str s = to$str("line 1\nline 2\r\n\nBjörn");
   B_bytearray b5 = s->$class->encode(s);
-  $print(1,$ascii(s));
-  $print(1,b5);
-  $print(1,b5->$class->splitlines(b5,NULL));
-  $print(1,b5->$class->splitlines(b5,$True));
+  B_print(1,$ascii(s));
+  B_print(1,b5);
+  B_print(1,b5->$class->splitlines(b5,NULL));
+  B_print(1,b5->$class->splitlines(b5,B_True));
   B_bytearray b6 = toB_bytearray("abcdefgh");
   B_list lst = $NEW(B_list,(B_Sequence)B_SequenceD_bytearrayG_witness,b6);
-  $print(1,lst);
+  B_print(1,lst);
   int start = 1;
   int stop = 6;
   int step = 2;
@@ -53,11 +53,11 @@ int main() {
   slc.stop = &stop;
   slc.step = &step;
   B_SequenceD_bytearrayG_witness->$class->__delslice__(B_SequenceD_bytearrayG_witness,b6,&slc);
-  $print(1,b6);
+  B_print(1,b6);
   B_SequenceD_bytearrayG_witness->$class->append(B_SequenceD_bytearrayG_witness,b6,toB_int(65));
   B_SequenceD_bytearrayG_witness->$class->append(B_SequenceD_bytearrayG_witness,b6,toB_int(66));
   B_SequenceD_bytearrayG_witness->$class->append(B_SequenceD_bytearrayG_witness,b6,toB_int(67));
-  $print(1,b6);
+  B_print(1,b6);
   for (int i=0; i<100000; i++)
     B_SequenceD_bytearrayG_witness->$class->append(B_SequenceD_bytearrayG_witness,b6,toB_int(65+i%26));
   start = 8;
@@ -66,6 +66,6 @@ int main() {
     step = i;
     B_SequenceD_bytearrayG_witness->$class->__delslice__(B_SequenceD_bytearrayG_witness,b6,&slc);
   }
-  $print(1,b6);
+  B_print(1,b6);
     
 }

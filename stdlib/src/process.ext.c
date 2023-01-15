@@ -39,7 +39,7 @@ void read_stderr(uv_stream_t *stream, ssize_t nread, const uv_buf_t *buf) {
             struct process_data *process_data = (struct process_data *)stream->data;
             processQ_Process self = process_data->process;
             $action2 f = process_data->on_stderr;
-            f->$class->__asyn__(f, self, toB_bytesD_len(buf->base, nread));
+            f->$class->__asyn__(f, self, to$bytesD_len(buf->base, nread));
         }
     }
 
@@ -57,7 +57,7 @@ void read_stdout(uv_stream_t *stream, ssize_t nread, const uv_buf_t *buf) {
             struct process_data *process_data = (struct process_data *)stream->data;
             processQ_Process self = process_data->process;
             $action2 f = process_data->on_stdout;
-            f->$class->__asyn__(f, self, toB_bytesD_len(buf->base, nread));
+            f->$class->__asyn__(f, self, to$bytesD_len(buf->base, nread));
         }
     }
 
@@ -92,11 +92,11 @@ $R processQ_Process$_create_process (processQ_Process self, $Cont c$cont) {
     }
     args[i] = NULL;
 
-    if (self->workdir != $None) {
+    if (self->workdir != B_None) {
         options->cwd = fromB_str(self->workdir);
     };
 
-    if (self->env == $None) {
+    if (self->env == B_None) {
         options->env = NULL;
     } else {
         char **env = (char **)calloc((B_dictD_len(self->env)+1), sizeof(char *));
@@ -153,7 +153,7 @@ $R processQ_Process$_create_process (processQ_Process self, $Cont c$cont) {
     uv_read_start((uv_stream_t*)&process_data->stdout_pipe, alloc_buffer, read_stdout);
     uv_read_start((uv_stream_t*)&process_data->stderr_pipe, alloc_buffer, read_stderr);
 
-    return $R_CONT(c$cont, $None);
+    return $R_CONT(c$cont, B_None);
 }
 
 void close_cb(uv_handle_t *handle) {
@@ -165,7 +165,7 @@ $R processQ_Process$done_writing$local (processQ_Process self, $Cont c$cont) {
     struct process_data *process_data = (struct process_data *)p->data;
     uv_stream_t *stdin = (uv_stream_t *)&process_data->stdin_pipe;
     uv_close(stdin, close_cb);
-    return $R_CONT(c$cont, $None);
+    return $R_CONT(c$cont, B_None);
 }
 
 $R processQ_Process$pid$local (processQ_Process self, $Cont c$cont) {
@@ -176,7 +176,7 @@ $R processQ_Process$pid$local (processQ_Process self, $Cont c$cont) {
 $R processQ_Process$signal$local (processQ_Process self, $Cont c$cont, B_int signal) {
     uv_process_t *p = (uv_process_t *)fromB_int(self->_p);
     uv_process_kill(p, fromB_int(signal));
-    return $R_CONT(c$cont, $None);
+    return $R_CONT(c$cont, B_None);
 }
 
 $R processQ_Process$write$local (processQ_Process self, $Cont c$cont, B_bytes data) {
@@ -195,5 +195,5 @@ $R processQ_Process$write$local (processQ_Process self, $Cont c$cont, B_bytes da
         log_warn(errmsg);
     }
 
-    return $R_CONT(c$cont, $None);
+    return $R_CONT(c$cont, B_None);
 }

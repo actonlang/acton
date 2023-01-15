@@ -16,14 +16,14 @@
 #include <stdio.h>
 
 int main() {
-  B_float a = toB_float(7.0);
-  B_float b = toB_float(5.0);
+  B_float a = to$float(7.0);
+  B_float b = to$float(5.0);
   B_RealD_float wit = B_RealD_floatG_witness;
   B_float c = wit->$class->__truediv__(wit,a,b);
   printf("7.0/5.0=%f\n",fromB_float(c));
   B_int d = wit->$class->__floor__(wit,(B_Integral)B_IntegralD_intG_witness,c);
   printf("floor(7/5)=%ld\n",fromB_int(d));
-  printf("round(1234567.14,-5)=%f\n",B_RealD_floatD___round__(B_RealD_floatG_witness,toB_float(1234567.14),toB_int(-5))->val);
-  printf("round(1.2345678,5)=%f\n",B_RealD_floatD___round__(B_RealD_floatG_witness,toB_float(1.2345678),toB_int(5))->val);
-  printf("%f\n",fromB_float(wit->$class->__fromatom__(wit,(B_atom)$PlusB_strG_witness->$class->__add__($PlusB_strG_witness,to$str("3."),to$str("14")))));
+  printf("round(1234567.14,-5)=%f\n",B_RealD_floatD___round__(B_RealD_floatG_witness,to$float(1234567.14),toB_int(-5))->val);
+  printf("round(1.2345678,5)=%f\n",B_RealD_floatD___round__(B_RealD_floatG_witness,to$float(1.2345678),toB_int(5))->val);
+  printf("%f\n",fromB_float(wit->$class->__fromatom__(wit,(B_atom)B_PlusB_strG_witness->$class->__add__(B_PlusB_strG_witness,to$str("3."),to$str("14")))));
 }

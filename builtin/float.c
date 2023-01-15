@@ -17,11 +17,11 @@
 // General methods ///////////////////////////////////////////////////////////////////////
 
 B_float B_floatG_new(B_atom a) {
-    if ($ISINSTANCE(a,B_i64)->val) return toB_float((double)((B_i64)a)->val);
+    if ($ISINSTANCE(a,B_i64)->val) return to$float((double)((B_i64)a)->val);
     if ($ISINSTANCE(a,B_int)->val) {
         zz_struct aval = ((B_int)a)->val;
         if (aval.size == 0)
-            return toB_float(0.0);
+            return to$float(0.0);
         if (labs(aval.size) > 16)
             $RAISE((B_BaseException)$NEW(B_ValueError,to$str("float(): int value too big for type float")));
         double pow = 1.0;  
@@ -30,16 +30,16 @@ B_float B_floatG_new(B_atom a) {
             res += aval.n[i] * pow;
             pow *= 18446744073709551616.0; // literal is 2^64
         }
-        return toB_float(aval.size<0 ? -res : res);
+        return to$float(aval.size<0 ? -res : res);
     }
     if ($ISINSTANCE(a,B_float)->val) return (B_float)a;
-    if ($ISINSTANCE(a,B_bool)->val) return toB_float((double)((B_bool)a)->val);
+    if ($ISINSTANCE(a,B_bool)->val) return to$float((double)((B_bool)a)->val);
     if ($ISINSTANCE(a,B_str)->val) {
         double x;
         int c;
         sscanf((char *)((B_str)a)->str,"%lf%n",&x,&c);
         if (c==((B_str)a)->nbytes)
-            return toB_float(x);
+            return to$float(x);
         else
             $RAISE((B_BaseException)$NEW(B_ValueError,to$str("float_fromatom(): invalid str literal for type float")));
     }
@@ -60,7 +60,7 @@ B_float B_floatD_deserialize(B_float self, $Serial$state state) {
     $WORD w = $val_deserialize(state);
     double x;
     memcpy(&x,&w,sizeof($WORD));
-    return toB_float(x);
+    return to$float(x);
 }
 
 B_bool B_floatD_bool(B_float x) {
@@ -85,7 +85,7 @@ struct B_floatG_class B_floatG_methods = {
     B_floatD_str
 };
   
-B_float toB_float(double x) {
+B_float to$float(double x) {
     B_float res = malloc(sizeof(struct B_float));
     res->$class = &B_floatG_methods;
     res->val = x;
@@ -111,7 +111,7 @@ B_RealD_float B_RealD_floatD___deserialize__(B_RealD_float self, $Serial$state s
 
 
 B_float B_RealD_floatD___add__(B_RealD_float wit,  B_float a, B_float b) {
-    return toB_float(fromB_float(a) + fromB_float(b));
+    return to$float(fromB_float(a) + fromB_float(b));
 }  
 
 B_float B_RealD_floatD___fromatom__(B_RealD_float wit, B_atom a) {
@@ -123,15 +123,15 @@ B_complex B_RealD_floatD___complx__(B_RealD_float wit, B_float a) {
 }
 
 B_float B_RealD_floatD___mul__(B_RealD_float wit,  B_float a, B_float b) {
-    return toB_float(fromB_float(a) * fromB_float(b));
+    return to$float(fromB_float(a) * fromB_float(b));
 }  
 
 B_float B_RealD_floatD___pow__(B_RealD_float wit,  B_float a, B_float b) {
-    return toB_float(exp(fromB_float(b) * log(fromB_float(a))));
+    return to$float(exp(fromB_float(b) * log(fromB_float(a))));
 }
 
 B_float B_RealD_floatD___neg__(B_RealD_float wit, B_float a) {
-    return toB_float(-fromB_float(a));
+    return to$float(-fromB_float(a));
 }
 
 B_float B_RealD_floatD___pos__(B_RealD_float wit, B_float a) {
@@ -143,11 +143,11 @@ $WORD B_RealD_float$real(B_RealD_float wit, B_float a, B_Real wit2) {
 }
 
 $WORD B_RealD_float$imag(B_RealD_float wit, B_float a, B_Real wit2) {
-    return wit2->$class->__fromatom__(wit2,(B_atom)toB_float(0.0));
+    return wit2->$class->__fromatom__(wit2,(B_atom)to$float(0.0));
 }
 
 $WORD B_RealD_floatD___abs__(B_RealD_float wit, B_float a, B_Real wit2) {
-    return wit2->$class->__fromatom__(wit2,(B_atom)toB_float(fabs(fromB_float(a))));
+    return wit2->$class->__fromatom__(wit2,(B_atom)to$float(fabs(fromB_float(a))));
 }
 
 B_float B_RealD_float$conjugate(B_RealD_float wit, B_float a) {
@@ -172,7 +172,7 @@ $WORD B_RealD_floatD___ceil__ (B_RealD_float wit, B_float x, B_Integral wit2) {
 B_float B_RealD_floatD___round__ (B_RealD_float wit, B_float x, B_int p) {
     double pval = p==NULL ? 0.0 : (double)fromB_int(p);
     double p10 = pow(10.0,pval);
-    return toB_float(round(x->val * p10)/p10);
+    return to$float(round(x->val * p10)/p10);
 }
      
 // B_MinusD_RealD_float  ////////////////////////////////////////////////////////////////////////////////////////
@@ -188,7 +188,7 @@ B_MinusD_RealD_float B_MinusD_RealD_floatD___deserialize__(B_MinusD_RealD_float 
 }
 
 B_float B_MinusD_RealD_floatD___sub__(B_MinusD_RealD_float wit,  B_float a, B_float b) {
-    return toB_float(fromB_float(a) - fromB_float(b));
+    return to$float(fromB_float(a) - fromB_float(b));
 }  
 
 // B_DivD_float  ////////////////////////////////////////////////////////////////////////////////////////
@@ -202,7 +202,7 @@ B_DivD_float B_DivD_floatD___deserialize__(B_DivD_float self, $Serial$state stat
 }
 
 B_float B_DivD_floatD___truediv__(B_DivD_float wit, B_float a, B_float b) {
-    return toB_float(fromB_float(a) / fromB_float(b));
+    return to$float(fromB_float(a) / fromB_float(b));
 }  
 
 // B_OrdD_float  ////////////////////////////////////////////////////////////////////////////////////////
@@ -320,7 +320,7 @@ struct B_RealD_floatG_class B_RealD_floatG_methods = {
     (B_str (*)(B_RealD_float))$default__str__,
     (B_str (*)(B_RealD_float))$default__str__,
     B_RealD_floatD___add__,
-    (B_float (*)(B_RealD_float, B_float, B_float))$PlusD___iadd__,
+    (B_float (*)(B_RealD_float, B_float, B_float))B_PlusD___iadd__,
     B_RealD_floatD___mul__,
     (B_float (*)(B_RealD_float, B_float, B_float))B_TimesD___imul__,
     B_RealD_floatD___fromatom__,

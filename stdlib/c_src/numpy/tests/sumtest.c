@@ -20,22 +20,22 @@ int main(int argc, char *argv[]) {
   numpy$D___init__();
   long n;
   sscanf(argv[1],"%ld",&n);
-  numpy$$ndarray x = numpy$$ndarray_linspace(toB_float(0.0),toB_float(1.0), toB_int(n*n*n*n));
-  numpy$$ndarray y = numpy$$ndarray_arange(toB_int(0),toB_int(n*n*n*n),toB_int(1));
-  //$printobj("x =",x);
+  numpyQ_ndarray x = numpyQ_ndarray_linspace(to$float(0.0),to$float(1.0), toB_int(n*n*n*n));
+  numpyQ_ndarray y = numpyQ_ndarray_arange(toB_int(0),toB_int(n*n*n*n),toB_int(1));
+  //B_printobj("x =",x);
   B_list newshape = $NEW(B_list,NULL,NULL);
   B_listD_append(newshape,toB_int(n));
   B_listD_append(newshape,toB_int(n));
   B_listD_append(newshape,toB_int(n));
   B_listD_append(newshape,toB_int(n));
-  numpy$$ndarray a = numpy$$ndarray_reshape(x,newshape);
-  numpy$$ndarray b = numpy$$ndarray_reshape(y,newshape);
-  //$printobj("a =",a);
+  numpyQ_ndarray a = numpyQ_ndarray_reshape(x,newshape);
+  numpyQ_ndarray b = numpyQ_ndarray_reshape(y,newshape);
+  //B_printobj("a =",a);
   //for (int i = 0; i<100; i++) {
-    B_value s = (B_value)numpy$$ndarray_sum((numpy$$Primitive)numpy$$PrimitiveB_floatG_witness,a,NULL);
-    $printobj("sum(a) =",s);
-    B_value t = (B_value)numpy$$ndarray_sum((numpy$$Primitive)numpy$$PrimitiveB_intG_witness,b,NULL);
-    //$printobj("b =",b);  
-    $printobj("sum(b) =",t);
+    B_value s = (B_value)numpyQ_ndarray_sum((numpyQ_Primitive)numpyQ_PrimitiveB_floatG_witness,a,NULL);
+    B_printobj("sum(a) =",s);
+    B_value t = (B_value)numpyQ_ndarray_sum((numpyQ_Primitive)numpyQ_PrimitiveB_intG_witness,b,NULL);
+    //B_printobj("b =",b);  
+    B_printobj("sum(b) =",t);
     //  }
 }

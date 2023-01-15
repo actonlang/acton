@@ -21,7 +21,7 @@ void B_BaseExceptionD___init__(B_BaseException self, B_str error_message) {
 };
 
 B_bool B_BaseExceptionD___bool__(B_BaseException self) {
-  return $True;
+  return B_True;
 }
 
 B_str B_BaseExceptionD___str__(B_BaseException self) {
@@ -55,7 +55,7 @@ void B_SystemExitD___init__(B_SystemExit self, B_str error_message) {
 };
 
 B_bool B_SystemExitD___bool__(B_SystemExit self) {
-  return $True;
+  return B_True;
 }
 
 B_str B_SystemExitD___str__(B_SystemExit self) {
@@ -88,7 +88,7 @@ void B_KeyboardInterruptD___init__(B_KeyboardInterrupt self, B_str error_message
 };
 
 B_bool B_KeyboardInterruptD___bool__(B_KeyboardInterrupt self) {
-  return $True;
+  return B_True;
 }
 
 B_str B_KeyboardInterruptD___str__(B_KeyboardInterrupt self) {
@@ -121,7 +121,7 @@ void B_ExceptionD___init__(B_Exception self, B_str error_message) {
 };
 
 B_bool B_ExceptionD___bool__(B_Exception self) {
-  return $True;
+  return B_True;
 }
 
 B_str B_ExceptionD___str__(B_Exception self) {
@@ -154,7 +154,7 @@ void B_AssertionErrorD___init__(B_AssertionError self, B_str error_message) {
 };
 
 B_bool B_AssertionErrorD___bool__(B_AssertionError self) {
-  return $True;
+  return B_True;
 }
 
 B_str B_AssertionErrorD___str__(B_AssertionError self) {
@@ -187,7 +187,7 @@ void B_LookupErrorD___init__(B_LookupError self, B_str error_message) {
 };
 
 B_bool B_LookupErrorD___bool__(B_LookupError self) {
-  return $True;
+  return B_True;
 }
 
 B_str B_LookupErrorD___str__(B_LookupError self) {
@@ -220,7 +220,7 @@ void B_IndexErrorD___init__(B_IndexError self, B_str error_message) {
 };
 
 B_bool B_IndexErrorD___bool__(B_IndexError self) {
-  return $True;
+  return B_True;
 }
 
 B_str B_IndexErrorD___str__(B_IndexError self) {
@@ -253,7 +253,7 @@ void B_KeyErrorD___init__(B_KeyError self, B_str error_message) {
 };
 
 B_bool B_KeyErrorD___bool__(B_KeyError self) {
-  return $True;
+  return B_True;
 }
 
 B_str B_KeyErrorD___str__(B_KeyError self) {
@@ -286,7 +286,7 @@ void B_MemoryErrorD___init__(B_MemoryError self, B_str error_message) {
 };
 
 B_bool B_MemoryErrorD___bool__(B_MemoryError self) {
-  return $True;
+  return B_True;
 }
 
 B_str B_MemoryErrorD___str__(B_MemoryError self) {
@@ -320,7 +320,7 @@ void B_OSErrorD___init__(B_OSError self, B_str error_message) {
 };
 
 B_bool B_OSErrorD___bool__(B_OSError self) {
-  return $True;
+  return B_True;
 }
 
 B_str B_OSErrorD___str__(B_OSError self) {
@@ -352,7 +352,7 @@ void B_RuntimeErrorD___init__(B_RuntimeError self, B_str error_message) {
 };
 
 B_bool B_RuntimeErrorD___bool__(B_RuntimeError self) {
-  return $True;
+  return B_True;
 }
 
 B_str B_RuntimeErrorD___str__(B_RuntimeError self) {
@@ -380,7 +380,7 @@ void B_NotImplementedErrorD___init__(B_NotImplementedError self, B_str error_mes
 };
 
 B_bool B_NotImplementedErrorD___bool__(B_NotImplementedError self) {
-  return $True;
+  return B_True;
 }
 
 B_str B_NotImplementedErrorD___str__(B_NotImplementedError self) {
@@ -414,7 +414,7 @@ void B_ValueErrorD___init__(B_ValueError self, B_str error_message) {
 };
 
 B_bool B_ValueErrorD___bool__(B_ValueError self) {
-  return $True;
+  return B_True;
 }
 
 B_str B_ValueErrorD___str__(B_ValueError self) {

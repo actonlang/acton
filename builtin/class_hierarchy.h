@@ -66,7 +66,7 @@ $Serializable $SerializableG_new();
 // struct //////////////////////////////////////////////////////
 
 // All user defined classes inherit from struct, as well as
-// int, float, complex, str, bytes, tuple, range, $NoneType (and immutable versions of list, set and dict)
+// int, float, complex, str, bytes, tuple, range, B_NoneType (and immutable versions of list, set and dict)
 // For the moment, closures, iterators and exceptions also inherit from struct
 
 

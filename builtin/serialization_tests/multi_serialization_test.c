@@ -24,8 +24,8 @@ int main() {
   // to serialize several objects, make a tuple.
   $serialize_file(($Serializable)$NEWTUPLE(4,a,lst,b,lst),"test7.bin");
   B_tuple t = (B_tuple)$deserialize_file("test7.bin");
-  $print(2,to$str("a1 = "),t->components[0]);
-  $print(2,to$str("lst1="),t->components[1]);
-  $print(2,to$str("b1 = "),t->components[2]);
-  $print(2,to$str("lst2="),t->components[3]);
+  B_print(2,to$str("a1 = "),t->components[0]);
+  B_print(2,to$str("lst1="),t->components[1]);
+  B_print(2,to$str("b1 = "),t->components[2]);
+  B_print(2,to$str("lst2="),t->components[3]);
 }

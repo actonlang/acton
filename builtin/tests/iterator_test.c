@@ -20,10 +20,10 @@ B_bool is_iterator($Super obj) {
   $SuperG_class c = obj->$class;
   while(c)
     if(c->$superclass == ($SuperG_class)&B_IteratorG_methods)
-      return $True;
+      return B_True;
     else
       c = c->$superclass;
-  return $False;
+  return B_False;
 }
   
 int main() {

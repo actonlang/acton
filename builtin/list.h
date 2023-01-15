@@ -39,7 +39,7 @@ extern struct B_CollectionD_SequenceD_list *B_CollectionD_SequenceD_listG_witnes
 #define $SequenceD_listG_witness B_SequenceD_listG_witness
 #define $CollectionD_listG_witness B_CollectionD_SequenceD_listG_witness
 
-// void $printlist(B_list list); //for debugging; only for lists of ints
+// void B_printlist(B_list list); //for debugging; only for lists of ints
 
 // Iterators over lists ///////////////////////////////////////////////////////
 

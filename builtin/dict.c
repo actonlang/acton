@@ -97,7 +97,7 @@ B_OrdD_dict B_OrdD_dictG_new(B_Hashable hA, B_Eq eB) {
 
 B_bool B_dictrel(bool directfalse,B_OrdD_dict w, B_dict a, B_dict b) {
     if (directfalse) {
-        return $False;
+        return B_False;
     }; 
     B_Hashable wH = w->W_HashableD_AD_OrdD_dict;
     B_Eq wB = w->W_EqD_BD_OrdD_dict;
@@ -108,9 +108,9 @@ B_bool B_dictrel(bool directfalse,B_OrdD_dict w, B_dict a, B_dict b) {
         long h = fromB_int(wH->$class->__hash__(wH,x));
         int ixa = $lookdict(a, wH, h, x, &resa);
         int ixb = $lookdict(b, wH, h, x ,&resb);
-        if (ixb<0 || wB->$class->__ne__(wB,resa,resb)->val) return $False;
+        if (ixb<0 || wB->$class->__ne__(wB,resa,resb)->val) return B_False;
     }
-    return $True;
+    return B_True;
 }
 
 B_bool B_OrdD_dictD___eq__ (B_OrdD_dict w, B_dict a, B_dict b) {

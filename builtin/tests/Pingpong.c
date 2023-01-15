@@ -19,12 +19,12 @@ void lambda$1D___init__(lambda$1 $this, Pingpong self, B_int count) {
     $this->count = count;
     printf("BBB\n");
 }
-void lambda$1D___serialize__(lambda$1 $this, $NoneType state) {
+void lambda$1D___serialize__(lambda$1 $this, B_NoneType state) {
     $step_serialize($this->self,state);
     $step_serialize($this->count,state);
 }
 
-lambda$1 lambda$1D___deserialize__($NoneType state) {
+lambda$1 lambda$1D___deserialize__(B_NoneType state) {
     lambda$1 res = $DNEW(lambda$1,state);
     res->self = (Pingpong)$step_deserialize(state);
     res->count = (B_int)$step_deserialize(state);
@@ -39,10 +39,10 @@ $R lambda$1D___call__(lambda$1 $this, $Cont then) {
 void lambda$2D___init__(lambda$2 $this, Pingpong self) {
     $this->self = self;
 }
-void lambda$2D___serialize__(lambda$2 $this, $NoneType state) {
+void lambda$2D___serialize__(lambda$2 $this, B_NoneType state) {
     $step_serialize($this->self,state);
 }
-lambda$2 lambda$2D___deserialize__($NoneType state) {
+lambda$2 lambda$2D___deserialize__(B_NoneType state) {
     lambda$2 res = $DNEW(lambda$2,state);
     res->self = (Pingpong)$step_deserialize(state);
     return res;
@@ -63,13 +63,13 @@ $R Pingpong$ping(Pingpong self, $Cont then) {
     printf("%ld Ping %ld\n", self->i->val, self->count->val);
     $AFTER(toB_int(1), ($Cont)$NEW(lambda$1, self, self->count));
     printf("AAA\n");
-    return $R_CONT(then, $None);
+    return $R_CONT(then, B_None);
 }
-void PingpongD___serialize__(Pingpong self, $NoneType state) {
+void PingpongD___serialize__(Pingpong self, B_NoneType state) {
     $step_serialize(self->i,state);
     $step_serialize(self->count,state);
 }
-Pingpong PingpongD___deserialize__($NoneType state) {
+Pingpong PingpongD___deserialize__(B_NoneType state) {
     Pingpong res = $DNEW(Pingpong,state);
     res->i = (B_int)$step_deserialize(state);
     res->count = (B_int)$step_deserialize(state);
@@ -78,7 +78,7 @@ Pingpong PingpongD___deserialize__($NoneType state) {
 $R Pingpong$pong(Pingpong self, B_int q, $Cont then) {
     printf("%ld     %ld Pong\n", self->i->val, q->val);
     $AFTER(toB_int(2), ($Cont)$NEW(lambda$2, self));
-    return $R_CONT(then, $None);
+    return $R_CONT(then, B_None);
 }
 
 struct lambda$1G_class lambda$1G_methods = {

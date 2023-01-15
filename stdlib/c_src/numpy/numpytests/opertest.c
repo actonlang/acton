@@ -26,7 +26,7 @@ int main() {
   printf("a.shape = %s\n",a->shape->$class->__str__(a->shape)->str);
   printf("a.strides = %s\n",a->strides->$class->__str__(a->strides)->str);
   printf("a=%s\n",a->$class->__str__(a)->str);
-  $Plus$ndarrayB_int wit = $Plus$ndarrayB_intG_witness;
+  B_Plus$ndarrayD_int wit = B_Plus$ndarrayD_intG_witness;
   $ndarray b = wit->$class->__add__(wit,a, a);
   printf("b.shape = %s\n",b->shape->$class->__str__(b->shape)->str);
   printf("b.strides = %s\n",b->strides->$class->__str__(b->strides)->str);

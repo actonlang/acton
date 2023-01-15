@@ -22,14 +22,14 @@ int main() {
   for (long i=0; i<100; i++)
     wit->$class->append(wit,lst,toB_int(i));
   B_list lst2 = wit->$class->__getslice__(wit,lst,slc);
-  $print(2,to$str("lst2 = "),lst2);
+  B_print(2,to$str("lst2 = "),lst2);
   B_list lst3 =  B_listG_new(NULL,NULL);
   for (long i=100; i<110; i++)
     wit->$class->append(wit,lst3,toB_int(i));
-  $print(2,to$str("lst3 = "),lst3);
+  B_print(2,to$str("lst3 = "),lst3);
   slc = B_sliceG_new(toB_int(10),toB_int(30),toB_int(2));
   wit->$class->__setslice__(wit,(B_Iterable)wit->W_Collection,lst2,slc,lst3);
-  $print(2,to$str("lst2 = "),lst2);
+  B_print(2,to$str("lst2 = "),lst2);
   B_range r = $NEW(B_range,toB_int(10000),NULL,NULL);
   B_list lst4 = wit->W_Collection->$class->__fromiter__(wit->W_Collection,(B_Iterable)B_IterableD_rangeG_witness,r);
 
@@ -39,5 +39,5 @@ int main() {
   slc = B_sliceG_new(toB_int(0),toB_int(10000),i);
     B_listD_delslice(lst4,slc);
   }
-  $print(2,to$str("lst4 = "),lst4);
+  B_print(2,to$str("lst4 = "),lst4);
 }

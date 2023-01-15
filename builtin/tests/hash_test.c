@@ -22,8 +22,8 @@ int main() {
   printf("hash of %d is %ld\n",543,B_intD_hash(toB_int(543)));
   printf("hash of %d is %ld\n",-1,B_intD_hash(toB_int(-1)));
   printf("hash of %d is %ld\n",-5,B_intD_hash(toB_int(-5)));
-  printf("hash of %f is %ld\n",-2.0,B_floatD_hash(toB_float(-2.0)));
-  printf("hash of %f is %ld\n",-1.0,B_floatD_hash(toB_float(-1.0)));
-  printf("hash of %f is %ld\n",0.75,B_floatD_hash(toB_float(0.75)));
+  printf("hash of %f is %ld\n",-2.0,B_floatD_hash(to$float(-2.0)));
+  printf("hash of %f is %ld\n",-1.0,B_floatD_hash(to$float(-1.0)));
+  printf("hash of %f is %ld\n",0.75,B_floatD_hash(to$float(0.75)));
   printf("hash of 'test' as B_str is %ld\n",fromB_int(wit->$class->__hash__(wit,to$str("test"))));
 }

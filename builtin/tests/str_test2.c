@@ -27,7 +27,7 @@ int *slcel(B_int n) {
 }
 
 int main() {
-  $PlusB_str wit1 = $PlusB_strG_witness;
+  B_PlusB_str wit1 = B_PlusB_strG_witness;
   B_str prefix =  to$str("<rpc-reply xmlns=\"urn:ietf:params:xml:ns:netconf:base:1.1\" message-id=\"' + str(message_id) + '\">");
   B_str suffix =  to$str("</rpc-reply>");
   B_str message = to$str("message");
@@ -57,8 +57,8 @@ int main() {
   B_str chinese = to$str("但他呼吁进行全面调查");
   printf("chinese nbytes = %d, nchars = %d\n",chinese->nbytes,chinese->nchars);
   B_str s = to$str("firstSEPsecondSEPthörd");
-  $print(1,s->$class->partition(s,to$str("SEP")));
-  $print(1,s->$class->rpartition(s,to$str("SEP")));
-  $print(1,s->$class->capitalize(s));
-  $print(1,s->$class->center(s,toB_int(50),NULL));
+  B_print(1,s->$class->partition(s,to$str("SEP")));
+  B_print(1,s->$class->rpartition(s,to$str("SEP")));
+  B_print(1,s->$class->capitalize(s));
+  B_print(1,s->$class->center(s,toB_int(50),NULL));
 }

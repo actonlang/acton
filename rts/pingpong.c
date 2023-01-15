@@ -23,7 +23,7 @@ void lambda$1D___init__(lambda$1 $this, Pingpong self, B_int count, B_int q) {
 }
 
 B_bool lambda$1D___bool__(lambda$1 self) {
-    return $True;
+    return B_True;
 }
 
 B_str lambda$1D___str__(lambda$1 self) {
@@ -32,13 +32,13 @@ B_str lambda$1D___str__(lambda$1 self) {
     return to$str(s);
 }
 
-void lambda$1D___serialize__(lambda$1 self, $NoneType state) {
+void lambda$1D___serialize__(lambda$1 self, B_NoneType state) {
     $step_serialize(self->self,state);
     $step_serialize(self->count,state);
     $step_serialize(self->q,state);
 }
 
-lambda$1 lambda$1D___deserialize__(lambda$1 self, $NoneType state) {
+lambda$1 lambda$1D___deserialize__(lambda$1 self, B_NoneType state) {
     lambda$1 res = $DNEW(lambda$1,state);
     res->self = $step_deserialize(state);
     res->count = $step_deserialize(state);
@@ -68,7 +68,7 @@ void lambda$2D___init__(lambda$2 $this, Pingpong self, B_int q) {
 }
 
 B_bool lambda$2D___bool__(lambda$2 self) {
-    return $True;
+    return B_True;
 }
 
 B_str lambda$2D___str__(lambda$2 self) {
@@ -77,13 +77,13 @@ B_str lambda$2D___str__(lambda$2 self) {
     return to$str(s);
 }
 
-void lambda$2D___serialize__(lambda$2 self, $NoneType state) {
+void lambda$2D___serialize__(lambda$2 self, B_NoneType state) {
     $step_serialize(self->self,state);
     $step_serialize(self->q,state);
 }
 
 
-lambda$2 lambda$2D___deserialize__(lambda$2 self, $NoneType state) {
+lambda$2 lambda$2D___deserialize__(lambda$2 self, B_NoneType state) {
     lambda$2 res = $DNEW(lambda$2,state);
     res->self = $step_deserialize(state);
     res->q = $step_deserialize(state);
@@ -111,7 +111,7 @@ void lambda$3D___init__(lambda$3 $this, $Cont cont) {
 }
 
 B_bool lambda$3D___bool__(lambda$3 self) {
-    return $True;
+    return B_True;
 }
 
 B_str lambda$3D___str__(lambda$3 self) {
@@ -120,17 +120,17 @@ B_str lambda$3D___str__(lambda$3 self) {
     return to$str(s);
 }
 
-void lambda$3D___serialize__(lambda$3 self, $NoneType state) {
+void lambda$3D___serialize__(lambda$3 self, B_NoneType state) {
     $step_serialize(self->cont,state);
 }
 
-lambda$3 lambda$3D___deserialize__(lambda$3 self, $NoneType state) {
+lambda$3 lambda$3D___deserialize__(lambda$3 self, B_NoneType state) {
     lambda$3 res = $DNEW(lambda$3,state);
     res->cont = $step_deserialize(state);
     return res;
 }
 
-$R lambda$3D___call__ (lambda$3 $this, $NoneType none) {
+$R lambda$3D___call__ (lambda$3 $this, B_NoneType none) {
     $OLDACT();
     $Cont cont = $this->cont;
     return $R_CONT(cont, none);
@@ -154,7 +154,7 @@ $R PingpongD___init__(Pingpong self, B_int i, $Cont then) {
 }
 
 B_bool PingpongD___bool__(Pingpong self) {
-    return $True;
+    return B_True;
 }
 
 B_str PingpongD___str__(Pingpong self) {
@@ -162,13 +162,13 @@ B_str PingpongD___str__(Pingpong self) {
     asprintf(&s,"<Pingpong object at %p>",self);
     return to$str(s);
 }
-void PingpongD___serialize__(Pingpong self, $NoneType state) {
+void PingpongD___serialize__(Pingpong self, B_NoneType state) {
     $ActorG_methods.__serialize__(($Actor)self, state);
     $step_serialize(self->i,state);
     $step_serialize(self->count,state);
 }
 
-Pingpong PingpongD___deserialize__(Pingpong res, $NoneType state) {
+Pingpong PingpongD___deserialize__(Pingpong res, B_NoneType state) {
     if (!res)
         res = $DNEW(Pingpong,state);
     $ActorG_methods.__deserialize__(($Actor)res, state);
@@ -180,15 +180,15 @@ Pingpong PingpongD___deserialize__(Pingpong res, $NoneType state) {
 $R Pingpong$ping(Pingpong self, B_int q, $Cont then) {
     self->count = B_IntegralD_intG_witness->$class->__add__(B_IntegralD_intG_witness, self->count, toB_int(1));
     B_int j = B_IntegralD_intG_witness->$class->__mul__(B_IntegralD_intG_witness, self->count, q);
-    $print(1, $FORMAT("%ld Ping %8ld", self->i->val, j->val));
+    B_print(1, $FORMAT("%ld Ping %8ld", self->i->val, j->val));
     $AFTER(toB_int(1), ($Cont)lambda$1G_new(self, self->count, q));
-    return $R_CONT(then, $None);
+    return $R_CONT(then, B_None);
 }
 $R Pingpong$pong(Pingpong self, B_int n, B_int q, $Cont then) {
     B_int j = B_IntegralD_intG_witness->$class->__mul__(B_IntegralD_intG_witness, n, q);
-    $print(1, $FORMAT("%ld       %7ld Pong", self->i->val, j->val));
+    B_print(1, $FORMAT("%ld       %7ld Pong", self->i->val, j->val));
     $AFTER(toB_int(2), ($Cont)lambda$2G_new(self, B_IntegralD_intG_witness->$class->__neg__(B_IntegralD_intG_witness, q)));
-    return $R_CONT(then, $None);
+    return $R_CONT(then, B_None);
 }
 
 $R PingpongG_new(B_int i, $Cont then) {

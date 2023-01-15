@@ -205,12 +205,6 @@ componentsKW                        = name "components"
 serializeKW                         = name "__serialize__"
 deserializeKW                       = name "__deserialize__"
 
-primTuple                           = gPrim "tuple"
-primNoneType                        = gPrim "NoneType"
-primNone                            = gPrim "None"
-primTrue                            = gPrim "True"
-primFalse                           = gPrim "False"
-
 primAND                             = gPrim "AND"
 primOR                              = gPrim "OR"
 primNOT                             = gPrim "NOT"
@@ -668,9 +662,9 @@ instance Gen Expr where
       | otherwise                   = genQName env n
     gen env (Int _ i str)           = gen env primToStr <> parens (text "\"" <> text (show i) <> text "\"")
     gen env (Float _ _ str)         = gen env primToFloat <> parens (text str)
-    gen env (Bool _ True)           = gen env primTrue
-    gen env (Bool _ False)          = gen env primFalse
-    gen env (None _)                = gen env primNone
+    gen env (Bool _ True)           = gen env qnTrue
+    gen env (Bool _ False)          = gen env qnFalse
+    gen env (None _)                = gen env qnNone
     gen env e@Strings{}             = gen env primToStr <> parens(hsep (map pretty (sval e)))
     gen env e@BStrings{}            = gen env primToBytes <> parens(hsep (map pretty (sval e)))
     gen env (Call _ e p _)          = genCall env [] e p
@@ -732,9 +726,9 @@ instance Gen Type where
     gen env (TVar _ v)              = gen env v
     gen env (TCon  _ c)             = gen env c
     gen env (TFun _ _ p _ t)        = gen env t <+> parens (char '*') <+> parens (gen env p)
-    gen env (TTuple _ pos _)        = gen env primTuple
+    gen env (TTuple _ pos _)        = gen env qnTuple
     gen env (TOpt _ t)              = gen env t
-    gen env (TNone _)               = gen env primNoneType
+    gen env (TNone _)               = gen env qnNoneType
     gen env (TWild _)               = word
     gen env (TRow _ _ _ t TNil{})   = gen env t
     gen env (TRow _ _ _ t r)        = gen env t <> comma <+> gen env r

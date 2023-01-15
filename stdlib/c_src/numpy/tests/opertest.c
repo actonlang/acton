@@ -16,19 +16,19 @@
 #include "../numpy.h"
 
 int main() {
-  numpy$$ndarray v = numpy$$ndarray_arange(toB_int(0),toB_int(60),toB_int(1));
+  numpyQ_ndarray v = numpyQ_ndarray_arange(toB_int(0),toB_int(60),toB_int(1));
   B_list newshape = $NEW(B_list,NULL,NULL);
   B_listD_append(newshape,toB_int(3));
   B_listD_append(newshape,toB_int(2));
   B_listD_append(newshape,toB_int(2));
   B_listD_append(newshape,toB_int(5));
-  numpy$$ndarray a = numpy$$ndarray_reshape(v,newshape);
-  $printobj("a.shape =",a->shape);
-  $printobj("a.strides =",a->strides);
-  $printobj("a =",a);
-  numpy$B_IntegralD_ndarray wit = $NEW(numpy$B_IntegralD_ndarray,(numpy$$Primitive)numpy$$PrimitiveB_intG_witness);
-  numpy$$ndarray b = wit->$class->__add__(wit,a, a);
-  $printobj("b.shape =",b->shape);
-  $printobj("b.strides =",b->strides);
-  $printobj("b =",b);
+  numpyQ_ndarray a = numpyQ_ndarray_reshape(v,newshape);
+  B_printobj("a.shape =",a->shape);
+  B_printobj("a.strides =",a->strides);
+  B_printobj("a =",a);
+  numpyQ_IntegralD_ndarray wit = $NEW(numpyQ_IntegralD_ndarray,(numpyQ_Primitive)numpyQ_PrimitiveB_intG_witness);
+  numpyQ_ndarray b = wit->$class->__add__(wit,a, a);
+  B_printobj("b.shape =",b->shape);
+  B_printobj("b.strides =",b->strides);
+  B_printobj("b =",b);
 }

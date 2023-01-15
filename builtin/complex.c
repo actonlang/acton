@@ -95,15 +95,15 @@ B_complex B_NumberD_complexD___pos__ (B_NumberD_complex wit, B_complex c) {
 }
 
 $WORD B_NumberD_complex$real (B_NumberD_complex wit, B_complex c, B_Real wit2) {
-  return wit2->$class->__fromatom__(wit2,(B_atom)toB_float(creal(c->val)));
+  return wit2->$class->__fromatom__(wit2,(B_atom)to$float(creal(c->val)));
 }
 
 $WORD B_NumberD_complex$imag (B_NumberD_complex wit, B_complex c, B_Real wit2) {
-  return wit2->$class->__fromatom__(wit2,(B_atom)toB_float(cimag(c->val)));
+  return wit2->$class->__fromatom__(wit2,(B_atom)to$float(cimag(c->val)));
 }
 
 $WORD B_NumberD_complexD___abs__ (B_NumberD_complex wit, B_complex c, B_Real wit2) {
-  return wit2->$class->__fromatom__(wit2,(B_atom)toB_float(cabs(c->val)));
+  return wit2->$class->__fromatom__(wit2,(B_atom)to$float(cabs(c->val)));
 }
 
 B_complex B_NumberD_complex$conjugate (B_NumberD_complex wit, B_complex c) {
@@ -235,7 +235,7 @@ struct B_NumberD_complexG_class B_NumberD_complexG_methods = {
     (B_str (*)(B_NumberD_complex))$default__str__,
     (B_str (*)(B_NumberD_complex))$default__str__,
     B_NumberD_complexD___add__,
-    (B_complex (*)(B_NumberD_complex, B_complex, B_complex))$PlusD___iadd__,
+    (B_complex (*)(B_NumberD_complex, B_complex, B_complex))B_PlusD___iadd__,
     B_NumberD_complexD___mul__,
     (B_complex (*)(B_NumberD_complex, B_complex, B_complex))B_TimesD___imul__,
     NULL,        // fromatom

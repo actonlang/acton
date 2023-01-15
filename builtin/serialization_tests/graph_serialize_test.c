@@ -57,7 +57,7 @@ int main() {
   $Graph g = $NEW($Graph,nodes);
   for (int i=0; i<SIZE; i += 2) {
     B_int ival = toB_int(i);
-    B_float fval = toB_float(i*3.1416);
+    B_float fval = to$float(i*3.1416);
     B_list lst1 = $NEW(B_list,NULL,NULL);
     B_list lst2 = $NEW(B_list,NULL,NULL);
     node[i] = ($Node)$NEW($IntNode,lst1,ival);

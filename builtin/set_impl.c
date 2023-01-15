@@ -521,7 +521,7 @@ void B_IteratorD_set_init(B_IteratorD_set self, B_set set) {
 }
 
 B_bool B_IteratorD_set_bool(B_IteratorD_set self) {
-    return $True;
+    return B_True;
 }
 
 B_str B_IteratorD_set_str(B_IteratorD_set self) {

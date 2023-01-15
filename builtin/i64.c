@@ -158,7 +158,7 @@ B_i64 B_IntegralD_i64D___conjugate__(B_IntegralD_i64 wit,  B_i64 a) {
 }
 
 B_float B_IntegralD_i64D___float__ (B_IntegralD_i64 wit, B_i64 n) {
-  return toB_float((double)n->val);
+  return to$float((double)n->val);
 }
 
 $WORD B_IntegralD_i64D___trunc__ (B_IntegralD_i64 wit, B_i64 n, B_Integral wit2) {
@@ -281,7 +281,7 @@ B_DivD_i64 B_DivD_i64D___deserialize__(B_DivD_i64 self, $Serial$state state) {
 }
 
 B_float B_DivD_i64D___truediv__ (B_DivD_i64 wit, B_i64 a, B_i64 b) {
-  return toB_float((double)a->val/(double)b->val);
+  return to$float((double)a->val/(double)b->val);
 }
 
 // B_OrdD_i64  ////////////////////////////////////////////////////////////////////////////////////////
@@ -410,7 +410,7 @@ struct B_IntegralD_i64G_class B_IntegralD_i64G_methods = {
     (B_str (*)(B_IntegralD_i64))$default__str__,
     (B_str (*)(B_IntegralD_i64))$default__str__,
     B_IntegralD_i64D___add__,
-    (B_i64 (*)(B_IntegralD_i64, B_i64, B_i64))$PlusD___iadd__,
+    (B_i64 (*)(B_IntegralD_i64, B_i64, B_i64))B_PlusD___iadd__,
     B_IntegralD_i64D___mul__,
     (B_i64 (*)(B_IntegralD_i64, B_i64, B_i64))B_TimesD___imul__,
     B_IntegralD_i64D___fromatom__,

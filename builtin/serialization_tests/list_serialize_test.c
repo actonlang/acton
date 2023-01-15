@@ -34,12 +34,12 @@ int main() {
       B_listD_append(lst2,sublst);
     }
   }
-  $print(1,lst2);
+  B_print(1,lst2);
   $ROW row = $serialize(($Serializable)lst2,NULL);
   //  $write_serialized(row,"test2.bin");
   B_list lst3 = (B_list)$deserialize(row, NULL);
   //  $ROW row2 = $read_serialized("test2.bin");
   // $write_serialized(row2,"test3.bin");
   // B_list lst0 = B_listD_getitem(lst3,4);
-  $print(1,lst3);
+  B_print(1,lst3);
 }

@@ -78,7 +78,7 @@ struct B_TimesD_SequenceD_listG_class B_TimesD_SequenceD_listG_methods = {
     (B_str (*)(B_TimesD_SequenceD_list))$default__str__,
     (B_str (*)(B_TimesD_SequenceD_list))$default__str__,
     B_TimesD_SequenceD_listD___add__,
-    (B_list (*)(B_TimesD_SequenceD_list, B_list, B_list))$PlusD___iadd__,
+    (B_list (*)(B_TimesD_SequenceD_list, B_list, B_list))B_PlusD___iadd__,
     B_TimesD_SequenceD_listD___mul__,
     (B_list (*)(B_TimesD_SequenceD_list, B_list, B_int))B_TimesD___imul__,
 };
@@ -135,11 +135,11 @@ B_OrdD_list B_OrdD_listD___deserialize__(B_OrdD_list self, $Serial$state state) 
 }
 
 B_bool B_OrdD_listD___eq__ (B_OrdD_list w, B_list a, B_list b) {
-    if (a->length != b->length) return $False;                                
+    if (a->length != b->length) return B_False;                                
     B_Ord w2 = w->W_OrdD_AD_OrdB_list;
     for (int i = 0; i<a->length; i++)
-        if ((w2->$class->__ne__(w2,a->data[i],b->data[i]))->val) return $False;
-    return $True;
+        if ((w2->$class->__ne__(w2,a->data[i],b->data[i]))->val) return B_False;
+    return B_True;
 }
 
 B_bool B_OrdD_listD___ne__ (B_OrdD_list w, B_list a, B_list b) {
@@ -154,7 +154,7 @@ B_bool B_OrdD_listD___lt__ (B_OrdD_list w, B_list a, B_list b) {
     if (i==a->length)
         return toB_bool(i<b->length);
     if (i==b->length)
-        return $False;
+        return B_False;
     return  wA->$class->__lt__(wA,a->data[i],b->data[i]);
 }
 
@@ -166,7 +166,7 @@ B_bool B_OrdD_listD___le__ (B_OrdD_list w, B_list a, B_list b) {
     if (i==a->length)
         return toB_bool(i<=b->length);
     if (i==b->length)
-        return $False;
+        return B_False;
     return  wA->$class->__lt__(wA,a->data[i],b->data[i]);
 }
 
@@ -281,7 +281,7 @@ B_bool B_ContainerD_listD___containsnot__(B_ContainerD_list wit, B_list self, $W
     return toB_bool(B_listD_containsnot(wit->W_EqD_AD_ContainerB_list,self,elem));
 }
 
-B_Iterator B_IterableD_list$reversed__iter__(B_Iterable wit, $WORD lst) {
+B_Iterator B_IterableD_listB_reversed__iter__(B_Iterable wit, $WORD lst) {
     return B_listD_reversed(lst);
 }
 

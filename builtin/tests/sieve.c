@@ -69,15 +69,15 @@ void printlist(B_list lst) {
 // Sieve of Erathostenes 
 B_list sieve(int n) {
   B_list isPrime = $NEW(B_list,NULL,NULL); 
-  B_listD_append(isPrime,$False); 
-  B_listD_append(isPrime,$False);
+  B_listD_append(isPrime,B_False); 
+  B_listD_append(isPrime,B_False);
   for (int i=2; i < n; i++) 
-    B_listD_append(isPrime,$True);
+    B_listD_append(isPrime,B_True);
   for (int i=2; i < floor(sqrt(n)); i++) {
     //if (fromB_bool(isPrime->data[i])) {
     if (fromB_bool(B_listD_getitem(isPrime,i))) {
       for (int k=i*i; k<n; k+=i)
-        B_listD_setitem(isPrime,k,$False);
+        B_listD_setitem(isPrime,k,B_False);
     }
   }
   B_list primes = $NEW(B_list,NULL,NULL);
@@ -95,15 +95,15 @@ B_list sieve(int n) {
 B_list sieveS(B_SequenceD_list wit, int n) {
   $WORD w;
   B_list isPrime = $NEW(B_list,NULL,NULL);
-  wit->$class->append(wit,isPrime,$False); 
-  wit->$class->append(wit,isPrime,$False);
+  wit->$class->append(wit,isPrime,B_False); 
+  wit->$class->append(wit,isPrime,B_False);
   for (int i=2; i < n; i++) 
-    wit->$class->append(wit,isPrime,$True);
+    wit->$class->append(wit,isPrime,B_True);
   for (int i=2; i < floor(sqrt(n)); i++) {
     w = wit->$class->__getitem__(wit,isPrime,toB_int(i));
     if (fromB_int(w)) {
       for (int k=i*i; k<n; k+=i)
-        wit->$class->__setitem__(wit,isPrime,toB_int(k),$False);
+        wit->$class->__setitem__(wit,isPrime,toB_int(k),B_False);
     }
   }
   B_list primes = $NEW(B_list,NULL,NULL);

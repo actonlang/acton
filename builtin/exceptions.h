@@ -186,7 +186,7 @@ struct B_MemoryErrorG_class {
     B_str (*__repr__)(B_MemoryError);
 };
 
-typedef struct $B_MemoryError *$B_MemoryError;
+typedef struct B_MemoryError *B_MemoryError;
 
 struct B_MemoryError {
     struct B_MemoryErrorG_class *$class;

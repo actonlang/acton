@@ -24,13 +24,13 @@ int main() {
   B_range r = $NEW(B_range,toB_int(10),toB_int(20),toB_int(1));
   B_Iterable wit = (B_Iterable)B_IterableD_rangeG_witness;
   B_Iterator it = wit->$class->__iter__(wit,r);
-  $print(2,to$str("lst = "), B_listD_fromiter(it));
-  $print(2,to$str("enumerate(lst,0) = "), B_listD_fromiter($enumerate(wit,r,0)));
-  $print(2,to$str("filter(even,lst) = "), B_listD_fromiter($filter(wit,$even,r)));
-  $print(2,to$str("map(even,lst) = "), B_listD_fromiter($map(wit,($WORD(*)($WORD))$even,r)));
+  B_print(2,to$str("lst = "), B_listD_fromiter(it));
+  B_print(2,to$str("enumerate(lst,0) = "), B_listD_fromiter(B_enumerate(wit,r,0)));
+  B_print(2,to$str("filter(even,lst) = "), B_listD_fromiter(B_filter(wit,$even,r)));
+  B_print(2,to$str("map(even,lst) = "), B_listD_fromiter(B_map(wit,($WORD(*)($WORD))$even,r)));
   B_str chinese = to$str("但他呼吁进行全面调查");
-  $print(3,chinese,to$str(" in ascii is "),$ascii(chinese));
-  $print(2,to$str("2^32 in hex is "),$hex((B_Integral)B_IntegralD_intG_witness,toB_int(65536L*65536L)));
-  $print(2,to$str("chr(8707) is "), $chr((B_Integral)B_IntegralD_intG_witness,toB_int(8707)));
-  $print(2,to$str("ord('∃') is "), $ord(to$str("∃")));
+  B_print(3,chinese,to$str(" in ascii is "),$ascii(chinese));
+  B_print(2,to$str("2^32 in hex is "),$hex((B_Integral)B_IntegralD_intG_witness,toB_int(65536L*65536L)));
+  B_print(2,to$str("chr(8707) is "), $chr((B_Integral)B_IntegralD_intG_witness,toB_int(8707)));
+  B_print(2,to$str("ord('∃') is "), $ord(to$str("∃")));
 }

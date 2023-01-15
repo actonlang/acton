@@ -23,8 +23,8 @@ struct lambda$1G_class {
     int $class_id;
     $SuperG_class $superclass;
     void (*__init__)(lambda$1, $Cont);
-    void (*__serialize__)(lambda$1, $NoneType);
-    lambda$1 (*__deserialize__)(lambda$1, $NoneType);
+    void (*__serialize__)(lambda$1, B_NoneType);
+    lambda$1 (*__deserialize__)(lambda$1, B_NoneType);
     B_bool (*__bool__)(lambda$1);
     B_str (*__str__)(lambda$1);
     $R (*__call__)(lambda$1, B_Msg);    
@@ -39,8 +39,8 @@ struct lambda$2G_class {
     int $class_id;
     $SuperG_class $superclass;
     void (*__init__)(lambda$2, Act, B_int, B_list);
-    void (*__serialize__)(lambda$2, $NoneType);
-    lambda$2 (*__deserialize__)(lambda$2, $NoneType);
+    void (*__serialize__)(lambda$2, B_NoneType);
+    lambda$2 (*__deserialize__)(lambda$2, B_NoneType);
     B_bool (*__bool__)(lambda$2);
     B_str (*__str__)(lambda$2);
     $R (*__call__)(lambda$2, $Cont);    
@@ -57,8 +57,8 @@ struct ActG_class {
     int $class_id;
     $SuperG_class $superclass;
     $R (*__init__)(Act, B_int, $Cont);
-    void (*__serialize__)(Act, $NoneType);
-    Act (*__deserialize__)(Act, $NoneType);
+    void (*__serialize__)(Act, B_NoneType);
+    Act (*__deserialize__)(Act, B_NoneType);
     B_bool (*__bool__)(Act);
     B_str (*__str__)(Act);
     $R (*act$local)(Act, B_int, B_list, $Cont);
@@ -80,8 +80,8 @@ struct lambda$3G_class {
     int $class_id;
     $SuperG_class $superclass;
     void (*__init__)(lambda$3, Root, B_Iterator, $Cont);
-    void (*__serialize__)(lambda$3, $NoneType);
-    lambda$3 (*__deserialize__)(lambda$3, $NoneType);
+    void (*__serialize__)(lambda$3, B_NoneType);
+    lambda$3 (*__deserialize__)(lambda$3, B_NoneType);
     B_bool (*__bool__)(lambda$3);
     B_str (*__str__)(lambda$3);
     $R (*__call__)(lambda$3, Act);
@@ -98,8 +98,8 @@ struct lambda$4G_class {
     int $class_id;
     $SuperG_class $superclass;
     void (*__init__)(lambda$4, $Cont);
-    void (*__serialize__)(lambda$4, $NoneType);
-    lambda$4 (*__deserialize__)(lambda$4, $NoneType);
+    void (*__serialize__)(lambda$4, B_NoneType);
+    lambda$4 (*__deserialize__)(lambda$4, B_NoneType);
     B_bool (*__bool__)(lambda$4);
     B_str (*__str__)(lambda$4);
     $R (*__call__)(lambda$4, $WORD);
@@ -114,8 +114,8 @@ struct RootG_class {
     int $class_id;
     $SuperG_class $superclass;
     $R (*__init__)(Root, B_Env, $Cont);
-    void (*__serialize__)(Root, $NoneType);
-    Root (*__deserialize__)(Root, $NoneType);
+    void (*__serialize__)(Root, B_NoneType);
+    Root (*__deserialize__)(Root, B_NoneType);
     B_bool (*__bool__)(Root);
     B_str (*__str__)(Root);
 };

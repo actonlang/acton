@@ -20,19 +20,19 @@ void $Node__init__($Node self, B_list nbors) {
   self->nbors = nbors;
 }
 
-void $Node__serialize__($Node self,$NoneType state) {
+void $Node__serialize__($Node self,B_NoneType state) {
   $step_serialize(self->nbors,state); 
 }
 
 B_bool $Node__bool__($Node self) {
-  return $True;
+  return B_True;
 }
 
 B_str $Node__str__($Node self) {
   return to$str("$Node");
 }
 
-$Node $Node__deserialize__($NoneType state) {                   
+$Node $Node__deserialize__(B_NoneType state) {                   
   $Node res = $DNEW($Node,state);                    
   res->nbors = (B_list)$step_deserialize(state);      
   return res;                                        
@@ -48,19 +48,19 @@ void $IntNode__init__($IntNode self, B_list nbors, B_int ival) {
 }
 
 B_bool $IntNode__bool__($IntNode self) {
-  return $True;
+  return B_True;
 }
 
 B_str $IntNode__str__($IntNode self) {
   return to$str("$IntNode");
 }
 
-void $IntNode__serialize__($IntNode self,$NoneType state) {
+void $IntNode__serialize__($IntNode self,B_NoneType state) {
   $step_serialize(self->nbors,state);
   $step_serialize(self->ival,state);
 }
 
-$IntNode $IntNode__deserialize__($NoneType state) {
+$IntNode $IntNode__deserialize__(B_NoneType state) {
   $IntNode res = $DNEW($IntNode,state);                    
   res->nbors = (B_list)$step_deserialize(state);
   res->ival = (B_int)$step_deserialize(state);
@@ -78,19 +78,19 @@ void $FloatNode__init__($FloatNode self, B_list nbors, B_float fval) {
 }
 
 B_bool $FloatNode__bool__($FloatNode self) {
-  return $True;
+  return B_True;
 }
 
 B_str $FloatNode__str__($FloatNode self) {
   return to$str("$FloatNode");
 }
 
-void $FloatNode__serialize__($FloatNode self,$NoneType state) {
+void $FloatNode__serialize__($FloatNode self,B_NoneType state) {
   $step_serialize(self->nbors,state);
   $step_serialize(self->fval,state);
 }
 
-$FloatNode $FloatNode__deserialize__($NoneType state) {
+$FloatNode $FloatNode__deserialize__(B_NoneType state) {
   $FloatNode res = $DNEW($FloatNode,state);                    
   res->nbors = (B_list)$step_deserialize(state);
   res->fval = (B_float)$step_deserialize(state);
@@ -108,18 +108,18 @@ void $Graph__init__($Graph self, B_list nodes) {
 }
 
 B_bool $Graph__bool__($Graph self) {
-  return $True;
+  return B_True;
 }
 
 B_str $Graph__str__($Graph self) {
   return to$str("$Graph");
 }
 
-void $Graph__serialize__($Graph self, $NoneType state) {
+void $Graph__serialize__($Graph self, B_NoneType state) {
   $step_serialize(self->nodes,state);
 }
 
-$Graph $Graph__deserialize__($NoneType state) {
+$Graph $Graph__deserialize__(B_NoneType state) {
   $Graph res = $DNEW($Graph,state);
   res->nodes = (B_list)$step_deserialize(state);
   return res;

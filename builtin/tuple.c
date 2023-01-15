@@ -95,7 +95,7 @@ void B_IteratorB_tupleD_init(B_IteratorB_tuple self, B_tuple lst) {
 }
 
 B_bool B_IteratorB_tupleD_bool(B_IteratorB_tuple self) {
-    return $True;
+    return B_True;
 }
 
 B_str B_IteratorB_tupleD_str(B_IteratorB_tuple self) {
@@ -259,8 +259,8 @@ B_bool B_HashableD_tupleD___eq__ (B_HashableD_tuple wit, B_tuple tup1, B_tuple t
     //type-checking guarantees that sizes are equal
     for (int i=0; i<tup1->size; i++)
         if (!wit->W_Hashable[i]->$class->__eq__(wit->W_Hashable[i],tup1->components[i],tup2->components[i]))
-            return $False;
-    return $True;
+            return B_False;
+    return B_True;
 }
 
 B_bool B_HashableD_tupleD___ne__ (B_HashableD_tuple wit, B_tuple tup1, B_tuple tup2) {

@@ -21,7 +21,7 @@ void lambda$1D___init__(lambda$1 $this, $Cont cont$0) {
 }
 
 B_bool lambda$1D___bool__(lambda$1 self) {
-  return $True;
+  return B_True;
 }
 
 B_str lambda$1D___str__(lambda$1 self) {
@@ -30,18 +30,18 @@ B_str lambda$1D___str__(lambda$1 self) {
   return to$str(s);
 }
 
-void lambda$1D___serialize__(lambda$1 self, $NoneType state) {
+void lambda$1D___serialize__(lambda$1 self, B_NoneType state) {
   $step_serialize(self->cont$0,state); 
 }
 
-lambda$1 lambda$1D___deserialize__($NoneType state) {
+lambda$1 lambda$1D___deserialize__(B_NoneType state) {
   lambda$1 res = $DNEW(lambda$1,state);
   res->cont$0 = $step_deserialize(state);  
   return res;
 }
 
 $R lambda$1D___call__(lambda$1 $this, B_Msg _ignore) {
-    return $this->cont$0->$class->__call__($this->cont$0, $None);
+    return $this->cont$0->$class->__call__($this->cont$0, B_None);
 }
 
 struct lambda$1G_class lambda$1G_methods = {
@@ -65,7 +65,7 @@ void lambda$2D___init__(lambda$2 $this, Act self, B_int from, B_list table) {
 }
 
 B_bool lambda$2D___bool__(lambda$2 self) {
-  return $True;
+  return B_True;
 }
 
 B_str lambda$2D___str__(lambda$2 self) {
@@ -74,14 +74,14 @@ B_str lambda$2D___str__(lambda$2 self) {
   return to$str(s);
 }
 
-void lambda$2D___serialize__(lambda$2 self, $NoneType state) {
+void lambda$2D___serialize__(lambda$2 self, B_NoneType state) {
   $step_serialize(self->self,state); 
   $step_serialize(self->from,state); 
   $step_serialize(self->table,state);
 }
 
 
-lambda$2 lambda$2D___deserialize__($NoneType state) {
+lambda$2 lambda$2D___deserialize__(B_NoneType state) {
   lambda$2 res = $DNEW(lambda$2,state);
   res->self = $step_deserialize(state);      
   res->from = $step_deserialize(state);     
@@ -111,13 +111,13 @@ $R ActD___init__(Act self, B_int i, $Cont cont$0) {
     $ActorG_methods.__init__(($Actor)self);
     self->i = i;
     self->count = toB_int(0);
-    self->rcv_dict = B_dictG_new((B_Hashable)B_HashableD_intG_witness, NULL, $None);
-    self->snd_dict = B_dictG_new((B_Hashable)B_HashableD_intG_witness, NULL, $None);
-    return $R_CONT(cont$0, $None);
+    self->rcv_dict = B_dictG_new((B_Hashable)B_HashableD_intG_witness, NULL, B_None);
+    self->snd_dict = B_dictG_new((B_Hashable)B_HashableD_intG_witness, NULL, B_None);
+    return $R_CONT(cont$0, B_None);
 }
 
 B_bool ActD___bool__(Act self) {
-  return $True;
+  return B_True;
 }
 
 B_str ActD___str__(Act self) {
@@ -126,14 +126,14 @@ B_str ActD___str__(Act self) {
   return to$str(s);
 }
 
-void ActD___serialize__(Act self, $NoneType state) {
+void ActD___serialize__(Act self, B_NoneType state) {
  $step_serialize(self->i,state);        
  $step_serialize(self->count,state);    
  $step_serialize(self->rcv_dict,state); 
  $step_serialize(self->snd_dict,state); 
 }
 
-Act ActD___deserialize__($NoneType state) {
+Act ActD___deserialize__(B_NoneType state) {
   Act res = $DNEW(Act,state);
   res->i = $step_deserialize(state);         
   res->count = $step_deserialize(state);     
@@ -152,7 +152,7 @@ $R Act$act$local(Act self, B_int from, B_list table, $Cont cont$0) {
         Act tmp$1 = B_SequenceD_listG_witness->$class->__getitem__(B_SequenceD_listG_witness, table, to);
         return tmp$1->$class->act(tmp$1, self->i, table, ($Cont)$NEW(lambda$1, cont$0));
     }
-    return $R_CONT(cont$0, $None);
+    return $R_CONT(cont$0, B_None);
 }
     
 $R Act$act(Act self, B_int from, B_list table, $Cont cont$0) {
@@ -181,7 +181,7 @@ void lambda$3D___init__(lambda$3 $this, Root self, B_Iterator iter$1, $Cont cont
 }
 
 B_bool lambda$3D___bool__(lambda$3 self) {
-  return $True;
+  return B_True;
 }
 
 B_str lambda$3D___str__(lambda$3 self) {
@@ -190,13 +190,13 @@ B_str lambda$3D___str__(lambda$3 self) {
   return to$str(s);
 }
 
-void lambda$3D___serialize__(lambda$3 self, $NoneType state) {
+void lambda$3D___serialize__(lambda$3 self, B_NoneType state) {
   $step_serialize(self->self,state);  
   $step_serialize(self->iter$1,state);
   $step_serialize(self->cont$0,state);
 }
 
-lambda$3 lambda$3D___deserialize__($NoneType state) {
+lambda$3 lambda$3D___deserialize__(B_NoneType state) {
   lambda$3 res = $DNEW(lambda$3,state);
   res->self = $step_deserialize(state);        
   res->iter$1 = $step_deserialize(state); 
@@ -227,7 +227,7 @@ void lambda$4D___init__(lambda$4 $this, $Cont cont$0) {
 }
 
 B_bool lambda$4D___bool__(lambda$4 self) {
-  return $True;
+  return B_True;
 }
 
 B_str lambda$4D___str__(lambda$4 self) {
@@ -236,18 +236,18 @@ B_str lambda$4D___str__(lambda$4 self) {
   return to$str(s);
 }
 
-void lambda$4D___serialize__(lambda$4 self, $NoneType state) {
+void lambda$4D___serialize__(lambda$4 self, B_NoneType state) {
    $step_serialize(self->cont$0,state); 
 }
 
-lambda$4 lambda$4D___deserialize__($NoneType state) {
+lambda$4 lambda$4D___deserialize__(B_NoneType state) {
   lambda$4 res = $DNEW(lambda$4,state);
   res->cont$0 = ($Cont)$step_deserialize(state);  
   return res;
 }
 
 $R lambda$4D___call__(lambda$4 $this, $WORD _ignore) {
-    return $this->cont$0->$class->__call__($this->cont$0, $None);
+    return $this->cont$0->$class->__call__($this->cont$0, B_None);
 }
 
 struct lambda$4G_class lambda$4G_methods = {
@@ -267,15 +267,15 @@ struct lambda$4G_class lambda$4G_methods = {
 
 $R loop$1(Root self, B_Iterator iter$1, $Cont cont$0, $WORD _ignore) {
     B_int i = iter$1->$class->__next__(iter$1);
-    if (i == $None) {
-        return join$1(self, cont$0, $None);
+    if (i == B_None) {
+        return join$1(self, cont$0, B_None);
     }
     return $NEWCC(Act, ($Cont)$NEW(lambda$3, self, iter$1, cont$0), i);
 }
 
 $R cont$1(Root self, B_Iterator iter$1, $Cont cont$0, Act $res) {
     B_SequenceD_listG_witness->$class->append(B_SequenceD_listG_witness, self->table, $res);
-    return loop$1(self, iter$1, cont$0, $None);
+    return loop$1(self, iter$1, cont$0, B_None);
 }
 
 $R join$1(Root self, $Cont cont$0, $WORD _ignore) {
@@ -285,13 +285,13 @@ $R join$1(Root self, $Cont cont$0, $WORD _ignore) {
 
 $R RootD___init__(Root self, B_Env _ignore, $Cont cont$0) {
     $ActorG_methods.__init__(($Actor)self);
-    self->table = B_listG_new(NULL, $None);
-    B_Iterator iter$1 = B_IterableD_rangeG_witness->$class->__iter__(B_IterableD_rangeG_witness, $NEW(B_range, no_actors, $None, $None));
-    return loop$1(self, iter$1, cont$0, $None);
+    self->table = B_listG_new(NULL, B_None);
+    B_Iterator iter$1 = B_IterableD_rangeG_witness->$class->__iter__(B_IterableD_rangeG_witness, $NEW(B_range, no_actors, B_None, B_None));
+    return loop$1(self, iter$1, cont$0, B_None);
 }
 
 B_bool RootD___bool__(Root self) {
-  return $True;
+  return B_True;
 }
 
 B_str RootD___str__(Root self) {
@@ -300,11 +300,11 @@ B_str RootD___str__(Root self) {
   return to$str(s);
 }
 
-void RootD___serialize__(Root self, $NoneType state) {
+void RootD___serialize__(Root self, B_NoneType state) {
   $step_serialize(self->table,state); 
 }
 
-Root RootD___deserialize__($NoneType state) {
+Root RootD___deserialize__(B_NoneType state) {
   Root res = $DNEW(Root,state);
   res->table = $step_deserialize(state);   
   return res;

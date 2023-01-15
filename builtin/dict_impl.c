@@ -332,7 +332,7 @@ void B_IteratorD_dictD_init(B_IteratorD_dict self, B_dict dict) {
 
 
 B_bool B_IteratorD_dictD_bool(B_IteratorD_dict self) {
-    return $True;
+    return B_True;
 }
 
 B_str B_IteratorD_dictD_str(B_IteratorD_dict self) {
@@ -461,7 +461,7 @@ void B_InteratorD_dict_values_init(B_InteratorD_dict_values self, B_dict dict) {
 
 
 B_bool B_InteratorD_dict_values_bool(B_InteratorD_dict_values self) {
-    return $True;
+    return B_True;
 }
 
 B_str B_InteratorD_dict_values_str(B_InteratorD_dict_values self) {
@@ -515,7 +515,7 @@ void B_InteratorD_dict_items_init(B_InteratorD_dict_items self, B_dict dict) {
 
 
 B_bool B_InteratorD_dict_items_bool(B_InteratorD_dict_items self) {
-    return $True;
+    return B_True;
 }
 
 B_str B_InteratorD_dict_items_str(B_InteratorD_dict_items self) {

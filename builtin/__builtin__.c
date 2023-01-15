@@ -26,7 +26,7 @@ $WORD B_OrdD___ge__(B_Ord wit, $WORD a, $WORD b) {
     return wit->$class->__le__(wit,b,a);
 }
 
-$WORD $PlusD___iadd__ ($Plus wit, $WORD a, $WORD b) {
+$WORD B_PlusD___iadd__ (B_Plus wit, $WORD a, $WORD b) {
     return wit->$class->__add__(wit, a, b);
 }
 
@@ -101,17 +101,17 @@ B_Logical B_LogicalG_new() {
     return res;
 }
 
-struct $PlusG_class $PlusG_methods = {"$PlusG_class", UNASSIGNED, NULL, (void (*)($Plus))$default__init__, NULL, NULL, (B_bool (*)($Plus))$default__bool__,  (B_str (*)($Plus))$default__str__, (B_str (*)($Plus))$default__str__,
-                                    NULL, $PlusD___iadd__};
+struct B_PlusG_class B_PlusG_methods = {"B_PlusG_class", UNASSIGNED, NULL, (void (*)(B_Plus))$default__init__, NULL, NULL, (B_bool (*)(B_Plus))$default__bool__,  (B_str (*)(B_Plus))$default__str__, (B_str (*)(B_Plus))$default__str__,
+                                    NULL, B_PlusD___iadd__};
 
-$Plus $PlusG_new() {
-    $Plus res = malloc(sizeof(struct $Plus));
-    res->$class = &$PlusG_methods;
+B_Plus B_PlusG_new() {
+    B_Plus res = malloc(sizeof(struct B_Plus));
+    res->$class = &B_PlusG_methods;
     return res;
 }
 
 struct B_TimesG_class B_TimesG_methods = {"B_TimesG_class", UNASSIGNED, NULL, (void (*)(B_Times))$default__init__, NULL, NULL, (B_bool (*)(B_Times))$default__bool__,  (B_str (*)(B_Times))$default__str__, (B_str (*)(B_Times))$default__str__,
-                                      NULL, ($WORD (*)(B_Times,$WORD,$WORD))$PlusD___iadd__, B_TimesD___imul__};
+                                      NULL, ($WORD (*)(B_Times,$WORD,$WORD))B_PlusD___iadd__, B_TimesD___imul__};
 
 B_Times B_TimesG_new() {
     B_Times res = malloc(sizeof(struct B_Times));
@@ -258,7 +258,7 @@ void B_NumberD___init__(B_Number self) {
 }
 
 struct B_NumberG_class B_NumberG_methods = {"B_NumberG_class", UNASSIGNED, ($SuperG_class)&B_TimesG_methods, B_NumberD___init__, NULL, NULL, (B_bool (*)(B_Number))$default__bool__,  (B_str (*)(B_Number))$default__str__,(B_str (*)(B_Number))$default__str__,
-                                        NULL, ($WORD (*)(B_Number,$WORD,$WORD))$PlusD___iadd__, NULL, ($WORD (*)(B_Number,$WORD,$WORD))$PlusD___iadd__, NULL, NULL, NULL, B_NumberD___ipow__, NULL, NULL, NULL, NULL, NULL, NULL};
+                                        NULL, ($WORD (*)(B_Number,$WORD,$WORD))B_PlusD___iadd__, NULL, ($WORD (*)(B_Number,$WORD,$WORD))B_PlusD___iadd__, NULL, NULL, NULL, B_NumberD___ipow__, NULL, NULL, NULL, NULL, NULL, NULL};
 
 
 B_Number B_NumberG_new() {
@@ -270,7 +270,7 @@ B_Number B_NumberG_new() {
 
 
 struct B_RealG_class B_RealG_methods = {"B_RealG_class", UNASSIGNED, ($SuperG_class)&B_NumberG_methods, (void (*)(B_Real))$default__init__, NULL, NULL, (B_bool (*)(B_Real))$default__bool__,  (B_str (*)(B_Real))$default__str__, (B_str (*)(B_Real))$default__str__,
-                                    NULL, ($WORD (*)(B_Real,$WORD,$WORD))$PlusD___iadd__, NULL, ($WORD (*)(B_Real,$WORD,$WORD))B_TimesD___imul__, NULL, NULL, NULL, ($WORD (*)(B_Real,$WORD,$WORD))B_NumberD___ipow__, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL};
+                                    NULL, ($WORD (*)(B_Real,$WORD,$WORD))B_PlusD___iadd__, NULL, ($WORD (*)(B_Real,$WORD,$WORD))B_TimesD___imul__, NULL, NULL, NULL, ($WORD (*)(B_Real,$WORD,$WORD))B_NumberD___ipow__, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL};
 
 
 B_Real B_RealG_new() {
@@ -280,7 +280,7 @@ B_Real B_RealG_new() {
 }
 
 struct B_RationalG_class B_RationalG_methods = {"B_RationalG_class", UNASSIGNED, ($SuperG_class)&B_RealG_methods, (void (*)(B_Rational))$default__init__, NULL, NULL, (B_bool (*)(B_Rational))$default__bool__,  (B_str (*)(B_Rational))$default__str__, (B_str (*)(B_Rational))$default__str__,
-                                            NULL, ($WORD (*)(B_Rational,$WORD,$WORD))$PlusD___iadd__, NULL,  ($WORD (*)(B_Rational,$WORD,$WORD))B_TimesD___imul__, NULL, NULL, NULL, ($WORD (*)(B_Rational,$WORD,$WORD))B_NumberD___ipow__, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL};
+                                            NULL, ($WORD (*)(B_Rational,$WORD,$WORD))B_PlusD___iadd__, NULL,  ($WORD (*)(B_Rational,$WORD,$WORD))B_TimesD___imul__, NULL, NULL, NULL, ($WORD (*)(B_Rational,$WORD,$WORD))B_NumberD___ipow__, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL};
 
 
 B_Rational B_RationalG_new() {
@@ -295,7 +295,7 @@ void B_IntegralD___init__(B_Integral self) {
 }
   
 struct B_IntegralG_class B_IntegralG_methods = {"B_IntegralG_class", UNASSIGNED, ($SuperG_class)&B_RationalG_methods, B_IntegralD___init__, NULL, NULL, (B_bool (*)(B_Integral))$default__bool__,  (B_str (*)(B_Integral))$default__str__, (B_str (*)(B_Integral))$default__str__,
-                                            NULL,  ($WORD (*)(B_Integral,$WORD,$WORD))$PlusD___iadd__, NULL,  ($WORD (*)(B_Integral,$WORD,$WORD))B_TimesD___imul__, NULL, NULL, NULL,  ($WORD (*)(B_Integral,$WORD,$WORD))B_NumberD___ipow__, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, B_IntegralD___ifloordiv__, B_IntegralD___imod__, B_IntegralD___ilshift__, B_IntegralD___irshift__, NULL};
+                                            NULL,  ($WORD (*)(B_Integral,$WORD,$WORD))B_PlusD___iadd__, NULL,  ($WORD (*)(B_Integral,$WORD,$WORD))B_TimesD___imul__, NULL, NULL, NULL,  ($WORD (*)(B_Integral,$WORD,$WORD))B_NumberD___ipow__, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, B_IntegralD___ifloordiv__, B_IntegralD___imod__, B_IntegralD___ilshift__, B_IntegralD___irshift__, NULL};
 
 B_Integral B_IntegralG_new() {
     B_Integral res = malloc(sizeof(struct B_Integral));
@@ -309,7 +309,7 @@ void $register_builtin_protocols() {
     $register(&B_EqG_methods);
     $register(&B_OrdG_methods);
     $register(&B_LogicalG_methods);
-    $register(&$PlusG_methods);
+    $register(&B_PlusG_methods);
     $register(&B_TimesG_methods);
     $register(&B_DivG_methods);
     $register(&B_MinusG_methods);

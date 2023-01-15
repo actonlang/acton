@@ -15,56 +15,56 @@
 #include "../../builtin/builtin.h"
 #include "../numpy.h"
 
-numpy$$ndarray $pow3(numpy$B_IntegralD_ndarray wit, numpy$$ndarray x) {
-  numpy$$ndarray tmp =  wit->$class->__mul__(wit,x,x);
+numpyQ_ndarray B_pow3(numpyQ_IntegralD_ndarray wit, numpyQ_ndarray x) {
+  numpyQ_ndarray tmp =  wit->$class->__mul__(wit,x,x);
   return wit->$class->__mul__(wit,tmp,x);
 }
 
-numpy$$ndarray loess_simple(numpy$$ndarray x, numpy$$ndarray y, numpy$$ndarray xin, B_int win) {
+numpyQ_ndarray loess_simple(numpyQ_ndarray x, numpyQ_ndarray y, numpyQ_ndarray xin, B_int win) {
   B_list ix = $NEW(B_list,NULL,NULL);
   B_slice s = $NEW(B_slice,NULL,NULL,NULL);
-  B_listD_append(ix,numpy$$ndsliceG_new(s));
-  B_listD_append(ix,numpy$$ndindexG_new(numpy$G_newaxis));
-  numpy$$Primitive witp = (numpy$$Primitive)numpy$$PrimitiveB_floatG_witness;
-  numpy$B_IntegralD_ndarray wit = $NEW(numpy$B_IntegralD_ndarray,witp);
-  numpy$B_MinusD_ndarray wit2 = (numpy$B_MinusD_ndarray)wit-> W_Minus;
-  numpy$$ndarray tmp1 = wit2->$class->__sub__(wit2,xin,numpy$$ndarrayD___ndgetslice__(x,ix));
-  numpy$$ndarray xd = numpy$$abs(witp,tmp1);
-  numpy$$ndarray tmp2 = numpy$$partition(witp,xd,win);
+  B_listD_append(ix,numpyQ_ndsliceG_new(s));
+  B_listD_append(ix,numpyQ_ndindexG_new(numpy$G_newaxis));
+  numpyQ_Primitive witp = (numpyQ_Primitive)numpyQ_PrimitiveB_floatG_witness;
+  numpyQ_IntegralD_ndarray wit = $NEW(numpyQ_IntegralD_ndarray,witp);
+  numpyQ_MinusD_ndarray wit2 = (numpyQ_MinusD_ndarray)wit-> W_Minus;
+  numpyQ_ndarray tmp1 = wit2->$class->__sub__(wit2,xin,numpyQ_ndarrayD___ndgetslice__(x,ix));
+  numpyQ_ndarray xd = numpyQ_abs(witp,tmp1);
+  numpyQ_ndarray tmp2 = numpyQ_partition(witp,xd,win);
   B_list ix2 = $NEW(B_list,NULL,NULL);
-  B_listD_append(ix2,numpy$$ndsliceG_new(s));
-  B_listD_append(ix2,numpy$$ndindexG_new(win));
-  numpy$$ndarray tmp3 = numpy$$ndarrayD___ndgetslice__(tmp2,ix2);
-  numpy$$ndarray tmp4 = numpy$$ndarrayD___ndgetslice__(tmp3,ix);
-  numpy$$ndarray tmp5 = wit->$class->__truediv__(wit,xd,tmp4);
-  numpy$$ndarray w = numpy$$clip(witp,tmp5,toB_float(0.0),toB_float(1.0));
-  numpy$$ndarray tmp6 = $pow3(wit,w);
-  numpy$$ndarray tmp7 = wit2->$class->__sub__(wit2,numpy$$fromatom(toB_float(1.0)),tmp6);
-  numpy$$ndarray ws = $pow3(wit,tmp7);
-  numpy$$ndarray a00 = numpy$$sum(witp,ws,toB_int(1));
-  numpy$$ndarray a01 = numpy$$dot(witp,ws,x);
-  numpy$$ndarray a11 = numpy$$dot(witp,ws,wit->$class->__mul__(wit,x,x));
-  numpy$$ndarray b0 = numpy$$dot(witp,ws,y);
-  numpy$$ndarray b1 = numpy$$dot(witp,ws,wit->$class->__mul__(wit,x,y));
-  numpy$$ndarray det = wit2->$class->__sub__(wit2,wit->$class->__mul__(wit,a00,a11),wit->$class->__mul__(wit,a01,a01));
-  numpy$$ndarray tmp8 = wit2->$class->__sub__(wit2,wit->$class->__mul__(wit,a11,b0),wit->$class->__mul__(wit,a01,b1));
-  numpy$$ndarray tmp9 = wit2->$class->__sub__(wit2,wit->$class->__mul__(wit,a00,b1),wit->$class->__mul__(wit,a01,b0));
-  numpy$$ndarray tmp10 = wit->$class->__add__(wit,tmp8,wit->$class->__mul__(wit,tmp9,xin));
+  B_listD_append(ix2,numpyQ_ndsliceG_new(s));
+  B_listD_append(ix2,numpyQ_ndindexG_new(win));
+  numpyQ_ndarray tmp3 = numpyQ_ndarrayD___ndgetslice__(tmp2,ix2);
+  numpyQ_ndarray tmp4 = numpyQ_ndarrayD___ndgetslice__(tmp3,ix);
+  numpyQ_ndarray tmp5 = wit->$class->__truediv__(wit,xd,tmp4);
+  numpyQ_ndarray w = numpyQ_clip(witp,tmp5,to$float(0.0),to$float(1.0));
+  numpyQ_ndarray tmp6 = B_pow3(wit,w);
+  numpyQ_ndarray tmp7 = wit2->$class->__sub__(wit2,numpyQ_fromatom(to$float(1.0)),tmp6);
+  numpyQ_ndarray ws = B_pow3(wit,tmp7);
+  numpyQ_ndarray a00 = numpyQ_sum(witp,ws,toB_int(1));
+  numpyQ_ndarray a01 = numpyQ_dot(witp,ws,x);
+  numpyQ_ndarray a11 = numpyQ_dot(witp,ws,wit->$class->__mul__(wit,x,x));
+  numpyQ_ndarray b0 = numpyQ_dot(witp,ws,y);
+  numpyQ_ndarray b1 = numpyQ_dot(witp,ws,wit->$class->__mul__(wit,x,y));
+  numpyQ_ndarray det = wit2->$class->__sub__(wit2,wit->$class->__mul__(wit,a00,a11),wit->$class->__mul__(wit,a01,a01));
+  numpyQ_ndarray tmp8 = wit2->$class->__sub__(wit2,wit->$class->__mul__(wit,a11,b0),wit->$class->__mul__(wit,a01,b1));
+  numpyQ_ndarray tmp9 = wit2->$class->__sub__(wit2,wit->$class->__mul__(wit,a00,b1),wit->$class->__mul__(wit,a01,b0));
+  numpyQ_ndarray tmp10 = wit->$class->__add__(wit,tmp8,wit->$class->__mul__(wit,tmp9,xin));
   return wit->$class->__truediv__(wit,tmp10,det);
 }
 
-numpy$$ndarray mkarray(double elems[], int len){
+numpyQ_ndarray mkarray(double elems[], int len){
   B_list lst = $NEW(B_list,NULL,NULL);
   for (int i =0; i< len; i++)
-    B_listD_append(lst,toB_float(elems[i]));
-  numpy$$Primitive wit0 = (numpy$$Primitive)numpy$$PrimitiveB_floatG_witness;
-  return numpy$$array(wit0,lst);
+    B_listD_append(lst,to$float(elems[i]));
+  numpyQ_Primitive wit0 = (numpyQ_Primitive)numpyQ_PrimitiveB_floatG_witness;
+  return numpyQ_array(wit0,lst);
 }
   
 int main(int argc, char *argv[]) {
   long n;
   sscanf(argv[1],"%ld",&n);
-  numpy$$ndarray xx,yy;
+  numpyQ_ndarray xx,yy;
   long win;
   $register_builtin();
   numpy$D___init__();
@@ -99,12 +99,12 @@ int main(int argc, char *argv[]) {
       xx0[i] = i*step;
       yy0[i] = sin(i*step);
     }
-    numpy$B_IntegralD_ndarray wit = numpy$B_IntegralD_ndarrayG_new((numpy$$Primitive)numpy$$PrimitiveB_floatG_witness);
+    numpyQ_IntegralD_ndarray wit = numpyQ_IntegralD_ndarrayG_new((numpyQ_Primitive)numpyQ_PrimitiveB_floatG_witness);
     xx = mkarray(xx0,n);
-    yy = wit->$class->__add__(wit,mkarray(yy0,n),numpy$$unirand(toB_float(-0.5),toB_float(0.5),toB_int(n)));
+    yy = wit->$class->__add__(wit,mkarray(yy0,n),numpyQ_unirand(to$float(-0.5),to$float(0.5),toB_int(n)));
     win = n/4-1;
   }
-  numpy$$ndarray res = loess_simple(xx,yy,xx,toB_int(win));
+  numpyQ_ndarray res = loess_simple(xx,yy,xx,toB_int(win));
   printf("set term aqua title \"Loess\"\n");
   printf("set multiplot\nplot  [0:6.3][-1.5:1.5] 0\nclear\n");
   printf("$scatterplot <<EOD\n");

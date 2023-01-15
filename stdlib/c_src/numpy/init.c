@@ -14,28 +14,28 @@
 
 #include <limits.h>
 
-int numpy$$done = 0;
+int numpyQ_done = 0;
 
 void numpy$D___init__() {
-    if (numpy$$done) return;
-    numpy$$done = 1;
-    numpy$G_newaxis = toB_int(LONG_MIN);
-    $register_force(ATOM_ID,&numpy$$ndarrayG_methods);
-    $register(&numpy$B_IteratorD_ndarrayG_methods);
-    $register(&numpy$$PrimitiveB_intG_methods);
-    $register(&numpy$$PrimitiveB_floatG_methods);
-    $register(&numpy$$ndselectG_methods);
-    $register(&numpy$$ndindexG_methods);
-    $register(&numpy$$ndsliceG_methods);
-    $register(&numpy$B_IntegralD_ndarrayB_intG_methods);
-    $register(&numpy$B_LogicalD_ndarrayB_intG_methods);
-    $register(&numpy$B_MinusD_ndarrayB_intG_methods);
-    $register(&numpy$B_DivD_ndarrayB_intG_methods);
-    $register(&numpy$B_DivD_ndarrayB_floatG_methods);
-    $register(&numpy$B_RealD_ndarrayG_methods);
-    $register(&numpy$B_MinusD_ndarrayG_methods);
-    $register(&numpy$B_SliceableD_ndarrayG_methods);
-    $register(&numpy$B_CollectionD_ndarrayG_methods);
-    $register(&numpy$B_RealFuns$math$ndarrayG_methods);
+    if (numpyQ_done) return;
+    numpyQ_done = 1;
+    numpyQ_newaxis = toB_int(LONG_MIN);
+    $register_force(ATOM_ID,&numpyQ_ndarrayG_methods);
+    $register(&numpyQ_IteratorD_ndarrayG_methods);
+    $register(&numpyQ_PrimitiveB_intG_methods);
+    $register(&numpyQ_PrimitiveB_floatG_methods);
+    $register(&numpyQ_ndselectG_methods);
+    $register(&numpyQ_ndindexG_methods);
+    $register(&numpyQ_ndsliceG_methods);
+    $register(&numpyQ_IntegralD_ndarrayD_intG_methods);
+    $register(&numpyQ_LogicalD_ndarrayD_intG_methods);
+    $register(&numpyQ_MinusD_ndarrayD_intG_methods);
+    $register(&numpyQ_DivD_ndarrayD_intG_methods);
+    $register(&numpyQ_DivD_ndarrayD_floatG_methods);
+    $register(&numpyQ_RealD_ndarrayG_methods);
+    $register(&numpyQ_MinusD_ndarrayG_methods);
+    $register(&numpyQ_SliceableD_ndarrayG_methods);
+    $register(&numpyQ_CollectionD_ndarrayG_methods);
+    $register(&numpyQ_RealFuns$math$ndarrayG_methods);
 }
 

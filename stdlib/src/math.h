@@ -8,8 +8,8 @@ struct mathQ_RealFunsG_class {
     char *$GCINFO;
     B_int $class_id;
     $SuperG_class $superclass;
-    $NoneType (*__init__) (mathQ_RealFuns);
-    $NoneType (*__serialize__) (mathQ_RealFuns, $Serial$state);
+    B_NoneType (*__init__) (mathQ_RealFuns);
+    B_NoneType (*__serialize__) (mathQ_RealFuns, $Serial$state);
     mathQ_RealFuns (*__deserialize__) (mathQ_RealFuns, $Serial$state);
     B_bool (*__bool__)(mathQ_RealFuns);
     B_str (*__str__)(mathQ_RealFuns);
@@ -41,8 +41,8 @@ struct mathQ_RealFunsD_floatG_class {
     char *$GCINFO;
     B_int $class_id;
     $SuperG_class $superclass;
-    $NoneType (*__init__) (mathQ_RealFunsD_float);
-    $NoneType (*__serialize__) (mathQ_RealFunsD_float, $Serial$state);
+    B_NoneType (*__init__) (mathQ_RealFunsD_float);
+    B_NoneType (*__serialize__) (mathQ_RealFunsD_float, $Serial$state);
     mathQ_RealFunsD_float (*__deserialize__) (mathQ_RealFunsD_float, $Serial$state);
     B_bool (*__bool__)(mathQ_RealFunsD_float);
     B_str (*__str__)(mathQ_RealFunsD_float);

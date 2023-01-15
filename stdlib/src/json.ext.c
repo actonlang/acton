@@ -108,7 +108,7 @@ B_dict jsonQ_decode_obj(yyjson_val *obj) {
                 break;
             case YYJSON_TYPE_NULL:;
                 // TODO: this is broken?
-                B_dictD_setitem(res, wit, to$str(yyjson_get_str(key)), $None);
+                B_dictD_setitem(res, wit, to$str(yyjson_get_str(key)), B_None);
                 break;
             case YYJSON_TYPE_BOOL:;
                 B_dictD_setitem(res, wit, to$str(yyjson_get_str(key)), toB_bool(yyjson_get_bool(val)));
@@ -143,7 +143,7 @@ B_list jsonQ_decode_arr(yyjson_val *arr) {
                 break;
             case YYJSON_TYPE_NULL:;
                 // TODO: this is broken?
-                B_listD_append(res, $None);
+                B_listD_append(res, B_None);
                 break;
             case YYJSON_TYPE_BOOL:;
                 B_listD_append(res, toB_bool(yyjson_get_bool(val)));

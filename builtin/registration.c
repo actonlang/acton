@@ -43,7 +43,7 @@ void $register_builtin() {
   G_methods = B_listD_new(2*PREASSIGNED); //preallocate space for PREASSIGNED user classes before doubling needed
   memset(G_methods->data,0,PREASSIGNED*sizeof($WORD)); // initiate PREASSIGNED first slots to NULL;
   G_methods->length = PREASSIGNED;
-  $register_force(NONE_ID,&$NoneTypeG_methods);
+  $register_force(NONE_ID,&B_NoneTypeG_methods);
   // $register_force(ATOM_ID,&B_atomG_methods);
   $register_force(INT_ID,&B_intG_methods);
   $register_force(FLOAT_ID,&B_floatG_methods);
@@ -86,12 +86,12 @@ void $register_builtin() {
 
 B_bool issubtype(int sub_id, int ancestor_id) {
   if (sub_id == ancestor_id)
-    return $True;
+    return B_True;
   $SuperG_class c =  ($SuperG_class)$GET_METHODS(sub_id)->$superclass;
   while(c)
     if(c->$class_id == ancestor_id)
-      return $True;
+      return B_True;
     else
       c = c->$superclass;
-  return $False;
+  return B_False;
 }

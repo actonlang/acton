@@ -47,7 +47,7 @@ struct $l$1contG_class {
     char *$GCINFO;
     int $class_id;
     $SuperG_class $superclass;
-    $NoneType (*__init__) ($l$1cont, B_Env, B_str);
+    B_NoneType (*__init__) ($l$1cont, B_Env, B_str);
     void (*__serialize__) ($l$1cont, $Serial$state);
     $l$1cont (*__deserialize__) ($l$1cont, $Serial$state);
     B_bool (*__bool__) ($l$1cont);
@@ -64,7 +64,7 @@ struct $l$2contG_class {
     char *$GCINFO;
     int $class_id;
     $SuperG_class $superclass;
-    $NoneType (*__init__) ($l$2cont, B_Env, $action);
+    B_NoneType (*__init__) ($l$2cont, B_Env, $action);
     void (*__serialize__) ($l$2cont, $Serial$state);
     $l$2cont (*__deserialize__) ($l$2cont, $Serial$state);
     B_bool (*__bool__) ($l$2cont);
@@ -81,7 +81,7 @@ struct $l$3contG_class {
     char *$GCINFO;
     int $class_id;
     $SuperG_class $superclass;
-    $NoneType (*__init__) ($l$3cont, B_Env, B_int);
+    B_NoneType (*__init__) ($l$3cont, B_Env, B_int);
     void (*__serialize__) ($l$3cont, $Serial$state);
     $l$3cont (*__deserialize__) ($l$3cont, $Serial$state);
     B_bool (*__bool__) ($l$3cont);
@@ -98,7 +98,7 @@ struct B_WorldAuthG_class {
     char *$GCINFO;
     int $class_id;
     $SuperG_class $superclass;
-    $NoneType (*__init__) (B_WorldAuth);
+    B_NoneType (*__init__) (B_WorldAuth);
     void (*__serialize__) (B_WorldAuth, $Serial$state);
     B_WorldAuth (*__deserialize__) (B_WorldAuth, $Serial$state);
     B_bool (*__bool__) (B_WorldAuth);
@@ -123,13 +123,13 @@ struct B_EnvG_class {
     char *$GCINFO;
     int $class_id;
     $SuperG_class $superclass;
-    $NoneType (*__init__) (B_Env, B_WorldAuth, B_list);
+    B_NoneType (*__init__) (B_Env, B_WorldAuth, B_list);
     void (*__serialize__) (B_Env, $Serial$state);
     B_Env (*__deserialize__) (B_Env, $Serial$state);
     B_bool (*__bool__) (B_Env);
     B_str (*__str__) (B_Env);
     B_str (*__repr__) (B_Env);
-    $NoneType (*__resume__) (B_Env);
+    B_NoneType (*__resume__) (B_Env);
     $R (*stdout_write$local) (B_Env, $Cont, B_str);
     $R (*stdin_install$local) (B_Env, $Cont, $action);
     $R (*exit$local) (B_Env, $Cont, B_int);

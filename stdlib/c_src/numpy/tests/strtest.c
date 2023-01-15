@@ -18,26 +18,26 @@
 
 int main() {
   B_list elems = $NEW(B_list,NULL,NULL);
-  B_listD_append(elems,toB_float(2.0));
-  B_listD_append(elems,toB_float(3.0));
-  B_listD_append(elems,toB_float(5.0));
-  B_listD_append(elems,toB_float(7.0));
-  numpy$$ndarray q = numpy$$ndarray_array((numpy$$Primitive)numpy$$PrimitiveB_floatG_witness,elems);
-  $printobj("q =",q);
-  numpy$$ndarray a = numpy$$ndarray_arange(toB_int(0),toB_int(10),toB_int(1));
-  $printobj("a =",a);
+  B_listD_append(elems,to$float(2.0));
+  B_listD_append(elems,to$float(3.0));
+  B_listD_append(elems,to$float(5.0));
+  B_listD_append(elems,to$float(7.0));
+  numpyQ_ndarray q = numpyQ_ndarray_array((numpyQ_Primitive)numpyQ_PrimitiveB_floatG_witness,elems);
+  B_printobj("q =",q);
+  numpyQ_ndarray a = numpyQ_ndarray_arange(toB_int(0),toB_int(10),toB_int(1));
+  B_printobj("a =",a);
   B_list ix = $NEW(B_list,NULL,NULL);
   B_listD_append(ix,toB_int(2));
   B_listD_append(ix,toB_int(5));
-  $printobj("a.reshape(2,5)=",numpy$$ndarray_reshape(a,ix));
-  numpy$$ndarray b = numpy$$ndarray_linspace(toB_float(0),toB_float(1),toB_int(5));
-  $printobj("b =",b);
+  B_printobj("a.reshape(2,5)=",numpyQ_ndarray_reshape(a,ix));
+  numpyQ_ndarray b = numpyQ_ndarray_linspace(to$float(0),to$float(1),toB_int(5));
+  B_printobj("b =",b);
   
   B_list ix1 = $NEW(B_list,NULL,NULL);
-  B_listD_append(ix1,numpy$$ndindexG_new(toB_int(7)));
-  numpy$$ndarray c = numpy$$ndarrayD___ndgetslice__(a,ix1);
-  $printobj("a[7] =",c);
-  numpy$$ndarray d = numpy$$ndarray_fromatom(toB_float(3.5));
-  $printobj("d =",d);
+  B_listD_append(ix1,numpyQ_ndindexG_new(toB_int(7)));
+  numpyQ_ndarray c = numpyQ_ndarrayD___ndgetslice__(a,ix1);
+  B_printobj("a[7] =",c);
+  numpyQ_ndarray d = numpyQ_ndarray_fromatom(to$float(3.5));
+  B_printobj("d =",d);
 }
 

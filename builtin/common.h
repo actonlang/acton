@@ -1,6 +1,6 @@
 
 typedef void *$WORD;
-#define $None ($WORD)0
+#define B_None ($WORD)0
 
 #define $long long
 #define $int64 int64_t
@@ -8,7 +8,7 @@ typedef void *$WORD;
 void $default__init__($WORD);
 
 
-void $printobj(char *mess,$WORD obj);
+void B_printobj(char *mess,$WORD obj);
 
 
 #define $NEW($T, ...)       ({ $T $t = malloc(sizeof(struct $T)); \
@@ -29,15 +29,15 @@ void $printobj(char *mess,$WORD obj);
 
 #define $OR(T, a, b)        ({ T $a = (a); ($a && ((B_value)$a)->$class->__bool__((B_value)$a)->val) ? $a : (b); })
 
-#define $NOT(T, a)          ({ T $a = (a); ($a && ((B_value)$a)->$class->__bool__((B_value)$a)->val) ? $False : $True; })
+#define $NOT(T, a)          ({ T $a = (a); ($a && ((B_value)$a)->$class->__bool__((B_value)$a)->val) ? B_False : B_True; })
 
 #define $ISINSTANCE($x,$T)  ({ $SuperG_class $c = (($Super)$x)->$class; \
                                while($c && $c != ($SuperG_class)&$T ## G_methods) $c = $c->$superclass; \
                                toB_bool($c != 0); })
 
-#define $ISNOTNONE(x)       ((x) != $None ? $True : $False)
+#define $ISNOTNONE(x)       ((x) != B_None ? B_True : B_False)
 
-#define $ISNONE(x)          ((x) != $None ? $False : $True)
+#define $ISNONE(x)          ((x) != B_None ? B_False : B_True)
 
 #define $SKIPRES(cont)      (cont)
 

@@ -418,7 +418,7 @@ B_float B_DivD_intD___truediv__ (B_DivD_int wit, B_int a, B_int b) {
     zz_div(&ared->val,aval,&g->val);
     zz_div(&bred->val,bval,&g->val);
     zz_divrem(&q->val,&r->val,&ared->val,&bred->val);
-    return toB_float(B_floatG_new((B_atom)q)->val +  B_floatG_new((B_atom)r)->val/ B_floatG_new((B_atom)bred)->val);
+    return to$float(B_floatG_new((B_atom)q)->val +  B_floatG_new((B_atom)r)->val/ B_floatG_new((B_atom)bred)->val);
 }
 
 // B_OrdD_int  ////////////////////////////////////////////////////////////////////////////////////////
@@ -552,7 +552,7 @@ struct B_IntegralD_intG_class B_IntegralD_intG_methods = {
     (B_str (*)(B_IntegralD_int))$default__str__,
     (B_str (*)(B_IntegralD_int))$default__str__,
     B_IntegralD_intD___add__,
-    (B_int (*)(B_IntegralD_int, B_int, B_int))$PlusD___iadd__,
+    (B_int (*)(B_IntegralD_int, B_int, B_int))B_PlusD___iadd__,
     B_IntegralD_intD___mul__,
     (B_int (*)(B_IntegralD_int, B_int, B_int))B_TimesD___imul__,
     B_IntegralD_intD___fromatom__,

@@ -298,7 +298,7 @@ void B_MsgD___init__(B_Msg m, $Actor to, $Cont cont, time_t baseline, $WORD valu
 }
 
 B_bool B_MsgD___bool__(B_Msg self) {
-  return $True;
+  return B_True;
 }
 
 B_str B_MsgD___str__(B_Msg self) {
@@ -350,7 +350,7 @@ void $ActorD___init__($Actor a) {
 }
 
 B_bool $ActorD___bool__($Actor self) {
-  return $True;
+  return B_True;
 }
 
 B_str $ActorD___str__($Actor self) {
@@ -359,8 +359,8 @@ B_str $ActorD___str__($Actor self) {
   return to$str(s);
 }
 
-$NoneType $ActorD___resume__($Actor self) {
-  return $None;
+B_NoneType $ActorD___resume__($Actor self) {
+  return B_None;
 }
 
 void $ActorD___serialize__($Actor self, $Serial$state state) {
@@ -397,7 +397,7 @@ void $CatcherD___init__($Catcher c, $Cont cont) {
 }
 
 B_bool $CatcherD___bool__($Catcher self) {
-  return $True;
+  return B_True;
 }
 
 B_str $CatcherD___str__($Catcher self) {
@@ -425,7 +425,7 @@ void $ConstContD___init__($ConstCont $this, $WORD val, $Cont cont) {
 }
 
 B_bool $ConstContD___bool__($ConstCont self) {
-  return $True;
+  return B_True;
 }
 
 B_str $ConstContD___str__($ConstCont self) {
@@ -675,7 +675,7 @@ $R $DoneD___call__($Cont $this, $WORD val) {
 }
 
 B_bool $DoneD___bool__($Cont self) {
-  return $True;
+  return B_True;
 }
 
 B_str $DoneD___str__($Cont self) {

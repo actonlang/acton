@@ -297,8 +297,8 @@ extern struct B_TimesD_bytes *B_TimesD_bytesG_witness;
 extern struct B_SliceableD_bytes *B_SliceableD_bytesG_witness;
 extern struct B_ContainerD_bytes *B_ContainerD_bytesG_witness;
 
-B_bytes toB_bytes(char *str);
-B_bytes toB_bytesD_len(char *str, int len);
+B_bytes to$bytes(char *str);
+B_bytes to$bytesD_len(char *str, int len);
 unsigned char *fromB_bytes(B_bytes b);
 
 

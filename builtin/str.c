@@ -327,7 +327,7 @@ struct B_TimesD_strG_class  B_TimesD_strG_methods = {
     (B_str (*)(B_TimesD_str))$default__str__,
     (B_str (*)(B_TimesD_str))$default__str__,
     B_TimesD_strD___add__,
-    (B_str (*)(B_TimesD_str, B_str, B_str))$PlusD___iadd__,
+    (B_str (*)(B_TimesD_str, B_str, B_str))B_PlusD___iadd__,
     B_TimesD_strD___mul__,
     (B_str (*)(B_TimesD_str, B_str, B_int))B_TimesD___imul__,
 
@@ -748,7 +748,7 @@ B_IteratorB_str B_IteratorB_str$_deserialize(B_IteratorB_str res, $Serial$state 
 }
 
 B_bool B_IteratorB_strD_bool(B_IteratorB_str self) {
-    return $True;
+    return B_True;
 }
 
 B_str B_IteratorB_strD_str(B_IteratorB_str self) {
@@ -956,16 +956,16 @@ B_bytes B_strD_encode(B_str s) {
 B_bool B_strD_endswith(B_str s, B_str sub, B_int start, B_int end) {
     B_int st = start;
     B_int en = end;
-    if (fix_start_end(s->nchars,&st,&en) < 0) return $False;
+    if (fix_start_end(s->nchars,&st,&en) < 0) return B_False;
     int isascii = s->nchars==s->nbytes;
     unsigned char *p = skip_chars(s->str + s->nbytes,fromB_int(en) - s->nchars,isascii) - sub->nbytes;
     unsigned char *q = sub->str;
     for (int i=0; i<sub->nbytes; i++) {
         if (*p == 0 || *p++ != *q++) {
-            return $False;
+            return B_False;
         }
     }
-    return $True;
+    return B_True;
 }
 
 B_str B_strD_expandtabs(B_str s, B_int tabsize){
@@ -1026,15 +1026,15 @@ B_bool B_strD_isalnum(B_str s) {
     int codepoint;
     int nbytes;
     if (s->nchars == 0)
-        return $False;
+        return B_False;
     for (int i=0; i < s->nchars; i++) {
         nbytes = utf8proc_iterate(p,-1,&codepoint);
         utf8proc_category_t cat = utf8proc_category(codepoint);
         if ((cat <  UTF8PROC_CATEGORY_LU || cat >  UTF8PROC_CATEGORY_LO) && cat != UTF8PROC_CATEGORY_ND)
-            return $False;
+            return B_False;
         p += nbytes;
     }
-    return $True;
+    return B_True;
 }
 
 B_bool B_strD_isalpha(B_str s) {
@@ -1042,25 +1042,25 @@ B_bool B_strD_isalpha(B_str s) {
     int codepoint;
     int nbytes;
     if (s->nchars == 0)
-        return $False;
+        return B_False;
     for (int i=0; i < s->nchars; i++) {
         nbytes = utf8proc_iterate(p,-1,&codepoint);
         utf8proc_category_t cat = utf8proc_category(codepoint);
         if (cat <  UTF8PROC_CATEGORY_LU || cat >  UTF8PROC_CATEGORY_LO)
-            return $False;
+            return B_False;
         p += nbytes;
     }
-    return $True;
+    return B_True;
 }
 
 B_bool B_strD_isascii(B_str s) {
     unsigned char *p = s->str;
     for (int i=0; i < s->nbytes; i++) {
         if (*p > 127)
-            return $False;
+            return B_False;
         p++;
     }
-    return $True;
+    return B_True;
 }
 
 B_bool B_strD_isdecimal(B_str s) {
@@ -1068,15 +1068,15 @@ B_bool B_strD_isdecimal(B_str s) {
     int codepoint;
     int nbytes;
     if (s->nchars == 0)
-        return $False;
+        return B_False;
     for (int i=0; i < s->nchars; i++) {
         nbytes = utf8proc_iterate(p,-1,&codepoint);
         utf8proc_category_t cat = utf8proc_category(codepoint);
         if (cat != UTF8PROC_CATEGORY_ND)
-            return $False;
+            return B_False;
         p += nbytes;
     }
-    return $True;
+    return B_True;
 }
 
 B_bool B_strD_islower(B_str s) {
@@ -1085,12 +1085,12 @@ B_bool B_strD_islower(B_str s) {
     int nbytes;
     int has_cased = 0;
     if (s->nchars == 0)
-        return $False;
+        return B_False;
     for (int i=0; i < s->nchars; i++) {
         nbytes = utf8proc_iterate(p,-1,&codepoint);
         utf8proc_category_t cat = utf8proc_category(codepoint);
         if (cat == UTF8PROC_CATEGORY_LT|| cat == UTF8PROC_CATEGORY_LU)
-            return $False;
+            return B_False;
         if (cat == UTF8PROC_CATEGORY_LL)
             has_cased = 1;
         p += nbytes;
@@ -1103,15 +1103,15 @@ B_bool B_strD_isprintable(B_str s) {
     int codepoint;
     int nbytes;
     if (s->nchars == 0)
-        return $False;
+        return B_False;
     for (int i=0; i < s->nchars; i++) {
         nbytes = utf8proc_iterate(p,-1,&codepoint);
         utf8proc_category_t cat = utf8proc_category(codepoint);
         if (cat >= UTF8PROC_CATEGORY_ZS && codepoint != 0x20)
-            return $False;
+            return B_False;
         p += nbytes;
     }
-    return $True;
+    return B_True;
 }
 
 B_bool B_strD_isspace(B_str s) {
@@ -1119,14 +1119,14 @@ B_bool B_strD_isspace(B_str s) {
     int codepoint;
     int nbytes;
     if (s->nchars == 0)
-        return $False;
+        return B_False;
     for (int i=0; i < s->nchars; i++) {
         nbytes = utf8proc_iterate(p,-1,&codepoint);
         if (!isspace_codepoint(codepoint))
-            return $False;
+            return B_False;
         p += nbytes;
     }
-    return $True;
+    return B_True;
 }
 
 B_bool B_strD_istitle(B_str s) {
@@ -1136,19 +1136,19 @@ B_bool B_strD_istitle(B_str s) {
     int hascased = 0;
     int incasedrun = 0;
     if (s->nchars == 0)
-        return $False;
+        return B_False;
     for (int i=0; i < s->nchars; i++) {
         nbytes = utf8proc_iterate(p,-1,&codepoint);
         utf8proc_category_t cat = utf8proc_category(codepoint);
         if (cat == UTF8PROC_CATEGORY_LU || cat == UTF8PROC_CATEGORY_LT ) {
             hascased = 1;
             if (incasedrun)
-                return $False;
+                return B_False;
             incasedrun = 1;
         } else if (cat == UTF8PROC_CATEGORY_LL) {
             hascased = 1;
             if (!incasedrun)
-                return $False;
+                return B_False;
         } else
             incasedrun = 0;
         p += nbytes;
@@ -1162,12 +1162,12 @@ B_bool B_strD_isupper(B_str s) {
     int nbytes;
     int hascased = 0;
     if (s->nchars == 0)
-        return $False;
+        return B_False;
     for (int i=0; i < s->nchars; i++) {
         nbytes = utf8proc_iterate(p,-1,&codepoint);
         utf8proc_category_t cat = utf8proc_category(codepoint);
         if (cat == UTF8PROC_CATEGORY_LL)
-            return $False;
+            return B_False;
         if (cat == UTF8PROC_CATEGORY_LU || cat == UTF8PROC_CATEGORY_LT)
             hascased = 1;
         p += nbytes;
@@ -1443,7 +1443,7 @@ B_list B_strD_split(B_str s, B_str sep, B_int maxsplit) {
  
 B_list B_strD_splitlines(B_str s, B_bool keepends) {
     if (!keepends)
-        keepends = $False;
+        keepends = B_False;
     B_list res = $NEW(B_list,NULL,NULL);
     unsigned char *p = s->str;
     unsigned char *q = p;
@@ -1500,16 +1500,16 @@ B_str B_strD_rstrip(B_str s, B_str cs) {
 B_bool B_strD_startswith(B_str s, B_str sub, B_int start, B_int end) {
     B_int st = start;
     B_int en = end;
-    if (fix_start_end(s->nchars,&st,&en) < 0) return $False;
+    if (fix_start_end(s->nchars,&st,&en) < 0) return B_False;
     int isascii = s->nchars==s->nbytes;
     unsigned char *p = skip_chars(s->str,fromB_int(st),isascii);
     unsigned char *q = sub->str;
     for (int i=0; i<sub->nbytes; i++) {
         if (*p == 0 || *p++ != *q++) {
-            return $False;
+            return B_False;
         }
     }
-    return $True;
+    return B_True;
 }
 
 
@@ -1714,16 +1714,16 @@ B_str B_bytearrayD_decode(B_bytearray s) {
 B_bool B_bytearrayD_endswith(B_bytearray s, B_bytearray sub, B_int start, B_int end) {
     B_int st = start;
     B_int en = end;
-    if (fix_start_end(s->nbytes,&st,&en) < 0) return $False;
+    if (fix_start_end(s->nbytes,&st,&en) < 0) return B_False;
     int enval = fromB_int(en);
     unsigned char *p = &s->str[enval-sub->nbytes];
     unsigned char *q = sub->str;
     for (int i=0; i<sub->nbytes; i++) {
         if (*p == 0 || *p++ != *q++) {
-            return $False;
+            return B_False;
         }
     }
-    return $True;
+    return B_True;
 }
 
 B_bytearray B_bytearrayD_expandtabs(B_bytearray s, B_int tabsz){
@@ -1781,44 +1781,44 @@ B_int B_bytearrayD_index(B_bytearray s, B_bytearray sub, B_int start, B_int end)
 
 B_bool B_bytearrayD_isalnum(B_bytearray s) {
     if (s->nbytes==0)
-        return $False;
+        return B_False;
     for (int i=0; i<s->nbytes; i++) {
         unsigned char c = s->str[i];
         if (c < '0' || c > 'z' || (c > '9' && c < 'A') || (c > 'Z' && c < 'a'))
-            return $False;
+            return B_False;
     }
-    return $True;
+    return B_True;
 }
 
 B_bool B_bytearrayD_isalpha(B_bytearray s) {
     if (s->nbytes==0)
-        return $False;
+        return B_False;
     for (int i=0; i<s->nbytes; i++) {
         unsigned char c = s->str[i];
         if (c < 'A' || c > 'z' || (c > 'Z' && c < 'a'))
-            return $False;
+            return B_False;
     }
-    return $True;
+    return B_True;
 }
 
 B_bool B_bytearrayD_isascii(B_bytearray s) {
     for (int i=0; i<s->nbytes; i++) {
         unsigned char c = s->str[i];
         if (c > 0x7f)
-            return $False;
+            return B_False;
     }
-    return $True;
+    return B_True;
 }
 
 B_bool B_bytearrayD_isdigit(B_bytearray s) {
     if (s->nbytes==0)
-        return $False;
+        return B_False;
     for (int i=0; i<s->nbytes; i++) {
         unsigned char c = s->str[i];
         if (c<'0' || c > '9')
-            return $False;
+            return B_False;
     }
-    return $True;
+    return B_True;
 }
  
 
@@ -1827,7 +1827,7 @@ B_bool B_bytearrayD_islower(B_bytearray s) {
     for (int i=0; i < s->nbytes; i++) {
         unsigned char c = s->str[i];
         if (c >= 'A' && c <= 'Z')
-            return $False;
+            return B_False;
         if (c >= 'a' && c <= 'z')
             has_lower = 1;
     }
@@ -1836,32 +1836,32 @@ B_bool B_bytearrayD_islower(B_bytearray s) {
 
 B_bool B_bytearrayD_isspace(B_bytearray s) {
     if (s->nbytes==0)
-        return $False;
+        return B_False;
     for (int i=0; i<s->nbytes; i++) {
         unsigned char c = s->str[i];
         if (c !=' ' && c != '\t' && c != '\n' && c != '\r' && c != '\x0b' && c != '\f')
-            return $False;
+            return B_False;
     }
-    return $True;
+    return B_True;
 }
 
 B_bool B_bytearrayD_istitle(B_bytearray s) {
     if (s->nbytes==0)
-        return $False;
+        return B_False;
     int incasedrun = 0;
     for (int i=0; i < s->nbytes; i++) {
         unsigned char c = s->str[i];
         if (c >='A' && c <= 'Z') {
             if (incasedrun)
-                return $False;
+                return B_False;
             incasedrun = 1;
         } else if (c >='a' && c <= 'z') {
             if (!incasedrun)
-                return $False;
+                return B_False;
         } else
             incasedrun = 0;
     }
-    return $True;
+    return B_True;
 }
 
 B_bool B_bytearrayD_isupper(B_bytearray s) {
@@ -1869,7 +1869,7 @@ B_bool B_bytearrayD_isupper(B_bytearray s) {
     for (int i=0; i < s->nbytes; i++) {
         unsigned char c = s->str[i];
         if (c >= 'a' && c <= 'z')
-            return $False;
+            return B_False;
         if (c >= 'a' && c <= 'z')
             has_upper = 1;
     }
@@ -2155,7 +2155,7 @@ B_list B_bytearrayD_split(B_bytearray s, B_bytearray sep, B_int maxsplit) {
 
 B_list B_bytearrayD_splitlines(B_bytearray s, B_bool keepends) {
     if (!keepends)
-        keepends = $False;
+        keepends = B_False;
     B_list res = $NEW(B_list,NULL,NULL);
     if (s->nbytes==0) {
         return res;
@@ -2189,16 +2189,16 @@ B_list B_bytearrayD_splitlines(B_bytearray s, B_bool keepends) {
 B_bool B_bytearrayD_startswith(B_bytearray s, B_bytearray sub, B_int start, B_int end) {
     B_int st = start;
     B_int en = end;
-    if (fix_start_end(s->nbytes,&st,&en) < 0) return $False;
+    if (fix_start_end(s->nbytes,&st,&en) < 0) return B_False;
     unsigned char *p = s->str + fromB_int(st);
-    if (p+sub->nbytes >= s->str+s->nbytes) return $False;
+    if (p+sub->nbytes >= s->str+s->nbytes) return B_False;
     unsigned char *q = sub->str;
     for (int i=0; i<sub->nbytes; i++) {
         if (p >= s->str + fromB_int(en) || *p++ != *q++) {
-            return $False;
+            return B_False;
         }
     }
-    return $True;
+    return B_True;
 }
 
 
@@ -2534,7 +2534,7 @@ struct B_TimesD_SequenceD_bytearrayG_class  B_TimesD_SequenceD_bytearrayG_method
     (B_str (*)(B_TimesD_SequenceD_bytearray))$default__str__,
     (B_str (*)(B_TimesD_SequenceD_bytearray))$default__str__,
     B_TimesD_SequenceD_bytearrayD___add__,
-    (B_bytearray (*)(B_TimesD_SequenceD_bytearray, B_bytearray, B_bytearray))$PlusD___iadd__,
+    (B_bytearray (*)(B_TimesD_SequenceD_bytearray, B_bytearray, B_bytearray))B_PlusD___iadd__,
     B_TimesD_SequenceD_bytearrayD___mul__,
     (B_bytearray (*)(B_TimesD_SequenceD_bytearray, B_bytearray, B_int))B_TimesD___imul__,
 };
@@ -2754,7 +2754,7 @@ void B_IteratorB_bytearrayD_init(B_IteratorB_bytearray self, B_bytearray b) {
 }
 
 B_bool B_IteratorB_bytearrayD_bool(B_IteratorB_bytearray self) {
-    return $True;
+    return B_True;
 }
 
 B_str B_IteratorB_bytearrayD_str(B_IteratorB_bytearray self) {
@@ -2919,7 +2919,7 @@ B_bytearray B_bytearrayD_deserialize(B_bytearray res, $Serial$state state) {
 
 // Conversion to and from C strings
 
-B_bytes toB_bytes(char *str) {
+B_bytes to$bytes(char *str) {
     B_bytes res;
     int len = strlen(str);
     NEW_UNFILLED_BYTES(res,len);
@@ -2927,7 +2927,7 @@ B_bytes toB_bytes(char *str) {
     return res;
 }
 
-B_bytes toB_bytesD_len(char *str, int len) {
+B_bytes to$bytesD_len(char *str, int len) {
     B_bytes res;
     NEW_UNFILLED_BYTES(res, len);
     memcpy(res->str, str, len);
@@ -3084,7 +3084,7 @@ B_bytes B_bytesD_capitalize(B_bytes s) {
 
 B_bytes B_bytesD_center(B_bytes s, B_int width, B_bytes fill) {
     int wval = fromB_int(width);
-    if (!fill) fill = toB_bytes(" ");
+    if (!fill) fill = to$bytes(" ");
     if (fill->nbytes != 1) {
         $RAISE((B_BaseException)$NEW(B_ValueError,to$str("center: fill bytes not single char")));
     }
@@ -3133,15 +3133,15 @@ B_str B_bytesD_decode(B_bytes s) {
 B_bool B_bytesD_endswith(B_bytes s, B_bytes sub, B_int start, B_int end) {
     B_int st = start;
     B_int en = end;
-    if (fix_start_end(s->nbytes,&st,&en) < 0) return $False;
+    if (fix_start_end(s->nbytes,&st,&en) < 0) return B_False;
     unsigned char *p = &s->str[fromB_int(en)-sub->nbytes];
     unsigned char *q = sub->str;
     for (int i=0; i<sub->nbytes; i++) {
         if (*p == 0 || *p++ != *q++) {
-            return $False;
+            return B_False;
         }
     }
-    return $True;
+    return B_True;
 }
 
 B_bytes B_bytesD_expandtabs(B_bytes s, B_int tabsz){
@@ -3199,44 +3199,44 @@ B_int B_bytesD_index(B_bytes s, B_bytes sub, B_int start, B_int end) {
 
 B_bool B_bytesD_isalnum(B_bytes s) {
     if (s->nbytes==0)
-        return $False;
+        return B_False;
     for (int i=0; i<s->nbytes; i++) {
         unsigned char c = s->str[i];
         if (c < '0' || c > 'z' || (c > '9' && c < 'A') || (c > 'Z' && c < 'a'))
-            return $False;
+            return B_False;
     }
-    return $True;
+    return B_True;
 }
 
 B_bool B_bytesD_isalpha(B_bytes s) {
     if (s->nbytes==0)
-        return $False;
+        return B_False;
     for (int i=0; i<s->nbytes; i++) {
         unsigned char c = s->str[i];
         if (c < 'A' || c > 'z' || (c > 'Z' && c < 'a'))
-            return $False;
+            return B_False;
     }
-    return $True;
+    return B_True;
 }
 
 B_bool B_bytesD_isascii(B_bytes s) {
     for (int i=0; i<s->nbytes; i++) {
         unsigned char c = s->str[i];
         if (c > 0x7f)
-            return $False;
+            return B_False;
     }
-    return $True;
+    return B_True;
 }
 
 B_bool B_bytesD_isdigit(B_bytes s) {
     if (s->nbytes==0)
-        return $False;
+        return B_False;
     for (int i=0; i<s->nbytes; i++) {
         unsigned char c = s->str[i];
         if (c<'0' || c > '9')
-            return $False;
+            return B_False;
     }
-    return $True;
+    return B_True;
 }
  
 
@@ -3245,7 +3245,7 @@ B_bool B_bytesD_islower(B_bytes s) {
     for (int i=0; i < s->nbytes; i++) {
         unsigned char c = s->str[i];
         if (c >= 'A' && c <= 'Z')
-            return $False;
+            return B_False;
         if (c >= 'a' && c <= 'z')
             has_lower = 1;
     }
@@ -3254,32 +3254,32 @@ B_bool B_bytesD_islower(B_bytes s) {
 
 B_bool B_bytesD_isspace(B_bytes s) {
     if (s->nbytes==0)
-        return $False;
+        return B_False;
     for (int i=0; i<s->nbytes; i++) {
         unsigned char c = s->str[i];
         if (c !=' ' && c != '\t' && c != '\n' && c != '\r' && c != '\x0b' && c != '\f')
-            return $False;
+            return B_False;
     }
-    return $True;
+    return B_True;
 }
 
 B_bool B_bytesD_istitle(B_bytes s) {
     if (s->nbytes==0)
-        return $False;
+        return B_False;
     int incasedrun = 0;
     for (int i=0; i < s->nbytes; i++) {
         unsigned char c = s->str[i];
         if (c >='A' && c <= 'Z') {
             if (incasedrun)
-                return $False;
+                return B_False;
             incasedrun = 1;
         } else if (c >='a' && c <= 'z') {
             if (!incasedrun)
-                return $False;
+                return B_False;
         } else
             incasedrun = 0;
     }
-    return $True;
+    return B_True;
 }
 
 B_bool B_bytesD_isupper(B_bytes s) {
@@ -3287,7 +3287,7 @@ B_bool B_bytesD_isupper(B_bytes s) {
     for (int i=0; i < s->nbytes; i++) {
         unsigned char c = s->str[i];
         if (c >= 'a' && c <= 'z')
-            return $False;
+            return B_False;
         if (c >= 'a' && c <= 'z')
             has_upper = 1;
     }
@@ -3352,7 +3352,7 @@ B_bytes B_bytesD_lower(B_bytes s) {
 
 B_bytes B_bytesD_lstrip(B_bytes s, B_bytes cs) {
     if (!cs)
-        cs = toB_bytes(" \t\n\r\x0b\x0c");
+        cs = to$bytes(" \t\n\r\x0b\x0c");
     int nstrip = 0;
     for (int i=0; i<s->nbytes; i++) {
         unsigned char c = s->str[i];
@@ -3376,7 +3376,7 @@ B_bytes B_bytesD_lstrip(B_bytes s, B_bytes cs) {
 B_tuple B_bytesD_partition(B_bytes s, B_bytes sep) {
     int n = fromB_int(B_bytesD_find(s,sep,NULL,NULL));
     if (n<0) {
-        return $NEWTUPLE(3,s,toB_bytes(""),toB_bytes(""));
+        return $NEWTUPLE(3,s,to$bytes(""),to$bytes(""));
     } else {
         int nb = bmh(s->str,sep->str,s->nbytes,sep->nbytes);
         B_bytes ls;
@@ -3492,7 +3492,7 @@ B_bytes B_bytesD_rjust(B_bytes s, B_int width, B_bytes fill) {
 B_tuple B_bytesD_rpartition(B_bytes s, B_bytes sep) {
     int n = fromB_int(B_bytesD_rfind(s,sep,NULL,NULL));
     if (n<0) {
-        return $NEWTUPLE(3,toB_bytes(""),toB_bytes(""),s);
+        return $NEWTUPLE(3,to$bytes(""),to$bytes(""),s);
     } else {
         int nb = rbmh(s->str,sep->str,s->nbytes,sep->nbytes);
         B_bytes ls;
@@ -3508,7 +3508,7 @@ B_tuple B_bytesD_rpartition(B_bytes s, B_bytes sep) {
 
 B_bytes B_bytesD_rstrip(B_bytes s, B_bytes cs) {
     if (!cs)
-        cs = toB_bytes(" \t\n\r\x0b\x0c");
+        cs = to$bytes(" \t\n\r\x0b\x0c");
     int nstrip = 0;
     for (int i=s->nbytes-1; i>=0; i--) {
         unsigned char c = s->str[i];
@@ -3598,7 +3598,7 @@ B_list B_bytesD_split(B_bytes s, B_bytes sep, B_int maxsplit) {
 
 B_list B_bytesD_splitlines(B_bytes s, B_bool keepends) {
     if (!keepends)
-        keepends = $False;
+        keepends = B_False;
     B_list res = $NEW(B_list,NULL,NULL);
     if (s->nbytes==0) {
         return res;
@@ -3632,16 +3632,16 @@ B_list B_bytesD_splitlines(B_bytes s, B_bool keepends) {
 B_bool B_bytesD_startswith(B_bytes s, B_bytes sub, B_int start, B_int end) {
     B_int st = start;
     B_int en = end;
-    if (fix_start_end(s->nbytes,&st,&en) < 0) return $False;
+    if (fix_start_end(s->nbytes,&st,&en) < 0) return B_False;
     unsigned char *p = s->str + fromB_int(st);
-    if (p+sub->nbytes >= s->str+s->nbytes) return $False;
+    if (p+sub->nbytes >= s->str+s->nbytes) return B_False;
     unsigned char *q = sub->str;
     for (int i=0; i<sub->nbytes; i++) {
         if (p >= s->str + fromB_int(en) || *p++ != *q++) {
-            return $False;
+            return B_False;
         }
     }
-    return $True;
+    return B_True;
 }
 
 
@@ -3755,7 +3755,7 @@ B_Iterator B_ContainerD_bytesD___iter__ (B_ContainerD_bytes wit, B_bytes str) {
 }
 
 B_bytes B_ContainerD_bytesD___fromiter__ (B_ContainerD_bytes wit, B_Iterable wit2, $WORD iter) {
-    return B_bytesD_join(toB_bytes(""),wit2,iter);
+    return B_bytesD_join(to$bytes(""),wit2,iter);
 }
 
 B_int B_ContainerD_bytesD___len__ (B_ContainerD_bytes wit, B_bytes str) {
@@ -3928,7 +3928,7 @@ struct B_TimesD_bytesG_class  B_TimesD_bytesG_methods = {
     (B_str (*)(B_TimesD_bytes))$default__str__,
     (B_str (*)(B_TimesD_bytes))$default__str__,
     B_TimesD_bytesD___add__,
-    (B_bytes (*)(B_TimesD_bytes, B_bytes, B_bytes))$PlusD___iadd__,
+    (B_bytes (*)(B_TimesD_bytes, B_bytes, B_bytes))B_PlusD___iadd__,
     B_TimesD_bytesD___mul__,
     (B_bytes (*)(B_TimesD_bytes, B_bytes, B_int))B_TimesD___imul__,
 
@@ -4017,7 +4017,7 @@ B_bytes B_bytesD_add(B_bytes s, B_bytes t) {
 B_bytes B_bytesD_mul (B_bytes a, B_int n) {
     int nval = fromB_int(n);
     if (nval <= 0)
-        return toB_bytes("");
+        return to$bytes("");
     else {
         B_bytes res;
         NEW_UNFILLED_BYTES(res, a->nbytes * nval);
@@ -4075,7 +4075,7 @@ B_IteratorB_bytes B_IteratorB_bytes$_deserialize(B_IteratorB_bytes res, $Serial$
 }
 
 B_bool B_IteratorB_bytesD_bool(B_IteratorB_bytes self) {
-    return $True;
+    return B_True;
 }
 
 B_str B_IteratorB_bytesD_str(B_IteratorB_bytes self) {

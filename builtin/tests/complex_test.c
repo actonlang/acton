@@ -21,6 +21,6 @@ int main() {
   B_NumberD_complex wit = B_NumberD_complexG_witness;
   B_complex c = wit->$class->__mul__(wit,a,b);
   B_complex c2 = wit->$class->__pow__(wit,a,b);
-  $print(2,to$str("(7+2i)*(5+3i) = "),c);
-  $print(2,to$str("(7+2i)**(5+3i) = "),c2);
+  B_print(2,to$str("(7+2i)*(5+3i) = "),c);
+  B_print(2,to$str("(7+2i)**(5+3i) = "),c2);
 }

@@ -29,10 +29,10 @@ extern int return_val;
 
 ///////////////////////////////////////////////////////////////////////////////////////////
 // START GENERATED __builtin__.act
-$NoneType $l$1contD___init__ ($l$1cont p$self, B_Env self, B_str s) {
+B_NoneType $l$1contD___init__ ($l$1cont p$self, B_Env self, B_str s) {
     p$self->self = self;
     p$self->s = s;
-    return $None;
+    return B_None;
 }
 $R $l$1contD___call__ ($l$1cont p$self, $Cont c$cont) {
     B_Env self = p$self->self;
@@ -64,10 +64,10 @@ $l$1cont $l$1contG_new(B_Env p$1, B_str p$2) {
 }
 struct $l$1contG_class $l$1contG_methods;
 
-$NoneType $l$2contD___init__ ($l$2cont p$self, B_Env self, $action cb) {
+B_NoneType $l$2contD___init__ ($l$2cont p$self, B_Env self, $action cb) {
     p$self->self = self;
     p$self->cb = cb;
-    return $None;
+    return B_None;
 }
 $R $l$2contD___call__ ($l$2cont p$self, $Cont c$cont) {
     B_Env self = p$self->self;
@@ -99,10 +99,10 @@ $l$2cont $l$2contG_new(B_Env p$1, $action p$2) {
 }
 struct $l$2contG_class $l$2contG_methods;
 
-$NoneType $l$3contD___init__ ($l$3cont p$self, B_Env self, B_int n) {
+B_NoneType $l$3contD___init__ ($l$3cont p$self, B_Env self, B_int n) {
     p$self->self = self;
     p$self->n = n;
-    return $None;
+    return B_None;
 }
 $R $l$3contD___call__ ($l$3cont p$self, $Cont c$cont) {
     B_Env self = p$self->self;
@@ -133,8 +133,8 @@ $l$3cont $l$3contG_new(B_Env p$1, B_int p$2) {
     return $tmp;
 }
 struct $l$3contG_class $l$3contG_methods;
-$NoneType B_WorldAuthD___init__ (B_WorldAuth self) {
-    return $None;
+B_NoneType B_WorldAuthD___init__ (B_WorldAuth self) {
+    return B_None;
 }
 void B_WorldAuthD___serialize__ (B_WorldAuth self, $Serial$state state) {
 }
@@ -172,15 +172,15 @@ B_WorldAuth B_WorldAuthG_new() {
 
 // Env /////////////////////////////////////////////////////////////////////////
 
-$NoneType B_EnvD___init__ (B_Env self, B_WorldAuth token, B_list argv) {
+B_NoneType B_EnvD___init__ (B_Env self, B_WorldAuth token, B_list argv) {
     self->auth = token;
     self->argv = argv;
     self->$affinity = 0;
-    return $None;
+    return B_None;
 }
 $R B_Env$stdout_write$local (B_Env self, $Cont c$cont, B_str s) {
     printf("%s", s->str);
-    return $R_CONT(c$cont, $None);
+    return $R_CONT(c$cont, B_None);
 }
 void read_stdin(uv_stream_t *stream, ssize_t nread, const uv_buf_t *buf) {
     log_info("read_stdin: %p", stream->data);
@@ -192,7 +192,7 @@ void read_stdin(uv_stream_t *stream, ssize_t nread, const uv_buf_t *buf) {
     } else if (nread > 0) {
         if (stream->data) {
             $action cb = stream->data;
-            cb->$class->__asyn__(cb, toB_bytesD_len(buf->base, nread));
+            cb->$class->__asyn__(cb, to$bytesD_len(buf->base, nread));
         }
     }
 
@@ -207,12 +207,12 @@ $R B_Env$stdin_install$local (B_Env self, $Cont c$cont, $action cb) {
     uv_tty_init(get_uv_loop(), tty, 0, 1);
     tty->data = cb;
     uv_read_start((uv_stream_t*)tty, alloc_buffer, read_stdin);
-    return $R_CONT(c$cont, $None);
+    return $R_CONT(c$cont, B_None);
 }
 $R B_Env$exit$local (B_Env self, $Cont c$cont, B_int n) {
     return_val = fromB_int(n);
     rts_shutdown();
-    return $R_CONT(c$cont, $None);
+    return $R_CONT(c$cont, B_None);
 }
 void B_EnvD___serialize__ (B_Env self, $Serial$state state) {
     $ActorG_methods.__serialize__(($Actor)self, state);
@@ -288,7 +288,7 @@ void D___init__ () {
         B_EnvG_methods.__bool__ = (B_bool (*) (B_Env))$ActorG_methods.__bool__;
         B_EnvG_methods.__str__ = (B_str (*) (B_Env))$ActorG_methods.__str__;
         B_EnvG_methods.__repr__ = (B_str (*) (B_Env))$ActorG_methods.__repr__;
-        B_EnvG_methods.__resume__ = ($NoneType (*) (B_Env))$ActorG_methods.__resume__;
+        B_EnvG_methods.__resume__ = (B_NoneType (*) (B_Env))$ActorG_methods.__resume__;
         B_EnvG_methods.__init__ = B_EnvD___init__;
         B_EnvG_methods.stdout_write$local = B_Env$stdout_write$local;
         B_EnvG_methods.stdin_install$local = B_Env$stdin_install$local;

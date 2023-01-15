@@ -30,8 +30,8 @@ int main() {
   B_dictD_setitem(dict,wit, b,lst);
   $ROW r = $serialize(($Serializable)dict,NULL);
   B_dict dict2 = (B_dict)$deserialize(r,NULL);
-  $print(1,dict);
-  $print(1,dict2);
+  B_print(1,dict);
+  B_print(1,dict2);
   B_listD_setitem(B_dictD_getitem(dict2,wit,a),1,toB_int(7));
   printf("Sharing test (both values should have 2nd element changed to 7):\ndict2 = %s\n",(dict2->$class->__str__(dict2))->str);
 }

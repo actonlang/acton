@@ -45,7 +45,7 @@ int main() {
   printf("e.shape = %s\n",e->shape->$class->__str__(e->shape)->str);
   printf("e.strides = %s\n",e->strides->$class->__str__(e->strides)->str);
   printf("e=%s\n",fromB_str(e->$class->__str__(e)));
-  $Plus$ndarrayB_int wit = $Plus$ndarrayB_intG_witness;
+  B_Plus$ndarrayD_int wit = B_Plus$ndarrayD_intG_witness;
   $ndarray f = wit->$class->__add__(wit,d,e);
   printf("f=%s\n",fromB_str(f->$class->__str__(f)));  
   $ndarray g = wit->$class->__add__(wit,a,e);

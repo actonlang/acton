@@ -28,9 +28,9 @@ int main() {
   $serialize_file(($Serializable)r2,"range.bin");
   B_range r3 = (B_range)$deserialize_file("range.bin");
   B_list lst = B_listD_fromiter(wit->$class->__iter__(wit,r3));
-  $print(2,to$str("lst = "),lst);
+  B_print(2,to$str("lst = "),lst);
   B_set s = B_set_fromiter((B_Hashable)B_HashableD_intG_witness,wit->$class->__iter__(wit,r2));
   B_SetD_set wit2 = B_SetD_setG_new((B_Hashable)B_HashableD_intG_witness);
   B_list lst2 = B_listD_fromiter(wit2->$class->__iter__(wit2,s));
-  $print(2,to$str("lst2 = "),lst2);
+  B_print(2,to$str("lst2 = "),lst2);
 }

@@ -5,10 +5,10 @@ void acton$rts$D___ext_init__() {
     // NOP
 }
 
-$NoneType acton$rts$$sleep (B_float sleep_time) {
+B_NoneType acton$rts$$sleep (B_float sleep_time) {
     int to_sleep = sleep_time->val*1000000;
     usleep(to_sleep);
-    return $None;
+    return B_None;
 }
 
 B_int acton$rts$$rss (B_WorldAuth auth) {

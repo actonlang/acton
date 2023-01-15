@@ -15,8 +15,8 @@
 #include "math.h"
 
 
-$NoneType mathQ_RealFunsD___init__ (mathQ_RealFuns W_self) {
-    return $None;
+B_NoneType mathQ_RealFunsD___init__ (mathQ_RealFuns W_self) {
+    return B_None;
 }
 mathQ_RealFuns mathQ_RealFunsG_new() {
     mathQ_RealFuns $tmp = malloc(sizeof(struct mathQ_RealFuns));
@@ -25,13 +25,13 @@ mathQ_RealFuns mathQ_RealFunsG_new() {
     return $tmp;
 }
 struct mathQ_RealFunsG_class mathQ_RealFunsG_methods;
-$NoneType mathQ_RealFunsD_floatD___init__ (mathQ_RealFunsD_float W_self) {
+B_NoneType mathQ_RealFunsD_floatD___init__ (mathQ_RealFunsD_float W_self) {
     mathQ_RealFunsG_methods.__init__((mathQ_RealFuns)W_self);
-    return $None;
+    return B_None;
 }
 
-$NoneType mathQ_RealFunsD_floatD___serialize__(mathQ_RealFunsD_float wit, $Serial$state state) {
-    return $None;
+B_NoneType mathQ_RealFunsD_floatD___serialize__(mathQ_RealFunsD_float wit, $Serial$state state) {
+    return B_None;
 }
 
 mathQ_RealFunsD_float mathQ_RealFunsD_floatD___deserialize__(mathQ_RealFunsD_float wit, $Serial$state state) {
@@ -39,49 +39,49 @@ mathQ_RealFunsD_float mathQ_RealFunsD_floatD___deserialize__(mathQ_RealFunsD_flo
     return res;
 }
 B_float mathQ_RealFunsD_float$sqrt(mathQ_RealFunsD_float wit, B_float x) {
-  return toB_float(sqrt(x->val));
+  return to$float(sqrt(x->val));
 }
 B_float mathQ_RealFunsD_float$exp(mathQ_RealFunsD_float wit, B_float x) {
-  return toB_float(exp(x->val));
+  return to$float(exp(x->val));
 }
 B_float mathQ_RealFunsD_float$log(mathQ_RealFunsD_float wit, B_float x) {
-  return toB_float(log(x->val));
+  return to$float(log(x->val));
 }
 B_float mathQ_RealFunsD_float$sin(mathQ_RealFunsD_float wit, B_float x) {
-  return toB_float(sin(x->val));
+  return to$float(sin(x->val));
 }
 B_float mathQ_RealFunsD_float$cos(mathQ_RealFunsD_float wit, B_float x) {
-  return toB_float(cos(x->val));
+  return to$float(cos(x->val));
 }
 B_float mathQ_RealFunsD_float$tan(mathQ_RealFunsD_float wit, B_float x) {
-  return toB_float(tan(x->val));
+  return to$float(tan(x->val));
 }
 B_float mathQ_RealFunsD_float$asin(mathQ_RealFunsD_float wit, B_float x) {
-  return toB_float(asin(x->val));
+  return to$float(asin(x->val));
 }
 B_float mathQ_RealFunsD_float$acos(mathQ_RealFunsD_float wit, B_float x) {
-  return toB_float(acos(x->val));
+  return to$float(acos(x->val));
 }
 B_float mathQ_RealFunsD_float$atan(mathQ_RealFunsD_float wit, B_float x) {
-  return toB_float(atan(x->val));
+  return to$float(atan(x->val));
 }
 B_float mathQ_RealFunsD_float$sinh(mathQ_RealFunsD_float wit, B_float x) {
-  return toB_float(sinh(x->val));
+  return to$float(sinh(x->val));
 }
 B_float mathQ_RealFunsD_float$cosh(mathQ_RealFunsD_float wit, B_float x) {
-  return toB_float(cosh(x->val));
+  return to$float(cosh(x->val));
 }
 B_float mathQ_RealFunsD_float$tanh(mathQ_RealFunsD_float wit, B_float x) {
-  return toB_float(tanh(x->val));
+  return to$float(tanh(x->val));
 }
 B_float mathQ_RealFunsD_float$asinh(mathQ_RealFunsD_float wit, B_float x) {
-  return toB_float(asinh(x->val));
+  return to$float(asinh(x->val));
 }
 B_float mathQ_RealFunsD_float$acosh(mathQ_RealFunsD_float wit, B_float x) {
-  return toB_float(acosh(x->val));
+  return to$float(acosh(x->val));
 }
 B_float mathQ_RealFunsD_float$atanh(mathQ_RealFunsD_float wit, B_float x) {
-  return toB_float(atanh(x->val));
+  return to$float(atanh(x->val));
 }
 
                       
