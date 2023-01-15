@@ -95,7 +95,7 @@ B_str B_dictD_str(B_dict self) {
     return B_strD_join_par('{',s2,'}');
 }
 
-void B_dictD_serialize(B_dict self,$NoneType state) {
+void B_dictD_serialize(B_dict self,$Serial$state state) {
     B_int prevkey = (B_int)B_dictD_get(state->done,(B_Hashable)B_HashableD_WORDG_witness,self,NULL);
     if (prevkey) {
         long pk = fromB_int(prevkey);
@@ -118,7 +118,7 @@ void B_dictD_serialize(B_dict self,$NoneType state) {
     }
 }
 
-B_dict B_dictD_deserialize(B_dict res, $NoneType state) {
+B_dict B_dictD_deserialize(B_dict res, $Serial$state state) {
     $ROW this = state->row;
     state->row = this->next;
     state->row_no++;
@@ -341,13 +341,13 @@ B_str B_IteratorD_dictD_str(B_IteratorD_dict self) {
     return to$str(s);
 }
 
-void B_IteratorD_dictD_serialize(B_IteratorD_dict self, $NoneType state) {
+void B_IteratorD_dictD_serialize(B_IteratorD_dict self, $Serial$state state) {
     $step_serialize(self->src,state);
     $step_serialize(toB_int(self->nxt),state);
 }
 
 
-B_IteratorD_dict B_InteratorD_dict__deserialize(B_IteratorD_dict res, $NoneType state) {
+B_IteratorD_dict B_InteratorD_dict__deserialize(B_IteratorD_dict res, $Serial$state state) {
     if (!res)
         res = $DNEW( B_IteratorD_dict,state);
     res->src = (B_dict)$step_deserialize(state);
@@ -470,12 +470,12 @@ B_str B_InteratorD_dict_values_str(B_InteratorD_dict_values self) {
     return to$str(s);
 }
 
-void B_InteratorD_dict_values_serialize(B_InteratorD_dict_values self, $NoneType state) {
+void B_InteratorD_dict_values_serialize(B_InteratorD_dict_values self, $Serial$state state) {
     $step_serialize(self->src,state);
     $step_serialize(toB_int(self->nxt),state);
 }
 
-B_InteratorD_dict_values B_InteratorD_dict_values_deserialize(B_InteratorD_dict_values res, $NoneType state) {
+B_InteratorD_dict_values B_InteratorD_dict_values_deserialize(B_InteratorD_dict_values res, $Serial$state state) {
     if (!res)
         res = $DNEW(B_InteratorD_dict_values,state);
     res->src = (B_dict)$step_deserialize(state);
@@ -524,12 +524,12 @@ B_str B_InteratorD_dict_items_str(B_InteratorD_dict_items self) {
     return to$str(s);
 }
 
-void B_InteratorD_dict_items_serialize(B_InteratorD_dict_items self, $NoneType state) {
+void B_InteratorD_dict_items_serialize(B_InteratorD_dict_items self, $Serial$state state) {
     $step_serialize(self->src,state);
     $step_serialize(toB_int(self->nxt),state);
 }
 
-B_InteratorD_dict_items B_InteratorD_dict_items_deserialize(B_InteratorD_dict_items res, $NoneType state) {
+B_InteratorD_dict_items B_InteratorD_dict_items_deserialize(B_InteratorD_dict_items res, $Serial$state state) {
     if (!res)
         res = $DNEW(B_InteratorD_dict_items,state);
     res->src = (B_dict)$step_deserialize(state);

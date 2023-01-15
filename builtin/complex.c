@@ -27,7 +27,7 @@ void B_complexD_init(B_complex self, B_Number wit, $WORD c){
   self->val = wit->$class->__complx__(wit,c)->val;
 }
 
-void B_complexD_serialize(B_complex c,$NoneType state) {
+void B_complexD_serialize(B_complex c,$Serial$state state) {
   $ROW row = $add_header(COMPLEX_ID,2,state);
   double re = creal(c->val);
   double im = cimag(c->val);
@@ -35,7 +35,7 @@ void B_complexD_serialize(B_complex c,$NoneType state) {
   memcpy(row->blob+1,&im,sizeof(double));
 }
 
-B_complex B_complexD_deserialize(B_complex self, $NoneType state) {
+B_complex B_complexD_deserialize(B_complex self, $Serial$state state) {
   $ROW this = state->row;
   state->row =this->next;
   state->row_no++;
@@ -59,11 +59,11 @@ struct B_complexG_class B_complexG_methods = {"B_complex",UNASSIGNED,($SuperG_cl
 
 // B_NumberD_complex  ////////////////////////////////////////////////////////////////////////////////////////
 
-void B_NumberD_complexD___serialize__(B_NumberD_complex self, $NoneType state) {
+void B_NumberD_complexD___serialize__(B_NumberD_complex self, $Serial$state state) {
   $step_serialize(self->W_Minus, state);
 }
 
-B_NumberD_complex B_NumberD_complexD___deserialize__(B_NumberD_complex res, $NoneType state) {
+B_NumberD_complex B_NumberD_complexD___deserialize__(B_NumberD_complex res, $Serial$state state) {
    if (!res)
       res = $DNEW(B_NumberD_complex,state);
    res->W_Minus = (B_Minus)$step_deserialize(state);
@@ -112,10 +112,10 @@ B_complex B_NumberD_complex$conjugate (B_NumberD_complex wit, B_complex c) {
 
 // B_DivD_complex /////////////////////////////////////////////////////////////////////////////////////////
 
-void B_DivD_complexD___serialize__(B_DivD_complex self, $NoneType state) {
+void B_DivD_complexD___serialize__(B_DivD_complex self, $Serial$state state) {
 }
 
-B_DivD_complex B_DivD_complexD___deserialize__(B_DivD_complex self, $NoneType state) {
+B_DivD_complex B_DivD_complexD___deserialize__(B_DivD_complex self, $Serial$state state) {
    B_DivD_complex res = $DNEW(B_DivD_complex,state);
    return res;
 }
@@ -126,11 +126,11 @@ B_complex B_DivD_complexD___truediv__ (B_DivD_complex wit, B_complex a, B_comple
 
 // B_MinusD_NumberD_complex  ////////////////////////////////////////////////////////////////////////////////////////
 
-void B_MinusD_NumberD_complexD___serialize__(B_MinusD_NumberD_complex self, $NoneType state) {
+void B_MinusD_NumberD_complexD___serialize__(B_MinusD_NumberD_complex self, $Serial$state state) {
   $step_serialize(self->W_Number, state);
 }
 
-B_MinusD_NumberD_complex B_MinusD_NumberD_complexD___deserialize__(B_MinusD_NumberD_complex self, $NoneType state) {
+B_MinusD_NumberD_complex B_MinusD_NumberD_complexD___deserialize__(B_MinusD_NumberD_complex self, $Serial$state state) {
    B_MinusD_NumberD_complex res = $DNEW(B_MinusD_NumberD_complex,state);
    res->W_Number = (B_Number)$step_deserialize(state);
    return res;
@@ -141,10 +141,10 @@ B_complex B_MinusD_NumberD_complexD___sub__(B_MinusD_NumberD_complex wit, B_comp
 }  
 // B_EqD_complex  ////////////////////////////////////////////////////////////////////////////////////////
 
-void B_EqD_complexD___serialize__(B_EqD_complex self, $NoneType state) {
+void B_EqD_complexD___serialize__(B_EqD_complex self, $Serial$state state) {
 }
 
-B_EqD_complex B_EqD_complexD___deserialize__(B_EqD_complex self, $NoneType state) {
+B_EqD_complex B_EqD_complexD___deserialize__(B_EqD_complex self, $Serial$state state) {
    B_EqD_complex res = $DNEW(B_EqD_complex,state);
    return res;
 }
@@ -160,10 +160,10 @@ B_bool B_EqD_complexD___ne__ (B_EqD_complex wit, B_complex a, B_complex b) {
 
 // B_HashableD_complex  ////////////////////////////////////////////////////////////////////////////////////////
 
-void B_HashableD_complexD___serialize__(B_HashableD_complex self, $NoneType state) {
+void B_HashableD_complexD___serialize__(B_HashableD_complex self, $Serial$state state) {
 }
 
-B_HashableD_complex B_HashableD_complexD___deserialize__(B_HashableD_complex self, $NoneType state) {
+B_HashableD_complex B_HashableD_complexD___deserialize__(B_HashableD_complex self, $Serial$state state) {
    B_HashableD_complex res = $DNEW(B_HashableD_complex,state);
    return res;
 }

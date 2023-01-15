@@ -30,11 +30,11 @@ B_str B_BaseExceptionD___str__(B_BaseException self) {
   return to$str(s);
 }
 
-void B_BaseExceptionD___serialize__(B_BaseException self, $NoneType state) {
+void B_BaseExceptionD___serialize__(B_BaseException self, $Serial$state state) {
     $step_serialize(self->error_message,state);
 };
 
-B_BaseException B_BaseExceptionD___deserialize__(B_BaseException self, $NoneType state) {
+B_BaseException B_BaseExceptionD___deserialize__(B_BaseException self, $Serial$state state) {
   B_BaseException res = $DNEW(B_BaseException,state);
   res->error_message = $step_deserialize(state);
   return res;
@@ -64,11 +64,11 @@ B_str B_SystemExitD___str__(B_SystemExit self) {
   return to$str(s);
 }
 
-void B_SystemExitD___serialize__(B_SystemExit self, $NoneType state) {
+void B_SystemExitD___serialize__(B_SystemExit self, $Serial$state state) {
     $step_serialize(self->error_message,state);
 };
 
-B_SystemExit B_SystemExitD___deserialize__(B_SystemExit self, $NoneType state) {
+B_SystemExit B_SystemExitD___deserialize__(B_SystemExit self, $Serial$state state) {
   B_SystemExit res = $DNEW(B_SystemExit,state);
   res->error_message = $step_deserialize(state);
   return res;
@@ -97,11 +97,11 @@ B_str B_KeyboardInterruptD___str__(B_KeyboardInterrupt self) {
   return to$str(s);
 }
 
-void B_KeyboardInterruptD___serialize__(B_KeyboardInterrupt self,$NoneType state) {
+void B_KeyboardInterruptD___serialize__(B_KeyboardInterrupt self,$Serial$state state) {
     $step_serialize(self->error_message,state);
 };
 
-B_KeyboardInterrupt B_KeyboardInterruptD___deserialize__(B_KeyboardInterrupt self, $NoneType state) {
+B_KeyboardInterrupt B_KeyboardInterruptD___deserialize__(B_KeyboardInterrupt self, $Serial$state state) {
   B_KeyboardInterrupt res = $DNEW(B_KeyboardInterrupt,state);
   res->error_message = $step_deserialize(state);
   return res;
@@ -130,11 +130,11 @@ B_str B_ExceptionD___str__(B_Exception self) {
   return to$str(s);
 }
 
-void B_ExceptionD___serialize__(B_Exception self,$NoneType state) {
+void B_ExceptionD___serialize__(B_Exception self,$Serial$state state) {
     $step_serialize(self->error_message,state);
 };
 
-B_Exception B_ExceptionD___deserialize__(B_Exception self, $NoneType state) {
+B_Exception B_ExceptionD___deserialize__(B_Exception self, $Serial$state state) {
   B_Exception res = $DNEW(B_Exception,state);
   res->error_message = $step_deserialize(state);
   return res;
@@ -163,11 +163,11 @@ B_str B_AssertionErrorD___str__(B_AssertionError self) {
   return to$str(s);
 }
 
-void B_AssertionErrorD___serialize__(B_AssertionError self, $NoneType state) {
+void B_AssertionErrorD___serialize__(B_AssertionError self, $Serial$state state) {
     $step_serialize(self->error_message,state);
 };
 
-B_AssertionError B_AssertionErrorD___deserialize__(B_AssertionError self, $NoneType state) {
+B_AssertionError B_AssertionErrorD___deserialize__(B_AssertionError self, $Serial$state state) {
   B_AssertionError res = $DNEW(B_AssertionError,state);
   res->error_message = $step_deserialize(state);
   return res;
@@ -196,11 +196,11 @@ B_str B_LookupErrorD___str__(B_LookupError self) {
   return to$str(s);
 }
 
-void B_LookupErrorD___serialize__(B_LookupError self,$NoneType state) {
+void B_LookupErrorD___serialize__(B_LookupError self,$Serial$state state) {
     $step_serialize(self->error_message,state);
 };
 
-B_LookupError B_LookupErrorD___deserialize__(B_LookupError self,$NoneType state) {
+B_LookupError B_LookupErrorD___deserialize__(B_LookupError self,$Serial$state state) {
   B_LookupError res = $DNEW(B_LookupError,state);
   res->error_message = $step_deserialize(state);
   return res;
@@ -229,11 +229,11 @@ B_str B_IndexErrorD___str__(B_IndexError self) {
   return to$str(s);
 }
 
-void B_IndexErrorD___serialize__(B_IndexError self, $NoneType state) {
+void B_IndexErrorD___serialize__(B_IndexError self, $Serial$state state) {
     $step_serialize(self->error_message,state);
 };
 
-B_IndexError B_IndexErrorD___deserialize__(B_IndexError self, $NoneType state) {
+B_IndexError B_IndexErrorD___deserialize__(B_IndexError self, $Serial$state state) {
   B_IndexError res = $DNEW(B_IndexError,state);
   res->error_message = $step_deserialize(state);
   return res;
@@ -262,11 +262,11 @@ B_str B_KeyErrorD___str__(B_KeyError self) {
   return to$str(s);
 }
 
-void B_KeyErrorD___serialize__(B_KeyError self, $NoneType state) {
+void B_KeyErrorD___serialize__(B_KeyError self, $Serial$state state) {
     $step_serialize(self->error_message,state);
 };
 
-B_KeyError B_KeyErrorD___deserialize__(B_KeyError self, $NoneType state) {
+B_KeyError B_KeyErrorD___deserialize__(B_KeyError self, $Serial$state state) {
   B_KeyError res = $DNEW(B_KeyError,state);
   res->error_message = $step_deserialize(state);
   return res;
@@ -295,12 +295,12 @@ B_str B_MemoryErrorD___str__(B_MemoryError self) {
   return to$str(s);
 }
 
-void B_MemoryErrorD___serialize__(B_MemoryError self, $NoneType state) {
+void B_MemoryErrorD___serialize__(B_MemoryError self, $Serial$state state) {
     $add_header(MEMORYERROR_ID,0,state);
     $step_serialize(self->error_message,state);
 };
 
-B_MemoryError B_MemoryErrorD___deserialize__(B_MemoryError self, $NoneType state) {
+B_MemoryError B_MemoryErrorD___deserialize__(B_MemoryError self, $Serial$state state) {
   B_MemoryError res = $DNEW(B_MemoryError,state);
   res->error_message = $step_deserialize(state);
   return res;
@@ -329,11 +329,11 @@ B_str B_OSErrorD___str__(B_OSError self) {
   return to$str(s);
 }
 
-void B_OSErrorD___serialize__(B_OSError self, $NoneType state) {
+void B_OSErrorD___serialize__(B_OSError self, $Serial$state state) {
     $step_serialize(self->error_message,state);
 };
 
-B_OSError B_OSErrorD___deserialize__(B_OSError self, $NoneType state) {
+B_OSError B_OSErrorD___deserialize__(B_OSError self, $Serial$state state) {
   B_OSError res = $DNEW(B_OSError,state);
   res->error_message = $step_deserialize(state);
   return res;
@@ -361,11 +361,11 @@ B_str B_RuntimeErrorD___str__(B_RuntimeError self) {
   return to$str(s);
 }
 
-void B_RuntimeErrorD___serialize__(B_RuntimeError self, $NoneType state) {
+void B_RuntimeErrorD___serialize__(B_RuntimeError self, $Serial$state state) {
     $step_serialize(self->error_message,state);
 };
 
-B_RuntimeError B_RuntimeErrorD___deserialize__(B_RuntimeError self, $NoneType state) {
+B_RuntimeError B_RuntimeErrorD___deserialize__(B_RuntimeError self, $Serial$state state) {
   B_RuntimeError res = $DNEW(B_RuntimeError,state);
   res->error_message = $step_deserialize(state);
   return res;
@@ -389,12 +389,12 @@ B_str B_NotImplementedErrorD___str__(B_NotImplementedError self) {
   return to$str(s);
 }
 
-void B_NotImplementedErrorD___serialize__(B_NotImplementedError self, $NoneType state) {
+void B_NotImplementedErrorD___serialize__(B_NotImplementedError self, $Serial$state state) {
     $add_header(NOTIMPLEMENTEDERROR_ID,0,state);
     $step_serialize(self->error_message,state);
 };
 
-B_NotImplementedError B_NotImplementedErrorD___deserialize__(B_NotImplementedError self, $NoneType state) {
+B_NotImplementedError B_NotImplementedErrorD___deserialize__(B_NotImplementedError self, $Serial$state state) {
   B_NotImplementedError res = $DNEW(B_NotImplementedError,state);
   res->error_message = $step_deserialize(state);
   return res;
@@ -423,12 +423,12 @@ B_str B_ValueErrorD___str__(B_ValueError self) {
   return to$str(s);
 }
 
-void B_ValueErrorD___serialize__(B_ValueError self,$NoneType state) {
+void B_ValueErrorD___serialize__(B_ValueError self,$Serial$state state) {
     $add_header(VALUEERROR_ID,0,state);
     $step_serialize(self->error_message,state);
 };
 
-B_ValueError B_ValueErrorD___deserialize__(B_ValueError self,$NoneType state) {
+B_ValueError B_ValueErrorD___deserialize__(B_ValueError self,$Serial$state state) {
   B_ValueError res = $DNEW(B_ValueError,state);
   res->error_message = $step_deserialize(state);
   return res;

@@ -74,7 +74,7 @@ void B_intD_init(B_int self, B_atom a){
     self->val = B_intG_new(a)->val;
 }
 
-void B_intD_serialize(B_int self,$NoneType state) {
+void B_intD_serialize(B_int self,$Serial$state state) {
     B_int prevkey = (B_int)B_dictD_get(state->done,(B_Hashable)B_HashableD_WORDG_witness,self,NULL);
     if (prevkey) {
         long pk = fromB_int(prevkey);
@@ -87,7 +87,7 @@ void B_intD_serialize(B_int self,$NoneType state) {
     memcpy(&row->blob[1],self->val.n,labs(self->val.size)*sizeof(long));
 }
 
-B_int B_intD_deserialize(B_int res,$NoneType state) {
+B_int B_intD_deserialize(B_int res,$Serial$state state) {
     $ROW this = state->row;
     state->row = this->next;
     state->row_no++;
@@ -137,12 +137,12 @@ B_int zz$toB_int(zz_ptr n) {
 
 // B_IntegralD_int /////////////////////////////////////////////////////////////////////////
 
-void B_IntegralD_intD___serialize__(B_IntegralD_int self, $NoneType state) {
+void B_IntegralD_intD___serialize__(B_IntegralD_int self, $Serial$state state) {
     $step_serialize(self->W_Logical, state);
     $step_serialize(self->W_Minus, state);
 }
 
-B_IntegralD_int B_IntegralD_intD___deserialize__(B_IntegralD_int self, $NoneType state) {
+B_IntegralD_int B_IntegralD_intD___deserialize__(B_IntegralD_int self, $Serial$state state) {
     B_IntegralD_int res = $DNEW(B_IntegralD_int,state);
     res->W_Logical = (B_Logical)$step_deserialize(state);
     res->W_Minus = (B_Minus)$step_deserialize(state);
@@ -345,13 +345,13 @@ B_int B_IntegralD_intD___invert__(B_IntegralD_int wit,  B_int a) {
 
 // LogicalB_int  ////////////////////////////////////////////////////////////////////////////////////////
 
-void B_LogicalD_IntegralD_intD___serialize__(B_LogicalD_IntegralD_int self, $NoneType state) {
+void B_LogicalD_IntegralD_intD___serialize__(B_LogicalD_IntegralD_int self, $Serial$state state) {
     //$step_serialize(self->W_Integral, state);
     fprintf(stderr,"Protocol Logical not implemented for int; use i64\n");
     exit(1);
 }
 
-B_LogicalD_IntegralD_int B_LogicalD_IntegralD_intD___deserialize__(B_LogicalD_IntegralD_int self, $NoneType state) {
+B_LogicalD_IntegralD_int B_LogicalD_IntegralD_intD___deserialize__(B_LogicalD_IntegralD_int self, $Serial$state state) {
     // B_LogicalD_IntegralD_i64 res = $DNEW(B_LogicalD_IntegralD_i64,state);
     //  res->W_Integral = (B_Integral)$step_deserialize(state);
     //  return res;
@@ -379,11 +379,11 @@ B_int B_LogicalD_IntegralD_intD___xor__(B_LogicalD_IntegralD_int wit,  B_int a, 
  
 // B_MinusD_IntegralD_int  ////////////////////////////////////////////////////////////////////////////////////////
 
-void B_MinusD_IntegralD_intD___serialize__(B_MinusD_IntegralD_int self, $NoneType state) {
+void B_MinusD_IntegralD_intD___serialize__(B_MinusD_IntegralD_int self, $Serial$state state) {
     $step_serialize(self->W_Integral, state);
 }
 
-B_MinusD_IntegralD_int B_MinusD_IntegralD_intD___deserialize__(B_MinusD_IntegralD_int self, $NoneType state) {
+B_MinusD_IntegralD_int B_MinusD_IntegralD_intD___deserialize__(B_MinusD_IntegralD_int self, $Serial$state state) {
     B_MinusD_IntegralD_int res = $DNEW(B_MinusD_IntegralD_int,state);
     res->W_Integral = (B_Integral)$step_deserialize(state);
     return res;
@@ -398,10 +398,10 @@ B_int B_MinusD_IntegralD_intD___sub__(B_MinusD_IntegralD_int wit,  B_int a, B_in
 
 // B_DivD_int  ////////////////////////////////////////////////////////////////////////////////////////
 
-void B_DivD_intD___serialize__(B_DivD_int self, $NoneType state) {
+void B_DivD_intD___serialize__(B_DivD_int self, $Serial$state state) {
 }
 
-B_DivD_int B_DivD_intD___deserialize__(B_DivD_int self, $NoneType state) {
+B_DivD_int B_DivD_intD___deserialize__(B_DivD_int self, $Serial$state state) {
     B_DivD_int res = $DNEW(B_DivD_int,state);
     return res;
 }
@@ -423,10 +423,10 @@ B_float B_DivD_intD___truediv__ (B_DivD_int wit, B_int a, B_int b) {
 
 // B_OrdD_int  ////////////////////////////////////////////////////////////////////////////////////////
 
-void B_OrdD_intD___serialize__(B_OrdD_int self, $NoneType state) {
+void B_OrdD_intD___serialize__(B_OrdD_int self, $Serial$state state) {
 }
 
-B_OrdD_int B_OrdD_intD___deserialize__(B_OrdD_int self, $NoneType state) {
+B_OrdD_int B_OrdD_intD___deserialize__(B_OrdD_int self, $Serial$state state) {
     B_OrdD_int res = $DNEW(B_OrdD_int,state);
     return res;
 }
@@ -457,10 +457,10 @@ B_bool B_OrdD_intD___ge__ (B_OrdD_int wit, B_int a, B_int b) {
 
 // B_HashableD_int ///////////////////////////////////////////////////////////////////////////////////////////////////////
 
-void B_HashableD_intD___serialize__(B_HashableD_int self, $NoneType state) {
+void B_HashableD_intD___serialize__(B_HashableD_int self, $Serial$state state) {
 }
 
-B_HashableD_int B_HashableD_intD___deserialize__(B_HashableD_int self, $NoneType state) {
+B_HashableD_int B_HashableD_intD___deserialize__(B_HashableD_int self, $Serial$state state) {
     B_HashableD_int res = $DNEW(B_HashableD_int,state);
     return res;
 }

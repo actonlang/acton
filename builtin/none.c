@@ -17,11 +17,11 @@ $NoneType $NoneTypeG_new() {
 }
 
 
-void $NoneTypeD__serialize__($NoneType self, $NoneType state) {
+void $NoneTypeD__serialize__($NoneType self, $Serial$state state) {
   $add_header(NONE_ID,0,state);
 }
 
-$NoneType $NoneTypeD__deserialize__($NoneType self, $NoneType state) {
+$NoneType $NoneTypeD__deserialize__($NoneType self, $Serial$state state) {
   state->row = state->row->next;
   state->row_no++;
   return NULL;

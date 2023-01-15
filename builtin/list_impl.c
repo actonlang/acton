@@ -44,7 +44,7 @@ B_str B_listD_str(B_list self) {
     return B_strD_join_par('[',s2,']');
 }
 
-void B_listD_serialize(B_list self,$NoneType state) {
+void B_listD_serialize(B_list self,$Serial$state state) {
     B_int prevkey = (B_int)B_dictD_get(state->done,(B_Hashable)B_HashableD_WORDG_witness,self,NULL);
     if (prevkey) {
         long pk = fromB_int(prevkey);
@@ -59,7 +59,7 @@ void B_listD_serialize(B_list self,$NoneType state) {
     }
 }
  
-B_list B_listD_deserialize(B_list res, $NoneType state) {
+B_list B_listD_deserialize(B_list res, $Serial$state state) {
     $ROW this = state->row;
     state->row = this->next;
     state->row_no++;
@@ -203,12 +203,12 @@ B_str B_IteratorD_listD_str(B_IteratorD_list self) {
     return to$str(s);
 }
 
-void B_IteratorD_listD_serialize(B_IteratorD_list self,$NoneType state) {
+void B_IteratorD_listD_serialize(B_IteratorD_list self,$Serial$state state) {
     $step_serialize(self->src,state);
     $step_serialize(toB_int(self->nxt),state);
 }
 
-B_IteratorD_list B_IteratorD_list$_deserialize(B_IteratorD_list res, $NoneType state) {
+B_IteratorD_list B_IteratorD_list$_deserialize(B_IteratorD_list res, $Serial$state state) {
     if(!res)
         res = $DNEW(B_IteratorD_list,state);
     res->src = (B_list)$step_deserialize(state);

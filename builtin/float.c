@@ -52,11 +52,11 @@ void B_floatD_init(B_float self, B_atom a){
     self->val = B_floatG_new(a)->val;
 }
 
-void B_floatD_serialize(B_float self, $NoneType state) {
+void B_floatD_serialize(B_float self, $Serial$state state) {
     $val_serialize(FLOAT_ID,&self->val,state);
 }
 
-B_float B_floatD_deserialize(B_float self, $NoneType state) {
+B_float B_floatD_deserialize(B_float self, $Serial$state state) {
     $WORD w = $val_deserialize(state);
     double x;
     memcpy(&x,&w,sizeof($WORD));
@@ -99,11 +99,11 @@ double fromB_float(B_float x) {
 
 // B_RealD_float /////////////////////////////////////////////////////////////////////////
 
-void B_RealD_floatD___serialize__(B_RealD_float self, $NoneType state) {
+void B_RealD_floatD___serialize__(B_RealD_float self, $Serial$state state) {
     $step_serialize(self->W_Minus, state);
 }
 
-B_RealD_float B_RealD_floatD___deserialize__(B_RealD_float self, $NoneType state) {
+B_RealD_float B_RealD_floatD___deserialize__(B_RealD_float self, $Serial$state state) {
     B_RealD_float res = $DNEW(B_RealD_float,state);
     res->W_Minus = (B_Minus)$step_deserialize(state);
     return res;
@@ -177,11 +177,11 @@ B_float B_RealD_floatD___round__ (B_RealD_float wit, B_float x, B_int p) {
      
 // B_MinusD_RealD_float  ////////////////////////////////////////////////////////////////////////////////////////
 
-void B_MinusD_RealD_floatD___serialize__(B_MinusD_RealD_float self, $NoneType state) {
+void B_MinusD_RealD_floatD___serialize__(B_MinusD_RealD_float self, $Serial$state state) {
     $step_serialize(self->W_Real, state);
 }
 
-B_MinusD_RealD_float B_MinusD_RealD_floatD___deserialize__(B_MinusD_RealD_float self, $NoneType state) {
+B_MinusD_RealD_float B_MinusD_RealD_floatD___deserialize__(B_MinusD_RealD_float self, $Serial$state state) {
     B_MinusD_RealD_float res = $DNEW(B_MinusD_RealD_float,state);
     res->W_Real = (B_Real)$step_deserialize(state);
     return res;
@@ -193,10 +193,10 @@ B_float B_MinusD_RealD_floatD___sub__(B_MinusD_RealD_float wit,  B_float a, B_fl
 
 // B_DivD_float  ////////////////////////////////////////////////////////////////////////////////////////
 
-void B_DivD_floatD___serialize__(B_DivD_float self, $NoneType state) {
+void B_DivD_floatD___serialize__(B_DivD_float self, $Serial$state state) {
 }
 
-B_DivD_float B_DivD_floatD___deserialize__(B_DivD_float self, $NoneType state) {
+B_DivD_float B_DivD_floatD___deserialize__(B_DivD_float self, $Serial$state state) {
     B_DivD_float res = $DNEW(B_DivD_float,state);
     return res;
 }
@@ -207,10 +207,10 @@ B_float B_DivD_floatD___truediv__(B_DivD_float wit, B_float a, B_float b) {
 
 // B_OrdD_float  ////////////////////////////////////////////////////////////////////////////////////////
 
-void B_OrdD_floatD___serialize__(B_OrdD_float self, $NoneType state) {
+void B_OrdD_floatD___serialize__(B_OrdD_float self, $Serial$state state) {
 }
 
-B_OrdD_float B_OrdD_floatD___deserialize__(B_OrdD_float self, $NoneType state) {
+B_OrdD_float B_OrdD_floatD___deserialize__(B_OrdD_float self, $Serial$state state) {
     B_OrdD_float res = $DNEW(B_OrdD_float,state);
     return res;
 }
@@ -242,10 +242,10 @@ B_bool B_OrdD_floatD___ge__ (B_OrdD_float wit, B_float a, B_float b) {
 
 // B_HashableD_float ///////////////////////////////////////////////////////////////////////////////////////////////////////
 
-void B_HashableD_floatD___serialize__(B_HashableD_float self, $NoneType state) {
+void B_HashableD_floatD___serialize__(B_HashableD_float self, $Serial$state state) {
 }
 
-B_HashableD_float B_HashableD_floatD___deserialize__(B_HashableD_float self, $NoneType state) {
+B_HashableD_float B_HashableD_floatD___deserialize__(B_HashableD_float self, $Serial$state state) {
     B_HashableD_float res = $DNEW(B_HashableD_float,state);
     return res;
 }

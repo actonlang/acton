@@ -41,10 +41,10 @@ struct B_IteratorG_class B_IteratorG_methods = {"B_Iterator",UNASSIGNED,NULL,NUL
 struct B_Iterator B_IteratorD_instance = {&B_IteratorG_methods};
 struct B_Iterator *B_IteratorG_witness = &B_IteratorD_instance;
 
-void B_IterableD_IteratorD___serialize__( B_IterableD_Iterator self, $NoneType state) {
+void B_IterableD_IteratorD___serialize__( B_IterableD_Iterator self, $Serial$state state) {
 }
 
-B_IterableD_Iterator B_IterableD_IteratorD___deserialize__(B_IterableD_Iterator self, $NoneType state) {
+B_IterableD_Iterator B_IterableD_IteratorD___deserialize__(B_IterableD_Iterator self, $Serial$state state) {
     B_IterableD_Iterator res = $DNEW(B_IterableD_Iterator,state);
     return res;
 }

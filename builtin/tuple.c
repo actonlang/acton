@@ -38,7 +38,7 @@ B_str B_tupleD_str(B_tuple self) {
 }
 
 
-void B_tupleD_serialize(B_tuple self, $NoneType state) {
+void B_tupleD_serialize(B_tuple self, $Serial$state state) {
     B_int prevkey = (B_int)B_dictD_get(state->done,(B_Hashable)B_HashableD_WORDG_witness,self,NULL);
     if (prevkey) {
         $val_serialize(-TUPLE_ID,&prevkey->val,state);
@@ -52,7 +52,7 @@ void B_tupleD_serialize(B_tuple self, $NoneType state) {
     }
 }
 
-B_tuple B_tupleD_deserialize(B_tuple self, $NoneType state) {
+B_tuple B_tupleD_deserialize(B_tuple self, $Serial$state state) {
     $ROW this = state->row;
     state->row = this->next;
     state->row_no++;
@@ -103,12 +103,12 @@ B_str B_IteratorB_tupleD_str(B_IteratorB_tuple self) {
     asprintf(&s,"<tuple iterator object at %p>",self);
     return to$str(s);
 }
-void B_IteratorB_tupleD_serialize(B_IteratorB_tuple self,$NoneType state) {
+void B_IteratorB_tupleD_serialize(B_IteratorB_tuple self,$Serial$state state) {
     $step_serialize(self->src,state);
     $step_serialize(toB_int(self->nxt),state);
 }
 
-B_IteratorB_tuple B_IteratorB_tuple$_deserialize(B_IteratorB_tuple res, $NoneType state) {
+B_IteratorB_tuple B_IteratorB_tuple$_deserialize(B_IteratorB_tuple res, $Serial$state state) {
     if (!res)
         res = $DNEW(B_IteratorB_tuple,state);
     res->src = $step_deserialize(state);
@@ -130,10 +130,10 @@ void B_IterableD_tupleD___init__(B_IterableD_tuple self) {
     return;
 }
 
-void B_IterableD_tupleD___serialize__(B_IterableD_tuple self, $NoneType state) {
+void B_IterableD_tupleD___serialize__(B_IterableD_tuple self, $Serial$state state) {
 }
 
-B_IterableD_tuple B_IterableD_tupleD___deserialize__(B_IterableD_tuple self, $NoneType state) {
+B_IterableD_tuple B_IterableD_tupleD___deserialize__(B_IterableD_tuple self, $Serial$state state) {
     B_IterableD_tuple res = $DNEW(B_IterableD_tuple,state);
     return res;
 }
@@ -154,10 +154,10 @@ struct B_IterableD_tuple *B_IterableD_tupleG_witness = &B_IterableD_tuple$instan
 
 // Sliceable ///////////////////////////////////////////////////////////////
 
-void B_SliceableD_tupleD___serialize__(B_SliceableD_tuple self, $NoneType state) {
+void B_SliceableD_tupleD___serialize__(B_SliceableD_tuple self, $Serial$state state) {
 }
 
-B_SliceableD_tuple B_SliceableD_tupleD___deserialize__(B_SliceableD_tuple self, $NoneType state) {
+B_SliceableD_tuple B_SliceableD_tupleD___deserialize__(B_SliceableD_tuple self, $Serial$state state) {
     B_SliceableD_tuple res = $DNEW(B_SliceableD_tuple,state);
     return res;
 }
@@ -243,12 +243,12 @@ void B_HashableD_tupleD___init__ (B_HashableD_tuple wit, int n, B_Hashable *comp
     wit->W_Hashable = comps;
 }
 
-void B_HashableD_tupleD___serialize__(B_HashableD_tuple self, $NoneType state) {
+void B_HashableD_tupleD___serialize__(B_HashableD_tuple self, $Serial$state state) {
     $step_serialize(toB_int(self->W_HashableB_tuple$size), state);
     // we need to serialize the array of Hashables!!
 }
 
-B_HashableD_tuple B_HashableD_tupleD___deserialize__(B_HashableD_tuple self, $NoneType state) {
+B_HashableD_tuple B_HashableD_tupleD___deserialize__(B_HashableD_tuple self, $Serial$state state) {
     B_HashableD_tuple res = $DNEW(B_HashableD_tuple,state);
     res->W_HashableB_tuple$size = fromB_int($step_deserialize(state));
     res->W_Hashable = NULL; // We do not get hash functions for the tuple!

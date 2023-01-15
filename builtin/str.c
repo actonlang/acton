@@ -28,8 +28,8 @@ void B_strD_init(B_str, B_value);
 B_bool B_strD_bool(B_str);
 B_str B_strD_str(B_str);
 B_str B_strD_repr(B_str);
-void B_strD_serialize(B_str,$NoneType);
-B_str B_strD_deserialize(B_str,$NoneType);
+void B_strD_serialize(B_str,$Serial$state);
+B_str B_strD_deserialize(B_str,$Serial$state);
 
 // String-specific methods
 B_str B_strD_capitalize(B_str s);
@@ -104,10 +104,10 @@ B_str B_strD_mul(B_str, B_int);
 
 // Ord
 
-void B_OrdD_strD___serialize__(B_OrdD_str self, $NoneType state) {
+void B_OrdD_strD___serialize__(B_OrdD_str self, $Serial$state state) {
 }
 
-B_OrdD_str B_OrdD_strD___deserialize__(B_OrdD_str self, $NoneType state) {
+B_OrdD_str B_OrdD_strD___deserialize__(B_OrdD_str self, $Serial$state state) {
     B_OrdD_str res = $DNEW(B_OrdD_str,state);
     return res;
 }
@@ -142,10 +142,10 @@ B_bool B_OrdD_strD___ge__ (B_OrdD_str wit, B_str a, B_str b){
 
 // Container
 
-void B_ContainerD_strD___serialize__(B_ContainerD_str self, $NoneType state) {
+void B_ContainerD_strD___serialize__(B_ContainerD_str self, $Serial$state state) {
 }
 
-B_ContainerD_str B_ContainerD_strD___deserialize__(B_ContainerD_str self, $NoneType state) {
+B_ContainerD_str B_ContainerD_strD___deserialize__(B_ContainerD_str self, $Serial$state state) {
     return $DNEW(B_ContainerD_str,state);
 }
 
@@ -171,10 +171,10 @@ B_bool B_ContainerD_strD___containsnot__ (B_ContainerD_str wit, B_str str, B_str
 
 // Sliceable
 
-void B_SliceableD_strD___serialize__(B_SliceableD_str self, $NoneType state) {
+void B_SliceableD_strD___serialize__(B_SliceableD_str self, $Serial$state state) {
 }
 
-B_SliceableD_str B_SliceableD_strD___deserialize__(B_SliceableD_str self, $NoneType state) {
+B_SliceableD_str B_SliceableD_strD___deserialize__(B_SliceableD_str self, $Serial$state state) {
     B_SliceableD_str res = $DNEW(B_SliceableD_str,state);
     return res;
 }
@@ -212,10 +212,10 @@ void B_SliceableD_strD___delslice__ (B_SliceableD_str wit, B_str str, B_slice sl
 
 // Times
 
-void B_TimesD_strD___serialize__(B_TimesD_str self, $NoneType state) {
+void B_TimesD_strD___serialize__(B_TimesD_str self, $Serial$state state) {
 }
 
-B_TimesD_str B_TimesD_strD___deserialize__(B_TimesD_str self, $NoneType state) {
+B_TimesD_str B_TimesD_strD___deserialize__(B_TimesD_str self, $Serial$state state) {
     B_TimesD_str res = $DNEW(B_TimesD_str,state);
     return res;
 }
@@ -230,10 +230,10 @@ B_str B_TimesD_strD___mul__ (B_TimesD_str wit, B_str a, B_int n) {
 
 // Hashable
 
-void B_HashableD_strD___serialize__(B_HashableD_str self, $NoneType state) {
+void B_HashableD_strD___serialize__(B_HashableD_str self, $Serial$state state) {
 }
 
-B_HashableD_str B_HashableD_strD___deserialize__(B_HashableD_str self, $NoneType state) {
+B_HashableD_str B_HashableD_strD___deserialize__(B_HashableD_str self, $Serial$state state) {
     B_HashableD_str res = $DNEW(B_HashableD_str,state);
     return res;
 }
@@ -733,13 +733,13 @@ void B_IteratorB_strD_init(B_IteratorB_str self, B_str str) {
     self->nxt = 0;
 }
 
-void B_IteratorB_strD_serialize(B_IteratorB_str self,$NoneType state) {
+void B_IteratorB_strD_serialize(B_IteratorB_str self,$Serial$state state) {
     $step_serialize(self->src,state);
     $step_serialize(toB_int(self->nxt),state);
 }
 
 
-B_IteratorB_str B_IteratorB_str$_deserialize(B_IteratorB_str res, $NoneType state) {
+B_IteratorB_str B_IteratorB_str$_deserialize(B_IteratorB_str res, $Serial$state state) {
     if (!res)
         res = $DNEW(B_IteratorB_str,state);
     res->src = (B_str)$step_deserialize(state);
@@ -844,7 +844,7 @@ B_str B_strD_repr(B_str s) {
 }
 
 
-void B_strD_serialize(B_str str,$NoneType state) {
+void B_strD_serialize(B_str str,$Serial$state state) {
     int nWords = str->nbytes/sizeof($WORD) + 1;         // # $WORDS needed to store str->str, including terminating 0.
     $ROW row = $add_header(STR_ID,2+nWords,state);
     long nbytes = (int)str->nbytes;                    // We could pack nbytes and nchars in one $WORD, 
@@ -854,7 +854,7 @@ void B_strD_serialize(B_str str,$NoneType state) {
     memcpy(row->blob+2,str->str,nbytes+1);
 }
 
-B_str B_strD_deserialize(B_str self, $NoneType state) {
+B_str B_strD_deserialize(B_str self, $Serial$state state) {
     $ROW this = state->row;
     state->row =this->next;
     state->row_no++;
@@ -1585,8 +1585,8 @@ static void expand_bytearray(B_bytearray b,int n) {
 void B_bytearrayD_init(B_bytearray, B_bytes);
 B_bool B_bytearrayD_bool(B_bytearray);
 B_str B_bytearrayD_str(B_bytearray);
-void B_bytearrayD_serialize(B_bytearray,$NoneType);
-B_bytearray B_bytearrayD_deserialize(B_bytearray,$NoneType);
+void B_bytearrayD_serialize(B_bytearray,$Serial$state);
+B_bytearray B_bytearrayD_deserialize(B_bytearray,$Serial$state);
 
 
 // bytearray methods, prototypes
@@ -2273,10 +2273,10 @@ int B_bytearrayD_containsnot (B_bytearray, B_int);
 
 // Ord
 
-void B_OrdD_bytearrayD___serialize__(B_OrdD_bytearray self, $NoneType state) {
+void B_OrdD_bytearrayD___serialize__(B_OrdD_bytearray self, $Serial$state state) {
 }
 
-B_OrdD_bytearray B_OrdD_bytearrayD___deserialize__(B_OrdD_bytearray self, $NoneType state) {
+B_OrdD_bytearray B_OrdD_bytearrayD___deserialize__(B_OrdD_bytearray self, $Serial$state state) {
     B_OrdD_bytearray res = $DNEW(B_OrdD_bytearray,state);
     return res;
 }
@@ -2311,12 +2311,12 @@ B_bool B_OrdD_bytearrayD___ge__ (B_OrdD_bytearray wit, B_bytearray a, B_bytearra
 
 // Sequence
 
-void B_SequenceD_bytearrayD___serialize__(B_SequenceD_bytearray self, $NoneType state) {
+void B_SequenceD_bytearrayD___serialize__(B_SequenceD_bytearray self, $Serial$state state) {
     $step_serialize(self->W_Collection, state);
     $step_serialize(self->W_Times, state);
 }
 
-B_SequenceD_bytearray B_SequenceD_bytearrayD___deserialize__(B_SequenceD_bytearray self, $NoneType state) {
+B_SequenceD_bytearray B_SequenceD_bytearrayD___deserialize__(B_SequenceD_bytearray self, $Serial$state state) {
     B_SequenceD_bytearray res = $DNEW(B_SequenceD_bytearray,state);
     res->W_Collection = (B_Collection)$step_deserialize(state);
     res->W_Times = (B_Times)$step_deserialize(state);
@@ -2370,11 +2370,11 @@ void B_SequenceD_bytearray$reverse(B_SequenceD_bytearray wit, B_bytearray self) 
 
 // Collection
 
-void B_CollectionD_SequenceD_bytearrayD___serialize__(B_CollectionD_SequenceD_bytearray self, $NoneType state) {
+void B_CollectionD_SequenceD_bytearrayD___serialize__(B_CollectionD_SequenceD_bytearray self, $Serial$state state) {
     $step_serialize(self->W_Sequence, state);
 }
 
-B_CollectionD_SequenceD_bytearray B_CollectionD_SequenceD_bytearrayD___deserialize__(B_CollectionD_SequenceD_bytearray self, $NoneType state) {
+B_CollectionD_SequenceD_bytearray B_CollectionD_SequenceD_bytearrayD___deserialize__(B_CollectionD_SequenceD_bytearray self, $Serial$state state) {
     B_CollectionD_SequenceD_bytearray res = $DNEW(B_CollectionD_SequenceD_bytearray,state);
     res->W_Sequence = (B_Sequence)$step_deserialize(state);
     return res;
@@ -2398,11 +2398,11 @@ B_int B_CollectionD_SequenceD_bytearrayD___len__ (B_CollectionD_SequenceD_bytear
 
 // Times
 
-void B_TimesD_SequenceD_bytearrayD___serialize__(B_TimesD_SequenceD_bytearray self, $NoneType state) {
+void B_TimesD_SequenceD_bytearrayD___serialize__(B_TimesD_SequenceD_bytearray self, $Serial$state state) {
     $step_serialize(self->W_Sequence, state);
 }
 
-B_TimesD_SequenceD_bytearray B_TimesD_SequenceD_bytearrayD___deserialize__(B_TimesD_SequenceD_bytearray self, $NoneType state) {
+B_TimesD_SequenceD_bytearray B_TimesD_SequenceD_bytearrayD___deserialize__(B_TimesD_SequenceD_bytearray self, $Serial$state state) {
     B_TimesD_SequenceD_bytearray res = $DNEW(B_TimesD_SequenceD_bytearray,state);
     res->W_Sequence = (B_Sequence)$step_deserialize(state);
     return res;
@@ -2422,10 +2422,10 @@ B_bytearray B_TimesD_SequenceD_bytearrayD___mul__ (B_TimesD_SequenceD_bytearray 
 
 // Container
 
-void B_ContainerD_bytearrayD___serialize__(B_ContainerD_bytearray self, $NoneType state) {
+void B_ContainerD_bytearrayD___serialize__(B_ContainerD_bytearray self, $Serial$state state) {
 }
 
-B_ContainerD_bytearray B_ContainerD_bytearrayD___deserialize__(B_ContainerD_bytearray self, $NoneType state) {
+B_ContainerD_bytearray B_ContainerD_bytearrayD___deserialize__(B_ContainerD_bytearray self, $Serial$state state) {
     return $DNEW(B_ContainerD_bytearray,state);
 }
 
@@ -2763,12 +2763,12 @@ B_str B_IteratorB_bytearrayD_str(B_IteratorB_bytearray self) {
     return to$str(s);
 }
 
-void B_IteratorB_bytearrayD_serialize(B_IteratorB_bytearray self,$NoneType state) {
+void B_IteratorB_bytearrayD_serialize(B_IteratorB_bytearray self,$Serial$state state) {
     $step_serialize(self->src,state);
     $step_serialize(toB_int(self->nxt),state);
 }
 
-B_IteratorB_bytearray B_IteratorB_bytearray$_deserialize(B_IteratorB_bytearray res, $NoneType state) {
+B_IteratorB_bytearray B_IteratorB_bytearray$_deserialize(B_IteratorB_bytearray res, $Serial$state state) {
     if(!res)
         res = $DNEW(B_IteratorB_bytearray,state);
     res->src = (B_bytearray)$step_deserialize(state);
@@ -2850,8 +2850,8 @@ int B_bytearrayD_containsnot (B_bytearray self, B_int c) {
 // General methods, implementations
 
 void B_bytearrayD_init(B_bytearray, B_bytes);
-void B_bytearrayD_serialize(B_bytearray,$NoneType);
-B_bytearray B_bytearrayD_deserialize(B_bytearray,$NoneType);
+void B_bytearrayD_serialize(B_bytearray,$Serial$state);
+B_bytearray B_bytearrayD_deserialize(B_bytearray,$Serial$state);
 B_bool B_bytearrayD_bool(B_bytearray);
 B_str B_bytearrayD_str(B_bytearray);
 
@@ -2886,7 +2886,7 @@ B_str B_bytearrayD_str(B_bytearray s) {
 }
 
 
-void B_bytearrayD_serialize(B_bytearray str,$NoneType state) {
+void B_bytearrayD_serialize(B_bytearray str,$Serial$state state) {
     int nWords = str->nbytes/sizeof($WORD) + 1;         // # $WORDS needed to store str->str, including terminating 0.
     $ROW row = $add_header(BYTEARRAY_ID,1+nWords,state);
     long nbytes = (long)str->nbytes;                    
@@ -2894,7 +2894,7 @@ void B_bytearrayD_serialize(B_bytearray str,$NoneType state) {
     memcpy(row->blob+1,str->str,nbytes+1);
 }
 
-B_bytearray B_bytearrayD_deserialize(B_bytearray res, $NoneType state) {
+B_bytearray B_bytearrayD_deserialize(B_bytearray res, $Serial$state state) {
     $ROW this = state->row;
     state->row =this->next;
     state->row_no++;
@@ -2961,8 +2961,8 @@ unsigned char *fromB_bytes(B_bytes b) {
 void B_bytesD_init(B_bytes, B_Iterable,$WORD);
 B_bool B_bytesD_bool(B_bytes);
 B_str B_bytesD_str(B_bytes);
-void B_bytesD_serialize(B_bytes,$NoneType);
-B_bytes B_bytesD_deserialize(B_bytes,$NoneType);
+void B_bytesD_serialize(B_bytes,$Serial$state);
+B_bytes B_bytesD_deserialize(B_bytes,$Serial$state);
 
 
 // bytes methods, prototypes
@@ -3705,10 +3705,10 @@ B_bytes B_bytesD_mul(B_bytes, B_int);
 
 // Ord
 
-void B_OrdD_bytesD___serialize__(B_OrdD_bytes self, $NoneType state) {
+void B_OrdD_bytesD___serialize__(B_OrdD_bytes self, $Serial$state state) {
 }
 
-B_OrdD_bytes B_OrdD_bytesD___deserialize__(B_OrdD_bytes self, $NoneType state) {
+B_OrdD_bytes B_OrdD_bytesD___deserialize__(B_OrdD_bytes self, $Serial$state state) {
     B_OrdD_bytes res = $DNEW(B_OrdD_bytes,state);
     return res;
 }
@@ -3743,10 +3743,10 @@ B_bool B_OrdD_bytesD___ge__ (B_OrdD_bytes wit, B_bytes a, B_bytes b){
 
 // Container
 
-void B_ContainerD_bytesD___serialize__(B_ContainerD_bytes self, $NoneType state) {
+void B_ContainerD_bytesD___serialize__(B_ContainerD_bytes self, $Serial$state state) {
 }
 
-B_ContainerD_bytes B_ContainerD_bytesD___deserialize__(B_ContainerD_bytes self, $NoneType state) {
+B_ContainerD_bytes B_ContainerD_bytesD___deserialize__(B_ContainerD_bytes self, $Serial$state state) {
     return  $DNEW(B_ContainerD_bytes,state);
 }
 
@@ -3772,10 +3772,10 @@ B_bool B_ContainerD_bytesD___containsnot__ (B_ContainerD_bytes wit, B_bytes str,
 
 // Sliceable
 
-void B_SliceableD_bytesD___serialize__(B_SliceableD_bytes self, $NoneType state) {
+void B_SliceableD_bytesD___serialize__(B_SliceableD_bytes self, $Serial$state state) {
 }
 
-B_SliceableD_bytes B_SliceableD_bytesD___deserialize__(B_SliceableD_bytes self, $NoneType state) {
+B_SliceableD_bytes B_SliceableD_bytesD___deserialize__(B_SliceableD_bytes self, $Serial$state state) {
     B_SliceableD_bytes res = $DNEW(B_SliceableD_bytes,state);
     return res;
 }
@@ -3813,10 +3813,10 @@ void B_SliceableD_bytesD___delslice__ (B_SliceableD_bytes wit, B_bytes str, B_sl
 
 // Times
 
-void B_TimesD_bytesD___serialize__(B_TimesD_bytes self, $NoneType state) {
+void B_TimesD_bytesD___serialize__(B_TimesD_bytes self, $Serial$state state) {
 }
 
-B_TimesD_bytes B_TimesD_bytesD___deserialize__(B_TimesD_bytes self, $NoneType state) {
+B_TimesD_bytes B_TimesD_bytesD___deserialize__(B_TimesD_bytes self, $Serial$state state) {
     B_TimesD_bytes res = $DNEW(B_TimesD_bytes,state);
     return res;
 }
@@ -3831,10 +3831,10 @@ B_bytes B_TimesD_bytesD___mul__ (B_TimesD_bytes wit, B_bytes a, B_int n) {
 
 // Hashable
 
-void B_HashableD_bytesD___serialize__(B_HashableD_bytes self, $NoneType state) {
+void B_HashableD_bytesD___serialize__(B_HashableD_bytes self, $Serial$state state) {
 }
 
-B_HashableD_bytes B_HashableD_bytesD___deserialize__(B_HashableD_bytes self, $NoneType state) {
+B_HashableD_bytes B_HashableD_bytesD___deserialize__(B_HashableD_bytes self, $Serial$state state) {
     B_HashableD_bytes res = $DNEW(B_HashableD_bytes,state);
     return res;
 }
@@ -4060,13 +4060,13 @@ void B_IteratorB_bytesD_init(B_IteratorB_bytes self, B_bytes str) {
     self->nxt = 0;
 }
 
-void B_IteratorB_bytesD_serialize(B_IteratorB_bytes self,$NoneType state) {
+void B_IteratorB_bytesD_serialize(B_IteratorB_bytes self,$Serial$state state) {
     $step_serialize(self->src,state);
     $step_serialize(toB_int(self->nxt),state);
 }
 
 
-B_IteratorB_bytes B_IteratorB_bytes$_deserialize(B_IteratorB_bytes res, $NoneType state) {
+B_IteratorB_bytes B_IteratorB_bytes$_deserialize(B_IteratorB_bytes res, $Serial$state state) {
     if (!res)
         res = $DNEW(B_IteratorB_bytes,state);
     res->src = (B_bytes)$step_deserialize(state);
@@ -4171,7 +4171,7 @@ B_str B_bytesD_str(B_bytes s) {
 }
 
 
-void B_bytesD_serialize(B_bytes str,$NoneType state) {
+void B_bytesD_serialize(B_bytes str,$Serial$state state) {
     int nWords = str->nbytes/sizeof($WORD) + 1;         // # $WORDS needed to store str->str, including terminating 0.
     $ROW row = $add_header(STR_ID,1+nWords,state);
     long nbytes = (long)str->nbytes;                    
@@ -4179,7 +4179,7 @@ void B_bytesD_serialize(B_bytes str,$NoneType state) {
     memcpy(row->blob+1,str->str,nbytes+1);
 }
 
-B_bytes B_bytesD_deserialize(B_bytes self, $NoneType state) {
+B_bytes B_bytesD_deserialize(B_bytes self, $Serial$state state) {
     $ROW this = state->row;
     state->row =this->next;
     state->row_no++;

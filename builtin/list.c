@@ -124,11 +124,11 @@ struct B_OrdD_listG_class B_OrdD_listG_methods = {
 };
 
 
-void B_OrdD_listD___serialize__(B_OrdD_list self, $NoneType state) {
+void B_OrdD_listD___serialize__(B_OrdD_list self, $Serial$state state) {
     $step_serialize(self->W_OrdD_AD_OrdB_list, state);
 }
 
-B_OrdD_list B_OrdD_listD___deserialize__(B_OrdD_list self, $NoneType state) {
+B_OrdD_list B_OrdD_listD___deserialize__(B_OrdD_list self, $Serial$state state) {
     B_OrdD_list res = $DNEW(B_OrdD_list,state);
     res->W_OrdD_AD_OrdB_list = (B_Ord)$step_deserialize(state);
     return res;
@@ -186,11 +186,11 @@ void B_OrdD_listD___init__(B_OrdD_list self, B_Ord e) {
     self->W_OrdD_AD_OrdB_list = e;
 }
   
-void B_TimesD_SequenceD_listD___serialize__(B_TimesD_SequenceD_list self, $NoneType state) {
+void B_TimesD_SequenceD_listD___serialize__(B_TimesD_SequenceD_list self, $Serial$state state) {
     $step_serialize(self->W_Sequence, state);
 }
 
-B_TimesD_SequenceD_list B_TimesD_SequenceD_listD___deserialize__(B_TimesD_SequenceD_list self, $NoneType state) {
+B_TimesD_SequenceD_list B_TimesD_SequenceD_listD___deserialize__(B_TimesD_SequenceD_list self, $Serial$state state) {
     B_TimesD_SequenceD_list res = $DNEW(B_TimesD_SequenceD_list,state);
     res->W_Sequence = (B_Sequence)$step_deserialize(state);
     return res;
@@ -204,11 +204,11 @@ B_list B_TimesD_SequenceD_listD___mul__ (B_TimesD_SequenceD_list wit, B_list a, 
     return B_listD_mul(a,n);
 }
 
-void B_CollectionD_SequenceD_listD___serialize__(B_CollectionD_SequenceD_list self, $NoneType state) {
+void B_CollectionD_SequenceD_listD___serialize__(B_CollectionD_SequenceD_list self, $Serial$state state) {
     $step_serialize(self->W_Sequence, state);
 }
 
-B_CollectionD_SequenceD_list B_CollectionD_SequenceD_listD___deserialize__(B_CollectionD_SequenceD_list self, $NoneType state) {
+B_CollectionD_SequenceD_list B_CollectionD_SequenceD_listD___deserialize__(B_CollectionD_SequenceD_list self, $Serial$state state) {
     B_CollectionD_SequenceD_list res = $DNEW(B_CollectionD_SequenceD_list,state);
     res->W_Sequence = (B_Sequence)$step_deserialize(state);
     return res;
@@ -226,12 +226,12 @@ B_int B_CollectionD_SequenceD_listD___len__(B_CollectionD_SequenceD_list wit, B_
     return toB_int(B_listD_len(self));
 }
 
-void B_SequenceD_listD___serialize__(B_SequenceD_list self, $NoneType state) {
+void B_SequenceD_listD___serialize__(B_SequenceD_list self, $Serial$state state) {
     $step_serialize(self->W_Collection, state);
     $step_serialize(self->W_Times, state);
 }
 
-B_SequenceD_list B_SequenceD_listD___deserialize__(B_SequenceD_list self, $NoneType state) {
+B_SequenceD_list B_SequenceD_listD___deserialize__(B_SequenceD_list self, $Serial$state state) {
     B_SequenceD_list res = $DNEW(B_SequenceD_list,state);
     res->W_Collection = (B_Collection)$step_deserialize(state);
     res->W_Times = (B_Times)$step_deserialize(state);
@@ -263,11 +263,11 @@ void B_SequenceD_listD___delslice__(B_SequenceD_list wit, B_list self, B_slice s
     B_listD_delslice((B_list)self,slice);
 }  
 
-void B_ContainerD_listD___serialize__(B_ContainerD_list self, $NoneType state) {
+void B_ContainerD_listD___serialize__(B_ContainerD_list self, $Serial$state state) {
     $step_serialize(self->W_EqD_AD_ContainerB_list, state);
 }
 
-B_ContainerD_list B_ContainerD_listD___deserialize__(B_ContainerD_list self, $NoneType state) {
+B_ContainerD_list B_ContainerD_listD___deserialize__(B_ContainerD_list self, $Serial$state state) {
     B_ContainerD_list res = $DNEW(B_ContainerD_list,state);
     res->W_EqD_AD_ContainerB_list = (B_Eq)$step_deserialize(state);
     return res;

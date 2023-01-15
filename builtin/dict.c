@@ -72,12 +72,12 @@ struct B_OrdD_dictG_class B_OrdD_dictG_methods = {
 };
 
 
-void B_OrdD_dictD___serialize__(B_OrdD_dict self, $NoneType state) {
+void B_OrdD_dictD___serialize__(B_OrdD_dict self, $Serial$state state) {
     $step_serialize(self->W_HashableD_AD_OrdD_dict, state);
     $step_serialize(self->W_EqD_BD_OrdD_dict, state);
 }
 
-B_OrdD_dict B_OrdD_dictD___deserialize__(B_OrdD_dict self, $NoneType state) {
+B_OrdD_dict B_OrdD_dictD___deserialize__(B_OrdD_dict self, $Serial$state state) {
     B_OrdD_dict res = $DNEW(B_OrdD_dict,state);
     res->W_HashableD_AD_OrdD_dict = (B_Hashable)$step_deserialize(state);
     res->W_EqD_BD_OrdD_dict = (B_Eq)$step_deserialize(state);
@@ -137,13 +137,13 @@ B_bool B_OrdD_dictD___ge__ (B_OrdD_dict w, B_dict a, B_dict b) {
     return toB_bool(!(w->$class->__le__(w,b,a)->val));
 }
 
-void B_MappingD_dictD___serialize__(B_MappingD_dict self, $NoneType state) {
+void B_MappingD_dictD___serialize__(B_MappingD_dict self, $Serial$state state) {
     $step_serialize(self->W_Indexed, state);
     $step_serialize(self->W_EqD_AD_MappingB_dict, state);
     $step_serialize(self->W_HashableD_AD_MappingB_dict, state);
 }
 
-B_MappingD_dict B_MappingD_dictD___deserialize__(B_MappingD_dict self, $NoneType state) {
+B_MappingD_dict B_MappingD_dictD___deserialize__(B_MappingD_dict self, $Serial$state state) {
     B_MappingD_dict res = $DNEW(B_MappingD_dict,state);
     res->W_Indexed = (B_Indexed)$step_deserialize(state);
     res->W_EqD_AD_MappingB_dict = (B_Eq)$step_deserialize(state);
@@ -199,13 +199,13 @@ void B_MappingD_dictD_setdefault (B_MappingD_dict wit, B_dict dict, $WORD key, $
     B_dictD_setdefault(dict,wit->W_HashableD_AD_MappingB_dict,key,deflt);
 }
 
-void B_IndexedD_MappingD_dictD___serialize__(B_IndexedD_MappingD_dict self, $NoneType state) {
+void B_IndexedD_MappingD_dictD___serialize__(B_IndexedD_MappingD_dict self, $Serial$state state) {
     $step_serialize(self->W_Mapping, state);
     $step_serialize(self->W_EqD_AD_MappingB_dict, state);
     $step_serialize(self->W_HashableD_AD_MappingB_dict, state);
 }
 
-B_IndexedD_MappingD_dict B_IndexedD_MappingD_dictD___deserialize__(B_IndexedD_MappingD_dict self, $NoneType state) {
+B_IndexedD_MappingD_dict B_IndexedD_MappingD_dictD___deserialize__(B_IndexedD_MappingD_dict self, $Serial$state state) {
     B_IndexedD_MappingD_dict res = $DNEW(B_IndexedD_MappingD_dict,state);
     res->W_Mapping = (B_Mapping)$step_deserialize(state);
     res->W_EqD_AD_MappingB_dict = (B_Eq)$step_deserialize(state);

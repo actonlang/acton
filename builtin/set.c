@@ -16,8 +16,8 @@
 #include "set_impl.h"
  
 
-void B_set_serialize(B_set, $NoneType);
-B_set B_set_deserialize(B_set, $NoneType);
+void B_set_serialize(B_set, $Serial$state);
+B_set B_set_deserialize(B_set, $Serial$state);
 
 struct B_OrdD_SetD_set B_OrdD_SetD_set_instance;
 struct B_MinusD_SetD_set B_MinusD_SetD_set_instance;
@@ -97,7 +97,7 @@ struct B_LogicalD_SetD_setG_class B_LogicalD_SetD_setG_methods = {
 
 // B_Set
 
-void B_SetD_setD___serialize__(B_SetD_set self, $NoneType state) {
+void B_SetD_setD___serialize__(B_SetD_set self, $Serial$state state) {
     $step_serialize(self->W_Ord, state);
     $step_serialize(self->W_Logical, state);
     $step_serialize(self->W_Minus, state);
@@ -105,7 +105,7 @@ void B_SetD_setD___serialize__(B_SetD_set self, $NoneType state) {
     $step_serialize(self->W_HashableD_AD_SetB_set, state);
 }
 
-B_SetD_set B_SetD_setD___deserialize__(B_SetD_set self, $NoneType state) {
+B_SetD_set B_SetD_setD___deserialize__(B_SetD_set self, $Serial$state state) {
     B_SetD_set res = $DNEW(B_SetD_set,state);
     res->W_Ord = (B_Ord)$step_deserialize(state);
     res->W_Logical = (B_Logical)$step_deserialize(state);
@@ -153,11 +153,11 @@ $WORD B_SetD_set$pop (B_SetD_set wit, B_set set) {
 
 // B_Ord
 
-void B_OrdD_SetD_setD___serialize__(B_OrdD_SetD_set self, $NoneType state) {
+void B_OrdD_SetD_setD___serialize__(B_OrdD_SetD_set self, $Serial$state state) {
     $step_serialize(self->W_Set, state);
 }
 
-B_OrdD_SetD_set B_OrdD_SetD_setD___deserialize__(B_OrdD_SetD_set self, $NoneType state) {
+B_OrdD_SetD_set B_OrdD_SetD_setD___deserialize__(B_OrdD_SetD_set self, $Serial$state state) {
     B_OrdD_SetD_set res = $DNEW(B_OrdD_SetD_set,state);
     res->W_Set = (B_Set)$step_deserialize(state);
     return res;
@@ -189,11 +189,11 @@ B_bool B_OrdD_SetD_setD___ge__ (B_OrdD_SetD_set wit, B_set a, B_set b) {
 
 // B_Minus
 
-void B_LogicalD_SetD_setD___serialize__(B_LogicalD_SetD_set self, $NoneType state) {
+void B_LogicalD_SetD_setD___serialize__(B_LogicalD_SetD_set self, $Serial$state state) {
     $step_serialize(self->W_Set, state);
 }
 
-B_LogicalD_SetD_set B_LogicalD_SetD_setD___deserialize__(B_LogicalD_SetD_set self, $NoneType state) {
+B_LogicalD_SetD_set B_LogicalD_SetD_setD___deserialize__(B_LogicalD_SetD_set self, $Serial$state state) {
     B_LogicalD_SetD_set res = $DNEW(B_LogicalD_SetD_set,state);
     res->W_Set = (B_Set)$step_deserialize(state);
     return res;
@@ -205,11 +205,11 @@ B_set B_MinusD_SetD_setD___sub__ (B_MinusD_SetD_set wit, B_set a, B_set b) {
 
 // B_Logical
 
-void B_MinusD_SetD_setD___serialize__(B_MinusD_SetD_set self, $NoneType state) {
+void B_MinusD_SetD_setD___serialize__(B_MinusD_SetD_set self, $Serial$state state) {
     $step_serialize(self->W_Set, state);
 }
 
-B_MinusD_SetD_set B_MinusD_SetD_setD___deserialize__(B_MinusD_SetD_set self, $NoneType state) {
+B_MinusD_SetD_set B_MinusD_SetD_setD___deserialize__(B_MinusD_SetD_set self, $Serial$state state) {
     B_MinusD_SetD_set res = $DNEW(B_MinusD_SetD_set,state);
     res->W_Set = (B_Set)$step_deserialize(state);
     return res;

@@ -55,12 +55,12 @@ B_str B_IteratorD_enumerate_str(B_IteratorD_enumerate self) {
     return to$str(s);
 }
 
-void B_IteratorD_enumerate_serialize(B_IteratorD_enumerate self,$NoneType state) {
+void B_IteratorD_enumerate_serialize(B_IteratorD_enumerate self,$Serial$state state) {
     $step_serialize(self->it,state);
     $step_serialize(toB_int(self->nxt),state);
 }
 
-B_IteratorD_enumerate B_IteratorD_enumerate$_deserialize(B_IteratorD_enumerate res,$NoneType state) {
+B_IteratorD_enumerate B_IteratorD_enumerate$_deserialize(B_IteratorD_enumerate res,$Serial$state state) {
     if (!res)
         res = $DNEW(B_IteratorD_enumerate,state);
     res->it = $step_deserialize(state);
@@ -109,11 +109,11 @@ B_str B_IteratorD_filter_str(B_IteratorD_filter self) {
     return to$str(s);
 }
 
-void B_IteratorD_filter_serialize(B_IteratorD_filter self,$NoneType state) {
+void B_IteratorD_filter_serialize(B_IteratorD_filter self,$Serial$state state) {
     $step_serialize(self->it,state);
 }
 
-B_IteratorD_filter B_IteratorD_filter$_deserialize(B_IteratorD_filter res, $NoneType state) {
+B_IteratorD_filter B_IteratorD_filter$_deserialize(B_IteratorD_filter res, $Serial$state state) {
     if (!res)
         res = $DNEW(B_IteratorD_filter,state);
     res->it = $step_deserialize(state);
@@ -158,11 +158,11 @@ B_str B_IteratorD_map_str(B_IteratorD_map self) {
     return to$str(s);
 }
 
-void B_IteratorD_map_serialize(B_IteratorD_map self,$NoneType state) {
+void B_IteratorD_map_serialize(B_IteratorD_map self,$Serial$state state) {
     $step_serialize(self->it,state);
 }
 
-B_IteratorD_map B_IteratorD_map$_deserialize(B_IteratorD_map res, $NoneType state) {
+B_IteratorD_map B_IteratorD_map$_deserialize(B_IteratorD_map res, $Serial$state state) {
     if (!res)
         res = $DNEW(B_IteratorD_map,state);
     res->it = $step_deserialize(state);
@@ -253,12 +253,12 @@ B_str B_IteratorD_zip_str(B_IteratorD_zip self) {
     return to$str(s);
 }
 
-void B_IteratorD_zip_serialize(B_IteratorD_zip self,$NoneType state) {
+void B_IteratorD_zip_serialize(B_IteratorD_zip self,$Serial$state state) {
     $step_serialize(self->it1,state);
     $step_serialize(self->it2,state);
 }
 
-B_IteratorD_zip B_IteratorD_zip$_deserialize(B_IteratorD_zip res, $NoneType state) {
+B_IteratorD_zip B_IteratorD_zip$_deserialize(B_IteratorD_zip res, $Serial$state state) {
     if (!res)
         res = $DNEW(B_IteratorD_zip,state);
     res->it1 = $step_deserialize(state);

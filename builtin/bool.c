@@ -31,11 +31,11 @@ B_str B_boolD_str(B_bool self) {
         return to$str("False");
 }
 
-void B_boolD_serialize(B_bool self, $NoneType state) {
+void B_boolD_serialize(B_bool self, $Serial$state state) {
     $val_serialize(BOOL_ID,&self->val,state);
 }
 
-B_bool B_boolD_deserialize(B_bool self, $NoneType state) {
+B_bool B_boolD_deserialize(B_bool self, $Serial$state state) {
     return toB_bool((long)$val_deserialize(state));
 }
 
@@ -101,10 +101,10 @@ B_HashableD_bool B_HashableD_boolG_new() {
 void B_HashableD_boolD___init__(B_HashableD_bool self) {
     return;
 }
-void B_HashableD_boolD___serialize__(B_HashableD_bool self, $NoneType state) {
+void B_HashableD_boolD___serialize__(B_HashableD_bool self, $Serial$state state) {
 }
 
-B_HashableD_bool B_HashableD_boolD___deserialize__(B_HashableD_bool self, $NoneType state) {
+B_HashableD_bool B_HashableD_boolD___deserialize__(B_HashableD_bool self, $Serial$state state) {
     B_HashableD_bool res = $DNEW(B_HashableD_bool,state);
     return res;
 }

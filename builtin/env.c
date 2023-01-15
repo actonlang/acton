@@ -39,11 +39,11 @@ $R $l$1contD___call__ ($l$1cont p$self, $Cont c$cont) {
     B_str s = p$self->s;
     return self->$class->stdout_write$local(self, c$cont, s);
 }
-void $l$1contD___serialize__ ($l$1cont self, $NoneType state) {
+void $l$1contD___serialize__ ($l$1cont self, $Serial$state state) {
     $step_serialize(self->self, state);
     $step_serialize(self->s, state);
 }
-$l$1cont $l$1contD___deserialize__ ($l$1cont self, $NoneType state) {
+$l$1cont $l$1contD___deserialize__ ($l$1cont self, $Serial$state state) {
     if (!self) {
         if (!state) {
             self = malloc(sizeof(struct $l$1cont));
@@ -74,11 +74,11 @@ $R $l$2contD___call__ ($l$2cont p$self, $Cont c$cont) {
     $action cb = p$self->cb;
     return self->$class->stdin_install$local(self, c$cont, cb);
 }
-void $l$2contD___serialize__ ($l$2cont self, $NoneType state) {
+void $l$2contD___serialize__ ($l$2cont self, $Serial$state state) {
     $step_serialize(self->self, state);
     $step_serialize(self->cb, state);
 }
-$l$2cont $l$2contD___deserialize__ ($l$2cont self, $NoneType state) {
+$l$2cont $l$2contD___deserialize__ ($l$2cont self, $Serial$state state) {
     if (!self) {
         if (!state) {
             self = malloc(sizeof(struct $l$2cont));
@@ -109,11 +109,11 @@ $R $l$3contD___call__ ($l$3cont p$self, $Cont c$cont) {
     B_int n = p$self->n;
     return self->$class->exit$local(self, c$cont, n);
 }
-void $l$3contD___serialize__ ($l$3cont self, $NoneType state) {
+void $l$3contD___serialize__ ($l$3cont self, $Serial$state state) {
     $step_serialize(self->self, state);
     $step_serialize(self->n, state);
 }
-$l$3cont $l$3contD___deserialize__ ($l$3cont self, $NoneType state) {
+$l$3cont $l$3contD___deserialize__ ($l$3cont self, $Serial$state state) {
     if (!self) {
         if (!state) {
             self = malloc(sizeof(struct $l$3cont));
@@ -136,9 +136,9 @@ struct $l$3contG_class $l$3contG_methods;
 $NoneType B_WorldAuthD___init__ (B_WorldAuth self) {
     return $None;
 }
-void B_WorldAuthD___serialize__ (B_WorldAuth self, $NoneType state) {
+void B_WorldAuthD___serialize__ (B_WorldAuth self, $Serial$state state) {
 }
-B_WorldAuth B_WorldAuthD___deserialize__ (B_WorldAuth self, $NoneType state) {
+B_WorldAuth B_WorldAuthD___deserialize__ (B_WorldAuth self, $Serial$state state) {
     if (!self) {
         if (!state) {
             self = malloc(sizeof(struct B_WorldAuth));
@@ -214,11 +214,11 @@ $R $Env$exit$local ($Env self, $Cont c$cont, B_int n) {
     rts_shutdown();
     return $R_CONT(c$cont, $None);
 }
-void $EnvD___serialize__ ($Env self, $NoneType state) {
+void $EnvD___serialize__ ($Env self, $Serial$state state) {
     $ActorG_methods.__serialize__(($Actor)self, state);
     $step_serialize(self->argv, state);
 }
-$Env $EnvD___deserialize__ ($Env self, $NoneType state) {
+$Env $EnvD___deserialize__ ($Env self, $Serial$state state) {
     if (!self) {
         if (!state) {
             self = malloc(sizeof(struct $Env));

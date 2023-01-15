@@ -61,10 +61,10 @@ B_str $ContD___str__($Cont self) {
   asprintf(&s,"<$Cont closure at %p>",self);
   return to$str(s);
 }
-void $ContD___serialize__($Cont self, $NoneType state) {
+void $ContD___serialize__($Cont self, $Serial$state state) {
     // Empty
 }
-$Cont $ContD___deserialize__($Cont self, $NoneType state) {
+$Cont $ContD___deserialize__($Cont self, $Serial$state state) {
     return $DNEW($Cont,state);
 }
 

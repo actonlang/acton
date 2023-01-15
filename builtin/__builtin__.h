@@ -928,7 +928,7 @@ struct B_ContainerG_class {
 };
 
 extern struct B_ContainerG_class B_ContainerG_methods;
-B_Container B_ContainerG_new();
+B_Container B_ContainerG_new(B_Eq);
 
 // B_Sequence ////////////////////////////////////////////////////////////
 

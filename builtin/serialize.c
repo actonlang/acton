@@ -16,7 +16,7 @@
 
 // Queue implementation //////////////////////////////////////////////////////////////////
 
-void $enqueue($NoneType state, $ROW elem) {
+void $enqueue($Serial$state state, $ROW elem) {
     if (state->row)
         state->row->next = elem;
     else
@@ -33,10 +33,10 @@ void $enqueue2(struct $ROWLISTHEADER *header, $ROW elem) {
  
 // Hashable$WORD methods //////////////////////////////////////////////////
 
-void B_HashableD_WORDD___serialize__(B_HashableD_WORD self, $NoneType state) {
+void B_HashableD_WORDD___serialize__(B_HashableD_WORD self, $Serial$state state) {
 }
 
-B_HashableD_WORD B_HashableD_WORDD___deserialize__(B_HashableD_WORD self, $NoneType state) {
+B_HashableD_WORD B_HashableD_WORDD___deserialize__(B_HashableD_WORD self, $Serial$state state) {
     B_HashableD_WORD res = $DNEW(B_HashableD_WORD,state);
     return res;
 }
@@ -73,7 +73,7 @@ struct B_HashableD_WORD *B_HashableD_WORDG_witness = &B_HashableD_WORD_instance;
 
 // small-step functions for (de)serializing the next object /////////////////////////////////////////////////
 
-$ROW $add_header(int class_id, int blob_size, $NoneType state) {
+$ROW $add_header(int class_id, int blob_size, $Serial$state state) {
     $ROW res = malloc(2 * sizeof(int) + (1+blob_size)*sizeof($WORD));
     res->class_id = class_id;
     state->row_no++;
@@ -83,7 +83,7 @@ $ROW $add_header(int class_id, int blob_size, $NoneType state) {
     return res;
 }
 
-void $step_serialize($WORD self, $NoneType state) {
+void $step_serialize($WORD self, $Serial$state state) {
     if (self) {
         int class_id = $GET_CLASSID((($Serializable)self)->$class);
         if (class_id > ITEM_ID) { // not one of the Acton builtin datatypes, which have hand-crafted serializations
@@ -108,7 +108,7 @@ void $step_serialize($WORD self, $NoneType state) {
         $add_header(NONE_ID,0,state);
 }
 
-$WORD $step_deserialize($NoneType state) {
+$WORD $step_deserialize($Serial$state state) {
     if (abs(state->row->class_id) > ITEM_ID) {
         $ROW this = state->row;
         state->row = this->next;
@@ -127,12 +127,12 @@ $WORD $step_deserialize($NoneType state) {
 
 
 
-void $val_serialize(int class_id, $WORD val,$NoneType state) {
+void $val_serialize(int class_id, $WORD val,$Serial$state state) {
     $ROW row = $add_header(class_id,1,state);
     memcpy(row->blob,val,sizeof($WORD));
 }
 
-$WORD $val_deserialize($NoneType state) {
+$WORD $val_deserialize($Serial$state state) {
     $WORD res;
     memcpy(&res,(state->row)->blob,sizeof($WORD));
     state->row = state->row->next;
@@ -183,7 +183,7 @@ void $write_serialized($ROW row, char *file) {
 }
  
 $ROW $serialize($Serializable s, $WORD (*globmap)($WORD)) {
-    $NoneType state = malloc(sizeof(struct $NoneType));
+    $Serial$state state = malloc(sizeof(struct $Serial$state));
     state->done = $NEW(B_dict,(B_Hashable)B_HashableD_WORDG_witness,NULL,NULL);
     state->globmap = globmap;
     state->row_no=0;
@@ -194,7 +194,7 @@ $ROW $serialize($Serializable s, $WORD (*globmap)($WORD)) {
 }
 
 $ROW $glob_serialize($Serializable self, $WORD (*globmap)($WORD)) {
-    $NoneType state = malloc(sizeof(struct $NoneType));
+    $Serial$state state = malloc(sizeof(struct $Serial$state));
     state->done = $NEW(B_dict,(B_Hashable)B_HashableD_WORDG_witness,NULL,NULL);
     state->globmap = globmap;
     state->row_no=0;
@@ -210,7 +210,7 @@ void $serialize_file($Serializable s, char *file) {
 }
 
 $Serializable $deserialize($ROW row, $WORD (*globmap)($WORD)) {
-    $NoneType state = malloc(sizeof(struct $NoneType));
+    $Serial$state state = malloc(sizeof(struct $Serial$state));
     state->done = $NEW(B_dict,(B_Hashable)B_HashableD_intG_witness,NULL,NULL);
     state->globmap = globmap;
     state->row_no=0;
@@ -220,7 +220,7 @@ $Serializable $deserialize($ROW row, $WORD (*globmap)($WORD)) {
 }
 
 $Serializable $glob_deserialize($Serializable self, $ROW row, $WORD (*globmap)($WORD)) {
-    $NoneType state = malloc(sizeof(struct $NoneType));
+    $Serial$state state = malloc(sizeof(struct $Serial$state));
     state->done = $NEW(B_dict,(B_Hashable)B_HashableD_intG_witness,NULL,NULL);
     state->globmap = globmap;
     state->row_no=1;

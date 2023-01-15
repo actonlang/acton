@@ -47,14 +47,14 @@ B_str B_rangeD___str__(B_range self) {
     return to$str(s);
 }
 
-void B_rangeD___serialize__(B_range self, $NoneType state) {
+void B_rangeD___serialize__(B_range self, $Serial$state state) {
     $ROW row = $add_header(RANGE_ID,3,state);
     row->blob[0] = ($WORD)self->start;
     row->blob[1] = ($WORD)self->stop;
     row->blob[2] = ($WORD)self->step;
 }
 
-B_range B_rangeD___deserialize__(B_range self, $NoneType state) {
+B_range B_rangeD___deserialize__(B_range self, $Serial$state state) {
     $ROW this = state->row;
     state->row = this->next;
     state->row_no++;
@@ -93,12 +93,12 @@ B_str B_IteratorB_rangeD_str(B_IteratorB_range self) {
     return to$str(s);
 }
 
-void B_IteratorB_rangeD_serialize(B_IteratorB_range self, $NoneType state) {
+void B_IteratorB_rangeD_serialize(B_IteratorB_range self, $Serial$state state) {
     $step_serialize(self->src,state);
     $step_serialize(toB_int(self->nxt),state);
 }
 
-B_IteratorB_range B_IteratorB_range$_deserialize(B_IteratorB_range self, $NoneType state) {
+B_IteratorB_range B_IteratorB_range$_deserialize(B_IteratorB_range self, $Serial$state state) {
     B_IteratorB_range res = $DNEW(B_IteratorB_range,state);
     res->src = (B_range)$step_deserialize(state);
     res->nxt = fromB_int((B_int)$step_deserialize(state));
@@ -144,10 +144,10 @@ void B_IterableD_rangeD___init__ (B_IterableD_range wit){
     return;
 }
 
-void B_IterableD_rangeD___serialize__(B_IterableD_range self, $NoneType state) {
+void B_IterableD_rangeD___serialize__(B_IterableD_range self, $Serial$state state) {
 }
 
-B_IterableD_range B_IterableD_rangeD___deserialize__(B_IterableD_range res, $NoneType state) {
+B_IterableD_range B_IterableD_rangeD___deserialize__(B_IterableD_range res, $Serial$state state) {
     if(!res)
         res = $DNEW(B_IterableD_range,state);
     return res;
