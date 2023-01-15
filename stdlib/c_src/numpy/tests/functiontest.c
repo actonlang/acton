@@ -17,7 +17,7 @@
 
 int main() {
   $register_builtin();
-  numpy$D___init__();
+  numpyQ___init__();
   numpyQ_ndarray v = numpyQ_ndarray_arange(toB_int(0),toB_int(60),toB_int(1));
   B_list newshape = $NEW(B_list,NULL,NULL);
   B_listD_append(newshape,toB_int(3));
@@ -34,7 +34,7 @@ int main() {
   B_printobj("a.transpose([1,2,0]) =\n",numpyQ_ndarray_transpose(a,axes));
   numpyQ_ndarray b = numpyQ_ndarray_reshape(numpyQ_ndarray_arange(toB_int(60),toB_int(0),toB_int(-1)),newshape);
   B_printobj("b=\n",b);
-  numpyQ_Primitive wit = (numpyQ_Primitive)numpyQ_PrimitiveB_intG_witness;
+  numpyQ_Primitive wit = (numpyQ_Primitive)numpyQ_PrimitiveD_intG_witness;
   numpyQ_ndarray c = numpyQ_ndarray_sort(wit,b,NULL);
   B_printobj("b.sort() =\n",c);
   B_printobj("b.sort(-1) =\n",numpyQ_ndarray_sort(wit,b,toB_int(-1)));

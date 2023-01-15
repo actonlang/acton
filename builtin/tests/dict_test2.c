@@ -89,7 +89,7 @@ int main() {
   for (long i=1; i<1000000; i++)
     if (i%100 > 0)
        wit->W_Indexed->$class->__delitem__( wit->W_Indexed,dict,toWord(i));
-  printf("Size of dict after popping is %ld\n",fromB_int(wit->$class->__len__(wit,dict)));
+  printf("Size of dict after popping is %ld\n",from$int(wit->$class->__len__(wit,dict)));
   
   B_Iterator iter = wit->$class->__iter__(wit,dict);
   long t = 0;
@@ -124,5 +124,5 @@ int main() {
   if((item = wit->$class->popitem(wit,dict))) {
      printf("popitem gives: key=%ld, value=%ld\n",fromWord(item->components[0]),fromWord(item->components[1]));
   }
-  printf("size of dictionary should be 10007; is %ld\n",fromB_int(wit->$class->__len__(wit,dict)));
+  printf("size of dictionary should be 10007; is %ld\n",from$int(wit->$class->__len__(wit,dict)));
 }

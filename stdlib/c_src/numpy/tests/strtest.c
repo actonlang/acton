@@ -22,7 +22,7 @@ int main() {
   B_listD_append(elems,to$float(3.0));
   B_listD_append(elems,to$float(5.0));
   B_listD_append(elems,to$float(7.0));
-  numpyQ_ndarray q = numpyQ_ndarray_array((numpyQ_Primitive)numpyQ_PrimitiveB_floatG_witness,elems);
+  numpyQ_ndarray q = numpyQ_ndarray_array((numpyQ_Primitive)numpyQ_PrimitiveD_floatG_witness,elems);
   B_printobj("q =",q);
   numpyQ_ndarray a = numpyQ_ndarray_arange(toB_int(0),toB_int(10),toB_int(1));
   B_printobj("a =",a);

@@ -47,7 +47,7 @@ B_str B_listD_str(B_list self) {
 void B_listD_serialize(B_list self,$Serial$state state) {
     B_int prevkey = (B_int)B_dictD_get(state->done,(B_Hashable)B_HashableD_WORDG_witness,self,NULL);
     if (prevkey) {
-        long pk = fromB_int(prevkey);
+        long pk = from$int(prevkey);
         $val_serialize(-LIST_ID,&pk,state);
         return;
     }
@@ -138,7 +138,7 @@ B_list B_listD_mul(B_list lst, B_int n) {
     if (n->val.size <= 0)
         return B_listD_new(0);
     else {
-        long n64 =  fromB_int(n);
+        long n64 =  from$int(n);
         B_list res = B_listD_new(lstlen * n64);
         for (int i=0; i<n64; i++)
             memcpy(res->data + i*lstlen, lst->data, lstlen * sizeof($WORD));
@@ -212,7 +212,7 @@ B_IteratorD_list B_IteratorD_list$_deserialize(B_IteratorD_list res, $Serial$sta
     if(!res)
         res = $DNEW(B_IteratorD_list,state);
     res->src = (B_list)$step_deserialize(state);
-    res->nxt = fromB_int((B_int)$step_deserialize(state));
+    res->nxt = from$int((B_int)$step_deserialize(state));
     return res;
 }
 

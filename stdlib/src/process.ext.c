@@ -3,7 +3,7 @@
 #include "../rts/io.h"
 #include "../rts/log.h"
 
-void process$D___ext_init__() {
+void processQ___ext_init__() {
     // NOP
 }
 
@@ -65,11 +65,11 @@ void read_stdout(uv_stream_t *stream, ssize_t nread, const uv_buf_t *buf) {
         free(buf->base);
 }
 
-$R processQ_Process$aid$local (processQ_Process self, $Cont c$cont) {
+$R processQ_ProcessD_aidG_local (processQ_Process self, $Cont c$cont) {
     return $R_CONT(c$cont, toB_int(self->$globkey));
 }
 
-$R processQ_Process$_create_process (processQ_Process self, $Cont c$cont) {
+$R processQ_ProcessD__create_process (processQ_Process self, $Cont c$cont) {
     pin_actor_affinity();
     struct process_data *process_data = calloc(1, sizeof(struct process_data));
     process_data->process = self;
@@ -160,27 +160,27 @@ void close_cb(uv_handle_t *handle) {
     // TODO: clean something up?
 }
 
-$R processQ_Process$done_writing$local (processQ_Process self, $Cont c$cont) {
-    uv_process_t *p = (uv_process_t *)fromB_int(self->_p);
+$R processQ_ProcessD_done_writingG_local (processQ_Process self, $Cont c$cont) {
+    uv_process_t *p = (uv_process_t *)from$int(self->_p);
     struct process_data *process_data = (struct process_data *)p->data;
     uv_stream_t *stdin = (uv_stream_t *)&process_data->stdin_pipe;
     uv_close(stdin, close_cb);
     return $R_CONT(c$cont, B_None);
 }
 
-$R processQ_Process$pid$local (processQ_Process self, $Cont c$cont) {
-    uv_process_t *p = (uv_process_t *)fromB_int(self->_p);
+$R processQ_ProcessD_pidG_local (processQ_Process self, $Cont c$cont) {
+    uv_process_t *p = (uv_process_t *)from$int(self->_p);
     return $R_CONT(c$cont, (B_atom)toB_int(p->pid));
 }
 
-$R processQ_Process$signal$local (processQ_Process self, $Cont c$cont, B_int signal) {
-    uv_process_t *p = (uv_process_t *)fromB_int(self->_p);
-    uv_process_kill(p, fromB_int(signal));
+$R processQ_ProcessD_signalG_local (processQ_Process self, $Cont c$cont, B_int signal) {
+    uv_process_t *p = (uv_process_t *)from$int(self->_p);
+    uv_process_kill(p, from$int(signal));
     return $R_CONT(c$cont, B_None);
 }
 
-$R processQ_Process$write$local (processQ_Process self, $Cont c$cont, B_bytes data) {
-    uv_process_t *p = (uv_process_t *)fromB_int(self->_p);
+$R processQ_ProcessD_writeG_local (processQ_Process self, $Cont c$cont, B_bytes data) {
+    uv_process_t *p = (uv_process_t *)from$int(self->_p);
 
     uv_write_t *req = (uv_write_t *)malloc(sizeof(uv_write_t));
     uv_buf_t buf = uv_buf_init(data->str, data->nbytes);

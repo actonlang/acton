@@ -98,7 +98,7 @@ B_str B_dictD_str(B_dict self) {
 void B_dictD_serialize(B_dict self,$Serial$state state) {
     B_int prevkey = (B_int)B_dictD_get(state->done,(B_Hashable)B_HashableD_WORDG_witness,self,NULL);
     if (prevkey) {
-        long pk = fromB_int(prevkey);
+        long pk = from$int(prevkey);
         $val_serialize(-DICT_ID,&pk,state);
         return;
     }
@@ -138,7 +138,7 @@ B_dict B_dictD_deserialize(B_dict res, $Serial$state state) {
         memcpy(res->table->tb_indices,&this->blob[4],tb_size*sizeof(int));
         for (int i=0; i<res->table->tb_nentries; i++) {
             $entry_t entry = &TB_ENTRIES(res->table)[i];
-            entry->hash = fromB_int((B_int)$step_deserialize(state));
+            entry->hash = from$int((B_int)$step_deserialize(state));
             entry->key =  $step_deserialize(state);
             entry->value = $step_deserialize(state);
         }
@@ -351,7 +351,7 @@ B_IteratorD_dict B_InteratorD_dict__deserialize(B_IteratorD_dict res, $Serial$st
     if (!res)
         res = $DNEW( B_IteratorD_dict,state);
     res->src = (B_dict)$step_deserialize(state);
-    res->nxt = fromB_int((B_int)$step_deserialize(state));
+    res->nxt = from$int((B_int)$step_deserialize(state));
     return res;
 }
 
@@ -366,14 +366,14 @@ B_Iterator B_dictD_iter(B_dict dict) {
 // Indexed ///////////////////////////////////////////////////////////////////////////////
 
 void B_dictD_setitem(B_dict dict, B_Hashable hashwit, $WORD key, $WORD value) {
-    long hash = fromB_int(hashwit->$class->__hash__(hashwit,key));
+    long hash = from$int(hashwit->$class->__hash__(hashwit,key));
     if (insertdict(dict, hashwit, hash, key, value)<0) {
         $RAISE((B_BaseException)$NEW(B_IndexError,to$str("setitem: key not in dictionary")));
     }      
 }
 
 $WORD B_dictD_getitem(B_dict dict, B_Hashable hashwit, $WORD key) {
-    long hash = fromB_int(hashwit->$class->__hash__(hashwit,key));
+    long hash = from$int(hashwit->$class->__hash__(hashwit,key));
     $WORD res;
     int ix = $lookdict(dict,hashwit,hash,key,&res);
     if (ix < 0)  {
@@ -384,7 +384,7 @@ $WORD B_dictD_getitem(B_dict dict, B_Hashable hashwit, $WORD key) {
 
 
 void B_dictD_delitem(B_dict dict, B_Hashable hashwit, $WORD key) {
-    long hash = fromB_int(hashwit->$class->__hash__(hashwit,key));
+    long hash = from$int(hashwit->$class->__hash__(hashwit,key));
     $WORD res;
     int ix = $lookdict(dict,hashwit,hash,key,&res);
     $table table = dict->table;
@@ -428,7 +428,7 @@ long B_dictD_len(B_dict dict) {
 
 int B_dictD_contains(B_dict dict, B_Hashable hashwit, $WORD key) {
     $WORD res;
-    return $lookdict(dict,hashwit,fromB_int(hashwit->$class->__hash__(hashwit,key)),key,&res) >= 0;
+    return $lookdict(dict,hashwit,from$int(hashwit->$class->__hash__(hashwit,key)),key,&res) >= 0;
 }
 
 // Mapping /////////////////////////////////////////////////////////////////////////////
@@ -479,7 +479,7 @@ B_InteratorD_dict_values B_InteratorD_dict_values_deserialize(B_InteratorD_dict_
     if (!res)
         res = $DNEW(B_InteratorD_dict_values,state);
     res->src = (B_dict)$step_deserialize(state);
-    res->nxt = fromB_int((B_int)$step_deserialize(state));
+    res->nxt = from$int((B_int)$step_deserialize(state));
     return res;
 }
 
@@ -533,7 +533,7 @@ B_InteratorD_dict_items B_InteratorD_dict_items_deserialize(B_InteratorD_dict_it
     if (!res)
         res = $DNEW(B_InteratorD_dict_items,state);
     res->src = (B_dict)$step_deserialize(state);
-    res->nxt = fromB_int((B_int)$step_deserialize(state));
+    res->nxt = from$int((B_int)$step_deserialize(state));
     return res;
 }
 
@@ -556,7 +556,7 @@ B_Iterator B_dictD_items(B_dict dict) {
 }
  
 $WORD B_dictD_get(B_dict dict, B_Hashable hashwit, $WORD key, $WORD deflt) {
-    long hash = fromB_int(hashwit->$class->__hash__(hashwit,key));
+    long hash = from$int(hashwit->$class->__hash__(hashwit,key));
     $WORD res;
     int ix = $lookdict(dict,hashwit,hash,key,&res);
     if (ix < 0) 
@@ -571,7 +571,7 @@ B_tuple B_dictD_popitem(B_dict dict, B_Hashable hashwit) {
     while (ix >= 0) {
         $entry_t entry =  &TB_ENTRIES(table)[ix];
         if (entry->value != NULL) {
-            long hash = fromB_int(hashwit->$class->__hash__(hashwit,entry->key));
+            long hash = from$int(hashwit->$class->__hash__(hashwit,entry->key));
             int i = $lookdict_index(table,hash,ix);
             table->tb_indices[i] = DKIX_DUMMY;
             dict->numelements--;
@@ -591,7 +591,7 @@ void B_dictD_update(B_dict dict,  B_Hashable hashwit, B_Iterator it) {
 
 $WORD B_dictD_setdefault(B_dict dict, B_Hashable hashwit, $WORD key, $WORD deflt) {
     // if (!deflt) deflt = void; what is the name of void here?...
-    long hash = fromB_int(hashwit->$class->__hash__(hashwit,key));
+    long hash = from$int(hashwit->$class->__hash__(hashwit,key));
     $WORD value;
     int ix = $lookdict(dict,hashwit,hash,key,&value);
     if (ix >= 0)

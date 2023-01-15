@@ -1,6 +1,6 @@
 #include <stdlib.h>
 
-void random$D___ext_init__() {
+void randomQ___ext_init__() {
     srand(time(NULL));
 }
 
@@ -15,10 +15,10 @@ void random$D___ext_init__() {
 // the time, which is prolly good enough for now. In a future, we could cook up
 // something better.
 
-B_int random$$randint (B_int min, B_int max) {
+B_int randomQ_randint (B_int min, B_int max) {
     // ensure we have a valid range where min is smaller than max
-    long minval = fromB_int(min);
-    long maxval = fromB_int(max);
+    long minval = from$int(min);
+    long maxval = from$int(max);
     if (minval > maxval) {
         $RAISE(((B_BaseException)B_ValueErrorG_new(to$str("min value must be smaller than max"))));
     }

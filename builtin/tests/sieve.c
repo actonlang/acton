@@ -101,7 +101,7 @@ B_list sieveS(B_SequenceD_list wit, int n) {
     wit->$class->append(wit,isPrime,B_True);
   for (int i=2; i < floor(sqrt(n)); i++) {
     w = wit->$class->__getitem__(wit,isPrime,toB_int(i));
-    if (fromB_int(w)) {
+    if (from$int(w)) {
       for (int k=i*i; k<n; k+=i)
         wit->$class->__setitem__(wit,isPrime,toB_int(k),B_False);
     }
@@ -122,5 +122,5 @@ int main() {
 
   //B_SequenceD_list wit = B_SequenceD_listG_witness;
   //B_list primes = sieveS(wit,10000000);
-  //printf("%ld\n",fromB_int(wit->W_Collection->$class->__len__(wit->W_Collection,primes)));
+  //printf("%ld\n",from$int(wit->W_Collection->$class->__len__(wit->W_Collection,primes)));
 }

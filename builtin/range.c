@@ -18,14 +18,14 @@ B_range B_rangeG_new(B_int start, B_int stop, B_int step) {
 
 void B_rangeD___init__(B_range self, B_int start, B_int stop, B_int step) {
     if (stop) {
-        self->start = fromB_int(start);
-        self->stop = fromB_int(stop);
+        self->start = from$int(start);
+        self->stop = from$int(stop);
     } else {
         self->start = 0;
-        self->stop = fromB_int(start);
+        self->stop = from$int(start);
     }
     if (step) {
-        int stp = fromB_int(step);
+        int stp = from$int(step);
         if (stp==0) {
             $RAISE((B_BaseException)$NEW(B_ValueError,to$str("step size zero in range")));
         }
@@ -101,7 +101,7 @@ void B_IteratorB_rangeD_serialize(B_IteratorB_range self, $Serial$state state) {
 B_IteratorB_range B_IteratorB_range$_deserialize(B_IteratorB_range self, $Serial$state state) {
     B_IteratorB_range res = $DNEW(B_IteratorB_range,state);
     res->src = (B_range)$step_deserialize(state);
-    res->nxt = fromB_int((B_int)$step_deserialize(state));
+    res->nxt = from$int((B_int)$step_deserialize(state));
     return res;
 }
 

@@ -17,7 +17,7 @@
 
 int main() {
   $register_builtin();
-  numpy$D___init__();
+  numpyQ___init__();
   numpyQ_ndarray v = numpyQ_arange(toB_int(0),toB_int(60),toB_int(1));
   B_list newshape = $NEW(B_list,NULL,NULL);
   B_listD_append(newshape,toB_int(3));
@@ -41,7 +41,7 @@ int main() {
   numpyQ_ndarray c = numpyQ_ndarrayD___ndgetslice__(a,ix1);
   B_printobj("c=",c);
   B_list test = B_listD_copy(c->shape);
-  numpyQ_Primitive wit = (numpyQ_Primitive)numpyQ_PrimitiveB_intG_witness;
+  numpyQ_Primitive wit = (numpyQ_Primitive)numpyQ_PrimitiveD_intG_witness;
   numpyQ_ndarray d = numpyQ_abs(wit,c);
   B_printobj("d=",d);
   numpyQ_ndarray e = numpyQ_fromatom(($Super)toB_int(3));

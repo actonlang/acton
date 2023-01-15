@@ -17,7 +17,7 @@
 
 int main(int argc, char *argv[]) {
   $register_builtin();
-  numpy$D___init__();
+  numpyQ___init__();
   long n;
   sscanf(argv[1],"%ld",&n);
   numpyQ_ndarray x = numpyQ_ndarray_linspace(to$float(0.0),to$float(1.0), toB_int(n*n*n*n));
@@ -32,9 +32,9 @@ int main(int argc, char *argv[]) {
   numpyQ_ndarray b = numpyQ_ndarray_reshape(y,newshape);
   //B_printobj("a =",a);
   //for (int i = 0; i<100; i++) {
-    B_value s = (B_value)numpyQ_ndarray_sum((numpyQ_Primitive)numpyQ_PrimitiveB_floatG_witness,a,NULL);
+    B_value s = (B_value)numpyQ_ndarray_sum((numpyQ_Primitive)numpyQ_PrimitiveD_floatG_witness,a,NULL);
     B_printobj("sum(a) =",s);
-    B_value t = (B_value)numpyQ_ndarray_sum((numpyQ_Primitive)numpyQ_PrimitiveB_intG_witness,b,NULL);
+    B_value t = (B_value)numpyQ_ndarray_sum((numpyQ_Primitive)numpyQ_PrimitiveD_intG_witness,b,NULL);
     //B_printobj("b =",b);  
     B_printobj("sum(b) =",t);
     //  }

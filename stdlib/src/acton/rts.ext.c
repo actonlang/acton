@@ -1,17 +1,17 @@
 #include <uv.h>
 #include <unistd.h>
 
-void acton$rts$D___ext_init__() {
+void actonQ_rtsQ___ext_init__() {
     // NOP
 }
 
-B_NoneType acton$rts$$sleep (B_float sleep_time) {
+B_NoneType actonQ_rtsQ_sleep (B_float sleep_time) {
     int to_sleep = sleep_time->val*1000000;
     usleep(to_sleep);
     return B_None;
 }
 
-B_int acton$rts$$rss (B_WorldAuth auth) {
+B_int actonQ_rtsQ_rss (B_WorldAuth auth) {
     size_t rsm;
     int r = uv_resident_set_memory(&rsm);
     return toB_int(rsm);

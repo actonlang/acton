@@ -240,15 +240,15 @@ B_SequenceD_list B_SequenceD_listD___deserialize__(B_SequenceD_list self, $Seria
   
   
 $WORD B_SequenceD_listD___getitem__(B_SequenceD_list wit, B_list self, B_int ix) {
-    return B_listD_getitem(self,fromB_int(ix));
+    return B_listD_getitem(self,from$int(ix));
 }
 
 void B_SequenceD_listD___setitem__(B_SequenceD_list wit, B_list self, B_int ix, $WORD val) {
-    B_listD_setitem(self,fromB_int(ix),val);
+    B_listD_setitem(self,from$int(ix),val);
 }
 
 void B_SequenceD_listD___delitem__(B_SequenceD_list wit, B_list self, B_int ix) {
-    B_listD_delitem(self,fromB_int(ix));
+    B_listD_delitem(self,from$int(ix));
 }
 
 B_list B_SequenceD_listD___getslice__(B_SequenceD_list wit, B_list self, B_slice slice) {
@@ -290,7 +290,7 @@ B_Iterator B_SequenceD_listD___reversed__(B_SequenceD_list wit, B_list self) {
 }
 
 void B_SequenceD_list$insert(B_SequenceD_list wit, B_list self, B_int ix, $WORD elem) {
-    B_listD_insert(self,fromB_int(ix),elem);
+    B_listD_insert(self,from$int(ix),elem);
 }
 
 void B_SequenceD_list$append(B_SequenceD_list wit, B_list self, $WORD elem) {

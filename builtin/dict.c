@@ -105,7 +105,7 @@ B_bool B_dictrel(bool directfalse,B_OrdD_dict w, B_dict a, B_dict b) {
     B_Iterator it = m->$class->keys(m,a);
     $WORD x,resa,resb;
     while ((x = $next(it))) {
-        long h = fromB_int(wH->$class->__hash__(wH,x));
+        long h = from$int(wH->$class->__hash__(wH,x));
         int ixa = $lookdict(a, wH, h, x, &resa);
         int ixb = $lookdict(b, wH, h, x ,&resb);
         if (ixb<0 || wB->$class->__ne__(wB,resa,resb)->val) return B_False;

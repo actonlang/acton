@@ -17,7 +17,7 @@
 
 int main() {
   $register_builtin();
-  numpy$D___init__();
+  numpyQ___init__();
   numpyQ_ndarray a = numpyQ_arange(toB_int(0),toB_int(60),toB_int(1));
   B_printobj("a.shape =",a->shape);
   B_printobj("a.strides =",a->strides);

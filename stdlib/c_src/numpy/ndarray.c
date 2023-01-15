@@ -19,7 +19,7 @@
 #include "primitive.c"
 
 //Select element #n in lst which is a list[int].
-#define $LONGELEM(lst,n)   (fromB_int((B_int)lst->data[n]))
+#define $LONGELEM(lst,n)   (from$int((B_int)lst->data[n]))
 
 numpyQ_array_iterator_state $mk_iterator(numpyQ_ndarray a);
 union $Bytes8 *iter_next(numpyQ_array_iterator_state it);
@@ -41,7 +41,7 @@ static numpyQ_ndarray G_newarray(enum ElemType typ, long ndim, B_int size, B_lis
     res->offset = 0;
     res->shape = shape;
     res->strides = strides;
-    if (allocate_data) res->data = malloc(fromB_int(size) * $elem_size(typ) * sizeof(union $Bytes8));
+    if (allocate_data) res->data = malloc(from$int(size) * $elem_size(typ) * sizeof(union $Bytes8));
     return res;
 }
 
@@ -70,7 +70,7 @@ B_list $mk_strides(B_list shape) {
     B_list res = B_listD_new(shape->length);
     res->length = shape->length;
     for (int i = shape->length-1; i>=0; i--) {
-        int64_t s =  fromB_int(B_listD_getitem(shape, i));
+        int64_t s =  from$int(B_listD_getitem(shape, i));
         B_listD_setitem(res,i,toB_int(s > 1 ? size : 0));
         size *= s;
     }
@@ -87,12 +87,12 @@ void numpyQ_ndarrayD___init__(numpyQ_ndarray self, numpyQ_Primitive wit, B_atom 
 void  numpyQ_ndarrayD___serialize__(numpyQ_ndarray self, $Serial$state state) {
     B_int prevkey = (B_int)B_dictD_get(state->done,(B_Hashable)B_HashableD_WORDG_witness,self,NULL);
     if (prevkey) {
-        long prevkeyval = fromB_int(prevkey);
+        long prevkeyval = from$int(prevkey);
         $val_serialize(-self->$class->$class_id,&prevkeyval,state);
         return;
     }
     B_dictD_setitem(state->done,(B_Hashable)B_HashableD_WORDG_witness,self,toB_int(state->row_no));
-    int64_t sizeval = fromB_int(self->size);
+    int64_t sizeval = from$int(self->size);
     int blobsize = 5 +sizeval ;
     $ROW row = $add_header(self->$class->$class_id,blobsize,state);
     row->blob[0] = ($WORD)self->elem_type;
@@ -106,7 +106,7 @@ void  numpyQ_ndarrayD___serialize__(numpyQ_ndarray self, $Serial$state state) {
 }
 
 numpyQ_ndarray numpyQ_ndarrayD___deserialize__(numpyQ_ndarray res, $Serial$state state) {
-    int64_t resval = fromB_int(res->size);
+    int64_t resval = from$int(res->size);
     $ROW this = state->row;
     state->row = this->next;
     state->row_no++;
@@ -131,7 +131,7 @@ numpyQ_ndarray numpyQ_ndarrayD___deserialize__(numpyQ_ndarray res, $Serial$state
 }
 
 B_bool  numpyQ_ndarrayD___bool__(numpyQ_ndarray a) {
-    if (fromB_int(a->size) > 1) 
+    if (from$int(a->size) > 1) 
         $RAISE((B_BaseException)$NEW(B_ValueError,to$str("__bool__ undefined for ndarrays with more than one element")));
     switch (a->elem_type) {
     case LongType:
@@ -174,8 +174,8 @@ numpyQ_ndarray numpyQ_ndarrayG_new(numpyQ_Primitive wit, B_atom a) {
 // reshape attempts to present a new view, but may have to copy data.
 
 numpyQ_ndarray numpyQ_ndarray$reshape(numpyQ_ndarray a, B_list newshape) {
-    long newsize = fromB_int($prod(newshape));
-    if (fromB_int(a->size) != newsize)
+    long newsize = from$int($prod(newshape));
+    if (from$int(a->size) != newsize)
         $RAISE((B_BaseException)$NEW(B_ValueError,to$str("wrong number of array elements for reshape")));
     if (a->shape->length == newshape->length) {
         // Check if newshape is actually equal to a->shape.
@@ -254,7 +254,7 @@ numpyQ_ndarray numpyQ_ndarray$transpose(numpyQ_ndarray a, B_list axes) {
         newshape->length = axes->length;
         newstrides->length = axes->length;
         for (long i = 0; i<axes->length; i++) {
-            long n = fromB_int((B_int)axes->data[i]);
+            long n = from$int((B_int)axes->data[i]);
             newshape->data[i] = a->shape->data[n];
             newstrides->data[i] = a->strides->data[n];
         }
@@ -275,7 +275,7 @@ numpyQ_ndarray numpyQ_ndarray$flatten(numpyQ_ndarray a) {
 numpyQ_ndarray numpyQ_ndarray$copy(numpyQ_ndarray a) {
     numpyQ_ndarray res = G_newarray(a->elem_type,a->ndim,a->size,a->shape,$mk_strides(a->shape),true);
     if ($is_contiguous(a))
-        memcpy(res->data,a->data,fromB_int(a->size)*sizeof($WORD)); // Hackish; what is the proper size to use?
+        memcpy(res->data,a->data,from$int(a->size)*sizeof($WORD)); // Hackish; what is the proper size to use?
     else {
         numpyQ_array_iterator_state it = $mk_iterator(a);
         union $Bytes8 *ixres, *ixa;
@@ -336,7 +336,7 @@ numpyQ_ndarray numpyQ_ndarrayD___ndgetslice__(numpyQ_ndarray a, B_list ix) {
                 B_listD_setitem(res->shape,respos--,toB_int(1));
             } else {
                 currstride = $LONGELEM(a->strides,apos--);
-                offset += currstride * fromB_int(((numpyQ_ndindex)currindex)->index);
+                offset += currstride * from$int(((numpyQ_ndindex)currindex)->index);
             }
         } else if ($ISINSTANCE(currindex,numpyQ_ndslice)->val) {
             int slen,start,stop,step;
@@ -382,8 +382,8 @@ numpyQ_array_iterator_state $mk_iterator(numpyQ_ndarray a) {
     }
     res->ndim1 = a->ndim-1;
     for (long i=res->ndim1; i>=0; i--) {
-        res->shape[i]   = fromB_int((B_int)B_listD_getitem(a->shape,i));
-        res->strides[i] = fromB_int((B_int)B_listD_getitem(a->strides,i));
+        res->shape[i]   = from$int((B_int)B_listD_getitem(a->shape,i));
+        res->strides[i] = from$int((B_int)B_listD_getitem(a->strides,i));
         res->index[i] = 0;
     }
     for (long i=res->ndim1; i>=1; i--) {
@@ -519,10 +519,10 @@ numpyQ_ndarray numpyQ_oper(union $Bytes8 (*f)(union $Bytes8, union $Bytes8),nump
 // The ndarray constructor takes an atomic argument and builds a 0-dimensional array.
 
 numpyQ_ndarray numpyQ_fromatom(numpyQ_Primitive wit, B_atom a) {
-    if ($ISINSTANCE(wit,numpyQ_PrimitiveB_int)->val) {
+    if ($ISINSTANCE(wit,numpyQ_PrimitiveD_int)->val) {
         numpyQ_ndarray res = G_newarray(LongType,0,toB_int(1),$NEW(B_list,NULL,NULL),$NEW(B_list,NULL,NULL),true);
         B_IntegralD_int iwit = B_IntegralD_intG_witness;
-        res->data->l = fromB_int(iwit->$class->__fromatom__(iwit, a));
+        res->data->l = from$int(iwit->$class->__fromatom__(iwit, a));
         return res;
     } else {
         numpyQ_ndarray res = G_newarray(DblType,0,toB_int(1),$NEW(B_list,NULL,NULL),$NEW(B_list,NULL,NULL),true);
@@ -542,8 +542,8 @@ numpyQ_ndarray numpyQ_linspace(B_float a, B_float b, B_int n) {
     B_list strides = $NEW(B_list,NULL,NULL);
     B_listD_append(strides,toB_int(1));
     numpyQ_ndarray res = G_newarray(DblType,1,n,shape,strides,true);
-    double step = (b->val - a->val)/fromB_int(n);
-    for (long i = 0; i<fromB_int(n); i++) {
+    double step = (b->val - a->val)/from$int(n);
+    for (long i = 0; i<from$int(n); i++) {
         res->data[i].d = a->val + i * step;
     }
     return res;
@@ -588,22 +588,22 @@ numpyQ_ndarray numpyQ_full(numpyQ_Primitive wit, B_list shape, $WORD val) {
     B_list strides = $mk_strides(shape);
     B_int size = $prod(shape);
     numpyQ_ndarray res = G_newarray(wit->$class->elem_type,shape->length,size,shape,strides,true);
-    for (int i=0; i<fromB_int(size); i++)
+    for (int i=0; i<from$int(size); i++)
         res->data[i] = wit->$class->from$obj(val);
     return res;
 }
 
 numpyQ_ndarray numpyQ_unirandint(B_int a, B_int b, B_int n) {
-    if (fromB_int(a) >= fromB_int(b))
+    if (from$int(a) >= from$int(b))
         $RAISE((B_BaseException)$NEW(B_ValueError,to$str("lower limit not smaller than upper in numpy.unirand")));
     B_list shape = $NEW(B_list,NULL,NULL);
     B_listD_append(shape,n);
     B_list strides = $NEW(B_list,NULL,NULL);
     B_listD_append(strides,toB_int(1));
-    long s = (fromB_int(b) - fromB_int(a));
+    long s = (from$int(b) - from$int(a));
     numpyQ_ndarray res = G_newarray(DblType,1,n,shape,strides,true);
-    for (int i = 0; i<fromB_int(n); i++)
-        res->data[i].l = fromB_int(a) + arc4random_uniform(s);
+    for (int i = 0; i<from$int(n); i++)
+        res->data[i].l = from$int(a) + arc4random_uniform(s);
     return res;
 }
 
@@ -617,7 +617,7 @@ numpyQ_ndarray numpyQ_unirandfloat(B_float a, B_float b, B_int n) {
     B_listD_append(strides,toB_int(1));
     double s = (b->val - a->val);
     numpyQ_ndarray res = G_newarray(DblType,1,n,shape,strides,true);
-    for (int i = 0; i<fromB_int(n); i++)
+    for (int i = 0; i<from$int(n); i++)
         res->data[i].d = a->val + s * (double)arc4random_uniform(NDARRAY_MAX)/(double)NDARRAY_MAX;
     return res;
 }
@@ -633,7 +633,7 @@ numpyQ_ndarray numpyQ_partition(numpyQ_Primitive wit, numpyQ_ndarray a, B_int k)
     res->ndim++;
     for (int i=0; i < $LONGELEM(res->shape,res->ndim-2); i++) {
         union $Bytes8 *start =iter_next(it);
-        quickselect(start,0,$LONGELEM(res->shape,res->ndim-1)-1,fromB_int(k),wit->$class->$lt);
+        quickselect(start,0,$LONGELEM(res->shape,res->ndim-1)-1,from$int(k),wit->$class->$lt);
     }
     return res;
 }
@@ -641,7 +641,7 @@ numpyQ_ndarray numpyQ_partition(numpyQ_Primitive wit, numpyQ_ndarray a, B_int k)
 numpyQ_ndarray numpyQ_sort(numpyQ_Primitive wit, numpyQ_ndarray a, B_int axis) {
     numpyQ_ndarray res = numpyQ_ndarray$copy(a);
     if (!axis) {
-        quicksort(res->data,0,fromB_int(res->size)-1,wit->$class->$lt);
+        quicksort(res->data,0,from$int(res->size)-1,wit->$class->$lt);
         B_list newshape = B_listD_new(1);
         B_listD_append(newshape,a->size);
         B_list newstrides = B_listD_new(1);
@@ -649,7 +649,7 @@ numpyQ_ndarray numpyQ_sort(numpyQ_Primitive wit, numpyQ_ndarray a, B_int axis) {
         res->shape = newshape;
         res->strides = newstrides;
         res->ndim = 1;
-    } else if (fromB_int(axis) == -1 || fromB_int(axis) == a->ndim-1) {
+    } else if (from$int(axis) == -1 || from$int(axis) == a->ndim-1) {
         res->ndim--;
         numpyQ_array_iterator_state it = $mk_iterator(res); //gives an iterator that successively selects start of each last dimension column.
         res->ndim++;
@@ -745,14 +745,14 @@ numpyQ_ndarray numpyQ_sum(numpyQ_Primitive wit, numpyQ_ndarray a, B_int axis) {
     numpyQ_ndarray res;
     long laxis;
     if(axis) {
-        laxis = fromB_int(axis) < 0 ? fromB_int(axis) + a->ndim : fromB_int(axis);
+        laxis = from$int(axis) < 0 ? from$int(axis) + a->ndim : from$int(axis);
         if (laxis < 0 || laxis >= a->ndim)
             $RAISE((B_BaseException)$NEW(B_ValueError,to$str("illegal axis in numpy.sum")));
     }
     if(!axis || a->ndim == 1) {
         union $Bytes8 resd = (union $Bytes8) 0L;
         if ($is_contiguous(a)) {
-            for (int i=0; i<fromB_int(a->size); i++)
+            for (int i=0; i<from$int(a->size); i++)
                 wit->$class->$iadd(&resd,a->data[i]); 
         } else {
             numpyQ_array_iterator_state it = $mk_iterator(a);
@@ -838,7 +838,7 @@ struct numpyQ_IteratorD_ndarrayG_class numpyQ_IteratorD_ndarrayG_methods = {"",U
                                                                         numpyQ_IteratorB_str,numpyQ_IteratorB_str,numpyQ_IteratorD_ndarrayD___next__};
 
 numpyQ_ndarray numpyQ_roll(numpyQ_Primitive wit, numpyQ_ndarray a, B_int n) {
-    if (fromB_int(n)==0)
+    if (from$int(n)==0)
         return a;
     numpyQ_ndarray b = numpyQ_ndarray$flatten(a);
     B_list newshape = B_listD_new(1);
@@ -847,12 +847,12 @@ numpyQ_ndarray numpyQ_roll(numpyQ_Primitive wit, numpyQ_ndarray a, B_int n) {
     B_listD_append(newstrides,toB_int(1));
     numpyQ_ndarray res = G_newarray(b->elem_type,1,b->size,newshape,newstrides,true);
     numpyQ_CollectionD_ndarray wit2 = numpyQ_CollectionD_ndarrayG_new(wit);
-    int len = fromB_int(wit2->$class->__len__(wit2,a));
-    int nval = fromB_int(n);
+    int len = from$int(wit2->$class->__len__(wit2,a));
+    int nval = from$int(n);
     int start = nval < 0 ? -nval : len-nval;
-    int stride =  fromB_int((B_int)b->strides->data[0]);
-    for (int i = 0; i < fromB_int(b->size); i++)
-        res->data[i] = b->data[b->offset + (start+i) %fromB_int( b->size) * stride];
+    int stride =  from$int((B_int)b->strides->data[0]);
+    for (int i = 0; i < from$int(b->size); i++)
+        res->data[i] = b->data[b->offset + (start+i) %from$int( b->size) * stride];
     return numpyQ_ndarray$reshape(res,a->shape);
 }
 
@@ -868,7 +868,7 @@ numpyQ_ndarray numpyQ_mean(numpyQ_Primitive wit, numpyQ_ndarray a, B_int axis) {
         sums = numpyQ_func($convert_to_double,sums);
         sums->elem_type = DblType;
     }
-    numpyQ_ndarray len = numpyQ_fromatom((numpyQ_Primitive)numpyQ_PrimitiveB_floatG_witness,(B_atom)to$float((double)(axis ? fromB_int((B_int)B_listD_getitem(a->shape,fromB_int(axis))) : fromB_int(a->size))));
+    numpyQ_ndarray len = numpyQ_fromatom((numpyQ_Primitive)numpyQ_PrimitiveD_floatG_witness,(B_atom)to$float((double)(axis ? from$int((B_int)B_listD_getitem(a->shape,from$int(axis))) : from$int(a->size))));
     return numpyQ_oper(d$truediv,sums,len);
 }
   
@@ -876,21 +876,21 @@ numpyQ_ndarray numpyQ_mean(numpyQ_Primitive wit, numpyQ_ndarray a, B_int axis) {
 
   
 numpyQ_ndarray numpyQ_tile(numpyQ_Primitive wit, numpyQ_ndarray a, B_int n) {
-    if (fromB_int(n)<=0) 
+    if (from$int(n)<=0) 
         $RAISE((B_BaseException)$NEW(B_ValueError,to$str("numpy.tile: non-positive number of tiles")));
-    B_int sz = toB_int(fromB_int(a->size)*fromB_int(n));
+    B_int sz = toB_int(from$int(a->size)*from$int(n));
     B_list newshape = B_listD_new(1);
     B_listD_append(newshape,sz);
     B_list newstrides = B_listD_new(1);
     B_listD_append(newstrides,toB_int(1));
     numpyQ_ndarray res = G_newarray(a->elem_type,1,sz,newshape,newstrides,true);
-    for (int i=0; i < fromB_int(sz); i++) 
-        res->data[i] = a->data[a->offset + i % fromB_int(a->size)];
+    for (int i=0; i < from$int(sz); i++) 
+        res->data[i] = a->data[a->offset + i % from$int(a->size)];
     return res;    
 }
 
 numpyQ_ndarray numpyQ_zeros(numpyQ_Primitive wit, B_int n) {
-    if (fromB_int(n)<=0) 
+    if (from$int(n)<=0) 
         $RAISE((B_BaseException)$NEW(B_ValueError,to$str("numpy.zeros: non-positive size")));
     B_list newshape = B_listD_new(1);
     B_listD_append(newshape,n);
@@ -906,7 +906,7 @@ numpyQ_ndarray numpyQ_zeros(numpyQ_Primitive wit, B_int n) {
         zero.d = 0.0;
         break;
     }
-    for (int i=0; i<fromB_int(n); i++)
+    for (int i=0; i<from$int(n); i++)
         res->data[i] = zero;
     return res;
 }
@@ -914,7 +914,7 @@ numpyQ_ndarray numpyQ_zeros(numpyQ_Primitive wit, B_int n) {
 numpyQ_ndarray numpyQ_concatenate(numpyQ_Primitive wit, B_list as) {
     int size = 0;
     for (int i = 0; i < as->length; i++)
-        size += fromB_int(((numpyQ_ndarray)B_listD_getitem(as, i))->size);
+        size += from$int(((numpyQ_ndarray)B_listD_getitem(as, i))->size);
     B_int sz = toB_int(size);
     B_list newshape = B_listD_new(1);
     B_listD_append(newshape,sz);
@@ -924,9 +924,9 @@ numpyQ_ndarray numpyQ_concatenate(numpyQ_Primitive wit, B_list as) {
     size = 0;
     for (int i=0; i < as->length; i++) {
         numpyQ_ndarray a = (numpyQ_ndarray)B_listD_getitem(as, i);
-        for (int j=0; j < fromB_int(a->size); j++)
-            res->data[size+j] = a->data[a->offset+j*fromB_int((B_int)B_listD_getitem(a->strides,-1))];
-        size +=  fromB_int(a->size);
+        for (int j=0; j < from$int(a->size); j++)
+            res->data[size+j] = a->data[a->offset+j*from$int((B_int)B_listD_getitem(a->strides,-1))];
+        size +=  from$int(a->size);
     }
     return res;
 }

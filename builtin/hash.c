@@ -230,7 +230,7 @@ long B_tupleD_hash(B_HashableD_tuple wit,B_tuple tup) {
     long mult = _PyHASH_MULTIPLIER;
     for (int i=0; i < size; i++) {
         B_Hashable h = wit->W_Hashable[i];
-        y = fromB_int(h->$class->__hash__(h,tup->components[i]));
+        y = from$int(h->$class->__hash__(h,tup->components[i]));
         x = (x ^ y) * mult;
         mult += (long)(82520UL + 2*(size-i-1));
     }

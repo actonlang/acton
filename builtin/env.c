@@ -37,7 +37,7 @@ B_NoneType $l$1contD___init__ ($l$1cont p$self, B_Env self, B_str s) {
 $R $l$1contD___call__ ($l$1cont p$self, $Cont c$cont) {
     B_Env self = p$self->self;
     B_str s = p$self->s;
-    return self->$class->stdout_write$local(self, c$cont, s);
+    return self->$class->stdout_writeG_local(self, c$cont, s);
 }
 void $l$1contD___serialize__ ($l$1cont self, $Serial$state state) {
     $step_serialize(self->self, state);
@@ -72,7 +72,7 @@ B_NoneType $l$2contD___init__ ($l$2cont p$self, B_Env self, $action cb) {
 $R $l$2contD___call__ ($l$2cont p$self, $Cont c$cont) {
     B_Env self = p$self->self;
     $action cb = p$self->cb;
-    return self->$class->stdin_install$local(self, c$cont, cb);
+    return self->$class->stdin_installG_local(self, c$cont, cb);
 }
 void $l$2contD___serialize__ ($l$2cont self, $Serial$state state) {
     $step_serialize(self->self, state);
@@ -107,7 +107,7 @@ B_NoneType $l$3contD___init__ ($l$3cont p$self, B_Env self, B_int n) {
 $R $l$3contD___call__ ($l$3cont p$self, $Cont c$cont) {
     B_Env self = p$self->self;
     B_int n = p$self->n;
-    return self->$class->exit$local(self, c$cont, n);
+    return self->$class->exitG_local(self, c$cont, n);
 }
 void $l$3contD___serialize__ ($l$3cont self, $Serial$state state) {
     $step_serialize(self->self, state);
@@ -178,7 +178,7 @@ B_NoneType B_EnvD___init__ (B_Env self, B_WorldAuth token, B_list argv) {
     self->$affinity = 0;
     return B_None;
 }
-$R B_Env$stdout_write$local (B_Env self, $Cont c$cont, B_str s) {
+$R B_Env$stdout_writeG_local (B_Env self, $Cont c$cont, B_str s) {
     printf("%s", s->str);
     return $R_CONT(c$cont, B_None);
 }
@@ -199,7 +199,7 @@ void read_stdin(uv_stream_t *stream, ssize_t nread, const uv_buf_t *buf) {
     if (buf->base)
         free(buf->base);
 }
-$R B_Env$stdin_install$local (B_Env self, $Cont c$cont, $action cb) {
+$R B_Env$stdin_installG_local (B_Env self, $Cont c$cont, $action cb) {
     // This should be the only call in env that does IO stuff, so it is safe to
     // pin affinity here (and not earlier)..
     pin_actor_affinity();
@@ -209,8 +209,8 @@ $R B_Env$stdin_install$local (B_Env self, $Cont c$cont, $action cb) {
     uv_read_start((uv_stream_t*)tty, alloc_buffer, read_stdin);
     return $R_CONT(c$cont, B_None);
 }
-$R B_Env$exit$local (B_Env self, $Cont c$cont, B_int n) {
-    return_val = fromB_int(n);
+$R B_Env$exitG_local (B_Env self, $Cont c$cont, B_int n) {
+    return_val = from$int(n);
     rts_shutdown();
     return $R_CONT(c$cont, B_None);
 }
@@ -290,9 +290,9 @@ void D___init__ () {
         B_EnvG_methods.__repr__ = (B_str (*) (B_Env))$ActorG_methods.__repr__;
         B_EnvG_methods.__resume__ = (B_NoneType (*) (B_Env))$ActorG_methods.__resume__;
         B_EnvG_methods.__init__ = B_EnvD___init__;
-        B_EnvG_methods.stdout_write$local = B_Env$stdout_write$local;
-        B_EnvG_methods.stdin_install$local = B_Env$stdin_install$local;
-        B_EnvG_methods.exit$local = B_Env$exit$local;
+        B_EnvG_methods.stdout_writeG_local = B_Env$stdout_writeG_local;
+        B_EnvG_methods.stdin_installG_local = B_Env$stdin_installG_local;
+        B_EnvG_methods.exitG_local = B_Env$exitG_local;
         B_EnvG_methods.stdout_write = B_Env$stdout_write;
         B_EnvG_methods.stdin_install = B_Env$stdin_install;
         B_EnvG_methods.exit = B_Env$exit;

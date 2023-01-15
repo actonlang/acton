@@ -149,7 +149,7 @@ $WORD to$objB_int(union $Bytes8 x) {
 
 union $Bytes8 from$objB_int($WORD x) {
     union $Bytes8 res;
-    res.l = fromB_int((B_int)x);
+    res.l = from$int((B_int)x);
     return res;
 }
 
@@ -163,51 +163,51 @@ union $Bytes8 from$objB_float($WORD x) {
     return res;
 }
 
-void numpyQ_PrimitiveB_intD_serialize(numpyQ_PrimitiveB_int self, $Serial$state state) {
+void numpyQ_PrimitiveD_intD_serialize(numpyQ_PrimitiveD_int self, $Serial$state state) {
 }
 
-numpyQ_PrimitiveB_int numpyQ_PrimitiveB_intD_deserialize(numpyQ_PrimitiveB_int self, $Serial$state state) {
-    numpyQ_PrimitiveB_int res = (numpyQ_PrimitiveB_int)$DNEW(numpyQ_PrimitiveB_int,state);
+numpyQ_PrimitiveD_int numpyQ_PrimitiveD_intD_deserialize(numpyQ_PrimitiveD_int self, $Serial$state state) {
+    numpyQ_PrimitiveD_int res = (numpyQ_PrimitiveD_int)$DNEW(numpyQ_PrimitiveD_int,state);
     return res;
 }
 
-void numpyQ_PrimitiveB_floatD_serialize(numpyQ_PrimitiveB_float self, $Serial$state state) {
+void numpyQ_PrimitiveD_floatD_serialize(numpyQ_PrimitiveD_float self, $Serial$state state) {
 }
 
-numpyQ_PrimitiveB_float numpyQ_PrimitiveB_floatD_deserialize(numpyQ_PrimitiveB_float self, $Serial$state state) {
-    numpyQ_PrimitiveB_float res = (numpyQ_PrimitiveB_float)$DNEW(numpyQ_PrimitiveB_float,state);
+numpyQ_PrimitiveD_float numpyQ_PrimitiveD_floatD_deserialize(numpyQ_PrimitiveD_float self, $Serial$state state) {
+    numpyQ_PrimitiveD_float res = (numpyQ_PrimitiveD_float)$DNEW(numpyQ_PrimitiveD_float,state);
     return res;
 }
 
 
-struct numpyQ_PrimitiveB_intG_class numpyQ_PrimitiveB_intG_methods = {"numpyQ_PrimitiveB_int",UNASSIGNED,NULL,(void (*)(numpyQ_PrimitiveB_int))$default__init__,
-                                                                  numpyQ_PrimitiveB_intD_serialize,numpyQ_PrimitiveB_intD_deserialize,NULL,NULL,NULL,
+struct numpyQ_PrimitiveD_intG_class numpyQ_PrimitiveD_intG_methods = {"numpyQ_PrimitiveD_int",UNASSIGNED,NULL,(void (*)(numpyQ_PrimitiveD_int))$default__init__,
+                                                                  numpyQ_PrimitiveD_intD_serialize,numpyQ_PrimitiveD_intD_deserialize,NULL,NULL,NULL,
                                                                   LongType,to$objB_int,from$objB_int,l$prim_str,
                                                                   l$add,l$sub,l$mul,l$truediv,l$floordiv,l$mod,l$land,l$lor,l$band,l$bor,l$bxor,l$lsh,l$rsh,lB_pow,
                                                                   l$iadd,l$isub,l$imul,l$itruediv,l$ifloordiv,l$imod,l$iband,l$ibor,l$ibxor,l$ilsh,l$irsh,
                                                                   l$eq,l$neq,l$lt,l$le,l$gt,l$ge,lB_abs,l$neg,l$lnot,l$bnot};
 
 
-struct numpyQ_PrimitiveB_floatG_class numpyQ_PrimitiveB_floatG_methods = {"numpyQ_PrimitiveB_float",UNASSIGNED,NULL,(void (*)(numpyQ_PrimitiveB_float))$default__init__, 
-                                                                      numpyQ_PrimitiveB_floatD_serialize,numpyQ_PrimitiveB_floatD_deserialize,NULL,NULL,NULL,
+struct numpyQ_PrimitiveD_floatG_class numpyQ_PrimitiveD_floatG_methods = {"numpyQ_PrimitiveD_float",UNASSIGNED,NULL,(void (*)(numpyQ_PrimitiveD_float))$default__init__, 
+                                                                      numpyQ_PrimitiveD_floatD_serialize,numpyQ_PrimitiveD_floatD_deserialize,NULL,NULL,NULL,
                                                                       DblType,to$objB_float,from$objB_float,d$prim_str,
                                                                       d$add,d$sub,d$mul,d$truediv,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,dB_pow,
                                                                       d$iadd,d$isub,d$imul,d$itruediv,NULL,NULL,NULL,NULL,NULL,NULL,NULL,
                                                                       d$eq,d$neq,d$lt,d$le,d$gt,d$ge,dB_abs,d$neg,NULL,NULL};
 
-struct numpyQ_PrimitiveB_int numpyQ_PrimitiveB_intD_instance = {&numpyQ_PrimitiveB_intG_methods};
-numpyQ_PrimitiveB_int numpyQ_PrimitiveB_intG_witness = &numpyQ_PrimitiveB_intD_instance;
+struct numpyQ_PrimitiveD_int numpyQ_PrimitiveD_intD_instance = {&numpyQ_PrimitiveD_intG_methods};
+numpyQ_PrimitiveD_int numpyQ_PrimitiveD_intG_witness = &numpyQ_PrimitiveD_intD_instance;
 
-struct numpyQ_PrimitiveB_float numpyQ_PrimitiveB_floatD_instance = {&numpyQ_PrimitiveB_floatG_methods};
-numpyQ_PrimitiveB_float numpyQ_PrimitiveB_floatG_witness = &numpyQ_PrimitiveB_floatD_instance;
+struct numpyQ_PrimitiveD_float numpyQ_PrimitiveD_floatD_instance = {&numpyQ_PrimitiveD_floatG_methods};
+numpyQ_PrimitiveD_float numpyQ_PrimitiveD_floatG_witness = &numpyQ_PrimitiveD_floatD_instance;
 
-numpyQ_PrimitiveB_int numpyQ_PrimitiveB_intG_new() {
-    numpyQ_PrimitiveB_int res = malloc(sizeof(numpyQ_PrimitiveB_int));
-    res->$class = &numpyQ_PrimitiveB_intG_methods;
+numpyQ_PrimitiveD_int numpyQ_PrimitiveD_intG_new() {
+    numpyQ_PrimitiveD_int res = malloc(sizeof(numpyQ_PrimitiveD_int));
+    res->$class = &numpyQ_PrimitiveD_intG_methods;
     return res;
 }
-numpyQ_PrimitiveB_float numpyQ_PrimitiveB_floatG_new() {
-    numpyQ_PrimitiveB_float res = malloc(sizeof(numpyQ_PrimitiveB_float));
-    res->$class = &numpyQ_PrimitiveB_floatG_methods;
+numpyQ_PrimitiveD_float numpyQ_PrimitiveD_floatG_new() {
+    numpyQ_PrimitiveD_float res = malloc(sizeof(numpyQ_PrimitiveD_float));
+    res->$class = &numpyQ_PrimitiveD_floatG_methods;
     return res;
 }

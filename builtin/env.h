@@ -130,9 +130,9 @@ struct B_EnvG_class {
     B_str (*__str__) (B_Env);
     B_str (*__repr__) (B_Env);
     B_NoneType (*__resume__) (B_Env);
-    $R (*stdout_write$local) (B_Env, $Cont, B_str);
-    $R (*stdin_install$local) (B_Env, $Cont, $action);
-    $R (*exit$local) (B_Env, $Cont, B_int);
+    $R (*stdout_writeG_local) (B_Env, $Cont, B_str);
+    $R (*stdin_installG_local) (B_Env, $Cont, $action);
+    $R (*exitG_local) (B_Env, $Cont, B_int);
     B_Msg (*stdout_write) (B_Env, B_str);
     B_Msg (*stdin_install) (B_Env, $action);
     B_Msg (*exit) (B_Env, B_int);

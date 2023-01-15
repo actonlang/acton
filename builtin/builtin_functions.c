@@ -42,7 +42,7 @@ void B_print(int size, ...) {
 
 void B_IteratorD_enumerate_init(B_IteratorD_enumerate self, B_Iterator it, B_int n) {
     self->it = it;
-    self->nxt = fromB_int(n);
+    self->nxt = from$int(n);
 }
 
 B_bool B_IteratorD_enumerate_bool(B_IteratorD_enumerate self) {
@@ -64,7 +64,7 @@ B_IteratorD_enumerate B_IteratorD_enumerate$_deserialize(B_IteratorD_enumerate r
     if (!res)
         res = $DNEW(B_IteratorD_enumerate,state);
     res->it = $step_deserialize(state);
-    res->nxt = fromB_int((B_int)$step_deserialize(state));
+    res->nxt = from$int((B_int)$step_deserialize(state));
     return res;
 }
 

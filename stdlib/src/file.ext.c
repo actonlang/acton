@@ -24,9 +24,9 @@ $R fileQ_ReadFileD__open_file (fileQ_ReadFile self, $Cont c$cont) {
 }
 
 
-$R fileQ_ReadFileD_close$local (fileQ_ReadFile self, $Cont c$cont) {
+$R fileQ_ReadFileD_closeG_local (fileQ_ReadFile self, $Cont c$cont) {
     uv_fs_t *req = (uv_fs_t *)calloc(1, sizeof(uv_fs_t));
-    int r = uv_fs_close(get_uv_loop(), req, (uv_file)fromB_int(self->_fd), NULL);
+    int r = uv_fs_close(get_uv_loop(), req, (uv_file)from$int(self->_fd), NULL);
     if (r < 0) {
         char errmsg[1024] = "Error closing file: ";
         uv_strerror_r(r, errmsg + strlen(errmsg), sizeof(errmsg)-strlen(errmsg));
@@ -36,17 +36,17 @@ $R fileQ_ReadFileD_close$local (fileQ_ReadFile self, $Cont c$cont) {
     return $R_CONT(c$cont, B_None);
 }
 
-$R fileQ_ReadFileD_read$local (fileQ_ReadFile self, $Cont c$cont) {
+$R fileQ_ReadFileD_readG_local (fileQ_ReadFile self, $Cont c$cont) {
     uv_fs_t *req = (uv_fs_t *)calloc(1, sizeof(uv_fs_t));
     char buf[1024] = {0};
     uv_buf_t iovec = uv_buf_init(buf, sizeof(buf));
-    int r = uv_fs_read(get_uv_loop(), req, (uv_file)fromB_int(self->_fd), &iovec, 1, -1, NULL);
+    int r = uv_fs_read(get_uv_loop(), req, (uv_file)from$int(self->_fd), &iovec, 1, -1, NULL);
     B_list res = B_listD_new(0);
     res->length = 0;
     while (r > 0) {
       B_listD_append(res, to$bytesD_len(buf,r));
         iovec = uv_buf_init(buf, sizeof(buf));
-        r = uv_fs_read(get_uv_loop(), req, (uv_file)fromB_int(self->_fd), &iovec, 1, -1, NULL);
+        r = uv_fs_read(get_uv_loop(), req, (uv_file)from$int(self->_fd), &iovec, 1, -1, NULL);
     }
     if (r < 0) {
         char errmsg[1024] = "Error reading from file: ";
@@ -75,9 +75,9 @@ $R fileQ_WriteFileD__open_file (fileQ_WriteFile self, $Cont c$cont) {
     return $R_CONT(c$cont, B_None);
 }
 
-$R fileQ_WriteFileD_close$local (fileQ_WriteFile self, $Cont c$cont) {
+$R fileQ_WriteFileD_closeG_local (fileQ_WriteFile self, $Cont c$cont) {
     uv_fs_t *req = (uv_fs_t *)calloc(1, sizeof(uv_fs_t));
-    int r = uv_fs_close(get_uv_loop(), req, (uv_file)fromB_int(self->_fd), NULL);
+    int r = uv_fs_close(get_uv_loop(), req, (uv_file)from$int(self->_fd), NULL);
     if (r < 0) {
         char errmsg[1024] = "Error closing file: ";
         uv_strerror_r(r, errmsg + strlen(errmsg), sizeof(errmsg)-strlen(errmsg));
@@ -87,11 +87,11 @@ $R fileQ_WriteFileD_close$local (fileQ_WriteFile self, $Cont c$cont) {
     return $R_CONT(c$cont, B_None);
 }
 
-$R fileQ_WriteFileD_write$local (fileQ_WriteFile self, $Cont c$cont, B_bytes data) {
+$R fileQ_WriteFileD_writeG_local (fileQ_WriteFile self, $Cont c$cont, B_bytes data) {
     uv_fs_t *req = (uv_fs_t *)calloc(1, sizeof(uv_fs_t));
     uv_buf_t buf = uv_buf_init((char *)data->str, data->nbytes);
 
-    int r = uv_fs_write(get_uv_loop(), req, (uv_file)fromB_int(self->_fd), &buf, 1, 0, NULL);
+    int r = uv_fs_write(get_uv_loop(), req, (uv_file)from$int(self->_fd), &buf, 1, 0, NULL);
     if (r < 0) {
         char errmsg[1024] = "Error writing to file: ";
         uv_strerror_r(r, errmsg + strlen(errmsg), sizeof(errmsg)-strlen(errmsg));

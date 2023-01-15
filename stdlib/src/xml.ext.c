@@ -178,7 +178,7 @@ static B_str xmlQ_encode_attrs(B_list attrs) {
     return res;
 }
 
-B_str xmlQ_Node$encode(xmlQ_Node self) {
+B_str xmlQ_NodeD_encode(xmlQ_Node self) {
     B_str nul = to$str("");
     B_Iterable wit = ((B_Iterable)((B_Collection)B_SequenceD_listG_new()->W_Collection));
     B_list children = xmlQ_encode_nodes(self->children);

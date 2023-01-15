@@ -170,7 +170,7 @@ $WORD B_RealD_floatD___ceil__ (B_RealD_float wit, B_float x, B_Integral wit2) {
 }
   
 B_float B_RealD_floatD___round__ (B_RealD_float wit, B_float x, B_int p) {
-    double pval = p==NULL ? 0.0 : (double)fromB_int(p);
+    double pval = p==NULL ? 0.0 : (double)from$int(p);
     double p10 = pow(10.0,pval);
     return to$float(round(x->val * p10)/p10);
 }

@@ -71,7 +71,7 @@ B_str B_set_str(B_set self) {
 void B_set_serialize(B_set self, $Serial$state state) {
     B_int prevkey = (B_int)B_dictD_get(state->done,(B_Hashable)B_HashableD_WORDG_witness,self,NULL);
     if (prevkey) {
-        long pk = fromB_int(prevkey);
+        long pk = from$int(prevkey);
         $val_serialize(-SET_ID,&pk,state);
         return;
     }
@@ -107,7 +107,7 @@ B_set B_set_deserialize (B_set res, $Serial$state state) {
         memset(res->table,0,(res->mask+1)*sizeof(B_setentry));
         for (int i=0; i<=res->mask;i++) {
             B_setentry *entry = &res->table[i];
-            entry->hash = fromB_int((B_int)$step_deserialize(state));
+            entry->hash = from$int((B_int)$step_deserialize(state));
             entry->key = $step_deserialize(state);
             if (entry->hash==-1)
                 entry->key = dummy;
@@ -396,16 +396,16 @@ B_set B_set_symmetric_difference(B_Hashable hashwit, B_set set, B_set other) {
 // Set /////////////////////////////////////////////////////////////////////////////////////////////
 
 void B_set_add(B_set set, B_Hashable hashwit,  $WORD elem) {
-    B_set_add_entry(set,hashwit,elem,fromB_int(hashwit->$class->__hash__(hashwit,elem)));
+    B_set_add_entry(set,hashwit,elem,from$int(hashwit->$class->__hash__(hashwit,elem)));
 }
 
 
 void B_set_discard(B_set set, B_Hashable hashwit, $WORD elem) {
-    B_set_discard_entry(set,hashwit,elem,fromB_int(hashwit->$class->__hash__(hashwit,elem)));
+    B_set_discard_entry(set,hashwit,elem,from$int(hashwit->$class->__hash__(hashwit,elem)));
 }
 
 void B_set_remove(B_set set, B_Hashable hashwit, $WORD elem) {
-    long hash = fromB_int(hashwit->$class->__hash__(hashwit,elem));
+    long hash = from$int(hashwit->$class->__hash__(hashwit,elem));
     if(B_set_discard_entry(set,hashwit,elem,hash))
         return;
     else {
@@ -473,7 +473,7 @@ long B_set_len(B_set set) {
 // Container_Eq ///////////////////////////////////////////////////////////////////////////////////////
 
 int B_set_contains(B_set set, B_Hashable hashwit, $WORD elem) {
-    return B_set_contains_entry(set,hashwit,elem,fromB_int(hashwit->$class->__hash__(hashwit,elem)));
+    return B_set_contains_entry(set,hashwit,elem,from$int(hashwit->$class->__hash__(hashwit,elem)));
 }
  
 // Iterable ///////////////////////////////////////////////////////////////////////////////////////
@@ -539,7 +539,7 @@ B_IteratorD_set B_IteratorD_setD__deserialize(B_IteratorD_set res, $Serial$state
     if (!res)
         res = $DNEW(B_IteratorD_set,state);
     res->src = (B_set)$step_deserialize(state);
-    res->nxt = fromB_int((B_int)$step_deserialize(state));
+    res->nxt = from$int((B_int)$step_deserialize(state));
     return res;
 }
 

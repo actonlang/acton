@@ -35,5 +35,5 @@ int main() {
   B_dict d = $NEW(B_dict,wit2,NULL,NULL);
   B_dictD_setitem(d,wit2,tup1,toB_int(13));
   B_int n =  (B_int)B_dictD_getitem(d,wit2,tup1);
-  printf("n=%ld\n",fromB_int(n));
+  printf("n=%ld\n",from$int(n));
 }

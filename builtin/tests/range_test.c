@@ -22,7 +22,7 @@ int main() {
   B_Iterator i1 = wit->$class->__iter__(wit,r1);
   B_int n;
   while ((n = (B_int)i1->$class->__next__(i1)))
-    printf("%ld ",fromB_int(n));
+    printf("%ld ",from$int(n));
   printf("\n");
   B_range r2 = B_rangeG_new(toB_int(50),toB_int(10),toB_int(-4));
   $serialize_file(($Serializable)r2,"range.bin");

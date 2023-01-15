@@ -40,11 +40,11 @@ numpyQ_IntegralD_ndarrayD_int numpyQ_IntegralD_ndarrayD_intD___deserialize__(num
 }
 
 numpyQ_ndarray numpyQ_IntegralD_ndarrayD_intD___add__(numpyQ_IntegralD_ndarrayD_int wit, numpyQ_ndarray a, numpyQ_ndarray b){
-    return numpyQ_oper(numpyQ_PrimitiveB_intG_witness->$class->$add,a,b);
+    return numpyQ_oper(numpyQ_PrimitiveD_intG_witness->$class->$add,a,b);
 }
 
 numpyQ_ndarray numpyQ_IntegralD_ndarrayD_intD___fromatom__(numpyQ_IntegralD_ndarrayD_int wit,B_atom a) {
-    return numpyQ_fromatom((numpyQ_Primitive)numpyQ_PrimitiveB_intG_witness,a);
+    return numpyQ_fromatom((numpyQ_Primitive)numpyQ_PrimitiveD_intG_witness,a);
 }
 
 B_complex numpyQ_IntegralD_ndarrayD_intD___complx__(numpyQ_IntegralD_ndarrayD_int wit, numpyQ_ndarray a) {
@@ -53,15 +53,15 @@ B_complex numpyQ_IntegralD_ndarrayD_intD___complx__(numpyQ_IntegralD_ndarrayD_in
 }
 
 numpyQ_ndarray numpyQ_IntegralD_ndarrayD_intD___mul__(numpyQ_IntegralD_ndarrayD_int wit, numpyQ_ndarray a, numpyQ_ndarray b) {
-    return numpyQ_oper(numpyQ_PrimitiveB_intG_witness->$class->$mul,a,b);
+    return numpyQ_oper(numpyQ_PrimitiveD_intG_witness->$class->$mul,a,b);
 }
 
 numpyQ_ndarray numpyQ_IntegralD_ndarrayD_intD___pow__(numpyQ_IntegralD_ndarrayD_int wit, numpyQ_ndarray a, numpyQ_ndarray b) {
-    return numpyQ_oper(numpyQ_PrimitiveB_intG_witness->$class->B_pow,a,b);
+    return numpyQ_oper(numpyQ_PrimitiveD_intG_witness->$class->B_pow,a,b);
 }
 
 numpyQ_ndarray numpyQ_IntegralD_ndarrayD_intD___neg__(numpyQ_IntegralD_ndarrayD_int wit, numpyQ_ndarray a) {
-    return numpyQ_func(numpyQ_PrimitiveB_intG_witness->$class->$neg,a);
+    return numpyQ_func(numpyQ_PrimitiveD_intG_witness->$class->$neg,a);
 }
 
 numpyQ_ndarray numpyQ_IntegralD_ndarrayD_intD___pos__(numpyQ_IntegralD_ndarrayD_int wit, numpyQ_ndarray a) {
@@ -73,7 +73,7 @@ $WORD numpyQ_IntegralD_ndarrayD_int$real(numpyQ_IntegralD_ndarrayD_int wit, nump
 }
 $WORD numpyQ_IntegralD_ndarrayD_int$imag(numpyQ_IntegralD_ndarrayD_int wit, numpyQ_ndarray a, B_Real wit2);
 $WORD numpyQ_IntegralD_ndarrayD_intD___abs__(numpyQ_IntegralD_ndarrayD_int wit, numpyQ_ndarray a, B_Real wit2) {
-    return numpyQ_func(numpyQ_PrimitiveB_intG_witness->$class->B_abs,a);
+    return numpyQ_func(numpyQ_PrimitiveD_intG_witness->$class->B_abs,a);
 }
 numpyQ_ndarray numpyQ_IntegralD_ndarrayD_int$conjugate(numpyQ_IntegralD_ndarrayD_int wit, numpyQ_ndarray a);
 B_float numpyQ_IntegralD_ndarrayD_intD___float__ (numpyQ_IntegralD_ndarrayD_int wit, numpyQ_ndarray a);
@@ -117,13 +117,13 @@ numpyQ_LogicalD_ndarrayD_int numpyQ_LogicalD_ndarrayD_intD___deserialize__(numpy
 }
 
 numpyQ_ndarray numpyQ_LogicalD_ndarrayD_intD___and__ (numpyQ_LogicalD_ndarrayD_int wit, numpyQ_ndarray a, numpyQ_ndarray b) {
-    return numpyQ_oper(numpyQ_PrimitiveB_intG_witness->$class->$band,a,b);
+    return numpyQ_oper(numpyQ_PrimitiveD_intG_witness->$class->$band,a,b);
 }
 numpyQ_ndarray numpyQ_LogicalD_ndarrayD_intD___or__ (numpyQ_LogicalD_ndarrayD_int wit, numpyQ_ndarray a, numpyQ_ndarray b) {
-    return numpyQ_oper(numpyQ_PrimitiveB_intG_witness->$class->$bor,a,b);
+    return numpyQ_oper(numpyQ_PrimitiveD_intG_witness->$class->$bor,a,b);
 }
 numpyQ_ndarray numpyQ_LogicalD_ndarrayD_intD___xor__ (numpyQ_LogicalD_ndarrayD_int wit, numpyQ_ndarray a, numpyQ_ndarray b) {
-    return numpyQ_oper(numpyQ_PrimitiveB_intG_witness->$class->$bxor,a,b);
+    return numpyQ_oper(numpyQ_PrimitiveD_intG_witness->$class->$bxor,a,b);
 }
 
 // numpyQ_MinusD_ndarrayD_int /////////////////////////////////////////////////////////////////////////////////
@@ -150,7 +150,7 @@ numpyQ_MinusD_ndarrayD_int numpyQ_MinusD_ndarrayD_intD___deserialize__(numpyQ_Mi
 }
 
 numpyQ_ndarray numpyQ_MinusD_ndarrayD_intD___sub__ (numpyQ_MinusD_ndarrayD_int wit, numpyQ_ndarray a, numpyQ_ndarray b) {
-    return numpyQ_oper(numpyQ_PrimitiveB_intG_witness->$class->$sub,a,b);
+    return numpyQ_oper(numpyQ_PrimitiveD_intG_witness->$class->$sub,a,b);
 }
 
 // numpyQ_RealFloat$ndarray //////////////////////////////////////////////////////////////////////////////////////
@@ -192,7 +192,7 @@ numpyQ_ndarray numpyQ_RealD_ndarrayD___add__(numpyQ_RealD_ndarray wit, numpyQ_nd
 }
 
 numpyQ_ndarray numpyQ_RealD_ndarrayD___fromatom__(numpyQ_RealD_ndarray wit,B_atom a) {
-    return numpyQ_fromatom((numpyQ_Primitive)numpyQ_PrimitiveB_floatG_witness, a);
+    return numpyQ_fromatom((numpyQ_Primitive)numpyQ_PrimitiveD_floatG_witness, a);
 }
 
 B_complex numpyQ_RealD_ndarrayD___complx__(numpyQ_RealD_ndarray wit, numpyQ_ndarray a) {
@@ -623,22 +623,22 @@ struct numpyQ_CollectionD_ndarray numpyQ_CollectionD_instance = {&numpyQ_Collect
 numpyQ_CollectionD_ndarray numpyQ_CollectionD_ndarrayG_witness = &numpyQ_CollectionD_instance;
 
 
-// numpyQ_RealFuns$math$ndarray ///////////////////////////////////////////////////////////
+// numpyQ_RealFunsD_mathD_ndarray ///////////////////////////////////////////////////////////
 
-B_NoneType numpyQ_RealFuns$math$ndarrayD___init__ (numpyQ_RealFuns$math$ndarray W_self, numpyQ_Primitive W_Primitive, mathQ_RealFuns W_RealFuns) {
+B_NoneType numpyQ_RealFunsD_mathD_ndarrayD___init__ (numpyQ_RealFunsD_mathD_ndarray W_self, numpyQ_Primitive W_Primitive, mathQ_RealFuns W_RealFuns) {
     W_self->W_PrimitiveD_AD_RealFuns$math$ndarray = W_Primitive;
     W_self-> W_RealFuns$mathD_AD_RealFuns$math$ndarray = W_RealFuns;
     return B_None;
 }
 
-B_NoneType numpyQ_RealFuns$math$ndarrayD___serialize__(numpyQ_RealFuns$math$ndarray wit, $Serial$state state) {
+B_NoneType numpyQ_RealFunsD_mathD_ndarrayD___serialize__(numpyQ_RealFunsD_mathD_ndarray wit, $Serial$state state) {
     $step_serialize(wit->W_PrimitiveD_AD_RealFuns$math$ndarray, state);
     $step_serialize(wit->W_RealFuns$mathD_AD_RealFuns$math$ndarray, state);
     return B_None;
 }
 
-numpyQ_RealFuns$math$ndarray numpyQ_RealFuns$math$ndarrayD___deserialize__(numpyQ_RealFuns$math$ndarray wit, $Serial$state state) {
-    numpyQ_RealFuns$math$ndarray res = $DNEW(numpyQ_RealFuns$math$ndarray,state);
+numpyQ_RealFunsD_mathD_ndarray numpyQ_RealFunsD_mathD_ndarrayD___deserialize__(numpyQ_RealFunsD_mathD_ndarray wit, $Serial$state state) {
+    numpyQ_RealFunsD_mathD_ndarray res = $DNEW(numpyQ_RealFunsD_mathD_ndarray,state);
     res->W_PrimitiveD_AD_RealFuns$math$ndarray = (numpyQ_Primitive)$step_deserialize(state);
     res->W_RealFuns$mathD_AD_RealFuns$math$ndarray = (mathQ_RealFuns)$step_deserialize(state);
     return res;
@@ -662,83 +662,83 @@ B8Fun(asinh,asinhB)
 B8Fun(acosh,acoshB)
 B8Fun(atanh,atanhB)
   
-numpyQ_ndarray numpyQ_RealFuns$math$ndarray$sqrt(numpyQ_RealFuns$math$ndarray wit, numpyQ_ndarray a) {
+numpyQ_ndarray numpyQ_RealFunsD_mathD_ndarray$sqrt(numpyQ_RealFunsD_mathD_ndarray wit, numpyQ_ndarray a) {
     return numpyQ_func(sqrtB,a);
 }
-numpyQ_ndarray numpyQ_RealFuns$math$ndarray$exp(numpyQ_RealFuns$math$ndarray wit, numpyQ_ndarray a) {
+numpyQ_ndarray numpyQ_RealFunsD_mathD_ndarray$exp(numpyQ_RealFunsD_mathD_ndarray wit, numpyQ_ndarray a) {
     return numpyQ_func(expB,a);
 }
-numpyQ_ndarray numpyQ_RealFuns$math$ndarray$log(numpyQ_RealFuns$math$ndarray wit, numpyQ_ndarray a) {
+numpyQ_ndarray numpyQ_RealFunsD_mathD_ndarray$log(numpyQ_RealFunsD_mathD_ndarray wit, numpyQ_ndarray a) {
     return numpyQ_func(logB,a);
 }
-numpyQ_ndarray numpyQ_RealFuns$math$ndarray$sin(numpyQ_RealFuns$math$ndarray wit, numpyQ_ndarray a) {
+numpyQ_ndarray numpyQ_RealFunsD_mathD_ndarray$sin(numpyQ_RealFunsD_mathD_ndarray wit, numpyQ_ndarray a) {
     return numpyQ_func(sinB,a);
 }
-numpyQ_ndarray numpyQ_RealFuns$math$ndarray$cos(numpyQ_RealFuns$math$ndarray wit, numpyQ_ndarray a) {
+numpyQ_ndarray numpyQ_RealFunsD_mathD_ndarray$cos(numpyQ_RealFunsD_mathD_ndarray wit, numpyQ_ndarray a) {
     return numpyQ_func(cosB,a);
 }
-numpyQ_ndarray numpyQ_RealFuns$math$ndarray$tan(numpyQ_RealFuns$math$ndarray wit, numpyQ_ndarray a) {
+numpyQ_ndarray numpyQ_RealFunsD_mathD_ndarray$tan(numpyQ_RealFunsD_mathD_ndarray wit, numpyQ_ndarray a) {
     return numpyQ_func(tanB,a);
 }
-numpyQ_ndarray numpyQ_RealFuns$math$ndarray$asin(numpyQ_RealFuns$math$ndarray wit, numpyQ_ndarray a) {
+numpyQ_ndarray numpyQ_RealFunsD_mathD_ndarray$asin(numpyQ_RealFunsD_mathD_ndarray wit, numpyQ_ndarray a) {
     return numpyQ_func(asinB,a);
 }
-numpyQ_ndarray numpyQ_RealFuns$math$ndarray$acos(numpyQ_RealFuns$math$ndarray wit, numpyQ_ndarray a) {
+numpyQ_ndarray numpyQ_RealFunsD_mathD_ndarray$acos(numpyQ_RealFunsD_mathD_ndarray wit, numpyQ_ndarray a) {
     return numpyQ_func(acosB,a);
 }
-numpyQ_ndarray numpyQ_RealFuns$math$ndarray$atan(numpyQ_RealFuns$math$ndarray wit, numpyQ_ndarray a) {
+numpyQ_ndarray numpyQ_RealFunsD_mathD_ndarray$atan(numpyQ_RealFunsD_mathD_ndarray wit, numpyQ_ndarray a) {
     return numpyQ_func(atanB,a);
 }
-numpyQ_ndarray numpyQ_RealFuns$math$ndarray$sinh(numpyQ_RealFuns$math$ndarray wit, numpyQ_ndarray a) {
+numpyQ_ndarray numpyQ_RealFunsD_mathD_ndarray$sinh(numpyQ_RealFunsD_mathD_ndarray wit, numpyQ_ndarray a) {
     return numpyQ_func(sinhB,a);
 }
-numpyQ_ndarray numpyQ_RealFuns$math$ndarray$cosh(numpyQ_RealFuns$math$ndarray wit, numpyQ_ndarray a) {
+numpyQ_ndarray numpyQ_RealFunsD_mathD_ndarray$cosh(numpyQ_RealFunsD_mathD_ndarray wit, numpyQ_ndarray a) {
     return numpyQ_func(coshB,a);
 }
-numpyQ_ndarray numpyQ_RealFuns$math$ndarray$tanh(numpyQ_RealFuns$math$ndarray wit, numpyQ_ndarray a) {
+numpyQ_ndarray numpyQ_RealFunsD_mathD_ndarray$tanh(numpyQ_RealFunsD_mathD_ndarray wit, numpyQ_ndarray a) {
     return numpyQ_func(tanhB,a);
 }
-numpyQ_ndarray numpyQ_RealFuns$math$ndarray$asinh(numpyQ_RealFuns$math$ndarray wit, numpyQ_ndarray a) {
+numpyQ_ndarray numpyQ_RealFunsD_mathD_ndarray$asinh(numpyQ_RealFunsD_mathD_ndarray wit, numpyQ_ndarray a) {
     return numpyQ_func(asinhB,a);
 }
-numpyQ_ndarray numpyQ_RealFuns$math$ndarray$acosh(numpyQ_RealFuns$math$ndarray wit, numpyQ_ndarray a) {
+numpyQ_ndarray numpyQ_RealFunsD_mathD_ndarray$acosh(numpyQ_RealFunsD_mathD_ndarray wit, numpyQ_ndarray a) {
     return numpyQ_func(acoshB,a);
 }
-numpyQ_ndarray numpyQ_RealFuns$math$ndarray$atanh(numpyQ_RealFuns$math$ndarray wit, numpyQ_ndarray a) {
+numpyQ_ndarray numpyQ_RealFunsD_mathD_ndarray$atanh(numpyQ_RealFunsD_mathD_ndarray wit, numpyQ_ndarray a) {
     return numpyQ_func(atanhB,a);
 }
 
                       
-numpyQ_RealFuns$math$ndarray numpyQ_RealFuns$math$ndarrayG_new(numpyQ_Primitive W_Primitive, mathQ_RealFuns W_RealFuns) {
-    numpyQ_RealFuns$math$ndarray $tmp = malloc(sizeof(numpyQ_RealFuns$math$ndarray));
-    $tmp->$class = &numpyQ_RealFuns$math$ndarrayG_methods;
-    numpyQ_RealFuns$math$ndarrayG_methods.__init__($tmp, W_Primitive, W_RealFuns);
+numpyQ_RealFunsD_mathD_ndarray numpyQ_RealFunsD_mathD_ndarrayG_new(numpyQ_Primitive W_Primitive, mathQ_RealFuns W_RealFuns) {
+    numpyQ_RealFunsD_mathD_ndarray $tmp = malloc(sizeof(numpyQ_RealFunsD_mathD_ndarray));
+    $tmp->$class = &numpyQ_RealFunsD_mathD_ndarrayG_methods;
+    numpyQ_RealFunsD_mathD_ndarrayG_methods.__init__($tmp, W_Primitive, W_RealFuns);
     return $tmp;
 }
-struct numpyQ_RealFuns$math$ndarrayG_class numpyQ_RealFuns$math$ndarrayG_methods = {
-    "numpyQ_RealFuns$math$ndarray",
+struct numpyQ_RealFunsD_mathD_ndarrayG_class numpyQ_RealFunsD_mathD_ndarrayG_methods = {
+    "numpyQ_RealFunsD_mathD_ndarray",
     UNASSIGNED,
     ($SuperG_class)&mathQ_RealFunsG_methods,
-    numpyQ_RealFuns$math$ndarrayD___init__,
-    numpyQ_RealFuns$math$ndarrayD___serialize__,
-    numpyQ_RealFuns$math$ndarrayD___deserialize__,
-    (B_bool (*)(numpyQ_RealFuns$math$ndarray))$default__bool__,
-    (B_str (*)(numpyQ_RealFuns$math$ndarray))$default__str__,
-    (B_str (*)(numpyQ_RealFuns$math$ndarray))$default__str__,
-    numpyQ_RealFuns$math$ndarray$sqrt,        
-    numpyQ_RealFuns$math$ndarray$exp,        
-    numpyQ_RealFuns$math$ndarray$log,        
-    numpyQ_RealFuns$math$ndarray$sin,        
-    numpyQ_RealFuns$math$ndarray$cos,        
-    numpyQ_RealFuns$math$ndarray$tan,        
-    numpyQ_RealFuns$math$ndarray$asin,        
-    numpyQ_RealFuns$math$ndarray$acos,        
-    numpyQ_RealFuns$math$ndarray$atan,        
-    numpyQ_RealFuns$math$ndarray$sinh,        
-    numpyQ_RealFuns$math$ndarray$cosh,        
-    numpyQ_RealFuns$math$ndarray$tanh,        
-    numpyQ_RealFuns$math$ndarray$asinh,        
-    numpyQ_RealFuns$math$ndarray$acosh,        
-    numpyQ_RealFuns$math$ndarray$atanh     
+    numpyQ_RealFunsD_mathD_ndarrayD___init__,
+    numpyQ_RealFunsD_mathD_ndarrayD___serialize__,
+    numpyQ_RealFunsD_mathD_ndarrayD___deserialize__,
+    (B_bool (*)(numpyQ_RealFunsD_mathD_ndarray))$default__bool__,
+    (B_str (*)(numpyQ_RealFunsD_mathD_ndarray))$default__str__,
+    (B_str (*)(numpyQ_RealFunsD_mathD_ndarray))$default__str__,
+    numpyQ_RealFunsD_mathD_ndarray$sqrt,        
+    numpyQ_RealFunsD_mathD_ndarray$exp,        
+    numpyQ_RealFunsD_mathD_ndarray$log,        
+    numpyQ_RealFunsD_mathD_ndarray$sin,        
+    numpyQ_RealFunsD_mathD_ndarray$cos,        
+    numpyQ_RealFunsD_mathD_ndarray$tan,        
+    numpyQ_RealFunsD_mathD_ndarray$asin,        
+    numpyQ_RealFunsD_mathD_ndarray$acos,        
+    numpyQ_RealFunsD_mathD_ndarray$atan,        
+    numpyQ_RealFunsD_mathD_ndarray$sinh,        
+    numpyQ_RealFunsD_mathD_ndarray$cosh,        
+    numpyQ_RealFunsD_mathD_ndarray$tanh,        
+    numpyQ_RealFunsD_mathD_ndarray$asinh,        
+    numpyQ_RealFunsD_mathD_ndarray$acosh,        
+    numpyQ_RealFunsD_mathD_ndarray$atanh     
 };
  

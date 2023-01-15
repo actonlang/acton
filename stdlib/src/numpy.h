@@ -77,17 +77,17 @@ typedef struct numpyQ_Primitive *numpyQ_Primitive;
 struct numpyQ_PrimitiveG_class;
 typedef struct numpyQ_PrimitiveG_class *numpyQ_PrimitiveG_class;
 
-struct numpyQ_PrimitiveB_int;
-typedef struct numpyQ_PrimitiveB_int *numpyQ_PrimitiveB_int;
+struct numpyQ_PrimitiveD_int;
+typedef struct numpyQ_PrimitiveD_int *numpyQ_PrimitiveD_int;
 
-struct numpyQ_PrimitiveB_intG_class;
-typedef struct numpyQ_PrimitiveB_intG_class *numpyQ_PrimitiveB_intG_class;
+struct numpyQ_PrimitiveD_intG_class;
+typedef struct numpyQ_PrimitiveD_intG_class *numpyQ_PrimitiveD_intG_class;
 
-struct numpyQ_PrimitiveB_float;
-typedef struct numpyQ_PrimitiveB_float *numpyQ_PrimitiveB_float;
+struct numpyQ_PrimitiveD_float;
+typedef struct numpyQ_PrimitiveD_float *numpyQ_PrimitiveD_float;
 
-struct numpyQ_PrimitiveB_floatG_class;
-typedef struct numpyQ_PrimitiveB_floatG_class *numpyQ_PrimitiveB_floatG_class;
+struct numpyQ_PrimitiveD_floatG_class;
+typedef struct numpyQ_PrimitiveD_floatG_class *numpyQ_PrimitiveD_floatG_class;
 
 struct numpyQ_Primitive {
     numpyQ_PrimitiveG_class $class;
@@ -158,20 +158,20 @@ B_str d$prim_str(union $Bytes8 n);
 
 // Primitive instance for int ///////////////////////////////////////////////////////////////
 
-struct numpyQ_PrimitiveB_int {
-    numpyQ_PrimitiveB_intG_class $class;
+struct numpyQ_PrimitiveD_int {
+    numpyQ_PrimitiveD_intG_class $class;
 };
 
-struct numpyQ_PrimitiveB_intG_class {
+struct numpyQ_PrimitiveD_intG_class {
   char *$GCINFO;
   int $class_id;
   $SuperG_class $superclass;
-  void (*__init__)(numpyQ_PrimitiveB_int);
-  void (*__serialize__)(numpyQ_PrimitiveB_int,$Serial$state);
-  numpyQ_PrimitiveB_int (*__deserialize__)(numpyQ_PrimitiveB_int,$Serial$state);
-  B_bool (*__bool__)(numpyQ_PrimitiveB_int);
-  B_str (*__str__)(numpyQ_PrimitiveB_int);
-  B_str (*__repr__)(numpyQ_PrimitiveB_int);
+  void (*__init__)(numpyQ_PrimitiveD_int);
+  void (*__serialize__)(numpyQ_PrimitiveD_int,$Serial$state);
+  numpyQ_PrimitiveD_int (*__deserialize__)(numpyQ_PrimitiveD_int,$Serial$state);
+  B_bool (*__bool__)(numpyQ_PrimitiveD_int);
+  B_str (*__str__)(numpyQ_PrimitiveD_int);
+  B_str (*__repr__)(numpyQ_PrimitiveD_int);
   enum ElemType elem_type;
   $WORD (*to$obj)(union $Bytes8);
   union $Bytes8 (*from$obj)($WORD);
@@ -215,20 +215,20 @@ struct numpyQ_PrimitiveB_intG_class {
 
 // Primitive instance for float ///////////////////////////////////////////////////////////////
 
-struct numpyQ_PrimitiveB_float {
-  numpyQ_PrimitiveB_floatG_class $class;
+struct numpyQ_PrimitiveD_float {
+  numpyQ_PrimitiveD_floatG_class $class;
 };
 
-struct numpyQ_PrimitiveB_floatG_class {
+struct numpyQ_PrimitiveD_floatG_class {
   char *$GCINFO;
   int $class_id;
   $SuperG_class $superclass;
-  void (*__init__)(numpyQ_PrimitiveB_float);
-  void (*__serialize__)(numpyQ_PrimitiveB_float,$Serial$state);
-  numpyQ_PrimitiveB_float (*__deserialize__)(numpyQ_PrimitiveB_float,$Serial$state);
-  B_bool (*__bool__)(numpyQ_PrimitiveB_float);
-  B_str (*__str__)(numpyQ_PrimitiveB_float);
-  B_str (*__repr__)(numpyQ_PrimitiveB_float);
+  void (*__init__)(numpyQ_PrimitiveD_float);
+  void (*__serialize__)(numpyQ_PrimitiveD_float,$Serial$state);
+  numpyQ_PrimitiveD_float (*__deserialize__)(numpyQ_PrimitiveD_float,$Serial$state);
+  B_bool (*__bool__)(numpyQ_PrimitiveD_float);
+  B_str (*__str__)(numpyQ_PrimitiveD_float);
+  B_str (*__repr__)(numpyQ_PrimitiveD_float);
   enum ElemType elem_type;
   $WORD (*to$obj)(union $Bytes8);
   union $Bytes8 (*from$obj)($WORD);
@@ -272,14 +272,14 @@ struct numpyQ_PrimitiveB_floatG_class {
 
 // Witnesses and creation ////////////////////////////////////////////////////////////////////////////
 
-numpyQ_PrimitiveB_int numpyQ_PrimitiveB_intG_new();
-numpyQ_PrimitiveB_float numpyQ_PrimitiveB_floatG_new();
+numpyQ_PrimitiveD_int numpyQ_PrimitiveD_intG_new();
+numpyQ_PrimitiveD_float numpyQ_PrimitiveD_floatG_new();
 
-extern struct numpyQ_PrimitiveB_intG_class  numpyQ_PrimitiveB_intG_methods;
-extern struct numpyQ_PrimitiveB_floatG_class  numpyQ_PrimitiveB_floatG_methods;
+extern struct numpyQ_PrimitiveD_intG_class  numpyQ_PrimitiveD_intG_methods;
+extern struct numpyQ_PrimitiveD_floatG_class  numpyQ_PrimitiveD_floatG_methods;
 
-extern struct numpyQ_PrimitiveB_int *numpyQ_PrimitiveB_intG_witness;
-extern struct numpyQ_PrimitiveB_float *numpyQ_PrimitiveB_floatG_witness;
+extern struct numpyQ_PrimitiveD_int *numpyQ_PrimitiveD_intG_witness;
+extern struct numpyQ_PrimitiveD_float *numpyQ_PrimitiveD_floatG_witness;
 
 // numpyQ_ndarray /////////////////////////////////////////////////////////////////////////////////
 
@@ -801,42 +801,42 @@ B_int numpyQ_CollectionD_ndarrayD___len__(numpyQ_CollectionD_ndarray, numpyQ_nda
 #define numpyQ_RealFloat$ndarray ((B_Real)numpyQ_RealD_ndarray)
 numpyQ_RealD_ndarray numpyQ_RealFloat$ndarrayG_new(numpyQ_Primitive,B_RealFloat); // (B_Real)numpyQ_RealD_ndarrayG_new(__VA_ARGS__)
 
-// numpyQ_RealFuns$math$ndarray ////////////////////////////////////////////////////
+// numpyQ_RealFunsD_mathD_ndarray ////////////////////////////////////////////////////
 
-struct numpyQ_RealFuns$math$ndarray;
-typedef struct numpyQ_RealFuns$math$ndarray *numpyQ_RealFuns$math$ndarray;
-struct numpyQ_RealFuns$math$ndarrayG_class {
+struct numpyQ_RealFunsD_mathD_ndarray;
+typedef struct numpyQ_RealFunsD_mathD_ndarray *numpyQ_RealFunsD_mathD_ndarray;
+struct numpyQ_RealFunsD_mathD_ndarrayG_class {
     char *$GCINFO;
     int $class_id;
     $SuperG_class $superclass;
-    B_NoneType (*__init__) (numpyQ_RealFuns$math$ndarray, numpyQ_Primitive, mathQ_RealFuns);
-    B_NoneType (*__serialize__) (numpyQ_RealFuns$math$ndarray, $Serial$state);
-    numpyQ_RealFuns$math$ndarray (*__deserialize__) (numpyQ_RealFuns$math$ndarray, $Serial$state);
-    B_bool (*__bool__)(numpyQ_RealFuns$math$ndarray);
-    B_str (*__str__)(numpyQ_RealFuns$math$ndarray);
-    B_str (*__repr__)(numpyQ_RealFuns$math$ndarray);
-    numpyQ_ndarray (*sqrt) (numpyQ_RealFuns$math$ndarray, numpyQ_ndarray);
-    numpyQ_ndarray (*exp) (numpyQ_RealFuns$math$ndarray, numpyQ_ndarray);
-    numpyQ_ndarray (*log) (numpyQ_RealFuns$math$ndarray, numpyQ_ndarray);
-    numpyQ_ndarray (*sin) (numpyQ_RealFuns$math$ndarray, numpyQ_ndarray);
-    numpyQ_ndarray (*cos) (numpyQ_RealFuns$math$ndarray, numpyQ_ndarray);
-    numpyQ_ndarray (*tan) (numpyQ_RealFuns$math$ndarray, numpyQ_ndarray);
-    numpyQ_ndarray (*asin) (numpyQ_RealFuns$math$ndarray, numpyQ_ndarray);
-    numpyQ_ndarray (*acos) (numpyQ_RealFuns$math$ndarray, numpyQ_ndarray);
-    numpyQ_ndarray (*atan) (numpyQ_RealFuns$math$ndarray, numpyQ_ndarray);
-    numpyQ_ndarray (*sinh) (numpyQ_RealFuns$math$ndarray, numpyQ_ndarray);
-    numpyQ_ndarray (*cosh) (numpyQ_RealFuns$math$ndarray, numpyQ_ndarray);
-    numpyQ_ndarray (*tanh) (numpyQ_RealFuns$math$ndarray, numpyQ_ndarray);
-    numpyQ_ndarray (*asinh) (numpyQ_RealFuns$math$ndarray, numpyQ_ndarray);
-    numpyQ_ndarray (*acosh) (numpyQ_RealFuns$math$ndarray, numpyQ_ndarray);
-    numpyQ_ndarray (*atanh) (numpyQ_RealFuns$math$ndarray, numpyQ_ndarray);
+    B_NoneType (*__init__) (numpyQ_RealFunsD_mathD_ndarray, numpyQ_Primitive, mathQ_RealFuns);
+    B_NoneType (*__serialize__) (numpyQ_RealFunsD_mathD_ndarray, $Serial$state);
+    numpyQ_RealFunsD_mathD_ndarray (*__deserialize__) (numpyQ_RealFunsD_mathD_ndarray, $Serial$state);
+    B_bool (*__bool__)(numpyQ_RealFunsD_mathD_ndarray);
+    B_str (*__str__)(numpyQ_RealFunsD_mathD_ndarray);
+    B_str (*__repr__)(numpyQ_RealFunsD_mathD_ndarray);
+    numpyQ_ndarray (*sqrt) (numpyQ_RealFunsD_mathD_ndarray, numpyQ_ndarray);
+    numpyQ_ndarray (*exp) (numpyQ_RealFunsD_mathD_ndarray, numpyQ_ndarray);
+    numpyQ_ndarray (*log) (numpyQ_RealFunsD_mathD_ndarray, numpyQ_ndarray);
+    numpyQ_ndarray (*sin) (numpyQ_RealFunsD_mathD_ndarray, numpyQ_ndarray);
+    numpyQ_ndarray (*cos) (numpyQ_RealFunsD_mathD_ndarray, numpyQ_ndarray);
+    numpyQ_ndarray (*tan) (numpyQ_RealFunsD_mathD_ndarray, numpyQ_ndarray);
+    numpyQ_ndarray (*asin) (numpyQ_RealFunsD_mathD_ndarray, numpyQ_ndarray);
+    numpyQ_ndarray (*acos) (numpyQ_RealFunsD_mathD_ndarray, numpyQ_ndarray);
+    numpyQ_ndarray (*atan) (numpyQ_RealFunsD_mathD_ndarray, numpyQ_ndarray);
+    numpyQ_ndarray (*sinh) (numpyQ_RealFunsD_mathD_ndarray, numpyQ_ndarray);
+    numpyQ_ndarray (*cosh) (numpyQ_RealFunsD_mathD_ndarray, numpyQ_ndarray);
+    numpyQ_ndarray (*tanh) (numpyQ_RealFunsD_mathD_ndarray, numpyQ_ndarray);
+    numpyQ_ndarray (*asinh) (numpyQ_RealFunsD_mathD_ndarray, numpyQ_ndarray);
+    numpyQ_ndarray (*acosh) (numpyQ_RealFunsD_mathD_ndarray, numpyQ_ndarray);
+    numpyQ_ndarray (*atanh) (numpyQ_RealFunsD_mathD_ndarray, numpyQ_ndarray);
 };
-struct numpyQ_RealFuns$math$ndarray {
-    struct numpyQ_RealFuns$math$ndarrayG_class *$class;
+struct numpyQ_RealFunsD_mathD_ndarray {
+    struct numpyQ_RealFunsD_mathD_ndarrayG_class *$class;
     numpyQ_Primitive W_PrimitiveD_AD_RealFuns$math$ndarray;
   mathQ_RealFuns W_RealFuns$mathD_AD_RealFuns$math$ndarray;
 };
-extern struct numpyQ_RealFuns$math$ndarrayG_class numpyQ_RealFuns$math$ndarrayG_methods;
+extern struct numpyQ_RealFunsD_mathD_ndarrayG_class numpyQ_RealFunsD_mathD_ndarrayG_methods;
 
 
 // method tables /////////////////////////////////////////////////////////////////
@@ -860,10 +860,10 @@ numpyQ_DivD_ndarrayD_int numpyQ_DivD_ndarrayD_intG_new();
 numpyQ_DivD_ndarrayD_float numpyQ_DivD_ndarrayD_floatG_new();
 numpyQ_SliceableD_ndarray numpyQ_SliceableD_ndarrayG_new(numpyQ_Primitive);
 numpyQ_CollectionD_ndarray numpyQ_CollectionD_ndarrayG_new(numpyQ_Primitive);
-numpyQ_RealFuns$math$ndarray numpyQ_RealFuns$math$ndarrayG_new(numpyQ_Primitive, mathQ_RealFuns);
+numpyQ_RealFunsD_mathD_ndarray numpyQ_RealFunsD_mathD_ndarrayG_new(numpyQ_Primitive, mathQ_RealFuns);
 
 
-void numpy$D___init__();
+void numpyQ___init__();
 
 void quickselect(union $Bytes8 *a, int left, int right, int k, bool (*lt)(union $Bytes8,union $Bytes8));
 void quicksort(union $Bytes8 *a, int left, int right, bool (*lt)(union $Bytes8,union $Bytes8));

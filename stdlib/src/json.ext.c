@@ -20,7 +20,7 @@ void jsonQ_encode_dict(yyjson_mut_doc *doc, yyjson_mut_val *node, B_dict data) {
         //log_info("key: %s  class_id: %d  type: %s", key, v->$class->$class_id, v->$class->$GCINFO);
         switch (v->$class->$class_id) {
             case 2:; // B_int
-                yyjson_mut_obj_add_int(doc, node, key, fromB_int((B_int)v));
+                yyjson_mut_obj_add_int(doc, node, key, from$int((B_int)v));
                 break;
             case 5:; // B_bool
                 yyjson_mut_obj_add_bool(doc, node, key, fromB_bool((B_bool)v));
@@ -49,7 +49,7 @@ void jsonQ_encode_list(yyjson_mut_doc *doc, yyjson_mut_val *node, B_list data) {
         B_value v = B_listD_getitem(data, i);
         switch (v->$class->$class_id) {
             case 2:; // B_int
-                yyjson_mut_arr_add_int(doc, node, fromB_int((B_int)v));
+                yyjson_mut_arr_add_int(doc, node, from$int((B_int)v));
                 break;
             case 5:; // B_bool
                 yyjson_mut_arr_add_bool(doc, node, fromB_bool((B_bool)v));
@@ -77,7 +77,7 @@ void jsonQ_encode_list(yyjson_mut_doc *doc, yyjson_mut_val *node, B_list data) {
     }
 }
 
-$R jsonQ_Json$encode$local (jsonQ_Json self, $Cont c$cont, B_dict data) {
+$R jsonQ_JsonD_encodeG_local (jsonQ_Json self, $Cont c$cont, B_dict data) {
     // Create JSON document
     yyjson_mut_doc *doc = yyjson_mut_doc_new(NULL);
     yyjson_mut_val *root = yyjson_mut_obj(doc);
@@ -167,7 +167,7 @@ B_list jsonQ_decode_arr(yyjson_val *arr) {
     return res;
 }
 
-$R jsonQ_Json$decode$local (jsonQ_Json self, $Cont c$cont, B_str data) {
+$R jsonQ_JsonD_decodeG_local (jsonQ_Json self, $Cont c$cont, B_str data) {
     // Read JSON and get root
     yyjson_read_err err;
     yyjson_doc *doc = yyjson_read_opts(fromB_str(data), strlen(fromB_str(data)), 0, NULL, &err);

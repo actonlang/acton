@@ -92,10 +92,10 @@ mathQ_RealFunsD_float mathQ_RealFunsD_floatG_new() {
     return $tmp;
 }
 struct mathQ_RealFunsD_floatG_class mathQ_RealFunsD_floatG_methods;
-int math$$done$ = 0;
-void math$D___init__ () {
-    if (math$$done$) return;
-    math$$done$ = 1;
+int mathQ_done$ = 0;
+void mathQ___init__ () {
+    if (mathQ_done$) return;
+    mathQ_done$ = 1;
     {
         mathQ_RealFunsG_methods.$GCINFO = "mathQ_RealFuns";
         mathQ_RealFunsG_methods.$superclass = NULL;
@@ -130,48 +130,48 @@ void math$D___init__ () {
     }
 }
 
-$WORD math$$sqrt (mathQ_RealFuns wit, $WORD x) {
+$WORD mathQ_sqrt (mathQ_RealFuns wit, $WORD x) {
   return wit->$class->sqrt(wit,x);
 }
-$WORD math$$exp (mathQ_RealFuns wit, $WORD x) {
+$WORD mathQ_exp (mathQ_RealFuns wit, $WORD x) {
   return wit->$class->exp(wit,x);
 }
-$WORD math$$log (mathQ_RealFuns wit, $WORD x) {
+$WORD mathQ_log (mathQ_RealFuns wit, $WORD x) {
   return wit->$class->log(wit,x);
 }
-$WORD math$$sin (mathQ_RealFuns wit, $WORD x) {
+$WORD mathQ_sin (mathQ_RealFuns wit, $WORD x) {
   return wit->$class->sin(wit,x);
 }
-$WORD math$$cos (mathQ_RealFuns wit, $WORD x) {
+$WORD mathQ_cos (mathQ_RealFuns wit, $WORD x) {
   return wit->$class->cos(wit,x);
 }
-$WORD math$$tan (mathQ_RealFuns wit, $WORD x) {
+$WORD mathQ_tan (mathQ_RealFuns wit, $WORD x) {
   return wit->$class->tan(wit,x);
 }
-$WORD math$$asin (mathQ_RealFuns wit, $WORD x) {
+$WORD mathQ_asin (mathQ_RealFuns wit, $WORD x) {
   return wit->$class->asin(wit,x);
 }
-$WORD math$$acos (mathQ_RealFuns wit, $WORD x) {
+$WORD mathQ_acos (mathQ_RealFuns wit, $WORD x) {
   return wit->$class->acos(wit,x);
 }
-$WORD math$$atan (mathQ_RealFuns wit, $WORD x) {
+$WORD mathQ_atan (mathQ_RealFuns wit, $WORD x) {
   return wit->$class->atan(wit,x);
 }
-$WORD math$$sinh (mathQ_RealFuns wit, $WORD x) {
+$WORD mathQ_sinh (mathQ_RealFuns wit, $WORD x) {
   return wit->$class->sinh(wit,x);
 }
-$WORD math$$cosh (mathQ_RealFuns wit, $WORD x) {
+$WORD mathQ_cosh (mathQ_RealFuns wit, $WORD x) {
   return wit->$class->cosh(wit,x);
 }
-$WORD math$$tanh (mathQ_RealFuns wit, $WORD x) {
+$WORD mathQ_tanh (mathQ_RealFuns wit, $WORD x) {
   return wit->$class->tanh(wit,x);
 }
-$WORD math$$asinh (mathQ_RealFuns wit, $WORD x) {
+$WORD mathQ_asinh (mathQ_RealFuns wit, $WORD x) {
   return wit->$class->asinh(wit,x);
 }
-$WORD math$$acosh (mathQ_RealFuns wit, $WORD x) {
+$WORD mathQ_acosh (mathQ_RealFuns wit, $WORD x) {
   return wit->$class->acosh(wit,x);
 }
-$WORD math$$atanh (mathQ_RealFuns wit, $WORD x) {
+$WORD mathQ_atanh (mathQ_RealFuns wit, $WORD x) {
   return wit->$class->atanh(wit,x);
 }

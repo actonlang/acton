@@ -77,7 +77,7 @@ void B_intD_init(B_int self, B_atom a){
 void B_intD_serialize(B_int self,$Serial$state state) {
     B_int prevkey = (B_int)B_dictD_get(state->done,(B_Hashable)B_HashableD_WORDG_witness,self,NULL);
     if (prevkey) {
-        long pk = fromB_int(prevkey);
+        long pk = from$int(prevkey);
         $val_serialize(-INT_ID,&pk,state);
         return;
     }
@@ -239,7 +239,7 @@ B_int B_IntegralD_intD___round__ (B_IntegralD_int wit, B_int n, B_int p) {
     }
     if (labs(p->val.size) >1)
         $RAISE((B_BaseException)$NEW(B_ValueError,to$str("__round__: precision out of range")));
-    long pval = fromB_int(p);
+    long pval = from$int(p);
     if (pval>=0)
         return n;
     B_int p10 = B_IntegralD_intD___pow__(NULL,toB_int(10), B_IntegralD_intD___neg__(NULL,p));
@@ -284,7 +284,7 @@ B_int B_IntegralD_intD___mod__(B_IntegralD_int wit, B_int a, B_int b) {
 B_int B_IntegralD_intD___lshift__(B_IntegralD_int wit,  B_int a, B_int b) {
     zz_struct aval = a->val;
     long ma = aval.size;
-    long bval = fromB_int(b);
+    long bval = from$int(b);
     if (ma==0 || bval==0)
         return a;
     if (bval<0)
@@ -315,7 +315,7 @@ B_int B_IntegralD_intD___lshift__(B_IntegralD_int wit,  B_int a, B_int b) {
 B_int B_IntegralD_intD___rshift__(B_IntegralD_int wit,  B_int a, B_int b) {
     zz_struct aval = a->val;
     long ma = aval.size;
-    long bval = fromB_int(b);
+    long bval = from$int(b);
     if (ma==0 || bval==0)
         return a;
     if (bval<0)
@@ -479,7 +479,7 @@ B_int B_HashableD_intD___hash__(B_HashableD_int wit, B_int a) {
     //    zz_init_fit(q,1);
     //    zz_seti(&res->val,zz_divremi(q,&a->val,LONG_MAX/4));    // This hash algorithm should be reconsidered!!!
 
-    return toB_int(B_i64D_hash(toB_i64(fromB_int(a))));
+    return toB_int(B_i64D_hash(toB_i64(from$int(a))));
 }
 
 // Initialization ////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -682,7 +682,7 @@ struct B_HashableD_intG_class B_HashableD_intG_methods = {
 struct B_HashableD_int B_HashableD_int_instance = {&B_HashableD_intG_methods};
 B_HashableD_int B_HashableD_intG_witness = &B_HashableD_int_instance;
 
-long fromB_int(B_int n) { 
+long from$int(B_int n) { 
     long sz = n->val.size;
     if (sz==0) return 0;
     unsigned long res = n->val.n[0];

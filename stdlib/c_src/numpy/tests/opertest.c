@@ -26,7 +26,7 @@ int main() {
   B_printobj("a.shape =",a->shape);
   B_printobj("a.strides =",a->strides);
   B_printobj("a =",a);
-  numpyQ_IntegralD_ndarray wit = $NEW(numpyQ_IntegralD_ndarray,(numpyQ_Primitive)numpyQ_PrimitiveB_intG_witness);
+  numpyQ_IntegralD_ndarray wit = $NEW(numpyQ_IntegralD_ndarray,(numpyQ_Primitive)numpyQ_PrimitiveD_intG_witness);
   numpyQ_ndarray b = wit->$class->__add__(wit,a, a);
   B_printobj("b.shape =",b->shape);
   B_printobj("b.strides =",b->strides);

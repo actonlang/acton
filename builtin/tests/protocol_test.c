@@ -21,11 +21,11 @@
  
 void printSequence(B_Sequence wit, $WORD seq) {
   printf("[");
-  long n = fromB_int(wit->W_Collection->$class->__len__(wit->W_Collection, seq));
+  long n = from$int(wit->W_Collection->$class->__len__(wit->W_Collection, seq));
   for (long i=0; i < n-1; i++) 
-    printf("%ld, ",fromB_int(wit->$class->__getitem__(wit,seq,toB_int(i))));
+    printf("%ld, ",from$int(wit->$class->__getitem__(wit,seq,toB_int(i))));
   if (n > 0) 
-    printf("%ld",fromB_int(wit->$class->__getitem__(wit,seq,toB_int(n-1))));
+    printf("%ld",from$int(wit->$class->__getitem__(wit,seq,toB_int(n-1))));
   printf("]\n");
 }
 
@@ -40,7 +40,7 @@ B_list range(B_Sequence wit, long a, long b) {
 $WORD concat(B_Collection wit1, B_Indexed wit2, B_Plus wit3, $WORD s, $WORD zero) {
   $WORD res = zero;
   B_int len = wit1->$class->__len__(wit1,s);
-  for (long i = 0; i < fromB_int(len); i++) {
+  for (long i = 0; i < from$int(len); i++) {
     $WORD nxt = wit2->$class->__getitem__(wit2,s,toB_int(i));
     res = wit3->$class->__add__(wit3,res,nxt);
   }
@@ -48,7 +48,7 @@ $WORD concat(B_Collection wit1, B_Indexed wit2, B_Plus wit3, $WORD s, $WORD zero
 }
 /*
 $WORD B_intD_add(PlusG_class cl, $WORD a, $WORD b) {
-  return toB_int(fromB_int(a)+fromB_int(b));
+  return toB_int(from$int(a)+from$int(b));
 }
 
 struct PlusG_class PlusB_intD_struct = {"GC_Plus",B_intD_add};
@@ -65,7 +65,7 @@ int main() {
   printSequence(wit,concat(wit->W_Collection,(B_Indexed)wit,wit->W_Plus,lst,emptylist));
   // and then to sum a list of integers
   $WORD lst2 = range(wit,1,100);
-  printf("1+2+...+99 = %ld\n",fromB_int(concat(wit->W_Collection,(B_Indexed)wit,(B_Plus)B_IntegralD_intG_witness,lst2,toB_int(0))));
+  printf("1+2+...+99 = %ld\n",from$int(concat(wit->W_Collection,(B_Indexed)wit,(B_Plus)B_IntegralD_intG_witness,lst2,toB_int(0))));
   // and finally as a very complicated identity function for strings
   printf("result is '%s'\n",fromB_str(concat((B_Collection)B_ContainerD_strG_witness,(B_Indexed)B_SliceableD_strG_witness,(B_Plus)B_PlusB_strG_witness,to$str("Complicated identity function"),to$str(""))));
 }

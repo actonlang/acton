@@ -41,6 +41,6 @@ int main() {
   B_Iterator it2 = (B_Iterator)$deserialize_file("iterator.bin");
   $serialize_file(($Serializable)it2,"iterator2.bin");
   B_int n = it2->$class->__next__(it2);
-  printf("next is %ld\n",fromB_int(n));
+  printf("next is %ld\n",from$int(n));
 }
   

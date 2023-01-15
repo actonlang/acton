@@ -218,11 +218,11 @@ B_i64 B_IntegralD_i64D___mod__(B_IntegralD_i64 wit, B_i64 a, B_i64 b) {
 }
 
 B_i64 B_IntegralD_i64D___lshift__(B_IntegralD_i64 wit,  B_i64 a, B_int b) {
-    return toB_i64(a->val << fromB_int(b));
+    return toB_i64(a->val << from$int(b));
 }
 
 B_i64 B_IntegralD_i64D___rshift__(B_IntegralD_i64 wit,  B_i64 a, B_int b) {
-  return toB_i64(a->val >> fromB_int(b));
+  return toB_i64(a->val >> from$int(b));
 }
  
 B_i64 B_IntegralD_i64D___invert__(B_IntegralD_i64 wit,  B_i64 a) {

@@ -42,7 +42,7 @@ extern struct B_HashableD_int *B_HashableD_intG_witness;
 
 B_int zz$toB_int(zz_ptr val);
 
-long fromB_int(B_int n);
+long from$int(B_int n);
 B_int toB_int(long n);
  
 B_int B_intG_new(B_atom a);

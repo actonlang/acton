@@ -27,5 +27,5 @@ int main() {
   printf("size of s1 is %ld\n",B_set_len(s1));
   long len1 = B_set_len(s1);
   for (long i=0; i<len1; i++)
-    printf("elem %ld is %ld\n",i,fromB_int(B_set_pop(s1)));
+    printf("elem %ld is %ld\n",i,from$int(B_set_pop(s1)));
 }

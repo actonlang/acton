@@ -62,17 +62,17 @@ B_slice B_sliceG_new(B_int start,B_int stop,B_int step) {
 void B_sliceD__init__(B_slice s, B_int start, B_int stop, B_int step) {
     if (start) {
         s->start = malloc(sizeof(int));
-        *s->start = fromB_int(start);
+        *s->start = from$int(start);
     } else
         s->start = NULL;
     if (stop) {
         s->stop = malloc(sizeof(int));
-        *s->stop = fromB_int(stop);
+        *s->stop = from$int(stop);
     } else
         s->stop = NULL;
     if (step) {
         s->step = malloc(sizeof(int));
-        *s->step = fromB_int(step);
+        *s->step = from$int(step);
     } else
         s->step = NULL;
 }

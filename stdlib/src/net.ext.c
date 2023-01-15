@@ -187,7 +187,7 @@ $R netQ_TCPIPConnectionD__init (netQ_TCPIPConnection self, $Cont c$cont) {
     connect_req->data = (void *)self;
 
     struct sockaddr_in dest;
-    uv_ip4_addr(fromB_str(self->address), fromB_int(self->port), &dest);
+    uv_ip4_addr(fromB_str(self->address), from$int(self->port), &dest);
 
     uv_tcp_connect(connect_req, socket, (const struct sockaddr*)&dest, on_connect);
 
@@ -195,7 +195,7 @@ $R netQ_TCPIPConnectionD__init (netQ_TCPIPConnection self, $Cont c$cont) {
 }
 
 $R netQ_TCPIPConnectionD_writeG_local (netQ_TCPIPConnection self, $Cont c$cont, B_bytes data) {
-    uv_stream_t *stream = (uv_stream_t *)fromB_int(self->_socket);
+    uv_stream_t *stream = (uv_stream_t *)from$int(self->_socket);
     // fd == -1 means invalid FD and can happen after __resume__
     if (stream == -1)
         return $R_CONT(c$cont, B_None);
@@ -259,7 +259,7 @@ $R netQ_TCPListenerD__init (netQ_TCPListener self, $Cont c$cont) {
     server->data = (void *)self;
     int r;
     struct sockaddr_in addr;
-    r = uv_ip4_addr(fromB_str(self->address), fromB_int(self->port), &addr);
+    r = uv_ip4_addr(fromB_str(self->address), from$int(self->port), &addr);
     if (r != 0) {
         char errmsg[1024] = "Unable to parse address: ";
         uv_strerror_r(r, errmsg + strlen(errmsg), sizeof(errmsg)-strlen(errmsg));
@@ -320,7 +320,7 @@ void netQ_TCPListenConnection__on_receive(uv_stream_t *stream, ssize_t nread, co
 }
 
 $R netQ_TCPListenConnectionD__init (netQ_TCPListenConnection self, $Cont c$cont) {
-    uv_stream_t *client = (uv_stream_t *)fromB_int(self->client);
+    uv_stream_t *client = (uv_stream_t *)from$int(self->client);
     client->data = self;
     int r = uv_read_start(client, alloc_buffer, netQ_TCPListenConnection__on_receive);
     if (r < 0) {
@@ -336,7 +336,7 @@ $R netQ_TCPListenConnectionD__init (netQ_TCPListenConnection self, $Cont c$cont)
 }
 
 $R netQ_TCPListenConnectionD_writeG_local (netQ_TCPListenConnection self, $Cont c$cont, B_bytes data) {
-    uv_stream_t *stream = (uv_stream_t *)fromB_int(self->client);
+    uv_stream_t *stream = (uv_stream_t *)from$int(self->client);
     // fd == -1 means invalid FD and can happen after __resume__
     if (stream == -1)
         return $R_CONT(c$cont, B_None);

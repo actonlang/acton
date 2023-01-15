@@ -25,7 +25,7 @@ numpyQ_ndarray loess_simple(numpyQ_ndarray x, numpyQ_ndarray y, numpyQ_ndarray x
   B_slice s = $NEW(B_slice,NULL,NULL,NULL);
   B_listD_append(ix,numpyQ_ndsliceG_new(s));
   B_listD_append(ix,numpyQ_ndindexG_new(numpy$G_newaxis));
-  numpyQ_Primitive witp = (numpyQ_Primitive)numpyQ_PrimitiveB_floatG_witness;
+  numpyQ_Primitive witp = (numpyQ_Primitive)numpyQ_PrimitiveD_floatG_witness;
   numpyQ_IntegralD_ndarray wit = $NEW(numpyQ_IntegralD_ndarray,witp);
   numpyQ_MinusD_ndarray wit2 = (numpyQ_MinusD_ndarray)wit-> W_Minus;
   numpyQ_ndarray tmp1 = wit2->$class->__sub__(wit2,xin,numpyQ_ndarrayD___ndgetslice__(x,ix));
@@ -57,7 +57,7 @@ numpyQ_ndarray mkarray(double elems[], int len){
   B_list lst = $NEW(B_list,NULL,NULL);
   for (int i =0; i< len; i++)
     B_listD_append(lst,to$float(elems[i]));
-  numpyQ_Primitive wit0 = (numpyQ_Primitive)numpyQ_PrimitiveB_floatG_witness;
+  numpyQ_Primitive wit0 = (numpyQ_Primitive)numpyQ_PrimitiveD_floatG_witness;
   return numpyQ_array(wit0,lst);
 }
   
@@ -67,7 +67,7 @@ int main(int argc, char *argv[]) {
   numpyQ_ndarray xx,yy;
   long win;
   $register_builtin();
-  numpy$D___init__();
+  numpyQ___init__();
   if (n <= 21) {
     
     double xx0[] = {0.5578196, 2.0217271, 2.5773252, 3.4140288, 4.3014084,
@@ -99,7 +99,7 @@ int main(int argc, char *argv[]) {
       xx0[i] = i*step;
       yy0[i] = sin(i*step);
     }
-    numpyQ_IntegralD_ndarray wit = numpyQ_IntegralD_ndarrayG_new((numpyQ_Primitive)numpyQ_PrimitiveB_floatG_witness);
+    numpyQ_IntegralD_ndarray wit = numpyQ_IntegralD_ndarrayG_new((numpyQ_Primitive)numpyQ_PrimitiveD_floatG_witness);
     xx = mkarray(xx0,n);
     yy = wit->$class->__add__(wit,mkarray(yy0,n),numpyQ_unirand(to$float(-0.5),to$float(0.5),toB_int(n)));
     win = n/4-1;

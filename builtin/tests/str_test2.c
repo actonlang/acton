@@ -17,12 +17,12 @@
 #include "../builtin.h"
 
 B_int neg(B_int n) {
-  return toB_int(-fromB_int(n));
+  return toB_int(-from$int(n));
 }
 
 int *slcel(B_int n) {
   int *res = malloc(sizeof(int));
-  *res = fromB_int(n);
+  *res = from$int(n);
   return res;
 }
 
@@ -47,7 +47,7 @@ int main() {
     printf("list has been split");
     B_SequenceD_list wit4 = B_SequenceD_listG_witness;
     B_int len = wit4->W_Collection->$class->__len__(wit4->W_Collection,lst);
-    for (long i=0; i < fromB_int(len); i++) {
+    for (long i=0; i < from$int(len); i++) {
       printf("  '%s'\n",fromB_str(wit4->$class->__getitem__(wit4,lst,toB_int(i))));
     }
     B_str space = to$str(" ");

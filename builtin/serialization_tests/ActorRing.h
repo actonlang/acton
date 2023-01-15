@@ -61,7 +61,7 @@ struct ActG_class {
     Act (*__deserialize__)(Act, B_NoneType);
     B_bool (*__bool__)(Act);
     B_str (*__str__)(Act);
-    $R (*act$local)(Act, B_int, B_list, $Cont);
+    $R (*actG_local)(Act, B_int, B_list, $Cont);
     $R (*act)(Act, B_int, B_list, $Cont);
 };
 struct Act {

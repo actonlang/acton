@@ -16,14 +16,14 @@
 
 int numpyQ_done = 0;
 
-void numpy$D___init__() {
+void numpyQ___init__() {
     if (numpyQ_done) return;
     numpyQ_done = 1;
     numpyQ_newaxis = toB_int(LONG_MIN);
     $register_force(ATOM_ID,&numpyQ_ndarrayG_methods);
     $register(&numpyQ_IteratorD_ndarrayG_methods);
-    $register(&numpyQ_PrimitiveB_intG_methods);
-    $register(&numpyQ_PrimitiveB_floatG_methods);
+    $register(&numpyQ_PrimitiveD_intG_methods);
+    $register(&numpyQ_PrimitiveD_floatG_methods);
     $register(&numpyQ_ndselectG_methods);
     $register(&numpyQ_ndindexG_methods);
     $register(&numpyQ_ndsliceG_methods);
@@ -36,6 +36,6 @@ void numpy$D___init__() {
     $register(&numpyQ_MinusD_ndarrayG_methods);
     $register(&numpyQ_SliceableD_ndarrayG_methods);
     $register(&numpyQ_CollectionD_ndarrayG_methods);
-    $register(&numpyQ_RealFuns$math$ndarrayG_methods);
+    $register(&numpyQ_RealFunsD_mathD_ndarrayG_methods);
 }
 

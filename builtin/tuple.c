@@ -112,7 +112,7 @@ B_IteratorB_tuple B_IteratorB_tuple$_deserialize(B_IteratorB_tuple res, $Serial$
     if (!res)
         res = $DNEW(B_IteratorB_tuple,state);
     res->src = $step_deserialize(state);
-    res->nxt = fromB_int((B_int)$step_deserialize(state));
+    res->nxt = from$int((B_int)$step_deserialize(state));
     return res;
 }
 
@@ -168,7 +168,7 @@ void B_SliceableD_tupleD___init__ (B_SliceableD_tuple wit) {
 
 $WORD B_SliceableD_tupleD___getitem__ (B_SliceableD_tuple wit, B_tuple self, B_int n) {
     int size = self->size;
-    int ix = fromB_int(n);
+    int ix = from$int(n);
     int ix0 = ix < 0 ? size + ix : ix;
     if (ix0 < 0 || ix0 >= size) {
         $RAISE((B_BaseException)$NEW(B_IndexError,to$str("getitem: indexing outside tuple")));
@@ -250,7 +250,7 @@ void B_HashableD_tupleD___serialize__(B_HashableD_tuple self, $Serial$state stat
 
 B_HashableD_tuple B_HashableD_tupleD___deserialize__(B_HashableD_tuple self, $Serial$state state) {
     B_HashableD_tuple res = $DNEW(B_HashableD_tuple,state);
-    res->W_HashableB_tuple$size = fromB_int($step_deserialize(state));
+    res->W_HashableB_tuple$size = from$int($step_deserialize(state));
     res->W_Hashable = NULL; // We do not get hash functions for the tuple!
     return res;
 }

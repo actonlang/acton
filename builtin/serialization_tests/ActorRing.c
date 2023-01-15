@@ -90,7 +90,7 @@ lambda$2 lambda$2D___deserialize__(B_NoneType state) {
 }
 
 $R lambda$2D___call__(lambda$2 $this, $Cont c$1) {
-    return $this->self->$class->act$local($this->self, $this->from, $this->table, c$1);
+    return $this->self->$class->actG_local($this->self, $this->from, $this->table, c$1);
 }
 
 struct lambda$2G_class lambda$2G_methods = {
@@ -142,13 +142,13 @@ Act ActD___deserialize__(B_NoneType state) {
   return res;
 }
 
-$R Act$act$local(Act self, B_int from, B_list table, $Cont cont$0) {
+$R Act$actG_local(Act self, B_int from, B_list table, $Cont cont$0) {
     if (fromB_bool(B_OrdD_intG_witness->$class->__lt__(B_OrdD_intG_witness, self->count, total_msgs))) {
         self->count = B_IntegralD_intG_witness->$class->__add__(B_IntegralD_intG_witness, self->count, toB_int(1));
         B_int to = B_IntegralD_intG_witness->$class->__mod__(B_IntegralD_intG_witness, B_IntegralD_intG_witness->$class->__add__(B_IntegralD_intG_witness, self->i, toB_int(1)), no_actors);
         B_IndexedD_MappingD_dictG_witness->$class->__setitem__(B_IndexedD_MappingD_dictG_witness, self->rcv_dict, from, B_IntegralD_intG_witness->$class->__add__(B_IntegralD_intG_witness, B_MappingD_dictG_witness->$class->get(B_MappingD_dictG_witness, self->rcv_dict, from, toB_int(0)), toB_int(1)));
         B_IndexedD_MappingD_dictG_witness->$class->__setitem__(B_IndexedD_MappingD_dictG_witness, self->snd_dict, to,   B_IntegralD_intG_witness->$class->__add__(B_IntegralD_intG_witness, B_MappingD_dictG_witness->$class->get(B_MappingD_dictG_witness, self->snd_dict, to, toB_int(0)), toB_int(1)));
-        printf("Actor %ld: count=%ld, from=%ld, to=%ld\n", fromB_int(self->i), fromB_int(self->count), fromB_int(from), fromB_int(to));
+        printf("Actor %ld: count=%ld, from=%ld, to=%ld\n", from$int(self->i), from$int(self->count), from$int(from), from$int(to));
         Act tmp$1 = B_SequenceD_listG_witness->$class->__getitem__(B_SequenceD_listG_witness, table, to);
         return tmp$1->$class->act(tmp$1, self->i, table, ($Cont)$NEW(lambda$1, cont$0));
     }
@@ -168,7 +168,7 @@ struct ActG_class ActG_methods = {
     ActD___deserialize__,
     ActD___bool__,
     ActD___str__,
-    Act$act$local,
+    Act$actG_local,
     Act$act
 };
 
