@@ -3,8 +3,8 @@ struct B_setG_class {
     int $class_id;
     $SuperG_class $superclass;
     void (*__init__)(B_set, B_Hashable, B_Iterable, $WORD);
-    void (*__serialize__)(B_set, $NoneType);
-    B_set (*__deserialize__)(B_set, $NoneType);
+    void (*__serialize__)(B_set, $Serial$state);
+    B_set (*__deserialize__)(B_set, $Serial$state);
     B_bool (*__bool__)(B_set);
     B_str (*__str__)(B_set);
     B_str (*__repr__)(B_set);
@@ -49,8 +49,8 @@ struct B_IteratorD_setG_class {
     int $class_id;
     $SuperG_class $superclass;
     void (*__init__)(B_IteratorD_set, B_set);
-    void (*__serialize__)(B_IteratorD_set, $NoneType);
-    B_IteratorD_set (*__deserialize__)(B_IteratorD_set, $NoneType);
+    void (*__serialize__)(B_IteratorD_set, $Serial$state);
+    B_IteratorD_set (*__deserialize__)(B_IteratorD_set, $Serial$state);
     B_bool (*__bool__)(B_IteratorD_set);
     B_str (*__str__)(B_IteratorD_set);
     B_str (*__repr__)(B_IteratorD_set);

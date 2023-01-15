@@ -15,10 +15,10 @@
 void numpy$$ndselectD___init__(numpy$$ndselect self) {
 }
 
-void numpy$$ndselectD___serialize__(numpy$$ndselect wit, $NoneType state) {
+void numpy$$ndselectD___serialize__(numpy$$ndselect wit, $Serial$state state) {
 }
 
-numpy$$ndselect numpy$$ndselectD___deserialize__(numpy$$ndselect wit, $NoneType state) {
+numpy$$ndselect numpy$$ndselectD___deserialize__(numpy$$ndselect wit, $Serial$state state) {
     numpy$$ndselect res = $DNEW(numpy$$ndselect,state);
     return res;
 }
@@ -50,11 +50,11 @@ void numpy$$ndindexD___init__(numpy$$ndindex self, B_int index) {
     self->index = index;
 }
 
-void numpy$$ndindexD___serialize__(numpy$$ndindex self, $NoneType state) {
+void numpy$$ndindexD___serialize__(numpy$$ndindex self, $Serial$state state) {
     $step_serialize(self->index, state);
 }
 
-numpy$$ndindex numpy$$ndindexD___deserialize__(numpy$$ndindex self, $NoneType state) {
+numpy$$ndindex numpy$$ndindexD___deserialize__(numpy$$ndindex self, $Serial$state state) {
     numpy$$ndindex res = $DNEW(numpy$$ndindex,state);
     res->index = (B_int)$step_deserialize(state);
     return res;
@@ -86,11 +86,11 @@ void numpy$$ndsliceD___init__(numpy$$ndslice self, B_slice slc) {
     self->slc = slc;
 }
 
-void numpy$$ndsliceD___serialize__(numpy$$ndslice self, $NoneType state) {
+void numpy$$ndsliceD___serialize__(numpy$$ndslice self, $Serial$state state) {
     $step_serialize(self->slc, state);
 }
 
-numpy$$ndslice numpy$$ndsliceD___deserialize__(numpy$$ndslice self, $NoneType state) {
+numpy$$ndslice numpy$$ndsliceD___deserialize__(numpy$$ndslice self, $Serial$state state) {
     numpy$$ndslice res = $DNEW(numpy$$ndslice,state);
     res->slc = (B_slice)$step_deserialize(state);
     return res;

@@ -133,46 +133,46 @@ $l$3cont $l$3contG_new($Env p$1, B_int p$2) {
     return $tmp;
 }
 struct $l$3contG_class $l$3contG_methods;
-$NoneType $WorldAuthD___init__ ($WorldAuth self) {
+$NoneType B_WorldAuthD___init__ (B_WorldAuth self) {
     return $None;
 }
-void $WorldAuthD___serialize__ ($WorldAuth self, $NoneType state) {
+void B_WorldAuthD___serialize__ (B_WorldAuth self, $NoneType state) {
 }
-$WorldAuth $WorldAuthD___deserialize__ ($WorldAuth self, $NoneType state) {
+B_WorldAuth B_WorldAuthD___deserialize__ (B_WorldAuth self, $NoneType state) {
     if (!self) {
         if (!state) {
-            self = malloc(sizeof(struct $WorldAuth));
-            self->$class = &$WorldAuthG_methods;
+            self = malloc(sizeof(struct B_WorldAuth));
+            self->$class = &B_WorldAuthG_methods;
             return self;
         }
-        self = $DNEW($WorldAuth, state);
+        self = $DNEW(B_WorldAuth, state);
     }
     return self;
 }
-struct $WorldAuthG_class $WorldAuthG_methods;
-$Msg $Env$stdout_write ($Env self, B_str s) {
+struct B_WorldAuthG_class B_WorldAuthG_methods;
+B_Msg $Env$stdout_write ($Env self, B_str s) {
     return $ASYNC((($Actor)self), (($Cont)$l$1contG_new((($Env)self), s)));
 }
-$Msg $Env$stdin_install ($Env self, $action cb) {
+B_Msg $Env$stdin_install ($Env self, $action cb) {
     return $ASYNC((($Actor)self), (($Cont)$l$2contG_new((($Env)self), cb)));
 }
-$Msg $Env$exit ($Env self, B_int n) {
+B_Msg $Env$exit ($Env self, B_int n) {
     return $ASYNC((($Actor)self), (($Cont)$l$3contG_new((($Env)self), n)));
 }
 // END GENERATED __builtin__.act
 ///////////////////////////////////////////////////////////////////////////////////////////
 
 
-$WorldAuth $WorldAuthG_new() {
-    $WorldAuth $tmp = malloc(sizeof(struct $WorldAuth));
-    $tmp->$class = &$WorldAuthG_methods;
-    $WorldAuthG_methods.__init__($tmp);
+B_WorldAuth B_WorldAuthG_new() {
+    B_WorldAuth $tmp = malloc(sizeof(struct B_WorldAuth));
+    $tmp->$class = &B_WorldAuthG_methods;
+    B_WorldAuthG_methods.__init__($tmp);
     return $tmp;
 }
 
 // Env /////////////////////////////////////////////////////////////////////////
 
-$NoneType $EnvD___init__ ($Env self, $WorldAuth token, B_list argv) {
+$NoneType $EnvD___init__ ($Env self, B_WorldAuth token, B_list argv) {
     self->auth = token;
     self->argv = argv;
     self->$affinity = 0;
@@ -231,7 +231,7 @@ $Env $EnvD___deserialize__ ($Env self, $NoneType state) {
     self->argv = $step_deserialize(state);
     return self;
 }
-$Env $EnvG_newact($WorldAuth token, B_list p$1) {
+$Env $EnvG_newact(B_WorldAuth token, B_list p$1) {
     $Env $tmp = $NEWACTOR($Env);
     $tmp->$class->__init__($tmp, token, p$1);  // Inline this message, note that $EnvD___init__ is *not* CPS'ed
     serialize_state_shortcut(($Actor)$tmp);
@@ -274,13 +274,13 @@ void D___init__ () {
         $register(&$l$3contG_methods);
     }
     {
-        $WorldAuthG_methods.$GCINFO = "$WorldAuth";
-        $WorldAuthG_methods.$superclass = ($SuperG_class)&B_valueG_methods;
+        B_WorldAuthG_methods.$GCINFO = "B_WorldAuth";
+        B_WorldAuthG_methods.$superclass = ($SuperG_class)&B_valueG_methods;
         ;
-        $WorldAuthG_methods.__init__ = $WorldAuthD___init__;
-        $WorldAuthG_methods.__serialize__ = $WorldAuthD___serialize__;
-        $WorldAuthG_methods.__deserialize__ = $WorldAuthD___deserialize__;
-        $register(&$WorldAuthG_methods);
+        B_WorldAuthG_methods.__init__ = B_WorldAuthD___init__;
+        B_WorldAuthG_methods.__serialize__ = B_WorldAuthD___serialize__;
+        B_WorldAuthG_methods.__deserialize__ = B_WorldAuthD___deserialize__;
+        $register(&B_WorldAuthG_methods);
     }
     {
         $EnvG_methods.$GCINFO = "$Env";

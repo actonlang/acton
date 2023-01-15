@@ -3,8 +3,8 @@ struct B_tupleG_class {
     int $class_id;
     $SuperG_class $superclass;
     void (*__init__)(B_tuple,int,...);
-    void (*__serialize__)(B_tuple,$NoneType); 
-    B_tuple (*__deserialize__)(B_tuple,$NoneType);
+    void (*__serialize__)(B_tuple,$Serial$state); 
+    B_tuple (*__deserialize__)(B_tuple,$Serial$state);
     B_bool (*__bool__)(B_tuple);
     B_str (*__str__)(B_tuple);
     B_str (*__repr__)(B_tuple);
@@ -49,8 +49,8 @@ struct B_IteratorB_tupleG_class {
     int $class_id;
     $SuperG_class $superclass;
     void (*__init__)(B_IteratorB_tuple, B_tuple);
-    void (*__serialize__)(B_IteratorB_tuple,$NoneType);
-    B_IteratorB_tuple (*__deserialize__)(B_IteratorB_tuple,$NoneType);
+    void (*__serialize__)(B_IteratorB_tuple,$Serial$state);
+    B_IteratorB_tuple (*__deserialize__)(B_IteratorB_tuple,$Serial$state);
     B_bool (*__bool__)(B_IteratorB_tuple);
     B_str (*__str__)(B_IteratorB_tuple);
     B_str (*__repr__)(B_IteratorB_tuple);

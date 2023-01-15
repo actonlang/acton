@@ -3,8 +3,8 @@ struct B_i64G_class {
     int $class_id;
     $SuperG_class $superclass;
     void (*__init__)(B_i64, B_atom);
-    void (*__serialize__)(B_i64,$NoneType);
-    B_i64 (*__deserialize__)(B_i64,$NoneType);
+    void (*__serialize__)(B_i64,$Serial$state);
+    B_i64 (*__deserialize__)(B_i64,$Serial$state);
     B_bool (*__bool__)(B_i64);
     B_str (*__str__)(B_i64);
     B_str (*__repr__)(B_i64);

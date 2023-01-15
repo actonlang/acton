@@ -3,8 +3,8 @@ struct $NoneTypeG_class {
     int $class_id;
     $SuperG_class $superclass;
     void (*__init__)($NoneType);
-    void (*__serialize__)($NoneType,$NoneType);
-    $NoneType (*__deserialize__)($NoneType,$NoneType);
+    void (*__serialize__)($NoneType,$Serial$state);
+    $NoneType (*__deserialize__)($NoneType,$Serial$state);
     B_bool (*__bool__)($NoneType);
     B_str (*__str__)($NoneType);
     B_str (*__repr__)($NoneType);

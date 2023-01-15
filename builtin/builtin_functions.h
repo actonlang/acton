@@ -15,8 +15,8 @@ struct B_IteratorD_enumerateG_class {
   int $class_id;
   $SuperG_class $superclass;
   void (*__init__)(B_IteratorD_enumerate, B_Iterator,B_int);
-  void (*__serialize__)(B_IteratorD_enumerate,$NoneType);
-  B_IteratorD_enumerate (*__deserialize__)(B_IteratorD_enumerate,$NoneType);
+  void (*__serialize__)(B_IteratorD_enumerate,$Serial$state);
+  B_IteratorD_enumerate (*__deserialize__)(B_IteratorD_enumerate,$Serial$state);
   B_bool (*__bool__)(B_IteratorD_enumerate);
   B_str (*__str__)(B_IteratorD_enumerate);
   B_str (*__repr__)(B_IteratorD_enumerate);
@@ -44,8 +44,8 @@ struct B_IteratorD_filterG_class {
   int $class_id;
   $SuperG_class $superclass;
   void (*__init__)(B_IteratorD_filter, B_Iterator, $pure);
-  void (*__serialize__)(B_IteratorD_filter,$NoneType);
-  B_IteratorD_filter (*__deserialize__)(B_IteratorD_filter,$NoneType);
+  void (*__serialize__)(B_IteratorD_filter,$Serial$state);
+  B_IteratorD_filter (*__deserialize__)(B_IteratorD_filter,$Serial$state);
   B_bool (*__bool__)(B_IteratorD_filter);
   B_str (*__str__)(B_IteratorD_filter);
   B_str (*__repr__)(B_IteratorD_filter);
@@ -73,8 +73,8 @@ struct B_IteratorD_mapG_class {
   int $class_id;
   $SuperG_class $superclass;
   void (*__init__)(B_IteratorD_map, B_Iterator, $pure);
-  void (*__serialize__)(B_IteratorD_map,$NoneType);
-  B_IteratorD_map (*__deserialize__)(B_IteratorD_map,$NoneType);
+  void (*__serialize__)(B_IteratorD_map,$Serial$state);
+  B_IteratorD_map (*__deserialize__)(B_IteratorD_map,$Serial$state);
   B_bool (*__bool__)(B_IteratorD_map);
   B_str (*__str__)(B_IteratorD_map);
   B_str (*__repr__)(B_IteratorD_map);
@@ -103,8 +103,8 @@ struct B_IteratorD_zipG_class {
   int $class_id;
   $SuperG_class $superclass;
   void (*__init__)(B_IteratorD_zip, B_Iterator, B_Iterator);
-  void (*__serialize__)(B_IteratorD_zip,$NoneType);
-  B_IteratorD_zip (*__deserialize__)(B_IteratorD_zip,$NoneType);
+  void (*__serialize__)(B_IteratorD_zip,$Serial$state);
+  B_IteratorD_zip (*__deserialize__)(B_IteratorD_zip,$Serial$state);
   B_bool (*__bool__)(B_IteratorD_zip);
   B_str (*__str__)(B_IteratorD_zip);
   B_str (*__repr__)(B_IteratorD_zip);

@@ -52,8 +52,8 @@ struct $SerializableG_class {
     int $class_id;
     $SuperG_class $superclass;                   // = InitializableG_methods
     void (*__init__)($Serializable);
-    void (*__serialize__)($Serializable, $NoneType);
-    $Serializable (*__deserialize__)($Serializable, $NoneType);
+    void (*__serialize__)($Serializable, $Serial$state);
+    $Serializable (*__deserialize__)($Serializable, $Serial$state);
 };
 
 struct $Serializable {
@@ -79,8 +79,8 @@ struct B_valueG_class {
     int $class_id;
     $SuperG_class $superclass;                      // = SerializableG_methods
     void (*__init__)(B_value);
-    void (*__serialize__)(B_value, $NoneType);
-    B_value (*__deserialize__)(B_value, $NoneType);
+    void (*__serialize__)(B_value, $Serial$state);
+    B_value (*__deserialize__)(B_value, $Serial$state);
     B_bool (*__bool__)(B_value);
     B_str (*__str__)(B_value);
     B_str (*__repr__)(B_value);
@@ -107,8 +107,8 @@ struct B_objectG_class {
     int $class_id;
     $SuperG_class $superclass;                      // = B_valueG_methods
     void (*__init__)(B_object);
-    void (*__serialize__)(B_object, $NoneType);
-    B_object (*__deserialize__)(B_object, $NoneType);
+    void (*__serialize__)(B_object, $Serial$state);
+    B_object (*__deserialize__)(B_object, $Serial$state);
     B_bool (*__bool__)(B_object);
     B_str (*__str__)(B_object);
     B_str (*__repr__)(B_object);

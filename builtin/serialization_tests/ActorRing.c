@@ -40,7 +40,7 @@ lambda$1 lambda$1D___deserialize__($NoneType state) {
   return res;
 }
 
-$R lambda$1D___call__(lambda$1 $this, $Msg _ignore) {
+$R lambda$1D___call__(lambda$1 $this, B_Msg _ignore) {
     return $this->cont$0->$class->__call__($this->cont$0, $None);
 }
 

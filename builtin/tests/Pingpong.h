@@ -48,7 +48,7 @@ struct lambda$2 {
 struct PingpongG_class {
     char *$GCINFO;
     $SuperG_class $superclass;
-    $R (*__init__)(Pingpong, $Env, $Cont);
+    $R (*__init__)(Pingpong, B_Env, $Cont);
     void (*__serialize__)(Pingpong, $NoneType);
     Pingpong (*__deserialize__)(Pingpong, $NoneType);
     $R (*ping)(Pingpong, $Cont);

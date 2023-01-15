@@ -27,7 +27,7 @@ struct lambda$1G_class {
     lambda$1 (*__deserialize__)(lambda$1, $NoneType);
     B_bool (*__bool__)(lambda$1);
     B_str (*__str__)(lambda$1);
-    $R (*__call__)(lambda$1, $Msg);    
+    $R (*__call__)(lambda$1, B_Msg);    
 };
 struct lambda$1 {
     struct lambda$1G_class *$class;
@@ -113,7 +113,7 @@ struct RootG_class {
     char *$GCINFO;
     int $class_id;
     $SuperG_class $superclass;
-    $R (*__init__)(Root, $Env, $Cont);
+    $R (*__init__)(Root, B_Env, $Cont);
     void (*__serialize__)(Root, $NoneType);
     Root (*__deserialize__)(Root, $NoneType);
     B_bool (*__bool__)(Root);

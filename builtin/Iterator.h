@@ -7,8 +7,8 @@ struct B_IteratorG_class {
     int $class_id;
     $SuperG_class $superclass;
     void (*__init__)(B_Iterator);
-    void (*__serialize__)(B_Iterator,$NoneType);
-    B_Iterator (*__deserialize__)(B_Iterator,$NoneType);
+    void (*__serialize__)(B_Iterator,$Serial$state);
+    B_Iterator (*__deserialize__)(B_Iterator,$Serial$state);
     B_bool (*__bool__)(B_Iterator);
     B_str (*__str__)(B_Iterator);
     B_str (*__repr__)(B_Iterator);

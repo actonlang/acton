@@ -11,7 +11,7 @@ $NoneType acton$rts$$sleep (B_float sleep_time) {
     return $None;
 }
 
-B_int acton$rts$$rss ($WorldAuth auth) {
+B_int acton$rts$$rss (B_WorldAuth auth) {
     size_t rsm;
     int r = uv_resident_set_memory(&rsm);
     return toB_int(rsm);

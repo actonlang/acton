@@ -3,8 +3,8 @@ struct B_listG_class {
   int $class_id;
   $SuperG_class $superclass;
   void (*__init__)(B_list, B_Iterable, $WORD);
-  void (*__serialize__)(B_list,$NoneType);
-  B_list (*__deserialize__)(B_list,$NoneType);
+  void (*__serialize__)(B_list,$Serial$state);
+  B_list (*__deserialize__)(B_list,$Serial$state);
   B_bool (*__bool__)(B_list);
   B_str (*__str__)(B_list);
   B_str (*__repr__)(B_list);
@@ -36,6 +36,8 @@ B_OrdD_list B_OrdD_listG_new(B_Ord);
 extern struct B_SequenceD_list *B_SequenceD_listG_witness;
 extern struct B_CollectionD_SequenceD_list *B_CollectionD_SequenceD_listG_witness;
 
+#define $SequenceD_listG_witness B_SequenceD_listG_witness
+#define $CollectionD_listG_witness B_CollectionD_SequenceD_listG_witness
 
 // void $printlist(B_list list); //for debugging; only for lists of ints
 
@@ -48,8 +50,8 @@ struct B_IteratorD_listG_class {
   int $class_id;
   $SuperG_class $superclass;
   void (*__init__)(B_IteratorD_list, B_list);
-  void (*__serialize__)(B_IteratorD_list,$NoneType);
-  B_IteratorD_list (*__deserialize__)(B_IteratorD_list,$NoneType);
+  void (*__serialize__)(B_IteratorD_list,$Serial$state);
+  B_IteratorD_list (*__deserialize__)(B_IteratorD_list,$Serial$state);
   B_bool (*__bool__)(B_IteratorD_list);
   B_str (*__str__)(B_IteratorD_list);
   B_str (*__repr__)(B_IteratorD_list);

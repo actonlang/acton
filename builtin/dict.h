@@ -3,8 +3,8 @@ struct B_dictG_class {
     int $class_id;
     $SuperG_class $superclass;
     void(*__init__)(B_dict, B_Hashable, B_Iterable, $WORD);
-    void (*__serialize__)(B_dict,$NoneType);
-    B_dict (*__deserialize__)(B_dict,$NoneType);
+    void (*__serialize__)(B_dict,$Serial$state);
+    B_dict (*__deserialize__)(B_dict,$Serial$state);
     B_bool (*__bool__)(B_dict);
     B_str (*__str__)(B_dict);
     B_str (*__repr__)(B_dict);
@@ -39,8 +39,8 @@ struct B_IteratorD_dictG_class {
     int $class_id;
     $SuperG_class $superclass;
     void (*__init__)(B_IteratorD_dict, B_dict);
-    void (*__serialize__)(B_IteratorD_dict,$NoneType);
-    B_IteratorD_dict (*__deserialize__)(B_IteratorD_dict,$NoneType);
+    void (*__serialize__)(B_IteratorD_dict,$Serial$state);
+    B_IteratorD_dict (*__deserialize__)(B_IteratorD_dict,$Serial$state);
     B_bool (*__bool__)(B_IteratorD_dict);
     B_str (*__str__)(B_IteratorD_dict);
     B_str (*__repr__)(B_IteratorD_dict);
@@ -65,8 +65,8 @@ struct B_InteratorD_dict_valuesG_class {
     int $class_id;
     $SuperG_class $superclass;
     void (*__init__)(B_InteratorD_dict_values, B_dict);
-    void (*__serialize__)(B_InteratorD_dict_values,$NoneType);
-    B_InteratorD_dict_values (*__deserialize__)(B_InteratorD_dict_values,$NoneType);
+    void (*__serialize__)(B_InteratorD_dict_values,$Serial$state);
+    B_InteratorD_dict_values (*__deserialize__)(B_InteratorD_dict_values,$Serial$state);
     B_bool (*__bool__)(B_InteratorD_dict_values);
     B_str (*__str__)(B_InteratorD_dict_values);
     B_str (*__repr__)(B_InteratorD_dict_values);
@@ -91,8 +91,8 @@ struct B_InteratorD_dict_itemsG_class {
     int $class_id;
     $SuperG_class $superclass;
     void (*__init__)(B_InteratorD_dict_items, B_dict);
-    void (*__serialize__)(B_InteratorD_dict_items,$NoneType);
-    B_InteratorD_dict_items (*__deserialize__)(B_InteratorD_dict_items,$NoneType);
+    void (*__serialize__)(B_InteratorD_dict_items,$Serial$state);
+    B_InteratorD_dict_items (*__deserialize__)(B_InteratorD_dict_items,$Serial$state);
     B_bool (*__bool__)(B_InteratorD_dict_items);
     B_str (*__str__)(B_InteratorD_dict_items);
     B_str (*__repr__)(B_InteratorD_dict_items);

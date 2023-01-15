@@ -10,8 +10,8 @@ struct B_complexG_class {
     int $class_id;
     $SuperG_class $superclass;
     void (*__init__)(B_complex, B_Number, $WORD);
-    void (*__serialize__)(B_complex,$NoneType);
-    B_complex (*__deserialize__)(B_complex,$NoneType);
+    void (*__serialize__)(B_complex,$Serial$state);
+    B_complex (*__deserialize__)(B_complex,$Serial$state);
     B_bool (*__bool__)(B_complex);
     B_str (*__str__)(B_complex);
     B_str (*__repr__)(B_complex);

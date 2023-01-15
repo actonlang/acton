@@ -3,8 +3,8 @@ struct B_floatG_class {
     int $class_id;
     $SuperG_class $superclass;
     void (*__init__)(B_float, B_atom);
-    void (*__serialize__)(B_float,$NoneType);
-    B_float (*__deserialize__)(B_float,$NoneType);
+    void (*__serialize__)(B_float,$Serial$state);
+    B_float (*__deserialize__)(B_float,$Serial$state);
     B_bool (*__bool__)(B_float);
     B_str (*__str__)(B_float);
     B_str (*__repr__)(B_float);

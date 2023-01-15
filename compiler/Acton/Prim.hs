@@ -81,6 +81,11 @@ primIdentityOpt     = gPrim "IdentityOpt"
 primWEqNone         = gPrim "wEqNone"
 primWIdentityNone   = gPrim "wIdentityNone"
 
+witIntegralInt      = GName mPrim $ Derived (deriveQ qnIntegral) $ Derived (deriveQ qnInt) suffixWitness
+witIntegralI64      = GName mPrim $ Derived (deriveQ qnIntegral) $ Derived (deriveQ qnI64) suffixWitness
+witSequenceList     = GName mPrim $ Derived (deriveQ qnSequence) $ Derived (deriveQ qnList) suffixWitness
+witCollectionList   = GName mPrim $ Derived (deriveQ qnCollection) $ Derived (deriveQ qnList) suffixWitness
+
 primISNOTNONE       = gPrim "ISNOTNONE"
 primISNONE          = gPrim "ISNONE"
 

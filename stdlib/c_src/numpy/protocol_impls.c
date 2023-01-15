@@ -27,12 +27,12 @@ numpy$B_IntegralD_ndarrayB_int numpy$B_IntegralD_ndarrayB_intG_new() {
 }
 
 
-void numpy$B_IntegralD_ndarrayB_intD___serialize__(numpy$B_IntegralD_ndarrayB_int wit, $NoneType state) {
+void numpy$B_IntegralD_ndarrayB_intD___serialize__(numpy$B_IntegralD_ndarrayB_int wit, $Serial$state state) {
     $step_serialize(wit->W_Logical, state);
     $step_serialize(wit->W_Minus, state);
 }
 
-numpy$B_IntegralD_ndarrayB_int numpy$B_IntegralD_ndarrayB_intD___deserialize__(numpy$B_IntegralD_ndarrayB_int wit, $NoneType state) {
+numpy$B_IntegralD_ndarrayB_int numpy$B_IntegralD_ndarrayB_intD___deserialize__(numpy$B_IntegralD_ndarrayB_int wit, $Serial$state state) {
     numpy$B_IntegralD_ndarrayB_int res = $DNEW(numpy$B_IntegralD_ndarrayB_int,state);
     res->W_Logical = (B_Logical)$step_deserialize(state);
     res->W_Minus = (B_Minus)$step_deserialize(state);
@@ -106,11 +106,11 @@ numpy$B_LogicalD_ndarrayB_int numpy$B_LogicalD_ndarrayB_intG_new(B_Integral W_In
     numpy$B_LogicalD_ndarrayB_intD___init__(res, W_Integral);
     return res;
 }
-void numpy$B_LogicalD_ndarrayB_intD___serialize__(numpy$B_LogicalD_ndarrayB_int wit, $NoneType state) {
+void numpy$B_LogicalD_ndarrayB_intD___serialize__(numpy$B_LogicalD_ndarrayB_int wit, $Serial$state state) {
     $step_serialize(wit->W_Integral, state);
 }
 
-numpy$B_LogicalD_ndarrayB_int numpy$B_LogicalD_ndarrayB_intD___deserialize__(numpy$B_LogicalD_ndarrayB_int wit, $NoneType state) {
+numpy$B_LogicalD_ndarrayB_int numpy$B_LogicalD_ndarrayB_intD___deserialize__(numpy$B_LogicalD_ndarrayB_int wit, $Serial$state state) {
     numpy$B_LogicalD_ndarrayB_int res = $DNEW(numpy$B_LogicalD_ndarrayB_int,state);
     res->W_Integral = (B_Integral)$step_deserialize(state);
     return res;
@@ -139,11 +139,11 @@ numpy$B_MinusD_ndarrayB_int numpy$B_MinusD_ndarrayB_intG_new(B_Integral W_Integr
     return res;
 }
 
-void numpy$B_MinusD_ndarrayB_intD___serialize__(numpy$B_MinusD_ndarrayB_int wit, $NoneType state) {
+void numpy$B_MinusD_ndarrayB_intD___serialize__(numpy$B_MinusD_ndarrayB_int wit, $Serial$state state) {
     $step_serialize(wit->W_Integral, state);
 }
 
-numpy$B_MinusD_ndarrayB_int numpy$B_MinusD_ndarrayB_intD___deserialize__(numpy$B_MinusD_ndarrayB_int wit, $NoneType state) {
+numpy$B_MinusD_ndarrayB_int numpy$B_MinusD_ndarrayB_intD___deserialize__(numpy$B_MinusD_ndarrayB_int wit, $Serial$state state) {
     numpy$B_MinusD_ndarrayB_int res = $DNEW(numpy$B_MinusD_ndarrayB_int,state);
     res->W_Integral = (B_Integral)$step_deserialize(state);
     return res;
@@ -177,11 +177,11 @@ numpy$B_RealD_ndarray numpy$B_RealD_ndarrayG_new(numpy$$Primitive W_PrimitiveD_A
 }
 
 
-void numpy$B_RealD_ndarrayD___serialize__(numpy$B_RealD_ndarray wit, $NoneType state) {
+void numpy$B_RealD_ndarrayD___serialize__(numpy$B_RealD_ndarray wit, $Serial$state state) {
     $step_serialize(wit->W_Minus, state);
 }
 
-numpy$B_RealD_ndarray numpy$B_RealD_ndarrayD___deserialize__(numpy$B_RealD_ndarray wit, $NoneType state) {
+numpy$B_RealD_ndarray numpy$B_RealD_ndarrayD___deserialize__(numpy$B_RealD_ndarray wit, $Serial$state state) {
     numpy$B_RealD_ndarray res = $DNEW(numpy$B_RealD_ndarray,state);
     res->W_Minus = (B_Minus)$step_deserialize(state);
     return res;
@@ -258,11 +258,11 @@ numpy$B_MinusD_ndarray numpy$B_MinusD_ndarrayG_new(B_Real W_Real) {
     return res;
 }
 
-void numpy$B_MinusD_ndarrayD___serialize__(numpy$B_MinusD_ndarray wit, $NoneType state) {
+void numpy$B_MinusD_ndarrayD___serialize__(numpy$B_MinusD_ndarray wit, $Serial$state state) {
     $step_serialize(wit->W_Real, state);
 }
 
-numpy$B_MinusD_ndarray numpy$B_MinusD_ndarrayD___deserialize__(numpy$B_MinusD_ndarray wit, $NoneType state) {
+numpy$B_MinusD_ndarray numpy$B_MinusD_ndarrayD___deserialize__(numpy$B_MinusD_ndarray wit, $Serial$state state) {
     numpy$B_MinusD_ndarray res = $DNEW(numpy$B_MinusD_ndarray,state);
     res->W_Real = (B_Real)$step_deserialize(state);
     return res;
@@ -283,10 +283,10 @@ numpy$B_DivD_ndarrayB_int numpy$B_DivD_ndarrayB_intG_new() {
     return res;
 }
 
-void numpy$B_DivD_ndarrayB_intD___serialize__(numpy$B_DivD_ndarrayB_int wit, $NoneType state) {
+void numpy$B_DivD_ndarrayB_intD___serialize__(numpy$B_DivD_ndarrayB_int wit, $Serial$state state) {
 }
 
-numpy$B_DivD_ndarrayB_int numpy$B_DivD_ndarrayB_intD___deserialize__(numpy$B_DivD_ndarrayB_int wit, $NoneType state) {
+numpy$B_DivD_ndarrayB_int numpy$B_DivD_ndarrayB_intD___deserialize__(numpy$B_DivD_ndarrayB_int wit, $Serial$state state) {
     numpy$B_DivD_ndarrayB_int res = $DNEW(numpy$B_DivD_ndarrayB_int,state);
     return res;
 }
@@ -308,10 +308,10 @@ numpy$B_DivD_ndarrayB_float numpy$B_DivD_ndarrayB_floatG_new() {
     return res;
 }
 
-void numpy$B_DivD_ndarrayB_floatD___serialize__(numpy$B_DivD_ndarrayB_float wit, $NoneType state) {
+void numpy$B_DivD_ndarrayB_floatD___serialize__(numpy$B_DivD_ndarrayB_float wit, $Serial$state state) {
 }
 
-numpy$B_DivD_ndarrayB_float numpy$B_DivD_ndarrayB_floatD___deserialize__(numpy$B_DivD_ndarrayB_float wit, $NoneType state) {
+numpy$B_DivD_ndarrayB_float numpy$B_DivD_ndarrayB_floatD___deserialize__(numpy$B_DivD_ndarrayB_float wit, $Serial$state state) {
     numpy$B_DivD_ndarrayB_float res = $DNEW(numpy$B_DivD_ndarrayB_float,state);
     return res;
 }
@@ -326,7 +326,7 @@ void numpy$B_SliceableD_ndarrayD___init__ (numpy$B_SliceableD_ndarray self, nump
     self->pwit = pwit;
 }
 
-void numpy$B_SliceableD_ndarrayD___serialize__(numpy$B_SliceableD_ndarray wit, $NoneType state) {
+void numpy$B_SliceableD_ndarrayD___serialize__(numpy$B_SliceableD_ndarray wit, $Serial$state state) {
 }
 
 numpy$B_SliceableD_ndarray numpy$B_SliceableD_ndarrayG_new(numpy$$Primitive pwit) {
@@ -336,7 +336,7 @@ numpy$B_SliceableD_ndarray numpy$B_SliceableD_ndarrayG_new(numpy$$Primitive pwit
     return res;
 }
 
-numpy$B_SliceableD_ndarray numpy$B_SliceableD_ndarrayD___deserialize__(numpy$B_SliceableD_ndarray wit, $NoneType state) {
+numpy$B_SliceableD_ndarray numpy$B_SliceableD_ndarrayD___deserialize__(numpy$B_SliceableD_ndarray wit, $Serial$state state) {
     numpy$B_SliceableD_ndarray res = $DNEW(numpy$B_SliceableD_ndarray,state);
     return res;
 }
@@ -387,10 +387,10 @@ numpy$B_CollectionD_ndarray numpy$B_CollectionD_ndarrayG_new(numpy$$Primitive pw
     return res;
 }
 
-void numpy$B_CollectionD_ndarrayD___serialize__(numpy$B_CollectionD_ndarray wit, $NoneType state) {
+void numpy$B_CollectionD_ndarrayD___serialize__(numpy$B_CollectionD_ndarray wit, $Serial$state state) {
 }
 
-numpy$B_CollectionD_ndarray numpy$B_CollectionD_ndarrayD___deserialize__(numpy$B_CollectionD_ndarray wit, $NoneType state) {
+numpy$B_CollectionD_ndarray numpy$B_CollectionD_ndarrayD___deserialize__(numpy$B_CollectionD_ndarray wit, $Serial$state state) {
     numpy$B_CollectionD_ndarray res = $DNEW(numpy$B_CollectionD_ndarray,state);
     return res;
 }
@@ -625,22 +625,22 @@ numpy$B_CollectionD_ndarray numpy$B_CollectionD_ndarrayG_witness = &numpy$B_Coll
 
 // numpy$B_RealFuns$math$ndarray ///////////////////////////////////////////////////////////
 
-$NoneType numpy$B_RealFuns$math$ndarrayD___init__ (numpy$B_RealFuns$math$ndarray W_self, numpy$$Primitive W_Primitive, math$B_RealFuns W_RealFuns) {
+$NoneType numpy$B_RealFuns$math$ndarrayD___init__ (numpy$B_RealFuns$math$ndarray W_self, numpy$$Primitive W_Primitive, mathQ_RealFuns W_RealFuns) {
     W_self->W_PrimitiveD_AD_RealFuns$math$ndarray = W_Primitive;
     W_self-> W_RealFuns$mathD_AD_RealFuns$math$ndarray = W_RealFuns;
     return $None;
 }
 
-$NoneType numpy$B_RealFuns$math$ndarrayD___serialize__(numpy$B_RealFuns$math$ndarray wit, $NoneType state) {
+$NoneType numpy$B_RealFuns$math$ndarrayD___serialize__(numpy$B_RealFuns$math$ndarray wit, $Serial$state state) {
     $step_serialize(wit->W_PrimitiveD_AD_RealFuns$math$ndarray, state);
     $step_serialize(wit->W_RealFuns$mathD_AD_RealFuns$math$ndarray, state);
     return $None;
 }
 
-numpy$B_RealFuns$math$ndarray numpy$B_RealFuns$math$ndarrayD___deserialize__(numpy$B_RealFuns$math$ndarray wit, $NoneType state) {
+numpy$B_RealFuns$math$ndarray numpy$B_RealFuns$math$ndarrayD___deserialize__(numpy$B_RealFuns$math$ndarray wit, $Serial$state state) {
     numpy$B_RealFuns$math$ndarray res = $DNEW(numpy$B_RealFuns$math$ndarray,state);
     res->W_PrimitiveD_AD_RealFuns$math$ndarray = (numpy$$Primitive)$step_deserialize(state);
-    res->W_RealFuns$mathD_AD_RealFuns$math$ndarray = (math$B_RealFuns)$step_deserialize(state);
+    res->W_RealFuns$mathD_AD_RealFuns$math$ndarray = (mathQ_RealFuns)$step_deserialize(state);
     return res;
 }
 
@@ -709,7 +709,7 @@ numpy$$ndarray numpy$B_RealFuns$math$ndarray$atanh(numpy$B_RealFuns$math$ndarray
 }
 
                       
-numpy$B_RealFuns$math$ndarray numpy$B_RealFuns$math$ndarrayG_new(numpy$$Primitive W_Primitive, math$B_RealFuns W_RealFuns) {
+numpy$B_RealFuns$math$ndarray numpy$B_RealFuns$math$ndarrayG_new(numpy$$Primitive W_Primitive, mathQ_RealFuns W_RealFuns) {
     numpy$B_RealFuns$math$ndarray $tmp = malloc(sizeof(struct numpy$B_RealFuns$math$ndarray));
     $tmp->$class = &numpy$B_RealFuns$math$ndarrayG_methods;
     numpy$B_RealFuns$math$ndarrayG_methods.__init__($tmp, W_Primitive, W_RealFuns);
@@ -718,7 +718,7 @@ numpy$B_RealFuns$math$ndarray numpy$B_RealFuns$math$ndarrayG_new(numpy$$Primitiv
 struct numpy$B_RealFuns$math$ndarrayG_class numpy$B_RealFuns$math$ndarrayG_methods = {
     "numpy$B_RealFuns$math$ndarray",
     UNASSIGNED,
-    ($SuperG_class)&math$B_RealFunsG_methods,
+    ($SuperG_class)&mathQ_RealFunsG_methods,
     numpy$B_RealFuns$math$ndarrayD___init__,
     numpy$B_RealFuns$math$ndarrayD___serialize__,
     numpy$B_RealFuns$math$ndarrayD___deserialize__,

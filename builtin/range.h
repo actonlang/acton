@@ -3,8 +3,8 @@ struct B_rangeG_class {
     int $class_id;
     $SuperG_class $superclass;
     void (*__init__)(B_range, B_int, B_int, B_int);
-    void (*__serialize__)(B_range,$NoneType);
-    B_range (*__deserialize__)(B_range,$NoneType);
+    void (*__serialize__)(B_range,$Serial$state);
+    B_range (*__deserialize__)(B_range,$Serial$state);
     B_bool (*__bool__)(B_range);
     B_str (*__str__)(B_range);
     B_str (*__repr__)(B_range);
@@ -34,8 +34,8 @@ struct B_IteratorB_rangeG_class {
     int $class_id;
     $SuperG_class $superclass;
     void (*__init__)(B_IteratorB_range, B_range);
-    void (*__serialize__)(B_IteratorB_range,$NoneType);
-    B_IteratorB_range (*__deserialize__)(B_IteratorB_range,$NoneType);
+    void (*__serialize__)(B_IteratorB_range,$Serial$state);
+    B_IteratorB_range (*__deserialize__)(B_IteratorB_range,$Serial$state);
     B_bool (*__bool__)(B_IteratorB_range);
     B_str (*__str__)(B_IteratorB_range);
     B_str (*__repr__)(B_IteratorB_range);

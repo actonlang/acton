@@ -27,9 +27,9 @@ struct Connection {
 };
 struct ConnectionD___class__ {
     char *$GCINFO;
-    $Msg (*deliver)(ConnectionD___class__, $WORD, B_str);
-    $Msg (*close)(ConnectionD___class__, $WORD);
-    $Msg (*receive_on)(ConnectionD___class__, $WORD, $function, $function);
+    B_Msg (*deliver)(ConnectionD___class__, $WORD, B_str);
+    B_Msg (*close)(ConnectionD___class__, $WORD);
+    B_Msg (*receive_on)(ConnectionD___class__, $WORD, $function, $function);
 };
 
 Connection ConnectionD___pack__(ConnectionD___class__ __class__, $WORD __impl__) {
@@ -52,7 +52,7 @@ struct Env {
 };
 struct EnvD___class__ {
     char *$GCINFO;
-    $Msg (*open)(EnvD___class__, $WORD, B_str, B_int, $function);
+    B_Msg (*open)(EnvD___class__, $WORD, B_str, B_int, $function);
 };
 
 Env EnvD___pack__(EnvD___class__ __class__, $WORD __impl__) {
@@ -74,17 +74,17 @@ struct TrueConnection {
     // more...
 };
 
-$Msg TrueConnection$deliver (ConnectionD___class__ cls, $WORD __impl__, B_str data) {
+B_Msg TrueConnection$deliver (ConnectionD___class__ cls, $WORD __impl__, B_str data) {
     TrueConnection trueSelf = (TrueConnection)__impl__;
     return NULL;
 }
 
-$Msg TrueConnection$close (ConnectionD___class__ cls, $WORD __impl__) {
+B_Msg TrueConnection$close (ConnectionD___class__ cls, $WORD __impl__) {
     TrueConnection trueSelf = (TrueConnection)__impl__;
     return NULL;
 }
 
-$Msg TrueConnection$receive_on (ConnectionD___class__ cls, $WORD __impl__, $function input, $function error) {
+B_Msg TrueConnection$receive_on (ConnectionD___class__ cls, $WORD __impl__, $function input, $function error) {
     TrueConnection trueSelf = (TrueConnection)__impl__;
     return NULL;
 }
@@ -101,12 +101,12 @@ struct ConnectionD___class__ Connection___TrueConnection = {
 struct TrueEnv;
 typedef struct TrueEnv *TrueEnv;
 
-$Msg TrueEnv$open(EnvD___class__ cls, $WORD __impl__, B_str address, B_int port, $function callback) {
+B_Msg TrueEnv$open(EnvD___class__ cls, $WORD __impl__, B_str address, B_int port, $function callback) {
     TrueEnv self = (TrueEnv)__impl__;
     
     TrueConnection trueConn = /* create socket, etc, ... */ NULL;
     Connection conn = ConnectionD___pack__(&Connection___TrueConnection, trueConn);
-    $Msg m = /* ASYNC... */ NULL;
+    B_Msg m = /* ASYNC... */ NULL;
     return m;
 }
 

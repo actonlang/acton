@@ -5,8 +5,8 @@ struct B_intG_class {
     int $class_id;
     $SuperG_class $superclass;
     void (*__init__)(B_int, B_atom);
-    void (*__serialize__)(B_int,$NoneType);
-    B_int (*__deserialize__)(B_int,$NoneType);
+    void (*__serialize__)(B_int,$Serial$state);
+    B_int (*__deserialize__)(B_int,$Serial$state);
     B_bool (*__bool__)(B_int);
     B_str (*__str__)(B_int);
     B_str (*__repr__)(B_int);

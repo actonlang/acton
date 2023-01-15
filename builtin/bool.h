@@ -3,8 +3,8 @@ struct B_boolG_class {
   int $class_id;
   $SuperG_class $superclass;
   void (*__init__)(B_bool, B_value);
-  void (*__serialize__)(B_bool, $NoneType);
-  B_bool (*__deserialize__)(B_bool, $NoneType);
+  void (*__serialize__)(B_bool, $Serial$state);
+  B_bool (*__deserialize__)(B_bool, $Serial$state);
   B_bool (*__bool__)(B_bool);
   B_str (*__str__)(B_bool);
   B_str (*__repr__)(B_bool);

@@ -5,14 +5,14 @@ struct $action;
 struct $mut;
 struct $pure;
 struct $Cont;
-struct $Msg;
+struct B_Msg;
 
 typedef struct $proc *$proc;
 typedef struct $action *$action;
 typedef struct $mut *$mut;
 typedef struct $pure *$pure;
 typedef struct $Cont *$Cont;
-typedef struct $Msg *$Msg;
+typedef struct B_Msg *B_Msg;
 
 
 enum $RTAG { $RDONE, $RFAIL, $RCONT, $RWAIT };
@@ -38,8 +38,8 @@ struct $ContG_class {
     int $class_id;
     $SuperG_class $superclass;
     void (*__init__)($Cont);
-    void (*__serialize__)($Cont, $NoneType);
-    $Cont (*__deserialize__)($Cont, $NoneType);
+    void (*__serialize__)($Cont, $Serial$state);
+    $Cont (*__deserialize__)($Cont, $Serial$state);
     B_bool (*__bool__)($Cont);
     B_str (*__str__)($Cont);
     B_str (*__repr__)($Cont);
@@ -53,8 +53,8 @@ extern struct $ContG_class $ContG_methods;
 void $ContD___init__($Cont);
 B_bool $ContD___bool__($Cont);
 B_str $ContD___str__($Cont);
-void $ContD___serialize__($Cont, $NoneType);
-$Cont $ContD___deserialize__($Cont, $NoneType);
+void $ContD___serialize__($Cont, $Serial$state);
+$Cont $ContD___deserialize__($Cont, $Serial$state);
 
 
 struct $procG_class {
@@ -62,8 +62,8 @@ struct $procG_class {
     int $class_id;
     $SuperG_class $superclass;
     void (*__init__)($proc);
-    void (*__serialize__)($proc, $NoneType);
-    $proc (*__deserialize__)($proc, $NoneType);
+    void (*__serialize__)($proc, $Serial$state);
+    $proc (*__deserialize__)($proc, $Serial$state);
     B_bool (*__bool__)($proc);
     B_str (*__str__)($proc);
     B_str (*__repr__)($proc);
@@ -81,14 +81,14 @@ struct $actionG_class {
     int $class_id;
     $SuperG_class $superclass;
     void (*__init__)($action);
-    void (*__serialize__)($action, $NoneType);
-    $action (*__deserialize__)($action, $NoneType);
+    void (*__serialize__)($action, $Serial$state);
+    $action (*__deserialize__)($action, $Serial$state);
     B_bool (*__bool__)($action);
     B_str (*__str__)($action);
     B_str (*__repr__)($action);
     $R (*__call__)($action, $Cont, $WORD);
     $R (*__exec__)($action, $Cont, $WORD);
-    $Msg (*__asyn__)($action, $WORD);
+    B_Msg (*__asyn__)($action, $WORD);
 };
 struct $action {
     struct $actionG_class *$class;
@@ -101,8 +101,8 @@ struct $mutG_class {
     int $class_id;
     $SuperG_class $superclass;
     void (*__init__)($mut);
-    void (*__serialize__)($mut, $NoneType);
-    $mut (*__deserialize__)($mut, $NoneType);
+    void (*__serialize__)($mut, $Serial$state);
+    $mut (*__deserialize__)($mut, $Serial$state);
     B_bool (*__bool__)($mut);
     B_str (*__str__)($mut);
     B_str (*__repr__)($mut);
@@ -121,8 +121,8 @@ struct $pureG_class {
     int $class_id;
     $SuperG_class $superclass;
     void (*__init__)($pure);
-    void (*__serialize__)($pure, $NoneType);
-    $pure (*__deserialize__)($pure, $NoneType);
+    void (*__serialize__)($pure, $Serial$state);
+    $pure (*__deserialize__)($pure, $Serial$state);
     B_bool (*__bool__)($pure);
     B_str (*__str__)($pure);
     B_str (*__repr__)($pure);
@@ -144,14 +144,14 @@ struct $action2G_class {
     int $class_id;
     $SuperG_class $superclass;
     void (*__init__)($action2);
-    void (*__serialize__)($action2, $NoneType);
-    $action2 (*__deserialize__)($action2, $NoneType);
+    void (*__serialize__)($action2, $Serial$state);
+    $action2 (*__deserialize__)($action2, $Serial$state);
     B_bool (*__bool__)($action2);
     B_str (*__str__)($action2);
     B_str (*__repr__)($action2);
     $R (*__call__)($action2, $Cont, $WORD, $WORD);
     $R (*__exec__)($action2, $Cont, $WORD, $WORD);
-    $Msg (*__asyn__)($action2, $WORD, $WORD);
+    B_Msg (*__asyn__)($action2, $WORD, $WORD);
 };
 struct $action2 {
     struct $action2G_class *$class;
@@ -164,14 +164,14 @@ struct $action3G_class {
     int $class_id;
     $SuperG_class $superclass;
     void (*__init__)($action3);
-    void (*__serialize__)($action3, $NoneType);
-    $action3 (*__deserialize__)($action3, $NoneType);
+    void (*__serialize__)($action3, $Serial$state);
+    $action3 (*__deserialize__)($action3, $Serial$state);
     B_bool (*__bool__)($action3);
     B_str (*__str__)($action3);
     B_str (*__repr__)($action3);
     $R (*__call__)($action3, $Cont, $WORD, $WORD, $WORD);
     $R (*__exec__)($action3, $WORD, $WORD, $WORD);
-    $Msg (*__asyn__)($action3, $WORD, $WORD, $WORD);
+    B_Msg (*__asyn__)($action3, $WORD, $WORD, $WORD);
 };
 struct $action3 {
     struct $action3G_class *$class;

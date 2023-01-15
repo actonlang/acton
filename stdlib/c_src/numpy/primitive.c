@@ -163,18 +163,18 @@ union $Bytes8 from$objB_float($WORD x) {
     return res;
 }
 
-void numpy$$PrimitiveB_int$serialize(numpy$$PrimitiveB_int self, $NoneType state) {
+void numpy$$PrimitiveB_int$serialize(numpy$$PrimitiveB_int self, $Serial$state state) {
 }
 
-numpy$$PrimitiveB_int numpy$$PrimitiveB_int$deserialize(numpy$$PrimitiveB_int self, $NoneType state) {
+numpy$$PrimitiveB_int numpy$$PrimitiveB_int$deserialize(numpy$$PrimitiveB_int self, $Serial$state state) {
     numpy$$PrimitiveB_int res = (numpy$$PrimitiveB_int)$DNEW(numpy$$PrimitiveB_int,state);
     return res;
 }
 
-void numpy$$PrimitiveB_float$serialize(numpy$$PrimitiveB_float self, $NoneType state) {
+void numpy$$PrimitiveB_float$serialize(numpy$$PrimitiveB_float self, $Serial$state state) {
 }
 
-numpy$$PrimitiveB_float numpy$$PrimitiveB_float$deserialize(numpy$$PrimitiveB_float self, $NoneType state) {
+numpy$$PrimitiveB_float numpy$$PrimitiveB_float$deserialize(numpy$$PrimitiveB_float self, $Serial$state state) {
     numpy$$PrimitiveB_float res = (numpy$$PrimitiveB_float)$DNEW(numpy$$PrimitiveB_float,state);
     return res;
 }

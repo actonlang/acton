@@ -56,12 +56,6 @@ deriveT (TCon _ c)                  = deriveQ (tcname c)
 
 witAttr qn                          = Internal Witness (nstr $ deriveQ qn) 0
 
-witIntegralInt                      = gBuiltin $ Derived (deriveQ qnIntegral) $ Derived (deriveQ qnInt) suffixWitness
-witIntegralI64                      = gBuiltin $ Derived (deriveQ qnIntegral) $ Derived (deriveQ qnI64) suffixWitness
-witSequenceList                     = gBuiltin $ Derived (deriveQ qnSequence) $ Derived (deriveQ qnList) suffixWitness
-witCollectionList                   = gBuiltin $ Derived (deriveQ qnCollection) $ Derived (deriveQ qnList) suffixWitness
-
-
 extensionName p c
   | length ts == length vs          = n0
   | otherwise                       = foldl Derived n0 (map deriveT ts)

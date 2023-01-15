@@ -81,13 +81,13 @@ struct PingpongG_class {
 struct Pingpong {
     struct PingpongG_class *$class;
     $Actor $next;
-    $Msg $msg;
-    $Msg $outgoing;
+    B_Msg B_Msg;
+    B_Msg $outgoing;
     $Actor $offspring;
     $Actor $uterus;
-    $Msg $waitsfor;
+    B_Msg $waitsfor;
     $Catcher $catcher;
-    $Lock $msg_lock;
+    $Lock B_Msg_lock;
     $long $globkey;
     B_int i;
     B_int count;

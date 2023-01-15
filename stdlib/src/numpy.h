@@ -10,8 +10,8 @@ struct numpy$$ndselectG_class {
     int $class_id;
     $SuperG_class $superclass;
     void (*__init__) (numpy$$ndselect);
-    void (*__serialize__) (numpy$$ndselect, $NoneType);
-    numpy$$ndselect (*__deserialize__) (numpy$$ndselect, $NoneType);
+    void (*__serialize__) (numpy$$ndselect, $Serial$state);
+    numpy$$ndselect (*__deserialize__) (numpy$$ndselect, $Serial$state);
     B_bool (*__bool__) (numpy$$ndselect);
     B_str (*__str__) (numpy$$ndselect);
     B_str (*__repr__) (numpy$$ndselect);
@@ -28,8 +28,8 @@ struct numpy$$ndindexG_class {
     int $class_id;
     $SuperG_class $superclass;
     void (*__init__) (numpy$$ndindex, B_int);
-    void (*__serialize__) (numpy$$ndindex, $NoneType);
-    numpy$$ndindex (*__deserialize__) (numpy$$ndindex, $NoneType);
+    void (*__serialize__) (numpy$$ndindex, $Serial$state);
+    numpy$$ndindex (*__deserialize__) (numpy$$ndindex, $Serial$state);
     B_bool (*__bool__) (numpy$$ndindex);
     B_str (*__str__) (numpy$$ndindex);
     B_str (*__repr__) (numpy$$ndindex);
@@ -49,8 +49,8 @@ struct numpy$$ndsliceG_class {
     int $class_id;
     $SuperG_class $superclass;
     void (*__init__) (numpy$$ndslice, B_slice);
-    void (*__serialize__) (numpy$$ndslice, $NoneType);
-    numpy$$ndslice (*__deserialize__) (numpy$$ndslice, $NoneType);
+    void (*__serialize__) (numpy$$ndslice, $Serial$state);
+    numpy$$ndslice (*__deserialize__) (numpy$$ndslice, $Serial$state);
     B_bool (*__bool__) (numpy$$ndslice);
     B_str (*__str__) (numpy$$ndslice);
     B_str (*__repr__) (numpy$$ndslice);
@@ -107,8 +107,8 @@ struct numpy$$PrimitiveG_class {
   int $class_id;
   $SuperG_class $superclass;
   void (*__init__)(numpy$$Primitive);
-  void (*__serialize__)(numpy$$Primitive,$NoneType);
-  numpy$$Primitive (*__deserialize__)(numpy$$Primitive,$NoneType);
+  void (*__serialize__)(numpy$$Primitive,$Serial$state);
+  numpy$$Primitive (*__deserialize__)(numpy$$Primitive,$Serial$state);
   B_bool (*__bool__)(numpy$$Primitive);
   B_str (*__str__)(numpy$$Primitive);
   B_str (*__repr__)(numpy$$Primitive);
@@ -167,8 +167,8 @@ struct numpy$$PrimitiveB_intG_class {
   int $class_id;
   $SuperG_class $superclass;
   void (*__init__)(numpy$$PrimitiveB_int);
-  void (*__serialize__)(numpy$$PrimitiveB_int,$NoneType);
-  numpy$$PrimitiveB_int (*__deserialize__)(numpy$$PrimitiveB_int,$NoneType);
+  void (*__serialize__)(numpy$$PrimitiveB_int,$Serial$state);
+  numpy$$PrimitiveB_int (*__deserialize__)(numpy$$PrimitiveB_int,$Serial$state);
   B_bool (*__bool__)(numpy$$PrimitiveB_int);
   B_str (*__str__)(numpy$$PrimitiveB_int);
   B_str (*__repr__)(numpy$$PrimitiveB_int);
@@ -224,8 +224,8 @@ struct numpy$$PrimitiveB_floatG_class {
   int $class_id;
   $SuperG_class $superclass;
   void (*__init__)(numpy$$PrimitiveB_float);
-  void (*__serialize__)(numpy$$PrimitiveB_float,$NoneType);
-  numpy$$PrimitiveB_float (*__deserialize__)(numpy$$PrimitiveB_float,$NoneType);
+  void (*__serialize__)(numpy$$PrimitiveB_float,$Serial$state);
+  numpy$$PrimitiveB_float (*__deserialize__)(numpy$$PrimitiveB_float,$Serial$state);
   B_bool (*__bool__)(numpy$$PrimitiveB_float);
   B_str (*__str__)(numpy$$PrimitiveB_float);
   B_str (*__repr__)(numpy$$PrimitiveB_float);
@@ -291,8 +291,8 @@ struct numpy$$ndarrayG_class {
   int $class_id;
   $SuperG_class $superclass;
     void (*__init__)(numpy$$ndarray,numpy$$Primitive,B_atom);
-  void (*__serialize__)(numpy$$ndarray,$NoneType); 
-  numpy$$ndarray (*__deserialize__)(numpy$$ndarray,$NoneType);
+  void (*__serialize__)(numpy$$ndarray,$Serial$state); 
+  numpy$$ndarray (*__deserialize__)(numpy$$ndarray,$Serial$state);
   B_bool (*__bool__)(numpy$$ndarray);
   B_str (*__str__)(numpy$$ndarray);
   B_str (*__repr__)(numpy$$ndarray);
@@ -342,8 +342,8 @@ struct numpy$B_IteratorD_ndarrayG_class {
   int $class_id;
   $SuperG_class $superclass;
   void (*__init__)(numpy$B_IteratorD_ndarray, numpy$$Primitive, numpy$$ndarray);
-  void (*__serialize__)(numpy$B_IteratorD_ndarray,$NoneType);
-  numpy$B_IteratorD_ndarray (*__deserialize__)(numpy$B_IteratorD_ndarray,$NoneType);
+  void (*__serialize__)(numpy$B_IteratorD_ndarray,$Serial$state);
+  numpy$B_IteratorD_ndarray (*__deserialize__)(numpy$B_IteratorD_ndarray,$Serial$state);
   B_bool (*__bool__)(numpy$B_IteratorD_ndarray);
   B_str (*__str__)(numpy$B_IteratorD_ndarray);
   B_str (*__repr__)(numpy$B_IteratorD_ndarray);
@@ -472,8 +472,8 @@ struct numpy$B_IntegralD_ndarrayB_intG_class {
     int $class_id;
     $SuperG_class $superclass;
     void (*__init__)(numpy$B_IntegralD_ndarrayB_int);
-    void (*__serialize__)(numpy$B_IntegralD_ndarrayB_int,$NoneType);
-    numpy$B_IntegralD_ndarrayB_int (*__deserialize__)(numpy$B_IntegralD_ndarrayB_int,$NoneType);
+    void (*__serialize__)(numpy$B_IntegralD_ndarrayB_int,$Serial$state);
+    numpy$B_IntegralD_ndarrayB_int (*__deserialize__)(numpy$B_IntegralD_ndarrayB_int,$Serial$state);
     B_bool (*__bool__)(numpy$B_IntegralD_ndarrayB_int);
     B_str (*__str__)(numpy$B_IntegralD_ndarrayB_int);
     B_str (*__repr__)(numpy$B_IntegralD_ndarrayB_int);
@@ -513,8 +513,8 @@ struct numpy$B_IntegralD_ndarrayB_intG_class {
 };
 
 void numpy$B_IntegralD_ndarrayB_intD___init__ (numpy$B_IntegralD_ndarrayB_int);
-void numpy$B_IntegralD_ndarrayB_intD___serialize__(numpy$B_IntegralD_ndarrayB_int,$NoneType);
-numpy$B_IntegralD_ndarrayB_int numpy$B_IntegralD_ndarrayB_intD___deserialize__(numpy$B_IntegralD_ndarrayB_int,$NoneType);
+void numpy$B_IntegralD_ndarrayB_intD___serialize__(numpy$B_IntegralD_ndarrayB_int,$Serial$state);
+numpy$B_IntegralD_ndarrayB_int numpy$B_IntegralD_ndarrayB_intD___deserialize__(numpy$B_IntegralD_ndarrayB_int,$Serial$state);
 numpy$$ndarray numpy$B_IntegralD_ndarrayB_intD___add__(numpy$B_IntegralD_ndarrayB_int, numpy$$ndarray, numpy$$ndarray);
 numpy$$ndarray numpy$B_IntegralD_ndarrayB_intD___iadd__(numpy$B_IntegralD_ndarrayB_int, numpy$$ndarray, numpy$$ndarray);
 numpy$$ndarray numpy$B_IntegralD_ndarrayB_intD___fromatom__(numpy$B_IntegralD_ndarrayB_int,B_atom);
@@ -555,8 +555,8 @@ struct numpy$B_LogicalD_ndarrayB_intG_class {
     int $class_id;
     $SuperG_class $superclass;
     void (*__init__)(numpy$B_LogicalD_ndarrayB_int, B_Integral);
-    void (*__serialize__)(numpy$B_LogicalD_ndarrayB_int,$NoneType);
-    numpy$B_LogicalD_ndarrayB_int (*__deserialize__)(numpy$B_LogicalD_ndarrayB_int,$NoneType);
+    void (*__serialize__)(numpy$B_LogicalD_ndarrayB_int,$Serial$state);
+    numpy$B_LogicalD_ndarrayB_int (*__deserialize__)(numpy$B_LogicalD_ndarrayB_int,$Serial$state);
     B_bool (*__bool__)(numpy$B_LogicalD_ndarrayB_int);
     B_str (*__str__)(numpy$B_LogicalD_ndarrayB_int);
     B_str (*__repr__)(numpy$B_LogicalD_ndarrayB_int);
@@ -569,8 +569,8 @@ struct numpy$B_LogicalD_ndarrayB_intG_class {
 };
 
 void numpy$B_LogicalD_ndarrayB_intD___init__ (numpy$B_LogicalD_ndarrayB_int, B_Integral);
-void numpy$B_LogicalD_ndarrayB_intD___serialize__(numpy$B_LogicalD_ndarrayB_int,$NoneType);
-numpy$B_LogicalD_ndarrayB_int numpy$B_LogicalD_ndarrayB_intD___deserialize__(numpy$B_LogicalD_ndarrayB_int,$NoneType);
+void numpy$B_LogicalD_ndarrayB_intD___serialize__(numpy$B_LogicalD_ndarrayB_int,$Serial$state);
+numpy$B_LogicalD_ndarrayB_int numpy$B_LogicalD_ndarrayB_intD___deserialize__(numpy$B_LogicalD_ndarrayB_int,$Serial$state);
 numpy$$ndarray numpy$B_LogicalD_ndarrayB_intD___and__ (numpy$B_LogicalD_ndarrayB_int, numpy$$ndarray, numpy$$ndarray);
 numpy$$ndarray numpy$B_LogicalD_ndarrayB_intD___or__ (numpy$B_LogicalD_ndarrayB_int, numpy$$ndarray, numpy$$ndarray);
 numpy$$ndarray numpy$B_LogicalD_ndarrayB_intD___xor__ (numpy$B_LogicalD_ndarrayB_int, numpy$$ndarray, numpy$$ndarray);
@@ -587,8 +587,8 @@ struct numpy$B_MinusD_ndarrayB_intG_class {
     int $class_id;
     $SuperG_class $superclass;
     void (*__init__)(numpy$B_MinusD_ndarrayB_int, B_Integral);
-    void (*__serialize__)(numpy$B_MinusD_ndarrayB_int,$NoneType);
-    numpy$B_MinusD_ndarrayB_int (*__deserialize__)(numpy$B_MinusD_ndarrayB_int,$NoneType);
+    void (*__serialize__)(numpy$B_MinusD_ndarrayB_int,$Serial$state);
+    numpy$B_MinusD_ndarrayB_int (*__deserialize__)(numpy$B_MinusD_ndarrayB_int,$Serial$state);
     B_bool (*__bool__)(numpy$B_MinusD_ndarrayB_int);
     B_str (*__str__)(numpy$B_MinusD_ndarrayB_int);
     B_str (*__repr__)(numpy$B_MinusD_ndarrayB_int);
@@ -597,8 +597,8 @@ struct numpy$B_MinusD_ndarrayB_intG_class {
 };
 
 void numpy$B_MinusD_ndarrayB_intD___init__ (numpy$B_MinusD_ndarrayB_int, B_Integral);
-void numpy$B_MinusD_ndarrayB_intD___serialize__(numpy$B_MinusD_ndarrayB_int,$NoneType);
-numpy$B_MinusD_ndarrayB_int numpy$B_MinusD_ndarrayB_intD___deserialize__(numpy$B_MinusD_ndarrayB_int,$NoneType);
+void numpy$B_MinusD_ndarrayB_intD___serialize__(numpy$B_MinusD_ndarrayB_int,$Serial$state);
+numpy$B_MinusD_ndarrayB_int numpy$B_MinusD_ndarrayB_intD___deserialize__(numpy$B_MinusD_ndarrayB_int,$Serial$state);
 numpy$$ndarray numpy$B_MinusD_ndarrayB_intD___sub__ (numpy$B_MinusD_ndarrayB_int, numpy$$ndarray, numpy$$ndarray);
 
 // numpy$B_RealD_ndarray ////////////////////////////////////////////////////////////
@@ -614,8 +614,8 @@ struct numpy$B_RealD_ndarrayG_class {
     int $class_id;
     $SuperG_class $superclass;
   void (*__init__)(numpy$B_RealD_ndarray, numpy$$Primitive);
-    void (*__serialize__)(numpy$B_RealD_ndarray,$NoneType);
-    numpy$B_RealD_ndarray (*__deserialize__)(numpy$B_RealD_ndarray,$NoneType);
+    void (*__serialize__)(numpy$B_RealD_ndarray,$Serial$state);
+    numpy$B_RealD_ndarray (*__deserialize__)(numpy$B_RealD_ndarray,$Serial$state);
     B_bool (*__bool__)(numpy$B_RealD_ndarray);
     B_str (*__str__)(numpy$B_RealD_ndarray);
     B_str (*__repr__)(numpy$B_RealD_ndarray);
@@ -641,8 +641,8 @@ struct numpy$B_RealD_ndarrayG_class {
 };
 
 void numpy$B_RealD_ndarrayD___init__ (numpy$B_RealD_ndarray,numpy$$Primitive);
-void numpy$B_RealD_ndarrayD___serialize__(numpy$B_RealD_ndarray,$NoneType);
-numpy$B_RealD_ndarray numpy$B_RealD_ndarrayD___deserialize__(numpy$B_RealD_ndarray,$NoneType);
+void numpy$B_RealD_ndarrayD___serialize__(numpy$B_RealD_ndarray,$Serial$state);
+numpy$B_RealD_ndarray numpy$B_RealD_ndarrayD___deserialize__(numpy$B_RealD_ndarray,$Serial$state);
 numpy$$ndarray numpy$B_RealD_ndarrayD___add__(numpy$B_RealD_ndarray, numpy$$ndarray, numpy$$ndarray);
 numpy$$ndarray numpy$B_RealD_ndarrayD___iadd__(numpy$B_RealD_ndarray, numpy$$ndarray, numpy$$ndarray);
 numpy$$ndarray numpy$B_RealD_ndarrayD___fromatom__(numpy$B_RealD_ndarray,B_atom);
@@ -673,8 +673,8 @@ struct numpy$B_MinusD_ndarrayG_class {
     int $class_id;
     $SuperG_class $superclass;
     void (*__init__)(numpy$B_MinusD_ndarray, B_Real);
-    void (*__serialize__)(numpy$B_MinusD_ndarray,$NoneType);
-    numpy$B_MinusD_ndarray (*__deserialize__)(numpy$B_MinusD_ndarray,$NoneType);
+    void (*__serialize__)(numpy$B_MinusD_ndarray,$Serial$state);
+    numpy$B_MinusD_ndarray (*__deserialize__)(numpy$B_MinusD_ndarray,$Serial$state);
     B_bool (*__bool__)(numpy$B_MinusD_ndarray);
     B_str (*__str__)(numpy$B_MinusD_ndarray);
     B_str (*__repr__)(numpy$B_MinusD_ndarray);
@@ -683,8 +683,8 @@ struct numpy$B_MinusD_ndarrayG_class {
 };
 
 void numpy$B_MinusD_ndarrayD___init__ (numpy$B_MinusD_ndarray, B_Real);
-void numpy$B_MinusD_ndarrayD___serialize__(numpy$B_MinusD_ndarray,$NoneType);
-numpy$B_MinusD_ndarray numpy$B_MinusD_ndarrayD___deserialize__(numpy$B_MinusD_ndarray,$NoneType);
+void numpy$B_MinusD_ndarrayD___serialize__(numpy$B_MinusD_ndarray,$Serial$state);
+numpy$B_MinusD_ndarray numpy$B_MinusD_ndarrayD___deserialize__(numpy$B_MinusD_ndarray,$Serial$state);
 numpy$$ndarray numpy$B_MinusD_ndarrayD___sub__ (numpy$B_MinusD_ndarray, numpy$$ndarray, numpy$$ndarray);
 
 // numpy$B_DivD_ndarrayB_int ////////////////////////////////////////////////////////////
@@ -699,8 +699,8 @@ struct numpy$B_DivD_ndarrayB_intG_class {
     int $class_id;
     $SuperG_class $superclass;
     void (*__init__)(numpy$B_DivD_ndarrayB_int);
-    void (*__serialize__)(numpy$B_DivD_ndarrayB_int,$NoneType);
-    numpy$B_DivD_ndarrayB_int (*__deserialize__)(numpy$B_DivD_ndarrayB_int,$NoneType);
+    void (*__serialize__)(numpy$B_DivD_ndarrayB_int,$Serial$state);
+    numpy$B_DivD_ndarrayB_int (*__deserialize__)(numpy$B_DivD_ndarrayB_int,$Serial$state);
     B_bool (*__bool__)(numpy$B_DivD_ndarrayB_int);
     B_str (*__str__)(numpy$B_DivD_ndarrayB_int);
     B_str (*__repr__)(numpy$B_DivD_ndarrayB_int);
@@ -709,8 +709,8 @@ struct numpy$B_DivD_ndarrayB_intG_class {
 };
 
 void numpy$B_DivD_ndarrayB_intD___init__ (numpy$B_DivD_ndarrayB_int);
-void numpy$B_DivD_ndarrayB_intD___serialize__(numpy$B_DivD_ndarrayB_int,$NoneType);
-numpy$B_DivD_ndarrayB_int numpy$B_DivD_ndarrayB_intD___deserialize__(numpy$B_DivD_ndarrayB_int,$NoneType);
+void numpy$B_DivD_ndarrayB_intD___serialize__(numpy$B_DivD_ndarrayB_int,$Serial$state);
+numpy$B_DivD_ndarrayB_int numpy$B_DivD_ndarrayB_intD___deserialize__(numpy$B_DivD_ndarrayB_int,$Serial$state);
 numpy$$ndarray numpy$B_DivD_ndarrayB_intD___truediv__ (numpy$B_DivD_ndarrayB_int, numpy$$ndarray, numpy$$ndarray);
 
 // numpy$B_DivD_ndarrayB_float ////////////////////////////////////////////////////////////
@@ -725,8 +725,8 @@ struct numpy$B_DivD_ndarrayB_floatG_class {
     int $class_id;
     $SuperG_class $superclass;
     void (*__init__)(numpy$B_DivD_ndarrayB_float);
-    void (*__serialize__)(numpy$B_DivD_ndarrayB_float,$NoneType);
-    numpy$B_DivD_ndarrayB_float (*__deserialize__)(numpy$B_DivD_ndarrayB_float,$NoneType);
+    void (*__serialize__)(numpy$B_DivD_ndarrayB_float,$Serial$state);
+    numpy$B_DivD_ndarrayB_float (*__deserialize__)(numpy$B_DivD_ndarrayB_float,$Serial$state);
     B_bool (*__bool__)(numpy$B_DivD_ndarrayB_float);
     B_str (*__str__)(numpy$B_DivD_ndarrayB_float);
     B_str (*__repr__)(numpy$B_DivD_ndarrayB_float);
@@ -735,8 +735,8 @@ struct numpy$B_DivD_ndarrayB_floatG_class {
 };
 
 void numpy$B_DivD_ndarrayB_floatD___init__ (numpy$B_DivD_ndarrayB_float);
-void numpy$B_DivD_ndarrayB_floatD___serialize__(numpy$B_DivD_ndarrayB_float,$NoneType);
-numpy$B_DivD_ndarrayB_float numpy$B_DivD_ndarrayB_floatD___deserialize__(numpy$B_DivD_ndarrayB_float,$NoneType);
+void numpy$B_DivD_ndarrayB_floatD___serialize__(numpy$B_DivD_ndarrayB_float,$Serial$state);
+numpy$B_DivD_ndarrayB_float numpy$B_DivD_ndarrayB_floatD___deserialize__(numpy$B_DivD_ndarrayB_float,$Serial$state);
 numpy$$ndarray numpy$B_DivD_ndarrayB_floatD___truediv__ (numpy$B_DivD_ndarrayB_float, numpy$$ndarray, numpy$$ndarray);
 
 // numpy$B_SliceableD_ndarray /////////////////////////////////////////////////////////////////
@@ -749,8 +749,8 @@ struct numpy$B_SliceableD_ndarrayG_class {
     int $class_id;
     $SuperG_class $superclass;
     void (*__init__) (numpy$B_SliceableD_ndarray, numpy$$Primitive);
-    void (*__serialize__) (numpy$B_SliceableD_ndarray, $NoneType);
-    numpy$B_SliceableD_ndarray (*__deserialize__) (numpy$B_SliceableD_ndarray, $NoneType);
+    void (*__serialize__) (numpy$B_SliceableD_ndarray, $Serial$state);
+    numpy$B_SliceableD_ndarray (*__deserialize__) (numpy$B_SliceableD_ndarray, $Serial$state);
     B_bool (*__bool__)(numpy$B_SliceableD_ndarray);
     B_str (*__str__)(numpy$B_SliceableD_ndarray);
     B_str (*__repr__)(numpy$B_SliceableD_ndarray);
@@ -779,8 +779,8 @@ struct numpy$B_CollectionD_ndarrayG_class {
     int $class_id;
     $SuperG_class $superclass;
     void (*__init__)(numpy$B_CollectionD_ndarray, numpy$$Primitive);
-    void (*__serialize__)(numpy$B_CollectionD_ndarray,$NoneType);
-    numpy$B_CollectionD_ndarray (*__deserialize__)(numpy$B_CollectionD_ndarray,$NoneType);
+    void (*__serialize__)(numpy$B_CollectionD_ndarray,$Serial$state);
+    numpy$B_CollectionD_ndarray (*__deserialize__)(numpy$B_CollectionD_ndarray,$Serial$state);
     B_bool (*__bool__)(numpy$B_CollectionD_ndarray);
     B_str (*__str__)(numpy$B_CollectionD_ndarray);
     B_str (*__repr__)(numpy$B_CollectionD_ndarray);
@@ -790,8 +790,8 @@ struct numpy$B_CollectionD_ndarrayG_class {
 };
 
 void numpy$B_CollectionD_ndarrayD___init__ (numpy$B_CollectionD_ndarray, numpy$$Primitive);
-void numpy$B_CollectionD_ndarrayD___serialize__(numpy$B_CollectionD_ndarray,$NoneType);
-numpy$B_CollectionD_ndarray numpy$B_CollectionD_ndarrayD___deserialize__(numpy$B_CollectionD_ndarray,$NoneType);
+void numpy$B_CollectionD_ndarrayD___serialize__(numpy$B_CollectionD_ndarray,$Serial$state);
+numpy$B_CollectionD_ndarray numpy$B_CollectionD_ndarrayD___deserialize__(numpy$B_CollectionD_ndarray,$Serial$state);
 B_Iterator numpy$B_CollectionD_ndarrayD___iter__ (numpy$B_CollectionD_ndarray, numpy$$ndarray);
 numpy$$ndarray numpy$B_CollectionD_ndarrayD___fromiter__(numpy$B_CollectionD_ndarray, B_Iterable);
 B_int numpy$B_CollectionD_ndarrayD___len__(numpy$B_CollectionD_ndarray, numpy$$ndarray);
@@ -809,9 +809,9 @@ struct numpy$B_RealFuns$math$ndarrayG_class {
     char *$GCINFO;
     int $class_id;
     $SuperG_class $superclass;
-    $NoneType (*__init__) (numpy$B_RealFuns$math$ndarray, numpy$$Primitive, math$B_RealFuns);
-    $NoneType (*__serialize__) (numpy$B_RealFuns$math$ndarray, $NoneType);
-    numpy$B_RealFuns$math$ndarray (*__deserialize__) (numpy$B_RealFuns$math$ndarray, $NoneType);
+    $NoneType (*__init__) (numpy$B_RealFuns$math$ndarray, numpy$$Primitive, mathQ_RealFuns);
+    $NoneType (*__serialize__) (numpy$B_RealFuns$math$ndarray, $Serial$state);
+    numpy$B_RealFuns$math$ndarray (*__deserialize__) (numpy$B_RealFuns$math$ndarray, $Serial$state);
     B_bool (*__bool__)(numpy$B_RealFuns$math$ndarray);
     B_str (*__str__)(numpy$B_RealFuns$math$ndarray);
     B_str (*__repr__)(numpy$B_RealFuns$math$ndarray);
@@ -834,7 +834,7 @@ struct numpy$B_RealFuns$math$ndarrayG_class {
 struct numpy$B_RealFuns$math$ndarray {
     struct numpy$B_RealFuns$math$ndarrayG_class *$class;
     numpy$$Primitive W_PrimitiveD_AD_RealFuns$math$ndarray;
-  math$B_RealFuns W_RealFuns$mathD_AD_RealFuns$math$ndarray;
+  mathQ_RealFuns W_RealFuns$mathD_AD_RealFuns$math$ndarray;
 };
 extern struct numpy$B_RealFuns$math$ndarrayG_class numpy$B_RealFuns$math$ndarrayG_methods;
 
@@ -860,7 +860,7 @@ numpy$B_DivD_ndarrayB_int numpy$B_DivD_ndarrayB_intG_new();
 numpy$B_DivD_ndarrayB_float numpy$B_DivD_ndarrayB_floatG_new();
 numpy$B_SliceableD_ndarray numpy$B_SliceableD_ndarrayG_new(numpy$$Primitive);
 numpy$B_CollectionD_ndarray numpy$B_CollectionD_ndarrayG_new(numpy$$Primitive);
-numpy$B_RealFuns$math$ndarray numpy$B_RealFuns$math$ndarrayG_new(numpy$$Primitive, math$B_RealFuns);
+numpy$B_RealFuns$math$ndarray numpy$B_RealFuns$math$ndarrayG_new(numpy$$Primitive, mathQ_RealFuns);
 
 
 void numpy$D___init__();

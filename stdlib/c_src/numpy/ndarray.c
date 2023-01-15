@@ -84,7 +84,7 @@ void numpy$$ndarrayD___init__(numpy$$ndarray self, numpy$$Primitive wit, B_atom 
     memcpy(self,r,sizeof(struct numpy$$ndarray));
 }
 
-void  numpy$$ndarrayD___serialize__(numpy$$ndarray self, $NoneType state) {
+void  numpy$$ndarrayD___serialize__(numpy$$ndarray self, $Serial$state state) {
     B_int prevkey = (B_int)B_dictD_get(state->done,(B_Hashable)B_HashableD_WORDG_witness,self,NULL);
     if (prevkey) {
         long prevkeyval = fromB_int(prevkey);
@@ -105,7 +105,7 @@ void  numpy$$ndarrayD___serialize__(numpy$$ndarray self, $NoneType state) {
     $step_serialize(self->strides, state);
 }
 
-numpy$$ndarray numpy$$ndarrayD___deserialize__(numpy$$ndarray res, $NoneType state) {
+numpy$$ndarray numpy$$ndarrayD___deserialize__(numpy$$ndarray res, $Serial$state state) {
     int64_t resval = fromB_int(res->size);
     $ROW this = state->row;
     state->row = this->next;
@@ -824,11 +824,11 @@ $WORD numpy$B_IteratorD_ndarrayD___next__(numpy$B_IteratorD_ndarray self) {
     return n ? self->pwit->$class->to$obj(*n) : NULL;
 }
 
-void numpy$B_IteratorD_$serialize(numpy$B_IteratorD_ndarray self,$NoneType state) {
+void numpy$B_IteratorD_$serialize(numpy$B_IteratorD_ndarray self,$Serial$state state) {
     $RAISE((B_BaseException)$NEW(B_ValueError,to$str("(de)serialization not implemented for ndarray iterators")));
 }
 
-numpy$B_IteratorD_ndarray numpy$B_IteratorD_ndarray$_deserialize(numpy$B_IteratorD_ndarray self,$NoneType state) {
+numpy$B_IteratorD_ndarray numpy$B_IteratorD_ndarray$_deserialize(numpy$B_IteratorD_ndarray self,$Serial$state state) {
     $RAISE((B_BaseException)$NEW(B_ValueError,to$str("(de)serialization not implemented for ndarray iterators")));
     return NULL;
 }
