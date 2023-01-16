@@ -19,6 +19,7 @@ import qualified Data.Map.Strict as Map
 import Data.Map.Strict (Map)
 
 import Acton.Syntax
+import Acton.Names
 import Acton.Printer
 import Acton.TypeM
 import Utils
@@ -73,7 +74,7 @@ subst s x0
         s1                          = tmp `zip` map tVar clash
         clash                       = dom s `intersect` tyfree (rng s)
         used                        = dom s ++ tyfree (rng s)                             
-        tmp                         = take (length clash) $ map (TV KWild . Internal TypesPass "") [1 ..] \\ used
+        tmp                         = take (length clash) $ map (TV KWild) tmpNames \\ used
 
 substIteratively                    :: Subst a => Substitution -> a -> a
 substIteratively s x                = runTypeM' s (msubst x)

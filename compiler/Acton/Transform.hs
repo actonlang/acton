@@ -247,10 +247,6 @@ rename s n                              = case lookup n s of
 
 erename s e                             = termsubst [ (n, eVar n') | (n,n') <- s ] e
 
-yNames                                  = paramNames "y"
-pNames                                  = paramNames "p"
-kNames                                  = paramNames "k"
-
 instance Transform Exception where
     trans env (Exception e mbe)         = Exception (trans env e) (trans env mbe)
 

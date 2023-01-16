@@ -18,21 +18,21 @@
 
 struct Connection;
 typedef struct Connection *Connection;
-struct Connection$__class__;
-typedef struct Connection$__class__ *Connection$__class__;
+struct ConnectionD___class__;
+typedef struct ConnectionD___class__ *ConnectionD___class__;
 
 struct Connection {
-    Connection$__class__ __class__;
+    ConnectionD___class__ __class__;
     $WORD __impl__;
 };
-struct Connection$__class__ {
+struct ConnectionD___class__ {
     char *$GCINFO;
-    $Msg (*deliver)(Connection$__class__, $WORD, $str);
-    $Msg (*close)(Connection$__class__, $WORD);
-    $Msg (*receive_on)(Connection$__class__, $WORD, $function, $function);
+    B_Msg (*deliver)(ConnectionD___class__, $WORD, B_str);
+    B_Msg (*close)(ConnectionD___class__, $WORD);
+    B_Msg (*receive_on)(ConnectionD___class__, $WORD, $function, $function);
 };
 
-Connection Connection$__pack__(Connection$__class__ __class__, $WORD __impl__) {
+Connection ConnectionD___pack__(ConnectionD___class__ __class__, $WORD __impl__) {
     Connection conn = malloc(sizeof(struct Connection));
     conn->__class__ = __class__;
     conn->__impl__ = __impl__;
@@ -43,19 +43,19 @@ Connection Connection$__pack__(Connection$__class__ __class__, $WORD __impl__) {
 
 struct Env;
 typedef struct Env *Env;
-struct Env$__class__;
-typedef struct Env$__class__ *Env$__class__;
+struct EnvD___class__;
+typedef struct EnvD___class__ *EnvD___class__;
 
 struct Env {
-    Env$__class__ __class__;
+    EnvD___class__ __class__;
     $WORD __impl__;
 };
-struct Env$__class__ {
+struct EnvD___class__ {
     char *$GCINFO;
-    $Msg (*open)(Env$__class__, $WORD, $str, $int, $function);
+    B_Msg (*open)(EnvD___class__, $WORD, B_str, B_int, $function);
 };
 
-Env Env$__pack__(Env$__class__ __class__, $WORD __impl__) {
+Env EnvD___pack__(EnvD___class__ __class__, $WORD __impl__) {
     Env env = malloc(sizeof(struct Env));
     env->__class__ = __class__;
     env->__impl__ = __impl__;
@@ -74,22 +74,22 @@ struct TrueConnection {
     // more...
 };
 
-$Msg TrueConnection$deliver (Connection$__class__ cls, $WORD __impl__, $str data) {
+B_Msg TrueConnection$deliver (ConnectionD___class__ cls, $WORD __impl__, B_str data) {
     TrueConnection trueSelf = (TrueConnection)__impl__;
     return NULL;
 }
 
-$Msg TrueConnection$close (Connection$__class__ cls, $WORD __impl__) {
+B_Msg TrueConnection$close (ConnectionD___class__ cls, $WORD __impl__) {
     TrueConnection trueSelf = (TrueConnection)__impl__;
     return NULL;
 }
 
-$Msg TrueConnection$receive_on (Connection$__class__ cls, $WORD __impl__, $function input, $function error) {
+B_Msg TrueConnection$receive_on (ConnectionD___class__ cls, $WORD __impl__, $function input, $function error) {
     TrueConnection trueSelf = (TrueConnection)__impl__;
     return NULL;
 }
 
-struct Connection$__class__ Connection___TrueConnection = {
+struct ConnectionD___class__ Connection___TrueConnection = {
     .$GCINFO    = "Connection",
     .deliver    = TrueConnection$deliver,
     .close      = TrueConnection$close,
@@ -101,16 +101,16 @@ struct Connection$__class__ Connection___TrueConnection = {
 struct TrueEnv;
 typedef struct TrueEnv *TrueEnv;
 
-$Msg TrueEnv$open(Env$__class__ cls, $WORD __impl__, $str address, $int port, $function callback) {
+B_Msg TrueEnv$open(EnvD___class__ cls, $WORD __impl__, B_str address, B_int port, $function callback) {
     TrueEnv self = (TrueEnv)__impl__;
     
     TrueConnection trueConn = /* create socket, etc, ... */ NULL;
-    Connection conn = Connection$__pack__(&Connection___TrueConnection, trueConn);
-    $Msg m = /* ASYNC... */ NULL;
+    Connection conn = ConnectionD___pack__(&Connection___TrueConnection, trueConn);
+    B_Msg m = /* ASYNC... */ NULL;
     return m;
 }
 
-struct Env$__class__ Env___TrueEnv = {
+struct EnvD___class__ Env___TrueEnv = {
     .$GCINFO    = "Env",
     .open       = TrueEnv$open
 };
@@ -124,7 +124,7 @@ struct TrueEnv {
 int main() {
     // ...
     TrueEnv trueEnv = /* create whatever... */ NULL;
-    Env env = Env$__pack__(&Env___TrueEnv, trueEnv);
+    Env env = EnvD___pack__(&Env___TrueEnv, trueEnv);
     // BOOTSTRAP($CONTINUATION(ROOT, 1, ($WORD)env));
     // ... 
 }

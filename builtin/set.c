@@ -16,240 +16,240 @@
 #include "set_impl.h"
  
 
-void $set_serialize($set, $Serial$state);
-$set $set_deserialize($set, $Serial$state);
+void B_set_serialize(B_set, $Serial$state);
+B_set B_set_deserialize(B_set, $Serial$state);
 
-struct $Ord$set $Ord$set_instance;
-struct $Minus$set $Minus$set_instance;
-struct $Logical$set $Logical$set_instance;
+struct B_OrdD_SetD_set B_OrdD_SetD_set_instance;
+struct B_MinusD_SetD_set B_MinusD_SetD_set_instance;
+struct B_LogicalD_SetD_set B_LogicalD_SetD_set_instance;
 
-struct $Set$set$class $Set$set$methods = {
-    "$Set$set",
+struct B_SetD_setG_class B_SetD_setG_methods = {
+    "B_SetD_set",
     UNASSIGNED,
-    ($Super$class)&$Set$methods,
-    $Set$set$__init__,
-    $Set$set$__serialize__,
-    $Set$set$__deserialize__,
-    ($bool (*)($Set$set))$default__bool__,
-    ($str (*)($Set$set))$default__str__,
-    ($str (*)($Set$set))$default__str__,
-    $Set$set$__iter__,
-    $Set$set$__fromiter__,
-    $Set$set$__len__,
-    $Set$set$__contains__,
-    $Set$set$__containsnot__,
-    $Set$set$isdisjoint,
-    $Set$set$add,
-    $Set$set$discard,
-    $Set$set$pop
+    ($SuperG_class)&B_SetG_methods,
+    B_SetD_setD___init__,
+    B_SetD_setD___serialize__,
+    B_SetD_setD___deserialize__,
+    (B_bool (*)(B_SetD_set))$default__bool__,
+    (B_str (*)(B_SetD_set))$default__str__,
+    (B_str (*)(B_SetD_set))$default__str__,
+    B_SetD_setD___iter__,
+    B_SetD_setD___fromiter__,
+    B_SetD_setD___len__,
+    B_SetD_setD___contains__,
+    B_SetD_setD___containsnot__,
+    B_SetD_set$isdisjoint,
+    B_SetD_set$add,
+    B_SetD_set$discard,
+    B_SetD_set$pop
 };   
 
-struct $Ord$set$class $Ord$set$methods = {
-    "$Ord$set",
+struct B_OrdD_SetD_setG_class B_OrdD_SetD_setG_methods = {
+    "B_OrdD_SetD_set",
     UNASSIGNED,
-    ($Super$class)&$Ord$methods,
-    $Ord$set$__init__,
-    $Ord$set$__serialize__,
-    $Ord$set$__deserialize__,
-    ($bool (*)($Ord$set))$default__bool__,
-    ($str (*)($Ord$set))$default__str__,
-    ($str (*)($Ord$set))$default__str__,
-    $Ord$set$__eq__,
-    $Ord$set$__ne__,
-    $Ord$set$__lt__,
-    $Ord$set$__le__,
-    $Ord$set$__gt__,
-    $Ord$set$__ge__
+    ($SuperG_class)&B_OrdG_methods,
+    B_OrdD_SetD_setD___init__,
+    B_OrdD_SetD_setD___serialize__,
+    B_OrdD_SetD_setD___deserialize__,
+    (B_bool (*)(B_OrdD_SetD_set))$default__bool__,
+    (B_str (*)(B_OrdD_SetD_set))$default__str__,
+    (B_str (*)(B_OrdD_SetD_set))$default__str__,
+    B_OrdD_SetD_setD___eq__,
+    B_OrdD_SetD_setD___ne__,
+    B_OrdD_SetD_setD___lt__,
+    B_OrdD_SetD_setD___le__,
+    B_OrdD_SetD_setD___gt__,
+    B_OrdD_SetD_setD___ge__
 };
 
-struct $Minus$set$class $Minus$set$methods = {
-    "$Minus$set",
+struct B_MinusD_SetD_setG_class B_MinusD_SetD_setG_methods = {
+    "B_MinusD_SetD_set",
     UNASSIGNED,
-    ($Super$class)&$Minus$methods,
-    $Minus$set$__init__,
-    $Minus$set$__serialize__,
-    $Minus$set$__deserialize__,
-    ($bool (*)($Minus$set))$default__bool__,
-    ($str (*)($Minus$set))$default__str__,
-    ($str (*)($Minus$set))$default__str__,
-    $Minus$set$__sub__,
-    ($set (*)($Minus$set, $set, $set))$Minus$__isub__,
+    ($SuperG_class)&B_MinusG_methods,
+    B_MinusD_SetD_setD___init__,
+    B_MinusD_SetD_setD___serialize__,
+    B_MinusD_SetD_setD___deserialize__,
+    (B_bool (*)(B_MinusD_SetD_set))$default__bool__,
+    (B_str (*)(B_MinusD_SetD_set))$default__str__,
+    (B_str (*)(B_MinusD_SetD_set))$default__str__,
+    B_MinusD_SetD_setD___sub__,
+    (B_set (*)(B_MinusD_SetD_set, B_set, B_set))B_MinusD___isub__,
 
 };
 
-struct $Logical$set$class $Logical$set$methods = {
-    "$Logical$set",
+struct B_LogicalD_SetD_setG_class B_LogicalD_SetD_setG_methods = {
+    "B_LogicalD_SetD_set",
     UNASSIGNED,
-    ($Super$class)&$Logical$methods,
-    $Logical$set$__init__,
-    $Logical$set$__serialize__,
-    $Logical$set$__deserialize__,
-    ($bool (*)($Logical$set))$default__bool__,
-    ($str (*)($Logical$set))$default__str__,
-    ($str (*)($Logical$set))$default__str__,
-    $Logical$set$__and__,
-    $Logical$set$__or__,
-    $Logical$set$__xor__,
-    ($set (*)($Logical$set, $set, $set))$Logical$__iand__,
-    ($set (*)($Logical$set, $set, $set))$Logical$__ior__,
-    ($set (*)($Logical$set, $set, $set))$Logical$__ixor__
+    ($SuperG_class)&B_LogicalG_methods,
+    B_LogicalD_SetD_setD___init__,
+    B_LogicalD_SetD_setD___serialize__,
+    B_LogicalD_SetD_setD___deserialize__,
+    (B_bool (*)(B_LogicalD_SetD_set))$default__bool__,
+    (B_str (*)(B_LogicalD_SetD_set))$default__str__,
+    (B_str (*)(B_LogicalD_SetD_set))$default__str__,
+    B_LogicalD_SetD_setD___and__,
+    B_LogicalD_SetD_setD___or__,
+    B_LogicalD_SetD_setD___xor__,
+    (B_set (*)(B_LogicalD_SetD_set, B_set, B_set))B_LogicalD___iand__,
+    (B_set (*)(B_LogicalD_SetD_set, B_set, B_set))B_LogicalD___ior__,
+    (B_set (*)(B_LogicalD_SetD_set, B_set, B_set))B_LogicalD___ixor__
 };
 
-// $Set
+// B_Set
 
-void $Set$set$__serialize__($Set$set self, $Serial$state state) {
-    $step_serialize(self->w$Ord, state);
-    $step_serialize(self->w$Logical, state);
-    $step_serialize(self->w$Minus, state);
-    $step_serialize(self->w$Eq$A$Set$set, state);
-    $step_serialize(self->w$Hashable$A$Set$set, state);
+void B_SetD_setD___serialize__(B_SetD_set self, $Serial$state state) {
+    $step_serialize(self->W_Ord, state);
+    $step_serialize(self->W_Logical, state);
+    $step_serialize(self->W_Minus, state);
+    $step_serialize(self->W_EqD_AD_SetB_set, state);
+    $step_serialize(self->W_HashableD_AD_SetB_set, state);
 }
 
-$Set$set $Set$set$__deserialize__($Set$set self, $Serial$state state) {
-    $Set$set res = $DNEW($Set$set,state);
-    res->w$Ord = ($Ord)$step_deserialize(state);
-    res->w$Logical = ($Logical)$step_deserialize(state);
-    res->w$Minus = ($Minus)$step_deserialize(state);
-    res->w$Eq$A$Set$set = ($Eq)$step_deserialize(state);
-    res->w$Hashable$A$Set$set = ($Hashable)$step_deserialize(state);
+B_SetD_set B_SetD_setD___deserialize__(B_SetD_set self, $Serial$state state) {
+    B_SetD_set res = $DNEW(B_SetD_set,state);
+    res->W_Ord = (B_Ord)$step_deserialize(state);
+    res->W_Logical = (B_Logical)$step_deserialize(state);
+    res->W_Minus = (B_Minus)$step_deserialize(state);
+    res->W_EqD_AD_SetB_set = (B_Eq)$step_deserialize(state);
+    res->W_HashableD_AD_SetB_set = (B_Hashable)$step_deserialize(state);
     return res;
 }
 
 
-$Iterator $Set$set$__iter__ ($Set$set wit, $set set) {
-    return $set_iter(set);
+B_Iterator B_SetD_setD___iter__ (B_SetD_set wit, B_set set) {
+    return B_set_iter(set);
 }
 
-$set $Set$set$__fromiter__($Set$set wit, $Iterable wit2, $WORD iter) {
-    return $set_fromiter(wit->w$Hashable$A$Set$set,wit2->$class->__iter__(wit2,iter));
+B_set B_SetD_setD___fromiter__(B_SetD_set wit, B_Iterable wit2, $WORD iter) {
+    return B_set_fromiter(wit->W_HashableD_AD_SetB_set,wit2->$class->__iter__(wit2,iter));
 }
 
-$int $Set$set$__len__ ($Set$set wit, $set set) {
-    return to$int($set_len(set));
+B_int B_SetD_setD___len__ (B_SetD_set wit, B_set set) {
+    return toB_int(B_set_len(set));
 }
-$bool $Set$set$__contains__ ($Set$set wit, $set set, $WORD val) {
-    return  to$bool($set_contains(set,wit->w$Hashable$A$Set$set,val));
-}
-
-$bool $Set$set$__containsnot__ ($Set$set wit, $set set, $WORD val) {
-    return  to$bool(!$set_contains(set,wit->w$Hashable$A$Set$set,val));
+B_bool B_SetD_setD___contains__ (B_SetD_set wit, B_set set, $WORD val) {
+    return  toB_bool(B_set_contains(set,wit->W_HashableD_AD_SetB_set,val));
 }
 
-$bool $Set$set$isdisjoint ($Set$set wit, $set set, $set other) {
-    return to$bool($set_isdisjoint(wit->w$Hashable$A$Set$set,set,other));
+B_bool B_SetD_setD___containsnot__ (B_SetD_set wit, B_set set, $WORD val) {
+    return  toB_bool(!B_set_contains(set,wit->W_HashableD_AD_SetB_set,val));
 }
 
-void $Set$set$add ($Set$set wit, $set set, $WORD elem) {
-    $set_add(set,wit->w$Hashable$A$Set$set,elem);
+B_bool B_SetD_set$isdisjoint (B_SetD_set wit, B_set set, B_set other) {
+    return toB_bool(B_set_isdisjoint(wit->W_HashableD_AD_SetB_set,set,other));
 }
 
-void $Set$set$discard ($Set$set wit, $set set, $WORD elem) {
-    $set_discard(set,wit->w$Hashable$A$Set$set,elem);
+void B_SetD_set$add (B_SetD_set wit, B_set set, $WORD elem) {
+    B_set_add(set,wit->W_HashableD_AD_SetB_set,elem);
 }
 
-$WORD $Set$set$pop ($Set$set wit, $set set) {
-    return $set_pop(set);
+void B_SetD_set$discard (B_SetD_set wit, B_set set, $WORD elem) {
+    B_set_discard(set,wit->W_HashableD_AD_SetB_set,elem);
 }
 
-// $Ord
-
-void $Ord$set$__serialize__($Ord$set self, $Serial$state state) {
-    $step_serialize(self->w$Set, state);
+$WORD B_SetD_set$pop (B_SetD_set wit, B_set set) {
+    return B_set_pop(set);
 }
 
-$Ord$set $Ord$set$__deserialize__($Ord$set self, $Serial$state state) {
-    $Ord$set res = $DNEW($Ord$set,state);
-    res->w$Set = ($Set)$step_deserialize(state);
+// B_Ord
+
+void B_OrdD_SetD_setD___serialize__(B_OrdD_SetD_set self, $Serial$state state) {
+    $step_serialize(self->W_Set, state);
+}
+
+B_OrdD_SetD_set B_OrdD_SetD_setD___deserialize__(B_OrdD_SetD_set self, $Serial$state state) {
+    B_OrdD_SetD_set res = $DNEW(B_OrdD_SetD_set,state);
+    res->W_Set = (B_Set)$step_deserialize(state);
     return res;
 }
 
-$bool $Ord$set$__eq__ ($Ord$set wit, $set a, $set b) {
-    return to$bool($set_eq((($Set$set)wit->w$Set)->w$Hashable$A$Set$set,a,b));
+B_bool B_OrdD_SetD_setD___eq__ (B_OrdD_SetD_set wit, B_set a, B_set b) {
+    return toB_bool(B_set_eq(((B_SetD_set)wit->W_Set)->W_HashableD_AD_SetB_set,a,b));
 }
   
-$bool $Ord$set$__ne__ ($Ord$set wit, $set a, $set b) {
-    return to$bool(!$set_eq((($Set$set)wit->w$Set)->w$Hashable$A$Set$set,a,b));
+B_bool B_OrdD_SetD_setD___ne__ (B_OrdD_SetD_set wit, B_set a, B_set b) {
+    return toB_bool(!B_set_eq(((B_SetD_set)wit->W_Set)->W_HashableD_AD_SetB_set,a,b));
 }
   
-$bool $Ord$set$__lt__ ($Ord$set wit, $set a, $set b) {
-    return to$bool($set_lt((($Set$set)wit->w$Set)->w$Hashable$A$Set$set,a,b));
+B_bool B_OrdD_SetD_setD___lt__ (B_OrdD_SetD_set wit, B_set a, B_set b) {
+    return toB_bool(B_set_lt(((B_SetD_set)wit->W_Set)->W_HashableD_AD_SetB_set,a,b));
 }
   
-$bool $Ord$set$__le__ ($Ord$set wit, $set a, $set b) {
-    return to$bool($set_le((($Set$set)wit->w$Set)->w$Hashable$A$Set$set,a,b));
+B_bool B_OrdD_SetD_setD___le__ (B_OrdD_SetD_set wit, B_set a, B_set b) {
+    return toB_bool(B_set_le(((B_SetD_set)wit->W_Set)->W_HashableD_AD_SetB_set,a,b));
 }
   
-$bool $Ord$set$__gt__ ($Ord$set wit, $set a, $set b) {
-    return to$bool($set_gt((($Set$set)wit->w$Set)->w$Hashable$A$Set$set,a,b));
+B_bool B_OrdD_SetD_setD___gt__ (B_OrdD_SetD_set wit, B_set a, B_set b) {
+    return toB_bool(B_set_gt(((B_SetD_set)wit->W_Set)->W_HashableD_AD_SetB_set,a,b));
 }
   
-$bool $Ord$set$__ge__ ($Ord$set wit, $set a, $set b) {
-    return to$bool($set_ge((($Set$set)wit->w$Set)->w$Hashable$A$Set$set,a,b));
+B_bool B_OrdD_SetD_setD___ge__ (B_OrdD_SetD_set wit, B_set a, B_set b) {
+    return toB_bool(B_set_ge(((B_SetD_set)wit->W_Set)->W_HashableD_AD_SetB_set,a,b));
 }
 
-// $Minus
+// B_Minus
 
-void $Logical$set$__serialize__($Logical$set self, $Serial$state state) {
-    $step_serialize(self->w$Set, state);
+void B_LogicalD_SetD_setD___serialize__(B_LogicalD_SetD_set self, $Serial$state state) {
+    $step_serialize(self->W_Set, state);
 }
 
-$Logical$set $Logical$set$__deserialize__($Logical$set self, $Serial$state state) {
-    $Logical$set res = $DNEW($Logical$set,state);
-    res->w$Set = ($Set)$step_deserialize(state);
+B_LogicalD_SetD_set B_LogicalD_SetD_setD___deserialize__(B_LogicalD_SetD_set self, $Serial$state state) {
+    B_LogicalD_SetD_set res = $DNEW(B_LogicalD_SetD_set,state);
+    res->W_Set = (B_Set)$step_deserialize(state);
     return res;
 }
 
-$set $Minus$set$__sub__ ($Minus$set wit, $set a, $set b) {
-    return $set_difference((($Set$set)wit->w$Set)->w$Hashable$A$Set$set,a,b);
+B_set B_MinusD_SetD_setD___sub__ (B_MinusD_SetD_set wit, B_set a, B_set b) {
+    return B_set_difference(((B_SetD_set)wit->W_Set)->W_HashableD_AD_SetB_set,a,b);
 }
 
-// $Logical
+// B_Logical
 
-void $Minus$set$__serialize__($Minus$set self, $Serial$state state) {
-    $step_serialize(self->w$Set, state);
+void B_MinusD_SetD_setD___serialize__(B_MinusD_SetD_set self, $Serial$state state) {
+    $step_serialize(self->W_Set, state);
 }
 
-$Minus$set $Minus$set$__deserialize__($Minus$set self, $Serial$state state) {
-    $Minus$set res = $DNEW($Minus$set,state);
-    res->w$Set = ($Set)$step_deserialize(state);
+B_MinusD_SetD_set B_MinusD_SetD_setD___deserialize__(B_MinusD_SetD_set self, $Serial$state state) {
+    B_MinusD_SetD_set res = $DNEW(B_MinusD_SetD_set,state);
+    res->W_Set = (B_Set)$step_deserialize(state);
     return res;
 }
 
-$set $Logical$set$__and__($Logical$set wit, $set a, $set b) {
-    return $set_intersection((($Set$set)wit->w$Set)->w$Hashable$A$Set$set,a,b);
+B_set B_LogicalD_SetD_setD___and__(B_LogicalD_SetD_set wit, B_set a, B_set b) {
+    return B_set_intersection(((B_SetD_set)wit->W_Set)->W_HashableD_AD_SetB_set,a,b);
 }
 
-$set $Logical$set$__or__ ($Logical$set wit, $set a, $set b) {
-    return $set_union((($Set$set)wit->w$Set)->w$Hashable$A$Set$set,a,b);
+B_set B_LogicalD_SetD_setD___or__ (B_LogicalD_SetD_set wit, B_set a, B_set b) {
+    return B_set_union(((B_SetD_set)wit->W_Set)->W_HashableD_AD_SetB_set,a,b);
 }
 
-$set $Logical$set$__xor__($Logical$set wit, $set a, $set b) {
-    return $set_symmetric_difference((($Set$set)wit->w$Set)->w$Hashable$A$Set$set,a,b);
+B_set B_LogicalD_SetD_setD___xor__(B_LogicalD_SetD_set wit, B_set a, B_set b) {
+    return B_set_symmetric_difference(((B_SetD_set)wit->W_Set)->W_HashableD_AD_SetB_set,a,b);
 }
 
 // init and new
 
-void $Ord$set$__init__($Ord$set self, $Set master) {
-    self->w$Set = master;
+void B_OrdD_SetD_setD___init__(B_OrdD_SetD_set self, B_Set master) {
+    self->W_Set = master;
 }
 
-void $Logical$set$__init__($Logical$set self, $Set master) {
-    self->w$Set = master;
+void B_LogicalD_SetD_setD___init__(B_LogicalD_SetD_set self, B_Set master) {
+    self->W_Set = master;
 }
 
-void $Minus$set$__init__($Minus$set self, $Set master) {
-    self->w$Set = master;
+void B_MinusD_SetD_setD___init__(B_MinusD_SetD_set self, B_Set master) {
+    self->W_Set = master;
 }
 
-$Set$set $Set$set$new($Hashable h) {
-    return $NEW($Set$set, h);
+B_SetD_set B_SetD_setG_new(B_Hashable h) {
+    return $NEW(B_SetD_set, h);
 }
 
-void $Set$set$__init__($Set$set self, $Hashable h) {
-    self->w$Ord = ($Ord)$NEW($Ord$set,($Set)self);
-    self->w$Logical = ($Logical)$NEW($Logical$set,($Set)self);
-    self->w$Minus = ($Minus)$NEW($Minus$set,($Set)self);
-    self->w$Eq$A$Set$set = ($Eq)h;
-    self->w$Hashable$A$Set$set = h;
+void B_SetD_setD___init__(B_SetD_set self, B_Hashable h) {
+    self->W_Ord = (B_Ord)$NEW(B_OrdD_SetD_set,(B_Set)self);
+    self->W_Logical = (B_Logical)$NEW(B_LogicalD_SetD_set,(B_Set)self);
+    self->W_Minus = (B_Minus)$NEW(B_MinusD_SetD_set,(B_Set)self);
+    self->W_EqD_AD_SetB_set = (B_Eq)h;
+    self->W_HashableD_AD_SetB_set = h;
 }
    

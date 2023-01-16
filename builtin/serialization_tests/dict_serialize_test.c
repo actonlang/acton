@@ -18,20 +18,20 @@
 
 int main() {
   $register_builtin();
-  $Hashable wit = ($Hashable)$Hashable$str$witness;
-  $Iterable wit2 = ($Iterable)$Iterable$range$witness;
-  $str a = to$str("a");
-  $str b = to$str("b");
-  $dict dict = $NEW($dict,wit,NULL,NULL);
-  $Iterator it = wit2->$class->__iter__(wit2,$NEW($range,to$int(0),to$int(10),to$int(1)));
-  $list lst = $list_fromiter(it);
+  B_Hashable wit = (B_Hashable)B_HashableD_strG_witness;
+  B_Iterable wit2 = (B_Iterable)B_IterableD_rangeG_witness;
+  B_str a = to$str("a");
+  B_str b = to$str("b");
+  B_dict dict = $NEW(B_dict,wit,NULL,NULL);
+  B_Iterator it = wit2->$class->__iter__(wit2,$NEW(B_range,toB_int(0),toB_int(10),toB_int(1)));
+  B_list lst = B_listD_fromiter(it);
   printf("lst = %s\n",(lst->$class->__str__(lst))->str);
-  $dict_setitem(dict,wit, a,lst);
-  $dict_setitem(dict,wit, b,lst);
+  B_dictD_setitem(dict,wit, a,lst);
+  B_dictD_setitem(dict,wit, b,lst);
   $ROW r = $serialize(($Serializable)dict,NULL);
-  $dict dict2 = ($dict)$deserialize(r,NULL);
-  $print(1,dict);
-  $print(1,dict2);
-  $list_setitem($dict_getitem(dict2,wit,a),1,to$int(7));
+  B_dict dict2 = (B_dict)$deserialize(r,NULL);
+  B_print(1,dict);
+  B_print(1,dict2);
+  B_listD_setitem(B_dictD_getitem(dict2,wit,a),1,toB_int(7));
   printf("Sharing test (both values should have 2nd element changed to 7):\ndict2 = %s\n",(dict2->$class->__str__(dict2))->str);
 }

@@ -50,9 +50,6 @@ defineAndShadow                     :: TEnv -> DeactEnv -> DeactEnv
 defineAndShadow te env              = modX (define te env) $ \x -> x{ wrappedX = wrapped env \\ ns, localsX = locals env \\ ns }
   where ns                          = dom te
 
-newName                             :: String -> DeactM Name
-newName s                           = state (\(uniq:supply) -> (Internal DeactPass s uniq, supply))
-
 
 wrapped env                         = wrappedX $ envX env
 
@@ -187,8 +184,8 @@ instance Deact Decl where
 
 newact env n q p                    = Def l0 (newactName n) q p KwdNIL (Just t) [newassign, waitinit, sReturn x] NoDec fxProc
   where t                           = tCon $ TC (NoQ n) (map tVar $ qbound q)
-        x                           = eVar tmpName
-        newassign                   = sAssign (pVar tmpName t) (eCall (tApp (eQVar primNEWACTOR) [t]) [])
+        x                           = eVar actName
+        newassign                   = sAssign (pVar actName t) (eCall (tApp (eQVar primNEWACTOR) [t]) [])
         waitinit                    = sExpr $ eCall (tApp (eQVar primAWAITf) [tNone]) [asyncmsg]
         asyncmsg                    = eCall (tApp (eQVar primASYNCf) [tNone]) [x, closure]
         closure                     = Lambda l0 PosNIL KwdNIL initcall fxProc
@@ -197,10 +194,6 @@ newact env n q p                    = Def l0 (newactName n) q p KwdNIL (Just t) 
 newactQName (QName m n)             = QName m (newactName n)
 newactQName (NoQ n)                 = NoQ (newactName n)
 newactQName (GName m n)             = GName m (newactName n)
-
-newactName n                        = Derived n (name "newact")
-
-tmpName                             = Internal DeactPass "tmp" 0
 
 addSelfPar p                        = PosPar selfKW (Just tSelf) Nothing p
 
@@ -281,7 +274,7 @@ deactCall env unwrap l (TApp _ (Var _ n) ts) (PosArg self (PosArg e PosNil))
                                          let lam = Lambda l0 PosNIL KwdNIL (eCallP e (pArg ps)) fxProc
                                          return $ Lambda l0 ps KwdNIL (eCall (tApp (eQVar primASYNCf) [t]) [self,lam]) fxAction
   where TFun _ fx p _ t             = typeOf env e
-        ps                          = pPar paramNames' p
+        ps                          = pPar paramNames p
 deactCall env unwrap l e as
   | fx == fxAction && unwrap        = deact env (eAwait $ Call l (eAsync e) as KwdNil)
   | otherwise                       = do e <- deact env e

@@ -1320,7 +1320,7 @@ instance Infer Expr where
                                              t1 <- newTVar
                                              w1 <- newWitness
                                              let t2 = tList t0
-                                                 w2 = eQVar primWCollectionList
+                                                 w2 = eQVar witCollectionList
                                              return (Impl w1 t1 (pSequence t0) :
                                                      cs, t1, eCall (tApp (eDot (eDot (eVar w1) (witAttr qnCollection)) fromiterKW) [t2]) [w2, List l es'])
     infer env (ListComp l e1 co)
@@ -1331,7 +1331,7 @@ instance Infer Expr where
                                              t1 <- newTVar
                                              w1 <- newWitness
                                              let t2 = tList t0
-                                                 w2 = eQVar primWCollectionList
+                                                 w2 = eQVar witCollectionList
                                              return (Impl w1 t1 (pSequence t0) :
                                                      cs1++cs2, t1, eCall (tApp (eDot (eDot (eVar w1) (witAttr qnCollection)) fromiterKW) [t2]) [w2, ListComp l e1' co'])
     infer env (Set l es)                = do t0 <- newTVar
@@ -1339,7 +1339,7 @@ instance Infer Expr where
                                              t1 <- newTVar
                                              w1 <- newWitness
                                              let t2 = tList t0
-                                                 w2 = eQVar primWCollectionList
+                                                 w2 = eQVar witCollectionList
                                              return (Impl w1 t1 (pSet t0) :
                                                      cs, t1, eCall (tApp (eDot (eVar w1) fromiterKW) [t2]) [w2, List l es'])
     infer env (SetComp l e1 co)
@@ -1350,7 +1350,7 @@ instance Infer Expr where
                                              t1 <- newTVar
                                              w1 <- newWitness
                                              let t2 = tList t0
-                                                 w2 = eQVar primWCollectionList
+                                                 w2 = eQVar witCollectionList
                                              return (Impl w1 t1 (pSet t0) :
                                                      cs1++cs2, t1, eCall (tApp (eDot (eVar w1) fromiterKW) [t2]) [w2, ListComp l e1' co'])
                                              
@@ -1360,7 +1360,7 @@ instance Infer Expr where
                                              t1 <- newTVar
                                              w1 <- newWitness
                                              let t2 = tList (tTupleP (posRow tk $ posRow tv posNil))
-                                                 w2 = eQVar primWCollectionList
+                                                 w2 = eQVar witCollectionList
                                              return (Impl w1 t1 (pMapping tk tv) :
                                                      cs, t1, eCall (tApp (eDot (eVar w1) fromiterKW) [t2]) [w2, List l as'])
     infer env (DictComp l a1 co)
@@ -1372,7 +1372,7 @@ instance Infer Expr where
                                              t1 <- newTVar
                                              w1 <- newWitness
                                              let t2 = tList (tTupleP (posRow tk $ posRow tv posNil))
-                                                 w2 = eQVar primWCollectionList
+                                                 w2 = eQVar witCollectionList
                                              return (Impl w1 t1 (pMapping tk tv) :
                                                      cs1++cs2, t1, eCall (tApp (eDot (eVar w1) fromiterKW) [t2]) [w2, ListComp l a1' co'])
     infer env (Paren l e)               = do (cs,t,e') <- infer env e

@@ -3,7 +3,7 @@
 #include "../rts/io.h"
 #include "../rts/log.h"
 
-void net$$__ext_init__() {
+void netQ___ext_init__() {
     // NOP
 }
 
@@ -13,9 +13,9 @@ struct dns_cb_data {
     $action on_error;
 };
 
-void net$$DNS$lookup_a__on_resolve (uv_getaddrinfo_t *req, int status, struct addrinfo *dns_res) {
+void netQ_DNSD_lookup_a__on_resolve (uv_getaddrinfo_t *req, int status, struct addrinfo *dns_res) {
     struct dns_cb_data *cb_data = req->data;
-    $list $res = $list$new(NULL, NULL);
+    B_list $res = B_listG_new(NULL, NULL);
 
     if (status != 0) {
         char errmsg[1024] = "DNS lookup error: ";
@@ -34,7 +34,7 @@ void net$$DNS$lookup_a__on_resolve (uv_getaddrinfo_t *req, int status, struct ad
     char addr[17] = {'\0'};
     for (rp = dns_res; rp != NULL; rp = rp->ai_next) {
         uv_ip4_name((struct sockaddr_in*) rp->ai_addr, addr, 16);
-        $Sequence$list$witness->$class->append($Sequence$list$witness, $res, to$str(addr));
+        B_SequenceD_listG_witness->$class->append(B_SequenceD_listG_witness, $res, to$str(addr));
     }
 
     $action f = cb_data->on_resolve;
@@ -46,7 +46,7 @@ void net$$DNS$lookup_a__on_resolve (uv_getaddrinfo_t *req, int status, struct ad
     free(req);
 }
 
-$R net$$DNS$lookup_a$local (net$$DNS self, $Cont c$cont, $str name, $action on_resolve, $action on_error) {
+$R netQ_DNSD_lookup_aG_local (netQ_DNS self, $Cont c$cont, B_str name, $action on_resolve, $action on_error) {
     struct addrinfo *hints = (struct addrinfo *)malloc(sizeof(struct addrinfo));
     hints->ai_family = PF_INET;
     hints->ai_socktype = SOCK_STREAM;
@@ -61,17 +61,17 @@ $R net$$DNS$lookup_a$local (net$$DNS self, $Cont c$cont, $str name, $action on_r
     uv_getaddrinfo_t *req = (uv_getaddrinfo_t*)malloc(sizeof(uv_getaddrinfo_t));
     req->data = cb_data;
 
-    int r = uv_getaddrinfo(get_uv_loop(), req, net$$DNS$lookup_a__on_resolve, from$str(name), NULL, hints);
+    int r = uv_getaddrinfo(get_uv_loop(), req, netQ_DNSD_lookup_a__on_resolve, fromB_str(name), NULL, hints);
     // TODO: use on_error callback instead!
     if (r != 0)
-        $RAISE((($BaseException)$RuntimeError$new(to$str("Unable to run DNS query"))));
+        $RAISE(((B_BaseException)B_RuntimeErrorG_new(to$str("Unable to run DNS query"))));
 
-    return $R_CONT(c$cont, $None);
+    return $R_CONT(c$cont, B_None);
 }
 
-void net$$DNS$lookup_aaaa__on_resolve (uv_getaddrinfo_t *req, int status, struct addrinfo *dns_res) {
+void netQ_DNSD_lookup_aaaa__on_resolve (uv_getaddrinfo_t *req, int status, struct addrinfo *dns_res) {
     struct dns_cb_data *cb_data = req->data;
-    $list $res = $list$new(NULL, NULL);
+    B_list $res = B_listG_new(NULL, NULL);
 
     if (status != 0) {
         char errmsg[1024] = "DNS lookup error: ";
@@ -91,7 +91,7 @@ void net$$DNS$lookup_aaaa__on_resolve (uv_getaddrinfo_t *req, int status, struct
     for (rp = dns_res; rp != NULL; rp = rp->ai_next) {
         //uv_ip6_name((struct sockaddr_in6*) rp->ai_addr, addr, 39);
         uv_ip6_name((struct sockaddr_in6*)(rp->ai_addr), addr, 39);
-        $Sequence$list$witness->$class->append($Sequence$list$witness, $res, to$str(addr));
+        B_SequenceD_listG_witness->$class->append(B_SequenceD_listG_witness, $res, to$str(addr));
     }
 
     $action f = cb_data->on_resolve;
@@ -103,7 +103,7 @@ void net$$DNS$lookup_aaaa__on_resolve (uv_getaddrinfo_t *req, int status, struct
     free(req);
 }
 
-$R net$$DNS$lookup_aaaa$local (net$$DNS self, $Cont c$cont, $str name, $action on_resolve, $action on_error) {
+$R netQ_DNSD_lookup_aaaaG_local (netQ_DNS self, $Cont c$cont, B_str name, $action on_resolve, $action on_error) {
     struct addrinfo *hints = (struct addrinfo *)malloc(sizeof(struct addrinfo));
     hints->ai_family = PF_INET6;
     hints->ai_socktype = SOCK_STREAM;
@@ -118,30 +118,30 @@ $R net$$DNS$lookup_aaaa$local (net$$DNS self, $Cont c$cont, $str name, $action o
     uv_getaddrinfo_t *req = (uv_getaddrinfo_t*)malloc(sizeof(uv_getaddrinfo_t));
     req->data = cb_data;
 
-    int r = uv_getaddrinfo(get_uv_loop(), req, net$$DNS$lookup_aaaa__on_resolve, from$str(name), NULL, hints);
+    int r = uv_getaddrinfo(get_uv_loop(), req, netQ_DNSD_lookup_aaaa__on_resolve, fromB_str(name), NULL, hints);
     // TODO: use on_error callback instead!
     if (r != 0)
-        $RAISE((($BaseException)$RuntimeError$new(to$str("Unable to run DNS query"))));
+        $RAISE(((B_BaseException)B_RuntimeErrorG_new(to$str("Unable to run DNS query"))));
 
-    return $R_CONT(c$cont, $None);
+    return $R_CONT(c$cont, B_None);
 }
 
-$R net$$DNS$_pin_affinity (net$$DNS self, $Cont c$cont) {
+$R netQ_DNSD__pin_affinity (netQ_DNS self, $Cont c$cont) {
     pin_actor_affinity();
-    return $R_CONT(c$cont, $None);
+    return $R_CONT(c$cont, B_None);
 }
 
 
-void net$$TCPIPConnection__on_receive(uv_stream_t *stream, ssize_t nread, const uv_buf_t *buf) {
+void netQ_TCPIPConnection__on_receive(uv_stream_t *stream, ssize_t nread, const uv_buf_t *buf) {
     if (nread < 0){
         if (nread == UV_EOF) {
             uv_close((uv_handle_t *)stream, NULL);
         }
     } else if (nread > 0) {
         if (stream->data) {
-            net$$TCPIPConnection self = stream->data;
+            netQ_TCPIPConnection self = stream->data;
             $action2 f = self->on_receive;
-            f->$class->__asyn__(f, self, to$bytes_len(buf->base, nread));
+            f->$class->__asyn__(f, self, to$bytesD_len(buf->base, nread));
         }
     }
 
@@ -150,7 +150,7 @@ void net$$TCPIPConnection__on_receive(uv_stream_t *stream, ssize_t nread, const 
 }
 
 void on_connect(uv_connect_t *connect_req, int status) {
-    net$$TCPIPConnection self = (net$$TCPIPConnection)connect_req->data;
+    netQ_TCPIPConnection self = (netQ_TCPIPConnection)connect_req->data;
 
     if (status != 0) {
         char errmsg[1024] = "Error in TCP connect: ";
@@ -163,7 +163,7 @@ void on_connect(uv_connect_t *connect_req, int status) {
     }
 
     connect_req->handle->data = self;
-    int r = uv_read_start(connect_req->handle, alloc_buffer, net$$TCPIPConnection__on_receive);
+    int r = uv_read_start(connect_req->handle, alloc_buffer, netQ_TCPIPConnection__on_receive);
     if (r < 0) {
         char errmsg[1024] = "Failed to start reading from TCP client socket: ";
         uv_strerror_r(r, errmsg + strlen(errmsg), sizeof(errmsg)-strlen(errmsg));
@@ -177,28 +177,28 @@ void on_connect(uv_connect_t *connect_req, int status) {
     f->$class->__asyn__(f, self);
 }
 
-$R net$$TCPIPConnection$_init (net$$TCPIPConnection self, $Cont c$cont) {
+$R netQ_TCPIPConnectionD__init (netQ_TCPIPConnection self, $Cont c$cont) {
     pin_actor_affinity();
     uv_tcp_t* socket = (uv_tcp_t*)malloc(sizeof(uv_tcp_t));
     uv_tcp_init(get_uv_loop(), socket);
-    self->_socket = to$int((long)socket);
+    self->_socket = toB_int((long)socket);
 
     uv_connect_t* connect_req = (uv_connect_t*)malloc(sizeof(uv_connect_t));
     connect_req->data = (void *)self;
 
     struct sockaddr_in dest;
-    uv_ip4_addr(from$str(self->address), from$int(self->port), &dest);
+    uv_ip4_addr(fromB_str(self->address), from$int(self->port), &dest);
 
     uv_tcp_connect(connect_req, socket, (const struct sockaddr*)&dest, on_connect);
 
-    return $R_CONT(c$cont, $None);
+    return $R_CONT(c$cont, B_None);
 }
 
-$R net$$TCPIPConnection$write$local (net$$TCPIPConnection self, $Cont c$cont, $bytes data) {
+$R netQ_TCPIPConnectionD_writeG_local (netQ_TCPIPConnection self, $Cont c$cont, B_bytes data) {
     uv_stream_t *stream = (uv_stream_t *)from$int(self->_socket);
     // fd == -1 means invalid FD and can happen after __resume__
     if (stream == -1)
-        return $R_CONT(c$cont, $None);
+        return $R_CONT(c$cont, B_None);
 
     uv_write_t *req = (uv_write_t *)malloc(sizeof(uv_write_t));
     uv_buf_t buf = uv_buf_init(data->str, data->nbytes);
@@ -210,18 +210,18 @@ $R net$$TCPIPConnection$write$local (net$$TCPIPConnection self, $Cont c$cont, $b
         $action2 f = self->on_error;
         f->$class->__asyn__(f, self, to$str(errmsg));
     }
-    return $R_CONT(c$cont, $None);
+    return $R_CONT(c$cont, B_None);
 }
 
-$NoneType net$$TCPIPConnection$__resume__ (net$$TCPIPConnection self) {
-    self->_socket = to$int(-1);
+B_NoneType netQ_TCPIPConnectionD___resume__ (netQ_TCPIPConnection self) {
+    self->_socket = toB_int(-1);
     $action2 f = self->on_error;
     f->$class->__asyn__(f, self, to$str("resume"));
-    return $None;
+    return B_None;
 }
 
 void on_new_connection(uv_stream_t *server, int status) {
-    net$$TCPListener self = (net$$TCPListener)server->data;
+    netQ_TCPListener self = (netQ_TCPListener)server->data;
 
     if (status != 0) {
         char errmsg[1024] = "Error on new TCP client connection: ";
@@ -246,12 +246,12 @@ void on_new_connection(uv_stream_t *server, int status) {
         return;
     }
 
-    self->$class->create_tcp_listen_connection(self, $None, to$int((long)client));
+    self->$class->create_tcp_listen_connection(self, B_None, toB_int((long)client));
     // TODO: free()
 }
 
 
-$R net$$TCPListener$_init (net$$TCPListener self, $Cont c$cont) {
+$R netQ_TCPListenerD__init (netQ_TCPListener self, $Cont c$cont) {
     pin_actor_affinity(($Actor)self);
 
     uv_tcp_t *server = (uv_tcp_t *)malloc(sizeof(uv_tcp_t));
@@ -259,7 +259,7 @@ $R net$$TCPListener$_init (net$$TCPListener self, $Cont c$cont) {
     server->data = (void *)self;
     int r;
     struct sockaddr_in addr;
-    r = uv_ip4_addr(from$str(self->address), from$int(self->port), &addr);
+    r = uv_ip4_addr(fromB_str(self->address), from$int(self->port), &addr);
     if (r != 0) {
         char errmsg[1024] = "Unable to parse address: ";
         uv_strerror_r(r, errmsg + strlen(errmsg), sizeof(errmsg)-strlen(errmsg));
@@ -267,7 +267,7 @@ $R net$$TCPListener$_init (net$$TCPListener self, $Cont c$cont) {
         $action2 f = self->on_listen_error;
         f->$class->__asyn__(f, self, to$str(errmsg));
         // TODO: free() & return
-        return $R_CONT(c$cont, $None);
+        return $R_CONT(c$cont, B_None);
     }
 
     r = uv_tcp_bind(server, (const struct sockaddr*)&addr, 0);
@@ -278,7 +278,7 @@ $R net$$TCPListener$_init (net$$TCPListener self, $Cont c$cont) {
         $action2 f = self->on_listen_error;
         f->$class->__asyn__(f, self, to$str(errmsg));
         // TODO: free() & return
-        return $R_CONT(c$cont, $None);
+        return $R_CONT(c$cont, B_None);
     }
 
     r = uv_listen((uv_stream_t*) server, 1024, on_new_connection);
@@ -289,29 +289,29 @@ $R net$$TCPListener$_init (net$$TCPListener self, $Cont c$cont) {
         $action2 f = self->on_listen_error;
         f->$class->__asyn__(f, self, to$str(errmsg));
         // TODO: free()
-        return $R_CONT(c$cont, $None);
+        return $R_CONT(c$cont, B_None);
     }
 
-    return $R_CONT(c$cont, $None);
+    return $R_CONT(c$cont, B_None);
 }
 
-$NoneType net$$TCPListener$__resume__ (net$$TCPListener self) {
-    self->_stream = to$int(-1);
+B_NoneType netQ_TCPListenerD___resume__ (netQ_TCPListener self) {
+    self->_stream = toB_int(-1);
     $action2 f = self->on_listen_error;
     f->$class->__asyn__(f, self, to$str("resume"));
-    return $None;
+    return B_None;
 }
 
-void net$$TCPListenConnection__on_receive(uv_stream_t *stream, ssize_t nread, const uv_buf_t *buf) {
+void netQ_TCPListenConnection__on_receive(uv_stream_t *stream, ssize_t nread, const uv_buf_t *buf) {
     if (nread < 0){
         if (nread == UV_EOF) {
             uv_close((uv_handle_t *)stream, NULL);
         }
     } else if (nread > 0) {
         if (stream->data) {
-            net$$TCPListenConnection self = stream->data;
+            netQ_TCPListenConnection self = stream->data;
             $action2 f = self->on_receive;
-            f->$class->__asyn__(f, self, to$bytes_len(buf->base, nread));
+            f->$class->__asyn__(f, self, to$bytesD_len(buf->base, nread));
         }
     }
 
@@ -319,27 +319,27 @@ void net$$TCPListenConnection__on_receive(uv_stream_t *stream, ssize_t nread, co
         free(buf->base);
 }
 
-$R net$$TCPListenConnection$_init (net$$TCPListenConnection self, $Cont c$cont) {
+$R netQ_TCPListenConnectionD__init (netQ_TCPListenConnection self, $Cont c$cont) {
     uv_stream_t *client = (uv_stream_t *)from$int(self->client);
     client->data = self;
-    int r = uv_read_start(client, alloc_buffer, net$$TCPListenConnection__on_receive);
+    int r = uv_read_start(client, alloc_buffer, netQ_TCPListenConnection__on_receive);
     if (r < 0) {
         char errmsg[1024] = "Failed to start reading from TCP socket: ";
         uv_strerror_r(r, errmsg + strlen(errmsg), sizeof(errmsg)-strlen(errmsg));
         log_warn(errmsg);
         $action2 f = self->on_error;
         f->$class->__asyn__(f, self, to$str(errmsg));
-        return $R_CONT(c$cont, $None);
+        return $R_CONT(c$cont, B_None);
     }
 
-    return $R_CONT(c$cont, $None);
+    return $R_CONT(c$cont, B_None);
 }
 
-$R net$$TCPListenConnection$write$local (net$$TCPListenConnection self, $Cont c$cont, $bytes data) {
+$R netQ_TCPListenConnectionD_writeG_local (netQ_TCPListenConnection self, $Cont c$cont, B_bytes data) {
     uv_stream_t *stream = (uv_stream_t *)from$int(self->client);
     // fd == -1 means invalid FD and can happen after __resume__
     if (stream == -1)
-        return $R_CONT(c$cont, $None);
+        return $R_CONT(c$cont, B_None);
 
     uv_write_t *req = (uv_write_t *)malloc(sizeof(uv_write_t));
     uv_buf_t buf = uv_buf_init(data->str, data->nbytes);
@@ -351,10 +351,10 @@ $R net$$TCPListenConnection$write$local (net$$TCPListenConnection self, $Cont c$
         $action2 f = self->on_error;
         f->$class->__asyn__(f, self, to$str(errmsg));
     }
-    return $R_CONT(c$cont, $None);
+    return $R_CONT(c$cont, B_None);
 }
 
-$NoneType net$$TCPListenConnection$__resume__ (net$$TCPListenConnection self) {
-    self->client = to$int(-1);
-    return $None;
+B_NoneType netQ_TCPListenConnectionD___resume__ (netQ_TCPListenConnection self) {
+    self->client = toB_int(-1);
+    return B_None;
 }

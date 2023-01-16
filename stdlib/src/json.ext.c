@@ -3,40 +3,40 @@
 #include "../rts/log.h"
 #include "../deps/yyjson.h"
 
-void json$$__ext_init__() {
+void jsonQ___ext_init__() {
     // NOP
 }
 
-void json$$encode_list(yyjson_mut_doc *doc, yyjson_mut_val *node, $list data);
-void json$$encode_dict(yyjson_mut_doc *doc, yyjson_mut_val *node, $dict data) {
-    $Iterator$dict$items iter = $NEW($Iterator$dict$items, data);
-    $tuple item;
+void jsonQ_encode_list(yyjson_mut_doc *doc, yyjson_mut_val *node, B_list data);
+void jsonQ_encode_dict(yyjson_mut_doc *doc, yyjson_mut_val *node, B_dict data) {
+    B_InteratorD_dict_items iter = $NEW(B_InteratorD_dict_items, data);
+    B_tuple item;
 
-    for (int i=0; i < $dict_len(data); i++) {
-        item = ($tuple)iter->$class->__next__(iter);
-        char *key = from$str(($str)item->components[0]);
-        char *value = from$str(($str)item->components[1]);
-        $value v = item->components[1];
+    for (int i=0; i < B_dictD_len(data); i++) {
+        item = (B_tuple)iter->$class->__next__(iter);
+        char *key = fromB_str((B_str)item->components[0]);
+        char *value = fromB_str((B_str)item->components[1]);
+        B_value v = item->components[1];
         //log_info("key: %s  class_id: %d  type: %s", key, v->$class->$class_id, v->$class->$GCINFO);
         switch (v->$class->$class_id) {
-            case 2:; // $int
-                yyjson_mut_obj_add_int(doc, node, key, from$int(($int)v));
+            case 2:; // B_int
+                yyjson_mut_obj_add_int(doc, node, key, from$int((B_int)v));
                 break;
-            case 5:; // $bool
-                yyjson_mut_obj_add_bool(doc, node, key, from$bool(($bool)v));
+            case 5:; // B_bool
+                yyjson_mut_obj_add_bool(doc, node, key, fromB_bool((B_bool)v));
                 break;
-            case 6:; // $str
-                yyjson_mut_obj_add_str(doc, node, key, from$str(($str)v));
+            case 6:; // B_str
+                yyjson_mut_obj_add_str(doc, node, key, fromB_str((B_str)v));
                 break;
-            case 7:; // $list
+            case 7:; // B_list
                 yyjson_mut_val *l = yyjson_mut_arr(doc);
                 yyjson_mut_obj_add_val(doc, node, key, l);
-                json$$encode_list(doc, l, ($list)v);
+                jsonQ_encode_list(doc, l, (B_list)v);
                 break;
-            case 8:; // $dict
+            case 8:; // B_dict
                 yyjson_mut_val *d = yyjson_mut_obj(doc);
                 yyjson_mut_obj_add_val(doc, node, key, d);
-                json$$encode_dict(doc, d, ($dict)v);
+                jsonQ_encode_dict(doc, d, (B_dict)v);
                 break;
         }
 
@@ -44,31 +44,31 @@ void json$$encode_dict(yyjson_mut_doc *doc, yyjson_mut_val *node, $dict data) {
     }
 }
 
-void json$$encode_list(yyjson_mut_doc *doc, yyjson_mut_val *node, $list data) {
-    for (int i = 0; i < $list_len(data); i++) {
-        $value v = $list_getitem(data, i);
+void jsonQ_encode_list(yyjson_mut_doc *doc, yyjson_mut_val *node, B_list data) {
+    for (int i = 0; i < B_listD_len(data); i++) {
+        B_value v = B_listD_getitem(data, i);
         switch (v->$class->$class_id) {
-            case 2:; // $int
-                yyjson_mut_arr_add_int(doc, node, from$int(($int)v));
+            case 2:; // B_int
+                yyjson_mut_arr_add_int(doc, node, from$int((B_int)v));
                 break;
-            case 5:; // $bool
-                yyjson_mut_arr_add_bool(doc, node, from$bool(($bool)v));
+            case 5:; // B_bool
+                yyjson_mut_arr_add_bool(doc, node, fromB_bool((B_bool)v));
                 break;
-            case 6:; // $str
-                yyjson_mut_arr_add_str(doc, node, from$str(($str)v));
+            case 6:; // B_str
+                yyjson_mut_arr_add_str(doc, node, fromB_str((B_str)v));
                 break;
-            case 7:; // $list
+            case 7:; // B_list
                 yyjson_mut_val *l = yyjson_mut_arr_add_arr(doc, node);
                 if (l) {
-                    json$$encode_list(doc, l, ($list)v);
+                    jsonQ_encode_list(doc, l, (B_list)v);
                 } else {
                     // TODO: raise exception
                 }
                 break;
-            case 8:; // $dict
+            case 8:; // B_dict
                 yyjson_mut_val *d = yyjson_mut_arr_add_obj(doc, node);
                 if (d) {
-                    json$$encode_dict(doc, d, ($dict)v);
+                    jsonQ_encode_dict(doc, d, (B_dict)v);
                 } else {
                     // TODO: raise exception
                 }
@@ -77,26 +77,26 @@ void json$$encode_list(yyjson_mut_doc *doc, yyjson_mut_val *node, $list data) {
     }
 }
 
-$R json$$Json$encode$local (json$$Json self, $Cont c$cont, $dict data) {
+$R jsonQ_JsonD_encodeG_local (jsonQ_Json self, $Cont c$cont, B_dict data) {
     // Create JSON document
     yyjson_mut_doc *doc = yyjson_mut_doc_new(NULL);
     yyjson_mut_val *root = yyjson_mut_obj(doc);
     yyjson_mut_doc_set_root(doc, root);
 
     // TODO: do the thing
-    json$$encode_dict(doc, root, data);
+    jsonQ_encode_dict(doc, root, data);
 
     const char *json = yyjson_mut_write(doc, 0, NULL);
     //yyjson_doc_free(doc);
     return $R_CONT(c$cont, to$str(json));
 }
 
-$list json$$decode_arr(yyjson_val *);
+B_list jsonQ_decode_arr(yyjson_val *);
 
-$dict json$$decode_obj(yyjson_val *obj) {
+B_dict jsonQ_decode_obj(yyjson_val *obj) {
 
-    $Hashable wit = ($Hashable)$Hashable$str$witness;
-    $dict res = $NEW($dict, wit, NULL, NULL);
+    B_Hashable wit = (B_Hashable)B_HashableD_strG_witness;
+    B_dict res = $NEW(B_dict, wit, NULL, NULL);
     yyjson_obj_iter iter;
     yyjson_obj_iter_init(obj, &iter);
     yyjson_val *key, *val;
@@ -108,32 +108,32 @@ $dict json$$decode_obj(yyjson_val *obj) {
                 break;
             case YYJSON_TYPE_NULL:;
                 // TODO: this is broken?
-                $dict_setitem(res, wit, to$str(yyjson_get_str(key)), $None);
+                B_dictD_setitem(res, wit, to$str(yyjson_get_str(key)), B_None);
                 break;
             case YYJSON_TYPE_BOOL:;
-                $dict_setitem(res, wit, to$str(yyjson_get_str(key)), to$bool(yyjson_get_bool(val)));
+                B_dictD_setitem(res, wit, to$str(yyjson_get_str(key)), toB_bool(yyjson_get_bool(val)));
                 break;
             case YYJSON_TYPE_NUM:;
-                $dict_setitem(res, wit, to$str(yyjson_get_str(key)), to$int(yyjson_get_int(val)));
+                B_dictD_setitem(res, wit, to$str(yyjson_get_str(key)), toB_int(yyjson_get_int(val)));
                 break;
             case YYJSON_TYPE_STR:;
-                $dict_setitem(res, wit, to$str(yyjson_get_str(key)), to$str(yyjson_get_str(val)));
+                B_dictD_setitem(res, wit, to$str(yyjson_get_str(key)), to$str(yyjson_get_str(val)));
                 break;
             case YYJSON_TYPE_ARR:;
-                $list l = json$$decode_arr(val);
-                $dict_setitem(res, wit, to$str(yyjson_get_str(key)), l);
+                B_list l = jsonQ_decode_arr(val);
+                B_dictD_setitem(res, wit, to$str(yyjson_get_str(key)), l);
                 break;
             case YYJSON_TYPE_OBJ:;
-                $dict d = json$$decode_obj(val);
-                $dict_setitem(res, wit, to$str(yyjson_get_str(key)), d);
+                B_dict d = jsonQ_decode_obj(val);
+                B_dictD_setitem(res, wit, to$str(yyjson_get_str(key)), d);
                 break;
         }
     }
     return res;
 }
 
-$list json$$decode_arr(yyjson_val *arr) {
-    $list res = $list$new(NULL, NULL);
+B_list jsonQ_decode_arr(yyjson_val *arr) {
+    B_list res = B_listG_new(NULL, NULL);
     yyjson_val *val;
     yyjson_arr_iter iter;
     yyjson_arr_iter_init(arr, &iter);
@@ -143,45 +143,45 @@ $list json$$decode_arr(yyjson_val *arr) {
                 break;
             case YYJSON_TYPE_NULL:;
                 // TODO: this is broken?
-                $list_append(res, $None);
+                B_listD_append(res, B_None);
                 break;
             case YYJSON_TYPE_BOOL:;
-                $list_append(res, to$bool(yyjson_get_bool(val)));
+                B_listD_append(res, toB_bool(yyjson_get_bool(val)));
                 break;
             case YYJSON_TYPE_NUM:;
-                $list_append(res, to$int(yyjson_get_int(val)));
+                B_listD_append(res, toB_int(yyjson_get_int(val)));
                 break;
             case YYJSON_TYPE_STR:;
-                $list_append(res, to$str(yyjson_get_str(val)));
+                B_listD_append(res, to$str(yyjson_get_str(val)));
                 break;
             case YYJSON_TYPE_ARR:;
-                $list l = json$$decode_arr(val);
-                $list_append(res, l);
+                B_list l = jsonQ_decode_arr(val);
+                B_listD_append(res, l);
                 break;
             case YYJSON_TYPE_OBJ:;
-                $dict d = json$$decode_obj(val);
-                $list_append(res, d);
+                B_dict d = jsonQ_decode_obj(val);
+                B_listD_append(res, d);
                 break;
         }
     }
     return res;
 }
 
-$R json$$Json$decode$local (json$$Json self, $Cont c$cont, $str data) {
+$R jsonQ_JsonD_decodeG_local (jsonQ_Json self, $Cont c$cont, B_str data) {
     // Read JSON and get root
     yyjson_read_err err;
-    yyjson_doc *doc = yyjson_read_opts(from$str(data), strlen(from$str(data)), 0, NULL, &err);
+    yyjson_doc *doc = yyjson_read_opts(fromB_str(data), strlen(fromB_str(data)), 0, NULL, &err);
     yyjson_val *root = yyjson_doc_get_root(doc);
 
-    $dict res = $NEW($dict,($Hashable)$Hashable$str$witness,NULL,NULL);
+    B_dict res = $NEW(B_dict,(B_Hashable)B_HashableD_strG_witness,NULL,NULL);
     // Iterate over the root object
     if (doc) {
         yyjson_val *obj = yyjson_doc_get_root(doc);
-        res = json$$decode_obj(obj);
+        res = jsonQ_decode_obj(obj);
     } else {
         char errmsg[1024];
         snprintf(errmsg, sizeof(errmsg), "JSON parsing error: %s (%u) at position %ld", err.msg, err.code, err.pos);
-        $RAISE(($BaseException)$NEW($ValueError, to$str(errmsg)));
+        $RAISE((B_BaseException)$NEW(B_ValueError, to$str(errmsg)));
     }
 
     yyjson_doc_free(doc);

@@ -16,13 +16,13 @@
 #include "../builtin.h"
  
 int main() {
-  $Iterable wit = ($Iterable)$Iterable$range$witness;
-  $Iterator it = wit->$class->__iter__(wit,$NEW($range,to$int(1),to$int(100),to$int(1)));
-  $list lst = $list_fromiter(it);
-  $Container$list wit2 = $NEW($Container$list,($Eq)$Hashable$int$witness);
-  $bool b = wit2->$class->__contains__(wit2,lst,to$int(17));
-  $bool c = wit2->$class->__contains__(wit2,lst,to$int(171));
-  $bool d = wit2->$class->__contains__(wit2,lst,to$int(100));
+  B_Iterable wit = (B_Iterable)B_IterableD_rangeG_witness;
+  B_Iterator it = wit->$class->__iter__(wit,$NEW(B_range,toB_int(1),toB_int(100),toB_int(1)));
+  B_list lst = B_listD_fromiter(it);
+  B_ContainerD_list wit2 = $NEW(B_ContainerD_list,(B_Eq)B_HashableD_intG_witness);
+  B_bool b = wit2->$class->__contains__(wit2,lst,toB_int(17));
+  B_bool c = wit2->$class->__contains__(wit2,lst,toB_int(171));
+  B_bool d = wit2->$class->__contains__(wit2,lst,toB_int(100));
   printf("results are %s, %s, %s\n",(b->$class->__str__(b))->str,(c->$class->__str__(c))->str,(d->$class->__str__(d))->str);
 }
   

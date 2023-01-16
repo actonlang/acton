@@ -33,42 +33,42 @@ void $enqueue2(struct $ROWLISTHEADER *header, $ROW elem) {
  
 // Hashable$WORD methods //////////////////////////////////////////////////
 
-void $Hashable$WORD$__serialize__($Hashable$WORD self, $Serial$state state) {
+void B_HashableD_WORDD___serialize__(B_HashableD_WORD self, $Serial$state state) {
 }
 
-$Hashable$WORD $Hashable$WORD$__deserialize__($Hashable$WORD self, $Serial$state state) {
-    $Hashable$WORD res = $DNEW($Hashable$WORD,state);
+B_HashableD_WORD B_HashableD_WORDD___deserialize__(B_HashableD_WORD self, $Serial$state state) {
+    B_HashableD_WORD res = $DNEW(B_HashableD_WORD,state);
     return res;
 }
 
-$bool $Hashable$WORD_eq($Hashable$WORD wit, $WORD a, $WORD b) {
-    return to$bool(a==b);
+B_bool B_HashableD_WORD_eq(B_HashableD_WORD wit, $WORD a, $WORD b) {
+    return toB_bool(a==b);
 }
 
-$bool $Hashable$WORD_ne($Hashable$WORD wit, $WORD a, $WORD b) {
-    return  to$bool(a != b);
+B_bool B_HashableD_WORD_ne(B_HashableD_WORD wit, $WORD a, $WORD b) {
+    return  toB_bool(a != b);
 }
 
-$int $Hashable$WORD_hash($Hashable$WORD wit, $WORD a) {
-    return to$int($pointer_hash(a));
+B_int B_HashableD_WORD_hash(B_HashableD_WORD wit, $WORD a) {
+    return toB_int($pointer_hash(a));
 }
 
-struct $Hashable$WORD$class $Hashable$WORD$methods = {
-    "$Hashable$WORD",
+struct B_HashableD_WORDG_class B_HashableD_WORDG_methods = {
+    "B_HashableD_WORD",
     UNASSIGNED,
-    ($Super$class)&$Hashable$methods,
-    (void (*)($Hashable$WORD))$default__init__,
-    $Hashable$WORD$__serialize__,
-    $Hashable$WORD$__deserialize__,
-    ($bool (*)($Hashable$WORD))$default__bool__,
-    ($str (*)($Hashable$WORD))$default__str__,
-    ($str (*)($Hashable$WORD))$default__str__,
-    $Hashable$WORD_eq,
-    $Hashable$WORD_ne,
-    $Hashable$WORD_hash
+    ($SuperG_class)&B_HashableG_methods,
+    (void (*)(B_HashableD_WORD))$default__init__,
+    B_HashableD_WORDD___serialize__,
+    B_HashableD_WORDD___deserialize__,
+    (B_bool (*)(B_HashableD_WORD))$default__bool__,
+    (B_str (*)(B_HashableD_WORD))$default__str__,
+    (B_str (*)(B_HashableD_WORD))$default__str__,
+    B_HashableD_WORD_eq,
+    B_HashableD_WORD_ne,
+    B_HashableD_WORD_hash
 };
-struct $Hashable$WORD $Hashable$WORD_instance = {&$Hashable$WORD$methods};
-struct $Hashable$WORD *$Hashable$WORD$witness = &$Hashable$WORD_instance;
+struct B_HashableD_WORD B_HashableD_WORD_instance = {&B_HashableD_WORDG_methods};
+struct B_HashableD_WORD *B_HashableD_WORDG_witness = &B_HashableD_WORD_instance;
 
 
 // small-step functions for (de)serializing the next object /////////////////////////////////////////////////
@@ -94,11 +94,11 @@ void $step_serialize($WORD self, $Serial$state state) {
                     return;
                 }
             }
-            $int prevkey = ($int)$dict_get(state->done,($Hashable)$Hashable$WORD$witness,self,NULL);
+            B_int prevkey = (B_int)B_dictD_get(state->done,(B_Hashable)B_HashableD_WORDG_witness,self,NULL);
             if (prevkey) {
                 $val_serialize(-class_id,&prevkey->val,state);
             } else {
-                $dict_setitem(state->done,($Hashable)$Hashable$WORD$witness,self,to$int(state->row_no));
+                B_dictD_setitem(state->done,(B_Hashable)B_HashableD_WORDG_witness,self,toB_int(state->row_no));
                 $add_header(class_id,0,state);
                 (($Serializable)self)->$class->__serialize__(self,state);
             }
@@ -118,7 +118,7 @@ $WORD $step_deserialize($Serial$state state) {
             if (key < 0)
                 return state->globmap(($WORD)key);
             else
-                return $dict_get(state->done,($Hashable)$Hashable$int$witness,to$int(key),NULL);
+                return B_dictD_get(state->done,(B_Hashable)B_HashableD_intG_witness,toB_int(key),NULL);
         } else
             return $GET_METHODS(this->class_id)->__deserialize__(NULL, state);
     } else
@@ -184,7 +184,7 @@ void $write_serialized($ROW row, char *file) {
  
 $ROW $serialize($Serializable s, $WORD (*globmap)($WORD)) {
     $Serial$state state = malloc(sizeof(struct $Serial$state));
-    state->done = $NEW($dict,($Hashable)$Hashable$WORD$witness,NULL,NULL);
+    state->done = $NEW(B_dict,(B_Hashable)B_HashableD_WORDG_witness,NULL,NULL);
     state->globmap = globmap;
     state->row_no=0;
     state->row = NULL;
@@ -195,7 +195,7 @@ $ROW $serialize($Serializable s, $WORD (*globmap)($WORD)) {
 
 $ROW $glob_serialize($Serializable self, $WORD (*globmap)($WORD)) {
     $Serial$state state = malloc(sizeof(struct $Serial$state));
-    state->done = $NEW($dict,($Hashable)$Hashable$WORD$witness,NULL,NULL);
+    state->done = $NEW(B_dict,(B_Hashable)B_HashableD_WORDG_witness,NULL,NULL);
     state->globmap = globmap;
     state->row_no=0;
     state->row = NULL;
@@ -211,7 +211,7 @@ void $serialize_file($Serializable s, char *file) {
 
 $Serializable $deserialize($ROW row, $WORD (*globmap)($WORD)) {
     $Serial$state state = malloc(sizeof(struct $Serial$state));
-    state->done = $NEW($dict,($Hashable)$Hashable$int$witness,NULL,NULL);
+    state->done = $NEW(B_dict,(B_Hashable)B_HashableD_intG_witness,NULL,NULL);
     state->globmap = globmap;
     state->row_no=0;
     state->row = row;
@@ -221,7 +221,7 @@ $Serializable $deserialize($ROW row, $WORD (*globmap)($WORD)) {
 
 $Serializable $glob_deserialize($Serializable self, $ROW row, $WORD (*globmap)($WORD)) {
     $Serial$state state = malloc(sizeof(struct $Serial$state));
-    state->done = $NEW($dict,($Hashable)$Hashable$int$witness,NULL,NULL);
+    state->done = $NEW(B_dict,(B_Hashable)B_HashableD_intG_witness,NULL,NULL);
     state->globmap = globmap;
     state->row_no=1;
     state->row = row->next;

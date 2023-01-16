@@ -69,8 +69,8 @@ static long long_hash (long u) {
     return h;
 }
 
-long $i64_hash ($i64 n) {
-    return long_hash(from$i64(n));
+long B_i64D_hash (B_i64 n) {
+    return long_hash(fromB_i64(n));
 }
 
 static long double_hash(double d) {
@@ -117,11 +117,11 @@ static long double_hash(double d) {
     return x;
 }
 
-long $float_hash($float v) {
-    return double_hash(from$float(v));
+long B_floatD_hash(B_float v) {
+    return double_hash(fromB_float(v));
 }
 
-long $complex_hash($complex c) {
+long B_complexD_hash(B_complex c) {
     // we use the tuple_hash algorithm (see below)
     long h1 = double_hash(creal(c->val));
     long h2 = double_hash(cimag(c->val));
@@ -184,7 +184,7 @@ static long pysiphash(void *src, long src_sz) {
                            src, src_sz);
 }
 
-long $string_hash($str s) {
+long B_string_hash(B_str s) {
     int len = s->nbytes;
     long x;
     /*
@@ -201,7 +201,7 @@ long $string_hash($str s) {
     return x;
 }
 
-long $bytes_hash($bytes s) {
+long B_bytesD_hash(B_bytes s) {
     int len = s->nbytes;
     long x;
     /*
@@ -223,13 +223,13 @@ long $bytes_hash($bytes s) {
   "Old" hash algorithm for tuples; used in Python versions <= 3.7. 
   From 3.8 the xxHash-based algorithm above is used.
 */
-long $tuple_hash($Hashable$tuple wit,$tuple tup) {
+long B_tupleD_hash(B_HashableD_tuple wit,B_tuple tup) {
     int size = tup->size;
     long x = 0x345678UL;
     long y;
     long mult = _PyHASH_MULTIPLIER;
     for (int i=0; i < size; i++) {
-        $Hashable h = wit->w$Hashable[i];
+        B_Hashable h = wit->W_Hashable[i];
         y = from$int(h->$class->__hash__(h,tup->components[i]));
         x = (x ^ y) * mult;
         mult += (long)(82520UL + 2*(size-i-1));

@@ -51,15 +51,15 @@ int fromWord($WORD w) {
 // Version with list methods //////////////////////////////////////////////////////////////////////////////////
 /*
 // prints a list of ints 
-void printlist($list lst) {
+void printlist(B_list lst) {
   $WORD w;
   printf("[");
-  for (int i=0; i < *$list_len(lst)-1; i++) {
-    w = $list_getitem(lst,i);
+  for (int i=0; i < *B_listD_len(lst)-1; i++) {
+    w = B_listD_getitem(lst,i);
     printf("%d, ",fromWord(w));
   }
-  if (*$list_len(lst) > 0) {
-    w = $list_getitem(lst,*$list_len(lst)-1);
+  if (*B_listD_len(lst) > 0) {
+    w = B_listD_getitem(lst,*B_listD_len(lst)-1);
     printf("%d",fromWord(w));
   }
   printf("]\n");
@@ -67,24 +67,24 @@ void printlist($list lst) {
 */
 
 // Sieve of Erathostenes 
-$list sieve(int n) {
-  $list isPrime = $NEW($list,NULL,NULL); 
-  $list_append(isPrime,$False); 
-  $list_append(isPrime,$False);
+B_list sieve(int n) {
+  B_list isPrime = $NEW(B_list,NULL,NULL); 
+  B_listD_append(isPrime,B_False); 
+  B_listD_append(isPrime,B_False);
   for (int i=2; i < n; i++) 
-    $list_append(isPrime,$True);
+    B_listD_append(isPrime,B_True);
   for (int i=2; i < floor(sqrt(n)); i++) {
-    //if (from$bool(isPrime->data[i])) {
-    if (from$bool($list_getitem(isPrime,i))) {
+    //if (fromB_bool(isPrime->data[i])) {
+    if (fromB_bool(B_listD_getitem(isPrime,i))) {
       for (int k=i*i; k<n; k+=i)
-        $list_setitem(isPrime,k,$False);
+        B_listD_setitem(isPrime,k,B_False);
     }
   }
-  $list primes = $NEW($list,NULL,NULL);
+  B_list primes = $NEW(B_list,NULL,NULL);
   for (int i=0; i<n; i++) {
-    //if (from$bool(isPrime->data[i])) {
-    if (from$bool($list_getitem(isPrime,i))) {
-      $list_append(primes,to$int(i));
+    //if (fromB_bool(isPrime->data[i])) {
+    if (fromB_bool(B_listD_getitem(isPrime,i))) {
+      B_listD_append(primes,toB_int(i));
     }
   }
   return primes;
@@ -92,25 +92,25 @@ $list sieve(int n) {
 
 // Version with protocol methods /////////////////////////////////////////////////////////////////////////////////////////
 
-$list sieveS($Sequence$list wit, int n) {
+B_list sieveS(B_SequenceD_list wit, int n) {
   $WORD w;
-  $list isPrime = $NEW($list,NULL,NULL);
-  wit->$class->append(wit,isPrime,$False); 
-  wit->$class->append(wit,isPrime,$False);
+  B_list isPrime = $NEW(B_list,NULL,NULL);
+  wit->$class->append(wit,isPrime,B_False); 
+  wit->$class->append(wit,isPrime,B_False);
   for (int i=2; i < n; i++) 
-    wit->$class->append(wit,isPrime,$True);
+    wit->$class->append(wit,isPrime,B_True);
   for (int i=2; i < floor(sqrt(n)); i++) {
-    w = wit->$class->__getitem__(wit,isPrime,to$int(i));
+    w = wit->$class->__getitem__(wit,isPrime,toB_int(i));
     if (from$int(w)) {
       for (int k=i*i; k<n; k+=i)
-        wit->$class->__setitem__(wit,isPrime,to$int(k),$False);
+        wit->$class->__setitem__(wit,isPrime,toB_int(k),B_False);
     }
   }
-  $list primes = $NEW($list,NULL,NULL);
+  B_list primes = $NEW(B_list,NULL,NULL);
   for (int i=0; i<n; i++) {
-    w = wit->$class->__getitem__(wit,isPrime,to$int(i));
-    if (from$bool(w)) {
-      wit->$class->append(wit,primes,to$int(i));
+    w = wit->$class->__getitem__(wit,isPrime,toB_int(i));
+    if (fromB_bool(w)) {
+      wit->$class->append(wit,primes,toB_int(i));
     }
   }
   return primes;
@@ -118,9 +118,9 @@ $list sieveS($Sequence$list wit, int n) {
 
 int main() {
 
-  printf("%ld\n",$list_len(sieve(10000000)));
+  printf("%ld\n",B_listD_len(sieve(10000000)));
 
-  //$Sequence$list wit = $Sequence$list$witness;
-  //$list primes = sieveS(wit,10000000);
-  //printf("%ld\n",from$int(wit->w$Collection->$class->__len__(wit->w$Collection,primes)));
+  //B_SequenceD_list wit = B_SequenceD_listG_witness;
+  //B_list primes = sieveS(wit,10000000);
+  //printf("%ld\n",from$int(wit->W_Collection->$class->__len__(wit->W_Collection,primes)));
 }

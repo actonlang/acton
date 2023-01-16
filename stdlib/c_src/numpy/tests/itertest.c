@@ -16,12 +16,12 @@
 #include "../ndarray.h"
 
 int main(int argc, char *argv[]) {
-  $ndarray a = $ndarray_arange(to$int(8));
-  $list newshape = $NEW($list,NULL,NULL);
-  $list_append(newshape,to$int(2));
-  //  $list_append(newshape,to$int(5));
-  $list_append(newshape,to$int(2));
-  $list_append(newshape,to$int(2));
+  $ndarray a = $ndarray_arange(toB_int(8));
+  B_list newshape = $NEW(B_list,NULL,NULL);
+  B_listD_append(newshape,toB_int(2));
+  //  B_listD_append(newshape,toB_int(5));
+  B_listD_append(newshape,toB_int(2));
+  B_listD_append(newshape,toB_int(2));
   $ndarray b = $ndarray_reshape(a,newshape);
   $ndarray c = $ndarray_copy(b);
   //printf("a=%s\n",a->$class->__str__(a)->str);

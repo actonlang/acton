@@ -1,47 +1,47 @@
-struct $float$class {
+struct B_floatG_class {
     char *$GCINFO;
     int $class_id;
-    $Super$class $superclass;
-    void (*__init__)($float, $atom);
-    void (*__serialize__)($float,$Serial$state);
-    $float (*__deserialize__)($float,$Serial$state);
-    $bool (*__bool__)($float);
-    $str (*__str__)($float);
-    $str (*__repr__)($float);
+    $SuperG_class $superclass;
+    void (*__init__)(B_float, B_atom);
+    void (*__serialize__)(B_float,$Serial$state);
+    B_float (*__deserialize__)(B_float,$Serial$state);
+    B_bool (*__bool__)(B_float);
+    B_str (*__str__)(B_float);
+    B_str (*__repr__)(B_float);
 };
 
 
-struct $float {
-    struct $float$class *$class;
+struct B_float {
+    struct B_floatG_class *$class;
     double val;
 };
 
-extern struct $float$class $float$methods;
-$float $float$new($atom);
+extern struct B_floatG_class B_floatG_methods;
+B_float B_floatG_new(B_atom);
 
-extern struct $Real$float$class $Real$float$methods;
-$Real$float $Real$float$new();
+extern struct B_RealD_floatG_class B_RealD_floatG_methods;
+B_RealD_float B_RealD_floatG_new();
 
-#define $RealFloat$float$new(...) $Real$float$new(__VA_ARGS__)
-#define $RealFloat$float $Real$float
+#define B_RealFloatD_floatG_new(...) B_RealD_floatG_new(__VA_ARGS__)
+#define B_RealFloatD_float B_RealD_float
 
-extern struct $Div$float$class $Div$float$methods;
-$Div$float $Div$float$new();
+extern struct B_DivD_floatG_class B_DivD_floatG_methods;
+B_DivD_float B_DivD_floatG_new();
 
-extern struct $Minus$float$class $Minus$float$methods;
-$Minus$float $Minus$float$new($Real);
+extern struct B_MinusD_RealD_floatG_class B_MinusD_RealD_floatG_methods;
+B_MinusD_RealD_float B_MinusD_RealD_floatG_new(B_Real);
 
-extern struct $Ord$float$class $Ord$float$methods;
-$Ord$float $Ord$float$new();
-extern struct $Hashable$float$class $Hashable$float$methods;
-$Hashable$float $Hashable$float$new();
+extern struct B_OrdD_floatG_class B_OrdD_floatG_methods;
+B_OrdD_float B_OrdD_floatG_new();
+extern struct B_HashableD_floatG_class B_HashableD_floatG_methods;
+B_HashableD_float B_HashableD_floatG_new();
 
-extern struct $Real$float *$Real$float$witness;
-extern struct $Minus$float *$Minus$float$witness;
-extern struct $Ord$float *$Ord$float$witness;
-extern struct $Hashable$float *$Hashable$float$witness;
+extern struct B_RealD_float *B_RealD_floatG_witness;
+extern struct B_MinusD_RealD_float *B_MinusD_RealD_floatG_witness;
+extern struct B_OrdD_float *B_OrdD_floatG_witness;
+extern struct B_HashableD_float *B_HashableD_floatG_witness;
 
-$float to$float(double x);
-double from$float($float x);
+B_float to$float(double x);
+double fromB_float(B_float x);
 
-$float $float$new($atom a);
+B_float B_floatG_new(B_atom a);

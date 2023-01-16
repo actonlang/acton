@@ -14,28 +14,28 @@
 
 #include <limits.h>
 
-int numpy$$done = 0;
+int numpyQ_done = 0;
 
-void numpy$$__init__() {
-    if (numpy$$done) return;
-    numpy$$done = 1;
-    numpy$$newaxis = to$int(LONG_MIN);
-    $register_force(ATOM_ID,&numpy$$ndarray$methods);
-    $register(&numpy$$Iterator$ndarray$methods);
-    $register(&numpy$$Primitive$int$methods);
-    $register(&numpy$$Primitive$float$methods);
-    $register(&numpy$$ndselect$methods);
-    $register(&numpy$$ndindex$methods);
-    $register(&numpy$$ndslice$methods);
-    $register(&numpy$$Integral$ndarray$int$methods);
-    $register(&numpy$$Logical$ndarray$int$methods);
-    $register(&numpy$$Minus$ndarray$int$methods);
-    $register(&numpy$$Div$ndarray$int$methods);
-    $register(&numpy$$Div$ndarray$float$methods);
-    $register(&numpy$$Real$ndarray$methods);
-    $register(&numpy$$Minus$ndarray$methods);
-    $register(&numpy$$Sliceable$ndarray$methods);
-    $register(&numpy$$Collection$ndarray$methods);
-    $register(&numpy$$RealFuns$math$ndarray$methods);
+void numpyQ___init__() {
+    if (numpyQ_done) return;
+    numpyQ_done = 1;
+    numpyQ_newaxis = toB_int(LONG_MIN);
+    $register_force(ATOM_ID,&numpyQ_ndarrayG_methods);
+    $register(&numpyQ_IteratorD_ndarrayG_methods);
+    $register(&numpyQ_PrimitiveD_intG_methods);
+    $register(&numpyQ_PrimitiveD_floatG_methods);
+    $register(&numpyQ_ndselectG_methods);
+    $register(&numpyQ_ndindexG_methods);
+    $register(&numpyQ_ndsliceG_methods);
+    $register(&numpyQ_IntegralD_ndarrayD_intG_methods);
+    $register(&numpyQ_LogicalD_ndarrayD_intG_methods);
+    $register(&numpyQ_MinusD_ndarrayD_intG_methods);
+    $register(&numpyQ_DivD_ndarrayD_intG_methods);
+    $register(&numpyQ_DivD_ndarrayD_floatG_methods);
+    $register(&numpyQ_RealD_ndarrayG_methods);
+    $register(&numpyQ_MinusD_ndarrayG_methods);
+    $register(&numpyQ_SliceableD_ndarrayG_methods);
+    $register(&numpyQ_CollectionD_ndarrayG_methods);
+    $register(&numpyQ_RealFunsD_mathD_ndarrayG_methods);
 }
 
