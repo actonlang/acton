@@ -55,6 +55,7 @@ data CompileOptions   = CompileOptions {
 
 data BuildOptions = BuildOptions {
                          alwaysB     :: Bool,
+                         debugB      :: Bool,
                          devB        :: Bool,
                          autostubB   :: Bool,
                          rootB       :: String,
@@ -133,6 +134,7 @@ compileOptions = CompileOptions
 buildCommand          = Build <$> (
     BuildOptions
         <$> switch (long "always-build" <> help "Development mode; include debug symbols etc")
+        <*> switch (long "debug"        <> help "Print debug stuff")
         <*> switch (long "dev"          <> help "Development mode; include debug symbols etc")
         <*> switch (long "auto-stub"    <> help "Allow automatic stub detection")
         <*> strOption (long "root"      <> metavar "ROOTACTOR" <> value "" <> help "Set root actor")
