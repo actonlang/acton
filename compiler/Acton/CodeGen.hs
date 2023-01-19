@@ -114,12 +114,15 @@ typedef env Def{}                   = empty
 decl env (Class _ n q a b)          = (text "struct" <+> classname env n <+> char '{') $+$ 
                                       nest 4 (vcat $ stdprefix env ++ initdef : serialize env tc : deserialize env tc : meths) $+$
                                       char '}' <> semi $+$
-                                      (text "struct" <+> genTopName env n <+> char '{') $+$ 
-                                      nest 4 (classlink env n $+$ vcat properties) $+$
-                                      char '}' <> semi
+                                      inst_struct
   where tc                          = TC (NoQ n) [ tVar v | Quant v _ <- q ]
         initdef : meths             = fields env tc
         properties                  = [ varsig env n (sctype sc) <> semi | (n, NSig sc Property) <- fullAttrEnv env tc ]
+        inst_struct | initNotImpl   = empty
+                    | otherwise     = (text "struct" <+> genTopName env n <+> char '{') $+$ 
+                                      nest 4 (classlink env n $+$ vcat properties) $+$
+                                      char '}' <> semi
+        initNotImpl                 = any hasNotImpl [ b' | Decl _ ds <- b, Def{dname=n',dbody=b'} <- ds, n' == initKW ]
 decl env (Def _ n q p _ a _ _ fx)   = gen env (exposeMsg fx $ fromJust a) <+> genTopName env n <+> parens (params env $ prowOf p) <> semi
 
 methstub env (Class _ n q a b)      = text "extern" <+> text "struct" <+> classname env n <+> methodtable env n <> semi $+$
