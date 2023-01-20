@@ -176,6 +176,9 @@ instance CPS [Stmt] where
       where t                           = typeOf env e
             cont c                      = if t == tNone then c else eCall (tApp (eQVar primSKIPRESc) [t]) [c]
 
+    cps env (s : Return _ e : _)
+      | e == Just eNone                 = cps env [s]
+      
     cps env (Expr _ e : ss)
       | contCall env e                  = do k <- newName "cont"
                                              x <- newName "res"
