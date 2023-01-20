@@ -2188,6 +2188,7 @@ int main(int argc, char **argv) {
     int cpu_pin;
     long num_cores = sysconf(_SC_NPROCESSORS_ONLN);
     bool mon_on_exit = false;
+    bool auto_backtrace = true;
     char *log_path = NULL;
     FILE *logf = NULL;
     bool log_stderr = false;
@@ -2223,16 +2224,8 @@ int main(int argc, char **argv) {
         log_fatal("Failed to install signal handler for SIGPIPE: %s", strerror(errno));
         exit(1);
     }
-    if (sigaction(SIGILL, &sa_ill, NULL) == -1) {
-        log_fatal("Failed to install signal handler for SIGILL: %s", strerror(errno));
-        exit(1);
-    }
     if (sigaction(SIGINT, &sa_int, NULL) == -1) {
         log_fatal("Failed to install signal handler for SIGINT: %s", strerror(errno));
-        exit(1);
-    }
-    if (sigaction(SIGSEGV, &sa_segv, NULL) == -1) {
-        log_fatal("Failed to install signal handler for SIGSEGV: %s", strerror(errno));
         exit(1);
     }
     if (sigaction(SIGTERM, &sa_term, NULL) == -1) {
@@ -2282,6 +2275,7 @@ int main(int argc, char **argv) {
         {"rts-mon-log-period", "PERIOD", 'k', "Periodicity of writing RTS mon stats log entry"},
         {"rts-mon-on-exit", NULL, 'E', "Print RTS mon stats to stdout on exit"},
         {"rts-mon-socket-path", "PATH", 'm', "Path to unix socket to expose RTS mon stats"},
+        {"rts-no-bt", NULL, 'B', "Disable automatic backtrace"},
         {"rts-log-path", "PATH", 'L', "Path to RTS log"},
         {"rts-log-stderr", NULL, 's', "Log to stderr in addition to log file"},
         {"rts-verbose", NULL, 'v', "Enable verbose RTS output"},
@@ -2335,6 +2329,9 @@ int main(int argc, char **argv) {
         }
 
         switch (ch) {
+            case 'B':
+                auto_backtrace = false;
+                break;
             case 'd':
                 #ifndef DEV
                 fprintf(stderr, "ERROR: RTS debug not supported.\n");
@@ -2402,6 +2399,17 @@ int main(int argc, char **argv) {
         }
     }
     new_argv[new_argc] = NULL;
+
+    if (auto_backtrace) {
+        if (sigaction(SIGILL, &sa_ill, NULL) == -1) {
+            log_fatal("Failed to install signal handler for SIGILL: %s", strerror(errno));
+            exit(1);
+        }
+        if (sigaction(SIGSEGV, &sa_segv, NULL) == -1) {
+            log_fatal("Failed to install signal handler for SIGSEGV: %s", strerror(errno));
+            exit(1);
+        }
+    }
 
     if (log_path)
         log_set_quiet(true);
