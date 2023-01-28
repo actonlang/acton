@@ -817,7 +817,7 @@ void $PUSH($Cont cont) {
     PUSH_catcher(self, c);
 }
 
-void $POP() {
+void $POP(B_i64 n) {
     $Actor self = ($Actor)pthread_getspecific(self_key);
     POP_catcher(self);
 }

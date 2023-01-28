@@ -315,7 +315,7 @@ scPUSH              = tSchema [] tPUSH
 
 --  $POP            : pure () -> None
 scPOP               = tSchema [] tPOP
-  where tPOP        = tFun fxPure posNil kwdNil tNone
+  where tPOP        = tFun fxPure (posRow tI64 posNil) kwdNil tNone
 
 --  $RERAISE        : pure () -> None
 scRERAISE           = tSchema [] tRERAISE
