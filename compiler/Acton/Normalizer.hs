@@ -39,7 +39,6 @@ normalize env0 m                    = return (evalState (norm env m) 0, env0')
 --  X Tuple (and list) patterns are replaced by a var pattern followed by explicit element assignments
 --  - With statemenmts are replaced by enter/exit prim calls + exception handling
 --  X The assert statement is replaced by a prim call ASSERT
---  X The raise statement is replaced by one of prim calls RAISE, RAISEFROM or RERAISE
 --  X Return without argument is replaced by return None
 --  - The else branch of a while loop is replaced by an explicit if statement enclosing the loop
 --  X Superclass lists are transitively closed
@@ -119,14 +118,8 @@ instance Norm Stmt where
     norm env (Return l Nothing)     = return $ Return l $ Just $ None l0
     norm env (Return l (Just e))    = do e' <- norm env e
                                          return $ Return l $ Just e'
-    norm env (Raise l mbex)         = do mbex' <- norm env mbex
-                                         case mbex' of
-                                            Nothing ->
-                                               return $ Expr l $ eCall (eQVar primRERAISE) []
-                                            Just (Exception e Nothing) ->
-                                               return $ Expr l $ eCall (eQVar primRAISE) [e]
-                                            Just (Exception e (Just e')) -> 
-                                               return $ Expr l $ eCall (eQVar primRAISEFROM) [e,e']
+    norm env (Raise l e)            = do e' <- norm env e
+                                         return $ Raise l e'
     norm env (Break l)              = return $ Break l
     norm env (Continue l)           = return $ Continue l
     norm env (If l bs els)          = If l <$> norm env bs <*> norm env els
@@ -280,9 +273,6 @@ instance Norm Pattern where
     norm env (PTuple l ps ks)       = PTuple l <$> norm env ps <*> norm env ks
     norm env (PList l ps p)         = PList l <$> norm env ps <*> norm env p        -- TODO: eliminate here
     norm env (PParen l p)           = norm env p
-
-instance Norm Exception where
-    norm env (Exception e mbe)      = Exception <$> norm env e <*> norm env mbe
 
 instance Norm Branch where
     norm env (Branch e ss)          = Branch <$> normBool env e <*> norm env ss

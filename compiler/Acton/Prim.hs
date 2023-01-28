@@ -60,9 +60,7 @@ primPUSHc           = gPrim "PUSHc"
 primPUSH            = gPrim "PUSH"
 
 primPOP             = gPrim "POP"
-primRERAISE         = gPrim "RERAISE"
 primRAISE           = gPrim "RAISE"
-primRAISEFROM       = gPrim "RAISEFROM"
 primASSERT          = gPrim "ASSERT"
 primNEWACTOR        = gPrim "NEWACTOR"
 
@@ -74,6 +72,8 @@ primFORMAT          = gPrim "FORMAT"
 
 primRContc          = gPrim "R_CONTc"
 primRCont           = gPrim "R_CONT"
+
+primRFail           = gPrim "R_FAIL"
 
 primEqOpt           = gPrim "EqOpt"
 primIdentityOpt     = gPrim "IdentityOpt"
@@ -130,9 +130,7 @@ primEnv             = [     (noq primASYNCf,        NDef scASYNCf NoDec),
                             (noq primPUSH,          NDef scPUSH NoDec),
                         
                             (noq primPOP,           NDef scPOP NoDec),
-                            (noq primRERAISE,       NDef scRERAISE NoDec),
                             (noq primRAISE,         NDef scRAISE NoDec),
-                            (noq primRAISEFROM,     NDef scRAISEFROM NoDec),
                             (noq primASSERT,        NDef scASSERT NoDec),
                             (noq primNEWACTOR,      NDef scNEWACTOR NoDec),
 
@@ -153,6 +151,7 @@ primEnv             = [     (noq primASYNCf,        NDef scASYNCf NoDec),
 
                             (noq primRContc,        NDef scRContc NoDec),
                             (noq primRCont,         NDef scRCont NoDec),
+                            (noq primRFail,         NDef scRFail NoDec),
 
                             (noq primEqOpt,         clEqOpt),
                             (noq primIdentityOpt,   clIdentityOpt),
@@ -317,17 +316,9 @@ scPUSH              = tSchema [] tPUSH
 scPOP               = tSchema [] tPOP
   where tPOP        = tFun fxPure (posRow tI64 posNil) kwdNil tNone
 
---  $RERAISE        : pure () -> None
-scRERAISE           = tSchema [] tRERAISE
-  where tRERAISE    = tFun fxPure posNil kwdNil tNone
-
 --  $RAISE          : pure (BaseException) -> None
 scRAISE             = tSchema [] tRAISE
   where tRAISE      = tFun fxPure (posRow tBaseException posNil) kwdNil tNone
-
---  $RAISEFROM      : pure (BaseException, BaseException) -> None
-scRAISEFROM         = tSchema [] tRAISEFROM
-  where tRAISEFROM  = tFun fxPure (posRow tBaseException $ posRow tBaseException posNil) kwdNil tNone
 
 --  $ASSERT         : pure (bool, ?str) -> None
 scASSERT            = tSchema [] tASSERT
@@ -371,6 +362,10 @@ scRCont             = tSchema [quant a] tRCont
   where tRCont      = tFun fxProc (posRow tCont' $ posRow (tVar a) posNil) kwdNil tR
         tCont'      = tCont (tVar a)
         a           = TV KType $ name "A"
+
+--  $R_FAIL         : proc(BaseException) -> $R
+scRFail             = tSchema [] tRFail
+  where tRFail      = tFun fxProc (posRow tBaseException posNil) kwdNil tR
 
 
 --  class $EqOpt[A] (Eq[?A]): pass

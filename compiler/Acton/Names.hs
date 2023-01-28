@@ -283,9 +283,6 @@ instance Vars QName where
     free (NoQ n)                    = free n
     free (GName m n)                = free m
 
-instance Vars Exception where
-    free (Exception e1 e2)          = free e1 ++ free e2
-
 instance Vars Except where
     free (ExceptAll _)              = []
     free (Except _ x)               = free x

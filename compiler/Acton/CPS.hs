@@ -283,6 +283,8 @@ instance CPS [Stmt] where
                                                       pushH env (eVar hcnt) :
                                                       b'
 
+    cps env (Raise _ e : _)             = return $ sReturn (eCall (eQVar primRFail) [conv e]) : []
+
     cps env (s : ss)                    = do k <- newName "cont"
                                              x <- newName "res"
                                              ss' <- cps env ss
@@ -333,7 +335,7 @@ finalH x f                              = eLambda' [x] (eCall (eVar f) [eInt 0, 
   where raiseH                          = eLambda' [] (eCall (eQVar primRAISE) [eVar x])
 
 hbody env x hs                          = do bs <- mapM h hs
-                                             return $ [sIf bs [sExpr $ eCall (eQVar primRERAISE) []]]
+                                             return $ [sIf bs [sReturn $ eCall (eQVar primRFail) [eVar x]]]
   where h (Handler (ExceptAll _) ss)    = Branch (eBool True) <$> cps env ss
         h (Handler (Except _ y) ss)     = Branch (IsInstance l0 (eVar x) y) <$> cps env ss
         h (Handler (ExceptAs _ y z) ss) = do ss' <- cps env1 ss
@@ -383,6 +385,7 @@ instance NeedCont Stmt where
     needCont env (While _ _ b els)      = needCont env b || needCont env els
     needCont env (Decl _ ds)            = needCont (define (envOf ds) env) ds
     needCont env (Try _ b hs els fin)   = True
+    needCont env (Raise _ e)            = True
     needCont env _                      = False
 
 instance NeedCont Decl where
@@ -424,6 +427,7 @@ instance PreCPS Stmt where
     pre env (Assign l ps e)             = Assign l ps <$> preTop env e
     pre env (MutAssign l t e)           = MutAssign l <$> pre env t <*> preTop env e
     pre env (Return l e)                = Return l <$> preTop env e
+    pre env (Raise l e)                 = Raise l <$> preTop env e
     pre env (If l bs els)               = If l <$> pre env bs <*> preSuite env els
     pre env (While l e b els)           = While l <$> pre env e <*> preSuite env b <*> preSuite env els
     pre env (Try l b hs els fin)        = Try l <$> preSuite env b <*> pre env hs <*> preSuite env els <*> preSuite env fin
@@ -443,9 +447,6 @@ instance PreCPS Branch where
 instance PreCPS Handler where
     pre env (Handler ex ss)             = Handler ex <$> preSuite env1 ss
       where env1                        = define (envOf ex) env
-
-instance PreCPS Exception where
-    pre env (Exception e1 e2)           = Exception <$> pre env e1 <*> pre env e2
 
 instance PreCPS PosArg where
     pre env (PosArg e p)                = PosArg <$> pre env e <*> pre env p

@@ -103,6 +103,7 @@ instance Deact Stmt where
     deact env (Pass l)              = return $ Pass l
     deact env (Return l Nothing)    = return $ Return l Nothing
     deact env (Return l (Just e))   = Return l . Just <$> deact env e
+    deact env (Raise l e)           = Raise l <$> deact env e
     deact env (Break l)             = return $ Break l
     deact env (Continue l)          = return $ Continue l
     deact env (If l bs els)         = If l <$> deact env bs <*> deactSuite env1 els

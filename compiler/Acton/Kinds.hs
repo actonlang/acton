@@ -278,7 +278,7 @@ instance KCheck Stmt where
     kchk env (Pass l)               = return $ Pass l
     kchk env (Delete l t)           = Delete l <$> kchk env t
     kchk env (Return l mbe)         = Return l <$> kchk env mbe
-    kchk env (Raise l mbex)         = Raise l <$> kchk env mbex
+    kchk env (Raise l e)            = Raise l <$> kchk env e
     kchk env (Break l)              = return $ Break l
     kchk env (Continue l)           = return $ Continue l
     kchk env (If l bs els)          = If l <$> kchk env bs <*> kchkSuite env els
@@ -372,9 +372,6 @@ instance KCheck Pattern where
     kchk env (PTuple l ps ks)       = PTuple l <$> kchk env ps <*> kchk env ks
     kchk env (PList l ps p)         = PList l <$> kchk env ps <*> kchk env p
     kchk env (PParen l p)           = PParen l <$> kchk env p
-
-instance KCheck Exception where
-    kchk env (Exception e mbe)      = Exception <$> kchk env e <*> kchk env mbe
 
 instance KCheck Branch where
     kchk env (Branch e ss)          = Branch <$> kchk env e <*> kchkSuite env ss
@@ -608,7 +605,7 @@ instance KSubst Stmt where
     ksubst g (Pass l)               = return $ Pass l
     ksubst g (Delete l t)           = Delete l <$> ksubst g t
     ksubst g (Return l mbe)         = Return l <$> ksubst g mbe
-    ksubst g (Raise l mbex)         = Raise l <$> ksubst g mbex
+    ksubst g (Raise l e)            = Raise l <$> ksubst g e
     ksubst g (Break l)              = return $ Break l
     ksubst g (Continue l)           = return $ Continue l
     ksubst g (If l bs els)          = If l <$> ksubst g bs <*> ksubst g els
@@ -674,9 +671,6 @@ instance KSubst Pattern where
     ksubst g (PTuple l ps ks)       = PTuple l <$> ksubst g ps <*> ksubst g ks
     ksubst g (PList l ps p)         = PList l <$> ksubst g ps <*> ksubst g p
     ksubst g (PParen l p)           = PParen l <$> ksubst g p
-
-instance KSubst Exception where
-    ksubst g (Exception e mbe)      = Exception <$> ksubst g e <*> ksubst g mbe
 
 instance KSubst Branch where
     ksubst g (Branch e ss)          = Branch <$> ksubst g e <*> ksubst g ss

@@ -42,7 +42,7 @@ data Stmt       = Expr          { sloc::SrcLoc, expr::Expr }
                 | Pass          { sloc::SrcLoc }
                 | Delete        { sloc::SrcLoc, target::Target }
                 | Return        { sloc::SrcLoc, optExpr::Maybe Expr }
-                | Raise         { sloc::SrcLoc, except::Maybe Exception }
+                | Raise         { sloc::SrcLoc, expr::Expr }
                 | Break         { sloc::SrcLoc }
                 | Continue      { sloc::SrcLoc }
                 | If            { sloc::SrcLoc, branches::[Branch], els::Suite }
@@ -174,7 +174,6 @@ univar _                                = False
 data ModuleItem = ModuleItem ModName (Maybe Name) deriving (Show,Eq)
 data ModRef     = ModRef (Int, Maybe ModName) deriving (Show,Eq)
 data ImportItem = ImportItem Name (Maybe Name) deriving (Show,Eq)
-data Exception  = Exception Expr (Maybe Expr) deriving (Show,Eq)
 data Branch     = Branch Expr Suite deriving (Show,Eq)
 data Handler    = Handler Except Suite deriving (Show,Eq)
 data Except     = ExceptAll SrcLoc | Except SrcLoc QName | ExceptAs SrcLoc QName Name deriving (Show)
@@ -266,7 +265,7 @@ sDef n p t b fx = sDecl [Def NoLoc n [] p KwdNIL (Just t) b NoDec fx]
 sReturn e       = Return NoLoc (Just e)
 sAssign p e     = Assign NoLoc [p] e
 sMutAssign t e  = MutAssign NoLoc t e
-sRaise e        = Raise NoLoc (Just (Exception e Nothing))
+sRaise e        = Raise NoLoc e
 sExpr e         = Expr NoLoc e
 sDecl ds        = Decl NoLoc ds
 sIf bs els      = If NoLoc bs els
@@ -569,7 +568,7 @@ instance Eq Stmt where
     x@Pass{}            ==  y@Pass{}            = True
     x@Delete{}          ==  y@Delete{}          = target x == target y
     x@Return{}          ==  y@Return{}          = optExpr x == optExpr y
-    x@Raise{}           ==  y@Raise{}           = except x == except y
+    x@Raise{}           ==  y@Raise{}           = expr x == expr y
     x@Break{}           ==  y@Break{}           = True
     x@Continue{}        ==  y@Continue{}        = True
     x@If{}              ==  y@If{}              = branches x == branches y && els x == els y

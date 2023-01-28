@@ -55,7 +55,7 @@ instance Relabel Stmt where
     relabel (Pass _) = Pass <$> newLoc
     relabel (Delete _ t) = Delete <$> newLoc <*> relabel t
     relabel (Return _ mbe) = Return <$> newLoc <*> relabel mbe
-    relabel (Raise _ mbex) = Raise <$> newLoc <*> relabel mbex
+    relabel (Raise _ e) = Raise <$> newLoc <*> relabel e
     relabel (Break _) = Break <$> newLoc
     relabel (Continue _) = Continue <$> newLoc
     relabel (If _ bs els) = If <$> newLoc <*> relabel bs <*> relabel els
@@ -122,9 +122,6 @@ instance Relabel Pattern where
     relabel (PTuple _ ps ks) = PTuple <$> newLoc <*> relabel ps <*> relabel ks
     relabel (PList _ ps p) = PList <$> newLoc <*> relabel ps <*> relabel p
     relabel (PParen _ p) = PParen <$> newLoc <*> relabel p
-
-instance Relabel Exception where
-  relabel (Exception e mbe) = Exception <$> relabel e <*> relabel mbe
 
 instance Relabel Name where
   relabel (Name _ s) = Name <$> newLoc <*> return s

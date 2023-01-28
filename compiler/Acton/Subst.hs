@@ -315,7 +315,7 @@ instance Subst Stmt where
     msubst (Assert l e mbe)         = Assert l <$> msubst e <*> msubst mbe
     msubst (Delete l t)             = Delete l <$> msubst t
     msubst (Return l mbe)           = Return l <$> msubst mbe
-    msubst (Raise l mbex)           = Raise l <$> msubst mbex
+    msubst (Raise l e)              = Raise l <$> msubst e
     msubst (If l bs els)            = If l <$> msubst bs <*> msubst els
     msubst (While l e b els)        = While l <$> msubst e <*> msubst b <*> msubst els
     msubst (For l p e b els)        = For l <$> msubst p <*> msubst e <*> msubst b <*> msubst els
@@ -334,7 +334,7 @@ instance Subst Stmt where
     tyfree (Assert l e mbe)         = tyfree mbe
     tyfree (Delete l t)             = tyfree t
     tyfree (Return l mbe)           = tyfree mbe
-    tyfree (Raise l mbex)           = tyfree mbex
+    tyfree (Raise l e)              = tyfree e
     tyfree (If l bs els)            = tyfree bs ++ tyfree els
     tyfree (While l e b els)        = tyfree e ++ tyfree b ++ tyfree els
     tyfree (For l p e b els)        = tyfree p ++ tyfree e ++ tyfree b ++ tyfree els
@@ -404,11 +404,6 @@ instance Subst Expr where
     tyfree (SetComp l e c)          = tyfree e ++ tyfree c
     tyfree (Paren l e)              = tyfree e
     tyfree e                        = []
-
-instance Subst Exception where
-    msubst (Exception e e')         = Exception <$> msubst e <*> msubst e'
-    
-    tyfree (Exception e e')         = tyfree e ++ tyfree e'
 
 instance Subst Branch where
     msubst (Branch e b)             = Branch <$> msubst e <*> msubst b
