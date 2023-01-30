@@ -37,6 +37,7 @@ $R fileQ_ReadFileD_closeG_local (fileQ_ReadFile self, $Cont c$cont) {
 }
 
 $R fileQ_ReadFileD_readG_local (fileQ_ReadFile self, $Cont c$cont) {
+    B_SequenceD_list wit = B_SequenceD_listG_witness;
     uv_fs_t *req = (uv_fs_t *)calloc(1, sizeof(uv_fs_t));
     char buf[1024] = {0};
     uv_buf_t iovec = uv_buf_init(buf, sizeof(buf));
@@ -44,7 +45,7 @@ $R fileQ_ReadFileD_readG_local (fileQ_ReadFile self, $Cont c$cont) {
     B_list res = B_listD_new(0);
     res->length = 0;
     while (r > 0) {
-      B_listD_append(res, to$bytesD_len(buf,r));
+        wit->$class->append(wit, res, to$bytesD_len(buf,r));
         iovec = uv_buf_init(buf, sizeof(buf));
         r = uv_fs_read(get_uv_loop(), req, (uv_file)from$int(self->_fd), &iovec, 1, -1, NULL);
     }
@@ -55,8 +56,8 @@ $R fileQ_ReadFileD_readG_local (fileQ_ReadFile self, $Cont c$cont) {
         $RAISE(((B_BaseException)B_RuntimeErrorG_new(to$str(errmsg))));
     }
     B_bytes nullb = to$bytes("");
-    B_Iterable wit = ((B_Iterable)((B_Collection)B_SequenceD_listG_new()->W_Collection));
-    return $R_CONT(c$cont, nullb->$class->join(nullb,wit,res));
+    B_Iterable wit2 = ((B_Iterable)((B_Collection)B_SequenceD_listG_new()->W_Collection));
+    return $R_CONT(c$cont, nullb->$class->join(nullb,wit2,res));
 }
 
 

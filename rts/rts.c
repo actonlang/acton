@@ -45,6 +45,7 @@
 #include "log.h"
 #include "netstring.h"
 #include "../builtin/env.h"
+#include "../builtin/function.h"
 
 #include "../backend/client_api.h"
 #include "../backend/fastrand.h"
@@ -1341,8 +1342,9 @@ void serialize_state_shortcut($Actor a) {
 
 void BOOTSTRAP(int argc, char *argv[]) {
     B_list args = B_listG_new(NULL,NULL);
+    B_SequenceD_list wit = B_SequenceD_listG_witness;
     for (int i=0; i< argc; i++)
-      B_listD_append(args,to$str(argv[i]));
+        wit->$class->append(wit,args,to$str(argv[i]));
 
     env_actor = B_EnvG_newact(B_WorldAuthG_new(), args);
 
@@ -2429,6 +2431,7 @@ int main(int argc, char **argv) {
     }
 
     $register_builtin();
+    B___init__();
     D___init__();
     $register_rts();
     $ROOTINIT();

@@ -12,7 +12,8 @@
  * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-void numpyQ_ndselectD___init__(numpyQ_ndselect self) {
+B_NoneType numpyQ_ndselectD___init__(numpyQ_ndselect self) {
+    return B_None;
 }
 
 void numpyQ_ndselectD___serialize__(numpyQ_ndselect wit, $Serial$state state) {
@@ -46,8 +47,9 @@ numpyQ_ndselect numpyQ_ndselectG_new() {
 
 
 
-void numpyQ_ndindexD___init__(numpyQ_ndindex self, B_int index) {
+B_NoneType numpyQ_ndindexD___init__(numpyQ_ndindex self, B_int index) {
     self->index = index;
+    return B_None;
 }
 
 void numpyQ_ndindexD___serialize__(numpyQ_ndindex self, $Serial$state state) {
@@ -82,8 +84,9 @@ numpyQ_ndindex numpyQ_ndindexG_new(B_int p$1) {
 
 
 
-void numpyQ_ndsliceD___init__(numpyQ_ndslice self, B_slice slc) {
+B_NoneType numpyQ_ndsliceD___init__(numpyQ_ndslice self, B_slice slc) {
     self->slc = slc;
+    return B_None;
 }
 
 void numpyQ_ndsliceD___serialize__(numpyQ_ndslice self, $Serial$state state) {

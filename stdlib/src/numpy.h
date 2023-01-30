@@ -9,7 +9,7 @@ struct numpyQ_ndselectG_class {
     char *$GCINFO;
     int $class_id;
     $SuperG_class $superclass;
-    void (*__init__) (numpyQ_ndselect);
+    B_NoneType (*__init__) (numpyQ_ndselect);
     void (*__serialize__) (numpyQ_ndselect, $Serial$state);
     numpyQ_ndselect (*__deserialize__) (numpyQ_ndselect, $Serial$state);
     B_bool (*__bool__) (numpyQ_ndselect);
@@ -27,7 +27,7 @@ struct numpyQ_ndindexG_class {
     char *$GCINFO;
     int $class_id;
     $SuperG_class $superclass;
-    void (*__init__) (numpyQ_ndindex, B_int);
+    B_NoneType (*__init__) (numpyQ_ndindex, B_int);
     void (*__serialize__) (numpyQ_ndindex, $Serial$state);
     numpyQ_ndindex (*__deserialize__) (numpyQ_ndindex, $Serial$state);
     B_bool (*__bool__) (numpyQ_ndindex);
@@ -48,7 +48,7 @@ struct numpyQ_ndsliceG_class {
     char *$GCINFO;
     int $class_id;
     $SuperG_class $superclass;
-    void (*__init__) (numpyQ_ndslice, B_slice);
+    B_NoneType (*__init__) (numpyQ_ndslice, B_slice);
     void (*__serialize__) (numpyQ_ndslice, $Serial$state);
     numpyQ_ndslice (*__deserialize__) (numpyQ_ndslice, $Serial$state);
     B_bool (*__bool__) (numpyQ_ndslice);
@@ -106,7 +106,7 @@ struct numpyQ_PrimitiveG_class {
   char *$GCINFO;
   int $class_id;
   $SuperG_class $superclass;
-  void (*__init__)(numpyQ_Primitive);
+  B_NoneType (*__init__)(numpyQ_Primitive);
   void (*__serialize__)(numpyQ_Primitive,$Serial$state);
   numpyQ_Primitive (*__deserialize__)(numpyQ_Primitive,$Serial$state);
   B_bool (*__bool__)(numpyQ_Primitive);
@@ -153,8 +153,8 @@ struct numpyQ_PrimitiveG_class {
   union $Bytes8 (*$bnot)(union $Bytes8);
 };
 
-B_str l$prim_str(union $Bytes8 n);
-B_str d$prim_str(union $Bytes8 n);
+B_str B_l_prim_str(union $Bytes8 n);
+B_str B_l_prim_str(union $Bytes8 n);
 
 // Primitive instance for int ///////////////////////////////////////////////////////////////
 
@@ -166,7 +166,7 @@ struct numpyQ_PrimitiveD_intG_class {
   char *$GCINFO;
   int $class_id;
   $SuperG_class $superclass;
-  void (*__init__)(numpyQ_PrimitiveD_int);
+  B_NoneType (*__init__)(numpyQ_PrimitiveD_int);
   void (*__serialize__)(numpyQ_PrimitiveD_int,$Serial$state);
   numpyQ_PrimitiveD_int (*__deserialize__)(numpyQ_PrimitiveD_int,$Serial$state);
   B_bool (*__bool__)(numpyQ_PrimitiveD_int);
@@ -223,7 +223,7 @@ struct numpyQ_PrimitiveD_floatG_class {
   char *$GCINFO;
   int $class_id;
   $SuperG_class $superclass;
-  void (*__init__)(numpyQ_PrimitiveD_float);
+  B_NoneType (*__init__)(numpyQ_PrimitiveD_float);
   void (*__serialize__)(numpyQ_PrimitiveD_float,$Serial$state);
   numpyQ_PrimitiveD_float (*__deserialize__)(numpyQ_PrimitiveD_float,$Serial$state);
   B_bool (*__bool__)(numpyQ_PrimitiveD_float);
@@ -290,7 +290,7 @@ struct numpyQ_ndarrayG_class {
   char *$GCINFO;
   int $class_id;
   $SuperG_class $superclass;
-    void (*__init__)(numpyQ_ndarray,numpyQ_Primitive,B_atom);
+  B_NoneType (*__init__)(numpyQ_ndarray,numpyQ_Primitive,B_atom);
   void (*__serialize__)(numpyQ_ndarray,$Serial$state); 
   numpyQ_ndarray (*__deserialize__)(numpyQ_ndarray,$Serial$state);
   B_bool (*__bool__)(numpyQ_ndarray);
@@ -341,7 +341,7 @@ struct numpyQ_IteratorD_ndarrayG_class {
   char *$GCINFO;
   int $class_id;
   $SuperG_class $superclass;
-  void (*__init__)(numpyQ_IteratorD_ndarray, numpyQ_Primitive, numpyQ_ndarray);
+  B_NoneType (*__init__)(numpyQ_IteratorD_ndarray, numpyQ_Primitive, numpyQ_ndarray);
   void (*__serialize__)(numpyQ_IteratorD_ndarray,$Serial$state);
   numpyQ_IteratorD_ndarray (*__deserialize__)(numpyQ_IteratorD_ndarray,$Serial$state);
   B_bool (*__bool__)(numpyQ_IteratorD_ndarray);
@@ -471,7 +471,7 @@ struct numpyQ_IntegralD_ndarrayD_intG_class {
     char *$GCINFO;
     int $class_id;
     $SuperG_class $superclass;
-    void (*__init__)(numpyQ_IntegralD_ndarrayD_int);
+    B_NoneType (*__init__)(numpyQ_IntegralD_ndarrayD_int);
     void (*__serialize__)(numpyQ_IntegralD_ndarrayD_int,$Serial$state);
     numpyQ_IntegralD_ndarrayD_int (*__deserialize__)(numpyQ_IntegralD_ndarrayD_int,$Serial$state);
     B_bool (*__bool__)(numpyQ_IntegralD_ndarrayD_int);
@@ -512,7 +512,7 @@ struct numpyQ_IntegralD_ndarrayD_intG_class {
     numpyQ_ndarray (*__invert__)(numpyQ_IntegralD_ndarrayD_int, numpyQ_ndarray);
 };
 
-void numpyQ_IntegralD_ndarrayD_intD___init__ (numpyQ_IntegralD_ndarrayD_int);
+B_NoneType numpyQ_IntegralD_ndarrayD_intD___init__ (numpyQ_IntegralD_ndarrayD_int);
 void numpyQ_IntegralD_ndarrayD_intD___serialize__(numpyQ_IntegralD_ndarrayD_int,$Serial$state);
 numpyQ_IntegralD_ndarrayD_int numpyQ_IntegralD_ndarrayD_intD___deserialize__(numpyQ_IntegralD_ndarrayD_int,$Serial$state);
 numpyQ_ndarray numpyQ_IntegralD_ndarrayD_intD___add__(numpyQ_IntegralD_ndarrayD_int, numpyQ_ndarray, numpyQ_ndarray);
@@ -554,7 +554,7 @@ struct numpyQ_LogicalD_ndarrayD_intG_class {
     char *$GCINFO;
     int $class_id;
     $SuperG_class $superclass;
-    void (*__init__)(numpyQ_LogicalD_ndarrayD_int, B_Integral);
+    B_NoneType (*__init__)(numpyQ_LogicalD_ndarrayD_int, B_Integral);
     void (*__serialize__)(numpyQ_LogicalD_ndarrayD_int,$Serial$state);
     numpyQ_LogicalD_ndarrayD_int (*__deserialize__)(numpyQ_LogicalD_ndarrayD_int,$Serial$state);
     B_bool (*__bool__)(numpyQ_LogicalD_ndarrayD_int);
@@ -568,7 +568,7 @@ struct numpyQ_LogicalD_ndarrayD_intG_class {
     numpyQ_ndarray (*__ixor__)(numpyQ_LogicalD_ndarrayD_int, numpyQ_ndarray, numpyQ_ndarray);
 };
 
-void numpyQ_LogicalD_ndarrayD_intD___init__ (numpyQ_LogicalD_ndarrayD_int, B_Integral);
+B_NoneType numpyQ_LogicalD_ndarrayD_intD___init__ (numpyQ_LogicalD_ndarrayD_int, B_Integral);
 void numpyQ_LogicalD_ndarrayD_intD___serialize__(numpyQ_LogicalD_ndarrayD_int,$Serial$state);
 numpyQ_LogicalD_ndarrayD_int numpyQ_LogicalD_ndarrayD_intD___deserialize__(numpyQ_LogicalD_ndarrayD_int,$Serial$state);
 numpyQ_ndarray numpyQ_LogicalD_ndarrayD_intD___and__ (numpyQ_LogicalD_ndarrayD_int, numpyQ_ndarray, numpyQ_ndarray);
@@ -586,7 +586,7 @@ struct numpyQ_MinusD_ndarrayD_intG_class {
     char *$GCINFO;
     int $class_id;
     $SuperG_class $superclass;
-    void (*__init__)(numpyQ_MinusD_ndarrayD_int, B_Integral);
+    B_NoneType (*__init__)(numpyQ_MinusD_ndarrayD_int, B_Integral);
     void (*__serialize__)(numpyQ_MinusD_ndarrayD_int,$Serial$state);
     numpyQ_MinusD_ndarrayD_int (*__deserialize__)(numpyQ_MinusD_ndarrayD_int,$Serial$state);
     B_bool (*__bool__)(numpyQ_MinusD_ndarrayD_int);
@@ -596,7 +596,7 @@ struct numpyQ_MinusD_ndarrayD_intG_class {
     numpyQ_ndarray (*__isub__)(numpyQ_MinusD_ndarrayD_int, numpyQ_ndarray, numpyQ_ndarray);
 };
 
-void numpyQ_MinusD_ndarrayD_intD___init__ (numpyQ_MinusD_ndarrayD_int, B_Integral);
+B_NoneType numpyQ_MinusD_ndarrayD_intD___init__ (numpyQ_MinusD_ndarrayD_int, B_Integral);
 void numpyQ_MinusD_ndarrayD_intD___serialize__(numpyQ_MinusD_ndarrayD_int,$Serial$state);
 numpyQ_MinusD_ndarrayD_int numpyQ_MinusD_ndarrayD_intD___deserialize__(numpyQ_MinusD_ndarrayD_int,$Serial$state);
 numpyQ_ndarray numpyQ_MinusD_ndarrayD_intD___sub__ (numpyQ_MinusD_ndarrayD_int, numpyQ_ndarray, numpyQ_ndarray);
@@ -613,7 +613,7 @@ struct numpyQ_RealD_ndarrayG_class {
     char *$GCINFO;
     int $class_id;
     $SuperG_class $superclass;
-  void (*__init__)(numpyQ_RealD_ndarray, numpyQ_Primitive);
+  B_NoneType (*__init__)(numpyQ_RealD_ndarray, numpyQ_Primitive);
     void (*__serialize__)(numpyQ_RealD_ndarray,$Serial$state);
     numpyQ_RealD_ndarray (*__deserialize__)(numpyQ_RealD_ndarray,$Serial$state);
     B_bool (*__bool__)(numpyQ_RealD_ndarray);
@@ -640,7 +640,7 @@ struct numpyQ_RealD_ndarrayG_class {
     numpyQ_ndarray (*__round__)(numpyQ_RealD_ndarray, numpyQ_ndarray, numpyQ_ndarray);
 };
 
-void numpyQ_RealD_ndarrayD___init__ (numpyQ_RealD_ndarray,numpyQ_Primitive);
+B_NoneType numpyQ_RealD_ndarrayD___init__ (numpyQ_RealD_ndarray,numpyQ_Primitive);
 void numpyQ_RealD_ndarrayD___serialize__(numpyQ_RealD_ndarray,$Serial$state);
 numpyQ_RealD_ndarray numpyQ_RealD_ndarrayD___deserialize__(numpyQ_RealD_ndarray,$Serial$state);
 numpyQ_ndarray numpyQ_RealD_ndarrayD___add__(numpyQ_RealD_ndarray, numpyQ_ndarray, numpyQ_ndarray);
@@ -672,7 +672,7 @@ struct numpyQ_MinusD_ndarrayG_class {
     char *$GCINFO;
     int $class_id;
     $SuperG_class $superclass;
-    void (*__init__)(numpyQ_MinusD_ndarray, B_Real);
+    B_NoneType (*__init__)(numpyQ_MinusD_ndarray, B_Real);
     void (*__serialize__)(numpyQ_MinusD_ndarray,$Serial$state);
     numpyQ_MinusD_ndarray (*__deserialize__)(numpyQ_MinusD_ndarray,$Serial$state);
     B_bool (*__bool__)(numpyQ_MinusD_ndarray);
@@ -682,7 +682,7 @@ struct numpyQ_MinusD_ndarrayG_class {
     numpyQ_ndarray (*__isub__)(numpyQ_MinusD_ndarray, numpyQ_ndarray, numpyQ_ndarray);
 };
 
-void numpyQ_MinusD_ndarrayD___init__ (numpyQ_MinusD_ndarray, B_Real);
+B_NoneType numpyQ_MinusD_ndarrayD___init__ (numpyQ_MinusD_ndarray, B_Real);
 void numpyQ_MinusD_ndarrayD___serialize__(numpyQ_MinusD_ndarray,$Serial$state);
 numpyQ_MinusD_ndarray numpyQ_MinusD_ndarrayD___deserialize__(numpyQ_MinusD_ndarray,$Serial$state);
 numpyQ_ndarray numpyQ_MinusD_ndarrayD___sub__ (numpyQ_MinusD_ndarray, numpyQ_ndarray, numpyQ_ndarray);
@@ -698,7 +698,7 @@ struct numpyQ_DivD_ndarrayD_intG_class {
     char *$GCINFO;
     int $class_id;
     $SuperG_class $superclass;
-    void (*__init__)(numpyQ_DivD_ndarrayD_int);
+    B_NoneType (*__init__)(numpyQ_DivD_ndarrayD_int);
     void (*__serialize__)(numpyQ_DivD_ndarrayD_int,$Serial$state);
     numpyQ_DivD_ndarrayD_int (*__deserialize__)(numpyQ_DivD_ndarrayD_int,$Serial$state);
     B_bool (*__bool__)(numpyQ_DivD_ndarrayD_int);
@@ -708,7 +708,7 @@ struct numpyQ_DivD_ndarrayD_intG_class {
     numpyQ_ndarray (*__itruediv__)(numpyQ_DivD_ndarrayD_int, numpyQ_ndarray, numpyQ_ndarray);
 };
 
-void numpyQ_DivD_ndarrayD_intD___init__ (numpyQ_DivD_ndarrayD_int);
+B_NoneType numpyQ_DivD_ndarrayD_intD___init__ (numpyQ_DivD_ndarrayD_int);
 void numpyQ_DivD_ndarrayD_intD___serialize__(numpyQ_DivD_ndarrayD_int,$Serial$state);
 numpyQ_DivD_ndarrayD_int numpyQ_DivD_ndarrayD_intD___deserialize__(numpyQ_DivD_ndarrayD_int,$Serial$state);
 numpyQ_ndarray numpyQ_DivD_ndarrayD_intD___truediv__ (numpyQ_DivD_ndarrayD_int, numpyQ_ndarray, numpyQ_ndarray);
@@ -724,7 +724,7 @@ struct numpyQ_DivD_ndarrayD_floatG_class {
     char *$GCINFO;
     int $class_id;
     $SuperG_class $superclass;
-    void (*__init__)(numpyQ_DivD_ndarrayD_float);
+    B_NoneType (*__init__)(numpyQ_DivD_ndarrayD_float);
     void (*__serialize__)(numpyQ_DivD_ndarrayD_float,$Serial$state);
     numpyQ_DivD_ndarrayD_float (*__deserialize__)(numpyQ_DivD_ndarrayD_float,$Serial$state);
     B_bool (*__bool__)(numpyQ_DivD_ndarrayD_float);
@@ -734,7 +734,7 @@ struct numpyQ_DivD_ndarrayD_floatG_class {
     numpyQ_ndarray (*__itruediv__)(numpyQ_DivD_ndarrayD_float, numpyQ_ndarray, numpyQ_ndarray);
 };
 
-void numpyQ_DivD_ndarrayD_floatD___init__ (numpyQ_DivD_ndarrayD_float);
+B_NoneType numpyQ_DivD_ndarrayD_floatD___init__ (numpyQ_DivD_ndarrayD_float);
 void numpyQ_DivD_ndarrayD_floatD___serialize__(numpyQ_DivD_ndarrayD_float,$Serial$state);
 numpyQ_DivD_ndarrayD_float numpyQ_DivD_ndarrayD_floatD___deserialize__(numpyQ_DivD_ndarrayD_float,$Serial$state);
 numpyQ_ndarray numpyQ_DivD_ndarrayD_floatD___truediv__ (numpyQ_DivD_ndarrayD_float, numpyQ_ndarray, numpyQ_ndarray);
@@ -748,18 +748,18 @@ struct numpyQ_SliceableD_ndarrayG_class {
     char *$GCINFO;
     int $class_id;
     $SuperG_class $superclass;
-    void (*__init__) (numpyQ_SliceableD_ndarray, numpyQ_Primitive);
+    B_NoneType (*__init__) (numpyQ_SliceableD_ndarray, numpyQ_Primitive);
     void (*__serialize__) (numpyQ_SliceableD_ndarray, $Serial$state);
     numpyQ_SliceableD_ndarray (*__deserialize__) (numpyQ_SliceableD_ndarray, $Serial$state);
     B_bool (*__bool__)(numpyQ_SliceableD_ndarray);
     B_str (*__str__)(numpyQ_SliceableD_ndarray);
     B_str (*__repr__)(numpyQ_SliceableD_ndarray);
     numpyQ_ndarray (*__getitem__) (numpyQ_SliceableD_ndarray, numpyQ_ndarray, B_int);
-    void (*__setitem__) (numpyQ_SliceableD_ndarray, numpyQ_ndarray, B_int, $WORD);
-    void (*__delitem__) (numpyQ_SliceableD_ndarray, numpyQ_ndarray, B_int);
+    B_NoneType (*__setitem__) (numpyQ_SliceableD_ndarray, numpyQ_ndarray, B_int, $WORD);
+    B_NoneType (*__delitem__) (numpyQ_SliceableD_ndarray, numpyQ_ndarray, B_int);
     numpyQ_ndarray (*__getslice__) (numpyQ_SliceableD_ndarray, numpyQ_ndarray, B_slice);
-    void (*__setslice__) (numpyQ_SliceableD_ndarray, numpyQ_ndarray, B_Iterable, B_slice, $WORD);
-    void (*__delslice__) (numpyQ_SliceableD_ndarray, numpyQ_ndarray, B_slice);
+    B_NoneType (*__setslice__) (numpyQ_SliceableD_ndarray, numpyQ_ndarray, B_Iterable, B_slice, $WORD);
+    B_NoneType (*__delslice__) (numpyQ_SliceableD_ndarray, numpyQ_ndarray, B_slice);
 };
 struct numpyQ_SliceableD_ndarray {
     numpyQ_SliceableD_ndarrayG_class $class;
@@ -778,7 +778,7 @@ struct numpyQ_CollectionD_ndarrayG_class {
     char *$GCINFO;
     int $class_id;
     $SuperG_class $superclass;
-    void (*__init__)(numpyQ_CollectionD_ndarray, numpyQ_Primitive);
+    B_NoneType (*__init__)(numpyQ_CollectionD_ndarray, numpyQ_Primitive);
     void (*__serialize__)(numpyQ_CollectionD_ndarray,$Serial$state);
     numpyQ_CollectionD_ndarray (*__deserialize__)(numpyQ_CollectionD_ndarray,$Serial$state);
     B_bool (*__bool__)(numpyQ_CollectionD_ndarray);
@@ -789,7 +789,7 @@ struct numpyQ_CollectionD_ndarrayG_class {
     B_int (*__len__)(numpyQ_CollectionD_ndarray, numpyQ_ndarray);
 };
 
-void numpyQ_CollectionD_ndarrayD___init__ (numpyQ_CollectionD_ndarray, numpyQ_Primitive);
+B_NoneType numpyQ_CollectionD_ndarrayD___init__ (numpyQ_CollectionD_ndarray, numpyQ_Primitive);
 void numpyQ_CollectionD_ndarrayD___serialize__(numpyQ_CollectionD_ndarray,$Serial$state);
 numpyQ_CollectionD_ndarray numpyQ_CollectionD_ndarrayD___deserialize__(numpyQ_CollectionD_ndarray,$Serial$state);
 B_Iterator numpyQ_CollectionD_ndarrayD___iter__ (numpyQ_CollectionD_ndarray, numpyQ_ndarray);

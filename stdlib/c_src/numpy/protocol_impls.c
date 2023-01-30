@@ -14,9 +14,10 @@
 
 // numpyQ_IntegralD_ndarrayD_int /////////////////////////////////////////////////////////////////////////////////////////////
 
-void numpyQ_IntegralD_ndarrayD_intD___init__(numpyQ_IntegralD_ndarrayD_int wit) {
+B_NoneType numpyQ_IntegralD_ndarrayD_intD___init__(numpyQ_IntegralD_ndarrayD_int wit) {
     wit->W_Logical = (B_Logical)$NEW(numpyQ_LogicalD_ndarrayD_int,(B_Integral)wit);
     wit->W_Minus = (B_Minus)$NEW(numpyQ_MinusD_ndarrayD_int,(B_Integral)wit);
+    return B_None;
 }; 
 
 numpyQ_IntegralD_ndarrayD_int numpyQ_IntegralD_ndarrayD_intG_new() {
@@ -87,7 +88,7 @@ numpyQ_ndarray numpyQ_IntegralD_ndarrayD_intD___int__ (numpyQ_IntegralD_ndarrayD
 numpyQ_ndarray numpyQ_IntegralD_ndarrayD_intD___index__ (numpyQ_IntegralD_ndarrayD_int wit, numpyQ_ndarray a);
 B_tuple numpyQ_IntegralD_ndarrayD_intD___divmod__ (numpyQ_IntegralD_ndarrayD_int wit, numpyQ_ndarray a, numpyQ_ndarray b);
 numpyQ_ndarray numpyQ_IntegralD_ndarrayD_intD___floordiv__ (numpyQ_IntegralD_ndarrayD_int wit, numpyQ_ndarray a, numpyQ_ndarray b) {
-    return numpyQ_oper(l$floordiv,a,b);
+    return numpyQ_oper(B_l_floordiv,a,b);
 }  
 numpyQ_ndarray numpyQ_IntegralD_ndarrayD_intD___mod__ (numpyQ_IntegralD_ndarrayD_int wit, numpyQ_ndarray a, numpyQ_ndarray b);
 numpyQ_ndarray numpyQ_IntegralD_ndarrayD_intD___lshift__ (numpyQ_IntegralD_ndarrayD_int wit, numpyQ_ndarray a, numpyQ_ndarray b);
@@ -96,8 +97,9 @@ numpyQ_ndarray numpyQ_IntegralD_ndarrayD_intD___invert__ (numpyQ_IntegralD_ndarr
 
 // numpyQ_LogicalD_ndarrayD_int //////////////////////////////////////////////////////////////////////////////
 
-void numpyQ_LogicalD_ndarrayD_intD___init__(numpyQ_LogicalD_ndarrayD_int wit, B_Integral W_Integral) {
+B_NoneType numpyQ_LogicalD_ndarrayD_intD___init__(numpyQ_LogicalD_ndarrayD_int wit, B_Integral W_Integral) {
     wit->W_Integral =  W_Integral;
+    return B_None;
 };
 
 numpyQ_LogicalD_ndarrayD_int numpyQ_LogicalD_ndarrayD_intG_new(B_Integral W_Integral) {
@@ -128,8 +130,9 @@ numpyQ_ndarray numpyQ_LogicalD_ndarrayD_intD___xor__ (numpyQ_LogicalD_ndarrayD_i
 
 // numpyQ_MinusD_ndarrayD_int /////////////////////////////////////////////////////////////////////////////////
 
-void numpyQ_MinusD_ndarrayD_intD___init__(numpyQ_MinusD_ndarrayD_int wit, B_Integral W_Integral) {
+B_NoneType numpyQ_MinusD_ndarrayD_intD___init__(numpyQ_MinusD_ndarrayD_int wit, B_Integral W_Integral) {
     wit->W_Integral =  W_Integral;
+    return B_None;
 };
 
 numpyQ_MinusD_ndarrayD_int numpyQ_MinusD_ndarrayD_intG_new(B_Integral W_Integral) {
@@ -164,9 +167,10 @@ numpyQ_RealD_ndarray numpyQ_RealFloat$ndarrayG_new(numpyQ_Primitive W_PrimitiveD
 
 // numpyQ_RealD_ndarray /////////////////////////////////////////////////////////////////////////////////////////////
 
-void numpyQ_RealD_ndarrayD___init__(numpyQ_RealD_ndarray wit, numpyQ_Primitive W_PrimitiveD_AD_numpy) {
+B_NoneType numpyQ_RealD_ndarrayD___init__(numpyQ_RealD_ndarray wit, numpyQ_Primitive W_PrimitiveD_AD_numpy) {
     wit->W_Minus = (B_Minus)$NEW(numpyQ_MinusD_ndarray,(B_Real)wit);
     wit->W_PrimitiveD_AD_RealD_ndarray =  W_PrimitiveD_AD_numpy;
+    return B_None;
 }; 
 
 numpyQ_RealD_ndarray numpyQ_RealD_ndarrayG_new(numpyQ_Primitive W_PrimitiveD_AD_numpy) {
@@ -247,8 +251,9 @@ numpyQ_ndarray numpyQ_RealD_ndarrayD___round__ (numpyQ_RealD_ndarray wit, numpyQ
  
 // numpyQ_MinusD_ndarray /////////////////////////////////////////////////////////////////////////////////
 
-void numpyQ_MinusD_ndarrayD___init__(numpyQ_MinusD_ndarray wit, B_Real W_Real) {
+B_NoneType numpyQ_MinusD_ndarrayD___init__(numpyQ_MinusD_ndarray wit, B_Real W_Real) {
     wit->W_Real =  W_Real;
+    return B_None;
 };
 
 numpyQ_MinusD_ndarray numpyQ_MinusD_ndarrayG_new(B_Real W_Real) {
@@ -274,7 +279,8 @@ numpyQ_ndarray numpyQ_MinusD_ndarrayD___sub__ (numpyQ_MinusD_ndarray wit, numpyQ
 
 // numpyQ_DivD_ndarrayD_int /////////////////////////////////////////////////////////////////////////////////
 
-void numpyQ_DivD_ndarrayD_intD___init__(numpyQ_DivD_ndarrayD_int wit) {
+B_NoneType numpyQ_DivD_ndarrayD_intD___init__(numpyQ_DivD_ndarrayD_int wit) {
+    return B_None;
 };
 
 numpyQ_DivD_ndarrayD_int numpyQ_DivD_ndarrayD_intG_new() {
@@ -292,14 +298,15 @@ numpyQ_DivD_ndarrayD_int numpyQ_DivD_ndarrayD_intD___deserialize__(numpyQ_DivD_n
 }
 
 numpyQ_ndarray numpyQ_DivD_ndarrayD_intD___truediv__ (numpyQ_DivD_ndarrayD_int wit, numpyQ_ndarray a, numpyQ_ndarray b) {
-    numpyQ_ndarray res = numpyQ_oper(l$truediv,a,b);
+    numpyQ_ndarray res = numpyQ_oper(B_l_truediv,a,b);
     res->elem_type = DblType;
     return res;
 }
 
 // numpyQ_DivD_ndarrayD_float /////////////////////////////////////////////////////////////////////////////////
 
-void numpyQ_DivD_ndarrayD_floatD___init__(numpyQ_DivD_ndarrayD_float wit) {
+B_NoneType numpyQ_DivD_ndarrayD_floatD___init__(numpyQ_DivD_ndarrayD_float wit) {
+    return B_None;
 };
 
 numpyQ_DivD_ndarrayD_float numpyQ_DivD_ndarrayD_floatG_new() {
@@ -317,13 +324,14 @@ numpyQ_DivD_ndarrayD_float numpyQ_DivD_ndarrayD_floatD___deserialize__(numpyQ_Di
 }
 
 numpyQ_ndarray numpyQ_DivD_ndarrayD_floatD___truediv__ (numpyQ_DivD_ndarrayD_float wit, numpyQ_ndarray a, numpyQ_ndarray b) {
-    return numpyQ_oper(d$truediv,a,b);
+    return numpyQ_oper(B_d_truediv,a,b);
 }
 
 // Sliceable$ndarray ///////////////////////////////////////////////////////////////////////////////
 
-void numpyQ_SliceableD_ndarrayD___init__ (numpyQ_SliceableD_ndarray self, numpyQ_Primitive pwit) {
+B_NoneType numpyQ_SliceableD_ndarrayD___init__ (numpyQ_SliceableD_ndarray self, numpyQ_Primitive pwit) {
     self->pwit = pwit;
+    return B_None;
 }
 
 void numpyQ_SliceableD_ndarrayD___serialize__(numpyQ_SliceableD_ndarray wit, $Serial$state state) {
@@ -341,43 +349,46 @@ numpyQ_SliceableD_ndarray numpyQ_SliceableD_ndarrayD___deserialize__(numpyQ_Slic
     return res;
 }
 
-numpyQ_ndarray numpyQ_SliceableD_ndarrayD___getitem__ (numpyQ_SliceableD_ndarray wit, numpyQ_ndarray a, B_int i) {
+numpyQ_ndarray numpyQ_SliceableD_ndarrayD___getitem__ (numpyQ_SliceableD_ndarray pwit, numpyQ_ndarray a, B_int i) {
+    B_SequenceD_list wit = B_SequenceD_listG_witness;
     B_list lst = B_listG_new(NULL, NULL);
-    B_listD_append(lst, numpyQ_ndindexG_new(i));
+    wit->$class->append(wit, lst, numpyQ_ndindexG_new(i));
     return a->$class->__ndgetslice__(a, lst);
 }
 
-void numpyQ_SliceableD_ndarrayD___setitem__ (numpyQ_SliceableD_ndarray wit, numpyQ_ndarray a, B_int i, $WORD val) {
-    fprintf(stderr,"Internal error: call to mutating method setitem on ndarray");
-    exit(-1);
+B_NoneType numpyQ_SliceableD_ndarrayD___setitem__ (numpyQ_SliceableD_ndarray wit, numpyQ_ndarray a, B_int i, $WORD val) {
+    $RAISE((B_BaseException)$NEW(B_NotImplementedError,to$str("call to mutating method setitem on ndarray")));
+    return B_None;
 }
 
-void numpyQ_SliceableD_ndarrayD___delitem__ (numpyQ_SliceableD_ndarray wit, numpyQ_ndarray a, B_int i) {
-    fprintf(stderr,"Internal error: call to mutating method delitem on ndarray");
-    exit(-1);
+B_NoneType numpyQ_SliceableD_ndarrayD___delitem__ (numpyQ_SliceableD_ndarray wit, numpyQ_ndarray a, B_int i) {
+    $RAISE((B_BaseException)$NEW(B_NotImplementedError,to$str("call to mutating method delitem on ndarray")));
+    return B_None;
 }
 
-numpyQ_ndarray numpyQ_SliceableD_ndarrayD___getslice__ (numpyQ_SliceableD_ndarray wit, numpyQ_ndarray a, B_slice slc) {
+numpyQ_ndarray numpyQ_SliceableD_ndarrayD___getslice__ (numpyQ_SliceableD_ndarray pwit, numpyQ_ndarray a, B_slice slc) {
+    B_SequenceD_list wit = B_SequenceD_listG_witness;
     B_list lst = B_listG_new(NULL, NULL);
-    B_listD_append(lst, numpyQ_ndsliceG_new(slc));
+    wit->$class->append(wit,lst, numpyQ_ndsliceG_new(slc));
     return a->$class->__ndgetslice__(a, lst);
 }
 
-void numpyQ_SliceableD_ndarrayD___setslice__ (numpyQ_SliceableD_ndarray wit, numpyQ_ndarray a, B_Iterable wit2, B_slice slc, $WORD iter) {
-    fprintf(stderr,"Internal error: call to mutating method setslice on ndarray");
-    exit(-1);
+B_NoneType numpyQ_SliceableD_ndarrayD___setslice__ (numpyQ_SliceableD_ndarray wit, numpyQ_ndarray a, B_Iterable wit2, B_slice slc, $WORD iter) {
+    $RAISE((B_BaseException)$NEW(B_NotImplementedError,to$str("call to mutating method setslice on ndarray")));
+    return B_None;
 }
 
-void numpyQ_SliceableD_ndarrayD___delslice__ (numpyQ_SliceableD_ndarray wit, numpyQ_ndarray a, B_slice slc) {
-    fprintf(stderr,"Internal error: call to mutating method delslice on ndarray");
-    exit(-1);
+B_NoneType numpyQ_SliceableD_ndarrayD___delslice__ (numpyQ_SliceableD_ndarray wit, numpyQ_ndarray a, B_slice slc) {
+    $RAISE((B_BaseException)$NEW(B_NotImplementedError,to$str("call to mutating method delslice on ndarray")));
+    return B_None;
 }
 
 // numpyQ_CollectionD_ndarray ////////////////////////////////////////////////////////
 
 
-void numpyQ_CollectionD_ndarrayD___init__(numpyQ_CollectionD_ndarray self, numpyQ_Primitive pwit) {
+B_NoneType numpyQ_CollectionD_ndarrayD___init__(numpyQ_CollectionD_ndarray self, numpyQ_Primitive pwit) {
     self->pwit = pwit;
+    return B_None;
 }
   
 numpyQ_CollectionD_ndarray numpyQ_CollectionD_ndarrayG_new(numpyQ_Primitive pwit) {
@@ -403,8 +414,9 @@ B_Iterator numpyQ_CollectionD_ndarrayD___iter__(numpyQ_CollectionD_ndarray self,
 numpyQ_ndarray numpyQ_CollectionD_ndarrayD___fromiter__(numpyQ_CollectionD_ndarray wit, B_Iterable iter) {
     return NULL;
 }
-B_int numpyQ_CollectionD_ndarrayD___len__(numpyQ_CollectionD_ndarray wit, numpyQ_ndarray a) {
-    return B_listD_getitem(a->shape,-1);
+B_int numpyQ_CollectionD_ndarrayD___len__(numpyQ_CollectionD_ndarray pwit, numpyQ_ndarray a) {
+    B_SequenceD_list wit = B_SequenceD_listG_witness;
+    return wit->$class->__getitem__(wit,a->shape,toB_int(-1));
 }
 
 
@@ -426,13 +438,13 @@ struct numpyQ_IntegralD_ndarrayD_intG_class numpyQ_IntegralD_ndarrayD_intG_metho
     (B_str (*)(numpyQ_IntegralD_ndarrayD_int))$default__str__,
     (B_str (*)(numpyQ_IntegralD_ndarrayD_int))$default__str__,
     numpyQ_IntegralD_ndarrayD_intD___add__,
-    (numpyQ_ndarray (*)(numpyQ_IntegralD_ndarrayD_int, numpyQ_ndarray, numpyQ_ndarray))B_PlusD___iadd__,    
+    numpyQ_IntegralD_ndarrayD_intD___add__,
     numpyQ_IntegralD_ndarrayD_intD___mul__,
-    (numpyQ_ndarray (*)(numpyQ_IntegralD_ndarrayD_int, numpyQ_ndarray, numpyQ_ndarray))B_TimesD___imul__ ,
+    numpyQ_IntegralD_ndarrayD_intD___mul__,
     numpyQ_IntegralD_ndarrayD_intD___fromatom__,
     NULL,
     numpyQ_IntegralD_ndarrayD_intD___pow__,
-    (numpyQ_ndarray (*)(numpyQ_IntegralD_ndarrayD_int, numpyQ_ndarray, numpyQ_ndarray))B_NumberD___ipow__ ,
+    numpyQ_IntegralD_ndarrayD_intD___pow__,
     numpyQ_IntegralD_ndarrayD_intD___neg__,
     numpyQ_IntegralD_ndarrayD_intD___pos__,
     NULL,
@@ -453,7 +465,7 @@ struct numpyQ_IntegralD_ndarrayD_intG_class numpyQ_IntegralD_ndarrayD_intG_metho
     NULL,
     NULL,
     NULL,
-    (numpyQ_ndarray (*)(numpyQ_IntegralD_ndarrayD_int, numpyQ_ndarray, numpyQ_ndarray))B_IntegralD___ifloordiv__,
+    numpyQ_IntegralD_ndarrayD_intD___floordiv__ ,
     NULL,
     NULL,
     NULL,
@@ -477,9 +489,9 @@ struct numpyQ_LogicalD_ndarrayD_intG_class numpyQ_LogicalD_ndarrayD_intG_methods
     numpyQ_LogicalD_ndarrayD_intD___and__,
     numpyQ_LogicalD_ndarrayD_intD___or__,
     numpyQ_LogicalD_ndarrayD_intD___xor__,
-    (numpyQ_ndarray (*)(numpyQ_LogicalD_ndarrayD_int, numpyQ_ndarray, numpyQ_ndarray))B_LogicalD___iand__,
-    (numpyQ_ndarray (*)(numpyQ_LogicalD_ndarrayD_int, numpyQ_ndarray, numpyQ_ndarray))B_LogicalD___ior__,
-    (numpyQ_ndarray (*)(numpyQ_LogicalD_ndarrayD_int, numpyQ_ndarray, numpyQ_ndarray))B_LogicalD___ixor__
+    numpyQ_LogicalD_ndarrayD_intD___and__,
+    numpyQ_LogicalD_ndarrayD_intD___or__,
+    numpyQ_LogicalD_ndarrayD_intD___xor__,
 };
 
 struct numpyQ_LogicalD_ndarrayD_int numpyQ_LogicalD_ndarrayD_int$instance = {&numpyQ_LogicalD_ndarrayD_intG_methods, (B_Integral)&numpyQ_IntegralD_ndarrayD_int$instance};
@@ -496,7 +508,7 @@ struct numpyQ_MinusD_ndarrayD_intG_class numpyQ_MinusD_ndarrayD_intG_methods = {
     (B_str (*)(numpyQ_MinusD_ndarrayD_int))$default__str__,
     (B_str (*)(numpyQ_MinusD_ndarrayD_int))$default__str__,
     numpyQ_MinusD_ndarrayD_intD___sub__,
-    (numpyQ_ndarray (*)(numpyQ_MinusD_ndarrayD_int, numpyQ_ndarray, numpyQ_ndarray))B_MinusD___isub__
+    numpyQ_MinusD_ndarrayD_intD___sub__,
 };
 struct numpyQ_MinusD_ndarrayD_int numpyQ_MinusD_ndarrayD_int$instance = {&numpyQ_MinusD_ndarrayD_intG_methods,  (B_Integral)&numpyQ_IntegralD_ndarrayD_int$instance};
 numpyQ_MinusD_ndarrayD_int numpyQ_MinusD_ndarrayD_intG_witness = &numpyQ_MinusD_ndarrayD_int$instance;
@@ -512,13 +524,13 @@ struct numpyQ_RealD_ndarrayG_class numpyQ_RealD_ndarrayG_methods = {
     (B_str (*)(numpyQ_RealD_ndarray))$default__str__,
     (B_str (*)(numpyQ_RealD_ndarray))$default__str__,
     numpyQ_RealD_ndarrayD___add__,
-    (numpyQ_ndarray (*)(numpyQ_RealD_ndarray, numpyQ_ndarray, numpyQ_ndarray))B_PlusD___iadd__,    
+    numpyQ_RealD_ndarrayD___add__,
     numpyQ_RealD_ndarrayD___mul__,
-    (numpyQ_ndarray (*)(numpyQ_RealD_ndarray, numpyQ_ndarray, numpyQ_ndarray))B_TimesD___imul__ ,
+    numpyQ_RealD_ndarrayD___mul__,
     numpyQ_RealD_ndarrayD___fromatom__,
     NULL,
     numpyQ_RealD_ndarrayD___pow__,
-    (numpyQ_ndarray (*)(numpyQ_RealD_ndarray, numpyQ_ndarray, numpyQ_ndarray))B_NumberD___ipow__ ,
+    numpyQ_RealD_ndarrayD___pow__,
     numpyQ_RealD_ndarrayD___neg__,
     numpyQ_RealD_ndarrayD___pos__,
     NULL,
@@ -543,7 +555,7 @@ struct numpyQ_MinusD_ndarrayG_class numpyQ_MinusD_ndarrayG_methods = {
     (B_str (*)(numpyQ_MinusD_ndarray))$default__str__,
     (B_str (*)(numpyQ_MinusD_ndarray))$default__str__,
     numpyQ_MinusD_ndarrayD___sub__,
-    (numpyQ_ndarray (*)(numpyQ_MinusD_ndarray, numpyQ_ndarray, numpyQ_ndarray))B_MinusD___isub__
+    numpyQ_MinusD_ndarrayD___sub__,
 };
 
 struct numpyQ_MinusD_ndarray numpyQ_MinusD_ndarray$instance = {&numpyQ_MinusD_ndarrayG_methods,  (B_Real)&numpyQ_RealD_ndarray$instance};
@@ -560,7 +572,7 @@ struct numpyQ_DivD_ndarrayD_intG_class numpyQ_DivD_ndarrayD_intG_methods = {
     (B_str (*)(numpyQ_DivD_ndarrayD_int))$default__str__,
     (B_str (*)(numpyQ_DivD_ndarrayD_int))$default__str__,
     numpyQ_DivD_ndarrayD_intD___truediv__,
-    (numpyQ_ndarray (*)(numpyQ_DivD_ndarrayD_int, numpyQ_ndarray, numpyQ_ndarray))B_DivD___itruediv__
+    numpyQ_DivD_ndarrayD_intD___truediv__,
 };
 
 struct numpyQ_DivD_ndarrayD_int numpyQ_DivD_ndarrayD_int$instance = {&numpyQ_DivD_ndarrayD_intG_methods};
@@ -577,7 +589,7 @@ struct numpyQ_DivD_ndarrayD_floatG_class numpyQ_DivD_ndarrayD_floatG_methods = {
     (B_str (*)(numpyQ_DivD_ndarrayD_float))$default__str__,
     (B_str (*)(numpyQ_DivD_ndarrayD_float))$default__str__,
     numpyQ_DivD_ndarrayD_floatD___truediv__,
-    (numpyQ_ndarray (*)(numpyQ_DivD_ndarrayD_float, numpyQ_ndarray, numpyQ_ndarray))B_DivD___itruediv__
+    numpyQ_DivD_ndarrayD_floatD___truediv__,
 };
 
 struct numpyQ_DivD_ndarrayD_float numpyQ_DivD_ndarrayD_float$instance = {&numpyQ_DivD_ndarrayD_floatG_methods};

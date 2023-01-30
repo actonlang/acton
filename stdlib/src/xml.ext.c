@@ -11,6 +11,7 @@
     (nm)->str[(nm)->nbytes] = 0
 
 xmlQ_Node $NodePtr2Node(xmlNodePtr node) {
+    B_SequenceD_list wit = B_SequenceD_listG_witness;
     if (node->type != XML_ELEMENT_NODE) {
         char *errmsg = NULL;
         int ret = asprintf(&errmsg, "Unexpected nodetype %d, content is %s", node->type, node->content);
@@ -25,7 +26,7 @@ xmlQ_Node $NodePtr2Node(xmlNodePtr node) {
         B_str prefix = NULL;
         if (nsDef->prefix) prefix = to$str((char *)nsDef->prefix);
         B_str href = to$str((char *)nsDef->href);
-        B_listD_append(nsdefs, $NEWTUPLE(2, prefix, href));
+        wit->$class->append(wit,nsdefs, $NEWTUPLE(2, prefix, href));
         nsDef=nsDef->next;
     }
 
@@ -36,7 +37,7 @@ xmlQ_Node $NodePtr2Node(xmlNodePtr node) {
     B_list attributes = B_listG_new(NULL, NULL);
     xmlAttrPtr attr = node->properties;
     while (attr) {
-        B_listD_append(attributes, $NEWTUPLE(2, to$str((char *)attr->name), to$str((char *)xmlGetProp(node, attr->name))));
+        wit->$class->append(wit,attributes, $NEWTUPLE(2, to$str((char *)attr->name), to$str((char *)xmlGetProp(node, attr->name))));
         attr = attr->next;
     }
 
@@ -51,7 +52,7 @@ xmlQ_Node $NodePtr2Node(xmlNodePtr node) {
     }
 
     while (cur != NULL) {
-        B_listD_append(children, $NodePtr2Node(cur));
+        wit->$class->append(wit,children, $NodePtr2Node(cur));
         cur = cur->next;
     }
 

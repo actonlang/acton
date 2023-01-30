@@ -28,7 +28,7 @@
 #define MSG_ID 14
 #define ACTOR_ID 15
 #define CATCHER_ID 16
-
+#define SLICE_ID 17   // Adding SLICE_ID by using a gap in the numbering...
 #define CONT_ID 18
 #define DONE_ID 19
 #define CONSTCONT_ID 20
@@ -89,7 +89,7 @@ void $register_force(int classid, $WORD meths);
 
 #define $GET_CLASSID(meths)  ((meths)->$class_id)
 
-#define $GET_METHODS(classid)  (($SerializableG_class)B_listD_getitem(G_methods,classid))
+#define $GET_METHODS(classid)  (($SerializableG_class)G_methods->data[classid])
 
 // list of method tables indexed by class_id. Only accessed via GET_METHODS above
 

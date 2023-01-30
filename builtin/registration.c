@@ -24,12 +24,13 @@ B_list G_methods;  //key is classid; values are method tables
 
 void $register_force(int classid, $WORD meths) {
   // we require that G_methods is big enough to index it at classid. See register_builtin below.
-  B_listD_setitem(G_methods,classid,meths);
+  G_methods->data[classid] = meths;
   (($SerializableG_class)meths)->$class_id = classid;
 }
     
 void $register($WORD meths) {
-    B_listD_append(G_methods,meths);
+    B_SequenceD_list wit = B_SequenceD_listG_witness;    
+    wit->$class->append(wit,G_methods,meths);
     (($SerializableG_class)meths)->$class_id = G_methods->length-1;
     //printf("$register class %s at index %d\n", (($SerializableG_class)meths)->$GCINFO, G_methods->length-1);
 }
@@ -59,13 +60,13 @@ void $register_builtin() {
   $register_force(STRITERATOR_ID,&B_IteratorB_strG_methods);
   $register_force(LISTITERATOR_ID,&B_IteratorD_listG_methods);
   $register_force(DICTITERATOR_ID,&B_IteratorD_dictG_methods);
-  $register_force(VALUESITERATOR_ID,&B_InteratorD_dict_valuesG_methods);
-  $register_force(ITEMSITERATOR_ID,&B_InteratorD_dict_itemsG_methods);
+  $register_force(VALUESITERATOR_ID,&B_IteratorD_dict_valuesG_methods);
+  $register_force(ITEMSITERATOR_ID,&B_IteratorD_dict_itemsG_methods);
   $register_force(SETITERATOR_ID,&B_IteratorD_setG_methods);
   $register_force(RANGEITERATOR_ID,&B_IteratorB_rangeG_methods);
   $register_force(ENUMERATEITERATOR_ID,&B_IteratorD_enumerateG_methods);
-  $register_force(FILTERITERATOR_ID,&B_IteratorD_filterG_methods);
-  $register_force(MAPITERATOR_ID,&B_IteratorD_mapG_methods);
+  // $register_force(FILTERITERATOR_ID,&B_IteratorD_filterG_methods);
+  // $register_force(MAPITERATOR_ID,&B_IteratorD_mapG_methods);
   $register_force(ZIPITERATOR_ID,&B_IteratorD_zipG_methods);
   $register_force(BASEEXCEPTION_ID,&B_BaseExceptionG_methods);
   $register_force(SYSTEMEXIT_ID,&B_SystemExitG_methods);
@@ -80,7 +81,7 @@ void $register_builtin() {
   $register_force(RUNTIMEERROR_ID,&B_RuntimeErrorG_methods);
   $register_force(NOTIMPLEMENTEDERROR_ID,&B_NotImplementedErrorG_methods);
   $register_force(VALUEERROR_ID,&B_ValueErrorG_methods);
-  $register_builtin_protocols();
+  //  $register_builtin_protocols();
 }
 
 

@@ -9,13 +9,13 @@ void jsonQ___ext_init__() {
 
 void jsonQ_encode_list(yyjson_mut_doc *doc, yyjson_mut_val *node, B_list data);
 void jsonQ_encode_dict(yyjson_mut_doc *doc, yyjson_mut_val *node, B_dict data) {
-    B_InteratorD_dict_items iter = $NEW(B_InteratorD_dict_items, data);
+    B_IteratorD_dict_items iter = $NEW(B_IteratorD_dict_items, data);
     B_tuple item;
 
-    for (int i=0; i < B_dictD_len(data); i++) {
+    for (int i=0; i < data->numelements; i++) {
         item = (B_tuple)iter->$class->__next__(iter);
-        char *key = fromB_str((B_str)item->components[0]);
-        char *value = fromB_str((B_str)item->components[1]);
+        char *key = (char *)fromB_str((B_str)item->components[0]);
+        char *value = (char *)fromB_str((B_str)item->components[1]);
         B_value v = item->components[1];
         //log_info("key: %s  class_id: %d  type: %s", key, v->$class->$class_id, v->$class->$GCINFO);
         switch (v->$class->$class_id) {
@@ -26,7 +26,7 @@ void jsonQ_encode_dict(yyjson_mut_doc *doc, yyjson_mut_val *node, B_dict data) {
                 yyjson_mut_obj_add_bool(doc, node, key, fromB_bool((B_bool)v));
                 break;
             case 6:; // B_str
-                yyjson_mut_obj_add_str(doc, node, key, fromB_str((B_str)v));
+                yyjson_mut_obj_add_str(doc, node, key,  (char *)fromB_str((B_str)v));
                 break;
             case 7:; // B_list
                 yyjson_mut_val *l = yyjson_mut_arr(doc);
@@ -45,8 +45,8 @@ void jsonQ_encode_dict(yyjson_mut_doc *doc, yyjson_mut_val *node, B_dict data) {
 }
 
 void jsonQ_encode_list(yyjson_mut_doc *doc, yyjson_mut_val *node, B_list data) {
-    for (int i = 0; i < B_listD_len(data); i++) {
-        B_value v = B_listD_getitem(data, i);
+    for (int i = 0; i < data->length; i++) {
+        B_value v = data->data[i];
         switch (v->$class->$class_id) {
             case 2:; // B_int
                 yyjson_mut_arr_add_int(doc, node, from$int((B_int)v));
@@ -55,7 +55,7 @@ void jsonQ_encode_list(yyjson_mut_doc *doc, yyjson_mut_val *node, B_list data) {
                 yyjson_mut_arr_add_bool(doc, node, fromB_bool((B_bool)v));
                 break;
             case 6:; // B_str
-                yyjson_mut_arr_add_str(doc, node, fromB_str((B_str)v));
+                yyjson_mut_arr_add_str(doc, node,  (char *)fromB_str((B_str)v));
                 break;
             case 7:; // B_list
                 yyjson_mut_val *l = yyjson_mut_arr_add_arr(doc, node);
@@ -86,7 +86,7 @@ $R jsonQ_JsonD_encodeG_local (jsonQ_Json self, $Cont c$cont, B_dict data) {
     // TODO: do the thing
     jsonQ_encode_dict(doc, root, data);
 
-    const char *json = yyjson_mut_write(doc, 0, NULL);
+    char *json = yyjson_mut_write(doc, 0, NULL);
     //yyjson_doc_free(doc);
     return $R_CONT(c$cont, to$str(json));
 }
@@ -95,7 +95,7 @@ B_list jsonQ_decode_arr(yyjson_val *);
 
 B_dict jsonQ_decode_obj(yyjson_val *obj) {
 
-    B_Hashable wit = (B_Hashable)B_HashableD_strG_witness;
+    B_Hashable wit = (B_Hashable)B_HashableD_strG_new();
     B_dict res = $NEW(B_dict, wit, NULL, NULL);
     yyjson_obj_iter iter;
     yyjson_obj_iter_init(obj, &iter);
@@ -133,6 +133,7 @@ B_dict jsonQ_decode_obj(yyjson_val *obj) {
 }
 
 B_list jsonQ_decode_arr(yyjson_val *arr) {
+    B_SequenceD_list wit = B_SequenceD_listG_witness;
     B_list res = B_listG_new(NULL, NULL);
     yyjson_val *val;
     yyjson_arr_iter iter;
@@ -143,24 +144,24 @@ B_list jsonQ_decode_arr(yyjson_val *arr) {
                 break;
             case YYJSON_TYPE_NULL:;
                 // TODO: this is broken?
-                B_listD_append(res, B_None);
+                wit->$class->append(wit, res, B_None);
                 break;
             case YYJSON_TYPE_BOOL:;
-                B_listD_append(res, toB_bool(yyjson_get_bool(val)));
+                 wit->$class->append(wit, res, toB_bool(yyjson_get_bool(val)));
                 break;
             case YYJSON_TYPE_NUM:;
-                B_listD_append(res, toB_int(yyjson_get_int(val)));
+                 wit->$class->append(wit, res, toB_int(yyjson_get_int(val)));
                 break;
             case YYJSON_TYPE_STR:;
-                B_listD_append(res, to$str(yyjson_get_str(val)));
+                 wit->$class->append(wit, res, to$str(yyjson_get_str(val)));
                 break;
             case YYJSON_TYPE_ARR:;
                 B_list l = jsonQ_decode_arr(val);
-                B_listD_append(res, l);
+                 wit->$class->append(wit, res, l);
                 break;
             case YYJSON_TYPE_OBJ:;
                 B_dict d = jsonQ_decode_obj(val);
-                B_listD_append(res, d);
+                 wit->$class->append(wit, res, d);
                 break;
         }
     }
@@ -173,7 +174,7 @@ $R jsonQ_JsonD_decodeG_local (jsonQ_Json self, $Cont c$cont, B_str data) {
     yyjson_doc *doc = yyjson_read_opts(fromB_str(data), strlen(fromB_str(data)), 0, NULL, &err);
     yyjson_val *root = yyjson_doc_get_root(doc);
 
-    B_dict res = $NEW(B_dict,(B_Hashable)B_HashableD_strG_witness,NULL,NULL);
+    B_dict res = $NEW(B_dict,(B_Hashable)B_HashableD_strG_new(),NULL,NULL);
     // Iterate over the root object
     if (doc) {
         yyjson_val *obj = yyjson_doc_get_root(doc);
