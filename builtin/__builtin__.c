@@ -63,6 +63,14 @@ B_atom B_atomD___deserialize__ (B_atom self, $Serial$state state) {
     }
     return self;
 }
+/*
+B_atom B_atomG_new() {
+    B_atom $tmp = malloc(sizeof(struct B_atom));
+    $tmp->$class = &B_atomG_methods;
+    B_atomG_methods.__init__($tmp);
+    return $tmp;
+}
+*/
 struct B_atomG_class B_atomG_methods;
 /*
 B_NoneType B_intD___init__ (B_int self, B_atom val);
@@ -89,7 +97,8 @@ B_int B_intG_new(B_atom G_1) {
 struct B_intG_class B_intG_methods;
 /*
 B_NoneType B_i64D___init__ (B_i64 self, B_atom val);
-void B_i64D___serialize__ (B_i64 self, $Serial$state state);
+void B_i64D___serialize__ (B_i64 self, $Serial$state state){
+}
 B_i64 B_i64D___deserialize__ (B_i64 self, $Serial$state state); {
     if (!self) {
         if (!state) {
@@ -178,9 +187,9 @@ B_slice B_sliceG_new(B_int G_1, B_int G_2, B_int G_3) {
 }
 */
 struct B_sliceG_class B_sliceG_methods;
-B_list B_listD_copy (B_list self);
 /*
 B_NoneType B_listD___init__ (B_list self, B_Iterable W_IterableE_62, $WORD val);
+B_list B_listD_copy (B_list self);
 void B_listD___serialize__ (B_list self, $Serial$state state) {
 }
 B_list B_listD___deserialize__ (B_list self, $Serial$state state) {
@@ -256,7 +265,6 @@ B_Iterable B_IterableD___deserialize__ (B_Iterable self, $Serial$state state) {
     return self;
 }
 struct B_IterableG_class B_IterableG_methods;
-/*
 B_NoneType B_strD___init__ (B_str self, B_value val);
 B_str B_strD_capitalize (B_str self);
 B_str B_strD_center (B_str self, B_int width, B_str fillchar);
@@ -292,6 +300,7 @@ B_bool B_strD_startswith (B_str self, B_str prefix, B_int start, B_int end);
 B_str B_strD_strip (B_str self, B_str chars);
 B_str B_strD_upper (B_str self);
 B_str B_strD_zfill (B_str self, B_int width);
+/*
 void B_strD___serialize__ (B_str self, $Serial$state state) {
 }
 B_str B_strD___deserialize__ (B_str self, $Serial$state state) {
@@ -313,7 +322,6 @@ B_str B_strG_new(B_value G_1) {
 }
 */
 struct B_strG_class B_strG_methods;
-/*
 B_NoneType B_bytesD___init__ (B_bytes self, B_Iterable W_IterableE_226, $WORD iterable);
 B_bytes B_bytesD_capitalize (B_bytes self);
 B_bytes B_bytesD_center (B_bytes self, B_int width, B_bytes fillchar);
@@ -348,6 +356,7 @@ B_bool B_bytesD_startswith (B_bytes self, B_bytes prefix, B_int start, B_int end
 B_bytes B_bytesD_strip (B_bytes self, B_bytes chars);
 B_bytes B_bytesD_upper (B_bytes self);
 B_bytes B_bytesD_zfill (B_bytes self, B_int width);
+/*
 void B_bytesD___serialize__ (B_bytes self, $Serial$state state) {
 }
 B_bytes B_bytesD___deserialize__ (B_bytes self, $Serial$state state) {
@@ -369,7 +378,6 @@ B_bytes B_bytesG_new(B_Iterable G_1, $WORD G_2) {
 }
 */
 struct B_bytesG_class B_bytesG_methods;
-/*
 B_NoneType B_bytearrayD___init__ (B_bytearray self, B_bytes val);
 B_bytearray B_bytearrayD_capitalize (B_bytearray self);
 B_bytearray B_bytearrayD_center (B_bytearray self, B_int width, B_bytearray fillchar);
@@ -404,6 +412,7 @@ B_bool B_bytearrayD_startswith (B_bytearray self, B_bytearray prefix, B_int star
 B_bytearray B_bytearrayD_strip (B_bytearray self, B_bytearray chars);
 B_bytearray B_bytearrayD_upper (B_bytearray self);
 B_bytearray B_bytearrayD_zfill (B_bytearray self, B_int width);
+/*
 void B_bytearrayD___serialize__ (B_bytearray self, $Serial$state state) {
 }
 B_bytearray B_bytearrayD___deserialize__ (B_bytearray self, $Serial$state state) {
@@ -438,6 +447,12 @@ B_Msg B_MsgD___deserialize__ (B_Msg self, $Serial$state state) {
         self = $DNEW(B_Msg, state);
     }
     return self;
+}
+B_Msg B_MsgG_new() {
+    B_Msg $tmp = malloc(sizeof(struct B_Msg));
+    $tmp->$class = &B_MsgG_methods;
+    B_MsgG_methods.__init__($tmp);
+    return $tmp;
 }
 struct B_MsgG_class B_MsgG_methods;
 */
@@ -1280,7 +1295,6 @@ B_NoneType B_IntegralD_intD___init__ (B_IntegralD_int W_self) {
     ((B_NoneType (*) (B_Integral, B_Minus, B_Logical))B_IntegralG_methods.__init__)(((B_Integral)W_self), ((B_Minus)B_MinusD_IntegralD_intG_new(((B_Integral)W_self))), ((B_Logical)B_LogicalD_IntegralD_intG_new(((B_Integral)W_self))));
     return B_None;
 }
-/*
 B_int B_IntegralD_intD___invert__ (B_IntegralD_int W_self, B_int G_1p);
 B_int B_IntegralD_intD___rshift__ (B_IntegralD_int W_self, B_int G_1p, B_int G_2p);
 B_int B_IntegralD_intD___lshift__ (B_IntegralD_int W_self, B_int G_1p, B_int G_2p);
@@ -1307,7 +1321,6 @@ B_complex B_IntegralD_intD___complex__ (B_IntegralD_int W_self, B_int G_1p);
 B_int B_IntegralD_intD___fromatom__ (B_IntegralD_int W_self, B_atom G_1p);
 B_int B_IntegralD_intD___mul__ (B_IntegralD_int W_self, B_int G_1p, B_int G_2p);
 B_int B_IntegralD_intD___add__ (B_IntegralD_int W_self, B_int G_1p, B_int G_2p);
-*/
 void B_IntegralD_intD___serialize__ (B_IntegralD_int self, $Serial$state state) {
     $step_serialize(self->W_Minus, state);
     $step_serialize(self->W_Logical, state);
@@ -1463,15 +1476,14 @@ B_HashableD_int B_HashableD_intD___deserialize__ (B_HashableD_int self, $Serial$
     }
     return self;
 }
-B_HashableD_int B_HashableD_intG_new() {
-    return $NEW(B_HashableD_int);
-}
+B_HashableD_int B_HashableD_intG_new() {   // manually added
+    return $NEW(B_HashableD_int);          //
+}                                          //
 struct B_HashableD_intG_class B_HashableD_intG_methods;
 B_NoneType B_IntegralD_i64D___init__ (B_IntegralD_i64 W_self) {
     ((B_NoneType (*) (B_Integral, B_Minus, B_Logical))B_IntegralG_methods.__init__)(((B_Integral)W_self), ((B_Minus)B_MinusD_IntegralD_i64G_new(((B_Integral)W_self))), ((B_Logical)B_LogicalD_IntegralD_i64G_new(((B_Integral)W_self))));
     return B_None;
 }
-/*
 B_i64 B_IntegralD_i64D___invert__ (B_IntegralD_i64 W_self, B_i64 G_1p);
 B_i64 B_IntegralD_i64D___rshift__ (B_IntegralD_i64 W_self, B_i64 G_1p, B_int G_2p);
 B_i64 B_IntegralD_i64D___lshift__ (B_IntegralD_i64 W_self, B_i64 G_1p, B_int G_2p);
@@ -1498,7 +1510,6 @@ B_complex B_IntegralD_i64D___complex__ (B_IntegralD_i64 W_self, B_i64 G_1p);
 B_i64 B_IntegralD_i64D___fromatom__ (B_IntegralD_i64 W_self, B_atom G_1p);
 B_i64 B_IntegralD_i64D___mul__ (B_IntegralD_i64 W_self, B_i64 G_1p, B_i64 G_2p);
 B_i64 B_IntegralD_i64D___add__ (B_IntegralD_i64 W_self, B_i64 G_1p, B_i64 G_2p);
-*/
 void B_IntegralD_i64D___serialize__ (B_IntegralD_i64 self, $Serial$state state) {
     $step_serialize(self->W_Minus, state);
     $step_serialize(self->W_Logical, state);
@@ -2357,8 +2368,8 @@ B_ContainerD_list B_ContainerD_listD___deserialize__ (B_ContainerD_list self, $S
     return self;
 }
 B_ContainerD_list B_ContainerD_listG_new(B_Eq w) { // Why is this not generated by actonc?
-    return $NEW(B_ContainerD_list,w);
-}
+    return $NEW(B_ContainerD_list,w);              //
+}                                                  //
 struct B_ContainerD_listG_class B_ContainerD_listG_methods;
 B_NoneType B_OrdD_listD___init__ (B_OrdD_list W_self, B_Ord W_OrdD_A) {
     ((B_NoneType (*) (B_Ord))B_OrdG_methods.__init__)(((B_Ord)W_self));
@@ -2831,9 +2842,9 @@ B_HashableD_str B_HashableD_strD___deserialize__ (B_HashableD_str self, $Serial$
     }
     return self;
 }
-B_HashableD_str B_HashableD_strG_new() {
-    return $NEW(B_HashableD_str);
-}
+B_HashableD_str B_HashableD_strG_new() {   // Manually added.
+    return $NEW(B_HashableD_str);          //
+}                                          //
 struct B_HashableD_strG_class B_HashableD_strG_methods;
 B_NoneType B_OrdD_bytearrayD___init__ (B_OrdD_bytearray W_self) {
     ((B_NoneType (*) (B_Ord))B_OrdG_methods.__init__)(((B_Ord)W_self));
@@ -3967,7 +3978,6 @@ void B___init__ () {
         B_complexG_methods.__init__ = B_complexD___init__;
         B_complexG_methods.__serialize__ = B_complexD___serialize__;
         B_complexG_methods.__deserialize__ = B_complexD___deserialize__;
-        $register(&B_complexG_methods);
     }
     {
         B_dictG_methods.$GCINFO = "B_dict";
@@ -3978,7 +3988,6 @@ void B___init__ () {
         B_dictG_methods.__init__ = B_dictD___init__;
         B_dictG_methods.__serialize__ = B_dictD___serialize__;
         B_dictG_methods.__deserialize__ = B_dictD___deserialize__;
-        $register(&B_dictG_methods);
     }
     {
         B_setG_methods.$GCINFO = "B_set";
@@ -3989,7 +3998,6 @@ void B___init__ () {
         B_setG_methods.__init__ = B_setD___init__;
         B_setG_methods.__serialize__ = B_setD___serialize__;
         B_setG_methods.__deserialize__ = B_setD___deserialize__;
-        $register(&B_setG_methods);
     }
     {
         B_NumberG_methods.$GCINFO = "B_Number";

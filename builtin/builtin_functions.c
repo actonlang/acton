@@ -21,7 +21,7 @@ static $WORD mkstr($WORD w) {
     return w1->$class->__str__(w);
 }
 
-void B_print(int size, ...) {
+B_NoneType B_print(int size, ...) {
     va_list args;
     va_start(args,size);
     if (size > 0) {
@@ -35,6 +35,7 @@ void B_print(int size, ...) {
      }
      putchar('\n');
      va_end(args);
+     return B_None;
 }
 
 /*        

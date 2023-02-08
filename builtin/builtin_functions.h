@@ -1,10 +1,7 @@
 #pragma once
 // #include "function.h"
 
-// print /////////////////////////////////////////////////////////////////
-
-void B_print(int size, ...);
-
+ 
 // enumerate ////////////////////////////////////////////////////////////
 
 struct B_IteratorD_enumerate;
@@ -32,7 +29,6 @@ struct B_IteratorD_enumerate {
 extern struct B_IteratorD_enumerateG_class B_IteratorD_enumerateG_methods;
 B_IteratorD_enumerate B_IteratorD_enumerateG_new(B_Iterator,B_int);
 
-B_Iterator B_enumerate(B_Iterable wit, $WORD iter, B_int start);
 
 // filter ////////////////////////////////////////////////////////////
 
@@ -63,8 +59,6 @@ struct B_IteratorD_filter {
 extern struct B_IteratorD_filterG_class B_IteratorD_filterG_methods;
 B_IteratorD_filter B_IteratorD_filterG_new(B_Iterator, $pure);
 
-B_Iterator B_filter(B_Iterable wit, $pure, $WORD iter);
-
 // map ////////////////////////////////////////////////////////////
 
 B_Iterator B_map (B_Iterable, $pure, $WORD);
@@ -93,8 +87,6 @@ struct B_IteratorD_map {
 
 extern struct B_IteratorD_mapG_class B_IteratorD_mapG_methods;
 B_IteratorD_map B_IteratorD_mapG_new(B_Iterator, $pure);
-
-B_Iterator B_map(B_Iterable wit, $pure, $WORD iter);
 
 // zip ////////////////////////////////////////////////////////////
 
