@@ -17,344 +17,7 @@
 #include <stdio.h>
 #include <limits.h>
 #include <ctype.h>
-#include "utf8proc.h"
-
-
-//  Method tables ///////////////////////////////////////////////////////////////
-
-// General methods
-
-void B_strD_init(B_str, B_value);
-B_bool B_strD_bool(B_str);
-B_str B_strD_str(B_str);
-B_str B_strD_repr(B_str);
-void B_strD_serialize(B_str,$Serial$state);
-B_str B_strD_deserialize(B_str,$Serial$state);
-
-// String-specific methods
-B_str B_strD_capitalize(B_str s);
-B_str B_strD_center(B_str s, B_int width, B_str fill);
-B_int B_strD_count(B_str s, B_str sub, B_int start, B_int end);
-B_bytes B_strD_encode(B_str s);
-B_bool B_strD_endswith(B_str s, B_str suffix, B_int start, B_int end);
-B_str B_strD_expandtabs(B_str s, B_int tabsize);      
-B_int B_strD_find(B_str s, B_str sub, B_int start, B_int end);
-B_int B_strD_index(B_str s, B_str sub, B_int start, B_int end);
-B_bool B_strD_isalnum(B_str s);
-B_bool B_strD_isalpha(B_str s);
-B_bool B_strD_isascii(B_str s);
-B_bool B_strD_isdecimal(B_str s);
-B_bool B_strD_isdigit(B_str s);
-B_bool B_strD_isidentifier(B_str s);
-B_bool B_strD_islower(B_str s);
-B_bool B_strD_isnumeric(B_str s);
-B_bool B_strD_isprintable(B_str s);
-B_bool B_strD_isspace(B_str s);
-B_bool B_strD_istitle(B_str s);
-B_bool B_strD_isupper(B_str s);
-B_str B_strD_join(B_str sep, B_Iterable wit, $WORD iter);
-B_str B_strD_ljust(B_str s, B_int width, B_str fill); 
-B_str B_strD_lower(B_str s);
-B_str B_strD_lstrip(B_str s,B_str cs); 
-B_tuple B_strD_partition(B_str s, B_str sep);
-B_str B_strD_replace(B_str s, B_str old, B_str new, B_int count);
-B_int B_strD_rfind(B_str s, B_str sub, B_int start, B_int end);
-B_int B_strD_rindex(B_str s, B_str sub, B_int start, B_int end);
-B_str B_strD_rjust(B_str s, B_int width, B_str fill);  
-B_tuple B_strD_rpartition(B_str s, B_str sep); 
-B_str B_strD_rstrip(B_str s,B_str cs);
-B_list B_strD_split(B_str s, B_str sep, B_int maxsplit);  
-B_list B_strD_splitlines(B_str s, B_bool keepends); 
-B_bool B_strD_startswith(B_str s, B_str prefix, B_int start, B_int end); 
-B_str B_strD_strip(B_str s,B_str cs);
-B_str B_strD_upper(B_str s);
-B_str B_strD_zfill(B_str s, B_int width);
-
-struct B_strG_class B_strG_methods =
-    {"B_str",UNASSIGNED,($SuperG_class)&B_atomG_methods, B_strD_init, B_strD_serialize, B_strD_deserialize, B_strD_bool, B_strD_str, B_strD_repr, B_strD_capitalize, B_strD_center, B_strD_count, B_strD_encode, B_strD_endswith,
-     B_strD_expandtabs, B_strD_find, B_strD_index, B_strD_isalnum, B_strD_isalpha, B_strD_isascii, B_strD_isdecimal, B_strD_islower, B_strD_isprintable, B_strD_isspace,
-     B_strD_istitle, B_strD_isupper, B_strD_join, B_strD_ljust, B_strD_lower, B_strD_lstrip, B_strD_partition, B_strD_replace, B_strD_rfind, B_strD_rindex, B_strD_rjust,
-     B_strD_rpartition, B_strD_rstrip, B_strD_split, B_strD_splitlines, B_strD_startswith, B_strD_strip, B_strD_upper, B_strD_zfill};
-
-
-// protocol methods; string implementation prototypes ///////////////////////////////////////////////////
-
-int B_strD_eq(B_str,B_str);
-int B_strD_neq(B_str,B_str);
-int B_strD_lt(B_str,B_str);
-int B_strD_le(B_str,B_str);
-int B_strD_gt(B_str,B_str);
-int B_strD_ge(B_str,B_str);
-
-B_Iterator B_strD_iter(B_str);
-
-B_str B_strD_fromiter(B_Iterable, $WORD);
-B_int B_strD_len(B_str str);
-
-int B_strD_contains (B_str, B_str);
-int B_strD_containsnot (B_str, B_str);
-
-B_str B_strD_getitem(B_str, int);
-B_str B_strD_getslice(B_str, B_slice);
- 
-B_str B_strD_add(B_str, B_str);
-B_str B_strD_mul(B_str, B_int);
-
-// Protocol instances, using above prototypes 
-
-// Ord
-
-void B_OrdD_strD___serialize__(B_OrdD_str self, $Serial$state state) {
-}
-
-B_OrdD_str B_OrdD_strD___deserialize__(B_OrdD_str self, $Serial$state state) {
-    B_OrdD_str res = $DNEW(B_OrdD_str,state);
-    return res;
-}
-
-B_OrdD_str B_OrdD_strG_new() {
-    return $NEW(B_OrdD_str);
-}
-
-B_bool B_OrdD_strD___eq__ (B_OrdD_str wit, B_str a, B_str b) {
-    return toB_bool(B_strD_eq(a,b));
-}
-
-B_bool B_OrdD_strD___ne__ (B_OrdD_str wit, B_str a, B_str b) {
-    return  toB_bool(B_strD_neq(a,b));
-}
-
-B_bool B_OrdD_strD___lt__ (B_OrdD_str wit, B_str a, B_str b) {
-    return toB_bool(B_strD_lt(a,b));
-}
-
-B_bool B_OrdD_strD___le__ (B_OrdD_str wit, B_str a, B_str b){
-    return toB_bool(B_strD_le(a,b));
-}
-
-B_bool B_OrdD_strD___gt__ (B_OrdD_str wit, B_str a, B_str b){
-    return toB_bool(B_strD_gt(a,b));
-}
-
-B_bool B_OrdD_strD___ge__ (B_OrdD_str wit, B_str a, B_str b){
-    return toB_bool(B_strD_ge(a,b));
-}
-
-// Container
-
-void B_ContainerD_strD___serialize__(B_ContainerD_str self, $Serial$state state) {
-}
-
-B_ContainerD_str B_ContainerD_strD___deserialize__(B_ContainerD_str self, $Serial$state state) {
-    return $DNEW(B_ContainerD_str,state);
-}
-
-B_Iterator B_ContainerD_strD___iter__ (B_ContainerD_str wit, B_str str) {
-    return B_strD_iter(str);
-}
-
-B_str B_ContainerD_strD___fromiter__ (B_ContainerD_str wit, B_Iterable wit2, $WORD iter) {
-    return B_strD_join(to$str(""),wit2,iter);
-}
-
-B_int B_ContainerD_strD___len__ (B_ContainerD_str wit, B_str str) {
-    return B_strD_len(str);
-}
-
-B_bool B_ContainerD_strD___contains__ (B_ContainerD_str wit, B_str str, B_str sub) {
-    return toB_bool(B_strD_contains(str, sub));
-}
-
-B_bool B_ContainerD_strD___containsnot__ (B_ContainerD_str wit, B_str str, B_str sub) {
-    return toB_bool(B_strD_containsnot(str, sub));
-}  
-
-// Sliceable
-
-void B_SliceableD_strD___serialize__(B_SliceableD_str self, $Serial$state state) {
-}
-
-B_SliceableD_str B_SliceableD_strD___deserialize__(B_SliceableD_str self, $Serial$state state) {
-    B_SliceableD_str res = $DNEW(B_SliceableD_str,state);
-    return res;
-}
-
-B_SliceableD_str B_SliceableD_strG_new() {
-    return $NEW(B_SliceableD_str);
-}
-B_str B_SliceableD_strD___getitem__ (B_SliceableD_str wit, B_str str, B_int i) {
-    return B_strD_getitem(str,from$int(i));
-}
-
-void B_SliceableD_strD___setitem__ (B_SliceableD_str wit, B_str str, B_int i, B_str val) {
-    fprintf(stderr,"Internal error: call to mutating method setitem on string");
-    exit(-1);
-}
-
-void B_SliceableD_strD___delitem__ (B_SliceableD_str wit, B_str str, B_int i) {
-    fprintf(stderr,"Internal error: call to mutating method delitem on string");
-    exit(-1);
-}
-
-B_str B_SliceableD_strD___getslice__ (B_SliceableD_str wit, B_str str, B_slice slc) {
-    return B_strD_getslice(str,slc);
-}
-
-void B_SliceableD_strD___setslice__ (B_SliceableD_str wit, B_str str, B_Iterable wit2, B_slice slc, $WORD iter) {
-    fprintf(stderr,"Internal error: call to mutating method setslice on string");
-    exit(-1);
-}
-
-void B_SliceableD_strD___delslice__ (B_SliceableD_str wit, B_str str, B_slice slc) {
-    fprintf(stderr,"Internal error: call to mutating method delslice on string");
-    exit(-1);
-}
-
-// Times
-
-void B_TimesD_strD___serialize__(B_TimesD_str self, $Serial$state state) {
-}
-
-B_TimesD_str B_TimesD_strD___deserialize__(B_TimesD_str self, $Serial$state state) {
-    B_TimesD_str res = $DNEW(B_TimesD_str,state);
-    return res;
-}
-
-B_str B_TimesD_strD___add__ (B_TimesD_str wit, B_str a, B_str b) {
-    return B_strD_add(a,b);
-}
-
-B_str B_TimesD_strD___mul__ (B_TimesD_str wit, B_str a, B_int n) {
-    return B_strD_mul(a,n);
-}
-
-// Hashable
-
-void B_HashableD_strD___serialize__(B_HashableD_str self, $Serial$state state) {
-}
-
-B_HashableD_str B_HashableD_strD___deserialize__(B_HashableD_str self, $Serial$state state) {
-    B_HashableD_str res = $DNEW(B_HashableD_str,state);
-    return res;
-}
-
-B_bool B_HashableD_strD___eq__ (B_HashableD_str wit, B_str a, B_str b) {
-    return toB_bool(B_strD_eq(a,b));
-}
-
-B_HashableD_str B_HashableD_strG_new() {
-    return $NEW(B_HashableD_str);
-}
-B_bool B_HashableD_strD___ne__ (B_HashableD_str wit, B_str a, B_str b) {
-    return toB_bool(B_strD_neq(a,b));
-}
-
-B_int B_HashableD_strD___hash__(B_HashableD_str wit, B_str str) {
-    return toB_int(B_string_hash(str));
-}
-
-
-// Method tables for witness classes
-
-struct B_OrdD_strG_class  B_OrdD_strG_methods = {
-    "B_OrdD_str",
-    UNASSIGNED,
-    ($SuperG_class)&B_OrdG_methods,
-    (void (*)(B_OrdD_str))$default__init__,
-    B_OrdD_strD___serialize__,
-    B_OrdD_strD___deserialize__,
-    (B_bool (*)(B_OrdD_str))$default__bool__,
-    (B_str (*)(B_OrdD_str))$default__str__,
-    (B_str (*)(B_OrdD_str))$default__str__,
-    B_OrdD_strD___eq__,
-    B_OrdD_strD___ne__,
-    B_OrdD_strD___lt__,
-    B_OrdD_strD___le__,
-    B_OrdD_strD___gt__,
-    B_OrdD_strD___ge__
-};
-struct B_OrdD_str B_OrdD_str_instance = {&B_OrdD_strG_methods};
-B_OrdD_str B_OrdD_strG_witness = &B_OrdD_str_instance;
-
-struct B_ContainerD_strG_class  B_ContainerD_strG_methods = {
-    "B_ContainerD_str",
-    UNASSIGNED,
-    ($SuperG_class)&B_ContainerG_methods,
-    B_ContainerD_strD___init__,
-    B_ContainerD_strD___serialize__,
-    B_ContainerD_strD___deserialize__,
-    (B_bool (*)(B_ContainerD_str))$default__bool__,
-    (B_str (*)(B_ContainerD_str))$default__str__,
-    (B_str (*)(B_ContainerD_str))$default__str__,
-    B_ContainerD_strD___iter__,
-    NULL,
-    B_ContainerD_strD___len__,
-    B_ContainerD_strD___contains__,
-    B_ContainerD_strD___containsnot__
-};
-struct B_ContainerD_str B_ContainerD_str_instance = {&B_ContainerD_strG_methods};
-B_ContainerD_str B_ContainerD_strG_witness = &B_ContainerD_str_instance;
-
-
-struct B_SliceableD_strG_class  B_SliceableD_strG_methods = {
-    "B_SliceableD_str",
-    UNASSIGNED,
-    ($SuperG_class)&B_SliceableG_methods,
-    (void (*)(B_SliceableD_str))$default__init__,
-    B_SliceableD_strD___serialize__,
-    B_SliceableD_strD___deserialize__,
-    (B_bool (*)(B_SliceableD_str))$default__bool__,
-    (B_str (*)(B_SliceableD_str))$default__str__,
-    (B_str (*)(B_SliceableD_str))$default__str__,
-    B_SliceableD_strD___getitem__,
-    B_SliceableD_strD___setitem__,
-    B_SliceableD_strD___delitem__,
-    B_SliceableD_strD___getslice__,
-    B_SliceableD_strD___setslice__,
-    B_SliceableD_strD___delslice__
-};
-struct B_SliceableD_str B_SliceableD_str_instance = {&B_SliceableD_strG_methods};
-B_SliceableD_str B_SliceableD_strG_witness = &B_SliceableD_str_instance;
-
-struct B_TimesD_strG_class  B_TimesD_strG_methods = {
-    "B_TimesD_str",
-    UNASSIGNED,
-    ($SuperG_class)&B_TimesG_methods,
-    (void (*)(B_TimesD_str))$default__init__,
-    B_TimesD_strD___serialize__,
-    B_TimesD_strD___deserialize__,
-    (B_bool (*)(B_TimesD_str))$default__bool__,
-    (B_str (*)(B_TimesD_str))$default__str__,
-    (B_str (*)(B_TimesD_str))$default__str__,
-    B_TimesD_strD___add__,
-    (B_str (*)(B_TimesD_str, B_str, B_str))B_PlusD___iadd__,
-    B_TimesD_strD___mul__,
-    (B_str (*)(B_TimesD_str, B_str, B_int))B_TimesD___imul__,
-
-};
-struct B_TimesD_str B_TimesD_str_instance = {&B_TimesD_strG_methods};
-B_TimesD_str B_TimesD_strG_witness = &B_TimesD_str_instance;
-
-struct B_HashableD_strG_class  B_HashableD_strG_methods = {
-    "B_HashableD_str",
-    UNASSIGNED,
-    ($SuperG_class)&B_HashableG_methods,
-    (void (*)(B_HashableD_str))$default__init__,
-    B_HashableD_strD___serialize__,
-    B_HashableD_strD___deserialize__,
-    (B_bool (*)(B_HashableD_str))$default__bool__,
-    (B_str (*)(B_HashableD_str))$default__str__,
-    (B_str (*)(B_HashableD_str))$default__str__,
-    B_HashableD_strD___eq__,
-    B_HashableD_strD___ne__,
-    B_HashableD_strD___hash__
-};
-struct B_HashableD_str B_HashableD_str_instance = {&B_HashableD_strG_methods};
-B_HashableD_str B_HashableD_strG_witness = &B_HashableD_str_instance;
-
- 
-void B_ContainerD_strD___init__ (B_ContainerD_str wit) {
-}
+#include "../deps/libutf8proc/utf8proc.h"
 
 // Auxiliaries, some used for both str and bytearray implementations ////////////////////////////////////////////////////////
 
@@ -631,211 +294,29 @@ static int rbmh( unsigned char *text, unsigned char *pattern, int tbytes, int pb
     return -1;
 }
 
-// Protocol methods; string implementations /////////////////////////////////////////////////////////////////////////////
-/* 
-   Note: We make str instances for Indexed and Sliceable even though these protocols 
-   include mutating methods. 
-*/
-
-// B_Ord ///////////////////////////////////////////////////////////////////////////////////////////////
-
-
-// TODO: We should consider how to normalize strings before comparisons
-
-int B_strD_eq(B_str a, B_str b) {
-    return (strcmp((char *)a->str,(char *)b->str)==0);
-}
-         
-int B_strD_neq(B_str a, B_str b) {
-    return !B_strD_eq(a,b);
-}
-
-// The comparisons below do lexicographic byte-wise comparisons.
-// Thus they do not in general reflect locale-dependent order conventions.
- 
-int B_strD_lt(B_str a, B_str b) {
-    return (strcmp((char *)a->str,(char *)b->str) < 0);
-}
- 
-int B_strD_le(B_str a, B_str b) {
-    return (strcmp((char *)a->str,(char *)b->str) <= 0);
-}
- 
-int B_strD_gt(B_str a, B_str b) {
-    return (strcmp((char *)a->str,(char *)b->str) > 0);
-}
- 
-int B_strD_ge(B_str a, B_str b) {
-    return (strcmp((char *)a->str,(char *)b->str) >= 0);
-}
- 
-// B_Hashable ///////////////////////////////////////////////////////////////////////////////////
-
-// hash function B_string_hash defined in hash.c
-
-// B_Times /////////////////////////////////////////////////////////////////////////////////////////////
-
-B_TimesD_str B_TimesD_strG_new() {
-    return $NEW(B_TimesD_str);
-}
- 
-B_str B_strD_add(B_str s, B_str t) {
-    B_str res;
-    NEW_UNFILLED_STR(res,s->nchars + t->nchars,s->nbytes + t->nbytes);
-    memcpy(res->str,s->str,s->nbytes);
-    memcpy(res->str+s->nbytes,t->str,t->nbytes);
-    return res;
-}
-
-B_str B_strD_mul (B_str a, B_int n) {
-    int nval = from$int(n);
-    if (nval <= 0)
-        return to$str("");
-    else {
-        B_str res;
-        NEW_UNFILLED_STR(res,a->nchars * nval, a->nbytes * nval);
-        for (int i=0; i<nval; i++)
-            memcpy(res->str + i*a->nbytes,a->str,a->nbytes);
-        return res;
-    }
-}
-
-// Collection ///////////////////////////////////////////////////////////////////////////////////////
-
-B_int B_strD_len(B_str s) {
-    B_int res = toB_int(s->nchars);
-    return res;
-}
-
-// B_Container ///////////////////////////////////////////////////////////////////////////
-
- 
-B_ContainerD_str B_ContainerD_strG_new() {
-    return $NEW(B_ContainerD_str);
-}
-
-int B_strD_contains(B_str s, B_str sub) {
-    return bmh(s->str,sub->str,s->nbytes,sub->nbytes) > 0;
-}
-
-int B_strD_containsnot(B_str s, B_str sub) {
-    return !B_strD_contains(s,sub);
-}
-
-// Iterable ///////////////////////////////////////////////////////////////////////////
-
-B_IteratorB_str B_IteratorB_strG_new(B_str str) {
-    return $NEW(B_IteratorB_str, str);
-}
-
-void B_IteratorB_strD_init(B_IteratorB_str self, B_str str) {
-    self->src = str;
-    self->nxt = 0;
-}
-
-void B_IteratorB_strD_serialize(B_IteratorB_str self,$Serial$state state) {
-    $step_serialize(self->src,state);
-    $step_serialize(toB_int(self->nxt),state);
-}
-
-
-B_IteratorB_str B_IteratorB_str$_deserialize(B_IteratorB_str res, $Serial$state state) {
-    if (!res)
-        res = $DNEW(B_IteratorB_str,state);
-    res->src = (B_str)$step_deserialize(state);
-    res->nxt = from$int((B_int)$step_deserialize(state));
-    return res;
-}
-
-B_bool B_IteratorB_strD_bool(B_IteratorB_str self) {
-    return B_True;
-}
-
-B_str B_IteratorB_strD_str(B_IteratorB_str self) {
-    char *s;
-    asprintf(&s,"<str iterator object at %p>",self);
-    return to$str(s);
-}
-
-// this is next function for forward iteration
-static B_str B_IteratorB_strD_next(B_IteratorB_str self) {
-    unsigned char *p = &self->src->str[self->nxt];
-    if (*p != 0) {
-        self->nxt +=byte_length2(*p);
-        return mk_char(p);
-    }
-    return NULL;
-}
-
-B_Iterator B_strD_iter(B_str str) {
-    return (B_Iterator)$NEW(B_IteratorB_str,str);
-}
-
-struct B_IteratorB_strG_class B_IteratorB_strG_methods = {"B_IteratorB_str",UNASSIGNED,($SuperG_class)&B_IteratorG_methods, B_IteratorB_strD_init,
-                                                    B_IteratorB_strD_serialize, B_IteratorB_str$_deserialize,
-                                                    B_IteratorB_strD_bool, B_IteratorB_strD_str, B_IteratorB_strD_str, B_IteratorB_strD_next};
-
-
-// Indexed ///////////////////////////////////////////////////////////////////////////
-
-B_str B_strD_getitem(B_str s, int i) {
-    unsigned char *p = s->str;
-    int ix = get_index(i,s->nchars);
-    p = skip_chars(p,ix,s->nchars == s->nbytes);
-    return mk_char(p);
-}
- 
-// Sliceable //////////////////////////////////////////////////////////////////////////////////////
-
-B_str B_strD_getslice(B_str s, B_slice slc) {
-    int isascii = s->nchars == s->nbytes;
-    int nchars = s->nchars;
-    int nbytes = 0;
-    int start, stop, step, slen;
-    normalize_slice(slc, nchars, &slen, &start, &stop, &step);
-    //slice notation have been eliminated and default values applied.
-    unsigned char buffer[4*slen]; // very conservative buffer size.
-    unsigned char *p = buffer;
-    unsigned char *t = skip_chars(s->str,start,isascii);
-    for (int i=0; i<slen; i++) {
-        int bytes = byte_length2(*t);
-        for (int k=0; k<bytes;k++) {
-            p[nbytes] = *t;
-            t++; nbytes++;
-        }
-        t = skip_chars(t,step-1,isascii);
-    }
-    B_str res;
-    NEW_UNFILLED_STR(res,slen,nbytes);
-    if (nbytes > 0)
-        memcpy(res->str,buffer,nbytes);
-    return res;
-}
-
-
-
 // General methods ////////////////////////////////////////////////////////////// 
 
 B_str B_strG_new(B_value s) {
     return $NEW(B_str, s);
 }
 
-void B_strD_init(B_str self, B_value s) {
+B_NoneType B_strD___init__(B_str self, B_value s) {
     B_str res = s->$class->__str__(s);
     self->nchars = res->nchars;
     self->nbytes = res->nbytes;
     self->str = res->str;
+    return B_None;
 }
 
-B_bool B_strD_bool(B_str s) {
+B_bool B_strD___bool__(B_str s) {
     return toB_bool(s->nchars > 0);
 };
 
-B_str B_strD_str(B_str s) {
+B_str B_strD___str__(B_str s) {
     return s;
 }
 
-B_str B_strD_repr(B_str s) {
+B_str B_strD___repr__(B_str s) {
     B_str $res = NEW_UNFILLED_STR($res,s->nchars+2,s->nbytes+2);
     $res->str[0] = '"';
     $res->str[$res->nbytes-1] = '"';
@@ -844,7 +325,7 @@ B_str B_strD_repr(B_str s) {
 }
 
 
-void B_strD_serialize(B_str str,$Serial$state state) {
+void B_strD___serialize__(B_str str,$Serial$state state) {
     int nWords = str->nbytes/sizeof($WORD) + 1;         // # $WORDS needed to store str->str, including terminating 0.
     $ROW row = $add_header(STR_ID,2+nWords,state);
     long nbytes = (int)str->nbytes;                    // We could pack nbytes and nchars in one $WORD, 
@@ -854,7 +335,7 @@ void B_strD_serialize(B_str str,$Serial$state state) {
     memcpy(row->blob+2,str->str,nbytes+1);
 }
 
-B_str B_strD_deserialize(B_str self, $Serial$state state) {
+B_str B_strD___deserialize__(B_str self, $Serial$state state) {
     $ROW this = state->row;
     state->row =this->next;
     state->row_no++;
@@ -1178,7 +659,8 @@ B_bool B_strD_isupper(B_str s) {
 B_str B_strD_join(B_str s, B_Iterable wit, $WORD iter) {
     int totchars = 0;
     int totbytes = 0;
-    B_list lst = B_listD_fromiter(wit->$class->__iter__(wit,iter));
+    B_CollectionD_SequenceD_list wit2 = B_CollectionD_SequenceD_listG_witness;
+    B_list lst = wit2->$class->__fromiter__(wit2,wit,iter);
     B_str nxt;
     int len = lst->length;
     for (int i=0; i<len; i++) {
@@ -1366,6 +848,7 @@ B_tuple B_strD_rpartition(B_str s, B_str sep) {
 
 B_list B_strD_split(B_str s, B_str sep, B_int maxsplit) {
     B_list res = $NEW(B_list,NULL,NULL);
+    B_SequenceD_list wit = B_SequenceD_listG_witness;
     if (maxsplit == NULL || from$int(maxsplit) < 0) maxsplit = toB_int(INT_MAX); 
     int remaining = s->nchars;
     if (sep == NULL) {
@@ -1384,7 +867,7 @@ B_list B_strD_split(B_str s, B_str sep, B_int maxsplit) {
                     inword = 1;
                     q = p;
                     wordlength = 1;
-                    if (B_listD_len(res) == from$int(maxsplit))
+                    if (res->length == from$int(maxsplit))
                         break; // we have now removed leading whitespace in remainder
                 } else
                     wordlength++;
@@ -1394,7 +877,7 @@ B_list B_strD_split(B_str s, B_str sep, B_int maxsplit) {
                     B_str word;
                     NEW_UNFILLED_STR(word,wordlength,p-q);
                     memcpy(word->str,q,p-q);
-                    B_listD_append(res,word);
+                    wit->$class->append(wit,res,word);
                     wordlength = 0;
                 }
             }
@@ -1407,14 +890,14 @@ B_list B_strD_split(B_str s, B_str sep, B_int maxsplit) {
                 B_str word;
                 NEW_UNFILLED_STR(word,wordlength,p-q);
                 memcpy(word->str,q,p-q);
-                B_listD_append(res,word);
+                wit->$class->append(wit,res,word);
             }
         } else {
             B_str word;
             p = s->str+s->nbytes;
             NEW_UNFILLED_STR(word,remaining,p-q);
             memcpy(word->str,q,p-q);
-            B_listD_append(res,word);
+            wit->$class->append(wit,res,word);
         }
         // $WORD w = list_getitem(res,0);
         return res;
@@ -1423,25 +906,26 @@ B_list B_strD_split(B_str s, B_str sep, B_int maxsplit) {
             $RAISE((B_BaseException)$NEW(B_ValueError,to$str("split: separator is empty string")));
         }
         if (remaining==0) { // for some unfathomable reason, this is the behaviour of the Python method
-            B_listD_append(res,null_str);
+            wit->$class->append(wit,res,null_str);
             return res;
         }
         B_str ls, rs, ssep;
         rs = s;
         // Note: This builds many intermediate rs strings...
-        while (rs->nchars>0 && B_listD_len(res) < from$int(maxsplit)) {
+        while (rs->nchars>0 && res->length < from$int(maxsplit)) {
             B_tuple t = B_strD_partition(rs,sep);
             ssep = (B_str)t->components[1];
             rs =  (B_str)t->components[2];
-            B_listD_append(res,(B_str)t->components[0]);
+            wit->$class->append(wit,res,(B_str)t->components[0]);
         }
         if (ssep->nchars>0)
-            B_listD_append(res,rs);
+            wit->$class->append(wit,res,rs);
         return res;
     }
 }
  
 B_list B_strD_splitlines(B_str s, B_bool keepends) {
+    B_SequenceD_list wit = B_SequenceD_listG_witness;
     if (!keepends)
         keepends = B_False;
     B_list res = $NEW(B_list,NULL,NULL);
@@ -1467,7 +951,7 @@ B_list B_strD_splitlines(B_str s, B_bool keepends) {
             memcpy(line->str,q,size);
             p += 1 + winend;
             q = p;
-            B_listD_append(res,line);
+            wit->$class->append(wit,res,line);
             linelength = 0;
         }
     }
@@ -1475,7 +959,7 @@ B_list B_strD_splitlines(B_str s, B_bool keepends) {
         B_str line;
         NEW_UNFILLED_STR(line,linelength,p-q);
         memcpy(line->str,q,p-q);
-        B_listD_append(res,line);
+        wit->$class->append(wit,res,line);
     }
     return res;
 } 
@@ -1542,9 +1026,223 @@ B_str B_strD_zfill(B_str s, B_int width) {
 }
 
 
+
+// Protocol methods; string implementations /////////////////////////////////////////////////////////////////////////////
+/* 
+   Note: We make str instances for Indexed and Sliceable even though these protocols 
+   include mutating methods. 
+*/
+
+// B_Ord ///////////////////////////////////////////////////////////////////////////////////////////////
+
+
+// TODO: We should consider how to normalize strings before comparisons
+
+ 
+// The comparisons below do lexicographic byte-wise comparisons.
+// Thus they do not in general reflect locale-dependent order conventions.
+ 
+B_bool B_OrdD_strD___eq__ (B_OrdD_str wit, B_str a, B_str b) {
+    return toB_bool(strcmp((char *)a->str,(char *)b->str) == 0);
+}
+ 
+B_bool B_OrdD_strD___ne__ (B_OrdD_str wit, B_str a, B_str b) {
+    return toB_bool(strcmp((char *)a->str,(char *)b->str) != 0);
+}
+ 
+B_bool B_OrdD_strD___lt__ (B_OrdD_str wit, B_str a, B_str b) {
+    return toB_bool(strcmp((char *)a->str,(char *)b->str) < 0);
+}
+
+B_bool B_OrdD_strD___le__ (B_OrdD_str wit, B_str a, B_str b) {
+    return toB_bool(strcmp((char *)a->str,(char *)b->str) <= 0);
+}
+ 
+B_bool B_OrdD_strD___gt__ (B_OrdD_str wit, B_str a, B_str b) {
+    return toB_bool(strcmp((char *)a->str,(char *)b->str) > 0);
+}
+
+B_bool B_OrdD_strD___ge__ (B_OrdD_str wit, B_str a, B_str b) {
+    return toB_bool(strcmp((char *)a->str,(char *)b->str) >= 0);
+}
+  
+// B_Hashable ///////////////////////////////////////////////////////////////////////////////////
+
+B_bool B_HashableD_strD___eq__ (B_HashableD_str wit, B_str a, B_str b) {
+    return toB_bool(strcmp((char *)a->str,(char *)b->str) == 0);
+}
+ 
+B_bool B_HashableD_strD___ne__ (B_HashableD_str wit, B_str a, B_str b) {
+    return toB_bool(strcmp((char *)a->str,(char *)b->str) != 0);
+}
+ 
+// hash function B_string_hash defined in hash.c
+B_int B_HashableD_strD___hash__(B_HashableD_str wit, B_str s) {
+    return toB_int(B_string_hash(s));
+}
+
+// B_Times /////////////////////////////////////////////////////////////////////////////////////////////
+
+B_str B_TimesD_strD___add__ (B_TimesD_str wit, B_str s, B_str t) {
+    B_str res;
+    NEW_UNFILLED_STR(res,s->nchars + t->nchars,s->nbytes + t->nbytes);
+    memcpy(res->str,s->str,s->nbytes);
+    memcpy(res->str+s->nbytes,t->str,t->nbytes);
+    return res;
+}
+
+B_str B_TimesD_strD___mul__ (B_TimesD_str wit, B_str a, B_int n) {
+    int nval = from$int(n);
+    if (nval <= 0)
+        return to$str("");
+    else {
+        B_str res;
+        NEW_UNFILLED_STR(res,a->nchars * nval, a->nbytes * nval);
+        for (int i=0; i<nval; i++)
+            memcpy(res->str + i*a->nbytes,a->str,a->nbytes);
+        return res;
+    }
+}
+
+// Collection ///////////////////////////////////////////////////////////////////////////////////////
+
+
+B_str B_ContainerD_strD___fromiter__ (B_ContainerD_str wit, B_Iterable wit2, $WORD iter) {
+    return B_strD_join(to$str(""),wit2,iter);
+}
+
+B_int B_ContainerD_strD___len__ (B_ContainerD_str wit, B_str s){
+    return toB_int(s->nchars);
+}
+
+// B_Container ///////////////////////////////////////////////////////////////////////////
+
+ 
+B_bool B_ContainerD_strD___contains__ (B_ContainerD_str wit, B_str s, B_str sub) {
+    return toB_bool(bmh(s->str,sub->str,s->nbytes,sub->nbytes) > 0);
+}
+
+B_bool B_ContainerD_strD___containsnot__ (B_ContainerD_str wit, B_str s, B_str sub) {
+    return toB_bool(!B_ContainerD_strD___contains__(wit, s, sub)->val);
+}
+
+// Iterable ///////////////////////////////////////////////////////////////////////////
+
+// first define Iterator class
+
+B_IteratorB_str B_IteratorB_strG_new(B_str str) {
+    return $NEW(B_IteratorB_str, str);
+}
+
+B_NoneType B_IteratorB_strD_init(B_IteratorB_str self, B_str str) {
+    self->src = str;
+    self->nxt = 0;
+    return B_None;
+}
+
+void B_IteratorB_strD_serialize(B_IteratorB_str self,$Serial$state state) {
+    $step_serialize(self->src,state);
+    $step_serialize(toB_int(self->nxt),state);
+}
+
+
+B_IteratorB_str B_IteratorB_str$_deserialize(B_IteratorB_str res, $Serial$state state) {
+    if (!res)
+        res = $DNEW(B_IteratorB_str,state);
+    res->src = (B_str)$step_deserialize(state);
+    res->nxt = from$int((B_int)$step_deserialize(state));
+    return res;
+}
+
+B_bool B_IteratorB_strD_bool(B_IteratorB_str self) {
+    return B_True;
+}
+
+B_str B_IteratorB_strD_str(B_IteratorB_str self) {
+    char *s;
+    asprintf(&s,"<str iterator object at %p>",self);
+    return to$str(s);
+}
+
+// this is next function for forward iteration
+static B_str B_IteratorB_strD_next(B_IteratorB_str self) {
+    unsigned char *p = &self->src->str[self->nxt];
+    if (*p != 0) {
+        self->nxt +=byte_length2(*p);
+        return mk_char(p);
+    }
+    return NULL;
+}
+
+
+struct B_IteratorB_strG_class B_IteratorB_strG_methods = {"B_IteratorB_str",UNASSIGNED,($SuperG_class)&B_IteratorG_methods, B_IteratorB_strD_init,
+                                                    B_IteratorB_strD_serialize, B_IteratorB_str$_deserialize,
+                                                    B_IteratorB_strD_bool, B_IteratorB_strD_str, B_IteratorB_strD_str, B_IteratorB_strD_next};
+
+// now, define __iter__
+
+B_Iterator B_ContainerD_strD___iter__ (B_ContainerD_str wit, B_str s) {
+    return (B_Iterator)$NEW(B_IteratorB_str,s);
+}
+
+
+// Indexed ///////////////////////////////////////////////////////////////////////////
+
+B_str B_SliceableD_strD___getitem__ (B_SliceableD_str wit, B_str s, B_int i) {
+    unsigned char *p = s->str;
+    int ix = get_index(from$int(i),s->nchars);
+    p = skip_chars(p,ix,s->nchars == s->nbytes);
+    return mk_char(p);
+}
+
+B_NoneType B_SliceableD_strD___setitem__ (B_SliceableD_str wit, B_str str, B_int i, B_str val) {
+    $RAISE((B_BaseException)$NEW(B_NotImplementedError,to$str("call to mutating method setitem on string")));
+    return B_None;
+}
+
+B_NoneType B_SliceableD_strD___delitem__ (B_SliceableD_str wit, B_str str, B_int i) {
+    $RAISE((B_BaseException)$NEW(B_NotImplementedError,to$str("call to mutating method delitem on string")));
+    return B_None;
+}
+
+// Sliceable //////////////////////////////////////////////////////////////////////////////////////
+
+B_str B_SliceableD_strD___getslice__ (B_SliceableD_str wit, B_str s, B_slice slc) {
+    int isascii = s->nchars == s->nbytes;
+    int nchars = s->nchars;
+    int nbytes = 0;
+    long start, stop, step, slen;
+    normalize_slice(slc, nchars, &slen, &start, &stop, &step);
+    //slice notation have been eliminated and default values applied.
+    unsigned char buffer[4*slen]; // very conservative buffer size.
+    unsigned char *p = buffer;
+    unsigned char *t = skip_chars(s->str,start,isascii);
+    for (int i=0; i<slen; i++) {
+        int bytes = byte_length2(*t);
+        for (int k=0; k<bytes;k++) {
+            p[nbytes] = *t;
+            t++; nbytes++;
+        }
+        t = skip_chars(t,step-1,isascii);
+    }
+    B_str res;
+    NEW_UNFILLED_STR(res,slen,nbytes);
+    if (nbytes > 0)
+        memcpy(res->str,buffer,nbytes);
+    return res;
+}
+
+B_NoneType B_SliceableD_strD___setslice__ (B_SliceableD_str wit, B_str str, B_Iterable wit2, B_slice slc, $WORD iter) {
+    $RAISE((B_BaseException)$NEW(B_NotImplementedError,to$str("call to mutating method setslice on string")));
+    return B_None;
+}
+
+B_NoneType B_SliceableD_strD___delslice__ (B_SliceableD_str wit, B_str str, B_slice slc) {
+    $RAISE((B_BaseException)$NEW(B_NotImplementedError,to$str("call to mutating method delslice on string")));
+    return B_None;
+}
+
 // End of str implementation ////////////////////////////////////////////////////
-
-
 
 // bytearray implementation //////////////////////////////////////////////////////////////////////////////
 
@@ -1580,68 +1278,6 @@ static void expand_bytearray(B_bytearray b,int n) {
     b->capacity = newcapacity;
 }  
 
-
-// General methods, prototypes
-void B_bytearrayD_init(B_bytearray, B_bytes);
-B_bool B_bytearrayD_bool(B_bytearray);
-B_str B_bytearrayD_str(B_bytearray);
-void B_bytearrayD_serialize(B_bytearray,$Serial$state);
-B_bytearray B_bytearrayD_deserialize(B_bytearray,$Serial$state);
-
-
-// bytearray methods, prototypes
-
-B_bytearray B_bytearrayD_capitalize(B_bytearray s);
-B_bytearray B_bytearrayD_center(B_bytearray s, B_int width, B_bytearray fill);
-B_int B_bytearrayD_count(B_bytearray s, B_bytearray sub, B_int start, B_int end);
-B_str B_bytearrayD_decode(B_bytearray s);
-B_bool B_bytearrayD_endswith(B_bytearray s, B_bytearray suffix, B_int start, B_int end);
-B_bytearray B_bytearrayD_expandtabs(B_bytearray s, B_int tabsize);      
-B_int B_bytearrayD_find(B_bytearray s, B_bytearray sub, B_int start, B_int end);
-B_int B_bytearrayD_index(B_bytearray s, B_bytearray sub, B_int start, B_int end);
-B_bool B_bytearrayD_isalnum(B_bytearray s);
-B_bool B_bytearrayD_isalpha(B_bytearray s);
-B_bool B_bytearrayD_isascii(B_bytearray s);
-B_bool B_bytearrayD_isdecimal(B_bytearray s);
-B_bool B_bytearrayD_isdigit(B_bytearray s);
-B_bool B_bytearrayD_isidentifier(B_bytearray s);
-B_bool B_bytearrayD_islower(B_bytearray s);
-B_bool B_bytearrayD_isnumeric(B_bytearray s);
-B_bool B_bytearrayD_isprintable(B_bytearray s);
-B_bool B_bytearrayD_isspace(B_bytearray s);
-B_bool B_bytearrayD_istitle(B_bytearray s);
-B_bool B_bytearrayD_isupper(B_bytearray s);
-B_bytearray B_bytearrayD_join(B_bytearray sep, B_Iterable wit, $WORD iter);
-B_bytearray B_bytearrayD_ljust(B_bytearray s, B_int width, B_bytearray fill); 
-B_bytearray B_bytearrayD_lower(B_bytearray s);
-B_bytearray B_bytearrayD_lstrip(B_bytearray s,B_bytearray cs); 
-B_tuple B_bytearrayD_partition(B_bytearray s, B_bytearray sep);
-B_bytearray B_bytearrayD_replace(B_bytearray s, B_bytearray old, B_bytearray new, B_int count);
-B_int B_bytearrayD_rfind(B_bytearray s, B_bytearray sub, B_int start, B_int end);
-B_int B_bytearrayD_rindex(B_bytearray s, B_bytearray sub, B_int start, B_int end);
-B_bytearray B_bytearrayD_rjust(B_bytearray s, B_int width, B_bytearray fill);  
-B_tuple B_bytearrayD_rpartition(B_bytearray s, B_bytearray sep); 
-B_bytearray B_bytearrayD_rstrip(B_bytearray s,B_bytearray cs);
-B_list B_bytearrayD_split(B_bytearray s, B_bytearray sep, B_int maxsplit);  
-B_list B_bytearrayD_splitlines(B_bytearray s, B_bool keepends); 
-B_bool B_bytearrayD_startswith(B_bytearray s, B_bytearray prefix, B_int start, B_int end); 
-B_bytearray B_bytearrayD_strip(B_bytearray s,B_bytearray cs);
-B_bytearray B_bytearrayD_upper(B_bytearray s);
-B_bytearray B_bytearrayD_zfill(B_bytearray s, B_int width);
-
-// Method table
-
-struct B_bytearrayG_class B_bytearrayG_methods =
-    {"B_bytearray",UNASSIGNED,($SuperG_class)&B_valueG_methods, B_bytearrayD_init, B_bytearrayD_serialize, B_bytearrayD_deserialize, B_bytearrayD_bool,
-     B_bytearrayD_str, B_bytearrayD_str, B_bytearrayD_capitalize, B_bytearrayD_center, B_bytearrayD_count,  B_bytearrayD_decode, B_bytearrayD_endswith,
-     B_bytearrayD_expandtabs, B_bytearrayD_find, B_bytearrayD_index,
-     B_bytearrayD_isalnum, B_bytearrayD_isalpha, B_bytearrayD_isascii, B_bytearrayD_isdigit, B_bytearrayD_islower, B_bytearrayD_isspace,
-     B_bytearrayD_istitle, B_bytearrayD_isupper, B_bytearrayD_join, B_bytearrayD_ljust, B_bytearrayD_lower, B_bytearrayD_lstrip, B_bytearrayD_partition, B_bytearrayD_replace,
-     B_bytearrayD_rfind, B_bytearrayD_rindex, B_bytearrayD_rjust,
-     B_bytearrayD_rpartition, B_bytearrayD_rstrip, B_bytearrayD_split, B_bytearrayD_splitlines, B_bytearrayD_startswith, B_bytearrayD_strip, B_bytearrayD_upper, B_bytearrayD_zfill};
-
-// Bytearray methods, implementations
-
 static B_bytearray B_bytearrayD_copy(B_bytearray s) {
     B_bytearray res;
     NEW_UNFILLED_BYTEARRAY(res,s->nbytes);
@@ -1649,6 +1285,66 @@ static B_bytearray B_bytearrayD_copy(B_bytearray s) {
     memcpy(res->str,s->str,s->nbytes);
     return res;
 }
+
+ 
+// General methods 
+
+B_bytearray B_bytearrayG_new(B_bytes b) {
+    return $NEW(B_bytearray, b);
+}
+
+B_NoneType B_bytearrayD___init__(B_bytearray self, B_bytes b) {
+    int len = b->nbytes;
+    self->nbytes = len;
+    self->capacity = len;
+    self->str = malloc(len+1);
+    memcpy(self->str,b->str,len+1);
+    return B_None;
+}
+ 
+B_bool B_bytearrayD___bool__(B_bytearray s) {
+    return toB_bool(s->nbytes > 0);
+};
+
+B_str B_bytearrayD___str__(B_bytearray s) {
+    B_str bs;
+    NEW_UNFILLED_STR(bs,s->nbytes,s->nbytes);
+    bs->str = s->str;        // bs may not be a correctly UTF8-encoded string
+    B_str as = $ascii(bs);    // but we can use $ascii on it anyhow.
+    B_str res;
+    int n = as->nbytes + 14; // "bytearray(b'" + "')"
+    NEW_UNFILLED_STR(res,n,n);
+    memcpy(res->str, "bytearray(b'",12);
+    memcpy(&res->str[12],as->str,as->nbytes);
+    memcpy(&res->str[n-2],"')",2);
+    return res;
+}
+
+
+void B_bytearrayD___serialize__(B_bytearray str,$Serial$state state) {
+    int nWords = str->nbytes/sizeof($WORD) + 1;         // # $WORDS needed to store str->str, including terminating 0.
+    $ROW row = $add_header(BYTEARRAY_ID,1+nWords,state);
+    long nbytes = (long)str->nbytes;                    
+    memcpy(row->blob,&nbytes,sizeof($WORD));            
+    memcpy(row->blob+1,str->str,nbytes+1);
+}
+
+B_bytearray B_bytearrayD___deserialize__(B_bytearray res, $Serial$state state) {
+    $ROW this = state->row;
+    state->row =this->next;
+    state->row_no++;
+    if(!res)
+        res = malloc(sizeof(struct B_bytearray));
+    long nbytes;
+    memcpy(&nbytes,this->blob,sizeof($WORD));
+    res->$class = &B_bytearrayG_methods;
+    res->nbytes = (long)nbytes;
+    res->str = malloc(nbytes+1);
+    memcpy(res->str,this->blob+1,nbytes+1);
+    return res;
+}
+
+// bytearray methods
 
 B_bytearray B_bytearrayD_capitalize(B_bytearray s) {
     if (s->nbytes==0) {
@@ -1878,7 +1574,8 @@ B_bool B_bytearrayD_isupper(B_bytearray s) {
 
 B_bytearray B_bytearrayD_join(B_bytearray s, B_Iterable wit, $WORD iter) {
     int totbytes = 0;
-    B_list lst = B_listD_fromiter(wit->$class->__iter__(wit,iter));
+    B_CollectionD_SequenceD_list wit2 = B_CollectionD_SequenceD_listG_witness;
+    B_list lst = wit2->$class->__fromiter__(wit2,wit,iter);
     B_bytearray nxt;
     int len = lst->length;
     for (int i=0; i<len; i++) {
@@ -2087,6 +1784,7 @@ B_bytearray B_bytearrayD_rstrip(B_bytearray s, B_bytearray cs) {
  
 B_list B_bytearrayD_split(B_bytearray s, B_bytearray sep, B_int maxsplit) {
     B_list res = $NEW(B_list,NULL,NULL);
+    B_SequenceD_list wit = B_SequenceD_listG_witness;
     if (maxsplit == NULL || from$int(maxsplit) < 0) maxsplit = toB_int(INT_MAX); 
     if (sep == NULL) {
         unsigned char *p = s->str;
@@ -2100,7 +1798,7 @@ B_list B_bytearrayD_split(B_bytearray s, B_bytearray sep, B_int maxsplit) {
                 if (!inword) {
                     inword = 1;
                     q = p;
-                    if (B_listD_len(res) == from$int(maxsplit))
+                    if (res->length == from$int(maxsplit))
                         break; // we have now removed leading whitespace in remainder
                 } 
             } else {
@@ -2109,7 +1807,7 @@ B_list B_bytearrayD_split(B_bytearray s, B_bytearray sep, B_int maxsplit) {
                     B_bytearray word;
                     NEW_UNFILLED_BYTEARRAY(word,p-q);
                     memcpy(word->str,q,p-q);
-                    B_listD_append(res,word);
+                    wit->$class->append(wit,res,word);
                 }
             }
             p++;
@@ -2120,14 +1818,14 @@ B_list B_bytearrayD_split(B_bytearray s, B_bytearray sep, B_int maxsplit) {
                 B_bytearray word;
                 NEW_UNFILLED_BYTEARRAY(word,p-q);
                 memcpy(word->str,q,p-q);
-                B_listD_append(res,word);
+                 wit->$class->append(wit,res,word);
             }
         } else {
             B_bytearray word;
             p = s->str+s->nbytes;
             NEW_UNFILLED_BYTEARRAY(word,p-q);
             memcpy(word->str,q,p-q);
-            B_listD_append(res,word);
+             wit->$class->append(wit,res,word);
         }
         return res;
     } else { // separator given
@@ -2135,20 +1833,20 @@ B_list B_bytearrayD_split(B_bytearray s, B_bytearray sep, B_int maxsplit) {
             $RAISE((B_BaseException)$NEW(B_ValueError,to$str("split for bytearray: separator is empty string")));
         }
         if (s->nbytes==0) { // for some unfathomable reason, this is the behaviour of the Python method
-            B_listD_append(res,null_str);
+            wit->$class->append(wit,res,null_str);
             return res;
         }
         B_bytearray ls, rs, ssep;
         rs = s;
         // Note: This builds many intermediate rs strings...
-        while (rs->nbytes>0 && B_listD_len(res) < from$int(maxsplit)) {
+        while (rs->nbytes>0 && res->length < from$int(maxsplit)) {
             B_tuple t = B_bytearrayD_partition(rs,sep);
             ssep = (B_bytearray)t->components[1];
             rs =  (B_bytearray)t->components[2];
-            B_listD_append(res,(B_bytearray)t->components[0]);
+             wit->$class->append(wit,res,(B_bytearray)t->components[0]);
         }
         if (ssep->nbytes>0)
-            B_listD_append(res,rs);
+            wit->$class->append(wit,res,rs);
         return res;
     }
 }
@@ -2156,6 +1854,7 @@ B_list B_bytearrayD_split(B_bytearray s, B_bytearray sep, B_int maxsplit) {
 B_list B_bytearrayD_splitlines(B_bytearray s, B_bool keepends) {
     if (!keepends)
         keepends = B_False;
+    B_SequenceD_list wit = B_SequenceD_listG_witness;
     B_list res = $NEW(B_list,NULL,NULL);
     if (s->nbytes==0) {
         return res;
@@ -2174,14 +1873,14 @@ B_list B_bytearrayD_splitlines(B_bytearray s, B_bool keepends) {
             memcpy(line->str,q,size);
             p+= 1 + winend;
             q = p;
-            B_listD_append(res,line);
+            wit->$class->append(wit,res,line);
         }
     }
     if (q < p) {
         B_bytearray line;
         NEW_UNFILLED_BYTEARRAY(line,p-q);
         memcpy(line->str,q,p-q);
-        B_listD_append(res,line);
+        wit->$class->append(wit,res,line);
     }
     return res;
 } 
@@ -2234,513 +1933,35 @@ B_bytearray B_bytearrayD_zfill(B_bytearray s, B_int width) {
     return res;
 }
 
-// Protocol methods, prototypes for bytearrays
-
-
-int B_bytearrayD_eq(B_bytearray,B_bytearray);
-int B_bytearrayD_neq(B_bytearray,B_bytearray);
-int B_bytearrayD_lt(B_bytearray,B_bytearray);
-int B_bytearrayD_le(B_bytearray,B_bytearray);
-int B_bytearrayD_gt(B_bytearray,B_bytearray);
-int B_bytearrayD_ge(B_bytearray,B_bytearray);
-
-B_int B_bytearrayD_getitem(B_bytearray, int);
-void B_bytearrayD_setitem(B_bytearray, int, int);
-void B_bytearrayD_delitem(B_bytearray, int);
-B_bytearray B_bytearrayD_getslice(B_bytearray, B_slice);
-void B_bytearrayD_setslice(B_bytearray, B_slice, B_Iterator);
-void B_bytearrayD_delslice(B_bytearray, B_slice);
-B_Iterator B_bytearrayD_reversed(B_bytearray);
-void B_bytearrayD_insert(B_bytearray, int, B_int);
-void B_bytearrayD_append(B_bytearray, B_int);
-void B_bytearrayD_reverse(B_bytearray);
-
-B_Iterator B_bytearrayD_iter(B_bytearray);
-B_bytearray B_bytearrayD_fromiter(B_Iterable, $WORD);
-B_int B_bytearrayD_len(B_bytearray str);
-
-B_bytearray B_bytearrayD_add(B_bytearray, B_bytearray);
-B_bytearray B_bytearrayD_mul(B_bytearray, B_int);
-
-int B_bytearrayD_contains (B_bytearray, B_int);
-int B_bytearrayD_containsnot (B_bytearray, B_int);
-
-
-
-
-// Protocol instances, using above prototypes 
-
-
+ 
 // Ord
 
-void B_OrdD_bytearrayD___serialize__(B_OrdD_bytearray self, $Serial$state state) {
-}
-
-B_OrdD_bytearray B_OrdD_bytearrayD___deserialize__(B_OrdD_bytearray self, $Serial$state state) {
-    B_OrdD_bytearray res = $DNEW(B_OrdD_bytearray,state);
-    return res;
-}
-
-B_OrdD_bytearray B_OrdD_bytearrayG_new() {
-    return $NEW(B_OrdD_bytearray);
-}
 
 B_bool B_OrdD_bytearrayD___eq__ (B_OrdD_bytearray wit, B_bytearray a, B_bytearray b) {
-    return toB_bool(B_bytearrayD_eq(a,b));
+    return toB_bool(strcmp((char *)a->str,(char *)b->str)==0);
 }
 
 B_bool B_OrdD_bytearrayD___ne__ (B_OrdD_bytearray wit, B_bytearray a, B_bytearray b) {
-    return  toB_bool(B_bytearrayD_neq(a,b));
+    return  toB_bool(strcmp((char *)a->str,(char *)b->str)!=0);
 }
 
 B_bool B_OrdD_bytearrayD___lt__ (B_OrdD_bytearray wit, B_bytearray a, B_bytearray b) {
-    return toB_bool(B_bytearrayD_lt(a,b));
+    return toB_bool(strcmp((char *)a->str,(char *)b->str)<0);
 }
 
 B_bool B_OrdD_bytearrayD___le__ (B_OrdD_bytearray wit, B_bytearray a, B_bytearray b){
-    return toB_bool(B_bytearrayD_le(a,b));
+    return toB_bool(strcmp((char *)a->str,(char *)b->str)<=0);
 }
 
 B_bool B_OrdD_bytearrayD___gt__ (B_OrdD_bytearray wit, B_bytearray a, B_bytearray b){
-    return toB_bool(B_bytearrayD_gt(a,b));
+    return toB_bool(strcmp((char *)a->str,(char *)b->str)>0);
 }
 
 B_bool B_OrdD_bytearrayD___ge__ (B_OrdD_bytearray wit, B_bytearray a, B_bytearray b){
-    return toB_bool(B_bytearrayD_ge(a,b));
-}
-
-// Sequence
-
-void B_SequenceD_bytearrayD___serialize__(B_SequenceD_bytearray self, $Serial$state state) {
-    $step_serialize(self->W_Collection, state);
-    $step_serialize(self->W_Times, state);
-}
-
-B_SequenceD_bytearray B_SequenceD_bytearrayD___deserialize__(B_SequenceD_bytearray self, $Serial$state state) {
-    B_SequenceD_bytearray res = $DNEW(B_SequenceD_bytearray,state);
-    res->W_Collection = (B_Collection)$step_deserialize(state);
-    res->W_Times = (B_Times)$step_deserialize(state);
-    return res;
-}
-
-B_SequenceD_bytearray B_SequenceD_bytearrayG_new() {
-    return $NEW(B_SequenceD_bytearray);
-}
-
-B_int B_SequenceD_bytearrayD___getitem__ (B_SequenceD_bytearray wit, B_bytearray self, B_int ix) {
-    return B_bytearrayD_getitem(self,from$int(ix));
-}
-
-void B_SequenceD_bytearrayD___setitem__ (B_SequenceD_bytearray wit, B_bytearray self, B_int ix, B_int val) {
-    B_bytearrayD_setitem(self,from$int(ix),from$int(val));
-}
-
-void B_SequenceD_bytearrayD___delitem__ (B_SequenceD_bytearray wit, B_bytearray self, B_int ix) {
-    B_bytearrayD_delitem(self,from$int(ix));
-}
-
-B_bytearray B_SequenceD_bytearrayD___getslice__ (B_SequenceD_bytearray wit, B_bytearray self, B_slice slc) {
-    return B_bytearrayD_getslice(self,slc);
-}
-
-void B_SequenceD_bytearrayD___setslice__ (B_SequenceD_bytearray wit,  B_bytearray self, B_Iterable wit2, B_slice slc, $WORD iter) {
-    B_bytearrayD_setslice(self,slc,wit2->$class->__iter__(wit2,iter));
-}
-
-void B_SequenceD_bytearrayD___delslice__ (B_SequenceD_bytearray wit, B_bytearray self, B_slice slc) {
-    B_bytearrayD_delslice(self,slc);
-}
-
-B_Iterator B_SequenceD_bytearrayD___reversed__(B_SequenceD_bytearray wit, B_bytearray self) {
-    return B_bytearrayD_reversed(self);
-}
-
-void B_SequenceD_bytearray$insert(B_SequenceD_bytearray wit, B_bytearray self, B_int ix, B_int val) {
-    B_bytearrayD_insert(self, from$int(ix), val);
-}
-
-void B_SequenceD_bytearray$append(B_SequenceD_bytearray wit, B_bytearray self, B_int val) {
-    B_bytearrayD_append(self, val);
-}
-
-void B_SequenceD_bytearray$reverse(B_SequenceD_bytearray wit, B_bytearray self) {
-    B_bytearrayD_reverse(self);
-}
-
-
-// Collection
-
-void B_CollectionD_SequenceD_bytearrayD___serialize__(B_CollectionD_SequenceD_bytearray self, $Serial$state state) {
-    $step_serialize(self->W_Sequence, state);
-}
-
-B_CollectionD_SequenceD_bytearray B_CollectionD_SequenceD_bytearrayD___deserialize__(B_CollectionD_SequenceD_bytearray self, $Serial$state state) {
-    B_CollectionD_SequenceD_bytearray res = $DNEW(B_CollectionD_SequenceD_bytearray,state);
-    res->W_Sequence = (B_Sequence)$step_deserialize(state);
-    return res;
-}
-
-B_CollectionD_SequenceD_bytearray B_CollectionD_SequenceD_bytearrayG_new(B_Sequence wit) {
-    return $NEW(B_CollectionD_SequenceD_bytearray,wit);
-}
-
-B_Iterator B_CollectionD_SequenceD_bytearrayD___iter__ (B_CollectionD_SequenceD_bytearray wit, B_bytearray str) {
-    return B_bytearrayD_iter(str);
-}
-
-B_bytearray B_CollectionD_SequenceD_bytearrayD___fromiter__ (B_CollectionD_SequenceD_bytearray wit, B_Iterable wit2, $WORD iter) {
-    return B_bytearrayD_join(toB_bytearray(""),wit2,iter);
-}
-
-B_int B_CollectionD_SequenceD_bytearrayD___len__ (B_CollectionD_SequenceD_bytearray wit, B_bytearray str) {
-    return B_bytearrayD_len(str);
-}
-
-// Times
-
-void B_TimesD_SequenceD_bytearrayD___serialize__(B_TimesD_SequenceD_bytearray self, $Serial$state state) {
-    $step_serialize(self->W_Sequence, state);
-}
-
-B_TimesD_SequenceD_bytearray B_TimesD_SequenceD_bytearrayD___deserialize__(B_TimesD_SequenceD_bytearray self, $Serial$state state) {
-    B_TimesD_SequenceD_bytearray res = $DNEW(B_TimesD_SequenceD_bytearray,state);
-    res->W_Sequence = (B_Sequence)$step_deserialize(state);
-    return res;
-}
-
-B_TimesD_SequenceD_bytearray B_TimesD_SequenceD_bytearrayG_new(B_Sequence wit) {
-    return $NEW(B_TimesD_SequenceD_bytearray,wit);
-}
-
-B_bytearray B_TimesD_SequenceD_bytearrayD___add__ (B_TimesD_SequenceD_bytearray wit, B_bytearray a, B_bytearray b) {
-    return B_bytearrayD_add(a,b);
-}
-
-B_bytearray B_TimesD_SequenceD_bytearrayD___mul__ (B_TimesD_SequenceD_bytearray wit, B_bytearray a, B_int n) {
-    return B_bytearrayD_mul(a,n);
+    return toB_bool(strcmp((char *)a->str,(char *)b->str)>=0);
 }
 
 // Container
-
-void B_ContainerD_bytearrayD___serialize__(B_ContainerD_bytearray self, $Serial$state state) {
-}
-
-B_ContainerD_bytearray B_ContainerD_bytearrayD___deserialize__(B_ContainerD_bytearray self, $Serial$state state) {
-    return $DNEW(B_ContainerD_bytearray,state);
-}
-
-B_ContainerD_bytearray B_ContainerD_bytearrayG_new() {
-    return $NEW(B_ContainerD_bytearray);
-}
-
-B_Iterator B_ContainerD_bytearrayD___iter__ (B_ContainerD_bytearray wit, B_bytearray str) {
-    return B_bytearrayD_iter(str);
-}
-
-B_bytearray B_ContainerD_bytearrayD___fromiter__ (B_ContainerD_bytearray wit, B_Iterable wit2, $WORD iter) {
-    return B_bytearrayD_join(toB_bytearray(""),wit2,iter);
-}
-
-B_int B_ContainerD_bytearrayD___len__ (B_ContainerD_bytearray wit, B_bytearray str) {
-    return B_bytearrayD_len(str);
-}
-
-B_bool B_ContainerD_bytearrayD___contains__(B_ContainerD_bytearray wit, B_bytearray self, B_int n) {
-    return toB_bool(B_bytearrayD_contains(self,n));
-}
-
-B_bool B_ContainerD_bytearrayD___containsnot__(B_ContainerD_bytearray wit, B_bytearray self, B_int n) {
-    return  toB_bool(!B_bytearrayD_contains(self,n));
-}
-
-
-// Method tables for witness classes
-
-struct B_SequenceD_bytearray  B_SequenceD_bytearray_instance;
-struct B_CollectionD_SequenceD_bytearray B_CollectionD_SequenceD_bytearray_instance;
-struct B_TimesD_SequenceD_bytearray B_TimesD_SequenceD_bytearray_instance;
-
-
-struct B_OrdD_bytearrayG_class  B_OrdD_bytearrayG_methods = {
-    "B_OrdD_bytearray",
-    UNASSIGNED,
-    ($SuperG_class)&B_OrdG_methods,
-    (void (*)(B_OrdD_bytearray))$default__init__,
-    B_OrdD_bytearrayD___serialize__,
-    B_OrdD_bytearrayD___deserialize__,
-    (B_bool (*)(B_OrdD_bytearray))$default__bool__,
-    (B_str (*)(B_OrdD_bytearray))$default__str__,
-    (B_str (*)(B_OrdD_bytearray))$default__str__,
-    B_OrdD_bytearrayD___eq__, B_OrdD_bytearrayD___ne__,
-    B_OrdD_bytearrayD___lt__, B_OrdD_bytearrayD___le__,
-    B_OrdD_bytearrayD___gt__, B_OrdD_bytearrayD___ge__
-};
-struct B_OrdD_bytearray B_OrdD_bytearray_instance = {&B_OrdD_bytearrayG_methods};
-B_OrdD_bytearray B_OrdD_bytearrayG_witness = &B_OrdD_bytearray_instance;
-
-struct B_SequenceD_bytearrayG_class B_SequenceD_bytearrayG_methods = {
-    "B_SequenceD_bytearray",
-    UNASSIGNED,
-    ($SuperG_class)&B_SequenceG_methods,
-    B_SequenceD_bytearrayD___init__,
-    B_SequenceD_bytearrayD___serialize__,
-    B_SequenceD_bytearrayD___deserialize__,
-    (B_bool (*)(B_SequenceD_bytearray))$default__bool__,
-    (B_str (*)(B_SequenceD_bytearray))$default__str__,
-    (B_str (*)(B_SequenceD_bytearray))$default__str__,
-    B_SequenceD_bytearrayD___getitem__,
-    B_SequenceD_bytearrayD___setitem__,
-    B_SequenceD_bytearrayD___delitem__,
-    B_SequenceD_bytearrayD___getslice__,
-    B_SequenceD_bytearrayD___setslice__,
-    B_SequenceD_bytearrayD___delslice__,
-    B_SequenceD_bytearrayD___reversed__,
-    B_SequenceD_bytearray$insert,
-    B_SequenceD_bytearray$append,
-    B_SequenceD_bytearray$reverse
-};
-struct B_SequenceD_bytearray B_SequenceD_bytearray_instance = {
-    &B_SequenceD_bytearrayG_methods,
-    (B_Collection)&B_CollectionD_SequenceD_bytearray_instance,
-    (B_Times)&B_TimesD_SequenceD_bytearray_instance
-};
-B_SequenceD_bytearray B_SequenceD_bytearrayG_witness = &B_SequenceD_bytearray_instance;
-
-struct B_CollectionD_SequenceD_bytearrayG_class B_CollectionD_SequenceD_bytearrayG_methods = {
-    "B_CollectionD_SequenceD_bytearray",
-    UNASSIGNED,
-    ($SuperG_class)&B_CollectionG_methods,
-    B_CollectionD_SequenceD_bytearrayD___init__,
-    B_CollectionD_SequenceD_bytearrayD___serialize__,
-    B_CollectionD_SequenceD_bytearrayD___deserialize__,
-    (B_bool (*)(B_CollectionD_SequenceD_bytearray))$default__bool__,
-    (B_str (*)(B_CollectionD_SequenceD_bytearray))$default__str__,
-    (B_str (*)(B_CollectionD_SequenceD_bytearray))$default__str__,
-    B_CollectionD_SequenceD_bytearrayD___iter__,
-    B_CollectionD_SequenceD_bytearrayD___fromiter__,
-    B_CollectionD_SequenceD_bytearrayD___len__
-};
-struct B_CollectionD_SequenceD_bytearray B_CollectionD_SequenceD_bytearray_instance = {&B_CollectionD_SequenceD_bytearrayG_methods,(B_Sequence)&B_SequenceD_bytearray_instance};
-B_CollectionD_SequenceD_bytearray B_CollectionD_SequenceD_bytearrayG_witness = &B_CollectionD_SequenceD_bytearray_instance;
-
-struct B_TimesD_SequenceD_bytearrayG_class  B_TimesD_SequenceD_bytearrayG_methods = {
-    "B_TimesD_SequenceD_bytearray",
-    UNASSIGNED,
-    ($SuperG_class)&B_TimesG_methods,
-    B_TimesD_SequenceD_bytearrayD___init__,
-    B_TimesD_SequenceD_bytearrayD___serialize__,
-    B_TimesD_SequenceD_bytearrayD___deserialize__,
-    (B_bool (*)(B_TimesD_SequenceD_bytearray))$default__bool__,
-    (B_str (*)(B_TimesD_SequenceD_bytearray))$default__str__,
-    (B_str (*)(B_TimesD_SequenceD_bytearray))$default__str__,
-    B_TimesD_SequenceD_bytearrayD___add__,
-    (B_bytearray (*)(B_TimesD_SequenceD_bytearray, B_bytearray, B_bytearray))B_PlusD___iadd__,
-    B_TimesD_SequenceD_bytearrayD___mul__,
-    (B_bytearray (*)(B_TimesD_SequenceD_bytearray, B_bytearray, B_int))B_TimesD___imul__,
-};
-struct B_TimesD_SequenceD_bytearray B_TimesD_SequenceD_bytearray_instance = {&B_TimesD_SequenceD_bytearrayG_methods};
-B_TimesD_SequenceD_bytearray B_TimesD_SequenceD_bytearrayG_witness = &B_TimesD_SequenceD_bytearray_instance;
-
-struct B_ContainerD_bytearrayG_class B_ContainerD_bytearrayG_methods = {
-    "B_ContainerD_bytearray",
-    UNASSIGNED,
-    ($SuperG_class)&B_ContainerG_methods,
-    B_ContainerD_bytearrayD___init__,
-    B_ContainerD_bytearrayD___serialize__,
-    B_ContainerD_bytearrayD___deserialize__,
-    (B_bool (*)(B_ContainerD_bytearray))$default__bool__,
-    (B_str (*)(B_ContainerD_bytearray))$default__str__,
-    (B_str (*)(B_ContainerD_bytearray))$default__str__,
-    B_ContainerD_bytearrayD___iter__,
-    B_ContainerD_bytearrayD___len__,
-    B_ContainerD_bytearrayD___contains__,
-    B_ContainerD_bytearrayD___containsnot__
-};
-struct B_ContainerD_bytearray B_ContainerD_bytearray_instance = {&B_ContainerD_bytearrayG_methods};
-B_ContainerD_bytearray B_ContainerD_bytearrayG_witness = &B_ContainerD_bytearray_instance;
-
-// init methods for witness classes
-
-void B_CollectionD_SequenceD_bytearrayD___init__(B_CollectionD_SequenceD_bytearray self, B_Sequence master) {
-    self->W_Sequence = master;
-}
-
-void B_TimesD_SequenceD_bytearrayD___init__(B_TimesD_SequenceD_bytearray self, B_Sequence master) {
-    self->W_Sequence = master;
-}
-
-void B_SequenceD_bytearrayD___init__(B_SequenceD_bytearray self) {
-    self->W_Collection = (B_Collection)$NEW(B_CollectionD_SequenceD_bytearray, (B_Sequence)self);
-    self->W_Times = (B_Times)$NEW(B_TimesD_SequenceD_bytearray, (B_Sequence)self);
-}
-
-void B_ContainerD_bytearrayD___init__ (B_ContainerD_bytearray wit) {
-}
-
-
-// protocol methods for bytearrays, implementations
-
-// Eq
-
-int B_bytearrayD_eq(B_bytearray a,B_bytearray b) {
-    return strcmp((char *)a->str,(char *)b->str)==0;
-}
-
-int B_bytearrayD_neq(B_bytearray a,B_bytearray b) {
-    return strcmp((char *)a->str,(char *)b->str)!=0;
-}
-
-// Ord
-
-int B_bytearrayD_lt(B_bytearray a,B_bytearray b) {
-    return strcmp((char *)a->str,(char *)b->str)<0;
-}
- 
-int B_bytearrayD_le(B_bytearray a,B_bytearray b) {
-    return strcmp((char *)a->str,(char *)b->str)<=0;
-}
-
-int B_bytearrayD_gt(B_bytearray a,B_bytearray b) {
-    return strcmp((char *)a->str,(char *)b->str)>0;
-}
-
-int B_bytearrayD_ge(B_bytearray a,B_bytearray b) {
-    return strcmp((char *)a->str,(char *)b->str)>=0;
-}
-
-// Indexed
-
-B_int B_bytearrayD_getitem(B_bytearray self, int ix) {
-    int ix0 = ix < 0 ? self->nbytes + ix : ix;
-    if (ix0<0 || ix0 >= self->nbytes)
-        $RAISE((B_BaseException)$NEW(B_IndexError,to$str("getitem for bytearray: indexing outside array")));
-    return toB_int((int)self->str[ix0]);
-}
-    
-void B_bytearrayD_setitem(B_bytearray self, int ix, int val) {
-    int ix0 = ix < 0 ? self->nbytes + ix : ix;
-    if (ix0<0 || ix0 >= self->nbytes)
-        $RAISE((B_BaseException)$NEW(B_IndexError,to$str("setitem for bytearray: indexing outside array")));
-    if (val<0 || val>255)
-        $RAISE((B_BaseException)$NEW(B_ValueError,to$str("setitem for bytearray: value outside [0..255]")));
-    self->str[ix0] = (unsigned char)val;
-}
-  
-void B_bytearrayD_delitem(B_bytearray self, int ix) {
-    int len = self->nbytes;
-    int ix0 = ix < 0 ? len + ix : ix;
-    if (ix0 < 0 || ix0 >= len)
-        $RAISE((B_BaseException)$NEW(B_IndexError,to$str("delitem for bytearray: indexing outside array")));
-    memmove(self->str + ix0,self->str + (ix0 + 1),len-(ix0+1));
-    self->nbytes--;
-}
-
-// Sliceable
-
-B_bytearray B_bytearrayD_getslice(B_bytearray self, B_slice slc) {
-    int len = self->nbytes;
-    int start, stop, step, slen;
-    normalize_slice(slc, len, &slen, &start, &stop, &step);
-    B_bytearray res;
-    NEW_UNFILLED_BYTEARRAY(res,slen);
-    int t = start;
-    for (int i=0; i<slen; i++) {
-        B_int w = B_bytearrayD_getitem(self,t);
-        B_bytearrayD_setitem(res,i,from$int(w));
-        t += step;
-    }
-    return res;
-}
-
-void B_bytearrayD_setslice(B_bytearray self, B_slice slc, B_Iterator it) {
-    int len = self->nbytes;
-    B_bytearray other;
-    NEW_UNFILLED_BYTEARRAY(other,0);
-    $WORD w;
-    while ((w=it->$class->__next__(it)))
-        B_bytearrayD_append(other,(B_int)w);
-    int olen = other->nbytes; 
-    int start, stop, step, slen;
-    normalize_slice(slc, len, &slen, &start, &stop, &step);
-    if (step != 1 && olen != slen) {
-        $RAISE((B_BaseException)$NEW(B_ValueError,to$str("setslice for bytearray: illegal slice")));
-    }
-    int copy = olen <= slen ? olen : slen;
-    int t = start;
-    for (int i= 0; i<copy; i++) {
-        self->str[t] = other->str[i];
-        t += step;
-    }
-    if (olen == slen)
-        return;
-    // now we know that step=1
-    if (olen < slen) {
-        memmove(self->str + start + copy,
-                self->str + start + slen,
-                len-(start+slen));
-        self->nbytes-=slen-olen;
-        return;
-    } else {
-        expand_bytearray(self,olen-slen);
-        int rest = len - (start+copy);
-        int incr = olen - slen;
-        memmove(self->str + start + copy + incr,
-                self->str + start + copy,
-                rest);
-        for (int i = copy; i < olen; i++)
-            self->str[start+i] = other->str[i];
-        self->nbytes += incr;
-    }
-}
-
-void B_bytearrayD_delslice(B_bytearray self, B_slice slc) {
-    int len = self->nbytes;
-    int start, stop, step, slen;
-    normalize_slice(slc, len, &slen, &start, &stop, &step);
-    if (slen==0) return;
-    unsigned char *p = self->str + start;
-    for (int i=0; i<slen-1; i++) {
-        memmove(p,p+i+1,step-1);
-        p+=step-1;
-    }
-    memmove(p,p+slen,len-1-(start+step*(slen-1)));
-    self->nbytes-=slen;
-    self->str[self->nbytes] = '\0';
-}
-
-// Sequence
-
-B_Iterator B_bytearrayD_reversed(B_bytearray self) {
-    B_bytearray copy = B_bytearrayD_copy(self);
-    B_bytearrayD_reverse(copy);
-    return B_bytearrayD_iter(copy);
-}
-
-void B_bytearrayD_insert(B_bytearray self, int ix, B_int elem) {
-    int len = self->nbytes;
-    expand_bytearray(self,1);
-    int ix0 = ix < 0 ? (len+ix < 0 ? 0 : len+ix) : (ix < len ? ix : len);
-    memmove(self->str + (ix0 + 1),
-            self->str + ix0 ,
-            len - ix0 + 1); // +1 to move also terminating '\0'
-    self->str[ix0] = (unsigned char)from$int(elem) & 0xff;
-    self->nbytes++;
-}
-
-void B_bytearrayD_append(B_bytearray self, B_int elem) {
-    expand_bytearray(self,1);
-    self->str[self->nbytes++] = (unsigned char)from$int(elem) & 0xff;
-    self->str[self->nbytes] = '\0';
-}
-
-void B_bytearrayD_reverse(B_bytearray self) {
-    int len = self->nbytes;
-    for (int i = 0; i < len/2; i++) {
-        unsigned char tmp = self->str[i];
-        self->str[i] = self->str[len-1-i];
-        self->str[len-1-i] = tmp;
-    }
-}
 
 // Iterable
 
@@ -2748,9 +1969,10 @@ static B_int B_IteratorB_bytearrayD_next(B_IteratorB_bytearray self) {
     return self->nxt >= self->src->nbytes ? NULL : toB_int(self->src->str[self->nxt++]);
 }
 
-void B_IteratorB_bytearrayD_init(B_IteratorB_bytearray self, B_bytearray b) {
+B_NoneType B_IteratorB_bytearrayD_init(B_IteratorB_bytearray self, B_bytearray b) {
     self->src = b;
     self->nxt = 0;
+    return B_None;
 }
 
 B_bool B_IteratorB_bytearrayD_bool(B_IteratorB_bytearray self) {
@@ -2789,30 +2011,194 @@ struct B_IteratorB_bytearrayG_class B_IteratorB_bytearrayG_methods = {
     B_IteratorB_bytearrayD_next
 };
 
-B_Iterator B_bytearrayD_iter(B_bytearray self) {
-    return (B_Iterator)$NEW(B_IteratorB_bytearray,self);
+B_Iterator B_ContainerD_bytearrayD___iter__ (B_ContainerD_bytearray wit, B_bytearray str) {
+    return (B_Iterator)$NEW(B_IteratorB_bytearray,str);
 }
 
-// Collection
-  
-B_bytearray B_bytearrayD_fromiter(B_Iterable wit, $WORD iter) {
+B_bytearray B_ContainerD_bytearrayD___fromiter__ (B_ContainerD_bytearray wit, B_Iterable wit2, $WORD iter) {
+    return B_bytearrayD_join(toB_bytearray(""),wit2,iter);
+}
+
+B_int B_ContainerD_bytearrayD___len__ (B_ContainerD_bytearray wit, B_bytearray str) {
+    return toB_int(str->nbytes);
+}
+
+B_bool B_ContainerD_bytearrayD___contains__(B_ContainerD_bytearray wit, B_bytearray self, B_int n) {
+    long res = 0;
+    for (int i=0; i < self->nbytes; i++) {
+        if (self->str[i] == (unsigned char)from$int(n)) {
+            res = 1;
+            break;
+        }
+    }
+    return toB_bool(res);
+}
+
+B_bool B_ContainerD_bytearrayD___containsnot__(B_ContainerD_bytearray wit, B_bytearray self, B_int n) {
+    return  toB_bool(!B_ContainerD_bytearrayD___contains__(wit,self,n)->val);
+}
+
+// Sequence
+
+B_int B_SequenceD_bytearrayD___getitem__ (B_SequenceD_bytearray wit, B_bytearray self, B_int n) {
+    long ix = from$int(n);
+    long ix0 = ix < 0 ? self->nbytes + ix : ix;
+    if (ix0<0 || ix0 >= self->nbytes)
+        $RAISE((B_BaseException)$NEW(B_IndexError,to$str("getitem for bytearray: indexing outside array")));
+    return toB_int((long)self->str[ix0]);
+}
+
+B_NoneType B_SequenceD_bytearrayD___setitem__ (B_SequenceD_bytearray wit, B_bytearray self, B_int n, B_int v) {
+    long ix = from$int(n);
+    long val = from$int(v);
+    long ix0 = ix < 0 ? self->nbytes + ix : ix;
+    if (ix0<0 || ix0 >= self->nbytes)
+        $RAISE((B_BaseException)$NEW(B_IndexError,to$str("setitem for bytearray: indexing outside array")));
+    if (val<0 || val>255)
+        $RAISE((B_BaseException)$NEW(B_ValueError,to$str("setitem for bytearray: value outside [0..255]")));
+    self->str[ix0] = (unsigned char)val;
+    return B_None;
+}
+
+B_NoneType B_SequenceD_bytearrayD___delitem__ (B_SequenceD_bytearray wit, B_bytearray self, B_int n) {
+    long ix = from$int(n);
+    int len = self->nbytes;
+    long ix0 = ix < 0 ? len + ix : ix;
+    if (ix0 < 0 || ix0 >= len)
+        $RAISE((B_BaseException)$NEW(B_IndexError,to$str("delitem for bytearray: indexing outside array")));
+    memmove(self->str + ix0,self->str + (ix0 + 1),len-(ix0+1));
+    self->nbytes--;
+    return B_None;
+}
+
+B_NoneType B_SequenceD_bytearrayD_insert(B_SequenceD_bytearray wit, B_bytearray self, B_int n, B_int elem) {
+    long ix = from$int(n);
+    int len = self->nbytes;
+    expand_bytearray(self,1);
+    int ix0 = ix < 0 ? (len+ix < 0 ? 0 : len+ix) : (ix < len ? ix : len);
+    memmove(self->str + (ix0 + 1),
+            self->str + ix0 ,
+            len - ix0 + 1); // +1 to move also terminating '\0'
+    self->str[ix0] = (unsigned char)from$int(elem) & 0xff;
+    self->nbytes++;
+    return B_None;
+}
+
+B_NoneType B_SequenceD_bytearrayD_append(B_SequenceD_bytearray wit, B_bytearray self, B_int elem) {
+    expand_bytearray(self,1);
+    self->str[self->nbytes++] = (unsigned char)from$int(elem) & 0xff;
+    self->str[self->nbytes] = '\0';
+    return B_None;
+}
+
+B_NoneType B_SequenceD_bytearrayD_reverse(B_SequenceD_bytearray wit, B_bytearray self) {
+    int len = self->nbytes;
+    for (int i = 0; i < len/2; i++) {
+        unsigned char tmp = self->str[i];
+        self->str[i] = self->str[len-1-i];
+        self->str[len-1-i] = tmp;
+    }
+    return B_None;
+}
+
+B_Iterator B_SequenceD_bytearrayD___reversed__(B_SequenceD_bytearray wit, B_bytearray self) {
+    B_bytearray copy = B_bytearrayD_copy(self);
+    B_SequenceD_bytearrayD_reverse(wit,copy);
+    return B_ContainerD_bytearrayD___iter__ (NULL, copy);
+}
+
+B_bytearray B_SequenceD_bytearrayD___getslice__ (B_SequenceD_bytearray wit, B_bytearray self, B_slice slc) {
+    int len = self->nbytes;
+    long start, stop, step, slen;
+    normalize_slice(slc, len, &slen, &start, &stop, &step);
     B_bytearray res;
-    NEW_UNFILLED_BYTEARRAY(res,0);
-    B_Iterator it = wit->$class->__iter__(wit,iter);
-    $WORD nxt;
-    while ((nxt = it->$class->__next__(it))) {
-        B_bytearrayD_append(res,(B_int)nxt);
+    NEW_UNFILLED_BYTEARRAY(res,slen);
+    long t = start;
+    for (int i=0; i<slen; i++) {
+        B_int w = B_SequenceD_bytearrayD___getitem__(wit, self, toB_int(t));
+        B_SequenceD_bytearrayD___setitem__(wit, res , toB_int(i), w);
+        t += step;
     }
     return res;
 }
 
-B_int B_bytearrayD_len(B_bytearray self) {
-    return toB_int(self->nbytes);
+B_NoneType B_SequenceD_bytearrayD___setslice__ (B_SequenceD_bytearray wit,  B_bytearray self, B_Iterable wit2, B_slice slc, $WORD iter) {
+    B_Iterator it = wit2->$class->__iter__(wit2,iter);
+    int len = self->nbytes;
+    B_bytearray other;    
+    NEW_UNFILLED_BYTEARRAY(other,0);
+    $WORD w;
+    while ((w=it->$class->__next__(it)))
+        B_SequenceD_bytearrayD_append(wit, other,(B_int)w);
+    int olen = other->nbytes; 
+    long start, stop, step, slen;
+    normalize_slice(slc, len, &slen, &start, &stop, &step);
+    if (step != 1 && olen != slen) {
+        $RAISE((B_BaseException)$NEW(B_ValueError,to$str("setslice for bytearray: illegal slice")));
+    }
+    int copy = olen <= slen ? olen : slen;
+    int t = start;
+    for (int i= 0; i<copy; i++) {
+        self->str[t] = other->str[i];
+        t += step;
+    }
+    if (olen == slen)
+        return B_None;
+    // now we know that step=1
+    if (olen < slen) {
+        memmove(self->str + start + copy,
+                self->str + start + slen,
+                len-(start+slen));
+        self->nbytes-=slen-olen;
+        return B_None;
+    } else {
+        expand_bytearray(self,olen-slen);
+        int rest = len - (start+copy);
+        int incr = olen - slen;
+        memmove(self->str + start + copy + incr,
+                self->str + start + copy,
+                rest);
+        for (int i = copy; i < olen; i++)
+            self->str[start+i] = other->str[i];
+        self->nbytes += incr;
+    }
+    return B_None;
+}
+
+B_NoneType B_SequenceD_bytearrayD___delslice__ (B_SequenceD_bytearray wit,  B_bytearray self, B_slice slc) {
+    int len = self->nbytes;
+    long start, stop, step, slen;
+    normalize_slice(slc, len, &slen, &start, &stop, &step);
+    if (slen==0) return B_None;
+    unsigned char *p = self->str + start;
+    for (int i=0; i<slen-1; i++) {
+        memmove(p,p+i+1,step-1);
+        p+=step-1;
+    }
+    memmove(p,p+slen,len-1-(start+step*(slen-1)));
+    self->nbytes-=slen;
+    self->str[self->nbytes] = '\0';
+    return B_None;
+}
+
+// Collection
+
+
+B_Iterator B_CollectionD_SequenceD_bytearrayD___iter__ (B_CollectionD_SequenceD_bytearray wit, B_bytearray str) {
+    return (B_Iterator)$NEW(B_IteratorB_bytearray,str);
+}
+
+B_bytearray B_CollectionD_SequenceD_bytearrayD___fromiter__ (B_CollectionD_SequenceD_bytearray wit, B_Iterable wit2, $WORD iter) {
+    return B_bytearrayD_join(toB_bytearray(""),wit2,iter);
+}
+
+B_int B_CollectionD_SequenceD_bytearrayD___len__ (B_CollectionD_SequenceD_bytearray wit, B_bytearray str) {
+    return toB_int(str->nbytes);
 }
 
 // Times
- 
-B_bytearray B_bytearrayD_add(B_bytearray a, B_bytearray b) {
+
+B_bytearray B_TimesD_SequenceD_bytearrayD___add__ (B_TimesD_SequenceD_bytearray wit, B_bytearray a, B_bytearray b) {
     B_bytearray res;
     NEW_UNFILLED_BYTEARRAY(res,a->nbytes+b->nbytes);
     memcpy(res->str,a->str,a->nbytes);
@@ -2820,7 +2206,7 @@ B_bytearray B_bytearrayD_add(B_bytearray a, B_bytearray b) {
     return res;
 }
 
-B_bytearray B_bytearrayD_mul (B_bytearray a, B_int n) {
+B_bytearray B_TimesD_SequenceD_bytearrayD___mul__ (B_TimesD_SequenceD_bytearray wit, B_bytearray a, B_int n) {
     int nval = from$int(n);
     if (nval <= 0)
         return toB_bytearray("");
@@ -2832,86 +2218,9 @@ B_bytearray B_bytearrayD_mul (B_bytearray a, B_int n) {
         return res;
     }
 }
-// Container
  
-int B_bytearrayD_contains (B_bytearray self, B_int c) {
-    for (int i=0; i < self->nbytes; i++) {
-        if (self->str[i] == (unsigned char)from$int(c))
-            return 1;
-    }
-    return 0;
-}
-
-int B_bytearrayD_containsnot (B_bytearray self, B_int c) {
-    return !B_bytearrayD_contains(self,c);
-}
-
-
-// General methods, implementations
-
-void B_bytearrayD_init(B_bytearray, B_bytes);
-void B_bytearrayD_serialize(B_bytearray,$Serial$state);
-B_bytearray B_bytearrayD_deserialize(B_bytearray,$Serial$state);
-B_bool B_bytearrayD_bool(B_bytearray);
-B_str B_bytearrayD_str(B_bytearray);
-
-B_bytearray B_bytearrayG_new(B_bytes b) {
-    return $NEW(B_bytearray, b);
-}
-
-void B_bytearrayD_init(B_bytearray self, B_bytes b) {
-    int len = b->nbytes;
-    self->nbytes = len;
-    self->capacity = len;
-    self->str = malloc(len+1);
-    memcpy(self->str,b->str,len+1);
-}
- 
-B_bool B_bytearrayD_bool(B_bytearray s) {
-    return toB_bool(s->nbytes > 0);
-};
-
-B_str B_bytearrayD_str(B_bytearray s) {
-    B_str bs;
-    NEW_UNFILLED_STR(bs,s->nbytes,s->nbytes);
-    bs->str = s->str;        // bs may not be a correctly UTF8-encoded string
-    B_str as = $ascii(bs);    // but we can use $ascii on it anyhow.
-    B_str res;
-    int n = as->nbytes + 14; // "bytearray(b'" + "')"
-    NEW_UNFILLED_STR(res,n,n);
-    memcpy(res->str, "bytearray(b'",12);
-    memcpy(&res->str[12],as->str,as->nbytes);
-    memcpy(&res->str[n-2],"')",2);
-    return res;
-}
-
-
-void B_bytearrayD_serialize(B_bytearray str,$Serial$state state) {
-    int nWords = str->nbytes/sizeof($WORD) + 1;         // # $WORDS needed to store str->str, including terminating 0.
-    $ROW row = $add_header(BYTEARRAY_ID,1+nWords,state);
-    long nbytes = (long)str->nbytes;                    
-    memcpy(row->blob,&nbytes,sizeof($WORD));            
-    memcpy(row->blob+1,str->str,nbytes+1);
-}
-
-B_bytearray B_bytearrayD_deserialize(B_bytearray res, $Serial$state state) {
-    $ROW this = state->row;
-    state->row =this->next;
-    state->row_no++;
-    if(!res)
-        res = malloc(sizeof(struct B_bytearray));
-    long nbytes;
-    memcpy(&nbytes,this->blob,sizeof($WORD));
-    res->$class = &B_bytearrayG_methods;
-    res->nbytes = (long)nbytes;
-    res->str = malloc(nbytes+1);
-    memcpy(res->str,this->blob+1,nbytes+1);
-    return res;
-}
-
 // End of bytearray implementation ////////////////////////////////////////////////
 
-// bytes implementation ///////////////////////////////////////////////////////////
 
 
 // bytes implementation ///////////////////////////////////////////////////////////
@@ -2939,127 +2248,6 @@ unsigned char *fromB_bytes(B_bytes b) {
 }
 
 // Auxiliaries
-/*
-  static void expand_bytes(B_bytes b,int n) {
-  if (b->capacity >= b->nbytes + n)
-  return;
-  int newcapacity = b->capacity==0 ? 1 : b->capacity;
-  while (newcapacity < b->nbytes+n)
-  newcapacity <<= 1;
-  unsigned char *newstr = b->str==NULL
-  ? malloc(newcapacity+1)
-  : realloc(b->str,newcapacity+1);
-  if (newstr == NULL) {
-  $RAISE((B_BaseException)$NEW(B_MemoryError,to$str("memory allocation failed")));
-  }
-  b->str = newstr;
-  b->capacity = newcapacity;
-  }  
-*/
-
-// Object methods for bytes, prototypes
-void B_bytesD_init(B_bytes, B_Iterable,$WORD);
-B_bool B_bytesD_bool(B_bytes);
-B_str B_bytesD_str(B_bytes);
-void B_bytesD_serialize(B_bytes,$Serial$state);
-B_bytes B_bytesD_deserialize(B_bytes,$Serial$state);
-
-
-// bytes methods, prototypes
-
-B_bytes B_bytesD_capitalize(B_bytes s);
-B_bytes B_bytesD_center(B_bytes s, B_int width, B_bytes fill);
-B_int B_bytesD_count(B_bytes s, B_bytes sub, B_int start, B_int end);
-B_str B_bytesD_decode(B_bytes s);
-B_bool B_bytesD_endswith(B_bytes s, B_bytes suffix, B_int start, B_int end);
-B_bytes B_bytesD_expandtabs(B_bytes s, B_int tabsize);      
-B_int B_bytesD_find(B_bytes s, B_bytes sub, B_int start, B_int end);
-B_int B_bytesD_index(B_bytes s, B_bytes sub, B_int start, B_int end);
-B_bool B_bytesD_isalnum(B_bytes s);
-B_bool B_bytesD_isalpha(B_bytes s);
-B_bool B_bytesD_isascii(B_bytes s);
-B_bool B_bytesD_isdecimal(B_bytes s);
-B_bool B_bytesD_isdigit(B_bytes s);
-B_bool B_bytesD_isidentifier(B_bytes s);
-B_bool B_bytesD_islower(B_bytes s);
-B_bool B_bytesD_isnumeric(B_bytes s);
-B_bool B_bytesD_isprintable(B_bytes s);
-B_bool B_bytesD_isspace(B_bytes s);
-B_bool B_bytesD_istitle(B_bytes s);
-B_bool B_bytesD_isupper(B_bytes s);
-B_bytes B_bytesD_join(B_bytes sep, B_Iterable wit, $WORD iter);
-B_bytes B_bytesD_ljust(B_bytes s, B_int width, B_bytes fill); 
-B_bytes B_bytesD_lower(B_bytes s);
-B_bytes B_bytesD_lstrip(B_bytes s,B_bytes cs); 
-B_tuple B_bytesD_partition(B_bytes s, B_bytes sep);
-B_bytes B_bytesD_removeprefix(B_bytes s, B_bytes prefix);
-B_bytes B_bytesD_removesuffix(B_bytes s, B_bytes suffix);
-B_bytes B_bytesD_replace(B_bytes s, B_bytes old, B_bytes new, B_int count);
-B_int B_bytesD_rfind(B_bytes s, B_bytes sub, B_int start, B_int end);
-B_int B_bytesD_rindex(B_bytes s, B_bytes sub, B_int start, B_int end);
-B_bytes B_bytesD_rjust(B_bytes s, B_int width, B_bytes fill);  
-B_tuple B_bytesD_rpartition(B_bytes s, B_bytes sep); 
-B_bytes B_bytesD_rstrip(B_bytes s,B_bytes cs);
-B_list B_bytesD_split(B_bytes s, B_bytes sep, B_int maxsplit);  
-B_list B_bytesD_splitlines(B_bytes s, B_bool keepends); 
-B_bool B_bytesD_startswith(B_bytes s, B_bytes prefix, B_int start, B_int end); 
-B_bytes B_bytesD_strip(B_bytes s,B_bytes cs);
-B_bytes B_bytesD_upper(B_bytes s);
-B_bytes B_bytesD_zfill(B_bytes s, B_int width);
-
-// Method table
-
-struct B_bytesG_class B_bytesG_methods =
-    {"B_bytes",UNASSIGNED,($SuperG_class)&B_valueG_methods, B_bytesD_init, B_bytesD_serialize, B_bytesD_deserialize, B_bytesD_bool,
-     B_bytesD_str,  B_bytesD_str, B_bytesD_capitalize, B_bytesD_center, B_bytesD_count,  B_bytesD_decode, B_bytesD_endswith,
-     B_bytesD_expandtabs, B_bytesD_find, B_bytesD_index,
-     B_bytesD_isalnum, B_bytesD_isalpha, B_bytesD_isascii, B_bytesD_isdigit, B_bytesD_islower, B_bytesD_isspace,
-     B_bytesD_istitle, B_bytesD_isupper, B_bytesD_join, B_bytesD_ljust, B_bytesD_lower, B_bytesD_lstrip, B_bytesD_partition,
-     B_bytesD_replace, B_bytesD_rfind, B_bytesD_rindex, B_bytesD_rjust,
-     B_bytesD_rpartition, B_bytesD_rstrip, B_bytesD_split, B_bytesD_splitlines, B_bytesD_startswith, B_bytesD_strip, B_bytesD_upper, B_bytesD_zfill};
-
-/*
-  struct B_bytesG_class B_bytesG_methods =
-  {"B_bytes",UNASSIGNED,($SuperG_class)&B_valueG_methods, B_bytesD_init, B_bytesD_serialize, B_bytesD_deserialize, B_bytesD_bool,
-  B_bytesD_str,
-  (B_bytes (*)(B_bytes))B_bytearrayD_capitalize,
-  (B_bytes (*)(B_bytes,B_int,B_bytes))B_bytearrayD_center,
-  (B_int (*)(B_bytes,B_bytes,B_int,B_int))B_bytearrayD_count,
-  (B_str (*)(B_bytes))B_bytearrayD_decode,
-  (B_bool (*)(B_bytes,B_bytes,B_int,B_int))B_bytearrayD_endswith,
-  (B_bytes (*)(B_bytes,B_int))B_bytearrayD_expandtabs,
-  (B_int (*)(B_bytes,B_bytes,B_int,B_int))B_bytearrayD_find,
-  (B_int (*)(B_bytes,B_bytes,B_int,B_int))B_bytearrayD_index,
-  (B_bool (*)(B_bytes))B_bytearrayD_isalnum,
-  (B_bool (*)(B_bytes))B_bytearrayD_isalpha,
-  (B_bool (*)(B_bytes))B_bytearrayD_isascii,
-  (B_bool (*)(B_bytes))B_bytearrayD_isdigit,
-  (B_bool (*)(B_bytes))B_bytearrayD_islower,
-  (B_bool (*)(B_bytes))B_bytearrayD_isspace,
-  (B_bool (*)(B_bytes))B_bytearrayD_istitle,
-  (B_bool (*)(B_bytes))B_bytearrayD_isupper,
-  (B_bytes (*)(B_bytes,B_Iterable,$WORD))B_bytearrayD_join,
-  (B_bytes (*)(B_bytes,B_int,B_bytes))B_bytearrayD_ljust,
-  (B_bytes (*)(B_bytes))B_bytearrayD_lower,
-  (B_bytes (*)(B_bytes,B_bytes))B_bytearrayD_lstrip,
-  (B_tuple (*)(B_bytes,B_bytes))B_bytearrayD_partition,
-  (B_bytes (*)(B_bytes,B_bytes,B_bytes,B_int))B_bytearrayD_replace,
-  (B_int (*)(B_bytes,B_bytes,B_int,B_int))B_bytearrayD_rfind,
-  (B_int (*)(B_bytes,B_bytes,B_int,B_int))B_bytearrayD_rindex,
-  (B_bytes (*)(B_bytes,B_int,B_bytes))B_bytearrayD_rjust,
-  (B_tuple (*)(B_bytes,B_bytes))B_bytearrayD_rpartition,
-  (B_bytes (*)(B_bytes,B_bytes))B_bytearrayD_rstrip,
-  (B_list (*)(B_bytes,B_bytes,B_int))B_bytearrayD_split,
-  (B_list (*)(B_bytes,B_bool))B_bytearrayD_splitlines,
-  (B_bool (*)(B_bytes,B_bytes,B_int,B_int))B_bytearrayD_startswith,
-  (B_bytes (*)(B_bytes,B_bytes))B_bytearrayD_strip,
-  (B_bytes (*)(B_bytes))B_bytearrayD_upper,
-  (B_bytes (*)(B_bytes,B_int))B_bytearrayD_zfill};
-*/
-
-
-// Bytes methods, implementations
-
 
 static B_bytes B_bytesD_copy(B_bytes s) {
     B_bytes res;
@@ -3070,6 +2258,79 @@ static B_bytes B_bytesD_copy(B_bytes s) {
 }
 
  
+
+// Bytes methods, implementations
+
+// General methods ////////////////////////////////////////////////////////////// 
+
+B_bytes B_bytesG_new(B_Iterable iter, $WORD wit) {
+    return $NEW(B_bytes, iter, wit);
+}
+
+B_NoneType B_bytesD___init__(B_bytes self, B_Iterable wit, $WORD iter) {
+    B_CollectionD_SequenceD_list wit2 = B_CollectionD_SequenceD_listG_witness;
+    B_list lst = wit2->$class->__fromiter__(wit2,wit,iter);
+    int len = lst->length;
+    self->nbytes = len;
+    self->str = malloc(len+1);
+    self->str[len] = 0;
+    for (int i=0; i< len; i++) {
+        int n = from$int((B_int)lst->data[i]);
+        if (0<=n && n <= 255)
+            self->str[i] = n;
+        else
+            $RAISE((B_BaseException)$NEW(B_ValueError,to$str("bytes constructor: element outside [0..255]")));
+    }
+    return B_None;
+}
+
+B_bool B_bytesD___bool__(B_bytes s) {
+    return toB_bool(s->nbytes > 0);
+};
+
+B_str B_bytesD___str__(B_bytes s) {
+    int lens = s->nbytes+3;
+    B_str str;
+    NEW_UNFILLED_STR(str,lens,lens);
+    unsigned char *p = str->str;
+    /*
+      The function $ascii escapes all occurrences of quotes. We do not want that 
+      for the delimiter pair, so we use the hackish solution to first set p[1] and
+      p[lens-1] to space, then call $ascii and afterwards introduce the delimiting quotes.
+    */
+    p[0] = 'b';
+    p[1] = ' ';
+    p[lens-1] = ' ';
+    memcpy(p+2,s->str,lens-3);
+    B_str res = $ascii(str);
+    res->str[1] = '"';
+    res->str[res->nbytes-1] = '"';
+    return res;
+}
+
+
+void B_bytesD___serialize__(B_bytes str,$Serial$state state) {
+    int nWords = str->nbytes/sizeof($WORD) + 1;         // # $WORDS needed to store str->str, including terminating 0.
+    $ROW row = $add_header(STR_ID,1+nWords,state);
+    long nbytes = (long)str->nbytes;                    
+    memcpy(row->blob,&nbytes,sizeof($WORD));            
+    memcpy(row->blob+1,str->str,nbytes+1);
+}
+
+B_bytes B_bytesD___deserialize__(B_bytes self, $Serial$state state) {
+    $ROW this = state->row;
+    state->row =this->next;
+    state->row_no++;
+    B_bytes res = malloc(sizeof(struct B_bytes));
+    long nbytes;
+    memcpy(&nbytes,this->blob,sizeof($WORD));
+    res->$class = &B_bytesG_methods;
+    res->nbytes = (long)nbytes;
+    res->str = malloc(nbytes+1);
+    memcpy(res->str,this->blob+2,nbytes+1);
+    return res;
+}
+   
 B_bytes B_bytesD_capitalize(B_bytes s) {
     if (s->nbytes==0) {
         return s;
@@ -3296,7 +2557,8 @@ B_bool B_bytesD_isupper(B_bytes s) {
 
 B_bytes B_bytesD_join(B_bytes s, B_Iterable wit, $WORD iter) {
     int totbytes = 0;
-    B_list lst = B_listD_fromiter(wit->$class->__iter__(wit,iter));
+    B_CollectionD_SequenceD_list wit2 = B_CollectionD_SequenceD_listG_witness;
+    B_list lst = wit2->$class->__fromiter__(wit2,wit,iter);
     B_bytes nxt;
     int len = lst->length;
     for (int i=0; i<len; i++) {
@@ -3530,6 +2792,7 @@ B_bytes B_bytesD_rstrip(B_bytes s, B_bytes cs) {
  
 B_list B_bytesD_split(B_bytes s, B_bytes sep, B_int maxsplit) {
     B_list res = $NEW(B_list,NULL,NULL);
+    B_SequenceD_list wit = B_SequenceD_listG_witness;
     if (maxsplit == NULL || from$int(maxsplit) < 0) maxsplit = toB_int(INT_MAX); 
     if (sep == NULL) {
         unsigned char *p = s->str;
@@ -3543,7 +2806,7 @@ B_list B_bytesD_split(B_bytes s, B_bytes sep, B_int maxsplit) {
                 if (!inword) {
                     inword = 1;
                     q = p;
-                    if (B_listD_len(res) == from$int(maxsplit))
+                    if (res->length == from$int(maxsplit))
                         break; // we have now removed leading whitespace in remainder
                 } 
             } else {
@@ -3552,7 +2815,7 @@ B_list B_bytesD_split(B_bytes s, B_bytes sep, B_int maxsplit) {
                     B_bytes word;
                     NEW_UNFILLED_BYTES(word,p-q);
                     memcpy(word->str,q,p-q);
-                    B_listD_append(res,word);
+                    wit->$class->append(wit,res,word);
                 }
             }
             p++;
@@ -3563,14 +2826,14 @@ B_list B_bytesD_split(B_bytes s, B_bytes sep, B_int maxsplit) {
                 B_bytes word;
                 NEW_UNFILLED_BYTES(word,p-q);
                 memcpy(word->str,q,p-q);
-                B_listD_append(res,word);
+                wit->$class->append(wit,res,word);
             }
         } else {
             B_bytes word;
             p = s->str+s->nbytes;
             NEW_UNFILLED_BYTES(word,p-q);
             memcpy(word->str,q,p-q);
-            B_listD_append(res,word);
+           wit->$class->append(wit,res,word);
         }
         return res;
     } else { // separator given
@@ -3578,20 +2841,20 @@ B_list B_bytesD_split(B_bytes s, B_bytes sep, B_int maxsplit) {
             $RAISE((B_BaseException)$NEW(B_ValueError,to$str("split for bytes: separator is empty string")));
         }
         if (s->nbytes==0) { // for some unfathomable reason, this is the behaviour of the Python method
-            B_listD_append(res,null_str);
+            wit->$class->append(wit,res,null_str);
             return res;
         }
         B_bytes ls, rs, ssep;
         rs = s;
         // Note: This builds many intermediate rs strings...
-        while (rs->nbytes>0 && B_listD_len(res) < from$int(maxsplit)) {
+        while (rs->nbytes>0 && res->length < from$int(maxsplit)) {
             B_tuple t = B_bytesD_partition(rs,sep);
             ssep = (B_bytes)t->components[1];
             rs =  (B_bytes)t->components[2];
-            B_listD_append(res,(B_bytes)t->components[0]);
+            wit->$class->append(wit,res,(B_bytes)t->components[0]);
         }
         if (ssep->nbytes>0)
-            B_listD_append(res,rs);
+            wit->$class->append(wit,res,rs);
         return res;
     }
 }
@@ -3600,6 +2863,7 @@ B_list B_bytesD_splitlines(B_bytes s, B_bool keepends) {
     if (!keepends)
         keepends = B_False;
     B_list res = $NEW(B_list,NULL,NULL);
+    B_SequenceD_list wit = B_SequenceD_listG_witness;
     if (s->nbytes==0) {
         return res;
     }
@@ -3617,14 +2881,14 @@ B_list B_bytesD_splitlines(B_bytes s, B_bool keepends) {
             memcpy(line->str,q,size);
             p+= 1 + winend;
             q = p;
-            B_listD_append(res,line);
+            wit->$class->append(wit,res,line);
         }
     }
     if (q < p) {
         B_bytes line;
         NEW_UNFILLED_BYTES(line,p-q);
         memcpy(line->str,q,p-q);
-        B_listD_append(res,line);
+        wit->$class->append(wit,res,line);
     }
     return res;
 } 
@@ -3678,376 +2942,36 @@ B_bytes B_bytesD_zfill(B_bytes s, B_int width) {
     return res;
 }
 
-// protocol methods; string implementation prototypes ///////////////////////////////////////////////////
-
-int B_bytesD_eq(B_bytes,B_bytes);
-int B_bytesD_neq(B_bytes,B_bytes);
-int B_bytesD_lt(B_bytes,B_bytes);
-int B_bytesD_le(B_bytes,B_bytes);
-int B_bytesD_gt(B_bytes,B_bytes);
-int B_bytesD_ge(B_bytes,B_bytes);
-
-B_Iterator B_bytesD_iter(B_bytes);
-
-B_bytes B_bytesD_fromiter(B_Iterable, $WORD);
-B_int B_bytesD_len(B_bytes str);
-
-int B_bytesD_contains (B_bytes, B_bytes);
-int B_bytesD_containsnot (B_bytes, B_bytes);
-
-B_int B_bytesD_getitem(B_bytes, int);
-B_bytes B_bytesD_getslice(B_bytes, B_slice);
+// protocol methods ///////////////////////////////////////////////////
  
-B_bytes B_bytesD_add(B_bytes, B_bytes);
-B_bytes B_bytesD_mul(B_bytes, B_int);
-
-// Protocol instances, using above prototypes 
-
 // Ord
 
-void B_OrdD_bytesD___serialize__(B_OrdD_bytes self, $Serial$state state) {
-}
-
-B_OrdD_bytes B_OrdD_bytesD___deserialize__(B_OrdD_bytes self, $Serial$state state) {
-    B_OrdD_bytes res = $DNEW(B_OrdD_bytes,state);
-    return res;
-}
-
-B_OrdD_bytes B_OrdD_bytesG_new() {
-    return $NEW(B_OrdD_bytes);
-}
-
+ 
 B_bool B_OrdD_bytesD___eq__ (B_OrdD_bytes wit, B_bytes a, B_bytes b) {
-    return toB_bool(B_bytesD_eq(a,b));
+    return toB_bool(strcmp((char *)a->str,(char *)b->str)==0);
 }
 
 B_bool B_OrdD_bytesD___ne__ (B_OrdD_bytes wit, B_bytes a, B_bytes b) {
-    return  toB_bool(B_bytesD_neq(a,b));
+    return  toB_bool(strcmp((char *)a->str,(char *)b->str)!=0);
 }
 
 B_bool B_OrdD_bytesD___lt__ (B_OrdD_bytes wit, B_bytes a, B_bytes b) {
-    return toB_bool(B_bytesD_lt(a,b));
+    return toB_bool(strcmp((char *)a->str,(char *)b->str)<0);
 }
 
 B_bool B_OrdD_bytesD___le__ (B_OrdD_bytes wit, B_bytes a, B_bytes b){
-    return toB_bool(B_bytesD_le(a,b));
+    return toB_bool(strcmp((char *)a->str,(char *)b->str)<=0);
 }
 
 B_bool B_OrdD_bytesD___gt__ (B_OrdD_bytes wit, B_bytes a, B_bytes b){
-    return toB_bool(B_bytesD_gt(a,b));
+    return toB_bool(strcmp((char *)a->str,(char *)b->str)>0);
 }
 
 B_bool B_OrdD_bytesD___ge__ (B_OrdD_bytes wit, B_bytes a, B_bytes b){
-    return toB_bool(B_bytesD_ge(a,b));
+    return toB_bool(strcmp((char *)a->str,(char *)b->str)>=0);
 }
 
 // Container
-
-void B_ContainerD_bytesD___serialize__(B_ContainerD_bytes self, $Serial$state state) {
-}
-
-B_ContainerD_bytes B_ContainerD_bytesD___deserialize__(B_ContainerD_bytes self, $Serial$state state) {
-    return  $DNEW(B_ContainerD_bytes,state);
-}
-
-B_Iterator B_ContainerD_bytesD___iter__ (B_ContainerD_bytes wit, B_bytes str) {
-    return B_bytesD_iter(str);
-}
-
-B_bytes B_ContainerD_bytesD___fromiter__ (B_ContainerD_bytes wit, B_Iterable wit2, $WORD iter) {
-    return B_bytesD_join(to$bytes(""),wit2,iter);
-}
-
-B_int B_ContainerD_bytesD___len__ (B_ContainerD_bytes wit, B_bytes str) {
-    return B_bytesD_len(str);
-}
-
-B_bool B_ContainerD_bytesD___contains__ (B_ContainerD_bytes wit, B_bytes str, B_bytes sub) {
-    return toB_bool(B_bytesD_contains(str, sub));
-}
-
-B_bool B_ContainerD_bytesD___containsnot__ (B_ContainerD_bytes wit, B_bytes str, B_bytes sub) {
-    return toB_bool(B_bytesD_containsnot(str, sub));
-}  
-
-// Sliceable
-
-void B_SliceableD_bytesD___serialize__(B_SliceableD_bytes self, $Serial$state state) {
-}
-
-B_SliceableD_bytes B_SliceableD_bytesD___deserialize__(B_SliceableD_bytes self, $Serial$state state) {
-    B_SliceableD_bytes res = $DNEW(B_SliceableD_bytes,state);
-    return res;
-}
-
-B_SliceableD_bytes B_SliceableD_bytesG_new() {
-    return $NEW(B_SliceableD_bytes);
-}
-B_int B_SliceableD_bytesD___getitem__ (B_SliceableD_bytes wit, B_bytes str, B_int i) {
-    return B_bytesD_getitem(str,from$int(i));
-}
-
-void B_SliceableD_bytesD___setitem__ (B_SliceableD_bytes wit, B_bytes str, B_int i, B_bytes val) {
-    fprintf(stderr,"Internal error: call to mutating method setitem on string");
-    exit(-1);
-}
-
-void B_SliceableD_bytesD___delitem__ (B_SliceableD_bytes wit, B_bytes str, B_int i) {
-    fprintf(stderr,"Internal error: call to mutating method delitem on string");
-    exit(-1);
-}
-
-B_bytes B_SliceableD_bytesD___getslice__ (B_SliceableD_bytes wit, B_bytes str, B_slice slc) {
-    return B_bytesD_getslice(str,slc);
-}
-
-void B_SliceableD_bytesD___setslice__ (B_SliceableD_bytes wit, B_bytes str, B_Iterable wit2, B_slice slc, $WORD iter) {
-    fprintf(stderr,"Internal error: call to mutating method setslice on string");
-    exit(-1);
-}
-
-void B_SliceableD_bytesD___delslice__ (B_SliceableD_bytes wit, B_bytes str, B_slice slc) {
-    fprintf(stderr,"Internal error: call to mutating method delslice on string");
-    exit(-1);
-}
-
-// Times
-
-void B_TimesD_bytesD___serialize__(B_TimesD_bytes self, $Serial$state state) {
-}
-
-B_TimesD_bytes B_TimesD_bytesD___deserialize__(B_TimesD_bytes self, $Serial$state state) {
-    B_TimesD_bytes res = $DNEW(B_TimesD_bytes,state);
-    return res;
-}
-
-B_bytes B_TimesD_bytesD___add__ (B_TimesD_bytes wit, B_bytes a, B_bytes b) {
-    return B_bytesD_add(a,b);
-}
-
-B_bytes B_TimesD_bytesD___mul__ (B_TimesD_bytes wit, B_bytes a, B_int n) {
-    return B_bytesD_mul(a,n);
-}
-
-// Hashable
-
-void B_HashableD_bytesD___serialize__(B_HashableD_bytes self, $Serial$state state) {
-}
-
-B_HashableD_bytes B_HashableD_bytesD___deserialize__(B_HashableD_bytes self, $Serial$state state) {
-    B_HashableD_bytes res = $DNEW(B_HashableD_bytes,state);
-    return res;
-}
-
-B_bool B_HashableD_bytesD___eq__ (B_HashableD_bytes wit, B_bytes a, B_bytes b) {
-    return toB_bool(B_bytesD_eq(a,b));
-}
-
-B_HashableD_bytes B_HashableD_bytesG_new() {
-    return $NEW(B_HashableD_bytes);
-}
-B_bool B_HashableD_bytesD___ne__ (B_HashableD_bytes wit, B_bytes a, B_bytes b) {
-    return toB_bool(B_bytesD_neq(a,b));
-}
-
-B_int B_HashableD_bytesD___hash__(B_HashableD_bytes wit, B_bytes str) {
-    return toB_int(B_bytesD_hash(str));
-}
-
-
-// Method tables for witness classes
-
-struct B_OrdD_bytesG_class  B_OrdD_bytesG_methods = {
-    "B_OrdD_bytes",
-    UNASSIGNED,
-    ($SuperG_class)&B_OrdG_methods,
-    (void (*)(B_OrdD_bytes))$default__init__,
-    B_OrdD_bytesD___serialize__,
-    B_OrdD_bytesD___deserialize__,
-    (B_bool (*)(B_OrdD_bytes))$default__bool__,
-    (B_str (*)(B_OrdD_bytes))$default__str__,
-    (B_str (*)(B_OrdD_bytes))$default__str__,
-    B_OrdD_bytesD___eq__,
-    B_OrdD_bytesD___ne__,
-    B_OrdD_bytesD___lt__,
-    B_OrdD_bytesD___le__,
-    B_OrdD_bytesD___gt__,
-    B_OrdD_bytesD___ge__
-};
-struct B_OrdD_bytes B_OrdD_bytes_instance = {&B_OrdD_bytesG_methods};
-B_OrdD_bytes B_OrdD_bytesG_witness = &B_OrdD_bytes_instance;
-
-struct B_ContainerD_bytesG_class  B_ContainerD_bytesG_methods = {
-    "B_ContainerD_bytes",
-    UNASSIGNED,
-    ($SuperG_class)&B_ContainerG_methods,
-    B_ContainerD_bytesD___init__,
-    B_ContainerD_bytesD___serialize__,
-    B_ContainerD_bytesD___deserialize__,
-    (B_bool (*)(B_ContainerD_bytes))$default__bool__,
-    (B_str (*)(B_ContainerD_bytes))$default__str__,
-    (B_str (*)(B_ContainerD_bytes))$default__str__,
-    B_ContainerD_bytesD___iter__,
-    NULL,
-    B_ContainerD_bytesD___len__,
-    B_ContainerD_bytesD___contains__,
-    B_ContainerD_bytesD___containsnot__
-};
-struct B_ContainerD_bytes B_ContainerD_bytes_instance = {&B_ContainerD_bytesG_methods};
-B_ContainerD_bytes B_ContainerD_bytesG_witness = &B_ContainerD_bytes_instance;
-
-
-struct B_SliceableD_bytesG_class  B_SliceableD_bytesG_methods = {
-    "B_SliceableD_bytes",
-    UNASSIGNED,
-    ($SuperG_class)&B_SliceableG_methods,
-    (void (*)(B_SliceableD_bytes))$default__init__,
-    B_SliceableD_bytesD___serialize__,
-    B_SliceableD_bytesD___deserialize__,
-    (B_bool (*)(B_SliceableD_bytes))$default__bool__,
-    (B_str (*)(B_SliceableD_bytes))$default__str__,
-    (B_str (*)(B_SliceableD_bytes))$default__str__,
-    B_SliceableD_bytesD___getitem__,
-    B_SliceableD_bytesD___setitem__,
-    B_SliceableD_bytesD___delitem__,
-    B_SliceableD_bytesD___getslice__,
-    B_SliceableD_bytesD___setslice__,
-    B_SliceableD_bytesD___delslice__
-};
-struct B_SliceableD_bytes B_SliceableD_bytes_instance = {&B_SliceableD_bytesG_methods};
-B_SliceableD_bytes B_SliceableD_bytesG_witness = &B_SliceableD_bytes_instance;
-
-struct B_TimesD_bytesG_class  B_TimesD_bytesG_methods = {
-    "B_TimesD_bytes",
-    UNASSIGNED,
-    ($SuperG_class)&B_TimesG_methods,
-    (void (*)(B_TimesD_bytes))$default__init__,
-    B_TimesD_bytesD___serialize__,
-    B_TimesD_bytesD___deserialize__,
-    (B_bool (*)(B_TimesD_bytes))$default__bool__,
-    (B_str (*)(B_TimesD_bytes))$default__str__,
-    (B_str (*)(B_TimesD_bytes))$default__str__,
-    B_TimesD_bytesD___add__,
-    (B_bytes (*)(B_TimesD_bytes, B_bytes, B_bytes))B_PlusD___iadd__,
-    B_TimesD_bytesD___mul__,
-    (B_bytes (*)(B_TimesD_bytes, B_bytes, B_int))B_TimesD___imul__,
-
-};
-struct B_TimesD_bytes B_TimesD_bytes_instance = {&B_TimesD_bytesG_methods};
-B_TimesD_bytes B_TimesD_bytesG_witness = &B_TimesD_bytes_instance;
-
-struct B_HashableD_bytesG_class  B_HashableD_bytesG_methods = {
-    "B_HashableD_bytes",
-    UNASSIGNED,
-    ($SuperG_class)&B_HashableG_methods,
-    (void (*)(B_HashableD_bytes))$default__init__,
-    B_HashableD_bytesD___serialize__,
-    B_HashableD_bytesD___deserialize__,
-    (B_bool (*)(B_HashableD_bytes))$default__bool__,
-    (B_str (*)(B_HashableD_bytes))$default__str__,
-    (B_str (*)(B_HashableD_bytes))$default__str__,
-    B_HashableD_bytesD___eq__,
-    B_HashableD_bytesD___ne__,
-    B_HashableD_bytesD___hash__
-};
-struct B_HashableD_bytes B_HashableD_bytes_instance = {&B_HashableD_bytesG_methods};
-B_HashableD_bytes B_HashableD_bytesG_witness = &B_HashableD_bytes_instance;
-
- 
-void B_ContainerD_bytesD___init__ (B_ContainerD_bytes wit) {
-}
-
-
-// Protocol methods; bytes implementations /////////////////////////////////////////////////////////////////////////////
-/* 
-   Note: We make bytes instances for Indexed and Sliceable even though these protocols 
-   include mutating methods. 
-*/
-
-// B_Ord ///////////////////////////////////////////////////////////////////////////////////////////////
-
-
-// TODO: We should consider how to normalize strings before comparisons
-
-int B_bytesD_eq(B_bytes a, B_bytes b) {
-    return (strcmp((char *)a->str,(char *)b->str)==0);
-}
-         
-int B_bytesD_neq(B_bytes a, B_bytes b) {
-    return !B_bytesD_eq(a,b);
-}
-
-// The comparisons below do lexicographic byte-wise comparisons.
-// Thus they do not in general reflect locale-dependent order conventions.
- 
-int B_bytesD_lt(B_bytes a, B_bytes b) {
-    return (strcmp((char *)a->str,(char *)b->str) < 0);
-}
- 
-int B_bytesD_le(B_bytes a, B_bytes b) {
-    return (strcmp((char *)a->str,(char *)b->str) <= 0);
-}
- 
-int B_bytesD_gt(B_bytes a, B_bytes b) {
-    return (strcmp((char *)a->str,(char *)b->str) > 0);
-}
- 
-int B_bytesD_ge(B_bytes a, B_bytes b) {
-    return (strcmp((char *)a->str,(char *)b->str) >= 0);
-}
- 
-// B_Hashable ///////////////////////////////////////////////////////////////////////////////////
-
-// hash function B_string_hash defined in hash.c
-
-// B_Times /////////////////////////////////////////////////////////////////////////////////////////////
-
-B_TimesD_bytes B_TimesD_bytesG_new() {
-    return $NEW(B_TimesD_bytes);
-}
- 
-B_bytes B_bytesD_add(B_bytes s, B_bytes t) {
-    B_bytes res;
-    NEW_UNFILLED_BYTES(res,s->nbytes + t->nbytes);
-    memcpy(res->str,s->str,s->nbytes);
-    memcpy(res->str+s->nbytes,t->str,t->nbytes);
-    return res;
-}
-
-B_bytes B_bytesD_mul (B_bytes a, B_int n) {
-    int nval = from$int(n);
-    if (nval <= 0)
-        return to$bytes("");
-    else {
-        B_bytes res;
-        NEW_UNFILLED_BYTES(res, a->nbytes * nval);
-        for (int i=0; i<nval; i++)
-            memcpy(res->str + i*a->nbytes,a->str,a->nbytes);
-        return res;
-    }
-}
-
-// Collection ///////////////////////////////////////////////////////////////////////////////////////
-
-B_int B_bytesD_len(B_bytes s) {
-    B_int res = toB_int(s->nbytes);
-    return res;
-}
-
-// B_Container ///////////////////////////////////////////////////////////////////////////
-
- 
-B_ContainerD_bytes B_ContainerD_bytesG_new() {
-    return $NEW(B_ContainerD_bytes);
-}
-
-int B_bytesD_contains(B_bytes s, B_bytes sub) {
-    return bmh(s->str,sub->str,s->nbytes,sub->nbytes) > 0;
-}
-
-int B_bytesD_containsnot(B_bytes s, B_bytes sub) {
-    return !B_bytesD_contains(s,sub);
-}
 
 // Iterable ///////////////////////////////////////////////////////////////////////////
 
@@ -4055,9 +2979,10 @@ B_IteratorB_bytes B_IteratorB_bytesG_new(B_bytes str) {
     return $NEW(B_IteratorB_bytes, str);
 }
 
-void B_IteratorB_bytesD_init(B_IteratorB_bytes self, B_bytes str) {
+B_NoneType B_IteratorB_bytesD_init(B_IteratorB_bytes self, B_bytes str) {
     self->src = str;
     self->nxt = 0;
+    return B_None;
 }
 
 void B_IteratorB_bytesD_serialize(B_IteratorB_bytes self,$Serial$state state) {
@@ -4089,110 +3014,119 @@ static B_int B_IteratorB_bytesD_next(B_IteratorB_bytes self) {
     return self->nxt >= self->src->nbytes ? NULL : toB_int(self->src->str[self->nxt++]);
 }
 
-B_Iterator B_bytesD_iter(B_bytes str) {
-    return (B_Iterator)$NEW(B_IteratorB_bytes,str);
-}
-
 struct B_IteratorB_bytesG_class B_IteratorB_bytesG_methods = {"B_IteratorB_bytes",UNASSIGNED,($SuperG_class)&B_IteratorG_methods, B_IteratorB_bytesD_init,
                                                         B_IteratorB_bytesD_serialize, B_IteratorB_bytes$_deserialize,
                                                         B_IteratorB_bytesD_bool, B_IteratorB_bytesD_str,  B_IteratorB_bytesD_str, B_IteratorB_bytesD_next};
 
-
-// Indexed ///////////////////////////////////////////////////////////////////////////
-
-B_int B_bytesD_getitem(B_bytes self, int ix) {
-    int ix0 = ix < 0 ? self->nbytes + ix : ix;
-    if (ix0<0 || ix0 >= self->nbytes)
-        $RAISE((B_BaseException)$NEW(B_IndexError,to$str("getitem for bytes: indexing outside array")));
-    return toB_int((int)self->str[ix0]);
+B_Iterator B_ContainerD_bytesD___iter__ (B_ContainerD_bytes wit, B_bytes str) {
+    return (B_Iterator)$NEW(B_IteratorB_bytes,str);
 }
- 
-// Sliceable //////////////////////////////////////////////////////////////////////////////////////
 
-B_bytes B_bytesD_getslice(B_bytes s, B_slice slc) {
-    int start, stop, step, slen;
-    normalize_slice(slc, s->nbytes, &slen, &start, &stop, &step);
+B_bytes B_ContainerD_bytesD___fromiter__ (B_ContainerD_bytes wit, B_Iterable wit2, $WORD iter) {
+    return B_bytesD_join(to$bytes(""),wit2,iter);
+}
+
+B_int B_ContainerD_bytesD___len__ (B_ContainerD_bytes wit, B_bytes str) {
+    return toB_int(str->nbytes);
+}
+
+B_bool B_ContainerD_bytesD___contains__ (B_ContainerD_bytes wit, B_bytes str, B_int n) {
+    long res = 0;
+    for (int i=0; i < str->nbytes; i++) {
+        if (str->str[i] == (unsigned char)from$int(n)) {
+            res = 1;
+            break;
+        }
+    }
+    return toB_bool(res);
+}
+
+B_bool B_ContainerD_bytesD___containsnot__ (B_ContainerD_bytes wit, B_bytes str, B_int n) {
+    return toB_bool(!B_ContainerD_bytesD___contains__(wit, str, n)->val);
+}  
+
+// Sliceable
+
+B_int B_SliceableD_bytesD___getitem__ (B_SliceableD_bytes wit, B_bytes str, B_int n) {
+    long ix = from$int(n);
+    long ix0 = ix < 0 ? str->nbytes + ix : ix;
+    if (ix0<0 || ix0 >= str->nbytes)
+        $RAISE((B_BaseException)$NEW(B_IndexError,to$str("getitem for bytes: indexing outside array")));
+    return toB_int((long)str->str[ix0]);
+}
+
+B_NoneType B_SliceableD_bytesD___setitem__ (B_SliceableD_bytes wit, B_bytes str, B_int i, B_int val) {
+    $RAISE((B_BaseException)$NEW(B_NotImplementedError,to$str("call to mutating method setitem on bytes")));
+    return B_None;
+}
+
+B_NoneType B_SliceableD_bytesD___delitem__ (B_SliceableD_bytes wit, B_bytes str, B_int i) {
+    $RAISE((B_BaseException)$NEW(B_NotImplementedError,to$str("call to mutating method delitem on bytes")));
+    return B_None;
+}
+
+B_bytes B_SliceableD_bytesD___getslice__ (B_SliceableD_bytes wit, B_bytes str, B_slice slc) {
+    long start, stop, step, slen;
+    normalize_slice(slc, str->nbytes, &slen, &start, &stop, &step);
     //slice notation has been eliminated and default values applied
     B_bytes res;
     NEW_UNFILLED_BYTES(res,slen);
     int t = start;
     for (int i=0; i<slen; i++) {
-        res->str[i] = s->str[t];
+        res->str[i] = str->str[t];
         t += step;
     }
     return res;
 }
 
-
-
-// General methods ////////////////////////////////////////////////////////////// 
-
-B_bytes B_bytesG_new(B_Iterable iter, $WORD wit) {
-    return $NEW(B_bytes, iter, wit);
+B_NoneType B_SliceableD_bytesD___setslice__ (B_SliceableD_bytes wit, B_bytes str, B_Iterable wit2, B_slice slc, $WORD iter) {
+    $RAISE((B_BaseException)$NEW(B_NotImplementedError,to$str("call to mutating method setslice on bytes")));
+    return B_None;
 }
 
-void B_bytesD_init(B_bytes self, B_Iterable wit, $WORD iter) {
-    B_list lst = B_listD_fromiter(wit->$class->__iter__(wit,iter));
-    int len = lst->length;
-    self->nbytes = len;
-    self->str = malloc(len+1);
-    self->str[len] = 0;
-    for (int i=0; i< len; i++) {
-        int n = from$int((B_int)lst->data[i]);
-        if (0<=n && n <= 255)
-            self->str[i] = n;
-        else
-            $RAISE((B_BaseException)$NEW(B_ValueError,to$str("bytes constructor: element outside [0..255]")));
+B_NoneType B_SliceableD_bytesD___delslice__ (B_SliceableD_bytes wit, B_bytes str, B_slice slc) {
+    $RAISE((B_BaseException)$NEW(B_NotImplementedError,to$str("call to mutating method delslice on bytes")));
+    return B_None;
+}
+
+// Times
+
+ 
+B_bytes B_TimesD_bytesD___add__ (B_TimesD_bytes wit, B_bytes s, B_bytes t) {
+    B_bytes res;
+    NEW_UNFILLED_BYTES(res,s->nbytes + t->nbytes);
+    memcpy(res->str,s->str,s->nbytes);
+    memcpy(res->str+s->nbytes,t->str,t->nbytes);
+    return res;
+}
+
+B_bytes B_TimesD_bytesD___mul__ (B_TimesD_bytes wit, B_bytes a, B_int n) {
+    int nval = from$int(n);
+    if (nval <= 0)
+        return to$bytes("");
+    else {
+        B_bytes res;
+        NEW_UNFILLED_BYTES(res, a->nbytes * nval);
+        for (int i=0; i<nval; i++)
+            memcpy(res->str + i*a->nbytes,a->str,a->nbytes);
+        return res;
     }
 }
 
-B_bool B_bytesD_bool(B_bytes s) {
-    return toB_bool(s->nbytes > 0);
-};
+// Hashable
 
-B_str B_bytesD_str(B_bytes s) {
-    int lens = s->nbytes+3;
-    B_str str;
-    NEW_UNFILLED_STR(str,lens,lens);
-    unsigned char *p = str->str;
-    /*
-      The function $ascii escapes all occurrences of quotes. We do not want that 
-      for the delimiter pair, so we use the hackish solution to first set p[1] and
-      p[lens-1] to space, then call $ascii and afterwards introduce the delimiting quotes.
-    */
-    p[0] = 'b';
-    p[1] = ' ';
-    p[lens-1] = ' ';
-    memcpy(p+2,s->str,lens-3);
-    B_str res = $ascii(str);
-    res->str[1] = '"';
-    res->str[res->nbytes-1] = '"';
-    return res;
+
+B_bool B_HashableD_bytesD___eq__ (B_HashableD_bytes wit, B_bytes a, B_bytes b) {
+    return toB_bool(strcmp((char *)a->str,(char *)b->str)==0);
 }
 
-
-void B_bytesD_serialize(B_bytes str,$Serial$state state) {
-    int nWords = str->nbytes/sizeof($WORD) + 1;         // # $WORDS needed to store str->str, including terminating 0.
-    $ROW row = $add_header(STR_ID,1+nWords,state);
-    long nbytes = (long)str->nbytes;                    
-    memcpy(row->blob,&nbytes,sizeof($WORD));            
-    memcpy(row->blob+1,str->str,nbytes+1);
+B_bool B_HashableD_bytesD___ne__ (B_HashableD_bytes wit, B_bytes a, B_bytes b) {
+    return toB_bool(strcmp((char *)a->str,(char *)b->str)!=0);
 }
 
-B_bytes B_bytesD_deserialize(B_bytes self, $Serial$state state) {
-    $ROW this = state->row;
-    state->row =this->next;
-    state->row_no++;
-    B_bytes res = malloc(sizeof(struct B_bytes));
-    long nbytes;
-    memcpy(&nbytes,this->blob,sizeof($WORD));
-    res->$class = &B_bytesG_methods;
-    res->nbytes = (long)nbytes;
-    res->str = malloc(nbytes+1);
-    memcpy(res->str,this->blob+2,nbytes+1);
-    return res;
+B_int B_HashableD_bytesD___hash__(B_HashableD_bytes wit, B_bytes str) {
+    return toB_int(B_bytesD_hash(str));
 }
-  
 
 // Builtin functions involving strings /////////////////////////////////////////////
 

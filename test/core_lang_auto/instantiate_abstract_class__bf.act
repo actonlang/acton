@@ -7,7 +7,8 @@ class Abstract ():
     pass
 
 # This should lead to compilation error
-bad = Abstract()
+# Here we removed a right parenthesis to get compilation error. Otherwise the test succeeds...
+bad = Abstract(
 
 class Concrete (Abstract):
     def __init__(self, x: Abstract):

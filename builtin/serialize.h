@@ -61,6 +61,8 @@ $Serializable $deserialize_file(char *file);
 
 // B_HashableD_WORDG_witness is needed to create the MappingB_dict witness necessary for serialization.
 
+typedef struct B_HashableD_WORD *B_HashableD_WORD;
+
 struct B_HashableD_WORDG_class {
     char *$GCINFO;
     int $class_id;

@@ -16,7 +16,7 @@ B_range B_rangeG_new(B_int start, B_int stop, B_int step) {
     return $NEW(B_range, start, stop, step);
 }
 
-void B_rangeD___init__(B_range self, B_int start, B_int stop, B_int step) {
+B_NoneType B_rangeD___init__(B_range self, B_int start, B_int stop, B_int step) {
     if (stop) {
         self->start = from$int(start);
         self->stop = from$int(stop);
@@ -33,6 +33,7 @@ void B_rangeD___init__(B_range self, B_int start, B_int stop, B_int step) {
             self->step = stp;
     } else
         self->step = 1;
+    return B_None;
 }
 
 
@@ -74,10 +75,6 @@ static $WORD B_IteratorB_rangeD_next(B_IteratorB_range self) {
         return res > self->src->stop ? toB_int(res) : NULL;
 }
 
-B_IteratorB_range B_IteratorB_rangeG_new(B_range rng) {
-    return $NEW(B_IteratorB_range,rng);
-}
-
 void B_IteratorB_rangeD_init(B_IteratorB_range self, B_range rng) {
     self->src = rng;
     self->nxt = 0;
@@ -105,20 +102,6 @@ B_IteratorB_range B_IteratorB_range$_deserialize(B_IteratorB_range self, $Serial
     return res;
 }
 
-
-struct B_rangeG_class B_rangeG_methods = {
-    "B_range",
-    UNASSIGNED,
-    ($SuperG_class)&B_valueG_methods,
-    B_rangeD___init__,
-    B_rangeD___serialize__,
-    B_rangeD___deserialize__,
-    B_rangeD___bool__,
-    B_rangeD___str__,
-    B_rangeD___str__
-};
-
-
 struct B_IteratorB_rangeG_class B_IteratorB_rangeG_methods = {
     "B_IteratorB_range",
     UNASSIGNED,
@@ -136,41 +119,7 @@ struct B_IteratorB_rangeG_class B_IteratorB_rangeG_methods = {
 //  return (B_Iterator)$NEW(B_IteratorB_range,rng);
 //}
 
-B_IterableD_range B_IterableD_rangeG_new() {
-    return $NEW(B_IterableD_range);
-}
-
-void B_IterableD_rangeD___init__ (B_IterableD_range wit){
-    return;
-}
-
-void B_IterableD_rangeD___serialize__(B_IterableD_range self, $Serial$state state) {
-}
-
-B_IterableD_range B_IterableD_rangeD___deserialize__(B_IterableD_range res, $Serial$state state) {
-    if(!res)
-        res = $DNEW(B_IterableD_range,state);
-    return res;
-}
-
+ 
 B_Iterator B_IterableD_rangeD___iter__ (B_IterableD_range wit, B_range rng) {
     return (B_Iterator)$NEW(B_IteratorB_range,rng);
 }
-
-struct B_IterableD_rangeG_class B_IterableD_rangeG_methods = {
-    "B_IterableD_range",
-    UNASSIGNED,
-    ($SuperG_class)&B_IterableG_methods,
-    B_IterableD_rangeD___init__,
-    B_IterableD_rangeD___serialize__,
-    B_IterableD_rangeD___deserialize__,
-    (B_bool (*)(B_IterableD_range))$default__bool__,
-    (B_str (*)(B_IterableD_range))$default__str__,
-    (B_str (*)(B_IterableD_range))$default__str__,
-    B_IterableD_rangeD___iter__
-};
-
-struct B_IterableD_range B_IterableD_range_instance = {&B_IterableD_rangeG_methods};
-B_IterableD_range B_IterableD_rangeG_witness = &B_IterableD_range_instance;
-
- 

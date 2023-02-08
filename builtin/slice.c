@@ -19,14 +19,13 @@
    - Otherwise, 
    - on input, len must be the # of elements in the sequence being sliced
    - on output 
-   - 0 <= *start < len is the starting position
-   - 0 <= *stop < len is the ending position (*non-inclusive*!)
-   - *step is the step size
-   - *slen is the # of elements in the slice. 
+      - 0 <= *start < len is the starting position
+      - 0 <= *stop < len is the ending position (*non-inclusive*!)
+      - *step is the step size
+      - *slen is the # of elements in the slice. 
 */
 
-
-void normalize_slice(B_slice slc, int len, int *slen, int *start, int *stop, int *step) {
+void normalize_slice(B_slice slc, long len, long *slen, long *start, long *stop, long *step) {
     if (slc->step == NULL)
         *step = 1;
     else
@@ -59,22 +58,43 @@ B_slice B_sliceG_new(B_int start,B_int stop,B_int step) {
     return $NEW(B_slice,start,stop,step);
 }
 
-void B_sliceD__init__(B_slice s, B_int start, B_int stop, B_int step) {
+B_NoneType B_sliceD___init__(B_slice s, B_int start, B_int stop, B_int step) {
     if (start) {
-        s->start = malloc(sizeof(int));
+        s->start = malloc(sizeof(long));
         *s->start = from$int(start);
     } else
         s->start = NULL;
     if (stop) {
-        s->stop = malloc(sizeof(int));
+        s->stop = malloc(sizeof(long));
         *s->stop = from$int(stop);
     } else
         s->stop = NULL;
     if (step) {
-        s->step = malloc(sizeof(int));
+        s->step = malloc(sizeof(long));
         *s->step = from$int(step);
     } else
         s->step = NULL;
+    return B_None;
 }
 
-struct B_sliceG_class B_sliceG_methods = {"B_slice",UNASSIGNED,($SuperG_class)&B_valueG_methods,B_sliceD__init__,NULL,NULL,NULL,NULL};
+void B_sliceD___serialize__ (B_slice self, $Serial$state state) {
+    $ROW row = $add_header(SLICE_ID,3,state);
+    row->blob[0] = ($WORD)*self->start;
+    row->blob[1] = ($WORD)*self->stop;
+    row->blob[2] = ($WORD)*self->step;
+}
+B_slice B_sliceD___deserialize__ (B_slice self, $Serial$state state) {
+    $ROW this = state->row;
+    state->row = this->next;
+    state->row_no++;
+    B_slice res = malloc(sizeof(struct B_slice));
+    res->$class = &B_sliceG_methods;
+    res->start = malloc(sizeof(long));
+    res->stop = malloc(sizeof(long));
+    res->step = malloc(sizeof(long));
+    *res->start = (long)this->blob[0];
+    *res->stop = (long)this->blob[1];
+    *res->step = (long)this->blob[2];
+    return res;
+}
+

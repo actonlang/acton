@@ -14,7 +14,7 @@
 
 #include <stdarg.h>
 
-void B_tupleD_init(B_tuple self,int size ,...) {
+B_NoneType B_tupleD___init__(B_tuple self,int size ,...) {
     va_list args;
     va_start(args,size);
     self->size = size;
@@ -22,23 +22,25 @@ void B_tupleD_init(B_tuple self,int size ,...) {
     for (int i=0; i<size; i++)
         self->components[i] = va_arg(args,$WORD);
     va_end(args);
+    return B_None;
 }
 
-B_bool B_tupleD_bool(B_tuple self) {
+B_bool B_tupleD___bool__(B_tuple self) {
     return toB_bool(self->size>0);
 }
 
-B_str B_tupleD_str(B_tuple self) {
+B_str B_tupleD___str__(B_tuple self) {
     B_list s2 = B_listD_new(self->size);
+    B_SequenceD_list wit = B_SequenceD_listG_witness;
     for (int i=0; i< self->size; i++) {
         B_value elem = (B_value)self->components[i];
-        B_listD_append(s2,elem->$class->__repr__(elem));
+        wit->$class->append(wit,s2,elem->$class->__repr__(elem));
     }
     return B_strD_join_par('(',s2,')');
 }
 
 
-void B_tupleD_serialize(B_tuple self, $Serial$state state) {
+void B_tupleD___serialize__(B_tuple self, $Serial$state state) {
     B_int prevkey = (B_int)B_dictD_get(state->done,(B_Hashable)B_HashableD_WORDG_witness,self,NULL);
     if (prevkey) {
         $val_serialize(-TUPLE_ID,&prevkey->val,state);
@@ -52,7 +54,7 @@ void B_tupleD_serialize(B_tuple self, $Serial$state state) {
     }
 }
 
-B_tuple B_tupleD_deserialize(B_tuple self, $Serial$state state) {
+B_tuple B_tupleD___deserialize__(B_tuple self, $Serial$state state) {
     $ROW this = state->row;
     state->row = this->next;
     state->row_no++;
@@ -75,59 +77,59 @@ struct B_tupleG_class B_tupleG_methods = {
     "tuple",
     UNASSIGNED,
     ($SuperG_class)&B_valueG_methods,
-    B_tupleD_init,
-    B_tupleD_serialize,
-    B_tupleD_deserialize,
-    B_tupleD_bool,
-    B_tupleD_str,
-    B_tupleD_str
+    B_tupleD___init__,
+    B_tupleD___serialize__,
+    B_tupleD___deserialize__,
+    B_tupleD___bool__,
+    B_tupleD___str__,
+    B_tupleD___str__
 };
-
 // Iterators over tuples ///////////////////////////////////////////////////////
 
-static $WORD B_IteratorB_tupleD_next(B_IteratorB_tuple self) {
+static $WORD B_IteratorD_tupleD_next(B_IteratorD_tuple self) {
     return self->nxt >= self->src->size ? NULL : self->src->components[self->nxt++];
 }
 
-void B_IteratorB_tupleD_init(B_IteratorB_tuple self, B_tuple lst) {
+B_NoneType B_IteratorD_tupleD_init(B_IteratorD_tuple self, B_tuple lst) {
     self->src = lst;
     self->nxt = 0;
+    return B_None;
 }
 
-B_bool B_IteratorB_tupleD_bool(B_IteratorB_tuple self) {
+B_bool B_IteratorD_tupleD_bool(B_IteratorD_tuple self) {
     return B_True;
 }
 
-B_str B_IteratorB_tupleD_str(B_IteratorB_tuple self) {
+B_str B_IteratorD_tupleD_str(B_IteratorD_tuple self) {
     char *s;
     asprintf(&s,"<tuple iterator object at %p>",self);
     return to$str(s);
 }
-void B_IteratorB_tupleD_serialize(B_IteratorB_tuple self,$Serial$state state) {
+void B_IteratorD_tupleD_serialize(B_IteratorD_tuple self,$Serial$state state) {
     $step_serialize(self->src,state);
     $step_serialize(toB_int(self->nxt),state);
 }
 
-B_IteratorB_tuple B_IteratorB_tuple$_deserialize(B_IteratorB_tuple res, $Serial$state state) {
+B_IteratorD_tuple B_IteratorD_tuple$_deserialize(B_IteratorD_tuple res, $Serial$state state) {
     if (!res)
-        res = $DNEW(B_IteratorB_tuple,state);
+        res = $DNEW(B_IteratorD_tuple,state);
     res->src = $step_deserialize(state);
     res->nxt = from$int((B_int)$step_deserialize(state));
     return res;
 }
 
-struct B_IteratorB_tupleG_class B_IteratorB_tupleG_methods = {"B_IteratorB_tuple",UNASSIGNED,($SuperG_class)&B_IteratorG_methods,B_IteratorB_tupleD_init,
-                                                        B_IteratorB_tupleD_serialize,B_IteratorB_tuple$_deserialize,B_IteratorB_tupleD_bool,B_IteratorB_tupleD_str,B_IteratorB_tupleD_str,B_IteratorB_tupleD_next};
+struct B_IteratorD_tupleG_class B_IteratorD_tupleG_methods = {"B_IteratorD_tuple",UNASSIGNED,($SuperG_class)&B_IteratorG_methods,B_IteratorD_tupleD_init,
+                                                        B_IteratorD_tupleD_serialize,B_IteratorD_tuple$_deserialize,B_IteratorD_tupleD_bool,B_IteratorD_tupleD_str,B_IteratorD_tupleD_str,B_IteratorD_tupleD_next};
 
 
 // Iterable ///////////////////////////////////////////////////////////////
 
 B_Iterator B_IterableD_tupleD___iter__(B_IterableD_tuple wit, B_tuple self) {
-    return (B_Iterator)$NEW(B_IteratorB_tuple,self);
+    return (B_Iterator)$NEW(B_IteratorD_tuple,self);
 }
 
-void B_IterableD_tupleD___init__(B_IterableD_tuple self) {
-    return;
+B_NoneType B_IterableD_tupleD___init__(B_IterableD_tuple self) {
+    return B_None;
 }
 
 void B_IterableD_tupleD___serialize__(B_IterableD_tuple self, $Serial$state state) {
@@ -149,8 +151,8 @@ struct B_IterableD_tupleG_class B_IterableD_tupleG_methods = {
     (B_str (*)(B_IterableD_tuple))$default__str__,
     B_IterableD_tupleD___iter__
 };
-struct B_IterableD_tuple B_IterableD_tuple$instance = {&B_IterableD_tupleG_methods};
-struct B_IterableD_tuple *B_IterableD_tupleG_witness = &B_IterableD_tuple$instance;
+//struct B_IterableD_tuple B_IterableD_tuple$instance = {&B_IterableD_tupleG_methods};
+//struct B_IterableD_tuple *B_IterableD_tupleG_witness = &B_IterableD_tuple$instance;
 
 // Sliceable ///////////////////////////////////////////////////////////////
 
@@ -162,8 +164,8 @@ B_SliceableD_tuple B_SliceableD_tupleD___deserialize__(B_SliceableD_tuple self, 
     return res;
 }
 
-void B_SliceableD_tupleD___init__ (B_SliceableD_tuple wit) {
-    return;
+B_NoneType B_SliceableD_tupleD___init__ (B_SliceableD_tuple wit) {
+    return B_None;
 }
 
 $WORD B_SliceableD_tupleD___getitem__ (B_SliceableD_tuple wit, B_tuple self, B_int n) {
@@ -177,20 +179,20 @@ $WORD B_SliceableD_tupleD___getitem__ (B_SliceableD_tuple wit, B_tuple self, B_i
 }
 
 
-void B_SliceableD_tupleD___setitem__ (B_SliceableD_tuple wit, B_tuple self, B_int ix, $WORD elem) {
-    fprintf(stderr,"%s\n","internal error: setitem on immutable tuple");
-    exit(-1);
+B_NoneType B_SliceableD_tupleD___setitem__ (B_SliceableD_tuple wit, B_tuple self, B_int ix, $WORD elem) {
+    $RAISE((B_BaseException)$NEW(B_NotImplementedError,to$str("call to mutating method setitem on tuple")));
+    return B_None;
 }
 
-void B_SliceableD_tupleD___delitem__ (B_SliceableD_tuple wit, B_tuple self, B_int ix) {
-    fprintf(stderr,"%s\n","internal error: delitem on immutable tuple");
-    exit(-1);
+B_NoneType B_SliceableD_tupleD___delitem__ (B_SliceableD_tuple wit, B_tuple self, B_int ix) {
+    $RAISE((B_BaseException)$NEW(B_NotImplementedError,to$str("call to mutating method delitem on tuple")));
+    return B_None;
 }
   
 
 B_tuple B_SliceableD_tupleD___getslice__ (B_SliceableD_tuple wit, B_tuple self, B_slice slc) {
     int size = self->size;
-    int start, stop, step, slen;
+    long start, stop, step, slen;
     normalize_slice(slc, size, &slen, &start, &stop, &step);
     //slice notation have been eliminated and default values applied.
     // slen now is the length of the slice
@@ -206,14 +208,14 @@ B_tuple B_SliceableD_tupleD___getslice__ (B_SliceableD_tuple wit, B_tuple self, 
     return res;
 }
 
-void B_SliceableD_tupleD___setslice__ (B_SliceableD_tuple wit, B_tuple self, B_Iterable wit2, B_slice slc, $WORD iter) {
-    fprintf(stderr,"%s\n","internal error: setslice on immutable tuple");
-    exit(-1);
+B_NoneType B_SliceableD_tupleD___setslice__ (B_SliceableD_tuple wit, B_tuple self, B_Iterable wit2, B_slice slc, $WORD iter) {
+    $RAISE((B_BaseException)$NEW(B_NotImplementedError,to$str("call to mutating method setslice on tuple")));
+    return B_None;
 }
 
-void B_SliceableD_tupleD___delslice__ (B_SliceableD_tuple wit, B_tuple self, B_slice slc) {
-    fprintf(stderr,"%s\n","internal error: delslice on immutable tuple");
-    exit(-1);
+B_NoneType B_SliceableD_tupleD___delslice__ (B_SliceableD_tuple wit, B_tuple self, B_slice slc) {
+    $RAISE((B_BaseException)$NEW(B_NotImplementedError,to$str("call to mutating method delslice on tuple")));
+    return B_None;
 }
 
 struct B_SliceableD_tupleG_class B_SliceableD_tupleG_methods = {
@@ -233,14 +235,13 @@ struct B_SliceableD_tupleG_class B_SliceableD_tupleG_methods = {
     B_SliceableD_tupleD___setslice__,
     B_SliceableD_tupleD___delslice__
 };
-struct  B_SliceableD_tuple B_SliceableD_tuple$instance = {&B_SliceableD_tupleG_methods};
-struct B_SliceableD_tuple *B_SliceableD_tupleG_witness = &B_SliceableD_tuple$instance;
 
 // Hashable ///////////////////////////////////////////////////////////////
 
-void B_HashableD_tupleD___init__ (B_HashableD_tuple wit, int n, B_Hashable *comps) {
+B_NoneType B_HashableD_tupleD___init__ (B_HashableD_tuple wit, int n, B_Hashable *comps) {
     wit->W_HashableB_tuple$size = n;
     wit->W_Hashable = comps;
+    return B_None;
 }
 
 void B_HashableD_tupleD___serialize__(B_HashableD_tuple self, $Serial$state state) {
@@ -286,4 +287,3 @@ struct B_HashableD_tupleG_class B_HashableD_tupleG_methods = {
     B_HashableD_tupleD___ne__,
     B_HashableD_tupleD___hash__
 };
-

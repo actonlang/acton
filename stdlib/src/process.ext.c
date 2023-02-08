@@ -84,11 +84,11 @@ $R processQ_ProcessD__create_process (processQ_Process self, $Cont c$cont) {
 
     req->data = process_data;
 
-    char **args = (char **)malloc((B_listD_len(self->cmd)+1) * sizeof(char *));
+    char **args = (char **)malloc((self->cmd->length+1) * sizeof(char *));
 
     int i;
-    for (i = 0; i < B_listD_len(self->cmd); i++) {
-        args[i] = fromB_str(B_listD_getitem(self->cmd, i));
+    for (i = 0; i < self->cmd->length; i++) {
+        args[i] = (char *)fromB_str(self->cmd->data[i]);
     }
     args[i] = NULL;
 
@@ -99,10 +99,10 @@ $R processQ_ProcessD__create_process (processQ_Process self, $Cont c$cont) {
     if (self->env == B_None) {
         options->env = NULL;
     } else {
-        char **env = (char **)calloc((B_dictD_len(self->env)+1), sizeof(char *));
-        B_InteratorD_dict_items iter = $NEW(B_InteratorD_dict_items, self->env);
+        char **env = (char **)calloc((self->env->numelements+1), sizeof(char *));
+        B_IteratorD_dict_items iter = $NEW(B_IteratorD_dict_items, self->env);
         B_tuple item;
-        for (i=0; i < B_dictD_len(self->env); i++) {
+        for (i=0; i < self->env->numelements; i++) {
             item = (B_tuple)iter->$class->__next__(iter);
             char *key = fromB_str((B_str)item->components[0]);
             char *value = fromB_str((B_str)item->components[1]);

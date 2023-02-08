@@ -36,6 +36,7 @@ B_int $mallocB_int() {
     return res;
 }
 
+B_int B_IntegralD_intD___lshift__(B_IntegralD_int wit,  B_int a, B_int b);
 
 B_int B_intG_new(B_atom a) {
     if ($ISINSTANCE(a,B_int)->val) return (B_int)a;
@@ -70,11 +71,12 @@ B_int B_intG_new(B_atom a) {
     exit(-1);
 }
 
-void B_intD_init(B_int self, B_atom a){
+B_NoneType B_intD___init__(B_int self, B_atom a){
     self->val = B_intG_new(a)->val;
+    return B_None;
 }
 
-void B_intD_serialize(B_int self,$Serial$state state) {
+void B_intD___serialize__(B_int self,$Serial$state state) {
     B_int prevkey = (B_int)B_dictD_get(state->done,(B_Hashable)B_HashableD_WORDG_witness,self,NULL);
     if (prevkey) {
         long pk = from$int(prevkey);
@@ -87,12 +89,12 @@ void B_intD_serialize(B_int self,$Serial$state state) {
     memcpy(&row->blob[1],self->val.n,labs(self->val.size)*sizeof(long));
 }
 
-B_int B_intD_deserialize(B_int res,$Serial$state state) {
+B_int B_intD___deserialize__(B_int res,$Serial$state state) {
     $ROW this = state->row;
     state->row = this->next;
     state->row_no++;
     if (this->class_id < 0) {
-        return (B_int)B_dictD_get(state->done,(B_Hashable)B_HashableD_intG_witness,toB_int((int)this->blob[0]),NULL);
+        return (B_int)B_dictD_get(state->done,(B_Hashable)B_HashableD_intG_witness,toB_int((long)this->blob[0]),NULL);
     } else {
         if (!res)
             res = $mallocB_int();
@@ -106,26 +108,14 @@ B_int B_intD_deserialize(B_int res,$Serial$state state) {
     }
 }
 
-B_bool B_intD_bool(B_int n) {
+B_bool B_intD___bool__(B_int n) {
     return toB_bool(zz_cmpi(&n->val,0));
 }
 
-B_str B_intD_str(B_int n) {
+B_str B_intD___str__(B_int n) {
     return to$str($getB_str(&n->val));
 }
   
-struct B_intG_class B_intG_methods = {
-    "B_int",
-    UNASSIGNED,
-    ($SuperG_class)&B_atomG_methods,
-    B_intD_init,
-    B_intD_serialize,
-    B_intD_deserialize,
-    B_intD_bool,
-    B_intD_str,
-    B_intD_str
-};
-
 B_int zz$toB_int(zz_ptr n) {
     B_int res = $mallocB_int();
     res->$class = &B_intG_methods;
@@ -137,25 +127,14 @@ B_int zz$toB_int(zz_ptr n) {
 
 // B_IntegralD_int /////////////////////////////////////////////////////////////////////////
 
-void B_IntegralD_intD___serialize__(B_IntegralD_int self, $Serial$state state) {
-    $step_serialize(self->W_Logical, state);
-    $step_serialize(self->W_Minus, state);
-}
-
-B_IntegralD_int B_IntegralD_intD___deserialize__(B_IntegralD_int self, $Serial$state state) {
-    B_IntegralD_int res = $DNEW(B_IntegralD_int,state);
-    res->W_Logical = (B_Logical)$step_deserialize(state);
-    res->W_Minus = (B_Minus)$step_deserialize(state);
-    return res;
-}
-
+ 
 B_int B_IntegralD_intD___add__(B_IntegralD_int wit,  B_int a, B_int b) {
     B_int res = $mallocB_int();
     zz_add(&res->val,&a->val,&b->val);
     return res;
 }
 
-B_complex B_IntegralD_intD___complx__(B_IntegralD_int wit, B_int a) {
+B_complex B_IntegralD_intD___complex__(B_IntegralD_int wit, B_int a) {
     fprintf(stderr,"Number.__complex__ not implemented for int");
     exit(1);
 }
@@ -191,12 +170,12 @@ B_int B_IntegralD_intD___pos__(B_IntegralD_int wit,  B_int a) {
     return a;
 }
 
-$WORD B_IntegralD_int$real(B_IntegralD_int wit, B_int a, B_Real wit2) {
+$WORD B_IntegralD_intD_real(B_IntegralD_int wit, B_int a, B_Real wit2) {
     fprintf(stderr,"Number.__real__ not implemented for int");
     exit(1);
 }
 
-$WORD B_IntegralD_int$imag(B_IntegralD_int wit, B_int a, B_Real wit2) {
+$WORD B_IntegralD_intD_imag(B_IntegralD_int wit, B_int a, B_Real wit2) {
     fprintf(stderr,"Number.__imag__ not implemented for int");
     exit(1);
 }
@@ -208,7 +187,7 @@ $WORD B_IntegralD_intD___abs__(B_IntegralD_int wit, B_int a, B_Real wit2) {
     return wit2->$class->__fromatom__(wit2,(B_atom)res);
 }
 
-B_int B_IntegralD_intD___conjugate__(B_IntegralD_int wit,  B_int a) {
+B_int B_IntegralD_intD_conjugate(B_IntegralD_int wit,  B_int a) {
     return a;
 }
 
@@ -246,11 +225,11 @@ B_int B_IntegralD_intD___round__ (B_IntegralD_int wit, B_int n, B_int p) {
     return B_IntegralD_intD___mul__(NULL,n,p10);
 }
   
-$WORD B_IntegralD_int$numerator (B_IntegralD_int wit, B_int n, B_Integral wit2) {
+$WORD B_IntegralD_intD_numerator (B_IntegralD_int wit, B_int n, B_Integral wit2) {
     return wit2->$class->__fromatom__(wit2,(B_atom)n);
 }
   
-$WORD B_IntegralD_int$denominator (B_IntegralD_int wit, B_int n, B_Integral wit2) {
+$WORD B_IntegralD_intD_denominator (B_IntegralD_int wit, B_int n, B_Integral wit2) {
     B_int res = toB_int(1L);
     return wit2->$class->__fromatom__(wit2,(B_atom)res);
 }
@@ -345,20 +324,6 @@ B_int B_IntegralD_intD___invert__(B_IntegralD_int wit,  B_int a) {
 
 // LogicalB_int  ////////////////////////////////////////////////////////////////////////////////////////
 
-void B_LogicalD_IntegralD_intD___serialize__(B_LogicalD_IntegralD_int self, $Serial$state state) {
-    //$step_serialize(self->W_Integral, state);
-    fprintf(stderr,"Protocol Logical not implemented for int; use i64\n");
-    exit(1);
-}
-
-B_LogicalD_IntegralD_int B_LogicalD_IntegralD_intD___deserialize__(B_LogicalD_IntegralD_int self, $Serial$state state) {
-    // B_LogicalD_IntegralD_i64 res = $DNEW(B_LogicalD_IntegralD_i64,state);
-    //  res->W_Integral = (B_Integral)$step_deserialize(state);
-    //  return res;
-    fprintf(stderr,"Protocol Logical not implemented for int; use i64\n");
-    exit(1);
-}
-
 B_int B_LogicalD_IntegralD_intD___and__(B_LogicalD_IntegralD_int wit,  B_int a, B_int b) {
     // return toB_i64(a->val & b->val);
     fprintf(stderr,"Protocol Logical not implemented for int; use i64\n");
@@ -379,16 +344,6 @@ B_int B_LogicalD_IntegralD_intD___xor__(B_LogicalD_IntegralD_int wit,  B_int a, 
  
 // B_MinusD_IntegralD_int  ////////////////////////////////////////////////////////////////////////////////////////
 
-void B_MinusD_IntegralD_intD___serialize__(B_MinusD_IntegralD_int self, $Serial$state state) {
-    $step_serialize(self->W_Integral, state);
-}
-
-B_MinusD_IntegralD_int B_MinusD_IntegralD_intD___deserialize__(B_MinusD_IntegralD_int self, $Serial$state state) {
-    B_MinusD_IntegralD_int res = $DNEW(B_MinusD_IntegralD_int,state);
-    res->W_Integral = (B_Integral)$step_deserialize(state);
-    return res;
-}
-
 B_int B_MinusD_IntegralD_intD___sub__(B_MinusD_IntegralD_int wit,  B_int a, B_int b) {
     B_int res = $mallocB_int();
     zz_sub(&res->val,&a->val,&b->val);
@@ -397,14 +352,6 @@ B_int B_MinusD_IntegralD_intD___sub__(B_MinusD_IntegralD_int wit,  B_int a, B_in
 
 
 // B_DivD_int  ////////////////////////////////////////////////////////////////////////////////////////
-
-void B_DivD_intD___serialize__(B_DivD_int self, $Serial$state state) {
-}
-
-B_DivD_int B_DivD_intD___deserialize__(B_DivD_int self, $Serial$state state) {
-    B_DivD_int res = $DNEW(B_DivD_int,state);
-    return res;
-}
 
 B_float B_DivD_intD___truediv__ (B_DivD_int wit, B_int a, B_int b) {
     zz_ptr aval = &a->val;
@@ -422,14 +369,6 @@ B_float B_DivD_intD___truediv__ (B_DivD_int wit, B_int a, B_int b) {
 }
 
 // B_OrdD_int  ////////////////////////////////////////////////////////////////////////////////////////
-
-void B_OrdD_intD___serialize__(B_OrdD_int self, $Serial$state state) {
-}
-
-B_OrdD_int B_OrdD_intD___deserialize__(B_OrdD_int self, $Serial$state state) {
-    B_OrdD_int res = $DNEW(B_OrdD_int,state);
-    return res;
-}
 
 B_bool B_OrdD_intD___eq__ (B_OrdD_int wit, B_int a, B_int b) {
     return toB_bool(zz_equal(&a->val,&b->val));
@@ -457,14 +396,6 @@ B_bool B_OrdD_intD___ge__ (B_OrdD_int wit, B_int a, B_int b) {
 
 // B_HashableD_int ///////////////////////////////////////////////////////////////////////////////////////////////////////
 
-void B_HashableD_intD___serialize__(B_HashableD_int self, $Serial$state state) {
-}
-
-B_HashableD_int B_HashableD_intD___deserialize__(B_HashableD_int self, $Serial$state state) {
-    B_HashableD_int res = $DNEW(B_HashableD_int,state);
-    return res;
-}
-
 B_bool B_HashableD_intD___eq__(B_HashableD_int wit, B_int a, B_int b) {
     return toB_bool(zz_equal(&a->val,&b->val));
 }
@@ -482,57 +413,6 @@ B_int B_HashableD_intD___hash__(B_HashableD_int wit, B_int a) {
     return toB_int(B_i64D_hash(toB_i64(from$int(a))));
 }
 
-// Initialization ////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-void B_IntegralD_int_init(B_IntegralD_int wit) {
-    wit-> W_Logical = (B_Logical)$NEW(B_LogicalD_IntegralD_int,(B_Integral)wit);
-    wit-> W_Minus = (B_Minus)$NEW(B_MinusD_IntegralD_int,(B_Integral)wit);
-};
-
-void B_LogicalD_IntegralD_int_init(B_LogicalD_IntegralD_int wit, B_Integral W_Integral) {
-    wit->W_Integral =  W_Integral;
-}
-
-void B_MinusD_IntegralD_int_init(B_MinusD_IntegralD_int wit, B_Integral W_Integral) {
-    wit->W_Integral =  W_Integral;
-}
-
-void B_DivD_int_init(B_DivD_int wit) {
-    return;
-}
-
-void B_OrdD_int_init(B_OrdD_int wit) {
-    return;
-}
-
-void B_HashableD_int_init(B_HashableD_int wit) {
-    return;
-}
-
-B_IntegralD_int B_IntegralD_intG_new() {
-    return $NEW(B_IntegralD_int);
-}
-
-B_LogicalD_IntegralD_int B_LogicalD_IntegralD_intG_new(B_Integral wit) {
-    return $NEW(B_LogicalD_IntegralD_int,wit);
-}
-  
-B_MinusD_IntegralD_int B_MinusD_IntegralD_intG_new(B_Integral wit) {
-    return $NEW(B_MinusD_IntegralD_int,wit);
-}
-  
-B_OrdD_int B_OrdD_intG_new() {
-    return $NEW(B_OrdD_int);
-}
-
-B_DivD_int B_DivD_intG_new() {
-    return $NEW(B_DivD_int);
-}
-
-B_HashableD_int B_HashableD_intG_new() {
-    return $NEW(B_HashableD_int);
-}
-
 
 struct B_IntegralD_int $IintegralB_intD_instance;
 struct B_LogicalD_IntegralD_int B_LogicalD_IntegralD_int_instance;
@@ -540,12 +420,12 @@ struct B_MinusD_IntegralD_int B_MinusD_IntegralD_int_instance;
 struct B_OrdD_int B_OrdD_int_instance;
 struct B_DivD_int B_DivD_int_instance;
 struct B_HashableD_int B_HashableD_int_instance;
-
+/*
 struct B_IntegralD_intG_class B_IntegralD_intG_methods = {
     "B_IntegralD_int",
     UNASSIGNED,
     ($SuperG_class)&B_IntegralG_methods,
-    B_IntegralD_int_init,
+    B_IntegralD_intD___init__,
     B_IntegralD_intD___serialize__,
     B_IntegralD_intD___deserialize__,
     (B_bool (*)(B_IntegralD_int))$default__bool__,
@@ -561,8 +441,8 @@ struct B_IntegralD_intG_class B_IntegralD_intG_methods = {
     (B_int (*)(B_IntegralD_int, B_int, B_int))B_NumberD___ipow__,
     B_IntegralD_intD___neg__,
     B_IntegralD_intD___pos__,
-    B_IntegralD_int$real,
-    B_IntegralD_int$imag,
+    B_IntegralD_intD_real,
+    B_IntegralD_intD_imag,
     B_IntegralD_intD___abs__,
     B_IntegralD_intD___conjugate__,
     B_IntegralD_intD___float__,
@@ -570,8 +450,8 @@ struct B_IntegralD_intG_class B_IntegralD_intG_methods = {
     B_IntegralD_intD___floor__,
     B_IntegralD_intD___ceil__,
     B_IntegralD_intD___round__,
-    B_IntegralD_int$numerator,
-    B_IntegralD_int$denominator,
+    B_IntegralD_intD_numerator,
+    B_IntegralD_intD_denominator,
     B_IntegralD_intD___int__,
     B_IntegralD_intD___index__,
     B_IntegralD_intD___divmod__,
@@ -585,10 +465,10 @@ struct B_IntegralD_intG_class B_IntegralD_intG_methods = {
     (B_int (*)(B_IntegralD_int, B_int, B_int))B_IntegralD___irshift__,
     B_IntegralD_intD___invert__
 };
-
+*/
 struct B_IntegralD_int B_IntegralD_int_instance = {&B_IntegralD_intG_methods, (B_Minus)&B_MinusD_IntegralD_int_instance, (B_Logical)&B_LogicalD_IntegralD_int_instance};
 B_IntegralD_int B_IntegralD_intG_witness = &B_IntegralD_int_instance;
-
+/*
 struct B_LogicalD_IntegralD_intG_class B_LogicalD_IntegralD_intG_methods =  {
     "B_LogicalD_IntegralD_int",
     UNASSIGNED,
@@ -606,10 +486,10 @@ struct B_LogicalD_IntegralD_intG_class B_LogicalD_IntegralD_intG_methods =  {
     (B_int (*)(B_LogicalD_IntegralD_int, B_int, B_int))B_LogicalD___ior__,
     (B_int (*)(B_LogicalD_IntegralD_int, B_int, B_int))B_LogicalD___ixor__
 };
-
+*/
 struct B_LogicalD_IntegralD_int B_LogicalD_IntegralD_int_instance = {&B_LogicalD_IntegralD_intG_methods, (B_Integral)&B_IntegralD_int_instance};
 B_LogicalD_IntegralD_int B_LogicalD_IntegralD_intG_witness = &B_LogicalD_IntegralD_int_instance;
-
+/*
 struct B_MinusD_IntegralD_intG_class B_MinusD_IntegralD_intG_methods = {
     "B_MinusD_IntegralD_int",
     UNASSIGNED,
@@ -623,9 +503,10 @@ struct B_MinusD_IntegralD_intG_class B_MinusD_IntegralD_intG_methods = {
     B_MinusD_IntegralD_intD___sub__,
     (B_int (*)(B_MinusD_IntegralD_int, B_int, B_int))B_MinusD___isub__
 };
-struct B_MinusD_IntegralD_int B_MinusD_IntegralD_int_instance = {&B_MinusD_IntegralD_intG_methods, (B_Integral)&B_IntegralD_int_instance};
+*/
+struct B_MinusD_IntegralD_int B_MinusD_IntegralD_int_instance = {&B_MinusD_IntegralD_intG_methods, (B_Number)&B_IntegralD_int_instance};
 B_MinusD_IntegralD_int B_MinusD_IntegralD_intG_witness = &B_MinusD_IntegralD_int_instance;
-
+/*
 struct B_OrdD_intG_class B_OrdD_intG_methods = {
     "B_OrdD_int",
     UNASSIGNED,
@@ -643,10 +524,10 @@ struct B_OrdD_intG_class B_OrdD_intG_methods = {
     B_OrdD_intD___gt__,
     B_OrdD_intD___ge__
 };
-
+*/
 struct B_OrdD_int B_OrdD_int_instance = {&B_OrdD_intG_methods};
 B_OrdD_int B_OrdD_intG_witness = &B_OrdD_int_instance;
-
+/*
 struct B_DivD_intG_class B_DivD_intG_methods = {
     "B_DivD_int",
     UNASSIGNED,
@@ -660,10 +541,10 @@ struct B_DivD_intG_class B_DivD_intG_methods = {
     B_DivD_intD___truediv__,
     (B_float (*)(B_DivD_int, B_int, B_int))B_DivD___itruediv__,
 };
-
+*/
 struct B_DivD_int B_DivD_int_instance = {&B_DivD_intG_methods};
 B_DivD_int B_DivD_intG_witness = &B_DivD_int_instance;
-
+/*
 struct B_HashableD_intG_class B_HashableD_intG_methods = {
     "B_HashableD_int",
     UNASSIGNED,
@@ -678,9 +559,10 @@ struct B_HashableD_intG_class B_HashableD_intG_methods = {
     B_HashableD_intD___ne__,
     B_HashableD_intD___hash__
 };
-
+*/
 struct B_HashableD_int B_HashableD_int_instance = {&B_HashableD_intG_methods};
 B_HashableD_int B_HashableD_intG_witness = &B_HashableD_int_instance;
+
 
 long from$int(B_int n) { 
     long sz = n->val.size;
