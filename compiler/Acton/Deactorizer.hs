@@ -185,8 +185,8 @@ instance Deact Decl where
 
 newact env n q p                    = Def l0 (newactName n) q p KwdNIL (Just t) [newassign, waitinit, sReturn x] NoDec fxProc
   where t                           = tCon $ TC (NoQ n) (map tVar $ qbound q)
-        x                           = eVar actName
-        newassign                   = sAssign (pVar actName t) (eCall (tApp (eQVar primNEWACTOR) [t]) [])
+        x                           = eVar g_act
+        newassign                   = sAssign (pVar g_act t) (eCall (tApp (eQVar primNEWACTOR) [t]) [])
         waitinit                    = sExpr $ eCall (tApp (eQVar primAWAITf) [tNone]) [asyncmsg]
         asyncmsg                    = eCall (tApp (eQVar primASYNCf) [tNone]) [x, closure]
         closure                     = Lambda l0 PosNIL KwdNIL initcall fxProc

@@ -263,6 +263,7 @@ instance EnvOf PosPar where
     envOf (PosPar n (Just t) _ p)   = (n,NVar t) : envOf p
     envOf (PosSTAR n (Just t))      = [(n,NVar t)]
     envOf PosNIL                    = []
+    envOf p                         = error ("### BAD envOf " ++ prstr p)
 
 instance EnvOf KwdPar where
     envOf (KwdPar n (Just t) _ k)   = (n,NVar t) : envOf k

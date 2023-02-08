@@ -25,7 +25,8 @@ self                                = Name NoLoc "self"
 localName n                         = Derived n suffixLocal
 newactName n                        = Derived n suffixNewact
 
-actName                             = globalName "act"
+g_act                               = globalName "act"
+g_ignore                            = globalName "ignore"
 
 suffixLocal                         = globalName "local"
 suffixNewact                        = globalName "newact"

@@ -308,6 +308,7 @@ closureCon fx p t
   | fx == fxAction                      = TC primAction [p,t]
   | fx == fxMut                         = TC primMut [p,t]
   | fx == fxPure                        = TC primPure [p,t]
+  | otherwise                           = error ("### BAD closureCon fx: " ++ prstr fx)
   where contArg (TFun _ fx p _ r)       = rtype p
 
 isCont (TFun _ fx p@TRow{} _ r)         = fx == fxProc && r == tR && rtail p == posNil && not (isCont $ rtype p)

@@ -181,7 +181,7 @@ tCollectionListWild = tCon (TC qnCollection [tList tWild, tWild])
 
 --  class $Cont[T] (value): pass
 --      __call__    : proc(T) -> $R
-clCont              = NClass [quant t] (leftpath [cValue]) []
+clCont              = NClass [quant t] (leftpath [cValue]) te
   where te          = [ (attr_call_, NSig (monotype $ tFun fxProc (posRow (tVar t) posNil) kwdNil tR) NoDec) ]
         t           = TV KType (name "T")
 
@@ -312,7 +312,7 @@ scPUSH              = tSchema [] tPUSH
 
 
 
---  $POP            : pure () -> None
+--  $POP            : pure (i64) -> None
 scPOP               = tSchema [] tPOP
   where tPOP        = tFun fxPure (posRow tI64 posNil) kwdNil tNone
 
