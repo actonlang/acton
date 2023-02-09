@@ -40,6 +40,7 @@ extern struct B_MsgG_class B_MsgG_methods;
 extern struct $ActorG_class $ActorG_methods;
 extern struct $CatcherG_class $CatcherG_methods;
 extern struct $ContG_class $DoneG_methods;
+extern struct $ContG_class $FailG_methods;
 extern struct $ConstContG_class $ConstContG_methods;
 
 #define MSG_HEADER              "Msg"

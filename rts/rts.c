@@ -616,7 +616,7 @@ bool ADD_waiting($Actor a, B_Msg m) {
     return did_add;
 }
 
-// Atomically freeze message "m" and return its list of waiting actors. 
+// Atomically freeze message "m" using "mark", and return its list of waiting actors.
 $Actor FREEZE_waiting(B_Msg m, $Cont mark) {
     spinlock_lock(&m->$wait_lock);
     m->$cont = mark;
@@ -715,6 +715,46 @@ struct $ContG_class $DoneG_methods = {
 };
 struct $Cont $Done$instance = {
     &$DoneG_methods
+};
+////////////////////////////////////////////////////////////////////////////////////////
+$R $FailD___call__($Cont $this, $WORD ex) {
+    return $R_FAIL(ex);
+}
+
+B_bool $FailD___bool__($Cont self) {
+  return B_True;
+}
+
+B_str $FailD___str__($Cont self) {
+  char *s;
+  asprintf(&s,"<$Fail object at %p>",self);
+  return to$str(s);
+}
+
+void $Fail__serialize__($Cont self, $Serial$state state) {
+  return;
+}
+
+$Cont $Fail__deserialize__($Cont self, $Serial$state state) {
+  $Cont res = $DNEW($Cont,state);
+  res->$class = &$FailG_methods;
+  return res;
+}
+
+struct $ContG_class $FailG_methods = {
+    "$Fail",
+    UNASSIGNED,
+    NULL,
+    $ContD___init__,
+    $Fail__serialize__,
+    $Fail__deserialize__,
+    $FailD___bool__,
+    $FailD___str__,
+    $FailD___str__,
+    $FailD___call__
+};
+struct $Cont $Fail$instance = {
+    &$FailG_methods
 };
 ////////////////////////////////////////////////////////////////////////////////////////
 $R $InitRootD___call__ ($Cont $this, $WORD val) {
@@ -1536,12 +1576,25 @@ void wt_work_cb(uv_check_t *ev) {
             if (c) {                            // Normal exception handling
                 m->$cont = c->$cont;
                 m->B_value = r.value;
+                rtsd_printf("## FAIL/handle actor %ld : %s", current->$globkey, current->$class->$GCINFO);
                 ENQ_ready(current);
             } else {                            // An unhandled exception
                 save_actor_state(current, m);
                 m->B_value = r.value;                               // m->value holds the raised exception,
                 $Actor b = FREEZE_waiting(m, MARK_EXCEPTION);       // so mark this and stop further m->waiting additions
-                // ... replace the following
+                while (b) {
+                    b->B_Msg->$cont = &$Fail$instance;
+                    b->B_Msg->B_value = r.value;
+                    b->$waitsfor = NULL;
+                    $Actor c = b->$next;
+                    ENQ_ready(b);
+                    rtsd_printf("## Propagating exception to actor %ld : %s", b->$globkey, b->$class->$GCINFO);
+                    b = c;
+                }
+                rtsd_printf("## FAIL actor %ld : %s", current->$globkey, current->$class->$GCINFO);
+                if (DEQ_msg(current)) {
+                    ENQ_ready(current);
+                }
             }
             break;
         }
@@ -1570,12 +1623,15 @@ void wt_work_cb(uv_check_t *ev) {
             }
             m->$cont = r.cont;
             B_Msg x = (B_Msg)r.value;
-            if (ADD_waiting(current, x)) {      // x->cont != NULL: x is still being processed so current was added to x->waiting
+            if (ADD_waiting(current, x)) {      // x->cont is a proper $Cont: x is still being processed so current was added to x->waiting
                 rtsd_printf("## AWAIT actor %ld : %s", current->$globkey, current->$class->$GCINFO);
                 current->$waitsfor = x;
-            } else if (EXCEPTIONAL(m)) {
-            
-            } else {                            // x->cont == NULL: x->value holds the final response, current is not in x->waiting
+            } else if (EXCEPTIONAL(x)) {        // x->cont == MARK_EXCEPTION: x->value holds the raised exception, current is not in x->waiting
+                rtsd_printf("## AWAIT/fail actor %ld : %s", current->$globkey, current->$class->$GCINFO);
+                m->$cont = &$Fail$instance;
+                m->B_value = x->B_value;
+                ENQ_ready(current);
+            } else {                            // x->cont == MARK_RESULT: x->value holds the final response, current is not in x->waiting
                 rtsd_printf("## AWAIT/wakeup actor %ld : %s", current->$globkey, current->$class->$GCINFO);
                 m->B_value = x->B_value;
                 ENQ_ready(current);
