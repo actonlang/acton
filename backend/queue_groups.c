@@ -150,18 +150,7 @@ int add_listener_to_group(group_state * group,
                         int * sockfd,
                         unsigned int * fastrandstate)
 {
-    consumer_state * cs = (consumer_state *) malloc(sizeof(consumer_state));
-    cs->consumer_id = consumer_id;
-    cs->shard_id = shard_id;
-    cs->app_id = app_id;
-    cs->group_id = group->group_id;
-    cs->private_read_head = -1;
-    cs->private_consume_head = -1;
-    cs->callback = callback;
-    cs->sockfd = sockfd;
-    cs->notified=0;
-    cs->prh_version=NULL;
-    cs->pch_version=NULL;
+    consumer_state * cs = get_consumer_state(consumer_id, shard_id, app_id, group->group_id, callback, sockfd, 1);
 
     pthread_mutex_lock(group->group_lock);
 
@@ -193,7 +182,7 @@ int remove_listener_from_group(group_state * group, WORD consumer_id)
     return 0;
 }
 
-int lookup_listener_in_group(group_state * group, WORD consumer_id, consumer_state ** cs)
+int lookup_listener_in_group(group_state * group, WORD consumer_id, WORD queue_id, consumer_state ** cs, group_queue_consumer_state ** gqcs)
 {
     pthread_mutex_lock(group->group_lock);
 
@@ -204,11 +193,18 @@ int lookup_listener_in_group(group_state * group, WORD consumer_id, consumer_sta
     if(consumer_node == NULL)
     {
         *cs = NULL;
+        *gqcs = NULL;
 
         return DB_ERR_NO_CONSUMER; // Consumer didn't exist
     }
 
     *cs = (consumer_state *) consumer_node->value;
+
+    snode_t * group_consumer_node = skiplist_search((*cs)->group_queue_consumer_states, queue_id);
+
+    assert(group_consumer_node != NULL);
+
+    *gqcs = (group_queue_consumer_state *) group_consumer_node->value;
 
     return 0;
 }

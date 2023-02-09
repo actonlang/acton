@@ -120,7 +120,7 @@ int notify_remote_queue_subscribers(WORD table_key, WORD queue_id, db_t * db)
         {
             consumer_state * cs = (consumer_state *) (cell->value);
 
-            if(cs->callback != NULL || cs->notified > 0) // Skip local subscribers or one that have already been notified:
+            if(cs->callback != NULL || cs->notified > 0) // Skip local subscribers or ones that have already been notified:
                 continue;
 
             assert(cs->sockfd != NULL);
@@ -321,13 +321,14 @@ int enqueue(WORD * column_values, int no_cols, size_t last_blob_size, WORD table
 }
 
 int lookup_consumer_state_in_group(WORD queue_id, WORD consumer_id, db_row_t * db_row,
-                                    consumer_state ** cs, db_t * db)
+                                    consumer_state ** cs, group_queue_consumer_state ** gqcs, db_t * db)
 {
     if(db_row->group_subscriptions == NULL) // Queue's group is already cached by 'auto_update_group_queue_subscriptions()', no need to call 'get_buckets_for_object()' again
     {
         log_debug("SERVER: lookup_consumer_state_in_group(%d), found no group state!", (int) queue_id);
 
         *cs = NULL;
+        *gqcs = NULL;
 
         return DB_ERR_NO_GROUP;
     }
@@ -341,7 +342,7 @@ int lookup_consumer_state_in_group(WORD queue_id, WORD consumer_id, db_row_t * d
                 ((gs != NULL)?((int) gs->status):(-1)),
                 ((gs != NULL)?((int) gs->consumers->no_items):(-1)));
 
-        return lookup_listener_in_group(gs, consumer_id, cs);
+        return lookup_listener_in_group(gs, consumer_id, queue_id, cs, gqcs);
     }
     else
     {
@@ -353,7 +354,7 @@ int lookup_consumer_state_in_group(WORD queue_id, WORD consumer_id, db_row_t * d
             {
                 group_state * gs = (group_state *) cell->value;
 
-                int ret = lookup_listener_in_group(gs, consumer_id, cs);
+                int ret = lookup_listener_in_group(gs, consumer_id, queue_id, cs, gqcs);
 
                 if(ret == 0)
                 {
@@ -372,19 +373,35 @@ int lookup_consumer_state_in_group(WORD queue_id, WORD consumer_id, db_row_t * d
 }
 
 int lookup_consumer_state_in_row_or_group(WORD queue_id, WORD consumer_id, db_row_t * db_row,
-                                           consumer_state ** cs, db_t * db)
+                                           consumer_state ** cs, group_queue_consumer_state ** gqcs, db_t * db)
 {
     *cs = NULL;
     snode_t * consumer_node = skiplist_search(db_row->consumer_state, consumer_id);
     if(consumer_node != NULL)
     {
         *cs = (consumer_state *) (consumer_node->value);
+        *gqcs = NULL;
         return 0;
     }
     else
     {
-        return lookup_consumer_state_in_group(queue_id, consumer_id, db_row, cs, db);
+        return lookup_consumer_state_in_group(queue_id, consumer_id, db_row, cs, gqcs, db);
     }
+}
+
+void sanity_check_consumer_read_heads(int64_t old_read_head, int64_t old_consume_head, int64_t new_read_head)
+{
+    assert(old_read_head <= new_read_head);
+
+    assert(old_consume_head <= new_read_head);
+}
+
+void sanity_check_consumer_consume_heads(int64_t old_read_head, int64_t old_consume_head, int64_t new_consume_head)
+{
+    assert(old_read_head >= new_consume_head);
+
+    assert(old_consume_head <= new_consume_head);
+
 }
 
 int set_private_read_head(WORD consumer_id, WORD shard_id, WORD app_id, WORD table_key, WORD queue_id,
@@ -402,11 +419,14 @@ int set_private_read_head(WORD consumer_id, WORD shard_id, WORD app_id, WORD tab
     int64_t no_entries = db_row->no_entries;
 
     consumer_state * cs = NULL;
+    group_queue_consumer_state * gqcs = NULL;
 
-    int ret = lookup_consumer_state_in_row_or_group(queue_id, consumer_id, db_row, &cs, db);
+    int ret = lookup_consumer_state_in_row_or_group(queue_id, consumer_id, db_row, &cs, &gqcs, db);
 
     if(ret != 0)
         return ret; // Consumer or group doesn't exist
+
+    assert (cs != NULL || gqcs != NULL);
 
     if(use_lock)
     {
@@ -415,15 +435,22 @@ int set_private_read_head(WORD consumer_id, WORD shard_id, WORD app_id, WORD tab
 
     assert(new_read_head <= no_entries - 1);
 
-    assert(cs->private_read_head <= new_read_head);
-
-    assert(cs->private_consume_head <= new_read_head);
-
-    cs->private_read_head = new_read_head;
-
     assert(version != NULL);
 
-    update_or_replace_vc(&(cs->prh_version), version);
+    int64_t old_read_head = READ_HEAD(cs, gqcs), old_consume_head = CONSUME_HEAD(cs, gqcs);
+
+    sanity_check_consumer_read_heads(old_read_head, old_consume_head, new_read_head);
+
+    if(gqcs != NULL)
+    {
+        gqcs->private_read_head = new_read_head;
+        update_or_replace_vc(&(gqcs->prh_version), version);
+    }
+    else
+    {
+        cs->private_read_head = new_read_head;
+        update_or_replace_vc(&(cs->prh_version), version);
+    }
 
     if(use_lock)
     {
@@ -448,24 +475,36 @@ int set_private_consume_head(WORD consumer_id, WORD shard_id, WORD app_id, WORD 
     int64_t no_entries = db_row->no_entries;
 
     consumer_state * cs = NULL;
+    group_queue_consumer_state * gqcs = NULL;
 
-    int ret = lookup_consumer_state_in_row_or_group(queue_id, consumer_id, db_row, &cs, db);
+    int ret = lookup_consumer_state_in_row_or_group(queue_id, consumer_id, db_row, &cs, &gqcs, db);
 
     if(ret != 0)
         return ret; // Consumer or group doesn't exist
 
-//  assert(new_consume_head <= no_entries - 1);
+    assert (cs != NULL || gqcs != NULL);
 
-//  assert(cs->private_read_head >= new_consume_head);
-
-//  assert(cs->private_consume_head <= new_consume_head);
-
-    if(cs->private_consume_head <= new_consume_head)
-        cs->private_consume_head = new_consume_head;
+    assert(new_consume_head <= no_entries - 1);
 
     assert(version != NULL);
 
-    update_or_replace_vc(&(cs->pch_version), version);
+    int64_t old_read_head = READ_HEAD(cs, gqcs), old_consume_head = CONSUME_HEAD(cs, gqcs);
+
+    sanity_check_consumer_consume_heads(old_read_head, old_consume_head, new_consume_head);
+
+    if(old_consume_head <= new_consume_head)
+    {
+        if(gqcs != NULL)
+        {
+            gqcs->private_consume_head = new_consume_head;
+            update_or_replace_vc(&(gqcs->pch_version), version);
+        }
+        else
+        {
+            cs->private_consume_head = new_consume_head;
+            update_or_replace_vc(&(cs->pch_version), version);
+        }
+    }
 
     return 0;
 }
@@ -490,36 +529,56 @@ int read_queue(WORD consumer_id, WORD shard_id, WORD app_id, WORD table_key, WOR
     int64_t no_entries = db_row->no_entries;
 
     consumer_state * cs = NULL;
+    group_queue_consumer_state * gqcs = NULL;
 
-    int ret = lookup_consumer_state_in_row_or_group(queue_id, consumer_id, db_row, &cs, db);
+    int ret = lookup_consumer_state_in_row_or_group(queue_id, consumer_id, db_row, &cs, &gqcs, db);
 
     if(ret != 0)
         return ret; // Consumer or group doesn't exist
+
+    assert (cs != NULL || gqcs != NULL);
 
     if(use_lock)
     {
         pthread_mutex_lock(db_row->read_lock);
     }
 
-    assert(cs->private_read_head <= no_entries - 1);
+    if(cs->private_read_head > no_entries - 1)
+    {
+        log_debug("BACKEND: ERROR Subscriber %" PRId64 " trying to read from queue %" PRId64 " , prev_read_head=%" PRId64 ", no_entries=%" PRId64 "",
+                        (int64_t) cs->consumer_id, queue_id, cs->private_read_head, no_entries);
 
-    *prh_version = (cs->prh_version != NULL)? copy_vc(cs->prh_version) : NULL;
+        assert(0);
+    }
 
-    if(cs->private_read_head == no_entries - 1)
+    int64_t old_read_head = READ_HEAD(cs, gqcs);
+
+    vector_clock * old_prh_vsn = READ_HEAD_VERSION(cs, gqcs);
+
+    *prh_version = (old_prh_vsn != NULL)? copy_vc(old_prh_vsn) : NULL;
+
+    if(old_read_head == no_entries - 1)
     {
         if(use_lock)
         {
             pthread_mutex_unlock(db_row->read_lock);
         }
 
-        *new_read_head = cs->private_read_head;
+        *new_read_head = old_read_head;
         return QUEUE_STATUS_READ_COMPLETE; // Nothing to read
     }
 
-    *new_read_head = MIN(cs->private_read_head + max_entries, no_entries - 1);
-    int64_t start_index = cs->private_read_head + 1;
+    *new_read_head = MIN(old_read_head + max_entries, no_entries - 1);
+    int64_t start_index = old_read_head + 1;
 
-    cs->private_read_head = *new_read_head;
+    if(gqcs != NULL)
+    {
+        gqcs->private_read_head = *new_read_head;
+    }
+    else
+    {
+        cs->private_read_head = *new_read_head;
+    }
 
     if(use_lock)
     {
@@ -533,15 +592,16 @@ int read_queue(WORD consumer_id, WORD shard_id, WORD app_id, WORD table_key, WOR
     assert(no_results == (*new_read_head - start_index + 1));
 
 #if (VERBOSITY > 0)
-    log_debug("BACKEND: Subscriber %" PRId64 " read %" PRId64 " queue entries, new_read_head=%" PRId64 "",
-                    (int64_t) cs->consumer_id, no_results, cs->private_read_head);
+    log_debug("BACKEND: Subscriber %" PRId64 " read %" PRId64 " queue entries from queue %" PRId64 ", new_read_head=%" PRId64 "",
+                    (int64_t) cs->consumer_id, no_results, queue_id, cs->private_read_head);
 #endif
 
     *entries_read = (int) no_results;
 
     ret = ((*new_read_head) == (no_entries - 1))? QUEUE_STATUS_READ_COMPLETE : QUEUE_STATUS_READ_INCOMPLETE;
 
-    cs->notified=(ret==QUEUE_STATUS_READ_INCOMPLETE);
+    if(cs->notified == 1)
+        cs->notified=(ret==QUEUE_STATUS_READ_INCOMPLETE);
 
     return ret;
 }
@@ -565,16 +625,23 @@ int peek_queue(WORD consumer_id, WORD shard_id, WORD app_id, WORD table_key, WOR
     int64_t no_entries = db_row->no_entries;
 
     consumer_state * cs = NULL;
+    group_queue_consumer_state * gqcs = NULL;
 
-    int ret = lookup_consumer_state_in_row_or_group(queue_id, consumer_id, db_row, &cs, db);
+    int ret = lookup_consumer_state_in_row_or_group(queue_id, consumer_id, db_row, &cs, &gqcs, db);
 
     if(ret != 0)
         return ret; // Consumer or group doesn't exist
 
-    int64_t start_offset = (offset >= 0)?offset:cs->private_read_head;
+    assert (cs != NULL || gqcs != NULL);
+
+    int64_t old_read_head = READ_HEAD(cs, gqcs);
+
+    vector_clock * old_prh_vsn = READ_HEAD_VERSION(cs, gqcs);
+
+    int64_t start_offset = (offset >= 0)?offset:old_read_head;
     assert(start_offset <= no_entries - 1);
 
-    *prh_version = (cs->prh_version != NULL)? copy_vc(cs->prh_version) : NULL;
+    *prh_version = (old_prh_vsn != NULL)? copy_vc(old_prh_vsn) : NULL;
 
     if(start_offset == no_entries - 1)
     {
@@ -593,7 +660,7 @@ int peek_queue(WORD consumer_id, WORD shard_id, WORD app_id, WORD table_key, WOR
 
 #if (VERBOSITY > 0)
     log_debug("BACKEND: Subscriber %" PRId64 " peeked %" PRId64 " / %" PRId64 " queue entries, new_read_head=%" PRId64 ", private_read_head=%" PRId64 "",
-                    (int64_t) cs->consumer_id, no_results, no_entries, *new_read_head, cs->private_read_head);
+                    (int64_t) cs->consumer_id, no_results, no_entries, *new_read_head, old_read_head);
 #endif
 
     *entries_read = (int) no_results;
@@ -624,24 +691,29 @@ int replay_queue(WORD consumer_id, WORD shard_id, WORD app_id, WORD table_key, W
     int64_t no_entries = db_row->no_entries;
 
     consumer_state * cs = NULL;
+    group_queue_consumer_state * gqcs = NULL;
 
-    int ret = lookup_consumer_state_in_row_or_group(queue_id, consumer_id, db_row, &cs, db);
+    int ret = lookup_consumer_state_in_row_or_group(queue_id, consumer_id, db_row, &cs, &gqcs, db);
 
     if(ret != 0)
         return ret; // Consumer or group doesn't exist
 
+    assert (cs != NULL || gqcs != NULL);
+
 //  cs->notified=0; // Replays don't count as notification consumptions
 
-    assert(cs->private_read_head <= no_entries - 1);
-    assert(cs->private_consume_head + replay_offset <= cs->private_read_head);
+    int64_t old_read_head = READ_HEAD(cs, gqcs), old_consume_head = CONSUME_HEAD(cs, gqcs);
 
-    if(cs->private_consume_head + replay_offset == cs->private_read_head)
+    assert(old_read_head <= no_entries - 1);
+    assert(old_consume_head + replay_offset <= old_read_head);
+
+    if(old_consume_head + replay_offset == old_read_head)
     {
         return QUEUE_STATUS_READ_COMPLETE; // // Nothing to replay
     }
 
-    *new_replay_offset = MIN(cs->private_consume_head + replay_offset + max_entries, cs->private_read_head);
-    int64_t start_index = cs->private_consume_head + replay_offset;
+    *new_replay_offset = MIN(old_consume_head + replay_offset + max_entries, old_read_head);
+    int64_t start_index = old_consume_head + replay_offset;
 
     int64_t no_results = (int64_t) table_range_search_clustering((WORD *) &queue_id,
                                         (WORD*) &start_index, (WORD*) new_replay_offset, 1,
@@ -660,7 +732,7 @@ int replay_queue(WORD consumer_id, WORD shard_id, WORD app_id, WORD table_key, W
                     (int64_t) cs->consumer_id, no_results, *new_replay_offset);
 #endif
 
-    ret = ((*new_replay_offset) == cs->private_read_head)? QUEUE_STATUS_READ_COMPLETE : QUEUE_STATUS_READ_INCOMPLETE;
+    ret = ((*new_replay_offset) == old_read_head)? QUEUE_STATUS_READ_COMPLETE : QUEUE_STATUS_READ_INCOMPLETE;
 
     return ret;
 }
@@ -680,31 +752,43 @@ int consume_queue(WORD consumer_id, WORD shard_id, WORD app_id, WORD table_key, 
     db_row_t * db_row = (db_row_t *) (node->value);
 
     consumer_state * cs = NULL;
+    group_queue_consumer_state * gqcs = NULL;
 
-    int ret = lookup_consumer_state_in_row_or_group(queue_id, consumer_id, db_row, &cs, db);
+    int ret = lookup_consumer_state_in_row_or_group(queue_id, consumer_id, db_row, &cs, &gqcs, db);
 
     if(ret != 0)
         return ret; // Consumer or group doesn't exist
 
+    assert (cs != NULL || gqcs != NULL);
+
+    int64_t old_read_head = READ_HEAD(cs, gqcs), old_consume_head = CONSUME_HEAD(cs, gqcs);
+
     cs->notified=0;
 
-    assert(cs->private_consume_head <= cs->private_read_head);
+    assert(old_consume_head <= old_read_head);
 
-    if(new_consume_head > cs->private_read_head)
+    if(new_consume_head > old_read_head)
     {
         return DB_ERR_QUEUE_HEAD_INVALID; // // Invalid consume
     }
 
-    if(new_consume_head == cs->private_consume_head)
+    if(new_consume_head == old_consume_head)
     {
         return DB_ERR_QUEUE_COMPLETE; // // Nothing to consume
     }
 
-    cs->private_consume_head = new_consume_head;
+    if(gqcs != NULL)
+    {
+        gqcs->private_consume_head = new_consume_head;
+    }
+    else
+    {
+        cs->private_consume_head = new_consume_head;
+    }
 
 #if (VERBOSITY > 0)
     log_debug("BACKEND: Subscriber %" PRId64 " consumed entries, new_consume_head=%" PRId64 ", read_head=%" PRId64 "",
-                    (int64_t) cs->consumer_id, cs->private_consume_head, cs->private_read_head);
+                    (int64_t) cs->consumer_id, new_consume_head, old_read_head);
 #endif
 
     return (int) new_consume_head;
@@ -747,7 +831,7 @@ int _subscribe_queue(WORD consumer_id, WORD shard_id, WORD app_id, WORD table_ke
         return DB_ERR_DUPLICATE_CONSUMER; // Consumer already exists!
     }
 
-    consumer_state * cs = get_consumer_state(consumer_id, shard_id, app_id, group_id, callback, sockfd);
+    consumer_state * cs = get_consumer_state(consumer_id, shard_id, app_id, group_id, callback, sockfd, 0);
 
     int ret = skiplist_insert(db_row->consumer_state, consumer_id, cs, fastrandstate);
 
@@ -1083,7 +1167,8 @@ int delete_queue(WORD table_key, WORD queue_id, vector_clock * version, short us
     return ret;
 }
 
-consumer_state * get_consumer_state(WORD consumer_id, WORD shard_id, WORD app_id, WORD group_id, queue_callback* callback, int * sockfd)
+consumer_state * get_consumer_state(WORD consumer_id, WORD shard_id, WORD app_id, WORD group_id, queue_callback* callback, int * sockfd,
+                                    int is_group_subscription)
 {
     consumer_state * cs = (consumer_state *) malloc(sizeof(consumer_state));
     cs->consumer_id = consumer_id;
@@ -1097,6 +1182,8 @@ consumer_state * get_consumer_state(WORD consumer_id, WORD shard_id, WORD app_id
     cs->notified=0;
     cs->prh_version=NULL;
     cs->pch_version=NULL;
+
+    cs->group_queue_consumer_states = (is_group_subscription)?create_skiplist_long():NULL;
 
     return cs;
 }
@@ -1112,12 +1199,77 @@ void free_consumer_state(consumer_state * cs)
     if(cs->callback != NULL)
         free_queue_callback(cs->callback);
 
+    if(cs->group_queue_consumer_states != NULL)
+        skiplist_free_val(cs->group_queue_consumer_states, free_group_queue_consumer_state_sl);
+
     free(cs);
 }
 
 void free_consumer_state_sl(void * cs)
 {
     free_consumer_state((consumer_state *) cs);
+}
+
+group_queue_consumer_state * get_group_queue_consumer_state()
+{
+    group_queue_consumer_state * cs = (group_queue_consumer_state *) malloc(sizeof(group_queue_consumer_state));
+    cs->private_read_head = -1;
+    cs->private_consume_head = -1;
+    cs->prh_version=NULL;
+    cs->pch_version=NULL;
+    cs->gs = NULL;
+
+    return cs;
+}
+
+int add_consumer_state_to_group(WORD queue_id, group_queue_consumer_state * gqcs, group_state *gs, unsigned int * fastrandstate)
+{
+    snode_t * consumer_node = skiplist_search(gs->consumers, queue_id);
+    if(consumer_node != NULL)
+    {
+        return 1;
+    }
+
+    int ret = skiplist_insert(gs->consumers, queue_id, gqcs, fastrandstate);
+    if(ret == 0)
+        gqcs->gs = gs;
+    return ret;
+}
+
+group_queue_consumer_state * get_consumer_state_from_group(WORD queue_id, group_state * gs)
+{
+    snode_t * consumer_node = skiplist_search(gs->consumers, queue_id);
+    if(consumer_node != NULL)
+    {
+        return (group_queue_consumer_state *) (consumer_node->value);
+    }
+    return NULL;
+}
+
+group_queue_consumer_state * pop_consumer_state_from_group(WORD queue_id, group_state * gs)
+{
+    snode_t * consumer_node = skiplist_delete(gs->consumers, queue_id);
+    if(consumer_node != NULL)
+    {
+        return (group_queue_consumer_state *) (consumer_node->value);
+    }
+    return NULL;
+}
+
+void free_group_queue_consumer_state(group_queue_consumer_state * cs)
+{
+    if(cs->prh_version != NULL)
+        free_vc(cs->prh_version);
+
+    if(cs->pch_version != NULL)
+        free_vc(cs->pch_version);
+
+    free(cs);
+}
+
+void free_group_queue_consumer_state_sl(void * cs)
+{
+    free_group_queue_consumer_state((group_queue_consumer_state *) cs);
 }
 
 

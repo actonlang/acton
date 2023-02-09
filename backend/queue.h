@@ -42,6 +42,11 @@
 #define QUEUE_NOTIF_DELETED 1
 #define GROUP_NOTIF_ENQUEUED 2
 
+#define READ_HEAD(cs, gqcs) ((gqcs != NULL)?(gqcs->private_read_head):(cs->private_read_head))
+#define CONSUME_HEAD(cs, gqcs) ((gqcs != NULL)?(gqcs->private_consume_head):(cs->private_consume_head))
+#define READ_HEAD_VERSION(cs, gqcs) ((gqcs != NULL)?(gqcs->prh_version):(cs->prh_version))
+#define CONSUME_HEAD_VERSION(cs, gqcs) ((gqcs != NULL)?(gqcs->pch_version):(cs->pch_version))
+
 int enqueue(WORD * column_values, int no_cols, size_t last_blob_size, WORD table_key, WORD queue_id, short use_lock, db_t * db, unsigned int * fastrandstate);
 int read_queue(WORD consumer_id, WORD shard_id, WORD app_id, WORD table_key, WORD queue_id,
         int max_entries, int * entries_read, int64_t * new_read_head, vector_clock ** prh_version,
@@ -77,10 +82,17 @@ int set_private_read_head(WORD consumer_id, WORD shard_id, WORD app_id, WORD tab
 int set_private_consume_head(WORD consumer_id, WORD shard_id, WORD app_id, WORD table_key, WORD queue_id,
                             int64_t new_consume_head, vector_clock * version, db_t * db);
 
-consumer_state * get_consumer_state(WORD consumer_id, WORD shard_id, WORD app_id, WORD group_id, queue_callback* callback, int * sockfd);
-
+consumer_state * get_consumer_state(WORD consumer_id, WORD shard_id, WORD app_id, WORD group_id, queue_callback* callback, int * sockfd, int is_group_subscription);
 void free_consumer_state(consumer_state * cs);
 void free_consumer_state_sl(void * cs);
+
+group_queue_consumer_state * get_group_queue_consumer_state();
+int add_consumer_state_to_group(WORD queue_id, group_queue_consumer_state * gqcs, group_state *gs, unsigned int * fastrandstate);
+group_queue_consumer_state * get_consumer_state_from_group(WORD queue_id, group_state * gs);
+group_queue_consumer_state * pop_consumer_state_from_group(WORD queue_id, group_state * gs);
+void free_group_queue_consumer_state(group_queue_consumer_state * cs);
+void free_group_queue_consumer_state_sl(void * cs);
+
 void free_queue_table_state(WORD queue_table_state);
 
 #endif /* BACKEND_QUEUE_H_ */

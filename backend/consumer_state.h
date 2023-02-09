@@ -24,6 +24,18 @@
 #include "common.h"
 #include "failure_detector/vector_clock.h"
 
+typedef struct group_state group_state;
+
+typedef struct group_queue_consumer_state {
+    int64_t private_read_head;
+    int64_t private_consume_head;
+
+    vector_clock * prh_version;
+    vector_clock * pch_version;
+
+    group_state * gs;
+} group_queue_consumer_state;
+
 typedef struct consumer_state {
     WORD consumer_id;
     WORD shard_id;
@@ -40,6 +52,8 @@ typedef struct consumer_state {
 
     queue_callback* callback; // For local subscribers
     int * sockfd; // For remote subscribers
+
+    skiplist_t * group_queue_consumer_states;
 } consumer_state;
 
 #endif /* BACKEND_CONSUMER_STATE_H_ */
