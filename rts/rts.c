@@ -596,12 +596,18 @@ bool DEQ_msg($Actor a) {
     return has_more;
 }
 
+#define MARK_RESULT         NULL
+#define MARK_EXCEPTION      ($Cont)1
+
+#define EXCEPTIONAL(m)      (m->$cont == MARK_EXCEPTION)
+#define FROZEN(m)           (m->$cont == MARK_RESULT || EXCEPTIONAL(m))
+
 // Atomically add actor "a" to the waiting list of messasge "m" if it is not frozen (and return true),
 // else immediately return false.
 bool ADD_waiting($Actor a, B_Msg m) {
     bool did_add = false;
     spinlock_lock(&m->$wait_lock);
-    if (m->$cont) {
+    if (!FROZEN(m)) {
         a->$next = m->$waiting;
         m->$waiting = a;
         did_add = true;
@@ -611,9 +617,9 @@ bool ADD_waiting($Actor a, B_Msg m) {
 }
 
 // Atomically freeze message "m" and return its list of waiting actors. 
-$Actor FREEZE_waiting(B_Msg m) {
+$Actor FREEZE_waiting(B_Msg m, $Cont mark) {
     spinlock_lock(&m->$wait_lock);
-    m->$cont = NULL;
+    m->$cont = mark;
     spinlock_unlock(&m->$wait_lock);
     $Actor res = m->$waiting;
     m->$waiting = NULL;
@@ -776,8 +782,10 @@ void PUSH_catcher($Actor a, $Catcher c) {
 
 $Catcher POP_catcher($Actor a) {
     $Catcher c = a->$catcher;
-    a->$catcher = c->$next;
-    c->$next = NULL;
+    if (c) {
+        a->$catcher = c->$next;
+        c->$next = NULL;
+    }
     return c;
 }
 
@@ -819,7 +827,10 @@ void $PUSH($Cont cont) {
 
 void $POP(B_i64 n) {
     $Actor self = ($Actor)pthread_getspecific(self_key);
-    POP_catcher(self);
+    while (n > 0) {
+        POP_catcher(self);
+        n--;
+    }
 }
 
 void create_all_actor_queues() {
@@ -1167,7 +1178,7 @@ void deserialize_system(snode_t *actors_start) {
             $glob_deserialize(($Serializable)act, row, try_globdict);
 
             B_Msg m = act->$waitsfor;
-            if (m && m->$cont) {
+            if (m && !FROZEN(m)) {
                 ADD_waiting(act, m);
                 rtsd_printf("# Adding Actor %ld to wait for Msg %ld", act->$globkey, m->$globkey);
             }
@@ -1352,6 +1363,47 @@ void BOOTSTRAP(int argc, char *argv[]) {
 
 }
 
+void save_actor_state($Actor current, B_Msg m) {
+            if (db) {
+                int success = 0;
+                reverse_outgoing_queue(current);
+                while(!success && !rts_exit) {
+                    uuid_t * txnid = remote_new_txn(db);
+                    if(txnid == NULL)
+                        continue;
+                    current->$consume_hd++;
+                    serialize_actor(current, txnid);
+                    FLUSH_outgoing_db(current, txnid);
+                    serialize_msg(current->B_Msg, txnid);
+
+                    long key = current->$globkey;
+                    snode_t *m_start, *m_end;
+                    int entries_read = 0, minority_status = 0;
+                    int64_t read_head = -1;
+
+                    int ret0 = remote_read_queue_in_txn(($WORD) db->local_rts_id, 0, 0, MSG_QUEUE, ($WORD)key, 1, &entries_read, &read_head, &m_start, &m_end, &minority_status, NULL, db);
+                    rtsd_printf("   # dummy read msg from queue %ld returns %d, entries read: %d", key, ret0, entries_read);
+                    if(handle_status_and_schema_mismatch(ret0, minority_status, key))
+                        continue;
+
+                    int ret1 = remote_consume_queue_in_txn(($WORD) db->local_rts_id, 0, 0, MSG_QUEUE, ($WORD)key, read_head, &minority_status, txnid, db);
+                    rtsd_printf("   # consume msg %ld from queue %ld returns %d", m->$globkey, key, ret1);
+                    if(handle_status_and_schema_mismatch(ret1, minority_status, key))
+                        continue;
+
+                    int ret2 = remote_commit_txn(txnid, &minority_status, db);
+                    rtsd_printf("############## Commit returned %d, minority_status %d", ret2, minority_status);
+                    if(handle_status_and_schema_mismatch(ret2, minority_status, key))
+                        continue;
+                    if(ret2 == VAL_STATUS_COMMIT)
+                        success = 1;
+                }
+                FLUSH_outgoing_local(current);
+            } else {
+                reverse_outgoing_queue(current);
+                FLUSH_outgoing_local(current);
+            }
+}
 
 ////////////////////////////////////////////////////////////////////////////////////////
 
@@ -1455,48 +1507,9 @@ void wt_work_cb(uv_check_t *ev) {
 
         switch (r.tag) {
         case $RDONE: {
-            if (db) {
-                int success = 0;
-                reverse_outgoing_queue(current);
-                while(!success && !rts_exit) {
-                    uuid_t * txnid = remote_new_txn(db);
-                    if(txnid == NULL)
-                        continue;
-                    current->$consume_hd++;
-                    serialize_actor(current, txnid);
-                    FLUSH_outgoing_db(current, txnid);
-                    serialize_msg(current->B_Msg, txnid);
-
-                    long key = current->$globkey;
-                    snode_t *m_start, *m_end;
-                    int entries_read = 0, minority_status = 0;
-                    int64_t read_head = -1;
-
-                    int ret0 = remote_read_queue_in_txn(($WORD) db->local_rts_id, 0, 0, MSG_QUEUE, ($WORD)key, 1, &entries_read, &read_head, &m_start, &m_end, &minority_status, NULL, db);
-                    rtsd_printf("   # dummy read msg from queue %ld returns %d, entries read: %d", key, ret0, entries_read);
-                    if(handle_status_and_schema_mismatch(ret0, minority_status, key))
-                        continue;
-
-                    int ret1 = remote_consume_queue_in_txn(($WORD) db->local_rts_id, 0, 0, MSG_QUEUE, ($WORD)key, read_head, &minority_status, txnid, db);
-                    rtsd_printf("   # consume msg %ld from queue %ld returns %d", m->$globkey, key, ret1);
-                    if(handle_status_and_schema_mismatch(ret1, minority_status, key))
-                        continue;
-
-                    int ret2 = remote_commit_txn(txnid, &minority_status, db);
-                    rtsd_printf("############## Commit returned %d, minority_status %d", ret2, minority_status);
-                    if(handle_status_and_schema_mismatch(ret2, minority_status, key))
-                        continue;
-                    if(ret2 == VAL_STATUS_COMMIT)
-                        success = 1;
-                }
-                FLUSH_outgoing_local(current);
-            } else {
-                reverse_outgoing_queue(current);
-                FLUSH_outgoing_local(current);
-            }
-
-            m->B_value = r.value;                 // m->value holds the response,
-            $Actor b = FREEZE_waiting(m);        // so set m->cont = NULL and stop further m->waiting additions
+            save_actor_state(current, m);
+            m->B_value = r.value;                           // m->value holds the message result,
+            $Actor b = FREEZE_waiting(m, MARK_RESULT);      // so mark this and stop further m->waiting additions
             while (b) {
                 b->B_Msg->B_value = r.value;
                 b->$waitsfor = NULL;
@@ -1520,9 +1533,16 @@ void wt_work_cb(uv_check_t *ev) {
         }
         case $RFAIL: {
             $Catcher c = POP_catcher(current);
-            m->$cont = c->$cont;
-            m->B_value = r.value;
-            ENQ_ready(current);
+            if (c) {                            // Normal exception handling
+                m->$cont = c->$cont;
+                m->B_value = r.value;
+                ENQ_ready(current);
+            } else {                            // An unhandled exception
+                save_actor_state(current, m);
+                m->B_value = r.value;                               // m->value holds the raised exception,
+                $Actor b = FREEZE_waiting(m, MARK_EXCEPTION);       // so mark this and stop further m->waiting additions
+                // ... replace the following
+            }
             break;
         }
         case $RWAIT: {
@@ -1553,6 +1573,8 @@ void wt_work_cb(uv_check_t *ev) {
             if (ADD_waiting(current, x)) {      // x->cont != NULL: x is still being processed so current was added to x->waiting
                 rtsd_printf("## AWAIT actor %ld : %s", current->$globkey, current->$class->$GCINFO);
                 current->$waitsfor = x;
+            } else if (EXCEPTIONAL(m)) {
+            
             } else {                            // x->cont == NULL: x->value holds the final response, current is not in x->waiting
                 rtsd_printf("## AWAIT/wakeup actor %ld : %s", current->$globkey, current->$class->$GCINFO);
                 m->B_value = x->B_value;

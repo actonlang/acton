@@ -26,7 +26,7 @@ localName n                         = Derived n suffixLocal
 newactName n                        = Derived n suffixNewact
 
 g_act                               = globalName "act"
-g_ignore                            = globalName "ignore"
+g_none                              = globalName "none"
 
 suffixLocal                         = globalName "local"
 suffixNewact                        = globalName "newact"

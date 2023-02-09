@@ -107,7 +107,7 @@ pushH env h                             = sExpr (eCall (eQVar primPUSHc) [h])
 format (Int _ 0 _, cont)                = [sReturn cont]
 format (lvl, cont)                      = [sExpr (eCall (eQVar primPOP) [lvl]), sReturn cont]
 
-wrapC c f env                           = eCallCont2 c [level, eLambda' [(g_ignore,tNone)] cont]
+wrapC c f env                           = eCallCont2 c [level, eLambda' [(g_none,tNone)] cont]
   where (level, cont)                   = f 0 env
 
 unwrapL 0 lvl                           = eVar lvl
@@ -277,7 +277,7 @@ instance CPS [Stmt] where
                                              body <- hbody (Pop +: Wrap fcnt +: env) x hs
                                              els' <- cpsSuite (Pop +: Wrap fcnt +: env) els
                                              b' <- cpsSuite (Pop +: Seq ecnt +: Wrap fcnt +: env) b
-                                             return $ kDef env fcnt (pospar [(lvl,tInt), (cnt,tCont0)]) fin' :
+                                             return $ kDef env fcnt (pospar [(lvl,tI64), (cnt,tCont0)]) fin' :
                                                       kDef env hcnt (pospar [(x,tException)]) (pushH env (finalH x fcnt) : body) :
                                                       kDef env ecnt (pospar [(x,tNone)]) (pushH env (finalH x fcnt) : els') :
                                                       pushH env (eVar hcnt) :
@@ -332,7 +332,7 @@ tCont0                                  = tFun fxProc (posRow tNone posNil) kwdN
 tCont1 fx t                             = tFun fx (posRow t posNil) kwdNil tR
 
 finalH x f                              = eLambda' [(x,tException)] (eCall (eVar f) [eInt 0, raiseH])
-  where raiseH                          = eLambda' [(g_ignore,tNone)] (eCall (eQVar primRFail) [eVar x])
+  where raiseH                          = eLambda' [(g_none,tNone)] (eCall (eQVar primRFail) [eVar x])
 
 hbody env x hs                          = do bs <- mapM h hs
                                              return $ [sIf bs [sReturn $ eCall (eQVar primRFail) [eVar x]]]
