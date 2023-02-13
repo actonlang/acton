@@ -1,4 +1,7 @@
 
+def gc() -> None:
+    NotImplemented
+
 # sleep is sort of dangerous - it will actually put the RTS thread executing the
 # actor calling this function to sleep. This could be seen as ultrabad, like we
 # would want to just pause execution of one actor and let the RTS thread process
