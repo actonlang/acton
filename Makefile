@@ -251,7 +251,7 @@ clean-compiler:
 	rm -f compiler/actonc compiler/package.yaml compiler/acton.cabal
 
 # /deps --------------------------------------------------
-DEPS_DIRS=deps/bsdnt deps/libbsd deps/libmd deps/libprotobuf_c deps/libutf8proc deps/libuv deps/libxml2 deps/util-linux
+DEPS_DIRS=deps/bsdnt deps/libbsd deps/libmd deps/libprotobuf_c deps/libutf8proc deps/libuv deps/libxml2 deps/util-linux deps/libpcre2
 
 # libActonDeps.a
 # This is an archive of all external libraries that we depend on. Each library
@@ -274,6 +274,7 @@ DEP_LIBS+=deps/instdir/lib/libutf8proc.a
 DEP_LIBS+=deps/instdir/lib/libuuid.a
 DEP_LIBS+=deps/instdir/lib/libuv.a
 DEP_LIBS+=deps/instdir/lib/libxml2.a
+DEP_LIBS+=deps/instdir/lib/libpcre2.a
 
 lib/libActonDeps.a: $(DEP_LIBS) dist/zig
 	mkdir -p lib_deps
@@ -457,6 +458,19 @@ deps/instdir/lib/libxml2.a: deps/libxml2 $(ZIG)
 	&& ./autogen.sh --without-python --without-iconv --without-zlib --without-lzma --prefix=$(TD)/deps/instdir --enable-static --disable-shared CFLAGS="$(CFLAGS_DEPS)" \
 	&& make -j && make install \
 	&& mv $(TD)/deps/instdir/include/libxml2/libxml $(TD)/deps/instdir/include/libxml
+
+# /deps/libpcre2 ------------------------------------------
+LIBPCRE2_REF=52c08847921a324c804cabf2814549f50bce1265
+deps/libpcre2:
+	ls $@ >/dev/null 2>&1 || git clone https://github.com/PCRE2Project/pcre2.git $@
+
+deps/instdir/lib/libpcre2.a: deps/libpcre2 $(ZIG)
+	mkdir -p $(dir $@)
+	cd $< \
+	&& git checkout $(LIBPCRE2_REF) \
+	&& ./autogen.sh \
+	&& ./configure --prefix=$(TD)/deps/instdir --enable-static --disable-shared CFLAGS="$(CFLAGS_DEPS)" \
+	&& make -j && make install
 
 # --
 
