@@ -10,7 +10,7 @@ endif
 
 ACTONC=dist/bin/actonc
 ACTC=dist/bin/actonc
-ZIG_VERSION:=0.10.0
+ZIG_VERSION:=0.10.1
 CC=$(TD)/dist/zig/zig cc
 CXX=$(TD)/dist/zig/zig c++
 ZIG=dist/zig
