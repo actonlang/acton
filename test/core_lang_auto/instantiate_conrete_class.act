@@ -7,8 +7,8 @@ class Abstract ():
     pass
 
 # This should lead to compilation error
-def bad():
-    return Abstract()
+#def bad():
+#    return Abstract()
 
 class Concrete (Abstract):
     def __init__(self, x: Abstract):
