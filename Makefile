@@ -501,10 +501,10 @@ builtin/ty/out/types/__builtin__.ty: builtin/ty/src/__builtin__.act $(ACTONC)
 	$(ACTC) --always-build $<
 
 # Build our standard library
-stdlib/out/dev/lib/libActonProject.a: $(STDLIB_SRCFILES) dist/types/__builtin__.ty $(DIST_HFILES) $(ACTONC) $(DEPSA)
+stdlib/out/dev/lib/libActonProject.a: $(STDLIB_SRCFILES) dist/types/__builtin__.ty $(DIST_HFILES) $(ACTONC) $(DEPSA) $(LIBGC)
 	cd stdlib && ../$(ACTC) build --always-build --auto-stub --dev
 
-stdlib/out/rel/lib/libActonProject.a: $(STDLIB_SRCFILES) dist/types/__builtin__.ty $(DIST_HFILES) $(ACTONC) $(DEPSA)
+stdlib/out/rel/lib/libActonProject.a: $(STDLIB_SRCFILES) dist/types/__builtin__.ty $(DIST_HFILES) $(ACTONC) $(DEPSA) $(LIBGC)
 	cd stdlib && ../$(ACTC) build --always-build --auto-stub
 	cp -a stdlib/out/types/. dist/types/
 
@@ -555,7 +555,7 @@ rts/rts_dev.o: rts/rts.c rts/rts.h $(DEPSA) $(LIBGC)
 		-Wno-int-to-void-pointer-cast -Wno-unused-result \
 		-c $< -o $@
 
-rts/rts_rel.o: rts/rts.c rts/rts.h $(DEPSA)
+rts/rts_rel.o: rts/rts.c rts/rts.h $(DEPSA) $(LIBGC)
 	$(CC) $(CFLAGS) $(CFLAGS_REL) \
 		-Wno-int-to-void-pointer-cast -Wno-unused-result \
 		-c $< -o $@

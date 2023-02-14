@@ -1,6 +1,12 @@
 import acton.rts
 import time
 
+actor Interruptor():
+    def interrupt():
+        acton.rts.gc()
+        after 0.001: interrupt()
+    interrupt()
+
 actor main(env):
     def test():
         t1 = time.time_ns()
@@ -13,5 +19,6 @@ actor main(env):
         else:
             return 0
 
+#    i = Interruptor()
     r = test()
     env.exit(r)
