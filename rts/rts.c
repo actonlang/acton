@@ -2128,7 +2128,7 @@ int main(int argc, char **argv) {
     bool log_stderr = false;
 
     appname = argv[0];
-    pid_t pid = getpid();
+    pid = getpid();
 
     // Do line buffered output
     setlinebuf(stdout);
