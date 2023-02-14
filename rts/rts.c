@@ -1699,7 +1699,7 @@ const char* stats_to_json () {
     // Worker threads
     yyjson_mut_val *j_stat = yyjson_mut_obj(doc);
     yyjson_mut_obj_add_val(doc, root, "wt", j_stat);
-    for (unsigned int i = 0; i < num_wthreads; i++) {
+    for (unsigned int i = 1; i < num_wthreads+1; i++) {
         yyjson_mut_val *j_wt = yyjson_mut_obj(doc);
         yyjson_mut_obj_add_val(doc, j_stat, wt_stats[i].key, j_wt);
         yyjson_mut_obj_add_str(doc, j_wt, "state",       WT_State_name[wt_stats[i].state]);
