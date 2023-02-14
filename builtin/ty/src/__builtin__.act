@@ -14,8 +14,7 @@
 ## Built-in types ##################################################################################
 
 class value:
-  def __init__(self) -> None:
-      return None
+  __init__ : () -> None
   def __bool__(self) -> bool:
       NotImplemented
   def __str__(self) -> str:
