@@ -252,7 +252,7 @@ void on_new_connection(uv_stream_t *server, int status) {
 
 
 $R netQ_TCPListenerD__init (netQ_TCPListener self, $Cont c$cont) {
-    pin_actor_affinity(($Actor)self);
+    pin_actor_affinity();
 
     uv_tcp_t *server = (uv_tcp_t *)malloc(sizeof(uv_tcp_t));
     uv_tcp_init(get_uv_loop(), server);
@@ -264,7 +264,7 @@ $R netQ_TCPListenerD__init (netQ_TCPListener self, $Cont c$cont) {
         char errmsg[1024] = "Unable to parse address: ";
         uv_strerror_r(r, errmsg + strlen(errmsg), sizeof(errmsg)-strlen(errmsg));
         log_warn(errmsg);
-        $action2 f = self->on_listen_error;
+        $action2 f = self->on_error;
         f->$class->__asyn__(f, self, to$str(errmsg));
         // TODO: free() & return
         return $R_CONT(c$cont, B_None);
@@ -275,7 +275,7 @@ $R netQ_TCPListenerD__init (netQ_TCPListener self, $Cont c$cont) {
         char errmsg[1024] = "Error in TCP bind: ";
         uv_strerror_r(r, errmsg + strlen(errmsg), sizeof(errmsg)-strlen(errmsg));
         log_warn(errmsg);
-        $action2 f = self->on_listen_error;
+        $action2 f = self->on_error;
         f->$class->__asyn__(f, self, to$str(errmsg));
         // TODO: free() & return
         return $R_CONT(c$cont, B_None);
@@ -286,7 +286,7 @@ $R netQ_TCPListenerD__init (netQ_TCPListener self, $Cont c$cont) {
         char errmsg[1024] = "Error in TCP listen: ";
         uv_strerror_r(r, errmsg + strlen(errmsg), sizeof(errmsg)-strlen(errmsg));
         log_warn(errmsg);
-        $action2 f = self->on_listen_error;
+        $action2 f = self->on_error;
         f->$class->__asyn__(f, self, to$str(errmsg));
         // TODO: free()
         return $R_CONT(c$cont, B_None);
@@ -297,9 +297,23 @@ $R netQ_TCPListenerD__init (netQ_TCPListener self, $Cont c$cont) {
 
 B_NoneType netQ_TCPListenerD___resume__ (netQ_TCPListener self) {
     self->_stream = toB_int(-1);
-    $action2 f = self->on_listen_error;
+    $action2 f = self->on_error;
     f->$class->__asyn__(f, self, to$str("resume"));
     return B_None;
+}
+
+$R netQ_TCPListenConnectionD__init (netQ_TCPListenConnection self, $Cont c$cont) {
+    pin_actor_affinity();
+
+    uv_stream_t *client = (uv_tcp_t *)from$int(self->server_client);
+    int fd;
+    uv_fileno((uv_handle_t *)client, &fd);
+    uv_tcp_t* client_handle = (uv_tcp_t*) malloc(sizeof(uv_tcp_t));
+    uv_tcp_init(get_uv_loop(), client_handle);
+    uv_tcp_open(client_handle, fd);
+    self->client = toB_int((long)client_handle);
+
+    return $R_CONT(c$cont, B_None);
 }
 
 void netQ_TCPListenConnection__on_receive(uv_stream_t *stream, ssize_t nread, const uv_buf_t *buf) {
@@ -319,7 +333,7 @@ void netQ_TCPListenConnection__on_receive(uv_stream_t *stream, ssize_t nread, co
         free(buf->base);
 }
 
-$R netQ_TCPListenConnectionD__init (netQ_TCPListenConnection self, $Cont c$cont) {
+$R netQ_TCPListenConnectionD__read_start (netQ_TCPListenConnection self, $Cont c$cont) {
     uv_stream_t *client = (uv_stream_t *)from$int(self->client);
     client->data = self;
     int r = uv_read_start(client, alloc_buffer, netQ_TCPListenConnection__on_receive);
@@ -354,7 +368,18 @@ $R netQ_TCPListenConnectionD_writeG_local (netQ_TCPListenConnection self, $Cont 
     return $R_CONT(c$cont, B_None);
 }
 
+$R netQ_TCPListenConnectionD_closeG_local (netQ_TCPListenConnection self, $Cont c$cont) {
+    log_debug("Closing TCP connection, affinity=%d", self->$affinity);
+    uv_stream_t *client = (uv_stream_t *)from$int(self->client);
+    uv_read_stop(client);
+    if (uv_is_closing((uv_handle_t *)client) == 0) {
+        uv_close((uv_handle_t *)client, NULL);
+    }
+    return $R_CONT(c$cont, B_None);
+}
+
 B_NoneType netQ_TCPListenConnectionD___resume__ (netQ_TCPListenConnection self) {
+    self->server_client = toB_int(-1);
     self->client = toB_int(-1);
     return B_None;
 }
