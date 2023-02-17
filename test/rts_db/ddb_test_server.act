@@ -14,7 +14,7 @@ actor Tester(env, port):
         lsock = init_listen()
 
     def on_server_accept(c):
-        pass
+        c.cb_install(on_server_receive, on_server_error)
 
     def on_server_receive(c, data):
         print("RECV", c, data.decode())
@@ -30,11 +30,10 @@ actor Tester(env, port):
     def on_server_error(c, error):
         print("There was an error:", error, " from:", c)
 
-
     def init_listen():
         listen_auth = net.TCPListenAuth(net.TCPAuth(net.NetAuth(env.auth)))
         print("Starting to listen...")
-        s = net.TCPListener(listen_auth, "0.0.0.0", port, on_listen_error, on_server_accept, on_server_receive, on_server_error)
+        s = net.TCPListener(listen_auth, "0.0.0.0", port, on_listen_error, on_server_accept)
         print("NOW LISTENING ON", str(port))
 
         return s
