@@ -19,7 +19,7 @@
  */
 
 #include "client_api.h"
-#include "hashes.h"
+#include "hash_ring.h"
 #include "log.h"
 
 #define GC_THREADS 1
@@ -121,6 +121,26 @@ int queue_callback_cmp(WORD e1, WORD e2)
     return 0;
 }
 
+int queue_group_callback_cmp(WORD e1, WORD e2)
+{
+    queue_callback_args * a1 = (queue_callback_args *) e1;
+    queue_callback_args * a2 = (queue_callback_args *) e2;
+
+    if(a1->consumer_id != a2->consumer_id)
+        return (int64_t) a1->consumer_id - (int64_t) a2->consumer_id;
+
+    if(a1->group_id != a2->group_id)
+        return (int64_t) a1->group_id - (int64_t) a2->group_id;
+
+    if(a1->shard_id != a2->shard_id)
+        return (int64_t) a1->shard_id - (int64_t) a2->shard_id;
+
+    if(a1->app_id != a2->app_id)
+        return (int64_t) a1->app_id - (int64_t) a2->app_id;
+
+    return 0;
+}
+
 // Remote DB API:
 
 void * comm_thread_loop(void * args);
@@ -134,9 +154,10 @@ remote_db_t * get_remote_db(int replication_factor, int rack_id, int dc_id, char
     db->servers = create_skiplist(&sockaddr_cmp);
     db->rtses = create_skiplist(&sockaddr_cmp);
     db->actors = create_skiplist_long();
-    db->_rts_ring = create_skiplist_long();
+    db->_rts_ring = get_hash_ring();
     db->txn_state = create_skiplist_uuid();
     db->queue_subscriptions = create_skiplist(&queue_callback_cmp);
+    db->group_queue_subscriptions = create_skiplist(&queue_group_callback_cmp);
     db->msg_callbacks = create_skiplist_long();
     db->subscribe_lock = (pthread_mutex_t*) ((char*) db + sizeof(remote_db_t));
     pthread_mutex_init(db->subscribe_lock, NULL);
@@ -397,7 +418,7 @@ void * comm_thread_loop(void * args)
 
                     if (msg_len < 0)
                     {
-                            log_error("ERROR reading from socket");
+                        log_error("ERROR reading from socket");
                         continue;
                     }
                     else if(msg_len == 0) // client closed socket
@@ -467,9 +488,9 @@ void * comm_thread_loop(void * args)
                         WORD notif_table_key = (WORD) qqm->cell_address->table_key;
                         WORD notif_queue_id = (WORD) qqm->cell_address->keys[0];
 
-                        queue_callback * qc = get_queue_client_callback((WORD) qqm->consumer_id, (WORD) qqm->shard_id, (WORD) qqm->app_id,
+                        queue_callback * qc = get_queue_client_callback((WORD) qqm->consumer_id, (WORD) qqm->shard_id, (WORD) qqm->app_id, (WORD) qqm->group_id,
                                                                         notif_table_key, notif_queue_id,
-                                                                    1, db);
+                                                                        1, db);
 
                         if(qc == NULL)
                         {
@@ -479,8 +500,7 @@ void * comm_thread_loop(void * args)
                         continue;
                         }
 
-                    queue_callback_args * qca = get_queue_callback_args(notif_table_key, notif_queue_id, (WORD) qqm->app_id, (WORD) qqm->shard_id, (WORD) qqm->consumer_id, QUEUE_NOTIF_ENQUEUED);
-
+                    queue_callback_args * qca = get_queue_callback_args(notif_table_key, notif_queue_id, (WORD) qqm->app_id, (WORD) qqm->shard_id, (WORD) qqm->consumer_id, (WORD) qqm->group_id, QUEUE_NOTIF_ENQUEUED);
 #if (CLIENT_VERBOSITY > 0)
                     log_info("CLIENT: Attempting to notify local subscriber %" PRId64 " (%p/%p/%p/%p)", (int64_t) qqm->consumer_id, qc, qc->lock, qc->signal, qc->callback);
 #endif
@@ -535,7 +555,7 @@ int add_server_to_membership(char *hostname, int portno, int status, remote_db_t
     if(rs == NULL)
     {
         log_error("ERROR: Failed joining server %s:%d (DNS/network problem?)!", hostname, portno);
-            return 1;
+        return 1;
     }
 
     snode_t * prev_entry = skiplist_search(db->servers, &rs->serveraddr);
@@ -615,8 +635,18 @@ void free_rts_descriptor(WORD rts_d)
     free(rts_d);
 }
 
+WORD get_rts_key(WORD rts)
+{
+    return (WORD) ((rts_descriptor *) rts)->_local_rts_index;
+}
+
+WORD get_rts_live_field(WORD rts)
+{
+    return (WORD) &(((rts_descriptor *) rts)->status);
+}
+
 int add_rts_to_membership(int rack_id, int dc_id, char *hostname, int local_rts_id, int node_status,
-                            skiplist_t * rtss, skiplist_t * _rts_ring,
+                            skiplist_t * rtss, hash_ring * _rts_ring,
                             unsigned int * seedptr)
 {
     rts_descriptor * rts_d = get_rts_descriptor(rack_id, dc_id, hostname, local_rts_id, node_status);
@@ -645,15 +675,11 @@ int add_rts_to_membership(int rack_id, int dc_id, char *hostname, int local_rts_
 
     // Update RTS consistent hashing ring used for actor placement:
 
-    uint32_t rts_id_hash = hash32(rts_d->_local_rts_index);
-
-    assert(skiplist_search(_rts_ring, (WORD) rts_id_hash) == NULL);
-
-    status = skiplist_insert(_rts_ring, (WORD) rts_id_hash, rts_d, seedptr);
+    status = add_bucket(_rts_ring, (WORD) rts_d, &get_rts_key, &get_rts_live_field, seedptr);
 
     assert(status == 0);
 
-    log_debug("Added RTS %s:%d - %d (%d) to membership!", hostname, local_rts_id, rts_d->_local_rts_index, rts_id_hash);
+    log_debug("Added RTS %s:%d - %d to membership!", hostname, local_rts_id, rts_d->_local_rts_index);
 
     return 0;
 }
@@ -698,89 +724,29 @@ void free_actor_descriptor(actor_descriptor * a)
 
 skiplist_t * get_rtses_for_actor(long actor_id, remote_db_t * db)
 {
-    skiplist_t * result = create_skiplist_long();
-    rts_descriptor * crt_rts = NULL;
-    int live_nodes=0, status = 0;
-
-    for(snode_t * crt = HEAD(db->rtses); crt!=NULL; crt = NEXT(crt))
-    {
-        rts_descriptor * rts_d = (rts_descriptor *) crt->value;
-        if(rts_d->status == NODE_LIVE)
-            live_nodes++;
-    }
-
-    int replicas = (db->actor_replication_factor < live_nodes)?db->actor_replication_factor:live_nodes;
-
-    if(replicas == 0)
-    {
+    if(db->_rts_ring->live_buckets == 0)
         return NULL;
-    }
 
-    snode_t * snode = skiplist_search_higher(db->_rts_ring, (WORD) hash32((int) actor_id));
-
-    while(result->no_items < replicas)
+    if(db->actor_replication_factor == 1)
     {
-        if(snode == NULL)
-        {
-            // Wrap back to the beginning of the ring:
-            snode = HEAD(db->_rts_ring);
-        }
-
-        crt_rts = (rts_descriptor *) snode->value;
-
-        if(crt_rts->status == NODE_LIVE)
-        {
-            status = skiplist_insert(result, (WORD) crt_rts->_local_rts_index, crt_rts, &(db->fastrandstate));
-
-            assert(status == 0);
-        }
-
-        snode = NEXT(snode);
+        skiplist_t * result = create_skiplist_long();
+        rts_descriptor * rts_d = (rts_descriptor *) get_buckets_for_object(db->_rts_ring, (int) actor_id, 1,
+                                                                            &get_rts_key, &get_rts_live_field, &(db->fastrandstate));
+        skiplist_insert(result, (WORD) rts_d->_local_rts_index, rts_d, &(db->fastrandstate));
+        return result;
     }
 
-    return result;
+    return get_buckets_for_object(db->_rts_ring, (int) actor_id, db->actor_replication_factor,
+                                    &get_rts_key, &get_rts_live_field, &(db->fastrandstate));
 }
 
 rts_descriptor * get_first_rts_for_actor(long actor_id, remote_db_t * db)
 {
-    rts_descriptor * crt_rts = NULL;
-    int live_nodes=0, status = 0, visited = 0;
-
-    for(snode_t * crt = HEAD(db->rtses); crt!=NULL; crt = NEXT(crt))
-    {
-        rts_descriptor * rts_d = (rts_descriptor *) crt->value;
-        if(rts_d->status == NODE_LIVE)
-            live_nodes++;
-    }
-
-    if(live_nodes == 0)
-    {
+    if(db->_rts_ring->live_buckets == 0)
         return NULL;
-    }
 
-    snode_t * snode = skiplist_search_higher(db->_rts_ring, (WORD) hash32((int) actor_id));
-    while(visited < db->rtses->no_items)
-    {
-        if(snode == NULL)
-        {
-            // Actor falls at the end of the ring, return first RTS:
-            snode = HEAD(db->_rts_ring);
-            continue;
-        }
-
-        crt_rts = (rts_descriptor *) snode->value;
-
-        if(crt_rts->status == NODE_LIVE)
-        {
-            return crt_rts;
-        }
-
-        snode = NEXT(snode);
-
-        visited++;
-    }
-
-    return NULL;
+    return (rts_descriptor *) get_buckets_for_object(db->_rts_ring, (int) actor_id, 1,
+            &get_rts_key, &get_rts_live_field, &(db->fastrandstate));
 }
 
 skiplist_t * get_local_actors(remote_db_t * db)
@@ -906,7 +872,7 @@ int add_actor_to_membership(long actor_id, remote_db_t * db)
     snode_t * prev_entry = skiplist_search(db->actors, (WORD) a->actor_id);
     if(prev_entry != NULL)
     {
-        log_debug("Actor %ld already in membership, skipping.", a->actor_id);
+        log_debug("Actor %ld was already added to membership, skipping.\n", a->actor_id);
         return -1;
     }
 
@@ -914,7 +880,7 @@ int add_actor_to_membership(long actor_id, remote_db_t * db)
 
     if(status != 0)
     {
-        log_debug("ERROR: Error adding actor %ld to membership!", a->actor_id);
+        log_debug("ERROR: Error adding actor %ld to membership!\n", a->actor_id);
         free_actor_descriptor(a);
         return -2;
     }
@@ -931,7 +897,7 @@ int add_actor_to_membership(long actor_id, remote_db_t * db)
             a->is_local = 1;
     }
 
-    log_debug("Added actor %ld (%d) to membership!", a->actor_id, hash32((int) actor_id));
+    log_debug("Added actor %ld to membership!", a->actor_id);
 
     log_debug("CLIENT: Actor membership: %s", to_string_actor_membership(db, msg_buf));
 
@@ -947,8 +913,8 @@ char * to_string_actor_membership(remote_db_t * db, char * msg_buff)
     for(snode_t * crt = HEAD(db->actors); crt!=NULL; crt = NEXT(crt))
     {
         actor_descriptor * a = (actor_descriptor *) crt->value;
-        sprintf(crt_ptr, "Actor(actor_id=%ld (%d), rts=%s:%d, rts_index=%d, rack_id=%d, dc_id=%d, status=%d)",
-                        a->actor_id, hash32((int) a->actor_id),
+        sprintf(crt_ptr, "Actor(actor_id=%ld, rts=%s:%d, rts_index=%d, rack_id=%d, dc_id=%d, status=%d)",
+                        a->actor_id,
                         (a->host_rts != NULL && a->host_rts->hostname != NULL)?(a->host_rts->hostname):"local",
                         (a->host_rts != NULL)?a->host_rts->local_rts_id:-1,
                         (a->host_rts != NULL)?a->host_rts->_local_rts_index:-1,
@@ -1139,9 +1105,10 @@ int free_remote_db(remote_db_t * db)
     skiplist_free_val(db->servers, &free_remote_server_ptr);
     skiplist_free(db->txn_state);
     skiplist_free(db->queue_subscriptions);
+    skiplist_free(db->group_queue_subscriptions);
+    free_hash_ring(db->_rts_ring, NULL);
     skiplist_free_val(db->rtses, &free_rts_descriptor);
     skiplist_free(db->actors);
-    skiplist_free(db->_rts_ring);
     free(db);
     free_vc(db->my_lc);
     return 0;
@@ -2563,7 +2530,7 @@ int remote_consume_queue_in_txn(WORD consumer_id, WORD shard_id, WORD app_id, WO
     return 0;
 }
 
-int remote_subscribe_queue(WORD consumer_id, WORD shard_id, WORD app_id, WORD table_key, WORD queue_id,
+int _remote_subscribe_queue(WORD consumer_id, WORD shard_id, WORD app_id, WORD table_key, WORD queue_id, WORD group_id,
                         queue_callback * callback, int64_t * prev_read_head, int64_t * prev_consume_head,
                         int * minority_status, remote_db_t * db)
 {
@@ -2572,9 +2539,19 @@ int remote_subscribe_queue(WORD consumer_id, WORD shard_id, WORD app_id, WORD ta
 
     unsigned len = 0;
     void * tmp_out_buf = NULL;
+
+    queue_query_message * q = NULL;
+    if((int) group_id == -1)
+    {
+        q = build_subscribe_queue_in_txn(consumer_id, shard_id, app_id, table_key, queue_id, NULL, get_nonce(db)); // txnid
+    }
+    else
+    {
+        q = build_subscribe_group_in_txn(consumer_id, shard_id, app_id, group_id, NULL, get_nonce(db));
+    }
+
     *minority_status = 0;
 
-    queue_query_message * q = build_subscribe_queue_in_txn(consumer_id, shard_id, app_id, table_key, queue_id, NULL, get_nonce(db)); // txnid
     int success = serialize_queue_message(q, (void **) &tmp_out_buf, &len, 1, NULL);
 
     if(db->servers->no_items < db->quorum_size)
@@ -2640,14 +2617,23 @@ int remote_subscribe_queue(WORD consumer_id, WORD shard_id, WORD app_id, WORD ta
 
     // Add local subscription on client:
 
-    int local_ret = subscribe_queue_client(consumer_id, shard_id, app_id, table_key, queue_id, callback, 1, db);
+    int local_ret = -1;
+
+    if((int) group_id == -1)
+    {
+        local_ret = subscribe_queue_client(consumer_id, shard_id, app_id, table_key, queue_id, callback, 1, db);
+    }
+    else
+    {
+        local_ret = subscribe_to_group(consumer_id, shard_id, app_id, group_id, callback, 1, db);
+    }
 
     stat_stop(dbc_stats.remote_subscribe_queue, &ts_start, 0);
 
     return (subscription_exists || local_ret == CLIENT_ERR_SUBSCRIPTION_EXISTS)?CLIENT_ERR_SUBSCRIPTION_EXISTS:0;
 }
 
-int remote_unsubscribe_queue(WORD consumer_id, WORD shard_id, WORD app_id, WORD table_key, WORD queue_id,
+int _remote_unsubscribe_queue(WORD consumer_id, WORD shard_id, WORD app_id, WORD table_key, WORD queue_id, WORD group_id,
                             int * minority_status, remote_db_t * db)
 {
     struct timespec ts_start;
@@ -2655,9 +2641,19 @@ int remote_unsubscribe_queue(WORD consumer_id, WORD shard_id, WORD app_id, WORD 
 
     unsigned len = 0;
     void * tmp_out_buf = NULL;
+
+    queue_query_message * q = NULL;
+    if((int) group_id == -1)
+    {
+        q = build_unsubscribe_queue_in_txn(consumer_id, shard_id, app_id, table_key, queue_id, NULL, get_nonce(db)); // txnid
+    }
+    else
+    {
+        q = build_unsubscribe_group_in_txn(consumer_id, shard_id, app_id, group_id, NULL, get_nonce(db));
+    }
+
     *minority_status = 0;
 
-    queue_query_message * q = build_unsubscribe_queue_in_txn(consumer_id, shard_id, app_id, table_key, queue_id, NULL, get_nonce(db)); // txnid
     int success = serialize_queue_message(q, (void **) &tmp_out_buf, &len, 1, NULL);
 
     if(db->servers->no_items < db->quorum_size)
@@ -2722,6 +2718,15 @@ int remote_unsubscribe_queue(WORD consumer_id, WORD shard_id, WORD app_id, WORD 
     delete_msg_callback(mc->nonce, db);
 
     // Remove local subscription from client:
+    int status = -1;
+    if((int) group_id == -1)
+    {
+            status = unsubscribe_queue_client(consumer_id, shard_id, app_id, table_key, queue_id, 1, db);
+    }
+    else
+    {
+            status = unsubscribe_from_group(consumer_id, shard_id, app_id, group_id, 1, db);
+    }
 
     int local_ret = unsubscribe_queue_client(consumer_id, shard_id, app_id, table_key, queue_id, 1, db);
     stat_stop(dbc_stats.remote_unsubscribe_queue, &ts_start, 0);
@@ -2744,7 +2749,192 @@ int remote_unsubscribe_queue_in_txn(WORD consumer_id, WORD shard_id, WORD app_id
     return 0;
 }
 
+int remote_subscribe_queue(WORD consumer_id, WORD shard_id, WORD app_id, WORD table_key, WORD queue_id,
+                        queue_callback * callback, int64_t * prev_read_head, int64_t * prev_consume_head,
+                        int * minority_status, remote_db_t * db)
+{
+    return _remote_subscribe_queue(consumer_id, shard_id, app_id, table_key, queue_id, (WORD) -1,
+                                    callback, prev_read_head, prev_consume_head, minority_status, db);
+}
+
+int remote_unsubscribe_queue(WORD consumer_id, WORD shard_id, WORD app_id, WORD table_key, WORD queue_id,
+                            int * minority_status, remote_db_t * db)
+{
+    return _remote_unsubscribe_queue(consumer_id, shard_id, app_id, table_key, queue_id, (WORD) -1, minority_status, db);
+}
+
+int remote_subscribe_group(WORD consumer_id, WORD shard_id, WORD app_id, WORD group_id,
+                        queue_callback * callback, int * minority_status, remote_db_t * db)
+{
+	log_debug("remote_subscribe_group(consumer_id = %d, group_id = %d)", (int) consumer_id, (int) group_id);
+    return _remote_subscribe_queue(consumer_id, shard_id, app_id, (WORD) -1, (WORD) -1, group_id,
+                                    callback, NULL, NULL, minority_status, db);
+}
+
+int remote_unsubscribe_group(WORD consumer_id, WORD shard_id, WORD app_id, WORD group_id, int * minority_status, remote_db_t * db)
+{
+    return _remote_unsubscribe_queue(consumer_id, shard_id, app_id, (WORD) -1, (WORD) -1, group_id, minority_status, db);
+}
+
+int remote_add_queue_to_group(WORD table_key, WORD queue_id, WORD group_id, short use_lock, remote_db_t * db)
+{
+    struct timespec ts_start;
+    stat_start(dbc_stats.remote_subscribe_queue, &ts_start);
+
+    unsigned len = 0;
+    void * tmp_out_buf = NULL;
+
+    queue_query_message * q = build_add_queue_to_group_in_txn(table_key, queue_id, group_id, NULL, get_nonce(db));
+
+    int success = serialize_queue_message(q, (void **) &tmp_out_buf, &len, 1, NULL);
+
+    if(db->servers->no_items < db->quorum_size)
+    {
+        log_error("No quorum (%d/%d servers alive)", db->servers->no_items, db->replication_factor);
+        stat_stop(dbc_stats.remote_subscribe_queue, &ts_start, NO_QUORUM_ERR);
+        return NO_QUORUM_ERR;
+    }
+    remote_server * rs = (remote_server *) (HEAD(db->servers))->value;
+
+#if CLIENT_VERBOSITY > 0
+    char print_buff[1024];
+    to_string_queue_message(q, (char *) print_buff);
+    log_debug("Sending queue message to server %s: %s", rs->id, print_buff);
+#endif
+
+    // Send packet to server and wait for reply:
+
+    msg_callback * mc = NULL;
+    success = send_packet_wait_replies_sync(tmp_out_buf, len, q->nonce, &mc, db);
+    assert(success == 0);
+    free_queue_message(q);
+
+    if(mc->no_replies < db->quorum_size)
+    {
+        log_error("No quorum (%d/%d replies received)", mc->no_replies, db->replication_factor);
+        delete_msg_callback(mc->nonce, db);
+        stat_stop(dbc_stats.remote_subscribe_queue, &ts_start, NO_QUORUM_ERR);
+        return NO_QUORUM_ERR;
+    }
+
+    for(int i=0;i<mc->no_replies;i++)
+    {
+        assert(mc->reply_types[i] == RPC_TYPE_ACK);
+        ack_message * ack = (ack_message *) mc->replies[i];
+        if(ack->status == CLIENT_ERR_SUBSCRIPTION_EXISTS)
+        {
+                delete_msg_callback(mc->nonce, db);
+                stat_stop(dbc_stats.remote_subscribe_queue, &ts_start, SUBSCRIPTION_EXISTS);
+                // TODO: align return value to use client API codes rather than server API?
+                return CLIENT_ERR_SUBSCRIPTION_EXISTS;
+        }
+
+#if CLIENT_VERBOSITY > 0
+        to_string_ack_message(ack, (char *) print_buff);
+        log_debug("Got back response from server %s: %s", rs->id, print_buff);
+#endif
+    }
+
+    delete_msg_callback(mc->nonce, db);
+
+    stat_stop(dbc_stats.remote_subscribe_queue, &ts_start, 0);
+
+    return 0;
+}
+
+int remote_remove_queue_from_group(WORD table_key, WORD queue_id, WORD group_id, short use_lock, remote_db_t * db)
+{
+    struct timespec ts_start;
+    stat_start(dbc_stats.remote_subscribe_queue, &ts_start);
+
+    unsigned len = 0;
+    void * tmp_out_buf = NULL;
+
+    queue_query_message * q = build_remove_queue_from_group_in_txn(table_key, queue_id, group_id, NULL, get_nonce(db));
+
+    int success = serialize_queue_message(q, (void **) &tmp_out_buf, &len, 1, NULL);
+
+    if(db->servers->no_items < db->quorum_size)
+    {
+        log_error("No quorum (%d/%d servers alive)", db->servers->no_items, db->replication_factor);
+        stat_stop(dbc_stats.remote_subscribe_queue, &ts_start, NO_QUORUM_ERR);
+        return NO_QUORUM_ERR;
+    }
+    remote_server * rs = (remote_server *) (HEAD(db->servers))->value;
+
+#if CLIENT_VERBOSITY > 0
+    char print_buff[1024];
+    to_string_queue_message(q, (char *) print_buff);
+    log_debug("Sending queue message to server %s: %s", rs->id, print_buff);
+#endif
+
+    // Send packet to server and wait for reply:
+
+    msg_callback * mc = NULL;
+    success = send_packet_wait_replies_sync(tmp_out_buf, len, q->nonce, &mc, db);
+    assert(success == 0);
+    free_queue_message(q);
+
+    if(mc->no_replies < db->quorum_size)
+    {
+        log_error("No quorum (%d/%d replies received)", mc->no_replies, db->replication_factor);
+        delete_msg_callback(mc->nonce, db);
+        stat_stop(dbc_stats.remote_subscribe_queue, &ts_start, NO_QUORUM_ERR);
+        return NO_QUORUM_ERR;
+    }
+
+    for(int i=0;i<mc->no_replies;i++)
+    {
+        assert(mc->reply_types[i] == RPC_TYPE_ACK);
+        ack_message * ack = (ack_message *) mc->replies[i];
+        if(ack->status == CLIENT_ERR_SUBSCRIPTION_EXISTS)
+        {
+                delete_msg_callback(mc->nonce, db);
+                stat_stop(dbc_stats.remote_subscribe_queue, &ts_start, SUBSCRIPTION_EXISTS);
+                // TODO: align return value to use client API codes rather than server API?
+                return CLIENT_ERR_SUBSCRIPTION_EXISTS;
+        }
+
+#if CLIENT_VERBOSITY > 0
+        to_string_ack_message(ack, (char *) print_buff);
+        log_debug("Got back response from server %s: %s", rs->id, print_buff);
+#endif
+    }
+
+    delete_msg_callback(mc->nonce, db);
+
+    stat_stop(dbc_stats.remote_subscribe_queue, &ts_start, 0);
+
+    return 0;
+}
+
+
 // Subscription handling client-side:
+
+queue_callback * get_queue_client_callback(WORD consumer_id, WORD shard_id, WORD app_id, WORD group_id, WORD table_key, WORD queue_id, short use_lock, remote_db_t * db)
+{
+    queue_callback_args * qca = get_queue_callback_args(table_key, queue_id,
+                                                       app_id, shard_id, consumer_id,
+                                                       group_id, QUEUE_NOTIF_ENQUEUED);
+    if(use_lock)
+        pthread_mutex_lock(db->subscribe_lock);
+
+    snode_t * subscription_node = NULL;
+
+    if((int) group_id != -1)
+    {
+        subscription_node = skiplist_search(db->group_queue_subscriptions, (WORD) qca);
+    }
+    else
+    {
+        subscription_node = skiplist_search(db->queue_subscriptions, (WORD) qca);
+    }
+
+    if(use_lock)
+        pthread_mutex_unlock(db->subscribe_lock);
+
+    return (subscription_node != NULL)? ((queue_callback *) (subscription_node->value)):NULL;
+}
 
 int subscribe_queue_client(WORD consumer_id, WORD shard_id, WORD app_id, WORD table_key, WORD queue_id,
                     queue_callback * callback, short use_lock, remote_db_t * db)
@@ -2752,7 +2942,7 @@ int subscribe_queue_client(WORD consumer_id, WORD shard_id, WORD app_id, WORD ta
     struct timespec ts_start;
     stat_start(dbc_stats.subscribe_queue_client, &ts_start);
 
-    queue_callback_args * qca = get_queue_callback_args(table_key, queue_id, app_id, shard_id, consumer_id, QUEUE_NOTIF_ENQUEUED);
+    queue_callback_args * qca = get_queue_callback_args(table_key, queue_id, app_id, shard_id, consumer_id, (WORD) -1, QUEUE_NOTIF_ENQUEUED);
 
     if(use_lock)
         pthread_mutex_lock(db->subscribe_lock);
@@ -2785,28 +2975,13 @@ int subscribe_queue_client(WORD consumer_id, WORD shard_id, WORD app_id, WORD ta
     return status;
 }
 
-queue_callback * get_queue_client_callback(WORD consumer_id, WORD shard_id, WORD app_id, WORD table_key, WORD queue_id, short use_lock, remote_db_t * db)
-{
-    queue_callback_args * qca = get_queue_callback_args(table_key, queue_id, app_id, shard_id, consumer_id, QUEUE_NOTIF_ENQUEUED);
-
-    if(use_lock)
-        pthread_mutex_lock(db->subscribe_lock);
-
-    snode_t * subscription_node = skiplist_search(db->queue_subscriptions, (WORD) qca);
-
-    if(use_lock)
-        pthread_mutex_unlock(db->subscribe_lock);
-
-    return (subscription_node != NULL)? ((queue_callback *) (subscription_node->value)):NULL;
-}
-
 int unsubscribe_queue_client(WORD consumer_id, WORD shard_id, WORD app_id, WORD table_key, WORD queue_id,
                         short use_lock, remote_db_t * db)
 {
     struct timespec ts_start;
     stat_start(dbc_stats.unsubscribe_queue_client, &ts_start);
 
-    queue_callback_args * qca = get_queue_callback_args(table_key, queue_id, app_id, shard_id, consumer_id, QUEUE_NOTIF_ENQUEUED);
+    queue_callback_args * qca = get_queue_callback_args(table_key, queue_id, app_id, shard_id, consumer_id, (WORD) -1, QUEUE_NOTIF_ENQUEUED);
 
     if(use_lock)
         pthread_mutex_lock(db->subscribe_lock);
@@ -2829,6 +3004,76 @@ int unsubscribe_queue_client(WORD consumer_id, WORD shard_id, WORD app_id, WORD 
     stat_stop(dbc_stats.unsubscribe_queue_client, &ts_start, 0);
     return (callback != NULL)?0:CLIENT_ERR_NO_SUBSCRIPTION_EXISTS;
 }
+
+int subscribe_to_group(WORD consumer_id, WORD shard_id, WORD app_id, WORD group_id,
+                            queue_callback * callback, short use_lock, remote_db_t * db)
+{
+    struct timespec ts_start;
+    stat_start(dbc_stats.subscribe_queue_client, &ts_start);
+
+    queue_callback_args * qca = get_queue_callback_args((WORD) -1, (WORD) -1, app_id, shard_id, consumer_id, group_id, GROUP_NOTIF_ENQUEUED);
+
+    if(use_lock)
+        pthread_mutex_lock(db->subscribe_lock);
+
+    snode_t * subscription_node = skiplist_search(db->group_queue_subscriptions, (WORD) qca);
+
+    if(subscription_node != NULL)
+    {
+        if(use_lock)
+            pthread_mutex_unlock(db->subscribe_lock);
+
+        stat_stop(dbc_stats.subscribe_queue_client, &ts_start, SUBSCRIPTION_EXISTS);
+        return CLIENT_ERR_SUBSCRIPTION_EXISTS; // Subscription already exists
+    }
+
+    int status = skiplist_insert(db->group_queue_subscriptions, (WORD) qca, (WORD) callback, &(db->fastrandstate));
+
+    if(use_lock)
+        pthread_mutex_unlock(db->subscribe_lock);
+
+    assert(status == 0);
+
+#if (VERBOSITY > 0)
+    log_debug("CLIENT: Subscriber %" PRId64 "/%" PRId64 "/%" PRId64 " subscribed group %" PRId64 " with callback %p",
+                    (int64_t) app_id, (int64_t) shard_id, (int64_t) consumer_id,
+                    (int64_t) group_id, cs->callback);
+#endif
+
+    stat_stop(dbc_stats.subscribe_queue_client, &ts_start, 0);
+    return status;
+}
+
+int unsubscribe_from_group(WORD consumer_id, WORD shard_id, WORD app_id, WORD group_id,
+                            short use_lock, remote_db_t * db)
+{
+    struct timespec ts_start;
+    stat_start(dbc_stats.unsubscribe_queue_client, &ts_start);
+
+    queue_callback_args * qca = get_queue_callback_args((WORD) -1, (WORD) -1, app_id, shard_id, consumer_id, group_id, QUEUE_NOTIF_ENQUEUED);
+
+    if(use_lock)
+        pthread_mutex_lock(db->subscribe_lock);
+
+    queue_callback * callback = skiplist_delete(db->group_queue_subscriptions, (WORD) qca);
+
+    if(use_lock)
+        pthread_mutex_unlock(db->subscribe_lock);
+
+    assert(callback != NULL);
+
+    free_queue_callback(callback);
+
+#if (VERBOSITY > 0)
+        log_info("CLIENT: Subscriber %" PRId64 "/%" PRId64 "/%" PRId64 " unsubscribed group %" PRId64 " with callback %p",
+                    (int64_t) app_id, (int64_t) shard_id, (int64_t) consumer_id,
+                    (int64_t) group_id, cs->callback);
+#endif
+
+    stat_stop(dbc_stats.unsubscribe_queue_client, &ts_start, 0);
+    return (callback != NULL)?0:CLIENT_ERR_NO_SUBSCRIPTION_EXISTS;
+}
+
 
 
 // Txn mgmt:

@@ -1,4 +1,18 @@
 /*
+ * Copyright (C) 2019-2021 Deutsche Telekom AG
+ *
+ * Redistribution and use in source and binary forms, with or without modification, are permitted provided that the following conditions are met:
+ *
+ * 1. Redistributions of source code must retain the above copyright notice, this list of conditions and the following disclaimer.
+ *
+ * 2. Redistributions in binary form must reproduce the above copyright notice, this list of conditions and the following disclaimer in the documentation and/or other materials provided with the distribution.
+ *
+ * 3. Neither the name of the copyright holder nor the names of its contributors may be used to endorse or promote products derived from this software without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ */
+
+/*
  * client_api.h
  *
  *      Author: aagapi
@@ -8,6 +22,7 @@
 #define BACKEND_CLIENT_API_H_
 
 #include "db.h"
+#include "queue_callback.h"
 #include "failure_detector/db_queries.h"
 #include "failure_detector/fd.h"
 #include "fastrand.h"
@@ -139,6 +154,7 @@ typedef struct remote_db {
 
     skiplist_t * txn_state; // Client cache of txn state
     skiplist_t * queue_subscriptions; // Client queue subscriptions
+    skiplist_t * group_queue_subscriptions; // Group client queue subscriptions
     skiplist_t * msg_callbacks; // Client msg callbacks
     pthread_mutex_t* subscribe_lock;
     pthread_mutex_t* msg_callbacks_lock;
@@ -164,7 +180,7 @@ typedef struct remote_db {
     pthread_mutex_t * gossip_lock;
     pthread_cond_t * gossip_signal;
 
-    skiplist_t * _rts_ring; // Consistent hashing skiplist of rts-es for actor-to-rts placement
+    hash_ring * _rts_ring; // Consistent hashing ring for actor-to-rts placement
     int local_rts_id;
 } remote_db_t;
 
@@ -251,21 +267,31 @@ int remote_subscribe_queue(WORD consumer_id, WORD shard_id, WORD app_id, WORD ta
                         queue_callback * callback, int64_t * prev_read_head, int64_t * prev_consume_head,
                         int * minority_status, remote_db_t * db);
 int remote_unsubscribe_queue(WORD consumer_id, WORD shard_id, WORD app_id, WORD table_key, WORD queue_id,
-                            int * minority_status, remote_db_t * db);
+                        int * minority_status, remote_db_t * db);
 int remote_subscribe_queue_in_txn(WORD consumer_id, WORD shard_id, WORD app_id, WORD table_key, WORD queue_id,
                         queue_callback * callback, int64_t * prev_read_head, int64_t * prev_consume_head,
                         int * minority_status, uuid_t * txnid, remote_db_t * db);
 int remote_unsubscribe_queue_in_txn(WORD consumer_id, WORD shard_id, WORD app_id, WORD table_key, WORD queue_id,
-                                    int * minority_status, uuid_t * txnid, remote_db_t * db);
+                        int * minority_status, uuid_t * txnid, remote_db_t * db);
+int remote_subscribe_group(WORD consumer_id, WORD shard_id, WORD app_id, WORD group_id,
+                        queue_callback * callback, int * minority_status, remote_db_t * db);
+int remote_unsubscribe_group(WORD consumer_id, WORD shard_id, WORD app_id, WORD group_id,
+                        int * minority_status, remote_db_t * db);
 
 // Subscription handling client-side:
 
+queue_callback * get_queue_client_callback(WORD consumer_id, WORD shard_id, WORD app_id, WORD group_id, WORD table_key, WORD queue_id,
+                    short use_lock, remote_db_t * db);
 int subscribe_queue_client(WORD consumer_id, WORD shard_id, WORD app_id, WORD table_key, WORD queue_id,
                     queue_callback * callback, short use_lock, remote_db_t * db);
-queue_callback * get_queue_client_callback(WORD consumer_id, WORD shard_id, WORD app_id, WORD table_key, WORD queue_id,
-                    short use_lock, remote_db_t * db);
 int unsubscribe_queue_client(WORD consumer_id, WORD shard_id, WORD app_id, WORD table_key, WORD queue_id,
                         short use_lock, remote_db_t * db);
+int remote_add_queue_to_group(WORD table_key, WORD queue_id, WORD group_id, short use_lock, remote_db_t * db);
+int remote_remove_queue_from_group(WORD table_key, WORD queue_id, WORD group_id, short use_lock, remote_db_t * db);
+int subscribe_to_group(WORD consumer_id, WORD shard_id, WORD app_id, WORD group_id,
+                            queue_callback * callback, short use_lock, remote_db_t * db);
+int unsubscribe_from_group(WORD consumer_id, WORD shard_id, WORD app_id, WORD group_id,
+                            short use_lock, remote_db_t * db);
 
 
 // Txn mgmt:
@@ -306,7 +332,9 @@ typedef struct rts_descriptor
 
 rts_descriptor * get_rts_descriptor(int rack_id, int dc_id, char *hostname, int local_rts_id, int status);
 void free_rts_descriptor(WORD rts_d);
-int add_rts_to_membership(int rack_id, int dc_id, char *hostname, int local_rts_id, int node_status, skiplist_t * rtss, skiplist_t * _rts_ring, unsigned int * seedptr);
+WORD get_rts_key(WORD);
+WORD get_rts_live_field(WORD);
+int add_rts_to_membership(int rack_id, int dc_id, char *hostname, int local_rts_id, int node_status, skiplist_t * rtss, hash_ring * _rts_ring, unsigned int * seedptr);
 char * to_string_rts_membership(remote_db_t * db, char * msg_buff);
 
 // Actor mgmt:

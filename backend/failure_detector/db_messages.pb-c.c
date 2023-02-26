@@ -2752,7 +2752,7 @@ const ProtobufCMessageDescriptor txn_message__descriptor =
   (ProtobufCMessageInit) txn_message__init,
   NULL,NULL,NULL    /* reserved[123] */
 };
-static const ProtobufCFieldDescriptor queue_query_message__field_descriptors[11] =
+static const ProtobufCFieldDescriptor queue_query_message__field_descriptors[12] =
 {
   {
     "queue_address",
@@ -2815,8 +2815,20 @@ static const ProtobufCFieldDescriptor queue_query_message__field_descriptors[11]
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
   {
-    "queue_index",
+    "group_id",
     6,
+    PROTOBUF_C_LABEL_REQUIRED,
+    PROTOBUF_C_TYPE_INT32,
+    0,   /* quantifier_offset */
+    offsetof(QueueQueryMessage, group_id),
+    NULL,
+    NULL,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
+  {
+    "queue_index",
+    7,
     PROTOBUF_C_LABEL_REQUIRED,
     PROTOBUF_C_TYPE_INT32,
     0,   /* quantifier_offset */
@@ -2828,7 +2840,7 @@ static const ProtobufCFieldDescriptor queue_query_message__field_descriptors[11]
   },
   {
     "status",
-    7,
+    8,
     PROTOBUF_C_LABEL_REQUIRED,
     PROTOBUF_C_TYPE_INT32,
     0,   /* quantifier_offset */
@@ -2840,7 +2852,7 @@ static const ProtobufCFieldDescriptor queue_query_message__field_descriptors[11]
   },
   {
     "cells",
-    8,
+    9,
     PROTOBUF_C_LABEL_REPEATED,
     PROTOBUF_C_TYPE_MESSAGE,
     offsetof(QueueQueryMessage, n_cells),
@@ -2852,7 +2864,7 @@ static const ProtobufCFieldDescriptor queue_query_message__field_descriptors[11]
   },
   {
     "txnid",
-    9,
+    10,
     PROTOBUF_C_LABEL_REQUIRED,
     PROTOBUF_C_TYPE_BYTES,
     0,   /* quantifier_offset */
@@ -2864,7 +2876,7 @@ static const ProtobufCFieldDescriptor queue_query_message__field_descriptors[11]
   },
   {
     "nonce",
-    10,
+    11,
     PROTOBUF_C_LABEL_REQUIRED,
     PROTOBUF_C_TYPE_INT64,
     0,   /* quantifier_offset */
@@ -2876,7 +2888,7 @@ static const ProtobufCFieldDescriptor queue_query_message__field_descriptors[11]
   },
   {
     "mtype",
-    11,
+    12,
     PROTOBUF_C_LABEL_REQUIRED,
     PROTOBUF_C_TYPE_INT32,
     0,   /* quantifier_offset */
@@ -2889,21 +2901,22 @@ static const ProtobufCFieldDescriptor queue_query_message__field_descriptors[11]
 };
 static const unsigned queue_query_message__field_indices_by_name[] = {
   2,   /* field[2] = app_id */
-  7,   /* field[7] = cells */
+  8,   /* field[8] = cells */
   4,   /* field[4] = consumer_id */
+  5,   /* field[5] = group_id */
   1,   /* field[1] = msg_type */
-  10,   /* field[10] = mtype */
-  9,   /* field[9] = nonce */
+  11,   /* field[11] = mtype */
+  10,   /* field[10] = nonce */
   0,   /* field[0] = queue_address */
-  5,   /* field[5] = queue_index */
+  6,   /* field[6] = queue_index */
   3,   /* field[3] = shard_id */
-  6,   /* field[6] = status */
-  8,   /* field[8] = txnid */
+  7,   /* field[7] = status */
+  9,   /* field[9] = txnid */
 };
 static const ProtobufCIntRange queue_query_message__number_ranges[1 + 1] =
 {
   { 1, 0 },
-  { 0, 11 }
+  { 0, 12 }
 };
 const ProtobufCMessageDescriptor queue_query_message__descriptor =
 {
@@ -2913,7 +2926,7 @@ const ProtobufCMessageDescriptor queue_query_message__descriptor =
   "QueueQueryMessage",
   "",
   sizeof(QueueQueryMessage),
-  11,
+  12,
   queue_query_message__field_descriptors,
   queue_query_message__field_indices_by_name,
   1,  queue_query_message__number_ranges,

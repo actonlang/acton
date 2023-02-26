@@ -350,6 +350,7 @@ struct  QueueQueryMessage
   int32_t app_id;
   int32_t shard_id;
   int32_t consumer_id;
+  int32_t group_id;
   int32_t queue_index;
   int32_t status;
   size_t n_cells;
@@ -360,7 +361,7 @@ struct  QueueQueryMessage
 };
 #define QUEUE_QUERY_MESSAGE__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&queue_query_message__descriptor) \
-    , NULL, 0, 0, 0, 0, 0, 0, 0,NULL, {0,NULL}, 0, 0 }
+    , NULL, 0, 0, 0, 0, 0, 0, 0, 0,NULL, {0,NULL}, 0, 0 }
 
 
 struct  ConsumerID

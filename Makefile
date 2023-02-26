@@ -146,7 +146,19 @@ DEPSA:=lib/libActonDeps.a
 backend/comm.o: backend/comm.c backend/comm.h backend/failure_detector/db_queries.h $(DEPSA)
 	$(CC) -o$@ $< -c $(CFLAGS_DB)
 
-backend/db.o: backend/db.c backend/db.h backend/skiplist.h $(DEPSA)
+backend/hash_ring.o: backend/hash_ring.c backend/hash_ring.h
+	$(CC) -o$@ $< -c $(CFLAGS_DB)
+
+backend/queue_callback.o: backend/queue_callback.c backend/queue_callback.h backend/common.h
+	$(CC) -o$@ $< -c $(CFLAGS_DB)
+
+backend/db.o: backend/db.c backend/db.h backend/skiplist.h backend/hash_ring.h backend/common.h $(DEPSA)
+	$(CC) -o$@ $< -c $(CFLAGS_DB)
+
+backend/queue.o: backend/queue.c backend/queue.h backend/queue_callback.h backend/log.h backend/failure_detector/cells.h backend/failure_detector/db_queries.h backend/common.h $(DEPSA)
+	$(CC) -o$@ $< -c $(CFLAGS_DB)
+
+backend/queue_groups.o: backend/queue_groups.c backend/queue_groups.h backend/queue_callback.h backend/skiplist.h backend/log.h backend/common.h $(DEPSA)
 	$(CC) -o$@ $< -c $(CFLAGS_DB)
 
 backend/log.o: backend/log.c
@@ -526,8 +538,8 @@ lib/rel/libActon.a: stdlib/out/rel/lib/libActonProject.a $(LIBACTON_REL_OFILES)
 	ar rcs $@ $(filter-out stdlib/out/rel/lib/libActonProject.a,$^)
 
 COMM_OFILES += backend/comm.o rts/empty.o
-DB_OFILES += backend/db.o backend/queue.o backend/skiplist.o backend/txn_state.o backend/txns.o rts/empty.o
-DBCLIENT_OFILES += backend/client_api.o rts/empty.o
+DB_OFILES += backend/db.o backend/queue.o backend/skiplist.o backend/txn_state.o backend/txns.o backend/queue_callback.o backend/hash_ring.o backend/queue_groups.o rts/empty.o
+DBCLIENT_OFILES += backend/client_api.o backend/queue_callback.o backend/hash_ring.o rts/empty.o
 REMOTE_OFILES += backend/failure_detector/db_messages.pb-c.o backend/failure_detector/cells.o backend/failure_detector/db_queries.o backend/failure_detector/fd.o
 VC_OFILES += backend/failure_detector/vector_clock.o
 BACKEND_OFILES=$(COMM_OFILES) $(DB_OFILES) $(DBCLIENT_OFILES) $(REMOTE_OFILES) $(VC_OFILES) backend/log.o deps/netstring_rel.o deps/yyjson_rel.o

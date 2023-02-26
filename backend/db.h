@@ -1,4 +1,18 @@
 /*
+ * Copyright (C) 2019-2021 Deutsche Telekom AG
+ *
+ * Redistribution and use in source and binary forms, with or without modification, are permitted provided that the following conditions are met:
+ *
+ * 1. Redistributions of source code must retain the above copyright notice, this list of conditions and the following disclaimer.
+ *
+ * 2. Redistributions in binary form must reproduce the above copyright notice, this list of conditions and the following disclaimer in the documentation and/or other materials provided with the distribution.
+ *
+ * 3. Neither the name of the copyright holder nor the names of its contributors may be used to endorse or promote products derived from this software without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ */
+
+/*
  * db.h
  *      Author: aagapi
  */
@@ -6,25 +20,13 @@
 #ifndef BACKEND_DB_H_
 #define BACKEND_DB_H_
 
+#include "common.h"
 #include "skiplist.h"
 #include "fastrand.h"
 #include "failure_detector/vector_clock.h"
-
-#include <pthread.h>
-#include <unistd.h>
-#include <inttypes.h>
-
-typedef void *WORD;
+#include "hash_ring.h"
 
 // High level API:
-
-#define DB_TYPE_CHAR 0
-#define DB_TYPE_INT16 1
-#define DB_TYPE_INT32 2
-#define DB_TYPE_INT64 3
-#define DB_TYPE_FLOAT32 4
-#define DB_TYPE_FLOAT64 5
-#define DB_TYPE_BLOB 6
 
 // Query types:
 
@@ -49,6 +51,9 @@ typedef void *WORD;
 #define QUERY_TYPE_READ_QUEUE_RESPONSE 16
 #define QUERY_TYPE_QUEUE_NOTIFICATION 17
 
+#define QUERY_TYPE_ADD_QUEUE_TO_GROUP 18
+#define QUERY_TYPE_REMOVE_QUEUE_FROM_GROUP 19
+
 // Return statuses:
 
 #define DB_ERR_NO_TABLE -1
@@ -67,9 +72,12 @@ typedef void *WORD;
 #define QUEUE_NOTIF_DELETED 1
 
 #define VERBOSE_BACKEND 0
+
 #define MAX_PRINT_BUFF 128 * 1024
 
 #define MULTI_THREADED 0
+
+#define ENABLE_AUTO_QUEUE_GROUP_SUBSCRIPTIONS 1
 
 typedef struct db_schema {
     int * col_types;
@@ -91,48 +99,11 @@ typedef struct db_table {
     skiplist_t * rows;
     skiplist_t ** indexes;
 
+    skiplist_t * queues;
     skiplist_t * row_tombstones;
 
     pthread_mutex_t* lock;
 } db_table_t;
-
-// Queues:
-
-typedef struct queue_callback_args
-{
-    WORD table_key;
-    WORD queue_id;
-
-    WORD consumer_id;
-    WORD shard_id;
-    WORD app_id;
-
-    int status;
-} queue_callback_args;
-
-typedef struct queue_callback
-{
-    void (*callback)(queue_callback_args *);
-    pthread_mutex_t * lock;
-    pthread_cond_t * signal;
-} queue_callback;
-
-typedef struct consumer_state {
-    WORD consumer_id;
-    WORD shard_id;
-    WORD app_id;
-
-    int64_t private_read_head;
-    int64_t private_consume_head;
-
-    vector_clock * prh_version;
-    vector_clock * pch_version;
-
-    short notified;
-
-    queue_callback* callback; // For local subscribers
-    int * sockfd; // For remote subscribers
-} consumer_state;
 
 // Cells:
 
@@ -144,7 +115,8 @@ typedef struct db_cell {
     int last_blob_size;
 
     // Queue metadata:
-    skiplist_t * consumer_state; // TO DO: Change to hash table, add indexing by shard_id and app_id
+    skiplist_t * consumer_state;
+    WORD group_subscriptions; // This field is either a group_state * or a skiplist_t * of group_states (if db->queue_group_replication_factor > 1)
     int64_t no_entries;
     pthread_mutex_t* enqueue_lock;
     pthread_mutex_t* read_lock;
@@ -160,6 +132,10 @@ typedef db_cell_t db_row_t;
 typedef struct db {
     skiplist_t * tables;
     skiplist_t * txn_state;
+
+    hash_ring * queue_groups;
+    int queue_group_replication_factor;
+    int enable_auto_queue_group_subscriptions;
 #if (MULTI_THREADED == 1)
     pthread_mutex_t* txn_state_lock;
 #endif
@@ -208,13 +184,12 @@ int db_verify_index_range_version(int idx_idx, WORD start_idx_key, WORD end_idx_
 
 // Lower level API:
 
-db_row_t * create_db_row(WORD * column_values, db_schema_t * schema, size_t last_blob_size, unsigned int * fastrandstate);
 db_row_t * create_db_row_schemaless(WORD * column_values, int * primary_key_idxs, int no_primary_keys,
                                     int * clustering_key_idxs, int no_clustering_keys, int no_schema_clustering_keys,
                                     int no_cols, size_t last_blob_size, unsigned int * fastrandstate);
 // Assumes key indexes are in order (rartition keys, followed by clustering keys, followed by columns). Also assumes a single partition key
 db_row_t * create_db_row_schemaless2(WORD * keys, int no_keys, WORD * cols, int no_cols, WORD last_blob, size_t last_blob_size, unsigned int * fastrandstate);
-void free_db_row(db_row_t * row, db_schema_t * schema);
+void free_db_row(db_row_t * row, db_schema_t * schema, db_t * db);
 void long_row_to_string(db_row_t* row, char * to_string, int * len, char * orig_offset);
 void print_long_db(db_t * db);
 void print_long_table(db_table_t * table);
@@ -230,7 +205,7 @@ int table_range_search_clustering(WORD* primary_keys, WORD* start_clustering_key
 WORD* table_search_columns(WORD* primary_keys, WORD* clustering_keys, int no_clustering_keys, int* column_idxs, int no_columns, db_table_t * table);
 db_row_t* table_search_index(WORD index_key, int idx_idx, db_table_t * table);
 int table_range_search_index(int idx_idx, WORD start_idx_key, WORD end_idx_key, snode_t** start_row, snode_t** end_row, db_table_t * table);
-int table_delete_row(WORD* primary_keys, vector_clock * version, db_table_t * table, unsigned int * fastrandstate);
+int table_delete_row(WORD* primary_keys, vector_clock * version, db_table_t * table, db_t * db, unsigned int * fastrandstate);
 int table_delete_by_index(WORD index_key, int idx_idx, db_table_t * table);
 int table_verify_cell_version(WORD* primary_keys, int no_primary_keys, WORD* clustering_keys, int no_clustering_keys, vector_clock * version, db_table_t * table);
 int table_verify_row_range_version(WORD* start_primary_keys, WORD* end_primary_keys, int no_primary_keys,
@@ -240,11 +215,4 @@ int table_verify_cell_range_version(WORD* primary_keys, int no_primary_keys, WOR
 int table_verify_index_version(WORD index_key, int idx_idx, vector_clock * version, db_table_t * table);
 int table_verify_index_range_version(int idx_idx, WORD start_idx_key, WORD end_idx_key,
                                         int64_t * range_result_keys, vector_clock ** range_result_versions, int no_range_results, db_table_t * table);
-
-queue_callback_args * get_queue_callback_args(WORD table_key, WORD queue_id, WORD app_id, WORD shard_id, WORD consumer_id, int status);
-void free_queue_callback_args(queue_callback_args * qca);
-queue_callback * get_queue_callback(void (*callback)(queue_callback_args *));
-int wait_on_queue_callback(queue_callback *);
-void free_queue_callback(queue_callback * qc);
-
 #endif /* BACKEND_DB_H_ */

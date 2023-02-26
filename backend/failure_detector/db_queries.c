@@ -1037,6 +1037,7 @@ queue_query_message * init_query_message_basic(cell_address * cell_address, uuid
     ca->app_id = -1;
     ca->shard_id = -1;
     ca->consumer_id = -1;
+    ca->group_id = -1;
     ca->status = -1;
     if(txnid != NULL)
     {
@@ -1089,13 +1090,37 @@ queue_query_message * build_delete_queue_in_txn(WORD table_key, WORD queue_id, u
 queue_query_message * build_subscribe_queue_in_txn(WORD consumer_id, WORD shard_id, WORD app_id, WORD table_key, WORD queue_id, uuid_t * txnid, int64_t nonce)
 {
     cell_address * c = init_cell_address_single_key_copy((int64_t) table_key, (int64_t) queue_id);
-    return init_subscribe_queue_message(c, (int64_t) app_id, (int64_t) shard_id, (int64_t) consumer_id, txnid, nonce);
+    return init_subscribe_queue_message(c, (int64_t) app_id, (int64_t) shard_id, (int64_t) consumer_id, -1, txnid, nonce);
 }
 
 queue_query_message * build_unsubscribe_queue_in_txn(WORD consumer_id, WORD shard_id, WORD app_id, WORD table_key, WORD queue_id, uuid_t * txnid, int64_t nonce)
 {
     cell_address * c = init_cell_address_single_key_copy((int64_t) table_key, (int64_t) queue_id);
-    return init_unsubscribe_queue_message(c, (int64_t) app_id, (int64_t) shard_id, (int64_t) consumer_id, txnid, nonce);
+    return init_unsubscribe_queue_message(c, (int64_t) app_id, (int64_t) shard_id, (int64_t) consumer_id, -1, txnid, nonce);
+}
+
+queue_query_message * build_subscribe_group_in_txn(WORD consumer_id, WORD shard_id, WORD app_id, WORD group_id, uuid_t * txnid, int64_t nonce)
+{
+    cell_address * c = init_cell_address_single_key_copy((int64_t) -1, (int64_t) -1);
+    return init_subscribe_queue_message(c, (int64_t) app_id, (int64_t) shard_id, (int64_t) consumer_id, (int64_t) group_id, txnid, nonce);
+}
+
+queue_query_message * build_unsubscribe_group_in_txn(WORD consumer_id, WORD shard_id, WORD app_id, WORD group_id, uuid_t * txnid, int64_t nonce)
+{
+    cell_address * c = init_cell_address_single_key_copy((int64_t) -1, (int64_t) -1);
+    return init_unsubscribe_queue_message(c, (int64_t) app_id, (int64_t) shard_id, (int64_t) consumer_id, (int64_t) group_id, txnid, nonce);
+}
+
+queue_query_message * build_add_queue_to_group_in_txn(WORD table_key, WORD queue_id, WORD group_id, uuid_t * txnid, int64_t nonce)
+{
+    cell_address * c = init_cell_address_single_key_copy((int64_t) table_key, (int64_t) queue_id);
+    return init_add_queue_to_group_message(c, (int64_t) group_id, txnid, nonce);
+}
+
+queue_query_message * build_remove_queue_from_group_in_txn(WORD table_key, WORD queue_id, WORD group_id, uuid_t * txnid, int64_t nonce)
+{
+    cell_address * c = init_cell_address_single_key_copy((int64_t) table_key, (int64_t) queue_id);
+    return init_remove_queue_from_group_message(c, (int64_t) group_id, txnid, nonce);
 }
 
 
@@ -1113,23 +1138,41 @@ queue_query_message * init_delete_queue_message(cell_address * cell_address, uui
     return ca;
 }
 
-queue_query_message * init_subscribe_queue_message(cell_address * cell_address, int app_id, int shard_id, int consumer_id, uuid_t * txnid, int64_t nonce)
+queue_query_message * init_subscribe_queue_message(cell_address * cell_address, int app_id, int shard_id, int consumer_id, int group_id, uuid_t * txnid, int64_t nonce)
 {
     queue_query_message * ca = init_query_message_basic(cell_address, txnid, nonce);
     ca->msg_type = QUERY_TYPE_SUBSCRIBE_QUEUE;
     ca->app_id = app_id;
     ca->shard_id = shard_id;
     ca->consumer_id = consumer_id;
+    ca->group_id = group_id;
     return ca;
 }
 
-queue_query_message * init_unsubscribe_queue_message(cell_address * cell_address, int app_id, int shard_id, int consumer_id, uuid_t * txnid, int64_t nonce)
+queue_query_message * init_unsubscribe_queue_message(cell_address * cell_address, int app_id, int shard_id, int consumer_id, int group_id, uuid_t * txnid, int64_t nonce)
 {
     queue_query_message * ca = init_query_message_basic(cell_address, txnid, nonce);
     ca->msg_type = QUERY_TYPE_UNSUBSCRIBE_QUEUE;
     ca->app_id = app_id;
     ca->shard_id = shard_id;
     ca->consumer_id = consumer_id;
+    ca->group_id = group_id;
+    return ca;
+}
+
+queue_query_message * init_add_queue_to_group_message(cell_address * cell_address, int group_id, uuid_t * txnid, int64_t nonce)
+{
+    queue_query_message * ca = init_query_message_basic(cell_address, txnid, nonce);
+    ca->msg_type = QUERY_TYPE_ADD_QUEUE_TO_GROUP;
+    ca->group_id = group_id;
+    return ca;
+}
+
+queue_query_message * init_remove_queue_from_group_message(cell_address * cell_address, int group_id, uuid_t * txnid, int64_t nonce)
+{
+    queue_query_message * ca = init_query_message_basic(cell_address, txnid, nonce);
+    ca->msg_type = QUERY_TYPE_REMOVE_QUEUE_FROM_GROUP;
+    ca->group_id = group_id;
     return ca;
 }
 
@@ -1150,6 +1193,7 @@ queue_query_message * init_read_queue_message(cell_address * cell_address, int a
     ca->app_id = app_id;
     ca->shard_id = shard_id;
     ca->consumer_id = consumer_id;
+    ca->group_id = -1;
     return ca;
 }
 
@@ -1161,10 +1205,11 @@ queue_query_message * init_consume_queue_message(cell_address * cell_address, in
     ca->app_id = app_id;
     ca->shard_id = shard_id;
     ca->consumer_id = consumer_id;
+    ca->group_id = -1;
     return ca;
 }
 
-queue_query_message * init_read_queue_response(cell_address * cell_address, cell * cells, int no_cells, int app_id, int shard_id, int consumer_id, int64_t new_read_head, short status, uuid_t * txnid, int64_t nonce)
+queue_query_message * init_read_queue_response(cell_address * cell_address, cell * cells, int no_cells, int app_id, int shard_id, int consumer_id, int group_id, int64_t new_read_head, short status, uuid_t * txnid, int64_t nonce)
 {
     queue_query_message * ca = init_query_message_basic(cell_address, txnid, nonce);
     ca->msg_type = QUERY_TYPE_READ_QUEUE_RESPONSE;
@@ -1172,6 +1217,7 @@ queue_query_message * init_read_queue_response(cell_address * cell_address, cell
     ca->app_id = app_id;
     ca->shard_id = shard_id;
     ca->consumer_id = consumer_id;
+    ca->group_id = group_id;
     ca->cells = cells;
     ca->no_cells = no_cells;
     ca->status = status;
@@ -1179,7 +1225,7 @@ queue_query_message * init_read_queue_response(cell_address * cell_address, cell
 
 }
 
-queue_query_message * init_queue_notification(cell_address * cell_address, cell * cells, int no_cells, int app_id, int shard_id, int consumer_id, int64_t new_no_entries, short status, uuid_t * txnid, int64_t nonce)
+queue_query_message * init_queue_notification(cell_address * cell_address, cell * cells, int no_cells, int app_id, int shard_id, int consumer_id, int group_id, int64_t new_no_entries, short status, uuid_t * txnid, int64_t nonce)
 {
     queue_query_message * ca = init_query_message_basic(cell_address, txnid, nonce);
     ca->msg_type = QUERY_TYPE_QUEUE_NOTIFICATION;
@@ -1187,6 +1233,7 @@ queue_query_message * init_queue_notification(cell_address * cell_address, cell 
     ca->app_id = app_id;
     ca->shard_id = shard_id;
     ca->consumer_id = consumer_id;
+    ca->group_id = group_id;
     ca->cells = cells;
     ca->no_cells = no_cells;
     ca->status = status;
@@ -1229,6 +1276,7 @@ void init_queue_message_msg(QueueQueryMessage * msg, queue_query_message * ca, C
     msg->app_id = ca->app_id;
     msg->shard_id = ca->shard_id;
     msg->consumer_id = ca->consumer_id;
+    msg->group_id = ca->group_id;
     msg->queue_index = ca->queue_index;
     msg->status = ca->status;
 
@@ -1267,11 +1315,19 @@ queue_query_message * init_queue_message_from_msg(QueueQueryMessage * msg)
         }
         case QUERY_TYPE_SUBSCRIBE_QUEUE:
         {
-            return init_subscribe_queue_message(cell_address, msg->app_id, msg->shard_id, msg->consumer_id, (uuid_t *) msg->txnid.data, msg->nonce);
+            return init_subscribe_queue_message(cell_address, msg->app_id, msg->shard_id, msg->consumer_id, msg->group_id, (uuid_t *) msg->txnid.data, msg->nonce);
         }
         case QUERY_TYPE_UNSUBSCRIBE_QUEUE:
         {
-            return init_unsubscribe_queue_message(cell_address, msg->app_id, msg->shard_id, msg->consumer_id, (uuid_t *) msg->txnid.data, msg->nonce);
+            return init_unsubscribe_queue_message(cell_address, msg->app_id, msg->shard_id, msg->consumer_id, msg->group_id, (uuid_t *) msg->txnid.data, msg->nonce);
+        }
+        case QUERY_TYPE_ADD_QUEUE_TO_GROUP:
+        {
+            return init_add_queue_to_group_message(cell_address, msg->group_id, (uuid_t *) msg->txnid.data, msg->nonce);
+        }
+        case QUERY_TYPE_REMOVE_QUEUE_FROM_GROUP:
+        {
+            return init_remove_queue_from_group_message(cell_address, msg->group_id, (uuid_t *) msg->txnid.data, msg->nonce);
         }
         case QUERY_TYPE_ENQUEUE:
         {
@@ -1301,11 +1357,11 @@ queue_query_message * init_queue_message_from_msg(QueueQueryMessage * msg)
                     copy_cell_from_msg(cells + i, msg->cells[i]);
             }
 
-            return init_read_queue_response(cell_address, cells, msg->n_cells, msg->app_id, msg->shard_id, msg->consumer_id, msg->queue_index, msg->status, (uuid_t *) msg->txnid.data, msg->nonce);
+            return init_read_queue_response(cell_address, cells, msg->n_cells, msg->app_id, msg->shard_id, msg->consumer_id, msg->group_id, msg->queue_index, msg->status, (uuid_t *) msg->txnid.data, msg->nonce);
         }
         case QUERY_TYPE_QUEUE_NOTIFICATION:
         {
-            return init_queue_notification(cell_address, NULL, 0, msg->app_id, msg->shard_id, msg->consumer_id, msg->queue_index, msg->status, (uuid_t *) msg->txnid.data, msg->nonce);
+            return init_queue_notification(cell_address, NULL, 0, msg->app_id, msg->shard_id, msg->consumer_id, msg->group_id, msg->queue_index, msg->status, (uuid_t *) msg->txnid.data, msg->nonce);
         }
         default:
         {
@@ -1452,6 +1508,16 @@ char * to_string_queue_message(queue_query_message * ca, char * msg_buff)
         case QUERY_TYPE_UNSUBSCRIBE_QUEUE:
         {
             sprintf(crt_ptr, "UnsubscribeQueue(txnid=%s, nonce=%" PRId64 ", app_id=%d, shard_id=%d, consumer_id=%d, ", uuid_str, ca->nonce, ca->app_id, ca->shard_id, ca->consumer_id);
+            break;
+        }
+        case QUERY_TYPE_ADD_QUEUE_TO_GROUP:
+        {
+            sprintf(crt_ptr, "AddQueueToGroup(txnid=%s, nonce=%" PRId64 ", table_key=%" PRId64 ", queue_id=%" PRId64 ", group_id=%d, ", uuid_str, ca->nonce, ca->cell_address->table_key, ca->cell_address->keys[0], ca->group_id);
+            break;
+        }
+        case QUERY_TYPE_REMOVE_QUEUE_FROM_GROUP:
+        {
+            sprintf(crt_ptr, "RemoveQueueFromGroup(txnid=%s, nonce=%" PRId64 ", table_key=%" PRId64 ", queue_id=%" PRId64 ", group_id=%d, ", uuid_str, ca->nonce, ca->cell_address->table_key, ca->cell_address->keys[0], ca->group_id);
             break;
         }
         case QUERY_TYPE_ENQUEUE:

@@ -12,16 +12,43 @@
  * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#ifndef BACKEND_HASHES_H_
-#define BACKEND_HASHES_H_
+/*
+ * queue_callback.h
+ *      Author: aagapi
+ */
 
-uint32_t hash32(uint32_t x)
-// Collision free, each input bit affects each output bit with ~50% probability
+#ifndef BACKEND_QUEUE_CALLBACK_H_
+#define BACKEND_QUEUE_CALLBACK_H_
+
+#include "common.h"
+
+typedef struct queue_callback_args
 {
-    x = ((x >> 16) ^ x) * 0x45d9f3b;
-    x = ((x >> 16) ^ x) * 0x45d9f3b;
-    x = (x >> 16) ^ x;
-    return x;
-}
+    WORD table_key;
+    WORD queue_id;
 
-#endif /* BACKEND_HASHES_H_ */
+    WORD consumer_id;
+    WORD shard_id;
+    WORD app_id;
+
+    WORD group_id;
+
+    int status;
+} queue_callback_args;
+
+typedef struct queue_callback
+{
+    void (*callback)(queue_callback_args *);
+    pthread_mutex_t * lock;
+    pthread_cond_t * signal;
+} queue_callback;
+
+#define DEBUG_QUEUE_CALLBACK 0
+
+queue_callback_args * get_queue_callback_args(WORD table_key, WORD queue_id, WORD app_id, WORD shard_id, WORD consumer_id, WORD group_id, int status);
+void free_queue_callback_args(queue_callback_args * qca);
+queue_callback * get_queue_callback(void (*callback)(queue_callback_args *));
+int wait_on_queue_callback(queue_callback *);
+void free_queue_callback(queue_callback * qc);
+
+#endif /* BACKEND_QUEUE_CALLBACK_H_ */

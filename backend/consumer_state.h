@@ -12,16 +12,46 @@
  * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#ifndef BACKEND_HASHES_H_
-#define BACKEND_HASHES_H_
+/*
+ * consumer_state.h
+ *
+ *      Author: aagapi
+ */
 
-uint32_t hash32(uint32_t x)
-// Collision free, each input bit affects each output bit with ~50% probability
-{
-    x = ((x >> 16) ^ x) * 0x45d9f3b;
-    x = ((x >> 16) ^ x) * 0x45d9f3b;
-    x = (x >> 16) ^ x;
-    return x;
-}
+#ifndef BACKEND_CONSUMER_STATE_H_
+#define BACKEND_CONSUMER_STATE_H_
 
-#endif /* BACKEND_HASHES_H_ */
+#include "common.h"
+#include "failure_detector/vector_clock.h"
+
+typedef struct group_state group_state;
+
+typedef struct group_queue_consumer_state {
+    int64_t private_read_head;
+    int64_t private_consume_head;
+
+    vector_clock * prh_version;
+    vector_clock * pch_version;
+
+    group_state * gs;
+} group_queue_consumer_state;
+
+typedef struct consumer_state {
+    WORD consumer_id;
+    WORD shard_id;
+    WORD app_id;
+    WORD group_id;
+
+    int64_t private_read_head;
+    int64_t private_consume_head;
+
+    vector_clock * prh_version;
+    vector_clock * pch_version;
+
+    short notified;
+
+    queue_callback* callback; // For local subscribers
+    int * sockfd; // For remote subscribers
+} consumer_state;
+
+#endif /* BACKEND_CONSUMER_STATE_H_ */

@@ -21,6 +21,7 @@
 // ActonDB Server:
 
 #include "db.h"
+#include "queue_callback.h"
 #include "failure_detector/db_queries.h"
 #include "failure_detector/fd.h"
 #include "comm.h"
@@ -281,6 +282,7 @@ int create_queue_schema(db_t * db, unsigned int * fastrandstate)
     col_types[no_queue_cols] = DB_TYPE_BLOB; // Include blob
 
     int ret = create_queue_table(MSG_QUEUE, no_queue_cols + 1, col_types, db,  fastrandstate);
+
     log_info("%s - %s (%d)", "Create MSG_QUEUE table", ret==0?"OK":"FAILED", ret);
 
     return ret;
@@ -697,7 +699,7 @@ int get_queue_read_response_packet(snode_t* start_row, snode_t* end_row, int no_
 
     if(no_results == 0)
     {
-        m = init_read_queue_response(q->cell_address, NULL, 0, q->app_id, q->shard_id, q->consumer_id, new_read_head, (short) status, q->txnid, q->nonce);
+        m = init_read_queue_response(q->cell_address, NULL, 0, q->app_id, q->shard_id, q->consumer_id, q->group_id, new_read_head, (short) status, q->txnid, q->nonce);
     }
     else
     {
@@ -727,7 +729,7 @@ int get_queue_read_response_packet(snode_t* start_row, snode_t* end_row, int no_
                         result->version);
         }
 
-        m = init_read_queue_response(q->cell_address, cells, no_results, q->app_id, q->shard_id, q->consumer_id, new_read_head, (short) status, q->txnid, q->nonce);
+        m = init_read_queue_response(q->cell_address, cells, no_results, q->app_id, q->shard_id, q->consumer_id, q->group_id, new_read_head, (short) status, q->txnid, q->nonce);
     }
 
 #if (VERBOSE_RPC > 0)
@@ -767,7 +769,7 @@ int handle_subscribe_queue(queue_query_message * q, int * clientfd, int64_t * pr
         return 1;
     }
     else
-        return register_remote_subscribe_queue((WORD) q->consumer_id, (WORD) q->shard_id, (WORD) q->app_id, (WORD) q->cell_address->table_key, (WORD) q->cell_address->keys[0],
+        return register_remote_subscribe_queue((WORD) q->consumer_id, (WORD) q->shard_id, (WORD) q->app_id, (WORD) q->cell_address->table_key, (WORD) q->cell_address->keys[0], (WORD) q->group_id,
                                         clientfd, prev_read_head, prev_consume_head, 1, db, fastrandstate);
 }
 
@@ -779,7 +781,7 @@ int handle_unsubscribe_queue(queue_query_message * q, db_t * db, unsigned int * 
         return 1;
     }
     else
-        return unsubscribe_queue((WORD) q->consumer_id, (WORD) q->shard_id, (WORD) q->app_id, (WORD) q->cell_address->table_key, (WORD) q->cell_address->keys[0], 1, db);
+        return register_remote_unsubscribe_queue((WORD) q->consumer_id, (WORD) q->shard_id, (WORD) q->app_id, (WORD) q->cell_address->table_key, (WORD) q->cell_address->keys[0], (WORD) q->group_id, 1, db);
 }
 
 int handle_enqueue(queue_query_message * q, db_t * db, unsigned int * fastrandstate)
@@ -1149,6 +1151,12 @@ int handle_client_message(int childfd, int msg_len, db_t * db, membership * m, s
                         status = get_queue_ack_packet(status, qm, &tmp_out_buf, &snd_msg_len, vc);
                         break;
                     }
+                    case QUERY_TYPE_ADD_QUEUE_TO_GROUP:
+                    {
+                        // This is handled automatically, should not be called explicitly
+                        assert(0);
+                        break;
+                    }
                     case QUERY_TYPE_ENQUEUE:
                     {
                         status = handle_enqueue(qm, db, fastrandstate);
@@ -1166,6 +1174,11 @@ int handle_client_message(int childfd, int msg_len, db_t * db, membership * m, s
                         db_schema_t * schema = NULL;
                         status = handle_read_queue(qm, &entries_read, &new_read_head, &prh_version,
                                                         &start_row, &end_row, &schema, db, fastrandstate);
+                        if(status != QUEUE_STATUS_READ_COMPLETE && status != QUEUE_STATUS_READ_INCOMPLETE && status != DB_ERR_NO_CONSUMER)
+                        {
+                            log_error("Unexpected status returned by handle_read_queue(): %d", status);
+                            assert(0);
+                        }
                         status = get_queue_read_response_packet(start_row, end_row, entries_read, new_read_head, status, schema, qm, &tmp_out_buf, &snd_msg_len, vc);
 
                         break;
@@ -1869,7 +1882,67 @@ int handle_agreement_response_message(membership_agreement_msg * ma, membership_
     return m->proposal_status;
 }
 
-int install_agreed_view(membership_agreement_msg * ma, membership * m, vector_clock * my_lc, unsigned int * fastrandstate)
+int auto_update_group_queue_subscriptions(membership * m, db_t * db, unsigned int * fastrandstate)
+{
+    char msg_buf[4096];
+    log_debug("SERVER: Auto-updating actor queue mapping to groups.");
+
+    // Update queue group membership from gossip state:
+
+    for(snode_t * crt_rts = HEAD(m->connected_clients); crt_rts!=NULL; crt_rts = NEXT(crt_rts))
+    {
+        remote_server * rts = (remote_server *) (crt_rts->value);
+
+        int rts_id = get_node_id((struct sockaddr *) &(rts->serveraddr));
+
+        int update_status = set_bucket_status(db->queue_groups, (WORD) rts_id, rts->status, &get_group_state_key, &get_group_state_live_field);
+
+        if(update_status < 0) // We just learned of this group; add it
+        {
+            log_debug("SERVER: auto_update_group_queue_subscriptions: Bucket %d not found, adding it", rts_id);
+
+            group_state * new_group = get_group((WORD) rts_id);
+
+            add_bucket(db->queue_groups, new_group, &get_group_state_key, &get_group_state_live_field, fastrandstate);
+        }
+    }
+
+    if(db->queue_groups->buckets->no_items < 1) // 2
+    {
+        log_debug("SERVER: We only have %d groups in total, nothing to do", db->queue_groups->buckets->no_items);
+        return 0;
+    }
+
+    // Update cached version of queue group subscriptions for all queues in all DB tables:
+
+    for(snode_t * crt_table = HEAD(db->tables); crt_table!=NULL; crt_table = NEXT(crt_table))
+    {
+        db_table_t * table = (db_table_t *) (crt_table->value);
+
+        for(snode_t * crt_queue = HEAD(table->queues); crt_queue!=NULL; crt_queue = NEXT(crt_queue))
+        {
+            db_row_t * row = (db_row_t *) (crt_queue->value);
+
+            WORD result = get_buckets_for_object(db->queue_groups, (int) row->key, db->queue_group_replication_factor,
+                                        &get_group_state_key, &get_group_state_live_field,
+                                        fastrandstate);
+
+            if(db->queue_group_replication_factor > 1 && row->group_subscriptions != NULL)
+            {
+            	skiplist_free(row->group_subscriptions);
+            }
+
+            row->group_subscriptions = result;
+
+            if(row->group_subscriptions != NULL)
+            	create_headers_for_group_subscribers(row, db, fastrandstate);
+        }
+    }
+
+    return 0;
+}
+
+int install_agreed_view(membership_agreement_msg * ma, membership * m, vector_clock * my_lc, db_t * db, unsigned int * fastrandstate)
 {
 #if (VERBOSE_RPC > -1)
     char msg_buf[1024];
@@ -1947,12 +2020,16 @@ int install_agreed_view(membership_agreement_msg * ma, membership * m, vector_cl
     if(m->agreed_peers != NULL)
     {
         skiplist_free(m->agreed_peers);
-//      skiplist_free_val(m->agreed_peers, &free_remote_server_ptr);
     }
 
     m->agreed_peers = new_membership;
 
     update_or_replace_vc(&(m->view_id), ma->vc);
+
+    if(db->enable_auto_queue_group_subscriptions)
+    {
+        auto_update_group_queue_subscriptions(m, db, fastrandstate);
+    }
 
 #if (VERBOSE_RPC > -1)
     log_info("SERVER: Installed new agreed view %s, local_view_disagrees=%d",
@@ -1962,6 +2039,8 @@ int install_agreed_view(membership_agreement_msg * ma, membership * m, vector_cl
 
     return local_view_disagrees;
 }
+
+
 
 int notify_new_view_to_clients(membership * m, membership_agreement_msg * ma, vector_clock * my_lc)
 {
@@ -2005,7 +2084,7 @@ int notify_new_view_to_clients(membership * m, membership_agreement_msg * ma, ve
 
 int handle_agreement_notify_message(membership_agreement_msg * ma, membership * m, db_t * db, vector_clock * my_lc, vector_clock * prev_vc, unsigned int * fastrandstate)
 {
-    int ret = install_agreed_view(ma, m, my_lc, fastrandstate);
+    int ret = install_agreed_view(ma, m, my_lc, db, fastrandstate);
     notify_new_view_to_clients(m, ma, my_lc);
     return ret;
 }
@@ -2220,7 +2299,7 @@ int handle_server_message(int childfd, int msg_len, membership * m, db_t * db, u
 
                     status = get_agreement_notify_packet(PROPOSAL_STATUS_ACCEPTED, merged_membership, ma, &amr, &tmp_out_buf, &snd_msg_len, copy_vc(my_lc), prev_vc);
 
-                    int local_view_disagrees = install_agreed_view(amr, m, copy_vc(my_lc), fastrandstate);
+                    int local_view_disagrees = install_agreed_view(amr, m, copy_vc(my_lc), db, fastrandstate);
 
                     notify_new_view_to_clients(m, amr, copy_vc(my_lc));
 
@@ -2332,7 +2411,8 @@ typedef struct argp_arguments
   char *log_file_path;
 } argp_arguments;
 
-error_t parse_opt (int key, char *arg, struct argp_state *state) {
+error_t parse_opt (int key, char *arg, struct argp_state *state)
+{
     argp_arguments * arguments = (argp_arguments *) state->input;
     char tmp_buff[10];
 
