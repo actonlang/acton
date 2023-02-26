@@ -1,6 +1,6 @@
 
 typedef void *$WORD;
-#define $None ($WORD)0
+#define B_None ($WORD)0
 
 #define $long long
 #define $int64 int64_t
@@ -8,36 +8,36 @@ typedef void *$WORD;
 void $default__init__($WORD);
 
 
-void $printobj(char *mess,$WORD obj);
+// void B_printobj(char *mess,$WORD obj);
 
 
 #define $NEW($T, ...)       ({ $T $t = malloc(sizeof(struct $T)); \
-                               $t->$class = &$T ## $methods; \
+                               $t->$class = &$T ## G_methods; \
                                $t->$class->__init__($t, ##__VA_ARGS__); \
                                $t; })
 
 #define $NEWCC($X, $c, ...) ({ $X $x = malloc(sizeof(struct $X)); \
-                               $x->$class = &$X ## $methods; \
+                               $x->$class = &$X ## G_methods; \
                                $x->$class->__init__($x, ##__VA_ARGS__, $CONSTCONT($x,$c)); })
 
 #define $DNEW($T, $state)   ({ $T $t = malloc(sizeof(struct $T)); \
-                               $t->$class = &$T ## $methods;                                     \
-                               $dict_setitem($state->done,($Hashable)$Hashable$int$witness,to$int($state->row_no-1),$t); \
+                               $t->$class = &$T ## G_methods;                                     \
+                               B_dictD_setitem($state->done,(B_Hashable)B_HashableD_intG_witness,toB_int($state->row_no-1),$t); \
                                $t; })
 
-#define $AND(T, a, b)       ({ T $a = (a); ($a && (($value)$a)->$class->__bool__(($value)$a)->val) ? (b) : $a; })
+#define $AND(T, a, b)       ({ T $a = (a); ($a && ((B_value)$a)->$class->__bool__((B_value)$a)->val) ? (b) : $a; })
 
-#define $OR(T, a, b)        ({ T $a = (a); ($a && (($value)$a)->$class->__bool__(($value)$a)->val) ? $a : (b); })
+#define $OR(T, a, b)        ({ T $a = (a); ($a && ((B_value)$a)->$class->__bool__((B_value)$a)->val) ? $a : (b); })
 
-#define $NOT(T, a)          ({ T $a = (a); ($a && (($value)$a)->$class->__bool__(($value)$a)->val) ? $False : $True; })
+#define $NOT(T, a)          ({ T $a = (a); ($a && ((B_value)$a)->$class->__bool__((B_value)$a)->val) ? B_False : B_True; })
 
-#define $ISINSTANCE($x,$T)  ({ $Super$class $c = (($Super)$x)->$class; \
-                               while($c && $c != ($Super$class)&$T ## $methods) $c = $c->$superclass; \
-                               to$bool($c != 0); })
+#define $ISINSTANCE($x,$T)  ({ $SuperG_class $c = (($Super)$x)->$class; \
+                               while($c && $c != ($SuperG_class)&$T ## G_methods) $c = $c->$superclass; \
+                               toB_bool($c != 0); })
 
-#define $ISNOTNONE(x)       ((x) != $None ? $True : $False)
+#define $ISNOTNONE(x)       ((x) != B_None ? B_True : B_False)
 
-#define $ISNONE(x)          ((x) != $None ? $False : $True)
+#define $ISNONE(x)          ((x) != B_None ? B_False : B_True)
 
 #define $SKIPRES(cont)      (cont)
 

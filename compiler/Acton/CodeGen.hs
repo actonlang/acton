@@ -29,6 +29,7 @@ import Acton.QuickType
 import Acton.Subst
 import Prelude hiding ((<>))
 import System.FilePath.Posix
+import Numeric
 
 generate                            :: Acton.Env.Env0 -> FilePath -> Module -> IO (String,String,String)
 generate env srcbase m              = do return (n, h,c)
@@ -113,12 +114,15 @@ typedef env Def{}                   = empty
 decl env (Class _ n q a b)          = (text "struct" <+> classname env n <+> char '{') $+$ 
                                       nest 4 (vcat $ stdprefix env ++ initdef : serialize env tc : deserialize env tc : meths) $+$
                                       char '}' <> semi $+$
-                                      (text "struct" <+> genTopName env n <+> char '{') $+$ 
-                                      nest 4 (classlink env n $+$ vcat properties) $+$
-                                      char '}' <> semi
+                                      inst_struct
   where tc                          = TC (NoQ n) [ tVar v | Quant v _ <- q ]
         initdef : meths             = fields env tc
         properties                  = [ varsig env n (sctype sc) <> semi | (n, NSig sc Property) <- fullAttrEnv env tc ]
+        inst_struct | initNotImpl   = empty
+                    | otherwise     = (text "struct" <+> genTopName env n <+> char '{') $+$ 
+                                      nest 4 (classlink env n $+$ vcat properties) $+$
+                                      char '}' <> semi
+        initNotImpl                 = any hasNotImpl [ b' | Decl _ ds <- b, Def{dname=n',dbody=b'} <- ds, n' == initKW ]
 decl env (Def _ n q p _ a _ _ fx)   = gen env (exposeMsg fx $ fromJust a) <+> genTopName env n <+> parens (params env $ prowOf p) <> semi
 
 methstub env (Class _ n q a b)      = text "extern" <+> text "struct" <+> classname env n <+> methodtable env n <> semi $+$
@@ -168,7 +172,7 @@ classid env                         = text "int" <+> gen env classidKW <> semi
 superlink env                       = gen env tSuperclass <+> gen env superclassKW <> semi
   where tSuperclass                 = tCon $ TC qnSuperClass []
 
-qnSuperClass                        = GName mPrim (Derived (name "Super") (name "class"))
+qnSuperClass                        = GName mPrim (Derived (name "Super") suffixClass)
 
 serialize env c                     = text "void" <+> parens (char '*' <> gen env serializeKW) <+> parens (gen env c <> comma <+> gen env tSerialstate) <> semi
 
@@ -176,14 +180,14 @@ deserialize env c                   = gen env (tCon c) <+> parens (char '*' <> g
 
 classlink env n                     = text "struct" <+> classname env n <+> text "*" <> gen env classKW <> semi
 
-classname env n                     = genTopName env (Derived n $ name "class")
+classname env n                     = genTopName env (Derived n suffixClass)
 
 methodtable env n                   = gen env (tableName $ gname env n)
 
 methodtable' env (NoQ n)            = methodtable env n
 methodtable' env n                  = gen env $ tableName n
 
-tableName (GName m n)               = GName m (Derived n $ name "methods")
+tableName (GName m n)               = GName m (Derived n suffixMethods)
 
 
 newcon env n                        = gen env (conName $ gname env n)
@@ -191,11 +195,10 @@ newcon env n                        = gen env (conName $ gname env n)
 newcon' env (NoQ n)                 = newcon env n
 newcon' env n                       = gen env $ conName $ unalias env n
 
-conName (GName m n)                 = GName m (Derived n $ name "new")
+conName (GName m n)                 = GName m (Derived n suffixNew)
 
 serializeSup env c                  = methodtable' env c <> dot <> gen env serializeKW
 deserializeSup env c                = methodtable' env c <> dot <> gen env deserializeKW
-
 
 classKW                             = primKW "class"
 gcinfoKW                            = primKW "GCINFO"
@@ -204,12 +207,6 @@ superclassKW                        = primKW "superclass"
 componentsKW                        = name "components"
 serializeKW                         = name "__serialize__"
 deserializeKW                       = name "__deserialize__"
-
-primTuple                           = gPrim "tuple"
-primNoneType                        = gPrim "NoneType"
-primNone                            = gPrim "None"
-primTrue                            = gPrim "True"
-primFalse                           = gPrim "False"
 
 primAND                             = gPrim "AND"
 primOR                              = gPrim "OR"
@@ -226,7 +223,7 @@ primToBytes                         = name "to$bytes"
 
 tmpV                                = primKW "tmp"
 
-tSerialstate                        = tCon $ TC (GName mPrim (Derived (name "Serial") (name "state"))) []
+tSerialstate                        = tCon $ TC (GName mPrim (name "Serial$state")) []
 primStepSerialize                   = gPrim "step_serialize"
 primStepDeserialize                 = gPrim "step_deserialize"
 primDNEW                            = gPrim "DNEW"
@@ -371,13 +368,13 @@ instance (Gen a) => Gen (Maybe a) where
 
 
 instance Gen ModName where
-    gen env (ModName ns)            = hcat $ punctuate (char '$') $ map (gen env) ns
+    gen env (ModName ns)            = hcat $ punctuate (text "Q_") $ map (gen env) ns
 
 instance Gen QName where
     gen env (GName m n)
       | m == mPrim                  = char '$' <> text (nstr n)
-      | m == mBuiltin               = char '$' <> text (nstr n)
-      | otherwise                   = gen env m <> text "$$" <> text (mkCident $ nstr n)
+      | m == mBuiltin               = text "B_" <> text (nstr n)
+      | otherwise                   = gen env m <> text "Q_" <> text (mkCident $ nstr n)
     gen env (NoQ n)                 = gen env n
     gen env n@QName{}               = gen env (unalias env n)
 
@@ -395,17 +392,18 @@ gname env n                         = unalias env (NoQ n)
 
 mkCident "complex"                  = "complx"
 mkCident "__complex__"              = "__complx__"
-mkCident "complx"                   = "complex$"
-mkCident "__complx__"               = "__complex$__"
+mkCident "complx"                   = "A_complex"
+mkCident "__complx__"               = "A___complex__"
 
-mkCident str
-  | isCident str                    = str
-  | otherwise                       = preEscape $ concat $ map esc str
-  where isCident s@(c:cs)           = isAlpha c && all isAlphaNum cs
-        isAlpha c                   = c `elem` ['a'..'z'] || c `elem` ['A'..'Z'] || c `elem` ['_','$']
+mkCident (c:s)
+  | isAlpha c                       = c : esc s
+  | otherwise                       = hex c ++ esc s
+  where isAlpha c                   = c `elem` ['a'..'z'] || c `elem` ['A'..'Z'] || c `elem` ['_','$']
         isAlphaNum c                = isAlpha c || c `elem` ['0'..'9']
-        esc c | isAlphaNum c        = [c]
-              | otherwise           = '_' : show (fromEnum c) ++ "_"
+        esc (c:s) | isAlphaNum c    = c : esc s
+                  | otherwise       = hex c ++ esc s
+        esc ""                      = ""
+        hex c                       = "X_" ++ showHex (fromEnum c) "_"
 
 unCkeyword str
   | str `Data.Set.member` rws       = preEscape str
@@ -419,7 +417,7 @@ unCkeyword str
                                         "volatile", "while"
                                       ]
 
-preEscape str                       = "_$" ++ str
+preEscape str                       = "A_" ++ str
 
 word                                = text "$WORD"
 
@@ -599,7 +597,7 @@ declCon env n q
   where TFun _ fx r _ t             = sctype $ fst $ schemaOf env (eVar n)
         tObj                        = tCon $ TC (NoQ n) (map tVar $ qbound q)
         tRes                        = if t == tR then tR else tObj
-        pars                        = pPar paramNames' r
+        pars                        = pPar paramNames r
         args                        = pArg pars
         initcall env | t == tR      = text "return" <+> methodtable env n <> dot <> gen env initKW <> parens (gen env tmpV <> comma <+> gen env (retobj args)) <> semi
                      | otherwise    = methodtable env n <> dot <> gen env initKW <> parens (gen env tmpV <> comma' (gen env args)) <> semi $+$
@@ -667,9 +665,9 @@ instance Gen Expr where
       | otherwise                   = genQName env n
     gen env (Int _ i str)           = gen env primToStr <> parens (text "\"" <> text (show i) <> text "\"")
     gen env (Float _ _ str)         = gen env primToFloat <> parens (text str)
-    gen env (Bool _ True)           = gen env primTrue
-    gen env (Bool _ False)          = gen env primFalse
-    gen env (None _)                = gen env primNone
+    gen env (Bool _ True)           = gen env qnTrue
+    gen env (Bool _ False)          = gen env qnFalse
+    gen env (None _)                = gen env qnNone
     gen env e@Strings{}             = gen env primToStr <> parens(hsep (map pretty (sval e)))
     gen env e@BStrings{}            = gen env primToBytes <> parens(hsep (map pretty (sval e)))
     gen env (Call _ e p _)          = genCall env [] e p
@@ -691,7 +689,7 @@ instance Gen Expr where
                                         tmp <> semi) <+> rbrace)
       where n                       = qnList
             tmp                     = gen env tmpV
-            w                       = gen env primWSequenceList
+            w                       = gen env witSequenceList
             append                  = w <> text "->" <> gen env classKW <> text "->" <> gen env appendKW
             pars e                  = w <> comma <+> tmp <> comma <+> gen env e
         -- brackets (commaSep (gen env) es)
@@ -731,9 +729,9 @@ instance Gen Type where
     gen env (TVar _ v)              = gen env v
     gen env (TCon  _ c)             = gen env c
     gen env (TFun _ _ p _ t)        = gen env t <+> parens (char '*') <+> parens (gen env p)
-    gen env (TTuple _ pos _)        = gen env primTuple
+    gen env (TTuple _ pos _)        = gen env qnTuple
     gen env (TOpt _ t)              = gen env t
-    gen env (TNone _)               = gen env primNoneType
+    gen env (TNone _)               = gen env qnNoneType
     gen env (TWild _)               = word
     gen env (TRow _ _ _ t TNil{})   = gen env t
     gen env (TRow _ _ _ t r)        = gen env t <> comma <+> gen env r

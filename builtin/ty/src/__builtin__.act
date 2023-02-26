@@ -165,8 +165,6 @@ class bytes (value):
       NotImplemented
   def islower      (self) -> bool:
       NotImplemented
-  def isprintable  (self) -> bool:
-      NotImplemented
   def isspace      (self) -> bool:
       NotImplemented
   def istitle      (self) -> bool:
@@ -237,8 +235,6 @@ class bytearray (object):
       NotImplemented
   def islower      (self) -> bool:
       NotImplemented
-  def isprintable  (self) -> bool:
-      NotImplemented
   def isspace      (self) -> bool:
       NotImplemented
   def istitle      (self) -> bool:
@@ -287,7 +283,7 @@ class Msg[A] (value):
 
 class BaseException (value):
   def __init__(self, msg: str) -> None:
-      NotImplemented
+      self.error_message = msg
 
 class SystemExit (BaseException):
   pass

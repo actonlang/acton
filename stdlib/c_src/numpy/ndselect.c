@@ -12,33 +12,34 @@
  * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-void numpy$$ndselect$__init__(numpy$$ndselect self) {
+B_NoneType numpyQ_ndselectD___init__(numpyQ_ndselect self) {
+    return B_None;
 }
 
-void numpy$$ndselect$__serialize__(numpy$$ndselect wit, $Serial$state state) {
+void numpyQ_ndselectD___serialize__(numpyQ_ndselect wit, $Serial$state state) {
 }
 
-numpy$$ndselect numpy$$ndselect$__deserialize__(numpy$$ndselect wit, $Serial$state state) {
-    numpy$$ndselect res = $DNEW(numpy$$ndselect,state);
+numpyQ_ndselect numpyQ_ndselectD___deserialize__(numpyQ_ndselect wit, $Serial$state state) {
+    numpyQ_ndselect res = $DNEW(numpyQ_ndselect,state);
     return res;
 }
 
-struct numpy$$ndselect$class numpy$$ndselect$methods = {
-    "numpy$$ndselect",
+struct numpyQ_ndselectG_class numpyQ_ndselectG_methods = {
+    "numpyQ_ndselect",
     UNASSIGNED,
-    ($Super$class)&$value$methods,
-    numpy$$ndselect$__init__,
-    numpy$$ndselect$__serialize__,
-    numpy$$ndselect$__deserialize__,
-    ($bool (*)(numpy$$ndselect))$default__bool__,
-    ($str (*)(numpy$$ndselect))$default__str__,
-    ($str (*)(numpy$$ndselect))$default__str__
+    ($SuperG_class)&B_valueG_methods,
+    numpyQ_ndselectD___init__,
+    numpyQ_ndselectD___serialize__,
+    numpyQ_ndselectD___deserialize__,
+    (B_bool (*)(numpyQ_ndselect))$default__bool__,
+    (B_str (*)(numpyQ_ndselect))$default__str__,
+    (B_str (*)(numpyQ_ndselect))$default__str__
 };
 
-numpy$$ndselect numpy$$ndselect$new() {
-    numpy$$ndselect $tmp = malloc(sizeof(struct numpy$$ndselect));
-    $tmp->$class = &numpy$$ndselect$methods;
-    numpy$$ndselect$methods.__init__($tmp);
+numpyQ_ndselect numpyQ_ndselectG_new() {
+    numpyQ_ndselect $tmp = malloc(sizeof(numpyQ_ndselect));
+    $tmp->$class = &numpyQ_ndselectG_methods;
+    numpyQ_ndselectG_methods.__init__($tmp);
     return $tmp;
 }
 
@@ -46,71 +47,73 @@ numpy$$ndselect numpy$$ndselect$new() {
 
 
 
-void numpy$$ndindex$__init__(numpy$$ndindex self, $int index) {
+B_NoneType numpyQ_ndindexD___init__(numpyQ_ndindex self, B_int index) {
     self->index = index;
+    return B_None;
 }
 
-void numpy$$ndindex$__serialize__(numpy$$ndindex self, $Serial$state state) {
+void numpyQ_ndindexD___serialize__(numpyQ_ndindex self, $Serial$state state) {
     $step_serialize(self->index, state);
 }
 
-numpy$$ndindex numpy$$ndindex$__deserialize__(numpy$$ndindex self, $Serial$state state) {
-    numpy$$ndindex res = $DNEW(numpy$$ndindex,state);
-    res->index = ($int)$step_deserialize(state);
+numpyQ_ndindex numpyQ_ndindexD___deserialize__(numpyQ_ndindex self, $Serial$state state) {
+    numpyQ_ndindex res = $DNEW(numpyQ_ndindex,state);
+    res->index = (B_int)$step_deserialize(state);
     return res;
 }
 
-struct numpy$$ndindex$class numpy$$ndindex$methods = {
-    "numpy$$ndindex",
+struct numpyQ_ndindexG_class numpyQ_ndindexG_methods = {
+    "numpyQ_ndindex",
     UNASSIGNED,
-    ($Super$class)&$value$methods,
-    numpy$$ndindex$__init__,
-    numpy$$ndindex$__serialize__,
-    numpy$$ndindex$__deserialize__,
-    ($bool (*)(numpy$$ndindex))$default__bool__,
-    ($str (*)(numpy$$ndindex))$default__str__,
-    ($str (*)(numpy$$ndindex))$default__str__
+    ($SuperG_class)&B_valueG_methods,
+    numpyQ_ndindexD___init__,
+    numpyQ_ndindexD___serialize__,
+    numpyQ_ndindexD___deserialize__,
+    (B_bool (*)(numpyQ_ndindex))$default__bool__,
+    (B_str (*)(numpyQ_ndindex))$default__str__,
+    (B_str (*)(numpyQ_ndindex))$default__str__
 };
 
-numpy$$ndindex numpy$$ndindex$new($int p$1) {
-    numpy$$ndindex $tmp = malloc(sizeof(struct numpy$$ndindex));
-    $tmp->$class = &numpy$$ndindex$methods;
-    numpy$$ndindex$methods.__init__($tmp, p$1);
+numpyQ_ndindex numpyQ_ndindexG_new(B_int p$1) {
+    numpyQ_ndindex $tmp = malloc(sizeof(numpyQ_ndindex));
+    $tmp->$class = &numpyQ_ndindexG_methods;
+    numpyQ_ndindexG_methods.__init__($tmp, p$1);
     return $tmp;
 }
 
 
 
 
-void numpy$$ndslice$__init__(numpy$$ndslice self, $slice slc) {
+B_NoneType numpyQ_ndsliceD___init__(numpyQ_ndslice self, B_slice slc) {
     self->slc = slc;
+    return B_None;
 }
 
-void numpy$$ndslice$__serialize__(numpy$$ndslice self, $Serial$state state) {
+void numpyQ_ndsliceD___serialize__(numpyQ_ndslice self, $Serial$state state) {
     $step_serialize(self->slc, state);
 }
 
-numpy$$ndslice numpy$$ndslice$__deserialize__(numpy$$ndslice self, $Serial$state state) {
-    numpy$$ndslice res = $DNEW(numpy$$ndslice,state);
-    res->slc = ($slice)$step_deserialize(state);
+numpyQ_ndslice numpyQ_ndsliceD___deserialize__(numpyQ_ndslice self, $Serial$state state) {
+    numpyQ_ndslice res = $DNEW(numpyQ_ndslice,state);
+    res->slc = (B_slice)$step_deserialize(state);
     return res;
 }
 
-struct numpy$$ndslice$class numpy$$ndslice$methods = {
-    "numpy$$ndslice",
+struct numpyQ_ndsliceG_class numpyQ_ndsliceG_methods = {
+    "numpyQ_ndslice",
     UNASSIGNED,
-    ($Super$class)&$value$methods,
-    numpy$$ndslice$__init__,
-    numpy$$ndslice$__serialize__,
-    numpy$$ndslice$__deserialize__,
-    ($bool (*)(numpy$$ndslice))$default__bool__,
-    ($str (*)(numpy$$ndslice))$default__str__,
-    ($str (*)(numpy$$ndslice))$default__str__
+    ($SuperG_class)&B_valueG_methods,
+    numpyQ_ndsliceD___init__,
+    numpyQ_ndsliceD___serialize__,
+    numpyQ_ndsliceD___deserialize__,
+    (B_bool (*)(numpyQ_ndslice))$default__bool__,
+    (B_str (*)(numpyQ_ndslice))$default__str__,
+    (B_str (*)(numpyQ_ndslice))$default__str__
 };
 
-numpy$$ndslice numpy$$ndslice$new($slice p$1) {
-    numpy$$ndslice $tmp = malloc(sizeof(struct numpy$$ndslice));
-    $tmp->$class = &numpy$$ndslice$methods;
-    numpy$$ndslice$methods.__init__($tmp, p$1);
+numpyQ_ndslice numpyQ_ndsliceG_new(B_slice p$1) {
+    numpyQ_ndslice $tmp = malloc(sizeof(numpyQ_ndslice));
+    $tmp->$class = &numpyQ_ndsliceG_methods;
+    numpyQ_ndsliceG_methods.__init__($tmp, p$1);
     return $tmp;
 }

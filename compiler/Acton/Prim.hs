@@ -17,6 +17,7 @@ import Utils
 import Pretty
 import Acton.Syntax
 import Acton.Builtin
+import Acton.Names
 
 nPrim               = name "$"
 mPrim               = ModName [nPrim]
@@ -80,10 +81,10 @@ primIdentityOpt     = gPrim "IdentityOpt"
 primWEqNone         = gPrim "wEqNone"
 primWIdentityNone   = gPrim "wIdentityNone"
 
-primWIntegralInt    = gPrim "Integral$int$witness"
-primWI64Int         = gPrim "Integral$i64$witness"
-primWSequenceList   = gPrim "Sequence$list$witness"
-primWCollectionList = gPrim "Collection$list$witness"
+witIntegralInt      = GName mPrim $ Derived (deriveQ qnIntegral) $ Derived (deriveQ qnInt) suffixWitness
+witIntegralI64      = GName mPrim $ Derived (deriveQ qnIntegral) $ Derived (deriveQ qnI64) suffixWitness
+witSequenceList     = GName mPrim $ Derived (deriveQ qnSequence) $ Derived (deriveQ qnList) suffixWitness
+witCollectionList   = GName mPrim $ Derived (deriveQ qnCollection) $ Derived (deriveQ qnList) suffixWitness
 
 primISNOTNONE       = gPrim "ISNOTNONE"
 primISNONE          = gPrim "ISNONE"
@@ -158,9 +159,9 @@ primEnv             = [     (noq primASYNCf,        NDef scASYNCf NoDec),
 
                             (noq primWEqNone,       NVar tEqNone),
                             (noq primWIdentityNone, NVar tIdentityNone),
-                            (noq primWIntegralInt,  NVar tIntegralInt),
-                            (noq primWSequenceList, NVar tSequenceListWild),
-                            (noq primWCollectionList,NVar tCollectionListWild),
+                            (noq witIntegralInt,    NVar tIntegralInt),
+                            (noq witSequenceList,   NVar tSequenceListWild),
+                            (noq witCollectionList, NVar tCollectionListWild),
 
                             (noq primISNOTNONE,     NDef scISNOTNONE NoDec),
                             (noq primISNONE,        NDef scISNONE NoDec),

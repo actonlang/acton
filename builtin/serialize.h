@@ -24,7 +24,7 @@ struct $ROWLISTHEADER {
 
 struct $Serial$state {
     char *$GCINFO;
-    $dict done;
+    B_dict done;
     $WORD (*globmap)($WORD);
     long row_no;
     $ROW row;
@@ -57,29 +57,31 @@ $ROW $read_serialized(char *file);
 // $deserialize_file just calls the above two functions
 $Serializable $deserialize_file(char *file);
 
-// $Hashable$WORD (for pointers) ////////////////////////////////////////////////////////////////////////
+// B_HashableD_WORD (for pointers) ////////////////////////////////////////////////////////////////////////
 
-// $Hashable$WORD$witness is needed to create the Mapping$dict witness necessary for serialization.
+// B_HashableD_WORDG_witness is needed to create the MappingB_dict witness necessary for serialization.
 
-struct $Hashable$WORD$class {
+typedef struct B_HashableD_WORD *B_HashableD_WORD;
+
+struct B_HashableD_WORDG_class {
     char *$GCINFO;
     int $class_id;
-    $Super$class superclass;
-    void (*__init__)($Hashable$WORD);
-    void (*__serialize__)($Hashable$WORD,$Serial$state);
-    $Hashable$WORD (*__deserialize__)($Hashable$WORD,$Serial$state);
-    $bool (*__bool__)($Hashable$WORD);
-    $str (*__str__)($Hashable$WORD);
-    $str (*__repr__)($Hashable$WORD);
-    $bool (*__eq__)($Hashable$WORD, $WORD, $WORD);
-    $bool (*__ne__)($Hashable$WORD, $WORD, $WORD);
-    $int (*__hash__)($Hashable$WORD, $WORD);
+    $SuperG_class superclass;
+    void (*__init__)(B_HashableD_WORD);
+    void (*__serialize__)(B_HashableD_WORD,$Serial$state);
+    B_HashableD_WORD (*__deserialize__)(B_HashableD_WORD,$Serial$state);
+    B_bool (*__bool__)(B_HashableD_WORD);
+    B_str (*__str__)(B_HashableD_WORD);
+    B_str (*__repr__)(B_HashableD_WORD);
+    B_bool (*__eq__)(B_HashableD_WORD, $WORD, $WORD);
+    B_bool (*__ne__)(B_HashableD_WORD, $WORD, $WORD);
+    B_int (*__hash__)(B_HashableD_WORD, $WORD);
 };
 
-struct $Hashable$WORD {
-    struct $Hashable$WORD$class *$class;
+struct B_HashableD_WORD {
+    struct B_HashableD_WORDG_class *$class;
 };
 
-extern struct $Hashable$WORD$class $Hashable$WORD$methods;
-$Hashable$WORD $Hashable$WORD$new();
-extern struct $Hashable$WORD *$Hashable$WORD$witness;
+extern struct B_HashableD_WORDG_class B_HashableD_WORDG_methods;
+B_HashableD_WORD B_HashableD_WORDG_new();
+extern struct B_HashableD_WORD *B_HashableD_WORDG_witness;

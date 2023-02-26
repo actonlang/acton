@@ -5,24 +5,27 @@
 import net
 import random
 
+actor Server(conn):
+    def on_receive(c, data):
+        print("Server received some data:", data, " from:", c)
+        if data == b"PING":
+            c.write(b"PONG")
+            c.close()
 
-actor Server(env, port):
+    def on_error(c, error):
+        print("There was an error:", error, " from:", c)
+
+
+actor Listener(env, port):
     def on_lsock_error(l, error):
         print("There was an error with the TCPListener socket:", error)
 
     def on_server_accept(c):
-        pass
-
-    def on_server_receive(c, data):
-        print("Server received some data:", data, " from:", c)
-        if data == b"PING":
-            c.write(b"PONG")
-
-    def on_server_error(c, error):
-        print("There was an error:", error, " from:", c)
+        s = Server(c)
+        c.cb_install(s.on_receive, s.on_error)
 
     listen_auth = net.TCPListenAuth(net.TCPAuth(net.NetAuth(env.auth)))
-    server = net.TCPListener(listen_auth, "0.0.0.0", port, on_lsock_error, on_server_accept, on_server_receive, on_server_error)
+    server = net.TCPListener(listen_auth, "0.0.0.0", port, on_lsock_error, on_server_accept)
 
 
 actor Client(env: Env, port: int):
@@ -34,7 +37,7 @@ actor Client(env: Env, port: int):
         print("Client RECV", data)
         if data == b"PONG":
             print("Got PONG, all good, yay")
-            await async env.exit(0)
+            after 0.1: _exit()
         else:
             print("Got bad response, exiting with error..")
             await async env.exit(1)
@@ -42,8 +45,12 @@ actor Client(env: Env, port: int):
     def on_error(c, msg):
         print("Client ERR", msg)
 
+    def _exit():
+        await async env.exit(0)
+
     connect_auth = net.TCPConnectAuth(net.TCPAuth(net.NetAuth(env.auth)))
     client = net.TCPIPConnection(connect_auth, "127.0.0.1", port, on_connect, on_receive, on_error)
+
 
 actor main(env):
     def timeout_error():
@@ -54,6 +61,6 @@ actor main(env):
 
     port = random.randint(10000, 20000)
     print("Using port", port)
-    s = Server(env, port)
+    l = Listener(env, port)
     c = Client(env, port)
 

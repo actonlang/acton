@@ -10,7 +10,7 @@ endif
 
 ACTONC=dist/bin/actonc
 ACTC=dist/bin/actonc
-ZIG_VERSION:=0.10.0
+ZIG_VERSION:=0.10.1
 CC=$(TD)/dist/zig/zig cc
 CXX=$(TD)/dist/zig/zig c++
 ZIG=dist/zig
@@ -65,7 +65,6 @@ endif # -- END: Apple Mac OS X -------------------------------------------------
 CFLAGS += -Werror
 # -- Linux ---------------------------------------------------------------------
 ifeq ($(shell uname -s),Linux)
-CFLAGS += -I$(TD)/deps/instdir/include
 ZIG_OS:=linux
 ifeq ($(shell uname -m),x86_64)
 CFLAGS_TARGET := -target x86_64-linux-gnu.2.28
@@ -244,12 +243,17 @@ builtin/env_rel.o: builtin/env.c builtin/env.h builtin/builtin_rel.o
 ACTONC_ALL_HS=$(wildcard compiler/*.hs compiler/**/*.hs)
 ACTONC_TEST_HS=$(wildcard compiler/tests/*.hs)
 ACTONC_HS=$(filter-out $(ACTONC_TEST_HS),$(ACTONC_ALL_HS))
+# Set STATIC_ACTONC=true to build a static actonc binary. This works on Debian
+# 11 and distributions of similar age while it seems to fail on newer versions.
+ifeq ($(STATIC_ACTONC),true)
+ACTC_GHC_OPTS=-optl-static
+endif
 # NOTE: we're unsetting CC to avoid using zig cc for stack / ghc, which doesn't
 # seem to work properly
 compiler/actonc: compiler/package.yaml.in compiler/stack.yaml $(ACTONC_HS)
 	cd compiler && unset CC && unset CFLAGS && stack build --dry-run 2>&1 | grep "Nothing to build" || \
 		(sed 's,^version:.*,version:      "$(VERSION_INFO)",' < package.yaml.in > package.yaml \
-		&& stack build --ghc-options -j4 \
+		&& stack build --ghc-options='-j4 $(ACTC_GHC_OPTS)' \
 		&& stack --local-bin-path=. install 2>/dev/null)
 
 .PHONY: clean-compiler
@@ -509,10 +513,10 @@ builtin/ty/out/types/__builtin__.ty: builtin/ty/src/__builtin__.act $(ACTONC)
 	$(ACTC) --always-build $<
 
 # Build our standard library
-stdlib/out/dev/lib/libActonProject.a: $(STDLIB_SRCFILES) dist/types/__builtin__.ty $(DIST_HFILES) $(ACTONC) $(DEPSA)
+stdlib/out/dev/lib/libActonProject.a: $(STDLIB_SRCFILES) dist/types/__builtin__.ty $(DIST_HFILES) $(ACTONC) $(DEPSA) $(LIBGC)
 	cd stdlib && ../$(ACTC) build --always-build --auto-stub --dev
 
-stdlib/out/rel/lib/libActonProject.a: $(STDLIB_SRCFILES) dist/types/__builtin__.ty $(DIST_HFILES) $(ACTONC) $(DEPSA)
+stdlib/out/rel/lib/libActonProject.a: $(STDLIB_SRCFILES) dist/types/__builtin__.ty $(DIST_HFILES) $(ACTONC) $(DEPSA) $(LIBGC)
 	cd stdlib && ../$(ACTC) build --always-build --auto-stub
 	cp -a stdlib/out/types/. dist/types/
 
@@ -563,7 +567,7 @@ rts/rts_dev.o: rts/rts.c rts/rts.h $(DEPSA) $(LIBGC)
 		-Wno-int-to-void-pointer-cast -Wno-unused-result \
 		-c $< -o $@
 
-rts/rts_rel.o: rts/rts.c rts/rts.h $(DEPSA)
+rts/rts_rel.o: rts/rts.c rts/rts.h $(DEPSA) $(LIBGC)
 	$(CC) $(CFLAGS) $(CFLAGS_REL) \
 		-Wno-int-to-void-pointer-cast -Wno-unused-result \
 		-c $< -o $@
@@ -737,4 +741,4 @@ debian/changelog: debian/changelog.in CHANGELOG.md
 
 .PHONY: debs
 debs: debian/changelog
-	debuild --preserve-envvar VERSION_INFO -i -us -uc -b
+	debuild --preserve-envvar VERSION_INFO --preserve-envvar STATIC_ACTONC -i -us -uc -b

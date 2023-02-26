@@ -55,9 +55,9 @@ jobs:
             ~/.stack
           key: ${{ matrix.os }}-${{ secrets.CACHE_VERSION }}
       - name: "Install build prerequisites"
-        run: brew install automake gettext haskell-stack libtool protobuf-c
+        run: brew install automake gettext haskell-stack libtool pkg-config protobuf-c
       - name: "Build Acton"
-        run: make -j2 -C ${{ github.workspace }} BUILD_RELEASE=${{ env.BUILD_RELEASE }}
+        run: make -C ${{ github.workspace }} BUILD_RELEASE=${{ env.BUILD_RELEASE }}
       - name: "Build a release"
         run: make -C ${{ github.workspace }} release
       - name: "Upload artifact"
@@ -156,7 +156,7 @@ jobs:
           apt-get install -qy libprotobuf-c-dev zlib1g-dev
           apt-get install -qy bash-completion build-essential debhelper devscripts
       - name: "Build Debian packages"
-        run: make -C ${GITHUB_WORKSPACE} debs BUILD_RELEASE=${{ env.BUILD_RELEASE }}
+        run: make -C ${GITHUB_WORKSPACE} debs BUILD_RELEASE=${{ env.BUILD_RELEASE }} STATIC_ACTONC=true
       - name: "Compute variables"
         id: vars
         run: |
@@ -313,6 +313,8 @@ jobs:
         include:
           - os: "debian"
             version: "11"
+          - os: "ubuntu"
+            version: "18.04"
           - os: "ubuntu"
             version: "20.04"
           - os: "ubuntu"

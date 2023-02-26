@@ -304,7 +304,7 @@ instance EnvOf Stmt where
 
 commonEnvOf suites
   | null liveSuites                 = []
-  | otherwise                       = restrict (envOf $ head liveSuites) (foldr1 intersect $ map bound $ tail liveSuites)
+  | otherwise                       = foldl restrict (envOf $ head liveSuites) (map bound $ tail liveSuites)
   where liveSuites                  = filter fallsthru suites
 
 instance EnvOf Decl where

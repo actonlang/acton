@@ -510,12 +510,15 @@ instance InfEnv Decl where
                                                  --traceM ("\n## infEnv class " ++ prstr n)
                                                  pushFX fxPure tNone
                                                  te0 <- infProperties env as' b
-                                                 (cs,te,b') <- infEnv env1 b
+                                                 (cs,te,b1) <- infEnv env1 b
                                                  popFX
                                                  (cs1,eq1) <- solveScoped env1 (qbound q) te tNone cs
                                                  checkNoEscape env (qbound q)
-                                                 (nterms,_,_) <- checkAttributes [] te' te
-                                                 return (cs1, [(n, NClass q as' (te0++te))], Class l n q us (bindWits eq1 ++ props te0 ++ b'))
+                                                 (nterms,asigs,_) <- checkAttributes [] te' te
+                                                 let te1 = if notImplBody b then unSig asigs else []
+                                                     te2 = te ++ te1
+                                                     b2 = addImpl te1 b1
+                                                 return (cs1, [(n, NClass q as' (te0++te2))], Class l n q us (bindWits eq1 ++ props te0 ++ b2))
                                              _ -> illegalRedef n
       where env1                        = define (exclude (toSigs te') [initKW]) $ reserve (bound b) $ defineSelfOpaque $ defineTVars (stripQual q) $ setInClass env
             (as,ps)                     = mro2 env us
@@ -533,6 +536,7 @@ instance InfEnv Decl where
                                                  checkNoEscape env (qbound q)
                                                  (nterms,_,sigs) <- checkAttributes [] te' te
                                                  let noself = [ n | (n, NSig sc Static) <- te, tvSelf `notElem` tyfree sc ]
+                                                 when (notImplBody b) $ err0 (notImpls b) "A protocol body cannot be NotImplemented"
                                                  when (not $ null nterms) $ err2 (dom nterms) "Method/attribute lacks signature:"
                                                  when (initKW `elem` sigs) $ err2 (filter (==initKW) sigs) "A protocol cannot define __init__"
                                                  when (not $ null noself) $ err2 noself "A static protocol signature must mention Self"
@@ -557,7 +561,7 @@ instance InfEnv Decl where
                                              (nterms,asigs,sigs) <- checkAttributes final te' te
                                              when (not $ null nterms) $ err2 (dom nterms) "Method/attribute not in listed protocols:"
                                              when (not $ null sigs) $ err2 sigs "Extension with new methods/attributes not supported"
-                                             when (not (null asigs || hasNotImpl b)) $ err3 l (dom asigs) "Protocol method/attribute lacks implementation:"
+                                             when (not (null asigs || notImplBody b)) $ err3 l (dom asigs) "Protocol method/attribute lacks implementation:"
                                              let te1 = unSig $ subst s asigs
                                                  te2 = te ++ te1
                                                  b2 = addImpl te1 b1
@@ -1316,7 +1320,7 @@ instance Infer Expr where
                                              t1 <- newTVar
                                              w1 <- newWitness
                                              let t2 = tList t0
-                                                 w2 = eQVar primWCollectionList
+                                                 w2 = eQVar witCollectionList
                                              return (Impl w1 t1 (pSequence t0) :
                                                      cs, t1, eCall (tApp (eDot (eDot (eVar w1) (witAttr qnCollection)) fromiterKW) [t2]) [w2, List l es'])
     infer env (ListComp l e1 co)
@@ -1327,7 +1331,7 @@ instance Infer Expr where
                                              t1 <- newTVar
                                              w1 <- newWitness
                                              let t2 = tList t0
-                                                 w2 = eQVar primWCollectionList
+                                                 w2 = eQVar witCollectionList
                                              return (Impl w1 t1 (pSequence t0) :
                                                      cs1++cs2, t1, eCall (tApp (eDot (eDot (eVar w1) (witAttr qnCollection)) fromiterKW) [t2]) [w2, ListComp l e1' co'])
     infer env (Set l es)                = do t0 <- newTVar
@@ -1335,7 +1339,7 @@ instance Infer Expr where
                                              t1 <- newTVar
                                              w1 <- newWitness
                                              let t2 = tList t0
-                                                 w2 = eQVar primWCollectionList
+                                                 w2 = eQVar witCollectionList
                                              return (Impl w1 t1 (pSet t0) :
                                                      cs, t1, eCall (tApp (eDot (eVar w1) fromiterKW) [t2]) [w2, List l es'])
     infer env (SetComp l e1 co)
@@ -1346,7 +1350,7 @@ instance Infer Expr where
                                              t1 <- newTVar
                                              w1 <- newWitness
                                              let t2 = tList t0
-                                                 w2 = eQVar primWCollectionList
+                                                 w2 = eQVar witCollectionList
                                              return (Impl w1 t1 (pSet t0) :
                                                      cs1++cs2, t1, eCall (tApp (eDot (eVar w1) fromiterKW) [t2]) [w2, ListComp l e1' co'])
                                              
@@ -1356,7 +1360,7 @@ instance Infer Expr where
                                              t1 <- newTVar
                                              w1 <- newWitness
                                              let t2 = tList (tTupleP (posRow tk $ posRow tv posNil))
-                                                 w2 = eQVar primWCollectionList
+                                                 w2 = eQVar witCollectionList
                                              return (Impl w1 t1 (pMapping tk tv) :
                                                      cs, t1, eCall (tApp (eDot (eVar w1) fromiterKW) [t2]) [w2, List l as'])
     infer env (DictComp l a1 co)
@@ -1368,7 +1372,7 @@ instance Infer Expr where
                                              t1 <- newTVar
                                              w1 <- newWitness
                                              let t2 = tList (tTupleP (posRow tk $ posRow tv posNil))
-                                                 w2 = eQVar primWCollectionList
+                                                 w2 = eQVar witCollectionList
                                              return (Impl w1 t1 (pMapping tk tv) :
                                                      cs1++cs2, t1, eCall (tApp (eDot (eVar w1) fromiterKW) [t2]) [w2, ListComp l a1' co'])
     infer env (Paren l e)               = do (cs,t,e') <- infer env e

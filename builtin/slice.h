@@ -1,23 +1,9 @@
-struct $slice$class {
-  char *$GCINFO;
-  int $class_id;
-  $Super$class $superclass;
-  void (*__init__)($slice,$int,$int,$int);
-  void (*__serialize__)($slice,$Serial$state);
-  $slice (*__deserialize__)($slice,$Serial$state);
-  $bool (*__bool__)($slice);
-  $str (*__str__)($slice);
-  $str (*__repr__)($slice);
-};
 
-typedef struct $slice {
-  struct $slice$class *$class;
-  int *start;
-  int *stop;
-  int *step;
-} *$slice;
+typedef struct B_slice {
+  struct B_sliceG_class *$class;
+  long *start;
+  long *stop;
+  long *step;
+} *B_slice;
 
-extern struct $slice$class $slice$methods;
-$slice $slice$new($int,$int,$int);
-
-void normalize_slice($slice slc, int len, int *slen, int *start, int *stop, int *step);
+void normalize_slice(B_slice slc, long len, long *slen, long *start, long *stop, long *step);

@@ -1,3253 +1,2997 @@
+/*
+Building project in /Users/sydow/acton/builtin/ty
+  Compiling __builtin__.act for release in stub mode
 #pragma once
+#include "builtin/builtin.h"
+#include "builtin/env.h"
+#include "rts/rts.h"
+*/
+struct B_value;
+struct B_object;
+struct B_atom;
+struct B_int;
+struct B_i64;
+struct B_float;
+struct B_bool;
+struct B_slice;
+struct B_list;
+struct B_range;
+struct B_Iterator;
+struct B_Iterable;
+struct B_str;
+struct B_bytes;
+struct B_bytearray;
+//struct B_Msg;
+struct B_BaseException;
+struct B_SystemExit;
+struct B_KeyboardInterrupt;
+struct B_Exception;
+struct B_AssertionError;
+struct B_LookupError;
+struct B_IndexError;
+struct B_KeyError;
+struct B_MemoryError;
+struct B_OSError;
+struct B_RuntimeError;
+struct B_NotImplementedError;
+struct B_ValueError;
+struct B_Identity;
+struct B_Eq;
+struct B_Ord;
+struct B_Logical;
+struct B_Plus;
+struct B_Minus;
+struct B_Times;
+struct B_Div;
+struct B_Hashable;
+struct B_complex;
+struct B_dict;
+struct B_set;
+struct B_Number;
+struct B_MinusD_Number;
+struct B_Real;
+struct B_MinusD_Real;
+struct B_RealFloat;
+struct B_MinusD_RealFloat;
+struct B_Rational;
+struct B_MinusD_Rational;
+struct B_Integral;
+struct B_MinusD_Integral;
+struct B_LogicalD_Integral;
+struct B_HashableD_bool;
+struct B_IntegralD_int;
+struct B_MinusD_IntegralD_int;
+struct B_LogicalD_IntegralD_int;
+struct B_DivD_int;
+struct B_OrdD_int;
+struct B_HashableD_int;
+struct B_IntegralD_i64;
+struct B_MinusD_IntegralD_i64;
+struct B_LogicalD_IntegralD_i64;
+struct B_DivD_i64;
+struct B_OrdD_i64;
+struct B_HashableD_i64;
+struct B_RealFloatD_float;
+struct B_MinusD_RealFloatD_float;
+struct B_DivD_float;
+struct B_OrdD_float;
+struct B_HashableD_float;
+struct B_NumberD_complex;
+struct B_MinusD_NumberD_complex;
+struct B_DivD_complex;
+struct B_EqD_complex;
+struct B_HashableD_complex;
+struct B_Indexed;
+struct B_Sliceable;
+struct B_Collection;
+struct B_Container;
+struct B_Sequence;
+struct B_CollectionD_Sequence;
+struct B_TimesD_Sequence;
+struct B_Mapping;
+struct B_IndexedD_Mapping;
+struct B_Set;
+struct B_OrdD_Set;
+struct B_LogicalD_Set;
+struct B_MinusD_Set;
+struct B_SequenceD_list;
+struct B_CollectionD_SequenceD_list;
+struct B_TimesD_SequenceD_list;
+struct B_ContainerD_list;
+struct B_OrdD_list;
+struct B_MappingD_dict;
+struct B_IndexedD_MappingD_dict;
+struct B_OrdD_dict;
+struct B_SetD_set;
+struct B_OrdD_SetD_set;
+struct B_LogicalD_SetD_set;
+struct B_MinusD_SetD_set;
+struct B_IterableD_Iterator;
+struct B_IterableD_range;
+struct B_OrdD_str;
+struct B_ContainerD_str;
+struct B_SliceableD_str;
+struct B_TimesD_str;
+struct B_HashableD_str;
+struct B_OrdD_bytearray;
+struct B_SequenceD_bytearray;
+struct B_CollectionD_SequenceD_bytearray;
+struct B_TimesD_SequenceD_bytearray;
+struct B_ContainerD_bytearray;
+struct B_OrdD_bytes;
+struct B_SliceableD_bytes;
+struct B_ContainerD_bytes;
+struct B_TimesD_bytes;
+struct B_HashableD_bytes;
+typedef struct B_value *B_value;
+typedef struct B_object *B_object;
+typedef struct B_atom *B_atom;
+typedef struct B_int *B_int;
+typedef struct B_i64 *B_i64;
+typedef struct B_float *B_float;
+typedef struct B_bool *B_bool;
+typedef struct B_slice *B_slice;
+typedef struct B_list *B_list;
+typedef struct B_range *B_range;
+typedef struct B_Iterator *B_Iterator;
+typedef struct B_Iterable *B_Iterable;
+typedef struct B_str *B_str;
+typedef struct B_bytes *B_bytes;
+typedef struct B_bytearray *B_bytearray;
+//typedef struct B_Msg *B_Msg;
+typedef struct B_BaseException *B_BaseException;
+typedef struct B_SystemExit *B_SystemExit;
+typedef struct B_KeyboardInterrupt *B_KeyboardInterrupt;
+typedef struct B_Exception *B_Exception;
+typedef struct B_AssertionError *B_AssertionError;
+typedef struct B_LookupError *B_LookupError;
+typedef struct B_IndexError *B_IndexError;
+typedef struct B_KeyError *B_KeyError;
+typedef struct B_MemoryError *B_MemoryError;
+typedef struct B_OSError *B_OSError;
+typedef struct B_RuntimeError *B_RuntimeError;
+typedef struct B_NotImplementedError *B_NotImplementedError;
+typedef struct B_ValueError *B_ValueError;
+typedef struct B_Identity *B_Identity;
+typedef struct B_Eq *B_Eq;
+typedef struct B_Ord *B_Ord;
+typedef struct B_Logical *B_Logical;
+typedef struct B_Plus *B_Plus;
+typedef struct B_Minus *B_Minus;
+typedef struct B_Times *B_Times;
+typedef struct B_Div *B_Div;
+typedef struct B_Hashable *B_Hashable;
+typedef struct B_complex *B_complex;
+typedef struct B_dict *B_dict;
+typedef struct B_set *B_set;
+typedef struct B_Number *B_Number;
+typedef struct B_MinusD_Number *B_MinusD_Number;
+typedef struct B_Real *B_Real;
+typedef struct B_MinusD_Real *B_MinusD_Real;
+typedef struct B_RealFloat *B_RealFloat;
+typedef struct B_MinusD_RealFloat *B_MinusD_RealFloat;
+typedef struct B_Rational *B_Rational;
+typedef struct B_MinusD_Rational *B_MinusD_Rational;
+typedef struct B_Integral *B_Integral;
+typedef struct B_MinusD_Integral *B_MinusD_Integral;
+typedef struct B_LogicalD_Integral *B_LogicalD_Integral;
+typedef struct B_HashableD_bool *B_HashableD_bool;
+typedef struct B_IntegralD_int *B_IntegralD_int;
+typedef struct B_MinusD_IntegralD_int *B_MinusD_IntegralD_int;
+typedef struct B_LogicalD_IntegralD_int *B_LogicalD_IntegralD_int;
+typedef struct B_DivD_int *B_DivD_int;
+typedef struct B_OrdD_int *B_OrdD_int;
+typedef struct B_HashableD_int *B_HashableD_int;
+typedef struct B_IntegralD_i64 *B_IntegralD_i64;
+typedef struct B_MinusD_IntegralD_i64 *B_MinusD_IntegralD_i64;
+typedef struct B_LogicalD_IntegralD_i64 *B_LogicalD_IntegralD_i64;
+typedef struct B_DivD_i64 *B_DivD_i64;
+typedef struct B_OrdD_i64 *B_OrdD_i64;
+typedef struct B_HashableD_i64 *B_HashableD_i64;
+typedef struct B_RealFloatD_float *B_RealFloatD_float;
+typedef struct B_MinusD_RealFloatD_float *B_MinusD_RealFloatD_float;
+typedef struct B_DivD_float *B_DivD_float;
+typedef struct B_OrdD_float *B_OrdD_float;
+typedef struct B_HashableD_float *B_HashableD_float;
+typedef struct B_NumberD_complex *B_NumberD_complex;
+typedef struct B_MinusD_NumberD_complex *B_MinusD_NumberD_complex;
+typedef struct B_DivD_complex *B_DivD_complex;
+typedef struct B_EqD_complex *B_EqD_complex;
+typedef struct B_HashableD_complex *B_HashableD_complex;
+typedef struct B_Indexed *B_Indexed;
+typedef struct B_Sliceable *B_Sliceable;
+typedef struct B_Collection *B_Collection;
+typedef struct B_Container *B_Container;
+typedef struct B_Sequence *B_Sequence;
+typedef struct B_CollectionD_Sequence *B_CollectionD_Sequence;
+typedef struct B_TimesD_Sequence *B_TimesD_Sequence;
+typedef struct B_Mapping *B_Mapping;
+typedef struct B_IndexedD_Mapping *B_IndexedD_Mapping;
+typedef struct B_Set *B_Set;
+typedef struct B_OrdD_Set *B_OrdD_Set;
+typedef struct B_LogicalD_Set *B_LogicalD_Set;
+typedef struct B_MinusD_Set *B_MinusD_Set;
+typedef struct B_SequenceD_list *B_SequenceD_list;
+typedef struct B_CollectionD_SequenceD_list *B_CollectionD_SequenceD_list;
+typedef struct B_TimesD_SequenceD_list *B_TimesD_SequenceD_list;
+typedef struct B_ContainerD_list *B_ContainerD_list;
+typedef struct B_OrdD_list *B_OrdD_list;
+typedef struct B_MappingD_dict *B_MappingD_dict;
+typedef struct B_IndexedD_MappingD_dict *B_IndexedD_MappingD_dict;
+typedef struct B_OrdD_dict *B_OrdD_dict;
+typedef struct B_SetD_set *B_SetD_set;
+typedef struct B_OrdD_SetD_set *B_OrdD_SetD_set;
+typedef struct B_LogicalD_SetD_set *B_LogicalD_SetD_set;
+typedef struct B_MinusD_SetD_set *B_MinusD_SetD_set;
+typedef struct B_IterableD_Iterator *B_IterableD_Iterator;
+typedef struct B_IterableD_range *B_IterableD_range;
+typedef struct B_OrdD_str *B_OrdD_str;
+typedef struct B_ContainerD_str *B_ContainerD_str;
+typedef struct B_SliceableD_str *B_SliceableD_str;
+typedef struct B_TimesD_str *B_TimesD_str;
+typedef struct B_HashableD_str *B_HashableD_str;
+typedef struct B_OrdD_bytearray *B_OrdD_bytearray;
+typedef struct B_SequenceD_bytearray *B_SequenceD_bytearray;
+typedef struct B_CollectionD_SequenceD_bytearray *B_CollectionD_SequenceD_bytearray;
+typedef struct B_TimesD_SequenceD_bytearray *B_TimesD_SequenceD_bytearray;
+typedef struct B_ContainerD_bytearray *B_ContainerD_bytearray;
+typedef struct B_OrdD_bytes *B_OrdD_bytes;
+typedef struct B_SliceableD_bytes *B_SliceableD_bytes;
+typedef struct B_ContainerD_bytes *B_ContainerD_bytes;
+typedef struct B_TimesD_bytes *B_TimesD_bytes;
+typedef struct B_HashableD_bytes *B_HashableD_bytes;
+struct B_valueG_class {
+    char *$GCINFO;
+    int $class_id;
+    $SuperG_class $superclass;
+    B_NoneType (*__init__) (B_value);
+    void (*__serialize__) (B_value, $Serial$state);
+    B_value (*__deserialize__) (B_value, $Serial$state);
+    B_bool (*__bool__) (B_value);
+    B_str (*__str__) (B_value);
+    B_str (*__repr__) (B_value);
+};
+struct B_value {
+    struct B_valueG_class *$class;
+};
+struct B_objectG_class {
+    char *$GCINFO;
+    int $class_id;
+    $SuperG_class $superclass;
+    B_NoneType (*__init__) (B_object);
+    void (*__serialize__) (B_object, $Serial$state);
+    B_object (*__deserialize__) (B_object, $Serial$state);
+    B_bool (*__bool__) (B_object);
+    B_str (*__str__) (B_object);
+    B_str (*__repr__) (B_object);
+};
+struct B_object {
+    struct B_objectG_class *$class;
+};
+struct B_atomG_class {
+    char *$GCINFO;
+    int $class_id;
+    $SuperG_class $superclass;
+    B_NoneType (*__init__) (B_atom);
+    void (*__serialize__) (B_atom, $Serial$state);
+    B_atom (*__deserialize__) (B_atom, $Serial$state);
+    B_bool (*__bool__) (B_atom);
+    B_str (*__str__) (B_atom);
+    B_str (*__repr__) (B_atom);
+};
+struct B_atom {
+    struct B_atomG_class *$class;
+};
+struct B_intG_class {
+    char *$GCINFO;
+    int $class_id;
+    $SuperG_class $superclass;
+    B_NoneType (*__init__) (B_int, B_atom);
+    void (*__serialize__) (B_int, $Serial$state);
+    B_int (*__deserialize__) (B_int, $Serial$state);
+    B_bool (*__bool__) (B_int);
+    B_str (*__str__) (B_int);
+    B_str (*__repr__) (B_int);
+};
+struct B_i64G_class {
+    char *$GCINFO;
+    int $class_id;
+    $SuperG_class $superclass;
+    B_NoneType (*__init__) (B_i64, B_atom);
+    void (*__serialize__) (B_i64, $Serial$state);
+    B_i64 (*__deserialize__) (B_i64, $Serial$state);
+    B_bool (*__bool__) (B_i64);
+    B_str (*__str__) (B_i64);
+    B_str (*__repr__) (B_i64);
+};
+struct B_floatG_class {
+    char *$GCINFO;
+    int $class_id;
+    $SuperG_class $superclass;
+    B_NoneType (*__init__) (B_float, B_atom);
+    void (*__serialize__) (B_float, $Serial$state);
+    B_float (*__deserialize__) (B_float, $Serial$state);
+    B_bool (*__bool__) (B_float);
+    B_str (*__str__) (B_float);
+    B_str (*__repr__) (B_float);
+};
+struct B_boolG_class {
+    char *$GCINFO;
+    int $class_id;
+    $SuperG_class $superclass;
+    B_NoneType (*__init__) (B_bool, B_value);
+    void (*__serialize__) (B_bool, $Serial$state);
+    B_bool (*__deserialize__) (B_bool, $Serial$state);
+    B_bool (*__bool__) (B_bool);
+    B_str (*__str__) (B_bool);
+    B_str (*__repr__) (B_bool);
+};
+struct B_sliceG_class {
+    char *$GCINFO;
+    int $class_id;
+    $SuperG_class $superclass;
+    B_NoneType (*__init__) (B_slice, B_int, B_int, B_int);
+    void (*__serialize__) (B_slice, $Serial$state);
+    B_slice (*__deserialize__) (B_slice, $Serial$state);
+    B_bool (*__bool__) (B_slice);
+    B_str (*__str__) (B_slice);
+    B_str (*__repr__) (B_slice);
+};
+struct B_listG_class {
+    char *$GCINFO;
+    int $class_id;
+    $SuperG_class $superclass;
+    B_NoneType (*__init__) (B_list, B_Iterable, $WORD);
+    void (*__serialize__) (B_list, $Serial$state);
+    B_list (*__deserialize__) (B_list, $Serial$state);
+    B_bool (*__bool__) (B_list);
+    B_str (*__str__) (B_list);
+    B_str (*__repr__) (B_list);
+    B_list (*copy) (B_list);
+};
+struct B_rangeG_class {
+    char *$GCINFO;
+    int $class_id;
+    $SuperG_class $superclass;
+    B_NoneType (*__init__) (B_range, B_int, B_int, B_int);
+    void (*__serialize__) (B_range, $Serial$state);
+    B_range (*__deserialize__) (B_range, $Serial$state);
+    B_bool (*__bool__) (B_range);
+    B_str (*__str__) (B_range);
+    B_str (*__repr__) (B_range);
+};
+struct B_IteratorG_class {
+    char *$GCINFO;
+    int $class_id;
+    $SuperG_class $superclass;
+    B_NoneType (*__init__) (B_Iterator);
+    void (*__serialize__) (B_Iterator, $Serial$state);
+    B_Iterator (*__deserialize__) (B_Iterator, $Serial$state);
+    B_bool (*__bool__) (B_Iterator);
+    B_str (*__str__) (B_Iterator);
+    B_str (*__repr__) (B_Iterator);
+    $WORD (*__next__) (B_Iterator);
+};
+struct B_Iterator {
+    struct B_IteratorG_class *$class;
+};
+struct B_IterableG_class {
+    char *$GCINFO;
+    int $class_id;
+    $SuperG_class $superclass;
+    B_NoneType (*__init__) (B_Iterable);
+    void (*__serialize__) (B_Iterable, $Serial$state);
+    B_Iterable (*__deserialize__) (B_Iterable, $Serial$state);
+    B_bool (*__bool__) (B_Iterable);
+    B_str (*__str__) (B_Iterable);
+    B_str (*__repr__) (B_Iterable);
+    B_Iterator (*__iter__) (B_Iterable, $WORD);
+};
+struct B_Iterable {
+    struct B_IterableG_class *$class;
+};
+struct B_strG_class {
+    char *$GCINFO;
+    int $class_id;
+    $SuperG_class $superclass;
+    B_NoneType (*__init__) (B_str, B_value);
+    void (*__serialize__) (B_str, $Serial$state);
+    B_str (*__deserialize__) (B_str, $Serial$state);
+    B_bool (*__bool__) (B_str);
+    B_str (*__str__) (B_str);
+    B_str (*__repr__) (B_str);
+    B_str (*capitalize) (B_str);
+    B_str (*center) (B_str, B_int, B_str);
+    B_int (*count) (B_str, B_str, B_int, B_int);
+    B_bytes (*encode) (B_str);
+    B_bool (*endswith) (B_str, B_str, B_int, B_int);
+    B_str (*expandtabs) (B_str, B_int);
+    B_int (*find) (B_str, B_str, B_int, B_int);
+    B_int (*index) (B_str, B_str, B_int, B_int);
+    B_bool (*isalnum) (B_str);
+    B_bool (*isalpha) (B_str);
+    B_bool (*isascii) (B_str);
+    B_bool (*isdecimal) (B_str);
+    B_bool (*islower) (B_str);
+    B_bool (*isprintable) (B_str);
+    B_bool (*isspace) (B_str);
+    B_bool (*istitle) (B_str);
+    B_bool (*isupper) (B_str);
+    B_str (*join) (B_str, B_Iterable, $WORD);
+    B_str (*ljust) (B_str, B_int, B_str);
+    B_str (*lower) (B_str);
+    B_str (*lstrip) (B_str, B_str);
+    B_tuple (*partition) (B_str, B_str);
+    B_str (*replace) (B_str, B_str, B_str, B_int);
+    B_int (*rfind) (B_str, B_str, B_int, B_int);
+    B_int (*rindex) (B_str, B_str, B_int, B_int);
+    B_str (*rjust) (B_str, B_int, B_str);
+    B_tuple (*rpartition) (B_str, B_str);
+    B_str (*rstrip) (B_str, B_str);
+    B_list (*split) (B_str, B_str, B_int);
+    B_list (*splitlines) (B_str, B_bool);
+    B_bool (*startswith) (B_str, B_str, B_int, B_int);
+    B_str (*strip) (B_str, B_str);
+    B_str (*upper) (B_str);
+    B_str (*zfill) (B_str, B_int);
+};
+struct B_bytesG_class {
+    char *$GCINFO;
+    int $class_id;
+    $SuperG_class $superclass;
+    B_NoneType (*__init__) (B_bytes, B_Iterable, $WORD);
+    void (*__serialize__) (B_bytes, $Serial$state);
+    B_bytes (*__deserialize__) (B_bytes, $Serial$state);
+    B_bool (*__bool__) (B_bytes);
+    B_str (*__str__) (B_bytes);
+    B_str (*__repr__) (B_bytes);
+    B_bytes (*capitalize) (B_bytes);
+    B_bytes (*center) (B_bytes, B_int, B_bytes);
+    B_int (*count) (B_bytes, B_bytes, B_int, B_int);
+    B_str (*decode) (B_bytes);
+    B_bool (*endswith) (B_bytes, B_bytes, B_int, B_int);
+    B_bytes (*expandtabs) (B_bytes, B_int);
+    B_int (*find) (B_bytes, B_bytes, B_int, B_int);
+    B_int (*index) (B_bytes, B_bytes, B_int, B_int);
+    B_bool (*isalnum) (B_bytes);
+    B_bool (*isalpha) (B_bytes);
+    B_bool (*isascii) (B_bytes);
+    B_bool (*isdigit) (B_bytes);
+    B_bool (*islower) (B_bytes);
+    B_bool (*isspace) (B_bytes);
+    B_bool (*istitle) (B_bytes);
+    B_bool (*isupper) (B_bytes);
+    B_bytes (*join) (B_bytes, B_Iterable, $WORD);
+    B_bytes (*ljust) (B_bytes, B_int, B_bytes);
+    B_bytes (*lower) (B_bytes);
+    B_bytes (*lstrip) (B_bytes, B_bytes);
+    B_tuple (*partition) (B_bytes, B_bytes);
+    B_bytes (*replace) (B_bytes, B_bytes, B_bytes, B_int);
+    B_int (*rfind) (B_bytes, B_bytes, B_int, B_int);
+    B_int (*rindex) (B_bytes, B_bytes, B_int, B_int);
+    B_bytes (*rjust) (B_bytes, B_int, B_bytes);
+    B_tuple (*rpartition) (B_bytes, B_bytes);
+    B_bytes (*rstrip) (B_bytes, B_bytes);
+    B_list (*split) (B_bytes, B_bytes, B_int);
+    B_list (*splitlines) (B_bytes, B_bool);
+    B_bool (*startswith) (B_bytes, B_bytes, B_int, B_int);
+    B_bytes (*strip) (B_bytes, B_bytes);
+    B_bytes (*upper) (B_bytes);
+    B_bytes (*zfill) (B_bytes, B_int);
+};
+struct B_bytearrayG_class {
+    char *$GCINFO;
+    int $class_id;
+    $SuperG_class $superclass;
+    B_NoneType (*__init__) (B_bytearray, B_bytes);
+    void (*__serialize__) (B_bytearray, $Serial$state);
+    B_bytearray (*__deserialize__) (B_bytearray, $Serial$state);
+    B_bool (*__bool__) (B_bytearray);
+    B_str (*__str__) (B_bytearray);
+    B_str (*__repr__) (B_bytearray);
+    B_bytearray (*capitalize) (B_bytearray);
+    B_bytearray (*center) (B_bytearray, B_int, B_bytearray);
+    B_int (*count) (B_bytearray, B_bytearray, B_int, B_int);
+    B_str (*decode) (B_bytearray);
+    B_bool (*endswith) (B_bytearray, B_bytearray, B_int, B_int);
+    B_bytearray (*expandtabs) (B_bytearray, B_int);
+    B_int (*find) (B_bytearray, B_bytearray, B_int, B_int);
+    B_int (*index) (B_bytearray, B_bytearray, B_int, B_int);
+    B_bool (*isalnum) (B_bytearray);
+    B_bool (*isalpha) (B_bytearray);
+    B_bool (*isascii) (B_bytearray);
+    B_bool (*isdigit) (B_bytearray);
+    B_bool (*islower) (B_bytearray);
+    B_bool (*isspace) (B_bytearray);
+    B_bool (*istitle) (B_bytearray);
+    B_bool (*isupper) (B_bytearray);
+    B_bytearray (*join) (B_bytearray, B_Iterable, $WORD);
+    B_bytearray (*ljust) (B_bytearray, B_int, B_bytearray);
+    B_bytearray (*lower) (B_bytearray);
+    B_bytearray (*lstrip) (B_bytearray, B_bytearray);
+    B_tuple (*partition) (B_bytearray, B_bytearray);
+    B_bytearray (*replace) (B_bytearray, B_bytearray, B_bytearray, B_int);
+    B_int (*rfind) (B_bytearray, B_bytearray, B_int, B_int);
+    B_int (*rindex) (B_bytearray, B_bytearray, B_int, B_int);
+    B_bytearray (*rjust) (B_bytearray, B_int, B_bytearray);
+    B_tuple (*rpartition) (B_bytearray, B_bytearray);
+    B_bytearray (*rstrip) (B_bytearray, B_bytearray);
+    B_list (*split) (B_bytearray, B_bytearray, B_int);
+    B_list (*splitlines) (B_bytearray, B_bool);
+    B_bool (*startswith) (B_bytearray, B_bytearray, B_int, B_int);
+    B_bytearray (*strip) (B_bytearray, B_bytearray);
+    B_bytearray (*upper) (B_bytearray);
+    B_bytearray (*zfill) (B_bytearray, B_int);
+};
+/*
+struct B_MsgG_class {
+    char *$GCINFO;
+    int $class_id;
+    $SuperG_class $superclass;
+    B_NoneType (*__init__) (B_Msg);
+    void (*__serialize__) (B_Msg, $Serial$state);
+    B_Msg (*__deserialize__) (B_Msg, $Serial$state);
+    B_bool (*__bool__) (B_Msg);
+    B_str (*__str__) (B_Msg);
+    B_str (*__repr__) (B_Msg);
+};
+struct B_Msg {
+    struct B_MsgG_class *$class;
+};
+*/
+struct B_BaseExceptionG_class {
+    char *$GCINFO;
+    int $class_id;
+    $SuperG_class $superclass;
+    B_NoneType (*__init__) (B_BaseException, B_str);
+    void (*__serialize__) (B_BaseException, $Serial$state);
+    B_BaseException (*__deserialize__) (B_BaseException, $Serial$state);
+    B_bool (*__bool__) (B_BaseException);
+    B_str (*__str__) (B_BaseException);
+    B_str (*__repr__) (B_BaseException);
+};
+struct B_BaseException {
+    struct B_BaseExceptionG_class *$class;
+    B_str error_message;
+};
+struct B_SystemExitG_class {
+    char *$GCINFO;
+    int $class_id;
+    $SuperG_class $superclass;
+    B_NoneType (*__init__) (B_SystemExit, B_str);
+    void (*__serialize__) (B_SystemExit, $Serial$state);
+    B_SystemExit (*__deserialize__) (B_SystemExit, $Serial$state);
+    B_bool (*__bool__) (B_SystemExit);
+    B_str (*__str__) (B_SystemExit);
+    B_str (*__repr__) (B_SystemExit);
+};
+struct B_SystemExit {
+    struct B_SystemExitG_class *$class;
+    B_str error_message;
+};
+struct B_KeyboardInterruptG_class {
+    char *$GCINFO;
+    int $class_id;
+    $SuperG_class $superclass;
+    B_NoneType (*__init__) (B_KeyboardInterrupt, B_str);
+    void (*__serialize__) (B_KeyboardInterrupt, $Serial$state);
+    B_KeyboardInterrupt (*__deserialize__) (B_KeyboardInterrupt, $Serial$state);
+    B_bool (*__bool__) (B_KeyboardInterrupt);
+    B_str (*__str__) (B_KeyboardInterrupt);
+    B_str (*__repr__) (B_KeyboardInterrupt);
+};
+struct B_KeyboardInterrupt {
+    struct B_KeyboardInterruptG_class *$class;
+    B_str error_message;
+};
+struct B_ExceptionG_class {
+    char *$GCINFO;
+    int $class_id;
+    $SuperG_class $superclass;
+    B_NoneType (*__init__) (B_Exception, B_str);
+    void (*__serialize__) (B_Exception, $Serial$state);
+    B_Exception (*__deserialize__) (B_Exception, $Serial$state);
+    B_bool (*__bool__) (B_Exception);
+    B_str (*__str__) (B_Exception);
+    B_str (*__repr__) (B_Exception);
+};
+struct B_Exception {
+    struct B_ExceptionG_class *$class;
+    B_str error_message;
+};
+struct B_AssertionErrorG_class {
+    char *$GCINFO;
+    int $class_id;
+    $SuperG_class $superclass;
+    B_NoneType (*__init__) (B_AssertionError, B_str);
+    void (*__serialize__) (B_AssertionError, $Serial$state);
+    B_AssertionError (*__deserialize__) (B_AssertionError, $Serial$state);
+    B_bool (*__bool__) (B_AssertionError);
+    B_str (*__str__) (B_AssertionError);
+    B_str (*__repr__) (B_AssertionError);
+};
+struct B_AssertionError {
+    struct B_AssertionErrorG_class *$class;
+    B_str error_message;
+};
+struct B_LookupErrorG_class {
+    char *$GCINFO;
+    int $class_id;
+    $SuperG_class $superclass;
+    B_NoneType (*__init__) (B_LookupError, B_str);
+    void (*__serialize__) (B_LookupError, $Serial$state);
+    B_LookupError (*__deserialize__) (B_LookupError, $Serial$state);
+    B_bool (*__bool__) (B_LookupError);
+    B_str (*__str__) (B_LookupError);
+    B_str (*__repr__) (B_LookupError);
+};
+struct B_LookupError {
+    struct B_LookupErrorG_class *$class;
+    B_str error_message;
+};
+struct B_IndexErrorG_class {
+    char *$GCINFO;
+    int $class_id;
+    $SuperG_class $superclass;
+    B_NoneType (*__init__) (B_IndexError, B_str);
+    void (*__serialize__) (B_IndexError, $Serial$state);
+    B_IndexError (*__deserialize__) (B_IndexError, $Serial$state);
+    B_bool (*__bool__) (B_IndexError);
+    B_str (*__str__) (B_IndexError);
+    B_str (*__repr__) (B_IndexError);
+};
+struct B_IndexError {
+    struct B_IndexErrorG_class *$class;
+    B_str error_message;
+};
+struct B_KeyErrorG_class {
+    char *$GCINFO;
+    int $class_id;
+    $SuperG_class $superclass;
+    B_NoneType (*__init__) (B_KeyError, B_str);
+    void (*__serialize__) (B_KeyError, $Serial$state);
+    B_KeyError (*__deserialize__) (B_KeyError, $Serial$state);
+    B_bool (*__bool__) (B_KeyError);
+    B_str (*__str__) (B_KeyError);
+    B_str (*__repr__) (B_KeyError);
+};
+struct B_KeyError {
+    struct B_KeyErrorG_class *$class;
+    B_str error_message;
+};
+struct B_MemoryErrorG_class {
+    char *$GCINFO;
+    int $class_id;
+    $SuperG_class $superclass;
+    B_NoneType (*__init__) (B_MemoryError, B_str);
+    void (*__serialize__) (B_MemoryError, $Serial$state);
+    B_MemoryError (*__deserialize__) (B_MemoryError, $Serial$state);
+    B_bool (*__bool__) (B_MemoryError);
+    B_str (*__str__) (B_MemoryError);
+    B_str (*__repr__) (B_MemoryError);
+};
+struct B_MemoryError {
+    struct B_MemoryErrorG_class *$class;
+    B_str error_message;
+};
+struct B_OSErrorG_class {
+    char *$GCINFO;
+    int $class_id;
+    $SuperG_class $superclass;
+    B_NoneType (*__init__) (B_OSError, B_str);
+    void (*__serialize__) (B_OSError, $Serial$state);
+    B_OSError (*__deserialize__) (B_OSError, $Serial$state);
+    B_bool (*__bool__) (B_OSError);
+    B_str (*__str__) (B_OSError);
+    B_str (*__repr__) (B_OSError);
+};
+struct B_OSError {
+    struct B_OSErrorG_class *$class;
+    B_str error_message;
+};
+struct B_RuntimeErrorG_class {
+    char *$GCINFO;
+    int $class_id;
+    $SuperG_class $superclass;
+    B_NoneType (*__init__) (B_RuntimeError, B_str);
+    void (*__serialize__) (B_RuntimeError, $Serial$state);
+    B_RuntimeError (*__deserialize__) (B_RuntimeError, $Serial$state);
+    B_bool (*__bool__) (B_RuntimeError);
+    B_str (*__str__) (B_RuntimeError);
+    B_str (*__repr__) (B_RuntimeError);
+};
+struct B_RuntimeError {
+    struct B_RuntimeErrorG_class *$class;
+    B_str error_message;
+};
+struct B_NotImplementedErrorG_class {
+    char *$GCINFO;
+    int $class_id;
+    $SuperG_class $superclass;
+    B_NoneType (*__init__) (B_NotImplementedError, B_str);
+    void (*__serialize__) (B_NotImplementedError, $Serial$state);
+    B_NotImplementedError (*__deserialize__) (B_NotImplementedError, $Serial$state);
+    B_bool (*__bool__) (B_NotImplementedError);
+    B_str (*__str__) (B_NotImplementedError);
+    B_str (*__repr__) (B_NotImplementedError);
+};
+struct B_NotImplementedError {
+    struct B_NotImplementedErrorG_class *$class;
+    B_str error_message;
+};
+struct B_ValueErrorG_class {
+    char *$GCINFO;
+    int $class_id;
+    $SuperG_class $superclass;
+    B_NoneType (*__init__) (B_ValueError, B_str);
+    void (*__serialize__) (B_ValueError, $Serial$state);
+    B_ValueError (*__deserialize__) (B_ValueError, $Serial$state);
+    B_bool (*__bool__) (B_ValueError);
+    B_str (*__str__) (B_ValueError);
+    B_str (*__repr__) (B_ValueError);
+};
+struct B_ValueError {
+    struct B_ValueErrorG_class *$class;
+    B_str error_message;
+};
+struct B_IdentityG_class {
+    char *$GCINFO;
+    int $class_id;
+    $SuperG_class $superclass;
+    B_NoneType (*__init__) (B_Identity);
+    void (*__serialize__) (B_Identity, $Serial$state);
+    B_Identity (*__deserialize__) (B_Identity, $Serial$state);
+    B_bool (*__bool__) (B_Identity);
+    B_str (*__str__) (B_Identity);
+    B_str (*__repr__) (B_Identity);
+    B_bool (*__is__) (B_Identity, $WORD, $WORD);
+    B_bool (*__isnot__) (B_Identity, $WORD, $WORD);
+};
+struct B_Identity {
+    struct B_IdentityG_class *$class;
+};
+struct B_EqG_class {
+    char *$GCINFO;
+    int $class_id;
+    $SuperG_class $superclass;
+    B_NoneType (*__init__) (B_Eq);
+    void (*__serialize__) (B_Eq, $Serial$state);
+    B_Eq (*__deserialize__) (B_Eq, $Serial$state);
+    B_bool (*__bool__) (B_Eq);
+    B_str (*__str__) (B_Eq);
+    B_str (*__repr__) (B_Eq);
+    B_bool (*__eq__) (B_Eq, $WORD, $WORD);
+    B_bool (*__ne__) (B_Eq, $WORD, $WORD);
+};
+struct B_Eq {
+    struct B_EqG_class *$class;
+};
+struct B_OrdG_class {
+    char *$GCINFO;
+    int $class_id;
+    $SuperG_class $superclass;
+    B_NoneType (*__init__) (B_Ord);
+    void (*__serialize__) (B_Ord, $Serial$state);
+    B_Ord (*__deserialize__) (B_Ord, $Serial$state);
+    B_bool (*__bool__) (B_Ord);
+    B_str (*__str__) (B_Ord);
+    B_str (*__repr__) (B_Ord);
+    B_bool (*__eq__) (B_Ord, $WORD, $WORD);
+    B_bool (*__ne__) (B_Ord, $WORD, $WORD);
+    B_bool (*__lt__) (B_Ord, $WORD, $WORD);
+    B_bool (*__le__) (B_Ord, $WORD, $WORD);
+    B_bool (*__gt__) (B_Ord, $WORD, $WORD);
+    B_bool (*__ge__) (B_Ord, $WORD, $WORD);
+};
+struct B_Ord {
+    struct B_OrdG_class *$class;
+};
+struct B_LogicalG_class {
+    char *$GCINFO;
+    int $class_id;
+    $SuperG_class $superclass;
+    B_NoneType (*__init__) (B_Logical);
+    void (*__serialize__) (B_Logical, $Serial$state);
+    B_Logical (*__deserialize__) (B_Logical, $Serial$state);
+    B_bool (*__bool__) (B_Logical);
+    B_str (*__str__) (B_Logical);
+    B_str (*__repr__) (B_Logical);
+    $WORD (*__and__) (B_Logical, $WORD, $WORD);
+    $WORD (*__or__) (B_Logical, $WORD, $WORD);
+    $WORD (*__xor__) (B_Logical, $WORD, $WORD);
+    $WORD (*__iand__) (B_Logical, $WORD, $WORD);
+    $WORD (*__ior__) (B_Logical, $WORD, $WORD);
+    $WORD (*__ixor__) (B_Logical, $WORD, $WORD);
+};
+struct B_Logical {
+    struct B_LogicalG_class *$class;
+};
+struct B_PlusG_class {
+    char *$GCINFO;
+    int $class_id;
+    $SuperG_class $superclass;
+    B_NoneType (*__init__) (B_Plus);
+    void (*__serialize__) (B_Plus, $Serial$state);
+    B_Plus (*__deserialize__) (B_Plus, $Serial$state);
+    B_bool (*__bool__) (B_Plus);
+    B_str (*__str__) (B_Plus);
+    B_str (*__repr__) (B_Plus);
+    $WORD (*__add__) (B_Plus, $WORD, $WORD);
+    $WORD (*__iadd__) (B_Plus, $WORD, $WORD);
+};
+struct B_Plus {
+    struct B_PlusG_class *$class;
+};
+struct B_MinusG_class {
+    char *$GCINFO;
+    int $class_id;
+    $SuperG_class $superclass;
+    B_NoneType (*__init__) (B_Minus);
+    void (*__serialize__) (B_Minus, $Serial$state);
+    B_Minus (*__deserialize__) (B_Minus, $Serial$state);
+    B_bool (*__bool__) (B_Minus);
+    B_str (*__str__) (B_Minus);
+    B_str (*__repr__) (B_Minus);
+    $WORD (*__sub__) (B_Minus, $WORD, $WORD);
+    $WORD (*__isub__) (B_Minus, $WORD, $WORD);
+};
+struct B_Minus {
+    struct B_MinusG_class *$class;
+};
+struct B_TimesG_class {
+    char *$GCINFO;
+    int $class_id;
+    $SuperG_class $superclass;
+    B_NoneType (*__init__) (B_Times);
+    void (*__serialize__) (B_Times, $Serial$state);
+    B_Times (*__deserialize__) (B_Times, $Serial$state);
+    B_bool (*__bool__) (B_Times);
+    B_str (*__str__) (B_Times);
+    B_str (*__repr__) (B_Times);
+    $WORD (*__add__) (B_Times, $WORD, $WORD);
+    $WORD (*__iadd__) (B_Times, $WORD, $WORD);
+    $WORD (*__mul__) (B_Times, $WORD, $WORD);
+    $WORD (*__imul__) (B_Times, $WORD, $WORD);
+};
+struct B_Times {
+    struct B_TimesG_class *$class;
+};
+struct B_DivG_class {
+    char *$GCINFO;
+    int $class_id;
+    $SuperG_class $superclass;
+    B_NoneType (*__init__) (B_Div);
+    void (*__serialize__) (B_Div, $Serial$state);
+    B_Div (*__deserialize__) (B_Div, $Serial$state);
+    B_bool (*__bool__) (B_Div);
+    B_str (*__str__) (B_Div);
+    B_str (*__repr__) (B_Div);
+    $WORD (*__truediv__) (B_Div, $WORD, $WORD);
+    $WORD (*__itruediv__) (B_Div, $WORD, $WORD);
+};
+struct B_Div {
+    struct B_DivG_class *$class;
+};
+struct B_HashableG_class {
+    char *$GCINFO;
+    int $class_id;
+    $SuperG_class $superclass;
+    B_NoneType (*__init__) (B_Hashable);
+    void (*__serialize__) (B_Hashable, $Serial$state);
+    B_Hashable (*__deserialize__) (B_Hashable, $Serial$state);
+    B_bool (*__bool__) (B_Hashable);
+    B_str (*__str__) (B_Hashable);
+    B_str (*__repr__) (B_Hashable);
+    B_bool (*__eq__) (B_Hashable, $WORD, $WORD);
+    B_bool (*__ne__) (B_Hashable, $WORD, $WORD);
+    B_int (*__hash__) (B_Hashable, $WORD);
+};
+struct B_Hashable {
+    struct B_HashableG_class *$class;
+};
+struct B_complexG_class {
+    char *$GCINFO;
+    int $class_id;
+    $SuperG_class $superclass;
+    B_NoneType (*__init__) (B_complex, B_Number, $WORD);
+    void (*__serialize__) (B_complex, $Serial$state);
+    B_complex (*__deserialize__) (B_complex, $Serial$state);
+    B_bool (*__bool__) (B_complex);
+    B_str (*__str__) (B_complex);
+    B_str (*__repr__) (B_complex);
+};
+struct B_dictG_class {
+    char *$GCINFO;
+    int $class_id;
+    $SuperG_class $superclass;
+    B_NoneType (*__init__) (B_dict, B_Hashable, B_Iterable, $WORD);
+    void (*__serialize__) (B_dict, $Serial$state);
+    B_dict (*__deserialize__) (B_dict, $Serial$state);
+    B_bool (*__bool__) (B_dict);
+    B_str (*__str__) (B_dict);
+    B_str (*__repr__) (B_dict);
+};
+struct B_setG_class {
+    char *$GCINFO;
+    int $class_id;
+    $SuperG_class $superclass;
+    B_NoneType (*__init__) (B_set, B_Hashable, B_Iterable, $WORD);
+    void (*__serialize__) (B_set, $Serial$state);
+    B_set (*__deserialize__) (B_set, $Serial$state);
+    B_bool (*__bool__) (B_set);
+    B_str (*__str__) (B_set);
+    B_str (*__repr__) (B_set);
+};
+struct B_NumberG_class {
+    char *$GCINFO;
+    int $class_id;
+    $SuperG_class $superclass;
+    B_NoneType (*__init__) (B_Number, B_Minus);
+    void (*__serialize__) (B_Number, $Serial$state);
+    B_Number (*__deserialize__) (B_Number, $Serial$state);
+    B_bool (*__bool__) (B_Number);
+    B_str (*__str__) (B_Number);
+    B_str (*__repr__) (B_Number);
+    $WORD (*__add__) (B_Number, $WORD, $WORD);
+    $WORD (*__iadd__) (B_Number, $WORD, $WORD);
+    $WORD (*__mul__) (B_Number, $WORD, $WORD);
+    $WORD (*__imul__) (B_Number, $WORD, $WORD);
+    $WORD (*__fromatom__) (B_Number, B_atom);
+    B_complex (*__complx__) (B_Number, $WORD);
+    $WORD (*__pow__) (B_Number, $WORD, $WORD);
+    $WORD (*__ipow__) (B_Number, $WORD, $WORD);
+    $WORD (*__neg__) (B_Number, $WORD);
+    $WORD (*__pos__) (B_Number, $WORD);
+    $WORD (*real) (B_Number, $WORD, B_Real);
+    $WORD (*imag) (B_Number, $WORD, B_Real);
+    $WORD (*__abs__) (B_Number, $WORD, B_Real);
+    $WORD (*conjugate) (B_Number, $WORD);
+};
+struct B_Number {
+    struct B_NumberG_class *$class;
+    B_Minus W_Minus;
+};
+struct B_MinusD_NumberG_class {
+    char *$GCINFO;
+    int $class_id;
+    $SuperG_class $superclass;
+    B_NoneType (*__init__) (B_MinusD_Number, B_Number);
+    void (*__serialize__) (B_MinusD_Number, $Serial$state);
+    B_MinusD_Number (*__deserialize__) (B_MinusD_Number, $Serial$state);
+    B_bool (*__bool__) (B_MinusD_Number);
+    B_str (*__str__) (B_MinusD_Number);
+    B_str (*__repr__) (B_MinusD_Number);
+    $WORD (*__sub__) (B_MinusD_Number, $WORD, $WORD);
+    $WORD (*__isub__) (B_MinusD_Number, $WORD, $WORD);
+};
+struct B_MinusD_Number {
+    struct B_MinusD_NumberG_class *$class;
+    B_Number W_Number;
+};
+struct B_RealG_class {
+    char *$GCINFO;
+    int $class_id;
+    $SuperG_class $superclass;
+    B_NoneType (*__init__) (B_Real, B_Minus);
+    void (*__serialize__) (B_Real, $Serial$state);
+    B_Real (*__deserialize__) (B_Real, $Serial$state);
+    B_bool (*__bool__) (B_Real);
+    B_str (*__str__) (B_Real);
+    B_str (*__repr__) (B_Real);
+    $WORD (*__add__) (B_Real, $WORD, $WORD);
+    $WORD (*__iadd__) (B_Real, $WORD, $WORD);
+    $WORD (*__mul__) (B_Real, $WORD, $WORD);
+    $WORD (*__imul__) (B_Real, $WORD, $WORD);
+    $WORD (*__fromatom__) (B_Real, B_atom);
+    B_complex (*__complx__) (B_Real, $WORD);
+    $WORD (*__pow__) (B_Real, $WORD, $WORD);
+    $WORD (*__ipow__) (B_Real, $WORD, $WORD);
+    $WORD (*__neg__) (B_Real, $WORD);
+    $WORD (*__pos__) (B_Real, $WORD);
+    $WORD (*real) (B_Real, $WORD, B_Real);
+    $WORD (*imag) (B_Real, $WORD, B_Real);
+    $WORD (*__abs__) (B_Real, $WORD, B_Real);
+    $WORD (*conjugate) (B_Real, $WORD);
+    B_float (*__float__) (B_Real, $WORD);
+    $WORD (*__trunc__) (B_Real, $WORD, B_Integral);
+    $WORD (*__floor__) (B_Real, $WORD, B_Integral);
+    $WORD (*__ceil__) (B_Real, $WORD, B_Integral);
+    $WORD (*__round__) (B_Real, $WORD, B_int);
+};
+struct B_Real {
+    struct B_RealG_class *$class;
+    B_Minus W_Minus;
+};
+struct B_MinusD_RealG_class {
+    char *$GCINFO;
+    int $class_id;
+    $SuperG_class $superclass;
+    B_NoneType (*__init__) (B_MinusD_Real, B_Real);
+    void (*__serialize__) (B_MinusD_Real, $Serial$state);
+    B_MinusD_Real (*__deserialize__) (B_MinusD_Real, $Serial$state);
+    B_bool (*__bool__) (B_MinusD_Real);
+    B_str (*__str__) (B_MinusD_Real);
+    B_str (*__repr__) (B_MinusD_Real);
+    $WORD (*__sub__) (B_MinusD_Real, $WORD, $WORD);
+    $WORD (*__isub__) (B_MinusD_Real, $WORD, $WORD);
+};
+struct B_MinusD_Real {
+    struct B_MinusD_RealG_class *$class;
+    B_Number W_Number;
+    B_Real W_Real;
+};
+struct B_RealFloatG_class {
+    char *$GCINFO;
+    int $class_id;
+    $SuperG_class $superclass;
+    B_NoneType (*__init__) (B_RealFloat, B_Minus);
+    void (*__serialize__) (B_RealFloat, $Serial$state);
+    B_RealFloat (*__deserialize__) (B_RealFloat, $Serial$state);
+    B_bool (*__bool__) (B_RealFloat);
+    B_str (*__str__) (B_RealFloat);
+    B_str (*__repr__) (B_RealFloat);
+    $WORD (*__add__) (B_RealFloat, $WORD, $WORD);
+    $WORD (*__iadd__) (B_RealFloat, $WORD, $WORD);
+    $WORD (*__mul__) (B_RealFloat, $WORD, $WORD);
+    $WORD (*__imul__) (B_RealFloat, $WORD, $WORD);
+    $WORD (*__fromatom__) (B_RealFloat, B_atom);
+    B_complex (*__complx__) (B_RealFloat, $WORD);
+    $WORD (*__pow__) (B_RealFloat, $WORD, $WORD);
+    $WORD (*__ipow__) (B_RealFloat, $WORD, $WORD);
+    $WORD (*__neg__) (B_RealFloat, $WORD);
+    $WORD (*__pos__) (B_RealFloat, $WORD);
+    $WORD (*real) (B_RealFloat, $WORD, B_Real);
+    $WORD (*imag) (B_RealFloat, $WORD, B_Real);
+    $WORD (*__abs__) (B_RealFloat, $WORD, B_Real);
+    $WORD (*conjugate) (B_RealFloat, $WORD);
+    B_float (*__float__) (B_RealFloat, $WORD);
+    $WORD (*__trunc__) (B_RealFloat, $WORD, B_Integral);
+    $WORD (*__floor__) (B_RealFloat, $WORD, B_Integral);
+    $WORD (*__ceil__) (B_RealFloat, $WORD, B_Integral);
+    $WORD (*__round__) (B_RealFloat, $WORD, B_int);
+};
+struct B_RealFloat {
+    struct B_RealFloatG_class *$class;
+    B_Minus W_Minus;
+};
+struct B_MinusD_RealFloatG_class {
+    char *$GCINFO;
+    int $class_id;
+    $SuperG_class $superclass;
+    B_NoneType (*__init__) (B_MinusD_RealFloat, B_RealFloat);
+    void (*__serialize__) (B_MinusD_RealFloat, $Serial$state);
+    B_MinusD_RealFloat (*__deserialize__) (B_MinusD_RealFloat, $Serial$state);
+    B_bool (*__bool__) (B_MinusD_RealFloat);
+    B_str (*__str__) (B_MinusD_RealFloat);
+    B_str (*__repr__) (B_MinusD_RealFloat);
+    $WORD (*__sub__) (B_MinusD_RealFloat, $WORD, $WORD);
+    $WORD (*__isub__) (B_MinusD_RealFloat, $WORD, $WORD);
+};
+struct B_MinusD_RealFloat {
+    struct B_MinusD_RealFloatG_class *$class;
+    B_Number W_Number;
+    B_Real W_Real;
+    B_RealFloat W_RealFloat;
+};
+struct B_RationalG_class {
+    char *$GCINFO;
+    int $class_id;
+    $SuperG_class $superclass;
+    B_NoneType (*__init__) (B_Rational, B_Minus);
+    void (*__serialize__) (B_Rational, $Serial$state);
+    B_Rational (*__deserialize__) (B_Rational, $Serial$state);
+    B_bool (*__bool__) (B_Rational);
+    B_str (*__str__) (B_Rational);
+    B_str (*__repr__) (B_Rational);
+    $WORD (*__add__) (B_Rational, $WORD, $WORD);
+    $WORD (*__iadd__) (B_Rational, $WORD, $WORD);
+    $WORD (*__mul__) (B_Rational, $WORD, $WORD);
+    $WORD (*__imul__) (B_Rational, $WORD, $WORD);
+    $WORD (*__fromatom__) (B_Rational, B_atom);
+    B_complex (*__complx__) (B_Rational, $WORD);
+    $WORD (*__pow__) (B_Rational, $WORD, $WORD);
+    $WORD (*__ipow__) (B_Rational, $WORD, $WORD);
+    $WORD (*__neg__) (B_Rational, $WORD);
+    $WORD (*__pos__) (B_Rational, $WORD);
+    $WORD (*real) (B_Rational, $WORD, B_Real);
+    $WORD (*imag) (B_Rational, $WORD, B_Real);
+    $WORD (*__abs__) (B_Rational, $WORD, B_Real);
+    $WORD (*conjugate) (B_Rational, $WORD);
+    B_float (*__float__) (B_Rational, $WORD);
+    $WORD (*__trunc__) (B_Rational, $WORD, B_Integral);
+    $WORD (*__floor__) (B_Rational, $WORD, B_Integral);
+    $WORD (*__ceil__) (B_Rational, $WORD, B_Integral);
+    $WORD (*__round__) (B_Rational, $WORD, B_int);
+    $WORD (*numerator) (B_Rational, $WORD, B_Integral);
+    $WORD (*denominator) (B_Rational, $WORD, B_Integral);
+};
+struct B_Rational {
+    struct B_RationalG_class *$class;
+    B_Minus W_Minus;
+};
+struct B_MinusD_RationalG_class {
+    char *$GCINFO;
+    int $class_id;
+    $SuperG_class $superclass;
+    B_NoneType (*__init__) (B_MinusD_Rational, B_Rational);
+    void (*__serialize__) (B_MinusD_Rational, $Serial$state);
+    B_MinusD_Rational (*__deserialize__) (B_MinusD_Rational, $Serial$state);
+    B_bool (*__bool__) (B_MinusD_Rational);
+    B_str (*__str__) (B_MinusD_Rational);
+    B_str (*__repr__) (B_MinusD_Rational);
+    $WORD (*__sub__) (B_MinusD_Rational, $WORD, $WORD);
+    $WORD (*__isub__) (B_MinusD_Rational, $WORD, $WORD);
+};
+struct B_MinusD_Rational {
+    struct B_MinusD_RationalG_class *$class;
+    B_Number W_Number;
+    B_Real W_Real;
+    B_Rational W_Rational;
+};
+struct B_IntegralG_class {
+    char *$GCINFO;
+    int $class_id;
+    $SuperG_class $superclass;
+    B_NoneType (*__init__) (B_Integral, B_Minus, B_Logical);
+    void (*__serialize__) (B_Integral, $Serial$state);
+    B_Integral (*__deserialize__) (B_Integral, $Serial$state);
+    B_bool (*__bool__) (B_Integral);
+    B_str (*__str__) (B_Integral);
+    B_str (*__repr__) (B_Integral);
+    $WORD (*__add__) (B_Integral, $WORD, $WORD);
+    $WORD (*__iadd__) (B_Integral, $WORD, $WORD);
+    $WORD (*__mul__) (B_Integral, $WORD, $WORD);
+    $WORD (*__imul__) (B_Integral, $WORD, $WORD);
+    $WORD (*__fromatom__) (B_Integral, B_atom);
+    B_complex (*__complx__) (B_Integral, $WORD);
+    $WORD (*__pow__) (B_Integral, $WORD, $WORD);
+    $WORD (*__ipow__) (B_Integral, $WORD, $WORD);
+    $WORD (*__neg__) (B_Integral, $WORD);
+    $WORD (*__pos__) (B_Integral, $WORD);
+    $WORD (*real) (B_Integral, $WORD, B_Real);
+    $WORD (*imag) (B_Integral, $WORD, B_Real);
+    $WORD (*__abs__) (B_Integral, $WORD, B_Real);
+    $WORD (*conjugate) (B_Integral, $WORD);
+    B_float (*__float__) (B_Integral, $WORD);
+    $WORD (*__trunc__) (B_Integral, $WORD, B_Integral);
+    $WORD (*__floor__) (B_Integral, $WORD, B_Integral);
+    $WORD (*__ceil__) (B_Integral, $WORD, B_Integral);
+    $WORD (*__round__) (B_Integral, $WORD, B_int);
+    $WORD (*numerator) (B_Integral, $WORD, B_Integral);
+    $WORD (*denominator) (B_Integral, $WORD, B_Integral);
+    B_int (*__int__) (B_Integral, $WORD);
+    B_int (*__index__) (B_Integral, $WORD);
+    B_tuple (*__divmod__) (B_Integral, $WORD, $WORD);
+    $WORD (*__floordiv__) (B_Integral, $WORD, $WORD);
+    $WORD (*__mod__) (B_Integral, $WORD, $WORD);
+    $WORD (*__ifloordiv__) (B_Integral, $WORD, $WORD);
+    $WORD (*__imod__) (B_Integral, $WORD, $WORD);
+    $WORD (*__lshift__) (B_Integral, $WORD, B_int);
+    $WORD (*__rshift__) (B_Integral, $WORD, B_int);
+    $WORD (*__ilshift__) (B_Integral, $WORD, B_int);
+    $WORD (*__irshift__) (B_Integral, $WORD, B_int);
+    $WORD (*__invert__) (B_Integral, $WORD);
+};
+struct B_Integral {
+    struct B_IntegralG_class *$class;
+    B_Minus W_Minus;
+    B_Logical W_Logical;
+};
+struct B_MinusD_IntegralG_class {
+    char *$GCINFO;
+    int $class_id;
+    $SuperG_class $superclass;
+    B_NoneType (*__init__) (B_MinusD_Integral, B_Integral);
+    void (*__serialize__) (B_MinusD_Integral, $Serial$state);
+    B_MinusD_Integral (*__deserialize__) (B_MinusD_Integral, $Serial$state);
+    B_bool (*__bool__) (B_MinusD_Integral);
+    B_str (*__str__) (B_MinusD_Integral);
+    B_str (*__repr__) (B_MinusD_Integral);
+    $WORD (*__sub__) (B_MinusD_Integral, $WORD, $WORD);
+    $WORD (*__isub__) (B_MinusD_Integral, $WORD, $WORD);
+};
+struct B_MinusD_Integral {
+    struct B_MinusD_IntegralG_class *$class;
+    B_Number W_Number;
+    B_Real W_Real;
+    B_Rational W_Rational;
+    B_Integral W_Integral;
+};
+struct B_LogicalD_IntegralG_class {
+    char *$GCINFO;
+    int $class_id;
+    $SuperG_class $superclass;
+    B_NoneType (*__init__) (B_LogicalD_Integral, B_Integral);
+    void (*__serialize__) (B_LogicalD_Integral, $Serial$state);
+    B_LogicalD_Integral (*__deserialize__) (B_LogicalD_Integral, $Serial$state);
+    B_bool (*__bool__) (B_LogicalD_Integral);
+    B_str (*__str__) (B_LogicalD_Integral);
+    B_str (*__repr__) (B_LogicalD_Integral);
+    $WORD (*__and__) (B_LogicalD_Integral, $WORD, $WORD);
+    $WORD (*__or__) (B_LogicalD_Integral, $WORD, $WORD);
+    $WORD (*__xor__) (B_LogicalD_Integral, $WORD, $WORD);
+    $WORD (*__iand__) (B_LogicalD_Integral, $WORD, $WORD);
+    $WORD (*__ior__) (B_LogicalD_Integral, $WORD, $WORD);
+    $WORD (*__ixor__) (B_LogicalD_Integral, $WORD, $WORD);
+};
+struct B_LogicalD_Integral {
+    struct B_LogicalD_IntegralG_class *$class;
+    B_Integral W_Integral;
+};
+struct B_HashableD_boolG_class {
+    char *$GCINFO;
+    int $class_id;
+    $SuperG_class $superclass;
+    B_NoneType (*__init__) (B_HashableD_bool);
+    void (*__serialize__) (B_HashableD_bool, $Serial$state);
+    B_HashableD_bool (*__deserialize__) (B_HashableD_bool, $Serial$state);
+    B_bool (*__bool__) (B_HashableD_bool);
+    B_str (*__str__) (B_HashableD_bool);
+    B_str (*__repr__) (B_HashableD_bool);
+    B_bool (*__eq__) (B_HashableD_bool, B_bool, B_bool);
+    B_bool (*__ne__) (B_HashableD_bool, B_bool, B_bool);
+    B_int (*__hash__) (B_HashableD_bool, B_bool);
+};
+struct B_HashableD_bool {
+    struct B_HashableD_boolG_class *$class;
+};
+struct B_IntegralD_intG_class {
+    char *$GCINFO;
+    int $class_id;
+    $SuperG_class $superclass;
+    B_NoneType (*__init__) (B_IntegralD_int);
+    void (*__serialize__) (B_IntegralD_int, $Serial$state);
+    B_IntegralD_int (*__deserialize__) (B_IntegralD_int, $Serial$state);
+    B_bool (*__bool__) (B_IntegralD_int);
+    B_str (*__str__) (B_IntegralD_int);
+    B_str (*__repr__) (B_IntegralD_int);
+    B_int (*__add__) (B_IntegralD_int, B_int, B_int);
+    B_int (*__iadd__) (B_IntegralD_int, B_int, B_int);
+    B_int (*__mul__) (B_IntegralD_int, B_int, B_int);
+    B_int (*__imul__) (B_IntegralD_int, B_int, B_int);
+    B_int (*__fromatom__) (B_IntegralD_int, B_atom);
+    B_complex (*__complx__) (B_IntegralD_int, B_int);
+    B_int (*__pow__) (B_IntegralD_int, B_int, B_int);
+    B_int (*__ipow__) (B_IntegralD_int, B_int, B_int);
+    B_int (*__neg__) (B_IntegralD_int, B_int);
+    B_int (*__pos__) (B_IntegralD_int, B_int);
+    $WORD (*real) (B_IntegralD_int, B_int, B_Real);
+    $WORD (*imag) (B_IntegralD_int, B_int, B_Real);
+    $WORD (*__abs__) (B_IntegralD_int, B_int, B_Real);
+    B_int (*conjugate) (B_IntegralD_int, B_int);
+    B_float (*__float__) (B_IntegralD_int, B_int);
+    $WORD (*__trunc__) (B_IntegralD_int, B_int, B_Integral);
+    $WORD (*__floor__) (B_IntegralD_int, B_int, B_Integral);
+    $WORD (*__ceil__) (B_IntegralD_int, B_int, B_Integral);
+    B_int (*__round__) (B_IntegralD_int, B_int, B_int);
+    $WORD (*numerator) (B_IntegralD_int, B_int, B_Integral);
+    $WORD (*denominator) (B_IntegralD_int, B_int, B_Integral);
+    B_int (*__int__) (B_IntegralD_int, B_int);
+    B_int (*__index__) (B_IntegralD_int, B_int);
+    B_tuple (*__divmod__) (B_IntegralD_int, B_int, B_int);
+    B_int (*__floordiv__) (B_IntegralD_int, B_int, B_int);
+    B_int (*__mod__) (B_IntegralD_int, B_int, B_int);
+    B_int (*__ifloordiv__) (B_IntegralD_int, B_int, B_int);
+    B_int (*__imod__) (B_IntegralD_int, B_int, B_int);
+    B_int (*__lshift__) (B_IntegralD_int, B_int, B_int);
+    B_int (*__rshift__) (B_IntegralD_int, B_int, B_int);
+    B_int (*__ilshift__) (B_IntegralD_int, B_int, B_int);
+    B_int (*__irshift__) (B_IntegralD_int, B_int, B_int);
+    B_int (*__invert__) (B_IntegralD_int, B_int);
+};
+struct B_IntegralD_int {
+    struct B_IntegralD_intG_class *$class;
+    B_Minus W_Minus;
+    B_Logical W_Logical;
+};
+struct B_MinusD_IntegralD_intG_class {
+    char *$GCINFO;
+    int $class_id;
+    $SuperG_class $superclass;
+    B_NoneType (*__init__) (B_MinusD_IntegralD_int, B_Integral);
+    void (*__serialize__) (B_MinusD_IntegralD_int, $Serial$state);
+    B_MinusD_IntegralD_int (*__deserialize__) (B_MinusD_IntegralD_int, $Serial$state);
+    B_bool (*__bool__) (B_MinusD_IntegralD_int);
+    B_str (*__str__) (B_MinusD_IntegralD_int);
+    B_str (*__repr__) (B_MinusD_IntegralD_int);
+    B_int (*__sub__) (B_MinusD_IntegralD_int, B_int, B_int);
+    B_int (*__isub__) (B_MinusD_IntegralD_int, B_int, B_int);
+};
+struct B_MinusD_IntegralD_int {
+    struct B_MinusD_IntegralD_intG_class *$class;
+    B_Number W_Number;
+    B_Real W_Real;
+    B_Rational W_Rational;
+    B_Integral W_Integral;
+};
+struct B_LogicalD_IntegralD_intG_class {
+    char *$GCINFO;
+    int $class_id;
+    $SuperG_class $superclass;
+    B_NoneType (*__init__) (B_LogicalD_IntegralD_int, B_Integral);
+    void (*__serialize__) (B_LogicalD_IntegralD_int, $Serial$state);
+    B_LogicalD_IntegralD_int (*__deserialize__) (B_LogicalD_IntegralD_int, $Serial$state);
+    B_bool (*__bool__) (B_LogicalD_IntegralD_int);
+    B_str (*__str__) (B_LogicalD_IntegralD_int);
+    B_str (*__repr__) (B_LogicalD_IntegralD_int);
+    B_int (*__and__) (B_LogicalD_IntegralD_int, B_int, B_int);
+    B_int (*__or__) (B_LogicalD_IntegralD_int, B_int, B_int);
+    B_int (*__xor__) (B_LogicalD_IntegralD_int, B_int, B_int);
+    B_int (*__iand__) (B_LogicalD_IntegralD_int, B_int, B_int);
+    B_int (*__ior__) (B_LogicalD_IntegralD_int, B_int, B_int);
+    B_int (*__ixor__) (B_LogicalD_IntegralD_int, B_int, B_int);
+};
+struct B_LogicalD_IntegralD_int {
+    struct B_LogicalD_IntegralD_intG_class *$class;
+    B_Integral W_Integral;
+};
+struct B_DivD_intG_class {
+    char *$GCINFO;
+    int $class_id;
+    $SuperG_class $superclass;
+    B_NoneType (*__init__) (B_DivD_int);
+    void (*__serialize__) (B_DivD_int, $Serial$state);
+    B_DivD_int (*__deserialize__) (B_DivD_int, $Serial$state);
+    B_bool (*__bool__) (B_DivD_int);
+    B_str (*__str__) (B_DivD_int);
+    B_str (*__repr__) (B_DivD_int);
+    B_float (*__truediv__) (B_DivD_int, B_int, B_int);
+    B_float (*__itruediv__) (B_DivD_int, B_int, B_int);
+};
+struct B_DivD_int {
+    struct B_DivD_intG_class *$class;
+};
+struct B_OrdD_intG_class {
+    char *$GCINFO;
+    int $class_id;
+    $SuperG_class $superclass;
+    B_NoneType (*__init__) (B_OrdD_int);
+    void (*__serialize__) (B_OrdD_int, $Serial$state);
+    B_OrdD_int (*__deserialize__) (B_OrdD_int, $Serial$state);
+    B_bool (*__bool__) (B_OrdD_int);
+    B_str (*__str__) (B_OrdD_int);
+    B_str (*__repr__) (B_OrdD_int);
+    B_bool (*__eq__) (B_OrdD_int, B_int, B_int);
+    B_bool (*__ne__) (B_OrdD_int, B_int, B_int);
+    B_bool (*__lt__) (B_OrdD_int, B_int, B_int);
+    B_bool (*__le__) (B_OrdD_int, B_int, B_int);
+    B_bool (*__gt__) (B_OrdD_int, B_int, B_int);
+    B_bool (*__ge__) (B_OrdD_int, B_int, B_int);
+};
+struct B_OrdD_int {
+    struct B_OrdD_intG_class *$class;
+};
+struct B_HashableD_intG_class {
+    char *$GCINFO;
+    int $class_id;
+    $SuperG_class $superclass;
+    B_NoneType (*__init__) (B_HashableD_int);
+    void (*__serialize__) (B_HashableD_int, $Serial$state);
+    B_HashableD_int (*__deserialize__) (B_HashableD_int, $Serial$state);
+    B_bool (*__bool__) (B_HashableD_int);
+    B_str (*__str__) (B_HashableD_int);
+    B_str (*__repr__) (B_HashableD_int);
+    B_bool (*__eq__) (B_HashableD_int, B_int, B_int);
+    B_bool (*__ne__) (B_HashableD_int, B_int, B_int);
+    B_int (*__hash__) (B_HashableD_int, B_int);
+};
+struct B_HashableD_int {
+    struct B_HashableD_intG_class *$class;
+};
+struct B_IntegralD_i64G_class {
+    char *$GCINFO;
+    int $class_id;
+    $SuperG_class $superclass;
+    B_NoneType (*__init__) (B_IntegralD_i64);
+    void (*__serialize__) (B_IntegralD_i64, $Serial$state);
+    B_IntegralD_i64 (*__deserialize__) (B_IntegralD_i64, $Serial$state);
+    B_bool (*__bool__) (B_IntegralD_i64);
+    B_str (*__str__) (B_IntegralD_i64);
+    B_str (*__repr__) (B_IntegralD_i64);
+    B_i64 (*__add__) (B_IntegralD_i64, B_i64, B_i64);
+    B_i64 (*__iadd__) (B_IntegralD_i64, B_i64, B_i64);
+    B_i64 (*__mul__) (B_IntegralD_i64, B_i64, B_i64);
+    B_i64 (*__imul__) (B_IntegralD_i64, B_i64, B_i64);
+    B_i64 (*__fromatom__) (B_IntegralD_i64, B_atom);
+    B_complex (*__complx__) (B_IntegralD_i64, B_i64);
+    B_i64 (*__pow__) (B_IntegralD_i64, B_i64, B_i64);
+    B_i64 (*__ipow__) (B_IntegralD_i64, B_i64, B_i64);
+    B_i64 (*__neg__) (B_IntegralD_i64, B_i64);
+    B_i64 (*__pos__) (B_IntegralD_i64, B_i64);
+    $WORD (*real) (B_IntegralD_i64, B_i64, B_Real);
+    $WORD (*imag) (B_IntegralD_i64, B_i64, B_Real);
+    $WORD (*__abs__) (B_IntegralD_i64, B_i64, B_Real);
+    B_i64 (*conjugate) (B_IntegralD_i64, B_i64);
+    B_float (*__float__) (B_IntegralD_i64, B_i64);
+    $WORD (*__trunc__) (B_IntegralD_i64, B_i64, B_Integral);
+    $WORD (*__floor__) (B_IntegralD_i64, B_i64, B_Integral);
+    $WORD (*__ceil__) (B_IntegralD_i64, B_i64, B_Integral);
+    B_i64 (*__round__) (B_IntegralD_i64, B_i64, B_int);
+    $WORD (*numerator) (B_IntegralD_i64, B_i64, B_Integral);
+    $WORD (*denominator) (B_IntegralD_i64, B_i64, B_Integral);
+    B_int (*__int__) (B_IntegralD_i64, B_i64);
+    B_int (*__index__) (B_IntegralD_i64, B_i64);
+    B_tuple (*__divmod__) (B_IntegralD_i64, B_i64, B_i64);
+    B_i64 (*__floordiv__) (B_IntegralD_i64, B_i64, B_i64);
+    B_i64 (*__mod__) (B_IntegralD_i64, B_i64, B_i64);
+    B_i64 (*__ifloordiv__) (B_IntegralD_i64, B_i64, B_i64);
+    B_i64 (*__imod__) (B_IntegralD_i64, B_i64, B_i64);
+    B_i64 (*__lshift__) (B_IntegralD_i64, B_i64, B_int);
+    B_i64 (*__rshift__) (B_IntegralD_i64, B_i64, B_int);
+    B_i64 (*__ilshift__) (B_IntegralD_i64, B_i64, B_int);
+    B_i64 (*__irshift__) (B_IntegralD_i64, B_i64, B_int);
+    B_i64 (*__invert__) (B_IntegralD_i64, B_i64);
+};
+struct B_IntegralD_i64 {
+    struct B_IntegralD_i64G_class *$class;
+    B_Minus W_Minus;
+    B_Logical W_Logical;
+};
+struct B_MinusD_IntegralD_i64G_class {
+    char *$GCINFO;
+    int $class_id;
+    $SuperG_class $superclass;
+    B_NoneType (*__init__) (B_MinusD_IntegralD_i64, B_Integral);
+    void (*__serialize__) (B_MinusD_IntegralD_i64, $Serial$state);
+    B_MinusD_IntegralD_i64 (*__deserialize__) (B_MinusD_IntegralD_i64, $Serial$state);
+    B_bool (*__bool__) (B_MinusD_IntegralD_i64);
+    B_str (*__str__) (B_MinusD_IntegralD_i64);
+    B_str (*__repr__) (B_MinusD_IntegralD_i64);
+    B_i64 (*__sub__) (B_MinusD_IntegralD_i64, B_i64, B_i64);
+    B_i64 (*__isub__) (B_MinusD_IntegralD_i64, B_i64, B_i64);
+};
+struct B_MinusD_IntegralD_i64 {
+    struct B_MinusD_IntegralD_i64G_class *$class;
+    B_Number W_Number;
+    B_Real W_Real;
+    B_Rational W_Rational;
+    B_Integral W_Integral;
+};
+struct B_LogicalD_IntegralD_i64G_class {
+    char *$GCINFO;
+    int $class_id;
+    $SuperG_class $superclass;
+    B_NoneType (*__init__) (B_LogicalD_IntegralD_i64, B_Integral);
+    void (*__serialize__) (B_LogicalD_IntegralD_i64, $Serial$state);
+    B_LogicalD_IntegralD_i64 (*__deserialize__) (B_LogicalD_IntegralD_i64, $Serial$state);
+    B_bool (*__bool__) (B_LogicalD_IntegralD_i64);
+    B_str (*__str__) (B_LogicalD_IntegralD_i64);
+    B_str (*__repr__) (B_LogicalD_IntegralD_i64);
+    B_i64 (*__and__) (B_LogicalD_IntegralD_i64, B_i64, B_i64);
+    B_i64 (*__or__) (B_LogicalD_IntegralD_i64, B_i64, B_i64);
+    B_i64 (*__xor__) (B_LogicalD_IntegralD_i64, B_i64, B_i64);
+    B_i64 (*__iand__) (B_LogicalD_IntegralD_i64, B_i64, B_i64);
+    B_i64 (*__ior__) (B_LogicalD_IntegralD_i64, B_i64, B_i64);
+    B_i64 (*__ixor__) (B_LogicalD_IntegralD_i64, B_i64, B_i64);
+};
+struct B_LogicalD_IntegralD_i64 {
+    struct B_LogicalD_IntegralD_i64G_class *$class;
+    B_Integral W_Integral;
+};
+struct B_DivD_i64G_class {
+    char *$GCINFO;
+    int $class_id;
+    $SuperG_class $superclass;
+    B_NoneType (*__init__) (B_DivD_i64);
+    void (*__serialize__) (B_DivD_i64, $Serial$state);
+    B_DivD_i64 (*__deserialize__) (B_DivD_i64, $Serial$state);
+    B_bool (*__bool__) (B_DivD_i64);
+    B_str (*__str__) (B_DivD_i64);
+    B_str (*__repr__) (B_DivD_i64);
+    B_float (*__truediv__) (B_DivD_i64, B_i64, B_i64);
+    B_float (*__itruediv__) (B_DivD_i64, B_i64, B_i64);
+};
+struct B_DivD_i64 {
+    struct B_DivD_i64G_class *$class;
+};
+struct B_OrdD_i64G_class {
+    char *$GCINFO;
+    int $class_id;
+    $SuperG_class $superclass;
+    B_NoneType (*__init__) (B_OrdD_i64);
+    void (*__serialize__) (B_OrdD_i64, $Serial$state);
+    B_OrdD_i64 (*__deserialize__) (B_OrdD_i64, $Serial$state);
+    B_bool (*__bool__) (B_OrdD_i64);
+    B_str (*__str__) (B_OrdD_i64);
+    B_str (*__repr__) (B_OrdD_i64);
+    B_bool (*__eq__) (B_OrdD_i64, B_i64, B_i64);
+    B_bool (*__ne__) (B_OrdD_i64, B_i64, B_i64);
+    B_bool (*__lt__) (B_OrdD_i64, B_i64, B_i64);
+    B_bool (*__le__) (B_OrdD_i64, B_i64, B_i64);
+    B_bool (*__gt__) (B_OrdD_i64, B_i64, B_i64);
+    B_bool (*__ge__) (B_OrdD_i64, B_i64, B_i64);
+};
+struct B_OrdD_i64 {
+    struct B_OrdD_i64G_class *$class;
+};
+struct B_HashableD_i64G_class {
+    char *$GCINFO;
+    int $class_id;
+    $SuperG_class $superclass;
+    B_NoneType (*__init__) (B_HashableD_i64);
+    void (*__serialize__) (B_HashableD_i64, $Serial$state);
+    B_HashableD_i64 (*__deserialize__) (B_HashableD_i64, $Serial$state);
+    B_bool (*__bool__) (B_HashableD_i64);
+    B_str (*__str__) (B_HashableD_i64);
+    B_str (*__repr__) (B_HashableD_i64);
+    B_bool (*__eq__) (B_HashableD_i64, B_i64, B_i64);
+    B_bool (*__ne__) (B_HashableD_i64, B_i64, B_i64);
+    B_int (*__hash__) (B_HashableD_i64, B_i64);
+};
+struct B_HashableD_i64 {
+    struct B_HashableD_i64G_class *$class;
+};
+struct B_RealFloatD_floatG_class {
+    char *$GCINFO;
+    int $class_id;
+    $SuperG_class $superclass;
+    B_NoneType (*__init__) (B_RealFloatD_float);
+    void (*__serialize__) (B_RealFloatD_float, $Serial$state);
+    B_RealFloatD_float (*__deserialize__) (B_RealFloatD_float, $Serial$state);
+    B_bool (*__bool__) (B_RealFloatD_float);
+    B_str (*__str__) (B_RealFloatD_float);
+    B_str (*__repr__) (B_RealFloatD_float);
+    B_float (*__add__) (B_RealFloatD_float, B_float, B_float);
+    B_float (*__iadd__) (B_RealFloatD_float, B_float, B_float);
+    B_float (*__mul__) (B_RealFloatD_float, B_float, B_float);
+    B_float (*__imul__) (B_RealFloatD_float, B_float, B_float);
+    B_float (*__fromatom__) (B_RealFloatD_float, B_atom);
+    B_complex (*__complx__) (B_RealFloatD_float, B_float);
+    B_float (*__pow__) (B_RealFloatD_float, B_float, B_float);
+    B_float (*__ipow__) (B_RealFloatD_float, B_float, B_float);
+    B_float (*__neg__) (B_RealFloatD_float, B_float);
+    B_float (*__pos__) (B_RealFloatD_float, B_float);
+    $WORD (*real) (B_RealFloatD_float, B_float, B_Real);
+    $WORD (*imag) (B_RealFloatD_float, B_float, B_Real);
+    $WORD (*__abs__) (B_RealFloatD_float, B_float, B_Real);
+    B_float (*conjugate) (B_RealFloatD_float, B_float);
+    B_float (*__float__) (B_RealFloatD_float, B_float);
+    $WORD (*__trunc__) (B_RealFloatD_float, B_float, B_Integral);
+    $WORD (*__floor__) (B_RealFloatD_float, B_float, B_Integral);
+    $WORD (*__ceil__) (B_RealFloatD_float, B_float, B_Integral);
+    B_float (*__round__) (B_RealFloatD_float, B_float, B_int);
+};
+struct B_RealFloatD_float {
+    struct B_RealFloatD_floatG_class *$class;
+    B_Minus W_Minus;
+};
+struct B_MinusD_RealFloatD_floatG_class {
+    char *$GCINFO;
+    int $class_id;
+    $SuperG_class $superclass;
+    B_NoneType (*__init__) (B_MinusD_RealFloatD_float, B_RealFloat);
+    void (*__serialize__) (B_MinusD_RealFloatD_float, $Serial$state);
+    B_MinusD_RealFloatD_float (*__deserialize__) (B_MinusD_RealFloatD_float, $Serial$state);
+    B_bool (*__bool__) (B_MinusD_RealFloatD_float);
+    B_str (*__str__) (B_MinusD_RealFloatD_float);
+    B_str (*__repr__) (B_MinusD_RealFloatD_float);
+    B_float (*__sub__) (B_MinusD_RealFloatD_float, B_float, B_float);
+    B_float (*__isub__) (B_MinusD_RealFloatD_float, B_float, B_float);
+};
+struct B_MinusD_RealFloatD_float {
+    struct B_MinusD_RealFloatD_floatG_class *$class;
+    B_Number W_Number;
+    B_Real W_Real;
+    B_RealFloat W_RealFloat;
+};
+struct B_DivD_floatG_class {
+    char *$GCINFO;
+    int $class_id;
+    $SuperG_class $superclass;
+    B_NoneType (*__init__) (B_DivD_float);
+    void (*__serialize__) (B_DivD_float, $Serial$state);
+    B_DivD_float (*__deserialize__) (B_DivD_float, $Serial$state);
+    B_bool (*__bool__) (B_DivD_float);
+    B_str (*__str__) (B_DivD_float);
+    B_str (*__repr__) (B_DivD_float);
+    B_float (*__truediv__) (B_DivD_float, B_float, B_float);
+    B_float (*__itruediv__) (B_DivD_float, B_float, B_float);
+};
+struct B_DivD_float {
+    struct B_DivD_floatG_class *$class;
+};
+struct B_OrdD_floatG_class {
+    char *$GCINFO;
+    int $class_id;
+    $SuperG_class $superclass;
+    B_NoneType (*__init__) (B_OrdD_float);
+    void (*__serialize__) (B_OrdD_float, $Serial$state);
+    B_OrdD_float (*__deserialize__) (B_OrdD_float, $Serial$state);
+    B_bool (*__bool__) (B_OrdD_float);
+    B_str (*__str__) (B_OrdD_float);
+    B_str (*__repr__) (B_OrdD_float);
+    B_bool (*__eq__) (B_OrdD_float, B_float, B_float);
+    B_bool (*__ne__) (B_OrdD_float, B_float, B_float);
+    B_bool (*__lt__) (B_OrdD_float, B_float, B_float);
+    B_bool (*__le__) (B_OrdD_float, B_float, B_float);
+    B_bool (*__gt__) (B_OrdD_float, B_float, B_float);
+    B_bool (*__ge__) (B_OrdD_float, B_float, B_float);
+};
+struct B_OrdD_float {
+    struct B_OrdD_floatG_class *$class;
+};
+struct B_HashableD_floatG_class {
+    char *$GCINFO;
+    int $class_id;
+    $SuperG_class $superclass;
+    B_NoneType (*__init__) (B_HashableD_float);
+    void (*__serialize__) (B_HashableD_float, $Serial$state);
+    B_HashableD_float (*__deserialize__) (B_HashableD_float, $Serial$state);
+    B_bool (*__bool__) (B_HashableD_float);
+    B_str (*__str__) (B_HashableD_float);
+    B_str (*__repr__) (B_HashableD_float);
+    B_bool (*__eq__) (B_HashableD_float, B_float, B_float);
+    B_bool (*__ne__) (B_HashableD_float, B_float, B_float);
+    B_int (*__hash__) (B_HashableD_float, B_float);
+};
+struct B_HashableD_float {
+    struct B_HashableD_floatG_class *$class;
+};
+struct B_NumberD_complexG_class {
+    char *$GCINFO;
+    int $class_id;
+    $SuperG_class $superclass;
+    B_NoneType (*__init__) (B_NumberD_complex);
+    void (*__serialize__) (B_NumberD_complex, $Serial$state);
+    B_NumberD_complex (*__deserialize__) (B_NumberD_complex, $Serial$state);
+    B_bool (*__bool__) (B_NumberD_complex);
+    B_str (*__str__) (B_NumberD_complex);
+    B_str (*__repr__) (B_NumberD_complex);
+    B_complex (*__add__) (B_NumberD_complex, B_complex, B_complex);
+    B_complex (*__iadd__) (B_NumberD_complex, B_complex, B_complex);
+    B_complex (*__mul__) (B_NumberD_complex, B_complex, B_complex);
+    B_complex (*__imul__) (B_NumberD_complex, B_complex, B_complex);
+    B_complex (*__fromatom__) (B_NumberD_complex, B_atom);
+    B_complex (*__complx__) (B_NumberD_complex, B_complex);
+    B_complex (*__pow__) (B_NumberD_complex, B_complex, B_complex);
+    B_complex (*__ipow__) (B_NumberD_complex, B_complex, B_complex);
+    B_complex (*__neg__) (B_NumberD_complex, B_complex);
+    B_complex (*__pos__) (B_NumberD_complex, B_complex);
+    $WORD (*real) (B_NumberD_complex, B_complex, B_Real);
+    $WORD (*imag) (B_NumberD_complex, B_complex, B_Real);
+    $WORD (*__abs__) (B_NumberD_complex, B_complex, B_Real);
+    B_complex (*conjugate) (B_NumberD_complex, B_complex);
+};
+struct B_NumberD_complex {
+    struct B_NumberD_complexG_class *$class;
+    B_Minus W_Minus;
+};
+struct B_MinusD_NumberD_complexG_class {
+    char *$GCINFO;
+    int $class_id;
+    $SuperG_class $superclass;
+    B_NoneType (*__init__) (B_MinusD_NumberD_complex, B_Number);
+    void (*__serialize__) (B_MinusD_NumberD_complex, $Serial$state);
+    B_MinusD_NumberD_complex (*__deserialize__) (B_MinusD_NumberD_complex, $Serial$state);
+    B_bool (*__bool__) (B_MinusD_NumberD_complex);
+    B_str (*__str__) (B_MinusD_NumberD_complex);
+    B_str (*__repr__) (B_MinusD_NumberD_complex);
+    B_complex (*__sub__) (B_MinusD_NumberD_complex, B_complex, B_complex);
+    B_complex (*__isub__) (B_MinusD_NumberD_complex, B_complex, B_complex);
+};
+struct B_MinusD_NumberD_complex {
+    struct B_MinusD_NumberD_complexG_class *$class;
+    B_Number W_Number;
+};
+struct B_DivD_complexG_class {
+    char *$GCINFO;
+    int $class_id;
+    $SuperG_class $superclass;
+    B_NoneType (*__init__) (B_DivD_complex);
+    void (*__serialize__) (B_DivD_complex, $Serial$state);
+    B_DivD_complex (*__deserialize__) (B_DivD_complex, $Serial$state);
+    B_bool (*__bool__) (B_DivD_complex);
+    B_str (*__str__) (B_DivD_complex);
+    B_str (*__repr__) (B_DivD_complex);
+    B_complex (*__truediv__) (B_DivD_complex, B_complex, B_complex);
+    B_complex (*__itruediv__) (B_DivD_complex, B_complex, B_complex);
+};
+struct B_DivD_complex {
+    struct B_DivD_complexG_class *$class;
+};
+struct B_EqD_complexG_class {
+    char *$GCINFO;
+    int $class_id;
+    $SuperG_class $superclass;
+    B_NoneType (*__init__) (B_EqD_complex);
+    void (*__serialize__) (B_EqD_complex, $Serial$state);
+    B_EqD_complex (*__deserialize__) (B_EqD_complex, $Serial$state);
+    B_bool (*__bool__) (B_EqD_complex);
+    B_str (*__str__) (B_EqD_complex);
+    B_str (*__repr__) (B_EqD_complex);
+    B_bool (*__eq__) (B_EqD_complex, B_complex, B_complex);
+    B_bool (*__ne__) (B_EqD_complex, B_complex, B_complex);
+};
+struct B_EqD_complex {
+    struct B_EqD_complexG_class *$class;
+};
+struct B_HashableD_complexG_class {
+    char *$GCINFO;
+    int $class_id;
+    $SuperG_class $superclass;
+    B_NoneType (*__init__) (B_HashableD_complex);
+    void (*__serialize__) (B_HashableD_complex, $Serial$state);
+    B_HashableD_complex (*__deserialize__) (B_HashableD_complex, $Serial$state);
+    B_bool (*__bool__) (B_HashableD_complex);
+    B_str (*__str__) (B_HashableD_complex);
+    B_str (*__repr__) (B_HashableD_complex);
+    B_bool (*__eq__) (B_HashableD_complex, B_complex, B_complex);
+    B_bool (*__ne__) (B_HashableD_complex, B_complex, B_complex);
+    B_int (*__hash__) (B_HashableD_complex, B_complex);
+};
+struct B_HashableD_complex {
+    struct B_HashableD_complexG_class *$class;
+};
+struct B_IndexedG_class {
+    char *$GCINFO;
+    int $class_id;
+    $SuperG_class $superclass;
+    B_NoneType (*__init__) (B_Indexed, B_Eq);
+    void (*__serialize__) (B_Indexed, $Serial$state);
+    B_Indexed (*__deserialize__) (B_Indexed, $Serial$state);
+    B_bool (*__bool__) (B_Indexed);
+    B_str (*__str__) (B_Indexed);
+    B_str (*__repr__) (B_Indexed);
+    $WORD (*__getitem__) (B_Indexed, $WORD, $WORD);
+    B_NoneType (*__setitem__) (B_Indexed, $WORD, $WORD, $WORD);
+    B_NoneType (*__delitem__) (B_Indexed, $WORD, $WORD);
+};
+struct B_Indexed {
+    struct B_IndexedG_class *$class;
+    B_Eq W_EqD_AD_Indexed;
+};
+struct B_SliceableG_class {
+    char *$GCINFO;
+    int $class_id;
+    $SuperG_class $superclass;
+    B_NoneType (*__init__) (B_Sliceable);
+    void (*__serialize__) (B_Sliceable, $Serial$state);
+    B_Sliceable (*__deserialize__) (B_Sliceable, $Serial$state);
+    B_bool (*__bool__) (B_Sliceable);
+    B_str (*__str__) (B_Sliceable);
+    B_str (*__repr__) (B_Sliceable);
+    $WORD (*__getitem__) (B_Sliceable, $WORD, B_int);
+    B_NoneType (*__setitem__) (B_Sliceable, $WORD, B_int, $WORD);
+    B_NoneType (*__delitem__) (B_Sliceable, $WORD, B_int);
+    $WORD (*__getslice__) (B_Sliceable, $WORD, B_slice);
+    B_NoneType (*__setslice__) (B_Sliceable, $WORD, B_Iterable, B_slice, $WORD);
+    B_NoneType (*__delslice__) (B_Sliceable, $WORD, B_slice);
+};
+struct B_Sliceable {
+    struct B_SliceableG_class *$class;
+    B_Eq W_EqD_AD_Indexed;
+};
+struct B_CollectionG_class {
+    char *$GCINFO;
+    int $class_id;
+    $SuperG_class $superclass;
+    B_NoneType (*__init__) (B_Collection);
+    void (*__serialize__) (B_Collection, $Serial$state);
+    B_Collection (*__deserialize__) (B_Collection, $Serial$state);
+    B_bool (*__bool__) (B_Collection);
+    B_str (*__str__) (B_Collection);
+    B_str (*__repr__) (B_Collection);
+    B_Iterator (*__iter__) (B_Collection, $WORD);
+    $WORD (*__fromiter__) (B_Collection, B_Iterable, $WORD);
+    B_int (*__len__) (B_Collection, $WORD);
+};
+struct B_Collection {
+    struct B_CollectionG_class *$class;
+};
+struct B_ContainerG_class {
+    char *$GCINFO;
+    int $class_id;
+    $SuperG_class $superclass;
+    B_NoneType (*__init__) (B_Container, B_Eq);
+    void (*__serialize__) (B_Container, $Serial$state);
+    B_Container (*__deserialize__) (B_Container, $Serial$state);
+    B_bool (*__bool__) (B_Container);
+    B_str (*__str__) (B_Container);
+    B_str (*__repr__) (B_Container);
+    B_Iterator (*__iter__) (B_Container, $WORD);
+    $WORD (*__fromiter__) (B_Container, B_Iterable, $WORD);
+    B_int (*__len__) (B_Container, $WORD);
+    B_bool (*__contains__) (B_Container, $WORD, $WORD);
+    B_bool (*__containsnot__) (B_Container, $WORD, $WORD);
+};
+struct B_Container {
+    struct B_ContainerG_class *$class;
+    B_Eq W_EqD_AD_Container;
+};
+struct B_SequenceG_class {
+    char *$GCINFO;
+    int $class_id;
+    $SuperG_class $superclass;
+    B_NoneType (*__init__) (B_Sequence, B_Collection, B_Times);
+    void (*__serialize__) (B_Sequence, $Serial$state);
+    B_Sequence (*__deserialize__) (B_Sequence, $Serial$state);
+    B_bool (*__bool__) (B_Sequence);
+    B_str (*__str__) (B_Sequence);
+    B_str (*__repr__) (B_Sequence);
+    $WORD (*__getitem__) (B_Sequence, $WORD, B_int);
+    B_NoneType (*__setitem__) (B_Sequence, $WORD, B_int, $WORD);
+    B_NoneType (*__delitem__) (B_Sequence, $WORD, B_int);
+    $WORD (*__getslice__) (B_Sequence, $WORD, B_slice);
+    B_NoneType (*__setslice__) (B_Sequence, $WORD, B_Iterable, B_slice, $WORD);
+    B_NoneType (*__delslice__) (B_Sequence, $WORD, B_slice);
+    B_Iterator (*__reversed__) (B_Sequence, $WORD);
+    B_NoneType (*insert) (B_Sequence, $WORD, B_int, $WORD);
+    B_NoneType (*append) (B_Sequence, $WORD, $WORD);
+    B_NoneType (*reverse) (B_Sequence, $WORD);
+};
+struct B_Sequence {
+    struct B_SequenceG_class *$class;
+    B_Eq W_EqD_AD_Indexed;
+    B_Collection W_Collection;
+    B_Times W_Times;
+};
+struct B_CollectionD_SequenceG_class {
+    char *$GCINFO;
+    int $class_id;
+    $SuperG_class $superclass;
+    B_NoneType (*__init__) (B_CollectionD_Sequence, B_Sequence);
+    void (*__serialize__) (B_CollectionD_Sequence, $Serial$state);
+    B_CollectionD_Sequence (*__deserialize__) (B_CollectionD_Sequence, $Serial$state);
+    B_bool (*__bool__) (B_CollectionD_Sequence);
+    B_str (*__str__) (B_CollectionD_Sequence);
+    B_str (*__repr__) (B_CollectionD_Sequence);
+    B_Iterator (*__iter__) (B_CollectionD_Sequence, $WORD);
+    $WORD (*__fromiter__) (B_CollectionD_Sequence, B_Iterable, $WORD);
+    B_int (*__len__) (B_CollectionD_Sequence, $WORD);
+};
+struct B_CollectionD_Sequence {
+    struct B_CollectionD_SequenceG_class *$class;
+    B_Sequence W_Sequence;
+};
+struct B_TimesD_SequenceG_class {
+    char *$GCINFO;
+    int $class_id;
+    $SuperG_class $superclass;
+    B_NoneType (*__init__) (B_TimesD_Sequence, B_Sequence);
+    void (*__serialize__) (B_TimesD_Sequence, $Serial$state);
+    B_TimesD_Sequence (*__deserialize__) (B_TimesD_Sequence, $Serial$state);
+    B_bool (*__bool__) (B_TimesD_Sequence);
+    B_str (*__str__) (B_TimesD_Sequence);
+    B_str (*__repr__) (B_TimesD_Sequence);
+    $WORD (*__add__) (B_TimesD_Sequence, $WORD, $WORD);
+    $WORD (*__iadd__) (B_TimesD_Sequence, $WORD, $WORD);
+    $WORD (*__mul__) (B_TimesD_Sequence, $WORD, B_int);
+    $WORD (*__imul__) (B_TimesD_Sequence, $WORD, B_int);
+};
+struct B_TimesD_Sequence {
+    struct B_TimesD_SequenceG_class *$class;
+    B_Sequence W_Sequence;
+};
+struct B_MappingG_class {
+    char *$GCINFO;
+    int $class_id;
+    $SuperG_class $superclass;
+    B_NoneType (*__init__) (B_Mapping, B_Eq, B_Indexed);
+    void (*__serialize__) (B_Mapping, $Serial$state);
+    B_Mapping (*__deserialize__) (B_Mapping, $Serial$state);
+    B_bool (*__bool__) (B_Mapping);
+    B_str (*__str__) (B_Mapping);
+    B_str (*__repr__) (B_Mapping);
+    B_Iterator (*__iter__) (B_Mapping, $WORD);
+    $WORD (*__fromiter__) (B_Mapping, B_Iterable, $WORD);
+    B_int (*__len__) (B_Mapping, $WORD);
+    B_bool (*__contains__) (B_Mapping, $WORD, $WORD);
+    B_bool (*__containsnot__) (B_Mapping, $WORD, $WORD);
+    $WORD (*get) (B_Mapping, $WORD, $WORD, $WORD);
+    B_Iterator (*keys) (B_Mapping, $WORD);
+    B_Iterator (*values) (B_Mapping, $WORD);
+    B_Iterator (*items) (B_Mapping, $WORD);
+    B_NoneType (*update) (B_Mapping, $WORD, B_Iterable, $WORD);
+    B_tuple (*popitem) (B_Mapping, $WORD);
+    B_NoneType (*setdefault) (B_Mapping, $WORD, $WORD, $WORD);
+};
+struct B_Mapping {
+    struct B_MappingG_class *$class;
+    B_Eq W_EqD_AD_Container;
+    B_Eq W_EqD_AD_Mapping;
+    B_Indexed W_Indexed;
+};
+struct B_IndexedD_MappingG_class {
+    char *$GCINFO;
+    int $class_id;
+    $SuperG_class $superclass;
+    B_NoneType (*__init__) (B_IndexedD_Mapping, B_Eq, B_Mapping);
+    void (*__serialize__) (B_IndexedD_Mapping, $Serial$state);
+    B_IndexedD_Mapping (*__deserialize__) (B_IndexedD_Mapping, $Serial$state);
+    B_bool (*__bool__) (B_IndexedD_Mapping);
+    B_str (*__str__) (B_IndexedD_Mapping);
+    B_str (*__repr__) (B_IndexedD_Mapping);
+    $WORD (*__getitem__) (B_IndexedD_Mapping, $WORD, $WORD);
+    B_NoneType (*__setitem__) (B_IndexedD_Mapping, $WORD, $WORD, $WORD);
+    B_NoneType (*__delitem__) (B_IndexedD_Mapping, $WORD, $WORD);
+};
+struct B_IndexedD_Mapping {
+    struct B_IndexedD_MappingG_class *$class;
+    B_Eq W_EqD_AD_Indexed;
+    B_Eq W_EqD_AD_Mapping;
+    B_Mapping W_Mapping;
+};
+struct B_SetG_class {
+    char *$GCINFO;
+    int $class_id;
+    $SuperG_class $superclass;
+    B_NoneType (*__init__) (B_Set, B_Eq, B_Ord, B_Logical, B_Minus);
+    void (*__serialize__) (B_Set, $Serial$state);
+    B_Set (*__deserialize__) (B_Set, $Serial$state);
+    B_bool (*__bool__) (B_Set);
+    B_str (*__str__) (B_Set);
+    B_str (*__repr__) (B_Set);
+    B_Iterator (*__iter__) (B_Set, $WORD);
+    $WORD (*__fromiter__) (B_Set, B_Iterable, $WORD);
+    B_int (*__len__) (B_Set, $WORD);
+    B_bool (*__contains__) (B_Set, $WORD, $WORD);
+    B_bool (*__containsnot__) (B_Set, $WORD, $WORD);
+    B_bool (*isdisjoint) (B_Set, $WORD, $WORD);
+    B_NoneType (*add) (B_Set, $WORD, $WORD);
+    B_NoneType (*discard) (B_Set, $WORD, $WORD);
+    $WORD (*pop) (B_Set, $WORD);
+};
+struct B_Set {
+    struct B_SetG_class *$class;
+    B_Eq W_EqD_AD_Container;
+    B_Eq W_EqD_AD_Set;
+    B_Ord W_Ord;
+    B_Logical W_Logical;
+    B_Minus W_Minus;
+};
+struct B_OrdD_SetG_class {
+    char *$GCINFO;
+    int $class_id;
+    $SuperG_class $superclass;
+    B_NoneType (*__init__) (B_OrdD_Set, B_Eq, B_Set);
+    void (*__serialize__) (B_OrdD_Set, $Serial$state);
+    B_OrdD_Set (*__deserialize__) (B_OrdD_Set, $Serial$state);
+    B_bool (*__bool__) (B_OrdD_Set);
+    B_str (*__str__) (B_OrdD_Set);
+    B_str (*__repr__) (B_OrdD_Set);
+    B_bool (*__eq__) (B_OrdD_Set, $WORD, $WORD);
+    B_bool (*__ne__) (B_OrdD_Set, $WORD, $WORD);
+    B_bool (*__lt__) (B_OrdD_Set, $WORD, $WORD);
+    B_bool (*__le__) (B_OrdD_Set, $WORD, $WORD);
+    B_bool (*__gt__) (B_OrdD_Set, $WORD, $WORD);
+    B_bool (*__ge__) (B_OrdD_Set, $WORD, $WORD);
+};
+struct B_OrdD_Set {
+    struct B_OrdD_SetG_class *$class;
+    B_Eq W_EqD_AD_Set;
+    B_Set W_Set;
+};
+struct B_LogicalD_SetG_class {
+    char *$GCINFO;
+    int $class_id;
+    $SuperG_class $superclass;
+    B_NoneType (*__init__) (B_LogicalD_Set, B_Eq, B_Set);
+    void (*__serialize__) (B_LogicalD_Set, $Serial$state);
+    B_LogicalD_Set (*__deserialize__) (B_LogicalD_Set, $Serial$state);
+    B_bool (*__bool__) (B_LogicalD_Set);
+    B_str (*__str__) (B_LogicalD_Set);
+    B_str (*__repr__) (B_LogicalD_Set);
+    $WORD (*__and__) (B_LogicalD_Set, $WORD, $WORD);
+    $WORD (*__or__) (B_LogicalD_Set, $WORD, $WORD);
+    $WORD (*__xor__) (B_LogicalD_Set, $WORD, $WORD);
+    $WORD (*__iand__) (B_LogicalD_Set, $WORD, $WORD);
+    $WORD (*__ior__) (B_LogicalD_Set, $WORD, $WORD);
+    $WORD (*__ixor__) (B_LogicalD_Set, $WORD, $WORD);
+};
+struct B_LogicalD_Set {
+    struct B_LogicalD_SetG_class *$class;
+    B_Eq W_EqD_AD_Set;
+    B_Set W_Set;
+};
+struct B_MinusD_SetG_class {
+    char *$GCINFO;
+    int $class_id;
+    $SuperG_class $superclass;
+    B_NoneType (*__init__) (B_MinusD_Set, B_Eq, B_Set);
+    void (*__serialize__) (B_MinusD_Set, $Serial$state);
+    B_MinusD_Set (*__deserialize__) (B_MinusD_Set, $Serial$state);
+    B_bool (*__bool__) (B_MinusD_Set);
+    B_str (*__str__) (B_MinusD_Set);
+    B_str (*__repr__) (B_MinusD_Set);
+    $WORD (*__sub__) (B_MinusD_Set, $WORD, $WORD);
+    $WORD (*__isub__) (B_MinusD_Set, $WORD, $WORD);
+};
+struct B_MinusD_Set {
+    struct B_MinusD_SetG_class *$class;
+    B_Eq W_EqD_AD_Set;
+    B_Set W_Set;
+};
+struct B_SequenceD_listG_class {
+    char *$GCINFO;
+    int $class_id;
+    $SuperG_class $superclass;
+    B_NoneType (*__init__) (B_SequenceD_list);
+    void (*__serialize__) (B_SequenceD_list, $Serial$state);
+    B_SequenceD_list (*__deserialize__) (B_SequenceD_list, $Serial$state);
+    B_bool (*__bool__) (B_SequenceD_list);
+    B_str (*__str__) (B_SequenceD_list);
+    B_str (*__repr__) (B_SequenceD_list);
+    $WORD (*__getitem__) (B_SequenceD_list, B_list, B_int);
+    B_NoneType (*__setitem__) (B_SequenceD_list, B_list, B_int, $WORD);
+    B_NoneType (*__delitem__) (B_SequenceD_list, B_list, B_int);
+    B_list (*__getslice__) (B_SequenceD_list, B_list, B_slice);
+    B_NoneType (*__setslice__) (B_SequenceD_list, B_list, B_Iterable, B_slice, $WORD);
+    B_NoneType (*__delslice__) (B_SequenceD_list, B_list, B_slice);
+    B_Iterator (*__reversed__) (B_SequenceD_list, B_list);
+    B_NoneType (*insert) (B_SequenceD_list, B_list, B_int, $WORD);
+    B_NoneType (*append) (B_SequenceD_list, B_list, $WORD);
+    B_NoneType (*reverse) (B_SequenceD_list, B_list);
+};
+struct B_SequenceD_list {
+    struct B_SequenceD_listG_class *$class;
+    B_Eq W_EqD_AD_Indexed;
+    B_Collection W_Collection;
+    B_Times W_Times;
+};
+struct B_CollectionD_SequenceD_listG_class {
+    char *$GCINFO;
+    int $class_id;
+    $SuperG_class $superclass;
+    B_NoneType (*__init__) (B_CollectionD_SequenceD_list, B_Sequence);
+    void (*__serialize__) (B_CollectionD_SequenceD_list, $Serial$state);
+    B_CollectionD_SequenceD_list (*__deserialize__) (B_CollectionD_SequenceD_list, $Serial$state);
+    B_bool (*__bool__) (B_CollectionD_SequenceD_list);
+    B_str (*__str__) (B_CollectionD_SequenceD_list);
+    B_str (*__repr__) (B_CollectionD_SequenceD_list);
+    B_Iterator (*__iter__) (B_CollectionD_SequenceD_list, B_list);
+    B_list (*__fromiter__) (B_CollectionD_SequenceD_list, B_Iterable, $WORD);
+    B_int (*__len__) (B_CollectionD_SequenceD_list, B_list);
+};
+struct B_CollectionD_SequenceD_list {
+    struct B_CollectionD_SequenceD_listG_class *$class;
+    B_Sequence W_Sequence;
+};
+struct B_TimesD_SequenceD_listG_class {
+    char *$GCINFO;
+    int $class_id;
+    $SuperG_class $superclass;
+    B_NoneType (*__init__) (B_TimesD_SequenceD_list, B_Sequence);
+    void (*__serialize__) (B_TimesD_SequenceD_list, $Serial$state);
+    B_TimesD_SequenceD_list (*__deserialize__) (B_TimesD_SequenceD_list, $Serial$state);
+    B_bool (*__bool__) (B_TimesD_SequenceD_list);
+    B_str (*__str__) (B_TimesD_SequenceD_list);
+    B_str (*__repr__) (B_TimesD_SequenceD_list);
+    B_list (*__add__) (B_TimesD_SequenceD_list, B_list, B_list);
+    B_list (*__iadd__) (B_TimesD_SequenceD_list, B_list, B_list);
+    B_list (*__mul__) (B_TimesD_SequenceD_list, B_list, B_int);
+    B_list (*__imul__) (B_TimesD_SequenceD_list, B_list, B_int);
+};
+struct B_TimesD_SequenceD_list {
+    struct B_TimesD_SequenceD_listG_class *$class;
+    B_Sequence W_Sequence;
+};
+struct B_ContainerD_listG_class {
+    char *$GCINFO;
+    int $class_id;
+    $SuperG_class $superclass;
+    B_NoneType (*__init__) (B_ContainerD_list, B_Eq);
+    void (*__serialize__) (B_ContainerD_list, $Serial$state);
+    B_ContainerD_list (*__deserialize__) (B_ContainerD_list, $Serial$state);
+    B_bool (*__bool__) (B_ContainerD_list);
+    B_str (*__str__) (B_ContainerD_list);
+    B_str (*__repr__) (B_ContainerD_list);
+    B_Iterator (*__iter__) (B_ContainerD_list, B_list);
+    B_list (*__fromiter__) (B_ContainerD_list, B_Iterable, $WORD);
+    B_int (*__len__) (B_ContainerD_list, B_list);
+    B_bool (*__contains__) (B_ContainerD_list, B_list, $WORD);
+    B_bool (*__containsnot__) (B_ContainerD_list, B_list, $WORD);
+};
+struct B_ContainerD_list {
+    struct B_ContainerD_listG_class *$class;
+    B_Eq W_EqD_AD_Container;
+    B_Eq W_EqD_AD_ContainerD_list;
+};
+struct B_OrdD_listG_class {
+    char *$GCINFO;
+    int $class_id;
+    $SuperG_class $superclass;
+    B_NoneType (*__init__) (B_OrdD_list, B_Ord);
+    void (*__serialize__) (B_OrdD_list, $Serial$state);
+    B_OrdD_list (*__deserialize__) (B_OrdD_list, $Serial$state);
+    B_bool (*__bool__) (B_OrdD_list);
+    B_str (*__str__) (B_OrdD_list);
+    B_str (*__repr__) (B_OrdD_list);
+    B_bool (*__eq__) (B_OrdD_list, B_list, B_list);
+    B_bool (*__ne__) (B_OrdD_list, B_list, B_list);
+    B_bool (*__lt__) (B_OrdD_list, B_list, B_list);
+    B_bool (*__le__) (B_OrdD_list, B_list, B_list);
+    B_bool (*__gt__) (B_OrdD_list, B_list, B_list);
+    B_bool (*__ge__) (B_OrdD_list, B_list, B_list);
+};
+struct B_OrdD_list {
+    struct B_OrdD_listG_class *$class;
+    B_Ord W_OrdD_AD_OrdD_list;
+};
+struct B_MappingD_dictG_class {
+    char *$GCINFO;
+    int $class_id;
+    $SuperG_class $superclass;
+    B_NoneType (*__init__) (B_MappingD_dict, B_Hashable);
+    void (*__serialize__) (B_MappingD_dict, $Serial$state);
+    B_MappingD_dict (*__deserialize__) (B_MappingD_dict, $Serial$state);
+    B_bool (*__bool__) (B_MappingD_dict);
+    B_str (*__str__) (B_MappingD_dict);
+    B_str (*__repr__) (B_MappingD_dict);
+    B_Iterator (*__iter__) (B_MappingD_dict, B_dict);
+    B_dict (*__fromiter__) (B_MappingD_dict, B_Iterable, $WORD);
+    B_int (*__len__) (B_MappingD_dict, B_dict);
+    B_bool (*__contains__) (B_MappingD_dict, B_dict, $WORD);
+    B_bool (*__containsnot__) (B_MappingD_dict, B_dict, $WORD);
+    $WORD (*get) (B_MappingD_dict, B_dict, $WORD, $WORD);
+    B_Iterator (*keys) (B_MappingD_dict, B_dict);
+    B_Iterator (*values) (B_MappingD_dict, B_dict);
+    B_Iterator (*items) (B_MappingD_dict, B_dict);
+    B_NoneType (*update) (B_MappingD_dict, B_dict, B_Iterable, $WORD);
+    B_tuple (*popitem) (B_MappingD_dict, B_dict);
+    B_NoneType (*setdefault) (B_MappingD_dict, B_dict, $WORD, $WORD);
+};
+struct B_MappingD_dict {
+    struct B_MappingD_dictG_class *$class;
+    B_Eq W_EqD_AD_Container;
+    B_Eq W_EqD_AD_Mapping;
+    B_Indexed W_Indexed;
+    B_Hashable W_HashableD_AD_MappingD_dict;
+};
+struct B_IndexedD_MappingD_dictG_class {
+    char *$GCINFO;
+    int $class_id;
+    $SuperG_class $superclass;
+    B_NoneType (*__init__) (B_IndexedD_MappingD_dict, B_Hashable, B_Mapping);
+    void (*__serialize__) (B_IndexedD_MappingD_dict, $Serial$state);
+    B_IndexedD_MappingD_dict (*__deserialize__) (B_IndexedD_MappingD_dict, $Serial$state);
+    B_bool (*__bool__) (B_IndexedD_MappingD_dict);
+    B_str (*__str__) (B_IndexedD_MappingD_dict);
+    B_str (*__repr__) (B_IndexedD_MappingD_dict);
+    $WORD (*__getitem__) (B_IndexedD_MappingD_dict, B_dict, $WORD);
+    B_NoneType (*__setitem__) (B_IndexedD_MappingD_dict, B_dict, $WORD, $WORD);
+    B_NoneType (*__delitem__) (B_IndexedD_MappingD_dict, B_dict, $WORD);
+};
+struct B_IndexedD_MappingD_dict {
+    struct B_IndexedD_MappingD_dictG_class *$class;
+    B_Eq W_EqD_AD_Indexed;
+    B_Eq W_EqD_AD_Mapping;
+    B_Mapping W_Mapping;
+    B_Hashable W_HashableD_AD_MappingD_dict;
+};
+struct B_OrdD_dictG_class {
+    char *$GCINFO;
+    int $class_id;
+    $SuperG_class $superclass;
+    B_NoneType (*__init__) (B_OrdD_dict, B_Hashable, B_Eq);
+    void (*__serialize__) (B_OrdD_dict, $Serial$state);
+    B_OrdD_dict (*__deserialize__) (B_OrdD_dict, $Serial$state);
+    B_bool (*__bool__) (B_OrdD_dict);
+    B_str (*__str__) (B_OrdD_dict);
+    B_str (*__repr__) (B_OrdD_dict);
+    B_bool (*__eq__) (B_OrdD_dict, B_dict, B_dict);
+    B_bool (*__ne__) (B_OrdD_dict, B_dict, B_dict);
+    B_bool (*__lt__) (B_OrdD_dict, B_dict, B_dict);
+    B_bool (*__le__) (B_OrdD_dict, B_dict, B_dict);
+    B_bool (*__gt__) (B_OrdD_dict, B_dict, B_dict);
+    B_bool (*__ge__) (B_OrdD_dict, B_dict, B_dict);
+};
+struct B_OrdD_dict {
+    struct B_OrdD_dictG_class *$class;
+    B_Hashable W_HashableD_AD_OrdD_dict;
+    B_Eq W_EqD_BD_OrdD_dict;
+};
+struct B_SetD_setG_class {
+    char *$GCINFO;
+    int $class_id;
+    $SuperG_class $superclass;
+    B_NoneType (*__init__) (B_SetD_set, B_Hashable);
+    void (*__serialize__) (B_SetD_set, $Serial$state);
+    B_SetD_set (*__deserialize__) (B_SetD_set, $Serial$state);
+    B_bool (*__bool__) (B_SetD_set);
+    B_str (*__str__) (B_SetD_set);
+    B_str (*__repr__) (B_SetD_set);
+    B_Iterator (*__iter__) (B_SetD_set, B_set);
+    B_set (*__fromiter__) (B_SetD_set, B_Iterable, $WORD);
+    B_int (*__len__) (B_SetD_set, B_set);
+    B_bool (*__contains__) (B_SetD_set, B_set, $WORD);
+    B_bool (*__containsnot__) (B_SetD_set, B_set, $WORD);
+    B_bool (*isdisjoint) (B_SetD_set, B_set, B_set);
+    B_NoneType (*add) (B_SetD_set, B_set, $WORD);
+    B_NoneType (*discard) (B_SetD_set, B_set, $WORD);
+    $WORD (*pop) (B_SetD_set, B_set);
+};
+struct B_SetD_set {
+    struct B_SetD_setG_class *$class;
+    B_Eq W_EqD_AD_Container;
+    B_Eq W_EqD_AD_Set;
+    B_Ord W_Ord;
+    B_Logical W_Logical;
+    B_Minus W_Minus;
+    B_Hashable W_HashableD_AD_SetD_set;
+};
+struct B_OrdD_SetD_setG_class {
+    char *$GCINFO;
+    int $class_id;
+    $SuperG_class $superclass;
+    B_NoneType (*__init__) (B_OrdD_SetD_set, B_Hashable, B_Set);
+    void (*__serialize__) (B_OrdD_SetD_set, $Serial$state);
+    B_OrdD_SetD_set (*__deserialize__) (B_OrdD_SetD_set, $Serial$state);
+    B_bool (*__bool__) (B_OrdD_SetD_set);
+    B_str (*__str__) (B_OrdD_SetD_set);
+    B_str (*__repr__) (B_OrdD_SetD_set);
+    B_bool (*__eq__) (B_OrdD_SetD_set, B_set, B_set);
+    B_bool (*__ne__) (B_OrdD_SetD_set, B_set, B_set);
+    B_bool (*__lt__) (B_OrdD_SetD_set, B_set, B_set);
+    B_bool (*__le__) (B_OrdD_SetD_set, B_set, B_set);
+    B_bool (*__gt__) (B_OrdD_SetD_set, B_set, B_set);
+    B_bool (*__ge__) (B_OrdD_SetD_set, B_set, B_set);
+};
+struct B_OrdD_SetD_set {
+    struct B_OrdD_SetD_setG_class *$class;
+    B_Eq W_EqD_AD_Set;
+    B_Set W_Set;
+    B_Hashable W_HashableD_AD_SetD_set;
+};
+struct B_LogicalD_SetD_setG_class {
+    char *$GCINFO;
+    int $class_id;
+    $SuperG_class $superclass;
+    B_NoneType (*__init__) (B_LogicalD_SetD_set, B_Hashable, B_Set);
+    void (*__serialize__) (B_LogicalD_SetD_set, $Serial$state);
+    B_LogicalD_SetD_set (*__deserialize__) (B_LogicalD_SetD_set, $Serial$state);
+    B_bool (*__bool__) (B_LogicalD_SetD_set);
+    B_str (*__str__) (B_LogicalD_SetD_set);
+    B_str (*__repr__) (B_LogicalD_SetD_set);
+    B_set (*__and__) (B_LogicalD_SetD_set, B_set, B_set);
+    B_set (*__or__) (B_LogicalD_SetD_set, B_set, B_set);
+    B_set (*__xor__) (B_LogicalD_SetD_set, B_set, B_set);
+    B_set (*__iand__) (B_LogicalD_SetD_set, B_set, B_set);
+    B_set (*__ior__) (B_LogicalD_SetD_set, B_set, B_set);
+    B_set (*__ixor__) (B_LogicalD_SetD_set, B_set, B_set);
+};
+struct B_LogicalD_SetD_set {
+    struct B_LogicalD_SetD_setG_class *$class;
+    B_Eq W_EqD_AD_Set;
+    B_Set W_Set;
+    B_Hashable W_HashableD_AD_SetD_set;
+};
+struct B_MinusD_SetD_setG_class {
+    char *$GCINFO;
+    int $class_id;
+    $SuperG_class $superclass;
+    B_NoneType (*__init__) (B_MinusD_SetD_set, B_Hashable, B_Set);
+    void (*__serialize__) (B_MinusD_SetD_set, $Serial$state);
+    B_MinusD_SetD_set (*__deserialize__) (B_MinusD_SetD_set, $Serial$state);
+    B_bool (*__bool__) (B_MinusD_SetD_set);
+    B_str (*__str__) (B_MinusD_SetD_set);
+    B_str (*__repr__) (B_MinusD_SetD_set);
+    B_set (*__sub__) (B_MinusD_SetD_set, B_set, B_set);
+    B_set (*__isub__) (B_MinusD_SetD_set, B_set, B_set);
+};
+struct B_MinusD_SetD_set {
+    struct B_MinusD_SetD_setG_class *$class;
+    B_Eq W_EqD_AD_Set;
+    B_Set W_Set;
+    B_Hashable W_HashableD_AD_SetD_set;
+};
+struct B_IterableD_IteratorG_class {
+    char *$GCINFO;
+    int $class_id;
+    $SuperG_class $superclass;
+    B_NoneType (*__init__) (B_IterableD_Iterator);
+    void (*__serialize__) (B_IterableD_Iterator, $Serial$state);
+    B_IterableD_Iterator (*__deserialize__) (B_IterableD_Iterator, $Serial$state);
+    B_bool (*__bool__) (B_IterableD_Iterator);
+    B_str (*__str__) (B_IterableD_Iterator);
+    B_str (*__repr__) (B_IterableD_Iterator);
+    B_Iterator (*__iter__) (B_IterableD_Iterator, B_Iterator);
+};
+struct B_IterableD_Iterator {
+    struct B_IterableD_IteratorG_class *$class;
+};
+struct B_IterableD_rangeG_class {
+    char *$GCINFO;
+    int $class_id;
+    $SuperG_class $superclass;
+    B_NoneType (*__init__) (B_IterableD_range);
+    void (*__serialize__) (B_IterableD_range, $Serial$state);
+    B_IterableD_range (*__deserialize__) (B_IterableD_range, $Serial$state);
+    B_bool (*__bool__) (B_IterableD_range);
+    B_str (*__str__) (B_IterableD_range);
+    B_str (*__repr__) (B_IterableD_range);
+    B_Iterator (*__iter__) (B_IterableD_range, B_range);
+};
+struct B_IterableD_range {
+    struct B_IterableD_rangeG_class *$class;
+};
+struct B_OrdD_strG_class {
+    char *$GCINFO;
+    int $class_id;
+    $SuperG_class $superclass;
+    B_NoneType (*__init__) (B_OrdD_str);
+    void (*__serialize__) (B_OrdD_str, $Serial$state);
+    B_OrdD_str (*__deserialize__) (B_OrdD_str, $Serial$state);
+    B_bool (*__bool__) (B_OrdD_str);
+    B_str (*__str__) (B_OrdD_str);
+    B_str (*__repr__) (B_OrdD_str);
+    B_bool (*__eq__) (B_OrdD_str, B_str, B_str);
+    B_bool (*__ne__) (B_OrdD_str, B_str, B_str);
+    B_bool (*__lt__) (B_OrdD_str, B_str, B_str);
+    B_bool (*__le__) (B_OrdD_str, B_str, B_str);
+    B_bool (*__gt__) (B_OrdD_str, B_str, B_str);
+    B_bool (*__ge__) (B_OrdD_str, B_str, B_str);
+};
+struct B_OrdD_str {
+    struct B_OrdD_strG_class *$class;
+};
+struct B_ContainerD_strG_class {
+    char *$GCINFO;
+    int $class_id;
+    $SuperG_class $superclass;
+    B_NoneType (*__init__) (B_ContainerD_str);
+    void (*__serialize__) (B_ContainerD_str, $Serial$state);
+    B_ContainerD_str (*__deserialize__) (B_ContainerD_str, $Serial$state);
+    B_bool (*__bool__) (B_ContainerD_str);
+    B_str (*__str__) (B_ContainerD_str);
+    B_str (*__repr__) (B_ContainerD_str);
+    B_Iterator (*__iter__) (B_ContainerD_str, B_str);
+    B_str (*__fromiter__) (B_ContainerD_str, B_Iterable, $WORD);
+    B_int (*__len__) (B_ContainerD_str, B_str);
+    B_bool (*__contains__) (B_ContainerD_str, B_str, B_str);
+    B_bool (*__containsnot__) (B_ContainerD_str, B_str, B_str);
+};
+struct B_ContainerD_str {
+    struct B_ContainerD_strG_class *$class;
+    B_Eq W_EqD_AD_Container;
+};
+struct B_SliceableD_strG_class {
+    char *$GCINFO;
+    int $class_id;
+    $SuperG_class $superclass;
+    B_NoneType (*__init__) (B_SliceableD_str);
+    void (*__serialize__) (B_SliceableD_str, $Serial$state);
+    B_SliceableD_str (*__deserialize__) (B_SliceableD_str, $Serial$state);
+    B_bool (*__bool__) (B_SliceableD_str);
+    B_str (*__str__) (B_SliceableD_str);
+    B_str (*__repr__) (B_SliceableD_str);
+    B_str (*__getitem__) (B_SliceableD_str, B_str, B_int);
+    B_NoneType (*__setitem__) (B_SliceableD_str, B_str, B_int, B_str);
+    B_NoneType (*__delitem__) (B_SliceableD_str, B_str, B_int);
+    B_str (*__getslice__) (B_SliceableD_str, B_str, B_slice);
+    B_NoneType (*__setslice__) (B_SliceableD_str, B_str, B_Iterable, B_slice, $WORD);
+    B_NoneType (*__delslice__) (B_SliceableD_str, B_str, B_slice);
+};
+struct B_SliceableD_str {
+    struct B_SliceableD_strG_class *$class;
+    B_Eq W_EqD_AD_Indexed;
+};
+struct B_TimesD_strG_class {
+    char *$GCINFO;
+    int $class_id;
+    $SuperG_class $superclass;
+    B_NoneType (*__init__) (B_TimesD_str);
+    void (*__serialize__) (B_TimesD_str, $Serial$state);
+    B_TimesD_str (*__deserialize__) (B_TimesD_str, $Serial$state);
+    B_bool (*__bool__) (B_TimesD_str);
+    B_str (*__str__) (B_TimesD_str);
+    B_str (*__repr__) (B_TimesD_str);
+    B_str (*__add__) (B_TimesD_str, B_str, B_str);
+    B_str (*__iadd__) (B_TimesD_str, B_str, B_str);
+    B_str (*__mul__) (B_TimesD_str, B_str, B_int);
+    B_str (*__imul__) (B_TimesD_str, B_str, B_int);
+};
+struct B_TimesD_str {
+    struct B_TimesD_strG_class *$class;
+};
+struct B_HashableD_strG_class {
+    char *$GCINFO;
+    int $class_id;
+    $SuperG_class $superclass;
+    B_NoneType (*__init__) (B_HashableD_str);
+    void (*__serialize__) (B_HashableD_str, $Serial$state);
+    B_HashableD_str (*__deserialize__) (B_HashableD_str, $Serial$state);
+    B_bool (*__bool__) (B_HashableD_str);
+    B_str (*__str__) (B_HashableD_str);
+    B_str (*__repr__) (B_HashableD_str);
+    B_bool (*__eq__) (B_HashableD_str, B_str, B_str);
+    B_bool (*__ne__) (B_HashableD_str, B_str, B_str);
+    B_int (*__hash__) (B_HashableD_str, B_str);
+};
+struct B_HashableD_str {
+    struct B_HashableD_strG_class *$class;
+};
+struct B_OrdD_bytearrayG_class {
+    char *$GCINFO;
+    int $class_id;
+    $SuperG_class $superclass;
+    B_NoneType (*__init__) (B_OrdD_bytearray);
+    void (*__serialize__) (B_OrdD_bytearray, $Serial$state);
+    B_OrdD_bytearray (*__deserialize__) (B_OrdD_bytearray, $Serial$state);
+    B_bool (*__bool__) (B_OrdD_bytearray);
+    B_str (*__str__) (B_OrdD_bytearray);
+    B_str (*__repr__) (B_OrdD_bytearray);
+    B_bool (*__eq__) (B_OrdD_bytearray, B_bytearray, B_bytearray);
+    B_bool (*__ne__) (B_OrdD_bytearray, B_bytearray, B_bytearray);
+    B_bool (*__lt__) (B_OrdD_bytearray, B_bytearray, B_bytearray);
+    B_bool (*__le__) (B_OrdD_bytearray, B_bytearray, B_bytearray);
+    B_bool (*__gt__) (B_OrdD_bytearray, B_bytearray, B_bytearray);
+    B_bool (*__ge__) (B_OrdD_bytearray, B_bytearray, B_bytearray);
+};
+struct B_OrdD_bytearray {
+    struct B_OrdD_bytearrayG_class *$class;
+};
+struct B_SequenceD_bytearrayG_class {
+    char *$GCINFO;
+    int $class_id;
+    $SuperG_class $superclass;
+    B_NoneType (*__init__) (B_SequenceD_bytearray);
+    void (*__serialize__) (B_SequenceD_bytearray, $Serial$state);
+    B_SequenceD_bytearray (*__deserialize__) (B_SequenceD_bytearray, $Serial$state);
+    B_bool (*__bool__) (B_SequenceD_bytearray);
+    B_str (*__str__) (B_SequenceD_bytearray);
+    B_str (*__repr__) (B_SequenceD_bytearray);
+    B_int (*__getitem__) (B_SequenceD_bytearray, B_bytearray, B_int);
+    B_NoneType (*__setitem__) (B_SequenceD_bytearray, B_bytearray, B_int, B_int);
+    B_NoneType (*__delitem__) (B_SequenceD_bytearray, B_bytearray, B_int);
+    B_bytearray (*__getslice__) (B_SequenceD_bytearray, B_bytearray, B_slice);
+    B_NoneType (*__setslice__) (B_SequenceD_bytearray, B_bytearray, B_Iterable, B_slice, $WORD);
+    B_NoneType (*__delslice__) (B_SequenceD_bytearray, B_bytearray, B_slice);
+    B_Iterator (*__reversed__) (B_SequenceD_bytearray, B_bytearray);
+    B_NoneType (*insert) (B_SequenceD_bytearray, B_bytearray, B_int, B_int);
+    B_NoneType (*append) (B_SequenceD_bytearray, B_bytearray, B_int);
+    B_NoneType (*reverse) (B_SequenceD_bytearray, B_bytearray);
+};
+struct B_SequenceD_bytearray {
+    struct B_SequenceD_bytearrayG_class *$class;
+    B_Eq W_EqD_AD_Indexed;
+    B_Collection W_Collection;
+    B_Times W_Times;
+};
+struct B_CollectionD_SequenceD_bytearrayG_class {
+    char *$GCINFO;
+    int $class_id;
+    $SuperG_class $superclass;
+    B_NoneType (*__init__) (B_CollectionD_SequenceD_bytearray, B_Sequence);
+    void (*__serialize__) (B_CollectionD_SequenceD_bytearray, $Serial$state);
+    B_CollectionD_SequenceD_bytearray (*__deserialize__) (B_CollectionD_SequenceD_bytearray, $Serial$state);
+    B_bool (*__bool__) (B_CollectionD_SequenceD_bytearray);
+    B_str (*__str__) (B_CollectionD_SequenceD_bytearray);
+    B_str (*__repr__) (B_CollectionD_SequenceD_bytearray);
+    B_Iterator (*__iter__) (B_CollectionD_SequenceD_bytearray, B_bytearray);
+    B_bytearray (*__fromiter__) (B_CollectionD_SequenceD_bytearray, B_Iterable, $WORD);
+    B_int (*__len__) (B_CollectionD_SequenceD_bytearray, B_bytearray);
+};
+struct B_CollectionD_SequenceD_bytearray {
+    struct B_CollectionD_SequenceD_bytearrayG_class *$class;
+    B_Sequence W_Sequence;
+};
+struct B_TimesD_SequenceD_bytearrayG_class {
+    char *$GCINFO;
+    int $class_id;
+    $SuperG_class $superclass;
+    B_NoneType (*__init__) (B_TimesD_SequenceD_bytearray, B_Sequence);
+    void (*__serialize__) (B_TimesD_SequenceD_bytearray, $Serial$state);
+    B_TimesD_SequenceD_bytearray (*__deserialize__) (B_TimesD_SequenceD_bytearray, $Serial$state);
+    B_bool (*__bool__) (B_TimesD_SequenceD_bytearray);
+    B_str (*__str__) (B_TimesD_SequenceD_bytearray);
+    B_str (*__repr__) (B_TimesD_SequenceD_bytearray);
+    B_bytearray (*__add__) (B_TimesD_SequenceD_bytearray, B_bytearray, B_bytearray);
+    B_bytearray (*__iadd__) (B_TimesD_SequenceD_bytearray, B_bytearray, B_bytearray);
+    B_bytearray (*__mul__) (B_TimesD_SequenceD_bytearray, B_bytearray, B_int);
+    B_bytearray (*__imul__) (B_TimesD_SequenceD_bytearray, B_bytearray, B_int);
+};
+struct B_TimesD_SequenceD_bytearray {
+    struct B_TimesD_SequenceD_bytearrayG_class *$class;
+    B_Sequence W_Sequence;
+};
+struct B_ContainerD_bytearrayG_class {
+    char *$GCINFO;
+    int $class_id;
+    $SuperG_class $superclass;
+    B_NoneType (*__init__) (B_ContainerD_bytearray);
+    void (*__serialize__) (B_ContainerD_bytearray, $Serial$state);
+    B_ContainerD_bytearray (*__deserialize__) (B_ContainerD_bytearray, $Serial$state);
+    B_bool (*__bool__) (B_ContainerD_bytearray);
+    B_str (*__str__) (B_ContainerD_bytearray);
+    B_str (*__repr__) (B_ContainerD_bytearray);
+    B_Iterator (*__iter__) (B_ContainerD_bytearray, B_bytearray);
+    B_bytearray (*__fromiter__) (B_ContainerD_bytearray, B_Iterable, $WORD);
+    B_int (*__len__) (B_ContainerD_bytearray, B_bytearray);
+    B_bool (*__contains__) (B_ContainerD_bytearray, B_bytearray, B_int);
+    B_bool (*__containsnot__) (B_ContainerD_bytearray, B_bytearray, B_int);
+};
+struct B_ContainerD_bytearray {
+    struct B_ContainerD_bytearrayG_class *$class;
+    B_Eq W_EqD_AD_Container;
+};
+struct B_OrdD_bytesG_class {
+    char *$GCINFO;
+    int $class_id;
+    $SuperG_class $superclass;
+    B_NoneType (*__init__) (B_OrdD_bytes);
+    void (*__serialize__) (B_OrdD_bytes, $Serial$state);
+    B_OrdD_bytes (*__deserialize__) (B_OrdD_bytes, $Serial$state);
+    B_bool (*__bool__) (B_OrdD_bytes);
+    B_str (*__str__) (B_OrdD_bytes);
+    B_str (*__repr__) (B_OrdD_bytes);
+    B_bool (*__eq__) (B_OrdD_bytes, B_bytes, B_bytes);
+    B_bool (*__ne__) (B_OrdD_bytes, B_bytes, B_bytes);
+    B_bool (*__lt__) (B_OrdD_bytes, B_bytes, B_bytes);
+    B_bool (*__le__) (B_OrdD_bytes, B_bytes, B_bytes);
+    B_bool (*__gt__) (B_OrdD_bytes, B_bytes, B_bytes);
+    B_bool (*__ge__) (B_OrdD_bytes, B_bytes, B_bytes);
+};
+struct B_OrdD_bytes {
+    struct B_OrdD_bytesG_class *$class;
+};
+struct B_SliceableD_bytesG_class {
+    char *$GCINFO;
+    int $class_id;
+    $SuperG_class $superclass;
+    B_NoneType (*__init__) (B_SliceableD_bytes);
+    void (*__serialize__) (B_SliceableD_bytes, $Serial$state);
+    B_SliceableD_bytes (*__deserialize__) (B_SliceableD_bytes, $Serial$state);
+    B_bool (*__bool__) (B_SliceableD_bytes);
+    B_str (*__str__) (B_SliceableD_bytes);
+    B_str (*__repr__) (B_SliceableD_bytes);
+    B_int (*__getitem__) (B_SliceableD_bytes, B_bytes, B_int);
+    B_NoneType (*__setitem__) (B_SliceableD_bytes, B_bytes, B_int, B_int);
+    B_NoneType (*__delitem__) (B_SliceableD_bytes, B_bytes, B_int);
+    B_bytes (*__getslice__) (B_SliceableD_bytes, B_bytes, B_slice);
+    B_NoneType (*__setslice__) (B_SliceableD_bytes, B_bytes, B_Iterable, B_slice, $WORD);
+    B_NoneType (*__delslice__) (B_SliceableD_bytes, B_bytes, B_slice);
+};
+struct B_SliceableD_bytes {
+    struct B_SliceableD_bytesG_class *$class;
+    B_Eq W_EqD_AD_Indexed;
+};
+struct B_ContainerD_bytesG_class {
+    char *$GCINFO;
+    int $class_id;
+    $SuperG_class $superclass;
+    B_NoneType (*__init__) (B_ContainerD_bytes);
+    void (*__serialize__) (B_ContainerD_bytes, $Serial$state);
+    B_ContainerD_bytes (*__deserialize__) (B_ContainerD_bytes, $Serial$state);
+    B_bool (*__bool__) (B_ContainerD_bytes);
+    B_str (*__str__) (B_ContainerD_bytes);
+    B_str (*__repr__) (B_ContainerD_bytes);
+    B_Iterator (*__iter__) (B_ContainerD_bytes, B_bytes);
+    B_bytes (*__fromiter__) (B_ContainerD_bytes, B_Iterable, $WORD);
+    B_int (*__len__) (B_ContainerD_bytes, B_bytes);
+    B_bool (*__contains__) (B_ContainerD_bytes, B_bytes, B_int);
+    B_bool (*__containsnot__) (B_ContainerD_bytes, B_bytes, B_int);
+};
+struct B_ContainerD_bytes {
+    struct B_ContainerD_bytesG_class *$class;
+    B_Eq W_EqD_AD_Container;
+};
+struct B_TimesD_bytesG_class {
+    char *$GCINFO;
+    int $class_id;
+    $SuperG_class $superclass;
+    B_NoneType (*__init__) (B_TimesD_bytes);
+    void (*__serialize__) (B_TimesD_bytes, $Serial$state);
+    B_TimesD_bytes (*__deserialize__) (B_TimesD_bytes, $Serial$state);
+    B_bool (*__bool__) (B_TimesD_bytes);
+    B_str (*__str__) (B_TimesD_bytes);
+    B_str (*__repr__) (B_TimesD_bytes);
+    B_bytes (*__add__) (B_TimesD_bytes, B_bytes, B_bytes);
+    B_bytes (*__iadd__) (B_TimesD_bytes, B_bytes, B_bytes);
+    B_bytes (*__mul__) (B_TimesD_bytes, B_bytes, B_int);
+    B_bytes (*__imul__) (B_TimesD_bytes, B_bytes, B_int);
+};
+struct B_TimesD_bytes {
+    struct B_TimesD_bytesG_class *$class;
+};
+struct B_HashableD_bytesG_class {
+    char *$GCINFO;
+    int $class_id;
+    $SuperG_class $superclass;
+    B_NoneType (*__init__) (B_HashableD_bytes);
+    void (*__serialize__) (B_HashableD_bytes, $Serial$state);
+    B_HashableD_bytes (*__deserialize__) (B_HashableD_bytes, $Serial$state);
+    B_bool (*__bool__) (B_HashableD_bytes);
+    B_str (*__str__) (B_HashableD_bytes);
+    B_str (*__repr__) (B_HashableD_bytes);
+    B_bool (*__eq__) (B_HashableD_bytes, B_bytes, B_bytes);
+    B_bool (*__ne__) (B_HashableD_bytes, B_bytes, B_bytes);
+    B_int (*__hash__) (B_HashableD_bytes, B_bytes);
+};
+struct B_HashableD_bytes {
+    struct B_HashableD_bytesG_class *$class;
+};
+extern struct B_valueG_class B_valueG_methods;
+B_value B_valueG_new();
+extern struct B_objectG_class B_objectG_methods;
+B_object B_objectG_new();
+extern struct B_atomG_class B_atomG_methods;
+//B_atom B_atomG_new();
+extern struct B_intG_class B_intG_methods;
+B_int B_intG_new(B_atom);
+extern struct B_i64G_class B_i64G_methods;
+B_i64 B_i64G_new(B_atom);
+extern struct B_floatG_class B_floatG_methods;
+B_float B_floatG_new(B_atom);
+extern struct B_boolG_class B_boolG_methods;
+B_bool B_boolG_new(B_value);
+extern struct B_sliceG_class B_sliceG_methods;
+B_slice B_sliceG_new(B_int, B_int, B_int);
+extern struct B_listG_class B_listG_methods;
+B_list B_listG_new(B_Iterable, $WORD);
+extern struct B_rangeG_class B_rangeG_methods;
+B_range B_rangeG_new(B_int, B_int, B_int);
+extern struct B_IteratorG_class B_IteratorG_methods;
+extern struct B_IterableG_class B_IterableG_methods;
+extern struct B_strG_class B_strG_methods;
+B_str B_strG_new(B_value);
+extern struct B_bytesG_class B_bytesG_methods;
+B_bytes B_bytesG_new(B_Iterable, $WORD);
+extern struct B_bytearrayG_class B_bytearrayG_methods;
+B_bytearray B_bytearrayG_new(B_bytes);
+//extern struct B_MsgG_class B_MsgG_methods;
+//B_Msg B_MsgG_new();
+extern struct B_BaseExceptionG_class B_BaseExceptionG_methods;
+B_BaseException B_BaseExceptionG_new(B_str);
+extern struct B_SystemExitG_class B_SystemExitG_methods;
+B_SystemExit B_SystemExitG_new(B_str);
+extern struct B_KeyboardInterruptG_class B_KeyboardInterruptG_methods;
+B_KeyboardInterrupt B_KeyboardInterruptG_new(B_str);
+extern struct B_ExceptionG_class B_ExceptionG_methods;
+B_Exception B_ExceptionG_new(B_str);
+extern struct B_AssertionErrorG_class B_AssertionErrorG_methods;
+B_AssertionError B_AssertionErrorG_new(B_str);
+extern struct B_LookupErrorG_class B_LookupErrorG_methods;
+B_LookupError B_LookupErrorG_new(B_str);
+extern struct B_IndexErrorG_class B_IndexErrorG_methods;
+B_IndexError B_IndexErrorG_new(B_str);
+extern struct B_KeyErrorG_class B_KeyErrorG_methods;
+B_KeyError B_KeyErrorG_new(B_str);
+extern struct B_MemoryErrorG_class B_MemoryErrorG_methods;
+B_MemoryError B_MemoryErrorG_new(B_str);
+extern struct B_OSErrorG_class B_OSErrorG_methods;
+B_OSError B_OSErrorG_new(B_str);
+extern struct B_RuntimeErrorG_class B_RuntimeErrorG_methods;
+B_RuntimeError B_RuntimeErrorG_new(B_str);
+extern struct B_NotImplementedErrorG_class B_NotImplementedErrorG_methods;
+B_NotImplementedError B_NotImplementedErrorG_new(B_str);
+extern struct B_ValueErrorG_class B_ValueErrorG_methods;
+B_ValueError B_ValueErrorG_new(B_str);
+extern struct B_IdentityG_class B_IdentityG_methods;
+extern struct B_EqG_class B_EqG_methods;
+extern struct B_OrdG_class B_OrdG_methods;
+extern struct B_LogicalG_class B_LogicalG_methods;
+extern struct B_PlusG_class B_PlusG_methods;
+extern struct B_MinusG_class B_MinusG_methods;
+extern struct B_TimesG_class B_TimesG_methods;
+extern struct B_DivG_class B_DivG_methods;
+extern struct B_HashableG_class B_HashableG_methods;
+extern struct B_complexG_class B_complexG_methods;
+B_complex B_complexG_new(B_Number, $WORD);
+extern struct B_dictG_class B_dictG_methods;
+B_dict B_dictG_new(B_Hashable, B_Iterable, $WORD);
+extern struct B_setG_class B_setG_methods;
+B_set B_setG_new(B_Hashable, B_Iterable, $WORD);
+extern struct B_NumberG_class B_NumberG_methods;
+extern struct B_MinusD_NumberG_class B_MinusD_NumberG_methods;
+extern struct B_RealG_class B_RealG_methods;
+extern struct B_MinusD_RealG_class B_MinusD_RealG_methods;
+extern struct B_RealFloatG_class B_RealFloatG_methods;
+extern struct B_MinusD_RealFloatG_class B_MinusD_RealFloatG_methods;
+extern struct B_RationalG_class B_RationalG_methods;
+extern struct B_MinusD_RationalG_class B_MinusD_RationalG_methods;
+extern struct B_IntegralG_class B_IntegralG_methods;
+extern struct B_MinusD_IntegralG_class B_MinusD_IntegralG_methods;
+extern struct B_LogicalD_IntegralG_class B_LogicalD_IntegralG_methods;
+extern struct B_HashableD_boolG_class B_HashableD_boolG_methods;
+B_HashableD_bool B_HashableD_boolG_new();
+extern struct B_IntegralD_intG_class B_IntegralD_intG_methods;
+B_IntegralD_int B_IntegralD_intG_new();
+extern struct B_MinusD_IntegralD_intG_class B_MinusD_IntegralD_intG_methods;
+B_MinusD_IntegralD_int B_MinusD_IntegralD_intG_new(B_Integral);
+extern struct B_LogicalD_IntegralD_intG_class B_LogicalD_IntegralD_intG_methods;
+B_LogicalD_IntegralD_int B_LogicalD_IntegralD_intG_new(B_Integral);
+extern struct B_DivD_intG_class B_DivD_intG_methods;
+B_DivD_int B_DivD_intG_new();
+extern struct B_OrdD_intG_class B_OrdD_intG_methods;
+B_OrdD_int B_OrdD_intG_new();
+extern struct B_HashableD_intG_class B_HashableD_intG_methods;
+B_HashableD_int B_HashableD_intG_new();                              // This is manually added; Why not generated?
+extern struct B_IntegralD_i64G_class B_IntegralD_i64G_methods;
+B_IntegralD_i64 B_IntegralD_i64G_new();
+extern struct B_MinusD_IntegralD_i64G_class B_MinusD_IntegralD_i64G_methods;
+B_MinusD_IntegralD_i64 B_MinusD_IntegralD_i64G_new(B_Integral);
+extern struct B_LogicalD_IntegralD_i64G_class B_LogicalD_IntegralD_i64G_methods;
+B_LogicalD_IntegralD_i64 B_LogicalD_IntegralD_i64G_new(B_Integral);
+extern struct B_DivD_i64G_class B_DivD_i64G_methods;
+B_DivD_i64 B_DivD_i64G_new();
+extern struct B_OrdD_i64G_class B_OrdD_i64G_methods;
+B_OrdD_i64 B_OrdD_i64G_new();
+extern struct B_HashableD_i64G_class B_HashableD_i64G_methods;
+extern struct B_RealFloatD_floatG_class B_RealFloatD_floatG_methods;
+B_RealFloatD_float B_RealFloatD_floatG_new();
+extern struct B_MinusD_RealFloatD_floatG_class B_MinusD_RealFloatD_floatG_methods;
+B_MinusD_RealFloatD_float B_MinusD_RealFloatD_floatG_new(B_RealFloat);
+extern struct B_DivD_floatG_class B_DivD_floatG_methods;
+B_DivD_float B_DivD_floatG_new();
+extern struct B_OrdD_floatG_class B_OrdD_floatG_methods;
+B_OrdD_float B_OrdD_floatG_new();
+extern struct B_HashableD_floatG_class B_HashableD_floatG_methods;
+extern struct B_NumberD_complexG_class B_NumberD_complexG_methods;
+B_NumberD_complex B_NumberD_complexG_new();
+extern struct B_MinusD_NumberD_complexG_class B_MinusD_NumberD_complexG_methods;
+B_MinusD_NumberD_complex B_MinusD_NumberD_complexG_new(B_Number);
+extern struct B_DivD_complexG_class B_DivD_complexG_methods;
+B_DivD_complex B_DivD_complexG_new();
+extern struct B_EqD_complexG_class B_EqD_complexG_methods;
+B_EqD_complex B_EqD_complexG_new();
+extern struct B_HashableD_complexG_class B_HashableD_complexG_methods;
+extern struct B_IndexedG_class B_IndexedG_methods;
+extern struct B_SliceableG_class B_SliceableG_methods;
+extern struct B_CollectionG_class B_CollectionG_methods;
+extern struct B_ContainerG_class B_ContainerG_methods;
+extern struct B_SequenceG_class B_SequenceG_methods;
+extern struct B_CollectionD_SequenceG_class B_CollectionD_SequenceG_methods;
+extern struct B_TimesD_SequenceG_class B_TimesD_SequenceG_methods;
+extern struct B_MappingG_class B_MappingG_methods;
+extern struct B_IndexedD_MappingG_class B_IndexedD_MappingG_methods;
+extern struct B_SetG_class B_SetG_methods;
+extern struct B_OrdD_SetG_class B_OrdD_SetG_methods;
+extern struct B_LogicalD_SetG_class B_LogicalD_SetG_methods;
+extern struct B_MinusD_SetG_class B_MinusD_SetG_methods;
+extern struct B_SequenceD_listG_class B_SequenceD_listG_methods;
+B_SequenceD_list B_SequenceD_listG_new();
+extern struct B_CollectionD_SequenceD_listG_class B_CollectionD_SequenceD_listG_methods;
+B_CollectionD_SequenceD_list B_CollectionD_SequenceD_listG_new(B_Sequence);
+extern struct B_TimesD_SequenceD_listG_class B_TimesD_SequenceD_listG_methods;
+B_TimesD_SequenceD_list B_TimesD_SequenceD_listG_new(B_Sequence);
+extern struct B_ContainerD_listG_class B_ContainerD_listG_methods;
+B_ContainerD_list B_ContainerD_listG_new(B_Eq);                           // This is manually added; Why not generated?
+extern struct B_OrdD_listG_class B_OrdD_listG_methods;
+B_OrdD_list B_OrdD_listG_new(B_Ord);
+extern struct B_MappingD_dictG_class B_MappingD_dictG_methods;
+B_MappingD_dict B_MappingD_dictG_new(B_Hashable);
+extern struct B_IndexedD_MappingD_dictG_class B_IndexedD_MappingD_dictG_methods;
+B_IndexedD_MappingD_dict B_IndexedD_MappingD_dictG_new(B_Hashable, B_Mapping);
+extern struct B_OrdD_dictG_class B_OrdD_dictG_methods;
+B_OrdD_dict B_OrdD_dictG_new(B_Hashable, B_Eq);
+extern struct B_SetD_setG_class B_SetD_setG_methods;
+B_SetD_set B_SetD_setG_new(B_Hashable);
+extern struct B_OrdD_SetD_setG_class B_OrdD_SetD_setG_methods;
+B_OrdD_SetD_set B_OrdD_SetD_setG_new(B_Hashable, B_Set);
+extern struct B_LogicalD_SetD_setG_class B_LogicalD_SetD_setG_methods;
+B_LogicalD_SetD_set B_LogicalD_SetD_setG_new(B_Hashable, B_Set);
+extern struct B_MinusD_SetD_setG_class B_MinusD_SetD_setG_methods;
+B_MinusD_SetD_set B_MinusD_SetD_setG_new(B_Hashable, B_Set);
+extern struct B_IterableD_IteratorG_class B_IterableD_IteratorG_methods;
+B_IterableD_Iterator B_IterableD_IteratorG_new();
+extern struct B_IterableD_rangeG_class B_IterableD_rangeG_methods;
+B_IterableD_range B_IterableD_rangeG_new();
+extern struct B_OrdD_strG_class B_OrdD_strG_methods;
+B_OrdD_str B_OrdD_strG_new();
+extern struct B_ContainerD_strG_class B_ContainerD_strG_methods;
+B_ContainerD_str B_ContainerD_strG_new();
+extern struct B_SliceableD_strG_class B_SliceableD_strG_methods;
+B_SliceableD_str B_SliceableD_strG_new();
+extern struct B_TimesD_strG_class B_TimesD_strG_methods;
+B_TimesD_str B_TimesD_strG_new();
+extern struct B_HashableD_strG_class B_HashableD_strG_methods;
+B_HashableD_str B_HashableD_strG_new();                                  // This is manually added; Why not generated?
+extern struct B_OrdD_bytearrayG_class B_OrdD_bytearrayG_methods;
+B_OrdD_bytearray B_OrdD_bytearrayG_new();
+extern struct B_SequenceD_bytearrayG_class B_SequenceD_bytearrayG_methods;
+B_SequenceD_bytearray B_SequenceD_bytearrayG_new();
+extern struct B_CollectionD_SequenceD_bytearrayG_class B_CollectionD_SequenceD_bytearrayG_methods;
+B_CollectionD_SequenceD_bytearray B_CollectionD_SequenceD_bytearrayG_new(B_Sequence);
+extern struct B_TimesD_SequenceD_bytearrayG_class B_TimesD_SequenceD_bytearrayG_methods;
+B_TimesD_SequenceD_bytearray B_TimesD_SequenceD_bytearrayG_new(B_Sequence);
+extern struct B_ContainerD_bytearrayG_class B_ContainerD_bytearrayG_methods;
+extern struct B_OrdD_bytesG_class B_OrdD_bytesG_methods;
+B_OrdD_bytes B_OrdD_bytesG_new();
+extern struct B_SliceableD_bytesG_class B_SliceableD_bytesG_methods;
+B_SliceableD_bytes B_SliceableD_bytesG_new();
+extern struct B_ContainerD_bytesG_class B_ContainerD_bytesG_methods;
+B_ContainerD_bytes B_ContainerD_bytesG_new();
+extern struct B_TimesD_bytesG_class B_TimesD_bytesG_methods;
+B_TimesD_bytes B_TimesD_bytesG_new();
+extern struct B_HashableD_bytesG_class B_HashableD_bytesG_methods;
+$WORD B_abs (B_Real, B_Number, $WORD);
+B_bool B_all (B_Iterable, $WORD);
+B_bool B_any (B_Iterable, $WORD);
+B_str B_ascii (B_tuple);
+B_str B_bin (B_Integral, $WORD);
+B_str B_chr (B_Integral, $WORD);
+B_tuple B_divmod (B_Integral, $WORD, $WORD);
+B_Iterator B_enumerate (B_Iterable, $WORD, B_int);
+//B_Iterator B_filter (B_Iterable, $pure, $WORD);   $pure defined in function.h; not yet included
+B_int B_hash (B_Hashable, $WORD);
+B_str B_hex (B_Integral, $WORD);
+B_Iterator B_iter (B_Iterable, $WORD);
+B_int B_len (B_Collection, $WORD);
+//B_Iterator B_map (B_Iterable, $pure, $WORD);      $pure defined in function.h; not yet included
+$WORD B_max (B_Ord, B_Iterable, $WORD, $WORD);
+$WORD B_min (B_Ord, B_Iterable, $WORD, $WORD);
+$WORD B_next (B_Iterator);
+B_int B_ord (B_str);
+$WORD B_pow (B_Number, $WORD, $WORD);
+// B_NoneType B_print (B_tuple);   Code generation uses signature below
+B_NoneType B_print (int,...);  // Manually added replacing above signature
+B_str B_repr (B_value);
+B_Iterator B_reversed (B_Sequence, $WORD);
+$WORD B_round (B_Real, $WORD, B_int);
+B_list B_sorted (B_Ord, B_Iterable, $WORD);
+$WORD B_sum (B_Plus, B_Iterable, $WORD, $WORD);
+B_Iterator B_zip (B_Iterable, B_Iterable, $WORD, $WORD);
+B_int B_gcd (B_int, B_int);
+B_tuple B_xgcd (B_int, B_int);
+/*        This is separate in env.h (which is slightly different; generated from earlier version of actonc)
+struct B_L_1proc;
+struct B_L_2proc;
+struct B_L_3proc;
+struct B_L_5Cont;
+struct B_L_6proc;
+struct B_WorldAuth;
+struct B_Env;
+typedef struct B_L_1proc *B_L_1proc;
+typedef struct B_L_2proc *B_L_2proc;
+typedef struct B_L_3proc *B_L_3proc;
+typedef struct B_L_5Cont *B_L_5Cont;
+typedef struct B_L_6proc *B_L_6proc;
+typedef struct B_WorldAuth *B_WorldAuth;
+typedef struct B_Env *B_Env;
+struct B_L_1procG_class {
+    char *$GCINFO;
+    int $class_id;
+    $SuperG_class $superclass;
+    B_NoneType (*__init__) (B_L_1proc, B_Env, B_str);
+    void (*__serialize__) (B_L_1proc, $Serial$state);
+    B_L_1proc (*__deserialize__) (B_L_1proc, $Serial$state);
+    B_bool (*__bool__) (B_L_1proc);
+    B_str (*__str__) (B_L_1proc);
+    B_str (*__repr__) (B_L_1proc);
+    $R (*__call__) (B_L_1proc, $Cont);
+    $R (*__exec__) (B_L_1proc, $Cont);
+};
+struct B_L_1proc {
+    struct B_L_1procG_class *$class;
+    B_Env self;
+    B_str s;
+};
+struct B_L_2procG_class {
+    char *$GCINFO;
+    int $class_id;
+    $SuperG_class $superclass;
+    B_NoneType (*__init__) (B_L_2proc, B_Env, $action);
+    void (*__serialize__) (B_L_2proc, $Serial$state);
+    B_L_2proc (*__deserialize__) (B_L_2proc, $Serial$state);
+    B_bool (*__bool__) (B_L_2proc);
+    B_str (*__str__) (B_L_2proc);
+    B_str (*__repr__) (B_L_2proc);
+    $R (*__call__) (B_L_2proc, $Cont);
+    $R (*__exec__) (B_L_2proc, $Cont);
+};
+struct B_L_2proc {
+    struct B_L_2procG_class *$class;
+    B_Env self;
+    $action cb;
+};
+struct B_L_3procG_class {
+    char *$GCINFO;
+    int $class_id;
+    $SuperG_class $superclass;
+    B_NoneType (*__init__) (B_L_3proc, B_Env, B_int);
+    void (*__serialize__) (B_L_3proc, $Serial$state);
+    B_L_3proc (*__deserialize__) (B_L_3proc, $Serial$state);
+    B_bool (*__bool__) (B_L_3proc);
+    B_str (*__str__) (B_L_3proc);
+    B_str (*__repr__) (B_L_3proc);
+    $R (*__call__) (B_L_3proc, $Cont);
+    $R (*__exec__) (B_L_3proc, $Cont);
+};
+struct B_L_3proc {
+    struct B_L_3procG_class *$class;
+    B_Env self;
+    B_int n;
+};
+$R B_L_4C_1cont (B_Env, $Cont, B_NoneType);
+struct B_L_5ContG_class {
+    char *$GCINFO;
+    int $class_id;
+    $SuperG_class $superclass;
+    B_NoneType (*__init__) (B_L_5Cont, B_Env, $Cont);
+    void (*__serialize__) (B_L_5Cont, $Serial$state);
+    B_L_5Cont (*__deserialize__) (B_L_5Cont, $Serial$state);
+    B_bool (*__bool__) (B_L_5Cont);
+    B_str (*__str__) (B_L_5Cont);
+    B_str (*__repr__) (B_L_5Cont);
+    $R (*__call__) (B_L_5Cont, B_NoneType);
+};
+struct B_L_5Cont {
+    struct B_L_5ContG_class *$class;
+    B_Env G_act;
+    $Cont C_cont;
+};
+struct B_L_6procG_class {
+    char *$GCINFO;
+    int $class_id;
+    $SuperG_class $superclass;
+    B_NoneType (*__init__) (B_L_6proc, B_Env, B_WorldAuth, B_list);
+    void (*__serialize__) (B_L_6proc, $Serial$state);
+    B_L_6proc (*__deserialize__) (B_L_6proc, $Serial$state);
+    B_bool (*__bool__) (B_L_6proc);
+    B_str (*__str__) (B_L_6proc);
+    B_str (*__repr__) (B_L_6proc);
+    $R (*__call__) (B_L_6proc, $Cont);
+    $R (*__exec__) (B_L_6proc, $Cont);
+};
+struct B_L_6proc {
+    struct B_L_6procG_class *$class;
+    B_Env G_act;
+    B_WorldAuth token;
+    B_list args;
+};
+struct B_WorldAuthG_class {
+    char *$GCINFO;
+    int $class_id;
+    $SuperG_class $superclass;
+    B_NoneType (*__init__) (B_WorldAuth);
+    void (*__serialize__) (B_WorldAuth, $Serial$state);
+    B_WorldAuth (*__deserialize__) (B_WorldAuth, $Serial$state);
+    B_bool (*__bool__) (B_WorldAuth);
+    B_str (*__str__) (B_WorldAuth);
+    B_str (*__repr__) (B_WorldAuth);
+};
+struct B_WorldAuth {
+    struct B_WorldAuthG_class *$class;
+};
+struct B_EnvG_class {
+    char *$GCINFO;
+    int $class_id;
+    $SuperG_class $superclass;
+    $R (*__init__) (B_Env, $Cont, B_WorldAuth, B_list);
+    void (*__serialize__) (B_Env, $Serial$state);
+    B_Env (*__deserialize__) (B_Env, $Serial$state);
+    B_bool (*__bool__) (B_Env);
+    B_str (*__str__) (B_Env);
+    B_str (*__repr__) (B_Env);
+    B_NoneType (*__resume__) (B_Env);
+    $R (*stdout_writeG_local) (B_Env, $Cont, B_str);
+    $R (*stdin_installG_local) (B_Env, $Cont, $action);
+    $R (*exitG_local) (B_Env, $Cont, B_int);
+    B_Msg (*stdout_write) (B_Env, B_str);
+    B_Msg (*stdin_install) (B_Env, $action);
+    B_Msg (*exit) (B_Env, B_int);
+};
+struct B_Env {
+    struct B_EnvG_class *$class;
+    $Actor $next;
+    B_Msg $msg;
+    B_Msg $outgoing;
+    B_Msg $waitsfor;
+    $int64 $consume_hd;
+    $Catcher $catcher;
+    $Lock $msg_lock;
+    $long $globkey;
+    $int64 $affinity;
+    B_WorldAuth token;
+    B_list args;
+    B_WorldAuth auth;
+    B_list argv;
+};
+$R B_EnvG_newact ($Cont, B_WorldAuth, B_list);
+extern struct B_L_1procG_class B_L_1procG_methods;
+B_L_1proc B_L_1procG_new(B_Env, B_str);
+extern struct B_L_2procG_class B_L_2procG_methods;
+B_L_2proc B_L_2procG_new(B_Env, $action);
+extern struct B_L_3procG_class B_L_3procG_methods;
+B_L_3proc B_L_3procG_new(B_Env, B_int);
+extern struct B_L_5ContG_class B_L_5ContG_methods;
+B_L_5Cont B_L_5ContG_new(B_Env, $Cont);
+extern struct B_L_6procG_class B_L_6procG_methods;
+B_L_6proc B_L_6procG_new(B_Env, B_WorldAuth, B_list);
+extern struct B_WorldAuthG_class B_WorldAuthG_methods;
+B_WorldAuth B_WorldAuthG_new();
+extern struct B_EnvG_class B_EnvG_methods;
+$R B_EnvG_new($Cont, B_WorldAuth, B_list);
+*/
+void B___init__ ();
 
-#include "common.h"
-
-struct $atom;
-typedef struct $atom *$atom;
-
-struct $list;
-typedef struct $list *$list;
-
-struct $dict;
-typedef struct $dict *$dict;
-
-struct $set;
-typedef struct $set *$set;
-
-struct $str;
-typedef struct $str *$str;
-
-struct $bytearray;
-typedef struct $bytearray *$bytearray;
-
-struct $bytes;
-typedef struct $bytes *$bytes;
-
-struct $NoneType;
-typedef struct $NoneType *$NoneType;
-
-struct $int;
-typedef struct $int *$int;
-
-struct $i64;
-typedef struct $i64 *$i64;
-
-struct $float;
-typedef struct $float *$float;
-
-struct $complex;
-typedef struct $complex *$complex;
-
-struct $bool;
-typedef struct $bool *$bool;
-
-struct $Serial$state;
-typedef struct $Serial$state *$Serial$state;
-
-#include "class_hierarchy.h"
-
-struct $range;
-typedef struct $range *$range;
-
-struct $tuple;
-typedef struct $tuple *$tuple;
-
-struct $Iterator;
-typedef struct $Iterator *$Iterator;
-
-struct $slice;
-typedef struct $slice *$slice;
-
-struct $BaseException;
-typedef struct $BaseException *$BaseException;
-
-struct $BaseException$class;
-typedef struct $BaseException$class *$BaseException$class;
-
-struct $SystemExit;
-typedef struct $SystemExit *$SystemExit;
-
-struct $SystemExit$class;
-typedef struct $SystemExit$class *$SystemExit$class;
-
-struct $KeyboardInterrupt;
-typedef struct $KeyboardInterrupt *$KeyboardInterrupt;
-
-struct $KeyboardInterrupt$class;
-typedef struct $KeyboardInterrupt$class *$KeyboardInterrupt$class;
-
-struct $Exception;
-typedef struct $Exception *$Exception;
-
-struct $Exception$class;
-typedef struct $Exception$class *$Exception$class;
-
-struct $AssertionError;
-typedef struct $AssertionError *$AssertionError;
-
-struct $AssertionError$class;
-typedef struct $AssertionError$class *$AssertionError$class;
-
-struct $LookupError;
-typedef struct $LookupError *$LookupError;
-
-struct $LookupError$class;
-typedef struct $LookupError$class *$LookupError$class;
-
-struct $IndexError;
-typedef struct $IndexError *$IndexError;
-
-struct $IndexError$class;
-typedef struct $IndexError$class *$IndexError$class;
-
-struct $KeyError;
-typedef struct $KeyError *$KeyError;
-
-struct $KeyError$class;
-typedef struct $KeyError$class *$KeyError$class;
-
-struct $MemoryError;
-typedef struct $MemoryError *$MemoryError;
-
-struct $MemoryError$class;
-typedef struct $MemoryError$class *$MemoryError$class;
-
-struct $OSError;
-typedef struct $OSError *$OSError;
-
-struct $OSError$class;
-typedef struct $OSError$class *$OSError$class;
-
-struct $RuntimeError;
-typedef struct $RuntimeError *$RuntimeError;
-
-struct $RuntimeError$class;
-typedef struct $RuntimeError$class *$RuntimeError$class;
-
-struct $NotImplementedError;
-typedef struct $NotImplementedError *$NotImplementedError;
-
-struct $NotImplementedError$class;
-typedef struct $NotImplementedError$class *$NotImplementedError$class;
-
-struct $ValueError;
-typedef struct $ValueError *$ValueError;
-
-struct $ValueError$class;
-typedef struct $ValueError$class *$ValueError$class;
-
-struct $Eq;
-typedef struct $Eq *$Eq;
-
-struct $Eq$class;
-typedef struct $Eq$class *$Eq$class;
-
-struct $Ord;
-typedef struct $Ord *$Ord;
-
-struct $Ord$class;
-typedef struct $Ord$class *$Ord$class;
-
-struct $Logical;
-typedef struct $Logical *$Logical;
-
-struct $Logical$class;
-typedef struct $Logical$class *$Logical$class;
-
-struct $Plus;
-typedef struct $Plus *$Plus;
-
-struct $Plus$class;
-typedef struct $Plus$class *$Plus$class;
-
-struct $Times;
-typedef struct $Times *$Times;
-
-struct $Times$class;
-typedef struct $Times$class *$Times$class;
-
-struct $Div;
-typedef struct $Div *$Div;
-
-struct $Div$class;
-typedef struct $Div$class *$Div$class;
-
-struct $Minus;
-typedef struct $Minus *$Minus;
-
-struct $Minus$class;
-typedef struct $Minus$class *$Minus$class;
-
-struct $Hashable;
-typedef struct $Hashable *$Hashable;
-
-struct $Hashable$class;
-typedef struct $Hashable$class *$Hashable$class;
-
-struct $Indexed;
-typedef struct $Indexed *$Indexed;
-
-struct $Indexed$class;
-typedef struct $Indexed$class *$Indexed$class;
-
-struct $Sliceable;
-typedef struct $Sliceable *$Sliceable;
-
-struct $Sliceable$class;
-typedef struct $Sliceable$class *$Sliceable$class;
-
-struct $Iterable;
-typedef struct $Iterable *$Iterable;
-
-struct $Iterable$class;
-typedef struct $Iterable$class *$Iterable$class;
-
-struct $Collection;
-typedef struct $Collection *$Collection;
-
-struct $Collection$class;
-typedef struct $Collection$class *$Collection$class;
-
-struct $Container;
-typedef struct $Container *$Container;
-
-struct $Container$class;
-typedef struct $Container$class *$Container$class;
-
-struct $Sequence;
-typedef struct $Sequence *$Sequence;
-
-struct $Sequence$class;
-typedef struct $Sequence$class *$Sequence$class;
-
-struct $Mapping;
-typedef struct $Mapping *$Mapping;
-
-struct $Mapping$class;
-typedef struct $Mapping$class *$Mapping$class;
-
-struct $Set;
-typedef struct $Set *$Set;
-
-struct $Set$class;
-typedef struct $Set$class *$Set$class;
-
-struct $Number;
-typedef struct $Number *$Number;
-
-struct $Number$class;
-typedef struct $Number$class *$Number$class;
-
-struct $Real;
-typedef struct $Real *$Real;
-
-struct $Real$class;
-typedef struct $Real$class *$Real$class;
-
-struct $Rational;
-typedef struct $Rational *$Rational;
-
-struct $Rational$class;
-typedef struct $Rational$class *$Rational$class;
-
-struct $Integral;
-typedef struct $Integral *$Integral;
-
-struct $Integral$class;
-typedef struct $Integral$class *$Integral$class;
-
-struct $Hashable$bool;
-typedef struct $Hashable$bool *$Hashable$bool;
-
-struct $Hashable$bool$class;
-typedef struct $Hashable$bool$class *$Hashable$bool$class;
-
-struct $Sequence$list;
-typedef struct $Sequence$list *$Sequence$list;
-
-struct $Sequence$list$class;
-typedef struct $Sequence$list$class *$Sequence$list$class;
-
-struct $Collection$list;
-typedef struct $Collection$list *$Collection$list;
-
-struct $Collection$list$class;
-typedef struct $Collection$list$class *$Collection$list$class;
-
-struct $Times$list;
-typedef struct $Times$list *$Times$list;
-
-struct $Times$list$class;
-typedef struct $Times$list$class *$Times$list$class;
-
-struct $Container$list;
-typedef struct $Container$list *$Container$list;
-
-struct $Container$list$class;
-typedef struct $Container$list$class *$Container$list$class;
-
-struct $Ord$list;
-typedef struct $Ord$list *$Ord$list;
-
-struct $Ord$list$class;
-typedef struct $Ord$list$class *$Ord$list$class;
-
-struct $Mapping$dict;
-typedef struct $Mapping$dict *$Mapping$dict;
-
-struct $Mapping$dict$class;
-typedef struct $Mapping$dict$class *$Mapping$dict$class;
-
-struct $Indexed$dict;
-typedef struct $Indexed$dict *$Indexed$dict;
-
-struct $Indexed$dict$class;
-typedef struct $Indexed$dict$class *$Indexed$dict$class;
-
-struct $Ord$dict;
-typedef struct $Ord$dict *$Ord$dict;
-
-struct $Ord$dict$class;
-typedef struct $Ord$dict$class *$Ord$dict$class;
-
-struct $Set$set;
-typedef struct $Set$set *$Set$set;
-
-struct $Set$set$class;
-typedef struct $Set$set$class *$Set$set$class;
-
-struct $Ord$set;
-typedef struct $Ord$set *$Ord$set;
-
-struct $Ord$set$class;
-typedef struct $Ord$set$class *$Ord$set$class;
-
-struct $Logical$set;
-typedef struct $Logical$set *$Logical$set;
-
-struct $Logical$set$class;
-typedef struct $Logical$set$class *$Logical$set$class;
-
-struct $Minus$set;
-typedef struct $Minus$set *$Minus$set;
-
-struct $Minus$set$class;
-typedef struct $Minus$set$class *$Minus$set$class;
-
-struct $Iterable$Iterator;
-typedef struct $Iterable$Iterator *$Iterable$Iterator;
-
-struct $Iterable$Iterator$class;
-typedef struct $Iterable$Iterator$class *$Iterable$Iterator$class;
-
-struct $Ord$str;
-typedef struct $Ord$str *$Ord$str;
-
-struct $Ord$str$class;
-typedef struct $Ord$str$class *$Ord$str$class;
-
-struct $Container$str;
-typedef struct $Container$str *$Container$str;
-
-struct $Container$str$class;
-typedef struct $Container$str$class *$Container$str$class;
-
-struct $Sliceable$str;
-typedef struct $Sliceable$str *$Sliceable$str;
-
-struct $Sliceable$str$class;
-typedef struct $Sliceable$str$class *$Sliceable$str$class;
-
-struct $Times$str;
-typedef struct $Times$str *$Times$str;
-
-struct $Times$str$class;
-typedef struct $Times$str$class *$Times$str$class;
-
-struct $Hashable$str;
-typedef struct $Hashable$str *$Hashable$str;
-
-struct $Hashable$str$class;
-typedef struct $Hashable$str$class *$Hashable$str$class;
-
-struct $Integral$i64;
-typedef struct $Integral$i64 *$Integral$i64;
-
-struct $Integral$i64$class;
-typedef struct $Integral$i64$class *$Integral$i64$class;
-
-struct $Logical$i64;
-typedef struct $Logical$i64 *$Logical$i64;
-
-struct $Logical$i64$class;
-typedef struct $Logical$i64$class *$Logical$i64$class;
-
-struct $Minus$i64;
-typedef struct $Minus$i64 *$Minus$i64;
-
-struct $Minus$i64$class;
-typedef struct $Minus$i64$class *$Minus$i64$class;
-
-struct $Div$i64;
-typedef struct $Div$i64 *$Div$i64;
-
-struct $Div$i64$class;
-typedef struct $Div$i64$class *$Div$i64$class;
-
-struct $Ord$i64;
-typedef struct $Ord$i64 *$Ord$i64;
-
-struct $Ord$i64$class;
-typedef struct $Ord$i64$class *$Ord$i64$class;
-
-struct $Hashable$i64;
-typedef struct $Hashable$i64 *$Hashable$i64;
-
-struct $Hashable$i64$class;
-typedef struct $Hashable$i64$class *$Hashable$i64$class;
-
-struct $Integral$int;
-typedef struct $Integral$int *$Integral$int;
-
-struct $Integral$int$class;
-typedef struct $Integral$int$class *$Integral$int$class;
-
-struct $Logical$int;
-typedef struct $Logical$int *$Logical$int;
-
-struct $Logical$int$class;
-typedef struct $Logical$int$class *$Logical$int$class;
-
-struct $Minus$int;
-typedef struct $Minus$int *$Minus$int;
-
-struct $Minus$int$class;
-typedef struct $Minus$int$class *$Minus$int$class;
-
-struct $Div$int;
-typedef struct $Div$int *$Div$int;
-
-struct $Div$int$class;
-typedef struct $Div$int$class *$Div$int$class;
-
-struct $Ord$int;
-typedef struct $Ord$int *$Ord$int;
-
-struct $Ord$int$class;
-typedef struct $Ord$int$class *$Ord$int$class;
-
-struct $Hashable$int;
-typedef struct $Hashable$int *$Hashable$int;
-
-struct $Hashable$int$class;
-typedef struct $Hashable$int$class *$Hashable$int$class;
-
-struct $Real$float;
-typedef struct $Real$float *$Real$float;
-
-struct $Real$float$class;
-typedef struct $Real$float$class *$Real$float$class;
-
-struct $Div$float;
-typedef struct $Div$float *$Div$float;
-
-struct $Div$float$class;
-typedef struct $Div$float$class *$Div$float$class;
-
-struct $Minus$float;
-typedef struct $Minus$float *$Minus$float;
-
-struct $Minus$float$class;
-typedef struct $Minus$float$class *$Minus$float$class;
-
-struct $Ord$float;
-typedef struct $Ord$float *$Ord$float;
-
-struct $Ord$float$class;
-typedef struct $Ord$float$class *$Ord$float$class;
-
-struct $Hashable$float;
-typedef struct $Hashable$float *$Hashable$float;
-
-struct $Hashable$float$class;
-typedef struct $Hashable$float$class *$Hashable$float$class;
-
-struct $Number$complex;
-typedef struct $Number$complex *$Number$complex;
-
-struct $Number$complex$class;
-typedef struct $Number$complex$class *$Number$complex$class;
-
-struct $Div$complex;
-typedef struct $Div$complex *$Div$complex;
-
-struct $Div$complex$class;
-typedef struct $Div$complex$class *$Div$complex$class;
-
-struct $Minus$complex;
-typedef struct $Minus$complex *$Minus$complex;
-
-struct $Minus$complex$class;
-typedef struct $Minus$complex$class *$Minus$complex$class;
-
-struct $Eq$complex;
-typedef struct $Eq$complex *$Eq$complex;
-
-struct $Eq$complex$class;
-typedef struct $Eq$complex$class *$Eq$complex$class;
-
-struct $Hashable$complex;
-typedef struct $Hashable$complex *$Hashable$complex;
-
-struct $Hashable$complex$class;
-typedef struct $Hashable$complex$class *$Hashable$complex$class;
-
-struct $Iterable$range;
-typedef struct $Iterable$range *$Iterable$range;
-
-struct $Iterable$range$class;
-typedef struct $Iterable$range$class *$Iterable$range$class;
-
-struct $Iterable$tuple;
-typedef struct $Iterable$tuple *$Iterable$tuple;
-
-struct $Iterable$tuple$class;
-typedef struct $Iterable$tuple$class *$Iterable$tuple$class;
-
-struct $Sliceable$tuple;
-typedef struct $Sliceable$tuple *$Sliceable$tuple;
-
-struct $Sliceable$tuple$class;
-typedef struct $Sliceable$tuple$class *$Sliceable$tuple$class;
-
-struct $Hashable$tuple;
-typedef struct $Hashable$tuple *$Hashable$tuple;
-
-struct $Hashable$tuple$class;
-typedef struct $Hashable$tuple$class *$Hashable$tuple$class;
-
-struct $Ord$bytearray;
-typedef struct $Ord$bytearray *$Ord$bytearray;
-
-struct $Ord$bytearray$class;
-typedef struct $Ord$bytearray$class *$Ord$bytearray$class;
-
-struct $Sequence$bytearray;
-typedef struct $Sequence$bytearray *$Sequence$bytearray;
-
-struct $Sequence$bytearray$class;
-typedef struct $Sequence$bytearray$class *$Sequence$bytearray$class;
-
-struct $Collection$bytearray;
-typedef struct $Collection$bytearray *$Collection$bytearray;
-
-struct $Collection$bytearray$class;
-typedef struct $Collection$bytearray$class *$Collection$bytearray$class;
-
-struct $Times$bytearray;
-typedef struct $Times$bytearray *$Times$bytearray;
-
-struct $Times$bytearray$class;
-typedef struct $Times$bytearray$class *$Times$bytearray$class;
-
-struct $Container$bytearray;
-typedef struct $Container$bytearray *$Container$bytearray;
-
-struct $Container$bytearray$class;
-typedef struct $Container$bytearray$class *$Container$bytearray$class;
-
-struct $Ord$bytes;
-typedef struct $Ord$bytes *$Ord$bytes;
-
-struct $Ord$bytes$class;
-typedef struct $Ord$bytes$class *$Ord$bytes$class;
-
-struct $Container$bytes;
-typedef struct $Container$bytes *$Container$bytes;
-
-struct $Container$bytes$class;
-typedef struct $Container$bytes$class *$Container$bytes$class;
-
-struct $Sliceable$bytes;
-typedef struct $Sliceable$bytes *$Sliceable$bytes;
-
-struct $Sliceable$bytes$class;
-typedef struct $Sliceable$bytes$class *$Sliceable$bytes$class;
-
-struct $Times$bytes;
-typedef struct $Times$bytes *$Times$bytes;
-
-struct $Times$bytes$class;
-typedef struct $Times$bytes$class *$Times$bytes$class;
-
-struct $Hashable$bytes;
-typedef struct $Hashable$bytes *$Hashable$bytes;
-
-struct $Hashable$bytes$class;
-typedef struct $Hashable$bytes$class *$Hashable$bytes$class;
-
-struct $Hashable$WORD;
-typedef struct $Hashable$WORD *$Hashable$WORD;
-
-struct $Hashable$WORD$class;
-typedef struct $Hashable$WORD$class *$Hashable$WORD$class;
-
-
-// $Eq ////////////////////////////////////////////////////////////
-
-struct $Eq {
-    $Eq$class $class;
-};
-
-struct $Eq$class {
-    char *$GCINFO;
-    int $class_id;
-    $Super$class $superclass;
-    void (*__init__)($Eq);
-    void (*__serialize__)($Eq,$Serial$state);
-    $Eq (*__deserialize__)($Eq,$Serial$state);
-    $bool (*__bool__)($Eq);
-    $str (*__str__)($Eq);
-    $str (*__repr__)($Eq);
-    $bool (*__eq__)($Eq, $WORD, $WORD);
-    $bool (*__ne__)($Eq, $WORD, $WORD);
-};
-
-$WORD $Eq$__ne__($Eq wit, $WORD a, $WORD b);
-extern struct $Eq$class $Eq$methods;
-$Eq $Eq$new();
-
-// $Ord ////////////////////////////////////////////////////////////
-
-struct $Ord {
-    $Ord$class $class;
-};
-
-struct $Ord$class {
-    char *$GCINFO;
-    int $class_id;
-    $Super$class $superclass;
-    void (*__init__)($Ord);
-    void (*__serialize__)($Ord,$Serial$state);
-    $Ord (*__deserialize__)($Ord,$Serial$state);
-    $bool (*__bool__)($Ord);
-    $str (*__str__)($Ord);
-    $str (*__repr__)($Ord);
-    $bool (*__eq__)($Ord, $WORD, $WORD);
-    $bool (*__ne__)($Ord, $WORD, $WORD);
-    $bool (*__lt__)($Ord, $WORD, $WORD);
-    $bool (*__le__)($Ord, $WORD, $WORD);
-    $bool (*__gt__)($Ord, $WORD, $WORD);
-    $bool (*__ge__)($Ord, $WORD, $WORD);
-};
-
-$WORD $Ord$__gt__($Ord wit, $WORD a, $WORD b);
-$WORD $Ord$__ge__($Ord wit, $WORD a, $WORD b);
-extern struct $Ord$class $Ord$methods;
-$Ord $Ord$new();
-
-// $Logical ////////////////////////////////////////////////////////////
-
-struct $Logical {
-    $Logical$class $class;
-};
-
-struct $Logical$class {
-    char *$GCINFO;
-    int $class_id;
-    $Super$class $superclass;
-    void (*__init__)($Logical);
-    void (*__serialize__)($Logical,$Serial$state);
-    $Logical (*__deserialize__)($Logical,$Serial$state);
-    $bool (*__bool__)($Logical);
-    $str (*__str__)($Logical);
-    $str (*__repr__)($Logical);
-    $WORD (*__and__)($Logical, $WORD, $WORD);
-    $WORD (*__or__)($Logical, $WORD, $WORD);
-    $WORD (*__xor__)($Logical, $WORD, $WORD);
-    $WORD (*__iand__)($Logical, $WORD, $WORD);
-    $WORD (*__ior__)($Logical, $WORD, $WORD);
-    $WORD (*__ixor__)($Logical, $WORD, $WORD);
-};
-
-$WORD $Logical$__iand__($Logical, $WORD, $WORD);
-$WORD $Logical$__ior__($Logical, $WORD, $WORD);
-$WORD $Logical$__ixor__($Logical, $WORD, $WORD);
-
-extern struct $Logical$class $Logical$methods;
-$Logical $Logical$new();
-
-// $Plus ////////////////////////////////////////////////////////////
-
-struct $Plus {
-    $Plus$class $class;
-};
-
-struct $Plus$class {
-    char *$GCINFO;
-    int $class_id;
-    $Super$class $superclass;
-    void (*__init__)($Plus);
-    void (*__serialize__)($Plus,$Serial$state);
-    $Plus (*__deserialize__)($Plus,$Serial$state);
-    $bool (*__bool__)($Plus);
-    $str (*__str__)($Plus);
-    $str (*__repr__)($Plus);
-    $WORD (*__add__)($Plus, $WORD, $WORD);
-    $WORD (*__iadd__)($Plus, $WORD, $WORD);
-};
-
-$WORD $Plus$__iadd__ ($Plus, $WORD, $WORD);
-
-extern struct $Plus$class $Plus$methods;
-$Plus $Plus$new();
-
-// $Times ////////////////////////////////////////////////////////////
-
-struct $Times {
-    $Times$class $class;
-};
-
-struct $Times$class {
-    char *$GCINFO;
-    int $class_id;
-    $Super$class $superclass;
-    void (*__init__)($Times);
-    void (*__serialize__)($Times,$Serial$state);
-    $Times (*__deserialize__)($Times,$Serial$state);
-    $bool (*__bool__)($Times);
-    $str (*__str__)($Times);
-    $str (*__repr__)($Times);
-    $WORD (*__add__)($Times, $WORD, $WORD);
-    $WORD (*__iadd__)($Times, $WORD, $WORD);
-    $WORD (*__mul__)($Times, $WORD, $WORD);
-    $WORD (*__imul__)($Times, $WORD, $WORD);
-};
-
-$WORD $Times$__imul__ ($Times, $WORD, $WORD);
-
-extern struct $Times$class $Times$methods;
-$Times $Times$new();
-
-// $Div ////////////////////////////////////////////////////////////
-
-struct $Div {
-    $Div$class $class;
-};
-
-struct $Div$class {
-    char *$GCINFO;
-    int $class_id;
-    $Super$class $superclass;
-    void (*__init__)($Div);
-    void (*__serialize__)($Div,$Serial$state);
-    $Div (*__deserialize__)($Div,$Serial$state);
-    $bool (*__bool__)($Div);
-    $str (*__str__)($Div);
-    $str (*__repr__)($Div);
-    $WORD (*__truediv__)($Div, $WORD, $WORD);
-    $WORD (*__itruediv__)($Div, $WORD, $WORD);
-};
-
-$WORD $Div$__itruediv__ ($Div, $WORD, $WORD);
-
-extern struct $Div$class $Div$methods;
-$Div $Div$new();
-
-// $Minus ////////////////////////////////////////////////////////////
-
-struct $Minus {
-    $Minus$class $class;
-};
-
-struct $Minus$class {
-    char *$GCINFO;
-    int $class_id;
-    $Super$class $superclass;
-    void (*__init__)($Minus);
-    void (*__serialize__)($Minus,$Serial$state);
-    $Minus (*__deserialize__)($Minus,$Serial$state);
-    $bool (*__bool__)($Minus);
-    $str (*__str__)($Minus);
-    $str (*__repr__)($Minus);
-    $WORD (*__sub__)($Minus, $WORD, $WORD);
-    $WORD (*__isub__)($Minus, $WORD, $WORD);
-};
-
-$WORD $Minus$__isub__ ($Minus, $WORD, $WORD);
-
-extern struct $Minus$class $Minus$methods;
-$Minus $Minus$new();
-
-// $Hashable ////////////////////////////////////////////////////////////
-
-struct $Hashable {
-    $Hashable$class $class;
-};
-
-struct $Hashable$class {
-    char *$GCINFO;
-    int $class_id;
-    $Super$class $superclass;
-    void (*__init__)($Hashable);
-    void (*__serialize__)($Hashable,$Serial$state);
-    $Hashable (*__deserialize__)($Hashable,$Serial$state);
-    $bool (*__bool__)($Hashable);
-    $str (*__str__)($Hashable);
-    $str (*__repr__)($Hashable);
-    $bool (*__eq__)($Hashable, $WORD, $WORD);
-    $bool (*__ne__)($Hashable, $WORD, $WORD);
-    $int (*__hash__)($Hashable, $WORD);
-};
-
-extern struct $Hashable$class $Hashable$methods;
-$Hashable $Hashable$new();
-
-// $Indexed ////////////////////////////////////////////////////////////
-
-struct $Indexed {
-    $Indexed$class $class;
-    $Eq w$Eq$A$Indexed;
-};
-
-struct $Indexed$class {
-    char *$GCINFO;
-    int $class_id;
-    $Super$class $superclass;
-    void (*__init__)($Indexed, $Eq);
-    void (*__serialize__)($Indexed,$Serial$state);
-    $Indexed (*__deserialize__)($Indexed,$Serial$state);
-    $bool (*__bool__)($Indexed);
-    $str (*__str__)($Indexed);
-    $str (*__repr__)($Indexed);
-    $WORD (*__getitem__)($Indexed, $WORD, $WORD);
-    void (*__setitem__)($Indexed, $WORD, $WORD, $WORD);
-    void (*__delitem__)($Indexed, $WORD, $WORD);
-};
-
-extern struct $Indexed$class $Indexed$methods;
-$Indexed $Indexed$new($Eq);
-
-// $Sliceable ////////////////////////////////////////////////////////////
-
-struct $Sliceable {
-    $Sliceable$class $class;
-};
-
-struct $Sliceable$class {
-    char *$GCINFO;
-    int $class_id;
-    $Super$class $superclass;
-    void (*__init__)($Sliceable);
-    void (*__serialize__)($Sliceable,$Serial$state);
-    $Sliceable (*__deserialize__)($Sliceable,$Serial$state);
-    $bool (*__bool__)($Sliceable);
-    $str (*__str__)($Sliceable);
-    $str (*__repr__)($Sliceable);
-    $WORD (*__getitem__)($Sliceable, $WORD, $int);
-    void (*__setitem__)($Sliceable, $WORD, $int, $WORD);
-    void (*__delitem__)($Sliceable, $WORD, $int);
-    $WORD (*__getslice__)($Sliceable, $WORD, $slice);
-    void (*__setslice__)($Sliceable, $WORD, $Iterable, $slice, $WORD);
-    void (*__delslice__)($Sliceable, $WORD, $slice);
-};
-
-extern struct $Sliceable$class $Sliceable$methods;
-$Sliceable $Sliceable$new();
-
-// $Iterable ////////////////////////////////////////////////////////////
-
-struct $Iterable {
-    $Iterable$class $class;
-};
-
-struct $Iterable$class {
-    char *$GCINFO;
-    int $class_id;
-    $Super$class $superclass;
-    void (*__init__)($Iterable);
-    void (*__serialize__)($Iterable,$Serial$state);
-    $Iterable (*__deserialize__)($Iterable,$Serial$state);
-    $bool (*__bool__)($Iterable);
-    $str (*__str__)($Iterable);
-    $str (*__repr__)($Iterable);
-    $Iterator (*__iter__)($Iterable, $WORD);
-};
-
-extern struct $Iterable$class $Iterable$methods;
-$Iterable $Iterable$new();
-
-// $Collection ////////////////////////////////////////////////////////////
-
-struct $Collection {
-    $Collection$class $class;
-};
-
-struct $Collection$class {
-    char *$GCINFO;
-    int $class_id;
-    $Super$class $superclass;
-    void (*__init__)($Collection);
-    void (*__serialize__)($Collection,$Serial$state);
-    $Collection (*__deserialize__)($Collection,$Serial$state);
-    $bool (*__bool__)($Collection);
-    $str (*__str__)($Collection);
-    $str (*__repr__)($Collection);
-    $Iterator (*__iter__)($Collection, $WORD);
-    $WORD (*__fromiter__)($Collection, $Iterable, $WORD);
-    $int (*__len__)($Collection, $WORD);
-};
-
-extern struct $Collection$class $Collection$methods;
-$Collection $Collection$new();
-
-// $Container ////////////////////////////////////////////////////////////
-
-struct $Container {
-    $Container$class $class;
-    $Eq w$Eq$A$Container;
-};
-
-struct $Container$class {
-    char *$GCINFO;
-    int $class_id;
-    $Super$class $superclass;
-    void (*__init__)($Container, $Eq);
-    void (*__serialize__)($Container,$Serial$state);
-    $Container (*__deserialize__)($Container,$Serial$state);
-    $bool (*__bool__)($Container);
-    $str (*__str__)($Container);
-    $str (*__repr__)($Container);
-    $Iterator (*__iter__)($Container, $WORD);
-    $WORD (*__fromiter__)($Container, $Iterable, $WORD);
-    $int (*__len__)($Container, $WORD);
-    $bool (*__contains__)($Container, $WORD, $WORD);
-    $bool (*__containsnot__)($Container, $WORD, $WORD);
-};
-
-extern struct $Container$class $Container$methods;
-
-// $Sequence ////////////////////////////////////////////////////////////
-
-struct $Sequence {
-    $Sequence$class $class;
-    $Collection w$Collection;
-    $Times w$Times;
-};
-
-struct $Sequence$class {
-    char *$GCINFO;
-    int $class_id;
-    $Super$class $superclass;
-    void (*__init__)($Sequence);
-    void (*__serialize__)($Sequence,$Serial$state);
-    $Sequence (*__deserialize__)($Sequence,$Serial$state);
-    $bool (*__bool__)($Sequence);
-    $str (*__str__)($Sequence);
-    $str (*__repr__)($Sequence);
-    $WORD (*__getitem__)($Sequence, $WORD, $int);
-    void (*__setitem__)($Sequence, $WORD, $int, $WORD);
-    void (*__delitem__)($Sequence, $WORD, $int);
-    $WORD (*__getslice__)($Sequence, $WORD, $slice);
-    void (*__setslice__)($Sequence, $WORD, $Iterable, $slice, $WORD);
-    void (*__delslice__)($Sequence, $WORD, $slice);
-    $Iterator (*__reversed__)($Sequence, $WORD);
-    void (*insert)($Sequence, $WORD, $int, $WORD);
-    void (*append)($Sequence, $WORD, $WORD);
-    void (*reverse)($Sequence, $WORD);
-};
-
-extern struct $Sequence$class $Sequence$methods;
-$Sequence $Sequence$new();
-
-// $Collection$Sequence ////////////////////////////////////////////////
-
-#define $Collection$Sequence $Collection
-#define $Collection$Sequence$class $Collection$class
-#define $Collection$Sequence$methods $Collection$methods
-#define $Collection$Sequence$new(...) $Collection$new(__VA_ARGS__)
-
-// $Times$Sequence /////////////////////////////////////////////////////
-
-#define $Times$Sequence $Times
-#define $Times$Sequence$class $Times$class
-#define $Times$Sequence$methods $Times$methods
-#define $Times$Sequence$new(...) $Times$new(__VA_ARGS__)
-
-// $Mapping ////////////////////////////////////////////////////////////
-
-struct $Mapping {
-    $Mapping$class $class;
-    $Indexed w$Indexed;
-    $Eq w$Eq$A$Mapping;
-};
-
-struct $Mapping$class {
-    char *$GCINFO;
-    int $class_id;
-    $Super$class $superclass;
-    void (*__init__)($Mapping, $Eq);
-    void (*__serialize__)($Mapping,$Serial$state);
-    $Mapping (*__deserialize__)($Mapping,$Serial$state);
-    $bool (*__bool__)($Mapping);
-    $str (*__str__)($Mapping);
-    $str (*__repr__)($Mapping);
-    $Iterator (*__iter__)($Mapping, $WORD);
-    $WORD (*__fromiter__)($Mapping, $Iterable, $WORD);
-    $int (*__len__)($Mapping, $WORD);
-    $bool (*__contains__)($Mapping, $WORD, $WORD);
-    $bool (*__containsnot__)($Mapping, $WORD, $WORD);
-    $WORD (*get)($Mapping, $WORD, $WORD, $WORD);
-    $Iterator (*keys)($Mapping, $WORD);
-    $Iterator (*values)($Mapping, $WORD);
-    $Iterator (*items)($Mapping, $WORD);
-    void (*update)($Mapping, $WORD, $Iterable, $WORD);
-    $tuple (*popitem)($Mapping, $WORD);
-    void (*setdefault)($Mapping, $WORD, $WORD, $WORD);
-};
-
-extern struct $Mapping$class $Mapping$methods;
-$Mapping $Mapping$new($Eq w$Eq$A$Mapping);
-
-// $Indexed$Mapping ////////////////////////////////////////////////
-
-#define $Indexed$Mapping $Indexed
-#define $Indexed$Mapping$class $Indexed$class
-#define $Indexed$Mapping$methods $Indexed$methods
-#define $Indexed$Mapping$new(...) $Indexed$new(__VA_ARGS__)
-
-// $Set ////////////////////////////////////////////////////////////
-
-struct $Set {
-    $Set$class $class;
-    $Ord w$Ord;
-    $Logical w$Logical;
-    $Minus w$Minus;
-    $Eq w$Eq$A$Set;
-};
-
-struct $Set$class {
-    char *$GCINFO;
-    int $class_id;
-    $Super$class $superclass;
-    void (*__init__)($Set, $Eq);
-    void (*__serialize__)($Set,$Serial$state);
-    $Set (*__deserialize__)($Set,$Serial$state);
-    $bool (*__bool__)($Set);
-    $str (*__str__)($Set);
-    $str (*__repr__)($Set);
-    $Iterator (*__iter__)($Set, $WORD);
-    $WORD (*__fromiter__)($Set, $Iterable, $WORD);
-    $int (*__len__)($Set, $WORD);
-    $bool (*__contains__)($Set, $WORD, $WORD);
-    $bool (*__containsnot__)($Set, $WORD, $WORD);
-    $bool (*isdisjoint)($Set, $WORD, $WORD);
-    void (*add)($Set, $WORD, $WORD);
-    void (*discard)($Set, $WORD, $WORD);
-    $WORD (*pop)($Set, $WORD);
-};
-
-extern struct $Set$class $Set$methods;
-
-// $Ord$Set ///////////////////////////////////////////////////////////
-
-#define $Ord$Set $Ord
-#define $Ord$Set$class $Ord$class
-#define $Ord$Set$methods $Ord$methods
-#define $Ord$Set$new(...) $Ord$new(__VA_ARGS__)
-
-// $Logical$Set ///////////////////////////////////////////////////////
-
-#define $Logical$Set $Logical
-#define $Logical$Set$class $Logical$class
-#define $Logical$Set$methods $Logical$methods
-#define $Logical$Set$new(...) $Logical$new(__VA_ARGS__)
-
-// $Minus$Set /////////////////////////////////////////////////////////
-
-#define $Minus$Set $Minus
-#define $Minus$Set$class $Minus$class
-#define $Minus$Set$methods $Minus$methods
-#define $Minus$Set$new(...) $Minus$new(__VA_ARGS__)
-
-// $Number ////////////////////////////////////////////////////////////
-
-struct $Number {
-    $Number$class $class;
-    $Minus w$Minus;
-};
-
-struct $Number$class {
-    char *$GCINFO;
-    int $class_id;
-    $Super$class $superclass;
-    void (*__init__)($Number);
-    void (*__serialize__)($Number,$Serial$state);
-    $Number (*__deserialize__)($Number,$Serial$state);
-    $bool (*__bool__)($Number);
-    $str (*__str__)($Number);
-    $str (*__repr__)($Number);
-    $WORD (*__add__)($Number, $WORD, $WORD);
-    $WORD (*__iadd__)($Number, $WORD, $WORD);
-    $WORD (*__mul__)($Number, $WORD, $WORD);
-    $WORD (*__imul__)($Number, $WORD, $WORD);
-    $WORD (*__fromatom__)($Number,$atom);
-    $complex (*__complx__)($Number, $WORD);
-    //    $WORD (*__truediv__)($Number, $WORD, $WORD);
-    $WORD (*__pow__)($Number, $WORD, $WORD);
-    //    $WORD (*__itruediv__)($Number, $WORD, $WORD);
-    $WORD (*__ipow__)($Number, $WORD, $WORD);
-    $WORD (*__neg__)($Number, $WORD);
-    $WORD (*__pos__)($Number, $WORD);
-    $WORD (*real)($Number, $WORD, $Real);
-    $WORD (*imag)($Number, $WORD, $Real);
-    $WORD (*__abs__)($Number, $WORD, $Real);
-    $WORD (*conjugate)($Number, $WORD);
-};
-
-//$WORD $Number$__itruediv__($Number, $WORD, $WORD);
-$WORD $Number$__ipow__($Number, $WORD, $WORD);
-
-extern struct $Number$class $Number$methods;
-$Number $Number$new();
-
-// $Minus$Number ////////////////////////////////////////////////////
-
-#define $Minus$Number $Minus
-#define $Minus$Number$class $Minus$class
-#define $Minus$Number$methods $Minus$methods
-#define $Minus$Number$new(...) $Minus$new(__VA_ARGS__)
-
-// $Real ////////////////////////////////////////////////////////////
-
-struct $Real {
-    $Real$class $class;
-};
-
-struct $Real$class {
-    char *$GCINFO;
-    int $class_id;
-    $Super$class $superclass;
-    void (*__init__)($Real);
-    void (*__serialize__)($Real,$Serial$state);
-    $Real (*__deserialize__)($Real,$Serial$state);
-    $bool (*__bool__)($Real);
-    $str (*__str__)($Real);
-    $str (*__repr__)($Real);
-    $WORD (*__add__)($Real, $WORD, $WORD);
-    $WORD (*__iadd__)($Real, $WORD, $WORD);
-    $WORD (*__mul__)($Real, $WORD, $WORD);
-    $WORD (*__imul__)($Real, $WORD, $WORD);
-    $WORD (*__fromatom__)($Real,$atom);
-    $complex (*__complx__)($Real, $WORD);
-    //    $WORD (*__truediv__)($Real, $WORD, $WORD);
-    $WORD (*__pow__)($Real, $WORD, $WORD);
-    //    $WORD (*__itruediv__)($Real, $WORD, $WORD);
-    $WORD (*__ipow__)($Real, $WORD, $WORD);
-    $WORD (*__neg__)($Real, $WORD);
-    $WORD (*__pos__)($Real, $WORD);
-    $WORD (*real)($Real, $WORD, $Real);
-    $WORD (*imag)($Real, $WORD, $Real);
-    $WORD (*__abs__)($Real, $WORD, $Real);
-    $WORD (*conjugate)($Real, $WORD);
-    $float (*__float__)($Real, $WORD);
-    $WORD (*__trunc__)($Real, $WORD, $Integral);
-    $WORD (*__floor__)($Real, $WORD, $Integral);
-    $WORD (*__ceil__)($Real, $WORD, $Integral);
-    $WORD (*__round__)($Real, $WORD, $int);
-};
-
-extern struct $Real$class $Real$methods;
-$Real $Real$new();
-
-// $Minus$Real //////////////////////////////////////////////////////////
-
-#define $Minus$Real $Minus
-#define $Minus$Real$class $Minus$class
-#define $Minus$Real$methods $Minus$methods
-#define $Minus$Real$new(...) $Minus$new(__VA_ARGS__)
-
-// $RealFloat ///////////////////////////////////////////////////////////
-
-#define $RealFloat $Real
-#define $RealFloat$class $Real$class
-#define $RealFloat$methods $Real$methods
-#define $RealFloat$new(...) $Real$new(__VA_ARGS__)
-
-// $Minus$RealFloat /////////////////////////////////////////////////////
-
-#define $Minus$RealFloat $Minus
-#define $Minus$RealFloat$class $Minus$class
-#define $Minus$RealFloat$methods $Minus$methods
-#define $Minus$RealFloat$new(...) $Minus$new(__VA_ARGS__)
-
-// $Rational ////////////////////////////////////////////////////////////
-
-struct $Rational {
-    $Rational$class $class;
-};
-
-struct $Rational$class {
-    char *$GCINFO;
-    int $class_id;
-    $Super$class $superclass;
-    void (*__init__)($Rational);
-    void (*__serialize__)($Rational,$Serial$state);
-    $Rational (*__deserialize__)($Rational,$Serial$state);
-    $bool (*__bool__)($Rational);
-    $str (*__str__)($Rational);
-    $str (*__repr__)($Rational);
-    $WORD (*__add__)($Rational, $WORD, $WORD);
-    $WORD (*__iadd__)($Rational, $WORD, $WORD);
-    $WORD (*__mul__)($Rational, $WORD, $WORD);
-    $WORD (*__imul__)($Rational, $WORD, $WORD);
-    $WORD (*__fromatom__)($Rational,$atom);
-    $complex (*__complx__)($Rational, $WORD);
-    //    $WORD (*__truediv__)($Rational, $WORD, $WORD);
-    $WORD (*__pow__)($Rational, $WORD, $WORD);
-    //    $WORD (*__itruediv__)($Rational, $WORD, $WORD);
-    $WORD (*__ipow__)($Rational, $WORD, $WORD);
-    $WORD (*__neg__)($Rational, $WORD);
-    $WORD (*__pos__)($Rational, $WORD);
-    $WORD (*real)($Rational, $WORD, $Real);
-    $WORD (*imag)($Rational, $WORD, $Real);
-    $WORD (*__abs__)($Rational, $WORD, $Real);
-    $WORD (*conjugate)($Rational, $WORD);
-    $float (*__float__)($Rational, $WORD);
-    $WORD (*__trunc__)($Rational, $WORD, $Integral);
-    $WORD (*__floor__)($Rational, $WORD, $Integral);
-    $WORD (*__ceil__)($Rational, $WORD, $Integral);
-    $WORD (*__round__)($Rational, $WORD, $int);
-    $WORD (*numerator)($Rational, $WORD, $Integral);
-    $WORD (*denominator)($Rational, $WORD, $Integral);
-};
-
-extern struct $Rational$class $Rational$methods;
-$Rational $Rational$new();
-
-// $Minus$Rational //////////////////////////////////////////////////////
-
-#define $Minus$Rational $Minus
-#define $Minus$Rational$class $Minus$class
-#define $Minus$Rational$methods $Minus$methods
-#define $Minus$Rational$new(...) $Minus$new(__VA_ARGS__)
-
-// $Integral ////////////////////////////////////////////////////////////
-
-struct $Integral {
-    $Integral$class $class;
-    $Minus w$Minus;
-    $Logical w$Logical;
-};
-
-struct $Integral$class {
-    char *$GCINFO;
-    int $class_id;
-    $Super$class $superclass;
-    void (*__init__)($Integral);
-    void (*__serialize__)($Integral,$Serial$state);
-    $Integral (*__deserialize__)($Integral,$Serial$state);
-    $bool (*__bool__)($Integral);
-    $str (*__str__)($Integral);
-    $str (*__repr__)($Integral);
-    $WORD (*__add__)($Integral, $WORD, $WORD);
-    $WORD (*__iadd__)($Integral, $WORD, $WORD);
-    $WORD (*__mul__)($Integral, $WORD, $WORD);
-    $WORD (*__imul__)($Integral, $WORD, $WORD);
-    $WORD (*__fromatom__)($Integral,$atom);
-    $complex (*__complx__)($Integral, $WORD);
-    //    $WORD (*__truediv__)($Integral, $WORD, $WORD);
-    $WORD (*__pow__)($Integral, $WORD, $WORD);
-    //    $WORD (*__itruediv__)($Integral, $WORD, $WORD);
-    $WORD (*__ipow__)($Integral, $WORD, $WORD);
-    $WORD (*__neg__)($Integral, $WORD);
-    $WORD (*__pos__)($Integral, $WORD);
-    $WORD (*real)($Integral, $WORD, $Real);
-    $WORD (*imag)($Integral, $WORD, $Real);
-    $WORD (*__abs__)($Integral, $WORD, $Real);
-    $WORD (*conjugate)($Integral, $WORD);
-    $float (*__float__)($Integral, $WORD);
-    $WORD (*__trunc__)($Integral, $WORD, $Integral);
-    $WORD (*__floor__)($Integral, $WORD, $Integral);
-    $WORD (*__ceil__)($Integral, $WORD, $Integral);
-    $WORD (*__round__)($Integral, $WORD, $int);
-    $WORD (*numerator)($Integral, $WORD, $Integral);
-    $WORD (*denominator)($Integral, $WORD, $Integral);
-    $int (*__int__)($Integral, $WORD);
-    $int (*__index__)($Integral, $WORD);
-    $tuple (*__divmod__)($Integral, $WORD, $WORD);
-    $WORD (*__floordiv__)($Integral, $WORD, $WORD);
-    $WORD (*__mod__)($Integral, $WORD, $WORD);
-    $WORD (*__lshift__)($Integral, $WORD, $int);
-    $WORD (*__rshift__)($Integral, $WORD, $int);
-    $WORD (*__ifloordiv__)($Integral, $WORD, $WORD);
-    $WORD (*__imod__)($Integral, $WORD, $WORD);
-    $WORD (*__ilshift__)($Integral, $WORD, $int);
-    $WORD (*__irshift__)($Integral, $WORD, $int);
-    $WORD (*__invert__)($Integral, $WORD);
-};
-
-$WORD $Integral$__ifloordiv__($Integral, $WORD, $WORD);
-$WORD $Integral$__imod__($Integral, $WORD, $WORD);
-$WORD $Integral$__ilshift__($Integral, $WORD, $int);
-$WORD $Integral$__irshift__($Integral, $WORD, $int);
-
-extern struct $Integral$class $Integral$methods;
-
-// $Minus$Integral ///////////////////////////////////////////////////////////
-
-#define $Minus$Integral $Minus
-#define $Minus$Integral$class $Minus$class
-#define $Minus$Integral$methods $Minus$methods
-#define $Minus$Integral$new(...) $Minus$new(__VA_ARGS__)
-
-// $Logical$Integral /////////////////////////////////////////////////////////
-
-#define $Logical$Integral $Logical
-#define $Logical$Integral$class $Logical$class
-#define $Logical$Integral$methods $Logical$methods
-#define $Logical$Integral$new(...) $Logical$new(__VA_ARGS__)
-
-// $Hashable$bool ////////////////////////////////////////////////////////////
-
-struct $Hashable$bool {
-    $Hashable$bool$class $class;
-};
-
-struct $Hashable$bool$class {
-    char *$GCINFO;
-    bool $class_id;
-    $Super$class $superclass;
-    void (*__init__)($Hashable$bool);
-    void (*__serialize__)($Hashable$bool,$Serial$state);
-    $Hashable$bool (*__deserialize__)($Hashable$bool,$Serial$state);
-    $bool (*__bool__)($Hashable$bool);
-    $str (*__str__)($Hashable$bool);
-    $str (*__repr__)($Hashable$bool);
-    $bool (*__eq__)($Hashable$bool, $bool, $bool);
-    $bool (*__ne__)($Hashable$bool, $bool, $bool);
-    $int (*__hash__)($Hashable$bool, $bool);
-};
-
-void $Hashable$bool$__init__ ($Hashable$bool);
-void $Hashable$bool$__serialize__($Hashable$bool, $Serial$state);
-$Hashable$bool $Hashable$bool$__deserialize__($Hashable$bool, $Serial$state);
-$bool $Hashable$bool$__eq__ ($Hashable$bool, $bool, $bool);
-$bool $Hashable$bool$__ne__ ($Hashable$bool, $bool, $bool);
-$int $Hashable$bool$__hash__ ($Hashable$bool, $bool);
-
-// $Sequence$list ////////////////////////////////////////////////////////////
-
-struct $Sequence$list {
-    $Sequence$list$class $class;
-    $Collection w$Collection;
-    $Times w$Times;
-};
-
-struct $Sequence$list$class {
-    char *$GCINFO;
-    int $class_id;
-    $Super$class $superclass;
-    void (*__init__)($Sequence$list);
-    void (*__serialize__)($Sequence$list,$Serial$state);
-    $Sequence$list (*__deserialize__)($Sequence$list,$Serial$state);
-    $bool (*__bool__)($Sequence$list);
-    $str (*__str__)($Sequence$list);
-    $str (*__repr__)($Sequence$list);
-    $WORD (*__getitem__)($Sequence$list, $list, $int);
-    void (*__setitem__)($Sequence$list, $list, $int, $WORD);
-    void (*__delitem__)($Sequence$list, $list, $int);
-    $list (*__getslice__)($Sequence$list, $list, $slice);
-    void (*__setslice__)($Sequence$list, $list, $Iterable, $slice, $WORD);
-    void (*__delslice__)($Sequence$list, $list, $slice);
-    $Iterator (*__reversed__)($Sequence$list, $list);
-    void (*insert)($Sequence$list, $list, $int, $WORD);
-    void (*append)($Sequence$list, $list, $WORD);
-    void (*reverse)($Sequence$list, $list);
-};
-
-void $Sequence$list$__init__ ($Sequence$list);
-void $Sequence$list$__serialize__($Sequence$list, $Serial$state);
-$Sequence$list $Sequence$list$__deserialize__($Sequence$list, $Serial$state);
-$WORD $Sequence$list$__getitem__ ($Sequence$list, $list, $int);
-void $Sequence$list$__setitem__ ($Sequence$list, $list, $int, $WORD);
-void $Sequence$list$__delitem__ ($Sequence$list, $list, $int);
-$list $Sequence$list$__getslice__ ($Sequence$list, $list, $slice);
-void $Sequence$list$__setslice__ ($Sequence$list, $list, $Iterable, $slice, $WORD);
-void $Sequence$list$__delslice__ ($Sequence$list, $list, $slice);
-$Iterator $Sequence$list$__reversed__ ($Sequence$list, $list);
-void $Sequence$list$insert ($Sequence$list, $list, $int, $WORD);
-void $Sequence$list$append ($Sequence$list, $list, $WORD);
-void $Sequence$list$reverse ($Sequence$list, $list);
-
-// $Collection$list ////////////////////////////////////////////////////////////
-
-struct $Collection$list {
-    $Collection$list$class $class;
-    $Sequence w$Sequence;
-};
-
-struct $Collection$list$class {
-    char *$GCINFO;
-    int $class_id;
-    $Super$class $superclass;
-    void (*__init__)($Collection$list, $Sequence);
-    void (*__serialize__)($Collection$list,$Serial$state);
-    $Collection$list (*__deserialize__)($Collection$list,$Serial$state);
-    $bool (*__bool__)($Collection$list);
-    $str (*__str__)($Collection$list);
-    $str (*__repr__)($Collection$list);
-    $Iterator (*__iter__)($Collection$list, $list);
-    $list (*__fromiter__)($Collection$list, $Iterable, $WORD);
-    $int (*__len__)($Collection$list, $list);
-};
-
-void $Collection$list$__init__ ($Collection$list, $Sequence);
-void $Collection$list$__serialize__($Collection$list, $Serial$state);
-$Collection$list $Collection$list$__deserialize__($Collection$list, $Serial$state);
-$Iterator $Collection$list$__iter__ ($Collection$list, $list);
-$list $Collection$list$__fromiter__ ($Collection$list, $Iterable, $WORD);
-$int $Collection$list$__len__ ($Collection$list, $list);
-
-// $Collection$Sequence ////////////////////////////////////////////////
-
-#define $Collection$Sequence$list $Collection$list
-#define $Collection$Sequence$list$class $Collection$list$class
-#define $Collection$Sequence$list$methods $Collection$list$methods
-#define $Collection$Sequence$list$new(...) $Collection$list$new(__VA_ARGS__)
-
-// $Times$list ////////////////////////////////////////////////////////////
-
-struct $Times$list {
-    $Times$list$class $class;
-    $Sequence w$Sequence;
-};
-
-struct $Times$list$class {
-    char *$GCINFO;
-    int $class_id;
-    $Super$class $superclass;
-    void (*__init__)($Times$list, $Sequence);
-    void (*__serialize__)($Times$list,$Serial$state);
-    $Times$list (*__deserialize__)($Times$list,$Serial$state);
-    $bool (*__bool__)($Times$list);
-    $str (*__str__)($Times$list);
-    $str (*__repr__)($Times$list);
-    $list (*__add__)($Times$list, $list, $list);
-    $list (*__iadd__)($Times$list, $list, $list);
-    $list (*__mul__)($Times$list, $list, $int);
-    $list (*__imul__)($Times$list, $list, $int);
-};
-
-void $Times$list$__init__ ($Times$list, $Sequence);
-void $Times$list$__serialize__($Times$list, $Serial$state);
-$Times$list $Times$list$__deserialize__($Times$list, $Serial$state);
-$list $Times$list$__add__ ($Times$list, $list, $list);
-$list $Times$list$__mul__($Times$list, $list, $int);
-
-// $Times$Sequence /////////////////////////////////////////////////////
-
-#define $Times$Sequence$list $Times$list
-#define $Times$Sequence$list$class $Times$list$class
-#define $Times$Sequence$list$methods $Times$list$methods
-#define $Times$Sequence$list$new(...) $Times$list$new(__VA_ARGS__)
-
-// $Container$list ////////////////////////////////////////////////////////////
-
-struct $Container$list {
-    $Container$list$class $class;
-    $Eq w$Eq$A$Container$list;
-};
-
-struct $Container$list$class {
-    char *$GCINFO;
-    int $class_id;
-    $Super$class $superclass;
-    void (*__init__)($Container$list, $Eq);
-    void (*__serialize__)($Container$list,$Serial$state);
-    $Container$list (*__deserialize__)($Container$list,$Serial$state);
-    $bool (*__bool__)($Container$list);
-    $str (*__str__)($Container$list);
-    $str (*__repr__)($Container$list);
-    $Iterator (*__iter__)($Container$list, $list);
-    $list (*__fromiter__)($Container$list, $Iterable, $WORD);
-    $int (*__len__)($Container$list, $list);
-    $bool (*__contains__)($Container$list, $list, $WORD);
-    $bool (*__containsnot__)($Container$list, $list, $WORD);
-};
-
-void $Container$list$__init__ ($Container$list, $Eq);
-void $Container$list$__serialize__($Container$list, $Serial$state);
-$Container$list $Container$list$__deserialize__($Container$list, $Serial$state);
-$Iterator $Container$list$__iter__ ($Container$list, $list);
-$list $Container$list$__fromiter__ ($Container$list, $Iterable, $WORD);
-$int $Container$list$__len__ ($Container$list, $list);
-$bool $Container$list$__contains__ ($Container$list, $list, $WORD);
-$bool $Container$list$__containsnot__ ($Container$list, $list, $WORD);
-
-
-// $Ord$list //////////////////////////////////////////////////////////////////////
-
-struct $Ord$list {
-    $Ord$list$class $class;
-    $Ord w$Ord$A$Ord$list;
-};
-
-struct $Ord$list$class {  
-    char *$GCINFO;
-    int $class_id;
-    $Super$class $superclass;
-    void (*__init__)($Ord$list,$Ord);
-    void (*__serialize__)($Ord$list,$Serial$state);
-    $Ord$list (*__deserialize__)($Ord$list,$Serial$state);
-    $bool (*__bool__)($Ord$list);
-    $str (*__str__)($Ord$list);
-    $str (*__repr__)($Ord$list);
-    $bool (*__eq__)($Ord$list, $list, $list);
-    $bool (*__ne__)($Ord$list, $list, $list);
-    $bool (*__lt__)($Ord$list, $list, $list);
-    $bool (*__le__)($Ord$list, $list, $list);
-    $bool (*__gt__)($Ord$list, $list, $list);
-    $bool (*__ge__)($Ord$list, $list, $list);
-};
-
-void $Ord$list$__init__ ($Ord$list, $Ord);
-void $Ord$list$__serialize__($Ord$list, $Serial$state);
-$Ord$list $Ord$list$__deserialize__($Ord$list, $Serial$state);
-$bool $Ord$list$__eq__ ($Ord$list, $list, $list);
-$bool $Ord$list$__ne__ ($Ord$list, $list, $list);
-$bool $Ord$list$__lt__ ($Ord$list, $list, $list);
-$bool $Ord$list$__le__ ($Ord$list, $list, $list);
-$bool $Ord$list$__gt__ ($Ord$list, $list, $list);
-$bool $Ord$list$__ge__ ($Ord$list, $list, $list);
-
-  
-// $Mapping$dict ////////////////////////////////////////////////////////////
-
-struct $Mapping$dict {
-    $Mapping$dict$class $class;
-    $Indexed w$Indexed;
-    $Eq w$Eq$A$Mapping$dict;
-    $Hashable w$Hashable$A$Mapping$dict;
-};
-
-struct $Mapping$dict$class {
-    char *$GCINFO;
-    int $class_id;
-    $Super$class $superclass;
-    void (*__init__)($Mapping$dict, $Hashable);
-    void (*__serialize__)($Mapping$dict,$Serial$state);
-    $Mapping$dict (*__deserialize__)($Mapping$dict,$Serial$state);
-    $bool (*__bool__)($Mapping$dict);
-    $str (*__str__)($Mapping$dict);
-    $str (*__repr__)($Mapping$dict);
-    $Iterator (*__iter__)($Mapping$dict, $dict);
-    $dict (*__fromiter__)($Mapping$dict, $Iterable, $WORD);
-    $int (*__len__)($Mapping$dict, $dict);
-    $bool (*__contains__)($Mapping$dict, $dict, $WORD);
-    $bool (*__containsnot__)($Mapping$dict, $dict, $WORD);
-    $WORD (*get)($Mapping$dict, $dict, $WORD, $WORD);
-    $Iterator (*keys)($Mapping$dict, $dict);
-    $Iterator (*values)($Mapping$dict, $dict);
-    $Iterator (*items)($Mapping$dict, $dict);
-    void (*update)($Mapping$dict, $dict, $Iterable, $WORD);
-    $tuple (*popitem)($Mapping$dict, $dict);
-    void (*setdefault)($Mapping$dict, $dict, $WORD, $WORD);
-};
-
-void $Mapping$dict$__init__ ($Mapping$dict, $Hashable);
-void $Mapping$dict$__serialize__($Mapping$dict, $Serial$state);
-$Mapping$dict $Mapping$dict$__deserialize__($Mapping$dict, $Serial$state);
-$Iterator $Mapping$dict$__iter__ ($Mapping$dict, $dict);
-$dict $Mapping$dict$__fromiter__ ($Mapping$dict, $Iterable, $WORD);
-$int $Mapping$dict$__len__ ($Mapping$dict, $dict);
-$bool $Mapping$dict$__contains__ ($Mapping$dict, $dict, $WORD);
-$bool $Mapping$dict$__containsnot__ ($Mapping$dict, $dict, $WORD);
-$WORD $Mapping$dict$get ($Mapping$dict, $dict, $WORD, $WORD);
-$Iterator $Mapping$dict$keys ($Mapping$dict, $dict);
-$Iterator $Mapping$dict$values ($Mapping$dict, $dict);
-$Iterator $Mapping$dict$items ($Mapping$dict, $dict);
-void $Mapping$dict$update ($Mapping$dict, $dict, $Iterable, $WORD);
-$tuple $Mapping$dict$popitem ($Mapping$dict, $dict);
-void $Mapping$dict$setdefault ($Mapping$dict, $dict, $WORD, $WORD);
-
-// $Indexed$dict ////////////////////////////////////////////////////////////
-
-struct $Indexed$dict {
-    $Indexed$dict$class $class;
-    $Mapping w$Mapping;
-    $Eq w$Eq$A$Mapping$dict;
-    $Hashable w$Hashable$A$Mapping$dict;
-};
-
-struct $Indexed$dict$class {
-    char *$GCINFO;
-    int $class_id;
-    $Super$class $superclass;
-    void (*__init__)($Indexed$dict, $Mapping, $Eq);
-    void (*__serialize__)($Indexed$dict,$Serial$state);
-    $Indexed$dict (*__deserialize__)($Indexed$dict,$Serial$state);
-    $bool (*__bool__)($Indexed$dict);
-    $str (*__str__)($Indexed$dict);
-    $str (*__repr__)($Indexed$dict);
-    $WORD (*__getitem__)($Indexed$dict, $dict, $WORD);
-    void (*__setitem__)($Indexed$dict, $dict, $WORD, $WORD);
-    void (*__delitem__)($Indexed$dict, $dict, $WORD);
-};
-
-void $Indexed$dict$__init__ ($Indexed$dict, $Mapping, $Eq);
-void $Indexed$dict$__serialize__($Indexed$dict, $Serial$state);
-$Indexed$dict $Indexed$dict$__deserialize__($Indexed$dict, $Serial$state);
-$WORD $Indexed$dict$__getitem__ ($Indexed$dict, $dict, $WORD);
-void $Indexed$dict$__setitem__ ($Indexed$dict, $dict, $WORD, $WORD);
-void $Indexed$dict$__delitem__ ($Indexed$dict, $dict, $WORD);
-
-// $Indexed$Mapping$dict /////////////////////////////////////////////////////////
-
-#define $Indexed$Mapping$dict $Indexed$dict
-#define $Indexed$Mapping$dict$class $Indexed$dict$class
-#define $Indexed$Mapping$dict$methods $Indexed$dict$methods
-#define $Indexed$Mapping$dict$new(...) $Indexed$dict$new(__VA_ARGS__)
-
-// $Ord$dict //////////////////////////////////////////////////////////////////////
-
-struct $Ord$dict {
-    $Ord$dict$class $class;
-    $Eq w$Eq$A$Ord$dict;
-    $Hashable w$Hashable$A$Ord$dict;
-    $Eq w$Eq$B$Ord$dict;
-};
-
-struct $Ord$dict$class {  
-    char *$GCINFO;
-    int $class_id;
-    $Super$class $superclass;
-    void (*__init__)($Ord$dict, $Hashable, $Eq);
-    void (*__serialize__)($Ord$dict,$Serial$state);
-    $Ord$dict (*__deserialize__)($Ord$dict,$Serial$state);
-    $bool (*__bool__)($Ord$dict);
-    $str (*__str__)($Ord$dict);
-    $str (*__repr__)($Ord$dict);
-    $bool (*__eq__)($Ord$dict, $dict, $dict);
-    $bool (*__ne__)($Ord$dict, $dict, $dict);
-    $bool (*__lt__)($Ord$dict, $dict, $dict);
-    $bool (*__le__)($Ord$dict, $dict, $dict);
-    $bool (*__gt__)($Ord$dict, $dict, $dict);
-    $bool (*__ge__)($Ord$dict, $dict, $dict);
-};
-
-void $Ord$dict$__init__ ($Ord$dict, $Hashable, $Eq);
-void $Ord$dict$__serialize__($Ord$dict, $Serial$state);
-$Ord$dict $Ord$dict$__deserialize__($Ord$dict, $Serial$state);
-$bool $Ord$dict$__eq__ ($Ord$dict, $dict, $dict);
-$bool $Ord$dict$__ne__ ($Ord$dict, $dict, $dict);
-$bool $Ord$dict$__lt__ ($Ord$dict, $dict, $dict);
-$bool $Ord$dict$__le__ ($Ord$dict, $dict, $dict);
-$bool $Ord$dict$__gt__ ($Ord$dict, $dict, $dict);
-$bool $Ord$dict$__ge__ ($Ord$dict, $dict, $dict);
-  
-// $Set$set ////////////////////////////////////////////////////////////
-
-struct $Set$set {
-    $Set$set$class $class;
-    $Ord w$Ord;
-    $Logical w$Logical;
-    $Minus w$Minus;
-    $Eq w$Eq$A$Set$set;
-    $Hashable w$Hashable$A$Set$set;
-};
-
-struct $Set$set$class {
-    char *$GCINFO;
-    int $class_id;
-    $Super$class $superclass;
-    void (*__init__)($Set$set, $Hashable);
-    void (*__serialize__)($Set$set,$Serial$state);
-    $Set$set (*__deserialize__)($Set$set,$Serial$state);
-    $bool (*__bool__)($Set$set);
-    $str (*__str__)($Set$set);
-    $str (*__repr__)($Set$set);
-    $Iterator (*__iter__)($Set$set, $set);
-    $set (*__fromiter__)($Set$set, $Iterable, $WORD);
-    $int (*__len__)($Set$set, $set);
-    $bool (*__contains__)($Set$set, $set, $WORD);
-    $bool (*__containsnot__)($Set$set, $set, $WORD);
-    $bool (*isdisjoint)($Set$set, $set, $set);
-    void (*add)($Set$set, $set, $WORD);
-    void (*discard)($Set$set, $set, $WORD);
-    $WORD (*pop)($Set$set, $set);
-};
-
-void $Set$set$__init__ ($Set$set, $Hashable);
-void $Set$set$__serialize__($Set$set, $Serial$state);
-$Set$set $Set$set$__deserialize__($Set$set, $Serial$state);
-$Iterator $Set$set$__iter__ ($Set$set, $set);
-$set $Set$set$__fromiter__ ($Set$set, $Iterable, $WORD);
-$int $Set$set$__len__ ($Set$set, $set);
-$bool $Set$set$__contains__ ($Set$set, $set, $WORD);
-$bool $Set$set$__containsnot__ ($Set$set, $set, $WORD);
-$bool $Set$set$isdisjoint ($Set$set, $set, $set);
-void $Set$set$add ($Set$set, $set, $WORD);
-void $Set$set$discard ($Set$set, $set, $WORD);
-$WORD $Set$set$pop ($Set$set, $set);
-
-// $Ord$set ////////////////////////////////////////////////////////////
-
-struct $Ord$set {
-    $Ord$set$class $class;
-    $Set w$Set;
-};
-
-struct $Ord$set$class {
-    char *$GCINFO;
-    int $class_id;
-    $Super$class $superclass;
-    void (*__init__)($Ord$set, $Set);
-    void (*__serialize__)($Ord$set,$Serial$state);
-    $Ord$set (*__deserialize__)($Ord$set,$Serial$state);
-    $bool (*__bool__)($Ord$set);
-    $str (*__str__)($Ord$set);
-    $str (*__repr__)($Ord$set);
-    $bool (*__eq__)($Ord$set, $set, $set);
-    $bool (*__ne__)($Ord$set, $set, $set);
-    $bool (*__lt__)($Ord$set, $set, $set);
-    $bool (*__le__)($Ord$set, $set, $set);
-    $bool (*__gt__)($Ord$set, $set, $set);
-    $bool (*__ge__)($Ord$set, $set, $set);
-};
-
-void $Ord$set$__init__ ($Ord$set, $Set);
-void $Ord$set$__serialize__($Ord$set, $Serial$state);
-$Ord$set $Ord$set$__deserialize__($Ord$set, $Serial$state);
-$bool $Ord$set$__eq__ ($Ord$set, $set, $set);
-$bool $Ord$set$__ne__ ($Ord$set, $set, $set);
-$bool $Ord$set$__lt__ ($Ord$set, $set, $set);
-$bool $Ord$set$__le__ ($Ord$set, $set, $set);
-$bool $Ord$set$__gt__ ($Ord$set, $set, $set);
-$bool $Ord$set$__ge__ ($Ord$set, $set, $set);
-
-// $Ord$Set$set ///////////////////////////////////////////////////////
-
-#define $Ord$Set$set $Ord
-#define $Ord$Set$set$class $Ord$set$class
-#define $Ord$Set$set$methods $Ord$set$methods
-#define $Ord$Set$set$new(...) $Ord$set$new(__VA_ARGS__)
-
-// $Logical$Set$set ///////////////////////////////////////////////////
-
-#define $Logical$Set$set $Logical$set
-#define $Logical$Set$set$class $Logical$set$class
-#define $Logical$Set$set$methods $Logical$set$methods
-#define $Logical$Set$set$new(...) $Logical$set$new(__VA_ARGS__)
-
-// $Minus$Set$set /////////////////////////////////////////////////////
-
-#define $Minus$Set$set $Minus$set
-#define $Minus$Set$set$class $Minus$set$class
-#define $Minus$Set$set$methods $Minus$set$methods
-#define $Minus$Set$set$new(...) $Minus$set$new(__VA_ARGS__)
-
-// $Logical$set ///////////////////////////////////////////////////////
-
-struct $Logical$set {
-    $Logical$set$class $class;
-    $Set w$Set;
-};
-
-struct $Logical$set$class {
-    char *$GCINFO;
-    int $class_id;
-    $Super$class $superclass;
-    void (*__init__)($Logical$set, $Set);
-    void (*__serialize__)($Logical$set,$Serial$state);
-    $Logical$set (*__deserialize__)($Logical$set,$Serial$state);
-    $bool (*__bool__)($Logical$set);
-    $str (*__str__)($Logical$set);
-    $str (*__repr__)($Logical$set);
-    $set (*__and__)($Logical$set, $set, $set);
-    $set (*__or__)($Logical$set, $set, $set);
-    $set (*__xor__)($Logical$set, $set, $set);
-    $set (*__iand__)($Logical$set, $set, $set);
-    $set (*__ior__)($Logical$set, $set, $set);
-    $set (*__ixor__)($Logical$set, $set, $set);
-};
-
-void $Logical$set$__init__ ($Logical$set, $Set);
-void $Logical$set$__serialize__($Logical$set, $Serial$state);
-$Logical$set $Logical$set$__deserialize__($Logical$set, $Serial$state);
-$set $Logical$set$__and__ ($Logical$set, $set, $set);
-$set $Logical$set$__or__ ($Logical$set, $set, $set);
-$set $Logical$set$__xor__ ($Logical$set, $set, $set);
-
-// $Minus$set ////////////////////////////////////////////////////////////
-
-struct $Minus$set {
-    $Minus$set$class $class;
-    $Set w$Set;
-};
-
-struct $Minus$set$class {
-    char *$GCINFO;
-    int $class_id;
-    $Super$class $superclass;
-    void (*__init__)($Minus$set, $Set);
-    void (*__serialize__)($Minus$set,$Serial$state);
-    $Minus$set (*__deserialize__)($Minus$set,$Serial$state);
-    $bool (*__bool__)($Minus$set);
-    $str (*__str__)($Minus$set);
-    $str (*__repr__)($Minus$set);
-    $set (*__sub__)($Minus$set, $set, $set);
-    $set (*__isub__)($Minus$set, $set, $set);
-};
-
-void $Minus$set$__init__ ($Minus$set, $Set);
-void $Minus$set$__serialize__($Minus$set, $Serial$state);
-$Minus$set $Minus$set$__deserialize__($Minus$set, $Serial$state);
-$set $Minus$set$__sub__ ($Minus$set, $set, $set);
-
-// $Iterable$Iterator ////////////////////////////////////////////////////////////
-
-struct $Iterable$Iterator {
-    $Iterable$Iterator$class $class;
-};
-
-struct $Iterable$Iterator$class {
-    char *$GCINFO;
-    int $class_id;
-    $Super$class $superclass;
-    void (*__init__)($Iterable$Iterator);
-    void (*__serialize__)($Iterable$Iterator,$Serial$state);
-    $Iterable$Iterator (*__deserialize__)($Iterable$Iterator,$Serial$state);
-    $bool (*__bool__)($Iterable$Iterator);
-    $str (*__str__)($Iterable$Iterator);
-    $str (*__repr__)($Iterable$Iterator);
-    $Iterator (*__iter__)($Iterable$Iterator, $Iterator);
-};
-
-void $Iterable$Iterator$__init__ ($Iterable$Iterator);
-void $Iterable$Iterator$__serialize__($Iterable$Iterator, $Serial$state);
-$Iterable$Iterator $Iterable$Iterator$__deserialize__($Iterable$Iterator, $Serial$state);
-$Iterator $Iterable$Iterator$__iter__ ($Iterable$Iterator, $Iterator);
-
- 
-// $Ord$str ////////////////////////////////////////////////////////////
-
-struct $Ord$str {
-    $Ord$str$class $class;
-};
-
-struct $Ord$str$class {
-    char *$GCINFO;
-    int $class_id;
-    $Super$class $superclass;
-    void (*__init__)($Ord$str);
-    void (*__serialize__)($Ord$str,$Serial$state);
-    $Ord$str (*__deserialize__)($Ord$str,$Serial$state);
-    $bool (*__bool__)($Ord$str);
-    $str (*__str__)($Ord$str);
-    $str (*__repr__)($Ord$str);
-    $bool (*__eq__)($Ord$str, $str, $str);
-    $bool (*__ne__)($Ord$str, $str, $str);
-    $bool (*__lt__)($Ord$str, $str, $str);
-    $bool (*__le__)($Ord$str, $str, $str);
-    $bool (*__gt__)($Ord$str, $str, $str);
-    $bool (*__ge__)($Ord$str, $str, $str);
-};
-
-void $Ord$str$__init__ ($Ord$str);
-void $Ord$str$__serialize__($Ord$str, $Serial$state);
-$Ord$str $Ord$str$__deserialize__($Ord$str, $Serial$state);
-$bool $Ord$str$__eq__ ($Ord$str, $str, $str);
-$bool $Ord$str$__ne__ ($Ord$str, $str, $str);
-$bool $Ord$str$__lt__ ($Ord$str, $str, $str);
-$bool $Ord$str$__le__ ($Ord$str, $str, $str);
-$bool $Ord$str$__gt__ ($Ord$str, $str, $str);
-$bool $Ord$str$__ge__ ($Ord$str, $str, $str);
-
-// $Container$str ////////////////////////////////////////////////////////////
-
-struct $Container$str {
-    $Container$str$class $class;
-};
-
-struct $Container$str$class {
-    char *$GCINFO;
-    int $class_id;
-    $Super$class $superclass;
-    void (*__init__)($Container$str);
-    void (*__serialize__)($Container$str,$Serial$state);
-    $Container$str (*__deserialize__)($Container$str,$Serial$state);
-    $bool (*__bool__)($Container$str);
-    $str (*__str__)($Container$str);
-    $str (*__repr__)($Container$str);
-    $Iterator (*__iter__)($Container$str, $str);
-    $str (*__fromiter__)($Container$str, $Iterable, $WORD);
-    $int (*__len__)($Container$str, $str);
-    $bool (*__contains__)($Container$str, $str, $str);
-    $bool (*__containsnot__)($Container$str, $str, $str);
-};
-
-void $Container$str$__init__ ($Container$str);
-void $Container$str$__serialize__($Container$str, $Serial$state);
-$Container$str $Container$str$__deserialize__($Container$str, $Serial$state);
-$Iterator $Container$str$__iter__ ($Container$str, $str);
-$int $Container$str$__len__ ($Container$str, $str);
-$bool $Container$str$__contains__ ($Container$str, $str, $str);
-$bool $Container$str$__containsnot__ ($Container$str, $str, $str);
-
-// $Sliceable$str ////////////////////////////////////////////////////////////
-
-struct $Sliceable$str {
-    $Sliceable$str$class $class;
-};
-
-struct $Sliceable$str$class {
-    char *$GCINFO;
-    int $class_id;
-    $Super$class $superclass;
-    void (*__init__)($Sliceable$str);
-    void (*__serialize__)($Sliceable$str,$Serial$state);
-    $Sliceable$str (*__deserialize__)($Sliceable$str,$Serial$state);
-    $bool (*__bool__)($Sliceable$str);
-    $str (*__str__)($Sliceable$str);
-    $str (*__repr__)($Sliceable$str);
-    $str (*__getitem__)($Sliceable$str, $str, $int);
-    void (*__setitem__)($Sliceable$str, $str, $int, $str);
-    void (*__delitem__)($Sliceable$str, $str, $int);
-    $str (*__getslice__)($Sliceable$str, $str, $slice);
-    void (*__setslice__)($Sliceable$str, $str, $Iterable, $slice, $WORD);
-    void (*__delslice__)($Sliceable$str, $str, $slice);
-};
-
-void $Sliceable$str$__init__ ($Sliceable$str);
-void $Sliceable$str$__serialize__($Sliceable$str, $Serial$state);
-$Sliceable$str $Sliceable$str$__deserialize__($Sliceable$str, $Serial$state);
-$str $Sliceable$str$__getitem__ ($Sliceable$str, $str, $int);
-void $Sliceable$str$__setitem__ ($Sliceable$str, $str, $int, $str);
-void $Sliceable$str$__delitem__ ($Sliceable$str, $str, $int);
-$str $Sliceable$str$__getslice__ ($Sliceable$str, $str, $slice);
-void $Sliceable$str$__setslice__ ($Sliceable$str, $str, $Iterable, $slice, $WORD);
-void $Sliceable$str$__delslice__ ($Sliceable$str, $str, $slice);
-
-// $Times$str ////////////////////////////////////////////////////////////
-
-struct $Times$str {
-    $Times$str$class $class;
-};
-
-struct $Times$str$class {
-    char *$GCINFO;
-    int $class_id;
-    $Super$class $superclass;
-    void (*__init__)($Times$str);
-    void (*__serialize__)($Times$str,$Serial$state);
-    $Times$str (*__deserialize__)($Times$str,$Serial$state);
-    $bool (*__bool__)($Times$str);
-    $str (*__str__)($Times$str);
-    $str (*__repr__)($Times$str);
-    $str (*__add__)($Times$str, $str, $str);
-    $str (*__iadd__)($Times$str, $str, $str);
-    $str (*__mul__)($Times$str, $str, $int);
-    $str (*__imul__)($Times$str, $str, $int);
-};
-
-void $Times$str$__init__ ($Times$str);
-void $Times$str$__serialize__($Times$str, $Serial$state);
-$Times$str $Times$str$__deserialize__($Times$str, $Serial$state);
-$bool $Times$str$__bool__($Times$str);
-$str $Times$str$__str__($Times$str);
-$str $Times$str$__add__ ($Times$str, $str, $str);
-$str $Times$str$__mul__($Times$str, $str, $int);
-
-// $Hashable$str ////////////////////////////////////////////////////////////
-
-struct $Hashable$str {
-    $Hashable$str$class $class;
-};
-
-struct $Hashable$str$class {
-    char *$GCINFO;
-    int $class_id;
-    $Super$class $superclass;
-    void (*__init__)($Hashable$str);
-    void (*__serialize__)($Hashable$str,$Serial$state);
-    $Hashable$str (*__deserialize__)($Hashable$str,$Serial$state);
-    $bool (*__bool__)($Hashable$str);
-    $str (*__str__)($Hashable$str);
-    $str (*__repr__)($Hashable$str);
-    $bool (*__eq__)($Hashable$str, $str, $str);
-    $bool (*__ne__)($Hashable$str, $str, $str);
-    $int (*__hash__)($Hashable$str, $str);
-};
-
-void $Hashable$str$__init__ ($Hashable$str);
-void $Hashable$str$__serialize__($Hashable$str, $Serial$state);
-$Hashable$str $Hashable$str$__deserialize__($Hashable$str, $Serial$state);
-$bool $Hashable$str$__eq__ ($Hashable$str, $str, $str);
-$bool $Hashable$str$__ne__ ($Hashable$str, $str, $str);
-$int $Hashable$str$__hash__ ($Hashable$str, $str);
-
-// $Integral$i64 ////////////////////////////////////////////////////////////
-
-struct $Integral$i64 {
-    $Integral$i64$class $class;
-    $Minus w$Minus;
-    $Logical w$Logical;
-};
-
-struct $Integral$i64$class {
-    char *$GCINFO;
-    int $class_id;
-    $Super$class $superclass;
-    void (*__init__)($Integral$i64);
-    void (*__serialize__)($Integral$i64,$Serial$state);
-    $Integral$i64 (*__deserialize__)($Integral$i64,$Serial$state);
-    $bool (*__bool__)($Integral$i64);
-    $str (*__str__)($Integral$i64);
-    $str (*__repr__)($Integral$i64);
-    $i64 (*__add__)($Integral$i64, $i64, $i64);
-    $i64 (*__iadd__)($Integral$i64, $i64, $i64);
-    $i64 (*__mul__)($Integral$i64, $i64, $i64);
-    $i64 (*__imul__)($Integral$i64, $i64, $i64);
-    $i64 (*__fromatom__)($Integral$i64,$atom);
-    $complex (*__complx__)($Integral$i64, $i64);
-    //    $i64 (*__truediv__)($Integral$i64, $i64, $i64);
-    $i64 (*__pow__)($Integral$i64, $i64, $i64);
-    //    $i64 (*__itruediv__)($Integral$i64, $i64, $i64);
-    $i64 (*__ipow__)($Integral$i64, $i64, $i64);
-    $i64 (*__neg__)($Integral$i64, $i64);
-    $i64 (*__pos__)($Integral$i64, $i64);
-    $WORD (*real)($Integral$i64, $i64, $Real);
-    $WORD (*imag)($Integral$i64, $i64, $Real);
-    $WORD (*__abs__)($Integral$i64, $i64, $Real);
-    $i64 (*conjugate)($Integral$i64, $i64);
-    $float (*__float__)($Integral$i64, $i64);
-    $WORD (*__trunc__)($Integral$i64, $i64, $Integral);
-    $WORD (*__floor__)($Integral$i64, $i64, $Integral);
-    $WORD (*__ceil__)($Integral$i64, $i64, $Integral);
-    $i64 (*__round__)($Integral$i64, $i64, $i64);
-    $WORD (*numerator)($Integral$i64, $i64, $Integral);
-    $WORD (*denominator)($Integral$i64, $i64, $Integral);
-    $i64 (*__int__)($Integral$i64, $int);
-    $i64 (*__index__)($Integral$i64, $int);
-    $tuple (*__divmod__)($Integral$i64, $i64, $i64);
-    $i64 (*__floordiv__)($Integral$i64, $i64, $i64);
-    $i64 (*__mod__)($Integral$i64, $i64, $i64);
-    $i64 (*__lshift__)($Integral$i64, $i64, $int);
-    $i64 (*__rshift__)($Integral$i64, $i64, $int);
-    $i64 (*__ifloordiv__)($Integral$i64, $i64, $i64);
-    $i64 (*__imod__)($Integral$i64, $i64, $i64);
-    $i64 (*__ilshift__)($Integral$i64, $i64, $int);
-    $i64 (*__irshift__)($Integral$i64, $i64, $int);
-    $i64 (*__invert__)($Integral$i64, $i64);
-};
-
-void $Integral$i64$__init__ ($Integral$i64);
-void $Integral$i64$__serialize__($Integral$i64, $Serial$state);
-$Integral$i64 $Integral$i64$__deserialize__($Integral$i64, $Serial$state);
-$i64 $Integral$i64$__add__($Integral$i64, $i64, $i64);
-$i64 $Integral$i64$__fromatom__($Integral$i64,$atom);
-$complex $Integral$i64$__complx__($Integral$i64, $i64);
-$i64 $Integral$i64$__mul__($Integral$i64, $i64, $i64);
-//$i64 $Integral$i64$__truediv__($Integral$i64, $i64, $i64);
-$i64 $Integral$i64$__pow__($Integral$i64, $i64, $i64);
-$i64 $Integral$i64$__neg__($Integral$i64, $i64);
-$i64 $Integral$i64$__pos__($Integral$i64, $i64);
-$WORD $Integral$i64$real($Integral$i64, $i64, $Real);
-$WORD $Integral$i64$imag($Integral$i64, $i64, $Real);
-$WORD $Integral$i64$__abs__($Integral$i64, $i64, $Real);
-$i64 $Integral$i64$conjugate($Integral$i64, $i64);
-$float $Integral$i64$__float__ ($Integral$i64, $i64);
-$WORD $Integral$i64$__trunc__ ($Integral$i64, $i64, $Integral);
-$WORD $Integral$i64$__floor__ ($Integral$i64, $i64, $Integral);
-$WORD $Integral$i64$__ceil__ ($Integral$i64, $i64, $Integral);
-$i64 $Integral$i64$__round__ ($Integral$i64, $i64, $i64);
-$WORD $Integral$i64$numerator ($Integral$i64, $i64, $Integral);
-$WORD $Integral$i64$denominator ($Integral$i64, $i64, $Integral);
-$i64 $Integral$i64$__int__ ($Integral$i64, $int);
-$i64 $Integral$i64$__index__ ($Integral$i64, $int);
-$tuple $Integral$i64$__divmod__ ($Integral$i64, $i64, $i64);
-$i64 $Integral$i64$__floordiv__ ($Integral$i64, $i64, $i64);
-$i64 $Integral$i64$__mod__ ($Integral$i64, $i64, $i64);
-$i64 $Integral$i64$__lshift__ ($Integral$i64, $i64, $int);
-$i64 $Integral$i64$__rshift__ ($Integral$i64, $i64, $int);
-$i64 $Integral$i64$__invert__ ($Integral$i64, $i64);
-
-// $Logical$i64 ////////////////////////////////////////////////////////////
-
-struct $Logical$i64 {
-    $Logical$i64$class $class;
-    $Integral w$Integral;
-};
-
-struct $Logical$i64$class {
-    char *$GCINFO;
-    int $class_id;
-    $Super$class $superclass;
-    void (*__init__)($Logical$i64, $Integral);
-    void (*__serialize__)($Logical$i64,$Serial$state);
-    $Logical$i64 (*__deserialize__)($Logical$i64,$Serial$state);
-    $bool (*__bool__)($Logical$i64);
-    $str (*__str__)($Logical$i64);
-    $str (*__repr__)($Logical$i64);
-    $i64 (*__and__)($Logical$i64, $i64, $i64);
-    $i64 (*__or__)($Logical$i64, $i64, $i64);
-    $i64 (*__xor__)($Logical$i64, $i64, $i64);
-    $i64 (*__iand__)($Logical$i64, $i64, $i64);
-    $i64 (*__ior__)($Logical$i64, $i64, $i64);
-    $i64 (*__ixor__)($Logical$i64, $i64, $i64);
-};
-
-void $Logical$i64$__init__ ($Logical$i64, $Integral);
-void $Logical$i64$__serialize__($Logical$i64, $Serial$state);
-$Logical$i64 $Logical$i64$__deserialize__($Logical$i64, $Serial$state);
-$i64 $Logical$i64$__and__ ($Logical$i64, $i64, $i64);
-$i64 $Logical$i64$__or__ ($Logical$i64, $i64, $i64);
-$i64 $Logical$i64$__xor__ ($Logical$i64, $i64, $i64);
-
-// $Minus$i64 ////////////////////////////////////////////////////////////
-
-struct $Minus$i64 {
-    $Minus$i64$class $class;
-    $Integral w$Integral;
-};
-
-struct $Minus$i64$class {
-    char *$GCINFO;
-    int $class_id;
-    $Super$class $superclass;
-    void (*__init__)($Minus$i64, $Integral);
-    void (*__serialize__)($Minus$i64,$Serial$state);
-    $Minus$i64 (*__deserialize__)($Minus$i64,$Serial$state);
-    $bool (*__bool__)($Minus$i64);
-    $str (*__str__)($Minus$i64);
-    $str (*__repr__)($Minus$i64);
-    $i64 (*__sub__)($Minus$i64, $i64, $i64);
-    $i64 (*__isub__)($Minus$i64, $i64, $i64);
-};
-
-void $Minus$i64$__init__ ($Minus$i64, $Integral);
-void $Minus$i64$__serialize__($Minus$i64, $Serial$state);
-$Minus$i64 $Minus$i64$__deserialize__($Minus$i64, $Serial$state);
-$i64 $Minus$i64$__sub__ ($Minus$i64, $i64, $i64);
-
-// $Div$i64 ////////////////////////////////////////////////////////////
-
-struct $Div$i64 {
-    $Div$i64$class $class;
-};
-
-struct $Div$i64$class {
-    char *$GCINFO;
-    int $class_id;
-    $Super$class $superclass;
-    void (*__init__)($Div$i64);
-    void (*__serialize__)($Div$i64,$Serial$state);
-    $Div$i64 (*__deserialize__)($Div$i64,$Serial$state);
-    $bool (*__bool__)($Div$i64);
-    $str (*__str__)($Div$i64);
-    $str (*__repr__)($Div$i64);
-    $float (*__truediv__)($Div$i64, $i64, $i64);
-    $float (*__itruediv__)($Div$i64, $i64, $i64);
-};
-
-$float $Div$i64$__truediv__ ($Div$i64, $i64, $i64);
-$float $Div$i64$__itruediv__ ($Div$i64, $i64, $i64);
-
-// $Ord$i64 /////////////////////////////////////////////////////////////////
-
-struct $Ord$i64 {
-    $Ord$i64$class $class;
-};
-
-struct $Ord$i64$class {  
-    char *$GCINFO;
-    int $class_id;
-    $Super$class $superclass;
-    void (*__init__)($Ord$i64);
-    void (*__serialize__)($Ord$i64,$Serial$state);
-    $Ord$i64 (*__deserialize__)($Ord$i64,$Serial$state);
-    $bool (*__bool__)($Ord$i64);
-    $str (*__str__)($Ord$i64);
-    $str (*__repr__)($Ord$i64);
-    $bool (*__eq__)($Ord$i64, $i64, $i64);
-    $bool (*__ne__)($Ord$i64, $i64, $i64);
-    $bool (*__lt__)($Ord$i64, $i64, $i64);
-    $bool (*__le__)($Ord$i64, $i64, $i64);
-    $bool (*__gt__)($Ord$i64, $i64, $i64);
-    $bool (*__ge__)($Ord$i64, $i64, $i64);
-};
-
-void $Ord$i64$__init__ ($Ord$i64);
-void $Ord$i64$__serialize__($Ord$i64, $Serial$state);
-$Ord$i64 $Ord$i64$__deserialize__($Ord$i64, $Serial$state);
-$bool $Ord$i64$__eq__ ($Ord$i64, $i64, $i64);
-$bool $Ord$i64$__ne__ ($Ord$i64, $i64, $i64);
-$bool $Ord$i64$__lt__ ($Ord$i64, $i64, $i64);
-$bool $Ord$i64$__le__ ($Ord$i64, $i64, $i64);
-$bool $Ord$i64$__gt__ ($Ord$i64, $i64, $i64);
-$bool $Ord$i64$__ge__ ($Ord$i64, $i64, $i64);
-  
-
-// $Hashable$i64 ////////////////////////////////////////////////////////////
-
-struct $Hashable$i64 {
-    $Hashable$i64$class $class;
-};
-
-struct $Hashable$i64$class {
-    char *$GCINFO;
-    int $class_id;
-    $Super$class $superclass;
-    void (*__init__)($Hashable$i64);
-    void (*__serialize__)($Hashable$i64,$Serial$state);
-    $Hashable$i64 (*__deserialize__)($Hashable$i64,$Serial$state);
-    $bool (*__bool__)($Hashable$i64);
-    $str (*__str__)($Hashable$i64);
-    $str (*__repr__)($Hashable$i64);
-    $bool (*__eq__)($Hashable$i64, $i64, $i64);
-    $bool (*__ne__)($Hashable$i64, $i64, $i64);
-    $int (*__hash__)($Hashable$i64, $i64);
-};
-
-void $Hashable$i64$__init__ ($Hashable$i64);
-void $Hashable$i64$__serialize__($Hashable$i64, $Serial$state);
-$Hashable$i64 $Hashable$i64$__deserialize__($Hashable$i64, $Serial$state);
-$bool $Hashable$i64$__eq__ ($Hashable$i64, $i64, $i64);
-$bool $Hashable$i64$__ne__ ($Hashable$i64, $i64, $i64);
-$int $Hashable$i64$__hash__ ($Hashable$i64, $i64);
-
-// $Integral$int ////////////////////////////////////////////////////////////
-
-struct $Integral$int {
-    $Integral$int$class $class;
-    $Minus w$Minus;
-    $Logical w$Logical;
-};
-
-struct $Integral$int$class {
-    char *$GCINFO;
-    int $class_id;
-    $Super$class $superclass;
-    void (*__init__)($Integral$int);
-    void (*__serialize__)($Integral$int,$Serial$state);
-    $Integral$int (*__deserialize__)($Integral$int,$Serial$state);
-    $bool (*__bool__)($Integral$int);
-    $str (*__str__)($Integral$int);
-    $str (*__repr__)($Integral$int);
-    $int (*__add__)($Integral$int, $int, $int);
-    $int (*__iadd__)($Integral$int, $int, $int);
-    $int (*__mul__)($Integral$int, $int, $int);
-    $int (*__imul__)($Integral$int, $int, $int);
-    $int (*__fromatom__)($Integral$int,$atom);
-    $complex (*__complx__)($Integral$int, $int);
-    //    $int (*__truediv__)($Integral$int, $int, $int);
-    $int (*__pow__)($Integral$int, $int, $int);
-    //    $int (*__itruediv__)($Integral$int, $int, $int);
-    $int (*__ipow__)($Integral$int, $int, $int);
-    $int (*__neg__)($Integral$int, $int);
-    $int (*__pos__)($Integral$int, $int);
-    $WORD (*real)($Integral$int, $int, $Real);
-    $WORD (*imag)($Integral$int, $int, $Real);
-    $WORD (*__abs__)($Integral$int, $int, $Real);
-    $int (*conjugate)($Integral$int, $int);
-    $float (*__float__)($Integral$int, $int);
-    $WORD (*__trunc__)($Integral$int, $int, $Integral);
-    $WORD (*__floor__)($Integral$int, $int, $Integral);
-    $WORD (*__ceil__)($Integral$int, $int, $Integral);
-    $int (*__round__)($Integral$int, $int, $int);
-    $WORD (*numerator)($Integral$int, $int, $Integral);
-    $WORD (*denominator)($Integral$int, $int, $Integral);
-    $int (*__int__)($Integral$int, $int);
-    $int (*__index__)($Integral$int, $int);
-    $tuple (*__divmod__)($Integral$int, $int, $int);
-    $int (*__floordiv__)($Integral$int, $int, $int);
-    $int (*__mod__)($Integral$int, $int, $int);
-    $int (*__lshift__)($Integral$int, $int, $int);
-    $int (*__rshift__)($Integral$int, $int, $int);
-    $int (*__ifloordiv__)($Integral$int, $int, $int);
-    $int (*__imod__)($Integral$int, $int, $int);
-    $int (*__ilshift__)($Integral$int, $int, $int);
-    $int (*__irshift__)($Integral$int, $int, $int);
-    $int (*__invert__)($Integral$int, $int);
-};
-
-void $Integral$int$__init__ ($Integral$int);
-void $Integral$int$__serialize__($Integral$int, $Serial$state);
-$Integral$int $Integral$int$__deserialize__($Integral$int, $Serial$state);
-$int $Integral$int$__add__($Integral$int, $int, $int);
-$int $Integral$int$__fromatom__($Integral$int,$atom);
-$complex $Integral$int$__complx__($Integral$int, $int);
-$int $Integral$int$__mul__($Integral$int, $int, $int);
-//$int $Integral$int$__truediv__($Integral$int, $int, $int);
-$int $Integral$int$__pow__($Integral$int, $int, $int);
-$int $Integral$int$__neg__($Integral$int, $int);
-$int $Integral$int$__pos__($Integral$int, $int);
-$WORD $Integral$int$real($Integral$int, $int, $Real);
-$WORD $Integral$int$imag($Integral$int, $int, $Real);
-$WORD $Integral$int$__abs__($Integral$int, $int, $Real);
-$int $Integral$int$conjugate($Integral$int, $int);
-$float $Integral$int$__float__ ($Integral$int, $int);
-$WORD $Integral$int$__trunc__ ($Integral$int, $int, $Integral);
-$WORD $Integral$int$__floor__ ($Integral$int, $int, $Integral);
-$WORD $Integral$int$__ceil__ ($Integral$int, $int, $Integral);
-$int $Integral$int$__round__ ($Integral$int, $int, $int);
-$WORD $Integral$int$numerator ($Integral$int, $int, $Integral);
-$WORD $Integral$int$denominator ($Integral$int, $int, $Integral);
-$int $Integral$int$__int__ ($Integral$int, $int);
-$int $Integral$int$__index__ ($Integral$int, $int);
-$tuple $Integral$int$__divmod__ ($Integral$int, $int, $int);
-$int $Integral$int$__floordiv__ ($Integral$int, $int, $int);
-$int $Integral$int$__mod__ ($Integral$int, $int, $int);
-$int $Integral$int$__lshift__ ($Integral$int, $int, $int);
-$int $Integral$int$__rshift__ ($Integral$int, $int, $int);
-$int $Integral$int$__invert__ ($Integral$int, $int);
-
-// $Logical$int ////////////////////////////////////////////////////////////
-
-struct $Logical$int {
-    $Logical$int$class $class;
-    $Integral w$Integral;
-};
-
-struct $Logical$int$class {
-    char *$GCINFO;
-    int $class_id;
-    $Super$class $superclass;
-    void (*__init__)($Logical$int, $Integral);
-    void (*__serialize__)($Logical$int,$Serial$state);
-    $Logical$int (*__deserialize__)($Logical$int,$Serial$state);
-    $bool (*__bool__)($Logical$int);
-    $str (*__str__)($Logical$int);
-    $str (*__repr__)($Logical$int);
-    $int (*__and__)($Logical$int, $int, $int);
-    $int (*__or__)($Logical$int, $int, $int);
-    $int (*__xor__)($Logical$int, $int, $int);
-    $int (*__iand__)($Logical$int, $int, $int);
-    $int (*__ior__)($Logical$int, $int, $int);
-    $int (*__ixor__)($Logical$int, $int, $int);
-};
-
-void $Logical$int$__init__ ($Logical$int, $Integral);
-void $Logical$int$__serialize__($Logical$int, $Serial$state);
-$Logical$int $Logical$int$__deserialize__($Logical$int, $Serial$state);
-$int $Logical$int$__and__ ($Logical$int, $int, $int);
-$int $Logical$int$__or__ ($Logical$int, $int, $int);
-$int $Logical$int$__xor__ ($Logical$int, $int, $int);
-
-// $Logical$Integral$int /////////////////////////////////////////////////
-
-#define $Logical$Integral$int $Logical$int
-#define $Logical$Integral$int$class $Logical$int$class
-#define $Logical$Integral$int$methods $Logical$int$methods
-#define $Logical$Integral$int$new(...) $Logical$int$new(__VA_ARGS__)
-
-// $Minus$int ////////////////////////////////////////////////////////////
-
-struct $Minus$int {
-    $Minus$int$class $class;
-    $Integral w$Integral;
-};
-
-struct $Minus$int$class {
-    char *$GCINFO;
-    int $class_id;
-    $Super$class $superclass;
-    void (*__init__)($Minus$int, $Integral);
-    void (*__serialize__)($Minus$int,$Serial$state);
-    $Minus$int (*__deserialize__)($Minus$int,$Serial$state);
-    $bool (*__bool__)($Minus$int);
-    $str (*__str__)($Minus$int);
-    $str (*__repr__)($Minus$int);
-    $int (*__sub__)($Minus$int, $int, $int);
-    $int (*__isub__)($Minus$int, $int, $int);
-};
-
-void $Minus$int$__init__ ($Minus$int, $Integral);
-void $Minus$int$__serialize__($Minus$int, $Serial$state);
-$Minus$int $Minus$int$__deserialize__($Minus$int, $Serial$state);
-$int $Minus$int$__sub__ ($Minus$int, $int, $int);
-
-// $Minus$Integral$int ///////////////////////////////////////////////////////////
-
-#define $Minus$Integral$int $Minus$int
-#define $Minus$Integral$int$class $Minus$int$class
-#define $Minus$Integral$int$methods $Minus$int$methods
-#define $Minus$Integral$int$new(...) $Minus$int$new(__VA_ARGS__)
-
-// $Div$int ////////////////////////////////////////////////////////////
-
-struct $Div$int {
-    $Div$int$class $class;
-};
-
-struct $Div$int$class {
-    char *$GCINFO;
-    int $class_id;
-    $Super$class $superclass;
-    void (*__init__)($Div$int);
-    void (*__serialize__)($Div$int,$Serial$state);
-    $Div$int (*__deserialize__)($Div$int,$Serial$state);
-    $bool (*__bool__)($Div$int);
-    $str (*__str__)($Div$int);
-    $str (*__repr__)($Div$int);
-    $float (*__truediv__)($Div$int, $int, $int);
-    $float (*__itruediv__)($Div$int, $int, $int);
-};
-
-$float $Div$int$__truediv__ ($Div$int, $int, $int);
-$float $Div$int$__itruediv__ ($Div$int, $int, $int);
-
-// $Ord$int /////////////////////////////////////////////////////////////////
-
-struct $Ord$int {
-    $Ord$int$class $class;
-};
-
-struct $Ord$int$class {  
-    char *$GCINFO;
-    int $class_id;
-    $Super$class $superclass;
-    void (*__init__)($Ord$int);
-    void (*__serialize__)($Ord$int,$Serial$state);
-    $Ord$int (*__deserialize__)($Ord$int,$Serial$state);
-    $bool (*__bool__)($Ord$int);
-    $str (*__str__)($Ord$int);
-    $str (*__repr__)($Ord$int);
-    $bool (*__eq__)($Ord$int, $int, $int);
-    $bool (*__ne__)($Ord$int, $int, $int);
-    $bool (*__lt__)($Ord$int, $int, $int);
-    $bool (*__le__)($Ord$int, $int, $int);
-    $bool (*__gt__)($Ord$int, $int, $int);
-    $bool (*__ge__)($Ord$int, $int, $int);
-};
-
-void $Ord$int$__init__ ($Ord$int);
-void $Ord$int$__serialize__($Ord$int, $Serial$state);
-$Ord$int $Ord$int$__deserialize__($Ord$int, $Serial$state);
-$bool $Ord$int$__eq__ ($Ord$int, $int, $int);
-$bool $Ord$int$__ne__ ($Ord$int, $int, $int);
-$bool $Ord$int$__lt__ ($Ord$int, $int, $int);
-$bool $Ord$int$__le__ ($Ord$int, $int, $int);
-$bool $Ord$int$__gt__ ($Ord$int, $int, $int);
-$bool $Ord$int$__ge__ ($Ord$int, $int, $int);
-  
-
-// $Hashable$int ////////////////////////////////////////////////////////////
-
-struct $Hashable$int {
-    $Hashable$int$class $class;
-};
-
-struct $Hashable$int$class {
-    char *$GCINFO;
-    int $class_id;
-    $Super$class $superclass;
-    void (*__init__)($Hashable$int);
-    void (*__serialize__)($Hashable$int,$Serial$state);
-    $Hashable$int (*__deserialize__)($Hashable$int,$Serial$state);
-    $bool (*__bool__)($Hashable$int);
-    $str (*__str__)($Hashable$int);
-    $str (*__repr__)($Hashable$int);
-    $bool (*__eq__)($Hashable$int, $int, $int);
-    $bool (*__ne__)($Hashable$int, $int, $int);
-    $int (*__hash__)($Hashable$int, $int);
-};
-
-void $Hashable$int$__init__ ($Hashable$int);
-void $Hashable$int$__serialize__($Hashable$int, $Serial$state);
-$Hashable$int $Hashable$int$__deserialize__($Hashable$int, $Serial$state);
-$bool $Hashable$int$__eq__ ($Hashable$int, $int, $int);
-$bool $Hashable$int$__ne__ ($Hashable$int, $int, $int);
-$int $Hashable$int$__hash__ ($Hashable$int, $int);
-
-// $Real$float ////////////////////////////////////////////////////////////
-
-struct $Real$float {
-    $Real$float$class $class;
-    $Minus w$Minus;
-};
-
-struct $Real$float$class {
-    char *$GCINFO;
-    int $class_id;
-    $Super$class $superclass;
-    void (*__init__)($Real$float);
-    void (*__serialize__)($Real$float,$Serial$state);
-    $Real$float (*__deserialize__)($Real$float,$Serial$state);
-    $bool (*__bool__)($Real$float);
-    $str (*__str__)($Real$float);
-    $str (*__repr__)($Real$float);
-    $float (*__add__)($Real$float, $float, $float);
-    $float (*__iadd__)($Real$float, $float, $float);
-    $float (*__mul__)($Real$float, $float, $float);
-    $float (*__imul__)($Real$float, $float, $float);
-    $float (*__fromatom__)($Real$float,$atom);
-    $complex (*__complx__)($Real$float, $float);
-    //    $float (*__truediv__)($Real$float, $float, $float);
-    $float (*__pow__)($Real$float, $float, $float);
-    //    $float (*__itruediv__)($Real$float, $float, $float);
-    $float (*__ipow__)($Real$float, $float, $float);
-    $float (*__neg__)($Real$float, $float);
-    $float (*__pos__)($Real$float, $float);
-    $WORD (*real)($Real$float, $float, $Real);
-    $WORD (*imag)($Real$float, $float, $Real);
-    $WORD (*__abs__)($Real$float, $float, $Real);
-    $float (*conjugate)($Real$float, $float);
-    $float (*__float__)($Real$float, $float);
-    $WORD (*__trunc__)($Real$float, $float, $Integral);
-    $WORD (*__floor__)($Real$float, $float, $Integral);
-    $WORD (*__ceil__)($Real$float, $float, $Integral);
-    $float (*__round__)($Real$float, $float, $int);
-};
-
-void $Real$float$__init__ ($Real$float);
-void $Real$float$__serialize__($Real$float, $Serial$state);
-$Real$float $Real$float$__deserialize__($Real$float, $Serial$state);
-$float $Real$float$__add__($Real$float, $float, $float);
-$float $Real$float$__fromatom__($Real$float,$atom);
-$complex $Real$float$__complx__($Real$float, $float);
-$float $Real$float$__mul__($Real$float, $float, $float);
-//$float $Real$float$__truediv__($Real$float, $float, $float);
-$float $Real$float$__pow__($Real$float, $float, $float);
-$float $Real$float$__neg__($Real$float, $float);
-$float $Real$float$__pos__($Real$float, $float);
-$WORD $Real$float$real($Real$float, $float, $Real);
-$WORD $Real$float$imag($Real$float, $float, $Real);
-$WORD $Real$float$__abs__($Real$float, $float, $Real);
-$float $Real$float$conjugate($Real$float, $float);
-$float $Real$float$__float__ ($Real$float, $float);
-$WORD $Real$float$__trunc__ ($Real$float, $float, $Integral);
-$WORD $Real$float$__floor__ ($Real$float, $float, $Integral);
-$WORD $Real$float$__ceil__ ($Real$float, $float, $Integral);
-$float $Real$float$__round__ ($Real$float, $float, $int);
-
-// $Div$float ////////////////////////////////////////////////////////////
-
-struct $Div$float {
-    $Div$float$class $class;
-};
-
-struct $Div$float$class {
-    char *$GCINFO;
-    int $class_id;
-    $Super$class $superclass;
-    void (*__init__)($Div$float);
-    void (*__serialize__)($Div$float,$Serial$state);
-    $Div$float (*__deserialize__)($Div$float,$Serial$state);
-    $bool (*__bool__)($Div$float);
-    $str (*__str__)($Div$float);
-    $str (*__repr__)($Div$float);
-    $float (*__truediv__)($Div$float, $float, $float);
-    $float (*__itruediv__)($Div$float, $float, $float);
-};
-
-$float $Div$float$__truediv__ ($Div$float, $float, $float);
-$float $Div$float$__itruediv__ ($Div$float, $float, $float);
-
-// $Minus$float ////////////////////////////////////////////////////////////
-
-struct $Minus$float {
-    $Minus$float$class $class;
-    $Real w$Real;
-};
-
-struct $Minus$float$class {
-    char *$GCINFO;
-    int $class_id;
-    $Super$class $superclass;
-    void (*__init__)($Minus$float, $Real);
-    void (*__serialize__)($Minus$float,$Serial$state);
-    $Minus$float (*__deserialize__)($Minus$float,$Serial$state);
-    $bool (*__bool__)($Minus$float);
-    $str (*__str__)($Minus$float);
-    $str (*__repr__)($Minus$float);
-    $float (*__sub__)($Minus$float, $float, $float);
-    $float (*__isub__)($Minus$float, $float, $float);
-};
-
-void $Minus$float$__init__ ($Minus$float, $Real);
-void $Minus$float$__serialize__($Minus$float, $Serial$state);
-$Minus$float $Minus$float$__deserialize__($Minus$float, $Serial$state);
-$float $Minus$float$__sub__ ($Minus$float, $float, $float);
-
-// $Ord$float /////////////////////////////////////////////////////////////////
-
-struct $Ord$float {
-    $Ord$float$class $class;
-};
-
-struct $Ord$float$class {
-    char *$GCINFO;
-    int $class_id;
-    $Super$class $superclass;
-    void (*__init__)($Ord$float);
-    void (*__serialize__)($Ord$float,$Serial$state);
-    $Ord$float (*__deserialize__)($Ord$float,$Serial$state);
-    $bool (*__bool__)($Ord$float);
-    $str (*__str__)($Ord$float);
-    $str (*__repr__)($Ord$float);
-    $bool (*__eq__)($Ord$float, $float, $float);
-    $bool (*__ne__)($Ord$float, $float, $float);
-    $bool (*__lt__)($Ord$float, $float, $float);
-    $bool (*__le__)($Ord$float, $float, $float);
-    $bool (*__gt__)($Ord$float, $float, $float);
-    $bool (*__ge__)($Ord$float, $float, $float);
-};
-
-void $Ord$float$__init__ ($Ord$float);
-void $Ord$float$__serialize__($Ord$float, $Serial$state);
-$Ord$float $Ord$float$__deserialize__($Ord$float, $Serial$state);
-$bool $Ord$float$__eq__ ($Ord$float, $float, $float);
-$bool $Ord$float$__ne__ ($Ord$float, $float, $float);
-$bool $Ord$float$__lt__ ($Ord$float, $float, $float);
-$bool $Ord$float$__le__ ($Ord$float, $float, $float);
-$bool $Ord$float$__gt__ ($Ord$float, $float, $float);
-$bool $Ord$float$__ge__ ($Ord$float, $float, $float);
-
-// $Hashable$float ////////////////////////////////////////////////////////////
-
-struct $Hashable$float {
-    $Hashable$float$class $class;
-};
-
-struct $Hashable$float$class {
-    char *$GCINFO;
-    int $class_id;
-    $Super$class $superclass;
-    void (*__init__)($Hashable$float);
-    void (*__serialize__)($Hashable$float,$Serial$state);
-    $Hashable$float (*__deserialize__)($Hashable$float,$Serial$state);
-    $bool (*__bool__)($Hashable$float);
-    $str (*__str__)($Hashable$float);
-    $str (*__repr__)($Hashable$float);
-    $bool (*__eq__)($Hashable$float, $float, $float);
-    $bool (*__ne__)($Hashable$float, $float, $float);
-    $int (*__hash__)($Hashable$float, $float);
-};
-
-void $Hashable$float$__init__ ($Hashable$float);
-void $Hashable$float$__serialize__($Hashable$float, $Serial$state);
-$Hashable$float $Hashable$float$__deserialize__($Hashable$float, $Serial$state);
-$bool $Hashable$float$__eq__ ($Hashable$float, $float, $float);
-$bool $Hashable$float$__ne__ ($Hashable$float, $float, $float);
-$int $Hashable$float$__hash__ ($Hashable$float, $float);
-
-// $Number$complex ////////////////////////////////////////////////////////////
-
-struct $Number$complex {
-    $Number$complex$class $class;
-    $Minus w$Minus;
-};
-
-struct $Number$complex$class {
-    char *$GCINFO;
-    int $class_id;
-    $Super$class $superclass;
-    void (*__init__)($Number$complex);
-    void (*__serialize__)($Number$complex,$Serial$state);
-    $Number$complex (*__deserialize__)($Number$complex,$Serial$state);
-    $bool (*__bool__)($Number$complex);
-    $str (*__str__)($Number$complex);
-    $str (*__repr__)($Number$complex);
-    $complex (*__add__)($Number$complex, $complex, $complex);
-    $complex (*__iadd__)($Number$complex, $complex, $complex);
-    $complex (*__mul__)($Number$complex, $complex, $complex);
-    $complex (*__imul__)($Number$complex, $complex, $complex);
-    $complex (*__fromatom__)($Number$complex,$atom);
-    $complex (*__complx__)($Number$complex, $complex);
-    //    $complex (*__truediv__)($Number$complex, $complex, $complex);
-    $complex (*__pow__)($Number$complex, $complex, $complex);
-    //    $complex (*__itruediv__)($Number$complex, $complex, $complex);
-    $complex (*__ipow__)($Number$complex, $complex, $complex);
-    $complex (*__neg__)($Number$complex, $complex);
-    $complex (*__pos__)($Number$complex, $complex);
-    $WORD (*real)($Number$complex, $complex, $Real);
-    $WORD (*imag)($Number$complex, $complex, $Real);
-    $WORD (*__abs__)($Number$complex, $complex, $Real);
-    $complex (*conjugate)($Number$complex, $complex);
-};
-
-void $Number$complex$__init__ ($Number$complex);
-void $Number$complex$__serialize__($Number$complex, $Serial$state);
-$Number$complex $Number$complex$__deserialize__($Number$complex, $Serial$state);
-$complex $Number$complex$__add__ ($Number$complex, $complex, $complex);
-$complex $Number$complex$__fromatom__($Number$complex,$atom);
-$complex $Number$complex$__complx__ ($Number$complex, $complex);
-$complex $Number$complex$__mul__ ($Number$complex, $complex, $complex);
-//$complex $Number$complex$__truediv__ ($Number$complex, $complex, $complex);
-$complex $Number$complex$__pow__ ($Number$complex, $complex, $complex);
-$complex $Number$complex$__neg__ ($Number$complex, $complex);
-$complex $Number$complex$__pos__ ($Number$complex, $complex);
-$WORD $Number$complex$real ($Number$complex, $complex, $Real);
-$WORD $Number$complex$imag ($Number$complex, $complex, $Real);
-$WORD $Number$complex$__abs__ ($Number$complex, $complex, $Real);
-$complex $Number$complex$conjugate ($Number$complex, $complex);
-
-// $Div$complex ////////////////////////////////////////////////////////////
-
-struct $Div$complex {
-    $Div$complex$class $class;
-};
-
-struct $Div$complex$class {
-    char *$GCINFO;
-    int $class_id;
-    $Super$class $superclass;
-    void (*__init__)($Div$complex);
-    void (*__serialize__)($Div$complex,$Serial$state);
-    $Div$complex (*__deserialize__)($Div$complex,$Serial$state);
-    $bool (*__bool__)($Div$complex);
-    $str (*__str__)($Div$complex);
-    $str (*__repr__)($Div$complex);
-    $complex (*__truediv__)($Div$complex, $complex, $complex);
-    $complex (*__itruediv__)($Div$complex, $complex, $complex);
-};
-
-$complex $Div$complex$__truediv__ ($Div$complex, $complex, $complex);
-$complex $Div$complex$__itruediv__ ($Div$complex, $complex, $complex);
-
-// $Minus$complex ////////////////////////////////////////////////////////////
-
-struct $Minus$complex {
-    $Minus$complex$class $class;
-    $Number w$Number;
-};
-
-struct $Minus$complex$class {
-    char *$GCINFO;
-    int $class_id;
-    $Super$class $superclass;
-    void (*__init__)($Minus$complex, $Number);
-    void (*__serialize__)($Minus$complex,$Serial$state);
-    $Minus$complex (*__deserialize__)($Minus$complex,$Serial$state);
-    $bool (*__bool__)($Minus$complex);
-    $str (*__str__)($Minus$complex);
-    $str (*__repr__)($Minus$complex);
-    $complex (*__sub__)($Minus$complex, $complex, $complex);
-    $complex (*__isub__)($Minus$complex, $complex, $complex);
-};
-
-void $Minus$complex$__init__ ($Minus$complex, $Number);
-void $Minus$complex$__serialize__($Minus$complex, $Serial$state);
-$Minus$complex $Minus$complex$__deserialize__($Minus$complex, $Serial$state);
-$complex $Minus$complex$__sub__ ($Minus$complex, $complex, $complex);
-
-// $Eq$complex ////////////////////////////////////////////////////////////
-
-struct $Eq$complex {
-    $Eq$complex$class $class;
-};
-
-struct $Eq$complex$class {
-    char *$GCINFO;
-    int $class_id;
-    $Super$class $superclass;
-    void (*__init__)($Eq$complex);
-    void (*__serialize__)($Eq$complex,$Serial$state);
-    $Eq$complex (*__deserialize__)($Eq$complex,$Serial$state);
-    $bool (*__bool__)($Eq$complex);
-    $str (*__str__)($Eq$complex);
-    $str (*__repr__)($Eq$complex);
-    $bool (*__eq__)($Eq$complex, $complex, $complex);
-    $bool (*__ne__)($Eq$complex, $complex, $complex);
-};
-
-void $Eq$complex$__init__($Eq$complex);
-void $Eq$complex$__serialize__($Eq$complex, $Serial$state);
-$Eq$complex $Eq$complex$__deserialize__($Eq$complex, $Serial$state);
-$bool $Eq$complex$__eq__ ($Eq$complex, $complex, $complex);
-$bool $Eq$complex$__ne__ ($Eq$complex, $complex, $complex);
-
-// $Hashable$complex ////////////////////////////////////////////////////////////
-
-struct $Hashable$complex {
-    $Hashable$complex$class $class;
-};
-
-struct $Hashable$complex$class {
-    char *$GCINFO;
-    int $class_id;
-    $Super$class $superclass;
-    void (*__init__)($Hashable$complex);
-    void (*__serialize__)($Hashable$complex,$Serial$state);
-    $Hashable$complex (*__deserialize__)($Hashable$complex,$Serial$state);
-    $bool (*__bool__)($Hashable$complex);
-    $str (*__str__)($Hashable$complex);
-    $str (*__repr__)($Hashable$complex);
-    $bool (*__eq__)($Hashable$complex, $complex, $complex);
-    $bool (*__ne__)($Hashable$complex, $complex, $complex);
-    $int (*__hash__)($Hashable$complex, $complex);
-};
-
-void $Hashable$complex$__init__ ($Hashable$complex);
-void $Hashable$complex$__serialize__($Hashable$complex, $Serial$state);
-$Hashable$complex $Hashable$complex$__deserialize__($Hashable$complex, $Serial$state);
-$bool $Hashable$complex$__bool__($Hashable$complex);
-$str $Hashable$complex$__str__($Hashable$complex);
-$bool $Hashable$complex$__eq__ ($Hashable$complex, $complex, $complex);
-$bool $Hashable$complex$__ne__ ($Hashable$complex, $complex, $complex);
-$int $Hashable$complex$__hash__ ($Hashable$complex, $complex);
-
-// $Iterable$range ////////////////////////////////////////////////////////////
-
-struct $Iterable$range {
-    $Iterable$range$class $class;
-};
-
-struct $Iterable$range$class {
-    char *$GCINFO;
-    int $class_id;
-    $Super$class $superclass;
-    void (*__init__)($Iterable$range);
-    void (*__serialize__)($Iterable$range,$Serial$state);
-    $Iterable$range (*__deserialize__)($Iterable$range,$Serial$state);
-    $bool (*__bool__)($Iterable$range);
-    $str (*__str__)($Iterable$range);
-    $str (*__repr__)($Iterable$range);
-    $Iterator (*__iter__)($Iterable$range, $range);
-};
-
-void $Iterable$range$__init__ ($Iterable$range);
-void $Iterable$range$__serialize__($Iterable$range, $Serial$state);
-$Iterable$range $Iterable$range$__deserialize__($Iterable$range, $Serial$state);
-$Iterator $Iterable$range$__iter__ ($Iterable$range, $range);
-
-// $Iterable$tuple ////////////////////////////////////////////////////////////
-
-struct $Iterable$tuple {
-    $Iterable$tuple$class $class;
-};
-
-struct $Iterable$tuple$class {
-    char *$GCINFO;
-    int $class_id;
-    $Super$class $superclass;
-    void (*__init__)($Iterable$tuple);
-    void (*__serialize__)($Iterable$tuple,$Serial$state);
-    $Iterable$tuple (*__deserialize__)($Iterable$tuple,$Serial$state);
-    $bool (*__bool__)($Iterable$tuple);
-    $str (*__str__)($Iterable$tuple);
-    $str (*__repr__)($Iterable$tuple);
-    $Iterator (*__iter__)($Iterable$tuple, $tuple);
-};
-
-void $Iterable$tuple$__init__ ($Iterable$tuple);
-void $Iterable$tuple$__serialize__($Iterable$tuple, $Serial$state);
-$Iterable$tuple $Iterable$tuple$__deserialize__($Iterable$tuple, $Serial$state);
-$Iterator $Iterable$tuple$__iter__ ($Iterable$tuple, $tuple);
-
-// $Sliceable$tuple ////////////////////////////////////////////////////////////
-
-// all methods except getitem and getslice will raise NotImplementedError
-
-struct $Sliceable$tuple {
-    $Sliceable$tuple$class $class;
-};
-
-struct $Sliceable$tuple$class {
-    char *$GCINFO;
-    int $class_id;
-    $Super$class $superclass;
-    void (*__init__)($Sliceable$tuple);
-    void (*__serialize__)($Sliceable$tuple,$Serial$state);
-    $Sliceable$tuple (*__deserialize__)($Sliceable$tuple,$Serial$state);
-    $bool (*__bool__)($Sliceable$tuple);
-    $str (*__str__)($Sliceable$tuple);
-    $str (*__repr__)($Sliceable$tuple);
-    $WORD (*__getitem__)($Sliceable$tuple, $tuple, $int);
-    void (*__setitem__)($Sliceable$tuple, $tuple, $int, $WORD);
-    void (*__delitem__)($Sliceable$tuple, $tuple, $int);
-    $tuple (*__getslice__)($Sliceable$tuple, $tuple, $slice);
-    void (*__setslice__)($Sliceable$tuple, $tuple, $Iterable, $slice, $WORD);
-    void (*__delslice__)($Sliceable$tuple, $tuple, $slice);
-};
-
-void $Sliceable$tuple$__init__ ($Sliceable$tuple);
-void $Sliceable$tuple$__serialize__($Sliceable$tuple, $Serial$state);
-$Sliceable$tuple $Sliceable$tuple$__deserialize__($Sliceable$tuple, $Serial$state);
-$WORD $Sliceable$tuple$__getitem__ ($Sliceable$tuple, $tuple, $int);
-void $Sliceable$tuple$__setitem__ ($Sliceable$tuple, $tuple, $int, $WORD);
-void $Sliceable$tuple$__delitem__ ($Sliceable$tuple, $tuple, $int);
-$tuple $Sliceable$tuple$__getslice__ ($Sliceable$tuple, $tuple, $slice);
-void $Sliceable$tuple$__setslice__ ($Sliceable$tuple, $tuple, $Iterable, $slice, $WORD);
-void $Sliceable$tuple$__delslice__ ($Sliceable$tuple, $tuple, $slice);
-
-// $Hashable$tuple ////////////////////////////////////////////////////////////
-
-struct $Hashable$tuple {
-    $Hashable$tuple$class $class;
-    int w$Hashable$tuple$size;
-    $Hashable *w$Hashable;
-};
-
-struct $Hashable$tuple$class {
-    char *$GCINFO;
-    int $class_id;
-    $Super$class $superclass;
-    void (*__init__)($Hashable$tuple,int,$Hashable*);
-    void (*__serialize__)($Hashable$tuple,$Serial$state);
-    $Hashable$tuple (*__deserialize__)($Hashable$tuple,$Serial$state);
-    $bool (*__bool__)($Hashable$tuple);
-    $str (*__str__)($Hashable$tuple);
-    $str (*__repr__)($Hashable$tuple);
-    $bool (*__eq__)($Hashable$tuple, $tuple, $tuple);
-    $bool (*__ne__)($Hashable$tuple, $tuple, $tuple);
-    $int (*__hash__)($Hashable$tuple, $tuple);
-};
-  
-void $Hashable$tuple$__init__ ($Hashable$tuple,int,$Hashable*);
-void $Hashable$tuple$__serialize__($Hashable$tuple, $Serial$state);
-$Hashable$tuple $Hashable$tuple$__deserialize__($Hashable$tuple, $Serial$state);
-$bool $Hashable$tuple$__eq__ ($Hashable$tuple, $tuple, $tuple);
-$bool $Hashable$tuple$__ne__ ($Hashable$tuple, $tuple, $tuple);
-$int $Hashable$tuple$__hash__ ($Hashable$tuple, $tuple);
-
-// $Ord$bytearray ////////////////////////////////////////////////////////////
-
-struct $Ord$bytearray {
-    $Ord$bytearray$class $class;
-};
-
-struct $Ord$bytearray$class {
-    char *$GCINFO;
-    int $class_id;
-    $Super$class $superclass;
-    void (*__init__)($Ord$bytearray);
-    void (*__serialize__)($Ord$bytearray,$Serial$state);
-    $Ord$bytearray (*__deserialize__)($Ord$bytearray,$Serial$state);
-    $bool (*__bool__)($Ord$bytearray);
-    $str (*__str__)($Ord$bytearray);
-    $str (*__repr__)($Ord$bytearray);
-    $bool (*__eq__)($Ord$bytearray, $bytearray, $bytearray);
-    $bool (*__ne__)($Ord$bytearray, $bytearray, $bytearray);
-    $bool (*__lt__)($Ord$bytearray, $bytearray, $bytearray);
-    $bool (*__le__)($Ord$bytearray, $bytearray, $bytearray);
-    $bool (*__gt__)($Ord$bytearray, $bytearray, $bytearray);
-    $bool (*__ge__)($Ord$bytearray, $bytearray, $bytearray);
-};
-
-void $Ord$bytearray$__init__ ($Ord$bytearray);
-void $Ord$bytearray$__serialize__($Ord$bytearray, $Serial$state);
-$Ord$bytearray $Ord$bytearray$__deserialize__($Ord$bytearray, $Serial$state);
-$bool $Ord$bytearray$__bool__($Ord$bytearray);
-$str $Ord$bytearray$__str__($Ord$bytearray);
-$bool $Ord$bytearray$__eq__ ($Ord$bytearray, $bytearray, $bytearray);
-$bool $Ord$bytearray$__ne__ ($Ord$bytearray, $bytearray, $bytearray);
-$bool $Ord$bytearray$__lt__ ($Ord$bytearray, $bytearray, $bytearray);
-$bool $Ord$bytearray$__le__ ($Ord$bytearray, $bytearray, $bytearray);
-$bool $Ord$bytearray$__gt__ ($Ord$bytearray, $bytearray, $bytearray);
-$bool $Ord$bytearray$__ge__ ($Ord$bytearray, $bytearray, $bytearray);
-
-// $Sequence$bytearray ////////////////////////////////////////////////////////////
-
-struct $Sequence$bytearray {
-    $Sequence$bytearray$class $class;
-    $Collection w$Collection;
-    $Times w$Times;
-};
-
-struct $Sequence$bytearray$class {
-    char *$GCINFO;
-    int $class_id;
-    $Super$class $superclass;
-    void (*__init__)($Sequence$bytearray);
-    void (*__serialize__)($Sequence$bytearray,$Serial$state);
-    $Sequence$bytearray (*__deserialize__)($Sequence$bytearray,$Serial$state);
-    $bool (*__bool__)($Sequence$bytearray);
-    $str (*__str__)($Sequence$bytearray);
-    $str (*__repr__)($Sequence$bytearray);
-    $int (*__getitem__)($Sequence$bytearray, $bytearray, $int);
-    void (*__setitem__)($Sequence$bytearray, $bytearray, $int, $int);
-    void (*__delitem__)($Sequence$bytearray, $bytearray, $int);
-    $bytearray (*__getslice__)($Sequence$bytearray, $bytearray, $slice);
-    void (*__setslice__)($Sequence$bytearray, $bytearray, $Iterable, $slice, $WORD);
-    void (*__delslice__)($Sequence$bytearray, $bytearray, $slice);
-    $Iterator (*__reversed__)($Sequence$bytearray, $bytearray);
-    void (*insert)($Sequence$bytearray, $bytearray, $int, $int);
-    void (*append)($Sequence$bytearray, $bytearray, $int);
-    void (*reverse)($Sequence$bytearray, $bytearray);
-};
-
-void $Sequence$bytearray$__init__ ($Sequence$bytearray);
-void $Sequence$bytearray$__serialize__($Sequence$bytearray, $Serial$state);
-$Sequence$bytearray $Sequence$bytearray$__deserialize__($Sequence$bytearray, $Serial$state);
-$bool $Sequence$bytearray$__bool__($Sequence$bytearray);
-$str $Sequence$bytearray$__str__($Sequence$bytearray);
-$int $Sequence$bytearray$__getitem__ ($Sequence$bytearray, $bytearray, $int);
-void $Sequence$bytearray$__setitem__ ($Sequence$bytearray, $bytearray, $int, $int);
-void $Sequence$bytearray$__delitem__ ($Sequence$bytearray, $bytearray, $int);
-$bytearray $Sequence$bytearray$__getslice__ ($Sequence$bytearray, $bytearray, $slice);
-void $Sequence$bytearray$__setslice__ ($Sequence$bytearray, $bytearray, $Iterable, $slice, $WORD);
-void $Sequence$bytearray$__delslice__ ($Sequence$bytearray, $bytearray, $slice);
-$Iterator $Sequence$bytearray$__reversed__ ($Sequence$bytearray, $bytearray);
-void $Sequence$bytearray$insert ($Sequence$bytearray, $bytearray, $int, $int);
-void $Sequence$bytearray$append ($Sequence$bytearray, $bytearray, $int);
-void $Sequence$bytearray$reverse ($Sequence$bytearray, $bytearray);
-
-// $Collection$bytearray ////////////////////////////////////////////////////////////
-
-struct $Collection$bytearray {
-    $Collection$bytearray$class $class;
-    $Sequence w$Sequence;
-};
-
-struct $Collection$bytearray$class {
-    char *$GCINFO;
-    int $class_id;
-    $Super$class $superclass;
-    void (*__init__)($Collection$bytearray, $Sequence);
-    void (*__serialize__)($Collection$bytearray,$Serial$state);
-    $Collection$bytearray (*__deserialize__)($Collection$bytearray,$Serial$state);
-    $bool (*__bool__)($Collection$bytearray);
-    $str (*__str__)($Collection$bytearray);
-    $str (*__repr__)($Collection$bytearray);
-    $Iterator (*__iter__)($Collection$bytearray, $bytearray);
-    $bytearray (*__fromiter__)($Collection$bytearray, $Iterable, $WORD);
-    $int (*__len__)($Collection$bytearray, $bytearray);
-};
-
-void $Collection$bytearray$__init__ ($Collection$bytearray, $Sequence);
-void $Collection$bytearray$__serialize__($Collection$bytearray, $Serial$state);
-$Collection$bytearray $Collection$bytearray$__deserialize__($Collection$bytearray, $Serial$state);
-$bool $Collection$bytearray$__bool__($Collection$bytearray);
-$str $Collection$bytearray$__str__($Collection$bytearray);
-$Iterator $Collection$bytearray$__iter__ ($Collection$bytearray, $bytearray);
-$bytearray $Collection$bytearray$__fromiter__ ($Collection$bytearray, $Iterable, $WORD);
-$int $Collection$bytearray$__len__ ($Collection$bytearray, $bytearray);
-
-// $Collection$Sequence$bytearray //////////////////////////////////////////////
-
-#define $Collection$Sequence$bytearray $Collection$bytearray
-#define $Collection$Sequence$bytearray$class $Collection$bytearray$class
-#define $Collection$Sequence$bytearray$methods $Collection$bytearray$methods
-#define $Collection$Sequence$bytearray$new(...) $Collection$bytearray$new(__VA_ARGS__)
-
-// $Times$bytearray ////////////////////////////////////////////////////////////
-
-struct $Times$bytearray {
-    $Times$bytearray$class $class;
-    $Sequence w$Sequence;
-};
-
-struct $Times$bytearray$class {
-    char *$GCINFO;
-    int $class_id;
-    $Super$class $superclass;
-    void (*__init__)($Times$bytearray, $Sequence);
-    void (*__serialize__)($Times$bytearray,$Serial$state);
-    $Times$bytearray (*__deserialize__)($Times$bytearray,$Serial$state);
-    $bool (*__bool__)($Times$bytearray);
-    $str (*__str__)($Times$bytearray);
-    $str (*__repr__)($Times$bytearray);
-    $bytearray (*__add__)($Times$bytearray, $bytearray, $bytearray);
-    $bytearray (*__iadd__)($Times$bytearray, $bytearray, $bytearray);
-    $bytearray (*__mul__)($Times$bytearray, $bytearray, $int);
-    $bytearray (*__imul__)($Times$bytearray, $bytearray, $int);
-};
-
-void $Times$bytearray$__init__ ($Times$bytearray, $Sequence);
-void $Times$bytearray$__serialize__($Times$bytearray, $Serial$state);
-$Times$bytearray $Times$bytearray$__deserialize__($Times$bytearray, $Serial$state);
-$bool $Times$bytearray$__bool__($Times$bytearray);
-$str $Times$bytearray$__str__($Times$bytearray);
-$bytearray $Times$bytearray$__add__ ($Times$bytearray, $bytearray, $bytearray);
-$bytearray $Times$bytearray$__mul__ ($Times$bytearray, $bytearray, $int);
-
-// $Times$Sequence$bytearray ///////////////////////////////////////////////////////
-
-#define $Times$Sequence$bytearray $Times$bytearray
-#define $Times$Sequence$bytearray$class $Times$bytearray$class
-#define $Times$Sequence$bytearray$methods $Times$bytearray$methods
-#define $Times$Sequence$bytearray$new(...) $Times$bytearray$new(__VA_ARGS__)
-
-// $Container$bytearray ////////////////////////////////////////////////////////////
-
-struct $Container$bytearray {
-    $Container$bytearray$class $class;
-};
-
-struct $Container$bytearray$class {
-    char *$GCINFO;
-    int $class_id;
-    $Super$class $superclass;
-    void (*__init__)($Container$bytearray);
-    void (*__serialize__)($Container$bytearray,$Serial$state);
-    $Container$bytearray (*__deserialize__)($Container$bytearray,$Serial$state);
-    $bool (*__bool__)($Container$bytearray);
-    $str (*__str__)($Container$bytearray);
-    $str (*__repr__)($Container$bytearray);
-    $Iterator (*__iter__)($Container$bytearray, $bytearray);
-    $int (*__len__)($Container$bytearray, $bytearray);
-    $bool (*__contains__)($Container$bytearray, $bytearray, $int);
-    $bool (*__containsnot__)($Container$bytearray, $bytearray, $int);
-};
-
-void $Container$bytearray$__init__ ($Container$bytearray);
-void $Container$bytearray$__serialize__($Container$bytearray, $Serial$state);
-$Container$bytearray $Container$bytearray$__deserialize__($Container$bytearray, $Serial$state);
-$bool $Container$bytearray$__bool__($Container$bytearray);
-$str $Container$bytearray$__str__($Container$bytearray);
-$Iterator $Container$bytearray$__iter__ ($Container$bytearray, $bytearray);
-$int $Container$bytearray$__len__ ($Container$bytearray, $bytearray);
-$bool $Container$bytearray$__contains__ ($Container$bytearray, $bytearray, $int);
-$bool $Container$bytearray$__containsnot__ ($Container$bytearray, $bytearray, $int);
-
-// $Ord$bytes ////////////////////////////////////////////////////////////
-
-struct $Ord$bytes {
-    $Ord$bytes$class $class;
-};
-
-struct $Ord$bytes$class {
-    char *$GCINFO;
-    int $class_id;
-    $Super$class $superclass;
-    void (*__init__)($Ord$bytes);
-    void (*__serialize__)($Ord$bytes,$Serial$state);
-    $Ord$bytes (*__deserialize__)($Ord$bytes,$Serial$state);
-    $bool (*__bool__)($Ord$bytes);
-    $str (*__str__)($Ord$bytes);
-    $str (*__repr__)($Ord$bytes);
-    $bool (*__eq__)($Ord$bytes, $bytes, $bytes);
-    $bool (*__ne__)($Ord$bytes, $bytes, $bytes);
-    $bool (*__lt__)($Ord$bytes, $bytes, $bytes);
-    $bool (*__le__)($Ord$bytes, $bytes, $bytes);
-    $bool (*__gt__)($Ord$bytes, $bytes, $bytes);
-    $bool (*__ge__)($Ord$bytes, $bytes, $bytes);
-};
-
-void $Ord$bytes$__init__ ($Ord$bytes);
-void $Ord$bytes$__serialize__($Ord$bytes, $Serial$state);
-$Ord$bytes $Ord$bytes$__deserialize__($Ord$bytes, $Serial$state);
-$bool $Ord$bytes$__eq__ ($Ord$bytes, $bytes, $bytes);
-$bool $Ord$bytes$__ne__ ($Ord$bytes, $bytes, $bytes);
-$bool $Ord$bytes$__lt__ ($Ord$bytes, $bytes, $bytes);
-$bool $Ord$bytes$__le__ ($Ord$bytes, $bytes, $bytes);
-$bool $Ord$bytes$__gt__ ($Ord$bytes, $bytes, $bytes);
-$bool $Ord$bytes$__ge__ ($Ord$bytes, $bytes, $bytes);
-
-// $Container$bytes ////////////////////////////////////////////////////////////
-
-struct $Container$bytes {
-    $Container$bytes$class $class;
-};
-
-struct $Container$bytes$class {
-    char *$GCINFO;
-    int $class_id;
-    $Super$class $superclass;
-    void (*__init__)($Container$bytes);
-    void (*__serialize__)($Container$bytes,$Serial$state);
-    $Container$bytes (*__deserialize__)($Container$bytes,$Serial$state);
-    $bool (*__bool__)($Container$bytes);
-    $str (*__str__)($Container$bytes);
-    $str (*__repr__)($Container$bytes);
-    $Iterator (*__iter__)($Container$bytes, $bytes);
-    $bytes (*__fromiter__)($Container$bytes, $Iterable, $WORD);
-    $int (*__len__)($Container$bytes, $bytes);
-    $bool (*__contains__)($Container$bytes, $bytes, $bytes);
-    $bool (*__containsnot__)($Container$bytes, $bytes, $bytes);
-};
-
-void $Container$bytes$__init__ ($Container$bytes);
-void $Container$bytes$__serialize__($Container$bytes, $Serial$state);
-$Container$bytes $Container$bytes$__deserialize__($Container$bytes, $Serial$state);
-$Iterator $Container$bytes$__iter__ ($Container$bytes, $bytes);
-$int $Container$bytes$__len__ ($Container$bytes, $bytes);
-$bool $Container$bytes$__contains__ ($Container$bytes, $bytes, $bytes);
-$bool $Container$bytes$__containsnot__ ($Container$bytes, $bytes, $bytes);
-
-// $Sliceable$bytes ////////////////////////////////////////////////////////////
-
-struct $Sliceable$bytes {
-    $Sliceable$bytes$class $class;
-};
-
-struct $Sliceable$bytes$class {
-    char *$GCINFO;
-    int $class_id;
-    $Super$class $superclass;
-    void (*__init__)($Sliceable$bytes);
-    void (*__serialize__)($Sliceable$bytes,$Serial$state);
-    $Sliceable$bytes (*__deserialize__)($Sliceable$bytes,$Serial$state);
-    $bool (*__bool__)($Sliceable$bytes);
-    $str (*__str__)($Sliceable$bytes);
-    $str (*__repr__)($Sliceable$bytes);
-    $int (*__getitem__)($Sliceable$bytes, $bytes, $int);
-    void (*__setitem__)($Sliceable$bytes, $bytes, $int, $bytes);
-    void (*__delitem__)($Sliceable$bytes, $bytes, $int);
-    $bytes (*__getslice__)($Sliceable$bytes, $bytes, $slice);
-    void (*__setslice__)($Sliceable$bytes, $bytes, $Iterable, $slice, $WORD);
-    void (*__delslice__)($Sliceable$bytes, $bytes, $slice);
-};
-
-void $Sliceable$bytes$__init__ ($Sliceable$bytes);
-void $Sliceable$bytes$__serialize__($Sliceable$bytes, $Serial$state);
-$Sliceable$bytes $Sliceable$bytes$__deserialize__($Sliceable$bytes, $Serial$state);
-$int $Sliceable$bytes$__getitem__ ($Sliceable$bytes, $bytes, $int);
-void $Sliceable$bytes$__setitem__ ($Sliceable$bytes, $bytes, $int, $bytes);
-void $Sliceable$bytes$__delitem__ ($Sliceable$bytes, $bytes, $int);
-$bytes $Sliceable$bytes$__getslice__ ($Sliceable$bytes, $bytes, $slice);
-void $Sliceable$bytes$__setslice__ ($Sliceable$bytes, $bytes, $Iterable, $slice, $WORD);
-void $Sliceable$bytes$__delslice__ ($Sliceable$bytes, $bytes, $slice);
-
-// $Times$bytes ////////////////////////////////////////////////////////////
-
-struct $Times$bytes {
-    $Times$bytes$class $class;
-};
-
-struct $Times$bytes$class {
-    char *$GCINFO;
-    int $class_id;
-    $Super$class $superclass;
-    void (*__init__)($Times$bytes);
-    void (*__serialize__)($Times$bytes,$Serial$state);
-    $Times$bytes (*__deserialize__)($Times$bytes,$Serial$state);
-    $bool (*__bool__)($Times$bytes);
-    $str (*__str__)($Times$bytes);
-    $str (*__repr__)($Times$bytes);
-    $bytes (*__add__)($Times$bytes, $bytes, $bytes);
-    $bytes (*__iadd__)($Times$bytes, $bytes, $bytes);
-    $bytes (*__mul__)($Times$bytes, $bytes, $int);
-    $bytes (*__imul__)($Times$bytes, $bytes, $int);
-};
-
-void $Times$bytes$__init__ ($Times$bytes);
-void $Times$bytes$__serialize__($Times$bytes, $Serial$state);
-$Times$bytes $Times$bytes$__deserialize__($Times$bytes, $Serial$state);
-$bool $Times$bytes$__bool__($Times$bytes);
-$bytes $Times$bytes$__str__($Times$bytes);
-$bytes $Times$bytes$__add__ ($Times$bytes, $bytes, $bytes);
-$bytes $Times$bytes$__mul__($Times$bytes, $bytes, $int);
-
-// $Hashable$bytes ////////////////////////////////////////////////////////////
-
-struct $Hashable$bytes {
-    $Hashable$bytes$class $class;
-};
-
-struct $Hashable$bytes$class {
-    char *$GCINFO;
-    int $class_id;
-    $Super$class $superclass;
-    void (*__init__)($Hashable$bytes);
-    void (*__serialize__)($Hashable$bytes,$Serial$state);
-    $Hashable$bytes (*__deserialize__)($Hashable$bytes,$Serial$state);
-    $bool (*__bool__)($Hashable$bytes);
-    $str (*__str__)($Hashable$bytes);
-    $str (*__repr__)($Hashable$bytes);
-    $bool (*__eq__)($Hashable$bytes, $bytes, $bytes);
-    $bool (*__ne__)($Hashable$bytes, $bytes, $bytes);
-    $int (*__hash__)($Hashable$bytes, $bytes);
-};
-
-void $Hashable$bytes$__init__ ($Hashable$bytes);
-void $Hashable$bytes$__serialize__($Hashable$bytes, $Serial$state);
-$Hashable$bytes $Hashable$bytes$__deserialize__($Hashable$bytes, $Serial$state);
-$bool $Hashable$bytes$__eq__ ($Hashable$bytes, $bytes, $bytes);
-$bool $Hashable$bytes$__ne__ ($Hashable$bytes, $bytes, $bytes);
-$int $Hashable$bytes$__hash__ ($Hashable$bytes, $bytes);
-
-void $register_builtin_protocols();

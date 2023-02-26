@@ -21,50 +21,50 @@
 $WORD toWord(long i) {
   char *s;
   int n = asprintf(&s,"%lu",i);
-  $str str = to$str(s);
+  B_str str = to$str(s);
   return ($WORD)str;
 }
 
 long fromWord($WORD w) {
-  unsigned char *str = from$str(($str)w);
+  unsigned char *str = fromB_str((B_str)w);
   long x;
   sscanf((char *)str,"%lu",&x);
   return x;
 }
 
-$Iterable dict_iterable($Mapping$dict wit) {
-  $Iterable$class cl = malloc(sizeof(struct  $Iterable$class));
-  cl->__iter__ = ($Iterator (*)($Iterable, $WORD))wit->$class->items;
-  $Iterable wit2 = malloc(sizeof(struct $Iterable));
+B_Iterable dict_iterable(B_MappingD_dict wit) {
+  B_IterableG_class cl = malloc(sizeof(struct  B_IterableG_class));
+  cl->__iter__ = (B_Iterator (*)(B_Iterable, $WORD))wit->$class->items;
+  B_Iterable wit2 = malloc(sizeof(struct B_Iterable));
   wit2->$class = cl;
   return wit2;
 }
     
 int main() {
   //$register_builtin();
-  $dict idict = $NEW($dict,($Hashable)$Hashable$int$witness,NULL,NULL);
-  $dict_setitem(idict, ($Hashable)$Hashable$int$witness, to$int(-1), to$str("minus one"));
-  $dict_setitem(idict, ($Hashable)$Hashable$int$witness, to$int(-2), to$str("minus two"));
-  $str i1 = ($str)$dict_get(idict, ($Hashable)$Hashable$int$witness, to$int(-1), NULL);
-  $str i2 = ($str)$dict_get(idict, ($Hashable)$Hashable$int$witness, to$int(-2), NULL);
+  B_dict idict = $NEW(B_dict,(B_Hashable)B_HashableD_intG_witness,NULL,NULL);
+  B_dictD_setitem(idict, (B_Hashable)B_HashableD_intG_witness, toB_int(-1), to$str("minus one"));
+  B_dictD_setitem(idict, (B_Hashable)B_HashableD_intG_witness, toB_int(-2), to$str("minus two"));
+  B_str i1 = (B_str)B_dictD_get(idict, (B_Hashable)B_HashableD_intG_witness, toB_int(-1), NULL);
+  B_str i2 = (B_str)B_dictD_get(idict, (B_Hashable)B_HashableD_intG_witness, toB_int(-2), NULL);
   printf("value of -1: %s\n", i1->str);
   printf("value of -2: %s\n", i2->str);
         
-  $Hashable hashwit = ($Hashable)$Hashable$str$witness;
-  $Mapping$dict wit = $NEW($Mapping$dict,hashwit);
-  $dict dict = $NEW($dict,hashwit,NULL,NULL); 
-  $dict other = $NEW($dict,hashwit,NULL,NULL);
+  B_Hashable hashwit = (B_Hashable)B_HashableD_strG_witness;
+  B_MappingD_dict wit = $NEW(B_MappingD_dict,hashwit);
+  B_dict dict = $NEW(B_dict,hashwit,NULL,NULL); 
+  B_dict other = $NEW(B_dict,hashwit,NULL,NULL);
   int j;
 
   for (long i=1; i < 1000000; i++) {
-    wit->w$Indexed->$class->__setitem__(wit->w$Indexed,dict,toWord(i),toWord(i+1));
+    wit->W_Indexed->$class->__setitem__(wit->W_Indexed,dict,toWord(i),toWord(i+1));
   }
   $WORD b;
   long r = 17;
   long s = 0;
   for (int j=1; j < 100000; j++) {
     r = r*r % 100000;
-    b = wit->w$Indexed->$class->__getitem__(wit->w$Indexed,dict,toWord(r));
+    b = wit->W_Indexed->$class->__getitem__(wit->W_Indexed,dict,toWord(r));
     s += fromWord(b);
   }
   printf("in dict_test after summation; last value retrieved should be %ld, was %ld\n",r+1,fromWord(b));
@@ -74,11 +74,11 @@ int main() {
   $serialize_file(($Serializable)dict,"test4.bin");
 
   printf("Wrote serialized dict to test4.bin\n");
-  $dict dict2 = ($dict)$deserialize_file("test4.bin");
+  B_dict dict2 = (B_dict)$deserialize_file("test4.bin");
   $serialize_file(($Serializable)dict2,"test5.bin");
   */  
-  int t1 = from$bool(wit->$class->__contains__(wit,dict,toWord(678)));
-  int t2 = from$bool(wit->$class->__contains__(wit,dict,toWord(-1)));
+  int t1 = fromB_bool(wit->$class->__contains__(wit,dict,toWord(678)));
+  int t2 = fromB_bool(wit->$class->__contains__(wit,dict,toWord(-1)));
 
   if (t1 && !t2)
     printf("contains test ok\n");
@@ -88,10 +88,10 @@ int main() {
   $WORD res = NULL;
   for (long i=1; i<1000000; i++)
     if (i%100 > 0)
-       wit->w$Indexed->$class->__delitem__( wit->w$Indexed,dict,toWord(i));
+       wit->W_Indexed->$class->__delitem__( wit->W_Indexed,dict,toWord(i));
   printf("Size of dict after popping is %ld\n",from$int(wit->$class->__len__(wit,dict)));
   
-  $Iterator iter = wit->$class->__iter__(wit,dict);
+  B_Iterator iter = wit->$class->__iter__(wit,dict);
   long t = 0;
   while ((res=iter->$class->__next__(iter))) {
     t += fromWord(res);
@@ -105,14 +105,14 @@ int main() {
   printf("dict_get on non-existing key; should return default value 666. Returned %ld\n",fromWord(w2));
 
   for (long j = 11; j < 200; j+=20)
-     wit->w$Indexed->$class->__setitem__( wit->w$Indexed,other,toWord(j),toWord(2*j));
+     wit->W_Indexed->$class->__setitem__( wit->W_Indexed,other,toWord(j),toWord(2*j));
 
-  $Iterator items = wit->$class->items(wit,dict);
-  $tuple item;
+  B_Iterator items = wit->$class->items(wit,dict);
+  B_tuple item;
   for (int k=0; k<10; k++) {
-    if ((item = ($tuple)items->$class->__next__(items))) {
-      $str key = item->components[0];
-      $str val = item->components[1];
+    if ((item = (B_tuple)items->$class->__next__(items))) {
+      B_str key = item->components[0];
+      B_str val = item->components[1];
       printf("item #%d is: key=%ld, value=%ld\n",k,fromWord(key),fromWord(val));
     }
   }

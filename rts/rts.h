@@ -22,7 +22,7 @@ extern long num_wthreads;
 
 extern pthread_key_t pkey_wtid;
 extern pthread_key_t pkey_uv_loop;
-struct $Msg;
+struct B_Msg;
 struct $Actor;
 struct $Catcher;
 struct $ConstCont;
@@ -31,16 +31,16 @@ extern pthread_key_t self_key;
 extern pthread_mutex_t sleep_lock;
 extern pthread_cond_t work_to_do;
 
-typedef struct $Msg *$Msg;
+typedef struct B_Msg *B_Msg;
 typedef struct $Actor *$Actor;
 typedef struct $Catcher *$Catcher;
 typedef struct $ConstCont *$ConstCont;
 
-extern struct $Msg$class $Msg$methods;
-extern struct $Actor$class $Actor$methods;
-extern struct $Catcher$class $Catcher$methods;
-extern struct $Cont$class $Done$methods;
-extern struct $ConstCont$class $ConstCont$methods;
+extern struct B_MsgG_class B_MsgG_methods;
+extern struct $ActorG_class $ActorG_methods;
+extern struct $CatcherG_class $CatcherG_methods;
+extern struct $ContG_class $DoneG_methods;
+extern struct $ConstContG_class $ConstContG_methods;
 
 #define MSG_HEADER              "Msg"
 #define ACTOR_HEADER            "Actor"
@@ -49,102 +49,102 @@ extern struct $ConstCont$class $ConstCont$methods;
 
 #define $Lock                   volatile atomic_flag
 
-struct $Msg$class {
+struct B_MsgG_class {
     char *$GCINFO;
     int $class_id;
-    $Super$class $superclass;
-    void (*__init__)($Msg, $Actor, $Cont, time_t, $WORD);
-    void (*__serialize__)($Msg, $Serial$state);
-    $Msg (*__deserialize__)($Msg, $Serial$state);
-    $bool (*__bool__)($Msg);
-    $str (*__str__)($Msg);
-    $str (*__repr__)($Msg);
+    $SuperG_class $superclass;
+    void (*__init__)(B_Msg, $Actor, $Cont, time_t, $WORD);
+    void (*__serialize__)(B_Msg, $Serial$state);
+    B_Msg (*__deserialize__)(B_Msg, $Serial$state);
+    B_bool (*__bool__)(B_Msg);
+    B_str (*__str__)(B_Msg);
+    B_str (*__repr__)(B_Msg);
 };
-struct $Msg {
-    struct $Msg$class *$class;
-    $Msg $next;
+struct B_Msg {
+    struct B_MsgG_class *$class;
+    B_Msg $next;
     $Actor $to;
     $Cont $cont;
     $Actor $waiting;
     time_t $baseline;
     $Lock $wait_lock;
-    $WORD $value;
+    $WORD B_value;
     $long $globkey;
 };
 
-struct $Actor$class {
+struct $ActorG_class {
     char *$GCINFO;
     int $class_id;
-    $Super$class $superclass;
+    $SuperG_class $superclass;
     void (*__init__)($Actor);
     void (*__serialize__)($Actor, $Serial$state);
     $Actor (*__deserialize__)($Actor, $Serial$state);
-    $bool (*__bool__)($Actor);
-    $str (*__str__)($Actor);
-    $str (*__repr__)($Actor);
-    $NoneType (*__resume__)($Actor);
+    B_bool (*__bool__)($Actor);
+    B_str (*__str__)($Actor);
+    B_str (*__repr__)($Actor);
+    B_NoneType (*__resume__)($Actor);
 };
 struct $Actor {
-    struct $Actor$class *$class;
+    struct $ActorG_class *$class;
     $Actor $next;
-    $Msg $msg;
-    $Msg $outgoing;
-    $Msg $waitsfor;
+    B_Msg B_Msg;
+    B_Msg $outgoing;
+    B_Msg $waitsfor;
     $int64 $consume_hd;
     $Catcher $catcher;
-    $Lock $msg_lock;
+    $Lock B_Msg_lock;
     $long $globkey;
     $int64 $affinity;
 };
 
-struct $Catcher$class {
+struct $CatcherG_class {
     char *$GCINFO;
     int $class_id;
-    $Super$class $superclass;
+    $SuperG_class $superclass;
     void (*__init__)($Catcher, $Cont);
     void (*__serialize__)($Catcher, $Serial$state);
     $Catcher (*__deserialize__)($Catcher, $Serial$state);
-    $bool (*__bool__)($Catcher);
-    $str (*__str__)($Catcher);
-    $str (*__repr__)($Catcher);
+    B_bool (*__bool__)($Catcher);
+    B_str (*__str__)($Catcher);
+    B_str (*__repr__)($Catcher);
 };
 struct $Catcher {
-    struct $Catcher$class *$class;
+    struct $CatcherG_class *$class;
     $Catcher $next;
     $Cont $cont;
 };
 
 
-struct $ConstCont$class {
+struct $ConstContG_class {
     char *$GCINFO;
     int $class_id;
-    $Super$class $superclass;
+    $SuperG_class $superclass;
     void (*__init__)($ConstCont, $WORD, $Cont);
     void (*__serialize__)($ConstCont, $Serial$state);
     $ConstCont (*__deserialize__)($ConstCont, $Serial$state);
-    $bool (*__bool__)($ConstCont);
-    $str (*__str__)($ConstCont);
-    $str (*__repr__)($ConstCont);
+    B_bool (*__bool__)($ConstCont);
+    B_str (*__str__)($ConstCont);
+    B_str (*__repr__)($ConstCont);
     $R (*__call__)($ConstCont, $WORD);
 };
 struct $ConstCont {
-    struct $ConstCont$class *$class;
+    struct $ConstContG_class *$class;
     $WORD val;
     $Cont cont;
 };
 $Cont $CONSTCONT($WORD, $Cont);
 
-$Msg $ASYNC($Actor, $Cont);
-$Msg $AFTER($float, $Cont);
-$R $AWAIT($Cont, $Msg);
+B_Msg $ASYNC($Actor, $Cont);
+B_Msg $AFTER(B_float, $Cont);
+$R $AWAIT($Cont, B_Msg);
 
 void init_db_queue(long);
 void register_actor(long key);
 void serialize_state_shortcut($Actor);
 
 #define $NEWACTOR($T)       ({ $T $t = malloc(sizeof(struct $T)); \
-                               $t->$class = &$T ## $methods; \
-                               $Actor$methods.__init__(($Actor)$t); \
+                               $t->$class = &$T ## G_methods; \
+                               $ActorG_methods.__init__(($Actor)$t); \
                                $t->$affinity = 0; \
                                init_db_queue($t->$globkey); \
                                register_actor($t->$globkey); \
@@ -153,7 +153,7 @@ void serialize_state_shortcut($Actor);
 void $PUSH($Cont);
 void $POP();
 
-extern $Msg timerQ;
+extern B_Msg timerQ;
 
 void wake_wt(int wtid);
 
@@ -164,10 +164,10 @@ void rts_shutdown();
 
 void pin_actor_affinity();
 
-//typedef $int $Env;
+//typedef B_int B_Env;
 
-void $Actor$serialize($Actor, $Serial$state);
-void $Actor$deserialize($Actor, $Serial$state);
+void $Actor$serialize($Actor, B_NoneType);
+void $Actor$deserialize($Actor, B_NoneType);
 
 $ROW $serialize_rts();
 void $deserialize_rts($ROW);

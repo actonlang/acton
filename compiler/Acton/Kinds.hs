@@ -61,7 +61,7 @@ swapXVars                           :: QBinds -> KindM QBinds
 swapXVars q                         = state $ \st -> (xvars st, st{ xvars = q })
 
 newWildvar                          = do k <- newKVar
-                                         n <- Internal Wildvar "" <$> newUnique
+                                         n <- Internal Typevar "w" <$> newUnique
                                          return $ TV k n
 
 newKVar                             = KVar <$> (Internal Kindvar "" <$> newUnique)
@@ -302,7 +302,7 @@ instance KCheck Decl where
                                          t <- convPExist env =<< convTWild t
                                          x <- convPExist env =<< convTWild x
                                          q' <- swapXVars tmp
-                                         env1 <- extvars (tybound (q++q')) env
+                                         env1 <- extvars (qbound q) env
                                          q <- kchkQBinds env1 (q++q')
                                          Def l n q <$> kchk env1 p <*> kchk env1 k <*> kexp KType env1 t <*> kchkSuite env1 b <*> pure d <*> kfx env1 x
       where ambig                   = qualbound q \\ closeDepVarsQ (tyfree p ++ tyfree k ++ tyfree t ++ tyfree x) q
@@ -320,7 +320,7 @@ instance KCheck Decl where
                                          c <- convPExist env c
                                          us <- convPExist env us
                                          q' <- swapXVars tmp
-                                         env1 <- extvars (tvSelf : qbound (q++q')) env
+                                         env1 <- extvars (tvSelf : qbound q) env
                                          Extension l <$> kchkQBinds env1 (q++q') <*> kexp KType env1 c <*> kchkPBounds env1 us <*> kchkSuite env1 b
       where ambig                   = qualbound q \\ vs
             undet                   = tyfree us \\ (tvSelf : vs)
@@ -450,7 +450,7 @@ instance KCheck TSchema where
                                          q <- convPExist env q
                                          t <- convPExist env t
                                          q' <- swapXVars tmp
-                                         env1 <- extvars (tybound (q++q')) env
+                                         env1 <- extvars (qbound q) env
                                          TSchema l <$> kchkQBinds env1 (q++q') <*> kexp KType env1 t
       where ambig                   = qualbound q \\ closeDepVarsQ (tyfree t) q
 
@@ -493,13 +493,13 @@ instance KInfer TCon where
                                          k <- ksubst False k
                                          return (k, TC (unalias env n) ts)
 
-envBound (TV k (Internal p _ _))    = p == Xistvar
+envBound (TV k (Internal p _ _))    = False
 envBound _                          = True
 
 instance KInfer Type where
     kinfer env (TWild l)            = err1 l "Illegal wildcard type"
     kinfer env (TVar l v)           = do (k,v) <- kinfer env v
-                                         when (envBound v) $ kunify l k (tvKind v env)     -- Wildvars are not int the environment
+                                         when (envBound v) $ kunify l k (tvKind v env)     -- Internal tyvars are not in the environment
                                          return (k, TVar l v)
     kinfer env (TCon l c)           = do c <- kexp KType env c
                                          return (KType, TCon l c)

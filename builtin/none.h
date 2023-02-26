@@ -1,18 +1,18 @@
-struct $NoneType$class {
+struct B_NoneTypeG_class {
     char *$GCINFO;
     int $class_id;
-    $Super$class $superclass;
-    void (*__init__)($NoneType);
-    void (*__serialize__)($NoneType,$Serial$state);
-    $NoneType (*__deserialize__)($NoneType,$Serial$state);
-    $bool (*__bool__)($NoneType);
-    $str (*__str__)($NoneType);
-    $str (*__repr__)($NoneType);
+    $SuperG_class $superclass;
+    void (*__init__)(B_NoneType);
+    void (*__serialize__)(B_NoneType,$Serial$state);
+    B_NoneType (*__deserialize__)(B_NoneType,$Serial$state);
+    B_bool (*__bool__)(B_NoneType);
+    B_str (*__str__)(B_NoneType);
+    B_str (*__repr__)(B_NoneType);
 };
 
-struct $NoneType {
-    struct $NoneType$class *$class;
+struct B_NoneType {
+    struct B_NoneTypeG_class *$class;
 };
 
-extern struct $NoneType$class $NoneType$methods;
-$NoneType $NoneType$new();
+extern struct B_NoneTypeG_class B_NoneTypeG_methods;
+B_NoneType B_NoneTypeG_new();

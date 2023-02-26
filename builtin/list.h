@@ -1,67 +1,43 @@
-struct $list$class {
-  char *$GCINFO;
-  int $class_id;
-  $Super$class $superclass;
-  void (*__init__)($list, $Iterable, $WORD);
-  void (*__serialize__)($list,$Serial$state);
-  $list (*__deserialize__)($list,$Serial$state);
-  $bool (*__bool__)($list);
-  $str (*__str__)($list);
-  $str (*__repr__)($list);
-  $list(*copy)($list);
-  //  $int (*sort)($list self, int (*cmp)($WORD,$WORD));
-};
-
-struct $list {
-  struct $list$class *$class;
+ 
+struct B_list {
+  struct B_listG_class *$class;
   $WORD *data;
   int length;
   int capacity;
 };
 
-extern struct $list$class $list$methods;
-$list $list$new($Iterable, $WORD);
+extern struct B_SequenceD_list *B_SequenceD_listG_witness;
+extern struct B_CollectionD_SequenceD_list *B_CollectionD_SequenceD_listG_witness;
 
-extern struct $Sequence$list$class $Sequence$list$methods;
-$Sequence$list $Sequence$list$new();
-extern struct $Collection$list$class $Collection$list$methods;
-$Collection$list $Collection$list$new($Sequence);
-extern struct $Times$list$class $Times$list$methods;
-$Times$list $Times$list$new($Sequence);
-extern struct $Container$list$class $Container$list$methods;
-$Container$list $Container$list$new($Eq);
-extern struct $Ord$list$class $Ord$list$methods;
-$Ord$list $Ord$list$new($Ord);
-
-extern struct $Sequence$list *$Sequence$list$witness;
-extern struct $Collection$list *$Collection$list$witness;
-
-
-// void $printlist($list list); //for debugging; only for lists of ints
+#define $SequenceD_listG_witness B_SequenceD_listG_witness
+#define $CollectionD_listG_witness B_CollectionD_SequenceD_listG_witness
 
 // Iterators over lists ///////////////////////////////////////////////////////
 
-typedef struct $Iterator$list *$Iterator$list; ;
+typedef struct B_IteratorD_list *B_IteratorD_list; ;
 
-struct $Iterator$list$class {
+struct B_IteratorD_listG_class {
   char *$GCINFO;
   int $class_id;
-  $Super$class $superclass;
-  void (*__init__)($Iterator$list, $list);
-  void (*__serialize__)($Iterator$list,$Serial$state);
-  $Iterator$list (*__deserialize__)($Iterator$list,$Serial$state);
-  $bool (*__bool__)($Iterator$list);
-  $str (*__str__)($Iterator$list);
-  $str (*__repr__)($Iterator$list);
-  $WORD(*__next__)($Iterator$list);
+  $SuperG_class $superclass;
+  void (*__init__)(B_IteratorD_list, B_list);
+  void (*__serialize__)(B_IteratorD_list,$Serial$state);
+  B_IteratorD_list (*__deserialize__)(B_IteratorD_list,$Serial$state);
+  B_bool (*__bool__)(B_IteratorD_list);
+  B_str (*__str__)(B_IteratorD_list);
+  B_str (*__repr__)(B_IteratorD_list);
+  $WORD(*__next__)(B_IteratorD_list);
 };
 
-struct $Iterator$list {
-  struct $Iterator$list$class *$class;
-  $list src;
+struct B_IteratorD_list {
+  struct B_IteratorD_listG_class *$class;
+  B_list src;
   int nxt;
 };
 
-extern struct  $Iterator$list$class  $Iterator$list$methods;
-$Iterator$list $Iterator$list$new($list);
+extern struct  B_IteratorD_listG_class  B_IteratorD_listG_methods;
+B_IteratorD_list B_IteratorD_listG_new(B_list);
 
+//convenience functions used at various places.
+B_list B_listD_new(int capacity);
+B_list B_listD_copy(B_list lst);

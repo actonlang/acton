@@ -1,35 +1,11 @@
-struct $bool$class {
-  char *$GCINFO;
-  int $class_id;
-  $Super$class $superclass;
-  void (*__init__)($bool, $value);
-  void (*__serialize__)($bool, $Serial$state);
-  $bool (*__deserialize__)($bool, $Serial$state);
-  $bool (*__bool__)($bool);
-  $str (*__str__)($bool);
-  $str (*__repr__)($bool);
-};
-
-struct $bool {
-  struct $bool$class *$class;
+struct B_bool {
+  struct B_boolG_class *$class;
   long val;
 };
 
-extern struct $bool$class $bool$methods;
-$bool $bool$new($value);
+B_bool toB_bool(long b);
+long fromB_bool(B_bool b);
 
-//extern struct $Eq$bool$class $Eq$bool$methods;
-//$Eq$bool $Eq$bool$new();
+extern B_bool B_True, B_False;
 
-extern struct $Hashable$bool$class $Hashable$bool$methods;
-$Hashable$bool $Hashable$bool$new();
-
-//extern struct $Eq$bool *$Eq$bool$witness;
-extern struct $Hashable$bool *$Hashable$bool$witness;
-
-$bool to$bool(long b);
-long from$bool($bool b);
-
-extern $bool $True, $False;
-
-$bool $default__bool__($value);
+B_bool $default__bool__(B_value);

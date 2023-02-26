@@ -16,17 +16,17 @@
 #include "../ndarray.h"
 
 int main() {
-  $ndarray v = $ndarray_arange(to$int(60));
-  $list newshape = $NEW($list,NULL,NULL);
-  $list_append(newshape,to$int(3));
-  $list_append(newshape,to$int(2));
-  $list_append(newshape,to$int(2));
-  $list_append(newshape,to$int(5));
+  $ndarray v = $ndarray_arange(toB_int(60));
+  B_list newshape = $NEW(B_list,NULL,NULL);
+  B_listD_append(newshape,toB_int(3));
+  B_listD_append(newshape,toB_int(2));
+  B_listD_append(newshape,toB_int(2));
+  B_listD_append(newshape,toB_int(5));
   $ndarray a = $ndarray_reshape(v,newshape);
   printf("a.shape = %s\n",a->shape->$class->__str__(a->shape)->str);
   printf("a.strides = %s\n",a->strides->$class->__str__(a->strides)->str);
   printf("a=%s\n",a->$class->__str__(a)->str);
-  $Plus$ndarray$int wit = $Plus$ndarray$int$witness;
+  B_Plus$ndarrayD_int wit = B_Plus$ndarrayD_intG_witness;
   $ndarray b = wit->$class->__add__(wit,a, a);
   printf("b.shape = %s\n",b->shape->$class->__str__(b->shape)->str);
   printf("b.strides = %s\n",b->strides->$class->__str__(b->strides)->str);

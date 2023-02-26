@@ -12,43 +12,10 @@
  * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-$Iterator $Iterable$Iterator_iter($Iterable$Iterator wit, $Iterator self) {
+B_Iterator B_IterableD_IteratorD___iter__(B_IterableD_Iterator wit, B_Iterator self) {
     return self;
 }
-
-$Iterable$Iterator $Iterable$Iterator$new() {
-    return $NEW($Iterable$Iterator);
-}
-
-struct $Iterable$Iterator$class $Iterable$Iterator$methods = {
-    "$Iterable$Iterator",
-    UNASSIGNED,
-    ($Super$class)&$Iterable$methods,
-    (void (*)($Iterable$Iterator))$default__init__,
-    $Iterable$Iterator$__serialize__,
-    $Iterable$Iterator$__deserialize__,
-    ($bool (*)($Iterable$Iterator))$default__bool__,
-    ($str (*)($Iterable$Iterator))$default__str__,
-    ($str (*)($Iterable$Iterator))$default__str__,
-    $Iterable$Iterator_iter
-};
-
-struct $Iterable$Iterator $Iterable$Iterator_instance = {&$Iterable$Iterator$methods};
-$Iterable$Iterator $Iterable$Iterator$witness = &$Iterable$Iterator_instance;
-
-
-struct $Iterator$class $Iterator$methods = {"$Iterator",UNASSIGNED,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL}; // $Iterator is an abstract class
-struct $Iterator $Iterator_instance = {&$Iterator$methods};
-struct $Iterator *$Iterator$witness = &$Iterator_instance;
-
-void $Iterable$Iterator$__serialize__( $Iterable$Iterator self, $Serial$state state) {
-}
-
-$Iterable$Iterator $Iterable$Iterator$__deserialize__($Iterable$Iterator self, $Serial$state state) {
-    $Iterable$Iterator res = $DNEW($Iterable$Iterator,state);
-    return res;
-}
-
-$WORD $next($Iterator it) {
+ 
+$WORD $next(B_Iterator it) {
     return it->$class->__next__(it);
 }

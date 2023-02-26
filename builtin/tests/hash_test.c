@@ -18,12 +18,12 @@
 #include "../builtin.h"
 
 int main() {
-  $Hashable wit = ($Hashable)$Hashable$str$witness;
-  printf("hash of %d is %ld\n",543,$int_hash(to$int(543)));
-  printf("hash of %d is %ld\n",-1,$int_hash(to$int(-1)));
-  printf("hash of %d is %ld\n",-5,$int_hash(to$int(-5)));
-  printf("hash of %f is %ld\n",-2.0,$float_hash(to$float(-2.0)));
-  printf("hash of %f is %ld\n",-1.0,$float_hash(to$float(-1.0)));
-  printf("hash of %f is %ld\n",0.75,$float_hash(to$float(0.75)));
-  printf("hash of 'test' as $str is %ld\n",from$int(wit->$class->__hash__(wit,to$str("test"))));
+  B_Hashable wit = (B_Hashable)B_HashableD_strG_witness;
+  printf("hash of %d is %ld\n",543,B_intD_hash(toB_int(543)));
+  printf("hash of %d is %ld\n",-1,B_intD_hash(toB_int(-1)));
+  printf("hash of %d is %ld\n",-5,B_intD_hash(toB_int(-5)));
+  printf("hash of %f is %ld\n",-2.0,B_floatD_hash(to$float(-2.0)));
+  printf("hash of %f is %ld\n",-1.0,B_floatD_hash(to$float(-1.0)));
+  printf("hash of %f is %ld\n",0.75,B_floatD_hash(to$float(0.75)));
+  printf("hash of 'test' as B_str is %ld\n",from$int(wit->$class->__hash__(wit,to$str("test"))));
 }

@@ -16,14 +16,14 @@
 
 // General methods ///////////////////////////////////////////////////////////////////////
 
-$float $float$new($atom a) {
-    if ($ISINSTANCE(a,$i64)->val) return to$float((double)(($i64)a)->val);
-    if ($ISINSTANCE(a,$int)->val) {
-        zz_struct aval = (($int)a)->val;
+B_float B_floatG_new(B_atom a) {
+    if ($ISINSTANCE(a,B_i64)->val) return to$float((double)((B_i64)a)->val);
+    if ($ISINSTANCE(a,B_int)->val) {
+        zz_struct aval = ((B_int)a)->val;
         if (aval.size == 0)
             return to$float(0.0);
         if (labs(aval.size) > 16)
-            $RAISE(($BaseException)$NEW($ValueError,to$str("float(): int value too big for type float")));
+            $RAISE((B_BaseException)$NEW(B_ValueError,to$str("float(): int value too big for type float")));
         double pow = 1.0;  
         double res = 0.0;
         for (int i = 0; i<(labs(aval.size)); i++) {
@@ -32,385 +32,332 @@ $float $float$new($atom a) {
         }
         return to$float(aval.size<0 ? -res : res);
     }
-    if ($ISINSTANCE(a,$float)->val) return ($float)a;
-    if ($ISINSTANCE(a,$bool)->val) return to$float((double)(($bool)a)->val);
-    if ($ISINSTANCE(a,$str)->val) {
+    if ($ISINSTANCE(a,B_float)->val) return (B_float)a;
+    if ($ISINSTANCE(a,B_bool)->val) return to$float((double)((B_bool)a)->val);
+    if ($ISINSTANCE(a,B_str)->val) {
         double x;
         int c;
-        sscanf((char *)(($str)a)->str,"%lf%n",&x,&c);
-        if (c==(($str)a)->nbytes)
+        sscanf((char *)((B_str)a)->str,"%lf%n",&x,&c);
+        if (c==((B_str)a)->nbytes)
             return to$float(x);
         else
-            $RAISE(($BaseException)$NEW($ValueError,to$str("float_fromatom(): invalid str literal for type float")));
+            $RAISE((B_BaseException)$NEW(B_ValueError,to$str("float_fromatom(): invalid str literal for type float")));
     }
     fprintf(stderr,"internal error: float_fromatom: argument not of atomic type");
     exit(-1);
 
 }
 
-void $float_init($float self, $atom a){
-    self->val = $float$new(a)->val;
+B_NoneType B_floatD___init__(B_float self, B_atom a){
+    self->val = B_floatG_new(a)->val;
+    return B_None;
 }
 
-void $float_serialize($float self, $Serial$state state) {
+void B_floatD___serialize__(B_float self, $Serial$state state) {
     $val_serialize(FLOAT_ID,&self->val,state);
 }
 
-$float $float_deserialize($float self, $Serial$state state) {
+B_float B_floatD___deserialize__(B_float self, $Serial$state state) {
     $WORD w = $val_deserialize(state);
     double x;
     memcpy(&x,&w,sizeof($WORD));
     return to$float(x);
 }
 
-$bool $float_bool($float x) {
-    return to$bool(x->val != 0.0);
+B_bool B_floatD___bool__(B_float x) {
+    return toB_bool(x->val != 0.0);
 }
 
-$str $float_str($float x) {
+B_str B_floatD___str__(B_float x) {
     char *s;
     asprintf(&s,"%g",x->val);
     return to$str(s);
 }
 
-struct $float$class $float$methods = {
-    "$float",
-    UNASSIGNED,
-    ($Super$class)&$value$methods,
-    $float_init,
-    $float_serialize,
-    $float_deserialize,
-    $float_bool,
-    $float_str,
-    $float_str
-};
-  
-$float to$float(double x) {
-    $float res = malloc(sizeof(struct $float));
-    res->$class = &$float$methods;
+B_float to$float(double x) {
+    B_float res = malloc(sizeof(struct B_float));
+    res->$class = &B_floatG_methods;
     res->val = x;
     return res;
 }
 
-double from$float($float x) {
+double fromB_float(B_float x) {
     return x->val;
 }
 
 
-// $Real$float /////////////////////////////////////////////////////////////////////////
+// B_RealFloatD_float /////////////////////////////////////////////////////////////////////////
 
-void $Real$float$__serialize__($Real$float self, $Serial$state state) {
-    $step_serialize(self->w$Minus, state);
-}
-
-$Real$float $Real$float$__deserialize__($Real$float self, $Serial$state state) {
-    $Real$float res = $DNEW($Real$float,state);
-    res->w$Minus = ($Minus)$step_deserialize(state);
-    return res;
-}
-
-
-$float $Real$float$__add__($Real$float wit,  $float a, $float b) {
-    return to$float(from$float(a) + from$float(b));
+B_float B_RealFloatD_floatD___add__(B_RealFloatD_float wit,  B_float a, B_float b) {
+    return to$float(fromB_float(a) + fromB_float(b));
 }  
 
-$float $Real$float$__fromatom__($Real$float wit, $atom a) {
-    return $float$new(a);
+B_float B_RealFloatD_floatD___fromatom__(B_RealFloatD_float wit, B_atom a) {
+    return B_floatG_new(a);
 }
 
-$complex $Real$float$__complx__($Real$float wit, $float a) {
-    return to$complex(a->val);
+B_complex B_RealFloatD_floatD___complex__(B_RealFloatD_float wit, B_float a) {
+    return toB_complex(a->val);
 }
 
-$float $Real$float$__mul__($Real$float wit,  $float a, $float b) {
-    return to$float(from$float(a) * from$float(b));
+B_float B_RealFloatD_floatD___mul__(B_RealFloatD_float wit,  B_float a, B_float b) {
+    return to$float(fromB_float(a) * fromB_float(b));
 }  
 
-$float $Real$float$__pow__($Real$float wit,  $float a, $float b) {
-    return to$float(exp(from$float(b) * log(from$float(a))));
+B_float B_RealFloatD_floatD___pow__(B_RealFloatD_float wit,  B_float a, B_float b) {
+    return to$float(exp(fromB_float(b) * log(fromB_float(a))));
 }
 
-$float $Real$float$__neg__($Real$float wit, $float a) {
-    return to$float(-from$float(a));
+B_float B_RealFloatD_floatD___neg__(B_RealFloatD_float wit, B_float a) {
+    return to$float(-fromB_float(a));
 }
 
-$float $Real$float$__pos__($Real$float wit, $float a) {
+B_float B_RealFloatD_floatD___pos__(B_RealFloatD_float wit, B_float a) {
     return a;
 }
 
-$WORD $Real$float$real($Real$float wit, $float a, $Real wit2) {
-    return wit2->$class->__fromatom__(wit2,($atom)a);
+$WORD B_RealFloatD_floatD_real(B_RealFloatD_float wit, B_float a, B_Real wit2) {
+    return wit2->$class->__fromatom__(wit2,(B_atom)a);
 }
 
-$WORD $Real$float$imag($Real$float wit, $float a, $Real wit2) {
-    return wit2->$class->__fromatom__(wit2,($atom)to$float(0.0));
+$WORD B_RealFloatD_floatD_imag(B_RealFloatD_float wit, B_float a, B_Real wit2) {
+    return wit2->$class->__fromatom__(wit2,(B_atom)to$float(0.0));
 }
 
-$WORD $Real$float$__abs__($Real$float wit, $float a, $Real wit2) {
-    return wit2->$class->__fromatom__(wit2,($atom)to$float(fabs(from$float(a))));
+$WORD B_RealFloatD_floatD___abs__(B_RealFloatD_float wit, B_float a, B_Real wit2) {
+    return wit2->$class->__fromatom__(wit2,(B_atom)to$float(fabs(fromB_float(a))));
 }
 
-$float $Real$float$conjugate($Real$float wit, $float a) {
+B_float B_RealFloatD_floatD_conjugate(B_RealFloatD_float wit, B_float a) {
     return a;
 }
-$float $Real$float$__float__ ($Real$float wit, $float x) {
+B_float B_RealFloatD_floatD___float__ (B_RealFloatD_float wit, B_float x) {
     return x;
 }
 
-$WORD $Real$float$__trunc__ ($Real$float wit, $float x, $Integral wit2) {
-    return wit2->$class->__fromatom__(wit2,($atom)to$int((long)trunc(from$float(x))));
+$WORD B_RealFloatD_floatD___trunc__ (B_RealFloatD_float wit, B_float x, B_Integral wit2) {
+    return wit2->$class->__fromatom__(wit2,(B_atom)toB_int((long)trunc(fromB_float(x))));
 }
   
-$WORD $Real$float$__floor__ ($Real$float wit, $float x, $Integral wit2) {
-    return wit2->$class->__fromatom__(wit2,($atom)to$int((long)floor(from$float(x))));
+$WORD B_RealFloatD_floatD___floor__ (B_RealFloatD_float wit, B_float x, B_Integral wit2) {
+    return wit2->$class->__fromatom__(wit2,(B_atom)toB_int((long)floor(fromB_float(x))));
 }
   
-$WORD $Real$float$__ceil__ ($Real$float wit, $float x, $Integral wit2) {
-    return wit2->$class->__fromatom__(wit2,($atom)to$int((long)ceil(from$float(x))));
+$WORD B_RealFloatD_floatD___ceil__ (B_RealFloatD_float wit, B_float x, B_Integral wit2) {
+    return wit2->$class->__fromatom__(wit2,(B_atom)toB_int((long)ceil(fromB_float(x))));
 }
   
-$float $Real$float$__round__ ($Real$float wit, $float x, $int p) {
+B_float B_RealFloatD_floatD___round__ (B_RealFloatD_float wit, B_float x, B_int p) {
     double pval = p==NULL ? 0.0 : (double)from$int(p);
     double p10 = pow(10.0,pval);
     return to$float(round(x->val * p10)/p10);
 }
      
-// $Minus$float  ////////////////////////////////////////////////////////////////////////////////////////
+// B_MinusD_RealFloatD_float  ////////////////////////////////////////////////////////////////////////////////////////
 
-void $Minus$float$__serialize__($Minus$float self, $Serial$state state) {
-    $step_serialize(self->w$Real, state);
-}
-
-$Minus$float $Minus$float$__deserialize__($Minus$float self, $Serial$state state) {
-    $Minus$float res = $DNEW($Minus$float,state);
-    res->w$Real = ($Real)$step_deserialize(state);
-    return res;
-}
-
-$float $Minus$float$__sub__($Minus$float wit,  $float a, $float b) {
-    return to$float(from$float(a) - from$float(b));
+ 
+B_float B_MinusD_RealFloatD_floatD___sub__(B_MinusD_RealFloatD_float wit,  B_float a, B_float b) {
+    return to$float(fromB_float(a) - fromB_float(b));
 }  
 
-// $Div$float  ////////////////////////////////////////////////////////////////////////////////////////
+// B_DivD_float  ////////////////////////////////////////////////////////////////////////////////////////
 
-void $Div$float$__serialize__($Div$float self, $Serial$state state) {
-}
-
-$Div$float $Div$float$__deserialize__($Div$float self, $Serial$state state) {
-    $Div$float res = $DNEW($Div$float,state);
-    return res;
-}
-
-$float $Div$float$__truediv__($Div$float wit, $float a, $float b) {
-    return to$float(from$float(a) / from$float(b));
+B_float B_DivD_floatD___truediv__(B_DivD_float wit, B_float a, B_float b) {
+    return to$float(fromB_float(a) / fromB_float(b));
 }  
 
-// $Ord$float  ////////////////////////////////////////////////////////////////////////////////////////
+// B_OrdD_float  ////////////////////////////////////////////////////////////////////////////////////////
 
-void $Ord$float$__serialize__($Ord$float self, $Serial$state state) {
+B_bool B_OrdD_floatD___eq__ (B_OrdD_float wit, B_float a, B_float b) {
+    return toB_bool(a->val == b->val);
 }
 
-$Ord$float $Ord$float$__deserialize__($Ord$float self, $Serial$state state) {
-    $Ord$float res = $DNEW($Ord$float,state);
-    return res;
+B_bool B_OrdD_floatD___ne__ (B_OrdD_float wit, B_float a, B_float b) {
+    return toB_bool(a->val != b->val);
 }
 
-$bool $Ord$float$__eq__ ($Ord$float wit, $float a, $float b) {
-    return to$bool(a->val == b->val);
+B_bool B_OrdD_floatD___lt__ (B_OrdD_float wit, B_float a, B_float b) {
+    return toB_bool(a->val < b->val);
 }
 
-$bool $Ord$float$__ne__ ($Ord$float wit, $float a, $float b) {
-    return to$bool(a->val != b->val);
+B_bool B_OrdD_floatD___le__ (B_OrdD_float wit, B_float a, B_float b) {
+    return toB_bool(a->val <= b->val);
 }
 
-$bool $Ord$float$__lt__ ($Ord$float wit, $float a, $float b) {
-    return to$bool(a->val < b->val);
+B_bool B_OrdD_floatD___gt__ (B_OrdD_float wit, B_float a, B_float b) {
+    return toB_bool(a->val > b->val);
 }
 
-$bool $Ord$float$__le__ ($Ord$float wit, $float a, $float b) {
-    return to$bool(a->val <= b->val);
-}
-
-$bool $Ord$float$__gt__ ($Ord$float wit, $float a, $float b) {
-    return to$bool(a->val > b->val);
-}
-
-$bool $Ord$float$__ge__ ($Ord$float wit, $float a, $float b) {
-    return to$bool(a->val >= b->val);
+B_bool B_OrdD_floatD___ge__ (B_OrdD_float wit, B_float a, B_float b) {
+    return toB_bool(a->val >= b->val);
 }
 
 
-// $Hashable$float ///////////////////////////////////////////////////////////////////////////////////////////////////////
+// B_HashableD_float ///////////////////////////////////////////////////////////////////////////////////////////////////////
 
-void $Hashable$float$__serialize__($Hashable$float self, $Serial$state state) {
+B_bool B_HashableD_floatD___eq__(B_HashableD_float wit, B_float a, B_float b) {
+    return toB_bool(a->val == b->val);
 }
 
-$Hashable$float $Hashable$float$__deserialize__($Hashable$float self, $Serial$state state) {
-    $Hashable$float res = $DNEW($Hashable$float,state);
-    return res;
+B_bool B_HashableD_floatD___neq__(B_HashableD_float wit, B_float a, B_float b) {
+    return toB_bool(a->val != b->val);
 }
 
-$bool $Hashable$float$__eq__($Hashable$float wit, $float a, $float b) {
-    return to$bool(a->val == b->val);
-}
-
-$bool $Hashable$float$__neq__($Hashable$float wit, $float a, $float b) {
-    return to$bool(a->val != b->val);
-}
-
-$int $Hashable$float$__hash__($Hashable$float wit, $float a) {
-    return to$int($float_hash(a));
+B_int B_HashableD_floatD___hash__(B_HashableD_float wit, B_float a) {
+    return toB_int(B_floatD_hash(a));
 }
 
 // init methods ////////////////////////////////////////////////////////////////////////////////////////////////
-
-void $Real$float_init($Real$float wit) {
-    wit-> w$Minus = ($Minus)$NEW($Minus$float,($Real)wit);
+/*
+B_NoneType B_RealFloatD_float_init(B_RealFloatD_float wit) {
+    wit-> W_Minus = (B_Minus)$NEW(B_MinusD_RealFloatD_float,(B_RealFloat)wit);
+    return B_None;
 };
 
-void $Minus$float_init($Minus$float wit, $Real w$Real) {
-    wit->w$Real =  w$Real;
+B_NoneType B_MinusD_RealFloatD_float_init(B_MinusD_RealFloatD_float wit, B_RealFloat W_RealFloat) {
+    wit->W_RealFloat =  W_RealFloat;
+    return B_None;
 }
 
-void $Ord$float_init($Ord$float wit) {
-    return;
+B_NoneType B_OrdD_float_init(B_OrdD_float wit) {
+    return B_None;
 }
-void $Div$float_init($Div$float wit) {
-    return;
-}
-
-void $Hashable$float_init($Hashable$float wit) {
-    return;
+B_NoneType B_DivD_float_init(B_DivD_float wit) {
+    return B_None;
 }
 
-$Real$float $Real$float$new() {
-    return $NEW($Real$float);
+B_NoneType B_HashableD_float_init(B_HashableD_float wit) {
+    return B_None;
 }
 
-$Div$float $Div$float$new() {
-    return $NEW($Div$float);
+B_RealFloatD_float B_RealFloatD_floatG_new() {
+    return $NEW(B_RealFloatD_float);
 }
 
-$Minus$float $Minus$float$new($Real wit) {
-    return $NEW($Minus$float,wit);
+B_DivD_float B_DivD_floatG_new() {
+    return $NEW(B_DivD_float);
+}
+
+B_MinusD_RealFloatD_float B_MinusD_RealFloatD_floatG_new(B_RealFloat wit) {
+    return $NEW(B_MinusD_RealFloatD_float,wit);
 }
   
-$Ord$float $Ord$float$new() {
-    return $NEW($Ord$float);
+B_OrdD_float B_OrdD_floatG_new() {
+    return $NEW(B_OrdD_float);
 }
 
-$Hashable$float $Hashable$float$new() {
-    return $NEW($Hashable$float);
+B_HashableD_float B_HashableD_floatG_new() {
+    return $NEW(B_HashableD_float);
 }
 
 
-struct $Real$float $Real$float_instance;
-struct $Minus$float $Minus$float_instance;
-struct $Ord$float $Ord$float_instance;
-struct $Hashable$float $Hashable$float_instance;
+struct B_RealFloatD_float B_RealFloatD_float_instance;
+struct B_MinusD_RealFloatD_float B_MinusD_RealFloatD_float_instance;
+struct B_OrdD_float B_OrdD_float_instance;
+struct B_HashableD_float B_HashableD_float_instance;
 
-struct $Real$float$class $Real$float$methods = {
-    "$Real$float",
+struct B_RealFloatD_floatG_class B_RealFloatD_floatG_methods = {
+    "B_RealFloatD_float",
     UNASSIGNED,
-    ($Super$class)&$Real$methods,
-    $Real$float_init,
-    $Real$float$__serialize__,
-    $Real$float$__deserialize__,
-    ($bool (*)($Real$float))$default__bool__,
-    ($str (*)($Real$float))$default__str__,
-    ($str (*)($Real$float))$default__str__,
-    $Real$float$__add__,
-    ($float (*)($Real$float, $float, $float))$Plus$__iadd__,
-    $Real$float$__mul__,
-    ($float (*)($Real$float, $float, $float))$Times$__imul__,
-    $Real$float$__fromatom__,
-    $Real$float$__complx__,
-    $Real$float$__pow__,
-    ($float (*)($Real$float, $float, $float))$Number$__ipow__,
-    $Real$float$__neg__,
-    $Real$float$__pos__,
-    $Real$float$real,
-    $Real$float$imag,
-    $Real$float$__abs__,
-    $Real$float$conjugate,
-    $Real$float$__float__,
-    $Real$float$__trunc__ ,
-    $Real$float$__floor__ ,
-    $Real$float$__ceil__ ,
-    $Real$float$__round__
+    ($SuperG_class)&B_RealG_methods,
+    B_RealFloatD_float_init,
+    B_RealFloatD_floatD___serialize__,
+    B_RealFloatD_floatD___deserialize__,
+    (B_bool (*)(B_RealFloatD_float))$default__bool__,
+    (B_str (*)(B_RealFloatD_float))$default__str__,
+    (B_str (*)(B_RealFloatD_float))$default__str__,
+    B_RealFloatD_floatD___add__,
+    (B_float (*)(B_RealFloatD_float, B_float, B_float))B_PlusD___iadd__,
+    B_RealFloatD_floatD___mul__,
+    (B_float (*)(B_RealFloatD_float, B_float, B_float))B_TimesD___imul__,
+    B_RealFloatD_floatD___fromatom__,
+    B_RealFloatD_floatD___complx__,
+    B_RealFloatD_floatD___pow__,
+    (B_float (*)(B_RealFloatD_float, B_float, B_float))B_NumberD___ipow__,
+    B_RealFloatD_floatD___neg__,
+    B_RealFloatD_floatD___pos__,
+    B_RealFloatD_float$real,
+    B_RealFloatD_float$imag,
+    B_RealFloatD_floatD___abs__,
+    B_RealFloatD_float$conjugate,
+    B_RealFloatD_floatD___float__,
+    B_RealFloatD_floatD___trunc__ ,
+    B_RealFloatD_floatD___floor__ ,
+    B_RealFloatD_floatD___ceil__ ,
+    B_RealFloatD_floatD___round__
 };
-struct $Real$float $Real$float_instance = {&$Real$float$methods, ($Minus)&$Minus$float_instance};
-$Real$float $Real$float$witness = &$Real$float_instance;
+struct B_RealFloatD_float B_RealFloatD_float_instance = {&B_RealFloatD_floatG_methods, (B_Minus)&B_MinusD_RealFloatD_float_instance};
+B_RealFloatD_float B_RealFloatD_floatG_witness = &B_RealFloatD_float_instance;
 
-struct $Minus$float$class $Minus$float$methods = {
-    "$Minus$float",
+struct B_MinusD_RealFloatD_floatG_class B_MinusD_RealFloatD_floatG_methods = {
+    "B_MinusD_RealFloatD_float",
     UNASSIGNED,
-    ($Super$class)&$Minus$methods,
-    $Minus$float_init,
-    $Minus$float$__serialize__,
-    $Minus$float$__deserialize__,
-    ($bool (*)($Minus$float))$default__bool__,
-    ($str (*)($Minus$float))$default__str__,
-    ($str (*)($Minus$float))$default__str__,
-    $Minus$float$__sub__,
-    ($float (*)($Minus$float, $float, $float))$Minus$__isub__,
+    ($SuperG_class)&B_MinusG_methods,
+    B_MinusD_RealFloatD_float_init,
+    B_MinusD_RealFloatD_floatD___serialize__,
+    B_MinusD_RealFloatD_floatD___deserialize__,
+    (B_bool (*)(B_MinusD_RealFloatD_float))$default__bool__,
+    (B_str (*)(B_MinusD_RealFloatD_float))$default__str__,
+    (B_str (*)(B_MinusD_RealFloatD_float))$default__str__,
+    B_MinusD_RealFloatD_floatD___sub__,
+    (B_float (*)(B_MinusD_RealFloatD_float, B_float, B_float))B_MinusD___isub__,
 
 };
-struct $Minus$float $Minus$float_instance = {&$Minus$float$methods, ($Real)&$Real$float_instance};
-$Minus$float $Minus$float$witness = &$Minus$float_instance;
+struct B_MinusD_RealFloatD_float B_MinusD_RealFloatD_float_instance = {&B_MinusD_RealFloatD_floatG_methods, (B_Number)&B_RealFloatD_float_instance};
+B_MinusD_RealFloatD_float B_MinusD_RealFloatD_floatG_witness = &B_MinusD_RealFloatD_float_instance;
 
-struct $Div$float$class $Div$float$methods = {
-    "$Div$float",
+struct B_DivD_floatG_class B_DivD_floatG_methods = {
+    "B_DivD_float",
     UNASSIGNED,
-    ($Super$class)&$Div$methods,
-    $Div$float_init,
-    $Div$float$__serialize__,
-    $Div$float$__deserialize__,
-    ($bool (*)($Div$float))$default__bool__,
-    ($str (*)($Div$float))$default__str__,
-    ($str (*)($Div$float))$default__str__,
-    $Div$float$__truediv__,
-    ($float (*)($Div$float, $float, $float))$Div$__itruediv__,
+    ($SuperG_class)&B_DivG_methods,
+    B_DivD_float_init,
+    B_DivD_floatD___serialize__,
+    B_DivD_floatD___deserialize__,
+    (B_bool (*)(B_DivD_float))$default__bool__,
+    (B_str (*)(B_DivD_float))$default__str__,
+    (B_str (*)(B_DivD_float))$default__str__,
+    B_DivD_floatD___truediv__,
+    (B_float (*)(B_DivD_float, B_float, B_float))B_DivD___itruediv__,
 };
 
-struct $Div$float $Div$float_instance = {&$Div$float$methods};
-$Div$float $Div$float$witness = &$Div$float_instance;
+struct B_DivD_float B_DivD_float_instance = {&B_DivD_floatG_methods};
+B_DivD_float B_DivD_floatG_witness = &B_DivD_float_instance;
 
 
-struct $Ord$float$class $Ord$float$methods = {
-    "$Ord$float",
+struct B_OrdD_floatG_class B_OrdD_floatG_methods = {
+    "B_OrdD_float",
     UNASSIGNED,
-    ($Super$class)&$Ord$methods,
-    $Ord$float_init,
-    $Ord$float$__serialize__,
-    $Ord$float$__deserialize__,
-    ($bool (*)($Ord$float))$default__bool__,
-    ($str (*)($Ord$float))$default__str__,
-    ($str (*)($Ord$float))$default__str__,
-    $Ord$float$__eq__ ,
-    $Ord$float$__ne__ ,
-    $Ord$float$__lt__ ,
-    $Ord$float$__le__ ,
-    $Ord$float$__gt__ ,
-    $Ord$float$__ge__
+    ($SuperG_class)&B_OrdG_methods,
+    B_OrdD_float_init,
+    B_OrdD_floatD___serialize__,
+    B_OrdD_floatD___deserialize__,
+    (B_bool (*)(B_OrdD_float))$default__bool__,
+    (B_str (*)(B_OrdD_float))$default__str__,
+    (B_str (*)(B_OrdD_float))$default__str__,
+    B_OrdD_floatD___eq__ ,
+    B_OrdD_floatD___ne__ ,
+    B_OrdD_floatD___lt__ ,
+    B_OrdD_floatD___le__ ,
+    B_OrdD_floatD___gt__ ,
+    B_OrdD_floatD___ge__
 };
-struct $Ord$float $Ord$float_instance = {&$Ord$float$methods};
-$Ord$float $Ord$float$witness = &$Ord$float_instance;
+struct B_OrdD_float B_OrdD_float_instance = {&B_OrdD_floatG_methods};
+B_OrdD_float B_OrdD_floatG_witness = &B_OrdD_float_instance;
 
-struct $Hashable$float$class $Hashable$float$methods = {
-    "$Hashable$float",
+struct B_HashableD_floatG_class B_HashableD_floatG_methods = {
+    "B_HashableD_float",
     UNASSIGNED,
-    ($Super$class)&$Hashable$methods,
-    $Hashable$float_init,
-    $Hashable$float$__serialize__,
-    $Hashable$float$__deserialize__,
-    ($bool (*)($Hashable$float))$default__bool__,
-    ($str (*)($Hashable$float))$default__str__,
-    ($str (*)($Hashable$float))$default__str__,
-    $Hashable$float$__eq__,
-    $Hashable$float$__neq__,
-    $Hashable$float$__hash__
+    ($SuperG_class)&B_HashableG_methods,
+    B_HashableD_float_init,
+    B_HashableD_floatD___serialize__,
+    B_HashableD_floatD___deserialize__,
+    (B_bool (*)(B_HashableD_float))$default__bool__,
+    (B_str (*)(B_HashableD_float))$default__str__,
+    (B_str (*)(B_HashableD_float))$default__str__,
+    B_HashableD_floatD___eq__,
+    B_HashableD_floatD___neq__,
+    B_HashableD_floatD___hash__
 };
-struct $Hashable$float $Hashable$float_instance = {&$Hashable$float$methods};
-$Hashable$float $Hashable$float$witness = &$Hashable$float_instance;
- 
+struct B_HashableD_float B_HashableD_float_instance = {&B_HashableD_floatG_methods};
+B_HashableD_float B_HashableD_floatG_witness = &B_HashableD_float_instance;
+*/

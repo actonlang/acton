@@ -62,8 +62,29 @@ actor TCPIPConnection(auth: TCPConnectAuth, address: str, port: int, on_connect:
         NotImplemented
     _init()
 
-actor TCPListenConnection(auth: _TCPListenConnectAuth, client: int, on_receive: action(TCPListenConnection, bytes) -> None, on_error: action(TCPListenConnection, str) -> None):
+actor TCPListenConnection(auth: _TCPListenConnectAuth, server_client: int):
     """TCP Listener Connection"""
+    var client: int = -1
+    var on_receive: ?action(TCPListenConnection, bytes) -> None = None
+    var on_error: ?action(TCPListenConnection, str) -> None = None
+    var _initialized = False
+
+    proc def _read_start():
+        """Implementation internal"""
+        NotImplemented
+
+    action def cb_install(new_on_receive: action(TCPListenConnection, bytes) -> None, new_on_error: action(TCPListenConnection, str) -> None) -> None:
+        """Install callback handlers"""
+        on_receive = new_on_receive
+        on_error = new_on_error
+        if not _initialized:
+            _read_start()
+            _initialized = True
+
+    action def close() -> None:
+        """Close connection"""
+        NotImplemented
+
     action def write(data: bytes) -> None:
         """Write data to remote"""
         NotImplemented
@@ -71,18 +92,17 @@ actor TCPListenConnection(auth: _TCPListenConnectAuth, client: int, on_receive: 
     mut def __resume__() -> None:
         NotImplemented
 
-    proc def _init():
+    proc def _init() -> None:
         """Implementation internal"""
         NotImplemented
     _init()
 
-
-actor TCPListener(auth: TCPListenAuth, address: str, port: int, on_listen_error: action(TCPListener, str) -> None, on_accept: action(TCPListenConnection) -> None, on_receive: action(TCPListenConnection, bytes) -> None, on_error: action(TCPListenConnection, str) -> None):
+actor TCPListener(auth: TCPListenAuth, address: str, port: int, on_error: action(TCPListener, str) -> None, on_accept: action(TCPListenConnection) -> None):
     """TCP Listener"""
     _stream = -1
     def create_tcp_listen_connection(auth: _TCPListenConnectAuth, client: int):
         """Implementation internal"""
-        c = TCPListenConnection(auth, client, on_receive, on_error)
+        c = TCPListenConnection(auth, client)
         on_accept(c)
 
     mut def __resume__() -> None:

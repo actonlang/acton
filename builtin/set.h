@@ -1,67 +1,41 @@
-struct $set$class {
-    char *$GCINFO;
-    int $class_id;
-    $Super$class $superclass;
-    void (*__init__)($set, $Hashable, $Iterable, $WORD);
-    void (*__serialize__)($set, $Serial$state);
-    $set (*__deserialize__)($set, $Serial$state);
-    $bool (*__bool__)($set);
-    $str (*__str__)($set);
-    $str (*__repr__)($set);
-    $set(*copy)($set, $Hashable);
-};
 
 typedef struct {
     $WORD key;
     long hash;    
-} $setentry;
+} B_setentry;
 
-typedef struct $set {
-    struct $set$class *$class;
-    long numelements;    // nr of elements in $set
+struct B_set {
+    struct B_setG_class *$class;
+    long numelements;    // nr of elements in B_set
     long fill;           // numelements + #dummy entries
     long mask;
     long finger;                       // Search finger for pop() 
-    $setentry *table;                  // the hashtable
-} *$set;
+    B_setentry *table;                  // the hashtable
+};
 
-
-extern struct $set$class $set$methods;
-$set $set$new($Hashable, $Iterable, $WORD);
-
-extern struct $Set$set$class $Set$set$methods;
-$Set$set $Set$set$new($Hashable);
-extern struct $Ord$set$class $Ord$set$methods;
-//$Ord$set $Ord$set$new($Set$set);
-extern struct $Minus$set$class $Minus$set$methods;
-//$Minus$set $Minus$set$new($Set$set);
-extern struct $Logical$set$class $Logical$set$methods;
-//$Logical$set $Logical$set$new($Set$set);
-
-extern struct $Set$set *$Set$set_new($Hashable);
 
 // Iterators over sets ///////////////////////////////////////////////////////
 
-typedef struct $Iterator$set *$Iterator$set; ;
+typedef struct B_IteratorD_set *B_IteratorD_set; ;
 
-struct $Iterator$set$class {
+struct B_IteratorD_setG_class {
     char *$GCINFO;
     int $class_id;
-    $Super$class $superclass;
-    void (*__init__)($Iterator$set, $set);
-    void (*__serialize__)($Iterator$set, $Serial$state);
-    $Iterator$set (*__deserialize__)($Iterator$set, $Serial$state);
-    $bool (*__bool__)($Iterator$set);
-    $str (*__str__)($Iterator$set);
-    $str (*__repr__)($Iterator$set);
-    $WORD(*__next__)($Iterator$set);
+    $SuperG_class $superclass;
+    void (*__init__)(B_IteratorD_set, B_set);
+    void (*__serialize__)(B_IteratorD_set, $Serial$state);
+    B_IteratorD_set (*__deserialize__)(B_IteratorD_set, $Serial$state);
+    B_bool (*__bool__)(B_IteratorD_set);
+    B_str (*__str__)(B_IteratorD_set);
+    B_str (*__repr__)(B_IteratorD_set);
+    $WORD(*__next__)(B_IteratorD_set);
 };
 
-struct $Iterator$set {
-    struct $Iterator$set$class *$class;
-    $set src;
+struct B_IteratorD_set {
+    struct B_IteratorD_setG_class *$class;
+    B_set src;
     int nxt;
 };
 
-extern struct  $Iterator$set$class  $Iterator$set$methods;
-$Iterator$set $Iterator$set$new($set);
+extern struct  B_IteratorD_setG_class  B_IteratorD_setG_methods;
+B_IteratorD_set B_IteratorD_setG_new(B_set);

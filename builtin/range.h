@@ -1,53 +1,33 @@
-struct $range$class {
-    char *$GCINFO;
-    int $class_id;
-    $Super$class $superclass;
-    void (*__init__)($range, $int, $int, $int);
-    void (*__serialize__)($range,$Serial$state);
-    $range (*__deserialize__)($range,$Serial$state);
-    $bool (*__bool__)($range);
-    $str (*__str__)($range);
-    $str (*__repr__)($range);
-};
 
-struct $range {
-    struct $range$class *$class;
+struct B_range {
+    struct B_rangeG_class *$class;
     long start;
     long stop;
     long step;
 };
 
-
-extern struct $range$class $range$methods;
-$range $range$new($int, $int, $int);
-
-extern struct $Iterable$range$class $Iterable$range$methods;
-$Iterable$range $Iterable$range$new();
-extern $Iterable$range $Iterable$range$witness;
-
 // Iterators over ranges ///////////////////////////////////////////////////////
 
-typedef struct $Iterator$range *$Iterator$range;
+typedef struct B_IteratorB_range *B_IteratorB_range;
 
-struct $Iterator$range$class {
+struct B_IteratorB_rangeG_class {
     char *$GCINFO;
     int $class_id;
-    $Super$class $superclass;
-    void (*__init__)($Iterator$range, $range);
-    void (*__serialize__)($Iterator$range,$Serial$state);
-    $Iterator$range (*__deserialize__)($Iterator$range,$Serial$state);
-    $bool (*__bool__)($Iterator$range);
-    $str (*__str__)($Iterator$range);
-    $str (*__repr__)($Iterator$range);
-    $WORD(*__next__)($Iterator$range);
+    $SuperG_class $superclass;
+    void (*__init__)(B_IteratorB_range, B_range);
+    void (*__serialize__)(B_IteratorB_range,$Serial$state);
+    B_IteratorB_range (*__deserialize__)(B_IteratorB_range,$Serial$state);
+    B_bool (*__bool__)(B_IteratorB_range);
+    B_str (*__str__)(B_IteratorB_range);
+    B_str (*__repr__)(B_IteratorB_range);
+    $WORD(*__next__)(B_IteratorB_range);
 };
 
-struct $Iterator$range {
-    struct $Iterator$range$class *$class;
-    $range src;
+struct B_IteratorB_range {
+    struct B_IteratorB_rangeG_class *$class;
+    B_range src;
     int nxt;
 };
 
-extern struct $Iterator$range$class  $Iterator$range$methods;
-$Iterator$range $Iterator$range$new($range);
-extern $Iterator$range $Iterator$range$witness;
+extern struct B_IteratorB_rangeG_class  B_IteratorB_rangeG_methods;
+B_IteratorB_range B_IteratorB_rangeG_new(B_range);

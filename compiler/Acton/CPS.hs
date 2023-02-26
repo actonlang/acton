@@ -111,7 +111,7 @@ wrapC c f env                           = eCallCont2 c [level, eLambda' [] cont]
   where (level, cont)                   = f 0 env
 
 unwrapL 0 lvl                           = eVar lvl
-unwrapL n lvl                           = eCall (eDot (eQVar primWIntegralInt) addKW) [eInt n, unwrapL 0 lvl]
+unwrapL n lvl                           = eCall (eDot (eQVar witIntegralInt) addKW) [eInt n, unwrapL 0 lvl]
 
 seqcont n (Pop : ctx)                   = seqcont (n+1) ctx
 seqcont n (Seq c : ctx)                 = (eInt n, eCallCont tNone c eNone)
@@ -176,6 +176,9 @@ instance CPS [Stmt] where
       where t                           = typeOf env e
             cont c                      = if t == tNone then c else eCall (tApp (eQVar primSKIPRESc) [t]) [c]
 
+    cps env (s : Return _ e : _)
+      | e == Just eNone                 = cps env [s]
+      
     cps env (Expr _ e : ss)
       | contCall env e                  = do k <- newName "cont"
                                              x <- newName "res"

@@ -36,124 +36,124 @@ typedef enum HandlerCase {nohandler, readhandler, connecthandler} HandlerCase;
 struct $l$1cont;
 struct $l$2cont;
 struct $l$3cont;
-struct $WorldAuth;
-struct $Env;
+struct B_WorldAuth;
+struct B_Env;
 typedef struct $l$1cont *$l$1cont;
 typedef struct $l$2cont *$l$2cont;
 typedef struct $l$3cont *$l$3cont;
-typedef struct $WorldAuth *$WorldAuth;
-typedef struct $Env *$Env;
-struct $l$1cont$class {
+typedef struct B_WorldAuth *B_WorldAuth;
+typedef struct B_Env *B_Env;
+struct $l$1contG_class {
     char *$GCINFO;
     int $class_id;
-    $Super$class $superclass;
-    $NoneType (*__init__) ($l$1cont, $Env, $str);
+    $SuperG_class $superclass;
+    B_NoneType (*__init__) ($l$1cont, B_Env, B_str);
     void (*__serialize__) ($l$1cont, $Serial$state);
     $l$1cont (*__deserialize__) ($l$1cont, $Serial$state);
-    $bool (*__bool__) ($l$1cont);
-    $str (*__str__) ($l$1cont);
-    $str (*__repr__) ($l$1cont);
+    B_bool (*__bool__) ($l$1cont);
+    B_str (*__str__) ($l$1cont);
+    B_str (*__repr__) ($l$1cont);
     $R (*__call__) ($l$1cont, $Cont);
 };
 struct $l$1cont {
-    struct $l$1cont$class *$class;
-    $Env self;
-    $str s;
+    struct $l$1contG_class *$class;
+    B_Env self;
+    B_str s;
 };
-struct $l$2cont$class {
+struct $l$2contG_class {
     char *$GCINFO;
     int $class_id;
-    $Super$class $superclass;
-    $NoneType (*__init__) ($l$2cont, $Env, $action);
+    $SuperG_class $superclass;
+    B_NoneType (*__init__) ($l$2cont, B_Env, $action);
     void (*__serialize__) ($l$2cont, $Serial$state);
     $l$2cont (*__deserialize__) ($l$2cont, $Serial$state);
-    $bool (*__bool__) ($l$2cont);
-    $str (*__str__) ($l$2cont);
-    $str (*__repr__) ($l$2cont);
+    B_bool (*__bool__) ($l$2cont);
+    B_str (*__str__) ($l$2cont);
+    B_str (*__repr__) ($l$2cont);
     $R (*__call__) ($l$2cont, $Cont);
 };
 struct $l$2cont {
-    struct $l$2cont$class *$class;
-    $Env self;
+    struct $l$2contG_class *$class;
+    B_Env self;
     $action cb;
 };
-struct $l$3cont$class {
+struct $l$3contG_class {
     char *$GCINFO;
     int $class_id;
-    $Super$class $superclass;
-    $NoneType (*__init__) ($l$3cont, $Env, $int);
+    $SuperG_class $superclass;
+    B_NoneType (*__init__) ($l$3cont, B_Env, B_int);
     void (*__serialize__) ($l$3cont, $Serial$state);
     $l$3cont (*__deserialize__) ($l$3cont, $Serial$state);
-    $bool (*__bool__) ($l$3cont);
-    $str (*__str__) ($l$3cont);
-    $str (*__repr__) ($l$3cont);
+    B_bool (*__bool__) ($l$3cont);
+    B_str (*__str__) ($l$3cont);
+    B_str (*__repr__) ($l$3cont);
     $R (*__call__) ($l$3cont, $Cont);
 };
 struct $l$3cont {
-    struct $l$3cont$class *$class;
-    $Env self;
-    $int n;
+    struct $l$3contG_class *$class;
+    B_Env self;
+    B_int n;
 };
-struct $WorldAuth$class {
+struct B_WorldAuthG_class {
     char *$GCINFO;
     int $class_id;
-    $Super$class $superclass;
-    $NoneType (*__init__) ($WorldAuth);
-    void (*__serialize__) ($WorldAuth, $Serial$state);
-    $WorldAuth (*__deserialize__) ($WorldAuth, $Serial$state);
-    $bool (*__bool__) ($WorldAuth);
-    $str (*__str__) ($WorldAuth);
-    $str (*__repr__) ($WorldAuth);
+    $SuperG_class $superclass;
+    B_NoneType (*__init__) (B_WorldAuth);
+    void (*__serialize__) (B_WorldAuth, $Serial$state);
+    B_WorldAuth (*__deserialize__) (B_WorldAuth, $Serial$state);
+    B_bool (*__bool__) (B_WorldAuth);
+    B_str (*__str__) (B_WorldAuth);
+    B_str (*__repr__) (B_WorldAuth);
 };
-struct $WorldAuth {
-    struct $WorldAuth$class *$class;
+struct B_WorldAuth {
+    struct B_WorldAuthG_class *$class;
 };
-$WorldAuth $WorldAuth$new();
-extern struct $l$1cont$class $l$1cont$methods;
-$l$1cont $l$1cont$new($Env, $str);
-extern struct $l$2cont$class $l$2cont$methods;
-$l$2cont $l$2cont$new($Env, $action);
-extern struct $l$3cont$class $l$3cont$methods;
-$l$3cont $l$3cont$new($Env, $int);
-extern struct $WorldAuth$class $WorldAuth$methods;
+B_WorldAuth B_WorldAuthG_new();
+extern struct $l$1contG_class $l$1contG_methods;
+$l$1cont $l$1contG_new(B_Env, B_str);
+extern struct $l$2contG_class $l$2contG_methods;
+$l$2cont $l$2contG_new(B_Env, $action);
+extern struct $l$3contG_class $l$3contG_methods;
+$l$3cont $l$3contG_new(B_Env, B_int);
+extern struct B_WorldAuthG_class B_WorldAuthG_methods;
 // END GENERATED __builtin__.act
 ///////////////////////////////////////////////////////////////////////////////////////////
 
-struct $Env$class {
+struct B_EnvG_class {
     char *$GCINFO;
     int $class_id;
-    $Super$class $superclass;
-    $NoneType (*__init__) ($Env, $WorldAuth, $list);
-    void (*__serialize__) ($Env, $Serial$state);
-    $Env (*__deserialize__) ($Env, $Serial$state);
-    $bool (*__bool__) ($Env);
-    $str (*__str__) ($Env);
-    $str (*__repr__) ($Env);
-    $NoneType (*__resume__) ($Env);
-    $R (*stdout_write$local) ($Env, $Cont, $str);
-    $R (*stdin_install$local) ($Env, $Cont, $action);
-    $R (*exit$local) ($Env, $Cont, $int);
-    $Msg (*stdout_write) ($Env, $str);
-    $Msg (*stdin_install) ($Env, $action);
-    $Msg (*exit) ($Env, $int);
+    $SuperG_class $superclass;
+    B_NoneType (*__init__) (B_Env, B_WorldAuth, B_list);
+    void (*__serialize__) (B_Env, $Serial$state);
+    B_Env (*__deserialize__) (B_Env, $Serial$state);
+    B_bool (*__bool__) (B_Env);
+    B_str (*__str__) (B_Env);
+    B_str (*__repr__) (B_Env);
+    B_NoneType (*__resume__) (B_Env);
+    $R (*stdout_writeG_local) (B_Env, $Cont, B_str);
+    $R (*stdin_installG_local) (B_Env, $Cont, $action);
+    $R (*exitG_local) (B_Env, $Cont, B_int);
+    B_Msg (*stdout_write) (B_Env, B_str);
+    B_Msg (*stdin_install) (B_Env, $action);
+    B_Msg (*exit) (B_Env, B_int);
 };
-struct $Env {
-    struct $Env$class *$class;
+struct B_Env {
+    struct B_EnvG_class *$class;
     $Actor $next;
-    $Msg $msg;
-    $Msg $outgoing;
-    $Msg $waitsfor;
+    B_Msg B_Msg;
+    B_Msg $outgoing;
+    B_Msg $waitsfor;
     $int64 $consume_hd;
     $Catcher $catcher;
-    $Lock $msg_lock;
+    $Lock B_Msg_lock;
     $long $globkey;
     $int64 $affinity;
-    $WorldAuth auth;
-    $list argv;
+    B_WorldAuth auth;
+    B_list argv;
 };
 
-extern struct $Env$class $Env$methods;
-$Env $Env$newact($WorldAuth, $list);
-void $__init__();
+extern struct B_EnvG_class B_EnvG_methods;
+B_Env B_EnvG_newact(B_WorldAuth, B_list);
+void D___init__();
 
 void reset_timeout();

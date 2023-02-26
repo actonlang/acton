@@ -7,13 +7,13 @@ packages:
 - completed:
     hackage: dir-traverse-0.2.3.0@sha256:adcc128f201ff95131b15ffe41365dc99c50dc3fa3a910f021521dc734013bfa,2137
     pantry-tree:
-      size: 389
       sha256: b19f0562746dfd0f8f21eccab6584592f55fb781ca3e043da9132cc23d8a5b99
+      size: 389
   original:
     hackage: dir-traverse-0.2.3.0
 snapshots:
 - completed:
-    size: 586041
-    url: https://raw.githubusercontent.com/commercialhaskell/stackage-snapshots/master/lts/18/12.yaml
-    sha256: 80fc6391195ff00c36f2a605ecbb07de909bfaa2eaa9722a27e486a6ecf8ecb0
-  original: lts-18.12
+    sha256: 428ec8d5ce932190d3cbe266b9eb3c175cd81e984babf876b64019e2cbe4ea68
+    size: 590100
+    url: https://raw.githubusercontent.com/commercialhaskell/stackage-snapshots/master/lts/18/28.yaml
+  original: lts-18.28

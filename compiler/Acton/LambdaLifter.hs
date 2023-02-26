@@ -90,7 +90,7 @@ liftedToTop                     = state (\(totop,supply) -> (totop, ([],supply))
 
 llCont                          = Internal LLiftPass "cont" 0
 
-llSelf                          = paramName0 "self"
+llSelf                          = Internal LLiftPass "self" 0
 
 
 -- Environment ---------------------------------------------------------------------------------------------------------
@@ -319,7 +319,7 @@ instance Lift Expr where
       | n `elem` dom (locals env)       = pure e
     ll env e
       | Just (e',vts) <- freefun env e  = closureConvert env (Lambda l0 par KwdNIL (call e' vts) fx) t vts (map (eVar . fst) vts )
-      where par                         = pPar paramNames' (conv p)
+      where par                         = pPar paramNames (conv p)
             call e' vts                 = Call l0 e' (addArgs vts $ pArg par) KwdNil
             TFun _ fx p _ t             = typeOf env e
 
@@ -349,7 +349,7 @@ instance Lift Expr where
                                              closureConvert env (Lambda l0 par KwdNIL call fxProc) (tMsg t) vts (map (eVar . fst) vts)
       | otherwise                       = do e <- ll env e
                                              return $ Async l e
-      where par                         = pPar paramNames' p
+      where par                         = pPar paramNames p
             TFun _ fx p _ t             = typeOf env e
 
     ll env e0@(Lambda l p KwdNIL e fx)  = do e' <- ll env1 e
@@ -392,7 +392,7 @@ llDot env l e n ts
   | otherwise                           = do e' <- llSub env e
                                              x <- newName "obj"
                                              closureConvert env (Lambda l0 par KwdNIL (calldot (NoQ x) n) fx) t [(x,t')] [e']
-  where par                             = pPar paramNames' p
+  where par                             = pPar paramNames p
         TFun _ fx p _ t                 = typeOf env e0
         calldot x n                     = Call l0 (eDot (eQVar x) n) (pArg par) KwdNil
         t'                              = typeOf env e

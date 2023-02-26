@@ -1,6 +1,6 @@
 #include <stdlib.h>
 
-void random$$__ext_init__() {
+void randomQ___ext_init__() {
     srand(time(NULL));
 }
 
@@ -15,12 +15,12 @@ void random$$__ext_init__() {
 // the time, which is prolly good enough for now. In a future, we could cook up
 // something better.
 
-$int random$$randint ($int min, $int max) {
+B_int randomQ_randint (B_int min, B_int max) {
     // ensure we have a valid range where min is smaller than max
     long minval = from$int(min);
     long maxval = from$int(max);
     if (minval > maxval) {
-        $RAISE((($BaseException)$ValueError$new(to$str("min value must be smaller than max"))));
+        $RAISE(((B_BaseException)B_ValueErrorG_new(to$str("min value must be smaller than max"))));
     }
     // upper end of the range we want when "based to 0"
     int range = maxval - minval;
@@ -34,5 +34,5 @@ $int random$$randint ($int min, $int max) {
     // spin getting new values until we find one in range
     while ((r = rand()) >= end);
     // normalize back to the requested range
-    return to$int(minval + r%range);
+    return toB_int(minval + r%range);
 }
