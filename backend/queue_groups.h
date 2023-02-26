@@ -37,7 +37,6 @@ typedef struct group_state {
 } group_state;
 
 typedef struct consumer_state consumer_state;
-typedef struct group_queue_consumer_state group_queue_consumer_state;
 
 // Queue group management fctns:
 
@@ -53,7 +52,7 @@ int add_listener_to_group(group_state * group,
                         queue_callback * callback,
                         int * sockfd,
                         unsigned int * fastrandstate);
-int lookup_listener_in_group(group_state * group, WORD consumer_id, WORD queue_id, consumer_state ** cs, group_queue_consumer_state ** gqcs);
+int lookup_listener_in_group(group_state * group, WORD consumer_id, WORD queue_id, consumer_state ** cs);
 int remove_listener_from_group(group_state * group, WORD consumer_id);
 int is_queue_in_group(group_state * group, WORD table_key, WORD queue_id);
 void free_group_state(WORD gs);

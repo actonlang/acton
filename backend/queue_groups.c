@@ -182,7 +182,7 @@ int remove_listener_from_group(group_state * group, WORD consumer_id)
     return 0;
 }
 
-int lookup_listener_in_group(group_state * group, WORD consumer_id, WORD queue_id, consumer_state ** cs, group_queue_consumer_state ** gqcs)
+int lookup_listener_in_group(group_state * group, WORD consumer_id, WORD queue_id, consumer_state ** cs)
 {
     pthread_mutex_lock(group->group_lock);
 
@@ -193,18 +193,11 @@ int lookup_listener_in_group(group_state * group, WORD consumer_id, WORD queue_i
     if(consumer_node == NULL)
     {
         *cs = NULL;
-        *gqcs = NULL;
 
         return DB_ERR_NO_CONSUMER; // Consumer didn't exist
     }
 
     *cs = (consumer_state *) consumer_node->value;
-
-    snode_t * group_consumer_node = skiplist_search((*cs)->group_queue_consumer_states, queue_id);
-
-    assert(group_consumer_node != NULL);
-
-    *gqcs = (group_queue_consumer_state *) group_consumer_node->value;
 
     return 0;
 }

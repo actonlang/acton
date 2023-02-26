@@ -2766,7 +2766,7 @@ int remote_unsubscribe_queue(WORD consumer_id, WORD shard_id, WORD app_id, WORD 
 int remote_subscribe_group(WORD consumer_id, WORD shard_id, WORD app_id, WORD group_id,
                         queue_callback * callback, int * minority_status, remote_db_t * db)
 {
-    printf("remote_subscribe_group(consumer_id = %d, group_id = %d)\n", (int) consumer_id, (int) group_id);
+	log_debug("remote_subscribe_group(consumer_id = %d, group_id = %d)", (int) consumer_id, (int) group_id);
     return _remote_subscribe_queue(consumer_id, shard_id, app_id, (WORD) -1, (WORD) -1, group_id,
                                     callback, NULL, NULL, minority_status, db);
 }
@@ -2790,7 +2790,7 @@ int remote_add_queue_to_group(WORD table_key, WORD queue_id, WORD group_id, shor
 
     if(db->servers->no_items < db->quorum_size)
     {
-        fprintf(stderr, "No quorum (%d/%d servers alive)\n", db->servers->no_items, db->replication_factor);
+        log_error("No quorum (%d/%d servers alive)", db->servers->no_items, db->replication_factor);
         stat_stop(dbc_stats.remote_subscribe_queue, &ts_start, NO_QUORUM_ERR);
         return NO_QUORUM_ERR;
     }
@@ -2799,7 +2799,7 @@ int remote_add_queue_to_group(WORD table_key, WORD queue_id, WORD group_id, shor
 #if CLIENT_VERBOSITY > 0
     char print_buff[1024];
     to_string_queue_message(q, (char *) print_buff);
-    printf("Sending queue message to server %s: %s\n", rs->id, print_buff);
+    log_debug("Sending queue message to server %s: %s", rs->id, print_buff);
 #endif
 
     // Send packet to server and wait for reply:
@@ -2811,7 +2811,7 @@ int remote_add_queue_to_group(WORD table_key, WORD queue_id, WORD group_id, shor
 
     if(mc->no_replies < db->quorum_size)
     {
-        fprintf(stderr, "No quorum (%d/%d replies received)\n", mc->no_replies, db->replication_factor);
+        log_error("No quorum (%d/%d replies received)", mc->no_replies, db->replication_factor);
         delete_msg_callback(mc->nonce, db);
         stat_stop(dbc_stats.remote_subscribe_queue, &ts_start, NO_QUORUM_ERR);
         return NO_QUORUM_ERR;
@@ -2831,7 +2831,7 @@ int remote_add_queue_to_group(WORD table_key, WORD queue_id, WORD group_id, shor
 
 #if CLIENT_VERBOSITY > 0
         to_string_ack_message(ack, (char *) print_buff);
-        printf("Got back response from server %s: %s\n", rs->id, print_buff);
+        log_debug("Got back response from server %s: %s", rs->id, print_buff);
 #endif
     }
 
@@ -2856,7 +2856,7 @@ int remote_remove_queue_from_group(WORD table_key, WORD queue_id, WORD group_id,
 
     if(db->servers->no_items < db->quorum_size)
     {
-        fprintf(stderr, "No quorum (%d/%d servers alive)\n", db->servers->no_items, db->replication_factor);
+        log_error("No quorum (%d/%d servers alive)", db->servers->no_items, db->replication_factor);
         stat_stop(dbc_stats.remote_subscribe_queue, &ts_start, NO_QUORUM_ERR);
         return NO_QUORUM_ERR;
     }
@@ -2865,7 +2865,7 @@ int remote_remove_queue_from_group(WORD table_key, WORD queue_id, WORD group_id,
 #if CLIENT_VERBOSITY > 0
     char print_buff[1024];
     to_string_queue_message(q, (char *) print_buff);
-    printf("Sending queue message to server %s: %s\n", rs->id, print_buff);
+    log_debug("Sending queue message to server %s: %s", rs->id, print_buff);
 #endif
 
     // Send packet to server and wait for reply:
@@ -2877,7 +2877,7 @@ int remote_remove_queue_from_group(WORD table_key, WORD queue_id, WORD group_id,
 
     if(mc->no_replies < db->quorum_size)
     {
-        fprintf(stderr, "No quorum (%d/%d replies received)\n", mc->no_replies, db->replication_factor);
+        log_error("No quorum (%d/%d replies received)", mc->no_replies, db->replication_factor);
         delete_msg_callback(mc->nonce, db);
         stat_stop(dbc_stats.remote_subscribe_queue, &ts_start, NO_QUORUM_ERR);
         return NO_QUORUM_ERR;
@@ -2897,7 +2897,7 @@ int remote_remove_queue_from_group(WORD table_key, WORD queue_id, WORD group_id,
 
 #if CLIENT_VERBOSITY > 0
         to_string_ack_message(ack, (char *) print_buff);
-        printf("Got back response from server %s: %s\n", rs->id, print_buff);
+        log_debug("Got back response from server %s: %s", rs->id, print_buff);
 #endif
     }
 
@@ -3035,7 +3035,7 @@ int subscribe_to_group(WORD consumer_id, WORD shard_id, WORD app_id, WORD group_
     assert(status == 0);
 
 #if (VERBOSITY > 0)
-    printf("CLIENT: Subscriber %" PRId64 "/%" PRId64 "/%" PRId64 " subscribed group %" PRId64 " with callback %p\n",
+    log_debug("CLIENT: Subscriber %" PRId64 "/%" PRId64 "/%" PRId64 " subscribed group %" PRId64 " with callback %p",
                     (int64_t) app_id, (int64_t) shard_id, (int64_t) consumer_id,
                     (int64_t) group_id, cs->callback);
 #endif

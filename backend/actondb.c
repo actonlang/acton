@@ -1927,41 +1927,15 @@ int auto_update_group_queue_subscriptions(membership * m, db_t * db, unsigned in
                                         &get_group_state_key, &get_group_state_live_field,
                                         fastrandstate);
 
-            group_state * gs = (group_state *) result;
-
-            group_state * old_gs = (group_state *) row->group_subscriptions;
-
-            // Add this consumer's queue state to the group state if it is not there yet.
-            // Move it over from the previous queue group if it already exists, create it if it doesn't:
-
-            group_queue_consumer_state * gqcs = get_consumer_state_from_group(row->key, gs);
-            if(gqcs == NULL)
+            if(db->queue_group_replication_factor > 1 && row->group_subscriptions != NULL)
             {
-                if(old_gs != NULL)
-                {
-                    gqcs = pop_consumer_state_from_group(row->key, old_gs);
-                    assert (gqcs != NULL);
-                }
-                else // if(gqcs == NULL)
-                {
-                    gqcs = get_group_queue_consumer_state();
-                }
-                int ret = add_consumer_state_to_group(row->key, gqcs, gs, fastrandstate);
-                assert(ret == 0);
-            }
-
-            log_debug("SERVER: Updated queue group buckets for queue %d, group_id = %d, status = %d, consumers = %d",
-                    (int) row->key, ((gs != NULL)?((int) gs->group_id):(-1)),
-                    ((gs != NULL)?((int) gs->status):(-1)),
-                    ((gs != NULL)?((int) gs->consumers->no_items):(-1)));
-
-            if(db->queue_group_replication_factor > 1)
-            {
-                if(row->group_subscriptions != NULL)
-                    skiplist_free(row->group_subscriptions);
+            	skiplist_free(row->group_subscriptions);
             }
 
             row->group_subscriptions = result;
+
+            if(row->group_subscriptions != NULL)
+            	create_headers_for_group_subscribers(row, db, fastrandstate);
         }
     }
 

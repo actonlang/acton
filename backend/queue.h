@@ -42,10 +42,10 @@
 #define QUEUE_NOTIF_DELETED 1
 #define GROUP_NOTIF_ENQUEUED 2
 
-#define READ_HEAD(cs, gqcs) ((gqcs != NULL)?(gqcs->private_read_head):(cs->private_read_head))
-#define CONSUME_HEAD(cs, gqcs) ((gqcs != NULL)?(gqcs->private_consume_head):(cs->private_consume_head))
-#define READ_HEAD_VERSION(cs, gqcs) ((gqcs != NULL)?(gqcs->prh_version):(cs->prh_version))
-#define CONSUME_HEAD_VERSION(cs, gqcs) ((gqcs != NULL)?(gqcs->pch_version):(cs->pch_version))
+#define READ_HEAD(cs) (cs->private_read_head)
+#define CONSUME_HEAD(cs) (cs->private_consume_head)
+#define READ_HEAD_VERSION(cs) (cs->prh_version)
+#define CONSUME_HEAD_VERSION(cs) (cs->pch_version)
 
 int enqueue(WORD * column_values, int no_cols, size_t last_blob_size, WORD table_key, WORD queue_id, short use_lock, db_t * db, unsigned int * fastrandstate);
 int read_queue(WORD consumer_id, WORD shard_id, WORD app_id, WORD table_key, WORD queue_id,
@@ -65,6 +65,9 @@ int consume_queue(WORD consumer_id, WORD shard_id, WORD app_id, WORD table_key, 
 int subscribe_queue(WORD consumer_id, WORD shard_id, WORD app_id, WORD table_key, WORD queue_id,
                         queue_callback * callback, int64_t * prev_read_head, int64_t * prev_consume_head,
                         short use_lock, db_t * db, unsigned int * fastrandstate);
+int __subscribe_queue(WORD consumer_id, WORD shard_id, WORD app_id, db_row_t * db_row, WORD group_id,
+                    queue_callback * callback, int * sockfd, int64_t * prev_read_head, int64_t * prev_consume_head,
+                    short use_lock, db_t * db, unsigned int * fastrandstate);
 int register_remote_subscribe_queue(WORD consumer_id, WORD shard_id, WORD app_id, WORD table_key, WORD queue_id, WORD group_id,
                     int * sockfd, int64_t * prev_read_head, int64_t * prev_consume_head,
                     short use_lock, db_t * db, unsigned int * fastrandstate);
@@ -72,6 +75,7 @@ int register_remote_unsubscribe_queue(WORD consumer_id, WORD shard_id, WORD app_
                                         short use_lock, db_t * db);
 int unsubscribe_queue(WORD consumer_id, WORD shard_id, WORD app_id, WORD table_key, WORD queue_id, WORD group_id,
                         short use_lock, db_t * db);
+void create_headers_for_group_subscribers(db_row_t * db_row, db_t * db, unsigned int * fastrandstate);
 int create_queue(WORD table_key, WORD queue_id, vector_clock * version, short use_lock,
                     db_t * db, unsigned int * fastrandstate);
 int delete_queue(WORD table_key, WORD queue_id, vector_clock * version, short use_lock, db_t * db, unsigned int * fastrandstate);
@@ -86,12 +90,9 @@ consumer_state * get_consumer_state(WORD consumer_id, WORD shard_id, WORD app_id
 void free_consumer_state(consumer_state * cs);
 void free_consumer_state_sl(void * cs);
 
-group_queue_consumer_state * get_group_queue_consumer_state();
-int add_consumer_state_to_group(WORD queue_id, group_queue_consumer_state * gqcs, group_state *gs, unsigned int * fastrandstate);
-group_queue_consumer_state * get_consumer_state_from_group(WORD queue_id, group_state * gs);
-group_queue_consumer_state * pop_consumer_state_from_group(WORD queue_id, group_state * gs);
-void free_group_queue_consumer_state(group_queue_consumer_state * cs);
-void free_group_queue_consumer_state_sl(void * cs);
+int add_consumer_state_to_group(WORD queue_id, consumer_state * cs, group_state *gs, unsigned int * fastrandstate);
+int get_consumer_state_from_group(WORD queue_id, group_state * gs, consumer_state ** cs);
+int pop_consumer_state_from_group(WORD queue_id, group_state * gs, consumer_state ** cs);
 
 void free_queue_table_state(WORD queue_table_state);
 

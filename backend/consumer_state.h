@@ -52,8 +52,6 @@ typedef struct consumer_state {
 
     queue_callback* callback; // For local subscribers
     int * sockfd; // For remote subscribers
-
-    skiplist_t * group_queue_consumer_states;
 } consumer_state;
 
 #endif /* BACKEND_CONSUMER_STATE_H_ */
