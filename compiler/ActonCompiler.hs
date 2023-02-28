@@ -158,6 +158,13 @@ printIce errMsg = do ccVer <- getCcVer
                         "\nNOTE: cc: " ++ ccVer
                         )
 
+-- Project handling ------------------------------------------------------------------------------------------
+
+isGitAvailable :: IO Bool
+isGitAvailable = do
+    (exitCode, _, _) <- readProcessWithExitCode "git" ["--version"] ""
+    return $ exitCode == ExitSuccess
+
 -- Create a project ---------------------------------------------------------------------------------------------
 
 createProject :: String -> IO ()
@@ -169,6 +176,11 @@ createProject name = do
     createDirectoryIfMissing True name
     writeFile (joinPath [ curDir, name, "Acton.toml" ]) ""
     paths <- findPaths (joinPath [ curDir, name, "Acton.toml" ]) defaultOpts
+    writeFile (joinPath [ curDir, name, ".gitignore" ]) (
+      ".actonc.lock\n" ++
+      "build.sh\n" ++
+      "out\n"
+      )
     writeFile (joinPath [ curDir, name, "README.org" ]) (
       "* " ++ name ++ "\n" ++ name ++ " is a cool Acton project!\n\n\n"
       ++ "** Compile\n\n#+BEGIN_SRC shell\nactonc build\n#+END_SRC\n\n\n"
@@ -180,6 +192,13 @@ createProject name = do
     putStrLn("Enter your new project directory with:\n  cd " ++ name)
     putStrLn("Compile:\n  actonc build")
     putStrLn("Run:\n  ./out/rel/bin/" ++ name)
+    gitAvailable <- isGitAvailable
+    iff (gitAvailable) $ do
+        putStrLn("")
+        setCurrentDirectory name
+        callProcess "git" ["init"]
+        callProcess "git" ["add", "."]
+        setCurrentDirectory curDir
 
 -- Build a project -----------------------------------------------------------------------------------------------
 
