@@ -691,6 +691,9 @@ dist/completion/acton.bash-completion: completion/acton.bash-completion
 dist/zig: deps/zig-$(ZIG_OS)-$(ZIG_ARCH)-$(ZIG_VERSION).tar.xz
 	mkdir -p $@
 	cd $@ && tar Jx --strip-components=1 -f ../../$^
+ifeq ($(shell uname -s),Darwin)
+	cp /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/sys/timex.h $@/lib/libc/include/any-macos-any/sys/
+endif
 
 deps/zig-$(ZIG_OS)-$(ZIG_ARCH)-$(ZIG_VERSION).tar.xz:
 	curl -o $@ https://ziglang.org/download/$(ZIG_VERSION)/zig-$(ZIG_OS)-$(ZIG_ARCH)-$(ZIG_VERSION).tar.xz
