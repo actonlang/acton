@@ -280,6 +280,8 @@ DEP_LIBS+=deps/instdir/lib/libmd.a
 endif
 
 DEP_LIBS+=deps/instdir/lib/libbsdnt.a
+DEP_LIBS+=deps/instdir/lib/libpcre2-8.a
+DEP_LIBS+=deps/instdir/lib/libpcre2-posix.a
 DEP_LIBS+=deps/instdir/lib/libprotobuf-c.a
 DEP_LIBS+=deps/instdir/lib/libutf8proc.a
 DEP_LIBS+=deps/instdir/lib/libuuid.a
@@ -468,6 +470,25 @@ deps/instdir/lib/libxml2.a: deps/libxml2 $(ZIG)
 	&& ./autogen.sh --without-python --without-iconv --without-zlib --without-lzma --prefix=$(TD)/deps/instdir --enable-static --disable-shared CFLAGS="$(CFLAGS_DEPS)" \
 	&& make -j && make install \
 	&& mv $(TD)/deps/instdir/include/libxml2/libxml $(TD)/deps/instdir/include/libxml
+
+# /deps/pcre2 --------------------------------------------
+PCRE2_REF=pcre2-10.42
+deps/pcre2:
+	ls $@ >/dev/null 2>&1 || git clone https://github.com/PCRE2Project/pcre2.git $@
+
+deps/instdir/lib/libpcre2-8.a: deps/pcre2 $(ZIG)
+	mkdir -p $(dir $@)
+	cd $< \
+	&& git checkout $(PCRE2_REF) \
+	&& ./autogen.sh \
+	&& ./configure --prefix=$(TD)/deps/instdir --enable-static --disable-shared CFLAGS="$(CFLAGS_DEPS)" \
+	&& make -j && make install
+
+# Dummy rule that depends on above target since it produces both libpcre2-8.a
+# and libpcre2-posix.a, this is just so that the libActonDeps.a target can rely
+# on libpcre2-posix.a (since it copies it into the archive) but if we don't have
+# a matching target it would fail.
+deps/instdir/lib/libpcre2-posix.a: deps/instdir/lib/libpcre2-8.a
 
 # --
 
