@@ -28,6 +28,7 @@
   - [for](control_flow/for.md)
   - [while](control_flow/while.md)
 - [Types](types.md)
-
+- [Standard library](stdlib.md)
+  - [Regular Expression](stdlib/re.md)
 
 - [Modules](modules.md)

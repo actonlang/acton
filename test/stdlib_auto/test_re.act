@@ -1,0 +1,68 @@
+import re
+
+actor main(env):
+    # Test basic regexp matching
+    m = re.match("foo[a-z]+", "åbc123 foobar åbc123")
+    if m is None:
+        print("ERROR: basic regexp matching failed")
+        await async env.exit(1)
+
+    # Test regexp matching with groups
+    m = re.match("foo[a-z]+", "åbc123 foobar åbc123")
+    if m is None:
+        print("ERROR: basic regexp matching failed")
+        await async env.exit(1)
+    if m is not None:
+        if m.group[0] != "foobar":
+            print("ERROR: regexp matching with groups failed on group 0: " + m.group[0])
+            await async env.exit(1)
+
+    # Test regexp matching with named groups
+    m = re.match("(?P<mypattern>foo[a-z]+)", "åbc123 foobar åbc123")
+    if m is None:
+        print("ERROR: regexp matching with named groups failed")
+        await async env.exit(1)
+    if m is not None:
+        if m.named["mypattern"] != "foobar":
+            print("ERROR: regexp matching with named groups failed on named group: " + m.named["mypattern"])
+            await async env.exit(1)
+
+
+    # Test regexp matching with multiple groups including named groups
+    m = re.match("([0-9]+).*(?P<mypattern>foo[a-z]+) *(?P<myotherpattern>bar[A-Za-z0-9]+)", "åbc123 foobar barEX4MPLE åbc123")
+    if m is None:
+        print("ERROR: regexp matching with multiple groups failed")
+        await async env.exit(1)
+    if m is not None:
+        if m.group[0] != "123 foobar barEX4MPLE":
+            print("ERROR: regexp matching with multiple groups failed on complete match")
+            await async env.exit(1)
+        if m.group[1] != "123":
+            print("ERROR: regexp matching with multiple groups failed on group 1: " + m.group[1])
+            await async env.exit(1)
+        if m.named["mypattern"] != "foobar":
+            print("ERROR: regexp matching with multiple groups failed on named group mypattern: " + m.named["mypattern"])
+            await async env.exit(1)
+        if m.named["myotherpattern"] != "barEX4MPLE":
+            print("ERROR: regexp matching with multiple groups failed on named group myotherpattern: " + m.named["myotherpattern"])
+            await async env.exit(1)
+
+    # Test regexp finding all matches
+    ms = re.matches(r"foo[0-9]+", "åbc123 foo1 foo2 foo3 åbc123 foo4")
+    if len(ms) != 4:
+        print("ERROR: regexp matching with multiple matches failed")
+        await async env.exit(1)
+    if ms[0].group[0] != "foo1":
+        print("ERROR: regexp matching with multiple matches failed on first match")
+        await async env.exit(1)
+    if ms[1].group[0] != "foo2":
+        print("ERROR: regexp matching with multiple matches failed on second match")
+        await async env.exit(1)
+    if ms[2].group[0] != "foo3":
+        print("ERROR: regexp matching with multiple matches failed on third match")
+        await async env.exit(1)
+    if ms[3].group[0] != "foo4":
+        print("ERROR: regexp matching with multiple matches failed on fourth match")
+        await async env.exit(1)
+
+    await async env.exit(0)
