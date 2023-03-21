@@ -18,28 +18,28 @@
 int main() {
   $register_builtin();
   numpyQ___init__();
-  numpyQ_ndarray v = numpyQ_ndarray_arange(toB_int(0),toB_int(60),toB_int(1));
+  numpyQ_ndarray v = numpyQ_ndarray_arange(to$int(0),to$int(60),to$int(1));
   B_list newshape = $NEW(B_list,NULL,NULL);
-  B_listD_append(newshape,toB_int(3));
-  B_listD_append(newshape,toB_int(4));
-  B_listD_append(newshape,toB_int(5));
+  B_listD_append(newshape,to$int(3));
+  B_listD_append(newshape,to$int(4));
+  B_listD_append(newshape,to$int(5));
   numpyQ_ndarray a = numpyQ_ndarray_reshape(v,newshape);
   B_printobj("a=\n",a);
   B_printobj("a.transpose() =\n",numpyQ_ndarray_transpose(a,NULL));
 
   B_list axes = $NEW(B_list,NULL,NULL);
-  B_listD_append(axes,toB_int(1));
-  B_listD_append(axes,toB_int(2));
-  B_listD_append(axes,toB_int(0));
+  B_listD_append(axes,to$int(1));
+  B_listD_append(axes,to$int(2));
+  B_listD_append(axes,to$int(0));
   B_printobj("a.transpose([1,2,0]) =\n",numpyQ_ndarray_transpose(a,axes));
-  numpyQ_ndarray b = numpyQ_ndarray_reshape(numpyQ_ndarray_arange(toB_int(60),toB_int(0),toB_int(-1)),newshape);
+  numpyQ_ndarray b = numpyQ_ndarray_reshape(numpyQ_ndarray_arange(to$int(60),to$int(0),to$int(-1)),newshape);
   B_printobj("b=\n",b);
   numpyQ_Primitive wit = (numpyQ_Primitive)numpyQ_PrimitiveD_intG_witness;
   numpyQ_ndarray c = numpyQ_ndarray_sort(wit,b,NULL);
   B_printobj("b.sort() =\n",c);
-  B_printobj("b.sort(-1) =\n",numpyQ_ndarray_sort(wit,b,toB_int(-1)));
-  B_printobj("a.clip(12,40) =\n",numpyQ_ndarray_clip(wit,a,toB_int(12),toB_int(40)));
-  B_printobj("a.clip(17,None) =\n",numpyQ_ndarray_clip(wit,a,toB_int(17),NULL));
+  B_printobj("b.sort(-1) =\n",numpyQ_ndarray_sort(wit,b,to$int(-1)));
+  B_printobj("a.clip(12,40) =\n",numpyQ_ndarray_clip(wit,a,to$int(12),to$int(40)));
+  B_printobj("a.clip(17,None) =\n",numpyQ_ndarray_clip(wit,a,to$int(17),NULL));
   /*
   B_Iterable iter = (B_Iterable)$NEW(numpyQ_IterableD_ndarray,wit);
   B_Iterator it = iter->$class->__iter__(iter,c);

@@ -114,7 +114,7 @@ B_dict jsonQ_decode_obj(yyjson_val *obj) {
                 B_dictD_setitem(res, wit, to$str(yyjson_get_str(key)), toB_bool(yyjson_get_bool(val)));
                 break;
             case YYJSON_TYPE_NUM:;
-                B_dictD_setitem(res, wit, to$str(yyjson_get_str(key)), toB_int(yyjson_get_int(val)));
+                B_dictD_setitem(res, wit, to$str(yyjson_get_str(key)), to$int(yyjson_get_int(val)));
                 break;
             case YYJSON_TYPE_STR:;
                 B_dictD_setitem(res, wit, to$str(yyjson_get_str(key)), to$str(yyjson_get_str(val)));
@@ -150,7 +150,7 @@ B_list jsonQ_decode_arr(yyjson_val *arr) {
                  wit->$class->append(wit, res, toB_bool(yyjson_get_bool(val)));
                 break;
             case YYJSON_TYPE_NUM:;
-                 wit->$class->append(wit, res, toB_int(yyjson_get_int(val)));
+                 wit->$class->append(wit, res, to$int(yyjson_get_int(val)));
                 break;
             case YYJSON_TYPE_STR:;
                  wit->$class->append(wit, res, to$str(yyjson_get_str(val)));

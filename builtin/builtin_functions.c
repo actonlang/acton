@@ -72,7 +72,7 @@ B_str B_IteratorD_enumerate_str(B_IteratorD_enumerate self) {
 
 void B_IteratorD_enumerate_serialize(B_IteratorD_enumerate self,$Serial$state state) {
     $step_serialize(self->it,state);
-    $step_serialize(toB_int(self->nxt),state);
+    $step_serialize(to$int(self->nxt),state);
 }
 
 B_IteratorD_enumerate B_IteratorD_enumerate$_deserialize(B_IteratorD_enumerate res,$Serial$state state) {
@@ -86,7 +86,7 @@ B_IteratorD_enumerate B_IteratorD_enumerate$_deserialize(B_IteratorD_enumerate r
 $WORD B_IteratorD_enumerate_next(B_IteratorD_enumerate it) {
     $WORD w = it->it->$class->__next__(it->it);
     if (w)
-        return $NEWTUPLE(2,toB_int(it->nxt++),w);
+        return $NEWTUPLE(2,to$int(it->nxt++),w);
     else
         return NULL;
 }
@@ -103,7 +103,7 @@ B_IteratorD_enumerate B_IteratorD_enumerateG_new(B_Iterator it, B_int n) {
 B_Iterator B_enumerate(B_Iterable wit, $WORD iter, B_int start) {
     B_Iterator it = wit->$class->__iter__(wit,iter);
     if (!start)
-        start = toB_int(0);
+        start = to$int(0);
     return (B_Iterator)B_IteratorD_enumerateG_new(it,start); 
 }
 

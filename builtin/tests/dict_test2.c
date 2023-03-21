@@ -43,10 +43,10 @@ B_Iterable dict_iterable(B_MappingD_dict wit) {
 int main() {
   //$register_builtin();
   B_dict idict = $NEW(B_dict,(B_Hashable)B_HashableD_intG_witness,NULL,NULL);
-  B_dictD_setitem(idict, (B_Hashable)B_HashableD_intG_witness, toB_int(-1), to$str("minus one"));
-  B_dictD_setitem(idict, (B_Hashable)B_HashableD_intG_witness, toB_int(-2), to$str("minus two"));
-  B_str i1 = (B_str)B_dictD_get(idict, (B_Hashable)B_HashableD_intG_witness, toB_int(-1), NULL);
-  B_str i2 = (B_str)B_dictD_get(idict, (B_Hashable)B_HashableD_intG_witness, toB_int(-2), NULL);
+  B_dictD_setitem(idict, (B_Hashable)B_HashableD_intG_witness, to$int(-1), to$str("minus one"));
+  B_dictD_setitem(idict, (B_Hashable)B_HashableD_intG_witness, to$int(-2), to$str("minus two"));
+  B_str i1 = (B_str)B_dictD_get(idict, (B_Hashable)B_HashableD_intG_witness, to$int(-1), NULL);
+  B_str i2 = (B_str)B_dictD_get(idict, (B_Hashable)B_HashableD_intG_witness, to$int(-2), NULL);
   printf("value of -1: %s\n", i1->str);
   printf("value of -2: %s\n", i2->str);
         

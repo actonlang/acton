@@ -19,7 +19,7 @@ $R fileQ_ReadFileD__open_file (fileQ_ReadFile self, $Cont c$cont) {
         $RAISE(((B_BaseException)B_RuntimeErrorG_new(to$str(errmsg))));
 
     }
-    self->_fd = toB_int(r);
+    self->_fd = to$int(r);
     return $R_CONT(c$cont, B_None);
 }
 
@@ -72,7 +72,7 @@ $R fileQ_WriteFileD__open_file (fileQ_WriteFile self, $Cont c$cont) {
         $RAISE(((B_BaseException)B_RuntimeErrorG_new(to$str(errmsg))));
 
     }
-    self->_fd = toB_int(r);
+    self->_fd = to$int(r);
     return $R_CONT(c$cont, B_None);
 }
 

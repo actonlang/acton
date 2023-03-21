@@ -18,18 +18,18 @@
 int main(int argc, char *argv[]) {
   B_list lst = $NEW(B_list,NULL,NULL);
   for (int i=0; i<1000; i++)
-    B_listD_append(lst,toB_int((long)rand()%200+100));
+    B_listD_append(lst,to$int((long)rand()%200+100));
   $ndarray a = $ndarray_array(lst);
   printf("a=%s\n",a->$class->__str__(a)->str);
   B_list newshape = $NEW(B_list,NULL,NULL);
-  B_listD_append(newshape,toB_int(10));
-  B_listD_append(newshape,toB_int(100));
+  B_listD_append(newshape,to$int(10));
+  B_listD_append(newshape,to$int(100));
   $ndarray c = $ndarray_reshape(a,newshape);
   printf("c=%s\n",c->$class->__str__(c)->str);
-  $ndarray d =  $ndarray_partition(c,toB_int(4));
+  $ndarray d =  $ndarray_partition(c,to$int(4));
   printf("d=%s\n",d->$class->__str__(d)->str);
 
-  $ndarray e = $ndarray_linspace(to$float(0),to$float(1),toB_int(101));
+  $ndarray e = $ndarray_linspace(to$float(0),to$float(1),to$int(101));
   $ndarray f = $ndarray_clipB_float(e,to$float(0.2),to$float(0.6));
   printf("f=%s\n",f->$class->__str__(f)->str);
 }

@@ -18,13 +18,13 @@
 int main() {
   $register_builtin();
   B_Iterable wit = (B_Iterable)B_IterableD_rangeG_new();
-  B_range r1 = B_rangeG_new(toB_int(2),toB_int(10),toB_int(3));
+  B_range r1 = B_rangeG_new(to$int(2),to$int(10),to$int(3));
   B_Iterator i1 = wit->$class->__iter__(wit,r1);
   B_int n;
   while ((n = (B_int)i1->$class->__next__(i1)))
     printf("%ld ",from$int(n));
   printf("\n");
-  B_range r2 = B_rangeG_new(toB_int(50),toB_int(10),toB_int(-4));
+  B_range r2 = B_rangeG_new(to$int(50),to$int(10),to$int(-4));
   $serialize_file(($Serializable)r2,"range.bin");
   B_range r3 = (B_range)$deserialize_file("range.bin");
   B_list lst = B_listD_fromiter(wit->$class->__iter__(wit,r3));

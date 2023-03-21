@@ -28,11 +28,11 @@ B_bool is_iterator($Super obj) {
   
 int main() {
   $register_builtin();
-  B_bool b1 = is_iterator(($Super)toB_int(3));
+  B_bool b1 = is_iterator(($Super)to$int(3));
   B_dict d = $NEW(B_dict,(B_Hashable)B_HashableD_intG_witness,NULL,NULL);
   B_Mapping wit = (B_Mapping)$NEW(B_MappingD_dict,(B_Hashable)B_HashableD_intG_witness);
   B_Indexed wit2 = wit->W_Indexed;
-  wit2->$class->__setitem__(wit2,d,toB_int(5),to$str("A string"));
+  wit2->$class->__setitem__(wit2,d,to$int(5),to$str("A string"));
   B_Iterator it = wit->$class->__iter__(wit,d);
   B_bool b2 = is_iterator(($Super)d);
   B_bool b3 = is_iterator(($Super)it);

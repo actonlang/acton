@@ -16,12 +16,12 @@
 #include "../numpy.h"
 
 int main() {
-  numpyQ_ndarray v = numpyQ_ndarray_arange(toB_int(0),toB_int(60),toB_int(1));
+  numpyQ_ndarray v = numpyQ_ndarray_arange(to$int(0),to$int(60),to$int(1));
   B_list newshape = $NEW(B_list,NULL,NULL);
-  B_listD_append(newshape,toB_int(3));
-  B_listD_append(newshape,toB_int(2));
-  B_listD_append(newshape,toB_int(2));
-  B_listD_append(newshape,toB_int(5));
+  B_listD_append(newshape,to$int(3));
+  B_listD_append(newshape,to$int(2));
+  B_listD_append(newshape,to$int(2));
+  B_listD_append(newshape,to$int(5));
   numpyQ_ndarray a = numpyQ_ndarray_reshape(v,newshape);
   B_printobj("a.shape =",a->shape);
   B_printobj("a.strides =",a->strides);

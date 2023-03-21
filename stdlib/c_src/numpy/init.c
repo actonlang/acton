@@ -19,7 +19,7 @@ int numpyQ_done = 0;
 void numpyQ___init__() {
     if (numpyQ_done) return;
     numpyQ_done = 1;
-    numpyQ_newaxis = toB_int(LONG_MIN);
+    numpyQ_newaxis = to$int(LONG_MIN);
     $register_force(ATOM_ID,&numpyQ_ndarrayG_methods);
     $register(&numpyQ_IteratorD_ndarrayG_methods);
     $register(&numpyQ_PrimitiveD_intG_methods);

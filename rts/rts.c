@@ -1042,7 +1042,7 @@ B_dict globdict = NULL;
 
 $WORD try_globdict($WORD w) {
     int key = (int)(long)w;
-    $WORD obj = B_dictD_get(globdict, (B_Hashable)B_HashableD_intG_witness, toB_int(key), NULL);
+    $WORD obj = B_dictD_get(globdict, (B_Hashable)B_HashableD_intG_witness, to$int(key), NULL);
     return obj;
 }
 
@@ -1161,7 +1161,7 @@ void deserialize_system(snode_t *actors_start) {
             BlobHd *head = (BlobHd*)r2->column_array[0];
             B_Msg msg = (B_Msg)$GET_METHODS(head->class_id)->__deserialize__(NULL, NULL);
             msg->$globkey = key;
-            B_dictD_setitem(globdict, (B_Hashable)B_HashableD_intG_witness, toB_int(key), msg);
+            B_dictD_setitem(globdict, (B_Hashable)B_HashableD_intG_witness, to$int(key), msg);
             rtsd_printf("# Allocated Msg %p = %ld of class %s = %d", msg, msg->$globkey, msg->$class->$GCINFO, msg->$class->$class_id);
             if (key < min_key)
                 min_key = key;
@@ -1178,7 +1178,7 @@ void deserialize_system(snode_t *actors_start) {
             BlobHd *head = (BlobHd*)r2->column_array[0];
             $Actor act = ($Actor)$GET_METHODS(head->class_id)->__deserialize__(NULL, NULL);
             act->$globkey = key;
-            B_dictD_setitem(globdict, (B_Hashable)B_HashableD_intG_witness, toB_int(key), act);
+            B_dictD_setitem(globdict, (B_Hashable)B_HashableD_intG_witness, to$int(key), act);
             rtsd_printf("# Allocated Actor %p = %ld of class %s = %d", act, act->$globkey, act->$class->$GCINFO, act->$class->$class_id);
             if (key < min_key)
                 min_key = key;
@@ -1196,7 +1196,7 @@ void deserialize_system(snode_t *actors_start) {
             $WORD *blob = ($WORD*)r2->column_array[0];
             int blob_size = r2->last_blob_size;
             $ROW row = extract_row(blob, blob_size);
-            B_Msg msg = (B_Msg)B_dictD_get(globdict, (B_Hashable)B_HashableD_intG_witness, toB_int(key), NULL);
+            B_Msg msg = (B_Msg)B_dictD_get(globdict, (B_Hashable)B_HashableD_intG_witness, to$int(key), NULL);
             rtsd_printf("####### Deserializing msg %p = %ld of class %s = %d", msg, msg->$globkey, msg->$class->$GCINFO, msg->$class->$class_id);
             print_rows(row);
             $glob_deserialize(($Serializable)msg, row, try_globdict);
@@ -1213,7 +1213,7 @@ void deserialize_system(snode_t *actors_start) {
             $WORD *blob = ($WORD*)r2->column_array[0];
             int blob_size = r2->last_blob_size;
             $ROW row = extract_row(blob, blob_size);
-            $Actor act = ($Actor)B_dictD_get(globdict, (B_Hashable)B_HashableD_intG_witness, toB_int(key), NULL);
+            $Actor act = ($Actor)B_dictD_get(globdict, (B_Hashable)B_HashableD_intG_witness, to$int(key), NULL);
             rtsd_printf("####### Deserializing actor %p = %ld of class %s = %d", act, act->$globkey, act->$class->$GCINFO, act->$class->$class_id);
             print_rows(row);
             $glob_deserialize(($Serializable)act, row, try_globdict);
@@ -1234,7 +1234,7 @@ void deserialize_system(snode_t *actors_start) {
                     long msg_key = read_queued_msg(key, &prev_read_head);
                 if (!msg_key)
                     break;
-                m = B_dictD_get(globdict, (B_Hashable)B_HashableD_intG_witness, toB_int(msg_key), NULL);
+                m = B_dictD_get(globdict, (B_Hashable)B_HashableD_intG_witness, to$int(msg_key), NULL);
                 rtsd_printf("# Adding Msg %ld to Actor %ld", m->$globkey, act->$globkey);
                 ENQ_msg(m, act);
             }
@@ -1250,7 +1250,7 @@ void deserialize_system(snode_t *actors_start) {
     for(snode_t * node = actors_start; node!=NULL; node=NEXT(node)) {
         db_row_t* r = (db_row_t*) node->value;
         long key = (long)r->key;
-        $Actor act = ($Actor)B_dictD_get(globdict, (B_Hashable)B_HashableD_intG_witness, toB_int(key), NULL);
+        $Actor act = ($Actor)B_dictD_get(globdict, (B_Hashable)B_HashableD_intG_witness, to$int(key), NULL);
         rtsd_printf("####### Resuming actor %p = %ld of class %s = %d", act, act->$globkey, act->$class->$GCINFO, act->$class->$class_id);
         act->$class->__resume__(act);
     }
@@ -1262,7 +1262,7 @@ void deserialize_system(snode_t *actors_start) {
         long msg_key = read_queued_msg(TIMER_QUEUE, &prev_read_head);
         if (!msg_key)
             break;
-        B_Msg m = B_dictD_get(globdict, (B_Hashable)B_HashableD_intG_witness, toB_int(msg_key), NULL);
+        B_Msg m = B_dictD_get(globdict, (B_Hashable)B_HashableD_intG_witness, to$int(msg_key), NULL);
         if (m->$baseline < now)
             m->$baseline = now;
         rtsd_printf("# Adding Msg %ld to the timerQ", m->$globkey);
@@ -1279,8 +1279,8 @@ void deserialize_system(snode_t *actors_start) {
      * These values must be kept in sync with next_key and the structure in
      * the BOOTSTRAP() function!
      */
-    env_actor  = (B_Env)B_dictD_get(globdict, (B_Hashable)B_HashableD_intG_witness, toB_int(-11), NULL);
-    root_actor = ($Actor)B_dictD_get(globdict, (B_Hashable)B_HashableD_intG_witness, toB_int(-12), NULL);
+    env_actor  = (B_Env)B_dictD_get(globdict, (B_Hashable)B_HashableD_intG_witness, to$int(-11), NULL);
+    root_actor = ($Actor)B_dictD_get(globdict, (B_Hashable)B_HashableD_intG_witness, to$int(-12), NULL);
     globdict = NULL;
     rtsd_printf("System deserialized");
 }

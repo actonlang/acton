@@ -252,7 +252,7 @@ void B_dictD___serialize__(B_dict self,$Serial$state state) {
         $val_serialize(-DICT_ID,&pk,state);
         return;
     }
-    B_dictD_setitem(state->done,(B_Hashable)B_HashableD_WORDG_witness,self,toB_int(state->row_no));
+    B_dictD_setitem(state->done,(B_Hashable)B_HashableD_WORDG_witness,self,to$int(state->row_no));
     int blobsize = 4 + (self->table->tb_size + 1) * sizeof(int)/sizeof($WORD);
     $ROW row = $add_header(DICT_ID,blobsize,state);
     row->blob[0] = ($WORD)self->numelements;
@@ -262,7 +262,7 @@ void B_dictD___serialize__(B_dict self,$Serial$state state) {
     memcpy(&row->blob[4],self->table->tb_indices,self->table->tb_size*sizeof(int));
     for (int i=0; i<self->table->tb_nentries; i++) {
         $entry_t entry = &TB_ENTRIES(self->table)[i];
-        $step_serialize(toB_int(entry->hash),state);
+        $step_serialize(to$int(entry->hash),state);
         $step_serialize(entry->key,state);
         $step_serialize(entry->value,state);
     }
@@ -273,11 +273,11 @@ B_dict B_dictD___deserialize__(B_dict res, $Serial$state state) {
     state->row = this->next;
     state->row_no++;
     if (this->class_id < 0) {
-        return B_dictD_get(state->done,(B_Hashable)B_HashableD_intG_witness,toB_int((long)this->blob[0]),NULL);
+        return B_dictD_get(state->done,(B_Hashable)B_HashableD_intG_witness,to$int((long)this->blob[0]),NULL);
     } else {
         if (!res)
             res = malloc(sizeof(struct B_dict));
-        B_dictD_setitem(state->done,(B_Hashable)B_HashableD_intG_witness,toB_int(state->row_no-1),res);
+        B_dictD_setitem(state->done,(B_Hashable)B_HashableD_intG_witness,to$int(state->row_no-1),res);
         res->$class = &B_dictG_methods;
         res->numelements = (long)this->blob[0];
         long tb_size = (long)this->blob[1];
@@ -381,7 +381,7 @@ B_str B_IteratorD_dictD_str(B_IteratorD_dict self) {
 
 void B_IteratorD_dictD_serialize(B_IteratorD_dict self, $Serial$state state) {
     $step_serialize(self->src,state);
-    $step_serialize(toB_int(self->nxt),state);
+    $step_serialize(to$int(self->nxt),state);
 }
 
 
@@ -420,7 +420,7 @@ B_dict B_MappingD_dictD___fromiter__ (B_MappingD_dict wit, B_Iterable wit2, $WOR
 }
 
 B_int B_MappingD_dictD___len__ (B_MappingD_dict wit, B_dict dict) {
-    return toB_int(dict->numelements);
+    return to$int(dict->numelements);
 }
   
 B_bool B_MappingD_dictD___contains__ (B_MappingD_dict wit, B_dict dict, $WORD key) {
@@ -489,7 +489,7 @@ B_str B_IteratorD_dict_values_str(B_IteratorD_dict_values self) {
 
 void B_IteratorD_dict_values_serialize(B_IteratorD_dict_values self, $Serial$state state) {
     $step_serialize(self->src,state);
-    $step_serialize(toB_int(self->nxt),state);
+    $step_serialize(to$int(self->nxt),state);
 }
 
 B_IteratorD_dict_values B_IteratorD_dict_values_deserialize(B_IteratorD_dict_values res, $Serial$state state) {
@@ -543,7 +543,7 @@ B_str B_IteratorD_dict_items_str(B_IteratorD_dict_items self) {
 
 void B_IteratorD_dict_items_serialize(B_IteratorD_dict_items self, $Serial$state state) {
     $step_serialize(self->src,state);
-    $step_serialize(toB_int(self->nxt),state);
+    $step_serialize(to$int(self->nxt),state);
 }
 
 B_IteratorD_dict_items B_IteratorD_dict_items_deserialize(B_IteratorD_dict_items res, $Serial$state state) {

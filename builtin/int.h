@@ -7,10 +7,10 @@ struct B_int {
 
 extern struct B_IntegralD_int *B_IntegralD_intG_witness;
 extern struct B_HashableD_int *B_HashableD_intG_witness;
-B_int zz$toB_int(zz_ptr val);
+B_int zz$to$int(zz_ptr val);
 
 long from$int(B_int n);
-B_int toB_int(long n);
+B_int to$int(long n);
  
 B_int B_intG_new(B_atom a);
 

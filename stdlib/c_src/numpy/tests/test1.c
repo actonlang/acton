@@ -21,7 +21,7 @@ int main(int argc, char *argv[]) {
   sscanf(argv[1],"%ld",&n);
   sscanf(argv[2],"%ld",&iters);
   for (int i=0;i<iters; i++) {
-    numpyQ_ndarray x = numpyQ_linspace(to$float((double)i),to$float((double)i+1), toB_int(n));
+    numpyQ_ndarray x = numpyQ_linspace(to$float((double)i),to$float((double)i+1), to$int(n));
     //printf("x=%s\n",x->$class->__str__(x)->str);
     B_list ix = $NEW(B_list,NULL,NULL);
     B_slice s = $NEW(B_slice,NULL,NULL,NULL);

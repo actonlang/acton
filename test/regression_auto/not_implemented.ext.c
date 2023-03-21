@@ -3,7 +3,7 @@ void not_implementedQ___ext_init__() {
 }
 
 B_int not_implementedQ_there (B_str x) {
-    return toB_int(0);
+    return to$int(0);
 }
 
 $WORD not_implementedQ_generic (B_Eq W_25, $WORD x) {

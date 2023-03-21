@@ -17,7 +17,7 @@
 #include "../builtin.h"
 
 B_int neg(B_int n) {
-  return toB_int(-from$int(n));
+  return to$int(-from$int(n));
 }
 
 int *slcel(B_int n) {
@@ -48,7 +48,7 @@ int main() {
     B_SequenceD_list wit4 = B_SequenceD_listG_witness;
     B_int len = wit4->W_Collection->$class->__len__(wit4->W_Collection,lst);
     for (long i=0; i < from$int(len); i++) {
-      printf("  '%s'\n",fromB_str(wit4->$class->__getitem__(wit4,lst,toB_int(i))));
+      printf("  '%s'\n",fromB_str(wit4->$class->__getitem__(wit4,lst,to$int(i))));
     }
     B_str space = to$str(" ");
     B_str joined = space->$class->join(space,(B_Iterable)wit4->W_Collection,lst);
@@ -60,5 +60,5 @@ int main() {
   B_print(1,s->$class->partition(s,to$str("SEP")));
   B_print(1,s->$class->rpartition(s,to$str("SEP")));
   B_print(1,s->$class->capitalize(s));
-  B_print(1,s->$class->center(s,toB_int(50),NULL));
+  B_print(1,s->$class->center(s,to$int(50),NULL));
 }

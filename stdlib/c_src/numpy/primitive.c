@@ -144,7 +144,7 @@ union $Bytes8 dB_pow(union $Bytes8  a, union $Bytes8 b) {
 }
 
 $WORD to$objB_int(union $Bytes8 x) {
-    return  toB_int(x.l);
+    return  to$int(x.l);
 }
 
 union $Bytes8 from$objB_int($WORD x) {

@@ -44,8 +44,8 @@ int main() {
   $Graph g2 = ($Graph)$deserialize_file("graph.bin");
   $serialize_file(($Serializable)g2,"graph2.bin");
 
-  $Node n2 = wit->$class->__getitem__(wit,g2->nodes,toB_int(1));
-  $Node n1 = wit->$class->__getitem__(wit,n2->nbors,toB_int(0));
+  $Node n2 = wit->$class->__getitem__(wit,g2->nodes,to$int(1));
+  $Node n1 = wit->$class->__getitem__(wit,n2->nbors,to$int(0));
   B_int a = (($IntNode)n1)->ival;
   printf("a=%ld\n",a->val);
   */
@@ -56,7 +56,7 @@ int main() {
   B_list nodes = $NEW(B_list,NULL,NULL);
   $Graph g = $NEW($Graph,nodes);
   for (int i=0; i<SIZE; i += 2) {
-    B_int ival = toB_int(i);
+    B_int ival = to$int(i);
     B_float fval = to$float(i*3.1416);
     B_list lst1 = $NEW(B_list,NULL,NULL);
     B_list lst2 = $NEW(B_list,NULL,NULL);
@@ -77,8 +77,8 @@ int main() {
   $Graph g2 = ($Graph)$deserialize_file("graph.bin");
   $serialize_file(($Serializable)g2,"graph2.bin");
 
-  $Node n2 = wit->$class->__getitem__(wit,g2->nodes,toB_int(SIZE-2)); //get node SIZE-2
-  $Node n1 = wit->$class->__getitem__(wit,n2->nbors,toB_int(2));      // get its nbor nr 2 (if SIZE is even and > 4, this is node[2]
+  $Node n2 = wit->$class->__getitem__(wit,g2->nodes,to$int(SIZE-2)); //get node SIZE-2
+  $Node n1 = wit->$class->__getitem__(wit,n2->nbors,to$int(2));      // get its nbor nr 2 (if SIZE is even and > 4, this is node[2]
   B_int a = (($IntNode)n1)->ival;
   printf("a=%ld\n",a->val);                                          // should print 2
                                                                 // check that graph.bin and graph2.bin are identical.

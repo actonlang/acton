@@ -16,24 +16,24 @@
 #include <utf8proc.h>
 
 int main() {
-  B_range r = B_rangeG_new(toB_int(50),toB_int(250),toB_int(50));
+  B_range r = B_rangeG_new(to$int(50),to$int(250),to$int(50));
   B_list lst0 = B_listD_fromiter((B_Iterator)$NEW(B_IteratorB_range,r));
   B_bytearray b = B_bytearrayG_new((B_value)lst0);
-  B_print(1,b->$class->center(b,toB_int(25),NULL));
-  B_range r2 = B_rangeG_new(toB_int(65),toB_int(91),NULL);
-  B_range r3 = B_rangeG_new(toB_int(75),toB_int(77),NULL);
+  B_print(1,b->$class->center(b,to$int(25),NULL));
+  B_range r2 = B_rangeG_new(to$int(65),to$int(91),NULL);
+  B_range r3 = B_rangeG_new(to$int(75),to$int(77),NULL);
   B_list lst2 = B_listD_fromiter((B_Iterator)B_IteratorB_rangeG_new(r2));
   B_list lst3 = B_listD_fromiter((B_Iterator)B_IteratorB_rangeG_new(r3));
   B_bytearray b2 = $NEW(B_bytearray,(B_value)lst2);
   B_bytearray b3 = $NEW(B_bytearray,(B_value)lst3);
   B_Sequence wit = (B_Sequence)B_SequenceD_bytearrayG_witness;
-  wit->$class->__delitem__(wit,b3,toB_int(0));
-  wit->$class->__delitem__(wit,b3,toB_int(-1));
+  wit->$class->__delitem__(wit,b3,to$int(0));
+  wit->$class->__delitem__(wit,b3,to$int(-1));
   B_int n = b2->$class->find(b2,b3,NULL,NULL);
   B_print(5,b3,to$str(" occurs in "),b2,to$str(" at pos "),n);
-  B_bytearray b4 = b->$class->center(b,toB_int(20),NULL);
+  B_bytearray b4 = b->$class->center(b,to$int(20),NULL);
   B_print(1,b->$class->lstrip(b4,NULL));
-  B_range rsep = $NEW(B_range,toB_int(70),toB_int(72),toB_int(5));
+  B_range rsep = $NEW(B_range,to$int(70),to$int(72),to$int(5));
   B_bytearray sep = $NEW(B_bytearray,(B_value)rsep);
   B_print(1,b2->$class->split(b2,sep,NULL));
   B_str s = to$str("line 1\nline 2\r\n\nBjörn");
@@ -54,12 +54,12 @@ int main() {
   slc.step = &step;
   B_SequenceD_bytearrayG_witness->$class->__delslice__(B_SequenceD_bytearrayG_witness,b6,&slc);
   B_print(1,b6);
-  B_SequenceD_bytearrayG_witness->$class->append(B_SequenceD_bytearrayG_witness,b6,toB_int(65));
-  B_SequenceD_bytearrayG_witness->$class->append(B_SequenceD_bytearrayG_witness,b6,toB_int(66));
-  B_SequenceD_bytearrayG_witness->$class->append(B_SequenceD_bytearrayG_witness,b6,toB_int(67));
+  B_SequenceD_bytearrayG_witness->$class->append(B_SequenceD_bytearrayG_witness,b6,to$int(65));
+  B_SequenceD_bytearrayG_witness->$class->append(B_SequenceD_bytearrayG_witness,b6,to$int(66));
+  B_SequenceD_bytearrayG_witness->$class->append(B_SequenceD_bytearrayG_witness,b6,to$int(67));
   B_print(1,b6);
   for (int i=0; i<100000; i++)
-    B_SequenceD_bytearrayG_witness->$class->append(B_SequenceD_bytearrayG_witness,b6,toB_int(65+i%26));
+    B_SequenceD_bytearrayG_witness->$class->append(B_SequenceD_bytearrayG_witness,b6,to$int(65+i%26));
   start = 8;
   stop = 100000;
   for (int i = 26; i>1; i--) {

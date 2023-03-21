@@ -30,7 +30,7 @@ int main() {
     } else {
       B_list sublst = $NEW(B_list,NULL,NULL);
       for (long j=0L; j < i; j++)
-        B_listD_append(sublst,toB_int(j));
+        B_listD_append(sublst,to$int(j));
       B_listD_append(lst2,sublst);
     }
   }

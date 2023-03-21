@@ -20,7 +20,7 @@ int main(int argc, char *argv[]) {
   long iters;
   sscanf(argv[1],"%ld",&n);
   sscanf(argv[2],"%ld",&iters);
-  $ndarray x = $ndarray_linspace(to$float(0.0),to$float(1.0), toB_int(n));
+  $ndarray x = $ndarray_linspace(to$float(0.0),to$float(1.0), to$int(n));
   // printf("x=%s\n",x->$class->__str__(x)->str);
   B_list ix = $NEW(B_list,NULL,NULL);
   $Slice s = $NEW($Slice,NULL,NULL,NULL);

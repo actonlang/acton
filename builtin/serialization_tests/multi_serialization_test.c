@@ -16,8 +16,8 @@
 
 int main() {
   $register_builtin();
-  B_int a = toB_int(17);
-  B_int b = toB_int(36);
+  B_int a = to$int(17);
+  B_int b = to$int(36);
   B_list lst = $NEW(B_list,NULL,NULL);
   B_listD_append(lst,a);
   B_listD_append(lst,b);

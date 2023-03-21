@@ -664,6 +664,7 @@ instance Gen Expr where
       | NClass{} <- findQName n env = newcon' env n
       | otherwise                   = genQName env n
     gen env (Int _ i str)           = gen env primToStr <> parens (text "\"" <> text (show i) <> text "\"")
+--    gen env (Int _ i str)           = gen env primToInt <> parens (text str)
     gen env (Float _ _ str)         = gen env primToFloat <> parens (text str)
     gen env (Bool _ True)           = gen env qnTrue
     gen env (Bool _ False)          = gen env qnFalse

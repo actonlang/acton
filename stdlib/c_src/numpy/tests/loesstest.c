@@ -41,7 +41,7 @@ numpyQ_ndarray loess_simple(numpyQ_ndarray x, numpyQ_ndarray y, numpyQ_ndarray x
   numpyQ_ndarray tmp6 = B_pow3(wit,w);
   numpyQ_ndarray tmp7 = wit2->$class->__sub__(wit2,numpyQ_fromatom(to$float(1.0)),tmp6);
   numpyQ_ndarray ws = B_pow3(wit,tmp7);
-  numpyQ_ndarray a00 = numpyQ_sum(witp,ws,toB_int(1));
+  numpyQ_ndarray a00 = numpyQ_sum(witp,ws,to$int(1));
   numpyQ_ndarray a01 = numpyQ_dot(witp,ws,x);
   numpyQ_ndarray a11 = numpyQ_dot(witp,ws,wit->$class->__mul__(wit,x,x));
   numpyQ_ndarray b0 = numpyQ_dot(witp,ws,y);
@@ -101,10 +101,10 @@ int main(int argc, char *argv[]) {
     }
     numpyQ_IntegralD_ndarray wit = numpyQ_IntegralD_ndarrayG_new((numpyQ_Primitive)numpyQ_PrimitiveD_floatG_witness);
     xx = mkarray(xx0,n);
-    yy = wit->$class->__add__(wit,mkarray(yy0,n),numpyQ_unirand(to$float(-0.5),to$float(0.5),toB_int(n)));
+    yy = wit->$class->__add__(wit,mkarray(yy0,n),numpyQ_unirand(to$float(-0.5),to$float(0.5),to$int(n)));
     win = n/4-1;
   }
-  numpyQ_ndarray res = loess_simple(xx,yy,xx,toB_int(win));
+  numpyQ_ndarray res = loess_simple(xx,yy,xx,to$int(win));
   printf("set term aqua title \"Loess\"\n");
   printf("set multiplot\nplot  [0:6.3][-1.5:1.5] 0\nclear\n");
   printf("$scatterplot <<EOD\n");

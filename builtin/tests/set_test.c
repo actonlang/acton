@@ -25,19 +25,19 @@ int main() {
   B_set s2 = $NEW(B_set,hashwit,NULL,NULL);
   printf("sets created\n");
   for (long i = 13; i < 1000; i++) {
-    wit->$class->add(wit,s,toB_int(i*i));
+    wit->$class->add(wit,s,to$int(i*i));
   }
-  wit->$class->discard(wit,s,toB_int(64));
-  wit->$class->discard(wit,s,toB_int(225));
-  wit->$class->discard(wit,s,toB_int(10000));
+  wit->$class->discard(wit,s,to$int(64));
+  wit->$class->discard(wit,s,to$int(225));
+  wit->$class->discard(wit,s,to$int(10000));
   int n = 0;
   for (long k = 0; k < 1000; k++)
-    if (fromB_bool(wit->$class->__contains__(wit,s,toB_int(k)))) {
+    if (fromB_bool(wit->$class->__contains__(wit,s,to$int(k)))) {
       n++;
     }
   printf("#elements <1000 is %d (should be 18)\n",n);
   for (long i = 0; i < 500; i++) {
-    wit->$class->add(wit,s2,toB_int(i*i*i*i));
+    wit->$class->add(wit,s2,to$int(i*i*i*i));
   }
   printf("size of s is %ld (should be 985)\n",from$int(wit->$class->__len__(wit,s)));
   printf("size of s2 is %ld (should be 500)\n",from$int(wit->$class->__len__(wit,s2)));

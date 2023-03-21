@@ -273,7 +273,7 @@ B_bool B_HashableD_i64D___ne__(B_HashableD_i64 wit, B_i64 a, B_i64 b) {
 }
 
 B_int B_HashableD_i64D___hash__(B_HashableD_i64 wit, B_i64 a) {
-    return toB_int(B_i64D_hash(a));
+    return to$int(B_i64D_hash(a));
 }
 
 // Initialization ////////////////////////////////////////////////////////////////////////////////////////////////////////

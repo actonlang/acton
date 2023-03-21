@@ -41,23 +41,23 @@ B_int B_IntegralD_intD___lshift__(B_IntegralD_int wit,  B_int a, B_int b);
 B_int B_intG_new(B_atom a) {
     if ($ISINSTANCE(a,B_int)->val) return (B_int)a;
     if ($ISINSTANCE(a,B_i64)->val) {
-        return toB_int(((B_i64)a)->val);
+        return to$int(((B_i64)a)->val);
     }
     if ($ISINSTANCE(a,B_float)->val) {
         double aval = ((B_float)a)->val;
         int e;
         double m = frexp(aval,&e);
         if (e>52) {
-            B_int c = toB_int((long)(m*4503599627370496.0)); // (1<< 52); 
-            B_int d = toB_int(e-52);
+            B_int c = to$int((long)(m*4503599627370496.0)); // (1<< 52); 
+            B_int d = to$int(e-52);
             return  B_IntegralD_intD___lshift__(NULL,c,d);
         } else {
             long al = (long)aval;
-            B_int res = toB_int(al);
+            B_int res = to$int(al);
             return res;
         }
     }
-    if ($ISINSTANCE(a,B_bool)->val) return toB_int(((B_bool)a)->val);
+    if ($ISINSTANCE(a,B_bool)->val) return to$int(((B_bool)a)->val);
     if ($ISINSTANCE(a,B_str)->val) {
         B_int res = malloc_int();
         res->$class = &B_intG_methods;
@@ -94,7 +94,7 @@ B_int B_intD___deserialize__(B_int res,$Serial$state state) {
     state->row = this->next;
     state->row_no++;
     if (this->class_id < 0) {
-        return (B_int)B_dictD_get(state->done,(B_Hashable)B_HashableD_intG_witness,toB_int((long)this->blob[0]),NULL);
+        return (B_int)B_dictD_get(state->done,(B_Hashable)B_HashableD_intG_witness,to$int((long)this->blob[0]),NULL);
     } else {
         if (!res)
             res = malloc_int();
@@ -102,7 +102,7 @@ B_int B_intD___deserialize__(B_int res,$Serial$state state) {
         res->val.alloc = labs(res->val.size);
         res->val.n = malloc(res->val.alloc*sizeof(long));
         memcpy(res->val.n,&this->blob[1],res->val.alloc*sizeof(long));
-        B_dictD_setitem(state->done,(B_Hashable)B_HashableD_intG_witness,toB_int(state->row_no-1),res);
+        B_dictD_setitem(state->done,(B_Hashable)B_HashableD_intG_witness,to$int(state->row_no-1),res);
         res->$class = &B_intG_methods;
         return res;
     }
@@ -116,7 +116,7 @@ B_str B_intD___str__(B_int n) {
     return to$str(get_str(&n->val));
 }
   
-B_int zz$toB_int(zz_ptr n) {
+B_int zz$to$int(zz_ptr n) {
     B_int res = malloc_int();
     res->$class = &B_intG_methods;
     res->val.n = n->n;
@@ -221,7 +221,7 @@ B_int B_IntegralD_intD___round__ (B_IntegralD_int wit, B_int n, B_int p) {
     long pval = from$int(p);
     if (pval>=0)
         return n;
-    B_int p10 = B_IntegralD_intD___pow__(NULL,toB_int(10), B_IntegralD_intD___neg__(NULL,p));
+    B_int p10 = B_IntegralD_intD___pow__(NULL,to$int(10), B_IntegralD_intD___neg__(NULL,p));
     return B_IntegralD_intD___mul__(NULL,n,p10);
 }
   
@@ -230,7 +230,7 @@ $WORD B_IntegralD_intD_numerator (B_IntegralD_int wit, B_int n, B_Integral wit2)
 }
   
 $WORD B_IntegralD_intD_denominator (B_IntegralD_int wit, B_int n, B_Integral wit2) {
-    B_int res = toB_int(1L);
+    B_int res = to$int(1L);
     return wit2->$class->__fromatom__(wit2,(B_atom)res);
 }
   
@@ -410,7 +410,7 @@ B_int B_HashableD_intD___hash__(B_HashableD_int wit, B_int a) {
     //    zz_init_fit(q,1);
     //    zz_seti(&res->val,zz_divremi(q,&a->val,LONG_MAX/4));    // This hash algorithm should be reconsidered!!!
 
-    return toB_int(B_i64D_hash(toB_i64(from$int(a))));
+    return to$int(B_i64D_hash(toB_i64(from$int(a))));
 }
 
 
@@ -575,7 +575,7 @@ long from$int(B_int n) {
     return sz<0 ? -res : res;
 }
             
-B_int toB_int(long n) {
+B_int to$int(long n) {
     B_int res = malloc(sizeof(struct B_int));
     res->$class = &B_intG_methods;
     res->val.n = malloc(sizeof(unsigned long));
