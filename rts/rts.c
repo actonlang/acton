@@ -867,9 +867,10 @@ void $PUSH($Cont cont) {
 
 void $POP(B_i64 n) {
     $Actor self = ($Actor)pthread_getspecific(self_key);
-    while (n > 0) {
+    long v = n->val;
+    while (v > 0) {
         POP_catcher(self);
-        n--;
+        v--;
     }
 }
 
