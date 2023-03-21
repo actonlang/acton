@@ -70,9 +70,9 @@ B_range B_rangeD___deserialize__(B_range self, $Serial$state state) {
 static $WORD B_IteratorB_rangeD_next(B_IteratorB_range self) {
     long res = self->src->start + self->nxt++*self->src->step;
     if (self->src->step>0)
-        return res < self->src->stop ? toB_int(res) : NULL;
+        return res < self->src->stop ? to$int(res) : NULL;
     else
-        return res > self->src->stop ? toB_int(res) : NULL;
+        return res > self->src->stop ? to$int(res) : NULL;
 }
 
 void B_IteratorB_rangeD_init(B_IteratorB_range self, B_range rng) {
@@ -92,7 +92,7 @@ B_str B_IteratorB_rangeD_str(B_IteratorB_range self) {
 
 void B_IteratorB_rangeD_serialize(B_IteratorB_range self, $Serial$state state) {
     $step_serialize(self->src,state);
-    $step_serialize(toB_int(self->nxt),state);
+    $step_serialize(to$int(self->nxt),state);
 }
 
 B_IteratorB_range B_IteratorB_range$_deserialize(B_IteratorB_range self, $Serial$state state) {

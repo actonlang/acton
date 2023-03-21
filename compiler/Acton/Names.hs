@@ -25,7 +25,8 @@ self                                = Name NoLoc "self"
 localName n                         = Derived n suffixLocal
 newactName n                        = Derived n suffixNewact
 
-actName                             = globalName "act"
+g_act                               = globalName "act"
+g_none                              = globalName "none"
 
 suffixLocal                         = globalName "local"
 suffixNewact                        = globalName "newact"
@@ -282,9 +283,6 @@ instance Vars QName where
     free (QName m n)                = free m
     free (NoQ n)                    = free n
     free (GName m n)                = free m
-
-instance Vars Exception where
-    free (Exception e1 e2)          = free e1 ++ free e2
 
 instance Vars Except where
     free (ExceptAll _)              = []

@@ -46,7 +46,7 @@ void B_tupleD___serialize__(B_tuple self, $Serial$state state) {
         $val_serialize(-TUPLE_ID,&prevkey->val,state);
         return;
     }
-    B_dictD_setitem(state->done,(B_Hashable)B_HashableD_WORDG_witness,self,toB_int(state->row_no));
+    B_dictD_setitem(state->done,(B_Hashable)B_HashableD_WORDG_witness,self,to$int(state->row_no));
     long len = (long)self->size;
     $val_serialize(TUPLE_ID,&len,state);
     for (int i=0; i<self->size; i++) {
@@ -59,11 +59,11 @@ B_tuple B_tupleD___deserialize__(B_tuple self, $Serial$state state) {
     state->row = this->next;
     state->row_no++;
     if (this->class_id < 0) {
-        return (B_tuple)B_dictD_get(state->done,(B_Hashable)B_HashableD_intG_witness,toB_int((long)this->blob[0]),NULL);
+        return (B_tuple)B_dictD_get(state->done,(B_Hashable)B_HashableD_intG_witness,to$int((long)this->blob[0]),NULL);
     } else {
         int len = (int)(long)this->blob[0];
         B_tuple res = malloc(sizeof(struct B_tuple));
-        B_dictD_setitem(state->done,(B_Hashable)B_HashableD_intG_witness,toB_int(state->row_no-1),res);
+        B_dictD_setitem(state->done,(B_Hashable)B_HashableD_intG_witness,to$int(state->row_no-1),res);
         res->components = malloc(len * sizeof($WORD));
         res->$class = &B_tupleG_methods;
         res->size = len;
@@ -107,7 +107,7 @@ B_str B_IteratorD_tupleD_str(B_IteratorD_tuple self) {
 }
 void B_IteratorD_tupleD_serialize(B_IteratorD_tuple self,$Serial$state state) {
     $step_serialize(self->src,state);
-    $step_serialize(toB_int(self->nxt),state);
+    $step_serialize(to$int(self->nxt),state);
 }
 
 B_IteratorD_tuple B_IteratorD_tuple$_deserialize(B_IteratorD_tuple res, $Serial$state state) {
@@ -245,7 +245,7 @@ B_NoneType B_HashableD_tupleD___init__ (B_HashableD_tuple wit, int n, B_Hashable
 }
 
 void B_HashableD_tupleD___serialize__(B_HashableD_tuple self, $Serial$state state) {
-    $step_serialize(toB_int(self->W_HashableB_tuple$size), state);
+    $step_serialize(to$int(self->W_HashableB_tuple$size), state);
     // we need to serialize the array of Hashables!!
 }
 
@@ -270,7 +270,7 @@ B_bool B_HashableD_tupleD___ne__ (B_HashableD_tuple wit, B_tuple tup1, B_tuple t
     
   
 B_int B_HashableD_tupleD___hash__ (B_HashableD_tuple wit, B_tuple tup) {
-    return toB_int(B_tupleD_hash(wit,tup));
+    return to$int(B_tupleD_hash(wit,tup));
 }
 
 struct B_HashableD_tupleG_class B_HashableD_tupleG_methods = {

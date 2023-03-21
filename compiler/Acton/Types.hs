@@ -267,9 +267,11 @@ instance InfEnv Stmt where
     infEnv env (Return l (Just e))      = do t <- currRet
                                              (cs,e') <- inferSub env t e
                                              return (cs, [], Return l (Just e'))
-    infEnv env s@(Raise _ Nothing)      = return ([], [], s)
-    infEnv env (Raise l (Just e))       = do (cs,_,e') <- infer env e
-                                             return (cs, [], Raise l (Just e'))
+    infEnv env (Raise l e)              = do (cs,t,e') <- infer env e
+                                             fx <- currFX
+                                             return (Cast t tException :
+                                                     Cast fxProc fx :
+                                                     cs, [], Raise l e')
     infEnv env s@(Break _)              = return ([], [], s)
     infEnv env s@(Continue _)           = return ([], [], s)
     infEnv env (If l bs els)            = do (css,tes,bs') <- fmap unzip3 $ mapM (infLiveEnv env) bs
@@ -294,7 +296,9 @@ instance InfEnv Stmt where
                                              (css,tes,hs') <- fmap unzip3 $ mapM (infLiveEnv env) hs
                                              (cs3,te1) <- commonTEnv env $ catMaybes $ (liveCombine te te'):tes
                                              (cs4,te2,fin') <- infSuiteEnv (define te1 env) fin
-                                             return (cs1++cs2++cs3++cs4++concat css, te1++te2, Try l b' hs' els' fin')
+                                             fx <- currFX
+                                             return (Cast fxProc fx :
+                                                     cs1++cs2++cs3++cs4++concat css, te1++te2, Try l b' hs' els' fin')
     infEnv env (With l items b)
       | nodup items                     = do (cs1,te,items') <- infEnv env items
                                              (cs2,te1,b') <- infSuiteEnv (define te env) b
@@ -1579,16 +1583,6 @@ instance InfEnv Comp where
                                              w <- newWitness
                                              return (Impl w t2 (pIterable t1) :
                                                      cs1++cs2++cs3, te1++te2, CompFor l p' (eCall (eDot (eVar w) iterKW) [e']) c')
-
-instance Infer Exception where
-    infer env (Exception e1 Nothing)    = do (cs,t1,e1') <- infer env e1
-                                             return (Cast t1 tException :
-                                                     cs, t1, Exception e1' Nothing)
-    infer env (Exception e1 (Just e2))  = do (cs1,t1,e1') <- infer env e1
-                                             (cs2,t2,e2') <- infer env e2
-                                             return (Cast t1 tException : 
-                                                     Cast t2 tException : 
-                                                     cs1++cs2, t1, Exception e1' (Just e2'))
 
 instance InfEnvT PosPat where
     infEnvT env (PosPat p ps)           = do (cs1,te1,t,p') <- infEnvT env p

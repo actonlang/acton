@@ -295,7 +295,6 @@ X String literals are concatenated
 - For loops are replaced by while over iterators
 - With statemenmts are replaced by enter/exit prim calls + exception handling
 X The assert statement is replaced by a prim call ASSERT
-X The raise statement is replaced by one of prim calls RAISE, RAISEFROM or RERAISE
 - The delete statement is replaced by (a sequence of) __delitem__ calls (for PIndex) or None assignments
 X Return without argument is replaced by return None
 - Incremental assignments are replaced by the corresponding __iop__ calls

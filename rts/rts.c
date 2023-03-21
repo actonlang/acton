@@ -596,12 +596,18 @@ bool DEQ_msg($Actor a) {
     return has_more;
 }
 
+#define MARK_RESULT         NULL
+#define MARK_EXCEPTION      ($Cont)1
+
+#define EXCEPTIONAL(m)      (m->$cont == MARK_EXCEPTION)
+#define FROZEN(m)           (m->$cont == MARK_RESULT || EXCEPTIONAL(m))
+
 // Atomically add actor "a" to the waiting list of messasge "m" if it is not frozen (and return true),
 // else immediately return false.
 bool ADD_waiting($Actor a, B_Msg m) {
     bool did_add = false;
     spinlock_lock(&m->$wait_lock);
-    if (m->$cont) {
+    if (!FROZEN(m)) {
         a->$next = m->$waiting;
         m->$waiting = a;
         did_add = true;
@@ -610,10 +616,10 @@ bool ADD_waiting($Actor a, B_Msg m) {
     return did_add;
 }
 
-// Atomically freeze message "m" and return its list of waiting actors. 
-$Actor FREEZE_waiting(B_Msg m) {
+// Atomically freeze message "m" using "mark", and return its list of waiting actors.
+$Actor FREEZE_waiting(B_Msg m, $Cont mark) {
     spinlock_lock(&m->$wait_lock);
-    m->$cont = NULL;
+    m->$cont = mark;
     spinlock_unlock(&m->$wait_lock);
     $Actor res = m->$waiting;
     m->$waiting = NULL;
@@ -711,6 +717,46 @@ struct $Cont $Done$instance = {
     &$DoneG_methods
 };
 ////////////////////////////////////////////////////////////////////////////////////////
+$R $FailD___call__($Cont $this, $WORD ex) {
+    return $R_FAIL(ex);
+}
+
+B_bool $FailD___bool__($Cont self) {
+  return B_True;
+}
+
+B_str $FailD___str__($Cont self) {
+  char *s;
+  asprintf(&s,"<$Fail object at %p>",self);
+  return to$str(s);
+}
+
+void $Fail__serialize__($Cont self, $Serial$state state) {
+  return;
+}
+
+$Cont $Fail__deserialize__($Cont self, $Serial$state state) {
+  $Cont res = $DNEW($Cont,state);
+  res->$class = &$FailG_methods;
+  return res;
+}
+
+struct $ContG_class $FailG_methods = {
+    "$Fail",
+    UNASSIGNED,
+    NULL,
+    $ContD___init__,
+    $Fail__serialize__,
+    $Fail__deserialize__,
+    $FailD___bool__,
+    $FailD___str__,
+    $FailD___str__,
+    $FailD___call__
+};
+struct $Cont $Fail$instance = {
+    &$FailG_methods
+};
+////////////////////////////////////////////////////////////////////////////////////////
 $R $InitRootD___call__ ($Cont $this, $WORD val) {
     typedef $R(*ROOT__init__t)($Actor, $Cont, B_Env);    // Assumed type of the ROOT actor's __init__ method
     return ((ROOT__init__t)root_actor->$class->__init__)(root_actor, ($Cont)val, env_actor);
@@ -776,8 +822,10 @@ void PUSH_catcher($Actor a, $Catcher c) {
 
 $Catcher POP_catcher($Actor a) {
     $Catcher c = a->$catcher;
-    a->$catcher = c->$next;
-    c->$next = NULL;
+    if (c) {
+        a->$catcher = c->$next;
+        c->$next = NULL;
+    }
     return c;
 }
 
@@ -817,9 +865,13 @@ void $PUSH($Cont cont) {
     PUSH_catcher(self, c);
 }
 
-void $POP() {
+void $POP(B_int n) {
     $Actor self = ($Actor)pthread_getspecific(self_key);
-    POP_catcher(self);
+    long v = from$int(n);
+    while (v > 0) {
+        POP_catcher(self);
+        v--;
+    }
 }
 
 void create_all_actor_queues() {
@@ -990,7 +1042,7 @@ B_dict globdict = NULL;
 
 $WORD try_globdict($WORD w) {
     int key = (int)(long)w;
-    $WORD obj = B_dictD_get(globdict, (B_Hashable)B_HashableD_intG_witness, toB_int(key), NULL);
+    $WORD obj = B_dictD_get(globdict, (B_Hashable)B_HashableD_intG_witness, to$int(key), NULL);
     return obj;
 }
 
@@ -1109,7 +1161,7 @@ void deserialize_system(snode_t *actors_start) {
             BlobHd *head = (BlobHd*)r2->column_array[0];
             B_Msg msg = (B_Msg)$GET_METHODS(head->class_id)->__deserialize__(NULL, NULL);
             msg->$globkey = key;
-            B_dictD_setitem(globdict, (B_Hashable)B_HashableD_intG_witness, toB_int(key), msg);
+            B_dictD_setitem(globdict, (B_Hashable)B_HashableD_intG_witness, to$int(key), msg);
             rtsd_printf("# Allocated Msg %p = %ld of class %s = %d", msg, msg->$globkey, msg->$class->$GCINFO, msg->$class->$class_id);
             if (key < min_key)
                 min_key = key;
@@ -1126,7 +1178,7 @@ void deserialize_system(snode_t *actors_start) {
             BlobHd *head = (BlobHd*)r2->column_array[0];
             $Actor act = ($Actor)$GET_METHODS(head->class_id)->__deserialize__(NULL, NULL);
             act->$globkey = key;
-            B_dictD_setitem(globdict, (B_Hashable)B_HashableD_intG_witness, toB_int(key), act);
+            B_dictD_setitem(globdict, (B_Hashable)B_HashableD_intG_witness, to$int(key), act);
             rtsd_printf("# Allocated Actor %p = %ld of class %s = %d", act, act->$globkey, act->$class->$GCINFO, act->$class->$class_id);
             if (key < min_key)
                 min_key = key;
@@ -1144,7 +1196,7 @@ void deserialize_system(snode_t *actors_start) {
             $WORD *blob = ($WORD*)r2->column_array[0];
             int blob_size = r2->last_blob_size;
             $ROW row = extract_row(blob, blob_size);
-            B_Msg msg = (B_Msg)B_dictD_get(globdict, (B_Hashable)B_HashableD_intG_witness, toB_int(key), NULL);
+            B_Msg msg = (B_Msg)B_dictD_get(globdict, (B_Hashable)B_HashableD_intG_witness, to$int(key), NULL);
             rtsd_printf("####### Deserializing msg %p = %ld of class %s = %d", msg, msg->$globkey, msg->$class->$GCINFO, msg->$class->$class_id);
             print_rows(row);
             $glob_deserialize(($Serializable)msg, row, try_globdict);
@@ -1161,13 +1213,13 @@ void deserialize_system(snode_t *actors_start) {
             $WORD *blob = ($WORD*)r2->column_array[0];
             int blob_size = r2->last_blob_size;
             $ROW row = extract_row(blob, blob_size);
-            $Actor act = ($Actor)B_dictD_get(globdict, (B_Hashable)B_HashableD_intG_witness, toB_int(key), NULL);
+            $Actor act = ($Actor)B_dictD_get(globdict, (B_Hashable)B_HashableD_intG_witness, to$int(key), NULL);
             rtsd_printf("####### Deserializing actor %p = %ld of class %s = %d", act, act->$globkey, act->$class->$GCINFO, act->$class->$class_id);
             print_rows(row);
             $glob_deserialize(($Serializable)act, row, try_globdict);
 
             B_Msg m = act->$waitsfor;
-            if (m && m->$cont) {
+            if (m && !FROZEN(m)) {
                 ADD_waiting(act, m);
                 rtsd_printf("# Adding Actor %ld to wait for Msg %ld", act->$globkey, m->$globkey);
             }
@@ -1182,7 +1234,7 @@ void deserialize_system(snode_t *actors_start) {
                     long msg_key = read_queued_msg(key, &prev_read_head);
                 if (!msg_key)
                     break;
-                m = B_dictD_get(globdict, (B_Hashable)B_HashableD_intG_witness, toB_int(msg_key), NULL);
+                m = B_dictD_get(globdict, (B_Hashable)B_HashableD_intG_witness, to$int(msg_key), NULL);
                 rtsd_printf("# Adding Msg %ld to Actor %ld", m->$globkey, act->$globkey);
                 ENQ_msg(m, act);
             }
@@ -1198,7 +1250,7 @@ void deserialize_system(snode_t *actors_start) {
     for(snode_t * node = actors_start; node!=NULL; node=NEXT(node)) {
         db_row_t* r = (db_row_t*) node->value;
         long key = (long)r->key;
-        $Actor act = ($Actor)B_dictD_get(globdict, (B_Hashable)B_HashableD_intG_witness, toB_int(key), NULL);
+        $Actor act = ($Actor)B_dictD_get(globdict, (B_Hashable)B_HashableD_intG_witness, to$int(key), NULL);
         rtsd_printf("####### Resuming actor %p = %ld of class %s = %d", act, act->$globkey, act->$class->$GCINFO, act->$class->$class_id);
         act->$class->__resume__(act);
     }
@@ -1210,7 +1262,7 @@ void deserialize_system(snode_t *actors_start) {
         long msg_key = read_queued_msg(TIMER_QUEUE, &prev_read_head);
         if (!msg_key)
             break;
-        B_Msg m = B_dictD_get(globdict, (B_Hashable)B_HashableD_intG_witness, toB_int(msg_key), NULL);
+        B_Msg m = B_dictD_get(globdict, (B_Hashable)B_HashableD_intG_witness, to$int(msg_key), NULL);
         if (m->$baseline < now)
             m->$baseline = now;
         rtsd_printf("# Adding Msg %ld to the timerQ", m->$globkey);
@@ -1227,8 +1279,8 @@ void deserialize_system(snode_t *actors_start) {
      * These values must be kept in sync with next_key and the structure in
      * the BOOTSTRAP() function!
      */
-    env_actor  = (B_Env)B_dictD_get(globdict, (B_Hashable)B_HashableD_intG_witness, toB_int(-11), NULL);
-    root_actor = ($Actor)B_dictD_get(globdict, (B_Hashable)B_HashableD_intG_witness, toB_int(-12), NULL);
+    env_actor  = (B_Env)B_dictD_get(globdict, (B_Hashable)B_HashableD_intG_witness, to$int(-11), NULL);
+    root_actor = ($Actor)B_dictD_get(globdict, (B_Hashable)B_HashableD_intG_witness, to$int(-12), NULL);
     globdict = NULL;
     rtsd_printf("System deserialized");
 }
@@ -1352,6 +1404,47 @@ void BOOTSTRAP(int argc, char *argv[]) {
 
 }
 
+void save_actor_state($Actor current, B_Msg m) {
+            if (db) {
+                int success = 0;
+                reverse_outgoing_queue(current);
+                while(!success && !rts_exit) {
+                    uuid_t * txnid = remote_new_txn(db);
+                    if(txnid == NULL)
+                        continue;
+                    current->$consume_hd++;
+                    serialize_actor(current, txnid);
+                    FLUSH_outgoing_db(current, txnid);
+                    serialize_msg(current->B_Msg, txnid);
+
+                    long key = current->$globkey;
+                    snode_t *m_start, *m_end;
+                    int entries_read = 0, minority_status = 0;
+                    int64_t read_head = -1;
+
+                    int ret0 = remote_read_queue_in_txn(($WORD) db->local_rts_id, 0, 0, MSG_QUEUE, ($WORD)key, 1, &entries_read, &read_head, &m_start, &m_end, &minority_status, NULL, db);
+                    rtsd_printf("   # dummy read msg from queue %ld returns %d, entries read: %d", key, ret0, entries_read);
+                    if(handle_status_and_schema_mismatch(ret0, minority_status, key))
+                        continue;
+
+                    int ret1 = remote_consume_queue_in_txn(($WORD) db->local_rts_id, 0, 0, MSG_QUEUE, ($WORD)key, read_head, &minority_status, txnid, db);
+                    rtsd_printf("   # consume msg %ld from queue %ld returns %d", m->$globkey, key, ret1);
+                    if(handle_status_and_schema_mismatch(ret1, minority_status, key))
+                        continue;
+
+                    int ret2 = remote_commit_txn(txnid, &minority_status, db);
+                    rtsd_printf("############## Commit returned %d, minority_status %d", ret2, minority_status);
+                    if(handle_status_and_schema_mismatch(ret2, minority_status, key))
+                        continue;
+                    if(ret2 == VAL_STATUS_COMMIT)
+                        success = 1;
+                }
+                FLUSH_outgoing_local(current);
+            } else {
+                reverse_outgoing_queue(current);
+                FLUSH_outgoing_local(current);
+            }
+}
 
 ////////////////////////////////////////////////////////////////////////////////////////
 
@@ -1455,48 +1548,9 @@ void wt_work_cb(uv_check_t *ev) {
 
         switch (r.tag) {
         case $RDONE: {
-            if (db) {
-                int success = 0;
-                reverse_outgoing_queue(current);
-                while(!success && !rts_exit) {
-                    uuid_t * txnid = remote_new_txn(db);
-                    if(txnid == NULL)
-                        continue;
-                    current->$consume_hd++;
-                    serialize_actor(current, txnid);
-                    FLUSH_outgoing_db(current, txnid);
-                    serialize_msg(current->B_Msg, txnid);
-
-                    long key = current->$globkey;
-                    snode_t *m_start, *m_end;
-                    int entries_read = 0, minority_status = 0;
-                    int64_t read_head = -1;
-
-                    int ret0 = remote_read_queue_in_txn(($WORD) db->local_rts_id, 0, 0, MSG_QUEUE, ($WORD)key, 1, &entries_read, &read_head, &m_start, &m_end, &minority_status, NULL, db);
-                    rtsd_printf("   # dummy read msg from queue %ld returns %d, entries read: %d", key, ret0, entries_read);
-                    if(handle_status_and_schema_mismatch(ret0, minority_status, key))
-                        continue;
-
-                    int ret1 = remote_consume_queue_in_txn(($WORD) db->local_rts_id, 0, 0, MSG_QUEUE, ($WORD)key, read_head, &minority_status, txnid, db);
-                    rtsd_printf("   # consume msg %ld from queue %ld returns %d", m->$globkey, key, ret1);
-                    if(handle_status_and_schema_mismatch(ret1, minority_status, key))
-                        continue;
-
-                    int ret2 = remote_commit_txn(txnid, &minority_status, db);
-                    rtsd_printf("############## Commit returned %d, minority_status %d", ret2, minority_status);
-                    if(handle_status_and_schema_mismatch(ret2, minority_status, key))
-                        continue;
-                    if(ret2 == VAL_STATUS_COMMIT)
-                        success = 1;
-                }
-                FLUSH_outgoing_local(current);
-            } else {
-                reverse_outgoing_queue(current);
-                FLUSH_outgoing_local(current);
-            }
-
-            m->B_value = r.value;                 // m->value holds the response,
-            $Actor b = FREEZE_waiting(m);        // so set m->cont = NULL and stop further m->waiting additions
+            save_actor_state(current, m);
+            m->B_value = r.value;                           // m->value holds the message result,
+            $Actor b = FREEZE_waiting(m, MARK_RESULT);      // so mark this and stop further m->waiting additions
             while (b) {
                 b->B_Msg->B_value = r.value;
                 b->$waitsfor = NULL;
@@ -1520,9 +1574,29 @@ void wt_work_cb(uv_check_t *ev) {
         }
         case $RFAIL: {
             $Catcher c = POP_catcher(current);
-            m->$cont = c->$cont;
-            m->B_value = r.value;
-            ENQ_ready(current);
+            if (c) {                            // Normal exception handling
+                m->$cont = c->$cont;
+                m->B_value = r.value;
+                rtsd_printf("## FAIL/handle actor %ld : %s", current->$globkey, current->$class->$GCINFO);
+                ENQ_ready(current);
+            } else {                            // An unhandled exception
+                save_actor_state(current, m);
+                m->B_value = r.value;                               // m->value holds the raised exception,
+                $Actor b = FREEZE_waiting(m, MARK_EXCEPTION);       // so mark this and stop further m->waiting additions
+                while (b) {
+                    b->B_Msg->$cont = &$Fail$instance;
+                    b->B_Msg->B_value = r.value;
+                    b->$waitsfor = NULL;
+                    $Actor c = b->$next;
+                    ENQ_ready(b);
+                    rtsd_printf("## Propagating exception to actor %ld : %s", b->$globkey, b->$class->$GCINFO);
+                    b = c;
+                }
+                rtsd_printf("## FAIL actor %ld : %s", current->$globkey, current->$class->$GCINFO);
+                if (DEQ_msg(current)) {
+                    ENQ_ready(current);
+                }
+            }
             break;
         }
         case $RWAIT: {
@@ -1550,10 +1624,15 @@ void wt_work_cb(uv_check_t *ev) {
             }
             m->$cont = r.cont;
             B_Msg x = (B_Msg)r.value;
-            if (ADD_waiting(current, x)) {      // x->cont != NULL: x is still being processed so current was added to x->waiting
+            if (ADD_waiting(current, x)) {      // x->cont is a proper $Cont: x is still being processed so current was added to x->waiting
                 rtsd_printf("## AWAIT actor %ld : %s", current->$globkey, current->$class->$GCINFO);
                 current->$waitsfor = x;
-            } else {                            // x->cont == NULL: x->value holds the final response, current is not in x->waiting
+            } else if (EXCEPTIONAL(x)) {        // x->cont == MARK_EXCEPTION: x->value holds the raised exception, current is not in x->waiting
+                rtsd_printf("## AWAIT/fail actor %ld : %s", current->$globkey, current->$class->$GCINFO);
+                m->$cont = &$Fail$instance;
+                m->B_value = x->B_value;
+                ENQ_ready(current);
+            } else {                            // x->cont == MARK_RESULT: x->value holds the final response, current is not in x->waiting
                 rtsd_printf("## AWAIT/wakeup actor %ld : %s", current->$globkey, current->$class->$GCINFO);
                 m->B_value = x->B_value;
                 ENQ_ready(current);

@@ -416,7 +416,7 @@ numpyQ_ndarray numpyQ_CollectionD_ndarrayD___fromiter__(numpyQ_CollectionD_ndarr
 }
 B_int numpyQ_CollectionD_ndarrayD___len__(numpyQ_CollectionD_ndarray pwit, numpyQ_ndarray a) {
     B_SequenceD_list wit = B_SequenceD_listG_witness;
-    return wit->$class->__getitem__(wit,a->shape,toB_int(-1));
+    return wit->$class->__getitem__(wit,a->shape,to$int(-1));
 }
 
 

@@ -103,6 +103,7 @@ instance Deact Stmt where
     deact env (Pass l)              = return $ Pass l
     deact env (Return l Nothing)    = return $ Return l Nothing
     deact env (Return l (Just e))   = Return l . Just <$> deact env e
+    deact env (Raise l e)           = Raise l <$> deact env e
     deact env (Break l)             = return $ Break l
     deact env (Continue l)          = return $ Continue l
     deact env (If l bs els)         = If l <$> deact env bs <*> deactSuite env1 els
@@ -184,8 +185,8 @@ instance Deact Decl where
 
 newact env n q p                    = Def l0 (newactName n) q p KwdNIL (Just t) [newassign, waitinit, sReturn x] NoDec fxProc
   where t                           = tCon $ TC (NoQ n) (map tVar $ qbound q)
-        x                           = eVar actName
-        newassign                   = sAssign (pVar actName t) (eCall (tApp (eQVar primNEWACTOR) [t]) [])
+        x                           = eVar g_act
+        newassign                   = sAssign (pVar g_act t) (eCall (tApp (eQVar primNEWACTOR) [t]) [])
         waitinit                    = sExpr $ eCall (tApp (eQVar primAWAITf) [tNone]) [asyncmsg]
         asyncmsg                    = eCall (tApp (eQVar primASYNCf) [tNone]) [x, closure]
         closure                     = Lambda l0 PosNIL KwdNIL initcall fxProc

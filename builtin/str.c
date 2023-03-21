@@ -198,7 +198,7 @@ static int get_index(int i, int nchars) {
 static int fix_start_end(int nchars, B_int *start, B_int *end) {
     if (*start==NULL) {
         *start = malloc(sizeof(struct B_int));
-        *start = toB_int(0);
+        *start = to$int(0);
     }
     int st = from$int(*start);
     if (st > nchars)
@@ -206,11 +206,11 @@ static int fix_start_end(int nchars, B_int *start, B_int *end) {
     if (st < 0) 
         st += nchars;
     st = st < 0 ? 0 : st;
-    *start = toB_int(st);
+    *start = to$int(st);
 
     if (*end==NULL) {
         *end = malloc(sizeof(struct B_int));
-        *end = toB_int(nchars);
+        *end = to$int(nchars);
     }
     int en = from$int(*end);
     if (en > nchars)   
@@ -219,7 +219,7 @@ static int fix_start_end(int nchars, B_int *start, B_int *end) {
         en += nchars;     
     en = en < 0 ? 0 : en;    
 
-    *end = toB_int(en);
+    *end = to$int(en);
     return 0;
 }
 
@@ -414,7 +414,7 @@ B_int B_strD_count(B_str s, B_str sub, B_int start, B_int end) {
     int isascii = s->nchars == s->nbytes;
     B_int st = start;
     B_int en = end;
-    if (fix_start_end(s->nchars,&st,&en) < 0) return toB_int(0);
+    if (fix_start_end(s->nchars,&st,&en) < 0) return to$int(0);
     unsigned char *p = skip_chars(s->str,from$int(st),isascii);
     unsigned char *q = skip_chars(p,from$int(en)-from$int(st),isascii);
     int res = 0;
@@ -424,7 +424,7 @@ B_int B_strD_count(B_str s, B_str sub, B_int start, B_int end) {
         p += n + (sub->nbytes>0 ? sub->nbytes : 1);
         n = bmh(p,sub->str,q-p,sub->nbytes);
     }
-    return toB_int(res);
+    return to$int(res);
 }
 
 B_bytes B_strD_encode(B_str s) {
@@ -486,12 +486,12 @@ B_int B_strD_find(B_str s, B_str sub, B_int start, B_int end) {
     int isascii = s->nchars == s->nbytes;
     B_int st = start;
     B_int en = end;
-    if (fix_start_end(s->nchars,&st,&en) < 0) return toB_int(-1);
+    if (fix_start_end(s->nchars,&st,&en) < 0) return to$int(-1);
     unsigned char *p = skip_chars(s->str,from$int(st),isascii);
     unsigned char *q = skip_chars(p,from$int(en)-from$int(st),isascii);
     int n = bmh(p,sub->str,q-p,sub->nbytes);
-    if (n<0) return toB_int(-1);
-    return toB_int(char_no(s,n+p-s->str));
+    if (n<0) return to$int(-1);
+    return to$int(char_no(s,n+p-s->str));
 }
 
 B_int B_strD_index(B_str s, B_str sub, B_int start, B_int end) {
@@ -752,7 +752,7 @@ B_tuple B_strD_partition(B_str s, B_str sep) {
 
 B_str B_strD_replace(B_str s, B_str old, B_str new, B_int count) {
     if (count==NULL)
-        count = toB_int(INT_MAX);
+        count = to$int(INT_MAX);
     int c = from$int(B_strD_count(s,old,NULL,NULL));
     int c0 = from$int(count) < c ? from$int(count) : c;
     if (c0==0){
@@ -789,12 +789,12 @@ B_int B_strD_rfind(B_str s, B_str sub, B_int start, B_int end) {
     int isascii = s->nchars == s->nbytes;
     B_int st = start;
     B_int en = end;
-    if (fix_start_end(s->nchars,&st,&en) < 0) return toB_int(-1);
+    if (fix_start_end(s->nchars,&st,&en) < 0) return to$int(-1);
     unsigned char *p = skip_chars(s->str,from$int(st),isascii);
     unsigned char *q = skip_chars(p,from$int(en)-from$int(st),isascii);
     int n = rbmh(p,sub->str,q-p,sub->nbytes);
-    if (n<0) return toB_int(-1);
-    return toB_int(char_no(s,n+p-s->str));
+    if (n<0) return to$int(-1);
+    return to$int(char_no(s,n+p-s->str));
 }
 
 
@@ -849,7 +849,7 @@ B_tuple B_strD_rpartition(B_str s, B_str sep) {
 B_list B_strD_split(B_str s, B_str sep, B_int maxsplit) {
     B_list res = $NEW(B_list,NULL,NULL);
     B_SequenceD_list wit = B_SequenceD_listG_witness;
-    if (maxsplit == NULL || from$int(maxsplit) < 0) maxsplit = toB_int(INT_MAX); 
+    if (maxsplit == NULL || from$int(maxsplit) < 0) maxsplit = to$int(INT_MAX); 
     int remaining = s->nchars;
     if (sep == NULL) {
         unsigned char *p = s->str;
@@ -1078,7 +1078,7 @@ B_bool B_HashableD_strD___ne__ (B_HashableD_str wit, B_str a, B_str b) {
  
 // hash function B_string_hash defined in hash.c
 B_int B_HashableD_strD___hash__(B_HashableD_str wit, B_str s) {
-    return toB_int(B_string_hash(s));
+    return to$int(B_string_hash(s));
 }
 
 // B_Times /////////////////////////////////////////////////////////////////////////////////////////////
@@ -1112,7 +1112,7 @@ B_str B_ContainerD_strD___fromiter__ (B_ContainerD_str wit, B_Iterable wit2, $WO
 }
 
 B_int B_ContainerD_strD___len__ (B_ContainerD_str wit, B_str s){
-    return toB_int(s->nchars);
+    return to$int(s->nchars);
 }
 
 // B_Container ///////////////////////////////////////////////////////////////////////////
@@ -1142,7 +1142,7 @@ B_NoneType B_IteratorB_strD_init(B_IteratorB_str self, B_str str) {
 
 void B_IteratorB_strD_serialize(B_IteratorB_str self,$Serial$state state) {
     $step_serialize(self->src,state);
-    $step_serialize(toB_int(self->nxt),state);
+    $step_serialize(to$int(self->nxt),state);
 }
 
 
@@ -1388,7 +1388,7 @@ B_bytearray B_bytearrayD_center(B_bytearray s, B_int width, B_bytearray fill) {
 B_int B_bytearrayD_count(B_bytearray s, B_bytearray sub, B_int start, B_int end) {
     B_int st = start;
     B_int en = end;
-    if (fix_start_end(s->nbytes,&st,&en) < 0) return toB_int(0);
+    if (fix_start_end(s->nbytes,&st,&en) < 0) return to$int(0);
     int stval = from$int(st);
     int enval = from$int(en);
     unsigned char *p = &s->str[stval];
@@ -1400,7 +1400,7 @@ B_int B_bytearrayD_count(B_bytearray s, B_bytearray sub, B_int start, B_int end)
         p += n + (sub->nbytes>0 ? sub->nbytes : 1);
         n = bmh(p,sub->str,q-p,sub->nbytes);
     }
-    return toB_int(res);
+    return to$int(res);
 }
 
 B_str B_bytearrayD_decode(B_bytearray s) {
@@ -1458,12 +1458,12 @@ B_bytearray B_bytearrayD_expandtabs(B_bytearray s, B_int tabsz){
 B_int B_bytearrayD_find(B_bytearray s, B_bytearray sub, B_int start, B_int end) {
     B_int st = start;
     B_int en = end;
-    if (fix_start_end(s->nbytes,&st,&en) < 0) return toB_int(-1);
+    if (fix_start_end(s->nbytes,&st,&en) < 0) return to$int(-1);
     unsigned char *p = &s->str[from$int(start)];
     unsigned char *q = &s->str[from$int(end)];
     int n = bmh(p,sub->str,q-p,sub->nbytes);
-    if (n<0) return toB_int(-1);
-    return toB_int(n+p-s->str);
+    if (n<0) return to$int(-1);
+    return to$int(n+p-s->str);
 }
 
 
@@ -1672,7 +1672,7 @@ B_tuple B_bytearrayD_partition(B_bytearray s, B_bytearray sep) {
 
 B_bytearray B_bytearrayD_replace(B_bytearray s, B_bytearray old, B_bytearray new, B_int count) {
     if (count==NULL)
-        count = toB_int(INT_MAX);
+        count = to$int(INT_MAX);
     int c = from$int(B_bytearrayD_count(s,old,NULL,NULL));
     int c0 = from$int(count) < c ? from$int(count) : c;
     if (c0==0){
@@ -1707,12 +1707,12 @@ B_bytearray B_bytearrayD_replace(B_bytearray s, B_bytearray old, B_bytearray new
 B_int B_bytearrayD_rfind(B_bytearray s, B_bytearray sub, B_int start, B_int end) {
     B_int st = start;
     B_int en = end;
-    if (fix_start_end(s->nbytes,&st,&en) < 0) return toB_int(-1);
+    if (fix_start_end(s->nbytes,&st,&en) < 0) return to$int(-1);
     unsigned char *p = &s->str[from$int(st)];
     unsigned char *q = &s->str[from$int(en)];
     int n = rbmh(p,sub->str,q-p,sub->nbytes);
-    if (n<0) return toB_int(-1);
-    return toB_int(n+p-s->str);
+    if (n<0) return to$int(-1);
+    return to$int(n+p-s->str);
 }
 
 
@@ -1785,7 +1785,7 @@ B_bytearray B_bytearrayD_rstrip(B_bytearray s, B_bytearray cs) {
 B_list B_bytearrayD_split(B_bytearray s, B_bytearray sep, B_int maxsplit) {
     B_list res = $NEW(B_list,NULL,NULL);
     B_SequenceD_list wit = B_SequenceD_listG_witness;
-    if (maxsplit == NULL || from$int(maxsplit) < 0) maxsplit = toB_int(INT_MAX); 
+    if (maxsplit == NULL || from$int(maxsplit) < 0) maxsplit = to$int(INT_MAX); 
     if (sep == NULL) {
         unsigned char *p = s->str;
         if (s->nbytes==0) {
@@ -1966,7 +1966,7 @@ B_bool B_OrdD_bytearrayD___ge__ (B_OrdD_bytearray wit, B_bytearray a, B_bytearra
 // Iterable
 
 static B_int B_IteratorB_bytearrayD_next(B_IteratorB_bytearray self) {
-    return self->nxt >= self->src->nbytes ? NULL : toB_int(self->src->str[self->nxt++]);
+    return self->nxt >= self->src->nbytes ? NULL : to$int(self->src->str[self->nxt++]);
 }
 
 B_NoneType B_IteratorB_bytearrayD_init(B_IteratorB_bytearray self, B_bytearray b) {
@@ -1987,7 +1987,7 @@ B_str B_IteratorB_bytearrayD_str(B_IteratorB_bytearray self) {
 
 void B_IteratorB_bytearrayD_serialize(B_IteratorB_bytearray self,$Serial$state state) {
     $step_serialize(self->src,state);
-    $step_serialize(toB_int(self->nxt),state);
+    $step_serialize(to$int(self->nxt),state);
 }
 
 B_IteratorB_bytearray B_IteratorB_bytearray$_deserialize(B_IteratorB_bytearray res, $Serial$state state) {
@@ -2020,7 +2020,7 @@ B_bytearray B_ContainerD_bytearrayD___fromiter__ (B_ContainerD_bytearray wit, B_
 }
 
 B_int B_ContainerD_bytearrayD___len__ (B_ContainerD_bytearray wit, B_bytearray str) {
-    return toB_int(str->nbytes);
+    return to$int(str->nbytes);
 }
 
 B_bool B_ContainerD_bytearrayD___contains__(B_ContainerD_bytearray wit, B_bytearray self, B_int n) {
@@ -2045,7 +2045,7 @@ B_int B_SequenceD_bytearrayD___getitem__ (B_SequenceD_bytearray wit, B_bytearray
     long ix0 = ix < 0 ? self->nbytes + ix : ix;
     if (ix0<0 || ix0 >= self->nbytes)
         $RAISE((B_BaseException)$NEW(B_IndexError,to$str("getitem for bytearray: indexing outside array")));
-    return toB_int((long)self->str[ix0]);
+    return to$int((long)self->str[ix0]);
 }
 
 B_NoneType B_SequenceD_bytearrayD___setitem__ (B_SequenceD_bytearray wit, B_bytearray self, B_int n, B_int v) {
@@ -2115,8 +2115,8 @@ B_bytearray B_SequenceD_bytearrayD___getslice__ (B_SequenceD_bytearray wit, B_by
     NEW_UNFILLED_BYTEARRAY(res,slen);
     long t = start;
     for (int i=0; i<slen; i++) {
-        B_int w = B_SequenceD_bytearrayD___getitem__(wit, self, toB_int(t));
-        B_SequenceD_bytearrayD___setitem__(wit, res , toB_int(i), w);
+        B_int w = B_SequenceD_bytearrayD___getitem__(wit, self, to$int(t));
+        B_SequenceD_bytearrayD___setitem__(wit, res , to$int(i), w);
         t += step;
     }
     return res;
@@ -2193,7 +2193,7 @@ B_bytearray B_CollectionD_SequenceD_bytearrayD___fromiter__ (B_CollectionD_Seque
 }
 
 B_int B_CollectionD_SequenceD_bytearrayD___len__ (B_CollectionD_SequenceD_bytearray wit, B_bytearray str) {
-    return toB_int(str->nbytes);
+    return to$int(str->nbytes);
 }
 
 // Times
@@ -2373,7 +2373,7 @@ B_bytes B_bytesD_center(B_bytes s, B_int width, B_bytes fill) {
 B_int B_bytesD_count(B_bytes s, B_bytes sub, B_int start, B_int end) {
     B_int st = start;
     B_int en = end;
-    if (fix_start_end(s->nbytes,&st,&en) < 0) return toB_int(0);
+    if (fix_start_end(s->nbytes,&st,&en) < 0) return to$int(0);
     int stval = from$int(st);
     unsigned char *p = &s->str[stval];
     unsigned char *q = &p[from$int(en)-stval];
@@ -2384,7 +2384,7 @@ B_int B_bytesD_count(B_bytes s, B_bytes sub, B_int start, B_int end) {
         p += n + (sub->nbytes>0 ? sub->nbytes : 1);
         n = bmh(p,sub->str,q-p,sub->nbytes);
     }
-    return toB_int(res);
+    return to$int(res);
 }
 
 B_str B_bytesD_decode(B_bytes s) {
@@ -2441,12 +2441,12 @@ B_bytes B_bytesD_expandtabs(B_bytes s, B_int tabsz){
 B_int B_bytesD_find(B_bytes s, B_bytes sub, B_int start, B_int end) {
     B_int st = start;
     B_int en = end;
-    if (fix_start_end(s->nbytes,&st,&en) < 0) return toB_int(-1);
+    if (fix_start_end(s->nbytes,&st,&en) < 0) return to$int(-1);
     unsigned char *p = &s->str[from$int(st)];
     unsigned char *q = &s->str[from$int(en)];
     int n = bmh(p,sub->str,q-p,sub->nbytes);
-    if (n<0) return toB_int(-1);
-    return toB_int(n+p-s->str);
+    if (n<0) return to$int(-1);
+    return to$int(n+p-s->str);
 }
 
 
@@ -2680,7 +2680,7 @@ B_bytes B_bytesD_removesuffix(B_bytes s, B_bytes suffix) {
 }
 B_bytes B_bytesD_replace(B_bytes s, B_bytes old, B_bytes new, B_int count) {
     if (count==NULL)
-        count = toB_int(INT_MAX);
+        count = to$int(INT_MAX);
     int c = from$int(B_bytesD_count(s,old,NULL,NULL));
     int c0 = from$int(count) < c ? from$int(count) : c;
     if (c0==0){
@@ -2715,12 +2715,12 @@ B_bytes B_bytesD_replace(B_bytes s, B_bytes old, B_bytes new, B_int count) {
 B_int B_bytesD_rfind(B_bytes s, B_bytes sub, B_int start, B_int end) {
     B_int st = start;
     B_int en = end;
-    if (fix_start_end(s->nbytes,&st,&en) < 0) return toB_int(-1);
+    if (fix_start_end(s->nbytes,&st,&en) < 0) return to$int(-1);
     unsigned char *p = &s->str[from$int(st)];
     unsigned char *q = &s->str[from$int(en)];
     int n = rbmh(p,sub->str,q-p,sub->nbytes);
-    if (n<0) return toB_int(-1);
-    return toB_int(n+p-s->str);
+    if (n<0) return to$int(-1);
+    return to$int(n+p-s->str);
 }
 
 
@@ -2793,7 +2793,7 @@ B_bytes B_bytesD_rstrip(B_bytes s, B_bytes cs) {
 B_list B_bytesD_split(B_bytes s, B_bytes sep, B_int maxsplit) {
     B_list res = $NEW(B_list,NULL,NULL);
     B_SequenceD_list wit = B_SequenceD_listG_witness;
-    if (maxsplit == NULL || from$int(maxsplit) < 0) maxsplit = toB_int(INT_MAX); 
+    if (maxsplit == NULL || from$int(maxsplit) < 0) maxsplit = to$int(INT_MAX); 
     if (sep == NULL) {
         unsigned char *p = s->str;
         if (s->nbytes==0) {
@@ -2987,7 +2987,7 @@ B_NoneType B_IteratorB_bytesD_init(B_IteratorB_bytes self, B_bytes str) {
 
 void B_IteratorB_bytesD_serialize(B_IteratorB_bytes self,$Serial$state state) {
     $step_serialize(self->src,state);
-    $step_serialize(toB_int(self->nxt),state);
+    $step_serialize(to$int(self->nxt),state);
 }
 
 
@@ -3011,7 +3011,7 @@ B_str B_IteratorB_bytesD_str(B_IteratorB_bytes self) {
 
 // this is next function for forward iteration
 static B_int B_IteratorB_bytesD_next(B_IteratorB_bytes self) {
-    return self->nxt >= self->src->nbytes ? NULL : toB_int(self->src->str[self->nxt++]);
+    return self->nxt >= self->src->nbytes ? NULL : to$int(self->src->str[self->nxt++]);
 }
 
 struct B_IteratorB_bytesG_class B_IteratorB_bytesG_methods = {"B_IteratorB_bytes",UNASSIGNED,($SuperG_class)&B_IteratorG_methods, B_IteratorB_bytesD_init,
@@ -3027,7 +3027,7 @@ B_bytes B_ContainerD_bytesD___fromiter__ (B_ContainerD_bytes wit, B_Iterable wit
 }
 
 B_int B_ContainerD_bytesD___len__ (B_ContainerD_bytes wit, B_bytes str) {
-    return toB_int(str->nbytes);
+    return to$int(str->nbytes);
 }
 
 B_bool B_ContainerD_bytesD___contains__ (B_ContainerD_bytes wit, B_bytes str, B_int n) {
@@ -3052,7 +3052,7 @@ B_int B_SliceableD_bytesD___getitem__ (B_SliceableD_bytes wit, B_bytes str, B_in
     long ix0 = ix < 0 ? str->nbytes + ix : ix;
     if (ix0<0 || ix0 >= str->nbytes)
         $RAISE((B_BaseException)$NEW(B_IndexError,to$str("getitem for bytes: indexing outside array")));
-    return toB_int((long)str->str[ix0]);
+    return to$int((long)str->str[ix0]);
 }
 
 B_NoneType B_SliceableD_bytesD___setitem__ (B_SliceableD_bytes wit, B_bytes str, B_int i, B_int val) {
@@ -3125,7 +3125,7 @@ B_bool B_HashableD_bytesD___ne__ (B_HashableD_bytes wit, B_bytes a, B_bytes b) {
 }
 
 B_int B_HashableD_bytesD___hash__(B_HashableD_bytes wit, B_bytes str) {
-    return toB_int(B_bytesD_hash(str));
+    return to$int(B_bytesD_hash(str));
 }
 
 // Builtin functions involving strings /////////////////////////////////////////////
@@ -3277,7 +3277,7 @@ B_int $ord(B_str c) {
     int cpnbytes = utf8proc_iterate(c->str,-1,&cp);
     if (cpnbytes < 0)
         $RAISE((B_BaseException)$NEW(B_ValueError,to$str("ord: argument is not a single Unicode char")));
-    return toB_int(cp);
+    return to$int(cp);
 }
 
 // Auxiliary function used in __str__ for collections ////////////////////////////

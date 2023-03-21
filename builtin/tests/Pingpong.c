@@ -54,14 +54,14 @@ $R lambda$2D___call__(lambda$2 $this, $Cont then) {
 
 $R PingpongD___init__(Pingpong self, B_Env env, $Cont then) {
     $ActorG_methods.__init__(($Actor)self);
-    self->i = toB_int(7);
-    self->count = toB_int(0);
+    self->i = to$int(7);
+    self->count = to$int(0);
     return self->$class->ping(self, then);
 }
 $R Pingpong$ping(Pingpong self, $Cont then) {
-    self->count = B_IntegralD_intG_witness->$class->__add__(B_IntegralD_intG_witness, self->count, toB_int(1));
+    self->count = B_IntegralD_intG_witness->$class->__add__(B_IntegralD_intG_witness, self->count, to$int(1));
     printf("%ld Ping %ld\n", self->i->val, self->count->val);
-    $AFTER(toB_int(1), ($Cont)$NEW(lambda$1, self, self->count));
+    $AFTER(to$int(1), ($Cont)$NEW(lambda$1, self, self->count));
     printf("AAA\n");
     return $R_CONT(then, B_None);
 }
@@ -77,7 +77,7 @@ Pingpong PingpongD___deserialize__(B_NoneType state) {
 }
 $R Pingpong$pong(Pingpong self, B_int q, $Cont then) {
     printf("%ld     %ld Pong\n", self->i->val, q->val);
-    $AFTER(toB_int(2), ($Cont)$NEW(lambda$2, self));
+    $AFTER(to$int(2), ($Cont)$NEW(lambda$2, self));
     return $R_CONT(then, B_None);
 }
 

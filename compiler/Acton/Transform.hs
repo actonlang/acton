@@ -75,7 +75,7 @@ instance Transform Stmt where
     trans env (Assert l e mbe)          = Assert l (trans env e) (trans env mbe)
     trans env (Delete l t)              = Delete l (trans env t)
     trans env (Return l mbe)            = Return l (trans env mbe)
-    trans env (Raise l mbex)            = Raise l (trans env mbex)
+    trans env (Raise l e)               = Raise l (trans env e)
     trans env (If l bs els)             = If l (trans env bs) (trans env els)
     trans env (While l e b els)         = While l (trans env e) (trans env b) (trans env els)
     trans env (For l p e b els)         = For l p (trans env e) (trans env1 b) (trans env els)
@@ -246,9 +246,6 @@ rename s n                              = case lookup n s of
                                             _ -> n
 
 erename s e                             = termsubst [ (n, eVar n') | (n,n') <- s ] e
-
-instance Transform Exception where
-    trans env (Exception e mbe)         = Exception (trans env e) (trans env mbe)
 
 instance Transform Branch where
     trans env (Branch e ss)             = Branch (trans env e) (trans env ss)

@@ -84,7 +84,7 @@ B_list sieve(int n) {
   for (int i=0; i<n; i++) {
     //if (fromB_bool(isPrime->data[i])) {
     if (fromB_bool(B_listD_getitem(isPrime,i))) {
-      B_listD_append(primes,toB_int(i));
+      B_listD_append(primes,to$int(i));
     }
   }
   return primes;
@@ -100,17 +100,17 @@ B_list sieveS(B_SequenceD_list wit, int n) {
   for (int i=2; i < n; i++) 
     wit->$class->append(wit,isPrime,B_True);
   for (int i=2; i < floor(sqrt(n)); i++) {
-    w = wit->$class->__getitem__(wit,isPrime,toB_int(i));
+    w = wit->$class->__getitem__(wit,isPrime,to$int(i));
     if (from$int(w)) {
       for (int k=i*i; k<n; k+=i)
-        wit->$class->__setitem__(wit,isPrime,toB_int(k),B_False);
+        wit->$class->__setitem__(wit,isPrime,to$int(k),B_False);
     }
   }
   B_list primes = $NEW(B_list,NULL,NULL);
   for (int i=0; i<n; i++) {
-    w = wit->$class->__getitem__(wit,isPrime,toB_int(i));
+    w = wit->$class->__getitem__(wit,isPrime,to$int(i));
     if (fromB_bool(w)) {
-      wit->$class->append(wit,primes,toB_int(i));
+      wit->$class->append(wit,primes,to$int(i));
     }
   }
   return primes;

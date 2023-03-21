@@ -178,16 +178,16 @@ Pingpong PingpongD___deserialize__(Pingpong res, B_NoneType state) {
 }
 
 $R Pingpong$ping(Pingpong self, B_int q, $Cont then) {
-    self->count = B_IntegralD_intG_witness->$class->__add__(B_IntegralD_intG_witness, self->count, toB_int(1));
+    self->count = B_IntegralD_intG_witness->$class->__add__(B_IntegralD_intG_witness, self->count, to$int(1));
     B_int j = B_IntegralD_intG_witness->$class->__mul__(B_IntegralD_intG_witness, self->count, q);
     B_print(1, $FORMAT("%ld Ping %8ld", self->i->val, j->val));
-    $AFTER(toB_int(1), ($Cont)lambda$1G_new(self, self->count, q));
+    $AFTER(to$int(1), ($Cont)lambda$1G_new(self, self->count, q));
     return $R_CONT(then, B_None);
 }
 $R Pingpong$pong(Pingpong self, B_int n, B_int q, $Cont then) {
     B_int j = B_IntegralD_intG_witness->$class->__mul__(B_IntegralD_intG_witness, n, q);
     B_print(1, $FORMAT("%ld       %7ld Pong", self->i->val, j->val));
-    $AFTER(toB_int(2), ($Cont)lambda$2G_new(self, B_IntegralD_intG_witness->$class->__neg__(B_IntegralD_intG_witness, q)));
+    $AFTER(to$int(2), ($Cont)lambda$2G_new(self, B_IntegralD_intG_witness->$class->__neg__(B_IntegralD_intG_witness, q)));
     return $R_CONT(then, B_None);
 }
 

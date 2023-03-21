@@ -16,32 +16,32 @@
 #include "../ndarray.h"
 
 int main() {
-  $ndarray v = $ndarray_arange(toB_int(60));
+  $ndarray v = $ndarray_arange(to$int(60));
   B_list newshape = $NEW(B_list,NULL,NULL);
-  B_listD_append(newshape,toB_int(3));
-  B_listD_append(newshape,toB_int(4));
-  B_listD_append(newshape,toB_int(5));
+  B_listD_append(newshape,to$int(3));
+  B_listD_append(newshape,to$int(4));
+  B_listD_append(newshape,to$int(5));
   $ndarray a = $ndarray_reshape(v,newshape);
   printf("a=%s\n",fromB_str(a->$class->__str__(a)));
   B_list ix = $NEW(B_list,NULL,NULL);
   B_listD_append(ix,NULL);
   $Slice s1 = $NEW($Slice,NULL,NULL,NULL);
   B_listD_append(ix,s1);
-  B_listD_append(ix,toB_int(2));
+  B_listD_append(ix,to$int(2));
   $ndarray b = $nd_getslice(a,ix);
   printf("b=%s\n",fromB_str(b->$class->__str__(b)));
   B_list ix1 = $NEW(B_list,NULL,NULL);
-  B_listD_append(ix1,toB_int(1));
-  $Slice s2 = $NEW($Slice,toB_int(1),NULL,NULL);
+  B_listD_append(ix1,to$int(1));
+  $Slice s2 = $NEW($Slice,to$int(1),NULL,NULL);
   B_listD_append(ix1,s2);
-  $Slice s3 = $NEW($Slice,toB_int(-1),toB_int(0),toB_int(-1));
+  $Slice s3 = $NEW($Slice,to$int(-1),to$int(0),to$int(-1));
   B_listD_append(ix1,s3);
   $ndarray c = $nd_getslice(a,ix1);
   printf("c=%s\n",fromB_str(c->$class->__str__(c)));
   B_list test = B_listD_copy(c->shape);
   $ndarray d = $ndarray_func1(mul2,c);
   printf("d=%s\n",fromB_str(d->$class->__str__(d)));
-  $ndarray e = $ndarray_fromatom(($Super)toB_int(3));
+  $ndarray e = $ndarray_fromatom(($Super)to$int(3));
   printf("e.shape = %s\n",e->shape->$class->__str__(e->shape)->str);
   printf("e.strides = %s\n",e->strides->$class->__str__(e->strides)->str);
   printf("e=%s\n",fromB_str(e->$class->__str__(e)));

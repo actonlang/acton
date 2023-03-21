@@ -136,7 +136,7 @@ B_bool B_HashableD_complexD___ne__(B_HashableD_complex wit, B_complex a, B_compl
 }
 
 B_int B_HashableD_complexD___hash__(B_HashableD_complex wit, B_complex a) {
-    return toB_int(B_complexD_hash(a));
+    return to$int(B_complexD_hash(a));
 }
 // init methods ////////////////////////////////////////////////////////////////////////////////////////////////
 /*

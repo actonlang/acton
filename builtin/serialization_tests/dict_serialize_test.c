@@ -23,7 +23,7 @@ int main() {
   B_str a = to$str("a");
   B_str b = to$str("b");
   B_dict dict = $NEW(B_dict,wit,NULL,NULL);
-  B_Iterator it = wit2->$class->__iter__(wit2,$NEW(B_range,toB_int(0),toB_int(10),toB_int(1)));
+  B_Iterator it = wit2->$class->__iter__(wit2,$NEW(B_range,to$int(0),to$int(10),to$int(1)));
   B_list lst = B_listD_fromiter(it);
   printf("lst = %s\n",(lst->$class->__str__(lst))->str);
   B_dictD_setitem(dict,wit, a,lst);
@@ -32,6 +32,6 @@ int main() {
   B_dict dict2 = (B_dict)$deserialize(r,NULL);
   B_print(1,dict);
   B_print(1,dict2);
-  B_listD_setitem(B_dictD_getitem(dict2,wit,a),1,toB_int(7));
+  B_listD_setitem(B_dictD_getitem(dict2,wit,a),1,to$int(7));
   printf("Sharing test (both values should have 2nd element changed to 7):\ndict2 = %s\n",(dict2->$class->__str__(dict2))->str);
 }

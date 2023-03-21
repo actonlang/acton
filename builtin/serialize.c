@@ -50,7 +50,7 @@ B_bool B_HashableD_WORD_ne(B_HashableD_WORD wit, $WORD a, $WORD b) {
 }
 
 B_int B_HashableD_WORD_hash(B_HashableD_WORD wit, $WORD a) {
-    return toB_int($pointer_hash(a));
+    return to$int($pointer_hash(a));
 }
 
 struct B_HashableD_WORDG_class B_HashableD_WORDG_methods = {
@@ -98,7 +98,7 @@ void $step_serialize($WORD self, $Serial$state state) {
             if (prevkey) {
                 $val_serialize(-class_id,&prevkey->val,state);
             } else {
-                B_dictD_setitem(state->done,(B_Hashable)B_HashableD_WORDG_witness,self,toB_int(state->row_no));
+                B_dictD_setitem(state->done,(B_Hashable)B_HashableD_WORDG_witness,self,to$int(state->row_no));
                 $add_header(class_id,0,state);
                 (($Serializable)self)->$class->__serialize__(self,state);
             }
@@ -118,7 +118,7 @@ $WORD $step_deserialize($Serial$state state) {
             if (key < 0)
                 return state->globmap(($WORD)key);
             else
-                return B_dictD_get(state->done,(B_Hashable)B_HashableD_intG_witness,toB_int(key),NULL);
+                return B_dictD_get(state->done,(B_Hashable)B_HashableD_intG_witness,to$int(key),NULL);
         } else
             return $GET_METHODS(this->class_id)->__deserialize__(NULL, state);
     } else

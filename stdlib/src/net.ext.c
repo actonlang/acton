@@ -181,7 +181,7 @@ $R netQ_TCPIPConnectionD__init (netQ_TCPIPConnection self, $Cont c$cont) {
     pin_actor_affinity();
     uv_tcp_t* socket = (uv_tcp_t*)malloc(sizeof(uv_tcp_t));
     uv_tcp_init(get_uv_loop(), socket);
-    self->_socket = toB_int((long)socket);
+    self->_socket = to$int((long)socket);
 
     uv_connect_t* connect_req = (uv_connect_t*)malloc(sizeof(uv_connect_t));
     connect_req->data = (void *)self;
@@ -214,7 +214,7 @@ $R netQ_TCPIPConnectionD_writeG_local (netQ_TCPIPConnection self, $Cont c$cont, 
 }
 
 B_NoneType netQ_TCPIPConnectionD___resume__ (netQ_TCPIPConnection self) {
-    self->_socket = toB_int(-1);
+    self->_socket = to$int(-1);
     $action2 f = self->on_error;
     f->$class->__asyn__(f, self, to$str("resume"));
     return B_None;
@@ -246,7 +246,7 @@ void on_new_connection(uv_stream_t *server, int status) {
         return;
     }
 
-    self->$class->create_tcp_listen_connection(self, B_None, toB_int((long)client));
+    self->$class->create_tcp_listen_connection(self, B_None, to$int((long)client));
     // TODO: free()
 }
 
@@ -296,7 +296,7 @@ $R netQ_TCPListenerD__init (netQ_TCPListener self, $Cont c$cont) {
 }
 
 B_NoneType netQ_TCPListenerD___resume__ (netQ_TCPListener self) {
-    self->_stream = toB_int(-1);
+    self->_stream = to$int(-1);
     $action2 f = self->on_error;
     f->$class->__asyn__(f, self, to$str("resume"));
     return B_None;
@@ -311,7 +311,7 @@ $R netQ_TCPListenConnectionD__init (netQ_TCPListenConnection self, $Cont c$cont)
     uv_tcp_t* client_handle = (uv_tcp_t*) malloc(sizeof(uv_tcp_t));
     uv_tcp_init(get_uv_loop(), client_handle);
     uv_tcp_open(client_handle, fd);
-    self->client = toB_int((long)client_handle);
+    self->client = to$int((long)client_handle);
 
     return $R_CONT(c$cont, B_None);
 }
@@ -379,7 +379,7 @@ $R netQ_TCPListenConnectionD_closeG_local (netQ_TCPListenConnection self, $Cont 
 }
 
 B_NoneType netQ_TCPListenConnectionD___resume__ (netQ_TCPListenConnection self) {
-    self->server_client = toB_int(-1);
-    self->client = toB_int(-1);
+    self->server_client = to$int(-1);
+    self->client = to$int(-1);
     return B_None;
 }

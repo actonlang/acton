@@ -77,6 +77,6 @@ B_bool B_HashableD_boolD___ne__(B_HashableD_bool wit, B_bool a, B_bool b) {
 }
 
 B_int B_HashableD_boolD___hash__(B_HashableD_bool wit, B_bool a) {
-    return toB_int(B_i64D_hash((B_i64)a));
+    return to$int(B_i64D_hash((B_i64)a));
 }
  

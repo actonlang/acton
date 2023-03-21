@@ -26,7 +26,7 @@ void exit_handler(uv_process_t *req, int64_t exit_status, int term_signal) {
         uv_close((uv_handle_t *)stdin, NULL);
     uv_close((uv_handle_t *)req, NULL);
     $action3 f = process_data->on_exit;
-    f->$class->__asyn__(f, process_data->process, toB_int(exit_status), toB_int(term_signal));
+    f->$class->__asyn__(f, process_data->process, to$int(exit_status), to$int(term_signal));
 }
 
 void read_stderr(uv_stream_t *stream, ssize_t nread, const uv_buf_t *buf) {
@@ -66,7 +66,7 @@ void read_stdout(uv_stream_t *stream, ssize_t nread, const uv_buf_t *buf) {
 }
 
 $R processQ_ProcessD_aidG_local (processQ_Process self, $Cont c$cont) {
-    return $R_CONT(c$cont, toB_int(self->$globkey));
+    return $R_CONT(c$cont, to$int(self->$globkey));
 }
 
 $R processQ_ProcessD__create_process (processQ_Process self, $Cont c$cont) {
@@ -80,7 +80,7 @@ $R processQ_ProcessD__create_process (processQ_Process self, $Cont c$cont) {
     uv_process_options_t *options = calloc(1, sizeof(uv_process_options_t));
 
     uv_process_t *req = calloc(1, sizeof(uv_process_t));
-    self->_p = toB_int((long)req);
+    self->_p = to$int((long)req);
 
     req->data = process_data;
 
@@ -170,7 +170,7 @@ $R processQ_ProcessD_done_writingG_local (processQ_Process self, $Cont c$cont) {
 
 $R processQ_ProcessD_pidG_local (processQ_Process self, $Cont c$cont) {
     uv_process_t *p = (uv_process_t *)from$int(self->_p);
-    return $R_CONT(c$cont, (B_atom)toB_int(p->pid));
+    return $R_CONT(c$cont, (B_atom)to$int(p->pid));
 }
 
 $R processQ_ProcessD_signalG_local (processQ_Process self, $Cont c$cont, B_int signal) {

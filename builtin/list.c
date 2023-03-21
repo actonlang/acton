@@ -96,7 +96,7 @@ void B_listD___serialize__(B_list self,$Serial$state state) {
         $val_serialize(-LIST_ID,&pk,state);
         return;
     }
-    B_dictD_setitem(state->done,(B_Hashable)B_HashableD_WORDG_witness,self,toB_int(state->row_no));
+    B_dictD_setitem(state->done,(B_Hashable)B_HashableD_WORDG_witness,self,to$int(state->row_no));
     long len = (long)self->length;
     $val_serialize(LIST_ID,&len,state);
     for (int i=0; i<self->length; i++) {
@@ -109,11 +109,11 @@ B_list B_listD___deserialize__(B_list res, $Serial$state state) {
     state->row = this->next;
     state->row_no++;
     if (this->class_id < 0) {
-        return (B_list)B_dictD_get(state->done,(B_Hashable)B_HashableD_intG_witness,toB_int((long)this->blob[0]),NULL);
+        return (B_list)B_dictD_get(state->done,(B_Hashable)B_HashableD_intG_witness,to$int((long)this->blob[0]),NULL);
     } else {
         if (!res)
             res = B_listD_new((int)(long)this->blob[0]);
-        B_dictD_setitem(state->done,(B_Hashable)B_HashableD_intG_witness,toB_int(state->row_no-1),res);
+        B_dictD_setitem(state->done,(B_Hashable)B_HashableD_intG_witness,to$int(state->row_no-1),res);
         res->length = res->capacity;
         for (int i = 0; i < res->length; i++) 
             res->data[i] = $step_deserialize(state);
@@ -234,7 +234,7 @@ B_str B_IteratorD_listD_str(B_IteratorD_list self) {
 
 void B_IteratorD_listD_serialize(B_IteratorD_list self,$Serial$state state) {
     $step_serialize(self->src,state);
-    $step_serialize(toB_int(self->nxt),state);
+    $step_serialize(to$int(self->nxt),state);
 }
 
 B_IteratorD_list B_IteratorD_list$_deserialize(B_IteratorD_list res, $Serial$state state) {
@@ -266,7 +266,7 @@ B_list B_CollectionD_SequenceD_listD___fromiter__ (B_CollectionD_SequenceD_list 
 }
 
 B_int B_CollectionD_SequenceD_listD___len__(B_CollectionD_SequenceD_list wit, B_list self) {
-    return toB_int(self->length);
+    return to$int(self->length);
 }
 
 //  B_SequenceD_list //////////////////////////////////////////////////////////////////
@@ -317,7 +317,7 @@ B_list B_SequenceD_listD___getslice__(B_SequenceD_list wit, B_list lst, B_slice 
     B_SequenceD_list wit2 = B_SequenceD_listG_new();
     for (int i=0; i<slen; i++) {
         $WORD w;
-        w = B_SequenceD_listD___getitem__(wit, lst, toB_int(t));
+        w = B_SequenceD_listD___getitem__(wit, lst, to$int(t));
         wit2->$class->append(wit2, rlst, w);
         t += step;
     }

@@ -136,15 +136,15 @@ B_float B_RealFloatD_floatD___float__ (B_RealFloatD_float wit, B_float x) {
 }
 
 $WORD B_RealFloatD_floatD___trunc__ (B_RealFloatD_float wit, B_float x, B_Integral wit2) {
-    return wit2->$class->__fromatom__(wit2,(B_atom)toB_int((long)trunc(fromB_float(x))));
+    return wit2->$class->__fromatom__(wit2,(B_atom)to$int((long)trunc(fromB_float(x))));
 }
   
 $WORD B_RealFloatD_floatD___floor__ (B_RealFloatD_float wit, B_float x, B_Integral wit2) {
-    return wit2->$class->__fromatom__(wit2,(B_atom)toB_int((long)floor(fromB_float(x))));
+    return wit2->$class->__fromatom__(wit2,(B_atom)to$int((long)floor(fromB_float(x))));
 }
   
 $WORD B_RealFloatD_floatD___ceil__ (B_RealFloatD_float wit, B_float x, B_Integral wit2) {
-    return wit2->$class->__fromatom__(wit2,(B_atom)toB_int((long)ceil(fromB_float(x))));
+    return wit2->$class->__fromatom__(wit2,(B_atom)to$int((long)ceil(fromB_float(x))));
 }
   
 B_float B_RealFloatD_floatD___round__ (B_RealFloatD_float wit, B_float x, B_int p) {
@@ -204,7 +204,7 @@ B_bool B_HashableD_floatD___neq__(B_HashableD_float wit, B_float a, B_float b) {
 }
 
 B_int B_HashableD_floatD___hash__(B_HashableD_float wit, B_float a) {
-    return toB_int(B_floatD_hash(a));
+    return to$int(B_floatD_hash(a));
 }
 
 // init methods ////////////////////////////////////////////////////////////////////////////////////////////////

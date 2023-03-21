@@ -771,7 +771,7 @@ yield_stmt = yield_expr >>= \e -> return $ S.Expr (S.eloc e) e
 
 raise_stmt = addLoc $ do
                rword "raise"
-               S.Raise NoLoc <$> (optional $ S.Exception <$> expr <*> optional (rword "from" *> expr))
+               S.Raise NoLoc <$> expr
                                      
 import_stmt = import_name <|> import_from <?> "import statement"
    where import_name = addLoc $ do

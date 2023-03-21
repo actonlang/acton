@@ -1,4 +1,4 @@
-def foo():
+proc def foo():
     raise ValueError("hejsan")
 
 actor main(env):

@@ -34,5 +34,5 @@ B_int randomQ_randint (B_int min, B_int max) {
     // spin getting new values until we find one in range
     while ((r = rand()) >= end);
     // normalize back to the requested range
-    return toB_int(minval + r%range);
+    return to$int(minval + r%range);
 }

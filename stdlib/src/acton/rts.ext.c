@@ -37,5 +37,5 @@ B_NoneType actonQ_rtsQ_sleep (B_float sleep_time) {
 B_int actonQ_rtsQ_rss (B_WorldAuth auth) {
     size_t rsm;
     int r = uv_resident_set_memory(&rsm);
-    return toB_int(rsm);
+    return to$int(rsm);
 }

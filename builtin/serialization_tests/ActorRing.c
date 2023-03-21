@@ -110,7 +110,7 @@ struct lambda$2G_class lambda$2G_methods = {
 $R ActD___init__(Act self, B_int i, $Cont cont$0) {
     $ActorG_methods.__init__(($Actor)self);
     self->i = i;
-    self->count = toB_int(0);
+    self->count = to$int(0);
     self->rcv_dict = B_dictG_new((B_Hashable)B_HashableD_intG_witness, NULL, B_None);
     self->snd_dict = B_dictG_new((B_Hashable)B_HashableD_intG_witness, NULL, B_None);
     return $R_CONT(cont$0, B_None);
@@ -144,10 +144,10 @@ Act ActD___deserialize__(B_NoneType state) {
 
 $R Act$actG_local(Act self, B_int from, B_list table, $Cont cont$0) {
     if (fromB_bool(B_OrdD_intG_witness->$class->__lt__(B_OrdD_intG_witness, self->count, total_msgs))) {
-        self->count = B_IntegralD_intG_witness->$class->__add__(B_IntegralD_intG_witness, self->count, toB_int(1));
-        B_int to = B_IntegralD_intG_witness->$class->__mod__(B_IntegralD_intG_witness, B_IntegralD_intG_witness->$class->__add__(B_IntegralD_intG_witness, self->i, toB_int(1)), no_actors);
-        B_IndexedD_MappingD_dictG_witness->$class->__setitem__(B_IndexedD_MappingD_dictG_witness, self->rcv_dict, from, B_IntegralD_intG_witness->$class->__add__(B_IntegralD_intG_witness, B_MappingD_dictG_witness->$class->get(B_MappingD_dictG_witness, self->rcv_dict, from, toB_int(0)), toB_int(1)));
-        B_IndexedD_MappingD_dictG_witness->$class->__setitem__(B_IndexedD_MappingD_dictG_witness, self->snd_dict, to,   B_IntegralD_intG_witness->$class->__add__(B_IntegralD_intG_witness, B_MappingD_dictG_witness->$class->get(B_MappingD_dictG_witness, self->snd_dict, to, toB_int(0)), toB_int(1)));
+        self->count = B_IntegralD_intG_witness->$class->__add__(B_IntegralD_intG_witness, self->count, to$int(1));
+        B_int to = B_IntegralD_intG_witness->$class->__mod__(B_IntegralD_intG_witness, B_IntegralD_intG_witness->$class->__add__(B_IntegralD_intG_witness, self->i, to$int(1)), no_actors);
+        B_IndexedD_MappingD_dictG_witness->$class->__setitem__(B_IndexedD_MappingD_dictG_witness, self->rcv_dict, from, B_IntegralD_intG_witness->$class->__add__(B_IntegralD_intG_witness, B_MappingD_dictG_witness->$class->get(B_MappingD_dictG_witness, self->rcv_dict, from, to$int(0)), to$int(1)));
+        B_IndexedD_MappingD_dictG_witness->$class->__setitem__(B_IndexedD_MappingD_dictG_witness, self->snd_dict, to,   B_IntegralD_intG_witness->$class->__add__(B_IntegralD_intG_witness, B_MappingD_dictG_witness->$class->get(B_MappingD_dictG_witness, self->snd_dict, to, to$int(0)), to$int(1)));
         printf("Actor %ld: count=%ld, from=%ld, to=%ld\n", from$int(self->i), from$int(self->count), from$int(from), from$int(to));
         Act tmp$1 = B_SequenceD_listG_witness->$class->__getitem__(B_SequenceD_listG_witness, table, to);
         return tmp$1->$class->act(tmp$1, self->i, table, ($Cont)$NEW(lambda$1, cont$0));
@@ -279,7 +279,7 @@ $R cont$1(Root self, B_Iterator iter$1, $Cont cont$0, Act $res) {
 }
 
 $R join$1(Root self, $Cont cont$0, $WORD _ignore) {
-    Act tmp$2 = B_SequenceD_listG_witness->$class->__getitem__(B_SequenceD_listG_witness, self->table, toB_int(0));
+    Act tmp$2 = B_SequenceD_listG_witness->$class->__getitem__(B_SequenceD_listG_witness, self->table, to$int(0));
     return tmp$2->$class->act(tmp$2, no_actors, self->table, ($Cont)$NEW(lambda$4, cont$0));
 }
 
@@ -339,8 +339,8 @@ void $init_module() {
     B_MappingD_dictG_witness = (B_Mapping)$NEW(B_MappingD_dict, (B_Hashable)B_HashableD_intG_witness);
     B_IndexedD_MappingD_dictG_witness = B_MappingD_dictG_witness->W_Indexed;
     
-    no_actors = toB_int(5);
-    total_msgs = toB_int(20);
+    no_actors = to$int(5);
+    total_msgs = to$int(20);
     $register_builtin();
     $register(&lambda$1G_methods);
     $register(&lambda$2G_methods);

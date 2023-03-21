@@ -261,9 +261,6 @@ instance Pretty QName where
 instance Pretty ModRef where
     pretty (ModRef (i,n))           = hcat (replicate i dot) <> pretty n
     
-instance Pretty Exception where
-    pretty (Exception e1 e2)        = pretty e1 <+> nonEmpty (text "from" <+>) pretty e2
-
 instance Pretty Handler where
     pretty (Handler ex b)           = pretty ex <> colon $+$ prettySuite b
     
