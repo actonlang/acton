@@ -24,10 +24,10 @@
 
 // General methods ///////////////////////////////////////////////////////////////////////
 
-int B_setD_str(zz_ptr a, char *str);
-char *$getB_str(zz_ptr n);
+int set_str(zz_ptr a, char *str);
+char *get_str(zz_ptr n);
 
-B_int $mallocB_int() {
+B_int malloc_int() {
     B_int res = malloc(sizeof(struct B_int));
     res->$class = &B_intG_methods;
     res->val.n = malloc(sizeof(unsigned long));
@@ -59,9 +59,9 @@ B_int B_intG_new(B_atom a) {
     }
     if ($ISINSTANCE(a,B_bool)->val) return toB_int(((B_bool)a)->val);
     if ($ISINSTANCE(a,B_str)->val) {
-        B_int res = $mallocB_int();
+        B_int res = malloc_int();
         res->$class = &B_intG_methods;
-        int digits = B_setD_str(&res->val, (char *)((B_str)a)->str);
+        int digits = set_str(&res->val, (char *)((B_str)a)->str);
         if (digits>0)
             return res;
         else 
@@ -97,7 +97,7 @@ B_int B_intD___deserialize__(B_int res,$Serial$state state) {
         return (B_int)B_dictD_get(state->done,(B_Hashable)B_HashableD_intG_witness,toB_int((long)this->blob[0]),NULL);
     } else {
         if (!res)
-            res = $mallocB_int();
+            res = malloc_int();
         res->val.size = (long)this->blob[0];
         res->val.alloc = labs(res->val.size);
         res->val.n = malloc(res->val.alloc*sizeof(long));
@@ -113,11 +113,11 @@ B_bool B_intD___bool__(B_int n) {
 }
 
 B_str B_intD___str__(B_int n) {
-    return to$str($getB_str(&n->val));
+    return to$str(get_str(&n->val));
 }
   
 B_int zz$toB_int(zz_ptr n) {
-    B_int res = $mallocB_int();
+    B_int res = malloc_int();
     res->$class = &B_intG_methods;
     res->val.n = n->n;
     res->val.size = n->size;
@@ -129,7 +129,7 @@ B_int zz$toB_int(zz_ptr n) {
 
  
 B_int B_IntegralD_intD___add__(B_IntegralD_int wit,  B_int a, B_int b) {
-    B_int res = $mallocB_int();
+    B_int res = malloc_int();
     zz_add(&res->val,&a->val,&b->val);
     return res;
 }
@@ -144,7 +144,7 @@ B_int B_IntegralD_intD___fromatom__(B_IntegralD_int wit, B_atom a) {
 }
 
 B_int B_IntegralD_intD___mul__(B_IntegralD_int wit,  B_int a, B_int b) {
-    B_int res = $mallocB_int();
+    B_int res = malloc_int();
     zz_mul(&res->val,&a->val,&b->val);
     return res;
 }  
@@ -155,13 +155,13 @@ B_int B_IntegralD_intD___pow__(B_IntegralD_int wit, B_int a, B_int b) {
         $RAISE((B_BaseException)$NEW(B_ValueError,to$str("__pow__: exponent negative")));
     if (zz_cmpi(val_b,LONG_MAX) > 0)
         $RAISE((B_BaseException)$NEW(B_ValueError,to$str("__pow__: exponent out of range (> LONG_MAX)")));
-    B_int res = $mallocB_int();
+    B_int res = malloc_int();
     zz_powi(&res->val,&a->val,val_b->n[0]); // __pow__ should have an int64 exponent in the Acton protocol
     return res;
 }
 
 B_int B_IntegralD_intD___neg__(B_IntegralD_int wit,  B_int a) {
-    B_int res = $mallocB_int();
+    B_int res = malloc_int();
     zz_neg(&res->val,&a->val);
     return res;
 }
@@ -181,7 +181,7 @@ $WORD B_IntegralD_intD_imag(B_IntegralD_int wit, B_int a, B_Real wit2) {
 }
 
 $WORD B_IntegralD_intD___abs__(B_IntegralD_int wit, B_int a, B_Real wit2) {
-    B_int res = $mallocB_int();
+    B_int res = malloc_int();
     zz_set(&res->val,&a->val);
     res->val.size = labs(a->val.size);
     return wit2->$class->__fromatom__(wit2,(B_atom)res);
@@ -210,7 +210,7 @@ $WORD B_IntegralD_intD___ceil__ (B_IntegralD_int wit, B_int n, B_Integral wit2) 
 B_int B_IntegralD_intD___round__ (B_IntegralD_int wit, B_int n, B_int p) {
     zz_struct nval = n->val;
     if (nval.size < 0) {
-        B_int n1 = $mallocB_int();
+        B_int n1 = malloc_int();
         zz_neg(&n1->val,&nval);
         B_int res = B_IntegralD_intD___round__(wit,n1,p);
         zz_neg(&res->val,&res->val);
@@ -243,14 +243,14 @@ B_int B_IntegralD_intD___index__(B_IntegralD_int wit, B_int n) {
 }
 
 B_tuple B_IntegralD_intD___divmod__(B_IntegralD_int wit, B_int a, B_int b) {
-    B_int q = $mallocB_int();
-    B_int r = $mallocB_int();
+    B_int q = malloc_int();
+    B_int r = malloc_int();
     zz_divrem(&q->val,&r->val,&a->val,&b->val);
     return $NEWTUPLE(2, q, r);
 }
 
 B_int B_IntegralD_intD___floordiv__(B_IntegralD_int wit, B_int a, B_int b) {
-    B_int res = $mallocB_int();
+    B_int res = malloc_int();
     zz_div(&res->val,&a->val,&b->val);
     return res;
 }
@@ -271,7 +271,7 @@ B_int B_IntegralD_intD___lshift__(B_IntegralD_int wit,  B_int a, B_int b) {
     long shw = bval/64;
     long shb = bval%64;
     long mres = labs(ma) + shw + (shb > 0);
-    B_int res = $mallocB_int();
+    B_int res = malloc_int();
     zz_ptr rval = &res->val;
     zz_init_fit(rval,mres);
     if (shb>0) {
@@ -299,7 +299,7 @@ B_int B_IntegralD_intD___rshift__(B_IntegralD_int wit,  B_int a, B_int b) {
         return a;
     if (bval<0)
         $RAISE((B_BaseException)$NEW(B_ValueError,to$str("__rshift: negative shift count")));
-    B_int res = $mallocB_int();
+    B_int res = malloc_int();
     zz_ptr rval = &res->val;
     long shw = bval/64;
     long shb = bval%64;
@@ -345,7 +345,7 @@ B_int B_LogicalD_IntegralD_intD___xor__(B_LogicalD_IntegralD_int wit,  B_int a, 
 // B_MinusD_IntegralD_int  ////////////////////////////////////////////////////////////////////////////////////////
 
 B_int B_MinusD_IntegralD_intD___sub__(B_MinusD_IntegralD_int wit,  B_int a, B_int b) {
-    B_int res = $mallocB_int();
+    B_int res = malloc_int();
     zz_sub(&res->val,&a->val,&b->val);
     return res;
 }
@@ -356,11 +356,11 @@ B_int B_MinusD_IntegralD_intD___sub__(B_MinusD_IntegralD_int wit,  B_int a, B_in
 B_float B_DivD_intD___truediv__ (B_DivD_int wit, B_int a, B_int b) {
     zz_ptr aval = &a->val;
     zz_ptr bval = &b->val;
-    B_int ared = $mallocB_int();
-    B_int bred = $mallocB_int();
-    B_int q = $mallocB_int();
-    B_int r = $mallocB_int();
-    B_int g = $mallocB_int();
+    B_int ared = malloc_int();
+    B_int bred = malloc_int();
+    B_int q = malloc_int();
+    B_int r = malloc_int();
+    B_int g = malloc_int();
     zz_gcd(&g->val,aval,bval);
     zz_div(&ared->val,aval,&g->val);
     zz_div(&bred->val,bval,&g->val);
@@ -405,7 +405,7 @@ B_bool B_HashableD_intD___ne__(B_HashableD_int wit, B_int a, B_int b) {
 }
 
 B_int B_HashableD_intD___hash__(B_HashableD_int wit, B_int a) {
-    //    B_int res = $mallocB_int();
+    //    B_int res = malloc_int();
     //    zz_ptr q = malloc(sizeof(zz_struct));
     //    zz_init_fit(q,1);
     //    zz_seti(&res->val,zz_divremi(q,&a->val,LONG_MAX/4));    // This hash algorithm should be reconsidered!!!
@@ -596,7 +596,7 @@ int POW10INWORD = 18; // Largest power of 10 that fits in a signed long
 double CCCC = 9.805415291306852e-2;  // log2(WORD_BITS) - log2 (POW10INWORD) - log2 (log2(10))
 char * fstr =  "%18lu";
 
-int $getB_str0(bool ishead, zz_ptr n, zz_ptr dens[], int d, char *res, int pos) {
+int get_str0(bool ishead, zz_ptr n, zz_ptr dens[], int d, char *res, int pos) {
     if (d >= 0) {
         zz_ptr hi = malloc(sizeof(zz_struct));
         zz_ptr lo = malloc(sizeof(zz_struct));
@@ -604,10 +604,10 @@ int $getB_str0(bool ishead, zz_ptr n, zz_ptr dens[], int d, char *res, int pos) 
         zz_init_fit(lo,dens[d]->size);
         zz_divrem(hi, lo, n, dens[d]);
         if (hi->size==0 && ishead) {
-            return $getB_str0(ishead, lo, dens, d-1, res, pos);
+            return get_str0(ishead, lo, dens, d-1, res, pos);
         } else {
-            int newpos = $getB_str0(ishead, hi, dens, d-1, res, pos);        
-            return $getB_str0(false, lo, dens, d-1, res, newpos);          
+            int newpos = get_str0(ishead, hi, dens, d-1, res, pos);
+            return get_str0(false, lo, dens, d-1, res, newpos);
         }
     } else {
         char *buf = malloc(POW10INWORD);
@@ -623,7 +623,7 @@ int $getB_str0(bool ishead, zz_ptr n, zz_ptr dens[], int d, char *res, int pos) 
     }
 }
 
-char * $getB_str(zz_ptr nval) {
+char * get_str(zz_ptr nval) {
     if (nval->size == 0)
         return "0";
     long nlen = BSDNT_ABS(nval->size);
@@ -660,12 +660,12 @@ char * $getB_str(zz_ptr nval) {
         res[0] = '-';
         pos++;
     }
-    int newpos = $getB_str0(true, npos, dens, d-1, res, pos);
+    int newpos = get_str0(true, npos, dens, d-1, res, pos);
     res[newpos] = '\0';
     return res;
 }
 
-int B_setD_str0(zz_ptr a, char *nstr, int parts) {
+int set_str0(zz_ptr a, char *nstr, int parts) {
     // assert(parts > 0);
     if (parts == 1) {
         unsigned long val;
@@ -679,8 +679,8 @@ int B_setD_str0(zz_ptr a, char *nstr, int parts) {
         zz_ptr lores = malloc(sizeof(zz_struct));
         zz_init(hires);
         zz_init(lores);
-        int hidigs = B_setD_str0(hires, nstr, hi);
-        int lodigs = B_setD_str0(lores, &nstr[hi * POW10INWORD], lo);
+        int hidigs = set_str0(hires, nstr, hi);
+        int lodigs = set_str0(lores, &nstr[hi * POW10INWORD], lo);
         zz_seti(a, 10);
         zz_powi(a, a, POW10INWORD * lo);
         zz_mul(a, a, hires);
@@ -689,7 +689,7 @@ int B_setD_str0(zz_ptr a, char *nstr, int parts) {
     }
 }
 
-int B_setD_str(zz_ptr a, char *nstr) {
+int set_str(zz_ptr a, char *nstr) {
     int len = 0;
     while (isdigit(nstr[len]))
         len++;
@@ -699,7 +699,7 @@ int B_setD_str(zz_ptr a, char *nstr) {
     int parts = len / POW10INWORD;
     int offset =  len % POW10INWORD;
     if (offset == 0)
-        return B_setD_str0(a, nstr, parts);
+        return set_str0(a, nstr, parts);
     else {
         zz_ptr res0 = malloc(sizeof(zz_struct));
         zz_init(res0);
@@ -710,7 +710,7 @@ int B_setD_str(zz_ptr a, char *nstr) {
         int partdigits = 0;
         sscanf(buf, "%lu", &headval);
         if (parts > 0) {
-            partdigits = B_setD_str0(res0, &nstr[offset], parts);
+            partdigits = set_str0(res0, &nstr[offset], parts);
             zz_seti(a, 10);
             zz_powi(a, a, POW10INWORD * parts);
             zz_muli(a, a, headval);
@@ -725,15 +725,15 @@ int B_setD_str(zz_ptr a, char *nstr) {
 
 // gcd functions from BSDNT //////////////////////////////////
 B_int $gcd(B_int a, B_int b) {
-    B_int res = $mallocB_int();
+    B_int res = malloc_int();
     zz_gcd(&res->val, &a->val, &b->val);
     return res;
 }
 
 B_tuple $xgcd(B_int a, B_int b) {
-    B_int d = $mallocB_int();
-    B_int s = $mallocB_int();
-    B_int t = $mallocB_int();
+    B_int d = malloc_int();
+    B_int s = malloc_int();
+    B_int t = malloc_int();
     zz_xgcd(&d->val, &s->val, &t->val, &a->val, &b->val);
     return $NEWTUPLE(3, d, s, t);
 }
