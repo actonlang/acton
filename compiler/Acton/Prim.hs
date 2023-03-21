@@ -312,9 +312,9 @@ scPUSH              = tSchema [] tPUSH
 
 
 
---  $POP            : pure (i64) -> None
+--  $POP            : pure (int) -> None
 scPOP               = tSchema [] tPOP
-  where tPOP        = tFun fxPure (posRow tI64 posNil) kwdNil tNone
+  where tPOP        = tFun fxPure (posRow tInt posNil) kwdNil tNone
 
 --  $RAISE          : pure (BaseException) -> None
 scRAISE             = tSchema [] tRAISE

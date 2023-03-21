@@ -231,7 +231,7 @@ instance CPS [Stmt] where
                                              cnt  <- newName "cont"
                                              fin' <- cpsSuite (Unwrap lvl cnt +: env) fin
                                              b'   <- cpsSuite (Pop +: Wrap fcnt +: env) b
-                                             return $ kDef env fcnt (pospar [(lvl,tI64), (cnt,tCont0)]) fin' :
+                                             return $ kDef env fcnt (pospar [(lvl,tInt), (cnt,tCont0)]) fin' :
                                                       pushH env (finalH x fcnt) :
                                                       b'
 
@@ -262,7 +262,7 @@ instance CPS [Stmt] where
                                              fin' <- cpsSuite (Unwrap lvl cnt +: env) fin
                                              body <- hbody (Pop +: Wrap fcnt +: env) x hs
                                              b' <- cpsSuite (Pop +: Wrap fcnt +: env) b
-                                             return $ kDef env fcnt (pospar [(lvl,tI64), (cnt,tCont0)]) fin' :
+                                             return $ kDef env fcnt (pospar [(lvl,tInt), (cnt,tCont0)]) fin' :
                                                       kDef env hcnt (pospar [(x,tException)]) (pushH env (finalH x fcnt) : body) :
                                                       pushH env (eVar hcnt) :
                                                       b'
@@ -277,7 +277,7 @@ instance CPS [Stmt] where
                                              body <- hbody (Pop +: Wrap fcnt +: env) x hs
                                              els' <- cpsSuite (Pop +: Wrap fcnt +: env) els
                                              b' <- cpsSuite (Pop +: Seq ecnt +: Wrap fcnt +: env) b
-                                             return $ kDef env fcnt (pospar [(lvl,tI64), (cnt,tCont0)]) fin' :
+                                             return $ kDef env fcnt (pospar [(lvl,tInt), (cnt,tCont0)]) fin' :
                                                       kDef env hcnt (pospar [(x,tException)]) (pushH env (finalH x fcnt) : body) :
                                                       kDef env ecnt (pospar [(x,tNone)]) (pushH env (finalH x fcnt) : els') :
                                                       pushH env (eVar hcnt) :
