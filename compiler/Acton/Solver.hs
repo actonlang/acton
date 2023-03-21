@@ -60,6 +60,11 @@ simplify' env te tt eq cs                   = do eq1 <- reduce env eq cs
                                                  tt1 <- msubst tt
                                                  improve env1 te1 tt1 eq1 cs1
 
+tryred env eq []                            = return ([], eq)
+tryred env eq cs                            = do eq1 <- reduce env eq cs
+                                                 cs1 <- msubst =<< collectDeferred
+                                                 return (cs1, eq1)
+
 groupCs env []                              = []
 groupCs env (c:cs)                          = close (tyfree c ++ attrfree [c]) [c] cs
   where close tvs cs0 cs
@@ -74,25 +79,31 @@ groupCs env (c:cs)                          = close (tyfree c ++ attrfree [c]) [
 -- solve
 ----------------------------------------------------------------------------------------------------------------------
 
-data Rank                                   = RSealed { tgt :: Type }
-                                            | RTry { tgt :: Type, alts :: [Type], rev :: Bool }
+data Rank                                   = RRed { cstrs :: [Constraint] }
                                             | RUni { tgt :: Type, alts :: [Type] }
+                                            | RSealed { tgt :: Type }
+                                            | RTry { tgt :: Type, alts :: [Type], rev :: Bool }
+                                            | RVar { tgt :: Type, alts :: [Type] }
                                             | ROvl { tgt :: Type }
                                             | RSkip
                                             deriving (Show)
 
 instance Eq Rank where
+    RRed _      == RRed _                   = True
+    RUni t1 _   == RUni t2 _                = t1 == t2
     RSealed t1  == RSealed t2               = t1 == t2
     RTry t1 _ _ == RTry t2 _ _              = t1 == t2
-    RUni t1 _   == RUni t2 _                = t1 == t2
+    RVar t1 _   == RVar t2 _                = t1 == t2
     ROvl t1     == ROvl t2                  = True
     RSkip       == RSkip                    = True
     _           == _                        = False
 
 instance Pretty Rank where
+    pretty (RRed cs)                        = text "<reduce>" <+> commaSep pretty cs
+    pretty (RUni t ts)                      = pretty t <+> char '=' <+> commaSep pretty ts
     pretty (RSealed t)                      = pretty t <+> text "sealed"
     pretty (RTry t ts rev)                  = pretty t <+> braces (commaSep pretty ts) Pretty.<> (if rev then char '\'' else empty)
-    pretty (RUni t ts)                      = pretty t <+> char '=' <+> commaSep pretty ts
+    pretty (RVar t ts)                      = pretty t <+> char '~' <+> commaSep pretty ts
     pretty (ROvl t)                         = pretty t <+> text "..."
     pretty RSkip                            = text "<skip>"
 
@@ -103,7 +114,7 @@ solve env select te tt eq cs                = do (cs',eq') <- solveGroups env se
                                                  return (cs', eq'++eq)
 
 solveGroups env select te tt []             = return ([], [])
-solveGroups env select te tt (cs:css)       = do --traceM ("\n\n######### solveGroup\n" ++ render (nest 4 $ vcat $ map pretty cs))
+solveGroups env select te tt (cs:css)       = do traceM ("\n\n######### solveGroup\n" ++ render (nest 4 $ vcat $ map pretty cs))
                                                  (cs1,eq1) <- solve' env select [] te tt [] cs `catchError` \err -> Control.Exception.throw err
                                                  env <- msubst env
                                                  (cs2,eq2) <- solveGroups env select te tt css
@@ -112,54 +123,68 @@ solveGroups env select te tt (cs:css)       = do --traceM ("\n\n######### solveG
 solve' env select hist te tt eq cs
   | null solve_cs || null goals             = return (keep_cs, eq)
   | otherwise                               = do st <- currentState
-                                                 --traceM ("## keep:\n" ++ render (nest 8 $ vcat $ map pretty keep_cs))
-                                                 --traceM ("## solve:\n" ++ render (nest 8 $ vcat $ map pretty solve_cs))
-                                                 --traceM ("## ranks:\n" ++ render (nest 8 $ vcat $ map pretty rnks))
+                                                 traceM ("## keep:\n" ++ render (nest 8 $ vcat $ map pretty keep_cs))
+                                                 traceM ("## solve:\n" ++ render (nest 8 $ vcat $ map pretty solve_cs))
+                                                 traceM ("## ranks:\n" ++ render (nest 8 $ vcat $ map pretty rnks))
+                                                 traceM ("## keep2:\n" ++ render (nest 8 $ vcat $ map pretty keep2))
+                                                 traceM ("## solve2:\n" ++ render (nest 8 $ vcat $ map pretty solve2))
                                                  --traceM ("## optvs: " ++ prstrs optvs)
                                                  --traceM ("## posvs: " ++ prstrs posvs)
                                                  --traceM ("## negvs: " ++ prstrs negvs)
                                                  case head goals of
+                                                    RRed cs' -> do
+                                                        traceM ("### reduce " ++ prstrs cs')
+                                                        proceed hist cs
+                                                    RUni t alts -> do
+                                                        traceM ("### uni goal " ++ prstr t ++ ", unifying with " ++ prstrs alts)
+                                                        unifyM alts (repeat t) >> proceed hist cs
                                                     RSealed t ->
                                                         tryAlts st t [fxAction, fxPure]
                                                     RTry t alts r -> do
-                                                        --traceM ("### goal " ++ prstr t ++ ", candidates: " ++ prstrs alts ++ if r then " (rev)" else "")
+                                                        traceM ("### try goal " ++ prstr t ++ ", candidates: " ++ prstrs alts ++ if r then " (rev)" else "")
                                                         tryAlts st t alts
-                                                    RUni t alts -> do
-                                                        --traceM ("### goal " ++ prstr t ++ ", unifying with " ++ prstrs alts)
+                                                    RVar t alts -> do
+                                                        traceM ("### var goal " ++ prstr t ++ ", unifying with " ++ prstrs alts)
                                                         unifyM alts (repeat t) >> proceed hist cs
                                                     ROvl t -> do
-                                                        --traceM ("### goal " ++ prstr t ++ ", defaulting remaining constraints")
-                                                        (cs,eq) <- simplify' (useForce env) te tt eq cs
+                                                        traceM ("### ovl goal " ++ prstr t ++ ", defaulting remaining constraints")
+                                                        (cs,eq) <- tryred (useForce env) eq cs
+                                                        te <- msubst te
+                                                        tt <- msubst tt
                                                         hist <- msubst hist
                                                         solve' env select hist te tt eq cs
                                                     RSkip ->
                                                         return (keep_cs, eq)
 
-  where (solve_cs, keep_cs)                 = partition select cs
+  where (solve1, keep1)                     = partition select cs
+        heads                               = map headvar solve1
+        (solve2, keep2)                     = partition ((`elem` heads) . headvar) keep1
+        (solve_cs, keep_cs)                 = (solve1++solve2, keep2)
         goals                               = sortOn deco $ map condense $ group rnks
         group []                            = []
         group (r:rs)                        = (r : rs1) : group rs2
           where (rs1,rs2)                   = partition (==r) rs
         rnks                                = map (rank env) solve_cs
-        tryAlts st t0 []                    = --trace ("### FAIL " ++ prstr t0) $
+        tryAlts st t0 []                    = trace ("### FAIL " ++ prstr t0) $
                                               noSolve cs
         tryAlts st t0 (t:ts)                = tryAlt t0 t `catchError` const ({-traceM ("### ROLLBACK " ++ prstr t0) >> -}rollbackState st >> tryAlts st t0 ts)
         tryAlt t0 (TCon _ c)
           | isProto env (tcname c)          = do p <- instwildcon env c
                                                  w <- newWitness
-                                                 --traceM ("  # trying " ++ prstr t0 ++ " (" ++ prstr p ++ ")")
+                                                 traceM ("  # trying " ++ prstr t0 ++ " (" ++ prstr p ++ ")")
                                                  proceed hist (Impl w t0 p : cs)
         tryAlt t0 t                         = do t <- instwild env (kindOf env t0) t
-                                                 --traceM ("  # trying " ++ prstr t0 ++ " = " ++ prstr t)
+                                                 traceM ("  # trying " ++ prstr t0 ++ " = " ++ prstr t)
                                                  unify t0 t
                                                  proceed (t:hist) cs
-        proceed hist cs                     = do cs <- msubst cs
+        proceed hist cs                     = do (cs,eq) <- tryred env eq cs
                                                  te <- msubst te
                                                  tt <- msubst tt
-                                                 (cs,eq) <- simplify' env te tt eq cs
                                                  hist <- msubst hist
                                                  solve' env select hist te tt eq cs
 
+        condense (RRed cs : rs)             = RRed (cs ++ concatMap cstrs rs)
+        condense (RUni t as : rs)           = RUni t (foldr union as $ map alts rs)
         condense (RSealed t : rs)           = RSealed t
         condense (RTry t as r : rs)
           | TVar{} <- t                     = RTry t (if rev' then subrev ts' else ts') rev'
@@ -167,7 +192,7 @@ solve' env select hist te tt eq cs
           where ts                          = foldr intersect as $ map alts rs
                 ts'                         = if tvar t `elem` optvs then ts \\ [tOpt tWild] else ts
                 rev'                        = (or $ r : map rev rs) || tvar t `elem` posvs
-        condense (RUni t as : rs)           = RUni t (foldr union as $ map alts rs)
+        condense (RVar t as : rs)           = RVar t (foldr union as $ map alts rs)
         condense (ROvl t : rs)              = ROvl t
         condense (RSkip : rs)               = RSkip
         condense rs                         = error ("### condense " ++ show rs)
@@ -177,12 +202,14 @@ solve' env select hist te tt eq cs
         univs                               = univars cs
         (posvs, negvs)                      = polvars te `polcat` polvars tt
 
-        deco (RSealed t)                    = (0, 0, 0, 0)
-        deco (RTry (TVar _ v) as r)         = (1, length $ filter (==v) embvs, length as, length $ filter (==v) univs)
-        deco (RTry t as r)                  = (2, 0, length as, 0)
-        deco (RUni t as)                    = (3, 0, length as, 0)
-        deco (ROvl t)                       = (4, 0, 0, 0)
-        deco (RSkip)                        = (5, 0, 0, 0)
+        deco (RRed cs)                      = (0, 0, 0, 0)
+        deco (RUni t as)                    = (1, 0, length as, 0)
+        deco (RSealed t)                    = (2, 0, 0, 0)
+        deco (RTry (TVar _ v) as r)         = (3, length $ filter (==v) embvs, length as, length $ filter (==v) univs)
+        deco (RTry t as r)                  = (4, 0, length as, 0)
+        deco (RVar t as)                    = (5, 0, length as, 0)
+        deco (ROvl t)                       = (6, 0, 0, 0)
+        deco (RSkip)                        = (7, 0, 0, 0)
 
         subrev []                           = []
         subrev (t:ts)                       = subrev ts1 ++ t : subrev ts2
@@ -199,7 +226,7 @@ rank env (Sub _ t1 t2)                      = rank env (Cast t1 t2)
 rank env (Cast t1@TVar{} t2@TVar{})
   | univar (tvar t1), univar (tvar t2)      = RUni t1 [t2]
 rank env (Cast t1@TVar{} (TOpt _ t2@TVar{}))
-  | univar (tvar t1), univar (tvar t2)      = RUni t1 [t2]
+  | univar (tvar t1), univar (tvar t2)      = RVar t1 [t2]
 rank env (Cast t1@TVar{} (TOpt _ t2))
   | univar (tvar t1)                        = RTry t1 (allBelow env t2 ++ [tOpt tWild, tNone]) False
 rank env (Cast TNone{} t2@TVar{})
@@ -215,12 +242,52 @@ rank env c@(Impl _ t p)
   where ts                                  = allExtProto env t p
 
 rank env (Sel _ t n _)                      = RTry t (allConAttr env n ++ allProtoAttr env n ++ allExtProtoAttr env n) False
-rank env (Mut t n _)                        = RTry t (allConAttr env n `intersect` allBelow env tObject) False
+rank env (Mut t n _)                        = RTry t (allConAttr env n) False
 
 rank env (Seal t@TVar{})
   | tvkind (tvar t) == KFX                  = RSealed t
   | otherwise                               = RSkip
 
+rank env c                                  = RRed [c]
+
+
+----------------------------------------------------------------------------------------------------------------------
+-- New variable info
+----------------------------------------------------------------------------------------------------------------------
+
+data VarInfo                                = VarInfo {
+                                                ubnd        :: [Type],
+                                                lbnd        :: [Type],
+                                                uvar        :: [TVar],
+                                                lvar        :: [TVar],
+                                                pbnd        :: [PCon],
+                                                sels        :: [Name],
+                                                muts        :: [Name] }
+
+varinf                                      :: Constraints -> Map TVar VarInfo
+varinf                                      = foldl f Map.empty
+  where
+    f m (Cast (TVar _ v1) (TVar _ v2))
+      | v1 == v2                            = m
+      | otherwise                           = update m v1 (\vi -> vi { uvar = v2 : uvar vi })
+    f m (Cast (TVar _ v) t)                 = update m v (\vi -> vi { ubnd = t : ubnd vi })
+    f m (Cast t (TVar _ v))                 = update m v (\vi -> vi { lbnd = t : lbnd vi })
+    f m (Sub _ t1 t2)                       = f m (Cast t1 t2)
+    f m (Impl w (TVar _ v) p)               = update m v (\vi -> vi { pbnd = p : pbnd vi })
+    f m (Impl w t p)
+      | not $ null vs                       = undefined
+      where vs                              = tyfree t
+    f m (Sel _ (TVar _ v) n t)              = update m v (\vi -> vi { sels = n : sels vi })
+    f m (Mut (TVar _ v) n t)                = update m v (\vi -> vi { muts = n : muts vi })
+    f m (Seal (TVar _ v))                   = undefined
+    f m _                                   = undefined
+
+    update                                  :: Map TVar VarInfo -> TVar -> (VarInfo -> VarInfo) -> Map TVar VarInfo
+    update m v f                            = Map.alter upd v m
+      where upd (Just i)                    = Just (f i)
+            upd Nothing                     = Just (f $ VarInfo [] [] [] [] [] [] [])
+
+-------------------------------------------------------------------------------------------------------------------------
 
 class OptVars a where
     optvars                             :: a -> [TVar]
