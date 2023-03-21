@@ -152,7 +152,7 @@ void serialize_state_shortcut($Actor);
                                $t; })
 
 void $PUSH($Cont);
-void $POP(B_i64);
+void $POP(B_int);
 
 extern B_Msg timerQ;
 

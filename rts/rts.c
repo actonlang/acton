@@ -865,9 +865,9 @@ void $PUSH($Cont cont) {
     PUSH_catcher(self, c);
 }
 
-void $POP(B_i64 n) {
+void $POP(B_int n) {
     $Actor self = ($Actor)pthread_getspecific(self_key);
-    long v = n->val;
+    long v = from$int(n);
     while (v > 0) {
         POP_catcher(self);
         v--;

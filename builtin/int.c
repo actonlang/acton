@@ -588,6 +588,14 @@ B_int to$int(long n) {
     return res;
 }
 
+B_int to$int2(char *str) {
+    B_int res = malloc_int();
+    res->$class = &B_intG_methods;
+    set_str(&res->val, str);
+    return res;
+}
+
+
 // Conversion to strings /////////////////////////////////////////////////////////////////////////////
 
 // These three constants must be changed for a 32 bit machine
