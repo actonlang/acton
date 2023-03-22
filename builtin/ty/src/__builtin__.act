@@ -715,7 +715,7 @@ def any(it : Iterable[A]) -> bool:
             return True
     return False
 
-def ascii(*args) -> str:
+def ascii(x : value) -> str:
     NotImplemented
 
 def bin(x: Integral) -> str:

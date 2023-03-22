@@ -46,8 +46,8 @@ B_IteratorB_str B_IteratorB_strG_new(B_str);
 struct B_bytearray {
     struct B_bytearrayG_class *$class;
     int nbytes;
-    int capacity;
     unsigned char *str;
+    int capacity;
 };
 
  
@@ -120,18 +120,6 @@ struct B_IteratorB_bytes {
 
 extern struct  B_IteratorB_bytesG_class  B_IteratorB_bytesG_methods;
 B_IteratorB_bytes B_IteratorB_bytesG_new(B_bytes);
-
-//builtin functions //////////////////////////////////////////////////////////////////////////////////
-
-// Backslash, single and double quote are always escaped.
-// All control and non-ASCII bytes are escaped using \xhh (so \x0a is used instead of \n, etc)
-// Single quotes are used as string delimiters.
-B_str $ascii(B_str s);
-B_str $bin(B_Integral wit, $WORD n);
-B_str $chr(B_Integral wit, $WORD n);
-B_str $hex(B_Integral wit, $WORD n);
-B_int $ord(B_str c);
-
 
 // Internal auxiliary function /////////////////////////////////////////////
 
