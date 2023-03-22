@@ -64,6 +64,7 @@ int return_val = 0;
 char *appname = NULL;
 pid_t pid;
 
+uv_loop_t *aux_uv_loop = NULL;
 uv_loop_t *uv_loops[MAX_WTHREADS];
 uv_async_t stop_ev[MAX_WTHREADS];
 uv_async_t wake_ev[MAX_WTHREADS];
@@ -2488,6 +2489,7 @@ int main(int argc, char **argv) {
             check_uv_fatal(uv_async_send(&wake_ev[i]), "Error sending initial work event: ");
         }
     }
+    aux_uv_loop = uv_loops[0];
 
     for (uint i=0; i <= MAX_WTHREADS; i++) {
         rqs[i].head = NULL;
@@ -2597,11 +2599,10 @@ int main(int argc, char **argv) {
     }
 
     // Run the timer queue and keep track of other periodic tasks
-    uv_loop_t *uv_loop = uv_loops[0];
     timer_ev = malloc(sizeof(uv_timer_t));
-    uv_timer_init(uv_loops[0], timer_ev);
+    uv_timer_init(aux_uv_loop, timer_ev);
     uv_timer_start(timer_ev, main_timer_cb, 0, 0);
-    int r = uv_run(uv_loop, UV_RUN_DEFAULT);
+    int r = uv_run(aux_uv_loop, UV_RUN_DEFAULT);
 
     // -- SHUTDOWN --
 

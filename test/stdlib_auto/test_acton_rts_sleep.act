@@ -9,11 +9,10 @@ actor Interruptor():
 
 actor main(env):
     def test():
-        t1 = time.time_ns()
+        s = time.Stopwatch()
         acton.rts.sleep(0.1)
-        t2 = time.time_ns()
-        diff = (t2-t1) / 1000000000
-        if diff < 0.1:
+        d = s.elapsed()
+        if d.to_float() < 0.1:
             print("Sleep seems to have been below 1 second :(")
             return 1
         else:

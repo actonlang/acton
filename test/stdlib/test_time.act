@@ -1,21 +1,13 @@
 import time
 
 actor main(env):
-    def check(ts):
-        diff = ts - int(env.argv[1])
-        print("diff:", diff)
-        if abs(int(diff)) > 5:
-            print("ERROR: diff seems too large, time.time*() should be roughly same as provided UNIX timestamp input")
-            return 1
-        else:
-            return 0
+    et = time.Instant(int(env.argv[1]), 0, time.RealtimeClock(0, 0, 0))
+    n = time.time()
+    d = n.since(et)
+    print("duration:", d)
 
-    def test():
-        r1 = check(int(time.time()))
-        r2 = check(int(time.time_ns() / 1000000000))
-        return (r1 == 0 and r2 == 0)
+    if abs(d.second) > 5:
+        print("ERROR: diff seems too large, time.time*() should be roughly same as provided UNIX timestamp input")
+        await async env.exit(1)
 
-    if test():
-       await async env.exit(0)
-    else:
-       await async env.exit(1)
+    await async env.exit(0)
