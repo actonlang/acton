@@ -827,7 +827,7 @@ decl_group = do p <- L.indentLevel
                 return [ S.Decl (loc ds) ds | ds <- Names.splitDeclGroup g ]
 
 decl :: Parser S.Decl
-decl = try funcdef <|> classdef <|> protodef <|> extdef <|> actordef
+decl = funcdef <|> classdef <|> protodef <|> extdef <|> actordef
 
 decorator :: Bool -> Parser S.Deco
 decorator sig = do
