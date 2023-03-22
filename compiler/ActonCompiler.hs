@@ -225,16 +225,15 @@ buildProject opts = do
 
 printDocs :: C.DocOptions -> IO ()
 printDocs opts = do
--- TODO: re-enable after figuring out extra args to showTyFile
---              iff (not (null $ C.signs opts)) $ do
---                     let filename = C.signs opts
---                         (fileBody,fileExt) = splitExtension $ takeFileName filename
---                     case fileExt of
---                            ".ty" -> do
---                                paths <- findPaths filename defaultOpts
---                                env0 <- Acton.Env.initEnv (sysTypes paths) False
---                                Acton.Types.showTyFile (Acton.Env.setMod (modName paths) env0) filename
---                            _     -> printErrorAndExit ("Unknown filetype: " ++ filename)
+              iff (not (null $ C.signs opts)) $ do
+                     let filename = C.signs opts
+                         (fileBody,fileExt) = splitExtension $ takeFileName filename
+                     case fileExt of
+                            ".ty" -> do
+                                paths <- findPaths filename defaultOpts
+                                env0 <- Acton.Env.initEnv (sysTypes paths) False
+                                Acton.Types.showTyFile env0 (modName paths) filename
+                            _     -> printErrorAndExit ("Unknown filetype: " ++ filename)
               iff (not (null $ C.full opts)) $
                    putStrLn "Full documentation not implemented"           -- issue #708
 
