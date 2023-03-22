@@ -69,4 +69,8 @@ actor main(env):
 #        print("Unexpected result of list.sort():", l)
 #        await async env.exit(1)
 
+    if bool([]):
+        print("Unexpected result of bool([]):", l)
+        await async env.exit(1)
+        
     await async env.exit(0)
