@@ -3546,7 +3546,7 @@ void B___init__ () {
     {
         B_listG_methods.$GCINFO = "B_list";
         B_listG_methods.$superclass = ($SuperG_class)&B_objectG_methods;
-        B_listG_methods.__bool__ = (B_bool (*) (B_list))B_valueG_methods.__bool__;
+        B_listG_methods.__bool__ = B_listD___bool__;
         B_listG_methods.__str__ = B_listD___str__;
         B_listG_methods.__repr__ = B_listD___str__;
         B_listG_methods.__init__ = B_listD___init__;
