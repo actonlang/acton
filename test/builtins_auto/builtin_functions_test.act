@@ -2,16 +2,29 @@ lst = list(range(10, 15, 1))
 
 def even(n):
     return n % 2 == 0
-    
+
+
 actor main(env):
     if list(filter(even,lst)) != [10,12,14]:
        print("filter")
        env.exit(1)
-#    if list(map(even,lst)) != [True,False,True,False,True]:
-#       print("map")
-#       env.exit(1)
-#    print("max(lst) is ", max(lst,None))
-#    print("2^32 in hex is ", hex(65536*65536))
-#    print("chr(8707) is ", chr(8707))
-#    print("ord('∃') is ", ord("∃"))
+    if list(map(lambda x : x*x,lst)) != [100, 121, 144, 169, 196]:
+        print("map")
+        env.exit(1)                   
+    if max(lst,None) != 14:
+        print("max")
+        env.exit(1)
+    if hex(65536*65536) != "0x100000000":
+        print("hex")
+        env.exit(1)
+    if chr(8707) != '∃':
+        print("chr")
+        env.exit(1)
+    if ord('∃') != 8707:
+        print("ord")
+        env.exit(1)
+    if ascii("Björn ∃") != "'Bj\\xc3\\xb6rn \\xe2\\x88\\x83'":
+       print("ascii")
+       env.exit(1)
+
     env.exit(0)

@@ -2797,7 +2797,7 @@ extern struct B_HashableD_bytesG_class B_HashableD_bytesG_methods;
 $WORD B_abs (B_Real, B_Number, $WORD);
 B_bool B_all (B_Iterable, $WORD);
 B_bool B_any (B_Iterable, $WORD);
-B_str B_ascii (B_tuple);
+B_str B_ascii (B_value);
 B_str B_bin (B_Integral, $WORD);
 B_str B_chr (B_Integral, $WORD);
 B_tuple B_divmod (B_Integral, $WORD, $WORD);

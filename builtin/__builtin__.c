@@ -3158,7 +3158,7 @@ B_bool B_any (B_Iterable W_IterableE_780, $WORD it) {
     }
     return B_False;
 }
-B_str B_ascii (B_tuple args);
+B_str B_ascii (B_value s);
 B_str B_bin (B_Integral W_IntegralE_791, $WORD x);
 B_str B_chr (B_Integral W_IntegralE_794, $WORD i);
 B_tuple B_divmod (B_Integral W_IntegralD_A, $WORD a, $WORD b) {

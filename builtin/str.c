@@ -40,16 +40,16 @@ static B_str whitespace_str = &whitespace_struct;
     (nm)->$class = &B_strG_methods;               \
     (nm)->nchars = nchrs;                       \
     (nm)->nbytes = nbtes;                       \
-    (nm)->str = malloc((nm)->nbytes + 1);       \
-    (nm)->str[(nm)->nbytes] = 0
+    (nm)->str = malloc(nbtes + 1);       \
+    (nm)->str[nbtes] = 0
 
 #define NEW_UNFILLED_BYTEARRAY(nm,nbtes)        \
     nm = malloc(sizeof(struct B_bytearray));     \
     (nm)->$class = &B_bytearrayG_methods;         \
     (nm)->nbytes = nbtes;                       \
     (nm)->capacity = nbtes;                     \
-    (nm)->str = malloc((nm)->nbytes + 1);       \
-    (nm)->str[(nm)->nbytes] = 0
+    (nm)->str = malloc(nbtes + 1);       \
+    (nm)->str[nbtes] = 0
 
 #define NEW_UNFILLED_BYTES(nm,nbtes)            \
     nm = malloc(sizeof(struct B_bytes));         \
@@ -294,6 +294,75 @@ static int rbmh( unsigned char *text, unsigned char *pattern, int tbytes, int pb
     return -1;
 }
 
+struct byte_counts {
+    int printable, squotes, dquotes, escaped, non_printable, non_ascii;
+};
+        
+
+struct byte_counts byte_count(unsigned char *s, int len) {
+   struct byte_counts res = {0,0,0,0,0,0};
+    unsigned char c;
+    for (int i=0; i<len; i++) {
+        c = s[i];
+        if (c=='\\' || c=='\n' || c=='\t' || c=='\r')
+            res.escaped++;
+        else if (c < 32 || c == 127)
+            res.non_printable++;
+        else if (c=='\'')
+            res.squotes++;
+        else if (c=='"')
+            res.dquotes++;
+        else if (c<127)
+            res.printable++;
+        else
+            res.non_ascii++;
+    }
+    return res;
+}
+
+void escape_str(unsigned char *out, unsigned char *in, int outlen, int inlen, int max_esc, bool esc_squote) {
+    unsigned char *hexdigits = (unsigned char *)"0123456789abcdef";
+    unsigned char *p = out;
+    for (int i=0; i<inlen; i++) {
+        unsigned char c = in[i];
+        if ((c < 32 && c != '\t' && c != '\r' && c != '\n') || ( c > 126 && c <= max_esc)) {
+            *p = '\\'; p++;
+            *p = 'x'; p++;
+            *p = hexdigits[c >> 4]; p++;
+            *p = hexdigits[c & 0xf]; p++;
+        } else {
+            switch (c) {
+            case '\\':
+                *p = '\\'; p++;
+                *p = '\\'; p++;
+                break;
+            case '\'':
+                if (esc_squote) {
+                    *p = '\\'; p++;
+                }
+                *p = '\''; p++;
+                break;
+            case '\t':
+                *p = '\\'; p++;
+                *p = 't'; p++;
+                break;
+            case '\n':
+                *p = '\\'; p++;
+                *p = 'n'; p++;
+                break;
+            case '\r':
+                *p = '\\'; p++;
+                *p = 'r'; p++;
+                break;
+            default:        
+                *p = c; p++;
+            }
+        }
+    }
+}
+
+
+
 // General methods ////////////////////////////////////////////////////////////// 
 
 B_str B_strG_new(B_value s) {
@@ -316,14 +385,22 @@ B_str B_strD___str__(B_str s) {
     return s;
 }
 
-B_str B_strD___repr__(B_str s) {
-    B_str $res = NEW_UNFILLED_STR($res,s->nchars+2,s->nbytes+2);
-    $res->str[0] = '"';
-    $res->str[$res->nbytes-1] = '"';
-    memcpy($res->str+1, s->str,s->nbytes);
-    return $res;
-}
 
+B_str B_strD___repr__(B_str s) {
+    struct byte_counts bs = byte_count(s->str, s->nbytes);
+    int newbytes = 2+bs.escaped+3*bs.non_printable+(bs.squotes>0 && bs.dquotes>0 ? bs.squotes : 0);
+    B_str res;
+    NEW_UNFILLED_STR(res,s->nchars+newbytes, s->nbytes+newbytes);
+    escape_str(res->str+1,s->str,res->nbytes-1,s->nbytes,127,bs.squotes>0 && bs.dquotes>0);
+    if (bs.dquotes==0 && bs.squotes>0) {
+        res->str[0] = '"';
+        res->str[res->nbytes-1] = '"';
+    } else {
+        res->str[0] = '\'';
+        res->str[res->nbytes-1] = '\'';
+    }        
+    return res;
+}
 
 void B_strD___serialize__(B_str str,$Serial$state state) {
     int nWords = str->nbytes/sizeof($WORD) + 1;         // # $WORDS needed to store str->str, including terminating 0.
@@ -1307,16 +1384,21 @@ B_bool B_bytearrayD___bool__(B_bytearray s) {
 };
 
 B_str B_bytearrayD___str__(B_bytearray s) {
-    B_str bs;
-    NEW_UNFILLED_STR(bs,s->nbytes,s->nbytes);
-    bs->str = s->str;        // bs may not be a correctly UTF8-encoded string
-    B_str as = $ascii(bs);    // but we can use $ascii on it anyhow.
+    struct byte_counts bs = byte_count(s->str, s->nbytes);
+    int newbytes = 14+bs.escaped+3*bs.non_printable+(bs.squotes>0 && bs.dquotes>0 ? bs.squotes : 0)+3*bs.non_ascii;
     B_str res;
-    int n = as->nbytes + 14; // "bytearray(b'" + "')"
-    NEW_UNFILLED_STR(res,n,n);
-    memcpy(res->str, "bytearray(b'",12);
-    memcpy(&res->str[12],as->str,as->nbytes);
-    memcpy(&res->str[n-2],"')",2);
+    int nbytes = s->nbytes+newbytes;
+    NEW_UNFILLED_STR(res,nbytes,nbytes);
+    escape_str(res->str+12,s->str,res->nbytes-12,s->nbytes,255,bs.squotes>0 && bs.dquotes>0);
+    if (bs.dquotes==0 && bs.squotes>0) {
+        res->str[11] = '"';
+        res->str[res->nbytes-2] = '"';
+    } else {
+        res->str[11] = '\'';
+        res->str[res->nbytes-2] = '\'';
+    }        
+    memcpy(res->str, "bytearray(b",11);
+    res->str[res->nbytes-1] = ')';
     return res;
 }
 
@@ -2289,25 +2371,22 @@ B_bool B_bytesD___bool__(B_bytes s) {
 };
 
 B_str B_bytesD___str__(B_bytes s) {
-    int lens = s->nbytes+3;
-    B_str str;
-    NEW_UNFILLED_STR(str,lens,lens);
-    unsigned char *p = str->str;
-    /*
-      The function $ascii escapes all occurrences of quotes. We do not want that 
-      for the delimiter pair, so we use the hackish solution to first set p[1] and
-      p[lens-1] to space, then call $ascii and afterwards introduce the delimiting quotes.
-    */
-    p[0] = 'b';
-    p[1] = ' ';
-    p[lens-1] = ' ';
-    memcpy(p+2,s->str,lens-3);
-    B_str res = $ascii(str);
-    res->str[1] = '"';
-    res->str[res->nbytes-1] = '"';
+    struct byte_counts bs = byte_count(s->str, s->nbytes);
+    int newbytes = 3+bs.escaped+3*bs.non_printable+(bs.dquotes>0 && bs.dquotes>0 ? bs.squotes : 0)+3*bs.non_ascii;
+    B_str res;
+    int nbytes = s->nbytes+newbytes;
+    NEW_UNFILLED_STR(res,nbytes,nbytes);
+    escape_str(res->str+2,s->str,res->nbytes-2,s->nbytes,255,bs.squotes>0 && bs.dquotes>0);
+    if (bs.dquotes==0 && bs.squotes>0) {
+        res->str[1] = '"';
+        res->str[res->nbytes-1] = '"';
+    } else {
+        res->str[1] = '\'';
+        res->str[res->nbytes-1] = '\'';
+    }        
+    res->str[0] = 'b';
     return res;
 }
-
 
 void B_bytesD___serialize__(B_bytes str,$Serial$state state) {
     int nWords = str->nbytes/sizeof($WORD) + 1;         // # $WORDS needed to store str->str, including terminating 0.
@@ -3130,59 +3209,25 @@ B_int B_HashableD_bytesD___hash__(B_HashableD_bytes wit, B_bytes str) {
 
 // Builtin functions involving strings /////////////////////////////////////////////
 
-B_str $ascii(B_str s) {
-    unsigned char *hexdigits = (unsigned char *)"0123456789abcdef";
-    int printable = 0;
-    int escaped = 0; // Backslash, single and double quote
-    int non_printable = 0;
-    unsigned char c;
-    for (int i=0; i<s->nbytes; i++) {
-        c = s->str[i];
-        if ((c < 32 || c > 126) && c != '\t' && c != '\r' && c != '\n')
-            non_printable++;
-        else if (c=='\\' || c=='\'' || c=='"' || c=='\n' || c=='\t' || c=='\r')
-            escaped++;
-        else 
-            printable++;
-    }
-    int nbytes = printable+2*escaped+4*non_printable;
+B_str B_ascii(B_value v) {
+    B_str s  = v->$class->__str__(v);
+    struct byte_counts bs = byte_count(s->str, s->nbytes);
+    //    printf("%d %d %d %d %d %d\n",bs.escaped,bs.squotes,bs.dquotes,bs.printable,bs.non_printable,bs.non_ascii);
+    int newbytes = 2+bs.escaped+3*bs.non_printable+(bs.squotes>0 && bs.dquotes>0 ? bs.squotes : 0)+3*bs.non_ascii;
     B_str res;
-    NEW_UNFILLED_STR(res,nbytes,nbytes);
-    unsigned char *p =res->str;
-    for (int i=0; i<s->nbytes; i++) {
-        c = s->str[i];
-        if ((c < 32 || c > 126) && c != '\t' && c != '\r' && c != '\n') {
-            *p = '\\'; p++;
-            *p = 'x'; p++;
-            *p = hexdigits[c >> 4]; p++;
-            *p = hexdigits[c & 0xf]; p++;
-        } else switch (c) {
-            case '\\':
-            case '\'':
-            case '\"':
-                *p = '\\'; p++;
-                *p = c; p++;
-                break;
-            case '\t':
-                *p = '\\'; p++;
-                *p = 't'; p++;
-                break;
-            case '\n':
-                *p = '\\'; p++;
-                *p = 'n'; p++;
-                break;
-            case '\r':
-                *p = '\\'; p++;
-                *p = 'r'; p++;
-                break;
-            default:        
-                *p = c; p++;
-            }
-    }
+    NEW_UNFILLED_STR(res,s->nchars+newbytes,s->nbytes+newbytes);
+    escape_str(res->str+1,s->str,res->nbytes-1,s->nbytes,255,bs.squotes>0 && bs.dquotes>0);
+    if (bs.dquotes==0 && bs.squotes>0) {
+        res->str[0] = '"';
+        res->str[res->nbytes-1] = '"';
+    } else {
+        res->str[0] = '\'';
+        res->str[res->nbytes-1] = '\'';
+    }        
     return res;
 }
-   
-B_str $bin(B_Integral wit, $WORD n) {
+ 
+B_str B_bin(B_Integral wit, $WORD n) {
     long v = from$int(wit->$class->__int__(wit,n));
     int sign = v<0;
     int nbits = 1;
@@ -3221,7 +3266,7 @@ B_str $bin(B_Integral wit, $WORD n) {
     return res;
 }  
 
-B_str $chr(B_Integral wit, $WORD n) {
+B_str B_chr(B_Integral wit, $WORD n) {
     long v = from$int(wit->$class->__int__(wit,n));
     if (v >=  0x110000)
         $RAISE((B_BaseException)$NEW(B_ValueError,to$str("chr: argument is not a valid Unicode code point")));
@@ -3236,7 +3281,7 @@ B_str $chr(B_Integral wit, $WORD n) {
     return res;
 }
 
-B_str $hex(B_Integral wit, $WORD n) {
+B_str B_hex(B_Integral wit, $WORD n) {
     unsigned char *hexdigits = (unsigned char *)"0123456789abcdef";
     long v =  from$int(wit->$class->__int__(wit,n));
     int sign = v<0;
@@ -3270,7 +3315,7 @@ B_str $hex(B_Integral wit, $WORD n) {
     return res;
 }
 
-B_int $ord(B_str c) {
+B_int B_ord(B_str c) {
     if(c->nchars != 1)
         $RAISE((B_BaseException)$NEW(B_ValueError,to$str("ord: argument is not a single Unicode char")));
     int cp;
