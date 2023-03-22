@@ -56,7 +56,7 @@ extern struct dbc_stat dbc_stats;
 
 char rts_verbose = 0;
 char rts_debug = 0;
-long num_wthreads;
+long num_wthreads = -1;
 
 char rts_exit = 0;
 int return_val = 0;
@@ -2186,7 +2186,6 @@ int main(int argc, char **argv) {
     int new_argc = argc;
     int cpu_pin;
     long num_cores = sysconf(_SC_NPROCESSORS_ONLN);
-    num_wthreads = num_cores;
     bool mon_on_exit = false;
     char *log_path = NULL;
     FILE *logf = NULL;
@@ -2424,16 +2423,17 @@ int main(int argc, char **argv) {
     }
     // Determine number of worker threads, normally 1:1 per CPU thread / core
     // For low core count systems we do a minimum of 4 worker threads
-    if (num_wthreads < 4) {
+    if (num_wthreads == -1 && num_cores < 4) { // auto, few CPU cores, so use 4 worker threads
         num_wthreads = 4;
         cpu_pin = 0;
         log_info("Detected %ld CPUs: Using %ld worker threads, due to low CPU count. No CPU affinity used.", num_cores, num_wthreads);
-    } else if (num_wthreads == num_cores) {
+    } else if (num_wthreads == -1) { // auto, many CPU cores, use 1 worker thread per CPU core
+        num_wthreads = num_cores;
         cpu_pin = 1;
         log_info("Detected %ld CPUs: Using %ld worker threads for 1:1 mapping with CPU affinity set.", num_cores, num_wthreads);
     } else {
         cpu_pin = 0;
-        log_info("Detected %ld CPUs: Using %ld worker threads. No CPU affinity used.", num_cores, num_wthreads);
+        log_info("Detected %ld CPUs: Using %ld worker threads (manually set). No CPU affinity used.", num_cores, num_wthreads);
     }
 
     // Zeroize statistics
