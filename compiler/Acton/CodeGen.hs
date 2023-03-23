@@ -664,7 +664,9 @@ instance Gen Expr where
     gen env (Var _ n)
       | NClass{} <- findQName n env = newcon' env n
       | otherwise                   = genQName env n
-    gen env (Int _ i str)           = gen env primToInt2 <> parens (doubleQuotes $ text str)
+    gen env (Int _ i str)
+        |i <= 9223372036854775807   = gen env primToInt <> parens (text str) -- literal is 2^63-1
+         | otherwise                = gen env primToInt2 <> parens (doubleQuotes $ text (show i))
     gen env (Float _ _ str)         = gen env primToFloat <> parens (text str)
     gen env (Bool _ True)           = gen env qnTrue
     gen env (Bool _ False)          = gen env qnFalse

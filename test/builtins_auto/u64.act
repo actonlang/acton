@@ -6,7 +6,7 @@ actor main(env):
             env.exit(1)
     a : u64 = 37
     assert_eq(a+5,42)
-    b  : u64 = 18446744073709551615  # 2^64 - 1
+    b  : u64 = 0xffffffffffffffff  # maximal value
     assert_eq(b+1,0)
     assert_eq(b//2*2,18446744073709551614)
     print(b/2*2)
