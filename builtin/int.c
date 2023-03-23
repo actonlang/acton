@@ -43,6 +43,17 @@ B_int B_intG_new(B_atom a) {
     if ($ISINSTANCE(a,B_i64)->val) {
         return to$int(((B_i64)a)->val);
     }
+    if ($ISINSTANCE(a,B_u64)->val) {
+        unsigned long v = ((B_u64)a)->val;
+        if (v==0) 
+            return to$int(0L);
+        else {
+            B_int res = malloc_int();
+            res->val.size=1;
+            res->val.n[0] = v;
+            return res;
+        }
+    }
     if ($ISINSTANCE(a,B_float)->val) {
         double aval = ((B_float)a)->val;
         int e;

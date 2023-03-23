@@ -1,0 +1,23 @@
+actor main(env):
+
+    def assert_eq(a,b):
+        if a != b:
+            print(a,'!=', b)
+            env.exit(1)
+    a : u64 = 37
+    assert_eq(a+5,42)
+    b  : u64 = 18446744073709551615  # 2^64 - 1
+    assert_eq(b+1,0)
+    assert_eq(b//2*2,18446744073709551614)
+    print(b/2*2)
+    assert_eq(u64("18446744073700000000"),18446744073700000000)
+    assert_eq(a-50,18446744073709551603)                    # underflow
+    c : i64 = 7
+    d = {a:c, 3:1}
+    assert_eq(a ^ 14, 43)
+    assert_eq(a | 14, 47)
+    assert_eq(~a, 18446744073709551578)
+    print(d[37])  #assert_eq gives infinite loop during compilation
+    for i in d.keys():
+        print(i)
+    env.exit(0)

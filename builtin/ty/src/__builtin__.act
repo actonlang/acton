@@ -36,6 +36,10 @@ class i64 (atom):
   def __init__(self, val: atom) -> None:
       NotImplemented 
 
+class u64 (atom):
+  def __init__(self, val: atom) -> None:
+      NotImplemented 
+
 class float (atom):
   def __init__(self, val: atom) -> None:
       NotImplemented
@@ -546,6 +550,15 @@ extension i64 (Div[float]):
 extension i64 (Ord):
     NotImplemented
 extension i64 (Hashable):
+    NotImplemented
+
+extension u64 (Integral):
+    NotImplemented
+extension u64 (Div[float]):
+    NotImplemented
+extension u64 (Ord):
+    NotImplemented
+extension u64 (Hashable):
     NotImplemented
 
 extension float (RealFloat):

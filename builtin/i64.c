@@ -182,8 +182,8 @@ B_int B_IntegralD_i64D___index__(B_IntegralD_i64 wit, B_i64 n) {
 }
 
 B_tuple B_IntegralD_i64D___divmod__(B_IntegralD_i64 wit, B_i64 a, B_i64 b) {
-    int n = a->val;
-    int d = b->val;
+    long n = a->val;
+    long d = b->val;
     return $NEWTUPLE(2, toB_i64(n/d), toB_i64(n%d));
 }
 
