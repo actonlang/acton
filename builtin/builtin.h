@@ -54,6 +54,7 @@ typedef struct $Serializable  *$Serializable;
 #include "tuple.h"
 #include "hash.h"
 #include "i64.h"
+#include "u64.h"
 #include "range.h"
 #include "exceptions.h"
 #include "function.h"

@@ -18,6 +18,7 @@
 
 B_float B_floatG_new(B_atom a) {
     if ($ISINSTANCE(a,B_i64)->val) return to$float((double)((B_i64)a)->val);
+    if ($ISINSTANCE(a,B_u64)->val) return to$float((double)((B_u64)a)->val);
     if ($ISINSTANCE(a,B_int)->val) {
         zz_struct aval = ((B_int)a)->val;
         if (aval.size == 0)
