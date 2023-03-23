@@ -33,6 +33,16 @@ B_i64 B_i64G_new(B_atom a) {
         return toB_i64(n.size*n.n[0]);
     }
     if ($ISINSTANCE(a,B_i64)->val) return (B_i64)a;
+    if ($ISINSTANCE(a,B_i32)->val) return toB_i64((long)((B_i32)a)->val);
+    if ($ISINSTANCE(a,B_i16)->val) return toB_i64((long)((B_i16)a)->val);
+    if ($ISINSTANCE(a,B_u64)->val) {
+        unsigned long x = ((B_u64)a)->val;
+        if (x > LONG_MAX) 
+            $RAISE((B_BaseException)$NEW(B_ValueError,to$str("i64(): u64 argument out of range")));
+        return toB_i64((long)x);
+    }
+    if ($ISINSTANCE(a,B_u32)->val) return toB_i64((long)((B_u32)a)->val);
+    if ($ISINSTANCE(a,B_u16)->val) return toB_i64((long)((B_u16)a)->val);
     if ($ISINSTANCE(a,B_float)->val) return toB_i64(round(((B_float)a)->val));
     if ($ISINSTANCE(a,B_bool)->val) return toB_i64(((B_bool)a)->val);
     if ($ISINSTANCE(a,B_str)->val) {
@@ -275,36 +285,3 @@ B_bool B_HashableD_i64D___ne__(B_HashableD_i64 wit, B_i64 a, B_i64 b) {
 B_int B_HashableD_i64D___hash__(B_HashableD_i64 wit, B_i64 a) {
     return to$int(B_i64D_hash(a));
 }
-
-// Initialization ////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-/*
-struct B_IntegralD_i64 B_IntegralD_i64_instance;
-struct B_LogicalD_IntegralD_i64 B_LogicalD_IntegralD_i64_instance;
-struct B_MinusD_IntegralD_i64 B_MinusD_IntegralD_i64_instance;
-struct B_OrdD_i64 B_OrdD_i64_instance;
-struct B_DivD_i64 B_DivD_i64_instance;
-struct B_HashableD_i64 B_HashableD_i64_instance;
-
- 
-struct B_IntegralD_i64 B_IntegralD_i64_instance = {&B_IntegralD_i64G_methods, (B_Minus)&B_MinusD_IntegralD_i64_instance, (B_Logical)&B_LogicalD_IntegralD_i64_instance};
-B_IntegralD_i64 B_IntegralD_i64G_witness = &B_IntegralD_i64_instance;
-
- 
-struct B_LogicalD_IntegralD_i64 B_LogicalD_IntegralD_i64_instance = {&B_LogicalD_IntegralD_i64G_methods, (B_Integral)&B_IntegralD_i64_instance};
-B_LogicalD_IntegralD_i64 B_LogicalD_IntegralD_i64G_witness = &B_LogicalD_IntegralD_i64_instance;
-
-struct B_MinusD_IntegralD_i64 B_MinusD_IntegralD_i64_instance = {&B_MinusD_IntegralD_i64G_methods, (B_Number)&B_IntegralD_i64_instance};
-B_MinusD_IntegralD_i64 B_MinusD_IntegralD_i64G_witness = &B_MinusD_IntegralD_i64_instance;
-
-struct B_OrdD_i64 B_OrdD_i64_instance = {&B_OrdD_i64G_methods};
-B_OrdD_i64 B_OrdD_i64G_witness = &B_OrdD_i64_instance;
-
- 
-struct B_DivD_i64 B_DivD_i64_instance = {&B_DivD_i64G_methods};
-B_DivD_i64 B_DivD_i64G_witness = &B_DivD_i64_instance;
-
- 
-struct B_HashableD_i64 B_HashableD_i64_instance = {&B_HashableD_i64G_methods};
-B_HashableD_i64 B_HashableD_i64G_witness = &B_HashableD_i64_instance;
-*/

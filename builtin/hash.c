@@ -73,6 +73,14 @@ long B_i64D_hash (B_i64 n) {
     return long_hash(fromB_i64(n));
 }
 
+long B_i32D_hash (B_i32 n) {
+    return long_hash((long)fromB_i32(n));
+}
+
+long B_i16D_hash (B_i16 n) {
+    return long_hash((long)fromB_i16(n));
+}
+
 static long double_hash(double d) {
     int e, sign;
     double m;

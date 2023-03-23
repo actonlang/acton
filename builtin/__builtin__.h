@@ -71,12 +71,36 @@ struct B_LogicalD_IntegralD_i64;
 struct B_DivD_i64;
 struct B_OrdD_i64;
 struct B_HashableD_i64;
+struct B_IntegralD_i32;
+struct B_MinusD_IntegralD_i32;
+struct B_LogicalD_IntegralD_i32;
+struct B_DivD_i32;
+struct B_OrdD_i32;
+struct B_HashableD_i32;
+struct B_IntegralD_i16;
+struct B_MinusD_IntegralD_i16;
+struct B_LogicalD_IntegralD_i16;
+struct B_DivD_i16;
+struct B_OrdD_i16;
+struct B_HashableD_i16;
 struct B_IntegralD_u64;
 struct B_MinusD_IntegralD_u64;
 struct B_LogicalD_IntegralD_u64;
 struct B_DivD_u64;
 struct B_OrdD_u64;
 struct B_HashableD_u64;
+struct B_IntegralD_u32;
+struct B_MinusD_IntegralD_u32;
+struct B_LogicalD_IntegralD_u32;
+struct B_DivD_u32;
+struct B_OrdD_u32;
+struct B_HashableD_u32;
+struct B_IntegralD_u16;
+struct B_MinusD_IntegralD_u16;
+struct B_LogicalD_IntegralD_u16;
+struct B_DivD_u16;
+struct B_OrdD_u16;
+struct B_HashableD_u16;
 struct B_RealFloatD_float;
 struct B_MinusD_RealFloatD_float;
 struct B_DivD_float;
@@ -134,7 +158,11 @@ typedef struct B_object *B_object;
 typedef struct B_atom *B_atom;
 typedef struct B_int *B_int;
 typedef struct B_i64 *B_i64;
+typedef struct B_i32 *B_i32;
+typedef struct B_i16 *B_i16;
 typedef struct B_u64 *B_u64;
+typedef struct B_u32 *B_u32;
+typedef struct B_u16 *B_u16;
 typedef struct B_float *B_float;
 typedef struct B_bool *B_bool;
 typedef struct B_slice *B_slice;
@@ -195,12 +223,36 @@ typedef struct B_LogicalD_IntegralD_i64 *B_LogicalD_IntegralD_i64;
 typedef struct B_DivD_i64 *B_DivD_i64;
 typedef struct B_OrdD_i64 *B_OrdD_i64;
 typedef struct B_HashableD_i64 *B_HashableD_i64;
+typedef struct B_IntegralD_i32 *B_IntegralD_i32;
+typedef struct B_MinusD_IntegralD_i32 *B_MinusD_IntegralD_i32;
+typedef struct B_LogicalD_IntegralD_i32 *B_LogicalD_IntegralD_i32;
+typedef struct B_DivD_i32 *B_DivD_i32;
+typedef struct B_OrdD_i32 *B_OrdD_i32;
+typedef struct B_HashableD_i32 *B_HashableD_i32;
+typedef struct B_IntegralD_i16 *B_IntegralD_i16;
+typedef struct B_MinusD_IntegralD_i16 *B_MinusD_IntegralD_i16;
+typedef struct B_LogicalD_IntegralD_i16 *B_LogicalD_IntegralD_i16;
+typedef struct B_DivD_i16 *B_DivD_i16;
+typedef struct B_OrdD_i16 *B_OrdD_i16;
+typedef struct B_HashableD_i16 *B_HashableD_i16;
 typedef struct B_IntegralD_u64 *B_IntegralD_u64;
 typedef struct B_MinusD_IntegralD_u64 *B_MinusD_IntegralD_u64;
 typedef struct B_LogicalD_IntegralD_u64 *B_LogicalD_IntegralD_u64;
 typedef struct B_DivD_u64 *B_DivD_u64;
 typedef struct B_OrdD_u64 *B_OrdD_u64;
 typedef struct B_HashableD_u64 *B_HashableD_u64;
+typedef struct B_IntegralD_u32 *B_IntegralD_u32;
+typedef struct B_MinusD_IntegralD_u32 *B_MinusD_IntegralD_u32;
+typedef struct B_LogicalD_IntegralD_u32 *B_LogicalD_IntegralD_u32;
+typedef struct B_DivD_u32 *B_DivD_u32;
+typedef struct B_OrdD_u32 *B_OrdD_u32;
+typedef struct B_HashableD_u32 *B_HashableD_u32;
+typedef struct B_IntegralD_u16 *B_IntegralD_u16;
+typedef struct B_MinusD_IntegralD_u16 *B_MinusD_IntegralD_u16;
+typedef struct B_LogicalD_IntegralD_u16 *B_LogicalD_IntegralD_u16;
+typedef struct B_DivD_u16 *B_DivD_u16;
+typedef struct B_OrdD_u16 *B_OrdD_u16;
+typedef struct B_HashableD_u16 *B_HashableD_u16;
 typedef struct B_RealFloatD_float *B_RealFloatD_float;
 typedef struct B_MinusD_RealFloatD_float *B_MinusD_RealFloatD_float;
 typedef struct B_DivD_float *B_DivD_float;
@@ -317,6 +369,28 @@ struct B_i64G_class {
     B_str (*__str__) (B_i64);
     B_str (*__repr__) (B_i64);
 };
+struct B_i32G_class {
+    char *$GCINFO;
+    int $class_id;
+    $SuperG_class $superclass;
+    B_NoneType (*__init__) (B_i32, B_atom);
+    void (*__serialize__) (B_i32, $Serial$state);
+    B_i32 (*__deserialize__) (B_i32, $Serial$state);
+    B_bool (*__bool__) (B_i32);
+    B_str (*__str__) (B_i32);
+    B_str (*__repr__) (B_i32);
+};
+struct B_i16G_class {
+    char *$GCINFO;
+    int $class_id;
+    $SuperG_class $superclass;
+    B_NoneType (*__init__) (B_i16, B_atom);
+    void (*__serialize__) (B_i16, $Serial$state);
+    B_i16 (*__deserialize__) (B_i16, $Serial$state);
+    B_bool (*__bool__) (B_i16);
+    B_str (*__str__) (B_i16);
+    B_str (*__repr__) (B_i16);
+};
 struct B_u64G_class {
     char *$GCINFO;
     int $class_id;
@@ -327,6 +401,28 @@ struct B_u64G_class {
     B_bool (*__bool__) (B_u64);
     B_str (*__str__) (B_u64);
     B_str (*__repr__) (B_u64);
+};
+struct B_u32G_class {
+    char *$GCINFO;
+    int $class_id;
+    $SuperG_class $superclass;
+    B_NoneType (*__init__) (B_u32, B_atom);
+    void (*__serialize__) (B_u32, $Serial$state);
+    B_u32 (*__deserialize__) (B_u32, $Serial$state);
+    B_bool (*__bool__) (B_u32);
+    B_str (*__str__) (B_u32);
+    B_str (*__repr__) (B_u32);
+};
+struct B_u16G_class {
+    char *$GCINFO;
+    int $class_id;
+    $SuperG_class $superclass;
+    B_NoneType (*__init__) (B_u16, B_atom);
+    void (*__serialize__) (B_u16, $Serial$state);
+    B_u16 (*__deserialize__) (B_u16, $Serial$state);
+    B_bool (*__bool__) (B_u16);
+    B_str (*__str__) (B_u16);
+    B_str (*__repr__) (B_u16);
 };
 struct B_floatG_class {
     char *$GCINFO;
@@ -1545,6 +1641,313 @@ struct B_HashableD_i64G_class {
 struct B_HashableD_i64 {
     struct B_HashableD_i64G_class *$class;
 };
+
+
+
+
+
+
+
+struct B_IntegralD_i32G_class {
+    char *$GCINFO;
+    int $class_id;
+    $SuperG_class $superclass;
+    B_NoneType (*__init__) (B_IntegralD_i32);
+    void (*__serialize__) (B_IntegralD_i32, $Serial$state);
+    B_IntegralD_i32 (*__deserialize__) (B_IntegralD_i32, $Serial$state);
+    B_bool (*__bool__) (B_IntegralD_i32);
+    B_str (*__str__) (B_IntegralD_i32);
+    B_str (*__repr__) (B_IntegralD_i32);
+    B_i32 (*__add__) (B_IntegralD_i32, B_i32, B_i32);
+    B_i32 (*__iadd__) (B_IntegralD_i32, B_i32, B_i32);
+    B_i32 (*__mul__) (B_IntegralD_i32, B_i32, B_i32);
+    B_i32 (*__imul__) (B_IntegralD_i32, B_i32, B_i32);
+    B_i32 (*__fromatom__) (B_IntegralD_i32, B_atom);
+    B_complex (*__complx__) (B_IntegralD_i32, B_i32);
+    B_i32 (*__pow__) (B_IntegralD_i32, B_i32, B_i32);
+    B_i32 (*__ipow__) (B_IntegralD_i32, B_i32, B_i32);
+    B_i32 (*__neg__) (B_IntegralD_i32, B_i32);
+    B_i32 (*__pos__) (B_IntegralD_i32, B_i32);
+    $WORD (*real) (B_IntegralD_i32, B_i32, B_Real);
+    $WORD (*imag) (B_IntegralD_i32, B_i32, B_Real);
+    $WORD (*__abs__) (B_IntegralD_i32, B_i32, B_Real);
+    B_i32 (*conjugate) (B_IntegralD_i32, B_i32);
+    B_float (*__float__) (B_IntegralD_i32, B_i32);
+    $WORD (*__trunc__) (B_IntegralD_i32, B_i32, B_Integral);
+    $WORD (*__floor__) (B_IntegralD_i32, B_i32, B_Integral);
+    $WORD (*__ceil__) (B_IntegralD_i32, B_i32, B_Integral);
+    B_i32 (*__round__) (B_IntegralD_i32, B_i32, B_int);
+    $WORD (*numerator) (B_IntegralD_i32, B_i32, B_Integral);
+    $WORD (*denominator) (B_IntegralD_i32, B_i32, B_Integral);
+    B_int (*__int__) (B_IntegralD_i32, B_i32);
+    B_int (*__index__) (B_IntegralD_i32, B_i32);
+    B_tuple (*__divmod__) (B_IntegralD_i32, B_i32, B_i32);
+    B_i32 (*__floordiv__) (B_IntegralD_i32, B_i32, B_i32);
+    B_i32 (*__mod__) (B_IntegralD_i32, B_i32, B_i32);
+    B_i32 (*__ifloordiv__) (B_IntegralD_i32, B_i32, B_i32);
+    B_i32 (*__imod__) (B_IntegralD_i32, B_i32, B_i32);
+    B_i32 (*__lshift__) (B_IntegralD_i32, B_i32, B_int);
+    B_i32 (*__rshift__) (B_IntegralD_i32, B_i32, B_int);
+    B_i32 (*__ilshift__) (B_IntegralD_i32, B_i32, B_int);
+    B_i32 (*__irshift__) (B_IntegralD_i32, B_i32, B_int);
+    B_i32 (*__invert__) (B_IntegralD_i32, B_i32);
+};
+struct B_IntegralD_i32 {
+    struct B_IntegralD_i32G_class *$class;
+    B_Minus W_Minus;
+    B_Logical W_Logical;
+};
+struct B_MinusD_IntegralD_i32G_class {
+    char *$GCINFO;
+    int $class_id;
+    $SuperG_class $superclass;
+    B_NoneType (*__init__) (B_MinusD_IntegralD_i32, B_Integral);
+    void (*__serialize__) (B_MinusD_IntegralD_i32, $Serial$state);
+    B_MinusD_IntegralD_i32 (*__deserialize__) (B_MinusD_IntegralD_i32, $Serial$state);
+    B_bool (*__bool__) (B_MinusD_IntegralD_i32);
+    B_str (*__str__) (B_MinusD_IntegralD_i32);
+    B_str (*__repr__) (B_MinusD_IntegralD_i32);
+    B_i32 (*__sub__) (B_MinusD_IntegralD_i32, B_i32, B_i32);
+    B_i32 (*__isub__) (B_MinusD_IntegralD_i32, B_i32, B_i32);
+};
+struct B_MinusD_IntegralD_i32 {
+    struct B_MinusD_IntegralD_i32G_class *$class;
+    B_Number W_Number;
+    B_Real W_Real;
+    B_Rational W_Rational;
+    B_Integral W_Integral;
+};
+struct B_LogicalD_IntegralD_i32G_class {
+    char *$GCINFO;
+    int $class_id;
+    $SuperG_class $superclass;
+    B_NoneType (*__init__) (B_LogicalD_IntegralD_i32, B_Integral);
+    void (*__serialize__) (B_LogicalD_IntegralD_i32, $Serial$state);
+    B_LogicalD_IntegralD_i32 (*__deserialize__) (B_LogicalD_IntegralD_i32, $Serial$state);
+    B_bool (*__bool__) (B_LogicalD_IntegralD_i32);
+    B_str (*__str__) (B_LogicalD_IntegralD_i32);
+    B_str (*__repr__) (B_LogicalD_IntegralD_i32);
+    B_i32 (*__and__) (B_LogicalD_IntegralD_i32, B_i32, B_i32);
+    B_i32 (*__or__) (B_LogicalD_IntegralD_i32, B_i32, B_i32);
+    B_i32 (*__xor__) (B_LogicalD_IntegralD_i32, B_i32, B_i32);
+    B_i32 (*__iand__) (B_LogicalD_IntegralD_i32, B_i32, B_i32);
+    B_i32 (*__ior__) (B_LogicalD_IntegralD_i32, B_i32, B_i32);
+    B_i32 (*__ixor__) (B_LogicalD_IntegralD_i32, B_i32, B_i32);
+};
+struct B_LogicalD_IntegralD_i32 {
+    struct B_LogicalD_IntegralD_i32G_class *$class;
+    B_Integral W_Integral;
+};
+struct B_DivD_i32G_class {
+    char *$GCINFO;
+    int $class_id;
+    $SuperG_class $superclass;
+    B_NoneType (*__init__) (B_DivD_i32);
+    void (*__serialize__) (B_DivD_i32, $Serial$state);
+    B_DivD_i32 (*__deserialize__) (B_DivD_i32, $Serial$state);
+    B_bool (*__bool__) (B_DivD_i32);
+    B_str (*__str__) (B_DivD_i32);
+    B_str (*__repr__) (B_DivD_i32);
+    B_float (*__truediv__) (B_DivD_i32, B_i32, B_i32);
+    B_float (*__itruediv__) (B_DivD_i32, B_i32, B_i32);
+};
+struct B_DivD_i32 {
+    struct B_DivD_i32G_class *$class;
+};
+struct B_OrdD_i32G_class {
+    char *$GCINFO;
+    int $class_id;
+    $SuperG_class $superclass;
+    B_NoneType (*__init__) (B_OrdD_i32);
+    void (*__serialize__) (B_OrdD_i32, $Serial$state);
+    B_OrdD_i32 (*__deserialize__) (B_OrdD_i32, $Serial$state);
+    B_bool (*__bool__) (B_OrdD_i32);
+    B_str (*__str__) (B_OrdD_i32);
+    B_str (*__repr__) (B_OrdD_i32);
+    B_bool (*__eq__) (B_OrdD_i32, B_i32, B_i32);
+    B_bool (*__ne__) (B_OrdD_i32, B_i32, B_i32);
+    B_bool (*__lt__) (B_OrdD_i32, B_i32, B_i32);
+    B_bool (*__le__) (B_OrdD_i32, B_i32, B_i32);
+    B_bool (*__gt__) (B_OrdD_i32, B_i32, B_i32);
+    B_bool (*__ge__) (B_OrdD_i32, B_i32, B_i32);
+};
+struct B_OrdD_i32 {
+    struct B_OrdD_i32G_class *$class;
+};
+struct B_HashableD_i32G_class {
+    char *$GCINFO;
+    int $class_id;
+    $SuperG_class $superclass;
+    B_NoneType (*__init__) (B_HashableD_i32);
+    void (*__serialize__) (B_HashableD_i32, $Serial$state);
+    B_HashableD_i32 (*__deserialize__) (B_HashableD_i32, $Serial$state);
+    B_bool (*__bool__) (B_HashableD_i32);
+    B_str (*__str__) (B_HashableD_i32);
+    B_str (*__repr__) (B_HashableD_i32);
+    B_bool (*__eq__) (B_HashableD_i32, B_i32, B_i32);
+    B_bool (*__ne__) (B_HashableD_i32, B_i32, B_i32);
+    B_int (*__hash__) (B_HashableD_i32, B_i32);
+};
+struct B_HashableD_i32 {
+    struct B_HashableD_i32G_class *$class;
+};
+
+
+
+
+
+
+
+struct B_IntegralD_i16G_class {
+    char *$GCINFO;
+    int $class_id;
+    $SuperG_class $superclass;
+    B_NoneType (*__init__) (B_IntegralD_i16);
+    void (*__serialize__) (B_IntegralD_i16, $Serial$state);
+    B_IntegralD_i16 (*__deserialize__) (B_IntegralD_i16, $Serial$state);
+    B_bool (*__bool__) (B_IntegralD_i16);
+    B_str (*__str__) (B_IntegralD_i16);
+    B_str (*__repr__) (B_IntegralD_i16);
+    B_i16 (*__add__) (B_IntegralD_i16, B_i16, B_i16);
+    B_i16 (*__iadd__) (B_IntegralD_i16, B_i16, B_i16);
+    B_i16 (*__mul__) (B_IntegralD_i16, B_i16, B_i16);
+    B_i16 (*__imul__) (B_IntegralD_i16, B_i16, B_i16);
+    B_i16 (*__fromatom__) (B_IntegralD_i16, B_atom);
+    B_complex (*__complx__) (B_IntegralD_i16, B_i16);
+    B_i16 (*__pow__) (B_IntegralD_i16, B_i16, B_i16);
+    B_i16 (*__ipow__) (B_IntegralD_i16, B_i16, B_i16);
+    B_i16 (*__neg__) (B_IntegralD_i16, B_i16);
+    B_i16 (*__pos__) (B_IntegralD_i16, B_i16);
+    $WORD (*real) (B_IntegralD_i16, B_i16, B_Real);
+    $WORD (*imag) (B_IntegralD_i16, B_i16, B_Real);
+    $WORD (*__abs__) (B_IntegralD_i16, B_i16, B_Real);
+    B_i16 (*conjugate) (B_IntegralD_i16, B_i16);
+    B_float (*__float__) (B_IntegralD_i16, B_i16);
+    $WORD (*__trunc__) (B_IntegralD_i16, B_i16, B_Integral);
+    $WORD (*__floor__) (B_IntegralD_i16, B_i16, B_Integral);
+    $WORD (*__ceil__) (B_IntegralD_i16, B_i16, B_Integral);
+    B_i16 (*__round__) (B_IntegralD_i16, B_i16, B_int);
+    $WORD (*numerator) (B_IntegralD_i16, B_i16, B_Integral);
+    $WORD (*denominator) (B_IntegralD_i16, B_i16, B_Integral);
+    B_int (*__int__) (B_IntegralD_i16, B_i16);
+    B_int (*__index__) (B_IntegralD_i16, B_i16);
+    B_tuple (*__divmod__) (B_IntegralD_i16, B_i16, B_i16);
+    B_i16 (*__floordiv__) (B_IntegralD_i16, B_i16, B_i16);
+    B_i16 (*__mod__) (B_IntegralD_i16, B_i16, B_i16);
+    B_i16 (*__ifloordiv__) (B_IntegralD_i16, B_i16, B_i16);
+    B_i16 (*__imod__) (B_IntegralD_i16, B_i16, B_i16);
+    B_i16 (*__lshift__) (B_IntegralD_i16, B_i16, B_int);
+    B_i16 (*__rshift__) (B_IntegralD_i16, B_i16, B_int);
+    B_i16 (*__ilshift__) (B_IntegralD_i16, B_i16, B_int);
+    B_i16 (*__irshift__) (B_IntegralD_i16, B_i16, B_int);
+    B_i16 (*__invert__) (B_IntegralD_i16, B_i16);
+};
+struct B_IntegralD_i16 {
+    struct B_IntegralD_i16G_class *$class;
+    B_Minus W_Minus;
+    B_Logical W_Logical;
+};
+struct B_MinusD_IntegralD_i16G_class {
+    char *$GCINFO;
+    int $class_id;
+    $SuperG_class $superclass;
+    B_NoneType (*__init__) (B_MinusD_IntegralD_i16, B_Integral);
+    void (*__serialize__) (B_MinusD_IntegralD_i16, $Serial$state);
+    B_MinusD_IntegralD_i16 (*__deserialize__) (B_MinusD_IntegralD_i16, $Serial$state);
+    B_bool (*__bool__) (B_MinusD_IntegralD_i16);
+    B_str (*__str__) (B_MinusD_IntegralD_i16);
+    B_str (*__repr__) (B_MinusD_IntegralD_i16);
+    B_i16 (*__sub__) (B_MinusD_IntegralD_i16, B_i16, B_i16);
+    B_i16 (*__isub__) (B_MinusD_IntegralD_i16, B_i16, B_i16);
+};
+struct B_MinusD_IntegralD_i16 {
+    struct B_MinusD_IntegralD_i16G_class *$class;
+    B_Number W_Number;
+    B_Real W_Real;
+    B_Rational W_Rational;
+    B_Integral W_Integral;
+};
+struct B_LogicalD_IntegralD_i16G_class {
+    char *$GCINFO;
+    int $class_id;
+    $SuperG_class $superclass;
+    B_NoneType (*__init__) (B_LogicalD_IntegralD_i16, B_Integral);
+    void (*__serialize__) (B_LogicalD_IntegralD_i16, $Serial$state);
+    B_LogicalD_IntegralD_i16 (*__deserialize__) (B_LogicalD_IntegralD_i16, $Serial$state);
+    B_bool (*__bool__) (B_LogicalD_IntegralD_i16);
+    B_str (*__str__) (B_LogicalD_IntegralD_i16);
+    B_str (*__repr__) (B_LogicalD_IntegralD_i16);
+    B_i16 (*__and__) (B_LogicalD_IntegralD_i16, B_i16, B_i16);
+    B_i16 (*__or__) (B_LogicalD_IntegralD_i16, B_i16, B_i16);
+    B_i16 (*__xor__) (B_LogicalD_IntegralD_i16, B_i16, B_i16);
+    B_i16 (*__iand__) (B_LogicalD_IntegralD_i16, B_i16, B_i16);
+    B_i16 (*__ior__) (B_LogicalD_IntegralD_i16, B_i16, B_i16);
+    B_i16 (*__ixor__) (B_LogicalD_IntegralD_i16, B_i16, B_i16);
+};
+struct B_LogicalD_IntegralD_i16 {
+    struct B_LogicalD_IntegralD_i16G_class *$class;
+    B_Integral W_Integral;
+};
+struct B_DivD_i16G_class {
+    char *$GCINFO;
+    int $class_id;
+    $SuperG_class $superclass;
+    B_NoneType (*__init__) (B_DivD_i16);
+    void (*__serialize__) (B_DivD_i16, $Serial$state);
+    B_DivD_i16 (*__deserialize__) (B_DivD_i16, $Serial$state);
+    B_bool (*__bool__) (B_DivD_i16);
+    B_str (*__str__) (B_DivD_i16);
+    B_str (*__repr__) (B_DivD_i16);
+    B_float (*__truediv__) (B_DivD_i16, B_i16, B_i16);
+    B_float (*__itruediv__) (B_DivD_i16, B_i16, B_i16);
+};
+struct B_DivD_i16 {
+    struct B_DivD_i16G_class *$class;
+};
+struct B_OrdD_i16G_class {
+    char *$GCINFO;
+    int $class_id;
+    $SuperG_class $superclass;
+    B_NoneType (*__init__) (B_OrdD_i16);
+    void (*__serialize__) (B_OrdD_i16, $Serial$state);
+    B_OrdD_i16 (*__deserialize__) (B_OrdD_i16, $Serial$state);
+    B_bool (*__bool__) (B_OrdD_i16);
+    B_str (*__str__) (B_OrdD_i16);
+    B_str (*__repr__) (B_OrdD_i16);
+    B_bool (*__eq__) (B_OrdD_i16, B_i16, B_i16);
+    B_bool (*__ne__) (B_OrdD_i16, B_i16, B_i16);
+    B_bool (*__lt__) (B_OrdD_i16, B_i16, B_i16);
+    B_bool (*__le__) (B_OrdD_i16, B_i16, B_i16);
+    B_bool (*__gt__) (B_OrdD_i16, B_i16, B_i16);
+    B_bool (*__ge__) (B_OrdD_i16, B_i16, B_i16);
+};
+struct B_OrdD_i16 {
+    struct B_OrdD_i16G_class *$class;
+};
+struct B_HashableD_i16G_class {
+    char *$GCINFO;
+    int $class_id;
+    $SuperG_class $superclass;
+    B_NoneType (*__init__) (B_HashableD_i16);
+    void (*__serialize__) (B_HashableD_i16, $Serial$state);
+    B_HashableD_i16 (*__deserialize__) (B_HashableD_i16, $Serial$state);
+    B_bool (*__bool__) (B_HashableD_i16);
+    B_str (*__str__) (B_HashableD_i16);
+    B_str (*__repr__) (B_HashableD_i16);
+    B_bool (*__eq__) (B_HashableD_i16, B_i16, B_i16);
+    B_bool (*__ne__) (B_HashableD_i16, B_i16, B_i16);
+    B_int (*__hash__) (B_HashableD_i16, B_i16);
+};
+struct B_HashableD_i16 {
+    struct B_HashableD_i16G_class *$class;
+};
+
+
+
+
+
+
+
 struct B_IntegralD_u64G_class {
     char *$GCINFO;
     int $class_id;
@@ -1688,6 +2091,311 @@ struct B_HashableD_u64G_class {
 struct B_HashableD_u64 {
     struct B_HashableD_u64G_class *$class;
 };
+
+
+
+
+
+
+struct B_IntegralD_u32G_class {
+    char *$GCINFO;
+    int $class_id;
+    $SuperG_class $superclass;
+    B_NoneType (*__init__) (B_IntegralD_u32);
+    void (*__serialize__) (B_IntegralD_u32, $Serial$state);
+    B_IntegralD_u32 (*__deserialize__) (B_IntegralD_u32, $Serial$state);
+    B_bool (*__bool__) (B_IntegralD_u32);
+    B_str (*__str__) (B_IntegralD_u32);
+    B_str (*__repr__) (B_IntegralD_u32);
+    B_u32 (*__add__) (B_IntegralD_u32, B_u32, B_u32);
+    B_u32 (*__iadd__) (B_IntegralD_u32, B_u32, B_u32);
+    B_u32 (*__mul__) (B_IntegralD_u32, B_u32, B_u32);
+    B_u32 (*__imul__) (B_IntegralD_u32, B_u32, B_u32);
+    B_u32 (*__fromatom__) (B_IntegralD_u32, B_atom);
+    B_complex (*__complx__) (B_IntegralD_u32, B_u32);
+    B_u32 (*__pow__) (B_IntegralD_u32, B_u32, B_u32);
+    B_u32 (*__ipow__) (B_IntegralD_u32, B_u32, B_u32);
+    B_u32 (*__neg__) (B_IntegralD_u32, B_u32);
+    B_u32 (*__pos__) (B_IntegralD_u32, B_u32);
+    $WORD (*real) (B_IntegralD_u32, B_u32, B_Real);
+    $WORD (*imag) (B_IntegralD_u32, B_u32, B_Real);
+    $WORD (*__abs__) (B_IntegralD_u32, B_u32, B_Real);
+    B_u32 (*conjugate) (B_IntegralD_u32, B_u32);
+    B_float (*__float__) (B_IntegralD_u32, B_u32);
+    $WORD (*__trunc__) (B_IntegralD_u32, B_u32, B_Integral);
+    $WORD (*__floor__) (B_IntegralD_u32, B_u32, B_Integral);
+    $WORD (*__ceil__) (B_IntegralD_u32, B_u32, B_Integral);
+    B_u32 (*__round__) (B_IntegralD_u32, B_u32, B_int);
+    $WORD (*numerator) (B_IntegralD_u32, B_u32, B_Integral);
+    $WORD (*denominator) (B_IntegralD_u32, B_u32, B_Integral);
+    B_int (*__int__) (B_IntegralD_u32, B_u32);
+    B_int (*__index__) (B_IntegralD_u32, B_u32);
+    B_tuple (*__divmod__) (B_IntegralD_u32, B_u32, B_u32);
+    B_u32 (*__floordiv__) (B_IntegralD_u32, B_u32, B_u32);
+    B_u32 (*__mod__) (B_IntegralD_u32, B_u32, B_u32);
+    B_u32 (*__ifloordiv__) (B_IntegralD_u32, B_u32, B_u32);
+    B_u32 (*__imod__) (B_IntegralD_u32, B_u32, B_u32);
+    B_u32 (*__lshift__) (B_IntegralD_u32, B_u32, B_int);
+    B_u32 (*__rshift__) (B_IntegralD_u32, B_u32, B_int);
+    B_u32 (*__ilshift__) (B_IntegralD_u32, B_u32, B_int);
+    B_u32 (*__irshift__) (B_IntegralD_u32, B_u32, B_int);
+    B_u32 (*__invert__) (B_IntegralD_u32, B_u32);
+};
+struct B_IntegralD_u32 {
+    struct B_IntegralD_u32G_class *$class;
+    B_Minus W_Minus;
+    B_Logical W_Logical;
+};
+struct B_MinusD_IntegralD_u32G_class {
+    char *$GCINFO;
+    int $class_id;
+    $SuperG_class $superclass;
+    B_NoneType (*__init__) (B_MinusD_IntegralD_u32, B_Integral);
+    void (*__serialize__) (B_MinusD_IntegralD_u32, $Serial$state);
+    B_MinusD_IntegralD_u32 (*__deserialize__) (B_MinusD_IntegralD_u32, $Serial$state);
+    B_bool (*__bool__) (B_MinusD_IntegralD_u32);
+    B_str (*__str__) (B_MinusD_IntegralD_u32);
+    B_str (*__repr__) (B_MinusD_IntegralD_u32);
+    B_u32 (*__sub__) (B_MinusD_IntegralD_u32, B_u32, B_u32);
+    B_u32 (*__isub__) (B_MinusD_IntegralD_u32, B_u32, B_u32);
+};
+struct B_MinusD_IntegralD_u32 {
+    struct B_MinusD_IntegralD_u32G_class *$class;
+    B_Number W_Number;
+    B_Real W_Real;
+    B_Rational W_Rational;
+    B_Integral W_Integral;
+};
+struct B_LogicalD_IntegralD_u32G_class {
+    char *$GCINFO;
+    int $class_id;
+    $SuperG_class $superclass;
+    B_NoneType (*__init__) (B_LogicalD_IntegralD_u32, B_Integral);
+    void (*__serialize__) (B_LogicalD_IntegralD_u32, $Serial$state);
+    B_LogicalD_IntegralD_u32 (*__deserialize__) (B_LogicalD_IntegralD_u32, $Serial$state);
+    B_bool (*__bool__) (B_LogicalD_IntegralD_u32);
+    B_str (*__str__) (B_LogicalD_IntegralD_u32);
+    B_str (*__repr__) (B_LogicalD_IntegralD_u32);
+    B_u32 (*__and__) (B_LogicalD_IntegralD_u32, B_u32, B_u32);
+    B_u32 (*__or__) (B_LogicalD_IntegralD_u32, B_u32, B_u32);
+    B_u32 (*__xor__) (B_LogicalD_IntegralD_u32, B_u32, B_u32);
+    B_u32 (*__iand__) (B_LogicalD_IntegralD_u32, B_u32, B_u32);
+    B_u32 (*__ior__) (B_LogicalD_IntegralD_u32, B_u32, B_u32);
+    B_u32 (*__ixor__) (B_LogicalD_IntegralD_u32, B_u32, B_u32);
+};
+struct B_LogicalD_IntegralD_u32 {
+    struct B_LogicalD_IntegralD_u32G_class *$class;
+    B_Integral W_Integral;
+};
+struct B_DivD_u32G_class {
+    char *$GCINFO;
+    int $class_id;
+    $SuperG_class $superclass;
+    B_NoneType (*__init__) (B_DivD_u32);
+    void (*__serialize__) (B_DivD_u32, $Serial$state);
+    B_DivD_u32 (*__deserialize__) (B_DivD_u32, $Serial$state);
+    B_bool (*__bool__) (B_DivD_u32);
+    B_str (*__str__) (B_DivD_u32);
+    B_str (*__repr__) (B_DivD_u32);
+    B_float (*__truediv__) (B_DivD_u32, B_u32, B_u32);
+    B_float (*__itruediv__) (B_DivD_u32, B_u32, B_u32);
+};
+struct B_DivD_u32 {
+    struct B_DivD_u32G_class *$class;
+};
+struct B_OrdD_u32G_class {
+    char *$GCINFO;
+    int $class_id;
+    $SuperG_class $superclass;
+    B_NoneType (*__init__) (B_OrdD_u32);
+    void (*__serialize__) (B_OrdD_u32, $Serial$state);
+    B_OrdD_u32 (*__deserialize__) (B_OrdD_u32, $Serial$state);
+    B_bool (*__bool__) (B_OrdD_u32);
+    B_str (*__str__) (B_OrdD_u32);
+    B_str (*__repr__) (B_OrdD_u32);
+    B_bool (*__eq__) (B_OrdD_u32, B_u32, B_u32);
+    B_bool (*__ne__) (B_OrdD_u32, B_u32, B_u32);
+    B_bool (*__lt__) (B_OrdD_u32, B_u32, B_u32);
+    B_bool (*__le__) (B_OrdD_u32, B_u32, B_u32);
+    B_bool (*__gt__) (B_OrdD_u32, B_u32, B_u32);
+    B_bool (*__ge__) (B_OrdD_u32, B_u32, B_u32);
+};
+struct B_OrdD_u32 {
+    struct B_OrdD_u32G_class *$class;
+};
+struct B_HashableD_u32G_class {
+    char *$GCINFO;
+    int $class_id;
+    $SuperG_class $superclass;
+    B_NoneType (*__init__) (B_HashableD_u32);
+    void (*__serialize__) (B_HashableD_u32, $Serial$state);
+    B_HashableD_u32 (*__deserialize__) (B_HashableD_u32, $Serial$state);
+    B_bool (*__bool__) (B_HashableD_u32);
+    B_str (*__str__) (B_HashableD_u32);
+    B_str (*__repr__) (B_HashableD_u32);
+    B_bool (*__eq__) (B_HashableD_u32, B_u32, B_u32);
+    B_bool (*__ne__) (B_HashableD_u32, B_u32, B_u32);
+    B_int (*__hash__) (B_HashableD_u32, B_u32);
+};
+struct B_HashableD_u32 {
+    struct B_HashableD_u32G_class *$class;
+};
+
+
+
+
+
+
+struct B_IntegralD_u16G_class {
+    char *$GCINFO;
+    int $class_id;
+    $SuperG_class $superclass;
+    B_NoneType (*__init__) (B_IntegralD_u16);
+    void (*__serialize__) (B_IntegralD_u16, $Serial$state);
+    B_IntegralD_u16 (*__deserialize__) (B_IntegralD_u16, $Serial$state);
+    B_bool (*__bool__) (B_IntegralD_u16);
+    B_str (*__str__) (B_IntegralD_u16);
+    B_str (*__repr__) (B_IntegralD_u16);
+    B_u16 (*__add__) (B_IntegralD_u16, B_u16, B_u16);
+    B_u16 (*__iadd__) (B_IntegralD_u16, B_u16, B_u16);
+    B_u16 (*__mul__) (B_IntegralD_u16, B_u16, B_u16);
+    B_u16 (*__imul__) (B_IntegralD_u16, B_u16, B_u16);
+    B_u16 (*__fromatom__) (B_IntegralD_u16, B_atom);
+    B_complex (*__complx__) (B_IntegralD_u16, B_u16);
+    B_u16 (*__pow__) (B_IntegralD_u16, B_u16, B_u16);
+    B_u16 (*__ipow__) (B_IntegralD_u16, B_u16, B_u16);
+    B_u16 (*__neg__) (B_IntegralD_u16, B_u16);
+    B_u16 (*__pos__) (B_IntegralD_u16, B_u16);
+    $WORD (*real) (B_IntegralD_u16, B_u16, B_Real);
+    $WORD (*imag) (B_IntegralD_u16, B_u16, B_Real);
+    $WORD (*__abs__) (B_IntegralD_u16, B_u16, B_Real);
+    B_u16 (*conjugate) (B_IntegralD_u16, B_u16);
+    B_float (*__float__) (B_IntegralD_u16, B_u16);
+    $WORD (*__trunc__) (B_IntegralD_u16, B_u16, B_Integral);
+    $WORD (*__floor__) (B_IntegralD_u16, B_u16, B_Integral);
+    $WORD (*__ceil__) (B_IntegralD_u16, B_u16, B_Integral);
+    B_u16 (*__round__) (B_IntegralD_u16, B_u16, B_int);
+    $WORD (*numerator) (B_IntegralD_u16, B_u16, B_Integral);
+    $WORD (*denominator) (B_IntegralD_u16, B_u16, B_Integral);
+    B_int (*__int__) (B_IntegralD_u16, B_u16);
+    B_int (*__index__) (B_IntegralD_u16, B_u16);
+    B_tuple (*__divmod__) (B_IntegralD_u16, B_u16, B_u16);
+    B_u16 (*__floordiv__) (B_IntegralD_u16, B_u16, B_u16);
+    B_u16 (*__mod__) (B_IntegralD_u16, B_u16, B_u16);
+    B_u16 (*__ifloordiv__) (B_IntegralD_u16, B_u16, B_u16);
+    B_u16 (*__imod__) (B_IntegralD_u16, B_u16, B_u16);
+    B_u16 (*__lshift__) (B_IntegralD_u16, B_u16, B_int);
+    B_u16 (*__rshift__) (B_IntegralD_u16, B_u16, B_int);
+    B_u16 (*__ilshift__) (B_IntegralD_u16, B_u16, B_int);
+    B_u16 (*__irshift__) (B_IntegralD_u16, B_u16, B_int);
+    B_u16 (*__invert__) (B_IntegralD_u16, B_u16);
+};
+struct B_IntegralD_u16 {
+    struct B_IntegralD_u16G_class *$class;
+    B_Minus W_Minus;
+    B_Logical W_Logical;
+};
+struct B_MinusD_IntegralD_u16G_class {
+    char *$GCINFO;
+    int $class_id;
+    $SuperG_class $superclass;
+    B_NoneType (*__init__) (B_MinusD_IntegralD_u16, B_Integral);
+    void (*__serialize__) (B_MinusD_IntegralD_u16, $Serial$state);
+    B_MinusD_IntegralD_u16 (*__deserialize__) (B_MinusD_IntegralD_u16, $Serial$state);
+    B_bool (*__bool__) (B_MinusD_IntegralD_u16);
+    B_str (*__str__) (B_MinusD_IntegralD_u16);
+    B_str (*__repr__) (B_MinusD_IntegralD_u16);
+    B_u16 (*__sub__) (B_MinusD_IntegralD_u16, B_u16, B_u16);
+    B_u16 (*__isub__) (B_MinusD_IntegralD_u16, B_u16, B_u16);
+};
+struct B_MinusD_IntegralD_u16 {
+    struct B_MinusD_IntegralD_u16G_class *$class;
+    B_Number W_Number;
+    B_Real W_Real;
+    B_Rational W_Rational;
+    B_Integral W_Integral;
+};
+struct B_LogicalD_IntegralD_u16G_class {
+    char *$GCINFO;
+    int $class_id;
+    $SuperG_class $superclass;
+    B_NoneType (*__init__) (B_LogicalD_IntegralD_u16, B_Integral);
+    void (*__serialize__) (B_LogicalD_IntegralD_u16, $Serial$state);
+    B_LogicalD_IntegralD_u16 (*__deserialize__) (B_LogicalD_IntegralD_u16, $Serial$state);
+    B_bool (*__bool__) (B_LogicalD_IntegralD_u16);
+    B_str (*__str__) (B_LogicalD_IntegralD_u16);
+    B_str (*__repr__) (B_LogicalD_IntegralD_u16);
+    B_u16 (*__and__) (B_LogicalD_IntegralD_u16, B_u16, B_u16);
+    B_u16 (*__or__) (B_LogicalD_IntegralD_u16, B_u16, B_u16);
+    B_u16 (*__xor__) (B_LogicalD_IntegralD_u16, B_u16, B_u16);
+    B_u16 (*__iand__) (B_LogicalD_IntegralD_u16, B_u16, B_u16);
+    B_u16 (*__ior__) (B_LogicalD_IntegralD_u16, B_u16, B_u16);
+    B_u16 (*__ixor__) (B_LogicalD_IntegralD_u16, B_u16, B_u16);
+};
+struct B_LogicalD_IntegralD_u16 {
+    struct B_LogicalD_IntegralD_u16G_class *$class;
+    B_Integral W_Integral;
+};
+struct B_DivD_u16G_class {
+    char *$GCINFO;
+    int $class_id;
+    $SuperG_class $superclass;
+    B_NoneType (*__init__) (B_DivD_u16);
+    void (*__serialize__) (B_DivD_u16, $Serial$state);
+    B_DivD_u16 (*__deserialize__) (B_DivD_u16, $Serial$state);
+    B_bool (*__bool__) (B_DivD_u16);
+    B_str (*__str__) (B_DivD_u16);
+    B_str (*__repr__) (B_DivD_u16);
+    B_float (*__truediv__) (B_DivD_u16, B_u16, B_u16);
+    B_float (*__itruediv__) (B_DivD_u16, B_u16, B_u16);
+};
+struct B_DivD_u16 {
+    struct B_DivD_u16G_class *$class;
+};
+struct B_OrdD_u16G_class {
+    char *$GCINFO;
+    int $class_id;
+    $SuperG_class $superclass;
+    B_NoneType (*__init__) (B_OrdD_u16);
+    void (*__serialize__) (B_OrdD_u16, $Serial$state);
+    B_OrdD_u16 (*__deserialize__) (B_OrdD_u16, $Serial$state);
+    B_bool (*__bool__) (B_OrdD_u16);
+    B_str (*__str__) (B_OrdD_u16);
+    B_str (*__repr__) (B_OrdD_u16);
+    B_bool (*__eq__) (B_OrdD_u16, B_u16, B_u16);
+    B_bool (*__ne__) (B_OrdD_u16, B_u16, B_u16);
+    B_bool (*__lt__) (B_OrdD_u16, B_u16, B_u16);
+    B_bool (*__le__) (B_OrdD_u16, B_u16, B_u16);
+    B_bool (*__gt__) (B_OrdD_u16, B_u16, B_u16);
+    B_bool (*__ge__) (B_OrdD_u16, B_u16, B_u16);
+};
+struct B_OrdD_u16 {
+    struct B_OrdD_u16G_class *$class;
+};
+struct B_HashableD_u16G_class {
+    char *$GCINFO;
+    int $class_id;
+    $SuperG_class $superclass;
+    B_NoneType (*__init__) (B_HashableD_u16);
+    void (*__serialize__) (B_HashableD_u16, $Serial$state);
+    B_HashableD_u16 (*__deserialize__) (B_HashableD_u16, $Serial$state);
+    B_bool (*__bool__) (B_HashableD_u16);
+    B_str (*__str__) (B_HashableD_u16);
+    B_str (*__repr__) (B_HashableD_u16);
+    B_bool (*__eq__) (B_HashableD_u16, B_u16, B_u16);
+    B_bool (*__ne__) (B_HashableD_u16, B_u16, B_u16);
+    B_int (*__hash__) (B_HashableD_u16, B_u16);
+};
+struct B_HashableD_u16 {
+    struct B_HashableD_u16G_class *$class;
+};
+
+
+
+
+
+
+
 struct B_RealFloatD_floatG_class {
     char *$GCINFO;
     int $class_id;
@@ -2777,8 +3485,16 @@ extern struct B_intG_class B_intG_methods;
 B_int B_intG_new(B_atom);
 extern struct B_i64G_class B_i64G_methods;
 B_i64 B_i64G_new(B_atom);
+extern struct B_i32G_class B_i32G_methods;
+B_i32 B_i32G_new(B_atom);
+extern struct B_i16G_class B_i16G_methods;
+B_i16 B_i16G_new(B_atom);
 extern struct B_u64G_class B_u64G_methods;
 B_u64 B_u64G_new(B_atom);
+extern struct B_u32G_class B_u32G_methods;
+B_u32 B_u32G_new(B_atom);
+extern struct B_u16G_class B_u16G_methods;
+B_u16 B_u16G_new(B_atom);
 extern struct B_floatG_class B_floatG_methods;
 B_float B_floatG_new(B_atom);
 extern struct B_boolG_class B_boolG_methods;
@@ -2865,6 +3581,7 @@ extern struct B_OrdD_intG_class B_OrdD_intG_methods;
 B_OrdD_int B_OrdD_intG_new();
 extern struct B_HashableD_intG_class B_HashableD_intG_methods;
 B_HashableD_int B_HashableD_intG_new();                              // This is manually added; Why not generated?
+
 extern struct B_IntegralD_i64G_class B_IntegralD_i64G_methods;
 B_IntegralD_i64 B_IntegralD_i64G_new();
 extern struct B_MinusD_IntegralD_i64G_class B_MinusD_IntegralD_i64G_methods;
@@ -2877,8 +3594,34 @@ extern struct B_OrdD_i64G_class B_OrdD_i64G_methods;
 B_OrdD_i64 B_OrdD_i64G_new();
 extern struct B_HashableD_i64G_class B_HashableD_i64G_methods;
 B_HashableD_i64 B_HashableD_i64G_new();                              // This is manually added; Why not generated?
+
+extern struct B_IntegralD_i32G_class B_IntegralD_i32G_methods;
+B_IntegralD_i32 B_IntegralD_i32G_new();
+extern struct B_MinusD_IntegralD_i32G_class B_MinusD_IntegralD_i32G_methods;
+B_MinusD_IntegralD_i32 B_MinusD_IntegralD_i32G_new(B_Integral);
+extern struct B_LogicalD_IntegralD_i32G_class B_LogicalD_IntegralD_i32G_methods;
+B_LogicalD_IntegralD_i32 B_LogicalD_IntegralD_i32G_new(B_Integral);
+extern struct B_DivD_i32G_class B_DivD_i32G_methods;
+B_DivD_i32 B_DivD_i32G_new();
+extern struct B_OrdD_i32G_class B_OrdD_i32G_methods;
+B_OrdD_i32 B_OrdD_i32G_new();
+extern struct B_HashableD_i32G_class B_HashableD_i32G_methods;
+B_HashableD_i32 B_HashableD_i32G_new();                              // This is manually added; Why not generated?
+
+extern struct B_IntegralD_i16G_class B_IntegralD_i16G_methods;
+B_IntegralD_i16 B_IntegralD_i16G_new();
+extern struct B_MinusD_IntegralD_i16G_class B_MinusD_IntegralD_i16G_methods;
+B_MinusD_IntegralD_i16 B_MinusD_IntegralD_i16G_new(B_Integral);
+extern struct B_LogicalD_IntegralD_i16G_class B_LogicalD_IntegralD_i16G_methods;
+B_LogicalD_IntegralD_i16 B_LogicalD_IntegralD_i16G_new(B_Integral);
+extern struct B_DivD_i16G_class B_DivD_i16G_methods;
+B_DivD_i16 B_DivD_i16G_new();
+extern struct B_OrdD_i16G_class B_OrdD_i16G_methods;
+B_OrdD_i16 B_OrdD_i16G_new();
+extern struct B_HashableD_i16G_class B_HashableD_i16G_methods;
+B_HashableD_i16 B_HashableD_i16G_new();                              // This is manually added; Why not generated?
+
 extern struct B_IntegralD_u64G_class B_IntegralD_u64G_methods;
-B_HashableD_u64 B_HashableD_u64G_new();                              // This is manually added; Why not generated?
 B_IntegralD_u64 B_IntegralD_u64G_new();
 extern struct B_MinusD_IntegralD_u64G_class B_MinusD_IntegralD_u64G_methods;
 B_MinusD_IntegralD_u64 B_MinusD_IntegralD_u64G_new(B_Integral);
@@ -2889,6 +3632,34 @@ B_DivD_u64 B_DivD_u64G_new();
 extern struct B_OrdD_u64G_class B_OrdD_u64G_methods;
 B_OrdD_u64 B_OrdD_u64G_new();
 extern struct B_HashableD_u64G_class B_HashableD_u64G_methods;
+B_HashableD_u64 B_HashableD_u64G_new();                              // This is manually added; Why not generated?
+
+extern struct B_IntegralD_u32G_class B_IntegralD_u32G_methods;
+B_IntegralD_u32 B_IntegralD_u32G_new();
+extern struct B_MinusD_IntegralD_u32G_class B_MinusD_IntegralD_u32G_methods;
+B_MinusD_IntegralD_u32 B_MinusD_IntegralD_u32G_new(B_Integral);
+extern struct B_LogicalD_IntegralD_u32G_class B_LogicalD_IntegralD_u32G_methods;
+B_LogicalD_IntegralD_u32 B_LogicalD_IntegralD_u32G_new(B_Integral);
+extern struct B_DivD_u32G_class B_DivD_u32G_methods;
+B_DivD_u32 B_DivD_u32G_new();
+extern struct B_OrdD_u32G_class B_OrdD_u32G_methods;
+B_OrdD_u32 B_OrdD_u32G_new();
+extern struct B_HashableD_u32G_class B_HashableD_u32G_methods;
+B_HashableD_u32 B_HashableD_u32G_new();                              // This is manually added; Why not generated?
+
+extern struct B_IntegralD_u16G_class B_IntegralD_u16G_methods;
+B_IntegralD_u16 B_IntegralD_u16G_new();
+extern struct B_MinusD_IntegralD_u16G_class B_MinusD_IntegralD_u16G_methods;
+B_MinusD_IntegralD_u16 B_MinusD_IntegralD_u16G_new(B_Integral);
+extern struct B_LogicalD_IntegralD_u16G_class B_LogicalD_IntegralD_u16G_methods;
+B_LogicalD_IntegralD_u16 B_LogicalD_IntegralD_u16G_new(B_Integral);
+extern struct B_DivD_u16G_class B_DivD_u16G_methods;
+B_DivD_u16 B_DivD_u16G_new();
+extern struct B_OrdD_u16G_class B_OrdD_u16G_methods;
+B_OrdD_u16 B_OrdD_u16G_new();
+extern struct B_HashableD_u16G_class B_HashableD_u16G_methods;
+B_HashableD_u16 B_HashableD_u16G_new();                              // This is manually added; Why not generated?
+
 extern struct B_RealFloatD_floatG_class B_RealFloatD_floatG_methods;
 B_RealFloatD_float B_RealFloatD_floatG_new();
 extern struct B_MinusD_RealFloatD_floatG_class B_MinusD_RealFloatD_floatG_methods;

@@ -20,4 +20,16 @@ actor main(env):
     print(d[37])  #assert_eq gives infinite loop during compilation
     for i in d.keys():
         print(i)
+
+
+    a16 : i16 = 32
+    print(a16*8)
+    b16 : i16 = 12345
+    print (a16 ^ b16)
+
+    c32 : u32 = 0xfffff
+    print(c32-100)
+    print(c32 < 100000)
+    f : u32 = 0-1
+    print(f/1000000)
     env.exit(0)
