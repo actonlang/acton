@@ -30,4 +30,6 @@ actor main(env):
     c32 : u32 = 0xfffff
     print(c32-100)
     print(c32 < 100000)
+    f : u32 = 0-1
+    print(f/1000000)
     env.exit(0)
