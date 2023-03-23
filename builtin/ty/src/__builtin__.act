@@ -36,7 +36,23 @@ class i64 (atom):
   def __init__(self, val: atom) -> None:
       NotImplemented 
 
+class i32 (atom):
+  def __init__(self, val: atom) -> None:
+      NotImplemented 
+
+class i16 (atom):
+  def __init__(self, val: atom) -> None:
+      NotImplemented 
+
 class u64 (atom):
+  def __init__(self, val: atom) -> None:
+      NotImplemented 
+
+class u32 (atom):
+  def __init__(self, val: atom) -> None:
+      NotImplemented 
+
+class u16 (atom):
   def __init__(self, val: atom) -> None:
       NotImplemented 
 
@@ -552,6 +568,24 @@ extension i64 (Ord):
 extension i64 (Hashable):
     NotImplemented
 
+extension i32 (Integral):
+    NotImplemented
+extension i32 (Div[float]):
+    NotImplemented
+extension i32 (Ord):
+    NotImplemented
+extension i32 (Hashable):
+    NotImplemented
+
+extension i16 (Integral):
+    NotImplemented
+extension i16 (Div[float]):
+    NotImplemented
+extension i16 (Ord):
+    NotImplemented
+extension i16 (Hashable):
+    NotImplemented
+
 extension u64 (Integral):
     NotImplemented
 extension u64 (Div[float]):
@@ -559,6 +593,24 @@ extension u64 (Div[float]):
 extension u64 (Ord):
     NotImplemented
 extension u64 (Hashable):
+    NotImplemented
+
+extension u32 (Integral):
+    NotImplemented
+extension u32 (Div[float]):
+    NotImplemented
+extension u32 (Ord):
+    NotImplemented
+extension u32 (Hashable):
+    NotImplemented
+
+extension u16 (Integral):
+    NotImplemented
+extension u16 (Div[float]):
+    NotImplemented
+extension u16 (Ord):
+    NotImplemented
+extension u16 (Hashable):
     NotImplemented
 
 extension float (RealFloat):

@@ -32,7 +32,27 @@ B_u64 B_u64G_new(B_atom a) {
         }
         return toB_u64(n.size*n.n[0]);
     }
+    if ($ISINSTANCE(a,B_i64)->val) {
+        long x = ((B_i64)a)->val;
+        if (x < 0) 
+            $RAISE((B_BaseException)$NEW(B_ValueError,to$str("u64(): i64 argument out of range")));
+        return toB_u64((unsigned long)x);
+    }
+    if ($ISINSTANCE(a,B_i32)->val) {
+        int x = ((B_i32)a)->val;
+        if (x < 0) 
+            $RAISE((B_BaseException)$NEW(B_ValueError,to$str("u64(): i32 argument out of range")));
+        return toB_u64((unsigned long)x);
+    }
+    if ($ISINSTANCE(a,B_i16)->val) {
+        short x = ((B_i16)a)->val;
+        if (x < 0) 
+            $RAISE((B_BaseException)$NEW(B_ValueError,to$str("u64(): i16 argument out of range")));
+        return toB_u64((unsigned long)x);
+    }
     if ($ISINSTANCE(a,B_u64)->val) return (B_u64)a;
+    if ($ISINSTANCE(a,B_u32)->val) return toB_u64((unsigned long)((B_u32)a)->val);
+    if ($ISINSTANCE(a,B_u16)->val) return toB_u64((unsigned long)((B_u16)a)->val);
     if ($ISINSTANCE(a,B_float)->val) {
         long x = round(((B_float)a)->val);
         if (x<0)
