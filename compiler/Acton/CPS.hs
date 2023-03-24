@@ -113,31 +113,31 @@ wrapC c f env                           = eCallCont2 c [level, eLambda' [(g_none
 unwrapL 0 lvl                           = eVar lvl
 unwrapL n lvl                           = eCall (eDot (eQVar witIntegralInt) addKW) [eInt n, unwrapL 0 lvl]
 
-seqcont n (Pop : ctx)                   = seqcont (n+1) ctx
-seqcont n (Seq c : ctx)                 = (eInt n, eCallCont tNone c eNone)
-seqcont n (Loop c : ctx)                = (eInt n, eCallCont tNone c eNone)
-seqcont n (Meth c t : _)                = (eInt n, eCallCont tNone c eNone)
-seqcont n (Wrap c : ctx)                = (eInt n, wrapC c seqcont ctx)
-seqcont n (Unwrap lvl cnt : _)          = (unwrapL n lvl, eCallCont2 cnt [eNone])
+seqcont n (Pop : ctx)                   = seqcont (n+1) ctx                                 -- end of sequence:     in a handler scope      -   remember to pop
+seqcont n (Seq c : ctx)                 = (eInt n, eCallCont tNone c eNone)                 --                      followed by some cmd    -   jump to it
+seqcont n (Loop c : ctx)                = (eInt n, eCallCont tNone c eNone)                 --                      inside a loop           -   jump to its top
+seqcont n (Meth c t : _)                = (eInt n, eCallCont tNone c eNone)                 --                      in a method             -   jump to its continuation
+seqcont n (Wrap c : ctx)                = (eInt n, wrapC c seqcont ctx)                     --                      before a finalizer      -   jump to it, relay the true jump
+seqcont n (Unwrap lvl cnt : _)          = (unwrapL n lvl, eCallCont2 cnt [eNone])           --                      in a finalizer          -   do the true jump
 
-cntcont n (Pop : ctx)                   = cntcont (n+1) ctx
-cntcont n (Seq c : ctx)                 = cntcont n ctx
-cntcont n (Loop c : ctx)                = (eInt n, eCallCont tNone c eNone)
-cntcont n (Wrap c : ctx)                = (eInt n, wrapC c cntcont ctx)
-cntcont n (Unwrap lvl cnt : ctx)        = cntcont n ctx
+cntcont n (Pop : ctx)                   = cntcont (n+1) ctx                                 -- 'continue':          in a handler scope      -   remember to pop
+cntcont n (Seq c : ctx)                 = cntcont n ctx                                     --                      followed by some cmd    -   ignore it
+cntcont n (Loop c : ctx)                = (eInt n, eCallCont tNone c eNone)                 --                      inside a loop           -   jump to its top
+cntcont n (Wrap c : ctx)                = (eInt n, wrapC c cntcont ctx)                     --                      before a finalizer      -   jump to it, relay the true jump
+cntcont n (Unwrap lvl cnt : ctx)        = cntcont n ctx                                     --                      in a finalizer          -   ignore the true jump
 
-brkcont n (Pop : ctx)                   = brkcont (n+1) ctx
-brkcont n (Seq c : ctx)                 = brkcont n ctx
-brkcont n (Loop c : ctx)                = seqcont n ctx
-brkcont n (Wrap c : ctx)                = (eInt n, wrapC c brkcont ctx)
-brkcont n (Unwrap lvl cnt : ctx)        = brkcont n ctx
+brkcont n (Pop : ctx)                   = brkcont (n+1) ctx                                 -- 'break':             in a handler scope      -   remember to pop
+brkcont n (Seq c : ctx)                 = brkcont n ctx                                     --                      followed by some cmd    -   ignore it
+brkcont n (Loop c : ctx)                = seqcont n ctx                                     --                      in a loop               -   jump to what follows
+brkcont n (Wrap c : ctx)                = (eInt n, wrapC c brkcont ctx)                     --                      before a finalizer      -   jump to it, relay the true jump
+brkcont n (Unwrap lvl cnt : ctx)        = brkcont n ctx                                     --                      in a finalizer          -   ignore the true jump
 
-retcont e n (Pop : ctx)                 = retcont e (n+1) ctx
-retcont e n (Seq c : ctx)               = retcont e n ctx
-retcont e n (Loop c : ctx)              = retcont e n ctx
-retcont e n (Meth c t : _)              = (eInt n, eCallCont t c e)
-retcont e n (Wrap c : ctx)              = (eInt n, wrapC c (retcont e) ctx)
-retcont e n (Unwrap lvl cnt : ctx)      = retcont e n ctx
+retcont e n (Pop : ctx)                 = retcont e (n+1) ctx                               -- 'return':            in a handler scope      -   remember to pop
+retcont e n (Seq c : ctx)               = retcont e n ctx                                   --                      followed by some cmd    -   ignore it
+retcont e n (Loop c : ctx)              = retcont e n ctx                                   --                      in a loop               -   ignore it
+retcont e n (Meth c t : _)              = (eInt n, eCallCont t c e)                         --                      in a method             -   jump to its continuation
+retcont e n (Wrap c : ctx)              = (eInt n, wrapC c (retcont e) ctx)                 --                      before a finalizer      -   jump to it, relay the true jump
+retcont e n (Unwrap lvl cnt : ctx)      = retcont e n ctx                                   --                      in a finalizer          -   ignore the true jump
 
 quicknext (Seq c : _)                   = Just (eVar c)
 quicknext (Loop c : _)                  = Just (eVar c)
