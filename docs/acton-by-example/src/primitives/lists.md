@@ -20,6 +20,14 @@ actor main(env):
     # A slice of a list is also a list, so cast to str.
     print("A slice   : " + str(l[2:4]))
     
+    print("Pop first item:", l.pop(0))
+    print("Pop last item:", l.pop(-1))
+    print("List items:", str(l))
+    
+    # Extend a list by adding another list to it
+    l.extend(["apple", "orange"])
+    print("List items:", str(l))
+    
     # Reverse a list inplace
     l.reverse()
     print("Reversed:", l)
@@ -27,6 +35,10 @@ actor main(env):
     # Get a shallow copy of the list
     l2 = l.copy()
     print("Copy:", l2)
+    
+    # Clear list
+    l.clear()
+    print("List after clear:", str(l))
 
     await async env.exit(0)
 ```
@@ -41,12 +53,16 @@ Output:
 ```sh
 First item: Firsty
 Last item : banana
-List items: ["Firsty", "foo", "foo", "bar", "banana"]
-A slice   : ["foo", "bar"]
-Reversed: ["banana", "bar", "foo", "foo", "Firsty"]
-Copy: ["banana", "bar", "foo", "foo", "Firsty"]
+List items: ['Firsty', 'foo', 'foo', 'bar', 'banana']
+A slice   : ['foo', 'bar']
+Pop first item: Firsty
+Pop last item: banana
+List items: ['foo', 'foo', 'bar']
+List items: ['foo', 'foo', 'bar', 'apple', 'orange']
+Reversed: ['orange', 'apple', 'bar', 'foo', 'foo']
+Copy: ['orange', 'apple', 'bar', 'foo', 'foo']
+List after clear: []
 ```
-
 
 - All items in a list must be of the same type
   - It is not allowed to mix, like `["foo", 1]` leads to a compiler error
