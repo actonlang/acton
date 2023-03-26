@@ -19,21 +19,21 @@ void jsonQ_encode_dict(yyjson_mut_doc *doc, yyjson_mut_val *node, B_dict data) {
         B_value v = item->components[1];
         //log_info("key: %s  class_id: %d  type: %s", key, v->$class->$class_id, v->$class->$GCINFO);
         switch (v->$class->$class_id) {
-            case 2:; // B_int
+            case INT_ID:;
                 yyjson_mut_obj_add_int(doc, node, key, from$int((B_int)v));
                 break;
-            case 5:; // B_bool
+            case BOOL_ID:;
                 yyjson_mut_obj_add_bool(doc, node, key, fromB_bool((B_bool)v));
                 break;
-            case 6:; // B_str
+            case STR_ID:;
                 yyjson_mut_obj_add_str(doc, node, key,  (char *)fromB_str((B_str)v));
                 break;
-            case 7:; // B_list
+            case LIST_ID:;
                 yyjson_mut_val *l = yyjson_mut_arr(doc);
                 yyjson_mut_obj_add_val(doc, node, key, l);
                 jsonQ_encode_list(doc, l, (B_list)v);
                 break;
-            case 8:; // B_dict
+            case DICT_ID:;
                 yyjson_mut_val *d = yyjson_mut_obj(doc);
                 yyjson_mut_obj_add_val(doc, node, key, d);
                 jsonQ_encode_dict(doc, d, (B_dict)v);
@@ -48,16 +48,16 @@ void jsonQ_encode_list(yyjson_mut_doc *doc, yyjson_mut_val *node, B_list data) {
     for (int i = 0; i < data->length; i++) {
         B_value v = data->data[i];
         switch (v->$class->$class_id) {
-            case 2:; // B_int
+            case INT_ID:;
                 yyjson_mut_arr_add_int(doc, node, from$int((B_int)v));
                 break;
-            case 5:; // B_bool
+            case BOOL_ID:;
                 yyjson_mut_arr_add_bool(doc, node, fromB_bool((B_bool)v));
                 break;
-            case 6:; // B_str
+            case STR_ID:;
                 yyjson_mut_arr_add_str(doc, node,  (char *)fromB_str((B_str)v));
                 break;
-            case 7:; // B_list
+            case LIST_ID:;
                 yyjson_mut_val *l = yyjson_mut_arr_add_arr(doc, node);
                 if (l) {
                     jsonQ_encode_list(doc, l, (B_list)v);
@@ -65,7 +65,7 @@ void jsonQ_encode_list(yyjson_mut_doc *doc, yyjson_mut_val *node, B_list data) {
                     // TODO: raise exception
                 }
                 break;
-            case 8:; // B_dict
+            case DICT_ID:;
                 yyjson_mut_val *d = yyjson_mut_arr_add_obj(doc, node);
                 if (d) {
                     jsonQ_encode_dict(doc, d, (B_dict)v);
