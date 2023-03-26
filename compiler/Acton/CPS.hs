@@ -287,10 +287,11 @@ instance CPS [Stmt] where
 
     cps env (s : ss)                    = do k <- newName "cont"
                                              x <- newName "res"
-                                             ss' <- cps env ss
+                                             ss' <- cps env1 ss
                                              ss1 <- cps (Seq k +: env) [s]
                                              return $ kDef env k (pospar [(x,tNone)]) ss' :
                                                       ss1
+      where env1                        = define (envOf s) env
 
     cps env []                          = return []
 

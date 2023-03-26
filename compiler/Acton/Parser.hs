@@ -104,7 +104,7 @@ initState            = (False,[])
 
 -- Parser contexts ---------------------------------------------------------
 
-data CTX = TOP | PAR | IF | SEQ | LOOP | DATA | DEF | CLASS | PROTO | EXT | ACTOR deriving (Show,Eq)
+data CTX = TOP | PAR | IF | SEQ | LOOP | DATA | DEF | CLASS | PROTO | EXT | ACTOR | FINAL deriving (Show,Eq)
 
 withCtx ctx = between (St.modify (pushCtx ctx)) (St.modify popCtx)
 
@@ -957,7 +957,7 @@ try_stmt = addLoc $ do
         handler p = atPos p $ do
                         exc <- except
                         S.Handler exc <$> suite SEQ p
-        finally_part p = atPos p $ do
+        finally_part p = atPos p $ withCtx FINAL $ do
                         rword "finally"
                         suite SEQ p
                  
