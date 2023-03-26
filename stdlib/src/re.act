@@ -1,0 +1,79 @@
+
+#class Pattern():
+#    pass
+#
+#class Or(Pattern):
+#    def __init__(self, p: list[Pattern]):
+#        self.p = p
+#
+#    def __str__(self):
+#        res = "("
+#        l = len(self.p)
+#        for i in range(0, l, 1):
+#            res += str(self.p[i])
+#            if i < l-1:
+#                res += "|"
+#        res += ")"
+#        return res
+#
+#class Text(Pattern):
+#    """Literal text
+#    """
+#    def __init__(self, t: str):
+#        self.text = t
+#        # TODO: complete patterns for escaping re patterns
+#        self.re_text = t.replace(".", r"\.", None).replace("?", r"\?", None)
+#
+#    def __str__(self):
+#        return self.re_text
+
+
+class Match:
+    def __init__(self, pattern: str, string: str, start_pos: int, end_pos: int, group: list[str], named_group: dict[str, str]) -> None:
+        self.pattern = pattern
+        self.string = string
+        self.start_pos = start_pos
+        self.end_pos = end_pos
+        self.group = group
+        self.named = named_group
+
+# TODO: add _compile function to compile a pattern to a regex, and use it in
+# _match function to avoid recompiling the pattern each time
+
+def _match(pattern: str, string: str, start_pos: int) -> ?Match:
+    NotImplemented
+
+
+def match(pattern: str, string: str) -> ?Match:
+    """Scan through string looking for a match to the pattern, returning
+    a match object, or None if no match was found.
+    """
+    return _match(pattern, string, 0)
+
+
+def matches(pattern: str, string: str) -> list[Match]:
+    """Find all non-overlapping matches in string
+    """
+    # TODO: implement as a generator instead
+    res = []
+    pos = 0
+    str_len = len(string)
+    while True:
+        if pos >= str_len:
+            break
+        m = _match(pattern, string, pos)
+        if m is None:
+            break
+        if m is not None:
+            res.append(m)
+            pos = m.end_pos
+    return res
+
+#def replace():
+#    pass
+#
+#def replace_all():
+#    pass
+#
+#def split(pattern: str, subject: str, max_split: int=0) -> list[str]:
+#    return [""]
