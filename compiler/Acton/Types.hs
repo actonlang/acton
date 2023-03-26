@@ -318,12 +318,13 @@ instance InfEnv Stmt where
     
     infEnv env (Signature l ns sc@(TSchema _ q t) dec)
       | not $ null bad                  = illegalSigOverride (head bad)
-      | otherwise                       = return ([], [(n, NSig sc dec) | n <- ns], Signature l ns sc dec)
+      | otherwise                       = return ([], [(n, NSig sc dec') | n <- ns], Signature l ns sc dec)
       where
         redefs                          = [ (n,i) | n <- ns, let i = findName n env, i /= NReserved ]
         bad                             = [ n | (n,i) <- redefs, not $ ok i ]
         ok (NSig (TSchema _ [] t') d)   = null q && castable env t t' && dec == d
         ok _                            = False
+        dec'                            = if inClass env && isProp dec sc then Property else dec
 
     infEnv env (Data l _ _)             = notYet l "data syntax"
 
@@ -705,7 +706,7 @@ infProperties env as b
   | Just (self,ss) <- inits             = infProps self ss
   | otherwise                           = return []
   where inherited                       = concat $ map (conAttrs env . tcname . snd) as
-        explicit                        = concat [ ns | Signature _ ns _ Property <- b ]
+        explicit                        = concat [ ns | Signature _ ns sc dec <- b, isProp dec sc ]
         inits                           = listToMaybe [ (x, dbody d) | Decl _ ds <- b, d@Def{pos=PosPar x _ _ _} <- ds, dname d == initKW ]
         infProps self (MutAssign _ (Dot _ (Var _ (NoQ x)) n) _ : b)
           | x /= self                   = return []
@@ -850,10 +851,11 @@ instance Check Stmt where
     checkEnv env (Signature l ns sc dec)
                                         = do wellformed env1 q
                                              wellformed env1 t
-                                             return ([], Signature l ns sc' dec)
+                                             return ([], Signature l ns sc' dec')
       where TSchema l q t               = sc
             sc' | null q                = sc
                 | otherwise             = let TFun l' x p k t' = t in TSchema l (noqual env q) (TFun l' x (qualWRow env q p) k t')
+            dec'                        = if inClass env && isProp dec sc then Property else dec
             env1                        = defineTVars q env
     checkEnv env s                      = return ([], s)
 
