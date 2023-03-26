@@ -33,25 +33,25 @@ actor main(env):
 #        print("Unexpected result of list.count(37):", c)
 #        await async env.exit(1)
 
-#    l.extend([45, 56])
-#    if l != [0, 1, 37, 2, 3, 45, 56]:
-#        print("Unexpected result of list.extend([45, 56]):", l)
-#        await async env.exit(1)
+    l.extend([45, 56])
+    if l != [0, 1, 37, 2, 3, 45, 56]:
+        print("Unexpected result of list.extend([45, 56]):", l)
+        await async env.exit(1)
 
     l.reverse()
-    if l != [3, 2, 37, 1, 0]:
+    if l != [56, 45, 3, 2, 37, 1, 0]:
         print("Unexpected result of list.reverse():", l)
         await async env.exit(1)
 
     del l[1]
-    if l != [3, 37, 1, 0]:
+    if l != [56, 3, 2, 37, 1, 0]:
         print("Unexpected result of del list[1]:", l)
         await async env.exit(1)
 
-#    l.pop()
-#    if l != [3, 37, 1]:
-#        print("Unexpected result of list.pop():", l)
-#        await async env.exit(1)
+    l.pop(-1)
+    if l != [56, 3, 2, 37, 1]:
+        print("Unexpected result of list.pop():", l)
+        await async env.exit(1)
 
 #    l.remove(37)
 #    if l != [3, 1]:
@@ -59,10 +59,10 @@ actor main(env):
 #        await async env.exit(1)
 
 
-#    l.clear()
-#    if l != []:
-#        print("Unexpected result of list.clear():", l)
-#        await async env.exit(1)
+    l.clear()
+    if l != []:
+        print("Unexpected result of list.clear():", l)
+        await async env.exit(1)
 
 #    l.sort()
 #    if l != [0, 1, 2, 3, 37]:

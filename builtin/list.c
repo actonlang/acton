@@ -125,9 +125,43 @@ B_list B_listD_copy(B_list lst) {
     int len = lst->length;
     B_list res = B_listD_new(len);
     res->length = len;
-    memcpy(res->data,lst->data,len*sizeof($WORD));
+    memcpy(res->data, lst->data, len*sizeof($WORD));
     return res;
 }
+
+B_NoneType B_listD_clear(B_list lst) {
+    memset(lst->data, 0, lst->length * sizeof($WORD));
+    lst->length = 0;
+    return B_None;
+}
+
+B_NoneType B_listD_extend(B_list lst, B_list other) {
+    expand(lst, other->length);
+    memcpy(lst->data + lst->length, other->data, other->length * sizeof($WORD));
+    lst->length += other->length;
+    return B_None;
+}
+
+$WORD B_listD_pop(B_list lst, B_int i) {
+    long ix;
+    int len =lst->length;
+    if (!i)
+        ix = len-1;
+    else
+        ix = from$int(i);
+    long ix0 = ix < 0 ? len + ix : ix;
+    if (ix0 < 0 || ix0 >= len) {
+        $RAISE((B_BaseException)$NEW(B_IndexError,to$str("list.pop: index outside list")));
+    }
+    $WORD res = lst->data[ix0];
+    memmove(lst->data + ix0,
+            lst->data + (ix0 + 1),
+            (len-(ix0+1))*sizeof($WORD));
+    lst->data[len-1] = NULL;
+    lst->length--;
+    return res;
+}
+    
 
 // B_OrdD_list ////////////////////////////////////////////////////////
 
