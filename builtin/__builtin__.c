@@ -4540,7 +4540,7 @@ void B___init__ () {
         B_i64G_methods.$superclass = ($SuperG_class)&B_atomG_methods;
         B_i64G_methods.__bool__ = B_i64D___bool__;
         B_i64G_methods.__str__ = B_i64D___str__;  
-        B_i64G_methods.__str__ = B_i64D___str__; 
+        B_i64G_methods.__repr__ = B_i64D___str__; 
         B_i64G_methods.__init__ = B_i64D___init__;
         B_i64G_methods.__serialize__ = B_i64D___serialize__;
         B_i64G_methods.__deserialize__ = B_i64D___deserialize__;
@@ -4550,7 +4550,7 @@ void B___init__ () {
         B_i32G_methods.$superclass = ($SuperG_class)&B_atomG_methods;
         B_i32G_methods.__bool__ = B_i32D___bool__;
         B_i32G_methods.__str__ = B_i32D___str__;  
-        B_i32G_methods.__str__ = B_i32D___str__; 
+        B_i32G_methods.__repr__ = B_i32D___str__; 
         B_i32G_methods.__init__ = B_i32D___init__;
         B_i32G_methods.__serialize__ = B_i32D___serialize__;
         B_i32G_methods.__deserialize__ = B_i32D___deserialize__;
@@ -4560,7 +4560,7 @@ void B___init__ () {
         B_i16G_methods.$superclass = ($SuperG_class)&B_atomG_methods;
         B_i16G_methods.__bool__ = B_i16D___bool__;
         B_i16G_methods.__str__ = B_i16D___str__;  
-        B_i16G_methods.__str__ = B_i16D___str__; 
+        B_i16G_methods.__repr__ = B_i16D___str__; 
         B_i16G_methods.__init__ = B_i16D___init__;
         B_i16G_methods.__serialize__ = B_i16D___serialize__;
         B_i16G_methods.__deserialize__ = B_i16D___deserialize__;
@@ -4570,7 +4570,7 @@ void B___init__ () {
         B_u64G_methods.$superclass = ($SuperG_class)&B_atomG_methods;
         B_u64G_methods.__bool__ = B_u64D___bool__;
         B_u64G_methods.__str__ = B_u64D___str__;  
-        B_u64G_methods.__str__ = B_u64D___str__; 
+        B_u64G_methods.__repr__ = B_u64D___str__; 
         B_u64G_methods.__init__ = B_u64D___init__;
         B_u64G_methods.__serialize__ = B_u64D___serialize__;
         B_u64G_methods.__deserialize__ = B_u64D___deserialize__;
@@ -4580,7 +4580,7 @@ void B___init__ () {
         B_u32G_methods.$superclass = ($SuperG_class)&B_atomG_methods;
         B_u32G_methods.__bool__ = B_u32D___bool__;
         B_u32G_methods.__str__ = B_u32D___str__;  
-        B_u32G_methods.__str__ = B_u32D___str__; 
+        B_u32G_methods.__repr__ = B_u32D___str__; 
         B_u32G_methods.__init__ = B_u32D___init__;
         B_u32G_methods.__serialize__ = B_u32D___serialize__;
         B_u32G_methods.__deserialize__ = B_u32D___deserialize__;
@@ -4590,7 +4590,7 @@ void B___init__ () {
         B_u16G_methods.$superclass = ($SuperG_class)&B_atomG_methods;
         B_u16G_methods.__bool__ = B_u16D___bool__;
         B_u16G_methods.__str__ = B_u16D___str__;  
-        B_u16G_methods.__str__ = B_u16D___str__; 
+        B_u16G_methods.__repr__ = B_u16D___str__; 
         B_u16G_methods.__init__ = B_u16D___init__;
         B_u16G_methods.__serialize__ = B_u16D___serialize__;
         B_u16G_methods.__deserialize__ = B_u16D___deserialize__;
@@ -4632,9 +4632,12 @@ void B___init__ () {
         B_listG_methods.__str__ = B_listD___str__;
         B_listG_methods.__repr__ = B_listD___str__;
         B_listG_methods.__init__ = B_listD___init__;
-        B_listG_methods.copy = B_listD_copy;
         B_listG_methods.__serialize__ = B_listD___serialize__;
         B_listG_methods.__deserialize__ = B_listD___deserialize__;
+        B_listG_methods.clear = B_listD_clear;
+        B_listG_methods.copy = B_listD_copy;
+        B_listG_methods.extend = B_listD_extend;
+        B_listG_methods.pop = B_listD_pop;
     }
     {
         B_rangeG_methods.$GCINFO = "B_range";

@@ -467,7 +467,10 @@ struct B_listG_class {
     B_bool (*__bool__) (B_list);
     B_str (*__str__) (B_list);
     B_str (*__repr__) (B_list);
+    B_NoneType (*clear) (B_list);
     B_list (*copy) (B_list);
+    B_NoneType (*extend) (B_list, B_list);
+    $WORD (*pop) (B_list, B_int);
 };
 struct B_rangeG_class {
     char *$GCINFO;

@@ -71,7 +71,13 @@ class slice (value):
 class list[A] (object):
   def __init__(self, val: ?Iterable[A]) -> None:
       NotImplemented
+  def clear(self) -> None:
+      NotImplemented
   def copy(self) -> list[A]:
+      NotImplemented
+  def extend(self, other: list[A]) -> None:
+      NotImplemented
+  def pop(self, n :?int) -> A:
       NotImplemented
 
 class range (value):
