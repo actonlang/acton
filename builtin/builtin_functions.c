@@ -237,7 +237,10 @@ $WORD B_min(B_Ord wit, B_Iterable wit2, $WORD iter, $WORD deflt) {
 }
  
 B_list B_sorted(B_Ord wit, B_Iterable wit2, $WORD iter) {
-    return NULL;
+    B_CollectionD_SequenceD_list w = B_CollectionD_SequenceD_listG_witness;
+    B_list res = w->$class->__fromiter__(w, wit2, iter);
+    B_tim_sort(wit, res->data, res->length);
+    return res;
 }
 
 // sum /////////////////////////////////////////////////////////////////////////////////

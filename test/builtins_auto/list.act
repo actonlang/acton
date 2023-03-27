@@ -64,10 +64,11 @@ actor main(env):
         print("Unexpected result of list.clear():", l)
         await async env.exit(1)
 
-#    l.sort()
-#    if l != [0, 1, 2, 3, 37]:
-#        print("Unexpected result of list.sort():", l)
-#        await async env.exit(1)
+#    sorted
+    l = [56, 3, 2, 37, 1]
+    if sorted(l) != [1, 2, 3, 37, 56]:
+        print("Unexpected result of sorted(l):", sorted(l))
+        await async env.exit(1)
 
     if bool([]):
         print("Unexpected result of bool([]):", l)
