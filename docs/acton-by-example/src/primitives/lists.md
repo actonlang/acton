@@ -28,6 +28,10 @@ actor main(env):
     l.extend(["apple", "orange"])
     print("List items:", str(l))
     
+    unsorted_list = [9, 5, 123, 14, 1]
+    sl = sorted(unsorted_list)
+    print("Sorted list", str(sl))
+
     # Reverse a list inplace
     l.reverse()
     print("Reversed:", l)
@@ -59,6 +63,7 @@ Pop first item: Firsty
 Pop last item: banana
 List items: ['foo', 'foo', 'bar']
 List items: ['foo', 'foo', 'bar', 'apple', 'orange']
+Sorted list [1, 5, 9, 14, 123]
 Reversed: ['orange', 'apple', 'bar', 'foo', 'foo']
 Copy: ['orange', 'apple', 'bar', 'foo', 'foo']
 List after clear: []
