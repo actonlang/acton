@@ -11,9 +11,9 @@ endif
 ACTONC=dist/bin/actonc
 ACTC=dist/bin/actonc
 ZIG_VERSION:=0.10.1
-CC=$(TD)/dist/zig/zig cc
-CXX=$(TD)/dist/zig/zig c++
-ZIG=dist/zig
+CC=$(TD)/deps/zig/zig cc
+CXX=$(TD)/deps/zig/zig c++
+ZIG=deps/zig
 LIBGC=lib/libactongc.a
 export CC
 export CXX
@@ -87,7 +87,7 @@ all: version-check
 
 .PHONY: help
 help:
-	@echo "Available make targets"
+	@echo "Available make targets:"
 	@echo "  all     - build everything"
 	@echo "  dist    - build complete distribution"
 	@echo "  actonc  - build the Acton compiler"
@@ -95,6 +95,10 @@ help:
 	@echo "  rts     - build the Run Time System"
 	@echo ""
 	@echo "  test    - run the test suite"
+	@echo ""
+	@echo "  clean   - /normal/ clean repo"
+	@echo "  clean-all - thorough cleaning"
+	@echo "  clean-deps-rm - remove downloaded deps, normally never needed?"
 
 
 .PHONY: version-check
@@ -307,7 +311,7 @@ clean-deps:
 	rm -rf deps/instdir lib/libActonDeps.a
 
 clean-deps-rm:
-	rm -rf $(DEPS_DIRS) deps/libgc deps/zig-*.tar*
+	rm -rf $(DEPS_DIRS) deps/libgc deps/zig deps/zig-*.tar*
 
 # /deps/libargp --------------------------------------------
 LIBARGP_REF=1.5.0
@@ -651,14 +655,14 @@ test-stdlib:
 	cd compiler && stack test --ta '-p "stdlib"'
 
 
-.PHONY: clean
-clean: clean-deps clean-distribution clean-backend clean-rts
+.PHONY: clean clean-all clean-backend clean-rts
+clean: clean-distribution clean-backend clean-rts
 
-.PHONY: clean-backend
+clean-all: clean clean-compiler clean-deps
+
 clean-backend:
 	rm -f $(DBARCHIVE) $(BACKEND_OFILES) backend/actondb
 
-.PHONY: clean-rts
 clean-rts:
 	rm -rf $(ARCHIVES) $(DBARCHIVE) $(OFILES) $(STDLIB_HFILES) $(STDLIB_OFILES) $(STDLIB_TYFILES) stdlib/out/ lib_deps
 
@@ -709,7 +713,11 @@ dist/completion/acton.bash-completion: completion/acton.bash-completion
 	mkdir -p $(dir $@)
 	cp $< $@
 
-dist/zig: deps/zig-$(ZIG_OS)-$(ZIG_ARCH)-$(ZIG_VERSION).tar.xz
+dist/zig: deps/zig
+	mkdir -p $(dir $@)
+	cp -a $< $@
+
+deps/zig: deps/zig-$(ZIG_OS)-$(ZIG_ARCH)-$(ZIG_VERSION).tar.xz
 	mkdir -p $@
 	cd $@ && tar Jx --strip-components=1 -f ../../$^
 ifeq ($(shell uname -s),Darwin)
