@@ -1,0 +1,23 @@
+name: Trigger rebuild of Acton Web page
+
+# When there are changes to files under docs/acton-by-example on main branch,
+# trigger the workflow to rebuild the Acton web page
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'docs/acton-by-example/**'
+
+jobs:
+  trigger_acton_lang:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Trigger build of www.acton-lang.org
+        uses: benc-uk/workflow-dispatch@v1
+        with:
+          repo: actonlang/www.acton-lang.org
+          token: ${{ secrets.ACTBOT_PAT }}
+          workflow: main.yml
+          ref: main
