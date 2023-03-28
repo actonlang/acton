@@ -100,11 +100,8 @@ B_int B_intG_new(B_atom a) {
     if ($ISINSTANCE(a,B_str)->val) {
         B_int res = malloc_int();
         res->$class = &B_intG_methods;
-        int digits = set_str(&res->val, (char *)((B_str)a)->str);
-        if (digits>0)
-            return res;
-        else 
-            $RAISE((B_BaseException)$NEW(B_ValueError,to$str("int(): string arg has no digit in prefix")));
+        set_str(&res->val, (char *)((B_str)a)->str);
+        return res;
     }
     fprintf(stderr,"internal error: B_intG_new: argument not of atomic type\n");
     exit(-1);
@@ -190,10 +187,16 @@ B_int B_IntegralD_intD___mul__(B_IntegralD_int wit,  B_int a, B_int b) {
   
 B_int B_IntegralD_intD___pow__(B_IntegralD_int wit, B_int a, B_int b) {
     zz_ptr val_b = &b->val;
-    if (zz_cmpi(val_b,0) < 0)
-        $RAISE((B_BaseException)$NEW(B_ValueError,to$str("__pow__: exponent negative")));
-    if (zz_cmpi(val_b,LONG_MAX) > 0)
-        $RAISE((B_BaseException)$NEW(B_ValueError,to$str("__pow__: exponent out of range (> LONG_MAX)")));
+    if (zz_cmpi(val_b,0) < 0) {
+        char errmsg[1024];
+        snprintf(errmsg, sizeof(errmsg), "int.__pow__(): negative exponent: %s", get_str(val_b));
+        $RAISE((B_BaseException)$NEW(B_ValueError,to$str(errmsg)));
+    }
+    if (zz_cmpi(val_b,LONG_MAX) > 0) {
+        char errmsg[1024];
+        snprintf(errmsg, sizeof(errmsg), "int.__pow__(): exponent out of range (>LONG_MAX):  %s", get_str(val_b));
+        $RAISE((B_BaseException)$NEW(B_ValueError,to$str(errmsg)));
+    }
     B_int res = malloc_int();
     zz_powi(&res->val,&a->val,val_b->n[0]); // __pow__ should have an int64 exponent in the Acton protocol
     return res;
@@ -255,8 +258,11 @@ B_int B_IntegralD_intD___round__ (B_IntegralD_int wit, B_int n, B_int p) {
         zz_neg(&res->val,&res->val);
         return res;
     }
-    if (labs(p->val.size) >1)
-        $RAISE((B_BaseException)$NEW(B_ValueError,to$str("__round__: precision out of range")));
+    if (labs(p->val.size) >1) {
+        char errmsg[1024];
+        snprintf(errmsg, sizeof(errmsg), "int.__round__(): precision out of range: %s", get_str(&p->val));
+        $RAISE((B_BaseException)$NEW(B_ValueError,to$str(errmsg)));
+    }
     long pval = from$int(p);
     if (pval>=0)
         return n;
@@ -305,8 +311,11 @@ B_int B_IntegralD_intD___lshift__(B_IntegralD_int wit,  B_int a, B_int b) {
     long bval = from$int(b);
     if (ma==0 || bval==0)
         return a;
-    if (bval<0)
-        $RAISE((B_BaseException)$NEW(B_ValueError,to$str("__lshift: negative shift count")));
+    if (bval<0) {
+        char errmsg[1024];
+        snprintf(errmsg, sizeof(errmsg), "int.__lshift__: negative shift count: %ld", bval);
+        $RAISE((B_BaseException)$NEW(B_ValueError,to$str(errmsg)));
+    }
     long shw = bval/64;
     long shb = bval%64;
     long mres = labs(ma) + shw + (shb > 0);
@@ -336,8 +345,11 @@ B_int B_IntegralD_intD___rshift__(B_IntegralD_int wit,  B_int a, B_int b) {
     long bval = from$int(b);
     if (ma==0 || bval==0)
         return a;
-    if (bval<0)
-        $RAISE((B_BaseException)$NEW(B_ValueError,to$str("__rshift: negative shift count")));
+    if (bval<0)  {
+        char errmsg[1024];
+        snprintf(errmsg, sizeof(errmsg), "int.__rshift__: negative shift count: %ld", bval);
+        $RAISE((B_BaseException)$NEW(B_ValueError,to$str(errmsg)));
+    }
     B_int res = malloc_int();
     zz_ptr rval = &res->val;
     long shw = bval/64;
@@ -737,12 +749,27 @@ int set_str0(zz_ptr a, char *nstr, int parts) {
 }
 
 int set_str(zz_ptr a, char *nstr) {
-    int len = 0;
-    while (isdigit(nstr[len]))
-        len++;
-    if (len == 0) {
-        $RAISE((B_BaseException)$NEW(B_ValueError,to$str("int.__fromatom__: no digits in string prefix")));
+    int pre=0;
+    int sgn = 1;
+    while(isspace(nstr[pre])) pre++;;
+    if(nstr[pre]=='+')
+        pre++;
+    else if (nstr[pre]=='-') {
+        sgn = -1;
+        pre++;
     }
+    int pre_len = pre;
+    int len = 0;
+    while (isdigit(nstr[pre])) {
+        len++;
+        pre++;
+    }
+    if (len == 0 || nstr[pre] != 0) {
+        char errmsg[1024];
+        snprintf(errmsg, sizeof(errmsg), "int.fromatom(): string \"%s\" cannot be converted to int", nstr);
+        $RAISE((B_BaseException)$NEW(B_ValueError,to$str(errmsg)));
+    }
+    nstr += pre_len;
     int parts = len / POW10INWORD;
     int offset =  len % POW10INWORD;
     if (offset == 0)
@@ -765,7 +792,8 @@ int set_str(zz_ptr a, char *nstr) {
         } else {
             zz_seti(a, headval);
         }
-        return offset + partdigits;
+        a->size *= sgn;
+        return pre + offset + partdigits;
     } 
 }
 
