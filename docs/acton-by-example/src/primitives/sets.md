@@ -3,12 +3,14 @@
 Source:
 ```python
 actor main(env):
+    # Duplicate entries
     s = {"foo", "foo"}
-    print(s)
+    print("Set without duplicate 'foo':", s)
     s.add("bar")
-    print(s)
-    print(len(s))
-    print(s)
+    print("Set after adding 'bar':", s)
+    print("Entries in set:", len(s))
+    s.discard("foo")
+    print("Set after discarding 'foo':", s)
 
     await async env.exit(0)
 ```
@@ -21,8 +23,8 @@ actonc sets.act
 
 Output:
 ```sh
-{foo}
-{bar, foo}
-2
-{bar, foo}
+Set without duplicate 'foo': {"foo"}
+Set after adding 'bar': {"bar", "foo"}
+Entries in set: 2
+Set after discarding 'foo': {"bar"}
 ```
