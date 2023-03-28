@@ -10,7 +10,7 @@ on:
       - 'docs/acton-by-example/**'
 
 jobs:
-  trigger_acton_lang:
+  trigger_web_rebuild:
     runs-on: ubuntu-latest
 
     steps:

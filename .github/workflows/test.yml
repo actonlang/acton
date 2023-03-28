@@ -400,13 +400,15 @@ jobs:
         run: mv $(ls acton-darwin*.tar.bz2 | tail -n1) acton-darwin-x86_64.tar.bz2
       - name: "Remove version number from linux tar ball"
         run: mv $(ls acton-linux-x86_64*.tar.bz2 | tail -n1) acton-linux-x86_64.tar.bz2
+      - name: "Remove version number from debian package"
+        run: mv $(ls acton_*.deb | tail -n1) acton_tip_amd64.deb
       - name: "List files for debug"
         run: ls
       - name: "Upload artifacts without version number for stable links"
         uses: ncipollo/release-action@v1
         with:
           allowUpdates: true
-          artifacts: acton*.tar*
+          artifacts: acton*.tar*,acton_*.deb
           body: ${{ steps.extract-release-notes.outputs.release_notes }}
           draft: false
           prerelease: true
