@@ -378,7 +378,9 @@ jobs:
         with:
           name: acton-debs
       - name: "List downloaded artifacts"
-        run: ls
+        run: |
+          ls
+          ls deb
       - name: "Workaround for changelog extractor that looks for number versions in headlines, which won't work for 'Unreleased'"
         run: sed -i -e 's/^## Unreleased/## [999.9] Unreleased\nThis is an unreleased snapshot built from the main branch. Like a nightly but more up to date./' CHANGELOG.md
       - name: "Extract release notes"
@@ -403,12 +405,14 @@ jobs:
       - name: "Remove version number from debian package"
         run: mv $(ls deb/acton_*.deb | tail -n1) deb/acton_tip_amd64.deb
       - name: "List files for debug"
-        run: ls
+        run: |
+          ls
+          ls deb
       - name: "Upload artifacts without version number for stable links"
         uses: ncipollo/release-action@v1
         with:
           allowUpdates: true
-          artifacts: acton*.tar*,acton_*.deb
+          artifacts: "acton*.tar*,deb/acton_*.deb"
           body: ${{ steps.extract-release-notes.outputs.release_notes }}
           draft: false
           prerelease: true
