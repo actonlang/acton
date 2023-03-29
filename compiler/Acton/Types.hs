@@ -268,10 +268,7 @@ instance InfEnv Stmt where
                                              (cs,e') <- inferSub env t e
                                              return (cs, [], Return l (Just e'))
     infEnv env (Raise l e)              = do (cs,t,e') <- infer env e
-                                             fx <- currFX
-                                             return (Cast t tException :
-                                                     Cast fxProc fx :
-                                                     cs, [], Raise l e')
+                                             return (Cast t tException : cs, [], Raise l e')
     infEnv env s@(Break _)              = return ([], [], s)
     infEnv env s@(Continue _)           = return ([], [], s)
     infEnv env (If l bs els)            = do (css,tes,bs') <- fmap unzip3 $ mapM (infLiveEnv env) bs
