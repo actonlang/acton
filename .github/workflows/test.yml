@@ -401,7 +401,7 @@ jobs:
       - name: "Remove version number from linux tar ball"
         run: mv $(ls acton-linux-x86_64*.tar.bz2 | tail -n1) acton-linux-x86_64.tar.bz2
       - name: "Remove version number from debian package"
-        run: mv $(ls acton_*.deb | tail -n1) acton_tip_amd64.deb
+        run: mv $(ls deb/acton_*.deb | tail -n1) deb/acton_tip_amd64.deb
       - name: "List files for debug"
         run: ls
       - name: "Upload artifacts without version number for stable links"
