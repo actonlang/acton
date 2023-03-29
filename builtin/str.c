@@ -17,6 +17,10 @@
 #include <stdio.h>
 #include <limits.h>
 #include <ctype.h>
+
+#define GC_THREADS 1
+#include "gc.h"
+
 #include "../deps/libutf8proc/utf8proc.h"
 
 // Auxiliaries, some used for both str and bytearray implementations ////////////////////////////////////////////////////////
@@ -40,7 +44,7 @@ static B_str whitespace_str = &whitespace_struct;
     (nm)->$class = &B_strG_methods;               \
     (nm)->nchars = nchrs;                       \
     (nm)->nbytes = nbtes;                       \
-    (nm)->str = malloc(nbtes + 1);       \
+    (nm)->str = GC_MALLOC_ATOMIC(nbtes + 1);       \
     (nm)->str[nbtes] = 0
 
 #define NEW_UNFILLED_BYTEARRAY(nm,nbtes)        \
@@ -48,14 +52,14 @@ static B_str whitespace_str = &whitespace_struct;
     (nm)->$class = &B_bytearrayG_methods;         \
     (nm)->nbytes = nbtes;                       \
     (nm)->capacity = nbtes;                     \
-    (nm)->str = malloc(nbtes + 1);       \
+    (nm)->str = GC_MALLOC_ATOMIC(nbtes + 1);       \
     (nm)->str[nbtes] = 0
 
 #define NEW_UNFILLED_BYTES(nm,nbtes)            \
     nm = malloc(sizeof(struct B_bytes));         \
     (nm)->$class = &B_bytesG_methods;             \
     (nm)->nbytes = nbtes;                       \
-    (nm)->str = malloc(nbtes + 1);              \
+    (nm)->str = GC_MALLOC_ATOMIC(nbtes + 1);              \
     (nm)->str[nbtes] = 0
 
 // Conversion to and from C strings
@@ -424,7 +428,7 @@ B_str B_strD___deserialize__(B_str self, $Serial$state state) {
     long nchars;
     memcpy(&nchars,this->blob+1,sizeof($WORD));
     res->nchars = (int)nchars;
-    res->str = malloc(nbytes+1);
+    res->str = GC_MALLOC_ATOMIC(nbytes+1);
     memcpy(res->str,this->blob+2,nbytes+1);
     return res;
 }
@@ -1346,7 +1350,7 @@ static void expand_bytearray(B_bytearray b,int n) {
     while (newcapacity < b->nbytes+n)
         newcapacity <<= 1;
     unsigned char *newstr = b->str==NULL
-        ? malloc(newcapacity+1)
+        ? GC_MALLOC_ATOMIC(newcapacity+1)
         : realloc(b->str,newcapacity+1);
     if (newstr == NULL) {
         $RAISE((B_BaseException)$NEW(B_MemoryError,to$str("memory allocation failed")));
@@ -1374,7 +1378,7 @@ B_NoneType B_bytearrayD___init__(B_bytearray self, B_bytes b) {
     int len = b->nbytes;
     self->nbytes = len;
     self->capacity = len;
-    self->str = malloc(len+1);
+    self->str = GC_MALLOC_ATOMIC(len+1);
     memcpy(self->str,b->str,len+1);
     return B_None;
 }
@@ -1421,7 +1425,7 @@ B_bytearray B_bytearrayD___deserialize__(B_bytearray res, $Serial$state state) {
     memcpy(&nbytes,this->blob,sizeof($WORD));
     res->$class = &B_bytearrayG_methods;
     res->nbytes = (long)nbytes;
-    res->str = malloc(nbytes+1);
+    res->str = GC_MALLOC_ATOMIC(nbytes+1);
     memcpy(res->str,this->blob+1,nbytes+1);
     return res;
 }
@@ -2354,7 +2358,7 @@ B_NoneType B_bytesD___init__(B_bytes self, B_Iterable wit, $WORD iter) {
     B_list lst = wit2->$class->__fromiter__(wit2,wit,iter);
     int len = lst->length;
     self->nbytes = len;
-    self->str = malloc(len+1);
+    self->str = GC_MALLOC_ATOMIC(len+1);
     self->str[len] = 0;
     for (int i=0; i< len; i++) {
         int n = from$int((B_int)lst->data[i]);
@@ -2405,7 +2409,7 @@ B_bytes B_bytesD___deserialize__(B_bytes self, $Serial$state state) {
     memcpy(&nbytes,this->blob,sizeof($WORD));
     res->$class = &B_bytesG_methods;
     res->nbytes = (long)nbytes;
-    res->str = malloc(nbytes+1);
+    res->str = GC_MALLOC_ATOMIC(nbytes+1);
     memcpy(res->str,this->blob+2,nbytes+1);
     return res;
 }
