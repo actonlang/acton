@@ -205,8 +205,8 @@ infLiveEnv env x
   | otherwise                           = do (cs,te,x') <- infSuiteEnv env x
                                              return (cs, Nothing, x')
 
-liveCombine te Nothing                  = te
-liveCombine Nothing te'                 = te'
+liveCombine te Nothing                  = Nothing
+liveCombine Nothing te'                 = Nothing
 liveCombine (Just te) (Just te')        = Just $ te++te'
 
 unwrapSchema sc                         = sc{ sctype = unwrap $ sctype sc }
