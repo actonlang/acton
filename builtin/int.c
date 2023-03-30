@@ -12,6 +12,9 @@
  * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
+#define GC_THREADS 1
+#include "gc.h"
+
 // Auxiliary //////////////////////////////////////////////////////////////////////////////
 
 // only called with e>=0.
@@ -30,7 +33,7 @@ char *get_str(zz_ptr n);
 B_int malloc_int() {
     B_int res = malloc(sizeof(struct B_int));
     res->$class = &B_intG_methods;
-    res->val.n = malloc(sizeof(unsigned long));
+    res->val.n = GC_MALLOC_ATOMIC(sizeof(unsigned long));
     res->val.size = 0;
     res->val.alloc = 1;
     return res;
@@ -669,7 +672,7 @@ int get_str0(bool ishead, zz_ptr n, zz_ptr dens[], int d, char *res, int pos) {
             return get_str0(false, lo, dens, d-1, res, newpos);
         }
     } else {
-        char *buf = malloc(POW10INWORD);
+        char *buf = GC_MALLOC_ATOMIC(POW10INWORD);
         asprintf(&buf,"%lu",(unsigned long)n->n[0]);
         int len = strlen(buf);
         if (ishead) {
@@ -712,7 +715,7 @@ char * get_str(zz_ptr nval) {
     // strlen is for most n one more than necessary; this is a precaution for values of n
     // where the ... in ceil(...) is very close to an integer. So we often waste one byte.
     int strlen = ceil(log10((float)npos->n[nlen - 1]) + (nlen - 1) * WORD_BITS * log10(2) + is_neg_n) + 2;
-    char *res = malloc(strlen);    
+    char *res = GC_MALLOC_ATOMIC(strlen);
     memset(res,'0', strlen);
     int pos = 0;
     if (is_neg_n) {
@@ -777,7 +780,7 @@ int set_str(zz_ptr a, char *nstr) {
     else {
         zz_ptr res0 = malloc(sizeof(zz_struct));
         zz_init(res0);
-        char *buf = malloc(offset+1);
+        char *buf = GC_MALLOC_ATOMIC(offset+1);
         memcpy(buf, nstr, offset);
         buf[offset] = '\0';
         unsigned long headval;
