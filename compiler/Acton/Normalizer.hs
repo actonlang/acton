@@ -119,7 +119,7 @@ instance Norm Stmt where
     norm env (Return l (Just e))    = do e' <- norm env e
                                          return $ Return l $ Just e'
     norm env (Raise l e)            = do e' <- norm env e
-                                         return $ Raise l e'
+                                         return $ Expr l $ eCall (eQVar primRAISE) [e']
     norm env (Break l)              = return $ Break l
     norm env (Continue l)           = return $ Continue l
     norm env (If l bs els)          = If l <$> norm env bs <*> norm env els
