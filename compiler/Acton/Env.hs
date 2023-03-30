@@ -1060,25 +1060,25 @@ importWits m te env         = foldl addWit env ws
 
 
 
-headvar (Impl w (TVar _ v) p)       = v
+headvar (Impl w (TVar _ v) p)       = Just v
 
 headvar (Cast (TVar _ v) (TVar _ v'))
-  | not $ univar v                  = v'
-headvar (Cast (TVar _ v) t)         = v
-headvar (Cast t (TVar _ v))         = v     -- ?
+  | not $ univar v                  = Just v'
+headvar (Cast (TVar _ v) t)         = Just v
+headvar (Cast t (TVar _ v))         = Just v     -- ?
 
 headvar (Sub w (TVar _ v) (TVar _ v'))
-  | not $ univar v                  = v'
-headvar (Sub w (TVar _ v) t)        = v
-headvar (Sub w t (TVar _ v))        = v     -- ?
+  | not $ univar v                  = Just v'
+headvar (Sub w (TVar _ v) t)        = Just v
+headvar (Sub w t (TVar _ v))        = Just v     -- ?
 
-headvar (Sel w (TVar _ v) n t)      = v
+headvar (Sel w (TVar _ v) n t)      = Just v
 
-headvar (Mut (TVar _ v) n t)        = v
+headvar (Mut (TVar _ v) n t)        = Just v
 
-headvar (Seal (TVar _ v))           = v
+headvar (Seal (TVar _ v))           = Just v
 
-headvar c                           = error ("###### headvar " ++ prstr c)
+headvar c                           = Nothing
 
 -- Error handling ----------------------------------------------------------------------------------------------------
 

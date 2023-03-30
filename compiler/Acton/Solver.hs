@@ -79,7 +79,7 @@ groupCs env (c:cs)                          = close (tyfree c ++ attrfree [c]) [
 -- solve
 ----------------------------------------------------------------------------------------------------------------------
 
-data Rank                                   = RRed { cstrs :: [Constraint] }
+data Rank                                   = RRed { cstr :: Constraint }
                                             | RUni { tgt :: Type, alts :: [Type] }
                                             | RSealed { tgt :: Type }
                                             | RTry { tgt :: Type, alts :: [Type], rev :: Bool }
@@ -99,7 +99,7 @@ instance Eq Rank where
     _           == _                        = False
 
 instance Pretty Rank where
-    pretty (RRed cs)                        = text "<reduce>" <+> commaSep pretty cs
+    pretty (RRed c)                         = text "<reduce>" <+> pretty c
     pretty (RUni t ts)                      = pretty t <+> char '=' <+> commaSep pretty ts
     pretty (RSealed t)                      = pretty t <+> text "sealed"
     pretty (RTry t ts rev)                  = pretty t <+> braces (commaSep pretty ts) Pretty.<> (if rev then char '\'' else empty)
@@ -132,8 +132,8 @@ solve' env select hist te tt eq cs
                                                  --traceM ("## posvs: " ++ prstrs posvs)
                                                  --traceM ("## negvs: " ++ prstrs negvs)
                                                  case head goals of
-                                                    RRed cs' -> do
-                                                        traceM ("### reduce " ++ prstrs cs')
+                                                    RRed c -> do
+                                                        traceM ("### reduce " ++ prstr c)
                                                         proceed hist cs
                                                     RUni t alts -> do
                                                         traceM ("### uni goal " ++ prstr t ++ ", unifying with " ++ prstrs alts)
@@ -157,8 +157,8 @@ solve' env select hist te tt eq cs
                                                         return (keep_cs, eq)
 
   where (solve1, keep1)                     = partition select cs
-        heads                               = map headvar solve1
-        (solve2, keep2)                     = partition ((`elem` heads) . headvar) keep1
+        heads                               = [ v | Just v <- map headvar solve1 ]
+        (solve2, keep2)                     = partition (maybe False (`elem` heads) . headvar) keep1
         (solve_cs, keep_cs)                 = (solve1++solve2, keep2)
         goals                               = sortOn deco $ map condense $ group rnks
         group []                            = []
@@ -183,7 +183,7 @@ solve' env select hist te tt eq cs
                                                  hist <- msubst hist
                                                  solve' env select hist te tt eq cs
 
-        condense (RRed cs : rs)             = RRed (cs ++ concatMap cstrs rs)
+        condense (RRed c : rs)              = RRed c
         condense (RUni t as : rs)           = RUni t (foldr union as $ map alts rs)
         condense (RSealed t : rs)           = RSealed t
         condense (RTry t as r : rs)
@@ -248,7 +248,7 @@ rank env (Seal t@TVar{})
   | tvkind (tvar t) == KFX                  = RSealed t
   | otherwise                               = RSkip
 
-rank env c                                  = RRed [c]
+rank env c                                  = RRed c
 
 
 ----------------------------------------------------------------------------------------------------------------------
@@ -1029,7 +1029,7 @@ improve env te tt eq cs
         obsvars                         = posvars0 ++ negvars0 ++ fixedvars ++ pvars ++ embedded vi ++ sealed vi
         boundvars                       = Map.keys (ubounds vi) ++ Map.keys (lbounds vi)
         boundprot                       = tyfree (Map.elems $ ubounds vi) ++ tyfree (Map.elems $ lbounds vi)
-        cyclic                          = if null (boundvars\\boundprot) then [ c | c <- cs, headvar c `elem` boundvars ] else []
+        cyclic                          = if null (boundvars\\boundprot) then [ c | c <- cs, fromJust (headvar c) `elem` boundvars ] else []
         redSeal                         = sealed vi \\ (posvars ++ negvars ++ embedded vi ++ Map.keys (ubounds vi) ++ Map.keys (lbounds vi)
                                           ++ Map.keys (pbounds vi) ++ Map.keys (mutattrs vi) ++ Map.keys (selattrs vi))
 
