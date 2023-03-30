@@ -2174,6 +2174,7 @@ void DaveNull () {}
 
 int main(int argc, char **argv) {
     // Init garbage collector and suppress warnings
+    GC_enable_incremental();
     GC_INIT();
     GC_set_warn_proc(DaveNull);
     uint ddb_no_host = 0;
