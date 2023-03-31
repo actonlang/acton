@@ -547,6 +547,18 @@ genCall env ts e@(Var _ n) p
   | NDef{} <- info                  = (instCast env ts e $ gen env e) <> parens (gen env p)
   where info                        = findQName n env
 genCall env ts (Async _ e) p        = genCall env ts e p
+
+genCall env ts e0@(Dot _ e n) p
+     | n == fromatomKW,
+       let PosArg c@(Call{}) PosNil = p,
+       let PosArg parg PosNil  = pargs c
+                                    = case parg of
+                                        i@(Int _ ival _) -> trace ("call is = " ++ show (Call NoLoc e0 p KwdNil) ++ " , type is " ++ show (fst $ schemaOf env (Call NoLoc e0 p KwdNil))) $
+                                           case nstr(noq(tcname(tcon(sctype(fst $ schemaOf env (Call NoLoc e0 p KwdNil)))))) of
+                                            "int" -> gen env i -- gen env primToInt <> parens (text (show ival))
+                                            "float" -> gen env primToFloat <> parens (text ("(double)"++show ival))
+                                            _ -> genDotCall env ts (snd $ schemaOf env e0) e n p
+                                        _ -> genDotCall env ts (snd $ schemaOf env e0) e n p
 genCall env ts e0@(Dot _ e n) p     = genDotCall env ts (snd $ schemaOf env e0) e n p
 
 instCast env [] e                   = id

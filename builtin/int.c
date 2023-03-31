@@ -630,16 +630,14 @@ long from$int(B_int n) {
 }
             
 B_int to$int(long n) {
-    B_int res = malloc(sizeof(struct B_int));
-    res->$class = &B_intG_methods;
-    res->val.n = malloc(sizeof(unsigned long));
-    res->val.n[0] = n<0?-n:n;
-    res->val.alloc = 1;
-    if (n==0)
-        res->val.size=0;
-    else
-        res->val.size = n>0?1:-1;
-    return res;
+    if (n >= 0 && n <= 100)
+        return &B_int_strs[n];
+    else {
+        B_int res = malloc_int();
+        res->val.n[0] = n < 0 ? -n : n;
+        res->val.size = n < 0 ? -1 : n > 0;
+        return res;
+    }
 }
 
 B_int to$int2(char *str) {
@@ -816,3 +814,117 @@ B_tuple $xgcd(B_int a, B_int b) {
     return $NEWTUPLE(3, d, s, t);
 }
     
+unsigned long B_int_longs[101] = { 0,  1,  2,  3,  4,  5,  6,  7,  8,  9,
+                                  10, 11, 12, 13, 14, 15, 16, 17, 18, 19,
+                                  20, 21, 22, 23, 24, 25, 26, 27, 28, 29,
+                                  30, 31, 32, 33, 34, 35, 36, 37, 38, 39,
+                                  40, 41, 42, 43, 44, 45, 46, 47, 48, 49,
+                                  50, 51, 52, 53, 54, 55, 56, 57, 58, 59,
+                                  60, 61, 62, 63, 64, 65, 66, 67, 68, 69,
+                                  70, 71, 72, 73, 74, 75, 76, 77, 78, 79,
+                                  80, 81, 82, 83, 84, 85, 86, 87, 88, 89,
+                                  90, 91, 92, 93, 94, 95, 96, 97, 98, 99,
+                                 100};
+                         
+struct B_int B_int_strs[101] = {{&B_intG_methods, B_int_longs, 0, 1},
+                         {&B_intG_methods, B_int_longs+1, 1, 1},
+                         {&B_intG_methods, B_int_longs+2, 1, 1},
+                         {&B_intG_methods, B_int_longs+3, 1, 1},
+                         {&B_intG_methods, B_int_longs+4, 1, 1},
+                         {&B_intG_methods, B_int_longs+5, 1, 1},
+                         {&B_intG_methods, B_int_longs+6, 1, 1},
+                         {&B_intG_methods, B_int_longs+7, 1, 1},
+                         {&B_intG_methods, B_int_longs+8, 1, 1},
+                         {&B_intG_methods, B_int_longs+9, 1, 1},
+                         {&B_intG_methods, B_int_longs+10, 1, 1},
+                         {&B_intG_methods, B_int_longs+11, 1, 1},
+                         {&B_intG_methods, B_int_longs+12, 1, 1},
+                         {&B_intG_methods, B_int_longs+13, 1, 1},
+                         {&B_intG_methods, B_int_longs+14, 1, 1},
+                         {&B_intG_methods, B_int_longs+15, 1, 1},
+                         {&B_intG_methods, B_int_longs+16, 1, 1},
+                         {&B_intG_methods, B_int_longs+17, 1, 1},
+                         {&B_intG_methods, B_int_longs+18, 1, 1},
+                         {&B_intG_methods, B_int_longs+19, 1, 1},
+                         {&B_intG_methods, B_int_longs+20, 1, 1},
+                         {&B_intG_methods, B_int_longs+21, 1, 1},
+                         {&B_intG_methods, B_int_longs+22, 1, 1},
+                         {&B_intG_methods, B_int_longs+23, 1, 1},
+                         {&B_intG_methods, B_int_longs+24, 1, 1},
+                         {&B_intG_methods, B_int_longs+25, 1, 1},
+                         {&B_intG_methods, B_int_longs+26, 1, 1},
+                         {&B_intG_methods, B_int_longs+27, 1, 1},
+                         {&B_intG_methods, B_int_longs+28, 1, 1},
+                         {&B_intG_methods, B_int_longs+29, 1, 1},
+                         {&B_intG_methods, B_int_longs+30, 1, 1},
+                         {&B_intG_methods, B_int_longs+31, 1, 1},
+                         {&B_intG_methods, B_int_longs+32, 1, 1},
+                         {&B_intG_methods, B_int_longs+33, 1, 1},
+                         {&B_intG_methods, B_int_longs+34, 1, 1},
+                         {&B_intG_methods, B_int_longs+35, 1, 1},
+                         {&B_intG_methods, B_int_longs+36, 1, 1},
+                         {&B_intG_methods, B_int_longs+37, 1, 1},
+                         {&B_intG_methods, B_int_longs+38, 1, 1},
+                         {&B_intG_methods, B_int_longs+39, 1, 1},
+                         {&B_intG_methods, B_int_longs+40, 1, 1},
+                         {&B_intG_methods, B_int_longs+41, 1, 1},
+                         {&B_intG_methods, B_int_longs+42, 1, 1},
+                         {&B_intG_methods, B_int_longs+43, 1, 1},
+                         {&B_intG_methods, B_int_longs+44, 1, 1},
+                         {&B_intG_methods, B_int_longs+45, 1, 1},
+                         {&B_intG_methods, B_int_longs+46, 1, 1},
+                         {&B_intG_methods, B_int_longs+47, 1, 1},
+                         {&B_intG_methods, B_int_longs+48, 1, 1},
+                         {&B_intG_methods, B_int_longs+49, 1, 1},
+                         {&B_intG_methods, B_int_longs+50, 1, 1},
+                         {&B_intG_methods, B_int_longs+51, 1, 1},
+                         {&B_intG_methods, B_int_longs+52, 1, 1},
+                         {&B_intG_methods, B_int_longs+53, 1, 1},
+                         {&B_intG_methods, B_int_longs+54, 1, 1},
+                         {&B_intG_methods, B_int_longs+55, 1, 1},
+                         {&B_intG_methods, B_int_longs+56, 1, 1},
+                         {&B_intG_methods, B_int_longs+57, 1, 1},
+                         {&B_intG_methods, B_int_longs+58, 1, 1},
+                         {&B_intG_methods, B_int_longs+59, 1, 1},
+                         {&B_intG_methods, B_int_longs+60, 1, 1},
+                         {&B_intG_methods, B_int_longs+61, 1, 1},
+                         {&B_intG_methods, B_int_longs+62, 1, 1},
+                         {&B_intG_methods, B_int_longs+63, 1, 1},
+                         {&B_intG_methods, B_int_longs+64, 1, 1},
+                         {&B_intG_methods, B_int_longs+65, 1, 1},
+                         {&B_intG_methods, B_int_longs+66, 1, 1},
+                         {&B_intG_methods, B_int_longs+67, 1, 1},
+                         {&B_intG_methods, B_int_longs+68, 1, 1},
+                         {&B_intG_methods, B_int_longs+69, 1, 1},
+                         {&B_intG_methods, B_int_longs+70, 1, 1},
+                         {&B_intG_methods, B_int_longs+71, 1, 1},
+                         {&B_intG_methods, B_int_longs+72, 1, 1},
+                         {&B_intG_methods, B_int_longs+73, 1, 1},
+                         {&B_intG_methods, B_int_longs+74, 1, 1},
+                         {&B_intG_methods, B_int_longs+75, 1, 1},
+                         {&B_intG_methods, B_int_longs+76, 1, 1},
+                         {&B_intG_methods, B_int_longs+77, 1, 1},
+                         {&B_intG_methods, B_int_longs+78, 1, 1},
+                         {&B_intG_methods, B_int_longs+79, 1, 1},
+                         {&B_intG_methods, B_int_longs+80, 1, 1},
+                         {&B_intG_methods, B_int_longs+81, 1, 1},
+                         {&B_intG_methods, B_int_longs+82, 1, 1},
+                         {&B_intG_methods, B_int_longs+83, 1, 1},
+                         {&B_intG_methods, B_int_longs+84, 1, 1},
+                         {&B_intG_methods, B_int_longs+85, 1, 1},
+                         {&B_intG_methods, B_int_longs+86, 1, 1},
+                         {&B_intG_methods, B_int_longs+87, 1, 1},
+                         {&B_intG_methods, B_int_longs+88, 1, 1},
+                         {&B_intG_methods, B_int_longs+89, 1, 1},
+                         {&B_intG_methods, B_int_longs+90, 1, 1},
+                         {&B_intG_methods, B_int_longs+91, 1, 1},
+                         {&B_intG_methods, B_int_longs+92, 1, 1},
+                         {&B_intG_methods, B_int_longs+93, 1, 1},
+                         {&B_intG_methods, B_int_longs+94, 1, 1},
+                         {&B_intG_methods, B_int_longs+95, 1, 1},
+                         {&B_intG_methods, B_int_longs+96, 1, 1},
+                         {&B_intG_methods, B_int_longs+97, 1, 1},
+                         {&B_intG_methods, B_int_longs+98, 1, 1},
+                         {&B_intG_methods, B_int_longs+99, 1, 1},
+                         {&B_intG_methods, B_int_longs+100, 1, 1}};
+                         
