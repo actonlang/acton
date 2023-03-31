@@ -126,8 +126,6 @@ solve' env select hist te tt eq cs
                                                  traceM ("## keep:\n" ++ render (nest 8 $ vcat $ map pretty keep_cs))
                                                  traceM ("## solve:\n" ++ render (nest 8 $ vcat $ map pretty solve_cs))
                                                  traceM ("## ranks:\n" ++ render (nest 8 $ vcat $ map pretty rnks))
-                                                 traceM ("## keep2:\n" ++ render (nest 8 $ vcat $ map pretty keep2))
-                                                 traceM ("## solve2:\n" ++ render (nest 8 $ vcat $ map pretty solve2))
                                                  --traceM ("## optvs: " ++ prstrs optvs)
                                                  --traceM ("## posvs: " ++ prstrs posvs)
                                                  --traceM ("## negvs: " ++ prstrs negvs)
@@ -164,7 +162,7 @@ solve' env select hist te tt eq cs
         group []                            = []
         group (r:rs)                        = (r : rs1) : group rs2
           where (rs1,rs2)                   = partition (==r) rs
-        rnks                                = map (rank env) solve_cs
+        rnks                                = map (rank env (taint cs)) solve_cs
         tryAlts st t0 []                    = trace ("### FAIL " ++ prstr t0) $
                                               noSolve cs
         tryAlts st t0 (t:ts)                = tryAlt t0 t `catchError` const ({-traceM ("### ROLLBACK " ++ prstr t0) >> -}rollbackState st >> tryAlts st t0 ts)
@@ -220,36 +218,43 @@ solve' env select hist te tt eq cs
 --                                          = int : [C3Pt] ++ CPt ++ subrev [] ++ Pt : [] ++ float : subrev []
 --                                          = int : C3Pt : CPt : Pt : float
 
-rank                                        :: Env -> Constraint -> Rank
-rank env (Sub _ t1 t2)                      = rank env (Cast t1 t2)
+rank                                        :: Env -> [TVar] -> Constraint -> Rank
+rank env tainted (Sub _ t1 t2)              = rank env tainted (Cast t1 t2)
 
-rank env (Cast t1@TVar{} t2@TVar{})
-  | univar (tvar t1), univar (tvar t2)      = RUni t1 [t2]
-rank env (Cast t1@TVar{} (TOpt _ t2@TVar{}))
+rank env tainted (Cast t1@(TVar _ v1) t2@(TVar _ v2))
+  | univar v1, univar v2                    = if length ([v1,v2] \\ tainted) > 0 then RUni t1 [t2] else RVar t1 [t2]
+rank env tainted (Cast t1@TVar{} (TOpt _ t2@TVar{}))
   | univar (tvar t1), univar (tvar t2)      = RVar t1 [t2]
-rank env (Cast t1@TVar{} (TOpt _ t2))
+rank env tainted (Cast t1@TVar{} (TOpt _ t2))
   | univar (tvar t1)                        = RTry t1 (allBelow env t2 ++ [tOpt tWild, tNone]) False
-rank env (Cast TNone{} t2@TVar{})
+rank env tainted (Cast TNone{} t2@TVar{})
   | univar (tvar t2)                        = RTry t2 [tOpt tWild, tNone] True
-rank env (Cast t1@TVar{} t2)
+rank env tainted (Cast t1@TVar{} t2)
   | univar (tvar t1)                        = RTry t1 (allBelow env t2) False
-rank env (Cast t1 t2@TVar{})
+rank env tainted (Cast t1 t2@TVar{})
   | univar (tvar t2)                        = RTry t2 (allAbove env t1) True
 
-rank env c@(Impl _ t p)
+rank env tainted c@(Impl _ t p)
   | schematic t `elem` ts                   = ROvl t
   | otherwise                               = RTry t ts False
   where ts                                  = allExtProto env t p
 
-rank env (Sel _ t n _)                      = RTry t (allConAttr env n ++ allProtoAttr env n ++ allExtProtoAttr env n) False
-rank env (Mut t n _)                        = RTry t (allConAttr env n) False
+rank env tainted (Sel _ t n _)              = RTry t (allConAttr env n ++ allProtoAttr env n ++ allExtProtoAttr env n) False
+rank env tainted (Mut t n _)                = RTry t (allConAttr env n) False
 
-rank env (Seal t@TVar{})
+rank env tainted (Seal t@TVar{})
   | tvkind (tvar t) == KFX                  = RSealed t
   | otherwise                               = RSkip
 
-rank env c                                  = RRed c
+rank env tainted c                          = RRed c
 
+
+taint []                                    = []
+taint (Sub _ t1 t2 : cs)                    = taint (Cast t1 t2 : cs)
+taint (Cast TVar{} TVar{} : cs)             = taint cs
+taint (Cast (TVar _ v) _ : cs)              = v : taint cs
+taint (Cast _ (TVar _ v) : cs)              = v : taint cs
+taint (_ : cs)                              = taint cs
 
 ----------------------------------------------------------------------------------------------------------------------
 -- New variable info
