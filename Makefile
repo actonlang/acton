@@ -387,12 +387,16 @@ LIBGC_REF=daea2f19089c32f38de916b8949fde42d73daf6f
 deps/libgc:
 	ls $@ >/dev/null 2>&1 || git clone https://github.com/ivmai/bdwgc.git $@
 
+# NOTE: there appears to be a problem with bdwgc in incremental mode where it is
+# does not find pointers in global variables despite them being in the root set.
+# We use NO_VDB_FOR_STATIC_ROOTS to work around this. Eventually we should fix
+# this and get a slightly faster GC by doing VDB for static roots too.
 deps/instdir/lib/libgc.a: deps/libgc $(ZIG)
 	mkdir -p $(dir $@)
 	cd $< \
 	&& git checkout $(LIBGC_REF) \
 	&& unset CFLAGS \
-	&& export CFLAGS_EXTRA="-DGC_BUILTIN_ATOMIC -DGC_THREADS -DNO_PROC_FOR_LIBRARIES -DREDIRECT_MALLOC=GC_malloc -DIGNORE_FREE -DGC_ASSERTIONS $(CFLAGS_DEPS)" \
+	&& export CFLAGS_EXTRA="-DLARGE_CONFIG -DGC_BUILTIN_ATOMIC -DGC_THREADS -DNO_PROC_FOR_LIBRARIES -DREDIRECT_MALLOC=GC_malloc -DIGNORE_FREE -DNO_VDB_FOR_STATIC_ROOTS -DGC_ASSERTIONS $(CFLAGS_DEPS)" \
 	&& make -f Makefile.direct -j base_lib \
 	&& cp $(TD)/deps/libgc/libgc.a $(TD)/$@ \
 	&& cp -r $(TD)/deps/libgc/include/gc* $(TD)/deps/instdir/include/
@@ -715,7 +719,7 @@ dist/completion/acton.bash-completion: completion/acton.bash-completion
 
 dist/zig: deps/zig
 	mkdir -p $(dir $@)
-	cp -a $< $@
+	cp -a $< dist/
 
 deps/zig: deps/zig-$(ZIG_OS)-$(ZIG_ARCH)-$(ZIG_VERSION).tar.xz
 	mkdir -p $@
