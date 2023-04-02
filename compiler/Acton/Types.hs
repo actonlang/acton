@@ -145,10 +145,10 @@ infTop env ss                           = do --traceM ("\n## infEnv top")
                                              ss <- msubst ss
                                              popFX
                                              eq <- solveAll (define (filter typeDecl te) env) te tNone cs
+                                             ss <- termred <$> msubst (bindWits eq ++ ss)
                                              defaultVars (tyfree ss)
                                              te <- defaultTE te
-                                             ss1 <- termred <$> msubst (bindWits eq ++ ss)
-                                             return (te, ss1)
+                                             return (te, ss)
 
 class Infer a where
     infer                               :: Env -> a -> TypeM (Constraints,Type,a)
