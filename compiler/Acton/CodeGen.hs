@@ -553,7 +553,7 @@ genCall env ts e0@(Dot _ e n) p
        let PosArg c@(Call{}) PosNil = p,
        let PosArg parg PosNil  = pargs c
                                     = case parg of
-                                        i@(Int _ ival _) -> trace ("call is = " ++ show (Call NoLoc e0 p KwdNil) ++ " , type is " ++ show (fst $ schemaOf env (Call NoLoc e0 p KwdNil))) $
+                                        i@(Int _ ival _) -> -- trace ("call is = " ++ show (Call NoLoc e0 p KwdNil) ++ " , type is " ++ show (fst $ schemaOf env (Call NoLoc e0 p KwdNil))) $
                                            case nstr(noq(tcname(tcon(sctype(fst $ schemaOf env (Call NoLoc e0 p KwdNil)))))) of
                                             "int" -> gen env i -- gen env primToInt <> parens (text (show ival))
                                             "float" -> gen env primToFloat <> parens (text ("(double)"++show ival))
