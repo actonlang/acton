@@ -392,7 +392,7 @@ deps/instdir/lib/libgc.a: deps/libgc $(ZIG)
 	cd $< \
 	&& git checkout $(LIBGC_REF) \
 	&& unset CFLAGS \
-	&& export CFLAGS_EXTRA="-DGC_BUILTIN_ATOMIC -DGC_THREADS -DNO_PROC_FOR_LIBRARIES -DREDIRECT_MALLOC=GC_malloc -DIGNORE_FREE -DGC_ASSERTIONS $(CFLAGS_DEPS)" \
+	&& export CFLAGS_EXTRA="-DLARGE_CONFIG -DGC_BUILTIN_ATOMIC -DGC_THREADS -DNO_PROC_FOR_LIBRARIES -DREDIRECT_MALLOC=GC_malloc -DIGNORE_FREE -DPARALLEL_MARK $(CFLAGS_DEPS)" \
 	&& make -f Makefile.direct -j base_lib \
 	&& cp $(TD)/deps/libgc/libgc.a $(TD)/$@ \
 	&& cp -r $(TD)/deps/libgc/include/gc* $(TD)/deps/instdir/include/
