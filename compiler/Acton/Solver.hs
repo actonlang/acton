@@ -236,11 +236,11 @@ rank env tainted (Cast t1 t2@TVar{})
 
 rank env tainted c@(Impl _ t p)
   | schematic t `elem` ts                   = ROvl t
-  | otherwise                               = RTry t ts False
+  | not $ null $ tyfree t                   = RTry t ts False
   where ts                                  = allExtProto env t p
 
-rank env tainted (Sel _ t n _)              = RTry t (allConAttr env n ++ allProtoAttr env n ++ allExtProtoAttr env n) False
-rank env tainted (Mut t n _)                = RTry t (allConAttr env n) False
+rank env tainted (Sel _ t@TVar{} n _)       = RTry t (allProtoAttr env n ++ allConAttr env n ++ allExtProtoAttr env n) False
+rank env tainted (Mut t@TVar{} n _)         = RTry t (allConAttr env n) False
 
 rank env tainted (Seal t@TVar{})
   | tvkind (tvar t) == KFX                  = RSealed t
@@ -254,6 +254,8 @@ taint (Sub _ t1 t2 : cs)                    = taint (Cast t1 t2 : cs)
 taint (Cast TVar{} TVar{} : cs)             = taint cs
 taint (Cast (TVar _ v) _ : cs)              = v : taint cs
 taint (Cast _ (TVar _ v) : cs)              = v : taint cs
+taint (Sel _ (TVar _ v) _ _ : cs)           = v : taint cs
+taint (Mut (TVar _ v) _ _ : cs)             = v : taint cs
 taint (_ : cs)                              = taint cs
 
 ----------------------------------------------------------------------------------------------------------------------
