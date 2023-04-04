@@ -29,7 +29,18 @@ static void expand(B_list lst,int n) {
     }
     lst->data = newptr;
     lst->capacity = newcapacity;
-}  
+}
+
+static void shrink(B_list lst) {
+    if (lst->capacity > 20 && 2*lst->length < lst->capacity) {
+        int newcapacity = lst->length;
+        $WORD old = lst->data;
+        lst->data = malloc(newcapacity * sizeof($WORD));
+        lst->capacity = newcapacity;
+        memcpy(lst->data, old, newcapacity * sizeof($WORD));
+    }
+}
+            
 
 B_list B_listD_new(int capacity) {
     if (capacity < 0) {
@@ -159,6 +170,7 @@ $WORD B_listD_pop(B_list lst, B_int i) {
             (len-(ix0+1))*sizeof($WORD));
     lst->data[len-1] = NULL;
     lst->length--;
+    shrink(lst);
     return res;
 }
     
@@ -336,7 +348,9 @@ B_NoneType B_SequenceD_listD___delitem__(B_SequenceD_list wit, B_list lst, B_int
     memmove(lst->data + ix0,
             lst->data + (ix0 + 1),
             (len-(ix0+1))*sizeof($WORD));
+    lst->data[lst->length-1] = NULL;
     lst->length--;
+    shrink(lst);
     return B_None;
 }
 
