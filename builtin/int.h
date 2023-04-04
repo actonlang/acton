@@ -18,3 +18,4 @@ B_int B_intG_new(B_atom a);
 B_int $gcd(B_int, B_int);
 B_tuple $xgcd(B_int, B_int);
 
+extern struct B_int B_int_strs[256];
