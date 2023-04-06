@@ -697,6 +697,11 @@ dist/include/bsdnt: $(DEPSA)
 	@mkdir -p $(dir $@)
 	cp -a deps/instdir/include/bsdnt $@
 
+dist/include/gc: $(LIBGC)
+	@mkdir -p $(dir $@)
+	cp -a deps/instdir/include/gc $@
+	cp -a deps/instdir/include/gc.h $(dir $@)
+
 dist/rts/%: rts/%
 	@mkdir -p $(dir $@)
 	cp $< $@
@@ -731,7 +736,7 @@ deps/zig-$(ZIG_OS)-$(ZIG_ARCH)-$(ZIG_VERSION).tar.xz:
 #curl -o $@ https://ziglang.org/builds/zig-$(ZIG_OS)-$(ZIG_ARCH)-$(ZIG_VERSION).tar.xz
 
 .PHONY: distribution clean-distribution
-distribution: $(DIST_ARCHIVES) dist/include/bsdnt $(DIST_BINS) $(DIST_HFILES) $(DIST_TYFILES) $(DIST_DBARCHIVE) $(DIST_ZIG)
+distribution: $(DIST_ARCHIVES) dist/include/bsdnt dist/include/gc $(DIST_BINS) $(DIST_HFILES) $(DIST_TYFILES) $(DIST_DBARCHIVE) $(DIST_ZIG)
 
 clean-distribution:
 	rm -rf dist
