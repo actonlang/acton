@@ -141,7 +141,9 @@ hModule env (Module m imps stmts)   = text "#pragma" <+> text "once" $+$
                                       (if inBuiltin env
                                        then empty
                                        else include env "builtin" (modName ["builtin"]) $+$
+                                            include env "builtin" (modName ["env"]) $+$
                                             include env "rts" (modName ["rts"])) $+$
+                                      text "#include" <+> doubleQuotes (text "gc/gc_typed.h") $+$
                                       vcat (map (include env "types") $ modNames imps) $+$
                                       hSuite env stmts $+$
                                       text "void" <+> genTopName env initKW <+> parens empty <> semi 
@@ -163,7 +165,7 @@ declstub env Def{}                  = empty
 typedef env (Class _ n q a b)       = text "typedef" <+> text "struct" <+> genTopName env n <+> char '*' <> genTopName env n <> semi
 typedef env Def{}                   = empty
 
-decl env (Class _ n q a b)          = (text "struct" <+> classname env n <+> char '{') $+$ 
+decl env (Class _ n q a b)          = (text "struct" <+> classname env n <+> char '{') $+$
                                       nest 4 (vcat $ stdprefix env ++ initdef : serialize env tc : deserialize env tc : meths) $+$
                                       char '}' <> semi $+$
                                       inst_struct
@@ -173,7 +175,8 @@ decl env (Class _ n q a b)          = (text "struct" <+> classname env n <+> cha
         inst_struct | initNotImpl   = empty
                     | otherwise     = (text "struct" <+> genTopName env n <+> char '{') $+$ 
                                       nest 4 (classlink env n $+$ vcat properties) $+$
-                                      char '}' <> semi
+                                      char '}' <> semi $+$
+                                      text "extern" <+> gcbm env n
         initNotImpl                 = any hasNotImpl [ b' | Decl _ ds <- b, Def{dname=n',dbody=b'} <- ds, n' == initKW ]
 decl env (Def _ n q p _ a _ _ fx)   = gen env (exposeMsg fx $ fromJust a) <+> genTopName env n <+> parens (params env $ prowOf p) <> semi
 
@@ -215,9 +218,11 @@ exposeMsg' t                        = t
 
 varsig env n t                      = gen env t <+> gen env n
 
-stdprefix env                       = [gcinfo env, classid env, superlink env]
+stdprefix env                       = [gcdescr env, class_name env, classid env, superlink env]
 
-gcinfo env                          = text "char" <+> text "*" <> gen env gcinfoKW <> semi
+gcdescr env                         = text "GC_descr" <+> gen env gcdescrKW <> semi
+gcbm env n                          = text "GC_word" <+> genTopName env n <> text "D_gcbm" <> brackets (text "GC_BITMAP_SIZE" <> parens (text "struct" <+> genTopName env n)) <> semi
+class_name env                      = text "char" <+> text "*" <> gen env classnameKW <> semi
 
 classid env                         = text "int" <+> gen env classidKW <> semi
 
@@ -256,7 +261,8 @@ serializeSup env c                  = methodtable' env c <> dot <> gen env seria
 deserializeSup env c                = methodtable' env c <> dot <> gen env deserializeKW
 
 classKW                             = primKW "class"
-gcinfoKW                            = primKW "GCINFO"
+gcdescrKW                           = primKW "GCdescr"
+classnameKW                         = primKW "name"
 classidKW                           = primKW "class_id"
 superclassKW                        = primKW "superclass"
 componentsKW                        = name "components"
@@ -335,7 +341,8 @@ declDecl env (Class _ n q as b)
                                       declSerialize env1 n c props sup_c $+$
                                       declDeserialize env1 n c props sup_c $+$
                                       declCon env1 n q b $+$
-                                      text "struct" <+> classname env n <+> methodtable env n <> semi
+                                      text "struct" <+> classname env n <+> methodtable env n <> semi $+$
+                                      gcbm env n
   where b'                          = subst [(tvSelf, tCon c)] b
         c                           = TC (NoQ n) (map tVar $ qbound q)
         env1                        = defineTVars q env
@@ -369,7 +376,7 @@ declDeserialize env n c props sup_c = (gen env (tCon c) <+> genTopName env (meth
                                               create) $+$
                                       char '}'
         create                      = gen env self <+> text "=" <+> gen env primDNEW <> parens (genTopName env n <> comma <+> gen env st) <> semi
-        alloc                       = gen env self <+> equals <+> malloc env (gname env n) <> semi $+$
+        alloc                       = gen env self <+> equals <+> typed_malloc env (gname env n) (methodtable env1 n) <> semi $+$
                                       gen env self <> text "->" <> gen env1 classKW <+> equals <+> char '&' <> methodtable env1 n <> semi
         super_step | [c] <- sup_c   = deserializeSup env (tcname c) <> parens (parens (gen env $ tcname c) <> gen env self <> comma <+> gen env st) <> semi
                    | otherwise      = empty
@@ -391,7 +398,11 @@ initModule env (s : ss)             = genStmt env s $+$
   where te                          = envOf s `exclude` defined env
         env1                        = gdefine te env
 
-initClassBase env c q as hasCDef    = methodtable env c <> dot <> gen env gcinfoKW <+> equals <+> doubleQuotes (genTopName env c) <> semi $+$
+-- TODO: complete GC_set_bit
+initClassBase env c q as hasCDef    = text "//" <+> genTopName env c <> text "D_gcbm" <+> text "is already initalized to 0 as bdwgc malloc is actually calloc" $+$
+                                      vcat [ text "GC_set_bit" <> parens (genTopName env c <> text "D_gcbm" <> comma <+> text "GC_WORD_OFFSET" <> parens (text "struct" <+> genTopName env c <> comma <+> gen env n))<> semi | (n, NSig sc Property) <- fullAttrEnv env tc ] $+$
+                                      methodtable env c <> dot <> gen env gcdescrKW <+> equals <+> text "GC_make_descriptor" <> parens (genTopName env c <> text "D_gcbm" <> comma <+> text "GC_WORD_LEN" <> parens (text "struct" <+> genTopName env c)) <> semi $+$
+                                      methodtable env c <> dot <> gen env classnameKW <+> equals <+> doubleQuotes (genTopName env c) <> semi $+$
                                       methodtable env c <> dot <> gen env superclassKW <+> equals <+> super <> semi $+$
                                       vcat [ inherit c' n | (c',n) <- inheritedAttrs env (NoQ c) ] $+$ text "\n\n"
   where super                       = if null as then text "NULL" else parens (gen env qnSuperClass) <> text "&" <> methodtable' env (tcname $ head as)
@@ -678,7 +689,7 @@ genNew env n p                      = newcon' env n <> parens (gen env p)
 
 declCon env n q b
   | null abstr || hasNotImpl b      = (gen env tRes <+> newcon env n <> parens (gen env pars) <+> char '{') $+$
-                                      nest 4 (gen env tObj <+> gen env tmpV <+> equals <+> malloc env (gname env n) <> semi $+$
+                                      nest 4 (gen env tObj <+> gen env tmpV <+> equals <+> typed_malloc env (gname env n) (methodtable env1 n) <> semi $+$
                                               gen env tmpV <> text "->" <> gen env1 classKW <+> equals <+> char '&' <> methodtable env1 n <> semi $+$
                                               initcall env1) $+$
                                       char '}'
@@ -696,6 +707,7 @@ declCon env n q b
         env1                        = ldefine ((tmpV, NVar tObj) : envOf pars) env
         abstr                       = abstractAttrs env (NoQ n)
 
+typed_malloc env n mt               = text "GC_MALLOC_EXPLICITLY_TYPED" <> parens (text "sizeof" <> parens (text "struct" <+> gen env n) <> comma <+> mt <> dot <> gen env gcdescrKW)
 malloc env n                        = text "malloc" <> parens (text "sizeof" <> parens (text "struct" <+> gen env n))
 
 comma' x                            = if isEmpty x then empty else comma <+> x
