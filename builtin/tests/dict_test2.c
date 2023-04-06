@@ -33,7 +33,7 @@ long fromWord($WORD w) {
 }
 
 B_Iterable dict_iterable(B_MappingD_dict wit) {
-  B_IterableG_class cl = malloc(sizeof(struct  B_IterableG_class));
+  B_IterableG_class cl = malloc(sizeof(struct B_IterableG_class));
   cl->__iter__ = (B_Iterator (*)(B_Iterable, $WORD))wit->$class->items;
   B_Iterable wit2 = malloc(sizeof(struct B_Iterable));
   wit2->$class = cl;
