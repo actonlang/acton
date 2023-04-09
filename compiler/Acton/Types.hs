@@ -125,8 +125,8 @@ instance Simp QName where
       where aliases                 = [ n1 | (n1, NAlias n2) <- names env, n2 == n ]
 
 
-defaultTE                           :: TEnv -> TypeM TEnv
-defaultTE te                        = do defaultVars (tyfree te)
+defaultTE                           :: Env -> TEnv -> TypeM TEnv
+defaultTE env te                    = do defaultVars (tyfree te \\ tyfree env)
                                          msubst te
 
 defaultVars tvs                     = do tvs' <- tyfree <$> msubst (map tVar tvs)
@@ -147,7 +147,7 @@ infTop env ss                           = do --traceM ("\n## infEnv top")
                                              eq <- solveAll (define (filter typeDecl te) env) te tNone cs
                                              ss <- termred <$> msubst (bindWits eq ++ ss)
                                              defaultVars (tyfree ss)
-                                             te <- defaultTE te
+                                             te <- defaultTE env  te
                                              return (te, ss)
 
 class Infer a where
@@ -863,57 +863,67 @@ instance Check Branch where
 
 --------------------------------------------------------------------------------------------------------------------------
 
-refine                                  :: Env -> Constraints -> TEnv -> Equations -> TypeM ([TVar], Constraints, TEnv, Equations)
-refine env cs te eq
+refine                                  :: Env -> Constraints -> TEnv -> Equations -> TypeM (Constraints, [TVar], Constraints, TEnv, Equations)
+refine env cs0 te eq
   | not $ null solve_cs                 = do --traceM ("  #solving: " ++ prstrs solve_cs)
                                              (cs',eq') <- solve env (not . canQual) te tNone eq cs
                                              refineAgain cs' eq'
   | not $ null ambig_vs                 = do --traceM ("  #defaulting: " ++ prstrs ambig_vs)
-                                             (cs',eq') <- solve env ambig te tNone eq cs
+                                             (cs',eq') <- solve env isAmbig te tNone eq cs
                                              refineAgain cs' eq'
   | otherwise                           = do eq <- msubst eq
-                                             return (gen_vs, cs, te, eq)
-  where solve_cs                        = [ c | c <- cs, not (canQual c) ]
-        ambig_vs                        = tyfree cs \\ closeDepVars safe_vs cs
+                                             return (fix_cs, gen_vs, cs, te, eq)
+  where fix_vs                          = closeDepVars (tyfree env ++ fxfree te ++ fxfree cs0) cs0
+        (fix_cs, cs)                    = partition (all (`elem` fix_vs) . tyfree) cs0
+        solve_cs                        = [ c | c <- cs, not (canQual c) ]
+        ambig_vs                        = tyfree cs \\ closeDepVars (fix_vs++safe_vs) cs
 
         safe_vs                         = if null def_vss then [] else nub $ foldr1 intersect def_vss
         def_vss                         = [ nub $ filter canGen $ tyfree sc | (_, NDef sc _) <- te, null $ scbind sc ]
-        gen_vs                          = nub (foldr union (tyfree cs) def_vss)
+        gen_vs                          = nub (foldr union (tyfree cs) def_vss) \\ fix_vs
 
         canQual (Impl _ (TVar _ v) _)   = univar v
         canQual _                       = False
 
         canGen tv                       = tvkind tv /= KFX
 
-        ambig c                         = any (`elem` ambig_vs) (tyfree c)
+        isAmbig c                       = any (`elem` ambig_vs) (tyfree c)
 
-        refineAgain cs eq               = do (cs,eq') <- simplify env te tNone cs
+        refineAgain cs eq               = do (cs1,eq1) <- simplify env te tNone (fix_cs++cs)
                                              te <- msubst te
                                              env <- msubst env
-                                             refine env cs te (eq'++eq)
+                                             refine env cs1 te (eq1++eq)
+
+fxfree te                               = [ tv | tv <- tyfree te, tvkind tv == KFX ]
 
 genEnv                                  :: Env -> Constraints -> TEnv -> [Decl] -> TypeM (Constraints,TEnv,Equations,[Decl])
 genEnv env cs te ds
   | any typeDecl te                     = do te <- msubst te
                                              --traceM ("## genEnv types 1\n" ++ render (nest 6 $ pretty te))
-                                             eq <- solveAll (define te env) te tNone cs
-                                             te <- defaultTE te
+                                             --traceM ("     cs: " ++ prstrs cs)
+--                                             eq <- solveAll (define te env) te tNone cs
+                                             (cs,eq) <- simplify (define te env) te tNone cs
+                                             te <- msubst te
+                                             env <- msubst env
+                                             (fix_cs, gen_vs, gen_cs, te, eq) <- refine (define te env) cs te eq
+--                                             te <- defaultTE env te
                                              --traceM ("## genEnv  types 2\n" ++ render (nest 6 $ pretty te))
-                                             return ([], te, eq, ds)
+--                                             return ([], te, eq, ds)
+                                             return (fix_cs, te, eq, ds)
   | onTop env                           = do te <- msubst te
                                              --traceM ("## genEnv defs 1\n" ++ render (nest 6 $ pretty te))
                                              (cs,eq) <- simplify env te tNone cs
                                              te <- msubst te
                                              env <- msubst env
-                                             (gen_vs, gen_cs, te, eq) <- refine env cs te eq
+                                             (fix_cs, gen_vs, gen_cs, te, eq) <- refine env cs te eq
                                              --traceM ("## genEnv defs 2 [" ++ prstrs gen_vs ++ "]\n" ++ render (nest 6 $ pretty te))
                                              let (q,ws) = qualify gen_vs gen_cs
-                                                 te1 = map (generalize q) te
+                                                 te1 = map (generalize gen_vs q) te
                                                  (eq1,eq2) = splitEqs (dom ws) eq
                                                  ds1 = map (abstract q ds ws eq1) ds
-                                             te1 <- defaultTE te1
+                                             --te1 <- defaultTE env te1
                                              --traceM ("## genEnv defs 3 [" ++ prstrs gen_vs ++ "]\n" ++ render (nest 6 $ pretty te1))
-                                             return ([], te1, eq2, ds1)
+                                             return (fix_cs, te1, eq2, ds1)
   | otherwise                           = do te <- msubst te
                                              --traceM ("## genEnv local defs \n" ++ render (nest 6 $ pretty te))
                                              (cs,eq) <- simplify env te tNone cs
@@ -927,9 +937,11 @@ genEnv env cs te ds
                     impls               = [ p | Impl w (TVar _ v') p <- cs, v == v' ]
                     wits                = [ (w, impl2type t p) | Impl w t@(TVar _ v') p <- cs, v == v' ]
 
-    generalize q (n, NDef sc d)
-      | null $ scbind sc                = (n, NDef (tSchema q (sctype sc)) d)
-      | otherwise                       = (n, NDef sc d)
+    generalize vs q (n, NDef sc d)
+      | null $ scbind sc                = (n, NDef (tSchema q1 (sctype sc)) d)
+      where q1                          = [ qv | qv@(Quant v _) <- q, v `elem` vs ]
+    generalize vs q (n, i)              = (n, i)
+
 
     abstract q ds ws eq d@Def{}
       | null $ qbinds d                 = d{ qbinds = noqual env q, 
