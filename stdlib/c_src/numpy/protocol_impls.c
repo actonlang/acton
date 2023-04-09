@@ -476,7 +476,7 @@ struct numpyQ_IntegralD_ndarrayD_int numpyQ_IntegralD_ndarrayD_int$instance = {&
                                                                            (B_Logical)&numpyQ_LogicalD_ndarrayD_int$instance,  (B_Minus)&numpyQ_MinusD_ndarrayD_int$instance};
 numpyQ_IntegralD_ndarrayD_int numpyQ_IntegralD_ndarrayD_intG_witness = &numpyQ_IntegralD_ndarrayD_int$instance;
 
-struct numpyQ_LogicalD_ndarrayD_intG_class numpyQ_LogicalD_ndarrayD_intG_methods =  {
+struct numpyQ_LogicalD_ndarrayD_intG_class numpyQ_LogicalD_ndarrayD_intG_methods = {
     "numpyQ_LogicalD_ndarrayD_int",
     UNASSIGNED,
     ($SuperG_class)&B_LogicalG_methods,
