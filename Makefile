@@ -592,16 +592,6 @@ rts/rts_rel.o: rts/rts.c rts/rts.h builtin/__builtin__.h $(DEPSA) $(LIBGC)
 rts/empty.o: rts/empty.c
 	$(CC) $(CFLAGS) -g -c $< -o $@
 
-rts/pingpong: rts/pingpong.c rts/pingpong.h rts/rts.o
-	$(CC) $(CFLAGS) -Wno-int-to-void-pointer-cast \
-		-lutf8proc -lActonDB \
-		$(LDLIBS)
-		rts/rts.o \
-		builtin/builtin.o \
-		$< \
-		-o $@
-
-
 # top level targets
 
 .PHONY: backend
