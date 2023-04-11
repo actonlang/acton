@@ -141,7 +141,8 @@ B_list B_listD_copy(B_list lst) {
 }
 
 B_NoneType B_listD_clear(B_list lst) {
-    memset(lst->data, 0, lst->length * sizeof($WORD));
+    lst->data = NULL;
+    lst->capacity = 0;
     lst->length = 0;
     return B_None;
 }
