@@ -88,9 +88,7 @@ cmdLineParser       =  (VersionOpt <$> versionOptions)
                         <> command "cloud" (info cloudCommand (progDesc "Run an Acton project in the cloud"))
                         <> command "doc"   (info docCommand (progDesc "Show type and docstring info"))
                       ))              
-                     <|> (CompileOpt <$> (some $ argument (str :: ReadM String) (metavar "ACTONFILENAMES" <> help "Compile Acton files"))
-                                  <*> compileOptions )
-
+                     <|> (CompileOpt <$> (some $ argument (str :: ReadM String) (metavar "ACTONFILENAMES" <> help "Compile Acton files" <> completer (bashCompleter "file -X '!*.act' -o plusdirs"))) <*> compileOptions)
 
 versionOptions         = VersionOptions <$>
                                          switch (long "version"         <> help "Show version information")
@@ -152,8 +150,8 @@ cloudCommand        = Cloud <$> (
 
 docCommand          = Doc <$> (
     DocOptions
-        <$> strOption (long "signs" <> metavar "TYFILE" <> value "" <> help "Show type signatures")
-        <*> strOption (long "full" <> metavar "ACTONFILE" <> value "" <> help "Show type signatures and docstrings"))
+        <$> strOption (long "signs" <> metavar "TYFILE" <> value "" <> help "Show type signatures" <> completer (bashCompleter "file -X '!*.ty' -o plusdirs"))
+        <*> strOption (long "full" <> metavar "ACTONFILE" <> value "" <> help "Show type signatures and docstrings" <> completer (bashCompleter "file -X '!*.act' -o plusdirs")))
 
 descr               = fullDesc <> progDesc "Compilation and management of Acton source code and projects"
                       <> header "actonc - the Acton compiler"
