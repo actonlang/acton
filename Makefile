@@ -284,6 +284,9 @@ DEP_LIBS+=deps/instdir/lib/libmd.a
 endif
 
 DEP_LIBS+=deps/instdir/lib/libbsdnt.a
+DEP_LIBS+=deps/instdir/lib/libnetsnmp.a
+DEP_LIBS+=deps/instdir/lib/libnetsnmpagent.a
+DEP_LIBS+=deps/instdir/lib/libnetsnmpmibs.a
 DEP_LIBS+=deps/instdir/lib/libpcre2-8.a
 DEP_LIBS+=deps/instdir/lib/libpcre2-posix.a
 DEP_LIBS+=deps/instdir/lib/libprotobuf-c.a
@@ -422,6 +425,33 @@ deps/instdir/lib/libprotobuf-c.a: deps/libprotobuf_c $(ZIG)
 	&& ./autogen.sh \
 	&& ./configure --prefix=$(TD)/deps/instdir --enable-static --disable-shared --disable-protoc CFLAGS="--verbose $(CFLAGS_DEPS)" CXXFLAGS="--verbose $(CFLAGS_TARGET)" \
 	&& make -j && make install
+
+# /deps/libsnmp --------------------------------------
+LIBNETSNMP_REF=v5.9.3
+deps/libnetsnmp:
+	ls $@ >/dev/null 2>&1 || git clone https://github.com/net-snmp/net-snmp.git $@
+
+deps/instdir/lib/libnetsnmp.a: deps/libnetsnmp $(ZIG)
+	mkdir -p $(dir $@)
+	cd $< \
+	&& git checkout $(LIBNETSNMP_REF) \
+	&& ./configure --prefix=$(TD)/deps/instdir --enable-static --disable-shared CFLAGS="$(CFLAGS_DEPS)" \
+		--disable-agent --disable-applications --disable-manuals --disable-scripts --disable-mibs --disable-embedded-perl \
+		--disable-perl-cc-checks --without-pcre --without-perl-modules --without-python-modules --without-rpm \
+		--without-kmem-usage --without-systemd --disable-ucd-snmp-compatibility --without-ucd-snmp-diskio \
+		--without-ucd-snmp-mibII --without-ucd-snmp-pass --without-ucd-snmp-protocol --without-ucd-snmp-tc \
+		--without-ucd-snmp-vacm --without-ucd-snmp-vacm-conf --without-ucd-snmp-version --without-ucd-snmp-walk \
+		--without-ucd-snmp --without-krb5 --without-gssapi --without-ldap --without-libwrap --without-libnetsnmpmibs \
+		--without-libnetsnmpagent --without-libwrap --disable-libnetsnmpagent --disable-libnetsnmphelpers \
+		--with-default-snmp-version="3" --with-sys-contact="root@localhost" --with-sys-location="NA" \
+		--with-logfile="./snmpd.log" --with-persistent-directory="./" --with-mib-modules="" --with-transports="UDP" \
+	&& make -j && make install
+
+# Dummy rules that depends on above target since it produces libnetsnmp.a,
+# libnetsnmpagent.a and libnetsnmpmibs.a. These dummy targets is just so that
+# the libActonDeps.a can rely on them (and wait for their completion). Without
+# matching targets it would fail.
+deps/instdir/lib/libnetsnmpagent.a deps/instdir/lib/libnetsnmpmibs.a: deps/instdir/lib/libnetsnmp.a
 
 # /deps/libutf8proc --------------------------------------
 LIBUTF8PROC_REF=63f31c908ef7656415f73d6c178f08181239f74c
