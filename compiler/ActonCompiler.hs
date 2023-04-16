@@ -266,15 +266,18 @@ compileFiles opts srcFiles = do
         putStrLn ("    srcDir   : " ++ srcDir paths)
         iff (length srcFiles == 1) (putStrLn ("    modName  : " ++ prstr (modName paths)))
     tasks <- mapM (parseActFile opts paths) srcFiles
-    -- figure out binTasks, currently just based on --root
+    -- figure out binTasks, if --root is provided, use that, otherwise
+    -- presumptuously use all non-stub source compile tasks, which get filtered
+    -- out later on (after we parsed the project source files) in case they
+    -- don't have a main actor, see filterMainActor
     let rootParts = splitOn "." (C.root opts)
         rootMod   = init rootParts
         guessMod  = if length rootParts == 1 then modName paths else A.modName rootMod
         binTask   = BinTask False (prstr guessMod) (A.GName guessMod (A.name $ last rootParts))
-        binTasks
+        preBinTasks
           | null (C.root opts) = map (\t -> BinTask True (prstr (name t)) (A.GName (name t) (A.name "main"))) (filter (not . stubmode) tasks)
           | otherwise        = [binTask]
-    compileTasks opts paths tasks binTasks
+    compileTasks opts paths tasks preBinTasks
 
 -- Paths handling -------------------------------------------------------------------------------------
 
@@ -403,11 +406,25 @@ parseActFile opts paths actFile = do
 data CompileTask        = ActonTask { name :: A.ModName, src :: String, atree:: A.Module, stubmode :: Bool } deriving (Show)
 data BinTask            = BinTask { isDefaultRoot :: Bool, binName :: String, rootActor :: A.QName } deriving (Show)
 
+-- return modules that have an actor called 'main'
+filterMainActor env opts paths binTask
+                         = case lookup n (fromJust (Acton.Env.lookupMod m env)) of
+                               Just (A.NAct [] (A.TRow _ _ _ t A.TNil{}) A.TNil{} _)
+                                   | prstr t == "Env" || prstr t == "None"
+                                      || prstr t == "__builtin__.Env"|| prstr t == "__builtin__.None"-> do   -- TODO: proper check of parameter type
+                                      return (Just binTask)
+                                   | otherwise -> return Nothing
+                               Just t -> return Nothing
+                               Nothing -> return Nothing
+  where mn                  = A.mname qn
+        qn@(A.GName m n)    = rootActor binTask
+        (sc,_)              = Acton.QuickType.schemaOf env (A.eQVar qn)
+
 importsOf :: CompileTask -> [A.ModName]
 importsOf t = A.importsOf (atree t)
 
 compileTasks :: C.CompileOptions -> Paths -> [CompileTask] -> [BinTask] -> IO ()
-compileTasks opts paths tasks binTasks
+compileTasks opts paths tasks preBinTasks
                        = do tasks <- chaseImportedFiles opts paths tasks
                             let sccs = stronglyConnComp  [(t,name t,importsOf t) | t <- tasks]
                                 (as,cs) = Data.List.partition isAcyclic sccs
@@ -416,7 +433,8 @@ compileTasks opts paths tasks binTasks
                             if null cs
                              then do env0 <- Acton.Env.initEnv (sysTypes paths) (modName paths == Acton.Builtin.mBuiltin)
                                      env1 <- foldM (doTask opts paths) env0 [t | AcyclicSCC t <- as]
-                                     mapM (buildExecutable env1 opts paths) binTasks
+                                     binTasks <- catMaybes <$> mapM (filterMainActor env1 opts paths) preBinTasks
+                                     mapM (buildExecutable env1 opts paths) preBinTasks
                                      when (rmTmp paths) $ removeDirectoryRecursive (projPath paths)
                                      return ()
                               else printErrorAndExit ("Cyclic imports: "++concatMap showTaskGraph cs)
