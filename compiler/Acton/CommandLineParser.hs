@@ -50,7 +50,9 @@ data CompileOptions   = CompileOptions {
                          root        :: String,
                          tempdir     :: String,
                          syspath     :: String,
-                         cc          :: String
+                         cc          :: String,
+                         zigbuild    :: Bool,
+                         nozigbuild  :: Bool
                      } deriving Show
 
 data BuildOptions = BuildOptions {
@@ -59,9 +61,12 @@ data BuildOptions = BuildOptions {
                          devB        :: Bool,
                          autostubB   :: Bool,
                          rootB       :: String,
+                         ccmdB       :: Bool,
                          quietB      :: Bool,
                          timingB     :: Bool,
-                         ccB         :: String
+                         ccB         :: String,
+                         zigbuildB   :: Bool,
+                         nozigbuildB :: Bool
                      } deriving Show
                          
 
@@ -130,6 +135,8 @@ compileOptions = CompileOptions
         <*> strOption (long "tempdir"   <> metavar "TEMPDIR" <> value "" <> help "Set directory for build files")
         <*> strOption (long "syspath"   <> metavar "TARGETDIR" <>  value "" <> help "Set syspath")
         <*> strOption (long "cc"        <> metavar "PATH" <>  value "" <> help "CC")
+        <*> switch (long "zigbuild"     <> help "Use zig build")
+        <*> switch (long "no-zigbuild"  <> help "Don't use zig build")
 
 buildCommand          = Build <$> (
     BuildOptions
@@ -138,9 +145,12 @@ buildCommand          = Build <$> (
         <*> switch (long "dev"          <> help "Development mode; include debug symbols etc")
         <*> switch (long "auto-stub"    <> help "Allow automatic stub detection")
         <*> strOption (long "root"      <> metavar "ROOTACTOR" <> value "" <> help "Set root actor")
+        <*> switch (long "ccmd"         <> help "Show CC / LD commands")
         <*> switch (long "quiet"        <> help "Don't print stuff")
         <*> switch (long "timing"       <> help "Print timing information")
         <*> strOption (long "cc"        <> metavar "PATH" <>  value "" <> help "CC")
+        <*> switch (long "zigbuild"     <> help "Use zig build")
+        <*> switch (long "no-zigbuild"  <> help "Don't use zig build")
     )
                  
 cloudCommand        = Cloud <$> (

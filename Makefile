@@ -222,6 +222,10 @@ backend/test/skiplist_test: backend/test/skiplist_test.c backend/skiplist.c
 	$(CC) -o$@ $^ $(CFLAGS_DB) -Ibackend \
 		$(LDLIBS)
 
+builder/builder: builder/build.zig $(ZIG)
+	rm -rf builder/zig-cache builder/zig-out
+	cd builder && ../$(ZIG)/zig build && find zig-cache -name build -exec cp {} builder \;
+
 # /builtin ----------------------------------------------
 builtin/__builtin__.c builtin/__builtin__.h: builtin/ty/out/types/__builtin__.ty
 builtin/builtin_dev.o: builtin/builtin.c builtin/__builtin__.h $(BUILTIN_HFILES) $(BUILTIN_CFILES) $(DEPSA) $(LIBGC)
@@ -241,7 +245,7 @@ ACTC_GHC_OPTS=-optl-static
 endif
 # NOTE: we're unsetting CC to avoid using zig cc for stack / ghc, which doesn't
 # seem to work properly
-compiler/actonc: compiler/package.yaml.in compiler/stack.yaml $(ACTONC_HS)
+compiler/actonc: compiler/package.yaml.in compiler/stack.yaml dist/builder $(ACTONC_HS)
 	cd compiler && unset CC && unset CFLAGS && stack build --dry-run 2>&1 | grep "Nothing to build" || \
 		(sed 's,^version:.*,version:      "$(VERSION_INFO)",' < package.yaml.in > package.yaml \
 		&& stack build --ghc-options='-j4 $(ACTC_GHC_OPTS)' \
@@ -573,16 +577,16 @@ dist/types/__builtin__.ty: builtin/ty/out/types/__builtin__.ty
 
 builtin/ty/out/types/__builtin__.ty: builtin/ty/src/__builtin__.act $(ACTONC)
 	@mkdir -p $(dir $@)
-	$(ACTC) --always-build $<
+	$(ACTC) --always-build --no-zigbuild $<
 	cp builtin/ty/out/types/__builtin__.h builtin/__builtin__.h
 	cp builtin/ty/out/types/__builtin__.c builtin/__builtin__.c
 
 # Build our standard library
 stdlib/out/dev/lib/libActonProject.a: $(STDLIB_SRCFILES) dist/types/__builtin__.ty $(DIST_HFILES) $(ACTONC) $(DEPSA) $(LIBGC)
-	cd stdlib && ../$(ACTC) build --always-build --auto-stub --dev
+	cd stdlib && ../$(ACTC) build --always-build --auto-stub --no-zigbuild --dev
 
 stdlib/out/rel/lib/libActonProject.a: $(STDLIB_SRCFILES) dist/types/__builtin__.ty $(DIST_HFILES) $(ACTONC) $(DEPSA) $(LIBGC)
-	cd stdlib && ../$(ACTC) build --always-build --auto-stub
+	cd stdlib && ../$(ACTC) build --always-build --auto-stub --no-zigbuild
 	cp -a stdlib/out/types/. dist/types/
 
 
@@ -718,6 +722,10 @@ dist/bin/runacton: bin/runacton
 	cp $< $@.tmp
 	mv $@.tmp $@
 
+dist/builder: builder/builder
+	@mkdir -p $(dir $@)
+	cp $< $@
+
 dist/builtin/%: builtin/%
 	@mkdir -p $(dir $@)
 	cp $< $@
@@ -761,7 +769,7 @@ else
 endif
 
 .PHONY: distribution clean-distribution
-distribution: $(DIST_ARCHIVES) dist/inc $(DIST_BINS) $(DIST_HFILES) $(DIST_TYFILES) $(DIST_DBARCHIVE) $(DIST_ZIG)
+distribution: $(DIST_ARCHIVES) dist/builder dist/inc $(DIST_BINS) $(DIST_HFILES) $(DIST_TYFILES) $(DIST_DBARCHIVE) $(DIST_ZIG)
 
 clean-distribution:
 	rm -rf dist

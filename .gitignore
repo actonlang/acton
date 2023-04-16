@@ -18,6 +18,8 @@ backend/test/queue_unit_tests
 backend/test/skiplist_test
 backend/test/test_client
 
+builder/zig-cache
+
 compiler/actonc
 compiler/package.yaml
 compiler/tests/*.ty

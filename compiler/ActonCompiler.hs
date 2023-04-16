@@ -84,13 +84,14 @@ main                     =  do arg <- C.parseCmdLine
                                case arg of
                                    C.VersionOpt opts       -> printVersion opts
                                    C.CmdOpt (C.New opts)   -> createProject (C.file opts)
-                                   C.CmdOpt (C.Build opts) -> buildProject $ defaultOpts {C.alwaysbuild = C.alwaysB opts, C.autostub = C.autostubB opts, C.debug = C.debugB opts, C.dev = C.devB opts, C.root = C.rootB opts, C.quiet = C.quietB opts, C.timing = C.timingB opts, C.cc = C.ccB opts}
+                                   C.CmdOpt (C.Build opts) -> buildProject $ defaultOpts {C.alwaysbuild = C.alwaysB opts, C.autostub = C.autostubB opts, C.debug = C.debugB opts, C.dev = C.devB opts, C.root = C.rootB opts, C.ccmd = C.ccmdB opts, C.quiet = C.quietB opts, C.timing = C.timingB opts, C.cc = C.ccB opts, C.zigbuild = C.zigbuildB opts, C.nozigbuild = C.nozigbuildB opts}
                                    C.CmdOpt (C.Cloud opts) -> undefined
                                    C.CmdOpt (C.Doc opts)   -> printDocs opts
                                    C.CompileOpt nms opts   -> compileFiles opts (catMaybes $ map filterActFile nms)
 
 defaultOpts   = C.CompileOptions False False False False False False False False False False False
                                  False False False False False False False False False "" "" "" ""
+                                 False False
 
 
 -- Auxiliary functions ---------------------------------------------------------------------------------------
@@ -189,7 +190,9 @@ createProject name = do
     writeFile (joinPath [ curDir, name, ".gitignore" ]) (
       ".actonc.lock\n" ++
       "build.sh\n" ++
-      "out\n"
+      "out\n" ++
+      "zig-cache\n" ++
+      "zig-out\n"
       )
     writeFile (joinPath [ curDir, name, "README.org" ]) (
       "* " ++ name ++ "\n" ++ name ++ " is a cool Acton project!\n\n\n"
@@ -285,7 +288,7 @@ compileFiles opts srcFiles = do
         guessMod  = if length rootParts == 1 then modName paths else A.modName rootMod
         binTask   = BinTask False (prstr guessMod) (A.GName guessMod (A.name $ last rootParts))
         preBinTasks
-          | null (C.root opts) = map (\t -> BinTask True (prstr (name t)) (A.GName (name t) (A.name "main"))) (filter (not . stubmode) tasks)
+          | null (C.root opts) = map (\t -> BinTask True (modNameToString (name t)) (A.GName (name t) (A.name "main"))) (filter (not . stubmode) tasks)
           | otherwise        = [binTask]
     compileTasks opts paths tasks preBinTasks
 
@@ -297,6 +300,7 @@ data Paths      = Paths {
                     sysLib      :: FilePath,
                     projPath    :: FilePath,
                     projOut     :: FilePath,
+                    projProfile :: FilePath,
                     projTypes   :: FilePath,
                     projLib     :: FilePath,
                     binDir      :: FilePath,
@@ -349,11 +353,14 @@ findPaths actFile opts  = do execDir <- takeDirectory <$> System.Environment.get
                              createDirectoryIfMissing True projTypes
                              createDirectoryIfMissing True projLib
                              createDirectoryIfMissing True (getModPath projTypes modName)
-                             return $ Paths sysPath sysTypes sysLib projPath projOut projTypes projLib binDir srcDir isTmp rmTmp fileExt modName
+                             return $ Paths sysPath sysTypes sysLib projPath projOut projProfile projTypes projLib binDir srcDir isTmp rmTmp fileExt modName
   where (fileBody,fileExt) = splitExtension $ takeFileName actFile
 
         analyze "/" ds  = do let rmTmp = if (null $ C.tempdir opts) then True else False
-                             tmp <- if (null $ C.tempdir opts) then createTempDirectory (joinPath ["/", "tmp"]) "actonc" else canonicalizePath (C.tempdir opts)
+                             tmpDir <- canonicalizePath "/tmp"
+                             tmp <- if (null $ C.tempdir opts)
+                               then createTempDirectory tmpDir "actonc"
+                               else canonicalizePath (C.tempdir opts)
                              createDirectoryIfMissing True tmp
                              return (True, rmTmp, tmp, [])
         analyze pre ds  = do exists <- doesFileExist (joinPath [pre, "Acton.toml"])
@@ -414,6 +421,12 @@ parseActFile opts paths actFile = do
 -- Compilation tasks, chasing imported modules, compilation and building executables -------------------------------------------
 
 data CompileTask        = ActonTask { name :: A.ModName, src :: String, atree:: A.Module, stubmode :: Bool } deriving (Show)
+-- TODO: replace binName String type with ModName just like for CompileTask.
+-- ModName is a array so a hierarchy with submodules is represented, we can then
+-- get it use joinPath (modPath) to get a path or modName to get a string
+-- representation. We need both of BinTask when generating build.zig, so it
+-- would be more robust to use that type rather than a hacky character
+-- replacement (replaceDot in genBuildZigExe)
 data BinTask            = BinTask { isDefaultRoot :: Bool, binName :: String, rootActor :: A.QName } deriving (Show)
 
 -- return modules that have an actor called 'main'
@@ -430,6 +443,9 @@ filterMainActor env opts paths binTask
         qn@(A.GName m n)    = rootActor binTask
         (sc,_)              = Acton.QuickType.schemaOf env (A.eQVar qn)
 
+useZigBuild opts paths =
+  not (C.nozigbuild opts)
+
 importsOf :: CompileTask -> [A.ModName]
 importsOf t = A.importsOf (atree t)
 
@@ -443,8 +459,11 @@ compileTasks opts paths tasks preBinTasks
                             if null cs
                              then do env0 <- Acton.Env.initEnv (sysTypes paths) (modName paths == Acton.Builtin.mBuiltin)
                                      env1 <- foldM (doTask opts paths) env0 [t | AcyclicSCC t <- as]
-                                     binTasks <- catMaybes <$> mapM (filterMainActor env1 opts paths) preBinTasks
-                                     mapM (buildExecutable env1 opts paths) preBinTasks
+                                     iff (not (C.stub opts)) $ do
+                                       binTasks <- catMaybes <$> mapM (filterMainActor env1 opts paths) preBinTasks
+                                       if useZigBuild opts paths
+                                         then zigBuild env1 opts paths tasks binTasks
+                                         else mapM_ (buildExecutable env1 opts paths) preBinTasks
                                      when (rmTmp paths) $ removeDirectoryRecursive (projPath paths)
                                      return ()
                               else printErrorAndExit ("Cyclic imports: "++concatMap showTaskGraph cs)
@@ -498,6 +517,7 @@ doTask opts paths env t@(ActonTask mn src m stubMode) = do
         runCustomMake paths mn
         timeCustomMake <- getTime Monotonic
         iff (C.timing opts) $ putStrLn("    Custom make           : " ++ fmtTime(timeCustomMake - timeStart))
+
 
     -- no need to list the cFile since it is intermediate; oFile is final output
     let outFiles = [tyFile, hFile] ++ if stubMode then [] else [oFile]
@@ -680,11 +700,6 @@ runRestPasses opts paths env0 parsed stubMode = do
 
                       iff ((C.cgen opts) || (C.hgen opts)) System.Exit.exitSuccess
 
-                      let pedantArg = if (C.cpedantic opts) then "-Werror" else ""
-
-                      let hFile = outbase ++ ".h"
-                          oFile = joinPath [projLib paths, n ++ ".o"]
-                          aFile = joinPath [projLib paths, "libActonProject.a"]
 
                       iff (not stubMode) (do
                           -- cc is invoked with parent directory of project
@@ -697,6 +712,7 @@ runRestPasses opts paths env0 parsed stubMode = do
                               aFile = joinPath [projLib paths, "libActonProject.a"]
                               buildF = joinPath [projPath paths, "build.sh"]
                               wd = takeFileName (projPath paths)
+                              pedantArg = if (C.cpedantic opts) then "-Werror" else ""
                               ccCmd = (cc paths opts ++
                                        " -Werror=return-type " ++ pedantArg ++
                                        (if (C.dev opts) then " -Og -g " else " -O3 ") ++
@@ -714,15 +730,20 @@ runRestPasses opts paths env0 parsed stubMode = do
                               arCmd = ar paths ++ " rcs " ++ aFile ++ " " ++ oFile
                           writeFile hFile h
                           writeFile cFile c
-                          iff (takeFileName (srcFile paths mn) /= "__builtin__.act") $ do
-                             iff (C.ccmd opts) $ do
-                                 putStrLn ccCmd
-                                 putStrLn arCmd
-                             writeFile buildF $ unlines ["#!/bin/sh", "cd ..", ccCmd, arCmd]
-                             runCc (ccCmd ++ " && " ++ arCmd) (Just (takeDirectory (projPath paths)))
-                             timeCC <- getTime Monotonic
-                             iff (C.timing opts) $ putStrLn("    Pass: C compilation   : " ++ fmtTime (timeCC - timeCodeWrite))
-                                            )
+
+                          -- Only compile here if we are not using zig build.
+                          -- zig build is run for all modules at the end instead
+                          -- of per file.
+                          iff (not (useZigBuild opts paths)) $ do
+                              iff (takeFileName (srcFile paths mn) /= "__builtin__.act") $ do
+                                  iff (C.ccmd opts) $ do
+                                      putStrLn ccCmd
+                                      putStrLn arCmd
+                                  writeFile buildF $ unlines ["#!/bin/sh", "cd ..", ccCmd, arCmd]
+                                  runCc (ccCmd ++ " && " ++ arCmd) (Just (takeDirectory (projPath paths)))
+                                  timeCC <- getTime Monotonic
+                                  iff (C.timing opts) $ putStrLn("    Pass: C compilation   : " ++ fmtTime (timeCC - timeCodeWrite))
+                                                 )
 
                       return $ Acton.Env.addMod mn iface (env0 `Acton.Env.withModulesFrom` env)
 
@@ -807,3 +828,84 @@ buildExecutable env opts paths binTask
                                libPaths ++
                                libFiles ++
                                "\n")
+
+
+writeRootC :: Acton.Env.Env0 -> C.CompileOptions -> Paths -> BinTask -> IO (Maybe BinTask)
+writeRootC env opts paths binTask
+                         = case lookup n (fromJust (Acton.Env.lookupMod m env)) of
+                               Just (A.NAct [] (A.TRow _ _ _ t A.TNil{}) A.TNil{} _)
+                                   | prstr t == "Env" || prstr t == "None"
+                                      || prstr t == "__builtin__.Env"|| prstr t == "__builtin__.None"-> do   -- !! To do: proper check of parameter type !!
+                                      c <- Acton.CodeGen.genRoot env qn
+                                      writeFile rootFile c
+                                      return (Just binTask)
+                                   | otherwise -> handle "Type error" Acton.Types.typeError "" paths m
+                                     (Acton.Types.TypeError NoLoc ("Illegal type "++ prstr t ++ " of parameter to root actor " ++ prstr qn))
+                               Just t -> handle "Type error" Acton.Types.typeError "" paths m (Acton.Types.TypeError NoLoc (prstr qn ++ " has not actor type."))
+                               Nothing -> return Nothing
+  where mn                  = A.mname qn
+        qn@(A.GName m n)    = rootActor binTask
+        (sc,_)              = Acton.QuickType.schemaOf env (A.eQVar qn)
+        buildF              = joinPath [projPath paths, "build.sh"]
+        outbase             = outBase paths mn
+        rootFile            = outbase ++ ".root.c"
+
+
+modNameToString :: A.ModName -> String
+modNameToString (A.ModName names) = intercalate "." (map nameToString names)
+
+nameToString :: A.Name -> String
+nameToString (A.Name _ s) = s
+
+runZig opts zigCmd wd = do
+    iff (C.ccmd opts) $ putStrLn zigCmd
+    (returnCode, zigStdout, zigStderr) <- readCreateProcessWithExitCode (shell $ zigCmd){ cwd = wd } ""
+    case returnCode of
+        ExitSuccess -> do
+          return ()
+        ExitFailure _ -> do printIce "compilation of generated Zig code failed"
+                            putStrLn $ "zig stdout:\n" ++ zigStdout
+                            putStrLn $ "zig stderr:\n" ++ zigStderr
+                            System.Exit.exitFailure
+
+zigBuild :: Acton.Env.Env0 -> C.CompileOptions -> Paths -> [CompileTask] -> [BinTask] -> IO ()
+zigBuild env opts paths tasks binTasks = do
+    mapM (writeRootC env opts paths) binTasks
+    iff (not (C.quiet opts)) $ putStrLn("  Final compilation step")
+    timeStart <- getTime Monotonic
+
+    -- custom build.zig ?
+    buildZigExists <- doesFileExist $ projPath paths ++ "/build.zig"
+    homeDir <- getHomeDirectory
+    let zigCmdBase =
+          if buildZigExists
+            then zig paths ++ " build "
+            else (joinPath [ sysPath paths, "builder" ]) ++ " " ++
+                 (joinPath [ sysPath paths, "zig/zig" ]) ++ " " ++
+                 projPath paths ++ " " ++ (joinPath [ projPath paths, "build-cache" ]) ++ " " ++
+                 (joinPath [ homeDir, ".cache/zig" ])
+    let zigCmd = zigCmdBase ++
+                 " --prefix " ++ projProfile paths ++ " --prefix-exe-dir 'bin'" ++
+                 if (C.debug opts) then " --verbose-cc " else "" ++
+                 " -Doptimize=" ++ (if (C.dev opts) then "Debug" else "ReleaseFast") ++
+                 " -Dprojpath_out=" ++ joinPath [ projPath paths, "out" ] ++
+                 " -Dprojpath_outtypes=" ++ joinPath [ projPath paths, "out", "types" ] ++
+                 " -Dsyspath=" ++ sysPath paths ++
+                 " -Dsyspath_include=" ++ joinPath [ sysPath paths, "inc" ] ++
+                 " -Dsyspath_lib=" ++ joinPath [ sysPath paths, "lib" ] ++
+                 " -Dsyspath_libreldev=" ++ joinPath [ sysPath paths, "lib", reldev ] ++
+                 " -Dlibactondeps=ActonDeps-" ++ platform ++
+                 " -Dlibactongc=actongc-" ++ platform
+
+    runZig opts zigCmd (Just (projPath paths))
+    -- if we are in a temp acton project, copy the outputted binary next to the source file
+    if (isTmp paths)
+      then do
+        let srcBinFile = joinPath [ projProfile paths, "bin", (binName (head binTasks)) ]
+            dstBinFile = joinPath [ binDir paths, (binName (head binTasks)) ]
+        copyFile srcBinFile dstBinFile
+      else return ()
+    timeEnd <- getTime Monotonic
+    iff (not (C.quiet opts)) $ putStrLn("   Finished final compilation step in  " ++ fmtTime(timeEnd - timeStart))
+    return ()
+  where reldev = if C.dev opts then "dev" else "rel"
