@@ -84,6 +84,6 @@ extern B_HashableD_bool B_HashableD_boolG_witness;
 extern B_OrdD_list  B_OrdD_listD_bytesG_witness;
 extern B_MappingD_dict B_MappingD_dictD_strG_witness;
 extern B_MappingD_dict B_MappingD_dictD_intG_witness;
-
+ 
 #define $SequenceD_listG_witness B_SequenceD_listG_witness
 #define $CollectionD_listG_witness B_CollectionD_SequenceD_listG_witness

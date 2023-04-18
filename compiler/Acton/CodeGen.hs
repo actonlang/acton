@@ -57,9 +57,14 @@ endsRight []                        = False
 myPretty (GName m n)
       | m == mBuiltin               = text ("B_" ++ nstr n)
       | otherwise                   = pretty m <> dot <> pretty n
+<<<<<<< HEAD
 myPretty (NoQ w@(Internal _ _ _))
                                     = pretty w
 staticStubs env                     = map f wns
+=======
+
+staticStubs env                     = map f wns 
+>>>>>>> a459d521 (partial work on static witnesses)
     where wns                       = map h (filter g $ witnesses env)
           g w@(WClass{})            = length (wsteps w) == 1 || endsRight (wsteps w)
           g _                       = False
@@ -100,7 +105,7 @@ staticWitnessName (Call _ (TApp _ (Var _ v@(GName m n)) _) PosNil KwdNil)
                                     = (Just v, [])
  --  where depProtos                  = [nContainer, nMapping, nSetP]
 staticWitnessName _                 = (Nothing, [])
-
+ 
 -- Environment --------------------------------------------------------------------------------------
 
 genEnv env0                         = setX env0 GenX{ globalX = [], localX = [], retX = tNone }
