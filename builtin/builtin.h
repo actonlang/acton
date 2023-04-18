@@ -63,5 +63,6 @@ typedef struct $Serializable  *$Serializable;
 #include "exceptions.h"
 #include "function.h"
 #include "builtin_functions.h"
+#include "staticWitnesses.h"
 
 

@@ -5,8 +5,6 @@ struct B_int {
     zz_struct val;
 };
 
-extern struct B_IntegralD_int *B_IntegralD_intG_witness;
-extern struct B_HashableD_int *B_HashableD_intG_witness;
 B_int zz$to$int(zz_ptr val);
 
 long from$int(B_int n);
