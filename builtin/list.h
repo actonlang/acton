@@ -5,12 +5,10 @@ struct B_list {
   int length;
   int capacity;
 };
-
+/*
 extern struct B_SequenceD_list *B_SequenceD_listG_witness;
 extern struct B_CollectionD_SequenceD_list *B_CollectionD_SequenceD_listG_witness;
-
-#define $SequenceD_listG_witness B_SequenceD_listG_witness
-#define $CollectionD_listG_witness B_CollectionD_SequenceD_listG_witness
+*/
 
 // Iterators over lists ///////////////////////////////////////////////////////
 

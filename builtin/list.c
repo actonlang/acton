@@ -511,7 +511,8 @@ struct B_SequenceD_listG_class B_SequenceD_listG_methods = {
     B_SequenceD_listD_append,
     B_SequenceD_listD_reverse
 };
-    
+
+/*
 struct B_TimesD_SequenceD_list B_TimesD_SequenceD_list_instance;
 struct B_SequenceD_list B_SequenceD_list_instance;
 
@@ -536,3 +537,4 @@ struct B_TimesD_SequenceD_list B_TimesD_SequenceD_list_instance = {
     (B_Sequence)&B_SequenceD_list_instance
 };
 B_TimesD_SequenceD_list B_TimesD_SequenceD_listG_witness = &B_TimesD_SequenceD_list_instance;
+*/
