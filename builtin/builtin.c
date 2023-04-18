@@ -50,3 +50,4 @@
 #include "function.c"
 #include "builtin_functions.c"
 #include "__builtin__.c"
+#include "staticWitnesses.c"

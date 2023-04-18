@@ -36,7 +36,7 @@ generate env srcbase m              = do return (n, h,c)
   where n                           = concat (Data.List.intersperse "." (modPath (modname m))) --render $ quotes $ gen env0 (modname m)
         h                           = render $ hModule env0 m
         c                           = render $ cModule env0 srcbase m
-        env0                        = genEnv $ setMod (modname m) env
+        env0                        = genEnv $ setMod (modname m) env 
 
 genRoot                            :: Acton.Env.Env0 -> QName -> IO String
 genRoot env0 qn@(GName m n)         = do return $ render (cInclude $+$ cInit $+$ cRoot)
@@ -48,6 +48,50 @@ genRoot env0 qn@(GName m n)         = do return $ render (cInclude $+$ cInit $+$
         cRoot                       = (gen env tActor <+> gen env primROOT <+> parens empty <+> char '{') $+$
                                        nest 4 (text "return" <+> parens (gen env tActor) <> gen env primNEWACTOR <> parens (gen env qn) <> semi) $+$
                                        char '}'
+
+
+endsRight [Right _]                 = True
+endsRight(x : xs)                   = endsRight xs
+endsRight []                        = False
+
+myPretty (GName m n)
+      | m == mBuiltin               = text ("B_" ++ nstr n)
+      | otherwise                   = pretty m <> dot <> pretty n
+
+staticStubs env                     = map f wns 
+    where wns                       = map h (filter g $ witnesses env)
+          g w@(WClass{})            = length (wsteps w) == 1 || endsRight (wsteps w)
+          g _                       = False
+          f w                       = myPretty w <+> myPretty (witName w) <+> equals <+> braces(char '&' <> myPretty (instName w)) <> semi
+          h w                       = if nm1 == nm2 then wname w else gBuiltin (Derived (Derived nm1 nm2) nm3)
+             where nm1              = noq(tcname(proto w))
+                   Derived nm2 nm3  = noq (wname w)
+
+staticImpls env                     = map f wns ++ map k wns
+    where wns                       = map h (filter g $ witnesses env)
+          g w@(WClass{})            = length (wsteps w) == 1 || endsRight (wsteps w) && binds w == []
+          g _                       = False
+          f w                       = text "struct" <+> myPretty w <+> myPretty (instName w) <> semi
+          k w                       = text "struct" <+> myPretty w <+> myPretty (instName w) <+> equals <+> braces(char '&' <> myPretty (methName w)) <> semi
+          h w                       = if nm1 == nm2 then wname w else gBuiltin (Derived (Derived nm1 nm2) nm3)
+             where nm1              = noq(tcname(proto w))
+                   Derived nm2 nm3  = noq (wname w)
+
+instName (GName m n)                = GName m (Derived n (globalName "instance"))
+methName (GName m n)                = GName m (Derived n (globalName "methods"))
+
+derivedHead (Derived d@(Derived{}) _) = derivedHead d
+derivedHead (Derived n _)           = n
+
+staticWitnessName (Call _ (Var _ v@(GName m n)) PosNil KwdNil)
+    | m == mBuiltin  && notElem (derivedHead n) depProtos
+                                    = Just v
+staticWitnessName (Call _ (TApp _ (Var _ v@(GName m n)) (TCon _ (TC (GName m' n') []):_)) PosNil KwdNil)
+    | m == mBuiltin && m' == mBuiltin
+                                    = Just v
+staticWitnessName _                 = Nothing
+
+depProtos                           = [nContainer, nMapping, nSetP]
 
 -- Environment --------------------------------------------------------------------------------------
 
@@ -184,11 +228,14 @@ classname env n                     = genTopName env (Derived n suffixClass)
 
 methodtable env n                   = gen env (tableName $ gname env n)
 
+staticwitness env n                 = gen env (witName n)
+
 methodtable' env (NoQ n)            = methodtable env n
 methodtable' env n                  = gen env $ tableName n
 
 tableName (GName m n)               = GName m (Derived n suffixMethods)
-
+witName (GName m n)                 = GName m (Derived n suffixWitness)
+witName n                           = error ("witName " ++ show n)
 
 newcon env n                        = gen env (conName $ gname env n)
 
@@ -420,6 +467,8 @@ unCkeyword str
                                         "volatile", "while"
                                       ]
 
+
+
 preEscape str                       = "A_" ++ str
 
 word                                = text "$WORD"
@@ -430,8 +479,15 @@ genSuite env (s:ss)                 = genStmt env s $+$ genSuite (ldefine (envOf
         env1                        = ldefine te env
 
 genStmt env (Decl _ ds)             = empty
-genStmt env (Assign _ [PVar _ n (Just t)] e)
-  | n `notElem` defined env         = gen env t <+> gen env n <+> equals <+> genExp env t e <> semi
+genStmt env s@(Assign _ [PVar _ n (Just t)] e)
+  | n `notElem` defined env         = gen env t <+> gen env n <+> equals <+> rhs <> semi
+  where isWitness (Internal Witness _ _) = True
+        isWitness _                 = False
+        rhs                         = if isWitness n 
+                                      then case staticWitnessName e of
+                                           Just nm -> trace ("****t="++show t++"\n****e="++show e++"\n****nm="++ render( parens(myPretty (tcname(tcon t))) <> myPretty (witName nm)) ++"\n\n\n") $ parens(myPretty (tcname(tcon t))) <> myPretty (witName nm) 
+                                           Nothing -> genExp env t e
+                                      else genExp env t e
 genStmt env s                       = vcat [ gen env t <+> gen env n <> semi | (n,NVar t) <- te ] $+$
                                       gen env s
   where te                          = envOf s `exclude` defined env
@@ -657,7 +713,7 @@ adjust t t' e                       = typecast t t' e
 
 genExp env t' e                     = gen env (adjust t t' e')
   where (t, e')                     = qType env adjust e
-
+ 
 genExp' env e                       = gen env e'
   where (t, e')                     = qType env adjust e
 

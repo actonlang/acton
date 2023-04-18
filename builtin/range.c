@@ -115,6 +115,10 @@ struct B_IteratorB_rangeG_class B_IteratorB_rangeG_methods = {
     B_IteratorB_rangeD_next
 };
 
+/*
+struct B_IterableD_range B_IterableD_rangeG_instance = {&B_IterableD_rangeG_methods};
+B_IterableD_range B_IterableD_rangeG_witness = &B_IterableD_rangeG_instance;
+*/
 //B_Iterator B_rangeD_iter(B_range rng) {
 //  return (B_Iterator)$NEW(B_IteratorB_range,rng);
 //}
