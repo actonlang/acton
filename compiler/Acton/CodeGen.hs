@@ -82,12 +82,10 @@ staticImpls env                     = map f wns ++ map k wns
 instName (GName m n)                = GName m (Derived n (globalName "instance"))
 methName (GName m n)                = GName m (Derived n (globalName "methods"))
 
- 
 derivedHead (Derived d@(Derived{}) _) = derivedHead d
 derivedHead (Derived n _)           = n
 
 staticWitnessName (Dot _ c@(Call _ _ _ KwdNil) a) = (nm, NoQ a:as) 
-    where (nm, as) = staticWitnessName c
 staticWitnessName (Call _ (Var _ v@(GName m n)) PosNil KwdNil)
     | m == mBuiltin 
                                     = (Just v, [])
