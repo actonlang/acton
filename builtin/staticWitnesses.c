@@ -105,23 +105,14 @@ struct B_SequenceD_list B_SequenceD_listG_instance = {&B_SequenceD_listG_methods
 struct B_HashableD_complex B_HashableD_complexG_instance = {&B_HashableD_complexG_methods};
 struct B_EqD_complex B_EqD_complexG_instance = {&B_EqD_complexG_methods};
 struct B_DivD_complex B_DivD_complexG_instance = {&B_DivD_complexG_methods};
-<<<<<<< HEAD
-struct B_MinusD_NumberD_complex B_MinusD_NumberD_complexG_instance = {&B_MinusD_NumberD_complexG_methods, (B_Number)&B_NumberD_complexG_instance}; // !!!
+
+struct B_MinusD_NumberD_complex B_MinusD_NumberD_complexG_instance = {&B_MinusD_NumberD_complexG_methods, (B_Number)&B_NumberD_complexG_instance};
 struct B_NumberD_complex B_NumberD_complexG_instance = {&B_NumberD_complexG_methods, (B_Minus)&B_MinusD_NumberD_complexG_instance};
 struct B_HashableD_float B_HashableD_floatG_instance = {&B_HashableD_floatG_methods};
 struct B_OrdD_float B_OrdD_floatG_instance = {&B_OrdD_floatG_methods};
 struct B_DivD_float B_DivD_floatG_instance = {&B_DivD_floatG_methods};
 struct B_MinusD_RealFloatD_float B_MinusD_RealFloatD_floatG_instance = {&B_MinusD_RealFloatD_floatG_methods, (B_Number)&B_RealFloatD_floatG_instance};
 struct B_RealFloatD_float B_RealFloatD_floatG_instance = {&B_RealFloatD_floatG_methods, (B_Minus)&B_MinusD_RealFloatD_floatG_instance};
-=======
-struct B_MinusD_NumberD_complex B_MinusD_NumberD_complexG_instance = {&B_MinusD_NumberD_complexG_methods}; // !!!
-struct B_NumberD_complex B_NumberD_complexG_instance = {&B_NumberD_complexG_methods};
-struct B_HashableD_float B_HashableD_floatG_instance = {&B_HashableD_floatG_methods};
-struct B_OrdD_float B_OrdD_floatG_instance = {&B_OrdD_floatG_methods};
-struct B_DivD_float B_DivD_floatG_instance = {&B_DivD_floatG_methods};
-struct B_MinusD_RealFloatD_float B_MinusD_RealFloatD_floatG_instance = {&B_MinusD_RealFloatD_floatG_methods}; // !!!
-struct B_RealFloatD_float B_RealFloatD_floatG_instance = {&B_RealFloatD_floatG_methods};
->>>>>>> a459d521 (partial work on static witnesses)
 struct B_HashableD_u16 B_HashableD_u16G_instance = {&B_HashableD_u16G_methods};
 struct B_OrdD_u16 B_OrdD_u16G_instance = {&B_OrdD_u16G_methods};
 struct B_DivD_u16 B_DivD_u16G_instance = {&B_DivD_u16G_methods};

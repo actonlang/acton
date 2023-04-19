@@ -57,14 +57,9 @@ endsRight []                        = False
 myPretty (GName m n)
       | m == mBuiltin               = text ("B_" ++ nstr n)
       | otherwise                   = pretty m <> dot <> pretty n
-<<<<<<< HEAD
-myPretty (NoQ w@(Internal _ _ _))
-                                    = pretty w
-staticStubs env                     = map f wns
-=======
+myPretty (NoQ w@(Internal _ _ _))   = pretty w
 
-staticStubs env                     = map f wns 
->>>>>>> a459d521 (partial work on static witnesses)
+staticStubs env                     = map f wns
     where wns                       = map h (filter g $ witnesses env)
           g w@(WClass{})            = length (wsteps w) == 1 || endsRight (wsteps w)
           g _                       = False
@@ -85,12 +80,13 @@ staticImpls env                     = map f wns ++ map k wns
 
 instName (GName m n)                = GName m (Derived n (globalName "instance"))
 methName (GName m n)                = GName m (Derived n (globalName "methods"))
+
  
 derivedHead (Derived d@(Derived{}) _) = derivedHead d
 derivedHead (Derived n _)           = n
 
 staticWitnessName (Dot _ c@(Call _ _ _ KwdNil) a) = (nm, NoQ a:as) 
-   where (nm, as) = staticWitnessName c
+    where (nm, as) = staticWitnessName c
 staticWitnessName (Call _ (Var _ v@(GName m n)) PosNil KwdNil)
     | m == mBuiltin 
                                     = (Just v, [])
@@ -506,8 +502,13 @@ genStmt env (Assign _ [PVar _ n (Just t)] e)
         isWitness _                 = False
         rhs                         = if isWitness n 
                                       then case staticWitnessName e of
+<<<<<<< HEAD
                                            (Just (nm),as) -> foldr (\x y -> y <>text "->" <> myPretty (x)) (parens(myPretty (tcname(tcon t))) <> myPretty (witName nm)) as 
                                            _  ->  genExp env t e
+=======
+                                           (Just (nm),as) -> trace ("*** Witness t="++show t++"\n****e="++show e++"\n****nm="++ render( foldr (\x y -> y <>text "->" <> myPretty (x)) (parens(myPretty (tcname(tcon t))) <> myPretty (witName nm)) as)++"\n\n\n") $ foldr (\x y -> y <>text "->" <> myPretty (x)) (parens(myPretty (tcname(tcon t))) <> myPretty (witName nm)) as 
+                                           _  -> trace ("*** New t="++show t++"\n****e="++show e++"\n\n") $ genExp env t e
+>>>>>>> ddd35de0 (fixed minor bugs in CodeGen.hs and staticWitnesses.c)
                                       else genExp env t e
 genStmt env s                       = vcat [ gen env t <+> gen env n <> semi | (n,NVar t) <- te ] $+$
                                       gen env s
