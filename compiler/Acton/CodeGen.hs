@@ -57,7 +57,9 @@ endsRight []                        = False
 myPretty (GName m n)
       | m == mBuiltin               = text ("B_" ++ nstr n)
       | otherwise                   = pretty m <> dot <> pretty n
-
+myPretty (NoQ w@(Internal _ _ _))
+                                    = pretty w
+{-
 staticStubs env                     = map f wns 
     where wns                       = map h (filter g $ witnesses env)
           g w@(WClass{})            = length (wsteps w) == 1 || endsRight (wsteps w)
@@ -79,19 +81,21 @@ staticImpls env                     = map f wns ++ map k wns
 
 instName (GName m n)                = GName m (Derived n (globalName "instance"))
 methName (GName m n)                = GName m (Derived n (globalName "methods"))
+-}
 
 derivedHead (Derived d@(Derived{}) _) = derivedHead d
 derivedHead (Derived n _)           = n
 
+staticWitnessName (Dot _ c@(Call _ _ PosNil KwdNil) a) = (nm, NoQ a:as) 
+   where (nm, as) = staticWitnessName c
 staticWitnessName (Call _ (Var _ v@(GName m n)) PosNil KwdNil)
-    | m == mBuiltin  && notElem (derivedHead n) depProtos
-                                    = Just v
-staticWitnessName (Call _ (TApp _ (Var _ v@(GName m n)) (TCon _ (TC (GName m' n') []):_)) PosNil KwdNil)
-    | m == mBuiltin && m' == mBuiltin
-                                    = Just v
-staticWitnessName _                 = Nothing
-
-depProtos                           = [nContainer, nMapping, nSetP]
+    | m == mBuiltin 
+                                    = (Just v, [])
+staticWitnessName (Call _ (TApp _ (Var _ v@(GName m n)) _) PosNil KwdNil)
+    | m == mBuiltin && notElem (derivedHead n) depProtos
+                                    = (Just v, [])
+   where depProtos                  = [nContainer, nMapping, nSetP]
+staticWitnessName _                 = (Nothing, [])
 
 -- Environment --------------------------------------------------------------------------------------
 
@@ -479,14 +483,14 @@ genSuite env (s:ss)                 = genStmt env s $+$ genSuite (ldefine (envOf
         env1                        = ldefine te env
 
 genStmt env (Decl _ ds)             = empty
-genStmt env s@(Assign _ [PVar _ n (Just t)] e)
+genStmt env (Assign _ [PVar _ n (Just t)] e)
   | n `notElem` defined env         = gen env t <+> gen env n <+> equals <+> rhs <> semi
   where isWitness (Internal Witness _ _) = True
         isWitness _                 = False
         rhs                         = if isWitness n 
                                       then case staticWitnessName e of
-                                           Just nm -> trace ("****t="++show t++"\n****e="++show e++"\n****nm="++ render( parens(myPretty (tcname(tcon t))) <> myPretty (witName nm)) ++"\n\n\n") $ parens(myPretty (tcname(tcon t))) <> myPretty (witName nm) 
-                                           Nothing -> genExp env t e
+                                           (Just (nm),as) -> trace ("*** Witness t="++show t++"\n****e="++show e++"\n****nm="++ render( foldr (\x y -> y <>text "->" <> myPretty (x)) (parens(myPretty (tcname(tcon t))) <> myPretty (witName nm)) as)++"\n\n\n") $ foldr (\x y -> y <>text "->" <> myPretty (x)) (parens(myPretty (tcname(tcon t))) <> myPretty (witName nm)) as 
+                                           _  -> trace ("*** New t="++show t++"\n****e="++show e++"\n\n") $ genExp env t e
                                       else genExp env t e
 genStmt env s                       = vcat [ gen env t <+> gen env n <> semi | (n,NVar t) <- te ] $+$
                                       gen env s
@@ -744,8 +748,8 @@ instance Gen Expr where
     gen env (List _ es)
       | null es                     = newcon' env n <> parens (text "NULL" <> comma <+> text "NULL")
       | otherwise                   = parens (lbrace <+> (
-                                        gen env n <+> tmp <+> equals <+> newcon' env n <> parens (text "NULL" <> comma <+> text "NULL") <> semi $+$
-                                        vcat [ append <> parens (pars e) <> semi | e <- es ] $+$
+                                         vcat (gen env n <+> tmp <+> equals <+> newcon' env n <> parens (text "NULL" <> comma <+> text "NULL") <> semi :
+                                                [append <> parens (pars e) <> semi | e <- es ]) $+$
                                         tmp <> semi) <+> rbrace)
       where n                       = qnList
             tmp                     = gen env tmpV
