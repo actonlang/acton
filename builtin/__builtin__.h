@@ -11,6 +11,11 @@ struct B_object;
 struct B_atom;
 struct B_int;
 struct B_i64;
+struct B_i32;
+struct B_i16;
+struct B_u64;
+struct B_u32;
+struct B_u16;
 struct B_float;
 struct B_bool;
 struct B_slice;
@@ -21,7 +26,7 @@ struct B_Iterable;
 struct B_str;
 struct B_bytes;
 struct B_bytearray;
-//struct B_Msg;
+// struct B_Msg;           *******************************
 struct B_BaseException;
 struct B_SystemExit;
 struct B_KeyboardInterrupt;
@@ -1644,13 +1649,6 @@ struct B_HashableD_i64G_class {
 struct B_HashableD_i64 {
     struct B_HashableD_i64G_class *$class;
 };
-
-
-
-
-
-
-
 struct B_IntegralD_i32G_class {
     char *$GCINFO;
     int $class_id;
@@ -1794,13 +1792,6 @@ struct B_HashableD_i32G_class {
 struct B_HashableD_i32 {
     struct B_HashableD_i32G_class *$class;
 };
-
-
-
-
-
-
-
 struct B_IntegralD_i16G_class {
     char *$GCINFO;
     int $class_id;
@@ -1944,13 +1935,6 @@ struct B_HashableD_i16G_class {
 struct B_HashableD_i16 {
     struct B_HashableD_i16G_class *$class;
 };
-
-
-
-
-
-
-
 struct B_IntegralD_u64G_class {
     char *$GCINFO;
     int $class_id;
@@ -2094,12 +2078,6 @@ struct B_HashableD_u64G_class {
 struct B_HashableD_u64 {
     struct B_HashableD_u64G_class *$class;
 };
-
-
-
-
-
-
 struct B_IntegralD_u32G_class {
     char *$GCINFO;
     int $class_id;
@@ -2243,12 +2221,6 @@ struct B_HashableD_u32G_class {
 struct B_HashableD_u32 {
     struct B_HashableD_u32G_class *$class;
 };
-
-
-
-
-
-
 struct B_IntegralD_u16G_class {
     char *$GCINFO;
     int $class_id;
@@ -2392,13 +2364,6 @@ struct B_HashableD_u16G_class {
 struct B_HashableD_u16 {
     struct B_HashableD_u16G_class *$class;
 };
-
-
-
-
-
-
-
 struct B_RealFloatD_floatG_class {
     char *$GCINFO;
     int $class_id;

@@ -59,19 +59,46 @@ myPretty (GName m n)
       | otherwise                   = pretty m <> dot <> pretty n
 myPretty (NoQ w@(Internal _ _ _))
                                     = pretty w
+staticStubs env                     = map f wns
+    where wns                       = map h (filter g $ witnesses env)
+          g w@(WClass{})            = length (wsteps w) == 1 || endsRight (wsteps w)
+          g _                       = False
+          f w                       = myPretty w <+> myPretty (witName w) <+> equals <+> braces(char '&' <> myPretty (instName w)) <> semi
+          h w                       = if nm1 == nm2 then wname w else gBuiltin (Derived (Derived nm1 nm2) nm3)
+             where nm1              = noq(tcname(proto w))
+                   Derived nm2 nm3  = noq (wname w)
+
+staticImpls env                     = map f wns ++ map k wns
+    where wns                       = map h (filter g $ witnesses env)
+          g w@(WClass{})            = length (wsteps w) == 1 || endsRight (wsteps w) && binds w == []
+          g _                       = False
+          f w                       = text "struct" <+> myPretty w <+> myPretty (instName w) <> semi
+          k w                       = text "struct" <+> myPretty w <+> myPretty (instName w) <+> equals <+> braces(char '&' <> myPretty (methName w)) <> semi
+          h w                       = if nm1 == nm2 then wname w else gBuiltin (Derived (Derived nm1 nm2) nm3)
+             where nm1              = noq(tcname(proto w))
+                   Derived nm2 nm3  = noq (wname w)
+
+instName (GName m n)                = GName m (Derived n (globalName "instance"))
+methName (GName m n)                = GName m (Derived n (globalName "methods"))
  
 derivedHead (Derived d@(Derived{}) _) = derivedHead d
 derivedHead (Derived n _)           = n
 
-staticWitnessName (Dot _ c@(Call _ _ PosNil KwdNil) a) = (nm, NoQ a:as) 
+staticWitnessName (Dot _ c@(Call _ _ _ KwdNil) a) = (nm, NoQ a:as) 
    where (nm, as) = staticWitnessName c
 staticWitnessName (Call _ (Var _ v@(GName m n)) PosNil KwdNil)
     | m == mBuiltin 
                                     = (Just v, [])
+staticWitnessName (Call _ (TApp _ (Var _ (GName m n@(Derived n1 n2))) [TCon _ (TC gn1 []), _]) _ KwdNil)
+   | m == mBuiltin && n1 == nMapping && n2 == nDict && gn1 == qnInt
+                                      = (Just (gBuiltin (Derived n nInt)),[])
+staticWitnessName (Call _ (TApp _ (Var _ (GName m n@(Derived n1 n2))) [TCon _ (TC gn1 []), _]) _ KwdNil)
+   | m == mBuiltin && n1 == nMapping && n2 == nDict && gn1 == qnStr
+                                      = (Just (gBuiltin (Derived n nStr)),[])
 staticWitnessName (Call _ (TApp _ (Var _ v@(GName m n)) _) PosNil KwdNil)
-    | m == mBuiltin && notElem (derivedHead n) depProtos
+    | m == mBuiltin  -- && notElem (derivedHead n) depProtos
                                     = (Just v, [])
-   where depProtos                  = [nContainer, nMapping, nSetP]
+ --  where depProtos                  = [nContainer, nMapping, nSetP]
 staticWitnessName _                 = (Nothing, [])
 
 -- Environment --------------------------------------------------------------------------------------
@@ -118,7 +145,8 @@ hModule env (Module m imps stmts)   = text "#pragma" <+> text "once" $+$
                                       include env "rts" (modName ["rts"]) $+$
                                       vcat (map (include env "types") $ modNames imps) $+$
                                       hSuite env stmts $+$
-                                      text "void" <+> genTopName env initKW <+> parens empty <> semi
+                                      text "void" <+> genTopName env initKW <+> parens empty <> semi 
+
 
 hSuite env []                       = empty
 hSuite env (s:ss)                   = hStmt env s $+$ hSuite (gdefine (envOf s) env) ss
@@ -460,7 +488,8 @@ genSuite env (s:ss)                 = genStmt env s $+$ genSuite (ldefine (envOf
 genStmt env (Decl _ ds)             = empty
 genStmt env (Assign _ [PVar _ n (Just t)] e)
   | n `notElem` defined env         = gen env t <+> gen env n <+> equals <+> rhs <> semi
-  where isWitness (Internal Witness _ _) = True
+  where isWitness (Internal Witness _ _)
+                                    = True
         isWitness _                 = False
         rhs                         = if isWitness n 
                                       then case staticWitnessName e of
