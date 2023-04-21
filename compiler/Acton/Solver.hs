@@ -239,7 +239,7 @@ rank env tainted c@(Impl _ t p)
   | not $ null $ tyfree t                   = RTry t ts False
   where ts                                  = allExtProto env t p
 
-rank env tainted (Sel _ t@TVar{} n _)       = RTry t (allProtoAttr env n ++ allConAttr env n ++ allExtProtoAttr env n) False
+rank env tainted (Sel _ t@TVar{} n _)       = RTry t (allConAttr env n ++ allExtProtoAttr env n) False
 rank env tainted (Mut t@TVar{} n _)         = RTry t (allConAttr env n) False
 
 rank env tainted (Seal t@TVar{})

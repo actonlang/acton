@@ -1282,11 +1282,28 @@ instance Infer Expr where
 
     infer env (Dot l e n)
       | n == initKW                     = err1 n "__init__ cannot be selected by instance"
+      | not $ null protos               = case protos of
+                                            TCon _ p0 : _ -> do
+                                                traceM ("## Dot " ++ prstr e ++ " . " ++ prstr n)
+                                                p <- instwildcon env p0
+                                                traceM ("## proto: " ++ prstr p)
+                                                let Just (wf,sc,dec) = findAttr env p n
+                                                traceM ("## schema: " ++ prstr sc)
+                                                (cs,tvs,t) <- instantiate env sc
+                                                traceM ("## instantiated type t: " ++ prstr t)
+                                                (cs0,t0,e') <- infer env e
+                                                traceM ("## inferred type t0: " ++ prstr t0)
+                                                w <- newWitness
+                                                let t' = subst [(tvSelf,t0)] $ addSelf t dec
+                                                traceM ("## returned term: " ++ prstr (app t (tApp (Dot l (wf $ eVar w) n) tvs) (e' : witsOf cs)))
+                                                return (Impl w t0 p :
+                                                        cs0++cs, t', app t (tApp (Dot l (wf $ eVar w) n) tvs) (e' : witsOf cs))
       | otherwise                       = do (cs,t,e') <- infer env e
                                              w <- newWitness
                                              t0 <- newTVar
                                              return (Sel w t n t0 :
                                                      cs, t0, eCall (eVar w) [e'])
+      where protos                      = allProtoAttr env n
 
     infer env (Rest l e n)              = do p <- newTVarOfKind PRow
                                              k <- newTVarOfKind KRow
