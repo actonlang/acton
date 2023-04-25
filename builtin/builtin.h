@@ -36,6 +36,43 @@ typedef struct $SerializableG_class *$SerializableG_class;
 struct $Serializable;
 typedef struct $Serializable  *$Serializable;
 
+// The following declarations moved here from function.h
+
+struct $proc;
+struct $action;
+struct $mut;
+struct $pure;
+struct $Cont;
+struct B_Msg;
+
+typedef struct $proc *$proc;
+typedef struct $action *$action;
+typedef struct $mut *$mut;
+typedef struct $pure *$pure;
+typedef struct $Cont *$Cont;
+typedef struct B_Msg *B_Msg;
+
+
+enum $RTAG { $RDONE, $RFAIL, $RCONT, $RWAIT };
+typedef enum $RTAG $RTAG;
+
+struct $R {
+    $RTAG tag;
+    $Cont cont;
+    $WORD value;
+};
+typedef struct $R $R;
+
+#define $RU_CONT $R_CONT        // Temporary workaround until Prim names get their own prefix
+#define $RU_FAIL $R_FAIL        // Temporary workaround until Prim names get their own prefix
+
+#define $R_CONT(cont, arg)      ($R){$RCONT, (cont), ($WORD)(arg)}
+#define $R_DONE(value)          ($R){$RDONE, NULL,   (value)}
+#define $R_FAIL(value)          ($R){$RFAIL, NULL,   (value)}
+#define $R_WAIT(cont, value)    ($R){$RWAIT, (cont), (value)}
+
+/////////////////////////////////////////////////////////
+
 #include "__builtin__.h"
 #include "class_hierarchy.h"
 #include "serialize.h"
