@@ -26,7 +26,7 @@ struct B_Iterable;
 struct B_str;
 struct B_bytes;
 struct B_bytearray;
-// struct B_Msg;           *******************************
+struct B_Msg;
 struct B_BaseException;
 struct B_SystemExit;
 struct B_KeyboardInterrupt;
@@ -178,7 +178,7 @@ typedef struct B_Iterable *B_Iterable;
 typedef struct B_str *B_str;
 typedef struct B_bytes *B_bytes;
 typedef struct B_bytearray *B_bytearray;
-//typedef struct B_Msg *B_Msg;
+typedef struct B_Msg *B_Msg;
 typedef struct B_BaseException *B_BaseException;
 typedef struct B_SystemExit *B_SystemExit;
 typedef struct B_KeyboardInterrupt *B_KeyboardInterrupt;
@@ -651,7 +651,6 @@ struct B_bytearrayG_class {
     B_bytearray (*upper) (B_bytearray);
     B_bytearray (*zfill) (B_bytearray, B_int);
 };
-/*
 struct B_MsgG_class {
     char *$GCINFO;
     int $class_id;
@@ -663,6 +662,7 @@ struct B_MsgG_class {
     B_str (*__str__) (B_Msg);
     B_str (*__repr__) (B_Msg);
 };
+/*
 struct B_Msg {
     struct B_MsgG_class *$class;
 };
@@ -3444,11 +3444,8 @@ struct B_HashableD_bytes {
     struct B_HashableD_bytesG_class *$class;
 };
 extern struct B_valueG_class B_valueG_methods;
-B_value B_valueG_new();
 extern struct B_objectG_class B_objectG_methods;
-B_object B_objectG_new();
 extern struct B_atomG_class B_atomG_methods;
-//B_atom B_atomG_new();
 extern struct B_intG_class B_intG_methods;
 B_int B_intG_new(B_atom);
 extern struct B_i64G_class B_i64G_methods;
@@ -3481,8 +3478,7 @@ extern struct B_bytesG_class B_bytesG_methods;
 B_bytes B_bytesG_new(B_Iterable, $WORD);
 extern struct B_bytearrayG_class B_bytearrayG_methods;
 B_bytearray B_bytearrayG_new(B_bytes);
-//extern struct B_MsgG_class B_MsgG_methods;
-//B_Msg B_MsgG_new();
+extern struct B_MsgG_class B_MsgG_methods;
 extern struct B_BaseExceptionG_class B_BaseExceptionG_methods;
 B_BaseException B_BaseExceptionG_new(B_str);
 extern struct B_SystemExitG_class B_SystemExitG_methods;
@@ -3548,8 +3544,6 @@ B_DivD_int B_DivD_intG_new();
 extern struct B_OrdD_intG_class B_OrdD_intG_methods;
 B_OrdD_int B_OrdD_intG_new();
 extern struct B_HashableD_intG_class B_HashableD_intG_methods;
-B_HashableD_int B_HashableD_intG_new();                              // This is manually added; Why not generated?
-
 extern struct B_IntegralD_i64G_class B_IntegralD_i64G_methods;
 B_IntegralD_i64 B_IntegralD_i64G_new();
 extern struct B_MinusD_IntegralD_i64G_class B_MinusD_IntegralD_i64G_methods;
@@ -3561,8 +3555,6 @@ B_DivD_i64 B_DivD_i64G_new();
 extern struct B_OrdD_i64G_class B_OrdD_i64G_methods;
 B_OrdD_i64 B_OrdD_i64G_new();
 extern struct B_HashableD_i64G_class B_HashableD_i64G_methods;
-B_HashableD_i64 B_HashableD_i64G_new();                              // This is manually added; Why not generated?
-
 extern struct B_IntegralD_i32G_class B_IntegralD_i32G_methods;
 B_IntegralD_i32 B_IntegralD_i32G_new();
 extern struct B_MinusD_IntegralD_i32G_class B_MinusD_IntegralD_i32G_methods;
@@ -3574,8 +3566,6 @@ B_DivD_i32 B_DivD_i32G_new();
 extern struct B_OrdD_i32G_class B_OrdD_i32G_methods;
 B_OrdD_i32 B_OrdD_i32G_new();
 extern struct B_HashableD_i32G_class B_HashableD_i32G_methods;
-B_HashableD_i32 B_HashableD_i32G_new();                              // This is manually added; Why not generated?
-
 extern struct B_IntegralD_i16G_class B_IntegralD_i16G_methods;
 B_IntegralD_i16 B_IntegralD_i16G_new();
 extern struct B_MinusD_IntegralD_i16G_class B_MinusD_IntegralD_i16G_methods;
@@ -3587,8 +3577,6 @@ B_DivD_i16 B_DivD_i16G_new();
 extern struct B_OrdD_i16G_class B_OrdD_i16G_methods;
 B_OrdD_i16 B_OrdD_i16G_new();
 extern struct B_HashableD_i16G_class B_HashableD_i16G_methods;
-B_HashableD_i16 B_HashableD_i16G_new();                              // This is manually added; Why not generated?
-
 extern struct B_IntegralD_u64G_class B_IntegralD_u64G_methods;
 B_IntegralD_u64 B_IntegralD_u64G_new();
 extern struct B_MinusD_IntegralD_u64G_class B_MinusD_IntegralD_u64G_methods;
@@ -3600,8 +3588,6 @@ B_DivD_u64 B_DivD_u64G_new();
 extern struct B_OrdD_u64G_class B_OrdD_u64G_methods;
 B_OrdD_u64 B_OrdD_u64G_new();
 extern struct B_HashableD_u64G_class B_HashableD_u64G_methods;
-B_HashableD_u64 B_HashableD_u64G_new();                              // This is manually added; Why not generated?
-
 extern struct B_IntegralD_u32G_class B_IntegralD_u32G_methods;
 B_IntegralD_u32 B_IntegralD_u32G_new();
 extern struct B_MinusD_IntegralD_u32G_class B_MinusD_IntegralD_u32G_methods;
@@ -3613,8 +3599,6 @@ B_DivD_u32 B_DivD_u32G_new();
 extern struct B_OrdD_u32G_class B_OrdD_u32G_methods;
 B_OrdD_u32 B_OrdD_u32G_new();
 extern struct B_HashableD_u32G_class B_HashableD_u32G_methods;
-B_HashableD_u32 B_HashableD_u32G_new();                              // This is manually added; Why not generated?
-
 extern struct B_IntegralD_u16G_class B_IntegralD_u16G_methods;
 B_IntegralD_u16 B_IntegralD_u16G_new();
 extern struct B_MinusD_IntegralD_u16G_class B_MinusD_IntegralD_u16G_methods;
@@ -3626,8 +3610,6 @@ B_DivD_u16 B_DivD_u16G_new();
 extern struct B_OrdD_u16G_class B_OrdD_u16G_methods;
 B_OrdD_u16 B_OrdD_u16G_new();
 extern struct B_HashableD_u16G_class B_HashableD_u16G_methods;
-B_HashableD_u16 B_HashableD_u16G_new();                              // This is manually added; Why not generated?
-
 extern struct B_RealFloatD_floatG_class B_RealFloatD_floatG_methods;
 B_RealFloatD_float B_RealFloatD_floatG_new();
 extern struct B_MinusD_RealFloatD_floatG_class B_MinusD_RealFloatD_floatG_methods;
@@ -3666,7 +3648,6 @@ B_CollectionD_SequenceD_list B_CollectionD_SequenceD_listG_new(B_Sequence);
 extern struct B_TimesD_SequenceD_listG_class B_TimesD_SequenceD_listG_methods;
 B_TimesD_SequenceD_list B_TimesD_SequenceD_listG_new(B_Sequence);
 extern struct B_ContainerD_listG_class B_ContainerD_listG_methods;
-B_ContainerD_list B_ContainerD_listG_new(B_Eq);                           // This is manually added; Why not generated?
 extern struct B_OrdD_listG_class B_OrdD_listG_methods;
 B_OrdD_list B_OrdD_listG_new(B_Ord);
 extern struct B_MappingD_dictG_class B_MappingD_dictG_methods;
@@ -3696,7 +3677,6 @@ B_SliceableD_str B_SliceableD_strG_new();
 extern struct B_TimesD_strG_class B_TimesD_strG_methods;
 B_TimesD_str B_TimesD_strG_new();
 extern struct B_HashableD_strG_class B_HashableD_strG_methods;
-B_HashableD_str B_HashableD_strG_new();                                  // This is manually added; Why not generated?
 extern struct B_OrdD_bytearrayG_class B_OrdD_bytearrayG_methods;
 B_OrdD_bytearray B_OrdD_bytearrayG_new();
 extern struct B_SequenceD_bytearrayG_class B_SequenceD_bytearrayG_methods;
@@ -3723,12 +3703,12 @@ B_str B_bin (B_Integral, $WORD);
 B_str B_chr (B_Integral, $WORD);
 B_tuple B_divmod (B_Integral, $WORD, $WORD);
 B_Iterator B_enumerate (B_Iterable, $WORD, B_int);
-B_Iterator B_filter (B_Iterable, $pure, $WORD); 
+B_Iterator B_filter (B_Iterable, $pure, $WORD);
 B_int B_hash (B_Hashable, $WORD);
 B_str B_hex (B_Integral, $WORD);
 B_Iterator B_iter (B_Iterable, $WORD);
 B_int B_len (B_Collection, $WORD);
-B_Iterator B_map (B_Iterable, $pure, $WORD);  
+B_Iterator B_map (B_Iterable, $pure, $WORD);
 $WORD B_max (B_Ord, B_Iterable, $WORD, $WORD);
 $WORD B_min (B_Ord, B_Iterable, $WORD, $WORD);
 $WORD B_next (B_Iterator);
@@ -3743,7 +3723,6 @@ $WORD B_sum (B_Plus, B_Iterable, $WORD, $WORD);
 B_Iterator B_zip (B_Iterable, B_Iterable, $WORD, $WORD);
 B_int B_gcd (B_int, B_int);
 B_tuple B_xgcd (B_int, B_int);
-/*        This is separate in env.h (which is slightly different; generated from earlier version of actonc)
 struct B_L_1proc;
 struct B_L_2proc;
 struct B_L_3proc;
@@ -3909,9 +3888,21 @@ B_L_5Cont B_L_5ContG_new(B_Env, $Cont);
 extern struct B_L_6procG_class B_L_6procG_methods;
 B_L_6proc B_L_6procG_new(B_Env, B_WorldAuth, B_list);
 extern struct B_WorldAuthG_class B_WorldAuthG_methods;
-B_WorldAuth B_WorldAuthG_new();
 extern struct B_EnvG_class B_EnvG_methods;
 $R B_EnvG_new($Cont, B_WorldAuth, B_list);
-*/
 void B___init__ ();
 
+
+// Manual additions to __builtin__.h
+
+B_HashableD_int B_HashableD_intG_new();
+B_HashableD_i64 B_HashableD_i64G_new();
+B_HashableD_i32 B_HashableD_i32G_new();
+B_HashableD_i16 B_HashableD_i16G_new();
+B_HashableD_u64 B_HashableD_u64G_new();
+B_HashableD_u32 B_HashableD_u32G_new();
+B_HashableD_u16 B_HashableD_u16G_new();
+B_HashableD_str B_HashableD_srtG_new();
+B_HashableD_bytes B_HashableD_bytesG_new();
+
+B_ContainerD_list B_ContainerD_listG_new(B_Eq);

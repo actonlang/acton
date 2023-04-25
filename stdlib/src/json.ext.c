@@ -95,7 +95,7 @@ B_list jsonQ_decode_arr(yyjson_val *);
 
 B_dict jsonQ_decode_obj(yyjson_val *obj) {
 
-    B_Hashable wit = (B_Hashable)B_HashableD_strG_new();
+    B_Hashable wit = (B_Hashable)B_HashableD_strG_witness;
     B_dict res = $NEW(B_dict, wit, NULL, NULL);
     yyjson_obj_iter iter;
     yyjson_obj_iter_init(obj, &iter);

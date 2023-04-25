@@ -1401,7 +1401,7 @@ void BOOTSTRAP(int argc, char *argv[]) {
     for (int i=0; i< argc; i++)
         wit->$class->append(wit,args,to$str(argv[i]));
 
-    env_actor = B_EnvG_newact(B_WorldAuthG_new(), args);
+    env_actor = B_EnvG_newactor(B_WorldAuthG_new(), args);
 
     root_actor = $ROOT();                           // Assumed to return $NEWACTOR(X) for the selected root actor X
     time_t now = current_time();
@@ -2523,7 +2523,6 @@ int main(int argc, char **argv) {
 
     $register_builtin();
     B___init__();
-    D___init__();
     $register_rts();
     $ROOTINIT();
 
