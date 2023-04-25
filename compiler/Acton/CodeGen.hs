@@ -328,7 +328,10 @@ declDecl env (Def _ n q p KwdNIL (Just t) b d fx)
   where env1                        = setRet t1 $ ldefine (envOf p) $ defineTVars q env
         t1                          = exposeMsg fx t
 
-declDecl env (Class _ n q as b)     = vcat [ declDecl env1 d{ dname = methodname n (dname d) } | Decl _ ds <- b', d@Def{} <- ds ] $+$
+declDecl env (Class _ n q as b)
+    | cDefinedClass                 = vcat [ declDecl env1 d{ dname = methodname n (dname d) } | Decl _ ds <- b', d@Def{} <- ds ] $+$
+                                      text "struct" <+> classname env n <+> methodtable env n <> semi
+    | otherwise                     = vcat [ declDecl env1 d{ dname = methodname n (dname d) } | Decl _ ds <- b', d@Def{} <- ds ] $+$
                                       declSerialize env1 n c props sup_c $+$
                                       declDeserialize env1 n c props sup_c $+$
                                       declCon env1 n q b $+$
@@ -338,7 +341,8 @@ declDecl env (Class _ n q as b)     = vcat [ declDecl env1 d{ dname = methodname
         env1                        = defineTVars q env
         props                       = [ n | (n, NSig sc Property) <- fullAttrEnv env c ]
         sup_c                       = filter ((`elem` special_repr) . tcname) as
-        special_repr                = [primActor]                                               -- To be extended...
+        special_repr                = [primActor] -- To be extended...
+        cDefinedClass               = inBuiltin env && any hasNotImpl [b' | Decl _ ds <- b, Def{dname=n',dbody=b'} <- ds, n' == initKW ]
 
 declSerialize env n c props sup_c   = (text "void" <+> genTopName env (methodname n serializeKW) <+> parens (gen env pars) <+> char '{') $+$
                                       nest 4 (super_step $+$ vcat [ step i | i <- props \\ super_attrs ]) $+$
@@ -375,7 +379,7 @@ declDeserialize env n c props sup_c = (gen env (tCon c) <+> genTopName env (meth
 
 
 initModule env []                   = empty
-initModule env (Decl _ ds : ss)     = vcat [ char '{' $+$ nest 4 (initClassBase env1 n q as $+$ initClass env n b) $+$ char '}' | Class _ n q as b <- ds ] $+$
+initModule env (Decl _ ds : ss)     = vcat [ char '{' $+$ nest 4 (initClassBase env1 n q as b $+$ initClass env n b) $+$ char '}' | Class _ n q as b <- ds ] $+$
                                       initModule env1 ss
   where env1                        = gdefine (envOf ds) env
 initModule env (Signature{} : ss)   = initModule env ss
@@ -385,17 +389,20 @@ initModule env (s : ss)             = genStmt env s $+$
   where te                          = envOf s `exclude` defined env
         env1                        = gdefine te env
 
-initClassBase env c q as            = methodtable env c <> dot <> gen env gcinfoKW <+> equals <+> doubleQuotes (genTopName env c) <> semi $+$
+initClassBase env c q as b           = methodtable env c <> dot <> gen env gcinfoKW <+> equals <+> doubleQuotes (genTopName env c) <> semi $+$
                                       methodtable env c <> dot <> gen env superclassKW <+> equals <+> super <> semi $+$
                                       vcat [ inherit c' n | (c',n) <- inheritedAttrs env (NoQ c) ]
   where super                       = if null as then text "NULL" else parens (gen env qnSuperClass) <> text "&" <> methodtable' env (tcname $ head as)
         selfsubst                   = subst [(tvSelf, tCon tc)]
         tc                          = TC (NoQ c) [ tVar v | Quant v _ <- q ]
-        inherit c' n                = methodtable env c <> dot <> gen env n <+> equals <+> cast (fromJust $ lookup n te) <> methodtable' env c' <> dot <> gen env n <> semi
+        inherit c' n
+          | cDefinedClass           = methodtable env c <> dot <> gen env n <+> equals <+> genTopName env (methodname c n) <> semi
+          | otherwise               = methodtable env c <> dot <> gen env n <+> equals <+> cast (fromJust $ lookup n te) <> methodtable' env c' <> dot <> gen env n <> semi
         cast (NSig sc dec)          = parens (gen env (selfsubst $ addSelf (sctype sc) (Just dec)))
         cast (NDef sc dec)          = parens (gen env (selfsubst $ addSelf (sctype sc) (Just dec)))
         cast (NVar t)               = parens (gen env $ selfsubst t)
         te                          = fullAttrEnv env $ TC (NoQ c) [ tVar v | Quant v _ <- q ]
+        cDefinedClass               = inBuiltin env && any hasNotImpl [b' | Decl _ ds <- b, Def{dname=n',dbody=b'} <- ds, n' == initKW ]
 
 initClass env c []                  = vcat [ methodtable env c <> dot <> gen env n <+> equals <+> genTopName env (methodname c n) <> semi | n <- [serializeKW,deserializeKW] ] $+$
                                       gen env primRegister <> parens (char '&' <> methodtable env c) <> semi
@@ -596,9 +603,9 @@ genCall env [] (TApp _ e ts) p      = genCall env ts e p
 genCall env [_,t] (Var _ n) (PosArg e PosNil)
   | n == primCAST                   = parens (parens (gen env t) <> gen env e)
 genCall env [row] (Var _ n) p
-   | qn == qnPrint                   = if i>0
-                                       then gen env qn <> parens (gen env primNEWTUPLE <> parens (pretty i <> comma <> gen env p))
-                                       else gen env qn <> parens (gen env primNEWTUPLE0)
+  | qn == qnPrint                   = if i>0
+                                      then gen env qn <> parens (gen env primNEWTUPLE <> parens (pretty i <> comma <> gen env p))
+                                      else gen env qn <> parens (gen env primNEWTUPLE0)
   where i                           = nargs p
         qn                          = unalias env n
 genCall env [row] (Var _ n) (PosArg s@Strings{} (PosArg tup PosNil))

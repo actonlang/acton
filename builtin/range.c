@@ -48,6 +48,12 @@ B_str B_rangeD___str__(B_range self) {
     return to$str(s);
 }
 
+B_str B_rangeD___repr__(B_range self) {
+    char *s;
+    asprintf(&s,"range(%ld,%ld,%ld)",self->start,self->stop,self->step);
+    return to$str(s);
+}
+
 void B_rangeD___serialize__(B_range self, $Serial$state state) {
     $ROW row = $add_header(RANGE_ID,3,state);
     row->blob[0] = ($WORD)self->start;

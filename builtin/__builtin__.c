@@ -4,10 +4,7 @@ Building project in /Users/sydow/acton/builtin/ty
 #include "types/__builtin__.h"
 #include "src/__builtin__.ext.c"
 */
-#include "../rts/rts.h"
-B_NoneType B_valueD___init__ (B_value self) {
-    return B_None;
-}
+#include "../rts/rts.h"                               // Manually added
 B_bool B_valueD___bool__ (B_value self);
 B_str B_valueD___str__ (B_value self);
 B_str B_valueD___repr__ (B_value self);
@@ -24,12 +21,6 @@ B_value B_valueD___deserialize__ (B_value self, $Serial$state state) {
     }
     return self;
 }
-B_value B_valueG_new() {
-    B_value $tmp = malloc(sizeof(struct B_value));
-    $tmp->$class = &B_valueG_methods;
-    B_valueG_methods.__init__($tmp);
-    return $tmp;
-}
 struct B_valueG_class B_valueG_methods;
 void B_objectD___serialize__ (B_object self, $Serial$state state) {
 }
@@ -43,12 +34,6 @@ B_object B_objectD___deserialize__ (B_object self, $Serial$state state) {
         self = $DNEW(B_object, state);
     }
     return self;
-}
-B_object B_objectG_new() {
-    B_object $tmp = malloc(sizeof(struct B_object));
-    $tmp->$class = &B_objectG_methods;
-    B_objectG_methods.__init__($tmp);
-    return $tmp;
 }
 struct B_objectG_class B_objectG_methods;
 void B_atomD___serialize__ (B_atom self, $Serial$state state) {
@@ -64,181 +49,34 @@ B_atom B_atomD___deserialize__ (B_atom self, $Serial$state state) {
     }
     return self;
 }
-/*
-B_atom B_atomG_new() {
-    B_atom $tmp = malloc(sizeof(struct B_atom));
-    $tmp->$class = &B_atomG_methods;
-    B_atomG_methods.__init__($tmp);
-    return $tmp;
-}
-*/
 struct B_atomG_class B_atomG_methods;
-/*
 B_NoneType B_intD___init__ (B_int self, B_atom val);
-void B_intD___serialize__ (B_int self, $Serial$state state) {
-}
-B_int B_intD___deserialize__ (B_int self, $Serial$state state) {
-    if (!self) {
-        if (!state) {
-            self = malloc(sizeof(struct B_int));
-            self->$class = &B_intG_methods;
-            return self;
-        }
-        self = $DNEW(B_int, state);
-    }
-    return self;
-}
-B_int B_intG_new(B_atom G_1) {
-    B_int $tmp = malloc(sizeof(struct B_int));
-    $tmp->$class = &B_intG_methods;
-    B_intG_methods.__init__($tmp, G_1);
-    return $tmp;
-}
-*/
 struct B_intG_class B_intG_methods;
-/*
 B_NoneType B_i64D___init__ (B_i64 self, B_atom val);
-void B_i64D___serialize__ (B_i64 self, $Serial$state state){
-}
-B_i64 B_i64D___deserialize__ (B_i64 self, $Serial$state state); {
-    if (!self) {
-        if (!state) {
-            self = malloc(sizeof(struct B_i64));
-            self->$class = &B_i64G_methods;
-            return self;
-        }
-        self = $DNEW(B_i64, state);
-    }
-    return self;
-}
-B_i64 B_i64G_new(B_atom G_1) {
-    B_i64 $tmp = malloc(sizeof(struct B_i64));
-    $tmp->$class = &B_i64G_methods;
-    B_i64G_methods.__init__($tmp, G_1);
-    return $tmp;
-}
-*/
 struct B_i64G_class B_i64G_methods;
+B_NoneType B_i32D___init__ (B_i32 self, B_atom val);
 struct B_i32G_class B_i32G_methods;
+B_NoneType B_i16D___init__ (B_i16 self, B_atom val);
 struct B_i16G_class B_i16G_methods;
+B_NoneType B_u64D___init__ (B_u64 self, B_atom val);
 struct B_u64G_class B_u64G_methods;
+B_NoneType B_u32D___init__ (B_u32 self, B_atom val);
 struct B_u32G_class B_u32G_methods;
+B_NoneType B_u16D___init__ (B_u16 self, B_atom val);
 struct B_u16G_class B_u16G_methods;
-/*
 B_NoneType B_floatD___init__ (B_float self, B_atom val);
-void B_floatD___serialize__ (B_float self, $Serial$state state) {
-}
-B_float B_floatD___deserialize__ (B_float self, $Serial$state state) {
-    if (!self) {
-        if (!state) {
-            self = malloc(sizeof(struct B_float));
-            self->$class = &B_floatG_methods;
-            return self;
-        }
-        self = $DNEW(B_float, state);
-    }
-    return self;
-}
-B_float B_floatG_new(B_atom G_1) {
-    B_float $tmp = malloc(sizeof(struct B_float));
-    $tmp->$class = &B_floatG_methods;
-    B_floatG_methods.__init__($tmp, G_1);
-    return $tmp;
-}
-*/
 struct B_floatG_class B_floatG_methods;
-/*
 B_NoneType B_boolD___init__ (B_bool self, B_value val);
-void B_boolD___serialize__ (B_bool self, $Serial$state state) {
-}
-B_bool B_boolD___deserialize__ (B_bool self, $Serial$state state) {
-    if (!self) {
-        if (!state) {
-            self = malloc(sizeof(struct B_bool));
-            self->$class = &B_boolG_methods;
-            return self;
-        }
-        self = $DNEW(B_bool, state);
-    }
-    return self;
-}
-B_bool B_boolG_new(B_value G_1) {
-    B_bool $tmp = malloc(sizeof(struct B_bool));
-    $tmp->$class = &B_boolG_methods;
-    B_boolG_methods.__init__($tmp, G_1);
-    return $tmp;
-}
-*/
 struct B_boolG_class B_boolG_methods;
-/*
 B_NoneType B_sliceD___init__ (B_slice self, B_int start, B_int stop, B_int step);
-void B_sliceD___serialize__ (B_slice self, $Serial$state state) {
-}
-B_slice B_sliceD___deserialize__ (B_slice self, $Serial$state state) {
-    if (!self) {
-        if (!state) {
-            self = malloc(sizeof(struct B_slice));
-            self->$class = &B_sliceG_methods;
-            return self;
-        }
-        self = $DNEW(B_slice, state);
-    }
-    return self;
-}
-B_slice B_sliceG_new(B_int G_1, B_int G_2, B_int G_3) {
-    B_slice $tmp = malloc(sizeof(struct B_slice));
-    $tmp->$class = &B_sliceG_methods;
-    B_sliceG_methods.__init__($tmp, G_1, G_2, G_3);
-    return $tmp;
-}
-*/
 struct B_sliceG_class B_sliceG_methods;
-/*
-B_NoneType B_listD___init__ (B_list self, B_Iterable W_IterableE_62, $WORD val);
+B_NoneType B_listD___init__ (B_list self, B_Iterable W_IterableE_82, $WORD val);
+B_NoneType B_listD_clear (B_list self);
 B_list B_listD_copy (B_list self);
-void B_listD___serialize__ (B_list self, $Serial$state state) {
-}
-B_list B_listD___deserialize__ (B_list self, $Serial$state state) {
-    if (!self) {
-        if (!state) {
-            self = malloc(sizeof(struct B_list));
-            self->$class = &B_listG_methods;
-            return self;
-        }
-        self = $DNEW(B_list, state);
-    }
-    return self;
-}
-B_list B_listG_new(B_Iterable G_1, $WORD G_2) {
-    B_list $tmp = malloc(sizeof(struct B_list));
-    $tmp->$class = &B_listG_methods;
-    B_listG_methods.__init__($tmp, G_1, G_2);
-    return $tmp;
-}
-*/
+B_NoneType B_listD_extend (B_list self, B_list other);
+$WORD B_listD_pop (B_list self, B_int n);
 struct B_listG_class B_listG_methods;
-/*
 B_NoneType B_rangeD___init__ (B_range self, B_int start, B_int stop, B_int step);
-void B_rangeD___serialize__ (B_range self, $Serial$state state) {
-}
-B_range B_rangeD___deserialize__ (B_range self, $Serial$state state) {
-    if (!self) {
-        if (!state) {
-            self = malloc(sizeof(struct B_range));
-            self->$class = &B_rangeG_methods;
-            return self;
-        }
-        self = $DNEW(B_range, state);
-    }
-    return self;
-}
-B_range B_rangeG_new(B_int G_1, B_int G_2, B_int G_3) {
-    B_range $tmp = malloc(sizeof(struct B_range));
-    $tmp->$class = &B_rangeG_methods;
-    B_rangeG_methods.__init__($tmp, G_1, G_2, G_3);
-    return $tmp;
-}
-*/
 struct B_rangeG_class B_rangeG_methods;
 void B_IteratorD___serialize__ (B_Iterator self, $Serial$state state) {
 }
@@ -289,7 +127,7 @@ B_bool B_strD_isprintable (B_str self);
 B_bool B_strD_isspace (B_str self);
 B_bool B_strD_istitle (B_str self);
 B_bool B_strD_isupper (B_str self);
-B_str B_strD_join (B_str self, B_Iterable W_IterableE_154, $WORD iterable);
+B_str B_strD_join (B_str self, B_Iterable W_IterableE_189, $WORD iterable);
 B_str B_strD_ljust (B_str self, B_int width, B_str fillchar);
 B_str B_strD_lower (B_str self);
 B_str B_strD_lstrip (B_str self, B_str chars);
@@ -306,29 +144,8 @@ B_bool B_strD_startswith (B_str self, B_str prefix, B_int start, B_int end);
 B_str B_strD_strip (B_str self, B_str chars);
 B_str B_strD_upper (B_str self);
 B_str B_strD_zfill (B_str self, B_int width);
-/*
-void B_strD___serialize__ (B_str self, $Serial$state state) {
-}
-B_str B_strD___deserialize__ (B_str self, $Serial$state state) {
-    if (!self) {
-        if (!state) {
-            self = malloc(sizeof(struct B_str));
-            self->$class = &B_strG_methods;
-            return self;
-        }
-        self = $DNEW(B_str, state);
-    }
-    return self;
-}
-B_str B_strG_new(B_value G_1) {
-    B_str $tmp = malloc(sizeof(struct B_str));
-    $tmp->$class = &B_strG_methods;
-    B_strG_methods.__init__($tmp, G_1);
-    return $tmp;
-}
-*/
 struct B_strG_class B_strG_methods;
-B_NoneType B_bytesD___init__ (B_bytes self, B_Iterable W_IterableE_226, $WORD iterable);
+B_NoneType B_bytesD___init__ (B_bytes self, B_Iterable W_IterableE_261, $WORD iterable);
 B_bytes B_bytesD_capitalize (B_bytes self);
 B_bytes B_bytesD_center (B_bytes self, B_int width, B_bytes fillchar);
 B_int B_bytesD_count (B_bytes self, B_bytes sub, B_int start, B_int end);
@@ -345,7 +162,7 @@ B_bool B_bytesD_islower (B_bytes self);
 B_bool B_bytesD_isspace (B_bytes self);
 B_bool B_bytesD_istitle (B_bytes self);
 B_bool B_bytesD_isupper (B_bytes self);
-B_bytes B_bytesD_join (B_bytes self, B_Iterable W_IterableE_296, $WORD iterable);
+B_bytes B_bytesD_join (B_bytes self, B_Iterable W_IterableE_331, $WORD iterable);
 B_bytes B_bytesD_ljust (B_bytes self, B_int width, B_bytes fillchar);
 B_bytes B_bytesD_lower (B_bytes self);
 B_bytes B_bytesD_lstrip (B_bytes self, B_bytes chars);
@@ -362,27 +179,6 @@ B_bool B_bytesD_startswith (B_bytes self, B_bytes prefix, B_int start, B_int end
 B_bytes B_bytesD_strip (B_bytes self, B_bytes chars);
 B_bytes B_bytesD_upper (B_bytes self);
 B_bytes B_bytesD_zfill (B_bytes self, B_int width);
-/*
-void B_bytesD___serialize__ (B_bytes self, $Serial$state state) {
-}
-B_bytes B_bytesD___deserialize__ (B_bytes self, $Serial$state state) {
-    if (!self) {
-        if (!state) {
-            self = malloc(sizeof(struct B_bytes));
-            self->$class = &B_bytesG_methods;
-            return self;
-        }
-        self = $DNEW(B_bytes, state);
-    }
-    return self;
-}
-B_bytes B_bytesG_new(B_Iterable G_1, $WORD G_2) {
-    B_bytes $tmp = malloc(sizeof(struct B_bytes));
-    $tmp->$class = &B_bytesG_methods;
-    B_bytesG_methods.__init__($tmp, G_1, G_2);
-    return $tmp;
-}
-*/
 struct B_bytesG_class B_bytesG_methods;
 B_NoneType B_bytearrayD___init__ (B_bytearray self, B_bytes val);
 B_bytearray B_bytearrayD_capitalize (B_bytearray self);
@@ -401,7 +197,7 @@ B_bool B_bytearrayD_islower (B_bytearray self);
 B_bool B_bytearrayD_isspace (B_bytearray self);
 B_bool B_bytearrayD_istitle (B_bytearray self);
 B_bool B_bytearrayD_isupper (B_bytearray self);
-B_bytearray B_bytearrayD_join (B_bytearray self, B_Iterable W_IterableE_436, $WORD iterable);
+B_bytearray B_bytearrayD_join (B_bytearray self, B_Iterable W_IterableE_471, $WORD iterable);
 B_bytearray B_bytearrayD_ljust (B_bytearray self, B_int width, B_bytearray fillchar);
 B_bytearray B_bytearrayD_lower (B_bytearray self);
 B_bytearray B_bytearrayD_lstrip (B_bytearray self, B_bytearray chars);
@@ -418,29 +214,8 @@ B_bool B_bytearrayD_startswith (B_bytearray self, B_bytearray prefix, B_int star
 B_bytearray B_bytearrayD_strip (B_bytearray self, B_bytearray chars);
 B_bytearray B_bytearrayD_upper (B_bytearray self);
 B_bytearray B_bytearrayD_zfill (B_bytearray self, B_int width);
-/*
-void B_bytearrayD___serialize__ (B_bytearray self, $Serial$state state) {
-}
-B_bytearray B_bytearrayD___deserialize__ (B_bytearray self, $Serial$state state) {
-    if (!self) {
-        if (!state) {
-            self = malloc(sizeof(struct B_bytearray));
-            self->$class = &B_bytearrayG_methods;
-            return self;
-        }
-        self = $DNEW(B_bytearray, state);
-    }
-    return self;
-}
-B_bytearray B_bytearrayG_new(B_bytes G_1) {
-    B_bytearray $tmp = malloc(sizeof(struct B_bytearray));
-    $tmp->$class = &B_bytearrayG_methods;
-    B_bytearrayG_methods.__init__($tmp, G_1);
-    return $tmp;
-}
-*/
 struct B_bytearrayG_class B_bytearrayG_methods;
-/*
+/*   Manually removed
 void B_MsgD___serialize__ (B_Msg self, $Serial$state state) {
 }
 B_Msg B_MsgD___deserialize__ (B_Msg self, $Serial$state state) {
@@ -453,12 +228,6 @@ B_Msg B_MsgD___deserialize__ (B_Msg self, $Serial$state state) {
         self = $DNEW(B_Msg, state);
     }
     return self;
-}
-B_Msg B_MsgG_new() {
-    B_Msg $tmp = malloc(sizeof(struct B_Msg));
-    $tmp->$class = &B_MsgG_methods;
-    B_MsgG_methods.__init__($tmp);
-    return $tmp;
 }
 struct B_MsgG_class B_MsgG_methods;
 */
@@ -941,74 +710,11 @@ B_Hashable B_HashableD___deserialize__ (B_Hashable self, $Serial$state state) {
     return self;
 }
 struct B_HashableG_class B_HashableG_methods;
-/*
-B_NoneType B_complexD___init__ (B_complex self, B_Number W_NumberE_604, $WORD val);
-void B_complexD___serialize__ (B_complex self, $Serial$state state) {
-}
-B_complex B_complexD___deserialize__ (B_complex self, $Serial$state state) {
-    if (!self) {
-        if (!state) {
-            self = malloc(sizeof(struct B_complex));
-            self->$class = &B_complexG_methods;
-            return self;
-        }
-        self = $DNEW(B_complex, state);
-    }
-    return self;
-}
-B_complex B_complexG_new(B_Number G_1, $WORD G_2) {
-    B_complex $tmp = malloc(sizeof(struct B_complex));
-    $tmp->$class = &B_complexG_methods;
-    B_complexG_methods.__init__($tmp, G_1, G_2);
-    return $tmp;
-}
-*/
+B_NoneType B_complexD___init__ (B_complex self, B_Number W_NumberE_639, $WORD val);
 struct B_complexG_class B_complexG_methods;
-/*
-B_NoneType B_dictD___init__ (B_dict self, B_Hashable W_HashableD_A, B_Iterable W_IterableE_609, $WORD iterable);
-void B_dictD___serialize__ (B_dict self, $Serial$state state) {
-}
-B_dict B_dictD___deserialize__ (B_dict self, $Serial$state state) {
-    if (!self) {
-        if (!state) {
-            self = malloc(sizeof(struct B_dict));
-            self->$class = &B_dictG_methods;
-            return self;
-        }
-        self = $DNEW(B_dict, state);
-    }
-    return self;
-}
-B_dict B_dictG_new(B_Hashable G_1, B_Iterable G_2, $WORD G_3) {
-    B_dict $tmp = malloc(sizeof(struct B_dict));
-    $tmp->$class = &B_dictG_methods;
-    B_dictG_methods.__init__($tmp, G_1, G_2, G_3);
-    return $tmp;
-}
-*/
+B_NoneType B_dictD___init__ (B_dict self, B_Hashable W_HashableD_A, B_Iterable W_IterableE_644, $WORD iterable);
 struct B_dictG_class B_dictG_methods;
-/*
-B_NoneType B_setD___init__ (B_set self, B_Hashable W_HashableD_A, B_Iterable W_IterableE_617, $WORD iterable);
-void B_setD___serialize__ (B_set self, $Serial$state state) {
-}
-B_set B_setD___deserialize__ (B_set self, $Serial$state state) {
-    if (!self) {
-        if (!state) {
-            self = malloc(sizeof(struct B_set));
-            self->$class = &B_setG_methods;
-            return self;
-        }
-        self = $DNEW(B_set, state);
-    }
-    return self;
-}
-B_set B_setG_new(B_Hashable G_1, B_Iterable G_2, $WORD G_3) {
-    B_set $tmp = malloc(sizeof(struct B_set));
-    $tmp->$class = &B_setG_methods;
-    B_setG_methods.__init__($tmp, G_1, G_2, G_3);
-    return $tmp;
-}
-*/
+B_NoneType B_setD___init__ (B_set self, B_Hashable W_HashableD_A, B_Iterable W_IterableE_652, $WORD iterable);
 struct B_setG_class B_setG_methods;
 B_NoneType B_NumberD___init__ (B_Number W_self, B_Minus W_Minus) {
     ((B_NoneType (*) (B_Times))B_TimesG_methods.__init__)(((B_Times)W_self));
@@ -1309,17 +1015,17 @@ B_int B_IntegralD_intD___floordiv__ (B_IntegralD_int W_self, B_int G_1p, B_int G
 B_tuple B_IntegralD_intD___divmod__ (B_IntegralD_int W_self, B_int G_1p, B_int G_2p);
 B_int B_IntegralD_intD___index__ (B_IntegralD_int W_self, B_int G_1p);
 B_int B_IntegralD_intD___int__ (B_IntegralD_int W_self, B_int G_1p);
-$WORD B_IntegralD_intD_denominator (B_IntegralD_int W_self, B_int G_1p, B_Integral W_IntegralE_638);
-$WORD B_IntegralD_intD_numerator (B_IntegralD_int W_self, B_int G_1p, B_Integral W_IntegralE_637);
+$WORD B_IntegralD_intD_denominator (B_IntegralD_int W_self, B_int G_1p, B_Integral W_IntegralE_673);
+$WORD B_IntegralD_intD_numerator (B_IntegralD_int W_self, B_int G_1p, B_Integral W_IntegralE_672);
 B_int B_IntegralD_intD___round__ (B_IntegralD_int W_self, B_int G_1p, B_int G_2p);
-$WORD B_IntegralD_intD___ceil__ (B_IntegralD_int W_self, B_int G_1p, B_Integral W_IntegralE_636);
-$WORD B_IntegralD_intD___floor__ (B_IntegralD_int W_self, B_int G_1p, B_Integral W_IntegralE_635);
-$WORD B_IntegralD_intD___trunc__ (B_IntegralD_int W_self, B_int G_1p, B_Integral W_IntegralE_634);
+$WORD B_IntegralD_intD___ceil__ (B_IntegralD_int W_self, B_int G_1p, B_Integral W_IntegralE_671);
+$WORD B_IntegralD_intD___floor__ (B_IntegralD_int W_self, B_int G_1p, B_Integral W_IntegralE_670);
+$WORD B_IntegralD_intD___trunc__ (B_IntegralD_int W_self, B_int G_1p, B_Integral W_IntegralE_669);
 B_float B_IntegralD_intD___float__ (B_IntegralD_int W_self, B_int G_1p);
 B_int B_IntegralD_intD_conjugate (B_IntegralD_int W_self, B_int G_1p);
-$WORD B_IntegralD_intD___abs__ (B_IntegralD_int W_self, B_int G_1p, B_Real W_RealE_633);
-$WORD B_IntegralD_intD_imag (B_IntegralD_int W_self, B_int G_1p, B_Real W_RealE_632);
-$WORD B_IntegralD_intD_real (B_IntegralD_int W_self, B_int G_1p, B_Real W_RealE_631);
+$WORD B_IntegralD_intD___abs__ (B_IntegralD_int W_self, B_int G_1p, B_Real W_RealE_668);
+$WORD B_IntegralD_intD_imag (B_IntegralD_int W_self, B_int G_1p, B_Real W_RealE_667);
+$WORD B_IntegralD_intD_real (B_IntegralD_int W_self, B_int G_1p, B_Real W_RealE_666);
 B_int B_IntegralD_intD___pos__ (B_IntegralD_int W_self, B_int G_1p);
 B_int B_IntegralD_intD___neg__ (B_IntegralD_int W_self, B_int G_1p);
 B_int B_IntegralD_intD___pow__ (B_IntegralD_int W_self, B_int G_1p, B_int G_2p);
@@ -1482,22 +1188,7 @@ B_HashableD_int B_HashableD_intD___deserialize__ (B_HashableD_int self, $Serial$
     }
     return self;
 }
-B_HashableD_int B_HashableD_intG_new() {   // manually added
-    return $NEW(B_HashableD_int);          //
-}                                          //
 struct B_HashableD_intG_class B_HashableD_intG_methods;
-
-
-
-
-
-
-
-
-
-
-
-
 B_NoneType B_IntegralD_i64D___init__ (B_IntegralD_i64 W_self) {
     ((B_NoneType (*) (B_Integral, B_Minus, B_Logical))B_IntegralG_methods.__init__)(((B_Integral)W_self), ((B_Minus)B_MinusD_IntegralD_i64G_new(((B_Integral)W_self))), ((B_Logical)B_LogicalD_IntegralD_i64G_new(((B_Integral)W_self))));
     return B_None;
@@ -1510,17 +1201,17 @@ B_i64 B_IntegralD_i64D___floordiv__ (B_IntegralD_i64 W_self, B_i64 G_1p, B_i64 G
 B_tuple B_IntegralD_i64D___divmod__ (B_IntegralD_i64 W_self, B_i64 G_1p, B_i64 G_2p);
 B_int B_IntegralD_i64D___index__ (B_IntegralD_i64 W_self, B_i64 G_1p);
 B_int B_IntegralD_i64D___int__ (B_IntegralD_i64 W_self, B_i64 G_1p);
-$WORD B_IntegralD_i64D_denominator (B_IntegralD_i64 W_self, B_i64 G_1p, B_Integral W_IntegralE_638);
-$WORD B_IntegralD_i64D_numerator (B_IntegralD_i64 W_self, B_i64 G_1p, B_Integral W_IntegralE_637);
+$WORD B_IntegralD_i64D_denominator (B_IntegralD_i64 W_self, B_i64 G_1p, B_Integral W_IntegralE_673);
+$WORD B_IntegralD_i64D_numerator (B_IntegralD_i64 W_self, B_i64 G_1p, B_Integral W_IntegralE_672);
 B_i64 B_IntegralD_i64D___round__ (B_IntegralD_i64 W_self, B_i64 G_1p, B_int G_2p);
-$WORD B_IntegralD_i64D___ceil__ (B_IntegralD_i64 W_self, B_i64 G_1p, B_Integral W_IntegralE_636);
-$WORD B_IntegralD_i64D___floor__ (B_IntegralD_i64 W_self, B_i64 G_1p, B_Integral W_IntegralE_635);
-$WORD B_IntegralD_i64D___trunc__ (B_IntegralD_i64 W_self, B_i64 G_1p, B_Integral W_IntegralE_634);
+$WORD B_IntegralD_i64D___ceil__ (B_IntegralD_i64 W_self, B_i64 G_1p, B_Integral W_IntegralE_671);
+$WORD B_IntegralD_i64D___floor__ (B_IntegralD_i64 W_self, B_i64 G_1p, B_Integral W_IntegralE_670);
+$WORD B_IntegralD_i64D___trunc__ (B_IntegralD_i64 W_self, B_i64 G_1p, B_Integral W_IntegralE_669);
 B_float B_IntegralD_i64D___float__ (B_IntegralD_i64 W_self, B_i64 G_1p);
 B_i64 B_IntegralD_i64D_conjugate (B_IntegralD_i64 W_self, B_i64 G_1p);
-$WORD B_IntegralD_i64D___abs__ (B_IntegralD_i64 W_self, B_i64 G_1p, B_Real W_RealE_633);
-$WORD B_IntegralD_i64D_imag (B_IntegralD_i64 W_self, B_i64 G_1p, B_Real W_RealE_632);
-$WORD B_IntegralD_i64D_real (B_IntegralD_i64 W_self, B_i64 G_1p, B_Real W_RealE_631);
+$WORD B_IntegralD_i64D___abs__ (B_IntegralD_i64 W_self, B_i64 G_1p, B_Real W_RealE_668);
+$WORD B_IntegralD_i64D_imag (B_IntegralD_i64 W_self, B_i64 G_1p, B_Real W_RealE_667);
+$WORD B_IntegralD_i64D_real (B_IntegralD_i64 W_self, B_i64 G_1p, B_Real W_RealE_666);
 B_i64 B_IntegralD_i64D___pos__ (B_IntegralD_i64 W_self, B_i64 G_1p);
 B_i64 B_IntegralD_i64D___neg__ (B_IntegralD_i64 W_self, B_i64 G_1p);
 B_i64 B_IntegralD_i64D___pow__ (B_IntegralD_i64 W_self, B_i64 G_1p, B_i64 G_2p);
@@ -1683,21 +1374,7 @@ B_HashableD_i64 B_HashableD_i64D___deserialize__ (B_HashableD_i64 self, $Serial$
     }
     return self;
 }
-B_HashableD_i64 B_HashableD_i64G_new() {   // manually added
-    return $NEW(B_HashableD_i64);          //
-}                                          //
 struct B_HashableD_i64G_class B_HashableD_i64G_methods;
-
-
-
-
-
-
-
-
-
-
-
 B_NoneType B_IntegralD_i32D___init__ (B_IntegralD_i32 W_self) {
     ((B_NoneType (*) (B_Integral, B_Minus, B_Logical))B_IntegralG_methods.__init__)(((B_Integral)W_self), ((B_Minus)B_MinusD_IntegralD_i32G_new(((B_Integral)W_self))), ((B_Logical)B_LogicalD_IntegralD_i32G_new(((B_Integral)W_self))));
     return B_None;
@@ -1710,17 +1387,17 @@ B_i32 B_IntegralD_i32D___floordiv__ (B_IntegralD_i32 W_self, B_i32 G_1p, B_i32 G
 B_tuple B_IntegralD_i32D___divmod__ (B_IntegralD_i32 W_self, B_i32 G_1p, B_i32 G_2p);
 B_int B_IntegralD_i32D___index__ (B_IntegralD_i32 W_self, B_i32 G_1p);
 B_int B_IntegralD_i32D___int__ (B_IntegralD_i32 W_self, B_i32 G_1p);
-$WORD B_IntegralD_i32D_denominator (B_IntegralD_i32 W_self, B_i32 G_1p, B_Integral W_IntegralE_638);
-$WORD B_IntegralD_i32D_numerator (B_IntegralD_i32 W_self, B_i32 G_1p, B_Integral W_IntegralE_637);
+$WORD B_IntegralD_i32D_denominator (B_IntegralD_i32 W_self, B_i32 G_1p, B_Integral W_IntegralE_673);
+$WORD B_IntegralD_i32D_numerator (B_IntegralD_i32 W_self, B_i32 G_1p, B_Integral W_IntegralE_672);
 B_i32 B_IntegralD_i32D___round__ (B_IntegralD_i32 W_self, B_i32 G_1p, B_int G_2p);
-$WORD B_IntegralD_i32D___ceil__ (B_IntegralD_i32 W_self, B_i32 G_1p, B_Integral W_IntegralE_636);
-$WORD B_IntegralD_i32D___floor__ (B_IntegralD_i32 W_self, B_i32 G_1p, B_Integral W_IntegralE_635);
-$WORD B_IntegralD_i32D___trunc__ (B_IntegralD_i32 W_self, B_i32 G_1p, B_Integral W_IntegralE_634);
+$WORD B_IntegralD_i32D___ceil__ (B_IntegralD_i32 W_self, B_i32 G_1p, B_Integral W_IntegralE_671);
+$WORD B_IntegralD_i32D___floor__ (B_IntegralD_i32 W_self, B_i32 G_1p, B_Integral W_IntegralE_670);
+$WORD B_IntegralD_i32D___trunc__ (B_IntegralD_i32 W_self, B_i32 G_1p, B_Integral W_IntegralE_669);
 B_float B_IntegralD_i32D___float__ (B_IntegralD_i32 W_self, B_i32 G_1p);
 B_i32 B_IntegralD_i32D_conjugate (B_IntegralD_i32 W_self, B_i32 G_1p);
-$WORD B_IntegralD_i32D___abs__ (B_IntegralD_i32 W_self, B_i32 G_1p, B_Real W_RealE_633);
-$WORD B_IntegralD_i32D_imag (B_IntegralD_i32 W_self, B_i32 G_1p, B_Real W_RealE_632);
-$WORD B_IntegralD_i32D_real (B_IntegralD_i32 W_self, B_i32 G_1p, B_Real W_RealE_631);
+$WORD B_IntegralD_i32D___abs__ (B_IntegralD_i32 W_self, B_i32 G_1p, B_Real W_RealE_668);
+$WORD B_IntegralD_i32D_imag (B_IntegralD_i32 W_self, B_i32 G_1p, B_Real W_RealE_667);
+$WORD B_IntegralD_i32D_real (B_IntegralD_i32 W_self, B_i32 G_1p, B_Real W_RealE_666);
 B_i32 B_IntegralD_i32D___pos__ (B_IntegralD_i32 W_self, B_i32 G_1p);
 B_i32 B_IntegralD_i32D___neg__ (B_IntegralD_i32 W_self, B_i32 G_1p);
 B_i32 B_IntegralD_i32D___pow__ (B_IntegralD_i32 W_self, B_i32 G_1p, B_i32 G_2p);
@@ -1883,21 +1560,7 @@ B_HashableD_i32 B_HashableD_i32D___deserialize__ (B_HashableD_i32 self, $Serial$
     }
     return self;
 }
-B_HashableD_i32 B_HashableD_i32G_new() {   // manually added
-    return $NEW(B_HashableD_i32);          //
-}                                          //
 struct B_HashableD_i32G_class B_HashableD_i32G_methods;
-
-
-
-
-
-
-
-
-
-
-
 B_NoneType B_IntegralD_i16D___init__ (B_IntegralD_i16 W_self) {
     ((B_NoneType (*) (B_Integral, B_Minus, B_Logical))B_IntegralG_methods.__init__)(((B_Integral)W_self), ((B_Minus)B_MinusD_IntegralD_i16G_new(((B_Integral)W_self))), ((B_Logical)B_LogicalD_IntegralD_i16G_new(((B_Integral)W_self))));
     return B_None;
@@ -1910,17 +1573,17 @@ B_i16 B_IntegralD_i16D___floordiv__ (B_IntegralD_i16 W_self, B_i16 G_1p, B_i16 G
 B_tuple B_IntegralD_i16D___divmod__ (B_IntegralD_i16 W_self, B_i16 G_1p, B_i16 G_2p);
 B_int B_IntegralD_i16D___index__ (B_IntegralD_i16 W_self, B_i16 G_1p);
 B_int B_IntegralD_i16D___int__ (B_IntegralD_i16 W_self, B_i16 G_1p);
-$WORD B_IntegralD_i16D_denominator (B_IntegralD_i16 W_self, B_i16 G_1p, B_Integral W_IntegralE_638);
-$WORD B_IntegralD_i16D_numerator (B_IntegralD_i16 W_self, B_i16 G_1p, B_Integral W_IntegralE_637);
+$WORD B_IntegralD_i16D_denominator (B_IntegralD_i16 W_self, B_i16 G_1p, B_Integral W_IntegralE_673);
+$WORD B_IntegralD_i16D_numerator (B_IntegralD_i16 W_self, B_i16 G_1p, B_Integral W_IntegralE_672);
 B_i16 B_IntegralD_i16D___round__ (B_IntegralD_i16 W_self, B_i16 G_1p, B_int G_2p);
-$WORD B_IntegralD_i16D___ceil__ (B_IntegralD_i16 W_self, B_i16 G_1p, B_Integral W_IntegralE_636);
-$WORD B_IntegralD_i16D___floor__ (B_IntegralD_i16 W_self, B_i16 G_1p, B_Integral W_IntegralE_635);
-$WORD B_IntegralD_i16D___trunc__ (B_IntegralD_i16 W_self, B_i16 G_1p, B_Integral W_IntegralE_634);
+$WORD B_IntegralD_i16D___ceil__ (B_IntegralD_i16 W_self, B_i16 G_1p, B_Integral W_IntegralE_671);
+$WORD B_IntegralD_i16D___floor__ (B_IntegralD_i16 W_self, B_i16 G_1p, B_Integral W_IntegralE_670);
+$WORD B_IntegralD_i16D___trunc__ (B_IntegralD_i16 W_self, B_i16 G_1p, B_Integral W_IntegralE_669);
 B_float B_IntegralD_i16D___float__ (B_IntegralD_i16 W_self, B_i16 G_1p);
 B_i16 B_IntegralD_i16D_conjugate (B_IntegralD_i16 W_self, B_i16 G_1p);
-$WORD B_IntegralD_i16D___abs__ (B_IntegralD_i16 W_self, B_i16 G_1p, B_Real W_RealE_633);
-$WORD B_IntegralD_i16D_imag (B_IntegralD_i16 W_self, B_i16 G_1p, B_Real W_RealE_632);
-$WORD B_IntegralD_i16D_real (B_IntegralD_i16 W_self, B_i16 G_1p, B_Real W_RealE_631);
+$WORD B_IntegralD_i16D___abs__ (B_IntegralD_i16 W_self, B_i16 G_1p, B_Real W_RealE_668);
+$WORD B_IntegralD_i16D_imag (B_IntegralD_i16 W_self, B_i16 G_1p, B_Real W_RealE_667);
+$WORD B_IntegralD_i16D_real (B_IntegralD_i16 W_self, B_i16 G_1p, B_Real W_RealE_666);
 B_i16 B_IntegralD_i16D___pos__ (B_IntegralD_i16 W_self, B_i16 G_1p);
 B_i16 B_IntegralD_i16D___neg__ (B_IntegralD_i16 W_self, B_i16 G_1p);
 B_i16 B_IntegralD_i16D___pow__ (B_IntegralD_i16 W_self, B_i16 G_1p, B_i16 G_2p);
@@ -2083,22 +1746,7 @@ B_HashableD_i16 B_HashableD_i16D___deserialize__ (B_HashableD_i16 self, $Serial$
     }
     return self;
 }
-B_HashableD_i16 B_HashableD_i16G_new() {   // manually added
-    return $NEW(B_HashableD_i16);          //
-}                                          //
 struct B_HashableD_i16G_class B_HashableD_i16G_methods;
-
-
-
-
-
-
-
-
-
-
-
-
 B_NoneType B_IntegralD_u64D___init__ (B_IntegralD_u64 W_self) {
     ((B_NoneType (*) (B_Integral, B_Minus, B_Logical))B_IntegralG_methods.__init__)(((B_Integral)W_self), ((B_Minus)B_MinusD_IntegralD_u64G_new(((B_Integral)W_self))), ((B_Logical)B_LogicalD_IntegralD_u64G_new(((B_Integral)W_self))));
     return B_None;
@@ -2111,17 +1759,17 @@ B_u64 B_IntegralD_u64D___floordiv__ (B_IntegralD_u64 W_self, B_u64 G_1p, B_u64 G
 B_tuple B_IntegralD_u64D___divmod__ (B_IntegralD_u64 W_self, B_u64 G_1p, B_u64 G_2p);
 B_int B_IntegralD_u64D___index__ (B_IntegralD_u64 W_self, B_u64 G_1p);
 B_int B_IntegralD_u64D___int__ (B_IntegralD_u64 W_self, B_u64 G_1p);
-$WORD B_IntegralD_u64D_denominator (B_IntegralD_u64 W_self, B_u64 G_1p, B_Integral W_IntegralE_638);
-$WORD B_IntegralD_u64D_numerator (B_IntegralD_u64 W_self, B_u64 G_1p, B_Integral W_IntegralE_637);
+$WORD B_IntegralD_u64D_denominator (B_IntegralD_u64 W_self, B_u64 G_1p, B_Integral W_IntegralE_673);
+$WORD B_IntegralD_u64D_numerator (B_IntegralD_u64 W_self, B_u64 G_1p, B_Integral W_IntegralE_672);
 B_u64 B_IntegralD_u64D___round__ (B_IntegralD_u64 W_self, B_u64 G_1p, B_int G_2p);
-$WORD B_IntegralD_u64D___ceil__ (B_IntegralD_u64 W_self, B_u64 G_1p, B_Integral W_IntegralE_636);
-$WORD B_IntegralD_u64D___floor__ (B_IntegralD_u64 W_self, B_u64 G_1p, B_Integral W_IntegralE_635);
-$WORD B_IntegralD_u64D___trunc__ (B_IntegralD_u64 W_self, B_u64 G_1p, B_Integral W_IntegralE_634);
+$WORD B_IntegralD_u64D___ceil__ (B_IntegralD_u64 W_self, B_u64 G_1p, B_Integral W_IntegralE_671);
+$WORD B_IntegralD_u64D___floor__ (B_IntegralD_u64 W_self, B_u64 G_1p, B_Integral W_IntegralE_670);
+$WORD B_IntegralD_u64D___trunc__ (B_IntegralD_u64 W_self, B_u64 G_1p, B_Integral W_IntegralE_669);
 B_float B_IntegralD_u64D___float__ (B_IntegralD_u64 W_self, B_u64 G_1p);
 B_u64 B_IntegralD_u64D_conjugate (B_IntegralD_u64 W_self, B_u64 G_1p);
-$WORD B_IntegralD_u64D___abs__ (B_IntegralD_u64 W_self, B_u64 G_1p, B_Real W_RealE_633);
-$WORD B_IntegralD_u64D_imag (B_IntegralD_u64 W_self, B_u64 G_1p, B_Real W_RealE_632);
-$WORD B_IntegralD_u64D_real (B_IntegralD_u64 W_self, B_u64 G_1p, B_Real W_RealE_631);
+$WORD B_IntegralD_u64D___abs__ (B_IntegralD_u64 W_self, B_u64 G_1p, B_Real W_RealE_668);
+$WORD B_IntegralD_u64D_imag (B_IntegralD_u64 W_self, B_u64 G_1p, B_Real W_RealE_667);
+$WORD B_IntegralD_u64D_real (B_IntegralD_u64 W_self, B_u64 G_1p, B_Real W_RealE_666);
 B_u64 B_IntegralD_u64D___pos__ (B_IntegralD_u64 W_self, B_u64 G_1p);
 B_u64 B_IntegralD_u64D___neg__ (B_IntegralD_u64 W_self, B_u64 G_1p);
 B_u64 B_IntegralD_u64D___pow__ (B_IntegralD_u64 W_self, B_u64 G_1p, B_u64 G_2p);
@@ -2233,9 +1881,6 @@ B_DivD_u64 B_DivD_u64D___deserialize__ (B_DivD_u64 self, $Serial$state state) {
     }
     return self;
 }
-B_HashableD_u64 B_HashableD_u64G_new() {   // manually added
-    return $NEW(B_HashableD_u64);          //
-}                                          //
 B_DivD_u64 B_DivD_u64G_new() {
     B_DivD_u64 $tmp = malloc(sizeof(struct B_DivD_u64));
     $tmp->$class = &B_DivD_u64G_methods;
@@ -2288,16 +1933,6 @@ B_HashableD_u64 B_HashableD_u64D___deserialize__ (B_HashableD_u64 self, $Serial$
     return self;
 }
 struct B_HashableD_u64G_class B_HashableD_u64G_methods;
-
-
-
-
-
-
-
-
-
-
 B_NoneType B_IntegralD_u32D___init__ (B_IntegralD_u32 W_self) {
     ((B_NoneType (*) (B_Integral, B_Minus, B_Logical))B_IntegralG_methods.__init__)(((B_Integral)W_self), ((B_Minus)B_MinusD_IntegralD_u32G_new(((B_Integral)W_self))), ((B_Logical)B_LogicalD_IntegralD_u32G_new(((B_Integral)W_self))));
     return B_None;
@@ -2310,17 +1945,17 @@ B_u32 B_IntegralD_u32D___floordiv__ (B_IntegralD_u32 W_self, B_u32 G_1p, B_u32 G
 B_tuple B_IntegralD_u32D___divmod__ (B_IntegralD_u32 W_self, B_u32 G_1p, B_u32 G_2p);
 B_int B_IntegralD_u32D___index__ (B_IntegralD_u32 W_self, B_u32 G_1p);
 B_int B_IntegralD_u32D___int__ (B_IntegralD_u32 W_self, B_u32 G_1p);
-$WORD B_IntegralD_u32D_denominator (B_IntegralD_u32 W_self, B_u32 G_1p, B_Integral W_IntegralE_638);
-$WORD B_IntegralD_u32D_numerator (B_IntegralD_u32 W_self, B_u32 G_1p, B_Integral W_IntegralE_637);
+$WORD B_IntegralD_u32D_denominator (B_IntegralD_u32 W_self, B_u32 G_1p, B_Integral W_IntegralE_673);
+$WORD B_IntegralD_u32D_numerator (B_IntegralD_u32 W_self, B_u32 G_1p, B_Integral W_IntegralE_672);
 B_u32 B_IntegralD_u32D___round__ (B_IntegralD_u32 W_self, B_u32 G_1p, B_int G_2p);
-$WORD B_IntegralD_u32D___ceil__ (B_IntegralD_u32 W_self, B_u32 G_1p, B_Integral W_IntegralE_636);
-$WORD B_IntegralD_u32D___floor__ (B_IntegralD_u32 W_self, B_u32 G_1p, B_Integral W_IntegralE_635);
-$WORD B_IntegralD_u32D___trunc__ (B_IntegralD_u32 W_self, B_u32 G_1p, B_Integral W_IntegralE_634);
+$WORD B_IntegralD_u32D___ceil__ (B_IntegralD_u32 W_self, B_u32 G_1p, B_Integral W_IntegralE_671);
+$WORD B_IntegralD_u32D___floor__ (B_IntegralD_u32 W_self, B_u32 G_1p, B_Integral W_IntegralE_670);
+$WORD B_IntegralD_u32D___trunc__ (B_IntegralD_u32 W_self, B_u32 G_1p, B_Integral W_IntegralE_669);
 B_float B_IntegralD_u32D___float__ (B_IntegralD_u32 W_self, B_u32 G_1p);
 B_u32 B_IntegralD_u32D_conjugate (B_IntegralD_u32 W_self, B_u32 G_1p);
-$WORD B_IntegralD_u32D___abs__ (B_IntegralD_u32 W_self, B_u32 G_1p, B_Real W_RealE_633);
-$WORD B_IntegralD_u32D_imag (B_IntegralD_u32 W_self, B_u32 G_1p, B_Real W_RealE_632);
-$WORD B_IntegralD_u32D_real (B_IntegralD_u32 W_self, B_u32 G_1p, B_Real W_RealE_631);
+$WORD B_IntegralD_u32D___abs__ (B_IntegralD_u32 W_self, B_u32 G_1p, B_Real W_RealE_668);
+$WORD B_IntegralD_u32D_imag (B_IntegralD_u32 W_self, B_u32 G_1p, B_Real W_RealE_667);
+$WORD B_IntegralD_u32D_real (B_IntegralD_u32 W_self, B_u32 G_1p, B_Real W_RealE_666);
 B_u32 B_IntegralD_u32D___pos__ (B_IntegralD_u32 W_self, B_u32 G_1p);
 B_u32 B_IntegralD_u32D___neg__ (B_IntegralD_u32 W_self, B_u32 G_1p);
 B_u32 B_IntegralD_u32D___pow__ (B_IntegralD_u32 W_self, B_u32 G_1p, B_u32 G_2p);
@@ -2483,21 +2118,7 @@ B_HashableD_u32 B_HashableD_u32D___deserialize__ (B_HashableD_u32 self, $Serial$
     }
     return self;
 }
-B_HashableD_u32 B_HashableD_u32G_new() {   // manually added
-    return $NEW(B_HashableD_u32);          //
-}                                          //
 struct B_HashableD_u32G_class B_HashableD_u32G_methods;
-
-
-
-
-
-
-
-
-
-
-
 B_NoneType B_IntegralD_u16D___init__ (B_IntegralD_u16 W_self) {
     ((B_NoneType (*) (B_Integral, B_Minus, B_Logical))B_IntegralG_methods.__init__)(((B_Integral)W_self), ((B_Minus)B_MinusD_IntegralD_u16G_new(((B_Integral)W_self))), ((B_Logical)B_LogicalD_IntegralD_u16G_new(((B_Integral)W_self))));
     return B_None;
@@ -2510,17 +2131,17 @@ B_u16 B_IntegralD_u16D___floordiv__ (B_IntegralD_u16 W_self, B_u16 G_1p, B_u16 G
 B_tuple B_IntegralD_u16D___divmod__ (B_IntegralD_u16 W_self, B_u16 G_1p, B_u16 G_2p);
 B_int B_IntegralD_u16D___index__ (B_IntegralD_u16 W_self, B_u16 G_1p);
 B_int B_IntegralD_u16D___int__ (B_IntegralD_u16 W_self, B_u16 G_1p);
-$WORD B_IntegralD_u16D_denominator (B_IntegralD_u16 W_self, B_u16 G_1p, B_Integral W_IntegralE_638);
-$WORD B_IntegralD_u16D_numerator (B_IntegralD_u16 W_self, B_u16 G_1p, B_Integral W_IntegralE_637);
+$WORD B_IntegralD_u16D_denominator (B_IntegralD_u16 W_self, B_u16 G_1p, B_Integral W_IntegralE_673);
+$WORD B_IntegralD_u16D_numerator (B_IntegralD_u16 W_self, B_u16 G_1p, B_Integral W_IntegralE_672);
 B_u16 B_IntegralD_u16D___round__ (B_IntegralD_u16 W_self, B_u16 G_1p, B_int G_2p);
-$WORD B_IntegralD_u16D___ceil__ (B_IntegralD_u16 W_self, B_u16 G_1p, B_Integral W_IntegralE_636);
-$WORD B_IntegralD_u16D___floor__ (B_IntegralD_u16 W_self, B_u16 G_1p, B_Integral W_IntegralE_635);
-$WORD B_IntegralD_u16D___trunc__ (B_IntegralD_u16 W_self, B_u16 G_1p, B_Integral W_IntegralE_634);
+$WORD B_IntegralD_u16D___ceil__ (B_IntegralD_u16 W_self, B_u16 G_1p, B_Integral W_IntegralE_671);
+$WORD B_IntegralD_u16D___floor__ (B_IntegralD_u16 W_self, B_u16 G_1p, B_Integral W_IntegralE_670);
+$WORD B_IntegralD_u16D___trunc__ (B_IntegralD_u16 W_self, B_u16 G_1p, B_Integral W_IntegralE_669);
 B_float B_IntegralD_u16D___float__ (B_IntegralD_u16 W_self, B_u16 G_1p);
 B_u16 B_IntegralD_u16D_conjugate (B_IntegralD_u16 W_self, B_u16 G_1p);
-$WORD B_IntegralD_u16D___abs__ (B_IntegralD_u16 W_self, B_u16 G_1p, B_Real W_RealE_633);
-$WORD B_IntegralD_u16D_imag (B_IntegralD_u16 W_self, B_u16 G_1p, B_Real W_RealE_632);
-$WORD B_IntegralD_u16D_real (B_IntegralD_u16 W_self, B_u16 G_1p, B_Real W_RealE_631);
+$WORD B_IntegralD_u16D___abs__ (B_IntegralD_u16 W_self, B_u16 G_1p, B_Real W_RealE_668);
+$WORD B_IntegralD_u16D_imag (B_IntegralD_u16 W_self, B_u16 G_1p, B_Real W_RealE_667);
+$WORD B_IntegralD_u16D_real (B_IntegralD_u16 W_self, B_u16 G_1p, B_Real W_RealE_666);
 B_u16 B_IntegralD_u16D___pos__ (B_IntegralD_u16 W_self, B_u16 G_1p);
 B_u16 B_IntegralD_u16D___neg__ (B_IntegralD_u16 W_self, B_u16 G_1p);
 B_u16 B_IntegralD_u16D___pow__ (B_IntegralD_u16 W_self, B_u16 G_1p, B_u16 G_2p);
@@ -2683,35 +2304,20 @@ B_HashableD_u16 B_HashableD_u16D___deserialize__ (B_HashableD_u16 self, $Serial$
     }
     return self;
 }
-B_HashableD_u16 B_HashableD_u16G_new() {   // manually added
-    return $NEW(B_HashableD_u16);          //
-}                                          //
 struct B_HashableD_u16G_class B_HashableD_u16G_methods;
-
-
-
-
-
-
-
-
-
-
-
-
 B_NoneType B_RealFloatD_floatD___init__ (B_RealFloatD_float W_self) {
     ((B_NoneType (*) (B_RealFloat, B_Minus))B_RealFloatG_methods.__init__)(((B_RealFloat)W_self), ((B_Minus)B_MinusD_RealFloatD_floatG_new(((B_RealFloat)W_self))));
     return B_None;
 }
 B_float B_RealFloatD_floatD___round__ (B_RealFloatD_float W_self, B_float G_1p, B_int G_2p);
-$WORD B_RealFloatD_floatD___ceil__ (B_RealFloatD_float W_self, B_float G_1p, B_Integral W_IntegralE_636);
-$WORD B_RealFloatD_floatD___floor__ (B_RealFloatD_float W_self, B_float G_1p, B_Integral W_IntegralE_635);
-$WORD B_RealFloatD_floatD___trunc__ (B_RealFloatD_float W_self, B_float G_1p, B_Integral W_IntegralE_634);
+$WORD B_RealFloatD_floatD___ceil__ (B_RealFloatD_float W_self, B_float G_1p, B_Integral W_IntegralE_671);
+$WORD B_RealFloatD_floatD___floor__ (B_RealFloatD_float W_self, B_float G_1p, B_Integral W_IntegralE_670);
+$WORD B_RealFloatD_floatD___trunc__ (B_RealFloatD_float W_self, B_float G_1p, B_Integral W_IntegralE_669);
 B_float B_RealFloatD_floatD___float__ (B_RealFloatD_float W_self, B_float G_1p);
 B_float B_RealFloatD_floatD_conjugate (B_RealFloatD_float W_self, B_float G_1p);
-$WORD B_RealFloatD_floatD___abs__ (B_RealFloatD_float W_self, B_float G_1p, B_Real W_RealE_633);
-$WORD B_RealFloatD_floatD_imag (B_RealFloatD_float W_self, B_float G_1p, B_Real W_RealE_632);
-$WORD B_RealFloatD_floatD_real (B_RealFloatD_float W_self, B_float G_1p, B_Real W_RealE_631);
+$WORD B_RealFloatD_floatD___abs__ (B_RealFloatD_float W_self, B_float G_1p, B_Real W_RealE_668);
+$WORD B_RealFloatD_floatD_imag (B_RealFloatD_float W_self, B_float G_1p, B_Real W_RealE_667);
+$WORD B_RealFloatD_floatD_real (B_RealFloatD_float W_self, B_float G_1p, B_Real W_RealE_666);
 B_float B_RealFloatD_floatD___pos__ (B_RealFloatD_float W_self, B_float G_1p);
 B_float B_RealFloatD_floatD___neg__ (B_RealFloatD_float W_self, B_float G_1p);
 B_float B_RealFloatD_floatD___pow__ (B_RealFloatD_float W_self, B_float G_1p, B_float G_2p);
@@ -2847,9 +2453,9 @@ B_NoneType B_NumberD_complexD___init__ (B_NumberD_complex W_self) {
     return B_None;
 }
 B_complex B_NumberD_complexD_conjugate (B_NumberD_complex W_self, B_complex G_1p);
-$WORD B_NumberD_complexD___abs__ (B_NumberD_complex W_self, B_complex G_1p, B_Real W_RealE_633);
-$WORD B_NumberD_complexD_imag (B_NumberD_complex W_self, B_complex G_1p, B_Real W_RealE_632);
-$WORD B_NumberD_complexD_real (B_NumberD_complex W_self, B_complex G_1p, B_Real W_RealE_631);
+$WORD B_NumberD_complexD___abs__ (B_NumberD_complex W_self, B_complex G_1p, B_Real W_RealE_668);
+$WORD B_NumberD_complexD_imag (B_NumberD_complex W_self, B_complex G_1p, B_Real W_RealE_667);
+$WORD B_NumberD_complexD_real (B_NumberD_complex W_self, B_complex G_1p, B_Real W_RealE_666);
 B_complex B_NumberD_complexD___pos__ (B_NumberD_complex W_self, B_complex G_1p);
 B_complex B_NumberD_complexD___neg__ (B_NumberD_complex W_self, B_complex G_1p);
 B_complex B_NumberD_complexD___pow__ (B_NumberD_complex W_self, B_complex G_1p, B_complex G_2p);
@@ -2996,8 +2602,8 @@ B_Indexed B_IndexedD___deserialize__ (B_Indexed self, $Serial$state state) {
 }
 struct B_IndexedG_class B_IndexedG_methods;
 B_NoneType B_SliceableD___init__ (B_Sliceable W_self) {
-    B_Eq W_333 = ((B_Eq)B_OrdD_intG_new());
-    ((B_NoneType (*) (B_Indexed, B_Eq))B_IndexedG_methods.__init__)(((B_Indexed)W_self), W_333);
+    B_Eq W_511 = ((B_Eq)B_OrdD_intG_new());
+    ((B_NoneType (*) (B_Indexed, B_Eq))B_IndexedG_methods.__init__)(((B_Indexed)W_self), W_511);
     return B_None;
 }
 void B_SliceableD___serialize__ (B_Sliceable self, $Serial$state state) {
@@ -3288,7 +2894,7 @@ B_NoneType B_SequenceD_listD_append (B_SequenceD_list W_self, B_list G_1p, $WORD
 B_NoneType B_SequenceD_listD_insert (B_SequenceD_list W_self, B_list G_1p, B_int G_2p, $WORD G_3p);
 B_Iterator B_SequenceD_listD___reversed__ (B_SequenceD_list W_self, B_list G_1p);
 B_NoneType B_SequenceD_listD___delslice__ (B_SequenceD_list W_self, B_list G_1p, B_slice G_2p);
-B_NoneType B_SequenceD_listD___setslice__ (B_SequenceD_list W_self, B_list G_1p, B_Iterable W_IterableE_682, B_slice G_2p, $WORD G_3p);
+B_NoneType B_SequenceD_listD___setslice__ (B_SequenceD_list W_self, B_list G_1p, B_Iterable W_IterableE_722, B_slice G_2p, $WORD G_3p);
 B_list B_SequenceD_listD___getslice__ (B_SequenceD_list W_self, B_list G_1p, B_slice G_2p);
 B_NoneType B_SequenceD_listD___delitem__ (B_SequenceD_list W_self, B_list G_1p, B_int G_2p);
 B_NoneType B_SequenceD_listD___setitem__ (B_SequenceD_list W_self, B_list G_1p, B_int G_2p, $WORD G_3p);
@@ -3324,7 +2930,7 @@ B_NoneType B_CollectionD_SequenceD_listD___init__ (B_CollectionD_SequenceD_list 
     return B_None;
 }
 B_int B_CollectionD_SequenceD_listD___len__ (B_CollectionD_SequenceD_list W_self, B_list G_1p);
-B_list B_CollectionD_SequenceD_listD___fromiter__ (B_CollectionD_SequenceD_list W_self, B_Iterable W_IterableE_687, $WORD G_1p);
+B_list B_CollectionD_SequenceD_listD___fromiter__ (B_CollectionD_SequenceD_list W_self, B_Iterable W_IterableE_727, $WORD G_1p);
 B_Iterator B_CollectionD_SequenceD_listD___iter__ (B_CollectionD_SequenceD_list W_self, B_list G_1p);
 void B_CollectionD_SequenceD_listD___serialize__ (B_CollectionD_SequenceD_list self, $Serial$state state) {
     $step_serialize(self->W_Sequence, state);
@@ -3400,9 +3006,6 @@ B_ContainerD_list B_ContainerD_listD___deserialize__ (B_ContainerD_list self, $S
     self->W_EqD_AD_ContainerD_list = $step_deserialize(state);
     return self;
 }
-B_ContainerD_list B_ContainerD_listG_new(B_Eq w) { // Why is this not generated by actonc?
-    return $NEW(B_ContainerD_list,w);              //
-}                                                  //
 struct B_ContainerD_listG_class B_ContainerD_listG_methods;
 B_NoneType B_OrdD_listD___init__ (B_OrdD_list W_self, B_Ord W_OrdD_A) {
     ((B_NoneType (*) (B_Ord))B_OrdG_methods.__init__)(((B_Ord)W_self));
@@ -3440,7 +3043,7 @@ B_NoneType B_MappingD_dictD___init__ (B_MappingD_dict W_self, B_Hashable W_Hasha
 }
 B_NoneType B_MappingD_dictD_setdefault (B_MappingD_dict W_self, B_dict G_1p, $WORD G_2p, $WORD G_3p);
 B_tuple B_MappingD_dictD_popitem (B_MappingD_dict W_self, B_dict G_1p);
-B_NoneType B_MappingD_dictD_update (B_MappingD_dict W_self, B_dict G_1p, B_Iterable W_IterableE_718, $WORD G_2p);
+B_NoneType B_MappingD_dictD_update (B_MappingD_dict W_self, B_dict G_1p, B_Iterable W_IterableE_758, $WORD G_2p);
 B_Iterator B_MappingD_dictD_items (B_MappingD_dict W_self, B_dict G_1p);
 B_Iterator B_MappingD_dictD_values (B_MappingD_dict W_self, B_dict G_1p);
 B_Iterator B_MappingD_dictD_keys (B_MappingD_dict W_self, B_dict G_1p);
@@ -3448,7 +3051,7 @@ $WORD B_MappingD_dictD_get (B_MappingD_dict W_self, B_dict G_1p, $WORD G_2p, $WO
 B_bool B_MappingD_dictD___containsnot__ (B_MappingD_dict W_self, B_dict G_1p, $WORD G_2p);
 B_bool B_MappingD_dictD___contains__ (B_MappingD_dict W_self, B_dict G_1p, $WORD G_2p);
 B_int B_MappingD_dictD___len__ (B_MappingD_dict W_self, B_dict G_1p);
-B_dict B_MappingD_dictD___fromiter__ (B_MappingD_dict W_self, B_Iterable W_IterableE_687, $WORD G_1p);
+B_dict B_MappingD_dictD___fromiter__ (B_MappingD_dict W_self, B_Iterable W_IterableE_727, $WORD G_1p);
 B_Iterator B_MappingD_dictD___iter__ (B_MappingD_dict W_self, B_dict G_1p);
 void B_MappingD_dictD___serialize__ (B_MappingD_dict self, $Serial$state state) {
     $step_serialize(self->W_EqD_AD_Container, state);
@@ -3558,7 +3161,7 @@ B_bool B_SetD_setD_isdisjoint (B_SetD_set W_self, B_set G_1p, B_set G_2p);
 B_bool B_SetD_setD___containsnot__ (B_SetD_set W_self, B_set G_1p, $WORD G_2p);
 B_bool B_SetD_setD___contains__ (B_SetD_set W_self, B_set G_1p, $WORD G_2p);
 B_int B_SetD_setD___len__ (B_SetD_set W_self, B_set G_1p);
-B_set B_SetD_setD___fromiter__ (B_SetD_set W_self, B_Iterable W_IterableE_687, $WORD G_1p);
+B_set B_SetD_setD___fromiter__ (B_SetD_set W_self, B_Iterable W_IterableE_727, $WORD G_1p);
 B_Iterator B_SetD_setD___iter__ (B_SetD_set W_self, B_set G_1p);
 void B_SetD_setD___serialize__ (B_SetD_set self, $Serial$state state) {
     $step_serialize(self->W_EqD_AD_Container, state);
@@ -3768,14 +3371,14 @@ B_OrdD_str B_OrdD_strG_new() {
 }
 struct B_OrdD_strG_class B_OrdD_strG_methods;
 B_NoneType B_ContainerD_strD___init__ (B_ContainerD_str W_self) {
-    B_Eq W_395 = ((B_Eq)B_OrdD_strG_new());
-    ((B_NoneType (*) (B_Container, B_Eq))B_ContainerG_methods.__init__)(((B_Container)W_self), W_395);
+    B_Eq W_573 = ((B_Eq)B_OrdD_strG_new());
+    ((B_NoneType (*) (B_Container, B_Eq))B_ContainerG_methods.__init__)(((B_Container)W_self), W_573);
     return B_None;
 }
 B_bool B_ContainerD_strD___containsnot__ (B_ContainerD_str W_self, B_str G_1p, B_str G_2p);
 B_bool B_ContainerD_strD___contains__ (B_ContainerD_str W_self, B_str G_1p, B_str G_2p);
 B_int B_ContainerD_strD___len__ (B_ContainerD_str W_self, B_str G_1p);
-B_str B_ContainerD_strD___fromiter__ (B_ContainerD_str W_self, B_Iterable W_IterableE_687, $WORD G_1p);
+B_str B_ContainerD_strD___fromiter__ (B_ContainerD_str W_self, B_Iterable W_IterableE_727, $WORD G_1p);
 B_Iterator B_ContainerD_strD___iter__ (B_ContainerD_str W_self, B_str G_1p);
 void B_ContainerD_strD___serialize__ (B_ContainerD_str self, $Serial$state state) {
     $step_serialize(self->W_EqD_AD_Container, state);
@@ -3804,7 +3407,7 @@ B_NoneType B_SliceableD_strD___init__ (B_SliceableD_str W_self) {
     return B_None;
 }
 B_NoneType B_SliceableD_strD___delslice__ (B_SliceableD_str W_self, B_str G_1p, B_slice G_2p);
-B_NoneType B_SliceableD_strD___setslice__ (B_SliceableD_str W_self, B_str G_1p, B_Iterable W_IterableE_682, B_slice G_2p, $WORD G_3p);
+B_NoneType B_SliceableD_strD___setslice__ (B_SliceableD_str W_self, B_str G_1p, B_Iterable W_IterableE_722, B_slice G_2p, $WORD G_3p);
 B_str B_SliceableD_strD___getslice__ (B_SliceableD_str W_self, B_str G_1p, B_slice G_2p);
 B_NoneType B_SliceableD_strD___delitem__ (B_SliceableD_str W_self, B_str G_1p, B_int G_2p);
 B_NoneType B_SliceableD_strD___setitem__ (B_SliceableD_str W_self, B_str G_1p, B_int G_2p, B_str G_3p);
@@ -3875,9 +3478,6 @@ B_HashableD_str B_HashableD_strD___deserialize__ (B_HashableD_str self, $Serial$
     }
     return self;
 }
-B_HashableD_str B_HashableD_strG_new() {   // Manually added.
-    return $NEW(B_HashableD_str);          //
-}                                          //
 struct B_HashableD_strG_class B_HashableD_strG_methods;
 B_NoneType B_OrdD_bytearrayD___init__ (B_OrdD_bytearray W_self) {
     ((B_NoneType (*) (B_Ord))B_OrdG_methods.__init__)(((B_Ord)W_self));
@@ -3914,7 +3514,7 @@ B_NoneType B_SequenceD_bytearrayD_append (B_SequenceD_bytearray W_self, B_bytear
 B_NoneType B_SequenceD_bytearrayD_insert (B_SequenceD_bytearray W_self, B_bytearray G_1p, B_int G_2p, B_int G_3p);
 B_Iterator B_SequenceD_bytearrayD___reversed__ (B_SequenceD_bytearray W_self, B_bytearray G_1p);
 B_NoneType B_SequenceD_bytearrayD___delslice__ (B_SequenceD_bytearray W_self, B_bytearray G_1p, B_slice G_2p);
-B_NoneType B_SequenceD_bytearrayD___setslice__ (B_SequenceD_bytearray W_self, B_bytearray G_1p, B_Iterable W_IterableE_682, B_slice G_2p, $WORD G_3p);
+B_NoneType B_SequenceD_bytearrayD___setslice__ (B_SequenceD_bytearray W_self, B_bytearray G_1p, B_Iterable W_IterableE_722, B_slice G_2p, $WORD G_3p);
 B_bytearray B_SequenceD_bytearrayD___getslice__ (B_SequenceD_bytearray W_self, B_bytearray G_1p, B_slice G_2p);
 B_NoneType B_SequenceD_bytearrayD___delitem__ (B_SequenceD_bytearray W_self, B_bytearray G_1p, B_int G_2p);
 B_NoneType B_SequenceD_bytearrayD___setitem__ (B_SequenceD_bytearray W_self, B_bytearray G_1p, B_int G_2p, B_int G_3p);
@@ -3950,7 +3550,7 @@ B_NoneType B_CollectionD_SequenceD_bytearrayD___init__ (B_CollectionD_SequenceD_
     return B_None;
 }
 B_int B_CollectionD_SequenceD_bytearrayD___len__ (B_CollectionD_SequenceD_bytearray W_self, B_bytearray G_1p);
-B_bytearray B_CollectionD_SequenceD_bytearrayD___fromiter__ (B_CollectionD_SequenceD_bytearray W_self, B_Iterable W_IterableE_687, $WORD G_1p);
+B_bytearray B_CollectionD_SequenceD_bytearrayD___fromiter__ (B_CollectionD_SequenceD_bytearray W_self, B_Iterable W_IterableE_727, $WORD G_1p);
 B_Iterator B_CollectionD_SequenceD_bytearrayD___iter__ (B_CollectionD_SequenceD_bytearray W_self, B_bytearray G_1p);
 void B_CollectionD_SequenceD_bytearrayD___serialize__ (B_CollectionD_SequenceD_bytearray self, $Serial$state state) {
     $step_serialize(self->W_Sequence, state);
@@ -4003,8 +3603,8 @@ B_TimesD_SequenceD_bytearray B_TimesD_SequenceD_bytearrayG_new(B_Sequence G_1) {
 }
 struct B_TimesD_SequenceD_bytearrayG_class B_TimesD_SequenceD_bytearrayG_methods;
 B_NoneType B_ContainerD_bytearrayD___init__ (B_ContainerD_bytearray W_self) {
-    B_Eq W_427 = ((B_Eq)B_OrdD_intG_new());
-    ((B_NoneType (*) (B_Container, B_Eq))B_ContainerG_methods.__init__)(((B_Container)W_self), W_427);
+    B_Eq W_605 = ((B_Eq)B_OrdD_intG_new());
+    ((B_NoneType (*) (B_Container, B_Eq))B_ContainerG_methods.__init__)(((B_Container)W_self), W_605);
     return B_None;
 }
 B_bool B_ContainerD_bytearrayD___containsnot__ (B_ContainerD_bytearray W_self, B_bytearray G_1p, B_int G_2p);
@@ -4056,7 +3656,7 @@ B_NoneType B_SliceableD_bytesD___init__ (B_SliceableD_bytes W_self) {
     return B_None;
 }
 B_NoneType B_SliceableD_bytesD___delslice__ (B_SliceableD_bytes W_self, B_bytes G_1p, B_slice G_2p);
-B_NoneType B_SliceableD_bytesD___setslice__ (B_SliceableD_bytes W_self, B_bytes G_1p, B_Iterable W_IterableE_682, B_slice G_2p, $WORD G_3p);
+B_NoneType B_SliceableD_bytesD___setslice__ (B_SliceableD_bytes W_self, B_bytes G_1p, B_Iterable W_IterableE_722, B_slice G_2p, $WORD G_3p);
 B_bytes B_SliceableD_bytesD___getslice__ (B_SliceableD_bytes W_self, B_bytes G_1p, B_slice G_2p);
 B_NoneType B_SliceableD_bytesD___delitem__ (B_SliceableD_bytes W_self, B_bytes G_1p, B_int G_2p);
 B_NoneType B_SliceableD_bytesD___setitem__ (B_SliceableD_bytes W_self, B_bytes G_1p, B_int G_2p, B_int G_3p);
@@ -4084,14 +3684,14 @@ B_SliceableD_bytes B_SliceableD_bytesG_new() {
 }
 struct B_SliceableD_bytesG_class B_SliceableD_bytesG_methods;
 B_NoneType B_ContainerD_bytesD___init__ (B_ContainerD_bytes W_self) {
-    B_Eq W_438 = ((B_Eq)B_OrdD_intG_new());
-    ((B_NoneType (*) (B_Container, B_Eq))B_ContainerG_methods.__init__)(((B_Container)W_self), W_438);
+    B_Eq W_616 = ((B_Eq)B_OrdD_intG_new());
+    ((B_NoneType (*) (B_Container, B_Eq))B_ContainerG_methods.__init__)(((B_Container)W_self), W_616);
     return B_None;
 }
 B_bool B_ContainerD_bytesD___containsnot__ (B_ContainerD_bytes W_self, B_bytes G_1p, B_int G_2p);
 B_bool B_ContainerD_bytesD___contains__ (B_ContainerD_bytes W_self, B_bytes G_1p, B_int G_2p);
 B_int B_ContainerD_bytesD___len__ (B_ContainerD_bytes W_self, B_bytes G_1p);
-B_bytes B_ContainerD_bytesD___fromiter__ (B_ContainerD_bytes W_self, B_Iterable W_IterableE_687, $WORD G_1p);
+B_bytes B_ContainerD_bytesD___fromiter__ (B_ContainerD_bytes W_self, B_Iterable W_IterableE_727, $WORD G_1p);
 B_Iterator B_ContainerD_bytesD___iter__ (B_ContainerD_bytes W_self, B_bytes G_1p);
 void B_ContainerD_bytesD___serialize__ (B_ContainerD_bytes self, $Serial$state state) {
     $step_serialize(self->W_EqD_AD_Container, state);
@@ -4160,11 +3760,11 @@ B_HashableD_bytes B_HashableD_bytesD___deserialize__ (B_HashableD_bytes self, $S
     return self;
 }
 struct B_HashableD_bytesG_class B_HashableD_bytesG_methods;
-$WORD B_abs (B_Real W_RealE_768, B_Number W_NumberE_767, $WORD x) {
-    return (($WORD (*) (B_Number, $WORD, B_Real))W_NumberE_767->$class->__abs__)(W_NumberE_767, x, W_RealE_768);
+$WORD B_abs (B_Real W_RealE_808, B_Number W_NumberE_807, $WORD x) {
+    return (($WORD (*) (B_Number, $WORD, B_Real))W_NumberE_807->$class->__abs__)(W_NumberE_807, x, W_RealE_808);
 }
-B_bool B_all (B_Iterable W_IterableE_772, $WORD it) {
-    B_Iterator N_iter = ((B_Iterator (*) (B_Iterable, $WORD))W_IterableE_772->$class->__iter__)(W_IterableE_772, it);
+B_bool B_all (B_Iterable W_IterableE_812, $WORD it) {
+    B_Iterator N_iter = ((B_Iterator (*) (B_Iterable, $WORD))W_IterableE_812->$class->__iter__)(W_IterableE_812, it);
     $WORD N_1val = (($WORD (*) (B_Iterator))N_iter->$class->__next__)(N_iter);
     while ($ISNOTNONE(N_1val)->val) {
         // $WORD x = N_1val;
@@ -4177,8 +3777,8 @@ B_bool B_all (B_Iterable W_IterableE_772, $WORD it) {
     }
     return B_True;
 }
-B_bool B_any (B_Iterable W_IterableE_780, $WORD it) {
-    B_Iterator N_2iter = ((B_Iterator (*) (B_Iterable, $WORD))W_IterableE_780->$class->__iter__)(W_IterableE_780, it);
+B_bool B_any (B_Iterable W_IterableE_820, $WORD it) {
+    B_Iterator N_2iter = ((B_Iterator (*) (B_Iterable, $WORD))W_IterableE_820->$class->__iter__)(W_IterableE_820, it);
     $WORD N_3val = (($WORD (*) (B_Iterator))N_2iter->$class->__next__)(N_2iter);
     while ($ISNOTNONE(N_3val)->val) {
         // $WORD x = N_3val;
@@ -4191,27 +3791,27 @@ B_bool B_any (B_Iterable W_IterableE_780, $WORD it) {
     }
     return B_False;
 }
-B_str B_ascii (B_value s);
-B_str B_bin (B_Integral W_IntegralE_791, $WORD x);
-B_str B_chr (B_Integral W_IntegralE_794, $WORD i);
+B_str B_ascii (B_value x);
+B_str B_bin (B_Integral W_IntegralE_829, $WORD x);
+B_str B_chr (B_Integral W_IntegralE_832, $WORD i);
 B_tuple B_divmod (B_Integral W_IntegralD_A, $WORD a, $WORD b) {
     return ((B_tuple (*) (B_Integral, $WORD, $WORD))W_IntegralD_A->$class->__divmod__)(W_IntegralD_A, a, b);
 }
-B_Iterator B_enumerate (B_Iterable W_IterableE_805, $WORD iterable, B_int start);
-// B_Iterator B_filter (B_Iterable W_IterableE_814, $pure function, $WORD iterable);
-B_int B_hash (B_Hashable W_HashableE_823, $WORD x) {
-    return ((B_int (*) (B_Hashable, $WORD))W_HashableE_823->$class->__hash__)(W_HashableE_823, x);
+B_Iterator B_enumerate (B_Iterable W_IterableE_843, $WORD iterable, B_int start);
+B_Iterator B_filter (B_Iterable W_IterableE_852, $pure function, $WORD iterable);
+B_int B_hash (B_Hashable W_HashableE_861, $WORD x) {
+    return ((B_int (*) (B_Hashable, $WORD))W_HashableE_861->$class->__hash__)(W_HashableE_861, x);
 }
-B_str B_hex (B_Integral W_IntegralE_826, $WORD i);
-B_Iterator B_iter (B_Iterable W_IterableE_830, $WORD x) {
-    return ((B_Iterator (*) (B_Iterable, $WORD))W_IterableE_830->$class->__iter__)(W_IterableE_830, x);
+B_str B_hex (B_Integral W_IntegralE_864, $WORD i);
+B_Iterator B_iter (B_Iterable W_IterableE_868, $WORD x) {
+    return ((B_Iterator (*) (B_Iterable, $WORD))W_IterableE_868->$class->__iter__)(W_IterableE_868, x);
 }
-B_int B_len (B_Collection W_CollectionE_838, $WORD x) {
-    return ((B_int (*) (B_Collection, $WORD))W_CollectionE_838->$class->__len__)(W_CollectionE_838, x);
+B_int B_len (B_Collection W_CollectionE_876, $WORD x) {
+    return ((B_int (*) (B_Collection, $WORD))W_CollectionE_876->$class->__len__)(W_CollectionE_876, x);
 }
-// B_Iterator B_map (B_Iterable W_IterableE_845, $pure function, $WORD iterable);
-$WORD B_max (B_Ord W_OrdD_A, B_Iterable W_IterableE_855, $WORD iter, $WORD dflt);
-$WORD B_min (B_Ord W_OrdD_A, B_Iterable W_IterableE_863, $WORD iter, $WORD dflt);
+B_Iterator B_map (B_Iterable W_IterableE_883, $pure function, $WORD iterable);
+$WORD B_max (B_Ord W_OrdD_A, B_Iterable W_IterableE_893, $WORD iter, $WORD dflt);
+$WORD B_min (B_Ord W_OrdD_A, B_Iterable W_IterableE_901, $WORD iter, $WORD dflt);
 $WORD B_next (B_Iterator x) {
     return (($WORD (*) (B_Iterator))x->$class->__next__)(x);
 }
@@ -4219,19 +3819,19 @@ B_int B_ord (B_str c);
 $WORD B_pow (B_Number W_NumberD_A, $WORD a, $WORD b) {
     return (($WORD (*) (B_Number, $WORD, $WORD))W_NumberD_A->$class->__pow__)(W_NumberD_A, a, b);
 }
-// B_NoneType B_print (B_tuple args);
+B_NoneType B_print (B_tuple args);
 B_str B_repr (B_value x) {
     return ((B_str (*) (B_value))x->$class->__repr__)(x);
 }
-B_Iterator B_reversed (B_Sequence W_SequenceE_893, $WORD seq) {
-    return ((B_Iterator (*) (B_Sequence, $WORD))W_SequenceE_893->$class->__reversed__)(W_SequenceE_893, seq);
+B_Iterator B_reversed (B_Sequence W_SequenceE_931, $WORD seq) {
+    return ((B_Iterator (*) (B_Sequence, $WORD))W_SequenceE_931->$class->__reversed__)(W_SequenceE_931, seq);
 }
 $WORD B_round (B_Real W_RealD_A, $WORD x, B_int n) {
     return (($WORD (*) (B_Real, $WORD, B_int))W_RealD_A->$class->__round__)(W_RealD_A, x, n);
 }
-B_list B_sorted (B_Ord W_OrdD_A, B_Iterable W_IterableE_906, $WORD iter);
-$WORD B_sum (B_Plus W_PlusD_A, B_Iterable W_IterableE_914, $WORD iter, $WORD start);
-B_Iterator B_zip (B_Iterable W_IterableE_924, B_Iterable W_IterableE_923, $WORD a, $WORD b);
+B_list B_sorted (B_Ord W_OrdD_A, B_Iterable W_IterableE_944, $WORD iter);
+$WORD B_sum (B_Plus W_PlusD_A, B_Iterable W_IterableE_952, $WORD iter, $WORD start);
+B_Iterator B_zip (B_Iterable W_IterableE_962, B_Iterable W_IterableE_961, $WORD a, $WORD b);
 B_int B_gcd (B_int a, B_int b);
 B_tuple B_xgcd (B_int a, B_int b);
 B_NoneType B_L_1procD___init__ (B_L_1proc L_self, B_Env self, B_str s) {
@@ -4483,7 +4083,7 @@ $R B_EnvG_new($Cont G_1, B_WorldAuth G_2, B_list G_3) {
     B_Env $tmp = malloc(sizeof(struct B_Env));
     $tmp->$class = &B_EnvG_methods;
     //    return B_EnvG_methods.__init__($tmp, G_1, G_2, $CONSTCONT(G_3, $tmp));
-    return B_EnvG_methods.__init__($tmp, G_1, G_2, G_3);  // Changed without proper understanding
+    return B_EnvG_methods.__init__($tmp, G_1, G_2, G_3);     // Manually changed with limited understanding BvS
 }
 struct B_EnvG_class B_EnvG_methods;
 $R B_EnvG_newact ($Cont C_cont, B_WorldAuth token, B_list args) {
@@ -4494,160 +4094,172 @@ int B_done$ = 0;
 void B___init__ () {
     if (B_done$) return;
     B_done$ = 1;
-    //    B___ext_init__ ();
+    //    B___ext_init__ ();     Manually removed
     {
         B_valueG_methods.$GCINFO = "B_value";
         B_valueG_methods.$superclass = NULL;
-        B_valueG_methods.__init__ = B_valueD___init__;
         B_valueG_methods.__bool__ = B_valueD___bool__;
         B_valueG_methods.__str__ = B_valueD___str__;
-        B_valueG_methods.__repr__ = B_valueD___str__;
+        B_valueG_methods.__repr__ = B_valueD___repr__;
         B_valueG_methods.__serialize__ = B_valueD___serialize__;
         B_valueG_methods.__deserialize__ = B_valueD___deserialize__;
+        $register(&B_valueG_methods);
     }
     {
         B_objectG_methods.$GCINFO = "B_object";
         B_objectG_methods.$superclass = ($SuperG_class)&B_valueG_methods;
-        B_objectG_methods.__init__ = (B_NoneType (*) (B_object))B_valueG_methods.__init__;
         B_objectG_methods.__bool__ = (B_bool (*) (B_object))B_valueG_methods.__bool__;
         B_objectG_methods.__str__ = (B_str (*) (B_object))B_valueG_methods.__str__;
         B_objectG_methods.__repr__ = (B_str (*) (B_object))B_valueG_methods.__repr__;
         B_objectG_methods.__serialize__ = B_objectD___serialize__;
         B_objectG_methods.__deserialize__ = B_objectD___deserialize__;
+        $register(&B_objectG_methods);
     }
     {
         B_atomG_methods.$GCINFO = "B_atom";
         B_atomG_methods.$superclass = ($SuperG_class)&B_valueG_methods;
-        B_atomG_methods.__init__ = (B_NoneType (*) (B_atom))B_valueG_methods.__init__;
         B_atomG_methods.__bool__ = (B_bool (*) (B_atom))B_valueG_methods.__bool__;
         B_atomG_methods.__str__ = (B_str (*) (B_atom))B_valueG_methods.__str__;
-        B_atomG_methods.__repr__ = (B_str (*) (B_atom))B_valueG_methods.__str__;
+        B_atomG_methods.__repr__ = (B_str (*) (B_atom))B_valueG_methods.__repr__;
         B_atomG_methods.__serialize__ = B_atomD___serialize__;
         B_atomG_methods.__deserialize__ = B_atomD___deserialize__;
+        $register(&B_atomG_methods);
     }
     {
         B_intG_methods.$GCINFO = "B_int";
         B_intG_methods.$superclass = ($SuperG_class)&B_atomG_methods;
         B_intG_methods.__bool__ = B_intD___bool__;
         B_intG_methods.__str__ = B_intD___str__;
-        B_intG_methods.__repr__ = B_intD___str__;
+        B_intG_methods.__repr__ = B_intD___repr__;
         B_intG_methods.__init__ = B_intD___init__;
         B_intG_methods.__serialize__ = B_intD___serialize__;
         B_intG_methods.__deserialize__ = B_intD___deserialize__;
+        $register(&B_intG_methods);
     }
     {
         B_i64G_methods.$GCINFO = "B_i64";
         B_i64G_methods.$superclass = ($SuperG_class)&B_atomG_methods;
         B_i64G_methods.__bool__ = B_i64D___bool__;
-        B_i64G_methods.__str__ = B_i64D___str__;  
-        B_i64G_methods.__repr__ = B_i64D___str__; 
+        B_i64G_methods.__str__ = B_i64D___str__;
+        B_i64G_methods.__repr__ = B_i64D___repr__;
         B_i64G_methods.__init__ = B_i64D___init__;
         B_i64G_methods.__serialize__ = B_i64D___serialize__;
         B_i64G_methods.__deserialize__ = B_i64D___deserialize__;
+        $register(&B_i64G_methods);
     }
-     {
+    {
         B_i32G_methods.$GCINFO = "B_i32";
         B_i32G_methods.$superclass = ($SuperG_class)&B_atomG_methods;
         B_i32G_methods.__bool__ = B_i32D___bool__;
-        B_i32G_methods.__str__ = B_i32D___str__;  
-        B_i32G_methods.__repr__ = B_i32D___str__; 
+        B_i32G_methods.__str__ = B_i32D___str__;
+        B_i32G_methods.__repr__ = B_i32D___repr__;
         B_i32G_methods.__init__ = B_i32D___init__;
         B_i32G_methods.__serialize__ = B_i32D___serialize__;
         B_i32G_methods.__deserialize__ = B_i32D___deserialize__;
+        $register(&B_i32G_methods);
     }
-     {
+    {
         B_i16G_methods.$GCINFO = "B_i16";
         B_i16G_methods.$superclass = ($SuperG_class)&B_atomG_methods;
         B_i16G_methods.__bool__ = B_i16D___bool__;
-        B_i16G_methods.__str__ = B_i16D___str__;  
-        B_i16G_methods.__repr__ = B_i16D___str__; 
+        B_i16G_methods.__str__ = B_i16D___str__;
+        B_i16G_methods.__repr__ = B_i16D___repr__;
         B_i16G_methods.__init__ = B_i16D___init__;
         B_i16G_methods.__serialize__ = B_i16D___serialize__;
         B_i16G_methods.__deserialize__ = B_i16D___deserialize__;
+        $register(&B_i16G_methods);
     }
     {
         B_u64G_methods.$GCINFO = "B_u64";
         B_u64G_methods.$superclass = ($SuperG_class)&B_atomG_methods;
         B_u64G_methods.__bool__ = B_u64D___bool__;
-        B_u64G_methods.__str__ = B_u64D___str__;  
-        B_u64G_methods.__repr__ = B_u64D___str__; 
+        B_u64G_methods.__str__ = B_u64D___str__;
+        B_u64G_methods.__repr__ = B_u64D___repr__;
         B_u64G_methods.__init__ = B_u64D___init__;
         B_u64G_methods.__serialize__ = B_u64D___serialize__;
         B_u64G_methods.__deserialize__ = B_u64D___deserialize__;
+        $register(&B_u64G_methods);
     }
     {
         B_u32G_methods.$GCINFO = "B_u32";
         B_u32G_methods.$superclass = ($SuperG_class)&B_atomG_methods;
         B_u32G_methods.__bool__ = B_u32D___bool__;
-        B_u32G_methods.__str__ = B_u32D___str__;  
-        B_u32G_methods.__repr__ = B_u32D___str__; 
+        B_u32G_methods.__str__ = B_u32D___str__;
+        B_u32G_methods.__repr__ = B_u32D___repr__;
         B_u32G_methods.__init__ = B_u32D___init__;
         B_u32G_methods.__serialize__ = B_u32D___serialize__;
         B_u32G_methods.__deserialize__ = B_u32D___deserialize__;
+        $register(&B_u32G_methods);
     }
     {
         B_u16G_methods.$GCINFO = "B_u16";
         B_u16G_methods.$superclass = ($SuperG_class)&B_atomG_methods;
         B_u16G_methods.__bool__ = B_u16D___bool__;
-        B_u16G_methods.__str__ = B_u16D___str__;  
-        B_u16G_methods.__repr__ = B_u16D___str__; 
+        B_u16G_methods.__str__ = B_u16D___str__;
+        B_u16G_methods.__repr__ = B_u16D___repr__;
         B_u16G_methods.__init__ = B_u16D___init__;
         B_u16G_methods.__serialize__ = B_u16D___serialize__;
         B_u16G_methods.__deserialize__ = B_u16D___deserialize__;
+        $register(&B_u16G_methods);
     }
     {
         B_floatG_methods.$GCINFO = "B_float";
         B_floatG_methods.$superclass = ($SuperG_class)&B_atomG_methods;
         B_floatG_methods.__bool__ = B_floatD___bool__;
         B_floatG_methods.__str__ = B_floatD___str__;
-        B_floatG_methods.__repr__ = B_floatD___str__;
+        B_floatG_methods.__repr__ = B_floatD___repr__;
         B_floatG_methods.__init__ = B_floatD___init__;
         B_floatG_methods.__serialize__ = B_floatD___serialize__;
         B_floatG_methods.__deserialize__ = B_floatD___deserialize__;
+        $register(&B_floatG_methods);
     }
     {
         B_boolG_methods.$GCINFO = "B_bool";
         B_boolG_methods.$superclass = ($SuperG_class)&B_atomG_methods;
         B_boolG_methods.__bool__ = B_boolD___bool__;
         B_boolG_methods.__str__ = B_boolD___str__;
-        B_boolG_methods.__repr__ = B_boolD___str__;
+        B_boolG_methods.__repr__ = B_boolD___repr__;
         B_boolG_methods.__init__ = B_boolD___init__;
         B_boolG_methods.__serialize__ = B_boolD___serialize__;
         B_boolG_methods.__deserialize__ = B_boolD___deserialize__;
+        $register(&B_boolG_methods);
     }
     {
         B_sliceG_methods.$GCINFO = "B_slice";
         B_sliceG_methods.$superclass = ($SuperG_class)&B_valueG_methods;
-        B_sliceG_methods.__bool__ = (B_bool (*) (B_slice))B_valueG_methods.__bool__;
-        B_sliceG_methods.__str__ = (B_str (*) (B_slice))B_valueG_methods.__str__;
-        B_sliceG_methods.__repr__ = (B_str (*) (B_slice))B_valueG_methods.__repr__;
+        B_sliceG_methods.__bool__ = B_sliceD___bool__;
+        B_sliceG_methods.__str__ = B_sliceD___str__;
+        B_sliceG_methods.__repr__ = B_sliceD___repr__;
         B_sliceG_methods.__init__ = B_sliceD___init__;
         B_sliceG_methods.__serialize__ = B_sliceD___serialize__;
         B_sliceG_methods.__deserialize__ = B_sliceD___deserialize__;
+        $register(&B_sliceG_methods);
     }
     {
         B_listG_methods.$GCINFO = "B_list";
         B_listG_methods.$superclass = ($SuperG_class)&B_objectG_methods;
         B_listG_methods.__bool__ = B_listD___bool__;
         B_listG_methods.__str__ = B_listD___str__;
-        B_listG_methods.__repr__ = B_listD___str__;
+        B_listG_methods.__repr__ = B_listD___repr__;
         B_listG_methods.__init__ = B_listD___init__;
-        B_listG_methods.__serialize__ = B_listD___serialize__;
-        B_listG_methods.__deserialize__ = B_listD___deserialize__;
         B_listG_methods.clear = B_listD_clear;
         B_listG_methods.copy = B_listD_copy;
         B_listG_methods.extend = B_listD_extend;
         B_listG_methods.pop = B_listD_pop;
+        B_listG_methods.__serialize__ = B_listD___serialize__;
+        B_listG_methods.__deserialize__ = B_listD___deserialize__;
+        $register(&B_listG_methods);
     }
     {
         B_rangeG_methods.$GCINFO = "B_range";
         B_rangeG_methods.$superclass = ($SuperG_class)&B_valueG_methods;
-        B_rangeG_methods.__bool__ = (B_bool (*) (B_range))B_valueG_methods.__bool__;
-        B_rangeG_methods.__str__ = (B_str (*) (B_range))B_valueG_methods.__str__;
-        B_rangeG_methods.__repr__ = (B_str (*) (B_range))B_valueG_methods.__repr__;
+        B_rangeG_methods.__bool__ = B_rangeD___bool__;
+        B_rangeG_methods.__str__ = B_rangeD___str__;
+        B_rangeG_methods.__repr__ = B_rangeD___repr__;
         B_rangeG_methods.__init__ = B_rangeD___init__;
         B_rangeG_methods.__serialize__ = B_rangeD___serialize__;
         B_rangeG_methods.__deserialize__ = B_rangeD___deserialize__;
+        $register(&B_rangeG_methods);
     }
     {
         B_IteratorG_methods.$GCINFO = "B_Iterator";
@@ -4657,6 +4269,7 @@ void B___init__ () {
         B_IteratorG_methods.__repr__ = (B_str (*) (B_Iterator))B_valueG_methods.__repr__;
         B_IteratorG_methods.__serialize__ = B_IteratorD___serialize__;
         B_IteratorG_methods.__deserialize__ = B_IteratorD___deserialize__;
+        $register(&B_IteratorG_methods);
     }
     {
         B_IterableG_methods.$GCINFO = "B_Iterable";
@@ -4672,7 +4285,7 @@ void B___init__ () {
     {
         B_strG_methods.$GCINFO = "B_str";
         B_strG_methods.$superclass = ($SuperG_class)&B_atomG_methods;
-        B_strG_methods.__bool__ = (B_bool (*) (B_str))B_valueG_methods.__bool__;
+        B_strG_methods.__bool__ = B_strD___bool__;
         B_strG_methods.__str__ = B_strD___str__;
         B_strG_methods.__repr__ = B_strD___repr__;
         B_strG_methods.__init__ = B_strD___init__;
@@ -4712,13 +4325,14 @@ void B___init__ () {
         B_strG_methods.zfill = B_strD_zfill;
         B_strG_methods.__serialize__ = B_strD___serialize__;
         B_strG_methods.__deserialize__ = B_strD___deserialize__;
+        $register(&B_strG_methods);
     }
     {
         B_bytesG_methods.$GCINFO = "B_bytes";
         B_bytesG_methods.$superclass = ($SuperG_class)&B_valueG_methods;
-        B_bytesG_methods.__bool__ = (B_bool (*) (B_bytes))B_valueG_methods.__bool__;
+        B_bytesG_methods.__bool__ = B_bytesD___bool__;
         B_bytesG_methods.__str__ = B_bytesD___str__;
-        B_bytesG_methods.__repr__ = B_bytesD___str__;
+        B_bytesG_methods.__repr__ = B_bytesD___repr__;
         B_bytesG_methods.__init__ = B_bytesD___init__;
         B_bytesG_methods.capitalize = B_bytesD_capitalize;
         B_bytesG_methods.center = B_bytesD_center;
@@ -4755,13 +4369,14 @@ void B___init__ () {
         B_bytesG_methods.zfill = B_bytesD_zfill;
         B_bytesG_methods.__serialize__ = B_bytesD___serialize__;
         B_bytesG_methods.__deserialize__ = B_bytesD___deserialize__;
+        $register(&B_bytesG_methods);
     }
     {
         B_bytearrayG_methods.$GCINFO = "B_bytearray";
         B_bytearrayG_methods.$superclass = ($SuperG_class)&B_objectG_methods;
-        B_bytearrayG_methods.__bool__ = (B_bool (*) (B_bytearray))B_valueG_methods.__bool__;
+        B_bytearrayG_methods.__bool__ = B_bytearrayD___bool__;
         B_bytearrayG_methods.__str__ = B_bytearrayD___str__;
-        B_bytearrayG_methods.__repr__ = B_bytearrayD___str__;
+        B_bytearrayG_methods.__repr__ = B_bytearrayD___repr__;
         B_bytearrayG_methods.__init__ = B_bytearrayD___init__;
         B_bytearrayG_methods.capitalize = B_bytearrayD_capitalize;
         B_bytearrayG_methods.center = B_bytearrayD_center;
@@ -4798,6 +4413,7 @@ void B___init__ () {
         B_bytearrayG_methods.zfill = B_bytearrayD_zfill;
         B_bytearrayG_methods.__serialize__ = B_bytearrayD___serialize__;
         B_bytearrayG_methods.__deserialize__ = B_bytearrayD___deserialize__;
+        $register(&B_bytearrayG_methods);
     }
     /*
     {
@@ -4815,131 +4431,144 @@ void B___init__ () {
         B_BaseExceptionG_methods.$GCINFO = "B_BaseException";
         B_BaseExceptionG_methods.$superclass = ($SuperG_class)&B_valueG_methods;
         B_BaseExceptionG_methods.__bool__ = (B_bool (*) (B_BaseException))B_valueG_methods.__bool__;
-        B_BaseExceptionG_methods.__str__ = B_BaseExceptionD___str__;
-        B_BaseExceptionG_methods.__repr__ = B_BaseExceptionD___str__;
+        B_BaseExceptionG_methods.__str__ = (B_str (*) (B_BaseException))B_valueG_methods.__str__;
+        B_BaseExceptionG_methods.__repr__ = (B_str (*) (B_BaseException))B_valueG_methods.__repr__;
         B_BaseExceptionG_methods.__init__ = B_BaseExceptionD___init__;
         B_BaseExceptionG_methods.__serialize__ = B_BaseExceptionD___serialize__;
-        B_BaseExceptionG_methods.__deserialize__ = B_BaseExceptionD___deserialize__; 
+        B_BaseExceptionG_methods.__deserialize__ = B_BaseExceptionD___deserialize__;
+        $register(&B_BaseExceptionG_methods);
     }
     {
         B_SystemExitG_methods.$GCINFO = "B_SystemExit";
         B_SystemExitG_methods.$superclass = ($SuperG_class)&B_BaseExceptionG_methods;
         B_SystemExitG_methods.__init__ = (B_NoneType (*) (B_SystemExit, B_str))B_BaseExceptionG_methods.__init__;
         B_SystemExitG_methods.__bool__ = (B_bool (*) (B_SystemExit))B_valueG_methods.__bool__;
-        B_SystemExitG_methods.__str__ = B_SystemExitD___str__;
-        B_SystemExitG_methods.__repr__ = B_SystemExitD___str__;
+        B_SystemExitG_methods.__str__ = (B_str (*) (B_SystemExit))B_valueG_methods.__str__;
+        B_SystemExitG_methods.__repr__ = (B_str (*) (B_SystemExit))B_valueG_methods.__repr__;
         B_SystemExitG_methods.__serialize__ = B_SystemExitD___serialize__;
         B_SystemExitG_methods.__deserialize__ = B_SystemExitD___deserialize__;
+        $register(&B_SystemExitG_methods);
     }
     {
         B_KeyboardInterruptG_methods.$GCINFO = "B_KeyboardInterrupt";
         B_KeyboardInterruptG_methods.$superclass = ($SuperG_class)&B_BaseExceptionG_methods;
         B_KeyboardInterruptG_methods.__init__ = (B_NoneType (*) (B_KeyboardInterrupt, B_str))B_BaseExceptionG_methods.__init__;
         B_KeyboardInterruptG_methods.__bool__ = (B_bool (*) (B_KeyboardInterrupt))B_valueG_methods.__bool__;
-        B_KeyboardInterruptG_methods.__str__ = B_KeyboardInterruptD___str__;
-        B_KeyboardInterruptG_methods.__repr__ = B_KeyboardInterruptD___str__;
+        B_KeyboardInterruptG_methods.__str__ = (B_str (*) (B_KeyboardInterrupt))B_valueG_methods.__str__;
+        B_KeyboardInterruptG_methods.__repr__ = (B_str (*) (B_KeyboardInterrupt))B_valueG_methods.__repr__;
         B_KeyboardInterruptG_methods.__serialize__ = B_KeyboardInterruptD___serialize__;
         B_KeyboardInterruptG_methods.__deserialize__ = B_KeyboardInterruptD___deserialize__;
+        $register(&B_KeyboardInterruptG_methods);
     }
     {
         B_ExceptionG_methods.$GCINFO = "B_Exception";
         B_ExceptionG_methods.$superclass = ($SuperG_class)&B_BaseExceptionG_methods;
         B_ExceptionG_methods.__init__ = (B_NoneType (*) (B_Exception, B_str))B_BaseExceptionG_methods.__init__;
         B_ExceptionG_methods.__bool__ = (B_bool (*) (B_Exception))B_valueG_methods.__bool__;
-        B_ExceptionG_methods.__str__ = B_ExceptionD___str__;
-        B_ExceptionG_methods.__repr__ = B_ExceptionD___str__;
+        B_ExceptionG_methods.__str__ = (B_str (*) (B_Exception))B_valueG_methods.__str__;
+        B_ExceptionG_methods.__repr__ = (B_str (*) (B_Exception))B_valueG_methods.__repr__;
         B_ExceptionG_methods.__serialize__ = B_ExceptionD___serialize__;
         B_ExceptionG_methods.__deserialize__ = B_ExceptionD___deserialize__;
+        $register(&B_ExceptionG_methods);
     }
     {
         B_AssertionErrorG_methods.$GCINFO = "B_AssertionError";
         B_AssertionErrorG_methods.$superclass = ($SuperG_class)&B_ExceptionG_methods;
         B_AssertionErrorG_methods.__init__ = (B_NoneType (*) (B_AssertionError, B_str))B_BaseExceptionG_methods.__init__;
         B_AssertionErrorG_methods.__bool__ = (B_bool (*) (B_AssertionError))B_valueG_methods.__bool__;
-        B_AssertionErrorG_methods.__str__ = B_AssertionErrorD___str__;
-        B_AssertionErrorG_methods.__repr__ = B_AssertionErrorD___str__;
+        B_AssertionErrorG_methods.__str__ = (B_str (*) (B_AssertionError))B_valueG_methods.__str__;
+        B_AssertionErrorG_methods.__repr__ = (B_str (*) (B_AssertionError))B_valueG_methods.__repr__;
         B_AssertionErrorG_methods.__serialize__ = B_AssertionErrorD___serialize__;
         B_AssertionErrorG_methods.__deserialize__ = B_AssertionErrorD___deserialize__;
+        $register(&B_AssertionErrorG_methods);
     }
     {
         B_LookupErrorG_methods.$GCINFO = "B_LookupError";
         B_LookupErrorG_methods.$superclass = ($SuperG_class)&B_ExceptionG_methods;
         B_LookupErrorG_methods.__init__ = (B_NoneType (*) (B_LookupError, B_str))B_BaseExceptionG_methods.__init__;
         B_LookupErrorG_methods.__bool__ = (B_bool (*) (B_LookupError))B_valueG_methods.__bool__;
-        B_LookupErrorG_methods.__str__ = B_LookupErrorD___str__;
-        B_LookupErrorG_methods.__repr__ = B_LookupErrorD___str__;
+        B_LookupErrorG_methods.__str__ = (B_str (*) (B_LookupError))B_valueG_methods.__str__;
+        B_LookupErrorG_methods.__repr__ = (B_str (*) (B_LookupError))B_valueG_methods.__repr__;
         B_LookupErrorG_methods.__serialize__ = B_LookupErrorD___serialize__;
         B_LookupErrorG_methods.__deserialize__ = B_LookupErrorD___deserialize__;
+        $register(&B_LookupErrorG_methods);
     }
     {
         B_IndexErrorG_methods.$GCINFO = "B_IndexError";
         B_IndexErrorG_methods.$superclass = ($SuperG_class)&B_LookupErrorG_methods;
         B_IndexErrorG_methods.__init__ = (B_NoneType (*) (B_IndexError, B_str))B_BaseExceptionG_methods.__init__;
         B_IndexErrorG_methods.__bool__ = (B_bool (*) (B_IndexError))B_valueG_methods.__bool__;
-        B_IndexErrorG_methods.__str__ = B_IndexErrorD___str__;
-        B_IndexErrorG_methods.__repr__ = B_IndexErrorD___str__;
+        B_IndexErrorG_methods.__str__ = (B_str (*) (B_IndexError))B_valueG_methods.__str__;
+        B_IndexErrorG_methods.__repr__ = (B_str (*) (B_IndexError))B_valueG_methods.__repr__;
         B_IndexErrorG_methods.__serialize__ = B_IndexErrorD___serialize__;
         B_IndexErrorG_methods.__deserialize__ = B_IndexErrorD___deserialize__;
+        $register(&B_IndexErrorG_methods);
     }
     {
         B_KeyErrorG_methods.$GCINFO = "B_KeyError";
         B_KeyErrorG_methods.$superclass = ($SuperG_class)&B_LookupErrorG_methods;
         B_KeyErrorG_methods.__init__ = (B_NoneType (*) (B_KeyError, B_str))B_BaseExceptionG_methods.__init__;
         B_KeyErrorG_methods.__bool__ = (B_bool (*) (B_KeyError))B_valueG_methods.__bool__;
-        B_KeyErrorG_methods.__str__ = B_KeyErrorD___str__;
-        B_KeyErrorG_methods.__repr__ = B_KeyErrorD___str__;
+        B_KeyErrorG_methods.__str__ = (B_str (*) (B_KeyError))B_valueG_methods.__str__;
+        B_KeyErrorG_methods.__repr__ = (B_str (*) (B_KeyError))B_valueG_methods.__repr__;
         B_KeyErrorG_methods.__serialize__ = B_KeyErrorD___serialize__;
         B_KeyErrorG_methods.__deserialize__ = B_KeyErrorD___deserialize__;
+        $register(&B_KeyErrorG_methods);
     }
     {
         B_MemoryErrorG_methods.$GCINFO = "B_MemoryError";
         B_MemoryErrorG_methods.$superclass = ($SuperG_class)&B_ExceptionG_methods;
         B_MemoryErrorG_methods.__init__ = (B_NoneType (*) (B_MemoryError, B_str))B_BaseExceptionG_methods.__init__;
         B_MemoryErrorG_methods.__bool__ = (B_bool (*) (B_MemoryError))B_valueG_methods.__bool__;
-        B_MemoryErrorG_methods.__str__ = B_MemoryErrorD___str__;
-        B_MemoryErrorG_methods.__repr__ = B_MemoryErrorD___str__;
+        B_MemoryErrorG_methods.__str__ = (B_str (*) (B_MemoryError))B_valueG_methods.__str__;
+        B_MemoryErrorG_methods.__repr__ = (B_str (*) (B_MemoryError))B_valueG_methods.__repr__;
         B_MemoryErrorG_methods.__serialize__ = B_MemoryErrorD___serialize__;
         B_MemoryErrorG_methods.__deserialize__ = B_MemoryErrorD___deserialize__;
+        $register(&B_MemoryErrorG_methods);
     }
     {
         B_OSErrorG_methods.$GCINFO = "B_OSError";
         B_OSErrorG_methods.$superclass = ($SuperG_class)&B_ExceptionG_methods;
         B_OSErrorG_methods.__init__ = (B_NoneType (*) (B_OSError, B_str))B_BaseExceptionG_methods.__init__;
         B_OSErrorG_methods.__bool__ = (B_bool (*) (B_OSError))B_valueG_methods.__bool__;
-        B_OSErrorG_methods.__str__ = B_OSErrorD___str__;
-        B_OSErrorG_methods.__repr__ = B_OSErrorD___str__;
+        B_OSErrorG_methods.__str__ = (B_str (*) (B_OSError))B_valueG_methods.__str__;
+        B_OSErrorG_methods.__repr__ = (B_str (*) (B_OSError))B_valueG_methods.__repr__;
         B_OSErrorG_methods.__serialize__ = B_OSErrorD___serialize__;
         B_OSErrorG_methods.__deserialize__ = B_OSErrorD___deserialize__;
+        $register(&B_OSErrorG_methods);
     }
     {
         B_RuntimeErrorG_methods.$GCINFO = "B_RuntimeError";
         B_RuntimeErrorG_methods.$superclass = ($SuperG_class)&B_ExceptionG_methods;
         B_RuntimeErrorG_methods.__init__ = (B_NoneType (*) (B_RuntimeError, B_str))B_BaseExceptionG_methods.__init__;
         B_RuntimeErrorG_methods.__bool__ = (B_bool (*) (B_RuntimeError))B_valueG_methods.__bool__;
-        B_RuntimeErrorG_methods.__str__ = B_RuntimeErrorD___str__;
-        B_RuntimeErrorG_methods.__repr__ = B_RuntimeErrorD___str__;
+        B_RuntimeErrorG_methods.__str__ = (B_str (*) (B_RuntimeError))B_valueG_methods.__str__;
+        B_RuntimeErrorG_methods.__repr__ = (B_str (*) (B_RuntimeError))B_valueG_methods.__repr__;
         B_RuntimeErrorG_methods.__serialize__ = B_RuntimeErrorD___serialize__;
         B_RuntimeErrorG_methods.__deserialize__ = B_RuntimeErrorD___deserialize__;
+        $register(&B_RuntimeErrorG_methods);
     }
     {
         B_NotImplementedErrorG_methods.$GCINFO = "B_NotImplementedError";
         B_NotImplementedErrorG_methods.$superclass = ($SuperG_class)&B_RuntimeErrorG_methods;
         B_NotImplementedErrorG_methods.__init__ = (B_NoneType (*) (B_NotImplementedError, B_str))B_BaseExceptionG_methods.__init__;
         B_NotImplementedErrorG_methods.__bool__ = (B_bool (*) (B_NotImplementedError))B_valueG_methods.__bool__;
-        B_NotImplementedErrorG_methods.__str__ = B_NotImplementedErrorD___str__;
-        B_NotImplementedErrorG_methods.__repr__ = B_NotImplementedErrorD___str__;
+        B_NotImplementedErrorG_methods.__str__ = (B_str (*) (B_NotImplementedError))B_valueG_methods.__str__;
+        B_NotImplementedErrorG_methods.__repr__ = (B_str (*) (B_NotImplementedError))B_valueG_methods.__repr__;
         B_NotImplementedErrorG_methods.__serialize__ = B_NotImplementedErrorD___serialize__;
         B_NotImplementedErrorG_methods.__deserialize__ = B_NotImplementedErrorD___deserialize__;
+        $register(&B_NotImplementedErrorG_methods);
     }
     {
         B_ValueErrorG_methods.$GCINFO = "B_ValueError";
         B_ValueErrorG_methods.$superclass = ($SuperG_class)&B_ExceptionG_methods;
         B_ValueErrorG_methods.__init__ = (B_NoneType (*) (B_ValueError, B_str))B_BaseExceptionG_methods.__init__;
         B_ValueErrorG_methods.__bool__ = (B_bool (*) (B_ValueError))B_valueG_methods.__bool__;
-        B_ValueErrorG_methods.__str__ = B_ValueErrorD___str__;
-        B_ValueErrorG_methods.__repr__ = B_ValueErrorD___str__;
+        B_ValueErrorG_methods.__str__ = (B_str (*) (B_ValueError))B_valueG_methods.__str__;
+        B_ValueErrorG_methods.__repr__ = (B_str (*) (B_ValueError))B_valueG_methods.__repr__;
         B_ValueErrorG_methods.__serialize__ = B_ValueErrorD___serialize__;
         B_ValueErrorG_methods.__deserialize__ = B_ValueErrorD___deserialize__;
+        $register(&B_ValueErrorG_methods);
     }
     {
         B_IdentityG_methods.$GCINFO = "B_Identity";
@@ -5057,32 +4686,35 @@ void B___init__ () {
     {
         B_complexG_methods.$GCINFO = "B_complex";
         B_complexG_methods.$superclass = ($SuperG_class)&B_valueG_methods;
-        B_complexG_methods.__bool__ = (B_bool (*) (B_complex))B_valueG_methods.__bool__;
+        B_complexG_methods.__bool__ = B_complexD___bool__;
         B_complexG_methods.__str__ = B_complexD___str__;
-        B_complexG_methods.__repr__ = B_complexD___str__;
+        B_complexG_methods.__repr__ = B_complexD___repr__;
         B_complexG_methods.__init__ = B_complexD___init__;
         B_complexG_methods.__serialize__ = B_complexD___serialize__;
         B_complexG_methods.__deserialize__ = B_complexD___deserialize__;
+        $register(&B_complexG_methods);
     }
     {
         B_dictG_methods.$GCINFO = "B_dict";
         B_dictG_methods.$superclass = ($SuperG_class)&B_objectG_methods;
-        B_dictG_methods.__bool__ = (B_bool (*) (B_dict))B_valueG_methods.__bool__;
+        B_dictG_methods.__bool__ = B_dictD___bool__;
         B_dictG_methods.__str__ = B_dictD___str__;
-        B_dictG_methods.__repr__ = B_dictD___str__;
+        B_dictG_methods.__repr__ = B_dictD___repr__;
         B_dictG_methods.__init__ = B_dictD___init__;
         B_dictG_methods.__serialize__ = B_dictD___serialize__;
         B_dictG_methods.__deserialize__ = B_dictD___deserialize__;
+        $register(&B_dictG_methods);
     }
     {
         B_setG_methods.$GCINFO = "B_set";
         B_setG_methods.$superclass = ($SuperG_class)&B_objectG_methods;
-        B_setG_methods.__bool__ = (B_bool (*) (B_set))B_valueG_methods.__bool__;
+        B_setG_methods.__bool__ = B_setD___bool__;
         B_setG_methods.__str__ = B_setD___str__;
-        B_setG_methods.__repr__ = (B_str (*) (B_set))B_valueG_methods.__repr__;
+        B_setG_methods.__repr__ = B_setD___repr__;
         B_setG_methods.__init__ = B_setD___init__;
         B_setG_methods.__serialize__ = B_setD___serialize__;
         B_setG_methods.__deserialize__ = B_setD___deserialize__;
+        $register(&B_setG_methods);
     }
     {
         B_NumberG_methods.$GCINFO = "B_Number";
@@ -5356,20 +4988,14 @@ void B___init__ () {
         B_HashableD_intG_methods.__bool__ = (B_bool (*) (B_HashableD_int))B_valueG_methods.__bool__;
         B_HashableD_intG_methods.__str__ = (B_str (*) (B_HashableD_int))B_valueG_methods.__str__;
         B_HashableD_intG_methods.__repr__ = (B_str (*) (B_HashableD_int))B_valueG_methods.__repr__;
-        B_HashableD_intG_methods.__eq__ = B_HashableD_intD___eq__;
         B_HashableD_intG_methods.__ne__ = (B_bool (*) (B_HashableD_int, B_int, B_int))B_EqG_methods.__ne__;
         B_HashableD_intG_methods.__init__ = B_HashableD_intD___init__;
         B_HashableD_intG_methods.__hash__ = B_HashableD_intD___hash__;
+        B_HashableD_intG_methods.__eq__ = B_HashableD_intD___eq__;     //Manually inserted
         B_HashableD_intG_methods.__serialize__ = B_HashableD_intD___serialize__;
         B_HashableD_intG_methods.__deserialize__ = B_HashableD_intD___deserialize__;
         $register(&B_HashableD_intG_methods);
     }
-
-
-
-
-
-
     {
         B_IntegralD_i64G_methods.$GCINFO = "B_IntegralD_i64";
         B_IntegralD_i64G_methods.$superclass = ($SuperG_class)&B_IntegralG_methods;
@@ -5480,17 +5106,14 @@ void B___init__ () {
         B_HashableD_i64G_methods.__bool__ = (B_bool (*) (B_HashableD_i64))B_valueG_methods.__bool__;
         B_HashableD_i64G_methods.__str__ = (B_str (*) (B_HashableD_i64))B_valueG_methods.__str__;
         B_HashableD_i64G_methods.__repr__ = (B_str (*) (B_HashableD_i64))B_valueG_methods.__repr__;
-        B_HashableD_i64G_methods.__eq__ = B_HashableD_i64D___eq__;
         B_HashableD_i64G_methods.__ne__ = (B_bool (*) (B_HashableD_i64, B_i64, B_i64))B_EqG_methods.__ne__;
         B_HashableD_i64G_methods.__init__ = B_HashableD_i64D___init__;
         B_HashableD_i64G_methods.__hash__ = B_HashableD_i64D___hash__;
+        B_HashableD_i64G_methods.__eq__ = B_HashableD_i64D___eq__;     //Manually inserted
         B_HashableD_i64G_methods.__serialize__ = B_HashableD_i64D___serialize__;
         B_HashableD_i64G_methods.__deserialize__ = B_HashableD_i64D___deserialize__;
         $register(&B_HashableD_i64G_methods);
     }
-
-
-    
     {
         B_IntegralD_i32G_methods.$GCINFO = "B_IntegralD_i32";
         B_IntegralD_i32G_methods.$superclass = ($SuperG_class)&B_IntegralG_methods;
@@ -5601,17 +5224,14 @@ void B___init__ () {
         B_HashableD_i32G_methods.__bool__ = (B_bool (*) (B_HashableD_i32))B_valueG_methods.__bool__;
         B_HashableD_i32G_methods.__str__ = (B_str (*) (B_HashableD_i32))B_valueG_methods.__str__;
         B_HashableD_i32G_methods.__repr__ = (B_str (*) (B_HashableD_i32))B_valueG_methods.__repr__;
-        B_HashableD_i32G_methods.__eq__ = B_HashableD_i32D___eq__;
         B_HashableD_i32G_methods.__ne__ = (B_bool (*) (B_HashableD_i32, B_i32, B_i32))B_EqG_methods.__ne__;
         B_HashableD_i32G_methods.__init__ = B_HashableD_i32D___init__;
         B_HashableD_i32G_methods.__hash__ = B_HashableD_i32D___hash__;
+        B_HashableD_i32G_methods.__eq__ = B_HashableD_i32D___eq__;     //Manually inserted
         B_HashableD_i32G_methods.__serialize__ = B_HashableD_i32D___serialize__;
         B_HashableD_i32G_methods.__deserialize__ = B_HashableD_i32D___deserialize__;
         $register(&B_HashableD_i32G_methods);
     }
-
-
-    
     {
         B_IntegralD_i16G_methods.$GCINFO = "B_IntegralD_i16";
         B_IntegralD_i16G_methods.$superclass = ($SuperG_class)&B_IntegralG_methods;
@@ -5722,19 +5342,14 @@ void B___init__ () {
         B_HashableD_i16G_methods.__bool__ = (B_bool (*) (B_HashableD_i16))B_valueG_methods.__bool__;
         B_HashableD_i16G_methods.__str__ = (B_str (*) (B_HashableD_i16))B_valueG_methods.__str__;
         B_HashableD_i16G_methods.__repr__ = (B_str (*) (B_HashableD_i16))B_valueG_methods.__repr__;
-        B_HashableD_i16G_methods.__eq__ = B_HashableD_i16D___eq__;
         B_HashableD_i16G_methods.__ne__ = (B_bool (*) (B_HashableD_i16, B_i16, B_i16))B_EqG_methods.__ne__;
         B_HashableD_i16G_methods.__init__ = B_HashableD_i16D___init__;
         B_HashableD_i16G_methods.__hash__ = B_HashableD_i16D___hash__;
+        B_HashableD_i16G_methods.__eq__ = B_HashableD_i16D___eq__;     //Manually inserted
         B_HashableD_i16G_methods.__serialize__ = B_HashableD_i16D___serialize__;
         B_HashableD_i16G_methods.__deserialize__ = B_HashableD_i16D___deserialize__;
-        $register(&B_HashableD_i64G_methods);
+        $register(&B_HashableD_i16G_methods);
     }
-
-
-    
-
-
     {
         B_IntegralD_u64G_methods.$GCINFO = "B_IntegralD_u64";
         B_IntegralD_u64G_methods.$superclass = ($SuperG_class)&B_IntegralG_methods;
@@ -5845,20 +5460,14 @@ void B___init__ () {
         B_HashableD_u64G_methods.__bool__ = (B_bool (*) (B_HashableD_u64))B_valueG_methods.__bool__;
         B_HashableD_u64G_methods.__str__ = (B_str (*) (B_HashableD_u64))B_valueG_methods.__str__;
         B_HashableD_u64G_methods.__repr__ = (B_str (*) (B_HashableD_u64))B_valueG_methods.__repr__;
-        B_HashableD_u64G_methods.__eq__ = B_HashableD_u64D___eq__;
         B_HashableD_u64G_methods.__ne__ = (B_bool (*) (B_HashableD_u64, B_u64, B_u64))B_EqG_methods.__ne__;
         B_HashableD_u64G_methods.__init__ = B_HashableD_u64D___init__;
         B_HashableD_u64G_methods.__hash__ = B_HashableD_u64D___hash__;
+        B_HashableD_u64G_methods.__eq__ = B_HashableD_u64D___eq__;     //Manually inserted
         B_HashableD_u64G_methods.__serialize__ = B_HashableD_u64D___serialize__;
         B_HashableD_u64G_methods.__deserialize__ = B_HashableD_u64D___deserialize__;
         $register(&B_HashableD_u64G_methods);
     }
-
-
-
-   
-
-
     {
         B_IntegralD_u32G_methods.$GCINFO = "B_IntegralD_u32";
         B_IntegralD_u32G_methods.$superclass = ($SuperG_class)&B_IntegralG_methods;
@@ -5969,20 +5578,14 @@ void B___init__ () {
         B_HashableD_u32G_methods.__bool__ = (B_bool (*) (B_HashableD_u32))B_valueG_methods.__bool__;
         B_HashableD_u32G_methods.__str__ = (B_str (*) (B_HashableD_u32))B_valueG_methods.__str__;
         B_HashableD_u32G_methods.__repr__ = (B_str (*) (B_HashableD_u32))B_valueG_methods.__repr__;
-        B_HashableD_u32G_methods.__eq__ = B_HashableD_u32D___eq__;
         B_HashableD_u32G_methods.__ne__ = (B_bool (*) (B_HashableD_u32, B_u32, B_u32))B_EqG_methods.__ne__;
         B_HashableD_u32G_methods.__init__ = B_HashableD_u32D___init__;
         B_HashableD_u32G_methods.__hash__ = B_HashableD_u32D___hash__;
+        B_HashableD_u32G_methods.__eq__ = B_HashableD_u32D___eq__;     //Manually inserted
         B_HashableD_u32G_methods.__serialize__ = B_HashableD_u32D___serialize__;
         B_HashableD_u32G_methods.__deserialize__ = B_HashableD_u32D___deserialize__;
         $register(&B_HashableD_u32G_methods);
     }
-
-
-
-   
-
-
     {
         B_IntegralD_u16G_methods.$GCINFO = "B_IntegralD_u16";
         B_IntegralD_u16G_methods.$superclass = ($SuperG_class)&B_IntegralG_methods;
@@ -6093,19 +5696,14 @@ void B___init__ () {
         B_HashableD_u16G_methods.__bool__ = (B_bool (*) (B_HashableD_u16))B_valueG_methods.__bool__;
         B_HashableD_u16G_methods.__str__ = (B_str (*) (B_HashableD_u16))B_valueG_methods.__str__;
         B_HashableD_u16G_methods.__repr__ = (B_str (*) (B_HashableD_u16))B_valueG_methods.__repr__;
-        B_HashableD_u16G_methods.__eq__ = B_HashableD_u16D___eq__;
         B_HashableD_u16G_methods.__ne__ = (B_bool (*) (B_HashableD_u16, B_u16, B_u16))B_EqG_methods.__ne__;
         B_HashableD_u16G_methods.__init__ = B_HashableD_u16D___init__;
         B_HashableD_u16G_methods.__hash__ = B_HashableD_u16D___hash__;
+        B_HashableD_u16G_methods.__eq__ = B_HashableD_u16D___eq__;     //Manually inserted
         B_HashableD_u16G_methods.__serialize__ = B_HashableD_u16D___serialize__;
         B_HashableD_u16G_methods.__deserialize__ = B_HashableD_u16D___deserialize__;
         $register(&B_HashableD_u16G_methods);
     }
-
-
-
-
-
     {
         B_RealFloatD_floatG_methods.$GCINFO = "B_RealFloatD_float";
         B_RealFloatD_floatG_methods.$superclass = ($SuperG_class)&B_RealFloatG_methods;
@@ -6188,6 +5786,7 @@ void B___init__ () {
         B_HashableD_floatG_methods.__ne__ = (B_bool (*) (B_HashableD_float, B_float, B_float))B_EqG_methods.__ne__;
         B_HashableD_floatG_methods.__init__ = B_HashableD_floatD___init__;
         B_HashableD_floatG_methods.__hash__ = B_HashableD_floatD___hash__;
+        B_HashableD_floatG_methods.__eq__ = B_HashableD_floatD___eq__;     //Manually inserted
         B_HashableD_floatG_methods.__serialize__ = B_HashableD_floatD___serialize__;
         B_HashableD_floatG_methods.__deserialize__ = B_HashableD_floatD___deserialize__;
         $register(&B_HashableD_floatG_methods);
@@ -6718,10 +6317,10 @@ void B___init__ () {
         B_HashableD_strG_methods.__bool__ = (B_bool (*) (B_HashableD_str))B_valueG_methods.__bool__;
         B_HashableD_strG_methods.__str__ = (B_str (*) (B_HashableD_str))B_valueG_methods.__str__;
         B_HashableD_strG_methods.__repr__ = (B_str (*) (B_HashableD_str))B_valueG_methods.__repr__;
-        B_HashableD_strG_methods.__eq__ =  B_HashableD_strD___eq__;                                  // This line was not generated
         B_HashableD_strG_methods.__ne__ = (B_bool (*) (B_HashableD_str, B_str, B_str))B_EqG_methods.__ne__;
         B_HashableD_strG_methods.__init__ = B_HashableD_strD___init__;
         B_HashableD_strG_methods.__hash__ = B_HashableD_strD___hash__;
+        B_HashableD_strG_methods.__eq__ = B_HashableD_strD___eq__;
         B_HashableD_strG_methods.__serialize__ = B_HashableD_strD___serialize__;
         B_HashableD_strG_methods.__deserialize__ = B_HashableD_strD___deserialize__;
         $register(&B_HashableD_strG_methods);
@@ -6880,6 +6479,7 @@ void B___init__ () {
         B_HashableD_bytesG_methods.__ne__ = (B_bool (*) (B_HashableD_bytes, B_bytes, B_bytes))B_EqG_methods.__ne__;
         B_HashableD_bytesG_methods.__init__ = B_HashableD_bytesD___init__;
         B_HashableD_bytesG_methods.__hash__ = B_HashableD_bytesD___hash__;
+        B_HashableD_bytesG_methods.__eq__ = B_HashableD_bytesD___eq__;
         B_HashableD_bytesG_methods.__serialize__ = B_HashableD_bytesD___serialize__;
         B_HashableD_bytesG_methods.__deserialize__ = B_HashableD_bytesD___deserialize__;
         $register(&B_HashableD_bytesG_methods);
@@ -6979,3 +6579,42 @@ void B___init__ () {
         $register(&B_EnvG_methods);
     }
 }
+
+
+// Manually added definitions
+
+B_HashableD_int B_HashableD_intG_new() {
+    return $NEW(B_HashableD_int);
+}
+B_HashableD_i64 B_HashableD_i64G_new() {
+    return $NEW(B_HashableD_i64);
+}
+B_HashableD_i32 B_HashableD_i32G_new() {
+    return $NEW(B_HashableD_i32);
+}
+B_HashableD_i16 B_HashableD_i16G_new() {
+    return $NEW(B_HashableD_i16);
+}
+B_HashableD_u64 B_HashableD_u64G_new() {
+    return $NEW(B_HashableD_u64);
+}
+B_HashableD_u32 B_HashableD_u32G_new() {
+    return $NEW(B_HashableD_u32);
+}
+B_HashableD_u16 B_HashableD_u16G_new() {
+    return $NEW(B_HashableD_u16);
+}
+B_HashableD_float B_HashableD_floatG_new() {
+    return $NEW(B_HashableD_float);
+}
+B_HashableD_str B_HashableD_strG_new() {
+    return $NEW(B_HashableD_str);
+}
+B_HashableD_bytes B_HashableD_bytesG_new() {
+    return $NEW(B_HashableD_bytes);
+}
+
+B_ContainerD_list B_ContainerD_listG_new(B_Eq w) {
+    return $NEW(B_ContainerD_list,w);
+}
+

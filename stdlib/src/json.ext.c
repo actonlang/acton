@@ -174,7 +174,7 @@ $R jsonQ_JsonD_decodeG_local (jsonQ_Json self, $Cont c$cont, B_str data) {
     yyjson_doc *doc = yyjson_read_opts(fromB_str(data), strlen(fromB_str(data)), 0, NULL, &err);
     yyjson_val *root = yyjson_doc_get_root(doc);
 
-    B_dict res = $NEW(B_dict,(B_Hashable)B_HashableD_strG_new(),NULL,NULL);
+    B_dict res = $NEW(B_dict,(B_Hashable)B_HashableD_strG_witness,NULL,NULL);
     // Iterate over the root object
     if (doc) {
         yyjson_val *obj = yyjson_doc_get_root(doc);
