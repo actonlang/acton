@@ -723,7 +723,9 @@ abstractAttr env tc n       = n `elem` abstractAttrs env (tcname tc)
 
 allCons                     :: EnvF x -> [CCon]
 allCons env                 = reverse locals ++ concat [ cons m (lookupMod m env) | m <- moduleRefs (names env), m /= mPrim ]
-  where locals              = [ TC (NoQ n) (wildargs i) | (n,i) <- names env, con i ]
+  where locals
+          | inBuiltin env   = cons mBuiltin (Just $ names env)
+          | otherwise       = [ TC (NoQ n) (wildargs i) | (n,i) <- names env, con i ]
         con NClass{}        = True
         con NAct{}          = True
         con _               = False
@@ -731,7 +733,9 @@ allCons env                 = reverse locals ++ concat [ cons m (lookupMod m env
 
 allProtos                   :: EnvF x -> [PCon]
 allProtos env               = reverse locals ++ concat [ protos m (lookupMod m env) | m <- moduleRefs (names env), m /= mPrim ]
-  where locals              = [ TC (NoQ n) (wildargs i) | (n,i) <- names env, proto i ]
+  where locals
+          | inBuiltin env   = protos mBuiltin (Just $ names env)
+          | otherwise       = [ TC (NoQ n) (wildargs i) | (n,i) <- names env, proto i ]
         proto NProto{}      = True
         proto _             = False
         protos m (Just te)  = [ TC (GName m n) (wildargs i) | (n,i) <- te, proto i ] ++ concat [ protos (modCat m n) (Just te') | (n,NModule te') <- te ]
