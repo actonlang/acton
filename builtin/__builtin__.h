@@ -26,7 +26,7 @@ struct B_Iterable;
 struct B_str;
 struct B_bytes;
 struct B_bytearray;
-struct B_Msg;
+//struct B_Msg;
 struct B_BaseException;
 struct B_SystemExit;
 struct B_KeyboardInterrupt;
