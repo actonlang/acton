@@ -3902,7 +3902,7 @@ B_HashableD_i16 B_HashableD_i16G_new();
 B_HashableD_u64 B_HashableD_u64G_new();
 B_HashableD_u32 B_HashableD_u32G_new();
 B_HashableD_u16 B_HashableD_u16G_new();
-B_HashableD_str B_HashableD_srtG_new();
+B_HashableD_str B_HashableD_strG_new();
 B_HashableD_bytes B_HashableD_bytesG_new();
 
 B_ContainerD_list B_ContainerD_listG_new(B_Eq);

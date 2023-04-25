@@ -1406,6 +1406,9 @@ B_str B_bytearrayD___str__(B_bytearray s) {
     return res;
 }
 
+B_str B_bytearrayD___repr__(B_bytearray s) {
+    return B_bytearrayD___str__(s);
+}
 
 void B_bytearrayD___serialize__(B_bytearray str,$Serial$state state) {
     int nWords = str->nbytes/sizeof($WORD) + 1;         // # $WORDS needed to store str->str, including terminating 0.
@@ -2390,6 +2393,10 @@ B_str B_bytesD___str__(B_bytes s) {
     }        
     res->str[0] = 'b';
     return res;
+}
+
+B_str B_bytesD___repr__(B_bytes s) {
+    return  B_bytesD___str__(s);
 }
 
 void B_bytesD___serialize__(B_bytes str,$Serial$state state) {

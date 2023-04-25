@@ -98,3 +98,16 @@ B_slice B_sliceD___deserialize__ (B_slice self, $Serial$state state) {
     return res;
 }
 
+B_bool B_sliceD___bool__(B_slice s) {
+    return B_True;
+}
+
+B_str B_sliceD___str__(B_slice s) {
+    char *c;
+    asprintf(&c,"Slice [%ld:%ld:%ld]",*s->start, *s->stop,*s->step);
+    return to$str(c);
+}
+
+B_str B_sliceD___repr__(B_slice s) {
+    return B_sliceD___str__(s);
+}

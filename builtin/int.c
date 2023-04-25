@@ -145,6 +145,10 @@ B_bool B_intD___bool__(B_int n) {
 B_str B_intD___str__(B_int n) {
     return to$str(get_str(&n->val));
 }
+
+B_str B_intD___repr__(B_int n) {
+    return to$str(get_str(&n->val));
+}
   
 B_int zz$to$int(zz_ptr n) {
     B_int res = malloc_int();

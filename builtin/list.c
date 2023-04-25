@@ -100,6 +100,10 @@ B_str B_listD___str__(B_list self) {
     return B_strD_join_par('[',s2,']');
 }
 
+B_str B_listD___repr__(B_list self) {
+    return B_listD___str__(self);
+}
+
 void B_listD___serialize__(B_list self,$Serial$state state) {
     B_int prevkey = (B_int)B_dictD_get(state->done,(B_Hashable)B_HashableD_WORDG_witness,self,NULL);
     if (prevkey) {

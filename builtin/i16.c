@@ -102,6 +102,12 @@ B_str B_i16D___str__(B_i16 n) {
     return to$str(s);
 }
 
+B_str B_i16D___repr__(B_i16 n) {
+    char *s;
+    asprintf(&s,"%hd",n->val);
+    return to$str(s);
+}
+
 B_i16 toB_i16(short i) {
     B_i16 res = malloc(sizeof(struct B_i16));
     res->$class = &B_i16G_methods;

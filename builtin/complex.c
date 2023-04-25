@@ -56,6 +56,12 @@ B_str B_complexD___str__(B_complex c) {
     return to$str(s);
 }
   
+B_str B_complexD___repr__(B_complex c) {
+    char *s;
+    asprintf(&s,"%f + %f*I",creal(c->val),cimag(c->val));
+    return to$str(s);
+}
+  
 // B_NumberD_complex  ////////////////////////////////////////////////////////////////////////////////////////
 
 B_complex B_NumberD_complexD___add__(B_NumberD_complex wit, B_complex a, B_complex b) {

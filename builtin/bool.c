@@ -32,6 +32,13 @@ B_str B_boolD___str__(B_bool self) {
         return to$str("False");
 }
 
+B_str B_boolD___repr__(B_bool self) {
+    if (self->val)
+        return to$str("True");
+    else
+        return to$str("False");
+}
+
 void B_boolD___serialize__(B_bool self, $Serial$state state) {
     $val_serialize(BOOL_ID,&self->val,state);
 }
