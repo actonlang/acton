@@ -288,6 +288,7 @@ remote_db_t * db = NULL;
 
 ////////////////////////////////////////////////////////////////////////////////////////
 
+/*
 void B_MsgD___init__(B_Msg m, $Actor to, $Cont cont, time_t baseline, $WORD value) {
     m->$next = NULL;
     m->$to = to;
@@ -297,6 +298,21 @@ void B_MsgD___init__(B_Msg m, $Actor to, $Cont cont, time_t baseline, $WORD valu
     m->B_value = value;
     atomic_flag_clear(&m->$wait_lock);
     m->$globkey = get_next_key();
+}
+*/
+
+B_Msg B_MsgG_new( $Actor to, $Cont cont, time_t baseline, $WORD value) {
+    B_Msg m = malloc(sizeof(struct B_Msg));
+    m->$class = &B_MsgG_methods;
+    m->$next = NULL;
+    m->$to = to;
+    m->$cont = cont;
+    m->$waiting = NULL;
+    m->$baseline = baseline;
+    m->B_value = value;
+    atomic_flag_clear(&m->$wait_lock);
+    m->$globkey = get_next_key();
+    return m;
 }
 
 B_bool B_MsgD___bool__(B_Msg self) {
@@ -466,7 +482,7 @@ struct B_MsgG_class B_MsgG_methods = {
     MSG_HEADER,
     UNASSIGNED,
     NULL,
-    B_MsgD___init__,
+    NULL,
     B_MsgD___serialize__,
     B_MsgD___deserialize__,
     B_MsgD___bool__,
@@ -833,7 +849,7 @@ $Catcher POP_catcher($Actor a) {
 B_Msg $ASYNC($Actor to, $Cont cont) {
     $Actor self = ($Actor)pthread_getspecific(self_key);
     time_t baseline = 0;
-    B_Msg m = $NEW(B_Msg, to, cont, baseline, &$Done$instance);
+    B_Msg m = B_MsgG_new(to, cont, baseline, &$Done$instance);
     if (self) {                                         // $ASYNC called by actor code
         m->$baseline = self->B_Msg->$baseline;
         PUSH_outgoing(self, m);
@@ -851,7 +867,7 @@ B_Msg $AFTER(B_float sec, $Cont cont) {
     $Actor self = ($Actor)pthread_getspecific(self_key);
     rtsd_printf("# AFTER by %ld", self->$globkey);
     time_t baseline = self->B_Msg->$baseline + sec->val * 1000000;
-    B_Msg m = $NEW(B_Msg, self, cont, baseline, &$Done$instance);
+    B_Msg m = B_MsgG_new(self, cont, baseline, &$Done$instance);
     PUSH_outgoing(self, m);
     return m;
 }
@@ -1389,7 +1405,7 @@ void BOOTSTRAP(int argc, char *argv[]) {
 
     root_actor = $ROOT();                           // Assumed to return $NEWACTOR(X) for the selected root actor X
     time_t now = current_time();
-    B_Msg m = $NEW(B_Msg, root_actor, &$InitRoot$cont, now, &$Done$instance);
+    B_Msg m = B_MsgG_new(root_actor, &$InitRoot$cont, now, &$Done$instance);
     if (db) {
             int ret = 0, minority_status = 0;
             while(!rts_exit) {
