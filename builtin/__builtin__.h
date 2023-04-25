@@ -3723,19 +3723,18 @@ B_str B_bin (B_Integral, $WORD);
 B_str B_chr (B_Integral, $WORD);
 B_tuple B_divmod (B_Integral, $WORD, $WORD);
 B_Iterator B_enumerate (B_Iterable, $WORD, B_int);
-//B_Iterator B_filter (B_Iterable, $pure, $WORD);   $pure defined in function.h; not yet included
+B_Iterator B_filter (B_Iterable, $pure, $WORD); 
 B_int B_hash (B_Hashable, $WORD);
 B_str B_hex (B_Integral, $WORD);
 B_Iterator B_iter (B_Iterable, $WORD);
 B_int B_len (B_Collection, $WORD);
-//B_Iterator B_map (B_Iterable, $pure, $WORD);      $pure defined in function.h; not yet included
+B_Iterator B_map (B_Iterable, $pure, $WORD);  
 $WORD B_max (B_Ord, B_Iterable, $WORD, $WORD);
 $WORD B_min (B_Ord, B_Iterable, $WORD, $WORD);
 $WORD B_next (B_Iterator);
 B_int B_ord (B_str);
 $WORD B_pow (B_Number, $WORD, $WORD);
-// B_NoneType B_print (B_tuple);   Code generation uses signature below
-B_NoneType B_print (int,...);  // Manually added replacing above signature
+B_NoneType B_print (B_tuple);
 B_str B_repr (B_value);
 B_Iterator B_reversed (B_Sequence, $WORD);
 $WORD B_round (B_Real, $WORD, B_int);
