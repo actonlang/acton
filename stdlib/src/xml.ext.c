@@ -10,6 +10,7 @@
     (nm)->str = malloc((nm)->nbytes + 1);       \
     (nm)->str[(nm)->nbytes] = 0
 
+
 xmlQ_Node $NodePtr2Node(xmlNodePtr node) {
     B_SequenceD_list wit = B_SequenceD_listG_witness;
     if (node->type != XML_ELEMENT_NODE) {

@@ -4,6 +4,7 @@ Building project in /Users/sydow/acton/builtin/ty
 #include "types/__builtin__.h"
 #include "src/__builtin__.ext.c"
 */
+#include "../rts/rts.h"
 B_NoneType B_valueD___init__ (B_value self) {
     return B_None;
 }
@@ -4233,7 +4234,6 @@ $WORD B_sum (B_Plus W_PlusD_A, B_Iterable W_IterableE_914, $WORD iter, $WORD sta
 B_Iterator B_zip (B_Iterable W_IterableE_924, B_Iterable W_IterableE_923, $WORD a, $WORD b);
 B_int B_gcd (B_int a, B_int b);
 B_tuple B_xgcd (B_int a, B_int b);
-/*
 B_NoneType B_L_1procD___init__ (B_L_1proc L_self, B_Env self, B_str s) {
     L_self->self = self;
     L_self->s = s;
@@ -4482,14 +4482,14 @@ B_Env B_EnvD___deserialize__ (B_Env self, $Serial$state state) {
 $R B_EnvG_new($Cont G_1, B_WorldAuth G_2, B_list G_3) {
     B_Env $tmp = malloc(sizeof(struct B_Env));
     $tmp->$class = &B_EnvG_methods;
-    return B_EnvG_methods.__init__($tmp, G_1, G_2, $CONSTCONT(G_3, $tmp));
+    //    return B_EnvG_methods.__init__($tmp, G_1, G_2, $CONSTCONT(G_3, $tmp));
+    return B_EnvG_methods.__init__($tmp, G_1, G_2, G_3);  // Changed without proper understanding
 }
 struct B_EnvG_class B_EnvG_methods;
 $R B_EnvG_newact ($Cont C_cont, B_WorldAuth token, B_list args) {
     B_Env G_act = $NEWACTOR(B_Env);
     return $AWAIT((($Cont)B_L_5ContG_new(G_act, C_cont)), $ASYNC((($Actor)G_act), (($Cont)B_L_6procG_new(G_act, token, args))));
 }
-*/
 int B_done$ = 0;
 void B___init__ () {
     if (B_done$) return;
@@ -6884,7 +6884,6 @@ void B___init__ () {
         B_HashableD_bytesG_methods.__deserialize__ = B_HashableD_bytesD___deserialize__;
         $register(&B_HashableD_bytesG_methods);
     }
-    /*
     {
         B_L_1procG_methods.$GCINFO = "B_L_1proc";
         B_L_1procG_methods.$superclass = ($SuperG_class)&$procG_methods;
@@ -6955,7 +6954,8 @@ void B___init__ () {
         B_WorldAuthG_methods.__bool__ = (B_bool (*) (B_WorldAuth))B_valueG_methods.__bool__;
         B_WorldAuthG_methods.__str__ = (B_str (*) (B_WorldAuth))B_valueG_methods.__str__;
         B_WorldAuthG_methods.__repr__ = (B_str (*) (B_WorldAuth))B_valueG_methods.__repr__;
-        ;
+        B_WorldAuthG_methods.__init__ = B_WorldAuthD___init__;                            // Manually added
+        //        ;
         B_WorldAuthG_methods.__serialize__ = B_WorldAuthD___serialize__;
         B_WorldAuthG_methods.__deserialize__ = B_WorldAuthD___deserialize__;
         $register(&B_WorldAuthG_methods);
@@ -6978,5 +6978,4 @@ void B___init__ () {
         B_EnvG_methods.__deserialize__ = B_EnvD___deserialize__;
         $register(&B_EnvG_methods);
     }
-    */
 }
