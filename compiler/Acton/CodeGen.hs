@@ -379,9 +379,11 @@ declDeserialize env n c props sup_c = (gen env (tCon c) <+> genTopName env (meth
 
 
 initModule env []                   = empty
-initModule env (Decl _ ds : ss)     = vcat [ char '{' $+$ nest 4 (initClassBase env1 n q as b $+$ initClass env n b) $+$ char '}' | Class _ n q as b <- ds ] $+$
+initModule env (Decl _ ds : ss)     = vcat [ char '{' $+$ nest 4 (initClassBase env1 n q as hC $+$ initClass env n b hC) $+$ char '}' | Class _ n q as b <- ds, let hC = hasCDef b ] $+$
                                       initModule env1 ss
   where env1                        = gdefine (envOf ds) env
+        hasCDef b                   = inBuiltin env && any hasNotImpl [b' | Decl _ ds <- b, Def{dname=n',dbody=b'} <- ds, n' == initKW ]
+        
 initModule env (Signature{} : ss)   = initModule env ss
 initModule env (s : ss)             = genStmt env s $+$
                                       vcat [ genTopName env n <+> equals <+> gen env n <> semi | (n,_) <- te ] $+$
@@ -389,30 +391,29 @@ initModule env (s : ss)             = genStmt env s $+$
   where te                          = envOf s `exclude` defined env
         env1                        = gdefine te env
 
-initClassBase env c q as b           = methodtable env c <> dot <> gen env gcinfoKW <+> equals <+> doubleQuotes (genTopName env c) <> semi $+$
+initClassBase env c q as hasCDef    = methodtable env c <> dot <> gen env gcinfoKW <+> equals <+> doubleQuotes (genTopName env c) <> semi $+$
                                       methodtable env c <> dot <> gen env superclassKW <+> equals <+> super <> semi $+$
                                       vcat [ inherit c' n | (c',n) <- inheritedAttrs env (NoQ c) ]
   where super                       = if null as then text "NULL" else parens (gen env qnSuperClass) <> text "&" <> methodtable' env (tcname $ head as)
         selfsubst                   = subst [(tvSelf, tCon tc)]
         tc                          = TC (NoQ c) [ tVar v | Quant v _ <- q ]
         inherit c' n
-          | cDefinedClass           = methodtable env c <> dot <> gen env n <+> equals <+> genTopName env (methodname c n) <> semi
+          | hasCDef                 = methodtable env c <> dot <> gen env n <+> equals <+> genTopName env (methodname c n) <> semi
           | otherwise               = methodtable env c <> dot <> gen env n <+> equals <+> cast (fromJust $ lookup n te) <> methodtable' env c' <> dot <> gen env n <> semi
         cast (NSig sc dec)          = parens (gen env (selfsubst $ addSelf (sctype sc) (Just dec)))
         cast (NDef sc dec)          = parens (gen env (selfsubst $ addSelf (sctype sc) (Just dec)))
         cast (NVar t)               = parens (gen env $ selfsubst t)
         te                          = fullAttrEnv env $ TC (NoQ c) [ tVar v | Quant v _ <- q ]
-        cDefinedClass               = inBuiltin env && any hasNotImpl [b' | Decl _ ds <- b, Def{dname=n',dbody=b'} <- ds, n' == initKW ]
 
-initClass env c []                  = vcat [ methodtable env c <> dot <> gen env n <+> equals <+> genTopName env (methodname c n) <> semi | n <- [serializeKW,deserializeKW] ] $+$
-                                      gen env primRegister <> parens (char '&' <> methodtable env c) <> semi
-initClass env c (Decl _ ds : ss)    = vcat [ methodtable env c <> dot <> gen env n <+> equals <+> genTopName env (methodname c n) <> semi | Def{dname=n} <- ds ] $+$
-                                      initClass env1 c ss
+initClass env c [] hasCDef          = vcat [ methodtable env c <> dot <> gen env n <+> equals <+> genTopName env (methodname c n) <> semi | n <- [serializeKW,deserializeKW] ] $+$
+                                      if hasCDef then empty else gen env primRegister <> parens (char '&' <> methodtable env c) <> semi
+initClass env c (Decl _ ds : ss) b  = vcat [ methodtable env c <> dot <> gen env n <+> equals <+> genTopName env (methodname c n) <> semi | Def{dname=n} <- ds ] $+$
+                                      initClass env1 c ss b
   where env1                        = gdefine (envOf ds) env
-initClass env c (Signature{} : ss)  = initClass env c ss
-initClass env c (s : ss)            = genStmt env s $+$
+initClass env c (Signature{} : ss) b = initClass env c ss b
+initClass env c (s : ss) b           = genStmt env s $+$
                                       vcat [ genTopName env c <> dot <> gen env n <+> equals <+> gen env n <> semi | (n,_) <- te ] $+$
-                                      initClass env1 c ss
+                                      initClass env1 c ss b
   where te                          = envOf s `exclude` defined env
         env1                        = ldefine te env
 

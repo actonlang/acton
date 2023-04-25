@@ -4103,7 +4103,6 @@ void B___init__ () {
         B_valueG_methods.__repr__ = B_valueD___repr__;
         B_valueG_methods.__serialize__ = B_valueD___serialize__;
         B_valueG_methods.__deserialize__ = B_valueD___deserialize__;
-        $register(&B_valueG_methods);
     }
     {
         B_objectG_methods.$GCINFO = "B_object";
@@ -4113,7 +4112,6 @@ void B___init__ () {
         B_objectG_methods.__repr__ = (B_str (*) (B_object))B_valueG_methods.__repr__;
         B_objectG_methods.__serialize__ = B_objectD___serialize__;
         B_objectG_methods.__deserialize__ = B_objectD___deserialize__;
-        $register(&B_objectG_methods);
     }
     {
         B_atomG_methods.$GCINFO = "B_atom";
@@ -4123,7 +4121,6 @@ void B___init__ () {
         B_atomG_methods.__repr__ = (B_str (*) (B_atom))B_valueG_methods.__repr__;
         B_atomG_methods.__serialize__ = B_atomD___serialize__;
         B_atomG_methods.__deserialize__ = B_atomD___deserialize__;
-        $register(&B_atomG_methods);
     }
     {
         B_intG_methods.$GCINFO = "B_int";
@@ -4134,7 +4131,6 @@ void B___init__ () {
         B_intG_methods.__init__ = B_intD___init__;
         B_intG_methods.__serialize__ = B_intD___serialize__;
         B_intG_methods.__deserialize__ = B_intD___deserialize__;
-        $register(&B_intG_methods);
     }
     {
         B_i64G_methods.$GCINFO = "B_i64";
@@ -4145,7 +4141,6 @@ void B___init__ () {
         B_i64G_methods.__init__ = B_i64D___init__;
         B_i64G_methods.__serialize__ = B_i64D___serialize__;
         B_i64G_methods.__deserialize__ = B_i64D___deserialize__;
-        $register(&B_i64G_methods);
     }
     {
         B_i32G_methods.$GCINFO = "B_i32";
@@ -4156,7 +4151,6 @@ void B___init__ () {
         B_i32G_methods.__init__ = B_i32D___init__;
         B_i32G_methods.__serialize__ = B_i32D___serialize__;
         B_i32G_methods.__deserialize__ = B_i32D___deserialize__;
-        $register(&B_i32G_methods);
     }
     {
         B_i16G_methods.$GCINFO = "B_i16";
@@ -4167,7 +4161,6 @@ void B___init__ () {
         B_i16G_methods.__init__ = B_i16D___init__;
         B_i16G_methods.__serialize__ = B_i16D___serialize__;
         B_i16G_methods.__deserialize__ = B_i16D___deserialize__;
-        $register(&B_i16G_methods);
     }
     {
         B_u64G_methods.$GCINFO = "B_u64";
@@ -4178,7 +4171,6 @@ void B___init__ () {
         B_u64G_methods.__init__ = B_u64D___init__;
         B_u64G_methods.__serialize__ = B_u64D___serialize__;
         B_u64G_methods.__deserialize__ = B_u64D___deserialize__;
-        $register(&B_u64G_methods);
     }
     {
         B_u32G_methods.$GCINFO = "B_u32";
@@ -4189,7 +4181,6 @@ void B___init__ () {
         B_u32G_methods.__init__ = B_u32D___init__;
         B_u32G_methods.__serialize__ = B_u32D___serialize__;
         B_u32G_methods.__deserialize__ = B_u32D___deserialize__;
-        $register(&B_u32G_methods);
     }
     {
         B_u16G_methods.$GCINFO = "B_u16";
@@ -4200,7 +4191,6 @@ void B___init__ () {
         B_u16G_methods.__init__ = B_u16D___init__;
         B_u16G_methods.__serialize__ = B_u16D___serialize__;
         B_u16G_methods.__deserialize__ = B_u16D___deserialize__;
-        $register(&B_u16G_methods);
     }
     {
         B_floatG_methods.$GCINFO = "B_float";
@@ -4211,7 +4201,6 @@ void B___init__ () {
         B_floatG_methods.__init__ = B_floatD___init__;
         B_floatG_methods.__serialize__ = B_floatD___serialize__;
         B_floatG_methods.__deserialize__ = B_floatD___deserialize__;
-        $register(&B_floatG_methods);
     }
     {
         B_boolG_methods.$GCINFO = "B_bool";
@@ -4222,7 +4211,6 @@ void B___init__ () {
         B_boolG_methods.__init__ = B_boolD___init__;
         B_boolG_methods.__serialize__ = B_boolD___serialize__;
         B_boolG_methods.__deserialize__ = B_boolD___deserialize__;
-        $register(&B_boolG_methods);
     }
     {
         B_sliceG_methods.$GCINFO = "B_slice";
@@ -4233,7 +4221,6 @@ void B___init__ () {
         B_sliceG_methods.__init__ = B_sliceD___init__;
         B_sliceG_methods.__serialize__ = B_sliceD___serialize__;
         B_sliceG_methods.__deserialize__ = B_sliceD___deserialize__;
-        $register(&B_sliceG_methods);
     }
     {
         B_listG_methods.$GCINFO = "B_list";
@@ -4248,7 +4235,6 @@ void B___init__ () {
         B_listG_methods.pop = B_listD_pop;
         B_listG_methods.__serialize__ = B_listD___serialize__;
         B_listG_methods.__deserialize__ = B_listD___deserialize__;
-        $register(&B_listG_methods);
     }
     {
         B_rangeG_methods.$GCINFO = "B_range";
@@ -4259,7 +4245,6 @@ void B___init__ () {
         B_rangeG_methods.__init__ = B_rangeD___init__;
         B_rangeG_methods.__serialize__ = B_rangeD___serialize__;
         B_rangeG_methods.__deserialize__ = B_rangeD___deserialize__;
-        $register(&B_rangeG_methods);
     }
     {
         B_IteratorG_methods.$GCINFO = "B_Iterator";
@@ -4325,7 +4310,6 @@ void B___init__ () {
         B_strG_methods.zfill = B_strD_zfill;
         B_strG_methods.__serialize__ = B_strD___serialize__;
         B_strG_methods.__deserialize__ = B_strD___deserialize__;
-        $register(&B_strG_methods);
     }
     {
         B_bytesG_methods.$GCINFO = "B_bytes";
@@ -4369,7 +4353,6 @@ void B___init__ () {
         B_bytesG_methods.zfill = B_bytesD_zfill;
         B_bytesG_methods.__serialize__ = B_bytesD___serialize__;
         B_bytesG_methods.__deserialize__ = B_bytesD___deserialize__;
-        $register(&B_bytesG_methods);
     }
     {
         B_bytearrayG_methods.$GCINFO = "B_bytearray";
@@ -4413,7 +4396,6 @@ void B___init__ () {
         B_bytearrayG_methods.zfill = B_bytearrayD_zfill;
         B_bytearrayG_methods.__serialize__ = B_bytearrayD___serialize__;
         B_bytearrayG_methods.__deserialize__ = B_bytearrayD___deserialize__;
-        $register(&B_bytearrayG_methods);
     }
     /*
     {
@@ -4436,7 +4418,6 @@ void B___init__ () {
         B_BaseExceptionG_methods.__init__ = B_BaseExceptionD___init__;
         B_BaseExceptionG_methods.__serialize__ = B_BaseExceptionD___serialize__;
         B_BaseExceptionG_methods.__deserialize__ = B_BaseExceptionD___deserialize__;
-        $register(&B_BaseExceptionG_methods);
     }
     {
         B_SystemExitG_methods.$GCINFO = "B_SystemExit";
@@ -4447,7 +4428,6 @@ void B___init__ () {
         B_SystemExitG_methods.__repr__ = (B_str (*) (B_SystemExit))B_valueG_methods.__repr__;
         B_SystemExitG_methods.__serialize__ = B_SystemExitD___serialize__;
         B_SystemExitG_methods.__deserialize__ = B_SystemExitD___deserialize__;
-        $register(&B_SystemExitG_methods);
     }
     {
         B_KeyboardInterruptG_methods.$GCINFO = "B_KeyboardInterrupt";
@@ -4458,7 +4438,6 @@ void B___init__ () {
         B_KeyboardInterruptG_methods.__repr__ = (B_str (*) (B_KeyboardInterrupt))B_valueG_methods.__repr__;
         B_KeyboardInterruptG_methods.__serialize__ = B_KeyboardInterruptD___serialize__;
         B_KeyboardInterruptG_methods.__deserialize__ = B_KeyboardInterruptD___deserialize__;
-        $register(&B_KeyboardInterruptG_methods);
     }
     {
         B_ExceptionG_methods.$GCINFO = "B_Exception";
@@ -4469,7 +4448,6 @@ void B___init__ () {
         B_ExceptionG_methods.__repr__ = (B_str (*) (B_Exception))B_valueG_methods.__repr__;
         B_ExceptionG_methods.__serialize__ = B_ExceptionD___serialize__;
         B_ExceptionG_methods.__deserialize__ = B_ExceptionD___deserialize__;
-        $register(&B_ExceptionG_methods);
     }
     {
         B_AssertionErrorG_methods.$GCINFO = "B_AssertionError";
@@ -4480,7 +4458,6 @@ void B___init__ () {
         B_AssertionErrorG_methods.__repr__ = (B_str (*) (B_AssertionError))B_valueG_methods.__repr__;
         B_AssertionErrorG_methods.__serialize__ = B_AssertionErrorD___serialize__;
         B_AssertionErrorG_methods.__deserialize__ = B_AssertionErrorD___deserialize__;
-        $register(&B_AssertionErrorG_methods);
     }
     {
         B_LookupErrorG_methods.$GCINFO = "B_LookupError";
@@ -4491,7 +4468,6 @@ void B___init__ () {
         B_LookupErrorG_methods.__repr__ = (B_str (*) (B_LookupError))B_valueG_methods.__repr__;
         B_LookupErrorG_methods.__serialize__ = B_LookupErrorD___serialize__;
         B_LookupErrorG_methods.__deserialize__ = B_LookupErrorD___deserialize__;
-        $register(&B_LookupErrorG_methods);
     }
     {
         B_IndexErrorG_methods.$GCINFO = "B_IndexError";
@@ -4502,7 +4478,6 @@ void B___init__ () {
         B_IndexErrorG_methods.__repr__ = (B_str (*) (B_IndexError))B_valueG_methods.__repr__;
         B_IndexErrorG_methods.__serialize__ = B_IndexErrorD___serialize__;
         B_IndexErrorG_methods.__deserialize__ = B_IndexErrorD___deserialize__;
-        $register(&B_IndexErrorG_methods);
     }
     {
         B_KeyErrorG_methods.$GCINFO = "B_KeyError";
@@ -4513,7 +4488,6 @@ void B___init__ () {
         B_KeyErrorG_methods.__repr__ = (B_str (*) (B_KeyError))B_valueG_methods.__repr__;
         B_KeyErrorG_methods.__serialize__ = B_KeyErrorD___serialize__;
         B_KeyErrorG_methods.__deserialize__ = B_KeyErrorD___deserialize__;
-        $register(&B_KeyErrorG_methods);
     }
     {
         B_MemoryErrorG_methods.$GCINFO = "B_MemoryError";
@@ -4524,7 +4498,6 @@ void B___init__ () {
         B_MemoryErrorG_methods.__repr__ = (B_str (*) (B_MemoryError))B_valueG_methods.__repr__;
         B_MemoryErrorG_methods.__serialize__ = B_MemoryErrorD___serialize__;
         B_MemoryErrorG_methods.__deserialize__ = B_MemoryErrorD___deserialize__;
-        $register(&B_MemoryErrorG_methods);
     }
     {
         B_OSErrorG_methods.$GCINFO = "B_OSError";
@@ -4535,7 +4508,6 @@ void B___init__ () {
         B_OSErrorG_methods.__repr__ = (B_str (*) (B_OSError))B_valueG_methods.__repr__;
         B_OSErrorG_methods.__serialize__ = B_OSErrorD___serialize__;
         B_OSErrorG_methods.__deserialize__ = B_OSErrorD___deserialize__;
-        $register(&B_OSErrorG_methods);
     }
     {
         B_RuntimeErrorG_methods.$GCINFO = "B_RuntimeError";
@@ -4546,7 +4518,6 @@ void B___init__ () {
         B_RuntimeErrorG_methods.__repr__ = (B_str (*) (B_RuntimeError))B_valueG_methods.__repr__;
         B_RuntimeErrorG_methods.__serialize__ = B_RuntimeErrorD___serialize__;
         B_RuntimeErrorG_methods.__deserialize__ = B_RuntimeErrorD___deserialize__;
-        $register(&B_RuntimeErrorG_methods);
     }
     {
         B_NotImplementedErrorG_methods.$GCINFO = "B_NotImplementedError";
@@ -4557,7 +4528,6 @@ void B___init__ () {
         B_NotImplementedErrorG_methods.__repr__ = (B_str (*) (B_NotImplementedError))B_valueG_methods.__repr__;
         B_NotImplementedErrorG_methods.__serialize__ = B_NotImplementedErrorD___serialize__;
         B_NotImplementedErrorG_methods.__deserialize__ = B_NotImplementedErrorD___deserialize__;
-        $register(&B_NotImplementedErrorG_methods);
     }
     {
         B_ValueErrorG_methods.$GCINFO = "B_ValueError";
@@ -4568,8 +4538,7 @@ void B___init__ () {
         B_ValueErrorG_methods.__repr__ = (B_str (*) (B_ValueError))B_valueG_methods.__repr__;
         B_ValueErrorG_methods.__serialize__ = B_ValueErrorD___serialize__;
         B_ValueErrorG_methods.__deserialize__ = B_ValueErrorD___deserialize__;
-        $register(&B_ValueErrorG_methods);
-    }
+     }
     {
         B_IdentityG_methods.$GCINFO = "B_Identity";
         B_IdentityG_methods.$superclass = ($SuperG_class)&B_valueG_methods;
@@ -4692,7 +4661,6 @@ void B___init__ () {
         B_complexG_methods.__init__ = B_complexD___init__;
         B_complexG_methods.__serialize__ = B_complexD___serialize__;
         B_complexG_methods.__deserialize__ = B_complexD___deserialize__;
-        $register(&B_complexG_methods);
     }
     {
         B_dictG_methods.$GCINFO = "B_dict";
@@ -4703,7 +4671,6 @@ void B___init__ () {
         B_dictG_methods.__init__ = B_dictD___init__;
         B_dictG_methods.__serialize__ = B_dictD___serialize__;
         B_dictG_methods.__deserialize__ = B_dictD___deserialize__;
-        $register(&B_dictG_methods);
     }
     {
         B_setG_methods.$GCINFO = "B_set";
@@ -4714,7 +4681,6 @@ void B___init__ () {
         B_setG_methods.__init__ = B_setD___init__;
         B_setG_methods.__serialize__ = B_setD___serialize__;
         B_setG_methods.__deserialize__ = B_setD___deserialize__;
-        $register(&B_setG_methods);
     }
     {
         B_NumberG_methods.$GCINFO = "B_Number";
@@ -5067,6 +5033,7 @@ void B___init__ () {
         B_LogicalD_IntegralD_i64G_methods.__or__ = B_LogicalD_IntegralD_i64D___or__;
         B_LogicalD_IntegralD_i64G_methods.__and__ = B_LogicalD_IntegralD_i64D___and__;
         B_LogicalD_IntegralD_i64G_methods.__serialize__ = B_LogicalD_IntegralD_i64D___serialize__;
+
         B_LogicalD_IntegralD_i64G_methods.__deserialize__ = B_LogicalD_IntegralD_i64D___deserialize__;
         $register(&B_LogicalD_IntegralD_i64G_methods);
     }
