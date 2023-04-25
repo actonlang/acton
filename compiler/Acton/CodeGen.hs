@@ -594,7 +594,9 @@ genCall env [] (TApp _ e ts) p      = genCall env ts e p
 genCall env [_,t] (Var _ n) (PosArg e PosNil)
   | n == primCAST                   = parens (parens (gen env t) <> gen env e)
 genCall env [row] (Var _ n) p
-  | qn == qnPrint                   = gen env qn <> parens (pretty i <> if i > 0 then comma <+> gen env p else empty)
+   | qn == qnPrint                   = if i>0
+                                       then gen env qn <> parens (gen env primNEWTUPLE <> parens (pretty i <> comma <> gen env p))
+                                       else gen env qn <> parens (gen env primNEWTUPLE0)
   where i                           = nargs p
         qn                          = unalias env n
 genCall env [row] (Var _ n) (PosArg s@Strings{} (PosArg tup PosNil))
