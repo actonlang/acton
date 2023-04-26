@@ -121,6 +121,9 @@ solveGroups env select te tt (cs:css)       = do traceM ("\n\n######### solveGro
                                                  return (cs1++cs2, eq1++eq2)
 
 solve' env select hist te tt eq cs
+  | not $ null unigoals                     = do traceM (unlines [ "### uni goal " ++ prstr t ++ " ~ " ++ prstrs alts | RUni t alts <- unigoals ])
+                                                 sequence [ unify t t' | RUni t alts <- unigoals, t' <- alts ]
+                                                 proceed hist cs
   | null solve_cs || null goals             = return (keep_cs, eq)
   | otherwise                               = do st <- currentState
                                                  traceM ("## keep:\n" ++ render (nest 8 $ vcat $ map pretty keep_cs))
@@ -133,9 +136,9 @@ solve' env select hist te tt eq cs
                                                     RRed c -> do
                                                         traceM ("### reduce " ++ prstr c)
                                                         proceed hist cs
-                                                    RUni t alts -> do
-                                                        traceM ("### uni goal " ++ prstr t ++ ", unifying with " ++ prstrs alts)
-                                                        unifyM alts (repeat t) >> proceed hist cs
+--                                                    RUni t alts -> do
+--                                                        traceM ("### uni goal " ++ prstr t ++ ", unifying with " ++ prstrs alts)
+--                                                        unifyM alts (repeat t) >> proceed hist cs
                                                     RSealed t ->
                                                         tryAlts st t [fxAction, fxPure]
                                                     RTry t alts r -> do
@@ -158,7 +161,7 @@ solve' env select hist te tt eq cs
         heads                               = [ v | Just v <- map headvar solve1 ]
         (solve2, keep2)                     = partition (maybe False (`elem` heads) . headvar) keep1
         (solve_cs, keep_cs)                 = (solve1++solve2, keep2)
-        goals                               = sortOn deco $ map condense $ group rnks
+        (unigoals, goals)                   = span isUni $ sortOn deco $ map condense $ group rnks
         group []                            = []
         group (r:rs)                        = (r : rs1) : group rs2
           where (rs1,rs2)                   = partition (==r) rs
@@ -199,6 +202,9 @@ solve' env select hist te tt eq cs
         embvs                               = embvars cs
         univs                               = univars cs
         (posvs, negvs)                      = polvars te `polcat` polvars tt
+
+        isUni RUni{}                        = True
+        isUni _                             = False
 
         deco (RRed cs)                      = (0, 0, 0, 0)
         deco (RUni t as)                    = (1, 0, length as, 0)
@@ -256,6 +262,7 @@ taint (Cast (TVar _ v) _ : cs)              = v : taint cs
 taint (Cast _ (TVar _ v) : cs)              = v : taint cs
 taint (Sel _ (TVar _ v) _ _ : cs)           = v : taint cs
 taint (Mut (TVar _ v) _ _ : cs)             = v : taint cs
+taint (Impl _ (TVar _ v) _ : cs)            = v : taint cs
 taint (_ : cs)                              = taint cs
 
 ----------------------------------------------------------------------------------------------------------------------
