@@ -112,9 +112,8 @@ ifneq ($(VERSION),$(GIT_VERSION_TAG)) # ..ensure the git tag is same as version 
 endif
 endif
 
-ENV_FILES=$(wildcard builtin/env.*)
-BUILTIN_HFILES=$(filter-out $(ENV_FILES),$(wildcard builtin/*.h))
-BUILTIN_CFILES=$(filter-out $(ENV_FILES),$(wildcard builtin/*.c))
+BUILTIN_HFILES=$(wildcard builtin/*.h)
+BUILTIN_CFILES=$(wildcard builtin/*.c)
 
 DBARCHIVE=lib/libActonDB.a
 ARCHIVES=lib/dev/libActon.a lib/rel/libActon.a lib/libActonDeps.a lib/libactongc.a
@@ -232,13 +231,6 @@ builtin/builtin_dev.o: builtin/builtin.c $(BUILTIN_HFILES) $(BUILTIN_CFILES) $(D
 
 builtin/builtin_rel.o: builtin/builtin.c $(BUILTIN_HFILES) $(BUILTIN_CFILES) $(DEPSA) $(LIBGC)
 	$(CC) $(CFLAGS) $(CFLAGS_REL) -Wno-unused-result -c $< -o$@
-
-builtin/env_dev.o: builtin/env.c builtin/env.h builtin/builtin_dev.o
-	$(CC) $(CFLAGS) $(CFLAGS_DEV) -c $< -o$@
-
-builtin/env_rel.o: builtin/env.c builtin/env.h builtin/builtin_rel.o
-	$(CC) $(CFLAGS) $(CFLAGS_REL) -c $< -o$@
-
 
 # /compiler ----------------------------------------------
 ACTONC_ALL_HS=$(wildcard compiler/*.hs compiler/**/*.hs)
@@ -545,7 +537,7 @@ stdlib/out/rel/lib/libActonProject.a: $(STDLIB_SRCFILES) dist/types/__builtin__.
 
 # /lib --------------------------------------------------
 
-LIBACTON_DEV_OFILES=builtin/builtin_dev.o builtin/env_dev.o rts/empty.o rts/io_dev.o rts/log.o rts/rts_dev.o deps/netstring_dev.o deps/yyjson_dev.o
+LIBACTON_DEV_OFILES=builtin/builtin_dev.o rts/empty.o rts/io_dev.o rts/log.o rts/rts_dev.o deps/netstring_dev.o deps/yyjson_dev.o
 OFILES += $(LIBACTON_DEV_OFILES)
 lib/dev/libActon.a: stdlib/out/dev/lib/libActonProject.a $(LIBACTON_DEV_OFILES)
 	@mkdir -p $(dir $@)
@@ -603,7 +595,6 @@ rts/pingpong: rts/pingpong.c rts/pingpong.h rts/rts.o
 		$(LDLIBS)
 		rts/rts.o \
 		builtin/builtin.o \
-		builtin/env.o \
 		$< \
 		-o $@
 

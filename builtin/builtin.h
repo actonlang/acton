@@ -109,7 +109,7 @@ typedef struct $Catcher *$Catcher;
 #include "exceptions.h"
 #include "function.h"
 #include "builtin_functions.h"
-#include "env0.h"
+#include "env.h"
 #include "staticWitnesses.h"
 
 
