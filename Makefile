@@ -168,9 +168,6 @@ backend/queue_groups.o: backend/queue_groups.c backend/queue_groups.h backend/qu
 backend/log.o: backend/log.c
 	$(CC) -o$@ $< -c $(CFLAGS_DB)
 
-backend/queue.o: backend/queue.c backend/queue.h backend/log.h backend/failure_detector/cells.h backend/failure_detector/db_queries.h $(DEPSA)
-	$(CC) -o$@ $< -c $(CFLAGS_DB)
-
 backend/skiplist.o: backend/skiplist.c backend/skiplist.h backend/log.h backend/fastrand.h $(DEPSA)
 	$(CC) -o$@ $< -c $(CFLAGS_DB)
 
