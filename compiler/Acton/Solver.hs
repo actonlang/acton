@@ -158,8 +158,8 @@ solve' env select hist te tt eq cs
                                                         return (keep_cs, eq)
 
   where (solve1, keep1)                     = partition select cs
-        heads                               = [ v | Just v <- map headvar solve1 ]
-        (solve2, keep2)                     = partition (maybe False (`elem` heads) . headvar) keep1
+        --heads                               = [ v | Just v <- map headvar solve1 ]
+        (solve2, keep2)  = ([], keep1) --                   = partition (maybe False (`elem` heads) . headvar) keep1
         (solve_cs, keep_cs)                 = (solve1++solve2, keep2)
         (unigoals, goals)                   = span isUni $ sortOn deco $ map condense $ group rnks
         group []                            = []
