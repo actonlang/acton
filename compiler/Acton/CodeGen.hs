@@ -275,7 +275,7 @@ declDecl env (Def _ n q p KwdNIL (Just t) b d fx)
 declDecl env (Class _ n q as b)     = vcat [ declDecl env1 d{ dname = methodname n (dname d) } | Decl _ ds <- b', d@Def{} <- ds ] $+$
                                       declSerialize env1 n c props sup_c $+$
                                       declDeserialize env1 n c props sup_c $+$
-                                      declCon env1 n q $+$
+                                      declCon env1 n q b $+$
                                       text "struct" <+> classname env n <+> methodtable env n <> semi
   where b'                          = subst [(tvSelf, tCon c)] b
         c                           = TC (NoQ n) (map tVar $ qbound q)
@@ -347,7 +347,9 @@ initClass env c (Decl _ ds : ss)    = vcat [ methodtable env c <> dot <> gen env
                                       initClass env1 c ss
   where env1                        = gdefine (envOf ds) env
 initClass env c (Signature{} : ss)  = initClass env c ss
-initClass env c (s : ss)            = genStmt env s $+$
+initClass env c (s : ss)
+  | isNotImpl s                     = initClass env c ss
+  | otherwise                       = genStmt env s $+$
                                       vcat [ genTopName env c <> dot <> gen env n <+> equals <+> gen env n <> semi | (n,_) <- te ] $+$
                                       initClass env1 c ss
   where te                          = envOf s `exclude` defined env
@@ -587,14 +589,13 @@ classCast env ts x q n              = parens . (parens (gen env t) <>)
 
 genNew env n p                      = newcon' env n <> parens (gen env p)
 
-declCon env n q
-  | not $ null ns                   = --trace ("### NOT GENERATING CONS FOR " ++ prstr n ++ " BECAUSE OF " ++ prstrs ns) $
-                                      empty
-  | otherwise                       = (gen env tRes <+> newcon env n <> parens (gen env pars) <+> char '{') $+$
+declCon env n q b
+  | null abstr || hasNotImpl b      = (gen env tRes <+> newcon env n <> parens (gen env pars) <+> char '{') $+$
                                       nest 4 (gen env tObj <+> gen env tmpV <+> equals <+> malloc env (gname env n) <> semi $+$
                                               gen env tmpV <> text "->" <> gen env1 classKW <+> equals <+> char '&' <> methodtable env1 n <> semi $+$
                                               initcall env1) $+$
                                       char '}'
+  | otherwise                       = empty
   where TFun _ fx r _ t             = sctype $ fst $ schemaOf env (eVar n)
         tObj                        = tCon $ TC (NoQ n) (map tVar $ qbound q)
         tRes                        = if t == tR then tR else tObj
@@ -606,7 +607,7 @@ declCon env n q
         retobj (PosArg e PosNil)    = PosArg (eCall (tApp (eQVar primCONSTCONT) [tObj]) [e, eVar tmpV]) PosNil
         retobj (PosArg e p)         = PosArg e (retobj p)
         env1                        = ldefine ((tmpV, NVar tObj) : envOf pars) env
-        ns                          = abstractAttrs env (NoQ n)
+        abstr                       = abstractAttrs env (NoQ n)
 
 malloc env n                        = text "malloc" <> parens (text "sizeof" <> parens (text "struct" <+> gen env n))
 
