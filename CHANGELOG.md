@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## [0.15.0] (2023-04-26)
+
 ### Added
 - `actonc` is now statically linked in the Acton APT repo packages [#1148]
   - enables development using Acton on Ubuntu 18.04, Debian 10 and distributions

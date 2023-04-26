@@ -18,21 +18,18 @@
 There are two types of releases, "version releases" and the `tip` release.
 
 ### Versioned release
-- this is like version 1.2.3
-- to create a release, first prepare `CHANGELOG.md` by placing the content
-  currently under the `Unreleased` heading under a version number, like version
-  `1.2.3` instead
-- this needs to be done as a PR and merged to the `main` branch
-- then tag the commit, which should now be the latest commit on `main`, with a
-    version tag
-  - the tag must be a three number version number prefixed by `v`, like `v1.2.3`
-- pushing the tag to GitHub will trigger a CI (GitHub Action) workflow that
-    builds a release
+- this is like version `1.2.3`
+- create a new branch called `release-v` followed by the version number, like
+  `release-v1.2.3`
+- prepare `CHANGELOG.md` by placing the content currently under the `Unreleased`
+  heading under a version number, like version `1.2.3` instead
+- push branch to GitHub and open PR
+- once the PR is merged, a GitHub Action workflow will take over, create a tag
+  and proceed to build the final release build and upload as an artifact
   - it will take the content from `CHANGELOG.md` and use as the GitHub Release
     notes
   - artifacts from the CI test jobs will be included in the Release as assets
-  - the Release will become visible on
-    https://github.com/actonlang/acton/releases
+  - the Release is published at https://github.com/actonlang/acton/releases
 
 ### `tip` release
 - this is the binary output from the last successful CI job on the `main`
