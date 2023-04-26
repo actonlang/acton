@@ -13,11 +13,108 @@
     in our `build-debs` CI job which builds the .deb packages used in the Acton
     APT repo
   - local compilation still defaults to a dynamically linked `actonc`
+- Parallel GC marking, speeding up mark phase significantly on computers with
+  many cores [#]
+  - Up to 16 parallel threads are used for marking
+- Add `sorted()` function [#1211]
+  - Uses timsort, which is the same sorting algorithm used by Python and Java's
+    Arrays.sort()
+- Add `re` module for regular expression matching [#1208]
+  - Offers `match()` function to match on text,
+    - Unanchored pattern matching, unlike the Python equivalent which is
+      anchored at the start per default (seems highly unintuitive)
+- Completely revamped `time` module [#1188]
+  - The high level interface is now oriented based on the two common usage
+    patterns of measuring elapsed time or telling the current date and time.
+  - `Stopwatch` measure elapsed time
+  - `time.now()` now returns a DateTime object, which is a higher level object
+- New fixed width integers: i16, i32, i64, u16, u32, u64 [#1202] [#1202] [#1203]
+- Backend queue subscriptions now done in bulk [#1127]
+  - An actor mailbox is mapped to a queue in the backend
+  - For every actor creation, the RTS would create and subscribe to the
+    corresponding queue.
+  - There's a new interface for queue subscriptions where individual queues are
+    grouped together into queue groups, so the RTS only needs to subscribe to a
+    group once
+- New acton projects are now git initialized [#1185]
+  - Using `actonc new foo` to create a new Acton project, we now check if git is
+    available and if so, initialize the repository. Also include a `.gitignore`
+- Allow overriding number of worker threads [#1199]
+  - It's been possible to set but we always used a minimum of 4, so even setting
+    threads to 2 you would end up with 4. It can be really useful for debugging
+    to run on a single WT, so honoring this is useful.
+- Add list methods `clear`, `extend` & `pop` [#1206]
+- New `--rts-no-bt` option to disable automatic backtrace printing [#1226]
+  - Automatic backtrace printing is nice for the normal case where one might run
+    a program and do not have core dumps enabled
+  - However, when doing actual debugging, one usually enables core dumps and
+    analysis it using a debugger interactively, in which case it's only annoying
+    to get a couple of screenfuls of backtrace in the terminal on every
+    iteration
+- Laid foundation for exception handling [#1228]
+  - Handles exceptions for CPS converted code
+  - Proc style functions do not currently handle exceptions properly
+  - Not fully enabled just yet, as it requires some more work
+- `int` literals between 0 and 256 are now statically allocated [#1235]
+  - Python uses the same trick for -5 to 255 for speedup for commonly used
+    integers
+  - Acton literal negative integers are really not negative integers but an
+    expression of "minus" and the integer 5 so we cannot currently do the same
+    trick for common negative values, like -1 etc
+- lists can now shrink to reduce memory usage [#1237]
+  - When list length goes below half, the list will be reallocated and copied
+    over to a new memory area
+
+### Changed
+- bash completion for `actonc` now completes `.act` files [#1246]
+- `TCPIPListener` interface has changed for callback registration [#1181]
+  - The `on_receive` and `on_error` handler for individual client connections
+    (`TCPListenConnection`) are now registered after instantiation of each
+    `TCPListenConnection` actor by calling `cb_install()`.
+    - This is most appropriately done in the on_accept callback.
+  - Unlike the old pattern, where we provided these callbacks up front to the
+    `TCPIPListener` actor, having them registered per client connection
+    naturally opens up to having different handlers per client.
 
 ### Fixed
-- fix bug in dict `__eq__`, so equality check now works [#1144]
+- Fix `@property` handling & inference [#1207]
+- Fix bug in dict `__eq__`, so equality check now works [#1144]
 - `min()` & `max()` now work as they should [#1150]
 - `isinstance` now works correctly [#1124]
+- Fix compilation with return in nested branches [#1162]
+- Signal interrupts are now properly handled in acton.rts.sleep() [#1172]
+  - Previously, a signal would interrupt the sleep and it would simply not sleep
+    long enough. Now, if interrupted, the sleep is called with the remaining
+    time until the full duration has passed.
+- Fix worker thread indexes in WTS rtsmon interface [#1176]
+- `bool([])` now correctly returns False [#1193]
+- Correct `hex`, `bin` and `ascii` functions [#1196]
+- `actonc docs --signs` now works [#1197]
+- Correct pid is now reported in rtsmon [#1177]
+- Atomic mallocs are now used where possible to speed up GC [#1225]
+  - The GC does not need to scan the value of a `str` or `bytearray`, so they
+    are now atomically allocated which means the GC will skip scanning them
+- Document more list operations [#1136]
+- Explain named tuples [#1192]
+- Improved some parser errors [#1198]
+- Now using zig v0.10.1 [#1174]
+- Update to LTS 18.28 [#1141]
+- Internal name mangling has been changed [#1160]
+- builtins has been reorganized [#1169]
+- New `make clean-all` target to clean move stuff [#1210]
+
+### Testing / CI
+- Add Ubuntu 18.04 as test platform in CI [#1149]
+  - It's not possible to build Acton on Ubuntu 18.04
+  - As actonc is now statically built, the version built on Debian now also runs
+    on Ubuntu 18.04!
+- Test all available operations on lists [#1137]
+- Test all available operations on dicts [#1140]
+- Concurrent builds disabled on MacOS due to intermittent failures [#1145]
+- web page rebuild now triggered on changes to docs/acton-by-example [#1216]
+- Deb package now also gets a deterministic name [#1217] [#1219] [#1220]
+  - Makes it much easier to install the pre-built tip packages for testing / CI
+    etc on other repos
 
 
 ## [0.14.2] (2022-11-27)
