@@ -303,7 +303,7 @@ class bytearray (object):
       NotImplemented
 
 class Msg[A] (value):
-  pass
+  NotImplemented
 
 ## Exceptions ##################################################################################
 
