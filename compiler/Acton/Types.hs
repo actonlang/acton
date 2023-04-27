@@ -1294,22 +1294,11 @@ instance Infer Expr where
 
     infer env (Dot l e n)
       | n == initKW                     = err1 n "__init__ cannot be selected by instance"
-      | not $ null protos               = case protos of
-                                            TCon _ p0 : _ -> do
-                                                p <- instwildcon env p0
-                                                let Just (wf,sc,dec) = findAttr env p n
-                                                (cs,tvs,t) <- instantiate env sc
-                                                (cs0,t0,e') <- infer env e
-                                                w <- newWitness
-                                                let t' = subst [(tvSelf,t0)] t
-                                                return (Impl w t0 p :
-                                                        cs0++cs, t', app t' (tApp (Dot l (wf $ eVar w) n) tvs) (e' : witsOf cs))
       | otherwise                       = do (cs,t,e') <- infer env e
                                              w <- newWitness
                                              t0 <- newTVar
                                              return (Sel w t n t0 :
                                                      cs, t0, eCall (eVar w) [e'])
-      where protos                      = allProtoAttr env n
 
     infer env (Rest l e n)              = do p <- newTVarOfKind PRow
                                              k <- newTVarOfKind KRow

@@ -114,27 +114,28 @@ solve env select te tt eq cs                = do (cs',eq') <- solveGroups env se
                                                  return (cs', eq'++eq)
 
 solveGroups env select te tt []             = return ([], [])
-solveGroups env select te tt (cs:css)       = do traceM ("\n\n######### solveGroup\n" ++ render (nest 4 $ vcat $ map pretty cs))
+solveGroups env select te tt (cs:css)       = do --traceM ("\n\n######### solveGroup\n" ++ render (nest 4 $ vcat $ map pretty cs))
                                                  (cs1,eq1) <- solve' env select [] te tt [] cs `catchError` \err -> Control.Exception.throw err
                                                  env <- msubst env
                                                  (cs2,eq2) <- solveGroups env select te tt css
                                                  return (cs1++cs2, eq1++eq2)
 
 solve' env select hist te tt eq cs
-  | not $ null unigoals                     = do traceM (unlines [ "### uni goal " ++ prstr t ++ " ~ " ++ prstrs alts | RUni t alts <- unigoals ])
+  | not $ null unigoals                     = do --traceM (unlines [ "### uni goal " ++ prstr t ++ " ~ " ++ prstrs alts | RUni t alts <- unigoals ])
+                                                 traceM ("### uni goals: " ++ show (sum [ length alts | RUni t alts <- unigoals ]))
                                                  sequence [ unify t t' | RUni t alts <- unigoals, t' <- alts ]
                                                  proceed hist cs
   | null solve_cs || null goals             = return (keep_cs, eq)
   | otherwise                               = do st <- currentState
-                                                 traceM ("## keep:\n" ++ render (nest 8 $ vcat $ map pretty keep_cs))
-                                                 traceM ("## solve:\n" ++ render (nest 8 $ vcat $ map pretty solve_cs))
-                                                 traceM ("## ranks:\n" ++ render (nest 8 $ vcat $ map pretty rnks))
+                                                 --traceM ("## keep:\n" ++ render (nest 8 $ vcat $ map pretty keep_cs))
+                                                 --traceM ("## solve:\n" ++ render (nest 8 $ vcat $ map pretty solve_cs))
+                                                 --traceM ("## ranks:\n" ++ render (nest 8 $ vcat $ map pretty rnks))
                                                  --traceM ("## optvs: " ++ prstrs optvs)
                                                  --traceM ("## posvs: " ++ prstrs posvs)
                                                  --traceM ("## negvs: " ++ prstrs negvs)
                                                  case head goals of
                                                     RRed c -> do
-                                                        traceM ("### reduce " ++ prstr c)
+                                                        --traceM ("### reduce " ++ prstr c)
                                                         proceed hist cs
 --                                                    RUni t alts -> do
 --                                                        traceM ("### uni goal " ++ prstr t ++ ", unifying with " ++ prstrs alts)
@@ -142,13 +143,13 @@ solve' env select hist te tt eq cs
                                                     RSealed t ->
                                                         tryAlts st t [fxAction, fxPure]
                                                     RTry t alts r -> do
-                                                        traceM ("### try goal " ++ prstr t ++ ", candidates: " ++ prstrs alts ++ if r then " (rev)" else "")
+                                                        --traceM ("### try goal " ++ prstr t ++ ", candidates: " ++ prstrs alts ++ if r then " (rev)" else "")
                                                         tryAlts st t alts
                                                     RVar t alts -> do
-                                                        traceM ("### var goal " ++ prstr t ++ ", unifying with " ++ prstrs alts)
+                                                        --traceM ("### var goal " ++ prstr t ++ ", unifying with " ++ prstrs alts)
                                                         unifyM alts (repeat t) >> proceed hist cs
                                                     ROvl t -> do
-                                                        traceM ("### ovl goal " ++ prstr t ++ ", defaulting remaining constraints")
+                                                        --traceM ("### ovl goal " ++ prstr t ++ ", defaulting remaining constraints")
                                                         (cs,eq) <- tryred (useForce env) eq cs
                                                         te <- msubst te
                                                         tt <- msubst tt
@@ -157,30 +158,28 @@ solve' env select hist te tt eq cs
                                                     RSkip ->
                                                         return (keep_cs, eq)
 
-  where (solve1, keep1)                     = partition select cs
-        --heads                               = [ v | Just v <- map headvar solve1 ]
-        (solve2, keep2)  = ([], keep1) --                   = partition (maybe False (`elem` heads) . headvar) keep1
-        (solve_cs, keep_cs)                 = (solve1++solve2, keep2)
+  where (solve_cs, keep_cs)                 = partition select cs
         (unigoals, goals)                   = span isUni $ sortOn deco $ map condense $ group rnks
         group []                            = []
         group (r:rs)                        = (r : rs1) : group rs2
           where (rs1,rs2)                   = partition (==r) rs
         rnks                                = map (rank env (taint cs)) solve_cs
-        tryAlts st t0 []                    = trace ("### FAIL " ++ prstr t0) $
+        tryAlts st t0 []                    = --trace ("### FAIL " ++ prstr t0) $
                                               noSolve cs
         tryAlts st t0 (t:ts)                = tryAlt t0 t `catchError` const ({-traceM ("### ROLLBACK " ++ prstr t0) >> -}rollbackState st >> tryAlts st t0 ts)
         tryAlt t0 (TCon _ c)
           | isProto env (tcname c)          = do p <- instwildcon env c
                                                  w <- newWitness
-                                                 traceM ("  # trying " ++ prstr t0 ++ " (" ++ prstr p ++ ")")
+                                                 --traceM ("  # trying " ++ prstr t0 ++ " (" ++ prstr p ++ ")")
                                                  proceed hist (Impl w t0 p : cs)
         tryAlt t0 t                         = do t <- instwild env (kindOf env t0) t
-                                                 traceM ("  # trying " ++ prstr t0 ++ " = " ++ prstr t)
+                                                 --traceM ("  # trying " ++ prstr t0 ++ " = " ++ prstr t)
                                                  unify t0 t
                                                  proceed (t:hist) cs
-        proceed hist cs                     = do (cs,eq) <- tryred env eq cs
+        proceed hist cs                     = do --(cs,eq) <- tryred env eq cs
                                                  te <- msubst te
                                                  tt <- msubst tt
+                                                 (cs,eq) <- simplify' env te tt eq cs
                                                  hist <- msubst hist
                                                  solve' env select hist te tt eq cs
 
@@ -245,7 +244,7 @@ rank env tainted c@(Impl _ t p)
   | not $ null $ tyfree t                   = RTry t ts False
   where ts                                  = allExtProto env t p
 
-rank env tainted (Sel _ t@TVar{} n _)       = RTry t (allConAttr env n ++ allExtProtoAttr env n) False
+rank env tainted (Sel _ t@TVar{} n _)       = RTry t (allProtoAttr env n ++ allConAttr env n ++ allExtProtoAttr env n) False
 rank env tainted (Mut t@TVar{} n _)         = RTry t (allConAttr env n) False
 
 rank env tainted (Seal t@TVar{})
@@ -1043,7 +1042,7 @@ improve env te tt eq cs
         obsvars                         = posvars0 ++ negvars0 ++ fixedvars ++ pvars ++ embedded vi ++ sealed vi
         boundvars                       = Map.keys (ubounds vi) ++ Map.keys (lbounds vi)
         boundprot                       = tyfree (Map.elems $ ubounds vi) ++ tyfree (Map.elems $ lbounds vi)
-        cyclic                          = if null (boundvars\\boundprot) then [ c | c <- cs, fromJust (headvar c) `elem` boundvars ] else []
+        cyclic                          = if null (boundvars\\boundprot) then [ c | c <- cs, headvar c `elem` boundvars ] else []
         redSeal                         = sealed vi \\ (posvars ++ negvars ++ embedded vi ++ Map.keys (ubounds vi) ++ Map.keys (lbounds vi)
                                           ++ Map.keys (pbounds vi) ++ Map.keys (mutattrs vi) ++ Map.keys (selattrs vi))
 
