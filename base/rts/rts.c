@@ -522,6 +522,9 @@ struct $ConstContG_class $ConstContG_methods = {
 // else immediately return false.
 bool ADD_waiting($Actor a, B_Msg m) {
     bool did_add = false;
+
+    assert(m != NULL);
+
     spinlock_lock(&m->$wait_lock);
     if (!FROZEN(m)) {
         a->$next = m->$waiting;
@@ -1588,6 +1591,7 @@ void wt_work_cb(uv_check_t *ev) {
             }
             m->$cont = r.cont;
             B_Msg x = (B_Msg)r.value;
+            assert(x != NULL);
             if (ADD_waiting(current, x)) {      // x->cont is a proper $Cont: x is still being processed so current was added to x->waiting
                 rtsd_printf("## AWAIT actor %ld : %s", current->$globkey, current->$class->$GCINFO);
                 current->$waitsfor = x;

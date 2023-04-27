@@ -1,0 +1,114 @@
+
+import http
+import logging
+import net
+
+#actor HttpGetter(connect_auth, host, batch_size):
+#    var count = 0
+#    var outstanding = 0
+#    var reconnects = 0
+#
+#    def request_some(conn, n):
+#        for i in range(0, n, 1):
+#            conn.get("/" + str(i), on_response)
+#            outstanding += 1
+#
+#    def on_response(conn: http.Client, resp: http.Response):
+#        count += 1
+#        outstanding -= 1
+##        if (count+outstanding) < 1234:
+##            request_some(conn, 1)
+#
+#    def on_connect(conn):
+#        print("Connected")
+#        if reconnects == 0:
+#            request_some(conn, batch_size)
+#        reconnects += 1
+#
+#
+#    def on_error(conn, err):
+#        print("Error: " + err)
+#
+#    def get_stats():
+#        return "Count: " + str(count) + " outstanding: " + str(outstanding)
+#
+#    print("Connecting to http://" + host)
+#    client = http.Client(connect_auth, host, 7000, on_connect, on_error)
+#
+#
+actor main(env):
+
+    log_handler = logging.Handler("HTTPtest")
+    log_handler.add_sink(logging.StdoutSink())
+    log = logging.Logger(log_handler)
+#    def test_http_request_parser(query, parsed) -> bool:
+#        # Go through query byte by byte, and feed it to the parser one more
+#        # byte at a time until we get a complete request
+#        for i in range(0, len(query), 1):
+#            partial_request = query[0:i+1]
+#            req, rest = http.parse_request(partial_request)
+#            if req is not None:
+#                if str(parsed) == str(req):
+#                    return True
+#                else:
+#                    print("Expected: " + str(parsed) + " got: " + str(req))
+#                    return False
+#        print("No request found")
+#        return False
+#
+#    def run_test_http_request_parser():
+#        a = b"\r\n\r\n"
+#        qs = a.split(b"\r\n\r\n", 1)
+#        tests = [
+#            (query = b"GET / HTTP/1.1\r\nHost: 127.0.0.1:8000\r\nUser-Agent: curl/7.85.0\r\nAccept: */*\r\n\r\n",
+#             parsed = http.Request("GET", "/", b"1.1", {"Host": "127.0.0.1:8000", "User-Agent": "curl/7.85.0", "Accept": "*/*"}, b"")
+#             )
+#        ]
+#        all_good = True
+#        for t in tests:
+#            if not test_http_request_parser(t.query, t.parsed):
+#                all_good = False
+#        return all_good
+#
+#
+##    host = env.argv[1]
+    tcpccap = net.TCPConnectCap(net.TCPCap(net.NetCap(env.cap)))
+##
+##    var workers = []
+##    for i in range(0, 1, 1):
+##        print("Starting worker " + str(i))
+##        workers.append(HttpGetter(connect_auth, host, 20))
+##
+##    def print_stats():
+##        for w in workers:
+##            print(w.get_stats())
+##        after 1: print_stats()
+##    print_stats()
+##
+##    def _exit():
+##        print_stats()
+##        env.exit(0)
+##
+###    after 5: _exit()
+#
+#    if not run_test_http_request_parser():
+#        await async env.exit(1)
+
+    def _on_http_connect(c):
+        c.get("/products/1", _on_http_receive)
+
+    def _on_http_receive(c, data):
+        print("YAY, got something")
+        print(data)
+        print(data.status)
+        try:
+            print(data.to_json())
+        except:
+            print("Failed to parse json")
+
+    def _on_http_error(c, errmsg):
+        print(errmsg)
+
+    print("asdf")
+    hc = http.Client(tcpccap, "https", "dummyjson.com", None, True, _on_http_connect, _on_http_error, log_handler)
+    hc2 = http.Client(tcpccap, "http", "neverssl.com", None, True, _on_http_connect, _on_http_error, log_handler)
