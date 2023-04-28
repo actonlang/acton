@@ -85,20 +85,18 @@ methName (GName m n)                = GName m (Derived n (globalName "methods"))
 derivedHead (Derived d@(Derived{}) _) = derivedHead d
 derivedHead (Derived n _)           = n
 
-staticWitnessName (Dot _ c@(Call _ _ _ KwdNil) a) = (nm, NoQ a:as) 
+staticWitnessName (Dot _ c@(Call _ _ _ KwdNil) a) = (nm, NoQ a:as)
+   where (nm,as)                    = staticWitnessName c
 staticWitnessName (Call _ (Var _ v@(GName m n)) PosNil KwdNil)
-    | m == mBuiltin 
-                                    = (Just v, [])
+    | m == mBuiltin                 = (Just v, [])
 staticWitnessName (Call _ (TApp _ (Var _ (GName m n@(Derived n1 n2))) [TCon _ (TC gn1 []), _]) _ KwdNil)
    | m == mBuiltin && n1 == nMapping && n2 == nDict && gn1 == qnInt
-                                      = (Just (gBuiltin (Derived n nInt)),[])
+                                    = (Just (gBuiltin (Derived n nInt)),[])
 staticWitnessName (Call _ (TApp _ (Var _ (GName m n@(Derived n1 n2))) [TCon _ (TC gn1 []), _]) _ KwdNil)
    | m == mBuiltin && n1 == nMapping && n2 == nDict && gn1 == qnStr
-                                      = (Just (gBuiltin (Derived n nStr)),[])
+                                    = (Just (gBuiltin (Derived n nStr)),[])
 staticWitnessName (Call _ (TApp _ (Var _ v@(GName m n)) _) PosNil KwdNil)
-    | m == mBuiltin  -- && notElem (derivedHead n) depProtos
-                                    = (Just v, [])
- --  where depProtos                  = [nContainer, nMapping, nSetP]
+    | m == mBuiltin                 = (Just v, [])
 staticWitnessName _                 = (Nothing, [])
  
 -- Environment --------------------------------------------------------------------------------------
@@ -501,18 +499,8 @@ genStmt env (Assign _ [PVar _ n (Just t)] e)
         isWitness _                 = False
         rhs                         = if isWitness n 
                                       then case staticWitnessName e of
-<<<<<<< HEAD
-<<<<<<< HEAD
                                            (Just (nm),as) -> foldr (\x y -> y <>text "->" <> myPretty (x)) (parens(myPretty (tcname(tcon t))) <> myPretty (witName nm)) as 
                                            _  ->  genExp env t e
-=======
-                                           (Just (nm),as) -> trace ("*** Witness t="++show t++"\n****e="++show e++"\n****nm="++ render( foldr (\x y -> y <>text "->" <> myPretty (x)) (parens(myPretty (tcname(tcon t))) <> myPretty (witName nm)) as)++"\n\n\n") $ foldr (\x y -> y <>text "->" <> myPretty (x)) (parens(myPretty (tcname(tcon t))) <> myPretty (witName nm)) as 
-                                           _  -> trace ("*** New t="++show t++"\n****e="++show e++"\n\n") $ genExp env t e
->>>>>>> ddd35de0 (fixed minor bugs in CodeGen.hs and staticWitnesses.c)
-=======
-                                           (Just (nm),as) -> foldr (\x y -> y <>text "->" <> myPretty (x)) (parens(myPretty (tcname(tcon t))) <> myPretty (witName nm)) as 
-                                           _  ->  genExp env t e
->>>>>>> 517831a7 (removed some tracing from CodeGen.hs)
                                       else genExp env t e
 genStmt env s                       = vcat [ gen env t <+> gen env n <> semi | (n,NVar t) <- te ] $+$
                                       gen env s
