@@ -82,10 +82,11 @@ B_Env B_EnvG_newactor(B_WorldAuth token, B_list args) {
 B_WorldAuth B_WorldAuthG_new() {
     B_WorldAuth $tmp = malloc(sizeof(struct B_WorldAuth));
     $tmp->$class = &B_WorldAuthG_methods;
-    B_WorldAuthG_methods.__init__($tmp);
+    //   B_WorldAuthG_methods.__init__($tmp);
     return $tmp;
 }
 
 B_NoneType B_WorldAuthD___init__ (B_WorldAuth self) {
     return B_None;
 }
+

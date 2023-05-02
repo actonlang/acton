@@ -165,6 +165,13 @@ void pin_actor_affinity();
 void $Actor$serialize($Actor, B_NoneType);
 void $Actor$deserialize($Actor, B_NoneType);
 
+B_bool B_MsgD___bool__(B_Msg self); 
+B_str B_MsgD___str__(B_Msg self);
+B_str B_MsgD___repr__(B_Msg self); 
+void B_MsgD___serialize__(B_Msg self, $Serial$state state);
+B_Msg B_MsgD___deserialize__(B_Msg res, $Serial$state state);
+
+
 $ROW $serialize_rts();
 void $deserialize_rts($ROW);
 

@@ -288,6 +288,20 @@ remote_db_t * db = NULL;
 
 ////////////////////////////////////////////////////////////////////////////////////////
 
+/* 
+
+The strangeness of the next 30 lines are caused by the unfortunate presence of Msg in __builtin__.act.
+
+-- This generates a stub of B_MsgD___init__ with wrong parameters, and its presence in the method table, do we define it here, but nver use it.
+-- The out-commented version is how __init__ should really be defined
+-- The B_msgG_newXX function now inlines the proper __init__; it has to be renamed because of a generated and improper B_msgG_new.
+
+*/
+
+void B_MsgD___init__() {
+    // Must (and will) never be called!
+}
+
 /*
 void B_MsgD___init__(B_Msg m, $Actor to, $Cont cont, time_t baseline, $WORD value) {
     m->$next = NULL;
@@ -301,7 +315,7 @@ void B_MsgD___init__(B_Msg m, $Actor to, $Cont cont, time_t baseline, $WORD valu
 }
 */
 
-B_Msg B_MsgG_new( $Actor to, $Cont cont, time_t baseline, $WORD value) {
+B_Msg B_MsgG_newXX( $Actor to, $Cont cont, time_t baseline, $WORD value) {
     B_Msg m = malloc(sizeof(struct B_Msg));
     m->$class = &B_MsgG_methods;
     m->$next = NULL;
@@ -315,6 +329,9 @@ B_Msg B_MsgG_new( $Actor to, $Cont cont, time_t baseline, $WORD value) {
     return m;
 }
 
+
+////////////////////////////////////////////////////////////////////////
+
 B_bool B_MsgD___bool__(B_Msg self) {
   return B_True;
 }
@@ -323,6 +340,10 @@ B_str B_MsgD___str__(B_Msg self) {
   char *s;
   asprintf(&s,"<B_Msg object at %p>",self);
   return to$str(s);
+}
+
+B_str B_MsgD___repr__(B_Msg self) {
+  return B_MsgD___str__(self);
 }
 
 void B_MsgD___serialize__(B_Msg self, $Serial$state state) {
@@ -478,6 +499,7 @@ $Cont $CONSTCONT($WORD val, $Cont cont){
 
 ////////////////////////////////////////////////////////////////////////////////////////
 
+/*
 struct B_MsgG_class B_MsgG_methods = {
     MSG_HEADER,
     UNASSIGNED,
@@ -489,6 +511,7 @@ struct B_MsgG_class B_MsgG_methods = {
     B_MsgD___str__,
     B_MsgD___str__
 };
+*/
 
 struct $ActorG_class $ActorG_methods = {
     ACTOR_HEADER,
@@ -849,7 +872,7 @@ $Catcher POP_catcher($Actor a) {
 B_Msg $ASYNC($Actor to, $Cont cont) {
     $Actor self = ($Actor)pthread_getspecific(self_key);
     time_t baseline = 0;
-    B_Msg m = B_MsgG_new(to, cont, baseline, &$Done$instance);
+    B_Msg m = B_MsgG_newXX(to, cont, baseline, &$Done$instance);
     if (self) {                                         // $ASYNC called by actor code
         m->$baseline = self->B_Msg->$baseline;
         PUSH_outgoing(self, m);
@@ -867,7 +890,7 @@ B_Msg $AFTER(B_float sec, $Cont cont) {
     $Actor self = ($Actor)pthread_getspecific(self_key);
     rtsd_printf("# AFTER by %ld", self->$globkey);
     time_t baseline = self->B_Msg->$baseline + sec->val * 1000000;
-    B_Msg m = B_MsgG_new(self, cont, baseline, &$Done$instance);
+    B_Msg m = B_MsgG_newXX(self, cont, baseline, &$Done$instance);
     PUSH_outgoing(self, m);
     return m;
 }
@@ -1405,7 +1428,7 @@ void BOOTSTRAP(int argc, char *argv[]) {
 
     root_actor = $ROOT();                           // Assumed to return $NEWACTOR(X) for the selected root actor X
     time_t now = current_time();
-    B_Msg m = B_MsgG_new(root_actor, &$InitRoot$cont, now, &$Done$instance);
+    B_Msg m = B_MsgG_newXX(root_actor, &$InitRoot$cont, now, &$Done$instance);
     if (db) {
             int ret = 0, minority_status = 0;
             while(!rts_exit) {

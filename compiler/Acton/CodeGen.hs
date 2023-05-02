@@ -138,9 +138,10 @@ modNames []                         = []
 -- Header -------------------------------------------------------------------------------------------
 
 hModule env (Module m imps stmts)   = text "#pragma" <+> text "once" $+$
-                                      include env "builtin" (modName ["builtin"]) $+$
-                                      include env "builtin" (modName ["env"]) $+$
-                                      include env "rts" (modName ["rts"]) $+$
+                                      (if inBuiltin env
+                                       then empty
+                                       else include env "builtin" (modName ["builtin"]) $+$
+                                            include env "rts" (modName ["rts"])) $+$
                                       vcat (map (include env "types") $ modNames imps) $+$
                                       hSuite env stmts $+$
                                       text "void" <+> genTopName env initKW <+> parens empty <> semi 
@@ -177,13 +178,13 @@ decl env (Class _ n q a b)          = (text "struct" <+> classname env n <+> cha
 decl env (Def _ n q p _ a _ _ fx)   = gen env (exposeMsg fx $ fromJust a) <+> genTopName env n <+> parens (params env $ prowOf p) <> semi
 
 methstub env (Class _ n q a b)      = text "extern" <+> text "struct" <+> classname env n <+> methodtable env n <> semi $+$
-                                      constub env t n r
+                                      constub env t n r b
   where TFun _ _ r _ t              = sctype $ fst $ schemaOf env (eVar n)
 methstub env Def{}                  = empty
 
-constub env t n r
-  | not $ null ns                   = empty
-  | otherwise                       = gen env t <+> newcon env n <> parens (params env r) <> semi
+constub env t n r b
+  | null ns || hasNotImpl b         = gen env t <+> newcon env n <> parens (params env r) <> semi
+  | otherwise                       = empty
   where ns                          = abstractAttrs env (NoQ n)
 
 fields env c                        = map field (subst [(tvSelf,tCon c)] te)
@@ -289,7 +290,8 @@ primNEWTUPLE0                       = gPrim "NEWTUPLE0"
 -- Implementation -----------------------------------------------------------------------------------
 
 cModule env srcbase (Module m imps stmts)
-                                    = include env "types" m $+$
+                                    = include env (if inBuiltin env then "" else "types") m $+$
+                                      (if inBuiltin env then text "#include \"../rts/rts.h\"" else empty) $+$
                                       ext_include $+$
                                       declModule env stmts $+$
                                       text "int" <+> genTopName env initFlag <+> equals <+> text "0" <> semi $+$
@@ -299,9 +301,9 @@ cModule env srcbase (Module m imps stmts)
                                               ext_init $+$
                                               initImports $+$
                                               initModule env stmts) $+$
-                                      char '}'
+                                      if inBuiltin env then empty else char '}'   -- Temporary fix until __builtin__ADD.c not necessary
   where initImports                 = vcat [ gen env (GName m initKW) <> parens empty <> semi | m <- modNames imps ]
-        external                    = hasNotImpl stmts
+        external                    = hasNotImpl stmts && not (inBuiltin env)
         ext_include                 = if external then text "#include" <+> doubleQuotes (text srcbase <> text ".ext.c") else empty
         ext_init                    = if external then genTopName env (name "__ext_init__") <+> parens empty <> semi else empty
 
@@ -391,7 +393,7 @@ initModule env (s : ss)             = genStmt env s $+$
 
 initClassBase env c q as hasCDef    = methodtable env c <> dot <> gen env gcinfoKW <+> equals <+> doubleQuotes (genTopName env c) <> semi $+$
                                       methodtable env c <> dot <> gen env superclassKW <+> equals <+> super <> semi $+$
-                                      vcat [ inherit c' n | (c',n) <- inheritedAttrs env (NoQ c) ]
+                                      vcat [ inherit c' n | (c',n) <- inheritedAttrs env (NoQ c) ] $+$ text "\n\n"
   where super                       = if null as then text "NULL" else parens (gen env qnSuperClass) <> text "&" <> methodtable' env (tcname $ head as)
         selfsubst                   = subst [(tvSelf, tCon tc)]
         tc                          = TC (NoQ c) [ tVar v | Quant v _ <- q ]
@@ -409,7 +411,9 @@ initClass env c (Decl _ ds : ss) b  = vcat [ methodtable env c <> dot <> gen env
                                       initClass env1 c ss b
   where env1                        = gdefine (envOf ds) env
 initClass env c (Signature{} : ss) b = initClass env c ss b
-initClass env c (s : ss) b           = genStmt env s $+$
+initClass env c (s : ss) b
+  | isNotImpl s                     = initClass env c ss b
+  | otherwise                       = genStmt env s $+$
                                       vcat [ genTopName env c <> dot <> gen env n <+> equals <+> gen env n <> semi | (n,_) <- te ] $+$
                                       initClass env1 c ss b
   where te                          = envOf s `exclude` defined env
@@ -676,7 +680,8 @@ declCon env n q b
         initcall env | t == tR      = text "return" <+> methodtable env n <> dot <> gen env initKW <> parens (gen env tmpV <> comma <+> gen env (retobj args)) <> semi
                      | otherwise    = methodtable env n <> dot <> gen env initKW <> parens (gen env tmpV <> comma' (gen env args)) <> semi $+$
                                       text "return" <+> gen env tmpV <> semi
-        retobj (PosArg e PosNil)    = PosArg (eCall (tApp (eQVar primCONSTCONT) [tObj]) [e, eVar tmpV]) PosNil
+        retobj PosNil               = PosNil
+     --   retobj (PosArg e PosNil)    = PosArg (eCall (tApp (eQVar primCONSTCONT) [tObj]) [e, eVar tmpV]) PosNil
         retobj (PosArg e p)         = PosArg e (retobj p)
         env1                        = ldefine ((tmpV, NVar tObj) : envOf pars) env
         abstr                       = abstractAttrs env (NoQ n)
