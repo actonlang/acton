@@ -144,10 +144,14 @@ infTop env ss                           = do --traceM ("\n## infEnv top")
                                              (cs,te,ss) <- (if stub env then infEnv else infSuiteEnv) env ss
                                              ss <- msubst ss
                                              popFX
+                                             --traceM ("######## solve TOP: " ++ show (length cs))
+                                             traceM (prstrs cs)
                                              eq <- solveAll (define (filter typeDecl te) env) te tNone cs
+                                             --traceM ("######## termred TOP")
                                              ss <- termred <$> msubst (bindWits eq ++ ss)
                                              defaultVars (tyfree ss)
                                              te <- defaultTE env  te
+                                             --traceM ("-------- done TOP")
                                              return (te, ss)
 
 class Infer a where
@@ -328,9 +332,11 @@ instance InfEnv Stmt where
     infEnv env (Decl l ds)
       | inDecl env && nodup ds          = do (cs1,te1,ds1) <- infEnv env ds
                                              return (cs1, te1, Decl l ds1)
-      | nodup ds                        = do (cs1,te1,ds1) <- infEnv (setInDecl env) ds
+      | nodup ds                        = do --traceM ("######## decls: " ++ prstrs (declnames ds))
+                                             (cs1,te1,ds1) <- infEnv (setInDecl env) ds
                                              (cs2,ds2) <- checkEnv (define te1 env) ds1
                                              (cs3,te2,eq,ds3) <- genEnv env cs2 te1 ds2
+                                             --traceM ("-------- done: " ++ prstrs (declnames ds))
                                              return (cs1++cs3, te2, withLocal (bindWits eq) $ Decl l ds3)
 
     infEnv env (Delete l targ)          = do (cs0,t0,e0,tg) <- infTarg env targ
@@ -901,14 +907,11 @@ genEnv env cs te ds
   | any typeDecl te                     = do te <- msubst te
                                              --traceM ("## genEnv types 1\n" ++ render (nest 6 $ pretty te))
                                              --traceM ("     cs: " ++ prstrs cs)
---                                             eq <- solveAll (define te env) te tNone cs
                                              (cs,eq) <- simplify (define te env) te tNone cs
                                              te <- msubst te
                                              env <- msubst env
                                              (fix_cs, gen_vs, gen_cs, te, eq) <- refine (define te env) cs te eq
---                                             te <- defaultTE env te
                                              --traceM ("## genEnv  types 2\n" ++ render (nest 6 $ pretty te))
---                                             return ([], te, eq, ds)
                                              return (fix_cs, te, eq, ds)
   | onTop env                           = do te <- msubst te
                                              --traceM ("## genEnv defs 1\n" ++ render (nest 6 $ pretty te))
@@ -921,7 +924,6 @@ genEnv env cs te ds
                                                  te1 = map (generalize gen_vs q) te
                                                  (eq1,eq2) = splitEqs (dom ws) eq
                                                  ds1 = map (abstract q ds ws eq1) ds
-                                             --te1 <- defaultTE env te1
                                              --traceM ("## genEnv defs 3 [" ++ prstrs gen_vs ++ "]\n" ++ render (nest 6 $ pretty te1))
                                              return (fix_cs, te1, eq2, ds1)
   | otherwise                           = do te <- msubst te

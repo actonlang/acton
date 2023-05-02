@@ -60,11 +60,6 @@ simplify' env te tt eq cs                   = do eq1 <- reduce env eq cs
                                                  tt1 <- msubst tt
                                                  improve env1 te1 tt1 eq1 cs1
 
-tryred env eq []                            = return ([], eq)
-tryred env eq cs                            = do eq1 <- reduce env eq cs
-                                                 cs1 <- msubst =<< collectDeferred
-                                                 return (cs1, eq1)
-
 groupCs env []                              = []
 groupCs env (c:cs)                          = close (tyfree c ++ attrfree [c]) [c] cs
   where close tvs cs0 cs
@@ -137,9 +132,6 @@ solve' env select hist te tt eq cs
                                                     RRed c -> do
                                                         --traceM ("### reduce " ++ prstr c)
                                                         proceed hist cs
---                                                    RUni t alts -> do
---                                                        traceM ("### uni goal " ++ prstr t ++ ", unifying with " ++ prstrs alts)
---                                                        unifyM alts (repeat t) >> proceed hist cs
                                                     RSealed t ->
                                                         tryAlts st t [fxAction, fxPure]
                                                     RTry t alts r -> do
@@ -150,7 +142,7 @@ solve' env select hist te tt eq cs
                                                         unifyM alts (repeat t) >> proceed hist cs
                                                     ROvl t -> do
                                                         --traceM ("### ovl goal " ++ prstr t ++ ", defaulting remaining constraints")
-                                                        (cs,eq) <- tryred (useForce env) eq cs
+                                                        (cs,eq) <- simplify' (useForce env) te tt eq cs
                                                         te <- msubst te
                                                         tt <- msubst tt
                                                         hist <- msubst hist
@@ -166,7 +158,7 @@ solve' env select hist te tt eq cs
         rnks                                = map (rank env (taint cs)) solve_cs
         tryAlts st t0 []                    = --trace ("### FAIL " ++ prstr t0) $
                                               noSolve cs
-        tryAlts st t0 (t:ts)                = tryAlt t0 t `catchError` const ({-traceM ("### ROLLBACK " ++ prstr t0) >> -}rollbackState st >> tryAlts st t0 ts)
+        tryAlts st t0 (t:ts)                = tryAlt t0 t `catchError` const (traceM ("### ROLLBACK " ++ prstr t0) >> rollbackState st >> tryAlts st t0 ts)
         tryAlt t0 (TCon _ c)
           | isProto env (tcname c)          = do p <- instwildcon env c
                                                  w <- newWitness
@@ -176,8 +168,7 @@ solve' env select hist te tt eq cs
                                                  --traceM ("  # trying " ++ prstr t0 ++ " = " ++ prstr t)
                                                  unify t0 t
                                                  proceed (t:hist) cs
-        proceed hist cs                     = do --(cs,eq) <- tryred env eq cs
-                                                 te <- msubst te
+        proceed hist cs                     = do te <- msubst te
                                                  tt <- msubst tt
                                                  (cs,eq) <- simplify' env te tt eq cs
                                                  hist <- msubst hist
