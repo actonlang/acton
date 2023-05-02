@@ -112,8 +112,8 @@ ifneq ($(VERSION),$(GIT_VERSION_TAG)) # ..ensure the git tag is same as version 
 endif
 endif
 
-BUILTIN_HFILES=$(wildcard builtin/*.h)
-BUILTIN_CFILES=$(wildcard builtin/*.c)
+BUILTIN_HFILES=$(wildcard builtin/*.h) builtin/__builtin__.h
+BUILTIN_CFILES=$(wildcard builtin/*.c) builtin/__builtin__.c
 
 DBARCHIVE=lib/libActonDB.a
 ARCHIVES=lib/dev/libActon.a lib/rel/libActon.a lib/libActonDeps.a lib/libactongc.a
@@ -525,7 +525,7 @@ dist/types/__builtin__.ty: builtin/ty/out/types/__builtin__.ty
 builtin/ty/out/types/__builtin__.ty: builtin/ty/src/__builtin__.act $(ACTONC)
 	@mkdir -p $(dir $@)
 	$(ACTC) --always-build $<
-	mv builtin/ty/out/types/__builtin__.h builtin
+	cp builtin/ty/out/types/__builtin__.h builtin/__builtin__.h 
 	cat builtin/ty/out/types/__builtin__.c builtin/__builtin__ADD.c > builtin/__builtin__.c
 
 # Build our standard library
