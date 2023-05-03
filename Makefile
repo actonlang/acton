@@ -226,10 +226,11 @@ backend/test/skiplist_test: backend/test/skiplist_test.c backend/skiplist.c
 		$(LDLIBS)
 
 # /builtin ----------------------------------------------
-builtin/builtin_dev.o: builtin/builtin.c $(BUILTIN_HFILES) $(BUILTIN_CFILES) $(DEPSA) $(LIBGC)
+builtin/__builtin__.c builtin/__builtin__.h: builtin/ty/out/types/__builtin__.ty
+builtin/builtin_dev.o: builtin/builtin.c builtin/__builtin__.h $(BUILTIN_HFILES) $(BUILTIN_CFILES) $(DEPSA) $(LIBGC)
 	$(CC) $(CFLAGS) $(CFLAGS_DEV) -Wno-unused-result -c $< -o$@
 
-builtin/builtin_rel.o: builtin/builtin.c $(BUILTIN_HFILES) $(BUILTIN_CFILES) $(DEPSA) $(LIBGC)
+builtin/builtin_rel.o: builtin/builtin.c builtin/__builtin__.h $(BUILTIN_HFILES) $(BUILTIN_CFILES) $(DEPSA) $(LIBGC)
 	$(CC) $(CFLAGS) $(CFLAGS_REL) -Wno-unused-result -c $< -o$@
 
 # /compiler ----------------------------------------------
@@ -567,23 +568,23 @@ lib/libActonDB.a: $(BACKEND_OFILES)
 
 # /rts --------------------------------------------------
 OFILES += rts/io_dev.o rts/io_rel.o rts/log.o rts/rts_dev.o rts/rts_rel.o rts/empty.o
-rts/io_dev.o: rts/io.c rts/io.h $(DEPSA) $(LIBGC)
+rts/io_dev.o: rts/io.c rts/io.h builtin/__builtin__.h $(DEPSA) $(LIBGC)
 	$(CC) $(CFLAGS) $(CFLAGS_DEV) $(LDFLAGS) \
 		-c $< -o $@
 
-rts/io_rel.o: rts/io.c rts/io.h $(DEPSA) $(LIBGC)
+rts/io_rel.o: rts/io.c rts/io.h builtin/__builtin__.h $(DEPSA) $(LIBGC)
 	$(CC) $(CFLAGS) $(CFLAGS_REL) $(LDFLAGS) \
 		-c $< -o $@
 
-rts/log.o: rts/log.c rts/log.h $(DEPSA)
+rts/log.o: rts/log.c rts/log.h builtin/__builtin__.h $(DEPSA)
 	$(CC) $(CFLAGS) $(CFLAGS_DEV) -DLOG_USE_COLOR -c $< -o$@
 
-rts/rts_dev.o: rts/rts.c rts/rts.h $(DEPSA) $(LIBGC)
+rts/rts_dev.o: rts/rts.c rts/rts.h builtin/__builtin__.h $(DEPSA) $(LIBGC)
 	$(CC) $(CFLAGS) $(CFLAGS_DEV) \
 		-Wno-int-to-void-pointer-cast -Wno-unused-result \
 		-c $< -o $@
 
-rts/rts_rel.o: rts/rts.c rts/rts.h $(DEPSA) $(LIBGC)
+rts/rts_rel.o: rts/rts.c rts/rts.h builtin/__builtin__.h $(DEPSA) $(LIBGC)
 	$(CC) $(CFLAGS) $(CFLAGS_REL) \
 		-Wno-int-to-void-pointer-cast -Wno-unused-result \
 		-c $< -o $@
@@ -653,8 +654,10 @@ clean-all: clean clean-compiler clean-deps
 clean-backend:
 	rm -f $(DBARCHIVE) $(BACKEND_OFILES) backend/actondb
 
-clean-rts:
-	rm -rf $(ARCHIVES) $(DBARCHIVE) $(OFILES) $(STDLIB_HFILES) $(STDLIB_OFILES) $(STDLIB_TYFILES) stdlib/out/ lib_deps
+# clean-builtin and clean-rts does the same thing, actually cleaning all of
+# builtin, rts & stdlib. It's rather fast to rebuild so doesn't really matter.
+clean-builtin clean-rts:
+	rm -rf $(ARCHIVES) $(DBARCHIVE) $(OFILES) builtin/__builtin__.h builtin/__builtin__.c $(STDLIB_HFILES) $(STDLIB_OFILES) $(STDLIB_TYFILES) stdlib/out/ lib_deps
 
 # == DIST ==
 #
