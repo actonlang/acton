@@ -31,7 +31,7 @@ xmlQ_Node $NodePtr2Node(xmlNodePtr node) {
     }
 
     B_str prefix = NULL;
-    if (node->ns)
+    if (node->ns && node->ns->prefix)
         prefix = to$str((char *)node->ns->prefix);
 
     B_list attributes = B_listG_new(NULL, NULL);
