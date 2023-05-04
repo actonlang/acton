@@ -35,6 +35,10 @@ void $default__init__($WORD);
                                while($c && $c != ($SuperG_class)&$T ## G_methods) $c = $c->$superclass; \
                                toB_bool($c != 0); })
 
+#define $ISINSTANCE0($x,$T)  ({ $SuperG_class $c = (($Super)$x)->$class; \
+                               while($c && $c != ($SuperG_class)&$T ## G_methods) $c = $c->$superclass; \
+                               $c != 0; })
+
 #define $ISNOTNONE(x)       ((x) != B_None ? B_True : B_False)
 
 #define $ISNONE(x)          ((x) != B_None ? B_False : B_True)

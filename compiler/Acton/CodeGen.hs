@@ -526,7 +526,18 @@ instance Gen Stmt where
     gen env (While _ e b [])        = (text "while" <+> parens (genBool env e <> text "->val") <+> char '{') $+$ nest 4 (genSuite env b) $+$ char '}'
     gen env _                       = empty
 
-genBranch env kw (Branch e b)       = (text kw <+> parens (genBool env e <> text "->val") <+> char '{') $+$ nest 4 (genSuite env b) $+$ char '}'
+
+genBranch env kw (Branch e b)       = (text kw <+> parens (genBranchExp env e) <+> char '{') $+$ nest 4 (genSuite env b) $+$ char '}'
+
+
+genBranchExp env (IsInstance _ x y) = text "$ISINSTANCE0" <> parens(gen env x <>comma <+> genQName env y)
+genBranchExp env e@(Call _ (Dot _ (Var _ w) op) (PosArg x (PosArg y PosNil)) KwdNil)
+                                    = case findQName w env of
+                                        NVar (TCon _ (TC p [TCon _ (TC t [])]))
+                                          | p==qnOrd && t==qnInt ->
+                                             text "ORD_INT" <> text (nstr op) <> parens(gen env x <>comma <+> gen env y) 
+                                        _ -> genBool env e <> text "->val" 
+genBranchExp env e                  = genBool env e <> text "->val"
 
 genElse env []                      = empty
 genElse env b                       = (text "else" <+> char '{') $+$ nest 4 (genSuite env b) $+$ char '}'
@@ -750,6 +761,27 @@ instance Gen Expr where
     gen env (None _)                = gen env qnNone
     gen env e@Strings{}             = gen env primToStr <> parens(hsep (map pretty (sval e)))
     gen env e@BStrings{}            = gen env primToBytes <> parens(hsep (map pretty (sval e)))
+    gen env (Call _ e@(Dot _ (Var _ w) fa) p@(PosArg (Call _ (TApp _ _ ts) (PosArg i@(Int _ n s) PosNil) KwdNil) PosNil) KwdNil)
+         | fa == fromatomKW         = case wInfo of
+                                         NVar (TCon _ (TC _ [TCon _ (TC tn _)]))
+                                            | tn == qnInt -> gen env i
+                                            | tn == qnI64 -> text "toB_i64" <> parens (text s) 
+                                         _                -> genCall env [] e p
+       where wInfo = findQName w env
+    gen env (Call l  e@(TApp _ (Dot _ (Var _ w) fi) _) p@(PosArg _ (PosArg (List _ es) PosNil)) KwdNil)
+      | fi == fromiterKW 
+                                     = case findQName w env of
+                                          NVar (TCon _ (TC gn1 (TCon _ (TC gn2 _):( TCon _ (TC gn3 _):_))))
+                                             | gn2==qnDict && elem gn3 hs -> text "B_mk_dict" <> parens (pretty (length es) <> comma <+> hashwit gn3 <> hsep [comma <+> gen env e | e <- es])
+                                             | gn2==qnSetT && elem gn3 hs -> text "B_mk_set" <> parens (pretty (length es) <> comma <+> hashwit gn3 <> hsep [comma <+> gen env e | e <- es])
+                                          _ -> genCall env [] e p
+      where hs                       = [qnInt, qnStr, qnFloat, qnI64, qnI32, qnI16, qnU64, qnU32, qnU16, qnBytes]
+            hashwit gn               = gen env (witName (gBuiltin (Derived nHashable (noq gn))))
+    gen env (Call l  e@(TApp _ (Dot _ (Dot _ (Var _ w) _) fi) _) p@(PosArg _ (PosArg (List _ es) PosNil)) KwdNil)
+      | fi == fromiterKW            = case findQName w env of
+                                          NVar (TCon _ (TC gn1 (TCon _ (TC gn2 _):ts)))
+                                             | gn2==qnList -> text "B_mk_list" <> parens (pretty (length es) <> hsep [comma <+> gen env e | e <- es])
+                                          _ -> genCall env [] e p
     gen env (Call _ e p _)          = genCall env [] e p
     gen env (Async _ e)             = gen env e
     gen env (TApp _ e ts)           = genInst env ts e

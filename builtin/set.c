@@ -121,7 +121,7 @@ static int B_set_contains_entry(B_set set,  B_Hashable hashwit, $WORD elem, long
     return B_set_lookkey(set, hashwit, elem, hash)->key != NULL;
 }
 
-static void B_set_add_entry(B_set set, B_Hashable hashwit, $WORD key, long hash) {
+void B_set_add_entry(B_set set, B_Hashable hashwit, $WORD key, long hash) {
     B_setentry *freeslot;
     B_setentry *entry;
     long perturb;
