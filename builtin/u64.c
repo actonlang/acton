@@ -97,6 +97,12 @@ B_str B_u64D___str__(B_u64 n) {
     return to$str(s);
 }
 
+B_str B_u64D___repr__(B_u64 n) {
+    char *s;
+    asprintf(&s,"%lu",n->val);
+    return to$str(s);
+}
+
 B_u64 toB_u64(unsigned long i) {
     B_u64 res = malloc(sizeof(struct B_u64));
     res->$class = &B_u64G_methods;

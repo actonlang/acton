@@ -79,6 +79,12 @@ B_str B_floatD___str__(B_float x) {
     return to$str(s);
 }
 
+B_str B_floatD___repr__(B_float x) {
+    char *s;
+    asprintf(&s,"%g",x->val);
+    return to$str(s);
+}
+
 B_float to$float(double x) {
     B_float res = malloc(sizeof(struct B_float));
     res->$class = &B_floatG_methods;

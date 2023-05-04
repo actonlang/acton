@@ -48,6 +48,12 @@ B_str B_rangeD___str__(B_range self) {
     return to$str(s);
 }
 
+B_str B_rangeD___repr__(B_range self) {
+    char *s;
+    asprintf(&s,"range(%ld,%ld,%ld)",self->start,self->stop,self->step);
+    return to$str(s);
+}
+
 void B_rangeD___serialize__(B_range self, $Serial$state state) {
     $ROW row = $add_header(RANGE_ID,3,state);
     row->blob[0] = ($WORD)self->start;
@@ -115,6 +121,10 @@ struct B_IteratorB_rangeG_class B_IteratorB_rangeG_methods = {
     B_IteratorB_rangeD_next
 };
 
+/*
+struct B_IterableD_range B_IterableD_rangeG_instance = {&B_IterableD_rangeG_methods};
+B_IterableD_range B_IterableD_rangeG_witness = &B_IterableD_rangeG_instance;
+*/
 //B_Iterator B_rangeD_iter(B_range rng) {
 //  return (B_Iterator)$NEW(B_IteratorB_range,rng);
 //}

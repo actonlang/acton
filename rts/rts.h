@@ -1,6 +1,5 @@
 #pragma once
 
-#include <stdatomic.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdint.h>
@@ -23,8 +22,6 @@ extern long num_wthreads;
 extern pthread_key_t pkey_wtid;
 extern pthread_key_t pkey_uv_loop;
 struct B_Msg;
-struct $Actor;
-struct $Catcher;
 struct $ConstCont;
 
 extern pthread_key_t self_key;
@@ -32,8 +29,6 @@ extern pthread_mutex_t sleep_lock;
 extern pthread_cond_t work_to_do;
 
 typedef struct B_Msg *B_Msg;
-typedef struct $Actor *$Actor;
-typedef struct $Catcher *$Catcher;
 typedef struct $ConstCont *$ConstCont;
 
 extern struct B_MsgG_class B_MsgG_methods;
@@ -48,8 +43,7 @@ extern struct $ConstContG_class $ConstContG_methods;
 #define CATCHER_HEADER          "Catcher"
 #define CLOS_HEADER             "Clos"
 
-#define $Lock                   volatile atomic_flag
-
+/*       Defined in builtin/__builtin__.h with wrong type for __init__
 struct B_MsgG_class {
     char *$GCINFO;
     int $class_id;
@@ -61,6 +55,7 @@ struct B_MsgG_class {
     B_str (*__str__)(B_Msg);
     B_str (*__repr__)(B_Msg);
 };
+*/
 struct B_Msg {
     struct B_MsgG_class *$class;
     B_Msg $next;
@@ -169,6 +164,13 @@ void pin_actor_affinity();
 
 void $Actor$serialize($Actor, B_NoneType);
 void $Actor$deserialize($Actor, B_NoneType);
+
+B_bool B_MsgD___bool__(B_Msg self); 
+B_str B_MsgD___str__(B_Msg self);
+B_str B_MsgD___repr__(B_Msg self); 
+void B_MsgD___serialize__(B_Msg self, $Serial$state state);
+B_Msg B_MsgD___deserialize__(B_Msg res, $Serial$state state);
+
 
 $ROW $serialize_rts();
 void $deserialize_rts($ROW);

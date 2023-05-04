@@ -112,9 +112,8 @@ ifneq ($(VERSION),$(GIT_VERSION_TAG)) # ..ensure the git tag is same as version 
 endif
 endif
 
-ENV_FILES=$(wildcard builtin/env.*)
-BUILTIN_HFILES=$(filter-out $(ENV_FILES),$(wildcard builtin/*.h))
-BUILTIN_CFILES=$(filter-out $(ENV_FILES),$(wildcard builtin/*.c))
+BUILTIN_HFILES=$(wildcard builtin/*.h) builtin/__builtin__.h
+BUILTIN_CFILES=$(wildcard builtin/*.c) builtin/__builtin__.c
 
 DBARCHIVE=lib/libActonDB.a
 ARCHIVES=lib/dev/libActon.a lib/rel/libActon.a lib/libActonDeps.a lib/libactongc.a
@@ -227,18 +226,12 @@ backend/test/skiplist_test: backend/test/skiplist_test.c backend/skiplist.c
 		$(LDLIBS)
 
 # /builtin ----------------------------------------------
-builtin/builtin_dev.o: builtin/builtin.c $(BUILTIN_HFILES) $(BUILTIN_CFILES) $(DEPSA) $(LIBGC)
+builtin/__builtin__.c builtin/__builtin__.h: builtin/ty/out/types/__builtin__.ty
+builtin/builtin_dev.o: builtin/builtin.c builtin/__builtin__.h $(BUILTIN_HFILES) $(BUILTIN_CFILES) $(DEPSA) $(LIBGC)
 	$(CC) $(CFLAGS) $(CFLAGS_DEV) -Wno-unused-result -c $< -o$@
 
-builtin/builtin_rel.o: builtin/builtin.c $(BUILTIN_HFILES) $(BUILTIN_CFILES) $(DEPSA) $(LIBGC)
+builtin/builtin_rel.o: builtin/builtin.c builtin/__builtin__.h $(BUILTIN_HFILES) $(BUILTIN_CFILES) $(DEPSA) $(LIBGC)
 	$(CC) $(CFLAGS) $(CFLAGS_REL) -Wno-unused-result -c $< -o$@
-
-builtin/env_dev.o: builtin/env.c builtin/env.h builtin/builtin_dev.o
-	$(CC) $(CFLAGS) $(CFLAGS_DEV) -c $< -o$@
-
-builtin/env_rel.o: builtin/env.c builtin/env.h builtin/builtin_rel.o
-	$(CC) $(CFLAGS) $(CFLAGS_REL) -c $< -o$@
-
 
 # /compiler ----------------------------------------------
 ACTONC_ALL_HS=$(wildcard compiler/*.hs compiler/**/*.hs)
@@ -533,6 +526,8 @@ dist/types/__builtin__.ty: builtin/ty/out/types/__builtin__.ty
 builtin/ty/out/types/__builtin__.ty: builtin/ty/src/__builtin__.act $(ACTONC)
 	@mkdir -p $(dir $@)
 	$(ACTC) --always-build $<
+	cp builtin/ty/out/types/__builtin__.h builtin/__builtin__.h 
+	cat builtin/ty/out/types/__builtin__.c builtin/__builtin__ADD.c > builtin/__builtin__.c
 
 # Build our standard library
 stdlib/out/dev/lib/libActonProject.a: $(STDLIB_SRCFILES) dist/types/__builtin__.ty $(DIST_HFILES) $(ACTONC) $(DEPSA) $(LIBGC)
@@ -545,7 +540,7 @@ stdlib/out/rel/lib/libActonProject.a: $(STDLIB_SRCFILES) dist/types/__builtin__.
 
 # /lib --------------------------------------------------
 
-LIBACTON_DEV_OFILES=builtin/builtin_dev.o builtin/env_dev.o rts/empty.o rts/io_dev.o rts/log.o rts/rts_dev.o deps/netstring_dev.o deps/yyjson_dev.o
+LIBACTON_DEV_OFILES=builtin/builtin_dev.o rts/empty.o rts/io_dev.o rts/log.o rts/rts_dev.o deps/netstring_dev.o deps/yyjson_dev.o
 OFILES += $(LIBACTON_DEV_OFILES)
 lib/dev/libActon.a: stdlib/out/dev/lib/libActonProject.a $(LIBACTON_DEV_OFILES)
 	@mkdir -p $(dir $@)
@@ -573,23 +568,23 @@ lib/libActonDB.a: $(BACKEND_OFILES)
 
 # /rts --------------------------------------------------
 OFILES += rts/io_dev.o rts/io_rel.o rts/log.o rts/rts_dev.o rts/rts_rel.o rts/empty.o
-rts/io_dev.o: rts/io.c rts/io.h $(DEPSA) $(LIBGC)
+rts/io_dev.o: rts/io.c rts/io.h builtin/__builtin__.h $(DEPSA) $(LIBGC)
 	$(CC) $(CFLAGS) $(CFLAGS_DEV) $(LDFLAGS) \
 		-c $< -o $@
 
-rts/io_rel.o: rts/io.c rts/io.h $(DEPSA) $(LIBGC)
+rts/io_rel.o: rts/io.c rts/io.h builtin/__builtin__.h $(DEPSA) $(LIBGC)
 	$(CC) $(CFLAGS) $(CFLAGS_REL) $(LDFLAGS) \
 		-c $< -o $@
 
-rts/log.o: rts/log.c rts/log.h $(DEPSA)
+rts/log.o: rts/log.c rts/log.h builtin/__builtin__.h $(DEPSA)
 	$(CC) $(CFLAGS) $(CFLAGS_DEV) -DLOG_USE_COLOR -c $< -o$@
 
-rts/rts_dev.o: rts/rts.c rts/rts.h $(DEPSA) $(LIBGC)
+rts/rts_dev.o: rts/rts.c rts/rts.h builtin/__builtin__.h $(DEPSA) $(LIBGC)
 	$(CC) $(CFLAGS) $(CFLAGS_DEV) \
 		-Wno-int-to-void-pointer-cast -Wno-unused-result \
 		-c $< -o $@
 
-rts/rts_rel.o: rts/rts.c rts/rts.h $(DEPSA) $(LIBGC)
+rts/rts_rel.o: rts/rts.c rts/rts.h builtin/__builtin__.h $(DEPSA) $(LIBGC)
 	$(CC) $(CFLAGS) $(CFLAGS_REL) \
 		-Wno-int-to-void-pointer-cast -Wno-unused-result \
 		-c $< -o $@
@@ -603,7 +598,6 @@ rts/pingpong: rts/pingpong.c rts/pingpong.h rts/rts.o
 		$(LDLIBS)
 		rts/rts.o \
 		builtin/builtin.o \
-		builtin/env.o \
 		$< \
 		-o $@
 
@@ -660,8 +654,10 @@ clean-all: clean clean-compiler clean-deps
 clean-backend:
 	rm -f $(DBARCHIVE) $(BACKEND_OFILES) backend/actondb
 
-clean-rts:
-	rm -rf $(ARCHIVES) $(DBARCHIVE) $(OFILES) $(STDLIB_HFILES) $(STDLIB_OFILES) $(STDLIB_TYFILES) stdlib/out/ lib_deps
+# clean-builtin and clean-rts does the same thing, actually cleaning all of
+# builtin, rts & stdlib. It's rather fast to rebuild so doesn't really matter.
+clean-builtin clean-rts:
+	rm -rf $(ARCHIVES) $(DBARCHIVE) $(OFILES) builtin/__builtin__.h builtin/__builtin__.c $(STDLIB_HFILES) $(STDLIB_OFILES) $(STDLIB_TYFILES) stdlib/out/ lib_deps
 
 # == DIST ==
 #

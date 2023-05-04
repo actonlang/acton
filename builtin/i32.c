@@ -92,6 +92,12 @@ B_str B_i32D___str__(B_i32 n) {
     return to$str(s);
 }
 
+B_str B_i32D___repr__(B_i32 n) {
+    char *s;
+    asprintf(&s,"%d",n->val);
+    return to$str(s);
+}
+
 B_i32 toB_i32(int i) {
     B_i32 res = malloc(sizeof(struct B_i32));
     res->$class = &B_i32G_methods;

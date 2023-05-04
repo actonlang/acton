@@ -20,7 +20,7 @@ static $WORD mkstr($WORD w) {
     B_value w1 = (B_value)w;
     return w1->$class->__str__(w);
 }
-
+/*
 B_NoneType B_print(int size, ...) {
     va_list args;
     va_start(args,size);
@@ -37,8 +37,8 @@ B_NoneType B_print(int size, ...) {
      va_end(args);
      return B_None;
 }
-
-/*        
+*/
+        
 B_NoneType B_print(B_tuple t) {
     if (t->size > 0) {
         B_value elem = (B_value)t->components[0];
@@ -52,7 +52,7 @@ B_NoneType B_print(B_tuple t) {
     putchar('\n');
     return B_None;
 }
-*/
+
 // enumerate //////////////////////////////////////////////////////////////////////////
 
 void B_IteratorD_enumerate_init(B_IteratorD_enumerate self, B_Iterator it, B_int n) {

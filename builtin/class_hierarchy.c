@@ -42,6 +42,12 @@ B_str B_valueD___str__(B_value self) {
     return to$str(s);
 }
 
+B_str B_valueD___repr__(B_value self) {
+    char *s;
+    asprintf(&s,"<%s object at %p>",self->$class->$GCINFO,self);
+    return to$str(s);
+}
+
 B_str B_objectD___str__(B_object self) {
     char *s;
     asprintf(&s,"<%s object at %p>",self->$class->$GCINFO,self);

@@ -100,6 +100,10 @@ B_str B_listD___str__(B_list self) {
     return B_strD_join_par('[',s2,']');
 }
 
+B_str B_listD___repr__(B_list self) {
+    return B_listD___str__(self);
+}
+
 void B_listD___serialize__(B_list self,$Serial$state state) {
     B_int prevkey = (B_int)B_dictD_get(state->done,(B_Hashable)B_HashableD_WORDG_witness,self,NULL);
     if (prevkey) {
@@ -511,7 +515,8 @@ struct B_SequenceD_listG_class B_SequenceD_listG_methods = {
     B_SequenceD_listD_append,
     B_SequenceD_listD_reverse
 };
-    
+
+/*
 struct B_TimesD_SequenceD_list B_TimesD_SequenceD_list_instance;
 struct B_SequenceD_list B_SequenceD_list_instance;
 
@@ -536,3 +541,4 @@ struct B_TimesD_SequenceD_list B_TimesD_SequenceD_list_instance = {
     (B_Sequence)&B_SequenceD_list_instance
 };
 B_TimesD_SequenceD_list B_TimesD_SequenceD_listG_witness = &B_TimesD_SequenceD_list_instance;
+*/

@@ -397,7 +397,7 @@ parseActFile opts paths actFile = do
                     let doStub = exists && C.autostub opts
                     when (doStub && C.debug opts) $ do putStrLn("Found matching C file (" ++ makeRelative (srcDir paths) cFile
                                                         ++ "), assuming stub compilation for " ++ makeRelative (srcDir paths) srcfile)
-                    return ((takeFileName srcfile) == "__builtin__.act" || C.stub opts || doStub)
+                    return (C.stub opts || doStub)
               where cFile = replaceExtension srcfile ".c"
 
 
@@ -704,20 +704,21 @@ runRestPasses opts paths env0 parsed stubMode = do
                               arCmd = ar paths ++ " rcs " ++ aFile ++ " " ++ oFile
                           writeFile hFile h
                           writeFile cFile c
-                          iff (C.ccmd opts) $ do
-                              putStrLn ccCmd
-                              putStrLn arCmd
-                          writeFile buildF $ unlines ["#!/bin/sh", "cd ..", ccCmd, arCmd]
-                          (returnCode, ccStdout, ccStderr) <- readCreateProcessWithExitCode (shell $ ccCmd ++ " && " ++ arCmd){ cwd = Just (takeDirectory (projPath paths)) } ""
-                          timeCC <- getTime Monotonic
-                          iff (C.timing opts) $ putStrLn("    Pass: C compilation   : " ++ fmtTime (timeCC - timeCodeWrite))
-                          case returnCode of
-                              ExitSuccess -> return()
-                              ExitFailure _ -> do printIce "compilation of generated C code failed"
-                                                  putStrLn $ "cc stdout:\n" ++ ccStdout
-                                                  putStrLn $ "cc stderr:\n" ++ ccStderr
-                                                  System.Exit.exitFailure
-                                         )
+                          iff (takeFileName (srcFile paths mn) /= "__builtin__.act") $ do
+                             iff (C.ccmd opts) $ do
+                                 putStrLn ccCmd
+                                 putStrLn arCmd
+                             writeFile buildF $ unlines ["#!/bin/sh", "cd ..", ccCmd, arCmd]
+                             (returnCode, ccStdout, ccStderr) <- readCreateProcessWithExitCode (shell $ ccCmd ++ " && " ++ arCmd){ cwd = Just (takeDirectory (projPath paths)) } ""
+                             timeCC <- getTime Monotonic
+                             iff (C.timing opts) $ putStrLn("    Pass: C compilation   : " ++ fmtTime (timeCC - timeCodeWrite))
+                             case returnCode of
+                                 ExitSuccess -> return()
+                                 ExitFailure _ -> do printIce "compilation of generated C code failed"
+                                                     putStrLn $ "cc stdout:\n" ++ ccStdout
+                                                     putStrLn $ "cc stderr:\n" ++ ccStderr
+                                                     System.Exit.exitFailure
+                                            )
 
                       return $ Acton.Env.addMod mn iface (env0 `Acton.Env.withModulesFrom` env)
 

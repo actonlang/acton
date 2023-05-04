@@ -235,6 +235,10 @@ B_str B_setD___str__(B_set self) {
     return B_strD_join_par('{',s2,'}');
 }
 
+B_str B_setD___repr__(B_set self) {
+    return B_setD___str__(self);
+}
+
 void B_setD___serialize__(B_set self, $Serial$state state) {
     B_int prevkey = (B_int)B_dictD_get(state->done,(B_Hashable)B_HashableD_WORDG_witness,self,NULL);
     if (prevkey) {

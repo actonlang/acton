@@ -50,3 +50,5 @@
 #include "function.c"
 #include "builtin_functions.c"
 #include "__builtin__.c"
+#include "env.c"
+#include "staticWitnesses.c"

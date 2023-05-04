@@ -9,7 +9,7 @@ void reQ___ext_init__() {
 
 // TODO: use u64 instead of unt for arg_start_pos
 reQ_Match reQ__match (B_str arg_pattern, B_str arg_text, B_int arg_start_pos) {
-    B_Hashable hwit = B_HashableD_strG_new();
+    B_Hashable hwit = B_HashableD_strG_witness;
     B_SequenceD_list swit = B_SequenceD_listG_witness;
     B_list groups = B_listG_new(NULL, NULL);
     B_dict named_groups = $NEW(B_dict, hwit, NULL, NULL);

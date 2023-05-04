@@ -12,6 +12,7 @@
 #include <string.h>
 #include <math.h>
 #include <ctype.h>
+#include <stdatomic.h>
 
 #include "common.h"
 
@@ -35,6 +36,51 @@ typedef struct $SerializableG_class *$SerializableG_class;
 
 struct $Serializable;
 typedef struct $Serializable  *$Serializable;
+
+// The following declarations moved here from function.h
+
+struct $proc;
+struct $action;
+struct $mut;
+struct $pure;
+struct $Cont;
+
+typedef struct $proc *$proc;
+typedef struct $action *$action;
+typedef struct $mut *$mut;
+typedef struct $pure *$pure;
+typedef struct $Cont *$Cont;
+
+enum $RTAG { $RDONE, $RFAIL, $RCONT, $RWAIT };
+typedef enum $RTAG $RTAG;
+
+struct $R {
+    $RTAG tag;
+    $Cont cont;
+    $WORD value;
+};
+typedef struct $R $R;
+
+#define $RU_CONT $R_CONT        // Temporary workaround until Prim names get their own prefix
+#define $RU_FAIL $R_FAIL        // Temporary workaround until Prim names get their own prefix
+
+#define $R_CONT(cont, arg)      ($R){$RCONT, (cont), ($WORD)(arg)}
+#define $R_DONE(value)          ($R){$RDONE, NULL,   (value)}
+#define $R_FAIL(value)          ($R){$RFAIL, NULL,   (value)}
+#define $R_WAIT(cont, value)    ($R){$RWAIT, (cont), (value)}
+
+/////////////////////////////////////////////////////////
+
+// And the following from rts.h /////////////////////////
+
+struct $Actor;
+struct $Catcher;
+typedef struct $Actor *$Actor;
+typedef struct $Catcher *$Catcher;
+
+#define $Lock                   volatile atomic_flag
+
+///////////////////////////////////////////////////////////
 
 #include "__builtin__.h"
 #include "class_hierarchy.h"
@@ -63,5 +109,7 @@ typedef struct $Serializable  *$Serializable;
 #include "exceptions.h"
 #include "function.h"
 #include "builtin_functions.h"
+#include "env.h"
+#include "staticWitnesses.h"
 
 

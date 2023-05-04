@@ -26,7 +26,7 @@ B_tuple B_tupleG_new(int,...);
 
 #define $NEWTUPLE0  ({ B_tuple $t = malloc(sizeof(struct B_tuple));       \
             $t->$class = &B_tupleG_methods;                               \
-            $t->$class->__init__($t);                                   \
+            $t->$class->__init__($t,0);                                  \
             $t; })
 
 
