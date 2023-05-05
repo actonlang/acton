@@ -10,7 +10,7 @@ endif
 
 ACTONC=dist/bin/actonc
 ACTC=dist/bin/actonc
-ZIG_VERSION:=0.10.1
+ZIG_VERSION:=0.11.0-dev.2985+3f3b1a680
 CC=$(TD)/deps/zig/zig cc
 CXX=$(TD)/deps/zig/zig c++
 ZIG=deps/zig
@@ -721,7 +721,7 @@ deps/zig: deps/zig-$(ZIG_OS)-$(ZIG_ARCH)-$(ZIG_VERSION).tar.xz
 	cp -a deps/zig-extras/* $@
 
 deps/zig-$(ZIG_OS)-$(ZIG_ARCH)-$(ZIG_VERSION).tar.xz:
-	curl -o $@ https://ziglang.org/download/$(ZIG_VERSION)/zig-$(ZIG_OS)-$(ZIG_ARCH)-$(ZIG_VERSION).tar.xz
+	curl -o $@ https://ziglang.org/builds/zig-$(ZIG_OS)-$(ZIG_ARCH)-$(ZIG_VERSION).tar.xz
 
 # For releases, URL looks like:
 #curl -o $@ https://ziglang.org/download/$(ZIG_VERSION)/zig-$(ZIG_OS)-$(ZIG_ARCH)-$(ZIG_VERSION).tar.xz
