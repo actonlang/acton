@@ -79,9 +79,9 @@ xmlQ_Node xmlQ_decode(B_str data) {
 
 B_str xmlQ_node2str(B_str tag, B_str nsdefs, B_str prefix, B_str attrs, B_str cont, B_str text, B_str tail) {
     int res_bytes = 2*tag->nbytes + 2*(prefix ? prefix->nbytes+1:0) + nsdefs->nbytes + attrs->nbytes +
-                    text->nbytes + cont->nbytes + tail->nbytes + 5; // 5 = len ("<" + ">" + "</" + ">")
+                    (text ? text->nbytes:0) + cont->nbytes + (tail ? tail->nbytes:0) + 5; // 5 = len ("<" + ">" + "</" + ">")
     int res_chars = 2*tag->nchars + 2*(prefix ? prefix->nchars+1:0) + nsdefs->nchars + attrs->nchars +
-                    text->nchars + cont->nchars + tail->nchars + 5;
+                    (text ? text->nchars:0) + cont->nchars + (tail ? tail->nchars:0) + 5;
     int one_line = 0;
     B_str res;
     NEW_UNFILLED_STR(res, res_bytes, res_chars);
@@ -95,7 +95,10 @@ B_str xmlQ_node2str(B_str tag, B_str nsdefs, B_str prefix, B_str attrs, B_str co
     memcpy(p, nsdefs->str, nsdefs->nbytes); p += nsdefs->nbytes;
     memcpy(p, attrs->str, attrs->nbytes); p += attrs->nbytes;
     *p++ = '>';
-    memcpy(p, text->str, text->nbytes); p += text->nbytes;
+    if (text) {
+        memcpy(p, text->str, text->nbytes);
+        p += text->nbytes;
+    }
     memcpy(p, cont->str, cont->nbytes); p += cont->nbytes;
     *p++ = '<';
     *p++ = '/';
@@ -105,7 +108,10 @@ B_str xmlQ_node2str(B_str tag, B_str nsdefs, B_str prefix, B_str attrs, B_str co
     }
     memcpy(p, tag->str, tag->nbytes); p += tag->nbytes;
     *p++ = '>';
-    memcpy(p, tail->str, tail->nbytes); p += tail->nbytes;
+    if (tail) {
+        memcpy(p, tail->str, tail->nbytes);
+        p += tail->nbytes;
+    }
     return res;
 }
 
