@@ -22,6 +22,10 @@ actor main(env):
         print()
 
     d = xml.decode(test_xml[0])
+
+    # Test text=None and tail=None
+    e = xml.encode(xml.Node("tag", [(None, "http://example.com")], None, [], [], None, None))
+
 # TODO: fix so this works!
 #    if d.name != "a":
 #        print("Wrong tag name")
