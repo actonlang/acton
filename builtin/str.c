@@ -23,6 +23,10 @@
 
 #include "../deps/libutf8proc/utf8proc.h"
 
+GC_word B_strD_gcbm[GC_BITMAP_SIZE(struct B_str)];
+GC_word B_bytearrayD_gcbm[GC_BITMAP_SIZE(struct B_bytearray)];
+GC_word B_bytesD_gcbm[GC_BITMAP_SIZE(struct B_bytes)];
+
 // Auxiliaries, some used for both str and bytearray implementations ////////////////////////////////////////////////////////
 
 static unsigned char nul = 0;

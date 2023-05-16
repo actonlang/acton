@@ -14,6 +14,8 @@
 
 #include <math.h>
 
+GC_word B_floatD_gcbm[GC_BITMAP_SIZE(struct B_float)];
+
 // General methods ///////////////////////////////////////////////////////////////////////
 
 B_float B_floatG_new(B_atom a) {

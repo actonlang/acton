@@ -21,6 +21,7 @@
 static $WORD _dummy;
 #define dummy (&_dummy)
 
+GC_word B_setD_gcbm[GC_BITMAP_SIZE(struct B_set)];
 
 // Auxiliary functions ///////////////////////////////////////////////////////////////////////////////
 

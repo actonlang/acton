@@ -15,6 +15,8 @@
 #define GC_THREADS 1
 #include "gc.h"
 
+GC_word B_intD_gcbm[GC_BITMAP_SIZE(struct B_int)];
+
 // General methods ///////////////////////////////////////////////////////////////////////
 
 int set_str(zz_ptr a, char *str);

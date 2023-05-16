@@ -298,6 +298,7 @@ The strangeness of the next 30 lines are caused by the unfortunate presence of M
 
 */
 
+GC_word B_MsgD_gcbm[GC_BITMAP_SIZE(struct B_Msg)];
 void B_MsgD___init__() {
     // Must (and will) never be called!
 }

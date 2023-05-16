@@ -36,6 +36,8 @@ struct $table_struct {
 
 #define PERTURB_SHIFT 5
 
+GC_word B_dictD_gcbm[GC_BITMAP_SIZE(struct B_dict)];
+
 // Internal routines //////////////////////////////////////////////////////////////////
 
 /*
