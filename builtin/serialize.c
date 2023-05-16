@@ -54,6 +54,7 @@ B_int B_HashableD_WORD_hash(B_HashableD_WORD wit, $WORD a) {
 }
 
 struct B_HashableD_WORDG_class B_HashableD_WORDG_methods = {
+    0,
     "B_HashableD_WORD",
     UNASSIGNED,
     ($SuperG_class)&B_HashableG_methods,

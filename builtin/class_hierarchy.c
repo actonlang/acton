@@ -38,19 +38,19 @@ B_NoneType B_objectD___init__ (B_object self) {
 */
 B_str B_valueD___str__(B_value self) {
     char *s;
-    asprintf(&s,"<%s object at %p>",self->$class->$GCINFO,self);
+    asprintf(&s,"<%s object at %p>",self->$class->$name,self);
     return to$str(s);
 }
 
 B_str B_valueD___repr__(B_value self) {
     char *s;
-    asprintf(&s,"<%s object at %p>",self->$class->$GCINFO,self);
+    asprintf(&s,"<%s object at %p>",self->$class->$name,self);
     return to$str(s);
 }
 
 B_str B_objectD___str__(B_object self) {
     char *s;
-    asprintf(&s,"<%s object at %p>",self->$class->$GCINFO,self);
+    asprintf(&s,"<%s object at %p>",self->$class->$name,self);
     return to$str(s);
 }
 
@@ -61,8 +61,7 @@ B_bool B_objectD___bool__(B_object self) {
     return B_True;
 }
 
-struct $SerializableG_class $SerializableG_methods = {"$Serializable",UNASSIGNED,NULL, $SerializableD___init__,NULL,NULL};
-
+struct $SerializableG_class $SerializableG_methods = {0,"$Serializable",UNASSIGNED,NULL, $SerializableD___init__,NULL,NULL};
 //struct B_valueG_class B_valueG_methods = {"B_value",UNASSIGNED,($SuperG_class)&$SerializableG_methods,B_valueD___init__,NULL,NULL, B_valueD___bool__,B_valueD___str__,B_valueD___str__};
 
 //struct B_objectG_class B_objectG_methods = {"B_object",UNASSIGNED,($SuperG_class)&B_valueG_methods,B_objectD___init__,NULL,NULL,B_objectD___bool__,B_objectD___str__,B_objectD___str__};

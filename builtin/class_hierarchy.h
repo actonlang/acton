@@ -4,7 +4,8 @@
 
 
 struct $SuperG_class {
-    char *$GCINFO;
+    GC_descr $GCdescr;
+    char *$name;
     int $class_id;
     $SuperG_class $superclass;
 };
@@ -12,6 +13,7 @@ struct $SuperG_class {
 struct $Super {
     $SuperG_class $class;
 };
+extern GC_word $SuperD_gcbm[GC_BITMAP_SIZE(struct $Super)];
 
 /*
 typedef struct $InitializableG_class *$InitializableG_class;
@@ -19,7 +21,8 @@ typedef struct $InitializableG_class *$InitializableG_class;
 typedef struct $Initializable  *$Initializable;
 
 struct $InitializableG_class {
-    char *$GCINFO;
+    GC_descr $GCdescr;
+    char *$name;
     int $class_id;
     $SuperG_class $superclass;                   // = NULL
     B_NoneType (*__init__)($Initializable);
@@ -28,6 +31,7 @@ struct $InitializableG_class {
 struct $Initializable {
     struct $InitializableG_class *$class;
 };
+extern GC_word $InitializableD_gcbm[GC_BITMAP_SIZE(struct $Initializable)];
 
 extern struct $InitializableG_class $InitializableG_methods;
 $Initializable $InitializableG_new();
@@ -36,7 +40,8 @@ $Initializable $InitializableG_new();
 // Serializable //////////////////////////////////////////////////////
 
 struct $SerializableG_class {
-    char *$GCINFO;
+    GC_descr $GCdescr;
+    char *$name;
     int $class_id;
     $SuperG_class $superclass;                   // = InitializableG_methods
     B_NoneType (*__init__)($Serializable);
@@ -47,6 +52,7 @@ struct $SerializableG_class {
 struct $Serializable {
     struct $SerializableG_class *$class;
 };
+extern GC_word $SerializableD_gcbm[GC_BITMAP_SIZE(struct $Serializable)];
 
 extern struct $SerializableG_class $SerializableG_methods;
 $Serializable $SerializableG_new();

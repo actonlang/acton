@@ -74,6 +74,7 @@ B_tuple B_tupleD___deserialize__(B_tuple self, $Serial$state state) {
 }
 
 struct B_tupleG_class B_tupleG_methods = {
+    0,
     "tuple",
     UNASSIGNED,
     ($SuperG_class)&B_valueG_methods,
@@ -118,8 +119,7 @@ B_IteratorD_tuple B_IteratorD_tuple$_deserialize(B_IteratorD_tuple res, $Serial$
     return res;
 }
 
-struct B_IteratorD_tupleG_class B_IteratorD_tupleG_methods = {"B_IteratorD_tuple",UNASSIGNED,($SuperG_class)&B_IteratorG_methods,B_IteratorD_tupleD_init,
-                                                        B_IteratorD_tupleD_serialize,B_IteratorD_tuple$_deserialize,B_IteratorD_tupleD_bool,B_IteratorD_tupleD_str,B_IteratorD_tupleD_str,B_IteratorD_tupleD_next};
+struct B_IteratorD_tupleG_class B_IteratorD_tupleG_methods = {0,"B_IteratorD_tuple",UNASSIGNED,($SuperG_class)&B_IteratorG_methods,B_IteratorD_tupleD_init,                                                        B_IteratorD_tupleD_serialize,B_IteratorD_tuple$_deserialize,B_IteratorD_tupleD_bool,B_IteratorD_tupleD_str,B_IteratorD_tupleD_str,B_IteratorD_tupleD_next};
 
 
 // Iterable ///////////////////////////////////////////////////////////////
@@ -140,6 +140,7 @@ B_IterableD_tuple B_IterableD_tupleD___deserialize__(B_IterableD_tuple self, $Se
     return res;
 }
 struct B_IterableD_tupleG_class B_IterableD_tupleG_methods = {
+    0,
     "B_IterableD_tuple",
     UNASSIGNED,
     ($SuperG_class)&B_IterableG_methods,
@@ -219,6 +220,7 @@ B_NoneType B_SliceableD_tupleD___delslice__ (B_SliceableD_tuple wit, B_tuple sel
 }
 
 struct B_SliceableD_tupleG_class B_SliceableD_tupleG_methods = {
+    0,
     "B_SliceableD_tuple",
     UNASSIGNED,
     ($SuperG_class)&B_SliceableG_methods,
@@ -274,6 +276,7 @@ B_int B_HashableD_tupleD___hash__ (B_HashableD_tuple wit, B_tuple tup) {
 }
 
 struct B_HashableD_tupleG_class B_HashableD_tupleG_methods = {
+    0,
     "B_HashableD_tuple",
     UNASSIGNED,
     ($SuperG_class)&B_HashableG_methods,

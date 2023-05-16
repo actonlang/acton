@@ -13,7 +13,8 @@ typedef struct lambda$2 *lambda$2;
 typedef struct Pingpong *Pingpong;
 
 struct lambda$1G_class {
-    char *$GCINFO;
+    GC_descr $GCdescr;
+    char *$name;
     $SuperG_class $superclass;
     void (*__init__)(lambda$1, Pingpong, B_int);
     void (*__serialize__)(lambda$1, B_NoneType);
@@ -28,9 +29,11 @@ struct lambda$1 {
     Pingpong self;
     B_int count;
 };
+extern GC_word lambda$1D_gcbm[GC_BITMAP_SIZE(struct lambda$1)];
 
 struct lambda$2G_class {
-    char *$GCINFO;
+    GC_descr $GCdescr;
+    char *$name;
     $SuperG_class $superclass;
     void (*__init__)(lambda$2, Pingpong);
     void (*__serialize__)(lambda$2, B_NoneType);
@@ -44,9 +47,11 @@ struct lambda$2 {
     };
     Pingpong self;
 };
+extern GC_word lambda$2D_gcbm[GC_BITMAP_SIZE(struct lambda$2)];
 
 struct PingpongG_class {
-    char *$GCINFO;
+    GC_descr $GCdescr;
+    char *$name;
     $SuperG_class $superclass;
     $R (*__init__)(Pingpong, B_Env, $Cont);
     void (*__serialize__)(Pingpong, B_NoneType);
@@ -62,6 +67,7 @@ struct Pingpong {
     B_int i;
     B_int count;
 };
+extern GC_word PingpongD_gcbm[GC_BITMAP_SIZE(struct Pingpong)];
 
 extern struct lambda$1G_class lambda$1G_methods;
 extern struct lambda$2G_class lambda$2G_methods;

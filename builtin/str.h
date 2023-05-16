@@ -6,6 +6,7 @@ struct B_str {
     int nchars;              // length of str in Unicode chars
     unsigned char *str;      // str is UTF-8 encoded.
 };
+extern GC_word B_strD_gcbm[GC_BITMAP_SIZE(struct B_str)];
 
 // Constructor; str must be a null-terminated, correctly UTF-8-encoded string.
 // The constructor checks this and returns a B_str value.
@@ -18,7 +19,8 @@ unsigned char *fromB_str(B_str str);
 typedef struct B_IteratorB_str *B_IteratorB_str; ;
 
 struct B_IteratorB_strG_class {
-    char *$GCINFO;
+    GC_descr $GCdescr;
+    char *$name;
     int $class_id;
     $SuperG_class $superclass;
     B_NoneType (*__init__)(B_IteratorB_str, B_str);
@@ -35,6 +37,7 @@ struct B_IteratorB_str {
     B_str src;
     int nxt;
 };
+extern GC_word B_IteratorB_strD_gcbm[GC_BITMAP_SIZE(struct B_IteratorB_str)];
 
 extern struct  B_IteratorB_strG_class  B_IteratorB_strG_methods;
 B_IteratorB_str B_IteratorB_strG_new(B_str);
@@ -49,6 +52,7 @@ struct B_bytearray {
     unsigned char *str;
     int capacity;
 };
+extern GC_word B_bytearrayD_gcbm[GC_BITMAP_SIZE(struct B_bytearray)];
 
  
 B_bytearray toB_bytearray(char *str); 
@@ -59,7 +63,8 @@ unsigned char *fromB_bytearray(B_bytearray b);
 typedef struct B_IteratorB_bytearray *B_IteratorB_bytearray; ;
 
 struct B_IteratorB_bytearrayG_class {
-    char *$GCINFO;
+    GC_descr $GCdescr;
+    char *$name;
     int $class_id;
     $SuperG_class $superclass;
     B_NoneType (*__init__)(B_IteratorB_bytearray, B_bytearray);
@@ -76,6 +81,7 @@ struct B_IteratorB_bytearray {
     B_bytearray src;
     int nxt;
 };
+extern GC_word B_IteratorB_bytearrayD_gcbm[GC_BITMAP_SIZE(struct B_IteratorB_bytearray)];
 
 extern struct  B_IteratorB_bytearrayG_class  B_IteratorB_bytearrayG_methods;
 B_IteratorB_bytearray B_IteratorB_bytearrayG_new(B_bytearray);
@@ -88,6 +94,7 @@ struct B_bytes {
     int nbytes;
     unsigned char *str;
 };
+extern GC_word B_bytesD_gcbm[GC_BITMAP_SIZE(struct B_bytes)];
 
 B_bytes to$bytes(char *str);
 B_bytes to$bytesD_len(char *str, int len);
@@ -100,7 +107,8 @@ unsigned char *fromB_bytes(B_bytes b);
 typedef struct B_IteratorB_bytes *B_IteratorB_bytes; ;
 
 struct B_IteratorB_bytesG_class {
-    char *$GCINFO;
+    GC_descr $GCdescr;
+    char *$name;
     int $class_id;
     $SuperG_class $superclass;
     B_NoneType (*__init__)(B_IteratorB_bytes, B_bytes);
@@ -117,6 +125,7 @@ struct B_IteratorB_bytes {
     B_bytes src;
     int nxt;
 };
+extern GC_word B_IteratorB_bytesD_gcbm[GC_BITMAP_SIZE(struct B_IteratorB_bytes)];
 
 extern struct  B_IteratorB_bytesG_class  B_IteratorB_bytesG_methods;
 B_IteratorB_bytes B_IteratorB_bytesG_new(B_bytes);

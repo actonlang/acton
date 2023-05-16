@@ -91,8 +91,7 @@ $WORD B_IteratorD_enumerate_next(B_IteratorD_enumerate it) {
         return NULL;
 }
 
-struct B_IteratorD_enumerateG_class B_IteratorD_enumerateG_methods = {"B_IteratorD_enumerate",UNASSIGNED,($SuperG_class)&B_IteratorG_methods,B_IteratorD_enumerate_init,
-                                                                B_IteratorD_enumerate_serialize, B_IteratorD_enumerate$_deserialize, 
+struct B_IteratorD_enumerateG_class B_IteratorD_enumerateG_methods = {0,"B_IteratorD_enumerate",UNASSIGNED,($SuperG_class)&B_IteratorG_methods,B_IteratorD_enumerate_init,                                                                B_IteratorD_enumerate_serialize, B_IteratorD_enumerate$_deserialize, 
                                                                 B_IteratorD_enumerate_bool,B_IteratorD_enumerate_str,B_IteratorD_enumerate_str, B_IteratorD_enumerate_next};
 
 
@@ -143,8 +142,7 @@ $WORD B_IteratorD_filter_next(B_IteratorD_filter it) {
     return w;
 }
 
-struct B_IteratorD_filterG_class B_IteratorD_filterG_methods = {"B_IteratorD_filter",UNASSIGNED,($SuperG_class)&B_IteratorG_methods,B_IteratorD_filter_init,
-                                                          B_IteratorD_filter_serialize, B_IteratorD_filter$_deserialize, 
+struct B_IteratorD_filterG_class B_IteratorD_filterG_methods = {0,"B_IteratorD_filter",UNASSIGNED,($SuperG_class)&B_IteratorG_methods,B_IteratorD_filter_init,                                                          B_IteratorD_filter_serialize, B_IteratorD_filter$_deserialize, 
                                                           B_IteratorD_filter_bool,B_IteratorD_filter_str,B_IteratorD_filter_str, B_IteratorD_filter_next};
 
 B_IteratorD_filter B_IteratorD_filterG_new(B_Iterator it, $pure f) {
@@ -192,8 +190,7 @@ $WORD B_IteratorD_map_next(B_IteratorD_map it) {
         return NULL;
 }
 
-struct B_IteratorD_mapG_class B_IteratorD_mapG_methods = {"B_IteratorD_map",UNASSIGNED,($SuperG_class)&B_IteratorG_methods,B_IteratorD_map_init,
-                                                    B_IteratorD_map_serialize, B_IteratorD_map$_deserialize,  
+struct B_IteratorD_mapG_class B_IteratorD_mapG_methods = {0,"B_IteratorD_map",UNASSIGNED,($SuperG_class)&B_IteratorG_methods,B_IteratorD_map_init,                                                    B_IteratorD_map_serialize, B_IteratorD_map$_deserialize,  
                                                     B_IteratorD_map_bool,B_IteratorD_map_str,B_IteratorD_map_str, B_IteratorD_map_next};
 
 B_IteratorD_map B_IteratorD_mapG_new(B_Iterator it, $pure f) {
@@ -293,8 +290,7 @@ $WORD B_IteratorD_zip_next(B_IteratorD_zip it) {
         return NULL;
 }
 
-struct B_IteratorD_zipG_class B_IteratorD_zipG_methods = {" B_IteratorD_zip",UNASSIGNED,($SuperG_class)&B_IteratorG_methods,B_IteratorD_zip_init,
-                                                    B_IteratorD_zip_serialize, B_IteratorD_zip$_deserialize, 
+struct B_IteratorD_zipG_class B_IteratorD_zipG_methods = {0," B_IteratorD_zip",UNASSIGNED,($SuperG_class)&B_IteratorG_methods,B_IteratorD_zip_init,                                                    B_IteratorD_zip_serialize, B_IteratorD_zip$_deserialize, 
                                                     B_IteratorD_zip_bool,B_IteratorD_zip_str,B_IteratorD_zip_str, B_IteratorD_zip_next};
 
 B_IteratorD_zip B_IteratorD_zipG_new(B_Iterator iter1, B_Iterator iter2) {
@@ -325,8 +321,7 @@ B_bool B_EqOptD___ne__(B_EqOpt wit, $WORD a, $WORD b) {
     return (!a && !b) ? B_False : B_True;
 }
 
-struct B_EqOptG_class B_EqOptG_methods = {"B_EqOpt", UNASSIGNED, NULL, B_EqOptD___init__, B_EqOptD___eq__, B_EqOptD___ne__};
-
+struct B_EqOptG_class B_EqOptG_methods = {0,"B_EqOpt", UNASSIGNED, NULL, B_EqOptD___init__, B_EqOptD___eq__, B_EqOptD___ne__};
 
 B_EqOpt B_EqOptG_new(B_Eq W_Eq$A) {
     return $NEW(B_EqOpt, W_Eq$A);

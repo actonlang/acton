@@ -191,6 +191,7 @@ struct B_EqD_complex B_EqD_complex_instance;
 struct B_HashableD_complex B_HashableD_complex_instance;
 
 struct B_NumberD_complexG_class B_NumberD_complexG_methods = {
+    0,
     "B_NumberD_complex",
     UNASSIGNED,
     ($SuperG_class)&B_NumberG_methods,
@@ -219,6 +220,7 @@ struct B_NumberD_complex B_NumberD_complex_instance = {&B_NumberD_complexG_metho
 B_NumberD_complex B_NumberD_complexG_witness = &B_NumberD_complex_instance;
 
 struct B_DivD_complexG_class B_DivD_complexG_methods = {
+    0,
     "B_DivD_complex",
     UNASSIGNED,
     ($SuperG_class)&B_DivG_methods,
@@ -236,6 +238,7 @@ struct B_DivD_complex B_DivD_complex_instance = {&B_DivD_complexG_methods};
 B_DivD_complex B_DivD_complexG_witness = &B_DivD_complex_instance;
 
 struct B_MinusD_NumberD_complexG_class B_MinusD_NumberD_complexG_methods = {
+    0,
     "B_MinusD_NumberD_complex",
     UNASSIGNED,
     ($SuperG_class)&B_MinusG_methods,
@@ -252,6 +255,7 @@ struct B_MinusD_NumberD_complex B_MinusD_NumberD_complex_instance = {&B_MinusD_N
 B_MinusD_NumberD_complex B_MinusD_NumberD_complexG_witness = &B_MinusD_NumberD_complex_instance;
 
 struct B_EqD_complexG_class B_EqD_complexG_methods = {
+    0,
     "B_EqD_complex",
     UNASSIGNED,
     ($SuperG_class)&B_EqG_methods,
@@ -268,6 +272,7 @@ struct B_EqD_complex B_EqD_complex_instance = {&B_EqD_complexG_methods};
 B_EqD_complex B_EqD_complexG_witness = &B_EqD_complex_instance;
 
 struct B_HashableD_complexG_class B_HashableD_complexG_methods = {
+    0,
     "B_HashableD_complex",
     UNASSIGNED,
     ($SuperG_class)&B_HashableG_methods,

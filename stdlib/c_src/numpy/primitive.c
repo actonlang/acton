@@ -180,16 +180,14 @@ numpyQ_PrimitiveD_float numpyQ_PrimitiveD_floatD_deserialize(numpyQ_PrimitiveD_f
 }
 
 
-struct numpyQ_PrimitiveD_intG_class numpyQ_PrimitiveD_intG_methods = {"numpyQ_PrimitiveD_int",UNASSIGNED,NULL,(B_NoneType (*)(numpyQ_PrimitiveD_int))$default__init__,
-                                                                  numpyQ_PrimitiveD_intD_serialize,numpyQ_PrimitiveD_intD_deserialize,NULL,NULL,NULL,
+struct numpyQ_PrimitiveD_intG_class numpyQ_PrimitiveD_intG_methods = {0,"numpyQ_PrimitiveD_int",UNASSIGNED,NULL,(B_NoneType (*)(numpyQ_PrimitiveD_int))$default__init__,                                                                  numpyQ_PrimitiveD_intD_serialize,numpyQ_PrimitiveD_intD_deserialize,NULL,NULL,NULL,
                                                                   LongType,to$objB_int,from$objB_int,B_l_prim_str,
                                                                   B_l_add,B_l_sub,B_l_mul,B_l_truediv,B_l_floordiv,B_l_mod,B_l_land,B_l_lor,B_l_band,B_l_bor,B_l_bxor,B_l_lsh,B_l_rsh,lB_pow,
                                                                   B_l_iadd,B_l_isub,B_l_imul,B_l_itruediv,B_l_ifloordiv,B_l_imod,B_l_iband,B_l_ibor,B_l_ibxor,B_l_ilsh,B_l_irsh,
                                                                   B_l_eq,B_l_neq,B_l_lt,B_l_le,B_l_gt,B_l_ge,lB_abs,B_l_neg,B_l_lnot,B_l_bnot};
 
 
-struct numpyQ_PrimitiveD_floatG_class numpyQ_PrimitiveD_floatG_methods = {"numpyQ_PrimitiveD_float",UNASSIGNED,NULL,(B_NoneType (*)(numpyQ_PrimitiveD_float))$default__init__, 
-                                                                      numpyQ_PrimitiveD_floatD_serialize,numpyQ_PrimitiveD_floatD_deserialize,NULL,NULL,NULL,
+struct numpyQ_PrimitiveD_floatG_class numpyQ_PrimitiveD_floatG_methods = {0,"numpyQ_PrimitiveD_float",UNASSIGNED,NULL,(B_NoneType (*)(numpyQ_PrimitiveD_float))$default__init__,                                                                       numpyQ_PrimitiveD_floatD_serialize,numpyQ_PrimitiveD_floatD_deserialize,NULL,NULL,NULL,
                                                                       DblType,to$objB_float,from$objB_float,B_d_prim_str,
                                                                       B_d_add,B_d_sub,B_d_mul,B_d_truediv,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,dB_pow,
                                                                       B_d_iadd,B_d_isub,B_d_imul,B_d_itruediv,NULL,NULL,NULL,NULL,NULL,NULL,NULL,

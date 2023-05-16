@@ -2,6 +2,7 @@ struct B_i64 {
     struct B_i64G_class *$class;
     long val;
 };
+extern GC_word B_i64D_gcbm[GC_BITMAP_SIZE(struct B_i64)];
 
  
 B_i64 toB_i64(long n);

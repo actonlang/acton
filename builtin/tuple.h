@@ -1,5 +1,6 @@
 struct B_tupleG_class {
-    char *$GCINFO;
+    GC_descr $GCdescr;
+    char *$name;
     int $class_id;
     $SuperG_class $superclass;
     B_NoneType (*__init__)(B_tuple,int,...);
@@ -15,6 +16,7 @@ struct B_tuple {
     int size;
     $WORD *components;
 };
+extern GC_word B_tupleD_gcbm[GC_BITMAP_SIZE(struct B_tuple)];
 
 extern struct B_tupleG_class B_tupleG_methods;
 B_tuple B_tupleG_new(int,...);
@@ -57,9 +59,11 @@ typedef struct B_HashableD_tupleG_class *B_HashableD_tupleG_class;
 struct B_IterableD_tuple {
     B_IterableD_tupleG_class $class;
 };
+extern GC_word B_IterableD_tupleD_gcbm[GC_BITMAP_SIZE(struct B_IterableD_tuple)];
 
 struct B_IterableD_tupleG_class {
-    char *$GCINFO;
+    GC_descr $GCdescr;
+    char *$name;
     int $class_id;
     $SuperG_class $superclass;
     B_NoneType (*__init__)(B_IterableD_tuple);
@@ -86,9 +90,11 @@ B_IterableD_tuple B_IterableD_tupleG_new();
 struct B_SliceableD_tuple {
     B_SliceableD_tupleG_class $class;
 };
+extern GC_word B_SliceableD_tupleD_gcbm[GC_BITMAP_SIZE(struct B_SliceableD_tuple)];
 
 struct B_SliceableD_tupleG_class {
-    char *$GCINFO;
+    GC_descr $GCdescr;
+    char *$name;
     int $class_id;
     $SuperG_class $superclass;
     B_NoneType (*__init__)(B_SliceableD_tuple);
@@ -125,9 +131,11 @@ struct B_HashableD_tuple {
     int W_HashableB_tuple$size;
     B_Hashable *W_Hashable;
 };
+extern GC_word B_HashableD_tupleD_gcbm[GC_BITMAP_SIZE(struct B_HashableD_tuple)];
 
 struct B_HashableD_tupleG_class {
-    char *$GCINFO;
+    GC_descr $GCdescr;
+    char *$name;
     int $class_id;
     $SuperG_class $superclass;
     B_NoneType (*__init__)(B_HashableD_tuple,int,B_Hashable*);
@@ -165,7 +173,8 @@ extern struct B_HashableD_tuple *B_HashableD_tuple_new(int,B_Hashable*);
 typedef struct B_IteratorD_tuple *B_IteratorD_tuple;
 
 struct B_IteratorD_tupleG_class {
-    char *$GCINFO;
+    GC_descr $GCdescr;
+    char *$name;
     int $class_id;
     $SuperG_class $superclass;
     B_NoneType (*__init__)(B_IteratorD_tuple, B_tuple);
@@ -182,6 +191,7 @@ struct B_IteratorD_tuple {
     B_tuple src;
     int nxt;
 };
+extern GC_word B_IteratorD_tupleD_gcbm[GC_BITMAP_SIZE(struct B_IteratorD_tuple)];
 
 extern struct B_IteratorD_tupleG_class B_IteratorD_tupleG_methods;
 B_IteratorD_tuple B_IteratorD_tupleG_new(B_tuple);

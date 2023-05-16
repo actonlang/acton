@@ -428,6 +428,7 @@ struct numpyQ_MinusD_ndarray numpyQ_MinusD_ndarray$instance;
 struct numpyQ_SliceableD_ndarray numpyQ_SliceableD_ndarray$instance;
 
 struct numpyQ_IntegralD_ndarrayD_intG_class numpyQ_IntegralD_ndarrayD_intG_methods = {
+    0,
     "numpyQ_IntegralD_ndarrayD_int",
     UNASSIGNED,
     ($SuperG_class)&B_IntegralG_methods,
@@ -477,6 +478,7 @@ struct numpyQ_IntegralD_ndarrayD_int numpyQ_IntegralD_ndarrayD_int$instance = {&
 numpyQ_IntegralD_ndarrayD_int numpyQ_IntegralD_ndarrayD_intG_witness = &numpyQ_IntegralD_ndarrayD_int$instance;
 
 struct numpyQ_LogicalD_ndarrayD_intG_class numpyQ_LogicalD_ndarrayD_intG_methods = {
+    0,
     "numpyQ_LogicalD_ndarrayD_int",
     UNASSIGNED,
     ($SuperG_class)&B_LogicalG_methods,
@@ -498,6 +500,7 @@ struct numpyQ_LogicalD_ndarrayD_int numpyQ_LogicalD_ndarrayD_int$instance = {&nu
 numpyQ_LogicalD_ndarrayD_int numpyQ_LogicalD_ndarrayD_intG_witness = &numpyQ_LogicalD_ndarrayD_int$instance;
 
 struct numpyQ_MinusD_ndarrayD_intG_class numpyQ_MinusD_ndarrayD_intG_methods = {
+    0,
     "numpyQ_MinusD_ndarrayD_int",
     UNASSIGNED,
     ($SuperG_class)&B_MinusG_methods,
@@ -514,6 +517,7 @@ struct numpyQ_MinusD_ndarrayD_int numpyQ_MinusD_ndarrayD_int$instance = {&numpyQ
 numpyQ_MinusD_ndarrayD_int numpyQ_MinusD_ndarrayD_intG_witness = &numpyQ_MinusD_ndarrayD_int$instance;
 
 struct numpyQ_RealD_ndarrayG_class numpyQ_RealD_ndarrayG_methods = {
+    0,
     "numpyQ_RealD_ndarray",
     UNASSIGNED,
     ($SuperG_class)&B_IntegralG_methods,
@@ -545,6 +549,7 @@ struct numpyQ_RealD_ndarrayG_class numpyQ_RealD_ndarrayG_methods = {
 };
  
 struct numpyQ_MinusD_ndarrayG_class numpyQ_MinusD_ndarrayG_methods = {
+    0,
     "numpyQ_MinusD_ndarray",
     UNASSIGNED,
     ($SuperG_class)&B_MinusG_methods,
@@ -562,6 +567,7 @@ struct numpyQ_MinusD_ndarray numpyQ_MinusD_ndarray$instance = {&numpyQ_MinusD_nd
 numpyQ_MinusD_ndarray numpyQ_MinusD_ndarrayG_witness = &numpyQ_MinusD_ndarray$instance;
 
 struct numpyQ_DivD_ndarrayD_intG_class numpyQ_DivD_ndarrayD_intG_methods = {
+    0,
     "numpyQ_DivD_ndarrayD_int",
     UNASSIGNED,
     ($SuperG_class)&B_MinusG_methods,
@@ -579,6 +585,7 @@ struct numpyQ_DivD_ndarrayD_int numpyQ_DivD_ndarrayD_int$instance = {&numpyQ_Div
 numpyQ_DivD_ndarrayD_int numpyQ_DivD_ndarrayD_intG_witness = &numpyQ_DivD_ndarrayD_int$instance;
 
 struct numpyQ_DivD_ndarrayD_floatG_class numpyQ_DivD_ndarrayD_floatG_methods = {
+    0,
     "numpyQ_DivD_ndarrayD_float",
     UNASSIGNED,
     ($SuperG_class)&B_MinusG_methods,
@@ -596,6 +603,7 @@ struct numpyQ_DivD_ndarrayD_float numpyQ_DivD_ndarrayD_float$instance = {&numpyQ
 numpyQ_DivD_ndarrayD_float numpyQ_DivD_ndarrayD_floatG_witness = &numpyQ_DivD_ndarrayD_float$instance;
 
 struct numpyQ_SliceableD_ndarrayG_class numpyQ_SliceableD_ndarrayG_methods = {
+    0,
     "numpyQ_SliceableD_ndarray",
     UNASSIGNED,
     ($SuperG_class)&B_SliceableG_methods,
@@ -617,6 +625,7 @@ numpyQ_SliceableD_ndarray numpyQ_SliceableD_ndarrayG_witness = &numpyQ_Sliceable
 
 
 struct numpyQ_CollectionD_ndarrayG_class numpyQ_CollectionD_ndarrayG_methods = {
+    0,
     "numpyQ_CollectionD_ndarray",
     UNASSIGNED,
     ($SuperG_class)&B_CollectionG_methods,
@@ -728,6 +737,7 @@ numpyQ_RealFunsD_mathD_ndarray numpyQ_RealFunsD_mathD_ndarrayG_new(numpyQ_Primit
     return $tmp;
 }
 struct numpyQ_RealFunsD_mathD_ndarrayG_class numpyQ_RealFunsD_mathD_ndarrayG_methods = {
+    0,
     "numpyQ_RealFunsD_mathD_ndarray",
     UNASSIGNED,
     ($SuperG_class)&mathQ_RealFunsG_methods,

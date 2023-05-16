@@ -398,8 +398,7 @@ B_IteratorD_dict B_IteratorD_dict__deserialize(B_IteratorD_dict res, $Serial$sta
 }
 
 
-struct B_IteratorD_dictG_class B_IteratorD_dictG_methods = {"B_IteratorD_dict",UNASSIGNED,($SuperG_class)&B_IteratorG_methods, B_IteratorD_dictD_init,
-                                                      B_IteratorD_dictD_serialize, B_IteratorD_dict__deserialize, B_IteratorD_dictD_bool,B_IteratorD_dictD_str,B_IteratorD_dictD_str, B_IteratorD_dictD_next};
+struct B_IteratorD_dictG_class B_IteratorD_dictG_methods = {0,"B_IteratorD_dict",UNASSIGNED,($SuperG_class)&B_IteratorG_methods, B_IteratorD_dictD_init,                                                      B_IteratorD_dictD_serialize, B_IteratorD_dict__deserialize, B_IteratorD_dictD_bool,B_IteratorD_dictD_str,B_IteratorD_dictD_str, B_IteratorD_dictD_next};
 
 
 B_Iterator B_MappingD_dictD___iter__ (B_MappingD_dict wit, B_dict dict) {
@@ -504,8 +503,7 @@ B_IteratorD_dict_values B_IteratorD_dict_values_deserialize(B_IteratorD_dict_val
     return res;
 }
 
-struct B_IteratorD_dict_valuesG_class B_IteratorD_dict_valuesG_methods = {"B_IteratorD_dict_values",UNASSIGNED,($SuperG_class)&B_IteratorG_methods, B_IteratorD_dict_values_init,
-                                                                    B_IteratorD_dict_values_serialize, B_IteratorD_dict_values_deserialize, B_IteratorD_dict_values_bool, B_IteratorD_dict_values_str,B_IteratorD_dict_values_str,
+struct B_IteratorD_dict_valuesG_class B_IteratorD_dict_valuesG_methods = {0,"B_IteratorD_dict_values",UNASSIGNED,($SuperG_class)&B_IteratorG_methods, B_IteratorD_dict_values_init,                                                                    B_IteratorD_dict_values_serialize, B_IteratorD_dict_values_deserialize, B_IteratorD_dict_values_bool, B_IteratorD_dict_values_str,B_IteratorD_dict_values_str,
                                                                     B_IteratorD_dict_values_next};
 
 // items iterator
@@ -560,8 +558,7 @@ B_IteratorD_dict_items B_IteratorD_dict_items_deserialize(B_IteratorD_dict_items
 
 
 
-struct B_IteratorD_dict_itemsG_class B_IteratorD_dict_itemsG_methods = {"B_IteratorD_dict_items",UNASSIGNED,($SuperG_class)&B_IteratorG_methods, B_IteratorD_dict_items_init,
-                                                                  B_IteratorD_dict_items_serialize, B_IteratorD_dict_items_deserialize,B_IteratorD_dict_items_bool, B_IteratorD_dict_items_str, B_IteratorD_dict_items_str, B_IteratorD_dict_items_next};
+struct B_IteratorD_dict_itemsG_class B_IteratorD_dict_itemsG_methods = {0,"B_IteratorD_dict_items",UNASSIGNED,($SuperG_class)&B_IteratorG_methods, B_IteratorD_dict_items_init,                                                                  B_IteratorD_dict_items_serialize, B_IteratorD_dict_items_deserialize,B_IteratorD_dict_items_bool, B_IteratorD_dict_items_str, B_IteratorD_dict_items_str, B_IteratorD_dict_items_next};
 
 
 B_Iterator B_MappingD_dictD_values (B_MappingD_dict wit, B_dict dict) {
@@ -708,6 +705,7 @@ struct  B_MappingD_dictG_class B_MappingD_dictG_methods = {
 };
 
 struct B_IndexedD_MappingD_dictG_class B_IndexedD_MappingD_dictG_methods = {
+    0,
     "B_IndexedD_MappingD_dict",
     UNASSIGNED,
     ($SuperG_class)&B_IndexedG_methods,
@@ -724,6 +722,7 @@ struct B_IndexedD_MappingD_dictG_class B_IndexedD_MappingD_dictG_methods = {
 
 
 struct B_OrdD_dictG_class B_OrdD_dictG_methods = {
+    0,
     "B_OrdD_dict",
     UNASSIGNED,
     ($SuperG_class)&B_OrdG_methods,

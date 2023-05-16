@@ -4,6 +4,7 @@ struct B_int {
     struct B_intG_class *$class;
     zz_struct val;
 };
+extern GC_word B_intD_gcbm[GC_BITMAP_SIZE(struct B_int)];
 
 B_int zz$to$int(zz_ptr val);
 

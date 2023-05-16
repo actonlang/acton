@@ -82,6 +82,7 @@ $R Pingpong$pong(Pingpong self, B_int q, $Cont then) {
 }
 
 struct lambda$1G_class lambda$1G_methods = {
+    0,
     "lambda$1",
     NULL,
     lambda$1D___init__,
@@ -90,6 +91,7 @@ struct lambda$1G_class lambda$1G_methods = {
     lambda$1D___call__
 };
 struct lambda$2G_class lambda$2G_methods = {
+    0,
     "lambda$2",
     NULL,
     lambda$2D___init__,
@@ -98,6 +100,7 @@ struct lambda$2G_class lambda$2G_methods = {
     lambda$2D___call__
 };
 struct PingpongG_class PingpongG_methods = {
+    0,
     "Pingpong",
     NULL,
     PingpongD___init__,
@@ -108,7 +111,7 @@ struct PingpongG_class PingpongG_methods = {
 };
 
 $R PingpongG_new(B_Env env, $Cont cont) {
-    Pingpong $tmp = malloc(sizeof(struct Pingpong));
+    Pingpong $tmp = GC_MALLOC_EXPLICITLY_TYPED(sizeof(struct Pingpong), PingpongG_methods.$GCdescr);
     $tmp->$class = &PingpongG_methods;
     return PingpongG_methods.__init__($tmp, env, $CONSTCONT($tmp, cont));
 }

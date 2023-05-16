@@ -296,8 +296,7 @@ B_IteratorD_list B_IteratorD_list$_deserialize(B_IteratorD_list res, $Serial$sta
     return res;
 }
 
-struct B_IteratorD_listG_class B_IteratorD_listG_methods = {"B_IteratorD_list",UNASSIGNED,($SuperG_class)&B_IteratorG_methods, B_IteratorD_listD_init,
-                                                      B_IteratorD_listD_serialize, B_IteratorD_list$_deserialize,B_IteratorD_listD_bool,B_IteratorD_listD_str,B_IteratorD_listD_str,B_IteratorD_listD_next};
+struct B_IteratorD_listG_class B_IteratorD_listG_methods = {0,"B_IteratorD_list",UNASSIGNED,($SuperG_class)&B_IteratorG_methods, B_IteratorD_listD_init,                                                      B_IteratorD_listD_serialize, B_IteratorD_list$_deserialize,B_IteratorD_listD_bool,B_IteratorD_listD_str,B_IteratorD_listD_str,B_IteratorD_listD_next};
 
 // Now, we can define the protocol methods
 
@@ -495,6 +494,7 @@ B_bool B_ContainerD_listD___containsnot__(B_ContainerD_list wit, B_list lst, $WO
 // so we need to initialize the below method table here, even if it is done in B___init__.
 
 struct B_SequenceD_listG_class B_SequenceD_listG_methods = {
+    0,
     "B_SequenceD_list", 
     UNASSIGNED,
     ($SuperG_class)&B_SequenceG_methods,

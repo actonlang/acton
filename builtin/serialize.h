@@ -23,13 +23,15 @@ struct $ROWLISTHEADER {
 //typedef struct $Serial$state *$Serial$state;
 
 struct $Serial$state {
-    char *$GCINFO;
+    GC_descr $GCdescr;
+    char *$name;
     B_dict done;
     $WORD (*globmap)($WORD);
     long row_no;
     $ROW row;
     $ROW fst; //not used in deserialization
 };
+extern GC_word $Serial$stateD_gcbm[GC_BITMAP_SIZE(struct $Serial$state)];
 
 // small-step helpers for defining serializations //////////////////////////////////////////////////
 
@@ -64,7 +66,8 @@ $Serializable $deserialize_file(char *file);
 typedef struct B_HashableD_WORD *B_HashableD_WORD;
 
 struct B_HashableD_WORDG_class {
-    char *$GCINFO;
+    GC_descr $GCdescr;
+    char *$name;
     int $class_id;
     $SuperG_class superclass;
     void (*__init__)(B_HashableD_WORD);
@@ -81,6 +84,7 @@ struct B_HashableD_WORDG_class {
 struct B_HashableD_WORD {
     struct B_HashableD_WORDG_class *$class;
 };
+extern GC_word B_HashableD_WORDD_gcbm[GC_BITMAP_SIZE(struct B_HashableD_WORD)];
 
 extern struct B_HashableD_WORDG_class B_HashableD_WORDG_methods;
 B_HashableD_WORD B_HashableD_WORDG_new();

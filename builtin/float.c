@@ -268,6 +268,7 @@ struct B_OrdD_float B_OrdD_float_instance;
 struct B_HashableD_float B_HashableD_float_instance;
 
 struct B_RealFloatD_floatG_class B_RealFloatD_floatG_methods = {
+    0,
     "B_RealFloatD_float",
     UNASSIGNED,
     ($SuperG_class)&B_RealG_methods,
@@ -301,6 +302,7 @@ struct B_RealFloatD_float B_RealFloatD_float_instance = {&B_RealFloatD_floatG_me
 B_RealFloatD_float B_RealFloatD_floatG_witness = &B_RealFloatD_float_instance;
 
 struct B_MinusD_RealFloatD_floatG_class B_MinusD_RealFloatD_floatG_methods = {
+    0,
     "B_MinusD_RealFloatD_float",
     UNASSIGNED,
     ($SuperG_class)&B_MinusG_methods,
@@ -318,6 +320,7 @@ struct B_MinusD_RealFloatD_float B_MinusD_RealFloatD_float_instance = {&B_MinusD
 B_MinusD_RealFloatD_float B_MinusD_RealFloatD_floatG_witness = &B_MinusD_RealFloatD_float_instance;
 
 struct B_DivD_floatG_class B_DivD_floatG_methods = {
+    0,
     "B_DivD_float",
     UNASSIGNED,
     ($SuperG_class)&B_DivG_methods,
@@ -336,6 +339,7 @@ B_DivD_float B_DivD_floatG_witness = &B_DivD_float_instance;
 
 
 struct B_OrdD_floatG_class B_OrdD_floatG_methods = {
+    0,
     "B_OrdD_float",
     UNASSIGNED,
     ($SuperG_class)&B_OrdG_methods,
@@ -356,6 +360,7 @@ struct B_OrdD_float B_OrdD_float_instance = {&B_OrdD_floatG_methods};
 B_OrdD_float B_OrdD_floatG_witness = &B_OrdD_float_instance;
 
 struct B_HashableD_floatG_class B_HashableD_floatG_methods = {
+    0,
     "B_HashableD_float",
     UNASSIGNED,
     ($SuperG_class)&B_HashableG_methods,

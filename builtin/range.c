@@ -109,6 +109,7 @@ B_IteratorB_range B_IteratorB_range$_deserialize(B_IteratorB_range self, $Serial
 }
 
 struct B_IteratorB_rangeG_class B_IteratorB_rangeG_methods = {
+    0,
     "B_IteratorB_range",
     UNASSIGNED,
     ($SuperG_class)&B_IteratorG_methods,

@@ -6,7 +6,8 @@
 struct numpyQ_ndselect;
 typedef struct numpyQ_ndselect *numpyQ_ndselect;
 struct numpyQ_ndselectG_class {
-    char *$GCINFO;
+    GC_descr $GCdescr;
+    char *$name;
     int $class_id;
     $SuperG_class $superclass;
     B_NoneType (*__init__) (numpyQ_ndselect);
@@ -19,12 +20,14 @@ struct numpyQ_ndselectG_class {
 struct numpyQ_ndselect {
     struct numpyQ_ndselectG_class *$class;
 };
+extern GC_word numpyQ_ndselectD_gcbm[GC_BITMAP_SIZE(struct numpyQ_ndselect)];
 extern struct numpyQ_ndselectG_class numpyQ_ndselectG_methods;
 numpyQ_ndselect numpyQ_ndselectG_new();
 struct numpyQ_ndindex;
 typedef struct numpyQ_ndindex *numpyQ_ndindex;
 struct numpyQ_ndindexG_class {
-    char *$GCINFO;
+    GC_descr $GCdescr;
+    char *$name;
     int $class_id;
     $SuperG_class $superclass;
     B_NoneType (*__init__) (numpyQ_ndindex, B_int);
@@ -38,6 +41,7 @@ struct numpyQ_ndindex {
     struct numpyQ_ndindexG_class *$class;
     B_int index;
 };
+extern GC_word numpyQ_ndindexD_gcbm[GC_BITMAP_SIZE(struct numpyQ_ndindex)];
 extern struct numpyQ_ndindexG_class numpyQ_ndindexG_methods;
 numpyQ_ndindex numpyQ_ndindexG_new(B_int);
 
@@ -45,7 +49,8 @@ numpyQ_ndindex numpyQ_ndindexG_new(B_int);
 struct numpyQ_ndslice;
 typedef struct numpyQ_ndslice *numpyQ_ndslice;
 struct numpyQ_ndsliceG_class {
-    char *$GCINFO;
+    GC_descr $GCdescr;
+    char *$name;
     int $class_id;
     $SuperG_class $superclass;
     B_NoneType (*__init__) (numpyQ_ndslice, B_slice);
@@ -59,6 +64,7 @@ struct numpyQ_ndslice {
     struct numpyQ_ndsliceG_class *$class;
     B_slice slc;
 };
+extern GC_word numpyQ_ndsliceD_gcbm[GC_BITMAP_SIZE(struct numpyQ_ndslice)];
 extern struct numpyQ_ndsliceG_class numpyQ_ndsliceG_methods;
 numpyQ_ndslice numpyQ_ndsliceG_new(B_slice);
 
@@ -92,6 +98,7 @@ typedef struct numpyQ_PrimitiveD_floatG_class *numpyQ_PrimitiveD_floatG_class;
 struct numpyQ_Primitive {
     numpyQ_PrimitiveG_class $class;
 };
+extern GC_word numpyQ_PrimitiveD_gcbm[GC_BITMAP_SIZE(struct numpyQ_Primitive)];
 
 union $Bytes8 {
   long l;
@@ -103,7 +110,8 @@ enum ElemType {LongType,DblType};
 int $elem_size(enum ElemType typ);
 
 struct numpyQ_PrimitiveG_class {
-  char *$GCINFO;
+  GC_descr $GCdescr;
+  char *$name;
   int $class_id;
   $SuperG_class $superclass;
   B_NoneType (*__init__)(numpyQ_Primitive);
@@ -161,9 +169,11 @@ B_str B_l_prim_str(union $Bytes8 n);
 struct numpyQ_PrimitiveD_int {
     numpyQ_PrimitiveD_intG_class $class;
 };
+extern GC_word numpyQ_PrimitiveD_intD_gcbm[GC_BITMAP_SIZE(struct numpyQ_PrimitiveD_int)];
 
 struct numpyQ_PrimitiveD_intG_class {
-  char *$GCINFO;
+  GC_descr $GCdescr;
+  char *$name;
   int $class_id;
   $SuperG_class $superclass;
   B_NoneType (*__init__)(numpyQ_PrimitiveD_int);
@@ -218,9 +228,11 @@ struct numpyQ_PrimitiveD_intG_class {
 struct numpyQ_PrimitiveD_float {
   numpyQ_PrimitiveD_floatG_class $class;
 };
+extern GC_word numpyQ_PrimitiveD_floatD_gcbm[GC_BITMAP_SIZE(struct numpyQ_PrimitiveD_float)];
 
 struct numpyQ_PrimitiveD_floatG_class {
-  char *$GCINFO;
+  GC_descr $GCdescr;
+  char *$name;
   int $class_id;
   $SuperG_class $superclass;
   B_NoneType (*__init__)(numpyQ_PrimitiveD_float);
@@ -287,7 +299,8 @@ struct numpyQ_ndarray;
 typedef struct numpyQ_ndarray *numpyQ_ndarray;
 
 struct numpyQ_ndarrayG_class {
-  char *$GCINFO;
+  GC_descr $GCdescr;
+  char *$name;
   int $class_id;
   $SuperG_class $superclass;
   B_NoneType (*__init__)(numpyQ_ndarray,numpyQ_Primitive,B_atom);
@@ -314,6 +327,7 @@ struct numpyQ_ndarray {
   B_list strides;
   union $Bytes8 *data;
 };
+extern GC_word numpyQ_ndarrayD_gcbm[GC_BITMAP_SIZE(struct numpyQ_ndarray)];
 
 extern struct numpyQ_ndarrayG_class numpyQ_ndarrayG_methods;
 
@@ -338,7 +352,8 @@ typedef struct numpyQ_array_iterator_state {
 typedef struct numpyQ_IteratorD_ndarray *numpyQ_IteratorD_ndarray; ;
 
 struct numpyQ_IteratorD_ndarrayG_class {
-  char *$GCINFO;
+  GC_descr $GCdescr;
+  char *$name;
   int $class_id;
   $SuperG_class $superclass;
   B_NoneType (*__init__)(numpyQ_IteratorD_ndarray, numpyQ_Primitive, numpyQ_ndarray);
@@ -357,6 +372,7 @@ struct numpyQ_IteratorD_ndarray {
   numpyQ_Primitive pwit;
   numpyQ_array_iterator_state it;
 };
+extern GC_word numpyQ_IteratorD_ndarrayD_gcbm[GC_BITMAP_SIZE(struct numpyQ_IteratorD_ndarray)];
 
 extern struct  numpyQ_IteratorD_ndarrayG_class  numpyQ_IteratorD_ndarrayG_methods;
 
@@ -466,9 +482,11 @@ struct numpyQ_IntegralD_ndarrayD_int {
     B_Logical W_Logical;
     B_Minus W_Minus;
 };
+extern GC_word numpyQ_IntegralD_ndarrayD_intD_gcbm[GC_BITMAP_SIZE(struct numpyQ_IntegralD_ndarrayD_int)];
 
 struct numpyQ_IntegralD_ndarrayD_intG_class {
-    char *$GCINFO;
+    GC_descr $GCdescr;
+    char *$name;
     int $class_id;
     $SuperG_class $superclass;
     B_NoneType (*__init__)(numpyQ_IntegralD_ndarrayD_int);
@@ -549,9 +567,11 @@ struct numpyQ_LogicalD_ndarrayD_int {
     numpyQ_LogicalD_ndarrayD_intG_class $class;
     B_Integral W_Integral;
 };
+extern GC_word numpyQ_LogicalD_ndarrayD_intD_gcbm[GC_BITMAP_SIZE(struct numpyQ_LogicalD_ndarrayD_int)];
 
 struct numpyQ_LogicalD_ndarrayD_intG_class {
-    char *$GCINFO;
+    GC_descr $GCdescr;
+    char *$name;
     int $class_id;
     $SuperG_class $superclass;
     B_NoneType (*__init__)(numpyQ_LogicalD_ndarrayD_int, B_Integral);
@@ -581,9 +601,11 @@ struct numpyQ_MinusD_ndarrayD_int {
     numpyQ_MinusD_ndarrayD_intG_class $class;
     B_Integral W_Integral;
 };
+extern GC_word numpyQ_MinusD_ndarrayD_intD_gcbm[GC_BITMAP_SIZE(struct numpyQ_MinusD_ndarrayD_int)];
 
 struct numpyQ_MinusD_ndarrayD_intG_class {
-    char *$GCINFO;
+    GC_descr $GCdescr;
+    char *$name;
     int $class_id;
     $SuperG_class $superclass;
     B_NoneType (*__init__)(numpyQ_MinusD_ndarrayD_int, B_Integral);
@@ -608,9 +630,11 @@ struct numpyQ_RealD_ndarray {
     B_Minus W_Minus;
     numpyQ_Primitive W_PrimitiveD_AD_RealD_ndarray;
 };
+extern GC_word numpyQ_RealD_ndarrayD_gcbm[GC_BITMAP_SIZE(struct numpyQ_RealD_ndarray)];
 
 struct numpyQ_RealD_ndarrayG_class {
-    char *$GCINFO;
+    GC_descr $GCdescr;
+    char *$name;
     int $class_id;
     $SuperG_class $superclass;
   B_NoneType (*__init__)(numpyQ_RealD_ndarray, numpyQ_Primitive);
@@ -667,9 +691,11 @@ struct numpyQ_MinusD_ndarray {
     numpyQ_MinusD_ndarrayG_class $class;
     B_Real W_Real;
 };
+extern GC_word numpyQ_MinusD_ndarrayD_gcbm[GC_BITMAP_SIZE(struct numpyQ_MinusD_ndarray)];
 
 struct numpyQ_MinusD_ndarrayG_class {
-    char *$GCINFO;
+    GC_descr $GCdescr;
+    char *$name;
     int $class_id;
     $SuperG_class $superclass;
     B_NoneType (*__init__)(numpyQ_MinusD_ndarray, B_Real);
@@ -693,9 +719,11 @@ struct numpyQ_DivD_ndarrayD_int {
     numpyQ_DivD_ndarrayD_intG_class $class;
     B_Real W_Real;
 };
+extern GC_word numpyQ_DivD_ndarrayD_intD_gcbm[GC_BITMAP_SIZE(struct numpyQ_DivD_ndarrayD_int)];
 
 struct numpyQ_DivD_ndarrayD_intG_class {
-    char *$GCINFO;
+    GC_descr $GCdescr;
+    char *$name;
     int $class_id;
     $SuperG_class $superclass;
     B_NoneType (*__init__)(numpyQ_DivD_ndarrayD_int);
@@ -719,9 +747,11 @@ struct numpyQ_DivD_ndarrayD_float {
     numpyQ_DivD_ndarrayD_floatG_class $class;
     B_Real W_Real;
 };
+extern GC_word numpyQ_DivD_ndarrayD_floatD_gcbm[GC_BITMAP_SIZE(struct numpyQ_DivD_ndarrayD_float)];
 
 struct numpyQ_DivD_ndarrayD_floatG_class {
-    char *$GCINFO;
+    GC_descr $GCdescr;
+    char *$name;
     int $class_id;
     $SuperG_class $superclass;
     B_NoneType (*__init__)(numpyQ_DivD_ndarrayD_float);
@@ -745,7 +775,8 @@ struct numpyQ_SliceableD_ndarray;
 typedef struct numpyQ_SliceableD_ndarray *numpyQ_SliceableD_ndarray;
 
 struct numpyQ_SliceableD_ndarrayG_class {
-    char *$GCINFO;
+    GC_descr $GCdescr;
+    char *$name;
     int $class_id;
     $SuperG_class $superclass;
     B_NoneType (*__init__) (numpyQ_SliceableD_ndarray, numpyQ_Primitive);
@@ -765,6 +796,7 @@ struct numpyQ_SliceableD_ndarray {
     numpyQ_SliceableD_ndarrayG_class $class;
     numpyQ_Primitive pwit;
 };
+extern GC_word numpyQ_SliceableD_ndarrayD_gcbm[GC_BITMAP_SIZE(struct numpyQ_SliceableD_ndarray)];
 
 
 // numpyQ_CollectionD_ndarray ////////////////////////////////////////////////////////////
@@ -773,9 +805,11 @@ struct numpyQ_CollectionD_ndarray {
   numpyQ_CollectionD_ndarrayG_class $class;
   numpyQ_Primitive pwit;
 };
+extern GC_word numpyQ_CollectionD_ndarrayD_gcbm[GC_BITMAP_SIZE(struct numpyQ_CollectionD_ndarray)];
 
 struct numpyQ_CollectionD_ndarrayG_class {
-    char *$GCINFO;
+    GC_descr $GCdescr;
+    char *$name;
     int $class_id;
     $SuperG_class $superclass;
     B_NoneType (*__init__)(numpyQ_CollectionD_ndarray, numpyQ_Primitive);
@@ -806,7 +840,8 @@ numpyQ_RealD_ndarray numpyQ_RealFloat$ndarrayG_new(numpyQ_Primitive,B_RealFloat)
 struct numpyQ_RealFunsD_mathD_ndarray;
 typedef struct numpyQ_RealFunsD_mathD_ndarray *numpyQ_RealFunsD_mathD_ndarray;
 struct numpyQ_RealFunsD_mathD_ndarrayG_class {
-    char *$GCINFO;
+    GC_descr $GCdescr;
+    char *$name;
     int $class_id;
     $SuperG_class $superclass;
     B_NoneType (*__init__) (numpyQ_RealFunsD_mathD_ndarray, numpyQ_Primitive, mathQ_RealFuns);
@@ -836,6 +871,7 @@ struct numpyQ_RealFunsD_mathD_ndarray {
     numpyQ_Primitive W_PrimitiveD_AD_RealFuns$math$ndarray;
   mathQ_RealFuns W_RealFuns$mathD_AD_RealFuns$math$ndarray;
 };
+extern GC_word numpyQ_RealFunsD_mathD_ndarrayD_gcbm[GC_BITMAP_SIZE(struct numpyQ_RealFunsD_mathD_ndarray)];
 extern struct numpyQ_RealFunsD_mathD_ndarrayG_class numpyQ_RealFunsD_mathD_ndarrayG_methods;
 
 

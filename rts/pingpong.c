@@ -200,6 +200,7 @@ $R PingpongG_new(B_int i, $Cont then) {
 ////////////////////////////////////////////////////////////////////////////////////////
 
 struct lambda$1G_class lambda$1G_methods = {
+    0,
     "lambda$1",
     UNASSIGNED,
     ($SuperG_class)&$ContG_methods,
@@ -211,6 +212,7 @@ struct lambda$1G_class lambda$1G_methods = {
     lambda$1D___call__
 };
 struct lambda$2G_class lambda$2G_methods = {
+    0,
     "lambda$2",
     UNASSIGNED,
     ($SuperG_class)&$ContG_methods,
@@ -222,6 +224,7 @@ struct lambda$2G_class lambda$2G_methods = {
     lambda$2D___call__
 };
 struct lambda$3G_class lambda$3G_methods = {
+    0,
     "lambda$3",
     UNASSIGNED,
     ($SuperG_class)&$ContG_methods,
@@ -233,6 +236,7 @@ struct lambda$3G_class lambda$3G_methods = {
     lambda$3D___call__
 };
 struct PingpongG_class PingpongG_methods = {
+    0,
     "Pingpong",
     UNASSIGNED,
     ($SuperG_class)&$ActorG_methods,

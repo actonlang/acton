@@ -1256,8 +1256,7 @@ static B_str B_IteratorB_strD_next(B_IteratorB_str self) {
 }
 
 
-struct B_IteratorB_strG_class B_IteratorB_strG_methods = {"B_IteratorB_str",UNASSIGNED,($SuperG_class)&B_IteratorG_methods, B_IteratorB_strD_init,
-                                                    B_IteratorB_strD_serialize, B_IteratorB_str$_deserialize,
+struct B_IteratorB_strG_class B_IteratorB_strG_methods = {0,"B_IteratorB_str",UNASSIGNED,($SuperG_class)&B_IteratorG_methods, B_IteratorB_strD_init,                                                    B_IteratorB_strD_serialize, B_IteratorB_str$_deserialize,
                                                     B_IteratorB_strD_bool, B_IteratorB_strD_str, B_IteratorB_strD_str, B_IteratorB_strD_next};
 
 // now, define __iter__
@@ -2088,6 +2087,7 @@ B_IteratorB_bytearray B_IteratorB_bytearray$_deserialize(B_IteratorB_bytearray r
 }
 
 struct B_IteratorB_bytearrayG_class B_IteratorB_bytearrayG_methods = {
+    0,
     "",
     UNASSIGNED,
     ($SuperG_class)&B_IteratorG_methods,
@@ -3104,8 +3104,7 @@ static B_int B_IteratorB_bytesD_next(B_IteratorB_bytes self) {
     return self->nxt >= self->src->nbytes ? NULL : to$int(self->src->str[self->nxt++]);
 }
 
-struct B_IteratorB_bytesG_class B_IteratorB_bytesG_methods = {"B_IteratorB_bytes",UNASSIGNED,($SuperG_class)&B_IteratorG_methods, B_IteratorB_bytesD_init,
-                                                        B_IteratorB_bytesD_serialize, B_IteratorB_bytes$_deserialize,
+struct B_IteratorB_bytesG_class B_IteratorB_bytesG_methods = {0,"B_IteratorB_bytes",UNASSIGNED,($SuperG_class)&B_IteratorG_methods, B_IteratorB_bytesD_init,                                                        B_IteratorB_bytesD_serialize, B_IteratorB_bytes$_deserialize,
                                                         B_IteratorB_bytesD_bool, B_IteratorB_bytesD_str,  B_IteratorB_bytesD_str, B_IteratorB_bytesD_next};
 
 B_Iterator B_ContainerD_bytesD___iter__ (B_ContainerD_bytes wit, B_bytes str) {
@@ -3375,7 +3374,7 @@ B_str B_strD_join_par(char lpar, B_list elems, char rpar) {
 
 B_str $default__str__(B_value self) {
     char *s;
-    asprintf(&s,"<%s object at %p>",self->$class->$GCINFO,self);
+    asprintf(&s,"<%s object at %p>",self->$class->$name,self);
     return to$str(s);
 }
 
@@ -3510,6 +3509,7 @@ struct B_OrdD_bytearray B_OrdD_bytearray_instance = {&B_OrdD_bytearrayG_methods}
 B_OrdD_bytearray B_OrdD_bytearrayG_witness = &B_OrdD_bytearray_instance;
 
 struct B_SequenceD_bytearrayG_class B_SequenceD_bytearrayG_methods = {
+    0,
     "B_SequenceD_bytearray",
     UNASSIGNED,
     ($SuperG_class)&B_SequenceG_methods,
@@ -3540,6 +3540,7 @@ struct B_SequenceD_bytearray B_SequenceD_bytearray_instance = {
 B_SequenceD_bytearray B_SequenceD_bytearrayG_witness = &B_SequenceD_bytearray_instance;
 
 struct B_CollectionD_SequenceD_bytearrayG_class B_CollectionD_SequenceD_bytearrayG_methods = {
+    0,
     "B_CollectionD_SequenceD_bytearray",
     UNASSIGNED,
     ($SuperG_class)&B_CollectionG_methods,
@@ -3577,6 +3578,7 @@ struct B_TimesD_SequenceD_bytearray B_TimesD_SequenceD_bytearray_instance = {&B_
 B_TimesD_SequenceD_bytearray B_TimesD_SequenceD_bytearrayG_witness = &B_TimesD_SequenceD_bytearray_instance;
 
 struct B_ContainerD_bytearrayG_class B_ContainerD_bytearrayG_methods = {
+    0,
     "B_ContainerD_bytearray",
     UNASSIGNED,
     ($SuperG_class)&B_ContainerG_methods,
