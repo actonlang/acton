@@ -27,6 +27,7 @@
   - [if / elif / else](control_flow/if_else.md)
   - [for](control_flow/for.md)
   - [while](control_flow/while.md)
+  - [after / sleep](control_flow/after_sleep.md)
 - [Types](types.md)
 - [Standard library](stdlib.md)
   - [Regular Expression](stdlib/re.md)
