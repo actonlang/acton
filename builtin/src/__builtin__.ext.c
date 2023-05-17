@@ -1,23 +1,30 @@
 
 void B___ext_init__() {
-    memset(B_boolD_gcbm, 0xFF, sizeof(B_boolD_gcbm));
-    memset(B_complexD_gcbm, 0xFF, sizeof(B_complexD_gcbm));
-    memset(B_dictD_gcbm, 0xFF, sizeof(B_dictD_gcbm));
-    memset(B_floatD_gcbm, 0xFF, sizeof(B_floatD_gcbm));
-    memset(B_i16D_gcbm, 0xFF, sizeof(B_i16D_gcbm));
-    memset(B_i32D_gcbm, 0xFF, sizeof(B_i32D_gcbm));
-    memset(B_i64D_gcbm, 0xFF, sizeof(B_i64D_gcbm));
-    memset(B_intD_gcbm, 0xFF, sizeof(B_intD_gcbm));
-    memset(B_listD_gcbm, 0xFF, sizeof(B_listD_gcbm));
-    memset(B_rangeD_gcbm, 0xFF, sizeof(B_rangeD_gcbm));
-    memset(B_setD_gcbm, 0xFF, sizeof(B_setD_gcbm));
-    memset(B_sliceD_gcbm, 0xFF, sizeof(B_sliceD_gcbm));
-    memset(B_strD_gcbm, 0xFF, sizeof(B_strD_gcbm));
-    memset(B_bytearrayD_gcbm, 0xFF, sizeof(B_bytearrayD_gcbm));
-    memset(B_bytesD_gcbm, 0xFF, sizeof(B_bytesD_gcbm));
-    memset(B_u16D_gcbm, 0xFF, sizeof(B_u16D_gcbm));
-    memset(B_u32D_gcbm, 0xFF, sizeof(B_u32D_gcbm));
-    memset(B_u64D_gcbm, 0xFF, sizeof(B_u64D_gcbm));
+    // Here is a list of things that have no fields that need to be scanned. It
+    // is noted down as an explicit negative list of things so we don't have to
+    // think "did we miss this". No, we did not, it just does not need scanning
+    // and the GC bitmap is already initialized to 0 due to the GC malloc
+    // actually being a calloc.
+    // - B_bool / B_boolD_gcbm
+    // - B_complex / B_complexD_gcbm
+    // - B_float / B_floatD_gcbm
+    // - B_i16 / B_i16D_gcbm
+    // - B_i32 / B_i32D_gcbm
+    // - B_i64 / B_i64D_gcbm
+    // - B_u16 / B_u16D_gcbm
+    // - B_u32 / B_u32D_gcbm
+    // - B_u64 / B_u64D_gcbm
+    // - B_range / B_rangeD_gcbm
+    GC_set_bit(B_bytearrayD_gcbm, GC_WORD_OFFSET(struct B_bytearray, str));
+    GC_set_bit(B_bytesD_gcbm, GC_WORD_OFFSET(struct B_bytes, str));
+    GC_set_bit(B_dictD_gcbm, GC_WORD_OFFSET(struct B_dict, table));
+    GC_set_bit(B_intD_gcbm, GC_WORD_OFFSET(struct B_int, val.n));
+    GC_set_bit(B_listD_gcbm, GC_WORD_OFFSET(struct B_list, data));
+    GC_set_bit(B_setD_gcbm, GC_WORD_OFFSET(struct B_set, table));
+    GC_set_bit(B_sliceD_gcbm, GC_WORD_OFFSET(struct B_slice, start));
+    GC_set_bit(B_sliceD_gcbm, GC_WORD_OFFSET(struct B_slice, step));
+    GC_set_bit(B_sliceD_gcbm, GC_WORD_OFFSET(struct B_slice, stop));
+    GC_set_bit(B_strD_gcbm, GC_WORD_OFFSET(struct B_str, str));
 
     B_HashableD_intG_methods.__eq__ = (B_bool (*)(B_HashableD_int, B_int, B_int))B_OrdD_intD___eq__;
     B_HashableD_i64G_methods.__eq__ = (B_bool (*)(B_HashableD_i64, B_i64, B_i64))B_OrdD_i64D___eq__;
