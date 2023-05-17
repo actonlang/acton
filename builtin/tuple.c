@@ -62,7 +62,7 @@ B_tuple B_tupleD___deserialize__(B_tuple self, $Serial$state state) {
         return (B_tuple)B_dictD_get(state->done,(B_Hashable)B_HashableD_intG_witness,to$int((long)this->blob[0]),NULL);
     } else {
         int len = (int)(long)this->blob[0];
-        B_tuple res = malloc(sizeof(struct B_tuple));
+        B_tuple res = GC_MALLOC_EXPLICITLY_TYPED(sizeof(struct B_tuple), B_tupleG_methods.$GCdescr);
         B_dictD_setitem(state->done,(B_Hashable)B_HashableD_intG_witness,to$int(state->row_no-1),res);
         res->components = malloc(len * sizeof($WORD));
         res->$class = &B_tupleG_methods;
@@ -197,7 +197,7 @@ B_tuple B_SliceableD_tupleD___getslice__ (B_SliceableD_tuple wit, B_tuple self, 
     normalize_slice(slc, size, &slen, &start, &stop, &step);
     //slice notation have been eliminated and default values applied.
     // slen now is the length of the slice
-    B_tuple res = malloc(sizeof(struct B_tuple));
+    B_tuple res = GC_MALLOC_EXPLICITLY_TYPED(sizeof(struct B_tuple), B_tupleG_methods.$GCdescr);
     res->$class = self->$class;
     res->size = slen;
     res->components = malloc(slen * sizeof($WORD));

@@ -111,7 +111,7 @@ B_str B_i16D___repr__(B_i16 n) {
 }
 
 B_i16 toB_i16(short i) {
-    B_i16 res = malloc(sizeof(struct B_i16));
+    B_i16 res = GC_MALLOC_EXPLICITLY_TYPED(sizeof(struct B_i16), B_i16G_methods.$GCdescr);
     res->$class = &B_i16G_methods;
     res->val = i;
     return res;

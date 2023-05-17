@@ -106,7 +106,7 @@ B_str B_u64D___repr__(B_u64 n) {
 }
 
 B_u64 toB_u64(unsigned long i) {
-    B_u64 res = malloc(sizeof(struct B_u64));
+    B_u64 res = GC_MALLOC_EXPLICITLY_TYPED(sizeof(struct B_u64), B_u64G_methods.$GCdescr);
     res->$class = &B_u64G_methods;
     res->val = i;
     return res;

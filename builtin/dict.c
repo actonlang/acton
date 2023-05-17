@@ -233,11 +233,11 @@ B_str B_dictD___str__(B_dict self) {
         B_value value = ((B_value)item->components[1]);
         B_str keystr = key->$class->__repr__(key);
         B_str valuestr = value->$class->__repr__(value);
-        B_str elem = malloc(sizeof(struct B_str));
+        B_str elem = GC_MALLOC_EXPLICITLY_TYPED(sizeof(struct B_str), B_strG_methods.$GCdescr);
         elem->$class = &B_strG_methods;
         elem->nbytes = keystr->nbytes+valuestr->nbytes+1;
         elem->nchars = keystr->nchars+valuestr->nchars+1;
-        elem->str = malloc(elem->nbytes+1);
+        elem->str = GC_MALLOC_ATOMIC(elem->nbytes+1);
         memcpy(elem->str,keystr->str,keystr->nbytes);
         elem->str[keystr->nbytes] = ':';
         memcpy(&elem->str[keystr->nbytes+1],valuestr->str,valuestr->nbytes);
@@ -282,7 +282,7 @@ B_dict B_dictD___deserialize__(B_dict res, $Serial$state state) {
         return B_dictD_get(state->done,(B_Hashable)B_HashableD_intG_witness,to$int((long)this->blob[0]),NULL);
     } else {
         if (!res)
-            res = malloc(sizeof(struct B_dict));
+            res = GC_MALLOC_EXPLICITLY_TYPED(sizeof(struct B_dict), B_dictG_methods.$GCdescr);
         B_dictD_setitem(state->done,(B_Hashable)B_HashableD_intG_witness,to$int(state->row_no-1),res);
         res->$class = &B_dictG_methods;
         res->numelements = (long)this->blob[0];

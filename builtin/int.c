@@ -23,7 +23,7 @@ int set_str(zz_ptr a, char *str);
 char *get_str(zz_ptr n);
 
 B_int malloc_int() {
-    B_int res = malloc(sizeof(struct B_int));
+    B_int res = GC_MALLOC_EXPLICITLY_TYPED(sizeof(struct B_int), B_intG_methods.$GCdescr);
     res->$class = &B_intG_methods;
     res->val.n = GC_MALLOC_ATOMIC(sizeof(unsigned long));
     res->val.size = 0;

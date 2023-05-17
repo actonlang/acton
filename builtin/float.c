@@ -88,7 +88,7 @@ B_str B_floatD___repr__(B_float x) {
 }
 
 B_float to$float(double x) {
-    B_float res = malloc(sizeof(struct B_float));
+    B_float res = GC_MALLOC_EXPLICITLY_TYPED(sizeof(struct B_float), B_floatG_methods.$GCdescr);
     res->$class = &B_floatG_methods;
     res->val = x;
     return res;

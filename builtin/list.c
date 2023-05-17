@@ -49,7 +49,7 @@ B_list B_listD_new(int capacity) {
         fprintf(stderr,"Internal error list_new: negative capacity");
         exit(-1);
     } 
-    B_list lst = malloc(sizeof(struct B_list));
+    B_list lst = GC_MALLOC_EXPLICITLY_TYPED(sizeof(struct B_list), B_listG_methods.$GCdescr);
     if (lst == NULL) {
         $RAISE((B_BaseException)$NEW(B_MemoryError,to$str("memory allocation failed")));
     }

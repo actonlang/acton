@@ -52,7 +52,7 @@ B_bool B_boolG_new(B_value s) {
 }
 
 B_bool toB_bool(long b) {
-    B_bool res = malloc(sizeof(struct B_bool));
+    B_bool res = GC_MALLOC_EXPLICITLY_TYPED(sizeof(struct B_bool), B_boolG_methods.$GCdescr);
     res->$class = &B_boolG_methods;
     res->val = b;
     return res;

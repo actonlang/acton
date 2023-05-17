@@ -179,7 +179,7 @@ void B_set_add_entry(B_set set, B_Hashable hashwit, $WORD key, long hash) {
 
 
 B_set B_set_copy(B_set set, B_Hashable hashwit) {
-    B_set res = malloc(sizeof(struct B_set));
+    B_set res = GC_MALLOC_EXPLICITLY_TYPED(sizeof(struct B_set), B_setG_methods.$GCdescr);
     memcpy(res,set,sizeof(struct B_set));
     res->table = malloc((set->mask+1)*sizeof(B_setentry));
     memcpy(res->table,set->table,(set->mask+1)*sizeof(B_setentry));
@@ -268,7 +268,7 @@ B_set B_setD___deserialize__ (B_set res, $Serial$state state) {
         return B_dictD_get(state->done,(B_Hashable)B_HashableD_intG_witness,to$int((long)this->blob[0]),NULL);
     } else {
         if (!res)
-            res = malloc(sizeof(struct B_set));
+            res = GC_MALLOC_EXPLICITLY_TYPED(sizeof(struct B_set), B_setG_methods.$GCdescr);
         B_dictD_setitem(state->done,(B_Hashable)B_HashableD_intG_witness,to$int(state->row_no-1),res);
         res->$class = &B_setG_methods;
         res->numelements = (long)this->blob[0];
@@ -309,8 +309,8 @@ static $WORD B_IteratorD_set_next_entry(B_IteratorD_set self) {
 }
 
 static B_Iterator B_set_iter_entry(B_set set) {
-    B_IteratorD_set iter =  malloc(sizeof(struct B_IteratorD_set));
-    struct B_IteratorD_setG_class *methods = malloc(sizeof(struct B_IteratorD_setG_class));
+    B_IteratorD_set iter =  GC_MALLOC_EXPLICITLY_TYPED(sizeof(struct B_IteratorD_set), B_IteratorD_setG_methods.$GCdescr);
+    struct B_IteratorD_setG_class *methods = malloc(sizeof(struct B_IteratorD_setG_class)); // TODO: use GC_MALLOC_ATOMIC here?
     iter->$class = methods;
     methods->__next__ =  B_IteratorD_set_next_entry;
     iter->src = set;

@@ -15,7 +15,7 @@
 GC_word B_complexD_gcbm[GC_BITMAP_SIZE(struct B_complex)];
 
 B_complex toB_complex(complex double c) {
-    B_complex res = malloc(sizeof(struct B_complex));
+    B_complex res = GC_MALLOC_EXPLICITLY_TYPED(sizeof(struct B_complex), B_complexG_methods.$GCdescr);
     res->$class = &B_complexG_methods;
     res->val = c;
     return res;

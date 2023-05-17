@@ -56,7 +56,7 @@ void normalize_slice(B_slice slc, long len, long *slen, long *start, long *stop,
 }
 
 B_slice B_sliceG_new(B_int start,B_int stop,B_int step) {
-    return $NEW(B_slice,start,stop,step);
+    return $NEW(B_slice, start, stop, step);
 }
 
 B_NoneType B_sliceD___init__(B_slice s, B_int start, B_int stop, B_int step) {
@@ -88,7 +88,7 @@ B_slice B_sliceD___deserialize__ (B_slice self, $Serial$state state) {
     $ROW this = state->row;
     state->row = this->next;
     state->row_no++;
-    B_slice res = malloc(sizeof(struct B_slice));
+    B_slice res = GC_MALLOC_EXPLICITLY_TYPED(sizeof(struct B_slice), B_sliceG_methods.$GCdescr);
     res->$class = &B_sliceG_methods;
     res->start = malloc(sizeof(long));
     res->stop = malloc(sizeof(long));

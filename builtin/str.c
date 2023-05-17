@@ -44,7 +44,7 @@ static struct B_str whitespace_struct = {&B_strG_methods,6,6,(unsigned char *)" 
 static B_str whitespace_str = &whitespace_struct;
 
 #define NEW_UNFILLED_STR(nm,nchrs,nbtes)        \
-    nm = malloc(sizeof(struct B_str));           \
+    nm = GC_MALLOC_EXPLICITLY_TYPED(sizeof(struct B_str), B_strG_methods.$GCdescr); \
     (nm)->$class = &B_strG_methods;               \
     (nm)->nchars = nchrs;                       \
     (nm)->nbytes = nbtes;                       \
@@ -52,7 +52,7 @@ static B_str whitespace_str = &whitespace_struct;
     (nm)->str[nbtes] = 0
 
 #define NEW_UNFILLED_BYTEARRAY(nm,nbtes)        \
-    nm = malloc(sizeof(struct B_bytearray));     \
+    nm = GC_MALLOC_EXPLICITLY_TYPED(sizeof(struct B_bytearray), B_bytearrayG_methods.$GCdescr); \
     (nm)->$class = &B_bytearrayG_methods;         \
     (nm)->nbytes = nbtes;                       \
     (nm)->capacity = nbtes;                     \
@@ -60,7 +60,7 @@ static B_str whitespace_str = &whitespace_struct;
     (nm)->str[nbtes] = 0
 
 #define NEW_UNFILLED_BYTES(nm,nbtes)            \
-    nm = malloc(sizeof(struct B_bytes));         \
+    nm = GC_MALLOC_EXPLICITLY_TYPED(sizeof(struct B_bytes), B_bytesG_methods.$GCdescr); \
     (nm)->$class = &B_bytesG_methods;             \
     (nm)->nbytes = nbtes;                       \
     (nm)->str = GC_MALLOC_ATOMIC(nbtes + 1);              \
@@ -205,7 +205,7 @@ static int get_index(int i, int nchars) {
 
 static int fix_start_end(int nchars, B_int *start, B_int *end) {
     if (*start==NULL) {
-        *start = malloc(sizeof(struct B_int));
+        *start = GC_MALLOC_EXPLICITLY_TYPED(sizeof(struct B_int), B_intG_methods.$GCdescr);
         *start = to$int(0);
     }
     int st = from$int(*start);
@@ -217,7 +217,7 @@ static int fix_start_end(int nchars, B_int *start, B_int *end) {
     *start = to$int(st);
 
     if (*end==NULL) {
-        *end = malloc(sizeof(struct B_int));
+        *end = GC_MALLOC_EXPLICITLY_TYPED(sizeof(struct B_int), B_intG_methods.$GCdescr);
         *end = to$int(nchars);
     }
     int en = from$int(*end);
@@ -424,7 +424,7 @@ B_str B_strD___deserialize__(B_str self, $Serial$state state) {
     $ROW this = state->row;
     state->row =this->next;
     state->row_no++;
-    B_str res = malloc(sizeof(struct B_str));
+    B_str res = GC_MALLOC_EXPLICITLY_TYPED(sizeof(struct B_str), B_strG_methods.$GCdescr);
     long nbytes;
     memcpy(&nbytes,this->blob,sizeof($WORD));
     res->$class = &B_strG_methods;
@@ -1426,7 +1426,7 @@ B_bytearray B_bytearrayD___deserialize__(B_bytearray res, $Serial$state state) {
     state->row =this->next;
     state->row_no++;
     if(!res)
-        res = malloc(sizeof(struct B_bytearray));
+        res = GC_MALLOC_EXPLICITLY_TYPED(sizeof(struct B_bytearray), B_bytearrayG_methods.$GCdescr);
     long nbytes;
     memcpy(&nbytes,this->blob,sizeof($WORD));
     res->$class = &B_bytearrayG_methods;
@@ -2415,7 +2415,7 @@ B_bytes B_bytesD___deserialize__(B_bytes self, $Serial$state state) {
     $ROW this = state->row;
     state->row =this->next;
     state->row_no++;
-    B_bytes res = malloc(sizeof(struct B_bytes));
+    B_bytes res = GC_MALLOC_EXPLICITLY_TYPED(sizeof(struct B_bytes), B_bytesG_methods.$GCdescr);
     long nbytes;
     memcpy(&nbytes,this->blob,sizeof($WORD));
     res->$class = &B_bytesG_methods;
