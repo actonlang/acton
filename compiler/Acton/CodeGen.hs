@@ -307,7 +307,7 @@ cModule env srcbase (Module m imps stmts)
                                               ext_init $+$
                                               initImports $+$
                                               initModule env stmts) $+$
-                                      if inBuiltin env then empty else char '}'   -- Temporary fix until __builtin__ADD.c not necessary
+                                      char '}'
   where initImports                 = vcat [ gen env (GName m initKW) <> parens empty <> semi | m <- modNames imps ]
         external                    = hasNotImpl stmts && not (inBuiltin env)
         ext_include                 = if hasNotImpl stmts then text "#include" <+> doubleQuotes (text srcbase <> text ".ext.c") else empty

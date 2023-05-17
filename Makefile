@@ -526,8 +526,8 @@ dist/types/__builtin__.ty: builtin/ty/out/types/__builtin__.ty
 builtin/ty/out/types/__builtin__.ty: builtin/ty/src/__builtin__.act $(ACTONC)
 	@mkdir -p $(dir $@)
 	$(ACTC) --always-build $<
-	cp builtin/ty/out/types/__builtin__.h builtin/__builtin__.h 
-	cat builtin/ty/out/types/__builtin__.c builtin/__builtin__ADD.c > builtin/__builtin__.c
+	cp builtin/ty/out/types/__builtin__.h builtin/__builtin__.h
+	cp builtin/ty/out/types/__builtin__.c builtin/__builtin__.c
 
 # Build our standard library
 stdlib/out/dev/lib/libActonProject.a: $(STDLIB_SRCFILES) dist/types/__builtin__.ty $(DIST_HFILES) $(ACTONC) $(DEPSA) $(LIBGC)
