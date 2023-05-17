@@ -32,17 +32,17 @@ B_int malloc_int() {
 B_int B_IntegralD_intD___lshift__(B_IntegralD_int wit,  B_int a, B_int b);
 
 B_int B_intG_new(B_atom a) {
-    if ($ISINSTANCE(a,B_int)->val) return (B_int)a;
-    if ($ISINSTANCE(a,B_i64)->val) {
+    if ($ISINSTANCE0(a,B_int)) return (B_int)a;
+    if ($ISINSTANCE0(a,B_i64)) {
         return to$int(((B_i64)a)->val);
     }
-    if ($ISINSTANCE(a,B_i32)->val) {
+    if ($ISINSTANCE0(a,B_i32)) {
         return to$int((long)((B_i32)a)->val);
     }
-    if ($ISINSTANCE(a,B_i16)->val) {
+    if ($ISINSTANCE0(a,B_i16)) {
         return to$int((long)((B_i16)a)->val);
     }
-    if ($ISINSTANCE(a,B_u64)->val) {
+    if ($ISINSTANCE0(a,B_u64)) {
         unsigned long v = ((B_u64)a)->val;
         if (v==0) 
             return to$int(0L);
@@ -53,7 +53,7 @@ B_int B_intG_new(B_atom a) {
             return res;
         }
     }
-    if ($ISINSTANCE(a,B_u32)->val) {
+    if ($ISINSTANCE0(a,B_u32)) {
         unsigned int v = ((B_u32)a)->val;
         if (v==0) 
             return to$int(0L);
@@ -64,7 +64,7 @@ B_int B_intG_new(B_atom a) {
             return res;
         }
     }
-    if ($ISINSTANCE(a,B_u32)->val) {
+    if ($ISINSTANCE0(a,B_u32)) {
         unsigned short v = ((B_u32)a)->val;
         if (v==0) 
             return to$int(0L);
@@ -75,7 +75,7 @@ B_int B_intG_new(B_atom a) {
             return res;
         }
     }
-    if ($ISINSTANCE(a,B_float)->val) {
+    if ($ISINSTANCE0(a,B_float)) {
         double aval = ((B_float)a)->val;
         int e;
         double m = frexp(aval,&e);
@@ -89,8 +89,8 @@ B_int B_intG_new(B_atom a) {
             return res;
         }
     }
-    if ($ISINSTANCE(a,B_bool)->val) return to$int(((B_bool)a)->val);
-    if ($ISINSTANCE(a,B_str)->val) {
+    if ($ISINSTANCE0(a,B_bool)) return to$int(((B_bool)a)->val);
+    if ($ISINSTANCE0(a,B_str)) {
         B_int res = malloc_int();
         res->$class = &B_intG_methods;
         set_str(&res->val, (char *)((B_str)a)->str);

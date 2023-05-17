@@ -49,35 +49,10 @@ genRoot env0 qn@(GName m n)         = do return $ render (cInclude $+$ cInit $+$
                                        nest 4 (text "return" <+> parens (gen env tActor) <> gen env primNEWACTOR <> parens (gen env qn) <> semi) $+$
                                        char '}'
 
-
-endsRight [Right _]                 = True
-endsRight(x : xs)                   = endsRight xs
-endsRight []                        = False
-
 myPretty (GName m n)
       | m == mBuiltin               = text ("B_" ++ nstr n)
       | otherwise                   = pretty m <> dot <> pretty n
-      
 myPretty (NoQ w@(Internal _ _ _))   = pretty w
-
-staticStubs env                     = map f wns
-    where wns                       = map h (filter g $ witnesses env)
-          g w@(WClass{})            = length (wsteps w) == 1 || endsRight (wsteps w)
-          g _                       = False
-          f w                       = myPretty w <+> myPretty (witName w) <+> equals <+> braces(char '&' <> myPretty (instName w)) <> semi
-          h w                       = if nm1 == nm2 then wname w else gBuiltin (Derived (Derived nm1 nm2) nm3)
-             where nm1              = noq(tcname(proto w))
-                   Derived nm2 nm3  = noq (wname w)
-
-staticImpls env                     = map f wns ++ map k wns
-    where wns                       = map h (filter g $ witnesses env)
-          g w@(WClass{})            = length (wsteps w) == 1 || endsRight (wsteps w) && binds w == []
-          g _                       = False
-          f w                       = text "struct" <+> myPretty w <+> myPretty (instName w) <> semi
-          k w                       = text "struct" <+> myPretty w <+> myPretty (instName w) <+> equals <+> braces(char '&' <> myPretty (methName w)) <> semi
-          h w                       = if nm1 == nm2 then wname w else gBuiltin (Derived (Derived nm1 nm2) nm3)
-             where nm1              = noq(tcname(proto w))
-                   Derived nm2 nm3  = noq (wname w)
 
 instName (GName m n)                = GName m (Derived n (globalName "instance"))
 methName (GName m n)                = GName m (Derived n (globalName "methods"))
@@ -523,19 +498,19 @@ instance Gen Stmt where
     gen env (Break _)               = text "break" <> semi
     gen env (Continue _)            = text "continue" <> semi
     gen env (If _ (b:bs) b2)        = genBranch env "if" b $+$ vmap (genBranch env "else if") bs $+$ genElse env b2
-    gen env (While _ e b [])        = (text "while" <+> parens (genBool env e <> text "->val") <+> char '{') $+$ nest 4 (genSuite env b) $+$ char '}'
+    gen env (While _ e b [])        = genBranch env "while" (Branch e b) 
     gen env _                       = empty
-
 
 genBranch env kw (Branch e b)       = (text kw <+> parens (genBranchExp env e) <+> char '{') $+$ nest 4 (genSuite env b) $+$ char '}'
 
-
-genBranchExp env (IsInstance _ x y) = text "$ISINSTANCE0" <> parens(gen env x <>comma <+> genQName env y)
+genBranchExp env (IsInstance _ x y) = gen env primISINSTANCE0 <> parens(gen env x <>comma <+> genQName env y)
+genBranchExp env (Call _ (TApp _ (Var _ f) _) (PosArg x PosNil) KwdNil)
+   | f == primISNOTNONE             = gen env primISNOTNONE0 <> parens(gen env x)
 genBranchExp env e@(Call _ (Dot _ (Var _ w) op) (PosArg x (PosArg y PosNil)) KwdNil)
                                     = case findQName w env of
                                         NVar (TCon _ (TC p [TCon _ (TC t [])]))
-                                          | p==qnOrd && t==qnInt ->
-                                             text "ORD_INT" <> text (nstr op) <> parens(gen env x <>comma <+> gen env y) 
+                                          | (p==qnOrd || p==qnEq) && elem t [qnInt, qnI64] ->
+                                             text "ORD_" <> genQName env t <> text (nstr op) <> parens(gen env x <>comma <+> gen env y) 
                                         _ -> genBool env e <> text "->val" 
 genBranchExp env e                  = genBool env e <> text "->val"
 
@@ -769,17 +744,18 @@ instance Gen Expr where
                                          _                -> genCall env [] e p
        where wInfo = findQName w env
     gen env (Call l  e@(TApp _ (Dot _ (Var _ w) fi) _) p@(PosArg _ (PosArg (List _ es) PosNil)) KwdNil)
-      | fi == fromiterKW 
-                                     = case findQName w env of
-                                          NVar (TCon _ (TC gn1 (TCon _ (TC gn2 _):( TCon _ (TC gn3 _):_))))
-                                             | gn2==qnDict && elem gn3 hs -> text "B_mk_dict" <> parens (pretty (length es) <> comma <+> hashwit gn3 <> hsep [comma <+> gen env e | e <- es])
-                                             | gn2==qnSetT && elem gn3 hs -> text "B_mk_set" <> parens (pretty (length es) <> comma <+> hashwit gn3 <> hsep [comma <+> gen env e | e <- es])
+      | fi == fromiterKW            = case findQName w env of
+                                          NVar (TCon _ (TC _ (TCon _ (TC gn2 _):_)))
+                                             | gn2==qnDict -> text "B_mk_dict" <> parens (pretty (length es) <> comma <+>
+                                                              parens (parens (text "B_MappingD_dict") <> genQName env w) <> text "->W_HashableD_AD_MappingD_dict" <>
+                                                              hsep [comma <+> gen env e | e <- es])
+                                             | gn2==qnSetT -> text "B_mk_set" <> parens (pretty (length es) <> comma <+>
+                                                              parens (parens (text "B_SetD_set") <> genQName env w) <> text "->W_HashableD_AD_SetD_set" <>
+                                                              hsep [comma <+> gen env e | e <- es])
                                           _ -> genCall env [] e p
-      where hs                       = [qnInt, qnStr, qnFloat, qnI64, qnI32, qnI16, qnU64, qnU32, qnU16, qnBytes]
-            hashwit gn               = gen env (witName (gBuiltin (Derived nHashable (noq gn))))
     gen env (Call l  e@(TApp _ (Dot _ (Dot _ (Var _ w) _) fi) _) p@(PosArg _ (PosArg (List _ es) PosNil)) KwdNil)
       | fi == fromiterKW            = case findQName w env of
-                                          NVar (TCon _ (TC gn1 (TCon _ (TC gn2 _):ts)))
+                                          NVar (TCon _ (TC _ (TCon _ (TC gn2 _):_)))
                                              | gn2==qnList -> text "B_mk_list" <> parens (pretty (length es) <> hsep [comma <+> gen env e | e <- es])
                                           _ -> genCall env [] e p
     gen env (Call _ e p _)          = genCall env [] e p
@@ -790,21 +766,10 @@ instance Gen Expr where
     gen env (DotI _ e i)            = gen env e <> text "->" <> gen env componentsKW <> brackets (pretty i)
     gen env (RestI _ e i)           = gen env eNone <> semi <+> text "// CodeGen for tuple tail not implemented"
     gen env (Tuple _ p KwdNil)      
-       | n == 0                    = gen env primNEWTUPLE0
-       | otherwise                 = gen env primNEWTUPLE <> parens (text (show n) <> comma' (gen env p))
-       where n                     = nargs p
-    gen env (List _ es)
-      | null es                     = newcon' env n <> parens (text "NULL" <> comma <+> text "NULL")
-      | otherwise                   = parens (lbrace <+> (
-                                         vcat (gen env n <+> tmp <+> equals <+> newcon' env n <> parens (text "NULL" <> comma <+> text "NULL") <> semi :
-                                                [append <> parens (pars e) <> semi | e <- es ]) $+$
-                                        tmp <> semi) <+> rbrace)
-      where n                       = qnList
-            tmp                     = gen env tmpV
-            w                       = gen env witSequenceList
-            append                  = w <> text "->" <> gen env classKW <> text "->" <> gen env appendKW
-            pars e                  = w <> comma <+> tmp <> comma <+> gen env e
-        -- brackets (commaSep (gen env) es)
+       | n == 0                     = gen env primNEWTUPLE0
+       | otherwise                  = gen env primNEWTUPLE <> parens (text (show n) <> comma' (gen env p))
+       where n                      = nargs p
+    gen env (List _ es)             = text "B_mk_list" <> parens (pretty (length es) <> hsep [comma <+> gen env e | e <- es])
     gen env (BinOp _ e1 And e2)     = gen env primAND <> parens (gen env t <> comma <+> gen env e1 <> comma <+> gen env e2)
       where t                       = typeOf env e1
     gen env (BinOp _ e1 Or e2)      = gen env primOR <> parens (gen env t <> comma <+> gen env e1 <> comma <+> gen env e2)

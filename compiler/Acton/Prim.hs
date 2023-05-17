@@ -65,6 +65,7 @@ primASSERT          = gPrim "ASSERT"
 primNEWACTOR        = gPrim "NEWACTOR"
 
 primISINSTANCE      = gPrim "ISINSTANCE"
+primISINSTANCE0     = gPrim "ISINSTANCE0"
 primCAST            = gPrim "CAST"
 primCONSTCONT       = gPrim "CONSTCONT"
 
@@ -87,6 +88,7 @@ witSequenceList     = GName mPrim $ Derived (deriveQ qnSequence) $ Derived (deri
 witCollectionList   = GName mPrim $ Derived (deriveQ qnCollection) $ Derived (deriveQ qnList) suffixWitness
 
 primISNOTNONE       = gPrim "ISNOTNONE"
+primISNOTNONE0      = gPrim "ISNOTNONE0"
 primISNONE          = gPrim "ISNONE"
 
 primSKIPRESc        = gPrim "SKIPRESc"

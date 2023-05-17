@@ -25,27 +25,27 @@ long longpow(long a, long e) {
 // General methods ///////////////////////////////////////////////////////////////////////
 
 B_i64 B_i64G_new(B_atom a) {
-    if ($ISINSTANCE(a,B_int)->val){
+    if ($ISINSTANCE0(a,B_int)){
         zz_struct n = ((B_int)a)-> val;
         if (n.n[0] > LONG_MAX || (labs(n.size))>1) {
             $RAISE((B_BaseException)$NEW(B_ValueError,to$str("i64(): int argument out of range")));
         }
         return toB_i64(n.size*n.n[0]);
     }
-    if ($ISINSTANCE(a,B_i64)->val) return (B_i64)a;
-    if ($ISINSTANCE(a,B_i32)->val) return toB_i64((long)((B_i32)a)->val);
-    if ($ISINSTANCE(a,B_i16)->val) return toB_i64((long)((B_i16)a)->val);
-    if ($ISINSTANCE(a,B_u64)->val) {
+    if ($ISINSTANCE0(a,B_i64)) return (B_i64)a;
+    if ($ISINSTANCE0(a,B_i32)) return toB_i64((long)((B_i32)a)->val);
+    if ($ISINSTANCE0(a,B_i16)) return toB_i64((long)((B_i16)a)->val);
+    if ($ISINSTANCE0(a,B_u64)) {
         unsigned long x = ((B_u64)a)->val;
         if (x > LONG_MAX) 
             $RAISE((B_BaseException)$NEW(B_ValueError,to$str("i64(): u64 argument out of range")));
         return toB_i64((long)x);
     }
-    if ($ISINSTANCE(a,B_u32)->val) return toB_i64((long)((B_u32)a)->val);
-    if ($ISINSTANCE(a,B_u16)->val) return toB_i64((long)((B_u16)a)->val);
-    if ($ISINSTANCE(a,B_float)->val) return toB_i64(round(((B_float)a)->val));
-    if ($ISINSTANCE(a,B_bool)->val) return toB_i64(((B_bool)a)->val);
-    if ($ISINSTANCE(a,B_str)->val) {
+    if ($ISINSTANCE0(a,B_u32)) return toB_i64((long)((B_u32)a)->val);
+    if ($ISINSTANCE0(a,B_u16)) return toB_i64((long)((B_u16)a)->val);
+    if ($ISINSTANCE0(a,B_float)) return toB_i64(round(((B_float)a)->val));
+    if ($ISINSTANCE0(a,B_bool)) return toB_i64(((B_bool)a)->val);
+    if ($ISINSTANCE0(a,B_str)) {
         long x;
         int c;
         sscanf((char *)((B_str)a)->str,"%ld%n",&x,&c);
