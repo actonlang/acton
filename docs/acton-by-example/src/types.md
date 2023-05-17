@@ -7,7 +7,7 @@ It is possible to specify the types of variables or arguments in a function thro
 Source:
 ```python
 # 'a: int' means the first argument `a` should be of type int
-# 'b: int' means the second argument `b` should be of type str
+# 'b: str means the second argument `b` should be of type str
 # The function returns nothing
 def foo(a: int, b: str) -> None:
     print(a, b)
@@ -49,4 +49,4 @@ Output:
 1234 hello
 ```
 
-Try changing the type of `i1` or `s1` and you will find that the compiler complains that it cannot solve the types of the program.
+Try changing the type of `i1` or `s1` and you will find that the compiler complains that it cannot solve the type constraints of the program.
