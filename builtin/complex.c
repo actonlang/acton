@@ -12,8 +12,10 @@
  * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
+GC_word B_complexD_gcbm[GC_BITMAP_SIZE(struct B_complex)];
+
 B_complex toB_complex(complex double c) {
-    B_complex res = malloc(sizeof(struct B_complex));
+    B_complex res = GC_MALLOC_EXPLICITLY_TYPED(sizeof(struct B_complex), B_complexG_methods.$GCdescr);
     res->$class = &B_complexG_methods;
     res->val = c;
     return res;
@@ -191,6 +193,7 @@ struct B_EqD_complex B_EqD_complex_instance;
 struct B_HashableD_complex B_HashableD_complex_instance;
 
 struct B_NumberD_complexG_class B_NumberD_complexG_methods = {
+    0,
     "B_NumberD_complex",
     UNASSIGNED,
     ($SuperG_class)&B_NumberG_methods,
@@ -219,6 +222,7 @@ struct B_NumberD_complex B_NumberD_complex_instance = {&B_NumberD_complexG_metho
 B_NumberD_complex B_NumberD_complexG_witness = &B_NumberD_complex_instance;
 
 struct B_DivD_complexG_class B_DivD_complexG_methods = {
+    0,
     "B_DivD_complex",
     UNASSIGNED,
     ($SuperG_class)&B_DivG_methods,
@@ -236,6 +240,7 @@ struct B_DivD_complex B_DivD_complex_instance = {&B_DivD_complexG_methods};
 B_DivD_complex B_DivD_complexG_witness = &B_DivD_complex_instance;
 
 struct B_MinusD_NumberD_complexG_class B_MinusD_NumberD_complexG_methods = {
+    0,
     "B_MinusD_NumberD_complex",
     UNASSIGNED,
     ($SuperG_class)&B_MinusG_methods,
@@ -252,6 +257,7 @@ struct B_MinusD_NumberD_complex B_MinusD_NumberD_complex_instance = {&B_MinusD_N
 B_MinusD_NumberD_complex B_MinusD_NumberD_complexG_witness = &B_MinusD_NumberD_complex_instance;
 
 struct B_EqD_complexG_class B_EqD_complexG_methods = {
+    0,
     "B_EqD_complex",
     UNASSIGNED,
     ($SuperG_class)&B_EqG_methods,
@@ -268,6 +274,7 @@ struct B_EqD_complex B_EqD_complex_instance = {&B_EqD_complexG_methods};
 B_EqD_complex B_EqD_complexG_witness = &B_EqD_complex_instance;
 
 struct B_HashableD_complexG_class B_HashableD_complexG_methods = {
+    0,
     "B_HashableD_complex",
     UNASSIGNED,
     ($SuperG_class)&B_HashableG_methods,

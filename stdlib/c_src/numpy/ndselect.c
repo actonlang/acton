@@ -25,6 +25,7 @@ numpyQ_ndselect numpyQ_ndselectD___deserialize__(numpyQ_ndselect wit, $Serial$st
 }
 
 struct numpyQ_ndselectG_class numpyQ_ndselectG_methods = {
+    0,
     "numpyQ_ndselect",
     UNASSIGNED,
     ($SuperG_class)&B_valueG_methods,
@@ -63,6 +64,7 @@ numpyQ_ndindex numpyQ_ndindexD___deserialize__(numpyQ_ndindex self, $Serial$stat
 }
 
 struct numpyQ_ndindexG_class numpyQ_ndindexG_methods = {
+    0,
     "numpyQ_ndindex",
     UNASSIGNED,
     ($SuperG_class)&B_valueG_methods,
@@ -100,6 +102,7 @@ numpyQ_ndslice numpyQ_ndsliceD___deserialize__(numpyQ_ndslice self, $Serial$stat
 }
 
 struct numpyQ_ndsliceG_class numpyQ_ndsliceG_methods = {
+    0,
     "numpyQ_ndslice",
     UNASSIGNED,
     ($SuperG_class)&B_valueG_methods,

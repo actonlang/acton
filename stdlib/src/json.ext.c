@@ -17,7 +17,7 @@ void jsonQ_encode_dict(yyjson_mut_doc *doc, yyjson_mut_val *node, B_dict data) {
         char *key = (char *)fromB_str((B_str)item->components[0]);
         char *value = (char *)fromB_str((B_str)item->components[1]);
         B_value v = item->components[1];
-        //log_info("key: %s  class_id: %d  type: %s", key, v->$class->$class_id, v->$class->$GCINFO);
+        //log_info("key: %s  class_id: %d  type: %s", key, v->$class->$class_id, v->$class->$name);
         switch (v->$class->$class_id) {
             case INT_ID:;
                 yyjson_mut_obj_add_int(doc, node, key, from$int((B_int)v));

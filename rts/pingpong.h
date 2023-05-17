@@ -13,7 +13,8 @@ typedef struct lambda$3 *lambda$3;
 typedef struct Pingpong *Pingpong;
 
 struct lambda$1G_class {
-    char *$GCINFO;
+    GC_descr $GCdescr;
+    char *$name;
     int $class_id;
     $SuperG_class $superclass;
     void (*__init__)(lambda$1, Pingpong, B_int, B_int);
@@ -29,10 +30,12 @@ struct lambda$1 {
     B_int count;
     B_int q;
 };
+extern GC_word lambda$1D_gcbm[GC_BITMAP_SIZE(struct lambda$1)];
 lambda$1 lambda$1G_new(Pingpong, B_int, B_int);
 
 struct lambda$2G_class {
-    char *$GCINFO;
+    GC_descr $GCdescr;
+    char *$name;
     int $class_id;
     $SuperG_class $superclass;
     void (*__init__)(lambda$2, Pingpong, B_int);
@@ -47,10 +50,12 @@ struct lambda$2 {
     Pingpong self;
     B_int q;
 };
+extern GC_word lambda$2D_gcbm[GC_BITMAP_SIZE(struct lambda$2)];
 lambda$2 lambda$2G_new(Pingpong, B_int);
 
 struct lambda$3G_class {
-    char *$GCINFO;
+    GC_descr $GCdescr;
+    char *$name;
     int $class_id;
     $SuperG_class $superclass;
     void (*__init__)(lambda$3, $Cont);
@@ -64,10 +69,12 @@ struct lambda$3 {
     struct lambda$3G_class *$class;
     $Cont cont;
 };
+extern GC_word lambda$3D_gcbm[GC_BITMAP_SIZE(struct lambda$3)];
 lambda$3 lambda$3G_new($Cont);
 
 struct PingpongG_class {
-    char *$GCINFO;
+    GC_descr $GCdescr;
+    char *$name;
     int $class_id;
     $SuperG_class $superclass;
     $R (*__init__)(Pingpong, B_int, $Cont);
@@ -92,6 +99,7 @@ struct Pingpong {
     B_int i;
     B_int count;
 };
+extern GC_word PingpongD_gcbm[GC_BITMAP_SIZE(struct Pingpong)];
 $R PingpongG_new(B_int, $Cont);
 
 extern struct lambda$1G_class lambda$1G_methods;

@@ -5,7 +5,8 @@
 struct mathQ_RealFuns;
 typedef struct mathQ_RealFuns *mathQ_RealFuns;
 struct mathQ_RealFunsG_class {
-    char *$GCINFO;
+    GC_descr $GCdescr;
+    char *$name;
     B_int $class_id;
     $SuperG_class $superclass;
     B_NoneType (*__init__) (mathQ_RealFuns);
@@ -33,12 +34,14 @@ struct mathQ_RealFunsG_class {
 struct mathQ_RealFuns {
     struct mathQ_RealFunsG_class *$class;
 };
+extern GC_word mathQ_RealFunsD_gcbm[GC_BITMAP_SIZE(struct mathQ_RealFuns)];
 extern struct mathQ_RealFunsG_class mathQ_RealFunsG_methods;
 mathQ_RealFuns mathQ_RealFunsG_new();
 struct mathQ_RealFunsD_float;
 typedef struct mathQ_RealFunsD_float *mathQ_RealFunsD_float;
 struct mathQ_RealFunsD_floatG_class {
-    char *$GCINFO;
+    GC_descr $GCdescr;
+    char *$name;
     B_int $class_id;
     $SuperG_class $superclass;
     B_NoneType (*__init__) (mathQ_RealFunsD_float);
@@ -66,6 +69,7 @@ struct mathQ_RealFunsD_floatG_class {
 struct mathQ_RealFunsD_float {
     struct mathQ_RealFunsD_floatG_class *$class;
 };
+extern GC_word mathQ_RealFunsD_floatD_gcbm[GC_BITMAP_SIZE(struct mathQ_RealFunsD_float)];
 extern struct mathQ_RealFunsD_floatG_class mathQ_RealFunsD_floatG_methods;
 mathQ_RealFunsD_float mathQ_RealFunsD_floatG_new();
 $WORD mathQ_sqrt (mathQ_RealFuns, $WORD);

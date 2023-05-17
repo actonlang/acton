@@ -1,7 +1,8 @@
 #pragma once
 
 struct $ContG_class {
-    char *$GCINFO;
+    GC_descr $GCdescr;
+    char *$name;
     int $class_id;
     $SuperG_class $superclass;
     void (*__init__)($Cont);
@@ -15,6 +16,7 @@ struct $ContG_class {
 struct $Cont {
     struct $ContG_class *$class;
 };
+extern GC_word $ContD_gcbm[GC_BITMAP_SIZE(struct $Cont)];
 extern struct $ContG_class $ContG_methods;
 
 void $ContD___init__($Cont);
@@ -25,7 +27,8 @@ $Cont $ContD___deserialize__($Cont, $Serial$state);
 
 
 struct $procG_class {
-    char *$GCINFO;
+    GC_descr $GCdescr;
+    char *$name;
     int $class_id;
     $SuperG_class $superclass;
     void (*__init__)($proc);
@@ -40,11 +43,13 @@ struct $procG_class {
 struct $proc {
     struct $procG_class *$class;
 };
+extern GC_word $procD_gcbm[GC_BITMAP_SIZE(struct $proc)];
 extern struct $procG_class $procG_methods;
 
 
 struct $actionG_class {
-    char *$GCINFO;
+    GC_descr $GCdescr;
+    char *$name;
     int $class_id;
     $SuperG_class $superclass;
     void (*__init__)($action);
@@ -60,11 +65,13 @@ struct $actionG_class {
 struct $action {
     struct $actionG_class *$class;
 };
+extern GC_word $actionD_gcbm[GC_BITMAP_SIZE(struct $action)];
 extern struct $actionG_class $actionG_methods;
 
 
 struct $mutG_class {
-    char *$GCINFO;
+    GC_descr $GCdescr;
+    char *$name;
     int $class_id;
     $SuperG_class $superclass;
     void (*__init__)($mut);
@@ -80,11 +87,13 @@ struct $mutG_class {
 struct $mut {
     struct $mutG_class *$class;
 };
+extern GC_word $mutD_gcbm[GC_BITMAP_SIZE(struct $mut)];
 extern struct $mutG_class $mutG_methods;
 
 
 struct $pureG_class {
-    char *$GCINFO;
+    GC_descr $GCdescr;
+    char *$name;
     int $class_id;
     $SuperG_class $superclass;
     void (*__init__)($pure);
@@ -100,6 +109,7 @@ struct $pureG_class {
 struct $pure {
     struct $pureG_class *$class;
 };
+extern GC_word $pureD_gcbm[GC_BITMAP_SIZE(struct $pure)];
 extern struct $pureG_class $pureG_methods;
 
 
@@ -107,7 +117,8 @@ extern struct $pureG_class $pureG_methods;
 struct $action2;
 typedef struct $action2 *$action2;
 struct $action2G_class {
-    char *$GCINFO;
+    GC_descr $GCdescr;
+    char *$name;
     int $class_id;
     $SuperG_class $superclass;
     void (*__init__)($action2);
@@ -123,11 +134,13 @@ struct $action2G_class {
 struct $action2 {
     struct $action2G_class *$class;
 };
+extern GC_word $action2D_gcbm[GC_BITMAP_SIZE(struct $action2)];
 
 struct $action3;
 typedef struct $action3 *$action3;
 struct $action3G_class {
-    char *$GCINFO;
+    GC_descr $GCdescr;
+    char *$name;
     int $class_id;
     $SuperG_class $superclass;
     void (*__init__)($action3);
@@ -143,3 +156,4 @@ struct $action3G_class {
 struct $action3 {
     struct $action3G_class *$class;
 };
+extern GC_word $action3D_gcbm[GC_BITMAP_SIZE(struct $action3)];

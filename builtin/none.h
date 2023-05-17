@@ -1,5 +1,6 @@
 struct B_NoneTypeG_class {
-    char *$GCINFO;
+    GC_descr $GCdescr;
+    char *$name;
     int $class_id;
     $SuperG_class $superclass;
     void (*__init__)(B_NoneType);
@@ -13,6 +14,7 @@ struct B_NoneTypeG_class {
 struct B_NoneType {
     struct B_NoneTypeG_class *$class;
 };
+extern GC_word B_NoneTypeD_gcbm[GC_BITMAP_SIZE(struct B_NoneType)];
 
 extern struct B_NoneTypeG_class B_NoneTypeG_methods;
 B_NoneType B_NoneTypeG_new();

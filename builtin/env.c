@@ -80,7 +80,7 @@ B_Env B_EnvG_newactor(B_WorldAuth token, B_list args) {
 }
 
 B_WorldAuth B_WorldAuthG_new() {
-    B_WorldAuth $tmp = malloc(sizeof(struct B_WorldAuth));
+    B_WorldAuth $tmp = GC_MALLOC_EXPLICITLY_TYPED(sizeof(struct B_WorldAuth), B_WorldAuthG_methods.$GCdescr);
     $tmp->$class = &B_WorldAuthG_methods;
     //   B_WorldAuthG_methods.__init__($tmp);
     return $tmp;

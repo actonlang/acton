@@ -12,6 +12,8 @@
  * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
+GC_word B_rangeD_gcbm[GC_BITMAP_SIZE(struct B_range)];
+
 B_range B_rangeG_new(B_int start, B_int stop, B_int step) {
     return $NEW(B_range, start, stop, step);
 }
@@ -65,7 +67,7 @@ B_range B_rangeD___deserialize__(B_range self, $Serial$state state) {
     $ROW this = state->row;
     state->row = this->next;
     state->row_no++;
-    B_range res = malloc(sizeof(struct B_range));
+    B_range res = GC_MALLOC_EXPLICITLY_TYPED(sizeof(struct B_range), B_rangeG_methods.$GCdescr);
     res->$class = &B_rangeG_methods;
     res->start = (long)this->blob[0];
     res->stop = (long)this->blob[1];
@@ -109,6 +111,7 @@ B_IteratorB_range B_IteratorB_range$_deserialize(B_IteratorB_range self, $Serial
 }
 
 struct B_IteratorB_rangeG_class B_IteratorB_rangeG_methods = {
+    0,
     "B_IteratorB_range",
     UNASSIGNED,
     ($SuperG_class)&B_IteratorG_methods,

@@ -5,13 +5,15 @@ struct B_range {
     long stop;
     long step;
 };
+extern GC_word B_rangeD_gcbm[GC_BITMAP_SIZE(struct B_range)];
 
 // Iterators over ranges ///////////////////////////////////////////////////////
 
 typedef struct B_IteratorB_range *B_IteratorB_range;
 
 struct B_IteratorB_rangeG_class {
-    char *$GCINFO;
+    GC_descr $GCdescr;
+    char *$name;
     int $class_id;
     $SuperG_class $superclass;
     void (*__init__)(B_IteratorB_range, B_range);
@@ -28,6 +30,7 @@ struct B_IteratorB_range {
     B_range src;
     int nxt;
 };
+extern GC_word B_IteratorB_rangeD_gcbm[GC_BITMAP_SIZE(struct B_IteratorB_range)];
 
 extern struct B_IteratorB_rangeG_class  B_IteratorB_rangeG_methods;
 B_IteratorB_range B_IteratorB_rangeG_new(B_range);

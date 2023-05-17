@@ -69,6 +69,7 @@ $Cont $ContD___deserialize__($Cont self, $Serial$state state) {
 }
 
 struct $ContG_class $ContG_methods = {
+    0,
     "$Cont",
     UNASSIGNED,
     NULL,
@@ -81,6 +82,7 @@ struct $ContG_class $ContG_methods = {
     NULL                /* __call__ */
 };
 struct $procG_class $procG_methods = {
+    0,
     "$proc",
     UNASSIGNED,
     NULL,
@@ -94,6 +96,7 @@ struct $procG_class $procG_methods = {
     NULL                /* __exec__ */
 };
 struct $actionG_class $actionG_methods = {
+    0,
     "$action",
     UNASSIGNED,
     NULL,
@@ -108,6 +111,7 @@ struct $actionG_class $actionG_methods = {
     NULL                /* __asyn__ */
 };
 struct $mutG_class $mutG_methods = {
+    0,
     "$mut",
     UNASSIGNED,
     NULL,
@@ -122,6 +126,7 @@ struct $mutG_class $mutG_methods = {
     NULL                /* __eval__ */
 };
 struct $pureG_class $pureG_methods = {
+    0,
     "$pure",
     UNASSIGNED,
     NULL,

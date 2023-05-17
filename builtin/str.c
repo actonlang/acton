@@ -23,6 +23,10 @@
 
 #include "../deps/libutf8proc/utf8proc.h"
 
+GC_word B_strD_gcbm[GC_BITMAP_SIZE(struct B_str)];
+GC_word B_bytearrayD_gcbm[GC_BITMAP_SIZE(struct B_bytearray)];
+GC_word B_bytesD_gcbm[GC_BITMAP_SIZE(struct B_bytes)];
+
 // Auxiliaries, some used for both str and bytearray implementations ////////////////////////////////////////////////////////
 
 static unsigned char nul = 0;
@@ -40,7 +44,7 @@ static struct B_str whitespace_struct = {&B_strG_methods,6,6,(unsigned char *)" 
 static B_str whitespace_str = &whitespace_struct;
 
 #define NEW_UNFILLED_STR(nm,nchrs,nbtes)        \
-    nm = malloc(sizeof(struct B_str));           \
+    nm = GC_MALLOC_EXPLICITLY_TYPED(sizeof(struct B_str), B_strG_methods.$GCdescr); \
     (nm)->$class = &B_strG_methods;               \
     (nm)->nchars = nchrs;                       \
     (nm)->nbytes = nbtes;                       \
@@ -48,7 +52,7 @@ static B_str whitespace_str = &whitespace_struct;
     (nm)->str[nbtes] = 0
 
 #define NEW_UNFILLED_BYTEARRAY(nm,nbtes)        \
-    nm = malloc(sizeof(struct B_bytearray));     \
+    nm = GC_MALLOC_EXPLICITLY_TYPED(sizeof(struct B_bytearray), B_bytearrayG_methods.$GCdescr); \
     (nm)->$class = &B_bytearrayG_methods;         \
     (nm)->nbytes = nbtes;                       \
     (nm)->capacity = nbtes;                     \
@@ -56,7 +60,7 @@ static B_str whitespace_str = &whitespace_struct;
     (nm)->str[nbtes] = 0
 
 #define NEW_UNFILLED_BYTES(nm,nbtes)            \
-    nm = malloc(sizeof(struct B_bytes));         \
+    nm = GC_MALLOC_EXPLICITLY_TYPED(sizeof(struct B_bytes), B_bytesG_methods.$GCdescr); \
     (nm)->$class = &B_bytesG_methods;             \
     (nm)->nbytes = nbtes;                       \
     (nm)->str = GC_MALLOC_ATOMIC(nbtes + 1);              \
@@ -201,7 +205,7 @@ static int get_index(int i, int nchars) {
 
 static int fix_start_end(int nchars, B_int *start, B_int *end) {
     if (*start==NULL) {
-        *start = malloc(sizeof(struct B_int));
+        *start = GC_MALLOC_EXPLICITLY_TYPED(sizeof(struct B_int), B_intG_methods.$GCdescr);
         *start = to$int(0);
     }
     int st = from$int(*start);
@@ -213,7 +217,7 @@ static int fix_start_end(int nchars, B_int *start, B_int *end) {
     *start = to$int(st);
 
     if (*end==NULL) {
-        *end = malloc(sizeof(struct B_int));
+        *end = GC_MALLOC_EXPLICITLY_TYPED(sizeof(struct B_int), B_intG_methods.$GCdescr);
         *end = to$int(nchars);
     }
     int en = from$int(*end);
@@ -420,7 +424,7 @@ B_str B_strD___deserialize__(B_str self, $Serial$state state) {
     $ROW this = state->row;
     state->row =this->next;
     state->row_no++;
-    B_str res = malloc(sizeof(struct B_str));
+    B_str res = GC_MALLOC_EXPLICITLY_TYPED(sizeof(struct B_str), B_strG_methods.$GCdescr);
     long nbytes;
     memcpy(&nbytes,this->blob,sizeof($WORD));
     res->$class = &B_strG_methods;
@@ -1256,8 +1260,7 @@ static B_str B_IteratorB_strD_next(B_IteratorB_str self) {
 }
 
 
-struct B_IteratorB_strG_class B_IteratorB_strG_methods = {"B_IteratorB_str",UNASSIGNED,($SuperG_class)&B_IteratorG_methods, B_IteratorB_strD_init,
-                                                    B_IteratorB_strD_serialize, B_IteratorB_str$_deserialize,
+struct B_IteratorB_strG_class B_IteratorB_strG_methods = {0,"B_IteratorB_str",UNASSIGNED,($SuperG_class)&B_IteratorG_methods, B_IteratorB_strD_init,                                                    B_IteratorB_strD_serialize, B_IteratorB_str$_deserialize,
                                                     B_IteratorB_strD_bool, B_IteratorB_strD_str, B_IteratorB_strD_str, B_IteratorB_strD_next};
 
 // now, define __iter__
@@ -1423,7 +1426,7 @@ B_bytearray B_bytearrayD___deserialize__(B_bytearray res, $Serial$state state) {
     state->row =this->next;
     state->row_no++;
     if(!res)
-        res = malloc(sizeof(struct B_bytearray));
+        res = GC_MALLOC_EXPLICITLY_TYPED(sizeof(struct B_bytearray), B_bytearrayG_methods.$GCdescr);
     long nbytes;
     memcpy(&nbytes,this->blob,sizeof($WORD));
     res->$class = &B_bytearrayG_methods;
@@ -2088,6 +2091,7 @@ B_IteratorB_bytearray B_IteratorB_bytearray$_deserialize(B_IteratorB_bytearray r
 }
 
 struct B_IteratorB_bytearrayG_class B_IteratorB_bytearrayG_methods = {
+    0,
     "",
     UNASSIGNED,
     ($SuperG_class)&B_IteratorG_methods,
@@ -2411,7 +2415,7 @@ B_bytes B_bytesD___deserialize__(B_bytes self, $Serial$state state) {
     $ROW this = state->row;
     state->row =this->next;
     state->row_no++;
-    B_bytes res = malloc(sizeof(struct B_bytes));
+    B_bytes res = GC_MALLOC_EXPLICITLY_TYPED(sizeof(struct B_bytes), B_bytesG_methods.$GCdescr);
     long nbytes;
     memcpy(&nbytes,this->blob,sizeof($WORD));
     res->$class = &B_bytesG_methods;
@@ -3104,8 +3108,7 @@ static B_int B_IteratorB_bytesD_next(B_IteratorB_bytes self) {
     return self->nxt >= self->src->nbytes ? NULL : to$int(self->src->str[self->nxt++]);
 }
 
-struct B_IteratorB_bytesG_class B_IteratorB_bytesG_methods = {"B_IteratorB_bytes",UNASSIGNED,($SuperG_class)&B_IteratorG_methods, B_IteratorB_bytesD_init,
-                                                        B_IteratorB_bytesD_serialize, B_IteratorB_bytes$_deserialize,
+struct B_IteratorB_bytesG_class B_IteratorB_bytesG_methods = {0,"B_IteratorB_bytes",UNASSIGNED,($SuperG_class)&B_IteratorG_methods, B_IteratorB_bytesD_init,                                                        B_IteratorB_bytesD_serialize, B_IteratorB_bytes$_deserialize,
                                                         B_IteratorB_bytesD_bool, B_IteratorB_bytesD_str,  B_IteratorB_bytesD_str, B_IteratorB_bytesD_next};
 
 B_Iterator B_ContainerD_bytesD___iter__ (B_ContainerD_bytes wit, B_bytes str) {
@@ -3375,7 +3378,7 @@ B_str B_strD_join_par(char lpar, B_list elems, char rpar) {
 
 B_str $default__str__(B_value self) {
     char *s;
-    asprintf(&s,"<%s object at %p>",self->$class->$GCINFO,self);
+    asprintf(&s,"<%s object at %p>",self->$class->$name,self);
     return to$str(s);
 }
 
@@ -3510,6 +3513,7 @@ struct B_OrdD_bytearray B_OrdD_bytearray_instance = {&B_OrdD_bytearrayG_methods}
 B_OrdD_bytearray B_OrdD_bytearrayG_witness = &B_OrdD_bytearray_instance;
 
 struct B_SequenceD_bytearrayG_class B_SequenceD_bytearrayG_methods = {
+    0,
     "B_SequenceD_bytearray",
     UNASSIGNED,
     ($SuperG_class)&B_SequenceG_methods,
@@ -3540,6 +3544,7 @@ struct B_SequenceD_bytearray B_SequenceD_bytearray_instance = {
 B_SequenceD_bytearray B_SequenceD_bytearrayG_witness = &B_SequenceD_bytearray_instance;
 
 struct B_CollectionD_SequenceD_bytearrayG_class B_CollectionD_SequenceD_bytearrayG_methods = {
+    0,
     "B_CollectionD_SequenceD_bytearray",
     UNASSIGNED,
     ($SuperG_class)&B_CollectionG_methods,
@@ -3577,6 +3582,7 @@ struct B_TimesD_SequenceD_bytearray B_TimesD_SequenceD_bytearray_instance = {&B_
 B_TimesD_SequenceD_bytearray B_TimesD_SequenceD_bytearrayG_witness = &B_TimesD_SequenceD_bytearray_instance;
 
 struct B_ContainerD_bytearrayG_class B_ContainerD_bytearrayG_methods = {
+    0,
     "B_ContainerD_bytearray",
     UNASSIGNED,
     ($SuperG_class)&B_ContainerG_methods,

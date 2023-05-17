@@ -12,6 +12,7 @@ struct B_set {
     long finger;                       // Search finger for pop() 
     B_setentry *table;                  // the hashtable
 };
+extern GC_word B_setD_gcbm[GC_BITMAP_SIZE(struct B_set)];
 
 
 // Iterators over sets ///////////////////////////////////////////////////////
@@ -19,7 +20,8 @@ struct B_set {
 typedef struct B_IteratorD_set *B_IteratorD_set; ;
 
 struct B_IteratorD_setG_class {
-    char *$GCINFO;
+    GC_descr $GCdescr;
+    char *$name;
     int $class_id;
     $SuperG_class $superclass;
     void (*__init__)(B_IteratorD_set, B_set);
@@ -36,6 +38,7 @@ struct B_IteratorD_set {
     B_set src;
     int nxt;
 };
+extern GC_word B_IteratorD_setD_gcbm[GC_BITMAP_SIZE(struct B_IteratorD_set)];
 
 extern struct  B_IteratorD_setG_class  B_IteratorD_setG_methods;
 B_IteratorD_set B_IteratorD_setG_new(B_set);

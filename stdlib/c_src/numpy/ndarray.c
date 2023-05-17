@@ -363,6 +363,7 @@ numpyQ_ndarray numpyQ_ndarrayD___ndgetslice__(numpyQ_ndarray a, B_list ix) {
 }
 
 struct numpyQ_ndarrayG_class numpyQ_ndarrayG_methods = {
+    0,
     "numpyQ_ndarray",
     UNASSIGNED,
     ($SuperG_class)&B_valueG_methods,
@@ -849,8 +850,7 @@ numpyQ_IteratorD_ndarray numpyQ_IteratorD_ndarray$_deserialize(numpyQ_IteratorD_
     return NULL;
 }
 
-struct numpyQ_IteratorD_ndarrayG_class numpyQ_IteratorD_ndarrayG_methods = {"",UNASSIGNED,($SuperG_class)&B_IteratorG_methods, numpyQ_IteratorD_init,
-                                                                        numpyQ_IteratorD_$serialize, numpyQ_IteratorD_ndarray$_deserialize,numpyQ_IteratorB_bool,
+struct numpyQ_IteratorD_ndarrayG_class numpyQ_IteratorD_ndarrayG_methods = {0,"",UNASSIGNED,($SuperG_class)&B_IteratorG_methods, numpyQ_IteratorD_init,                                                                        numpyQ_IteratorD_$serialize, numpyQ_IteratorD_ndarray$_deserialize,numpyQ_IteratorB_bool,
                                                                         numpyQ_IteratorB_str,numpyQ_IteratorB_str,numpyQ_IteratorD_ndarrayD___next__};
 
 numpyQ_ndarray numpyQ_roll(numpyQ_Primitive pwit, numpyQ_ndarray a, B_int n) {

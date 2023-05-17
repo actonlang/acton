@@ -12,6 +12,7 @@
  * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
+GC_word B_sliceD_gcbm[GC_BITMAP_SIZE(struct B_slice)];
 
 /* Normalize slice notation, so that
    - if step == 0, VALUEERROR is raised
@@ -55,7 +56,7 @@ void normalize_slice(B_slice slc, long len, long *slen, long *start, long *stop,
 }
 
 B_slice B_sliceG_new(B_int start,B_int stop,B_int step) {
-    return $NEW(B_slice,start,stop,step);
+    return $NEW(B_slice, start, stop, step);
 }
 
 B_NoneType B_sliceD___init__(B_slice s, B_int start, B_int stop, B_int step) {
@@ -87,7 +88,7 @@ B_slice B_sliceD___deserialize__ (B_slice self, $Serial$state state) {
     $ROW this = state->row;
     state->row = this->next;
     state->row_no++;
-    B_slice res = malloc(sizeof(struct B_slice));
+    B_slice res = GC_MALLOC_EXPLICITLY_TYPED(sizeof(struct B_slice), B_sliceG_methods.$GCdescr);
     res->$class = &B_sliceG_methods;
     res->start = malloc(sizeof(long));
     res->stop = malloc(sizeof(long));

@@ -8,7 +8,8 @@ struct B_IteratorD_enumerate;
 typedef struct B_IteratorD_enumerate *B_IteratorD_enumerate;
 
 struct B_IteratorD_enumerateG_class {
-  char *$GCINFO;
+  GC_descr $GCdescr;
+  char *$name;
   int $class_id;
   $SuperG_class $superclass;
   void (*__init__)(B_IteratorD_enumerate, B_Iterator,B_int);
@@ -25,6 +26,7 @@ struct B_IteratorD_enumerate {
   B_Iterator it;
   int nxt;
 };
+extern GC_word B_IteratorD_enumerateD_gcbm[GC_BITMAP_SIZE(struct B_IteratorD_enumerate)];
 
 extern struct B_IteratorD_enumerateG_class B_IteratorD_enumerateG_methods;
 B_IteratorD_enumerate B_IteratorD_enumerateG_new(B_Iterator,B_int);
@@ -38,7 +40,8 @@ struct B_IteratorD_filter;
 typedef struct B_IteratorD_filter *B_IteratorD_filter;
 
 struct B_IteratorD_filterG_class {
-  char *$GCINFO;
+  GC_descr $GCdescr;
+  char *$name;
   int $class_id;
   $SuperG_class $superclass;
   void (*__init__)(B_IteratorD_filter, B_Iterator, $pure);
@@ -55,6 +58,7 @@ struct B_IteratorD_filter {
   B_Iterator it;
   $pure f;
 };
+extern GC_word B_IteratorD_filterD_gcbm[GC_BITMAP_SIZE(struct B_IteratorD_filter)];
 
 extern struct B_IteratorD_filterG_class B_IteratorD_filterG_methods;
 B_IteratorD_filter B_IteratorD_filterG_new(B_Iterator, $pure);
@@ -67,7 +71,8 @@ struct B_IteratorD_map;
 typedef struct B_IteratorD_map *B_IteratorD_map;
 
 struct B_IteratorD_mapG_class {
-  char *$GCINFO;
+  GC_descr $GCdescr;
+  char *$name;
   int $class_id;
   $SuperG_class $superclass;
   void (*__init__)(B_IteratorD_map, B_Iterator, $pure);
@@ -84,6 +89,7 @@ struct B_IteratorD_map {
   B_Iterator it;
   $pure f;
 };
+extern GC_word B_IteratorD_mapD_gcbm[GC_BITMAP_SIZE(struct B_IteratorD_map)];
 
 extern struct B_IteratorD_mapG_class B_IteratorD_mapG_methods;
 B_IteratorD_map B_IteratorD_mapG_new(B_Iterator, $pure);
@@ -94,7 +100,8 @@ struct B_IteratorD_zip;
 typedef struct B_IteratorD_zip *B_IteratorD_zip;
 
 struct B_IteratorD_zipG_class {
-  char *$GCINFO;
+  GC_descr $GCdescr;
+  char *$name;
   int $class_id;
   $SuperG_class $superclass;
   void (*__init__)(B_IteratorD_zip, B_Iterator, B_Iterator);
@@ -111,6 +118,7 @@ struct B_IteratorD_zip {
   B_Iterator it1;
   B_Iterator it2;
 };
+extern GC_word B_IteratorD_zipD_gcbm[GC_BITMAP_SIZE(struct B_IteratorD_zip)];
 
 extern struct B_IteratorD_zipG_class B_IteratorD_zipG_methods;
 B_IteratorD_zip B_IteratorD_zipG_new(B_Iterator, B_Iterator);
@@ -124,7 +132,8 @@ struct B_EqOpt;
 typedef struct B_EqOpt *B_EqOpt;
 
 struct B_EqOptG_class {
-    char *$GCINFO;
+    GC_descr $GCdescr;
+    char *$name;
     int $class_id;
     $SuperG_class $superclass;
     void (*__init__)(B_EqOpt, B_Eq);
@@ -136,6 +145,7 @@ struct B_EqOpt {
     struct B_EqOptG_class *$class;
     B_Eq W_Eq$A;
 };
+extern GC_word B_EqOptD_gcbm[GC_BITMAP_SIZE(struct B_EqOpt)];
 
 B_EqOpt B_EqOptG_new(B_Eq);
 

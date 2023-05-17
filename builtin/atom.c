@@ -13,6 +13,7 @@
  */
 
 struct B_atomG_class B_atomG_methods = {
+    0,
     "B_atom",
     UNASSIGNED,
     ($SuperG_class)&B_valueG_methods

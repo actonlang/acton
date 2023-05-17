@@ -19,12 +19,13 @@ B_NoneType mathQ_RealFunsD___init__ (mathQ_RealFuns W_self) {
     return B_None;
 }
 mathQ_RealFuns mathQ_RealFunsG_new() {
-    mathQ_RealFuns $tmp = malloc(sizeof(struct mathQ_RealFuns));
+    mathQ_RealFuns $tmp = GC_MALLOC_EXPLICITLY_TYPED(sizeof(struct mathQ_RealFuns), mathQ_RealFunsG_methods.$GCdescr);
     $tmp->$class = &mathQ_RealFunsG_methods;
     mathQ_RealFunsG_methods.__init__($tmp);
     return $tmp;
 }
 struct mathQ_RealFunsG_class mathQ_RealFunsG_methods;
+GC_word mathQ_RealFunsD_gcbm[GC_BITMAP_SIZE(struct mathQ_RealFuns)];
 B_NoneType mathQ_RealFunsD_floatD___init__ (mathQ_RealFunsD_float W_self) {
     mathQ_RealFunsG_methods.__init__((mathQ_RealFuns)W_self);
     return B_None;
@@ -86,24 +87,29 @@ B_float mathQ_RealFunsD_float$atanh(mathQ_RealFunsD_float wit, B_float x) {
 
                       
 mathQ_RealFunsD_float mathQ_RealFunsD_floatG_new() {
-    mathQ_RealFunsD_float $tmp = malloc(sizeof(struct mathQ_RealFunsD_float));
+    mathQ_RealFunsD_float $tmp = GC_MALLOC_EXPLICITLY_TYPED(sizeof(struct mathQ_RealFunsD_float), mathQ_RealFunsD_floatG_methods.$GCdescr);
     $tmp->$class = &mathQ_RealFunsD_floatG_methods;
     mathQ_RealFunsD_floatG_methods.__init__($tmp);
     return $tmp;
 }
 struct mathQ_RealFunsD_floatG_class mathQ_RealFunsD_floatG_methods;
+GC_word mathQ_RealFunsD_floatD_gcbm[GC_BITMAP_SIZE(struct mathQ_RealFunsD_float)];
 int mathQ_done$ = 0;
 void mathQ___init__ () {
     if (mathQ_done$) return;
     mathQ_done$ = 1;
     {
-        mathQ_RealFunsG_methods.$GCINFO = "mathQ_RealFuns";
+        memset(mathQ_RealFunsD_gcbm, 0xFF, sizeof(mathQ_RealFunsD_gcbm));
+        mathQ_RealFunsG_methods.$GCdescr = GC_make_descriptor(mathQ_RealFunsD_gcbm, GC_WORD_LEN(struct mathQ_RealFuns));
+        mathQ_RealFunsG_methods.$name = "mathQ_RealFuns";
         mathQ_RealFunsG_methods.$superclass = NULL;
         mathQ_RealFunsG_methods.__init__ = mathQ_RealFunsD___init__;
         $register(&mathQ_RealFunsG_methods);
     }
     {
-        mathQ_RealFunsD_floatG_methods.$GCINFO = "mathQ_RealFunsD_float";
+        memset(mathQ_RealFunsD_floatD_gcbm, 0xFF, sizeof(mathQ_RealFunsD_floatD_gcbm));
+        mathQ_RealFunsD_floatG_methods.$GCdescr = GC_make_descriptor(mathQ_RealFunsD_floatD_gcbm, GC_WORD_LEN(struct mathQ_RealFunsD_float));
+        mathQ_RealFunsD_floatG_methods.$name = "mathQ_RealFunsD_float";
         mathQ_RealFunsD_floatG_methods.$superclass = ($SuperG_class)&mathQ_RealFunsG_methods;
         mathQ_RealFunsD_floatG_methods.__serialize__ = mathQ_RealFunsD_floatD___serialize__,
         mathQ_RealFunsD_floatG_methods.__deserialize__ = mathQ_RealFunsD_floatD___deserialize__,

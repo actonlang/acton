@@ -9,6 +9,7 @@ struct B_complex {
     struct B_complexG_class *$class;
     complex double val;
 };
+extern GC_word B_complexD_gcbm[GC_BITMAP_SIZE(struct B_complex)];
 
 B_complex toB_complex(complex double c);
 

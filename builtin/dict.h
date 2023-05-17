@@ -5,6 +5,7 @@ struct B_dict {
     long numelements;               // nr of elements in dictionary
     $table table;                   // the hashtable
 };
+extern GC_word B_dictD_gcbm[GC_BITMAP_SIZE(struct B_dict)];
 
 // Iterators over dicts ///////////////////////////////////////////////////////
 
@@ -13,7 +14,8 @@ struct B_dict {
 typedef struct B_IteratorD_dict *B_IteratorD_dict;
 
 struct B_IteratorD_dictG_class {
-    char *$GCINFO;
+    GC_descr $GCdescr;
+    char *$name;
     int $class_id;
     $SuperG_class $superclass;
     void (*__init__)(B_IteratorD_dict, B_dict);
@@ -30,6 +32,7 @@ struct B_IteratorD_dict {
     B_dict src;
     int nxt;
 };
+extern GC_word B_IteratorD_dictD_gcbm[GC_BITMAP_SIZE(struct B_IteratorD_dict)];
 
 extern struct B_IteratorD_dictG_class  B_IteratorD_dictG_methods;
 B_IteratorD_dict B_IteratorD_dictG_new(B_dict);
@@ -39,7 +42,8 @@ B_IteratorD_dict B_IteratorD_dictG_new(B_dict);
 typedef struct B_IteratorD_dict_values *B_IteratorD_dict_values;
 
 struct B_IteratorD_dict_valuesG_class {
-    char *$GCINFO;
+    GC_descr $GCdescr;
+    char *$name;
     int $class_id;
     $SuperG_class $superclass;
     void (*__init__)(B_IteratorD_dict_values, B_dict);
@@ -56,6 +60,7 @@ struct B_IteratorD_dict_values {
     B_dict src;
     int nxt;
 };
+extern GC_word B_IteratorD_dict_valuesD_gcbm[GC_BITMAP_SIZE(struct B_IteratorD_dict_values)];
 
 extern struct B_IteratorD_dict_valuesG_class  B_IteratorD_dict_valuesG_methods;
 B_IteratorD_dict_values B_IteratorD_dict_valuesG_new(B_dict);
@@ -65,7 +70,8 @@ B_IteratorD_dict_values B_IteratorD_dict_valuesG_new(B_dict);
 typedef struct B_IteratorD_dict_items *B_IteratorD_dict_items;
 
 struct B_IteratorD_dict_itemsG_class {
-    char *$GCINFO;
+    GC_descr $GCdescr;
+    char *$name;
     int $class_id;
     $SuperG_class $superclass;
     void (*__init__)(B_IteratorD_dict_items, B_dict);
@@ -82,6 +88,7 @@ struct B_IteratorD_dict_items {
     B_dict src;
     int nxt;
 };
+extern GC_word B_IteratorD_dict_itemsD_gcbm[GC_BITMAP_SIZE(struct B_IteratorD_dict_items)];
 
 extern struct B_IteratorD_dict_itemsG_class  B_IteratorD_dict_itemsG_methods;
 B_IteratorD_dict_items B_IteratorD_dict_itemsG_new(B_dict);

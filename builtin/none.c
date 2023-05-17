@@ -35,5 +35,4 @@ B_str B_NoneTypeD__str__(B_NoneType self) {
   return to$str("None");
 }
 
-struct B_NoneTypeG_class B_NoneTypeG_methods = {"B_NoneType",UNASSIGNED,($SuperG_class)&B_valueG_methods,(void (*)(B_NoneType))$default__init__,
-                                            B_NoneTypeD__serialize__,  B_NoneTypeD__deserialize__, B_NoneTypeD__bool__, B_NoneTypeD__str__, B_NoneTypeD__str__};
+struct B_NoneTypeG_class B_NoneTypeG_methods = {0,"B_NoneType",UNASSIGNED,($SuperG_class)&B_valueG_methods,(void (*)(B_NoneType))$default__init__,                                            B_NoneTypeD__serialize__,  B_NoneTypeD__deserialize__, B_NoneTypeD__bool__, B_NoneTypeD__str__, B_NoneTypeD__str__};
