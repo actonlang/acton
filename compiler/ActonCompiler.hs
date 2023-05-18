@@ -36,7 +36,11 @@ import qualified Pretty
 import qualified InterfaceFiles
 
 import Control.Applicative
+import Control.Concurrent.Async
+import Control.Concurrent.MVar
 import Control.Exception (throw,catch,displayException,IOException,ErrorCall)
+import Control.Exception (bracketOnError)
+import Control.Concurrent (forkIO)
 import Control.Monad
 import Data.List.Split
 import Data.Monoid ((<>))
@@ -60,6 +64,8 @@ import qualified System.Environment
 import qualified System.Exit
 import qualified Paths_acton
 import Text.Printf
+
+import qualified Data.ByteString.Char8 as B
 
 #if defined(darwin_HOST_OS) && defined(aarch64_HOST_ARCH)
 ccTarget = " -target aarch64-macos-none "
@@ -709,18 +715,38 @@ runRestPasses opts paths env0 parsed stubMode = do
                                  putStrLn ccCmd
                                  putStrLn arCmd
                              writeFile buildF $ unlines ["#!/bin/sh", "cd ..", ccCmd, arCmd]
-                             (returnCode, ccStdout, ccStderr) <- readCreateProcessWithExitCode (shell $ ccCmd ++ " && " ++ arCmd){ cwd = Just (takeDirectory (projPath paths)) } ""
+                             runCc (ccCmd ++ " && " ++ arCmd) (Just (takeDirectory (projPath paths)))
                              timeCC <- getTime Monotonic
                              iff (C.timing opts) $ putStrLn("    Pass: C compilation   : " ++ fmtTime (timeCC - timeCodeWrite))
-                             case returnCode of
-                                 ExitSuccess -> return()
-                                 ExitFailure _ -> do printIce "compilation of generated C code failed"
-                                                     putStrLn $ "cc stdout:\n" ++ ccStdout
-                                                     putStrLn $ "cc stderr:\n" ++ ccStderr
-                                                     System.Exit.exitFailure
                                             )
 
                       return $ Acton.Env.addMod mn iface (env0 `Acton.Env.withModulesFrom` env)
+
+executeProcess :: String -> Maybe FilePath -> IO (ExitCode, B.ByteString, B.ByteString)
+executeProcess command workingDir = do
+    let process = (shell command) {
+            cwd = workingDir,
+            std_out = CreatePipe,
+            std_err = CreatePipe
+        }
+    (_, Just std_out, Just std_err, processHandle) <- createProcess process
+    let readStdout = B.hGetContents std_out
+        readStderr = B.hGetContents std_err
+    (stdoutData, stderrData) <- runConcurrently $ (,) <$> Concurrently readStdout <*> Concurrently readStderr
+    exitCode <- waitForProcess processHandle
+    return (exitCode, stdoutData, stderrData)
+
+runCc cmd wd = do
+    (exitCode, out, err) <- executeProcess cmd wd
+    case exitCode of
+        ExitSuccess -> return ()
+        ExitFailure _ -> do
+            printIce "compilation of C code failed"
+            putStrLn "cc stdout:"
+            B.putStrLn out
+            putStrLn "cc stderr:"
+            B.putStrLn err
+            System.Exit.exitFailure
 
 handle errKind f src paths mn ex = do putStrLn ("\nERROR: Error when compiling " ++ (prstr mn) ++ " module: " ++ errKind)
                                       putStrLn (Acton.Parser.makeReport (f ex) src)
@@ -745,14 +771,9 @@ buildExecutable env opts paths binTask
                                       appendFile buildF ccCmd
                                       setFileMode buildF 0o755
                                       timeStart <- getTime Monotonic
-                                      (returnCode, ccStdout, ccStderr) <- readCreateProcessWithExitCode (shell $ ccCmd) ""
+                                      runCc ccCmd Nothing
                                       timeEnd <- getTime Monotonic
-                                      case returnCode of
-                                          ExitSuccess -> iff (C.timing opts) $ putStrLn(" Finished in " ++ fmtTime(timeEnd - timeStart))
-                                          ExitFailure _ -> do printIce "compilation of generated C code of the root actor failed"
-                                                              putStrLn $ "cc stdout:\n" ++ ccStdout
-                                                              putStrLn $ "cc stderr:\n" ++ ccStderr
-                                                              System.Exit.exitFailure
+                                      iff (C.timing opts) $ putStrLn(" Finished in " ++ fmtTime(timeEnd - timeStart))
                                       return ()
                                    | otherwise -> handle "Type error" Acton.Types.typeError "" paths m
                                      (Acton.Types.TypeError NoLoc ("Illegal type "++ prstr t ++ " of parameter to root actor " ++ prstr qn))
