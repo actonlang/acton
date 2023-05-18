@@ -24,6 +24,7 @@ executables:
       - happy
     dependencies:
       - array
+      - async
       - base >= 4.7 && < 5
       - binary
       - bytestring
@@ -49,6 +50,8 @@ executables:
       - unix
       - utf8-string
       - zlib
+    ghc-options:
+      - -threaded
 
 tests:
   test_actonc:
