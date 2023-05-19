@@ -43,32 +43,29 @@ CFLAGS+= -fno-sanitize=undefined -I. -I$(TD)/deps/instdir/include -Ideps -Wno-in
 CFLAGS_REL= -O3 -DREL
 CFLAGS_DEV= -g -DDEV
 LDFLAGS+=-L$(TD)/lib
-LDLIBS+=-lActonDeps -lm -lpthread
+LDLIBS += -lActonDeps-$(PLATFORM) -lm -lpthread
+
+# rewrite arm64 to aarch64
+ifeq ($(shell uname -m),arm64)
+ARCH:=aarch64
+else
+ARCH:=$(shell uname -m)
+endif
 
 # -- Apple Mac OS X ------------------------------------------------------------
 ifeq ($(shell uname -s),Darwin)
-ZIG_OS:=macos
-
-# -- M1
-ifeq ($(shell uname -m),arm64)
-ZIG_ARCH:=aarch64
+OS:=macos
 endif
 
-# -- Intel CPU
-ifeq ($(shell uname -m),x86_64)
-ZIG_ARCH:=x86_64
-endif
-
-endif # -- END: Apple Mac OS X -------------------------------------------------
+PLATFORM=$(ARCH)-$(OS)
 
 
 CFLAGS += -Werror
 # -- Linux ---------------------------------------------------------------------
 ifeq ($(shell uname -s),Linux)
-ZIG_OS:=linux
+OS:=linux
 ifeq ($(shell uname -m),x86_64)
 CFLAGS_TARGET := -target x86_64-linux-gnu.2.28
-ZIG_ARCH:=x86_64
 else
 $(error "Unsupported architecture for Linux?")
 endif
@@ -116,7 +113,7 @@ BUILTIN_HFILES=$(wildcard builtin/*.h) builtin/__builtin__.h
 BUILTIN_CFILES=$(wildcard builtin/*.c) builtin/__builtin__.c
 
 DBARCHIVE=lib/libActonDB.a
-ARCHIVES=lib/dev/libActon.a lib/rel/libActon.a lib/libActonDeps.a lib/libactongc.a
+ARCHIVES=lib/dev/libActon.a lib/rel/libActon.a lib/libActonDeps-$(PLATFORM).a lib/libactongc.a
 
 DIST_BINS=$(ACTONC) dist/bin/actondb dist/bin/runacton
 DIST_HFILES=\
@@ -144,7 +141,7 @@ backend/actondb: backend/actondb.c lib/libActonDB.a $(DEPSA)
 
 # Listing DEPSA as prerequisites in a target means it is dependent upon at least
 # one of  the external libraries that we place in libActonDeps
-DEPSA:=lib/libActonDeps.a
+DEPSA:=lib/libActonDeps-$(PLATFORM).a
 
 backend/comm.o: backend/comm.c backend/comm.h backend/failure_detector/db_queries.h $(DEPSA)
 	$(CC) -o$@ $< -c $(CFLAGS_DB)
@@ -282,14 +279,14 @@ DEP_LIBS+=deps/instdir/lib/libuuid.a
 DEP_LIBS+=deps/instdir/lib/libuv.a
 DEP_LIBS+=deps/instdir/lib/libxml2.a
 
-lib/libActonDeps.a: $(DEP_LIBS) dist/zig
+lib/libActonDeps-$(PLATFORM).a: $(DEP_LIBS) dist/zig
 	mkdir -p lib_deps
 	for LIB in $(DEP_LIBS); do \
 		LIBNAME=$$(basename $${LIB} .a); \
 		mkdir -p lib_deps/$${LIBNAME}; \
 		$$(cd lib_deps/$${LIBNAME} && ar x $(TD)/$${LIB}); \
 	done
-	cd lib_deps && ar -qc ../lib/libActonDeps.a */*.o
+	cd lib_deps && ar -qc ../lib/libActonDeps-$(PLATFORM).a */*.o
 
 lib/libactongc.a: deps/instdir/lib/libgc.a
 	cp $< $@
@@ -298,7 +295,7 @@ lib/libactongc.a: deps/instdir/lib/libgc.a
 clean-deps:
 	-for I in $(DEPS_DIRS); do ls $${I} >/dev/null 2>&1 && echo Cleaning $${I} && make -C $(TD)/$${I} clean; done
 	-$(MAKE) -C deps/libgc/ -f Makefile.direct clean
-	rm -rf deps/instdir lib/libActonDeps.a
+	rm -rf deps/instdir lib/libActonDeps-$(PLATFORM).a
 
 clean-deps-rm:
 	rm -rf $(DEPS_DIRS) deps/libgc deps/zig deps/zig-*.tar*
@@ -637,6 +634,7 @@ test-stdlib:
 clean: clean-distribution clean-backend clean-rts
 
 clean-all: clean clean-compiler clean-deps
+	rm -rf lib_deps lib/*
 
 clean-backend:
 	rm -f $(DBARCHIVE) $(BACKEND_OFILES) backend/actondb
@@ -644,7 +642,7 @@ clean-backend:
 # clean-builtin and clean-rts does the same thing, actually cleaning all of
 # builtin, rts & stdlib. It's rather fast to rebuild so doesn't really matter.
 clean-builtin clean-rts:
-	rm -rf $(ARCHIVES) $(DBARCHIVE) $(OFILES) builtin/__builtin__.h builtin/__builtin__.c $(STDLIB_HFILES) $(STDLIB_OFILES) $(STDLIB_TYFILES) stdlib/out/ lib_deps
+	rm -rf $(ARCHIVES) $(DBARCHIVE) $(OFILES) builtin/__builtin__.h builtin/__builtin__.c $(STDLIB_HFILES) $(STDLIB_OFILES) $(STDLIB_TYFILES) stdlib/out/
 
 # == DIST ==
 #
@@ -702,18 +700,19 @@ dist/zig: deps/zig
 	mkdir -p $(dir $@)
 	cp -a $< $@
 
-deps/zig: deps/zig-$(ZIG_OS)-$(ZIG_ARCH)-$(ZIG_VERSION).tar.xz
+deps/zig: deps/zig-$(OS)-$(ARCH)-$(ZIG_VERSION).tar.xz
 	mkdir -p $@
 	cd $@ && tar Jx --strip-components=1 -f ../../$^
 	cp -a deps/zig-extras/* $@
 
-deps/zig-$(ZIG_OS)-$(ZIG_ARCH)-$(ZIG_VERSION).tar.xz:
-	curl -o $@ https://ziglang.org/builds/zig-$(ZIG_OS)-$(ZIG_ARCH)-$(ZIG_VERSION).tar.xz
-
-# For releases, URL looks like:
-#curl -o $@ https://ziglang.org/download/$(ZIG_VERSION)/zig-$(ZIG_OS)-$(ZIG_ARCH)-$(ZIG_VERSION).tar.xz
-# Nightlies:
-#curl -o $@ https://ziglang.org/builds/zig-$(ZIG_OS)-$(ZIG_ARCH)-$(ZIG_VERSION).tar.xz
+# Check if ZIG_VERSION contains -dev, in which case we pull down a nightly,
+# otherwise its a release
+deps/zig-$(OS)-$(ARCH)-$(ZIG_VERSION).tar.xz:
+ifeq ($(findstring -dev,$(ZIG_VERSION)),-dev)
+	curl -o $@ https://ziglang.org/builds/zig-$(OS)-$(ARCH)-$(ZIG_VERSION).tar.xz
+else
+	curl -o $@ https://ziglang.org/download/$(ZIG_VERSION)/zig-$(OS)-$(ARCH)-$(ZIG_VERSION).tar.xz
+endif
 
 .PHONY: distribution clean-distribution
 distribution: $(DIST_ARCHIVES) dist/include/bsdnt dist/include/gc $(DIST_BINS) $(DIST_HFILES) $(DIST_TYFILES) $(DIST_DBARCHIVE) $(DIST_ZIG)
@@ -723,7 +722,7 @@ clean-distribution:
 
 # == release ==
 # This is where we take our distribution and turn it into a release tar ball
-ARCH=$(shell uname -s -m | sed -e 's/ /-/' | tr '[A-Z]' '[a-z]')
+PLATARCH=$(shell uname -s -m | sed -e 's/ /-/' | tr '[A-Z]' '[a-z]')
 GNU_TAR := $(shell sed --version 2>&1 | grep GNU >/dev/null 2>&1; echo $$?)
 ifeq ($(GNU_TAR),0)
 TAR_TRANSFORM_OPT=--transform 's,^dist,acton,'
@@ -734,13 +733,13 @@ endif
 # Do grep to only get a version number. If there's an error, we get an empty
 # string which is better than getting the error message itself.
 ACTONC_VERSION=$(shell $(ACTONC) --numeric-version 2>/dev/null | grep -E "^[0-9.]+$$")
-.PHONY: acton-$(ARCH)-$(ACTONC_VERSION).tar.bz2
-acton-$(ARCH)-$(ACTONC_VERSION).tar.bz2:
+.PHONY: acton-$(PLATARCH)-$(ACTONC_VERSION).tar.bz2
+acton-$(PLATARCH)-$(ACTONC_VERSION).tar.bz2:
 	tar jcvf $@ $(TAR_TRANSFORM_OPT) --exclude .gitignore dist
 
 .PHONY: release
 release: distribution
-	$(MAKE) acton-$(ARCH)-$(ACTONC_VERSION).tar.bz2
+	$(MAKE) acton-$(PLATARCH)-$(ACTONC_VERSION).tar.bz2
 
 .PHONY: install
 install:
