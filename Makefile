@@ -540,7 +540,7 @@ stdlib/out/rel/lib/libActonProject.a: $(STDLIB_SRCFILES) dist/types/__builtin__.
 
 # /lib --------------------------------------------------
 
-LIBACTON_DEV_OFILES=builtin/builtin_dev.o rts/empty.o rts/io_dev.o rts/log.o rts/rts_dev.o deps/netstring_dev.o deps/yyjson_dev.o
+LIBACTON_DEV_OFILES=builtin/builtin_dev.o rts/io_dev.o rts/log.o rts/rts_dev.o deps/netstring_dev.o deps/yyjson_dev.o
 OFILES += $(LIBACTON_DEV_OFILES)
 lib/dev/libActon.a: stdlib/out/dev/lib/libActonProject.a $(LIBACTON_DEV_OFILES)
 	@mkdir -p $(dir $@)
@@ -554,9 +554,9 @@ lib/rel/libActon.a: stdlib/out/rel/lib/libActonProject.a $(LIBACTON_REL_OFILES)
 	cp -a $< $@
 	ar rcs $@ $(filter-out stdlib/out/rel/lib/libActonProject.a,$^)
 
-COMM_OFILES += backend/comm.o rts/empty.o
-DB_OFILES += backend/db.o backend/queue.o backend/skiplist.o backend/txn_state.o backend/txns.o backend/queue_callback.o backend/hash_ring.o backend/queue_groups.o rts/empty.o
-DBCLIENT_OFILES += backend/client_api.o backend/queue_callback.o backend/hash_ring.o rts/empty.o
+COMM_OFILES += backend/comm.o
+DB_OFILES += backend/db.o backend/queue.o backend/skiplist.o backend/txn_state.o backend/txns.o backend/queue_callback.o backend/hash_ring.o backend/queue_groups.o
+DBCLIENT_OFILES += backend/client_api.o backend/queue_callback.o backend/hash_ring.o
 REMOTE_OFILES += backend/failure_detector/db_messages.pb-c.o backend/failure_detector/cells.o backend/failure_detector/db_queries.o backend/failure_detector/fd.o
 VC_OFILES += backend/failure_detector/vector_clock.o
 BACKEND_OFILES=$(COMM_OFILES) $(DB_OFILES) $(DBCLIENT_OFILES) $(REMOTE_OFILES) $(VC_OFILES) backend/log.o deps/netstring_rel.o deps/yyjson_rel.o
@@ -567,7 +567,7 @@ lib/libActonDB.a: $(BACKEND_OFILES)
 
 
 # /rts --------------------------------------------------
-OFILES += rts/io_dev.o rts/io_rel.o rts/log.o rts/rts_dev.o rts/rts_rel.o rts/empty.o
+OFILES += rts/io_dev.o rts/io_rel.o rts/log.o rts/rts_dev.o rts/rts_rel.o
 rts/io_dev.o: rts/io.c rts/io.h builtin/__builtin__.h $(DEPSA) $(LIBGC)
 	$(CC) $(CFLAGS) $(CFLAGS_DEV) $(LDFLAGS) \
 		-c $< -o $@
@@ -588,19 +588,6 @@ rts/rts_rel.o: rts/rts.c rts/rts.h builtin/__builtin__.h $(DEPSA) $(LIBGC)
 	$(CC) $(CFLAGS) $(CFLAGS_REL) \
 		-Wno-int-to-void-pointer-cast -Wno-unused-result \
 		-c $< -o $@
-
-rts/empty.o: rts/empty.c
-	$(CC) $(CFLAGS) -g -c $< -o $@
-
-rts/pingpong: rts/pingpong.c rts/pingpong.h rts/rts.o
-	$(CC) $(CFLAGS) -Wno-int-to-void-pointer-cast \
-		-lutf8proc -lActonDB \
-		$(LDLIBS)
-		rts/rts.o \
-		builtin/builtin.o \
-		$< \
-		-o $@
-
 
 # top level targets
 
