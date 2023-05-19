@@ -264,12 +264,10 @@ DEPS_DIRS=deps/bsdnt deps/libbsd deps/libmd deps/libprotobuf_c deps/libutf8proc 
 # different library archives.
 
 DEP_LIBS+=deps/instdir/lib/libargp.a
-
 ifeq ($(shell uname -s),Linux)
 DEP_LIBS+=deps/instdir/lib/libbsd.a
 DEP_LIBS+=deps/instdir/lib/libmd.a
 endif
-
 DEP_LIBS+=deps/instdir/lib/libbsdnt.a
 DEP_LIBS+=deps/instdir/lib/libpcre2-8.a
 DEP_LIBS+=deps/instdir/lib/libpcre2-posix.a
@@ -278,6 +276,26 @@ DEP_LIBS+=deps/instdir/lib/libutf8proc.a
 DEP_LIBS+=deps/instdir/lib/libuuid.a
 DEP_LIBS+=deps/instdir/lib/libuv.a
 DEP_LIBS+=deps/instdir/lib/libxml2.a
+
+DEPS_REFS=\
+	$(LIBARGP_REF) \
+	$(LIBBSD_REF) \
+	$(LIBMD_REF) \
+	$(LIBBSDNT_REF) \
+	$(LIBPCRE2_REF) \
+	$(LIBPROTOBUF_C_REF) \
+	$(LIBUTF8PROC_REF) \
+	$(LIBUUID_REF) \
+	$(LIBUV_REF) \
+	$(LIBXML2_REF)
+
+DEPS_SUM=$(shell echo $(DEPS_REFS) | sha256sum | cut -d' ' -f1)
+
+.PHONY: build-deps show-deps-sum
+show-deps-sum:
+	@echo $(DEPS_SUM)
+
+build-deps: $(DEPSA)
 
 lib/libActonDeps-$(PLATFORM).a: $(DEP_LIBS) dist/zig
 	mkdir -p lib_deps
@@ -463,14 +481,14 @@ deps/instdir/lib/libxml2.a: deps/libxml2 $(ZIG)
 	&& mv $(TD)/deps/instdir/include/libxml2/libxml $(TD)/deps/instdir/include/libxml
 
 # /deps/pcre2 --------------------------------------------
-PCRE2_REF=pcre2-10.42
+LIBPCRE2_REF=pcre2-10.42
 deps/pcre2:
 	ls $@ >/dev/null 2>&1 || git clone https://github.com/PCRE2Project/pcre2.git $@
 
 deps/instdir/lib/libpcre2-8.a: deps/pcre2 $(ZIG)
 	mkdir -p $(dir $@)
 	cd $< \
-	&& git checkout $(PCRE2_REF) \
+	&& git checkout $(LIBPCRE2_REF) \
 	&& ./autogen.sh \
 	&& ./configure --prefix=$(TD)/deps/instdir --enable-static --disable-shared CFLAGS="$(CFLAGS_DEPS)" \
 	&& make -j && make install
