@@ -297,14 +297,21 @@ show-deps-sum:
 
 build-deps: $(DEPSA)
 
-lib/libActonDeps-$(PLATFORM).a: $(DEP_LIBS) dist/zig
+download-deps:
+	curl -f -L https://github.com/actonlang/acton/releases/tag/deps-$(DEPS_SUM)/libActonDeps-$(PLATFORM).a -o lib/libActonDeps-$(PLATFORM).a
+
+# Attempt downloading the deps archive, but if that fails, build it locally
+lib/libActonDeps-$(PLATFORM).a:
+	$(MAKE) download-deps || ($(MAKE) lib_deps/libActonDeps-$(PLATFORM).a && cp lib_deps/libActonDeps-$(PLATFORM).a lib/libActonDeps-$(PLATFORM).a)
+
+lib_deps/libActonDeps-$(PLATFORM).a: dist/zig $(DEP_LIBS)
 	mkdir -p lib_deps
 	for LIB in $(DEP_LIBS); do \
 		LIBNAME=$$(basename $${LIB} .a); \
 		mkdir -p lib_deps/$${LIBNAME}; \
 		$$(cd lib_deps/$${LIBNAME} && ar x $(TD)/$${LIB}); \
 	done
-	cd lib_deps && ar -qc ../lib/libActonDeps-$(PLATFORM).a */*.o
+	cd lib_deps && ar -qc $@ */*.o
 
 lib/libactongc.a: deps/instdir/lib/libgc.a
 	cp $< $@
@@ -689,7 +696,7 @@ dist/builtin/%: builtin/%
 	@mkdir -p $(dir $@)
 	cp $< $@
 
-dist/include/bsdnt: $(DEPSA)
+dist/include/bsdnt: deps/instdir/lib/libbsdnt.a
 	@mkdir -p $(dir $@)
 	cp -a deps/instdir/include/bsdnt $@
 
