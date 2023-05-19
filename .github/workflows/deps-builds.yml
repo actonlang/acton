@@ -83,7 +83,8 @@ jobs:
         with:
           allowUpdates: true
           artifacts: "libActonDeps-*"
-          body: ""
-          draft: true
+          body: "libActonDeps"
           token: ${{ secrets.GITHUB_TOKEN }}
           replacesArtifacts: true
+          makeLatest: false
+          prerelease: true
