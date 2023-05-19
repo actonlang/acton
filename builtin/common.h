@@ -41,6 +41,8 @@ void $default__init__($WORD);
 
 #define $ISNOTNONE(x)       ((x) != B_None ? B_True : B_False)
 
+#define $ISNOTNONE0(x)       ((x) != B_None)
+
 #define $ISNONE(x)          ((x) != B_None ? B_False : B_True)
 
 #define $SKIPRES(cont)      (cont)

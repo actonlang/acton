@@ -18,9 +18,9 @@ B_tuple $xgcd(B_int, B_int);
 
 extern struct B_int B_int_strs[256];
 
-#define ORD_INT__eq__(a,b)  (zz_equal(&a->val,&b->val))
-#define ORD_INT__ne__(a,b)  (1-zz_equal(&a->val,&b->val))
-#define ORD_INT__lt__(a,b)  (zz_cmp(&a->val,&b->val) < 0)
-#define ORD_INT__le__(a,b)  (zz_cmp(&a->val,&b->val) <= 0)
-#define ORD_INT__gt__(a,b)  (zz_cmp(&a->val,&b->val) > 0)
-#define ORD_INT__ge__(a,b)  (zz_cmp(&a->val,&b->val) >= 0)
+#define ORD_B_int__eq__(a,b)  (zz_equal(&a->val,&b->val))
+#define ORD_B_int__ne__(a,b)  (1-zz_equal(&a->val,&b->val))
+#define ORD_B_int__lt__(a,b)  (zz_cmp(&a->val,&b->val) < 0)
+#define ORD_B_int__le__(a,b)  (zz_cmp(&a->val,&b->val) <= 0)
+#define ORD_B_int__gt__(a,b)  (zz_cmp(&a->val,&b->val) > 0)
+#define ORD_B_int__ge__(a,b)  (zz_cmp(&a->val,&b->val) >= 0)
