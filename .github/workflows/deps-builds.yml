@@ -84,7 +84,8 @@ jobs:
           allowUpdates: true
           artifacts: "libActonDeps-*"
           body: "libActonDeps"
-          token: ${{ secrets.GITHUB_TOKEN }}
-          replacesArtifacts: true
           makeLatest: false
           prerelease: true
+          replacesArtifacts: true
+          repo: "libactondeps"
+          token: ${{ secrets.ACTBOT_PAT }}
