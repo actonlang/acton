@@ -30,6 +30,7 @@ jobs:
           name: deps-x86_64-macos
           path: |
             ${{ github.workspace }}/lib/libActonDeps-x86_64-macos.a
+            ${{ github.workspace }}/lib/libactongc-x86_64-macos.a
 
   build-linux:
     strategy:
@@ -60,6 +61,7 @@ jobs:
           name: deps-x86_64-linux
           path: |
             ${{ github.workspace }}/lib/libActonDeps-x86_64-linux.a
+            ${{ github.workspace }}/lib/libactongc-x86_64-linux.a
 
   # Release job, only run for version tagged releases.
   upload-deps:
@@ -82,7 +84,7 @@ jobs:
         uses: ncipollo/release-action@v1
         with:
           allowUpdates: true
-          artifacts: "libActonDeps-*"
+          artifacts: "libActonDeps-*,libactongc-*"
           body: "libActonDeps"
           token: ${{ secrets.GITHUB_TOKEN }}
           replacesArtifacts: true

@@ -14,7 +14,7 @@ ZIG_VERSION:=0.11.0-dev.2985+3f3b1a680
 CC=$(TD)/deps/zig/zig cc
 CXX=$(TD)/deps/zig/zig c++
 ZIG=deps/zig
-LIBGC=lib/libactongc.a
+LIBGC=lib/libactongc-$(PLATFORM).a
 export CC
 export CXX
 
@@ -113,7 +113,7 @@ BUILTIN_HFILES=$(wildcard builtin/*.h) builtin/__builtin__.h
 BUILTIN_CFILES=$(wildcard builtin/*.c) builtin/__builtin__.c
 
 DBARCHIVE=lib/libActonDB.a
-ARCHIVES=lib/dev/libActon.a lib/rel/libActon.a lib/libActonDeps-$(PLATFORM).a lib/libactongc.a
+ARCHIVES=lib/dev/libActon.a lib/rel/libActon.a lib/libActonDeps-$(PLATFORM).a lib/libactongc-$(PLATFORM).a
 
 DIST_BINS=$(ACTONC) dist/bin/actondb dist/bin/runacton
 DIST_HFILES=\
@@ -295,7 +295,7 @@ DEPS_SUM=$(shell echo $(DEPS_REFS) | sha256sum | cut -d' ' -f1)
 show-deps-sum:
 	@echo $(DEPS_SUM)
 
-build-deps: $(DEPSA)
+build-deps: $(DEPSA) lib/libactongc-$(PLATFORM).a
 
 lib/libActonDeps-$(PLATFORM).a: $(DEP_LIBS) dist/zig
 	mkdir -p lib_deps
@@ -306,7 +306,7 @@ lib/libActonDeps-$(PLATFORM).a: $(DEP_LIBS) dist/zig
 	done
 	cd lib_deps && ar -qc ../lib/libActonDeps-$(PLATFORM).a */*.o
 
-lib/libactongc.a: deps/instdir/lib/libgc.a
+lib/libactongc-$(PLATFORM).a: deps/instdir/lib/libgc.a dist/zig
 	cp $< $@
 
 .PHONY: clean-deps
