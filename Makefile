@@ -289,25 +289,59 @@ DEPS_REFS=\
 	$(LIBUV_REF) \
 	$(LIBXML2_REF)
 
-DEPS_SUM=$(shell echo $(DEPS_REFS) | sha256sum | cut -d' ' -f1)
+DEPS_SUM:=$(shell echo $(DEPS_REFS) | shasum | cut -d' ' -f1)
 
 .PHONY: build-deps show-deps-sum
 show-deps-sum:
 	@echo $(DEPS_SUM)
 
-build-deps: $(DEPSA) lib/libactongc-$(PLATFORM).a
+build-deps: deps-$(DEPS_SUM)-$(PLATFORM).tar.bz2
 
-lib/libActonDeps-$(PLATFORM).a: $(DEP_LIBS) dist/zig
+deps-$(DEPS_SUM)-$(PLATFORM).tar.bz2: deps-$(DEPS_SUM)-$(PLATFORM).tar
+	bzip2 -9 $<
+
+deps-$(DEPS_SUM)-$(PLATFORM).tar: export ALWAYS_BUILD=true
+deps-$(DEPS_SUM)-$(PLATFORM).tar: $(DEPSA) lib/libactongc-$(PLATFORM).a
+	tar cvf $@ $(DEPSA) lib/libactongc-$(PLATFORM).a
+	cd deps/instdir && tar rvf ../../$@ include
+
+deps-download/$(DEPS_SUM):
+	ls deps-download/$(DEPS_SUM) >/dev/null 2>&1 || \
+		(mkdir -p deps-download/$(DEPS_SUM) \
+		&& curl -f -L https://github.com/actonlang/acton/releases/tag/deps-$(DEPS_SUM)/deps-$(DEPS_SUM)-$(PLATFORM).tar.bz2 -o deps-download/deps-$(DEPS_SUM)-$(PLATFORM).tar.bz2 \
+		&& cd deps-download/$(DEPS_SUM) && tar jxf ../deps-$(DEPS_SUM)-$(PLATFORM).tar.bz2)
+
+# Attempt downloading the deps archive or if it fails, build it locally.
+# Also copy in headers from downloaded archive into deps/instdir/include, so the
+# headers are available, just as if we had built the deps locally.
+lib/libActonDeps-$(PLATFORM).a:
+	($(MAKE) -j1 check-download-allowed deps-download/$(DEPS_SUM) \
+		&& cp -r deps-download/$(DEPS_SUM)/lib/libActonDeps-$(PLATFORM).a $@ \
+		&& mkdir -p deps/instdir/include && cp -r deps-download/$(DEPS_SUM)/include/* deps/instdir/include/ ) \
+	|| ($(MAKE) lib_deps/libActonDeps-$(PLATFORM).a && cp lib_deps/libActonDeps-$(PLATFORM).a $@)
+
+lib_deps/libActonDeps-$(PLATFORM).a: dist/zig $(DEP_LIBS)
 	mkdir -p lib_deps
 	for LIB in $(DEP_LIBS); do \
 		LIBNAME=$$(basename $${LIB} .a); \
 		mkdir -p lib_deps/$${LIBNAME}; \
 		$$(cd lib_deps/$${LIBNAME} && ar x $(TD)/$${LIB}); \
 	done
-	cd lib_deps && ar -qc ../lib/libActonDeps-$(PLATFORM).a */*.o
+	cd lib_deps && ar -qc libActonDeps-$(PLATFORM).a */*.o
 
-lib/libactongc-$(PLATFORM).a: deps/instdir/lib/libgc.a dist/zig
-	cp $< $@
+lib/libactongc-$(PLATFORM).a:
+	($(MAKE) -j1 check-download-allowed deps-download/$(DEPS_SUM) \
+		&& cp deps-download/$(DEPS_SUM)/lib/libactongc-$(PLATFORM).a $@) \
+	|| ($(MAKE) deps/instdir/lib/libgc.a dist/zig && cp deps/instdir/lib/libgc.a $@)
+
+# Check if ALWAYS_BUILD=true and if so, fail rule. Used before running a
+# download target, so if this fails, we do not download and can fail over to the
+# local build case.
+.PHONY: check-download-allowed
+check-download-allowed:
+ifeq ($(ALWAYS_BUILD),true)
+	false
+endif
 
 .PHONY: clean-deps
 clean-deps:
@@ -316,7 +350,7 @@ clean-deps:
 	rm -rf deps/instdir lib/libActonDeps-$(PLATFORM).a
 
 clean-deps-rm:
-	rm -rf $(DEPS_DIRS) deps/libgc deps/zig deps/zig-*.tar*
+	rm -rf $(DEPS_DIRS) deps/libgc deps/zig deps/zig-*.tar* deps-download
 
 # /deps/libargp --------------------------------------------
 LIBARGP_REF=1.5.0
@@ -327,8 +361,7 @@ deps/libargp:
 # argp-standalone repo:
 # https://github.com/argp-standalone/argp-standalone/commit/0297fd805e760499cdca605466851729e377169a
 deps/instdir/lib/libargp.a: deps/libargp $(ZIG)
-	mkdir -p $(dir $@)
-	mkdir -p $(shell dirname $(dir $@))/include
+	mkdir -p $(dir $@) $(shell dirname $(dir $@))/include
 	cd $< \
 	&& git checkout $(LIBARGP_REF) \
 	&& aclocal \
@@ -352,7 +385,7 @@ deps/libbsdnt:
 # seems fine for now since this is likely a pure library, not interacting
 # anything with libc, but maybe we should fix it?
 deps/instdir/lib/libbsdnt.a: deps/libbsdnt $(ZIG)
-	mkdir -p $(dir $@)
+	mkdir -p $(dir $@) $(shell dirname $(dir $@))/include
 	cd $< \
 	&& git checkout $(LIBBSDNT_REF) \
 	&& ./configure --prefix=$(TD)/deps/instdir --enable-static --disable-shared \
@@ -378,7 +411,7 @@ deps/libbsd:
 # we achieve simply by copying libbsd/include/bsd to libbsd/incbsd and adding
 # that with -I../incbsd
 deps/instdir/lib/libbsd.a: deps/libbsd deps/instdir/lib/libmd.a $(ZIG)
-	mkdir -p $(dir $@)
+	mkdir -p $(dir $@) $(shell dirname $(dir $@))/include
 	cd $< \
 	&& git checkout $(LIBBSD_REF) \
 	&& rm -rf incbsd \
@@ -393,7 +426,7 @@ deps/libgc:
 	ls $@ >/dev/null 2>&1 || git clone https://github.com/ivmai/bdwgc.git $@
 
 deps/instdir/lib/libgc.a: deps/libgc $(ZIG)
-	mkdir -p $(dir $@)
+	mkdir -p $(dir $@) $(shell dirname $(dir $@))/include
 	cd $< \
 	&& git checkout $(LIBGC_REF) \
 	&& unset CFLAGS \
@@ -689,14 +722,9 @@ dist/builtin/%: builtin/%
 	@mkdir -p $(dir $@)
 	cp $< $@
 
-dist/include/bsdnt: $(DEPSA)
+dist/inc: $(DEPSA)
 	@mkdir -p $(dir $@)
-	cp -a deps/instdir/include/bsdnt $@
-
-dist/include/gc: $(LIBGC)
-	@mkdir -p $(dir $@)
-	cp -a deps/instdir/include/gc $@
-	cp -a deps/instdir/include/gc.h $(dir $@)
+	cp -a deps/instdir/include $@
 
 dist/rts/%: rts/%
 	@mkdir -p $(dir $@)
@@ -716,7 +744,7 @@ dist/completion/acton.bash-completion: completion/acton.bash-completion
 
 dist/zig: deps/zig
 	mkdir -p $(dir $@)
-	cp -a $< $@
+	ls $@ > /dev/null 2>&1 || cp -a $< $@
 
 deps/zig: deps/zig-$(OS)-$(ARCH)-$(ZIG_VERSION).tar.xz
 	mkdir -p $@
@@ -733,7 +761,7 @@ else
 endif
 
 .PHONY: distribution clean-distribution
-distribution: $(DIST_ARCHIVES) dist/include/bsdnt dist/include/gc $(DIST_BINS) $(DIST_HFILES) $(DIST_TYFILES) $(DIST_DBARCHIVE) $(DIST_ZIG)
+distribution: $(DIST_ARCHIVES) dist/inc $(DIST_BINS) $(DIST_HFILES) $(DIST_TYFILES) $(DIST_DBARCHIVE) $(DIST_ZIG)
 
 clean-distribution:
 	rm -rf dist

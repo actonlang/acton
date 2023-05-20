@@ -29,8 +29,7 @@ jobs:
         with:
           name: deps-x86_64-macos
           path: |
-            ${{ github.workspace }}/lib/libActonDeps-x86_64-macos.a
-            ${{ github.workspace }}/lib/libactongc-x86_64-macos.a
+            ${{ github.workspace }}/deps-*.tar.bz2
 
   build-linux:
     strategy:
@@ -54,14 +53,13 @@ jobs:
           apt-get install -qy automake autopoint bison bzip2 curl git libtool make pkg-config procps python3
           apt-get install -qy libprotobuf-c-dev zlib1g-dev
       - name: "Build Acton deps"
-        run: make -j2 -C ${GITHUB_WORKSPACE} build-deps
+        run: make -C ${GITHUB_WORKSPACE} build-deps
       - name: "Upload deps artifact"
         uses: actions/upload-artifact@v3
         with:
           name: deps-x86_64-linux
           path: |
-            ${{ github.workspace }}/lib/libActonDeps-x86_64-linux.a
-            ${{ github.workspace }}/lib/libactongc-x86_64-linux.a
+            ${{ github.workspace }}/deps-*.tar.bz2
 
   # Release job, only run for version tagged releases.
   upload-deps:
@@ -84,7 +82,7 @@ jobs:
         uses: ncipollo/release-action@v1
         with:
           allowUpdates: true
-          artifacts: "libActonDeps-*,libactongc-*"
+          artifacts: "deps-*.tar.bz2"
           body: "libActonDeps"
           makeLatest: false
           prerelease: true

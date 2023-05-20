@@ -701,7 +701,7 @@ runRestPasses opts paths env0 parsed stubMode = do
                                        " -Werror=return-type " ++ pedantArg ++
                                        (if (C.dev opts) then " -Og -g " else " -O3 ") ++
                                        " -c " ++
-                                       " -isystem " ++ sysPath paths ++ "/include" ++
+                                       " -isystem " ++ sysPath paths ++ "/inc" ++
                                        " -I" ++ wd ++
                                        " -I" ++ wd ++ "/out" ++
                                        " -I" ++ sysPath paths ++
@@ -799,7 +799,7 @@ buildExecutable env opts paths binTask
         ccCmd               = (cc paths opts ++
                                pedantArg ++
                                (if (C.dev opts) then " -Og -g " else " -O3 ") ++
-                               " -isystem " ++ sysPath paths ++ "/include" ++
+                               " -isystem " ++ sysPath paths ++ "/inc" ++
                                " -I" ++ projOut paths ++
                                " -I" ++ sysPath paths ++
                                " " ++ rootFile ++
