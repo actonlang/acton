@@ -308,7 +308,7 @@ deps-$(DEPS_SUM)-$(PLATFORM).tar: $(DEPSA) lib/libactongc-$(PLATFORM).a
 deps-download/$(DEPS_SUM):
 	ls deps-download/$(DEPS_SUM) >/dev/null 2>&1 || \
 		(mkdir -p deps-download/$(DEPS_SUM) \
-		&& curl -f -L https://github.com/actonlang/acton/releases/tag/deps-$(DEPS_SUM)/deps-$(DEPS_SUM)-$(PLATFORM).tar.bz2 -o deps-download/deps-$(DEPS_SUM)-$(PLATFORM).tar.bz2 \
+		&& curl -f -L https://github.com/actonlang/libactondeps/releases/download/deps-$(DEPS_SUM)/deps-$(DEPS_SUM)-$(PLATFORM).tar.bz2 -o deps-download/deps-$(DEPS_SUM)-$(PLATFORM).tar.bz2 \
 		&& cd deps-download/$(DEPS_SUM) && tar jxf ../deps-$(DEPS_SUM)-$(PLATFORM).tar.bz2)
 
 # Attempt downloading the deps archive or if it fails, build it locally.

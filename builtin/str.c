@@ -21,7 +21,7 @@
 #define GC_THREADS 1
 #include "gc.h"
 
-#include "../deps/libutf8proc/utf8proc.h"
+#include "utf8proc.h"
 
 // Auxiliaries, some used for both str and bytearray implementations ////////////////////////////////////////////////////////
 
