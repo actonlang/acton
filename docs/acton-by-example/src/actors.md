@@ -14,10 +14,6 @@ actor Act(name):
     def hello():
         # We can directly access actor arguments, like `name`
         print("Hello world from " + name)
-        # TODO: remove 'return True' as it should not be necessary, but with the
-        # default (returning None), we get a segfault when we do await async on 
-        # this method.
-        return True
 
 actor main(env):
     # Create an actor instance a of Act
