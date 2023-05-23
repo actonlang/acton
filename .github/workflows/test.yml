@@ -171,6 +171,7 @@ jobs:
             ~/.cache/acton/
             ~/.stack
             ~/zig-cache
+            debian/
           key: build-debs
       - name: "Install build prerequisites"
         run: |
