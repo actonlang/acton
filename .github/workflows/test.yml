@@ -231,7 +231,7 @@ jobs:
           export PR_SHA=${{github.event.pull_request.head.sha}}
           export COMMIT_SHA=${PR_SHA:-${GITHUB_SHA}}
           export PR_REMOTE=${{ github.event.pull_request.head.repo.clone_url }}
-          export BASE_REMOTE=${{ github.repository.clone_url }}
+          export BASE_REMOTE=${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}.git
           export GIT_REPO=${PR_REMOTE:-${BASE_REMOTE}}
           sed -i -e "s#^\(  head.*,\) branch.*#  head \"${GIT_REPO}\", revision: \"${COMMIT_SHA}\"#" homebrew/Formula/acton.rb
           cat homebrew/Formula/acton.rb
