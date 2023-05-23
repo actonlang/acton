@@ -230,7 +230,9 @@ jobs:
           sed -i -e 's,^  url.*,  url "https://github.com/actonlang/acton/archive/refs/tags/v${{ steps.get_version.outputs.version }}.tar.gz",' homebrew/Formula/acton.rb
           export PR_SHA=${{github.event.pull_request.head.sha}}
           export COMMIT_SHA=${PR_SHA:-${GITHUB_SHA}}
-          sed -i -e "s/^\(  head.*,\) branch.*/\1 revision: \"${COMMIT_SHA}\"/" homebrew/Formula/acton.rb
+          export PR_REMOTE=${{ github.event.pull_request.head.repo.clone_url }}
+          export GIT_REPO=${PR_REMOTE:-${GITHUB_REPOSITORY}}
+          sed -i -e "s#^\(  head.*,\) branch.*#  head \"${GIT_REPO}\", revision: \"${COMMIT_SHA}\"#" homebrew/Formula/acton.rb
           cat homebrew/Formula/acton.rb
           git diff homebrew/Formula/acton.rb
           cp -av homebrew $(brew --prefix | sed -e 's,^/usr/local,/usr/local/Homebrew,')/Library/Taps/actonlang/homebrew-acton
