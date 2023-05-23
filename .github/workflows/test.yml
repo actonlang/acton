@@ -326,6 +326,7 @@ jobs:
     runs-on: ubuntu-latest
     container:
       image: ${{ matrix.os }}:${{ matrix.version }}
+      options: --privileged --ulimit core=-1 --security-opt seccomp=unconfined
     steps:
       - name: "Download .deb files"
         uses: actions/download-artifact@v3
@@ -336,6 +337,13 @@ jobs:
           apt update
           apt install -y ./deb/acton_*.deb
           actonc --version
+      - name: "Enable dumping core files to /tmp/core..."
+        run: |
+          apt install -qy procps
+          cat /proc/sys/kernel/core_pattern
+          sysctl kernel.core_pattern='/tmp/core.%h.%e.%t' || true
+          cat /proc/sys/kernel/core_pattern
+          ulimit -c unlimited
       - name: "Compile acton program"
         run: |
           echo '#!/usr/bin/env runacton'   > test-runtime.act
@@ -345,6 +353,21 @@ jobs:
           chmod a+x test-runtime.act
           ./test-runtime.act
           ./test-runtime.act | grep "Hello, world"
+          for I in $(seq 50); do ./test-runtime.act || break; done
+      - name: "ls core"
+        if: failure()
+        run: |
+          pwd
+          ls
+          find /tmp
+          mv /tmp/core* .
+      - name: "Upload core file & binaries as artifacts on test failure"
+        if: failure()
+        uses: actions/upload-artifact@v3
+        with:
+          name: coredumps-${{ matrix.os }}-${{ matrix.version }}-${{ github.run_id }}.zip
+          path: |
+            ${{ github.workspace }}/core*
 
 
   # If we are on the main branch, we'll create or update a pre-release called

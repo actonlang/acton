@@ -13,6 +13,7 @@ pub const FilePath = struct {
 };
 
 pub fn build(b: *std.build.Builder) void {
+    print("Acton Project Builder\n", .{});
     const optimize = b.standardOptimizeOption(.{});
     const target = b.standardTargetOptions(.{});
     const projpath_out = b.option([]const u8, "projpath_out", "") orelse "";
