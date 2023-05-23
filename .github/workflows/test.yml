@@ -294,7 +294,7 @@ jobs:
           name: acton-macos-11
       - name: "Extract acton"
         run: |
-          tar jxvf $(ls acton-darwin*.tar.bz2 | tail -n1)
+          tar jxf $(ls acton-darwin*.tar.bz2 | tail -n1)
       - name: "Compile acton program"
         run: |
           echo '#!/usr/bin/env runacton'   > test-runtime.act

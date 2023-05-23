@@ -307,7 +307,7 @@ deps-$(DEPS_SUM)-$(PLATFORM).tar.bz2: deps-$(DEPS_SUM)-$(PLATFORM).tar
 deps-$(DEPS_SUM)-$(PLATFORM).tar: export ALWAYS_BUILD=true
 deps-$(DEPS_SUM)-$(PLATFORM).tar: $(DEPSA) lib/libactongc-$(PLATFORM).a
 	tar cvf $@ $(DEPSA) lib/libactongc-$(PLATFORM).a
-	cd deps/instdir && tar rvf ../../$@ include
+	cd deps/instdir && tar rf ../../$@ include
 
 deps-download/$(DEPS_SUM):
 	ls deps-download/$(DEPS_SUM) >/dev/null 2>&1 || \
@@ -789,7 +789,7 @@ endif
 ACTONC_VERSION=$(shell $(ACTONC) --numeric-version 2>/dev/null | grep -E "^[0-9.]+$$")
 .PHONY: acton-$(PLATARCH)-$(ACTONC_VERSION).tar.bz2
 acton-$(PLATARCH)-$(ACTONC_VERSION).tar.bz2:
-	tar jcvf $@ $(TAR_TRANSFORM_OPT) --exclude .gitignore dist
+	tar jcf $@ $(TAR_TRANSFORM_OPT) --exclude .gitignore dist
 
 .PHONY: release
 release: distribution
