@@ -230,7 +230,10 @@ jobs:
           sed -i -e 's,^  url.*,  url "https://github.com/actonlang/acton/archive/refs/tags/v${{ steps.get_version.outputs.version }}.tar.gz",' homebrew/Formula/acton.rb
           export PR_SHA=${{github.event.pull_request.head.sha}}
           export COMMIT_SHA=${PR_SHA:-${GITHUB_SHA}}
-          sed -i -e "s/^\(  head.*,\) branch.*/\1 revision: \"${COMMIT_SHA}\"/" homebrew/Formula/acton.rb
+          export PR_REMOTE=${{ github.event.pull_request.head.repo.clone_url }}
+          export BASE_REMOTE=${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}.git
+          export GIT_REPO=${PR_REMOTE:-${BASE_REMOTE}}
+          sed -i -e "s#^\(  head.*,\) branch.*#  head \"${GIT_REPO}\", revision: \"${COMMIT_SHA}\"#" homebrew/Formula/acton.rb
           cat homebrew/Formula/acton.rb
           git diff homebrew/Formula/acton.rb
           cp -av homebrew $(brew --prefix | sed -e 's,^/usr/local,/usr/local/Homebrew,')/Library/Taps/actonlang/homebrew-acton
@@ -324,6 +327,7 @@ jobs:
     runs-on: ubuntu-latest
     container:
       image: ${{ matrix.os }}:${{ matrix.version }}
+      options: --privileged --ulimit core=-1 --security-opt seccomp=unconfined
     steps:
       - name: "Download .deb files"
         uses: actions/download-artifact@v3
@@ -334,6 +338,13 @@ jobs:
           apt update
           apt install -y ./deb/acton_*.deb
           actonc --version
+      - name: "Enable dumping core files to /tmp/core..."
+        run: |
+          apt install -qy procps
+          cat /proc/sys/kernel/core_pattern
+          sysctl kernel.core_pattern='/tmp/core.%h.%e.%t' || true
+          cat /proc/sys/kernel/core_pattern
+          ulimit -c unlimited
       - name: "Compile acton program"
         run: |
           echo '#!/usr/bin/env runacton'   > test-runtime.act
@@ -343,6 +354,21 @@ jobs:
           chmod a+x test-runtime.act
           ./test-runtime.act
           ./test-runtime.act | grep "Hello, world"
+          for I in $(seq 50); do ./test-runtime.act || break; done
+      - name: "ls core"
+        if: failure()
+        run: |
+          pwd
+          ls
+          find /tmp
+          mv /tmp/core* .
+      - name: "Upload core file & binaries as artifacts on test failure"
+        if: failure()
+        uses: actions/upload-artifact@v3
+        with:
+          name: coredumps-${{ matrix.os }}-${{ matrix.version }}-${{ github.run_id }}.zip
+          path: |
+            ${{ github.workspace }}/core*
 
 
   # If we are on the main branch, we'll create or update a pre-release called
