@@ -224,7 +224,9 @@ backend/test/skiplist_test: backend/test/skiplist_test.c backend/skiplist.c
 
 builder/builder: builder/build.zig $(ZIG)
 	rm -rf builder/zig-cache builder/zig-out
-	cd builder && ../$(ZIG)/zig build && find zig-cache -name build -exec cp {} builder \;
+	cd builder \
+		&& ../$(ZIG)/zig build -Doptimize=Debug -Dcpu=$(ARCH) \
+		&& find zig-cache -name build -exec cp {} builder \;
 
 # /builtin ----------------------------------------------
 builtin/__builtin__.c builtin/__builtin__.h: builtin/ty/out/types/__builtin__.ty
