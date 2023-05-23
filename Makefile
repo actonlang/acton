@@ -687,6 +687,7 @@ test-stdlib:
 
 .PHONY: clean clean-all clean-backend clean-rts
 clean: clean-distribution clean-backend clean-rts
+	rm -rf builder/builder builder/zig-cache builder/zig-out
 
 clean-all: clean clean-compiler clean-deps
 	rm -rf lib_deps lib/*
