@@ -124,7 +124,7 @@ solveGroups env select te tt (cs:css)       = do --traceM ("\n\n######### solveG
 
 solve' env select hist te tt eq cs
   | not $ null unigoals                     = do --traceM (unlines [ "### uni goal " ++ prstr t ++ " ~ " ++ prstrs alts | RUni t alts <- unigoals ])
-                                                 traceM ("### uni goals: " ++ show (sum [ length alts | RUni t alts <- unigoals ]))
+                                                 --traceM ("### uni goals: " ++ show (sum [ length alts | RUni t alts <- unigoals ]))
                                                  sequence [ unify t t' | RUni t alts <- unigoals, t' <- alts ]
                                                  proceed hist cs
   | null solve_cs || null goals             = return (keep_cs, eq)
@@ -165,7 +165,7 @@ solve' env select hist te tt eq cs
         rnks                                = map (rank env (taint cs)) solve_cs
         tryAlts st t0 []                    = --trace ("### FAIL " ++ prstr t0) $
                                               noSolve cs
-        tryAlts st t0 (t:ts)                = tryAlt t0 t `catchError` const (traceM ("### ROLLBACK " ++ prstr t0) >> rollbackState st >> tryAlts st t0 ts)
+        tryAlts st t0 (t:ts)                = tryAlt t0 t `catchError` const ({-traceM ("=== ROLLBACK " ++ prstr t0) >> -}rollbackState st >> tryAlts st t0 ts)
         tryAlt t0 (TCon _ c)
           | isProto env (tcname c)          = do p <- instwildcon env c
                                                  w <- newWitness

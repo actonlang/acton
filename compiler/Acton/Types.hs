@@ -145,7 +145,7 @@ infTop env ss                           = do --traceM ("\n## infEnv top")
                                              ss <- msubst ss
                                              popFX
                                              --traceM ("######## solve TOP: " ++ show (length cs))
-                                             traceM (prstrs cs)
+                                             --traceM (prstrs cs)
                                              eq <- solveAll (define (filter typeDecl te) env) te tNone cs
                                              --traceM ("######## termred TOP")
                                              ss <- termred <$> msubst (bindWits eq ++ ss)
@@ -615,11 +615,13 @@ toSigs te                               = map makeSig te
 
 --------------------------------------------------------------------------------------------------------------------------
 
+solveAll env te tt []                   = return []
 solveAll env te tt cs                   = do --traceM ("\n\n### solveAll " ++ prstrs cs)
                                              (cs,eq) <- simplify env te tt cs
                                              (cs,eq) <- solve env (const True) te tt eq cs
                                              return eq
 
+solveScoped env vs te tt []             = return ([], [])
 solveScoped env [] te tt cs             = simplify env te tt cs
 solveScoped env vs te tt cs             = do --traceM ("\n\n### solveScoped: " ++ prstrs cs)
                                              (cs,eq) <- simplify env te tt cs
