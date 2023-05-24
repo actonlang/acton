@@ -143,6 +143,10 @@ jobs:
     container:
       image: debian:bullseye
     steps:
+      - name: "Show platform and environment"
+        run: |
+          env
+          cat /proc/cpuinfo
       - name: "Set BUILD_RELEASE when we are building for a version tag"
         run: |
           echo "BUILD_RELEASE=1" >> $GITHUB_ENV
@@ -329,6 +333,10 @@ jobs:
       image: ${{ matrix.os }}:${{ matrix.version }}
       options: --privileged --ulimit core=-1 --security-opt seccomp=unconfined
     steps:
+      - name: "Show platform and environment"
+        run: |
+          env
+          cat /proc/cpuinfo
       - name: "Download .deb files"
         uses: actions/download-artifact@v3
         with:
