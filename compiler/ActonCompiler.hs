@@ -444,10 +444,7 @@ filterMainActor env opts paths binTask
         (sc,_)              = Acton.QuickType.schemaOf env (A.eQVar qn)
 
 useZigBuild opts paths =
-  -- Default to NOT use zig build, unless the user explicitly asks for it
-  C.zigbuild opts
-  -- TODO: enable zig build by default when it's ready
-  --not (C.zigbuild opts)
+  not (C.nozigbuild opts)
 
 importsOf :: CompileTask -> [A.ModName]
 importsOf t = A.importsOf (atree t)

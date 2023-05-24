@@ -224,7 +224,8 @@ backend/test/skiplist_test: backend/test/skiplist_test.c backend/skiplist.c
 
 builder/builder: builder/build.zig $(ZIG)
 	rm -rf builder/zig-cache builder/zig-out
-	cd builder && ../$(ZIG)/zig build && find zig-cache -name build -exec cp {} builder \;
+	(echo 'const root = @import("build.zig");'; tail -n +2 deps/zig/lib/build_runner.zig) > builder/build_runner.zig
+	cd builder && ../$(ZIG)/zig build-exe build_runner.zig -femit-bin=builder -mcpu=$(ARCH)
 
 # /builtin ----------------------------------------------
 builtin/__builtin__.c builtin/__builtin__.h: builtin/ty/out/types/__builtin__.ty
@@ -687,7 +688,7 @@ test-stdlib:
 
 .PHONY: clean clean-all clean-backend clean-rts
 clean: clean-distribution clean-backend clean-rts
-	rm -rf builder/builder builder/zig-cache builder/zig-out
+	rm -rf builder/build_runner* builder/builder* builder/zig-cache builder/zig-out
 
 clean-all: clean clean-compiler clean-deps
 	rm -rf lib_deps lib/*
