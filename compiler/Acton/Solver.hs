@@ -19,6 +19,7 @@ import Control.Monad.Except
 import qualified Data.Map.Strict as Map
 import Data.Map.Strict (Map)
 import qualified Control.Exception
+import Control.DeepSeq
 
 import Utils
 import Pretty
@@ -41,7 +42,9 @@ simplify env te tt cs                       = do cs <- msubst cs
                                                  te <- msubst te
                                                  --traceM ("  -simplify:\n" ++ render (nest 8 $ vcat $ map pretty cs))
                                                  --traceM ("  -for:\n" ++ render (nest 8 $ vcat $ map pretty te))
-                                                 simplifyGroups env te tt (groupCs env cs)
+                                                 css <- groupCs env cs
+                                                 --sequence [ traceM ("## long:\n" ++ render (nest 4 $ vcat $ map pretty cs)) | cs <- css, length cs > 1000 ]
+                                                 simplifyGroups env te tt css
 
 simplifyGroups env te tt []                 = return ([], [])
 simplifyGroups env te tt (cs:css)           = do --traceM ("\n\n######### simplifyGroup " ++ prstrs cs)
@@ -60,14 +63,17 @@ simplify' env te tt eq cs                   = do eq1 <- reduce env eq cs
                                                  tt1 <- msubst tt
                                                  improve env1 te1 tt1 eq1 cs1
 
-groupCs env []                              = []
-groupCs env (c:cs)                          = close (tyfree c ++ attrfree [c]) [c] cs
-  where close tvs cs0 cs
-          | null cs1                        = cs0 : groupCs env cs2
-          | otherwise                       = close (tvs++tyfree cs1++attrfree cs1) (cs0++cs1) cs2
-          where (cs1,cs2)                   = partition (not . null . intersect tvs . tyfree) cs
-        attrs cs                            = [ n | Sel _ t n _ <- cs ] ++ [ n | Mut t n _ <- cs ]
-        attrfree cs                         = [ tv | n <- attrs cs, tv <- allConAttrFree env n ]
+groupCs env cs                              = do st <- currentState
+                                                 mapM mark ([1..] `zip` cs)
+                                                 m <- foldM group Map.empty cs
+                                                 rollbackState st
+                                                 return $ Map.elems m
+  where mark (n,c)                          = do tvs <- (nub . filter univar . tyfree) <$> msubst c         -- Also include env vars via Sel/Mut?
+                                                 sequence [ unify (newTVarToken n) (tVar tv) | tv <- tvs ]
+        group m c                           = do tvs <- (filter univar . tyfree) <$> msubst c
+                                                 let tv = case tvs of [] -> tv0; tv:_ -> tv
+                                                 return $ Map.insertWith (++) tv [c] m
+        TVar _ tv0                          = newTVarToken 0
 
 
 ----------------------------------------------------------------------------------------------------------------------
@@ -104,7 +110,8 @@ instance Pretty Rank where
 
 solve                                       :: (Polarity a, Pretty a) => Env -> (Constraint -> Bool) ->
                                                TEnv -> a -> Equations -> Constraints -> TypeM (Constraints,Equations)
-solve env select te tt eq cs                = do (cs',eq') <- solveGroups env select te tt (groupCs env cs)
+solve env select te tt eq cs                = do css <- groupCs env cs
+                                                 (cs',eq') <- solveGroups env select te tt css
                                                  eq <- msubst eq
                                                  return (cs', eq'++eq)
 
@@ -399,11 +406,10 @@ instance Vars Equation where
 
 reduce                                      :: Env -> Equations -> Constraints -> TypeM Equations
 reduce env eq []                            = return eq
-reduce env eq (c:cs)                        = do c' <- msubst c
-                                                 --traceM ("   reduce " ++ prstr c')
-                                                 eq1 <- reduce' env eq c'
-                                                 cs' <- msubst cs
-                                                 reduce env eq1 cs'
+reduce env eq (c:cs)                        = do c <- msubst c
+                                                 --traceM ("   reduce " ++ prstr c)
+                                                 eq1 <- reduce' env eq c
+                                                 reduce env eq1 cs
 
 reduce'                                     :: Env -> Equations -> Constraint -> TypeM Equations
 reduce' env eq (Cast t1 t2)                 = do cast' env t1 t2

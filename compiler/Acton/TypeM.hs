@@ -45,7 +45,8 @@ runTypeM m                              = runTypeM' [] m
 runTypeM'                               :: Substitution -> TypeM a -> a
 runTypeM' s m                           = case evalState (runExceptT m) (initTypeState $ Map.fromList s) of
                                             Right x  -> x
-                                            Left cs -> error "Unhandled TypeM exception"
+                                            Left err -> error ("Unhandled TypeM exception: " ++ prstr loc ++ ": " ++ prstr str)
+                                              where (loc,str) = typeError err
 
 currentState                            :: TypeM TypeState
 currentState                            = lift $ state $ \st -> (st, st)
@@ -97,6 +98,8 @@ newTVarOfKind k                         = TVar NoLoc <$> TV k <$> Internal Typev
         str PRow                        = "p"
         str KRow                        = "k"
         str _                           = ""
+
+newTVarToken n                          = TVar NoLoc $ TV KWild $ Internal Typevar "z" n
 
 newTVars ks                             = mapM newTVarOfKind ks
 
