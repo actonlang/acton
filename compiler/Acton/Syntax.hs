@@ -11,7 +11,7 @@
 -- THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 --
 
-{-# LANGUAGE MultiParamTypeClasses, FlexibleInstances, FlexibleContexts, DeriveGeneric #-}
+{-# LANGUAGE MultiParamTypeClasses, FlexibleInstances, FlexibleContexts, DeriveGeneric, DeriveAnyClass #-}
 module Acton.Syntax where
 
 import Utils
@@ -19,6 +19,7 @@ import qualified Data.Binary
 import qualified Data.Set
 import Data.Char
 import GHC.Generics (Generic)
+import Control.DeepSeq
 import Prelude hiding((<>))
 
 
@@ -115,9 +116,9 @@ data Pattern    = PWild         { ploc::SrcLoc, pann::Maybe Type }
 type Target     = Expr
 
 data Prefix     = Globvar | Kindvar | Xistvar | Typevar | Tempvar | Witness | NormPass | CPSPass | LLiftPass
-                deriving (Eq,Ord,Show,Read,Generic)
+                deriving (Eq,Ord,Show,Read,Generic,NFData)
 
-data Name       = Name SrcLoc String | Derived Name Name | Internal Prefix String Int deriving (Generic,Show)
+data Name       = Name SrcLoc String | Derived Name Name | Internal Prefix String Int deriving (Generic,Show,NFData)
 
 nloc (Name l _) = l
 nloc _          = NoLoc
@@ -150,7 +151,7 @@ globalName s    = Internal Globvar s 0
 globalNames s   = map (Internal Globvar s) [1..]
 
 
-data ModName    = ModName [Name] deriving (Show,Read,Eq,Generic)
+data ModName    = ModName [Name] deriving (Show,Read,Eq,Generic,NFData)
 
 modName ss      = ModName (map name ss)
 
@@ -161,7 +162,7 @@ modCat (ModName ns) n = ModName (ns++[n])
 instance Ord ModName where
     compare a b = compare (modPath a) (modPath b)
 
-data QName      = QName { mname::ModName, noq::Name } | NoQ { noq::Name } | GName { mname::ModName, noq::Name } deriving (Show,Read,Eq,Ord,Generic)
+data QName      = QName { mname::ModName, noq::Name } | NoQ { noq::Name } | GName { mname::ModName, noq::Name } deriving (Show,Read,Eq,Ord,Generic,NFData)
 
 qName ss s      = QName (modName ss) (name s)
 
@@ -202,19 +203,19 @@ data Binary     = Or|And|Plus|Minus|Mult|Pow|Div|Mod|EuDiv|BOr|BXor|BAnd|ShiftL|
 data Aug        = PlusA|MinusA|MultA|PowA|DivA|ModA|EuDivA|BOrA|BXorA|BAndA|ShiftLA|ShiftRA|MMultA deriving (Show,Eq)
 data Comparison = Eq|NEq|LtGt|Lt|Gt|GE|LE|In|NotIn|Is|IsNot deriving (Show,Eq)
 
-data Deco       = NoDec | Property | Static deriving (Eq,Show,Read,Generic)
+data Deco       = NoDec | Property | Static deriving (Eq,Show,Read,Generic,NFData)
 
-data Kind       = KType | KProto | KFX | PRow | KRow | KFun [Kind] Kind | KVar Name | KWild deriving (Eq,Ord,Show,Read,Generic)
+data Kind       = KType | KProto | KFX | PRow | KRow | KFun [Kind] Kind | KVar Name | KWild deriving (Eq,Ord,Show,Read,Generic,NFData)
 
-data TSchema    = TSchema { scloc::SrcLoc, scbind::QBinds, sctype::Type } deriving (Show,Read,Generic)
+data TSchema    = TSchema { scloc::SrcLoc, scbind::QBinds, sctype::Type } deriving (Show,Read,Generic,NFData)
 
-data TVar       = TV { tvkind::Kind, tvname::Name } deriving (Show,Read,Generic) -- the Name is an uppercase letter, optionally followed by digits.
+data TVar       = TV { tvkind::Kind, tvname::Name } deriving (Show,Read,Generic,NFData) -- the Name is an uppercase letter, optionally followed by digits.
 
-data TCon       = TC { tcname::QName, tcargs::[Type] } deriving (Eq,Show,Read,Generic)
+data TCon       = TC { tcname::QName, tcargs::[Type] } deriving (Eq,Show,Read,Generic,NFData)
 
-data FX         = FXPure | FXMut | FXProc | FXAction deriving (Eq,Show,Read,Generic)
+data FX         = FXPure | FXMut | FXProc | FXAction deriving (Eq,Show,Read,Generic,NFData)
 
-data QBind      = Quant TVar [TCon] deriving (Eq,Show,Read,Generic)
+data QBind      = Quant TVar [TCon] deriving (Eq,Show,Read,Generic,NFData)
 
 type QBinds     = [QBind]
 
@@ -233,7 +234,7 @@ data Type       = TVar      { tloc::SrcLoc, tvar::TVar }
                 | TNil      { tloc::SrcLoc, rkind::Kind }
                 | TRow      { tloc::SrcLoc, rkind::Kind, label::Name, rtype::Type, rtail::TRow }
                 | TFX       { tloc::SrcLoc, tfx::FX }
-                deriving (Show,Read,Generic)
+                deriving (Show,Read,Generic,NFData)
 
 type TFX        = Type
 type PosRow     = Type
@@ -246,7 +247,7 @@ data Constraint = Cast  Type Type
                 | Sel   Name Type Name Type
                 | Mut   Type Name Type
                 | Seal  Type
-                deriving (Eq,Show,Read,Generic)
+                deriving (Eq,Show,Read,Generic,NFData)
 
 type Constraints = [Constraint]
 
