@@ -338,6 +338,7 @@ jobs:
           apt update
           apt install -y ./deb/acton_*.deb
           actonc --version
+          sha256sum /usr/lib/acton/builder
       - name: "Enable dumping core files to /tmp/core..."
         run: |
           apt install -qy procps

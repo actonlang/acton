@@ -227,6 +227,7 @@ builder/builder: builder/build.zig $(ZIG)
 	cd builder \
 		&& ../$(ZIG)/zig build -Doptimize=Debug -Dcpu=$(ARCH) \
 		&& find zig-cache -name build -exec cp {} builder \;
+	sha256sum $@
 
 # /builtin ----------------------------------------------
 builtin/__builtin__.c builtin/__builtin__.h: builtin/ty/out/types/__builtin__.ty
