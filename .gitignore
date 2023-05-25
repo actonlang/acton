@@ -18,6 +18,12 @@ backend/test/queue_unit_tests
 backend/test/skiplist_test
 backend/test/test_client
 
+base/.actonc.lock
+base/build-cache
+base/out
+
+builder/builder
+builder/build_runner.zig
 builder/zig-cache
 
 compiler/actonc

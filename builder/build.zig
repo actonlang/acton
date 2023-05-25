@@ -13,12 +13,14 @@ pub const FilePath = struct {
 };
 
 pub fn build(b: *std.build.Builder) void {
-    print("Acton Project Builder\n", .{});
+    const buildroot_path = b.build_root.handle.realpathAlloc(b.allocator, ".") catch unreachable;
+    print("Acton Project Builder\nBuilding in {s}\n", .{buildroot_path});
     const optimize = b.standardOptimizeOption(.{});
     const target = b.standardTargetOptions(.{});
-    const projpath_out = b.option([]const u8, "projpath_out", "") orelse "";
+    const projpath = b.option([]const u8, "projpath", "") orelse "";
     const projpath_outtypes = b.option([]const u8, "projpath_outtypes", "") orelse "";
     const syspath = b.option([]const u8, "syspath", "") orelse "";
+    const syspath_base = b.option([]const u8, "syspath_base", "") orelse "";
     const syspath_include = b.option([]const u8, "syspath_include", "") orelse "";
     const syspath_lib = b.option([]const u8, "syspath_lib", "") orelse "";
     const syspath_libreldev = b.option([]const u8, "syspath_libreldev", "") orelse "";
@@ -26,7 +28,7 @@ pub fn build(b: *std.build.Builder) void {
     const libactongc = b.option([]const u8, "libactongc", "") orelse "";
     const wd = b.option([]const u8, "wd", "") orelse "";
 
-    var iter_dir = std.fs.cwd().openIterableDir(
+    var iter_dir = b.build_root.handle.openIterableDir(
         "out/types/",
         .{},
     ) catch |err| {
@@ -111,9 +113,8 @@ pub fn build(b: *std.build.Builder) void {
         libActonProject.addCSourceFile(entry, &cflags);
     }
 
-    libActonProject.addIncludePath(projpath_out);
-    libActonProject.addIncludePath(".");
-    libActonProject.addIncludePath(syspath);
+    libActonProject.addIncludePath(projpath);
+    libActonProject.addIncludePath(syspath_base);
     libActonProject.addIncludePath(syspath_include);
     libActonProject.addIncludePath("../deps/instdir/include"); // hack hack for stdlib TODO: sort out
     libActonProject.linkLibC();
@@ -138,9 +139,10 @@ pub fn build(b: *std.build.Builder) void {
             .target = target,
             .optimize = optimize,
         });
+        _ = syspath;
         executable.addCSourceFile(entry.full_path, &[_][]const u8{});
-        executable.addIncludePath(projpath_out);
-        executable.addIncludePath(syspath);
+        executable.addIncludePath(projpath);
+        executable.addIncludePath(syspath_base);
         executable.addIncludePath(syspath_include);
         executable.addLibraryPath("out/rel/lib/");
         executable.addLibraryPath(syspath_libreldev);

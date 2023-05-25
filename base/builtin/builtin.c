@@ -12,15 +12,43 @@
  * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#include "../builtin.h"
-#include <stdio.h>
+#ifdef __linux__
+#ifndef _GNU_SOURCE
+#define _GNU_SOURCE 1
+#endif
+#endif
 
-int main() {
-  B_complex a = toB_complex(7.0 + _Complex_I * 2.0);
-  B_complex b = toB_complex(5.0 + _Complex_I * 3.0);
-  B_NumberD_complex wit = B_NumberD_complexG_witness;
-  B_complex c = wit->$class->__mul__(wit,a,b);
-  B_complex c2 = wit->$class->__pow__(wit,a,b);
-  B_print(2,to$str("(7+2i)*(5+3i) = "),c);
-  B_print(2,to$str("(7+2i)**(5+3i) = "),c2);
-}
+#include "builtin.h"
+
+#include "common.c"
+#include "class_hierarchy.c"
+#include "none.c"
+// #include "atom.c"
+#include "i64.c"
+#include "i32.c"
+#include "i16.c"
+#include "u64.c"
+#include "u32.c"
+#include "u16.c"
+#include "int.c"
+#include "float.c"
+#include "bool.c"
+#include "complex.c"
+#include "Iterator.c"
+#include "slice.c"
+#include "hash.c"
+#include "timsort.c"
+#include "list.c"
+#include "dict.c"
+#include "str.c"
+#include "set.c"
+#include "tuple.c"
+#include "range.c"
+#include "exceptions.c"
+#include "serialize.c"
+#include "registration.c"
+#include "function.c"
+#include "builtin_functions.c"
+#include "env.c"
+#include "staticWitnesses.c"
+#include "utils.c"

@@ -20,7 +20,7 @@
 #include <stdbool.h>
 #include <time.h>
 
-#include "rts/rts.h"
+#include "../rts/rts.h"
 
 #define LOG_VERSION "0.1.0"
 

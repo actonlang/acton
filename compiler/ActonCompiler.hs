@@ -68,17 +68,22 @@ import Text.Printf
 import qualified Data.ByteString.Char8 as B
 
 #if defined(darwin_HOST_OS) && defined(aarch64_HOST_ARCH)
-ccTarget = " -target aarch64-macos-none "
-platform = "aarch64-macos"
+defTarget = "aarch64-macos-none"
 #elif defined(darwin_HOST_OS) && defined(x86_64_HOST_ARCH)
-ccTarget = " -target x86_64-macos-none "
-platform = "x86_64-macos"
+defTarget = "x86_64-macos-none"
 #elif defined(linux_HOST_OS) && defined(x86_64_HOST_ARCH)
-ccTarget = " -target x86_64-linux-gnu.2.28 "
-platform = "x86_64-linux"
+defTarget = "x86_64-linux-gnu.2.28"
 #else
 #error "Unsupported platform"
 #endif
+
+archOs t = case t of
+  "aarch64-macos-none" -> "aarch64-macos"
+  "x86_64-macos-none"  -> "x86_64-macos"
+  "x86_64-linux-none"  -> "x86_64-linux"
+  "x86_64-linux-gnu.2.28"  -> "x86_64-linux"
+  _ -> error $ "Unsupported target: " ++ t
+
 
 main                     =  do arg <- C.parseCmdLine
                                case arg of
@@ -102,7 +107,7 @@ zig paths = sysPath paths ++ "/zig/zig"
 cc :: Paths -> C.CompileOptions -> FilePath
 cc paths opts = if not (C.cc opts == "")
              then C.cc opts
-             else zig paths ++ " cc " ++ ccTarget
+             else zig paths ++ " cc -target " ++ defTarget
 
 ar :: Paths -> FilePath
 ar paths = zig paths ++ " ar "
@@ -336,11 +341,10 @@ srcBase paths mn        = joinPath (srcDir paths : A.modPath mn)
 findPaths               :: FilePath -> C.CompileOptions -> IO Paths
 findPaths actFile opts  = do execDir <- takeDirectory <$> System.Environment.getExecutablePath
                              sysPath <- canonicalizePath (if null $ C.syspath opts then execDir ++ "/.." else C.syspath opts)
-                             let sysTypes = joinPath [sysPath, "types"]
                              let sysLib = joinPath [sysPath, "lib/" ++ if (C.dev opts) then "dev" else "rel"]
                              absSrcFile <- canonicalizePath actFile
                              (isTmp, rmTmp, projPath, dirInSrc) <- analyze (takeDirectory absSrcFile) []
-                             let sysTypes = joinPath [sysPath, "types"]
+                             let sysTypes = joinPath [sysPath, "base", "out", "types"]
                                  srcDir  = if isTmp then takeDirectory absSrcFile else joinPath [projPath, "src"]
                                  projOut = joinPath [projPath, "out"]
                                  projProfile = joinPath [projOut, if (C.dev opts) then "dev" else "rel"]
@@ -412,8 +416,6 @@ parseActFile opts paths actFile = do
           detectStubMode paths srcfile opts = do
                     exists <- doesFileExist cFile
                     let doStub = exists && C.autostub opts
-                    when (doStub && C.debug opts) $ do putStrLn("Found matching C file (" ++ makeRelative (srcDir paths) cFile
-                                                        ++ "), assuming stub compilation for " ++ makeRelative (srcDir paths) srcfile)
                     return (C.stub opts || doStub)
               where cFile = replaceExtension srcfile ".c"
 
@@ -452,12 +454,25 @@ importsOf t = A.importsOf (atree t)
 compileTasks :: C.CompileOptions -> Paths -> [CompileTask] -> [BinTask] -> IO ()
 compileTasks opts paths tasks preBinTasks
                        = do tasks <- chaseImportedFiles opts paths tasks
-                            let sccs = stronglyConnComp  [(t,name t,importsOf t) | t <- tasks]
-                                (as,cs) = Data.List.partition isAcyclic sccs
-                            -- show modules to compile and in which order
-                            --putStrLn(concatMap showTaskGraph sccs)
+                            -- We sort out the order of imports etc and split
+                            -- out __builtin__, if it's part of the tasks, so we
+                            -- can deal with it first
+                            let sccs = stronglyConnComp  [(t, name t, importsOf t) | t <- tasks]
+                                (builtinSccs, otherSccs) = partition containsBuiltin sccs
+                                (as,cs) = Data.List.partition isAcyclic otherSccs
+
+                            -- Seprate compile of __builtin__, if it's part of this project
+                            case builtinSccs of
+                                [AcyclicSCC t] -> do
+                                        builtinEnv0 <- Acton.Env.initEnv (sysTypes paths) True
+                                        doTask opts paths builtinEnv0 t
+                                        return ()
+                                _ -> do return ()
+                            let builtinPath = if null builtinSccs then sysTypes paths else projTypes paths
+
+                            -- Compile all the other modules, reinitializing the env from disk
                             if null cs
-                             then do env0 <- Acton.Env.initEnv (sysTypes paths) (modName paths == Acton.Builtin.mBuiltin)
+                             then do env0 <- Acton.Env.initEnv builtinPath False
                                      env1 <- foldM (doTask opts paths) env0 [t | AcyclicSCC t <- as]
                                      iff (not (C.stub opts)) $ do
                                        binTasks <- catMaybes <$> mapM (filterMainActor env1 opts paths) preBinTasks
@@ -470,6 +485,7 @@ compileTasks opts paths tasks preBinTasks
   where isAcyclic (AcyclicSCC _) = True
         isAcyclic _              = False
         showTaskGraph ts         = "\n"++concatMap (\t-> concat (intersperse "." (A.modPath (name t)))++" ") ts
+        containsBuiltin (AcyclicSCC task) = name task == (A.modName ["__builtin__"])
 
 
 chaseImportedFiles :: C.CompileOptions -> Paths -> [CompileTask] -> IO [CompileTask]
@@ -511,25 +527,21 @@ doTask opts paths env t@(ActonTask mn src m stubMode) = do
               ++ (if stubMode then " in stub mode" else "")))
 
     timeStart <- getTime Monotonic
-    -- run custom make target compilation for modules implemented in C
-    -- Note how this does not include .ext.c style modules
+    -- For stub modules, copy the .c & .h files from src/ to out/types/
+    -- Note how this is different from .ext.c style modules
     iff stubMode $ do
-        runCustomMake paths mn
-        timeCustomMake <- getTime Monotonic
-        iff (C.timing opts) $ putStrLn("    Custom make           : " ++ fmtTime(timeCustomMake - timeStart))
+        copyFileWithMetadata (replaceExtension actFile ".c") cFile
+        copyFileWithMetadata (replaceExtension actFile ".h") hFile
 
-
-    -- no need to list the cFile since it is intermediate; oFile is final output
-    let outFiles = [tyFile, hFile] ++ if stubMode then [] else [oFile]
-    ok <- checkUptoDate paths actFile outFiles (importsOf t)
+    let outFiles = [tyFile, hFile, cFile]
+    ok <- checkUptoDate opts paths actFile outFiles (importsOf t)
     if ok && not (forceCompilation opts)
       then do
         iff (C.debug opts) (putStrLn ("    Skipping " ++ makeRelative (srcDir paths) actFile ++ " (files are up to date).") >> hFlush stdout)
         timeBeforeTy <- getTime Monotonic
         (_,te) <- InterfaceFiles.readFile tyFile
-        timeReadTy <- getTime Monotonic
-        iff (C.timing opts) $ putStrLn("Read .ty file " ++ makeRelative (projPath paths) tyFile ++ ": " ++ fmtTime(timeReadTy - timeBeforeTy))
         timeEnd <- getTime Monotonic
+        iff (C.timing opts) $ putStrLn("   Read .ty file " ++ makeRelative (projPath paths) tyFile ++ ": " ++ fmtTime(timeEnd - timeBeforeTy))
         iff (not (C.quiet opts)) $ putStrLn("   Already up to date, in   " ++ fmtTime(timeEnd - timeStart))
         return (Acton.Env.addMod mn te env)
       else do
@@ -546,58 +558,21 @@ doTask opts paths env t@(ActonTask mn src m stubMode) = do
         tyFile              = outbase ++ ".ty"
         hFile               = outbase ++ ".h"
         cFile               = outbase ++ ".c"
-        oFile               = joinPath [projLib paths, prstr mn] ++  ".o"
         forceCompilation :: C.CompileOptions -> Bool
         forceCompilation args = (C.alwaysbuild args) || (C.parse args) || (C.kinds args) || (C.types args) || (C.sigs args)
                                 || (C.norm args) || (C.deact args) || (C.cps args) || (C.llift args) || (C.hgen args) ||(C.cgen args)
 
-runCustomMake paths mn = do
-    -- copy header file in place, if it exists
-    let srcH = replaceExtension actFile ".h"
-    hSrcExist <- doesFileExist srcH
-    let hFile = outbase ++ ".h"
-    iff (hSrcExist) $ do
-        hFileExist <- doesFileExist hFile
-        if hFileExist
-          then do
-            hSame <- cmpFiles srcH hFile
-            iff (not hSame) $ do
-                copyFile srcH hFile
-          else
-            copyFile srcH hFile
 
-    -- run custom make target, if we find a Makefile
-    -- since we have no visibility into make target dependencies, we always
-    -- run custom make targets
-    let makeFile = projPath paths ++ "/Makefile"
-    makeExist <- doesFileExist makeFile
-    iff (makeExist) (do
-      cExist <- doesFileExist $ replaceExtension actFile ".c"
-      iff (cExist) (do
-        let roFile = makeRelative (projPath paths) oFile
-            aFile = joinPath [projLib paths, "libActonProject.a"]
-            makeCmd = "make " ++ roFile
-            arCmd = ar paths ++ " rcs " ++ aFile ++ " " ++ oFile
-        (returnCode, makeStdout, makeStderr) <- readCreateProcessWithExitCode (shell $ makeCmd ++ " && " ++ arCmd){ cwd = Just (projPath paths) } ""
-        case returnCode of
-            ExitSuccess -> return()
-            ExitFailure _ -> do printIce "compilation of C code failed"
-                                putStrLn $ "make stdout:\n" ++ makeStdout
-                                putStrLn $ "make stderr:\n" ++ makeStderr
-                                System.Exit.exitFailure)
-                    )
-  where actFile             = srcFile paths mn
-        outbase             = outBase paths mn
-        oFile               = joinPath [projLib paths, prstr mn] ++  ".o"
-        cmpFiles a b        = liftM2 (==) (readFile a) (readFile b)
-
-
-checkUptoDate :: Paths -> FilePath -> [FilePath] -> [A.ModName] -> IO Bool
-checkUptoDate paths actFile outFiles imps = do
+checkUptoDate :: C.CompileOptions -> Paths -> FilePath -> [FilePath] -> [A.ModName] -> IO Bool
+checkUptoDate opts paths actFile outFiles imps = do
+    iff (C.debug opts) (putStrLn ("    Checking " ++ makeRelative (srcDir paths) actFile ++ " is up to date..."))
     srcFiles  <- filterM System.Directory.doesFileExist potSrcFiles
     outExists <- mapM System.Directory.doesFileExist outFiles
+
     if not (and outExists)
-        then return False
+        then do
+            iff (C.debug opts) (putStrLn ("    Missing output files: " ++ show outExists ++ " for " ++ show outFiles))
+            return False
         else do
             -- get the time of the last modified source file
             srcTime  <- head <$> sortBy (comparing Down) <$> mapM System.Directory.getModificationTime srcFiles
@@ -812,7 +787,7 @@ buildExecutable env opts paths binTask
         buildF              = joinPath [projPath paths, "build.sh"]
         outbase             = outBase paths mn
         rootFile            = outbase ++ ".root.c"
-        libFiles            = " -lActonProject -lActon -lActonDB -lActonDeps-" ++ platform ++ " -lactongc-" ++ platform ++ " -lpthread -lm -ldl "
+        libFiles            = " -lActonProject -lActon -lActonDB -lActonDeps-" ++ archOs defTarget ++ " -lactongc-" ++ archOs defTarget ++ " -lpthread -lm -ldl "
         libPaths            = " -L " ++ sysPath paths ++ "/lib -L" ++ sysLib paths ++ " -L" ++ projLib paths
         binFile             = joinPath [binDir paths, (binName binTask)]
         srcbase             = srcFile paths mn
@@ -879,23 +854,29 @@ zigBuild env opts paths tasks binTasks = do
     homeDir <- getHomeDirectory
     let zigCmdBase =
           if buildZigExists
-            then zig paths ++ " build "
+            then zig paths ++ " build " ++
+                 " -target " ++ defTarget ++
+                 " --prefix " ++ projProfile paths ++ " --prefix-exe-dir 'bin'" ++
+                 if (C.debug opts) then " --verbose " else "" ++
+                 "--global-cache-dir " ++ (joinPath [ homeDir, ".cache/acton/build-cache" ])
             else (joinPath [ sysPath paths, "builder" ]) ++ " " ++
                  (joinPath [ sysPath paths, "zig/zig" ]) ++ " " ++
                  projPath paths ++ " " ++ (joinPath [ projPath paths, "build-cache" ]) ++ " " ++
-                 (joinPath [ homeDir, ".cache/zig" ])
+                 (joinPath [ homeDir, ".cache/acton/build-cache" ])
     let zigCmd = zigCmdBase ++
                  " --prefix " ++ projProfile paths ++ " --prefix-exe-dir 'bin'" ++
-                 if (C.debug opts) then " --verbose-cc " else "" ++
+                 if (C.debug opts) then " --verbose " else "" ++
+                 " -Dtarget=" ++ defTarget ++
                  " -Doptimize=" ++ (if (C.dev opts) then "Debug" else "ReleaseFast") ++
-                 " -Dprojpath_out=" ++ joinPath [ projPath paths, "out" ] ++
+                 " -Dprojpath=" ++ projPath paths ++
                  " -Dprojpath_outtypes=" ++ joinPath [ projPath paths, "out", "types" ] ++
                  " -Dsyspath=" ++ sysPath paths ++
+                 " -Dsyspath_base=" ++ joinPath [ sysPath paths, "base" ] ++
                  " -Dsyspath_include=" ++ joinPath [ sysPath paths, "inc" ] ++
                  " -Dsyspath_lib=" ++ joinPath [ sysPath paths, "lib" ] ++
                  " -Dsyspath_libreldev=" ++ joinPath [ sysPath paths, "lib", reldev ] ++
-                 " -Dlibactondeps=ActonDeps-" ++ platform ++
-                 " -Dlibactongc=actongc-" ++ platform
+                 " -Dlibactondeps=ActonDeps-" ++ archOs defTarget ++
+                 " -Dlibactongc=actongc-" ++ archOs defTarget
 
     runZig opts zigCmd (Just (projPath paths))
     -- if we are in a temp acton project, copy the outputted binary next to the source file

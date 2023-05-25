@@ -82,7 +82,7 @@ typedef struct $Catcher *$Catcher;
 
 ///////////////////////////////////////////////////////////
 
-#include "__builtin__.h"
+#include "../out/types/__builtin__.h"
 #include "class_hierarchy.h"
 #include "serialize.h"
 #include "registration.h"
