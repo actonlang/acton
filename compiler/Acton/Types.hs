@@ -576,7 +576,8 @@ instance InfEnv Decl where
                                              return (cs1, [(extensionName (head us) c, NExt q c ps te2)], Extension l q c us (bindWits eq1 ++ b2))
       where TC n ts                     = c
             env1                        = define (toSigs te') $ reserve (bound b) $ defineSelfOpaque $ defineTVars (stripQual q) $ setInClass env
-            witsearch                   = [ w | w <- witsByPName env (tcname $ head us), matching (tCon c) w, matching' (wtype w) (qbound q) (tCon c) ]
+            witsearch                   = [ w | w <- witsByPName env (tcname u), matching (tCon c) u w, matching' [wtype w] (qbound q) [tCon c] ]
+            u                           = head us
             ps                          = mro1 env us     -- TODO: check that ps doesn't contradict any previous extension mro for c
             final                       = concat [ conAttrs env (tcname p) | (_,p) <- tail ps, hasWitness env (tCon c) p ]
             te'                         = parentTEnv env ps
@@ -917,6 +918,7 @@ genEnv env cs te ds
                                              return (fix_cs, te, eq, ds)
   | onTop env                           = do te <- msubst te
                                              --traceM ("## genEnv defs 1\n" ++ render (nest 6 $ pretty te))
+                                             --traceM ("     cs: " ++ prstrs cs)
                                              (cs,eq) <- simplify env te tNone cs
                                              te <- msubst te
                                              env <- msubst env
@@ -1030,7 +1032,9 @@ instance Infer Expr where
                                             NDef sc d -> do 
                                                 (cs,tvs,t) <- instantiate env sc
                                                 let e = app t (tApp x tvs) $ witsOf cs
-                                                wrapped attrWrap env cs [tActor,t] [eVar selfKW,e]
+                                                if actorSelf env
+                                                    then wrapped attrWrap env cs [tActor,t] [eVar selfKW,e]
+                                                    else return (cs, t, e)
                                             NClass q _ _ -> do
                                                 (cs0,ts) <- instQBinds env q
                                                 --traceM ("## Instantiating " ++ prstr n)
