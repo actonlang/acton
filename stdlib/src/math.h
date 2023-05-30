@@ -1,19 +1,20 @@
 #pragma once
 #include "builtin/builtin.h"
-#include "builtin/env.h"
 #include "rts/rts.h"
 struct mathQ_RealFuns;
+struct mathQ_RealFunsD_float;
 typedef struct mathQ_RealFuns *mathQ_RealFuns;
+typedef struct mathQ_RealFunsD_float *mathQ_RealFunsD_float;
 struct mathQ_RealFunsG_class {
     char *$GCINFO;
-    B_int $class_id;
+    int $class_id;
     $SuperG_class $superclass;
     B_NoneType (*__init__) (mathQ_RealFuns);
-    B_NoneType (*__serialize__) (mathQ_RealFuns, $Serial$state);
+    void (*__serialize__) (mathQ_RealFuns, $Serial$state);
     mathQ_RealFuns (*__deserialize__) (mathQ_RealFuns, $Serial$state);
-    B_bool (*__bool__)(mathQ_RealFuns);
-    B_str (*__str__)(mathQ_RealFuns);
-    B_str (*__repr__)(mathQ_RealFuns);
+    B_bool (*__bool__) (mathQ_RealFuns);
+    B_str (*__str__) (mathQ_RealFuns);
+    B_str (*__repr__) (mathQ_RealFuns);
     $WORD (*sqrt) (mathQ_RealFuns, $WORD);
     $WORD (*exp) (mathQ_RealFuns, $WORD);
     $WORD (*log) (mathQ_RealFuns, $WORD);
@@ -33,20 +34,16 @@ struct mathQ_RealFunsG_class {
 struct mathQ_RealFuns {
     struct mathQ_RealFunsG_class *$class;
 };
-extern struct mathQ_RealFunsG_class mathQ_RealFunsG_methods;
-mathQ_RealFuns mathQ_RealFunsG_new();
-struct mathQ_RealFunsD_float;
-typedef struct mathQ_RealFunsD_float *mathQ_RealFunsD_float;
 struct mathQ_RealFunsD_floatG_class {
     char *$GCINFO;
-    B_int $class_id;
+    int $class_id;
     $SuperG_class $superclass;
     B_NoneType (*__init__) (mathQ_RealFunsD_float);
-    B_NoneType (*__serialize__) (mathQ_RealFunsD_float, $Serial$state);
+    void (*__serialize__) (mathQ_RealFunsD_float, $Serial$state);
     mathQ_RealFunsD_float (*__deserialize__) (mathQ_RealFunsD_float, $Serial$state);
-    B_bool (*__bool__)(mathQ_RealFunsD_float);
-    B_str (*__str__)(mathQ_RealFunsD_float);
-    B_str (*__repr__)(mathQ_RealFunsD_float);
+    B_bool (*__bool__) (mathQ_RealFunsD_float);
+    B_str (*__str__) (mathQ_RealFunsD_float);
+    B_str (*__repr__) (mathQ_RealFunsD_float);
     B_float (*sqrt) (mathQ_RealFunsD_float, B_float);
     B_float (*exp) (mathQ_RealFunsD_float, B_float);
     B_float (*log) (mathQ_RealFunsD_float, B_float);
@@ -66,6 +63,7 @@ struct mathQ_RealFunsD_floatG_class {
 struct mathQ_RealFunsD_float {
     struct mathQ_RealFunsD_floatG_class *$class;
 };
+extern struct mathQ_RealFunsG_class mathQ_RealFunsG_methods;
 extern struct mathQ_RealFunsD_floatG_class mathQ_RealFunsD_floatG_methods;
 mathQ_RealFunsD_float mathQ_RealFunsD_floatG_new();
 $WORD mathQ_sqrt (mathQ_RealFuns, $WORD);
