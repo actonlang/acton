@@ -230,10 +230,13 @@ backend/test/skiplist_test: backend/test/skiplist_test.c backend/skiplist.c
 	$(CC) -o$@ $^ $(CFLAGS_DB) -Ibackend \
 		$(LDLIBS)
 
+ifeq ($(ARCH),x86_64)
+ZIG_ARCH_ARG=-mcpu=x86_64
+endif
 builder/builder: builder/build.zig $(ZIG)
 	rm -rf builder/zig-cache builder/zig-out
 	(echo 'const root = @import("build.zig");'; tail -n +2 deps/zig/lib/build_runner.zig) > builder/build_runner.zig
-	cd builder && ../$(ZIG)/zig build-exe build_runner.zig -femit-bin=builder -mcpu=$(ARCH)
+	cd builder && ../$(ZIG)/zig build-exe build_runner.zig -femit-bin=builder $(ZIG_ARCH_ARG)
 
 # /compiler ----------------------------------------------
 ACTONC_ALL_HS=$(wildcard compiler/*.hs compiler/**/*.hs)
