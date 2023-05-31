@@ -202,7 +202,7 @@ jobs:
   # its pushed to the homebrew-acton repository.
   brew-macos:
     #if: ${{ startsWith(github.ref, 'refs/tags/v') || startsWith(github.ref, 'refs/tags/release-') }}
-    runs-on: macos-12
+    runs-on: macos-13
     steps:
       - name: "Show environment"
         run: env
