@@ -19,6 +19,10 @@ export DH_VERBOSE = 1
 override_dh_auto_test:
 	@echo "Skipping tests"
 
+# Do not strip
+override_dh_strip:
+	@echo "Skipping strip"
+
 # dh_make generated override targets
 # This is example for Cmake (See https://bugs.debian.org/641051 )
 #override_dh_auto_configure:
