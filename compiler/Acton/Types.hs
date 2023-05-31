@@ -234,6 +234,7 @@ wrapped kw env cs ts args               = do tvx <- newTVarOfKind KFX
                                              let t1 = subst [(fxSelf,fx)] t0
                                                  t2 = tFun fxPure (foldr posRow posNil ts) kwdNil t'
                                              w <- newWitness
+                                             --traceM ("## wrapped " ++ prstr (Impl w fx p))
                                              return (Impl w fx p :
                                                      Cast t1 t2 :
                                                      cs, t', eCall (tApp (Dot l0 (eVar w) kw) tvs) args)
@@ -682,7 +683,7 @@ infActorEnv env ss                      = do dsigs <- mapM mkNDef dvars         
         mkNVar n                        = do t <- newTVar
                                              return (n, NVar t)
 
-matchActorAssumption env n0 p k te      = do --traceM ("## matchActorAssumption " ++ prstr n0)
+matchActorAssumption env n0 p k te      = do --traceM ("## matchActorAssumption " ++ prstrs te)
                                              (css,eqs) <- unzip <$> mapM check1 te0
                                              let cs = [Cast (prowOf p) p0, Cast (krowOf k) k0, Seal p0, Seal k0]
                                              (cs,eq) <- simplify env obs tNone (cs ++ concat css)
@@ -757,7 +758,7 @@ abstractDefs env q eq b                 = map absDef b
 
 instance Check Decl where
     checkEnv env (Def l n q p k a b dec fx)
-                                        = do --traceM ("## checkEnv def " ++ prstr n ++ " (q = [" ++ prstrs q ++ "])")
+                                        = do --traceM ("## checkEnv def " ++ prstr n ++ " FX " ++ prstr fx')
                                              t <- maybe newTVar return a
                                              pushFX fx' t
                                              st <- newTVar
@@ -930,12 +931,7 @@ genEnv env cs te ds
                                                  ds1 = map (abstract q ds ws eq1) ds
                                              --traceM ("## genEnv defs 3 [" ++ prstrs gen_vs ++ "]\n" ++ render (nest 6 $ pretty te1))
                                              return (fix_cs, te1, eq2, ds1)
-  | otherwise                           = do te <- msubst te
-                                             --traceM ("## genEnv local defs \n" ++ render (nest 6 $ pretty te))
-                                             (cs,eq) <- simplify env te tNone cs
-                                             te <- msubst te
-                                             --traceM ("## genEnv local defs 2\n" ++ render (nest 6 $ pretty te))
-                                             return (cs, te, eq, ds)
+  | otherwise                           = return (cs, te, [], ds)
   where
     qualify vs cs                       = let (q,wss) = unzip $ map qbind vs in (q, concat wss)
       where qbind v                     = (Quant v (casts ++ impls), wits)
@@ -1386,6 +1382,7 @@ instance Infer Expr where
                                                  w2 = eQVar witCollectionList
                                              return (Impl w1 t1 (pMapping tk tv) :
                                                      cs, t1, eCall (tApp (eDot (eVar w1) fromiterKW) [t2]) [w2, List l as'])
+
     infer env (DictComp l a1 co)
       | nodup co                        = do (cs1,te,co') <- infEnv env co
                                              tk <- newTVar
@@ -1398,11 +1395,12 @@ instance Infer Expr where
                                                  w2 = eQVar witCollectionList
                                              return (Impl w1 t1 (pMapping tk tv) :
                                                      cs1++cs2, t1, eCall (tApp (eDot (eVar w1) fromiterKW) [t2]) [w2, ListComp l a1' co'])
+
     infer env (Paren l e)               = do (cs,t,e') <- infer env e
                                              return (cs, t, Paren l e')
 
 inferCall env unwrap l e ps ks          = do (cs1,t,e) <- infer env e
-                                             (cs1,t,e) <- if unwrap then wrapped attrUnwrap env cs1 [t] [e] else pure (cs1,t,e)
+                                             (cs1,t,e) <- if unwrap && actorSelf env then wrapped attrUnwrap env cs1 [t] [e] else pure (cs1,t,e)
                                              (cs2,prow,ps) <- infer env ps
                                              (cs3,krow,ks) <- infer env ks
                                              t0 <- newTVar

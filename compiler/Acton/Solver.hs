@@ -78,7 +78,6 @@ groupCs env cs                              = do st <- currentState
 ----------------------------------------------------------------------------------------------------------------------
 
 data Rank                                   = RRed { cstr :: Constraint }
-                                            | RUni { tgt :: Type, alts :: [Type] }
                                             | RSealed { tgt :: Type }
                                             | RTry { tgt :: Type, alts :: [Type], rev :: Bool }
                                             | RVar { tgt :: Type, alts :: [Type] }
@@ -88,7 +87,6 @@ data Rank                                   = RRed { cstr :: Constraint }
 
 instance Eq Rank where
     RRed _      == RRed _                   = True
-    RUni t1 _   == RUni t2 _                = t1 == t2
     RSealed t1  == RSealed t2               = t1 == t2
     RTry t1 _ _ == RTry t2 _ _              = t1 == t2
     RVar t1 _   == RVar t2 _                = t1 == t2
@@ -98,7 +96,6 @@ instance Eq Rank where
 
 instance Pretty Rank where
     pretty (RRed c)                         = text "<reduce>" <+> pretty c
-    pretty (RUni t ts)                      = pretty t <+> char '=' <+> commaSep pretty ts
     pretty (RSealed t)                      = pretty t <+> text "sealed"
     pretty (RTry t ts rev)                  = pretty t <+> braces (commaSep pretty ts) Pretty.<> (if rev then char '\'' else empty)
     pretty (RVar t ts)                      = pretty t <+> char '~' <+> commaSep pretty ts
@@ -120,10 +117,11 @@ solveGroups env select te tt (cs:css)       = do --traceM ("\n\n######### solveG
                                                  return (cs1++cs2, eq1++eq2)
 
 solve' env select hist te tt eq cs
-  | not $ null unigoals                     = do --traceM (unlines [ "### uni goal " ++ prstr t ++ " ~ " ++ prstrs alts | RUni t alts <- unigoals ])
-                                                 --traceM ("### uni goals: " ++ show (sum [ length alts | RUni t alts <- unigoals ]))
-                                                 sequence [ unify t t' | RUni t alts <- unigoals, t' <- alts ]
+  | not $ null vargoals                     = do --traceM (unlines [ "### var goal " ++ prstr t ++ " ~ " ++ prstrs alts | RVar t alts <- vargoals ])
+                                                 --traceM ("### var goals: " ++ show (sum [ length alts | RVar t alts <- vargoals ]))
+                                                 sequence [ unify t t' | RVar t alts <- vargoals, t' <- alts ]
                                                  proceed hist cs
+  | any not keep_evidence                   = noSolve keep_cs
   | null solve_cs || null goals             = return (keep_cs, eq)
   | otherwise                               = do st <- currentState
                                                  --traceM ("## keep:\n" ++ render (nest 8 $ vcat $ map pretty keep_cs))
@@ -156,11 +154,12 @@ solve' env select hist te tt eq cs
                                                         return (keep_cs, eq)
 
   where (solve_cs, keep_cs)                 = partition select cs
-        (unigoals, goals)                   = span isUni $ sortOn deco $ map condense $ group rnks
+        keep_evidence                       = [ hasWitness env t p | Impl _ t p <- keep_cs ]
+        (vargoals, goals)                   = span isVar $ sortOn deco $ map condense $ group rnks
         group []                            = []
         group (r:rs)                        = (r : rs1) : group rs2
           where (rs1,rs2)                   = partition (==r) rs
-        rnks                                = map (rank env (taint cs)) solve_cs
+        rnks                                = map (rank env) solve_cs
         tryAlts st t0 []                    = --trace ("### FAIL " ++ prstr t0) $
                                               noSolve cs
         tryAlts st t0 (t:ts)                = tryAlt t0 t `catchError` const ({-traceM ("=== ROLLBACK " ++ prstr t0) >> -}rollbackState st >> tryAlts st t0 ts)
@@ -180,7 +179,6 @@ solve' env select hist te tt eq cs
                                                  solve' env select hist te tt eq cs
 
         condense (RRed c : rs)              = RRed c
-        condense (RUni t as : rs)           = RUni t (foldr union as $ map alts rs)
         condense (RSealed t : rs)           = RSealed t
         condense (RTry t as r : rs)
           | TVar{} <- t                     = RTry t (if rev' then subrev ts' else ts') rev'
@@ -198,11 +196,10 @@ solve' env select hist te tt eq cs
         univs                               = univars cs
         (posvs, negvs)                      = polvars te `polcat` polvars tt
 
-        isUni RUni{}                        = True
-        isUni _                             = False
+        isVar RVar{}                        = True
+        isVar _                             = False
 
         deco (RRed cs)                      = (0, 0, 0, 0)
-        deco (RUni t as)                    = (1, 0, length as, 0)
         deco (RSealed t)                    = (2, 0, 0, 0)
         deco (RTry (TVar _ v) as r)         = (3, length $ filter (==v) embvs, length as, length $ filter (==v) univs)
         deco (RTry t as r)                  = (4, 0, length as, 0)
@@ -219,47 +216,36 @@ solve' env select hist te tt eq cs
 --                                          = int : [C3Pt] ++ CPt ++ subrev [] ++ Pt : [] ++ float : subrev []
 --                                          = int : C3Pt : CPt : Pt : float
 
-rank                                        :: Env -> [TVar] -> Constraint -> Rank
-rank env tainted (Sub _ t1 t2)              = rank env tainted (Cast t1 t2)
+rank                                        :: Env -> Constraint -> Rank
+rank env (Sub _ t1 t2)                      = rank env (Cast t1 t2)
 
-rank env tainted (Cast t1@(TVar _ v1) t2@(TVar _ v2))
-  | univar v1, univar v2                    = if length ([v1,v2] \\ tainted) > 0 then RUni t1 [t2] else RVar t1 [t2]
-rank env tainted (Cast t1@TVar{} (TOpt _ t2@TVar{}))
+rank env (Cast t1@(TVar _ v1) t2@(TVar _ v2))
+  | univar v1, univar v2                    = RVar t1 [t2]
+rank env (Cast t1@TVar{} (TOpt _ t2@TVar{}))
   | univar (tvar t1), univar (tvar t2)      = RVar t1 [t2]
-rank env tainted (Cast t1@TVar{} (TOpt _ t2))
+rank env (Cast t1@TVar{} (TOpt _ t2))
   | univar (tvar t1)                        = RTry t1 (allBelow env t2 ++ [tOpt tWild, tNone]) False
-rank env tainted (Cast TNone{} t2@TVar{})
+rank env (Cast TNone{} t2@TVar{})
   | univar (tvar t2)                        = RTry t2 [tOpt tWild, tNone] True
-rank env tainted (Cast t1@TVar{} t2)
+rank env (Cast t1@TVar{} t2)
   | univar (tvar t1)                        = RTry t1 (allBelow env t2) False
-rank env tainted (Cast t1 t2@TVar{})
+rank env (Cast t1 t2@TVar{})
   | univar (tvar t2)                        = RTry t2 (allAbove env t1) True
 
-rank env tainted c@(Impl _ t p)
+rank env c@(Impl _ t p)
   | schematic t `elem` ts                   = ROvl t
   | not $ null $ tyfree t                   = RTry t ts False
   where ts                                  = allExtProto env t p
 
-rank env tainted (Sel _ t@TVar{} n _)       = RTry t (allProtoAttr env n ++ allConAttr env n ++ allExtProtoAttr env n) False
-rank env tainted (Mut t@TVar{} n _)         = RTry t (allConAttr env n) False
+rank env (Sel _ t@TVar{} n _)               = RTry t (allProtoAttr env n ++ allConAttr env n ++ allExtProtoAttr env n) False
+rank env (Mut t@TVar{} n _)                 = RTry t (allConAttr env n) False
 
-rank env tainted (Seal t@TVar{})
+rank env (Seal t@TVar{})
   | tvkind (tvar t) == KFX                  = RSealed t
   | otherwise                               = RSkip
 
-rank env tainted c                          = RRed c
+rank env c                                  = RRed c
 
-
-taint []                                    = []
-taint (Sub _ t1 t2 : cs)                    = taint (Cast t1 t2 : cs)
-taint (Cast TVar{} TVar{} : cs)             = taint cs
-taint (Cast (TVar _ v) _ : cs)              = v : taint cs
-taint (Cast _ (TVar _ v) : cs)              = v : taint cs
-taint (Sel _ (TVar _ v) _ _ : cs)           = v : taint cs
-taint (Mut (TVar _ v) _ _ : cs)             = v : taint cs
-taint (Impl _ (TVar _ v) _ : cs)            = v : taint cs
-taint (Seal (TVar _ v) : cs)                = v : taint cs
-taint (_ : cs)                              = taint cs
 
 ----------------------------------------------------------------------------------------------------------------------
 -- New variable info
@@ -540,12 +526,12 @@ solveMutAttr env (wf,sc,dec) (Mut t1 n t2)  = do when (dec /= Just Property) (no
 findWitness                 :: Env -> Type -> PCon -> [Witness]
 findWitness env t p
   | length all_ws <= 1      = all_ws
-  | otherwise               = trace ("## findWitness " ++ prstr t ++ " (" ++ prstr p ++ "), all_ws: " ++ prstrs all_ws) $
+  | otherwise               = --trace ("## findWitness " ++ prstr t ++ " (" ++ prstr p ++ "), all_ws: " ++ prstrs all_ws) $
                               case elim [] match_ws of
-                                [w] | null uni_ws  -> trace (" # best: " ++ prstr w) $ [w]
-                                w:u | force        -> trace (" # best forced: " ++ prstrs (w:u)) $ [w]
-                                _   | force        -> trace (" # first forced: " ++ prstr (head all_ws)) $ [head all_ws]
-                                    | otherwise    -> trace (" # all") $ all_ws
+                                [w] | null uni_ws  -> {-trace (" # best: " ++ prstr w) $ -}[w]
+                                w:u | force        -> {-trace (" # best forced: " ++ prstrs (w:u)) $ -}[w]
+                                _   | force        -> {-trace (" # first forced: " ++ prstr (head all_ws)) $ -}[head all_ws]
+                                    | otherwise    -> {-trace (" # all") $ -}all_ws
   where t_                  = wild t                    -- matching against wild t also accepts witnesses that would instantiate t
         p_                  = wild p                    -- matching against wild p also accepts witnesses that would instantiate p
         force               = isForced env
