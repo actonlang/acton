@@ -41,7 +41,7 @@ generate env srcbase m              = do return (n, h,c)
 genRoot                            :: Acton.Env.Env0 -> QName -> IO String
 genRoot env0 qn@(GName m n)         = do return $ render (cInclude $+$ cInit $+$ cRoot)
   where env                         = genEnv $ setMod m env0
-        cInclude                    = include env "types" m
+        cInclude                    = include env "out/types" m
         cInit                       = (text "void" <+> gen env primROOTINIT <+> parens empty <+> char '{') $+$
                                        nest 4 (gen env (GName m initKW) <> parens empty <> semi) $+$
                                        char '}'
@@ -115,9 +115,9 @@ modNames []                         = []
 hModule env (Module m imps stmts)   = text "#pragma" <+> text "once" $+$
                                       (if inBuiltin env
                                        then empty
-                                       else include env "builtin" (modName ["builtin"]) $+$
+                                       else text "#include \"builtin/builtin.h\"" $+$ -- TODO: can we include out/types/__builtin__.h instead?
                                             include env "rts" (modName ["rts"])) $+$
-                                      vcat (map (include env "types") $ modNames imps) $+$
+                                      vcat (map (include env "out/types") $ modNames imps) $+$
                                       hSuite env stmts $+$
                                       text "void" <+> genTopName env initKW <+> parens empty <> semi 
 
@@ -265,8 +265,8 @@ primNEWTUPLE0                       = gPrim "NEWTUPLE0"
 -- Implementation -----------------------------------------------------------------------------------
 
 cModule env srcbase (Module m imps stmts)
-                                    = include env (if inBuiltin env then "" else "types") m $+$
-                                      (if inBuiltin env then text "#include \"../rts/rts.h\"" else empty) $+$
+                                    = (if inBuiltin env then text "#include \"builtin/builtin.c\"" else empty) $+$
+                                      include env (if inBuiltin env then "" else "out/types") m $+$
                                       ext_include $+$
                                       declModule env stmts $+$
                                       text "int" <+> genTopName env initFlag <+> equals <+> text "0" <> semi $+$

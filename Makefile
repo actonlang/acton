@@ -109,22 +109,24 @@ ifneq ($(VERSION),$(GIT_VERSION_TAG)) # ..ensure the git tag is same as version 
 endif
 endif
 
-BUILTIN_HFILES=$(wildcard builtin/*.h) builtin/__builtin__.h
-BUILTIN_CFILES=$(wildcard builtin/*.c) builtin/__builtin__.c
-
 DBARCHIVE=lib/libActonDB.a
-ARCHIVES=lib/dev/libActon.a lib/rel/libActon.a lib/libActonDeps-$(PLATFORM).a lib/libactongc-$(PLATFORM).a
+ARCHIVES=lib/libActonDeps-$(PLATFORM).a lib/libactongc-$(PLATFORM).a
+
+BUILTIN_HFILES=$(wildcard base/builtin/*.h)
 
 DIST_BINS=$(ACTONC) dist/bin/actondb dist/bin/runacton
 DIST_HFILES=\
 	dist/rts/io.h \
 	dist/rts/rts.h \
 	dist/builtin/env.h \
-	$(addprefix dist/,$(BUILTIN_HFILES))
+	$(patsubst base/%,dist/%,$(BUILTIN_HFILES))
 DIST_DBARCHIVE=$(addprefix dist/,$(DBARCHIVE))
 DIST_ARCHIVES=$(addprefix dist/,$(ARCHIVES))
 DIST_ZIG=dist/zig
 
+# Listing DEPSA as prerequisites in a target means it is dependent upon at least
+# one of  the external libraries that we place in libActonDeps
+DEPSA:=lib/libActonDeps-$(PLATFORM).a
 
 CFLAGS_DB = -I. -Ideps -I$(TD)/deps/instdir/include -DLOG_USE_COLOR -g
 CFLAGS_DB+= $(CFLAGS_TARGET)
@@ -139,9 +141,15 @@ backend/actondb: backend/actondb.c lib/libActonDB.a $(DEPSA)
 		-lActonDB \
 		$(LDLIBS)
 
-# Listing DEPSA as prerequisites in a target means it is dependent upon at least
-# one of  the external libraries that we place in libActonDeps
-DEPSA:=lib/libActonDeps-$(PLATFORM).a
+.PHONY: base/out/rel/lib/libActonProject.a base/out/dev/lib/libActonProject.a
+base/out/rel/lib/libActonProject.a: $(ACTONC) $(DEPSA)
+	cd base && ../dist/bin/actonc build --auto-stub
+
+base/out/dev/lib/libActonProject.a: $(ACTONC) $(DEPSA)
+	cd base && ../dist/bin/actonc build --auto-stub --dev
+
+base/out/types/__builtin__.ty: $(ACTONC)
+	cd base && ../dist/bin/actonc src/__builtin__.act
 
 backend/comm.o: backend/comm.c backend/comm.h backend/failure_detector/db_queries.h $(DEPSA)
 	$(CC) -o$@ $< -c $(CFLAGS_DB)
@@ -226,14 +234,6 @@ builder/builder: builder/build.zig $(ZIG)
 	rm -rf builder/zig-cache builder/zig-out
 	(echo 'const root = @import("build.zig");'; tail -n +2 deps/zig/lib/build_runner.zig) > builder/build_runner.zig
 	cd builder && ../$(ZIG)/zig build-exe build_runner.zig -femit-bin=builder -mcpu=$(ARCH)
-
-# /builtin ----------------------------------------------
-builtin/__builtin__.c builtin/__builtin__.h: builtin/ty/out/types/__builtin__.ty
-builtin/builtin_dev.o: builtin/builtin.c builtin/__builtin__.h $(BUILTIN_HFILES) $(BUILTIN_CFILES) $(DEPSA) $(LIBGC)
-	$(CC) $(CFLAGS) $(CFLAGS_DEV) -Wno-unused-result -c $< -o$@
-
-builtin/builtin_rel.o: builtin/builtin.c builtin/__builtin__.h $(BUILTIN_HFILES) $(BUILTIN_CFILES) $(DEPSA) $(LIBGC)
-	$(CC) $(CFLAGS) $(CFLAGS_REL) -Wno-unused-result -c $< -o$@
 
 # /compiler ----------------------------------------------
 ACTONC_ALL_HS=$(wildcard compiler/*.hs compiler/**/*.hs)
@@ -332,7 +332,7 @@ lib_deps/libActonDeps-$(PLATFORM).a: dist/zig $(DEP_LIBS)
 		mkdir -p lib_deps/$${LIBNAME}; \
 		$$(cd lib_deps/$${LIBNAME} && ar x $(TD)/$${LIB}); \
 	done
-	cd lib_deps && ar -qc libActonDeps-$(PLATFORM).a */*.o
+	cd lib_deps && ar -qc libActonDeps-$(PLATFORM).a */*.o ../deps/*.o
 
 lib/libactongc-$(PLATFORM).a:
 	($(MAKE) -j1 check-download-allowed deps-download/$(DEPS_SUM) \
@@ -552,60 +552,7 @@ deps/yyjson_dev.o: deps/yyjson.c
 deps/yyjson_rel.o: deps/yyjson.c
 	$(CC) $(CFLAGS) $(CFLAGS_REL) -c $< -o$@
 
-# Building the builtin, rts and stdlib is a little tricky as we have to be
-# careful about order. First comes the __builtin__.act file,
-STDLIB_ACTFILES=$(wildcard stdlib/src/*.act stdlib/src/**/*.act)
-STDLIB_ACTFILES_NS=$(filter-out stdlib/src/__builtin__.act,$(STDLIB_ACTFILES))
-STDLIB_CFILES=$(wildcard stdlib/src/*.c stdlib/src/**/*.c)
-STDLIB_SRCFILES=$(wildcard stdlib/src/* stdlib/src/**/* stdlib/c_src/* stdlib/c_src/**/*)
-STDLIB_ACTON_MODULES=$(filter-out $(STDLIB_CFILES:.c=.act),$(STDLIB_ACTFILES_NS))
-STDLIB_TYFILES=$(subst src,out/types,$(STDLIB_ACTFILES:.act=.ty))
-STDLIB_TYFILES_C=$(subst src,out/types,$(STDLIB_CFILES:.c=.ty))
-STDLIB_HFILES=$(subst src,out/types,$(STDLIB_ACTFILES_NS:.act=.h))
-STDLIB_HFILES_C=$(subst src,out/types,$(STDLIB_CFILES:.c=.h))
-STDLIB_DEV_OFILES_ACT=$(subst src,out/lib,$(STDLIB_ACTS:.act=_dev.o))
-STDLIB_REL_OFILES_ACT=$(subst src,out/lib,$(STDLIB_ACTS:.act=_rel.o))
-STDLIB_DEV_OFILES=$(STDLIB_DEV_OFILES_ACT)
-STDLIB_REL_OFILES=$(STDLIB_REL_OFILES_ACT)
-STDLIB_OFILES=$(STDLIB_DEV_OFILES) $(STDLIB_REL_OFILES)
-
-
-# __builtin__.ty is special, it even has special handling in actonc. Essentially
-# all other modules depend on it, so it must be compiled first.
-dist/types/__builtin__.ty: builtin/ty/out/types/__builtin__.ty
-	@mkdir -p $(dir $@)
-	cp $< $@
-
-builtin/ty/out/types/__builtin__.ty: builtin/ty/src/__builtin__.act $(ACTONC)
-	@mkdir -p $(dir $@)
-	$(ACTC) --always-build --no-zigbuild $<
-	cp builtin/ty/out/types/__builtin__.h builtin/__builtin__.h
-	cp builtin/ty/out/types/__builtin__.c builtin/__builtin__.c
-
-# Build our standard library
-stdlib/out/dev/lib/libActonProject.a: $(STDLIB_SRCFILES) dist/types/__builtin__.ty $(DIST_HFILES) $(ACTONC) $(DEPSA) $(LIBGC)
-	cd stdlib && ../$(ACTC) build --always-build --auto-stub --no-zigbuild --dev
-
-stdlib/out/rel/lib/libActonProject.a: $(STDLIB_SRCFILES) dist/types/__builtin__.ty $(DIST_HFILES) $(ACTONC) $(DEPSA) $(LIBGC)
-	cd stdlib && ../$(ACTC) build --always-build --auto-stub --no-zigbuild
-	cp -a stdlib/out/types/. dist/types/
-
-
 # /lib --------------------------------------------------
-
-LIBACTON_DEV_OFILES=builtin/builtin_dev.o rts/io_dev.o rts/log.o rts/rts_dev.o deps/netstring_dev.o deps/yyjson_dev.o
-OFILES += $(LIBACTON_DEV_OFILES)
-lib/dev/libActon.a: stdlib/out/dev/lib/libActonProject.a $(LIBACTON_DEV_OFILES)
-	@mkdir -p $(dir $@)
-	cp -a $< $@
-	ar rcs $@ $(filter-out stdlib/out/dev/lib/libActonProject.a,$^)
-
-LIBACTON_REL_OFILES=$(LIBACTON_DEV_OFILES:_dev.o=_rel.o)
-OFILES += $(LIBACTON_REL_OFILES)
-lib/rel/libActon.a: stdlib/out/rel/lib/libActonProject.a $(LIBACTON_REL_OFILES)
-	@mkdir -p $(dir $@)
-	cp -a $< $@
-	ar rcs $@ $(filter-out stdlib/out/rel/lib/libActonProject.a,$^)
 
 COMM_OFILES += backend/comm.o
 DB_OFILES += backend/db.o backend/queue.o backend/skiplist.o backend/txn_state.o backend/txns.o backend/queue_callback.o backend/hash_ring.o backend/queue_groups.o
@@ -617,30 +564,6 @@ OFILES += $(BACKEND_OFILES)
 lib/libActonDB.a: $(BACKEND_OFILES)
 	rm -f $@
 	ar rcs $@ $^
-
-
-# /rts --------------------------------------------------
-OFILES += rts/io_dev.o rts/io_rel.o rts/log.o rts/rts_dev.o rts/rts_rel.o
-rts/io_dev.o: rts/io.c rts/io.h builtin/__builtin__.h $(DEPSA) $(LIBGC)
-	$(CC) $(CFLAGS) $(CFLAGS_DEV) $(LDFLAGS) \
-		-c $< -o $@
-
-rts/io_rel.o: rts/io.c rts/io.h builtin/__builtin__.h $(DEPSA) $(LIBGC)
-	$(CC) $(CFLAGS) $(CFLAGS_REL) $(LDFLAGS) \
-		-c $< -o $@
-
-rts/log.o: rts/log.c rts/log.h builtin/__builtin__.h $(DEPSA)
-	$(CC) $(CFLAGS) $(CFLAGS_DEV) -DLOG_USE_COLOR -c $< -o$@
-
-rts/rts_dev.o: rts/rts.c rts/rts.h builtin/__builtin__.h $(DEPSA) $(LIBGC)
-	$(CC) $(CFLAGS) $(CFLAGS_DEV) \
-		-Wno-int-to-void-pointer-cast -Wno-unused-result \
-		-c $< -o $@
-
-rts/rts_rel.o: rts/rts.c rts/rts.h builtin/__builtin__.h $(DEPSA) $(LIBGC)
-	$(CC) $(CFLAGS) $(CFLAGS_REL) \
-		-Wno-int-to-void-pointer-cast -Wno-unused-result \
-		-c $< -o $@
 
 # top level targets
 
@@ -686,9 +609,8 @@ test-stdlib:
 	cd compiler && stack test --ta '-p "stdlib"'
 
 
-.PHONY: clean clean-all clean-backend clean-rts
-clean: clean-distribution clean-backend clean-rts
-	rm -rf builder/build_runner* builder/builder* builder/zig-cache builder/zig-out
+.PHONY: clean clean-all clean-backend clean-base
+clean: clean-distribution clean-backend clean-base
 
 clean-all: clean clean-compiler clean-deps
 	rm -rf lib_deps lib/*
@@ -696,13 +618,18 @@ clean-all: clean clean-compiler clean-deps
 clean-backend:
 	rm -f $(DBARCHIVE) $(BACKEND_OFILES) backend/actondb
 
-# clean-builtin and clean-rts does the same thing, actually cleaning all of
-# builtin, rts & stdlib. It's rather fast to rebuild so doesn't really matter.
-clean-builtin clean-rts:
-	rm -rf $(ARCHIVES) $(DBARCHIVE) $(OFILES) builtin/__builtin__.h builtin/__builtin__.c builtin/ty/out $(STDLIB_HFILES) $(STDLIB_OFILES) $(STDLIB_TYFILES) stdlib/out/
+clean-base:
+	rm -rf base/build-cache base/out builder/build_runner* builder/builder* builder/zig-cache builder/zig-out
+	rm -rf $(ARCHIVES) $(DBARCHIVE) $(OFILES) builtin/__builtin__.h builtin/__builtin__.c builtin/ty/out stdlib/out/
 
 # == DIST ==
 #
+
+# We depend on libActon.a because the base/out directory will be populated as a
+# result of building it, and we want to copy those files!
+dist/base: base dist/lib/dev/libActon.a
+	@mkdir -p $@
+	cp -r base/Acton.toml base/builtin base/out base/rts base/src base/stdlib dist/base/
 
 # This does a little hack, first copying and then moving the file in place. This
 # is to avoid an error if the executable is currently running. cp tries to open
@@ -728,7 +655,7 @@ dist/builder: builder/builder
 	@mkdir -p $(dir $@)
 	cp $< $@
 
-dist/builtin/%: builtin/%
+dist/builtin/%: base/builtin/%
 	@mkdir -p $(dir $@)
 	cp $< $@
 
@@ -736,15 +663,23 @@ dist/inc: $(DEPSA)
 	@mkdir -p $(dir $@)
 	cp -a deps/instdir/include $@
 
-dist/rts/%: rts/%
-	@mkdir -p $(dir $@)
-	cp $< $@
-
-dist/types/%: stdlib/out/types/% stdlib
+dist/rts/%: base/rts/%
 	@mkdir -p $(dir $@)
 	cp $< $@
 
 dist/lib/%: lib/%
+	@mkdir -p $(dir $@)
+	cp $< $@
+
+dist/lib/dev/libActon.a: base/out/dev/lib/libActonProject.a
+	@mkdir -p $(dir $@)
+	cp $< $@
+
+dist/lib/rel/libActon.a: base/out/rel/lib/libActonProject.a
+	@mkdir -p $(dir $@)
+	cp $< $@
+
+dist/lib/libActonDB.a: lib/libActonDB.a
 	@mkdir -p $(dir $@)
 	cp $< $@
 
@@ -771,7 +706,7 @@ else
 endif
 
 .PHONY: distribution clean-distribution
-distribution: $(DIST_ARCHIVES) dist/builder dist/inc $(DIST_BINS) $(DIST_HFILES) $(DIST_TYFILES) $(DIST_DBARCHIVE) $(DIST_ZIG)
+distribution: dist/base $(DIST_ARCHIVES) dist/lib/dev/libActon.a dist/lib/rel/libActon.a dist/builder dist/inc $(DIST_BINS) $(DIST_HFILES) $(DIST_DBARCHIVE) $(DIST_ZIG)
 
 clean-distribution:
 	rm -rf dist

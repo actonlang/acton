@@ -572,4 +572,4 @@ B_set B_LogicalD_SetD_setD___xor__(B_LogicalD_SetD_set wit, B_set set, B_set oth
     return res;
 }
 
- 
+#undef dummy

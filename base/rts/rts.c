@@ -40,9 +40,9 @@
 #include "yyjson.h"
 #include "rts.h"
 
-#include "io.h"
+#include "io.c"
 
-#include "log.h"
+#include "log.c"
 #include "netstring.h"
 #include "../builtin/env.h"
 #include "../builtin/function.h"
@@ -298,8 +298,9 @@ The strangeness of the next 30 lines are caused by the unfortunate presence of M
 
 */
 
-void B_MsgD___init__() {
+B_NoneType B_MsgD___init__ (B_Msg G_1p) {
     // Must (and will) never be called!
+    return B_None;
 }
 
 /*
