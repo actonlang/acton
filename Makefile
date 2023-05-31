@@ -321,8 +321,8 @@ deps-download/$(DEPS_SUM):
 # headers are available, just as if we had built the deps locally.
 lib/libActonDeps-$(PLATFORM).a:
 	($(MAKE) -j1 check-download-allowed deps-download/$(DEPS_SUM) \
-		&& cp -r deps-download/$(DEPS_SUM)/lib/libActonDeps-$(PLATFORM).a $@ \
-		&& mkdir -p deps/instdir/include && cp -r deps-download/$(DEPS_SUM)/include/* deps/instdir/include/ ) \
+		&& mkdir -p deps/instdir/include && cp -r deps-download/$(DEPS_SUM)/include/* deps/instdir/include/ \
+		&& cp -r deps-download/$(DEPS_SUM)/lib/libActonDeps-$(PLATFORM).a $@) \
 	|| ($(MAKE) lib_deps/libActonDeps-$(PLATFORM).a && cp lib_deps/libActonDeps-$(PLATFORM).a $@)
 
 lib_deps/libActonDeps-$(PLATFORM).a: dist/zig $(DEP_LIBS)
