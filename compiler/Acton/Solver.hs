@@ -237,7 +237,7 @@ rank env c@(Impl _ t p)
   | not $ null $ tyfree t                   = RTry t ts False
   where ts                                  = allExtProto env t p
 
-rank env (Sel _ t@TVar{} n _)               = RTry t (allProtoAttr env n ++ allConAttr env n ++ allExtProtoAttr env n) False
+rank env (Sel _ t@TVar{} n _)               = RTry t (allConAttr env n ++ allProtoAttr env n ++ allExtProtoAttr env n) False
 rank env (Mut t@TVar{} n _)                 = RTry t (allConAttr env n) False
 
 rank env (Seal t@TVar{})
