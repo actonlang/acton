@@ -207,9 +207,9 @@ jobs:
       - name: "Show environment"
         run: env
       - name: "Set BUILD_RELEASE when we are building for a version tag"
+        if: startsWith(github.ref, 'refs/tags/v')
         run: |
           echo "BUILD_RELEASE=1" >> $GITHUB_ENV
-        if: startsWith(github.ref, 'refs/tags/v')
       - name: "Enable dumping core files"
         run: |
           sudo sysctl kern.corefile=core.%P
@@ -244,6 +244,99 @@ jobs:
           git diff homebrew/Formula/acton.rb
           cp -av homebrew $(brew --prefix | sed -e 's,^/usr/local,/usr/local/Homebrew,')/Library/Taps/actonlang/homebrew-acton
           cat $(brew --prefix | sed -e 's,^/usr/local,/usr/local/Homebrew,')/Library/Taps/actonlang/homebrew-acton/Formula/acton.rb
+      - name: "brew test-bot --only-tap-syntax"
+        run: |
+          brew readall --aliases actonlang/acton
+          brew style actonlang/acton
+          brew audit --tap=actonlang/acton
+      - name: "brew test-bot --only-formulae"
+        run: |
+          brew audit --strict --only=gcc_dependency actonlang/acton/acton
+          brew deps --tree --annotate --include-build --include-test actonlang/acton/acton
+          brew fetch --HEAD --retry actonlang/acton/acton --build-bottle --force
+          brew install --HEAD --only-dependencies --verbose --build-bottle actonlang/acton/acton
+          brew install --HEAD --verbose --build-bottle actonlang/acton/acton
+          brew linkage actonlang/acton/acton
+          brew linkage --test --strict actonlang/acton/acton
+          brew test --verbose actonlang/acton/acton
+          # Cannot run on --HEAD
+          #brew audit actonlang/acton/acton --online --git --skip-style
+      - name: "Test compile acton program"
+        run: |
+          echo '#!/usr/bin/env runacton'   > test-runtime.act
+          echo 'actor main(env):'          >> test-runtime.act
+          echo '    print("Hello, world")' >> test-runtime.act
+          echo '    env.exit(0)'           >> test-runtime.act
+          chmod a+x test-runtime.act
+          ./test-runtime.act
+          ./test-runtime.act | grep "Hello, world"
+      - name: "Get the actonc version"
+        id: get_actonc_version
+        run: echo "version=$(actonc --numeric-version)" >> $GITHUB_OUTPUT
+      - name: "brew bottle"
+        run: |
+          brew bottle acton
+          ls
+          export BOTTLE_NAME=$(ls | grep "acton.*bottle" | sed -E -e 's/acton--[^.]+(\..*.bottle.tar.gz)/acton-v${{ steps.get_actonc_version.outputs.version }}\1/')
+          echo "Moving bottle to ${BOTTLE_NAME}"
+          mv acton*bottle.tar.gz ${BOTTLE_NAME}
+      - name: "Upload bottles as artifact"
+        uses: actions/upload-artifact@main
+        with:
+          name: bottles
+          path: '*.bottle.*'
+
+  brew-linux:
+    #if: ${{ startsWith(github.ref, 'refs/tags/v') || startsWith(github.ref, 'refs/tags/release-') }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: "Show environment"
+        run: env
+      - name: "Set up Homebrew"
+        id: set-up-homebrew
+        uses: Homebrew/actions/setup-homebrew@master
+      - name: "Cache Homebrew Bundler RubyGems"
+        id: cache
+        uses: actions/cache@v3
+        with:
+          path: ${{ steps.set-up-homebrew.outputs.gems-path }}
+          key: ${{ runner.os }}-rubygems-${{ steps.set-up-homebrew.outputs.gems-hash }}
+          restore-keys: ${{ runner.os }}-rubygems-
+      - name: "Set BUILD_RELEASE when we are building for a version tag"
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          echo "BUILD_RELEASE=1" >> $GITHUB_ENV
+      - name: "Check out repository code"
+        uses: actions/checkout@v3
+      - name: "Get the version"
+        id: get_version
+        run: echo "version=$(grep VERSION= common.mk | cut -d = -f 2)" >> $GITHUB_OUTPUT
+      - name: "Hacky hacky homebrew formula"
+        # NOTE: brew --prefix gives us path to Homebrew installation directory,
+        #       which differs between Intel and M1 mac. However, on Intel the
+        #       path is one deeper, which is why we use sed to rewrite
+        #       /usr/local to /usr/local/Homebrew so we can find
+        #       /usr/local/Homewbrew/Library while on M1 it is in
+        #       /opt/homebrew/Library.
+        # COMMIT_SHA is either the SHA from the pull request or read directly
+        # from GITHUB_SHA. It is needed because GITHUB_SHA, which works
+        # correctly for a push event, does not work for pull_request events as
+        # GITHUB_SHA points to a PR merge commit or something like that... it's
+        # weird and doesn't work.
+        run: |
+          export HB_TAPS_DIR=/home/linuxbrew/.linuxbrew/Homebrew/Library/Taps
+          mkdir -p ${HB_TAPS_DIR}/actonlang
+          sed -i -e 's,^  url.*,  url "https://github.com/actonlang/acton/archive/refs/tags/v${{ steps.get_version.outputs.version }}.tar.gz",' homebrew/Formula/acton.rb
+          export PR_SHA=${{github.event.pull_request.head.sha}}
+          export COMMIT_SHA=${PR_SHA:-${GITHUB_SHA}}
+          export PR_REMOTE=${{ github.event.pull_request.head.repo.clone_url }}
+          export BASE_REMOTE=${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}.git
+          export GIT_REPO=${PR_REMOTE:-${BASE_REMOTE}}
+          sed -i -e "s#^\(  head.*,\) branch.*#  head \"${GIT_REPO}\", revision: \"${COMMIT_SHA}\"#" homebrew/Formula/acton.rb
+          cat homebrew/Formula/acton.rb
+          git diff homebrew/Formula/acton.rb
+          cp -av homebrew ${HB_TAPS_DIR}/actonlang/homebrew-acton
+          cat ${HB_TAPS_DIR}/actonlang/homebrew-acton/Formula/acton.rb
       - name: "brew test-bot --only-tap-syntax"
         run: |
           brew readall --aliases actonlang/acton
