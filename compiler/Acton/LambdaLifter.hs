@@ -384,6 +384,8 @@ instance Lift Expr where
     ll env (YieldFrom l e)              = YieldFrom l <$> ll env e
     ll env (Tuple l es KwdNil)          = Tuple l <$> ll env es <*> pure KwdNil
     ll env (List l es)                  = List l <$> ll env es
+    ll env (Dict l as)                  = Dict l <$> ll env as
+    ll env (Set l es)                   = Set l <$> ll env es
     ll env e                            = error ("ll unexpected: " ++ prstr e)
 
 llDot env l e n ts
@@ -418,6 +420,10 @@ primSubst n
 instance Lift Elem where
     ll env (Elem e)                     = Elem <$> ll env e
     ll env (Star e)                     = Star <$> ll env e
+
+instance Lift Assoc where
+    ll env (Assoc k v)                  = Assoc <$> ll env k <*> ll env v
+    ll env (StarStar e)                 = StarStar <$> ll env e
 
 instance Lift PosArg where
     ll env (PosArg e p)                 = PosArg <$> ll env e <*> ll env p

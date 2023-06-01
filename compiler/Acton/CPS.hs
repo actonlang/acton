@@ -490,6 +490,8 @@ instance PreCPS Expr where
     pre env (YieldFrom l e)             = YieldFrom l <$> pre env e
     pre env (Tuple l es KwdNil)         = Tuple l <$> pre env es <*> pure KwdNil
     pre env (List l es)                 = List l <$> pre env es
+    pre env (Dict l as)                 = Dict l <$> pre env as
+    pre env (Set l es)                  = Set l <$> pre env es
     pre env e                           = return e
 
     preTop env e0@(Call l e ps KwdNil)
@@ -499,6 +501,9 @@ instance PreCPS Expr where
 
 instance PreCPS Elem where
     pre env (Elem e)                    = Elem <$> pre env e
+
+instance PreCPS Assoc where
+    pre env (Assoc k v)                 = Assoc <$> pre env k <*> pre env v
 
 
 -- Convert types ----------------------------------------------------------------------------------------
@@ -588,6 +593,8 @@ instance Conv Expr where
     conv (YieldFrom l e)                = YieldFrom l (conv e)
     conv (Tuple l es ks)                = Tuple l (conv es) (conv ks)
     conv (List l es)                    = List l (conv es)
+    conv (Dict l as)                    = Dict l (conv as)
+    conv (Set l es)                     = Set l (conv es)
     conv e                              = e
 
 instance Conv PosArg where
@@ -600,3 +607,6 @@ instance Conv KwdArg where
 
 instance Conv Elem where
     conv (Elem e)                       = Elem (conv e)
+
+instance Conv Assoc where
+    conv (Assoc k v)                    = Assoc (conv k) (conv v)

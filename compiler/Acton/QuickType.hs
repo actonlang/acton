@@ -169,6 +169,11 @@ instance QType Expr where
       where (_, c')                 = qType env f c
             (t, e')                 = qType env1 f e
             env1                    = define (envOf c) env
+    qType env f (Dict l as)         = (tDict (upbound env ts1) (upbound env ts2), Dict l (zipWith Assoc ks vs))
+      where (ts1, ks)               = unzip $ [ qType env f k | Assoc k v <- as ]
+            (ts2, vs)               = unzip $ [ qType env f v | Assoc k v <- as ]
+    qType env f (Set l es)          = (tSet (upbound env ts), Set l es')
+      where (ts, es')               = unzip $ map (qType env f) es
     qType env f (Paren l e)         = (t, Paren l e')
       where (t, e')                 = qType env f e
 
