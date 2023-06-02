@@ -2,6 +2,90 @@
 
 ## Unreleased
 
+### Added
+- Faster constraint solver through new strategy [#1316]
+  - Evaluates vastly fewer possibilities
+  - One application used to take over 10 mins for constraint solving which now
+    runs in roughly 10 seconds - woohoo
+- New second stage compilation of generated C code [#1249] [#1304]
+  - new `builder` performs "second stage" compilation of the C code that
+    `actonc` generates into object files, archives and executable binaries
+  - Built on Zig's Build System, gaining all that it offers
+  - Very good caching, dependency detection, up-to-date checking and concurrency
+  - Custom compilation to make `builder` itself portable
+  - Compilation can now be more clearly separated in two steps:
+    - step 1: `actonc` compiles `.act` to `.c` & `.h`
+    - step 2: `builder` compiles `.c` & `.h` to `.o` & `.a` & executables
+  - Up-to-date checking in actonc adjusted to only compare `.act` with `.c` &
+    `.h` output
+  - `builder` does a fantastic job of following dependencies (looking at
+    `#include` statements etc) to figure out when things need to be recompiled
+  - All of this is internal, `actonc` calls `builder` under the hood, much like
+    it earlier called `cc` under the hood
+  - `--no-zigbuild` can be used to force old compilation method
+    - `--no-zigbuild` will be removed in the future
+- Much faster build of Acton itself using prebuilt libActonDeps [#1279] [#1282]
+  - Uses a checksum of git refs of all lib that constitutes libActonDeps
+    - If any dep lib is updated to use new version, libActonDeps will be rebuilt
+  - Uploaded to github.com/actonlang/libactondeps and downloaded on demand from
+    normal Makefile, thus used for local builds and in CI
+  - Falls back to local compilation if prebuilt version is not available
+- Code generation improvements [#]
+- builtins, RTS & stlib now organized as an Acton project called `base` [#1309]
+  - More streamlined towards imagined design of how project dependencies will
+    work in the future, meaning less special kludges
+  - Cleans up include paths and similar, avoiding potential naming conflicts
+
+### Changed
+- release builds now use `-O3` and dev builds use `-Og` [#1270]
+- Collection overloading has been removed [#1316]
+  - It was previously possible to overload collections like dict / Mapping
+  - {} now always means the builtin dict
+
+### Fixed
+- builtin code is now generated [#1256] [#1260]
+  - `__builtin__.c` and `__builtin__.h` are now generated from `__builtin__.ty`
+    at build time, whereas they were earlier checked in to git, having once been
+    generated but heavily modified by hand
+  - given complexity of these files, it is difficult to keep the files up to
+    date when there are changes to the `CodeGen` pass in `actonc`
+  - `actonc` CodeGen pass is now infused with some of the bespoke customizations
+    done for builtins, other customizations have been removed to streamline the
+    whole thing or inserted into .ext.c file to use the "standard way of
+    customization" (what an oxymoron)
+- Better performance through code generation improvements [#1263] [#1274]
+  - Code generation has been improved, primarily to avoid unnecessary
+    allocations, thus reducing pressure on GC, leading to improved performance
+  - One application that ran in > 12 minutes now run in < 2 minutes
+- `xml` module now correctly parses default namespace [#1262]
+- address `xml` bugs with more null checks [#126]
+- Switched to a nightly version of zig [#1264]
+  - pre-release version of zig v0.11
+  - we still pin to this particular zig version which goes through the Acton CI
+    testing so there is relatively low risk of this silently breaking something
+- Document `after` and encourage not using `sleep` [#1269]
+- `actonc` now transparently passes through zig output [#1277]
+  - treats subprocess output as bytestring instead of trying to decode it
+  - we only pass it through anyway, there is no analysis done on it
+  - avoids errors seen when not using UTF-8 locale, like when `LANG` is unset
+    (effectively defaulting to `C`)
+- Remove bunch of old code, irrelevant tests, old gen env scripts ect [#1278]
+- `math` module switched from stub style to .ext.c style [#1309]
+- Add missing MacOS headers [#1309]
+- Remove note on segfault in AbE that's no longer valid [#1303]
+
+### Testing / CI
+- Added macos-13 as test target in CI [#1258]
+- New CI job to build libactondeps and upload to "cache" repository [#1283] [#1284]
+  - Also using cached for CI builds (as well as local)
+  - MacOS CI builds 12 -> 6 minutes, Linux ~8 -> 4 minutes
+    - brew-macos is still slow, but we get quicker feedback of failures looking
+      at test-macos & test-linux jobs
+- Fixed Homebrew build by applying workaround
+  - Broke due to upstream changes and is still broken with default suggested
+    config in `brew new-tap`
+
+
 ## [0.15.0] (2023-04-26)
 
 ### Added
