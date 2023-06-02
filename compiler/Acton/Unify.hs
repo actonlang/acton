@@ -81,23 +81,11 @@ unify' t1 t2                                = noUnify t1 t2
 match vs (TWild _) t                        = Just []
 match vs t (TWild _)                        = Just []
 match vs (TCon _ c1) (TCon _ c2)
-  | tcname c1 == tcname c2                  = match' (tcargs c1) (tcargs c2)
-  where match' (t1:ts1) (t2:ts2)            = do s1 <- match vs t1 t2
-                                                 s2 <- match' ts1 ts2
-                                                 merge s1 s2
-        match' [] []                        = Just []
+  | tcname c1 == tcname c2                  = matches vs (tcargs c1) (tcargs c2)
 match vs (TFun _ fx1 p1 k1 t1) (TFun _ fx2 p2 k2 t2)
-                                            = do s1 <- match vs fx1 fx2
-                                                 s2 <- match vs p1 p2
-                                                 s3 <- match vs k1 k2
-                                                 s4 <- match vs t1 t2
-                                                 s <- merge s1 s2
-                                                 s' <- merge s3 s4
-                                                 merge s s'
+                                            = matches vs [fx1,p1,k1,t1] [fx2,p2,k2,t2]
 match vs (TTuple _ p1 k1) (TTuple _ p2 k2)
-                                            = do s1 <- match vs p1 p2
-                                                 s2 <- match vs k1 k2
-                                                 merge s1 s2
+                                            = matches vs [p1,k1] [p2,k2]
 match vs (TOpt _ t1) (TOpt _ t2)            = match vs t1 t2
 match vs (TNone _) (TNone _)                = Just []
 match vs (TFX _ fx1) (TFX _ fx2)
@@ -106,9 +94,7 @@ match vs (TFX _ fx1) (TFX _ fx2)
 match vs (TNil _ k1) (TNil _ k2)
   | k1 == k2                                = Just []
 match vs r1 (TRow _ k n2 t2 r2)
-  | Just (t1,r1') <- findElem r1            = do s1 <- match vs t1 t2
-                                                 s2 <- match vs r1' r2
-                                                 merge s1 s2
+  | Just (t1,r1') <- findElem r1            = matches vs [t1,r1'] [t2,r2]
   where findElem (TRow l k n1 t1 r1)
           | n1 == n2                        = Just (t1, r1)
           | otherwise                       = do (t1',r1') <- findElem r1
@@ -120,10 +106,16 @@ match vs t1 (TVar _ tv)
   | tv `elem` vs && tv `notElem` tyfree t1  = Just [(tv, t1)]
 match vs t1 t2                              = Nothing
 
+matches vs [] []                            = Just []
+matches vs (t:ts) (t':ts')                  = do s1 <- match vs t t'
+                                                 s2 <- matches vs ts ts'
+                                                 merge s1 s2
+
 merge s1 s2
   | agree                                   = Just $ s1 ++ s2
   | otherwise                               = Nothing
-  where agree                               = and [ subst s1 (tVar v) == subst s2 (tVar v) | v <- dom s1 `intersect` dom s2 ]
+  where agree                               = and [ subst s1 (tVar v) `wildeq` subst s2 (tVar v) | v <- dom s1 `intersect` dom s2 ]
+        t `wildeq` t'                       = match [] t t' == Just []
 
 
 -- findElem ------------------------------------------------------------------------------------------------------------------------

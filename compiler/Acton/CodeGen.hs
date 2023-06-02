@@ -368,7 +368,7 @@ initModule env (s : ss)             = genStmt env s $+$
 
 initClassBase env c q as hasCDef    = methodtable env c <> dot <> gen env gcinfoKW <+> equals <+> doubleQuotes (genTopName env c) <> semi $+$
                                       methodtable env c <> dot <> gen env superclassKW <+> equals <+> super <> semi $+$
-                                      vcat [ inherit c' n | (c',n) <- inheritedAttrs env (NoQ c) ] $+$ text "\n\n"
+                                      vcat [ inherit c' n | (c',n) <- inheritedAttrs env (NoQ c) ]
   where super                       = if null as then text "NULL" else parens (gen env qnSuperClass) <> text "&" <> methodtable' env (tcname $ head as)
         selfsubst                   = subst [(tvSelf, tCon tc)]
         tc                          = TC (NoQ c) [ tVar v | Quant v _ <- q ]
@@ -743,21 +743,10 @@ instance Gen Expr where
                                             | tn == qnI64 -> text "toB_i64" <> parens (text s) 
                                          _                -> genCall env [] e p
        where wInfo = findQName w env
-    gen env (Call l  e@(TApp _ (Dot _ (Var _ w) fi) _) p@(PosArg _ (PosArg (List _ es) PosNil)) KwdNil)
-      | fi == fromiterKW            = case findQName w env of
-                                          NVar (TCon _ (TC _ (TCon _ (TC gn2 _):_)))
-                                             | gn2==qnDict -> text "B_mk_dict" <> parens (pretty (length es) <> comma <+>
-                                                              parens (parens (text "B_MappingD_dict") <> genQName env w) <> text "->W_HashableD_AD_MappingD_dict" <>
-                                                              hsep [comma <+> gen env e | e <- es])
-                                             | gn2==qnSetT -> text "B_mk_set" <> parens (pretty (length es) <> comma <+>
-                                                              parens (parens (text "B_SetD_set") <> genQName env w) <> text "->W_HashableD_AD_SetD_set" <>
-                                                              hsep [comma <+> gen env e | e <- es])
-                                          _ -> genCall env [] e p
-    gen env (Call l  e@(TApp _ (Dot _ (Dot _ (Var _ w) _) fi) _) p@(PosArg _ (PosArg (List _ es) PosNil)) KwdNil)
-      | fi == fromiterKW            = case findQName w env of
-                                          NVar (TCon _ (TC _ (TCon _ (TC gn2 _):_)))
-                                             | gn2==qnList -> text "B_mk_list" <> parens (pretty (length es) <> hsep [comma <+> gen env e | e <- es])
-                                          _ -> genCall env [] e p
+    gen env (Call l  (TApp _ e@(Var _ mk) _) p@(PosArg w (PosArg (Set _ es) PosNil)) KwdNil)
+      | mk == primMkSet             = text "B_mk_set" <> parens (pretty (length es) <> comma <+> gen env w <> hsep [comma <+> gen env e | e <- es])
+    gen env (Call l  (TApp _ e@(Var _ mk) _) p@(PosArg w (PosArg (Dict _ es) PosNil)) KwdNil)
+      | mk == primMkDict            = text "B_mk_dict" <> parens (pretty (length es) <> comma <+> gen env w <>  hsep [comma <+> gen env e | e <- es])
     gen env (Call _ e p _)          = genCall env [] e p
     gen env (Async _ e)             = gen env e
     gen env (TApp _ e ts)           = genInst env ts e
@@ -770,6 +759,8 @@ instance Gen Expr where
        | otherwise                  = gen env primNEWTUPLE <> parens (text (show n) <> comma' (gen env p))
        where n                      = nargs p
     gen env (List _ es)             = text "B_mk_list" <> parens (pretty (length es) <> hsep [comma <+> gen env e | e <- es])
+--    gen env (Set _ es)              = text "B_mk_set" <> parens (pretty (length es) <> hsep [comma <+> gen env e | e <- es])
+--    gen env (Dict _ es)             = text "B_mk_dict" <> parens (pretty (length es) <> hsep [comma <+> gen env e | e <- es])
     gen env (BinOp _ e1 And e2)     = gen env primAND <> parens (gen env t <> comma <+> gen env e1 <> comma <+> gen env e2)
       where t                       = typeOf env e1
     gen env (BinOp _ e1 Or e2)      = gen env primOR <> parens (gen env t <> comma <+> gen env e1 <> comma <+> gen env e2)
@@ -777,7 +768,7 @@ instance Gen Expr where
     gen env (UnOp _ Not e)          = gen env primNOT <> parens (gen env t <> comma <+> genBool env e)
       where t                       = typeOf env e
     gen env (Cond _ e1 e e2)        = parens (parens (genBool env e) <> text "->val" <+> text "?" <+> gen env e1 <+> text ":" <+> gen env e2)
-
+    gen env e                       = error ("Unexpected expr: "++show e)
 genStr env s                        = text $ head $ sval s
 
 genBool env e                       = genExp env tBool e
@@ -790,6 +781,9 @@ nargs (PosArg _ p)                  = 1 + nargs p
 instance Gen Elem where
     gen env (Elem e)                = gen env e
 
+instance Gen Assoc where
+    gen env (Assoc e1 e2)           = gen env primNEWTUPLE <> parens (text "2" <> comma <+> gen env e1 <>comma <+> gen env e2)
+    
 instance Gen Pattern where
     gen env (PVar _ n _)            = gen env n
 

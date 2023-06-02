@@ -19,6 +19,7 @@ import Control.Monad.Except
 import qualified Data.Map.Strict as Map
 import Data.Map.Strict (Map)
 import qualified Control.Exception
+import Control.DeepSeq
 
 import Utils
 import Pretty
@@ -37,14 +38,13 @@ import Acton.Unify
 
 -- Reduce conservatively and remove entailed constraints
 simplify                                    :: (Polarity a, Pretty a) => Env -> TEnv -> a -> Constraints -> TypeM (Constraints,Equations)
-simplify env te tt cs                       = do cs <- msubst cs
-                                                 te <- msubst te
-                                                 --traceM ("  -simplify:\n" ++ render (nest 8 $ vcat $ map pretty cs))
-                                                 --traceM ("  -for:\n" ++ render (nest 8 $ vcat $ map pretty te))
-                                                 simplifyGroups env te tt (groupCs env cs)
+simplify env te tt cs                       = do css <- groupCs env cs
+                                                 --traceM ("#### SIMPLIFY " ++ prstrs (map length css))
+                                                 --sequence [ traceM ("## long:\n" ++ render (nest 4 $ vcat $ map pretty cs)) | cs <- css, length cs > 500 ]
+                                                 simplifyGroups env te tt css
 
 simplifyGroups env te tt []                 = return ([], [])
-simplifyGroups env te tt (cs:css)           = do --traceM ("\n\n######### simplifyGroup " ++ prstrs cs)
+simplifyGroups env te tt (cs:css)           = do --traceM ("\n\n######### simplifyGroup\n" ++ render (nest 4 $ vcat $ map pretty cs))
                                                  (cs1,eq1) <- simplify' env te tt [] cs `catchError` \err -> Control.Exception.throw err
                                                  env <- msubst env
                                                  (cs2,eq2) <- simplifyGroups env te tt css
@@ -60,45 +60,52 @@ simplify' env te tt eq cs                   = do eq1 <- reduce env eq cs
                                                  tt1 <- msubst tt
                                                  improve env1 te1 tt1 eq1 cs1
 
-groupCs env []                              = []
-groupCs env (c:cs)                          = close (tyfree c ++ attrfree [c]) [c] cs
-  where close tvs cs0 cs
-          | null cs1                        = cs0 : groupCs env cs2
-          | otherwise                       = close (tvs++tyfree cs1++attrfree cs1) (cs0++cs1) cs2
-          where (cs1,cs2)                   = partition (not . null . intersect tvs . tyfree) cs
-        attrs cs                            = [ n | Sel _ t n _ <- cs ] ++ [ n | Mut t n _ <- cs ]
-        attrfree cs                         = [ tv | n <- attrs cs, tv <- allConAttrFree env n ]
+groupCs env cs                              = do st <- currentState
+                                                 mapM mark ([1..] `zip` cs)
+                                                 m <- foldM group Map.empty cs
+                                                 rollbackState st
+                                                 return $ Map.elems m
+  where mark (n,c)                          = do tvs <- (nub . filter univar . tyfree) <$> msubst c         -- Also include env vars via Sel/Mut?
+                                                 sequence [ unify (newTVarToken n) (tVar tv) | tv <- tvs ]
+        group m c                           = do tvs <- (filter univar . tyfree) <$> msubst c
+                                                 let tv = case tvs of [] -> tv0; tv:_ -> tv
+                                                 return $ Map.insertWith (++) tv [c] m
+        TVar _ tv0                          = newTVarToken 0
 
 
 ----------------------------------------------------------------------------------------------------------------------
 -- solve
 ----------------------------------------------------------------------------------------------------------------------
 
-data Rank                                   = RSealed { tgt :: Type }
+data Rank                                   = RRed { cstr :: Constraint }
+                                            | RSealed { tgt :: Type }
                                             | RTry { tgt :: Type, alts :: [Type], rev :: Bool }
-                                            | RUni { tgt :: Type, alts :: [Type] }
+                                            | RVar { tgt :: Type, alts :: [Type] }
                                             | ROvl { tgt :: Type }
                                             | RSkip
                                             deriving (Show)
 
 instance Eq Rank where
+    RRed _      == RRed _                   = True
     RSealed t1  == RSealed t2               = t1 == t2
     RTry t1 _ _ == RTry t2 _ _              = t1 == t2
-    RUni t1 _   == RUni t2 _                = t1 == t2
+    RVar t1 _   == RVar t2 _                = t1 == t2
     ROvl t1     == ROvl t2                  = True
     RSkip       == RSkip                    = True
     _           == _                        = False
 
 instance Pretty Rank where
+    pretty (RRed c)                         = text "<reduce>" <+> pretty c
     pretty (RSealed t)                      = pretty t <+> text "sealed"
     pretty (RTry t ts rev)                  = pretty t <+> braces (commaSep pretty ts) Pretty.<> (if rev then char '\'' else empty)
-    pretty (RUni t ts)                      = pretty t <+> char '=' <+> commaSep pretty ts
+    pretty (RVar t ts)                      = pretty t <+> char '~' <+> commaSep pretty ts
     pretty (ROvl t)                         = pretty t <+> text "..."
     pretty RSkip                            = text "<skip>"
 
 solve                                       :: (Polarity a, Pretty a) => Env -> (Constraint -> Bool) ->
                                                TEnv -> a -> Equations -> Constraints -> TypeM (Constraints,Equations)
-solve env select te tt eq cs                = do (cs',eq') <- solveGroups env select te tt (groupCs env cs)
+solve env select te tt eq cs                = do css <- groupCs env cs
+                                                 (cs',eq') <- solveGroups env select te tt css
                                                  eq <- msubst eq
                                                  return (cs', eq'++eq)
 
@@ -110,6 +117,11 @@ solveGroups env select te tt (cs:css)       = do --traceM ("\n\n######### solveG
                                                  return (cs1++cs2, eq1++eq2)
 
 solve' env select hist te tt eq cs
+  | not $ null vargoals                     = do --traceM (unlines [ "### var goal " ++ prstr t ++ " ~ " ++ prstrs alts | RVar t alts <- vargoals ])
+                                                 --traceM ("### var goals: " ++ show (sum [ length alts | RVar t alts <- vargoals ]))
+                                                 sequence [ unify t t' | RVar t alts <- vargoals, t' <- alts ]
+                                                 proceed hist cs
+  | any not keep_evidence                   = noSolve keep_cs
   | null solve_cs || null goals             = return (keep_cs, eq)
   | otherwise                               = do st <- currentState
                                                  --traceM ("## keep:\n" ++ render (nest 8 $ vcat $ map pretty keep_cs))
@@ -119,31 +131,38 @@ solve' env select hist te tt eq cs
                                                  --traceM ("## posvs: " ++ prstrs posvs)
                                                  --traceM ("## negvs: " ++ prstrs negvs)
                                                  case head goals of
-                                                    RSealed t ->
+                                                    RRed c -> do
+                                                        --traceM ("### reduce " ++ prstr c)
+                                                        proceed hist cs
+                                                    RSealed t -> do
+                                                        --traceM ("### try goal " ++ prstr t ++ ", candidates: " ++ prstrs [fxAction, fxPure])
                                                         tryAlts st t [fxAction, fxPure]
                                                     RTry t alts r -> do
-                                                        --traceM ("### goal " ++ prstr t ++ ", candidates: " ++ prstrs alts ++ if r then " (rev)" else "")
+                                                        --traceM ("### try goal " ++ prstr t ++ ", candidates: " ++ prstrs alts ++ if r then " (rev)" else "")
                                                         tryAlts st t alts
-                                                    RUni t alts -> do
-                                                        --traceM ("### goal " ++ prstr t ++ ", unifying with " ++ prstrs alts)
+                                                    RVar t alts -> do
+                                                        --traceM ("### var goal " ++ prstr t ++ ", unifying with " ++ prstrs alts)
                                                         unifyM alts (repeat t) >> proceed hist cs
                                                     ROvl t -> do
-                                                        --traceM ("### goal " ++ prstr t ++ ", defaulting remaining constraints")
+                                                        --traceM ("### ovl goal " ++ prstr t ++ ", defaulting remaining constraints")
                                                         (cs,eq) <- simplify' (useForce env) te tt eq cs
+                                                        te <- msubst te
+                                                        tt <- msubst tt
                                                         hist <- msubst hist
                                                         solve' env select hist te tt eq cs
                                                     RSkip ->
                                                         return (keep_cs, eq)
 
   where (solve_cs, keep_cs)                 = partition select cs
-        goals                               = sortOn deco $ map condense $ group rnks
+        keep_evidence                       = [ hasWitness env t p | Impl _ t p <- keep_cs ]
+        (vargoals, goals)                   = span isVar $ sortOn deco $ map condense $ group rnks
         group []                            = []
         group (r:rs)                        = (r : rs1) : group rs2
           where (rs1,rs2)                   = partition (==r) rs
         rnks                                = map (rank env) solve_cs
         tryAlts st t0 []                    = --trace ("### FAIL " ++ prstr t0) $
                                               noSolve cs
-        tryAlts st t0 (t:ts)                = tryAlt t0 t `catchError` const ({-traceM ("### ROLLBACK " ++ prstr t0) >> -}rollbackState st >> tryAlts st t0 ts)
+        tryAlts st t0 (t:ts)                = tryAlt t0 t `catchError` const ({-traceM ("=== ROLLBACK " ++ prstr t0) >> -}rollbackState st >> tryAlts st t0 ts)
         tryAlt t0 (TCon _ c)
           | isProto env (tcname c)          = do p <- instwildcon env c
                                                  w <- newWitness
@@ -153,13 +172,13 @@ solve' env select hist te tt eq cs
                                                  --traceM ("  # trying " ++ prstr t0 ++ " = " ++ prstr t)
                                                  unify t0 t
                                                  proceed (t:hist) cs
-        proceed hist cs                     = do cs <- msubst cs
-                                                 te <- msubst te
+        proceed hist cs                     = do te <- msubst te
                                                  tt <- msubst tt
                                                  (cs,eq) <- simplify' env te tt eq cs
                                                  hist <- msubst hist
                                                  solve' env select hist te tt eq cs
 
+        condense (RRed c : rs)              = RRed c
         condense (RSealed t : rs)           = RSealed t
         condense (RTry t as r : rs)
           | TVar{} <- t                     = RTry t (if rev' then subrev ts' else ts') rev'
@@ -167,7 +186,7 @@ solve' env select hist te tt eq cs
           where ts                          = foldr intersect as $ map alts rs
                 ts'                         = if tvar t `elem` optvs then ts \\ [tOpt tWild] else ts
                 rev'                        = (or $ r : map rev rs) || tvar t `elem` posvs
-        condense (RUni t as : rs)           = RUni t (foldr union as $ map alts rs)
+        condense (RVar t as : rs)           = RVar t (foldr union as $ map alts rs)
         condense (ROvl t : rs)              = ROvl t
         condense (RSkip : rs)               = RSkip
         condense rs                         = error ("### condense " ++ show rs)
@@ -177,12 +196,16 @@ solve' env select hist te tt eq cs
         univs                               = univars cs
         (posvs, negvs)                      = polvars te `polcat` polvars tt
 
-        deco (RSealed t)                    = (0, 0, 0, 0)
-        deco (RTry (TVar _ v) as r)         = (1, length $ filter (==v) embvs, length as, length $ filter (==v) univs)
-        deco (RTry t as r)                  = (2, 0, length as, 0)
-        deco (RUni t as)                    = (3, 0, length as, 0)
-        deco (ROvl t)                       = (4, 0, 0, 0)
-        deco (RSkip)                        = (5, 0, 0, 0)
+        isVar RVar{}                        = True
+        isVar _                             = False
+
+        deco (RRed cs)                      = (0, 0, 0, 0)
+        deco (RSealed t)                    = (2, 0, 0, 0)
+        deco (RTry (TVar _ v) as r)         = (3, length $ filter (==v) embvs, length as, length $ filter (==v) univs)
+        deco (RTry t as r)                  = (4, 0, length as, 0)
+        deco (RVar t as)                    = (5, 0, length as, 0)
+        deco (ROvl t)                       = (6, 0, 0, 0)
+        deco (RSkip)                        = (7, 0, 0, 0)
 
         subrev []                           = []
         subrev (t:ts)                       = subrev ts1 ++ t : subrev ts2
@@ -196,10 +219,10 @@ solve' env select hist te tt eq cs
 rank                                        :: Env -> Constraint -> Rank
 rank env (Sub _ t1 t2)                      = rank env (Cast t1 t2)
 
-rank env (Cast t1@TVar{} t2@TVar{})
-  | univar (tvar t1), univar (tvar t2)      = RUni t1 [t2]
+rank env (Cast t1@(TVar _ v1) t2@(TVar _ v2))
+  | univar v1, univar v2                    = RVar t1 [t2]
 rank env (Cast t1@TVar{} (TOpt _ t2@TVar{}))
-  | univar (tvar t1), univar (tvar t2)      = RUni t1 [t2]
+  | univar (tvar t1), univar (tvar t2)      = RVar t1 [t2]
 rank env (Cast t1@TVar{} (TOpt _ t2))
   | univar (tvar t1)                        = RTry t1 (allBelow env t2 ++ [tOpt tWild, tNone]) False
 rank env (Cast TNone{} t2@TVar{})
@@ -211,16 +234,56 @@ rank env (Cast t1 t2@TVar{})
 
 rank env c@(Impl _ t p)
   | schematic t `elem` ts                   = ROvl t
-  | otherwise                               = RTry t ts False
+  | not $ null $ tyfree t                   = RTry t ts False
   where ts                                  = allExtProto env t p
 
-rank env (Sel _ t n _)                      = RTry t (allConAttr env n ++ allProtoAttr env n ++ allExtProtoAttr env n) False
-rank env (Mut t n _)                        = RTry t (allConAttr env n `intersect` allBelow env tObject) False
+rank env (Sel _ t@TVar{} n _)               = RTry t (allConAttr env n ++ allProtoAttr env n ++ allExtProtoAttr env n) False
+rank env (Mut t@TVar{} n _)                 = RTry t (allConAttr env n) False
 
 rank env (Seal t@TVar{})
   | tvkind (tvar t) == KFX                  = RSealed t
   | otherwise                               = RSkip
 
+rank env c                                  = RRed c
+
+
+----------------------------------------------------------------------------------------------------------------------
+-- New variable info
+----------------------------------------------------------------------------------------------------------------------
+
+data VarInfo                                = VarInfo {
+                                                ubnd        :: [Type],
+                                                lbnd        :: [Type],
+                                                uvar        :: [TVar],
+                                                lvar        :: [TVar],
+                                                pbnd        :: [PCon],
+                                                sels        :: [Name],
+                                                muts        :: [Name] }
+
+varinf                                      :: Constraints -> Map TVar VarInfo
+varinf                                      = foldl f Map.empty
+  where
+    f m (Cast (TVar _ v1) (TVar _ v2))
+      | v1 == v2                            = m
+      | otherwise                           = update m v1 (\vi -> vi { uvar = v2 : uvar vi })
+    f m (Cast (TVar _ v) t)                 = update m v (\vi -> vi { ubnd = t : ubnd vi })
+    f m (Cast t (TVar _ v))                 = update m v (\vi -> vi { lbnd = t : lbnd vi })
+    f m (Sub _ t1 t2)                       = f m (Cast t1 t2)
+    f m (Impl w (TVar _ v) p)               = update m v (\vi -> vi { pbnd = p : pbnd vi })
+    f m (Impl w t p)
+      | not $ null vs                       = undefined
+      where vs                              = tyfree t
+    f m (Sel _ (TVar _ v) n t)              = update m v (\vi -> vi { sels = n : sels vi })
+    f m (Mut (TVar _ v) n t)                = update m v (\vi -> vi { muts = n : muts vi })
+    f m (Seal (TVar _ v))                   = undefined
+    f m _                                   = undefined
+
+    update                                  :: Map TVar VarInfo -> TVar -> (VarInfo -> VarInfo) -> Map TVar VarInfo
+    update m v f                            = Map.alter upd v m
+      where upd (Just i)                    = Just (f i)
+            upd Nothing                     = Just (f $ VarInfo [] [] [] [] [] [] [])
+
+-------------------------------------------------------------------------------------------------------------------------
 
 class OptVars a where
     optvars                             :: a -> [TVar]
@@ -328,11 +391,10 @@ instance Vars Equation where
 
 reduce                                      :: Env -> Equations -> Constraints -> TypeM Equations
 reduce env eq []                            = return eq
-reduce env eq (c:cs)                        = do c' <- msubst c
-                                                 --traceM ("   reduce " ++ prstr c')
-                                                 eq1 <- reduce' env eq c'
-                                                 cs' <- msubst cs
-                                                 reduce env eq1 cs'
+reduce env eq (c:cs)                        = do c <- msubst c
+                                                 --traceM ("   reduce " ++ prstr c)
+                                                 eq1 <- reduce' env eq c
+                                                 reduce env eq1 cs
 
 reduce'                                     :: Env -> Equations -> Constraint -> TypeM Equations
 reduce' env eq (Cast t1 t2)                 = do cast' env t1 t2
@@ -342,20 +404,21 @@ reduce' env eq (Sub w t1 t2)                = sub' env eq w t1 t2
 
 reduce' env eq c@(Impl w t@(TVar _ tv) p)
   | univar tv                               = do defer [c]; return eq
-  | Just wit <- witSearch                   = do (eq',cs) <- solveImpl env wit w t p
+  | [wit] <- witSearch                      = do (eq',cs) <- solveImpl env wit w t p
                                                  reduce env (eq'++eq) cs
+  | not $ null witSearch                    = do defer [c]; return eq
   where witSearch                           = findWitness env t p
   
 reduce' env eq c@(Impl w t@(TCon _ tc) p)
-  | Just wit <- witSearch                   = do (eq',cs) <- solveImpl env wit w t p
+  | [wit] <- witSearch                      = do (eq',cs) <- solveImpl env wit w t p
                                                  reduce env (eq'++eq) cs
-  | not $ null $ filter univar $ tyfree t   = do defer [c]; return eq
+  | not $ null witSearch                    = do defer [c]; return eq
   where witSearch                           = findWitness env t p
 
 reduce' env eq c@(Impl w t@(TFX _ tc) p)
-  | Just wit <- witSearch                   = do (eq',cs) <- solveImpl env wit w t p
+  | [wit] <- witSearch                      = do (eq',cs) <- solveImpl env wit w t p
                                                  reduce env (eq'++eq) cs
-  | not $ null $ filter univar $ tyfree t   = do defer [c]; return eq
+  | not $ null witSearch                    = do defer [c]; return eq
   where witSearch                           = findWitness env t p
 
 reduce' env eq c@(Impl w t@(TOpt _ t') p)
@@ -460,18 +523,27 @@ solveMutAttr env (wf,sc,dec) (Mut t1 n t2)  = do when (dec /= Just Property) (no
 -- witness lookup
 ----------------------------------------------------------------------------------------------------------------------
 
-findWitness                 :: Env -> Type -> PCon -> Maybe Witness
-findWitness env t p         = case elim [] match_ws of
-                                [w] | null uni_ws  -> Just w
-                                w:_ | isForced env -> Just w
-                                _ -> Nothing
-  where (match_ws, ws1)     = partition (matching t) (witsByPName env $ tcname p)
-        uni_ws              = filter (unifying t) ws1
+findWitness                 :: Env -> Type -> PCon -> [Witness]
+findWitness env t p
+  | length all_ws <= 1      = all_ws
+  | otherwise               = --trace ("## findWitness " ++ prstr t ++ " (" ++ prstr p ++ "), all_ws: " ++ prstrs all_ws) $
+                              case elim [] match_ws of
+                                [w] | null uni_ws  -> {-trace (" # best: " ++ prstr w) $ -}[w]
+                                w:u | force        -> {-trace (" # best forced: " ++ prstrs (w:u)) $ -}[w]
+                                _   | force        -> {-trace (" # first forced: " ++ prstr (head all_ws)) $ -}[head all_ws]
+                                    | otherwise    -> {-trace (" # all") $ -}all_ws
+  where t_                  = wild t                    -- matching against wild t also accepts witnesses that would instantiate t
+        p_                  = wild p                    -- matching against wild p also accepts witnesses that would instantiate p
+        force               = isForced env
+        t'                  = if force then t_ else t   -- allow instantiation only when in forced mode
+        all_ws              = reverse $ filter (matching t_ p_) $ witsByPName env $ tcname p    -- all witnesses that could be used
+        (match_ws, rest_ws) = partition (matching (if force then t_ else t) p_) all_ws          -- only those that match t exactly
+        uni_ws              = filter (unifying t) rest_ws
         elim ws' []         = reverse ws'
         elim ws' (w:ws)
           | covered         = elim ws' ws
           | otherwise       = elim (w:ws') ws
-          where covered     = or [ matching (wtype w') w && not (matching (wtype w) w') | w' <- ws'++ws ]
+          where covered     = or [ matchP w' w && not (matchP w w') | w' <- ws'++ws ]
 
 findProtoByAttr env cn n    = case filter hasAttr $ witsByTName env cn of
                                 [] -> Nothing
@@ -479,19 +551,22 @@ findProtoByAttr env cn n    = case filter hasAttr $ witsByTName env cn of
   where hasAttr w           = n `elem` conAttrs env (tcname $ proto w)
 
 hasWitness                  :: Env -> Type -> PCon -> Bool
-hasWitness env t p          =  isJust $ findWitness env t p
+hasWitness env t p          =  not $ null $ findWitness env t p
 
 allExtProto                 :: Env -> Type -> PCon -> [Type]
-allExtProto env t p         = reverse [ schematic (wtype w) | w <- witsByPName env (tcname p), matching t0 w {- && schematic (wtype w) /= t0 -} ]
-  where t0                  = wild t                    -- matching against wild t also accepts witnesses that would instantiate t
+allExtProto env t p         = reverse [ schematic (wtype w) | w <- witsByPName env (tcname p), matching t_ p_ w ]
+  where t_                  = wild t                    -- matching against wild t also accepts witnesses that would instantiate t
+        p_                  = wild p                    -- matching against wild p also accepts witnesses that would instantiate p
 
 allExtProtoAttr             :: Env -> Name -> [Type]
 allExtProtoAttr env n       = [ tCon tc | tc <- allCons env, any ((n `elem`) . allAttrs' env . proto) (witsByTName env $ tcname tc) ]
 
 
-matching t w                = matching' t (qbound $ binds w) (wtype w)
+matching t p w              = matching' (t : tcargs p) (qbound $ binds w) (wtype w : tcargs (proto w))
 
-matching' t vs t'           = isJust $ match vs t t'    -- there is a substitution s with domain vs such that t == subst s t'
+matchP w w'                 = matching (wtype w) (proto w) w'
+
+matching' ts vs ts'         = isJust $ matches vs ts ts'    -- there is a substitution s with domain vs such that ts == subst s ts'
 
 unifying t w                = runTypeM $ tryUnify `catchError` const (return False)
   where tryUnify            = do unify t (wtype w)
@@ -948,8 +1023,8 @@ improve env te tt eq cs
         upperBnd                        = [ (v,t) | (v,[t]) <- Map.assocs (ubounds vi), v `notElem` embedded vi ]
         posLBnd                         = [ (v,t) | (v,t) <- lowerBnd, v `notElem` negvars, implAll env (lookup' v $ pbounds vi) t ]
         negUBnd                         = [ (v,t) | (v,t) <- upperBnd, v `notElem` posvars, implAll env (lookup' v $ pbounds vi) t, noDots env vi v ]
-        closLBnd                        = [ (v,t) | (v, [t]) <- Map.assocs (lbounds vi), upClosed env t ]
-        closUBnd                        = [ (v,t) | (v, [t]) <- Map.assocs (ubounds vi), dnClosed env t ]
+        closLBnd                        = [ (v,t) | (v, [t]) <- Map.assocs (lbounds vi), upClosed env t, implAll env (lookup' v $ pbounds vi) t ]
+        closUBnd                        = [ (v,t) | (v, [t]) <- Map.assocs (ubounds vi), dnClosed env t, implAll env (lookup' v $ pbounds vi) t, noDots env vi v ]
         (redEq,redUni)                  = ctxtReduce env vi multiPBnd
         mutC                            = findBoundAttrs env (mutattrs vi) (ubounds vi)
         selC                            = findBoundAttrs env (selattrs vi) (ubounds vi)
@@ -990,8 +1065,9 @@ findWitAttrs env attrs bounds           = [ ((v,n), (p, wexpr ws $ eVar w)) | (v
 
 
 implAll env [] t                        = True
-implAll env ps (TCon _ c)               = and [ hasWitness env (tCon c) p | (w,p) <- ps ]
-implAll env ps (TOpt _ _)               = all ((`elem` [qnIdentity,qnEq]) . tcname . snd) ps
+implAll env ps t@TCon{}                 = and [ hasWitness env t p | (w,p) <- ps ]
+implAll env ps t@TFX{}                  = and [ hasWitness env t p | (w,p) <- ps ]
+implAll env ps t@TOpt{}                 = all ((`elem` [qnIdentity,qnEq]) . tcname . snd) ps
 implAll env ps t                        = False
 
 noDots env vi v                         = null (lookup' v $ selattrs vi) && null (lookup' v $ mutattrs vi)

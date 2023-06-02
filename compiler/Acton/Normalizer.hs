@@ -259,6 +259,8 @@ instance Norm Expr where
     norm env (List l es)            = List l <$> norm env es
     norm env e0@(ListComp l e c)    = notYet l e0                                   -- TODO: eliminate here
       where env1                    = define (envOf c) env
+    norm env (Dict l as)            = Dict l <$> norm env as
+    norm env (Set l es)             = Set l <$> norm env es
     norm env (Paren l e)            = norm env e
     norm env e                      = error ("norm unexpected: " ++ prstr e)
 
@@ -336,6 +338,10 @@ instance Norm Comp where
 instance Norm Elem where
     norm env (Elem e)               = Elem <$> norm env e
     norm env (Star e)               = Star <$> norm env e               -- TODO: eliminate here
+
+instance Norm Assoc where
+    norm env (Assoc k v)            = Assoc <$> norm env k <*> norm env v
+    norm env (StarStar e)           = StarStar <$> norm env e           -- TODO: eliminate here
 
 
 -- Convert function types ---------------------------------------------------------------------------------

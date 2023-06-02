@@ -115,6 +115,8 @@ primWrapPure        = gPrim "wWrapPure"
 
 primWRAP            = gPrim "WRAP"
 
+primMkSet           = gPrim "mkSet"
+primMkDict          = gPrim "mkDict"
 
 primEnv             = [     (noq primASYNCf,        NDef scASYNCf NoDec),
                             (noq primAFTERf,        NDef scAFTERf NoDec),
@@ -175,7 +177,10 @@ primEnv             = [     (noq primASYNCf,        NDef scASYNCf NoDec),
 --                            (noq primWrapProc,      NVar $ tWrapped fxProc fxProc fxProc),
 --                            (noq primWrapAction,    NVar $ tWrapped fxAction fxProc fxProc),
 
-                            (noq primWRAP,          NDef scWRAP NoDec)
+                            (noq primWRAP,          NDef scWRAP NoDec),
+
+                            (noq primMkSet,         NDef scMkSet NoDec),
+                            (noq primMkDict,        NDef scMkDict NoDec)
                       ]
 
 tSequenceListWild   = tCon (TC qnSequence [tList tWild, tWild])
@@ -417,6 +422,20 @@ scSKIPRES           = tSchema [quant a] tSKIPRES
         tCont''     = tCont (tVar a)
         a           = TV KType $ name "A"
 
+
+--  $MkSet          : [A] => (Hashable[A], set[A]) -> set[A]
+scMkSet             = tSchema [quant a] tMkSet
+  where tMkSet      = tFun fxPure (posRow tHashableA (posRow (tSet (tVar a)) posNil)) kwdNil (tSet (tVar a))
+        tHashableA  = tCon (TC qnHashable [tVar a])
+        a           = TV KType $ name "A"
+       
+--  $MkDict         : [A] => (Hashable[A], dict[A]) -> dict[A]
+scMkDict            = tSchema [quant a, quant b] tMkDict
+  where tMkDict     = tFun fxPure (posRow tHashableA (posRow (tDict (tVar a) (tVar b)) posNil)) kwdNil (tDict (tVar a)(tVar b))
+        tHashableA  = tCon (TC qnHashable [tVar a])
+        a           = TV KType $ name "A"
+        b           = TV KType $ name "B"
+       
 --  $WRAP           : [A,B,C] => ($Actor, proc(*A,**B)->C) -> action(*A,**B)->C
 scWRAP              = tSchema [quant a, quant b, quant c] tWRAP
   where tWRAP       = tFun0 [tActor, abcFun fxProc] (abcFun fxAction)
@@ -474,3 +493,4 @@ primWits            = [ WInst []        fxAction (pWrapped fxProc fxProc)   prim
   where path        = [Left (noQ "_")]
         y           = TV KFX (name "Y")
         
+

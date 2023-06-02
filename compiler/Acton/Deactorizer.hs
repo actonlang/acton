@@ -265,6 +265,8 @@ instance Deact Expr where
     deact env (YieldFrom l e)       = YieldFrom l <$> deact env e
     deact env (Tuple l es KwdNil)   = Tuple l <$> deact env es <*> pure KwdNil
     deact env (List l es)           = List l <$> deact env es
+    deact env (Dict l as)           = Dict l <$> deact env as
+    deact env (Set l es)            = Set l <$> deact env es
     deact env e                     = error ("deact unexpected expr: " ++ prstr e)
 
 deactCall env unwrap l (TApp _ (Var _ n) ts) (PosArg self (PosArg e PosNil))
@@ -293,6 +295,10 @@ instance Deact PosArg where
 instance Deact Elem where
     deact env (Elem e)              = Elem <$> deact env e
     deact env (Star e)              = Star <$> deact env e
+
+instance Deact Assoc where
+    deact env (Assoc k v)           = Assoc <$> deact env k <*> deact env v
+    deact env (StarStar e)          = StarStar <$> deact env e
 
 
 -- Variables free in a lambda -----------------------------------------------------------------------------------

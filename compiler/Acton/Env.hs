@@ -530,6 +530,18 @@ tconKind n env              = case findQName n env of
   where kind k []           = k
         kind k q            = KFun [ tvkind v | Quant v _ <- q ] k
 
+actorSelf env               = case lookup selfKW (names env) of
+                                Just (NVar (TCon _ tc)) | isActor env (tcname tc) -> True
+                                _ -> False
+
+actorMethod env n0          = walk [] (names env)
+  where
+    walk ns ((n,NDef{}):te) = walk (n:ns) te
+    walk ns ((n,NVar (TCon _ tc)):te)
+      | n == selfKW         = isActor env (tcname tc) && n0 `elem` ns
+    walk ns (_ : te)        = walk ns te
+    walk ns []              = False
+
 isDef                       :: EnvF x -> QName -> Bool
 isDef env n                 = case findQName n env of
                                 NDef _ _ -> True
@@ -574,7 +586,7 @@ schematic t                 = t
 
 schematic' (TC n ts)         = TC n [ tWild | _ <- ts ]
 
-wild t                      = subst [ (v,tWild) | v <- nub (tyfree t) ] t
+wild t                      = subst [ (v,tWild) | v <- nub (tyfree t), univar v ] t
 
 wildargs i                  = [ tWild | _ <- nbinds i ]
   where
