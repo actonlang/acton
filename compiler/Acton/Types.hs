@@ -1357,7 +1357,8 @@ instance Infer Expr where
                                              notYet l e
     infer env (Set l es)                = do t0 <- newTVar
                                              (cs,es')  <- infElems env es t0
-                                             return (cs, tSet t0, Set l es')
+                                             w <- newWitness
+                                             return (Impl w t0 pHashable : cs, tSet t0, eCall (tApp (eQVar primMkSet) [t0]) [eVar w,Set l es'])
 --                                             t1 <- newTVar
 --                                             w1 <- newWitness
 --                                             let t2 = tList t0
@@ -1380,7 +1381,8 @@ instance Infer Expr where
     infer env (Dict l as)               = do tk <- newTVar
                                              tv <- newTVar
                                              (cs,as') <- infAssocs env as tk tv
-                                             return (cs, tDict tk tv, Dict l as')
+                                             w <- newWitness 
+                                             return (Impl w tk pHashable : cs, tDict tk tv, eCall (tApp (eQVar primMkDict) [tk, tv]) [eVar w,Dict l as'])
 --                                             t1 <- newTVar
 --                                             w1 <- newWitness
 --                                             let t2 = tList (tTupleP (posRow tk $ posRow tv posNil))
