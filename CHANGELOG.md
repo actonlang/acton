@@ -1,8 +1,23 @@
 # Changelog
 
-## Unreleased
+## [0.15.1] (2023-06-02)
 
-### Added
+A better strategy for constraint solver results in vastly lower constraint
+solving times and thus reduced overall compilation times. Large improvements in
+code generation resulting in less memory allocations and thus a much lower load
+on the GC, yielding much better runtime performance.
+
+The internal compilation of generation C code has been revamped, now more
+structured and simplified in many ways, internally making use of the Zig buils
+system which in turn unleashes a lot of benefits.
+
+### Changed
+- release builds now use `-O3` and dev builds use `-Og` [#1270]
+- Collection overloading has been removed [#1316]
+  - It was previously possible to overload collections like dict / Mapping
+  - {} now always means the builtin dict
+
+### Fixed
 - Faster constraint solver through new strategy [#1316]
   - Evaluates vastly fewer possibilities
   - One application used to take over 10 mins for constraint solving which now
@@ -30,19 +45,10 @@
   - Uploaded to github.com/actonlang/libactondeps and downloaded on demand from
     normal Makefile, thus used for local builds and in CI
   - Falls back to local compilation if prebuilt version is not available
-- Code generation improvements [#]
 - builtins, RTS & stlib now organized as an Acton project called `base` [#1309]
   - More streamlined towards imagined design of how project dependencies will
     work in the future, meaning less special kludges
   - Cleans up include paths and similar, avoiding potential naming conflicts
-
-### Changed
-- release builds now use `-O3` and dev builds use `-Og` [#1270]
-- Collection overloading has been removed [#1316]
-  - It was previously possible to overload collections like dict / Mapping
-  - {} now always means the builtin dict
-
-### Fixed
 - builtin code is now generated [#1256] [#1260]
   - `__builtin__.c` and `__builtin__.h` are now generated from `__builtin__.ty`
     at build time, whereas they were earlier checked in to git, having once been
