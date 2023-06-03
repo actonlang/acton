@@ -138,14 +138,14 @@ CFLAGS_DB+= -Wno-int-to-pointer-cast -Wno-pointer-to-int-cast
 backend/actondb: backend/actondb.c lib/libActonDB.a $(DEPSA)
 	$(CC) -o$@ $< $(CFLAGS_DB) \
 		$(LDFLAGS) \
-		-lActonDB \
+		-lActonDB -lActonDeps-$(PLATFORM) -Llib \
 		$(LDLIBS)
 
 .PHONY: base/out/rel/lib/libActonProject.a base/out/dev/lib/libActonProject.a
-base/out/rel/lib/libActonProject.a: $(ACTONC) $(DEPSA)
+base/out/rel/lib/libActonProject.a: $(ACTONC) $(DEPSA) $(LIBGC)
 	cd base && ../dist/bin/actonc build --auto-stub
 
-base/out/dev/lib/libActonProject.a: $(ACTONC) $(DEPSA)
+base/out/dev/lib/libActonProject.a: $(ACTONC) $(DEPSA) $(LIBGC)
 	cd base && ../dist/bin/actonc build --auto-stub --dev
 
 base/out/types/__builtin__.ty: $(ACTONC)
@@ -284,6 +284,7 @@ DEP_LIBS+=deps/instdir/lib/libutf8proc.a
 DEP_LIBS+=deps/instdir/lib/libuuid.a
 DEP_LIBS+=deps/instdir/lib/libuv.a
 DEP_LIBS+=deps/instdir/lib/libxml2.a
+DEP_LIBS+=deps/instdir/lib/libyyjson.a
 
 DEPS_REFS=\
 	$(LIBARGP_REF) \
@@ -295,7 +296,8 @@ DEPS_REFS=\
 	$(LIBUTF8PROC_REF) \
 	$(LIBUUID_REF) \
 	$(LIBUV_REF) \
-	$(LIBXML2_REF)
+	$(LIBXML2_REF) \
+	local_libyyjson
 
 DEPS_SUM:=$(shell echo $(DEPS_REFS) | shasum | cut -d' ' -f1)
 
@@ -335,7 +337,7 @@ lib_deps/libActonDeps-$(PLATFORM).a: dist/zig $(DEP_LIBS)
 		mkdir -p lib_deps/$${LIBNAME}; \
 		$$(cd lib_deps/$${LIBNAME} && ar x $(TD)/$${LIB}); \
 	done
-	cd lib_deps && ar -qc libActonDeps-$(PLATFORM).a */*.o ../deps/*.o
+	cd lib_deps && ar -qc libActonDeps-$(PLATFORM).a */*.o
 
 lib/libactongc-$(PLATFORM).a:
 	($(MAKE) -j1 check-download-allowed deps-download/$(DEPS_SUM) \
@@ -355,7 +357,7 @@ endif
 clean-deps:
 	-for I in $(DEPS_DIRS); do ls $${I} >/dev/null 2>&1 && echo Cleaning $${I} && make -C $(TD)/$${I} clean; done
 	-$(MAKE) -C deps/libgc/ -f Makefile.direct clean
-	rm -rf deps/instdir lib/libActonDeps-$(PLATFORM).a
+	rm -rf deps/instdir lib/libActonDeps-$(PLATFORM).a lib_deps
 
 clean-deps-rm:
 	rm -rf $(DEPS_DIRS) deps/libgc deps/zig deps/zig-*.tar* deps-download
@@ -542,18 +544,16 @@ deps/instdir/lib/libpcre2-posix.a: deps/instdir/lib/libpcre2-8.a
 
 # --
 
-OFILES += deps/netstring_dev.o deps/netstring_rel.o deps/yyjson_dev.o deps/yyjson_rel.o
+OFILES += deps/netstring_dev.o deps/netstring_rel.o
 deps/netstring_dev.o: deps/netstring.c
 	$(CC) $(CFLAGS) $(CFLAGS_DEV) -c $< -o$@
 
 deps/netstring_rel.o: deps/netstring.c
 	$(CC) $(CFLAGS) $(CFLAGS_REL) -c $< -o$@
 
-deps/yyjson_dev.o: deps/yyjson.c
-	$(CC) $(CFLAGS) $(CFLAGS_DEV) -c $< -o$@
+deps/instdir/lib/libyyjson.a: $(ZIG)
+	cd deps/libyyjson && $(TD)/$(ZIG)/zig build $(ZIG_TARGET) --prefix ../instdir
 
-deps/yyjson_rel.o: deps/yyjson.c
-	$(CC) $(CFLAGS) $(CFLAGS_REL) -c $< -o$@
 
 # /lib --------------------------------------------------
 
@@ -562,7 +562,7 @@ DB_OFILES += backend/db.o backend/queue.o backend/skiplist.o backend/txn_state.o
 DBCLIENT_OFILES += backend/client_api.o backend/queue_callback.o backend/hash_ring.o
 REMOTE_OFILES += backend/failure_detector/db_messages.pb-c.o backend/failure_detector/cells.o backend/failure_detector/db_queries.o backend/failure_detector/fd.o
 VC_OFILES += backend/failure_detector/vector_clock.o
-BACKEND_OFILES=$(COMM_OFILES) $(DB_OFILES) $(DBCLIENT_OFILES) $(REMOTE_OFILES) $(VC_OFILES) backend/log.o deps/netstring_rel.o deps/yyjson_rel.o
+BACKEND_OFILES=$(COMM_OFILES) $(DB_OFILES) $(DBCLIENT_OFILES) $(REMOTE_OFILES) $(VC_OFILES) backend/log.o deps/netstring_rel.o
 OFILES += $(BACKEND_OFILES)
 lib/libActonDB.a: $(BACKEND_OFILES)
 	rm -f $@
@@ -616,7 +616,7 @@ test-stdlib:
 clean: clean-distribution clean-backend clean-base
 
 clean-all: clean clean-compiler clean-deps
-	rm -rf lib_deps lib/*
+	rm -rf lib/*
 
 clean-backend:
 	rm -f $(DBARCHIVE) $(BACKEND_OFILES) backend/actondb
