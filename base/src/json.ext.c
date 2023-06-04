@@ -1,7 +1,7 @@
 
 #include "../rts/io.h"
 #include "../rts/log.h"
-#include "../deps/yyjson.h"
+#include "yyjson.h"
 
 void jsonQ___ext_init__() {
     // NOP
