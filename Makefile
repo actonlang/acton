@@ -261,7 +261,7 @@ clean-compiler:
 	rm -f compiler/actonc compiler/package.yaml compiler/acton.cabal
 
 # /deps --------------------------------------------------
-DEPS_DIRS=deps/bsdnt deps/libbsd deps/libmd deps/libprotobuf_c deps/libutf8proc deps/libuv deps/libxml2 deps/util-linux
+DEPS_DIRS=deps/bsdnt deps/libbsd deps/libprotobuf_c deps/libutf8proc deps/libuv deps/libxml2 deps/util-linux
 
 # libActonDeps.a
 # This is an archive of all external libraries that we depend on. Each library
@@ -274,7 +274,6 @@ DEPS_DIRS=deps/bsdnt deps/libbsd deps/libmd deps/libprotobuf_c deps/libutf8proc 
 DEP_LIBS+=deps/instdir/lib/libargp.a
 ifeq ($(shell uname -s),Linux)
 DEP_LIBS+=deps/instdir/lib/libbsd.a
-DEP_LIBS+=deps/instdir/lib/libmd.a
 endif
 DEP_LIBS+=deps/instdir/lib/libbsdnt.a
 DEP_LIBS+=deps/instdir/lib/libpcre2-8.a
@@ -289,7 +288,6 @@ DEP_LIBS+=deps/instdir/lib/libyyjson.a
 DEPS_REFS=\
 	$(LIBARGP_REF) \
 	$(LIBBSD_REF) \
-	$(LIBMD_REF) \
 	$(LIBBSDNT_REF) \
 	$(LIBPCRE2_REF) \
 	$(LIBPROTOBUF_C_REF) \
@@ -406,7 +404,7 @@ LIBBSD_REF=c3f9c5b918d3914a6f20c4444e303ce09e25dffd
 deps/libbsd:
 	ls $@ >/dev/null 2>&1 || git clone https://github.com/actonlang/libbsd.git $@
 
-deps/instdir/lib/libbsd.a: deps/libbsd deps/instdir/lib/libmd.a $(DIST_ZIG)
+deps/instdir/lib/libbsd.a: deps/libbsd $(DIST_ZIG)
 	cd $< \
 	&& git checkout $(LIBBSD_REF) \
 	&& $(ZIG) build $(ZIG_TARGET) --prefix ../instdir
@@ -425,19 +423,6 @@ deps/instdir/lib/libgc.a: deps/libgc $(DIST_ZIG)
 	&& make -f Makefile.direct -j base_lib \
 	&& cp $(TD)/deps/libgc/libgc.a $(TD)/$@ \
 	&& cp -r $(TD)/deps/libgc/include/gc* $(TD)/deps/instdir/include/
-
-# /deps/libmd --------------------------------------------
-LIBMD_REF=1.0.4
-deps/libmd:
-	ls $@ >/dev/null 2>&1 || git clone https://gitlab.freedesktop.org/libbsd/libmd.git $@
-
-deps/instdir/lib/libmd.a: deps/libmd $(DIST_ZIG)
-	mkdir -p $(dir $@)
-	cd $< \
-	&& git checkout $(LIBMD_REF) \
-	&& ./autogen \
-	&& ./configure --prefix=$(TD)/deps/instdir --enable-static --disable-shared CFLAGS="$(CFLAGS_DEPS)" \
-	&& make -j && make install
 
 # /deps/libprotobuf_c --------------------------------------------
 LIBPROTOBUF_C_REF=abc67a11c6db271bedbb9f58be85d6f4e2ea8389
