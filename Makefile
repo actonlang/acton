@@ -11,9 +11,10 @@ endif
 ACTONC=dist/bin/actonc
 ACTC=dist/bin/actonc
 ZIG_VERSION:=0.11.0-dev.2985+3f3b1a680
-CC=$(TD)/deps/zig/zig cc
-CXX=$(TD)/deps/zig/zig c++
 ZIG=$(TD)/dist/zig/zig
+AR=$(ZIG) ar
+CC=$(ZIG) cc
+CXX=$(ZIG) c++
 LIBGC=lib/libactongc-$(PLATFORM).a
 export CC
 export CXX
@@ -284,6 +285,7 @@ DEP_LIBS+=deps/instdir/lib/libutf8proc.a
 DEP_LIBS+=deps/instdir/lib/libuuid.a
 DEP_LIBS+=deps/instdir/lib/libuv.a
 DEP_LIBS+=deps/instdir/lib/libxml2.a
+DEP_LIBS+=deps/instdir/lib/libnetstring.a
 DEP_LIBS+=deps/instdir/lib/libyyjson.a
 
 DEPS_REFS=\
@@ -297,6 +299,7 @@ DEPS_REFS=\
 	$(LIBUUID_REF) \
 	$(LIBUV_REF) \
 	$(LIBXML2_REF) \
+	local_libnetstring \
 	local_libyyjson
 
 DEPS_SUM:=$(shell echo $(DEPS_REFS) | shasum | cut -d' ' -f1)
@@ -335,9 +338,9 @@ lib_deps/libActonDeps-$(PLATFORM).a: $(DIST_ZIG) $(DEP_LIBS)
 	for LIB in $(DEP_LIBS); do \
 		LIBNAME=$$(basename $${LIB} .a); \
 		mkdir -p lib_deps/$${LIBNAME}; \
-		$$(cd lib_deps/$${LIBNAME} && $(ZIG) ar x $(TD)/$${LIB}); \
+		$$(cd lib_deps/$${LIBNAME} && $(AR) x $(TD)/$${LIB}); \
 	done
-	cd lib_deps && $(ZIG) ar -qc libActonDeps-$(PLATFORM).a */*.o
+	cd lib_deps && $(AR) -qc libActonDeps-$(PLATFORM).a */*.o
 
 lib/libactongc-$(PLATFORM).a:
 	($(MAKE) -j1 check-download-allowed deps-download/$(DEPS_SUM) \
@@ -543,13 +546,8 @@ deps/instdir/lib/libpcre2-8.a: deps/pcre2 $(DIST_ZIG)
 deps/instdir/lib/libpcre2-posix.a: deps/instdir/lib/libpcre2-8.a
 
 # --
-
-OFILES += deps/netstring_dev.o deps/netstring_rel.o
-deps/netstring_dev.o: deps/netstring.c
-	$(CC) $(CFLAGS) $(CFLAGS_DEV) -c $< -o$@
-
-deps/netstring_rel.o: deps/netstring.c
-	$(CC) $(CFLAGS) $(CFLAGS_REL) -c $< -o$@
+deps/instdir/lib/libnetstring.a: $(DIST_ZIG)
+	cd deps/libnetstring && $(ZIG) build $(ZIG_TARGET) --prefix ../instdir
 
 deps/instdir/lib/libyyjson.a: $(DIST_ZIG)
 	cd deps/libyyjson && $(ZIG) build $(ZIG_TARGET) --prefix ../instdir
@@ -562,7 +560,7 @@ DB_OFILES += backend/db.o backend/queue.o backend/skiplist.o backend/txn_state.o
 DBCLIENT_OFILES += backend/client_api.o backend/queue_callback.o backend/hash_ring.o
 REMOTE_OFILES += backend/failure_detector/db_messages.pb-c.o backend/failure_detector/cells.o backend/failure_detector/db_queries.o backend/failure_detector/fd.o
 VC_OFILES += backend/failure_detector/vector_clock.o
-BACKEND_OFILES=$(COMM_OFILES) $(DB_OFILES) $(DBCLIENT_OFILES) $(REMOTE_OFILES) $(VC_OFILES) backend/log.o deps/netstring_rel.o
+BACKEND_OFILES=$(COMM_OFILES) $(DB_OFILES) $(DBCLIENT_OFILES) $(REMOTE_OFILES) $(VC_OFILES) backend/log.o
 OFILES += $(BACKEND_OFILES)
 lib/libActonDB.a: $(BACKEND_OFILES)
 	rm -f $@
