@@ -402,33 +402,14 @@ deps/instdir/lib/libbsdnt.a: deps/libbsdnt $(DIST_ZIG)
 	&& make -j && make install
 
 # /deps/libbsd --------------------------------------------
-LIBBSD_REF=0.11.7
+LIBBSD_REF=c3f9c5b918d3914a6f20c4444e303ce09e25dffd
 deps/libbsd:
-	ls $@ >/dev/null 2>&1 || git clone https://gitlab.freedesktop.org/libbsd/libbsd.git $@
+	ls $@ >/dev/null 2>&1 || git clone https://github.com/actonlang/libbsd.git $@
 
-# NOTE: there's a silly copy going on in here to work around an issue with
-# include paths. Files in the libbsd/src directory include things like
-# <unistd.h> which are available in libbsd/include/bsd and some part of automake
-# adds a -I../include/bsd argument but zig already has other paths, like
-# /usr/include ahead of this path so when it's looking for unistd.h it's going
-# to find the system wide one and not the one in include/bsd. While specifying
-# an include directory with -I in CFLAGS adds it at the start of the search
-# list, we can't do this for ../include/bsd as it considers it a duplicate arg
-# and ignores it - it only gets added late in the path list. It doesn't appear
-# possible to influence and add something earlier in the search path and I don't
-# understand automake well enough to determine if we could somehow add it
-# earlier. Thus, the only workaround I found is to use a different name, which
-# we achieve simply by copying libbsd/include/bsd to libbsd/incbsd and adding
-# that with -I../incbsd
 deps/instdir/lib/libbsd.a: deps/libbsd deps/instdir/lib/libmd.a $(DIST_ZIG)
-	mkdir -p $(dir $@) $(shell dirname $(dir $@))/include
 	cd $< \
 	&& git checkout $(LIBBSD_REF) \
-	&& rm -rf incbsd \
-	&& cp -av include/bsd incbsd \
-	&& ./autogen \
-	&& ./configure --prefix=$(TD)/deps/instdir --enable-static --disable-shared CFLAGS="-I../incbsd -I$(TD)/deps/instdir/include -L$(TD)/deps/instdir/lib $(CFLAGS_DEPS)" \
-	&& make -j && make install
+	&& $(ZIG) build $(ZIG_TARGET) --prefix ../instdir
 
 # /deps/libgc --------------------------------------------
 LIBGC_REF=daea2f19089c32f38de916b8949fde42d73daf6f
