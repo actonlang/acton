@@ -174,13 +174,14 @@ DEPS_DIRS += dist/deps/libyyjson
 DEPS += dist/depsout/lib/libactongc.a
 DEPS += dist/depsout/lib/libargp.a
 DEPS += dist/depsout/lib/libbsdnt.a
+DEPS += dist/depsout/lib/libnetstring.a
 DEPS += dist/depsout/lib/libpcre2.a
 DEPS += dist/depsout/lib/libprotobuf-c.a
+DEPS += dist/depsout/lib/libssl.a
 DEPS += dist/depsout/lib/libutf8proc.a
 DEPS += dist/depsout/lib/libuuid.a
 DEPS += dist/depsout/lib/libuv.a
 DEPS += dist/depsout/lib/libxml2.a
-DEPS += dist/depsout/lib/libnetstring.a
 DEPS += dist/depsout/lib/libyyjson.a
 
 .PHONE: clean-downloads
@@ -244,6 +245,20 @@ dist/deps/libprotobuf_c: deps-download/$(LIBPROTOBUF_C_REF).tar.gz
 	touch $(TD)/$@
 
 dist/depsout/lib/libprotobuf-c.a: dist/deps/libprotobuf_c $(DIST_ZIG)
+	cd $< && $(ZIG) build $(ZIG_TARGET) --prefix $(TD)/dist/depsout
+
+# /deps/openssl (OpenSSL) ---------------------------------
+OPENSSL_REF=dfa0614f6744f0b96c8a22b23dacc68f8a9d0e4d
+deps-download/$(OPENSSL_REF).tar.gz:
+	mkdir -p deps-download
+	curl -f -L -o $@ https://github.com/kassane/openssl/archive/$(OPENSSL_REF).tar.gz
+
+dist/deps/openssl: deps-download/$(OPENSSL_REF).tar.gz
+	mkdir -p $@
+	cd $@ && tar zx --strip-components=1 -f $(TD)/$<
+	touch $(TD)/$@
+
+dist/depsout/lib/libssl.a: dist/deps/openssl $(DIST_ZIG)
 	cd $< && $(ZIG) build $(ZIG_TARGET) --prefix $(TD)/dist/depsout
 
 # /deps/libutf8proc --------------------------------------
