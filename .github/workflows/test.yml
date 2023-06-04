@@ -251,13 +251,22 @@ jobs:
           brew audit --tap=actonlang/acton
       - name: "brew test-bot --only-formulae"
         run: |
-          brew audit --strict --only=gcc_dependency actonlang/acton/acton
-          brew deps --tree --annotate --include-build --include-test actonlang/acton/acton
+          # There is an intermittent, but rather frequently occuring issue where
+          # the public release is used instead of --HEAD with brew , so avoiding
+          # commands where we can't provide --HEAD for now.
+          #brew audit --strict --only=gcc_dependency actonlang/acton/acton
+          #brew deps --tree --annotate --include-build --include-test actonlang/acton/acton
+          echo "brew fetch"
           brew fetch --HEAD --retry actonlang/acton/acton --build-bottle --force
+          echo "brew install --only-dependencies"
           brew install --HEAD --only-dependencies --verbose --build-bottle actonlang/acton/acton
+          echo "brew install"
           brew install --HEAD --verbose --build-bottle actonlang/acton/acton
+          echo "brew linkage"
           brew linkage actonlang/acton/acton
+          echo "brew linkage --test"
           brew linkage --test --strict actonlang/acton/acton
+          echo "brew test"
           brew test --verbose actonlang/acton/acton
           # Cannot run on --HEAD
           #brew audit actonlang/acton/acton --online --git --skip-style
