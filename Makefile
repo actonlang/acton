@@ -13,7 +13,7 @@ ACTC=dist/bin/actonc
 ZIG_VERSION:=0.11.0-dev.2985+3f3b1a680
 CC=$(TD)/deps/zig/zig cc
 CXX=$(TD)/deps/zig/zig c++
-ZIG=deps/zig
+ZIG=$(TD)/dist/zig/zig
 LIBGC=lib/libactongc-$(PLATFORM).a
 export CC
 export CXX
@@ -233,10 +233,10 @@ backend/test/skiplist_test: backend/test/skiplist_test.c backend/skiplist.c
 ifeq ($(ARCH),x86_64)
 ZIG_ARCH_ARG=-mcpu=x86_64
 endif
-builder/builder: builder/build.zig $(ZIG)
+builder/builder: builder/build.zig $(ZIG_DEP)
 	rm -rf builder/zig-cache builder/zig-out
 	(echo 'const root = @import("build.zig");'; tail -n +2 deps/zig/lib/build_runner.zig) > builder/build_runner.zig
-	cd builder && ../$(ZIG)/zig build-exe build_runner.zig -femit-bin=builder $(ZIG_ARCH_ARG)
+	cd builder && $(ZIG) build-exe build_runner.zig -femit-bin=builder $(ZIG_ARCH_ARG)
 
 # /compiler ----------------------------------------------
 ACTONC_ALL_HS=$(wildcard compiler/*.hs compiler/**/*.hs)
@@ -330,19 +330,19 @@ lib/libActonDeps-$(PLATFORM).a:
 		&& cp -r deps-download/$(DEPS_SUM)/lib/libActonDeps-$(PLATFORM).a $@) \
 	|| ($(MAKE) lib_deps/libActonDeps-$(PLATFORM).a && cp lib_deps/libActonDeps-$(PLATFORM).a $@)
 
-lib_deps/libActonDeps-$(PLATFORM).a: dist/zig $(DEP_LIBS)
+lib_deps/libActonDeps-$(PLATFORM).a: $(DIST_ZIG) $(DEP_LIBS)
 	mkdir -p lib_deps
 	for LIB in $(DEP_LIBS); do \
 		LIBNAME=$$(basename $${LIB} .a); \
 		mkdir -p lib_deps/$${LIBNAME}; \
-		$$(cd lib_deps/$${LIBNAME} && ar x $(TD)/$${LIB}); \
+		$$(cd lib_deps/$${LIBNAME} && $(ZIG) ar x $(TD)/$${LIB}); \
 	done
-	cd lib_deps && ar -qc libActonDeps-$(PLATFORM).a */*.o
+	cd lib_deps && $(ZIG) ar -qc libActonDeps-$(PLATFORM).a */*.o
 
 lib/libactongc-$(PLATFORM).a:
 	($(MAKE) -j1 check-download-allowed deps-download/$(DEPS_SUM) \
 		&& cp deps-download/$(DEPS_SUM)/lib/libactongc-$(PLATFORM).a $@) \
-	|| ($(MAKE) deps/instdir/lib/libgc.a dist/zig && cp deps/instdir/lib/libgc.a $@)
+	|| ($(MAKE) deps/instdir/lib/libgc.a $(DIST_ZIG) && cp deps/instdir/lib/libgc.a $@)
 
 # Check if ALWAYS_BUILD=true and if so, fail rule. Used before running a
 # download target, so if this fails, we do not download and can fail over to the
@@ -370,7 +370,7 @@ deps/libargp:
 # NOTE: autoconf incantataion taken from (now removed) CI config of
 # argp-standalone repo:
 # https://github.com/argp-standalone/argp-standalone/commit/0297fd805e760499cdca605466851729e377169a
-deps/instdir/lib/libargp.a: deps/libargp $(ZIG)
+deps/instdir/lib/libargp.a: deps/libargp $(DIST_ZIG)
 	mkdir -p $(dir $@) $(shell dirname $(dir $@))/include
 	cd $< \
 	&& git checkout $(LIBARGP_REF) \
@@ -394,7 +394,7 @@ deps/libbsdnt:
 # argument passing it seems? -target=foo works whereas -target foo does not. It
 # seems fine for now since this is likely a pure library, not interacting
 # anything with libc, but maybe we should fix it?
-deps/instdir/lib/libbsdnt.a: deps/libbsdnt $(ZIG)
+deps/instdir/lib/libbsdnt.a: deps/libbsdnt $(DIST_ZIG)
 	mkdir -p $(dir $@) $(shell dirname $(dir $@))/include
 	cd $< \
 	&& git checkout $(LIBBSDNT_REF) \
@@ -420,7 +420,7 @@ deps/libbsd:
 # earlier. Thus, the only workaround I found is to use a different name, which
 # we achieve simply by copying libbsd/include/bsd to libbsd/incbsd and adding
 # that with -I../incbsd
-deps/instdir/lib/libbsd.a: deps/libbsd deps/instdir/lib/libmd.a $(ZIG)
+deps/instdir/lib/libbsd.a: deps/libbsd deps/instdir/lib/libmd.a $(DIST_ZIG)
 	mkdir -p $(dir $@) $(shell dirname $(dir $@))/include
 	cd $< \
 	&& git checkout $(LIBBSD_REF) \
@@ -435,7 +435,7 @@ LIBGC_REF=daea2f19089c32f38de916b8949fde42d73daf6f
 deps/libgc:
 	ls $@ >/dev/null 2>&1 || git clone https://github.com/ivmai/bdwgc.git $@
 
-deps/instdir/lib/libgc.a: deps/libgc $(ZIG)
+deps/instdir/lib/libgc.a: deps/libgc $(DIST_ZIG)
 	mkdir -p $(dir $@) $(shell dirname $(dir $@))/include
 	cd $< \
 	&& git checkout $(LIBGC_REF) \
@@ -450,7 +450,7 @@ LIBMD_REF=1.0.4
 deps/libmd:
 	ls $@ >/dev/null 2>&1 || git clone https://gitlab.freedesktop.org/libbsd/libmd.git $@
 
-deps/instdir/lib/libmd.a: deps/libmd $(ZIG)
+deps/instdir/lib/libmd.a: deps/libmd $(DIST_ZIG)
 	mkdir -p $(dir $@)
 	cd $< \
 	&& git checkout $(LIBMD_REF) \
@@ -463,7 +463,7 @@ LIBPROTOBUF_C_REF=abc67a11c6db271bedbb9f58be85d6f4e2ea8389
 deps/libprotobuf_c:
 	ls $@ >/dev/null 2>&1 || git clone https://github.com/protobuf-c/protobuf-c.git $@
 
-deps/instdir/lib/libprotobuf-c.a: deps/libprotobuf_c $(ZIG)
+deps/instdir/lib/libprotobuf-c.a: deps/libprotobuf_c $(DIST_ZIG)
 	mkdir -p $(dir $@)
 	cd $< \
 	&& git checkout $(LIBPROTOBUF_C_REF) \
@@ -476,7 +476,7 @@ LIBUTF8PROC_REF=63f31c908ef7656415f73d6c178f08181239f74c
 deps/libutf8proc:
 	ls $@ >/dev/null 2>&1 || git clone https://github.com/JuliaStrings/utf8proc.git $@
 
-deps/instdir/lib/libutf8proc.a: deps/libutf8proc $(ZIG)
+deps/instdir/lib/libutf8proc.a: deps/libutf8proc $(DIST_ZIG)
 	mkdir -p $(dir $@)
 	cd $< \
 	&& git checkout $(LIBUTF8PROC_REF) \
@@ -488,7 +488,7 @@ LIBUUID_REF=v2.38.1
 deps/util-linux:
 	ls $@ >/dev/null 2>&1 || git clone https://github.com/util-linux/util-linux.git $@
 
-deps/instdir/lib/libuuid.a: deps/util-linux $(ZIG)
+deps/instdir/lib/libuuid.a: deps/util-linux $(DIST_ZIG)
 	mkdir -p $(dir $@)
 	cd $< \
 	&& git checkout $(LIBUUID_REF) \
@@ -501,7 +501,7 @@ LIBUV_REF=3e7d2a649275cce3c2d43c67205e627931bda55e
 deps/libuv:
 	ls $@ >/dev/null 2>&1 || git clone https://github.com/libuv/libuv.git $@
 
-deps/instdir/lib/libuv.a: deps/libuv $(ZIG)
+deps/instdir/lib/libuv.a: deps/libuv $(DIST_ZIG)
 	mkdir -p $(dir $@)
 	cd $< \
 	&& git checkout $(LIBUV_REF) \
@@ -514,7 +514,7 @@ LIBXML2_REF=644a89e080bced793295f61f18aac8cfad6bece2
 deps/libxml2:
 	ls $@ >/dev/null 2>&1 || git clone https://github.com/GNOME/libxml2.git $@
 
-deps/instdir/lib/libxml2.a: deps/libxml2 $(ZIG)
+deps/instdir/lib/libxml2.a: deps/libxml2 $(DIST_ZIG)
 	mkdir -p $(dir $@)
 	cd $< \
 	&& git checkout $(LIBXML2_REF) \
@@ -528,7 +528,7 @@ LIBPCRE2_REF=pcre2-10.42
 deps/pcre2:
 	ls $@ >/dev/null 2>&1 || git clone https://github.com/PCRE2Project/pcre2.git $@
 
-deps/instdir/lib/libpcre2-8.a: deps/pcre2 $(ZIG)
+deps/instdir/lib/libpcre2-8.a: deps/pcre2 $(DIST_ZIG)
 	mkdir -p $(dir $@)
 	cd $< \
 	&& git checkout $(LIBPCRE2_REF) \
@@ -551,8 +551,8 @@ deps/netstring_dev.o: deps/netstring.c
 deps/netstring_rel.o: deps/netstring.c
 	$(CC) $(CFLAGS) $(CFLAGS_REL) -c $< -o$@
 
-deps/instdir/lib/libyyjson.a: $(ZIG)
-	cd deps/libyyjson && $(TD)/$(ZIG)/zig build $(ZIG_TARGET) --prefix ../instdir
+deps/instdir/lib/libyyjson.a: $(DIST_ZIG)
+	cd deps/libyyjson && $(ZIG) build $(ZIG_TARGET) --prefix ../instdir
 
 
 # /lib --------------------------------------------------
@@ -639,7 +639,7 @@ dist/base: base dist/lib/dev/libActon.a
 # the file and modify it, which the Linux kernel (and perhaps others?) will
 # prevent if the file to be modified is an executable program that is currently
 # running.  We work around it by moving / renaming the file in place instead!
-dist/bin/actonc: compiler/actonc $(ZIG)
+dist/bin/actonc: compiler/actonc $(DIST_ZIG)
 	@mkdir -p $(dir $@)
 	cp $< $@.tmp
 	mv $@.tmp $@
