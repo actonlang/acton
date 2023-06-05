@@ -13,6 +13,7 @@
  */
 
 #include <limits.h>
+#include <stdlib.h>
 
 int numpyQ_done = 0;
 
@@ -37,5 +38,6 @@ void numpyQ___init__() {
     $register(&numpyQ_SliceableD_ndarrayG_methods);
     $register(&numpyQ_CollectionD_ndarrayG_methods);
     $register(&numpyQ_RealFunsD_mathD_ndarrayG_methods);
+    srand(time(NULL));
 }
 

@@ -12,9 +12,6 @@
  * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#ifdef __linux__
-#include <bsd/stdlib.h>
-#endif
 #include <limits.h>
 #include "primitive.c"
 
@@ -613,8 +610,12 @@ numpyQ_ndarray numpyQ_unirandint(B_int a, B_int b, B_int n) {
     wit->$class->append(wit,strides,to$int(1));
     long s = (from$int(b) - from$int(a));
     numpyQ_ndarray res = G_newarray(DblType,1,n,shape,strides,true);
-    for (int i = 0; i<from$int(n); i++)
-        res->data[i].l = from$int(a) + arc4random_uniform(s);
+    for (int i = 0; i<from$int(n); i++) {
+        // NOTE: we originally used arc4random_uniform() here but downgraded to
+        // rand() for portability.
+        // TODO: maybe use a better random source?
+        res->data[i].l = from$int(a) + (rand() % s);
+    }
     return res;
 }
 
@@ -629,8 +630,12 @@ numpyQ_ndarray numpyQ_unirandfloat(B_float a, B_float b, B_int n) {
     wit->$class->append(wit,strides,to$int(1));
     double s = (b->val - a->val);
     numpyQ_ndarray res = G_newarray(DblType,1,n,shape,strides,true);
-    for (int i = 0; i<from$int(n); i++)
-        res->data[i].d = a->val + s * (double)arc4random_uniform(NDARRAY_MAX)/(double)NDARRAY_MAX;
+    for (int i = 0; i<from$int(n); i++) {
+        // NOTE: we originally used arc4random_uniform() here but downgraded to
+        // rand() for portability.
+        // TODO: maybe use a better random source?
+        res->data[i].d = a->val + s * ((rand() % NDARRAY_MAX)/(double)NDARRAY_MAX);
+    }
     return res;
 }
 
