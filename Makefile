@@ -262,7 +262,7 @@ clean-compiler:
 	rm -f compiler/actonc compiler/package.yaml compiler/acton.cabal
 
 # /deps --------------------------------------------------
-DEPS_DIRS=deps/bsdnt deps/libprotobuf_c deps/libutf8proc deps/libuv deps/libxml2 deps/util-linux
+DEPS_DIRS=deps/libargp deps/libbsdnt deps/libprotobuf_c deps/libutf8proc deps/libuv deps/libxml2 deps/pcre2 deps/util-linux
 
 # libActonDeps.a
 # This is an archive of all external libraries that we depend on. Each library
@@ -274,8 +274,7 @@ DEPS_DIRS=deps/bsdnt deps/libprotobuf_c deps/libutf8proc deps/libuv deps/libxml2
 
 DEP_LIBS+=deps/instdir/lib/libargp.a
 DEP_LIBS+=deps/instdir/lib/libbsdnt.a
-DEP_LIBS+=deps/instdir/lib/libpcre2-8.a
-DEP_LIBS+=deps/instdir/lib/libpcre2-posix.a
+DEP_LIBS+=deps/instdir/lib/libpcre2.a
 DEP_LIBS+=deps/instdir/lib/libprotobuf-c.a
 DEP_LIBS+=deps/instdir/lib/libutf8proc.a
 DEP_LIBS+=deps/instdir/lib/libuuid.a
@@ -479,23 +478,14 @@ deps/instdir/lib/libxml2.a: deps/libxml2 $(DIST_ZIG)
 	&& mv $(TD)/deps/instdir/include/libxml2/libxml $(TD)/deps/instdir/include/libxml
 
 # /deps/pcre2 --------------------------------------------
-LIBPCRE2_REF=pcre2-10.42
+LIBPCRE2_REF=ece17affd4f1d57eb148af9a39c64c1bb19b0e51
 deps/pcre2:
-	ls $@ >/dev/null 2>&1 || git clone https://github.com/PCRE2Project/pcre2.git $@
+	ls $@ >/dev/null 2>&1 || git clone https://github.com/actonlang/pcre2.git $@
 
-deps/instdir/lib/libpcre2-8.a: deps/pcre2 $(DIST_ZIG)
-	mkdir -p $(dir $@)
+deps/instdir/lib/libpcre2.a: deps/pcre2 $(DIST_ZIG)
 	cd $< \
 	&& git checkout $(LIBPCRE2_REF) \
-	&& ./autogen.sh \
-	&& ./configure --prefix=$(TD)/deps/instdir --enable-static --disable-shared CFLAGS="$(CFLAGS_DEPS)" \
-	&& make -j && make install
-
-# Dummy rule that depends on above target since it produces both libpcre2-8.a
-# and libpcre2-posix.a, this is just so that the libActonDeps.a target can rely
-# on libpcre2-posix.a (since it copies it into the archive) but if we don't have
-# a matching target it would fail.
-deps/instdir/lib/libpcre2-posix.a: deps/instdir/lib/libpcre2-8.a
+	&& $(ZIG) build $(ZIG_TARGET) --prefix ../instdir
 
 # --
 deps/instdir/lib/libnetstring.a: $(DIST_ZIG)
