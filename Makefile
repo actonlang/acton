@@ -426,16 +426,15 @@ deps/instdir/lib/libprotobuf-c.a: deps/libprotobuf_c $(DIST_ZIG)
 	&& make -j && make install
 
 # /deps/libutf8proc --------------------------------------
-LIBUTF8PROC_REF=63f31c908ef7656415f73d6c178f08181239f74c
+LIBUTF8PROC_REF=3c489aea1a497b98f6cc28ea5b218181b84769e6
 deps/libutf8proc:
-	ls $@ >/dev/null 2>&1 || git clone https://github.com/JuliaStrings/utf8proc.git $@
+	ls $@ >/dev/null 2>&1 || git clone https://github.com/actonlang/utf8proc.git $@
 
 deps/instdir/lib/libutf8proc.a: deps/libutf8proc $(DIST_ZIG)
 	mkdir -p $(dir $@)
 	cd $< \
 	&& git checkout $(LIBUTF8PROC_REF) \
-	&& make CFLAGS="$(CFLAGS_DEPS)" \
-	&& make install prefix=$(TD)/deps/instdir
+	&& $(ZIG) build $(ZIG_TARGET) --prefix ../instdir
 
 # /deps/libuuid ------------------------------------------
 LIBUUID_REF=v2.38.1
