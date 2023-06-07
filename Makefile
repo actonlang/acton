@@ -434,18 +434,14 @@ deps/instdir/lib/libuv.a: deps/libuv $(DIST_ZIG)
 	&& $(ZIG) build $(ZIG_TARGET) --prefix ../instdir
 
 # /deps/libxml2 ------------------------------------------
-LIBXML2_REF=644a89e080bced793295f61f18aac8cfad6bece2
+LIBXML2_REF=8459e725c3294d8d637317036f9d8b10860195dc
 deps/libxml2:
-	ls $@ >/dev/null 2>&1 || git clone https://github.com/GNOME/libxml2.git $@
+	ls $@ >/dev/null 2>&1 || git clone https://github.com/actonlang/libxml2.git $@
 
 deps/instdir/lib/libxml2.a: deps/libxml2 $(DIST_ZIG)
-	mkdir -p $(dir $@)
 	cd $< \
 	&& git checkout $(LIBXML2_REF) \
-	&& sed -i -e 's/1.16.3/1.16.1/' configure.ac \
-	&& ./autogen.sh --without-python --without-iconv --without-zlib --without-lzma --prefix=$(TD)/deps/instdir --enable-static --disable-shared CFLAGS="$(CFLAGS_DEPS)" \
-	&& make -j && make install \
-	&& mv $(TD)/deps/instdir/include/libxml2/libxml $(TD)/deps/instdir/include/libxml
+	&& $(ZIG) build $(ZIG_TARGET) --prefix ../instdir
 
 # /deps/pcre2 --------------------------------------------
 LIBPCRE2_REF=ece17affd4f1d57eb148af9a39c64c1bb19b0e51
