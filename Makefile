@@ -66,8 +66,8 @@ CFLAGS += -Werror
 ifeq ($(shell uname -s),Linux)
 OS:=linux
 ifeq ($(shell uname -m),x86_64)
-CFLAGS_TARGET := -target x86_64-linux-gnu.2.28
-ZIG_TARGET := -Dtarget=x86_64-linux-gnu.2.28
+CFLAGS_TARGET := -target x86_64-linux-gnu.2.27
+ZIG_TARGET := -Dtarget=x86_64-linux-gnu.2.27
 else
 $(error "Unsupported architecture for Linux?")
 endif
