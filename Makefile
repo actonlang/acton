@@ -10,7 +10,7 @@ endif
 
 ACTONC=dist/bin/actonc
 ACTC=dist/bin/actonc
-ZIG_VERSION:=0.11.0-dev.2985+3f3b1a680
+ZIG_VERSION:=0.11.0-dev.3384+00ff65357
 ZIG=$(TD)/dist/zig/zig
 AR=$(ZIG) ar
 CC=$(ZIG) cc
