@@ -451,17 +451,14 @@ deps/instdir/lib/libuuid.a: deps/util-linux $(DIST_ZIG)
 	&& make -j && make install
 
 # /deps/libuv --------------------------------------------
-LIBUV_REF=3e7d2a649275cce3c2d43c67205e627931bda55e
+LIBUV_REF=53b7649fc83f8cee6f0170b335222a759c0a26f0
 deps/libuv:
-	ls $@ >/dev/null 2>&1 || git clone https://github.com/libuv/libuv.git $@
+	ls $@ >/dev/null 2>&1 || git clone https://github.com/actonlang/libuv.git $@
 
 deps/instdir/lib/libuv.a: deps/libuv $(DIST_ZIG)
-	mkdir -p $(dir $@)
 	cd $< \
 	&& git checkout $(LIBUV_REF) \
-	&& ./autogen.sh \
-	&& ./configure --prefix=$(TD)/deps/instdir --enable-static --disable-shared CFLAGS="$(CFLAGS_DEPS)" \
-	&& make -j && make install
+	&& $(ZIG) build $(ZIG_TARGET) --prefix ../instdir
 
 # /deps/libxml2 ------------------------------------------
 LIBXML2_REF=644a89e080bced793295f61f18aac8cfad6bece2
