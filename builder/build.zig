@@ -51,7 +51,7 @@ pub fn build(b: *std.build.Builder) void {
             std.os.exit(1);
         };
         if (next_result) |entry| {
-            if (entry.kind == .File) {
+            if (entry.kind == .file) {
                 if (std.mem.endsWith(u8, entry.basename, ".c")) {
                     const fPath = b.allocator.create(FilePath) catch |err| {
                         std.log.err("Error allocating FilePath entry: {}", .{err});

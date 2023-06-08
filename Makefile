@@ -10,7 +10,7 @@ endif
 
 ACTONC=dist/bin/actonc
 ACTC=dist/bin/actonc
-ZIG_VERSION:=0.11.0-dev.2985+3f3b1a680
+ZIG_VERSION:=0.11.0-dev.3384+00ff65357
 ZIG=$(TD)/dist/zig/zig
 AR=$(ZIG) ar
 CC=$(ZIG) cc
@@ -66,7 +66,8 @@ CFLAGS += -Werror
 ifeq ($(shell uname -s),Linux)
 OS:=linux
 ifeq ($(shell uname -m),x86_64)
-CFLAGS_TARGET := -target x86_64-linux-gnu.2.28
+CFLAGS_TARGET := -target x86_64-linux-gnu.2.27
+ZIG_TARGET := -Dtarget=x86_64-linux-gnu.2.27
 else
 $(error "Unsupported architecture for Linux?")
 endif
@@ -450,17 +451,14 @@ deps/instdir/lib/libuuid.a: deps/util-linux $(DIST_ZIG)
 	&& make -j && make install
 
 # /deps/libuv --------------------------------------------
-LIBUV_REF=3e7d2a649275cce3c2d43c67205e627931bda55e
+LIBUV_REF=53b7649fc83f8cee6f0170b335222a759c0a26f0
 deps/libuv:
-	ls $@ >/dev/null 2>&1 || git clone https://github.com/libuv/libuv.git $@
+	ls $@ >/dev/null 2>&1 || git clone https://github.com/actonlang/libuv.git $@
 
 deps/instdir/lib/libuv.a: deps/libuv $(DIST_ZIG)
-	mkdir -p $(dir $@)
 	cd $< \
 	&& git checkout $(LIBUV_REF) \
-	&& ./autogen.sh \
-	&& ./configure --prefix=$(TD)/deps/instdir --enable-static --disable-shared CFLAGS="$(CFLAGS_DEPS)" \
-	&& make -j && make install
+	&& $(ZIG) build $(ZIG_TARGET) --prefix ../instdir
 
 # /deps/libxml2 ------------------------------------------
 LIBXML2_REF=644a89e080bced793295f61f18aac8cfad6bece2
