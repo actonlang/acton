@@ -360,26 +360,14 @@ clean-deps-rm:
 	rm -rf $(DEPS_DIRS) deps/libgc deps/zig deps/zig-*.tar* deps-download
 
 # /deps/libargp --------------------------------------------
-LIBARGP_REF=1.5.0
+LIBARGP_REF=a2b750b4439099c223fd0fb70c902df396791fb1
 deps/libargp:
-	ls $@ >/dev/null 2>&1 || git clone https://github.com/argp-standalone/argp-standalone.git $@
+	ls $@ >/dev/null 2>&1 || git clone https://github.com/actonlang/argp-standalone.git $@
 
-# NOTE: autoconf incantataion taken from (now removed) CI config of
-# argp-standalone repo:
-# https://github.com/argp-standalone/argp-standalone/commit/0297fd805e760499cdca605466851729e377169a
 deps/instdir/lib/libargp.a: deps/libargp $(DIST_ZIG)
-	mkdir -p $(dir $@) $(shell dirname $(dir $@))/include
 	cd $< \
 	&& git checkout $(LIBARGP_REF) \
-	&& aclocal \
-	&& autoheader \
-	&& autoconf \
-	&& automake --add-missing \
-	&& autoreconf \
-	&& ./configure --prefix=$(TD)/deps/instdir --enable-static --disable-shared CFLAGS="-I../incbsd -I$(TD)/deps/instdir/include -L$(TD)/deps/instdir/lib $(CFLAGS_DEPS)" \
-	&& make -j \
-	&& cp argp.h ../instdir/include/ \
-	&& cp libargp.a ../instdir/lib/
+	&& $(ZIG) build $(ZIG_TARGET) --prefix ../instdir
 
 # /deps/libbsdnt --------------------------------------------
 LIBBSDNT_REF=97053f366618b0e987a76bc6d6992165c8ea843e
