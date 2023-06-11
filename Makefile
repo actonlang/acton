@@ -396,17 +396,14 @@ deps/instdir/lib/libgc.a: deps/libgc $(DIST_ZIG)
 	&& cp -r $(TD)/deps/libgc/include/gc* $(TD)/deps/instdir/include/
 
 # /deps/libprotobuf_c --------------------------------------------
-LIBPROTOBUF_C_REF=abc67a11c6db271bedbb9f58be85d6f4e2ea8389
+LIBPROTOBUF_C_REF=5499f774396953c2ef63e725e2f03a5c0bdeff73
 deps/libprotobuf_c:
-	ls $@ >/dev/null 2>&1 || git clone https://github.com/protobuf-c/protobuf-c.git $@
+	ls $@ >/dev/null 2>&1 || git clone https://github.com/actonlang/protobuf-c.git $@
+	cd $@ && git checkout $(LIBPROTOBUF_C_REF)
 
 deps/instdir/lib/libprotobuf-c.a: deps/libprotobuf_c $(DIST_ZIG)
-	mkdir -p $(dir $@)
 	cd $< \
-	&& git checkout $(LIBPROTOBUF_C_REF) \
-	&& ./autogen.sh \
-	&& ./configure --prefix=$(TD)/deps/instdir --enable-static --disable-shared --disable-protoc CFLAGS="--verbose $(CFLAGS_DEPS)" CXXFLAGS="--verbose $(CFLAGS_TARGET)" \
-	&& make -j && make install
+	&& $(ZIG) build $(ZIG_TARGET) --prefix ../instdir
 
 # /deps/libutf8proc --------------------------------------
 LIBUTF8PROC_REF=3c489aea1a497b98f6cc28ea5b218181b84769e6
