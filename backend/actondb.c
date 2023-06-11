@@ -2614,7 +2614,7 @@ int main(int argc, char **argv) {
   //  separate gossip port.
   if (arguments.gportno > 0) {
       // TODO: remove this once gossip protocol carries gossip port info
-      if (arguments.gportno != arguments.portno)
+      if (arguments.gportno != arguments.portno+1)
           log_warn("Using a gossip port other than RPC port + 1 is not a supported configuration");
       gportno = arguments.gportno;
   } else {
