@@ -263,7 +263,7 @@ clean-compiler:
 	rm -f compiler/actonc compiler/package.yaml compiler/acton.cabal
 
 # /deps --------------------------------------------------
-DEPS_DIRS=deps/libargp deps/libbsdnt deps/libprotobuf_c deps/libutf8proc deps/libuv deps/libxml2 deps/pcre2 deps/util-linux
+DEPS_DIRS=deps/libargp deps/libbsdnt deps/libprotobuf_c deps/libutf8proc deps/libuv deps/libxml2 deps/pcre2
 
 # libActonDeps.a
 # This is an archive of all external libraries that we depend on. Each library
@@ -420,17 +420,8 @@ deps/instdir/lib/libutf8proc.a: deps/libutf8proc $(DIST_ZIG)
 	&& $(ZIG) build $(ZIG_TARGET) --prefix ../instdir
 
 # /deps/libuuid ------------------------------------------
-LIBUUID_REF=v2.38.1
-deps/util-linux:
-	ls $@ >/dev/null 2>&1 || git clone https://github.com/util-linux/util-linux.git $@
-
-deps/instdir/lib/libuuid.a: deps/util-linux $(DIST_ZIG)
-	mkdir -p $(dir $@)
-	cd $< \
-	&& git checkout $(LIBUUID_REF) \
-	&& ./autogen.sh \
-	&& ./configure --prefix=$(TD)/deps/instdir --disable-nls --disable-poman --disable-all-programs --enable-libuuid --enable-static --disable-shared CFLAGS="$(CFLAGS_DEPS)" \
-	&& make -j && make install
+deps/instdir/lib/libuuid.a: $(DIST_ZIG)
+	cd deps/libuuid && $(ZIG) build $(ZIG_TARGET) --prefix ../instdir
 
 # /deps/libuv --------------------------------------------
 LIBUV_REF=53b7649fc83f8cee6f0170b335222a759c0a26f0
