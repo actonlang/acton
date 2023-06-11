@@ -370,21 +370,15 @@ deps/instdir/lib/libargp.a: deps/libargp $(DIST_ZIG)
 	&& $(ZIG) build $(ZIG_TARGET) --prefix ../instdir
 
 # /deps/libbsdnt --------------------------------------------
-LIBBSDNT_REF=97053f366618b0e987a76bc6d6992165c8ea843e
+LIBBSDNT_REF=20c727a5f390d1d4d2c22a3c5bfabb5276d34757
 deps/libbsdnt:
-	ls $@ >/dev/null 2>&1 || git clone https://github.com/wbhart/bsdnt.git $@
+	ls $@ >/dev/null 2>&1 || git clone https://github.com/actonlang/bsdnt.git $@
 
-# NOTE: we don't pass in CFLAGS_DEPS which includes setting -target to zig,
-# because the autoconf stuff in bsdnt is so old it doesn't accept this style of
-# argument passing it seems? -target=foo works whereas -target foo does not. It
-# seems fine for now since this is likely a pure library, not interacting
-# anything with libc, but maybe we should fix it?
 deps/instdir/lib/libbsdnt.a: deps/libbsdnt $(DIST_ZIG)
 	mkdir -p $(dir $@) $(shell dirname $(dir $@))/include
 	cd $< \
 	&& git checkout $(LIBBSDNT_REF) \
-	&& ./configure --prefix=$(TD)/deps/instdir --enable-static --disable-shared \
-	&& make -j && make install
+	&& $(ZIG) build $(ZIG_TARGET) --prefix ../instdir
 
 # /deps/libgc --------------------------------------------
 LIBGC_REF=daea2f19089c32f38de916b8949fde42d73daf6f
