@@ -855,13 +855,12 @@ zigBuild env opts paths tasks binTasks = do
     let zigCmdBase =
           if buildZigExists
             then zig paths ++ " build " ++
-                 " -target " ++ defTarget ++
                  " --prefix " ++ projProfile paths ++ " --prefix-exe-dir 'bin'" ++
-                 if (C.debug opts) then " --verbose " else "" ++
-                 "--global-cache-dir " ++ (joinPath [ homeDir, ".cache/acton/build-cache" ])
-            else (joinPath [ sysPath paths, "builder" ]) ++ " " ++
+                 if (C.debug opts) then " --verbose " else ""
+            else (joinPath [ sysPath paths, "builder", "builder" ]) ++ " " ++
                  (joinPath [ sysPath paths, "zig/zig" ]) ++ " " ++
-                 projPath paths ++ " " ++ (joinPath [ projPath paths, "build-cache" ]) ++ " " ++
+                 projPath paths ++ " " ++
+                 (joinPath [ projPath paths, "build-cache" ]) ++ " " ++
                  (joinPath [ homeDir, ".cache/acton/build-cache" ])
     let zigCmd = zigCmdBase ++
                  " --prefix " ++ projProfile paths ++ " --prefix-exe-dir 'bin'" ++
@@ -871,7 +870,8 @@ zigBuild env opts paths tasks binTasks = do
                  " -Dprojpath=" ++ projPath paths ++
                  " -Dprojpath_outtypes=" ++ joinPath [ projPath paths, "out", "types" ] ++
                  " -Dsyspath=" ++ sysPath paths ++
-                 " -Dsyspath_base=" ++ joinPath [ sysPath paths, "base" ] ++
+                 " -Dsyspath_backend=" ++ dir_dots_to_root ++ joinPath [ sysPath paths, "backend" ] ++
+                 " -Dsyspath_base=" ++ dir_dots_to_root ++ joinPath [ sysPath paths, "base" ] ++
                  " -Dsyspath_include=" ++ joinPath [ sysPath paths, "inc" ] ++
                  " -Dsyspath_lib=" ++ joinPath [ sysPath paths, "lib" ] ++
                  " -Dsyspath_libreldev=" ++ joinPath [ sysPath paths, "lib", reldev ] ++
@@ -890,3 +890,6 @@ zigBuild env opts paths tasks binTasks = do
     iff (not (C.quiet opts)) $ putStrLn("   Finished final compilation step in  " ++ fmtTime(timeEnd - timeStart))
     return ()
   where reldev = if C.dev opts then "dev" else "rel"
+        -- As many ../../ etc to get from the project directory to the root,
+        -- from which point an absolute path is used
+        dir_dots_to_root = joinPath $ replicate (length $ splitPath $ projPath paths) ".."
