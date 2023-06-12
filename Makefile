@@ -361,34 +361,46 @@ clean-deps-rm:
 
 # /deps/libargp --------------------------------------------
 LIBARGP_REF=a2b750b4439099c223fd0fb70c902df396791fb1
-deps/libargp:
-	ls $@ >/dev/null 2>&1 || git clone https://github.com/actonlang/argp-standalone.git $@
+deps-download/$(LIBARGP_REF).tar.gz:
+	mkdir -p deps-download
+	curl -f -L -o $@ https://github.com/actonlang/argp-standalone/archive/$(LIBARGP_REF).tar.gz
+
+deps/libargp: deps-download/$(LIBARGP_REF).tar.gz
+	rm -rf $(TD)/$@
+	tar xzf $(TD)/$< && mv $(TD)/argp-standalone-$(LIBARGP_REF) $(TD)/$@
+	touch $(TD)/$@
 
 deps/instdir/lib/libargp.a: deps/libargp $(DIST_ZIG)
-	cd $< \
-	&& git checkout $(LIBARGP_REF) \
-	&& $(ZIG) build $(ZIG_TARGET) --prefix ../instdir
+	cd $< && $(ZIG) build $(ZIG_TARGET) --prefix ../instdir
 
 # /deps/libbsdnt --------------------------------------------
 LIBBSDNT_REF=20c727a5f390d1d4d2c22a3c5bfabb5276d34757
-deps/libbsdnt:
-	ls $@ >/dev/null 2>&1 || git clone https://github.com/actonlang/bsdnt.git $@
+deps-download/$(LIBBSDNT_REF).tar.gz:
+	mkdir -p deps-download
+	curl -f -L -o $@ https://github.com/actonlang/bsdnt/archive/$(LIBBSDNT_REF).tar.gz
+
+deps/libbsdnt: deps-download/$(LIBBSDNT_REF).tar.gz
+	rm -rf $(TD)/$@
+	tar xzf $(TD)/$< && mv $(TD)/bsdnt-$(LIBBSDNT_REF) $(TD)/$@
+	touch $(TD)/$@
 
 deps/instdir/lib/libbsdnt.a: deps/libbsdnt $(DIST_ZIG)
-	mkdir -p $(dir $@) $(shell dirname $(dir $@))/include
-	cd $< \
-	&& git checkout $(LIBBSDNT_REF) \
-	&& $(ZIG) build $(ZIG_TARGET) --prefix ../instdir
+	cd $< && $(ZIG) build $(ZIG_TARGET) --prefix ../instdir
 
 # /deps/libgc --------------------------------------------
 LIBGC_REF=daea2f19089c32f38de916b8949fde42d73daf6f
-deps/libgc:
-	ls $@ >/dev/null 2>&1 || git clone https://github.com/ivmai/bdwgc.git $@
+deps-download/$(LIBGC_REF).tar.gz:
+	mkdir -p deps-download
+	curl -f -L -o $@ https://github.com/actonlang/bdwgc/archive/$(LIBGC_REF).tar.gz
+
+deps/libgc: deps-download/$(LIBGC_REF).tar.gz
+	rm -rf $(TD)/$@
+	tar xzf $(TD)/$< && mv $(TD)/bdwgc-$(LIBGC_REF) $(TD)/$@
+	touch $(TD)/$@
 
 deps/instdir/lib/libgc.a: deps/libgc $(DIST_ZIG)
 	mkdir -p $(dir $@) $(shell dirname $(dir $@))/include
 	cd $< \
-	&& git checkout $(LIBGC_REF) \
 	&& unset CFLAGS \
 	&& export CFLAGS_EXTRA="-DLARGE_CONFIG -DGC_BUILTIN_ATOMIC -DGC_THREADS -DNO_PROC_FOR_LIBRARIES -DREDIRECT_MALLOC=GC_malloc -DIGNORE_FREE -DPARALLEL_MARK $(CFLAGS_DEPS)" \
 	&& make -f Makefile.direct -j base_lib \
@@ -397,24 +409,31 @@ deps/instdir/lib/libgc.a: deps/libgc $(DIST_ZIG)
 
 # /deps/libprotobuf_c --------------------------------------------
 LIBPROTOBUF_C_REF=5499f774396953c2ef63e725e2f03a5c0bdeff73
-deps/libprotobuf_c:
-	ls $@ >/dev/null 2>&1 || git clone https://github.com/actonlang/protobuf-c.git $@
-	cd $@ && git checkout $(LIBPROTOBUF_C_REF)
+deps-download/$(LIBPROTOBUF_C_REF).tar.gz:
+	mkdir -p deps-download
+	curl -f -L -o $@ https://github.com/actonlang/protobuf-c/archive/$(LIBPROTOBUF_C_REF).tar.gz
+
+deps/libprotobuf_c: deps-download/$(LIBPROTOBUF_C_REF).tar.gz
+	rm -rf $(TD)/$@
+	tar xzf $(TD)/$< && mv $(TD)/protobuf-c-$(LIBPROTOBUF_C_REF) $(TD)/$@
+	touch $(TD)/$@
 
 deps/instdir/lib/libprotobuf-c.a: deps/libprotobuf_c $(DIST_ZIG)
-	cd $< \
-	&& $(ZIG) build $(ZIG_TARGET) --prefix ../instdir
+	cd $< && $(ZIG) build $(ZIG_TARGET) --prefix ../instdir
 
 # /deps/libutf8proc --------------------------------------
 LIBUTF8PROC_REF=3c489aea1a497b98f6cc28ea5b218181b84769e6
-deps/libutf8proc:
-	ls $@ >/dev/null 2>&1 || git clone https://github.com/actonlang/utf8proc.git $@
+deps-download/$(LIBUTF8PROC_REF).tar.gz:
+	mkdir -p deps-download
+	curl -f -L -o $@ https://github.com/actonlang/utf8proc/archive/$(LIBUTF8PROC_REF).tar.gz
+
+deps/libutf8proc: deps-download/$(LIBUTF8PROC_REF).tar.gz
+	rm -rf $(TD)/$@
+	tar xzf $(TD)/$< && mv $(TD)/utf8proc-$(LIBUTF8PROC_REF) $(TD)/$@
+	touch $(TD)/$@
 
 deps/instdir/lib/libutf8proc.a: deps/libutf8proc $(DIST_ZIG)
-	mkdir -p $(dir $@)
-	cd $< \
-	&& git checkout $(LIBUTF8PROC_REF) \
-	&& $(ZIG) build $(ZIG_TARGET) --prefix ../instdir
+	cd $< && $(ZIG) build $(ZIG_TARGET) --prefix ../instdir
 
 # /deps/libuuid ------------------------------------------
 deps/instdir/lib/libuuid.a: $(DIST_ZIG)
@@ -422,33 +441,45 @@ deps/instdir/lib/libuuid.a: $(DIST_ZIG)
 
 # /deps/libuv --------------------------------------------
 LIBUV_REF=53b7649fc83f8cee6f0170b335222a759c0a26f0
-deps/libuv:
-	ls $@ >/dev/null 2>&1 || git clone https://github.com/actonlang/libuv.git $@
+deps-download/$(LIBUV_REF).tar.gz:
+	mkdir -p deps-download
+	curl -f -L -o $@ https://github.com/actonlang/libuv/archive/$(LIBUV_REF).tar.gz
+
+deps/libuv: deps-download/$(LIBUV_REF).tar.gz
+	rm -rf $(TD)/$@
+	tar xzf $(TD)/$< && mv $(TD)/libuv-$(LIBUV_REF) $(TD)/$@
+	touch $(TD)/$@
 
 deps/instdir/lib/libuv.a: deps/libuv $(DIST_ZIG)
-	cd $< \
-	&& git checkout $(LIBUV_REF) \
-	&& $(ZIG) build $(ZIG_TARGET) --prefix ../instdir
+	cd $< && $(ZIG) build $(ZIG_TARGET) --prefix ../instdir
 
 # /deps/libxml2 ------------------------------------------
 LIBXML2_REF=8459e725c3294d8d637317036f9d8b10860195dc
-deps/libxml2:
-	ls $@ >/dev/null 2>&1 || git clone https://github.com/actonlang/libxml2.git $@
+deps-download/$(LIBXML2_REF).tar.gz:
+	mkdir -p deps-download
+	curl -f -L -o $@ https://github.com/actonlang/libxml2/archive/$(LIBXML2_REF).tar.gz
+
+deps/libxml2: deps-download/$(LIBXML2_REF).tar.gz
+	rm -rf $(TD)/$@
+	tar xzf $(TD)/$< && mv $(TD)/libxml2-$(LIBXML2_REF) $(TD)/$@
+	touch $(TD)/$@
 
 deps/instdir/lib/libxml2.a: deps/libxml2 $(DIST_ZIG)
-	cd $< \
-	&& git checkout $(LIBXML2_REF) \
-	&& $(ZIG) build $(ZIG_TARGET) --prefix ../instdir
+	cd $< && $(ZIG) build $(ZIG_TARGET) --prefix ../instdir
 
 # /deps/pcre2 --------------------------------------------
 LIBPCRE2_REF=ece17affd4f1d57eb148af9a39c64c1bb19b0e51
-deps/pcre2:
-	ls $@ >/dev/null 2>&1 || git clone https://github.com/actonlang/pcre2.git $@
+deps-download/$(LIBPCRE2_REF).tar.gz:
+	mkdir -p deps-download
+	curl -f -L -o $@ https://github.com/actonlang/pcre2/archive/$(LIBPCRE2_REF).tar.gz
+
+deps/pcre2: deps-download/$(LIBPCRE2_REF).tar.gz
+	rm -rf $(TD)/$@
+	tar xzf $(TD)/$< && mv $(TD)/pcre2-$(LIBPCRE2_REF) $(TD)/$@
+	touch $(TD)/$@
 
 deps/instdir/lib/libpcre2.a: deps/pcre2 $(DIST_ZIG)
-	cd $< \
-	&& git checkout $(LIBPCRE2_REF) \
-	&& $(ZIG) build $(ZIG_TARGET) --prefix ../instdir
+	cd $< && $(ZIG) build $(ZIG_TARGET) --prefix ../instdir
 
 # --
 deps/instdir/lib/libnetstring.a: $(DIST_ZIG)
