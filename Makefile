@@ -621,11 +621,11 @@ dist/completion/acton.bash-completion: completion/acton.bash-completion
 dist/zig: deps/zig
 	mkdir -p $(dir $@)
 	ls $@ > /dev/null 2>&1 || cp -a $< $@
+	cp -a deps/zig-extras/* $@
 
 deps/zig: deps/zig-$(OS)-$(ARCH)-$(ZIG_VERSION).tar.xz
 	mkdir -p $@
 	cd $@ && tar Jx --strip-components=1 -f ../../$^
-	cp -a deps/zig-extras/* $@
 
 # Check if ZIG_VERSION contains -dev, in which case we pull down a nightly,
 # otherwise its a release
