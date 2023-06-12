@@ -388,7 +388,7 @@ deps/instdir/lib/libbsdnt.a: deps/libbsdnt $(DIST_ZIG)
 	cd $< && $(ZIG) build $(ZIG_TARGET) --prefix ../instdir
 
 # /deps/libgc --------------------------------------------
-LIBGC_REF=daea2f19089c32f38de916b8949fde42d73daf6f
+LIBGC_REF=8ee0dc25da0a4572dc3ba706b3d26983f1928d21
 deps-download/$(LIBGC_REF).tar.gz:
 	mkdir -p deps-download
 	curl -f -L -o $@ https://github.com/actonlang/bdwgc/archive/$(LIBGC_REF).tar.gz
@@ -399,13 +399,7 @@ deps/libgc: deps-download/$(LIBGC_REF).tar.gz
 	touch $(TD)/$@
 
 deps/instdir/lib/libgc.a: deps/libgc $(DIST_ZIG)
-	mkdir -p $(dir $@) $(shell dirname $(dir $@))/include
-	cd $< \
-	&& unset CFLAGS \
-	&& export CFLAGS_EXTRA="-DLARGE_CONFIG -DGC_BUILTIN_ATOMIC -DGC_THREADS -DNO_PROC_FOR_LIBRARIES -DREDIRECT_MALLOC=GC_malloc -DIGNORE_FREE -DPARALLEL_MARK $(CFLAGS_DEPS)" \
-	&& make -f Makefile.direct -j base_lib \
-	&& cp $(TD)/deps/libgc/libgc.a $(TD)/$@ \
-	&& cp -r $(TD)/deps/libgc/include/gc* $(TD)/deps/instdir/include/
+	cd $< && $(ZIG) build $(ZIG_TARGET) --prefix ../instdir
 
 # /deps/libprotobuf_c --------------------------------------------
 LIBPROTOBUF_C_REF=5499f774396953c2ef63e725e2f03a5c0bdeff73
