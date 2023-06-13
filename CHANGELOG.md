@@ -2,10 +2,30 @@
 
 ## Unreleased
 
-Further adoption of the Zig build system, now covering all external library
-dependencies as well as the backend library.
+Elevate Acton's build capabilities by completing the adoption of the Zig build
+system. Everything, including external library dependencies, builtins, RTS,
+stdlib and backend, is now built using build.zig files. A hierarchy of zig
+modules are formed, which allow building the entirety of the Acton system with a
+single zig build, which is what actonc calls internally. This enables complete
+control over the low level compilation.
+
+The most striking feature unlocked is likely cross-compilation:
+
+  user@machine$ actonc --quiet helloworld.act 
+  user@machine$ file helloworld
+  helloworld: ELF 64-bit LSB executable, x86-64, version 1 (SYSV), dynamically linked, interpreter /lib64/ld-linux-x86-64.so.2, for GNU/Linux 2.0.0, with debug_info, not stripped
+  user@machine$ actonc --quiet helloworld.act --target x86_64-macos-none
+  user@machine$ file helloworld
+  helloworld: Mach-O 64-bit x86_64 executable, flags:<NOUNDEFS|DYLDLINK|TWOLEVEL|PIE>
+
+We still produce libActon, libActonDeps and similar, which are used when
+targeting the native platform of the local machine but for any customization to
+the target, everything will be built from source.
 
 ### Fixed
+- revamped low level build, now potentially rebuilding entire Acton system from
+  source code
+  - allows cross-compilation and similar advanced features
 - `json` module now correctly encodes and decodes floats [#1345] [#1349]
 - zig build of all external library dependencies
   - gives us much better control over how libraries are compiled
