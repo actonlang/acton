@@ -261,7 +261,7 @@ lib_deps/libActonDeps-$(PLATFORM).a: $(DIST_ZIG) $(DEP_LIBS)
 lib/libactongc-$(PLATFORM).a:
 	($(MAKE) -j1 check-download-allowed deps-download/$(DEPS_SUM) \
 		&& cp deps-download/$(DEPS_SUM)/lib/libactongc-$(PLATFORM).a $@) \
-	|| ($(MAKE) deps/instdir/lib/libgc.a $(DIST_ZIG) && cp deps/instdir/lib/libgc.a $@)
+	|| ($(MAKE) deps/instdir/lib/libgc.a $(DIST_ZIG) && mkdir -p dist/inc && cp -r deps/instdir/include/gc* dist/inc/ && cp deps/instdir/lib/libgc.a $@)
 
 # Check if ALWAYS_BUILD=true and if so, fail rule. Used before running a
 # download target, so if this fails, we do not download and can fail over to the
@@ -485,7 +485,7 @@ dist/bin/actonc: compiler/actonc $(DIST_ZIG)
 	mv $@.tmp $@
 
 #
-dist/bin/actondb: $(DIST_ZIG) $(DEPSA) $(LIBGC)
+dist/bin/actondb: $(DIST_ZIG) $(DEPSA) $(LIBGC) $(DIST_INC)
 	$(ZIG) build --build-file $(TD)/backend/build.zig $(ZIG_TARGET) --cache-dir $(TD)/zig-cache --prefix $(TD)/dist -Dsyspath_include=$(TD)/dist/inc
 
 dist/bin/runacton: bin/runacton
@@ -506,9 +506,10 @@ dist/deps/%: deps/% $(DEPSA)
 	@mkdir -p $(dir $@)
 	cp -a $< $@
 
-dist/inc: $(DEPSA)
+DIST_INC=$(addprefix dist/inc/,argp.h bsdnt gc gc.h libxml netstring.h pcre2.h protobuf-c utf8proc.h uuid uv uv.h yyjson.h)
+dist/inc/%: $(DEPSA)
 	@mkdir -p $(dir $@)
-	cp -a deps/instdir/include $@
+	cp -a deps/instdir/include/* dist/inc/
 
 dist/rts/%: base/rts/%
 	@mkdir -p $(dir $@)
@@ -549,7 +550,7 @@ else
 endif
 
 .PHONY: distribution clean-distribution
-distribution: dist/base $(DIST_ARCHIVES) $(DIST_BACKEND_FILES) dist/lib/dev/libActon.a dist/lib/rel/libActon.a dist/builder dist/inc $(DIST_BINS) $(DIST_HFILES) $(DIST_ZIG)
+distribution: dist/base $(DIST_ARCHIVES) $(DIST_BACKEND_FILES) dist/lib/dev/libActon.a dist/lib/rel/libActon.a dist/builder $(DIST_INC) $(DIST_BINS) $(DIST_HFILES) $(DIST_ZIG)
 	$(MAKE) $(DIST_DEPS)
 
 clean-distribution:
