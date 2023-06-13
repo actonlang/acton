@@ -111,7 +111,6 @@ ifneq ($(VERSION),$(GIT_VERSION_TAG)) # ..ensure the git tag is same as version 
 endif
 endif
 
-DBARCHIVE=lib/libActonDB.a
 ARCHIVES=lib/libActonDeps-$(PLATFORM).a lib/libactongc-$(PLATFORM).a
 
 BUILTIN_HFILES=$(wildcard base/builtin/*.h)
@@ -122,7 +121,6 @@ DIST_HFILES=\
 	dist/rts/rts.h \
 	dist/builtin/env.h \
 	$(patsubst base/%,dist/%,$(BUILTIN_HFILES))
-DIST_DBARCHIVE=$(addprefix dist/,$(DBARCHIVE))
 DIST_ARCHIVES=$(addprefix dist/,$(ARCHIVES))
 DIST_ZIG=dist/zig
 
@@ -136,13 +134,6 @@ CFLAGS_DB+= $(CFLAGS_TARGET)
 CFLAGS_DB+= -fno-sanitize=undefined -Werror
 # TODO: clean up casts and remove this!
 CFLAGS_DB+= -Wno-int-to-pointer-cast -Wno-pointer-to-int-cast
-# /backend ----------------------------------------------
-backend/actondb: backend/actondb.c lib/libActonDB.a $(DEPSA)
-	$(CC) -o$@ $< $(CFLAGS_DB) \
-		$(LDFLAGS) \
-		-lActonDB -lActonDeps-$(PLATFORM) -Llib \
-		$(LDLIBS)
-
 .PHONY: base/out/rel/lib/libActonProject.a base/out/dev/lib/libActonProject.a
 base/out/rel/lib/libActonProject.a: $(ACTONC) $(DEPSA) $(LIBGC)
 	cd base && ../dist/bin/actonc build --auto-stub
@@ -153,63 +144,6 @@ base/out/dev/lib/libActonProject.a: $(ACTONC) $(DEPSA) $(LIBGC)
 base/out/types/__builtin__.ty: $(ACTONC)
 	cd base && ../dist/bin/actonc src/__builtin__.act
 
-backend/comm.o: backend/comm.c backend/comm.h backend/failure_detector/db_queries.h $(DEPSA)
-	$(CC) -o$@ $< -c $(CFLAGS_DB)
-
-backend/hash_ring.o: backend/hash_ring.c backend/hash_ring.h
-	$(CC) -o$@ $< -c $(CFLAGS_DB)
-
-backend/queue_callback.o: backend/queue_callback.c backend/queue_callback.h backend/common.h
-	$(CC) -o$@ $< -c $(CFLAGS_DB)
-
-backend/db.o: backend/db.c backend/db.h backend/skiplist.h backend/hash_ring.h backend/common.h $(DEPSA)
-	$(CC) -o$@ $< -c $(CFLAGS_DB)
-
-backend/queue.o: backend/queue.c backend/queue.h backend/queue_callback.h backend/log.h backend/failure_detector/cells.h backend/failure_detector/db_queries.h backend/common.h $(DEPSA)
-	$(CC) -o$@ $< -c $(CFLAGS_DB)
-
-backend/queue_groups.o: backend/queue_groups.c backend/queue_groups.h backend/queue_callback.h backend/skiplist.h backend/log.h backend/common.h $(DEPSA)
-	$(CC) -o$@ $< -c $(CFLAGS_DB)
-
-backend/log.o: backend/log.c
-	$(CC) -o$@ $< -c $(CFLAGS_DB)
-
-backend/skiplist.o: backend/skiplist.c backend/skiplist.h backend/log.h backend/fastrand.h $(DEPSA)
-	$(CC) -o$@ $< -c $(CFLAGS_DB)
-
-backend/txn_state.o: backend/txn_state.c backend/txn_state.h $(DEPSA)
-	$(CC) -o$@ $< -c $(CFLAGS_DB)
-
-backend/txns.o: backend/txns.c backend/txns.h $(DEPSA)
-	$(CC) -o$@ $< -c $(CFLAGS_DB)
-
-backend/client_api.o: backend/client_api.c backend/client_api.h backend/log.h backend/hashes.h $(DEPSA) $(LIBGC)
-	$(CC) -o$@ $< -c $(CFLAGS_DB)
-
-backend/failure_detector/db_messages.pb-c.o: backend/failure_detector/db_messages.pb-c.c backend/failure_detector/db_messages.pb-c.h $(DEPSA)
-	$(CC) -o$@ $< -c $(CFLAGS_DB)
-
-backend/failure_detector/cells.o: backend/failure_detector/cells.c backend/failure_detector/cells.h $(DEPSA)
-	$(CC) -o$@ $< -c $(CFLAGS_DB)
-
-backend/failure_detector/db_queries.o: backend/failure_detector/db_queries.c backend/failure_detector/db_queries.h backend/log.h backend/failure_detector/db_messages.pb-c.h $(DEPSA)
-	$(CC) -o$@ $< -c $(CFLAGS_DB)
-
-backend/failure_detector/fd.o: backend/failure_detector/fd.c backend/failure_detector/fd.h backend/failure_detector/db_messages.pb-c.h $(DEPSA)
-	$(CC) -o$@ $< -c $(CFLAGS_DB)
-
-backend/failure_detector/vector_clock.o: backend/failure_detector/vector_clock.c backend/failure_detector/vector_clock.h backend/failure_detector/db_messages.pb-c.h $(DEPSA)
-	$(CC) -o$@ $< -c $(CFLAGS_DB)
-
-# backend tests
-BACKEND_TESTS=backend/failure_detector/db_messages_test \
-	backend/test/actor_ring_tests_local \
-	backend/test/actor_ring_tests_remote \
-	backend/test/db_unit_tests \
-	backend/test/queue_unit_tests \
-	backend/test/skiplist_test \
-	backend/test/test_client
-
 .PHONY: test-backend
 test-backend: $(BACKEND_TESTS)
 	@echo DISABLED TEST: backend/failure_detector/db_messages_test
@@ -218,19 +152,6 @@ test-backend: $(BACKEND_TESTS)
 	./backend/test/db_unit_tests
 	@echo DISABLED test: ./backend/test/queue_unit_tests
 	./backend/test/skiplist_test
-
-backend/failure_detector/db_messages_test: backend/failure_detector/db_messages_test.c lib/libActonDB.a
-	$(CC) -o$@ $< $(CFLAGS_DB) \
-		$(LDFLAGS) \
-		-lActonDB $(LDLIBS)
-
-backend/test/%: backend/test/%.c lib/libActonDB.a
-	$(CC) -o$@ $< $(CFLAGS_DB) -Ibackend \
-		$(LDFLAGS) -lActonDB $(LDLIBS)
-
-backend/test/skiplist_test: backend/test/skiplist_test.c backend/skiplist.c
-	$(CC) -o$@ $^ $(CFLAGS_DB) -Ibackend \
-		$(LDLIBS)
 
 ifeq ($(ARCH),x86_64)
 ZIG_ARCH_ARG=-mcpu=x86_64
@@ -322,6 +243,7 @@ deps-download/$(DEPS_SUM):
 # Also copy in headers from downloaded archive into deps/instdir/include, so the
 # headers are available, just as if we had built the deps locally.
 lib/libActonDeps-$(PLATFORM).a:
+	mkdir -p lib
 	($(MAKE) -j1 check-download-allowed deps-download/$(DEPS_SUM) \
 		&& mkdir -p deps/instdir/include && cp -r deps-download/$(DEPS_SUM)/include/* deps/instdir/include/ \
 		&& cp -r deps-download/$(DEPS_SUM)/lib/libActonDeps-$(PLATFORM).a $@) \
@@ -371,7 +293,7 @@ deps/libargp: deps-download/$(LIBARGP_REF).tar.gz
 	touch $(TD)/$@
 
 deps/instdir/lib/libargp.a: deps/libargp $(DIST_ZIG)
-	cd $< && $(ZIG) build $(ZIG_TARGET) --prefix ../instdir
+	cd $< && $(ZIG) build $(ZIG_TARGET) --cache-dir $(TD)/zig-cache --prefix ../instdir
 
 # /deps/libbsdnt --------------------------------------------
 LIBBSDNT_REF=20c727a5f390d1d4d2c22a3c5bfabb5276d34757
@@ -385,7 +307,7 @@ deps/libbsdnt: deps-download/$(LIBBSDNT_REF).tar.gz
 	touch $(TD)/$@
 
 deps/instdir/lib/libbsdnt.a: deps/libbsdnt $(DIST_ZIG)
-	cd $< && $(ZIG) build $(ZIG_TARGET) --prefix ../instdir
+	cd $< && $(ZIG) build $(ZIG_TARGET) --cache-dir $(TD)/zig-cache --prefix ../instdir
 
 # /deps/libgc --------------------------------------------
 LIBGC_REF=8ee0dc25da0a4572dc3ba706b3d26983f1928d21
@@ -399,7 +321,7 @@ deps/libgc: deps-download/$(LIBGC_REF).tar.gz
 	touch $(TD)/$@
 
 deps/instdir/lib/libgc.a: deps/libgc $(DIST_ZIG)
-	cd $< && $(ZIG) build $(ZIG_TARGET) --prefix ../instdir
+	cd $< && $(ZIG) build $(ZIG_TARGET) --cache-dir $(TD)/zig-cache --prefix ../instdir
 
 # /deps/libprotobuf_c --------------------------------------------
 LIBPROTOBUF_C_REF=5499f774396953c2ef63e725e2f03a5c0bdeff73
@@ -413,7 +335,7 @@ deps/libprotobuf_c: deps-download/$(LIBPROTOBUF_C_REF).tar.gz
 	touch $(TD)/$@
 
 deps/instdir/lib/libprotobuf-c.a: deps/libprotobuf_c $(DIST_ZIG)
-	cd $< && $(ZIG) build $(ZIG_TARGET) --prefix ../instdir
+	cd $< && $(ZIG) build $(ZIG_TARGET) --cache-dir $(TD)/zig-cache --prefix ../instdir
 
 # /deps/libutf8proc --------------------------------------
 LIBUTF8PROC_REF=3c489aea1a497b98f6cc28ea5b218181b84769e6
@@ -427,11 +349,11 @@ deps/libutf8proc: deps-download/$(LIBUTF8PROC_REF).tar.gz
 	touch $(TD)/$@
 
 deps/instdir/lib/libutf8proc.a: deps/libutf8proc $(DIST_ZIG)
-	cd $< && $(ZIG) build $(ZIG_TARGET) --prefix ../instdir
+	cd $< && $(ZIG) build $(ZIG_TARGET) --cache-dir $(TD)/zig-cache --prefix ../instdir
 
 # /deps/libuuid ------------------------------------------
 deps/instdir/lib/libuuid.a: $(DIST_ZIG)
-	cd deps/libuuid && $(ZIG) build $(ZIG_TARGET) --prefix ../instdir
+	cd deps/libuuid && $(ZIG) build $(ZIG_TARGET) --cache-dir $(TD)/zig-cache --prefix ../instdir
 
 # /deps/libuv --------------------------------------------
 LIBUV_REF=53b7649fc83f8cee6f0170b335222a759c0a26f0
@@ -445,7 +367,7 @@ deps/libuv: deps-download/$(LIBUV_REF).tar.gz
 	touch $(TD)/$@
 
 deps/instdir/lib/libuv.a: deps/libuv $(DIST_ZIG)
-	cd $< && $(ZIG) build $(ZIG_TARGET) --prefix ../instdir
+	cd $< && $(ZIG) build $(ZIG_TARGET) --cache-dir $(TD)/zig-cache --prefix ../instdir
 
 # /deps/libxml2 ------------------------------------------
 LIBXML2_REF=8459e725c3294d8d637317036f9d8b10860195dc
@@ -459,7 +381,7 @@ deps/libxml2: deps-download/$(LIBXML2_REF).tar.gz
 	touch $(TD)/$@
 
 deps/instdir/lib/libxml2.a: deps/libxml2 $(DIST_ZIG)
-	cd $< && $(ZIG) build $(ZIG_TARGET) --prefix ../instdir
+	cd $< && $(ZIG) build $(ZIG_TARGET) --cache-dir $(TD)/zig-cache --prefix ../instdir
 
 # /deps/pcre2 --------------------------------------------
 LIBPCRE2_REF=ece17affd4f1d57eb148af9a39c64c1bb19b0e51
@@ -473,38 +395,22 @@ deps/pcre2: deps-download/$(LIBPCRE2_REF).tar.gz
 	touch $(TD)/$@
 
 deps/instdir/lib/libpcre2.a: deps/pcre2 $(DIST_ZIG)
-	cd $< && $(ZIG) build $(ZIG_TARGET) --prefix ../instdir
+	cd $< && $(ZIG) build $(ZIG_TARGET) --cache-dir $(TD)/zig-cache --prefix ../instdir
 
 # --
 deps/instdir/lib/libnetstring.a: $(DIST_ZIG)
-	cd deps/libnetstring && $(ZIG) build $(ZIG_TARGET) --prefix ../instdir
+	cd deps/libnetstring && $(ZIG) build $(ZIG_TARGET) --cache-dir $(TD)/zig-cache --prefix ../instdir
 
 deps/instdir/lib/libyyjson.a: $(DIST_ZIG)
-	cd deps/libyyjson && $(ZIG) build $(ZIG_TARGET) --prefix ../instdir
+	cd deps/libyyjson && $(ZIG) build $(ZIG_TARGET) --cache-dir $(TD)/zig-cache --prefix ../instdir
 
 
 # /lib --------------------------------------------------
 
-COMM_OFILES += backend/comm.o
-DB_OFILES += backend/db.o backend/queue.o backend/skiplist.o backend/txn_state.o backend/txns.o backend/queue_callback.o backend/hash_ring.o backend/queue_groups.o
-DBCLIENT_OFILES += backend/client_api.o backend/queue_callback.o backend/hash_ring.o
-REMOTE_OFILES += backend/failure_detector/db_messages.pb-c.o backend/failure_detector/cells.o backend/failure_detector/db_queries.o backend/failure_detector/fd.o
-VC_OFILES += backend/failure_detector/vector_clock.o
-BACKEND_OFILES=$(COMM_OFILES) $(DB_OFILES) $(DBCLIENT_OFILES) $(REMOTE_OFILES) $(VC_OFILES) backend/log.o
-OFILES += $(BACKEND_OFILES)
-lib/libActonDB.a: $(BACKEND_OFILES)
-	rm -f $@
-	ar rcs $@ $^
-
 # top level targets
-
-.PHONY: backend
-backend:
-	$(MAKE) -C backend
 
 .PHONY: rts
 rts: $(ARCHIVES)
-
 
 .PHONY: test test-builtins test-compiler test-db test-examples test-lang test-regressions test-rts test-stdlib
 test:
@@ -547,14 +453,20 @@ clean-all: clean clean-compiler clean-deps
 	rm -rf lib/*
 
 clean-backend:
-	rm -f $(DBARCHIVE) $(BACKEND_OFILES) backend/actondb
+	rm -f $(BACKEND_OFILES) backend/actondb
 
 clean-base:
 	rm -rf base/build-cache base/out builder/build_runner* builder/builder* builder/zig-cache builder/zig-out
-	rm -rf $(ARCHIVES) $(DBARCHIVE) $(OFILES) builtin/__builtin__.h builtin/__builtin__.c builtin/ty/out stdlib/out/
+	rm -rf $(ARCHIVES) $(OFILES) builtin/__builtin__.h builtin/__builtin__.c builtin/ty/out stdlib/out/
 
 # == DIST ==
 #
+
+BACKEND_FILES = backend/build.zig $(wildcard backend/*.c backend/*.h backend/failure_detector/*.c backend/failure_detector/*.h)
+DIST_BACKEND_FILES = $(addprefix dist/,$(BACKEND_FILES))
+dist/backend/%: backend/%
+	mkdir -p $(dir $@)
+	cp $< $@
 
 # We depend on libActon.a because the base/out directory will be populated as a
 # result of building it, and we want to copy those files!
@@ -572,10 +484,9 @@ dist/bin/actonc: compiler/actonc $(DIST_ZIG)
 	cp $< $@.tmp
 	mv $@.tmp $@
 
-dist/bin/actondb: backend/actondb
-	@mkdir -p $(dir $@)
-	cp $< $@.tmp
-	mv $@.tmp $@
+#
+dist/bin/actondb: $(DIST_ZIG) $(DEPSA)
+	$(ZIG) build --build-file $(TD)/backend/build.zig $(ZIG_TARGET) --cache-dir $(TD)/zig-cache --prefix $(TD)/dist -Dsyspath_include=$(TD)/dist/inc
 
 dist/bin/runacton: bin/runacton
 	@mkdir -p $(dir $@)
@@ -610,10 +521,6 @@ dist/lib/rel/libActon.a: base/out/rel/lib/libActonProject.a
 	@mkdir -p $(dir $@)
 	cp $< $@
 
-dist/lib/libActonDB.a: lib/libActonDB.a
-	@mkdir -p $(dir $@)
-	cp $< $@
-
 dist/completion/acton.bash-completion: completion/acton.bash-completion
 	mkdir -p $(dir $@)
 	cp $< $@
@@ -637,7 +544,7 @@ else
 endif
 
 .PHONY: distribution clean-distribution
-distribution: dist/base $(DIST_ARCHIVES) dist/lib/dev/libActon.a dist/lib/rel/libActon.a dist/builder dist/inc $(DIST_BINS) $(DIST_HFILES) $(DIST_DBARCHIVE) $(DIST_ZIG)
+distribution: dist/base $(DIST_ARCHIVES) $(DIST_BACKEND_FILES) dist/lib/dev/libActon.a dist/lib/rel/libActon.a dist/builder dist/inc $(DIST_BINS) $(DIST_HFILES) $(DIST_ZIG)
 
 clean-distribution:
 	rm -rf dist
