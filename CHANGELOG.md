@@ -1,5 +1,48 @@
 # Changelog
 
+## Unreleased
+
+Further adoption of the Zig build system, now covering all external library
+dependencies as well as the backend library.
+
+### Fixed
+- `json` module now correctly encodes and decodes floats [#1345] [#1349]
+- zig build of all external library dependencies
+  - gives us much better control over how libraries are compiled
+  - much much faster! autoconfig is really slow!
+    - e.g. building protobuf-c takes a few seconds on a 2015 MBP while with
+      autoconf, it spends > 1 minute trying to figure out capabilities of the
+      C++ compiler, despite the C++ parts of libprotobuf-c not being enabled!
+    - the debian test job now often build Acton in less than 3 minutes, macos-13
+      often run in ~4 minutes - a real improvement!
+  - libargp [#1336]
+  - libbsdnt [#1337]
+  - libgc [#1344]
+  - libnetstring [#1325]
+  - libpcre2 [#1331]
+  - libprotobuf-c [#1341]
+  - libutf8proc [#1332]
+  - libuuid [#1340]
+  - libuv [#1334]
+  - libxml2 [#1333]
+  - libyyjson [#1323]
+  - remove libbsd & libmd as dependency [#1329]
+    - only use was of arc4random in numpy, which is now rand using()
+- backend is now built using zig [#1346]
+- use curl instead of git clone to fetch dependencies [#1343]
+  - much faster and reduced disk usage
+
+### Testing / CI
+- testing of the Homebrew Formula has been removed [#1338]
+  - since some time, this test job has been intermittently failing, or rather
+    only intermittently passing as most of the time it fails
+  - to avoid lots of errors in CI, the job has been removed
+  - the failures are likely coming from some change in brew behavior
+  - we use a fairly hacked up and not supported workflow
+  - several attempts to fix it have been unsuccessful and we're unable to spend
+    more time on it right not
+
+
 ## [0.15.1] (2023-06-02)
 
 A better strategy for constraint solver results in vastly lower constraint
@@ -8,7 +51,7 @@ code generation resulting in less memory allocations and thus a much lower load
 on the GC, yielding much better runtime performance.
 
 The internal compilation of generation C code has been revamped, now more
-structured and simplified in many ways, internally making use of the Zig buils
+structured and simplified in many ways, internally making use of the Zig build
 system which in turn unleashes a lot of benefits.
 
 ### Changed
