@@ -22,6 +22,9 @@ void jsonQ_encode_dict(yyjson_mut_doc *doc, yyjson_mut_val *node, B_dict data) {
             case INT_ID:;
                 yyjson_mut_obj_add_int(doc, node, key, from$int((B_int)v));
                 break;
+            case FLOAT_ID:;
+                yyjson_mut_obj_add_real(doc, node, key, fromB_float((B_float)v));
+                break;
             case BOOL_ID:;
                 yyjson_mut_obj_add_bool(doc, node, key, fromB_bool((B_bool)v));
                 break;
@@ -38,9 +41,13 @@ void jsonQ_encode_dict(yyjson_mut_doc *doc, yyjson_mut_val *node, B_dict data) {
                 yyjson_mut_obj_add_val(doc, node, key, d);
                 jsonQ_encode_dict(doc, d, (B_dict)v);
                 break;
+            default:
+                // TODO: hmm, at least handle all builtin types? and that's it,
+                // maybe? like we really shouldn't accept user-defined types
+                // here, just throw an exception? or when we have unions, just
+                // accept union of the types we support
+                log_error("jsonQ_encode_dict: for key %s unknown type: %d", v->$class->$GCINFO);
         }
-
-
     }
 }
 
@@ -50,6 +57,10 @@ void jsonQ_encode_list(yyjson_mut_doc *doc, yyjson_mut_val *node, B_list data) {
         switch (v->$class->$class_id) {
             case INT_ID:;
                 yyjson_mut_arr_add_int(doc, node, from$int((B_int)v));
+                break;
+            case FLOAT_ID:;
+                log_debug("jsonQ_encode_list: float, value: %f", fromB_float((B_float)v));
+                yyjson_mut_arr_add_real(doc, node, fromB_float((B_float)v));
                 break;
             case BOOL_ID:;
                 yyjson_mut_arr_add_bool(doc, node, fromB_bool((B_bool)v));
@@ -73,6 +84,12 @@ void jsonQ_encode_list(yyjson_mut_doc *doc, yyjson_mut_val *node, B_list data) {
                     // TODO: raise exception
                 }
                 break;
+            default:
+                // TODO: hmm, at least handle all builtin types? and that's it,
+                // maybe? like we really shouldn't accept user-defined types
+                // here, just throw an exception? or when we have unions, just
+                // accept union of the types we support
+                log_error("jsonQ_encode_list: unknown type: %d", v->$class->$GCINFO);
         }
     }
 }
@@ -114,7 +131,17 @@ B_dict jsonQ_decode_obj(yyjson_val *obj) {
                 B_dictD_setitem(res, wit, to$str(yyjson_get_str(key)), toB_bool(yyjson_get_bool(val)));
                 break;
             case YYJSON_TYPE_NUM:;
-                B_dictD_setitem(res, wit, to$str(yyjson_get_str(key)), to$int(yyjson_get_int(val)));
+                switch (yyjson_get_subtype(val)) {
+                    case YYJSON_SUBTYPE_UINT:;
+                        B_dictD_setitem(res, wit, to$str(yyjson_get_str(key)), to$int(yyjson_get_int(val)));
+                        break;
+                    case YYJSON_SUBTYPE_SINT:;
+                        B_dictD_setitem(res, wit, to$str(yyjson_get_str(key)), to$int(yyjson_get_int(val)));
+                        break;
+                    case YYJSON_SUBTYPE_REAL:;
+                        B_dictD_setitem(res, wit, to$str(yyjson_get_str(key)), to$float(yyjson_get_real(val)));
+                        break;
+                }
                 break;
             case YYJSON_TYPE_STR:;
                 B_dictD_setitem(res, wit, to$str(yyjson_get_str(key)), to$str(yyjson_get_str(val)));
@@ -127,6 +154,9 @@ B_dict jsonQ_decode_obj(yyjson_val *obj) {
                 B_dict d = jsonQ_decode_obj(val);
                 B_dictD_setitem(res, wit, to$str(yyjson_get_str(key)), d);
                 break;
+            default:
+                // TODO: just handle all types?
+                log_error("jsonQ_decode_obj: unknown type: %d", yyjson_get_type(val));
         }
     }
     return res;
@@ -147,22 +177,35 @@ B_list jsonQ_decode_arr(yyjson_val *arr) {
                 wit->$class->append(wit, res, B_None);
                 break;
             case YYJSON_TYPE_BOOL:;
-                 wit->$class->append(wit, res, toB_bool(yyjson_get_bool(val)));
+                wit->$class->append(wit, res, toB_bool(yyjson_get_bool(val)));
                 break;
             case YYJSON_TYPE_NUM:;
-                 wit->$class->append(wit, res, to$int(yyjson_get_int(val)));
+                switch (yyjson_get_subtype(val)) {
+                    case YYJSON_SUBTYPE_UINT:;
+                        wit->$class->append(wit, res, to$int(yyjson_get_int(val)));
+                        break;
+                    case YYJSON_SUBTYPE_SINT:;
+                        wit->$class->append(wit, res, to$int(yyjson_get_int(val)));
+                        break;
+                    case YYJSON_SUBTYPE_REAL:;
+                        wit->$class->append(wit, res, to$float(yyjson_get_real(val)));
+                        break;
+                }
                 break;
             case YYJSON_TYPE_STR:;
-                 wit->$class->append(wit, res, to$str(yyjson_get_str(val)));
+                wit->$class->append(wit, res, to$str(yyjson_get_str(val)));
                 break;
             case YYJSON_TYPE_ARR:;
                 B_list l = jsonQ_decode_arr(val);
-                 wit->$class->append(wit, res, l);
+                wit->$class->append(wit, res, l);
                 break;
             case YYJSON_TYPE_OBJ:;
                 B_dict d = jsonQ_decode_obj(val);
-                 wit->$class->append(wit, res, d);
+                wit->$class->append(wit, res, d);
                 break;
+            default:
+                // TODO: just handle all types?
+                log_error("jsonQ_decode_arr: unknown type: %d", yyjson_get_type(val));
         }
     }
     return res;
