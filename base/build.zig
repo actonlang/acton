@@ -17,6 +17,7 @@ pub fn build(b: *std.build.Builder) void {
     print("Acton Base Builder\nBuilding in {s}\n", .{buildroot_path});
     const optimize = b.standardOptimizeOption(.{});
     const target = b.standardTargetOptions(.{});
+    const use_prebuilt = b.option(bool, "use_prebuilt", "") orelse false;
     const projpath = b.option([]const u8, "projpath", "") orelse "";
     const projpath_outtypes = b.option([]const u8, "projpath_outtypes", "") orelse "";
     const syspath = b.option([]const u8, "syspath", "") orelse "";
@@ -28,6 +29,7 @@ pub fn build(b: *std.build.Builder) void {
     const libactondeps = b.option([]const u8, "libactondeps", "") orelse "";
     const libactongc = b.option([]const u8, "libactongc", "") orelse "";
     const wd = b.option([]const u8, "wd", "") orelse "";
+    _ = use_prebuilt;
     _ = libactongc;
     _ = libactondeps;
     _ = syspath_backend;

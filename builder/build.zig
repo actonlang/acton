@@ -49,6 +49,7 @@ pub fn build(b: *std.build.Builder) void {
     print("Acton Project Builder\nBuilding in {s}\n", .{buildroot_path});
     const optimize = b.standardOptimizeOption(.{});
     const target = b.standardTargetOptions(.{});
+    const use_prebuilt = b.option(bool, "use_prebuilt", "") orelse false;
     const projpath = b.option([]const u8, "projpath", "") orelse "";
     const projpath_outtypes = b.option([]const u8, "projpath_outtypes", "") orelse "";
     const syspath = b.option([]const u8, "syspath", "") orelse "";
@@ -251,25 +252,28 @@ pub fn build(b: *std.build.Builder) void {
         executable.addLibraryPath(syspath_lib);
         executable.linkLibrary(libActonProject);
 
-        executable.linkLibrary(actonbase_dep.artifact("Acton"));
-        executable.linkLibrary(libactondb_dep.artifact("ActonDB"));
+        if (use_prebuilt) {
+            executable.linkSystemLibraryName("Acton");
+            executable.linkSystemLibraryName(libactondeps);
+            executable.linkSystemLibraryName("ActonDB");
+            executable.linkSystemLibraryName(libactongc);
+        } else {
+            executable.linkLibrary(actonbase_dep.artifact("Acton"));
+            executable.linkLibrary(libactondb_dep.artifact("ActonDB"));
 
-        //executable.linkSystemLibraryName(libactondeps);
-        _ = libactondeps;
-        executable.linkLibrary(dep_libargp.artifact("argp"));
-        executable.linkLibrary(dep_libbsdnt.artifact("bsdnt"));
-        executable.linkLibrary(dep_libnetstring.artifact("netstring"));
-        executable.linkLibrary(dep_libpcre2.artifact("pcre2"));
-        executable.linkLibrary(dep_libprotobuf_c.artifact("protobuf-c"));
-        executable.linkLibrary(dep_libutf8proc.artifact("utf8proc"));
-        executable.linkLibrary(dep_libuuid.artifact("uuid"));
-        executable.linkLibrary(dep_libuv.artifact("uv"));
-        executable.linkLibrary(dep_libxml2.artifact("xml2"));
-        executable.linkLibrary(dep_libyyjson.artifact("yyjson"));
+            executable.linkLibrary(dep_libargp.artifact("argp"));
+            executable.linkLibrary(dep_libbsdnt.artifact("bsdnt"));
+            executable.linkLibrary(dep_libnetstring.artifact("netstring"));
+            executable.linkLibrary(dep_libpcre2.artifact("pcre2"));
+            executable.linkLibrary(dep_libprotobuf_c.artifact("protobuf-c"));
+            executable.linkLibrary(dep_libutf8proc.artifact("utf8proc"));
+            executable.linkLibrary(dep_libuuid.artifact("uuid"));
+            executable.linkLibrary(dep_libuv.artifact("uv"));
+            executable.linkLibrary(dep_libxml2.artifact("xml2"));
+            executable.linkLibrary(dep_libyyjson.artifact("yyjson"));
 
-        executable.linkLibrary(dep_libgc.artifact("gc"));
-        //executable.linkSystemLibraryName(libactongc);
-        _ = libactongc;
+            executable.linkLibrary(dep_libgc.artifact("gc"));
+        }
 
         executable.linkLibC();
         b.installArtifact(executable);

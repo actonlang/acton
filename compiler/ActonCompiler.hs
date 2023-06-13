@@ -67,16 +67,6 @@ import Text.Printf
 
 import qualified Data.ByteString.Char8 as B
 
-#if defined(darwin_HOST_OS) && defined(aarch64_HOST_ARCH)
-defTarget = "aarch64-macos-none"
-#elif defined(darwin_HOST_OS) && defined(x86_64_HOST_ARCH)
-defTarget = "x86_64-macos-none"
-#elif defined(linux_HOST_OS) && defined(x86_64_HOST_ARCH)
-defTarget = "x86_64-linux-gnu.2.28"
-#else
-#error "Unsupported platform"
-#endif
-
 archOs t = case t of
   "aarch64-macos-none" -> "aarch64-macos"
   "x86_64-macos-none"  -> "x86_64-macos"
@@ -89,14 +79,14 @@ main                     =  do arg <- C.parseCmdLine
                                case arg of
                                    C.VersionOpt opts       -> printVersion opts
                                    C.CmdOpt (C.New opts)   -> createProject (C.file opts)
-                                   C.CmdOpt (C.Build opts) -> buildProject $ defaultOpts {C.alwaysbuild = C.alwaysB opts, C.autostub = C.autostubB opts, C.debug = C.debugB opts, C.dev = C.devB opts, C.root = C.rootB opts, C.ccmd = C.ccmdB opts, C.quiet = C.quietB opts, C.timing = C.timingB opts, C.cc = C.ccB opts, C.zigbuild = C.zigbuildB opts, C.nozigbuild = C.nozigbuildB opts}
+                                   C.CmdOpt (C.Build opts) -> buildProject $ defaultOpts {C.alwaysbuild = C.alwaysB opts, C.autostub = C.autostubB opts, C.debug = C.debugB opts, C.dev = C.devB opts, C.root = C.rootB opts, C.ccmd = C.ccmdB opts, C.quiet = C.quietB opts, C.timing = C.timingB opts, C.cc = C.ccB opts, C.target = C.targetB opts, C.zigbuild = C.zigbuildB opts, C.nozigbuild = C.nozigbuildB opts}
                                    C.CmdOpt (C.Cloud opts) -> undefined
                                    C.CmdOpt (C.Doc opts)   -> printDocs opts
                                    C.CompileOpt nms opts   -> compileFiles opts (catMaybes $ map filterActFile nms)
 
 defaultOpts   = C.CompileOptions False False False False False False False False False False False
                                  False False False False False False False False False "" "" "" ""
-                                 False False
+                                 C.defTarget False False
 
 
 -- Auxiliary functions ---------------------------------------------------------------------------------------
@@ -107,7 +97,7 @@ zig paths = sysPath paths ++ "/zig/zig"
 cc :: Paths -> C.CompileOptions -> FilePath
 cc paths opts = if not (C.cc opts == "")
              then C.cc opts
-             else zig paths ++ " cc -target " ++ defTarget
+             else zig paths ++ " cc -target " ++ C.target opts
 
 ar :: Paths -> FilePath
 ar paths = zig paths ++ " ar "
@@ -787,7 +777,7 @@ buildExecutable env opts paths binTask
         buildF              = joinPath [projPath paths, "build.sh"]
         outbase             = outBase paths mn
         rootFile            = outbase ++ ".root.c"
-        libFiles            = " -lActonProject -lActon -lActonDB -lActonDeps-" ++ archOs defTarget ++ " -lactongc-" ++ archOs defTarget ++ " -lpthread -lm -ldl "
+        libFiles            = " -lActonProject -lActon -lActonDB -lActonDeps-" ++ archOs (C.target opts) ++ " -lactongc-" ++ archOs (C.target opts) ++ " -lpthread -lm -ldl "
         libPaths            = " -L " ++ sysPath paths ++ "/lib -L" ++ sysLib paths ++ " -L" ++ projLib paths
         binFile             = joinPath [binDir paths, (binName binTask)]
         srcbase             = srcFile paths mn
@@ -852,20 +842,26 @@ zigBuild env opts paths tasks binTasks = do
     -- custom build.zig ?
     buildZigExists <- doesFileExist $ projPath paths ++ "/build.zig"
     homeDir <- getHomeDirectory
+    let cache_dir = joinPath [ projPath paths, "build-cache" ]
+        global_cache_dir = joinPath [ homeDir, ".cache", "acton", "build-cache" ]
+        use_prebuilt = C.defTarget == C.target opts
     let zigCmdBase =
           if buildZigExists
             then zig paths ++ " build " ++
-                 " --prefix " ++ projProfile paths ++ " --prefix-exe-dir 'bin'" ++
+                 " --cache-dir " ++ cache_dir ++
+                 " --global-cache-dir " ++ global_cache_dir ++
+                 " --prefix " ++ projProfile paths ++
+                 " --prefix-exe-dir 'bin'" ++
                  if (C.debug opts) then " --verbose " else ""
             else (joinPath [ sysPath paths, "builder", "builder" ]) ++ " " ++
                  (joinPath [ sysPath paths, "zig/zig" ]) ++ " " ++
                  projPath paths ++ " " ++
-                 (joinPath [ projPath paths, "build-cache" ]) ++ " " ++
-                 (joinPath [ homeDir, ".cache/acton/build-cache" ])
+                 cache_dir ++ " " ++
+                 global_cache_dir
     let zigCmd = zigCmdBase ++
                  " --prefix " ++ projProfile paths ++ " --prefix-exe-dir 'bin'" ++
                  if (C.debug opts) then " --verbose " else "" ++
-                 " -Dtarget=" ++ defTarget ++
+                 " -Dtarget=" ++ (C.target opts) ++
                  " -Doptimize=" ++ (if (C.dev opts) then "Debug" else "ReleaseFast") ++
                  " -Dprojpath=" ++ projPath paths ++
                  " -Dprojpath_outtypes=" ++ joinPath [ projPath paths, "out", "types" ] ++
@@ -875,8 +871,9 @@ zigBuild env opts paths tasks binTasks = do
                  " -Dsyspath_include=" ++ joinPath [ sysPath paths, "inc" ] ++
                  " -Dsyspath_lib=" ++ joinPath [ sysPath paths, "lib" ] ++
                  " -Dsyspath_libreldev=" ++ joinPath [ sysPath paths, "lib", reldev ] ++
-                 " -Dlibactondeps=ActonDeps-" ++ archOs defTarget ++
-                 " -Dlibactongc=actongc-" ++ archOs defTarget
+                 " -Dlibactondeps=ActonDeps-" ++ archOs (C.target opts) ++
+                 " -Dlibactongc=actongc-" ++ archOs (C.target opts) ++
+                 if use_prebuilt then " -Duse_prebuilt" else ""
 
     runZig opts zigCmd (Just (projPath paths))
     -- if we are in a temp acton project, copy the outputted binary next to the source file
