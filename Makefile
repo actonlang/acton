@@ -134,11 +134,11 @@ CFLAGS_DB+= $(CFLAGS_TARGET)
 CFLAGS_DB+= -fno-sanitize=undefined -Werror
 # TODO: clean up casts and remove this!
 CFLAGS_DB+= -Wno-int-to-pointer-cast -Wno-pointer-to-int-cast
-.PHONY: base/out/rel/lib/libActonProject.a base/out/dev/lib/libActonProject.a
-base/out/rel/lib/libActonProject.a: $(ACTONC) $(DEPSA) $(LIBGC)
+.PHONY: base/out/rel/lib/libActon.a base/out/dev/lib/libActon.a
+base/out/rel/lib/libActon.a: $(ACTONC) $(DEPSA) $(LIBGC)
 	cd base && ../dist/bin/actonc build --auto-stub
 
-base/out/dev/lib/libActonProject.a: $(ACTONC) $(DEPSA) $(LIBGC)
+base/out/dev/lib/libActon.a: $(ACTONC) $(DEPSA) $(LIBGC)
 	cd base && ../dist/bin/actonc build --auto-stub --dev
 
 base/out/types/__builtin__.ty: $(ACTONC)
@@ -156,7 +156,7 @@ test-backend: $(BACKEND_TESTS)
 ifeq ($(ARCH),x86_64)
 ZIG_ARCH_ARG=-mcpu=x86_64
 endif
-builder/builder: builder/build.zig $(ZIG_DEP)
+builder/builder: builder/build.zig $(ZIG_DEP) $(DEPSA) $(LIBGC)
 	rm -rf builder/zig-cache builder/zig-out
 	(echo 'const root = @import("build.zig");'; tail -n +2 deps/zig/lib/build_runner.zig) > builder/build_runner.zig
 	cd builder && $(ZIG) build-exe build_runner.zig -femit-bin=builder $(ZIG_ARCH_ARG)
@@ -261,7 +261,7 @@ lib_deps/libActonDeps-$(PLATFORM).a: $(DIST_ZIG) $(DEP_LIBS)
 lib/libactongc-$(PLATFORM).a:
 	($(MAKE) -j1 check-download-allowed deps-download/$(DEPS_SUM) \
 		&& cp deps-download/$(DEPS_SUM)/lib/libactongc-$(PLATFORM).a $@) \
-	|| ($(MAKE) deps/instdir/lib/libgc.a $(DIST_ZIG) && cp deps/instdir/lib/libgc.a $@)
+	|| ($(MAKE) deps/instdir/lib/libgc.a $(DIST_ZIG) && mkdir -p dist/inc && cp -r deps/instdir/include/gc* dist/inc/ && cp deps/instdir/lib/libgc.a $@)
 
 # Check if ALWAYS_BUILD=true and if so, fail rule. Used before running a
 # download target, so if this fails, we do not download and can fail over to the
@@ -463,10 +463,10 @@ clean-base:
 #
 
 BACKEND_FILES = backend/build.zig $(wildcard backend/*.c backend/*.h backend/failure_detector/*.c backend/failure_detector/*.h)
-DIST_BACKEND_FILES = $(addprefix dist/,$(BACKEND_FILES))
+DIST_BACKEND_FILES = $(addprefix dist/,$(BACKEND_FILES)) dist/backend/deps
 dist/backend/%: backend/%
 	mkdir -p $(dir $@)
-	cp $< $@
+	cp -a $< $@
 
 # We depend on libActon.a because the base/out directory will be populated as a
 # result of building it, and we want to copy those files!
@@ -485,7 +485,7 @@ dist/bin/actonc: compiler/actonc $(DIST_ZIG)
 	mv $@.tmp $@
 
 #
-dist/bin/actondb: $(DIST_ZIG) $(DEPSA)
+dist/bin/actondb: $(DIST_ZIG) $(DEPSA) $(LIBGC) $(DIST_INC)
 	$(ZIG) build --build-file $(TD)/backend/build.zig $(ZIG_TARGET) --cache-dir $(TD)/zig-cache --prefix $(TD)/dist -Dsyspath_include=$(TD)/dist/inc
 
 dist/bin/runacton: bin/runacton
@@ -494,16 +494,22 @@ dist/bin/runacton: bin/runacton
 	mv $@.tmp $@
 
 dist/builder: builder/builder
-	@mkdir -p $(dir $@)
-	cp $< $@
+	@mkdir -p $@
+	cp -a builder/builder builder/*.zig $@/
 
 dist/builtin/%: base/builtin/%
 	@mkdir -p $(dir $@)
 	cp $< $@
 
-dist/inc: $(DEPSA)
+DIST_DEPS=$(addprefix dist/deps/,libargp libbsdnt libgc libnetstring libprotobuf_c libutf8proc libuuid libuv libxml2 libyyjson pcre2)
+dist/deps/%: deps/% $(DEPSA)
 	@mkdir -p $(dir $@)
-	cp -a deps/instdir/include $@
+	cp -a $< $@
+
+DIST_INC=$(addprefix dist/inc/,argp.h bsdnt gc gc.h libxml netstring.h pcre2.h protobuf-c utf8proc.h uuid uv uv.h yyjson.h)
+dist/inc/%: $(DEPSA)
+	@mkdir -p $(dir $@)
+	cp -a deps/instdir/include/* dist/inc/
 
 dist/rts/%: base/rts/%
 	@mkdir -p $(dir $@)
@@ -513,11 +519,11 @@ dist/lib/%: lib/%
 	@mkdir -p $(dir $@)
 	cp $< $@
 
-dist/lib/dev/libActon.a: base/out/dev/lib/libActonProject.a
+dist/lib/dev/libActon.a: base/out/dev/lib/libActon.a
 	@mkdir -p $(dir $@)
 	cp $< $@
 
-dist/lib/rel/libActon.a: base/out/rel/lib/libActonProject.a
+dist/lib/rel/libActon.a: base/out/rel/lib/libActon.a
 	@mkdir -p $(dir $@)
 	cp $< $@
 
@@ -544,7 +550,8 @@ else
 endif
 
 .PHONY: distribution clean-distribution
-distribution: dist/base $(DIST_ARCHIVES) $(DIST_BACKEND_FILES) dist/lib/dev/libActon.a dist/lib/rel/libActon.a dist/builder dist/inc $(DIST_BINS) $(DIST_HFILES) $(DIST_ZIG)
+distribution: dist/base $(DIST_ARCHIVES) $(DIST_BACKEND_FILES) dist/lib/dev/libActon.a dist/lib/rel/libActon.a dist/builder $(DIST_INC) $(DIST_BINS) $(DIST_HFILES) $(DIST_ZIG)
+	$(MAKE) $(DIST_DEPS)
 
 clean-distribution:
 	rm -rf dist

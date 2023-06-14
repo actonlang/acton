@@ -1,6 +1,17 @@
+{-# LANGUAGE CPP #-}
 module Acton.CommandLineParser where
 
 import Options.Applicative
+
+#if defined(darwin_HOST_OS) && defined(aarch64_HOST_ARCH)
+defTarget = "aarch64-macos-none"
+#elif defined(darwin_HOST_OS) && defined(x86_64_HOST_ARCH)
+defTarget = "x86_64-macos-none"
+#elif defined(linux_HOST_OS) && defined(x86_64_HOST_ARCH)
+defTarget = "x86_64-linux-gnu.2.28"
+#else
+#error "Unsupported platform"
+#endif
 
 parseCmdLine        :: IO CmdLineOptions
 parseCmdLine        = execParser (info (cmdLineParser <**> helper) descr)
@@ -51,6 +62,7 @@ data CompileOptions   = CompileOptions {
                          tempdir     :: String,
                          syspath     :: String,
                          cc          :: String,
+                         target      :: String,
                          zigbuild    :: Bool,
                          nozigbuild  :: Bool
                      } deriving Show
@@ -65,6 +77,7 @@ data BuildOptions = BuildOptions {
                          quietB      :: Bool,
                          timingB     :: Bool,
                          ccB         :: String,
+                         targetB     :: String,
                          zigbuildB   :: Bool,
                          nozigbuildB :: Bool
                      } deriving Show
@@ -135,6 +148,7 @@ compileOptions = CompileOptions
         <*> strOption (long "tempdir"   <> metavar "TEMPDIR" <> value "" <> help "Set directory for build files")
         <*> strOption (long "syspath"   <> metavar "TARGETDIR" <>  value "" <> help "Set syspath")
         <*> strOption (long "cc"        <> metavar "PATH" <>  value "" <> help "CC")
+        <*> strOption (long "target"    <> metavar "TARGET" <>  value defTarget <> help "Target, e.g. x86_64-linux-gnu.2.28")
         <*> switch (long "zigbuild"     <> help "Use zig build")
         <*> switch (long "no-zigbuild"  <> help "Don't use zig build")
 
@@ -149,6 +163,7 @@ buildCommand          = Build <$> (
         <*> switch (long "quiet"        <> help "Don't print stuff")
         <*> switch (long "timing"       <> help "Print timing information")
         <*> strOption (long "cc"        <> metavar "PATH" <>  value "" <> help "CC")
+        <*> strOption (long "target"    <> metavar "TARGET" <>  value defTarget <> help "Target, e.g. x86_64-linux-gnu.2.28")
         <*> switch (long "zigbuild"     <> help "Use zig build")
         <*> switch (long "no-zigbuild"  <> help "Don't use zig build")
     )
