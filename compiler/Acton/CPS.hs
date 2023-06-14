@@ -102,10 +102,10 @@ eCallCont t c arg                       = eCall (tApp (eQVar primRContc) [t]) [e
 
 eCallCont2 c args                       = eCall (eVar c) args
 
-pushH env h                             = sExpr (eCall (eQVar primPUSHc) [h])
+pushH env h                             = sExpr (eCall (eQVar primPUSH_Cc) [h])
 
 format (Int _ 0 _, cont)                = [sReturn cont]
-format (lvl, cont)                      = [sExpr (eCall (eQVar primPOP) [lvl]), sReturn cont]
+format (lvl, cont)                      = [sExpr (eCall (eQVar primPOP_C) [lvl]), sReturn cont]
 
 wrapC c f env                           = eCallCont2 c [level, eLambda' [(g_none,tNone)] cont]
   where (level, cont)                   = f 0 env

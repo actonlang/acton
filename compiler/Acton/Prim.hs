@@ -56,11 +56,24 @@ primASYNC           = gPrim "ASYNC"
 primAFTER           = gPrim "AFTER"
 primAWAIT           = gPrim "AWAIT"
 
-primPUSHc           = gPrim "PUSHc"
-primPUSH            = gPrim "PUSH"
+primPUSH_Cc         = gPrim "PUSH_Cc"
+primPUSHF_Cc        = gPrim "PUSHF_Cc"
+primPUSH_C          = gPrim "PUSH_C"
+primPUSHF_C         = gPrim "PUSHF_C"
+primPOP_C           = gPrim "POP_C"
+primDROP_C          = gPrim "DROP_C"
 
+primPUSH            = gPrim "PUSH"
+primPUSHF           = gPrim "PUSHF"
 primPOP             = gPrim "POP"
+primDROP            = gPrim "DROP"
 primRAISE           = gPrim "RAISE"
+
+primSEQ             = gPrim "SEQ"
+primBRK             = gPrim "BRK"
+primCNT             = gPrim "CNT"
+primRET             = gPrim "RET"
+
 primASSERT          = gPrim "ASSERT"
 primNEWACTOR        = gPrim "NEWACTOR"
 
@@ -105,6 +118,7 @@ pWrapped x y        = TC primWrappedP [x,y]
 primWrappedC        = gPrim "WrappedC"
 tWrapped s x y      = tCon $ TC primWrappedC [s,x,y]
 
+attrVal             = name "val"
 attrWrap            = name "wrap"
 attrUnwrap          = name "unwrap"
 
@@ -129,12 +143,24 @@ primEnv             = [     (noq primASYNCf,        NDef scASYNCf NoDec),
                             (noq primASYNC,         NDef scASYNC NoDec),
                             (noq primAFTER,         NDef scAFTER NoDec),
                             (noq primAWAIT,         NDef scAWAIT NoDec),
-                        
-                            (noq primPUSHc,         NDef scPUSHc NoDec),
+
+                            (noq primPUSH_Cc,       NDef scPUSH_Cc NoDec),
+                            (noq primPUSHF_Cc,      NDef scPUSHF_Cc NoDec),
+                            (noq primPUSH_C,        NDef scPUSH_C NoDec),
+                            (noq primPUSHF_C,       NDef scPUSHF_C NoDec),
+                            (noq primPOP_C,         NDef scPOP_C NoDec),
+
                             (noq primPUSH,          NDef scPUSH NoDec),
-                        
+                            (noq primPUSHF,         NDef scPUSHF NoDec),
                             (noq primPOP,           NDef scPOP NoDec),
+                            (noq primDROP,          NDef scDROP NoDec),
                             (noq primRAISE,         NDef scRAISE NoDec),
+
+                            (noq primSEQ,           clSEQ),
+                            (noq primBRK,           clBRK),
+                            (noq primCNT,           clCNT),
+                            (noq primRET,           clRET),
+
                             (noq primASSERT,        NDef scASSERT NoDec),
                             (noq primNEWACTOR,      NDef scNEWACTOR NoDec),
 
@@ -241,7 +267,30 @@ clActor             = NClass [] (leftpath [cValue]) te
                         (reprKW,              NDef (monotype $ tFun fxPure posNil kwdNil tStr) NoDec),
                         (resumeKW,            NDef (monotype $ tFun fxMut posNil kwdNil tNone) NoDec)
                       ]
-        
+
+--  class $SEQ (Exception, value):
+--      __init__ : () -> None
+clSEQ               = NClass [] (leftpath [ cException, cValue]) te
+  where te          = [ (initKW, NSig (monotype $ tFun fxPure posNil kwdNil tNone) NoDec) ]
+
+--  class $BRK (Exception, value):
+--      __init__ : () -> None
+clBRK               = NClass [] (leftpath [ cException, cValue]) te
+  where te          = [ (initKW, NSig (monotype $ tFun fxPure posNil kwdNil tNone) NoDec) ]
+
+--  class $CNT (Exception, value):
+--      __init__ : () -> None
+clCNT               = NClass [] (leftpath [ cException, cValue]) te
+  where te          = [ (initKW, NSig (monotype $ tFun fxPure posNil kwdNil tNone) NoDec) ]
+
+--  class $RET (Exception, value):
+--      @property
+--      val      : value
+--      __init__ : (value) -> None
+clRET               = NClass [] (leftpath [ cException, cValue]) te
+  where te          = [ (attrVal, NSig (monotype tValue) Property),
+                        (initKW,  NSig (monotype $ tFun fxPure (posRow tValue posNil) kwdNil tNone) NoDec) ]
+
 
 --  class $R (): pass
 clR                 = NClass [] [] []
@@ -307,26 +356,56 @@ scAWAIT             = tSchema [quant a] tAWAIT
 
 
 
---  $PUSHc          : pure (proc(BaseException)->$R) -> None
-scPUSHc             = tSchema [] tPUSH
-  where tPUSH       = tFun fxPure (posRow tCont' posNil) kwdNil tNone
-        tCont'      = tFun fxProc (posRow tBaseException posNil) kwdNil tR
+--  $PUSH_Cc        : pure (proc(Exception)->$R) -> None                            -- Signature about to change
+scPUSH_Cc           = tSchema [] tPUSH_C
+  where tPUSH_C     = tFun fxPure (posRow tCont' posNil) kwdNil tNone
+        tCont'      = tFun fxProc (posRow tException posNil) kwdNil tR
 
---  $PUSH           : pure ($Cont[BaseException]) -> None
-scPUSH              = tSchema [] tPUSH
-  where tPUSH       = tFun fxPure (posRow tCont' posNil) kwdNil tNone
+--  $PUSH_FCc       : pure (proc(Exception)->$R) -> None                            -- Signature about to change
+scPUSHF_Cc          = tSchema [] tPUSHF_C
+  where tPUSHF_C    = tFun fxPure (posRow tCont' posNil) kwdNil tNone
+        tCont'      = tFun fxProc (posRow tException posNil) kwdNil tR
+
+--  $PUSH_C         : pure ($Cont[Exception]) -> None                               -- Signature about to change
+scPUSH_C            = tSchema [] tPUSH_C
+  where tPUSH_C     = tFun fxPure (posRow tCont' posNil) kwdNil tNone
         a           = TV KType $ name "A"
-        tCont'      = tCont tBaseException
+        tCont'      = tCont tException
 
+--  $PUSHF_C        : pure ($Cont[Exception]) -> None                               -- Signature about to change
+scPUSHF_C           = tSchema [] tPUSHF_C
+  where tPUSHF_C    = tFun fxPure (posRow tCont' posNil) kwdNil tNone
+        a           = TV KType $ name "A"
+        tCont'      = tCont tException
 
+--  $POP_C          : pure (int) -> None                                            -- Signature about to change
+scPOP_C             = tSchema [] tPOP_C
+  where tPOP_C      = tFun fxPure (posRow tInt posNil) kwdNil tNone
 
---  $POP            : pure (int) -> None
+--  $DROP_C         : pure (int) -> None                                            -- Signature about to change
+scDROP_C            = tSchema [] tDROP_C
+  where tDROP_C     = tFun fxPure (posRow tInt posNil) kwdNil tNone
+
+--  $PUSH           : () -> bool
+scPUSH              = tSchema [] tPUSH
+  where tPUSH       = tFun fxPure posNil kwdNil tBool
+
+--  $PUSHF          : () -> bool
+scPUSHF             = tSchema [] tPUSHF
+  where tPUSHF      = tFun fxPure posNil kwdNil tBool
+
+--  $POP            : () -> Exception
 scPOP               = tSchema [] tPOP
-  where tPOP        = tFun fxPure (posRow tInt posNil) kwdNil tNone
+  where tPOP        = tFun fxPure posNil kwdNil tException
 
---  $RAISE          : pure (BaseException) -> None
+--  $DROP           : () -> None
+scDROP              = tSchema [] tDROP
+  where tDROP       = tFun fxPure posNil kwdNil tNone
+
+--  $RAISE          : (Exception) -> None
 scRAISE             = tSchema [] tRAISE
-  where tRAISE      = tFun fxPure (posRow tBaseException posNil) kwdNil tNone
+  where tRAISE      = tFun fxPure (posRow tException posNil) kwdNil tNone
+
 
 --  $ASSERT         : pure (bool, ?str) -> None
 scASSERT            = tSchema [] tASSERT
@@ -371,9 +450,9 @@ scRCont             = tSchema [quant a] tRCont
         tCont'      = tCont (tVar a)
         a           = TV KType $ name "A"
 
---  $R_FAIL         : proc(BaseException) -> $R
+--  $R_FAIL         : proc(Exception) -> $R
 scRFail             = tSchema [] tRFail
-  where tRFail      = tFun fxProc (posRow tBaseException posNil) kwdNil tR
+  where tRFail      = tFun fxProc (posRow tException posNil) kwdNil tR
 
 
 --  class $EqOpt[A] (Eq[?A]): pass

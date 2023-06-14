@@ -1,6 +1,5 @@
 
-void $RAISE(B_BaseException e);
-
+void $RAISE(B_Exception e);
  
 /*
   Exceptions hierarchy in Python 3.8 according to

@@ -94,4 +94,3 @@ void $RAISE(B_BaseException e) {
   fprintf(stderr, "%s: %s\n", e->$class->$GCINFO, e->error_message ? fromB_str(e->error_message) : "");
   exit(1);
 }
-

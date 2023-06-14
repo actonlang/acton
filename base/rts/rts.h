@@ -192,8 +192,15 @@ void serialize_state_shortcut($Actor);
                                register_actor($t->$globkey); \
                                $t; })
 
-void $PUSH($Cont);
-void $POP(B_int);
+void $PUSH_C($Cont);                // Signature about to change
+void $POP_C(B_int);                 // Signature about to change
+#define $PUSHF_C $PUSH_C
+
+$WORD $PUSH();
+B_Exception $POP();
+void $DROP();
+void $RAISE(B_Exception e);
+#define $PUSHF $PUSH
 
 extern B_Msg timerQ;
 

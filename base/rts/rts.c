@@ -771,19 +771,36 @@ $R $AWAIT($Cont cont, B_Msg m) {
     return $R_WAIT(cont, m);
 }
 
-void $PUSH($Cont cont) {
+void $PUSH_C($Cont cont) {                                          // Signature about to change
     $Actor self = ($Actor)pthread_getspecific(self_key);
     $Catcher c = $NEW($Catcher, cont);
     PUSH_catcher(self, c);
 }
 
-void $POP(B_int n) {
+void $POP_C(B_int n) {                                              // Signature about to change
     $Actor self = ($Actor)pthread_getspecific(self_key);
     long v = from$int(n);
     while (v > 0) {
         POP_catcher(self);
         v--;
     }
+}
+
+$WORD $PUSH() {
+
+}
+
+B_Exception $POP() {
+
+}
+
+void $DROP() {
+
+}
+
+void $RAISE(B_Exception e) {
+    fprintf(stderr,"%s\n",(char*)fromB_str(e->error_message));
+    exit(1);
 }
 
 void create_all_actor_queues() {
