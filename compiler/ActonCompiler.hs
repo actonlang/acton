@@ -68,10 +68,11 @@ import Text.Printf
 import qualified Data.ByteString.Char8 as B
 
 archOs t = case t of
+  "native" -> archOs C.defTarget
   "aarch64-macos-none" -> "aarch64-macos"
   "x86_64-macos-none"  -> "x86_64-macos"
   "x86_64-linux-none"  -> "x86_64-linux"
-  "x86_64-linux-gnu.2.28"  -> "x86_64-linux"
+  "x86_64-linux-gnu.2.27"  -> "x86_64-linux"
   _ -> error $ "Unsupported target: " ++ t
 
 
@@ -871,8 +872,8 @@ zigBuild env opts paths tasks binTasks = do
                  " -Dsyspath_include=" ++ joinPath [ sysPath paths, "inc" ] ++
                  " -Dsyspath_lib=" ++ joinPath [ sysPath paths, "lib" ] ++
                  " -Dsyspath_libreldev=" ++ joinPath [ sysPath paths, "lib", reldev ] ++
-                 " -Dlibactondeps=ActonDeps-" ++ archOs (C.target opts) ++
-                 " -Dlibactongc=actongc-" ++ archOs (C.target opts) ++
+                 " -Dlibactondeps=ActonDeps-" ++ (if use_prebuilt then archOs (C.target opts) else "") ++
+                 " -Dlibactongc=actongc-" ++ (if use_prebuilt then archOs (C.target opts) else "") ++
                  if use_prebuilt then " -Duse_prebuilt" else ""
 
     runZig opts zigCmd (Just (projPath paths))
