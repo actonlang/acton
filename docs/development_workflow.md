@@ -52,12 +52,12 @@ There are two types of releases, "version releases" and the `tip` release.
 
 # Dependencies
 
+## Run time
+- GMP
+  - actonc is written in Haskell which uses GMP for big integers
+    - for releases on Linux, we build a static binary so GMP is linked in and
+      thus not a dependency
+    - for non-releases or MacOS, we need gmp as a shared library
+
 ## Build time
-- automake, autopoint, bison, libtool, pkg-config
-  - required by external library dependencies
-- libprotobuf-c-dev
-  - required by libprotobuf-c, this is all very complicated
-- gcc
-  - required by ghc
-- zlib1g-dev
-  - required by ghc
+- ghc

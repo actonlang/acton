@@ -6,9 +6,7 @@ Build-Depends:
  bash-completion,
  debhelper-compat (= 13),
  haskell-stack,
- libprotobuf-c-dev,
- make,
- pkg-config
+ make
 Standards-Version: 4.6.0
 Homepage: http://www.acton-lang.org
 Rules-Requires-Root: no
