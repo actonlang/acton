@@ -53,11 +53,14 @@ jobs:
         with:
           path: |
             ~/.stack
+            ~/zig-cache
           key: ${{ matrix.os }}-${{ secrets.CACHE_VERSION }}
       - name: "Install build prerequisites"
         run: brew install haskell-stack
       - name: "Build Acton"
-        run: make -C ${{ github.workspace }} BUILD_RELEASE=${{ env.BUILD_RELEASE }}
+        run: |
+          export ZIG_CACHE_DIR=~/zig-cache
+          make -C ${{ github.workspace }} BUILD_RELEASE=${{ env.BUILD_RELEASE }}
       - name: "Build a release"
         run: make -C ${{ github.workspace }} release
       - name: "Upload artifact"
@@ -112,6 +115,7 @@ jobs:
         with:
           path: |
             ~/.stack
+            ~/zig-cache
           key: ${{ matrix.os }}-${{ matrix.version }}-${{ secrets.CACHE_VERSION }}
       - name: "chown our home dir to avoid stack complaining"
         run: chown -R root:root /github/home
@@ -126,7 +130,9 @@ jobs:
           stack upgrade
           echo "PATH=~/.local/bin:$PATH" >> $GITHUB_ENV
       - name: "Build Acton"
-        run: make -j2 -C ${GITHUB_WORKSPACE} BUILD_RELEASE=${{ env.BUILD_RELEASE }}
+        run: |
+          export ZIG_CACHE_DIR=~/zig-cache
+          make -j2 -C ${GITHUB_WORKSPACE} BUILD_RELEASE=${{ env.BUILD_RELEASE }}
       - name: "Build a release"
         run: make -C ${GITHUB_WORKSPACE} release
       - name: "Upload artifact"
@@ -154,13 +160,22 @@ jobs:
         if: startsWith(github.ref, 'refs/tags/v')
       - name: "Check out repository code"
         uses: actions/checkout@v3
+      - name: "Cache stuff"
+        uses: actions/cache@v3
+        with:
+          path: |
+            ~/.stack
+            ~/zig-cache
+          key: build-debs
       - name: "Install build prerequisites"
         run: |
           apt-get update
           apt-get install -qy bzip2 curl git haskell-stack make procps python3 zlib1g-dev
           apt-get install -qy bash-completion build-essential debhelper devscripts
       - name: "Build Debian packages"
-        run: make -C ${GITHUB_WORKSPACE} debs BUILD_RELEASE=${{ env.BUILD_RELEASE }} STATIC_ACTONC=true
+        run: |
+          export ZIG_CACHE_DIR=~/zig-cache
+          make -C ${GITHUB_WORKSPACE} debs BUILD_RELEASE=${{ env.BUILD_RELEASE }} STATIC_ACTONC=true
       - name: "Compute variables"
         id: vars
         run: |
