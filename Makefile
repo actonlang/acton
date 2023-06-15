@@ -3,11 +3,6 @@ TD:=$(shell dirname $(realpath $(firstword $(MAKEFILE_LIST))))
 CHANGELOG_VERSION=$(shell grep '^\#\# \[[0-9]' CHANGELOG.md | sed 's/\#\# \[\([^]]\{1,\}\)].*/\1/' | head -n1)
 GIT_VERSION_TAG=$(shell git tag --points-at HEAD 2>/dev/null | grep "v[0-9]" | sed -e 's/^v//')
 
-PKGCONFIG=$(shell which pkg-config)
-ifeq ($(PKGCONFIG),)
-$(error "pkg-config must be installed")
-endif
-
 ACTONC=dist/bin/actonc
 ACTC=dist/bin/actonc
 ZIG_VERSION:=0.11.0-dev.3384+00ff65357
