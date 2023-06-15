@@ -3,6 +3,8 @@ TD:=$(shell dirname $(realpath $(firstword $(MAKEFILE_LIST))))
 CHANGELOG_VERSION=$(shell grep '^\#\# \[[0-9]' CHANGELOG.md | sed 's/\#\# \[\([^]]\{1,\}\)].*/\1/' | head -n1)
 GIT_VERSION_TAG=$(shell git tag --points-at HEAD 2>/dev/null | grep "v[0-9]" | sed -e 's/^v//')
 
+ZIG_CACHE_DIR?=$(TD)/zig-cache
+
 ACTONC=dist/bin/actonc
 ACTC=dist/bin/actonc
 ZIG_VERSION:=0.11.0-dev.3384+00ff65357
@@ -288,7 +290,7 @@ deps/libargp: deps-download/$(LIBARGP_REF).tar.gz
 	touch $(TD)/$@
 
 deps/instdir/lib/libargp.a: deps/libargp $(DIST_ZIG)
-	cd $< && $(ZIG) build $(ZIG_TARGET) --cache-dir $(TD)/zig-cache --prefix ../instdir
+	cd $< && $(ZIG) build $(ZIG_TARGET) --prefix ../instdir
 
 # /deps/libbsdnt --------------------------------------------
 LIBBSDNT_REF=20c727a5f390d1d4d2c22a3c5bfabb5276d34757
@@ -302,7 +304,7 @@ deps/libbsdnt: deps-download/$(LIBBSDNT_REF).tar.gz
 	touch $(TD)/$@
 
 deps/instdir/lib/libbsdnt.a: deps/libbsdnt $(DIST_ZIG)
-	cd $< && $(ZIG) build $(ZIG_TARGET) --cache-dir $(TD)/zig-cache --prefix ../instdir
+	cd $< && $(ZIG) build $(ZIG_TARGET) --prefix ../instdir
 
 # /deps/libgc --------------------------------------------
 LIBGC_REF=8ee0dc25da0a4572dc3ba706b3d26983f1928d21
@@ -316,7 +318,7 @@ deps/libgc: deps-download/$(LIBGC_REF).tar.gz
 	touch $(TD)/$@
 
 deps/instdir/lib/libgc.a: deps/libgc $(DIST_ZIG)
-	cd $< && $(ZIG) build $(ZIG_TARGET) --cache-dir $(TD)/zig-cache --prefix ../instdir
+	cd $< && $(ZIG) build $(ZIG_TARGET) --prefix ../instdir
 
 # /deps/libprotobuf_c --------------------------------------------
 LIBPROTOBUF_C_REF=5499f774396953c2ef63e725e2f03a5c0bdeff73
@@ -330,7 +332,7 @@ deps/libprotobuf_c: deps-download/$(LIBPROTOBUF_C_REF).tar.gz
 	touch $(TD)/$@
 
 deps/instdir/lib/libprotobuf-c.a: deps/libprotobuf_c $(DIST_ZIG)
-	cd $< && $(ZIG) build $(ZIG_TARGET) --cache-dir $(TD)/zig-cache --prefix ../instdir
+	cd $< && $(ZIG) build $(ZIG_TARGET) --prefix ../instdir
 
 # /deps/libutf8proc --------------------------------------
 LIBUTF8PROC_REF=3c489aea1a497b98f6cc28ea5b218181b84769e6
@@ -344,11 +346,11 @@ deps/libutf8proc: deps-download/$(LIBUTF8PROC_REF).tar.gz
 	touch $(TD)/$@
 
 deps/instdir/lib/libutf8proc.a: deps/libutf8proc $(DIST_ZIG)
-	cd $< && $(ZIG) build $(ZIG_TARGET) --cache-dir $(TD)/zig-cache --prefix ../instdir
+	cd $< && $(ZIG) build $(ZIG_TARGET) --prefix ../instdir
 
 # /deps/libuuid ------------------------------------------
 deps/instdir/lib/libuuid.a: $(DIST_ZIG)
-	cd deps/libuuid && $(ZIG) build $(ZIG_TARGET) --cache-dir $(TD)/zig-cache --prefix ../instdir
+	cd deps/libuuid && $(ZIG) build $(ZIG_TARGET) --prefix ../instdir
 
 # /deps/libuv --------------------------------------------
 LIBUV_REF=53b7649fc83f8cee6f0170b335222a759c0a26f0
@@ -362,7 +364,7 @@ deps/libuv: deps-download/$(LIBUV_REF).tar.gz
 	touch $(TD)/$@
 
 deps/instdir/lib/libuv.a: deps/libuv $(DIST_ZIG)
-	cd $< && $(ZIG) build $(ZIG_TARGET) --cache-dir $(TD)/zig-cache --prefix ../instdir
+	cd $< && $(ZIG) build $(ZIG_TARGET) --prefix ../instdir
 
 # /deps/libxml2 ------------------------------------------
 LIBXML2_REF=8459e725c3294d8d637317036f9d8b10860195dc
@@ -376,7 +378,7 @@ deps/libxml2: deps-download/$(LIBXML2_REF).tar.gz
 	touch $(TD)/$@
 
 deps/instdir/lib/libxml2.a: deps/libxml2 $(DIST_ZIG)
-	cd $< && $(ZIG) build $(ZIG_TARGET) --cache-dir $(TD)/zig-cache --prefix ../instdir
+	cd $< && $(ZIG) build $(ZIG_TARGET) --prefix ../instdir
 
 # /deps/pcre2 --------------------------------------------
 LIBPCRE2_REF=ece17affd4f1d57eb148af9a39c64c1bb19b0e51
@@ -390,14 +392,14 @@ deps/pcre2: deps-download/$(LIBPCRE2_REF).tar.gz
 	touch $(TD)/$@
 
 deps/instdir/lib/libpcre2.a: deps/pcre2 $(DIST_ZIG)
-	cd $< && $(ZIG) build $(ZIG_TARGET) --cache-dir $(TD)/zig-cache --prefix ../instdir
+	cd $< && $(ZIG) build $(ZIG_TARGET) --prefix ../instdir
 
 # --
 deps/instdir/lib/libnetstring.a: $(DIST_ZIG)
-	cd deps/libnetstring && $(ZIG) build $(ZIG_TARGET) --cache-dir $(TD)/zig-cache --prefix ../instdir
+	cd deps/libnetstring && $(ZIG) build $(ZIG_TARGET) --prefix ../instdir
 
 deps/instdir/lib/libyyjson.a: $(DIST_ZIG)
-	cd deps/libyyjson && $(ZIG) build $(ZIG_TARGET) --cache-dir $(TD)/zig-cache --prefix ../instdir
+	cd deps/libyyjson && $(ZIG) build $(ZIG_TARGET) --prefix ../instdir
 
 
 # /lib --------------------------------------------------
@@ -481,7 +483,7 @@ dist/bin/actonc: compiler/actonc $(DIST_ZIG)
 
 #
 dist/bin/actondb: $(DIST_ZIG) $(DEPSA) $(LIBGC) $(DIST_INC)
-	$(ZIG) build --build-file $(TD)/backend/build.zig $(ZIG_TARGET) --cache-dir $(TD)/zig-cache --prefix $(TD)/dist -Dsyspath_include=$(TD)/dist/inc
+	$(ZIG) build --build-file $(TD)/backend/build.zig $(ZIG_TARGET) --prefix $(TD)/dist -Dsyspath_include=$(TD)/dist/inc
 
 dist/bin/runacton: bin/runacton
 	@mkdir -p $(dir $@)
