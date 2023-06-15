@@ -48,13 +48,13 @@ jobs:
           ulimit -c unlimited
       - name: "Check out repository code"
         uses: actions/checkout@v3
-      - name: "Cache ~/.stack"
+      - name: "Cache stuff"
         uses: actions/cache@v3
         with:
           path: |
             ~/.stack
             ~/zig-cache
-          key: ${{ matrix.os }}-${{ secrets.CACHE_VERSION }}
+          key: ${{ matrix.os }}
       - name: "Install build prerequisites"
         run: brew install haskell-stack
       - name: "Build Acton"
@@ -110,13 +110,13 @@ jobs:
           echo "BUILD_RELEASE=1" >> $GITHUB_ENV
       - name: "Check out repository code"
         uses: actions/checkout@v3
-      - name: "Cache ~/.stack"
+      - name: "Cache stuff"
         uses: actions/cache@v3
         with:
           path: |
             ~/.stack
             ~/zig-cache
-          key: ${{ matrix.os }}-${{ matrix.version }}-${{ secrets.CACHE_VERSION }}
+          key: ${{ matrix.os }}-${{ matrix.version }}
       - name: "chown our home dir to avoid stack complaining"
         run: chown -R root:root /github/home
       - name: "Install build prerequisites"
