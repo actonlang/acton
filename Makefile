@@ -256,7 +256,7 @@ deps-download/$(LIBARGP_REF).tar.gz:
 
 dist/deps/libargp: deps-download/$(LIBARGP_REF).tar.gz
 	mkdir -p $@
-	cd $@ && tar zx --strip-components=1 -f $(TD)/$< --wildcards '*/build.zig' '*/*.c' '*/*.h'
+	cd $@ && tar zx --strip-components=1 -f $(TD)/$<
 	rm -rf $@/testsuite
 	touch $(TD)/$@
 
@@ -271,7 +271,7 @@ deps-download/$(LIBBSDNT_REF).tar.gz:
 
 dist/deps/libbsdnt: deps-download/$(LIBBSDNT_REF).tar.gz
 	mkdir -p $@
-	cd $@ && tar zx --strip-components=1 -f $(TD)/$< --wildcards '*/build.zig' '*/*.c' '*/*.h'
+	cd $@ && tar zx --strip-components=1 -f $(TD)/$<
 	touch $(TD)/$@
 
 dist/depsout/lib/libbsdnt.a: dist/deps/libbsdnt $(DIST_ZIG)
@@ -285,7 +285,7 @@ deps-download/$(LIBGC_REF).tar.gz:
 
 dist/deps/libgc: deps-download/$(LIBGC_REF).tar.gz
 	mkdir -p $@
-	cd $@ && tar zx --strip-components=1 -f $(TD)/$< --wildcards '*/build.zig' '*/*.c' '*/*.h' '*/include'
+	cd $@ && tar zx --strip-components=1 -f $(TD)/$<
 	rm -rf $@/cord $@/extra $@/tests $@/tools
 	touch $(TD)/$@
 
@@ -300,7 +300,7 @@ deps-download/$(LIBPROTOBUF_C_REF).tar.gz:
 
 dist/deps/libprotobuf_c: deps-download/$(LIBPROTOBUF_C_REF).tar.gz
 	mkdir -p $@
-	cd $@ && tar zx --strip-components=1 -f $(TD)/$< --wildcards '*/build.zig' '*/protobuf-c'
+	cd $@ && tar zx --strip-components=1 -f $(TD)/$<
 	touch $(TD)/$@
 
 dist/depsout/lib/libprotobuf-c.a: dist/deps/libprotobuf_c $(DIST_ZIG)
@@ -314,7 +314,7 @@ deps-download/$(LIBUTF8PROC_REF).tar.gz:
 
 dist/deps/libutf8proc: deps-download/$(LIBUTF8PROC_REF).tar.gz
 	mkdir -p $@
-	cd $@ && tar zx --strip-components=1 -f $(TD)/$< --wildcards '*/build.zig' '*/utf8proc.c' '*/utf8proc.h' '*/utf8proc_data.c'
+	cd $@ && tar zx --strip-components=1 -f $(TD)/$<
 	touch $(TD)/$@
 
 dist/depsout/lib/libutf8proc.a: dist/deps/libutf8proc $(DIST_ZIG)
@@ -350,7 +350,7 @@ deps-download/$(LIBXML2_REF).tar.gz:
 
 dist/deps/libxml2: deps-download/$(LIBXML2_REF).tar.gz
 	mkdir -p $@
-	cd $@ && tar zx --strip-components=1 -f $(TD)/$< --wildcards '*/build.zig' '*/include' '*/*.c' '*/*.h'
+	cd $@ && tar zx --strip-components=1 -f $(TD)/$<
 	rm -rf $@/doc $@/example $@/fuzz $@/os400 $@/python $@/test*
 	touch $(TD)/$@
 
@@ -365,7 +365,7 @@ deps-download/$(LIBPCRE2_REF).tar.gz:
 
 dist/deps/pcre2: deps-download/$(LIBPCRE2_REF).tar.gz
 	mkdir -p $@
-	cd $@ && tar zx --strip-components=1 -f $(TD)/$< --wildcards '*/build.zig' '*/src'
+	cd $@ && tar zx --strip-components=1 -f $(TD)/$<
 	touch $(TD)/$@
 
 dist/depsout/lib/libpcre2.a: dist/deps/pcre2 $(DIST_ZIG)
