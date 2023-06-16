@@ -61,3 +61,4 @@ There are two types of releases, "version releases" and the `tip` release.
 
 ## Build time
 - ghc
+- make
