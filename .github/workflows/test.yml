@@ -59,7 +59,7 @@ jobs:
         run: brew install haskell-stack
       - name: "Build Acton"
         run: |
-          export ZIG_CACHE_DIR=~/zig-cache
+          export ZIG_LOCAL_CACHE_DIR=~/zig-cache
           make -C ${{ github.workspace }} BUILD_RELEASE=${{ env.BUILD_RELEASE }}
       - name: "Build a release"
         run: make -C ${{ github.workspace }} release
@@ -129,7 +129,7 @@ jobs:
           echo "PATH=~/.local/bin:$PATH" >> $GITHUB_ENV
       - name: "Build Acton"
         run: |
-          export ZIG_CACHE_DIR=~/zig-cache
+          export ZIG_LOCAL_CACHE_DIR=~/zig-cache
           make -j2 -C ${GITHUB_WORKSPACE} BUILD_RELEASE=${{ env.BUILD_RELEASE }}
       - name: "Build a release"
         run: make -C ${GITHUB_WORKSPACE} release
@@ -172,7 +172,7 @@ jobs:
           apt-get install -qy bash-completion build-essential debhelper devscripts
       - name: "Build Debian packages"
         run: |
-          export ZIG_CACHE_DIR=~/zig-cache
+          export ZIG_LOCAL_CACHE_DIR=~/zig-cache
           make -C ${GITHUB_WORKSPACE} debs BUILD_RELEASE=${{ env.BUILD_RELEASE }} STATIC_ACTONC=true
       - name: "Compute variables"
         id: vars
