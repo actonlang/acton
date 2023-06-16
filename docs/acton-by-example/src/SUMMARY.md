@@ -34,3 +34,4 @@
   - [Regular Expression](stdlib/re.md)
 
 - [Modules](modules.md)
+- [Compilation](compilation.md)
