@@ -67,15 +67,6 @@ import Text.Printf
 
 import qualified Data.ByteString.Char8 as B
 
-archOs t = case t of
-  "native" -> archOs C.defTarget
-  "aarch64-macos-none" -> "aarch64-macos"
-  "x86_64-macos-none"  -> "x86_64-macos"
-  "x86_64-linux-none"  -> "x86_64-linux"
-  "x86_64-linux-gnu.2.27"  -> "x86_64-linux"
-  _ -> error $ "Unsupported target: " ++ t
-
-
 main                     =  do arg <- C.parseCmdLine
                                case arg of
                                    C.VersionOpt opts       -> printVersion opts
@@ -683,14 +674,10 @@ runRestPasses opts paths env0 parsed stubMode = do
                                        " -Werror=return-type " ++ pedantArg ++
                                        (if (C.dev opts) then " -Og -g " else " -O3 ") ++
                                        " -c " ++
-                                       " -isystem " ++ sysPath paths ++ "/inc" ++
-                                       " -I" ++ wd ++
-                                       " -I" ++ wd ++ "/out" ++
-                                       " -I" ++ sysPath paths ++
-                                       -- TODO: how to get rid of this? we need
-                                       -- to specify the include path for C
-                                       -- libraries we depend on...
-                                       " -I" ++ sysPath paths ++ "/../deps/instdir/include" ++
+                                       " -I" ++ projPath paths ++
+                                       " -I" ++ sysPath paths ++ "/base" ++
+                                       " -I" ++ sysPath paths ++ "/base/out" ++
+                                       " -I" ++ sysPath paths ++ "/depsout/include" ++
                                        " -o" ++ oFile ++
                                        " " ++ makeRelative (takeDirectory (projPath paths)) cFile)
                               arCmd = ar paths ++ " rcs " ++ aFile ++ " " ++ oFile
@@ -778,7 +765,7 @@ buildExecutable env opts paths binTask
         buildF              = joinPath [projPath paths, "build.sh"]
         outbase             = outBase paths mn
         rootFile            = outbase ++ ".root.c"
-        libFiles            = " -lActonProject -lActon -lActonDB -lActonDeps-" ++ archOs (C.target opts) ++ " -lactongc-" ++ archOs (C.target opts) ++ " -lpthread -lm -ldl "
+        libFiles            = " -lActonProject -lActon -lActonDB -largp -lbsdnt -lpcre2 -lprotobuf-c -lutf8proc -luuid -luv -lxml2 -lnetstring -lyyjson -lactongc -lpthread -lm -ldl "
         libPaths            = " -L " ++ sysPath paths ++ "/depsout/lib -L" ++ sysLib paths ++ " -L" ++ projLib paths
         binFile             = joinPath [binDir paths, (binName binTask)]
         srcbase             = srcFile paths mn
@@ -786,9 +773,10 @@ buildExecutable env opts paths binTask
         ccCmd               = (cc paths opts ++
                                pedantArg ++
                                (if (C.dev opts) then " -Og -g " else " -O3 ") ++
-                               " -isystem " ++ sysPath paths ++ "/inc" ++
-                               " -I" ++ projOut paths ++
-                               " -I" ++ sysPath paths ++
+                               " -I" ++ projPath paths ++
+                               " -I" ++ sysPath paths ++ "/base" ++
+                               " -I" ++ sysPath paths ++ "/base/out" ++
+                               " -I" ++ sysPath paths ++ "/depsout/include" ++
                                " " ++ rootFile ++
                                " -o" ++ binFile ++
                                libPaths ++
@@ -872,8 +860,6 @@ zigBuild env opts paths tasks binTasks = do
                  " -Dsyspath_include=" ++ joinPath [ sysPath paths, "depsout", "include" ] ++
                  " -Dsyspath_lib=" ++ joinPath [ sysPath paths, "depsout", "lib" ] ++
                  " -Dsyspath_libreldev=" ++ joinPath [ sysPath paths, "lib", reldev ] ++
-                 " -Dlibactondeps=ActonDeps-" ++ (if use_prebuilt then archOs (C.target opts) else "") ++
-                 " -Dlibactongc=actongc-" ++ (if use_prebuilt then archOs (C.target opts) else "") ++
                  if use_prebuilt then " -Duse_prebuilt" else ""
 
     runZig opts zigCmd (Just (projPath paths))
