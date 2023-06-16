@@ -13,7 +13,6 @@ ZIG=$(TD)/dist/zig/zig
 AR=$(ZIG) ar
 CC=$(ZIG) cc
 CXX=$(ZIG) c++
-LIBGC=dist/depsout/lib/libactongc-$(PLATFORM).a
 export CC
 export CXX
 
@@ -109,21 +108,13 @@ ifneq ($(VERSION),$(GIT_VERSION_TAG)) # ..ensure the git tag is same as version 
 endif
 endif
 
-ARCHIVES=dist/depsout/lib/libActonDeps-$(PLATFORM).a dist/depsout/lib/libactongc-$(PLATFORM).a
-
 BUILTIN_HFILES=$(wildcard base/builtin/*.h)
 
 DIST_BINS=$(ACTONC) dist/bin/actondb dist/bin/runacton
 DIST_HFILES=\
 	dist/rts/io.h \
-	dist/rts/rts.h \
-	dist/builtin/env.h \
-	$(patsubst base/%,dist/%,$(BUILTIN_HFILES))
+	dist/rts/rts.h
 DIST_ZIG=dist/zig
-
-# Listing DEPSA as prerequisites in a target means it is dependent upon at least
-# one of  the external libraries that we place in libActonDeps
-DEPSA:=dist/depsout/lib/libActonDeps-$(PLATFORM).a
 
 CFLAGS_DB = -I. -Ideps -I$(TD)/dist/depsout/include -DLOG_USE_COLOR -g
 CFLAGS_DB+= $(CFLAGS_TARGET)
@@ -131,15 +122,6 @@ CFLAGS_DB+= $(CFLAGS_TARGET)
 CFLAGS_DB+= -fno-sanitize=undefined -Werror
 # TODO: clean up casts and remove this!
 CFLAGS_DB+= -Wno-int-to-pointer-cast -Wno-pointer-to-int-cast
-.PHONY: base/out/rel/lib/libActon.a base/out/dev/lib/libActon.a
-base/out/rel/lib/libActon.a: $(ACTONC) $(DEPSA) $(LIBGC)
-	cd base && ../dist/bin/actonc build --auto-stub
-
-base/out/dev/lib/libActon.a: $(ACTONC) $(DEPSA) $(LIBGC)
-	cd base && ../dist/bin/actonc build --auto-stub --dev
-
-base/out/types/__builtin__.ty: $(ACTONC)
-	cd base && ../dist/bin/actonc src/__builtin__.act
 
 .PHONY: test-backend
 test-backend: $(BACKEND_TESTS)
@@ -149,14 +131,6 @@ test-backend: $(BACKEND_TESTS)
 	./backend/test/db_unit_tests
 	@echo DISABLED test: ./backend/test/queue_unit_tests
 	./backend/test/skiplist_test
-
-ifeq ($(ARCH),x86_64)
-ZIG_ARCH_ARG=-mcpu=x86_64
-endif
-builder/builder: builder/build.zig $(ZIG_DEP) $(DEPSA) $(LIBGC)
-	rm -rf builder/zig-cache builder/zig-out
-	(echo 'const root = @import("build.zig");'; tail -n +2 dist/zig/lib/build_runner.zig) > builder/build_runner.zig
-	cd builder && $(ZIG) build-exe build_runner.zig -femit-bin=builder $(ZIG_ARCH_ARG)
 
 # /compiler ----------------------------------------------
 ACTONC_ALL_HS=$(wildcard compiler/*.hs compiler/**/*.hs)
@@ -181,70 +155,31 @@ clean-compiler:
 	rm -f compiler/actonc compiler/package.yaml compiler/acton.cabal
 
 # /deps --------------------------------------------------
-# libActonDeps.a
-# This is an archive of all external libraries that we depend on. Each library
-# comes in its own .a archive but in order to hide this and free the compiler
-# from having to juggle a bunch of -l options, we bake the contents of all these
-# .a archives into one big archive and link with that. We have to extract into
-# subdirectories to prevent overwriting if there are name collisions between
-# different library archives.
+DEPS_DIRS += dist/deps/libargp
+DEPS_DIRS += dist/deps/libbsdnt
+DEPS_DIRS += dist/deps/libgc
+DEPS_DIRS += dist/deps/libnetstring
+DEPS_DIRS += dist/deps/pcre2
+DEPS_DIRS += dist/deps/libprotobuf_c
+DEPS_DIRS += dist/deps/libutf8proc
+DEPS_DIRS += dist/deps/libuuid
+DEPS_DIRS += dist/deps/libuv
+DEPS_DIRS += dist/deps/libxml2
+DEPS_DIRS += dist/deps/libyyjson
 
-DEP_LIBS+=dist/depsout/lib/libargp.a
-DEP_LIBS+=dist/depsout/lib/libbsdnt.a
-DEP_LIBS+=dist/depsout/lib/libpcre2.a
-DEP_LIBS+=dist/depsout/lib/libprotobuf-c.a
-DEP_LIBS+=dist/depsout/lib/libutf8proc.a
-DEP_LIBS+=dist/depsout/lib/libuuid.a
-DEP_LIBS+=dist/depsout/lib/libuv.a
-DEP_LIBS+=dist/depsout/lib/libxml2.a
-DEP_LIBS+=dist/depsout/lib/libnetstring.a
-DEP_LIBS+=dist/depsout/lib/libyyjson.a
+DEPS += dist/depsout/lib/libactongc.a
+DEPS += dist/depsout/lib/libargp.a
+DEPS += dist/depsout/lib/libbsdnt.a
+DEPS += dist/depsout/lib/libpcre2.a
+DEPS += dist/depsout/lib/libprotobuf-c.a
+DEPS += dist/depsout/lib/libutf8proc.a
+DEPS += dist/depsout/lib/libuuid.a
+DEPS += dist/depsout/lib/libuv.a
+DEPS += dist/depsout/lib/libxml2.a
+DEPS += dist/depsout/lib/libnetstring.a
+DEPS += dist/depsout/lib/libyyjson.a
 
-DEPS_REFS=\
-	$(LIBARGP_REF) \
-	$(LIBBSDNT_REF) \
-	$(LIBPCRE2_REF) \
-	$(LIBPROTOBUF_C_REF) \
-	$(LIBUTF8PROC_REF) \
-	$(LIBUUID_REF) \
-	$(LIBUV_REF) \
-	$(LIBXML2_REF) \
-	local_libnetstring \
-	local_libyyjson
-
-DEPS_SUM:=$(shell echo $(DEPS_REFS) | shasum | cut -d' ' -f1)
-
-.PHONY: build-deps show-deps-sum
-
-# Attempt downloading the deps archive or if it fails, build it locally.
-# Also copy in headers from downloaded archive into deps/instdir/include, so the
-# headers are available, just as if we had built the deps locally.
-dist/depsout/lib/libActonDeps-$(PLATFORM).a:
-	mkdir -p $(dir $@)
-	$(MAKE) lib_deps/libActonDeps-$(PLATFORM).a && cp lib_deps/libActonDeps-$(PLATFORM).a $@
-
-lib_deps/libActonDeps-$(PLATFORM).a: $(DIST_ZIG) $(DEP_LIBS)
-	mkdir -p lib_deps
-	for LIB in $(DEP_LIBS); do \
-		LIBNAME=$$(basename $${LIB} .a); \
-		mkdir -p lib_deps/$${LIBNAME}; \
-		$$(cd lib_deps/$${LIBNAME} && $(AR) x $(TD)/$${LIB}); \
-	done
-	cd lib_deps && $(AR) -qc libActonDeps-$(PLATFORM).a */*.o
-
-dist/depsout/lib/libactongc-$(PLATFORM).a: dist/depsout/lib/libgc.a
-	cp $< $@
-
-
-# Check if ALWAYS_BUILD=true and if so, fail rule. Used before running a
-# download target, so if this fails, we do not download and can fail over to the
-# local build case.
-.PHONY: check-download-allowed
-check-download-allowed:
-ifeq ($(ALWAYS_BUILD),true)
-	false
-endif
-
+.PHONE: clean-downloads
 clean-downloads:
 	rm -rf deps-download
 
@@ -289,8 +224,9 @@ dist/deps/libgc: deps-download/$(LIBGC_REF).tar.gz
 	rm -rf $@/cord $@/extra $@/tests $@/tools
 	touch $(TD)/$@
 
-dist/depsout/lib/libgc.a: dist/deps/libgc $(DIST_ZIG)
+dist/depsout/lib/libactongc.a: dist/deps/libgc $(DIST_ZIG)
 	cd $< && $(ZIG) build $(ZIG_TARGET) --prefix $(TD)/dist/depsout
+	mv dist/depsout/lib/libgc.a $@
 
 # /deps/libprotobuf_c --------------------------------------------
 LIBPROTOBUF_C_REF=5499f774396953c2ef63e725e2f03a5c0bdeff73
@@ -387,12 +323,26 @@ dist/depsout/lib/libyyjson.a: dist/deps/libyyjson $(DIST_ZIG)
 	cd $< && $(ZIG) build $(ZIG_TARGET) --prefix $(TD)/dist/depsout
 
 
-# /lib --------------------------------------------------
+ifeq ($(ARCH),x86_64)
+ZIG_ARCH_ARG=-mcpu=x86_64
+endif
+builder/builder: builder/build.zig $(ZIG_DEP) $(DEPS_DIRS)
+	rm -rf builder/zig-cache builder/zig-out
+	(echo 'const root = @import("build.zig");'; tail -n +2 dist/zig/lib/build_runner.zig) > builder/build_runner.zig
+	cd builder && $(ZIG) build-exe build_runner.zig -femit-bin=builder $(ZIG_ARCH_ARG)
+
+.PHONY: base/out/rel/lib/libActon.a base/out/dev/lib/libActon.a
+base/out/rel/lib/libActon.a: $(ACTONC) $(DEPS)
+	cd base && ../dist/bin/actonc build --auto-stub --ccmd
+
+base/out/dev/lib/libActon.a: $(ACTONC) $(DEPS)
+	cd base && ../dist/bin/actonc build --auto-stub --dev --ccmd
+
+base/out/types/__builtin__.ty: $(ACTONC)
+	cd base && ../dist/bin/actonc src/__builtin__.act
+
 
 # top level targets
-
-.PHONY: rts
-rts: $(ARCHIVES)
 
 .PHONY: test test-builtins test-compiler test-db test-examples test-lang test-regressions test-rts test-stdlib
 test:
@@ -436,7 +386,7 @@ clean-all: clean clean-compiler
 
 clean-base:
 	rm -rf base/build-cache base/out builder/build_runner* builder/builder* builder/zig-cache builder/zig-out
-	rm -rf $(ARCHIVES) $(OFILES) builtin/__builtin__.h builtin/__builtin__.c builtin/ty/out stdlib/out/
+	rm -rf $(OFILES) builtin/__builtin__.h builtin/__builtin__.c builtin/ty/out stdlib/out/
 
 # == DIST ==
 #
@@ -464,7 +414,7 @@ dist/bin/actonc: compiler/actonc $(DIST_ZIG)
 	mv $@.tmp $@
 
 #
-dist/bin/actondb: $(DIST_ZIG) $(DEPSA) $(LIBGC) $(DIST_INC)
+dist/bin/actondb: $(DIST_ZIG) $(DEPS) $(DIST_INC)
 	$(ZIG) build --build-file $(TD)/dist/backend/build.zig $(ZIG_TARGET) --prefix $(TD)/dist/depsout -Dsyspath_include=$(TD)/dist/depsout/include
 	mv $(TD)/dist/depsout/bin/actondb $@
 	rmdir $(TD)/dist/depsout/bin
@@ -478,12 +428,8 @@ dist/builder: builder/builder
 	@mkdir -p $@
 	cp -a builder/builder builder/*.zig $@/
 
-dist/builtin/%: base/builtin/%
-	@mkdir -p $(dir $@)
-	cp $< $@
-
 DIST_DEPS=$(addprefix dist/deps/,libargp libbsdnt libgc libnetstring libprotobuf_c libutf8proc libuuid libuv libxml2 libyyjson pcre2)
-dist/deps/%: deps/% $(DEPSA)
+dist/deps/%: deps/% $(DEPS)
 	@mkdir -p $(dir $@)
 	cp -a $< $@
 
@@ -506,6 +452,7 @@ dist/completion/acton.bash-completion: completion/acton.bash-completion
 dist/zig: deps-download/zig-$(OS)-$(ARCH)-$(ZIG_VERSION).tar.xz
 	mkdir -p $@
 	cd $@ && tar Jx --strip-components=1 -f ../../$^
+	rm -rf $@/doc $@/lib/libcxx $@/lib/libcxxabi $@/lib/libc/include/any-windows-any
 	cp -a deps/zig-extras/* $@
 
 
@@ -520,7 +467,7 @@ else
 endif
 
 .PHONY: distribution clean-distribution
-distribution: dist/base $(ARCHIVES) $(DIST_BACKEND_FILES) dist/lib/dev/libActon.a dist/lib/rel/libActon.a dist/builder $(DIST_INC) $(DIST_BINS) $(DIST_HFILES) $(DIST_ZIG)
+distribution: dist/base $(DIST_BACKEND_FILES) $(DEPSA) dist/lib/dev/libActon.a dist/lib/rel/libActon.a dist/builder $(DIST_INC) $(DIST_BINS) $(DIST_HFILES) $(DIST_ZIG)
 	$(MAKE) $(DIST_DEPS)
 
 clean-distribution:

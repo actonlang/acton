@@ -58,8 +58,6 @@ pub fn build(b: *std.build.Builder) void {
     const syspath_include = b.option([]const u8, "syspath_include", "") orelse "";
     const syspath_lib = b.option([]const u8, "syspath_lib", "") orelse "";
     const syspath_libreldev = b.option([]const u8, "syspath_libreldev", "") orelse "";
-    const libactondeps = b.option([]const u8, "libactondeps", "") orelse "";
-    const libactongc = b.option([]const u8, "libactongc", "") orelse "";
     const wd = b.option([]const u8, "wd", "") orelse "";
 
     const libactondb_dep = b.anonymousDependency(syspath_backend, @import("backendbuild.zig"), .{
@@ -254,9 +252,18 @@ pub fn build(b: *std.build.Builder) void {
 
         if (use_prebuilt) {
             executable.linkSystemLibraryName("Acton");
-            executable.linkSystemLibraryName(libactondeps);
+            executable.linkSystemLibraryName("argp");
+            executable.linkSystemLibraryName("bsdnt");
+            executable.linkSystemLibraryName("netstring");
+            executable.linkSystemLibraryName("pcre2");
+            executable.linkSystemLibraryName("protobuf-c");
+            executable.linkSystemLibraryName("utf8proc");
+            executable.linkSystemLibraryName("uuid");
+            executable.linkSystemLibraryName("uv");
+            executable.linkSystemLibraryName("xml2");
+            executable.linkSystemLibraryName("yyjson");
             executable.linkSystemLibraryName("ActonDB");
-            executable.linkSystemLibraryName(libactongc);
+            executable.linkSystemLibraryName("actongc");
         } else {
             executable.linkLibrary(actonbase_dep.artifact("Acton"));
             executable.linkLibrary(libactondb_dep.artifact("ActonDB"));
