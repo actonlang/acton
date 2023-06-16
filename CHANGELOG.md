@@ -2,12 +2,15 @@
 
 ## Unreleased
 
+
+## [0.15.2] (2023-06-16)
+
 Elevate Acton's build capabilities by completing the adoption of the Zig build
 system. Everything, including external library dependencies, builtins, RTS,
 stdlib and backend, is now built using build.zig files. A hierarchy of zig
 modules are formed, which allow building the entirety of the Acton system with a
 single zig build, which is what actonc calls internally. This enables complete
-control over the low level compilation.
+control over all aspects of the low level compilation.
 
 The most striking feature unlocked is likely cross-compilation:
 
@@ -18,14 +21,19 @@ The most striking feature unlocked is likely cross-compilation:
   user@machine$ file helloworld
   helloworld: Mach-O 64-bit x86_64 executable, flags:<NOUNDEFS|DYLDLINK|TWOLEVEL|PIE>
 
-We still produce libActon, libActonDeps and similar, which are used when
-targeting the native platform of the local machine but for any customization to
-the target, everything will be built from source.
+Libraries for the local platform are still prebuilt and included in the Acton
+distribution, hich are used when using the default target, i.e. targetting the
+local machine. For any customization to the target, everything will be built
+from source.
 
 ### Fixed
 - revamped low level build, now potentially rebuilding entire Acton system from
   source code
   - allows cross-compilation and similar advanced features
+  - use `--target` for cross-compilation, e.g. `--target aarch64-macos-none` to
+    target an Apple M1 computer
+  - for Acton projects, there is now a `build-cache` directory that caches all
+    built output and speeds things up tremendously
 - `json` module now correctly encodes and decodes floats [#1345] [#1349]
 - zig build of all external library dependencies
   - gives us much better control over how libraries are compiled
@@ -53,6 +61,13 @@ the target, everything will be built from source.
   - much faster and reduced disk usage
 
 ### Testing / CI
+- caching has been vastly improved in CI
+  - based on the new zig build system, we utilize zigs excellent caching
+    capability by using a single zig cache for the entire build of Acton. In CI,
+    we cache the zig-cache directory, so we don't actually have to recompile
+    files at all. Some CI runs now take less than 2 minutes to build Acton!
+  - we should be able to  trust Zigs caching to do the right thing, if files are
+    modified it will notice!
 - testing of the Homebrew Formula has been removed [#1338]
   - since some time, this test job has been intermittently failing, or rather
     only intermittently passing as most of the time it fails
@@ -61,6 +76,8 @@ the target, everything will be built from source.
   - we use a fairly hacked up and not supported workflow
   - several attempts to fix it have been unsuccessful and we're unable to spend
     more time on it right not
+- removed test of compiling Acton on Ubuntu 20.04 due to problems with stack
+  - note how executables built by actonc are still compatible with Ubuntu 20.04
 
 
 ## [0.15.1] (2023-06-02)
