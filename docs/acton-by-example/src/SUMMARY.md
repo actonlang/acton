@@ -22,7 +22,7 @@
   - [Attributes](actors/attributes.md)
   - [Concurrency](actors/concurrency.md)
   - [Sync Method calls](actors/sync_method_call.md)
-<!-- should go under Actors -- - [Async Method calls](actors/async_method_call.md) -->
+  - [Async Method calls](actors/async_method_call.md)
 - [Control flow](control_flow.md)
   - [actors](control_flow/actors.md)
   - [if / elif / else](control_flow/if_else.md)
