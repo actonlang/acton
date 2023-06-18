@@ -1,6 +1,6 @@
 # Control flow in an async actor world
 
-The basic control flow of most programming languages involve a starting point, like a main function, which is run from top to bottom, after which the program implicitly terminates. The basic objective is to feed instructions to the CPU and this goal remains through increasing levels of abstractions. Acton is different. Once created, an actor will simply remain indefinitely, waiting for incoming messages in the form of actor method calls. See [Actor Lifetime](actors/lifetime.md).
+The basic control flow of most programming languages involve a starting point, like a main function, which is run from top to bottom, after which the program implicitly terminates. The basic objective is to feed instructions to the CPU and this goal remains through increasing levels of abstractions. Acton is different. Once created, an actor will simply remain indefinitely, waiting for incoming messages in the form of actor method calls. See [Actor Lifetime](/actors/lifetime.md).
 
 ## A mental model of actors
 
