@@ -94,6 +94,8 @@ jobs:
             version: "22.04"
           - os: "ubuntu"
             version: "22.10"
+          - os: "ubuntu"
+            version: "23.04"
     runs-on: ubuntu-latest
     container:
       image: ${{ matrix.os }}:${{ matrix.version }}
@@ -237,6 +239,8 @@ jobs:
             version: "22.04"
           - os: "ubuntu"
             version: "22.10"
+          - os: "ubuntu"
+            version: "23.04"
     runs-on: ubuntu-latest
     container:
       image: ${{ matrix.os }}:${{ matrix.version }}
