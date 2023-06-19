@@ -90,6 +90,8 @@ jobs:
         include:
           - os: "debian"
             version: "11"
+          - os: "debian"
+            version: "12"
           - os: "ubuntu"
             version: "22.04"
           - os: "ubuntu"
@@ -230,7 +232,11 @@ jobs:
       matrix:
         include:
           - os: "debian"
+            version: "10"
+          - os: "debian"
             version: "11"
+          - os: "debian"
+            version: "12"
           - os: "ubuntu"
             version: "18.04"
           - os: "ubuntu"
