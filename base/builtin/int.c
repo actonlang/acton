@@ -454,7 +454,13 @@ B_bool B_HashableD_intD___ne__(B_HashableD_int wit, B_int a, B_int b) {
 }
 
 B_int B_HashableD_intD___hash__(B_HashableD_int wit, B_int a) {
-    return to$int(B_i64D_hash(toB_i64(from$int(a))));
+    long sz = a->val.size;
+    if (sz==0) return toB_i64(sz);
+    unsigned long res = a->val.n[0];
+    if (res > LONG_MAX || labs(sz) > 1) 
+        return to$int(B_i64D_hash(toB_i64((long)res & LONG_MAX)));
+    else
+        return to$int(B_i64D_hash(toB_i64(sz<0 ? -res : res)));
 }
  
 long from$int(B_int n) { 
