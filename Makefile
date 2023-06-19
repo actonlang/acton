@@ -486,13 +486,13 @@ endif
 # Do grep to only get a version number. If there's an error, we get an empty
 # string which is better than getting the error message itself.
 ACTONC_VERSION=$(shell $(ACTONC) --numeric-version 2>/dev/null | grep -E "^[0-9.]+$$")
-.PHONY: acton-$(PLATARCH)-$(ACTONC_VERSION).tar.bz2
-acton-$(PLATARCH)-$(ACTONC_VERSION).tar.bz2:
-	tar jcvf $@ $(TAR_TRANSFORM_OPT) --exclude .gitignore dist
+.PHONY: acton-$(PLATARCH)-$(ACTONC_VERSION).tar.xz
+acton-$(PLATARCH)-$(ACTONC_VERSION).tar.xz:
+	tar cv $(TAR_TRANSFORM_OPT) --exclude .gitignore dist | xz -z -0 --threads=0 > $@
 
 .PHONY: release
 release: distribution
-	$(MAKE) acton-$(PLATARCH)-$(ACTONC_VERSION).tar.bz2
+	$(MAKE) acton-$(PLATARCH)-$(ACTONC_VERSION).tar.xz
 
 .PHONY: install
 install:
