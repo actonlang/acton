@@ -212,7 +212,7 @@ jobs:
           name: acton-macos-11
       - name: "Extract acton"
         run: |
-          tar jxvf $(ls acton-darwin*.tar.bz2 | tail -n1)
+          tar Jxvf $(ls acton-darwin*.tar.xz | tail -n1)
       - name: "Compile acton program"
         run: |
           echo '#!/usr/bin/env runacton'   > test-runtime.act
@@ -352,9 +352,9 @@ jobs:
           token: ${{ secrets.GITHUB_TOKEN }}
           replacesArtifacts: true
       - name: "Remove version number from darwin tar ball"
-        run: mv $(ls acton-darwin*.tar.bz2 | tail -n1) acton-darwin-x86_64.tar.bz2
+        run: mv $(ls acton-darwin*.tar.xz | tail -n1) acton-darwin-x86_64.tar.xz
       - name: "Remove version number from linux tar ball"
-        run: mv $(ls acton-linux-x86_64*.tar.bz2 | tail -n1) acton-linux-x86_64.tar.bz2
+        run: mv $(ls acton-linux-x86_64*.tar.xz | tail -n1) acton-linux-x86_64.tar.xz
       - name: "Remove version number from debian package"
         run: mv $(ls deb/acton_*.deb | tail -n1) deb/acton_tip_amd64.deb
       - name: "List files for debug"
