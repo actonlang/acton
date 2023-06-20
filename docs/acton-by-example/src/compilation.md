@@ -8,6 +8,48 @@ The default target is somewhat conservative to ensure a reasonable amount of com
 
 To compile an executable optimized for the local computer, use `--target native`. In many cases it can lead to a significant faster program, often running 30% to 100% faster.
 
+## Statically linked executables using musl for portability
+
+On Linux, executable programs can be statically linked using the Musl C library, which maximizes portability as there are no runtime dependencies at all.
+
+To compile an executable optimized for portability using musl on x86_64, use `--target x86_64-linux-musl`.
+
+A default compiled program is dynamically linked with GNU libc & friends
+```
+$ actonc helloworld.act
+Building file helloworld.act
+  Compiling helloworld.act for release
+   Finished compilation in   0.013 s
+  Final compilation step
+   Finished final compilation step in   0.224 s
+$ ldd helloworld
+        linux-vdso.so.1 (0x00007fff2975b000)
+        libm.so.6 => /lib/x86_64-linux-gnu/libm.so.6 (0x00007f11f472a000)
+        libpthread.so.0 => /lib/x86_64-linux-gnu/libpthread.so.0 (0x00007f11f4725000)
+        libc.so.6 => /lib/x86_64-linux-gnu/libc.so.6 (0x00007f11f4544000)
+        libdl.so.2 => /lib/x86_64-linux-gnu/libdl.so.2 (0x00007f11f453f000)
+        /lib64/ld-linux-x86-64.so.2 (0x00007f11f4827000)
+$
+```
+
+A program linked statically towards Musl has no run time dependencies:
+
+```
+$ actonc helloworld.act --target x86_64-linux-musl
+Building file helloworld.act
+  Compiling helloworld.act for release
+   Finished compilation in   0.013 s
+  Final compilation step
+   Finished final compilation step in   0.224 s
+$ ldd helloworld
+        not a dynamic executable
+$
+```
+
+Although untested, static linking with musl should work on other CPU architectures.
+
+MacOS does not support static compilation.
+
 ## Cross-compilation
 
 Acton supports cross-compilation, which means that it is possible to run develop on one computer, say a Linux computer with an x86-64 CPU but build an executable binary that can run on a MacOS computer.
