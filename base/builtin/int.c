@@ -196,7 +196,10 @@ B_int B_IntegralD_intD___pow__(B_IntegralD_int wit, B_int a, B_int b) {
         $RAISE((B_BaseException)$NEW(B_ValueError,to$str(errmsg)));
     }
     B_int res = malloc_int();
-    zz_powi(&res->val,&a->val,val_b->n[0]); // __pow__ should have an int64 exponent in the Acton protocol
+    if (val_b->size == 0)
+         zz_seti(&res->val, 1);
+     else     
+         zz_powi(&res->val,&a->val,val_b->n[0]); // __pow__ should have an int64 exponent in the Acton protocol
     return res;
 }
 
