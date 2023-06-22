@@ -8,7 +8,7 @@ export ZIG_LOCAL_CACHE_DIR
 
 ACTONC=dist/bin/actonc
 ACTC=dist/bin/actonc
-ZIG_VERSION:=0.11.0-dev.3384+00ff65357
+ZIG_VERSION:=0.11.0-dev.3739+939e4d81e
 ZIG=$(TD)/dist/zig/zig
 AR=$(ZIG) ar
 CC=$(ZIG) cc
