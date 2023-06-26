@@ -63,6 +63,7 @@ data CompileOptions   = CompileOptions {
                          syspath     :: String,
                          cc          :: String,
                          target      :: String,
+                         cachedir    :: String,
                          zigbuild    :: Bool,
                          nozigbuild  :: Bool
                      } deriving Show
@@ -78,6 +79,7 @@ data BuildOptions = BuildOptions {
                          timingB     :: Bool,
                          ccB         :: String,
                          targetB     :: String,
+                         cachedirB   :: String,
                          zigbuildB   :: Bool,
                          nozigbuildB :: Bool
                      } deriving Show
@@ -149,6 +151,7 @@ compileOptions = CompileOptions
         <*> strOption (long "syspath"   <> metavar "TARGETDIR" <>  value "" <> help "Set syspath")
         <*> strOption (long "cc"        <> metavar "PATH" <>  value "" <> help "CC")
         <*> strOption (long "target"    <> metavar "TARGET" <>  value defTarget <> help "Target, e.g. x86_64-linux-gnu.2.28")
+        <*> strOption (long "cache"     <> metavar "CACHEDIR" <>  value "" <> help "Cache directory")
         <*> switch (long "zigbuild"     <> help "Use zig build")
         <*> switch (long "no-zigbuild"  <> help "Don't use zig build")
 
@@ -164,6 +167,7 @@ buildCommand          = Build <$> (
         <*> switch (long "timing"       <> help "Print timing information")
         <*> strOption (long "cc"        <> metavar "PATH" <>  value "" <> help "CC")
         <*> strOption (long "target"    <> metavar "TARGET" <>  value defTarget <> help "Target, e.g. x86_64-linux-gnu.2.28")
+        <*> strOption (long "cache"     <> metavar "CACHEDIR" <>  value "" <> help "Cache directory")
         <*> switch (long "zigbuild"     <> help "Use zig build")
         <*> switch (long "no-zigbuild"  <> help "Don't use zig build")
     )

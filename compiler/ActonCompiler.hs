@@ -71,14 +71,28 @@ main                     =  do arg <- C.parseCmdLine
                                case arg of
                                    C.VersionOpt opts       -> printVersion opts
                                    C.CmdOpt (C.New opts)   -> createProject (C.file opts)
-                                   C.CmdOpt (C.Build opts) -> buildProject $ defaultOpts {C.alwaysbuild = C.alwaysB opts, C.autostub = C.autostubB opts, C.debug = C.debugB opts, C.dev = C.devB opts, C.root = C.rootB opts, C.ccmd = C.ccmdB opts, C.quiet = C.quietB opts, C.timing = C.timingB opts, C.cc = C.ccB opts, C.target = C.targetB opts, C.zigbuild = C.zigbuildB opts, C.nozigbuild = C.nozigbuildB opts}
+                                   C.CmdOpt (C.Build opts) -> buildProject $ defaultOpts {
+                                     C.alwaysbuild = C.alwaysB opts,
+                                     C.autostub = C.autostubB opts,
+                                     C.debug = C.debugB opts,
+                                     C.dev = C.devB opts,
+                                     C.root = C.rootB opts,
+                                     C.ccmd = C.ccmdB opts,
+                                     C.quiet = C.quietB opts,
+                                     C.timing = C.timingB opts,
+                                     C.cc = C.ccB opts,
+                                     C.target = C.targetB opts,
+                                     C.cachedir = C.cachedirB opts,
+                                     C.zigbuild = C.zigbuildB opts,
+                                     C.nozigbuild = C.nozigbuildB opts
+                                     }
                                    C.CmdOpt (C.Cloud opts) -> undefined
                                    C.CmdOpt (C.Doc opts)   -> printDocs opts
                                    C.CompileOpt nms opts   -> compileFiles opts (catMaybes $ map filterActFile nms)
 
 defaultOpts   = C.CompileOptions False False False False False False False False False False False
                                  False False False False False False False False False "" "" "" ""
-                                 C.defTarget False False
+                                 C.defTarget "" False False
 
 
 -- Auxiliary functions ---------------------------------------------------------------------------------------
@@ -831,7 +845,7 @@ zigBuild env opts paths tasks binTasks = do
     -- custom build.zig ?
     buildZigExists <- doesFileExist $ projPath paths ++ "/build.zig"
     homeDir <- getHomeDirectory
-    let cache_dir = joinPath [ projPath paths, "build-cache" ]
+    let cache_dir = if (not $ null $ C.cachedir opts) then (C.cachedir opts) else joinPath [ projPath paths, "build-cache" ]
         global_cache_dir = joinPath [ homeDir, ".cache", "acton", "build-cache" ]
         use_prebuilt = C.defTarget == C.target opts
     let zigCmdBase =
