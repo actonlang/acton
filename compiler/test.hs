@@ -55,7 +55,7 @@ main = do
       , stdlibTests
       ]
   where timeout :: Timeout
-        timeout = mkTimeout (60*1000000) -- 60 second timeout
+        timeout = mkTimeout (3*60*1000000) -- 3 minutes timeout
 
 coreLangTests =
   testGroup "Core language"
@@ -78,6 +78,14 @@ compilerTests =
         (returnCode, cmdOut, cmdErr) <- readCreateProcessWithExitCode (shell $ "rm -rf ../test/compiler/rebuild-import/out") ""
         testBuild "" ExitSuccess False "../test/compiler/rebuild-import/"
         testBuild "" ExitSuccess False "../test/compiler/rebuild-import/"
+  , testCase "build hello --target aarch64-macos-none" $ do
+        testBuild "--target aarch64-macos-none" ExitSuccess False "../test/compiler/hello/"
+  , testCase "build hello --target x86_64-macos-none" $ do
+        testBuild "--target x86_64-macos-none" ExitSuccess False "../test/compiler/hello/"
+  , testCase "build hello --target x86_64-linux-gnu.2.27" $ do
+        testBuild "--target x86_64-linux-gnu.2.27" ExitSuccess False "../test/compiler/hello/"
+  , testCase "build hello --target x86_64-linux-musl" $ do
+        testBuild "--target x86_64-linux-musl" ExitSuccess False "../test/compiler/hello/"
   ]
 
 actoncProjTests =
@@ -281,7 +289,7 @@ buildThing opts thing = do
     projPath <- canonicalizePath thing
     curDir <- getCurrentDirectory
     let wd = if proj then projPath else curDir
-    let actCmd    = (id actonc) ++ " " ++ (if proj then "build " else thing) ++ " --always-build " ++ opts
+    let actCmd    = (id actonc) ++ " " ++ (if proj then "build " else thing) ++ " --always-build --cache ~/.cache/acton/test-build-cache " ++ opts
     (returnCode, cmdOut, cmdErr) <- readCreateProcessWithExitCode (shell $ actCmd){ cwd = Just wd } ""
     return (returnCode, cmdOut, cmdErr)
 

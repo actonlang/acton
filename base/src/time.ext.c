@@ -31,7 +31,11 @@ unsigned long time__uuid_to_ulong(const char* uuid) {
 
 
 void time__get_clock_data_cb(uv_timer_t *ev) {
+#ifdef __linux__
+    time__realclock_status = adjtimex(&time__realclock_tx);
+#else
     time__realclock_status = ntp_adjtime(&time__realclock_tx);
+#endif
 }
 
 void timeQ___ext_init__() {
