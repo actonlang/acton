@@ -8,6 +8,9 @@
 **/*.o
 **/a.out
 **/core
+**/build-cache
+**/zig-cache
+**/.actonc.lock
 
 backend/actondb
 backend/failure_detector/db_messages_test

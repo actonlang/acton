@@ -30,7 +30,7 @@ body:
       label: Error output
       description: Include the full output from compiling using `actonc`
       placeholder: |
-        user@machine:~/acton/test$ ../dist/actonc --root main counter_adder.act
+        $ ../dist/actonc --root main counter_adder.act
         /home/user/acton/dist/modules/test/counter_adder.c: In function ‘test$counter_adder$$Counter$count$local’:
         /home/user/acton/dist/modules/test/counter_adder.c:224:9: error: conversion to non-scalar type requested
           224 |         return (($R)__self__->i);
@@ -40,6 +40,6 @@ body:
         NOTE: https://github.com/actonlang/acton/issues/new?template=ice.md
         NOTE: acton 0.5.2.20210904.7.7.37 compiled by ghc 8.10 on linux x86_64
         NOTE: cc: cc (Debian 10.2.1-6) 10.2.1 20210110
-        user@machine:~/acton/test$
+        $
     validations:
       required: true

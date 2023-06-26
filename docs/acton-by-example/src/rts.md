@@ -7,13 +7,13 @@ The Acton Run Time System is what sets up the environment in which an Acton prog
 It is possible to configure the RTS through a number of arguments. All arguments to the RTS start with `--rts-`. Use `--rts-help` to see a list of all arguments:
 
 ```sh
-user@machine:~$ actonc examples/helloworld.act
+$ actonc examples/helloworld.act
 Building file examples/helloworld.act
   Compiling helloworld.act for release
    Finished compilation in   0.012 s
   Final compilation step
    Finished final compilation step in   0.198 s
-user@machine:~$ examples/helloworld --rts-help
+$ examples/helloworld --rts-help
 The Acton RTS reads and consumes the following options and arguments. All
 other parameters are passed verbatim to the Acton application. Option
 arguments can be passed either with --rts-option=ARG or --rts-option ARG
@@ -37,7 +37,7 @@ arguments can be passed either with --rts-option=ARG or --rts-option ARG
   --rts-verbose                     Enable verbose RTS output
   --rts-wthreads=COUNT              Number of worker threads [#CPU cores]
 
-user@machine:~$
+$
 ```
 
 # Worker threads

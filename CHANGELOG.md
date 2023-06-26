@@ -37,11 +37,11 @@ control over all aspects of the low level compilation.
 
 The most striking feature unlocked is likely cross-compilation:
 
-  user@machine$ actonc --quiet helloworld.act 
-  user@machine$ file helloworld
+  $ actonc --quiet helloworld.act 
+  $ file helloworld
   helloworld: ELF 64-bit LSB executable, x86-64, version 1 (SYSV), dynamically linked, interpreter /lib64/ld-linux-x86-64.so.2, for GNU/Linux 2.0.0, with debug_info, not stripped
-  user@machine$ actonc --quiet helloworld.act --target x86_64-macos-none
-  user@machine$ file helloworld
+  $ actonc --quiet helloworld.act --target x86_64-macos-none
+  $ file helloworld
   helloworld: Mach-O 64-bit x86_64 executable, flags:<NOUNDEFS|DYLDLINK|TWOLEVEL|PIE>
 
 Libraries for the local platform are still prebuilt and included in the Acton
