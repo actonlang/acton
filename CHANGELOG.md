@@ -2,6 +2,29 @@
 
 ## Unreleased
 
+### Added
+- `actonc --cache CACHEDIR` can be used to specify the build cache directory
+
+### Fixed
+- static compilation with Musl libc is now possible on Linux [#1372]
+  - adjusted to adjtimex
+- hashing for `int` now supports values outside of `i64` [#1348] [#1367]
+- fix `__pow__` to avoid compiler optimization bug [#1371]
+- bump Zig version [#1374]
+  - avoids "File not Found" error
+- text color in SVG in docs now follow font color [#1365]
+
+### Testing / CI
+- cross-compilation is now tested in CI in all jobs for these targets:
+  - `aarch64-macos-none`
+  - `x86_64-macos-none`
+  - `x86_64-linux-gnu.2.27`
+  - `x86_64-linux-musl`
+- CI uses `--cache` to place build cache in `~/.cache/acton/test-build-cache`,
+  which is in turn cached in CI
+  - the cross-compilation testing meant testing went from ~1 minute to ~3, with
+    caching it remains at around ~1 minute
+
 
 ## [0.15.2] (2023-06-16)
 
