@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+
+## [0.15.3] (2023-06-27)
+
 ### Added
 - `actonc --cache CACHEDIR` can be used to specify the build cache directory
 
@@ -13,6 +16,12 @@
 - bump Zig version [#1374]
   - avoids "File not Found" error
 - text color in SVG in docs now follow font color [#1365]
+- fix hooking of thread creation to inject signal handler wrapper for stop the
+  world [#812]
+- corrected arguments passed to `on_error` callback of `net.DNS` related lookup
+  functions [#812]
+  - .act file specified 2 arguments to the `on_error` callback while the .ext.c
+    file only sent a single argument
 
 ### Testing / CI
 - cross-compilation is now tested in CI in all jobs for these targets:
