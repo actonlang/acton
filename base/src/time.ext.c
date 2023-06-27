@@ -1,3 +1,6 @@
+#define GC_THREADS 1
+#include <gc.h>
+
 #include <sys/timex.h>
 #include <uv.h>
 

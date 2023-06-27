@@ -1,10 +1,10 @@
+#define GC_THREADS 1
+#include <gc.h>
+
 #include "io.h"
 
 #include <uv.h>
 #include <unistd.h>
-
-#define GC_THREADS 1
-#include "gc.h"
 
 #include "log.h"
 #include "log.h"

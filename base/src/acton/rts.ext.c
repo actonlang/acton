@@ -1,6 +1,8 @@
+#define GC_THREADS 1
+#include <gc.h>
+
 #include <time.h>
 #include <uv.h>
-#include "gc.h"
 
 void actonQ_rtsQ___ext_init__() {
     // NOP
