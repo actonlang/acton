@@ -20,12 +20,14 @@ void netQ_DNSD_lookup_a__on_resolve (uv_getaddrinfo_t *req, int status, struct a
         char errmsg[1024] = "DNS lookup error: ";
         uv_strerror_r(status, errmsg + strlen(errmsg), sizeof(errmsg)-strlen(errmsg));
         $action2 f = cb_data->on_error;
-        f->$class->__asyn__(f, "", to$str(errmsg));
+        // TODO: fill in the original query as first argument to on_error callback
+        f->$class->__asyn__(f, to$str(""), to$str(errmsg));
 
+        // No free with GC, but maybe one day we do this explicitly?
         uv_freeaddrinfo(dns_res);
-        free(cb_data->hints);
-        free(cb_data);
-        free(req);
+        //free(cb_data->hints);
+        //free(cb_data);
+        //free(req);
         return;
     }
 
@@ -39,10 +41,11 @@ void netQ_DNSD_lookup_a__on_resolve (uv_getaddrinfo_t *req, int status, struct a
     $action f = cb_data->on_resolve;
     f->$class->__asyn__(f, $res);
 
+    // No free with GC, but maybe one day we do this explicitly?
     uv_freeaddrinfo(dns_res);
-    free(cb_data->hints);
-    free(cb_data);
-    free(req);
+    //free(cb_data->hints);
+    //free(cb_data);
+    //free(req);
 }
 
 $R netQ_DNSD_lookup_aG_local (netQ_DNS self, $Cont c$cont, B_str name, $action on_resolve, $action on_error) {
@@ -65,8 +68,9 @@ $R netQ_DNSD_lookup_aG_local (netQ_DNS self, $Cont c$cont, B_str name, $action o
         char errmsg[1024] = "Unable to run DNS query: ";
         uv_strerror_r(r, errmsg + strlen(errmsg), sizeof(errmsg)-strlen(errmsg));
         log_warn(errmsg);
-        (($action2) on_error)->$class->__asyn__(on_error, name, to$str(errmsg));
-        // TODO: free()
+        $action2 f = cb_data->on_error;
+        f->$class->__asyn__(f, name, to$str(errmsg));
+        // NOTE: free() here if do manual memory management in I/O one day
         return $R_CONT(c$cont, B_None);
     }
 
@@ -80,13 +84,15 @@ void netQ_DNSD_lookup_aaaa__on_resolve (uv_getaddrinfo_t *req, int status, struc
     if (status != 0) {
         char errmsg[1024] = "DNS lookup error: ";
         uv_strerror_r(status, errmsg + strlen(errmsg), sizeof(errmsg)-strlen(errmsg));
-        $action f = cb_data->on_error;
-        f->$class->__asyn__(f, to$str(errmsg));
+        $action2 f = cb_data->on_error;
+        // TODO: fill in the original query as first argument to on_error callback
+        f->$class->__asyn__(f, to$str(""), to$str(errmsg));
 
+        // No free with GC, but maybe one day we do this explicitly?
         uv_freeaddrinfo(dns_res);
-        free(cb_data->hints);
-        free(cb_data);
-        free(req);
+        //free(cb_data->hints);
+        //free(cb_data);
+        //free(req);
         return;
     }
 
@@ -100,10 +106,11 @@ void netQ_DNSD_lookup_aaaa__on_resolve (uv_getaddrinfo_t *req, int status, struc
     $action f = cb_data->on_resolve;
     f->$class->__asyn__(f, $res);
 
+    // No free with GC, but maybe one day we do this explicitly?
     uv_freeaddrinfo(dns_res);
-    free(cb_data->hints);
-    free(cb_data);
-    free(req);
+    //free(cb_data->hints);
+    //free(cb_data);
+    //free(req);
 }
 
 $R netQ_DNSD_lookup_aaaaG_local (netQ_DNS self, $Cont c$cont, B_str name, $action on_resolve, $action on_error) {
@@ -126,8 +133,9 @@ $R netQ_DNSD_lookup_aaaaG_local (netQ_DNS self, $Cont c$cont, B_str name, $actio
         char errmsg[1024] = "Unable to run DNS query: ";
         uv_strerror_r(r, errmsg + strlen(errmsg), sizeof(errmsg)-strlen(errmsg));
         log_warn(errmsg);
-        (($action2) on_error)->$class->__asyn__(on_error, name, to$str(errmsg));
-        // TODO: free()
+        $action2 f = cb_data->on_error;
+        f->$class->__asyn__(f, name, to$str(errmsg));
+        // NOTE: free() here if do manual memory management in I/O one day
         return $R_CONT(c$cont, B_None);
     }
 
@@ -153,8 +161,9 @@ void netQ_TCPIPConnection__on_receive(uv_stream_t *stream, ssize_t nread, const 
         }
     }
 
-    if (buf->base)
-        free(buf->base);
+    // No free with GC, but maybe one day we do this explicitly?
+    //if (buf->base)
+    //    free(buf->base);
 }
 
 void on_connect(uv_connect_t *connect_req, int status) {
@@ -166,7 +175,7 @@ void on_connect(uv_connect_t *connect_req, int status) {
         log_warn(errmsg);
         $action2 f = self->on_error;
         f->$class->__asyn__(f, self, to$str(errmsg));
-        // TODO: free()
+        // NOTE: free() here if do manual memory management in I/O one day
         return;
     }
 
@@ -237,7 +246,7 @@ void on_new_connection(uv_stream_t *server, int status) {
         log_warn(errmsg);
         $action2 f = self->on_error;
         f->$class->__asyn__(f, self, to$str(errmsg));
-        // TODO: free()
+        // NOTE: free() here if do manual memory management in I/O one day
         return;
     }
 
@@ -250,12 +259,12 @@ void on_new_connection(uv_stream_t *server, int status) {
         log_warn(errmsg);
         $action2 f = self->on_error;
         f->$class->__asyn__(f, self, to$str(errmsg));
-        // TODO: free()
+        // NOTE: free() here if do manual memory management in I/O one day
         return;
     }
 
     self->$class->create_tcp_listen_connection(self, B_None, to$int((long)client));
-    // TODO: free()
+    // NOTE: free() here if do manual memory management in I/O one day
 }
 
 
@@ -274,7 +283,7 @@ $R netQ_TCPListenerD__init (netQ_TCPListener self, $Cont c$cont) {
         log_warn(errmsg);
         $action2 f = self->on_error;
         f->$class->__asyn__(f, self, to$str(errmsg));
-        // TODO: free() & return
+        // NOTE: free() here if do manual memory management in I/O one day
         return $R_CONT(c$cont, B_None);
     }
 
@@ -285,7 +294,7 @@ $R netQ_TCPListenerD__init (netQ_TCPListener self, $Cont c$cont) {
         log_warn(errmsg);
         $action2 f = self->on_error;
         f->$class->__asyn__(f, self, to$str(errmsg));
-        // TODO: free() & return
+        // NOTE: free() here if do manual memory management in I/O one day
         return $R_CONT(c$cont, B_None);
     }
 
@@ -296,7 +305,7 @@ $R netQ_TCPListenerD__init (netQ_TCPListener self, $Cont c$cont) {
         log_warn(errmsg);
         $action2 f = self->on_error;
         f->$class->__asyn__(f, self, to$str(errmsg));
-        // TODO: free()
+        // NOTE: free() here if do manual memory management in I/O one day
         return $R_CONT(c$cont, B_None);
     }
 
@@ -337,8 +346,9 @@ void netQ_TCPListenConnection__on_receive(uv_stream_t *stream, ssize_t nread, co
         }
     }
 
-    if (buf->base)
-        free(buf->base);
+    // No free with GC, but maybe one day we do this explicitly?
+    //if (buf->base)
+    //    free(buf->base);
 }
 
 $R netQ_TCPListenConnectionD__read_start (netQ_TCPListenConnection self, $Cont c$cont) {
