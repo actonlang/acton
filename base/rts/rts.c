@@ -18,6 +18,9 @@
 #endif
 #endif
 
+#define GC_THREADS 1
+#include <gc.h>
+
 #include <unistd.h>
 #include <pthread.h>
 #include <stdio.h>
@@ -32,9 +35,6 @@
 #ifdef __linux__
 #include <sys/prctl.h>
 #endif
-
-#define GC_THREADS 1
-#include "gc.h"
 #include "yyjson.h"
 #include "rts.h"
 

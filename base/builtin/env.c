@@ -18,6 +18,9 @@
 #endif
 #endif
 
+#define GC_THREADS 1
+#include <gc.h>
+
 #include <uv.h>
 #include "env.h"
 
