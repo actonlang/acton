@@ -11,6 +11,7 @@ void netQ___ext_init__() {
 
 struct dns_cb_data {
     struct addrinfo *hints;
+    char* hostname;
     $action on_resolve;
     $action2 on_error;
 };
@@ -23,11 +24,10 @@ void netQ_DNSD_lookup_a__on_resolve (uv_getaddrinfo_t *req, int status, struct a
         char errmsg[1024] = "DNS lookup error: ";
         uv_strerror_r(status, errmsg + strlen(errmsg), sizeof(errmsg)-strlen(errmsg));
         $action2 f = cb_data->on_error;
-        // TODO: fill in the original query as first argument to on_error callback
-        f->$class->__asyn__(f, to$str(""), to$str(errmsg));
+        f->$class->__asyn__(f, to$str(cb_data->hostname), to$str(errmsg));
 
         // No free with GC, but maybe one day we do this explicitly?
-        uv_freeaddrinfo(dns_res);
+        //uv_freeaddrinfo(dns_res);
         //free(cb_data->hints);
         //free(cb_data);
         //free(req);
@@ -45,7 +45,7 @@ void netQ_DNSD_lookup_a__on_resolve (uv_getaddrinfo_t *req, int status, struct a
     f->$class->__asyn__(f, $res);
 
     // No free with GC, but maybe one day we do this explicitly?
-    uv_freeaddrinfo(dns_res);
+    //uv_freeaddrinfo(dns_res);
     //free(cb_data->hints);
     //free(cb_data);
     //free(req);
@@ -60,6 +60,7 @@ $R netQ_DNSD_lookup_aG_local (netQ_DNS self, $Cont c$cont, B_str name, $action o
 
     struct dns_cb_data *cb_data = (struct dns_cb_data *)malloc(sizeof(struct dns_cb_data));
     cb_data->hints = hints;
+    cb_data->hostname = fromB_str(name);
     cb_data->on_resolve = on_resolve;
     cb_data->on_error = on_error;
 
@@ -88,11 +89,10 @@ void netQ_DNSD_lookup_aaaa__on_resolve (uv_getaddrinfo_t *req, int status, struc
         char errmsg[1024] = "DNS lookup error: ";
         uv_strerror_r(status, errmsg + strlen(errmsg), sizeof(errmsg)-strlen(errmsg));
         $action2 f = cb_data->on_error;
-        // TODO: fill in the original query as first argument to on_error callback
-        f->$class->__asyn__(f, to$str(""), to$str(errmsg));
+        f->$class->__asyn__(f, to$str(cb_data->hostname), to$str(errmsg));
 
         // No free with GC, but maybe one day we do this explicitly?
-        uv_freeaddrinfo(dns_res);
+        //uv_freeaddrinfo(dns_res);
         //free(cb_data->hints);
         //free(cb_data);
         //free(req);
@@ -110,7 +110,7 @@ void netQ_DNSD_lookup_aaaa__on_resolve (uv_getaddrinfo_t *req, int status, struc
     f->$class->__asyn__(f, $res);
 
     // No free with GC, but maybe one day we do this explicitly?
-    uv_freeaddrinfo(dns_res);
+    //uv_freeaddrinfo(dns_res);
     //free(cb_data->hints);
     //free(cb_data);
     //free(req);
@@ -125,6 +125,7 @@ $R netQ_DNSD_lookup_aaaaG_local (netQ_DNS self, $Cont c$cont, B_str name, $actio
 
     struct dns_cb_data *cb_data = (struct dns_cb_data *)malloc(sizeof(struct dns_cb_data));
     cb_data->hints = hints;
+    cb_data->hostname = fromB_str(name);
     cb_data->on_resolve = on_resolve;
     cb_data->on_error = on_error;
 
