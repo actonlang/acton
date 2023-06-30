@@ -215,6 +215,50 @@ $R netQ_TCPIPConnectionD__init (netQ_TCPIPConnection self, $Cont c$cont) {
     return $R_CONT(c$cont, B_None);
 }
 
+struct close_cb_data {
+    netQ_TCPIPConnection self;
+    $action on_close;
+};
+
+static void after_shutdown(uv_shutdown_t* req, int status) {
+    log_debug("TCP Shutdown complete, closing handle");
+    if (status < 0)
+        log_warn("Error in TCP shutdown: %s", uv_strerror(status));
+    uv_close((uv_handle_t*)req->handle, NULL);
+    struct close_cb_data *cb_data = (struct close_cb_data *)req->data;
+    $action on_close = cb_data->on_close;
+    on_close->$class->__asyn__(on_close, cb_data->self);
+}
+
+$R netQ_TCPIPConnectionD_closeG_local (netQ_TCPIPConnection self, $Cont c$cont, $action on_close) {
+    uv_stream_t *stream = (uv_stream_t *)from$int(self->_socket);
+    // fd == -1 means invalid FD and can happen after __resume__
+    if (stream == -1)
+        return $R_CONT(c$cont, B_None);
+
+    log_debug("Closing TCP connection");
+    struct close_cb_data *cb_data = (struct close_cb_data *)malloc(sizeof(struct close_cb_data));
+    cb_data->self = self;
+    cb_data->on_close = on_close;
+    uv_shutdown_t *req = (uv_shutdown_t *)malloc(sizeof(uv_shutdown_t));
+    req->data = (void *)cb_data;
+    int r = uv_shutdown(req, stream, after_shutdown);
+    self->_socket = to$int(-1);
+    if (r < 0) {
+        // TODO: we could probably ignore most or all of these errors as the
+        // purpose is to shutdown our side of the connection and many of these
+        // errors are about "not connected" or "already closed", turning this
+        // into a NOP
+        char errmsg[1024] = "Failed to shutdown TCP client socket: ";
+        uv_strerror_r(r, errmsg + strlen(errmsg), sizeof(errmsg)-strlen(errmsg));
+        log_warn(errmsg);
+        on_close->$class->__asyn__(on_close, self);
+        return $R_CONT(c$cont, B_None);
+    }
+    return $R_CONT(c$cont, B_None);
+}
+
+
 $R netQ_TCPIPConnectionD_writeG_local (netQ_TCPIPConnection self, $Cont c$cont, B_bytes data) {
     uv_stream_t *stream = (uv_stream_t *)from$int(self->_socket);
     // fd == -1 means invalid FD and can happen after __resume__

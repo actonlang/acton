@@ -37,6 +37,9 @@ actor Client(env: Env, port: int):
         print("Client RECV", data)
         if data == b"PONG":
             print("Got PONG, all good, yay")
+            # Test idempotency / that we don't break anything by double-closing
+            c.close()
+            c.close()
             after 0.1: _exit()
         else:
             print("Got bad response, exiting with error..")
