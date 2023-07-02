@@ -28,7 +28,6 @@ pub fn build(b: *std.build.Builder) void {
     const syspath_backend = b.option([]const u8, "syspath_backend", "") orelse "";
     const libactondeps = b.option([]const u8, "libactondeps", "") orelse "";
     const libactongc = b.option([]const u8, "libactongc", "") orelse "";
-    const wd = b.option([]const u8, "wd", "") orelse "";
     _ = use_prebuilt;
     _ = libactongc;
     _ = libactondeps;
@@ -110,16 +109,26 @@ pub fn build(b: *std.build.Builder) void {
         }
     }
 
+    var flags = std.ArrayList([]const u8).init(b.allocator);
+    defer flags.deinit();
+
+    if (optimize == .Debug) {
+        print("Debug build\n", .{});
+        flags.appendSlice(&.{
+            "-DDEV",
+        }) catch |err| {
+            std.log.err("Error appending flags: {}", .{err});
+            std.os.exit(1);
+        };
+    }
+
     const libActon = b.addStaticLibrary(.{
         .name = "Acton",
         .target = target,
         .optimize = optimize,
     });
-    const cflags = [_][]const u8{
-        wd
-    };
     for (c_files.items) |entry| {
-        libActon.addCSourceFile(entry, &cflags);
+        libActon.addCSourceFile(entry, flags.items);
     }
 
     libActon.addIncludePath(projpath);
