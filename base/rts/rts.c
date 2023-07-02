@@ -244,9 +244,9 @@ void wake_wt(int wtid) {
     // wake up corresponding worker threads....
     if (wtid == 0) {
         // global queue
-        for (int j = 0; j < num_wthreads; j++) {
-            if (wt_stats[j].state == WT_Idle) {
-                uv_async_send(&wake_ev[j]);
+        for (int i = 1; i < num_wthreads+1; i++) {
+            if (wt_stats[i].state == WT_Idle) {
+                uv_async_send(&wake_ev[i]);
                 return;
             }
         }
