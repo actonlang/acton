@@ -200,6 +200,10 @@ void on_connect(uv_connect_t *connect_req, int status) {
 
 $R netQ_TCPIPConnectionD__init (netQ_TCPIPConnection self, $Cont c$cont) {
     pin_actor_affinity();
+    return $R_CONT(c$cont, B_None);
+}
+
+$R netQ_TCPIPConnectionD__connect (netQ_TCPIPConnection self, $Cont c$cont, netQ_TCPIPConnection c) {
     uv_tcp_t* socket = (uv_tcp_t*)malloc(sizeof(uv_tcp_t));
     uv_tcp_init(get_uv_loop(), socket);
     self->_socket = to$int((long)socket);
