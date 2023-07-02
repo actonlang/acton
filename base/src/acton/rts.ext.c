@@ -4,6 +4,9 @@
 #include <time.h>
 #include <uv.h>
 
+#include "rts/io.h"
+#include "rts/log.h"
+
 void actonQ_rtsQ___ext_init__() {
     // NOP
 }
@@ -40,4 +43,40 @@ B_int actonQ_rtsQ_rss (B_WorldAuth auth) {
     size_t rsm;
     int r = uv_resident_set_memory(&rsm);
     return to$int(rsm);
+}
+
+struct actonQ_rtsQ_io_handles_walk_res {
+    B_dict d;
+    B_Hashable wit;
+};
+
+void actonQ_rtsQ_io_handles_walk_cb (uv_handle_t *handle, void *arg) {
+    struct actonQ_rtsQ_io_handles_walk_res *walk_res = (struct actonQ_rtsQ_io_handles_walk_res *)arg;
+    B_tuple val;
+    if (uv_handle_get_type(handle) == UV_TCP) {
+        $Actor hactor = handle->data;
+        val = (B_tuple)$NEWTUPLE(2,
+                                to$str((char *)uv_handle_type_name(uv_handle_get_type(handle))),
+                                toB_u64((unsigned long)hactor)
+                                );
+    } else {
+        val = (B_tuple)$NEWTUPLE(2,
+                                to$str((char *)uv_handle_type_name(uv_handle_get_type(handle))),
+                                toB_u64(0) // TODO: should be None type instead, right?
+                                );
+    }
+
+    B_dictD_setitem(walk_res->d, walk_res->wit, toB_u64((long)handle), val);
+}
+
+B_dict actonQ_rtsQ_io_handles (B_WorldAuth auth) {
+    B_Hashable wit = (B_Hashable)B_HashableD_u64G_witness;
+    B_dict d = $NEW(B_dict, wit, NULL, NULL);
+
+    struct actonQ_rtsQ_io_handles_walk_res walk_res;
+    walk_res.wit = wit;
+    walk_res.d = d;
+    uv_walk(get_uv_loop(), actonQ_rtsQ_io_handles_walk_cb, (void *)&walk_res);
+
+    return d;
 }

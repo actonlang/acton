@@ -1,3 +1,5 @@
+# TODO: replace WorldAuth with SysAuth here for reading information and
+# SysAuthBAD or something for write operations
 
 def gc() -> None:
     NotImplemented
@@ -17,4 +19,8 @@ def sleep(duration: float) -> None:
 
 def rss(auth: WorldAuth) -> int:
     """Get Resident Set Size"""
+    NotImplemented
+
+def io_handles(auth: WorldAuth) -> dict[u64, (typ: str, act: u64)]:
+    """Return all I/O handles and their type for the current worker thread"""
     NotImplemented
