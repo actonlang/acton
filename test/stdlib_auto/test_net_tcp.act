@@ -2,8 +2,17 @@
 # and then creating a TCP client connection which connects to the server, sends
 # a message and expects a reply. This exercices both ends of the TCP connection.
 
+import acton.rts
 import net
 import random
+
+
+def filter_tcp_handles(handles: dict[u64, (typ: str, act: u64)]):
+    res = {}
+    for k, v in handles.items():
+        if v.typ == "tcp" and v.act != u64(0):
+            res[k] = v
+    return res
 
 actor Server(conn):
     def on_receive(c, data):
@@ -29,18 +38,39 @@ actor Listener(env, port):
 
 
 actor Client(env: Env, port: int):
+    var connection = 0
     def on_connect(c):
-        print("Client established connection")
+        connection += 1
+        print("Client connected, TCP handles", filter_tcp_handles(acton.rts.io_handles(env.auth)))
         await async c.write(b"PING")
+
+    def on_close(c):
+        print("closed connection", connection)
+        if connection == 2:
+            after 0.001: check_io()
+
+    def check_io():
+        tcp_handles = filter_tcp_handles(acton.rts.io_handles(env.auth))
+        print("IO check...", tcp_handles)
+        if len(tcp_handles) < 2:
+            # Only TCP listening socket left...
+            print("TCP client properly cleaned from IO loop, exiting...")
+            await async env.exit(0)
+        else:
+            print("TCP client not properly cleaned from IO loop, waiting...")
+            after 0.8: check_io()
 
     def on_receive(c, data):
         print("Client RECV", data)
         if data == b"PONG":
             print("Got PONG, all good, yay")
-            # Test idempotency / that we don't break anything by double-closing
-            c.close()
-            c.close()
-            after 0.1: _exit()
+            if connection == 1:
+                print("Conn 1: reconnecting")
+                c.reconnect()
+            else:
+                # Test idempotency / that we don't break anything by double-closing
+                c.close(on_close)
+                await async c.close(on_close)
         else:
             print("Got bad response, exiting with error..")
             await async env.exit(1)
@@ -49,6 +79,8 @@ actor Client(env: Env, port: int):
         print("Client ERR", msg)
 
     def _exit():
+        print("exiting..")
+        print(acton.rts.io_handles(env.auth))
         await async env.exit(0)
 
     connect_auth = net.TCPConnectAuth(net.TCPAuth(net.NetAuth(env.auth)))
@@ -56,6 +88,7 @@ actor Client(env: Env, port: int):
 
 
 actor main(env):
+    init_io_handles = acton.rts.io_handles(env.auth)
     def timeout_error():
         print("Timeout reached, exiting with error...")
         await async env.exit(1)
@@ -66,4 +99,3 @@ actor main(env):
     print("Using port", port)
     l = Listener(env, port)
     c = Client(env, port)
-
