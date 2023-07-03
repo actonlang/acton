@@ -2,6 +2,50 @@
 
 ## Unreleased
 
+## [0.15.4] (2023-07-03)
+
+Primarily addition of simplified TCP reconnection, related fixes and functionality.
+
+### Added
+- Add `.close()` and `.reconnect()` on TCP client actor [#1383]
+  - It is now possible to explicitly close or reconnect a TCP client
+- Add RTS Monitor actor in `acton.rts.Monitor()` [#1383]
+  - The RTS Monitor actor starts a worker monitor per worker thread, each pinned
+    to a particular worker thread. By doing so, it can retrieve information from
+    each worker thread in safe manner, honoring the RTS design.
+  - Currently just supporting getting handles from I/O subsystem.
+- Add `env.nr_threads` [#1383]
+- Add `set_actor_affinity(wthread_id)` [#1383]
+
+### Changed
+- Include DNS query hostname in `on_error` cb [#1382]
+  - Simplifies retrying a query since we otherwise do not have a persistent
+    tracking object per query
+
+### Fixed
+- Fix `--rts-debug` [#1383]
+  - Has been broken since new builder but is now fixed
+- Fix off-by-one in worker thread wake up [#1383]
+  - Waking all threads would not consider all threads as there was an off-by-one
+    error.
+  - No known problems in the field from this, it was only noticed in development
+    using --rts-wthreads=1
+    - The RTS uses at least 4 workers per default
+- Use relative source file path in logs [#1383] [#1391]
+  - `__FILE__`, set by the C compiler, is used to include source file path in
+    log messages
+  - Zig uses absolute paths to all files
+  - now using `-ffile-prefix-map` to make path relative
+  - project dir name also included, for example `base/rts/rts.c`, to make it
+    easier to understand from which project a file comes from
+- Assignment in multiple branches [#1390] [#1392]
+  - Only assigning in multiple branches (not before branches) would lead to
+    redefining shadowing variable of outer scope in low level generated C code
+  - Info guiding joined assignment has been fixed
+
+### Testing / CI
+- Verify we cannot instantiate WorldAuth
+
 
 ## [0.15.3] (2023-06-27)
 
