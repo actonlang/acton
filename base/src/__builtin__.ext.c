@@ -1,4 +1,4 @@
-#include "../rts/rts.c"
+#include "rts/rts.c"
 
 void B___ext_init__() {
 

@@ -210,6 +210,15 @@ pub fn build(b: *std.build.Builder) void {
     var flags = std.ArrayList([]const u8).init(b.allocator);
     defer flags.deinit();
 
+    var file_prefix_map = std.ArrayList(u8).init(b.allocator);
+    defer file_prefix_map.deinit();
+    const file_prefix_path = b.build_root.handle.openDir("..", .{}) catch unreachable;
+    const file_prefix_path_path = file_prefix_path.realpathAlloc(b.allocator, ".") catch unreachable;
+    file_prefix_map.appendSlice("-ffile-prefix-map=") catch unreachable;
+    file_prefix_map.appendSlice(file_prefix_path_path) catch unreachable;
+    file_prefix_map.appendSlice("/=") catch unreachable;
+    flags.append(file_prefix_map.items) catch unreachable;
+
     if (optimize == .Debug) {
         print("Debug build\n", .{});
         flags.appendSlice(&.{
