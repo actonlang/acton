@@ -1,0 +1,10 @@
+
+import acton.rts
+
+actor main(env):
+    rts_monitor = acton.rts.Monitor(env)
+    for k,v in rts_monitor.io_handles().items():
+        print("Worker", k)
+        for hid, handle in v.items():
+            print("  %d:" % int(hid), handle)
+    await async env.exit(0)

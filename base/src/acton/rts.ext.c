@@ -69,7 +69,7 @@ void actonQ_rtsQ_io_handles_walk_cb (uv_handle_t *handle, void *arg) {
     B_dictD_setitem(walk_res->d, walk_res->wit, toB_u64((long)handle), val);
 }
 
-B_dict actonQ_rtsQ_io_handles (B_WorldAuth auth) {
+B_dict actonQ_rtsQ__io_handles (B_WorldAuth auth) {
     B_Hashable wit = (B_Hashable)B_HashableD_u64G_witness;
     B_dict d = $NEW(B_dict, wit, NULL, NULL);
 
@@ -79,4 +79,9 @@ B_dict actonQ_rtsQ_io_handles (B_WorldAuth auth) {
     uv_walk(get_uv_loop(), actonQ_rtsQ_io_handles_walk_cb, (void *)&walk_res);
 
     return d;
+}
+
+$R actonQ_rtsQ_WThreadMonitorD__init (actonQ_rtsQ_WThreadMonitor self, $Cont C_cont) {
+    set_actor_affinity(from$int(self->wthread_id));
+    return $RU_CONT(C_cont, B_None);
 }

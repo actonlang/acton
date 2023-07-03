@@ -21,6 +21,31 @@ def rss(auth: WorldAuth) -> int:
     """Get Resident Set Size"""
     NotImplemented
 
-def io_handles(auth: WorldAuth) -> dict[u64, (typ: str, act: u64)]:
+def _io_handles(auth: WorldAuth) -> dict[u64, (typ: str, act: u64)]:
     """Return all I/O handles and their type for the current worker thread"""
     NotImplemented
+
+actor WThreadMonitor(env: Env, arg_wthread_id: int):
+    wthread_id = arg_wthread_id
+
+    def io_handles():
+        return _io_handles(env.auth)
+
+    proc def _init():
+        """Implementation internal"""
+        NotImplemented
+    _init()
+
+actor Monitor(env: Env):
+    tms: dict[int, WThreadMonitor] = {}
+
+    for wthread_id in range(1, env.nr_wthreads+1, 1):
+        tm = WThreadMonitor(env, wthread_id)
+        tms[wthread_id] = tm
+
+    def io_handles():
+        res = {}
+        for wthread_id, tm in tms.items():
+            res[wthread_id] = tm.io_handles()
+        return res
+
