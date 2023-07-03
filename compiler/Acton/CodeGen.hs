@@ -482,8 +482,9 @@ genStmt env (Assign _ [PVar _ n (Just t)] e)
                                            _  ->  genExp env t e
                                       else genExp env t e
 genStmt env s                       = vcat [ gen env t <+> gen env n <> semi | (n,NVar t) <- te ] $+$
-                                      gen env s
+                                      gen env1 s
   where te                          = envOf s `exclude` defined env
+        env1                        = ldefine te env
 
 instance Gen Stmt where
     gen env (Expr _ Strings{})      = semi

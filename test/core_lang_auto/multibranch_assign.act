@@ -1,0 +1,8 @@
+def foo():
+    if 1 == 1:
+        b = 0
+    else:
+        b = 1
+
+actor main(env):
+    await async env.exit(0)
