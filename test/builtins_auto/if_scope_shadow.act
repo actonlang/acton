@@ -1,0 +1,17 @@
+# We had a bug where codegen would redefine a variable from an outer scope,
+# effectively shadowing the assignment. This tests that case to prevent
+# regressions. See https://github.com/actonlang/acton/issues/1390
+
+actor main(env):
+    def test():
+        if True:
+            a = 1
+        else:
+            a = 0
+
+        if a == 1:
+            await async env.exit(0)
+        else:
+            await async env.exit(1)
+
+    test()
