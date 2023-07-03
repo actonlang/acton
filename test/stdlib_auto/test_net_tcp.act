@@ -7,11 +7,13 @@ import net
 import random
 
 
-def filter_tcp_handles(handles: dict[u64, (typ: str, act: u64)]):
+def get_tcp_handles(m):
+    tcp_handles = m.io_handles()
     res = {}
-    for k, v in handles.items():
-        if v.typ == "tcp" and v.act != u64(0):
-            res[k] = v
+    for wthread_id, handles in tcp_handles.items():
+        for k, v in handles.items():
+            if v.typ == "tcp" and v.act != u64(0):
+                res[k] = v
     return res
 
 actor Server(conn):
@@ -37,11 +39,11 @@ actor Listener(env, port):
     server = net.TCPListener(listen_auth, "0.0.0.0", port, on_lsock_error, on_server_accept)
 
 
-actor Client(env: Env, port: int):
+actor Client(rts_monitor, env: Env, port: int):
     var connection = 0
     def on_connect(c):
         connection += 1
-        print("Client connected, TCP handles", filter_tcp_handles(acton.rts.io_handles(env.auth)))
+        print("Client connected, TCP handles", get_tcp_handles(rts_monitor))
         await async c.write(b"PING")
 
     def on_close(c):
@@ -50,7 +52,7 @@ actor Client(env: Env, port: int):
             after 0.001: check_io()
 
     def check_io():
-        tcp_handles = filter_tcp_handles(acton.rts.io_handles(env.auth))
+        tcp_handles = get_tcp_handles(rts_monitor)
         print("IO check...", tcp_handles)
         if len(tcp_handles) < 2:
             # Only TCP listening socket left...
@@ -80,7 +82,6 @@ actor Client(env: Env, port: int):
 
     def _exit():
         print("exiting..")
-        print(acton.rts.io_handles(env.auth))
         await async env.exit(0)
 
     connect_auth = net.TCPConnectAuth(net.TCPAuth(net.NetAuth(env.auth)))
@@ -88,7 +89,6 @@ actor Client(env: Env, port: int):
 
 
 actor main(env):
-    init_io_handles = acton.rts.io_handles(env.auth)
     def timeout_error():
         print("Timeout reached, exiting with error...")
         await async env.exit(1)
@@ -97,5 +97,6 @@ actor main(env):
 
     port = random.randint(10000, 20000)
     print("Using port", port)
+    rts_monitor = acton.rts.Monitor(env)
     l = Listener(env, port)
-    c = Client(env, port)
+    c = Client(rts_monitor, env, port)
