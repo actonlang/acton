@@ -234,6 +234,12 @@ void pin_actor_affinity() {
     a->$affinity = i;
 }
 
+void set_actor_affinity(int wthread_id) {
+    $Actor a = ($Actor)pthread_getspecific(self_key);
+    log_debug("Setting affinity for %s actor %ld to WT %d", a->$class->$GCINFO, a->$globkey, wthread_id);
+    a->$affinity = wthread_id;
+}
+
 void wake_wt(int wtid) {
     // We are sometimes optimistically called, i.e. the caller sometimes does
     // not really know whether there is new work or not. We check and if there

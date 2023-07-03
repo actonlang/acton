@@ -159,6 +159,7 @@ void handle_timeout();
 void rts_shutdown();
 
 void pin_actor_affinity();
+void set_actor_affinity(int wthread_id);
 
 //typedef B_int B_Env;
 
