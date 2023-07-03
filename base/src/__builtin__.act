@@ -872,6 +872,7 @@ class WorldAuth():
 actor Env (token: WorldAuth, args: list[str]):
     auth = token
     argv = args
+    nr_wthreads: int = 0
 
     action def stdout_write(s: str) -> None:
         NotImplemented
