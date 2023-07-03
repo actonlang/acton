@@ -51,6 +51,13 @@ actor TCPIPConnection(auth: TCPConnectAuth, address: str, port: int, on_connect:
     """TCP IP Connection"""
     _socket = -1
 
+    action def close(on_close: action(TCPIPConnection) -> None) -> None:
+        """Close the connection"""
+        NotImplemented
+
+    def reconnect():
+        close(_connect)
+
     action def write(data: bytes) -> None:
         """Write data to remote"""
         NotImplemented
@@ -60,7 +67,11 @@ actor TCPIPConnection(auth: TCPConnectAuth, address: str, port: int, on_connect:
 
     proc def _init():
         NotImplemented
+
+    proc def _connect(c):
+        NotImplemented
     _init()
+    _connect(self)
 
 actor TCPListenConnection(auth: _TCPListenConnectAuth, server_client: int):
     """TCP Listener Connection"""

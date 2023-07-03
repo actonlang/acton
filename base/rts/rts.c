@@ -234,6 +234,12 @@ void pin_actor_affinity() {
     a->$affinity = i;
 }
 
+void set_actor_affinity(int wthread_id) {
+    $Actor a = ($Actor)pthread_getspecific(self_key);
+    log_debug("Setting affinity for %s actor %ld to WT %d", a->$class->$GCINFO, a->$globkey, wthread_id);
+    a->$affinity = wthread_id;
+}
+
 void wake_wt(int wtid) {
     // We are sometimes optimistically called, i.e. the caller sometimes does
     // not really know whether there is new work or not. We check and if there
@@ -244,9 +250,9 @@ void wake_wt(int wtid) {
     // wake up corresponding worker threads....
     if (wtid == 0) {
         // global queue
-        for (int j = 0; j < num_wthreads; j++) {
-            if (wt_stats[j].state == WT_Idle) {
-                uv_async_send(&wake_ev[j]);
+        for (int i = 1; i < num_wthreads+1; i++) {
+            if (wt_stats[i].state == WT_Idle) {
+                uv_async_send(&wake_ev[i]);
                 return;
             }
         }
@@ -1426,6 +1432,7 @@ void BOOTSTRAP(int argc, char *argv[]) {
         wit->$class->append(wit,args,to$str(argv[i]));
 
     env_actor = B_EnvG_newactor(B_WorldAuthG_new(), args);
+    env_actor->nr_wthreads = to$int(num_wthreads);
 
     root_actor = $ROOT();                           // Assumed to return $NEWACTOR(X) for the selected root actor X
     time_t now = current_time();

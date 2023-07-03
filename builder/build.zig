@@ -58,7 +58,6 @@ pub fn build(b: *std.build.Builder) void {
     const syspath_include = b.option([]const u8, "syspath_include", "") orelse "";
     const syspath_lib = b.option([]const u8, "syspath_lib", "") orelse "";
     const syspath_libreldev = b.option([]const u8, "syspath_libreldev", "") orelse "";
-    const wd = b.option([]const u8, "wd", "") orelse "";
 
     const libactondb_dep = b.anonymousDependency(syspath_backend, @import("backendbuild.zig"), .{
         .target = target,
@@ -208,11 +207,30 @@ pub fn build(b: *std.build.Builder) void {
         .target = target,
         .optimize = optimize,
     });
-    const cflags = [_][]const u8{
-        wd
-    };
+    var flags = std.ArrayList([]const u8).init(b.allocator);
+    defer flags.deinit();
+
+    var file_prefix_map = std.ArrayList(u8).init(b.allocator);
+    defer file_prefix_map.deinit();
+    const file_prefix_path = b.build_root.handle.openDir("..", .{}) catch unreachable;
+    const file_prefix_path_path = file_prefix_path.realpathAlloc(b.allocator, ".") catch unreachable;
+    file_prefix_map.appendSlice("-ffile-prefix-map=") catch unreachable;
+    file_prefix_map.appendSlice(file_prefix_path_path) catch unreachable;
+    file_prefix_map.appendSlice("/=") catch unreachable;
+    flags.append(file_prefix_map.items) catch unreachable;
+
+    if (optimize == .Debug) {
+        print("Debug build\n", .{});
+        flags.appendSlice(&.{
+            "-DDEV",
+        }) catch |err| {
+            std.log.err("Error appending flags: {}", .{err});
+            std.os.exit(1);
+        };
+    }
+
     for (c_files.items) |entry| {
-        libActonProject.addCSourceFile(entry, &cflags);
+        libActonProject.addCSourceFile(entry, flags.items);
     }
 
     libActonProject.addIncludePath(projpath);
@@ -241,7 +259,7 @@ pub fn build(b: *std.build.Builder) void {
             .optimize = optimize,
         });
         //_ = syspath;
-        executable.addCSourceFile(entry.full_path, &[_][]const u8{});
+        executable.addCSourceFile(entry.full_path, flags.items);
         executable.addIncludePath(projpath);
         executable.addIncludePath(syspath_base);
         executable.addIncludePath(syspath_include);

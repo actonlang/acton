@@ -51,16 +51,25 @@ pub fn build(b: *std.build.Builder) void {
         "failure_detector/vector_clock.c",
     };
 
-    const libactondb_cflags: []const []const u8 = &.{
-        "-fno-sanitize=undefined",
-    };
+    var flags = std.ArrayList([]const u8).init(b.allocator);
+    defer flags.deinit();
+    flags.append("-fno-sanitize=undefined") catch unreachable;
+
+    var file_prefix_map = std.ArrayList(u8).init(b.allocator);
+    defer file_prefix_map.deinit();
+    const file_prefix_path = b.build_root.handle.openDir("..", .{}) catch unreachable;
+    const file_prefix_path_path = file_prefix_path.realpathAlloc(b.allocator, ".") catch unreachable;
+    file_prefix_map.appendSlice("-ffile-prefix-map=") catch unreachable;
+    file_prefix_map.appendSlice(file_prefix_path_path) catch unreachable;
+    file_prefix_map.appendSlice("/=") catch unreachable;
+    flags.append(file_prefix_map.items) catch unreachable;
 
     const libactondb = b.addStaticLibrary(.{
         .name = "ActonDB",
         .target = target,
         .optimize = optimize,
     });
-    libactondb.addCSourceFiles(&libactondb_sources, libactondb_cflags);
+    libactondb.addCSourceFiles(&libactondb_sources, flags.items);
     libactondb.defineCMacro("LOG_USER_COLOR", "");
     libactondb.addIncludePath(syspath_include);
     libactondb.linkLibC();
@@ -74,7 +83,7 @@ pub fn build(b: *std.build.Builder) void {
     actondb.addCSourceFile("actondb.c", &[_][]const u8{
         "-fno-sanitize=undefined",
     });
-    actondb.addCSourceFile("log.c", &[_][]const u8{});
+    actondb.addCSourceFile("log.c", flags.items);
     actondb.addIncludePath(syspath_include);
     actondb.addLibraryPath("../lib");
     actondb.linkLibrary(libactondb);
