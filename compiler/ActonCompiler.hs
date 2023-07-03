@@ -260,12 +260,10 @@ compileFiles opts srcFiles = do
     -- we only care about project level path stuff and all source files are
     -- known to be in the same project
     paths <- findPaths (head srcFiles) opts
-    iff (not(C.quiet opts)) $ do
+    iff (not(quiet opts)) $ do
         if isTmp paths
-          then
-            putStrLn("Building file " ++ head srcFiles)
-          else
-            putStrLn("Building project in " ++ projPath paths)
+          then putStrLn("Building file " ++ head srcFiles)
+          else putStrLn("Building project in " ++ projPath paths)
 
     when (C.debug opts) $ do
         putStrLn ("  Paths:")
@@ -516,9 +514,12 @@ chaseImportedFiles opts paths itasks
                                                          (imns ++ concatMap importsOf t)
 
 
+quiet :: C.CompileOptions -> Bool
+quiet opts = C.quiet opts || altOutput opts
+
 doTask :: C.CompileOptions -> Paths -> Acton.Env.Env0 -> CompileTask -> IO Acton.Env.Env0
 doTask opts paths env t@(ActonTask mn src m stubMode) = do
-    iff (not (C.quiet opts))  (putStrLn("  Compiling " ++ makeRelative (srcDir paths) actFile
+    iff (not (quiet opts))  (putStrLn("  Compiling " ++ makeRelative (srcDir paths) actFile
               ++ (if (C.dev opts) then " for development" else " for release")
               ++ (if stubMode then " in stub mode" else "")))
 
@@ -538,7 +539,7 @@ doTask opts paths env t@(ActonTask mn src m stubMode) = do
         (_,te) <- InterfaceFiles.readFile tyFile
         timeEnd <- getTime Monotonic
         iff (C.timing opts) $ putStrLn("   Read .ty file " ++ makeRelative (projPath paths) tyFile ++ ": " ++ fmtTime(timeEnd - timeBeforeTy))
-        iff (not (C.quiet opts)) $ putStrLn("   Already up to date, in   " ++ fmtTime(timeEnd - timeStart))
+        iff (not (quiet opts)) $ putStrLn("   Already up to date, in   " ++ fmtTime(timeEnd - timeStart))
         return (Acton.Env.addMod mn te env)
       else do
         createDirectoryIfMissing True (getModPath (projTypes paths) mn)
@@ -547,7 +548,7 @@ doTask opts paths env t@(ActonTask mn src m stubMode) = do
           `catch` handle "Compilation error" Acton.Env.compilationError src paths mn
           `catch` handle "Type error" Acton.Types.typeError src paths mn
         timeEnd <- getTime Monotonic
-        iff (not (C.quiet opts)) $ putStrLn("   Finished compilation in  " ++ fmtTime(timeEnd - timeStart))
+        iff (not (quiet opts)) $ putStrLn("   Finished compilation in  " ++ fmtTime(timeEnd - timeStart))
         return env'
   where actFile             = srcFile paths mn
         outbase             = outBase paths mn
@@ -600,6 +601,10 @@ checkUptoDate opts paths actFile outFiles imps = do
                                    (False, False) -> error("ERROR: Unable to find interface file")
                              return filePath
 
+
+-- Check if any other non-standard output is enabled, like --cgen or --sigs
+altOutput opts =
+    (C.cgen opts) || (C.hgen opts) || (C.sigs opts) || (C.llift opts) || (C.cps opts) || (C.deact opts) || (C.norm opts)
 
 runRestPasses :: C.CompileOptions -> Paths -> Acton.Env.Env0 -> A.Module -> Bool -> IO Acton.Env.Env0
 runRestPasses opts paths env0 parsed stubMode = do
@@ -658,6 +663,9 @@ runRestPasses opts paths env0 parsed stubMode = do
                       (n,h,c) <- Acton.CodeGen.generate liftEnv relSrcBase lifted
                       timeCodeGen <- getTime Monotonic
                       iff (C.timing opts) $ putStrLn("    Pass: Generating code : " ++ fmtTime (timeCodeGen - timeLLift))
+
+                      iff (altOutput opts) $ do
+                          System.Exit.exitSuccess
 
                       iff (C.hgen opts) $ do
                           putStrLn(h)
@@ -755,7 +763,7 @@ buildExecutable env opts paths binTask
                                Just (A.NAct [] (A.TRow _ _ _ t A.TNil{}) A.TNil{} _) 
                                    | prstr t == "Env" || prstr t == "None"
                                       || prstr t == "__builtin__.Env"|| prstr t == "__builtin__.None"-> do   -- !! To do: proper check of parameter type !!
-                                      iff (not (C.quiet opts)) $ putStrLn ("Building executable "++ makeRelative (projPath paths) binFile)
+                                      iff (not (quiet opts)) $ putStrLn ("Building executable "++ makeRelative (projPath paths) binFile)
                                       c <- Acton.CodeGen.genRoot env qn
                                       writeFile rootFile c
                                       iff (C.ccmd opts) $ do
@@ -839,7 +847,7 @@ runZig opts zigCmd wd = do
 zigBuild :: Acton.Env.Env0 -> C.CompileOptions -> Paths -> [CompileTask] -> [BinTask] -> IO ()
 zigBuild env opts paths tasks binTasks = do
     mapM (writeRootC env opts paths) binTasks
-    iff (not (C.quiet opts)) $ putStrLn("  Final compilation step")
+    iff (not (quiet opts)) $ putStrLn("  Final compilation step")
     timeStart <- getTime Monotonic
 
     -- custom build.zig ?
@@ -878,14 +886,14 @@ zigBuild env opts paths tasks binTasks = do
 
     runZig opts zigCmd (Just (projPath paths))
     -- if we are in a temp acton project, copy the outputted binary next to the source file
-    if (isTmp paths)
+    if (isTmp paths && not (null binTasks))
       then do
         let srcBinFile = joinPath [ projProfile paths, "bin", (binName (head binTasks)) ]
             dstBinFile = joinPath [ binDir paths, (binName (head binTasks)) ]
         copyFile srcBinFile dstBinFile
       else return ()
     timeEnd <- getTime Monotonic
-    iff (not (C.quiet opts)) $ putStrLn("   Finished final compilation step in  " ++ fmtTime(timeEnd - timeStart))
+    iff (not (quiet opts)) $ putStrLn("   Finished final compilation step in  " ++ fmtTime(timeEnd - timeStart))
     return ()
   where reldev = if C.dev opts then "dev" else "rel"
         -- As many ../../ etc to get from the project directory to the root,
