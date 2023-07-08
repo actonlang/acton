@@ -3,9 +3,25 @@
 ## Unreleased
 
 ### Added
+- `net.TCPConnection`: A new TCP client connection actor [#1398]
+  - Support DNS lookups so the input address can be a name rather than an IP
+    address
+    - It is still possible to connect using an IP address
+  - Supports Happy Eyeballs (RFC6555) which uses both IPv4 and IPv6
+    simultaneously to connect using the fastest transport
+    - Happy Eyeballs is only used for hostnames. If an IP address is provided,
+      we connect directly to it.
+- `net.is_ipv4(address: str) -> bool` tells you if something is an IPv4 address
+- `net.is_ipv6(address: str) -> bool` tells you if something is an IPv6 address
 - AbE: Documented capability based security [#1267]
 
 ### Changed
+- `net.TCPIPConnection` is removed and replaced by `net.TCPConnection`
+  - Originally opted to add `net.TCPConnection` now and phase out
+    `net.TCPIPConnection` later but as there is already a breaking change with
+    the change of Auth -> Cap so all user code related to networking (and other
+    things) need to be changed, we might as well change from
+    `net.TCPIPConnection` to `net.TCPConnection`
 - `DNS` actor is replaced with lookup functions [#1406]
   - The `DNS` actor is removed, the `lookup_a` & `lookup_aaaa` methods it has
     are now free functions in the `net` module, i.e. simply call `net.lookup_a`

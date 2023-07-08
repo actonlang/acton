@@ -3,7 +3,7 @@ import net
 actor main(env):
 
     def on_connect(c):
-        print("Client established connection")
+        print("Client established connection to", c.remote_address(), "from", c.local_address(), "using IP version", c.ip_version())
         def conn_write(s):
             c.write(s.encode())
 
@@ -14,10 +14,12 @@ actor main(env):
 
     def on_error(c, msg):
         print("Client ERR", msg)
+        # Should do periodic back-off
+        c.reconnect()
 
     if len(env.argv) != 3:
         print("usage: client [HOST] [PORT]")
         await async env.exit(-1)
 
     connect_cap = net.TCPConnectCap(net.TCPCap(net.NetCap(env.cap)))
-    client = net.TCPIPConnection(connect_cap, env.argv[1], int(env.argv[2]), on_connect, on_receive, on_error)
+    client = net.TCPConnection(connect_cap, env.argv[1], int(env.argv[2]), on_connect, on_receive, on_error)

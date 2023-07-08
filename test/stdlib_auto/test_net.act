@@ -1,0 +1,24 @@
+import net
+
+actor main(env):
+    for ip in ["1.2.3.4", "123.123.123.123"]:
+        if net.is_ipv4(ip) == False:
+            print(ip, "incorrectly detected as not IPv4")
+            await async env.exit(1)
+
+    for notip in ["1.2.3.4.5", "256.123.123.123"]:
+        if net.is_ipv4(notip) == True:
+            print(notip, "incorrectly detected as correct IPv4")
+            await async env.exit(1)
+
+    for ip in ["2001:db8::1", "2001:DB8::1"]:
+        if net.is_ipv6(ip) == False:
+            print(ip, "incorrectly detected as not IPv6")
+            await async env.exit(1)
+
+    for notip in ["2001:db8::123456", "2001:db8:::1"]:
+        if net.is_ipv6(notip) == True:
+            print(notip, "incorrectly detected as correct IPv6")
+            await async env.exit(1)
+
+    await async env.exit(0)
