@@ -530,7 +530,7 @@ doTask opts paths env t@(ActonTask mn src m stubMode) = do
         copyFileWithMetadata (replaceExtension actFile ".c") cFile
         copyFileWithMetadata (replaceExtension actFile ".h") hFile
 
-    let outFiles = [tyFile, hFile, cFile]
+    let outFiles = if stubMode then [tyFile] else [tyFile, hFile, cFile]
     ok <- checkUptoDate opts paths actFile outFiles (importsOf t)
     if ok && not (forceCompilation opts)
       then do
