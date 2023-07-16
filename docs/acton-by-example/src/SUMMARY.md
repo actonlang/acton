@@ -30,6 +30,7 @@
   - [while](control_flow/while.md)
   - [after / sleep](control_flow/after_sleep.md)
 - [Types](types.md)
+  - [Explicit types](types/explicit.md)
 - [Standard library](stdlib.md)
   - [Regular Expression](stdlib/re.md)
 
