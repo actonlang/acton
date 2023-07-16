@@ -2,7 +2,7 @@
 
 Acton is a statically typed language. Unlike traditional languages like C or Java, where the type of every variable must be explicitly stated, we can write most Acton programs without types. The Acton compiler features a powerful type inferencer which will then infer the type.
 
-To see the inferred type signatures after an Acton program is compiled you can use the `--sigs` option of the compiler. As rhe name suggests, this will print out the type signatures for the functions, actors and their attributes and methods found in the compiled file.
+To see the inferred types of an Acton program, use the `--sigs` option of the compiler. As the name suggests, this will print out the type signatures for functions, actors and their attributes and methods in the specified Acton module.
 
 Source:
 ```python
@@ -18,12 +18,9 @@ actor main(env):
     await async env.exit(0)
 ```
 
-Compile and use the `--sigs` option:
+Print type signatures with `--sigs`:
 ```sh
-actonc --sigs types.act
-Building file types.act
-  Compiling types.act for release
-
+actonc types.act --sigs
 
 #################################### sigs:
 
