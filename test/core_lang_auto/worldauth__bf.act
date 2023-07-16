@@ -2,4 +2,4 @@
 # should result in a build failure
 
 actor main(env):
-    a = WorldAuth()
+    a = WorldCap()

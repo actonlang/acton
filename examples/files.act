@@ -1,9 +1,9 @@
 import file
 
 actor main(env):
-    # Need to construct authentication token, to prove we are allowed to read files
-    f_auth = file.ReadFileAuth(file.FileAuth(env.auth))
-    f = file.ReadFile(f_auth, env.argv[1])
+    # Get a reference to capability to read a file, by refining from WorldCap
+    f_cap = file.ReadFileCap(file.FileCap(env.auth))
+    f = file.ReadFile(f_cap, env.argv[1])
     data = f.read()
     print(data.decode())
 

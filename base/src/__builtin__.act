@@ -863,13 +863,34 @@ def xgcd(a : int, b : int) -> (int, int, int):
 
 ## Environment ################################################
 
-class WorldAuth():
-    """WorldAuth is the root of the capability based authentication chain,
-    providing access to everything.
+class WorldCap():
+    """WorldCap has the capability to access the entire world outside of Acton.
+    It is the root of the capability hierarchy.
+
+    In an Actor world, access to actors (like being able to call their methods)
+    requires a reference to the relevant actor. Anyone with a reference can
+    access the actor in question. It is not possible to forge a reference.
+
+    In Acton, things outside the actor world are represented as actors with the
+    associated capabilities. For example, with a reference to the TCPConnectCap
+    actor, we have the capability of using a POSIX socket to connect to a remote
+    host over the network. TCPConnectCap is part of a capability hierarchy,
+    starting with the generic WorldCap and becoming further and further refined:
+
+      WorldCap > NetCap > TCPCap > TCPConnectCap
+
+    There are other more refined Caps that each have a a subset of the
+    capabilities of the world.
+
+    Capability based privilege restriction prevent some deeply nested part of a
+    program, perhaps in a dependency to a dependency, to perform operations
+    unknown to the application author. Access to capabilities must be explicitly
+    handed out and a program can only perform operations based on the
+    capabilities it has access to.
     """
     pass
 
-actor Env (token: WorldAuth, args: list[str]):
+actor Env (token: WorldCap, args: list[str]):
     auth = token
     argv = args
     nr_wthreads: int = 0

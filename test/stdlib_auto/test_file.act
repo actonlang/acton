@@ -6,18 +6,18 @@ actor main(env):
         filename = "test-file"
         test_data = b"test-data\n"
 
-        fa = file.FileAuth(env.auth)
-        wfa = file.WriteFileAuth(fa)
-        wf = file.WriteFile(wfa, filename)
+        fc = file.FileCap(env.auth)
+        wfc = file.WriteFileCap(fc)
+        wf = file.WriteFile(wfc, filename)
         await async wf.write(test_data)
         await async wf.close()
 
-        rfa = file.ReadFileAuth(fa)
-        rf = file.ReadFile(rfa, filename)
-        rc = rf.read()
+        rfc = file.ReadFileCap(fc)
+        rf = file.ReadFile(rfc, filename)
+        rd = rf.read()
         rf.close()
-        print("Read bytes: ", rc)
-        if rc is not None and test_data == rc:
+        print("Read bytes: ", rd)
+        if rd is not None and test_data == rd:
             print("Read and written content MATCHES, yay")
             await async env.exit(0)
         else:

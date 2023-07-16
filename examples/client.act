@@ -19,5 +19,5 @@ actor main(env):
         print("usage: client [HOST] [PORT]")
         await async env.exit(-1)
 
-    connect_auth = net.TCPConnectAuth(net.TCPAuth(net.NetAuth(env.auth)))
-    client = net.TCPIPConnection(connect_auth, env.argv[1], int(env.argv[2]), on_connect, on_receive, on_error)
+    connect_cap = net.TCPConnectCap(net.TCPCap(net.NetCap(env.auth)))
+    client = net.TCPIPConnection(connect_cap, env.argv[1], int(env.argv[2]), on_connect, on_receive, on_error)

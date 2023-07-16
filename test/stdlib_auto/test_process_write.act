@@ -31,8 +31,8 @@ actor main(env):
 
     def test():
         print("Starting process..")
-        pa = process.ProcessAuth(env.auth)
-        p = process.Process(pa, ["cat"], None, None, on_stdout, on_stderr, on_exit, on_error)
+        pc = process.ProcessCap(env.auth)
+        p = process.Process(pc, ["cat"], None, None, on_stdout, on_stderr, on_exit, on_error)
         p.write(b"hejsan\n")
 
     def ex():

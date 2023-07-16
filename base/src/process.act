@@ -1,11 +1,11 @@
 """Constructs for spawning and interacting with sub-processes
 """
 
-class ProcessAuth():
-    def __init__(self, auth: WorldAuth):
+class ProcessCap():
+    def __init__(self, auth: WorldCap):
         pass
 
-actor Process(auth: ProcessAuth, cmd: list[str], workdir: ?str, env: ?dict[str, str], on_stdout: action(Process, bytes) -> None, on_stderr: action(Process, bytes) -> None, on_exit: action(Process, int, int) -> None, on_error: action(Process,str) -> None):
+actor Process(auth: ProcessCap, cmd: list[str], workdir: ?str, env: ?dict[str, str], on_stdout: action(Process, bytes) -> None, on_stderr: action(Process, bytes) -> None, on_exit: action(Process, int, int) -> None, on_error: action(Process,str) -> None):
     """A process
     - auth: authentication token
     - cmd: the command to run

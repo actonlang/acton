@@ -10,7 +10,7 @@ actor Server(conn):
     def on_error(c, error):
         print("There was an error:", error, " from:", c)
 
-actor Listener(listen_auth, port):
+actor Listener(listen_cap, port):
 
     def on_error(l, error):
         print("There was an error with the TCPListener socket:", error)
@@ -19,12 +19,12 @@ actor Listener(listen_auth, port):
         s = Server(c)
         c.cb_install(s.on_receive, s.on_error)
 
-    var server = net.TCPListener(listen_auth, "0.0.0.0", port, on_error, on_accept)
+    var server = net.TCPListener(listen_cap, "0.0.0.0", port, on_error, on_accept)
 
 actor main(env):
     port = 12345
 
     # Set up specific auth token
-    listen_auth = net.TCPListenAuth(net.TCPAuth(net.NetAuth(env.auth)))
+    listen_cap = net.TCPListenCap(net.TCPCap(net.NetCap(env.auth)))
 
-    l = Listener(listen_auth, port)
+    l = Listener(listen_cap, port)
