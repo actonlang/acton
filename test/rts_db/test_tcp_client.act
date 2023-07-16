@@ -42,7 +42,7 @@ actor Client(connect_auth, port: int):
 
 
 actor Tester(env, verbose, port_chunk):
-    process_auth = process.ProcessAuth(env.auth)
+    process_cap = process.ProcessCap(env.auth)
     var ps = []
     var psp: dict[int, str] = {}
     var combined_output = ""
@@ -127,7 +127,7 @@ actor Tester(env, verbose, port_chunk):
         for i in range(0, 3, 1):
             port = port_chunk + (2*i)
             cmd = ["../dist/bin/actondb", "-p", str(port)]
-            p = process.Process(process_auth, cmd, None, None, on_stdout, on_stderr, db_on_exit, on_error)
+            p = process.Process(process_cap, cmd, None, None, on_stdout, on_stderr, db_on_exit, on_error)
             p_alive += 1
             ps.append(p)
             paid = p.aid()
@@ -149,7 +149,7 @@ actor Tester(env, verbose, port_chunk):
         # 3. terminate TCP client app
         # 4. connect using our TCP client to TCP server and send INC to increase counter to 1
         # 5. start TCP client app, which will connect to TCP server & fetch current value, which will be 1 / correct and we exit 0
-        connect_auth = net.TCPConnectAuth(net.TCPAuth(net.NetAuth(env.auth)))
+        connect_auth = net.TCPConnectCap(net.TCPCap(net.NetCap(env.auth)))
         port = port_chunk+199
         cmd_srv = ["./rts_db/ddb_test_server", str(port), "--rts-verbose"]
         p_srv = None
@@ -171,7 +171,7 @@ actor Tester(env, verbose, port_chunk):
                     break
             are_we_done()
 
-        p_srv = process.Process(process_auth, cmd_srv, None, None, app_server_on_stdout, on_stderr, app_server_on_exit, on_error)
+        p_srv = process.Process(process_cap, cmd_srv, None, None, app_server_on_stdout, on_stderr, app_server_on_exit, on_error)
         p_alive += 1
         if p_srv is not None:
             ps.append(p_srv)
@@ -192,7 +192,7 @@ actor Tester(env, verbose, port_chunk):
                     state = 4
                     tcp_expect += 1
                     log("state 2: Starting test tcp client app")
-                    p = process.Process(process_auth, cmd, None, None, app_client_on_stdout, on_stderr, app_client_on_exit, on_error)
+                    p = process.Process(process_cap, cmd, None, None, app_client_on_stdout, on_stderr, app_client_on_exit, on_error)
                     p_alive += 1
                     if p is not None:
                         ps.append(p)
@@ -240,7 +240,7 @@ actor Tester(env, verbose, port_chunk):
         log("Running TCP client test")
         dbc_start()
         log("Starting TCP client app: " + " ".join(cmd))
-        p = process.Process(process_auth, cmd, None, None, app_client_on_stdout, on_stderr, app_client_on_exit, on_error)
+        p = process.Process(process_cap, cmd, None, None, app_client_on_stdout, on_stderr, app_client_on_exit, on_error)
         p_alive += 1
         if p is not None:
             ps.append(p)

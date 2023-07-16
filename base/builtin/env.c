@@ -71,7 +71,7 @@ $R B_EnvD_exitG_local (B_Env self, $Cont c$cont, B_int n) {
 }
 
 
-B_Env B_EnvG_newactor(B_WorldAuth token, B_list args) {
+B_Env B_EnvG_newactor(B_WorldCap token, B_list args) {
     B_Env $tmp = $NEWACTOR(B_Env);
     $tmp->token = token;
     $tmp->args = args;
@@ -82,14 +82,14 @@ B_Env B_EnvG_newactor(B_WorldAuth token, B_list args) {
     return $tmp;
 }
 
-B_WorldAuth B_WorldAuthG_new() {
-    B_WorldAuth $tmp = malloc(sizeof(struct B_WorldAuth));
-    $tmp->$class = &B_WorldAuthG_methods;
-    //   B_WorldAuthG_methods.__init__($tmp);
+B_WorldCap B_WorldCapG_new() {
+    B_WorldCap $tmp = malloc(sizeof(struct B_WorldCap));
+    $tmp->$class = &B_WorldCapG_methods;
+    //   B_WorldCapG_methods.__init__($tmp);
     return $tmp;
 }
 
-B_NoneType B_WorldAuthD___init__ (B_WorldAuth self) {
+B_NoneType B_WorldCapD___init__ (B_WorldCap self) {
     return B_None;
 }
 

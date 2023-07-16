@@ -35,8 +35,8 @@ actor Listener(env, port):
         s = Server(c)
         c.cb_install(s.on_receive, s.on_error)
 
-    listen_auth = net.TCPListenAuth(net.TCPAuth(net.NetAuth(env.auth)))
-    server = net.TCPListener(listen_auth, "0.0.0.0", port, on_lsock_error, on_server_accept)
+    listen_cap = net.TCPListenCap(net.TCPCap(net.NetCap(env.auth)))
+    server = net.TCPListener(listen_cap, "0.0.0.0", port, on_lsock_error, on_server_accept)
 
 
 actor Client(rts_monitor, env: Env, port: int):
@@ -84,8 +84,8 @@ actor Client(rts_monitor, env: Env, port: int):
         print("exiting..")
         await async env.exit(0)
 
-    connect_auth = net.TCPConnectAuth(net.TCPAuth(net.NetAuth(env.auth)))
-    client = net.TCPIPConnection(connect_auth, "127.0.0.1", port, on_connect, on_receive, on_error)
+    connect_cap = net.TCPConnectCap(net.TCPCap(net.NetCap(env.auth)))
+    client = net.TCPIPConnection(connect_cap, "127.0.0.1", port, on_connect, on_receive, on_error)
 
 
 actor main(env):

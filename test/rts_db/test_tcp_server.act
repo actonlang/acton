@@ -20,7 +20,7 @@ PORT_CHUNK_MAX=30000
 # termination signal 15 but instead we 0... so this is currently our expectation
 # given how RTS works, but maybe that should be fixed...
 
-actor Client(connect_auth, port: int):
+actor Client(connect_cap, port: int):
     def on_connect(c):
         print("Client established connection")
         await async c.write(b"PING")
@@ -35,14 +35,14 @@ actor Client(connect_auth, port: int):
     def on_error(c, msg):
         print("Client ERR", msg)
 
-    client = net.TCPIPConnection(connect_auth, "127.0.0.1", port, on_connect, on_receive, on_error)
+    client = net.TCPIPConnection(connect_cap, "127.0.0.1", port, on_connect, on_receive, on_error)
 
     def write(data: bytes):
         client.write(data)
 
 
 actor Tester(env, verbose, port_chunk):
-    process_auth = process.ProcessAuth(env.auth)
+    process_cap = process.ProcessCap(env.auth)
     var ps = []
     var psp: dict[int, str] = {}
     var combined_output = ""
@@ -120,7 +120,7 @@ actor Tester(env, verbose, port_chunk):
         for i in range(0, 3, 1):
             port = port_chunk + (2*i)
             cmd = ["../dist/bin/actondb", "-p", str(port), "-s", "127.0.0.1:" + str(port_chunk+1)]
-            p = process.Process(process_auth, cmd, None, None, on_stdout, on_stderr, db_on_exit, on_error)
+            p = process.Process(process_cap, cmd, None, None, on_stdout, on_stderr, db_on_exit, on_error)
             p_alive += 1
             ps.append(p)
             paid = p.aid()
@@ -136,7 +136,7 @@ actor Tester(env, verbose, port_chunk):
 
 
     def test_ddb_server():
-        connect_auth = net.TCPConnectAuth(net.TCPAuth(net.NetAuth(env.auth)))
+        connect_cap = net.TCPConnectCap(net.TCPCap(net.NetCap(env.auth)))
         port = port_chunk+199
         cmd = ["./rts_db/ddb_test_server", str(port), "--rts-verbose"] + db_args(port_chunk, 3)
         p = None
@@ -191,14 +191,14 @@ actor Tester(env, verbose, port_chunk):
                 if data.find(b"NOW LISTENING", None, None) > -1:
                     log("Server app listening in state %d, starting TCP client" % state)
                     state = 1
-                    tcp_client = net.TCPIPConnection(connect_auth, "127.0.0.1", port, tcpc_on_connect, tcpc_on_receive, tcpc_on_error)
+                    tcp_client = net.TCPIPConnection(connect_cap, "127.0.0.1", port, tcpc_on_connect, tcpc_on_receive, tcpc_on_error)
                 else:
                     log("In state " + str(state) + ", read unexpected output from server app:" + str(data))
             elif state == 6:
                 if data.find(b"NOW LISTENING", None, None) > -1:
                     log("Server app listening in state %d, starting TCP client" % state)
                     state = 7
-                    tcp_client = net.TCPIPConnection(connect_auth, "127.0.0.1", port, tcpc_on_connect, tcpc_on_receive, tcpc_on_error)
+                    tcp_client = net.TCPIPConnection(connect_cap, "127.0.0.1", port, tcpc_on_connect, tcpc_on_receive, tcpc_on_error)
                 else:
                     log("In state " + str(state) + ", read unexpected output from server app:" + str(data))
 
@@ -218,7 +218,7 @@ actor Tester(env, verbose, port_chunk):
                 if exit_code == 0 and term_signal == 0:
                     log("App successfully exited in state %d with exit code %d and termination signal %d" % (state, exit_code, term_signal))
                     state = 6
-                    p = process.Process(process_auth, cmd, None, None, app_server_on_stdout, on_stderr, app_server_on_exit, on_error)
+                    p = process.Process(process_cap, cmd, None, None, app_server_on_stdout, on_stderr, app_server_on_exit, on_error)
                     ps.append(p)
                     p_alive += 1
                     if p is not None:
@@ -243,7 +243,7 @@ actor Tester(env, verbose, port_chunk):
 
 
         # Start server
-        p = process.Process(process_auth, cmd, None, None, app_server_on_stdout, on_stderr, app_server_on_exit, on_error)
+        p = process.Process(process_cap, cmd, None, None, app_server_on_stdout, on_stderr, app_server_on_exit, on_error)
         p_alive += 1
         if p is not None:
             app_pid = p.pid()

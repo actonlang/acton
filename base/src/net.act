@@ -1,36 +1,36 @@
 """Network IO
 """
 
-class NetAuth():
+class NetCap():
     """Token for general network access"""
-    def __init__(self, auth: WorldAuth):
+    def __init__(self, auth: WorldCap):
         pass
 
-class DNSAuth():
+class DNSCap():
     """Token for performing DNS queries"""
-    def __init__(self, auth: NetAuth):
+    def __init__(self, auth: NetCap):
         pass
 
-class TCPAuth():
+class TCPCap():
     """Token for connecting or listening with TCP"""
-    def __init__(self, auth: NetAuth):
+    def __init__(self, auth: NetCap):
         pass
 
-class TCPConnectAuth():
+class TCPConnectCap():
     """Token to connect using TCP to a remote host"""
-    def __init__(self, auth: TCPAuth):
+    def __init__(self, auth: TCPCap):
         pass
 
-class TCPListenAuth():
+class TCPListenCap():
     """Token for opening a TCP socket"""
-    def __init__(self, auth: TCPAuth):
+    def __init__(self, auth: TCPCap):
         pass
 
-class _TCPListenConnectAuth():
+class _TCPListenConnectCap():
     """Internal use only"""
     pass
 
-actor DNS(auth: DNSAuth):
+actor DNS(auth: DNSCap):
     action def lookup_a(name: str, on_resolve: action(list[str]) -> None, on_error: action(str, str) -> None) -> None:
         """Perform DNS lookup for name of record type A
         """
@@ -47,7 +47,7 @@ actor DNS(auth: DNSAuth):
     _pin_affinity()
 
 
-actor TCPIPConnection(auth: TCPConnectAuth, address: str, port: int, on_connect: action(TCPIPConnection) -> None, on_receive: action(TCPIPConnection, bytes) -> None, on_error: action(TCPIPConnection, str) -> None):
+actor TCPIPConnection(auth: TCPConnectCap, address: str, port: int, on_connect: action(TCPIPConnection) -> None, on_receive: action(TCPIPConnection, bytes) -> None, on_error: action(TCPIPConnection, str) -> None):
     """TCP IP Connection"""
     _socket = -1
 
@@ -73,7 +73,7 @@ actor TCPIPConnection(auth: TCPConnectAuth, address: str, port: int, on_connect:
     _init()
     _connect(self)
 
-actor TCPListenConnection(auth: _TCPListenConnectAuth, server_client: int):
+actor TCPListenConnection(auth: _TCPListenConnectCap, server_client: int):
     """TCP Listener Connection"""
     var client: int = -1
     var on_receive: ?action(TCPListenConnection, bytes) -> None = None
@@ -108,10 +108,10 @@ actor TCPListenConnection(auth: _TCPListenConnectAuth, server_client: int):
         NotImplemented
     _init()
 
-actor TCPListener(auth: TCPListenAuth, address: str, port: int, on_error: action(TCPListener, str) -> None, on_accept: action(TCPListenConnection) -> None):
+actor TCPListener(auth: TCPListenCap, address: str, port: int, on_error: action(TCPListener, str) -> None, on_accept: action(TCPListenConnection) -> None):
     """TCP Listener"""
     _stream = -1
-    def create_tcp_listen_connection(auth: _TCPListenConnectAuth, client: int):
+    def create_tcp_listen_connection(auth: _TCPListenConnectCap, client: int):
         """Implementation internal"""
         c = TCPListenConnection(auth, client)
         on_accept(c)
