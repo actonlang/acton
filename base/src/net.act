@@ -30,21 +30,27 @@ class _TCPListenConnectCap():
     """Internal use only"""
     pass
 
-actor DNS(auth: DNSCap):
-    action def lookup_a(name: str, on_resolve: action(list[str]) -> None, on_error: action(str, str) -> None) -> None:
-        """Perform DNS lookup for name of record type A
-        """
-        NotImplemented
 
-    action def lookup_aaaa(name: str, on_resolve: action(list[str]) -> None, on_error: action(str, str) -> None) -> None:
-        """Perform DNS lookup for name of record type AAAA
-        """
-        NotImplemented
+def _lookup_a(name: str, on_resolve: action(list[str]) -> None, on_error: action(str, str) -> None) -> None:
+    """Perform DNS lookup for name of record type A
+    """
+    NotImplemented
 
-    proc def _pin_affinity() -> None:
-        """Implementation internal"""
-        NotImplemented
-    _pin_affinity()
+def _lookup_aaaa(name: str, on_resolve: action(list[str]) -> None, on_error: action(str, str) -> None) -> None:
+    """Perform DNS lookup for name of record type AAAA
+    """
+    NotImplemented
+
+
+def lookup_a(cap: DNSCap, name: str, on_resolve: action(list[str]) -> None, on_error: action(str, str) -> None) -> None:
+    """Perform DNS lookup for name of record type A
+    """
+    _lookup_a(name, on_resolve, on_error)
+
+def lookup_aaaa(cap: DNSCap, name: str, on_resolve: action(list[str]) -> None, on_error: action(str, str) -> None) -> None:
+    """Perform DNS lookup for name of record type AAAA
+    """
+    _lookup_aaaa(name, on_resolve, on_error)
 
 
 actor TCPIPConnection(auth: TCPConnectCap, address: str, port: int, on_connect: action(TCPIPConnection) -> None, on_receive: action(TCPIPConnection, bytes) -> None, on_error: action(TCPIPConnection, str) -> None):

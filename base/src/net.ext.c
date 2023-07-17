@@ -16,7 +16,7 @@ struct dns_cb_data {
     $action2 on_error;
 };
 
-void netQ_DNSD_lookup_a__on_resolve (uv_getaddrinfo_t *req, int status, struct addrinfo *dns_res) {
+static void _lookup_a__on_resolve (uv_getaddrinfo_t *req, int status, struct addrinfo *dns_res) {
     struct dns_cb_data *cb_data = req->data;
     B_list $res = B_listG_new(NULL, NULL);
 
@@ -51,7 +51,7 @@ void netQ_DNSD_lookup_a__on_resolve (uv_getaddrinfo_t *req, int status, struct a
     //free(req);
 }
 
-$R netQ_DNSD_lookup_aG_local (netQ_DNS self, $Cont c$cont, B_str name, $action on_resolve, $action on_error) {
+B_NoneType netQ__lookup_a (B_str name, $action on_resolve, $action on_error) {
     struct addrinfo *hints = (struct addrinfo *)malloc(sizeof(struct addrinfo));
     hints->ai_family = PF_INET;
     hints->ai_socktype = SOCK_STREAM;
@@ -67,7 +67,7 @@ $R netQ_DNSD_lookup_aG_local (netQ_DNS self, $Cont c$cont, B_str name, $action o
     uv_getaddrinfo_t *req = (uv_getaddrinfo_t*)malloc(sizeof(uv_getaddrinfo_t));
     req->data = cb_data;
 
-    int r = uv_getaddrinfo(get_uv_loop(), req, netQ_DNSD_lookup_a__on_resolve, fromB_str(name), NULL, hints);
+    int r = uv_getaddrinfo(get_uv_loop(), req, _lookup_a__on_resolve, fromB_str(name), NULL, hints);
     if (r != 0) {
         char errmsg[1024] = "Unable to run DNS query: ";
         uv_strerror_r(r, errmsg + strlen(errmsg), sizeof(errmsg)-strlen(errmsg));
@@ -75,13 +75,13 @@ $R netQ_DNSD_lookup_aG_local (netQ_DNS self, $Cont c$cont, B_str name, $action o
         $action2 f = cb_data->on_error;
         f->$class->__asyn__(f, name, to$str(errmsg));
         // NOTE: free() here if do manual memory management in I/O one day
-        return $R_CONT(c$cont, B_None);
+        return B_None;
     }
 
-    return $R_CONT(c$cont, B_None);
+    return B_None;
 }
 
-void netQ_DNSD_lookup_aaaa__on_resolve (uv_getaddrinfo_t *req, int status, struct addrinfo *dns_res) {
+static void _lookup_aaaa__on_resolve (uv_getaddrinfo_t *req, int status, struct addrinfo *dns_res) {
     struct dns_cb_data *cb_data = req->data;
     B_list $res = B_listG_new(NULL, NULL);
 
@@ -116,7 +116,7 @@ void netQ_DNSD_lookup_aaaa__on_resolve (uv_getaddrinfo_t *req, int status, struc
     //free(req);
 }
 
-$R netQ_DNSD_lookup_aaaaG_local (netQ_DNS self, $Cont c$cont, B_str name, $action on_resolve, $action on_error) {
+B_NoneType netQ__lookup_aaaa (B_str name, $action on_resolve, $action on_error) {
     struct addrinfo *hints = (struct addrinfo *)malloc(sizeof(struct addrinfo));
     hints->ai_family = PF_INET6;
     hints->ai_socktype = SOCK_STREAM;
@@ -132,7 +132,7 @@ $R netQ_DNSD_lookup_aaaaG_local (netQ_DNS self, $Cont c$cont, B_str name, $actio
     uv_getaddrinfo_t *req = (uv_getaddrinfo_t*)malloc(sizeof(uv_getaddrinfo_t));
     req->data = cb_data;
 
-    int r = uv_getaddrinfo(get_uv_loop(), req, netQ_DNSD_lookup_aaaa__on_resolve, fromB_str(name), NULL, hints);
+    int r = uv_getaddrinfo(get_uv_loop(), req, _lookup_aaaa__on_resolve, fromB_str(name), NULL, hints);
     if (r != 0) {
         char errmsg[1024] = "Unable to run DNS query: ";
         uv_strerror_r(r, errmsg + strlen(errmsg), sizeof(errmsg)-strlen(errmsg));
@@ -140,17 +140,11 @@ $R netQ_DNSD_lookup_aaaaG_local (netQ_DNS self, $Cont c$cont, B_str name, $actio
         $action2 f = cb_data->on_error;
         f->$class->__asyn__(f, name, to$str(errmsg));
         // NOTE: free() here if do manual memory management in I/O one day
-        return $R_CONT(c$cont, B_None);
+        return B_None;
     }
 
-    return $R_CONT(c$cont, B_None);
+    return B_None;
 }
-
-$R netQ_DNSD__pin_affinity (netQ_DNS self, $Cont c$cont) {
-    pin_actor_affinity();
-    return $R_CONT(c$cont, B_None);
-}
-
 
 void netQ_TCPIPConnection__on_receive(uv_stream_t *stream, ssize_t nread, const uv_buf_t *buf) {
     if (nread < 0){
