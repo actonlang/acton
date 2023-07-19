@@ -2,12 +2,13 @@
 """
 
 class ProcessCap():
-    def __init__(self, auth: WorldCap):
+    """Capability to start processes"""
+    def __init__(self, cap: WorldCap):
         pass
 
-actor Process(auth: ProcessCap, cmd: list[str], workdir: ?str, env: ?dict[str, str], on_stdout: action(Process, bytes) -> None, on_stderr: action(Process, bytes) -> None, on_exit: action(Process, int, int) -> None, on_error: action(Process,str) -> None):
+actor Process(cap: ProcessCap, cmd: list[str], workdir: ?str, env: ?dict[str, str], on_stdout: action(Process, bytes) -> None, on_stderr: action(Process, bytes) -> None, on_exit: action(Process, int, int) -> None, on_error: action(Process,str) -> None):
     """A process
-    - auth: authentication token
+    - cap: capability to start processes
     - cmd: the command to run
     - workdir: working directory, use None for current directory
     - env: environment for process, use None to inherit current environment

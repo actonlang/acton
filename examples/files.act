@@ -2,7 +2,7 @@ import file
 
 actor main(env):
     # Get a reference to capability to read a file, by refining from WorldCap
-    f_cap = file.ReadFileCap(file.FileCap(env.auth))
+    f_cap = file.ReadFileCap(file.FileCap(env.cap))
     f = file.ReadFile(f_cap, env.argv[1])
     data = f.read()
     print(data.decode())

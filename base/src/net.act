@@ -2,28 +2,28 @@
 """
 
 class NetCap():
-    """Token for general network access"""
-    def __init__(self, auth: WorldCap):
+    """Capability to access network"""
+    def __init__(self, cap: WorldCap):
         pass
 
 class DNSCap():
-    """Token for performing DNS queries"""
-    def __init__(self, auth: NetCap):
+    """Capability to perform DNS queries"""
+    def __init__(self, cap: NetCap):
         pass
 
 class TCPCap():
-    """Token for connecting or listening with TCP"""
-    def __init__(self, auth: NetCap):
+    """Capability to connect or listen with TCP"""
+    def __init__(self, cap: NetCap):
         pass
 
 class TCPConnectCap():
-    """Token to connect using TCP to a remote host"""
-    def __init__(self, auth: TCPCap):
+    """Capability to connect using TCP to a remote host"""
+    def __init__(self, cap: TCPCap):
         pass
 
 class TCPListenCap():
-    """Token for opening a TCP socket"""
-    def __init__(self, auth: TCPCap):
+    """Capability to listen with TCP"""
+    def __init__(self, cap: TCPCap):
         pass
 
 class _TCPListenConnectCap():
@@ -53,7 +53,7 @@ def lookup_aaaa(cap: DNSCap, name: str, on_resolve: action(list[str]) -> None, o
     _lookup_aaaa(name, on_resolve, on_error)
 
 
-actor TCPIPConnection(auth: TCPConnectCap, address: str, port: int, on_connect: action(TCPIPConnection) -> None, on_receive: action(TCPIPConnection, bytes) -> None, on_error: action(TCPIPConnection, str) -> None):
+actor TCPIPConnection(cap: TCPConnectCap, address: str, port: int, on_connect: action(TCPIPConnection) -> None, on_receive: action(TCPIPConnection, bytes) -> None, on_error: action(TCPIPConnection, str) -> None):
     """TCP IP Connection"""
     _socket = -1
 
@@ -79,7 +79,7 @@ actor TCPIPConnection(auth: TCPConnectCap, address: str, port: int, on_connect: 
     _init()
     _connect(self)
 
-actor TCPListenConnection(auth: _TCPListenConnectCap, server_client: int):
+actor TCPListenConnection(cap: _TCPListenConnectCap, server_client: int):
     """TCP Listener Connection"""
     var client: int = -1
     var on_receive: ?action(TCPListenConnection, bytes) -> None = None
@@ -114,12 +114,12 @@ actor TCPListenConnection(auth: _TCPListenConnectCap, server_client: int):
         NotImplemented
     _init()
 
-actor TCPListener(auth: TCPListenCap, address: str, port: int, on_error: action(TCPListener, str) -> None, on_accept: action(TCPListenConnection) -> None):
+actor TCPListener(cap: TCPListenCap, address: str, port: int, on_error: action(TCPListener, str) -> None, on_accept: action(TCPListenConnection) -> None):
     """TCP Listener"""
     _stream = -1
-    def create_tcp_listen_connection(auth: _TCPListenConnectCap, client: int):
+    def create_tcp_listen_connection(cap: _TCPListenConnectCap, client: int):
         """Implementation internal"""
-        c = TCPListenConnection(auth, client)
+        c = TCPListenConnection(cap, client)
         on_accept(c)
 
     mut def __resume__() -> None:

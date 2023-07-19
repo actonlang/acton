@@ -890,14 +890,17 @@ class WorldCap():
     """
     pass
 
-actor Env (token: WorldCap, args: list[str]):
-    auth = token
+actor Env (wc: WorldCap, args: list[str]):
+    cap = wc
+    auth = wc
     argv = args
     nr_wthreads: int = 0
 
     action def stdout_write(s: str) -> None:
         NotImplemented
+
     action def stdin_install(cb: action(str) -> None) -> None:
         NotImplemented
+
     action def exit(n: int):
         NotImplemented

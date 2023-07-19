@@ -6,7 +6,7 @@ actor main(env):
         filename = "test-file"
         test_data = b"test-data\n"
 
-        fc = file.FileCap(env.auth)
+        fc = file.FileCap(env.cap)
         wfc = file.WriteFileCap(fc)
         wf = file.WriteFile(wfc, filename)
         await async wf.write(test_data)

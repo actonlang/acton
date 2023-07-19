@@ -24,7 +24,7 @@ actor Listener(listen_cap, port):
 actor main(env):
     port = 12345
 
-    # Set up specific auth token
-    listen_cap = net.TCPListenCap(net.TCPCap(net.NetCap(env.auth)))
+    # Set up capability for listening with TCP
+    listen_cap = net.TCPListenCap(net.TCPCap(net.NetCap(env.cap)))
 
     l = Listener(listen_cap, port)

@@ -35,7 +35,7 @@ actor Listener(env, port):
         s = Server(c)
         c.cb_install(s.on_receive, s.on_error)
 
-    listen_cap = net.TCPListenCap(net.TCPCap(net.NetCap(env.auth)))
+    listen_cap = net.TCPListenCap(net.TCPCap(net.NetCap(env.cap)))
     server = net.TCPListener(listen_cap, "0.0.0.0", port, on_lsock_error, on_server_accept)
 
 
@@ -84,7 +84,7 @@ actor Client(rts_monitor, env: Env, port: int):
         print("exiting..")
         await async env.exit(0)
 
-    connect_cap = net.TCPConnectCap(net.TCPCap(net.NetCap(env.auth)))
+    connect_cap = net.TCPConnectCap(net.TCPCap(net.NetCap(env.cap)))
     client = net.TCPIPConnection(connect_cap, "127.0.0.1", port, on_connect, on_receive, on_error)
 
 

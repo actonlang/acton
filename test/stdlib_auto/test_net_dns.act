@@ -26,7 +26,7 @@ actor main(env):
             env.exit(1)
 
         print("== DNS test")
-        dc = net.DNSCap(net.NetCap(env.auth))
+        dc = net.DNSCap(net.NetCap(env.cap))
         net.lookup_a(dc, "localhost", on_resolved, on_error)
         net.lookup_aaaa(dc, "localhost", on_resolved, on_error)
 

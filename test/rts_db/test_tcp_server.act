@@ -42,7 +42,7 @@ actor Client(connect_cap, port: int):
 
 
 actor Tester(env, verbose, port_chunk):
-    process_cap = process.ProcessCap(env.auth)
+    process_cap = process.ProcessCap(env.cap)
     var ps = []
     var psp: dict[int, str] = {}
     var combined_output = ""
@@ -136,7 +136,7 @@ actor Tester(env, verbose, port_chunk):
 
 
     def test_ddb_server():
-        connect_cap = net.TCPConnectCap(net.TCPCap(net.NetCap(env.auth)))
+        connect_cap = net.TCPConnectCap(net.TCPCap(net.NetCap(env.cap)))
         port = port_chunk+199
         cmd = ["./rts_db/ddb_test_server", str(port), "--rts-verbose"] + db_args(port_chunk, 3)
         p = None
