@@ -31,7 +31,7 @@ actor Tester(env, port):
         print("There was an error:", error, " from:", c)
 
     def init_listen():
-        listen_cap = net.TCPListenCap(net.TCPCap(net.NetCap(env.auth)))
+        listen_cap = net.TCPListenCap(net.TCPCap(net.NetCap(env.cap)))
         print("Starting to listen...")
         s = net.TCPListener(listen_cap, "0.0.0.0", port, on_listen_error, on_server_accept)
         print("NOW LISTENING ON", str(port))

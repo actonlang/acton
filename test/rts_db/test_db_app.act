@@ -22,7 +22,7 @@ PORT_CHUNK_MAX=30000
 
 
 actor Tester(env, verbose, port_chunk):
-    process_cap = process.ProcessCap(env.auth)
+    process_cap = process.ProcessCap(env.cap)
     var ps = []
     var psp: dict[int, str] = {}
     var combined_output = ""

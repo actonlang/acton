@@ -42,7 +42,7 @@ actor Client(connect_auth, port: int):
 
 
 actor Tester(env, verbose, port_chunk):
-    process_cap = process.ProcessCap(env.auth)
+    process_cap = process.ProcessCap(env.cap)
     var ps = []
     var psp: dict[int, str] = {}
     var combined_output = ""
@@ -149,7 +149,7 @@ actor Tester(env, verbose, port_chunk):
         # 3. terminate TCP client app
         # 4. connect using our TCP client to TCP server and send INC to increase counter to 1
         # 5. start TCP client app, which will connect to TCP server & fetch current value, which will be 1 / correct and we exit 0
-        connect_auth = net.TCPConnectCap(net.TCPCap(net.NetCap(env.auth)))
+        connect_auth = net.TCPConnectCap(net.TCPCap(net.NetCap(env.cap)))
         port = port_chunk+199
         cmd_srv = ["./rts_db/ddb_test_server", str(port), "--rts-verbose"]
         p_srv = None

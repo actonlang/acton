@@ -1,25 +1,25 @@
 
 class FileCap():
-    def __init__(self, auth: WorldCap):
+    def __init__(self, cap: WorldCap):
         pass
 
 class ReadFileCap():
-    def __init__(self, auth: FileCap):
+    def __init__(self, cap: FileCap):
         pass
 
 class WriteFileCap():
-    def __init__(self, auth: FileCap):
+    def __init__(self, cap: FileCap):
         pass
 
 
-actor FS(auth: FileCap):
+actor FS(cap: FileCap):
     """File system operations """
     action def mkdir(filename: str):
         """Make a directory"""
         pass
 
 
-actor ReadFile(auth: ReadFileCap, filename: str):
+actor ReadFile(cap: ReadFileCap, filename: str):
     """Read a file
     """
     var _fd = -1
@@ -38,7 +38,7 @@ actor ReadFile(auth: ReadFileCap, filename: str):
         NotImplemented
 
 
-actor WriteFile(auth: WriteFileCap, filename: str):
+actor WriteFile(cap: WriteFileCap, filename: str):
     """Write a file
     """
     var _fd = -1

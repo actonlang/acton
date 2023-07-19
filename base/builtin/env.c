@@ -71,11 +71,11 @@ $R B_EnvD_exitG_local (B_Env self, $Cont c$cont, B_int n) {
 }
 
 
-B_Env B_EnvG_newactor(B_WorldCap token, B_list args) {
+B_Env B_EnvG_newactor(B_WorldCap wc, B_list args) {
     B_Env $tmp = $NEWACTOR(B_Env);
-    $tmp->token = token;
+    $tmp->cap = wc;
     $tmp->args = args;
-    $tmp->auth = $tmp->token;
+    $tmp->auth = $tmp->cap;
     $tmp->argv = $tmp->args;
     $tmp->$affinity = 0;
     serialize_state_shortcut(($Actor)$tmp);

@@ -17,11 +17,11 @@ def sleep(duration: float) -> None:
     """Put RTS worker thread to sleep"""
     NotImplemented
 
-def rss(auth: WorldCap) -> int:
+def rss(cap: WorldCap) -> int:
     """Get Resident Set Size"""
     NotImplemented
 
-def _io_handles(auth: WorldCap) -> dict[u64, (typ: str, act: u64)]:
+def _io_handles(cap: WorldCap) -> dict[u64, (typ: str, act: u64)]:
     """Return all I/O handles and their type for the current worker thread"""
     NotImplemented
 
@@ -29,7 +29,7 @@ actor WThreadMonitor(env: Env, arg_wthread_id: int):
     wthread_id = arg_wthread_id
 
     def io_handles():
-        return _io_handles(env.auth)
+        return _io_handles(env.cap)
 
     proc def _init():
         """Implementation internal"""

@@ -50,12 +50,12 @@ actor main(env):
             count += c
         print("In total across all actors:", count)
         print("Total messages per second:", int(float(count)/stop_at))
-        print("RSS:", acton.rts.rss(env.auth))
+        print("RSS:", acton.rts.rss(env.cap))
         await async env.exit(0)
 
     var alive = 0
     def report():
-        print("RSS at second", alive, ":", acton.rts.rss(env.auth) / (1024*1024), "MB")
+        print("RSS at second", alive, ":", acton.rts.rss(env.cap) / (1024*1024), "MB")
         alive += 1
         after 1: report()
 
