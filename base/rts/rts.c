@@ -29,6 +29,7 @@
 #include <signal.h>
 
 #include <time.h>
+#include <setjmp.h>
 #include <stdlib.h>
 
 #include <sys/wait.h>
@@ -1430,7 +1431,16 @@ void wt_wake_cb(uv_async_t *ev) {
     // work is run later when wt_work_cb is called as part of the "check" phase.
 }
 
+struct JumpBuf;
+typedef struct JumpBuf *JumpBuf;
+struct JumpBuf {
+    jmp_buf buf;
+    B_Exception xval;
+    JumpBuf prev;
+};
+
 void wt_work_cb(uv_check_t *ev) {
+    JumpBuf jump0 = NULL;
     int wtid = (int)pthread_getspecific(pkey_wtid);
 
     struct timespec ts_start, ts1, ts2, ts3;
