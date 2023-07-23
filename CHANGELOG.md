@@ -2,6 +2,33 @@
 
 ## Unreleased
 
+### Changed
+- `DNS` actor is replaced with lookup functions [#1406]
+  - The `DNS` actor is removed, the `lookup_a` & `lookup_aaaa` methods it has
+    are now free functions in the `net` module, i.e. simply call `net.lookup_a`
+  - It was originally an actonc shortcoming that lead to the design with a `DNS`
+    actor - it was intentional, so this is more of a cleanup
+- Renamed authentication concept to "capabilities" [#1402] [#1407]
+  - In order to better reflect the mental model and intuition we want to instill
+    in users of Acton, Auth objects are renamed to Cap
+    - With a reference to a capability, we can use that capability. This aligns
+      with the existing security model for the internal actor domain where an
+      actor must hold a reference to another actor in order to call its method.
+    - We want to extend that mental model for all external things in the world
+      as well.
+  - All `*Auth` objects now have a `Cap` suffix
+  - All `auth` args are renamed to `cap`
+
+### Fixed
+- Document use of `--sigs` in Acton-by-Example [#1405]
+- Fix up-to-date check for stub compilation [#1399]
+- Improve support for alternate output in actonc [#1395]
+  - When alternate output is enabled, like `actonc --types`, now uses quiet
+    mode, thus suppressing various progress messages which interferred with the
+    alternate output
+  - Avoid errors when compiling files without a root actor
+
+
 ## [0.16.0] (2023-07-03)
 
 Primarily addition of simplified TCP reconnection, related fixes and functionality.
