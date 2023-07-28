@@ -867,7 +867,7 @@ class WorldCap():
     """WorldCap has the capability to access the entire world outside of Acton.
     It is the root of the capability hierarchy.
 
-    In an Actor world, access to actors (like being able to call their methods)
+    In an actor world, access to actors (like being able to call their methods)
     requires a reference to the relevant actor. Anyone with a reference can
     access the actor in question. It is not possible to forge a reference.
 

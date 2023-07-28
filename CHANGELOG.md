@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+### Added
+- AbE: Documented capability based security [#1267]
+
 ### Changed
 - `DNS` actor is replaced with lookup functions [#1406]
   - The `DNS` actor is removed, the `lookup_a` & `lookup_aaaa` methods it has

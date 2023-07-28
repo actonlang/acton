@@ -31,6 +31,8 @@
   - [after / sleep](control_flow/after_sleep.md)
 - [Types](types.md)
   - [Explicit types](types/explicit.md)
+- [Security](security.md)
+  - [Capabilities](security/capabilities.md)
 - [Standard library](stdlib.md)
   - [Regular Expression](stdlib/re.md)
 
