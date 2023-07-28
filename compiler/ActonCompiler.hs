@@ -254,6 +254,22 @@ printDocs opts = do
 
 -- Compile Acton files ---------------------------------------------------------------------------------------------
 
+removeOrphanFiles :: FilePath -> IO ()
+removeOrphanFiles dir = do
+    -- Recursively get all files in the "out" directory.
+    absOutFiles <- getFilesRecursive dir
+    let outFiles = map (makeRelative dir) absOutFiles
+
+    -- Map over each file.
+    forM_ outFiles $ \file -> do
+        -- Remove the file ending.
+        let fileNoExt = dropExtension (dropExtension file)
+            srcFile = ("src" </> fileNoExt <.> "act")
+        -- Check if there is a corresponding .act file in the "src" directory.
+        srcExists <- doesFileExist srcFile
+        -- If the .act file doesn't exist, remove the file in the "out" directory.
+        when (not srcExists) $ removeFile (dir </> file)
+
 compileFiles :: C.CompileOptions -> [String] -> IO ()
 compileFiles opts srcFiles = do
     -- it is ok to get paths from just the first file here since at this point
@@ -277,6 +293,10 @@ compileFiles opts srcFiles = do
         putStrLn ("    binDir   : " ++ binDir paths)
         putStrLn ("    srcDir   : " ++ srcDir paths)
         iff (length srcFiles == 1) (putStrLn ("    modName  : " ++ prstr (modName paths)))
+
+    -- remove files in out that do not have corresponding source files!
+    removeOrphanFiles (projTypes paths)
+
     tasks <- mapM (parseActFile opts paths) srcFiles
     -- figure out binTasks, if --root is provided, use that, otherwise
     -- presumptuously use all non-stub source compile tasks, which get filtered
@@ -290,6 +310,7 @@ compileFiles opts srcFiles = do
           | null (C.root opts) = map (\t -> BinTask True (modNameToString (name t)) (A.GName (name t) (A.name "main"))) (filter (not . stubmode) tasks)
           | otherwise        = [binTask]
     compileTasks opts paths tasks preBinTasks
+
 
 -- Paths handling -------------------------------------------------------------------------------------
 
