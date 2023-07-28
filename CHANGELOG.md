@@ -30,6 +30,9 @@
     mode, thus suppressing various progress messages which interferred with the
     alternate output
   - Avoid errors when compiling files without a root actor
+- Clean up old generated output files [#1411]
+  - When the source files is moved or removed, also remove the corresponding
+    output files
 
 
 ## [0.16.0] (2023-07-03)
