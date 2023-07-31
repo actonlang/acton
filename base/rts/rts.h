@@ -6,6 +6,7 @@
 #include <stdbool.h>
 #include <time.h>
 #include <pthread.h>
+#include <setjmp.h>
 
 #ifdef __gnu_linux__
     #define IS_GNU_LINUX
@@ -196,10 +197,19 @@ void $PUSH_C($Cont);                // Signature about to change
 void $POP_C(B_int);                 // Signature about to change
 #define $PUSHF_C $PUSH_C
 
-$WORD $PUSH();
+struct JumpBuf;
+typedef struct JumpBuf *JumpBuf;
+struct JumpBuf {
+    jmp_buf buf;
+    B_Exception xval;
+    JumpBuf prev;
+};
+
+JumpBuf $PUSH_BUF();
 B_Exception $POP();
 void $DROP();
 void $RAISE(B_Exception e);
+#define $PUSH()             (!setjmp($PUSH_BUF()->buf))
 #define $PUSHF $PUSH
 
 extern B_Msg timerQ;

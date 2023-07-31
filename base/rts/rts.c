@@ -29,7 +29,6 @@
 #include <signal.h>
 
 #include <time.h>
-#include <setjmp.h>
 #include <stdlib.h>
 
 #include <sys/wait.h>
@@ -179,6 +178,7 @@ time_t current_time() {
 }
 
 pthread_key_t self_key;
+pthread_key_t jump_top;
 pthread_key_t pkey_wtid;
 pthread_key_t pkey_uv_loop;
 
@@ -787,21 +787,31 @@ void $POP_C(B_int n) {                                              // Signature
     }
 }
 
-$WORD $PUSH() {
-
+JumpBuf $PUSH_BUF() {
+    JumpBuf current = (JumpBuf)pthread_getspecific(jump_top);
+    JumpBuf new = (JumpBuf)malloc(sizeof(struct JumpBuf));
+    new->prev = current;
+    pthread_setspecific(jump_top, new);
+    return new;
 }
 
 B_Exception $POP() {
-
+    JumpBuf current = (JumpBuf)pthread_getspecific(jump_top);
+    pthread_setspecific(jump_top, current->prev);
+    return current->xval;
 }
 
 void $DROP() {
-
+    JumpBuf current = (JumpBuf)pthread_getspecific(jump_top);
+    pthread_setspecific(jump_top, current->prev);
 }
 
 void $RAISE(B_Exception e) {
-    fprintf(stderr,"%s\n",(char*)fromB_str(e->error_message));
-    exit(1);
+    //fprintf(stderr,"%s\n",(char*)fromB_str(e->error_message));
+    //exit(1);
+    JumpBuf jump = (JumpBuf)pthread_getspecific(jump_top);
+    jump->xval = e;
+    longjmp(jump->buf, 1);
 }
 
 void create_all_actor_queues() {
@@ -1431,16 +1441,10 @@ void wt_wake_cb(uv_async_t *ev) {
     // work is run later when wt_work_cb is called as part of the "check" phase.
 }
 
-struct JumpBuf;
-typedef struct JumpBuf *JumpBuf;
-struct JumpBuf {
-    jmp_buf buf;
-    B_Exception xval;
-    JumpBuf prev;
-};
-
 void wt_work_cb(uv_check_t *ev) {
     JumpBuf jump0 = NULL;
+    pthread_setspecific(jump_top, NULL);
+
     int wtid = (int)pthread_getspecific(pkey_wtid);
 
     struct timespec ts_start, ts1, ts2, ts3;
@@ -1465,26 +1469,36 @@ void wt_work_cb(uv_check_t *ev) {
         clock_gettime(CLOCK_MONOTONIC, &ts1);
         wt_stats[wtid].state = WT_Working;
 
-        rtsd_printf("## Running actor %ld : %s", current->$globkey, current->$class->$GCINFO);
-        $R r = cont->$class->__call__(cont, val);
+        $R r;
+        if (jump0 || $PUSH()) {                         // Normal path
+            if (!jump0) {
+                jump0 = (JumpBuf)pthread_getspecific(jump_top);
+            }
+            rtsd_printf("## Running actor %ld : %s", current->$globkey, current->$class->$GCINFO);
+            r = cont->$class->__call__(cont, val);
 
-        clock_gettime(CLOCK_MONOTONIC, &ts2);
-        long long int diff = (ts2.tv_sec * 1000000000 + ts2.tv_nsec) - (ts1.tv_sec * 1000000000 + ts1.tv_nsec);
+            clock_gettime(CLOCK_MONOTONIC, &ts2);
+            long long int diff = (ts2.tv_sec * 1000000000 + ts2.tv_nsec) - (ts1.tv_sec * 1000000000 + ts1.tv_nsec);
 
-        wt_stats[wtid].conts_count++;
-        wt_stats[wtid].conts_sum += diff;
+            wt_stats[wtid].conts_count++;
+            wt_stats[wtid].conts_sum += diff;
 
-        if      (diff < 100)              { wt_stats[wtid].conts_100ns++; }
-        else if (diff < 1   * 1000)       { wt_stats[wtid].conts_1us++; }
-        else if (diff < 10  * 1000)       { wt_stats[wtid].conts_10us++; }
-        else if (diff < 100 * 1000)       { wt_stats[wtid].conts_100us++; }
-        else if (diff < 1   * 1000000)    { wt_stats[wtid].conts_1ms++; }
-        else if (diff < 10  * 1000000)    { wt_stats[wtid].conts_10ms++; }
-        else if (diff < 100 * 1000000)    { wt_stats[wtid].conts_100ms++; }
-        else if (diff < 1   * 1000000000) { wt_stats[wtid].conts_1s++; }
-        else if (diff < (long long int)10  * 1000000000) { wt_stats[wtid].conts_10s++; }
-        else if (diff < (long long int)100 * 1000000000) { wt_stats[wtid].conts_100s++; }
-        else                              { wt_stats[wtid].conts_inf++; }
+            if      (diff < 100)              { wt_stats[wtid].conts_100ns++; }
+            else if (diff < 1   * 1000)       { wt_stats[wtid].conts_1us++; }
+            else if (diff < 10  * 1000)       { wt_stats[wtid].conts_10us++; }
+            else if (diff < 100 * 1000)       { wt_stats[wtid].conts_100us++; }
+            else if (diff < 1   * 1000000)    { wt_stats[wtid].conts_1ms++; }
+            else if (diff < 10  * 1000000)    { wt_stats[wtid].conts_10ms++; }
+            else if (diff < 100 * 1000000)    { wt_stats[wtid].conts_100ms++; }
+            else if (diff < 1   * 1000000000) { wt_stats[wtid].conts_1s++; }
+            else if (diff < (long long int)10  * 1000000000) { wt_stats[wtid].conts_10s++; }
+            else if (diff < (long long int)100 * 1000000000) { wt_stats[wtid].conts_100s++; }
+            else                              { wt_stats[wtid].conts_inf++; }
+        } else {                                        // Exceptional path
+            B_Exception ex = jump0->xval;
+            rtsd_printf("## Actor %ld : %s exception: %s", current->$globkey, current->$class->$GCINFO, ex->$class->$GCINFO);
+            r = $R_FAIL(ex);
+        }
 
         switch (r.tag) {
         case $RDONE: {
@@ -1583,7 +1597,7 @@ void wt_work_cb(uv_check_t *ev) {
         pthread_setspecific(self_key, NULL);
 
         clock_gettime(CLOCK_MONOTONIC, &ts3);
-        diff = (ts3.tv_sec * 1000000000 + ts3.tv_nsec) - (ts2.tv_sec * 1000000000 + ts2.tv_nsec);
+        long long int diff = (ts3.tv_sec * 1000000000 + ts3.tv_nsec) - (ts2.tv_sec * 1000000000 + ts2.tv_nsec);
         wt_stats[wtid].bkeep_count++;
         wt_stats[wtid].bkeep_sum += diff;
 
@@ -2175,6 +2189,7 @@ int main(int argc, char **argv) {
 
 
     pthread_key_create(&self_key, NULL);
+    pthread_key_create(&jump_top, NULL);
     pthread_setspecific(self_key, NULL);
     pthread_key_create(&pkey_wtid, NULL);
     pthread_key_create(&pkey_uv_loop, NULL);
