@@ -4,4 +4,4 @@ actor main(env):
     def f():
         print(time.time())
     f()
-    env.exit(0)
+    exit(env.cap, 0)

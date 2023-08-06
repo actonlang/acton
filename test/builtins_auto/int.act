@@ -25,4 +25,4 @@ actor main(env):
         raise ValueError("int('123') != 123")
     if hash(2**131) >= 2**64:
         raise ValueError("hash(2**131) too big")        
-    await async env.exit(0)
+    exit(env.cap, 0)

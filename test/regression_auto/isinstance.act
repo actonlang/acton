@@ -5,4 +5,4 @@ def foo(x: value) -> bool:
     return isinstance(x, Foo) or isinstance(x, int)
 
 actor main(env):
-    env.exit(0)
+    exit(env.cap, 0)

@@ -7,4 +7,4 @@ actor main(env):
     data = f.read()
     print(data.decode())
 
-    env.exit(0)
+    exit(env.cap, 0)

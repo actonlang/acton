@@ -17,4 +17,4 @@ actor Foo(on_done):
     _push_cb(_do_stuff_cb)
 
 actor main(env):
-    env.exit(0)
+    exit(env.cap, 0)

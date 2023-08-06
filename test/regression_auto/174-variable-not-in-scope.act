@@ -4,4 +4,4 @@ def foo(a):
 actor main(env):
     b = 1
     foo(b)
-    await async env.exit(0)
+    exit(env.cap, 0)

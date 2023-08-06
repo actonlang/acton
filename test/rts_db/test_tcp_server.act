@@ -69,13 +69,13 @@ actor Tester(env, verbose, port_chunk):
         if error_encountered:
             print("There was an error :/")
             print(combined_output)
-            await async env.exit(1)
+            exit(env.cap, 1)
         else:
             print("Test success!")
             if verbose:
                 print("Combined DB & App output:")
                 print(combined_output)
-            await async env.exit(0)
+            exit(env.cap, 0)
 
     def are_we_done():
         if p_alive > 0 :
@@ -277,7 +277,7 @@ actor main(env):
         print("Unconditional exit")
         await async t.error("Giving up...")
         await async t.report()
-        await async env.exit(1)
+        exit(env.cap, 1)
 
     after 21: test_timeout()
     after 25: unconditional_exit()

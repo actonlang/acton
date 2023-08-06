@@ -15,10 +15,10 @@ actor main(env):
         if data == b"1":
             if attempts > 1:
                 print("Got a 1, I'm happy, exiting...")
-                await async env.exit(0)
+                exit(env.cap, 0)
             else:
                 print("Got a 1, but fewer attempts than expected... fail :/")
-                await async env.exit(1)
+                exit(env.cap, 1)
 
     def on_error(c, msg):
         print("Client error:", msg)

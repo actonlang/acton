@@ -8,4 +8,4 @@ actor Bar(f):
 actor main(env):
     f = Foo()
     b = Bar(f.func)
-    await async env.exit(0)
+    exit(env.cap, 0)

@@ -16,4 +16,4 @@ actor main(env):
     proc def absent(i: int) -> int:
         NotImplemented
     after 2: absent(7)
-    await async env.exit(0)
+    exit(env.cap, 0)

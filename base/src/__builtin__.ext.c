@@ -17,3 +17,10 @@ void B___ext_init__() {
     B_ContainerD_listG_methods.__fromiter__ = (B_list (*)(B_ContainerD_list, B_Iterable, $WORD))B_CollectionD_SequenceD_listD___fromiter__;
     B_ContainerD_listG_methods.__iter__ = (B_Iterator (*)(B_ContainerD_list, B_list))B_CollectionD_SequenceD_listD___iter__;
 }
+
+B_NoneType B_exit (B_WorldCap cap, B_int exit_code) {
+    log_info("Exiting...");
+    return_val = from$int(exit_code);
+    rts_shutdown();
+    return B_None;
+}

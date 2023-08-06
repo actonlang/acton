@@ -5,25 +5,25 @@ actor main(env):
     def on_stderr(p, data):
         print("Received output on stderr:", data)
         print("... but not expecting any, exiting with error")
-        await async env.exit(1)
+        exit(env.cap, 1)
 
     def on_stdout(p, data):
         print("Received output on stdout:", data)
         print("... but not expecting any, exiting with error")
-        await async env.exit(1)
+        exit(env.cap, 1)
 
     def on_exit(p, exit_code, term_signal):
         print("Process exited with code: ", exit_code, " terminated with signal:", term_signal)
         if term_signal == 15:
             print("Got expected terminal signal 15, yay")
-            await async env.exit(0)
+            exit(env.cap, 0)
         else:
             print("Exited in unexpected way, error...")
-            await async env.exit(1)
+            exit(env.cap, 1)
 
     def on_error(p, error):
         print("Error from process:", error)
-        await async env.exit(1)
+        exit(env.cap, 1)
 
     def test():
         print("Starting process..")
@@ -34,14 +34,14 @@ actor main(env):
         print("PID:", pid)
         if pid is None:
             print("PID is None, bad...")
-            await async env.exit(1)
+            exit(env.cap, 1)
         else:
             print("Good PID, yay, now killing process")
             p.stop()
 
     def ex():
         print("Test timeout, exiting with error")
-        env.exit(1)
+        exit(env.cap, 1)
 
     test()
     after 3: ex()

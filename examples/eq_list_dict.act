@@ -117,6 +117,6 @@ actor main(env):
       print("Not le, wrong")
       
 
-   env.exit(0)
+   exit(env.cap, 0)
     
    

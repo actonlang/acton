@@ -19,7 +19,7 @@ actor main(env):
         print(d)
         if d.to_float() > 0.1:
             print("Diff (", d, ") is larger than expected")
-            await async env.exit(1)
+            exit(env.cap, 1)
 
     work()
-    await async env.exit(0)
+    exit(env.cap, 0)

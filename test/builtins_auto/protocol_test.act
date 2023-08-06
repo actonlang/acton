@@ -15,4 +15,4 @@ actor main(env):
 # TODO: uncomment - how can this lead to compilation errors?
 #    print(concat(lst2, 0))
     print(concat('Complicated identity function',''))
-    env.exit(0)
+    exit(env.cap, 0)

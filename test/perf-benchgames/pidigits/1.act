@@ -46,4 +46,4 @@ actor main(env):
         i += 1
         eliminate_Digit(d)
     print("3." + res[1:])
-    await async env.exit(0)
+    exit(env.cap, 0)

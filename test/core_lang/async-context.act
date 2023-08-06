@@ -7,4 +7,4 @@ actor main(env):
     print(Foo().ping())
     var a = Foo().ping()
     print(a)
-    await async env.exit(0)
+    exit(env.cap, 0)

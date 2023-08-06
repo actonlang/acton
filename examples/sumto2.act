@@ -7,4 +7,4 @@ def sumto(n):
     
 actor main(env):
     print(sumto(int(env.argv[1])))
-    env.exit(0)
+    exit(env.cap, 0)

@@ -18,4 +18,4 @@ def fun(x: Abstract):
     return Concrete(x)
 
 actor main(env):
-    await async env.exit(0)
+    exit(env.cap, 0)

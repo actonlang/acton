@@ -4,4 +4,4 @@ def foo():
     return 3
 
 actor main(env):
-    await async env.exit(0)
+    exit(env.cap, 0)

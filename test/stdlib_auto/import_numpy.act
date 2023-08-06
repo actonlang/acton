@@ -1,4 +1,4 @@
 import numpy
 
 actor main(env):
-    env.exit(0)
+    exit(env.cap, 0)

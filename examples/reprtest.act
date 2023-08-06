@@ -9,6 +9,6 @@ actor main(env):
   for i in range(0,10,1):
       d[i] = str(i)
   print(d)
-  env.exit(0)
+  exit(env.cap, 0)
   
   

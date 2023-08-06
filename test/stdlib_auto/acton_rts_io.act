@@ -7,4 +7,4 @@ actor main(env):
         print("Worker", k)
         for hid, handle in v.items():
             print("  %d:" % int(hid), handle)
-    await async env.exit(0)
+    exit(env.cap, 0)

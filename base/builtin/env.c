@@ -64,12 +64,6 @@ $R B_EnvD_stdin_installG_local (B_Env self, $Cont c$cont, $action cb) {
     uv_read_start((uv_stream_t*)tty, alloc_buffer, read_stdin);
     return $R_CONT(c$cont, B_None);
 }
-$R B_EnvD_exitG_local (B_Env self, $Cont c$cont, B_int n) {
-    return_val = from$int(n);
-    rts_shutdown();
-    return $R_CONT(c$cont, B_None);
-}
-
 
 B_Env B_EnvG_newactor(B_WorldCap wc, B_list args) {
     B_Env $tmp = $NEWACTOR(B_Env);

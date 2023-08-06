@@ -7,4 +7,4 @@ actor main(env):
     var actors = [Foo()]
     for act in actors:
         act.ping()
-    env.exit(0)
+    exit(env.cap, 0)

@@ -9,27 +9,27 @@ actor main(env):
        r = r*r % 1000
        s += int(dict[str(r)])
     if s != 99446:
-        env.exit(1)
+        exit(env.cap, 1)
     if str(678) not in dict:
-        env.exit(1)
+        exit(env.cap, 1)
     for i in range(1,1000,1):
         if i%10 > 0:
             del dict[str(i)]
     if len(dict) != 99:
-        env.exit(1)
+        exit(env.cap, 1)
     t = 0
     for k in dict:
         t += int(k)
     if t != 49500:
-        env.exit(1)
+        exit(env.cap, 1)
     deflt = '666'
     w = dict.get('100',deflt)
     w2 = dict.get('37',deflt)
     if w != '101' or w2 != '666':
-        env.exit(1)
+        exit(env.cap, 1)
     for j in range(11,200,20):
         other[str(j)] = str(2*j)
     dict.update(other.items())
     if len(dict) != 109:
-        env.exit(1)
-    env.exit(0)
+        exit(env.cap, 1)
+    exit(env.cap, 0)

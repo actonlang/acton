@@ -55,7 +55,7 @@ following code:
 ``` Acton
 actor main(env):
     print("Hello, world!")
-    await async env.exit(0)
+    exit(env.cap, 0)
 ```
 
 Compile the program and run it:

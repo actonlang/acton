@@ -18,7 +18,7 @@ actor main(env):
         print(e)
         if s is not None and e is not None and s != e:
             print("MISMATCH")
-            await async env.exit(1)
+            exit(env.cap, 1)
         print()
 
     d = xml.decode(test_xml[0])
@@ -29,10 +29,10 @@ actor main(env):
 # TODO: fix so this works!
 #    if d.name != "a":
 #        print("Wrong tag name")
-#        await async env.exit(1)
+#        exit(env.cap, 1)
 # TODO: fix so this works!
 #    if d.content != "hello":
 #        print("Wrong tag content")
-#        await async env.exit(1)
+#        exit(env.cap, 1)
 
-    await async env.exit(0)
+    exit(env.cap, 0)

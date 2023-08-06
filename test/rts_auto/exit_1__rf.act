@@ -1,2 +1,2 @@
 actor main(env):
-    env.exit(1)
+    exit(env.cap, 1)

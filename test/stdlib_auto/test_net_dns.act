@@ -18,20 +18,20 @@ actor main(env):
 
             if res["ipv4"] and res["ipv6"]:
                 print("Got both IPv4 and IPv6 result, exiting happily")
-                env.exit(0)
+                exit(env.cap, 0)
 
 
         def on_error(name, msg):
             print("Got error during DNS resolution of", name, ", error:", msg)
-            env.exit(1)
+            exit(env.cap, 1)
 
         print("== DNS test")
         dc = net.DNSCap(net.NetCap(env.cap))
         net.lookup_a(dc, "localhost", on_resolved, on_error)
         net.lookup_aaaa(dc, "localhost", on_resolved, on_error)
 
-    def exit():
-        env.exit(1)
+    def _exit():
+        exit(env.cap, 1)
 
     test_dns()
-    after 1: exit()
+    after 1: _exit()

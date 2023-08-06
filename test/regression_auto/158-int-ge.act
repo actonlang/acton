@@ -3,12 +3,12 @@ actor main(env):
         print("Acton thinks 1 is less or equal to 2, yay!")
     else:
         print("ERROR: Acton (incorrectly) thinks 1 is less or equal to 2")
-        await async env.exit(1)
+        exit(env.cap, 1)
 
     if 2 >= 1:
         print("Acton thinks 2 is greater or equal to 1, yay!")
     else:
         print("ERROR: Acton (incorrectly) thinks 2 is less or equal to 1")
-        await async env.exit(1)
+        exit(env.cap, 1)
 
-    await async env.exit(0)
+    exit(env.cap, 0)

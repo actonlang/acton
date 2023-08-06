@@ -10,4 +10,4 @@ actor main(env):
     else:
         target = int(123)
     print(sumto(int(target)))
-    env.exit(0)
+    exit(env.cap, 0)

@@ -20,4 +20,4 @@ actor main(env):
 
 #    i = Interruptor()
     r = test()
-    env.exit(r)
+    exit(env.cap, r)

@@ -9,4 +9,4 @@ actor Foo():
 actor main(env):
     f = Foo()
     f.hello()
-    await async env.exit(0)
+    exit(env.cap, 0)

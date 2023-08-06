@@ -13,4 +13,4 @@ def delchild(self : tree, n : int) -> None:
     del self.children[n]
 
 actor main(env):
-    env.exit(0)
+    exit(env.cap, 0)

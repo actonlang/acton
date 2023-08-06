@@ -4,23 +4,23 @@ import process
 actor main(env):
     def on_stderr(p, data):
         print("Received output on stderr:", data)
-        env.exit(0)
+        exit(env.cap, 0)
 
     def on_stdout(p, data):
         print("Received output on stdout:", data.decode())
         if data == b"HELLO\n":
             print("All good, exiting..")
-            await async env.exit(0)
+            exit(env.cap, 0)
         else:
             print("Unexpected output, blargh")
-            await async env.exit(1)
+            exit(env.cap, 1)
 
     def on_exit(p, exit_code, term_signal):
         print("Process exited with code: ", exit_code, " terminated with signal:", term_signal)
 
     def on_error(p, error):
         print("Error from process:", error)
-        await async env.exit(1)
+        exit(env.cap, 1)
 
     def test():
         print("Starting process..")
@@ -30,7 +30,7 @@ actor main(env):
     def ex():
         print("Test timeout, should exit with error but not now... disabled due to faulty error")
         # TODO: fix on macos 10.15!?
-        env.exit(0)
+        exit(env.cap, 0)
 
     test()
     after 3: ex()

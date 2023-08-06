@@ -28,14 +28,14 @@ actor main(env):
         r = random.randint(0, 1234)
         if r < 0:
             print("Got a random number outside range: ", r, "min 0 / max 1234")
-            await async env.exit(1)
+            exit(env.cap, 1)
 
     print("Checking that 100k random numbers are within the specified range")
     for i in range(0, 100000, 1):
         r = random.randint(1293862, 97309358)
         if r < 0:
             print("Got a random number outside range: ", r, "min 1293862 / max 97309358")
-            await async env.exit(1)
+            exit(env.cap, 1)
 
     check_random_distribution(500, 1000, 1*1000*1000)
 
@@ -52,4 +52,4 @@ actor main(env):
     print(random.randint(34560, 9281234))
     print(random.randint(34560, 9281234))
 
-    await async env.exit(0)
+    exit(env.cap, 0)

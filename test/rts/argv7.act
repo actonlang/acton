@@ -2,4 +2,4 @@ actor main(env):
     # Never expected to get here as we should be invoked with invalid command
     # line argument
     print("All is well")
-    await async env.exit(0)
+    exit(env.cap, 0)

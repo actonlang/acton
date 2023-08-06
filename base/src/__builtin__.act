@@ -902,5 +902,6 @@ actor Env (wc: WorldCap, args: list[str]):
     action def stdin_install(cb: action(str) -> None) -> None:
         NotImplemented
 
-    action def exit(n: int):
-        NotImplemented
+# TODO: cap should be Union[ExitCap, WorldCap]
+def exit(cap: WorldCap, exit_code: int) -> None:
+    NotImplemented

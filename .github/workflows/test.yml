@@ -221,7 +221,7 @@ jobs:
           echo '#!/usr/bin/env runacton'   > test-runtime.act
           echo 'actor main(env):'          >> test-runtime.act
           echo '    print("Hello, world")' >> test-runtime.act
-          echo '    env.exit(0)'           >> test-runtime.act
+          echo '    exit(env.cap, 0)'           >> test-runtime.act
           chmod a+x test-runtime.act
           export PATH=$(pwd)/acton/bin:$PATH
           ./test-runtime.act
@@ -280,7 +280,7 @@ jobs:
           echo '#!/usr/bin/env runacton'   > test-runtime.act
           echo 'actor main(env):'          >> test-runtime.act
           echo '    print("Hello, world")' >> test-runtime.act
-          echo '    env.exit(0)'           >> test-runtime.act
+          echo '    exit(env.cap, 0)'           >> test-runtime.act
           chmod a+x test-runtime.act
           ./test-runtime.act
           ./test-runtime.act | grep "Hello, world"

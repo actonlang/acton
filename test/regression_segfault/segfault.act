@@ -8,4 +8,4 @@ def foo(bar):
 actor main(env):
     a = foo("foo")
     print(a)
-    env.exit(0)
+    exit(env.cap, 0)

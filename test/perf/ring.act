@@ -28,7 +28,7 @@ actor main(env):
         print("in a ring, then initiates the ring by injecting a message which")
         print("spins around forever. It stops when the first actor has")
         print("processed STOP number of messages.")
-        await async env.exit(1)
+        exit(env.cap, 1)
 
     num_nodes = int(env.argv[1])
     stop_at = float(env.argv[2])
@@ -51,7 +51,7 @@ actor main(env):
         print("In total across all actors:", count)
         print("Total messages per second:", int(float(count)/stop_at))
         print("RSS:", acton.rts.rss(env.cap))
-        await async env.exit(0)
+        exit(env.cap, 0)
 
     var alive = 0
     def report():

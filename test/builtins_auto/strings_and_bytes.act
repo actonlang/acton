@@ -1,7 +1,7 @@
 actor main(env):
     def assertEqual(desc, e, a):
         if e != a:
-            await async env.exit(1)
+            exit(env.cap, 1)
 
     def test_helloworld():
         ascii = "Hello, world!"
@@ -21,4 +21,4 @@ actor main(env):
 
     test_helloworld()
     test_limdef()
-    env.exit(0)
+    exit(env.cap, 0)

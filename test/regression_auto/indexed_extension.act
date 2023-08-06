@@ -12,4 +12,4 @@ extension tree (Indexed[int,tree]):
         del self.children[n]
 
 actor main(env):
-    env.exit(0)
+    exit(env.cap, 0)

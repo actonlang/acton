@@ -18,4 +18,4 @@ actor main(env):
     for i in map(int,v): print(i)
     for x in map(float,v): print(x)
 #   print(average(v))
-    env.exit(0)
+    exit(env.cap, 0)

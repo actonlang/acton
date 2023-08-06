@@ -4,7 +4,7 @@ actor worker(report):
 actor main(env):
     def report():
         print('Done!')
-        env.exit(0)
+        exit(env.cap, 0)
 
     worker(report)
-    env.exit(0)
+    exit(env.cap, 0)

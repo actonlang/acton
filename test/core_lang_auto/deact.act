@@ -24,7 +24,7 @@ actor main(env):
     def myproc(i):
         print("myproc", i)
         if i == 2:
-            env.exit(0)
+            exit(env.cap, 0)
         return i
     a = Apa()
     b = Bepa()

@@ -23,5 +23,5 @@ def e(prec):
 
 actor main(env):
      print(e(10000))
-     env.exit(0)
+     exit(env.cap, 0)
 

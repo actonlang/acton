@@ -1,7 +1,7 @@
 # ensure that the after call works, which we do by immediately exiting
 # if it doesn't work, this program will hang
 actor main(env):
-    def exit():
-        env.exit(0)
+    def _exit():
+        exit(env.cap, 0)
 
-    after 0: exit()
+    after 0: _exit()

@@ -11,7 +11,7 @@ actor main(env):
     if n != 18:
         raise ValueError("n is" + str(n) + ", not 18")
 
-        env.exit(1)
+        exit(env.cap, 1)
     s2 = {1}
     for i in range(0,500,1):
         s2.add(i*i*i*i)
@@ -19,4 +19,4 @@ actor main(env):
         raise ValueError("set length error 1")
     if len(s & s2) != 27 or len(s | s2) != 1458 or len(s ^ s2) != 1431:  
         raise ValueError("set length error 2")
-    env.exit(0)
+    exit(env.cap, 0)

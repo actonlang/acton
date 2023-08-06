@@ -8,4 +8,4 @@ actor main(env):
     a = {"id": random.randint(0,10)}
     f = Foo()
     f.bar(a)
-    await async env.exit(0)
+    exit(env.cap, 0)

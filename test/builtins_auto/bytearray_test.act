@@ -28,4 +28,4 @@ actor main(env):
 #      del b2[0:10000:i]      # delete everything except the Z's
 #    print(b2)
 
-    env.exit(0)
+    exit(env.cap, 0)

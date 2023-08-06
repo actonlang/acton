@@ -19,9 +19,9 @@ actor main(env):
         print("Read bytes: ", rd)
         if rd is not None and test_data == rd:
             print("Read and written content MATCHES, yay")
-            await async env.exit(0)
+            exit(env.cap, 0)
         else:
             print("Read and written content does not match, exiting with error...")
-            await async env.exit(1)
+            exit(env.cap, 1)
 
     test_write()

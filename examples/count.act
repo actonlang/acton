@@ -37,7 +37,7 @@ actor main(env):
 
     if len(env.argv) > 2:
         print("Usage: count COUNT")
-        await async env.exit(1)
+        exit(env.cap, 1)
 
     if len(env.argv) > 1:
         count_to = int(env.argv[1])
@@ -45,7 +45,7 @@ actor main(env):
     def _work():
         print(i)
         if count_to and i == count_to:
-            await async env.exit(0)
+            exit(env.cap, 0)
         i += 1
         after 1: _work()
 

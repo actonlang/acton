@@ -18,4 +18,4 @@ actor main(env):
     test()
 
 
-    await async env.exit(0)
+    exit(env.cap, 0)

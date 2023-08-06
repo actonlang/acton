@@ -3,7 +3,7 @@ actor main(env):
     def assert_eq(a,b):
         if a != b:
             print(a,'!=', b)
-            env.exit(1)
+            exit(env.cap, 1)
     a : u64 = 37
     assert_eq(a+5,42)
     b  : u64 = 0xffffffffffffffff  # maximal value
@@ -32,4 +32,4 @@ actor main(env):
     print(c32 < 100000)
     f : u32 = 0-1
     print(f/1000000)
-    env.exit(0)
+    exit(env.cap, 0)

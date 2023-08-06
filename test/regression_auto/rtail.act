@@ -4,4 +4,4 @@ def read(filename):
 
 actor main(env):
     fc = read("foo")
-    env.exit(0)
+    exit(env.cap, 0)

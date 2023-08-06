@@ -4,9 +4,9 @@ actor main(env):
             print(msg, "=", a, "as expected (", b, ")")
         if a != b:
             print("Assertion error:", a, "!=", b, "(" + msg + ")")
-            await async env.exit(1)
+            exit(env.cap, 1)
 
     testEqual(0+1, 1, "0+1")
     testEqual(1+2, 3, "1+2")
 
-    await async env.exit(0)
+    exit(env.cap, 0)

@@ -3,6 +3,6 @@ actor main(env):
     l = [4, 9, 7, 1]
     if max(l, 0) != 9:
         print("max() incorrectly returned:", max(l, 0))
-        await async env.exit(0)
+        exit(env.cap, 0)
 
-    await async env.exit(0)
+    exit(env.cap, 0)

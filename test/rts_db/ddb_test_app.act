@@ -18,7 +18,7 @@ actor main(env):
     def final():
         print("In final method")
         print("exiting...")
-        await async env.exit(0)
+        exit(env.cap, 0)
 
     def test():
         print("Creating Foo() instance")

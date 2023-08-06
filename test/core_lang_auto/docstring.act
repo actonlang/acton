@@ -3,4 +3,4 @@
 actor main(env):
     """Main actor
     """
-    await async env.exit(0)
+    exit(env.cap, 0)

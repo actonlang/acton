@@ -12,4 +12,4 @@ actor main(env):
         o.foo(callback)
 
     _work()
-    f = env.exit(0)
+    f = exit(env.cap, 0)

@@ -2,4 +2,4 @@ import foo
 
 actor main(env):
     f = foo.Foo()
-    await async env.exit(0)
+    exit(env.cap, 0)

@@ -39,7 +39,7 @@ class Acton < Formula
       #!/usr/bin/env runacton
       actor main(env):
           print("Hello World!")
-          await async env.exit(0)
+          exit(env.cap, 0)
     EOS
     testapp.chmod 0755
     assert_equal "Hello World!\n", shell_output(testapp)

@@ -30,4 +30,4 @@ actor main(env):
         print(count(sieve(int(env.argv[1]))))
     else:
         print("Usage: sieve <positive integer>")
-    env.exit(0)
+    exit(env.cap, 0)

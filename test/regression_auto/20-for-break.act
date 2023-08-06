@@ -11,4 +11,4 @@ actor main(env):
         if 1 > 0:
             break
 
-    await async env.exit(0)
+    exit(env.cap, 0)

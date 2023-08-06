@@ -2,4 +2,4 @@ proc def foo():
     raise ValueError("hejsan")
 
 actor main(env):
-    await async env.exit(0)
+    exit(env.cap, 0)
