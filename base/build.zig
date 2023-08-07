@@ -137,14 +137,14 @@ pub fn build(b: *std.build.Builder) void {
         .optimize = optimize,
     });
     for (c_files.items) |entry| {
-        libActon.addCSourceFile(entry, flags.items);
+        libActon.addCSourceFile(.{ .file = .{ .path = entry }, .flags = flags.items });
     }
 
-    libActon.addIncludePath(projpath);
-    libActon.addIncludePath(syspath_base);
-    libActon.addIncludePath(syspath_include);
-    libActon.addIncludePath("../inc"); // hack hack for stdlib TODO: sort out
-    libActon.addIncludePath("../deps/instdir/include"); // hack hack for stdlib TODO: sort out
+    libActon.addIncludePath(.{ .path = projpath });
+    libActon.addIncludePath(.{ .path = syspath_base });
+    libActon.addIncludePath(.{ .path = syspath_include });
+    libActon.addIncludePath(.{ .path = "../inc" }); // hack hack for stdlib TODO: sort out
+    libActon.addIncludePath(.{ .path = "../deps/instdir/include" }); // hack hack for stdlib TODO: sort out
     libActon.linkLibC();
     b.installArtifact(libActon);
 }

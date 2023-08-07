@@ -230,12 +230,12 @@ pub fn build(b: *std.build.Builder) void {
     }
 
     for (c_files.items) |entry| {
-        libActonProject.addCSourceFile(entry, flags.items);
+        libActonProject.addCSourceFile(.{ .file = .{ .path = entry }, .flags = flags.items });
     }
 
-    libActonProject.addIncludePath(projpath);
-    libActonProject.addIncludePath(syspath_base);
-    libActonProject.addIncludePath(syspath_include);
+    libActonProject.addIncludePath(.{ .path = projpath });
+    libActonProject.addIncludePath(.{ .path = syspath_base });
+    libActonProject.addIncludePath(.{ .path = syspath_include });
     libActonProject.linkLibC();
     b.installArtifact(libActonProject);
 
@@ -259,13 +259,13 @@ pub fn build(b: *std.build.Builder) void {
             .optimize = optimize,
         });
         //_ = syspath;
-        executable.addCSourceFile(entry.full_path, flags.items);
-        executable.addIncludePath(projpath);
-        executable.addIncludePath(syspath_base);
-        executable.addIncludePath(syspath_include);
-        executable.addLibraryPath("out/rel/lib/");
-        executable.addLibraryPath(syspath_libreldev);
-        executable.addLibraryPath(syspath_lib);
+        executable.addCSourceFile(.{ .file = .{ .path = entry.full_path }, .flags = flags.items });
+        executable.addIncludePath(.{ .path = projpath });
+        executable.addIncludePath(.{ .path = syspath_base });
+        executable.addIncludePath(.{ .path = syspath_include });
+        executable.addLibraryPath(.{ .path = "out/rel/lib/" });
+        executable.addLibraryPath(.{ .path = syspath_libreldev });
+        executable.addLibraryPath(.{ .path = syspath_lib });
         executable.linkLibrary(libActonProject);
 
         if (use_prebuilt) {

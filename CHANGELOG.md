@@ -22,6 +22,16 @@
       as well.
   - All `*Auth` objects now have a `Cap` suffix
   - All `auth` args are renamed to `cap`
+- `SysCap` is a new capability for functions related to Acton RTS System
+  internals [#1388]
+  - `SysCap` is available from `env.syscap`
+  - `SysCap` is separate from the normal capability hierarchy where `WorldCap`
+    is the root
+    - This is to promote the aspiration to restrict access to RTS internal
+    - While `WorldCap` shouldn't be passed around frivolously either,
+      capabilities should restricted and delegated, it is still fairly normal to
+      pass `WorldCap` while the vast majority of programs should not even need
+      `SysCap`
 - The `msg` of exceptions is now optional [#1422]
 
 ### Fixed
@@ -38,6 +48,7 @@
 - Fix return value of int hashable [#1415]
 - Fix module import check [#1420]
 - Avoid segfault when exception `error_message` is not set [#1422]
+- Bump Zig version to v0.11.0 [#1421]
 
 
 ## [0.16.0] (2023-07-03)

@@ -34,7 +34,7 @@ pub fn build(b: *std.build.Builder) void {
         "-DHAVE_SYS_FILE_H",
         "-DUSLEEP",
     });
-    lib.addIncludePath("include");
+    lib.addIncludePath(.{ .path = "include" });
     lib.linkLibC();
     b.installFile("src/uuid.h", "include/uuid/uuid.h");
     b.installArtifact(lib);
