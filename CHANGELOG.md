@@ -4,6 +4,7 @@
 
 ### Added
 - AbE: Documented capability based security [#1267]
+- The class name of exception errors is now printed on exception [#1423]
 
 ### Changed
 - `DNS` actor is replaced with lookup functions [#1406]
@@ -21,6 +22,7 @@
       as well.
   - All `*Auth` objects now have a `Cap` suffix
   - All `auth` args are renamed to `cap`
+- The `msg` of exceptions is now optional [#1422]
 
 ### Fixed
 - Document use of `--sigs` in Acton-by-Example [#1405]
@@ -33,6 +35,9 @@
 - Clean up old generated output files [#1411]
   - When the source files is moved or removed, also remove the corresponding
     output files
+- Fix return value of int hashable [#1415]
+- Fix module import check [#1420]
+- Avoid segfault when exception `error_message` is not set [#1422]
 
 
 ## [0.16.0] (2023-07-03)
