@@ -46,6 +46,7 @@ mkEnv sys proj env m        = getImps sys proj env (imps m)
 
 data EnvF x                 = EnvF {
                                 names      :: TEnv,
+                                imports    :: [ModName],
                                 modules    :: TEnv,
                                 witnesses  :: [Witness],
                                 thismod    :: Maybe ModName,
@@ -56,7 +57,9 @@ type Env0                   = EnvF ()
 
 
 setX                        :: EnvF y -> x -> EnvF x
-setX env x                  = EnvF { names = names env, modules = modules env, witnesses = witnesses env, thismod = thismod env, stub = stub env, envX = x }
+setX env x                  = EnvF { names = names env, imports = imports env, modules = modules env,
+                                     witnesses = witnesses env, thismod = thismod env, stub = stub env,
+                                     envX = x }
 
 modX                        :: EnvF x -> (x -> x) -> EnvF x
 modX env f                  = env{ envX = f (envX env) }
@@ -115,6 +118,8 @@ instance (Pretty x) => Pretty (EnvF x) where
                                   vcat (map pretty (modules env)) $+$
                                   text "--- names" <+> pretty (thismod env) <> colon $+$
                                   vcat (map pretty (names env)) $+$
+                                  text "--- imports" <+> pretty (thismod env) <> colon $+$
+                                  vcat (map pretty (imports env)) $+$
                                   text "--- witnesses:"  $+$
                                   vcat (map pretty (witnesses env)) $+$
                                   text "--- extra:"  $+$
@@ -246,15 +251,12 @@ instance (Unalias a) => Unalias (Maybe a) where
     unalias env                     = fmap (unalias env)
 
 instance Unalias ModName where
-    unalias env (ModName ns0)
-      | inBuiltin env               = ModName ns0
-      | otherwise                   = ModName $ f ns0 (names env)
-      where f [] te                 = []
-            f (n:ns) te             = case lookup n te of
-                                        Just (NModule te') -> n : f ns te'
-                                        Just (NMAlias (ModName m)) -> f (m++ns) (modules env)
-                                        _ -> noModule (ModName ns0)
-
+    unalias env m@(ModName ns)
+      | inBuiltin env               = m
+      | otherwise                   = case lookup (head ns) (names env) of
+                                        Just (NMAlias m') -> m'
+                                        Nothing | m `elem` imports env  -> m
+                                        _ -> noModule m
 instance Unalias QName where
     unalias env (QName m n)         = case findMod m env of
                                         Just te -> case lookup n te of
@@ -343,12 +345,6 @@ noDefs te                   = [ (n,i) | (n,i) <- te, keep i ]
         keep NAct{}         = False
         keep _              = True
 
-noAliases                   :: TEnv -> TEnv
-noAliases te                = [ (n,i) | (n,i) <- te, keep i ]
-  where keep NAlias{}       = False
-        keep NMAlias{}      = False
-        keep _              = True
-
 normTEnv                    :: TEnv -> TEnv
 normTEnv te                 = f [] te
   where
@@ -371,6 +367,7 @@ unSig te                    = map f te
 -- first variant is special case for compiling __builtin__.act
 initEnv                    :: FilePath -> Bool -> IO Env0
 initEnv path True          = return $ EnvF{ names = [(nPrim,NMAlias mPrim)],
+                                            imports = [mPrim],
                                             modules = [(nPrim,NModule primEnv)],
                                             witnesses = primWits,
                                             thismod = Nothing,
@@ -378,6 +375,7 @@ initEnv path True          = return $ EnvF{ names = [(nPrim,NMAlias mPrim)],
                                             envX = () }
 initEnv path False         = do (_,envBuiltin) <- InterfaceFiles.readFile (joinPath [path,"__builtin__.ty"])
                                 let env0 = EnvF{ names = [(nPrim,NMAlias mPrim), (nBuiltin,NMAlias mBuiltin)],
+                                                 imports = [mPrim,mBuiltin],
                                                  modules = [(nPrim,NModule primEnv), (nBuiltin,NModule envBuiltin)],
                                                  witnesses = primWits,
                                                  thismod = Nothing,
@@ -402,6 +400,9 @@ define                      :: TEnv -> EnvF x -> EnvF x
 define te env               = foldl addWit env1 ws
   where env1                = env{ names = reverse te ++ exclude (names env) (dom te) }
         ws                  = [ WClass q (tCon c) p (NoQ w) ws | (w, NExt q c ps te') <- te, (ws,p) <- ps ]
+
+addImport                   :: ModName -> EnvF x -> EnvF x
+addImport m env             = env{ imports = m : imports env }
 
 defineTVars                 :: QBinds -> EnvF x -> EnvF x
 defineTVars q env           = foldr f env q
@@ -486,8 +487,9 @@ findName n env              = findQName (NoQ n) env
 findMod                     :: ModName -> EnvF x -> Maybe TEnv
 findMod m env | inBuiltin env, m==mBuiltin
                             = Just (names env)
-findMod (ModName (n:ns)) env = case lookup n (names env) of
-                                Just (NMAlias (ModName ns')) -> lookupMod (ModName $ ns'++ns) env
+findMod m@(ModName ns) env  = case lookup (head ns) (names env) of
+                                Just (NMAlias m') -> lookupMod m' env
+                                Nothing | m `elem` imports env  -> lookupMod m env
                                 _ -> Nothing
 
 lookupMod                   :: ModName -> EnvF x -> Maybe TEnv
@@ -734,7 +736,7 @@ abstractAttr env tc n       = n `elem` abstractAttrs env (tcname tc)
 
 
 allCons                     :: EnvF x -> [CCon]
-allCons env                 = reverse locals ++ concat [ cons m (lookupMod m env) | m <- moduleRefs (names env), m /= mPrim ]
+allCons env                 = reverse locals ++ concat [ cons m (lookupMod m env) | m <- moduleRefs env, m /= mPrim ]
   where locals
           | inBuiltin env   = cons mBuiltin (Just $ names env)
           | otherwise       = [ TC (NoQ n) (wildargs i) | (n,i) <- names env, con i ]
@@ -744,7 +746,7 @@ allCons env                 = reverse locals ++ concat [ cons m (lookupMod m env
         cons m (Just te)    = [ TC (GName m n) (wildargs i) | (n,i) <- te, con i ] ++ concat [ cons (modCat m n) (Just te') | (n,NModule te') <- te ]
 
 allProtos                   :: EnvF x -> [PCon]
-allProtos env               = reverse locals ++ concat [ protos m (lookupMod m env) | m <- moduleRefs (names env), m /= mPrim ]
+allProtos env               = reverse locals ++ concat [ protos m (lookupMod m env) | m <- moduleRefs env, m /= mPrim ]
   where locals
           | inBuiltin env   = protos mBuiltin (Just $ names env)
           | otherwise       = [ TC (NoQ n) (wildargs i) | (n,i) <- names env, proto i ]
@@ -1006,8 +1008,7 @@ impModule sys proj env (Import _ ms)
   where imp env []              = return env
         imp env (ModuleItem m as : is)
                                 = do (env1,te) <- doImp sys proj env m
-                                     let ModName (m0:_) = m
-                                         env2 = maybe (define [(m0, NMAlias $ ModName [m0])] env1) (\n->define [(n, NMAlias m)] env1) as
+                                     let env2 = maybe (addImport m) (\n->define [(n, NMAlias m)]) as env1
                                      imp (importWits m te env2) is
 impModule sys proj env (FromImport _ (ModRef (0,Just m)) items)
                                 = do (env1,te) <- doImp sys proj env m
@@ -1018,9 +1019,9 @@ impModule sys proj env (FromImportAll _ (ModRef (0,Just m)))
 impModule _ _ _ i               = illegalImport (loc i)
 
 
-moduleRefs te                   = nub $ [ m | (_,NMAlias m) <- te ] ++ [ m | (_,NAlias (GName m _)) <- te ]
+moduleRefs env                  = nub $ imports env ++ [ m | (_,NMAlias m) <- names env ] ++ [ m | (_,NAlias (GName m _)) <- names env ]
 
-moduleRefs1 env                 = moduleRefs (names env) \\ [mPrim, mBuiltin]
+moduleRefs1 env                 = moduleRefs env \\ [mPrim, mBuiltin]
 
 subImp sys proj env []          = return env
 subImp sys proj env (m:ms)      = do (env',_) <- doImp sys proj env m

@@ -48,7 +48,7 @@ reconstruct fname env0 (Module m i ss)  = do --traceM ("#################### ori
 
 showTyFile env0 m fname         = do (ms,te) <- InterfaceFiles.readFile fname
                                      putStrLn ("\n#################################### Interface:")
-                                     let env1 = define [ (name "_",NMAlias m) | m <- ms ] env0
+                                     let env1 = foldr addImport env0 ms
                                      putStrLn $ prettySigs env1 m te
 
 prettySigs env m te             = render $ vcat [ text "import" <+> pretty m | m <- moduleRefs1 env ] $++$
