@@ -79,8 +79,10 @@ primNEWACTOR        = gPrim "NEWACTOR"
 
 primISINSTANCE      = gPrim "ISINSTANCE"
 primISINSTANCE0     = gPrim "ISINSTANCE0"
-primCAST            = gPrim "CAST"
 primCONSTCONT       = gPrim "CONSTCONT"
+primCAST            = gPrim "CAST"
+
+eCAST t t' e        = eCall (tApp (eQVar primCAST) [t,t']) [e]
 
 primFORMAT          = gPrim "FORMAT"
 

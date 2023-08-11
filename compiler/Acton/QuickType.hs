@@ -34,7 +34,7 @@ accept t t' e                       = e
 typecast                            :: Checker
 typecast t t' e
   | t == t'                         = e
-  | otherwise                       = eCall (tApp (eQVar primCAST) [t,t']) [e]
+  | otherwise                       = eCAST t t' e
 
 
 typeOf env x                        = fst $ qType env accept x

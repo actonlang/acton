@@ -299,7 +299,7 @@ instance InfEnv Stmt where
                                              (cs3,te1) <- commonTEnv env $ catMaybes $ (liveCombine te te'):tes
                                              (cs4,te2,fin') <- infSuiteEnv (define te1 env) fin
                                              fx <- currFX
-                                             return (Cast fxProc fx :
+                                             return (--Cast fxProc fx :
                                                      cs1++cs2++cs3++cs4++concat css, te1++te2, Try l b' hs' els' fin')
     infEnv env (With l items b)
       | nodup items                     = do (cs1,te,items') <- infEnv env items
@@ -1509,7 +1509,7 @@ isNone None{} Eq (Var _ (NoQ n))        = Just n
 isNone e op e'                          = Nothing
 
 
-sCast n t t'                            = [(n, eCall (tApp (eQVar primCAST) [t,t']) [eVar n])]
+sCast n t t'                            = [(n, eCAST t t' (eVar n))]
 
 inferSlice env (Sliz l e1 e2 e3)        = do (cs1,e1') <- inferSub env tInt e1
                                              (cs2,e2') <- inferSub env tInt e2
