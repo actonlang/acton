@@ -807,7 +807,7 @@ void $DROP() {
 }
 
 void $RAISE(B_Exception e) {
-    //fprintf(stderr,"%s\n",(char*)fromB_str(e->error_message));
+    //fprintf(stderr, "%s: %s\n", e->$class->$GCINFO, e->error_message ? fromB_str(e->error_message) : "");
     //exit(1);
     JumpBuf jump = (JumpBuf)pthread_getspecific(jump_top);
     jump->xval = e;

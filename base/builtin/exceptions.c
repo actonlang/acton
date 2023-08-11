@@ -89,8 +89,3 @@ B_str B_ValueErrorD___str__(B_ValueError self) {
   asprintf(&s,"ValueError:  %s>",fromB_str(self->error_message));
   return to$str(s);
 }
-
-void $RAISE(B_BaseException e) {
-  fprintf(stderr, "%s: %s\n", e->$class->$GCINFO, e->error_message ? fromB_str(e->error_message) : "");
-  exit(1);
-}
