@@ -27,7 +27,7 @@ actor Server(conn):
         print("There was an error:", error, " from:", c)
 
 
-actor Listener(env, port):
+actor Listener(env, address, port):
     def on_lsock_error(l, error):
         print("There was an error with the TCPListener socket:", error)
 
@@ -36,31 +36,20 @@ actor Listener(env, port):
         c.cb_install(s.on_receive, s.on_error)
 
     listen_cap = net.TCPListenCap(net.TCPCap(net.NetCap(env.cap)))
-    server = net.TCPListener(listen_cap, "0.0.0.0", port, on_lsock_error, on_server_accept)
+    server = net.TCPListener(listen_cap, address, port, on_lsock_error, on_server_accept)
 
 
-actor Client(rts_monitor, env: Env, port: int):
+actor Client(name, rts_monitor, env: Env, port: int, on_success):
     var connection = 0
     def on_connect(c):
         connection += 1
-        print("Client connected, TCP handles", get_tcp_handles(rts_monitor))
+        print("Client %s connected to %s:%d, TCP handles: %s" % (name, c.remote_address(), port, str(get_tcp_handles(rts_monitor))))
         await async c.write(b"PING")
 
     def on_close(c):
         print("closed connection", connection)
         if connection == 2:
-            after 0.001: check_io()
-
-    def check_io():
-        tcp_handles = get_tcp_handles(rts_monitor)
-        print("IO check...", tcp_handles)
-        if len(tcp_handles) < 2:
-            # Only TCP listening socket left...
-            print("TCP client properly cleaned from IO loop, exiting...")
-            await async env.exit(0)
-        else:
-            print("TCP client not properly cleaned from IO loop, waiting...")
-            after 0.8: check_io()
+            on_success()
 
     def on_receive(c, data):
         print("Client RECV", data)
@@ -95,8 +84,52 @@ actor main(env):
 
     after 2: timeout_error()
 
-    port = random.randint(10000, 20000)
-    print("Using port", port)
     rts_monitor = acton.rts.Monitor(env)
-    l = Listener(env, port)
-    c = Client(rts_monitor, env, port)
+
+    port4 = random.randint(10000, 20000)
+    port6 = port4+1
+    print("Using ports, IPv4: %d  IPv6: %d" % (port4, port6))
+
+    require_v4 = True
+    require_v6 = False
+
+    if require_v4:
+        l4 = Listener(env, "127.0.0.1", port4)
+    if require_v6:
+        l6 = Listener(env, "::1", port6)
+
+    var v4_connected = False
+    var v6_connected = False
+    var ds_connected = False
+
+    def _on_v4_connect():
+        v4_connected = True
+        if not require_v6 or v6_connected:
+            after 0.1: check_io()
+
+    def _on_v6_connect():
+        print("v6 connected")
+        v6_connected = True
+        if not require_v4 or v4_connected:
+            after 0.1: check_io()
+
+    def check_io():
+        tcp_handles = get_tcp_handles(rts_monitor)
+        print("IO check...", tcp_handles)
+        expected_tcp_handles = 0
+        if require_v4:
+            expected_tcp_handles += 1
+        if require_v6:
+            expected_tcp_handles += 1
+        if len(tcp_handles) <= expected_tcp_handles:
+            # Only TCP listening sockets left...
+            print("TCP client properly cleaned from IO loop, exiting...")
+            await async env.exit(0)
+        else:
+            print("TCP client not properly cleaned from IO loop, waiting...")
+            after 0.8: check_io()
+
+    if require_v4:
+        c4 = Client("c4", rts_monitor, env, port4, _on_v4_connect)
+    if require_v6:
+        c6 = Client("c6", rts_monitor, env, port6, _on_v6_connect)

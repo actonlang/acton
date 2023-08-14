@@ -199,6 +199,7 @@ void on_connect4(uv_connect_t *connect_req, int status) {
         return;
     }
     $action f = self->_fun_oncon4;
+    //$action f = self->$class->_on_connect4;
     f->$class->__asyn__(f, self);
 }
 
@@ -433,8 +434,21 @@ $R netQ_TCPListenerD__init (netQ_TCPListener self, $Cont c$cont) {
     uv_tcp_init(get_uv_loop(), server);
     server->data = (void *)self;
     int r;
-    struct sockaddr_in addr;
-    r = uv_ip4_addr(fromB_str(self->address), from$int(self->port), &addr);
+    struct sockaddr_in addr4;
+    struct sockaddr_in6 addr6;
+    if (inet_pton(AF_INET, fromB_str(self->address), &(addr4.sin_addr)) == 1) {
+        r = uv_ip4_addr(fromB_str(self->address), from$int(self->port), &addr4);
+    } else if (inet_pton(AF_INET6, fromB_str(self->address), &(addr6.sin6_addr)) == 1) {
+        r = uv_ip6_addr(fromB_str(self->address), from$int(self->port), &addr6);
+    } else {
+        char errmsg[1024] = "Address is not an IPv4 or IPv6 address: ";
+        asprintf(errmsg + strlen(errmsg), "%s", fromB_str(self->address));
+        log_warn(errmsg);
+        $action2 f = self->on_error;
+        f->$class->__asyn__(f, self, to$str(errmsg));
+        // NOTE: free() here if do manual memory management in I/O one day
+        return $R_CONT(c$cont, B_None);
+    }
     if (r != 0) {
         char errmsg[1024] = "Unable to parse address: ";
         uv_strerror_r(r, errmsg + strlen(errmsg), sizeof(errmsg)-strlen(errmsg));
@@ -445,7 +459,11 @@ $R netQ_TCPListenerD__init (netQ_TCPListener self, $Cont c$cont) {
         return $R_CONT(c$cont, B_None);
     }
 
-    r = uv_tcp_bind(server, (const struct sockaddr*)&addr, 0);
+    if (inet_pton(AF_INET, fromB_str(self->address), &(addr4.sin_addr)) == 1) {
+        r = uv_tcp_bind(server, (const struct sockaddr *)&addr4, 0);
+    } else if (inet_pton(AF_INET6, fromB_str(self->address), &(addr6.sin6_addr)) == 1) {
+        r = uv_tcp_bind(server, (const struct sockaddr6 *)&addr6, 0);
+    }
     if (r != 0) {
         char errmsg[1024] = "Error in TCP bind: ";
         uv_strerror_r(r, errmsg + strlen(errmsg), sizeof(errmsg)-strlen(errmsg));
@@ -456,7 +474,7 @@ $R netQ_TCPListenerD__init (netQ_TCPListener self, $Cont c$cont) {
         return $R_CONT(c$cont, B_None);
     }
 
-    r = uv_listen((uv_stream_t*) server, 1024, on_new_connection);
+    r = uv_listen((uv_stream_t *)server, 1024, on_new_connection);
     if (r != 0) {
         char errmsg[1024] = "Error in TCP listen: ";
         uv_strerror_r(r, errmsg + strlen(errmsg), sizeof(errmsg)-strlen(errmsg));
