@@ -70,8 +70,11 @@ actor TCPConnection(cap: TCPConnectCap, address: str, port: int, on_connect: act
     var _sock6_state = 0
     var _sock6_error = ""
     var _state = 0
+    # TODO: turn this into an argument when we support default argument values
+    var connect_timeout = 10.0
 
     var _connections = 0
+    var _consecutive_connect_errors = 0
     var _bytes_in: u64 = 0
     var _bytes_out: u64 = 0
 
@@ -98,13 +101,14 @@ actor TCPConnection(cap: TCPConnectCap, address: str, port: int, on_connect: act
     action def _on_tcp_error(sockfamily: int, err: int, errmsg: str):
         if sockfamily == 4:
             if _sock6_error != "":
+                _consecutive_connect_errors += 1
                 on_error(self, errmsg + "  IPv6 error: " + _sock6_error)
             _sock4_error = errmsg
         elif sockfamily == 6:
             if _sock4_error != "":
+                _consecutive_connect_errors += 1
                 on_error(self, errmsg + "  IPv4 error: " + _sock4_error)
             _sock6_error = errmsg
-
 
     # TCP connect over IPv4
     proc def _connect4(ip_address: str):
@@ -131,6 +135,7 @@ actor TCPConnection(cap: TCPConnectCap, address: str, port: int, on_connect: act
             _sock = sock
             _read_start()
             _connections += 1
+            _consecutive_connect_errors = 0
             on_connect(self)
         else:
             print("Unexpected state", _state)
@@ -146,11 +151,16 @@ actor TCPConnection(cap: TCPConnectCap, address: str, port: int, on_connect: act
         """Close the connection"""
         NotImplemented
 
+    def _connect_timeout():
+        _consecutive_connect_errors += 1
+        on_error(self, "Connection attempt failed due to timeout")
+
     def reconnect():
         close(_connect)
 
     def _connect(c):
         _state = 1
+        after connect_timeout: _connect_timeout()
         if is_ipv4(address):
             _connect4(address)
         elif is_ipv6(address):
@@ -171,12 +181,11 @@ actor TCPConnection(cap: TCPConnectCap, address: str, port: int, on_connect: act
     action def remote_address() -> str:
         NotImplemented
 
-    action def metrics() -> list[u64]:
-        return [
-            _connections,
-            _bytes_in,
-            _bytes_out
-        ]
+    action def metrics():
+        return (connections=_connections,
+                consecutive_connect_errors=_consecutive_connect_errors,
+                bytes_in=_bytes_in,
+                bytes_out=_bytes_out)
 
     # TODO: get rid of this, but how to call _on_connect4 directly?
     var _fun_oncon4: action() -> None = _on_connect4
@@ -184,7 +193,6 @@ actor TCPConnection(cap: TCPConnectCap, address: str, port: int, on_connect: act
     var _fun_on_tcp_error: action(int, int, str) -> None = _on_tcp_error
 
     _connect(self)
-
 
 
 actor TCPListenConnection(cap: _TCPListenConnectCap, server_client: int):
