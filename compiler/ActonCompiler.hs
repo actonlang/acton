@@ -685,9 +685,6 @@ runRestPasses opts paths env0 parsed stubMode = do
                       timeCodeGen <- getTime Monotonic
                       iff (C.timing opts) $ putStrLn("    Pass: Generating code : " ++ fmtTime (timeCodeGen - timeLLift))
 
-                      iff (altOutput opts) $ do
-                          System.Exit.exitSuccess
-
                       iff (C.hgen opts) $ do
                           putStrLn(h)
                           System.Exit.exitSuccess
@@ -695,11 +692,11 @@ runRestPasses opts paths env0 parsed stubMode = do
                           putStrLn(c)
                           System.Exit.exitSuccess
 
+                      iff (altOutput opts) $ do
+                          System.Exit.exitSuccess
+
                       timeCodeWrite <- getTime Monotonic
                       iff (C.timing opts) $ putStrLn("    Pass: Writing code    : " ++ fmtTime (timeCodeWrite - timeCodeGen))
-
-                      iff ((C.cgen opts) || (C.hgen opts)) System.Exit.exitSuccess
-
 
                       iff (not stubMode) (do
                           -- cc is invoked with parent directory of project
