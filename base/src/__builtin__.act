@@ -890,9 +890,15 @@ class WorldCap():
     """
     pass
 
-actor Env (wc: WorldCap, args: list[str]):
+class SysCap():
+    """SysCap has the capability to access the internals of the Acton RTS system
+    """
+    pass
+
+actor Env (wc: WorldCap, sc: SysCap, args: list[str]):
     cap = wc
     auth = wc
+    syscap = sc
     argv = args
     nr_wthreads: int = 0
 
