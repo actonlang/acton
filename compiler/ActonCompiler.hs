@@ -893,6 +893,7 @@ zigBuild env opts paths tasks binTasks = do
                  if (C.debug opts) then " --verbose " else "" ++
                  " -Dtarget=" ++ (C.target opts) ++
                  " -Doptimize=" ++ (if (C.dev opts) then "Debug" else "ReleaseFast") ++
+                 (if (C.cpedantic opts) then " -Dcpedantic " else " ") ++
                  " -Dprojpath=" ++ projPath paths ++
                  " -Dprojpath_outtypes=" ++ joinPath [ projPath paths, "out", "types" ] ++
                  " -Dsyspath=" ++ sysPath paths ++
@@ -901,7 +902,7 @@ zigBuild env opts paths tasks binTasks = do
                  " -Dsyspath_include=" ++ joinPath [ sysPath paths, "depsout", "include" ] ++
                  " -Dsyspath_lib=" ++ joinPath [ sysPath paths, "depsout", "lib" ] ++
                  " -Dsyspath_libreldev=" ++ joinPath [ sysPath paths, "lib", reldev ] ++
-                 if use_prebuilt then " -Duse_prebuilt" else ""
+                 (if use_prebuilt then " -Duse_prebuilt" else "")
 
     runZig opts zigCmd (Just (projPath paths))
     -- if we are in a temp acton project, copy the outputted binary next to the source file

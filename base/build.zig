@@ -17,6 +17,7 @@ pub fn build(b: *std.build.Builder) void {
     print("Acton Base Builder\nBuilding in {s}\n", .{buildroot_path});
     const optimize = b.standardOptimizeOption(.{});
     const target = b.standardTargetOptions(.{});
+    const cpedantic = b.option(bool, "cpedantic", "") orelse false;
     const use_prebuilt = b.option(bool, "use_prebuilt", "") orelse false;
     const projpath = b.option([]const u8, "projpath", "") orelse "";
     const projpath_outtypes = b.option([]const u8, "projpath_outtypes", "") orelse "";
@@ -120,6 +121,9 @@ pub fn build(b: *std.build.Builder) void {
     file_prefix_map.appendSlice(file_prefix_path_path) catch unreachable;
     file_prefix_map.appendSlice("/=") catch unreachable;
     flags.append(file_prefix_map.items) catch unreachable;
+    if (cpedantic) {
+        flags.append("-Werror") catch unreachable;
+    }
 
     if (optimize == .Debug) {
         print("Debug build\n", .{});
