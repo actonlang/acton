@@ -11,7 +11,7 @@ void fileQ___ext_init__() {
 
 }
 
-$R fileQ_ReadFileD__open_file (fileQ_ReadFile self, $Cont c$cont) {
+$R fileQ_ReadFileD__open_fileG_local (fileQ_ReadFile self, $Cont c$cont) {
     pin_actor_affinity();
     uv_fs_t *req = (uv_fs_t *)calloc(1, sizeof(uv_fs_t));
     int r = uv_fs_open(get_uv_loop(), req, (char *)fromB_str(self->filename), UV_FS_O_RDONLY, 0, NULL);
@@ -64,7 +64,7 @@ $R fileQ_ReadFileD_readG_local (fileQ_ReadFile self, $Cont c$cont) {
 }
 
 
-$R fileQ_WriteFileD__open_file (fileQ_WriteFile self, $Cont c$cont) {
+$R fileQ_WriteFileD__open_fileG_local (fileQ_WriteFile self, $Cont c$cont) {
     pin_actor_affinity();
     uv_fs_t *req = (uv_fs_t *)calloc(1, sizeof(uv_fs_t));
     int r = uv_fs_open(get_uv_loop(), req, (char *)fromB_str(self->filename),  UV_FS_O_RDWR | UV_FS_O_CREAT, S_IWUSR|S_IRUSR|S_IRGRP|S_IROTH, NULL);

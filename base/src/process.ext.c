@@ -71,7 +71,7 @@ $R processQ_ProcessD_aidG_local (processQ_Process self, $Cont c$cont) {
     return $R_CONT(c$cont, to$int(self->$globkey));
 }
 
-$R processQ_ProcessD__create_process (processQ_Process self, $Cont c$cont) {
+$R processQ_ProcessD__create_processG_local (processQ_Process self, $Cont c$cont) {
     pin_actor_affinity();
     struct process_data *process_data = calloc(1, sizeof(struct process_data));
     process_data->process = self;

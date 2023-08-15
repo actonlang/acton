@@ -182,7 +182,7 @@ void netQ_TCPConnection__on_receive(uv_stream_t *stream, ssize_t nread, const uv
 }
 
 
-$R netQ_TCPConnectionD__pin_affinity (netQ_TCPConnection self, $Cont c$cont) {
+$R netQ_TCPConnectionD__pin_affinityG_local (netQ_TCPConnection self, $Cont c$cont) {
     pin_actor_affinity();
     return $R_CONT(c$cont, B_None);
 }
@@ -194,13 +194,10 @@ void on_connect4(uv_connect_t *connect_req, int status) {
         char errmsg[1024] = "Error in TCP connect over IPv4: ";
         uv_strerror_r(status, errmsg + strlen(errmsg), sizeof(errmsg)-strlen(errmsg));
         log_warn(errmsg);
-        $action3 f = self->_fun_on_tcp_error;
-        f->$class->__asyn__(f, to$int(4), to$int(status), to$str(errmsg));
+        self->$class->_on_tcp_error(self, to$int(4), to$int(status), to$str(errmsg));
         return;
     }
-    $action f = self->_fun_oncon4;
-    //$action f = self->$class->_on_connect4;
-    f->$class->__asyn__(f, self);
+    self->$class->_on_connect4(self);
 }
 
 void on_connect6(uv_connect_t *connect_req, int status) {
@@ -210,15 +207,13 @@ void on_connect6(uv_connect_t *connect_req, int status) {
         char errmsg[1024] = "Error in TCP connect over IPv6: ";
         uv_strerror_r(status, errmsg + strlen(errmsg), sizeof(errmsg)-strlen(errmsg));
         log_warn(errmsg);
-        $action3 f = self->_fun_on_tcp_error;
-        f->$class->__asyn__(f, to$int(6), to$int(status), to$str(errmsg));
+        self->$class->_on_tcp_error(self, to$int(4), to$int(status), to$str(errmsg));
         return;
     }
-    $action f = self->_fun_oncon6;
-    f->$class->__asyn__(f, self);
+    self->$class->_on_connect6(self);
 }
 
-$R netQ_TCPConnectionD__connect4 (netQ_TCPConnection self, $Cont c$cont, B_str ip_address) {
+$R netQ_TCPConnectionD__connect4G_local (netQ_TCPConnection self, $Cont c$cont, B_str ip_address) {
     log_debug("TCP connecting over IPv4 to %s", fromB_str(ip_address));
     uv_tcp_t* socket = (uv_tcp_t*)malloc(sizeof(uv_tcp_t));
     uv_tcp_init(get_uv_loop(), socket);
@@ -235,7 +230,7 @@ $R netQ_TCPConnectionD__connect4 (netQ_TCPConnection self, $Cont c$cont, B_str i
     return $R_CONT(c$cont, B_None);
 }
 
-$R netQ_TCPConnectionD__connect6 (netQ_TCPConnection self, $Cont c$cont, B_str ip_address) {
+$R netQ_TCPConnectionD__connect6G_local (netQ_TCPConnection self, $Cont c$cont, B_str ip_address) {
     log_debug("TCP connecting over IPv6 to %s", fromB_str(ip_address));
     uv_tcp_t* socket = (uv_tcp_t*)malloc(sizeof(uv_tcp_t));
     uv_tcp_init(get_uv_loop(), socket);
@@ -252,7 +247,7 @@ $R netQ_TCPConnectionD__connect6 (netQ_TCPConnection self, $Cont c$cont, B_str i
     return $R_CONT(c$cont, B_None);
 }
 
-$R netQ_TCPConnectionD__read_start (netQ_TCPConnection self, $Cont c$cont) {
+$R netQ_TCPConnectionD__read_startG_local (netQ_TCPConnection self, $Cont c$cont) {
     uv_tcp_t* socket = (uv_tcp_t *)from$int(self->_sock);
     socket->data = self;
     int r = uv_read_start(socket, alloc_buffer, netQ_TCPConnection__on_receive);
@@ -427,7 +422,7 @@ void on_new_connection(uv_stream_t *server, int status) {
 }
 
 
-$R netQ_TCPListenerD__init (netQ_TCPListener self, $Cont c$cont) {
+$R netQ_TCPListenerD__initG_local (netQ_TCPListener self, $Cont c$cont) {
     pin_actor_affinity();
 
     uv_tcp_t *server = (uv_tcp_t *)malloc(sizeof(uv_tcp_t));
@@ -495,7 +490,7 @@ B_NoneType netQ_TCPListenerD___resume__ (netQ_TCPListener self) {
     return B_None;
 }
 
-$R netQ_TCPListenConnectionD__init (netQ_TCPListenConnection self, $Cont c$cont) {
+$R netQ_TCPListenConnectionD__initG_local (netQ_TCPListenConnection self, $Cont c$cont) {
     pin_actor_affinity();
 
     uv_stream_t *client = (uv_tcp_t *)from$int(self->server_client);
@@ -527,7 +522,7 @@ void netQ_TCPListenConnection__on_receive(uv_stream_t *stream, ssize_t nread, co
     //    free(buf->base);
 }
 
-$R netQ_TCPListenConnectionD__read_start (netQ_TCPListenConnection self, $Cont c$cont) {
+$R netQ_TCPListenConnectionD__read_startG_local (netQ_TCPListenConnection self, $Cont c$cont) {
     uv_stream_t *client = (uv_stream_t *)from$int(self->client);
     client->data = self;
     int r = uv_read_start(client, alloc_buffer, netQ_TCPListenConnection__on_receive);
