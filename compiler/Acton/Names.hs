@@ -57,7 +57,8 @@ deriveT (TCon _ c)                  = deriveQ (tcname c)
 
 witAttr qn                          = Internal Witness (nstr $ deriveQ qn) 0
 
-extensionName p c
+extensionName [] c                  = Derived (globalName "ext") (deriveQ $ tcname c)
+extensionName (p:_) c
   | length ts == length vs          = n0
   | otherwise                       = foldl Derived n0 (map deriveT ts)
   where ts                          = tcargs c
@@ -71,19 +72,24 @@ declnames (Extension{} : ds)        = declnames ds
 declnames (d : ds)                  = dname d : declnames ds
 declnames []                        = []
 
+dname' (Extension _ _ c us _)       = extensionName us c
+dname' d                            = dname d
+
 splitDeclGroup []                   = []
-splitDeclGroup (d:ds)
-  | def d                           = splitdef (free d) [d] defs ++ splitDeclGroup ds1
-  | otherwise                       = (d:types) : splitDeclGroup ds2
-  where (defs,ds1)                  = span def ds
-        (types,ds2)                 = span (not . def) ds
-        splitdef vs ds0 []          = [reverse ds0]
-        splitdef vs ds0 (d:ds)
-          | any (`elem` ws) vs      = splitdef (free d++vs) (d:ds0) ds
-          | otherwise               = reverse ds0 : splitdef (free d) [d] ds
+splitDeclGroup (d:ds)               = join $ split (free d) [d] ds
+  where split vs ds0 []             = [reverse ds0]
+        split vs ds0 (d:ds)
+          | any (`elem` ws) vs      = split (free d++vs) (d:ds0) ds
+          | otherwise               = reverse ds0 : split (free d) [d] ds
           where ws                  = declnames (d:ds)
-        def Def{}                   = True
-        def _                       = False
+        join []                     = []
+        join dss
+          | not $ null dss1         = concat dss1 : join dss2
+          where (dss1,dss2)         = span (all tydecl) dss
+                tydecl Def{}        = False
+                tydecl _            = True
+        join (ds:dss)               = ds : join dss
+
 
 -- Control flow --------------------
 

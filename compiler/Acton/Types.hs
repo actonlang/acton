@@ -561,7 +561,7 @@ instance InfEnv Decl where
       | length us == 0                  = err (loc n) "Extension lacks a protocol"
 --      | length us > 1                   = notYet (loc n) "Extensions with multiple protocols"
       | not $ null witsearch            = err (loc n) ("Extension already exists: " ++ prstr (head witsearch))
-      | otherwise                       = do --traceM ("\n## infEnv extension " ++ prstr (extensionName (head us) c))
+      | otherwise                       = do --traceM ("\n## infEnv extension " ++ prstr (extensionName us c))
                                              pushFX fxPure tNone
                                              (cs,te,b1) <- infEnv env1 b
                                              popFX
@@ -574,7 +574,7 @@ instance InfEnv Decl where
                                              let te1 = unSig $ subst s asigs
                                                  te2 = te ++ te1
                                                  b2 = addImpl te1 b1
-                                             return (cs1, [(extensionName (head us) c, NExt q c ps te2)], Extension l q c us (bindWits eq1 ++ b2))
+                                             return (cs1, [(extensionName us c, NExt q c ps te2)], Extension l q c us (bindWits eq1 ++ b2))
       where TC n ts                     = c
             env1                        = define (toSigs te') $ reserve (bound b) $ defineSelfOpaque $ defineTVars (stripQual q) $ setInClass env
             witsearch                   = [ w | w <- witsByPName env (tcname u), matching (tCon c) u w, matching' [wtype w] (qbound q) [tCon c] ]
@@ -841,7 +841,7 @@ instance Check Decl where
       where env1                        = defineInst c ps thisKW' $ defineSelf n q $ defineTVars q $ setInClass env
             tvs                         = tvSelf : qbound q
             n                           = tcname c
-            n'                          = extensionName (head us) c
+            n'                          = extensionName us c
             NExt _ _ ps te              = findName n' env
             s                           = [(tvSelf, tCon $ TC n (map tVar $ qbound q))]
 
