@@ -144,7 +144,7 @@ instance Deact Decl where
               | otherwise           = bound params `intersect` fvs ++ [ n | n <- dom $ envOf inits, not (isHidden n) || n `elem` fvs ]
             locals                  = nub $ live_vars ++ bound decls
             wrapped                 = bound wrapdefs
-            wrapdefs                = [ d | Decl _ ds <- decls, d@Def{dname=n, dfx=fx} <- ds, fx == fxProc && not (isHidden n) || fx == fxAction ]
+            wrapdefs                = [ d | Decl _ ds <- decls, d@Def{dname=n, dfx=fx} <- ds, fx == fxProc || fx == fxAction ]
 
             propsigs                = [ Signature l0 [n] (monotype t) Property | (n,t) <- concat $ props' params : map props inits ]
 

@@ -190,11 +190,6 @@ actor TCPConnection(cap: TCPConnectCap, address: str, port: int, on_connect: act
                 bytes_in=_bytes_in,
                 bytes_out=_bytes_out)
 
-    # TODO: is it possible to directly call e.g. _on_connect4 from a non-CPSed C function? how?
-    var _fun_oncon4: action() -> None = _on_connect4
-    var _fun_oncon6: action() -> None = _on_connect6
-    var _fun_on_tcp_error: action(int, int, str) -> None = _on_tcp_error
-
     _connect(self)
 
 
