@@ -30,6 +30,11 @@ class _TCPListenConnectCap():
     """Internal use only"""
     pass
 
+def is_ipv4(address: str) -> bool:
+    NotImplemented
+
+def is_ipv6(address: str) -> bool:
+    NotImplemented
 
 def _lookup_a(name: str, on_resolve: action(list[str]) -> None, on_error: action(str, str) -> None) -> None:
     """Perform DNS lookup for name of record type A
@@ -53,31 +58,145 @@ def lookup_aaaa(cap: DNSCap, name: str, on_resolve: action(list[str]) -> None, o
     _lookup_aaaa(name, on_resolve, on_error)
 
 
-actor TCPIPConnection(cap: TCPConnectCap, address: str, port: int, on_connect: action(TCPIPConnection) -> None, on_receive: action(TCPIPConnection, bytes) -> None, on_error: action(TCPIPConnection, str) -> None):
+actor TCPConnection(cap: TCPConnectCap, address: str, port: int, on_connect: action(TCPConnection) -> None, on_receive: action(TCPConnection, bytes) -> None, on_error: action(TCPConnection, str) -> None):
     """TCP IP Connection"""
-    _socket = -1
+    var _a_res: list[str] = []
+    var _aaaa_res: list[str] = []
+    var _sock = -1
+    var _sock4 = -1
+    var _sock4_state = 0
+    var _sock4_error = ""
+    var _sock6 = -1
+    var _sock6_state = 0
+    var _sock6_error = ""
+    var _state = 0
+    # TODO: turn this into an argument when we support default argument values
+    var connect_timeout = 10.0
 
-    action def close(on_close: action(TCPIPConnection) -> None) -> None:
-        """Close the connection"""
+    var _connections = 0
+    var _consecutive_connect_errors = 0
+    var _bytes_in: u64 = 0
+    var _bytes_out: u64 = 0
+
+    proc def _pin_affinity() -> None:
+        NotImplemented
+    _pin_affinity()
+
+    # DNS A
+    def _on_dns_a_resolve(result):
+        _a_res = result
+        _connect4(result[0])
+
+    def _on_dns_a_error(name, msg):
+        _lookup_a(address, _on_dns_a_resolve, _on_dns_a_error)
+
+    # DNS AAAA
+    def _on_dns_aaaa_resolve(result):
+        _aaaa_res = result
+        _connect6(result[0])
+
+    def _on_dns_aaaa_error(name, msg):
+        _lookup_aaaa(address, _on_dns_aaaa_resolve, _on_dns_aaaa_error)
+
+    action def _on_tcp_error(sockfamily: int, err: int, errmsg: str):
+        if sockfamily == 4:
+            if _sock6_error != "":
+                _consecutive_connect_errors += 1
+                on_error(self, errmsg + "  IPv6 error: " + _sock6_error)
+            _sock4_error = errmsg
+        elif sockfamily == 6:
+            if _sock4_error != "":
+                _consecutive_connect_errors += 1
+                on_error(self, errmsg + "  IPv4 error: " + _sock4_error)
+            _sock6_error = errmsg
+
+    # TCP connect over IPv4
+    proc def _connect4(ip_address: str):
         NotImplemented
 
-    def reconnect():
-        close(_connect)
+    action def _on_connect4():
+        _sock4_error = ""
+        _on_connect(_sock4)
+
+    # TCP connect over IPv6
+    proc def _connect6(ip_address: str):
+        NotImplemented
+
+    action def _on_connect6():
+        _sock6_error = ""
+        _on_connect(_sock6)
+
+    # Handle on_connect event
+    proc def _on_connect(sock: int):
+        if _state == 2:
+            pass
+        elif _state == 1:
+            _state = 2
+            _sock = sock
+            _read_start()
+            _connections += 1
+            _consecutive_connect_errors = 0
+            on_connect(self)
+        else:
+            print("Unexpected state", _state)
+
+    proc def _read_start():
+        NotImplemented
 
     action def write(data: bytes) -> None:
         """Write data to remote"""
         NotImplemented
 
+    action def close(on_close: action(TCPConnection) -> None) -> None:
+        """Close the connection"""
+        NotImplemented
+
+    def _connect_timeout():
+        _state = 0
+        _consecutive_connect_errors += 1
+        def _on_close(c):
+            on_error(self, "Connection attempt failed due to timeout")
+        close(_on_close)
+
+    def reconnect():
+        close(_connect)
+
+    def _connect(c):
+        _state = 1
+        after connect_timeout: _connect_timeout()
+        if is_ipv4(address):
+            _connect4(address)
+        elif is_ipv6(address):
+            _connect6(address)
+        else:
+            _lookup_aaaa(address, _on_dns_aaaa_resolve, _on_dns_aaaa_error)
+            _lookup_a(address, _on_dns_a_resolve, _on_dns_a_error)
+
     mut def __resume__() -> None:
         NotImplemented
 
-    proc def _init():
+    action def ip_version() -> ?int:
         NotImplemented
 
-    proc def _connect(c):
+    action def local_address() -> str:
         NotImplemented
-    _init()
+
+    action def remote_address() -> str:
+        NotImplemented
+
+    action def metrics():
+        return (connections=_connections,
+                consecutive_connect_errors=_consecutive_connect_errors,
+                bytes_in=_bytes_in,
+                bytes_out=_bytes_out)
+
+    # TODO: is it possible to directly call e.g. _on_connect4 from a non-CPSed C function? how?
+    var _fun_oncon4: action() -> None = _on_connect4
+    var _fun_oncon6: action() -> None = _on_connect6
+    var _fun_on_tcp_error: action(int, int, str) -> None = _on_tcp_error
+
     _connect(self)
+
 
 actor TCPListenConnection(cap: _TCPListenConnectCap, server_client: int):
     """TCP Listener Connection"""

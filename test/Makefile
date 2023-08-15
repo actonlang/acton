@@ -1,5 +1,5 @@
 MK_PATH:=$(shell dirname $(dir $(abspath $(lastword $(MAKEFILE_LIST)))))
-ACTONC=$(MK_PATH)/dist/bin/actonc --quiet --always-build
+ACTONC=$(MK_PATH)/dist/bin/actonc --quiet
 DDB_SERVER=../dist/bin/actondb
 TESTS= \
 	$(DDB_TESTS)

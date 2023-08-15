@@ -4,7 +4,7 @@ Any interesting program will need to interact with the outside world, like acces
 
 In an Acton program, having a reference to an actor gives you the ability to do something with that actor. Without a reference, it is impossible to access an actor and it is not possible to forge a reference. This provides a simple and effective security model that also extends to accessing things outside of the Acton system, like files or remote hosts over the network.
 
-Things outside of the actor world are represented by actors and to access such actors, a *capability reference* is required. For example, we can use `TCPIPConnection` to connect to a remote host over the network using TCP. The first argument is of the type `TCPConnectCap`, which is the *capability* of using a TCP socket to connect to a remote host. This is enforced by the Acton type system. Not having the correct capability reference will lead to a compilation error.
+Things outside of the actor world are represented by actors and to access such actors, a *capability reference* is required. For example, we can use `TCPConnection` to connect to a remote host over the network using TCP. The first argument is of the type `TCPConnectCap`, which is the *capability* of using a TCP socket to connect to a remote host. This is enforced by the Acton type system. Not having the correct capability reference will lead to a compilation error.
 
 `TCPConnectCap` is part of a capability hierarchy, starting with the generic `WorldCap` and becoming further and further restricted:
 
@@ -27,7 +27,7 @@ actor main(env):
         print("Client ERR", msg)
 
     connect_cap = net.TCPConnectCap(net.TCPCap(net.NetCap(env.cap)))
-    client = net.TCPIPConnection(connect_cap, env.argv[1], int(env.argv[2]), on_connect, on_receive, on_error)
+    client = net.TCPConnection(connect_cap, env.argv[1], int(env.argv[2]), on_connect, on_receive, on_error)
 ```
 
 Capability based privilege restriction prevent some deeply nested part of a program, perhaps in a dependency to a dependency, to perform operations unknown to the application author. Access to capabilities must be explicitly handed out and a program can only perform operations based on the capabilities it has access to.
