@@ -64,12 +64,17 @@ actor TCPConnection(cap: TCPConnectCap, address: str, port: int, on_connect: act
     var _aaaa_res: list[str] = []
     var _sock = -1
     var _sock4 = -1
-    var _sock4_state = 0
     var _sock4_error = ""
     var _sock6 = -1
-    var _sock6_state = 0
     var _sock6_error = ""
-    var _state = 0
+
+    STATE_INIT = 0
+    STATE_RESOLVING  = 1 # Resolving DNS
+    STATE_CONNECTING = 2 # Got DNS response or input was IP address so now doing TCP connect
+    STATE_CONNECTED  = 3 # TCP Connected
+    STATE_CLOSED     = 4 # TCP Connection disconnected / closed (it might never have been connected)
+    var _state = STATE_INIT
+
     # TODO: turn this into an argument when we support default argument values
     var connect_timeout = 10.0
 
@@ -82,9 +87,14 @@ actor TCPConnection(cap: TCPConnectCap, address: str, port: int, on_connect: act
         NotImplemented
     _pin_affinity()
 
+    # TODO: we should not just connect to the first IPv4 and first IPv6 result
+    # but rather arrange them in order of preference and try them in that order,
+    # more details in Happy Eye Balls v2 https://tools.ietf.org/html/rfc8305
+
     # DNS A
     def _on_dns_a_resolve(result):
         _a_res = result
+        _state = STATE_CONNECTING
         _connect4(result[0])
 
     def _on_dns_a_error(name, msg):
@@ -93,6 +103,7 @@ actor TCPConnection(cap: TCPConnectCap, address: str, port: int, on_connect: act
     # DNS AAAA
     def _on_dns_aaaa_resolve(result):
         _aaaa_res = result
+        _state = STATE_CONNECTING
         _connect6(result[0])
 
     def _on_dns_aaaa_error(name, msg):
@@ -128,16 +139,21 @@ actor TCPConnection(cap: TCPConnectCap, address: str, port: int, on_connect: act
 
     # Handle on_connect event
     proc def _on_connect(sock: int):
-        if _state == 2:
-            pass
-        elif _state == 1:
-            _state = 2
+        if _state == STATE_CONNECTING:
+            _state = STATE_CONNECTED
             _sock = sock
             _read_start()
             _connections += 1
             _consecutive_connect_errors = 0
             on_connect(self)
+        elif _state == STATE_CONNECTED:
+            # It is normal to get multiple on_connect events since we are doing
+            # Happy Eyeballs and letting IPv4 race against IPv6, so we end up
+            # here for whichever comes second.
+            pass
         else:
+            # We don't expect to establish a connection in any other state
+            # TODO: use RTS log instead
             print("Unexpected state", _state)
 
     proc def _read_start():
@@ -152,24 +168,29 @@ actor TCPConnection(cap: TCPConnectCap, address: str, port: int, on_connect: act
         NotImplemented
 
     def _connect_timeout():
-        _state = 0
-        _consecutive_connect_errors += 1
-        def _on_close(c):
-            on_error(self, "Connection attempt failed due to timeout")
-        close(_on_close)
+        if _state == STATE_CONNECTING:
+            _state = STATE_CLOSED
+            _consecutive_connect_errors += 1
+            def _on_close(c):
+                on_error(self, "Connection attempt failed due to timeout")
+            close(_on_close)
 
     def reconnect():
         close(_connect)
 
     def _connect(c):
-        _state = 1
+        # TODO: would be nice to cancel connect_timeout when connection succeeds
         after connect_timeout: _connect_timeout()
         if is_ipv4(address):
+            _state = STATE_CONNECTING
             _connect4(address)
         elif is_ipv6(address):
+            _state = STATE_CONNECTING
             _connect6(address)
         else:
+            _state = STATE_RESOLVING
             _lookup_aaaa(address, _on_dns_aaaa_resolve, _on_dns_aaaa_error)
+            # TODO: delay this by a few milliseconds to give IPv6 a slight preference
             _lookup_a(address, _on_dns_a_resolve, _on_dns_a_error)
 
     mut def __resume__() -> None:
