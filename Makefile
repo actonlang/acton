@@ -8,7 +8,7 @@ export ZIG_LOCAL_CACHE_DIR
 
 ACTONC=dist/bin/actonc
 ACTC=dist/bin/actonc
-ZIG_VERSION:=0.11.0-dev.3739+939e4d81e
+ZIG_VERSION:=0.11.0
 ZIG=$(TD)/dist/zig/zig
 AR=$(ZIG) ar
 CC=$(ZIG) cc
@@ -184,7 +184,7 @@ clean-downloads:
 	rm -rf deps-download
 
 # /deps/libargp --------------------------------------------
-LIBARGP_REF=a2b750b4439099c223fd0fb70c902df396791fb1
+LIBARGP_REF=ba179f83370d91ed6bc8fc5da87f6863ab2e2613
 deps-download/$(LIBARGP_REF).tar.gz:
 	mkdir -p deps-download
 	curl -f -L -o $@ https://github.com/actonlang/argp-standalone/archive/$(LIBARGP_REF).tar.gz
@@ -199,7 +199,7 @@ dist/depsout/lib/libargp.a: dist/deps/libargp $(DIST_ZIG)
 	cd $< && $(ZIG) build $(ZIG_TARGET) --prefix $(TD)/dist/depsout
 
 # /deps/libbsdnt --------------------------------------------
-LIBBSDNT_REF=20c727a5f390d1d4d2c22a3c5bfabb5276d34757
+LIBBSDNT_REF=1c02c76995905aedcfb74125e3191ff7c180fe9e
 deps-download/$(LIBBSDNT_REF).tar.gz:
 	mkdir -p deps-download
 	curl -f -L -o $@ https://github.com/actonlang/bsdnt/archive/$(LIBBSDNT_REF).tar.gz
@@ -213,7 +213,7 @@ dist/depsout/lib/libbsdnt.a: dist/deps/libbsdnt $(DIST_ZIG)
 	cd $< && $(ZIG) build $(ZIG_TARGET) --prefix $(TD)/dist/depsout
 
 # /deps/libgc --------------------------------------------
-LIBGC_REF=66ed03b9283b56a530717f1aa7d1ed4cf1e65741
+LIBGC_REF=ead2119801a6659d1d78406563d5acc6df4d94e3
 deps-download/$(LIBGC_REF).tar.gz:
 	mkdir -p deps-download
 	curl -f -L -o $@ https://github.com/actonlang/bdwgc/archive/$(LIBGC_REF).tar.gz
@@ -265,7 +265,7 @@ dist/depsout/lib/libuuid.a: dist/deps/libuuid $(DIST_ZIG)
 	cd $< && $(ZIG) build $(ZIG_TARGET) --prefix $(TD)/dist/depsout
 
 # /deps/libuv --------------------------------------------
-LIBUV_REF=53b7649fc83f8cee6f0170b335222a759c0a26f0
+LIBUV_REF=5e5a6bd6850ef5ec3e9c74520093392020c4caa7
 deps-download/$(LIBUV_REF).tar.gz:
 	mkdir -p deps-download
 	curl -f -L -o $@ https://github.com/actonlang/libuv/archive/$(LIBUV_REF).tar.gz
@@ -279,7 +279,7 @@ dist/depsout/lib/libuv.a: dist/deps/libuv $(DIST_ZIG)
 	cd $< && $(ZIG) build $(ZIG_TARGET) --prefix $(TD)/dist/depsout
 
 # /deps/libxml2 ------------------------------------------
-LIBXML2_REF=8459e725c3294d8d637317036f9d8b10860195dc
+LIBXML2_REF=ee7863427393b9fa9c55e1c03fa40289429d7b29
 deps-download/$(LIBXML2_REF).tar.gz:
 	mkdir -p deps-download
 	curl -f -L -o $@ https://github.com/actonlang/libxml2/archive/$(LIBXML2_REF).tar.gz
@@ -294,7 +294,7 @@ dist/depsout/lib/libxml2.a: dist/deps/libxml2 $(DIST_ZIG)
 	cd $< && $(ZIG) build $(ZIG_TARGET) --prefix $(TD)/dist/depsout
 
 # /deps/pcre2 --------------------------------------------
-LIBPCRE2_REF=ece17affd4f1d57eb148af9a39c64c1bb19b0e51
+LIBPCRE2_REF=d9ddcd6e986d894385408818942524549080ba46
 deps-download/$(LIBPCRE2_REF).tar.gz:
 	mkdir -p deps-download
 	curl -f -L -o $@ https://github.com/actonlang/pcre2/archive/$(LIBPCRE2_REF).tar.gz

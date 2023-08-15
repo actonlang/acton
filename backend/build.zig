@@ -71,7 +71,7 @@ pub fn build(b: *std.build.Builder) void {
     });
     libactondb.addCSourceFiles(&libactondb_sources, flags.items);
     libactondb.defineCMacro("LOG_USER_COLOR", "");
-    libactondb.addIncludePath(syspath_include);
+    libactondb.addIncludePath(.{ .path = syspath_include });
     libactondb.linkLibC();
     b.installArtifact(libactondb);
 
@@ -80,12 +80,12 @@ pub fn build(b: *std.build.Builder) void {
         .target = target,
         .optimize = optimize,
     });
-    actondb.addCSourceFile("actondb.c", &[_][]const u8{
+    actondb.addCSourceFile(.{ .file = .{ .path = "actondb.c" }, .flags = &[_][]const u8{
         "-fno-sanitize=undefined",
-    });
-    actondb.addCSourceFile("log.c", flags.items);
-    actondb.addIncludePath(syspath_include);
-    actondb.addLibraryPath("../lib");
+    }});
+    actondb.addCSourceFile(.{ .file = .{ .path = "log.c" }, .flags = flags.items });
+    actondb.addIncludePath(.{ .path = syspath_include });
+    actondb.addLibraryPath(.{ .path = "../lib" });
     actondb.linkLibrary(libactondb);
     actondb.linkLibrary(dep_libargp.artifact("argp"));
     actondb.linkLibrary(dep_libnetstring.artifact("netstring"));
