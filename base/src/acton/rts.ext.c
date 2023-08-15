@@ -11,12 +11,12 @@ void actonQ_rtsQ___ext_init__() {
     // NOP
 }
 
-B_NoneType actonQ_rtsQ_gc () {
+B_NoneType actonQ_rtsQ_gc (B_SysCap cap) {
     GC_gcollect();
     return B_None;
 }
 
-B_NoneType actonQ_rtsQ_sleep (B_float sleep_time) {
+B_NoneType actonQ_rtsQ_sleep (B_SysCap cap, B_float sleep_time) {
     double st = fromB_float(sleep_time);
     struct timespec ts;
     ts.tv_sec = (int)st;
@@ -39,7 +39,7 @@ B_NoneType actonQ_rtsQ_sleep (B_float sleep_time) {
     return B_None;
 }
 
-B_int actonQ_rtsQ_rss (B_WorldCap auth) {
+B_int actonQ_rtsQ_rss (B_SysCap cap) {
     size_t rsm;
     int r = uv_resident_set_memory(&rsm);
     return to$int(rsm);
@@ -69,7 +69,7 @@ void actonQ_rtsQ_io_handles_walk_cb (uv_handle_t *handle, void *arg) {
     B_dictD_setitem(walk_res->d, walk_res->wit, toB_u64((long)handle), val);
 }
 
-B_dict actonQ_rtsQ__io_handles (B_WorldCap auth) {
+B_dict actonQ_rtsQ__io_handles (B_SysCap cap) {
     B_Hashable wit = (B_Hashable)B_HashableD_u64G_witness;
     B_dict d = $NEW(B_dict, wit, NULL, NULL);
 
