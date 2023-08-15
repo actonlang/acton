@@ -43,6 +43,10 @@ CFLAGS_DEV= -g -DDEV
 LDFLAGS+=-L$(TD)/lib
 LDLIBS += -lActonDeps-$(PLATFORM) -lm -lpthread
 
+ifdef CPEDANTIC
+CPEDANTIC=--cpedantic
+endif
+
 # rewrite arm64 to aarch64
 ifeq ($(shell uname -m),arm64)
 ARCH:=aarch64
@@ -326,17 +330,17 @@ dist/depsout/lib/libyyjson.a: dist/deps/libyyjson $(DIST_ZIG)
 ifeq ($(ARCH),x86_64)
 ZIG_ARCH_ARG=-mcpu=x86_64
 endif
-builder/builder: builder/build.zig $(ZIG_DEP) $(DEPS_DIRS)
+builder/builder: builder/build.zig backend/build.zig base/build.zig $(ZIG_DEP) $(DEPS_DIRS)
 	rm -rf builder/zig-cache builder/zig-out
 	(echo 'const root = @import("build.zig");'; tail -n +2 dist/zig/lib/build_runner.zig) > builder/build_runner.zig
 	cd builder && $(ZIG) build-exe build_runner.zig -femit-bin=builder $(ZIG_ARCH_ARG)
 
 .PHONY: base/out/rel/lib/libActon.a base/out/dev/lib/libActon.a
 base/out/rel/lib/libActon.a: $(ACTONC) $(DEPS)
-	cd base && ../dist/bin/actonc build --auto-stub --ccmd
+	cd base && ../dist/bin/actonc build --auto-stub $(CPEDANTIC)
 
 base/out/dev/lib/libActon.a: $(ACTONC) $(DEPS)
-	cd base && ../dist/bin/actonc build --auto-stub --dev --ccmd
+	cd base && ../dist/bin/actonc build --auto-stub --dev $(CPEDANTIC)
 
 base/out/types/__builtin__.ty: $(ACTONC)
 	cd base && ../dist/bin/actonc src/__builtin__.act
