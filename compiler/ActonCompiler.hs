@@ -74,6 +74,7 @@ main                     =  do arg <- C.parseCmdLine
                                    C.CmdOpt (C.Build opts) -> buildProject $ defaultOpts {
                                      C.alwaysbuild = C.alwaysB opts,
                                      C.autostub = C.autostubB opts,
+                                     C.cpedantic = C.cpedanticB opts,
                                      C.debug = C.debugB opts,
                                      C.dev = C.devB opts,
                                      C.root = C.rootB opts,

@@ -15,6 +15,10 @@
 - `net.is_ipv6(address: str) -> bool` tells you if something is an IPv6 address
 - AbE: Documented capability based security [#1267]
 - The class name of exception errors is now printed on exception [#1423]
+- `actonc build --cpedantic` now works, it was previously only supported for
+  single files [#1438]
+- It is now possible to have mutually recursive definitions between function
+  defs, classes and actors [#1433] [#1435]
 
 ### Changed
 - `net.TCPIPConnection` is removed and replaced by `net.TCPConnection`
