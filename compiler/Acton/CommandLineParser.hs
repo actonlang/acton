@@ -70,6 +70,7 @@ data CompileOptions   = CompileOptions {
 
 data BuildOptions = BuildOptions {
                          alwaysB     :: Bool,
+                         cpedanticB  :: Bool,
                          debugB      :: Bool,
                          devB        :: Bool,
                          autostubB   :: Bool,
@@ -158,6 +159,7 @@ compileOptions = CompileOptions
 buildCommand          = Build <$> (
     BuildOptions
         <$> switch (long "always-build" <> help "Development mode; include debug symbols etc")
+        <*> switch (long "cpedantic"    <> help "Pedantic C compilation with -Werror")
         <*> switch (long "debug"        <> help "Print debug stuff")
         <*> switch (long "dev"          <> help "Development mode; include debug symbols etc")
         <*> switch (long "auto-stub"    <> help "Allow automatic stub detection")
