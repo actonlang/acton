@@ -42,7 +42,7 @@ static void _lookup_a__on_resolve (uv_getaddrinfo_t *req, int status, struct add
     if (status != 0) {
         char errmsg[1024] = "DNS lookup error: ";
         uv_strerror_r(status, errmsg + strlen(errmsg), sizeof(errmsg)-strlen(errmsg));
-        $action2 f = cb_data->on_error;
+        $action2 f = ($action2)cb_data->on_error;
         f->$class->__asyn__(f, to$str(cb_data->hostname), to$str(errmsg));
 
         // No free with GC, but maybe one day we do this explicitly?
@@ -60,7 +60,7 @@ static void _lookup_a__on_resolve (uv_getaddrinfo_t *req, int status, struct add
         B_SequenceD_listG_witness->$class->append(B_SequenceD_listG_witness, $res, to$str(addr));
     }
 
-    $action f = cb_data->on_resolve;
+    $action f = ($action)cb_data->on_resolve;
     f->$class->__asyn__(f, $res);
 
     // No free with GC, but maybe one day we do this explicitly?
@@ -91,7 +91,7 @@ B_NoneType netQ__lookup_a (B_str name, $action on_resolve, $action on_error) {
         char errmsg[1024] = "Unable to run DNS query: ";
         uv_strerror_r(r, errmsg + strlen(errmsg), sizeof(errmsg)-strlen(errmsg));
         log_warn(errmsg);
-        $action2 f = cb_data->on_error;
+        $action2 f = ($action2)cb_data->on_error;
         f->$class->__asyn__(f, name, to$str(errmsg));
         // NOTE: free() here if do manual memory management in I/O one day
         return B_None;
@@ -107,7 +107,7 @@ static void _lookup_aaaa__on_resolve (uv_getaddrinfo_t *req, int status, struct 
     if (status != 0) {
         char errmsg[1024] = "DNS lookup error: ";
         uv_strerror_r(status, errmsg + strlen(errmsg), sizeof(errmsg)-strlen(errmsg));
-        $action2 f = cb_data->on_error;
+        $action2 f = ($action2)cb_data->on_error;
         f->$class->__asyn__(f, to$str(cb_data->hostname), to$str(errmsg));
 
         // No free with GC, but maybe one day we do this explicitly?
@@ -125,7 +125,7 @@ static void _lookup_aaaa__on_resolve (uv_getaddrinfo_t *req, int status, struct 
         B_SequenceD_listG_witness->$class->append(B_SequenceD_listG_witness, $res, to$str(addr));
     }
 
-    $action f = cb_data->on_resolve;
+    $action f = ($action)cb_data->on_resolve;
     f->$class->__asyn__(f, $res);
 
     // No free with GC, but maybe one day we do this explicitly?
@@ -156,7 +156,7 @@ B_NoneType netQ__lookup_aaaa (B_str name, $action on_resolve, $action on_error) 
         char errmsg[1024] = "Unable to run DNS query: ";
         uv_strerror_r(r, errmsg + strlen(errmsg), sizeof(errmsg)-strlen(errmsg));
         log_warn(errmsg);
-        $action2 f = cb_data->on_error;
+        $action2 f = ($action2)cb_data->on_error;
         f->$class->__asyn__(f, name, to$str(errmsg));
         // NOTE: free() here if do manual memory management in I/O one day
         return B_None;
@@ -173,7 +173,7 @@ void netQ_TCPConnection__on_receive(uv_stream_t *stream, ssize_t nread, const uv
     } else if (nread > 0) {
         if (stream->data) {
             netQ_TCPConnection self = stream->data;
-            $action2 f = self->on_receive;
+            $action2 f = ($action2)self->on_receive;
             f->$class->__asyn__(f, self, to$bytesD_len(buf->base, nread));
             // TODO: count read bytes
             self->_bytes_in->val += nread;
@@ -255,7 +255,7 @@ $R netQ_TCPConnectionD__read_startG_local (netQ_TCPConnection self, $Cont c$cont
         char errmsg[1024] = "Failed to start reading from TCP client socket: ";
         uv_strerror_r(r, errmsg + strlen(errmsg), sizeof(errmsg)-strlen(errmsg));
         log_warn(errmsg);
-        $action2 f = self->on_error;
+        $action2 f = ($action2)self->on_error;
         f->$class->__asyn__(f, self, to$str(errmsg));
         return $R_CONT(c$cont, B_None);
     }
@@ -276,7 +276,7 @@ $R netQ_TCPConnectionD_writeG_local (netQ_TCPConnection self, $Cont c$cont, B_by
         char errmsg[1024] = "Failed to write to TCP socket: ";
         uv_strerror_r(r, errmsg + strlen(errmsg), sizeof(errmsg)-strlen(errmsg));
         log_warn(errmsg);
-        $action2 f = self->on_error;
+        $action2 f = ($action2)self->on_error;
         f->$class->__asyn__(f, self, to$str(errmsg));
     }
     self->_bytes_out->val += data->nbytes;
@@ -287,7 +287,7 @@ B_NoneType netQ_TCPConnectionD___resume__ (netQ_TCPConnection self) {
     self->_sock = to$int(-1);
     self->_sock4 = to$int(-1);
     self->_sock6 = to$int(-1);
-    $action2 f = self->on_error;
+    $action2 f = ($action2)self->on_error;
     f->$class->__asyn__(f, self, to$str("resume"));
     return B_None;
 }
@@ -303,7 +303,7 @@ static void after_shutdown(uv_shutdown_t* req, int status) {
         log_warn("Error in TCP shutdown: %s", uv_strerror(status));
     uv_close((uv_handle_t*)req->handle, NULL);
     struct close_cb_data *cb_data = (struct close_cb_data *)req->data;
-    $action on_close = cb_data->on_close;
+    $action on_close = ($action)cb_data->on_close;
     on_close->$class->__asyn__(on_close, cb_data->self);
 }
 
@@ -398,7 +398,7 @@ void on_new_connection(uv_stream_t *server, int status) {
         char errmsg[1024] = "Error on new TCP client connection: ";
         uv_strerror_r(status, errmsg + strlen(errmsg), sizeof(errmsg)-strlen(errmsg));
         log_warn(errmsg);
-        $action2 f = self->on_error;
+        $action2 f = ($action2)self->on_error;
         f->$class->__asyn__(f, self, to$str(errmsg));
         // NOTE: free() here if do manual memory management in I/O one day
         return;
@@ -411,7 +411,7 @@ void on_new_connection(uv_stream_t *server, int status) {
         char errmsg[1024] = "Error in accepting TCP client connection: ";
         uv_strerror_r(r, errmsg + strlen(errmsg), sizeof(errmsg)-strlen(errmsg));
         log_warn(errmsg);
-        $action2 f = self->on_error;
+        $action2 f = ($action2)self->on_error;
         f->$class->__asyn__(f, self, to$str(errmsg));
         // NOTE: free() here if do manual memory management in I/O one day
         return;
@@ -439,7 +439,7 @@ $R netQ_TCPListenerD__initG_local (netQ_TCPListener self, $Cont c$cont) {
         char errmsg[1024] = "Address is not an IPv4 or IPv6 address: ";
         asprintf(errmsg + strlen(errmsg), "%s", fromB_str(self->address));
         log_warn(errmsg);
-        $action2 f = self->on_error;
+        $action2 f = ($action2)self->on_error;
         f->$class->__asyn__(f, self, to$str(errmsg));
         // NOTE: free() here if do manual memory management in I/O one day
         return $R_CONT(c$cont, B_None);
@@ -448,7 +448,7 @@ $R netQ_TCPListenerD__initG_local (netQ_TCPListener self, $Cont c$cont) {
         char errmsg[1024] = "Unable to parse address: ";
         uv_strerror_r(r, errmsg + strlen(errmsg), sizeof(errmsg)-strlen(errmsg));
         log_warn(errmsg);
-        $action2 f = self->on_error;
+        $action2 f = ($action2)self->on_error;
         f->$class->__asyn__(f, self, to$str(errmsg));
         // NOTE: free() here if do manual memory management in I/O one day
         return $R_CONT(c$cont, B_None);
@@ -463,7 +463,7 @@ $R netQ_TCPListenerD__initG_local (netQ_TCPListener self, $Cont c$cont) {
         char errmsg[1024] = "Error in TCP bind: ";
         uv_strerror_r(r, errmsg + strlen(errmsg), sizeof(errmsg)-strlen(errmsg));
         log_warn(errmsg);
-        $action2 f = self->on_error;
+        $action2 f = ($action2)self->on_error;
         f->$class->__asyn__(f, self, to$str(errmsg));
         // NOTE: free() here if do manual memory management in I/O one day
         return $R_CONT(c$cont, B_None);
@@ -474,7 +474,7 @@ $R netQ_TCPListenerD__initG_local (netQ_TCPListener self, $Cont c$cont) {
         char errmsg[1024] = "Error in TCP listen: ";
         uv_strerror_r(r, errmsg + strlen(errmsg), sizeof(errmsg)-strlen(errmsg));
         log_warn(errmsg);
-        $action2 f = self->on_error;
+        $action2 f = ($action2)self->on_error;
         f->$class->__asyn__(f, self, to$str(errmsg));
         // NOTE: free() here if do manual memory management in I/O one day
         return $R_CONT(c$cont, B_None);
@@ -485,7 +485,7 @@ $R netQ_TCPListenerD__initG_local (netQ_TCPListener self, $Cont c$cont) {
 
 B_NoneType netQ_TCPListenerD___resume__ (netQ_TCPListener self) {
     self->_stream = to$int(-1);
-    $action2 f = self->on_error;
+    $action2 f = ($action2)self->on_error;
     f->$class->__asyn__(f, self, to$str("resume"));
     return B_None;
 }
@@ -512,7 +512,7 @@ void netQ_TCPListenConnection__on_receive(uv_stream_t *stream, ssize_t nread, co
     } else if (nread > 0) {
         if (stream->data) {
             netQ_TCPListenConnection self = stream->data;
-            $action2 f = self->on_receive;
+            $action2 f = ($action2)self->on_receive;
             f->$class->__asyn__(f, self, to$bytesD_len(buf->base, nread));
         }
     }
@@ -530,7 +530,7 @@ $R netQ_TCPListenConnectionD__read_startG_local (netQ_TCPListenConnection self, 
         char errmsg[1024] = "Failed to start reading from TCP socket: ";
         uv_strerror_r(r, errmsg + strlen(errmsg), sizeof(errmsg)-strlen(errmsg));
         log_warn(errmsg);
-        $action2 f = self->on_error;
+        $action2 f = ($action2)self->on_error;
         f->$class->__asyn__(f, self, to$str(errmsg));
         return $R_CONT(c$cont, B_None);
     }
@@ -551,7 +551,7 @@ $R netQ_TCPListenConnectionD_writeG_local (netQ_TCPListenConnection self, $Cont 
         char errmsg[1024] = "Failed to write to TCP socket: ";
         uv_strerror_r(r, errmsg + strlen(errmsg), sizeof(errmsg)-strlen(errmsg));
         log_warn(errmsg);
-        $action2 f = self->on_error;
+        $action2 f = ($action2)self->on_error;
         f->$class->__asyn__(f, self, to$str(errmsg));
     }
     return $R_CONT(c$cont, B_None);

@@ -22,12 +22,12 @@ struct process_data {
 
 void exit_handler(uv_process_t *req, int64_t exit_status, int term_signal) {
     struct process_data *process_data = req->data;
-    uv_stream_t *stdin = (uv_stream_t *)&process_data->stdin_pipe;
+    uv_handle_t *stdin = (uv_handle_t *)&process_data->stdin_pipe;
     // stdin might be closed already from done_writing
     if (uv_is_closing(stdin) == 0)
-        uv_close((uv_handle_t *)stdin, NULL);
+        uv_close(stdin, NULL);
     uv_close((uv_handle_t *)req, NULL);
-    $action3 f = process_data->on_exit;
+    $action3 f = ($action3)process_data->on_exit;
     f->$class->__asyn__(f, process_data->process, to$int(exit_status), to$int(term_signal));
 }
 
@@ -40,7 +40,7 @@ void read_stderr(uv_stream_t *stream, ssize_t nread, const uv_buf_t *buf) {
         if (stream->data) {
             struct process_data *process_data = (struct process_data *)stream->data;
             processQ_Process self = process_data->process;
-            $action2 f = process_data->on_stderr;
+            $action2 f = ($action2)process_data->on_stderr;
             f->$class->__asyn__(f, self, to$bytesD_len(buf->base, nread));
         }
     }
@@ -58,7 +58,7 @@ void read_stdout(uv_stream_t *stream, ssize_t nread, const uv_buf_t *buf) {
         if (stream->data) {
             struct process_data *process_data = (struct process_data *)stream->data;
             processQ_Process self = process_data->process;
-            $action2 f = process_data->on_stdout;
+            $action2 f = ($action2)process_data->on_stdout;
             f->$class->__asyn__(f, self, to$bytesD_len(buf->base, nread));
         }
     }
@@ -147,7 +147,7 @@ $R processQ_ProcessD__create_processG_local (processQ_Process self, $Cont c$cont
         char errmsg[1024] = "Failed to spawn process: ";
         uv_strerror_r(r, errmsg + strlen(errmsg), sizeof(errmsg)-strlen(errmsg));
         log_warn(errmsg);
-        $action2 f = self->on_error;
+        $action2 f = ($action2)self->on_error;
         f->$class->__asyn__(f, process_data->process, to$str(errmsg));
     }
     // TODO: do we need to do some magic to read any data produced before this
@@ -165,7 +165,7 @@ void close_cb(uv_handle_t *handle) {
 $R processQ_ProcessD_done_writingG_local (processQ_Process self, $Cont c$cont) {
     uv_process_t *p = (uv_process_t *)from$int(self->_p);
     struct process_data *process_data = (struct process_data *)p->data;
-    uv_stream_t *stdin = (uv_stream_t *)&process_data->stdin_pipe;
+    uv_handle_t *stdin = (uv_handle_t *)&process_data->stdin_pipe;
     uv_close(stdin, close_cb);
     return $R_CONT(c$cont, B_None);
 }
