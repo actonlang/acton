@@ -109,7 +109,7 @@ cc paths opts = if not (C.cc opts == "")
 ar :: Paths -> FilePath
 ar paths = zig paths ++ " ar "
 
-dump h txt      = putStrLn ("\n\n#################################### " ++ h ++ ":\n" ++ txt)
+dump mn h txt      = putStrLn ("\n\n== " ++ h ++ ": " ++ modNameToString mn ++ " ================================\n" ++ txt)
 
 getModPath :: FilePath -> A.ModName -> FilePath
 getModPath path mn =
@@ -422,7 +422,7 @@ parseActFile opts paths actFile = do
                       `catch` handle "Context error" Acton.Parser.contextError src paths (modName paths)
                       `catch` handle "Indentation error" Acton.Parser.indentationError src paths (modName paths)
                       `catch` handle "Syntax error" Acton.Parser.failFastError src paths (modName paths)
-                    iff (C.parse opts) $ dump "parse" (Pretty.print m)
+                    iff (C.parse opts) $ dump (modName paths) "parse" (Pretty.print m)
                     timeParse <- getTime Monotonic
                     iff (C.timing opts) $ putStrLn("Parsing file " ++ makeRelative (srcDir paths) actFile
                                                                    ++ ": " ++ fmtTime(timeParse - timeRead))
@@ -490,7 +490,7 @@ compileTasks opts paths tasks preBinTasks
                             if null cs
                              then do env0 <- Acton.Env.initEnv builtinPath False
                                      env1 <- foldM (doTask opts paths) env0 [t | AcyclicSCC t <- as]
-                                     iff (not (C.stub opts)) $ do
+                                     iff (not (altOutput opts) && not (C.stub opts)) $ do
                                        binTasks <- catMaybes <$> mapM (filterMainActor env1 opts paths) preBinTasks
                                        if useZigBuild opts paths
                                          then zigBuild env1 opts paths tasks binTasks
@@ -644,39 +644,39 @@ runRestPasses opts paths env0 parsed stubMode = do
                       iff (C.timing opts) $ putStrLn("    Pass: Make environment: " ++ fmtTime (timeEnv - timeStart))
 
                       kchecked <- Acton.Kinds.check env parsed
-                      iff (C.kinds opts) $ dump "kinds" (Pretty.print kchecked)
+                      iff (C.kinds opts) $ dump mn "kinds" (Pretty.print kchecked)
                       timeKindsCheck <- getTime Monotonic
                       iff (C.timing opts) $ putStrLn("    Pass: Kinds check     : " ++ fmtTime (timeKindsCheck - timeEnv))
 
                       (iface,tchecked,typeEnv) <- Acton.Types.reconstruct outbase env kchecked
-                      iff (C.types opts) $ dump "types" (Pretty.print tchecked)
-                      iff (C.sigs opts) $ dump "sigs" (Acton.Types.prettySigs env mn iface)
+                      iff (C.types opts) $ dump mn "types" (Pretty.print tchecked)
+                      iff (C.sigs opts) $ dump mn "sigs" (Acton.Types.prettySigs env mn iface)
                       timeTypeCheck <- getTime Monotonic
                       iff (C.timing opts) $ putStrLn("    Pass: Type check      : " ++ fmtTime (timeTypeCheck - timeKindsCheck))
 
                       (normalized, normEnv) <- Acton.Normalizer.normalize typeEnv tchecked
-                      iff (C.norm opts) $ dump "norm" (Pretty.print normalized)
+                      iff (C.norm opts) $ dump mn "norm" (Pretty.print normalized)
                       --traceM ("#################### normalized env0:")
                       --traceM (Pretty.render (Pretty.pretty normEnv))
                       timeNormalized <- getTime Monotonic
                       iff (C.timing opts) $ putStrLn("    Pass: Normalizer      : " ++ fmtTime (timeNormalized - timeTypeCheck))
 
                       (deacted,deactEnv) <- Acton.Deactorizer.deactorize normEnv normalized
-                      iff (C.deact opts) $ dump "deact" (Pretty.print deacted)
+                      iff (C.deact opts) $ dump mn "deact" (Pretty.print deacted)
                       --traceM ("#################### deacted env0:")
                       --traceM (Pretty.render (Pretty.pretty deactEnv))
                       timeDeactorizer <- getTime Monotonic
                       iff (C.timing opts) $ putStrLn("    Pass: Deactorizer     : " ++ fmtTime (timeDeactorizer - timeNormalized))
 
                       (cpstyled,cpsEnv) <- Acton.CPS.convert deactEnv deacted
-                      iff (C.cps opts) $ dump "cps" (Pretty.print cpstyled)
+                      iff (C.cps opts) $ dump mn "cps" (Pretty.print cpstyled)
                       --traceM ("#################### cps'ed env0:")
                       --traceM (Pretty.render (Pretty.pretty cpsEnv))
                       timeCPS <- getTime Monotonic
                       iff (C.timing opts) $ putStrLn("    Pass: CPS             : " ++ fmtTime (timeCPS - timeDeactorizer))
 
                       (lifted,liftEnv) <- Acton.LambdaLifter.liftModule cpsEnv cpstyled
-                      iff (C.llift opts) $ dump "llift" (Pretty.print lifted)
+                      iff (C.llift opts) $ dump mn "llift" (Pretty.print lifted)
                       --traceM ("#################### lifteded env0:")
                       --traceM (Pretty.render (Pretty.pretty liftEnv))
                       timeLLift <- getTime Monotonic
@@ -693,13 +693,7 @@ runRestPasses opts paths env0 parsed stubMode = do
                           putStrLn(c)
                           System.Exit.exitSuccess
 
-                      iff (altOutput opts) $ do
-                          System.Exit.exitSuccess
-
-                      timeCodeWrite <- getTime Monotonic
-                      iff (C.timing opts) $ putStrLn("    Pass: Writing code    : " ++ fmtTime (timeCodeWrite - timeCodeGen))
-
-                      iff (not stubMode) (do
+                      iff (altOutput opts || not stubMode) (do
                           -- cc is invoked with parent directory of project
                           -- directory as working directory, this is so that the
                           -- paths used in logging will reflect the project name
@@ -722,8 +716,12 @@ runRestPasses opts paths env0 parsed stubMode = do
                                        " -o" ++ oFile ++
                                        " " ++ makeRelative (takeDirectory (projPath paths)) cFile)
                               arCmd = ar paths ++ " rcs " ++ aFile ++ " " ++ oFile
+
                           writeFile hFile h
                           writeFile cFile c
+
+                          timeCodeWrite <- getTime Monotonic
+                          iff (C.timing opts) $ putStrLn("    Pass: Writing code    : " ++ fmtTime (timeCodeWrite - timeCodeGen))
 
                           -- Only compile here if we are not using zig build.
                           -- zig build is run for all modules at the end instead
