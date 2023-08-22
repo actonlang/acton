@@ -170,7 +170,7 @@ instance Deact Decl where
             
             wrap n q p t            = Decl l0 [Def l0 n q (addSelfPar p) KwdNIL (Just t) [ret] NoDec fxAction]
               where ret             = sReturn $ eCall (tApp (eQVar primASYNCf) [t]) [self,lam]
-                    lam             = Lambda l0 PosNIL KwdNIL (eCallP (eDot self $ localName n) (pArg p)) fxProc
+                    lam             = Lambda l0 PosNIL KwdNIL (eCallP (tApp (eDot self $ localName n) (map tVar $ qbound q)) (pArg p)) fxProc
                     self            = eVar selfKW
 
     deact env (Def l n q p KwdNIL (Just t) b d fx)
