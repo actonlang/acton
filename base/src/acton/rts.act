@@ -22,6 +22,10 @@ def _io_handles(cap: SysCap) -> dict[u64, (typ: str, act: u64)]:
     """Return all I/O handles and their type for the current worker thread"""
     NotImplemented
 
+def rts_stats(cap: SysCap) -> dict[u64, (state: str, work_entered: u64, no_work: u64, yield_to_io: u64, sleeps: u64, conts_count: u64, conts_sum: u64, conts_100ns: u64, conts_1us: u64, conts_10us: u64, conts_100us: u64, conts_1ms: u64, conts_10ms: u64, conts_100ms: u64, conts_1s: u64, conts_10s: u64, conts_100s: u64, conts_inf: u64, bkeep_count: u64, bkeep_sum: u64, bkeep_100ns: u64, bkeep_1us: u64, bkeep_10us: u64, bkeep_100us: u64, bkeep_1ms: u64, bkeep_10ms: u64, bkeep_100ms: u64, bkeep_1s: u64, bkeep_10s: u64, bkeep_100s: u64, bkeep_inf: u64)]:
+    """Return all I/O handles and their type for the current worker thread"""
+    NotImplemented
+
 actor WThreadMonitor(env: Env, arg_wthread_id: int):
     wthread_id = arg_wthread_id
 

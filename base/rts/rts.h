@@ -18,6 +18,48 @@
 #define MAX_WTHREADS 256
 
 extern long num_wthreads;
+struct wt_stat {
+    unsigned int idx;          // worker thread index
+    char key[10];              // thread index as string for convenience
+    unsigned int state;        // current thread state
+    unsigned long long sleeps; // number of times thread slept
+
+    // Executing actor continuations is the primary work of the RTS, we measure
+    // the execution time of each and count to buckets to get a rough idea of
+    // how long it takes
+    unsigned long long conts_count; // number of executed continuations
+    unsigned long long conts_sum;   // nanoseconds spent running continuations
+    unsigned long long conts_100ns; // bucket for <100ns
+    unsigned long long conts_1us;   // bucket for <1us
+    unsigned long long conts_10us;  // bucket for <10us
+    unsigned long long conts_100us; // bucket for <100us
+    unsigned long long conts_1ms;   // bucket for <1ms
+    unsigned long long conts_10ms;  // bucket for <10ms
+    unsigned long long conts_100ms; // bucket for <100ms
+    unsigned long long conts_1s;     // bucket for <1s
+    unsigned long long conts_10s;    // bucket for <10s
+    unsigned long long conts_100s;   // bucket for <100s
+    unsigned long long conts_inf;   // bucket for <+Inf
+    // Bookkeeping is all the other work we do not directly related to running
+    // actor continuations, like taking locks, committing information, talking
+    // to the database etc
+    unsigned long long bkeep_count; // number of bookkeeping rounds
+    unsigned long long bkeep_sum;   // nanoseconds spent bookkeeping
+    unsigned long long bkeep_100ns; // bucket for <100ns
+    unsigned long long bkeep_1us;   // bucket for <1us
+    unsigned long long bkeep_10us;  // bucket for <10us
+    unsigned long long bkeep_100us; // bucket for <100us
+    unsigned long long bkeep_1ms;   // bucket for <1ms
+    unsigned long long bkeep_10ms;  // bucket for <10ms
+    unsigned long long bkeep_100ms; // bucket for <100ms
+    unsigned long long bkeep_1s;     // bucket for <1s
+    unsigned long long bkeep_10s;    // bucket for <10s
+    unsigned long long bkeep_100s;   // bucket for <100s
+    unsigned long long bkeep_inf;   // bucket for <+Inf
+    // Avoid cache trashing by aligning on cache line size (64!?)
+    char padding[56];
+};
+extern struct wt_stat wt_stats[MAX_WTHREADS];
 
 extern pthread_key_t pkey_wtid;
 extern pthread_key_t pkey_uv_loop;
