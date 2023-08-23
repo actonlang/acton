@@ -17,6 +17,8 @@
 
 #define MAX_WTHREADS 256
 
+#include "q.h"
+
 extern long num_wthreads;
 struct wt_stat {
     unsigned int idx;          // worker thread index
