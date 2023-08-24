@@ -12,13 +12,16 @@
  * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-B_NoneType B_BaseExceptionD___init__ (B_BaseException, B_str);
 void B_BaseExceptionD___serialize__ (B_BaseException, $Serial$state);
 B_bool B_valueD___bool__ (B_value);
 B_str B_valueD___str__ (B_value);
 B_str B_valueD___repr__ (B_value);
 
 
+B_NoneType $SEQD___init__ ($SEQ self) {
+    self->error_message = NULL;
+    return B_None;
+}
 $SEQ $SEQD___deserialize__ ($SEQ self, $Serial$state state) {
     if (!self) {
         if (!state) {
@@ -40,7 +43,7 @@ $SEQ $SEQG_new() {
 struct $SEQG_class $SEQG_methods = {
     .$GCINFO            = "$SEQ",
     .$superclass        = ($SuperG_class)&B_ExceptionG_methods,
-    .__init__           = (B_NoneType (*) ($SEQ))B_BaseExceptionD___init__,
+    .__init__           = $SEQD___init__,
     .__bool__           = (B_bool (*) ($SEQ))B_valueD___bool__,
     .__str__            = (B_str (*) ($SEQ))B_valueD___str__,
     .__repr__           = (B_str (*) ($SEQ))B_valueD___repr__,
@@ -70,7 +73,7 @@ $BRK $BRKG_new() {
 struct $BRKG_class $BRKG_methods = {
     .$GCINFO            = "$BRK",
     .$superclass        = ($SuperG_class)&B_ExceptionG_methods,
-    .__init__           = (B_NoneType (*) ($BRK))B_BaseExceptionD___init__,
+    .__init__           = (B_NoneType (*) ($BRK))$SEQD___init__,
     .__bool__           = (B_bool (*) ($BRK))B_valueD___bool__,
     .__str__            = (B_str (*) ($BRK))B_valueD___str__,
     .__repr__           = (B_str (*) ($BRK))B_valueD___repr__,
@@ -100,7 +103,7 @@ $CNT $CNTG_new() {
 struct $CNTG_class $CNTG_methods = {
     .$GCINFO            = "$CNT",
     .$superclass        = ($SuperG_class)&B_ExceptionG_methods,
-    .__init__           = (B_NoneType (*) ($CNT))B_BaseExceptionD___init__,
+    .__init__           = (B_NoneType (*) ($CNT))$SEQD___init__,
     .__bool__           = (B_bool (*) ($CNT))B_valueD___bool__,
     .__str__            = (B_str (*) ($CNT))B_valueD___str__,
     .__repr__           = (B_str (*) ($CNT))B_valueD___repr__,

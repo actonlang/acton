@@ -264,7 +264,7 @@ void B_MsgD___init__(B_Msg m, $Actor to, $Cont cont, time_t baseline, $WORD valu
     m->$cont = cont;
     m->$waiting = NULL;
     m->$baseline = baseline;
-    m->B_value = value;
+    m->value = value;
     atomic_flag_clear(&m->$wait_lock);
     m->$globkey = get_next_key();
 }
@@ -278,7 +278,7 @@ B_Msg B_MsgG_newXX( $Actor to, $Cont cont, time_t baseline, $WORD value) {
     m->$cont = cont;
     m->$waiting = NULL;
     m->$baseline = baseline;
-    m->B_value = value;
+    m->value = value;
     atomic_flag_clear(&m->$wait_lock);
     m->$globkey = get_next_key();
     return m;
@@ -305,7 +305,7 @@ void B_MsgD___serialize__(B_Msg self, $Serial$state state) {
     $step_serialize(self->$to,state);
     $step_serialize(self->$cont,state);
     $val_serialize(ITEM_ID,&self->$baseline,state);
-    $step_serialize(self->B_value,state);
+    $step_serialize(self->value,state);
 }
 
 
@@ -323,7 +323,7 @@ B_Msg B_MsgD___deserialize__(B_Msg res, $Serial$state state) {
     res->$cont = $step_deserialize(state);
     res->$waiting = NULL;
     res->$baseline = (time_t)$val_deserialize(state);
-    res->B_value = $step_deserialize(state);
+    res->value = $step_deserialize(state);
     atomic_flag_clear(&res->$wait_lock);
     return res;
 }
@@ -1054,7 +1054,7 @@ void print_msg(B_Msg m) {
     rtsd_printf("     cont: %p", m->$cont);
     rtsd_printf("     waiting: %p", m->$waiting);
     rtsd_printf("     baseline: %ld", m->$baseline);
-    rtsd_printf("     value: %p", m->B_value);
+    rtsd_printf("     value: %p", m->value);
     rtsd_printf("     globkey: %ld", m->$globkey);
 }
 
@@ -1442,7 +1442,7 @@ void wt_wake_cb(uv_async_t *ev) {
 }
 
 void wt_work_cb(uv_check_t *ev) {
-    JumpBuf jump0 = NULL;
+    volatile JumpBuf jump0 = NULL;
     pthread_setspecific(jump_top, NULL);
 
     int wtid = (int)pthread_getspecific(pkey_wtid);
@@ -1455,16 +1455,16 @@ void wt_work_cb(uv_check_t *ev) {
         if (rts_exit) {
             return;
         }
-        $Actor current = DEQ_ready(wtid);
+        volatile $Actor current = DEQ_ready(wtid);
         if (!current)
             return;
 
         wake_wt(0);
 
         pthread_setspecific(self_key, current);
-        B_Msg m = current->B_Msg;
+        volatile B_Msg m = current->B_Msg;
         $Cont cont = m->$cont;
-        $WORD val = m->B_value;
+        $WORD val = m->value;
 
         clock_gettime(CLOCK_MONOTONIC, &ts1);
         wt_stats[wtid].state = WT_Working;
@@ -1496,17 +1496,17 @@ void wt_work_cb(uv_check_t *ev) {
             else                              { wt_stats[wtid].conts_inf++; }
         } else {                                        // Exceptional path
             B_BaseException ex = jump0->xval;
-            rtsd_printf("## Actor %ld : %s exception: %s", current->$globkey, current->$class->$GCINFO, ex->$class->$GCINFO);
+            rtsd_printf("## Actor %ld : %s longjmp exception: %s", current->$globkey, current->$class->$GCINFO, ex->$class->$GCINFO);
             r = $R_FAIL(ex);
         }
 
         switch (r.tag) {
         case $RDONE: {
             save_actor_state(current, m);
-            m->B_value = r.value;                           // m->value holds the message result,
+            m->value = r.value;                             // m->value holds the message result,
             $Actor b = FREEZE_waiting(m, MARK_RESULT);      // so mark this and stop further m->waiting additions
             while (b) {
-                b->B_Msg->B_value = r.value;
+                b->B_Msg->value = r.value;
                 b->$waitsfor = NULL;
                 $Actor c = b->$next;
                 ENQ_ready(b);
@@ -1521,7 +1521,7 @@ void wt_work_cb(uv_check_t *ev) {
         }
         case $RCONT: {
             m->$cont = r.cont;
-            m->B_value = r.value;
+            m->value = r.value;
             rtsd_printf("## CONT actor %ld : %s", current->$globkey, current->$class->$GCINFO);
             ENQ_ready(current);
             break;
@@ -1530,26 +1530,28 @@ void wt_work_cb(uv_check_t *ev) {
             $Catcher c = POP_catcher(current);
             if (c) {                            // Normal exception handling
                 m->$cont = c->$cont;
-                m->B_value = r.value;
+                m->value = r.value;
                 rtsd_printf("## FAIL/handle actor %ld : %s", current->$globkey, current->$class->$GCINFO);
                 ENQ_ready(current);
             } else {                            // An unhandled exception
                 save_actor_state(current, m);
-                m->B_value = r.value;                               // m->value holds the raised exception,
+                B_BaseException ex = (B_BaseException)r.value;
+                rtsd_printf("## UNHANDLED EXCEPTION %s in actor %ld : %s", ex->$class->$GCINFO, current->$globkey, current->$class->$GCINFO);
+                m->value = r.value;                                 // m->value holds the raised exception,
                 $Actor b = FREEZE_waiting(m, MARK_EXCEPTION);       // so mark this and stop further m->waiting additions
                 while (b) {
                     b->B_Msg->$cont = &$Fail$instance;
-                    b->B_Msg->B_value = r.value;
+                    b->B_Msg->value = r.value;
                     b->$waitsfor = NULL;
                     $Actor c = b->$next;
                     ENQ_ready(b);
                     rtsd_printf("## Propagating exception to actor %ld : %s", b->$globkey, b->$class->$GCINFO);
                     b = c;
                 }
-                rtsd_printf("## FAIL actor %ld : %s", current->$globkey, current->$class->$GCINFO);
                 if (DEQ_msg(current)) {
                     ENQ_ready(current);
                 }
+                rtsd_printf("## Done handling failed actor %ld : %s", current->$globkey, current->$class->$GCINFO);
             }
             break;
         }
@@ -1584,11 +1586,11 @@ void wt_work_cb(uv_check_t *ev) {
             } else if (EXCEPTIONAL(x)) {        // x->cont == MARK_EXCEPTION: x->value holds the raised exception, current is not in x->waiting
                 rtsd_printf("## AWAIT/fail actor %ld : %s", current->$globkey, current->$class->$GCINFO);
                 m->$cont = &$Fail$instance;
-                m->B_value = x->B_value;
+                m->value = x->value;
                 ENQ_ready(current);
             } else {                            // x->cont == MARK_RESULT: x->value holds the final response, current is not in x->waiting
                 rtsd_printf("## AWAIT/wakeup actor %ld : %s", current->$globkey, current->$class->$GCINFO);
-                m->B_value = x->B_value;
+                m->value = x->value;
                 ENQ_ready(current);
             }
             break;

@@ -110,7 +110,7 @@ struct B_Msg {
     $Actor $waiting;
     time_t $baseline;
     $Lock $wait_lock;
-    $WORD B_value;
+    $WORD value;
     $long $globkey;
 };
 
