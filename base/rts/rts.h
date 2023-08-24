@@ -208,7 +208,7 @@ struct JumpBuf {
 JumpBuf $PUSH_BUF();
 B_Exception $POP();
 void $DROP();
-void $RAISE(B_Exception e);
+void $RAISE(B_BaseException e);
 #define $PUSH()             (!setjmp($PUSH_BUF()->buf))
 #define $PUSHF $PUSH
 

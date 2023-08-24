@@ -272,17 +272,17 @@ clActor             = NClass [] (leftpath [cValue]) te
 
 --  class $SEQ (Exception, value):
 --      __init__ : () -> None
-clSEQ               = NClass [] (leftpath [ cException, cValue]) te
+clSEQ               = NClass [] (leftpath [ cBaseException, cValue]) te
   where te          = [ (initKW, NSig (monotype $ tFun fxPure posNil kwdNil tNone) NoDec) ]
 
 --  class $BRK (Exception, value):
 --      __init__ : () -> None
-clBRK               = NClass [] (leftpath [ cException, cValue]) te
+clBRK               = NClass [] (leftpath [ cBaseException, cValue]) te
   where te          = [ (initKW, NSig (monotype $ tFun fxPure posNil kwdNil tNone) NoDec) ]
 
 --  class $CNT (Exception, value):
 --      __init__ : () -> None
-clCNT               = NClass [] (leftpath [ cException, cValue]) te
+clCNT               = NClass [] (leftpath [ cBaseException, cValue]) te
   where te          = [ (initKW, NSig (monotype $ tFun fxPure posNil kwdNil tNone) NoDec) ]
 
 --  class $RET (Exception, value):

@@ -82,6 +82,10 @@ void $register_builtin() {
   $register_force(NOTIMPLEMENTEDERROR_ID,&B_NotImplementedErrorG_methods);
   $register_force(VALUEERROR_ID,&B_ValueErrorG_methods);
   //  $register_builtin_protocols();
+  $register_force(SEQ_ID,&$SEQG_methods);
+  $register_force(BRK_ID,&$BRKG_methods);
+  $register_force(CNT_ID,&$CNTG_methods);
+  $register_force(RET_ID,&$RETG_methods);
 }
 
 

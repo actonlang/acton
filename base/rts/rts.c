@@ -806,7 +806,7 @@ void $DROP() {
     pthread_setspecific(jump_top, current->prev);
 }
 
-void $RAISE(B_Exception e) {
+void $RAISE(B_BaseException e) {
     //fprintf(stderr, "%s: %s\n", e->$class->$GCINFO, e->error_message ? fromB_str(e->error_message) : "");
     //exit(1);
     JumpBuf jump = (JumpBuf)pthread_getspecific(jump_top);
