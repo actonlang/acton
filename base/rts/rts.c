@@ -795,7 +795,7 @@ JumpBuf $PUSH_BUF() {
     return new;
 }
 
-B_Exception $POP() {
+B_BaseException $POP() {
     JumpBuf current = (JumpBuf)pthread_getspecific(jump_top);
     pthread_setspecific(jump_top, current->prev);
     return current->xval;
@@ -1495,7 +1495,7 @@ void wt_work_cb(uv_check_t *ev) {
             else if (diff < (long long int)100 * 1000000000) { wt_stats[wtid].conts_100s++; }
             else                              { wt_stats[wtid].conts_inf++; }
         } else {                                        // Exceptional path
-            B_Exception ex = jump0->xval;
+            B_BaseException ex = jump0->xval;
             rtsd_printf("## Actor %ld : %s exception: %s", current->$globkey, current->$class->$GCINFO, ex->$class->$GCINFO);
             r = $R_FAIL(ex);
         }

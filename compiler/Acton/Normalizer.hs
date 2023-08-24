@@ -139,7 +139,7 @@ exitContext env s
         exn (Return _ (Just e))     = eCall (eQVar primRET) [e]
 
 sDROP                               = sExpr (eCall (eQVar primDROP) [])
-sPOP x                              = sAssign (pVar x tException) (eCall (eQVar primPOP) [])
+sPOP x                              = sAssign (pVar x tBaseException) (eCall (eQVar primPOP) [])
 ePUSHF                              = eCall (eQVar primPUSHF) []
 sSEQ                                = sExpr (eCall (eQVar primRAISE) [eCall (eQVar primSEQ) []])
 sRAISE e                            = sExpr (eCall (eQVar primRAISE) [e])
@@ -190,15 +190,19 @@ instance Norm Stmt where
       where ePUSH                   = eCall (eQVar primPUSH) []
     norm' env (Try l b hs els fin)  = do ss <- norm' (pushMark FINAL env) try0
                                          x <- newName "xx"
-                                         fin <- norm (define [(x,NVar tException)] env) fin
+                                         fin <- norm (define [(x,NVar tBaseException)] env) fin
                                          return [sIf [Branch ePUSHF (ss++mbseq)] (sPOP x : fin ++ relays x)]
       where try0                    = Try l b hs els []
-            relays x                = iff [ Branch (eIsInstance x n) s | (n,s) <- filter valid $ map (relay x) ctrl] [sRAISE $ eVar x]
+            relays x                = iff [ Branch (eIsInstance x n) s | (n,s) <- map (relay x) ctrl, valid s] [sRAISE $ eVar x]
             relay _ SEQ             = (primSEQ, [sPass]) 
             relay _ BRK             = (primBRK, exitContext env sBreak)
             relay _ CNT             = (primCNT, exitContext env sContinue)
-            relay x RET             = (primRET, exitContext env $ sReturn (eCAST tValue (getRet env) (eDot (eVar x) attrVal)))
-            valid (_, [Expr{}])     = False
+            relay x RET             = (primRET, downcast : exitContext env ret)
+              where x'              = Derived x (globalName "RET")
+                    downcast        = sAssign (pVar x' tRET) (eCAST tBaseException tRET (eVar x))
+                    ret             = sReturn (eCAST tValue (getRet env) (eDot (eVar x') attrVal))
+            valid [Expr{}]          = False
+            valid [Assign{},Expr{}] = False
             valid _                 = True
             mbseq                   = if SEQ `elem` ctrl then [sSEQ] else []
             ctrl                    = nub (flows try0)

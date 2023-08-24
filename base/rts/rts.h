@@ -201,12 +201,12 @@ struct JumpBuf;
 typedef struct JumpBuf *JumpBuf;
 struct JumpBuf {
     jmp_buf buf;
-    B_Exception xval;
+    B_BaseException xval;
     JumpBuf prev;
 };
 
 JumpBuf $PUSH_BUF();
-B_Exception $POP();
+B_BaseException $POP();
 void $DROP();
 void $RAISE(B_BaseException e);
 #define $PUSH()             (!setjmp($PUSH_BUF()->buf))

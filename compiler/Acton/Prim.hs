@@ -74,6 +74,11 @@ primBRK             = gPrim "BRK"
 primCNT             = gPrim "CNT"
 primRET             = gPrim "RET"
 
+tSEQ                = tCon $ TC primSEQ []
+tBRK                = tCon $ TC primBRK []
+tCNT                = tCon $ TC primCNT []
+tRET                = tCon $ TC primRET []
+
 primASSERT          = gPrim "ASSERT"
 primNEWACTOR        = gPrim "NEWACTOR"
 
@@ -270,26 +275,26 @@ clActor             = NClass [] (leftpath [cValue]) te
                         (resumeKW,            NDef (monotype $ tFun fxMut posNil kwdNil tNone) NoDec)
                       ]
 
---  class $SEQ (Exception, value):
+--  class $SEQ (BaseException, value):
 --      __init__ : () -> None
-clSEQ               = NClass [] (leftpath [ cBaseException, cValue]) te
+clSEQ               = NClass [] (leftpath [cBaseException, cValue]) te
   where te          = [ (initKW, NSig (monotype $ tFun fxPure posNil kwdNil tNone) NoDec) ]
 
---  class $BRK (Exception, value):
+--  class $BRK (BaseException, value):
 --      __init__ : () -> None
-clBRK               = NClass [] (leftpath [ cBaseException, cValue]) te
+clBRK               = NClass [] (leftpath [cBaseException, cValue]) te
   where te          = [ (initKW, NSig (monotype $ tFun fxPure posNil kwdNil tNone) NoDec) ]
 
---  class $CNT (Exception, value):
+--  class $CNT (BaseException, value):
 --      __init__ : () -> None
-clCNT               = NClass [] (leftpath [ cBaseException, cValue]) te
+clCNT               = NClass [] (leftpath [cBaseException, cValue]) te
   where te          = [ (initKW, NSig (monotype $ tFun fxPure posNil kwdNil tNone) NoDec) ]
 
---  class $RET (Exception, value):
+--  class $RET (BaseException, value):
 --      @property
 --      val      : value
 --      __init__ : (value) -> None
-clRET               = NClass [] (leftpath [ cException, cValue]) te
+clRET               = NClass [] (leftpath [cBaseException, cValue]) te
   where te          = [ (attrVal, NSig (monotype tValue) Property),
                         (initKW,  NSig (monotype $ tFun fxPure (posRow tValue posNil) kwdNil tNone) NoDec) ]
 
