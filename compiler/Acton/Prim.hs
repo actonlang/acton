@@ -363,35 +363,31 @@ scAWAIT             = tSchema [quant a] tAWAIT
 
 
 
---  $PUSH_Cc        : pure (proc(BaseException)->$R) -> None                        -- Signature about to change
+--  $PUSH_Cc        : pure (proc(bool)->$R) -> None
 scPUSH_Cc           = tSchema [] tPUSH_C
   where tPUSH_C     = tFun fxPure (posRow tCont' posNil) kwdNil tNone
-        tCont'      = tFun fxProc (posRow tBaseException posNil) kwdNil tR
+        tCont'      = tFun fxProc (posRow tBool posNil) kwdNil tR
 
---  $PUSH_FCc       : pure (proc(BaseException)->$R) -> None                        -- Signature about to change
+--  $PUSH_FCc       : pure (proc(bool)->$R) -> None
 scPUSHF_Cc          = tSchema [] tPUSHF_C
   where tPUSHF_C    = tFun fxPure (posRow tCont' posNil) kwdNil tNone
-        tCont'      = tFun fxProc (posRow tBaseException posNil) kwdNil tR
+        tCont'      = tFun fxProc (posRow tBool posNil) kwdNil tR
 
---  $PUSH_C         : pure ($Cont[BaseException]) -> None                           -- Signature about to change
+--  $PUSH_C         : pure ($Cont[bool]) -> None
 scPUSH_C            = tSchema [] tPUSH_C
-  where tPUSH_C     = tFun fxPure (posRow tCont' posNil) kwdNil tNone
-        a           = TV KType $ name "A"
-        tCont'      = tCont tBaseException
+  where tPUSH_C     = tFun fxPure (posRow (tCont tBool) posNil) kwdNil tNone
 
---  $PUSHF_C        : pure ($Cont[BaseException]) -> None                           -- Signature about to change
+--  $PUSHF_C        : pure ($Cont[bool]) -> None
 scPUSHF_C           = tSchema [] tPUSHF_C
-  where tPUSHF_C    = tFun fxPure (posRow tCont' posNil) kwdNil tNone
-        a           = TV KType $ name "A"
-        tCont'      = tCont tBaseException
+  where tPUSHF_C    = tFun fxPure (posRow (tCont tBool) posNil) kwdNil tNone
 
---  $POP_C          : pure (int) -> None                                            -- Signature about to change
+--  $POP_C          : pure () -> BaseExceptiom
 scPOP_C             = tSchema [] tPOP_C
-  where tPOP_C      = tFun fxPure (posRow tInt posNil) kwdNil tNone
+  where tPOP_C      = tFun fxPure posNil kwdNil tBaseException
 
---  $DROP_C         : pure (int) -> None                                            -- Signature about to change
+--  $DROP_C         : pure () -> None
 scDROP_C            = tSchema [] tDROP_C
-  where tDROP_C     = tFun fxPure (posRow tInt posNil) kwdNil tNone
+  where tDROP_C     = tFun fxPure posNil kwdNil tNone
 
 --  $PUSH           : () -> bool
 scPUSH              = tSchema [] tPUSH

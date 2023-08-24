@@ -772,19 +772,23 @@ $R $AWAIT($Cont cont, B_Msg m) {
     return $R_WAIT(cont, m);
 }
 
-void $PUSH_C($Cont cont) {                                          // Signature about to change
+$R $PUSH_C($Cont cont) {
     $Actor self = ($Actor)pthread_getspecific(self_key);
     $Catcher c = $NEW($Catcher, cont);
     PUSH_catcher(self, c);
+    return $R_CONT(cont, B_True);                   // True indicates the "try" branch
 }
 
-void $POP_C(B_int n) {                                              // Signature about to change
+B_BaseException $POP_C() {
     $Actor self = ($Actor)pthread_getspecific(self_key);
-    long v = from$int(n);
-    while (v > 0) {
-        POP_catcher(self);
-        v--;
-    }
+    POP_catcher(self);
+    JumpBuf topbuf = (JumpBuf)pthread_getspecific(jump_top);
+    return topbuf->xval;
+}
+
+void $DROP_C() {
+    $Actor self = ($Actor)pthread_getspecific(self_key);
+    POP_catcher(self);
 }
 
 JumpBuf $PUSH_BUF() {
@@ -796,9 +800,9 @@ JumpBuf $PUSH_BUF() {
 }
 
 B_BaseException $POP() {
-    JumpBuf current = (JumpBuf)pthread_getspecific(jump_top);
-    pthread_setspecific(jump_top, current->prev);
-    return current->xval;
+    JumpBuf topbuf = (JumpBuf)pthread_getspecific(jump_top);
+    pthread_setspecific(jump_top, topbuf->prev);
+    return topbuf->xval;
 }
 
 void $DROP() {
@@ -1530,7 +1534,7 @@ void wt_work_cb(uv_check_t *ev) {
             $Catcher c = POP_catcher(current);
             if (c) {                            // Normal exception handling
                 m->$cont = c->$cont;
-                m->value = r.value;
+                m->value = B_False;             // False signals the exceptional branch
                 rtsd_printf("## FAIL/handle actor %ld : %s", current->$globkey, current->$class->$GCINFO);
                 ENQ_ready(current);
             } else {                            // An unhandled exception

@@ -193,9 +193,11 @@ void serialize_state_shortcut($Actor);
                                register_actor($t->$globkey); \
                                $t; })
 
-void $PUSH_C($Cont);                // Signature about to change
-void $POP_C(B_int);                 // Signature about to change
+$R $PUSH_C($Cont);
+B_BaseException $POP_C();
+void $DROP_C();
 #define $PUSHF_C $PUSH_C
+#define $RAISE_C $RAISE
 
 struct JumpBuf;
 typedef struct JumpBuf *JumpBuf;
