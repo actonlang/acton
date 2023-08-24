@@ -505,6 +505,8 @@ instance Gen Stmt where
 genBranch env kw (Branch e b)       = (text kw <+> parens (genBranchExp env e) <+> char '{') $+$ nest 4 (genSuite env b) $+$ char '}'
 
 genBranchExp env (IsInstance _ x y) = gen env primISINSTANCE0 <> parens(gen env x <>comma <+> genQName env y)
+genBranchExp env (Call _ (Var _ f) PosNil KwdNil)
+  | f `elem` [primPUSH,primPUSHF]   = gen env f <> parens(empty)
 genBranchExp env (Call _ (TApp _ (Var _ f) _) (PosArg x PosNil) KwdNil)
    | f == primISNOTNONE             = gen env primISNOTNONE0 <> parens(gen env x)
 genBranchExp env e@(Call _ (Dot _ (Var _ w) op) (PosArg x (PosArg y PosNil)) KwdNil)

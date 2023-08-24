@@ -363,27 +363,27 @@ scAWAIT             = tSchema [quant a] tAWAIT
 
 
 
---  $PUSH_Cc        : pure (proc(Exception)->$R) -> None                            -- Signature about to change
+--  $PUSH_Cc        : pure (proc(BaseException)->$R) -> None                        -- Signature about to change
 scPUSH_Cc           = tSchema [] tPUSH_C
   where tPUSH_C     = tFun fxPure (posRow tCont' posNil) kwdNil tNone
-        tCont'      = tFun fxProc (posRow tException posNil) kwdNil tR
+        tCont'      = tFun fxProc (posRow tBaseException posNil) kwdNil tR
 
---  $PUSH_FCc       : pure (proc(Exception)->$R) -> None                            -- Signature about to change
+--  $PUSH_FCc       : pure (proc(BaseException)->$R) -> None                        -- Signature about to change
 scPUSHF_Cc          = tSchema [] tPUSHF_C
   where tPUSHF_C    = tFun fxPure (posRow tCont' posNil) kwdNil tNone
-        tCont'      = tFun fxProc (posRow tException posNil) kwdNil tR
+        tCont'      = tFun fxProc (posRow tBaseException posNil) kwdNil tR
 
---  $PUSH_C         : pure ($Cont[Exception]) -> None                               -- Signature about to change
+--  $PUSH_C         : pure ($Cont[BaseException]) -> None                           -- Signature about to change
 scPUSH_C            = tSchema [] tPUSH_C
   where tPUSH_C     = tFun fxPure (posRow tCont' posNil) kwdNil tNone
         a           = TV KType $ name "A"
-        tCont'      = tCont tException
+        tCont'      = tCont tBaseException
 
---  $PUSHF_C        : pure ($Cont[Exception]) -> None                               -- Signature about to change
+--  $PUSHF_C        : pure ($Cont[BaseException]) -> None                           -- Signature about to change
 scPUSHF_C           = tSchema [] tPUSHF_C
   where tPUSHF_C    = tFun fxPure (posRow tCont' posNil) kwdNil tNone
         a           = TV KType $ name "A"
-        tCont'      = tCont tException
+        tCont'      = tCont tBaseException
 
 --  $POP_C          : pure (int) -> None                                            -- Signature about to change
 scPOP_C             = tSchema [] tPOP_C
@@ -401,17 +401,17 @@ scPUSH              = tSchema [] tPUSH
 scPUSHF             = tSchema [] tPUSHF
   where tPUSHF      = tFun fxPure posNil kwdNil tBool
 
---  $POP            : () -> Exception
+--  $POP            : () -> BaseException
 scPOP               = tSchema [] tPOP
-  where tPOP        = tFun fxPure posNil kwdNil tException
+  where tPOP        = tFun fxPure posNil kwdNil tBaseException
 
 --  $DROP           : () -> None
 scDROP              = tSchema [] tDROP
   where tDROP       = tFun fxPure posNil kwdNil tNone
 
---  $RAISE          : (Exception) -> None
+--  $RAISE          : (BaseException) -> None
 scRAISE             = tSchema [] tRAISE
-  where tRAISE      = tFun fxPure (posRow tException posNil) kwdNil tNone
+  where tRAISE      = tFun fxPure (posRow tBaseException posNil) kwdNil tNone
 
 
 --  $ASSERT         : pure (bool, ?str) -> None
@@ -457,9 +457,9 @@ scRCont             = tSchema [quant a] tRCont
         tCont'      = tCont (tVar a)
         a           = TV KType $ name "A"
 
---  $R_FAIL         : proc(Exception) -> $R
+--  $R_FAIL         : proc(BaseException) -> $R
 scRFail             = tSchema [] tRFail
-  where tRFail      = tFun fxProc (posRow tException posNil) kwdNil tR
+  where tRFail      = tFun fxProc (posRow tBaseException posNil) kwdNil tR
 
 
 --  class $EqOpt[A] (Eq[?A]): pass
