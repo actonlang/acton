@@ -8,9 +8,6 @@ Sets up pairs of actors that ping each other.
 def print_rts_stats(cap: SysCap) -> None:
     for wtid, stats in acton.rts.rts_stats(cap).items():
         print("-- RTS stats wtid=%d" % int(wtid))
-        print("   work entered: %d" % int(stats.work_entered))
-        print("   no work: %d" % int(stats.no_work))
-        print("   yielded to IO: %d" % int(stats.yield_to_io))
         #print("   state: %s" % stats.state)
         #print("   sleeps: %d" % int(stats.sleeps))
         print("   conts_count: %d" % int(stats.conts_count))
