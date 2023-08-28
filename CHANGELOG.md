@@ -19,6 +19,40 @@
   single files [#1438]
 - It is now possible to have mutually recursive definitions between function
   defs, classes and actors [#1433] [#1435]
+- RTS now uses a per thread malloc implementation [#1456]
+  - `malloc` is part of libgc which has two flavours, a global malloc with a
+    lock and a per thread allocator
+  - During the restructuring to use Zigs build system, the compilation option to
+    use the per thread allocator was lost. It is now back!
+  - For parallel workloads across multiple RTS worker threads, there is a clear
+    bottleneck around malloc... not very surprisingly ;)
+- RTS readyQ and per actor message queue has been optimized [#1456]
+  - There is now a tail pointer which significantly speeds up insertions
+  - The fields have been slightly reorganized to allow the most important fields
+    early so it can be fetched in one cacheline
+  - Before, having many concurrent actors with many outstanding messages would
+    scale poorly, on an AMD 5950X running the pairs benchmark:
+    - before:
+      -    1 actor pair & 1   token: ~4M continuations per second
+      -   10 actor pair & 1   token: ~650K continuations per second
+      - 1000 actor pair & 1   token: ~280K continuations per second
+      - 1000 actor pair & 500 token: ~280K continuations per second
+    - after readyQ tail optimization:
+      -    1 actor pair & 1   token: ~3.8M continuations per second
+      - 1000 actor pair & 1   token: ~3.6M continuations per second
+      - 1000 actor pair & 500 token: ~700K continuations per second
+    - after msg queue tail optimization:
+      -    1 actor pair & 1   token: ~3.8M continuations per second
+      - 1000 actor pair & 1   token: ~3.6M continuations per second
+      - 1000 actor pair & 500 token: ~3.6M continuations per second
+  - This is an artificial benchmark where there is extremely little real work
+    done, so continuation switching becomes the dominant load. Thus, the
+    bottleneck becomes the global readyQ. Using more than 1 worker thread only
+    leads to lock contention and so the benchmarks are for 1 worker thread.
+    - Since the actor message queue is per actor, it is possible that multiple
+      worker threads could work faster but in practice they step on each others
+      toes enough around the global readyQ that it is slower overall.
+
 
 ### Changed
 - `net.TCPIPConnection` is removed and replaced by `net.TCPConnection`

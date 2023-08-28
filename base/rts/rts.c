@@ -40,6 +40,8 @@
 
 #include <uv.h>
 
+#include "q.c"
+
 #include "io.c"
 
 #include "log.c"
@@ -156,17 +158,10 @@ int pthread_setaffinity_np(pthread_t thread, size_t cpu_size, cpu_set_t *cpu_set
 extern void $ROOTINIT();
 extern $Actor $ROOT();
 
+struct mpmcq rqs[MAX_WTHREADS+1];
+
 $Actor root_actor = NULL;
 B_Env env_actor = NULL;
-
-struct readyqs {
-    $Actor head;
-    $Actor tail;
-    unsigned long long count;
-    $Lock lock;
-};
-struct readyqs rqs[MAX_WTHREADS+1];
-
 
 B_Msg timerQ = NULL;
 $Lock timerQ_lock;
@@ -229,16 +224,6 @@ void reset_timeout() {
     // Wake up timerQ thread
     uv_async_send(&wake_ev[0]);
 }
-
-static inline void spinlock_lock($Lock *f) {
-    while (atomic_flag_test_and_set(f) == true) {
-        // spin until we could set the flag
-    }
-}
-static inline void spinlock_unlock($Lock *f) {
-    atomic_flag_clear(f);
-}
-
 int64_t get_next_key() {
     spinlock_lock(&next_key_lock);
     int64_t res = --next_key;
@@ -522,88 +507,6 @@ struct $ConstContG_class $ConstContG_methods = {
 
 ////////////////////////////////////////////////////////////////////////////////////////
 
-// Atomically enqueue actor "a" onto the right ready-queue, either a thread
-// local one or the "default" of 0 which is a shared queue among all worker
-// threads. The index is offset by 1 so worker thread 0 is at index 1.
-int ENQ_ready($Actor a) {
-    int i = a->$affinity;
-    spinlock_lock(&rqs[i].lock);
-    if (rqs[i].head) {
-        $Actor x = rqs[i].head;
-        while (x->$next)
-            x = x->$next;
-        x->$next = a;
-    } else {
-        rqs[i].head = a;
-    }
-    a->$next = NULL;
-    spinlock_unlock(&rqs[i].lock);
-    // If we enqueue to someone who is not us, immediately wake them up...
-    int our_wtid = (int)pthread_getspecific(pkey_wtid);
-    if (our_wtid != i)
-        wake_wt(i);
-    return i;
-}
-
-// Atomically dequeue and return the first actor from a ready-queue, first
-// dequeueing from the thread specific queue and second from the global shared
-// readyQ or return NULL if no work is found.
-$Actor _DEQ_ready(int idx) {
-    $Actor res = NULL;
-    if (rqs[idx].head == NULL)
-        return res;
-
-    spinlock_lock(&rqs[idx].lock);
-    res = rqs[idx].head;
-    if (res) {
-        rqs[idx].head = res->$next;
-        res->$next = NULL;
-    }
-    spinlock_unlock(&rqs[idx].lock);
-    return res;
-}
-$Actor DEQ_ready(int idx) {
-    $Actor res = _DEQ_ready(idx);
-    if (res)
-        return res;
-
-    res = _DEQ_ready(0);
-    return res;
-}
-
-// Atomically enqueue message "m" onto the queue of actor "a", 
-// return true if the queue was previously empty.
-bool ENQ_msg(B_Msg m, $Actor a) {
-    bool did_enq = true;
-    spinlock_lock(&a->B_Msg_lock);
-    m->$next = NULL;
-    if (a->B_Msg) {
-        B_Msg x = a->B_Msg;
-        while (x->$next)
-            x = x->$next;
-        x->$next = m;
-        did_enq = false;
-    } else {
-        a->B_Msg = m;
-    }
-    spinlock_unlock(&a->B_Msg_lock);
-    return did_enq;
-}
-
-// Atomically dequeue the first message from the queue of actor "a",
-// return true if the queue still holds messages.
-bool DEQ_msg($Actor a) {
-    bool has_more = false;
-    spinlock_lock(&a->B_Msg_lock);
-    if (a->B_Msg) {
-        B_Msg x = a->B_Msg;
-        a->B_Msg = x->$next;
-        x->$next = NULL;
-        has_more = a->B_Msg != NULL;
-    }
-    spinlock_unlock(&a->B_Msg_lock);
-    return has_more;
-}
 
 #define MARK_RESULT         NULL
 #define MARK_EXCEPTION      ($Cont)1
@@ -1779,6 +1682,7 @@ const char* stats_to_json () {
         yyjson_mut_obj_add_val(doc, j_stat, wt_stats[i].key, j_wt);
         yyjson_mut_obj_add_str(doc, j_wt, "state",       WT_State_name[wt_stats[i].state]);
         yyjson_mut_obj_add_int(doc, j_wt, "sleeps",      wt_stats[i].sleeps);
+        yyjson_mut_obj_add_int(doc, j_wt, "qlen",        rqs[i].count);
         yyjson_mut_obj_add_int(doc, j_wt, "conts_count", wt_stats[i].conts_count);
         yyjson_mut_obj_add_int(doc, j_wt, "conts_sum",   wt_stats[i].conts_sum);
         yyjson_mut_obj_add_int(doc, j_wt, "conts_100ns", wt_stats[i].conts_100ns);

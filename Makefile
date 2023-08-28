@@ -217,7 +217,7 @@ dist/depsout/lib/libbsdnt.a: dist/deps/libbsdnt $(DIST_ZIG)
 	cd $< && $(ZIG) build $(ZIG_TARGET) --prefix $(TD)/dist/depsout
 
 # /deps/libgc --------------------------------------------
-LIBGC_REF=ead2119801a6659d1d78406563d5acc6df4d94e3
+LIBGC_REF=6d884227b4db1f5bd3e09a86e65a1caed32f3174
 deps-download/$(LIBGC_REF).tar.gz:
 	mkdir -p deps-download
 	curl -f -L -o $@ https://github.com/actonlang/bdwgc/archive/$(LIBGC_REF).tar.gz

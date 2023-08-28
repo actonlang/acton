@@ -1,5 +1,5 @@
 import acton.rts
-#
+
 # The ring program sets up a ring of actors and injects a message which will
 # cascade forever. After some time, provided through an argument, we will stop
 # the program and count the number of messages sent.
@@ -42,22 +42,22 @@ actor main(env):
     nodes[-1].set_next(nodes[0])
     a = nodes[0].ping()
 
+    var count = 0
     def stop():
-        count = 0
         for i in range(0, num_nodes, 1):
             c = nodes[i].get_count()
             print("Actor %d:" % i, c)
             count += c
         print("In total across all actors:", count)
         print("Total messages per second:", int(float(count)/stop_at))
-        print("RSS:", acton.rts.rss(env.cap))
+        print("RSS:", acton.rts.rss(env.syscap))
         await async env.exit(0)
 
     var alive = 0
     def report():
-        print("RSS at second", alive, ":", acton.rts.rss(env.cap) / (1024*1024), "MB")
+        #print("RSS at second", alive, ":", acton.rts.rss(env.syscap) / (1024*1024), "MB")
         alive += 1
-        after 1: report()
+        after 1.0: report()
 
     report()
 
