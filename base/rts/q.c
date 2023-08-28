@@ -117,7 +117,45 @@ $Actor DEQ_ready(int idx) {
 }
 
 
+#ifdef MSGQ == 2
+// Atomically enqueue message "m" onto the queue of actor "a",
+// return true if the queue was previously empty.
+bool ENQ_msg(B_Msg m, $Actor a) {
+    bool did_enq = true;
+    spinlock_lock(&a->B_Msg_lock);
+    m->$next = NULL;
+    if (a->B_Msg_tail) {
+        a->B_Msg_tail->$next = m;
+        a->B_Msg_tail = m;
+        did_enq = false;
+    } else {
+        a->B_Msg = m;
+        a->B_Msg_tail = m;
+    }
+    spinlock_unlock(&a->B_Msg_lock);
+    return did_enq;
+}
 
+// Atomically dequeue the first message from the queue of actor "a",
+// return true if the queue still holds messages.
+bool DEQ_msg($Actor a) {
+    bool has_more = false;
+    spinlock_lock(&a->B_Msg_lock);
+    B_Msg x = a->B_Msg;
+    if (x) {
+        a->B_Msg = x->$next;
+        x->$next = NULL;
+        if (a->B_Msg == NULL) {
+            a->B_Msg_tail = NULL;
+        }
+        has_more = a->B_Msg != NULL;
+    } else {
+        a->B_Msg_tail = NULL;
+    }
+    spinlock_unlock(&a->B_Msg_lock);
+    return has_more;
+}
+#else // MSGQ == 1
 // Atomically enqueue message "m" onto the queue of actor "a",
 // return true if the queue was previously empty.
 bool ENQ_msg(B_Msg m, $Actor a) {
@@ -151,3 +189,4 @@ bool DEQ_msg($Actor a) {
     spinlock_unlock(&a->B_Msg_lock);
     return has_more;
 }
+#endif // MSGQ

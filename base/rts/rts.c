@@ -224,7 +224,6 @@ void reset_timeout() {
     // Wake up timerQ thread
     uv_async_send(&wake_ev[0]);
 }
-
 int64_t get_next_key() {
     spinlock_lock(&next_key_lock);
     int64_t res = --next_key;

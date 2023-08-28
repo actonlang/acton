@@ -15,6 +15,7 @@
 
 #include "../builtin/builtin.h"
 
+#define MSGQ 2
 #define MAX_WTHREADS 256
 
 #include "q.h"
@@ -128,13 +129,14 @@ struct $Actor {
     struct $ActorG_class *$class;
     $Actor $next;
     B_Msg B_Msg;
+    B_Msg B_Msg_tail;
+    $Lock B_Msg_lock;
+    $int64 $affinity;
     B_Msg $outgoing;
     B_Msg $waitsfor;
     $int64 $consume_hd;
     $Catcher $catcher;
-    $Lock B_Msg_lock;
     $long $globkey;
-    $int64 $affinity;
 };
 
 struct $CatcherG_class {
