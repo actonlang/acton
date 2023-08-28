@@ -117,7 +117,7 @@ $Actor DEQ_ready(int idx) {
 }
 
 
-#ifdef MSGQ == 2
+#if MSGQ == 2
 // Atomically enqueue message "m" onto the queue of actor "a",
 // return true if the queue was previously empty.
 bool ENQ_msg(B_Msg m, $Actor a) {
