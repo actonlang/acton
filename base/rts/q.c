@@ -26,6 +26,7 @@ int ENQ_ready($Actor a) {
         rqs[i].tail = a;
     }
     a->$next = NULL;
+    rqs[i].count++;
     spinlock_unlock(&rqs[i].lock);
     // If we enqueue to someone who is not us, immediately wake them up...
     int our_wtid = (int)pthread_getspecific(pkey_wtid);
@@ -84,6 +85,7 @@ $Actor _DEQ_ready(int idx) {
     } else {
         rqs[idx].tail = NULL;
     }
+    rqs[idx].count--;
     spinlock_unlock(&rqs[idx].lock);
     return res;
 }

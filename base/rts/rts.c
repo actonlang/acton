@@ -1683,6 +1683,7 @@ const char* stats_to_json () {
         yyjson_mut_obj_add_val(doc, j_stat, wt_stats[i].key, j_wt);
         yyjson_mut_obj_add_str(doc, j_wt, "state",       WT_State_name[wt_stats[i].state]);
         yyjson_mut_obj_add_int(doc, j_wt, "sleeps",      wt_stats[i].sleeps);
+        yyjson_mut_obj_add_int(doc, j_wt, "qlen",        rqs[i].count);
         yyjson_mut_obj_add_int(doc, j_wt, "conts_count", wt_stats[i].conts_count);
         yyjson_mut_obj_add_int(doc, j_wt, "conts_sum",   wt_stats[i].conts_sum);
         yyjson_mut_obj_add_int(doc, j_wt, "conts_100ns", wt_stats[i].conts_100ns);
