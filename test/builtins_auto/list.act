@@ -43,6 +43,21 @@ actor main(env):
         print("Unexpected result of list.reverse():", l)
         await async env.exit(1)
 
+    lr = list(reversed([]))
+    if lr != []:
+        print("Unexpected result of reversed([]):", lr)
+        await async env.exit(1)
+
+    lr2 = list(reversed([1]))
+    if lr2 != [1]:
+        print("Unexpected result of reversed([]):", lr2)
+        await async env.exit(1)
+
+    lr3 = list(reversed([1,2,3]))
+    if lr3 != [3,2,1]:
+        print("Unexpected result of reversed([1,2,3]):", lr3)
+        await async env.exit(1)
+
     del l[1]
     if l != [56, 3, 2, 37, 1, 0]:
         print("Unexpected result of del list[1]:", l)
