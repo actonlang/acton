@@ -69,6 +69,9 @@
 - Fix module import check [#1420]
 - Avoid segfault when exception `error_message` is not set [#1422]
 - Bump Zig version to v0.11.0 [#1421]
+- Fix `reversed([])` which would `SIGILL` in dev mode [#1455]
+- Fix `reversed([1,2,3])` which now returns reversed result [#1455]
+  - Previous code did the reversal but returned the original value :P
 
 
 ## [0.16.0] (2023-07-03)

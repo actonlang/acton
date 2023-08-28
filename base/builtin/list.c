@@ -140,7 +140,8 @@ B_list B_listD_copy(B_list lst) {
     int len = lst->length;
     B_list res = B_listD_new(len);
     res->length = len;
-    memcpy(res->data, lst->data, len*sizeof($WORD));
+    if (len > 0)
+        memcpy(res->data, lst->data, len*sizeof($WORD));
     return res;
 }
 
@@ -447,8 +448,8 @@ B_NoneType B_SequenceD_listD_reverse(B_SequenceD_list wit, B_list lst) {
 
 B_Iterator B_SequenceD_listD___reversed__(B_SequenceD_list wit, B_list lst) {
     B_list copy = B_listD_copy(lst);
-    B_SequenceD_listD_reverse(wit,copy);
-    return B_CollectionD_SequenceD_listD___iter__((B_CollectionD_SequenceD_list)wit->W_Collection, lst);
+    B_SequenceD_listD_reverse(wit, copy);
+    return B_CollectionD_SequenceD_listD___iter__((B_CollectionD_SequenceD_list)wit->W_Collection, copy);
 }
 
 B_NoneType B_SequenceD_listD_insert(B_SequenceD_list wit, B_list lst, B_int n, $WORD elem) {
