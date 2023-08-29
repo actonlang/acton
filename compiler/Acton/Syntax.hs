@@ -144,6 +144,9 @@ nstr (Internal p s i)       = prefix p ++ "_" ++ unique i ++ s
         unique 0            = ""
         unique i            = show i
 
+rawstr (Name _ s)           = s
+rawstr n                    = nstr n
+
 name            = Name NoLoc
 
 globalName s    = Internal Globvar s 0

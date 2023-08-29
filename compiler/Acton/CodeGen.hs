@@ -414,7 +414,7 @@ instance Gen ModName where
 
 instance Gen QName where
     gen env (GName m n)
-      | m == mPrim                  = char '$' <> text (nstr n)
+      | m == mPrim                  = char '$' <> text (rawstr n)
       | m == mBuiltin               = text "B_" <> text (nstr n)
       | otherwise                   = gen env m <> text "Q_" <> text (mkCident $ nstr n)
     gen env (NoQ n)                 = gen env n

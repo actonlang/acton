@@ -254,7 +254,7 @@ instance Pretty QName where
 --    pretty (NoQ n)                  = char '~' <> pretty n
     pretty (NoQ n)                  = pretty n
     pretty (GName m n)
-      | m == mPrim                  = text ("$" ++ nstr n)
+      | m == mPrim                  = text ("$" ++ rawstr n)
 --      | m == mBuiltin               = text ("B_" ++ nstr n)
       | otherwise                   = pretty m <> dot <> pretty n
 
