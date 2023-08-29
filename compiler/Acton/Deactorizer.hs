@@ -103,14 +103,12 @@ instance Deact Stmt where
     deact env (Pass l)              = return $ Pass l
     deact env (Return l Nothing)    = return $ Return l Nothing
     deact env (Return l (Just e))   = Return l . Just <$> deact env e
-    deact env (Raise l e)           = Raise l <$> deact env e
     deact env (Break l)             = return $ Break l
     deact env (Continue l)          = return $ Continue l
     deact env (If l bs els)         = If l <$> deact env bs <*> deactSuite env1 els
       where env1                    = clearSampled env
     deact env (While l e b els)     = While l <$> deact env e <*> deactSuite env1 b <*> deactSuite env1 els
       where env1                    = clearSampled env
-    deact env (Try l b hs els fin)  = Try l <$> deactSuite env b <*> deact env hs <*> deactSuite env els <*> deactSuite env fin
     deact env (VarAssign l [p@(PVar _ n _)] e)
                                     = MutAssign l (selfRef n) <$> deact env e
       where t                       = typeOf env p
@@ -209,10 +207,6 @@ selfRef n                           = Dot l0 (Var l0 (NoQ selfKW)) n
 instance Deact Branch where
     deact env (Branch e ss)         = Branch <$> deact env e <*> deactSuite env1 ss
       where env1                    = clearSampled env
-
-instance Deact Handler where
-    deact env (Handler ex b)        = Handler ex <$> deactSuite env1 b
-      where env1                    = defineAndShadow (envOf ex) env
 
 isProcMeth env e
   | Just n <- isQVar e,

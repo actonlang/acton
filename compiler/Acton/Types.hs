@@ -297,7 +297,7 @@ instance InfEnv Stmt where
                                              (cs2,te',els') <- infLiveEnv (maybe id define te $ env) els
                                              (css,tes,hs') <- fmap unzip3 $ mapM (infLiveEnv env) hs
                                              (cs3,te1) <- commonTEnv env $ catMaybes $ (liveCombine te te'):tes
-                                             (cs4,te2,fin') <- infSuiteEnv (define te1 env) fin
+                                             (cs4,te2,fin') <- infSuiteEnv env fin
                                              fx <- currFX
                                              return (--Cast fxProc fx :
                                                      cs1++cs2++cs3++cs4++concat css, te1++te2, Try l b' hs' els' fin')
