@@ -92,26 +92,23 @@ inDef env                               = whereX (envX env) == InDef
 
 eCallCont t c arg                       = eCall (tApp (eQVar primRContc) [t]) [eVar c, arg]
 
-format cont                             = [sReturn cont]
-
-seqcont (Seq c : ctx)                   = eCallCont tNone c eNone                           -- end of sequence:     followed by some cmd    -   jump to it
-seqcont (Loop c : ctx)                  = eCallCont tNone c eNone                           --                      inside a loop           -   jump to its top
-seqcont (Meth c t : _)                  = eCallCont tNone c eNone                           --                      in a method             -   jump to its continuation
+seqcont (Seq c : ctx)                   = sReturn $ eCallCont tNone c eNone                 -- end of sequence:     followed by some cmd    -   jump to it
+seqcont (Loop c : ctx)                  = sReturn $ eCallCont tNone c eNone                 --                      inside a loop           -   jump to its top
+seqcont (Meth c t : _)                  = sReturn $ eCallCont tNone c eNone                 --                      in a method             -   jump to its continuation
 
 cntcont (Seq c : ctx)                   = cntcont ctx                                       -- 'continue':          followed by some cmd    -   ignore it
-cntcont (Loop c : ctx)                  = eCallCont tNone c eNone                           --                      inside a loop           -   jump to its top
+cntcont (Loop c : ctx)                  = sReturn $ eCallCont tNone c eNone                 --                      inside a loop           -   jump to its top
 
 brkcont (Seq c : ctx)                   = brkcont ctx                                       -- 'break':             followed by some cmd    -   ignore it
 brkcont (Loop c : ctx)                  = seqcont ctx                                       --                      in a loop               -   jump to what follows
 
 retcont e (Seq c : ctx)                 = retcont e ctx                                     -- 'return':            followed by some cmd    -   ignore it
 retcont e (Loop c : ctx)                = retcont e ctx                                     --                      in a loop               -   ignore it
-retcont e (Meth c t : _)                = eCallCont t c e                                   --                      in a method             -   jump to its continuation
+retcont e (Meth c t : _)                = sReturn $ eCallCont t c e                         --                      in a method             -   jump to its continuation
 
-quicknext (Seq c : _)                   = Just (eVar c)
-quicknext (Loop c : _)                  = Just (eVar c)
-quicknext (Meth c t : _)                = Just (eVar c)
-quicknext _                             = Nothing
+nextcont (Seq c : _)                    = eVar c
+nextcont (Loop c : _)                   = eVar c
+nextcont (Meth c t : _)                 = eVar c
 
 
 cpsSuite env ss                         = cps env ss
@@ -121,26 +118,23 @@ class CPS a where
 
 instance CPS [Stmt] where
     cps env []
-      | inCont env                      = return [sReturn $ seqcont (ctxt env)]
+      | inCont env                      = return [seqcont (ctxt env)]
     cps env (Continue _ : _)
-      | inCont env                      = return [sReturn $ cntcont (ctxt env)]
+      | inCont env                      = return [cntcont (ctxt env)]
     cps env (Break _ : _)
-      | inCont env                      = return [sReturn $ brkcont (ctxt env)]
+      | inCont env                      = return [brkcont (ctxt env)]
     cps env (Return _ Nothing : _)
-      | inCont env                      = return [sReturn $ retcont eNone (ctxt env)]
+      | inCont env                      = return [retcont eNone (ctxt env)]
     cps env (Return _ (Just e) : _)
-      | contCall env e,
-        Just c <- quicknext (ctxt env)  = return [sReturn (addContArg env (conv e) c)]
-      | inCont env                      = return [sReturn $ retcont (conv e) (ctxt env)]
+      | contCall env e                  = return [sReturn (addContArg env (conv e) (nextcont (ctxt env)))]
+      | inCont env                      = return [retcont (conv e) (ctxt env)]
 
     cps env (Assign _ [PVar _ n _] e : 
              Return _ (Just e') : _)
-      | contCall env e, e' == eVar n,
-        Just c <- quicknext (ctxt env)  = return [sReturn (addContArg env (conv e) c)]
+      | contCall env e, e' == eVar n    = return [sReturn (addContArg env (conv e) (nextcont (ctxt env)))]
 
     cps env [Expr _ e]
-      | contCall env e,
-        Just c <- quicknext (ctxt env)  = return [sReturn (addContArg env (conv e) (cont c))]
+      | contCall env e                  = return [sReturn (addContArg env (conv e) (cont (nextcont (ctxt env))))]
       where t                           = typeOf env e
             cont c                      = if t == tNone then c else eCall (tApp (eQVar primSKIPRESc) [t]) [c]
 
@@ -153,6 +147,7 @@ instance CPS [Stmt] where
                                              ss' <- cps env ss
                                              return $ kDef env k (pospar [(x,t)]) ss' :
                                                       sReturn (addContArg env (conv e) (eVar k)) : []
+      | isRAISE e                       = return $ sExpr (conv e) : []
       where t                           = typeOf env e
 
     cps env (Assign _ [PVar _ x _] e : ss)
@@ -282,6 +277,9 @@ convX s                                 = s
 
 isPUSH (Call _ (Var _ x) _ _)           = x `elem` [primPUSH,primPUSHF]
 isPUSH _                                = False
+
+isRAISE (Call _ (Var _ x) _ _)          = x == primRAISE
+isRAISE _                               = False
 
 convPUSH (Call _ (Var _ x) _ _) arg
   | x == primPUSH                       = eCall (eQVar primPUSH_Cc) [arg]
