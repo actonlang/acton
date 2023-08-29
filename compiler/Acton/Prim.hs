@@ -156,6 +156,7 @@ primEnv             = [     (noq primASYNCf,        NDef scASYNCf NoDec),
                             (noq primPUSH_C,        NDef scPUSH_C NoDec),
                             (noq primPUSHF_C,       NDef scPUSHF_C NoDec),
                             (noq primPOP_C,         NDef scPOP_C NoDec),
+                            (noq primDROP_C,        NDef scDROP_C NoDec),
 
                             (noq primPUSH,          NDef scPUSH NoDec),
                             (noq primPUSHF,         NDef scPUSHF NoDec),

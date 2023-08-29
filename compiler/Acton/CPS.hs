@@ -62,18 +62,12 @@ withPrefixes m                          = do ss0 <- swapPrefixes []
 data Frame                              = Meth   Name Type                  -- contParam with type
                                         | Seq    Name                       -- nextCont
                                         | Loop   Name                       -- loopEntry
-                                        | Wrap   Name                       -- finalizer
-                                        | Unwrap Name Name                  -- levelParam contParam
-                                        | Pop
                                         deriving (Eq,Show)
 
 instance Pretty Frame where
     pretty (Meth n t)                   = text "Meth" <+> pretty t
     pretty (Seq n)                      = text "Seq" <+> pretty n
     pretty (Loop n)                     = text "Loop" <+> pretty n
-    pretty (Wrap n)                     = text "Wrap" <+> pretty n
-    pretty (Unwrap n n')                = text "Unwrap" <+> pretty n <+> pretty n'
-    pretty Pop                          = text "Pop"
 
 type CPSEnv                             = EnvF CPSX
 
@@ -93,56 +87,30 @@ setClassCtxt env                        = modX env $ \x -> x{ ctxtX = [], whereX
 setDefCtxt env                          = modX env $ \x -> x{ whereX = InDef }
 
 onTop env                               = whereX (envX env) == OnTop
-
 inClass env                             = whereX (envX env) == InClass
-
 inDef env                               = whereX (envX env) == InDef
 
 eCallCont t c arg                       = eCall (tApp (eQVar primRContc) [t]) [eVar c, arg]
 
-eCallCont2 c args                       = eCall (eVar c) args
+format cont                             = [sReturn cont]
 
-pushH env h                             = sExpr (eCall (eQVar primPUSH_Cc) [h])
+seqcont (Seq c : ctx)                   = eCallCont tNone c eNone                           -- end of sequence:     followed by some cmd    -   jump to it
+seqcont (Loop c : ctx)                  = eCallCont tNone c eNone                           --                      inside a loop           -   jump to its top
+seqcont (Meth c t : _)                  = eCallCont tNone c eNone                           --                      in a method             -   jump to its continuation
 
-format (Int _ 0 _, cont)                = [sReturn cont]
-format (lvl, cont)                      = [sExpr (eCall (eQVar primPOP_C) [lvl]), sReturn cont]
+cntcont (Seq c : ctx)                   = cntcont ctx                                       -- 'continue':          followed by some cmd    -   ignore it
+cntcont (Loop c : ctx)                  = eCallCont tNone c eNone                           --                      inside a loop           -   jump to its top
 
-wrapC c f env                           = eCallCont2 c [level, eLambda' [(g_none,tNone)] cont]
-  where (level, cont)                   = f 0 env
+brkcont (Seq c : ctx)                   = brkcont ctx                                       -- 'break':             followed by some cmd    -   ignore it
+brkcont (Loop c : ctx)                  = seqcont ctx                                       --                      in a loop               -   jump to what follows
 
-unwrapL 0 lvl                           = eVar lvl
-unwrapL n lvl                           = eCall (eDot (eQVar witIntegralInt) addKW) [eInt n, unwrapL 0 lvl]
-
-seqcont n (Pop : ctx)                   = seqcont (n+1) ctx                                 -- end of sequence:     in a handler scope      -   remember to pop
-seqcont n (Seq c : ctx)                 = (eInt n, eCallCont tNone c eNone)                 --                      followed by some cmd    -   jump to it
-seqcont n (Loop c : ctx)                = (eInt n, eCallCont tNone c eNone)                 --                      inside a loop           -   jump to its top
-seqcont n (Meth c t : _)                = (eInt n, eCallCont tNone c eNone)                 --                      in a method             -   jump to its continuation
-seqcont n (Wrap c : ctx)                = (eInt n, wrapC c seqcont ctx)                     --                      before a finalizer      -   jump to it, relay the true jump
-seqcont n (Unwrap lvl cnt : _)          = (unwrapL n lvl, eCallCont2 cnt [eNone])           --                      in a finalizer          -   do the true jump
-
-cntcont n (Pop : ctx)                   = cntcont (n+1) ctx                                 -- 'continue':          in a handler scope      -   remember to pop
-cntcont n (Seq c : ctx)                 = cntcont n ctx                                     --                      followed by some cmd    -   ignore it
-cntcont n (Loop c : ctx)                = (eInt n, eCallCont tNone c eNone)                 --                      inside a loop           -   jump to its top
-cntcont n (Wrap c : ctx)                = (eInt n, wrapC c cntcont ctx)                     --                      before a finalizer      -   jump to it, relay the true jump
-cntcont n (Unwrap lvl cnt : ctx)        = cntcont n ctx                                     --                      in a finalizer          -   ignore the true jump
-
-brkcont n (Pop : ctx)                   = brkcont (n+1) ctx                                 -- 'break':             in a handler scope      -   remember to pop
-brkcont n (Seq c : ctx)                 = brkcont n ctx                                     --                      followed by some cmd    -   ignore it
-brkcont n (Loop c : ctx)                = seqcont n ctx                                     --                      in a loop               -   jump to what follows
-brkcont n (Wrap c : ctx)                = (eInt n, wrapC c brkcont ctx)                     --                      before a finalizer      -   jump to it, relay the true jump
-brkcont n (Unwrap lvl cnt : ctx)        = brkcont n ctx                                     --                      in a finalizer          -   ignore the true jump
-
-retcont e n (Pop : ctx)                 = retcont e (n+1) ctx                               -- 'return':            in a handler scope      -   remember to pop
-retcont e n (Seq c : ctx)               = retcont e n ctx                                   --                      followed by some cmd    -   ignore it
-retcont e n (Loop c : ctx)              = retcont e n ctx                                   --                      in a loop               -   ignore it
-retcont e n (Meth c t : _)              = (eInt n, eCallCont t c e)                         --                      in a method             -   jump to its continuation
-retcont e n (Wrap c : ctx)              = (eInt n, wrapC c (retcont e) ctx)                 --                      before a finalizer      -   jump to it, relay the true jump
-retcont e n (Unwrap lvl cnt : ctx)      = retcont e n ctx                                   --                      in a finalizer          -   ignore the true jump
+retcont e (Seq c : ctx)                 = retcont e ctx                                     -- 'return':            followed by some cmd    -   ignore it
+retcont e (Loop c : ctx)                = retcont e ctx                                     --                      in a loop               -   ignore it
+retcont e (Meth c t : _)                = eCallCont t c e                                   --                      in a method             -   jump to its continuation
 
 quicknext (Seq c : _)                   = Just (eVar c)
 quicknext (Loop c : _)                  = Just (eVar c)
 quicknext (Meth c t : _)                = Just (eVar c)
-quicknext (Wrap c : ctx)                = Just (wrapC c seqcont ctx)
 quicknext _                             = Nothing
 
 
@@ -153,32 +121,32 @@ class CPS a where
 
 instance CPS [Stmt] where
     cps env []
-      | inCont env                      = return $ format $ seqcont 0 (ctxt env)
+      | inCont env                      = return [sReturn $ seqcont (ctxt env)]
     cps env (Continue _ : _)
-      | inCont env                      = return $ format $ cntcont 0 (ctxt env)
+      | inCont env                      = return [sReturn $ cntcont (ctxt env)]
     cps env (Break _ : _)
-      | inCont env                      = return $ format $ brkcont 0 (ctxt env)
+      | inCont env                      = return [sReturn $ brkcont (ctxt env)]
     cps env (Return _ Nothing : _)
-      | inCont env                      = return $ format $ retcont eNone 0 (ctxt env)
+      | inCont env                      = return [sReturn $ retcont eNone (ctxt env)]
     cps env (Return _ (Just e) : _)
       | contCall env e,
-        Just c <- quicknext (ctxt env)  = return $ sReturn (addContArg env (conv e) c) : []
-      | inCont env                      = return $ format $ retcont (conv e) 0 (ctxt env)
+        Just c <- quicknext (ctxt env)  = return [sReturn (addContArg env (conv e) c)]
+      | inCont env                      = return [sReturn $ retcont (conv e) (ctxt env)]
 
     cps env (Assign _ [PVar _ n _] e : 
              Return _ (Just e') : _)
       | contCall env e, e' == eVar n,
-        Just c <- quicknext (ctxt env)  = return $ sReturn (addContArg env (conv e) c) : []
+        Just c <- quicknext (ctxt env)  = return [sReturn (addContArg env (conv e) c)]
 
     cps env [Expr _ e]
       | contCall env e,
-        Just c <- quicknext (ctxt env)  = return $ sReturn (addContArg env (conv e) (cont c)) : []
+        Just c <- quicknext (ctxt env)  = return [sReturn (addContArg env (conv e) (cont c))]
       where t                           = typeOf env e
             cont c                      = if t == tNone then c else eCall (tApp (eQVar primSKIPRESc) [t]) [c]
 
     cps env (s : Return _ e : _)
       | e == Just eNone                 = cps env [s]
-      
+
     cps env (Expr _ e : ss)
       | contCall env e                  = do k <- newName "cont"
                                              x <- newName "res"
@@ -213,10 +181,19 @@ instance CPS [Stmt] where
                                              return $ conv s : ss'
       where env1                        = define (envOf s) env
     
+    cps env [If _ [Branch e ss1] ss2]
+      | isPUSH e                        = do k <- newName "try"
+                                             x <- newName "res"
+                                             ss1 <- cpsSuite env (map convX ss1)
+                                             ss2 <- cpsSuite env (map convX ss2)
+                                             let body = sIf1 (eVar x) ss1 ss2 : []
+                                             return $ kDef env k (pospar [(x,tBool)]) body :
+                                                      sReturn (convPUSH e $ eVar k) : []
+
     cps env [If _ bs els]               = do bs' <- mapM (cps env) bs
                                              els' <- cpsSuite env els
                                              return $ sIf bs' els' : []
-    
+
     cps env [While _ e b els]           = do k    <- newName "loop"
                                              x    <- newName "res"
                                              b'   <- cpsSuite (Loop k +: env) b
@@ -224,66 +201,6 @@ instance CPS [Stmt] where
                                              let body = sIf1 (conv e) b' els' : []
                                              return $ kDef env k (pospar [(x,tNone)]) body : 
                                                       jump k
-
-    cps env [Try _ b [] [] fin]         = do fcnt <- newName "finalizer"
-                                             x    <- newName "x"
-                                             lvl  <- newName "level"
-                                             cnt  <- newName "cont"
-                                             fin' <- cpsSuite (Unwrap lvl cnt +: env) fin
-                                             b'   <- cpsSuite (Pop +: Wrap fcnt +: env) b
-                                             return $ kDef env fcnt (pospar [(lvl,tInt), (cnt,tCont0)]) fin' :
-                                                      pushH env (finalH x fcnt) :
-                                                      b'
-
-    cps env [Try _ b hs [] []]          = do hcnt <- newName "handler"
-                                             x    <- newName "x"
-                                             body <- hbody env x hs
-                                             b'   <- cpsSuite (Pop +: env) b
-                                             return $ kDef env hcnt (pospar [(x,tException)]) body :
-                                                      pushH env (eVar hcnt) :
-                                                      b'
-
-    cps env [Try _ b hs els []]         = do hcnt <- newName "handler"
-                                             ecnt <- newName "else"
-                                             x    <- newName "x"
-                                             body <- hbody env x hs
-                                             els' <- cpsSuite env els
-                                             b' <- cpsSuite (Pop +: Seq ecnt +: env) b
-                                             return $ kDef env hcnt (pospar [(x,tException)]) body :
-                                                      kDef env ecnt (pospar [(x,tNone)]) els' :
-                                                      pushH env (eVar hcnt) :
-                                                      b'
-
-    cps env [Try _ b hs [] fin]         = do fcnt <- newName "finalizer"
-                                             hcnt <- newName "handler"
-                                             x    <- newName "x"
-                                             lvl  <- newName "level"
-                                             cnt  <- newName "cont"
-                                             fin' <- cpsSuite (Unwrap lvl cnt +: env) fin
-                                             body <- hbody (Pop +: Wrap fcnt +: env) x hs
-                                             b' <- cpsSuite (Pop +: Wrap fcnt +: env) b
-                                             return $ kDef env fcnt (pospar [(lvl,tInt), (cnt,tCont0)]) fin' :
-                                                      kDef env hcnt (pospar [(x,tException)]) (pushH env (finalH x fcnt) : body) :
-                                                      pushH env (eVar hcnt) :
-                                                      b'
-                                          
-    cps env [Try _ b hs els fin]        = do fcnt <- newName "finalizer"
-                                             ecnt <- newName "else"
-                                             hcnt <- newName "handler"
-                                             x    <- newName "x"
-                                             lvl  <- newName "level"
-                                             cnt  <- newName "cont"
-                                             fin' <- cpsSuite (Unwrap lvl cnt +: env) fin
-                                             body <- hbody (Pop +: Wrap fcnt +: env) x hs
-                                             els' <- cpsSuite (Pop +: Wrap fcnt +: env) els
-                                             b' <- cpsSuite (Pop +: Seq ecnt +: Wrap fcnt +: env) b
-                                             return $ kDef env fcnt (pospar [(lvl,tInt), (cnt,tCont0)]) fin' :
-                                                      kDef env hcnt (pospar [(x,tException)]) (pushH env (finalH x fcnt) : body) :
-                                                      kDef env ecnt (pospar [(x,tNone)]) (pushH env (finalH x fcnt) : els') :
-                                                      pushH env (eVar hcnt) :
-                                                      b'
-
-    cps env (Raise _ e : _)             = return $ sReturn (eCall (eQVar primRFail) [conv e]) : []
 
     cps env (s : ss)                    = do k <- newName "cont"
                                              x <- newName "res"
@@ -332,18 +249,6 @@ tCont0                                  = tFun fxProc (posRow tNone posNil) kwdN
 
 tCont1 fx t                             = tFun fx (posRow t posNil) kwdNil tR
 
-finalH x f                              = eLambda' [(x,tException)] (eCall (eVar f) [eInt 0, raiseH])
-  where raiseH                          = eLambda' [(g_none,tNone)] (eCall (eQVar primRFail) [eVar x])
-
-hbody env x hs                          = do bs <- mapM h hs
-                                             return $ [sIf bs [sReturn $ eCall (eQVar primRFail) [eVar x]]]
-  where h (Handler (ExceptAll _) ss)    = Branch (eBool True) <$> cps env ss
-        h (Handler (Except _ y) ss)     = Branch (IsInstance l0 (eVar x) y) <$> cps env ss
-        h (Handler (ExceptAs _ y z) ss) = do ss' <- cps env1 ss
-                                             return $ Branch (IsInstance l0 (eVar x) y) (sAssign (pVar z t) (eVar x) : ss')
-          where env1                    = define [(z,NVar t)] env
-                t                       = tCon $ TC y []
-
 kDef env k p b                          = sDef k (conv p) tR b fxProc
 
 fxCall env test (Call _ Async{} p k)    = False
@@ -365,6 +270,23 @@ mutFX _                                 = False
 inCont env                              = length (ctxt env) > 0
 
 
+convX s@(If _ [Branch e _] _)
+  | isPUSH e                            = s
+convX (If l bs els)                     = If l [ Branch e (map convX ss) | Branch e ss <- bs ] (map convX els)
+convX (While l e ss els)                = While l e (map convX ss) (map convX els)
+convX (Expr l (Call l1 e ps ks))
+  | Var l2 x <- e, x == primDROP        = Expr l (Call l1 (Var l2 primDROP_C) ps ks)
+convX (Assign l p (Call l1 e ps ks))
+  | Var l2 x <- e, x == primPOP         = Assign l p (Call l1 (Var l2 primPOP_C) ps ks)
+convX s                                 = s
+
+isPUSH (Call _ (Var _ x) _ _)           = x `elem` [primPUSH,primPUSHF]
+isPUSH _                                = False
+
+convPUSH (Call _ (Var _ x) _ _) arg
+  | x == primPUSH                       = eCall (eQVar primPUSH_Cc) [arg]
+  | x == primPUSHF                      = eCall (eQVar primPUSHF_Cc) [arg]
+
 class NeedCont a where
     needCont                            :: CPSEnv -> a -> Bool
 
@@ -373,7 +295,7 @@ instance (NeedCont a, EnvOf a) => NeedCont [a] where
     needCont env (s : ss)               = needCont env s || needCont (define (envOf s) env) ss
 
 instance NeedCont Branch where
-    needCont env (Branch _ ss)          = needCont env ss
+    needCont env (Branch e ss)          = isPUSH e || needCont env ss
 
 instance NeedCont Stmt where
     needCont env (Return _ (Just e))    = inCont env
@@ -385,8 +307,6 @@ instance NeedCont Stmt where
     needCont env (If _ bs els)          = needCont env bs || needCont env els
     needCont env (While _ _ b els)      = needCont env b || needCont env els
     needCont env (Decl _ ds)            = needCont (define (envOf ds) env) ds
-    needCont env (Try _ b hs els fin)   = True
-    needCont env (Raise _ e)            = True
     needCont env _                      = False
 
 instance NeedCont Decl where
@@ -428,10 +348,8 @@ instance PreCPS Stmt where
     pre env (Assign l ps e)             = Assign l ps <$> preTop env e
     pre env (MutAssign l t e)           = MutAssign l <$> pre env t <*> preTop env e
     pre env (Return l e)                = Return l <$> preTop env e
-    pre env (Raise l e)                 = Raise l <$> preTop env e
     pre env (If l bs els)               = If l <$> pre env bs <*> preSuite env els
     pre env (While l e b els)           = While l <$> pre env e <*> preSuite env b <*> preSuite env els
-    pre env (Try l b hs els fin)        = Try l <$> preSuite env b <*> pre env hs <*> preSuite env els <*> preSuite env fin
     pre env (Decl l ds)                 = Decl l <$> pre env1 ds
       where env1                        = define (envOf ds) env
     pre env s                           = return s
