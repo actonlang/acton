@@ -1,3 +1,12 @@
+def test_i64():
+    x: i64 = 0
+    if (bool(x != 0)):
+       raise ValueError("unexpected: bool(x) != 0")
+    if x != 0:
+       raise ValueError("unexpected: x != 0")
+    return True
+
+
 actor main(env):
     if (141234567898765434567654345678765456787654 << 12) != 578496790113343219989112199900223311002230784:
         raise ValueError("left shift of positive int broken")
@@ -24,5 +33,8 @@ actor main(env):
     if int('123') != 123:
         raise ValueError("int('123') != 123")
     if hash(2**131) >= 2**64:
-        raise ValueError("hash(2**131) too big")        
+        raise ValueError("hash(2**131) too big")
+    if not test_i64():
+        await async env.exit(1)
+
     await async env.exit(0)
