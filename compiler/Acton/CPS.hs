@@ -65,7 +65,7 @@ data Frame                              = Meth   Name Type                  -- c
                                         deriving (Eq,Show)
 
 instance Pretty Frame where
-    pretty (Meth n t)                   = text "Meth" <+> pretty t
+    pretty (Meth n t)                   = text "Meth" <+> pretty n
     pretty (Seq n)                      = text "Seq" <+> pretty n
     pretty (Loop n)                     = text "Loop" <+> pretty n
 
@@ -90,25 +90,23 @@ onTop env                               = whereX (envX env) == OnTop
 inClass env                             = whereX (envX env) == InClass
 inDef env                               = whereX (envX env) == InDef
 
-eCallCont t c arg                       = eCall (tApp (eQVar primRContc) [t]) [eVar c, arg]
+eCallCont e (c,t)                       = eCall (tApp (eQVar primRContc) [t]) [eVar c, e]
 
-seqcont (Seq c : ctx)                   = sReturn $ eCallCont tNone c eNone                 -- end of sequence:     followed by some cmd    -   jump to it
-seqcont (Loop c : ctx)                  = sReturn $ eCallCont tNone c eNone                 --                      inside a loop           -   jump to its top
-seqcont (Meth c t : _)                  = sReturn $ eCallCont tNone c eNone                 --                      in a method             -   jump to its continuation
+eCallCont0 c                            = eCallCont eNone (c,tNone)
 
-cntcont (Seq c : ctx)                   = cntcont ctx                                       -- 'continue':          followed by some cmd    -   ignore it
-cntcont (Loop c : ctx)                  = sReturn $ eCallCont tNone c eNone                 --                      inside a loop           -   jump to its top
+cntcont (Seq c : ctx)                   = cntcont ctx                       -- 'continue':          followed by some cmd    -   ignore it
+cntcont (Loop c : ctx)                  = c                                 --                      inside a loop           -   jump to its top
 
-brkcont (Seq c : ctx)                   = brkcont ctx                                       -- 'break':             followed by some cmd    -   ignore it
-brkcont (Loop c : ctx)                  = seqcont ctx                                       --                      in a loop               -   jump to what follows
+brkcont (Seq c : ctx)                   = brkcont ctx                       -- 'break':             followed by some cmd    -   ignore it
+brkcont (Loop c : ctx)                  = seqcont ctx                       --                      in a loop               -   jump to what follows
 
-retcont e (Seq c : ctx)                 = retcont e ctx                                     -- 'return':            followed by some cmd    -   ignore it
-retcont e (Loop c : ctx)                = retcont e ctx                                     --                      in a loop               -   ignore it
-retcont e (Meth c t : _)                = sReturn $ eCallCont t c e                         --                      in a method             -   jump to its continuation
+seqcont (Seq c : ctx)                   = c                                 -- end of sequence:     followed by some cmd    -   jump to it
+seqcont (Loop c : ctx)                  = c                                 --                      inside a loop           -   jump to its top
+seqcont (Meth c t : _)                  = c                                 --                      in a method             -   jump to its continuation
 
-nextcont (Seq c : _)                    = eVar c
-nextcont (Loop c : _)                   = eVar c
-nextcont (Meth c t : _)                 = eVar c
+retcont (Seq c : ctx)                   = retcont ctx                       -- 'return':            followed by some cmd    -   ignore it
+retcont (Loop c : ctx)                  = retcont ctx                       --                      in a loop               -   ignore it
+retcont (Meth c t : _)                  = (c, t)                            --                      in a method             -   jump to its continuation
 
 
 cpsSuite env ss                         = cps env ss
@@ -118,23 +116,23 @@ class CPS a where
 
 instance CPS [Stmt] where
     cps env []
-      | inCont env                      = return [seqcont (ctxt env)]
+      | inCont env                      = return [sReturn $ eCallCont0 $ seqcont (ctxt env)]
     cps env (Continue _ : _)
-      | inCont env                      = return [cntcont (ctxt env)]
+      | inCont env                      = return [sReturn $ eCallCont0 $ cntcont (ctxt env)]
     cps env (Break _ : _)
-      | inCont env                      = return [brkcont (ctxt env)]
+      | inCont env                      = return [sReturn $ eCallCont0 $ brkcont (ctxt env)]
     cps env (Return _ Nothing : _)
-      | inCont env                      = return [retcont eNone (ctxt env)]
+      | inCont env                      = return [sReturn $ eCallCont eNone $ retcont (ctxt env)]
     cps env (Return _ (Just e) : _)
-      | contCall env e                  = return [sReturn (addContArg env (conv e) (nextcont (ctxt env)))]
-      | inCont env                      = return [retcont (conv e) (ctxt env)]
+      | contCall env e                  = return [sReturn (addContArg env (conv e) (eVar $ fst $ retcont (ctxt env)))]
+      | inCont env                      = return [sReturn $ eCallCont (conv e) $ retcont (ctxt env)]
 
     cps env (Assign _ [PVar _ n _] e : 
              Return _ (Just e') : _)
-      | contCall env e, e' == eVar n    = return [sReturn (addContArg env (conv e) (nextcont (ctxt env)))]
+      | contCall env e, e' == eVar n    = return [sReturn (addContArg env (conv e) (eVar $ fst $ retcont (ctxt env)))]
 
     cps env [Expr _ e]
-      | contCall env e                  = return [sReturn (addContArg env (conv e) (cont (nextcont (ctxt env))))]
+      | contCall env e                  = return [sReturn (addContArg env (conv e) (cont (eVar $ seqcont (ctxt env))))]
       where t                           = typeOf env e
             cont c                      = if t == tNone then c else eCall (tApp (eQVar primSKIPRESc) [t]) [c]
 
@@ -392,7 +390,7 @@ instance PreCPS Expr where
       | contFX fx                       = do (prefixes,e') <- withPrefixes $ preTop env1 e
                                              case prefixes of
                                                 [] -> let p' = conv p; t' = conv t
-                                                          e1 = if contCall env e then addContArg env1 e' (eVar contKW) else eCallCont t' contKW e'
+                                                          e1 = if contCall env e then addContArg env1 e' (eVar contKW) else eCallCont e' (contKW, t')
                                                       in return $ Lambda l (addContPar0 p' fx t') KwdNIL e1 fx
                                                 _ -> do
                                                     f <- newName "lambda"
