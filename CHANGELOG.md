@@ -106,6 +106,11 @@
 - Fix `reversed([])` which would `SIGILL` in dev mode [#1455]
 - Fix `reversed([1,2,3])` which now returns reversed result [#1455]
   - Previous code did the reversal but returned the original value :P
+- Fix `i64` comparisons like eq/ne/etc [#1459]
+  - Would just return the wrong results, like `i64(0) == i64(0)` would not
+    return `True`. Now works as they should!
+- Fix list add with empty list input, like `[1]+[]` [#1461]
+  - Used to segfault, now works as intended
 
 
 ## [0.16.0] (2023-07-03)
