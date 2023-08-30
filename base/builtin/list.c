@@ -37,6 +37,7 @@ static void shrink(B_list lst) {
         $WORD old = lst->data;
         lst->data = malloc(newcapacity * sizeof($WORD));
         lst->capacity = newcapacity;
+        assert(old != NULL);
         memcpy(lst->data, old, newcapacity * sizeof($WORD));
     }
 }
@@ -154,6 +155,7 @@ B_NoneType B_listD_clear(B_list lst) {
 
 B_NoneType B_listD_extend(B_list lst, B_list other) {
     expand(lst, other->length);
+    assert(other->data != NULL);
     memcpy(lst->data + lst->length, other->data, other->length * sizeof($WORD));
     lst->length += other->length;
     return B_None;
@@ -236,8 +238,10 @@ B_list B_TimesD_SequenceD_listD___add__ (B_TimesD_SequenceD_list wit, B_list lst
     int otherlen = other->length;
     int reslen = lstlen + otherlen;
     B_list res = B_listD_new(reslen);
-    memcpy(res->data,lst->data,lstlen*sizeof($WORD));
-    memcpy(res->data+lstlen,other->data,otherlen*sizeof($WORD));
+    if (lstlen > 0)
+        memcpy(res->data,lst->data,lstlen*sizeof($WORD));
+    if (otherlen > 0)
+        memcpy(res->data+lstlen,other->data,otherlen*sizeof($WORD));
     res->length = reslen;
     return res;
 }
