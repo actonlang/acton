@@ -197,6 +197,9 @@ instance CPS [Stmt] where
                                              els' <- cpsSuite env els
                                              return $ sIf bs' els' : []
 
+    cps env (If l bs els : s@(Expr _ e) : _)
+      | isRAISE e                       = cps env [If l [ Branch e (ss++[s]) | Branch e ss <- bs ] (els++[s])]
+
     cps env s@[While _ e b els]         = do k    <- newName "loop"
                                              x    <- newName "res"
                                              b'   <- cpsSuite (Loop k (dom nts) +: env) b
@@ -215,7 +218,8 @@ instance CPS [Stmt] where
                                              return $ kDef env k nts x tNone ss' :
                                                       s'
       where env1                        = define (envOf s) env
-            nts                         = nvarsOf (envOf s) ++ extraBinds env1 ss
+            nts0                        = nvarsOf (envOf s) `restrict` free ss
+            nts                         = nts0 ++ extraBinds env1 ss
 
     cps env []                          = return []
 
