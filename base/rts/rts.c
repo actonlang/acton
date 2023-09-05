@@ -388,6 +388,7 @@ $Actor $ActorD___deserialize__($Actor res, $Serial$state state) {
 void $CatcherD___init__($Catcher c, $Cont cont) {
     c->$next = NULL;
     c->$cont = cont;
+    c->xval = NULL;
 }
 
 B_bool $CatcherD___bool__($Catcher self) {
@@ -403,12 +404,14 @@ B_str $CatcherD___str__($Catcher self) {
 void $CatcherD___serialize__($Catcher self, $Serial$state state) {
     $step_serialize(self->$next,state);
     $step_serialize(self->$cont,state);
+    $step_serialize(self->xval,state);
 }
 
 $Catcher $CatcherD___deserialize__($Catcher self, $Serial$state state) {
     $Catcher res = $DNEW($Catcher,state);
     res->$next = $step_deserialize(state);
     res->$cont = $step_deserialize(state);
+    res->xval = $step_deserialize(state);
     return res;
 }
 ///////////////////////////////////////////////////////////////////////////////////////
@@ -781,9 +784,9 @@ $R $PUSH_C($Cont cont) {
 
 B_BaseException $POP_C() {
     $Actor self = ($Actor)pthread_getspecific(self_key);
-    POP_catcher(self);
-    JumpBuf topbuf = (JumpBuf)pthread_getspecific(jump_top);
-    return topbuf->xval;
+    $Catcher c = POP_catcher(self);
+    B_BaseException ex = c->xval;
+    return ex;
 }
 
 void $DROP_C() {
@@ -1500,7 +1503,7 @@ void wt_work_cb(uv_check_t *ev) {
             else                              { wt_stats[wtid].conts_inf++; }
         } else {                                        // Exceptional path
             B_BaseException ex = jump0->xval;
-            rtsd_printf("## Actor %ld : %s longjmp exception: %s", current->$globkey, current->$class->$GCINFO, ex->$class->$GCINFO);
+            rtsd_printf("## (%d) Actor %ld : %s longjmp exception: %s", wtid, current->$globkey, current->$class->$GCINFO, ex->$class->$GCINFO);
             r = $R_FAIL(ex);
         }
 
@@ -1533,6 +1536,7 @@ void wt_work_cb(uv_check_t *ev) {
         case $RFAIL: {
             $Catcher c = current->$catcher;
             if (c) {                            // Normal exception handling
+                c->xval = (B_BaseException)r.value;
                 m->$cont = c->$cont;
                 m->value = B_False;             // False signals the exceptional branch
                 rtsd_printf("## FAIL/handle actor %ld : %s", current->$globkey, current->$class->$GCINFO);

@@ -155,6 +155,7 @@ struct $Catcher {
     struct $CatcherG_class *$class;
     $Catcher $next;
     $Cont $cont;
+    B_BaseException xval;
 };
 
 
