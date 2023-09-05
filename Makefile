@@ -159,12 +159,14 @@ clean-compiler:
 	rm -f compiler/actonc compiler/package.yaml compiler/acton.cabal
 
 # /deps --------------------------------------------------
+DEPS_DIRS += dist/deps/mbedtls
 DEPS_DIRS += dist/deps/libargp
 DEPS_DIRS += dist/deps/libbsdnt
 DEPS_DIRS += dist/deps/libgc
 DEPS_DIRS += dist/deps/libnetstring
 DEPS_DIRS += dist/deps/pcre2
 DEPS_DIRS += dist/deps/libprotobuf_c
+DEPS_DIRS += dist/deps/tlsuv
 DEPS_DIRS += dist/deps/libutf8proc
 DEPS_DIRS += dist/deps/libuuid
 DEPS_DIRS += dist/deps/libuv
@@ -174,8 +176,12 @@ DEPS_DIRS += dist/deps/libyyjson
 DEPS += dist/depsout/lib/libactongc.a
 DEPS += dist/depsout/lib/libargp.a
 DEPS += dist/depsout/lib/libbsdnt.a
+DEPS += dist/depsout/lib/libmbedcrypto.a
+DEPS += dist/depsout/lib/libmbedtls.a
+DEPS += dist/depsout/lib/libmbedx509.a
 DEPS += dist/depsout/lib/libpcre2.a
 DEPS += dist/depsout/lib/libprotobuf-c.a
+DEPS += dist/depsout/lib/libtlsuv.a
 DEPS += dist/depsout/lib/libutf8proc.a
 DEPS += dist/depsout/lib/libuuid.a
 DEPS += dist/depsout/lib/libuv.a
@@ -232,6 +238,22 @@ dist/depsout/lib/libactongc.a: dist/deps/libgc $(DIST_ZIG)
 	cd $< && $(ZIG) build $(ZIG_TARGET) --prefix $(TD)/dist/depsout
 	mv dist/depsout/lib/libgc.a $@
 
+# /deps/libmbedtls --------------------------------------------
+LIBMBEDTLS_REF=c820d300e8d2129a4b79eb45a14ac42e85882732
+deps-download/$(LIBMBEDTLS_REF).tar.gz:
+	mkdir -p deps-download
+	curl -f -L -o $@ https://github.com/actonlang/mbedtls/archive/$(LIBMBEDTLS_REF).tar.gz
+
+dist/deps/mbedtls: deps-download/$(LIBMBEDTLS_REF).tar.gz
+	mkdir -p $@
+	cd $@ && tar zx --strip-components=1 -f $(TD)/$<
+	touch $(TD)/$@
+
+dist/depsout/lib/libmbedtls.a: dist/deps/mbedtls $(DIST_ZIG)
+	cd $< && $(ZIG) build $(ZIG_TARGET) --prefix $(TD)/dist/depsout
+dist/depsout/lib/libmbedcrypto.a: dist/depsout/lib/libmbedtls.a
+dist/depsout/lib/libmbedx509.a: dist/depsout/lib/libmbedtls.a
+
 # /deps/libprotobuf_c --------------------------------------------
 LIBPROTOBUF_C_REF=5499f774396953c2ef63e725e2f03a5c0bdeff73
 deps-download/$(LIBPROTOBUF_C_REF).tar.gz:
@@ -245,6 +267,20 @@ dist/deps/libprotobuf_c: deps-download/$(LIBPROTOBUF_C_REF).tar.gz
 
 dist/depsout/lib/libprotobuf-c.a: dist/deps/libprotobuf_c $(DIST_ZIG)
 	cd $< && $(ZIG) build $(ZIG_TARGET) --prefix $(TD)/dist/depsout
+
+# /deps/tlsuv ---------------------------------------------
+TLSUV_REF=e8f5a74a88e8943b24ece11a0bb9b9deaa373467
+deps-download/$(TLSUV_REF).tar.gz:
+	mkdir -p deps-download
+	curl -f -L -o $@ https://github.com/actonlang/tlsuv/archive/$(TLSUV_REF).tar.gz
+
+dist/deps/tlsuv: deps-download/$(TLSUV_REF).tar.gz
+	mkdir -p $@
+	cd $@ && tar zx --strip-components=1 -f $(TD)/$<
+	touch $(TD)/$@
+
+dist/depsout/lib/libtlsuv.a: dist/deps/tlsuv $(DIST_ZIG) dist/depsout/lib/libmbedtls.a dist/depsout/lib/libuv.a
+	cd $< && $(ZIG) build $(ZIG_TARGET) --prefix $(TD)/dist/depsout --search-prefix $(TD)/dist/depsout
 
 # /deps/libutf8proc --------------------------------------
 LIBUTF8PROC_REF=3c489aea1a497b98f6cc28ea5b218181b84769e6

@@ -88,6 +88,11 @@ pub fn build(b: *std.build.Builder) void {
         .optimize = optimize,
     });
 
+    const dep_libmbedtls = b.anonymousDependency(joinPath(b.allocator, dots_to_root, syspath, "deps/mbedtls"), @import("deps/mbedtls/build.zig"), .{
+        .target = target,
+        .optimize = optimize,
+    });
+
     const dep_libnetstring = b.anonymousDependency(joinPath(b.allocator, dots_to_root, syspath, "deps/libnetstring"), @import("deps/libnetstring/build.zig"), .{
         .target = target,
         .optimize = optimize,
@@ -99,6 +104,11 @@ pub fn build(b: *std.build.Builder) void {
     });
 
     const dep_libprotobuf_c = b.anonymousDependency(joinPath(b.allocator, dots_to_root, syspath, "deps/libprotobuf_c"), @import("deps/libprotobuf_c/build.zig"), .{
+        .target = target,
+        .optimize = optimize,
+    });
+
+    const dep_libtlsuv = b.anonymousDependency(joinPath(b.allocator, dots_to_root, syspath, "deps/tlsuv"), @import("deps/tlsuv/build.zig"), .{
         .target = target,
         .optimize = optimize,
     });
@@ -275,6 +285,10 @@ pub fn build(b: *std.build.Builder) void {
             executable.linkSystemLibraryName("netstring");
             executable.linkSystemLibraryName("pcre2");
             executable.linkSystemLibraryName("protobuf-c");
+            executable.linkSystemLibraryName("tlsuv");
+            executable.linkSystemLibraryName("mbedtls");
+            executable.linkSystemLibraryName("mbedcrypto");
+            executable.linkSystemLibraryName("mbedx509");
             executable.linkSystemLibraryName("utf8proc");
             executable.linkSystemLibraryName("uuid");
             executable.linkSystemLibraryName("uv");
@@ -291,6 +305,8 @@ pub fn build(b: *std.build.Builder) void {
             executable.linkLibrary(dep_libnetstring.artifact("netstring"));
             executable.linkLibrary(dep_libpcre2.artifact("pcre2"));
             executable.linkLibrary(dep_libprotobuf_c.artifact("protobuf-c"));
+            executable.linkLibrary(dep_libtlsuv.artifact("tlsuv"));
+            executable.linkLibrary(dep_libmbedtls.artifact("libtls"));
             executable.linkLibrary(dep_libutf8proc.artifact("utf8proc"));
             executable.linkLibrary(dep_libuuid.artifact("uuid"));
             executable.linkLibrary(dep_libuv.artifact("uv"));
