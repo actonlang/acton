@@ -1531,7 +1531,7 @@ void wt_work_cb(uv_check_t *ev) {
             break;
         }
         case $RFAIL: {
-            $Catcher c = POP_catcher(current);
+            $Catcher c = current->$catcher;
             if (c) {                            // Normal exception handling
                 m->$cont = c->$cont;
                 m->value = B_False;             // False signals the exceptional branch
