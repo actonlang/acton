@@ -501,3 +501,6 @@ instance Pretty (TVar,Name) where
 
 instance Pretty Substitution where
     pretty s                        = commaSep pretty s
+
+instance Pretty (Name,Type) where
+    pretty (n,t)                    = pretty n <> text ":" <+> pretty t

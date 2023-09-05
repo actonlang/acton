@@ -484,6 +484,10 @@ findQName (GName m n) env
 
 findName n env              = findQName (NoQ n) env
 
+lookupVar n env             = case lookup n (names env) of
+                                Just (NVar t) -> Just t
+                                _ -> Nothing
+
 findMod                     :: ModName -> EnvF x -> Maybe TEnv
 findMod m env | inBuiltin env, m==mBuiltin
                             = Just (names env)

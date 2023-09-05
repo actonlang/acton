@@ -196,7 +196,6 @@ llSuite env (Decl l ds : ss)
         funfree0                        = [ (dname d, nub $ free d) | d@Def{} <- ds ]
         fs                              = dom funfree0
         env1                            = define (envOf ds) env
-        parambound n                    = bound [ pos d | d <- ds, dname d == n ]
 llSuite env (s : ss)
   | ctxt env == InDef                   = (:) <$> ll env s <*> llSuite (extLocals s env1) ss
   | ctxt env == InClass                 = (:) <$> ll env s <*> llSuite env1 ss
@@ -310,6 +309,7 @@ closureCon fx p t
   | fx == fxPure                        = TC primPure [p,t]
   | otherwise                           = error ("### BAD closureCon fx: " ++ prstr fx)
   where contArg (TFun _ fx p _ r)       = rtype p
+        contArg t                       = error ("### contArg " ++ prstr t)
 
 isCont (TFun _ fx p@TRow{} _ r)         = fx == fxProc && r == tR && rtail p == posNil && not (isCont $ rtype p)
 isCont _                                = False

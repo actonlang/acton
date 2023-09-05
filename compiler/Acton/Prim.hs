@@ -577,4 +577,13 @@ primWits            = [ WInst []        fxAction (pWrapped fxProc fxProc)   prim
   where path        = [Left (noQ "_")]
         y           = TV KFX (name "Y")
         
+isPUSH (Call _ (Var _ x) _ _)   = x `elem` [primPUSH,primPUSHF]
+isPUSH _                        = False
+
+isPUSHF (Call _ (Var _ x) _ _)  = x == primPUSHF
+isPUSHF _                       = False
+
+isRAISE (Call _ (Var _ x) _ _)  = x == primRAISE
+isRAISE _                       = False
+
 

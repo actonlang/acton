@@ -60,14 +60,14 @@ withPrefixes m                          = do ss0 <- swapPrefixes []
 
 
 data Frame                              = Meth   Name Type                  -- contParam with type
-                                        | Seq    Name                       -- nextCont
-                                        | Loop   Name                       -- loopEntry
+                                        | Seq    Name [Name]                -- nextCont with extra args
+                                        | Loop   Name [Name]                -- loopEntry with extra args
                                         deriving (Eq,Show)
 
 instance Pretty Frame where
     pretty (Meth n t)                   = text "Meth" <+> pretty n
-    pretty (Seq n)                      = text "Seq" <+> pretty n
-    pretty (Loop n)                     = text "Loop" <+> pretty n
+    pretty (Seq n ns)                   = text "Seq" <+> pretty n
+    pretty (Loop n ns)                  = text "Loop" <+> pretty n
 
 type CPSEnv                             = EnvF CPSX
 
@@ -90,23 +90,24 @@ onTop env                               = whereX (envX env) == OnTop
 inClass env                             = whereX (envX env) == InClass
 inDef env                               = whereX (envX env) == InDef
 
-eCallCont e (c,t)                       = eCall (tApp (eQVar primRContc) [t]) [eVar c, e]
+eCallCont e (c,t)                       = eCall (tApp (eQVar primRContc) [t]) [c, e]
 
-eCallCont0 c                            = eCallCont eNone (c,tNone)
+eCallCont0 (c, ns)                      = eCallCont eNone (c',tNone)
+  where c'                              = kRef c ns g_skip tNone
 
-cntcont (Seq c : ctx)                   = cntcont ctx                       -- 'continue':          followed by some cmd    -   ignore it
-cntcont (Loop c : ctx)                  = c                                 --                      inside a loop           -   jump to its top
+cntcont (Seq _ _ : ctx)                 = cntcont ctx                       -- 'continue':          followed by some cmd    -   ignore it
+cntcont (Loop c ns : ctx)               = (c, ns)                           --                      inside a loop           -   jump to its top
 
-brkcont (Seq c : ctx)                   = brkcont ctx                       -- 'break':             followed by some cmd    -   ignore it
-brkcont (Loop c : ctx)                  = seqcont ctx                       --                      in a loop               -   jump to what follows
+brkcont (Seq _ _ : ctx)                 = brkcont ctx                       -- 'break':             followed by some cmd    -   ignore it
+brkcont (Loop _ _ : ctx)                = seqcont ctx                       --                      in a loop               -   jump to what follows
 
-seqcont (Seq c : ctx)                   = c                                 -- end of sequence:     followed by some cmd    -   jump to it
-seqcont (Loop c : ctx)                  = c                                 --                      inside a loop           -   jump to its top
-seqcont (Meth c t : _)                  = c                                 --                      in a method             -   jump to its continuation
+seqcont (Seq c ns : ctx)                = (c, ns)                           -- end of sequence:     followed by some cmd    -   jump to it
+seqcont (Loop c ns : ctx)               = (c, ns)                           --                      inside a loop           -   jump to its top
+seqcont (Meth c _ : _)                  = (c, [])                           --                      in a method             -   jump to its continuation
 
-retcont (Seq c : ctx)                   = retcont ctx                       -- 'return':            followed by some cmd    -   ignore it
-retcont (Loop c : ctx)                  = retcont ctx                       --                      in a loop               -   ignore it
-retcont (Meth c t : _)                  = (c, t)                            --                      in a method             -   jump to its continuation
+retcont (Seq _ _ : ctx)                 = retcont ctx                       -- 'return':            followed by some cmd    -   ignore it
+retcont (Loop _ _ : ctx)                = retcont ctx                       --                      in a loop               -   ignore it
+retcont (Meth c t : _)                  = (eVar c, t)                       --                      in a method             -   jump to its continuation
 
 
 cpsSuite env ss                         = cps env ss
@@ -116,25 +117,26 @@ class CPS a where
 
 instance CPS [Stmt] where
     cps env []
-      | inCont env                      = return [sReturn $ eCallCont0 $ seqcont (ctxt env)]
+      | inCont env                      = return [sReturn $ eCallCont0 $ seqcont $ ctxt env]
     cps env (Continue _ : _)
-      | inCont env                      = return [sReturn $ eCallCont0 $ cntcont (ctxt env)]
+      | inCont env                      = return [sReturn $ eCallCont0 $ cntcont $ ctxt env]
     cps env (Break _ : _)
-      | inCont env                      = return [sReturn $ eCallCont0 $ brkcont (ctxt env)]
+      | inCont env                      = return [sReturn $ eCallCont0 $ brkcont $ ctxt env]
     cps env (Return _ Nothing : _)
       | inCont env                      = return [sReturn $ eCallCont eNone $ retcont (ctxt env)]
     cps env (Return _ (Just e) : _)
-      | contCall env e                  = return [sReturn (addContArg env (conv e) (eVar $ fst $ retcont (ctxt env)))]
-      | inCont env                      = return [sReturn $ eCallCont (conv e) $ retcont (ctxt env)]
+      | contCall env e                  = return [sReturn $ addContArg env (conv e) $ fst $ retcont $ ctxt env]
+      | inCont env                      = return [sReturn $ eCallCont (conv e) $ retcont $ ctxt env]
 
     cps env (Assign _ [PVar _ n _] e : 
              Return _ (Just e') : _)
-      | contCall env e, e' == eVar n    = return [sReturn (addContArg env (conv e) (eVar $ fst $ retcont (ctxt env)))]
+      | contCall env e, e' == eVar n    = return [sReturn $ addContArg env (conv e) $ fst $ retcont $ ctxt env]
 
     cps env [Expr _ e]
-      | contCall env e                  = return [sReturn (addContArg env (conv e) (cont (eVar $ seqcont (ctxt env))))]
+      | contCall env e                  = return [sReturn $ addContArg env (conv e) $ cont $ seqcont $ ctxt env]
       where t                           = typeOf env e
-            cont c                      = if t == tNone then c else eCall (tApp (eQVar primSKIPRESc) [t]) [c]
+            cont (c,ns)                 = if t == tNone then c' else eCall (tApp (eQVar primSKIPRESc) [t]) [c']
+              where c'                  = kRef c ns g_skip t
 
     cps env (s : Return _ e : _)
       | e == Just eNone                 = cps env [s]
@@ -143,26 +145,32 @@ instance CPS [Stmt] where
       | contCall env e                  = do k <- newName "cont"
                                              x <- newName "res"
                                              ss' <- cps env ss
-                                             return $ kDef env k (pospar [(x,t)]) ss' :
-                                                      sReturn (addContArg env (conv e) (eVar k)) : []
+                                             --traceM ("## kDef Expr " ++ prstr k ++ ", updates: " ++ prstrs nts)
+                                             return $ kDef env k nts x t ss' :
+                                                      sReturn (addContArg env (conv e) (kRef k (dom nts) x t)) : []
       | isRAISE e                       = return $ sExpr (conv e) : []
       where t                           = typeOf env e
+            nts                         = extraBinds env ss
 
     cps env (Assign _ [PVar _ x _] e : ss)
       | contCall env e                  = do k <- newName "cont"
                                              ss' <- cps env1 ss
-                                             return $ kDef env k (pospar [(x,t)]) ss' :
-                                                      sReturn (addContArg env (conv e) (eVar k)) : []
+                                             --traceM ("## kDef Assign " ++ prstr k ++ ", updates: " ++ prstrs nts)
+                                             return $ kDef env k nts x t ss' :
+                                                      sReturn (addContArg env (conv e) (kRef k (dom nts) x t)) : []
       where t                           = typeOf env e
             env1                        = define [(x,NVar t)] env
+            nts                         = extraBinds env ss
 
     cps env (MutAssign _ tg e : ss)
       | contCall env e                  = do k <- newName "cont"
                                              x <- newName "res"
                                              ss' <- cps env (sMutAssign tg (eVar x) : ss)
-                                             return $ kDef env k (pospar [(x,t)]) ss' :
-                                                      sReturn (addContArg env (conv e) (eVar k)) : []
+                                             --traceM ("## kDef MutAssign " ++ prstr k ++ ", updates: " ++ prstrs nts)
+                                             return $ kDef env k nts x t ss' :
+                                                      sReturn (addContArg env (conv e) (kRef k (dom nts) x t)) : []
       where t                           = typeOf env e
+            nts                         = extraBinds env ss
 
     cps env (Decl l ds : ss)            = do ds' <- mapM (cps env1) ds
                                              ss' <- cps env1 ss
@@ -174,37 +182,44 @@ instance CPS [Stmt] where
                                              return $ conv s : ss'
       where env1                        = define (envOf s) env
     
-    cps env [If _ [Branch e ss1] ss2]
+    cps env s@[If _ [Branch e ss1] ss2]
       | isPUSH e                        = do k <- newName "try"
                                              x <- newName "res"
-                                             ss1 <- cpsSuite env (map convX ss1)
-                                             ss2 <- cpsSuite env (map convX ss2)
+                                             ss1 <- cpsSuite env (map convPOPDROP ss1)
+                                             ss2 <- cpsSuite env (map convPOPDROP ss2)
                                              let body = sIf1 (eVar x) ss1 ss2 : []
-                                             return $ kDef env k (pospar [(x,tBool)]) body :
-                                                      sReturn (convPUSH e $ eVar k) : []
+                                             --traceM ("## kDef PUSH " ++ prstr k ++ ", updates: " ++ prstrs nts)
+                                             return $ kDef env k nts x tBool body :
+                                                      sReturn (convPUSH e $ kRef k (dom nts) x tBool) : []
+      where nts                         = extraBinds env s
 
     cps env [If _ bs els]               = do bs' <- mapM (cps env) bs
                                              els' <- cpsSuite env els
                                              return $ sIf bs' els' : []
 
-    cps env [While _ e b els]           = do k    <- newName "loop"
+    cps env s@[While _ e b els]         = do k    <- newName "loop"
                                              x    <- newName "res"
-                                             b'   <- cpsSuite (Loop k +: env) b
+                                             b'   <- cpsSuite (Loop k (dom nts) +: env) b
                                              els' <- cpsSuite env els
                                              let body = sIf1 (conv e) b' els' : []
-                                             return $ kDef env k (pospar [(x,tNone)]) body : 
-                                                      jump k
+                                             --traceM ("## kDef While " ++ prstr k ++ ", updates: " ++ prstrs nts)
+                                             return $ kDef env k nts x tNone body :
+                                                      kJump k nts
+      where nts                         = extraBinds env s
 
     cps env (s : ss)                    = do k <- newName "cont"
                                              x <- newName "res"
                                              ss' <- cps env1 ss
-                                             ss1 <- cps (Seq k +: env) [s]
-                                             return $ kDef env k (pospar [(x,tNone)]) ss' :
-                                                      ss1
+                                             s' <- cps (Seq k (dom nts) +: env) [s]
+                                             --traceM ("## kDef Seq " ++ prstr k ++ ", updates: " ++ prstrs nts)
+                                             return $ kDef env k nts x tNone ss' :
+                                                      s'
       where env1                        = define (envOf s) env
+            nts                         = nvarsOf (envOf s) ++ extraBinds env1 ss
 
     cps env []                          = return []
 
+extraBinds env ss                       = [ (x, t) | x <- nub $ updatesOf ss, Just t <- [lookupVar x env] ]
 
 instance CPS Decl where
     cps env (Class l n q cs b)          = do b' <- cpsSuite env1 b
@@ -227,7 +242,7 @@ instance CPS Branch where
     cps env (Branch e ss)               = Branch (conv e) <$> cpsSuite env ss
 
     
-jump k                                  = sReturn (eCall (eVar k) [eNone]) : []
+kJump k nts                             = sReturn (eCall (eVar k) $ eNone : map eVar (dom nts)) : []
 
 
 addContArg env (Call l e p KwdNil) c    = Call NoLoc e (PosArg c p) KwdNil
@@ -242,7 +257,10 @@ tCont0                                  = tFun fxProc (posRow tNone posNil) kwdN
 
 tCont1 fx t                             = tFun fx (posRow t posNil) kwdNil tR
 
-kDef env k p b                          = sDef k (conv p) tR b fxProc
+kDef env k nts x t b                    = sDef k (conv $ pospar $ (x,t):nts) tR b fxProc
+
+kRef k [] x t                           = eVar k
+kRef k ns x t                           = eLambda' [(x,t)] $ eCall (eVar k) (map eVar (x:ns))
 
 fxCall env test (Call _ Async{} p k)    = False
 fxCall env test (Call _ e p k)          = test fx
@@ -263,21 +281,15 @@ mutFX _                                 = False
 inCont env                              = length (ctxt env) > 0
 
 
-convX s@(If _ [Branch e _] _)
+convPOPDROP s@(If _ [Branch e _] _)
   | isPUSH e                            = s
-convX (If l bs els)                     = If l [ Branch e (map convX ss) | Branch e ss <- bs ] (map convX els)
-convX (While l e ss els)                = While l e (map convX ss) (map convX els)
-convX (Expr l (Call l1 e ps ks))
+convPOPDROP (If l bs els)               = If l [ Branch e (map convPOPDROP ss) | Branch e ss <- bs ] (map convPOPDROP els)
+convPOPDROP (While l e ss els)          = While l e (map convPOPDROP ss) (map convPOPDROP els)
+convPOPDROP (Expr l (Call l1 e ps ks))
   | Var l2 x <- e, x == primDROP        = Expr l (Call l1 (Var l2 primDROP_C) ps ks)
-convX (Assign l p (Call l1 e ps ks))
+convPOPDROP (Assign l p (Call l1 e ps ks))
   | Var l2 x <- e, x == primPOP         = Assign l p (Call l1 (Var l2 primPOP_C) ps ks)
-convX s                                 = s
-
-isPUSH (Call _ (Var _ x) _ _)           = x `elem` [primPUSH,primPUSHF]
-isPUSH _                                = False
-
-isRAISE (Call _ (Var _ x) _ _)          = x == primRAISE
-isRAISE _                               = False
+convPOPDROP s                           = s
 
 convPUSH (Call _ (Var _ x) _ _) arg
   | x == primPUSH                       = eCall (eQVar primPUSH_Cc) [arg]
@@ -390,7 +402,7 @@ instance PreCPS Expr where
       | contFX fx                       = do (prefixes,e') <- withPrefixes $ preTop env1 e
                                              case prefixes of
                                                 [] -> let p' = conv p; t' = conv t
-                                                          e1 = if contCall env e then addContArg env1 e' (eVar contKW) else eCallCont e' (contKW, t')
+                                                          e1 = if contCall env e then addContArg env1 e' econt else eCallCont e' (econt,t')
                                                       in return $ Lambda l (addContPar0 p' fx t') KwdNIL e1 fx
                                                 _ -> do
                                                     f <- newName "lambda"
@@ -400,6 +412,7 @@ instance PreCPS Expr where
                                              return $ Lambda l p KwdNIL e' fx
       where env1                        = define (envOf p) env
             t                           = typeOf env1 e
+            econt                       = eVar contKW
     pre env (Yield l e)                 = Yield l <$> pre env e
     pre env (YieldFrom l e)             = YieldFrom l <$> pre env e
     pre env (Tuple l es KwdNil)         = Tuple l <$> pre env es <*> pure KwdNil

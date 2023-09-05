@@ -303,6 +303,8 @@ instance EnvOf Stmt where
     envOf (VarAssign _ ps e)        = envOf ps
     envOf (Decl _ ds)               = envOf ds
     envOf (Signature _ ns sc dec)   = [ (n, NSig sc dec) | n <- ns ]
+    envOf (If _ [Branch e ss] fin)
+      | isPUSHF e                   = envOf ss ++ envOf fin
     envOf (If _ bs els)             = commonEnvOf ([ ss | Branch _ ss <- bs ] ++ [els])
     envOf (Try _ b hs els fin)      = commonEnvOf ([ ss | Handler _ ss <- hs ] ++ [b++els]) ++ envOf fin
     envOf (With _ items b)          = envOf b `exclude` bound items
@@ -365,3 +367,21 @@ instance EnvOf Assoc where
 upbound env ts                      = case lubfold env ts of Just u -> u
 
 nvarsOf te                          = [ (n,t) | (n, NVar t) <- te ]
+
+updatesOf stmts                     = concatMap upd stmts
+  where upd (Assign _ p _)          = concatMap uvars p
+        upd (If _ bs els)           = concat [ updatesOf ss | Branch _ ss <- bs ] ++ updatesOf els
+        upd (While _ _ ss els)      = updatesOf ss ++ updatesOf els
+        upd (Try _ ss hs els fin)   = updatesOf ss ++ concat [ updatesOf ss | Handler _ ss <- hs ] ++ updatesOf els ++ updatesOf fin
+        upd _                       = []
+        uvars (PVar _ v Nothing)    = [v]
+        uvars (PParen _ p)          = uvars p
+        uvars (PTuple _ ps ks)      = uvarsP ps ++ uvarsK ks
+        uvars (PList _ ps mbp)      = concatMap uvars ps ++ maybe [] uvars mbp
+        uvars _                     = []
+        uvarsP (PosPat p r)         = uvars p ++ uvarsP r
+        uvarsP (PosPatStar p)       = uvars p
+        uvarsP (PosPatNil)          = []
+        uvarsK (KwdPat _ k r)       = uvars k ++ uvarsK r
+        uvarsK (KwdPatStar k)       = uvars k
+        uvarsK (KwdPatNil)          = []
