@@ -1,0 +1,180 @@
+Test = True
+
+class Err (Exception):
+    pass
+class Err2 (Exception):
+    pass
+
+
+def fun1(n,out):
+    try:
+        out.append('A')
+        if n == 1:
+            raise Err("err")
+    except Err:
+        out.append('X')
+    else:
+        out.append('E')
+    finally:
+        out.append('F')
+
+
+def fun2(n,out):
+    try:
+        out.append('A')
+        if n == 1:
+            raise Err("err")
+        out.append('B')
+    finally:
+        out.append('F')
+        return
+
+
+def fun3(n,out):
+    try:
+        out.append('A')
+        if n == 1:
+            raise Err("err")
+    except Err:
+        out.append('X')
+    else:
+        out.append('E')
+
+
+def fun4(n,out):
+    try:
+        try:
+            out.append('A')
+            if n == 1:
+                raise Err("err")
+        except Err:
+            out.append('X')
+        else:
+            out.append('E')
+        finally:
+            out.append('F1')
+        out.append('C')
+    finally:
+        out.append('F2')
+
+
+def fun5(n,out):
+    try:
+        out.append('A')
+        if n == 2:
+            raise Err("err")
+        if n == 0:
+            return 'B'
+    finally:
+        out.append('F')
+    return 'C'
+
+
+def fun6(n,out):
+    while Test:
+        try:                            #   LOOP    FINAL
+            try:                        #   LOOP    FINAL   FINAL
+                out.append('A')         #   LOOP    FINAL   FINAL   DROP
+                if n == 2:              #   LOOP    FINAL   FINAL   DROP
+                    raise Err("err")    #   LOOP    FINAL   FINAL   DROP
+                if n == 1:              #   LOOP    FINAL   FINAL   DROP
+                    break               #   LOOP    FINAL   FINAL   DROP
+            except Err:                 #   LOOP    FINAL   FINAL
+                out.append('X')         #   LOOP    FINAL   FINAL
+                break                   #   LOOP    FINAL   FINAL
+            finally:                    #   LOOP    FINAL
+                out.append('F1')        #   LOOP    FINAL
+        finally:                        #   LOOP
+            out.append('F2')            #   LOOP
+        out.append('B')
+        break
+    out.append('C')
+
+
+def fun7(n,out):
+    try:                                #   FINAL
+        while Test:                     #   FINAL   DROP
+            try:                        #   FINAL   DROP    LOOP    FINAL
+                out.append('A')         #   FINAL   DROP    LOOP    FINAL   DROP
+                if n == 2:              #   FINAL   DROP    LOOP    FINAL   DROP
+                    raise Err("err")    #   FINAL   DROP    LOOP    FINAL   DROP
+                if n == 1:              #   FINAL   DROP    LOOP    FINAL   DROP
+                    raise Err2("err")   #   FINAL   DROP    LOOP    FINAL   DROP
+            except Err:                 #   FINAL   DROP    LOOP    FINAL
+                break                   #   FINAL   DROP    LOOP    FINAL
+            except Err2:                #   FINAL   DROP    LOOP    FINAL
+                return "R1"             #   FINAL   DROP    LOOP    FINAL
+            else:                       #   FINAL   DROP    LOOP    FINAL
+                out.append('E')         #   FINAL   DROP    LOOP    FINAL
+            finally:                    #   FINAL   DROP    LOOP
+                out.append('F1')        #   FINAL   DROP    LOOP
+            out.append("B")             #   FINAL   DROP    LOOP
+            break                       #   FINAL   DROP    LOOP
+        out.append("C")                 #   FINAL   DROP
+    finally:
+        out.append('F2')                 
+    return "R2"
+
+
+actor main(env):
+    out1 = []
+    fun1(0,out1)
+    fun1(1,out1)
+    #print(out1)
+    
+    out2 = []
+    fun2(0,out2)
+    fun2(1,out2)
+    #print(out2)
+
+    out3 = []
+    fun3(0,out3)
+    fun3(1,out3)
+    #print(out3)
+
+    out4 = []
+    fun4(0,out4)
+    fun4(1,out4)
+    #print(out4)
+    
+    out5 = []
+    res5 = [fun5(0,out5),fun5(1,out5)]
+    try:
+        res5.append(fun5(2,out5))
+    except Err:
+        res5.append('X')
+    #print(out5,res5)
+    
+    out6 = []
+    fun6(0,out6)
+    fun6(1,out6)
+    fun6(2,out6)
+    #print(out6)
+
+    out7 = []
+    res7 = [fun7(0,out7), fun7(1,out7), fun7(2,out7)]
+    #print(out7, res7)
+
+    if out1 != ['A', 'E', 'F', 'A', 'X', 'F']:
+        print("Bad 1:", out1)
+        env.exit(1)
+    if out2 != ['A', 'B', 'F', 'A', 'F']:
+        print("Bad 2:", out2)
+        env.exit(1)
+    if out3 != ['A', 'E', 'A', 'X']:
+        print("Bad 3:", out3)
+        env.exit(1)
+    if out4 != ['A', 'E', 'F1', 'C', 'F2', 'A', 'X', 'F1', 'C', 'F2']:
+        print("Bad 4:", out4)
+        env.exit(1)
+    if out5 != ['A', 'F', 'A', 'F', 'A', 'F'] or res5 != ['B', 'C', 'X']:
+        print("Bad 5:", out5, res5)
+        env.exit(1)
+    if out6 != ['A', 'F1', 'F2', 'B', 'C', 'A', 'F1', 'F2', 'C', 'A', 'X', 'F1', 'F2', 'C']:
+        print("Bad 6:", out6)
+        env.exit(1)
+    if out7 != ['A', 'E', 'F1', 'B', 'C', 'F2', 'A', 'F1', 'F2', 'A', 'F1', 'C', 'F2'] or res7 != ['R2', 'R1', 'R2']:
+        print("Bad 7:", out7, res7)
+        env.exit(1)
+
+    env.exit(0)
