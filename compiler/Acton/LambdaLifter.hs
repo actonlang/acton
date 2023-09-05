@@ -413,6 +413,7 @@ primSubst n
   | n == primAFTERc                     = primAFTER
   | n == primAWAITc                     = primAWAIT
   | n == primPUSH_Cc                    = primPUSH_C
+  | n == primPUSHF_Cc                   = primPUSHF_C
   | n == primRContc                     = primRCont
   | n == primSKIPRESc                   = primSKIPRES
   | otherwise                           = n
