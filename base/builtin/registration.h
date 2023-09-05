@@ -63,7 +63,13 @@
 #define MUT_ID 47
 #define PURE_ID 48
 
-#define PREASSIGNED 49
+#define SEQ_ID 49
+#define BRK_ID 50
+#define CNT_ID 51
+#define RET_ID 52
+
+
+#define PREASSIGNED 53
 
 
 /* 

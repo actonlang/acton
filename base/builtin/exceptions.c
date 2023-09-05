@@ -12,86 +12,140 @@
  * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-B_str B_BaseExceptionD___str__(B_BaseException self) {
-  char *s;
-  asprintf(&s,"BaseException:  %s>",fromB_str(self->error_message));
-  return to$str(s);
-}
+void B_BaseExceptionD___serialize__ (B_BaseException, $Serial$state);
+B_bool B_valueD___bool__ (B_value);
+B_str B_valueD___str__ (B_value);
+B_str B_valueD___repr__ (B_value);
 
-B_str B_SystemExitD___str__(B_SystemExit self) {
-  char *s;
-  asprintf(&s,"SystemExit:  %s>",fromB_str(self->error_message));
-  return to$str(s);
-}
- 
-B_str B_KeyboardInterruptD___str__(B_KeyboardInterrupt self) {
-  char *s;
-  asprintf(&s,"KeyboardInterrupt:  %s>",fromB_str(self->error_message));
-  return to$str(s);
-}
- 
-B_str B_ExceptionD___str__(B_Exception self) {
-  char *s;
-  asprintf(&s,"Exception:  %s>",fromB_str(self->error_message));
-  return to$str(s);
-}
- 
-B_str B_AssertionErrorD___str__(B_AssertionError self) {
-  char *s;
-  asprintf(&s,"AssertionError:  %s>",fromB_str(self->error_message));
-  return to$str(s);
-}
 
-B_str B_LookupErrorD___str__(B_LookupError self) {
-  char *s;
-  asprintf(&s,"LookupError:  %s>",fromB_str(self->error_message));
-  return to$str(s);
+B_NoneType $SEQD___init__ ($SEQ self) {
+    self->error_message = NULL;
+    return B_None;
 }
-
-B_str B_IndexErrorD___str__(B_IndexError self) {
-  char *s;
-  asprintf(&s,"IndexError:  %s>",fromB_str(self->error_message));
-  return to$str(s);
+$SEQ $SEQD___deserialize__ ($SEQ self, $Serial$state state) {
+    if (!self) {
+        if (!state) {
+            self = malloc(sizeof(struct $SEQ));
+            self->$class = &$SEQG_methods;
+            return self;
+        }
+        self = $DNEW($SEQ, state);
+    }
+    self->error_message = $step_deserialize(state);
+    return self;
 }
-
-B_str B_KeyErrorD___str__(B_KeyError self) {
-  char *s;
-  asprintf(&s,"KeyError:  %s>",fromB_str(self->error_message));
-  return to$str(s);
+$SEQ $SEQG_new() {
+    $SEQ $tmp = malloc(sizeof(struct $SEQ));
+    $tmp->$class = &$SEQG_methods;
+    $SEQG_methods.__init__($tmp);
+    return $tmp;
 }
+struct $SEQG_class $SEQG_methods = {
+    .$GCINFO            = "$SEQ",
+    .$superclass        = ($SuperG_class)&B_ExceptionG_methods,
+    .__init__           = $SEQD___init__,
+    .__bool__           = (B_bool (*) ($SEQ))B_valueD___bool__,
+    .__str__            = (B_str (*) ($SEQ))B_valueD___str__,
+    .__repr__           = (B_str (*) ($SEQ))B_valueD___repr__,
+    .__serialize__      = (void (*) ($SEQ, $Serial$state))B_BaseExceptionD___serialize__,
+    .__deserialize__    = $SEQD___deserialize__
+};
 
-B_str B_MemoryErrorD___str__(B_MemoryError self) {
-  char *s;
-  asprintf(&s,"MemoryError:  %s>",fromB_str(self->error_message));
-  return to$str(s);
+
+$BRK $BRKD___deserialize__ ($BRK self, $Serial$state state) {
+    if (!self) {
+        if (!state) {
+            self = malloc(sizeof(struct $BRK));
+            self->$class = &$BRKG_methods;
+            return self;
+        }
+        self = $DNEW($BRK, state);
+    }
+    self->error_message = NULL;
+    return self;
 }
-
-B_str B_OSErrorD___str__(B_OSError self) {
-  char *s;
-  asprintf(&s,"OSError:  %s>",fromB_str(self->error_message));
-  return to$str(s);
+$BRK $BRKG_new() {
+    $BRK $tmp = malloc(sizeof(struct $BRK));
+    $tmp->$class = &$BRKG_methods;
+    $BRKG_methods.__init__($tmp);
+    return $tmp;
 }
+struct $BRKG_class $BRKG_methods = {
+    .$GCINFO            = "$BRK",
+    .$superclass        = ($SuperG_class)&B_ExceptionG_methods,
+    .__init__           = (B_NoneType (*) ($BRK))$SEQD___init__,
+    .__bool__           = (B_bool (*) ($BRK))B_valueD___bool__,
+    .__str__            = (B_str (*) ($BRK))B_valueD___str__,
+    .__repr__           = (B_str (*) ($BRK))B_valueD___repr__,
+    .__serialize__      = (void (*) ($BRK, $Serial$state))B_BaseExceptionD___serialize__,
+    .__deserialize__    = $BRKD___deserialize__
+};
 
-B_str B_RuntimeErrorD___str__(B_RuntimeError self) {
-  char *s;
-  asprintf(&s,"RuntimeError:  %s>",fromB_str(self->error_message));
-  return to$str(s);
+
+$CNT $CNTD___deserialize__ ($CNT self, $Serial$state state) {
+    if (!self) {
+        if (!state) {
+            self = malloc(sizeof(struct $CNT));
+            self->$class = &$CNTG_methods;
+            return self;
+        }
+        self = $DNEW($CNT, state);
+    }
+    self->error_message = $step_deserialize(state);
+    return self;
 }
-
-B_str B_NotImplementedErrorD___str__(B_NotImplementedError self) {
-  char *s;
-  asprintf(&s,"NotImplementedError:  %s>",fromB_str(self->error_message));
-  return to$str(s);
+$CNT $CNTG_new() {
+    $CNT $tmp = malloc(sizeof(struct $CNT));
+    $tmp->$class = &$CNTG_methods;
+    $CNTG_methods.__init__($tmp);
+    return $tmp;
 }
+struct $CNTG_class $CNTG_methods = {
+    .$GCINFO            = "$CNT",
+    .$superclass        = ($SuperG_class)&B_ExceptionG_methods,
+    .__init__           = (B_NoneType (*) ($CNT))$SEQD___init__,
+    .__bool__           = (B_bool (*) ($CNT))B_valueD___bool__,
+    .__str__            = (B_str (*) ($CNT))B_valueD___str__,
+    .__repr__           = (B_str (*) ($CNT))B_valueD___repr__,
+    .__serialize__      = (void (*) ($CNT, $Serial$state))B_BaseExceptionD___serialize__,
+    .__deserialize__    = $CNTD___deserialize__
+};
 
-B_str B_ValueErrorD___str__(B_ValueError self) {
-  char *s;
-  asprintf(&s,"ValueError:  %s>",fromB_str(self->error_message));
-  return to$str(s);
+
+B_NoneType $RETD___init__ ($RET self, B_value val) {
+    self->error_message = NULL;
+    self->val = val;
+    return B_None;
 }
-
-void $RAISE(B_BaseException e) {
-  fprintf(stderr, "%s: %s\n", e->$class->$GCINFO, e->error_message ? fromB_str(e->error_message) : "");
-  exit(1);
+void $RETD___serialize__ ($RET self, $Serial$state state) {
+    $step_serialize(self->val, state);
 }
-
+$RET $RETD___deserialize__ ($RET self, $Serial$state state) {
+    if (!self) {
+        if (!state) {
+            self = malloc(sizeof(struct $RET));
+            self->$class = &$RETG_methods;
+            return self;
+        }
+        self = $DNEW($RET, state);
+    }
+    self->error_message = $step_deserialize(state);
+    self->val = $step_deserialize(state);
+    return self;
+}
+$RET $RETG_new(B_value G_1) {
+    $RET $tmp = malloc(sizeof(struct $RET));
+    $tmp->$class = &$RETG_methods;
+    $RETG_methods.__init__($tmp, G_1);
+    return $tmp;
+}
+struct $RETG_class $RETG_methods = {
+    .$GCINFO            = "$RET",
+    .$superclass        = ($SuperG_class)&B_ExceptionG_methods,
+    .__init__           = $RETD___init__,
+    .__bool__           = (B_bool (*) ($RET))B_valueD___bool__,
+    .__str__            = (B_str (*) ($RET))B_valueD___str__,
+    .__repr__           = (B_str (*) ($RET))B_valueD___repr__,
+    .__serialize__      = $RETD___serialize__,
+    .__deserialize__    = $RETD___deserialize__
+};

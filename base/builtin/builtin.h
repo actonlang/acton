@@ -61,9 +61,6 @@ struct $R {
 };
 typedef struct $R $R;
 
-#define $RU_CONT $R_CONT        // Temporary workaround until Prim names get their own prefix
-#define $RU_FAIL $R_FAIL        // Temporary workaround until Prim names get their own prefix
-
 #define $R_CONT(cont, arg)      ($R){$RCONT, (cont), ($WORD)(arg)}
 #define $R_DONE(value)          ($R){$RDONE, NULL,   (value)}
 #define $R_FAIL(value)          ($R){$RFAIL, NULL,   (value)}

@@ -144,6 +144,9 @@ nstr (Internal p s i)       = prefix p ++ "_" ++ unique i ++ s
         unique 0            = ""
         unique i            = show i
 
+rawstr (Name _ s)           = s
+rawstr n                    = nstr n
+
 name            = Name NoLoc
 
 globalName s    = Internal Globvar s 0
@@ -272,6 +275,9 @@ sDecl ds        = Decl NoLoc ds
 sIf bs els      = If NoLoc bs els
 sIf1 e b els    = sIf [Branch e b] els
 sNotImpl        = Expr NoLoc eNotImpl
+sPass           = Pass NoLoc
+sBreak          = Break NoLoc
+sContinue       = Continue NoLoc
 
 handler qn b    = Handler (Except NoLoc qn) b
 
@@ -295,6 +301,7 @@ eLambda' nts e  = Lambda NoLoc (pospar nts) KwdNIL e fxProc
 eAsync e        = Async NoLoc e
 eAwait e        = Await NoLoc e
 eNotImpl        = NotImplemented NoLoc
+eIsInstance x n = IsInstance NoLoc (eVar x) n
 
 pospar nts      = foldr (\(n,t) p -> PosPar n (Just t) Nothing p) PosNIL nts
 pospar' ns      = foldr (\n p -> PosPar n Nothing Nothing p) PosNIL ns

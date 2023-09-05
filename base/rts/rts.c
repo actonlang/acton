@@ -178,6 +178,7 @@ time_t current_time() {
 }
 
 pthread_key_t self_key;
+pthread_key_t jump_top;
 pthread_key_t pkey_wtid;
 pthread_key_t pkey_uv_loop;
 
@@ -263,7 +264,7 @@ void B_MsgD___init__(B_Msg m, $Actor to, $Cont cont, time_t baseline, $WORD valu
     m->$cont = cont;
     m->$waiting = NULL;
     m->$baseline = baseline;
-    m->B_value = value;
+    m->value = value;
     atomic_flag_clear(&m->$wait_lock);
     m->$globkey = get_next_key();
 }
@@ -277,7 +278,7 @@ B_Msg B_MsgG_newXX( $Actor to, $Cont cont, time_t baseline, $WORD value) {
     m->$cont = cont;
     m->$waiting = NULL;
     m->$baseline = baseline;
-    m->B_value = value;
+    m->value = value;
     atomic_flag_clear(&m->$wait_lock);
     m->$globkey = get_next_key();
     return m;
@@ -304,7 +305,7 @@ void B_MsgD___serialize__(B_Msg self, $Serial$state state) {
     $step_serialize(self->$to,state);
     $step_serialize(self->$cont,state);
     $val_serialize(ITEM_ID,&self->$baseline,state);
-    $step_serialize(self->B_value,state);
+    $step_serialize(self->value,state);
 }
 
 
@@ -322,7 +323,7 @@ B_Msg B_MsgD___deserialize__(B_Msg res, $Serial$state state) {
     res->$cont = $step_deserialize(state);
     res->$waiting = NULL;
     res->$baseline = (time_t)$val_deserialize(state);
-    res->B_value = $step_deserialize(state);
+    res->value = $step_deserialize(state);
     atomic_flag_clear(&res->$wait_lock);
     return res;
 }
@@ -387,6 +388,7 @@ $Actor $ActorD___deserialize__($Actor res, $Serial$state state) {
 void $CatcherD___init__($Catcher c, $Cont cont) {
     c->$next = NULL;
     c->$cont = cont;
+    c->xval = NULL;
 }
 
 B_bool $CatcherD___bool__($Catcher self) {
@@ -402,12 +404,14 @@ B_str $CatcherD___str__($Catcher self) {
 void $CatcherD___serialize__($Catcher self, $Serial$state state) {
     $step_serialize(self->$next,state);
     $step_serialize(self->$cont,state);
+    $step_serialize(self->xval,state);
 }
 
 $Catcher $CatcherD___deserialize__($Catcher self, $Serial$state state) {
     $Catcher res = $DNEW($Catcher,state);
     res->$next = $step_deserialize(state);
     res->$cont = $step_deserialize(state);
+    res->xval = $step_deserialize(state);
     return res;
 }
 ///////////////////////////////////////////////////////////////////////////////////////
@@ -771,19 +775,50 @@ $R $AWAIT($Cont cont, B_Msg m) {
     return $R_WAIT(cont, m);
 }
 
-void $PUSH($Cont cont) {
+$R $PUSH_C($Cont cont) {
     $Actor self = ($Actor)pthread_getspecific(self_key);
     $Catcher c = $NEW($Catcher, cont);
     PUSH_catcher(self, c);
+    return $R_CONT(cont, B_True);                   // True indicates the "try" branch
 }
 
-void $POP(B_int n) {
+B_BaseException $POP_C() {
     $Actor self = ($Actor)pthread_getspecific(self_key);
-    long v = from$int(n);
-    while (v > 0) {
-        POP_catcher(self);
-        v--;
-    }
+    $Catcher c = POP_catcher(self);
+    B_BaseException ex = c->xval;
+    return ex;
+}
+
+void $DROP_C() {
+    $Actor self = ($Actor)pthread_getspecific(self_key);
+    POP_catcher(self);
+}
+
+JumpBuf $PUSH_BUF() {
+    JumpBuf current = (JumpBuf)pthread_getspecific(jump_top);
+    JumpBuf new = (JumpBuf)malloc(sizeof(struct JumpBuf));
+    new->prev = current;
+    pthread_setspecific(jump_top, new);
+    return new;
+}
+
+B_BaseException $POP() {
+    JumpBuf topbuf = (JumpBuf)pthread_getspecific(jump_top);
+    pthread_setspecific(jump_top, topbuf->prev);
+    return topbuf->xval;
+}
+
+void $DROP() {
+    JumpBuf current = (JumpBuf)pthread_getspecific(jump_top);
+    pthread_setspecific(jump_top, current->prev);
+}
+
+void $RAISE(B_BaseException e) {
+    //fprintf(stderr, "%s: %s\n", e->$class->$GCINFO, e->error_message ? fromB_str(e->error_message) : "");
+    //exit(1);
+    JumpBuf jump = (JumpBuf)pthread_getspecific(jump_top);
+    jump->xval = e;
+    longjmp(jump->buf, 1);
 }
 
 void create_all_actor_queues() {
@@ -1026,7 +1061,7 @@ void print_msg(B_Msg m) {
     rtsd_printf("     cont: %p", m->$cont);
     rtsd_printf("     waiting: %p", m->$waiting);
     rtsd_printf("     baseline: %ld", m->$baseline);
-    rtsd_printf("     value: %p", m->B_value);
+    rtsd_printf("     value: %p", m->value);
     rtsd_printf("     globkey: %ld", m->$globkey);
 }
 
@@ -1414,6 +1449,9 @@ void wt_wake_cb(uv_async_t *ev) {
 }
 
 void wt_work_cb(uv_check_t *ev) {
+    volatile JumpBuf jump0 = NULL;
+    pthread_setspecific(jump_top, NULL);
+
     int wtid = (int)pthread_getspecific(pkey_wtid);
 
     struct timespec ts_start, ts1, ts2, ts3;
@@ -1424,48 +1462,58 @@ void wt_work_cb(uv_check_t *ev) {
         if (rts_exit) {
             return;
         }
-        $Actor current = DEQ_ready(wtid);
+        volatile $Actor current = DEQ_ready(wtid);
         if (!current)
             return;
 
         wake_wt(0);
 
         pthread_setspecific(self_key, current);
-        B_Msg m = current->B_Msg;
+        volatile B_Msg m = current->B_Msg;
         $Cont cont = m->$cont;
-        $WORD val = m->B_value;
+        $WORD val = m->value;
 
         clock_gettime(CLOCK_MONOTONIC, &ts1);
         wt_stats[wtid].state = WT_Working;
 
-        rtsd_printf("## Running actor %ld : %s", current->$globkey, current->$class->$GCINFO);
-        $R r = cont->$class->__call__(cont, val);
+        $R r;
+        if (jump0 || $PUSH()) {                         // Normal path
+            if (!jump0) {
+                jump0 = (JumpBuf)pthread_getspecific(jump_top);
+            }
+            rtsd_printf("## Running actor %ld : %s", current->$globkey, current->$class->$GCINFO);
+            r = cont->$class->__call__(cont, val);
 
-        clock_gettime(CLOCK_MONOTONIC, &ts2);
-        long long int diff = (ts2.tv_sec * 1000000000 + ts2.tv_nsec) - (ts1.tv_sec * 1000000000 + ts1.tv_nsec);
+            clock_gettime(CLOCK_MONOTONIC, &ts2);
+            long long int diff = (ts2.tv_sec * 1000000000 + ts2.tv_nsec) - (ts1.tv_sec * 1000000000 + ts1.tv_nsec);
 
-        wt_stats[wtid].conts_count++;
-        wt_stats[wtid].conts_sum += diff;
+            wt_stats[wtid].conts_count++;
+            wt_stats[wtid].conts_sum += diff;
 
-        if      (diff < 100)              { wt_stats[wtid].conts_100ns++; }
-        else if (diff < 1   * 1000)       { wt_stats[wtid].conts_1us++; }
-        else if (diff < 10  * 1000)       { wt_stats[wtid].conts_10us++; }
-        else if (diff < 100 * 1000)       { wt_stats[wtid].conts_100us++; }
-        else if (diff < 1   * 1000000)    { wt_stats[wtid].conts_1ms++; }
-        else if (diff < 10  * 1000000)    { wt_stats[wtid].conts_10ms++; }
-        else if (diff < 100 * 1000000)    { wt_stats[wtid].conts_100ms++; }
-        else if (diff < 1   * 1000000000) { wt_stats[wtid].conts_1s++; }
-        else if (diff < (long long int)10  * 1000000000) { wt_stats[wtid].conts_10s++; }
-        else if (diff < (long long int)100 * 1000000000) { wt_stats[wtid].conts_100s++; }
-        else                              { wt_stats[wtid].conts_inf++; }
+            if      (diff < 100)              { wt_stats[wtid].conts_100ns++; }
+            else if (diff < 1   * 1000)       { wt_stats[wtid].conts_1us++; }
+            else if (diff < 10  * 1000)       { wt_stats[wtid].conts_10us++; }
+            else if (diff < 100 * 1000)       { wt_stats[wtid].conts_100us++; }
+            else if (diff < 1   * 1000000)    { wt_stats[wtid].conts_1ms++; }
+            else if (diff < 10  * 1000000)    { wt_stats[wtid].conts_10ms++; }
+            else if (diff < 100 * 1000000)    { wt_stats[wtid].conts_100ms++; }
+            else if (diff < 1   * 1000000000) { wt_stats[wtid].conts_1s++; }
+            else if (diff < (long long int)10  * 1000000000) { wt_stats[wtid].conts_10s++; }
+            else if (diff < (long long int)100 * 1000000000) { wt_stats[wtid].conts_100s++; }
+            else                              { wt_stats[wtid].conts_inf++; }
+        } else {                                        // Exceptional path
+            B_BaseException ex = jump0->xval;
+            rtsd_printf("## (%d) Actor %ld : %s longjmp exception: %s", wtid, current->$globkey, current->$class->$GCINFO, ex->$class->$GCINFO);
+            r = $R_FAIL(ex);
+        }
 
         switch (r.tag) {
         case $RDONE: {
             save_actor_state(current, m);
-            m->B_value = r.value;                           // m->value holds the message result,
+            m->value = r.value;                             // m->value holds the message result,
             $Actor b = FREEZE_waiting(m, MARK_RESULT);      // so mark this and stop further m->waiting additions
             while (b) {
-                b->B_Msg->B_value = r.value;
+                b->B_Msg->value = r.value;
                 b->$waitsfor = NULL;
                 $Actor c = b->$next;
                 ENQ_ready(b);
@@ -1480,35 +1528,38 @@ void wt_work_cb(uv_check_t *ev) {
         }
         case $RCONT: {
             m->$cont = r.cont;
-            m->B_value = r.value;
+            m->value = r.value;
             rtsd_printf("## CONT actor %ld : %s", current->$globkey, current->$class->$GCINFO);
             ENQ_ready(current);
             break;
         }
         case $RFAIL: {
-            $Catcher c = POP_catcher(current);
+            $Catcher c = current->$catcher;
             if (c) {                            // Normal exception handling
+                c->xval = (B_BaseException)r.value;
                 m->$cont = c->$cont;
-                m->B_value = r.value;
+                m->value = B_False;             // False signals the exceptional branch
                 rtsd_printf("## FAIL/handle actor %ld : %s", current->$globkey, current->$class->$GCINFO);
                 ENQ_ready(current);
             } else {                            // An unhandled exception
                 save_actor_state(current, m);
-                m->B_value = r.value;                               // m->value holds the raised exception,
+                B_BaseException ex = (B_BaseException)r.value;
+                rtsd_printf("## UNHANDLED EXCEPTION %s in actor %ld : %s", ex->$class->$GCINFO, current->$globkey, current->$class->$GCINFO);
+                m->value = r.value;                                 // m->value holds the raised exception,
                 $Actor b = FREEZE_waiting(m, MARK_EXCEPTION);       // so mark this and stop further m->waiting additions
                 while (b) {
                     b->B_Msg->$cont = &$Fail$instance;
-                    b->B_Msg->B_value = r.value;
+                    b->B_Msg->value = r.value;
                     b->$waitsfor = NULL;
                     $Actor c = b->$next;
                     ENQ_ready(b);
                     rtsd_printf("## Propagating exception to actor %ld : %s", b->$globkey, b->$class->$GCINFO);
                     b = c;
                 }
-                rtsd_printf("## FAIL actor %ld : %s", current->$globkey, current->$class->$GCINFO);
                 if (DEQ_msg(current)) {
                     ENQ_ready(current);
                 }
+                rtsd_printf("## Done handling failed actor %ld : %s", current->$globkey, current->$class->$GCINFO);
             }
             break;
         }
@@ -1543,11 +1594,11 @@ void wt_work_cb(uv_check_t *ev) {
             } else if (EXCEPTIONAL(x)) {        // x->cont == MARK_EXCEPTION: x->value holds the raised exception, current is not in x->waiting
                 rtsd_printf("## AWAIT/fail actor %ld : %s", current->$globkey, current->$class->$GCINFO);
                 m->$cont = &$Fail$instance;
-                m->B_value = x->B_value;
+                m->value = x->value;
                 ENQ_ready(current);
             } else {                            // x->cont == MARK_RESULT: x->value holds the final response, current is not in x->waiting
                 rtsd_printf("## AWAIT/wakeup actor %ld : %s", current->$globkey, current->$class->$GCINFO);
-                m->B_value = x->B_value;
+                m->value = x->value;
                 ENQ_ready(current);
             }
             break;
@@ -1556,7 +1607,7 @@ void wt_work_cb(uv_check_t *ev) {
         pthread_setspecific(self_key, NULL);
 
         clock_gettime(CLOCK_MONOTONIC, &ts3);
-        diff = (ts3.tv_sec * 1000000000 + ts3.tv_nsec) - (ts2.tv_sec * 1000000000 + ts2.tv_nsec);
+        long long int diff = (ts3.tv_sec * 1000000000 + ts3.tv_nsec) - (ts2.tv_sec * 1000000000 + ts2.tv_nsec);
         wt_stats[wtid].bkeep_count++;
         wt_stats[wtid].bkeep_sum += diff;
 
@@ -2148,6 +2199,7 @@ int main(int argc, char **argv) {
 
 
     pthread_key_create(&self_key, NULL);
+    pthread_key_create(&jump_top, NULL);
     pthread_setspecific(self_key, NULL);
     pthread_key_create(&pkey_wtid, NULL);
     pthread_key_create(&pkey_uv_loop, NULL);

@@ -1,6 +1,5 @@
 
 void $RAISE(B_BaseException e);
-
  
 /*
   Exceptions hierarchy in Python 3.8 according to
@@ -71,5 +70,94 @@ void $RAISE(B_BaseException e);
   +-- UnicodeWarning
   +-- BytesWarning
   +-- ResourceWarning
+
+  Plus the (hidden) primitive exceptions that implement control flow in the presence of finalizers:
+
+  +-- $SEQ
+  +-- $BRK
+  +-- $CNT
+  +-- $RET
  
 */
+
+struct $SEQ;
+struct $BRK;
+struct $CNT;
+struct $RET;
+
+typedef struct $SEQ *$SEQ;
+typedef struct $BRK *$BRK;
+typedef struct $CNT *$CNT;
+typedef struct $RET *$RET;
+
+struct $SEQG_class {
+    char *$GCINFO;
+    int $class_id;
+    $SuperG_class $superclass;
+    B_NoneType (*__init__) ($SEQ);
+    void (*__serialize__) ($SEQ, $Serial$state);
+    $SEQ (*__deserialize__) ($SEQ, $Serial$state);
+    B_bool (*__bool__) ($SEQ);
+    B_str (*__str__) ($SEQ);
+    B_str (*__repr__) ($SEQ);
+};
+struct $SEQ {
+    struct $SEQG_class *$class;
+    B_str error_message;
+};
+struct $BRKG_class {
+    char *$GCINFO;
+    int $class_id;
+    $SuperG_class $superclass;
+    B_NoneType (*__init__) ($BRK);
+    void (*__serialize__) ($BRK, $Serial$state);
+    $BRK (*__deserialize__) ($BRK, $Serial$state);
+    B_bool (*__bool__) ($BRK);
+    B_str (*__str__) ($BRK);
+    B_str (*__repr__) ($BRK);
+};
+struct $BRK {
+    struct $BRKG_class *$class;
+    B_str error_message;
+};
+struct $CNTG_class {
+    char *$GCINFO;
+    int $class_id;
+    $SuperG_class $superclass;
+    B_NoneType (*__init__) ($CNT);
+    void (*__serialize__) ($CNT, $Serial$state);
+    $CNT (*__deserialize__) ($CNT, $Serial$state);
+    B_bool (*__bool__) ($CNT);
+    B_str (*__str__) ($CNT);
+    B_str (*__repr__) ($CNT);
+};
+struct $CNT {
+    struct $CNTG_class *$class;
+    B_str error_message;
+};
+struct $RETG_class {
+    char *$GCINFO;
+    int $class_id;
+    $SuperG_class $superclass;
+    B_NoneType (*__init__) ($RET, B_value);
+    void (*__serialize__) ($RET, $Serial$state);
+    $RET (*__deserialize__) ($RET, $Serial$state);
+    B_bool (*__bool__) ($RET);
+    B_str (*__str__) ($RET);
+    B_str (*__repr__) ($RET);
+};
+struct $RET {
+    struct $RETG_class *$class;
+    B_str error_message;
+    B_value val;
+};
+
+extern struct $SEQG_class $SEQG_methods;
+extern struct $BRKG_class $BRKG_methods;
+extern struct $CNTG_class $CNTG_methods;
+extern struct $RETG_class $RETG_methods;
+
+$SEQ $SEQG_new();
+$BRK $BRKG_new();
+$CNT $CNTG_new();
+$RET $RETG_new(B_value);

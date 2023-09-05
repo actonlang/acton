@@ -1,0 +1,44 @@
+proc def call(n):
+    return n
+
+class Box(object):
+    def __init__(self):
+        self.item = 0
+
+proc def funExpr(n:int):
+    call(n)
+    n = 1
+
+proc def funAssign(n:int):
+    x = call(n)
+    n = 1
+
+proc def funMutAssign(n:int):
+    obj = Box()
+    obj.item = call(n)
+    n = 1
+
+proc def funPUSH(n:int):
+    try:
+        n = 1
+    finally:
+        return
+
+proc def funWhile(n:int):
+    while n:
+        n = 1
+        if False:
+            return
+
+proc def funSeq(n:int):
+    if True:
+        x = 0
+    elif n:
+        return
+    else:
+        x = 1
+    print(x)
+    n = 1
+
+actor main(env):
+    env.exit(0)

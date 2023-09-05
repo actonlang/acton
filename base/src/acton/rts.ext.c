@@ -122,5 +122,5 @@ B_dict actonQ_rtsQ_rts_stats (B_SysCap cap) {
 
 $R actonQ_rtsQ_WThreadMonitorD__initG_local (actonQ_rtsQ_WThreadMonitor self, $Cont C_cont) {
     set_actor_affinity(from$int(self->wthread_id));
-    return $RU_CONT(C_cont, B_None);
+    return $R_CONT(C_cont, B_None);
 }

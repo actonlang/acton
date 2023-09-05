@@ -54,9 +54,21 @@ newName s                           = do n <- get
 
 type NormEnv                        = EnvF NormX
 
-type NormX                          = ()
+data NormX                          = NormX { contextX :: [ContextMark], rtypeX :: Maybe Type }
 
-normEnv env0                        = env0
+data ContextMark                    = DROP | LOOP | FINAL deriving (Eq,Show)
+
+setContext c env                    = modX env $ \x -> x{ contextX = c }
+
+pushMark c env                      = modX env $ \x -> x{ contextX = c :  contextX x }
+
+context env                         = contextX $ envX env
+
+setRet t env                        = modX env $ \x -> x{ rtypeX = t }
+
+getRet env                          = fromJust $ rtypeX $ envX env
+
+normEnv env0                        = setX env0 NormX{ contextX = [], rtypeX = Nothing }
 
 
 -- Normalize terms ---------------------------------------------------------------------------------------
@@ -108,6 +120,48 @@ instance Norm a => Norm (Maybe a) where
 instance Norm Module where
     norm env (Module m imps ss)     = Module m imps <$> norm env ss
 
+handle env x hs                     = do bs <- sequence [ branch e b | Handler e b <- hs ]
+                                         return $ [sIf bs [sExpr $ eCall (eQVar primRAISE) [eVar x]]]
+  where branch (ExceptAll _) b      = Branch (eBool True) <$> norm env b
+        branch (Except _ y) b       = Branch (eIsInstance x y) <$> norm env b
+        branch (ExceptAs _ y z) b   = Branch (eIsInstance x y) <$> (bind:) <$> norm env' b
+          where env'                = define [(z,NVar t)] env
+                bind                = sAssign (pVar z t) (eVar x)
+                t                   = tCon $ TC y []
+
+exitContext env s
+  | DROP:c <- context env           = sDROP : exitContext (setContext c env) s
+  | FINAL:c <- context env          = [sRAISE $ exn s]
+  | LOOP:c <- context env           = if s `elem` [sBreak,sContinue] then [s] else exitContext (setContext c env) s
+  | otherwise                       = [s]
+  where exn (Break _)               = eCall (eQVar primBRK) []
+        exn (Continue _)            = eCall (eQVar primCNT) []
+        exn (Return _ (Just e))     = eCall (eQVar primRET) [e]
+
+sDROP                               = sExpr (eCall (eQVar primDROP) [])
+sPOP x                              = sAssign (pVar x tBaseException) (eCall (eQVar primPOP) [])
+ePUSHF                              = eCall (eQVar primPUSHF) []
+sSEQ                                = sExpr (eCall (eQVar primRAISE) [eCall (eQVar primSEQ) []])
+sRAISE e                            = sExpr (eCall (eQVar primRAISE) [e])
+
+-- TODO: maybe less approximation?
+isVal Var{}                         = True
+isVal Int{}                         = True
+isVal Float{}                       = True
+isVal Imaginary{}                   = True
+isVal Bool{}                        = True
+isVal None{}                        = True
+isVal Strings{}                     = True
+isVal BStrings{}                    = True
+isVal Lambda{}                      = True
+isVal (Call _ (TApp _ (Var _ n) _) (PosArg e PosNil) KwdNil)
+                                    = n == primCAST && isVal e
+isVal (TApp _ e _)                  = isVal e
+isVal (Dot _ e _)                   = isVal e
+isVal (DotI _ e _)                  = isVal e
+isVal (Paren _ e)                   = isVal e
+isVal _                             = False
+
 instance Norm Stmt where
     norm env (Expr l e)             = Expr l <$> norm env e
     norm env (MutAssign l t e)      = MutAssign l <$> norm env t <*> norm env e
@@ -115,16 +169,10 @@ instance Norm Stmt where
                                          mbe' <- norm env mbe
                                          return $ Expr l $ eCall (eQVar primASSERT) [e', maybe eNone id mbe']
     norm env (Pass l)               = return $ Pass l
-    norm env (Return l Nothing)     = return $ Return l $ Just $ None l0
-    norm env (Return l (Just e))    = do e' <- norm env e
-                                         return $ Return l $ Just e'
     norm env (Raise l e)            = do e' <- norm env e
                                          return $ Expr l $ eCall (eQVar primRAISE) [e']
-    norm env (Break l)              = return $ Break l
-    norm env (Continue l)           = return $ Continue l
     norm env (If l bs els)          = If l <$> norm env bs <*> norm env els
-    norm env (While l e b els)      = While l <$> normBool env e <*> norm env b <*> norm env els
-    norm env (Try l b hs els fin)   = Try l <$> norm env b <*> norm env hs <*> norm env els <*> norm env fin
+    norm env (While l e b els)      = While l <$> normBool env e <*> norm (pushMark LOOP env) b <*> norm env els
     norm env (Data l mbp ss)        = Data l <$> norm env mbp <*> norm env ss
     norm env (VarAssign l ps e)     = VarAssign l <$> norm env ps <*> norm env e
     norm env (After l e e')         = After l <$> norm env e <*> norm env e'
@@ -132,6 +180,46 @@ instance Norm Stmt where
       where env1                    = define (envOf ds) env
     norm env (Signature l ns t d)   = return $ Signature l ns (conv t) d
     norm env s                      = error ("norm unexpected stmt: " ++ prstr s)    
+
+    norm' env (Try l b [] els [])   = norm env (b ++ els)
+    norm' env (Try l b hs els [])   = do b <- norm (pushMark DROP env) b
+                                         els <- norm env els
+                                         x <- newName "x"
+                                         hdl <- handle env x hs
+                                         return [sIf [Branch ePUSH (b ++ sDROP : els)] (sPOP x : hdl)]
+      where ePUSH                   = eCall (eQVar primPUSH) []
+    norm' env (Try l b hs els fin)  = do ss <- norm' (pushMark FINAL env) try0
+                                         x <- newName "xx"
+                                         fin <- norm (define [(x,NVar tBaseException)] env) fin
+                                         return [sIf [Branch ePUSHF (ss++mbseq)] (sPOP x : fin ++ relays x)]
+      where try0                    = Try l b hs els []
+            relays x                = iff [ Branch (eIsInstance x n) s | (n,s) <- map (relay x) ctrl, valid s] [sRAISE $ eVar x]
+            relay _ SEQ             = (primSEQ, [sPass]) 
+            relay _ BRK             = (primBRK, exitContext env sBreak)
+            relay _ CNT             = (primCNT, exitContext env sContinue)
+            relay x RET             = (primRET, downcast : exitContext env ret)
+              where x'              = Derived x (globalName "RET")
+                    downcast        = sAssign (pVar x' tRET) (eCAST tBaseException tRET (eVar x))
+                    ret             = sReturn (eCAST tValue (getRet env) (eDot (eVar x') attrVal))
+            valid [Expr{}]          = False
+            valid [Assign{},Expr{}] = False
+            valid _                 = True
+            mbseq                   = if SEQ `elem` ctrl then [sSEQ] else []
+            ctrl                    = nub (flows try0)
+            iff [] els              = els
+            iff bs els              = [sIf bs els]
+
+    norm' env s@(Break l)           = return $ exitContext env s
+    norm' env s@(Continue l)        = return $ exitContext env s
+    norm' env (Return l Nothing)    = return $ exitContext env (Return l $ Just eNone)
+    norm' env (Return l (Just e))   = do e <- norm env e
+                                         case isVal e of
+                                             True -> return $ retContext e
+                                             False -> do
+                                                 n <- newName "tmp"
+                                                 return $ sAssign (pVar n t) e : retContext (eVar n)
+      where retContext e            = exitContext env $ Return l $ Just e
+            t                       = typeOf env e
 
     norm' env (Assign l ps e)       = do e' <- norm env e
                                          (ps1,stmts) <- unzip <$> mapM (normPat env) ps
@@ -187,14 +275,14 @@ instance Norm Decl where
     norm env (Def l n q p k t b d x)= do p' <- joinPar <$> norm env0 p <*> norm (define (envOf p) env0) k
                                          b' <- norm env1 b
                                          return $ Def l n q p' KwdNIL t (ret b') d x
-      where env1                    = define (envOf p ++ envOf k) env0
+      where env1                    = setContext [] $ setRet t $ define (envOf p ++ envOf k) env0
             env0                    = defineTVars q env
             ret b | fallsthru b     = b ++ [sReturn eNone]
                   | otherwise       = b
     norm env (Actor l n q p k b)    = do p' <- joinPar <$> norm env0 p <*> norm (define (envOf p) env0) k
                                          b' <- norm env1 b
                                          return $ Actor l n q p' KwdNIL b'
-      where env1                    = define (envOf p ++ envOf k) env0
+      where env1                    = setContext [] $ define (envOf p ++ envOf k) env0
             env0                    = define [(selfKW, NVar t0)] $ defineTVars q env
             t0                      = tCon $ TC (NoQ n) (map tVar $ qbound q)
     norm env (Class l n q as b)     = Class l n q as <$> norm env1 b

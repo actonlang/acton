@@ -6,6 +6,7 @@
 #include <stdbool.h>
 #include <time.h>
 #include <pthread.h>
+#include <setjmp.h>
 
 #ifdef __gnu_linux__
     #define IS_GNU_LINUX
@@ -109,7 +110,7 @@ struct B_Msg {
     $Actor $waiting;
     time_t $baseline;
     $Lock $wait_lock;
-    $WORD B_value;
+    $WORD value;
     $long $globkey;
 };
 
@@ -154,6 +155,7 @@ struct $Catcher {
     struct $CatcherG_class *$class;
     $Catcher $next;
     $Cont $cont;
+    B_BaseException xval;
 };
 
 
@@ -192,8 +194,26 @@ void serialize_state_shortcut($Actor);
                                register_actor($t->$globkey); \
                                $t; })
 
-void $PUSH($Cont);
-void $POP(B_int);
+$R $PUSH_C($Cont);
+B_BaseException $POP_C();
+void $DROP_C();
+#define $PUSHF_C $PUSH_C
+#define $RAISE_C $RAISE
+
+struct JumpBuf;
+typedef struct JumpBuf *JumpBuf;
+struct JumpBuf {
+    jmp_buf buf;
+    B_BaseException xval;
+    JumpBuf prev;
+};
+
+JumpBuf $PUSH_BUF();
+B_BaseException $POP();
+void $DROP();
+void $RAISE(B_BaseException e);
+#define $PUSH()             (!setjmp($PUSH_BUF()->buf))
+#define $PUSHF $PUSH
 
 extern B_Msg timerQ;
 

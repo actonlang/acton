@@ -56,18 +56,38 @@ primASYNC           = gPrim "ASYNC"
 primAFTER           = gPrim "AFTER"
 primAWAIT           = gPrim "AWAIT"
 
-primPUSHc           = gPrim "PUSHc"
-primPUSH            = gPrim "PUSH"
+primPUSH_Cc         = gPrim "PUSH_Cc"
+primPUSHF_Cc        = gPrim "PUSHF_Cc"
+primPUSH_C          = gPrim "PUSH_C"
+primPUSHF_C         = gPrim "PUSHF_C"
+primPOP_C           = gPrim "POP_C"
+primDROP_C          = gPrim "DROP_C"
 
+primPUSH            = gPrim "PUSH"
+primPUSHF           = gPrim "PUSHF"
 primPOP             = gPrim "POP"
+primDROP            = gPrim "DROP"
 primRAISE           = gPrim "RAISE"
+
+primSEQ             = gPrim "SEQ"
+primBRK             = gPrim "BRK"
+primCNT             = gPrim "CNT"
+primRET             = gPrim "RET"
+
+tSEQ                = tCon $ TC primSEQ []
+tBRK                = tCon $ TC primBRK []
+tCNT                = tCon $ TC primCNT []
+tRET                = tCon $ TC primRET []
+
 primASSERT          = gPrim "ASSERT"
 primNEWACTOR        = gPrim "NEWACTOR"
 
 primISINSTANCE      = gPrim "ISINSTANCE"
 primISINSTANCE0     = gPrim "ISINSTANCE0"
-primCAST            = gPrim "CAST"
 primCONSTCONT       = gPrim "CONSTCONT"
+primCAST            = gPrim "CAST"
+
+eCAST t t' e        = eCall (tApp (eQVar primCAST) [t,t']) [e]
 
 primFORMAT          = gPrim "FORMAT"
 
@@ -105,6 +125,7 @@ pWrapped x y        = TC primWrappedP [x,y]
 primWrappedC        = gPrim "WrappedC"
 tWrapped s x y      = tCon $ TC primWrappedC [s,x,y]
 
+attrVal             = name "val"
 attrWrap            = name "wrap"
 attrUnwrap          = name "unwrap"
 
@@ -129,12 +150,25 @@ primEnv             = [     (noq primASYNCf,        NDef scASYNCf NoDec),
                             (noq primASYNC,         NDef scASYNC NoDec),
                             (noq primAFTER,         NDef scAFTER NoDec),
                             (noq primAWAIT,         NDef scAWAIT NoDec),
-                        
-                            (noq primPUSHc,         NDef scPUSHc NoDec),
+
+                            (noq primPUSH_Cc,       NDef scPUSH_Cc NoDec),
+                            (noq primPUSHF_Cc,      NDef scPUSHF_Cc NoDec),
+                            (noq primPUSH_C,        NDef scPUSH_C NoDec),
+                            (noq primPUSHF_C,       NDef scPUSHF_C NoDec),
+                            (noq primPOP_C,         NDef scPOP_C NoDec),
+                            (noq primDROP_C,        NDef scDROP_C NoDec),
+
                             (noq primPUSH,          NDef scPUSH NoDec),
-                        
+                            (noq primPUSHF,         NDef scPUSHF NoDec),
                             (noq primPOP,           NDef scPOP NoDec),
+                            (noq primDROP,          NDef scDROP NoDec),
                             (noq primRAISE,         NDef scRAISE NoDec),
+
+                            (noq primSEQ,           clSEQ),
+                            (noq primBRK,           clBRK),
+                            (noq primCNT,           clCNT),
+                            (noq primRET,           clRET),
+
                             (noq primASSERT,        NDef scASSERT NoDec),
                             (noq primNEWACTOR,      NDef scNEWACTOR NoDec),
 
@@ -241,7 +275,30 @@ clActor             = NClass [] (leftpath [cValue]) te
                         (reprKW,              NDef (monotype $ tFun fxPure posNil kwdNil tStr) NoDec),
                         (resumeKW,            NDef (monotype $ tFun fxMut posNil kwdNil tNone) NoDec)
                       ]
-        
+
+--  class $SEQ (BaseException, value):
+--      __init__ : () -> None
+clSEQ               = NClass [] (leftpath [cBaseException, cValue]) te
+  where te          = [ (initKW, NSig (monotype $ tFun fxPure posNil kwdNil tNone) NoDec) ]
+
+--  class $BRK (BaseException, value):
+--      __init__ : () -> None
+clBRK               = NClass [] (leftpath [cBaseException, cValue]) te
+  where te          = [ (initKW, NSig (monotype $ tFun fxPure posNil kwdNil tNone) NoDec) ]
+
+--  class $CNT (BaseException, value):
+--      __init__ : () -> None
+clCNT               = NClass [] (leftpath [cBaseException, cValue]) te
+  where te          = [ (initKW, NSig (monotype $ tFun fxPure posNil kwdNil tNone) NoDec) ]
+
+--  class $RET (BaseException, value):
+--      @property
+--      val      : value
+--      __init__ : (value) -> None
+clRET               = NClass [] (leftpath [cBaseException, cValue]) te
+  where te          = [ (attrVal, NSig (monotype tValue) Property),
+                        (initKW,  NSig (monotype $ tFun fxPure (posRow tValue posNil) kwdNil tNone) NoDec) ]
+
 
 --  class $R (): pass
 clR                 = NClass [] [] []
@@ -307,26 +364,52 @@ scAWAIT             = tSchema [quant a] tAWAIT
 
 
 
---  $PUSHc          : pure (proc(BaseException)->$R) -> None
-scPUSHc             = tSchema [] tPUSH
-  where tPUSH       = tFun fxPure (posRow tCont' posNil) kwdNil tNone
-        tCont'      = tFun fxProc (posRow tBaseException posNil) kwdNil tR
+--  $PUSH_Cc        : pure (proc(bool)->$R) -> None
+scPUSH_Cc           = tSchema [] tPUSH_C
+  where tPUSH_C     = tFun fxPure (posRow tCont' posNil) kwdNil tNone
+        tCont'      = tFun fxProc (posRow tBool posNil) kwdNil tR
 
---  $PUSH           : pure ($Cont[BaseException]) -> None
+--  $PUSH_FCc       : pure (proc(bool)->$R) -> None
+scPUSHF_Cc          = tSchema [] tPUSHF_C
+  where tPUSHF_C    = tFun fxPure (posRow tCont' posNil) kwdNil tNone
+        tCont'      = tFun fxProc (posRow tBool posNil) kwdNil tR
+
+--  $PUSH_C         : pure ($Cont[bool]) -> None
+scPUSH_C            = tSchema [] tPUSH_C
+  where tPUSH_C     = tFun fxPure (posRow (tCont tBool) posNil) kwdNil tNone
+
+--  $PUSHF_C        : pure ($Cont[bool]) -> None
+scPUSHF_C           = tSchema [] tPUSHF_C
+  where tPUSHF_C    = tFun fxPure (posRow (tCont tBool) posNil) kwdNil tNone
+
+--  $POP_C          : pure () -> BaseExceptiom
+scPOP_C             = tSchema [] tPOP_C
+  where tPOP_C      = tFun fxPure posNil kwdNil tBaseException
+
+--  $DROP_C         : pure () -> None
+scDROP_C            = tSchema [] tDROP_C
+  where tDROP_C     = tFun fxPure posNil kwdNil tNone
+
+--  $PUSH           : () -> bool
 scPUSH              = tSchema [] tPUSH
-  where tPUSH       = tFun fxPure (posRow tCont' posNil) kwdNil tNone
-        a           = TV KType $ name "A"
-        tCont'      = tCont tBaseException
+  where tPUSH       = tFun fxPure posNil kwdNil tBool
 
+--  $PUSHF          : () -> bool
+scPUSHF             = tSchema [] tPUSHF
+  where tPUSHF      = tFun fxPure posNil kwdNil tBool
 
-
---  $POP            : pure (int) -> None
+--  $POP            : () -> BaseException
 scPOP               = tSchema [] tPOP
-  where tPOP        = tFun fxPure (posRow tInt posNil) kwdNil tNone
+  where tPOP        = tFun fxPure posNil kwdNil tBaseException
 
---  $RAISE          : pure (BaseException) -> None
+--  $DROP           : () -> None
+scDROP              = tSchema [] tDROP
+  where tDROP       = tFun fxPure posNil kwdNil tNone
+
+--  $RAISE          : (BaseException) -> None
 scRAISE             = tSchema [] tRAISE
   where tRAISE      = tFun fxPure (posRow tBaseException posNil) kwdNil tNone
+
 
 --  $ASSERT         : pure (bool, ?str) -> None
 scASSERT            = tSchema [] tASSERT
@@ -494,4 +577,13 @@ primWits            = [ WInst []        fxAction (pWrapped fxProc fxProc)   prim
   where path        = [Left (noQ "_")]
         y           = TV KFX (name "Y")
         
+isPUSH (Call _ (Var _ x) _ _)   = x `elem` [primPUSH,primPUSHF]
+isPUSH _                        = False
+
+isPUSHF (Call _ (Var _ x) _ _)  = x == primPUSHF
+isPUSHF _                       = False
+
+isRAISE (Call _ (Var _ x) _ _)  = x == primRAISE
+isRAISE _                       = False
+
 
