@@ -1,6 +1,7 @@
 #define GC_THREADS 1
 #include <gc.h>
 
+#include <tlsuv/tlsuv.h>
 #include <uv.h>
 #include "../rts/io.h"
 #include "../rts/log.h"
@@ -175,7 +176,6 @@ void netQ_TCPConnection__on_receive(uv_stream_t *stream, ssize_t nread, const uv
             netQ_TCPConnection self = stream->data;
             $action2 f = ($action2)self->on_receive;
             f->$class->__asyn__(f, self, to$bytesD_len(buf->base, nread));
-            // TODO: count read bytes
             self->_bytes_in->val += nread;
         }
     }
@@ -577,3 +577,158 @@ B_NoneType netQ_TCPListenConnectionD___resume__ (netQ_TCPListenConnection self) 
 //    netQ_DNSCap c = netQ_DNSCapG_new(void);
 //    return c;
 //}
+
+static void tls_on_close(uv_handle_t* stream) {
+    log_debug("TLS handle closed, stream: %p  stream->data: %p", stream, stream->data);
+    tlsuv_stream_free((tlsuv_stream_t *)stream);
+}
+
+static void tls_close(tlsuv_stream_t *stream) {
+    log_debug("Closing TLS stream: %p  stream->data: %p", stream, stream->data);
+    netQ_TLSConnection self = (netQ_TLSConnection)stream->data;
+    $action on_close = self->_on_close;
+    if (on_close)
+        on_close->$class->__asyn__(on_close, self);
+    tlsuv_stream_close(stream, tls_on_close);
+    self->_stream = to$int(-1);
+}
+
+void tls_on_receive(uv_stream_t *stream, ssize_t nread, const uv_buf_t* buf) {
+    if (nread > 0) {
+        if (stream->data) {
+            tls_link_t *tls = (tls_link_t *)stream->data;
+            uv_link_t *child = tls->child;
+            netQ_TLSConnection self = (netQ_TLSConnection)child->data;
+            $action2 f = ($action2)self->on_receive;
+            B_bytes data = to$bytesD_len(buf->base, nread);
+            f->$class->__asyn__(f, self, data);
+            self->_bytes_in->val += nread;
+        }
+    } else if (nread == UV_EOF) {
+        log_debug("TLS connection closed %p", stream);
+        tls_close(stream);
+    }
+    else if (nread < 0) {
+        log_debug("TLS read error %ld: %s", nread, uv_strerror((int) nread));
+        tls_close(stream);
+    }
+}
+
+void tls_write_cb(uv_write_t *wreq, int status) {
+    if (status < 0) {
+        log_debug("TLS write error %d: %s", status, uv_strerror(status));
+        char errmsg[1024] = "Failed to write to TLS TCP socket: ";
+        uv_strerror_r(status, errmsg + strlen(errmsg), sizeof(errmsg)-strlen(errmsg));
+        log_debug(errmsg);
+        netQ_TLSConnection self = (netQ_TLSConnection)wreq->data;
+        $action2 on_error = ($action2)self->on_error;
+        on_error->$class->__asyn__(on_error, self, to$str(errmsg));
+        tls_close((tlsuv_stream_t *)wreq->handle);
+    }
+}
+
+$R netQ_TLSConnectionD_closeG_local (netQ_TLSConnection self, $Cont c$cont, $action on_close) {
+    uv_stream_t *stream = (uv_stream_t *)from$int(self->_stream);
+    // fd == -1 means invalid FD and can happen after __resume__
+    if (stream == -1)
+        return $R_CONT(c$cont, B_None);
+
+    self->_on_close = on_close;
+
+    log_debug("Closing TLS TCP connection");
+    tls_close((tlsuv_stream_t *)stream);
+    // TODO: implement on_error? but tlsuv_stream_close always returns 0 and in
+    // the on_close callback the ->data is already NULL so how to find our actor
+    // and real callback?
+    return $R_CONT(c$cont, B_None);
+}
+
+$R netQ_TLSConnectionD_writeG_local (netQ_TLSConnection self, $Cont c$cont, B_bytes data) {
+    uv_stream_t *stream = (uv_stream_t *)from$int(self->_stream);
+    // fd == -1 means invalid FD and can happen after __resume__
+    if (stream == -1)
+        return $R_CONT(c$cont, B_None);
+
+    uv_write_t *wreq = (uv_write_t *)malloc(sizeof(uv_write_t));
+    wreq->data = self;
+    uv_buf_t buf = uv_buf_init(data->str, data->nbytes);
+    int r = tlsuv_stream_write(wreq, stream, &buf, tls_write_cb);
+    if (r < 0) {
+        char errmsg[1024] = "Failed to write to TLS TCP socket: ";
+        uv_strerror_r(r, errmsg + strlen(errmsg), sizeof(errmsg)-strlen(errmsg));
+        log_debug(errmsg);
+        $action2 f = ($action2)self->on_error;
+        f->$class->__asyn__(f, self, to$str(errmsg));
+    }
+    self->_bytes_out->val += data->nbytes;
+    return $R_CONT(c$cont, B_None);
+}
+
+
+static void tls_on_connect(uv_connect_t *creq, int status) {
+    netQ_TLSConnection self = (netQ_TLSConnection)creq->data;
+    if (status != 0) {
+        char errmsg[1024] = "Error in TLS TCP connect: ";
+        uv_strerror_r(status, errmsg + strlen(errmsg), sizeof(errmsg)-strlen(errmsg));
+        log_debug(errmsg);
+        tls_close((tlsuv_stream_t *)creq->handle);
+        self->$class->_on_tls_error(self, to$int(-1), to$int(status), to$str(errmsg));
+        return;
+    }
+
+    tlsuv_stream_t *stream = (tlsuv_stream_t *) creq->handle;
+    tlsuv_stream_read(stream, alloc_buffer, tls_on_receive);
+
+    self->$class->_on_tls_connect(self);
+}
+
+void tlsuv_logger(int level, const char *file, unsigned int line, const char *msg) {
+    // Map tlsuv log levels to our RTS log levels
+    int log_level;
+    if (level == 0) {        // NONE, used to say "we don't want logs"
+        // not actually used for any log messages, so this should be unreachable
+        return;
+    } else if (level == 1) { // ERR
+        log_level = LOG_ERROR;
+    } else if (level == 2) { // WARN
+        log_level = LOG_WARN;
+    } else if (level == 3) { // INFO
+        log_level = LOG_INFO;
+    } else if (level == 4) { // DEBG
+        log_level = LOG_DEBUG;
+    } else if (level == 5) { // VERB
+        log_level = LOG_DEBUG;
+    } else if (level == 6) { // TRACE
+        log_level = LOG_TRACE;
+    }
+
+    log_log(log_level, file, line, msg);
+}
+
+$R netQ_TLSConnectionD__connect_tlsG_local (netQ_TLSConnection self, $Cont c$cont) {
+    uv_connect_t* connect_req = (uv_connect_t*)calloc(1, sizeof(uv_connect_t));
+    connect_req->data = (void *)self;
+
+    //tlsuv_set_debug(5, tlsuv_logger);
+    tlsuv_stream_t *stream = (tlsuv_stream_t *)malloc(sizeof(tlsuv_stream_t));
+    tlsuv_stream_init(get_uv_loop(), stream, NULL);
+    // TODO: take ALPN as input to TLSConnection actor
+    //const char *alpn[] = { "http/1.1" };
+    //tlsuv_stream_set_protocols(stream, 1, alpn);
+    // No ALPN for now.
+    // TODO: This feels like it should really go into tlsuv_stream_init since
+    // otherweise we get a segfault? Upstream?
+    tlsuv_stream_set_protocols(stream, 0, NULL);
+    // TODO: take SNI as input to TLSConnection actor
+    stream->data = (void *)self;
+
+    tlsuv_stream_connect(connect_req, stream, fromB_str(self->address), from$int(self->port), tls_on_connect);
+    self->_stream = to$int((long)stream);
+
+    return $R_CONT(c$cont, B_None);
+}
+
+$R netQ_TLSConnectionD__pin_affinityG_local (netQ_TLSConnection self, $Cont c$cont) {
+    pin_actor_affinity();
+    return $R_CONT(c$cont, B_None);
+}
