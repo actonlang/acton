@@ -1,0 +1,142 @@
+# Test stdlib net module by first starting a server which listens to a TCP port
+# and then creating a TCP client connection which connects to the server, sends
+# a message and expects a reply. This exercices both ends of the TCP connection.
+
+import acton.rts
+import net
+import random
+
+
+def get_tcp_handles(m):
+    tcp_handles = m.io_handles()
+    res = {}
+    for wthread_id, handles in tcp_handles.items():
+        for k, v in handles.items():
+            if v.typ == "tcp" and v.act != u64(0):
+                res[k] = v
+    return res
+
+actor Server(conn):
+    def on_receive(c, data):
+        print("Server received some data:", data, " from:", c)
+        if data == b"PING":
+            c.write(b"PONG")
+            c.close()
+
+    def on_error(c, error):
+        print("There was an error:", error, " from:", c)
+
+
+actor Listener(env, address, port):
+    def on_lsock_error(l, error):
+        print("There was an error with the TCPListener socket:", error)
+
+    def on_server_accept(c):
+        s = Server(c)
+        c.cb_install(s.on_receive, s.on_error)
+
+    listen_cap = net.TCPListenCap(net.TCPCap(net.NetCap(env.cap)))
+    server = net.TCPListener(listen_cap, address, port, on_lsock_error, on_server_accept)
+
+http_req = (b"GET / HTTP/1.0\r\n"
+          + b"\r\n")
+actor Client(name, rts_monitor, env: Env, port: int, on_success):
+    var connection = 0
+    def on_connect(c):
+        connection += 1
+        print("Client connected", connection)
+        #print("Client %s connected to %s:%d, TCP handles: %s" % (name, c.remote_address(), port, str(get_tcp_handles(rts_monitor))))
+        #await async c.write(b"PING")
+        await async c.write(http_req)
+
+    def on_close(c):
+        print("closed connection", connection)
+        if connection == 2:
+            on_success()
+
+    def on_receive(c, data):
+        print("Client RECV", data)
+        # NOTE: True here, so we accept any data since we don't have our own TLS
+        # server side yet, thus testing against like google.com or similar
+        if True or data == b"PONG":
+            print("Got PONG, all good, yay")
+            if connection == 1:
+                print("Conn 1: reconnecting")
+                c.reconnect()
+            else:
+                # Test idempotency / that we don't break anything by double-closing
+                c.close(on_close)
+                await async c.close(on_close)
+        else:
+            print("Got bad response, exiting with error..")
+            await async env.exit(1)
+
+    def on_error(c, msg):
+        print("Client ERR", msg)
+
+    def _exit():
+        print("exiting..")
+        await async env.exit(0)
+
+    connect_cap = net.TCPConnectCap(net.TCPCap(net.NetCap(env.cap)))
+    #client = net.TLSConnection(connect_cap, "localhost", port, on_connect, on_receive, on_error)
+    client = net.TLSConnection(connect_cap, "www.google.com", 443, on_connect, on_receive, on_error)
+    #client = net.TLSConnection(connect_cap, "142.250.74.132", 443, on_connect, on_receive, on_error)
+
+
+actor main(env):
+    def timeout_error():
+        print("Timeout reached, exiting with error...")
+        await async env.exit(1)
+
+    #after 2: timeout_error()
+
+    rts_monitor = acton.rts.Monitor(env)
+
+    port4 = random.randint(10000, 20000)
+    port6 = port4+1
+    print("Using ports, IPv4: %d  IPv6: %d" % (port4, port6))
+
+    require_v4 = True
+    require_v6 = False
+
+    if require_v4:
+        l4 = Listener(env, "127.0.0.1", port4)
+    if require_v6:
+        l6 = Listener(env, "::1", port6)
+
+    var v4_connected = False
+    var v6_connected = False
+    var ds_connected = False
+
+    def _on_v4_connect():
+        v4_connected = True
+        if not require_v6 or v6_connected:
+            after 0.1: check_io()
+
+    def _on_v6_connect():
+        print("v6 connected")
+        v6_connected = True
+        if not require_v4 or v4_connected:
+            after 0.1: check_io()
+
+    def check_io():
+        tcp_handles = get_tcp_handles(rts_monitor)
+        print("IO check...", tcp_handles)
+        expected_tcp_handles = 0
+        if require_v4:
+            expected_tcp_handles += 1
+        if require_v6:
+            expected_tcp_handles += 1
+        if len(tcp_handles) <= expected_tcp_handles:
+            # Only TCP listening sockets left...
+            print("TCP client properly cleaned from IO loop, exiting...")
+            await async env.exit(0)
+        else:
+            print("TCP client not properly cleaned from IO loop, waiting...")
+            after 0.8: check_io()
+
+    if require_v4:
+        c4 = Client("c4", rts_monitor, env, port4, _on_v4_connect)
+    if require_v6:
+        c6 = Client("c6", rts_monitor, env, port6, _on_v6_connect)

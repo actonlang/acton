@@ -264,3 +264,51 @@ actor TCPListener(cap: TCPListenCap, address: str, port: int, on_error: action(T
         """Implementation internal"""
         NotImplemented
     _init()
+
+actor TLSConnection(cap: TCPConnectCap, address: str, port: int, on_connect: action(TLSConnection) -> None, on_receive: action(TLSConnection, bytes) -> None, on_error: action(TLSConnection, str) -> None):
+    # TODO: support disabling certificate verification
+    # TODO: support hostname/CN mismatch, good when connecting with IP address?
+    # TODO: do DNS lookup in Acton
+    # TODO: support ALPN
+    # TODO: support SNI
+    # TODO: support client certificates
+    # TODO: implement state machine
+    # TODO: support timeout
+    # TODO: do Happy Eyeballs
+    var _stream = -1
+
+    var _on_close: ?action(TLSConnection) -> None = None
+
+    var _connections = 0
+    var _consecutive_connect_errors = 0
+    var _bytes_in: u64 = 0
+    var _bytes_out: u64 = 0
+
+    proc def _pin_affinity() -> None:
+        NotImplemented
+    _pin_affinity()
+
+    action def _on_tls_connect():
+        _connections += 1
+        on_connect(self)
+
+    action def _on_tls_error(sockfamily: int, err: int, errmsg: str):
+        on_error(self, errmsg)
+
+    action def close(on_close: action(TLSConnection) -> None) -> None:
+        """Close the connection"""
+        NotImplemented
+
+    action def write(data: bytes) -> None:
+        """Write data to remote"""
+        NotImplemented
+
+    def reconnect():
+        close(_connect)
+
+    proc def _connect_tls():
+        NotImplemented
+
+    proc def _connect(c):
+        _connect_tls()
+    _connect(self)
