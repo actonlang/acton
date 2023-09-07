@@ -79,9 +79,9 @@ actor Client(name, rts_monitor, env: Env, port: int, on_success):
         await async env.exit(0)
 
     connect_cap = net.TCPConnectCap(net.TCPCap(net.NetCap(env.cap)))
-    #client = net.TLSConnection(connect_cap, "localhost", port, on_connect, on_receive, on_error)
-    client = net.TLSConnection(connect_cap, "www.google.com", 443, on_connect, on_receive, on_error)
-    #client = net.TLSConnection(connect_cap, "142.250.74.132", 443, on_connect, on_receive, on_error)
+    #client = net.TLSConnection(connect_cap, "localhost", port, on_connect, on_receive, on_error, True)
+    client = net.TLSConnection(connect_cap, "www.google.com", 443, on_connect, on_receive, on_error, True)
+    #client = net.TLSConnection(connect_cap, "142.250.74.132", 443, on_connect, on_receive, on_error, False)
 
 
 actor main(env):

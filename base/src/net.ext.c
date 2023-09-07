@@ -712,13 +712,17 @@ $R netQ_TLSConnectionD__connect_tlsG_local (netQ_TLSConnection self, $Cont c$con
     //tlsuv_set_debug(5, tlsuv_logger);
     tlsuv_stream_t *stream = (tlsuv_stream_t *)malloc(sizeof(tlsuv_stream_t));
     tlsuv_stream_init(get_uv_loop(), stream, NULL);
+
+    // Default is to verify TLS certificate. Should we disable verification?
+    if (fromB_bool(self->verify_tls) == false) {
+        log_debug("TLS certificate verification disabled");
+        stream->authmode = 0; // 0=none, 2=require (mbedtls specific)
+    }
+
     // TODO: take ALPN as input to TLSConnection actor
     //const char *alpn[] = { "http/1.1" };
     //tlsuv_stream_set_protocols(stream, 1, alpn);
     // No ALPN for now.
-    // TODO: This feels like it should really go into tlsuv_stream_init since
-    // otherweise we get a segfault? Upstream?
-    tlsuv_stream_set_protocols(stream, 0, NULL);
     // TODO: take SNI as input to TLSConnection actor
     stream->data = (void *)self;
 
