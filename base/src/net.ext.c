@@ -723,9 +723,6 @@ $R netQ_TLSConnectionD__connect_tlsG_local (netQ_TLSConnection self, $Cont c$con
     //const char *alpn[] = { "http/1.1" };
     //tlsuv_stream_set_protocols(stream, 1, alpn);
     // No ALPN for now.
-    // TODO: This feels like it should really go into tlsuv_stream_init since
-    // otherweise we get a segfault? Upstream?
-    tlsuv_stream_set_protocols(stream, 0, NULL);
     // TODO: take SNI as input to TLSConnection actor
     stream->data = (void *)self;
 
