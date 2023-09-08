@@ -132,7 +132,7 @@ extFree m env                   = modX env $ \x -> x{ freemapX = m ++ freemap en
 extNames m env                  = modX env $ \x -> x{ namemapX = m ++ namemap env }
 
 findFree n env                  = case lookup n (freemap env) of
-                                    Just vs -> Just $ restrict (locals env) vs
+                                    Just vs -> Just [ (v,t) | v <- vs, Just t <- [lookup v $ locals env] ]
                                     _ -> Nothing
     
 
