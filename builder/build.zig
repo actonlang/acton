@@ -43,7 +43,7 @@ fn dotsToRoot(allocator: std.mem.Allocator, cwd: []const u8) []const u8 {
 }
 
 pub fn build(b: *std.build.Builder) void {
-    const buildroot_path = b.build_root.handle.realpathAlloc(b.allocator, ".") catch @panic("ASDF");
+    const buildroot_path = b.build_root.handle.realpathAlloc(b.allocator, ".") catch @panic("ASD");
     const dots_to_root = dotsToRoot(b.allocator, buildroot_path);
     defer b.allocator.free(dots_to_root);
     print("Acton Project Builder\nBuilding in {s}\n", .{buildroot_path});
