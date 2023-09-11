@@ -1,0 +1,301 @@
+import file
+import time
+
+"""Advanced actor based logging
+
+There are three main components to the logging system:
+- Loggers: each actor that wants to emit logs creates its own Logger object
+- Handlers: the Logger object sends log messages to an Handler actor
+- Sinks: Handlers sends log messages to a Sink actor for final output
+
+Together, these components form a chain of actors that can be used to propagate,
+filter, transform and output log messages.
+
+The Logger object is the main interface for emitting log messages. Each actor
+that wants to emit log messages needs to create at least one Logger object. The
+Logger forwards messages to a log Handler. It provides convenience methods for
+each log level, e.g. `.info(msg, data)` or `.error(msg, data)`. Each of these
+methods takes a log message and an optional data dictionary for structured data,
+keyed by strings. It is also possible to only log structured data. Not all
+destination Sinks support structured data, in which case the structured data is
+flattened into a string representation.
+
+The Handler receives log messages from Loggers. It can forward the messages to
+a parent handler, making it possible to build a hierarchy of Handlers. At the
+top of the hierarchy is the root Handler, which does not have a parent Handler.
+For output, the Handler can also send the log messages to one or more Sinks.
+Each Handler has an associated output log level and only log messages of that
+level or higher importance will be propagated. By using a single log Handler for
+a group of related actors, the log level can be controlled for all actors in the
+group with a single setting.
+
+Sinks receives log messages from Handlers and are responsible for finally
+outputting the log messages. For example, the StdoutSink writes log messages to
+the stdout while FileSink can write log messages to a file.
+
+Here's an illustrative example of Logger, Handler and Sink hierarchy:
+
+                                     .------------.
+                               .---->| SyslogSink |
+           .---------.         |     '------------'
+           | Handler |---------+
+           '---------'         |     .------------.
+              ^  ^             '---->| FileSink   |
+              |  |                   '------------'
+              |  '----------.
+              |             |
+           .---------.    .---------.   .------------.
+           | Handler |    | Handler |-->| StdoutSink |
+           '---------'    '---------'   '------------'
+              ^^^           ^^^  ^^^
+              |||           |||  ||'----------.
+              |||           |||  |'----------.|
+              |||           |||  '----------.||
+              |||           |||             |||
+        .----------.    .----------.    .----------.
+        | Actor w/ |.   | Actor w/ |.   | Actor w/ |.
+        | Logger   ||.  | Logger   ||.  | Logger   ||.
+        '----------'||  '----------'||  '----------'||
+         '----------'|   '----------'|   '----------'|
+          '----------'    '----------'    '----------'
+
+For a simple application and in fact many large programs too, a single root
+Handler and a Sink or two is enough.
+
+Log Messages include the originating actor class and actor id. The Logger can be
+given a name, which can be useful if there is a human friendly name to the actor
+instance like "HTTP Worker 3". The path taken by the message through the Handler
+hierarchy is recorded and is also included in the outputted form.
+
+         .------------------------------- date
+         |                  .------------ time
+         |                  |  .--------- timezone offset
+         |                  |  |     .--- level
+         |                  |  |     |
+vvvvvvvvvv vvvvvvvvvvvvvvvvvv vv vvvvv
+2023-09-11T22:23:39.185147227+02 DEBUG  MyApp>http>HTTP Worker 3: my_app.http.server[-17]: Received query - {'method': 'GET', 'path': '/foo'}
+                                        ^^^^^^^^^^^^^^^^^^^^^^^^  ^^^^^^^^^^^^^^^^^^ ^^^   ^^^^^^^^^^^^^^   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+                                        |                         |                  |     |                |
+                      handler path -----'                         |                  |     |                |
+                       actor class -------------------------------'                  |     |                |
+                          actor id --------------------------------------------------'     |                |
+                       log message --------------------------------------------------------'                |
+                   structured data -------------------------------------------------------------------------'
+"""
+
+# Log levels
+UNSET     = -2
+OFF       = -1
+EMERGENCY = 0
+ALERT     = 1
+CRITICAL  = 2
+ERROR     = 3
+WARNING   = 4
+INFO      = 5
+NOTICE    = 6
+DEBUG     = 7
+VERBOSE   = 8
+TRACE     = 9
+ALL       = 999
+
+lvl_names = {
+    EMERGENCY : 'EMERG',
+    ALERT     : 'ALERT',
+    CRITICAL  : 'CRIT',
+    ERROR     : 'ERROR',
+    WARNING   : 'WARN',
+    INFO      : 'INFO',
+    NOTICE    : 'NOTICE',
+    DEBUG     : 'DEBUG',
+    VERBOSE   : 'VERB',
+    TRACE     : 'TRACE',
+}
+
+class Message():
+    """A log message
+    """
+    ts: time.DateTime
+    level: int
+    actor_class: str
+    actor_id: int
+    name: ?str
+    path: list[str]
+    msg: ?str
+    data: ?dict[str, value]
+
+    def __init__(self, level: int, path: list[str], name: ?str, msg: ?str, data: ?dict[str, value]):
+        self.ts = time.now()
+        self.level = level
+        self.actor_class = self._get_actor_class()
+        self.actor_id = self._get_actor_id()
+        self.name = name
+        self.path = path
+        self.msg = msg
+        self.data = data
+
+    def _get_actor_class(self) -> str:
+        NotImplemented
+
+    def _get_actor_id(self) -> int:
+        NotImplemented
+
+
+class Formatter:
+    def __init__(self):
+        pass
+
+    def format(self, m: Message) -> ?str:
+        raise NotImplementedError("")
+
+
+class DefaultFormatter(Formatter):
+    def format(self, m: Message) -> ?str:
+        lvl_name = lvl_names[m.level]
+        msg = m.msg
+        data = m.data
+        if msg is None and data is None:
+            return
+        str_path = '>'.join(m.path)
+        text = str(m.ts) + " %-7s" % lvl_name
+        if len(str_path) > 0:
+            text += str_path + ": "
+        text += m.actor_class + "[" + str(m.actor_id) + "]: "
+        if msg is not None:
+            text += msg
+        return text
+
+
+class Sink(object):
+    """A log sink
+    """
+    formatter: Formatter
+
+    def __init__(self):
+        self.formatter = DefaultFormatter()
+
+    def set_formatter(self, formatter: Formatter):
+        self.formatter = formatter
+
+    def handle(self, m: Message):
+        raise NotImplementedError("")
+
+
+class StdoutSink(Sink):
+    """Log sink that writes to stdout
+    """
+    def handle(self, m: Message):
+        text = self.formatter.format(m)
+        if text is not None:
+            data = m.data
+            if data is not None:
+                text += " - " + str(data)
+            print(text)
+
+# Untested and doesn't work yet?
+# TODO: implement this!
+#class FileSink(Sink):
+#    filename: str
+#    fh: file.WriteFile
+#
+#    def __init__(self, cap: file.WriteFileCap, filename: str):
+#        self.formatter = DefaultFormatter()
+#        self.filename = filename
+#        self.f = file.WriteFile(cap, filename)
+#
+#    def handle(self, m: Message):
+#        text = self.formatter.format(m)
+#        self.fh.write(text.encode())
+
+
+actor Handler(name: ?str):
+    var parent_handler: ?Handler = None
+    var sinks: list[Sink] = []
+    var output_level: int = ALL
+
+    def add_sink(sink: Sink):
+        sinks.append(sink)
+
+    def handle(m: Message):
+        if m.level <= output_level:
+            if name is not None:
+                m.path.insert(0, name)
+            if parent_handler is not None:
+                parent_handler.handle(m)
+            for sink in sinks:
+                sink.handle(m)
+
+    def set_handler(h: Handler):
+        parent_handler = h
+
+    def set_output_level(level: int):
+        output_level = level
+
+    def get_level() -> int:
+        return output_level
+
+
+class Logger(object):
+    """A logger"""
+    name: ?str
+    handler: ?Handler
+    output_level: int
+    last_check: time.Stopwatch
+
+    # TODO: Default name to actor type and ID
+    def __init__(self, handler: ?Handler):
+        self.name = None
+        self.handler = handler
+        self.output_level = UNSET
+        # TODO: enable, but it currently crashes?
+#        if handler is not None:
+#            self.output_level = handler.get_level()
+        self.last_check = time.Stopwatch()
+
+    def _set_level(self, level: int):
+        self.output_level = level
+
+    def log(self, level, msg, data):
+        handler = self.handler
+        if handler is not None:
+            path = []
+            n = self.name
+            if n is not None:
+                path = [n]
+            m = Message(level, path, self.name, msg, data)
+            # TODO: remove async here. It is an async call, but removing it leads to invalid AWAIT call, see
+            if self.output_level == UNSET or self.last_check.elapsed().to_float() > 0.1:
+                # TODO: do this async with a callback instead to avoid blocking
+                self.output_level = handler.get_level()
+                self.last_check = time.Stopwatch()
+            if level <= self.output_level:
+                async handler.handle(m)
+
+    def emergency(self, msg: ?str, data: ?dict[str, value]):
+        self.log(EMERGENCY, msg, data)
+
+    def alert(self, msg: ?str, data: ?dict[str, value]):
+        self.log(ALERT, msg, data)
+
+    def critical(self, msg: ?str, data: ?dict[str, value]):
+        self.log(CRITICAL, msg, data)
+
+    def error(self, msg: ?str, data: ?dict[str, value]):
+        self.log(ERROR, msg, data)
+
+    def warning(self, msg: ?str, data: ?dict[str, value]):
+        self.log(WARNING, msg, data)
+
+    def info(self, msg: ?str, data: ?dict[str, value]):
+        self.log(INFO, msg, data)
+
+    def notice(self, msg: ?str, data: ?dict[str, value]):
+        self.log(NOTICE, msg, data)
+
+    def debug(self, msg: ?str, data: ?dict[str, value]):
+        self.log(DEBUG, msg, data)
+
+    def verbose(self, msg: ?str, data: ?dict[str, value]):
+        self.log(VERBOSE, msg, data)
+
+    def trace(self, msg: ?str, data: ?dict[str, value]):
+        self.log(TRACE, msg, data)
