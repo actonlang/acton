@@ -354,7 +354,7 @@ declDeserialize env n c props sup_c = (gen env (tCon c) <+> genTopName env (meth
 
 
 initModule env []                   = empty
-initModule env (Decl _ ds : ss)     = vcat [ char '{' $+$ nest 4 (initClassBase env1 n q as hC $+$ initClass env n b hC) $+$ char '}' | Class _ n q as b <- ds, let hC = hasCDef b ] $+$
+initModule env (Decl _ ds : ss)     = vcat [ char '{' $+$ nest 4 (initClassBase env1 n q as hC $+$ initClass env1 n b hC) $+$ char '}' | Class _ n q as b <- ds, let hC = hasCDef b ] $+$
                                       initModule env1 ss
   where env1                        = gdefine (envOf ds) env
         hasCDef b                   = inBuiltin env && any hasNotImpl [b' | Decl _ ds <- b, Def{dname=n',dbody=b'} <- ds, n' == initKW ]
