@@ -3,6 +3,22 @@
 ## Unreleased
 
 ### Added
+- Add support for exceptions! [#1463]
+  - The syntactic support for exceptions has existed for a long time but the
+    underlying run time support was not implemented. It now is!
+    - It used to be that exceptions would exit the whole application without any
+      means of catching an exception.
+  - Unhandled exceptions are now printed to stderr [#1481]
+    - Do note however that unhandled exceptions will not exit the program nor
+      even the actors encountering an exception. It will abort the execution of
+      the current method and nothing else.
+- New `http` module [#1485]
+  - `http.Client` is a HTTP client that supports unencrypted HTTP on port 80 and
+    HTTPS using TLS on port 443
+  - `http.Listener` / `http.Server` is a HTTP server component that currently
+    only supports unencrypted HTTP (due to lack of a `net.TLSListener`)
+- New `logging` module [#1483]
+  - Provides logging functionality in an actor centric world
 - `net.TCPConnection`: A new TCP client connection actor [#1398]
   - Support DNS lookups so the input address can be a name rather than an IP
     address
@@ -11,6 +27,10 @@
     simultaneously to connect using the fastest transport
     - Happy Eyeballs is only used for hostnames. If an IP address is provided,
       we connect directly to it.
+- `net.TLSConnection`: A new TLS client connection actor [#1470]
+  - A simple TLS client connection actor. It supports disabling TLS certificate
+    verification for testing purposes.
+  - Using the MbedTLS library and tlsuv under the hood.
 - `net.is_ipv4(address: str) -> bool` tells you if something is an IPv4 address
 - `net.is_ipv6(address: str) -> bool` tells you if something is an IPv6 address
 - AbE: Documented capability based security [#1267]
@@ -111,6 +131,9 @@
     return `True`. Now works as they should!
 - Fix list add with empty list input, like `[1]+[]` [#1461]
   - Used to segfault, now works as intended
+
+### Testing / CI
+- Stop testing on Ubuntu 22.10 since it is End of Support
 
 
 ## [0.16.0] (2023-07-03)
