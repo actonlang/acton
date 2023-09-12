@@ -1015,9 +1015,9 @@ instance InfEnv Handler where
 instance InfEnv Except where
     infEnv env (ExceptAll l)            = return ([], [], ExceptAll l)
     infEnv env (Except l x)             = return ([Cast t tException], [], Except l x)
-      where t                           = tCon (TC x [])
+      where t                           = tCon (TC (unalias env x) [])
     infEnv env (ExceptAs l x n)         = return ([Cast t tException], [(n, NVar t)], ExceptAs l x n)
-      where t                           = tCon (TC x [])
+      where t                           = tCon (TC (unalias env x) [])
 
 instance Infer Expr where
     infer env x@(Var l n)               = case findQName n env of
