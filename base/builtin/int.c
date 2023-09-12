@@ -169,8 +169,7 @@ B_int B_IntegralD_intD___add__(B_IntegralD_int wit,  B_int a, B_int b) {
 }
 
 B_complex B_IntegralD_intD___complex__(B_IntegralD_int wit, B_int a) {
-    fprintf(stderr,"Number.__complex__ not implemented for int");
-    exit(1);
+    $RAISE((B_BaseException)$NEW(B_NotImplementedError, to$str("Number.__complex__ not implemented for int")));
 }
 
 B_int B_IntegralD_intD___fromatom__(B_IntegralD_int wit, B_atom a) {
@@ -214,13 +213,11 @@ B_int B_IntegralD_intD___pos__(B_IntegralD_int wit,  B_int a) {
 }
 
 $WORD B_IntegralD_intD_real(B_IntegralD_int wit, B_int a, B_Real wit2) {
-    fprintf(stderr,"Number.__real__ not implemented for int");
-    exit(1);
+    $RAISE((B_BaseException)$NEW(B_NotImplementedError,to$str("Number.__real__ not implemented for int")));
 }
 
 $WORD B_IntegralD_intD_imag(B_IntegralD_int wit, B_int a, B_Real wit2) {
-    fprintf(stderr,"Number.__imag__ not implemented for int");
-    exit(1);
+    $RAISE((B_BaseException)$NEW(B_NotImplementedError,to$str("Number.__imag__ not implemented for int")));
 }
 
 $WORD B_IntegralD_intD___abs__(B_IntegralD_int wit, B_int a, B_Real wit2) {
@@ -369,8 +366,7 @@ B_int B_IntegralD_intD___rshift__(B_IntegralD_int wit,  B_int a, B_int b) {
  
 B_int B_IntegralD_intD___invert__(B_IntegralD_int wit,  B_int a) {
     //return toB_i64(~a->val);
-    fprintf(stderr,"Number.__invert__ not implemented for int\n");
-    exit(1);
+    $RAISE((B_BaseException)$NEW(B_NotImplementedError,to$str("Number.__invert__ not implemented for int")));
 }
 
 
@@ -378,21 +374,18 @@ B_int B_IntegralD_intD___invert__(B_IntegralD_int wit,  B_int a) {
 
 B_int B_LogicalD_IntegralD_intD___and__(B_LogicalD_IntegralD_int wit,  B_int a, B_int b) {
     // return toB_i64(a->val & b->val);
-    fprintf(stderr,"Protocol Logical not implemented for int; use i64\n");
-    exit(1);
+    $RAISE((B_BaseException)$NEW(B_NotImplementedError,to$str("Protocol Logical not implemented for int; use i64\n")));
 }
                                                  
 B_int B_LogicalD_IntegralD_intD___or__(B_LogicalD_IntegralD_int wit,  B_int a, B_int b) {
     // return toB_i64(a->val | b->val);
-    fprintf(stderr,"Protocol Logical not implemented for int; use i64\n");
-    exit(1);
+    $RAISE((B_BaseException)$NEW(B_NotImplementedError,to$str("Protocol Logical not implemented for int; use i64\n")));
 }
                                                  
 B_int B_LogicalD_IntegralD_intD___xor__(B_LogicalD_IntegralD_int wit,  B_int a, B_int b) {
     // return toB_i64(a->val ^ b->val);
-    fprintf(stderr,"Protocol Logical not implemented for int; use i64\n");
-    exit(1);
-}  
+    $RAISE((B_BaseException)$NEW(B_NotImplementedError,to$str("Protocol Logical not implemented for int; use i64\n")));
+}
  
 // B_MinusD_IntegralD_int  ////////////////////////////////////////////////////////////////////////////////////////
 
