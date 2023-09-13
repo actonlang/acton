@@ -621,7 +621,7 @@ $WORD B_IndexedD_MappingD_dictD___getitem__(B_IndexedD_MappingD_dict wit, B_dict
     $WORD res;
     int ix = $lookdict(dict,hashwit,hash,key,&res);
     if (ix < 0)  {
-        $RAISE((B_BaseException)$NEW(B_KeyError,to$str("getitem: key not in dictionary")));
+        $RAISE((B_BaseException)$NEW(B_KeyError, to$str("getitem: key not in dictionary")));
     }      
     return res;
 }
