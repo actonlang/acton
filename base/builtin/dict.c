@@ -621,7 +621,7 @@ $WORD B_IndexedD_MappingD_dictD___getitem__(B_IndexedD_MappingD_dict wit, B_dict
     $WORD res;
     int ix = $lookdict(dict,hashwit,hash,key,&res);
     if (ix < 0)  {
-        $RAISE((B_BaseException)$NEW(B_IndexError,to$str("getitem: key not in dictionary")));
+        $RAISE((B_BaseException)$NEW(B_KeyError,to$str("getitem: key not in dictionary")));
     }      
     return res;
 }
@@ -637,14 +637,14 @@ B_NoneType B_IndexedD_MappingD_dictD___delitem__ (B_IndexedD_MappingD_dict wit, 
     int ix = $lookdict(dict,hashwit,hash,key,&res);
     $table table = dict->table;
     if (ix < 0)  {
-        $RAISE((B_BaseException)$NEW(B_IndexError,to$str("getitem: key not in dictionary")));
+        $RAISE((B_BaseException)$NEW(B_KeyError,to$str("getitem: key not in dictionary")));
     }      
     $entry_t entry = &TB_ENTRIES(table)[ix];
     int i = $lookdict_index(table,hash,ix);
     table->tb_indices[i] = DKIX_DUMMY;
     res = entry->value;
     if (res == NULL) {
-        $RAISE((B_BaseException)$NEW(B_IndexError,to$str("delitem: key not in dictionary")));
+        $RAISE((B_BaseException)$NEW(B_KeyError,to$str("delitem: key not in dictionary")));
     }
     entry->value = NULL;
     dict->numelements--;
@@ -746,7 +746,7 @@ struct B_OrdD_dictG_class B_OrdD_dictG_methods = {
 void B_dictD_setitem(B_dict dict, B_Hashable hashwit, $WORD key, $WORD value) {
     long hash = from$int(hashwit->$class->__hash__(hashwit,key));
     if (insertdict(dict, hashwit, hash, key, value)<0) {
-        $RAISE((B_BaseException)$NEW(B_IndexError,to$str("setitem: key not in dictionary")));
+        $RAISE((B_BaseException)$NEW(B_KeyError,to$str("setitem: key not in dictionary")));
     }      
 }
 
