@@ -138,9 +138,6 @@ instance CPS [Stmt] where
             cont (c,ns)                 = if t == tNone then c' else eCall (tApp (eQVar primSKIPRESc) [t]) [c']
               where c'                  = kRef c ns g_skip t
 
-    cps env (s : Return _ e : _)
-      | e == Just eNone                 = cps env [s]
-
     cps env (Expr _ e : ss)
       | contCall env e                  = do k <- newName "cont"
                                              x <- newName "res"
@@ -214,7 +211,7 @@ instance CPS [Stmt] where
                                              x <- newName "res"
                                              ss' <- cps env1 ss
                                              s' <- cps (Seq k (dom nts) +: env) [s]
-                                             --traceM ("## kDef Seq " ++ prstr k ++ ", updates: " ++ prstrs nts)
+                                             --traceM ("## kDef Seq " ++ prstr k ++ ", live/updates: " ++ prstrs nts)
                                              return $ kDef env k nts x tNone ss' :
                                                       s'
       where env1                        = define (envOf s) env
