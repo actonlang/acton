@@ -229,12 +229,16 @@ instance Norm Stmt where
       where t                       = typeOf env e
     norm' env (For l p e b els)     = do i <- newName "iter"
                                          v <- newName "val"
+--                                         norm env [sAssign (pVar i t) e,
+--                                                   sAssign (pVar v $ tOpt $ head ts) (next i),
+--                                                   While l (test v) (sAssign p (eVar v) : b ++ [sAssign (pVar' v) (next i)]) els]
                                          norm env [sAssign (pVar i t) e,
-                                                   sAssign (pVar v $ tOpt $ head ts) (next i),
-                                                   While l (test v) (sAssign p (eVar v) : b ++ [sAssign (pVar' v) (next i)]) els]
-      where t@(TCon _ (TC c ts))    = typeOf env e
-            test v                  = eCall (tApp (eQVar primISNOTNONE) [head ts]) [eVar v]
+                                                   While l (eBool True) (body v i) []]
+      where t@(TCon _ (TC c [t']))  = typeOf env e
+            test v                  = eCall (tApp (eQVar primISNOTNONE) [t']) [eVar v]
             next i                  = eCall (eDot (eVar i) nextKW) []
+            body v i                = [ sAssign (pVar v $ tOpt t') (next i),
+                                        sIf1 (test v) (sAssign p (eCAST (tOpt t') t' $ eVar v) : b) (els ++ [sBreak]) ]
     {-
     with EXPRESSION as PATTERN:
         SUITE
