@@ -522,9 +522,9 @@ kfx env (TVar _ tv)
   | not $ univar tv                 = variableFX tv
 kfx env t                           = kexp KFX env t
 
-kexp k env t                        = do (k',t) <- kinfer env t
+kexp k env t                        = do (k',t') <- kinfer env t
                                          kunify (loc t) k' k
-                                         return t
+                                         return t'
 
 ----------------------------------------------------------------------------------------------------------------------
 -- kunify
