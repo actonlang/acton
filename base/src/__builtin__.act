@@ -14,445 +14,445 @@
 ## Built-in types ##################################################################################
 
 class value:
-  __init__ : () -> None
-  def __bool__(self) -> bool:
-      NotImplemented
-  def __str__(self) -> str:
-      NotImplemented
-  def __repr__(self) -> str:
-      NotImplemented
+    __init__ : () -> None
+    def __bool__(self) -> bool:
+        NotImplemented
+    def __str__(self) -> str:
+        NotImplemented
+    def __repr__(self) -> str:
+        NotImplemented
 
 class object (value):
-  pass
+    pass
 
 class atom (value):
-  pass
+    pass
 
 class int (atom):
-  def __init__(self, val: atom) -> None:
-      NotImplemented
+    def __init__(self, val: atom) -> None:
+        NotImplemented
 
 class i64 (atom):
-  def __init__(self, val: atom) -> None:
-      NotImplemented 
+    def __init__(self, val: atom) -> None:
+        NotImplemented
 
 class i32 (atom):
-  def __init__(self, val: atom) -> None:
-      NotImplemented 
+    def __init__(self, val: atom) -> None:
+        NotImplemented
 
 class i16 (atom):
-  def __init__(self, val: atom) -> None:
-      NotImplemented 
+    def __init__(self, val: atom) -> None:
+        NotImplemented
 
 class u64 (atom):
-  def __init__(self, val: atom) -> None:
-      NotImplemented 
+    def __init__(self, val: atom) -> None:
+        NotImplemented
 
 class u32 (atom):
-  def __init__(self, val: atom) -> None:
-      NotImplemented 
+    def __init__(self, val: atom) -> None:
+        NotImplemented
 
 class u16 (atom):
-  def __init__(self, val: atom) -> None:
-      NotImplemented 
+    def __init__(self, val: atom) -> None:
+        NotImplemented
 
 class float (atom):
-  def __init__(self, val: atom) -> None:
-      NotImplemented
+    def __init__(self, val: atom) -> None:
+        NotImplemented
 
 class bool (atom):
-  def __init__(self, val: value) -> None:
-      NotImplemented
+    def __init__(self, val: value) -> None:
+        NotImplemented
 
 class slice (value):
-  def __init__(self, start: ?int, stop: ?int, step: ?int) -> None:
-      NotImplemented
-  
+    def __init__(self, start: ?int, stop: ?int, step: ?int) -> None:
+        NotImplemented
+
 class list[A] (object):
-  def __init__(self, val: ?Iterable[A]) -> None:
-      NotImplemented
-  def clear(self) -> None:
-      NotImplemented
-  def copy(self) -> list[A]:
-      NotImplemented
-  def extend(self, other: list[A]) -> None:
-      NotImplemented
-  def pop(self, n :?int) -> A:
-      NotImplemented
+    def __init__(self, val: ?Iterable[A]) -> None:
+        NotImplemented
+    def clear(self) -> None:
+        NotImplemented
+    def copy(self) -> list[A]:
+        NotImplemented
+    def extend(self, other: list[A]) -> None:
+        NotImplemented
+    def pop(self, n :?int) -> A:
+        NotImplemented
 
 class range (value):
-  def __init__(self, start: int, stop: ?int, step: ?int) -> None:
-      NotImplemented
+    def __init__(self, start: int, stop: ?int, step: ?int) -> None:
+        NotImplemented
 
 class Iterator[A] (object):
-  __next__      : () -> ?A
-  
+    __next__      : () -> ?A
+
 protocol Iterable[A]:
-  __iter__     : () -> Iterator[A]
-  
+    __iter__     : () -> Iterator[A]
+
 class str (atom):
-  def __init__     (self, val: value) -> None:
-      NotImplemented
-  def capitalize   (self) -> str:
-      NotImplemented
-  def center       (self, width: int, fillchar: ?str) -> str:
-      NotImplemented
-  def count        (self, sub: str, start: ?int, end: ?int) -> int:
-      NotImplemented
-  def encode       (self) -> bytes:
-      NotImplemented
-  def endswith     (self, suffix: str, start: ?int, end: ?int) -> bool:
-      NotImplemented
-  def expandtabs   (self, tabsize: ?int) -> str:
-      NotImplemented
-  def find         (self, sub: str, start: ?int, end: ?int) -> int:
-      NotImplemented
-  def index        (self, sub: str, start: ?int, end: ?int) -> int:
-      NotImplemented
-  def isalnum      (self) -> bool:
-      NotImplemented
-  def isalpha      (self) -> bool:
-      NotImplemented
-  def isascii      (self) -> bool:
-      NotImplemented
-  def isdecimal    (self) -> bool:
-      NotImplemented
-  def islower      (self) -> bool:
-      NotImplemented
-  def isprintable  (self) -> bool:
-      NotImplemented
-  def isspace      (self) -> bool:
-      NotImplemented
-  def istitle      (self) -> bool:
-      NotImplemented
-  def isupper      (self) -> bool:
-      NotImplemented
-  def join         (self, iterable: Iterable[str]) -> str:
-      NotImplemented
-  def ljust        (self, width: int, fillchar: ?str) -> str:
-      NotImplemented
-  def lower        (self) -> str:
-      NotImplemented
-  def lstrip       (self, chars: str) -> str:
-      NotImplemented
-  def partition    (self, sep: str) -> (str,str,str):
-      NotImplemented
-  def replace      (self, old: str, new: str, count: ?int) -> str:
-      NotImplemented
-  def rfind        (self, sub: str, start: ?int, end: ?int) -> int:
-      NotImplemented
-  def rindex       (self, sub: str, start: ?int, end: ?int) -> int:
-      NotImplemented
-  def rjust        (self, width: int, fillchar: ?str) -> str:
-      NotImplemented
-  def rpartition   (self, sep: str) -> (str,str,str):
-      NotImplemented
-  def rstrip       (self, chars: ?str) -> str:
-      NotImplemented
-  def split        (self, sep: str, maxsplit: ?int) -> list[str]:
-      NotImplemented
-  def splitlines   (self, keepends: ?bool) -> list[str]:
-      NotImplemented
-  def startswith   (self, prefix: str, start: ?int, end: ?int) -> bool:
-      NotImplemented
-  def strip        (self, chars: ?str) -> str:
-      NotImplemented
-  def upper        (self) -> str:
-      NotImplemented
-  def zfill        (self, width: int) -> str:
-      NotImplemented
+    def __init__     (self, val: value) -> None:
+        NotImplemented
+    def capitalize   (self) -> str:
+        NotImplemented
+    def center       (self, width: int, fillchar: ?str) -> str:
+        NotImplemented
+    def count        (self, sub: str, start: ?int, end: ?int) -> int:
+        NotImplemented
+    def encode       (self) -> bytes:
+        NotImplemented
+    def endswith     (self, suffix: str, start: ?int, end: ?int) -> bool:
+        NotImplemented
+    def expandtabs   (self, tabsize: ?int) -> str:
+        NotImplemented
+    def find         (self, sub: str, start: ?int, end: ?int) -> int:
+        NotImplemented
+    def index        (self, sub: str, start: ?int, end: ?int) -> int:
+        NotImplemented
+    def isalnum      (self) -> bool:
+        NotImplemented
+    def isalpha      (self) -> bool:
+        NotImplemented
+    def isascii      (self) -> bool:
+        NotImplemented
+    def isdecimal    (self) -> bool:
+        NotImplemented
+    def islower      (self) -> bool:
+        NotImplemented
+    def isprintable  (self) -> bool:
+        NotImplemented
+    def isspace      (self) -> bool:
+        NotImplemented
+    def istitle      (self) -> bool:
+        NotImplemented
+    def isupper      (self) -> bool:
+        NotImplemented
+    def join         (self, iterable: Iterable[str]) -> str:
+        NotImplemented
+    def ljust        (self, width: int, fillchar: ?str) -> str:
+        NotImplemented
+    def lower        (self) -> str:
+        NotImplemented
+    def lstrip       (self, chars: str) -> str:
+        NotImplemented
+    def partition    (self, sep: str) -> (str,str,str):
+        NotImplemented
+    def replace      (self, old: str, new: str, count: ?int) -> str:
+        NotImplemented
+    def rfind        (self, sub: str, start: ?int, end: ?int) -> int:
+        NotImplemented
+    def rindex       (self, sub: str, start: ?int, end: ?int) -> int:
+        NotImplemented
+    def rjust        (self, width: int, fillchar: ?str) -> str:
+        NotImplemented
+    def rpartition   (self, sep: str) -> (str,str,str):
+        NotImplemented
+    def rstrip       (self, chars: ?str) -> str:
+        NotImplemented
+    def split        (self, sep: str, maxsplit: ?int) -> list[str]:
+        NotImplemented
+    def splitlines   (self, keepends: ?bool) -> list[str]:
+        NotImplemented
+    def startswith   (self, prefix: str, start: ?int, end: ?int) -> bool:
+        NotImplemented
+    def strip        (self, chars: ?str) -> str:
+        NotImplemented
+    def upper        (self) -> str:
+        NotImplemented
+    def zfill        (self, width: int) -> str:
+        NotImplemented
 
 class bytes (value):
-  def __init__     (self, iterable: Iterable[int]) -> None:
-      NotImplemented
-  def capitalize   (self) -> bytes:
-      NotImplemented
-  def center       (self, width: int, fillchar: ?bytes) -> bytes:
-      NotImplemented
-  def count        (self, sub: bytes, start: ?int, end: ?int) -> int:
-      NotImplemented
-  def decode       (self) -> str:
-      NotImplemented
-  def endswith     (self, suffix: bytes, start: ?int, end: ?int) -> bool:
-      NotImplemented
-  def expandtabs   (self, tabsize: ?int) -> bytes:
-      NotImplemented
-  def find         (self, sub: bytes, start: ?int, end: ?int) -> int:
-      NotImplemented
-  def index        (self, sub: bytes, start: ?int, end: ?int) -> int:
-      NotImplemented
-  def isalnum      (self) -> bool:
-      NotImplemented
-  def isalpha      (self) -> bool:
-      NotImplemented
-  def isascii      (self) -> bool:
-      NotImplemented
-  def isdigit      (self) -> bool:
-      NotImplemented
-  def islower      (self) -> bool:
-      NotImplemented
-  def isspace      (self) -> bool:
-      NotImplemented
-  def istitle      (self) -> bool:
-      NotImplemented
-  def isupper      (self) -> bool:
-      NotImplemented
-  def join         (self, iterable: Iterable[bytes]) -> bytes:
-      NotImplemented
-  def ljust        (self, width: int, fillchar: ?bytes) -> bytes:
-      NotImplemented
-  def lower        (self) -> bytes:
-      NotImplemented
-  def lstrip       (self, chars: bytes) -> bytes:
-      NotImplemented
-  def partition    (self, sep: bytes) -> (bytes,bytes,bytes):
-      NotImplemented
-  def replace      (self, old: bytes, new: bytes, count: ?int) -> bytes:
-      NotImplemented
-  def rfind        (self, sub: bytes, start: ?int, end: ?int) -> int:
-      NotImplemented
-  def rindex       (self, sub: bytes, start: ?int, end: ?int) -> int:
-      NotImplemented
-  def rjust        (self, width: int, fillchar: ?bytes) -> bytes:
-      NotImplemented
-  def rpartition   (self, sep: bytes) -> (bytes,bytes,bytes):
-      NotImplemented
-  def rstrip       (self, chars: ?bytes) -> bytes:
-      NotImplemented
-  def split        (self, sep: bytes, maxsplit: ?int) -> list[bytes]:
-      NotImplemented
-  def splitlines   (self, keepends: ?bool) -> list[bytes]:
-      NotImplemented
-  def startswith   (self, prefix: bytes, start: ?int, end: ?int) -> bool:
-      NotImplemented
-  def strip        (self, chars: ?bytes) -> bytes:
-      NotImplemented
-  def upper        (self) -> bytes:
-      NotImplemented
-  def zfill        (self, width: int) -> bytes:
-      NotImplemented
+    def __init__     (self, iterable: Iterable[int]) -> None:
+        NotImplemented
+    def capitalize   (self) -> bytes:
+        NotImplemented
+    def center       (self, width: int, fillchar: ?bytes) -> bytes:
+        NotImplemented
+    def count        (self, sub: bytes, start: ?int, end: ?int) -> int:
+        NotImplemented
+    def decode       (self) -> str:
+        NotImplemented
+    def endswith     (self, suffix: bytes, start: ?int, end: ?int) -> bool:
+        NotImplemented
+    def expandtabs   (self, tabsize: ?int) -> bytes:
+        NotImplemented
+    def find         (self, sub: bytes, start: ?int, end: ?int) -> int:
+        NotImplemented
+    def index        (self, sub: bytes, start: ?int, end: ?int) -> int:
+        NotImplemented
+    def isalnum      (self) -> bool:
+        NotImplemented
+    def isalpha      (self) -> bool:
+        NotImplemented
+    def isascii      (self) -> bool:
+        NotImplemented
+    def isdigit      (self) -> bool:
+        NotImplemented
+    def islower      (self) -> bool:
+        NotImplemented
+    def isspace      (self) -> bool:
+        NotImplemented
+    def istitle      (self) -> bool:
+        NotImplemented
+    def isupper      (self) -> bool:
+        NotImplemented
+    def join         (self, iterable: Iterable[bytes]) -> bytes:
+        NotImplemented
+    def ljust        (self, width: int, fillchar: ?bytes) -> bytes:
+        NotImplemented
+    def lower        (self) -> bytes:
+        NotImplemented
+    def lstrip       (self, chars: bytes) -> bytes:
+        NotImplemented
+    def partition    (self, sep: bytes) -> (bytes,bytes,bytes):
+        NotImplemented
+    def replace      (self, old: bytes, new: bytes, count: ?int) -> bytes:
+        NotImplemented
+    def rfind        (self, sub: bytes, start: ?int, end: ?int) -> int:
+        NotImplemented
+    def rindex       (self, sub: bytes, start: ?int, end: ?int) -> int:
+        NotImplemented
+    def rjust        (self, width: int, fillchar: ?bytes) -> bytes:
+        NotImplemented
+    def rpartition   (self, sep: bytes) -> (bytes,bytes,bytes):
+        NotImplemented
+    def rstrip       (self, chars: ?bytes) -> bytes:
+        NotImplemented
+    def split        (self, sep: bytes, maxsplit: ?int) -> list[bytes]:
+        NotImplemented
+    def splitlines   (self, keepends: ?bool) -> list[bytes]:
+        NotImplemented
+    def startswith   (self, prefix: bytes, start: ?int, end: ?int) -> bool:
+        NotImplemented
+    def strip        (self, chars: ?bytes) -> bytes:
+        NotImplemented
+    def upper        (self) -> bytes:
+        NotImplemented
+    def zfill        (self, width: int) -> bytes:
+        NotImplemented
 
 class bytearray (object):
-  def __init__     (self, val: bytes) -> None:
-      NotImplemented
-  def capitalize   (self) -> bytearray:
-      NotImplemented
-  def center       (self, width: int, fillchar: ?bytearray) -> bytearray:
-      NotImplemented
-  def count        (self, sub: bytearray, start: ?int, end: ?int) -> int:
-      NotImplemented
-  def decode       (self) -> str:
-      NotImplemented
-  def endswith     (self, suffix: bytearray, start: ?int, end: ?int) -> bool:
-      NotImplemented
-  def expandtabs   (self, tabsize: ?int) -> bytearray:
-      NotImplemented
-  def find         (self, sub: bytearray, start: ?int, end: ?int) -> int:
-      NotImplemented
-  def index        (self, sub: bytearray, start: ?int, end: ?int) -> int:
-      NotImplemented
-  def isalnum      (self) -> bool:
-      NotImplemented
-  def isalpha      (self) -> bool:
-      NotImplemented
-  def isascii      (self) -> bool:
-      NotImplemented
-  def isdigit      (self) -> bool:
-      NotImplemented
-  def islower      (self) -> bool:
-      NotImplemented
-  def isspace      (self) -> bool:
-      NotImplemented
-  def istitle      (self) -> bool:
-      NotImplemented
-  def isupper      (self) -> bool:
-      NotImplemented
-  def join         (self, iterable: Iterable[bytearray]) -> bytearray:
-      NotImplemented
-  def ljust        (self, width: int, fillchar: ?bytearray) -> bytearray:
-      NotImplemented
-  def lower        (self) -> bytearray:
-      NotImplemented
-  def lstrip       (self, chars: bytearray) -> bytearray:
-      NotImplemented
-  def partition    (self, sep: bytearray) -> (bytearray,bytearray,bytearray):
-      NotImplemented
-  def replace      (self, old: bytearray, new: bytearray, count: ?int) -> bytearray:
-      NotImplemented
-  def rfind        (self, sub: bytearray, start: ?int, end: ?int) -> int:
-      NotImplemented
-  def rindex       (self, sub: bytearray, start: ?int, end: ?int) -> int:
-      NotImplemented
-  def rjust        (self, width: int, fillchar: ?bytearray) -> bytearray:
-      NotImplemented
-  def rpartition   (self, sep: bytearray) -> (bytearray,bytearray,bytearray):
-      NotImplemented
-  def rstrip       (self, chars: ?bytearray) -> bytearray:
-      NotImplemented
-  def split        (self, sep: bytearray, maxsplit: ?int) -> list[bytearray]:
-      NotImplemented
-  def splitlines   (self, keepends: ?bool) -> list[bytearray]:
-      NotImplemented
-  def startswith   (self, prefix: bytearray, start: ?int, end: ?int) -> bool:
-      NotImplemented
-  def strip        (self, chars: ?bytearray) -> bytearray:
-      NotImplemented
-  def upper        (self) -> bytearray:
-      NotImplemented
-  def zfill        (self, width: int) -> bytearray:
-      NotImplemented
+    def __init__     (self, val: bytes) -> None:
+        NotImplemented
+    def capitalize   (self) -> bytearray:
+        NotImplemented
+    def center       (self, width: int, fillchar: ?bytearray) -> bytearray:
+        NotImplemented
+    def count        (self, sub: bytearray, start: ?int, end: ?int) -> int:
+        NotImplemented
+    def decode       (self) -> str:
+        NotImplemented
+    def endswith     (self, suffix: bytearray, start: ?int, end: ?int) -> bool:
+        NotImplemented
+    def expandtabs   (self, tabsize: ?int) -> bytearray:
+        NotImplemented
+    def find         (self, sub: bytearray, start: ?int, end: ?int) -> int:
+        NotImplemented
+    def index        (self, sub: bytearray, start: ?int, end: ?int) -> int:
+        NotImplemented
+    def isalnum      (self) -> bool:
+        NotImplemented
+    def isalpha      (self) -> bool:
+        NotImplemented
+    def isascii      (self) -> bool:
+        NotImplemented
+    def isdigit      (self) -> bool:
+        NotImplemented
+    def islower      (self) -> bool:
+        NotImplemented
+    def isspace      (self) -> bool:
+        NotImplemented
+    def istitle      (self) -> bool:
+        NotImplemented
+    def isupper      (self) -> bool:
+        NotImplemented
+    def join         (self, iterable: Iterable[bytearray]) -> bytearray:
+        NotImplemented
+    def ljust        (self, width: int, fillchar: ?bytearray) -> bytearray:
+        NotImplemented
+    def lower        (self) -> bytearray:
+        NotImplemented
+    def lstrip       (self, chars: bytearray) -> bytearray:
+        NotImplemented
+    def partition    (self, sep: bytearray) -> (bytearray,bytearray,bytearray):
+        NotImplemented
+    def replace      (self, old: bytearray, new: bytearray, count: ?int) -> bytearray:
+        NotImplemented
+    def rfind        (self, sub: bytearray, start: ?int, end: ?int) -> int:
+        NotImplemented
+    def rindex       (self, sub: bytearray, start: ?int, end: ?int) -> int:
+        NotImplemented
+    def rjust        (self, width: int, fillchar: ?bytearray) -> bytearray:
+        NotImplemented
+    def rpartition   (self, sep: bytearray) -> (bytearray,bytearray,bytearray):
+        NotImplemented
+    def rstrip       (self, chars: ?bytearray) -> bytearray:
+        NotImplemented
+    def split        (self, sep: bytearray, maxsplit: ?int) -> list[bytearray]:
+        NotImplemented
+    def splitlines   (self, keepends: ?bool) -> list[bytearray]:
+        NotImplemented
+    def startswith   (self, prefix: bytearray, start: ?int, end: ?int) -> bool:
+        NotImplemented
+    def strip        (self, chars: ?bytearray) -> bytearray:
+        NotImplemented
+    def upper        (self) -> bytearray:
+        NotImplemented
+    def zfill        (self, width: int) -> bytearray:
+        NotImplemented
 
 class Msg[A] (value):
-  NotImplemented
+    NotImplemented
 
 ## Exceptions ##################################################################################
 
 class BaseException (value):
-  def __init__(self, msg: str) -> None:
-      self.error_message = msg
+    def __init__(self, msg: str) -> None:
+        self.error_message = msg
 
 class SystemExit (BaseException):
-  pass
+    pass
 
 class KeyboardInterrupt (BaseException):
-  pass
+    pass
 
 class Exception (BaseException):
-  pass
+    pass
 
 class AssertionError (Exception):
-  pass
+    pass
 
 class LookupError (Exception):
-  pass
+    pass
 
 class IndexError (LookupError):
-  pass
+    pass
 
 class KeyError (LookupError):
-  pass
+    pass
 
 class MemoryError (Exception):
-  pass
+    pass
 
 class OSError (Exception):
-  pass
+    pass
 
 class RuntimeError (Exception):
-  pass
+    pass
 
 class NotImplementedError (RuntimeError):
-  pass
+    pass
 
 class ValueError (Exception):
-  pass
+    pass
 
 ## General protocols ###############################################################################
 
 protocol Identity:
-  @staticmethod
-  __is__        : (Self,Self) -> bool
-  @staticmethod
-  __isnot__     : (Self,Self) -> bool
+    @staticmethod
+    __is__        : (Self,Self) -> bool
+    @staticmethod
+    __isnot__     : (Self,Self) -> bool
 
 protocol Eq:
-  @staticmethod
-  __eq__       : (Self,Self) -> bool
-  @staticmethod
-  __ne__       : (Self,Self) -> bool
-  def __ne__(a,b):
-      return not (a == b)
+    @staticmethod
+    __eq__       : (Self,Self) -> bool
+    @staticmethod
+    __ne__       : (Self,Self) -> bool
+    def __ne__(a,b):
+        return not (a == b)
 
 protocol Ord (Eq):
-  @staticmethod
-  __lt__       : (Self,Self) -> bool
-  @staticmethod
-  __le__       : (Self,Self) -> bool
-  @staticmethod
-  __gt__       : (Self,Self) -> bool 
-  @staticmethod
-  __ge__       : (Self,Self) -> bool 
+    @staticmethod
+    __lt__       : (Self,Self) -> bool
+    @staticmethod
+    __le__       : (Self,Self) -> bool
+    @staticmethod
+    __gt__       : (Self,Self) -> bool
+    @staticmethod
+    __ge__       : (Self,Self) -> bool
 
-  def __le__(a,b):
-      return a < b or a == b
-  def __gt__(a,b):
-      return b < a
-  def __ge__(a,b):
-      return b <= a
-      
+    def __le__(a,b):
+        return a < b or a == b
+    def __gt__(a,b):
+        return b < a
+    def __ge__(a,b):
+        return b <= a
+
 protocol Logical:
-  @staticmethod
-  __and__     : (Self,Self) -> Self
-  @staticmethod
-  __or__      : (Self,Self) -> Self
-  @staticmethod
-  __xor__     : (Self,Self) -> Self
+    @staticmethod
+    __and__     : (Self,Self) -> Self
+    @staticmethod
+    __or__      : (Self,Self) -> Self
+    @staticmethod
+    __xor__     : (Self,Self) -> Self
 
-  @staticmethod
-  __iand__    : (Self,Self) -> Self
-  @staticmethod
-  __ior__     : (Self,Self) -> Self
-  @staticmethod
-  __ixor__    : (Self,Self) -> Self
-  
-  def __iand__(a,b):
-      return a & b
-  def __ior__(a,b):
-      return a | b
-  def __ixor__(a,b):
-      return a ^ b
+    @staticmethod
+    __iand__    : (Self,Self) -> Self
+    @staticmethod
+    __ior__     : (Self,Self) -> Self
+    @staticmethod
+    __ixor__    : (Self,Self) -> Self
+
+    def __iand__(a,b):
+        return a & b
+    def __ior__(a,b):
+        return a | b
+    def __ixor__(a,b):
+        return a ^ b
 
 protocol Plus:
-  @staticmethod
-  __add__      : (Self,Self) -> Self
-  @staticmethod
-  __iadd__     : (Self,Self) -> Self
-  
-  def __iadd__(a,b):
-      return a + b
+    @staticmethod
+    __add__      : (Self,Self) -> Self
+    @staticmethod
+    __iadd__     : (Self,Self) -> Self
+
+    def __iadd__(a,b):
+        return a + b
 
 protocol Minus:
-  @staticmethod
-  __sub__      : (Self,Self) -> Self
-  @staticmethod
-  __isub__     : (Self,Self) -> Self
-  
-  def __isub__(a,b):
-      return a - b
+    @staticmethod
+    __sub__      : (Self,Self) -> Self
+    @staticmethod
+    __isub__     : (Self,Self) -> Self
+
+    def __isub__(a,b):
+        return a - b
 
 protocol Times[A] (Plus):
-  @staticmethod
-  __mul__      : (Self,A) -> Self
-  @staticmethod
-  __imul__     : (Self,A) -> Self
+    @staticmethod
+    __mul__      : (Self,A) -> Self
+    @staticmethod
+    __imul__     : (Self,A) -> Self
 
-  def __imul__(a,b):
-      return a * b
+    def __imul__(a,b):
+        return a * b
 
 protocol Div[A]:
- @staticmethod
- __truediv__  : (Self,Self) -> A
- @staticmethod
- __itruediv__ : (Self,Self) -> A
+    @staticmethod
+    __truediv__  : (Self,Self) -> A
+    @staticmethod
+    __itruediv__ : (Self,Self) -> A
 
- def __itruediv__(a,b):
-     return a / b
+    def __itruediv__(a,b):
+        return a / b
 
 protocol Hashable (Eq):
-  __hash__     : () -> int
+    __hash__     : () -> int
 
 
 class complex (value):
-  def __init__(self, val: Number) -> None:
-      NotImplemented
+    def __init__(self, val: Number) -> None:
+        NotImplemented
 
 class dict[A(Hashable),B] (object):
-  def __init__(self, iterable: ?Iterable[(A,B)]) -> None:
-      NotImplemented
+    def __init__(self, iterable: ?Iterable[(A,B)]) -> None:
+        NotImplemented
 
 class set[A(Hashable)] (object):
-  def __init__(self, iterable: ?Iterable[A]) -> None:
-      NotImplemented
+    def __init__(self, iterable: ?Iterable[A]) -> None:
+        NotImplemented
 
 ## Number protocols ################################################################################
 
@@ -474,81 +474,81 @@ class set[A(Hashable)] (object):
 #   Integral <--------
 
 protocol Number (Times[Self],Minus):
-  @staticmethod
-  __fromatom__ : (atom) -> Self
+    @staticmethod
+    __fromatom__ : (atom) -> Self
 
-  __complex__  : () -> complex
+    __complex__  : () -> complex
 
-  @staticmethod
-  __pow__      : (Self,Self) -> Self
+    @staticmethod
+    __pow__      : (Self,Self) -> Self
 
-  @staticmethod
-  __ipow__     : (Self,Self) -> Self
-  
-  def __ipow__(a,b):
-      return a ** b
+    @staticmethod
+    __ipow__     : (Self,Self) -> Self
 
-  __neg__      : () -> Self
-  __pos__      : () -> Self
-  
-  real         : () -> Real
-  imag         : () -> Real
-  __abs__      : () -> Real  # What about arg?
+    def __ipow__(a,b):
+        return a ** b
 
-  conjugate    : () -> Self
+    __neg__      : () -> Self
+    __pos__      : () -> Self
+
+    real         : () -> Real
+    imag         : () -> Real
+    __abs__      : () -> Real  # What about arg?
+
+    conjugate    : () -> Self
 
 protocol Real (Number):
-  __float__    : () -> float
+    __float__    : () -> float
 
-  __trunc__    : () -> Integral
-  __floor__    : () -> Integral
-  __ceil__     : () -> Integral
+    __trunc__    : () -> Integral
+    __floor__    : () -> Integral
+    __ceil__     : () -> Integral
 
-  __round__    : (?int) -> Self
+    __round__    : (?int) -> Self
 
 protocol RealFloat (Real):
-  pass
+    pass
 
 protocol Rational (Real):
-  numerator    : () -> Integral
-  denominator  : () -> Integral
+    numerator    : () -> Integral
+    denominator  : () -> Integral
 
 protocol Integral (Rational,Logical):
-  __int__      : () -> int
-  __index__    : () -> int
+    __int__      : () -> int
+    __index__    : () -> int
 
-  @staticmethod
-  __divmod__   : (Self,Self) -> (Self,Self)
-  @staticmethod
-  __floordiv__ : (Self,Self) -> Self
-  @staticmethod
-  __mod__      : (Self,Self) -> Self
+    @staticmethod
+    __divmod__   : (Self,Self) -> (Self,Self)
+    @staticmethod
+    __floordiv__ : (Self,Self) -> Self
+    @staticmethod
+    __mod__      : (Self,Self) -> Self
 
-  @staticmethod
-  __ifloordiv__ : (Self,Self) -> Self
-  @staticmethod
-  __imod__     : (Self,Self) -> Self
-  
-  @staticmethod
-  __lshift__   : (Self,int) -> Self
-  @staticmethod
-  __rshift__   : (Self,int) -> Self
+    @staticmethod
+    __ifloordiv__ : (Self,Self) -> Self
+    @staticmethod
+    __imod__     : (Self,Self) -> Self
 
-  @staticmethod
-  __ilshift__  : (Self,int) -> Self
-  @staticmethod
-  __irshift__  : (Self,int) -> Self
+    @staticmethod
+    __lshift__   : (Self,int) -> Self
+    @staticmethod
+    __rshift__   : (Self,int) -> Self
 
-  def __ifloordiv__(a,b):
-    return a // b
-  def __imod__(a,b):
-    return a % b
-  def __ilshift__(a,b):
-    return a << b
-  def __irshift__(a,b):
-    return a >> b
+    @staticmethod
+    __ilshift__  : (Self,int) -> Self
+    @staticmethod
+    __irshift__  : (Self,int) -> Self
 
-  __invert__   : () -> Self
+    def __ifloordiv__(a,b):
+        return a // b
+    def __imod__(a,b):
+        return a % b
+    def __ilshift__(a,b):
+        return a << b
+    def __irshift__(a,b):
+        return a >> b
+
+    __invert__   : () -> Self
 
 ## Number protocol extensions ######################################################################
 
@@ -640,23 +640,23 @@ extension complex (Hashable):
 ## Collection protocols ############################################################################
 
 protocol Indexed[A (Eq),B]:
-  __getitem__  : (A) -> B
-  __setitem__  : mut(A,B) -> None
-  __delitem__  : mut(A) -> None
+    __getitem__  : (A) -> B
+    __setitem__  : mut(A,B) -> None
+    __delitem__  : mut(A) -> None
 
 protocol Sliceable[A] (Indexed[int,A]):
-  __getslice__ : (slice) -> Self
-  __setslice__ : mut(slice,Iterable[A]) -> None
-  __delslice__ : mut(slice) -> None
-  
+    __getslice__ : (slice) -> Self
+    __setslice__ : mut(slice,Iterable[A]) -> None
+    __delslice__ : mut(slice) -> None
+
 protocol Collection[A] (Iterable[A]):
-  @staticmethod
-  __fromiter__ : (Iterable[A]) -> Self 
-  __len__      : () -> int
-  
+    @staticmethod
+    __fromiter__ : (Iterable[A]) -> Self
+    __len__      : () -> int
+
 protocol Container[A(Eq)] (Collection[A]):
-  __contains__    : (A) -> bool  
-  __containsnot__ : (A) -> bool
+    __contains__    : (A) -> bool
+    __containsnot__ : (A) -> bool
 
 
 
@@ -669,10 +669,10 @@ protocol Container[A(Eq)] (Collection[A]):
 #   Sequence <-------- <--------------
 
 protocol Sequence[A] (Sliceable[A], Collection[A], Times[int]):
-  __reversed__ : () -> Iterator[A] 
-  insert      : mut(int,A) -> None
-  append      : mut(A) -> None
-  reverse     : mut() -> None
+    __reversed__ : () -> Iterator[A]
+    insert      : mut(int,A) -> None
+    append      : mut(A) -> None
+    reverse     : mut() -> None
 
 
 
@@ -688,13 +688,13 @@ protocol Sequence[A] (Sliceable[A], Collection[A], Times[int]):
 #   Mapping <---------
 
 protocol Mapping[A(Eq),B] (Container[A], Indexed[A,B]):
-  get         : (A,B) -> B
-  keys        : () -> Iterator[A]
-  values      : () -> Iterator[B]
-  items       : () -> Iterator[(A,B)]
-  update      : mut(Iterable[(A,B)]) -> None
-  popitem     : () -> (A,B)
-  setdefault  : mut(A,B) -> None
+    get         : (A,B) -> B
+    keys        : () -> Iterator[A]
+    values      : () -> Iterator[B]
+    items       : () -> Iterator[(A,B)]
+    update      : mut(Iterable[(A,B)]) -> None
+    popitem     : () -> (A,B)
+    setdefault  : mut(A,B) -> None
 
 
 
@@ -710,11 +710,11 @@ protocol Mapping[A(Eq),B] (Container[A], Indexed[A,B]):
 #   Set <------------- <-------------- <--------------
 
 protocol Set[A (Eq)] (Container[A], Ord, Logical, Minus):
-  @staticmethod
-  isdisjoint  : (Self,Self) -> bool
-  add         : mut(A) -> None
-  discard     : mut(A) -> None
-  pop         : () -> A 
+    @staticmethod
+    isdisjoint  : (Self,Self) -> bool
+    add         : mut(A) -> None
+    discard     : mut(A) -> None
+    pop         : () -> A
 
 
 ## Collection protocol extensions ########################################

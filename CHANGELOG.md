@@ -109,6 +109,11 @@
 - The `msg` of exceptions is now optional [#1422]
 
 ### Fixed
+- Fix control flow bug for `continue` in `for` loop [#1265]
+- Fix control flow bug for `return` in `while loop` [#1194]
+- Throw exceptions for unimplemented builtins [#1010]
+  - Previously printed to stderr and did `exit(1)`
+  - Now throws a `NotImplemetedError` instead!
 - Document use of `--sigs` in Acton-by-Example [#1405]
 - Fix up-to-date check for stub compilation [#1399]
 - Improve support for alternate output in actonc [#1395]
