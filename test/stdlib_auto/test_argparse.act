@@ -1,0 +1,164 @@
+import logging
+import argparse
+
+def test_opts():
+    p = argparse.Parser()
+    p.add_bool("verbose", "verbose mode")
+    p.add_option("num", "int", "?", 1337, "number field")
+    p.add_option("text", "str", "?", "Hello", "text field")
+
+    args = p.parse(["./app"])
+    if args.get_bool("verbose") != False:
+        raise ValueError("default bool verbose != True")
+    if args.get_int("num") != 1337:
+        raise ValueError("default int num != 1337")
+    if args.get_str("text") != "Hello":
+        raise ValueError('default str text != "Hello"')
+
+    args = p.parse(["./app", "--verbose", "--num", "123", "--text", "foo"])
+    if args.get_bool("verbose") != True:
+        raise ValueError("bool verbose != True")
+    if args.get_int("num") != 123:
+        raise ValueError("int num != 123")
+    if args.get_str("text") != "foo":
+        raise ValueError('str text != "foo"')
+
+def test_opts_dupe():
+    p = argparse.Parser()
+    p.add_option("text", "str", "?", "Hello", "Text field")
+    try:
+        p.add_option("text", "str", "?", "Hello", "Text field")
+    except argparse.ArgumentError:
+        return
+    raise ValueError("Expected ArgumentError due to duplicate option")
+
+def test_opts_nargs():
+    p = argparse.Parser()
+    p.add_bool("verbose", "Enable verbose output")
+    p.add_option("text", "strlist", "+", [], "Text field")
+
+    args = p.parse(["./app", "--text", "A", "--verbose", "--text", "B"])
+    if args.get_strlist("text") != ["A", "B"]:
+        raise ValueError('opt strlist != ["A", "B"]')
+    if args.get_bool("verbose") != True:
+        raise ValueError("bool verbose != True")
+
+def test_posarg():
+    p = argparse.Parser()
+    p.add_arg("infile", "input file", "?")
+    p.add_arg("outfile", "output file", "?")
+
+    args = p.parse(["./app", "foo", "bar"])
+    if args.get_str("infile") != "foo":
+        raise ValueError("pos arg infile != foo")
+    if args.get_str("outfile") != "bar":
+        raise ValueError("pos arg outfile != bar")
+
+def test_posarg_nargs1():
+    p = argparse.Parser()
+    p.add_arg("infile", "input file", "+")
+    p.add_arg("outfile", "output file", "?")
+
+    args = p.parse(["./app", "in1", "in2", "bar"])
+    if args.get_strlist("infile") != ["in1", "in2"]:
+        raise ValueError('pos arg infile != ["in1", "in2"]')
+    if args.get_str("outfile") != "bar":
+        raise ValueError("pos arg outfile != bar")
+
+def test_posarg_nargs2():
+    p = argparse.Parser()
+    p.add_arg("infile", "input file", "?")
+    p.add_arg("outfile", "output file", "+")
+
+    args = p.parse(["./app", "in1", "out1", "out2"])
+    if args.get_str("infile") != "in1":
+        raise ValueError('pos arg infile != "in1"')
+    if args.get_strlist("outfile") != ["out1", "out2"]:
+        raise ValueError('pos arg outfile != ["out1", "out2"]')
+
+
+def test_posarg_nargs_invalid():
+    p = argparse.Parser()
+    p.add_arg("infile", "input file", "+")
+    try:
+        p.add_arg("outfile", "output file", "+")
+    except argparse.ArgumentError:
+        return
+    raise ValueError("Expected ArgumentError since multiple nargs=+ args is invalid (ambiguous)")
+
+def test_posarg_missing():
+    p = argparse.Parser()
+    p.add_arg("infile", "input file", "?")
+
+    try:
+        p.parse(["./app"])
+    except argparse.ArgumentError:
+        return
+    raise ValueError("Expected ArgumentError since positional argument is missing")
+
+def test_cmd():
+    def build(args):
+        pass
+
+    p = argparse.Parser()
+    p.add_bool("verbose", "Enable verbose output")
+    pb = p.add_cmd("build", build)
+    pb.add_bool("dev", "Enable dev mode")
+
+    args = p.parse(["./app", "--verbose", "build", "--dev"])
+    cmd = args.cmd
+    if cmd is None:
+        raise ValueError("Expected build cmd set")
+    if args.get_bool("verbose") != True:
+        raise ValueError("build cmd verbose flag == True")
+    if args.get_bool("dev") != True:
+        raise ValueError("build cmd dev flag == True")
+
+def test_cmd_nested():
+    def build(args):
+        pass
+
+    def build_and_run(args):
+        pass
+
+    p = argparse.Parser()
+    p.add_bool("verbose", "Enable verbose output")
+    pb = p.add_cmd("build", build)
+    pbr = p.add_cmd("run", build_and_run)
+    pb.add_bool("dev", "Enable dev mode")
+
+    # TODO: fix nested commands
+    args = p.parse(["./app", "--verbose", "build", "run", "--dev"])
+    cmd = args.cmd
+    if cmd is None:
+        raise ValueError("Expected build cmd set")
+    if args.get_bool("verbose") != True:
+        raise ValueError("build cmd verbose flag == True")
+    if args.get_bool("dev") != True:
+        raise ValueError("build cmd dev flag == True")
+
+def test_help():
+    p = argparse.Parser()
+    try:
+        args = p.parse(["./app", "--help"])
+    except argparse.PrintUsage:
+        return
+    raise ValueError("Expected PrintUsage")
+
+actor main(env):
+    try:
+        test_opts()
+        test_opts_nargs()
+        test_opts_dupe()
+        test_posarg()
+        test_posarg_nargs_invalid()
+        test_posarg_nargs1()
+        test_posarg_nargs2()
+        test_posarg_missing()
+        test_cmd()
+        #test_cmd_nested()
+        test_help()
+        env.exit(0)
+    except Exception as exc:
+        env.exit(1)
+        raise exc

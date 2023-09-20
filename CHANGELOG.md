@@ -19,6 +19,8 @@
     only supports unencrypted HTTP (due to lack of a `net.TLSListener`)
 - New `logging` module [#1483]
   - Provides logging functionality in an actor centric world
+- New `argparse` module [#1499]
+  - Command line argument parsing!
 - `net.TCPConnection`: A new TCP client connection actor [#1398]
   - Support DNS lookups so the input address can be a name rather than an IP
     address
@@ -114,6 +116,8 @@
 - Throw exceptions for unimplemented builtins [#1010]
   - Previously printed to stderr and did `exit(1)`
   - Now throws a `NotImplemetedError` instead!
+- Failed dict key lookups now throw `KeyError` [#1499]
+  - Previously incorrectly raised `IndexError`
 - Document use of `--sigs` in Acton-by-Example [#1405]
 - Fix up-to-date check for stub compilation [#1399]
 - Improve support for alternate output in actonc [#1395]

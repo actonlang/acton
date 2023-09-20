@@ -1,0 +1,271 @@
+"""Command line argument parsing
+
+parser = argparse.Parser(None)
+"""
+
+# TODO: nested commands
+# TODO: mutually exclusive argument groups
+# TODO: argument metavar
+# TODO: required options (oxymoronic)?
+# TODO: bash completion
+# TODO: --
+#
+
+class ArgumentError(Exception):
+    pass
+
+class PrintUsage(ArgumentError):
+    pass
+
+
+class Args(object):
+    cmd_parser: ?Parser
+    options: dict[str, (type: str, value: value)]
+    cmd: ?proc(Args) -> None
+
+    def __init__(self):
+        self.cmd_parser = None
+        self.options = {}
+        self.cmd = None
+
+    def get_bool(self, name: str) -> bool:
+        try:
+            opt = self.options[name]
+            if opt.type != "bool":
+                raise ValueError("Option %s is not a bool" % name)
+            val = opt.value
+            if isinstance(val, bool):
+                return val
+            raise ValueError("Option value %s is not a bool" % str(val))
+        except KeyError:
+            raise ArgumentError("Option '%s' not found" % name)
+
+    def get_int(self, name: str) -> int:
+        try:
+            opt = self.options[name]
+            if opt.type != "int":
+                raise ValueError("Option '%s' is not a int" % name)
+            val = opt.value
+            if isinstance(val, int):
+                return val
+            raise ValueError("Option value '%s' is not a int" % str(val))
+        except KeyError:
+            raise ArgumentError("Option '%s' not found" % name)
+
+    def get_str(self, name: str) -> str:
+        try:
+            opt = self.options[name]
+            if opt.type != "str":
+                raise ValueError("Option '%s' is not a str" % name)
+            val = opt.value
+            if isinstance(val, str):
+                return val
+            raise ValueError("Option value '%s' is not a str" % str(val))
+        except KeyError:
+            raise ArgumentError("Option '%s' not found" % name)
+
+    def get_strlist(self, name: str) -> list[str]:
+        try:
+            opt = self.options[name]
+            if opt.type != "strlist":
+                raise ValueError("Option '%s' is not a list[str]" % name)
+            val = opt.value
+            if isinstance(val, list):
+                return val
+            raise ValueError("Option value '%s' is not a list[str]" % str(val))
+        except KeyError:
+            raise ArgumentError("Option '%s' not found" % name)
+
+
+class Parser(object):
+    opts: dict[str, (name: str, type: str, nargs: str, default: ?value, help: str)]
+    args: list[(name: str, help: str, nargs: str, left: int)]
+    cmds: dict[str, (parser: Parser, fn: proc(Args) -> None)]
+    prog: str
+
+    def __init__(self):
+        self.opts = {}
+        self.args = []
+        self.cmds = {}
+        self.prog = ""
+
+    def add_bool(self, name: str, help: str):
+        self.opts[name] = (name=name, type="bool", nargs="?", default=False, help=help)
+
+    def add_option(self, name: str, type: str, nargs: str="?", default: ?value=None, help=""):
+        if name in self.opts:
+            raise ArgumentError("Option '%s' already exists" % name)
+        if type not in {"int", "str", "strlist"}:
+            raise ArgumentError("Invalid option type '%s'" % type)
+        self.opts[name] = (name=name, type=type, nargs=nargs, default=default, help="")
+
+    def add_arg(self, name: str, help: str = "", nargs: str = "?"):
+        if nargs == "+" or nargs == "*":
+            for arg in self.args:
+                if arg.nargs == "+" or arg.nargs == "*":
+                    raise ArgumentError("Only one positional argument with multiple values allowed")
+        self.args.append((name=name, help=help, nargs=nargs, left=1))
+
+    def add_cmd(self, name: str, fn: (Args) -> None):
+        p = Parser()
+        self.cmds[name] = (parser=p, fn=fn)
+        return p
+
+    def print_usage(self):
+        print(self.get_usage())
+
+    def get_usage(self):
+        usage_text = ""
+        short_opts = ""
+        for name in sorted(self.opts.keys()):
+            opt = self.opts[name]
+            if opt.type == "bool":
+                short_opts += " [--%s]" % name
+            else:
+                short_opts += " [--%s %s]" % (name, name.upper())
+        for arg in self.args:
+            n = arg.name
+            if n is not None:
+                if arg.nargs == "?":
+                    short_opts += " %s" % (n.upper())
+                elif arg.nargs == "+":
+                    short_opts += " %s [%s ...]" % (n.upper(), n.upper())
+        usage_text += "Usage: %s %s\n" % (self.prog, short_opts)
+        if len(self.args) > 0:
+            usage_text += "\nPositional arguments:\n"
+            for arg in self.args:
+                n = arg.name
+                if n is not None:
+                    usage_text += "  %-14s %s\n" % (n.upper(), arg.help)
+        if len(self.opts) > 0:
+            usage_text += "\nOptions:\n"
+            for name in sorted(self.opts.keys()):
+                opt = self.opts[name]
+                opt_help = "--%s" % name
+                if opt.type != "bool":
+                    opt_help += " %s" % name.upper()
+                usage_text += "  %-14s %s\n" % (opt_help, opt.help)
+        return usage_text
+
+    def parse(self, argv: list[str]) -> Args:
+        return self._parse(argv, None)
+
+    def _parse(self, argin: list[str], res_args: ?Args=None) -> Args:
+        if "help" not in self.opts:
+            self.add_bool("help", "show this help message")
+
+        if res_args is None: # top level call
+            self.prog = argin[0]
+            args_to_parse = argin[1:]
+        else: # recursively called
+            args_to_parse = argin
+        args, rest = self._parse_and_consume(args_to_parse, res_args)
+        cmd_parser = args.cmd_parser
+        if args.get_bool("help"):
+            raise PrintUsage(self.get_usage())
+        for arg in self.args:
+            if arg.name not in args.options:
+                raise ArgumentError("Missing positional argument: %s" % arg.name)
+        if cmd_parser is not None:
+            args = cmd_parser._parse(rest, args)
+        else:
+            if len(rest) > 0:
+                raise ArgumentError("Unexpected argument '%s'" % rest[0])
+
+        return args
+
+    def _parse_and_consume(self, argv: list[str], res_args: ?Args) -> (Args, list[str]):
+        rest: list[str] = []
+        if res_args is not None:
+            res = res_args
+            res.cmd_parser = None
+        else:
+            res = Args()
+        # Insert default values
+        for akey, aspec in self.opts.items():
+            defval = aspec.default
+            if defval is not None:
+                res.options[akey] = ("type"=aspec.type, "value"=defval)
+
+        posargs = []
+        skip = 0
+        for i in range(0, len(argv), 1):
+            p = i + skip
+            if p >= len(argv):
+                break
+            arg = argv[p]
+            start = 0
+            end = len(arg)
+            if arg.startswith('--', None, None):
+                start = 2
+                val_in_arg = False
+                if arg.find('=', None, None) != -1:
+                    val_in_arg = True
+                    end = arg.find('=', None, None)
+                akey = arg[start:end]
+
+                if akey in self.opts:
+                    aspec = self.opts[akey]
+                    val = False
+                    if aspec.type != "bool": # all other types take a value
+                        if val_in_arg:
+                            val = arg[end+1:]
+                        else:
+                            try:
+                                val = argv[p+1]
+                            except IndexError:
+                                raise ArgumentError("Missing value to option %s" % arg)
+                            skip += 1
+
+                    if aspec.type == "bool":
+                        res.options[akey] = ("type"="bool", "value"=True)
+                    elif aspec.type == "int":
+                        try:
+                            res.options[akey] = ("type"="int", "value"=int(val))
+                        except ValueError:
+                            raise ArgumentError("Option %s requires an integer value" % akey)
+                    elif aspec.type == "str":
+                        res.options[akey] = ("type"="str", "value"=val)
+                    elif aspec.type == "strlist":
+                        newval = []
+                        if akey in res.options:
+                            curlist = res.options[akey].value
+                            if isinstance(curlist, list):
+                                newval = curlist
+                        newval.append(val)
+                        res.options[akey] = ("type"="strlist", "value"=newval)
+                else:
+                    #raise ArgumentError("Unknown option %s" % arg)
+                    rest.append(arg)
+            else:
+                if arg in self.cmds:
+                    # pass rest of args to subparser for command
+                    cmd = self.cmds[arg]
+                    res.cmd_parser = cmd.parser
+                    res.cmd = cmd.fn
+                    continue
+                else:
+                    posargs.append(arg)
+
+        for i in range(0, len(posargs), 1):
+            arg = posargs[i]
+            if len(self.args) == 0:
+                rest.append(arg)
+            else:
+                posarg = self.args[0]
+                if posarg.nargs == "?":
+                    res.options[posarg.name] = ("type"="str", "value"=arg)
+                    self.args.pop(0)
+                elif posarg.nargs == "+":
+                    newval = []
+                    if posarg.name in res.options:
+                        curlist = res.options[posarg.name].value
+                        if isinstance(curlist, list):
+                            newval = curlist
+                    newval.append(arg)
+                    res.options[posarg.name] = ("type"="strlist", "value"=newval)
+                    remaining_posargs = len(self.args) - 1
+                    if len(posargs)-(i+1) == remaining_posargs:
+                        self.args.pop(0)
+
+        return res, rest
