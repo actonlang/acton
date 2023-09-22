@@ -755,7 +755,8 @@ instance Gen Expr where
     gen env (TApp _ e ts)           = genInst env ts e
     gen env (IsInstance _ e c)      = gen env primISINSTANCE <> parens (gen env e <> comma <+> genQName env c)
     gen env (Dot _ e n)             = genDot env [] e n
-    gen env (DotI _ e i)            = gen env e <> text "->" <> gen env componentsKW <> brackets (pretty i)
+    gen env e0@(DotI _ e i)         = parens $ parens (gen env t) <> gen env e <> text "->" <> gen env componentsKW <> brackets (pretty i)
+      where t                       = typeOf env e0
     gen env (RestI _ e i)           = gen env eNone <> semi <+> text "// CodeGen for tuple tail not implemented"
     gen env (Tuple _ p KwdNil)      
        | n == 0                     = gen env primNEWTUPLE0
