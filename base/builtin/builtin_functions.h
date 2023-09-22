@@ -120,24 +120,29 @@ B_Iterator B_zip(B_Iterable wit1, B_Iterable wit2, $WORD iter1, $WORD iter2);
 
 // EqOpt //////////////////////////////////////////////////////
 
-struct B_EqOpt;
-typedef struct B_EqOpt *B_EqOpt;
+struct $EqOpt;
+typedef struct $EqOpt *$EqOpt;
 
-struct B_EqOptG_class {
+struct $EqOptG_class {
     char *$GCINFO;
     int $class_id;
     $SuperG_class $superclass;
-    void (*__init__)(B_EqOpt, B_Eq);
-    B_bool (*__eq__)(B_EqOpt, $WORD, $WORD);
-    B_bool (*__ne__)(B_EqOpt, $WORD, $WORD);
+    void (*__init__)($EqOpt, B_Eq);
+    void (*__serialize__)($EqOpt,$Serial$state);
+    $EqOpt (*__deserialize__)($EqOpt,$Serial$state);
+    B_bool (*__bool__)($EqOpt);
+    B_str (*__str__)($EqOpt);
+    B_str (*__repr__)($EqOpt);
+    B_bool (*__eq__)($EqOpt, $WORD, $WORD);
+    B_bool (*__ne__)($EqOpt, $WORD, $WORD);
 };
 
-struct B_EqOpt {
-    struct B_EqOptG_class *$class;
+struct $EqOpt {
+    struct $EqOptG_class *$class;
     B_Eq W_Eq$A;
 };
 
-B_EqOpt B_EqOptG_new(B_Eq);
+$EqOpt $EqOptG_new(B_Eq);
 
 
 // Various small functions //////////////////////////////////////////////////////////

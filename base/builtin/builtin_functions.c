@@ -309,27 +309,52 @@ B_Iterator B_zip (B_Iterable wit1, B_Iterable wit2, $WORD iter1, $WORD iter2) {
 
 // EqOpt //////////////////////////////////////////////////////
 
-void B_EqOptD___init__(B_EqOpt wit, B_Eq W_Eq$A) {
+extern struct $EqOptG_class $EqOptG_methods;
+
+void $EqOptD___init__($EqOpt wit, B_Eq W_Eq$A) {
     wit->W_Eq$A = W_Eq$A;
 }
 
-B_bool B_EqOptD___eq__(B_EqOpt wit, $WORD a, $WORD b) {
-    if (a && b)
+B_bool $EqOptD_bool($EqOpt self) {
+    return B_True;
+}
+
+B_str $EqOptD_str($EqOpt self) {
+    char *s;
+    asprintf(&s,"<EqOpt witness at %p>",self);
+    return to$str(s);
+}
+
+void $EqOptD_serialize($EqOpt self,$Serial$state state) {
+    $step_serialize(self->W_Eq$A,state);
+}
+
+$EqOpt $EqOptD_deserialize($EqOpt res, $Serial$state state) {
+    if (!res)
+        res = $DNEW($EqOpt,state);
+    res->W_Eq$A = $step_deserialize(state);
+    return res;
+}
+
+B_bool $EqOptD___eq__($EqOpt wit, $WORD a, $WORD b) {
+    if (a && b) {
         return wit->W_Eq$A->$class->__eq__(wit->W_Eq$A, a, b);
+    }
     return (!a && !b) ? B_True : B_False;
 }
 
-B_bool B_EqOptD___ne__(B_EqOpt wit, $WORD a, $WORD b) {
+B_bool $EqOptD___ne__($EqOpt wit, $WORD a, $WORD b) {
     if (a && b)
         return wit->W_Eq$A->$class->__ne__(wit->W_Eq$A, a, b);
     return (!a && !b) ? B_False : B_True;
 }
 
-struct B_EqOptG_class B_EqOptG_methods = {"B_EqOpt", UNASSIGNED, NULL, B_EqOptD___init__, B_EqOptD___eq__, B_EqOptD___ne__};
+struct $EqOptG_class $EqOptG_methods = {"$EqOpt", UNASSIGNED, NULL, $EqOptD___init__, $EqOptD_serialize, $EqOptD_deserialize, 
+                                         $EqOptD_bool, $EqOptD_str, $EqOptD_str, $EqOptD___eq__, $EqOptD___ne__};
 
 
-B_EqOpt B_EqOptG_new(B_Eq W_Eq$A) {
-    return $NEW(B_EqOpt, W_Eq$A);
+$EqOpt $EqOptG_new(B_Eq W_Eq$A) {
+    return $NEW($EqOpt, W_Eq$A);
 }
 
 
