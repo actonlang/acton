@@ -218,7 +218,6 @@ solve' env select hist te tt eq cs
         subrev (t:ts)                       = subrev ts1 ++ t : subrev ts2
           where (ts1,ts2)                   = partition (\t' -> castable env t' t) ts
 
-
 -- subrev [int,Pt,float,CPt,C3Pt]           = [] ++ int : subrev [Pt,float,CPt,C3Pt] 
 --                                          = int : subrev [CPt,C3Pt] ++ Pt : subrev [float]
 --                                          = int : [C3Pt] ++ CPt ++ subrev [] ++ Pt : [] ++ float : subrev []
@@ -255,42 +254,6 @@ rank env (Seal _ t@TVar{})
 rank env c                                  = RRed c
 
 
-----------------------------------------------------------------------------------------------------------------------
--- New variable info
-----------------------------------------------------------------------------------------------------------------------
-
-data VarInfo                                = VarInfo {
-                                                ubnd        :: [Type],
-                                                lbnd        :: [Type],
-                                                uvar        :: [TVar],
-                                                lvar        :: [TVar],
-                                                pbnd        :: [PCon],
-                                                sels        :: [Name],
-                                                muts        :: [Name] }
-
-varinf                                      :: Constraints -> Map TVar VarInfo
-varinf                                      = foldl f Map.empty
-  where
-    f m (Cast _ (TVar _ v1) (TVar _ v2))
-      | v1 == v2                            = m
-      | otherwise                           = update m v1 (\vi -> vi { uvar = v2 : uvar vi })
-    f m (Cast _ (TVar _ v) t)               = update m v (\vi -> vi { ubnd = t : ubnd vi })
-    f m (Cast _ t (TVar _ v))               = update m v (\vi -> vi { lbnd = t : lbnd vi })
-    f m (Sub info _ t1 t2)                  = f m (Cast info t1 t2)
-    f m (Impl _ w (TVar _ v) p)             = update m v (\vi -> vi { pbnd = p : pbnd vi })
-    f m (Impl _ w t p)
-      | not $ null vs                       = undefined
-      where vs                              = tyfree t
-    f m (Sel _ _ (TVar _ v) n t)            = update m v (\vi -> vi { sels = n : sels vi })
-    f m (Mut _ (TVar _ v) n t)              = update m v (\vi -> vi { muts = n : muts vi })
-    f m (Seal _ (TVar _ v))                 = undefined
-    f m _                                   = undefined
-
-    update                                  :: Map TVar VarInfo -> TVar -> (VarInfo -> VarInfo) -> Map TVar VarInfo
-    update m v f                            = Map.alter upd v m
-      where upd (Just i)                    = Just (f i)
-            upd Nothing                     = Just (f $ VarInfo [] [] [] [] [] [] [])
-
 -------------------------------------------------------------------------------------------------------------------------
 
 class OptVars a where
@@ -314,6 +277,7 @@ instance OptVars Type where
     optvars (TFun _ fx p k t)           = optvars [p, k, t]
     optvars (TTuple _ p k)              = optvars [p, k]
     optvars (TRow _ _ _ t r)            = optvars [t, r]
+    optvars (TStar _ _ r)               = optvars r
     optvars _                           = []
 
 instance OptVars TCon where
@@ -359,8 +323,9 @@ allAbove env (TOpt _ t)                 = [tOpt tWild]
 allAbove env (TNone _)                  = [tOpt tWild, tNone]
 allAbove env (TFun _ _ _ _ _)           = [tOpt tWild, tFun tWild tWild tWild tWild]
 allAbove env (TTuple _ _ _)             = [tOpt tWild, tTuple tWild tWild]
-allAbove env (TRow _ k n _ _)           = [tRow k n tWild tWild]
-allAbove env (TNil _ k)                 = [tNil k]
+--allAbove env (TRow _ k n _ _)           = [tRow k n tWild tWild]
+--allAbove env (TStar _ k r)              = [tStar k tWild]
+--allAbove env (TNil _ k)                 = [tNil k]
 allAbove env (TFX _ FXProc)             = [fxProc]
 allAbove env (TFX _ FXMut)              = [fxProc, fxMut]
 allAbove env (TFX _ FXPure)             = [fxProc, fxMut, fxPure]
@@ -372,8 +337,9 @@ allBelow env (TOpt _ t)                 = tOpt tWild : allBelow env t ++ [tNone]
 allBelow env (TNone _)                  = [tNone]
 allBelow env (TFun _ _ _ _ _)           = [tFun tWild tWild tWild tWild]
 allBelow env (TTuple _ _ _)             = [tTuple tWild tWild]
-allBelow env (TRow _ k n _ _)           = [tRow k n tWild tWild]
-allBelow env (TNil _ k)                 = [tNil k]
+--allBelow env (TRow _ k n _ _)           = [tRow k n tWild tWild]
+--allBelow env (TStar _ k r)              = [tStar k tWild]
+--allBelow env (TNil _ k)                 = [tNil k]
 allBelow env (TFX _ FXProc)             = [fxProc, fxMut, fxPure, fxAction]
 allBelow env (TFX _ FXMut)              = [fxMut, fxPure]
 allBelow env (TFX _ FXPure)             = [fxPure]
@@ -401,7 +367,7 @@ reduce                                      :: Env -> Equations -> Constraints -
 reduce env eq []                            = return eq
 reduce env eq (c:cs)                        = do c <- msubst c
                                                  --traceM ("   reduce " ++ prstr c)
-                                                 eq1 <-  reduce' env eq c
+                                                 eq1 <- reduce' env eq c
                                                  reduce env eq1 cs
 
 reduce'                                     :: Env -> Equations -> Constraint -> TypeM Equations
@@ -450,7 +416,7 @@ reduce' env eq c@(Sel _ w (TVar _ tv) n _)
                                                  reduce env (eq'++eq) cs
   | Just p <- protoSearch                   = do (eq',cs) <- solveSelProto env p c
                                                  reduce env (eq'++eq) cs
-  | otherwise                               = tyerr n "Attribute not found:"
+  | otherwise                               = tyerr n "Attribute not found"
   where attrSearch                          = findTVAttr env tv n
         protoSearch                         = findProtoByAttr env (NoQ $ tvname tv) n
 
@@ -459,14 +425,26 @@ reduce' env eq c@(Sel _ w (TCon _ tc) n _)
                                                  reduce env (eq'++eq) cs
   | Just p <- protoSearch                   = do (eq',cs) <- solveSelProto env p c
                                                  reduce env (eq'++eq) cs
-  | otherwise                               = tyerr n "Attribute not found:"
+  | otherwise                               = tyerr n "Attribute not found"
   where attrSearch                          = findAttr env tc n
         protoSearch                         = findProtoByAttr env (tcname tc) n
 
-reduce' env eq c@(Sel _ w t1@(TTuple _ p r) n t2)
-                                            = do let e = eLambda [(px0,t1)] (eDot (eVar px0) n)
-                                                 unify (DfltInfo (loc c) 6 Nothing []) r (kwdRow n t2 tWild)
-                                                 return (Eqn w (wFun t1 t2) e : eq)
+reduce' env eq c@(Sel info w t1@(TTuple _ _ r) n t2)
+  | TVar _ tv <- r                          = do defer [c]; return eq
+  | otherwise                               = do --traceM ("### Sel " ++ prstr c)
+                                                 select r
+  where select (TRow _ _ n' t r)
+          | n == n'                         = do w' <- newWitness
+                                                 let e = eLambda [(px0,t1)] (eDot (eCallVar w' [eVar px0]) n)
+                                                 reduce env (Eqn w (wFun t1 t2) e : eq) [Sub info w' t t2]
+          | otherwise                       = select r
+        select (TStar _ _ r)                = do w' <- newWitness
+                                                 let e = eLambda [(px0,t1)] (eCallVar w' [eDot (eVar px0) attrKW])
+                                                 reduce env (Eqn w (wFun t1 t2) e : eq) [Sel info w' (tTupleK r) n t2]
+        select (TNil _ _)                   = kwdNotFound info n
+
+--  lambda (x:(a:int,b:int,**(c:int))): x.b  ==>  lambda x: (b=x.b, a=x.a, KW=x.KW).b            ==>  lambda x: x.b
+--  lambda (x:(a:int,b:int,**(c:int))): x.c  ==>  lambda x: (c=x.KW.x, a=x.a, b=x.b, KW=x.KW).c  ==>  lambda x: x.KW.c
 
 reduce' env eq c@(Mut _ (TVar _ tv) n _)
   | univar tv                               = do defer [c]; return eq
@@ -596,10 +574,10 @@ cast                                        :: Env -> ErrInfo -> Type -> Type ->
 cast env info t1 t2                         = do t1' <- msubst t1
                                                  t2' <- msubst t2
                                                  info' <- msubst info
-                                                 --traceM ("   cast " ++ prstr t1 ++ " < " ++ prstr t2)
+                                                 --traceM ("   cast " ++ prstr t1' ++ " < " ++ prstr t2')
                                                  cast' env info' t1' t2'
 
-castM env info ts1 ts2                           = mapM_ (uncurry $ cast env info ) (ts1 `zip` ts2)
+castM env info ts1 ts2                      = mapM_ (uncurry $ cast env info) (ts1 `zip` ts2)
 
 
 cast' env _ (TWild _) t2                    = return ()
@@ -611,12 +589,12 @@ cast' env info (TCon _ c1) (TCon _ c2)
 
 cast' env info f1@(TFun _ fx1 p1 k1 t1) f2@(TFun _ fx2 p2 k2 t2)
                                             = do cast env info fx1 fx2
-                                                 cast env info p2 p1
+                                                 k2 <- castPos env info p2 p1 k2 k1
                                                  cast env info k2 k1
                                                  cast env info t1 t2
-          
+
 cast' env info (TTuple _ p1 k1) (TTuple _ p2 k2)
-                                            = do cast env info p1 p2
+                                            = do k1 <- castPos env info p1 p2 k1 k2
                                                  cast env info k1 k2
 
 cast' env info (TOpt _ t1@TOpt{}) t2        = cast env info t1 t2
@@ -624,7 +602,7 @@ cast' env info t1 (TOpt _ t2@TOpt{})        = cast env info t1 t2
 cast' env info (TOpt _ t1) (TOpt _ t2)      = cast env info t1 t2
 cast' env info (TVar _ tv) t2@TNone{}       = do substitute tv tNone
                                                  cast env info tNone t2
-cast' env info t1@TOpt{} (TVar _ tv)        = do t2 <- instwild env KType $ tOpt tWild
+cast' env info t1@TOpt{} (TVar _ tv)        = do t2 <- instwild env KType $ tOpt tWild      -- What if tv is in t1???
                                                  substitute tv t2
                                                  cast env info t1 t2
 cast' env info t1 (TOpt _ t2)
@@ -646,42 +624,57 @@ cast' env info t1@(TFX _ fx1) t2@(TFX _ fx2)
 
 cast' env _ (TNil _ k1) (TNil _ k2)
   | k1 == k2                                = return ()
-cast' env info t1@(TNil _ _) r2@(TRow _ k n t2 r2')
-                                            = posElemNotFound0 env True (Cast info t1 t2) n
-cast' env info r1@(TRow _ k n _ _) r2@(TNil _ _)
-                                            = posElemNotFound0 env False (Cast info r1 r2) n
-cast' env info (TVar _ tv) r2@(TNil _ k)    = do substitute tv (tNil k)
+cast' env info (TVar _ tv) r2@(TNil _ k)
+  | tvkind tv == k                          = do substitute tv (tNil k)
                                                  cast env info (tNil k) r2
-cast' env info r1 (TRow _ k n t2 r2)        = do (t1,r1') <- findElem info k (tNil k) n r1 r2
-                                                 cast env info t1 t2
-                                                 cast env info r1' r2
-cast' env info (TRow _ k n t1 r1) r2        = do (t2,r2') <- findElem info k (tNil k) n r2 r1
-                                                 cast env info t1 t2
-                                                 cast env info r1 r2'
+cast' env info r1@(TNil _ k) (TVar _ tv)
+  | k == tvkind tv                          = do substitute tv (tNil k)
+                                                 cast env info r1 (tNil k)
+cast' env info (TRow _ k1 n1 t1 r1) (TRow _ k2 n2 t2 r2)
+  | k1 == k2 && n1 == n2                    = do cast env info t1 t2
+                                                 cast env info r1 r2
+cast' env info (TNil _ _) r2@(TRow _ _ n _ _)
+                                            = posElemNotFound0 True info n
+cast' env info r1@(TRow _ _ n _ _) r2@(TNil _ _)
+                                            = posElemNotFound0 False info n
+cast' env info (TStar _ k1 r1) (TStar _ k2 r2)
+  | k1 == k2                                = cast env info r1 r2
+cast' env info (TVar _ tv) r2@(TRow _ k n _ _)
+  | tvkind tv == k                          = do r1 <- instwild env k $ tRow k n tWild tWild
+                                                 substitute tv r1
+                                                 cast env info r1 r2
+cast' env info r1@(TRow _ k n _ _) (TVar _ tv)
+  | k == tvkind tv                          = do r2 <- instwild env k $ tRow k n tWild tWild
+                                                 substitute tv r2
+                                                 cast env info r1 r2
+cast' env info (TVar _ tv) r2@(TStar _ k _)
+  | tvkind tv == k                          = do r1 <- instwild env k $ tStar k tWild
+                                                 substitute tv r2
+                                                 cast env info r1 r2
+cast' env info r1@(TStar _ k _) (TVar _ tv)
+  | k == tvkind tv                          = do r2 <- instwild env k $ tStar k tWild
+                                                 substitute tv r1
+                                                 cast env info r1 r2
 
 cast' env info (TVar _ tv) t2@TFun{}
-  | univar tv                               = do t1 <- instwild env KType $ tFun tWild tWild tWild tWild
+  | univar tv && tvkind tv == KType         = do t1 <- instwild env KType $ tFun tWild tWild tWild tWild
                                                  substitute tv t1
                                                  cast env info t1 t2
 cast' env info t1@TFun{} (TVar _ tv)                                                                             -- Should remove this, rejects tv = TOpt...
-  | univar tv                               = do t2 <- instwild env KType $ tFun tWild tWild tWild tWild
+  | univar tv && KType == tvkind tv         = do t2 <- instwild env KType $ tFun tWild tWild tWild tWild
                                                  substitute tv t2
                                                  cast env info t1 t2
-
 cast' env info (TVar _ tv) t2@TTuple{}
-  | univar tv                               = do t1 <- instwild env KType $ tTuple tWild tWild
+  | univar tv && tvkind tv == KType         = do t1 <- instwild env KType $ tTuple tWild tWild
                                                  substitute tv t1
                                                  cast env info t1 t2
 
 cast' env info (TVar _ tv1) (TVar _ tv2)
   | tv1 == tv2                              = return ()
-
 cast' env info t1@(TVar _ tv) t2
   | univar tv                               = defer [Cast info t1 t2]
-
 cast' env info t1 t2@(TVar _ tv)
   | univar tv                               = defer [Cast info t1 t2]
-
 cast' env info t1@(TVar _ tv) t2            = cast' env info (tCon tc) t2
   where tc                                  = findTVBound env tv
 
@@ -707,6 +700,17 @@ posElemNotFound0 env b c n                  = do c <- msubst c
     where s c                               = case info c of
                                                  DeclInfo l1 l2 n sc msg -> c {info = DeclInfo l1 l2 n (simp env sc) msg}
                                                  _ -> c
+
+castPos env info p1 p2 k1 k2                = (do cast env info p1 p2; return k1) `catchError` handler
+  where handler (SurplusRow p)              = do --traceM ("## Shifting row " ++ prstr p ++ " into " ++ prstr k1)
+                                                 shift p (labels k2)
+        handler ex                          = throwError ex
+        shift (TRow l k _ t r) (n:ns)       = TRow l KRow n t <$> shift r ns
+        shift TNil{} ns                     = return k1
+        shift _ _                           = noRed (Cast info (tTuple p1 k1) (tTuple p2 k2))
+        labels (TRow _ _ n _ r)             = n : labels r
+        labels _                            = []
+
 {-
 splitInfo info t1 t2                        =  case info of
                                                    DfltInfo _ _ (Just (List _ (Elem e : es))) ts ->
@@ -714,6 +718,8 @@ splitInfo info t1 t2                        =  case info of
                                                    _ ->  (info {errloc = getLoc [loc t2, loc t1]}, info {errloc = getLoc [loc t1, loc t2]})
     where les e es                         = if null es then locAfter (loc e) else loc es
 -}
+
+
 ----------------------------------------------------------------------------------------------------------------------
 -- sub
 ----------------------------------------------------------------------------------------------------------------------
@@ -729,58 +735,48 @@ sub'                                        :: Env -> ErrInfo -> Equations -> Na
 sub' env _ eq w t1@TWild{} t2               = return (idwit env w t1 t2 : eq)
 sub' env _ eq w t1 t2@TWild{}               = return (idwit env w t1 t2 : eq)
 
---                as declared               as called
---                existing                  expected
-sub' env info eq w t1@(TFun _ fx1 p1 k1 t1') t2@(TFun _ fx2 p2 k2 t2')                   -- TODO: implement pos/kwd argument shifting
-                                            = do wp <- newWitness
-                                                 wk <- newWitness
-                                                 wt <- newWitness
-                                                 let e = eLambda [(px0,t1)] e'
-                                                     e' = Lambda l0 (PosSTAR px1 $ Just $ tTupleP p2) (KwdSTAR px2 $ Just $ tTupleK k2) e0 fx1
-                                                     e0 = eCall (eVar wt) [Call l0 (eVar px0) (PosStar e1) (KwdStar e2)]
-                                                     e1 = eCall (eVar wp) [eVar px1]
-                                                     e2 = eCall (eVar wk) [eVar px2]
-                                                     cs = [Cast info fx1 fx2,
-                                                           Sub info wp p2 p1,
-                                                           Sub info wk k2 k1,
-                                                           Sub info wt t1' t2']
-                                                 reduce env (Eqn w (wFun t1 t2) e : eq) cs
- 
---                existing            expected
-sub' env info eq w t1@(TTuple _ p1 k1) t2@(TTuple _ p2 k2)                               -- TODO: implement pos/kwd argument shifting
-                                            = do wp <- newWitness
-                                                 wk <- newWitness
-                                                 let e = eLambda [(px0,t1)] (Paren l0 $ Tuple l0 (PosStar e1) (KwdStar e2))
-                                                     e1 = eCall (eVar wp) [Paren l0 $ Tuple l0 (PosStar $ eVar px0) KwdNil]
-                                                     e2 = eCall (eVar wk) [Paren l0 $ Tuple l0 PosNil (KwdStar $ eVar px0)]
-                                                     cs = [Sub info wp p1 p2, Sub info wk k1 k2]
-                                                 reduce env (Eqn w (wFun t1 t2) e : eq) cs
+--                     as declared               as called
+--                     existing                  expected
+sub' env info eq w t1@(TFun _ fx1 p1 k1 t1') t2@(TFun _ fx2 p2 k2 t2')
+  | all isTVar [p1,p2] || all isTVar [k1,k2]= do --traceM ("## Unifying funs: " ++ prstr w ++ ": " ++ prstr t1 ++ " ~ " ++ prstr t2)
+                                                 unify info t1 t2
+                                                 return (idwit env w t1 t2 : eq)
+  | any isTVar [p1,p2]                      = do --traceM ("## Unifying fun pos " ++ prstr w ++ ": " ++ prstr t1 ++ " < " ++ prstr t2)
+                                                 unify info p1 p2
+                                                 sub env eq w t1 t2
+  | any isTVar [k1,k2]                      = do --traceM ("## Unifying fun kwd " ++ prstr w ++ ": " ++ prstr t1 ++ " < " ++ prstr t2)
+                                                 unify info k1 k2
+                                                 sub env eq w t1 t2
+  | otherwise                               = do --traceM ("### Aligning fun " ++ prstr t1 ++ " < " ++ prstr t2)
+                                                 (cs1,ap,es) <- subpos info ((map eVar pNames)!!) 0 p2 p1
+                                                 (cs2,ak) <- subkwd0 info eVar es k2 k1
+                                                 t1 <- msubst t1
+                                                 t2 <- msubst t2
+                                                 w' <- newWitness
+                                                 let (TFun _ fx1 p1 k1 t1', TFun _ fx2 p2 k2 t2') = (t1, t2)
+                                                     (pp,pk) = (pPar pNames p2, kPar attrKW k2)
+                                                     lambda = eLambda [(px0,t1)] $ Lambda l0 pp pk (eCallVar w' [Call l0 (eVar px0) ap ak]) fx1
+                                                 reduce env (Eqn w (wFun t1 t2) lambda : eq) (Cast info fx1 fx2 : Sub info w' t1' t2':cs1++cs2)
 
--- Note: a sub-row constraint R1 < R2 is witnessed by a lambda of type
--- (*(R1))->(*(R2)) or (**(R1))->(**(R2)), depending on the row kind
-
-sub' env info eq w r1@(TNil _ k1) r2@(TNil _ k2)
-  | k1 == k2                                = return (idwit env w tUnit tUnit : eq)
-
---           existing         expected                Match labels in the order of the expected row
-sub' env info eq w r1@(TNil _ _) r2@(TRow _ k n t2 r2')
-                                            = posElemNotFound0 env True (Sub info w r1 r2) n -- posElemNotFound True info n
-sub' env info eq w r1@(TRow _ k n _ _) r2@(TNil _ _)
-                                            = posElemNotFound0 env False (Sub info w r1 r2) n
-sub' env info eq w r1  r2@(TRow _ k n t2 r2')
-                                            = do (t1,r1') <- findElem info k (tNil k) n r1 r2'
-                                                 wt <- newWitness
-                                                 wr <- newWitness
-                                                 let e = rowWit k w n t1 r1' wt wr
-                                                     cs = [Sub info wt t1 t2, Sub info wr r1' r2']
-                                                 reduce env (Eqn w (rowFun k r1 r2) e : eq) cs
-sub' env info eq w r1@(TRow _ k n t1 r1') r2
-                                            = do (t2,r2') <- findElem info k (tNil k) n r2 r1'
-                                                 wt <- newWitness
-                                                 wr <- newWitness
-                                                 let e = rowWit k w n t2 r2' wt wr
-                                                     cs = [Sub info wt t1 t2, Sub info wr r1' r2']
-                                                 reduce env (Eqn w (rowFun k r1 r2) e : eq) cs
+--                     existing            expected
+sub' env info eq w t1@(TTuple _ p1 k1) t2@(TTuple _ p2 k2)
+  | all isTVar [p1,p2] || all isTVar [k1,k2]= do --traceM ("### Unifying tuples: " ++ prstr w ++ ": " ++ prstr t1 ++ " ~ " ++ prstr t2)
+                                                 unify info t1 t2
+                                                 return (idwit env w t1 t2 : eq)
+  | any isTVar [p1,p2]                      = do --traceM ("### Unifying tuple pos: " ++ prstr w ++ ": " ++ prstr t1 ++ " < " ++ prstr t2)
+                                                 unify info p1 p2
+                                                 sub env eq w t1 t2
+  | any isTVar [k1,k2]                      = do --traceM ("### Unifying tuple kwd: " ++ prstr w ++ ": " ++ prstr t1 ++ " < " ++ prstr t2)
+                                                 unify info k1 k2
+                                                 sub env eq w t1 t2
+  | otherwise                               = do --traceM ("### Aligning tuple " ++ prstr t1 ++ " < " ++ prstr t2)
+                                                 (cs1,ap,es) <- subpos info (eDotI (eVar px0) . toInteger) 0 p1 p2
+                                                 (cs2,ak) <- subkwd0 info (eDot (eVar px0)) es k1 k2
+                                                 t1 <- msubst t1
+                                                 t2 <- msubst t2
+                                                 let (TTuple _ p1 k1, TTuple _ p2 k2) = (t1, t2)
+                                                     lambda = eLambda [(px0,t1)] (Paren l0 $ Tuple l0 ap ak)
+                                                 reduce env (Eqn w (wFun t1 t2) lambda : eq) (cs1++cs2)
 
 sub' env info eq w (TVar _ tv) t2@TFun{}
   | univar tv                               = do t1 <- instwild env KType $ tFun tWild tWild tWild tWild
@@ -790,7 +786,6 @@ sub' env info eq w t1@TFun{} (TVar _ tv)                                        
   | univar tv                               = do t2 <- instwild env KType $ tFun tWild tWild tWild tWild
                                                  substitute tv t2
                                                  sub env info eq w t1 t2
-
 
 sub' env info eq w (TVar _ tv) t2@TTuple{}
   | univar tv                               = do t1 <- instwild env KType $ tTuple tWild tWild
@@ -805,93 +800,379 @@ sub' env info eq w t1 t2                    = do cast env info t1 t2
                                                  return (idwit env w t1 t2 : eq)
 
 
+subpos                                      :: ErrInfo -> (Int -> Expr) -> Int -> PosRow -> PosRow -> TypeM (Constraints, PosArg, [(Expr,Type)])
+subpos info f i TVar{}             TVar{}   = error "INTERNAL ERROR: subpos"
+subpos info f i (TVar _ tv)        r2
+  | tv `elem` tyfree r2                     = conflictingRow tv                     -- use rowTail?
+  | otherwise                               = do --traceM (" ## subpos " ++ prstr tv ++ " ~ " ++ prstr r2)
+                                                 substitute tv r2
+                                                 subpos info f i r2 r2
+subpos info f i r1                 (TVar _ tv)
+  | tv `elem` tyfree r1                     = conflictingRow tv                     -- use rowTail?
+  | otherwise                               = do --traceM (" ## subpos " ++ prstr r1 ++ " ~ " ++ prstr tv)
+                                                 substitute tv r1
+                                                 subpos info f i r1 r1
+
+subpos info f i (TRow _ _ _ t1 r1) (TRow _ _ _ t2 r2)
+                                            = do --traceM (" ## subpos A " ++ prstr t1 ++ " < " ++ prstr t2)
+                                                 (cs,as,es) <- subpos info f (i+1) r1 r2
+                                                 w <- newWitness
+                                                 return (Sub w t1 t2 : cs, PosArg (eCallVar w [f i]) as, es)
+subpos info f i (TStar _ _ r1)     (TStar _ _ r2)
+                                            = do --traceM (" ## subpos B " ++ prstr (tTupleP r1) ++ " < " ++ prstr (tTupleP r2))
+                                                 w <- newWitness
+                                                 return ([Sub w (tTupleP r1) (tTupleP r2)], PosStar (eCallVar w [f i]), [])
+subpos info f i TNil{}             TNil{}   = do --traceM (" ## subpos C ")
+                                                 return ([], PosNil, [])
+
+subpos info f i (TStar _ _ r1)     r2       = do --traceM (" ## subpos D " ++ prstr r1 ++ " ~ " ++ prstr r2)
+                                                 subpos info (eDotI (f i) . toInteger) 0 r1 r2
+subpos info f i r1                 (TStar _ _ r2)
+                                            = do --traceM (" ## subpos E " ++ prstr r1 ++ " ~ " ++ prstr r2)
+                                                 (cs,as,es) <- subpos info f i r1 r2
+                                                 return (cs, PosStar (eTupleP as), es)
+
+subpos info f i r1@TNil{}          r@(TRow _ _ _ t2 r2)
+  | TOpt{} <- t2                            = do --traceM (" ## subpos F Opt ~ " ++ prstr t2)
+                                                 (cs,as,es) <- subpos info f i r1 r2
+                                                 return (cs, PosArg eNone as, es)
+  | otherwise                               = do --traceM (" ## subpos G Nil ~ " ++ prstr r)
+                                                 posElemNotFound0 True info nWild
+subpos info f i (TRow _ _ _ t1 r1) r2@TNil{}
+                                            = do --traceM (" ## subpos H " ++ prstr t1 ++ " = " ++ prstr (f i))
+                                                 (cs,as,es) <- subpos info f (i+1) r1 r2
+                                                 return (cs, as, (f i, t1) : es)
+
+
+-----------------------
+
+subkwd0                                     :: ErrInfo -> (Name -> Expr) -> [(Expr,Type)] -> KwdRow -> KwdRow -> TypeM (Constraints, KwdArg)
+subkwd0 info f [] r1 r2                     = subkwd info f [] r1 r2
+subkwd0 info f ((e,t1):es) r1 (TRow _ _ n t2 r2)
+                                            = do --traceM (" ## subkwd0 extra pos for " ++ prstr n ++ ": " ++ prstr t1 ++ " < " ++ prstr t2)
+                                                 (cs,as) <- subkwd0 info f es r1 r2
+                                                 w <- newWitness
+                                                 return (Sub info w t1 t2 : cs, KwdArg n (eCallVar w [e]) as)
+  where labels (TRow _ _ n _ r)             = n : labels r
+        labels _                            = []
+subkwd0 info f ((e,t1):es) r1 r2            = posElemNotFound0 False info nWild
+
+subkwd                                      :: ErrInfo -> (Name -> Expr) -> [Name] -> KwdRow -> KwdRow -> TypeM (Constraints, KwdArg)
+subkwd f seen r1 (TVar _ tv)                = do unif f seen r1
+                                                 r2 <- msubst (tVar tv)
+                                                 subkwd f seen r1 r2
+  where unif f seen TVar{}                  = error "INTERNAL ERROR: subkwd"
+        unif f seen (TRow _ _ n t r)
+          | n `elem` seen                   = do --traceM ("## subkwd (Row) - Var: " ++ prstr (tRow KRow n t r) ++ " [" ++ prstrs seen ++ "] ≈ " ++ prstr tv)
+                                                 unif f (seen\\[n]) r
+          | tv `elem` tyfree r              = conflictingRow tv                     -- use rowTail?
+          | otherwise                       = do --traceM ("## subkwd Row - Var: " ++ prstr (tRow KRow n t r) ++ " [" ++ prstrs seen ++ "] ≈ " ++ prstr tv)
+                                                 r2 <- tRow KRow n t <$> newTVarOfKind KRow
+                                                 unify (tVar tv) r2
+        unif f seen (TStar _ _ r)
+          | tv `elem` tyfree r              = conflictingRow tv                     -- use rowTail?
+          | otherwise                       = do --traceM ("## subkwd Star - Var: " ++ prstr (tStar KRow r) ++ " [" ++ prstrs seen ++ "] ≈ " ++ prstr tv)
+                                                 r2 <- tStar KRow <$> newTVarOfKind KRow
+                                                 unify (tVar tv) r2
+        unif f seen TNil{}                  = do --traceM ("## subkwd Nil - Var: " ++ prstr (tNil KRow) ++ " [" ++ prstrs seen ++ "] ≈ " ++ prstr tv)
+                                                 r2 <- pure $ tNil KRow
+                                                 unify (tVar tv) r2
+
+subkwd f seen r1 (TRow _ _ n2 t2 r2)        = do (cs1,e) <- pick f seen r1
+                                                 r1 <- msubst r1
+                                                 r2 <- msubst r2
+                                                 (cs2,as) <- subkwd f (n2:seen) r1 r2
+                                                 return (cs1++cs2, KwdArg n2 e as)
+  where pick f seen (TVar _ tv)
+          | tv `elem` tyfree r2             = conflictingRow tv                     -- use rowTail?
+          | otherwise                       = do --traceM ("## subkwd Var - Row: " ++ prstr (tVar tv) ++ " [" ++ prstrs seen ++ "] ≈ " ++ prstr (tRow KRow n2 t2 r2))
+                                                 r1 <- tRow KRow n2 t2 <$> newTVarOfKind KRow
+                                                 unify (tVar tv) r1
+                                                 pick f seen r1
+        pick f seen (TRow _ _ n t r)
+          | n `elem` seen                   = do --traceM ("## subkwd (Row) - Row: " ++ prstr (tRow KRow n t r) ++ " [" ++ prstrs seen ++ "] ≈ " ++ prstr (tRow KRow n2 t2 r2))
+                                                 pick f (seen\\[n]) r
+          | n /= n2                         = pick f seen r
+          | otherwise                       = do --traceM ("## subkwd Row! - Row: " ++ prstr (tRow KRow n t r) ++ " [" ++ prstrs seen ++ "] ≈ " ++ prstr (tRow KRow n2 t2 r2))
+                                                 w <- newWitness
+                                                 return ([Sub w t t2], eCallVar w [f n])
+        pick f seen (TStar _ _ r)           = do --traceM ("## subkwd Star - Row: " ++ prstr (tStar KRow r) ++ " [" ++ prstrs seen ++ "] ≈ " ++ prstr (tRow KRow n2 t2 r2))
+                                                 pick (eDot (f attrKW)) seen r
+        pick f seen (TNil _ _)
+          | TOpt{} <- t2                    = do --traceM ("## subkwd Nil - Row: " ++ prstr (tNil KRow) ++ " [" ++ prstrs seen ++ "] ≈ " ++ prstr (tRow KRow n2 t2 r2))
+                                                 return ([], eNone)
+          | otherwise                       = kwdNotFound n2
+
+subkwd f seen r1 (TStar _ _ r2)             = do (cs,e) <- match f seen r1
+                                                 return (cs, KwdStar e)
+  where match f seen (TVar _ tv)
+          | tv `elem` tyfree r2             = conflictingRow tv                     -- use rowTail?
+          | otherwise                       = do --traceM ("## subkwd Var - Star: " ++ prstr (tVar tv) ++ " [" ++ prstrs seen ++ "] ≈ " ++ prstr (tStar KRow r2))
+                                                 r1 <- tStar KRow <$> newTVarOfKind KRow
+                                                 unify (tVar tv) r1
+                                                 match f seen r1
+        match f seen r1@(TRow _ _ n t r)
+          | n `elem` seen                   = do --traceM ("## subkwd (Row) - Star: " ++ prstr (tRow KRow n t r) ++ " [" ++ prstrs seen ++ "] ≈ " ++ prstr (tStar KRow r2))
+                                                 match f (seen\\[n]) r
+          | otherwise                       = do --traceM ("## subkwd Row - Star: " ++ prstr (tRow KRow n t r) ++ " [" ++ prstrs seen ++ "] ≈ " ++ prstr (tStar KRow r2))
+                                                 (cs,as) <- subkwd f seen r1 r2
+                                                 return (cs, eTupleK as)
+        match f seen r1@(TStar _ _ r)
+          | TVar{} <- r, TVar{} <- r2       = do --traceM ("## subkwd StarVar - StarVar: " ++ prstr (tStar KRow r) ++ " [" ++ prstrs seen ++ "] ≈ " ++ prstr (tStar KRow r2))
+                                                 unify r r2
+                                                 return ([], f attrKW)
+          | TVar{} <- r                     = do --traceM ("## subkwd StarVar - Star: " ++ prstr (tStar KRow r) ++ " [" ++ prstrs seen ++ "] ≈ " ++ prstr (tStar KRow r2))
+                                                 (cs,as) <- subkwd f seen r1 r2
+                                                 return (cs, eTupleK as)
+          | otherwise                       = do --traceM ("## subkwd Star - Star: " ++ prstr (tStar KRow r) ++ " [" ++ prstrs seen ++ "] ≈ " ++ prstr (tStar KRow r2))
+                                                 match (eDot (f attrKW)) seen r
+        match f seen r1@TNil{}              = do --traceM ("## subkwd Nil - Star: " ++ prstr (tNil KRow) ++ " [" ++ prstrs seen ++ "] ≈ " ++ prstr (tStar KRow r2))
+                                                 (cs,as) <- subkwd f seen r1 r2
+                                                 return (cs, eTupleK as)
+
+subkwd f seen r1 TNil{}                     = term f seen r1
+  where term f seen (TVar _ tv)             = do --traceM ("## subkwd Var - Nil: " ++ prstr (tVar tv) ++ " [" ++ prstrs seen ++ "] ≈ " ++ prstr (tNil KRow))
+                                                 r1 <- pure $ tNil KRow
+                                                 unify (tVar tv) r1
+                                                 term f seen (tNil KRow)
+        term f seen (TRow _ _ n t r)
+          | n `elem` seen                   = do --traceM ("## subkwd (Row) - Nil: " ++ prstr (tRow KRow n t r) ++ " [" ++ prstrs seen ++ "] ≈ " ++ prstr (tNil KRow))
+                                                 term f (seen\\[n]) r
+          | otherwise                       = do --traceM ("## subkwd Row - Nil: " ++ prstr (tRow KRow n t r) ++ " [" ++ prstrs seen ++ "] ≈ " ++ prstr (tNil KRow))
+                                                 kwdUnexpected n
+        term f seen (TStar _ _ r)           = do --traceM ("## subkwd Star - Nil: " ++ prstr (tStar KRow r) ++ " [" ++ prstrs seen ++ "] ≈ " ++ prstr (tNil KRow))
+                                                 term f seen r
+        term f seen (TNil _ _)              = do --traceM ("## subkwd Nil - Nil: " ++ prstr (tNil KRow) ++ " [" ++ prstrs seen ++ "] ≈ " ++ prstr (tNil KRow))
+                                                 return ([], KwdNil)
+
+
 {-
 
-round : (Real, ?int) -> Real
-----
-w(round)(3.14, None)                                                    w(round)(3.14, None)
-w : ((Real,?int)->Real) -> (float,None)->$1
-----
-w = lambda x: lambda *x1,**x2: wt(x(*wp(x1), **wk(x2)))                 = (lambda x: lambda *x1,**x2: wt(x(*wp(x1), **wk(x2))))(round)(3.14, None)          | x=round
-wt : (Real) -> $1                                                       = lambda *x1,**x2: wt(round(*wp(x1), **wk(x2)))(3.14, None)                         | x1=(3.14,None), x2=()
-wp : ((float,None)) -> (Real,?int)                                      = wt(round(*wp((3.14,None)), **wk(())))
-wk : (()) -> ()
-----
-wt = lambda x: x                                                        = (lambda x: x)(round(*wp((3.14,None)), **wk(())))                                  | x=round(...)
-wp = lambda x: (w1(x.0), *w2(x.*1))                                     = round(*(lambda x: (w1(x.0), *w2(x.*1)))((3.14,None)), **wk(()))                   | x=(3.14, None)
-wk = lambda y: ()                                                       = round(*(w1(3.14), *w2((None,))), **((lambda y: ())()))                            | y=()
-w1 : (float) -> Real                                                    = round(*(w1(3.14), *w2((None,))), **())
-w2 : ((None,)) -> (?int,)
-----
-w1 = lambda x: PACK(Real$float, x)                                      = round(*((lambda x: PACK(Real$float, x))(3.14), *w2((None,))))                     | x=3.14
-w2 = lambda x: (w21(x.0), *w22(x.*1))                                   = round(*(PACK(Real$float, 3.14), *(lambda x: (w21(x.0), *w22(x.*1)))((None,))))    | x=(None,)
-w21 : (None) -> ?int                                                    = round(*(PACK(Real$float, 3.14), *(w21(None), *w22(()))))
-w22 : (()) -> ()
-----
-w21 = lambda x: x                                                       = round(*(PACK(Real$float, 3.14), *((lambda x: x)(None), *w22(()))))                | x=None
-w22 = lambda y: ()                                                      = round(*(PACK(Real$float, 3.14), *(None, *(lambda y: ())())))                      | y=()
-                                                                        = round(*(PACK(Real$float, 3.14), *(None, *())))
-                                                                        = round(*(PACK(Real$float, 3.14), *(None,)))
-                                                                        = round(*(PACK(Real$float, 3.14), None))
-                                                                        = round(PACK(Real$float, 3.14), None)
+---- OK:
+
+x.          c,a             a,c                     a = x.a                                 Row!            Row
+x.          c,a             c           a           c = x.a                                 Row!            Row
+x.          c,a             .           ac                                                  (Row)           Row
+x.          .               .                       .                                       Nil             Nil
+
+---- OK:
+
+x.          c,a*(b*A)       a,b,c,e                 a = (x.)a, ...                          Row!            Row
+x.          c,a*(b*A)       b,c,e       a                                                   Star            Row
+x.KW.           b*A         b,c,e       a           b = (x.KW.)b                                Row!        Row
+x.          c,a*(b*A)       c,e         ab          c = (x.)c, ...                          Row!            Row
+x.          c,a*(b*A)       e           abc                                                 Star            Row
+x.KW.           b*A         e           abc                                                     StarVar     Row
+x.KW.KW.            A       e           abc                             A ~ e,B                 Var         Row
+x.KW.KW.            e,B     e           abc         e = (x.KW.KW.)e, ...                        Row!        Row
+x.          c,a*(b*(e,B))   .           abce                                                (Row)           Nil
+x.          *(b*(e,B))      .           be                                                  Star            Nil
+x.KW.           b*(e,B)     .           be                                                      (Row)       Nil
+x.KW.           *(e,B)      .           e                                                       Star        Nil
+x.KW.KW             e,B     .           e                                                       (Row)       Nil
+x.KW.KW             B       .                                           B ~ .                   Var         Nil
+                    .       .                                                                   Nil         Nil
+
+x = (c = 1, a = 2, KW = (b = 4, KW = (e = 5)))                          (a = x.a, b = x.KW.b, c = x.c, e = x.KW.KW.e)
+
+---- OK:
+
+x.          c*(b*A)         c*X                     c = x.c                                 Row!            Row
+x.          c*(b*A)         *X          c                                                   (Row)           Star
+x.          *(b*A)          *X                                                              Star            Star
+x.KW.           b*A         *X                      KW = (...)                                  Row         Star
+x.KW.           b*A             X                                       X ~ b,Y                 Row             Var
+x.KW.           b*A             b,Y                     b = x.KW.b                              Row!            Row
+x.KW.           b*A             Y       b                                                       (Row)           Var
+x.KW.           *A              Y                                       Y ~ *Z                  StarVar         Var
+x.KW.           *A              *Z                      KW = x.KW.KW    A ~ Z                   StarVar         StarVar
+
+x = (c = 1, KW = (b = 4, KW = y))                                       (c = x.c, KW = (b = x.KW.b, KW = x.KW.KW))
+
+---- OK:
+
+x.          c,a*(b*A)       a,b,c*X                 a = (x.)a, ...                          Row!            Row
+x.          c,a*(b*A)       b,c*X       a                                                   Star            Row
+x.KW.           b*A         b,c*X       a           b = (x.KW.)b, ...                           Row!        Row
+x.          c,a*(b*A)       c*X         ab          c = (x.)c, ...                          Row!            Row
+x.          c,a*(b*A)       *X          abc                                                 (Row)           Star
+x.          *(b*A)          *X          b                                                   Star            Star
+x.KW.           b*A         *X          b                                                       (Row)       Star
+x.KW.           *A          *X                      KW = (x.KW.)KW      A ~ X                   StarVar     StarVar
+
+x = (c = 1, a = 2, KW = (b = 4, KW = y))                                (a = x.a, b = x.KW.b, c = x.c, KW = x.KW.KW)
+
+---- OK:
+
+x.          c,a*(b*A)       a,b,c,e*X               a = (x.)a, ...                          Row!            Row
+x.          c,a*(b*A)       b,c,e*X     a                                                   Star            Row
+x.KW.           b*A         b,c,e*X                 b = (x.KW.)b, ...                           Row!        Row
+x.          c,a*(b*A)       c,e*X       ab          c = (x.)c, ...                          Row!            Row
+x.          c,a*(b*A)       e*X         abc                                                 Star            Row
+x.KW.           b*A         e*X         b                                                       Star        Row
+x.KW.KW.            A       e*X         b                               A ~ e,B                     Var     Row
+x.KW.KW.            e,B     e*X         b           e = (x.KW.KW.)e                                 Row!    Row
+x.          c,a*(b*(e,B))   *X          abce                                                (Row)           Star
+x.          *(b*(e,B))      *X          be                                                  Star            Star
+x.KW.           b*(e,B)     *X          be                                                      (Row)       Star
+x.KW.           *(e,B)      *X          e                                                       Star        Star
+x.KW.KW.            e,B     *X          e                                                           (Row)   Star
+x.KW.KW.            B       *X                                          B ~ *X                      Var     Star
+x.KW.KW.            *X      *X                      KW = (x.KW.KW.)KW                               StarVar StarVar
+
+x = (c = 1, a = 2, KW = (b = 4, KW = (e = 5, KW = y)))                  (a = x.a, b = x.KW.b, c = x.c, e = x.KW.KW.e, KW = x.KW.KW.KW)
+
+---- OK:
+
+x.          c,a*A           a,b,c,e*X               a = (x.)a, ...                          Row!        Row
+x.          c,a*A           b,c,e*X     a                                                   StarVar     Row
+x.KW.           A           b,c,e*X                                     A ~ b,B                 Var     Row
+x.KW.           b,B         b,c,e*X                 b = (x.KW.)b, ...                           Row!    Row
+x.          c,a*(b,B)       c,e*X       ab          c = (x.)c, ...                          Row!        Row
+x.          c,a*(b,B)       e*X         abc                                                 Star        Row
+x.KW.           b,B         e*X         b                               B ~ e,C                 Var     Row
+x.KW.           b,e,C       e*X         b           e = (x.KW.)e, ...                           Row!    Row
+x.          c,a*(b,e,C)     *X          abce                                                (Row)       Star
+x.          *(b,e,C)        *X          be                                                  Star        Star
+x.KW.           b,e,C       *X          be                                                      (Row)   Star
+x.KW.           C           *X                                          C ~ *X                  Var     Star
+x.KW.           *X          *X                      KW = (x.KW.)KW                              StarVar StarVar
+
+x = (c = 1, a = 2, KW = (b = 4, e = 5, KW = y))                         (a = x.a, b = x.KW.b, c = x.c, e = x.KW.e, KW = x.KW.KW)
+
+---- OK:
+
+x.          c,a,d*A         a,b,c,e*X               a = (x.)a, ...                          Row!        Row
+x.          c,a,d*A         b,c,e*X     a                                                   StarVar     Row
+x.KW.           A           b,c,e*X     a                               A ~ b,B                 Var     Row
+x.KW.           b,B         b,c,e*X     a           b = (x.KW.)b, ...                           Row!    Row
+x.          c,a,d*(b,B)     c,e*X       ab          c = x.c, ...                            Row!        Row
+x.          c,a,d*(b,B)     e*X         abc                                                 Star        Row
+x.KW.           b,B         e*X         b                               B ~ e,C                 Var     Row
+x.KW.           b,e,C       e*X         b           e = x.KW.e, ...                             Row!    Row
+x.          c,a,d*(b,e,C)   *X          abce                                                (Row)       Star
+x.          d*(b,e,C)       *X          be          KW = (...)                              Row         Star
+x.          d*(b,e,C)           X       be                              X ~ d,Y             Row             Var
+x.          d*(b,e,C)           d,Y     be              d = (x.)d, ...                      Row!            Row
+x.          d*(b,e,C)           Y       bed                                                 (Row)           Var
+x.          *(b,e,C)            Y       be                              Y ~ *Z              Star            Var
+x.          *(b,e,C)            *Z      be                                                  Star            Star
+x.KW.           b,e,C           *Z      be                                                      (Row)       Star
+x.KW.           C               *Z                                      C ~ *Z                  Var         Star
+x.KW.           *Z              *Z                      KW = (x.KW.)KW                          StarVar     StarVar
+
+x = (c = 1, a = 2, d = 3, KW = (b = 4, e = 5, KW = y))                  (a = x.a, b = x.KW.b, c = x.c, e = x.KW.e, KW = (d = x.d, KW = x.KW.KW))
 
 
+---- OK:
 
-round : (Real, ?int) -> Real
-----
-w(round)(3.14, None)                                                    w(round)(3.14, None)
-w : ((Real,?int)->Real) -> (float,None)->$1
-----
-w = lambda x0: lambda *x1,**x2: wt(x0(*wp(*x1), **wk(**x2)))            = (lambda x0: lambda *x1,**x2: wt(x0(*wp(*x1), **wk(**x2))))(round)(3.14, None)     | x0=round
-wt : (Real) -> $1                                                       = lambda *x1,**x2: wt(round(*wp(*x1), **wk(**x2)))(3.14, None)                      | x1=(3.14,None), x2=()
-wp : (float,None) -> (Real,?int)                                        = wt(round(*wp(3.14,None), **wk()))
-wk : () -> ()
-----
-wt = lambda x0: x0                                                      = (lambda x0: x0)(round(*wp((3.14,None)), **wk()))                                  | x0=round(...)
-wp = lambda x1,*x2: (w1(x1), *w2(*x2))                                  = round(*(lambda x1,*x2: (w1(x1), *w2(*x2)))((3.14,None)), **(lambda: ())()))       | x1=3.14, x2=(None,)
-wk = lambda: ()                                                         = round(*(w1(3.14), *w2(*(None,))), **())
-w1 : (float) -> Real                                                    = round(*(w1(3.14), *w2(None,)))
-w2 : (None,) -> (?int,)
-----
-w1 = lambda x0: PACK(Real$float, x0)                                    = round(*((lambda x0: PACK(Real$float, x0))(3.14), *w2(None)))                      | x0=3.14
-w2 = lambda x1,*x2: (w21(x1), *w22(*x2))                                = round(*(PACK(Real$float, 3.14), *(lambda x1,*x2: (w21(x1), *w22(*x2)))(None)))    | x1=None, x2=()
-w21 : (None) -> ?int                                                    = round(*(PACK(Real$float, 3.14), *(w21(None), *w22())))
-w22 : () -> ()
-----
-w21 = lambda x0: x0                                                     = round(*(PACK(Real$float, 3.14), *((lambda x0: x0)(None), *w22())))                | x0=None
-w22 = lambda: ()                                                        = round(*(PACK(Real$float, 3.14), *(None, *(lambda: ())())))
-                                                                        = round(*(PACK(Real$float, 3.14), *(None, *())))
-                                                                        = round(*(PACK(Real$float, 3.14), *(None,)))
-                                                                        = round(*(PACK(Real$float, 3.14), None))
-                                                                        = round(PACK(Real$float, 3.14), None)
+x.          c,a*A           a,c*X                   a = (x.)a, ...                          Row!        Row
+x.          c,a*A           c*X         a           c = (x.)c, ...                          Row!        Row
+x.          c,a*A           *X          ac                                                  (Row)       Star
+x.          *A              *X                      KW = (x.)KW         A ~ X               StarVar     StarVar
 
+x = (c = 1, a = 2, KW = y)                                              (a = x.a, c = x.c, KW = x.KW)
 
-------------------------------------------
+---- OK:
 
-round : (x:Real, n:?int) -> Real                                        round(n=None,x=3.14)
-----
-w(round)(n=None, x=3.14)                                                w(round)(n=None,x=3.14)
-w : ((x:Real,n:?int)->Real) -> (n:None,x:float)->$1
-----
-w = lambda x0: lambda **x1: wt(x0(**wr(**x1)))                          = (lambda x0: lambda **x1: wt(x0(**wr(**x1))))(round)(n=None,x=3.14)            | x0=round
-wt : (Real) -> $1                                                       = (lambda **x1: wt(round(**wr(**x1))))(n=None,x=3.14)                           | x1=(n=None,x=3.14))
-wr : (n:None,x:float) -> (x:Real,n:?int)                                = wt(round(**wr(n=None,x=3.14)))
-----
-wt = lambda x0: x0                                                      = (lambda x0: x0 )(round(**wr(n=None,x=3.14)))                                  | x0=round(...)
-wr = lambda x,**x2: (x=w1(x), **w2(**x2))                               = round(**(lambda x,**x2: (x=w1(x), **w2(**x2)))(n=None,x=3.14))                | x=3.14, x2=(n=None,)
-w1 : (float) -> Real                                                    = round(**(x=w1(3.14), **w2(n=None,)))
-w2 : (n:None,) -> (n:?int,)
-----
-w1 = lambda x0: PACK(Real$float, x0)                                    = round(**(x=(lambda x0: PACK(Real$float, x0))(3.14), **w2(n=None,)))             | x0=3.14
-w2 = lambda n, **x2: (n=w21(n), **w22(**x2))                            = round(**(x=PACK(Real$float, 3.14), **(lambda n, **x2: (n=w21(n), **w22(**x2)))(n=None,)))
-w21 : (None) -> ?int                                                    = round(**(x=PACK(Real$float, 3.14), **(n=w21(None), **w22(**()))))
-w22 : () -> ()
-----
-w21 = lambda x0: x0                                                     = round(**(x=PACK(Real$float, 3.14), **(n=None, **())))
-w22 = lambda: ()                                                        = round(**(x=PACK(Real$float, 3.14), **(n=None)))
-                                                                        = round(**(x=PACK(Real$float, 3.14), n=None))
-                                                                        = round(x=PACK(Real$float, 3.14), n=None)
+x.          c,a,d*A         a,c*X                   a = (x.)a, ...                          Row!        Row
+x.          c,a,d*A         c*X         a           c = (x.)c, ...                          Row!        Row
+x.          c,a,d*A         *X          ac                                                  (Row)       Star
+x.          d*A             *X                      KW = (...)                              Row         Star
+x.          d*A                 X                                       X ~ d,Y             Row             Var
+x.          d*A                 d,Y                     d = (x.)d, ...                      Row!            Row
+x.          d*A                 Y       d                                                   (Row)           Var
+x.          *A                  Y                                       Y ~ *A              Star            Var
+x.          *A                  *A                      KW = (x.)KW                         StarVar         StarVar
+
+x = (c = 1, a = 2, d = 3, KW = y)                                       (a = x.a, c = x.c, KW = (d = x.d, KW = x.KW))
+
+---- OK:
+
+x.          c,a,d*A         a,c*(d*X)               a = (x.)a, ...                          Row!        Row
+x.          c,a,d*A         c*(d*X)     a           c = (x.)c, ...                          Row!        Row
+x.          c,a,d*A         *(d*X)      ac                                                  (Row)       Star
+x.          d*A             *(d*X)                  KW = (...)                              Row         Star
+x.          d*A                 d*X                     d = x.d, ...                        Row!            Row
+x.          d*A                 *X      d                                                   (Row)           Star
+x.          *A                  *X                      KW = (x.)KW     A ~ X               StarVar         StarVar
+
+x = (c = 1, a = 2, d = 3, KW = y)                                       (a = x.a, c = x.c, KW = (d = x.d, KW = x.KW))
+
+---- OK:
+
+x.          c,a*A           a,c*(d*X)               a = (x.)a                               Row!        Row
+x.          c,a*A           c*(d*X)     a           c = (x.)c                               Row!        Row
+x.          c,a*A           *(d*X)      ac                                                  (Row)       Star
+x.          *A              *(d*X)                  KW = (...)                              StarVar     Star
+x.          *A                  d*X                                                         Star            Row
+x.KW.           A               d*X                                     A ~ d,B             Var             Row
+x.KW.           d,B             d*X                     d = x.KW.d                          Row!            Row
+x.          *(d,B)              d*X     d                                                   Star            Star
+x.KW.           d,B             *X      d                                                   (Row)           Star
+x.KW.           B               *X                                      B ~ *X              Var             Star
+x.KW.           *X              *X                      KW = x.KW.KW                        StarVar         StarVar
+
+x = (c = 1, a = 2, KW = (d = 3, KW = y))                                (a = x.a, c = x.c, KW = (d = x.KW.d, KW = x.KW.KW))
+
+---- OK:
+
+x.          c,a,d           a*X                     a = x.a                                 Row!        Row
+x.          c,a,d           *X          a                                                   (Row)       Star
+x.          c,d             *X                      KW = (...)                              Row         Star
+x.          c,d                 X                                       X ~ c,Y             Row             Var
+x.          c,d                 c,Y                     c = x.c                             Row!            Row
+x.          c,d                 Y       c                               Y ~ d,Z             Row             Var
+x.          c,d                 d,Z     c               d = x.d                             Row!            Row
+x.          c,d                 Z       cd                                                  (Row)           Var
+x.          .                   Z                                       Z ~ .               Nil             Var
+
+x = (c = 1, a = 2, d = 3)                                               (a = x.a, KW = (c = x.c, d = x.d))
+
+---- OK:
+
+x.          c,a,d*A         a*X                     a = x.a                                 Row!        Row
+x.          c,a,d*A         *X          a                                                   (Row)       Star
+x.          c,d*A           *X                      KW = (...)                              Row         Star
+x.          c,d*A               X                                       X ~ c,Y             (Row)           Var
+x.          c,d*A               c,Y                     c = x.c                             Row!            Row
+x.          c,d*A               Y       c                               Y ~ d,Z             (Row)           Var
+x.          c,d*A               d,Z     c               d = x.d                             Row!            Row
+x.          c,d*A               Z       cd                                                  (Row)           Var
+x.          *A                  Z                                       Z ~ *A              Star            Var
+x.          *A                  *A                      KW = x.KW                           StarVar         StarVar
+
+x = c = 1, a = 2, d = 3, KW = y)                                        (a = x.a, KW = (c = x.c, d = x.d, KW = x.KW))
+
 -}
+
+
+
+{-
+subpos 0 (A,B,*R) (A,B,C,D)                     = Arg x.0 $ subpos 1 (B,*R) (B,C,D)                                     f = x.
+                                                = Arg x.0 $ Arg x.1 $ subpos 2 (*R) (C,D)
+                                                = Arg x.0 $ Arg x.1 $ subpos 0 R (C,D)                                  f = x.2.   R ~ (C,D)
+                                                = Arg x.0 $ Arg x.1 $ subpos 0 (C,D) (C,D)
+                                                = Arg x.0 $ Arg x.1 $ Arg x.2.0 $ subpos 1 (D) (D)
+                                                = Arg x.0 $ Arg x.1 $ Arg x.2.0 $ Arg x.2.1 $ subpos 2 () ()
+                                                = Arg x.0 $ Arg x.1 $ Arg x.2.0 $ Arg x.2.1 $ Nil
+
+subpos 0 (A,B,C,D) (A,B,*S)                     = Arg x.0 $ subpos 1 (B,C,D) (B,*S)                                     f = x.
+                                                = Arg x.0 $ Arg x.1 $ subpos 2 (C,D) (*S)
+                                                = Arg x.0 $ Arg x.1 $ Arg (subpos 2 (C,D) S) Nil
+                                                = Arg x.0 $ Arg x.1 $ Arg (subpos 2 (C,D) (C,D)) Nil
+                                                = Arg x.0 $ Arg x.1 $ Arg (Arg x.2 $ subpos 3 (D) (D)) Nil
+                                                = Arg x.0 $ Arg x.1 $ Arg (Arg x.2 $ Arg x.3 $ subpos 4 () ()) Nil
+                                                = Arg x.0 $ Arg x.1 $ Arg (Arg x.2 $ Arg x.3 $ Nil) Nil
+
+subpos 0 (A,*R) (A,B,*S)                        = Arg x.0 $ subpos 1 (*R) (B,*S)                                        f = x.
+                                                = Arg x.0 $ subpos 0 R (B,*S)                                           f = x.1.    R ~ (B,*S)
+                                                = Arg x.0 $ subpos 0 (B,*S) (B,*S)
+                                                = Arg x.0 $ Arg x.1.0 $ subpos 1 (*S) (*S)
+                                                = Arg x.0 $ Arg x.1.0 $ Arg w(x.1.1) Nil
+
+-}
+
 
 ----------------------------------------------------------------------------------------------------------------------
 -- Variable info
@@ -974,6 +1255,7 @@ instwild env _ (TTuple l p k)           = TTuple l <$> instwild env PRow p <*> i
 instwild env _ (TOpt l t)               = TOpt l <$> instwild env KType t
 instwild env _ (TCon l c)               = TCon l <$> instwildcon env c
 instwild env _ (TRow l k n t r)         = TRow l k n <$> instwild env KType t <*> instwild env k r
+instwild env _ (TStar l k r)            = TStar l k <$> instwild env k r
 instwild env k t                        = return t
 
 instwildcon env c                       = case tconKind (tcname c) env of
@@ -1037,7 +1319,7 @@ improve env te tt eq cs
                                              lb <- mapM (mkLUB env) multiLBnd   -- LUB of the lower bounds
                                              --traceM ("  *GLB " ++ prstrs ub)
                                              --traceM ("  *LUB " ++ prstrs lb)
-                                             let cs' = [ Cast (DfltInfo NoLoc 14 Nothing []) (tVar v) t | (v,t) <- ub ] ++ [ Cast (DfltInfo NoLoc 110 Nothing [])  t (tVar v) | (v,t) <- lb ]
+                                             let cs' = [ Cast (DfltInfo NoLoc 14 Nothing []) (tVar v) t | (v,t) <- ub ] ++ [ Cast (DfltInfo NoLoc 110 Nothing []) t (tVar v) | (v,t) <- lb ]
                                              simplify' env te tt eq (cs' ++ map (replace ub lb) cs)
   | not $ null posLBnd                  = do --traceM ("  *S-simplify (dn) " ++ prstrs posLBnd)
                                              sequence [ unify (DfltInfo NoLoc 15 Nothing []) (tVar v) t | (v,t) <- posLBnd ]
@@ -1172,17 +1454,17 @@ remove ws (c : cs)                      = c : remove ws cs
 px0:px1:px2:_                           = xNames
 
 app tx e []                             = e
-app tx e es                             = Lambda NoLoc p' k' (Call NoLoc e (exp2arg es (pArg p')) (kArg k')) fx
-  where TFun _ fx p k _                 = tx                    -- If it takes arguments, it must be a function!
-        (p',k')                         = (pPar pNames p, kPar kNames k)
+app (TFun _ fx p k _) e es              = Lambda NoLoc p' k' (Call NoLoc e (exp2arg es (pArg p')) (kArg k')) fx
+  where (p',k')                         = (pPar pNames p, kPar attrKW k)
+app tx e es                             = Call NoLoc e (exp2arg es PosNil) KwdNil
 
 app2nd (Just Static) tx e es            = app tx e es
 app2nd (Just Property) tx e es          = app tx e es
 app2nd Nothing tx e es                  = app tx e es
 app2nd _ tx e []                        = e
 app2nd _ tx e es                        = Lambda NoLoc p' k' (Call NoLoc e (PosArg pSelf (exp2arg es pArgs)) (kArg k')) fx
-  where TFun _ fx p k _                 = tx                    -- If it takes arguments, it must be a function!
-        (p',k')                         = (pPar pNames p, kPar kNames k)
+  where TFun _ fx p k _                 = tx                    -- If it already takes a first argument, it must be a function!
+        (p',k')                         = (pPar pNames p, kPar attrKW k)
         PosArg pSelf pArgs              = pArg p'                    
 
 idwit env w t1 t2                       = Eqn w (wFun t1 t2) (eLambda [(px0,t1)] (eVar px0))
@@ -1190,11 +1472,11 @@ idwit env w t1 t2                       = Eqn w (wFun t1 t2) (eLambda [(px0,t1)]
 rowFun PRow r1 r2                       = tFun fxPure (posRow (tTupleP r1) posNil) kwdNil (tTupleP r2)
 rowFun KRow r1 r2                       = tFun fxPure (posRow (tTupleK r1) posNil) kwdNil (tTupleK r2)
 
-rowWit PRow w n t r wt wr               = eLambda [(px0,posRow t r)] eTup
+rowWit PRow n t r wt wr                 = eLambda [(px0,tTupleP $ posRow t r)] eTup
   where eTup                            = Paren l0 $ Tuple l0 (PosArg e1 (PosStar e2)) KwdNil
         e1                              = eCall (eVar wt) [DotI l0 (eVar px0) 0]
         e2                              = eCall (eVar wr) [RestI l0 (eVar px0) 0]
-rowWit KRow w n t r wt wr               = eLambda [(px0,kwdRow n t r)] eTup
+rowWit KRow n t r wt wr                 = eLambda [(px0,tTupleK $ kwdRow n t r)] eTup
   where eTup                            = Paren l0 $ Tuple l0 PosNil (KwdArg n e1 (KwdStar e2))
         e1                              = eCall (eVar wt) [Dot l0 (eVar px0) n]
         e2                              = eCall (eVar wr) [Rest l0 (eVar px0) n]
