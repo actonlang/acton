@@ -17,6 +17,7 @@
     HTTPS using TLS on port 443
   - `http.Listener` / `http.Server` is a HTTP server component that currently
     only supports unencrypted HTTP (due to lack of a `net.TLSListener`)
+  - Supports chunked transfer-encoding [#1510]
 - New `logging` module [#1483]
   - Provides logging functionality in an actor centric world
 - New `argparse` module [#1499]
@@ -113,6 +114,8 @@
 ### Fixed
 - Fix control flow bug for `continue` in `for` loop [#1265]
 - Fix control flow bug for `return` in `while loop` [#1194]
+- Fix comparison of optional types [#1186] [#1506]
+- Fix necessary casts for bool checks on tuple field [#1500] [#1504]
 - Throw exceptions for unimplemented builtins [#1010]
   - Previously printed to stderr and did `exit(1)`
   - Now throws a `NotImplemetedError` instead!
