@@ -1,0 +1,62 @@
+import http
+import logging
+
+
+def test_http_parser(log):
+    def partializer(testfun, query, parsed) -> bool:
+        # Go through query byte by byte, and feed it to the parser one more
+        # byte at a time until we get a complete request
+        for i in range(0, len(query), 1):
+            partial_request = query[0:i+1]
+            req, rest = http.parse_request(partial_request, log)
+            if req is not None:
+                if str(parsed) == str(req):
+                    return True
+                else:
+                    print("Expected: " + str(parsed) + " got: " + str(req))
+                    return False
+        return False
+
+    a = b"\r\n\r\n"
+    qs = a.split(b"\r\n\r\n", 1)
+    # Test various aspects of parsing HTTP requests
+    tests = [
+        (query = b"GET / HTTP/1.1\r\nHost: 127.0.0.1:8000\r\nUser-Agent: curl/7.85.0\r\nAccept: */*\r\n\r\n",
+         expected = http.Request("GET", "/", b"1.1", {"host": "127.0.0.1:8000", "user-agent": "curl/7.85.0", "accept": "*/*"}, b"")),
+        (query = b"GET / HTTP/1.1\r\nHost: 127.0.0.1:8000\r\nUser-Agent: curl/7.85.0\r\nAccept: */*\r\nContent-Length: 5\r\n\r\nhello",
+         expected = http.Request("GET", "/", b"1.1", {"host": "127.0.0.1:8000", "user-agent": "curl/7.85.0", "accept": "*/*", "content-length": "5"}, b"hello")),
+        (query = b"GET / HTTP/1.1\r\nHost: 127.0.0.1:8000\r\nUser-Agent: curl/7.85.0\r\nAccept: */*\r\nTransfer-Encoding: chunked\r\n\r\n4\r\nWiki\r\n5\r\npedia\r\nE\r\n in\r\n\r\nchunks.\r\n0\r\n\r\n",
+         expected = http.Request("GET", "/", b"1.1", {"host": "127.0.0.1:8000", "user-agent": "curl/7.85.0", "accept": "*/*", "transfer-encoding": "chunked"}, b"Wikipedia in\r\n\r\nchunks.")),
+    ]
+    all_good = True
+    for t in tests:
+        query = t.query
+        expected = t.expected
+        # Parse whole request
+        parsed, rest = http.parse_request(t.query, log)
+        if parsed is not None:
+            if not expected.compare(parsed):
+                all_good = False
+                print("Expected: " + str(expected) + " got: " + str(parsed))
+        else:
+            all_good = False
+            print("Failed to parse request: " + str(query))
+
+
+        # Parse request byte by byte
+        for i in range(0, len(t.query), 1):
+            partial_request = t.query[0:i+1]
+            req, rest = http.parse_request(partial_request, log)
+            if req is not None:
+                if not expected.compare(req):
+                    print("Expected: " + str(expected) + " got: " + str(req))
+                    all_good = False
+    return all_good
+
+actor main(env):
+    log_handler = logging.Handler(None)
+    log_handler.add_sink(logging.StdoutSink())
+    log = logging.Logger(log_handler)
+    print(test_http_parser(log))
+
+    env.exit(0)
