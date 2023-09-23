@@ -93,13 +93,8 @@ match vs (TFX _ fx1) (TFX _ fx2)
 
 match vs (TNil _ k1) (TNil _ k2)
   | k1 == k2                                = Just []
-match vs r1 (TRow _ k n2 t2 r2)
-  | Just (t1,r1') <- findElem r1            = matches vs [t1,r1'] [t2,r2]
-  where findElem (TRow l k n1 t1 r1)
-          | n1 == n2                        = Just (t1, r1)
-          | otherwise                       = do (t1',r1') <- findElem r1
-                                                 Just (t1', TRow l k n1 t1 r1')
-        findElem r1                         = Nothing
+match vs (TRow _ k1 n1 t1 r1) (TRow _ k2 n2 t2 r2)
+  | k1 == k2 && n1 == n2                    = matches vs [t1,r1] [t2,r2]
 match vs (TVar _ tv1) (TVar _ tv2)
   | tv1 == tv2                              = Just []
 match vs t1 (TVar _ tv)
