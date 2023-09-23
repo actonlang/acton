@@ -5,19 +5,28 @@ Source:
 actor main(env):
     # Items in a tuple can be of different types
     t = ("foo", 42)
-    # Items are accessed liked attributes on a object (this is so we can find 
-    # out type of items at compile time), not like the index in a list.
+    # Fields are accessed by their index and using field / attribute selection style:
     print(t)
     print(t.0)
     print(t.1)
     
-    # Named tuples
+    # Tuples can use named fields
     nt = (a="bar", b=1337)
     print(nt)
     print(nt.a)
     print(nt.b)
+    
+    r = foo()
+    # TODO: bool() should not be necessary
+    if bool(r.b):
+        print(r.c)
 
     await async env.exit(0)
+    
+def foo() -> (a: str, b: bool, c: int):
+    """A function that returns a tuple with fields name a and b
+    """
+    return (a = "hello", b=True, c=123)
 ```
 
 Compile and run:
@@ -28,15 +37,16 @@ actonc sets.act
 
 Output:
 ```sh
-("foo", 42)
+('foo', 42)
 foo
 42
-("bar", 1337)
+('bar', 1337)
 bar
 1337
+123
 ```
 
-- tuples allow storing multiple items in one variable
-- tuples are fixed length, unlike lists which can be appended and shortened
 - fields in a tuple can be of different types
-- named tuples are similar to records in other languages
+- tuples have a fixed fields
+- tuples with named fields is like an anonymous data class, i.e. the data type itself has no name
+- tuples with named fields can be used like a simple record type
