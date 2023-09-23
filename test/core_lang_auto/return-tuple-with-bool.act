@@ -1,0 +1,10 @@
+def foo() -> (a: str, b: bool, c: int):
+    return (a="hello", b=True, c=123)
+
+actor main(env):
+    r = foo()
+    print(r.b)
+
+    if r.b:
+        print("r.b is True")
+    env.exit(0)

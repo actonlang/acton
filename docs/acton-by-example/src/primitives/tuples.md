@@ -17,8 +17,7 @@ actor main(env):
     print(nt.b)
     
     r = foo()
-    # TODO: bool() should not be necessary
-    if bool(r.b):
+    if r.b:
         print(r.c)
 
     await async env.exit(0)
