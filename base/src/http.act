@@ -2,6 +2,7 @@ import acton.rts
 import json
 import logging
 import net
+from net import TCPListenConnection
 import time
 
 responses = {
@@ -70,6 +71,20 @@ responses = {
     511: b"Network Authentication Required"
 }
 
+def hex_to_decimal(hex_str: str) -> int:
+    hex_map = {'0': 0, '1': 1, '2': 2, '3': 3, '4': 4, '5': 5, '6': 6, '7': 7,
+               '8': 8, '9': 9, 'A': 10, 'B': 11, 'C': 12, 'D': 13, 'E': 14, 'F': 15}
+    decimal_value = 0
+    try:
+        for i in range(0, len(hex_str), 1):
+            j = len(hex_str)-i
+            digit = hex_str[j-1].upper()
+            decimal_value += hex_map[digit] * (16 ** i)
+    except:
+        raise ValueError("Unable to parse hexadecimal value")
+    return decimal_value
+
+
 def build_request(host: str, method: bytes, path: bytes, version: bytes, headers: dict[str, str], body: bytes) -> bytes:
     r = [ method + b" " + path + b" HTTP/" + version ]
     lheaders: dict[str, str] = {}
@@ -129,6 +144,13 @@ def build_response(version: bytes, status: int, headers: dict[str, str], body: s
     return res
 
 
+class Message(object):
+    def __init__(self, start_line: bytes, headers: dict[str, str], body: bytes):
+        self.start_line = start_line
+        self.headers = headers
+        self.body = body
+
+
 class Request(object):
     @property
     method: str
@@ -149,12 +171,13 @@ class Request(object):
         self.body = body
 
     def __str__(self):
-        return "<http.Request " + str(self.method) + " " + str(self.path) + ">"
+        return "<http.Request " + str(self.method) + " " + str(self.path) + " " + str(self.version) + " " + self.headers.__str__() + " " + str(self.body) + ">"
+
+    def compare(self, other):
+        return self.method == other.method and self.path == other.path and self.version == other.version and self.headers == other.headers and self.body == other.body
 
 
 class Response(object):
-    @property
-    method: str
     @property
     version: bytes
     @property
@@ -164,7 +187,7 @@ class Response(object):
     @property
     body: bytes
 
-    def __init__(self, method: str, version: bytes, status: int, headers: dict[str, str], body: bytes) -> None:
+    def __init__(self, version: bytes, status: int, headers: dict[str, str], body: bytes) -> None:
         self.version = version
         self.status = status
         self.headers = headers
@@ -173,35 +196,20 @@ class Response(object):
     def __str__(self) -> str:
         return "<http.Response " + str(self.status) + ">"
 
-    def to_json(self):
+    def decode_json(self):
         return json.decode(self.body.decode())
 
 
-
-# TODO: separate main part into parse_message()
-def parse_response(i: bytes) -> (?Response, bytes):
+def parse_message(i: bytes, log: logging.Logger) -> (?Message, bytes):
     rs = i.split(b"\r\n\r\n", 1)
     if len(rs) == 1:
-        # Not enough data
         return None, i
     else:
-        qlines = rs[0].split(b"\r\n", None)
-        start_line = qlines[0].rstrip(b"\r\n")
-        slparts = start_line.split(b" ", None)
-        verparts = slparts[0].split(b"/", 1)
-        if len(verparts) != 2:
-            # invalid request
-            # TODO: actually HTTP 0.9 might only have 2 parts, but we don't support that
-            return None, b""
-        version = verparts[1]
-        if version != b"1.1" and version != b"1.0":
-            return None, b""
+        header_lines = rs[0].split(b"\r\n", None)
+        start_line = header_lines[0].rstrip(b"\r\n")
 
-        status = int(slparts[1].decode())
-
-        # Parse headers
         headers : dict[str, str] = {}
-        for hline in qlines[1:]:
+        for hline in header_lines[1:]:
             hv = hline.split(b":", 1)
             if len(hv) == 1:
                 # TODO: silently ignore or explicitly throw error or something?
@@ -214,29 +222,82 @@ def parse_response(i: bytes) -> (?Response, bytes):
         body = b""
         rest = b""
         if "content-length" in headers:
-            blen = int(headers["content-length"].strip(" "))
-            if len(rs[1]) >= blen:
-                body = rs[1][:blen]
-                rest = rs[1][blen:]
+            clen = int(headers["content-length"].strip(" "))
+            log.trace("Got content-length in headers, expecting %d bytes" % clen, None)
+            if len(rs[1]) >= clen:
+                body = rs[1][:clen]
+                rest = rs[1][clen:]
+                log.trace("Enough data to reach content-length!", None)
+                msg = Message(start_line, headers, body)
+                return msg, rest
             else:
+                log.trace("Not enough data to reach content-length", None)
                 return None, i
+        elif "transfer-encoding" in headers:
+            tenc = set(headers["transfer-encoding"].strip(" ").split(",", None))
+            if "chunked" in tenc:
+                log.trace("Got chunked transfer-encoding", None)
+                reached_end = False
+                rest = rs[1]
+                log.trace("Rest: %s" % str(rest), None)
+                body = b""
+                while not reached_end:
+                    maybe_chunk = rest.split(b"\r\n", 1)
+                    if len(maybe_chunk) == 1:
+                        log.trace("No chunk header found", None)
+                        return None, i
+                    elif len(maybe_chunk) == 2:
+                        chunk_header = maybe_chunk[0].strip(b"\r\n")
+                        rest = maybe_chunk[1]
+                        log.trace("Chunk header: %s" % chunk_header.decode()[:20], None)
+                        if chunk_header == b"":
+                            log.trace("Empty chunk header", None)
+                            return None, i
+                        else:
+                            try:
+                                clen = hex_to_decimal(chunk_header.decode())
+                                log.trace("Chunk length: %d" % clen, None)
+                            except ValueError:
+                                log.trace("Chunk header not a length", None)
+                            else:
+                                if len(rest) >= clen:
+                                    gap = rest[clen-10:clen+10]
+                                    chunk = rest[:clen]
+                                    log.trace("Read chunk: %s" % str(chunk), None)
+                                    rest = rest[clen:]
+                                    if len(rest) < 2 and rest[0:2] != b"\r\n":
+                                        log.trace("Could not find chunk end marker", None)
+                                        return None, i
+                                    rest = rest[2:]
+                                    #log.trace("Enough data to reach end of chunk", None)
+                                    log.trace("Enough data to reach end of chunk, chunk gap: %s|%s" % (str(chunk[-5:]), str(rest[:5])), None)
+                                    body += chunk
+                                    if clen == 0:
+                                        reached_end = True
+                                        msg = Message(start_line, headers, body)
+                                        log.trace("Reached end of chunked message", None)
+                                        return msg, rest
+                                else:
+                                    log.trace("Not enough data to reach end of chunk", None)
+                                    return None, i
+
+                    else:
+                        # TODO: InternalError?
+                        raise ValueError("Unreachable")
         else:
             body = b""
             rest = rs[1]
-        # TODO: sanity check slparts components first to avoid weird things when decoding
-        r = Response("GABBA", version, status, headers, body)
-        return r, rest
-
-
-def parse_request(i: bytes) -> (?Request, bytes):
-    qs = i.split(b"\r\n\r\n", 1)
-    if len(qs) == 1:
-        # Not enough data
+            msg = Message(start_line, headers, body)
+            return msg, rest
         return None, i
-    else:
-        qlines = qs[0].split(b"\r\n", None)
-        start_line = qlines[0].rstrip(b"\r\n")
-        slparts = start_line.split(b" ", None)
+
+
+def parse_request(i: bytes, log: logging.Logger) -> (?Request, bytes):
+    msg, rest = parse_message(i, log)
+    if msg is not None:
+        slparts = msg.start_line.split(b" ", None)
+        method = slparts[0].decode()
+        path = slparts[1].decode()
         verparts = slparts[2].split(b"/", 1)
         if len(verparts) != 2:
             # invalid request
@@ -245,34 +306,29 @@ def parse_request(i: bytes) -> (?Request, bytes):
         version = verparts[1]
         if version != b"1.1" and version != b"1.0":
             return None, b""
-
-        # Parse headers
-        hs : dict[str, str] = {}
-        for hline in qlines[1:]:
-            hv = hline.split(b":", 1)
-            if len(hv) == 1:
-                # TODO: silently ignore or explicitly throw error or something?
-                pass
-            else:
-                hname = hv[0].decode().lower()
-                hs[hname] = hv[1].decode()
-
-        # TODO: why do we have to init body & rest here? seems we segfault otherwise...
-        body = b""
-        rest = b""
-        if "content-length" in hs:
-            blen = int(hs["content-length"].strip(" "))
-            if len(qs[1]) >= blen:
-                body = qs[1][:blen]
-                rest = qs[1][blen:]
-            else:
-                return None, i
-        else:
-            body = b""
-            rest = qs[1]
-        # TODO: sanity check slparts components first to avoid weird things when decoding
-        req = Request(slparts[0].decode(), slparts[1].decode(), version, hs, body)
+        req = Request(method, path, version, msg.headers, msg.body)
         return req, rest
+    return None, i
+
+def parse_response(i: bytes, log: logging.Logger) -> (?Response, bytes):
+    msg, rest = parse_message(i, log)
+    if msg is not None:
+        slparts = msg.start_line.split(b" ", None)
+        verparts = slparts[0].split(b"/", 1)
+        if len(verparts) != 2:
+            # invalid request
+            # TODO: actually HTTP 0.9 might only have 2 parts, but we don't support that
+            return None, b""
+        version = verparts[1]
+        if version != b"1.1" and version != b"1.0":
+            log.trace("Invalid HTTP version", None)
+            return None, b""
+
+        status = int(slparts[1].decode())
+        resp = Response(version, status, msg.headers, msg.body)
+        return resp, b""
+    return None, i
+
 
 actor Server(conn: net.TCPListenConnection, on_accept: action(Server) -> None, log_handler: ?logging.Handler):
     """Server serves a single client connection"""
@@ -290,7 +346,7 @@ actor Server(conn: net.TCPListenConnection, on_accept: action(Server) -> None, l
         on_request_cb = new_on_request
         on_error_cb = new_on_error
         if buf != b"":
-            req, buf = parse_request(buf)
+            req, buf = parse_request(buf, _log)
 
     def on_tcp_receive(tcp_conn, data: bytes) -> None:
         # TODO: do we really need a buf?
@@ -301,7 +357,7 @@ actor Server(conn: net.TCPListenConnection, on_accept: action(Server) -> None, l
             if buf != b"":
                 data = buf + data
 
-        req, buf = parse_request(data)
+        req, buf = parse_request(data, _log)
         if req is not None:
             if version is None:
                 version = req.version
@@ -343,14 +399,15 @@ actor Server(conn: net.TCPListenConnection, on_accept: action(Server) -> None, l
             if on_request_cb is not None:
                 response = on_request_cb(self, req, respond)
                 if response is not None:
-                    print("Sending response immediately")
+                    _log.trace("Sending response immediately", None)
                 else:
-                    print("Async response")
+                    _log.trace("Async response", None)
             else:
-                print("No on_request callback set")
+                _log.notice("No on_request callback set", None)
 
     def on_tcp_error(conn, error):
-        print("There was an error:", error, " from:", conn)
+        # TODO: the conn should really be in here, but type error!?
+        _log.trace("There was an error: %s from: %s" % (str(error), str("")), None)
 
     def close():
         conn.close()
@@ -436,10 +493,11 @@ actor Client(cap: net.TCPConnectCap, scheme: str, address: str, port: ?int, tls_
 
     def _on_con_receive(data: bytes) -> None:
         buf += data
-        _log.trace("Received data", {"bytes": len(data)})
+        _log.debug("Received data", {"bytes": len(data)})
+        #_log.trace("Received data", {"data": data})
 
         while True:
-            r, buf = parse_response(buf)
+            r, buf = parse_response(buf, _log)
             if r is not None:
                 if "connection" in r.headers and r.headers["connection"] == "close":
                     close_connection = True
@@ -484,32 +542,34 @@ actor Client(cap: net.TCPConnectCap, scheme: str, address: str, port: ?int, tls_
             tls_conn.write(data)
 
     # HTTP methods
-    def get(path: str, on_response: action(Client, Response) -> None):
-        req = build_request(address, b"GET", path.encode(), b"1.1", {}, b"")
+    def get(path: str, headers: dict[str, str], on_response: action(Client, Response) -> None):
+        req = build_request(address, b"GET", path.encode(), b"1.1", headers, b"")
         _log.debug("Sending request", {"method": "GET", "path": path})
         _on_response.append((req, on_response))
         _conn_write(req)
 
-    def head(path: str, on_response: action(Client, Response) -> None):
-        req = build_request(address, b"HEAD", path.encode(), b"1.1", {}, b"")
+    def head(path: str, headers: dict[str, str], on_response: action(Client, Response) -> None):
+        req = build_request(address, b"HEAD", path.encode(), b"1.1", headers, b"")
         _log.debug("Sending request", {"method": "HEAD", "path": path})
         _on_response.append((req, on_response))
         _conn_write(req)
 
-    def post(path: str, body: bytes, on_response: action(Client, Response) -> None):
-        req = build_request(address, b"POST", path.encode(), b"1.1", {}, body)
+    def post(path: str, headers: dict[str, str], body: bytes, on_response: action(Client, Response) -> None):
+        if "Content-Type" not in headers:
+            headers["Content-Type"] = "application/x-www-form-urlencoded"
+        req = build_request(address, b"POST", path.encode(), b"1.1", headers, body)
         _log.debug("Sending request", {"method": "POST", "path": path})
         _on_response.append((req, on_response))
         _conn_write(req)
 
-    def put(path: str, body: bytes, on_response: action(Client, Response) -> None):
-        req = build_request(address, b"PUT", path.encode(), b"1.1", {}, body)
+    def put(path: str, headers: dict[str, str], body: bytes, on_response: action(Client, Response) -> None):
+        req = build_request(address, b"PUT", path.encode(), b"1.1", headers, body)
         _log.debug("Sending request", {"method": "PUT", "path": path})
         _on_response.append((req, on_response))
         _conn_write(req)
 
-    def delete(path: str, on_response: action(Client, Response) -> None):
-        req = build_request(address, b"DELETE", path.encode(), b"1.1", {}, b"")
+    def delete(path: str, headers: dict[str, str], on_response: action(Client, Response) -> None):
+        req = build_request(address, b"DELETE", path.encode(), b"1.1", headers, b"")
         _log.debug("Sending request", {"method": "DELETE", "path": path})
         _on_response.append((req, on_response))
         _conn_write(req)
