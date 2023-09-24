@@ -14,6 +14,7 @@
 {-# LANGUAGE MultiParamTypeClasses, FlexibleInstances, FlexibleContexts, DeriveGeneric, DeriveAnyClass #-}
 module Acton.Syntax where
 
+import Flat
 import Utils
 import qualified Data.Binary
 import qualified Data.Set
@@ -116,9 +117,9 @@ data Pattern    = PWild         { ploc::SrcLoc, pann::Maybe Type }
 type Target     = Expr
 
 data Prefix     = Globvar | Kindvar | Xistvar | Typevar | Tempvar | Witness | NormPass | CPSPass | LLiftPass
-                deriving (Eq,Ord,Show,Read,Generic,NFData)
+                deriving (Eq,Ord,Show,Read,Generic,NFData,Flat)
 
-data Name       = Name SrcLoc String | Derived Name Name | Internal Prefix String Int deriving (Generic,Show,NFData)
+data Name       = Name SrcLoc String | Derived Name Name | Internal Prefix String Int deriving (Generic,Show,NFData,Flat)
 
 nloc (Name l _) = l
 nloc _          = NoLoc
@@ -154,7 +155,7 @@ globalName s    = Internal Globvar s 0
 globalNames s   = map (Internal Globvar s) [1..]
 
 
-data ModName    = ModName [Name] deriving (Show,Read,Eq,Generic,NFData)
+data ModName    = ModName [Name] deriving (Show,Read,Eq,Generic,NFData,Flat)
 
 modName ss      = ModName (map name ss)
 
@@ -165,7 +166,7 @@ modCat (ModName ns) n = ModName (ns++[n])
 instance Ord ModName where
     compare a b = compare (modPath a) (modPath b)
 
-data QName      = QName { mname::ModName, noq::Name } | NoQ { noq::Name } | GName { mname::ModName, noq::Name } deriving (Show,Read,Eq,Ord,Generic,NFData)
+data QName      = QName { mname::ModName, noq::Name } | NoQ { noq::Name } | GName { mname::ModName, noq::Name } deriving (Show,Read,Eq,Ord,Generic,NFData,Flat)
 
 qName ss s      = QName (modName ss) (name s)
 
@@ -206,19 +207,19 @@ data Binary     = Or|And|Plus|Minus|Mult|Pow|Div|Mod|EuDiv|BOr|BXor|BAnd|ShiftL|
 data Aug        = PlusA|MinusA|MultA|PowA|DivA|ModA|EuDivA|BOrA|BXorA|BAndA|ShiftLA|ShiftRA|MMultA deriving (Show,Eq)
 data Comparison = Eq|NEq|LtGt|Lt|Gt|GE|LE|In|NotIn|Is|IsNot deriving (Show,Eq)
 
-data Deco       = NoDec | Property | Static deriving (Eq,Show,Read,Generic,NFData)
+data Deco       = NoDec | Property | Static deriving (Eq,Show,Read,Generic,NFData,Flat)
 
-data Kind       = KType | KProto | KFX | PRow | KRow | KFun [Kind] Kind | KVar Name | KWild deriving (Eq,Ord,Show,Read,Generic,NFData)
+data Kind       = KType | KProto | KFX | PRow | KRow | KFun [Kind] Kind | KVar Name | KWild deriving (Eq,Ord,Show,Read,Generic,NFData,Flat)
 
-data TSchema    = TSchema { scloc::SrcLoc, scbind::QBinds, sctype::Type } deriving (Show,Read,Generic,NFData)
+data TSchema    = TSchema { scloc::SrcLoc, scbind::QBinds, sctype::Type } deriving (Show,Read,Generic,NFData,Flat)
 
-data TVar       = TV { tvkind::Kind, tvname::Name } deriving (Show,Read,Generic,NFData) -- the Name is an uppercase letter, optionally followed by digits.
+data TVar       = TV { tvkind::Kind, tvname::Name } deriving (Show,Read,Generic,NFData,Flat) -- the Name is an uppercase letter, optionally followed by digits.
 
-data TCon       = TC { tcname::QName, tcargs::[Type] } deriving (Eq,Show,Read,Generic,NFData)
+data TCon       = TC { tcname::QName, tcargs::[Type] } deriving (Eq,Show,Read,Generic,NFData,Flat)
 
-data FX         = FXPure | FXMut | FXProc | FXAction deriving (Eq,Show,Read,Generic,NFData)
+data FX         = FXPure | FXMut | FXProc | FXAction deriving (Eq,Show,Read,Generic,NFData,Flat)
 
-data QBind      = Quant TVar [TCon] deriving (Eq,Show,Read,Generic,NFData)
+data QBind      = Quant TVar [TCon] deriving (Eq,Show,Read,Generic,NFData,Flat)
 
 type QBinds     = [QBind]
 
@@ -237,7 +238,7 @@ data Type       = TVar      { tloc::SrcLoc, tvar::TVar }
                 | TNil      { tloc::SrcLoc, rkind::Kind }
                 | TRow      { tloc::SrcLoc, rkind::Kind, label::Name, rtype::Type, rtail::TRow }
                 | TFX       { tloc::SrcLoc, tfx::FX }
-                deriving (Show,Read,Generic,NFData)
+                deriving (Show,Read,Generic,NFData,Flat)
 
 type TFX        = Type
 type PosRow     = Type
@@ -431,7 +432,7 @@ data NameInfo           = NVar      Type
                         | NMAlias   ModName
                         | NModule   TEnv
                         | NReserved
-                        deriving (Eq,Show,Read,Generic)
+                        deriving (Eq,Show,Read,Generic,Flat)
 
 data Witness            = WClass    { binds::QBinds, wtype::Type, proto::PCon, wname::QName, wsteps::WPath }
                         | WInst     { binds::QBinds, wtype::Type, proto::PCon, wname::QName, wsteps::WPath }

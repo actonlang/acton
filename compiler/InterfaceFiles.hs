@@ -1,3 +1,4 @@
+{-# LANGUAGE ScopedTypeVariables #-}
 -- Copyright (C) 2019-2021 Data Ductus AB
 --
 -- Redistribution and use in source and binary forms, with or without modification, are permitted provided that the following conditions are met:
@@ -13,24 +14,33 @@
 
 module InterfaceFiles where
 
-import Data.Binary
-import qualified Data.ByteString.Lazy
+import Flat
+import Flat.Decoder
+import qualified Data.ByteString.Lazy as BL
 import Codec.Compression.Zlib
 import qualified System.Exit
 import qualified Acton.Syntax
 import System.IO
 
 writeFile :: FilePath -> [Acton.Syntax.ModName] -> Acton.Syntax.TEnv -> IO ()
-writeFile f ms a = do h <- openFile f WriteMode
-                      Data.ByteString.Lazy.hPut h (compress (encode (Acton.Syntax.version, (ms,a))))
-                      hClose h
+writeFile f ms a = do
+  h <- openFile f WriteMode
+  BL.hPut h (compress $ BL.fromStrict $ flat (Acton.Syntax.version, (ms, a)))
+  hClose h
 
 readFile :: FilePath -> IO ([Acton.Syntax.ModName], Acton.Syntax.TEnv)
 readFile f = do
-      h <- openFile f ReadMode
-      bs <- Data.ByteString.Lazy.hGetContents h
-      let (vs,a) = decode (decompress bs)
-      if vs == Acton.Syntax.version then do hClose h
-                                            return a
-        else do putStrLn ("Interface file has version "++show vs++"; current version is "++show Acton.Syntax.version)
-                System.Exit.exitFailure
+  h <- openFile f ReadMode
+  bs <- BL.hGetContents h
+  let decoded = unflat $ BL.toStrict $ decompress bs
+  case decoded of
+    Left (e :: DecodeException) -> do
+      putStrLn "Error during deserialization"
+      System.Exit.exitFailure
+    Right (vs, a) ->
+      if vs == Acton.Syntax.version then do
+        hClose h
+        return a
+      else do
+        putStrLn $ "Interface file has version " ++ show vs ++ "; current version is " ++ show Acton.Syntax.version
+        System.Exit.exitFailure

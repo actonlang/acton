@@ -14,6 +14,7 @@
 {-# LANGUAGE DeriveDataTypeable, DeriveGeneric, DeriveAnyClass #-}
 module Utils(module Utils, module SrcLocation, module Data.List, module Data.Maybe, module Debug.Trace) where
 
+import Flat
 import Debug.Trace
 import Data.List hiding ((\\))
 import Data.Maybe
@@ -26,7 +27,7 @@ import Pretty
 import Control.DeepSeq
 import Prelude hiding((<>))
 
-data SrcLoc                     = Loc Int Int | NoLoc deriving (Eq,Ord,Show,Read,Generic,NFData)
+data SrcLoc                     = Loc Int Int | NoLoc deriving (Eq,Ord,Show,Read,Generic,NFData,Flat)
 
 instance Data.Binary.Binary SrcLoc
 
