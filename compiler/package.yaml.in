@@ -50,8 +50,10 @@ executables:
       - unix
       - utf8-string
       - zlib
-    ghc-options:
-      - -threaded
+    when:
+    - condition: os(linux)
+      ld-options:
+        - -static
 
 tests:
   test_actonc:

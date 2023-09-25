@@ -41,3 +41,6 @@ extra-deps: [Cabal-3.10.1.0,Cabal-syntax-3.10.1.0,dir-traverse-0.2.3.0,directory
 # we rewrite this in our Homebrew recipe to use the system GHC. Do NOT remove
 # this line, regexp replace matches on it!
 # system-ghc: true
+
+ghc-options:
+  "unix": -fPIC
