@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+
+## [0.17.0] (2023-09-25)
+
+Acton now has exceptions, how exceptional!
+
 ### Added
 - Add support for exceptions! [#1463]
   - The syntactic support for exceptions has existed for a long time but the
@@ -75,7 +80,6 @@
     - Since the actor message queue is per actor, it is possible that multiple
       worker threads could work faster but in practice they step on each others
       toes enough around the global readyQ that it is slower overall.
-
 
 ### Changed
 - `net.TCPIPConnection` is removed and replaced by `net.TCPConnection`
