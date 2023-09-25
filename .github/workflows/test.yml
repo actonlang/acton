@@ -125,9 +125,9 @@ jobs:
         run: |
           export DEBIAN_FRONTEND=noninteractive
           apt-get update
-          apt-get install -qy bzip2 curl haskell-stack make procps zlib1g-dev
+          apt-get install -qy bzip2 curl g++ haskell-stack make procps zlib1g-dev
       - name: "Upgrade stack on old distributions"
-        if: ${{ (matrix.os == 'ubuntu') && (matrix.version == '20.04') }}
+        if: ${{ (matrix.os == 'ubuntu' && (matrix.version == '20.04' || matrix.version == '22.04')) || (matrix.os == 'debian' && matrix.version == '11') }}
         run: |
           stack upgrade
           echo "PATH=~/.local/bin:$PATH" >> $GITHUB_ENV
@@ -173,8 +173,13 @@ jobs:
       - name: "Install build prerequisites"
         run: |
           apt-get update
-          apt-get install -qy bzip2 curl haskell-stack make procps zlib1g-dev
+          apt-get install -qy bzip2 curl g++ haskell-stack make procps zlib1g-dev
           apt-get install -qy bash-completion build-essential debhelper devscripts
+      - name: "Upgrade stack on old distributions"
+        if: ${{ (matrix.os == 'ubuntu' && (matrix.version == '20.04' || matrix.version == '22.04')) || (matrix.os == 'debian' && matrix.version == '11') }}
+        run: |
+          stack upgrade
+          echo "PATH=~/.local/bin:$PATH" >> $GITHUB_ENV
       - name: "Build Debian packages"
         run: |
           export ZIG_LOCAL_CACHE_DIR=~/zig-cache
