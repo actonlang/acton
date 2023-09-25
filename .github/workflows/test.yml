@@ -183,7 +183,7 @@ jobs:
       - name: "Build Debian packages"
         run: |
           export ZIG_LOCAL_CACHE_DIR=~/zig-cache
-          make -C ${GITHUB_WORKSPACE} debs BUILD_RELEASE=${{ env.BUILD_RELEASE }} STATIC_ACTONC=true
+          make -C ${GITHUB_WORKSPACE} debs BUILD_RELEASE=${{ env.BUILD_RELEASE }}
       - name: "Compute variables"
         id: vars
         run: |
