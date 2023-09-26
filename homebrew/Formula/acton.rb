@@ -6,15 +6,8 @@ class Acton < Formula
   license "BSD-3-Clause"
   head "https://github.com/actonlang/acton.git", branch: "main"
 
-  # TODO: can gettext be removed? it was likely necessary when we built deps
-  # using autoconf, but might not be needed now that we use build.zig?
-  depends_on "gettext" => :build
   depends_on "ghc@8.10" => :build
   depends_on "haskell-stack" => :build
-
-  on_linux do
-    depends_on "gmp"
-  end
 
   def install
     # Fix up stack config to not install project local GHC
