@@ -145,6 +145,11 @@ jobs:
           if-no-files-found: error
       - name: "Run tests"
         run: make -C ${GITHUB_WORKSPACE} test
+      - name: "Build & Push container image"
+        if: ${{ (matrix.os == 'debian') && (matrix.version == '12') }}
+        run: |
+          make image
+          make push-image
 
 
   build-debs:
