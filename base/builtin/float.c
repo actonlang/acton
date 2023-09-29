@@ -174,6 +174,8 @@ B_float B_MinusD_RealFloatD_floatD___sub__(B_MinusD_RealFloatD_float wit,  B_flo
 // B_DivD_float  ////////////////////////////////////////////////////////////////////////////////////////
 
 B_float B_DivD_floatD___truediv__(B_DivD_float wit, B_float a, B_float b) {
+    if (b->val == to$float(0.0)->val)
+        $RAISE((B_BaseException)$NEW(B_ZeroDivisionError, to$str("float division by zero")));
     return to$float(fromB_float(a) / fromB_float(b));
 }  
 
