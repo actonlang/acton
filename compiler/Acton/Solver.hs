@@ -945,7 +945,6 @@ subkwd f seen r1 TNil{}                     = term f seen r1
         term f seen (TNil _ _)              = do --traceM ("## subkwd Nil - Nil: " ++ prstr (tNil KRow) ++ " [" ++ prstrs seen ++ "] ≈ " ++ prstr (tNil KRow))
                                                  return ([], KwdNil)
 
-
 {-
 
 ---- OK:

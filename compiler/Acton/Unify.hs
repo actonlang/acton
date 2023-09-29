@@ -58,9 +58,9 @@ unify' _ (TFX _ fx1) (TFX _ fx2)
 
 unify' _ (TNil _ k1) (TNil _ k2)
   | k1 == k2                                = return ()
-unify' info r1 (TRow _ k n t2 r2)           = do (t1,r1') <- findElem info k (tNil k) n r1 (rowTail r2)
-                                                 unify info t1 t2
-                                                 unify info r1' r2
+unify' info (TRow _ k1 n1 t1 r1) (TRow _ k2 n2 t2 r2)
+  | k1 == k2 && n1 == n2                    = do unify info t1 t2
+                                                 unify info r1 r2
 
 unify' info (TVar _ tv1) (TVar _ tv2)
   | tv1 == tv2                              = return ()
@@ -111,27 +111,3 @@ merge s1 s2
   | otherwise                               = Nothing
   where agree                               = and [ subst s1 (tVar v) `wildeq` subst s2 (tVar v) | v <- dom s1 `intersect` dom s2 ]
         t `wildeq` t'                       = match [] t t' == Just []
-
-
--- findElem ------------------------------------------------------------------------------------------------------------------------
-
-findElem info k r0 n r tl                   = do r0' <- msubst r0
-                                                 r' <- msubst r
-                                                 tl' <- msubst tl
-                                                 findElem' info r0' n r' tl'
-  where findElem' info r0 n (TRow l k n1 t r2) tl
-          | n == n1                         = return (t, revApp r0 r2)
-          | otherwise                       = findElem' info (TRow l k n1 t r0) n r2 tl
-        findElem' info r0 n (TNil _ _) tl   = kwdNotFound info n
-        findElem' info r0 n r2@(TVar _ tv) tl
-          | r2 == tl                        = conflictingRow tv
-          | not $ univar tv                 = kwdNotFound info n
-          | otherwise                       = do t <- newTVar
-                                                 r <- newTVarOfKind k
-                                                 substitute tv (tRow k n t r)
-                                                 return (t, revApp r0 r)
-        findElem' info e0 n r2 tl           = noUnify info r2 (tRow k n tWild tWild)
-        revApp (TRow l k n t r1) r2         = revApp r1 (TRow l k n t r2)
-        revApp (TNil _ _) r2                = r2
-
-
