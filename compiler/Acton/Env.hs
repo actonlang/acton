@@ -884,8 +884,8 @@ castable env (TFX _ fx1) (TFX _ fx2)        = castable' fx1 fx2
 
 castable env (TNil _ k1) (TNil _ k2)
   | k1 == k2                                = True
-castable env (TRow _ k n t1 r1) r2
-  | Just (t2,r2') <- findInRow n r2         = t2 /= tWild && castable env t1 t2 && r2' /= tWild && castable env r1 r2'
+castable env (TRow _ k1 n1 t1 r1) (TRow _ k2 n2 t2 r2)
+  | k1 == k2 && n1 == n2                    = castable env t1 t2 && castable env r1 r2
 
 castable env (TVar _ tv1) (TVar _ tv2)
   | tv1 == tv2                              = True
@@ -948,8 +948,8 @@ glb env t1@(TFX _ fx1) t2@(TFX _ fx2)
 
 glb env (TNil _ k1) (TNil _ k2)
   | k1 == k2                            = pure $ tNil k1
-glb env (TRow _ k n t1 r1) r
-  | Just (t2,r2) <- findInRow n r       = tRow k n <$> glb env t1 t2 <*> glb env r1 r2
+glb env (TRow _ k1 n1 t1 r1) (TRow _ k2 n2 t2 r2)
+  | k1 == k2 && n1 == n2                = tRow k1 n1 <$> glb env t1 t2 <*> glb env r1 r2
 
 glb env t1 t2                           = Nothing
     
@@ -1009,8 +1009,8 @@ lub env t1@(TFX _ fx1) t2@(TFX _ fx2)   = pure $ tTFX (lufx fx1 fx2)
 
 lub env (TNil _ k1) (TNil _ k2)
   | k1 == k2                            = pure $ tNil k1
-lub env (TRow _ k n t1 r1) r
-  | Just (t2,r2) <- findInRow n r       = tRow k n <$> lub env t1 t2 <*> lub env r1 r2
+lub env (TRow _ k1 n1 t1 r1) (TRow _ k2 n2 t2 r2)
+  | k1 == k2 && n1 == n2                = tRow k1 n1 <$> lub env t1 t2 <*> lub env r1 r2
 
 lub env t1 t2                           = Nothing
 
