@@ -215,6 +215,8 @@ B_tuple B_IntegralD_i32D___divmod__(B_IntegralD_i32 wit, B_i32 a, B_i32 b) {
 }
 
 B_i32 B_IntegralD_i32D___floordiv__(B_IntegralD_i32 wit, B_i32 a, B_i32 b) {
+    if (b->val == 0)
+        $RAISE((B_BaseException)$NEW(B_ZeroDivisionError, to$str("division by zero")));
     return toB_i32(a->val / b->val);
 }
 
@@ -260,6 +262,8 @@ B_i32 B_MinusD_IntegralD_i32D___sub__(B_MinusD_IntegralD_i32 wit,  B_i32 a, B_i3
 
  
 B_float B_DivD_i32D___truediv__ (B_DivD_i32 wit, B_i32 a, B_i32 b) {
+    if (b->val == 0)
+        $RAISE((B_BaseException)$NEW(B_ZeroDivisionError, to$str("division by zero")));
     return to$float((double)a->val/(double)b->val);
 }
 

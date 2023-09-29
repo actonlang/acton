@@ -1,10 +1,131 @@
+import testing
+
+# Test all integer types:
+# - i16
+# - i32
+# - i64
+# - u16
+# - u32
+# - u64
+# - int
+
+# TODO: test that division by zero raises ZeroDivisionError
+
+def test_i16_divzero():
+    try:
+        i16(3) / i16(0)
+    except ZeroDivisionError:
+        try:
+            i16(3) // i16(0)
+        except ZeroDivisionError:
+            return
+    raise testing.NotRaisesError("expected ZeroDivisionError for i16")
+
+def test_i32_divzero():
+    try:
+        i32(3) / i32(0)
+    except ZeroDivisionError:
+        try:
+            i32(3) // i32(0)
+        except ZeroDivisionError:
+            return
+    raise testing.NotRaisesError("expected ZeroDivisionError for i32")
+
+def test_i64_divzero():
+    try:
+        i64(3) / i64(0)
+    except ZeroDivisionError:
+        try:
+            i64(3) // i64(0)
+        except ZeroDivisionError:
+            return
+    raise testing.NotRaisesError("expected ZeroDivisionError for i64")
+
+def test_u16_divzero():
+    try:
+        u16(3) / u16(0)
+    except ZeroDivisionError:
+        try:
+            u16(3) // u16(0)
+        except ZeroDivisionError:
+            return
+    raise testing.NotRaisesError("expected ZeroDivisionError for u16")
+
+def test_u32_divzero():
+    try:
+        u32(3) / u32(0)
+    except ZeroDivisionError:
+        try:
+            u32(3) // u32(0)
+        except ZeroDivisionError:
+            return
+    raise testing.NotRaisesError("expected ZeroDivisionError for u32")
+
+def test_u64_divzero():
+    try:
+        u64(3) / u64(0)
+    except ZeroDivisionError:
+        try:
+            u64(3) // u64(0)
+        except ZeroDivisionError:
+            return
+    raise testing.NotRaisesError("expected ZeroDivisionError for u64")
+
+
+def test_i16():
+    test_i16_divzero()
+    x: i16 = 0
+    if (bool(x != 0)):
+       raise ValueError("unexpected: bool(x) != 0")
+    if x != 0:
+       raise ValueError("unexpected: x != 0")
+    return True
+
+def test_i32():
+    test_i32_divzero()
+    x: i32 = 0
+    if (bool(x != 0)):
+       raise ValueError("unexpected: bool(x) != 0")
+    if x != 0:
+       raise ValueError("unexpected: x != 0")
+    return True
+
 def test_i64():
+    test_i64_divzero()
     x: i64 = 0
     if (bool(x != 0)):
        raise ValueError("unexpected: bool(x) != 0")
     if x != 0:
        raise ValueError("unexpected: x != 0")
     return True
+
+def test_u16():
+    test_u16_divzero()
+    x: u16 = 0
+    if (bool(x != 0)):
+       raise ValueError("unexpected: bool(x) != 0")
+    if x != 0:
+       raise ValueError("unexpected: x != 0")
+    return True
+
+def test_u32():
+    test_u32_divzero()
+    x: u32 = 0
+    if (bool(x != 0)):
+       raise ValueError("unexpected: bool(x) != 0")
+    if x != 0:
+       raise ValueError("unexpected: x != 0")
+    return True
+
+def test_u64():
+    test_u64_divzero()
+    x: u64 = 0
+    if (bool(x != 0)):
+       raise ValueError("unexpected: bool(x) != 0")
+    if x != 0:
+       raise ValueError("unexpected: x != 0")
+    return True
+
 
 
 actor main(env):
@@ -34,7 +155,15 @@ actor main(env):
         raise ValueError("int('123') != 123")
     if hash(2**131) >= 2**64:
         raise ValueError("hash(2**131) too big")
-    if not test_i64():
-        await async env.exit(1)
 
-    await async env.exit(0)
+    try:
+        test_i16()
+        test_i32()
+        test_i64()
+        test_u16()
+        test_u32()
+        test_u64()
+        env.exit(0)
+    except Exception as e:
+        print(e)
+        env.exit(1)

@@ -353,6 +353,13 @@ class NotImplementedError (RuntimeError):
 class ValueError (Exception):
     pass
 
+class ArithmeticError (Exception):
+    pass
+
+class ZeroDivisionError (ArithmeticError):
+    pass
+
+
 ## General protocols ###############################################################################
 
 protocol Identity:
