@@ -311,6 +311,12 @@ class BaseException (value):
     def __init__(self, msg: str) -> None:
         self.error_message = msg
 
+    def __str__(self):
+        return "%s: %s" % (self._name(), self.error_message)
+
+    def _name(self) -> str:
+        NotImplemented
+
 class SystemExit (BaseException):
     pass
 

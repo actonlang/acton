@@ -817,8 +817,6 @@ void $DROP() {
 }
 
 void $RAISE(B_BaseException e) {
-    //fprintf(stderr, "%s: %s\n", e->$class->$GCINFO, e->error_message ? fromB_str(e->error_message) : "");
-    //exit(1);
     JumpBuf jump = (JumpBuf)pthread_getspecific(jump_top);
     jump->xval = e;
     longjmp(jump->buf, 1);
@@ -1576,7 +1574,7 @@ void wt_work_cb(uv_check_t *ev) {
             } else {                            // An unhandled exception
                 save_actor_state(current, m);
                 B_BaseException ex = (B_BaseException)r.value;
-                fprintf(stderr, "Unhandled exception in actor: %s[%ld]]:\n  %s: %s\n", unmangle_name(current->$class->$GCINFO), current->$globkey, unmangle_name(ex->$class->$GCINFO), fromB_str(ex->error_message));
+                fprintf(stderr, "Unhandled exception in actor: %s[%ld]]:\n  %s\n", unmangle_name(current->$class->$GCINFO), current->$globkey, fromB_str(ex->$class->__str__(ex)));
                 m->value = r.value;                                 // m->value holds the raised exception,
                 $Actor b = FREEZE_waiting(m, MARK_EXCEPTION);       // so mark this and stop further m->waiting additions
                 while (b) {
