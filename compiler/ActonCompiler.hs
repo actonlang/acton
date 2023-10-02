@@ -491,7 +491,8 @@ compileTasks opts paths tasks preBinTasks
                              then do env0 <- Acton.Env.initEnv builtinPath False
                                      env1 <- foldM (doTask opts paths) env0 [t | AcyclicSCC t <- as]
                                      iff (not (altOutput opts) && not (C.stub opts)) $ do
-                                       binTasks <- catMaybes <$> mapM (filterMainActor env1 opts paths) preBinTasks
+                                       detBinTasks <- catMaybes <$> mapM (filterMainActor env1 opts paths) preBinTasks
+                                       let binTasks = if (null (C.root opts)) then detBinTasks else preBinTasks
                                        if useZigBuild opts paths
                                          then zigBuild env1 opts paths tasks binTasks
                                          else mapM_ (buildExecutable env1 opts paths) preBinTasks
