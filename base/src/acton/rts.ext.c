@@ -12,8 +12,26 @@ void actonQ_rtsQ___ext_init__() {
 }
 
 B_NoneType actonQ_rtsQ_gc (B_SysCap cap) {
-    GC_gcollect();
+    GC_gcollect_and_unmap();
     return B_None;
+}
+
+B_NoneType actonQ_rtsQ_enable_gc (B_SysCap cap) {
+    GC_enable();
+    return B_None;
+}
+
+B_NoneType actonQ_rtsQ_disable_gc (B_SysCap cap) {
+    GC_disable();
+    return B_None;
+}
+
+B_u64 actonQ_rtsQ_get_heap_size (B_SysCap cap) {
+    return toB_u64(GC_get_heap_size());
+}
+
+B_u64 actonQ_rtsQ_get_mem_usage (B_SysCap cap) {
+    return toB_u64(GC_get_heap_size() - (GC_get_free_bytes() + GC_get_unmapped_bytes()));
 }
 
 B_NoneType actonQ_rtsQ_sleep (B_SysCap cap, B_float sleep_time) {

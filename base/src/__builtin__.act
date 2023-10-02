@@ -353,6 +353,13 @@ class NotImplementedError (RuntimeError):
 class ValueError (Exception):
     pass
 
+class ArithmeticError (Exception):
+    pass
+
+class ZeroDivisionError (ArithmeticError):
+    pass
+
+
 ## General protocols ###############################################################################
 
 protocol Identity:
@@ -841,6 +848,16 @@ def pow [A(Number)] (a : A, b : A) -> A:
     return Number.__pow__(a,b)
 
 def print(*args) -> None:
+    """Print to stdout with ending newline"""
+    NotImplemented
+
+def printn(*args) -> None:
+    """Print to stdout without newline & flushing
+
+    This is useful to print progress information and similar where we want to
+    overwrite the current line.
+    """
+    # TODO: fold this into print
     NotImplemented
 
 def repr(x : value):

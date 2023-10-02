@@ -1,4 +1,36 @@
 def gc(cap: SysCap) -> None:
+    """Collect garbage
+
+    Jedi level. This is not the function you are looking for.
+    """
+    NotImplemented
+
+def enable_gc(cap: SysCap) -> None:
+    """Enable the garbage collector
+
+    Jedi level. This is not the function you are looking for.
+    """
+    NotImplemented
+
+def disable_gc(cap: SysCap) -> None:
+    """Disable the garbage collector
+
+    Jedi level. This is not the function you are looking for.
+    """
+    NotImplemented
+
+def get_mem_usage(cap: SysCap) -> u64:
+    """Get memory usage in number of bytes
+
+    Gets the approximate current memory usage by this program. This is not the
+    same as the heap size (which is the amount of memory allocated to us from
+    the OS).
+    Computed by taking the heap size and subtracting unmapped bytes and free
+    bytes as the GC thinks of it. It's approximate because the GC gives us an
+    approximate value, usually on the order of ~10KB. Thus, it is hard to
+    precisely measure small usage of memory whereas for applications consuming
+    hundreds of KB or megabytes of memory, the precision is quite enough.
+    """
     NotImplemented
 
 # sleep is sort of dangerous - it will actually put the RTS thread executing the

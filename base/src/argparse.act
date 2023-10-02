@@ -106,7 +106,7 @@ class Parser(object):
                     raise ArgumentError("Only one positional argument with multiple values allowed")
         self.args.append((name=name, help=help, nargs=nargs, left=1))
 
-    def add_cmd(self, name: str, fn: (Args) -> None):
+    def add_cmd(self, name: str, fn: proc(Args) -> None):
         p = Parser()
         self.cmds[name] = (parser=p, fn=fn)
         return p

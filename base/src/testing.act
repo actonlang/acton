@@ -1,0 +1,408 @@
+
+import acton.rts
+import argparse
+import time
+import term
+
+# -- assert ---------------------------------------------------------------------
+
+class AssertError(Exception):
+    name: str
+
+# TODO: add actual values as args to assert functions
+# TODO: add __str__ to assert exceptions
+class NotEqualError(AssertError):
+    def __init__(self, msg):
+        self.error_message = msg
+        self.a = None
+        self.b = None
+
+class EqualError(AssertError):
+    def __init__(self, msg, a, b):
+        self.error_message = msg
+        self.a = None
+        self.b = None
+
+class NotTrueError(AssertError):
+    def __init__(self, msg):
+        self.error_message = msg
+        self.a = None
+
+class NotFalseError(AssertError):
+    def __init__(self, msg):
+        self.error_message = msg
+        self.a = None
+
+class NotNoneError(AssertError):
+    def __init__(self, msg):
+        self.error_message = msg
+        self.a = None
+
+class NoneError(AssertError):
+    def __init__(self, msg):
+        self.error_message = msg
+        self.a = None
+
+class NotInError(AssertError):
+    def __init__(self, msg):
+        self.error_message = msg
+        self.a = None
+        self.b = None
+
+class InError(AssertError):
+    def __init__(self, msg):
+        self.error_message = msg
+        self.a = None
+        self.b = None
+
+class NotIsError(AssertError):
+    def __init__(self, msg):
+        self.error_message = msg
+        self.a = None
+        self.b = None
+
+class IsError(AssertError):
+    def __init__(self, msg):
+        self.error_message = msg
+        self.a = None
+        self.b = None
+
+class NotRaisesError(AssertError):
+    def __init__(self, msg):
+        self.error_message = msg
+        self.a = None
+
+class IsInstanceError(AssertError):
+    def __init__(self, msg):
+        self.error_message = msg
+        self.a = None
+        self.b = None
+
+class NotIsInstanceError(AssertError):
+    def __init__(self, msg):
+        self.error_message = msg
+        self.a = None
+        self.b = None
+
+
+def assertEqual(a, b, msg: str):
+    if not (a == b):
+        assert_msg = "Expected equal values but they are non-equal"
+        if msg != "":
+            assert_msg += ": " + msg
+        # TODO: include actual values in error message
+        raise NotEqualError(assert_msg)
+
+def assertNotEqual(a, b, msg: str):
+    if not (a != b):
+        assert_msg = "Expected non-equal values but they are equal"
+        if msg != "":
+            assert_msg += ": " + msg
+        raise EqualError(assert_msg, a, b)
+
+def assertTrue(a, msg: str):
+    if not bool(a):
+        assert_msg = "Expected True but got False"
+        if msg != "":
+            assert_msg += ": " + msg
+        raise NotTrueError(assert_msg)
+
+def assertFalse(a, msg: str):
+    if bool(a):
+        assert_msg = "Expected False but got True"
+        if msg != "":
+            assert_msg += ": " + msg
+        # TODO: include actual values in error message
+        raise NotFalseError(assert_msg)
+
+# We cannot test raises right now because we need better support for taking a
+# function and its arguments as parameters or run as a context manager
+# TODO: assertRaises
+# TODO: assertRaisesWithMessage
+# TODO: assertRaisesWithMessageRegex
+
+# TODO: fix this
+#def assertIs(a, b, msg: str):
+#    if not (a is b):
+#        assert_msg = "Expected same objects but they are different"
+#        if msg != "":
+#            assert_msg += ": " + msg
+#        # TODO: include actual values in error message
+#        raise NotIsError(assert_msg)
+#
+#def assertIsNot(a, b, msg: str):
+#    if not (a is not b):
+#        assert_msg = "Expected different objects but they are the same"
+#        if msg != "":
+#            assert_msg += ": " + msg
+#        # TODO: include actual values in error message
+#        raise IsError(assert_msg)
+
+def assertIsNone(a, msg: str):
+    if not (a is None):
+        assert_msg = "Expected None but got non-None"
+        if msg != "":
+            assert_msg += ": " + msg
+        # TODO: include actual values in error message
+        raise NotNoneError(assert_msg)
+
+def assertIsNotNone(a, msg: str):
+    if not (a is not None):
+        assert_msg = "Expected non-None but got None"
+        if msg != "":
+            assert_msg += ": " + msg
+        # TODO: include actual values in error message
+        raise NoneError(assert_msg)
+
+def assertIn(a, b, msg: str):
+    if not (a in b):
+        assert_msg = "Expected value to be in collection but it is not"
+        if msg != "":
+            assert_msg += ": " + msg
+        # TODO: include actual values in error message
+        raise NotInError(assert_msg)
+
+def assertNotIn(a, b, msg: str):
+    if a in b:
+        assert_msg = "Expected value to not be in collection but it is"
+        if msg != "":
+            assert_msg += ": " + msg
+        # TODO: include actual values in error message
+        raise InError(assert_msg)
+
+# TODO: fix this?
+#def assertIsInstance(a, b, msg: str):
+#    if not isinstance(a, b):
+#        assert_msg = "Expected instance of " + b + " but got non-instance"
+#        if msg != "":
+#            assert_msg += ": " + msg
+#        raise NotIsInstanceError(assert_msg)
+#
+#def assertNotIsInstance(a, b, msg: str):
+#    if isinstance(a, b):
+#        assert_msg = "Expected not instance of " + b + " but got instance"
+#        if msg != "":
+#            assert_msg += ": " + msg
+#        raise IsInstanceError(assert_msg)
+
+# -------------------------------------------------------------------------------
+
+class UnitTest(object):
+    index: int
+    result: ?bool
+    def __init__(self, fn: proc() -> None, name: str, desc: str):
+        self.index = 0
+        self.iterations = 1
+        self.fn = fn
+        self.name = name
+        self.desc = desc
+        self.result = None
+
+
+class TestResult(object):
+    success: ?bool
+    duration: float
+    exception: ?Exception
+
+    def __init__(self, success: ?bool, duration: float, exception: ?Exception):
+        self.success = success
+        self.duration = duration
+        self.exception = exception
+
+
+actor test_runner(i, get_test, report_result):
+    def _run():
+        while True:
+            t = get_test()
+            if t is not None:
+                sw = time.Stopwatch()
+                f = t.fn
+                try:
+                    f()
+                    dur = sw.elapsed().to_float() * 1000.0
+                    report_result(t, TestResult(True, dur, None))
+                except AssertError as e:
+                    dur = sw.elapsed().to_float() * 1000.0
+                    report_result(t, TestResult(None, dur, e))
+                except Exception as e:
+                    dur = sw.elapsed().to_float() * 1000.0
+                    report_result(t, TestResult(False, dur, e))
+            else:
+                return None
+
+    after 0: _run()
+
+
+actor unit_test_runner(env: Env, unit_tests: dict[str, UnitTest]):
+    proc def _run_tests(args):
+        print("Running tests...")
+        hand_out = unit_tests
+        results: dict[str, (ut: UnitTest, result: ?TestResult)] = {}
+
+        for name, ut in unit_tests.items():
+            results[ut.name] = (ut=ut, result=None)
+
+        sw = time.Stopwatch()
+
+        def get_test():
+            r = hand_out.popitem()
+            if r is not None:
+                return r.1
+
+        def report_result(t, test_result: TestResult):
+            results[t.name] = (ut=t, result=test_result)
+            print_status()
+
+        def print_status():
+            d = "["
+            complete = True
+            for tname, t in results.items():
+                r = t.result
+                if r is not None:
+                    success = r.success
+                    if r:
+                        d += "."
+                    else:
+                        d += "!"
+                else:
+                    complete = False
+                    d += " "
+            d += "]"
+            printn("\r")
+            printn(d)
+
+            errors = 0
+            failures = 0
+            if complete:
+                printn(term.clearline + term.up() + term.clearline)
+                print("\nTests")
+                tname_width = 20
+                for tname, t in results.items():
+                    tname_width = max([tname_width, len(t.ut.name)], None)
+
+                for tname, t in results.items():
+                    ut = t.ut
+                    r = t.result
+                    if r is not None:
+                        prefix = "  " + ut.name + ": "
+                        prefix += " " * (tname_width - len(prefix))
+                        success = r.success
+                        exc = r.exception
+                        if exc is not None:
+                            if success is not None:
+                                failures += 1
+                                print(prefix + term.bold + term.red + "FAIL (%fms)" % r.duration + term.normal)
+                                for line in str(exc).splitlines(None):
+                                    print(term.red + "    %s" % (line) + term.normal)
+                            else:
+                                errors += 1
+                                print(prefix + term.bold + term.red + "ERROR (%fms)" % r.duration + term.normal)
+                                for line in str(exc).splitlines(None):
+                                    print(term.red + "    %s" % (line) + term.normal)
+                        else:
+                            time = "N/A"
+                            if r.duration >= 0:
+                                time = "%f" % (r.duration)
+                            print(prefix + term.green + "OK (%sms)" % (time) + term.normal)
+                    #print("Test %s: %s" % (t.name, str(t.result)))
+                print("")
+                if errors > 0 and failures > 0:
+                    print(term.bold + term.red + "%d error and %d failure out of %d tests (%ss)" % (errors, failures, len(results), sw.elapsed().str_ms()) + term.normal)
+                    print()
+                    env.exit(2)
+                elif errors > 0:
+                    print(term.bold + term.red + "%d out of %d tests errored (%ss)" % (errors, len(results), sw.elapsed().str_ms()) + term.normal)
+                    print()
+                    env.exit(2)
+                elif failures > 0:
+                    print(term.bold + term.red + "%d out of %d tests failed (%ss)" % (failures, len(results), sw.elapsed().str_ms()) + term.normal)
+                    print()
+                    env.exit(1)
+                else:
+                    print(term.green + "All %d tests passed (%ss)" % (len(results), sw.elapsed().str_ms()) + term.normal)
+                    print()
+                    env.exit(0)
+
+        for i in range(0, env.nr_wthreads, 1):
+            test_runner(i, get_test, report_result)
+
+
+    proc def _run_perf_tests(args):
+        print("Running performance tests")
+        # - disable GC
+        acton.rts.disable_gc(env.syscap)
+
+        all_good = True
+        for ut in unit_tests.values():
+            test_res = []
+            try:
+                for iteration in range(0, args.get_int("iterations"), 1):
+                    acton.rts.gc(env.syscap) # explicit GC collection
+                    mem_before = acton.rts.get_mem_usage(env.syscap)
+                    sw = time.Stopwatch()
+                    ut.fn() # run test function
+                    dur = sw.elapsed().to_float() * 1000.0
+                    mem_after = acton.rts.get_mem_usage(env.syscap)
+                    gc_sw = time.Stopwatch()
+                    acton.rts.gc(env.syscap)
+                    gc_dur = gc_sw.elapsed().to_float() * 1000.0
+                    mem_usage = mem_after - mem_before
+                    test_res.append((dur=dur, gc_dur=gc_dur, mem_usage=mem_usage))
+
+                total_mem_usage = 0
+                min_dur = 999999999999.0
+                max_dur = 0.0
+                total_dur = 0.0
+                total_gc_dur = 0.0
+                for res in test_res:
+                    total_mem_usage += int(res.mem_usage)
+                    min_dur = min([min_dur, res.dur], None)
+                    max_dur = max([max_dur, res.dur], None)
+                    total_dur += res.dur
+                    total_gc_dur += res.gc_dur
+
+                avg_mem_usage = total_mem_usage / len(test_res)
+                avg_dur = total_dur / float(len(test_res))
+                avg_gc_dur = total_gc_dur / float(len(test_res))
+                print("Test %s: %sOK%s" % (ut.name, str(term.green), str(term.normal)))
+                print("   iterations  : %12d" % args.get_int("iterations"))
+                print("   CPU time    : %12f / %12f / %12f ms min/avg/max" % (min_dur, avg_dur, max_dur))
+                print("   Mem usage   : %12d bytes (approximate)" % int(avg_mem_usage))
+                print("   GC CPU time : %12f ms" % (avg_gc_dur))
+            except AssertError as exc:
+                print("Test %s: %sFAILED%s" % (ut.name, term.bold + term.red, term.normal))
+                for line in str(exc).splitlines(None):
+                    print(term.red + "    %s" % (line) + term.normal)
+                all_good = False
+            except Exception as exc:
+                print("Test %s: %sERROR%s" % (ut.name, term.bold + term.red, term.normal))
+                for line in str(exc).splitlines(None):
+                    print(term.red + "    %s" % (line) + term.normal)
+                all_good = False
+
+        acton.rts.enable_gc(env.syscap)
+        if all_good:
+            env.exit(0)
+        else:
+            env.exit(1)
+
+    def _parse_args():
+        p = argparse.Parser()
+        tp = p.add_cmd("test", _run_tests)
+        pp = p.add_cmd("perf", _run_perf_tests)
+        pp.add_option("iterations", "int", "?", 1, "Number of iterations to run")
+
+        args = p.parse(env.argv)
+        _cmd = args.cmd
+        if _cmd is not None:
+            _cmd(args)
+        else:
+            # no command given, run all tests
+            _run_tests(args)
+    _parse_args()
+
+
+def __test():
+    assertEqual(1, 1, "1 == 1")
+    assertEqual("a", "a", "a == a")
+    assertNotEqual(1, 1, "1 != 1")

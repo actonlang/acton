@@ -458,14 +458,16 @@ class Instant:
     def since(self, other: Instant) -> Duration:
         """Return the duration since this instant.
         """
-#        TODO: fix __eq__ on Clock
-#        c = self.clock
-#        if c != other.clock:
-#            c = UnknownClock()
-        if (self.second == other.second and self.attosecond > other.attosecond) or self.second > other.second:
-            return Duration(self.second - other.second, self.attosecond - other.attosecond, self.clock)
-        else:
-            return Duration(other.second - self.second, other.attosecond - self.attosecond, self.clock)
+
+        result_attoseconds = self.attosecond - other.attosecond
+        result_seconds = self.second - other.second
+
+        # Handle underflow
+        if result_attoseconds < 0:
+            result_seconds -= 1
+            result_attoseconds += 10**18  # 1 second = 10^18 attoseconds
+
+        return Duration(result_seconds, result_attoseconds, self.clock)
 
     def comparable(self, other: Instant) -> bool:
         return self.clock.comparable(other.clock)

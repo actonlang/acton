@@ -42,14 +42,29 @@ B_NoneType B_print(int size, ...) {
 B_NoneType B_print(B_tuple t) {
     if (t->size > 0) {
         B_value elem = (B_value)t->components[0];
-        fputs((const char*)elem->$class->__str__(elem)->str,stdout);
+        fputs((const char*)elem->$class->__str__(elem)->str, stdout);
     }
     for (int i=1; i<t->size; i++) {
         putchar(' ');
         B_value elem = (B_value)t->components[i];
-        fputs((const char*)elem->$class->__str__(elem)->str,stdout);
+        fputs((const char*)elem->$class->__str__(elem)->str, stdout);
     }
     putchar('\n');
+    return B_None;
+}
+
+B_NoneType B_printn(B_tuple t) {
+    if (t->size > 0) {
+        B_value elem = (B_value)t->components[0];
+        char *s = elem->$class->__str__(elem);
+        fputs((const char*)elem->$class->__str__(elem)->str, stdout);
+    }
+    for (int i=1; i<t->size; i++) {
+        putchar(' ');
+        B_value elem = (B_value)t->components[i];
+        fputs((const char*)elem->$class->__str__(elem)->str, stdout);
+    }
+    fflush(stdout);
     return B_None;
 }
 

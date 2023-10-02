@@ -399,6 +399,8 @@ B_int B_MinusD_IntegralD_intD___sub__(B_MinusD_IntegralD_int wit,  B_int a, B_in
 // B_DivD_int  ////////////////////////////////////////////////////////////////////////////////////////
 
 B_float B_DivD_intD___truediv__ (B_DivD_int wit, B_int a, B_int b) {
+    if (zz_equal(&b->val, &to$int(0)->val))
+        $RAISE((B_BaseException)$NEW(B_ZeroDivisionError, to$str("division by zero")));
     zz_ptr aval = &a->val;
     zz_ptr bval = &b->val;
     B_int ared = malloc_int();
