@@ -112,6 +112,7 @@ nValueError                         = name "ValueError"
 nRange                              = name "range"
 nLen                                = name "len"
 nPrint                              = name "print"
+nPrintn                             = name "printn"
 nDict                               = name "dict"
 nList                               = name "list"
 nSetT                               = name "set"
@@ -173,6 +174,7 @@ qnValueError                        = gBuiltin nValueError
 ---
 qnRange                             = gBuiltin nRange
 qnPrint                             = gBuiltin nPrint
+qnPrintn                            = gBuiltin nPrintn
 qnDict                              = gBuiltin nDict
 qnList                              = gBuiltin nList
 qnSetT                              = gBuiltin nSetT
