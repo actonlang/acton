@@ -420,14 +420,22 @@ instance Pretty QBind where
 prettyPosRow (TRow _ PRow _ t (TNil _ PRow))
                                     = pretty t
 prettyPosRow (TRow _ PRow _ t p)    = pretty t <> comma <+> prettyPosRow p
-prettyPosRow (TVar _ v)             = text "*" <> pretty v
-prettyPosRow (TWild _)              = text "*_"
+prettyPosRow (TStar _ PRow r)
+  | TVar _ v <- r                   = text "*" <> pretty v
+  | TWild _ <- r                    = text "*_"
+  | otherwise                       = text "*" <> parens (prettyPosRow r)
+prettyPosRow (TVar _ v)             = text "*" <> pretty v      -- STAR!
+prettyPosRow (TWild _)              = text "*_"                 -- STAR!
 prettyPosRow (TNil _ PRow)          = empty
 prettyPosRow t                      = text "!!" <>  pretty t
     
 prettyKwdRow (TRow _ KRow n t (TNil _ KRow))
                                     = pretty n <> colon <+> pretty t
 prettyKwdRow (TRow _ KRow n t k)    = pretty n <> colon <+> pretty t <> comma <+> prettyKwdRow k
+prettyKwdRow (TStar _ KRow r)
+  | TVar _ v <- r                   = text "*" <> pretty v
+  | TWild _ <- r                    = text "*_"
+  | otherwise                       = text "*" <> parens (prettyKwdRow r)
 prettyKwdRow (TVar _ v)             = text "**" <> pretty v
 prettyKwdRow (TWild _)              = text "**_"
 prettyKwdRow (TNil _ KRow)          = empty
@@ -451,6 +459,8 @@ instance Pretty Type where
     pretty (TRow _ PRow _ t TNil{}) = parens $ pretty t <> comma
     pretty r@TRow{rkind=PRow}       = parens $ prettyPosRow r
     pretty r@TRow{rkind=KRow}       = parens $ prettyKwdRow r
+    pretty r@TStar{rkind=PRow}      = parens $ prettyPosRow r
+    pretty r@TStar{rkind=KRow}      = parens $ prettyKwdRow r
     pretty r@TNil{rkind=PRow}       = parens empty
     pretty r@TNil{rkind=KRow}       = parens empty
     pretty (TFX _ fx)               = pretty fx

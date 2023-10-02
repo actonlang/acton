@@ -235,6 +235,7 @@ data Type       = TVar      { tloc::SrcLoc, tvar::TVar }
                 | TWild     { tloc::SrcLoc }
                 | TNil      { tloc::SrcLoc, rkind::Kind }
                 | TRow      { tloc::SrcLoc, rkind::Kind, label::Name, rtype::Type, rtail::TRow }
+                | TStar     { tloc::SrcLoc, rkind::Kind, rtail::TRow }
                 | TFX       { tloc::SrcLoc, tfx::FX }
                 deriving (Show,Read,Generic,NFData)
 
@@ -339,6 +340,7 @@ tNone           = TNone NoLoc
 tWild           = TWild NoLoc
 tNil k          = TNil NoLoc k
 tRow k          = TRow NoLoc k
+tStar k         = TStar NoLoc k
 tTFX fx         = TFX NoLoc fx
 
 tCon0 n q       = tCon $ TC n [ tVar tv | Quant tv _ <- q ]
@@ -360,16 +362,19 @@ fxWild          = tWild
 fxFun fx1 fx2   = tFun fxPure (posRow (tF0 fx1) posNil) kwdNil (tF0 fx2)
   where tF0 fx  = tFun fx posNil kwdNil tNone
 
-posRow t r      = TRow NoLoc PRow (name "_") t r
+posRow t r      = tRow PRow (name "_") t r
+posStar r       = tStar PRow r
 posVar mbv      = maybe tWild tVar mbv
 posNil          = tNil PRow
 
-kwdRow n t r    = TRow NoLoc KRow n t r
+kwdRow n t r    = tRow KRow n t r
+kwdStar r       = tStar KRow r
 kwdVar mbv      = maybe tWild tVar mbv
 kwdNil          = tNil KRow
 
 rowTail (TRow _ _ _ _ r)
                 = rowTail r
+-- STAR!
 rowTail r       = r
 
 prowOf (PosPar n a _ p) = posRow (case a of Just t -> t; _ -> tWild) (prowOf p)
@@ -392,12 +397,14 @@ pPar ns (TRow _ PRow n t p)
   | n == name "_"       = PosPar (head ns) (Just t) Nothing (pPar (tail ns) p)
   | otherwise           = PosPar n (Just t) Nothing (pPar ns p)
 pPar ns (TNil _ PRow)   = PosNIL
+-- STAR!
 pPar ns t               = PosSTAR (head ns) (Just t)
 
 kPar ns (TRow _ KRow n t p)
   | n == name "_"       = KwdPar (head ns) (Just t) Nothing (kPar (tail ns) p)
   | otherwise           = KwdPar n (Just t) Nothing (kPar ns p)
 kPar ns (TNil _ KRow)   = KwdNIL
+-- STAR!
 kPar ns t               = KwdSTAR (head ns) (Just t)
 
 tRowLoc t@TRow{}        = getLoc [tloc t, loc (rtype t)]
@@ -473,6 +480,7 @@ instance Leaves Type where
     leaves (TTuple _ p k)   = leaves [p,k]
     leaves (TOpt _ t)       = leaves t
     leaves (TRow _ _ _ t r) = leaves [t,r]
+    leaves (TStar _ _ r)    = leaves r
     leaves _                = []
 
 instance Leaves TCon where
@@ -730,8 +738,9 @@ instance Eq Type where
     TOpt _ t1           == TOpt _ t2            = t1 == t2
     TNone _             == TNone _              = True
     TWild _             == TWild _              = True
-    TNil _ s1           == TNil _ s2            = s1 == s2
-    TRow _ s1 n1 t1 r1  == TRow _ s2 n2 t2 r2   = s1 == s2 && n1 == n2 && t1 == t2 && r1 == r2
+    TNil _ k1           == TNil _ k2            = k1 == k2
+    TRow _ k1 n1 t1 r1  == TRow _ k2 n2 t2 r2   = k1 == k2 && n1 == n2 && t1 == t2 && r1 == r2
+    TStar _ k1 r1       == TStar _ k2 r2        = k1 == k2 && r1 == r2
     TFX _ fx1           == TFX _ fx2            = fx1 == fx2
     _                   == _                    = False
 
@@ -811,5 +820,3 @@ singlePosPat _                      = False
 
 posParHead (PosPar a b c _)         = (a,b,c)
 posArgHead (PosArg a _)             = a
-posPatHead (PosPat a _)             = a
-posRowHead (TRow _ PRow _ a _)      = a

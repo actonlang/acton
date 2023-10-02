@@ -289,6 +289,7 @@ instance Unalias Type where
     unalias env (TTuple l p k)      = TTuple l (unalias env p) (unalias env k)
     unalias env (TOpt l t)          = TOpt l (unalias env t)
     unalias env (TRow l k n t r)    = TRow l k n (unalias env t) (unalias env r)
+    unalias env (TStar l k r)       = TStar l k (unalias env r)
     unalias env t                   = t
 
 instance Unalias NameInfo where
@@ -543,6 +544,7 @@ kindOf env TNone{}          = KType
 kindOf env TWild{}          = KWild
 kindOf env r@TNil{}         = rkind r
 kindOf env r@TRow{}         = rkind r
+kindOf env r@TStar{}        = rkind r
 kindOf env TFX{}            = KFX
 
 
@@ -608,6 +610,7 @@ schematic (TFun _ _ _ _ _)  = tFun tWild tWild tWild tWild
 schematic (TTuple _ _ _)    = tTuple tWild tWild
 schematic (TOpt _ _)        = tOpt tWild
 schematic (TRow _ k n _ _)  = tRow k n tWild tWild
+schematic (TStar _ k _)     = tStar k tWild
 schematic t                 = t
 
 schematic' (TC n ts)         = TC n [ tWild | _ <- ts ]
@@ -886,6 +889,8 @@ castable env (TNil _ k1) (TNil _ k2)
   | k1 == k2                                = True
 castable env (TRow _ k1 n1 t1 r1) (TRow _ k2 n2 t2 r2)
   | k1 == k2 && n1 == n2                    = castable env t1 t2 && castable env r1 r2
+castable env (TStar _ k1 r1) (TStar _ k2 r2)
+  | k1 == k2                                = castable env r1 r2
 
 castable env (TVar _ tv1) (TVar _ tv2)
   | tv1 == tv2                              = True
@@ -950,6 +955,8 @@ glb env (TNil _ k1) (TNil _ k2)
   | k1 == k2                            = pure $ tNil k1
 glb env (TRow _ k1 n1 t1 r1) (TRow _ k2 n2 t2 r2)
   | k1 == k2 && n1 == n2                = tRow k1 n1 <$> glb env t1 t2 <*> glb env r1 r2
+glb env (TStar _ k1 r1) (TStar _ k2 r2)
+  | k1 == k2                            = tStar k1 <$> glb env r1 r2
 
 glb env t1 t2                           = Nothing
     
@@ -1011,6 +1018,8 @@ lub env (TNil _ k1) (TNil _ k2)
   | k1 == k2                            = pure $ tNil k1
 lub env (TRow _ k1 n1 t1 r1) (TRow _ k2 n2 t2 r2)
   | k1 == k2 && n1 == n2                = tRow k1 n1 <$> lub env t1 t2 <*> lub env r1 r2
+lub env (TStar _ k1 r1) (TStar _ k2 r2)
+  | k1 == k2                            = tStar k1 <$> lub env r1 r2
 
 lub env t1 t2                           = Nothing
 
@@ -1275,6 +1284,7 @@ instance Simp Type where
     simp env (TTuple l p k)         = TTuple l (simp env p) (simp env k)
     simp env (TOpt l t)             = TOpt l (simp env t)
     simp env (TRow l k n t r)       = TRow l k n (simp env t) (simp env r)
+    simp env (TStar l k r)          = TStar l k (simp env r)
     simp env t                      = t
 
 instance Simp TCon where

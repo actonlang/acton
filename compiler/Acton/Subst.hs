@@ -266,6 +266,7 @@ instance Subst Type where
     msubst (TWild l)                = return $ TWild l
     msubst (TNil l s)               = return $ TNil l s
     msubst (TRow l k n t r)         = TRow l k n <$> msubst t <*> msubst r
+    msubst (TStar l k r)            = TStar l k <$> msubst r
     msubst (TFX l fx)               = return $ TFX l fx
 
     tyfree (TVar _ v)               = [v]
@@ -277,6 +278,7 @@ instance Subst Type where
     tyfree (TWild _)                = []
     tyfree (TNil _ _)               = []
     tyfree (TRow _ _ _ t r)         = tyfree t ++ tyfree r
+    tyfree (TStar _ _ r)            = tyfree r
     tyfree (TFX l fx)               = []
 
     
@@ -553,6 +555,7 @@ instance Polarity Type where
     polvars (TWild _)               = ([],[])
     polvars (TNil _ _)              = ([],[])
     polvars (TRow _ _ _ t r)        = polvars t `polcat` polvars r
+    polvars (TStar _ _ r)           = polvars r
     polvars (TFX l fx)              = ([],[])
 
 instance Polarity TCon where

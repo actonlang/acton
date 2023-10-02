@@ -103,6 +103,7 @@ instance WellFormed Type where
     wf env (TTuple _ p k)   = wf env p ++ wf env k
     wf env (TOpt _ t)       = wf env t
     wf env (TRow _ _ _ t r) = wf env t ++ wf env r
+    wf env (TStar _ _ r)    = wf env r
     wf env _                = []
 
 

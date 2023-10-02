@@ -61,6 +61,8 @@ unify' _ (TNil _ k1) (TNil _ k2)
 unify' info (TRow _ k1 n1 t1 r1) (TRow _ k2 n2 t2 r2)
   | k1 == k2 && n1 == n2                    = do unify info t1 t2
                                                  unify info r1 r2
+unify' info (TStar _ k1 r1) (TStar _ k2 r2)
+  | k1 == k2                                = unify info r1 r2
 
 unify' info (TVar _ tv1) (TVar _ tv2)
   | tv1 == tv2                              = return ()
@@ -95,6 +97,8 @@ match vs (TNil _ k1) (TNil _ k2)
   | k1 == k2                                = Just []
 match vs (TRow _ k1 n1 t1 r1) (TRow _ k2 n2 t2 r2)
   | k1 == k2 && n1 == n2                    = matches vs [t1,r1] [t2,r2]
+match vs (TStar _ k1 r1) (TStar _ k2 r2)
+  | k1 == k2                                = match vs r1 r2
 match vs (TVar _ tv1) (TVar _ tv2)
   | tv1 == tv2                              = Just []
 match vs t1 (TVar _ tv)

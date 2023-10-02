@@ -358,6 +358,7 @@ instance Norm Expr where
 
 nargs TNil{}                        = 0
 nargs p@TRow{}                      = 1 + nargs (rtail p)
+nargs p@TStar{}                     = 1
 
 narg n k@TRow{}                     = if n == label k then 0 else 1 + narg n (rtail k)
 
@@ -474,14 +475,14 @@ instance Conv Type where
     conv (TCon l c)                 = TCon l (conv c)
     conv (TTuple l p k)             = TTuple l (joinRow p k) kwdNil
     conv (TOpt l t)                 = TOpt l (conv t)
-    conv (TRow l k n t r)           = TRow l k n (conv t) (conv r)
+    conv (TRow l k n t r)           = TRow l k (name "_") (conv t) (conv r)
+    conv (TStar l k r)              = TRow l k (name "_") (TTuple l (conv r) kwdNil) posNil
     conv t                          = t
 
 instance Conv TCon where
     conv (TC c ts)                  = TC c (conv ts)
 
-joinRow (TRow l k n t p) r          = TRow l k n (conv t) (joinRow p r)
-joinRow p r                         = toPosRow r p
-
-toPosRow (TRow l k n t r) p         = TRow l k (name "_") t (toPosRow r p)
-toPosRow _ p                        = p
+joinRow (TRow l k n t p) r          = TRow l k (name "_") (conv t) (joinRow p r)
+joinRow (TStar l k p) r             = TRow l k (name "_") (TTuple l (conv p) kwdNil) (conv r)
+joinRow (TNil _ _) r                = conv r
+joinRow p (TNil _ _)                = conv p

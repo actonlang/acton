@@ -441,6 +441,7 @@ instance Vars Type where
     free (TOpt _ t)                 = free t
     free (TCon  _ c)                = free c
     free (TRow _ _ _ t r)           = free t ++ free r
+    free (TStar _ _ r)              = free r
     free _                          = []
 
 

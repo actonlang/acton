@@ -162,6 +162,7 @@ instance ConvTWild Type where
     convTWild (TOpt l t)            = TOpt l <$> convTWild t
     convTWild (TCon l c)            = TCon l <$> convTWild c
     convTWild (TRow l k n t r)      = TRow l k n <$> convTWild t <*> convTWild r
+    convTWild (TStar l k r)         = TStar l k <$> convTWild r
     convTWild t                     = return t
 
 instance ConvTWild TCon where
@@ -214,6 +215,7 @@ instance ConvPExist Type where
     convPExist env (TTuple l p k)   = TTuple l <$> convPExist env p <*> convPExist env k
     convPExist env (TOpt l t)       = TOpt l <$> convPExist env t
     convPExist env (TRow l k n t r) = TRow l k n <$> convPExist env t <*> convPExist env r
+    convPExist env (TStar l k r)    = TStar l k <$> convPExist env r
     convPExist env t                = return t
 
 instance ConvPExist TCon where
@@ -516,6 +518,8 @@ instance KInfer Type where
     kinfer env (TRow l k n t r)     = do t <- kexp KType env t
                                          r <- kexp k env r
                                          return (k, TRow l k n t r)
+    kinfer env (TStar l k r)        = do r <- kexp k env r
+                                         return (k, TStar l k r)
     kinfer env (TFX l fx)           = return (KFX, TFX l fx)
 
 kfx env (TVar _ tv)
@@ -594,6 +598,7 @@ instance KSubst Type where
     ksubst g (TNone l)              = return $ TNone l
     ksubst g (TNil l s)             = return $ TNil l s
     ksubst g (TRow l k n t r)       = TRow l k n <$> ksubst g t <*> ksubst g r
+    ksubst g (TStar l k r)          = TStar l k <$> ksubst g r
     ksubst g (TFX l fx)             = return $ TFX l fx
 
 instance KSubst Stmt where

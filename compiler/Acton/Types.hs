@@ -60,7 +60,6 @@ nodup x
   | otherwise                   = True
   where vs                      = duplicates (bound x)
 
-
 defaultTE                           :: Env -> TEnv -> TypeM TEnv
 defaultTE env te                    = do defaultVars (tyfree te \\ tyfree env)
                                          msubst te
