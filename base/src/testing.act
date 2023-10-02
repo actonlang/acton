@@ -396,6 +396,9 @@ actor unit_test_runner(env: Env, unit_tests: dict[str, UnitTest]):
         _cmd = args.cmd
         if _cmd is not None:
             _cmd(args)
+        else:
+            # no command given, run all tests
+            _run_tests(args)
     _parse_args()
 
 
