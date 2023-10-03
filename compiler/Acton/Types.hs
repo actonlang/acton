@@ -1360,8 +1360,8 @@ inferCall env unwrap l e ps ks          = do (cs1,t,e') <- infer env e
 
 
 tupleTemplate i                         = do ts <- mapM (const newTVar) [0..i]              -- Handle DotI or RestI...
-                                             p <- newTVarOfKind PRow            -- STAR!
-                                             k <- newTVarOfKind KRow            -- STAR!
+                                             p <- newTVarOfKind PRow
+                                             k <- newTVarOfKind KRow
                                              let p0 = foldl (flip posRow) p ts
                                                  p1 = foldl (flip posRow) p (tail ts)
                                              return (TTuple NoLoc p0 k, head ts, TTuple NoLoc p1 k)
@@ -1525,7 +1525,7 @@ instance Infer PosArg where
                                              prow <- newTVarOfKind PRow
                                              krow <- newTVarOfKind KRow
                                              return (Cast (DfltInfo (loc e) 99 (Just e) []) t (tTuple prow krow) :
-                                                     cs, prow, PosStar e')
+                                                     cs, posStar prow, PosStar e')
     infer env PosNil                    = return ([], posNil, PosNil)
     
 instance Infer KwdArg where
@@ -1536,7 +1536,7 @@ instance Infer KwdArg where
                                              prow <- newTVarOfKind PRow
                                              krow <- newTVarOfKind KRow
                                              return (Cast (DfltInfo (loc e) 100 (Just e) []) t (tTuple prow krow) :
-                                                     cs, krow, KwdStar e')
+                                                     cs, kwdStar krow, KwdStar e')
     infer env KwdNil                    = return ([], kwdNil, KwdNil)
 
 instance InfEnv Comp where
@@ -1559,7 +1559,7 @@ instance InfEnvT PosPat where
     infEnvT env (PosPatStar p)          = do (cs,te,t,p') <- infEnvT env p
                                              r <- newTVarOfKind PRow
                                              return (Cast (DfltInfo (loc p) 102 Nothing []) t (tTupleP r) :
-                                                     cs, te, r, PosPatStar p')
+                                                     cs, te, posStar r, PosPatStar p')
     infEnvT env PosPatNil               = return ([], [], posNil, PosPatNil)
 
 
@@ -1570,7 +1570,7 @@ instance InfEnvT KwdPat where
     infEnvT env (KwdPatStar p)          = do (cs,te,t,p') <- infEnvT env p
                                              r <- newTVarOfKind KRow
                                              return (Cast (DfltInfo (loc p) 103 Nothing []) t (tTupleK r) :
-                                                     cs, te, r, KwdPatStar p')
+                                                     cs, te, kwdStar r, KwdPatStar p')
     infEnvT env KwdPatNil               = return ([], [], kwdNil, KwdPatNil)
 
 

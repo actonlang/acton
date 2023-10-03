@@ -362,20 +362,22 @@ fxWild          = tWild
 fxFun fx1 fx2   = tFun fxPure (posRow (tF0 fx1) posNil) kwdNil (tF0 fx2)
   where tF0 fx  = tFun fx posNil kwdNil tNone
 
-posRow t r      = tRow PRow (name "_") t r
-posStar mbv     = tStar PRow $ maybe tWild tVar mbv
 posNil          = tNil PRow
+posRow          = tRow PRow (name "_")
+posStar         = tStar PRow
+posStar'        = posStar . maybe tWild tVar
 
-kwdRow n t r    = tRow KRow n t r
-kwdStar mbv     = tStar KRow $ maybe tWild tVar mbv
 kwdNil          = tNil KRow
+kwdRow          = tRow KRow
+kwdStar         = tStar KRow
+kwdStar'        = kwdStar . maybe tWild tVar
 
 prowOf (PosPar n a _ p) = posRow (case a of Just t -> t; _ -> tWild) (prowOf p)
-prowOf (PosSTAR n a)    = case a of Just (TTuple _ r _) -> r; _ -> tWild            -- STAR!
+prowOf (PosSTAR n a)    = posStar (case a of Just (TTuple _ r _) -> r; _ -> tWild)
 prowOf PosNIL           = posNil
 
 krowOf (KwdPar n a _ k) = kwdRow n (case a of Just t -> t; _ -> tWild) (krowOf k)
-krowOf (KwdSTAR n a)    = case a of Just (TTuple _ _ r) -> r; _ -> tWild            -- STAR!
+krowOf (KwdSTAR n a)    = kwdStar (case a of Just (TTuple _ _ r) -> r; _ -> tWild)
 krowOf KwdNIL           = kwdNil
 
 pArg (PosPar n a _ p)   = PosArg (eVar n) (pArg p)
