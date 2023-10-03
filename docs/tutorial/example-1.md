@@ -191,7 +191,7 @@ runtime errors because of unassigned variables. The problem with
 `harmonic2` 
 can be fixed by moving the initialisation of `sum` to before
 the `if` statement, by adding an `else` clause that also
-declares `sum` or, preferrably, by sticking to our first definition.
+declares `sum` or, preferably, by sticking to our first definition.
 
 In summary, Example 1 shows two function definitions, which both are
 valid in Python, but which may result in runtime errors when applied.

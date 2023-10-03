@@ -40,7 +40,7 @@ git push -u origin 1337-fix-foobar-bug
   
 ## Rebasing your local feature branch
 
-- If the `main` branch has had updates since your branched out your feature
+- If the `main` branch has had updates since you branched out your feature
   branch, you might get a conflict when trying to merge your feature branch back
   into `main`
 - Fix this by rebasing your feature branch on the new main

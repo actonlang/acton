@@ -9,7 +9,7 @@ with regards to triaging and prioritizing of bugs in Acton.
     wrong results; 5-1 = 3 and stuff like that
     - debugging this program is harder than when presented an explicit error
 - seg faults
-  - this causes a general feeling of brokenness and without an descriptive error
+  - this causes a general feeling of brokenness and without a descriptive error
     message, it is rather difficult to work around
 - things without workarounds
   - with type errors it is often possible to work around by adding type
