@@ -1,6 +1,6 @@
 # Example 0 - Hello World
 
-We follow tradition and introduce Acton programmin with the following minimal example
+We follow tradition and introduce Acton programming with the following minimal example
 
 ```py
 actor main(env):
