@@ -17,7 +17,7 @@ This function computes, for given ***n***, the list of all prime numbers
 smaller than ***n***, so `primesTo(20)` is
 `[2, 3, 5, 7, 11, 13, 17, 19]`. The function uses the
 ancient and remarkably efficient sieve algorithm discovered by the Greek
-mathematician Erathostenes around 200 BC. On a typical laptop this
+mathematician Eratosthenes around 200 BC. On a typical laptop this
 function will compute the 78498 primes less than a million in a small
 fraction of a second.
 
@@ -80,7 +80,7 @@ definitions, to be denoted by the same name. In fact, we have already
 seen overloading in previous examples:
 we have used + to denote addition both of `int`s and
 `float`s, quite different operations at the machine level. Many
-languages overload artihmetic operator symbols in ad hoc ways.
+languages overload arithmetic operator symbols in ad hoc ways.
 What we look for is a general method to introduce new
 overloadings. 
 
