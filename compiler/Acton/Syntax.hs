@@ -148,6 +148,8 @@ rawstr n                    = nstr n
 
 name            = Name NoLoc
 
+nWild           = name "_"
+
 globalName s    = Internal Globvar s 0
 
 globalNames s   = map (Internal Globvar s) [1..]
@@ -363,7 +365,7 @@ fxFun fx1 fx2   = tFun fxPure (posRow (tF0 fx1) posNil) kwdNil (tF0 fx2)
   where tF0 fx  = tFun fx posNil kwdNil tNone
 
 posNil          = tNil PRow
-posRow          = tRow PRow (name "_")
+posRow          = tRow PRow nWild
 posStar         = tStar PRow
 posStar'        = posStar . maybe tWild tVar
 
@@ -389,14 +391,14 @@ kArg (KwdSTAR n a)      = KwdStar (eVar n)
 kArg KwdNIL             = KwdNil
 
 pPar ns (TRow _ PRow n t p)
-  | n == name "_"       = PosPar (head ns) (Just t) Nothing (pPar (tail ns) p)
+  | n == nWild          = PosPar (head ns) (Just t) Nothing (pPar (tail ns) p)
   | otherwise           = PosPar n (Just t) Nothing (pPar ns p)
 pPar ns (TNil _ PRow)   = PosNIL
 pPar ns (TStar _ PRow r)= PosPar (head ns) (Just $ tTupleP r) Nothing PosNIL
 pPar ns t               = PosSTAR (head ns) (Just t)
 
 kPar ns (TRow _ KRow n t r)
-  | n == name "_"       = KwdPar (head ns) (Just t) Nothing (kPar (tail ns) r)
+  | n == nWild          = KwdPar (head ns) (Just t) Nothing (kPar (tail ns) r)
   | otherwise           = KwdPar n (Just t) Nothing (kPar ns r)
 kPar ns (TStar _ KRow r)= KwdPar (head ns) (Just $ tTupleK r) Nothing KwdNIL
 kPar ns (TNil _ KRow)   = KwdNIL
