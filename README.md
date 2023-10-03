@@ -12,7 +12,7 @@ simpler programming model. There is no explicit memory management, instead
 relying on garbage collection.
 
 Acton is statically typed with an expressive type language and type inference.
-Type inferrence means you don't have to explicitly declare types of every
+Type inference means you don't have to explicitly declare types of every
 variable but that the compiler will *infer* the type and performs its checks
 accordingly. We can have the benefits of type safety without the extra overhead
 involved in declaring types.
