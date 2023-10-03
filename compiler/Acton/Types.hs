@@ -1243,11 +1243,11 @@ instance Infer Expr where
                                              (cs,e') <- inferSub env (tTuple p (kwdRow n t0 k)) e
                                              return (cs, tTuple p k, Rest l e' n)
 
-    infer env (DotI l e i)              = do (tup,ti,rest) <- tupleTemplate i
+    infer env (DotI l e i)              = do (tup,ti,_) <- tupleTemplate i
                                              (cs,e') <- inferSub env tup e
                                              return (cs, ti, DotI l e' i)
 
-    infer env (RestI l e i)             = do (tup,ti,rest) <- tupleTemplate i
+    infer env (RestI l e i)             = do (tup,_,rest) <- tupleTemplate i
                                              (cs,e') <- inferSub env tup e
                                              return (cs, rest, RestI l e' i)
     infer env (Lambda l p k e fx)
@@ -1359,9 +1359,9 @@ inferCall env unwrap l e ps ks          = do (cs1,t,e') <- infer env e
                                   
 
 
-tupleTemplate i                         = do ts <- mapM (const newTVar) [0..i]
-                                             p <- newTVarOfKind PRow
-                                             k <- newTVarOfKind KRow
+tupleTemplate i                         = do ts <- mapM (const newTVar) [0..i]              -- Handle DotI or RestI...
+                                             p <- newTVarOfKind PRow            -- STAR!
+                                             k <- newTVarOfKind KRow            -- STAR!
                                              let p0 = foldl (flip posRow) p ts
                                                  p1 = foldl (flip posRow) p (tail ts)
                                              return (TTuple NoLoc p0 k, head ts, TTuple NoLoc p1 k)

@@ -363,26 +363,19 @@ fxFun fx1 fx2   = tFun fxPure (posRow (tF0 fx1) posNil) kwdNil (tF0 fx2)
   where tF0 fx  = tFun fx posNil kwdNil tNone
 
 posRow t r      = tRow PRow (name "_") t r
-posStar r       = tStar PRow r
-posVar mbv      = maybe tWild tVar mbv
+posStar mbv     = tStar PRow $ maybe tWild tVar mbv
 posNil          = tNil PRow
 
 kwdRow n t r    = tRow KRow n t r
-kwdStar r       = tStar KRow r
-kwdVar mbv      = maybe tWild tVar mbv
+kwdStar mbv     = tStar KRow $ maybe tWild tVar mbv
 kwdNil          = tNil KRow
 
-rowTail (TRow _ _ _ _ r)
-                = rowTail r
--- STAR!
-rowTail r       = r
-
 prowOf (PosPar n a _ p) = posRow (case a of Just t -> t; _ -> tWild) (prowOf p)
-prowOf (PosSTAR n a)    = case a of Just (TTuple _ r _) -> r; _ -> tWild
+prowOf (PosSTAR n a)    = case a of Just (TTuple _ r _) -> r; _ -> tWild            -- STAR!
 prowOf PosNIL           = posNil
 
 krowOf (KwdPar n a _ k) = kwdRow n (case a of Just t -> t; _ -> tWild) (krowOf k)
-krowOf (KwdSTAR n a)    = case a of Just (TTuple _ _ r) -> r; _ -> tWild
+krowOf (KwdSTAR n a)    = case a of Just (TTuple _ _ r) -> r; _ -> tWild            -- STAR!
 krowOf KwdNIL           = kwdNil
 
 pArg (PosPar n a _ p)   = PosArg (eVar n) (pArg p)
@@ -397,14 +390,14 @@ pPar ns (TRow _ PRow n t p)
   | n == name "_"       = PosPar (head ns) (Just t) Nothing (pPar (tail ns) p)
   | otherwise           = PosPar n (Just t) Nothing (pPar ns p)
 pPar ns (TNil _ PRow)   = PosNIL
--- STAR!
+pPar ns (TStar _ PRow r)= PosPar (head ns) (Just $ tTupleP r) Nothing PosNIL
 pPar ns t               = PosSTAR (head ns) (Just t)
 
-kPar ns (TRow _ KRow n t p)
-  | n == name "_"       = KwdPar (head ns) (Just t) Nothing (kPar (tail ns) p)
-  | otherwise           = KwdPar n (Just t) Nothing (kPar ns p)
+kPar ns (TRow _ KRow n t r)
+  | n == name "_"       = KwdPar (head ns) (Just t) Nothing (kPar (tail ns) r)
+  | otherwise           = KwdPar n (Just t) Nothing (kPar ns r)
+kPar ns (TStar _ KRow r)= KwdPar (head ns) (Just $ tTupleK r) Nothing KwdNIL
 kPar ns (TNil _ KRow)   = KwdNIL
--- STAR!
 kPar ns t               = KwdSTAR (head ns) (Just t)
 
 tRowLoc t@TRow{}        = getLoc [tloc t, loc (rtype t)]

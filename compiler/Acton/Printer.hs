@@ -424,8 +424,8 @@ prettyPosRow (TStar _ PRow r)
   | TVar _ v <- r                   = text "*" <> pretty v
   | TWild _ <- r                    = text "*_"
   | otherwise                       = text "*" <> parens (prettyPosRow r)
-prettyPosRow (TVar _ v)             = text "*" <> pretty v      -- STAR!
-prettyPosRow (TWild _)              = text "*_"                 -- STAR!
+prettyPosRow (TVar _ v)             = text "+" <> pretty v
+prettyPosRow (TWild _)              = text "+_"
 prettyPosRow (TNil _ PRow)          = empty
 prettyPosRow t                      = text "!!" <>  pretty t
     

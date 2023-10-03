@@ -1146,6 +1146,11 @@ x = c = 1, a = 2, d = 3, KW = y)                                        (a = x.a
 -}
 
 
+rowTail (TRow _ _ _ _ r)
+                = rowTail r
+-- STAR!
+rowTail r       = r
+
 
 {-
 subpos 0 (A,B,*R) (A,B,C,D)                     = Arg x.0 $ subpos 1 (B,*R) (B,C,D)                                     f = x.
