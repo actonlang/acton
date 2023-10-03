@@ -207,7 +207,7 @@ void on_connect6(uv_connect_t *connect_req, int status) {
         char errmsg[1024] = "Error in TCP connect over IPv6: ";
         uv_strerror_r(status, errmsg + strlen(errmsg), sizeof(errmsg)-strlen(errmsg));
         log_warn(errmsg);
-        self->$class->_on_tcp_error(self, to$int(4), to$int(status), to$str(errmsg));
+        self->$class->_on_tcp_error(self, to$int(6), to$int(status), to$str(errmsg));
         return;
     }
     self->$class->_on_connect6(self);
