@@ -427,7 +427,7 @@ prettyPosRow (TStar _ PRow r)
 prettyPosRow (TVar _ v)             = text "+" <> pretty v
 prettyPosRow (TWild _)              = text "+_"
 prettyPosRow (TNil _ PRow)          = empty
-prettyPosRow t                      = text "!!" <>  pretty t
+prettyPosRow t                      = text "??" <>  pretty t
     
 prettyKwdRow (TRow _ KRow n t (TNil _ KRow))
                                     = pretty n <> colon <+> pretty t
@@ -436,10 +436,10 @@ prettyKwdRow (TStar _ KRow r)
   | TVar _ v <- r                   = text "*" <> pretty v
   | TWild _ <- r                    = text "*_"
   | otherwise                       = text "*" <> parens (prettyKwdRow r)
-prettyKwdRow (TVar _ v)             = text "**" <> pretty v
-prettyKwdRow (TWild _)              = text "**_"
+prettyKwdRow (TVar _ v)             = text "++" <> pretty v
+prettyKwdRow (TWild _)              = text "++_"
 prettyKwdRow (TNil _ KRow)          = empty
-prettyKwdRow t                      = text "!!" <>  pretty t
+prettyKwdRow t                      = text "??" <>  pretty t
     
 prettyFunRow (TNil _ PRow) k        = prettyKwdRow k
 prettyFunRow p (TNil _ KRow)        = prettyPosRow p
