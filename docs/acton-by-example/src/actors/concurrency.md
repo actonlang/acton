@@ -25,7 +25,7 @@ actor main(env):
     bar = Counter("Bar")
     
     def exit():
-        await async env.exit(0)
+        env.exit(0)
 
     # exit the whole program after 10 seconds
     after 10: exit()

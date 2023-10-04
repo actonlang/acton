@@ -1,21 +1,23 @@
-actor main(env):
-    var exp = ["foo", "--bar"]
-    var i = 0
-    print("Expected:", exp)
-    print("env.argv:", env.argv[1:])
+import testing
 
-    for arg in env.argv[1:]:
-        if arg != exp[i]:
-            print("Oh noes:", arg, "!=", exp[i])
-            await async env.exit(1)
+def test_argv(exp, argv):
+    i = 0
+    for arg in argv[1:]:
+        testing.assertEqual(exp[i], arg, "arg != exp[i]")
         i += 1
 
     i = 1
     for ex in exp:
-        if ex != env.argv[i]:
-            print("Oh noes:", ex, "!=", env.argv[i])
-            await async env.exit(1)
+        testing.assertEqual(ex, argv[i], "ex != argv[i]")
         i += 1
 
-    print("All is well")
-    await async env.exit(0)
+actor main(env):
+    exp = ["foo", "--bar"]
+    print("Expected:", exp)
+    print("env.argv:", env.argv[1:])
+
+    try:
+        test_argv(exp, env.argv)
+        env.exit(0)
+    except:
+        env.exit(1)

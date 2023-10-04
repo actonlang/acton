@@ -1,3 +1,5 @@
+import testing
+
 import xml
 
 actor main(env):
@@ -16,6 +18,9 @@ actor main(env):
         print(d)
         e = xml.encode(d)
         print(e)
+
+        if s is not None and e is not None:
+            testing.assertEqual(e, s, "XML str -> data -> XML str")
         if s is not None and e is not None and s != e:
             print("MISMATCH")
             await async env.exit(1)

@@ -6,7 +6,7 @@ Given this Acton program:
 ```python
 actor main(env):
     print("Hello World!")
-    await async env.exit(0)
+    env.exit(0)
 ```
 
 The following actonc commands will all produce the same output.

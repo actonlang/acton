@@ -19,7 +19,7 @@ actor main(env):
             # ran out of luck, nobody likes a 4
             luck = False
 
-    await async env.exit(0)
+    env.exit(0)
 ```
 
 Compile and run:

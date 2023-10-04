@@ -44,7 +44,7 @@ actor main(env):
     l.clear()
     print("List after clear:", str(l))
 
-    await async env.exit(0)
+    env.exit(0)
 ```
 
 Compile and run:

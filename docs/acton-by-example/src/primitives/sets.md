@@ -20,7 +20,7 @@ actor main(env):
     s.discard("foo")
     print("Set after discarding 'foo':", s)
 
-    await async env.exit(0)
+    env.exit(0)
 ```
 
 Compile and run:

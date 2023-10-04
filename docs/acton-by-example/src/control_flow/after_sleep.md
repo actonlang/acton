@@ -29,7 +29,7 @@ actor main(env):
         
         # Exit after awhile
         if i > 4:
-            await async env.exit(0)
+            env.exit(0)
         
     # Kick off the whole thing
     send_msg()

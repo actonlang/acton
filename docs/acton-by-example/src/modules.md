@@ -20,7 +20,7 @@ actor main(env):
     now()              # using the directly imported function
     rightnow()         # using function alias
 
-    await async env.exit(0)
+    env.exit(0)
 ```
 
 Remember, all state in an Acton program must be held by actors. There can be no mutable variables in an Acton module, only constants! Similarly, there can be no global instantiation code in a module.

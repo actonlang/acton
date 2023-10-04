@@ -202,7 +202,7 @@ createProject name = do
       ++ "** Run\n\n#+BEGIN_SRC shell\nout/rel/bin/" ++ name ++ "\n#+END_SRC\n\n"
       )
     createDirectoryIfMissing True (srcDir paths)
-    writeFile (joinPath [(srcDir paths), name ++ ".act"]) "#\n#\n\nactor main(env):\n    print(\"Hello World!\")\n    await async env.exit(0)\n"
+    writeFile (joinPath [(srcDir paths), name ++ ".act"]) "#\n#\n\nactor main(env):\n    print(\"Hello World!\")\n    env.exit(0)\n"
     putStrLn("Created project " ++ name)
     putStrLn("Enter your new project directory with:\n  cd " ++ name)
     putStrLn("Compile:\n  actonc build")

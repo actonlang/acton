@@ -1,5 +1,5 @@
 actor main(env):
     # Never expected to get here as we should be invoked with invalid command
-    # line argument
-    print("All is well")
-    await async env.exit(0)
+    # line argument. The test actually expects a failure, so we exit with 0 to
+    # get a test failure.
+    env.exit(0)

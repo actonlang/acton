@@ -28,7 +28,7 @@ actor main(env):
 
     printfoo()
 
-    await async env.exit(0)
+    env.exit(0)
 ```
 
 Output:

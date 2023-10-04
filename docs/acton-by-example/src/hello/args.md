@@ -8,7 +8,7 @@ Source:
 ```python
 actor main(env):
     print("Hello " + env.argv[1] + "!")
-    await async env.exit(0)
+    env.exit(0)
 ```
 
 Compile and run, with argument:

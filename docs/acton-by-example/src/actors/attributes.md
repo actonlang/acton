@@ -21,7 +21,7 @@ actor main(env):
     # This would give an error, try uncommenting it
     # print(actor1.something)
 
-    await async env.exit(0)
+    env.exit(0)
 ```
 
 Compile and run:

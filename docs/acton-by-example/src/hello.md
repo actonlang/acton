@@ -10,7 +10,7 @@ Source:
 # actor by setting `--root main` when compiling the program
 actor main(env):
     print("Hello World!")
-    await async env.exit(0)
+    env.exit(0)
 ```
 
 Compile and run:

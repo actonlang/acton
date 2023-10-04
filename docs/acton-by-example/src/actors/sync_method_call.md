@@ -20,7 +20,7 @@ actor main(env):
     answer = d1.compute()
     print("The answer is", answer)
 
-    await async env.exit(0)
+    env.exit(0)
 ```
 
 Compile and run:

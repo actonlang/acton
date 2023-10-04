@@ -26,7 +26,7 @@ actor main(env):
     print("Pop last item:", d.popitem())
     print("Dict after .popitem():", d)
 
-    await async env.exit(0)
+    env.exit(0)
 ```
 
 Compile and run:
