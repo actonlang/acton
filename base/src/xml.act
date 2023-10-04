@@ -25,6 +25,7 @@ n.text and c.tail for all children of n.
 def decode(data : str) -> Node:
     NotImplemented
 
+# TODO: add arg to pretty-print, default=True
 def encode(node : Node) -> str:
     return node.encode()
 
