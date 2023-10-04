@@ -190,7 +190,7 @@ def assertNotIn(a, b, msg: str):
 class UnitTest(object):
     index: int
     result: ?bool
-    def __init__(self, fn: proc() -> None, name: str, desc: str):
+    def __init__(self, fn: mut() -> None, name: str, desc: str):
         self.index = 0
         self.iterations = 1
         self.fn = fn
