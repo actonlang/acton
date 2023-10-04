@@ -13,27 +13,20 @@ body:
     attributes:
       label: Acton Version
       description: "The output of `actonc --version`"
-      placeholder: "0.11.2-20221003112345"
+      placeholder: "0.16.3"
     validations:
       required: true
   - type: textarea
     id: repro
     attributes:
-      label: Steps to Reproduce
-      description: What exactly can someone else do, in order to observe the problem that you observed?
+      label: Steps to Reproduce and Observed Behavior
+      description: What exactly can someone else do, in order to observe the problem that you observed? Include the output and all error messages.
     validations:
       required: true
   - type: textarea
     id: expected
     attributes:
       label: Expected Behavior
-      description: What did you expect to happen?
-    validations:
-      required: true
-  - type: textarea
-    id: actual
-    attributes:
-      label: Actual Behavior
-      description: What happened instead? Be sure to include all error messages if any.
+      description: What did you expect to happen instead?
     validations:
       required: true
