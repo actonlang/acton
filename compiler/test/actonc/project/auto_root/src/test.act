@@ -2,4 +2,4 @@ import b
 
 actor main(env):
     b.foo()
-    await async env.exit(0)
+    env.exit(0)

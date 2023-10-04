@@ -30,7 +30,7 @@ actor main(env):
     foo(i2, s2)
     bar(i2, s2)
     
-    await async env.exit(0)
+    env.exit(0)
 ```
 
 Compile and run:

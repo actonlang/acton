@@ -19,7 +19,7 @@ actor main(env):
 
     if len(env.argv) != 3:
         print("usage: client [HOST] [PORT]")
-        await async env.exit(-1)
+        env.exit(-1)
 
     connect_cap = net.TCPConnectCap(net.TCPCap(net.NetCap(env.cap)))
     client = net.TCPConnection(connect_cap, env.argv[1], int(env.argv[2]), on_connect, on_receive, on_error)

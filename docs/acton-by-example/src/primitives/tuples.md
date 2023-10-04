@@ -20,7 +20,7 @@ actor main(env):
     if r.b:
         print(r.c)
 
-    await async env.exit(0)
+    env.exit(0)
     
 def foo() -> (a: str, b: bool, c: int):
     """A function that returns a tuple with fields name a and b

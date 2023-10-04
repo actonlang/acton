@@ -8,7 +8,7 @@ Source:
 
 actor main(env):
     print("Hello World!")
-    await async env.exit(0)
+    env.exit(0)
 ```
 
 Ensure the executable bit is set and run your .act file directly:

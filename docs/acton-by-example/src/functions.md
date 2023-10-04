@@ -13,7 +13,7 @@ def multiply(a, b):
 actor main(env):
     result = multiply(3, 4)
     print("Result:", result)
-    await async env.exit(0)
+    env.exit(0)
 ```
 
 Output:

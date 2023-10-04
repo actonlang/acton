@@ -16,7 +16,7 @@ actor main(env):
     s1 = "hello"   # inferred type: str
     foo(i1, s1)
 
-    await async env.exit(0)
+    env.exit(0)
 ```
 
 To see the inferred types of an Acton program, use the `--sigs` option of the compiler. As the name suggests, this will print out the type signatures for functions, actors and their attributes and methods in the specified Acton module.

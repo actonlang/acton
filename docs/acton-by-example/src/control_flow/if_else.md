@@ -34,7 +34,7 @@ actor main(env):
     inrange(-7)
     inrange(7)
 
-    await async env.exit(0)
+    env.exit(0)
 ```
 
 Compile and run:

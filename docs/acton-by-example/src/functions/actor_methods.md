@@ -25,7 +25,7 @@ actor main(env):
 
     result = compute(3)
     print("Result:", result)
-    await async env.exit(0)
+    env.exit(0)
 ```
 
 Output:

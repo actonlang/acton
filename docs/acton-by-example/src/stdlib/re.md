@@ -9,7 +9,7 @@ actor main(env):
     if m is not None:
         print("Got a match:", m.group[1])
 
-    await async env.exit(0)
+    env.exit(0)
 ```
 
 Output:

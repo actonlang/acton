@@ -19,7 +19,7 @@ def compute(a, fun):
 actor main(env):
     print( compute(7, multiply_with_3) )
     print( compute(7, multiply_with_42) )
-    await async env.exit(0)
+    env.exit(0)
 ```
 
 Output:

@@ -33,8 +33,8 @@ actor main(env):
     s2.say("bar", 5)
 
     def exit():
-        await async env.exit(0)
-    after 2: exit()
+        env.exit(0)
+    after 0.2: exit()
 ```
 
 Compile and run:

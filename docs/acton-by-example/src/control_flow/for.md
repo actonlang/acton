@@ -19,7 +19,7 @@ actor main(env):
         else:
             print(n)
 
-    await async env.exit(0)
+    env.exit(0)
 ```
 
 Compile and run:

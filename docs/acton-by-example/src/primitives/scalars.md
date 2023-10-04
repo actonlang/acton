@@ -17,7 +17,7 @@ actor main(env):
     b = True     # a boolean
     print(b)
     
-    await async env.exit(0)
+    env.exit(0)
 ```
 
 Compile and run:

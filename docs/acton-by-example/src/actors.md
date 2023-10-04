@@ -21,7 +21,7 @@ actor main(env):
     # Call the actor method hello
     await async a.hello()
 
-    await async env.exit(0)
+    env.exit(0)
 ```
 
 Compile and run:
