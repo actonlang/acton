@@ -141,19 +141,19 @@ instance Transform Expr where
     trans env (CompOp l e ops)          = CompOp l (trans env e) (trans env ops)
     trans env (UnOp l op e)             = UnOp l op (trans env e)
     trans env (Dot l e n)
-      | Tuple{} <- e'                   = trans env (kwditem n $ kargs e')
+      | Tuple{} <- e'                   = trans env (kwditem n $ kargs e')                  -- TODO: outrule side-effects in e
       | otherwise                       = Dot l e' n
       where e'                          = trans env e
     trans env (Rest l e n)
-      | Tuple{} <- e'                   = Tuple NoLoc PosNil (kwdrest n $ kargs e')
+      | Tuple{} <- e'                   = Tuple NoLoc PosNil (kwdrest n $ kargs e')         -- TODO: outrule side-effects in e
       | otherwise                       = Rest l e' n
       where e'                          = trans env e
     trans env (DotI l e i)
-      | Tuple{} <- e'                   = trans env (positem i $ pargs e')
+      | Tuple{} <- e'                   = trans env (positem i $ pargs e')                  -- TODO: outrule side-effects in e
       | otherwise                       = DotI l e' i
       where e'                          = trans env e
     trans env (RestI l e i)
-      | Tuple{} <- e'                   = Tuple NoLoc (posrest i $ pargs e') KwdNil
+      | Tuple{} <- e'                   = Tuple NoLoc (posrest i $ pargs e') KwdNil         -- TODO: outrule side-effects in e
       | otherwise                       = RestI l e' i
       where e'                          = trans env e
     trans env e0@(Lambda l p k e fx)
