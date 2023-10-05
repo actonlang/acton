@@ -1,23 +1,28 @@
-# TODO: flip around Json actor with free encode/decode functions, i.e. we want
-# the free encode/decode functions to actually do the work, which can be called
-# as json.encode() or json.decode() and will run as procs, i.e. synchronous
-# whereas if you want to run them async, you can use the Json actor. The Json
-# actor should just wrap the free functions. Now it's the other way around (only
-# way it works with compiler currently due to some bug), which means that every
-# invocation of encode / decode will also allocate a new actor.
-
 actor Json():
+    """JSON actor for distributed async processing
+
+    This actor can be used to process JSON data in a asynchronous distributed
+    fashion. The `encode` and `decode` methods are identical to the free
+    `encode` and `decode` functions in this module but by being wrapped in an
+    actor, they can be:
+    - called asynchronously
+    - the Json actor can be run by a different worker
+    Thus, by using one or multiple Json actors, the work of encoding or decoding
+    JSON can be distributed across multiple actors / workers / CPUs.
+    """
     action def decode(data: str) -> dict[str, value]:
-        NotImplemented
+        return decode(data)
 
     action def encode(data: dict[str, value]) -> str:
-        NotImplemented
+        return encode(data)
 
 
-def decode(data: str) -> dict[str, value]:
-    j = Json()
-    return j.decode(data)
+mut def decode(data: str) -> dict[str, value]:
+    """Decode a JSON string into a dictionary of values
+    """
+    NotImplemented
 
-def encode(data: dict[str, value]) -> str:
-    j = Json()
-    return j.encode(data)
+mut def encode(data: dict[str, value]) -> str:
+    """Encode a dictionary into a JSON string
+    """
+    NotImplemented

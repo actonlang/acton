@@ -94,20 +94,6 @@ void jsonQ_encode_list(yyjson_mut_doc *doc, yyjson_mut_val *node, B_list data) {
     }
 }
 
-$R jsonQ_JsonD_encodeG_local (jsonQ_Json self, $Cont c$cont, B_dict data) {
-    // Create JSON document
-    yyjson_mut_doc *doc = yyjson_mut_doc_new(NULL);
-    yyjson_mut_val *root = yyjson_mut_obj(doc);
-    yyjson_mut_doc_set_root(doc, root);
-
-    // TODO: do the thing
-    jsonQ_encode_dict(doc, root, data);
-
-    char *json = yyjson_mut_write(doc, 0, NULL);
-    //yyjson_doc_free(doc);
-    return $R_CONT(c$cont, to$str(json));
-}
-
 B_list jsonQ_decode_arr(yyjson_val *);
 
 B_dict jsonQ_decode_obj(yyjson_val *obj) {
@@ -211,7 +197,7 @@ B_list jsonQ_decode_arr(yyjson_val *arr) {
     return res;
 }
 
-$R jsonQ_JsonD_decodeG_local (jsonQ_Json self, $Cont c$cont, B_str data) {
+B_dict jsonQ_decode (B_str data) {
     // Read JSON and get root
     yyjson_read_err err;
     yyjson_doc *doc = yyjson_read_opts(fromB_str(data), strlen(fromB_str(data)), 0, NULL, &err);
@@ -229,5 +215,18 @@ $R jsonQ_JsonD_decodeG_local (jsonQ_Json self, $Cont c$cont, B_str data) {
     }
 
     yyjson_doc_free(doc);
-    return $R_CONT(c$cont, res);
+    return res;
+}
+
+B_str jsonQ_encode (B_dict data) {
+    // Create JSON document
+    yyjson_mut_doc *doc = yyjson_mut_doc_new(NULL);
+    yyjson_mut_val *root = yyjson_mut_obj(doc);
+    yyjson_mut_doc_set_root(doc, root);
+
+    jsonQ_encode_dict(doc, root, data);
+
+    char *json = yyjson_mut_write(doc, 0, NULL);
+    //yyjson_doc_free(doc);
+    return to$str(json);
 }
