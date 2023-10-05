@@ -1,31 +1,7 @@
-
 import json
+import testing
 
-actor main(env):
-
-    print("Testing: data -> JSON str -> data")
-    test_data = [
-        {"a": True, "b": False},
-        {"a": "1", "b": 2, "c": 3.1},
-        {"a": {"b": 1, "c": 2, "d": [1, 2], "e": [1.1, 2.2]}},
-        {"a": [1, 2, 3], "b": [1.1, 2.2, 3.3]},
-        {"a": [[1, 2, 3], [1, 2, 3]]},
-        {"a": [{"b": 1, "c": 2, "d": [1, 2]}, {"b": 1, "c": 2, "d": [1, 2]}]},
-    ]
-    for s in test_data:
-        print(s)
-        e = json.encode(s)
-        print(e)
-        d = json.decode(e)
-        print(d)
-#       This fails due to a compiler bug, see https://github.com/actonlang/acton/issues/841
-#        if s is not None and d is not None and s != d:
-#            print("MISMATCH")
-#            await async env.exit(1)
-
-        print()
-
-    print("Testing: JSON str -> data -> JSON str")
+def _test_json():
     test_json = [
         """{"a":true,"b":false}""",
         """{"a":"1","b":2,"c":3.1}""",
@@ -36,14 +12,18 @@ actor main(env):
         """{"a":[{"b":"1","c":2,"d":[1,2]},{"b":"1","c":2,"d":[1,2]}]}""",
     ]
     for s in test_json:
-        print(s)
+        #log.debug("Input string", {"json_str": s})
         d = json.decode(s)
-        print(d)
+        #log.debug("Decoded JSON string to dict", {"dict": d})
+        testing.assertIsNotNone(d, "Failed to decode JSON")
         e = json.encode(d)
-        if s is not None and e is not None and s != e:
-            print("MISMATCH")
-            await async env.exit(1)
+        #log.debug("Encoded to JSON", {"encoded": s})
+        testing.assertIsNotNone(e, "Failed to encode to JSON")
+        testing.assertEqual(s, e, "Input output via JSON round trip does not match")
 
-        print()
+__unit_tests: dict[str, testing.UnitTest] = {
+    "_test_json": testing.UnitTest(_test_json, "json", "Decode JSON [str, bool]"),
+}
 
-    await async env.exit(0)
+actor main(env):
+    testing.unit_test_runner(env, __unit_tests)
