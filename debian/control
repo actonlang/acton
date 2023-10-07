@@ -5,6 +5,7 @@ Maintainer: Kristian Larsson <kristian@spritelink.net>
 Build-Depends:
  bash-completion,
  debhelper-compat (= 13),
+ g++,
  haskell-stack,
  make
 Standards-Version: 4.6.0

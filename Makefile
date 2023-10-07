@@ -140,17 +140,12 @@ test-backend: $(BACKEND_TESTS)
 ACTONC_ALL_HS=$(wildcard compiler/*.hs compiler/**/*.hs)
 ACTONC_TEST_HS=$(wildcard compiler/tests/*.hs)
 ACTONC_HS=$(filter-out $(ACTONC_TEST_HS),$(ACTONC_ALL_HS))
-# Set STATIC_ACTONC=true to build a static actonc binary. This works on Debian
-# 11 and distributions of similar age while it seems to fail on newer versions.
-ifeq ($(STATIC_ACTONC),true)
-ACTC_GHC_OPTS=-optl-static
-endif
-# NOTE: we're unsetting CC to avoid using zig cc for stack / ghc, which doesn't
-# seem to work properly
+# NOTE: we're unsetting CC & CXX to avoid using zig cc & zig c++ for stack /
+# ghc, which doesn't seem to work properly
 compiler/actonc: compiler/package.yaml.in compiler/stack.yaml dist/builder $(ACTONC_HS)
-	cd compiler && unset CC && unset CFLAGS && stack build --dry-run 2>&1 | grep "Nothing to build" || \
+	cd compiler && unset CC && unset CXX && unset CFLAGS && stack build --dry-run 2>&1 | grep "Nothing to build" || \
 		(sed 's,^version:.*,version:      "$(VERSION_INFO)",' < package.yaml.in > package.yaml \
-		&& stack build --ghc-options='-j4 $(ACTC_GHC_OPTS)' \
+		&& stack build $(STACK_OPTS) --ghc-options='-j4 $(ACTC_GHC_OPTS)' \
 		&& stack --local-bin-path=. install 2>/dev/null)
 
 .PHONY: clean-compiler
@@ -548,4 +543,4 @@ debian/changelog: debian/changelog.in CHANGELOG.md
 
 .PHONY: debs
 debs: debian/changelog
-	debuild --preserve-envvar VERSION_INFO --preserve-envvar STATIC_ACTONC -i -us -uc -b
+	debuild --preserve-envvar VERSION_INFO -i -us -uc -b

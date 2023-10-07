@@ -125,9 +125,9 @@ jobs:
         run: |
           export DEBIAN_FRONTEND=noninteractive
           apt-get update
-          apt-get install -qy bzip2 curl haskell-stack make procps zlib1g-dev
+          apt-get install -qy bzip2 curl g++ haskell-stack make procps zlib1g-dev
       - name: "Upgrade stack on old distributions"
-        if: ${{ (matrix.os == 'ubuntu') && (matrix.version == '20.04') }}
+        if: ${{ (matrix.os == 'ubuntu' && (matrix.version == '20.04' || matrix.version == '22.04')) || (matrix.os == 'debian' && matrix.version == '11') }}
         run: |
           stack upgrade
           echo "PATH=~/.local/bin:$PATH" >> $GITHUB_ENV
@@ -150,7 +150,7 @@ jobs:
   build-debs:
     runs-on: ubuntu-latest
     container:
-      image: debian:bullseye
+      image: debian:12
     steps:
       - name: "Show platform and environment"
         run: |
@@ -173,12 +173,17 @@ jobs:
       - name: "Install build prerequisites"
         run: |
           apt-get update
-          apt-get install -qy bzip2 curl haskell-stack make procps zlib1g-dev
+          apt-get install -qy bzip2 curl g++ haskell-stack make procps zlib1g-dev
           apt-get install -qy bash-completion build-essential debhelper devscripts
+      - name: "Upgrade stack on old distributions"
+        if: ${{ (matrix.os == 'ubuntu' && (matrix.version == '20.04' || matrix.version == '22.04')) || (matrix.os == 'debian' && matrix.version == '11') }}
+        run: |
+          stack upgrade
+          echo "PATH=~/.local/bin:$PATH" >> $GITHUB_ENV
       - name: "Build Debian packages"
         run: |
           export ZIG_LOCAL_CACHE_DIR=~/zig-cache
-          make -C ${GITHUB_WORKSPACE} debs BUILD_RELEASE=${{ env.BUILD_RELEASE }} STATIC_ACTONC=true
+          make -C ${GITHUB_WORKSPACE} debs BUILD_RELEASE=${{ env.BUILD_RELEASE }}
       - name: "Compute variables"
         id: vars
         run: |
@@ -321,10 +326,10 @@ jobs:
         uses: actions/download-artifact@v3
         with:
           name: acton-macos-11
-      - name: "Download artifacts for Linux, built on Debian:11"
+      - name: "Download artifacts for Linux, built on Debian:12"
         uses: actions/download-artifact@v3
         with:
-          name: acton-debian-11
+          name: acton-debian-12
       - name: "Download artifacts for Debian Linux"
         uses: actions/download-artifact@v3
         with:
@@ -386,10 +391,10 @@ jobs:
         uses: actions/download-artifact@v3
         with:
           name: acton-macos-11
-      - name: "Download artifacts for Linux, built on Debian:11"
+      - name: "Download artifacts for Linux, built on Debian:12"
         uses: actions/download-artifact@v3
         with:
-          name: acton-debian-11
+          name: acton-debian-12
       - name: "Download artifacts for Debian Linux"
         uses: actions/download-artifact@v3
         with:
@@ -415,7 +420,7 @@ jobs:
     if: startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
     container:
-      image: debian:bullseye
+      image: debian:12
     needs: [test-macos, test-linux, build-debs]
     steps:
       - name: Install build prerequisites
@@ -440,7 +445,7 @@ jobs:
       - name: "Include new deb in Apt repository"
         run: |
           cd apt
-          reprepro include bullseye ../deb/*.changes
+          reprepro include bookworm ../deb/*.changes
       - name: "Push updates to git repository for apt.acton-lang.io"
         run: |
           cd apt

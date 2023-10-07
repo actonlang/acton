@@ -4,7 +4,7 @@
 
 # NOTE: do not forget to update homebrew/Formula/acton.rb with the version of
 # GHC that corresponds to the stack LTS release, like lts-18.28 -> ghc@8.10
-resolver: lts-18.28
+resolver: lts-21.13
 
 # User packages to be built.
 # Various formats can be used as shown in the example below.
@@ -29,7 +29,7 @@ packages:
 # Dependency packages to be pulled from upstream that are not in the resolver
 # (e.g., acme-missiles-0.3)
 # extra-deps: []
-extra-deps: [dir-traverse-0.2.3.0]
+extra-deps: [Cabal-3.10.1.0,Cabal-syntax-3.10.1.0,dir-traverse-0.2.3.0,directory-1.3.8.1,filepath-1.4.100.4,process-1.6.18.0,unix-2.8.2.1]
 # Override default flag values for local packages and extra-deps
 # flags: {}
 
@@ -41,3 +41,6 @@ extra-deps: [dir-traverse-0.2.3.0]
 # we rewrite this in our Homebrew recipe to use the system GHC. Do NOT remove
 # this line, regexp replace matches on it!
 # system-ghc: true
+
+ghc-options:
+  "unix": -fPIC
