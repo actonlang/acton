@@ -1,55 +1,129 @@
 import random
+import testing
 
-def check_random_distribution(min, max, total):
-    print("Checking distribution of", total, "random numbers between", min, "and", max, "are within 10% of an even distribution")
-    num_range = max - min
+# choice()
+def _test_choice_basic_functionality():
+    lst = [1, 2, 3, 4, 5]
+    for _ in range(0, 1000, 1):  # Repeat many times to ensure randomness
+        testing.assertIn(random.choice(lst), lst, "random.choice() returned a value not in the list")
+
+def _test_choice_empty_sequence():
+    try:
+        random.choice([])
+        raise testing.NotRaisesError("random.choice() did not raise IndexError when passed an empty sequence")
+    except IndexError:
+        pass
+
+def _test_choice_single_element():
+    testing.assertEqual(42, random.choice([42]), "Expected the only element in the list")
+
+def _test_choice_repeatability():
+    lst = [1, 2, 3, 4, 5]
+    results = set(None)
+    for _ in range(0, 1000, 1):
+        results.add(random.choice(lst))
+    testing.assertTrue(bool(len(results) > 1), "Expected multiple unique results for repeated calls")
+
+# sample()
+def _test_sample_basic_functionality():
+    """Test that random.sample() returns the correct number of elements and that
+    all returned elements are in the original population.
+    """
+    population = list(range(0, 100, 10))
+    k = 5
+    sample = random.sample(population, k)
+    testing.assertEqual(len(sample), k, "Sample size does not match k")
+    for elem in sample:
+        testing.assertIn(elem, population, "Sampled element not in the population")
+
+def _test_sample_size_larger_than_population():
+    """Test that random.sample() raises a ValueError when the sample size is
+    larger than the population size.
+    """
+    try:
+        random.sample([1, 2, 3], 5)
+        testing.assertTrue(False, "Expected a ValueError for k > population size")
+    except ValueError:
+        pass
+
+def _test_sample_with_single_element_population():
+    """Test sampling from a population with a single element.
+    """
+    sample = random.sample([42], 1)
+    testing.assertEqual(sample, [42], "Expected the only element in the population")
+
+def _test_sample_repeatability() -> None:
+    """Test that repeated calls to random.sample() produce different results.
+    """
+    lst = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+    sample_1 = random.sample(lst, 2)
+
+    for _ in range(0, 1000, 1):
+        sample_2 = random.sample(lst, 2)
+        if sample_1 != sample_2:
+            return None
+
+    # If we reach this point, all samples were identical
+    testing.assertTrue(False, "random.sample() appears to be producing identical results.")
+
+def _test_sample_size_zero():
+    """Test sampling with k=0, which should return an empty list.
+    """
+    sample = random.sample([1, 2, 3, 4, 5], 0)
+    testing.assertEqual(sample, [], "Expected an empty list for k=0")
+
+
+# randint()
+def _test_random_distribution():
+    """Test that random.randint() produces a somewhat uniform distribution.
+    """
+    low = 500
+    high = 1000
+    total = 1000000
+    num_range = high - low
     stats = {}
     for i in range(0, total, 1):
-        r = random.randint(min, max)
+        r = random.randint(low, high)
         if r not in stats:
             stats[r] = 0
         stats[r] += 1
     exp_count = total / num_range
     slack = 0.1
-    exp_min = exp_count * (1-slack)
-    exp_max = exp_count * (1+slack)
+    exp_low = exp_count * (1-slack)
+    exp_high = exp_count * (1+slack)
     for n, v in stats.items():
-        if v < exp_min:
-            print("n", n, "with a count of", v, "is below expected value of", exp_min)
-        if v > exp_max:
-            print("n", n, "with a count of", v, "is above expected value of", exp_max)
+        if v < exp_low:
+            print("n", n, "with a count of", v, "is below expected value of", exp_low)
+        if v > exp_high:
+            print("n", n, "with a count of", v, "is above expected value of", exp_high)
         #if n > (expected_count * 1.1) or n < (expected_count * 0.9):
             #print("n", n, " outside of expected range (", (expected_count*0.9), "-", (expected_count*1.1), "):", stats[n])
 
-
-actor main(env):
-    print("Checking that 100k random numbers are within the specified range")
+def _test_random1():
     for i in range(0, 100000, 1):
         r = random.randint(0, 1234)
-        if r < 0:
-            print("Got a random number outside range: ", r, "min 0 / max 1234")
-            await async env.exit(1)
+        testing.assertTrue(r >= 0 and r <= 1234, "random.randint() returned a value outside of the range")
 
-    print("Checking that 100k random numbers are within the specified range")
+def _test_random2():
     for i in range(0, 100000, 1):
         r = random.randint(1293862, 97309358)
-        if r < 0:
-            print("Got a random number outside range: ", r, "min 1293862 / max 97309358")
-            await async env.exit(1)
-
-    check_random_distribution(500, 1000, 1*1000*1000)
+        testing.assertTrue(r >= 1293862 and r <= 97309358, "random.randint() returned a value outside of the range")
 
 
-    print("Printing some random numbers for show:")
-    print(random.randint(0, 1234))
-    print(random.randint(0, 1234))
-    print(random.randint(0, 1234))
-    print(random.randint(0, 1234))
-    print(random.randint(0, 1234))
-    print(random.randint(34560, 9281234))
-    print(random.randint(34560, 9281234))
-    print(random.randint(34560, 9281234))
-    print(random.randint(34560, 9281234))
-    print(random.randint(34560, 9281234))
+__unit_tests: dict[str, testing.UnitTest] = {
+    "_test_choice_basic_functionality": testing.UnitTest(_test_choice_basic_functionality, "choice_basic_functionality", "Basic functionality of random.choice()"),
+    "_test_choice_empty_sequence": testing.UnitTest(_test_choice_empty_sequence, "choice_empty_sequence", "random.choice() raises IndexError when passed an empty sequence"),
+    "_test_choice_single_element": testing.UnitTest(_test_choice_single_element, "choice_single_element", "random.choice() returns the only element in the list"),
+    "_test_choice_repeatability": testing.UnitTest(_test_choice_repeatability, "choice_repeatability", "random.choice() returns different values when called repeatedly"),
+    "_test_random1": testing.UnitTest(_test_random1, "random1", "random.randint() returns a value within the specified range"),
+    "_test_random2": testing.UnitTest(_test_random2, "random2", "random.randint() returns a value within the specified range"),
+    "_test_sample_basic_functionality": testing.UnitTest(_test_sample_basic_functionality, "sample_basic_functionality", "Basic functionality of random.sample()"),
+    "_test_sample_size_larger_than_population": testing.UnitTest(_test_sample_size_larger_than_population, "sample_size_larger_than_population", "random.sample() raises a ValueError when k > population size"),
+    "_test_sample_with_single_element_population": testing.UnitTest(_test_sample_with_single_element_population, "sample_with_single_element_population", "random.sample() returns the only element in the population"),
+    "_test_sample_repeatability": testing.UnitTest(_test_sample_repeatability, "sample_repeatability", "random.sample() returns different values when called repeatedly"),
+    "_test_sample_size_zero": testing.UnitTest(_test_sample_size_zero, "sample_size_zero", "random.sample() returns an empty list when k=0"),
+    "_test_random_distribution": testing.UnitTest(_test_random_distribution, "random_distribution", "random.randint() returns a value within the specified range"),
+}
 
-    await async env.exit(0)
+actor main(env):
+    testing.unit_test_runner(env, __unit_tests)

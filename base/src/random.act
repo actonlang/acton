@@ -1,2 +1,40 @@
 def randint(min: int, max: int) -> int:
     NotImplemented
+
+def choice[T](sequence: Sequence[T]) -> T:
+    """
+    Return a random element from the non-empty sequence.
+
+    :param sequence: List or sequence to choose from.
+    :return: A random element from the sequence.
+    """
+    if len(sequence) == 0:
+        raise IndexError('Cannot choose from an empty sequence')
+
+    index = randint(0, len(sequence))
+    return sequence[index]
+
+
+def sample[T](population: list[T], k: int) -> list[T]:
+    """
+    Chooses k unique random elements from a population sequence.
+
+    :param population: List from which to sample.
+    :param k: Number of unique elements to pick.
+    :return: A new list containing elements from the population while maintaining the original sequence order.
+    """
+    if not (0 <= k and k <= len(population)):
+        raise ValueError("Sample larger than population or is negative")
+
+    result = []
+    indices = list(range(0, len(population), 1))
+    for _ in range(0, k, 1):
+        idx_to_pop = choice(indices)
+        idx = 0
+        for i in range(0, len(indices), 1):
+            if indices[i] == idx_to_pop:
+                idx = i
+                break
+        indices.pop(idx)
+        result.append(population[idx_to_pop])
+    return result
