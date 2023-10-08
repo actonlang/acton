@@ -394,14 +394,14 @@ pPar ns (TRow _ PRow n t p)
   | n == nWild          = PosPar (head ns) (Just t) Nothing (pPar (tail ns) p)
   | otherwise           = PosPar n (Just t) Nothing (pPar ns p)
 pPar ns (TNil _ PRow)   = PosNIL
-pPar ns (TStar _ PRow r)= PosPar (head ns) (Just $ tTupleP r) Nothing PosNIL
+pPar ns (TStar _ PRow r)= PosSTAR (head ns) (Just $ tTupleP r)
 pPar ns t               = PosSTAR (head ns) (Just t)
 
 kPar ns (TRow _ KRow n t r)
   | n == nWild          = KwdPar (head ns) (Just t) Nothing (kPar (tail ns) r)
   | otherwise           = KwdPar n (Just t) Nothing (kPar ns r)
-kPar ns (TStar _ KRow r)= KwdPar (head ns) (Just $ tTupleK r) Nothing KwdNIL
 kPar ns (TNil _ KRow)   = KwdNIL
+kPar ns (TStar _ KRow r)= KwdSTAR (head ns) (Just $ tTupleK r)
 kPar ns t               = KwdSTAR (head ns) (Just t)
 
 tRowLoc t@TRow{}        = getLoc [tloc t, loc (rtype t)]
