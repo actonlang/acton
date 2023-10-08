@@ -391,14 +391,12 @@ kArg (KwdSTAR n a)      = KwdStar (eVar n)
 kArg KwdNIL             = KwdNil
 
 pPar ns (TRow _ PRow n t p)
-  | n == nWild          = PosPar (head ns) (Just t) Nothing (pPar (tail ns) p)
-  | otherwise           = PosPar n (Just t) Nothing (pPar ns p)
+                        = PosPar (head ns) (Just t) Nothing (pPar (tail ns) p)
 pPar ns (TNil _ PRow)   = PosNIL
 pPar ns (TStar _ PRow r)= PosSTAR (head ns) (Just $ tTupleP r)
 
 kPar ns (TRow _ KRow n t r)
-  | n == nWild          = KwdPar (head ns) (Just t) Nothing (kPar (tail ns) r)
-  | otherwise           = KwdPar n (Just t) Nothing (kPar ns r)
+                        = KwdPar n (Just t) Nothing (kPar ns r)
 kPar ns (TNil _ KRow)   = KwdNIL
 kPar ns (TStar _ KRow r)= KwdSTAR (head ns) (Just $ tTupleK r)
 
