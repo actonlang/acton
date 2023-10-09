@@ -21,8 +21,8 @@ actor main(env):
     s.discard("foo")
     print("Set after discarding 'foo':", s)
 
-    # {} is ambiguous, it could mean an empty set or an empty dict so
-    # empty set must be created with set()
+    # Use set() to create an empty set. {} means an empty dict!
+    # TODO: remove None here once default args are in
     empty_set = set(None)
 
     env.exit(0)
