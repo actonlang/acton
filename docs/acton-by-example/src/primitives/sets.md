@@ -3,6 +3,7 @@
 Source:
 ```python
 actor main(env):
+    # set syntax is similar to dicts using {} but without keys
     s = {"foo", "bar"}
     print("Set content:", s)
     if "foo" in s:
@@ -19,6 +20,10 @@ actor main(env):
     print("Entries in set:", len(s))
     s.discard("foo")
     print("Set after discarding 'foo':", s)
+
+    # {} is ambiguous, it could mean an empty set or an empty dict so
+    # empty set must be created with set()
+    empty_set = set(None)
 
     env.exit(0)
 ```
