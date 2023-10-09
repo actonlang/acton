@@ -80,7 +80,7 @@ class Args(object):
 class Parser(object):
     opts: dict[str, (name: str, type: str, nargs: str, default: ?value, help: str)]
     args: list[(name: str, help: str, nargs: str, left: int)]
-    cmds: dict[str, (parser: Parser, fn: proc(Args) -> None)]
+    cmds: dict[str, (help: str, parser: Parser, fn: proc(Args) -> None)]
     prog: str
 
     def __init__(self):
@@ -106,9 +106,9 @@ class Parser(object):
                     raise ArgumentError("Only one positional argument with multiple values allowed")
         self.args.append((name=name, help=help, nargs=nargs, left=1))
 
-    def add_cmd(self, name: str, fn: proc(Args) -> None):
+    def add_cmd(self, name: str, help: str, fn: proc(Args) -> None):
         p = Parser()
-        self.cmds[name] = (parser=p, fn=fn)
+        self.cmds[name] = (help=help, parser=p, fn=fn)
         return p
 
     def print_usage(self):
@@ -130,7 +130,14 @@ class Parser(object):
                     short_opts += " %s" % (n.upper())
                 elif arg.nargs == "+":
                     short_opts += " %s [%s ...]" % (n.upper(), n.upper())
+        if len(self.cmds) > 0:
+            short_opts += " COMMAND"
         usage_text += "Usage: %s %s\n" % (self.prog, short_opts)
+
+        if len(self.cmds) > 0:
+            usage_text += "\nCommands:\n"
+            for name in sorted(self.cmds.keys()):
+                usage_text += "  %-14s %s\n" % (name, self.cmds[name].help)
         if len(self.args) > 0:
             usage_text += "\nPositional arguments:\n"
             for arg in self.args:

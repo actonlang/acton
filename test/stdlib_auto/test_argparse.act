@@ -108,7 +108,7 @@ actor test_cmd():
 
     p = argparse.Parser()
     p.add_bool("verbose", "Enable verbose output")
-    pb = p.add_cmd("build", _build)
+    pb = p.add_cmd("build", "Build stuff", _build)
     pb.add_bool("dev", "Enable dev mode")
 
     _args = p.parse(["./app", "--verbose", "build", "--dev"])

@@ -388,8 +388,8 @@ actor unit_test_runner(env: Env, unit_tests: dict[str, UnitTest]):
 
     def _parse_args():
         p = argparse.Parser()
-        tp = p.add_cmd("test", _run_tests)
-        pp = p.add_cmd("perf", _run_perf_tests)
+        tp = p.add_cmd("test", "Run tests", _run_tests)
+        pp = p.add_cmd("perf", "Performance benchmark tests", _run_perf_tests)
         pp.add_option("iterations", "int", "?", 1, "Number of iterations to run")
 
         args = p.parse(env.argv)
