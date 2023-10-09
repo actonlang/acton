@@ -455,6 +455,14 @@ class Instant:
 #        else:
 #            return Duration(other.second - self.second, other.attosecond - self.attosecond)
 
+    def add(self, duration: Duration) -> Instant:
+        attosecond_sum = self.attosecond + duration.attosecond
+        return Instant(self.second + duration.second + attosecond_sum // 10**18, attosecond_sum % 10**18, self.clock)
+
+    def sub(self, duration: Duration) -> Instant:
+        attosecond_diff = self.attosecond - duration.attosecond
+        return Instant(self.second - duration.second + attosecond_diff // 10**18, attosecond_diff % 10**18, self.clock)
+
     def since(self, other: Instant) -> Duration:
         """Return the duration since this instant.
         """
@@ -471,6 +479,13 @@ class Instant:
 
     def comparable(self, other: Instant) -> bool:
         return self.clock.comparable(other.clock)
+
+extension Instant(Ord):
+    def __eq__(self, other):
+        return self.second == other.second and self.attosecond == other.attosecond
+
+    def __lt__(self, other):
+        return self.second < other.second or self.second == other.second and self.attosecond < other.attosecond
 
 
 

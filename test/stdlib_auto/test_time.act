@@ -1,3 +1,4 @@
+import testing
 import time
 
 actor main(env):
@@ -14,8 +15,56 @@ actor main(env):
         time.test()
 #        a = time.Instant.now()
 
+    def test_instant_add():
+        c = time.MonotonicClock(0, 0, 0)
+        t1 = time.Instant(1234, 2 * 10**17, c)
+        t2 = t1.add(time.Duration(1, 9 * 10**17, c))
+        testing.assertEqual(t2.second, 1236, "second mismatch")
+        testing.assertEqual(t2.attosecond, 10**17, "attosecond mismatch")
 
-    test()
+    def test_instant_sub():
+        c = time.MonotonicClock(0, 0, 0)
+        t1 = time.Instant(1234, 2 * 10**17, c)
+        t2 = t1.sub(time.Duration(1, 5 * 10**17, c))
+        testing.assertEqual(t2.second, 1232, "second mismatch ")
+        testing.assertEqual(t2.attosecond, 7 * 10**17, "attosecond mismatch")
 
+    def test_instant_ord():
+        c = time.MonotonicClock(0, 0, 0)
+        t1 = time.Instant(1234, 2 * 10**17, c)
+        _t1 = time.Instant(1234, 2 * 10**17, c)
+        t2 = time.Instant(1234, 3 * 10**17, c)
+        t3 = time.Instant(1235, 1 * 10**17, c)
 
-    await async env.exit(0)
+        testing.assertTrue(t1 == t1, "self comparision failed")
+        testing.assertFalse(t1 != t1, "self comparision failed")
+        testing.assertTrue(t1 == _t1, "eq comparision failed")
+        testing.assertTrue(t1 != t2, "ne comparision failed")
+        testing.assertTrue(t1 != t3, "ne comparision failed")
+        testing.assertTrue(t1 <= t1, "self comparision failed")
+        testing.assertTrue(t1 >= t1, "self comparision failed")
+        testing.assertTrue(t1 < t2, "le comparision failed")
+        testing.assertTrue(t1 <= t2, "le comparision failed")
+        testing.assertTrue(t2 >= t1, "ge comparision failed")
+        testing.assertTrue(t2 > t1, "ge comparision failed")
+        testing.assertTrue(t1 < t3, "le comparision failed")
+        testing.assertTrue(t1 <= t3, "le comparision failed")
+        testing.assertTrue(t3 >= t1, "ge comparision failed")
+        testing.assertTrue(t3 > t1, "ge comparision failed")
+        testing.assertFalse(t1 > t2, "le comparision failed")
+        testing.assertFalse(t1 > t2, "le comparision failed")
+        testing.assertFalse(t2 < t1, "ge comparision failed")
+        testing.assertFalse(t2 <= t1, "ge comparision failed")
+        testing.assertFalse(t1 >= t3, "le comparision failed")
+        testing.assertFalse(t1 > t3, "le comparision failed")
+        testing.assertFalse(t3 < t1, "ge comparision failed")
+        testing.assertFalse(t3 <= t1, "ge comparision failed")
+    try:
+        test()
+        test_instant_add()
+        test_instant_sub()
+        test_instant_ord()
+        env.exit(0)
+    except Exception as ex:
+        env.exit(1)
+        raise ex
