@@ -35,7 +35,7 @@ actor Client(connect_auth, port: int):
     def on_error(c, msg):
         print("Client ERR", msg)
 
-    client = net.TCPConnection(connect_auth, "localhost", port, on_connect, on_receive, on_error)
+    client = net.TCPConnection(connect_auth, "127.0.0.1", port, on_connect, on_receive, on_error)
 
     def write(data: bytes):
         client.write(data)
@@ -229,7 +229,7 @@ actor Tester(env, verbose, port_chunk):
                 log("TCP client app exited, doing our TCP client to increase counter...")
                 if exit_code == 0 and term_signal == 0:
                     state = 2
-                    tcp_client = net.TCPConnection(connect_auth, "localhost", port, tcpc_on_connect, tcpc_on_receive, tcpc_on_error)
+                    tcp_client = net.TCPConnection(connect_auth, "127.0.0.1", port, tcpc_on_connect, tcpc_on_receive, tcpc_on_error)
 
             if state == 4:
                 if exit_code == 0 and term_signal == 0:
