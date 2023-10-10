@@ -210,7 +210,7 @@ class TestResult(object):
         self.exception = exception
 
 
-actor test_runner(i, get_test, report_result):
+actor unit_test_runner(i, get_test, report_result):
     def _run():
         while True:
             t = get_test()
@@ -233,14 +233,18 @@ actor test_runner(i, get_test, report_result):
     after 0: _run()
 
 
-actor unit_test_runner(env: Env, unit_tests: dict[str, UnitTest]):
+
+actor test_runner(env: Env, unit_tests: dict[str, UnitTest]):
     proc def _run_tests(args):
+        _run_unit_tests(args)
+
+    proc def _run_unit_tests(args):
         print("Running tests...")
         hand_out = unit_tests
-        results: dict[str, (ut: UnitTest, result: ?TestResult)] = {}
+        results: dict[str, (test: UnitTest, result: ?TestResult)] = {}
 
-        for name, ut in unit_tests.items():
-            results[ut.name] = (ut=ut, result=None)
+        for name, t in unit_tests.items():
+            results[t.name] = (test=t, result=None)
 
         sw = time.Stopwatch()
 
@@ -250,7 +254,7 @@ actor unit_test_runner(env: Env, unit_tests: dict[str, UnitTest]):
                 return r.1
 
         def report_result(t, test_result: TestResult):
-            results[t.name] = (ut=t, result=test_result)
+            results[t.name] = (test=t, result=test_result)
             print_status()
 
         def print_status():
@@ -278,13 +282,12 @@ actor unit_test_runner(env: Env, unit_tests: dict[str, UnitTest]):
                 print("\nTests")
                 tname_width = 20
                 for tname, t in results.items():
-                    tname_width = max([tname_width, len(t.ut.name)], None)
+                    tname_width = max([tname_width, len(t.test.name)], None)
 
                 for tname, t in results.items():
-                    ut = t.ut
                     r = t.result
                     if r is not None:
-                        prefix = "  " + ut.name + ": "
+                        prefix = "  " + t.test.name + ": "
                         prefix += " " * (tname_width - len(prefix))
                         success = r.success
                         exc = r.exception
@@ -324,7 +327,7 @@ actor unit_test_runner(env: Env, unit_tests: dict[str, UnitTest]):
                     env.exit(0)
 
         for i in range(0, env.nr_wthreads, 1):
-            test_runner(i, get_test, report_result)
+            unit_test_runner(i, get_test, report_result)
 
 
     proc def _run_perf_tests(args):

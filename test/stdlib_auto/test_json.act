@@ -26,4 +26,4 @@ __unit_tests: dict[str, testing.UnitTest] = {
 }
 
 actor main(env):
-    testing.unit_test_runner(env, __unit_tests)
+    testing.test_runner(env, __unit_tests)
