@@ -1,0 +1,61 @@
+import logging
+import testing
+
+actor SyncTester(log_handler):
+    log = logging.Logger(log_handler)
+    def test():
+        log.info("SyncTester.test()", None)
+
+actor AsyncTester(report_result, log_handler):
+    log = logging.Logger(log_handler)
+    def test():
+        log.info("AsyncTester.test()", None)
+        report_result(True, None)
+
+actor EnvTester(report_result, env, log_handler):
+    log = logging.Logger(log_handler)
+    def test():
+        log.info("EnvTester.test()", None)
+        report_result(True, None)
+
+def _test_foo() -> None:
+    pass
+
+def _test_syncact(log_handler: logging.Handler) -> None:
+    pass
+    # TODO: fix so that this compiles
+    #s = SyncTester(log_handler)
+    #s.test()
+
+def _test_asyncact(report_result, log_handler: logging.Handler) -> None:
+    # TODO: remove this
+    report_result(True, None)
+    # TODO: fix so that this compiles
+    #s = AsyncTester(report_result, log_handler)
+    #s.test()
+
+def _test_envtest(report_result, env, log_handler: logging.Handler) -> None:
+    # TODO: remove this
+    report_result(True, None)
+    # TODO: fix so that this compiles
+    #s = EnvTester(report_result, env, log_handler)
+    #s.test()
+
+__unit_tests: dict[str, testing.UnitTest] = {
+    "_test_foo": testing.UnitTest(_test_foo, "foo", "Foo"),
+}
+
+__sync_actor_tests: dict[str, testing.SyncActorTest] = {
+    "_test_syncact": testing.SyncActorTest(_test_syncact, "sync_act", "SyncAct"),
+}
+
+__async_actor_tests: dict[str, testing.AsyncActorTest] = {
+    "_test_asyncact": testing.AsyncActorTest(_test_asyncact, "async_act", "AsyncAct"),
+}
+
+__env_tests: dict[str, testing.EnvTest] = {
+    "_test_envtest": testing.EnvTest(_test_envtest, "env_test", "EnvTest"),
+}
+
+actor main(env):
+    testing.test_runner(env, __unit_tests, __sync_actor_tests, __async_actor_tests, __env_tests)
