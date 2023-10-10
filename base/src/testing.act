@@ -6,79 +6,76 @@ import term
 
 # -- assert ---------------------------------------------------------------------
 
-class AssertError(Exception):
-    name: str
-
 # TODO: add actual values as args to assert functions
 # TODO: add __str__ to assert exceptions
-class NotEqualError(AssertError):
+class NotEqualError(AssertionError):
     def __init__(self, msg):
         self.error_message = msg
         self.a = None
         self.b = None
 
-class EqualError(AssertError):
+class EqualError(AssertionError):
     def __init__(self, msg, a, b):
         self.error_message = msg
         self.a = None
         self.b = None
 
-class NotTrueError(AssertError):
+class NotTrueError(AssertionError):
     def __init__(self, msg):
         self.error_message = msg
         self.a = None
 
-class NotFalseError(AssertError):
+class NotFalseError(AssertionError):
     def __init__(self, msg):
         self.error_message = msg
         self.a = None
 
-class NotNoneError(AssertError):
+class NotNoneError(AssertionError):
     def __init__(self, msg):
         self.error_message = msg
         self.a = None
 
-class NoneError(AssertError):
+class NoneError(AssertionError):
     def __init__(self, msg):
         self.error_message = msg
         self.a = None
 
-class NotInError(AssertError):
-    def __init__(self, msg):
-        self.error_message = msg
-        self.a = None
-        self.b = None
-
-class InError(AssertError):
+class NotInError(AssertionError):
     def __init__(self, msg):
         self.error_message = msg
         self.a = None
         self.b = None
 
-class NotIsError(AssertError):
+class InError(AssertionError):
     def __init__(self, msg):
         self.error_message = msg
         self.a = None
         self.b = None
 
-class IsError(AssertError):
+class NotIsError(AssertionError):
     def __init__(self, msg):
         self.error_message = msg
         self.a = None
         self.b = None
 
-class NotRaisesError(AssertError):
-    def __init__(self, msg):
-        self.error_message = msg
-        self.a = None
-
-class IsInstanceError(AssertError):
+class IsError(AssertionError):
     def __init__(self, msg):
         self.error_message = msg
         self.a = None
         self.b = None
 
-class NotIsInstanceError(AssertError):
+class NotRaisesError(AssertionError):
+    def __init__(self, msg):
+        self.error_message = msg
+        self.a = None
+
+class IsInstanceError(AssertionError):
+    def __init__(self, msg):
+        self.error_message = msg
+        self.a = None
+        self.b = None
+
+class NotIsInstanceError(AssertionError):
     def __init__(self, msg):
         self.error_message = msg
         self.a = None
@@ -252,7 +249,7 @@ actor unit_test_runner(i, get_test, report_result):
                     f()
                     dur = sw.elapsed().to_float() * 1000.0
                     report_result(t, TestResult(True, None, dur))
-                except AssertError as e:
+                except AssertionError as e:
                     dur = sw.elapsed().to_float() * 1000.0
                     report_result(t, TestResult(None, e, dur))
                 except Exception as e:
@@ -403,7 +400,7 @@ actor test_runner(env: Env, unit_tests: dict[str, UnitTest], sync_actor_tests: d
                 print("   CPU time    : %12f / %12f / %12f ms min/avg/max" % (min_dur, avg_dur, max_dur))
                 print("   Mem usage   : %12d bytes (approximate)" % int(avg_mem_usage))
                 print("   GC CPU time : %12f ms" % (avg_gc_dur))
-            except AssertError as exc:
+            except AssertionError as exc:
                 print("Test %s: %sFAILED%s" % (ut.name, term.bold + term.red, term.normal))
                 for line in str(exc).splitlines(None):
                     print(term.red + "    %s" % (line) + term.normal)
