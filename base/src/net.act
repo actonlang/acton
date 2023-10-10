@@ -64,16 +64,18 @@ actor TCPConnection(cap: TCPConnectCap, address: str, port: int, on_connect: act
     var _aaaa_res: list[str] = []
     var _sock = -1
     var _sock4 = -1
+    var _sock4_state = 0
     var _sock4_error = ""
     var _sock6 = -1
+    var _sock6_state = 0
     var _sock6_error = ""
 
-    STATE_INIT = 0
+    STATE_NONE = 0
     STATE_RESOLVING  = 1 # Resolving DNS
     STATE_CONNECTING = 2 # Got DNS response or input was IP address so now doing TCP connect
     STATE_CONNECTED  = 3 # TCP Connected
     STATE_CLOSED     = 4 # TCP Connection disconnected / closed (it might never have been connected)
-    var _state = STATE_INIT
+    var _state = STATE_NONE
 
     # TODO: turn this into an argument when we support default argument values
     var connect_timeout = 10.0
@@ -94,6 +96,7 @@ actor TCPConnection(cap: TCPConnectCap, address: str, port: int, on_connect: act
     # DNS A
     def _on_dns_a_resolve(result):
         _a_res = result
+        _sock4_state = STATE_CONNECTING
         _state = STATE_CONNECTING
         _connect4(result[0])
 
@@ -103,6 +106,7 @@ actor TCPConnection(cap: TCPConnectCap, address: str, port: int, on_connect: act
     # DNS AAAA
     def _on_dns_aaaa_resolve(result):
         _aaaa_res = result
+        _sock6_state = STATE_CONNECTING
         _state = STATE_CONNECTING
         _connect6(result[0])
 
@@ -111,30 +115,50 @@ actor TCPConnection(cap: TCPConnectCap, address: str, port: int, on_connect: act
 
     action def _on_tcp_error(sockfamily: int, err: int, errmsg: str):
         if sockfamily == 4:
-            if _sock6_error != "":
+            if _sock6_state == STATE_NONE: # IPv4 only connection
                 _consecutive_connect_errors += 1
-                on_error(self, errmsg + "  IPv6 error: " + _sock6_error)
+                on_error(self, errmsg)
+            else: # dual stack connection
+                # wait for other socket to connect or fail
+                if _sock6_error != "":
+                    _consecutive_connect_errors += 1
+                    on_error(self, errmsg + "  IPv6 error: " + _sock6_error)
             _sock4_error = errmsg
         elif sockfamily == 6:
-            if _sock4_error != "":
+            if _sock4_state == STATE_NONE: # IPv6 only connection
                 _consecutive_connect_errors += 1
-                on_error(self, errmsg + "  IPv4 error: " + _sock4_error)
+                on_error(self, errmsg)
+            else: # dual stack connection
+                # wait for other socket to connect or fail
+                if _sock4_error != "":
+                    _consecutive_connect_errors += 1
+                    on_error(self, errmsg + "  IPv4 error: " + _sock4_error)
             _sock6_error = errmsg
 
     # TCP connect over IPv4
     proc def _connect4(ip_address: str):
         NotImplemented
 
-    action def _on_connect4():
-        _sock4_error = ""
-        _on_connect(_sock4)
-
     # TCP connect over IPv6
     proc def _connect6(ip_address: str):
         NotImplemented
 
+    action def _on_connect4():
+        _sock4_state = STATE_CONNECTED
+        _sock4_error = ""
+        if _sock6_state == STATE_CONNECTED:
+            # If IPv6 is already connected, we (IPv4) lost, so close our socket
+            # TODO: close IPv4 socket
+            return
+        _on_connect(_sock4)
+
     action def _on_connect6():
+        _sock6_state = STATE_CONNECTED
         _sock6_error = ""
+        if _sock4_state == STATE_CONNECTED:
+            # If IPv4 is already connected, we (IPv6) lost, so close our socket
+            # TODO: close IPv6 socket
+            return
         _on_connect(_sock6)
 
     # Handle on_connect event
@@ -148,8 +172,8 @@ actor TCPConnection(cap: TCPConnectCap, address: str, port: int, on_connect: act
             on_connect(self)
         elif _state == STATE_CONNECTED:
             # It is normal to get multiple on_connect events since we are doing
-            # Happy Eyeballs and letting IPv4 race against IPv6, so we end up
-            # here for whichever comes second.
+            # Happy Eyeballs and letting IPv4 race against IPv6, however, those
+            # should be cancelled out in the _on_connect[46] functions above.
             pass
         else:
             # We don't expect to establish a connection in any other state
@@ -182,9 +206,11 @@ actor TCPConnection(cap: TCPConnectCap, address: str, port: int, on_connect: act
         # TODO: would be nice to cancel connect_timeout when connection succeeds
         after connect_timeout: _connect_timeout()
         if is_ipv4(address):
+            _sock4_state = STATE_CONNECTING
             _state = STATE_CONNECTING
             _connect4(address)
         elif is_ipv6(address):
+            _sock6_state = STATE_CONNECTING
             _state = STATE_CONNECTING
             _connect6(address)
         else:
