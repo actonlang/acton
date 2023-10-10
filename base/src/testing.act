@@ -187,30 +187,61 @@ def assertNotIn(a, b, msg: str):
 
 # -------------------------------------------------------------------------------
 
-class UnitTest(object):
-    index: int
-    result: ?bool
+class Test (object):
+    name: str
+    desc: str
+
+class UnitTest(Test):
     def __init__(self, fn: mut() -> None, name: str, desc: str):
-        self.index = 0
-        self.iterations = 1
         self.fn = fn
         self.name = name
         self.desc = desc
-        self.result = None
+
+class SyncActorTest(Test):
+    def __init__(self, fn: proc() -> None, name: str, desc: str):
+        self.fn = fn
+        self.name = name
+        self.desc = desc
+
+class AsyncActorTest(Test):
+    def __init__(self, fn: proc(action(TestResult) -> None) -> None, name: str, desc: str):
+        self.fn = fn
+        self.name = name
+        self.desc = desc
+
+class EnvTest(Test):
+    def __init__(self, fn: proc(action(TestResult) -> None, Env) -> None, name: str, desc: str):
+        self.fn = fn
+        self.name = name
+        self.desc = desc
 
 
 class TestResult(object):
+    """
+    There are three possible outcomes for a test:
+    - success: the test ran to completion with the expected results
+      - for unit tests & synchronous actor tests, it means it returned `None`
+      - for asynchronous actor & env tests, the report_result callback was called with TestResult(success=True, exception=None)
+    - failure: the test encountered an unexpected value
+      - for unit tests & synchronous actor tests, an AssertionError (or child thereof) was raiesd
+      - for asynchronous actor & env tests, the report_result callback was called with TestResult(success=False, exception=AssertionError)
+    - error: the test was unable to run to completion, encountering some other error in test setup or similar
+      - for unit tests & synchronous actor tests, an Exception (or child thereof) was raised, but not an AssertionError
+      - for asynchronous actor & env tests, the report_result callback was called with TestResult(success=, exception=AssertionError)
+    """
     success: ?bool
-    duration: float
     exception: ?Exception
+    duration: float
 
-    def __init__(self, success: ?bool, duration: float, exception: ?Exception):
+    def __init__(self, success: ?bool, exception: ?Exception, duration: float):
         self.success = success
-        self.duration = duration
         self.exception = exception
+        self.duration = duration
 
 
 actor unit_test_runner(i, get_test, report_result):
+    """Test runner for unit tests
+    """
     def _run():
         while True:
             t = get_test()
@@ -220,13 +251,13 @@ actor unit_test_runner(i, get_test, report_result):
                 try:
                     f()
                     dur = sw.elapsed().to_float() * 1000.0
-                    report_result(t, TestResult(True, dur, None))
+                    report_result(t, TestResult(True, None, dur))
                 except AssertError as e:
                     dur = sw.elapsed().to_float() * 1000.0
-                    report_result(t, TestResult(None, dur, e))
+                    report_result(t, TestResult(None, e, dur))
                 except Exception as e:
                     dur = sw.elapsed().to_float() * 1000.0
-                    report_result(t, TestResult(False, dur, e))
+                    report_result(t, TestResult(False, e, dur))
             else:
                 return None
 
@@ -234,7 +265,7 @@ actor unit_test_runner(i, get_test, report_result):
 
 
 
-actor test_runner(env: Env, unit_tests: dict[str, UnitTest]):
+actor test_runner(env: Env, unit_tests: dict[str, UnitTest], sync_actor_tests: dict[str, SyncActorTest], async_actor_tests: dict[str, AsyncActorTest], env_tests: dict[str, EnvTest]):
     proc def _run_tests(args):
         _run_unit_tests(args)
 
