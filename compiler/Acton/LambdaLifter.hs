@@ -309,7 +309,7 @@ closureCon fx p t
   | fx == fxPure                        = TC primPure [p,t]
   | otherwise                           = error ("### BAD closureCon fx: " ++ prstr fx)
   where contArg (TFun _ fx p _ r)       = rtype p
-        contArg t                       = error ("### contArg " ++ prstr t)
+        contArg t                       = error ("### BAD contArg " ++ prstr t)
 
 isCont (TFun _ fx p@TRow{} _ r)         = fx == fxProc && r == tR && rtail p == posNil && not (isCont $ rtype p)
 isCont _                                = False
@@ -320,7 +320,7 @@ instance Lift Expr where
       | n `elem` dom (locals env)       = pure e
     ll env e
       | Just (e',vts) <- freefun env e  = closureConvert env (Lambda l0 par KwdNIL (call e' vts) fx) t vts (map (eVar . fst) vts )
-      where par                         = pPar paramNames (conv p)
+      where par                         = pPar paramNames p
             call e' vts                 = Call l0 e' (addArgs vts $ pArg par) KwdNil
             TFun _ fx p _ t             = typeOf env e
 
