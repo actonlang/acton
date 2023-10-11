@@ -475,15 +475,16 @@ instance Conv Type where
     conv (TCon l c)                 = TCon l (conv c)
     conv (TTuple l p k)             = TTuple l (joinRow p k) kwdNil
     conv (TOpt l t)                 = TOpt l (conv t)
-    conv (TRow l k n t r)           = TRow l k nWild (conv t) (conv r)
-    conv (TStar l k r)              = TRow l k nWild (TTuple l (conv r) kwdNil) posNil
+    conv (TRow l k n t r)           = TRow l PRow nWild (conv t) (conv r)
+    conv (TStar l k r)              = TRow l PRow nWild (TTuple l (conv r) kwdNil) posNil
+    conv (TNil l k)                 = TNil l PRow
     conv t                          = t
 
 instance Conv TCon where
     conv (TC c ts)                  = TC c (conv ts)
 
-joinRow (TRow l k n t p) r          = TRow l k nWild (conv t) (joinRow p r)
-joinRow (TStar l k p) r             = TRow l k nWild (TTuple l (conv p) kwdNil) (conv r)
+joinRow (TRow l k n t p) r          = TRow l PRow nWild (conv t) (joinRow p r)
+joinRow (TStar l k p) r             = TRow l PRow nWild (TTuple l (conv p) kwdNil) (conv r)
 joinRow (TNil _ _) r                = conv r
 -- To be removed:
 joinRow p (TNil _ _)                = conv p
