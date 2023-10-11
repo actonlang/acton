@@ -375,11 +375,13 @@ kwdStar         = tStar KRow
 kwdStar'        = kwdStar . maybe tWild tVar
 
 prowOf (PosPar n a _ p) = posRow (case a of Just t -> t; _ -> tWild) (prowOf p)
-prowOf (PosSTAR n a)    = posStar (case a of Just (TTuple _ r _) -> r; _ -> tWild)
+--prowOf (PosSTAR n a)    = posStar (case a of Just (TTuple _ r _) -> r; _ -> tWild)
+prowOf (PosSTAR n a)    = (case a of Just (TTuple _ r _) -> r; _ -> tWild)
 prowOf PosNIL           = posNil
 
 krowOf (KwdPar n a _ k) = kwdRow n (case a of Just t -> t; _ -> tWild) (krowOf k)
-krowOf (KwdSTAR n a)    = kwdStar (case a of Just (TTuple _ _ r) -> r; _ -> tWild)
+--krowOf (KwdSTAR n a)    = kwdStar (case a of Just (TTuple _ _ r) -> r; _ -> tWild)
+krowOf (KwdSTAR n a)    = (case a of Just (TTuple _ _ r) -> r; _ -> tWild)
 krowOf KwdNIL           = kwdNil
 
 pArg (PosPar n a _ p)   = PosArg (eVar n) (pArg p)
