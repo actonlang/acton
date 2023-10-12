@@ -22,7 +22,6 @@ import GHC.Generics (Generic)
 import Control.DeepSeq
 import Prelude hiding((<>))
 
-
 version :: [Int]
 version = [0,2]
 
@@ -244,16 +243,21 @@ type PosRow     = Type
 type KwdRow     = Type
 type TRow       = Type
 
-data Constraint = Cast  Type Type
-                | Sub   Name Type Type
-                | Impl  Name Type PCon
-                | Sel   Name Type Name Type
-                | Mut   Type Name Type
-                | Seal  Type
+data Constraint = Cast  ErrInfo Type Type
+                | Sub   ErrInfo Name Type Type
+                | Impl  ErrInfo Name Type PCon
+                | Sel   ErrInfo Name Type Name Type
+                | Mut   ErrInfo Type Name Type
+                | Seal  ErrInfo Type
                 deriving (Eq,Show,Read,Generic,NFData)
 
-type Constraints = [Constraint]
+type Constraints = [Constraint] 
 
+data ErrInfo    = LinkTo Constraint
+                | Origin SrcLoc String
+                | NoInfo Int
+                deriving (Eq,Show,Read,Generic,NFData)
+                
 type WPath      = [Either QName QName]
 
 type WTCon      = (WPath,PCon)
@@ -264,6 +268,24 @@ leftpath tcs    = [ (map Left ns, tc) | (ns,tc) <- nss `zip` tcs ]
 mkBody []       = [Pass NoLoc]
 mkBody b        = b
 
+errInfo (Cast info _ _)    = info
+errInfo (Sub info _ _ _)   = info
+errInfo (Impl info _ _ _)  = info
+errInfo (Sel info _ _ _ _) = info
+errInfo (Mut info _ _ _)   = info
+errInfo (Seal info _)      = info
+
+constrChain c = case errInfo c of
+                    LinkTo c' -> c : constrChain c'
+                    _ -> [c]
+
+constrChain2 i = case i of
+                    LinkTo c -> constrChain c
+                    _ -> []
+
+origin (LinkTo c)   = origin (errInfo c)
+origin (Origin _ s) = s
+origin i@(NoInfo _) = show i
 
 sDef n p t b fx = sDecl [Def NoLoc n [] p KwdNIL (Just t) b NoDec fx]
 sReturn e       = Return NoLoc (Just e)
@@ -498,6 +520,7 @@ instance Data.Binary.Binary QBind
 instance Data.Binary.Binary Type
 instance Data.Binary.Binary Kind
 instance Data.Binary.Binary FX
+instance Data.Binary.Binary ErrInfo
 instance Data.Binary.Binary Constraint
 instance Data.Binary.Binary NameInfo
 
@@ -551,13 +574,19 @@ instance HasLoc Type where
     loc                 = tloc
 
 instance HasLoc Constraint where
-    loc (Cast _ t)      = loc t
-    loc (Sub  _ _ t)    = loc t
-    loc (Impl _ _ p)    = loc p
-    loc (Sel _ _ n _)   = loc n
-    loc (Mut _ n _)     = loc n
-    loc (Seal t)        = loc t
+      loc c = loc (errInfo c)
+--    loc (Cast _ _ t)    = loc t
+--    loc (Sub  _ _ _ t)  = loc t
+--    loc (Impl _ _ _ p)  = loc p
+--    loc (Sel _ _ _ n _) = loc n
+--    loc (Mut _ _ n _)   = loc n
+--    loc (Seal t)        = loc t
 
+instance HasLoc ErrInfo where 
+      loc (LinkTo c)   = loc c
+      loc (Origin l _) = l
+      loc (NoInfo _)   = NoLoc
+      
 
 -- Eq -------------------------
 

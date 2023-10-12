@@ -1,0 +1,5 @@
+actor main(env):
+    var k = 3
+    pure def g():
+        return k
+    

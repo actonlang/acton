@@ -39,18 +39,18 @@ closeDepVars vs cs
   | null vs'                        = nub vs
   | otherwise                       = closeDepVars (vs'++vs) cs
   where vs'                         = concat [ deps c \\ vs | c <- cs, all (`elem` vs) (heads c) ]
-        heads (Impl w t _)          = tyfree t
-        heads (Cast t _)            = tyfree t
-        heads (Sub w t _)           = tyfree t
-        heads (Sel w t n _)         = tyfree t
-        heads (Mut t n _)           = tyfree t
-        heads (Seal t)              = tyfree t
-        deps (Impl w _ p)           = tyfree p
-        deps (Cast _ t)             = typars t
-        deps (Sub w _ t)            = typars t
-        deps (Sel w _ n t)          = typars t
-        deps (Mut _ n t)            = typars t
-        deps (Seal _)               = []
+        heads (Impl _ w t _)        = tyfree t
+        heads (Cast _ t _)          = tyfree t
+        heads (Sub _ w t _)         = tyfree t
+        heads (Sel _ w t n _)       = tyfree t
+        heads (Mut _ t n _)         = tyfree t
+        heads (Seal _ t)            = tyfree t
+        deps (Impl _ w _ p)         = tyfree p
+        deps (Cast _ _ t)           = typars t
+        deps (Sub _ w _ t)          = typars t
+        deps (Sel _ w _ n t)        = typars t
+        deps (Mut _ _ n t)          = typars t
+        deps (Seal _ _)             = []
         typars (TOpt _ t)           = typars t
         typars (TCon _ c)           = tyfree c
         typars _                    = []
@@ -104,20 +104,28 @@ instance Subst a => Subst (Maybe a) where
     tybound                         = maybe [] tybound
 
 instance Subst Constraint where
-    msubst (Cast t1 t2)             = Cast <$> msubst t1 <*> msubst t2
-    msubst (Sub w t1 t2)            = Sub w <$> msubst t1 <*> msubst t2
-    msubst (Impl w t p)             = Impl w <$> msubst t <*> msubst p
-    msubst (Sel w t1 n t2)          = Sel w <$> msubst t1 <*> return n <*> msubst t2
-    msubst (Mut t1 n t2)            = Mut <$> msubst t1 <*> return n <*> msubst t2
-    msubst (Seal t)                 = Seal <$> msubst t
+    msubst (Cast info t1 t2)        = Cast info <$> msubst t1 <*> msubst t2
+    msubst (Sub info w t1 t2)       = Sub info <$> return w <*> msubst t1 <*> msubst t2
+    msubst (Impl info w t p)        = Impl info <$> return w <*>msubst t <*> msubst p
+    msubst (Sel info w t1 n t2)     = Sel info <$> return w <*>msubst t1 <*> return n <*> msubst t2
+    msubst (Mut info t1 n t2)       = Mut info <$> msubst t1 <*> return n <*> msubst t2
+    msubst (Seal info t)            = Seal info <$> msubst t
 
-    tyfree (Cast t1 t2)             = tyfree t1 ++ tyfree t2
-    tyfree (Sub w t1 t2)            = tyfree t1 ++ tyfree t2
-    tyfree (Impl w t p)             = tyfree t ++ tyfree p
-    tyfree (Sel w t1 n t2)          = tyfree t1 ++ tyfree t2
-    tyfree (Mut t1 n t2)            = tyfree t1 ++ tyfree t2
-    tyfree (Seal t)                 = tyfree t
+    tyfree (Cast _ t1 t2)           = tyfree t1 ++ tyfree t2
+    tyfree (Sub _ w t1 t2)          = tyfree t1 ++ tyfree t2
+    tyfree (Impl _ w t p)           = tyfree t ++ tyfree p
+    tyfree (Sel _ w t1 n t2)        = tyfree t1 ++ tyfree t2
+    tyfree (Mut _ t1 n t2)          = tyfree t1 ++ tyfree t2
+    tyfree (Seal _ t)               = tyfree t
 
+
+instance Subst ErrInfo where
+    msubst (LinkTo c)               = LinkTo <$> msubst c
+    msubst info                     = return info
+
+    tyfree (LinkTo c)               = tyfree c
+    tyfree _                        = []
+    
 instance Subst TSchema where
     msubst (TSchema l [] t)         = TSchema l [] <$> msubst t
     msubst (TSchema l q t)          = TSchema l <$> msubst q <*> msubst t
@@ -179,6 +187,9 @@ msubstWith s x                      = do s0 <- getSubstitution
                                          x' <- msubst x
                                          setSubstitution s0
                                          return x'
+
+wildify                             :: Subst a => a -> TypeM a
+wildify a                           =  msubstWith (zip (tyfree a) (repeat tWild)) a
 
 testMsubstRenaming = do
     putStrLn ("p1: " ++ render (pretty (runTypeM p1)))

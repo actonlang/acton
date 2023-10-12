@@ -109,7 +109,8 @@ cc paths opts = if not (C.cc opts == "")
 ar :: Paths -> FilePath
 ar paths = zig paths ++ " ar "
 
-dump mn h txt      = putStrLn ("\n\n== " ++ h ++ ": " ++ modNameToString mn ++ " ================================\n" ++ txt)
+dump mn h txt      = putStrLn ("\n\n== " ++ h ++ ": " ++ modNameToString mn ++ " ================================\n" ++ txt
+                      ++'\n':replicate (38 + length h + length (modNameToString mn)) '=' ++ "\n")
 
 getModPath :: FilePath -> A.ModName -> FilePath
 getModPath path mn =

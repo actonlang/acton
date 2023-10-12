@@ -1,0 +1,7 @@
+def f(x):
+    try:
+        y = x+2
+    except int:
+        pass
+    
+    
