@@ -23,6 +23,7 @@ import qualified Control.Exception
 import Acton.Syntax
 import Acton.Printer
 import Utils
+import Pretty
 
 -- Type inference monad ------------------------------------------------------------------
 
@@ -112,7 +113,7 @@ data TypeError                      = TypeError SrcLoc String
                                     | InfiniteType TVar
                                     | ConflictingRow TVar
                                     | KwdNotFound Name
-                                    | PosElemNotFound
+                                    | PosElemNotFound ErrInfo String
                                     | EscapingVar [TVar] TSchema
                                     | NoSelStatic Name TCon
                                     | NoSelInstByClass Name TCon
@@ -120,8 +121,8 @@ data TypeError                      = TypeError SrcLoc String
                                     | LackSig Name
                                     | LackDef Name
                                     | NoRed Constraint
-                                    | NoSolve [Constraint]
-                                    | NoUnify Type Type
+                                    | NoSolve (Maybe Type) [Constraint]
+                                    | NoUnify ErrInfo Type Type
                                     deriving (Show)
 
 instance Control.Exception.Exception TypeError
@@ -132,7 +133,7 @@ instance HasLoc TypeError where
     loc (InfiniteType tv)           = loc tv
     loc (ConflictingRow tv)         = loc tv
     loc (KwdNotFound n)             = loc n
-    loc (PosElemNotFound)           = NoLoc     -- TODO: supply position
+    loc (PosElemNotFound info s)    = loc info -- NoLoc     -- TODO: supply position
     loc (EscapingVar tvs t)         = loc tvs
     loc (NoSelStatic n u)           = loc n
     loc (NoSelInstByClass n u)      = loc n
@@ -140,8 +141,15 @@ instance HasLoc TypeError where
     loc (LackSig n)                 = loc n
     loc (LackDef n)                 = loc n
     loc (NoRed c)                   = loc c
-    loc (NoSolve cs)                = loc cs
-    loc (NoUnify t1 t2)             = loc t1
+    loc (NoSolve (Just t) cs)       = loc (head cs)
+    loc (NoSolve Nothing cs)        = NoLoc
+    loc (NoUnify info t1 t2)        = loc info
+
+explain (Cast _ t1 t2) = pretty t1 <+> text "must be castable to" <+> pretty t2
+explain (Sub _ _ t1 t2) = pretty t1 <+> text "must be a subtype of" <+> pretty t2
+explain (Impl _ _ t p) = pretty t <+> text "must implement" <+> pretty p
+explain c = pretty c
+
 
 typeError                           :: TypeError -> (SrcLoc, String)
 typeError err                       = (loc err, render (expl err))
@@ -151,7 +159,7 @@ typeError err                       = (loc err, render (expl err))
     expl (InfiniteType tv)          = text "Type" <+> pretty tv <+> text "is infinite"
     expl (ConflictingRow tv)        = text "Row" <+> pretty tv <+> text "has conflicting extensions"
     expl (KwdNotFound n)            = text "Keyword element" <+> quotes (pretty n) <+> text "is not found"
-    expl (PosElemNotFound)          = text "Positional element is not found"
+    expl (PosElemNotFound info s)   = text s
     expl (EscapingVar tvs t)        = text "Type annotation" <+> pretty t <+> text "is too general, type variable" <+>
                                       pretty (head tvs) <+> text "escapes"
     expl (NoSelStatic n u)          = text "Static method" <+> pretty n <+> text "cannot be selected from" <+> pretty u <+> text "instance"
@@ -159,17 +167,26 @@ typeError err                       = (loc err, render (expl err))
     expl (NoMut n)                  = text "Non @property attribute" <+> pretty n <+> text "cannot be mutated"
     expl (LackSig n)                = text "Declaration lacks accompanying signature"
     expl (LackDef n)                = text "Signature lacks accompanying definition"
-    expl (NoRed c)                  = text "Cannot infer" <+> pretty c
-    expl (NoSolve cs)               = text "Cannot solve" <+> commaSep pretty cs
-    expl (NoUnify t1 t2)            = text "Cannot unify" <+> pretty t1 <+> text "and" <+> pretty t2
+    expl (NoRed c)                  = text (origin(errInfo c))
+    expl (NoSolve Nothing cs)       = text "Cannot solve" <+> commaSep pretty cs
+    expl (NoSolve (Just t) cs)      = text "The type" <+> pretty t <+> text "of the indicated expression must satisfy the following unsolvable collection of constraints:"
+                                        $+$ (nest 4 $ vcat $ map explain cs)
+    
+    expl (NoUnify info t1 t2)       = text "Cannot unify" <+> pretty t1 <+> text "and" <+> pretty t2
 
 tyerr x s                           = throwError $ TypeError (loc x) (s ++ " " ++ prstr x)
 tyerrs xs s                         = throwError $ TypeError (loc $ head xs) (s ++ " " ++ prstrs xs)
 rigidVariable tv                    = throwError $ RigidVariable tv
 infiniteType tv                     = throwError $ InfiniteType tv
 conflictingRow tv                   = throwError $ ConflictingRow tv
-kwdNotFound n | n == name "_"       = throwError $ PosElemNotFound
+kwdNotFound info n | n == name "_"  = throwError $ PosElemNotFound info (err1++err2)
               | otherwise           = throwError $ KwdNotFound n
+  where err1                        = case constrChain2 info of
+                                          Sub _ _ TNil{} _ : _ -> "Too few positional"
+                                          Sub _ _ _ TNil{} : _ -> "Too many positional"
+        err2                        = case origin info of
+                                          "Type error in function call" -> " arguments in function call"
+                                          s -> " elements in tuple"
 escapingVar tvs t                   = throwError $ EscapingVar tvs t
 noSelStatic n u                     = throwError $ NoSelStatic n u
 noSelInstByClass n u                = throwError $ NoSelInstByClass n u
@@ -177,5 +194,5 @@ noMut n                             = throwError $ NoMut n
 lackSig ns                          = throwError $ LackSig (head ns)
 lackDef ns                          = throwError $ LackDef (head ns)
 noRed c                             = throwError $ NoRed c
-noSolve cs                          = throwError $ NoSolve cs
-noUnify t1 t2                       = throwError $ NoUnify t1 t2
+noSolve mbt cs                      = throwError $ NoSolve mbt cs
+noUnify info t1 t2                  = throwError $ NoUnify info t1 t2

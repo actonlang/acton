@@ -236,9 +236,9 @@ instance Relabel Type where
     relabel (TFX _ fx) = TFX <$> newLoc <*> pure fx
 
 instance Relabel Constraint where
-    relabel (Cast t1 t2) = Cast <$> relabel t1 <*> relabel t2
-    relabel (Sub w t1 t2) = Sub <$> relabel w <*> relabel t1 <*> relabel t1
-    relabel (Impl w t p) = Impl <$> relabel w <*> relabel t <*> relabel p
-    relabel (Sel w t1 n t2) = Sel w <$> relabel t1 <*> relabel n <*> relabel t2
-    relabel (Mut t1 n t2) = Mut <$> relabel t1 <*> relabel n <*> relabel t2
-    relabel (Seal t) = Seal <$> relabel t
+    relabel (Cast info t1 t2) = Cast info <$> relabel t1 <*> relabel t2
+    relabel (Sub info w t1 t2) = Sub info <$> relabel w <*> relabel t1 <*> relabel t1
+    relabel (Impl info w t p) = Impl info <$> relabel w <*> relabel t <*> relabel p
+    relabel (Sel info w t1 n t2) = Sel info w <$> relabel t1 <*> relabel n <*> relabel t2
+    relabel (Mut info t1 n t2) = Mut info <$> relabel t1 <*> relabel n <*> relabel t2
+    relabel (Seal info t) = Seal info <$> relabel t
