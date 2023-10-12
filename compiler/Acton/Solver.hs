@@ -398,7 +398,7 @@ reduce                                      :: Env -> Equations -> Constraints -
 reduce env eq []                            = return eq
 reduce env eq (c:cs)                        = do c <- msubst c
                                                  --traceM ("   reduce " ++ prstr c)
-                                                 eq1 <- reduce' env eq c
+                                                 eq1 <-  reduce' env eq c
                                                  reduce env eq1 cs
 
 reduce'                                     :: Env -> Equations -> Constraint -> TypeM Equations
@@ -623,7 +623,7 @@ cast' env info t1 (TOpt _ t2)
 cast' env _ (TNone _) (TOpt _ t)            = return ()
 cast' env _ (TNone _) (TNone _)             = return ()
 
-cast' env _ (TFX _ fx1) (TFX _ fx2)
+cast' env info t1@(TFX _ fx1) t2@(TFX _ fx2)
   | castFX fx1 fx2                          = return ()
   where castFX FXPure   FXPure              = True
         castFX FXPure   FXMut               = True
@@ -678,7 +678,7 @@ cast' env info t1 (TOpt _ t2)               = cast env info t1 t2               
 
 cast' env info t1 t2                        = do t1' <- wildify t1
                                                  t2' <- wildify t2
-                                                 noRed (Cast (Origin (loc info) ("Cannot cast "++render(pretty t1')++" to "++render(pretty(t2')))) t1 t2)
+                                                 noRed (Cast info t1 t2)
 ----------------------------------------------------------------------------------------------------------------------
 -- sub
 ----------------------------------------------------------------------------------------------------------------------
