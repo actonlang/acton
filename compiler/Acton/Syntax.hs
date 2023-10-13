@@ -255,7 +255,7 @@ type Constraints = [Constraint]
 
 data ErrInfo    = LinkTo Constraint
                 | Origin SrcLoc String
-                | NoInfo Int
+                | NoInfo SrcLoc Int
                 deriving (Eq,Show,Read,Generic,NFData)
                 
 type WPath      = [Either QName QName]
@@ -285,7 +285,7 @@ constrChain2 i = case i of
 
 origin (LinkTo c)   = origin (errInfo c)
 origin (Origin _ s) = s
-origin i@(NoInfo _) = show i
+origin i@(NoInfo _ _) = show i
 
 sDef n p t b fx = sDecl [Def NoLoc n [] p KwdNIL (Just t) b NoDec fx]
 sReturn e       = Return NoLoc (Just e)
@@ -585,7 +585,7 @@ instance HasLoc Constraint where
 instance HasLoc ErrInfo where 
       loc (LinkTo c)   = loc c
       loc (Origin l _) = l
-      loc (NoInfo _)   = NoLoc
+      loc (NoInfo l _) = l
       
 
 -- Eq -------------------------
