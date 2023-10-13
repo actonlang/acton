@@ -66,7 +66,7 @@ groupCs env cs                              = do st <- currentState
                                                  rollbackState st
                                                  return $ Map.elems m
   where mark (n,c)                          = do tvs <- (nub . filter univar . tyfree) <$> msubst c         -- Also include env vars via Sel/Mut?
-                                                 sequence [ unify (NoInfo 1) (newTVarToken n) (tVar tv) | tv <- tvs ]
+                                                 sequence [ unify (NoInfo NoLoc 1) (newTVarToken n) (tVar tv) | tv <- tvs ]
         group m c                           = do tvs <- (filter univar . tyfree) <$> msubst c
                                                  let tv = case tvs of [] -> tv0; tv:_ -> tv
                                                  return $ Map.insertWith (++) tv [c] m
@@ -119,7 +119,7 @@ solveGroups env select te tt (cs:css)       = do --traceM ("\n\n######### solveG
 solve' env select hist te tt eq cs
   | not $ null vargoals                     = do --traceM (unlines [ "### var goal " ++ prstr t ++ " ~ " ++ prstrs alts | RVar t alts <- vargoals ])
                                                  --traceM ("### var goals: " ++ show (sum [ length alts | RVar t alts <- vargoals ]))
-                                                 sequence [ unify (NoInfo 2) t t' | RVar t alts <- vargoals, t' <- alts ]
+                                                 sequence [ unify (NoInfo (loc t) 2) t t' | RVar t alts <- vargoals, t' <- alts ]
                                                  proceed hist cs
   | any not keep_evidence                   = noSolve (Nothing :: Maybe Type) keep_cs
   | null solve_cs || null goals             = return (keep_cs, eq)
@@ -142,7 +142,7 @@ solve' env select hist te tt eq cs
                                                         tryAlts st t alts
                                                     RVar t alts -> do
                                                         --traceM ("### var goal " ++ prstr t ++ ", unifying with " ++ prstrs alts)
-                                                        unifyM (NoInfo 3) alts (repeat t) >> proceed hist cs
+                                                        unifyM (NoInfo (loc t) 3) alts (repeat t) >> proceed hist cs
                                                     ROvl t -> do
                                                         --traceM ("### ovl goal " ++ prstr t ++ ", defaulting remaining constraints")
                                                         (cs,eq) <- simplify' (useForce env) te tt eq cs
@@ -172,10 +172,10 @@ solve' env select hist te tt eq cs
           | isProto env (tcname c)          = do p <- instwildcon env c
                                                  w <- newWitness
                                                  --traceM ("  # trying " ++ prstr t0 ++ " (" ++ prstr p ++ ")")
-                                                 proceed hist (Impl (NoInfo 4) w t0 p : cs)
+                                                 proceed hist (Impl (NoInfo NoLoc 4) w t0 p : cs)
         tryAlt t0 t                         = do t <- instwild env (kindOf env t0) t
                                                  --traceM ("  # trying " ++ prstr t0 ++ " = " ++ prstr t)
-                                                 unify (NoInfo 5) t0 t
+                                                 unify (NoInfo NoLoc 5) t0 t
                                                  proceed (t:hist) cs
         proceed hist cs                     = do te <- msubst te
                                                  tt <- msubst tt
@@ -456,9 +456,9 @@ reduce' env eq c@(Sel _ w (TCon _ tc) n _)
   where attrSearch                          = findAttr env tc n
         protoSearch                         = findProtoByAttr env (tcname tc) n
 
-reduce' env eq (Sel _ w t1@(TTuple _ p r) n t2)
+reduce' env eq c@(Sel _ w t1@(TTuple _ p r) n t2)
                                             = do let e = eLambda [(px0,t1)] (eDot (eVar px0) n)
-                                                 unify (NoInfo 6) r (kwdRow n t2 tWild)
+                                                 unify (NoInfo (loc c) 6) r (kwdRow n t2 tWild)
                                                  return (Eqn w (wFun t1 t2) e : eq)
 
 reduce' env eq c@(Mut _ (TVar _ tv) n _)
@@ -490,14 +490,14 @@ reduce' env eq c                            = noRed c
 
 
 solveImpl env wit w t p                     = do (cs,p',we) <- instWitness env t wit
-                                                 unifyM (NoInfo 7) (tcargs p) (tcargs p')
+                                                 unifyM (NoInfo NoLoc 7) (tcargs p) (tcargs p')
                                                  return ([Eqn w (impl2type t p) we], cs)
 
-solveSelAttr env (wf,sc,d) (Sel info w t1 n t2)
+solveSelAttr env (wf,sc,d) c@(Sel info w t1 n t2)
                                             = do (cs,tvs,t) <- instantiate env sc
                                                  when (tvSelf `elem` snd (polvars t)) (tyerr n "Contravariant Self attribute not selectable by instance")
                                                  let e = eLambda [(px0,t1)] (app t (tApp (eDot (wf $ eVar px0) n) tvs) $ witsOf cs)
-                                                 unify (NoInfo 8) (subst [(tvSelf,t1)] t) t2
+                                                 unify (NoInfo (loc c) 8) (subst [(tvSelf,t1)] t) t2
                                                  return ([Eqn w (wFun t1 t2) e], cs)
 
 --  e1.__setslice__(sl, e2)
@@ -514,17 +514,18 @@ solveSelProto env pn c@(Sel info w t1 n t2) = do p <- instwildcon env pn
                                                  (eq,cs) <- solveSelWit env (p, eVar w') c
                                                  return (eq, Impl info w' t1 p : cs)
 
-solveSelWit env (p,we) (Sel info w t1 n t2) = do let Just (wf,sc,d) = findAttr env p n
+solveSelWit env (p,we) c@(Sel info w t1 n t2)
+                                            = do let Just (wf,sc,d) = findAttr env p n
                                                  (cs,tvs,t) <- instantiate env sc
                                                  when (tvSelf `elem` snd (polvars t)) (tyerr n "Contravariant Self attribute not selectable by instance")
                                                  let e = eLambda [(px0,t1)] (app t (tApp (eDot (wf we) n) tvs) $ eVar px0 : witsOf cs)
-                                                 unify (NoInfo 9) (subst [(tvSelf,t1)] t) t2
+                                                 unify (NoInfo (loc c) 9) (subst [(tvSelf,t1)] t) t2
                                                  return ([Eqn w (wFun t1 t2) e], cs)
 
-solveMutAttr env (wf,sc,dec) (Mut info t1 n t2)
+solveMutAttr env (wf,sc,dec) c@(Mut info t1 n t2)
                                             = do when (dec /= Just Property) (noMut n)
                                                  let TSchema _ [] t = sc
-                                                 unify (NoInfo 10) t2 (subst [(tvSelf,t1)] t)
+                                                 unify (NoInfo (loc c) 10) t2 (subst [(tvSelf,t1)] t)
 
 ----------------------------------------------------------------------------------------------------------------------
 -- witness lookup
@@ -545,7 +546,7 @@ findWitness env t p
         t'                  = if force then t_ else t   -- allow instantiation only when in forced mode
         all_ws              = reverse $ filter (matching t_ p_) $ witsByPName env $ tcname p    -- all witnesses that could be used
         (match_ws, rest_ws) = partition (matching (if force then t_ else t) p_) all_ws          -- only those that match t exactly
-        uni_ws              = filter (unifying (NoInfo 11) t) rest_ws
+        uni_ws              = filter (unifying (NoInfo (loc t) 11) t) rest_ws
         elim ws' []         = reverse ws'
         elim ws' (w:ws)
           | covered         = elim ws' ws
@@ -983,40 +984,40 @@ improve env te tt eq cs
   | Nothing <- info                     = do --traceM ("  *Resubmit " ++ show (length cs))
                                              simplify' env te tt eq cs
   | Left (v,vs) <- closure              = do --traceM ("  *Unify cycle " ++ prstr v ++ " = " ++ prstrs vs)
-                                             sequence [ unify (NoInfo 12) (tVar v) (tVar v') | v' <- vs ]
+                                             sequence [ unify (NoInfo NoLoc 12) (tVar v) (tVar v') | v' <- vs ]
                                              simplify' env te tt eq cs
   | not $ null gsimple                  = do --traceM ("  *G-simplify " ++ prstrs [ (v,tVar v') | (v,v') <- gsimple ])
                                              --traceM ("  *obsvars: " ++ prstrs obsvars)
                                              --traceM ("  *varvars: " ++ prstrs (varvars vi))
-                                             sequence [ unify (NoInfo 13) (tVar v) (tVar v') | (v,v') <- gsimple ]
+                                             sequence [ unify (NoInfo NoLoc 13) (tVar v) (tVar v') | (v,v') <- gsimple ]
                                              simplify' env te tt eq cs
   | not $ null cyclic                   = tyerrs cyclic ("Cyclic subtyping:")
   | not $ null (multiUBnd++multiLBnd)   = do ub <- mapM (mkGLB env) multiUBnd   -- GLB of the upper bounds
                                              lb <- mapM (mkLUB env) multiLBnd   -- LUB of the lower bounds
                                              --traceM ("  *GLB " ++ prstrs ub)
                                              --traceM ("  *LUB " ++ prstrs lb)
-                                             let cs' = [ Cast (NoInfo 14) (tVar v) t | (v,t) <- ub ] ++ [ Cast (NoInfo 110)  t (tVar v) | (v,t) <- lb ]
+                                             let cs' = [ Cast (NoInfo NoLoc 14) (tVar v) t | (v,t) <- ub ] ++ [ Cast (NoInfo NoLoc 110)  t (tVar v) | (v,t) <- lb ]
                                              simplify' env te tt eq (cs' ++ map (replace ub lb) cs)
   | not $ null posLBnd                  = do --traceM ("  *S-simplify (dn) " ++ prstrs posLBnd)
-                                             sequence [ unify (NoInfo 15) (tVar v) t | (v,t) <- posLBnd ]
+                                             sequence [ unify (NoInfo NoLoc 15) (tVar v) t | (v,t) <- posLBnd ]
                                              simplify' env te tt eq cs
   | not $ null negUBnd                  = do --traceM ("  *S-simplify (up) " ++ prstrs negUBnd)
-                                             sequence [ unify (NoInfo 16) (tVar v) t | (v,t) <- negUBnd ]
+                                             sequence [ unify (NoInfo NoLoc 16) (tVar v) t | (v,t) <- negUBnd ]
                                              simplify' env te tt eq cs
   | not $ null closUBnd                 = do --traceM ("  *Simplify upper closed bound " ++ prstrs closUBnd)
-                                             sequence [ unify (NoInfo 17) (tVar v) t | (v,t) <- closUBnd ]
+                                             sequence [ unify (NoInfo NoLoc 17) (tVar v) t | (v,t) <- closUBnd ]
                                              simplify' env te tt eq cs
   | not $ null closLBnd                 = do --traceM ("  *Simplify lower closed bound " ++ prstrs closLBnd)
-                                             sequence [ unify (NoInfo 18) (tVar v) t | (v,t) <- closLBnd ]
+                                             sequence [ unify (NoInfo NoLoc 18) (tVar v) t | (v,t) <- closLBnd ]
                                              simplify' env te tt eq cs
   | not $ null redEq                    = do --traceM ("  *(Context red) " ++ prstrs [ w | Eqn w _ _ <- redEq ])
-                                             sequence [ unify (NoInfo 19) t1 t2 | (t1,t2) <- redUni ]
+                                             sequence [ unify (NoInfo NoLoc 19) t1 t2 | (t1,t2) <- redUni ]
                                              simplify' env te tt (redEq++eq) (remove [ w | Eqn w _ _ <- redEq ] cs)
   | not $ null dots                     = do --traceM ("  *Implied mutation/selection solutions " ++ prstrs dots)
                                              (eq',cs') <- solveDots env mutC selC selP cs
                                              simplify' env te tt (eq'++eq) cs'
   | not $ null redSeal                  = do --traceM ("  *removing redundant Seal constraints on: " ++ prstrs redSeal)
-                                             return (cs \\ map (Seal (NoInfo 110) . tVar) redSeal, eq)
+                                             return (cs \\ map (Seal (NoInfo NoLoc 110) . tVar) redSeal, eq)
   | otherwise                           = do --traceM ("  *improvement done " ++ show (length cs))
                                              return (cs, eq)
   where info                            = varinfo cs
