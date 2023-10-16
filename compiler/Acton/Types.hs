@@ -1307,7 +1307,7 @@ instance Infer Expr where
       | otherwise                       = do (cs,t,e') <- infer env e
                                              w <- newWitness
                                              t0 <- newTVar
-                                             return (Sel (NoInfo l 86) w t n t0 :
+                                             return (Sel (Origin l ("Type "++Pretty.print t++" does not have selector "++Pretty.print n)) w t n t0 :
                                                      cs, t0, eCall (eVar w) [e'])
 
     infer env (Rest l e n)              = do p <- newTVarOfKind PRow
