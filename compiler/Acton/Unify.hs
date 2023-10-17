@@ -129,15 +129,17 @@ findElem info k r0 n r tl                   = do r0' <- msubst r0
   where findElem' info r0 n (TRow l k n1 t r2) tl
           | n == n1                         = return (t, revApp r0 r2)
           | otherwise                       = findElem' info (TRow l k n1 t r0) n r2 tl
-        findElem' info r0 n (TNil _ _) tl   = kwdNotFound info n
+        findElem' info r0 n (TNil _ _) tl   = do info' <- wildify info
+                                                 kwdNotFound info' n
         findElem' info r0 n r2@(TVar _ tv) tl
           | r2 == tl                        = conflictingRow tv
-          | not $ univar tv                 = kwdNotFound info n
+          | not $ univar tv                 = do info' <- wildify info
+                                                 kwdNotFound info n
           | otherwise                       = do t <- newTVar
                                                  r <- newTVarOfKind k
                                                  substitute tv (tRow k n t r)
                                                  return (t, revApp r0 r)
-        findElem' info e0 n r2 tl                = noUnify info r2 (tRow k n tWild tWild)
+        findElem' info e0 n r2 tl           = noUnify info r2 (tRow k n tWild tWild)
         revApp (TRow l k n t r1) r2         = revApp r1 (TRow l k n t r2)
         revApp (TNil _ _) r2                = r2
 
