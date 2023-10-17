@@ -1201,14 +1201,14 @@ atom_expr = do
            where iddot  = do
                         mb <- optional (opPref "~")
                         nm <- name
-                        return (\a -> maybe (S.Dot NoLoc a nm) (const $ S.Rest NoLoc a nm) mb)
+                        return (\a -> maybe (S.Dot (loc a `upto` loc nm) a nm) (const $ S.Rest (loc a `upto` loc nm) a nm) mb)
                  intdot  = do 
                         mb <- optional (opPref "~")
-                        i <- lexeme L.decimal
-                        return (\a -> maybe (S.DotI NoLoc a i) (const $ S.RestI NoLoc a i) mb)
+                        (l,i) <- withLoc $ lexeme L.decimal
+                        return (\a -> maybe (S.DotI (loc a `upto` l) a i) (const $ S.RestI (loc a `upto` l) a i) mb)
                  strdot = do
-                        (p,ss) <- withPos plainstrLiteral 
-                        return (\a -> S.Dot NoLoc a (S.Name NoLoc (head ss)))
+                        (l,ss) <- withLoc plainstrLiteral 
+                        return (\a -> S.Dot (loc a `upto` l) a (S.Name l (head ss)))
 
                  bslicelist = (:) <$> bslice <*> commaList bslice
                  tailslice = (,) <$> (colon *> optional expr) <*> (maybe Nothing id <$> optional (colon *> optional expr))

@@ -1307,7 +1307,10 @@ instance Infer Expr where
       | otherwise                       = do (cs,t,e') <- infer env e
                                              w <- newWitness
                                              t0 <- newTVar
-                                             return (Sel (NoInfo l 86) w t n t0 :
+                                             let hint = case t of
+                                                          TOpt _ _ -> "\nHint: you may need to test if " ++ Pretty.print e ++ " is not None"
+                                                          _ -> ""
+                                             return (Sel (Origin l (Pretty.print t ++ " does not have an attribute "++ Pretty.print n ++ hint)) w t n t0 :
                                                      cs, t0, eCall (eVar w) [e'])
 
     infer env (Rest l e n)              = do p <- newTVarOfKind PRow
@@ -1420,7 +1423,7 @@ inferCall env unwrap l e ps ks          = do (cs1,t,e) <- infer env e
                                              t0 <- newTVar
                                              fx <- currFX
                                              w <- newWitness
-                                             return (Sub (Origin l "Type error in function call") w t (tFun fx prow krow t0) :
+                                             return (Sub (Origin l "Type error in call") w t (tFun fx prow krow t0) :
                                                      cs1++cs2++cs3, t0, Call l (eCall (eVar w) [e]) ps ks)
 
 

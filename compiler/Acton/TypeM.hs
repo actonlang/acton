@@ -148,7 +148,8 @@ instance HasLoc TypeError where
 explain (Cast _ t1 t2) = pretty t1 <+> text "must be castable to" <+> pretty t2
 explain (Sub _ _ t1 t2) = pretty t1 <+> text "must be a subtype of" <+> pretty t2
 explain (Impl _ _ t p) = pretty t <+> text "must implement" <+> pretty p
-explain c = pretty c
+explain (Sel _ _ t n t0) = pretty t <+> text "must be a subtype of" <+> pretty t0
+explain c = text (show c) <+> pretty c
 
 
 typeError                           :: TypeError -> (SrcLoc, String)
@@ -179,14 +180,15 @@ tyerrs xs s                         = throwError $ TypeError (loc $ head xs) (s 
 rigidVariable tv                    = throwError $ RigidVariable tv
 infiniteType tv                     = throwError $ InfiniteType tv
 conflictingRow tv                   = throwError $ ConflictingRow tv
-kwdNotFound info n | n == name "_"  = throwError $ PosElemNotFound info (err1++err2)
+kwdNotFound info n | n == name "_"  = throwError $ PosElemNotFound info err
               | otherwise           = throwError $ KwdNotFound n
-  where err1                        = case constrChain2 info of
-                                          Sub _ _ TNil{} _ : _ -> "Too few positional"
-                                          Sub _ _ _ TNil{} : _ -> "Too many positional"
+  where err                         = case constrChain2 info of
+                                          Sub _ _ TNil{} _ : _ -> "Too few positional " ++ err2
+                                          Sub _ _ _ TNil{} : _ -> "Too many positional " ++ err2
+                                          c : _ -> render (explain c)
         err2                        = case origin info of
-                                          "Type error in function call" -> " arguments in function call"
-                                          s -> " elements in tuple"
+                                          "Type error in call" -> "arguments in call"
+                                          _  -> "elements"
 escapingVar tvs t                   = throwError $ EscapingVar tvs t
 noSelStatic n u                     = throwError $ NoSelStatic n u
 noSelInstByClass n u                = throwError $ NoSelInstByClass n u
