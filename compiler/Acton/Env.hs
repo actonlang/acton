@@ -609,7 +609,7 @@ schematic (TCon _ tc)       = tCon (schematic' tc)
 schematic (TFun _ _ _ _ _)  = tFun tWild tWild tWild tWild
 schematic (TTuple _ _ _)    = tTuple tWild tWild
 schematic (TOpt _ _)        = tOpt tWild
-schematic (TRow _ k n _ _)  = tRow k n tWild tWild
+schematic (TRow _ k n _ r)  = tRow k n tWild (schematic r)
 schematic (TStar _ k _)     = tStar k tWild
 schematic t                 = t
 
