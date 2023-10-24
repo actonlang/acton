@@ -884,6 +884,17 @@ def gcd(a : int, b : int) -> int:
 def xgcd(a : int, b : int) -> (int, int, int):
     NotImplemented
 
+def type(a: value) -> str:
+    """Get the name of the type of something as a string
+
+    Do not use this for meta-programming. Use isinstance().
+
+    This is only meant for development use as an alternative to letting actonc
+    print inferred types and similar. It will be removed in a future version
+    when there are better ways to debug types.
+    """
+    NotImplemented
+
 ## Environment ################################################
 
 class WorldCap():

@@ -21,3 +21,7 @@ void B___ext_init__() {
 B_str B_BaseExceptionD__name (B_BaseException self) {
     return to$str(unmangle_name(self->$class->$GCINFO));
 }
+
+B_str B_type(B_value a) {
+    return to$str(unmangle_name(a->$class->$GCINFO));
+}
