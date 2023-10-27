@@ -37,10 +37,11 @@ suffixWitness                       = globalName "witness"
 
 paramNames                          = globalNames ""
 pNames                              = globalNames "p"
-kNames                              = globalNames "k"
 xNames                              = globalNames "x"
 yNames                              = globalNames "y"
 tmpNames                            = globalNames "tmp"
+
+attrKW                              = globalName "kw"
 
 
 deriveQ (NoQ n)                     = n

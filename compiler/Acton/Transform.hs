@@ -271,13 +271,13 @@ instance Transform KwdPar where
     trans env (KwdPar n t e k)          = KwdPar n t (trans env e) (trans env k)
     trans env (KwdSTAR n (Just t))
       | Internal{} <- n,
-        TTuple _ _ k <- t               = kPar kNames k
+        TTuple _ _ k <- t               = kPar attrKW k
     trans env k                         = k
 
 ksubst (KwdPar _ _ _ k)                 = ksubst k
 ksubst (KwdSTAR n (Just t))
   | Internal{} <- n,
-    TTuple _ _ k <- t                   = [(n,Tuple l0 PosNil (kArg $ kPar kNames k))]
+    TTuple _ _ k <- t                   = [(n,Tuple l0 PosNil (kArg $ kPar attrKW k))]
 ksubst _                                = []
 
 instance Transform PosArg where

@@ -400,10 +400,10 @@ pPar ns (TRow _ PRow n t p)
 pPar ns (TNil _ PRow)   = PosNIL
 pPar ns (TStar _ PRow r)= PosSTAR (head ns) (Just $ tTupleP r)
 
-kPar ns (TRow _ KRow n t r)
-                        = KwdPar n (Just t) Nothing (kPar ns r)
-kPar ns (TNil _ KRow)   = KwdNIL
-kPar ns (TStar _ KRow r)= KwdSTAR (head ns) (Just $ tTupleK r)
+kPar kw (TRow _ KRow n t r)
+                        = KwdPar n (Just t) Nothing (kPar kw r)
+kPar kw (TNil _ KRow)   = KwdNIL
+kPar kw (TStar _ KRow r)= KwdSTAR kw (Just $ tTupleK r)
 
 tRowLoc t@TRow{}        = getLoc [tloc t, loc (rtype t)]
 
