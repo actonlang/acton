@@ -423,7 +423,7 @@ parseActFile opts paths actFile = do
                       `catch` handle "Context error" Acton.Parser.contextError src paths (modName paths)
                       `catch` handle "Indentation error" Acton.Parser.indentationError src paths (modName paths)
                       `catch` handle "Syntax error" Acton.Parser.failFastError src paths (modName paths)
-                    iff (C.parse opts) $ dump (modName paths) "parse" (show m) -- (Pretty.print m)
+                    iff (C.parse opts) $ dump (modName paths) "parse" (Pretty.print m)
                     timeParse <- getTime Monotonic
                     iff (C.timing opts) $ putStrLn("Parsing file " ++ makeRelative (srcDir paths) actFile
                                                                    ++ ": " ++ fmtTime(timeParse - timeRead))
