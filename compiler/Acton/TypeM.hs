@@ -145,7 +145,6 @@ instance HasLoc TypeError where
     loc (NoSolve _ _ _)             = NoLoc
     loc (NoUnify info t1 t2)        = loc info
 
-
 intro b t mbe                          = case mbe of
                                              Nothing ->  pretty t
                                              Just e ->  text "The type of" <+>  pretty e <+> (if b then text "(" Pretty.<>
@@ -222,6 +221,7 @@ typeError (NoSolve mbt vs cs)        = case length cs of
 typeError (NoUnify info t1 t2)       = case (loc t1, loc t2) of
                                           (l1@Loc{},l2@Loc{}) -> [(l1, ""),(l2,render(text "Incompatible types" <+> pretty t1 <+> text "and" <+> pretty t2))]
                                           _ ->  [(getLoc[loc info, loc t1, loc t2],render(text "Incompatible types" <+> pretty t1 <+> text "and" <+> pretty t2))]
+
 
 tyerr x s                           = throwError $ TypeError (loc x) (s ++ " " ++ prstr x)
 tyerrs xs s                         = throwError $ TypeError (loc $ head xs) (s ++ " " ++ prstrs xs)
