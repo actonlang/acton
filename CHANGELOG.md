@@ -3,6 +3,87 @@
 ## Unreleased
 
 
+## [0.18.0] (2023-10-30)
+
+### Added
+- Exceptions now have a `__str__()` method used to print the exception
+  - useful for exception types where we want to be able to include dynamic data
+  - string formatting of dynamic log messages is expensive, so we don't want to
+    incur that cost for exceptions that are thrown but never printed
+  - add extra attributes and print them in `__str__()` in your custom exceptions
+- Add `testing` module [#1524] [#1552]
+  - Supports four categories of tests:
+    - unit tests: `proc() -> None`, think pure functions
+    - synchronous actor tests, involves actors
+    - asynchronous actor tests
+    - env tests
+- Improvement to type error messages [#1554] [#1556] [#1559]
+- Add `term` module
+  - a couple of small helpers for doing colored text and similar in terminals
+- Add `random.choice()` & `random.choice()` [#1541]
+- Add `printn()` is like print but prints without an ending newline
+  - also flushes output immediately, useful to print progress style output
+  - this is temporary and will be removed once default argument handling is
+    properly implemented
+- Add `math.pi = 3.141592653589793` [#1539]
+- `acton.rts.enable_gc()` & `acton.rts.disable_gc()`
+  - there are situations in which it can be useful to turn off the GC, such as
+    during certain test scenarios
+- `acton.rts.get_mem_usage()` returns memory usage [#]
+  - approximate output due to how the GC works
+- Add `uri` module [#1560]
+  - Features a `parse_http()` function to parse a HTTP URL into its parts
+
+### Changed
+- Reverted to global single threaded malloc [#1547]
+  - There have been some reports of errors that could potentially be related to
+    per-thread malloc or DNS lookups. In caution, the per-thread malloc has been
+    disabled and will be brought back in a safe way once we've been able to test
+    it much more thoroughly.
+- Integer division by zero now results in exception `ZeroDivisionError`
+  - for `float`, `inf` is returned [#1530]
+    - this is aligned with IEEE & languages like C, Zig, Rust, Swift, Julia
+    - Python raises an exception on float divide by zero
+- Haskell Stack updated to LTS 21.13 using GHC 9.4 [#1517]
+  - Some tests show actonc running ~25% faster
+    - Presumably thanks to more optimizations in ghc
+  - C++ seemingly pulled in as a dependency for building Acton itself :(
+    - Would be nice to use zig c++ but alas, that does not work
+- `actonc` now always built statically on Linux
+  - Previously it was only built statically in release mode
+  - It does emit some errors / warnings around using dlopen but those are
+    harmless and can be ignored in our case
+- commands in `argparse` now expect `proc()` rather than `pure()`
+- JSON encode/decode are now free functions [#1536]
+  - the JSON encode and decode functions were implemented as methods on an actor
+    due to an earlier actonc bug
+  - bug is fixed, so `encode()` and `decode()` are now moved to free functions
+    in the `json` module
+  - the old `Json` actor remains and simply wraps the free functions
+
+### Fixed
+- Fix error handling in `net.TCPConnection` for single family use [#1546]
+  - original error handling presumed a dual stack socket and so would wait for
+    both IPv4 and IPv6 to report an error before propagating the error to the
+    caller
+  - now if only a single address family is used, errors are immediately sent to
+    the caller
+- Fix error handling in `net.TCPConnection` for dual stack use [#1527]
+  - while the original design focused on this use case, there was a bug
+- Honor `--root`
+  - the automatic detection of root actors based on the name `main` would
+    previously override a manually provided one
+- Fix time difference calculation when underflowing
+- Fix add / sub duration & comparison for `time.Instant` [#1545]
+- Fix premature conversion of input to close converter [#1553]
+
+### Testing / CI
+- Now building .debs on Debian 12 / bookworm
+- Avoid DNS lookups in test [#1551]
+  - We have a likely bug around DNS lookups that hits on MacOS. Work around by
+    using "127.0.0.1" rather than "localhost" in tests.
+
+
 ## [0.17.0] (2023-09-25)
 
 Acton now has exceptions, how exceptional!
