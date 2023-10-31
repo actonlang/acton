@@ -445,7 +445,7 @@ jobs:
       - name: "Include new deb in Apt repository"
         run: |
           cd apt
-          reprepro include bookworm ../deb/*.changes
+          reprepro include bullseye ../deb/*.changes
       - name: "Push updates to git repository for apt.acton-lang.io"
         run: |
           cd apt
