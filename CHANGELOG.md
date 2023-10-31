@@ -3,6 +3,11 @@
 ## Unreleased
 
 
+## [0.18.2] (2023-10-31)
+
+A real fix this time to the Debian APT repo.
+
+
 ## [0.18.1] (2023-10-31)
 
 A small fix for Debian builds.
