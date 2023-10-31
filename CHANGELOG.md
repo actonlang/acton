@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+### Testing / CI
+- Now also testing build / test and running on Ubuntu 23.10
+
 
 ## [0.18.2] (2023-10-31)
 
