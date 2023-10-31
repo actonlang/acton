@@ -391,6 +391,12 @@ test-builtins:
 test-compiler:
 	cd compiler && stack test --ta '-p "compiler"'
 
+test-typeerrors:
+	cd compiler && stack test --ta '-p "type errors"'
+
+test-typeerrors-accept:
+	cd compiler && stack runghc -- test.hs -p "type errors" --accept
+
 test-db:
 	cd compiler && stack test --ta '-p "DB"'
 

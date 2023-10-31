@@ -1,0 +1,10 @@
+Building file ../test/typeerrors/ex2.act
+  Compiling ex2.act for release
+
+ERROR: Error when compiling ex2 module: Type error
+ 4:5-12
+  |
+4 |a = f(3,4,5)
+  |    ^^^^^^^^
+Too many positional arguments in call
+

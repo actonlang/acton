@@ -1,0 +1,15 @@
+Building file ../test/typeerrors/ex9.act
+  Compiling ex9.act for release
+
+ERROR: Error when compiling ex9 module: Type error
+ 4:7-7
+  |
+4 |a = f(3,"hej")
+  |      ^
+The type t of the indicated expression must satisfy the following unsolvable collection of constraints:
+    _ must implement __builtin__.Number
+    t must implement __builtin__.Plus
+    _ must be a subtype of t
+    __builtin__.str must be castable to t
+    t must be a subtype of _
+
