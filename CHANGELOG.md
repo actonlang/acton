@@ -3,6 +3,12 @@
 ## Unreleased
 
 
+## [0.18.1] (2023-10-31)
+
+### Fixed
+- Align Debian package building on bookworm / 12
+
+
 ## [0.18.0] (2023-10-30)
 
 ### Added
