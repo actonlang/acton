@@ -1,0 +1,10 @@
+Building file ../test/typeerrors/ex13.act
+  Compiling ex13.act for release
+
+ERROR: Error when compiling ex13 module: Type error
+ 4:11-11
+  |
+4 |actor Act(s:int,t:str):
+  |          ^
+(__builtin__.int, __builtin__.str) must be castable to (_,)
+

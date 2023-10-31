@@ -60,6 +60,7 @@ tests:
     main:                test.hs
     dependencies:
       - base
+      - bytestring
       - dir-traverse
       - directory
       - filepath
@@ -68,6 +69,7 @@ tests:
       - system-filepath
       - tasty
       - tasty-expected-failure
+      - tasty-golden
       - tasty-hunit
       - time
       - timeit

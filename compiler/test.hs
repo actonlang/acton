@@ -4,6 +4,7 @@ import Data.List.Split
 import Data.Maybe
 import Data.Ord
 import Data.Time.Clock.POSIX
+import qualified Data.ByteString.Lazy.Char8 as LBS
 
 import System.Directory
 import System.Directory.Recursive
@@ -15,6 +16,7 @@ import System.TimeIt
 
 import Test.Tasty
 import Test.Tasty.ExpectedFailure
+import Test.Tasty.Golden (goldenVsString)
 import Test.Tasty.HUnit
 
 
@@ -38,6 +40,7 @@ main = do
     regressionSegfaultTests <- createTests "Regression segfaults" "../test/regression_segfault" False [] (testBuildAndRun "" "" segfault_exitcode)
     rtsAutoTests <- createAutoTests "RTS auto" "../test/rts_auto"
     stdlibAutoTests <- createAutoTests "stdlib auto" "../test/stdlib_auto"
+    typeErrorAutoTests <- createGoldenErrorAutoTests "type errors" "../test/typeerrors"
     defaultMain $ localOption timeout $ testGroup "Tests" $
       [ builtinsAutoTests
       , coreLangAutoTests
@@ -53,6 +56,7 @@ main = do
       , rtsTests
       , stdlibAutoTests
       , stdlibTests
+      , typeErrorAutoTests
       ]
   where timeout :: Timeout
         timeout = mkTimeout (5*60*1000000) -- 5 minutes timeout
@@ -211,6 +215,20 @@ createAutoTest file = do
     testCase testName $ testFunc expRet False file
   where (fileBody, fileExt) = splitExtension $ takeFileName file
 
+createGoldenErrorAutoTests name dir = do
+    actFiles <- findThings dir
+    return $ testGroup name $ map createGoldenErrorAutoTest actFiles
+
+createGoldenErrorAutoTest file = do
+    let testName  = fileBody
+        goldenFile = "../test/typeerrors/" ++ fileBody ++ ".golden"
+    goldenVsString testName goldenFile (getCompileError file)
+  where (fileBody, fileExt) = splitExtension $ takeFileName file
+
+getCompileError file = do
+    (returnCode, cmdOut, cmdErr) <- buildThing "" file
+    assertEqual "compile error retCode" (ExitFailure 1) returnCode
+    return (LBS.pack cmdOut)
 
 findThings dir = do
     items <- listDirectory dir

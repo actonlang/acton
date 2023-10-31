@@ -1,0 +1,10 @@
+Building file ../test/typeerrors/ex11.act
+  Compiling ex11.act for release
+
+ERROR: Error when compiling ex11 module: Type error
+ 4:5-10
+  |
+4 |a = f([8])
+  |    ^^^^^^
+Type error in call
+

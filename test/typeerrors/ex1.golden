@@ -1,0 +1,10 @@
+Building file ../test/typeerrors/ex1.act
+  Compiling ex1.act for release
+
+ERROR: Error when compiling ex1 module: Type error
+ 4:5-8
+  |
+4 |a = f(3)
+  |    ^^^^
+Too few positional arguments in call
+
