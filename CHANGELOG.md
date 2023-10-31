@@ -5,6 +5,8 @@
 
 ## [0.18.1] (2023-10-31)
 
+A small fix for Debian builds.
+
 ### Fixed
 - Align Debian package building on bookworm / 12
 
