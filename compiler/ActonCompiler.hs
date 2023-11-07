@@ -857,6 +857,7 @@ runZig opts zigCmd wd = do
     (returnCode, zigStdout, zigStderr) <- readCreateProcessWithExitCode (shell $ zigCmd){ cwd = wd } ""
     case returnCode of
         ExitSuccess -> do
+          iff (C.debug opts) $ putStrLn zigStderr
           return ()
         ExitFailure _ -> do printIce "compilation of generated Zig code failed"
                             putStrLn $ "zig stdout:\n" ++ zigStdout
