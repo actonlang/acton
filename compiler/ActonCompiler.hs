@@ -92,7 +92,7 @@ main                     =  do arg <- C.parseCmdLine
                                    C.CompileOpt nms opts   -> compileFiles opts (catMaybes $ map filterActFile nms)
 
 defaultOpts   = C.CompileOptions False False False False False False False False False False False
-                                 False False False False False False False False False "" "" "" ""
+                                 False False False False False False False False "" "" "" ""
                                  C.defTarget "" False False
 
 
