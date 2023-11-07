@@ -890,7 +890,7 @@ zigBuild env opts paths tasks binTasks = do
                  global_cache_dir
     let zigCmd = zigCmdBase ++
                  " --prefix " ++ projProfile paths ++ " --prefix-exe-dir 'bin'" ++
-                 if (C.debug opts) then " --verbose " else "" ++
+                 (if (C.debug opts) then " --verbose " else "") ++
                  " -Dtarget=" ++ (C.target opts) ++
                  " -Doptimize=" ++ (if (C.dev opts) then "Debug" else "ReleaseFast") ++
                  (if (C.cpedantic opts) then " -Dcpedantic " else " ") ++
