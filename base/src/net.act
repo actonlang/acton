@@ -101,7 +101,8 @@ actor TCPConnection(cap: TCPConnectCap, address: str, port: int, on_connect: act
         _connect4(result[0])
 
     def _on_dns_a_error(name, msg):
-        _lookup_a(address, _on_dns_a_resolve, _on_dns_a_error)
+        if _state == STATE_RESOLVING:
+            after 0.1: _lookup_a(address, _on_dns_a_resolve, _on_dns_a_error)
 
     # DNS AAAA
     def _on_dns_aaaa_resolve(result):
@@ -111,7 +112,8 @@ actor TCPConnection(cap: TCPConnectCap, address: str, port: int, on_connect: act
         _connect6(result[0])
 
     def _on_dns_aaaa_error(name, msg):
-        _lookup_aaaa(address, _on_dns_aaaa_resolve, _on_dns_aaaa_error)
+        if _state == STATE_RESOLVING:
+            after 0.1: _lookup_aaaa(address, _on_dns_aaaa_resolve, _on_dns_aaaa_error)
 
     action def _on_tcp_error(sockfamily: int, err: int, errmsg: str):
         if sockfamily == 4:
