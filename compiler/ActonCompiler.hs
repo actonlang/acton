@@ -302,9 +302,9 @@ compileFiles opts srcFiles = do
     let rootParts = splitOn "." (C.root opts)
         rootMod   = init rootParts
         guessMod  = if length rootParts == 1 then modName paths else A.modName rootMod
-        binTask   = BinTask False (prstr guessMod) (A.GName guessMod (A.name $ last rootParts))
+        binTask   = BinTask False (prstr guessMod) (A.GName guessMod (A.name $ last rootParts)) False
         preBinTasks
-          | null (C.root opts) = map (\t -> BinTask True (modNameToString (name t)) (A.GName (name t) (A.name "main"))) (filter (not . stubmode) tasks)
+          | null (C.root opts) = map (\t -> BinTask True (modNameToString (name t)) (A.GName (name t) (A.name "main")) False) (filter (not . stubmode) tasks)
           | otherwise        = [binTask]
     env <- compileTasks opts paths tasks
     compileBins opts paths env tasks preBinTasks
@@ -443,7 +443,7 @@ data CompileTask        = ActonTask { name :: A.ModName, src :: String, atree:: 
 -- representation. We need both of BinTask when generating build.zig, so it
 -- would be more robust to use that type rather than a hacky character
 -- replacement (replaceDot in genBuildZigExe)
-data BinTask            = BinTask { isDefaultRoot :: Bool, binName :: String, rootActor :: A.QName } deriving (Show)
+data BinTask            = BinTask { isDefaultRoot :: Bool, binName :: String, rootActor :: A.QName, isTest :: Bool } deriving (Show)
 
 -- return task where the specified root actor exists
 filterMainActor env opts paths binTask
@@ -841,6 +841,7 @@ writeRootC env opts paths binTask
                                    | prstr t == "Env" || prstr t == "None"
                                       || prstr t == "__builtin__.Env"|| prstr t == "__builtin__.None"-> do   -- !! To do: proper check of parameter type !!
                                       c <- Acton.CodeGen.genRoot env qn
+                                      createDirectoryIfMissing True (takeDirectory rootFile)
                                       writeFile rootFile c
                                       return (Just binTask)
                                    | otherwise -> handle "Type error" Acton.Types.typeError "" paths m
@@ -852,7 +853,7 @@ writeRootC env opts paths binTask
         (sc,_)              = Acton.QuickType.schemaOf env (A.eQVar qn)
         buildF              = joinPath [projPath paths, "build.sh"]
         outbase             = outBase paths mn
-        rootFile            = outbase ++ ".root.c"
+        rootFile            = if (isTest binTask) then outbase ++ ".test_root.c" else outbase ++ ".root.c"
 
 
 modNameToString :: A.ModName -> String
@@ -875,7 +876,9 @@ runZig opts zigCmd wd = do
 
 zigBuild :: Acton.Env.Env0 -> C.CompileOptions -> Paths -> [CompileTask] -> [BinTask] -> IO ()
 zigBuild env opts paths tasks binTasks = do
+    let testBinTasks = map (\t -> BinTask True (modNameToString (name t)) (A.GName (name t) (A.name "__test_main")) True) (filter (not . stubmode) tasks)
     mapM (writeRootC env opts paths) binTasks
+    mapM (writeRootC env opts paths) testBinTasks
     iff (not (quiet opts)) $ putStrLn("  Final compilation step")
     timeStart <- getTime Monotonic
 
