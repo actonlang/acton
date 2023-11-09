@@ -174,11 +174,6 @@ printIce errMsg = do ccVer <- getCcVer
 
 -- Project handling ------------------------------------------------------------------------------------------
 
-isGitAvailable :: IO Bool
-isGitAvailable = do
-    (exitCode, _, _) <- readProcessWithExitCode "git" ["--version"] ""
-    return $ exitCode == ExitSuccess
-
 -- Create a project ---------------------------------------------------------------------------------------------
 
 createProject :: String -> IO ()
@@ -311,7 +306,9 @@ compileFiles opts srcFiles = do
         preBinTasks
           | null (C.root opts) = map (\t -> BinTask True (modNameToString (name t)) (A.GName (name t) (A.name "main"))) (filter (not . stubmode) tasks)
           | otherwise        = [binTask]
-    compileTasks opts paths tasks preBinTasks
+    env <- compileTasks opts paths tasks
+    compileBins opts paths env tasks preBinTasks
+    return ()
 
 
 -- Paths handling -------------------------------------------------------------------------------------
@@ -448,7 +445,7 @@ data CompileTask        = ActonTask { name :: A.ModName, src :: String, atree:: 
 -- replacement (replaceDot in genBuildZigExe)
 data BinTask            = BinTask { isDefaultRoot :: Bool, binName :: String, rootActor :: A.QName } deriving (Show)
 
--- return modules that have an actor called 'main'
+-- return task where the specified root actor exists
 filterMainActor env opts paths binTask
                          = case lookup n (fromJust (Acton.Env.lookupMod m env)) of
                                Just (A.NAct [] A.TNil{} (A.TRow _ _ _ t A.TNil{}) _)
@@ -468,8 +465,8 @@ useZigBuild opts paths =
 importsOf :: CompileTask -> [A.ModName]
 importsOf t = A.importsOf (atree t)
 
-compileTasks :: C.CompileOptions -> Paths -> [CompileTask] -> [BinTask] -> IO ()
-compileTasks opts paths tasks preBinTasks
+compileTasks :: C.CompileOptions -> Paths -> [CompileTask] -> IO Acton.Env.Env0
+compileTasks opts paths tasks
                        = do tasks <- chaseImportedFiles opts paths tasks
                             -- We sort out the order of imports etc and split
                             -- out __builtin__, if it's part of the tasks, so we
@@ -491,19 +488,22 @@ compileTasks opts paths tasks preBinTasks
                             if null cs
                              then do env0 <- Acton.Env.initEnv builtinPath False
                                      env1 <- foldM (doTask opts paths) env0 [t | AcyclicSCC t <- as]
-                                     iff (not (altOutput opts) && not (C.stub opts)) $ do
-                                       detBinTasks <- catMaybes <$> mapM (filterMainActor env1 opts paths) preBinTasks
-                                       let binTasks = if (null (C.root opts)) then detBinTasks else preBinTasks
-                                       if useZigBuild opts paths
-                                         then zigBuild env1 opts paths tasks binTasks
-                                         else mapM_ (buildExecutable env1 opts paths) preBinTasks
-                                     when (rmTmp paths) $ removeDirectoryRecursive (projPath paths)
-                                     return ()
+                                     return env1
                               else printErrorAndExit ("Cyclic imports: "++concatMap showTaskGraph cs)
   where isAcyclic (AcyclicSCC _) = True
         isAcyclic _              = False
         showTaskGraph ts         = "\n"++concatMap (\t-> concat (intersperse "." (A.modPath (name t)))++" ") ts
         containsBuiltin (AcyclicSCC task) = name task == (A.modName ["__builtin__"])
+
+compileBins opts paths env tasks preBinTasks = do
+    iff (not (altOutput opts) && not (C.stub opts)) $ do
+      detBinTasks <- catMaybes <$> mapM (filterMainActor env opts paths) preBinTasks
+      let binTasks = if (null (C.root opts)) then detBinTasks else preBinTasks
+      if useZigBuild opts paths
+        then zigBuild env opts paths tasks binTasks
+        else mapM_ (buildExecutable env opts paths) preBinTasks -- TODO: change to binTasks?
+      when (rmTmp paths) $ removeDirectoryRecursive (projPath paths)
+    return ()
 
 
 chaseImportedFiles :: C.CompileOptions -> Paths -> [CompileTask] -> IO [CompileTask]
@@ -624,6 +624,11 @@ checkUptoDate opts paths actFile outFiles imps = do
                                    (False, True) -> stdlibImpName
                                    (False, False) -> error("ERROR: Unable to find interface file")
                              return filePath
+
+isGitAvailable :: IO Bool
+isGitAvailable = do
+    (exitCode, _, _) <- readProcessWithExitCode "git" ["--version"] ""
+    return $ exitCode == ExitSuccess
 
 
 -- Check if any other non-standard output is enabled, like --cgen or --sigs
