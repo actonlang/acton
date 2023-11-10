@@ -85,7 +85,8 @@ main                     =  do arg <- C.parseCmdLine
                                      C.target = C.targetB opts,
                                      C.cachedir = C.cachedirB opts,
                                      C.zigbuild = C.zigbuildB opts,
-                                     C.nozigbuild = C.nozigbuildB opts
+                                     C.nozigbuild = C.nozigbuildB opts,
+                                     C.test = C.testB opts
                                      }
                                    C.CmdOpt (C.Cloud opts) -> undefined
                                    C.CmdOpt (C.Doc opts)   -> printDocs opts
@@ -93,7 +94,7 @@ main                     =  do arg <- C.parseCmdLine
 
 defaultOpts   = C.CompileOptions False False False False False False False False False False False
                                  False False False False False False False False "" "" "" ""
-                                 C.defTarget "" False False
+                                 C.defTarget "" False False False
 
 
 -- Auxiliary functions ---------------------------------------------------------------------------------------
@@ -306,8 +307,15 @@ compileFiles opts srcFiles = do
         preBinTasks
           | null (C.root opts) = map (\t -> BinTask True (modNameToString (name t)) (A.GName (name t) (A.name "main")) False) (filter (not . stubmode) tasks)
           | otherwise        = [binTask]
+        preTestBinTasks = map (\t -> BinTask True (modNameToString (name t)) (A.GName (name t) (A.name "__test_main")) True) (filter (not . stubmode) tasks)
     env <- compileTasks opts paths tasks
-    compileBins opts paths env tasks preBinTasks
+    testBinTasks <- catMaybes <$> mapM (filterMainActor env opts paths) preTestBinTasks
+    if C.test opts
+      then do
+        compileBins opts paths env tasks testBinTasks
+        mapM_ (\t -> putStrLn (binName t)) testBinTasks
+      else do
+        compileBins opts paths env tasks preBinTasks
     return ()
 
 
@@ -876,9 +884,7 @@ runZig opts zigCmd wd = do
 
 zigBuild :: Acton.Env.Env0 -> C.CompileOptions -> Paths -> [CompileTask] -> [BinTask] -> IO ()
 zigBuild env opts paths tasks binTasks = do
-    let testBinTasks = map (\t -> BinTask True (modNameToString (name t)) (A.GName (name t) (A.name "__test_main")) True) (filter (not . stubmode) tasks)
     mapM (writeRootC env opts paths) binTasks
-    mapM (writeRootC env opts paths) testBinTasks
     iff (not (quiet opts)) $ putStrLn("  Final compilation step")
     timeStart <- getTime Monotonic
 

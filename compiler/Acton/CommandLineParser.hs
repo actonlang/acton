@@ -64,7 +64,8 @@ data CompileOptions   = CompileOptions {
                          target      :: String,
                          cachedir    :: String,
                          zigbuild    :: Bool,
-                         nozigbuild  :: Bool
+                         nozigbuild  :: Bool,
+                         test        :: Bool
                      } deriving Show
 
 data BuildOptions = BuildOptions {
@@ -81,7 +82,8 @@ data BuildOptions = BuildOptions {
                          targetB     :: String,
                          cachedirB   :: String,
                          zigbuildB   :: Bool,
-                         nozigbuildB :: Bool
+                         nozigbuildB :: Bool,
+                         testB       :: Bool
                      } deriving Show
                          
 
@@ -153,6 +155,7 @@ compileOptions = CompileOptions
         <*> strOption (long "cache"     <> metavar "CACHEDIR" <>  value "" <> help "Cache directory")
         <*> switch (long "zigbuild"     <> help "Use zig build")
         <*> switch (long "no-zigbuild"  <> help "Don't use zig build")
+        <*> switch (long "test"         <> help "Build tests")
 
 buildCommand          = Build <$> (
     BuildOptions
@@ -170,6 +173,7 @@ buildCommand          = Build <$> (
         <*> strOption (long "cache"     <> metavar "CACHEDIR" <>  value "" <> help "Cache directory")
         <*> switch (long "zigbuild"     <> help "Use zig build")
         <*> switch (long "no-zigbuild"  <> help "Don't use zig build")
+        <*> switch (long "test"         <> help "Build tests")
     )
                  
 cloudCommand        = Cloud <$> (
