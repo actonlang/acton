@@ -26,7 +26,7 @@ def run(source):
             sf = open(sfn, "w")
             sf.write(source)
             sf.close()
-            subprocess.run(["../../dist/bin/actonc", sfn])
+            subprocess.run(["../dist/bin/actonc", sfn])
             os.chmod(sfe, 0o755)
             output = subprocess.check_output([sfe]).decode("utf-8")
         except Exception as exc:
