@@ -9,6 +9,7 @@
   - [Directory structure](projects/directory_structure.md)
 - [Variable data types](primitives.md)
   - [Scalars](primitives/scalars.md)
+    - [float](primitives/float.md)
   - [Lists](primitives/lists.md)
   - [Dictionaries](primitives/dicts.md)
   - [Tuples](primitives/tuples.md)
