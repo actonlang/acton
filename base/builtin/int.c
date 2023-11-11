@@ -246,10 +246,12 @@ $WORD B_IntegralD_intD___floor__ (B_IntegralD_int wit, B_int n, B_Integral wit2)
 $WORD B_IntegralD_intD___ceil__ (B_IntegralD_int wit, B_int n, B_Integral wit2) {
     return wit2->$class->__fromatom__(wit2,(B_atom)n);
 }
-  
+
+B_int B_IntegralD_intD___floordiv__(B_IntegralD_int wit, B_int a, B_int b);
+
 B_int B_IntegralD_intD___round__ (B_IntegralD_int wit, B_int n, B_int p) {
     zz_struct nval = n->val;
-    if (nval.size < 0) {
+    if (nval.size < 0) { 
         B_int n1 = malloc_int();
         zz_neg(&n1->val,&nval);
         B_int res = B_IntegralD_intD___round__(wit,n1,p);
@@ -265,7 +267,9 @@ B_int B_IntegralD_intD___round__ (B_IntegralD_int wit, B_int n, B_int p) {
     if (pval>=0)
         return n;
     B_int p10 = B_IntegralD_intD___pow__(NULL,to$int(10), B_IntegralD_intD___neg__(NULL,p));
-    return B_IntegralD_intD___mul__(NULL,n,p10);
+    B_int p10half = B_IntegralD_intD___floordiv__(NULL, p10,to$int(2));
+    B_int n1 = B_IntegralD_intD___floordiv__(NULL,B_IntegralD_intD___add__(NULL,n,p10half),p10);
+    return B_IntegralD_intD___mul__(NULL,n1,p10);
 }
   
 $WORD B_IntegralD_intD_numerator (B_IntegralD_int wit, B_int n, B_Integral wit2) {

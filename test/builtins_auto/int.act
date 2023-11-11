@@ -59,7 +59,8 @@ def test_u32_divzero():
             u32(3) // u32(0)
         except ZeroDivisionError:
             return
-    raise testing.NotRaisesError("expected ZeroDivisionError for u32")
+
+        raise testing.NotRaisesError("expected ZeroDivisionError for u32")
 
 def test_u64_divzero():
     try:
@@ -147,9 +148,9 @@ actor main(env):
         raise ValueError("10**500/10**500 != 1")
     if (round(123456789, 10)) != 1.23456789e8:
         raise ValueError("round(123456789, 10) != 1.23456789e8")
-    if round(123456789, -10) != 1234567890000000000:
+    if round(123456789, -4) != 123460000:
         raise ValueError("round(123456789, -10) != 1234567890000000000")
-    if round(-123456789, -10) != -1234567890000000000:
+    if round(-123456789, -4) != -123460000:
         raise ValueError("round(-123456789, -10) != -1234567890000000000")
     if int('123') != 123:
         raise ValueError("int('123') != 123")
