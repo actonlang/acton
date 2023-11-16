@@ -276,6 +276,12 @@ $R netQ_TCPConnectionD_writeG_local (netQ_TCPConnection self, $Cont c$cont, B_by
         char errmsg[1024] = "Failed to write to TCP socket: ";
         uv_strerror_r(r, errmsg + strlen(errmsg), sizeof(errmsg)-strlen(errmsg));
         log_warn(errmsg);
+        if (strstr(errmsg, "bad file descriptor")) {
+            // This can happen if the socket is closed, se we raise an exception
+            // and let the caller retry
+            $RAISE(((B_BaseException)B_RuntimeErrorG_new(to$str(errmsg))));
+            return $R_CONT(c$cont, B_None);
+        }
         $action2 f = ($action2)self->on_error;
         f->$class->__asyn__(f, self, to$str(errmsg));
     }
@@ -311,6 +317,9 @@ $R netQ_TCPConnectionD_closeG_local (netQ_TCPConnection self, $Cont c$cont, $act
     uv_stream_t *stream = (uv_stream_t *)from$int(self->_sock);
     // fd == -1 means invalid FD and can happen after __resume__
     if (stream == -1)
+        // TODO: should we dispatch the on_close callback here too even though
+        // we did not close anything? This is what we do for TLSConnection too
+        // and it allows for chaining the callbacks
         return $R_CONT(c$cont, B_None);
 
     log_debug("Closing TCP connection");
@@ -629,9 +638,11 @@ void tls_write_cb(uv_write_t *wreq, int status) {
 
 $R netQ_TLSConnectionD_closeG_local (netQ_TLSConnection self, $Cont c$cont, $action on_close) {
     uv_stream_t *stream = (uv_stream_t *)from$int(self->_stream);
-    // fd == -1 means invalid FD and can happen after __resume__
-    if (stream == -1)
+    // fd == -1 means invalid FD and can happen after __resume__ or if the socket is closed
+    if (stream == -1) {
+        on_close->$class->__asyn__(on_close, self);
         return $R_CONT(c$cont, B_None);
+    }
 
     self->_on_close = on_close;
 
@@ -645,9 +656,14 @@ $R netQ_TLSConnectionD_closeG_local (netQ_TLSConnection self, $Cont c$cont, $act
 
 $R netQ_TLSConnectionD_writeG_local (netQ_TLSConnection self, $Cont c$cont, B_bytes data) {
     uv_stream_t *stream = (uv_stream_t *)from$int(self->_stream);
-    // fd == -1 means invalid FD and can happen after __resume__
-    if (stream == -1)
+    // fd == -1 means invalid FD and can happen after __resume__ or if the socket is closed
+    if (stream == -1) {
+        // Raise an exception and let the caller retry
+        char errmsg[] = "Failed to write to TLS TCP socket: bad stream";
+        log_debug(errmsg);
+        $RAISE(((B_BaseException)B_RuntimeErrorG_new(to$str(errmsg))));
         return $R_CONT(c$cont, B_None);
+    }
 
     uv_write_t *wreq = (uv_write_t *)malloc(sizeof(uv_write_t));
     wreq->data = self;
