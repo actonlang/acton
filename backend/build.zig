@@ -69,7 +69,10 @@ pub fn build(b: *std.build.Builder) void {
         .target = target,
         .optimize = optimize,
     });
-    libactondb.addCSourceFiles(&libactondb_sources, flags.items);
+    libactondb.addCSourceFiles(.{
+        .files = &libactondb_sources,
+        .flags = flags.items
+    });
     libactondb.defineCMacro("LOG_USER_COLOR", "");
     libactondb.addIncludePath(.{ .path = syspath_include });
     libactondb.linkLibC();

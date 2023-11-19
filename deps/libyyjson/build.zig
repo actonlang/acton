@@ -15,7 +15,10 @@ pub fn build(b: *std.build.Builder) void {
         "yyjson.c",
     };
 
-    lib.addCSourceFiles(&source_files, &[_][]const u8{});
+    lib.addCSourceFiles(.{
+        .files = &source_files,
+        .flags = &[_][]const u8{}
+    });
     lib.linkLibC();
     b.installFile("yyjson.h", "include/yyjson.h");
     b.installArtifact(lib);
