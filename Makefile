@@ -8,7 +8,7 @@ export ZIG_LOCAL_CACHE_DIR
 
 ACTONC=dist/bin/actonc
 ACTC=dist/bin/actonc
-ZIG_VERSION:=0.11.0
+ZIG_VERSION:=0.12.0-dev.1536+6b9f7e26c
 ZIG=$(TD)/dist/zig/zig
 AR=$(ZIG) ar
 CC=$(ZIG) cc
@@ -36,13 +36,6 @@ else
 export VERSION_INFO?=$(VERSION).$(BUILD_TIME)
 endif
 
-# TODO: remove -fno-sanitize=undefined, which is zig default as to help catch UB
-CFLAGS+= -fno-sanitize=undefined -I. -I$(TD)/deps/instdir/include -Ideps -Wno-int-to-pointer-cast -Wno-pointer-to-int-cast -Wformat -Werror=format-security
-CFLAGS_REL= -O3 -DREL
-CFLAGS_DEV= -g -DDEV
-LDFLAGS+=-L$(TD)/lib
-LDLIBS += -lActonDeps-$(PLATFORM) -lm -lpthread
-
 ifdef CPEDANTIC
 CPEDANTIC=--cpedantic
 endif
@@ -59,26 +52,15 @@ ifeq ($(shell uname -s),Darwin)
 OS:=macos
 endif
 
-PLATFORM=$(ARCH)-$(OS)
-
-
-CFLAGS += -Werror
 # -- Linux ---------------------------------------------------------------------
 ifeq ($(shell uname -s),Linux)
 OS:=linux
 ifeq ($(shell uname -m),x86_64)
-CFLAGS_TARGET := -target x86_64-linux-gnu.2.27
 ZIG_TARGET := -Dtarget=x86_64-linux-gnu.2.27
 else
 $(error "Unsupported architecture for Linux?")
 endif
 endif # -- END: Linux ----------------------------------------------------------
-# NOTE: we allow UB in deps since it is not really our job to clean up... but in
-# a better world?
-CFLAGS_DEPS=-fno-sanitize=undefined $(CFLAGS_TARGET)
-CFLAGS+=$(CFLAGS_TARGET)
-export CFLAGS
-export LDFLAGS
 
 .PHONY: all
 all: version-check
@@ -89,11 +71,6 @@ all: version-check
 help:
 	@echo "Available make targets:"
 	@echo "  all     - build everything"
-	@echo "  dist    - build complete distribution"
-	@echo "  actonc  - build the Acton compiler"
-	@echo "  backend - build the database backend"
-	@echo "  rts     - build the Run Time System"
-	@echo ""
 	@echo "  test    - run the test suite"
 	@echo ""
 	@echo "  clean   - /normal/ clean repo"
@@ -119,13 +96,6 @@ DIST_HFILES=\
 	dist/rts/io.h \
 	dist/rts/rts.h
 DIST_ZIG=dist/zig
-
-CFLAGS_DB = -I. -Ideps -I$(TD)/dist/depsout/include -DLOG_USE_COLOR -g
-CFLAGS_DB+= $(CFLAGS_TARGET)
-# TODO: enable sanitization of undefined behavior!
-CFLAGS_DB+= -fno-sanitize=undefined -Werror
-# TODO: clean up casts and remove this!
-CFLAGS_DB+= -Wno-int-to-pointer-cast -Wno-pointer-to-int-cast
 
 .PHONY: test-backend
 test-backend: $(BACKEND_TESTS)
@@ -189,7 +159,7 @@ clean-downloads:
 	rm -rf deps-download
 
 # /deps/libargp --------------------------------------------
-LIBARGP_REF=ba179f83370d91ed6bc8fc5da87f6863ab2e2613
+LIBARGP_REF=0b95a494f54e9d9dfd362bf0b3b320c87d697790
 deps-download/$(LIBARGP_REF).tar.gz:
 	mkdir -p deps-download
 	curl -f -L -o $@ https://github.com/actonlang/argp-standalone/archive/$(LIBARGP_REF).tar.gz
@@ -204,7 +174,7 @@ dist/depsout/lib/libargp.a: dist/deps/libargp $(DIST_ZIG)
 	cd $< && $(ZIG) build $(ZIG_TARGET) --prefix $(TD)/dist/depsout
 
 # /deps/libbsdnt --------------------------------------------
-LIBBSDNT_REF=1c02c76995905aedcfb74125e3191ff7c180fe9e
+LIBBSDNT_REF=310417e035a9e31e44a7015159bce5a1f94e79d0
 deps-download/$(LIBBSDNT_REF).tar.gz:
 	mkdir -p deps-download
 	curl -f -L -o $@ https://github.com/actonlang/bsdnt/archive/$(LIBBSDNT_REF).tar.gz
@@ -218,7 +188,7 @@ dist/depsout/lib/libbsdnt.a: dist/deps/libbsdnt $(DIST_ZIG)
 	cd $< && $(ZIG) build $(ZIG_TARGET) --prefix $(TD)/dist/depsout
 
 # /deps/libgc --------------------------------------------
-LIBGC_REF=ead2119801a6659d1d78406563d5acc6df4d94e3
+LIBGC_REF=311469ea84711c010067719b4e36294e0dde102c
 deps-download/$(LIBGC_REF).tar.gz:
 	mkdir -p deps-download
 	curl -f -L -o $@ https://github.com/actonlang/bdwgc/archive/$(LIBGC_REF).tar.gz
@@ -234,7 +204,7 @@ dist/depsout/lib/libactongc.a: dist/deps/libgc $(DIST_ZIG)
 	mv dist/depsout/lib/libgc.a $@
 
 # /deps/libmbedtls --------------------------------------------
-LIBMBEDTLS_REF=c820d300e8d2129a4b79eb45a14ac42e85882732
+LIBMBEDTLS_REF=d4d34ef9bb46b2703d97aafb2a0f017fe539512d
 deps-download/$(LIBMBEDTLS_REF).tar.gz:
 	mkdir -p deps-download
 	curl -f -L -o $@ https://github.com/actonlang/mbedtls/archive/$(LIBMBEDTLS_REF).tar.gz
@@ -250,7 +220,7 @@ dist/depsout/lib/libmbedcrypto.a: dist/depsout/lib/libmbedtls.a
 dist/depsout/lib/libmbedx509.a: dist/depsout/lib/libmbedtls.a
 
 # /deps/libprotobuf_c --------------------------------------------
-LIBPROTOBUF_C_REF=5499f774396953c2ef63e725e2f03a5c0bdeff73
+LIBPROTOBUF_C_REF=085a9c7b72b57015223e2cf81331677ee42eb2eb
 deps-download/$(LIBPROTOBUF_C_REF).tar.gz:
 	mkdir -p deps-download
 	curl -f -L -o $@ https://github.com/actonlang/protobuf-c/archive/$(LIBPROTOBUF_C_REF).tar.gz
@@ -264,7 +234,7 @@ dist/depsout/lib/libprotobuf-c.a: dist/deps/libprotobuf_c $(DIST_ZIG)
 	cd $< && $(ZIG) build $(ZIG_TARGET) --prefix $(TD)/dist/depsout
 
 # /deps/tlsuv ---------------------------------------------
-TLSUV_REF=686f38a8e6cc537134335dd314358cfdf51c442d
+TLSUV_REF=6640673e3c07210bc89c762abb540599498f1b41
 deps-download/$(TLSUV_REF).tar.gz:
 	mkdir -p deps-download
 	curl -f -L -o $@ https://github.com/actonlang/tlsuv/archive/$(TLSUV_REF).tar.gz
@@ -278,7 +248,7 @@ dist/depsout/lib/libtlsuv.a: dist/deps/tlsuv $(DIST_ZIG) dist/depsout/lib/libmbe
 	cd $< && $(ZIG) build $(ZIG_TARGET) --prefix $(TD)/dist/depsout --search-prefix $(TD)/dist/depsout
 
 # /deps/libutf8proc --------------------------------------
-LIBUTF8PROC_REF=3c489aea1a497b98f6cc28ea5b218181b84769e6
+LIBUTF8PROC_REF=d9d5995ff10b9f6abf5196da84ba6371aa0c8173
 deps-download/$(LIBUTF8PROC_REF).tar.gz:
 	mkdir -p deps-download
 	curl -f -L -o $@ https://github.com/actonlang/utf8proc/archive/$(LIBUTF8PROC_REF).tar.gz
@@ -300,7 +270,7 @@ dist/depsout/lib/libuuid.a: dist/deps/libuuid $(DIST_ZIG)
 	cd $< && $(ZIG) build $(ZIG_TARGET) --prefix $(TD)/dist/depsout
 
 # /deps/libuv --------------------------------------------
-LIBUV_REF=5e5a6bd6850ef5ec3e9c74520093392020c4caa7
+LIBUV_REF=a75ca2b026b958be9440023687ea84900b344a95
 deps-download/$(LIBUV_REF).tar.gz:
 	mkdir -p deps-download
 	curl -f -L -o $@ https://github.com/actonlang/libuv/archive/$(LIBUV_REF).tar.gz
@@ -314,7 +284,7 @@ dist/depsout/lib/libuv.a: dist/deps/libuv $(DIST_ZIG)
 	cd $< && $(ZIG) build $(ZIG_TARGET) --prefix $(TD)/dist/depsout
 
 # /deps/libxml2 ------------------------------------------
-LIBXML2_REF=ee7863427393b9fa9c55e1c03fa40289429d7b29
+LIBXML2_REF=ed74756581a0c32d0f2f288bbf6ec07a17bbb0cc
 deps-download/$(LIBXML2_REF).tar.gz:
 	mkdir -p deps-download
 	curl -f -L -o $@ https://github.com/actonlang/libxml2/archive/$(LIBXML2_REF).tar.gz
@@ -329,7 +299,7 @@ dist/depsout/lib/libxml2.a: dist/deps/libxml2 $(DIST_ZIG)
 	cd $< && $(ZIG) build $(ZIG_TARGET) --prefix $(TD)/dist/depsout
 
 # /deps/pcre2 --------------------------------------------
-LIBPCRE2_REF=d9ddcd6e986d894385408818942524549080ba46
+LIBPCRE2_REF=096cb970489d948127091713aad59f219ea30d00
 deps-download/$(LIBPCRE2_REF).tar.gz:
 	mkdir -p deps-download
 	curl -f -L -o $@ https://github.com/actonlang/pcre2/archive/$(LIBPCRE2_REF).tar.gz
@@ -363,8 +333,8 @@ ZIG_ARCH_ARG=-mcpu=x86_64
 endif
 builder/builder: builder/build.zig backend/build.zig base/build.zig $(ZIG_DEP) $(DEPS_DIRS)
 	rm -rf builder/zig-cache builder/zig-out
-	(echo 'const root = @import("build.zig");'; tail -n +2 dist/zig/lib/build_runner.zig) > builder/build_runner.zig
-	cd builder && $(ZIG) build-exe build_runner.zig -femit-bin=builder $(ZIG_ARCH_ARG)
+	(echo 'const root = @import("build.zig");'; tail -n +2 dist/zig/lib/build_runner.zig | sed -e 's/@dependencies/dependencies.zig/') > builder/build_runner.zig
+	cd builder && $(ZIG) build-exe build_runner.zig -femit-bin=builder --mod dependencies::./dependencies.zig --deps dependencies $(ZIG_ARCH_ARG)
 
 .PHONY: base/out/rel/lib/libActon.a base/out/dev/lib/libActon.a
 base/out/rel/lib/libActon.a: $(ACTONC) $(DEPS)
@@ -535,6 +505,7 @@ acton-$(PLATARCH)-$(ACTONC_VERSION).tar.xz:
 release: distribution
 	$(MAKE) acton-$(PLATARCH)-$(ACTONC_VERSION).tar.xz
 
+# This target is used by the debian packaging
 .PHONY: install
 install:
 	mkdir -p $(DESTDIR)/usr/bin $(DESTDIR)/usr/lib/acton

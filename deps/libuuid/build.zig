@@ -29,10 +29,13 @@ pub fn build(b: *std.build.Builder) void {
         "src/randutils.c",
     };
 
-    lib.addCSourceFiles(&source_files, &[_][]const u8{
-        "-DHAVE_NANOSLEEP",
-        "-DHAVE_SYS_FILE_H",
-        "-DUSLEEP",
+    lib.addCSourceFiles(.{
+        .files = &source_files,
+        .flags = &[_][]const u8{
+            "-DHAVE_NANOSLEEP",
+            "-DHAVE_SYS_FILE_H",
+            "-DUSLEEP",
+        }
     });
     lib.addIncludePath(.{ .path = "include" });
     lib.linkLibC();
