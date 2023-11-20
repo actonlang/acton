@@ -54,22 +54,23 @@
 #define             KEYERROR_ID                 39
 #define         MEMORYERROR_ID                  40
 #define         OSERROR_ID                      41
-#define         RUNTIMEERROR_ID                 42
-#define             NOTIMPLEMENTEDERROR_ID      43
-#define         VALUEERROR_ID                   44
+#define             CONNECTIONERROR_ID          42
+#define         RUNTIMEERROR_ID                 43
+#define             NOTIMPLEMENTEDERROR_ID      44
+#define         VALUEERROR_ID                   45
 
-#define PROC_ID 45
-#define ACTION_ID 46
-#define MUT_ID 47
-#define PURE_ID 48
+#define PROC_ID 46
+#define ACTION_ID 47
+#define MUT_ID 48
+#define PURE_ID 49
 
-#define SEQ_ID 49
-#define BRK_ID 50
-#define CNT_ID 51
-#define RET_ID 52
+#define SEQ_ID 50
+#define BRK_ID 51
+#define CNT_ID 52
+#define RET_ID 53
 
 
-#define PREASSIGNED 53
+#define PREASSIGNED 54
 
 
 /* 
