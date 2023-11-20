@@ -513,6 +513,10 @@ actor Client(cap: net.TCPConnectCap, scheme: str, address: str, port: ?int, tls_
                 if "connection" in r.headers and r.headers["connection"] == "close":
                     # Is this really the right thing to do here? If the client
                     # does not make a new request we just reconnected for nothing!
+                    # TODO: inspect the _on_response queue to see if there are more requests
+                    # TODO: for HTTP/1.0 do not reconnect right after the first
+                    # request, wait until the 2nd query and then assume there
+                    # will be more.
                     _log.debug("Closing TCP connection due to header: Connection: close", None)
                     _conn_reconnect()
                 if len(_on_response) == 0:
