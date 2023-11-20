@@ -36,13 +36,6 @@ else
 export VERSION_INFO?=$(VERSION).$(BUILD_TIME)
 endif
 
-# TODO: remove -fno-sanitize=undefined, which is zig default as to help catch UB
-CFLAGS+= -fno-sanitize=undefined -I. -I$(TD)/deps/instdir/include -Ideps -Wno-int-to-pointer-cast -Wno-pointer-to-int-cast -Wformat -Werror=format-security
-CFLAGS_REL= -O3 -DREL
-CFLAGS_DEV= -g -DDEV
-LDFLAGS+=-L$(TD)/lib
-LDLIBS += -lActonDeps-$(PLATFORM) -lm -lpthread
-
 ifdef CPEDANTIC
 CPEDANTIC=--cpedantic
 endif
@@ -59,26 +52,15 @@ ifeq ($(shell uname -s),Darwin)
 OS:=macos
 endif
 
-PLATFORM=$(ARCH)-$(OS)
-
-
-CFLAGS += -Werror
 # -- Linux ---------------------------------------------------------------------
 ifeq ($(shell uname -s),Linux)
 OS:=linux
 ifeq ($(shell uname -m),x86_64)
-CFLAGS_TARGET := -target x86_64-linux-gnu.2.27
 ZIG_TARGET := -Dtarget=x86_64-linux-gnu.2.27
 else
 $(error "Unsupported architecture for Linux?")
 endif
 endif # -- END: Linux ----------------------------------------------------------
-# NOTE: we allow UB in deps since it is not really our job to clean up... but in
-# a better world?
-CFLAGS_DEPS=-fno-sanitize=undefined $(CFLAGS_TARGET)
-CFLAGS+=$(CFLAGS_TARGET)
-export CFLAGS
-export LDFLAGS
 
 .PHONY: all
 all: version-check
@@ -89,11 +71,6 @@ all: version-check
 help:
 	@echo "Available make targets:"
 	@echo "  all     - build everything"
-	@echo "  dist    - build complete distribution"
-	@echo "  actonc  - build the Acton compiler"
-	@echo "  backend - build the database backend"
-	@echo "  rts     - build the Run Time System"
-	@echo ""
 	@echo "  test    - run the test suite"
 	@echo ""
 	@echo "  clean   - /normal/ clean repo"
@@ -119,13 +96,6 @@ DIST_HFILES=\
 	dist/rts/io.h \
 	dist/rts/rts.h
 DIST_ZIG=dist/zig
-
-CFLAGS_DB = -I. -Ideps -I$(TD)/dist/depsout/include -DLOG_USE_COLOR -g
-CFLAGS_DB+= $(CFLAGS_TARGET)
-# TODO: enable sanitization of undefined behavior!
-CFLAGS_DB+= -fno-sanitize=undefined -Werror
-# TODO: clean up casts and remove this!
-CFLAGS_DB+= -Wno-int-to-pointer-cast -Wno-pointer-to-int-cast
 
 .PHONY: test-backend
 test-backend: $(BACKEND_TESTS)
@@ -535,6 +505,7 @@ acton-$(PLATARCH)-$(ACTONC_VERSION).tar.xz:
 release: distribution
 	$(MAKE) acton-$(PLATARCH)-$(ACTONC_VERSION).tar.xz
 
+# This target is used by the debian packaging
 .PHONY: install
 install:
 	mkdir -p $(DESTDIR)/usr/bin $(DESTDIR)/usr/lib/acton
