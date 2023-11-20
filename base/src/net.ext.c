@@ -275,13 +275,13 @@ $R netQ_TCPConnectionD_writeG_local (netQ_TCPConnection self, $Cont c$cont, B_by
     if (r < 0) {
         char errmsg[1024] = "Failed to write to TCP socket: ";
         uv_strerror_r(r, errmsg + strlen(errmsg), sizeof(errmsg)-strlen(errmsg));
-        log_warn(errmsg);
-        if (strstr(errmsg, "bad file descriptor")) {
-            // This can happen if the socket is closed, se we raise an exception
-            // and let the caller retry
-            $RAISE(((B_BaseException)B_RuntimeErrorG_new(to$str(errmsg))));
+        if (r == UV_EBADF) {
+            // "bad file descriptor" error occurs when the socket is closed, se
+            // we raise an exception and let the caller retry
+            $RAISE(((B_BaseException)B_ConnectionErrorG_new(to$str(errmsg))));
             return $R_CONT(c$cont, B_None);
         }
+        log_warn(errmsg);
         $action2 f = ($action2)self->on_error;
         f->$class->__asyn__(f, self, to$str(errmsg));
     }
@@ -661,7 +661,7 @@ $R netQ_TLSConnectionD_writeG_local (netQ_TLSConnection self, $Cont c$cont, B_by
         // Raise an exception and let the caller retry
         char errmsg[] = "Failed to write to TLS TCP socket: bad stream";
         log_debug(errmsg);
-        $RAISE(((B_BaseException)B_RuntimeErrorG_new(to$str(errmsg))));
+        $RAISE(((B_BaseException)B_ConnectionErrorG_new(to$str(errmsg))));
         return $R_CONT(c$cont, B_None);
     }
 

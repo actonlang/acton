@@ -557,13 +557,10 @@ actor Client(cap: net.TCPConnectCap, scheme: str, address: str, port: ?int, tls_
                 await async tcp_conn.write(data)
             elif tls_conn is not None:
                 await async tls_conn.write(data)
-        except RuntimeError as exc:
+        except ConnectionError as exc:
             # HTTP/1.0 servers close the connection after each request by default
-            if "bad file descriptor" in str(exc) or "bad stream" in str(exc):
-                _log.debug("TCP connection closed, reconnecting", {"error": str(exc)})
-                _conn_reconnect()
-            else:
-                _on_con_error(str(exc))
+            _log.debug("TCP connection closed, reconnecting", {"error": str(exc)})
+            _conn_reconnect()
 
     # HTTP methods
     def get(path: str, headers: dict[str, str], on_response: action(Client, Response) -> None):
