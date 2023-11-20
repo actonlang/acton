@@ -443,7 +443,7 @@ reduce' env eq c@(Sel _ w (TVar _ tv) n _)
                                                  reduce env (eq'++eq) cs
   | Just p <- protoSearch                   = do (eq',cs) <- solveSelProto env p c
                                                  reduce env (eq'++eq) cs
-  | otherwise                               = tyerr n "Attribute not found"
+  | otherwise                               = tyerr n "Attribute not found:"
   where attrSearch                          = findTVAttr env tv n
         protoSearch                         = findProtoByAttr env (NoQ $ tvname tv) n
 
@@ -452,7 +452,7 @@ reduce' env eq c@(Sel _ w (TCon _ tc) n _)
                                                  reduce env (eq'++eq) cs
   | Just p <- protoSearch                   = do (eq',cs) <- solveSelProto env p c
                                                  reduce env (eq'++eq) cs
-  | otherwise                               = tyerr n "Attribute not found"
+  | otherwise                               = tyerr n "Attribute not found:"
   where attrSearch                          = findAttr env tc n
         protoSearch                         = findProtoByAttr env (tcname tc) n
 
