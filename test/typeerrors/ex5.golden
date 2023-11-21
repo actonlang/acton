@@ -2,9 +2,11 @@ Building file ../test/typeerrors/ex5.act
   Compiling ex5.act for release
 
 ERROR: Error when compiling ex5 module: Type error
- 7:5-14
+
   |
 7 |a = apply(f,3)
   |    ^^^^^^^^^^
-Too few positional arguments in call
+Too few positional elements
+
+- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
 

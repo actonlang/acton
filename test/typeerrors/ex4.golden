@@ -2,9 +2,11 @@ Building file ../test/typeerrors/ex4.act
   Compiling ex4.act for release
 
 ERROR: Error when compiling ex4 module: Type error
- 5:22-25
+
   |
 5 |    print("a".center(f(3)))
   |                     ^^^^
-Too few positional arguments in call
+Too few positional elements
+
+- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
 

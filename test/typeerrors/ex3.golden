@@ -2,9 +2,11 @@ Building file ../test/typeerrors/ex3.act
   Compiling ex3.act for release
 
 ERROR: Error when compiling ex3 module: Type error
- 5:11-25
+
   |
 5 |    print("a".center(100))
   |          ^^^^^^^^^^^^^^^
-Too few positional arguments in call
+Too few positional elements
+
+- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
 
