@@ -164,7 +164,7 @@ constub env t n r b
 
 fields env c                        = map field (subst [(tvSelf,tCon c)] te)
   where te                          = fullAttrEnv env c
-        field (n, NDef sc Static)   = funsig env n (sctype sc) <> semi
+        field (n, NDef sc Static  ) = funsig env n (sctype sc) <> semi
         field (n, NDef sc NoDec)    = methsig env c n (sctype sc) <> semi
         field (n, NVar t)           = varsig env n t <> semi
         field (n, NSig sc Static)   = funsig env n (sctype sc) <> semi

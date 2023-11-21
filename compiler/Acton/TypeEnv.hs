@@ -87,7 +87,7 @@ instance WellFormed TCon where
                                 NReserved -> nameReserved n
                                 i -> err1 n ("wf: Class or protocol name expected, got " ++ show i)
             s               = qbound q `zip` ts
-            constr u t      = if isProto env (tcname u) then Impl (NoInfo NoLoc 20) (name "_") t u else Cast (NoInfo NoLoc 21) t (tCon u)
+            constr u t      = if isProto env (tcname u) then Impl (DfltInfo NoLoc 20 Nothing []) (name "_") t u else Cast (DfltInfo NoLoc 21 Nothing []) t (tCon u)
 
 wfProto                     :: EnvF x -> TCon -> TypeM (Constraints, Constraints)
 wfProto env (TC n ts)       = do cs <- instQuals env q ts
@@ -129,14 +129,14 @@ instWitness env t0 wit      = case wit of
                                  WClass q t1 p w ws -> do
                                     (cs,tvs) <- instQBinds env q
                                     let s = (tvSelf,t0) : qbound q `zip` tvs
-                                    unify (NoInfo (loc t0) 22) t0 (subst s t1)
+                                    unify (DfltInfo (loc t0) 22 Nothing []) t0 (subst s t1)
                                     p <- msubst (subst s p)
                                     cs <- msubst cs
                                     return (cs, p, wexpr ws (eCall (tApp (eQVar w) tvs) $ wvars cs))
                                  WInst q t1 p w ws -> do
                                     (cs,tvs) <- instQBinds env q
                                     let s = (tvSelf,t0) : qbound q `zip` tvs
-                                    unify (NoInfo (loc t0) 23) t0 (subst s t1)
+                                    unify (DfltInfo (loc t0) 23 Nothing []) t0 (subst s t1)
                                     p <- msubst (subst s p)
                                     return (cs, p, wexpr ws (eQVar w))
 
@@ -144,8 +144,8 @@ instQuals                   :: EnvF x -> QBinds -> [Type] -> TypeM Constraints
 instQuals env q ts          = do let s = qbound q `zip` ts
                                  sequence [ constr (subst s (tVar v)) (subst s u) | Quant v us <- q, u <- us ]
   where constr t u@(TC n _)
-          | isProto env n   = do w <- newWitness; return $ Impl (Origin (loc t) (Pretty.print t++" must implement "++Pretty.print u)) w t u
-          | otherwise       = return $ Cast (NoInfo (loc t) 25) t (tCon u)
+          | isProto env n   = do w <- newWitness; return $ Impl (DfltInfo NoLoc 24 Nothing []) w t u
+          | otherwise       = return $ Cast (DfltInfo (loc t) 25 Nothing []) t (tCon u)
 
 wvars                       :: Constraints -> [Expr]
 wvars cs                    = [ eVar v | Impl _ v _ _ <- cs ]

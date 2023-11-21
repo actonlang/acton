@@ -93,6 +93,11 @@ instance Subst a => Subst (Name,a) where
     tyfree (n, t)                   = tyfree t
     tybound (n, t)                  = tybound t
 
+instance (Subst a, Subst b) => Subst (Name,a,b) where
+    msubst (n, t, u)                = (,,) <$> return n <*> msubst t <*> msubst u
+    tyfree (n, t, u)                = tyfree t ++ tyfree u
+    tybound (n, t, u)               = tybound t ++ tybound u
+
 instance Subst a => Subst [a] where
     msubst                          = mapM msubst
     tyfree                          = concat . map tyfree
@@ -104,12 +109,12 @@ instance Subst a => Subst (Maybe a) where
     tybound                         = maybe [] tybound
 
 instance Subst Constraint where
-    msubst (Cast info t1 t2)        = Cast info <$> msubst t1 <*> msubst t2
-    msubst (Sub info w t1 t2)       = Sub info <$> return w <*> msubst t1 <*> msubst t2
-    msubst (Impl info w t p)        = Impl info <$> return w <*>msubst t <*> msubst p
-    msubst (Sel info w t1 n t2)     = Sel info <$> return w <*>msubst t1 <*> return n <*> msubst t2
-    msubst (Mut info t1 n t2)       = Mut info <$> msubst t1 <*> return n <*> msubst t2
-    msubst (Seal info t)            = Seal info <$> msubst t
+    msubst (Cast info t1 t2)        = Cast <$> msubst info <*> msubst t1 <*> msubst t2
+    msubst (Sub info w t1 t2)       = Sub <$> msubst info <*> return w <*> msubst t1 <*> msubst t2
+    msubst (Impl info w t p)        = Impl <$> msubst info <*> return w <*>msubst t <*> msubst p
+    msubst (Sel info w t1 n t2)     = Sel <$> msubst info <*> return w <*>msubst t1 <*> return n <*> msubst t2
+    msubst (Mut info t1 n t2)       = Mut <$> msubst info <*> msubst t1 <*> return n <*> msubst t2
+    msubst (Seal info t)            = Seal <$> msubst info <*> msubst t
 
     tyfree (Cast _ t1 t2)           = tyfree t1 ++ tyfree t2
     tyfree (Sub _ w t1 t2)          = tyfree t1 ++ tyfree t2
@@ -120,10 +125,12 @@ instance Subst Constraint where
 
 
 instance Subst ErrInfo where
-    msubst (LinkTo c)               = LinkTo <$> msubst c
+    msubst (DfltInfo l n mbe ts)    = DfltInfo l n <$> msubst mbe <*> msubst ts
+    msubst (DeclInfo l1 l2 d t msg) = DeclInfo l1 l2 <$> msubst d <*> msubst t <*> return msg
     msubst info                     = return info
-
-    tyfree (LinkTo c)               = tyfree c
+    
+    tyfree (DfltInfo l n mbe ts)    = tyfree mbe ++ tyfree ts
+    tyfree (DeclInfo l1 l2 d t msg) = tyfree d ++ tyfree t
     tyfree _                        = []
     
 instance Subst TSchema where

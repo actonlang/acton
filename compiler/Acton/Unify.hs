@@ -28,9 +28,8 @@ import Acton.TypeM
 unify                                       :: ErrInfo -> Type -> Type -> TypeM ()
 unify info t1 t2                            = do t1' <- msubst t1
                                                  t2' <- msubst t2
-                                                 info' <- msubst info
                                                  --traceM ("  #unify " ++ prstr t1' ++ " and " ++ prstr t2')
-                                                 unify' info' t1' t2'
+                                                 unify' info t1' t2'
 
 unifyM info ts1 ts2                         = mapM_ (uncurry $ unify info) (ts1 `zip` ts2)
 
@@ -124,17 +123,14 @@ merge s1 s2
 findElem info k r0 n r tl                   = do r0' <- msubst r0
                                                  r' <- msubst r
                                                  tl' <- msubst tl
-                                                 info' <- msubst info
-                                                 findElem' info' r0' n r' tl'
+                                                 findElem' info r0' n r' tl'
   where findElem' info r0 n (TRow l k n1 t r2) tl
           | n == n1                         = return (t, revApp r0 r2)
           | otherwise                       = findElem' info (TRow l k n1 t r0) n r2 tl
-        findElem' info r0 n (TNil _ _) tl   = do info' <- wildify info
-                                                 kwdNotFound info' n
+        findElem' info r0 n (TNil _ _) tl   = kwdNotFound info n
         findElem' info r0 n r2@(TVar _ tv) tl
           | r2 == tl                        = conflictingRow tv
-          | not $ univar tv                 = do info' <- wildify info
-                                                 kwdNotFound info n
+          | not $ univar tv                 = kwdNotFound info n
           | otherwise                       = do t <- newTVar
                                                  r <- newTVarOfKind k
                                                  substitute tv (tRow k n t r)

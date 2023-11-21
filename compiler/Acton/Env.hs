@@ -398,7 +398,7 @@ reserve xs env              = env{ names = [ (x, NReserved) | x <- nub xs ] ++ n
 
 define                      :: TEnv -> EnvF x -> EnvF x
 define te env               = foldl addWit env1 ws
-  where env1                = env{ names = reverse te ++ exclude (names env) (dom te) }
+  where env1                = env{ names = reverse te ++ names env }
         ws                  = [ WClass q (tCon c) p (NoQ w) ws | (w, NExt q c ps te') <- te, (ws,p) <- ps ]
 
 addImport                   :: ModName -> EnvF x -> EnvF x
@@ -460,6 +460,9 @@ selfSubst env               = [ (TV k n, tCon c) | (n, NTVar k c) <- names env, 
 
 -- Name queries -------------------------------------------------------------------------------------------------------------------
 
+findAll n []  = []
+findAll n ((k,i):ms) = if k==n then (k,i) : findAll n ms else findAll n ms
+
 findQName                   :: QName -> EnvF x -> NameInfo
 findQName (QName m n) env   = case findMod m env of
                                 Just te -> case lookup n te of
@@ -484,6 +487,12 @@ findQName (GName m n) env
 
 findName n env              = findQName (NoQ n) env
 
+findAllName n env           = look (names env)
+   where look []            = []
+         look (p@(n',i) : ps)
+           | n == n'        = p : look ps
+           | otherwise      = look ps
+           
 lookupVar n env             = case lookup n (names env) of
                                 Just (NVar t) -> Just t
                                 _ -> Nothing
@@ -1147,8 +1156,8 @@ instance HasLoc CompilationError where
     loc (OtherError l str)          = l
 
 
-compilationError                    :: CompilationError -> (SrcLoc, String)
-compilationError err                = (loc err, render (expl err))
+compilationError                    :: CompilationError -> [(SrcLoc, String)]
+compilationError err                = [(loc err, render (expl err))]
   where
     expl (KindError l k1 k2)        = text "Expected a" <+> pretty k2 <> comma <+> text "actual kind is" <+> pretty k1
     expl (InfiniteKind l v k)       = text "Infinite kind inferred:" <+> pretty v <+> equals <+> pretty k

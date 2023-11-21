@@ -55,7 +55,7 @@ data Stmt       = Expr          { sloc::SrcLoc, expr::Expr }
                 | After         { sloc::SrcLoc, expr::Expr, expr2::Expr }
                 | Signature     { sloc::SrcLoc, vars::[Name], typ::TSchema, dec::Deco }
                 | Decl          { sloc::SrcLoc, decls::[Decl] }
-                deriving (Show)
+                deriving (Show,Read,NFData,Generic)
 
 data Decl       = Def           { dloc::SrcLoc, dname:: Name, qbinds::QBinds, pos::PosPar, kwd::KwdPar, ann::Maybe Type, dbody::Suite, deco::Deco, dfx::TFX }
                 | Actor         { dloc::SrcLoc, dname:: Name, qbinds::QBinds, pos::PosPar, kwd::KwdPar, dbody::Suite }
@@ -63,7 +63,7 @@ data Decl       = Def           { dloc::SrcLoc, dname:: Name, qbinds::QBinds, po
                 | Protocol      { dloc::SrcLoc, dname:: Name, qbinds::QBinds, bounds::[PCon], dbody::Suite }
 --                | Extension     { dloc::SrcLoc, dqname::QName, qbinds::QBinds, bounds::[PCon], dbody::Suite }
                 | Extension     { dloc::SrcLoc, qbinds::QBinds, tycon::TCon, bounds::[PCon], dbody::Suite }
-                deriving (Show)
+                deriving (Show,Read,NFData,Generic)
 
 data Expr       = Var           { eloc::SrcLoc, var::QName }
                 | Int           { eloc::SrcLoc, ival::Integer, lexeme::String }
@@ -102,7 +102,7 @@ data Expr       = Var           { eloc::SrcLoc, var::QName }
                 | Set           { eloc::SrcLoc, elems::[Elem] }
                 | SetComp       { eloc::SrcLoc, elem1::Elem, comp::Comp }
                 | Paren         { eloc::SrcLoc, exp1::Expr }
-                deriving (Show)
+                deriving (Show,Read,NFData,Generic)
 
 data Pattern    = PWild         { ploc::SrcLoc, pann::Maybe Type }
                 | PVar          { ploc::SrcLoc, pn::Name, pann::Maybe Type }
@@ -110,7 +110,7 @@ data Pattern    = PWild         { ploc::SrcLoc, pann::Maybe Type }
                 | PTuple        { ploc::SrcLoc, ppat::PosPat, kpat::KwdPat}
                 | PList         { ploc::SrcLoc, pats::[Pattern], ptail::Maybe Pattern }
                 | PData         { ploc::SrcLoc, pn::Name, pixs::[Expr] }
-                deriving (Show)
+                deriving (Show,Read,NFData,Generic)
 
 type Target     = Expr
 
@@ -174,36 +174,36 @@ univar (TV _ (Internal Typevar _ _))    = True          -- Regular type variable
 univar _                                = False
 
 
-data ModuleItem = ModuleItem ModName (Maybe Name) deriving (Show,Eq)
-data ModRef     = ModRef (Int, Maybe ModName) deriving (Show,Eq)
-data ImportItem = ImportItem Name (Maybe Name) deriving (Show,Eq)
-data Branch     = Branch Expr Suite deriving (Show,Eq)
-data Handler    = Handler Except Suite deriving (Show,Eq)
-data Except     = ExceptAll SrcLoc | Except SrcLoc QName | ExceptAs SrcLoc QName Name deriving (Show)
+data ModuleItem = ModuleItem ModName (Maybe Name) deriving (Show,Eq,Read,NFData,Generic)
+data ModRef     = ModRef (Int, Maybe ModName) deriving (Show,Eq,Read,NFData,Generic)
+data ImportItem = ImportItem Name (Maybe Name) deriving (Show,Eq,Read,NFData,Generic)
+data Branch     = Branch Expr Suite deriving (Show,Eq,Read,NFData,Generic)
+data Handler    = Handler Except Suite deriving (Show,Eq,Read,NFData,Generic)
+data Except     = ExceptAll SrcLoc | Except SrcLoc QName | ExceptAs SrcLoc QName Name deriving (Show,Read,NFData,Generic)
 
-data Elem       = Elem Expr | Star Expr deriving (Show,Eq)
-data Assoc      = Assoc Expr Expr | StarStar Expr deriving (Show,Eq)
+data Elem       = Elem Expr | Star Expr deriving (Show,Eq,Read,NFData,Generic)
+data Assoc      = Assoc Expr Expr | StarStar Expr deriving (Show,Eq,Read,NFData,Generic)
 
-data PosPar     = PosPar Name (Maybe Type) (Maybe Expr) PosPar | PosSTAR Name (Maybe Type) | PosNIL deriving (Show,Eq)
-data KwdPar     = KwdPar Name (Maybe Type) (Maybe Expr) KwdPar | KwdSTAR Name (Maybe Type) | KwdNIL deriving (Show,Eq)
+data PosPar     = PosPar Name (Maybe Type) (Maybe Expr) PosPar | PosSTAR Name (Maybe Type) | PosNIL deriving (Show,Eq,Read,NFData,Generic)
+data KwdPar     = KwdPar Name (Maybe Type) (Maybe Expr) KwdPar | KwdSTAR Name (Maybe Type) | KwdNIL deriving (Show,Eq,Read,NFData,Generic)
 
-data PosArg     = PosArg Expr PosArg | PosStar Expr | PosNil deriving (Show,Eq)
-data KwdArg     = KwdArg Name Expr KwdArg | KwdStar Expr | KwdNil deriving (Show,Eq)
+data PosArg     = PosArg Expr PosArg | PosStar Expr | PosNil deriving (Show,NFData,Eq,Read,Generic)
+data KwdArg     = KwdArg Name Expr KwdArg | KwdStar Expr | KwdNil deriving (Show,Eq,Read,NFData,Generic)
 
-data PosPat     = PosPat Pattern PosPat | PosPatStar Pattern | PosPatNil deriving (Show,Eq)
-data KwdPat     = KwdPat Name Pattern KwdPat | KwdPatStar Pattern | KwdPatNil deriving (Show,Eq)
+data PosPat     = PosPat Pattern PosPat | PosPatStar Pattern | PosPatNil deriving (Show,Eq,Read,NFData,Generic)
+data KwdPat     = KwdPat Name Pattern KwdPat | KwdPatStar Pattern | KwdPatNil deriving (Show,Eq,Read,NFData,Generic)
 
-data OpArg      = OpArg Comparison Expr deriving (Eq,Show)
-data Sliz       = Sliz SrcLoc (Maybe Expr) (Maybe Expr) (Maybe Expr) deriving (Show)
-data NDSliz     = NDExpr Expr | NDSliz Sliz deriving (Show,Eq)
-data Comp       = CompFor SrcLoc Pattern Expr Comp | CompIf SrcLoc Expr Comp | NoComp deriving (Show)
-data WithItem   = WithItem Expr (Maybe Pattern) deriving (Show,Eq)
+data OpArg      = OpArg Comparison Expr deriving (Eq,Show,Read,NFData,Generic)
+data Sliz       = Sliz SrcLoc (Maybe Expr) (Maybe Expr) (Maybe Expr) deriving (Show,Read,NFData,Generic)
+data NDSliz     = NDExpr Expr | NDSliz Sliz deriving (Show,Read,Eq,NFData,Generic)
+data Comp       = CompFor SrcLoc Pattern Expr Comp | CompIf SrcLoc Expr Comp | NoComp deriving (Show,Read,NFData,Generic)
+data WithItem   = WithItem Expr (Maybe Pattern) deriving (Show,Eq,Read,NFData,Generic)
 
 
-data Unary      = Not|UPlus|UMinus|BNot deriving (Show,Eq)
-data Binary     = Or|And|Plus|Minus|Mult|Pow|Div|Mod|EuDiv|BOr|BXor|BAnd|ShiftL|ShiftR|MMult deriving (Show,Read,Eq,Generic)
-data Aug        = PlusA|MinusA|MultA|PowA|DivA|ModA|EuDivA|BOrA|BXorA|BAndA|ShiftLA|ShiftRA|MMultA deriving (Show,Eq)
-data Comparison = Eq|NEq|LtGt|Lt|Gt|GE|LE|In|NotIn|Is|IsNot deriving (Show,Eq)
+data Unary      = Not|UPlus|UMinus|BNot deriving (Show,Eq,Read,NFData,Generic)
+data Binary     = Or|And|Plus|Minus|Mult|Pow|Div|Mod|EuDiv|BOr|BXor|BAnd|ShiftL|ShiftR|MMult deriving (Show,Read,Eq,NFData,Generic)
+data Aug        = PlusA|MinusA|MultA|PowA|DivA|ModA|EuDivA|BOrA|BXorA|BAndA|ShiftLA|ShiftRA|MMultA deriving (Show,Eq,Read,NFData,Generic)
+data Comparison = Eq|NEq|LtGt|Lt|Gt|GE|LE|In|NotIn|Is|IsNot deriving (Show,Eq,Read,NFData,Generic)
 
 data Deco       = NoDec | Property | Static deriving (Eq,Show,Read,Generic,NFData)
 
@@ -243,19 +243,19 @@ type PosRow     = Type
 type KwdRow     = Type
 type TRow       = Type
 
-data Constraint = Cast  ErrInfo Type Type
-                | Sub   ErrInfo Name Type Type
-                | Impl  ErrInfo Name Type PCon
-                | Sel   ErrInfo Name Type Name Type
-                | Mut   ErrInfo Type Name Type
-                | Seal  ErrInfo Type
+data Constraint = Cast  {info :: ErrInfo, type1 :: Type, type2 :: Type}
+                | Sub   {info :: ErrInfo, wit :: Name, type1 :: Type, type2 :: Type}
+                | Impl  {info :: ErrInfo, wit :: Name, type1 :: Type, proto1 :: PCon}
+                | Sel   {info :: ErrInfo, wit :: Name, type1 :: Type, name1 :: Name, type2 :: Type}
+                | Mut   {info :: ErrInfo, type1 :: Type, name1 :: Name, type2 :: Type}
+                | Seal  {info :: ErrInfo, type1 :: Type}
                 deriving (Eq,Show,Read,Generic,NFData)
 
 type Constraints = [Constraint] 
 
-data ErrInfo    = LinkTo Constraint
-                | Origin SrcLoc String
-                | NoInfo SrcLoc Int
+data ErrInfo    = DfltInfo {errloc :: SrcLoc, ident :: Int, iexpr :: Maybe Expr, typings :: [(Name,TSchema,Type)]}
+                | DeclInfo {errloc :: SrcLoc, otherloc :: SrcLoc, idecl :: Decl, itype :: Type, imsg :: String}
+                | Simple {errloc ::SrcLoc, imsg :: String}
                 deriving (Eq,Show,Read,Generic,NFData)
                 
 type WPath      = [Either QName QName]
@@ -268,25 +268,7 @@ leftpath tcs    = [ (map Left ns, tc) | (ns,tc) <- nss `zip` tcs ]
 mkBody []       = [Pass NoLoc]
 mkBody b        = b
 
-errInfo (Cast info _ _)    = info
-errInfo (Sub info _ _ _)   = info
-errInfo (Impl info _ _ _)  = info
-errInfo (Sel info _ _ _ _) = info
-errInfo (Mut info _ _ _)   = info
-errInfo (Seal info _)      = info
-
-constrChain c = case errInfo c of
-                    LinkTo c' -> c : constrChain c'
-                    _ -> [c]
-
-constrChain2 i = case i of
-                    LinkTo c -> constrChain c
-                    _ -> []
-
-origin (LinkTo c)   = origin (errInfo c)
-origin (Origin _ s) = s
-origin i@(NoInfo _ _) = show i
-
+ 
 sDef n p t b fx = sDecl [Def NoLoc n [] p KwdNIL (Just t) b NoDec fx]
 sReturn e       = Return NoLoc (Just e)
 sAssign p e     = Assign NoLoc [p] e
@@ -427,6 +409,7 @@ kPar ns (TRow _ KRow n t p)
 kPar ns (TNil _ KRow)   = KwdNIL
 kPar ns t               = KwdSTAR (head ns) (Just t)
 
+tRowLoc t@TRow{}        = getLoc [tloc t, loc (rtype t)]
 
 tvarSupply              = [ TV KType $ name (c:tl) | tl <- "" : map show [1..], c <- "ABCDEFGHIJKLMNOPQRSTUVW" ]
 
@@ -523,6 +506,30 @@ instance Data.Binary.Binary FX
 instance Data.Binary.Binary ErrInfo
 instance Data.Binary.Binary Constraint
 instance Data.Binary.Binary NameInfo
+instance Data.Binary.Binary Expr
+instance Data.Binary.Binary Stmt
+instance Data.Binary.Binary Decl
+instance Data.Binary.Binary Branch
+instance Data.Binary.Binary Handler
+instance Data.Binary.Binary Except
+instance Data.Binary.Binary Elem
+instance Data.Binary.Binary Assoc
+instance Data.Binary.Binary Pattern
+instance Data.Binary.Binary PosPar
+instance Data.Binary.Binary KwdPar
+instance Data.Binary.Binary PosArg
+instance Data.Binary.Binary KwdArg
+instance Data.Binary.Binary PosPat
+instance Data.Binary.Binary KwdPat
+instance Data.Binary.Binary OpArg
+instance Data.Binary.Binary Sliz
+instance Data.Binary.Binary NDSliz
+instance Data.Binary.Binary Comp
+instance Data.Binary.Binary WithItem
+instance Data.Binary.Binary Unary
+instance Data.Binary.Binary Binary
+instance Data.Binary.Binary Aug
+instance Data.Binary.Binary Comparison
 
 
 -- Locations ----------------
@@ -574,19 +581,22 @@ instance HasLoc Type where
     loc                 = tloc
 
 instance HasLoc Constraint where
-      loc c = loc (errInfo c)
---    loc (Cast _ _ t)    = loc t
---    loc (Sub  _ _ _ t)  = loc t
---    loc (Impl _ _ _ p)  = loc p
---    loc (Sel _ _ _ n _) = loc n
---    loc (Mut _ _ n _)   = loc n
---    loc (Seal t)        = loc t
+      loc c = loc (info c)
 
 instance HasLoc ErrInfo where 
-      loc (LinkTo c)   = loc c
-      loc (Origin l _) = l
-      loc (NoInfo l _) = l
+      loc (Simple l _)   = l
+      loc (DfltInfo l _ _ _) = l
+      loc (DeclInfo l _ _ _ _) = l
       
+instance HasLoc PosArg where
+      loc (PosArg e p) = loc e
+      loc (PosStar e)  = loc e
+      loc PosNil       = NoLoc
+
+instance HasLoc KwdArg where
+      loc (KwdArg n e p) = loc n `upto` loc e
+      loc (KwdStar e)    = loc e
+      loc KwdNil         = NoLoc
 
 -- Eq -------------------------
 

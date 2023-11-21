@@ -19,6 +19,7 @@ import Control.Monad.Except
 import qualified Data.Map.Strict as Map
 import Data.Map.Strict (Map)
 import qualified Control.Exception
+import Data.Char
 
 import Acton.Syntax
 import Acton.Printer
@@ -47,7 +48,7 @@ runTypeM'                               :: Substitution -> TypeM a -> a
 runTypeM' s m                           = case evalState (runExceptT m) (initTypeState $ Map.fromList s) of
                                             Right x  -> x
                                             Left err -> error ("Unhandled TypeM exception: " ++ prstr loc ++ ": " ++ prstr str)
-                                              where (loc,str) = typeError err
+                                              where (loc,str) : _ = typeError err
 
 currentState                            :: TypeM TypeState
 currentState                            = lift $ state $ \st -> (st, st)
@@ -121,7 +122,7 @@ data TypeError                      = TypeError SrcLoc String
                                     | LackSig Name
                                     | LackDef Name
                                     | NoRed Constraint
-                                    | NoSolve (Maybe Type) [Constraint]
+                                    | NoSolve (Maybe Type) [Type] [Constraint]
                                     | NoUnify ErrInfo Type Type
                                     deriving (Show)
 
@@ -141,54 +142,95 @@ instance HasLoc TypeError where
     loc (LackSig n)                 = loc n
     loc (LackDef n)                 = loc n
     loc (NoRed c)                   = loc c
-    loc (NoSolve (Just t) cs)       = loc (head cs)
-    loc (NoSolve Nothing cs)        = NoLoc
+    loc (NoSolve _ _ _)             = NoLoc
     loc (NoUnify info t1 t2)        = loc info
 
-explain (Cast _ t1 t2) = pretty t1 <+> text "must be castable to" <+> pretty t2
-explain (Sub _ _ t1 t2) = pretty t1 <+> text "must be a subtype of" <+> pretty t2
-explain (Impl _ _ t p) = pretty t <+> text "must implement" <+> pretty p
-explain (Sel _ _ t n t0) = pretty t <+> text "must be a subtype of" <+> pretty t0
-explain c = text (show c) <+> pretty c
+
+intro b t mbe                          = case mbe of
+                                             Nothing ->  pretty t
+                                             Just e ->  text "The type of" <+>  pretty e <+> (if b then text "(" Pretty.<>
+                                                    (if isGen t then text "which we call" else empty) <+> pretty t Pretty.<> text ")" else empty)
+   where isGen (TCon _ (TC (NoQ (Name _ ('t' : ds))) [])) = all isDigit ds
+         isGen _ = False
+         
+explainViolation c                   = case info c of
+                                          Simple l s -> text s
+                                          DfltInfo l n mbe ts -> -- text (show n)  $+$ 
+                                               (case c of 
+                                                  Cast _ t1 t2  -> intro False t1 mbe <+> text "is not a subclass of" <+> pretty t2
+                                                  Sub _ _ t1 t2 -> intro False t1 mbe <+> text "is not a subtype of" <+> pretty t2
+                                                  Impl _ _ t p -> intro False t mbe <+> text "does not implement" <+> pretty p
+                                                  Sel _ _ t n t0 -> intro False t mbe <+> text "does not have an attribute" <+> pretty n <+> text "with type" <+> pretty t0
+                                                  _ -> pretty c <+> text "does not hold") 
+                                          DeclInfo _ _ _ t msg -> text msg $+$ text "Function inferred to have type"<+> pretty t
+
+explainRequirement b c                = case info c of
+                                          Simple l s -> text s
+                                          DfltInfo l n mbe ts ->
+                                             (if ts /= []
+                                              then text (concatMap (\(n,s,t) -> Pretty.print n ++ " has had its polymorphic type "
+                                                            ++  Pretty.print s ++ " instantiated to " ++ Pretty.print t) ts++", so")  -- s is printed with internal typevars, not A, B...
+                                                                    
+                                              else empty) $+$ 
+                                               (case c of
+                                                   Cast _ t1 t2 -> intro b t1 mbe <+> text "must be a subclass of" <+> pretty t2
+                                                   Sub i _ t1 t2 -> intro b t1 mbe <+> text "must be a subtype of" <+> pretty t2 
+                                                   Impl _ _ t p -> intro b t mbe <+> text "must implement" <+> pretty p
+                                                   Sel _ _ t n t0 -> intro b t mbe <+> text "must have an attribute" <+> pretty n <+> text "with type" <+> pretty t0
+                                                                          Pretty.<> text "; no such type is known."
+                                                   _ -> pretty c <+> text "must hold")  
+                                          DeclInfo _ _ _ t msg -> text msg  $+$ text "Function inferred to have type"<+> pretty t
 
 
-typeError                           :: TypeError -> (SrcLoc, String)
-typeError err                       = (loc err, render (expl err))
-  where
-    expl (TypeError l str)          = text str
-    expl (RigidVariable tv)         = text "Type" <+> pretty tv <+> text "is rigid"
-    expl (InfiniteType tv)          = text "Type" <+> pretty tv <+> text "is infinite"
-    expl (ConflictingRow tv)        = text "Row" <+> pretty tv <+> text "has conflicting extensions"
-    expl (KwdNotFound n)            = text "Keyword element" <+> quotes (pretty n) <+> text "is not found"
-    expl (PosElemNotFound info s)   = text s
-    expl (EscapingVar tvs t)        = text "Type annotation" <+> pretty t <+> text "is too general, type variable" <+>
-                                      pretty (head tvs) <+> text "escapes"
-    expl (NoSelStatic n u)          = text "Static method" <+> pretty n <+> text "cannot be selected from" <+> pretty u <+> text "instance"
-    expl (NoSelInstByClass n u)     = text "Instance attribute" <+> pretty n <+> text "cannot be selected from class" <+> pretty u
-    expl (NoMut n)                  = text "Non @property attribute" <+> pretty n <+> text "cannot be mutated"
-    expl (LackSig n)                = text "Declaration lacks accompanying signature"
-    expl (LackDef n)                = text "Signature lacks accompanying definition"
-    expl (NoRed c)                  = text (origin(errInfo c))
-    expl (NoSolve Nothing cs)       = text "Cannot solve" <+> commaSep pretty cs
-    expl (NoSolve (Just t) cs)      = text "The type" <+> pretty t <+> text "of the indicated expression must satisfy the following unsolvable collection of constraints:"
-                                        $+$ (nest 4 $ vcat $ map explain cs)
-    
-    expl (NoUnify info t1 t2)       = text "Cannot unify" <+> pretty t1 <+> text "and" <+> pretty t2
+
+useless vs c                           = case c of
+                                             Cast _ t1 t2 -> f t1 || f t2
+                                             Sub _ _ t1 t2 -> f t1 || f t2
+                                             Impl _ _ t p -> f t
+                                             Sel _ _ t n t0 -> f t|| f t0
+                                             Mut _ t1 n t2 -> True   -- TODO
+                                             Seal _ _ -> True        -- TODO
+     where f (TVar _ v) = notElem v vs
+           f _          = False
+
+typeError                           :: TypeError -> [(SrcLoc, String)]
+typeError (TypeError l str)          = [(l, str)]
+typeError (RigidVariable tv)         = [(loc tv, render (text "Type" <+> pretty tv <+> text "is rigid"))]
+typeError (InfiniteType tv)          = [(loc tv, render (text "Type" <+> pretty tv <+> text "is infinite"))]
+typeError (ConflictingRow tv)        = [(loc tv, render (text "Type" <+> pretty tv <+> text "has conflicting extensions"))]
+typeError (KwdNotFound n)            = [(loc n, render (text "Keyword element" <+> quotes (pretty n) <+> text "is not found"))]
+typeError (PosElemNotFound info s)   = [(loc info, s)]
+typeError (EscapingVar tvs t)        = [(loc tvs, render (text "Type annotation" <+> pretty t <+> text "is too general, type variable" <+>
+                                        pretty (head tvs) <+> text "escapes"))]
+typeError (NoSelStatic n u)          = [(loc n, render (text "Static method" <+> pretty n <+> text "cannot be selected from" <+> pretty u <+> text "instance"))]
+typeError (NoSelInstByClass n u)     = [(loc n, render (text "Instance attribute" <+> pretty n <+> text "cannot be selected from class" <+> pretty u))]
+typeError (NoMut n)                  = [(loc n, render (text "Non @property attribute" <+> pretty n <+> text "cannot be mutated"))]
+typeError (LackSig n)                = [(loc n, render (text "Declaration lacks accompanying signature"))]
+typeError (LackDef n)                = [(loc n, render (text "Signature lacks accompanying definition"))]
+typeError (NoRed c)
+    | DeclInfo l1 l2 _ t _ <- info c = [(l1,""), (l2,render (explainViolation c))]
+    | otherwise                      = [(loc c, render (explainViolation c))]
+typeError (NoSolve mbt vs cs)        = case length cs of
+                                           0 -> [(NoLoc, "Unable to give good error message: please report example")]
+                                           1 ->  (NoLoc, "Cannot satisfy the following constraint:\n") : map (mkReq False) cs
+                                           _ ->  (NoLoc, "Cannot satisfy the following simultaneous constraints for the unknown "
+                                                         ++ (if length vs==1 then "type " else "types ") ++ render(commaList vs)  ++":\n")
+                                                : map (mkReq True) (cs2++cs1)
+         where mkReq b c             = (newLoc c, render (explainRequirement b c))
+               (cs1,cs2)             = partition (\c -> null $ typings(info c)) cs
+               newLoc c              = if null (typings (info c)) then loc c else loc(fst3(head(typings (info c))))
+               fst3 (a,_,_)          = a
+
+typeError (NoUnify info t1 t2)       = case (loc t1, loc t2) of
+                                          (l1@Loc{},l2@Loc{}) -> [(l1, ""),(l2,render(text "Incompatible types" <+> pretty t1 <+> text "and" <+> pretty t2))]
+                                          _ ->  [(getLoc[loc info, loc t1, loc t2],render(text "Incompatible types" <+> pretty t1 <+> text "and" <+> pretty t2))]
 
 tyerr x s                           = throwError $ TypeError (loc x) (s ++ " " ++ prstr x)
 tyerrs xs s                         = throwError $ TypeError (loc $ head xs) (s ++ " " ++ prstrs xs)
 rigidVariable tv                    = throwError $ RigidVariable tv
 infiniteType tv                     = throwError $ InfiniteType tv
 conflictingRow tv                   = throwError $ ConflictingRow tv
-kwdNotFound info n | n == name "_"  = throwError $ PosElemNotFound info err
-              | otherwise           = throwError $ KwdNotFound n
-  where err                         = case constrChain2 info of
-                                          Sub _ _ TNil{} _ : _ -> "Too few positional " ++ err2
-                                          Sub _ _ _ TNil{} : _ -> "Too many positional " ++ err2
-                                          c : _ -> render (explain c)
-        err2                        = case origin info of
-                                          "Type error in call" -> "arguments in call"
-                                          _  -> "elements"
+kwdNotFound info n                  = throwError $ KwdNotFound n
 escapingVar tvs t                   = throwError $ EscapingVar tvs t
 noSelStatic n u                     = throwError $ NoSelStatic n u
 noSelInstByClass n u                = throwError $ NoSelInstByClass n u
@@ -196,5 +238,8 @@ noMut n                             = throwError $ NoMut n
 lackSig ns                          = throwError $ LackSig (head ns)
 lackDef ns                          = throwError $ LackDef (head ns)
 noRed c                             = throwError $ NoRed c
-noSolve mbt cs                      = throwError $ NoSolve mbt cs
+noSolve mbt vs cs                   = throwError $ NoSolve mbt vs cs
 noUnify info t1 t2                  = throwError $ NoUnify info t1 t2
+
+posElemNotFound True info n         = throwError $ PosElemNotFound info "Too few positional elements"
+posElemNotFound False info n        = throwError $ PosElemNotFound info "Too many positional elements"
