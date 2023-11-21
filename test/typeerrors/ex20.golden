@@ -1,0 +1,18 @@
+Building file ../test/typeerrors/ex20.act
+  Compiling ex20.act for release
+
+ERROR: Error when compiling ex20 module: Type error
+
+  |
+1 |f : (str,str) -> str
+  |^
+
+  |
+3 |def f(s : str, a):
+4 |    return s * a
+  |
+Type incompatibility between signature and function definition
+Function inferred to have type _(__builtin__.str, __builtin__.int) -> __builtin__.str
+
+- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
+

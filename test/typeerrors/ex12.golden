@@ -2,10 +2,12 @@ Building file ../test/typeerrors/ex12.act
   Compiling ex12.act for release
 
 ERROR: Error when compiling ex12 module: Type error
- 2:5-12
+Cannot satisfy the following constraint:
+
   |
 2 |    env.exit()
-  |    ^^^^^^^^
-The type t of the indicated expression must satisfy the following unsolvable collection of constraints:
-    t must be a subtype of _() -> _
+  |    ^^^
+The type of env must have an attribute exit with type _() -> _; no such type is known.
+
+- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
 

@@ -28,7 +28,7 @@ import Prelude hiding((<>))
 
 data SrcLoc                     = Loc Int Int | NoLoc deriving (Eq,Ord,Show,Read,Generic,NFData)
 
-instance Data.Binary.Binary SrcLoc
+instance Data.Binary.Binary SrcLoc 
 
 instance Pretty SrcLoc where
     pretty (Loc l r)            = pretty l <> text "-" <> pretty r
@@ -38,6 +38,12 @@ Loc i _ `upto` Loc _ j          = Loc i j
 NoLoc `upto` l                  = l
 l `upto` NoLoc                  = l
 
+locAfter (Loc _ j)              = Loc j j
+
+getLoc []                       = NoLoc
+getLoc (NoLoc : ls)             = getLoc ls
+getLoc (l : _)                  = l
+                                    
 class HasLoc a where
     loc                         :: a -> SrcLoc
 
@@ -95,32 +101,34 @@ ptraceF f                       = traceF (render . f)
 head_ tag []                    = error ("Prelude.head: empty list (" ++ show tag ++ ")")
 head_ tag xs                    = head xs
 
+errSep                          =  '\n' : concat (replicate 40 "- ") ++ "\n"
 
-errReport (SpanCoLinear file row start end,msg) src
-                                = unlines [line1,line2,line3,line4,msg]
+errReport ((SpanCoLinear file row start end,msg) : ps) src
+                                = unlines ["",line2,line3,line4,msg] ++ errReport ps src
   where rowstr                  = show row
-        line1                   = file ++ " "++show row++":"++show start++"-"++show end
+        --line1                   = file ++ " "++show row++":"++show start++"-"++show end
         line2                   = replicate (length rowstr+1) ' '++"|"
         line3                   = rowstr ++ " |" ++ lines(src)!!!(row-1)
         line4                   = replicate (length rowstr+1) ' '++"|"++replicate (start-1) ' '++replicate (end-start+1) '^'
-errReport (SpanMultiLine file srow scol erow ecol,msg) src
-                                =unlines (line1:line2:quote++(if erow-srow<=2 then [] else [replicate (length erowstr) ' ' ++ " | ..."])++[line2,msg])
+errReport ((SpanMultiLine file srow scol erow ecol,msg) : ps) src
+                                = unlines (line2:quote++(if erow-srow<=2 then [] else [replicate (length erowstr) ' ' ++ " | ..."])++[line2,msg]) ++ errReport ps src
   where erowstr                 = show erow
-        line1                   = file ++ " "++show srow++":"++show scol++"-"++show erow++":"++show ecol
+        --line1                   = file ++ " "++show srow++":"++show scol++"-"++show erow++":"++show ecol
         line2                   = replicate (length erowstr+1) ' '++"|"
         pad n                   = replicate (length erowstr - length nstr) ' ' ++ nstr
           where nstr            = show n
         quote                   = map line [srow..minimum [srow+2,erow,length ls]]
         ls                      = lines src
         line n                  = pad n ++ " |" ++ ls!!!(n-1)
-errReport (SpanPoint file row col,msg) src
-                                = unlines [line1,line2,line3,line4,msg]
+errReport ((SpanPoint file row col,msg) : ps) src
+                                = unlines [line2,line3,line4,msg] ++ errReport ps src
   where rowstr                  = show row
-        line1                   = file ++ " "++show row++":"++show col
+        --line1                   = file ++ " "++show row++":"++show col
         line2                   = replicate (length rowstr+1) ' '++"|"
         line3                   = rowstr ++ " |" ++ lines src!!!(row-1)
         line4                   = replicate (length rowstr+1) ' '++"|"++replicate (col-1) ' '++"^"
-errReport (SpanEmpty,msg) _     = msg
+errReport ((SpanEmpty,msg) : ps) src = msg ++ errReport ps src
+errReport [] _                  = errSep
 
 lst !!! ix | ix >= length lst   = lst !! 0
            | otherwise          = lst !! ix
@@ -140,7 +148,7 @@ instance HasLoc GeneralError where
 internal loc x                  = Control.Exception.throw $ InternalErr loc (pretty x)
 notYet loc x                    = Control.Exception.throw $ NotYet loc (pretty x)
 
-generalError err                = (loc err,render (expl err))
+generalError err                = [(loc err,render (expl err))]
   where
     expl (InternalErr _ doc)    = text "(internal)" <+> doc
     expl (NotYet _ doc)         = text "Not yet supported:" <+> doc

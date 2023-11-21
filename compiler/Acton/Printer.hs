@@ -150,7 +150,7 @@ instance Pretty Expr where
     pretty (None _)                 = text "None"
     pretty (NotImplemented _)       = text "NotImplemented"
     pretty (Ellipsis _)             = text "..."
-    pretty (Strings _ ss)           = hsep (map pretty ss)
+    pretty (Strings _ ss)           = hsep (map (pretty . show) ss)
     pretty (BStrings _ ss)          = hsep (map (\s -> text " b" <> pretty s) ss)
     pretty (Call _ e ps ks)
         | atomic e                  = pretty e <> parens (pretty (ps,ks))

@@ -46,8 +46,8 @@ tr msg p = do
      Left err -> trace ("failure "++msg ++": "++show err) (parseError err)
      Right ok -> trace ("success "++msg++": "++show ok) (return ok)
      
-makeReport (loc, msg) src = errReport (sp, msg) src
-  where sp = extractSrcSpan loc src
+makeReport ps src = errReport (map setSpan ps) src
+  where setSpan (loc, msg) = (extractSrcSpan loc src, msg)
 
 instance ShowErrorComponent [Char] where
   showErrorComponent s = s
@@ -66,8 +66,8 @@ parseTestStr b p str = case runParser (St.evalStateT p (b,[])) "" str of
                          Left err -> putStrLn (errorBundlePretty err)
                          Right t  -> print t
 
-parserError :: ParseErrorBundle String String -> (SrcLoc,String)
-parserError err = (NoLoc,errorBundlePretty err)
+parserError :: ParseErrorBundle String String -> [(SrcLoc,String)]
+parserError err = [(NoLoc,errorBundlePretty err)]
 
 
 extractSrcSpan :: SrcLoc -> String -> SrcSpan
@@ -124,8 +124,8 @@ ifNotCtx avoid ignore yes no = do
 -- notIn s             = fail ("statement not allowed inside " ++ s)
 success             = return ()
 
-contextError                    :: ContextError -> (SrcLoc, String)
-contextError err                = (loc err, ctxMsg err)
+contextError                    :: ContextError -> [(SrcLoc, String)]
+contextError err                = [(loc err, ctxMsg err)]
 
 data ContextError   = OnlyTopLevel SrcLoc String
                     | OnlyInActor SrcLoc String
@@ -183,8 +183,8 @@ instance Control.Exception.Exception IndentationError
 instance HasLoc IndentationError where
    loc (IndentationError l) = l
 
-indentationError     :: IndentationError -> (SrcLoc, String)
-indentationError err = (loc err, "Too much indentation")
+indentationError     :: IndentationError -> [(SrcLoc, String)]
+indentationError err = [(loc err, "Too much indentation")]
 
 -- Fail fast error ----------------------------------------------------------
 
@@ -193,8 +193,8 @@ data FailFastError = FailFastError SrcLoc String deriving (Show, Eq)
 instance Control.Exception.Exception FailFastError
 
 
-failFastError :: FailFastError -> (SrcLoc, String)
-failFastError (FailFastError loc str) = (loc, str)
+failFastError :: FailFastError -> [(SrcLoc, String)]
+failFastError (FailFastError loc str) = [(loc, str)]
 
 failImmediately loc msg =  Control.Exception.throw $ FailFastError loc msg
 
@@ -855,7 +855,6 @@ funcdef =  addLoc $ do
               q <- optbinds
               (ppar,kpar) <- parens (funpars True)
               S.Def NoLoc n q ppar kpar <$> optional (arrow *> ttype) <*> suite DEF p <*> return deco <*> return (maybe S.tWild id fx)
-
 
 binds :: Parser S.QBinds
 binds = brackets (do b <- qbind; bs <- many (comma *> qbind); return (b:bs))
