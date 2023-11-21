@@ -1,9 +1,43 @@
 # Changelog
 
-## Unreleased
+## [0.18.3] (2023-11-21)
+
+### Added
+- `type()` function that provides the type of something as a string [#1587]
+  - Can be really useful as development tool to get inferred types or similar
+  - It should not be used for metaprogramming or similar
+  - This will likely be removed in the future when there is a better way of
+    debugging types, like a language server
+    
+### Fixed
+- Only print truly unhandled exception [#1586]
+  - "Unhandled" Exceptions are no longer printed in actor methods called by
+    another actor that awaits the return value
+  - It used to be that when an actor B raised an exception in a method called by
+    actor A, presuming no try/except handling at all, an `Unhandled exception`
+    message would be printed in both actor A and B.
+  - Now we inspect waiting actors and in case there are any, the exception will
+    be considered "handled" in the actor method that raised the exception
+- Cleanup old cruft from Makefile [#]
+- Now using zig v0.12.0-dev.1536
+  - Improved CPU feature detection for Apple silicon
+  - Some smaller zig build system changes, but it seems to be stabilizing as
+    there are now docs!
+- Acton now builds on Apple Silicon MacOS [#1582]
+  - It used to not understand the CPU features and thus MbedTLS would fail to
+    compile
+  - With zig v0.12.0, the correct CPU features are recognized
+- Fix int rounding [#1577]
+- Improve DNS error handling in net.TCPConnection [#1573]
+  - Ignore DNS resolution errors if we're already in connected state
+  - Given happy eyeball support, we could get a A record and establish a working
+    IPv4 connection while IPv6 would give an error and be retried continuously,
+    which is completely pointless when IPv4 is already established.
+- Type error now separate error from identifier with `:` [#1583]
 
 ### Testing / CI
 - Now also testing build / test and running on Ubuntu 23.10
+- There are now golden tests for the compilers type errors [#1571]
 
 
 ## [0.18.2] (2023-10-31)
