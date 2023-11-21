@@ -1,0 +1,35 @@
+Building file ../test/typeerrors/ex19.act
+  Compiling ex19.act for release
+
+ERROR: Error when compiling ex19 module: Type error
+Cannot satisfy the following simultaneous constraints for the unknown types t0, t1:
+
+  |
+7 |a = f(3,"hej")
+  |    ^
+f has had its polymorphic type [A(Plus, Ord)] => (A, A) -> A instantiated to (t1, t1) -> t1, so
+t1 must implement __builtin__.Ord
+
+  |
+7 |a = f(3,"hej")
+  |    ^
+f has had its polymorphic type [A(Plus, Ord)] => (A, A) -> A instantiated to (t1, t1) -> t1, so
+t1 must implement __builtin__.Plus
+
+  |
+7 |a = f(3,"hej")
+  |      ^
+The type of 3 (which we call t0) must implement __builtin__.Number
+
+  |
+7 |a = f(3,"hej")
+  |    ^^^^^^^^^^
+The type of f(3, "hej") (which we call t0) must be a subtype of t1
+
+  |
+7 |a = f(3,"hej")
+  |    ^^^^^^^^^^
+The type of f(3, "hej") ( __builtin__.str) must be a subclass of t1
+
+- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
+
