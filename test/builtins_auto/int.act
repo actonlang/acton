@@ -129,7 +129,7 @@ def test_u64():
 
 
 
-actor main(env):
+def test_int():
     if (141234567898765434567654345678765456787654 << 12) != 578496790113343219989112199900223311002230784:
         raise ValueError("left shift of positive int broken")
     if (-141234567898765434567654345678765456787654 << 12) != -578496790113343219989112199900223311002230784:
@@ -157,7 +157,9 @@ actor main(env):
     if hash(2**131) >= 2**64:
         raise ValueError("hash(2**131) too big")
 
+actor main(env):
     try:
+        test_int()
         test_i16()
         test_i32()
         test_i64()
