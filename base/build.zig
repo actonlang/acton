@@ -19,6 +19,7 @@ pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
     const cpedantic = b.option(bool, "cpedantic", "") orelse false;
     const use_db = b.option(bool, "db", "") orelse false;
+    const no_threads = b.option(bool, "no_threads", "") orelse false;
     const use_prebuilt = b.option(bool, "use_prebuilt", "") orelse false;
     const projpath = b.option([]const u8, "projpath", "") orelse "";
     const projpath_outtypes = b.option([]const u8, "projpath_outtypes", "") orelse "";
@@ -141,6 +142,18 @@ pub fn build(b: *std.Build) void {
     if (use_db) {
         print("Building with DB backend support\n", .{});
         flags.append("-DACTON_DB") catch unreachable;
+    }
+
+    if (no_threads) {
+        print("No threads\n", .{});
+    } else {
+        print("Threads enabled\n", .{});
+        flags.appendSlice(&.{
+            "-DACTON_THREADS",
+        }) catch |err| {
+            std.log.err("Error appending flags: {}", .{err});
+            std.os.exit(1);
+        };
     }
 
     const libActon = b.addStaticLibrary(.{
