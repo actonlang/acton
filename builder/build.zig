@@ -47,10 +47,10 @@ pub fn build(b: *std.Build) void {
     const buildroot_path = b.build_root.handle.realpathAlloc(b.allocator, ".") catch @panic("ASD");
     const dots_to_root = dotsToRoot(b.allocator, buildroot_path);
     defer b.allocator.free(dots_to_root);
-    print("Acton Project Builder\nBuilding in {s}\n", .{buildroot_path});
     const optimize = b.standardOptimizeOption(.{});
     const target = b.standardTargetOptions(.{});
     const db = b.option(bool, "db", "") orelse false;
+    const no_threads = b.option(bool, "no_threads", "") orelse false;
     const use_prebuilt = b.option(bool, "use_prebuilt", "") orelse false;
     const projpath = b.option([]const u8, "projpath", "") orelse "";
     const projpath_outtypes = b.option([]const u8, "projpath_outtypes", "") orelse "";
@@ -60,10 +60,12 @@ pub fn build(b: *std.Build) void {
     const syspath_include = b.option([]const u8, "syspath_include", "") orelse "";
     const syspath_lib = b.option([]const u8, "syspath_lib", "") orelse "";
     const syspath_libreldev = b.option([]const u8, "syspath_libreldev", "") orelse "";
+    print("Acton Project Builder\nBuilding in {s}\nno_threads: {}\n", .{buildroot_path, no_threads});
 
     const libactondb_dep = b.anonymousDependency(syspath_backend, @import("backendbuild.zig"), .{
         .target = target,
         .optimize = optimize,
+        .no_threads = no_threads,
         .syspath_include = syspath_include,
     });
 
@@ -71,6 +73,7 @@ pub fn build(b: *std.Build) void {
         .target = target,
         .optimize = optimize,
         .db = db,
+        .no_threads = no_threads,
         .syspath_include = syspath_include,
     });
 
@@ -81,6 +84,7 @@ pub fn build(b: *std.Build) void {
         .enable_redirect_malloc = true,
         .enable_large_config = true,
         .enable_mmap = true,
+        .enable_threads = if (no_threads) false else true
     });
 
 
@@ -264,6 +268,18 @@ pub fn build(b: *std.Build) void {
     if (db)
         flags.appendSlice(&.{"-DACTON_DB",}) catch unreachable;
 
+    if (no_threads) {
+        print("No threads\n", .{});
+    } else {
+        print("Threads enabled\n", .{});
+        flags.appendSlice(&.{
+            "-DACTON_THREADS",
+        }) catch |err| {
+            std.log.err("Error appending flags: {}", .{err});
+            std.os.exit(1);
+        };
+    }
+
     for (c_files.items) |entry| {
         libActonProject.addCSourceFile(.{ .file = .{ .path = entry }, .flags = flags.items });
     }
@@ -320,7 +336,7 @@ pub fn build(b: *std.Build) void {
         // Do not use prebuilt based on the use_prebuilt flag, but also do not
         // use prebuilt when there are custom options, like --db
         // Also see below.
-        if (!use_prebuilt or db) {
+        if (!use_prebuilt or db or no_threads) {
             executable.linkLibrary(actonbase_dep.artifact("Acton"));
         } else {
             executable.linkSystemLibrary("Acton");
@@ -344,8 +360,6 @@ pub fn build(b: *std.Build) void {
             executable.linkSystemLibrary("uv");
             executable.linkSystemLibrary("xml2");
             executable.linkSystemLibrary("yyjson");
-
-            executable.linkSystemLibrary("actongc");
         } else {
             if (db) {
                 executable.linkLibrary(libactondb_dep.artifact("ActonDB"));
@@ -365,8 +379,12 @@ pub fn build(b: *std.Build) void {
             executable.linkLibrary(dep_libxml2.artifact("xml2"));
             executable.linkLibrary(dep_libyyjson.artifact("yyjson"));
             executable.linkLibrary(dep_libsnappy_c.artifact("snappy-c"));
-
+        }
+        // Need custom built GC for no_threads
+        if (!use_prebuilt or no_threads) {
             executable.linkLibrary(dep_libgc.artifact("gc"));
+        } else {
+            executable.linkSystemLibrary("actongc");
         }
 
         executable.linkLibC();

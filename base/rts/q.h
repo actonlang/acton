@@ -22,4 +22,4 @@ struct mpmcq {
 };
 #endif
 
-extern struct mpmcq rqs[MAX_WTHREADS+1];
+extern struct mpmcq rqs[NUM_RQS];
