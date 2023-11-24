@@ -422,10 +422,10 @@ prettyPosRow (TRow _ PRow _ t (TNil _ PRow))
 prettyPosRow (TRow _ PRow _ t p)    = pretty t <> comma <+> prettyPosRow p
 prettyPosRow (TStar _ PRow r)
   | TVar _ v <- r                   = text "*" <> pretty v
-  | TWild _ <- r                    = text "*_"
-  | otherwise                       = text "*" <> parens (prettyPosRow r)
+  | TWild _ <- r                    = text "*"
+  | otherwise                       = text "*" <> parens (prettyPosRow r)   -- Print row as a tuple
 prettyPosRow (TVar _ v)             = text "+" <> pretty v
-prettyPosRow (TWild _)              = text "+_"
+prettyPosRow (TWild _)              = text "+"
 prettyPosRow (TNil _ PRow)          = empty
 prettyPosRow t                      = text "??" <>  pretty t
     
@@ -433,11 +433,11 @@ prettyKwdRow (TRow _ KRow n t (TNil _ KRow))
                                     = pretty n <> colon <+> pretty t
 prettyKwdRow (TRow _ KRow n t k)    = pretty n <> colon <+> pretty t <> comma <+> prettyKwdRow k
 prettyKwdRow (TStar _ KRow r)
-  | TVar _ v <- r                   = text "*" <> pretty v
-  | TWild _ <- r                    = text "*_"
-  | otherwise                       = text "*" <> parens (prettyKwdRow r)
+  | TVar _ v <- r                   = text "**" <> pretty v
+  | TWild _ <- r                    = text "**"
+  | otherwise                       = text "**" <> parens (prettyKwdRow r)  -- Print row as a tuple
 prettyKwdRow (TVar _ v)             = text "++" <> pretty v
-prettyKwdRow (TWild _)              = text "++_"
+prettyKwdRow (TWild _)              = text "++"
 prettyKwdRow (TNil _ KRow)          = empty
 prettyKwdRow t                      = text "??" <>  pretty t
     
@@ -450,9 +450,12 @@ instance Pretty Type where
     pretty (TCon  _ c)              = pretty c
     pretty (TFun _ fx p k t)        = prettyFXnoPure fx <> parens (prettyFunRow p k) <+> text "->" <+> pretty t
       where spaceSep f              = hsep . punctuate space . map f
-    pretty (TTuple _ (TRow _ _ _ t (TNil _ _)) (TNil _ _))
-                                    = parens (pretty t <> comma)
-    pretty (TTuple _ p k)           = parens (prettyFunRow p k)
+    pretty (TTuple _ p k)
+      | TVar{} <- p, TNil{} <- k    = pretty p                              -- Print top row variable as a tyvar
+      | TNil{} <- p, TVar{} <- k    = pretty k                              -- Print top row variable as a tyvar
+      | TRow _ _ _ t TNil{} <- p,
+        TNil{} <- k                 = parens (pretty t <> comma)
+      | otherwise                   = parens (prettyFunRow p k)
     pretty (TOpt _ t)               = text "?" <> pretty t
     pretty (TNone _)                = text "None"
     pretty (TWild _)                = text "_"
