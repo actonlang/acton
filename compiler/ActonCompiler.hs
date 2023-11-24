@@ -779,7 +779,7 @@ handle errKind f src paths mn ex = do putStrLn ("\nERROR: Error when compiling "
 
 buildExecutable env opts paths binTask
                          = case lookup n (fromJust (Acton.Env.lookupMod m env)) of
-                               Just (A.NAct [] (A.TRow _ _ _ t A.TNil{}) A.TNil{} _) 
+                               Just (A.NAct [] A.TNil{} (A.TRow _ _ _ t A.TNil{}) _)
                                    | prstr t == "Env" || prstr t == "None"
                                       || prstr t == "__builtin__.Env"|| prstr t == "__builtin__.None"-> do   -- !! To do: proper check of parameter type !!
                                       iff (not (quiet opts)) $ putStrLn ("Building executable "++ makeRelative (projPath paths) binFile)
@@ -828,7 +828,7 @@ buildExecutable env opts paths binTask
 writeRootC :: Acton.Env.Env0 -> C.CompileOptions -> Paths -> BinTask -> IO (Maybe BinTask)
 writeRootC env opts paths binTask
                          = case lookup n (fromJust (Acton.Env.lookupMod m env)) of
-                               Just (A.NAct [] (A.TRow _ _ _ t A.TNil{}) A.TNil{} _)
+                               Just (A.NAct [] A.TNil{} (A.TRow _ _ _ t A.TNil{}) _)
                                    | prstr t == "Env" || prstr t == "None"
                                       || prstr t == "__builtin__.Env"|| prstr t == "__builtin__.None"-> do   -- !! To do: proper check of parameter type !!
                                       c <- Acton.CodeGen.genRoot env qn
