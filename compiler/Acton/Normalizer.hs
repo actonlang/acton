@@ -343,7 +343,7 @@ instance Norm Expr where
     norm env (DotI l e i)           = DotI l <$> norm env e <*> pure i
     norm env (RestI l e i)          = RestI l <$> norm env e <*> pure i
     norm env (Lambda l p k e fx)    = do p' <- joinPar <$> norm env p <*> norm (define (envOf p) env) k
-                                         Lambda l p' KwdNIL <$> norm env1 e <*> return fx
+                                         eta <$> (Lambda l p' KwdNIL <$> norm env1 e <*> pure fx)
       where env1                    = define (envOf p ++ envOf k) env
     norm env (Yield l e)            = Yield l <$> norm env e
     norm env (YieldFrom l e)        = YieldFrom l <$> norm env e
@@ -355,6 +355,15 @@ instance Norm Expr where
     norm env (Set l es)             = Set l <$> norm env es
     norm env (Paren l e)            = norm env e
     norm env e                      = error ("norm unexpected: " ++ prstr e)
+
+eta (Lambda _ p KwdNIL (Call _ e p' KwdNil) fx)
+  | eq1 p p'                        = e
+  where
+    eq1 (PosPar n _ _ p) (PosArg e p')  = eVar n == e && eq1 p p'
+    eq1 (PosSTAR n _) (PosStar e)       = eVar n == e
+    eq1 PosNIL PosNil                   = True
+    eq1 _ _                             = False
+eta e                               = e
 
 nargs (TRow _ _ _ _ r)              = 1 + nargs r
 nargs (TStar _ _ _)                 = 1
