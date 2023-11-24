@@ -121,7 +121,7 @@ solve' env select hist te tt eq cs
                                                  --traceM ("### var goals: " ++ show (sum [ length alts | RVar t alts <- vargoals ]))
                                                  sequence [ unify (DfltInfo (loc t) 2 Nothing []) t t' | RVar t alts <- vargoals, t' <- alts ]
                                                  proceed hist cs
-  | any not keep_evidence                   = noSolve Nothing [] keep_cs
+  | any not keep_evidence                   = noSolve0 Nothing [] keep_cs
   | null solve_cs || null goals             = return (keep_cs, eq)
   | otherwise                               = do st <- currentState
                                                  --traceM ("## keep:\n" ++ render (nest 8 $ vcat $ map pretty keep_cs))
@@ -167,9 +167,8 @@ solve' env select hist te tt eq cs
                                                      cs' = if length cs == 1 then cs else filter (not . useless vs) cs
                                                      vs' = filter (\ v -> length (filter (\c -> v `elem` tyfree c) cs') > 1) (nub(tyfree cs')) -- is this necessary??
                                                  cs' <- msubstWith (zip vs' ts) cs'
-                                                 cs' <- wildify cs'
-                                                 noSolve (Just t) (take (length vs') ts) cs'
-        tryAlts st _ []                     = noSolve Nothing [] cs
+                                                 noSolve0 (Just t) (take (length vs') ts) cs'
+        tryAlts st _ []                     = noSolve0 Nothing [] cs
         tryAlts st t0 (t:ts)                = tryAlt t0 t `catchError` const ({-traceM ("=== ROLLBACK " ++ prstr t0) >> -}rollbackState st >> tryAlts st t0 ts)
         tryAlt t0 (TCon _ c)
           | isProto env (tcname c)          = do p <- instwildcon env c
@@ -490,7 +489,7 @@ reduce' env eq (Seal _ t@(TFX _ fx))
 reduce' env eq (Seal info t)                = reduce env eq (map (Seal info) ts)
   where ts                                  = leaves t
 
-reduce' env eq c                            = noRed c
+reduce' env eq c                            = noRed0 c
 
 
 solveImpl env wit w t p                     = do (cs,p',we) <- instWitness env t wit
@@ -643,10 +642,10 @@ cast' env info t1@(TFX _ fx1) t2@(TFX _ fx2)
 
 cast' env _ (TNil _ k1) (TNil _ k2)
   | k1 == k2                                = return ()
-cast' env info (TNil _ _) r2@(TRow _ k n t2 r2')
-                                            = posElemNotFound True info n
+cast' env info t1@(TNil _ _) r2@(TRow _ k n t2 r2')
+                                            = noRed0 (Cast info t1 t2) --posElemNotFound True info n
 cast' env info r1@(TRow _ k n _ _) r2@(TNil _ _)
-                                            = posElemNotFound False info n
+                                            = noRed0 (Cast info r1 r2) --posElemNotFound False info n
 cast' env info (TVar _ tv) r2@(TNil _ k)    = do substitute tv (tNil k)
                                                  cast env info (tNil k) r2
 cast' env info r1 (TRow _ k n t2 r2)        = do (t1,r1') <- findElem info k (tNil k) n r1 r2
@@ -682,15 +681,21 @@ cast' env info t1 t2@(TVar _ tv)
 cast' env info t1@(TVar _ tv) t2            = cast' env info (tCon tc) t2
   where tc                                  = findTVBound env tv
 
-cast' env info t1 t2@(TVar _ tv)            = noRed (Cast info t1 t2)
+cast' env info t1 t2@(TVar _ tv)            = noRed0 (Cast info t1 t2)
 
 cast' env info t1 (TOpt _ t2)               = cast env info t1 t2                -- Only matches when t1 is NOT a variable
 
-cast' env info t1 t2                        = do t1' <- wildify t1
-                                                 t2' <- wildify t2
-                                                 info' <- wildify info
-                                                 noRed (Cast info' t1' t2')
+cast' env info t1 t2                        = noRed0 (Cast info t1 t2)
 
+noRed0 c                                    = do c <- msubst c
+                                                 c <- wildify c
+                                                 noRed c
+
+noSolve0 mbt vs cs                          = do mbt <- msubst mbt
+                                                 cs <- msubst cs
+                                                 mbt <- wildify mbt
+                                                 cs <- wildify cs
+                                                 noSolve mbt vs cs
 {-
 splitInfo info t1 t2                        =  case info of
                                                    DfltInfo _ _ (Just (List _ (Elem e : es))) ts ->

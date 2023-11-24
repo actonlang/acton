@@ -253,9 +253,9 @@ data Constraint = Cast  {info :: ErrInfo, type1 :: Type, type2 :: Type}
 
 type Constraints = [Constraint] 
 
-data ErrInfo    = DfltInfo {errloc :: SrcLoc, ident :: Int, iexpr :: Maybe Expr, typings :: [(Name,TSchema,Type)]}
-                | DeclInfo {errloc :: SrcLoc, otherloc :: SrcLoc, idecl :: Decl, itype :: Type, imsg :: String}
-                | Simple {errloc ::SrcLoc, imsg :: String}
+data ErrInfo    = DfltInfo {errloc :: SrcLoc, errno :: Int, errexpr :: Maybe Expr, errinsts :: [(QName,TSchema,Type)]}
+                | DeclInfo {errloc :: SrcLoc, errloc2 :: SrcLoc, errname :: Name, errschema :: TSchema, errmsg :: String}
+                | Simple {errloc ::SrcLoc, errmsg :: String}
                 deriving (Eq,Show,Read,Generic,NFData)
                 
 type WPath      = [Either QName QName]

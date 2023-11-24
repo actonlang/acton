@@ -137,7 +137,7 @@ defaultVars tvs                     = do tvs' <- tyfree <$> msubst (map tVar tvs
         dflt KRow                   = kwdNil
 
 
-addTyping env n s t c                   = c {info = addT n (simp env s) t (info c)}
+addTyping env n s t c                   = c {info = addT n (simp env s) t (info c){errloc = loc n}}
     where addT n s t (DfltInfo l m mbe ts)
                                         = DfltInfo l m mbe ((n,s,t):ts)
           addT _ _ _ info               = info
@@ -464,20 +464,63 @@ matchingDec n sc dec dec'
 
 matchDefAssumption env cs def
   | q0 == q1                            = do --traceM ("## matchDefAssumption A " ++ prstr (dname def) ++ "[" ++ prstrs q1 ++ "]")
+                                             match env cs def
+  | otherwise                           = do --traceM ("## matchDefAssumption B " ++ prstr (dname def) ++ "[" ++ prstrs q1 ++ "]")
+                                             (cs1, tvs) <- instQBinds env q1
+                                             let eq0 = witSubst env q1 cs1
+                                                 s = qbound q1 `zip` tvs            -- This cannot just be memoized in the global TypeM substitution,
+                                             def' <- msubstWith s def{ qbinds = [] } -- since the variables in (qbound q1) aren't necessarily globally unique
+                                             match env (cs ++ cs1) def'
+  where NDef (TSchema _ q0 t0) dec      = findName (dname def) env
+        t2 | inClass env                = addSelf t0 (Just dec)
+           | otherwise                  = t0
+        q1                              = qbinds def
+        env0                            = defineTVars q1 $ defineTVars q0 env
+        pos0
+          | inClass env && dec/=Static  = case pos def of
+                                            PosPar nSelf t' e' pos' -> PosPar nSelf t' e' $ qualWPar env q0 pos'
+                                            _ -> err1 (dname def) "Missing self parameter"
+          | otherwise                   = qualWPar env q0 (pos def)
+
+        match env cs def                = do (cs2,eq1) <- solveScoped env0 (qbound q0) [] t1 (Cast info t1 t2 : cs)
+                                             checkNoEscape env (qbound q0)
+                                             cs2 <- msubst cs2
+                                             return (cs2, def{ qbinds = noqual env q0, pos = pos0, dbody = bindWits eq1 ++ dbody def })
+           where t1                     = tFun (dfx def) (prowOf $ pos def) (krowOf $ kwd def) (fromJust $ ann def)
+                 sc1                    = TSchema NoLoc q1 t1
+                 mbl                    = findSigLoc (dname def) env
+                 msg                    = "Type incompatibility between signature for and definition of "++Pretty.print (dname def)
+                 info                   = maybe (DfltInfo (loc def) 58 Nothing []) (\l -> DeclInfo l (loc def) (dname def) sc1 msg) mbl
+                                             
+{-
+matchDefAssumption env cs def
+  | q0 == q1                            = do --traceM ("## matchDefAssumption A " ++ prstr (dname def) ++ "[" ++ prstrs q1 ++ "]")
                                              let t1 = tFun (dfx def) (prowOf $ pos def) (krowOf $ kwd def) (fromJust $ ann def)
-                                                 mbl = findSigLoc (dname def) (names env)
-                                                 info = maybe (DfltInfo (loc def) 58 Nothing []) (\l -> DeclInfo l (loc def) def t1 "Type incompatibility between signature and function definition") mbl
+                                                 sc1 = TSchema NoLoc q1 t1
+                                             sc1 <- msubst sc1
+                                             sc1 <- wildify sc1
+                                             let mbl = findSigLoc (dname def) (names env)
+                                                 msg = "Type incompatibility between signature for and definition of "++Pretty.print (dname def)
+                                                 info = maybe (DfltInfo (loc def) 58 Nothing []) (\l -> DeclInfo l (loc def) (dname def) sc1 msg) mbl
                                              (cs2,eq1) <- solveScoped env0 (qbound q0) [] t1 (Cast info t1 t2 : cs)
                                              checkNoEscape env (qbound q0)
                                              cs2 <- msubst cs2
                                              return (cs2, def{ qbinds = noqual env q0, pos = pos0, dbody = bindWits eq1 ++ dbody def })
   | otherwise                           = do --traceM ("## matchDefAssumption B " ++ prstr (dname def) ++ "[" ++ prstrs q1 ++ "]")
+                                             -- below we repeat a lot of code from above, since def is redefined. Could the code be reorganized;
+                                             traceM("q0="++show q0 ++", q1="++show q1)
                                              (cs1, tvs) <- instQBinds env q1
                                              let eq0 = witSubst env q1 cs1
                                                  s = qbound q1 `zip` tvs            -- This cannot just be memoized in the global TypeM substitution,
                                              def <- msubstWith s def{ qbinds = [] } -- since the variables in (qbound q1) aren't necessarily globally unique
                                              let t1 = tFun (dfx def) (prowOf $ pos def) (krowOf $ kwd def) (fromJust $ ann def)
-                                             (cs2,eq1) <- solveScoped env0 (qbound q0) [] t1 (Cast (DfltInfo (loc def) 59 Nothing []) t1 t2 : cs++cs1)
+                                                 sc1 = TSchema NoLoc q1 t1
+                                                 sc1 <- msubst sc1
+                                             sc1 <- wildify sc1
+                                             let mbl = findSigLoc (dname def) (names env)
+                                                 msg = "Type incompatibility between signature for and definition of "++Pretty.print (dname def)
+                                                 info = maybe (DfltInfo (loc def) 59 Nothing []) (\l -> DeclInfo l (loc def) (dname def) sc1 msg) mbl
+                                             (cs2,eq1) <- solveScoped env0 (qbound q0) [] t1 (Cast info t1 t2 : cs++cs1)
                                              checkNoEscape env (qbound q0)
                                              cs2 <- msubst cs2
                                              return (cs2, def{ qbinds = noqual env q0, pos = pos0, dbody = bindWits (eq0++eq1) ++ dbody def })
@@ -496,7 +539,7 @@ matchDefAssumption env cs def
            | NSig{} <- t, n==n'         = Just (loc n')
            | otherwise                  = findSigLoc n ps
         findSigLoc n []                 = Nothing
-
+-}
 --------------------------------------------------------------------------------------------------------------------------
 
 instance InfEnv Decl where
@@ -1047,13 +1090,13 @@ instance Infer Expr where
                                             NSVar t -> do
                                                 fx <- currFX
                                                 return ([Cast (Simple l ("State variable may only be accessed in a proc")) fxProc fx], t, x)
-                                            NDef sc d -> do 
+                                            NDef sc d -> do
                                                 (cs,tvs,t) <- instantiate env sc
                                                 let e = app t (tApp x tvs) $ witsOf cs
                                                 -- traceM ("type of " ++ Pretty.print n ++" = "++ Pretty.print t ++ ", cs = " ++ render(commaList cs))
                                                 if actorSelf env
                                                     then wrapped l attrWrap env cs [tActor,t] [eVar selfKW,e]
-                                                    else return (map (addTyping env (noq n) sc t) cs, t, e)
+                                                    else return (map (addTyping env n sc t) cs, t, e)
                                             NClass q _ _ -> do
                                                 (cs0,ts) <- instQBinds env q
                                                 --traceM ("## Instantiating " ++ prstr n)
@@ -1232,14 +1275,15 @@ instance Infer Expr where
                                              t2 <- newTVar
                                              (cs2,e2') <- inferSub env t2 e2
                                              w <- newWitness
-                                             return (Impl (DfltInfo l 83 (Just e) []) w t2 (pContainer t1) :
+                                             return (Impl (DfltInfo (loc e1) 83 (Just e) []) w t2 (pContainer t1) :
                                                      cs1++cs2, tBool, eCall (eDot (eVar w) (method op)) [e2', e1'])
       | otherwise                       = do t <- newTVar
                                              (cs1,e1') <- inferSub env t e1
                                              (cs2,e2') <- inferSub env t e2
                                              w <- newWitness
-                                             return (Impl (DfltInfo l 84 (Just e) []) w t (protocol op) :
+                                             return (Impl (DfltInfo l 84 (Just e) []) w t (protocol op) :  
                                                      cs1++cs2, tBool, eCall (eDot (eVar w) (method op)) [e1',e2'])
+                                             -- TODO: This gives misleading error msg; it says that "e1 op e2 must implement protocol op"
       where protocol Eq                 = pEq
             protocol NEq                = pEq
             protocol LtGt               = pEq
@@ -1264,25 +1308,6 @@ instance Infer Expr where
 
     infer env (Dot l e n)
       | Just m <- isModule env e        = infer env (Var l (QName m n))
-
-{-
-          extension ndarray[float] (Number,Times,Plus,Minus):
-              __neg__ : () -> ndarray[float]
-
-          extension ndarray[int] (Number,Times,Plus,Minus):
-              __neg__ : () -> ndarray[int]
-
-          extension ndarray[float] (Real,Number,Times,Plus,Minus):
-              __round__ : (?int) -> ndarray[float]
-
-          extension ndarray[int] (Real,Number,Times,Plus,Minus):
-              __round__ : (?int) -> mdarray[int]
-
-          extension ndarray[A] (Sliceable[ndarray[A]], Indexed[int,ndarray[A]])):
-              __getslice__ : (slice) -> ndarray[A]
-
-
--}
 
     infer env (Dot l x@(Var _ c) n)
       | NClass q us te <- cinfo         = do (cs0,ts) <- instQBinds env q
@@ -1442,6 +1467,7 @@ inferCall env unwrap l e ps ks          = do (cs1,t,e') <- infer env e
                                              w <- newWitness
                                              return (Sub (DfltInfo l 837 (Just (Call l e ps ks)) []) w t (tFun fx prow krow t0) :
                                                      cs1++cs2++cs3, t0, Call l (eCall (eVar w) [e']) ps' ks')
+                                  
 
 
 tupleTemplate i                         = do ts <- mapM (const newTVar) [0..i]

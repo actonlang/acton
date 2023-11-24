@@ -484,6 +484,11 @@ findQName (GName m n) env
                                     Nothing -> noItem m n -- error ("## Failed lookup of " ++ prstr n ++ " in module " ++ prstr m)
                                 Nothing -> noModule m -- error ("## Failed lookup of module " ++ prstr m)
 
+findSigLoc n env            = findSL (names env)
+    where findSL ((n',t):ps)
+             | NSig{} <- t, n==n' = Just (loc n')
+             | otherwise          = findSL ps
+          findSL []               = Nothing
 
 findName n env              = findQName (NoQ n) env
 
