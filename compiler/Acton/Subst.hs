@@ -32,6 +32,7 @@ addSelf t _                             = t
 dropSelf                                :: Type -> Deco -> Type
 dropSelf (TFun l x p k t) NoDec
   | TRow _ _ _ _ p' <- p                = TFun l x p' k t
+  | TRow _ _ _ _ k' <- k                = TFun l x p k' t
 dropSelf t _                            = t
 
 selfType                                :: PosPar -> Deco -> Type
