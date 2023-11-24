@@ -411,11 +411,10 @@ matchDefAssumption env cs def
            | otherwise                  = t0
         q1                              = qbinds def
         env0                            = defineTVars q1 $ defineTVars q0 env
-        pos0
-          | inClass env && dec/=Static  = case pos def of
-                                            PosPar nSelf t' e' pos' -> PosPar nSelf t' e' $ qualWPar env q0 pos'
-                                            _ -> err1 (dname def) "Missing self parameter"
-          | otherwise                   = qualWPar env q0 (pos def)
+        pos0                            = case pos def of
+                                            PosPar nSelf t e p | inClass env && dec/=Static ->
+                                                PosPar nSelf t e $ qualWPar env q0 p
+                                            p -> qualWPar env q0 p
 
         match env cs def                = do (cs2,eq1) <- solveScoped env0 (qbound q0) [] t1 (Cast info t1 t2 : cs)
                                              checkNoEscape env (qbound q0)
@@ -460,7 +459,7 @@ instance InfEnv Decl where
       | not $ null ps                   = notYet (loc n) "Classes with direct extensions"
       | otherwise                       = case findName n env of
                                              NReserved -> do
-                                                 --traceM ("\n## infEnv class " ++ prstr n)
+                                                 traceM ("\n## infEnv class " ++ prstr n)
                                                  pushFX fxPure tNone
                                                  te0 <- infProperties env as' b
                                                  (cs,te,b1) <- infEnv env1 b
@@ -662,7 +661,7 @@ infProperties env as b
   | otherwise                           = return []
   where inherited                       = concat $ map (conAttrs env . tcname . snd) as
         explicit                        = concat [ ns | Signature _ ns sc dec <- b, isProp dec sc ]
-        inits                           = listToMaybe [ (x, dbody d) | Decl _ ds <- b, d@Def{pos=PosPar x _ _ _} <- ds, dname d == initKW ]
+        inits                           = listToMaybe [ (x, dbody d) | Decl _ ds <- b, d <- ds, dname d == initKW, Just x <- [selfPar d] ]
         infProps self (MutAssign _ (Dot _ (Var _ (NoQ x)) n) _ : b)
           | x /= self                   = return []
           | n `notElem` inherited,
@@ -673,10 +672,15 @@ infProperties env as b
         infProps self (Expr _ (Call _ (Dot _ (Var _ c) n) _ _) : b)
           | isClass env c, n == initKW  = infProps self b
         infProps self _                 = return []
+        selfPar Def{pos=PosPar x _ _ _} = Just x
+        selfPar Def{kwd=KwdPar x _ _ _} = Just x
+        selfPar _                       = Nothing
 
-infDefBody env n (PosPar x _ _ _) b
+infDefBody env n (PosPar x _ _ _) k b
   | inClass env && n == initKW          = infInitEnv (setInDef env) x b
-infDefBody env _ _ b                    = infSuiteEnv (setInDef env) b
+infDefBody env n p (KwdPar x _ _ _) b
+  | inClass env && n == initKW          = infInitEnv (setInDef env) x b
+infDefBody env _ _ _ b                  = infSuiteEnv (setInDef env) b
 
 infInitEnv env self (MutAssign l (Dot l' e1@(Var _ (NoQ x)) n) e2 : b)
   | x == self                           = do (cs1,t1,e1') <- infer env e1
@@ -697,11 +701,10 @@ abstractDefs env q eq b                 = map absDef b
         absDef (If l bs els)            = If l [ Branch e (map absDef ss) | Branch e ss <- bs ] (map absDef els)
         absDef stmt                     = stmt
         absDef' d@Def{}                 = d{ pos = pos1, dbody = bindWits eq ++ dbody d }
-          where pos1
-                  | deco d /= Static    = case pos d of
-                                            PosPar nSelf t' e' pos' -> PosPar nSelf t' e' $ qualWPar env q pos'
-                                            _ -> err1 (dname d) "Missing self parameter"
-                  | otherwise           = qualWPar env q (pos d)
+          where pos1                    = case pos d of
+                                            PosPar nSelf t e p | deco d /= Static ->
+                                                PosPar nSelf t e $ qualWPar env q p
+                                            p -> qualWPar env q p
 
 instance Check Decl where
     checkEnv env (Def l n q p k a b dec fx)
@@ -715,7 +718,7 @@ instance Check Decl where
                                                  unify (DfltInfo l 600 Nothing []) tSelf $ selfType p dec
                                              (csp,te0,p') <- infEnv env1 p
                                              (csk,te1,k') <- infEnv (define te0 env1) k
-                                             (csb,_,b') <- infDefBody (define te1 (define te0 env1)) n p' b
+                                             (csb,_,b') <- infDefBody (define te1 (define te0 env1)) n p' k' b
                                              popFX
                                              let cst = if fallsthru b then [Cast (DfltInfo l 65 Nothing []) tNone t] else []
                                                  t1 = tFun fx' (prowOf p') (krowOf k') t
@@ -723,8 +726,9 @@ instance Check Decl where
                                              checkNoEscape env tvs
                                              -- At this point, n has the type given by its def annotations.
                                              -- Now check that this type is no less general than its recursion assumption in env.
-                                             matchDefAssumption env cs1 (Def l n q (noDefaultsP p') (noDefaultsK k') (Just t)
-                                                                             (bindWits eq1 ++ defaultsP p' ++ defaultsK k' ++ b') dec fx')
+                                             let body = bindWits eq1 ++ defaultsP p' ++ defaultsK k' ++ b'
+                                             (cs,def) <- matchDefAssumption env cs1 (Def l n q p' k' (Just t) body dec fx')
+                                             return (cs, def{ pos = noDefaultsP (pos def), kwd = noDefaultsK (kwd def) })
       where env1                        = reserve (bound (p,k) ++ bound b \\ stateScope env) $ defineTVars q env
             tvs                         = qbound q
             fx'                         = unwrap fx
@@ -740,8 +744,9 @@ instance Check Decl where
                                              (cs1,eq1) <- solveScoped env1 tvs te tNone (csp++csk++csb++cs0)
                                              checkNoEscape env tvs
                                              fvs <- tyfree <$> msubst env
-                                             return (cs1, (Actor l n (noqual env q) (qualWPar env q $ noDefaultsP p') (noDefaultsK k')
-                                                           (bindWits (eq1++eq0) ++ defaultsP p' ++ defaultsK k' ++ b')))
+                                             let body = bindWits (eq1++eq0) ++ defaultsP p' ++ defaultsK k' ++ b'
+                                                 act = Actor l n (noqual env q) (qualWPar env q p') k' body
+                                             return (cs1, act{ pos = noDefaultsP (pos act), kwd = noDefaultsK (kwd act) })
       where env1                        = reserve (bound (p,k) ++ bound b) $ defineTVars q $
                                           define [(selfKW, NVar t0)] $ reserve (statevars b) $ setInAct env
             t0                          = tCon $ TC (NoQ n) (map tVar tvs)
@@ -912,27 +917,26 @@ genEnv env cs te ds
 
 
 defaultsP (PosPar n (Just t) (Just e) p)
-                                        = s : defaultsP p
+  | e /= eNone                          = s : defaultsP p
   where s                               = sIf1 test [set] []
         test                            = eCall (tApp (eQVar primISNONE) [t]) [eVar n]
         set                             = sAssign (pVar' n) e
-defaultsP (PosPar n _ Nothing p)        = defaultsP p
+defaultsP (PosPar n _ _ p)              = defaultsP p
 defaultsP _                             = []
 
-noDefaultsP (PosPar n t _ p)            = PosPar n t Nothing (noDefaultsP p)
-noDefaultsP p                           = p
+noDefaultsP (PosPar n t e p)            = PosPar n t Nothing (noDefaultsP p)
+noDefaultsP k                           = k
 
 defaultsK (KwdPar n (Just t) (Just e) k)
-                                        = s : defaultsK k
+  | e /= eNone                          = s : defaultsK k
   where s                               = sIf1 test [set] []
         test                            = eCall (tApp (eQVar primISNONE) [t]) [eVar n]
         set                             = sAssign (pVar' n) e
-defaultsK (KwdPar n _ Nothing k)        = defaultsK k
+defaultsK (KwdPar n _ _ k)              = defaultsK k
 defaultsK _                             = []
 
 noDefaultsK (KwdPar n t _ k)            = KwdPar n t Nothing (noDefaultsK k)
 noDefaultsK k                           = k
-
 
 
 --------------------------------------------------------------------------------------------------------------------------
@@ -1524,22 +1528,18 @@ instance Infer PosArg where
     infer env (PosArg e p)              = do (cs1,t,e') <- infer env e
                                              (cs2,prow,p') <- infer env p
                                              return (cs1++cs2, posRow t prow, PosArg e' p')
-    infer env (PosStar e)               = do (cs,t,e') <- infer env e
-                                             prow <- newTVarOfKind PRow
-                                             krow <- newTVarOfKind KRow
-                                             return (Cast (DfltInfo (loc e) 99 (Just e) []) t (tTuple prow krow) :
-                                                     cs, posStar prow, PosStar e')
+    infer env (PosStar e)               = do prow <- newTVarOfKind PRow
+                                             (cs,e') <- inferSub env (tTupleP prow) e
+                                             return (cs, posStar prow, PosStar e')
     infer env PosNil                    = return ([], posNil, PosNil)
     
 instance Infer KwdArg where
     infer env (KwdArg n e k)            = do (cs1,t,e') <- infer env e
                                              (cs2,krow,k') <- infer env k
                                              return (cs1++cs2, kwdRow n t krow, KwdArg n e' k')
-    infer env (KwdStar e)               = do (cs,t,e') <- infer env e
-                                             prow <- newTVarOfKind PRow
-                                             krow <- newTVarOfKind KRow
-                                             return (Cast (DfltInfo (loc e) 100 (Just e) []) t (tTuple prow krow) :
-                                                     cs, kwdStar krow, KwdStar e')
+    infer env (KwdStar e)               = do krow <- newTVarOfKind KRow
+                                             (cs,e') <- inferSub env (tTupleK krow) e
+                                             return (cs, kwdStar krow, KwdStar e')
     infer env KwdNil                    = return ([], kwdNil, KwdNil)
 
 instance InfEnv Comp where
