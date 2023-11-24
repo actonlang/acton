@@ -356,11 +356,16 @@ instance Norm Expr where
     norm env (Paren l e)            = norm env e
     norm env e                      = error ("norm unexpected: " ++ prstr e)
 
-nargs TNil{}                        = 0
-nargs p@TRow{}                      = 1 + nargs (rtail p)
-nargs p@TStar{}                     = 1
+nargs (TRow _ _ _ _ r)              = 1 + nargs r
+nargs (TStar _ _ _)                 = 1
+nargs (TNil _ _)                    = 0
 
-narg n k@TRow{}                     = if n == label k then 0 else 1 + narg n (rtail k)
+narg n (TRow _ _ n' _ r)
+  | n == n'                         = 0
+  | otherwise                       = 1 + narg n r
+narg n (TStar _ _ _)
+  | n == attrKW                     = 0
+narg n k                            = error ("### Bad narg " ++ prstr n ++ " " ++ prstr k)
 
 instance Norm Pattern where
     norm env (PWild l a)            = return $ PWild l (conv a)
@@ -488,3 +493,4 @@ joinRow (TStar l k p) r             = TRow l PRow nWild (TTuple l (conv p) kwdNi
 joinRow (TNil _ _) r                = conv r
 -- To be removed:
 joinRow p (TNil _ _)                = conv p
+joinRow p r                         = error ("##### joinRow " ++ prstr p ++ "  AND  " ++ prstr r)
