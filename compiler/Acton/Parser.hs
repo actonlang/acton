@@ -854,8 +854,12 @@ funcdef =  addLoc $ do
               assertNotData l "def"
               n <- name
               q <- optbinds
-              (ppar,kpar) <- parens (funpars True)
+              (ppar,kpar) <- params
               S.Def NoLoc n q ppar kpar <$> optional (arrow *> ttype) <*> suite DEF p <*> return deco <*> return (maybe S.tWild id fx)
+
+params :: Parser (S.PosPar, S.KwdPar)
+params = try ((\k ->(S.PosNIL,k)) <$> parens (kwdpar True))
+         <|> parens (funpars True)
 
 binds :: Parser S.QBinds
 binds = brackets (do b <- qbind; bs <- many (comma *> qbind); return (b:bs))
@@ -868,7 +872,7 @@ actordef = addLoc $ do
                 assertTop l "actor"
                 nm <- name <?> "actor name"
                 q <- optbinds
-                (ppar,kpar) <- parens (funpars True)
+                (ppar,kpar) <- params
                 ss <- suite ACTOR s
                 return $ S.Actor NoLoc nm q ppar kpar ss
 
