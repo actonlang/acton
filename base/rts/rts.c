@@ -37,9 +37,13 @@
 #include <time.h>
 #include <stdlib.h>
 
+// Windows
+#ifdef _WIN32
+#else
 #include <sys/un.h>
 #include <sys/time.h>
 #include <sys/wait.h>
+#endif
 #ifdef __linux__
 #include <sys/prctl.h>
 #endif
@@ -67,7 +71,9 @@
 extern struct dbc_stat dbc_stats;
 #endif
 
+#ifndef _WIN32
 struct sigaction sa_ill, sa_int, sa_pipe, sa_segv, sa_term;
+#endif
 
 char rts_verbose = 0;
 char rts_debug = 0;
@@ -184,9 +190,12 @@ $Lock next_key_lock;
 int64_t timer_consume_hd = 0;       // Lacks protection, although spinlocks wouldn't help concurrent increments. Must fix in db!
 
 time_t current_time() {
-    struct timeval now;
-    gettimeofday(&now, NULL);
-    return now.tv_sec * 1000000 + now.tv_usec;
+    uv_timespec64_t now;
+    if (uv_clock_gettime(UV_CLOCK_REALTIME, &now) != 0) {
+        log_error("uv_clock_gettime() failed");
+        return 0;
+    }
+    return now.tv_sec * 1000000 + now.tv_nsec / 1000;
 }
 
 #ifdef ACTON_THREADS
@@ -1513,10 +1522,10 @@ void wt_work_cb(uv_check_t *ev) {
 
     int wtid = GET_WTID();
 
-    struct timespec ts_start, ts1, ts2, ts3;
+    uv_timespec64_t ts_start, ts1, ts2, ts3;
     long long int runtime = 0;
 
-    clock_gettime(CLOCK_MONOTONIC, &ts_start);
+    uv_clock_gettime(UV_CLOCK_MONOTONIC, &ts_start);
     while (true) {
         if (rts_exit) {
             return;
@@ -1532,7 +1541,7 @@ void wt_work_cb(uv_check_t *ev) {
         $Cont cont = m->$cont;
         $WORD val = m->value;
 
-        clock_gettime(CLOCK_MONOTONIC, &ts1);
+        uv_clock_gettime(UV_CLOCK_MONOTONIC, &ts1);
         wt_stats[wtid].state = WT_Working;
 
         $R r;
@@ -1543,7 +1552,7 @@ void wt_work_cb(uv_check_t *ev) {
             rtsd_printf("## Running actor %ld : %s", current->$globkey, current->$class->$GCINFO);
             r = cont->$class->__call__(cont, val);
 
-            clock_gettime(CLOCK_MONOTONIC, &ts2);
+            uv_clock_gettime(UV_CLOCK_MONOTONIC, &ts2);
             long long int diff = (ts2.tv_sec * 1000000000 + ts2.tv_nsec) - (ts1.tv_sec * 1000000000 + ts1.tv_nsec);
 
             wt_stats[wtid].conts_count++;
@@ -1676,7 +1685,7 @@ void wt_work_cb(uv_check_t *ev) {
         }
         SET_SELF(NULL);
 
-        clock_gettime(CLOCK_MONOTONIC, &ts3);
+        uv_clock_gettime(UV_CLOCK_MONOTONIC, &ts3);
         long long int diff = (ts3.tv_sec * 1000000000 + ts3.tv_nsec) - (ts2.tv_sec * 1000000000 + ts2.tv_nsec);
         wt_stats[wtid].bkeep_count++;
         wt_stats[wtid].bkeep_sum += diff;
@@ -1789,13 +1798,26 @@ const char* stats_to_json () {
 
     yyjson_mut_obj_add_int(doc, root, "pid", pid);
 
-    struct timeval tv;
+    uv_timespec64_t ts;
+    if (uv_clock_gettime(UV_CLOCK_REALTIME, &ts) != 0) {
+        log_fatal("Unable to get precise time");
+        return NULL;
+    }
     struct tm tm;
-    gettimeofday(&tv, NULL);
-    localtime_r(&tv.tv_sec, &tm);
+#ifdef _WIN32
+    errno_t result = localtime_s(&tm, &ts.tv_sec);
+    if (result != 0) {
+        char errmsg[1024] = "Error getting time: ";
+        uv_strerror_r(errno, errmsg + strlen(errmsg), sizeof(errmsg) - strlen(errmsg));
+        log_warn("%s", errmsg);
+        return NULL;
+    }
+#else
+    localtime_r(&ts.tv_sec, &tm);
+#endif
     char dt[32];    // = "YYYY-MM-ddTHH:mm:ss.SSS+0000";
     strftime(dt, 32, "%Y-%m-%dT%H:%M:%S.000%z", &tm);
-    sprintf(dt + 20, "%03hu%s", (unsigned short)(tv.tv_usec / 1000), dt + 23);
+    sprintf(dt + 20, "%03hu%s", (unsigned short)(ts.tv_nsec / 1000000), dt + 23);
 
     yyjson_mut_obj_add_str(doc, root, "datetime", dt);
 
@@ -1862,13 +1884,16 @@ const char* db_membership_to_json () {
 
     yyjson_mut_obj_add_int(doc, root, "pid", pid);
 
-    struct timeval tv;
+    uv_timespec64_t ts;
+    if (uv_clock_gettime(UV_CLOCK_REALTIME, &ts) != 0) {
+        log_fatal("Unable to get precise time");
+        return NULL;
+    }
     struct tm tm;
-    gettimeofday(&tv, NULL);
-    localtime_r(&tv.tv_sec, &tm);
+    localtime_r(&ts.tv_sec, &tm);
     char dt[32];    // = "YYYY-MM-ddTHH:mm:ss.SSS+0000";
     strftime(dt, 32, "%Y-%m-%dT%H:%M:%S.000%z", &tm);
-    sprintf(dt + 20, "%03hu%s", (unsigned short)(tv.tv_usec / 1000), dt + 23);
+    sprintf(dt + 20, "%03hu%s", (unsigned short)(ts.tv_nsec / 1000000), dt + 23);
 
     yyjson_mut_obj_add_str(doc, root, "datetime", dt);
 
@@ -1912,13 +1937,26 @@ const char* actors_to_json () {
 
     yyjson_mut_obj_add_int(doc, root, "pid", pid);
 
-    struct timeval tv;
+    uv_timespec64_t ts;
+    if (uv_clock_gettime(UV_CLOCK_REALTIME, &ts) != 0) {
+        log_fatal("Unable to get precise time");
+        return NULL;
+    }
     struct tm tm;
-    gettimeofday(&tv, NULL);
-    localtime_r(&tv.tv_sec, &tm);
+#ifdef _WIN32
+    errno_t result = localtime_s(&tm, &ts.tv_sec);
+    if (result != 0) {
+        char errmsg[1024] = "Error getting time: ";
+        uv_strerror_r(errno, errmsg + strlen(errmsg), sizeof(errmsg) - strlen(errmsg));
+        log_warn("%s", errmsg);
+        return NULL;
+    }
+#else
+    localtime_r(&ts.tv_sec, &tm);
+#endif
     char dt[32];    // = "YYYY-MM-ddTHH:mm:ss.SSS+0000";
     strftime(dt, 32, "%Y-%m-%dT%H:%M:%S.000%z", &tm);
-    sprintf(dt + 20, "%03hu%s", (unsigned short)(tv.tv_usec / 1000), dt + 23);
+    sprintf(dt + 20, "%03hu%s", (unsigned short)(ts.tv_nsec / 1000000), dt + 23);
 
     yyjson_mut_obj_add_str(doc, root, "datetime", dt);
 
@@ -1995,6 +2033,9 @@ void *$mon_socket_loop() {
     pthread_setname_np(pthread_self(), "Monitor Socket");
 #endif
 
+#ifdef _WIN32
+    // TODO: implement on windows!?
+#else
     int s, client_sock, len;
     struct sockaddr_un local, remote;
     char q[100];
@@ -2094,6 +2135,7 @@ void *$mon_socket_loop() {
         close(client_sock);
     }
     return NULL;
+#endif
 }
 #endif
 
@@ -2106,6 +2148,7 @@ void rts_shutdown() {
 }
 
 
+#ifndef _WIN32
 void print_trace() {
     char pid_buf[30];
     sprintf(pid_buf, "%d", getpid());
@@ -2208,6 +2251,7 @@ void sigterm_handler(int signum) {
         exit(return_val);
     }
 }
+#endif
 
 void check_uv_fatal(int status, char msg[]) {
     if (status == 0)
@@ -2269,7 +2313,12 @@ int main(int argc, char **argv) {
     int rts_dc_id = -1;
     int new_argc = argc;
     int cpu_pin;
-    long num_cores = sysconf(_SC_NPROCESSORS_ONLN);
+    uv_cpu_info_t* cpu_infos;
+    int num_cores;
+    if (uv_cpu_info(&cpu_infos, &num_cores) != 0) {
+        log_fatal("Unable to get CPU info");
+        exit(1);
+    }
     bool mon_on_exit = false;
     bool auto_backtrace = true;
     bool interactive_backtrace = false;
@@ -2280,6 +2329,7 @@ int main(int argc, char **argv) {
     appname = argv[0];
     pid = getpid();
 
+#ifndef _WIN32
     // Do line buffered output
     setlinebuf(stdout);
 
@@ -2314,6 +2364,7 @@ int main(int argc, char **argv) {
         log_fatal("Failed to install signal handler for SIGTERM: %s", strerror(errno));
         exit(1);
     }
+#endif
 
 #ifdef ACTON_THREADS
     pthread_key_create(&self_key, NULL);
@@ -2490,6 +2541,7 @@ int main(int argc, char **argv) {
     }
     new_argv[new_argc] = NULL;
 
+#ifndef _WIN32
     if (interactive_backtrace) {
         sa_ill.sa_handler = &launch_debugger;
         sa_segv.sa_handler = &launch_debugger;
@@ -2497,8 +2549,10 @@ int main(int argc, char **argv) {
         sa_ill.sa_handler = &sigillsegv_handler;
         sa_segv.sa_handler = &sigillsegv_handler;
     }
+#endif
 
     if (auto_backtrace) {
+#ifndef _WIN32
         if (sigaction(SIGILL, &sa_ill, NULL) == -1) {
             log_fatal("Failed to install signal handler for SIGILL: %s", strerror(errno));
             exit(1);
@@ -2507,6 +2561,7 @@ int main(int argc, char **argv) {
             log_fatal("Failed to install signal handler for SIGSEGV: %s", strerror(errno));
             exit(1);
         }
+#endif
     }
 
     if (log_path)
@@ -2591,7 +2646,7 @@ int main(int argc, char **argv) {
 #endif
 
     for (int i=0; i <= num_wthreads; i++) {
-        uv_loop_t *loop = malloc(sizeof(uv_loop_t));
+        uv_loop_t *loop = GC_malloc(sizeof(uv_loop_t));
         check_uv_fatal(uv_loop_init(loop), "Error initializing libuv loop: ");
         uv_loops[i] = loop;
 
@@ -2726,16 +2781,14 @@ int main(int argc, char **argv) {
             pthread_setaffinity_np(threads[idx-1], sizeof(cpu_set), &cpu_set);
         }
     }
-#else
-    int wtid = 0;
-    uv_check_init(aux_uv_loop, &work_ev[wtid]);
-    uv_check_start(&work_ev[wtid], (uv_check_cb)wt_work_cb);
 #endif
 
     int wtid = 0;
     uv_loop_t *uv_loop = uv_loops[wtid];
+#ifdef ACTON_THREADS
     pthread_setspecific(pkey_wtid, (void *)wtid);
     pthread_setspecific(pkey_uv_loop, (void *)uv_loop);
+#endif
 
     uv_check_init(aux_uv_loop, &work_ev[wtid]);
     uv_check_start(&work_ev[wtid], (uv_check_cb)wt_work_cb);
@@ -2745,12 +2798,14 @@ int main(int argc, char **argv) {
     uv_timer_init(aux_uv_loop, timer_ev);
     uv_timer_start(timer_ev, main_timer_cb, 0, 0);
 
+#ifdef ACTON_THREADS
     // Set affinity for main thread
     if (cpu_pin) {
         CPU_ZERO(&cpu_set);
         CPU_SET(0, &cpu_set);
         pthread_setaffinity_np(pthread_self(), sizeof(cpu_set), &cpu_set);
     }
+#endif
 
     // Run the uv loop for the main thread
     wt_stats[0].state = WT_Idle;

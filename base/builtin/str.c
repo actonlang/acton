@@ -18,6 +18,8 @@
 #include <limits.h>
 #include <ctype.h>
 
+#include <strings.h>
+
 #define GC_THREADS 1
 #include "gc.h"
 

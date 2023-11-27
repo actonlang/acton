@@ -10,6 +10,8 @@
 #endif
 #include <setjmp.h>
 
+#include <asprintf.h>
+
 #ifdef __gnu_linux__
     #define IS_GNU_LINUX
 #elif  __APPLE__ && __MACH__

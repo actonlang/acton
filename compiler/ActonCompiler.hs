@@ -880,6 +880,11 @@ modNameToString (A.ModName names) = intercalate "." (map nameToString names)
 nameToString :: A.Name -> String
 nameToString (A.Name _ s) = s
 
+isWindowsOS :: String -> Bool
+isWindowsOS targetTriple = case splitOn "-" targetTriple of
+    (_:os:_) -> os == "windows"
+    _        -> False
+
 runZig opts zigCmd wd = do
     iff (C.ccmd opts) $ putStrLn zigCmd
     (returnCode, zigStdout, zigStderr) <- readCreateProcessWithExitCode (shell $ zigCmd){ cwd = wd } ""
@@ -903,9 +908,11 @@ zigBuild env opts paths tasks binTasks = do
     homeDir <- getHomeDirectory
     let cache_dir = if (not $ null $ C.cachedir opts) then (C.cachedir opts) else joinPath [ projPath paths, "build-cache" ]
         global_cache_dir = joinPath [ homeDir, ".cache", "acton", "build-cache" ]
+        no_threads = if isWindowsOS (C.target opts) then True else C.no_threads opts
+        -- TODO: something broken with rebuilds, try always rebuilding the rebuild-with-stdlib-import test and it'll fail?
         use_prebuilt = if isTmp paths
                          then C.defTarget == C.target opts
-                         else if C.db opts then False else C.defTarget == C.target opts
+                         else if C.db opts || no_threads then False else C.defTarget == C.target opts
         target_cpu = if (C.cpu opts /= "")
                        then C.cpu opts
                        else
@@ -933,7 +940,7 @@ zigBuild env opts paths tasks binTasks = do
                  target_cpu ++
                  " -Doptimize=" ++ (if (C.dev opts) then "Debug" else "ReleaseFast") ++
                  (if (C.db opts) then " -Ddb " else " ") ++
-                 (if (C.no_threads opts) then " -Dno_threads " else " ") ++
+                 (if no_threads then " -Dno_threads " else " ") ++
                  (if (C.cpedantic opts) then " -Dcpedantic " else " ") ++
                  " -Dprojpath=" ++ projPath paths ++
                  " -Dprojpath_outtypes=" ++ joinPath [ projPath paths, "out", "types" ] ++
@@ -950,8 +957,10 @@ zigBuild env opts paths tasks binTasks = do
     -- if we are in a temp acton project, copy the outputted binary next to the source file
     if (isTmp paths && not (null binTasks))
       then do
-        let srcBinFile = joinPath [ projProfile paths, "bin", (binName (head binTasks)) ]
-            dstBinFile = joinPath [ binDir paths, (binName (head binTasks)) ]
+        let baseName   = binName (head binTasks)
+            exeName    = if isWindowsOS (C.target opts) then baseName ++ ".exe" else baseName
+            srcBinFile = joinPath [ projProfile paths, "bin", exeName ]
+            dstBinFile = joinPath [ binDir paths, exeName ]
         copyFile srcBinFile dstBinFile
       else return ()
     timeEnd <- getTime Monotonic

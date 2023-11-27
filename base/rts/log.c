@@ -24,6 +24,7 @@
 #include <pthread.h>
 #endif
 
+#include <uv.h>
 #include "log.h"
 
 #define MAX_CALLBACKS 32
@@ -163,7 +164,7 @@ int log_add_fp(FILE *fp, int level) {
 
 static void init_event(log_Event *ev, void *udata) {
   if (!ev->date) {
-    clock_gettime(CLOCK_REALTIME, &ev->ts);
+    uv_clock_gettime(UV_CLOCK_REALTIME, &ev->ts);
     ev->date = localtime(&ev->ts.tv_sec);
   }
   ev->udata = udata;

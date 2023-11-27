@@ -1,3 +1,5 @@
+#include <asprintf.h>
+
 // Super //////////////////////////////////////////////////////////////
 
 // This is only used for typing the $superclass field in classes.
