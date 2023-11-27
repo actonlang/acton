@@ -22,10 +22,10 @@ struct process_data {
 
 void exit_handler(uv_process_t *req, int64_t exit_status, int term_signal) {
     struct process_data *process_data = req->data;
-    uv_handle_t *stdin = (uv_handle_t *)&process_data->stdin_pipe;
+    uv_handle_t *stdin_handle = (uv_handle_t *)&process_data->stdin_pipe;
     // stdin might be closed already from done_writing
-    if (uv_is_closing(stdin) == 0)
-        uv_close(stdin, NULL);
+    if (uv_is_closing(stdin_handle) == 0)
+        uv_close(stdin_handle, NULL);
     uv_close((uv_handle_t *)req, NULL);
     $action3 f = ($action3)process_data->on_exit;
     f->$class->__asyn__(f, process_data->process, to$int(exit_status), to$int(term_signal));
@@ -165,8 +165,8 @@ void close_cb(uv_handle_t *handle) {
 $R processQ_ProcessD_done_writingG_local (processQ_Process self, $Cont c$cont) {
     uv_process_t *p = (uv_process_t *)from$int(self->_p);
     struct process_data *process_data = (struct process_data *)p->data;
-    uv_handle_t *stdin = (uv_handle_t *)&process_data->stdin_pipe;
-    uv_close(stdin, close_cb);
+    uv_handle_t *stdin_handle = (uv_handle_t *)&process_data->stdin_pipe;
+    uv_close(stdin_handle, close_cb);
     return $R_CONT(c$cont, B_None);
 }
 
@@ -188,9 +188,9 @@ $R processQ_ProcessD_writeG_local (processQ_Process self, $Cont c$cont, B_bytes 
     uv_buf_t buf = uv_buf_init(data->str, data->nbytes);
 
     struct process_data *process_data = (struct process_data *)p->data;
-    uv_stream_t *stdin = (uv_stream_t *)&process_data->stdin_pipe;
+    uv_stream_t *stdin_handle = (uv_stream_t *)&process_data->stdin_pipe;
 
-    int r = uv_write(req, stdin, &buf, 1, NULL);
+    int r = uv_write(req, stdin_handle, &buf, 1, NULL);
     if (r != 0) {
         char errmsg[1024] = "Error writing to stdin of process: ";
         uv_strerror_r(r, errmsg + strlen(errmsg), sizeof(errmsg)-strlen(errmsg));
