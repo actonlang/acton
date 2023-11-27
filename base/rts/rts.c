@@ -1906,7 +1906,7 @@ const char* actors_to_json () {
 
 
 void *$mon_log_loop(void *period) {
-    log_info("Starting monitor log, with %d second(s) period, to: %s", (uint)period, mon_log_path);
+    log_info("Starting monitor log, with %d second(s) period, to: %s", (int)period, mon_log_path);
 
 #if defined(IS_MACOS)
     pthread_setname_np("Monitor Log");
@@ -1933,7 +1933,7 @@ void *$mon_log_loop(void *period) {
         pthread_mutex_lock(&rts_exit_lock);
         struct timespec ts;
         clock_gettime(CLOCK_REALTIME, &ts);
-        ts.tv_sec += (uint)period;
+        ts.tv_sec += (int)period;
         pthread_cond_timedwait(&rts_exit_signal, &rts_exit_lock, &ts);
         pthread_mutex_unlock(&rts_exit_lock);
     }
@@ -2203,7 +2203,7 @@ int main(int argc, char **argv) {
     // Init garbage collector and suppress warnings
     GC_INIT();
     GC_set_warn_proc(DaveNull);
-    uint ddb_no_host = 0;
+    int ddb_no_host = 0;
     char **ddb_host = NULL;
     char *rts_host = "localhost";
     int ddb_port = 32000;
@@ -2485,7 +2485,7 @@ int main(int argc, char **argv) {
     }
 
     // Zeroize statistics
-    for (uint i=0; i < MAX_WTHREADS; i++) {
+    for (int i=0; i < MAX_WTHREADS; i++) {
         wt_stats[i].idx = i;
         sprintf(wt_stats[i].key, "%d", i);
         wt_stats[i].state = 0;
@@ -2521,7 +2521,7 @@ int main(int argc, char **argv) {
     }
     init_dbc_stats();
 
-    for (uint i=0; i < num_wthreads+1; i++) {
+    for (int i=0; i < num_wthreads+1; i++) {
         uv_loop_t *loop = malloc(sizeof(uv_loop_t));
         check_uv_fatal(uv_loop_init(loop), "Error initializing libuv loop: ");
         uv_loops[i] = loop;
@@ -2538,7 +2538,7 @@ int main(int argc, char **argv) {
     }
     aux_uv_loop = uv_loops[0];
 
-    for (uint i=0; i <= MAX_WTHREADS; i++) {
+    for (int i=0; i <= MAX_WTHREADS; i++) {
         rqs[i].head = NULL;
         rqs[i].tail = NULL;
         rqs[i].count = 0;
