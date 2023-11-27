@@ -50,6 +50,7 @@ pub fn build(b: *std.Build) void {
     print("Acton Project Builder\nBuilding in {s}\n", .{buildroot_path});
     const optimize = b.standardOptimizeOption(.{});
     const target = b.standardTargetOptions(.{});
+    const db = b.option(bool, "db", "") orelse false;
     const use_prebuilt = b.option(bool, "use_prebuilt", "") orelse false;
     const projpath = b.option([]const u8, "projpath", "") orelse "";
     const projpath_outtypes = b.option([]const u8, "projpath_outtypes", "") orelse "";
@@ -69,6 +70,7 @@ pub fn build(b: *std.Build) void {
     const actonbase_dep = b.anonymousDependency(syspath_base, @import("basebuild.zig"), .{
         .target = target,
         .optimize = optimize,
+        .db = db,
         .syspath_include = syspath_include,
     });
 
@@ -259,6 +261,9 @@ pub fn build(b: *std.Build) void {
         };
     }
 
+    if (db)
+        flags.appendSlice(&.{"-DACTON_DB",}) catch unreachable;
+
     for (c_files.items) |entry| {
         libActonProject.addCSourceFile(.{ .file = .{ .path = entry }, .flags = flags.items });
     }
@@ -312,38 +317,48 @@ pub fn build(b: *std.Build) void {
         executable.addLibraryPath(.{ .path = syspath_lib });
         executable.linkLibrary(libActonProject);
 
-        if (use_prebuilt) {
+        // Do not use prebuilt based on the use_prebuilt flag, but also do not
+        // use prebuilt when there are custom options, like --db
+        // Also see below.
+        if (!use_prebuilt or db) {
+            executable.linkLibrary(actonbase_dep.artifact("Acton"));
+        } else {
             executable.linkSystemLibrary("Acton");
-            executable.linkSystemLibrary("argp");
+        }
+        if (use_prebuilt) {
+            if (db) {
+                executable.linkSystemLibrary("ActonDB");
+                executable.linkSystemLibrary("argp");
+                executable.linkSystemLibrary("protobuf-c");
+                executable.linkSystemLibrary("uuid");
+            }
             executable.linkSystemLibrary("bsdnt");
+            executable.linkSystemLibrary("mbedcrypto");
+            executable.linkSystemLibrary("mbedtls");
+            executable.linkSystemLibrary("mbedx509");
             executable.linkSystemLibrary("netstring");
             executable.linkSystemLibrary("pcre2");
-            executable.linkSystemLibrary("protobuf-c");
+            executable.linkSystemLibrary("snappy-c");
             executable.linkSystemLibrary("tlsuv");
-            executable.linkSystemLibrary("mbedtls");
-            executable.linkSystemLibrary("mbedcrypto");
-            executable.linkSystemLibrary("mbedx509");
             executable.linkSystemLibrary("utf8proc");
-            executable.linkSystemLibrary("uuid");
             executable.linkSystemLibrary("uv");
             executable.linkSystemLibrary("xml2");
             executable.linkSystemLibrary("yyjson");
-            executable.linkSystemLibrary("snappy-c");
-            executable.linkSystemLibrary("ActonDB");
+
             executable.linkSystemLibrary("actongc");
         } else {
-            executable.linkLibrary(actonbase_dep.artifact("Acton"));
-            executable.linkLibrary(libactondb_dep.artifact("ActonDB"));
-
-            executable.linkLibrary(dep_libargp.artifact("argp"));
+            if (db) {
+                executable.linkLibrary(libactondb_dep.artifact("ActonDB"));
+                executable.linkLibrary(dep_libargp.artifact("argp"));
+                executable.linkLibrary(dep_libprotobuf_c.artifact("protobuf-c"));
+                executable.linkLibrary(dep_libuuid.artifact("uuid"));
+            }
             executable.linkLibrary(dep_libbsdnt.artifact("bsdnt"));
             executable.linkLibrary(dep_libnetstring.artifact("netstring"));
             executable.linkLibrary(dep_libpcre2.artifact("pcre2"));
-            executable.linkLibrary(dep_libprotobuf_c.artifact("protobuf-c"));
             executable.linkLibrary(dep_libtlsuv.artifact("tlsuv"));
             executable.linkLibrary(dep_libmbedtls.artifact("mbedtls"));
             executable.linkLibrary(dep_libutf8proc.artifact("utf8proc"));
-            executable.linkLibrary(dep_libuuid.artifact("uuid"));
             executable.linkLibrary(dep_libuv.artifact("uv"));
             executable.linkLibrary(dep_libxml2.artifact("xml2"));
             executable.linkLibrary(dep_libyyjson.artifact("yyjson"));

@@ -79,6 +79,7 @@ main = do
           C.cpedantic = C.cpedanticB opts,
           C.debug = C.debugB opts,
           C.dev = C.devB opts,
+          C.db = C.dbB opts,
           C.root = C.rootB opts,
           C.ccmd = C.ccmdB opts,
           C.quiet = C.quietB opts,
@@ -96,7 +97,7 @@ main = do
                                     then printDocs (C.DocOptions (head nms) "")
                                     else compileFiles opts (catMaybes $ map filterActFile nms)
 
-defaultOpts   = C.CompileOptions False False False False False False False False False False False
+defaultOpts   = C.CompileOptions False False False False False False False False False False False False
                                  False False False False False False False False False "" "" "" ""
                                  C.defTarget "" False False False
 
@@ -900,7 +901,9 @@ zigBuild env opts paths tasks binTasks = do
     homeDir <- getHomeDirectory
     let cache_dir = if (not $ null $ C.cachedir opts) then (C.cachedir opts) else joinPath [ projPath paths, "build-cache" ]
         global_cache_dir = joinPath [ homeDir, ".cache", "acton", "build-cache" ]
-        use_prebuilt = C.defTarget == C.target opts
+        use_prebuilt = if isTmp paths
+                         then C.defTarget == C.target opts
+                         else if C.db opts then False else C.defTarget == C.target opts
     let zigCmdBase =
           if buildZigExists
             then zig paths ++ " build " ++
@@ -919,6 +922,7 @@ zigBuild env opts paths tasks binTasks = do
                  (if (C.debug opts) then " --verbose " else "") ++
                  " -Dtarget=" ++ (C.target opts) ++
                  " -Doptimize=" ++ (if (C.dev opts) then "Debug" else "ReleaseFast") ++
+                 (if (C.db opts) then " -Ddb " else " ") ++
                  (if (C.cpedantic opts) then " -Dcpedantic " else " ") ++
                  " -Dprojpath=" ++ projPath paths ++
                  " -Dprojpath_outtypes=" ++ joinPath [ projPath paths, "out", "types" ] ++

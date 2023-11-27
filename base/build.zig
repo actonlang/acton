@@ -18,6 +18,7 @@ pub fn build(b: *std.Build) void {
     const optimize = b.standardOptimizeOption(.{});
     const target = b.standardTargetOptions(.{});
     const cpedantic = b.option(bool, "cpedantic", "") orelse false;
+    const use_db = b.option(bool, "db", "") orelse false;
     const use_prebuilt = b.option(bool, "use_prebuilt", "") orelse false;
     const projpath = b.option([]const u8, "projpath", "") orelse "";
     const projpath_outtypes = b.option([]const u8, "projpath_outtypes", "") orelse "";
@@ -135,6 +136,11 @@ pub fn build(b: *std.Build) void {
             std.log.err("Error appending flags: {}", .{err});
             std.os.exit(1);
         };
+    }
+
+    if (use_db) {
+        print("Building with DB backend support\n", .{});
+        flags.append("-DACTON_DB") catch unreachable;
     }
 
     const libActon = b.addStaticLibrary(.{

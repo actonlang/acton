@@ -25,12 +25,16 @@
 #include <pthread.h>
 #include <stdio.h>
 #include <stdarg.h>
+#ifdef ACTON_DB
 #include <uuid/uuid.h>
+#endif
 #include <signal.h>
 
 #include <time.h>
 #include <stdlib.h>
 
+#include <sys/un.h>
+#include <sys/time.h>
 #include <sys/wait.h>
 #ifdef __linux__
 #include <sys/prctl.h>
@@ -49,12 +53,13 @@
 #include "../builtin/env.h"
 #include "../builtin/function.h"
 
+#ifdef ACTON_DB
 #include "../backend/client_api.h"
 #include "../backend/fastrand.h"
+extern struct dbc_stat dbc_stats;
+#endif
 
 struct sigaction sa_ill, sa_int, sa_pipe, sa_segv, sa_term;
-
-extern struct dbc_stat dbc_stats;
 
 char rts_verbose = 0;
 char rts_debug = 0;
@@ -238,7 +243,9 @@ int64_t get_next_key() {
 
 #define TIMER_QUEUE     0           // Special key in table MSG_QUEUE
 
+#ifdef ACTON_DB
 remote_db_t * db = NULL;
+#endif
 
 ////////////////////////////////////////////////////////////////////////////////////////
 
@@ -698,6 +705,7 @@ struct $Cont $InitRoot$cont = {
 };
 ////////////////////////////////////////////////////////////////////////////////////////
 
+#ifdef ACTON_DB
 void dummy_callback(queue_callback_args * qca) { }
 void queue_group_message_callback(queue_callback_args * qca) {
 //    rtsd_printf("   # There are messages in actor queues for group %d, subscriber %d, status %d\n", (int) qca->group_id, (int) qca->consumer_id, qca->status);
@@ -728,6 +736,7 @@ void register_actor(long key) {
         assert(status == 0);
     }
 }
+#endif
 
 void PUSH_outgoing($Actor self, B_Msg m) {
     m->$next = self->$outgoing;
@@ -822,6 +831,7 @@ void $RAISE(B_BaseException e) {
     longjmp(jump->buf, 1);
 }
 
+#ifdef ACTON_DB
 void create_all_actor_queues() {
     for(snode_t * node = HEAD(db->actors); node!=NULL; node=NEXT(node)) {
         create_db_queue((long) node->key);
@@ -870,6 +880,7 @@ int handle_status_and_schema_mismatch(int ret, int minority_status, long key)
 
     return 0;
 }
+#endif
 
 void reverse_outgoing_queue($Actor self) {
     B_Msg prev = NULL;
@@ -883,6 +894,7 @@ void reverse_outgoing_queue($Actor self) {
     self->$outgoing = prev;
 }
 
+#ifdef ACTON_DB
 // Send all buffered messages of the sender to global DB queues in a single txn, and retry it until success
 // Leaves no side effects in local queues if txns need to abort
 // Assumes the actor's outgoing queue has already been reversed in FIFO order
@@ -905,6 +917,7 @@ void FLUSH_outgoing_db($Actor self, uuid_t *txnid) {
         m = m->$next;
     }
 }
+#endif
 
 // Actually send all buffered messages of the sender, using internal queues only
 // Assumes the actor's outgoing queue has already been reversed in FIFO order
@@ -944,6 +957,7 @@ void handle_timeout() {
             int wtid = ENQ_ready(m->$to);
             wake_wt(wtid);
         }
+#ifdef ACTON_DB
         if (db) {
                 int success = 0;
                 while(!success && !rts_exit)
@@ -981,6 +995,7 @@ void handle_timeout() {
                     success = 1;
                 }
         }
+#endif
     }
 }
 
@@ -994,6 +1009,7 @@ $WORD try_globdict($WORD w) {
     return obj;
 }
 
+#ifdef ACTON_DB
 long read_queued_msg(long key, int64_t *read_head) {
     snode_t *m_start, *m_end;
     int entries_read = 0, minority_status = 0, ret = 0;
@@ -1012,6 +1028,7 @@ long read_queued_msg(long key, int64_t *read_head) {
     rtsd_printf("# r %p, key: %ld, cells: %p, columns: %p, no_cols: %d, blobsize: %d", r, (long)r->key, r->cells, r->column_array, r->no_columns, r->last_blob_size);
     return (long)r->column_array[0];
 }
+#endif
 
 typedef struct BlobHd {           // C.f. $ROW
     int class_id;
@@ -1077,6 +1094,7 @@ void print_actor($Actor a) {
     rtsd_printf("     globkey: %ld", a->$globkey);
 }
 
+#ifdef ACTON_DB
 void deserialize_system(snode_t *actors_start) {
     rtsd_printf("Deserializing system");
     queue_callback * gqc = get_queue_callback(queue_group_message_callback);
@@ -1232,6 +1250,7 @@ void deserialize_system(snode_t *actors_start) {
     globdict = NULL;
     rtsd_printf("System deserialized");
 }
+#endif
 
 $WORD try_globkey($WORD obj) {
     $SerializableG_class c = (($Serializable)obj)->$class;
@@ -1254,6 +1273,7 @@ long $total_rowsize($ROW r) {           // In words
     return size;
 }
 
+#ifdef ACTON_DB
 void insert_row(long key, size_t total, $ROW row, $WORD table, uuid_t *txnid) {
     $WORD column[2] = {($WORD)key, 0};
     $WORD blob[total];
@@ -1307,8 +1327,10 @@ void serialize_actor($Actor a, uuid_t *txnid) {
         out = out->$next;
     }
 }
+#endif
 
 void serialize_state_shortcut($Actor a) {
+#ifdef ACTON_DB
     if (db) {
             int success = 0, ret = 0, minority_status = 0;
             while(!success && !rts_exit) {
@@ -1324,6 +1346,7 @@ void serialize_state_shortcut($Actor a) {
                 success = 1;
             }
     }
+#endif
 }
 
 void BOOTSTRAP(int argc, char *argv[]) {
@@ -1338,6 +1361,7 @@ void BOOTSTRAP(int argc, char *argv[]) {
     root_actor = $ROOT();                           // Assumed to return $NEWACTOR(X) for the selected root actor X
     time_t now = current_time();
     B_Msg m = B_MsgG_newXX(root_actor, &$InitRoot$cont, now, &$Done$instance);
+#ifdef ACTON_DB
     if (db) {
             int ret = 0, minority_status = 0;
             while(!rts_exit) {
@@ -1347,6 +1371,7 @@ void BOOTSTRAP(int argc, char *argv[]) {
                     break;
             }
     }
+#endif
     if (ENQ_msg(m, root_actor)) {
         ENQ_ready(root_actor);
     }
@@ -1354,6 +1379,7 @@ void BOOTSTRAP(int argc, char *argv[]) {
 }
 
 void save_actor_state($Actor current, B_Msg m) {
+#ifdef ACTON_DB
             if (db) {
                 int success = 0;
                 reverse_outgoing_queue(current);
@@ -1390,9 +1416,12 @@ void save_actor_state($Actor current, B_Msg m) {
                 }
                 FLUSH_outgoing_local(current);
             } else {
+#endif
                 reverse_outgoing_queue(current);
                 FLUSH_outgoing_local(current);
+#ifdef ACTON_DB
             }
+#endif
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////
@@ -1600,6 +1629,7 @@ void wt_work_cb(uv_check_t *ev) {
             break;
         }
         case $RWAIT: {
+#ifdef ACTON_DB
             if (db) {
                 int success = 0, ret = 0, minority_status = 0;
                 reverse_outgoing_queue(current);
@@ -1619,9 +1649,12 @@ void wt_work_cb(uv_check_t *ev) {
                 }
                 FLUSH_outgoing_local(current);
             } else {
+#endif
                 reverse_outgoing_queue(current);
                 FLUSH_outgoing_local(current);
+#ifdef ACTON_DB
             }
+#endif
             m->$cont = r.cont;
             B_Msg x = (B_Msg)r.value;
             assert(x != NULL);
@@ -1718,6 +1751,7 @@ void $register_rts () {
  
 ////////////////////////////////////////////////////////////////////////////////////////
 
+#ifdef ACTON_DB
 void dbc_ops_stats_to_json(yyjson_mut_doc *doc, yyjson_mut_val *j_mpoint, struct dbc_ops_stat *ops_stat) {
     yyjson_mut_val *j_ops_stat = yyjson_mut_obj(doc);
     yyjson_mut_obj_add_val(doc, j_mpoint, ops_stat->name, j_ops_stat);
@@ -1741,6 +1775,7 @@ void dbc_ops_stats_to_json(yyjson_mut_doc *doc, yyjson_mut_val *j_mpoint, struct
     yyjson_mut_obj_add_int(doc, j_ops_stat, "time_inf",   ops_stat->time_inf);
 
 }
+#endif
 
 
 const char* stats_to_json () {
@@ -1803,16 +1838,19 @@ const char* stats_to_json () {
     yyjson_mut_val *j_dbc = yyjson_mut_obj(doc);
     yyjson_mut_obj_add_val(doc, root, "db_client", j_dbc);
 
+#ifdef ACTON_DB
 #define X(ops_name) \
     dbc_ops_stats_to_json(doc, j_dbc, dbc_stats.ops_name);
 LIST_OF_DBC_OPS
 #undef X
+#endif
 
     const char *json = yyjson_mut_write(doc, 0, NULL);
     yyjson_mut_doc_free(doc);
     return json;
 }
 
+#ifdef ACTON_DB
 const char* db_membership_to_json () {
     yyjson_mut_doc *doc = yyjson_mut_doc_new(NULL);
     yyjson_mut_val *root = yyjson_mut_obj(doc);
@@ -1861,6 +1899,7 @@ const char* db_membership_to_json () {
     yyjson_mut_doc_free(doc);
     return json;
 }
+#endif
 
 const char* actors_to_json () {
     yyjson_mut_doc *doc = yyjson_mut_doc_new(NULL);
@@ -1884,6 +1923,8 @@ const char* actors_to_json () {
     // Actual topology
     yyjson_mut_val *j_actors = yyjson_mut_obj(doc);
     yyjson_mut_obj_add_val(doc, root, "actors", j_actors);
+#ifdef ACTON_DB
+    // TODO: implement similar option but local only
     for(snode_t * crt = HEAD(db->actors); crt!=NULL; crt = NEXT(crt))
     {
         actor_descriptor * a = (actor_descriptor *) crt->value;
@@ -1898,6 +1939,7 @@ const char* actors_to_json () {
         yyjson_mut_obj_add_str(doc, j_a, "local", a->is_local?"yes":"no");
         yyjson_mut_obj_add_str(doc, j_a, "status", Actor_status_name[a->status]);
     }
+#endif
 
     const char *json = yyjson_mut_write(doc, 0, NULL);
     yyjson_mut_doc_free(doc);
@@ -2014,6 +2056,7 @@ void *$mon_socket_loop() {
                     }
                 }
 
+#ifdef ACTON_DB
                 if (memcmp(str, "membership", len) == 0) {
                     const char *json = db_membership_to_json();
                     char *send_buf = malloc(strlen(json)+14); // 14 = maximum digits for length is 9 (999999999) + : + ; + \0
@@ -2026,6 +2069,7 @@ void *$mon_socket_loop() {
                         break;
                     }
                 }
+#endif
 
                 if (memcmp(str, "WTS", len) == 0) {
                     const char *json = stats_to_json();
@@ -2519,7 +2563,9 @@ int main(int argc, char **argv) {
         wt_stats[i].bkeep_100s = 0;
         wt_stats[i].bkeep_inf = 0;
     }
+#ifdef ACTON_DB
     init_dbc_stats();
+#endif
 
     for (int i=0; i < num_wthreads+1; i++) {
         uv_loop_t *loop = malloc(sizeof(uv_loop_t));
@@ -2551,6 +2597,7 @@ int main(int argc, char **argv) {
 
     unsigned int seed;
     if (ddb_host) {
+#ifdef ACTON_DB
         GET_RANDSEED(&seed, 0);
         log_info("Starting distributed RTS node, host=%s, node_id=%d, rack_id=%d, datacenter_id=%d", rts_host, rts_node_id, rts_rack_id, rts_dc_id);
         log_info("Using distributed database backend replication factor of %d", ddb_replication);
@@ -2570,8 +2617,14 @@ int main(int argc, char **argv) {
         db = get_remote_db(ddb_replication, rts_rack_id, rts_dc_id, rts_host, rts_node_id, ddb_no_host, seed_hosts, seed_ports, &seed);
         free(seed_hosts);
         free(seed_ports);
+#else
+        fprintf(stderr, "ERROR: DB support disabled, unable to use provided DB backend host.\n");
+        fprintf(stderr, "HINT: Enable DB backend: actonc --db\n");
+        exit(1);
+#endif
     }
 
+#ifdef ACTON_DB
     if (db) {
         snode_t* start_row = NULL, * end_row = NULL;
         log_info("Checking for existing actor state in DDB.");
@@ -2603,8 +2656,11 @@ int main(int argc, char **argv) {
             log_info("Database intialization complete.");
         }
     } else {
+#endif
         BOOTSTRAP(new_argc, new_argv);
+#ifdef ACTON_DB
     }
+#endif
 
     cpu_set_t cpu_set;
 

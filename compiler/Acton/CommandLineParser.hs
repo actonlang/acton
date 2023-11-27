@@ -39,6 +39,7 @@ data NewOptions     = NewOptions {
 
 data CompileOptions   = CompileOptions {
                          alwaysbuild :: Bool,
+                         db          :: Bool,
                          parse       :: Bool,
                          kinds       :: Bool,
                          types       :: Bool,
@@ -72,6 +73,7 @@ data CompileOptions   = CompileOptions {
 data BuildOptions = BuildOptions {
                          alwaysB     :: Bool,
                          cpedanticB  :: Bool,
+                         dbB         :: Bool,
                          debugB      :: Bool,
                          devB        :: Bool,
                          autostubB   :: Bool,
@@ -130,6 +132,7 @@ newCommand = New <$> (NewOptions <$> argument (str :: ReadM String) (metavar "PR
 
 compileOptions = CompileOptions
         <$> switch (long "always-build" <> help "Show the result of parsing")
+        <*> switch (long "db"           <> help "Enable DB backend")
         <*> switch (long "parse"        <> help "Show the result of parsing")
         <*> switch (long "kinds"        <> help "Show all the result after kind-checking")
         <*> switch (long "types"        <> help "Show all inferred expression types")
@@ -163,6 +166,7 @@ buildCommand          = Build <$> (
     BuildOptions
         <$> switch (long "always-build" <> help "Development mode; include debug symbols etc")
         <*> switch (long "cpedantic"    <> help "Pedantic C compilation with -Werror")
+        <*> switch (long "db"           <> help "Enable DB backend")
         <*> switch (long "debug"        <> help "Print debug stuff")
         <*> switch (long "dev"          <> help "Development mode; include debug symbols etc")
         <*> switch (long "auto-stub"    <> help "Allow automatic stub detection")

@@ -186,12 +186,20 @@ void init_db_queue(long);
 void register_actor(long key);
 void serialize_state_shortcut($Actor);
 
+#ifdef ACTON_DB
+#define INIT_DB_QUEUE(key) init_db_queue(key)
+#define REGISTER_ACTOR(key) register_actor(key)
+#else
+#define INIT_DB_QUEUE(key)
+#define REGISTER_ACTOR(key)
+#endif
+
 #define $NEWACTOR($T)       ({ $T $t = malloc(sizeof(struct $T)); \
                                $t->$class = &$T ## G_methods; \
                                $ActorG_methods.__init__(($Actor)$t); \
                                $t->$affinity = 0; \
-                               init_db_queue($t->$globkey); \
-                               register_actor($t->$globkey); \
+                               INIT_DB_QUEUE($t->$globkey); \
+                               REGISTER_ACTOR($t->$globkey); \
                                $t; })
 
 $R $PUSH_C($Cont);
