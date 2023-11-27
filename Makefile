@@ -245,7 +245,7 @@ dist/depsout/lib/libprotobuf-c.a: dist/deps/libprotobuf_c $(DIST_ZIG)
 	cd $< && $(ZIG) build $(ZIG_TARGET) $(ZIG_CPU) --prefix $(TD)/dist/depsout
 
 # /deps/tlsuv ---------------------------------------------
-TLSUV_REF=f30ff355c06616b050002a12889b2cde4beccb19
+TLSUV_REF=1196b237c3802fe882c541dab93676657410be05
 deps-download/$(TLSUV_REF).tar.gz:
 	mkdir -p deps-download
 	curl -f -L -o $@ https://github.com/actonlang/tlsuv/archive/$(TLSUV_REF).tar.gz
@@ -259,7 +259,7 @@ dist/depsout/lib/libtlsuv.a: dist/deps/tlsuv $(DIST_ZIG) dist/depsout/lib/libmbe
 	cd $< && $(ZIG) build $(ZIG_TARGET) $(ZIG_CPU) --prefix $(TD)/dist/depsout --search-prefix $(TD)/dist/depsout
 
 # /deps/libutf8proc --------------------------------------
-LIBUTF8PROC_REF=ca34e8c7db7c7c28bddcf2a821d3c02e259c2215
+LIBUTF8PROC_REF=947e6459f8922525bc4c4f888b4aa94fb4520633
 deps-download/$(LIBUTF8PROC_REF).tar.gz:
 	mkdir -p deps-download
 	curl -f -L -o $@ https://github.com/actonlang/utf8proc/archive/$(LIBUTF8PROC_REF).tar.gz
@@ -295,7 +295,7 @@ dist/depsout/lib/libuv.a: dist/deps/libuv $(DIST_ZIG)
 	cd $< && $(ZIG) build $(ZIG_TARGET) $(ZIG_CPU) --prefix $(TD)/dist/depsout
 
 # /deps/libxml2 ------------------------------------------
-LIBXML2_REF=14100c19fd1d754bb39c9584fe223b2e2e1ffe77
+LIBXML2_REF=eec12d6781f9cebf08666bcd43c0f30c47fb03a8
 deps-download/$(LIBXML2_REF).tar.gz:
 	mkdir -p deps-download
 	curl -f -L -o $@ https://github.com/actonlang/libxml2/archive/$(LIBXML2_REF).tar.gz
@@ -324,7 +324,7 @@ dist/depsout/lib/libpcre2.a: dist/deps/pcre2 $(DIST_ZIG)
 	cd $< && $(ZIG) build $(ZIG_TARGET) $(ZIG_CPU) --prefix $(TD)/dist/depsout
 
 # /deps/libsnappy_c --------------------------------------------
-LIBSNAPPY_C_REF=519ab55d5338c47d85452c6b0fa97ef2d0e96396
+LIBSNAPPY_C_REF=9446721cb7ee790dfe2db39701075b00513b5129
 deps-download/$(LIBSNAPPY_C_REF).tar.gz:
 	mkdir -p deps-download
 	curl -f -L -o $@ https://github.com/actonlang/snappy/archive/$(LIBSNAPPY_C_REF).tar.gz
@@ -337,8 +337,6 @@ dist/deps/libsnappy_c: deps-download/$(LIBSNAPPY_C_REF).tar.gz
 dist/depsout/lib/libsnappy-c.a: dist/deps/libsnappy_c $(DIST_ZIG)
 	cd $< && $(ZIG) build $(ZIG_TARGET) $(ZIG_CPU) --prefix $(TD)/dist/depsout
 
-
-# --
 dist/deps/libnetstring: deps/libnetstring $(DIST_ZIG)
 	mkdir -p $(TD)/$@
 	cp -a $</* $(TD)/$@

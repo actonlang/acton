@@ -3,6 +3,14 @@
 ## Unreleased
 
 ### Added
+- Acton programs now run on Windows!
+  - It is now possible to compile Acton programs for Windows, both x86_64 and
+    aarch64, although since Acton itself (compiler etc) is not available on
+    Windows, only cross-compilation from MacOS or Linux is possible.
+  - Use `acton --target aarch64-windows-gnu examples/helloworld.act` to produce
+    `examples/helloworld.exe` which can be run on Windows
+  - Acton applications compiled for Windows are single threaded
+  - termios related terminal settings, is not supported on Windows
 - Acton RTS now supports actor cleanup through GC finalization
   - Define a `action def __cleanup__():` action on your actor and it will be run
     when the actor is about to be garbage collected
@@ -61,6 +69,7 @@
   - More grey shades
   - `term.clear` && `term.top` to clear and move cursor to top
 - `http.Client.close()` to explicitly close a connection
+- Single threaded RTS mode, only used by Windows for now
 
 ### Changed
 - The work dir and environment arguments of `process.Process` have been moved to

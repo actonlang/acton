@@ -794,6 +794,11 @@ modNameToString (A.ModName names) = intercalate "." (map nameToString names)
 nameToString :: A.Name -> String
 nameToString (A.Name _ s) = s
 
+isWindowsOS :: String -> Bool
+isWindowsOS targetTriple = case splitOn "-" targetTriple of
+    (_:os:_) -> os == "windows"
+    _        -> False
+
 runZig opts zigCmd wd = do
     iff (C.ccmd opts) $ putStrLn zigCmd
     (returnCode, zigStdout, zigStderr) <- readCreateProcessWithExitCode (shell $ zigCmd){ cwd = wd } ""
@@ -816,12 +821,15 @@ zigBuild env opts paths tasks binTasks = do
     buildZigExists <- doesFileExist $ projPath paths ++ "/build.zig"
     homeDir <- getHomeDirectory
     let global_cache_dir = joinPath [ homeDir, ".cache", "acton", "build-cache" ]
+        no_threads = if isWindowsOS (C.target opts) then True else C.no_threads opts
         target_cpu = if (C.cpu opts /= "")
                        then C.cpu opts
                        else
                          case (splitOn "-" (C.target opts)) of
                            ("native":_:_)        -> ""
                            ("aarch64":"macos":_) -> " -Dcpu=apple_a15 "
+    -- TODO: how do we do better here? Windows presumably runs on many CPUs that are not aarch64. We really just want to enable AES
+                           ("aarch64":"windows":_) -> " -Dcpu=apple_a15 "
                            ("x86_64":_:_)        -> " -Dcpu=westmere "
                            (_:_:_)               -> ""
     let zigCmdBase =
@@ -845,7 +853,7 @@ zigBuild env opts paths tasks binTasks = do
                  " -Ddeps_path=" ++ (C.deppath opts) ++
                  " -Doptimize=" ++ (if (C.dev opts) then "Debug" else "ReleaseFast") ++
                  (if (C.db opts) then " -Ddb " else " ") ++
-                 (if (C.no_threads opts) then " -Dno_threads " else " ") ++
+                 (if no_threads then " -Dno_threads " else " ") ++
                  (if (C.cpedantic opts) then " -Dcpedantic " else " ") ++
                  " -Dsyspath=" ++ sysPath paths
 
@@ -854,8 +862,10 @@ zigBuild env opts paths tasks binTasks = do
     -- if we are in a temp acton project, copy the outputted binary next to the source file
     if (isTmp paths && not (null binTasks))
       then do
-        let srcBinFile = joinPath [ projOut paths, "bin", (binName (head binTasks)) ]
-            dstBinFile = joinPath [ binDir paths, (binName (head binTasks)) ]
+        let baseName   = binName (head binTasks)
+            exeName    = if isWindowsOS (C.target opts) then baseName ++ ".exe" else baseName
+            srcBinFile = joinPath [ projOut paths, "bin", exeName ]
+            dstBinFile = joinPath [ binDir paths, exeName ]
         copyFile srcBinFile dstBinFile
       else return ()
     timeEnd <- getTime Monotonic

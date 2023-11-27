@@ -28,7 +28,12 @@ B_bool fileQ_FileStatD_is_file (fileQ_FileStat self) {
 
 // def is_symlink(self) -> bool:
 B_bool fileQ_FileStatD_is_symlink (fileQ_FileStat self) {
+#if defined(_WIN32) || defined(_WIN64)
+    // TODO: do better
+    return B_False;
+#else
     return toB_bool(S_ISLNK(fromB_u64(self->mode)));
+#endif
 }
 
 // def is_block_device(self) -> bool:
@@ -43,12 +48,22 @@ B_bool fileQ_FileStatD_is_char_device (fileQ_FileStat self) {
 
 // def is_fifo(self) -> bool:
 B_bool fileQ_FileStatD_is_fifo (fileQ_FileStat self) {
+#if defined(_WIN32) || defined(_WIN64)
+    // TODO: do better
+    return B_False;
+#else
     return toB_bool(S_ISFIFO(fromB_u64(self->mode)));
+#endif
 }
 
 // def is_socket(self) -> bool:
 B_bool fileQ_FileStatD_is_socket (fileQ_FileStat self) {
+#if defined(_WIN32) || defined(_WIN64)
+    // TODO: do better
+    return B_False;
+#else
     return toB_bool(S_ISSOCK(fromB_u64(self->mode)));
+#endif
 }
 
 // action def cwd() -> str:

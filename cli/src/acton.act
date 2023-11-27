@@ -21,7 +21,7 @@ def clean_buildcache(cap: file.FileCap):
 
 actor CompilerRunner(process_cap, env, args, wdir=None):
     def on_stderr(p, data):
-        print(data.decode(), stderr=True, end="")
+        print(data.decode(), err=True, end="")
 
     def on_stdout(p, data):
         print(data.decode(), end="")
@@ -448,7 +448,7 @@ actor main(env):
             pass
         if _cmd is not None:
             if _file is not None and (_file.endswith(".act") or _file.endswith(".ty")):
-                print("Error: cannot specify both a command and an .act/.ty file", stderr=True)
+                print("Error: cannot specify both a command and an .act/.ty file", err=True)
                 await async env.exit(1)
             _cmd(_args)
         else:
