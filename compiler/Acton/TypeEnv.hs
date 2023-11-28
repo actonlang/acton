@@ -163,7 +163,7 @@ bindWits eqs                            = [ Assign l0 [PVar l0 w (Just t)] e | E
 impl2type t (TC n ts)                   = tCon $ TC n (t:ts)
 
 wit2row ws                              = \p -> foldr f p ws
-  where f (w,t)                         = TRow NoLoc PRow w t
+  where f (w,t)                         = TRow NoLoc PRow nWild t
 
 wit2arg ws                              = \p -> foldr f p ws
   where f (w,t)                         = PosArg (eVar w)

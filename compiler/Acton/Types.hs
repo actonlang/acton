@@ -459,7 +459,7 @@ instance InfEnv Decl where
       | not $ null ps                   = notYet (loc n) "Classes with direct extensions"
       | otherwise                       = case findName n env of
                                              NReserved -> do
-                                                 traceM ("\n## infEnv class " ++ prstr n)
+                                                 --traceM ("\n## infEnv class " ++ prstr n)
                                                  pushFX fxPure tNone
                                                  te0 <- infProperties env as' b
                                                  (cs,te,b1) <- infEnv env1 b

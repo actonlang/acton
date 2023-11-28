@@ -324,7 +324,7 @@ instance Norm Expr where
     norm env (Strings l ss)         = return $ Strings l (catStrings ss)
     norm env (BStrings l ss)        = return $ BStrings l (catStrings ss)
     norm env (Call l e p k)         = Call l <$> norm env e <*> norm env (joinArg p k) <*> pure KwdNil
-    norm env (TApp l e ts)          = TApp l <$> normInst env ts e <*> pure ts
+    norm env (TApp l e ts)          = TApp l <$> normInst env ts e <*> pure (conv ts)
     norm env (Dot l (Var l' x) n)
       | NClass{} <- findQName x env = pure $ Dot l (Var l' x) n
     norm env (Dot l e n)
@@ -453,7 +453,6 @@ instance Norm Assoc where
 
 -- Convert function types ---------------------------------------------------------------------------------
 
-convEnv env m (n, NClass q ps te)   = [(n, NClass q (mro1 env $ map snd ps) te)]
 convEnv env m (n, i)                = [(n, conv i)]
 
 

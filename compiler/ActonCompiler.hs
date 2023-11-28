@@ -642,6 +642,8 @@ runRestPasses opts paths env0 parsed stubMode = do
 
                       envTmp <- Acton.Env.mkEnv (sysTypes paths) (projTypes paths) env0 parsed
                       let env = envTmp { Acton.Env.stub = stubMode }
+                      --traceM ("#################### initial env0:")
+                      --traceM (Pretty.render (Pretty.pretty env))
                       timeEnv <- getTime Monotonic
                       iff (C.timing opts) $ putStrLn("    Pass: Make environment: " ++ fmtTime (timeEnv - timeStart))
 
@@ -653,6 +655,8 @@ runRestPasses opts paths env0 parsed stubMode = do
                       (iface,tchecked,typeEnv) <- Acton.Types.reconstruct outbase env kchecked
                       iff (C.types opts) $ dump mn "types" (Pretty.print tchecked)
                       iff (C.sigs opts) $ dump mn "sigs" (Acton.Types.prettySigs env mn iface)
+                      --traceM ("#################### typed env0:")
+                      --traceM (Pretty.render (Pretty.pretty typeEnv))
                       timeTypeCheck <- getTime Monotonic
                       iff (C.timing opts) $ putStrLn("    Pass: Type check      : " ++ fmtTime (timeTypeCheck - timeKindsCheck))
 
