@@ -461,9 +461,6 @@ selfSubst env               = [ (TV k n, tCon c) | (n, NTVar k c) <- names env, 
 
 -- Name queries -------------------------------------------------------------------------------------------------------------------
 
-findAll n []  = []
-findAll n ((k,i):ms) = if k==n then (k,i) : findAll n ms else findAll n ms
-
 findQName                   :: QName -> EnvF x -> NameInfo
 findQName (QName m n) env   = case findMod m env of
                                 Just te -> case lookup n te of
@@ -499,12 +496,6 @@ findDefLoc n env            = findSL (names env)
 
 findName n env              = findQName (NoQ n) env
 
-findAllName n env           = look (names env)
-   where look []            = []
-         look (p@(n',i) : ps)
-           | n == n'        = p : look ps
-           | otherwise      = look ps
-           
 lookupVar n env             = case lookup n (names env) of
                                 Just (NVar t) -> Just t
                                 _ -> Nothing

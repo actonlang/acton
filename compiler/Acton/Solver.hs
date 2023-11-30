@@ -743,10 +743,10 @@ sub' env info eq w t1@(TFun _ fx1 p1 k1 t1') t2@(TFun _ fx2 p2 k2 t2')
                                                  return (idwit env w t1 t2 : eq)
   | any isTVar [p1,p2]                      = do --traceM ("## Unifying fun pos " ++ prstr w ++ ": " ++ prstr t1 ++ " < " ++ prstr t2)
                                                  unify info p1 p2
-                                                 sub env eq w t1 t2
+                                                 sub env info eq w t1 t2
   | any isTVar [k1,k2]                      = do --traceM ("## Unifying fun kwd " ++ prstr w ++ ": " ++ prstr t1 ++ " < " ++ prstr t2)
                                                  unify info k1 k2
-                                                 sub env eq w t1 t2
+                                                 sub env info eq w t1 t2
   | otherwise                               = do --traceM ("### Aligning fun " ++ prstr t1 ++ " < " ++ prstr t2)
                                                  (cs1,ap,es) <- subpos info ((map eVar pNames)!!) 0 p2 p1
                                                  (cs2,ak) <- subkwd0 info eVar es k2 k1
@@ -765,10 +765,10 @@ sub' env info eq w t1@(TTuple _ p1 k1) t2@(TTuple _ p2 k2)
                                                  return (idwit env w t1 t2 : eq)
   | any isTVar [p1,p2]                      = do --traceM ("### Unifying tuple pos: " ++ prstr w ++ ": " ++ prstr t1 ++ " < " ++ prstr t2)
                                                  unify info p1 p2
-                                                 sub env eq w t1 t2
+                                                 sub env info eq w t1 t2
   | any isTVar [k1,k2]                      = do --traceM ("### Unifying tuple kwd: " ++ prstr w ++ ": " ++ prstr t1 ++ " < " ++ prstr t2)
                                                  unify info k1 k2
-                                                 sub env eq w t1 t2
+                                                 sub env info eq w t1 t2
   | otherwise                               = do --traceM ("### Aligning tuple " ++ prstr t1 ++ " < " ++ prstr t2)
                                                  (cs1,ap,es) <- subpos info (eDotI (eVar px0) . toInteger) 0 p1 p2
                                                  (cs2,ak) <- subkwd0 info (eDot (eVar px0)) es k1 k2
@@ -817,11 +817,11 @@ subpos info f i (TRow _ _ _ t1 r1) (TRow _ _ _ t2 r2)
                                             = do --traceM (" ## subpos A " ++ prstr t1 ++ " < " ++ prstr t2)
                                                  (cs,as,es) <- subpos info f (i+1) r1 r2
                                                  w <- newWitness
-                                                 return (Sub w t1 t2 : cs, PosArg (eCallVar w [f i]) as, es)
+                                                 return (Sub info w t1 t2 : cs, PosArg (eCallVar w [f i]) as, es)
 subpos info f i (TStar _ _ r1)     (TStar _ _ r2)
                                             = do --traceM (" ## subpos B " ++ prstr (tTupleP r1) ++ " < " ++ prstr (tTupleP r2))
                                                  w <- newWitness
-                                                 return ([Sub w (tTupleP r1) (tTupleP r2)], PosStar (eCallVar w [f i]), [])
+                                                 return ([Sub info w (tTupleP r1) (tTupleP r2)], PosStar (eCallVar w [f i]), [])
 subpos info f i TNil{}             TNil{}   = do --traceM (" ## subpos C ")
                                                  return ([], PosNil, [])
 
@@ -858,9 +858,9 @@ subkwd0 info f ((e,t1):es) r1 (TRow _ _ n t2 r2)
 subkwd0 info f ((e,t1):es) r1 r2            = posElemNotFound0 False info nWild
 
 subkwd                                      :: ErrInfo -> (Name -> Expr) -> [Name] -> KwdRow -> KwdRow -> TypeM (Constraints, KwdArg)
-subkwd f seen r1 (TVar _ tv)                = do unif f seen r1
+subkwd info f seen r1 (TVar _ tv)           = do unif f seen r1
                                                  r2 <- msubst (tVar tv)
-                                                 subkwd f seen r1 r2
+                                                 subkwd info f seen r1 r2
   where unif f seen TVar{}                  = error "INTERNAL ERROR: subkwd"
         unif f seen (TRow _ _ n t r)
           | n `elem` seen                   = do --traceM ("## subkwd (Row) - Var: " ++ prstr (tRow KRow n t r) ++ " [" ++ prstrs seen ++ "] ≈ " ++ prstr tv)
@@ -868,26 +868,26 @@ subkwd f seen r1 (TVar _ tv)                = do unif f seen r1
           | tv `elem` tyfree r              = conflictingRow tv                     -- use rowTail?
           | otherwise                       = do --traceM ("## subkwd Row - Var: " ++ prstr (tRow KRow n t r) ++ " [" ++ prstrs seen ++ "] ≈ " ++ prstr tv)
                                                  r2 <- tRow KRow n t <$> newTVarOfKind KRow
-                                                 unify (tVar tv) r2
+                                                 unify info (tVar tv) r2
         unif f seen (TStar _ _ r)
           | tv `elem` tyfree r              = conflictingRow tv                     -- use rowTail?
           | otherwise                       = do --traceM ("## subkwd Star - Var: " ++ prstr (tStar KRow r) ++ " [" ++ prstrs seen ++ "] ≈ " ++ prstr tv)
                                                  r2 <- tStar KRow <$> newTVarOfKind KRow
-                                                 unify (tVar tv) r2
+                                                 unify info (tVar tv) r2
         unif f seen TNil{}                  = do --traceM ("## subkwd Nil - Var: " ++ prstr (tNil KRow) ++ " [" ++ prstrs seen ++ "] ≈ " ++ prstr tv)
                                                  r2 <- pure $ tNil KRow
-                                                 unify (tVar tv) r2
+                                                 unify info (tVar tv) r2
 
-subkwd f seen r1 (TRow _ _ n2 t2 r2)        = do (cs1,e) <- pick f seen r1
+subkwd info f seen r1 (TRow _ _ n2 t2 r2)   = do (cs1,e) <- pick f seen r1
                                                  r1 <- msubst r1
                                                  r2 <- msubst r2
-                                                 (cs2,as) <- subkwd f (n2:seen) r1 r2
+                                                 (cs2,as) <- subkwd info f (n2:seen) r1 r2
                                                  return (cs1++cs2, KwdArg n2 e as)
   where pick f seen (TVar _ tv)
           | tv `elem` tyfree r2             = conflictingRow tv                     -- use rowTail?
           | otherwise                       = do --traceM ("## subkwd Var - Row: " ++ prstr (tVar tv) ++ " [" ++ prstrs seen ++ "] ≈ " ++ prstr (tRow KRow n2 t2 r2))
                                                  r1 <- tRow KRow n2 t2 <$> newTVarOfKind KRow
-                                                 unify (tVar tv) r1
+                                                 unify info (tVar tv) r1
                                                  pick f seen r1
         pick f seen (TRow _ _ n t r)
           | n `elem` seen                   = do --traceM ("## subkwd (Row) - Row: " ++ prstr (tRow KRow n t r) ++ " [" ++ prstrs seen ++ "] ≈ " ++ prstr (tRow KRow n2 t2 r2))
@@ -895,51 +895,51 @@ subkwd f seen r1 (TRow _ _ n2 t2 r2)        = do (cs1,e) <- pick f seen r1
           | n /= n2                         = pick f seen r
           | otherwise                       = do --traceM ("## subkwd Row! - Row: " ++ prstr (tRow KRow n t r) ++ " [" ++ prstrs seen ++ "] ≈ " ++ prstr (tRow KRow n2 t2 r2))
                                                  w <- newWitness
-                                                 return ([Sub w t t2], eCallVar w [f n])
+                                                 return ([Sub info w t t2], eCallVar w [f n])
         pick f seen (TStar _ _ r)           = do --traceM ("## subkwd Star - Row: " ++ prstr (tStar KRow r) ++ " [" ++ prstrs seen ++ "] ≈ " ++ prstr (tRow KRow n2 t2 r2))
                                                  pick (eDot (f attrKW)) seen r
         pick f seen (TNil _ _)
           | TOpt{} <- t2                    = do --traceM ("## subkwd Nil - Row: " ++ prstr (tNil KRow) ++ " [" ++ prstrs seen ++ "] ≈ " ++ prstr (tRow KRow n2 t2 r2))
                                                  return ([], eNone)
-          | otherwise                       = kwdNotFound n2
+          | otherwise                       = kwdNotFound info n2
 
-subkwd f seen r1 (TStar _ _ r2)             = do (cs,e) <- match f seen r1
+subkwd info f seen r1 (TStar _ _ r2)        = do (cs,e) <- match f seen r1
                                                  return (cs, KwdStar e)
   where match f seen (TVar _ tv)
           | tv `elem` tyfree r2             = conflictingRow tv                     -- use rowTail?
           | otherwise                       = do --traceM ("## subkwd Var - Star: " ++ prstr (tVar tv) ++ " [" ++ prstrs seen ++ "] ≈ " ++ prstr (tStar KRow r2))
                                                  r1 <- tStar KRow <$> newTVarOfKind KRow
-                                                 unify (tVar tv) r1
+                                                 unify info (tVar tv) r1
                                                  match f seen r1
         match f seen r1@(TRow _ _ n t r)
           | n `elem` seen                   = do --traceM ("## subkwd (Row) - Star: " ++ prstr (tRow KRow n t r) ++ " [" ++ prstrs seen ++ "] ≈ " ++ prstr (tStar KRow r2))
                                                  match f (seen\\[n]) r
           | otherwise                       = do --traceM ("## subkwd Row - Star: " ++ prstr (tRow KRow n t r) ++ " [" ++ prstrs seen ++ "] ≈ " ++ prstr (tStar KRow r2))
-                                                 (cs,as) <- subkwd f seen r1 r2
+                                                 (cs,as) <- subkwd info f seen r1 r2
                                                  return (cs, eTupleK as)
         match f seen r1@(TStar _ _ r)
           | TVar{} <- r, TVar{} <- r2       = do --traceM ("## subkwd StarVar - StarVar: " ++ prstr (tStar KRow r) ++ " [" ++ prstrs seen ++ "] ≈ " ++ prstr (tStar KRow r2))
-                                                 unify r r2
+                                                 unify info r r2
                                                  return ([], f attrKW)
           | TVar{} <- r                     = do --traceM ("## subkwd StarVar - Star: " ++ prstr (tStar KRow r) ++ " [" ++ prstrs seen ++ "] ≈ " ++ prstr (tStar KRow r2))
-                                                 (cs,as) <- subkwd f seen r1 r2
+                                                 (cs,as) <- subkwd info f seen r1 r2
                                                  return (cs, eTupleK as)
           | otherwise                       = do --traceM ("## subkwd Star - Star: " ++ prstr (tStar KRow r) ++ " [" ++ prstrs seen ++ "] ≈ " ++ prstr (tStar KRow r2))
                                                  match (eDot (f attrKW)) seen r
         match f seen r1@TNil{}              = do --traceM ("## subkwd Nil - Star: " ++ prstr (tNil KRow) ++ " [" ++ prstrs seen ++ "] ≈ " ++ prstr (tStar KRow r2))
-                                                 (cs,as) <- subkwd f seen r1 r2
+                                                 (cs,as) <- subkwd info f seen r1 r2
                                                  return (cs, eTupleK as)
 
-subkwd f seen r1 TNil{}                     = term f seen r1
+subkwd info f seen r1 TNil{}                = term f seen r1
   where term f seen (TVar _ tv)             = do --traceM ("## subkwd Var - Nil: " ++ prstr (tVar tv) ++ " [" ++ prstrs seen ++ "] ≈ " ++ prstr (tNil KRow))
                                                  r1 <- pure $ tNil KRow
-                                                 unify (tVar tv) r1
+                                                 unify info (tVar tv) r1
                                                  term f seen (tNil KRow)
         term f seen (TRow _ _ n t r)
           | n `elem` seen                   = do --traceM ("## subkwd (Row) - Nil: " ++ prstr (tRow KRow n t r) ++ " [" ++ prstrs seen ++ "] ≈ " ++ prstr (tNil KRow))
                                                  term f (seen\\[n]) r
           | otherwise                       = do --traceM ("## subkwd Row - Nil: " ++ prstr (tRow KRow n t r) ++ " [" ++ prstrs seen ++ "] ≈ " ++ prstr (tNil KRow))
-                                                 kwdUnexpected n
+                                                 kwdUnexpected info n
         term f seen (TStar _ _ r)           = do --traceM ("## subkwd Star - Nil: " ++ prstr (tStar KRow r) ++ " [" ++ prstrs seen ++ "] ≈ " ++ prstr (tNil KRow))
                                                  term f seen r
         term f seen (TNil _ _)              = do --traceM ("## subkwd Nil - Nil: " ++ prstr (tNil KRow) ++ " [" ++ prstrs seen ++ "] ≈ " ++ prstr (tNil KRow))

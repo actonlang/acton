@@ -411,10 +411,11 @@ matchDefAssumption env cs def
            | otherwise                  = t0
         q1                              = qbinds def
         env0                            = defineTVars q1 $ defineTVars q0 env
-        pos0                            = case pos def of
-                                            PosPar nSelf t e p | inClass env && dec/=Static ->
-                                                PosPar nSelf t e $ qualWPar env q0 p
-                                            p -> qualWPar env q0 p
+        (pos0,kwd0)                     = qual env dec (pos def) (kwd def) (qualWPar env q0)
+--        pos0                            = case pos def of
+--                                            PosPar nSelf t e p | inClass env && dec/=Static ->
+--                                                PosPar nSelf t e $ qualWPar env q0 p
+--                                            p -> qualWPar env q0 p
 
         match env cs def                = do (cs2,eq1) <- solveScoped env0 (qbound q0) [] t1 (Cast info t1 t2 : cs)
                                              checkNoEscape env (qbound q0)
@@ -426,6 +427,11 @@ matchDefAssumption env cs def
                  msg                    = "Type incompatibility between signature for and definition of "++Pretty.print (dname def)
                  info                   = maybe (DfltInfo (loc def) 58 Nothing []) (\l -> DeclInfo l (loc def) (dname def) sc1 msg) mbl
                                              
+
+qual env dec p k qf | not (inClass env) = (qf p, k)
+qual env Static p k qf                  = (qf p, k)
+qual env dec PosNIL (KwdPar n t e k) qf = (PosPar n t e (qf PosNIL), k)
+qual env dec (PosPar n t e p) k qf      = (PosPar n t e (qf p), k)
 
 --------------------------------------------------------------------------------------------------------------------------
 

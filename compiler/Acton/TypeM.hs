@@ -114,6 +114,7 @@ data TypeError                      = TypeError SrcLoc String
                                     | InfiniteType TVar
                                     | ConflictingRow TVar
                                     | KwdNotFound Name
+                                    | KwdUnexpected Name
                                     | PosElemNotFound ErrInfo String
                                     | EscapingVar [TVar] TSchema
                                     | NoSelStatic Name TCon
@@ -135,6 +136,7 @@ instance HasLoc TypeError where
     loc (InfiniteType tv)           = loc tv
     loc (ConflictingRow tv)         = loc tv
     loc (KwdNotFound n)             = loc n
+    loc (KwdUnexpected n)           = loc n
     loc (PosElemNotFound info s)    = loc info -- NoLoc     -- TODO: supply position
     loc (EscapingVar tvs t)         = loc tvs
     loc (NoSelStatic n u)           = loc n
@@ -200,6 +202,7 @@ typeError (RigidVariable tv)         = [(loc tv, render (text "Type" <+> pretty 
 typeError (InfiniteType tv)          = [(loc tv, render (text "Type" <+> pretty tv <+> text "is infinite"))]
 typeError (ConflictingRow tv)        = [(loc tv, render (text "Type" <+> pretty tv <+> text "has conflicting extensions"))]
 typeError (KwdNotFound n)            = [(loc n, render (text "Keyword element" <+> quotes (pretty n) <+> text "is not found"))]
+typeError (KwdUnexpected n)          = [(loc n, render (text "Keyword element" <+> quotes (pretty n) <+> text "is not expected"))]
 typeError (PosElemNotFound info s)   = [(loc info, s)]
 typeError (EscapingVar tvs t)        = [(loc tvs, render (text "Type annotation" <+> pretty t <+> text "is too general, type variable" <+>
                                         pretty (head tvs) <+> text "escapes"))]
@@ -224,36 +227,13 @@ typeError (NoUnify info t1 t2)       = case (loc t1, loc t2) of
                                           (l1@Loc{},l2@Loc{}) -> [(l1, ""),(l2,render(text "Incompatible types" <+> pretty t1 <+> text "and" <+> pretty t2))]
                                           _ ->  [(getLoc[loc info, loc t1, loc t2],render(text "Incompatible types" <+> pretty t1 <+> text "and" <+> pretty t2))]
 
-typeError                           :: TypeError -> (SrcLoc, String)
-typeError err                       = (loc err, render (expl err))
-  where
-    expl (TypeError l str)          = text str
-    expl (RigidVariable tv)         = text "Type" <+> pretty tv <+> text "is rigid"
-    expl (InfiniteType tv)          = text "Type" <+> pretty tv <+> text "is infinite"
-    expl (ConflictingRow tv)        = text "Row" <+> pretty tv <+> text "has conflicting extensions"
-    expl (KwdNotFound n)            = text "Keyword element" <+> quotes (pretty n) <+> text "is not found"
-    expl (PosElemNotFound)          = text "Positional element is not found"
-    expl (KwdUnexpected n)          = text "Unexpected keyword element" <+> quotes (pretty n)
-    expl (PosUnexpected n)          = text "Unexpected positional element"
-    expl (PosConflict l n)          = text "Positional element conflicts with keyword element" <+> quotes (pretty n)
-    expl (EscapingVar tvs t)        = text "Type annotation" <+> pretty t <+> text "is too general, type variable" <+>
-                                      pretty (head tvs) <+> text "escapes"
-    expl (NoSelStatic n u)          = text "Static method" <+> pretty n <+> text "cannot be selected from" <+> pretty u <+> text "instance"
-    expl (NoSelInstByClass n u)     = text "Instance attribute" <+> pretty n <+> text "cannot be selected from class" <+> pretty u
-    expl (NoMut n)                  = text "Non @property attribute" <+> pretty n <+> text "cannot be mutated"
-    expl (LackSig n)                = text "Declaration lacks accompanying signature"
-    expl (LackDef n)                = text "Signature lacks accompanying definition"
-    expl (SurplusRow r)             = text "Surplus positional elements in" <+> pretty r
-    expl (NoRed c)                  = text "Cannot infer" <+> pretty c
-    expl (NoSolve cs)               = text "Cannot solve" <+> commaSep pretty cs
-    expl (NoUnify t1 t2)            = text "Cannot unify" <+> pretty t1 <+> text "and" <+> pretty t2
-
 tyerr x s                           = throwError $ TypeError (loc x) (s ++ " " ++ prstr x)
 tyerrs xs s                         = throwError $ TypeError (loc $ head xs) (s ++ " " ++ prstrs xs)
 rigidVariable tv                    = throwError $ RigidVariable tv
 infiniteType tv                     = throwError $ InfiniteType tv
 conflictingRow tv                   = throwError $ ConflictingRow tv
 kwdNotFound info n                  = throwError $ KwdNotFound n
+kwdUnexpected info n                = throwError $ KwdUnexpected n
 escapingVar tvs t                   = throwError $ EscapingVar tvs t
 noSelStatic n u                     = throwError $ NoSelStatic n u
 noSelInstByClass n u                = throwError $ NoSelInstByClass n u
