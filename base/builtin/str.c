@@ -2745,7 +2745,7 @@ B_tuple B_bytesD_partition(B_bytes s, B_bytes sep) {
 
 B_bytes B_bytesD_removeprefix(B_bytes s, B_bytes prefix) {
     int bytes_to_remove;
-    if (prefix->nbytes > s->nbytes || bcmp(s->str,prefix->str,prefix->nbytes))
+    if (prefix->nbytes > s->nbytes || memcmp(s->str,prefix->str,prefix->nbytes))
         bytes_to_remove = 0;
     else
         bytes_to_remove = prefix->nbytes;
@@ -2758,7 +2758,7 @@ B_bytes B_bytesD_removeprefix(B_bytes s, B_bytes prefix) {
 
 B_bytes B_bytesD_removesuffix(B_bytes s, B_bytes suffix) {
     int bytes_to_remove;
-    if (suffix->nbytes > s->nbytes || bcmp(s->str+s->nbytes-suffix->nbytes,suffix->str,suffix->nbytes))
+    if (suffix->nbytes > s->nbytes || memcmp(s->str+s->nbytes-suffix->nbytes,suffix->str,suffix->nbytes))
         bytes_to_remove = 0;
     else
         bytes_to_remove = suffix->nbytes;
