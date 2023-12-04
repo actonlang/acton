@@ -4,15 +4,9 @@ Building file ../test/typeerrors/ex1.act
 ERROR: Error when compiling ex1 module: Type error
 
   |
-4 |a = f(3)
-  |    ^^^^
-
-
-  |
 1 |def f(x,y):
-  |    ^
-Type incompatibility between definition of and call of f (too few arguments in call)
-f is inferred to have a type of the form [A(Plus)] => _(A, A) -> A
+  |        ^
+Keyword element 'y' is not found
 
 - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
 

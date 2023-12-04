@@ -3,7 +3,11 @@ Building file ../test/typeerrors/ex17.act
 
 ERROR: Error when compiling ex17 module: Type error
 
-Cannot satisfy the following simultaneous constraints for the unknown types t0, t1:
+  |
+2 |a = pow(3,"hej")
+  |    ^^^
+pow has had its polymorphic type [A(Number)] => (a: A, b: A) -> A instantiated to (a: t0, b: t0) -> t0, so
+t0 must implement __builtin__.Number
 
   |
 2 |a = pow(3,"hej")

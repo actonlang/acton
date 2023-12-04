@@ -7,6 +7,18 @@ Cannot satisfy the following simultaneous constraints for the unknown types t0, 
 
   |
 7 |a = f(3,"hej")
+  |    ^
+f has had its polymorphic type [A(Plus, Ord)] => (x: A, y: A) -> A instantiated to (x: t1, y: t1) -> t1, so
+t1 must implement __builtin__.Ord
+
+  |
+7 |a = f(3,"hej")
+  |    ^
+f has had its polymorphic type [A(Plus, Ord)] => (x: A, y: A) -> A instantiated to (x: t1, y: t1) -> t1, so
+t1 must implement __builtin__.Plus
+
+  |
+7 |a = f(3,"hej")
   |      ^
 The type of 3 (which we call t0) must implement __builtin__.Number
 
