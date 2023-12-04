@@ -175,7 +175,6 @@ wrapped l kw env cs ts args             = do tvx <- newTVarOfKind KFX
                                              let t1 = subst [(fxSelf,fx)] t0
                                                  t2 = tFun fxPure (foldr posRow posNil ts) kwdNil t'
                                              w <- newWitness
-                                             --traceM ("## wrapped " ++ prstr (Impl (DfltInfo 0) w fx p))
                                              return (Impl (DfltInfo l 29 Nothing []) w fx p :
                                                      Cast (DfltInfo l 30 Nothing []) t1 t2 :
                                                      cs, t', eCall (tApp (Dot l0 (eVar w) kw) tvs) args)
@@ -986,7 +985,7 @@ instance Infer Expr where
                                                 (cs,tvs,t) <- instantiate env sc
                                                 let e = app t (tApp x tvs) $ witsOf cs
                                                     cs1 = map (addTyping env n sc t) cs
-                                                -- traceM ("type of " ++ Pretty.print n ++" = "++ Pretty.print t ++ ", cs = " ++ render(commaList cs))
+                                                --traceM ("## type of " ++ prstr n ++ " = " ++ prstr t ++ ", cs = " ++ render(commaList cs))
                                                 if actorSelf env
                                                     then wrapped l attrWrap env cs1 [tActor,t] [eVar selfKW,e]
                                                     else return (cs1, t, e)

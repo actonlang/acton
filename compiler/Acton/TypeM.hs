@@ -78,7 +78,8 @@ collectDeferred                         :: TypeM Constraints
 collectDeferred                         = lift $ state $ \st -> (deferred st, st{ deferred = [] })
 
 substitute                              :: TVar -> Type -> TypeM ()
-substitute tv t                         = lift $ {-trace ("  #substitute " ++ prstr tv ++ " ~ " ++ prstr t) $ -}
+substitute tv t                         = lift $
+                                          --trace ("  #substitute " ++ prstr tv ++ " ~ " ++ prstr t) $
                                           state $ \st -> ((), st{ currsubst = Map.insert tv t (currsubst st)})
 
 getSubstitution                         :: TypeM (Map TVar Type)
