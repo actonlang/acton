@@ -698,10 +698,11 @@ small_stmt = del_stmt <|> pass_stmt <|> flow_stmt <|> assert_stmt <|> var_stmt <
 expr_stmt :: Parser S.Stmt
 expr_stmt = addLoc $ do
             o <- getOffset
-            try ((S.AugAssign NoLoc <$> target <*> augassign <*> rhs) <* assertNotData (Loc o o) "augmented assignment")
-              <|> try (S.Assign NoLoc <$> trysome assign <*> rhs)                                 -- Single variable lhs matches here
-              <|> try (S.MutAssign NoLoc <$> target <* equals <*> rhs)                            -- and not here
-              <|> (((S.Expr NoLoc <$> rhs) <* assertNotData (Loc o o) "call") <?> "expression statement")
+            S.Assign NoLoc <$> some (try assign) <*> rhs                                 -- Single variable lhs matches here
+             <|> (do t <- target                             
+                     ((S.AugAssign NoLoc t <$> augassign <*> rhs) <* assertNotData (Loc o o) "augmented assignment")
+                       <|> (S.MutAssign NoLoc t <$> (equals *> rhs)))                    -- and not here
+             <|> (((S.Expr NoLoc <$> rhs) <* assertNotData (Loc o o) "call") <?> "expression statement")
    where augassign :: Parser S.Aug
          augassign = augops
           where augops = S.PlusA   <$ symbol "+="
