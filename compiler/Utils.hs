@@ -28,7 +28,9 @@ import Prelude hiding((<>))
 
 data SrcLoc                     = Loc Int Int | NoLoc deriving (Eq,Ord,Show,Read,Generic,NFData)
 
-instance Data.Binary.Binary SrcLoc 
+instance Data.Binary.Binary SrcLoc -- where
+--    put _ = return ()
+--    get   = return NoLoc
 
 instance Pretty SrcLoc where
     pretty (Loc l r)            = pretty l <> text "-" <> pretty r
@@ -127,7 +129,7 @@ errReport ((SpanPoint file row col,msg) : ps) src
         line2                   = replicate (length rowstr+1) ' '++"|"
         line3                   = rowstr ++ " |" ++ lines src!!!(row-1)
         line4                   = replicate (length rowstr+1) ' '++"|"++replicate (col-1) ' '++"^"
-errReport ((SpanEmpty,msg) : ps) src = msg ++ errReport ps src
+errReport ((SpanEmpty,msg) : ps) src = '\n' : msg ++ errReport ps src
 errReport [] _                  = errSep
 
 lst !!! ix | ix >= length lst   = lst !! 0

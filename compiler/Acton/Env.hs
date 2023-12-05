@@ -484,6 +484,17 @@ findQName (GName m n) env
                                     Nothing -> noItem m n -- error ("## Failed lookup of " ++ prstr n ++ " in module " ++ prstr m)
                                 Nothing -> noModule m -- error ("## Failed lookup of module " ++ prstr m)
 
+findSigLoc n env            = findSL (names env)
+    where findSL ((n',t):ps)
+             | NSig{} <- t, n==n' = Just (loc n')
+             | otherwise          = findSL ps
+          findSL []               = Nothing
+
+findDefLoc n env            = findSL (names env)
+    where findSL ((n',t):ps)
+             | NDef{} <- t, n==n' = Just (loc n')
+             | otherwise          = findSL ps
+          findSL []               = Nothing
 
 findName n env              = findQName (NoQ n) env
 
@@ -1210,4 +1221,71 @@ err2 xs s                           = err (loc $ head xs) (s ++ " " ++ prstrs xs
 err3 l xs s                         = err l (s ++ " " ++ prstrs xs)
 
 notYetExpr e                        = notYet (loc e) e
+
+stripQual q                             = [ Quant v [] | Quant v us <- q ]
+
+
+class Simp a where
+    simp                            :: EnvF x -> a -> a
+
+instance (Simp a) => Simp [a] where
+    simp env                        = map (simp env)
+
+instance Simp TSchema where
+    simp env (TSchema l q t)        = TSchema l q' (substIteratively s $ simp env' t)
+      where (q', s)                 = simpQuant env (simp env' q) (tyfree t)
+            env'                    = defineTVars (stripQual q) env
+
+simpQuant env q vs0                 = (subst s [ Quant v ps | Quant v ps <- q2, not $ null ps ], s)
+  where (q1,q2)                     = partition isEX q
+        isEX (Quant v [p])          = length (filter (==v) vs) == 1
+        isEX _                      = False
+        vs                          = concat [ tyfree ps | Quant v ps <- q ] ++ vs0
+        s                           = s1 ++ s2
+        s1                          = [ (v, tCon p) | Quant v [p] <- q1 ]                       -- Inline existentials
+        s2                          = univars `zip` beautyvars                                  -- Beautify univars
+        univars                     = filter univar $ qbound q2
+        beautyvars                  = map tVar $ tvarSupply \\ tvarScope env
+
+instance Simp QBind where
+    simp env (Quant v ps)           = Quant v (simp env ps)
+
+instance Simp WTCon where
+    simp env (w, c)                 = (w, simp env c)
+
+instance Simp (Name, NameInfo) where
+    simp env (n, NSig sc dec)       = (n, NSig (simp env sc) dec)
+    simp env (n, NDef sc dec)       = (n, NDef (simp env sc) dec)
+    simp env (n, NVar t)            = (n, NVar (simp env t))
+    simp env (n, NSVar t)           = (n, NSVar (simp env t))
+    simp env (n, NClass q us te)    = (n, NClass (simp env' q) (simp env' us) (simp env' te))
+      where env'                    = defineTVars (stripQual q) env
+    simp env (n, NProto q us te)    = (n, NProto (simp env' q) (simp env' us) (simp env' te))
+      where env'                    = defineTVars (stripQual q) env
+    simp env (n, NExt q c us te)    = (n, NExt q' (subst s $ simp env' c) (subst s $ simp env' us) (subst s $ simp env' te))
+      where (q', s)                 = simpQuant env (simp env' q) (tyfree c ++ tyfree us ++ tyfree te)
+            env'                    = defineTVars (stripQual q) env
+    simp env (n, NAct q p k te)     = (n, NAct (simp env' q) (simp env' p) (simp env' k) (simp env' te))
+      where env'                    = defineTVars (stripQual q) env
+    simp env (n, i)                 = (n, i)
+
+instance Simp Type where
+    simp env (TCon l c)             = TCon l (simp env c)
+    simp env (TFun l fx p k t)      = TFun l (simp env fx) (simp env p) (simp env k) (simp env t)
+    simp env (TTuple l p k)         = TTuple l (simp env p) (simp env k)
+    simp env (TOpt l t)             = TOpt l (simp env t)
+    simp env (TRow l k n t r)       = TRow l k n (simp env t) (simp env r)
+    simp env t                      = t
+
+instance Simp TCon where
+    simp env (TC n ts)              = TC (simp env n) (simp env ts)
+
+instance Simp QName where
+    simp env (GName m n)
+      | inBuiltin env               = NoQ n
+      | Just m == thismod env       = NoQ n
+    simp env n
+      | not $ null aliases          = NoQ $ head aliases
+      | otherwise                   = n
+      where aliases                 = [ n1 | (n1, NAlias n2) <- names env, n2 == n ]
 

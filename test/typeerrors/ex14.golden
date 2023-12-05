@@ -6,7 +6,13 @@ ERROR: Error when compiling ex14 module: Type error
   |
 2 |    return g(x)
   |           ^^^^
-Too few positional elements
+
+
+  |
+4 |def g(x,y):
+  |    ^
+Type incompatibility between definition of and call of g (too few arguments in call)
+g is inferred to have a type of the form _(_, _) -> _
 
 - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
 

@@ -6,7 +6,13 @@ ERROR: Error when compiling ex2 module: Type error
   |
 4 |a = f(3,4,5)
   |    ^^^^^^^^
-Too many positional elements
+
+
+  |
+1 |def f(x,y):
+  |    ^
+Type incompatibility between definition of and call of f (too many arguments in call)
+f is inferred to have a type of the form [A(Plus)] => _(A, A) -> A
 
 - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
 

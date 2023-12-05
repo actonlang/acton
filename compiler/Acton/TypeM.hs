@@ -162,16 +162,16 @@ explainViolation c                   = case info c of
                                                   Impl _ _ t p -> intro False t mbe <+> text "does not implement" <+> pretty p
                                                   Sel _ _ t n t0 -> intro False t mbe <+> text "does not have an attribute" <+> pretty n <+> text "with type" <+> pretty t0
                                                   _ -> pretty c <+> text "does not hold") 
-                                          DeclInfo _ _ _ t msg -> text msg $+$ text "Function inferred to have type"<+> pretty t
+                                          DeclInfo _ _ n sc msg -> text msg $+$ pretty n <+> text "is inferred to have a type of the form"<+> pretty sc
 
 explainRequirement b c                = case info c of
                                           Simple l s -> text s
                                           DfltInfo l n mbe ts ->
                                              (if ts /= []
                                               then text (concatMap (\(n,s,t) -> Pretty.print n ++ " has had its polymorphic type "
-                                                            ++  Pretty.print s ++ " instantiated to " ++ Pretty.print t) ts++", so")  -- s is printed with internal typevars, not A, B...
+                                                            ++  Pretty.print s ++ " instantiated to " ++ Pretty.print t) ts++", so ")  
                                                                     
-                                              else empty) $+$ 
+                                              else empty) Pretty.<> 
                                                (case c of
                                                    Cast _ t1 t2 -> intro b t1 mbe <+> text "must be a subclass of" <+> pretty t2
                                                    Sub i _ t1 t2 -> intro b t1 mbe <+> text "must be a subtype of" <+> pretty t2 
@@ -179,7 +179,7 @@ explainRequirement b c                = case info c of
                                                    Sel _ _ t n t0 -> intro b t mbe <+> text "must have an attribute" <+> pretty n <+> text "with type" <+> pretty t0
                                                                           Pretty.<> text "; no such type is known."
                                                    _ -> pretty c <+> text "must hold")  
-                                          DeclInfo _ _ _ t msg -> text msg  $+$ text "Function inferred to have type"<+> pretty t
+                                          DeclInfo _ _ n sc msg -> text msg  $+$ pretty n <+> text "is inferred to have a type of the form"<+> pretty sc
 
 
 
@@ -208,17 +208,15 @@ typeError (NoMut n)                  = [(loc n, render (text "Non @property attr
 typeError (LackSig n)                = [(loc n, render (text "Declaration lacks accompanying signature"))]
 typeError (LackDef n)                = [(loc n, render (text "Signature lacks accompanying definition"))]
 typeError (NoRed c)
-    | DeclInfo l1 l2 _ t _ <- info c = [(l1,""), (l2,render (explainViolation c))]
+    | DeclInfo l1 l2 _ _ _ <- info c = [(l1,""), (l2,render (explainViolation c))]
     | otherwise                      = [(loc c, render (explainViolation c))]
 typeError (NoSolve mbt vs cs)        = case length cs of
                                            0 -> [(NoLoc, "Unable to give good error message: please report example")]
                                            1 ->  (NoLoc, "Cannot satisfy the following constraint:\n") : map (mkReq False) cs
                                            _ ->  (NoLoc, "Cannot satisfy the following simultaneous constraints for the unknown "
                                                          ++ (if length vs==1 then "type " else "types ") ++ render(commaList vs)  ++":\n")
-                                                : map (mkReq True) (cs2++cs1)
-         where mkReq b c             = (newLoc c, render (explainRequirement b c))
-               (cs1,cs2)             = partition (\c -> null $ typings(info c)) cs
-               newLoc c              = if null (typings (info c)) then loc c else loc(fst3(head(typings (info c))))
+                                                : map (mkReq True) cs
+         where mkReq b c             = (loc c, render (explainRequirement b c))
                fst3 (a,_,_)          = a
 
 typeError (NoUnify info t1 t2)       = case (loc t1, loc t2) of
@@ -241,5 +239,9 @@ noRed c                             = throwError $ NoRed c
 noSolve mbt vs cs                   = throwError $ NoSolve mbt vs cs
 noUnify info t1 t2                  = throwError $ NoUnify info t1 t2
 
-posElemNotFound True info n         = throwError $ PosElemNotFound info "Too few positional elements"
-posElemNotFound False info n        = throwError $ PosElemNotFound info "Too many positional elements"
+posElemNotFound True c n            = case info c of
+                                        DeclInfo{} -> throwError $ NoRed (c{info = (info c){errmsg = errmsg(info c)++" (too few arguments in call)"}})
+                                        info          -> throwError $ PosElemNotFound info "Too few positional elements"
+posElemNotFound False c n           = case info c of
+                                        DeclInfo{} -> throwError $ NoRed  (c{info = (info c){errmsg = errmsg(info c)++" (too many arguments in call)"}})
+                                        info          -> throwError $ PosElemNotFound info "Too many positional elements"

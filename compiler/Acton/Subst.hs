@@ -93,7 +93,7 @@ instance Subst a => Subst (Name,a) where
     tyfree (n, t)                   = tyfree t
     tybound (n, t)                  = tybound t
 
-instance (Subst a, Subst b) => Subst (Name,a,b) where
+instance (Subst a, Subst b) => Subst (QName,a,b) where
     msubst (n, t, u)                = (,,) <$> return n <*> msubst t <*> msubst u
     tyfree (n, t, u)                = tyfree t ++ tyfree u
     tybound (n, t, u)               = tybound t ++ tybound u
@@ -116,21 +116,21 @@ instance Subst Constraint where
     msubst (Mut info t1 n t2)       = Mut <$> msubst info <*> msubst t1 <*> return n <*> msubst t2
     msubst (Seal info t)            = Seal <$> msubst info <*> msubst t
 
-    tyfree (Cast _ t1 t2)           = tyfree t1 ++ tyfree t2
-    tyfree (Sub _ w t1 t2)          = tyfree t1 ++ tyfree t2
-    tyfree (Impl _ w t p)           = tyfree t ++ tyfree p
-    tyfree (Sel _ w t1 n t2)        = tyfree t1 ++ tyfree t2
-    tyfree (Mut _ t1 n t2)          = tyfree t1 ++ tyfree t2
-    tyfree (Seal _ t)               = tyfree t
+    tyfree (Cast info t1 t2)        = tyfree info ++ tyfree t1 ++ tyfree t2
+    tyfree (Sub info w t1 t2)       = tyfree info ++ tyfree t1 ++ tyfree t2
+    tyfree (Impl info w t p)        = tyfree info ++ tyfree t ++ tyfree p
+    tyfree (Sel info w t1 n t2)     = tyfree info ++ tyfree t1 ++ tyfree t2
+    tyfree (Mut info t1 n t2)       = tyfree info ++ tyfree t1 ++ tyfree t2
+    tyfree (Seal info t)            = tyfree info ++ tyfree t
 
 
 instance Subst ErrInfo where
     msubst (DfltInfo l n mbe ts)    = DfltInfo l n <$> msubst mbe <*> msubst ts
-    msubst (DeclInfo l1 l2 d t msg) = DeclInfo l1 l2 <$> msubst d <*> msubst t <*> return msg
+    msubst (DeclInfo l1 l2 n t msg) = DeclInfo l1 l2 n <$> msubst t <*> return msg
     msubst info                     = return info
     
     tyfree (DfltInfo l n mbe ts)    = tyfree mbe ++ tyfree ts
-    tyfree (DeclInfo l1 l2 d t msg) = tyfree d ++ tyfree t
+    tyfree (DeclInfo l1 l2 n t msg) = tyfree t
     tyfree _                        = []
     
 instance Subst TSchema where
@@ -195,8 +195,8 @@ msubstWith s x                      = do s0 <- getSubstitution
                                          setSubstitution s0
                                          return x'
 
-wildify                             :: Subst a => a -> TypeM a
-wildify a                           =  msubstWith (zip (tyfree a) (repeat tWild)) a
+wildify                             :: (Subst a) => a -> TypeM a
+wildify a                           = msubstWith (zip (tyfree a \\ tybound a) (repeat tWild)) a
 
 testMsubstRenaming = do
     putStrLn ("p1: " ++ render (pretty (runTypeM p1)))

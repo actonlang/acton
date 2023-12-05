@@ -253,9 +253,9 @@ data Constraint = Cast  {info :: ErrInfo, type1 :: Type, type2 :: Type}
 
 type Constraints = [Constraint] 
 
-data ErrInfo    = DfltInfo {errloc :: SrcLoc, ident :: Int, iexpr :: Maybe Expr, typings :: [(Name,TSchema,Type)]}
-                | DeclInfo {errloc :: SrcLoc, otherloc :: SrcLoc, idecl :: Decl, itype :: Type, imsg :: String}
-                | Simple {errloc ::SrcLoc, imsg :: String}
+data ErrInfo    = DfltInfo {errloc :: SrcLoc, errno :: Int, errexpr :: Maybe Expr, errinsts :: [(QName,TSchema,Type)]}
+                | DeclInfo {errloc :: SrcLoc, errloc2 :: SrcLoc, errname :: Name, errschema :: TSchema, errmsg :: String}
+                | Simple {errloc ::SrcLoc, errmsg :: String}
                 deriving (Eq,Show,Read,Generic,NFData)
                 
 type WPath      = [Either QName QName]
@@ -589,12 +589,12 @@ instance HasLoc ErrInfo where
       loc (DeclInfo l _ _ _ _) = l
       
 instance HasLoc PosArg where
-      loc (PosArg e p) = loc e
+      loc (PosArg e p) = loc e  `upto` loc p
       loc (PosStar e)  = loc e
       loc PosNil       = NoLoc
 
 instance HasLoc KwdArg where
-      loc (KwdArg n e p) = loc n `upto` loc e
+      loc (KwdArg n e k) = loc n `upto` loc k
       loc (KwdStar e)    = loc e
       loc KwdNil         = NoLoc
 

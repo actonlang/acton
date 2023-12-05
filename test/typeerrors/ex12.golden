@@ -2,6 +2,7 @@ Building file ../test/typeerrors/ex12.act
   Compiling ex12.act for release
 
 ERROR: Error when compiling ex12 module: Type error
+
 Cannot satisfy the following constraint:
 
   |
