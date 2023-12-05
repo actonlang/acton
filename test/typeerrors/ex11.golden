@@ -6,7 +6,13 @@ ERROR: Error when compiling ex11 module: Type error
   |
 4 |a = f([8])
   |    ^^^^^^
-The type of f([8]) is not a subclass of __builtin__.str
+
+
+  |
+1 |def f(s):
+  |    ^
+Type incompatibility between definition of and call of f
+f is inferred to have a type of the form _(__builtin__.str) -> __builtin__.str
 
 - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
 

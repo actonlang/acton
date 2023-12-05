@@ -6,7 +6,13 @@ ERROR: Error when compiling ex5 module: Type error
   |
 7 |a = apply(f,3)
   |    ^^^^^^^^^^
-Too few positional elements
+
+
+  |
+4 |def apply(g,x):
+  |    ^^^^^
+Type incompatibility between definition of and call of apply (too few arguments in call)
+apply is inferred to have a type of the form _(_(A) -> B, A) -> B
 
 - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
 

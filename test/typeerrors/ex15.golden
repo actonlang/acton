@@ -2,6 +2,7 @@ Building file ../test/typeerrors/ex15.act
   Compiling ex15.act for release
 
 ERROR: Error when compiling ex15 module: Type error
+
 Cannot satisfy the following simultaneous constraints for the unknown types t0, t1:
 
   |

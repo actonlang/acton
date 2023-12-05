@@ -2,6 +2,7 @@ Building file ../test/typeerrors/ex8.act
   Compiling ex8.act for release
 
 ERROR: Error when compiling ex8 module: Type error
+
 Cannot satisfy the following simultaneous constraints for the unknown type t0:
 
   |
