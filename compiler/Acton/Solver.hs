@@ -643,9 +643,9 @@ cast' env info t1@(TFX _ fx1) t2@(TFX _ fx2)
 cast' env _ (TNil _ k1) (TNil _ k2)
   | k1 == k2                                = return ()
 cast' env info t1@(TNil _ _) r2@(TRow _ k n t2 r2')
-                                            = noRed0 (Cast info t1 t2) --posElemNotFound True info n
+                                            = posElemNotFound0 env True (Cast info t1 t2) n
 cast' env info r1@(TRow _ k n _ _) r2@(TNil _ _)
-                                            = noRed0 (Cast info r1 r2) --posElemNotFound False info n
+                                            = posElemNotFound0 env False (Cast info r1 r2) n
 cast' env info (TVar _ tv) r2@(TNil _ k)    = do substitute tv (tNil k)
                                                  cast env info (tNil k) r2
 cast' env info r1 (TRow _ k n t2 r2)        = do (t1,r1') <- findElem info k (tNil k) n r1 r2
@@ -696,6 +696,13 @@ noSolve0 mbt vs cs                          = do mbt <- msubst mbt
                                                  mbt <- wildify mbt
                                                  cs <- wildify cs
                                                  noSolve mbt vs cs
+
+posElemNotFound0 env b c n                  = do c <- msubst c
+                                                 c <- wildify c
+                                                 posElemNotFound b (s c) n
+    where s c                               = case info c of
+                                                 DeclInfo l1 l2 n sc msg -> c {info = DeclInfo l1 l2 n (simp env sc) msg}
+                                                 _ -> c
 {-
 splitInfo info t1 t2                        =  case info of
                                                    DfltInfo _ _ (Just (List _ (Elem e : es))) ts ->
@@ -752,10 +759,10 @@ sub' env info eq w r1@(TNil _ k1) r2@(TNil _ k2)
   | k1 == k2                                = return (idwit env w tUnit tUnit : eq)
 
 --           existing         expected                Match labels in the order of the expected row
-sub' env info eq w (TNil _ _) r2@(TRow _ k n t2 r2')
-                                            = posElemNotFound True info n
+sub' env info eq w r1@(TNil _ _) r2@(TRow _ k n t2 r2')
+                                            = posElemNotFound0 env True (Sub info w r1 r2) n -- posElemNotFound True info n
 sub' env info eq w r1@(TRow _ k n _ _) r2@(TNil _ _)
-                                            = posElemNotFound False info n
+                                            = posElemNotFound0 env False (Sub info w r1 r2) n
 sub' env info eq w r1  r2@(TRow _ k n t2 r2')
                                             = do (t1,r1') <- findElem info k (tNil k) n r1 r2'
                                                  wt <- newWitness

@@ -589,12 +589,12 @@ instance HasLoc ErrInfo where
       loc (DeclInfo l _ _ _ _) = l
       
 instance HasLoc PosArg where
-      loc (PosArg e p) = loc e
+      loc (PosArg e p) = loc e  `upto` loc p
       loc (PosStar e)  = loc e
       loc PosNil       = NoLoc
 
 instance HasLoc KwdArg where
-      loc (KwdArg n e p) = loc n `upto` loc e
+      loc (KwdArg n e k) = loc n `upto` loc k
       loc (KwdStar e)    = loc e
       loc KwdNil         = NoLoc
 

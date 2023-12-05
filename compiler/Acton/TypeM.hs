@@ -169,9 +169,9 @@ explainRequirement b c                = case info c of
                                           DfltInfo l n mbe ts ->
                                              (if ts /= []
                                               then text (concatMap (\(n,s,t) -> Pretty.print n ++ " has had its polymorphic type "
-                                                            ++  Pretty.print s ++ " instantiated to " ++ Pretty.print t) ts++", so")  
+                                                            ++  Pretty.print s ++ " instantiated to " ++ Pretty.print t) ts++", so ")  
                                                                     
-                                              else empty) $+$ 
+                                              else empty) Pretty.<> 
                                                (case c of
                                                    Cast _ t1 t2 -> intro b t1 mbe <+> text "must be a subclass of" <+> pretty t2
                                                    Sub i _ t1 t2 -> intro b t1 mbe <+> text "must be a subtype of" <+> pretty t2 
@@ -239,5 +239,9 @@ noRed c                             = throwError $ NoRed c
 noSolve mbt vs cs                   = throwError $ NoSolve mbt vs cs
 noUnify info t1 t2                  = throwError $ NoUnify info t1 t2
 
-posElemNotFound True info n         = throwError $ PosElemNotFound info "Too few positional elements"
-posElemNotFound False info n        = throwError $ PosElemNotFound info "Too many positional elements"
+posElemNotFound True c n            = case info c of
+                                        DeclInfo{} -> throwError $ NoRed (c{info = (info c){errmsg = errmsg(info c)++" (too few arguments in call)"}})
+                                        info          -> throwError $ PosElemNotFound info "Too few positional elements"
+posElemNotFound False c n           = case info c of
+                                        DeclInfo{} -> throwError $ NoRed  (c{info = (info c){errmsg = errmsg(info c)++" (too many arguments in call)"}})
+                                        info          -> throwError $ PosElemNotFound info "Too many positional elements"

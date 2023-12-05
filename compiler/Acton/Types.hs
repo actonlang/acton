@@ -60,70 +60,6 @@ nodup x
   | otherwise                   = True
   where vs                      = duplicates (bound x)
 
-class Simp a where
-    simp                            :: EnvF x -> a -> a
-
-instance (Simp a) => Simp [a] where
-    simp env                        = map (simp env)
-
-instance Simp TSchema where
-    simp env (TSchema l q t)        = TSchema l q' (substIteratively s $ simp env' t)
-      where (q', s)                 = simpQuant env (simp env' q) (tyfree t)
-            env'                    = defineTVars (stripQual q) env
-
-simpQuant env q vs0                 = (subst s [ Quant v ps | Quant v ps <- q2, not $ null ps ], s)
-  where (q1,q2)                     = partition isEX q
-        isEX (Quant v [p])          = length (filter (==v) vs) == 1
-        isEX _                      = False
-        vs                          = concat [ tyfree ps | Quant v ps <- q ] ++ vs0
-        s                           = s1 ++ s2
-        s1                          = [ (v, tCon p) | Quant v [p] <- q1 ]                       -- Inline existentials
-        s2                          = univars `zip` beautyvars                                  -- Beautify univars
-        univars                     = filter univar $ qbound q2
-        beautyvars                  = map tVar $ tvarSupply \\ tvarScope env
-
-instance Simp QBind where
-    simp env (Quant v ps)           = Quant v (simp env ps)
-
-instance Simp WTCon where
-    simp env (w, c)                 = (w, simp env c)
-
-instance Simp (Name, NameInfo) where
-    simp env (n, NSig sc dec)       = (n, NSig (simp env sc) dec)
-    simp env (n, NDef sc dec)       = (n, NDef (simp env sc) dec)
-    simp env (n, NVar t)            = (n, NVar (simp env t))
-    simp env (n, NSVar t)           = (n, NSVar (simp env t))
-    simp env (n, NClass q us te)    = (n, NClass (simp env' q) (simp env' us) (simp env' te))
-      where env'                    = defineTVars (stripQual q) env
-    simp env (n, NProto q us te)    = (n, NProto (simp env' q) (simp env' us) (simp env' te))
-      where env'                    = defineTVars (stripQual q) env
-    simp env (n, NExt q c us te)    = (n, NExt q' (subst s $ simp env' c) (subst s $ simp env' us) (subst s $ simp env' te))
-      where (q', s)                 = simpQuant env (simp env' q) (tyfree c ++ tyfree us ++ tyfree te)
-            env'                    = defineTVars (stripQual q) env
-    simp env (n, NAct q p k te)     = (n, NAct (simp env' q) (simp env' p) (simp env' k) (simp env' te))
-      where env'                    = defineTVars (stripQual q) env
-    simp env (n, i)                 = (n, i)
-
-instance Simp Type where
-    simp env (TCon l c)             = TCon l (simp env c)
-    simp env (TFun l fx p k t)      = TFun l (simp env fx) (simp env p) (simp env k) (simp env t)
-    simp env (TTuple l p k)         = TTuple l (simp env p) (simp env k)
-    simp env (TOpt l t)             = TOpt l (simp env t)
-    simp env (TRow l k n t r)       = TRow l k n (simp env t) (simp env r)
-    simp env t                      = t
-
-instance Simp TCon where
-    simp env (TC n ts)              = TC (simp env n) (simp env ts)
-
-instance Simp QName where
-    simp env (GName m n)
-      | inBuiltin env               = NoQ n
-      | Just m == thismod env       = NoQ n
-    simp env n
-      | not $ null aliases          = NoQ $ head aliases
-      | otherwise                   = n
-      where aliases                 = [ n1 | (n1, NAlias n2) <- names env, n2 == n ]
-
 
 defaultTE                           :: Env -> TEnv -> TypeM TEnv
 defaultTE env te                    = do defaultVars (tyfree te \\ tyfree env)
@@ -492,54 +428,7 @@ matchDefAssumption env cs def
                  msg                    = "Type incompatibility between signature for and definition of "++Pretty.print (dname def)
                  info                   = maybe (DfltInfo (loc def) 58 Nothing []) (\l -> DeclInfo l (loc def) (dname def) sc1 msg) mbl
                                              
-{-
-matchDefAssumption env cs def
-  | q0 == q1                            = do --traceM ("## matchDefAssumption A " ++ prstr (dname def) ++ "[" ++ prstrs q1 ++ "]")
-                                             let t1 = tFun (dfx def) (prowOf $ pos def) (krowOf $ kwd def) (fromJust $ ann def)
-                                                 sc1 = TSchema NoLoc q1 t1
-                                             sc1 <- msubst sc1
-                                             sc1 <- wildify sc1
-                                             let mbl = findSigLoc (dname def) (names env)
-                                                 msg = "Type incompatibility between signature for and definition of "++Pretty.print (dname def)
-                                                 info = maybe (DfltInfo (loc def) 58 Nothing []) (\l -> DeclInfo l (loc def) (dname def) sc1 msg) mbl
-                                             (cs2,eq1) <- solveScoped env0 (qbound q0) [] t1 (Cast info t1 t2 : cs)
-                                             checkNoEscape env (qbound q0)
-                                             cs2 <- msubst cs2
-                                             return (cs2, def{ qbinds = noqual env q0, pos = pos0, dbody = bindWits eq1 ++ dbody def })
-  | otherwise                           = do --traceM ("## matchDefAssumption B " ++ prstr (dname def) ++ "[" ++ prstrs q1 ++ "]")
-                                             -- below we repeat a lot of code from above, since def is redefined. Could the code be reorganized;
-                                             traceM("q0="++show q0 ++", q1="++show q1)
-                                             (cs1, tvs) <- instQBinds env q1
-                                             let eq0 = witSubst env q1 cs1
-                                                 s = qbound q1 `zip` tvs            -- This cannot just be memoized in the global TypeM substitution,
-                                             def <- msubstWith s def{ qbinds = [] } -- since the variables in (qbound q1) aren't necessarily globally unique
-                                             let t1 = tFun (dfx def) (prowOf $ pos def) (krowOf $ kwd def) (fromJust $ ann def)
-                                                 sc1 = TSchema NoLoc q1 t1
-                                                 sc1 <- msubst sc1
-                                             sc1 <- wildify sc1
-                                             let mbl = findSigLoc (dname def) (names env)
-                                                 msg = "Type incompatibility between signature for and definition of "++Pretty.print (dname def)
-                                                 info = maybe (DfltInfo (loc def) 59 Nothing []) (\l -> DeclInfo l (loc def) (dname def) sc1 msg) mbl
-                                             (cs2,eq1) <- solveScoped env0 (qbound q0) [] t1 (Cast info t1 t2 : cs++cs1)
-                                             checkNoEscape env (qbound q0)
-                                             cs2 <- msubst cs2
-                                             return (cs2, def{ qbinds = noqual env q0, pos = pos0, dbody = bindWits (eq0++eq1) ++ dbody def })
-  where NDef (TSchema _ q0 t0) dec      = findName (dname def) env
-        t2 | inClass env                = addSelf t0 (Just dec)
-           | otherwise                  = t0
-        q1                              = qbinds def
-        env0                            = defineTVars q1 $ defineTVars q0 env
-        pos0
-          | inClass env && dec/=Static  = case pos def of
-                                            PosPar nSelf t' e' pos' -> PosPar nSelf t' e' $ qualWPar env q0 pos'
-                                            _ -> err1 (dname def) "Missing self parameter"
-          | otherwise                   = qualWPar env q0 (pos def)
 
-        findSigLoc n ((n',t):ps)
-           | NSig{} <- t, n==n'         = Just (loc n')
-           | otherwise                  = findSigLoc n ps
-        findSigLoc n []                 = Nothing
--}
 --------------------------------------------------------------------------------------------------------------------------
 
 instance InfEnv Decl where
@@ -555,11 +444,6 @@ instance InfEnv Decl where
                                                  return ([], [(n, NDef sc (deco d))], d)
                                              _ ->
                                                  illegalRedef n
-        where findSigLoc n ((n',NSig{}):ps)
-               | n == n'                = loc n'
-               | otherwise              = findSigLoc n ps
-              findSigLoc n (p:ps)       = findSigLoc n ps
-              findSigLoc _ []           = internal NoLoc "findSigLoc did not find location"
         
 
     infEnv env d@(Actor _ n q p k b)
@@ -667,8 +551,6 @@ addImpl [] ss                           = ss
 addImpl asigs (s : ss)
   | isNotImpl s                         = fromTEnv (unSig asigs) ++ s : ss
   | otherwise                           = s : addImpl asigs ss
-
-stripQual q                             = [ Quant v [] | Quant v us <- q ]
 
 toSigs te                               = map makeSig te
   where makeSig (n, NDef sc dec)        = (n, NSig sc dec)
@@ -1093,10 +975,11 @@ instance Infer Expr where
                                             NDef sc d -> do
                                                 (cs,tvs,t) <- instantiate env sc
                                                 let e = app t (tApp x tvs) $ witsOf cs
+                                                    cs1 = map (addTyping env n sc t) cs
                                                 -- traceM ("type of " ++ Pretty.print n ++" = "++ Pretty.print t ++ ", cs = " ++ render(commaList cs))
                                                 if actorSelf env
-                                                    then wrapped l attrWrap env cs [tActor,t] [eVar selfKW,e]
-                                                    else return (map (addTyping env n sc t) cs, t, e)
+                                                    then wrapped l attrWrap env cs1 [tActor,t] [eVar selfKW,e]
+                                                    else return (cs1, t, e)
                                             NClass q _ _ -> do
                                                 (cs0,ts) <- instQBinds env q
                                                 --traceM ("## Instantiating " ++ prstr n)
@@ -1306,7 +1189,7 @@ instance Infer Expr where
             method NotIn                = containsnotKW
     infer env (CompOp l e1 ops)         = notYet l "Comparison chaining"
 
-    infer env (Dot l e n)
+    infer env d@(Dot l e n)
       | Just m <- isModule env e        = infer env (Var l (QName m n))
 
     infer env (Dot l x@(Var _ c) n)
@@ -1465,7 +1348,14 @@ inferCall env unwrap l e ps ks          = do (cs1,t,e') <- infer env e
                                              t0 <- newTVar
                                              fx <- currFX
                                              w <- newWitness
-                                             return (Sub (DfltInfo l 837 (Just (Call l e ps ks)) []) w t (tFun fx prow krow t0) :
+                                             let i = case e of
+                                                        Var _ n@(NoQ n')
+                                                          | NDef sc _ <- findQName n env,
+                                                            Just l2 <- findDefLoc n' env ->
+                                                                   DeclInfo l l2 n' sc ("Type incompatibility between definition of and call of "++Pretty.print n')
+                                                        _ -> DfltInfo l 837 (Just (Call l e ps ks)) []
+                                             return (Sub i w t (tFun fx prow krow t0)  :
+                                            -- return (Sub (DfltInfo l 837 (Just (Call l e ps ks)) []) w t (tFun fx prow krow t0) :
                                                      cs1++cs2++cs3, t0, Call l (eCall (eVar w) [e']) ps' ks')
                                   
 
