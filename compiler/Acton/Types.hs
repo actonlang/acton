@@ -872,7 +872,7 @@ genEnv env cs te ds
                                              te <- msubst te
                                              env <- msubst env
                                              (fix_cs, gen_vs, gen_cs, te, eq) <- refine (define te env) cs te eq
-                                             --traceM ("## genEnv  types 2\n" ++ render (nest 6 $ pretty te))
+                                             --traceM ("## genEnv types 2\n" ++ render (nest 6 $ pretty te))
                                              return (fix_cs, te, eq, ds)
   | onTop env                           = do te <- msubst te
                                              --traceM ("## genEnv defs 1\n" ++ render (nest 6 $ pretty te))
