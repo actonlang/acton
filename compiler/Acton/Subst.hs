@@ -34,6 +34,11 @@ dropSelf (TFun l x p k t) NoDec
   | TRow _ _ _ _ p' <- p                = TFun l x p' k t
 dropSelf t _                            = t
 
+limitSelf                               :: Type -> Deco -> Bool -> [Constraint]
+limitSelf (TFun l _ p k _) NoDec True
+  | TRow _ _ _ t p' <- p                = [Cast (DfltInfo l 600 Nothing []) t tSelf]
+limitSelf _ _ _                         = []
+
 
 closeDepVars vs cs
   | null vs'                        = nub vs

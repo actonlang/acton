@@ -434,14 +434,15 @@ matchDefAssumption env cs def
 instance InfEnv Decl where
     infEnv env d@(Def _ n q p k a _ _ fx)
       | nodup (p,k)                     = case findName n env of
-                                             NSig sc dec | TFun{} <- sctype sc, matchingDec n sc dec (deco d) -> do
+                                             NSig sc dec | t@TFun{} <- sctype sc, matchingDec n sc dec (deco d) -> do
                                                  --traceM ("\n## infEnv (sig) def " ++ prstr (n, NDef sc dec))
                                                  return ([], [(n, NDef (unwrapSchema sc) dec)], d)
                                              NReserved -> do
                                                  t <- tFun (unwrap fx) (prowOf p) (krowOf k) <$> maybe newTVar return a
+                                                 let cs = limitSelf t (deco d) (inClass env)
                                                  let sc = tSchema q (if inClass env then dropSelf t (deco d) else t)
                                                  --traceM ("\n## infEnv def " ++ prstr (n, NDef sc (deco d)))
-                                                 return ([], [(n, NDef sc (deco d))], d)
+                                                 return (cs, [(n, NDef sc (deco d))], d)
                                              _ ->
                                                  illegalRedef n
         
