@@ -33,7 +33,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [macos-11, macos-12, macos-13]
+        os: [macos-12, macos-13]
     runs-on: ${{ matrix.os }}
     steps:
       - name: "Show env"
@@ -214,10 +214,10 @@ jobs:
         os: [macos-11, macos-12, macos-13]
     runs-on: ${{ matrix.os }}
     steps:
-      - name: "Download artifacts for Macos, built on macos-11"
+      - name: "Download artifacts for Macos, built on macos-12"
         uses: actions/download-artifact@v3
         with:
-          name: acton-macos-11
+          name: acton-macos-12
       - name: "Extract acton"
         run: |
           tar Jxvf $(ls acton-darwin*.tar.xz | tail -n1)
@@ -326,10 +326,10 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - name: "Check out repository code"
         uses: actions/checkout@v3
-      - name: "Download artifacts for Macos, built on macos-11"
+      - name: "Download artifacts for Macos, built on macos-12"
         uses: actions/download-artifact@v3
         with:
-          name: acton-macos-11
+          name: acton-macos-12
       - name: "Download artifacts for Linux, built on Debian:12"
         uses: actions/download-artifact@v3
         with:
@@ -391,10 +391,10 @@ jobs:
     steps:
       - name: "Check out repository code"
         uses: actions/checkout@v3
-      - name: "Download artifacts for Macos, built on macos-11"
+      - name: "Download artifacts for Macos, built on macos-12"
         uses: actions/download-artifact@v3
         with:
-          name: acton-macos-11
+          name: acton-macos-12
       - name: "Download artifacts for Linux, built on Debian:12"
         uses: actions/download-artifact@v3
         with:

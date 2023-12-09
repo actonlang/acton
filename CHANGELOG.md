@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+### Testing / CI
+- Stop testing on MacOS 11 [#1600]
+  - Homebrew has dropped support for MacOS 11 so the CI job had to build stuff
+    from source making it super slow and fragile, thus dropping it.
+
 ## [0.18.3] (2023-11-21)
 
 ### Added
