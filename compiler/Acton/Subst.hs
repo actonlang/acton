@@ -34,6 +34,11 @@ dropSelf (TFun l x p k t) NoDec
   | TRow _ _ _ _ p' <- p                = TFun l x p' k t
 dropSelf t _                            = t
 
+selfType                                :: PosPar -> Deco -> Type
+selfType p NoDec
+  | TRow _ _ _ t _ <- prowOf p          = t
+selfType _ _                            = tSelf
+
 
 closeDepVars vs cs
   | null vs'                        = nub vs
@@ -196,7 +201,7 @@ msubstWith s x                      = do s0 <- getSubstitution
                                          return x'
 
 wildify                             :: (Subst a) => a -> TypeM a
-wildify a                           = msubstWith (zip (tyfree a \\ tybound a) (repeat tWild)) a
+wildify a                           = msubstWith (zip (tyfree a \\ (tvSelf : tybound a)) (repeat tWild)) a
 
 testMsubstRenaming = do
     putStrLn ("p1: " ++ render (pretty (runTypeM p1)))

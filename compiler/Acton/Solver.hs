@@ -500,7 +500,7 @@ solveSelAttr env (wf,sc,d) c@(Sel info w t1 n t2)
                                             = do (cs,tvs,t) <- instantiate env sc
                                                  when (tvSelf `elem` snd (polvars t)) (tyerr n "Contravariant Self attribute not selectable by instance")
                                                  let e = eLambda [(px0,t1)] (app t (tApp (eDot (wf $ eVar px0) n) tvs) $ witsOf cs)
-                                                 unify (DfltInfo (loc c) 8 Nothing []) (subst [(tvSelf,t1)] t) t2
+                                                 cast env (DfltInfo (loc c) 8 Nothing []) (subst [(tvSelf,t1)] t) t2
                                                  return ([Eqn w (wFun t1 t2) e], cs)
 
 --  e1.__setslice__(sl, e2)
@@ -522,13 +522,13 @@ solveSelWit env (p,we) c@(Sel info w t1 n t2)
                                                  (cs,tvs,t) <- instantiate env sc
                                                  when (tvSelf `elem` snd (polvars t)) (tyerr n "Contravariant Self attribute not selectable by instance")
                                                  let e = eLambda [(px0,t1)] (app t (tApp (eDot (wf we) n) tvs) $ eVar px0 : witsOf cs)
-                                                 unify (DfltInfo (loc c) 9 Nothing []) (subst [(tvSelf,t1)] t) t2
+                                                 cast env (DfltInfo (loc c) 9 Nothing []) (subst [(tvSelf,t1)] t) t2
                                                  return ([Eqn w (wFun t1 t2) e], cs)
 
 solveMutAttr env (wf,sc,dec) c@(Mut info t1 n t2)
                                             = do when (dec /= Just Property) (noMut n)
                                                  let TSchema _ [] t = sc
-                                                 unify (DfltInfo (loc c) 10 Nothing []) t2 (subst [(tvSelf,t1)] t)
+                                                 cast env (DfltInfo (loc c) 10 Nothing []) t2 (subst [(tvSelf,t1)] t)
 
 ----------------------------------------------------------------------------------------------------------------------
 -- witness lookup

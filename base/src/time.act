@@ -214,12 +214,7 @@ class Clock:
     def comparable(self, other: Clock) -> bool:
         """Check if two clocks produce comparable time
         """
-        if isinstance(self, MonotonicClock) and isinstance(other, MonotonicClock):
-            return self.incarnation == other.incarnation
-        elif isinstance(self, RealtimeClock) and isinstance(other, RealtimeClock):
-            return self.standard == other.standard and self.sync == other.sync
-        else:
-            return False
+        return False
 
 
 class RealtimeClock(Clock):
@@ -233,6 +228,13 @@ class RealtimeClock(Clock):
         self.offset = offset
         self.error = error
 
+    def comparable(self, other: Clock) -> bool:
+        """Check if two clocks produce comparable time
+        """
+        if isinstance(other, RealtimeClock):
+            return self.standard == other.standard and self.sync == other.sync
+        else:
+            return False
 
 class MonotonicClock(Clock):
     """Monotonic clock
@@ -244,6 +246,13 @@ class MonotonicClock(Clock):
         self.offset = offset
         self.error = error
 
+    def comparable(self, other: Clock) -> bool:
+        """Check if two clocks produce comparable time
+        """
+        if isinstance(other, MonotonicClock):
+            return self.incarnation == other.incarnation
+        else:
+            return False
 
 class Calendar(object):
     """A calendar, like gregorian or julian.

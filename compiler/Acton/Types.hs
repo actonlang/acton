@@ -434,9 +434,9 @@ matchDefAssumption env cs def
 instance InfEnv Decl where
     infEnv env d@(Def _ n q p k a _ _ fx)
       | nodup (p,k)                     = case findName n env of
-                                             NSig sc dec | TFun{} <- sctype sc, matchingDec n sc dec (deco d) -> do
+                                             NSig sc dec | t@TFun{} <- sctype sc, matchingDec n sc dec (deco d) -> do
                                                  --traceM ("\n## infEnv (sig) def " ++ prstr (n, NDef sc dec))
-                                                 return ([], [(n, NDef (unwrapSchema sc) dec)], d)
+                                                 return ([], [(n, NDef (unwrapSchema sc) dec)], d{deco = dec})
                                              NReserved -> do
                                                  t <- tFun (unwrap fx) (prowOf p) (krowOf k) <$> maybe newTVar return a
                                                  let sc = tSchema q (if inClass env then dropSelf t (deco d) else t)
@@ -704,7 +704,6 @@ abstractDefs env q eq b                 = map absDef b
                                             _ -> err1 (dname d) "Missing self parameter"
                   | otherwise           = qualWPar env q (pos d)
 
-
 instance Check Decl where
     checkEnv env (Def l n q p k a b dec fx)
                                         = do --traceM ("## checkEnv def " ++ prstr n ++ " FX " ++ prstr fx')
@@ -713,6 +712,8 @@ instance Check Decl where
                                              st <- newTVar
                                              wellformed env1 q
                                              wellformed env1 a
+                                             when (inClass env) $ do
+                                                 unify (DfltInfo l 600 Nothing []) tSelf $ selfType p dec
                                              (csp,te0,p') <- infEnv env1 p
                                              (csk,te1,k') <- infEnv (define te0 env1) k
                                              (csb,_,b') <- infDefBody (define te1 (define te0 env1)) n p' b
