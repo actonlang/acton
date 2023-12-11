@@ -65,11 +65,15 @@ groupCs env cs                              = do st <- currentState
                                                  m <- foldM group Map.empty cs
                                                  rollbackState st
                                                  return $ Map.elems m
-  where mark (n,c)                          = do tvs <- (nub . filter univar . tyfree) <$> msubst c         -- Also include env vars via Sel/Mut? YES!!!
-                                                 sequence [ unify (DfltInfo NoLoc 1 Nothing []) (newTVarToken n) (tVar tv) | tv <- tvs ]
+  where mark (n,c)                          = do tvs <- (filter univar . tyfree) <$> msubst c
+                                                 tvs' <- (filter univar . tyfree) <$> msubst (map tVar $ attrfree c)
+                                                 sequence [ unify (DfltInfo NoLoc 1 Nothing []) (newTVarToken n) (tVar tv) | tv <- nub (tvs++tvs') ]
         group m c                           = do tvs <- (filter univar . tyfree) <$> msubst c
                                                  let tv = case tvs of [] -> tv0; tv:_ -> tv
                                                  return $ Map.insertWith (++) tv [c] m
+        attrfree c@(Sel _ _ _ n _)          = allConAttrFree env n
+        attrfree c@(Mut _ _ n _)            = allConAttrFree env n
+        attrfree _                          = []
         TVar _ tv0                          = newTVarToken 0
 
 
