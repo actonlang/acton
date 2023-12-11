@@ -1053,8 +1053,7 @@ instance Infer Expr where
                                              NClass q _ _ -> do
                                                 (cs,t,e') <- infer env e
                                                 ts <- newTVars [ tvkind v | v <- qbound q ]
-                                                return (Cast (DfltInfo (loc e) 78 (Just e) []) (tCon (TC c ts)) t :
-                                                        cs, tBool, IsInstance l e' c)
+                                                return (cs, tBool, IsInstance l e' c)
                                              _ -> nameUnexpected c
     infer env (BinOp l s@Strings{} Mod e)
       | TRow _ _ _ t TNil{} <- prow     = do (cs,e') <- inferSub env t e
@@ -1430,8 +1429,7 @@ inferTest env (IsInstance l e@(Var _ (NoQ n)) c)
                                                 (cs,t,e') <- infer env e
                                                 ts <- newTVars [ tvkind v | v <- qbound q ]
                                                 let tc = tCon (TC c ts)
-                                                return (Cast (DfltInfo (loc e) 95 (Just e) []) tc t :
-                                                        cs, define [(n,NVar tc)] env, sCast n t tc, tBool, IsInstance l e' c)
+                                                return (cs, define [(n,NVar tc)] env, sCast n t tc, tBool, IsInstance l e' c)
                                              _ -> nameUnexpected c
 inferTest env (Paren l e)               = do (cs,env',s,t,e') <- inferTest env e
                                              return (cs, env', s, t, Paren l e')
