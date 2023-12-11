@@ -746,8 +746,8 @@ instance Check Decl where
                                              (csb,te,b') <- (if stub env then infEnv else infSuiteEnv) (define te2 $ define te1 env1) b
                                              (cs0,eq0) <- matchActorAssumption env1 n p' k' te
                                              popFX
-                                             (cs1,eq1) <- solveScoped env1 tvs te tNone (csp++csk++csb++cs0)
-                                             checkNoEscape env tvs
+                                             (cs1,eq1) <- solveScoped env1 (tvSelf:tvs) te tNone (csp++csk++csb++cs0)
+                                             checkNoEscape env (tvSelf:tvs)
                                              fvs <- tyfree <$> msubst env
                                              let body = bindWits (eq1++eq0) ++ defaultsP p' ++ defaultsK k' ++ b'
                                                  act = Actor l n (noqual env q) (qualWPar env q p') k' body
@@ -764,8 +764,8 @@ instance Check Decl where
                                              wellformed env1 us
                                              (csb,b') <- checkEnv (define (subst s te) env1) b
                                              popFX
-                                             (cs1,eq1) <- solveScoped env1 tvs te tNone csb
-                                             checkNoEscape env tvs
+                                             (cs1,eq1) <- solveScoped env1 (tvSelf:tvs) te tNone csb
+                                             checkNoEscape env (tvSelf:tvs)
                                              return (cs1, [Class l n (noqual env q) (map snd as) (abstractDefs env q eq1 b')])
       where env1                        = defineSelf (NoQ n) q $ defineTVars q $ setInClass env
             tvs                         = tvSelf : qbound q
@@ -778,8 +778,8 @@ instance Check Decl where
                                              (csu,wmap) <- wellformedProtos env1 us
                                              (csb,b') <- checkEnv (define te env1) b
                                              popFX
-                                             (cs1,eq1) <- solveScoped env1 tvs te tNone (csu++csb)
-                                             checkNoEscape env tvs
+                                             (cs1,eq1) <- solveScoped env1 (tvSelf:tvs) te tNone (csu++csb)
+                                             checkNoEscape env (tvSelf:tvs)
                                              b' <- msubst b'
                                              return (cs1, convProtocol env n q ps eq1 wmap b')
       where env1                        = defineSelf (NoQ n) q $ defineTVars q $ setInClass env
@@ -793,8 +793,8 @@ instance Check Decl where
                                              (csu,wmap) <- wellformedProtos env1 us
                                              (csb,b') <- checkEnv (define (subst s te) env1) b
                                              popFX
-                                             (cs1,eq1) <- solveScoped env1 tvs te tNone (csu++csb)
-                                             checkNoEscape env tvs
+                                             (cs1,eq1) <- solveScoped env1 (tvSelf:tvs) te tNone (csu++csb)
+                                             checkNoEscape env (tvSelf:tvs)
                                              b' <- msubst b'
                                              return (cs1, convExtension env n' c q ps eq1 wmap b')
       where env1                        = defineInst c ps thisKW' $ defineSelf n q $ defineTVars q $ setInClass env
@@ -867,16 +867,14 @@ genEnv                                  :: Env -> Constraints -> TEnv -> [Decl] 
 genEnv env cs te ds
   | any typeDecl te                     = do te <- msubst te
                                              --traceM ("## genEnv types 1\n" ++ render (nest 6 $ pretty te))
-                                             --traceM ("     cs: " ++ prstrs cs)
+                                             --traceM ("## genEnv types cs:\n" ++ render (nest 4 $ vcat $ map pretty cs))
                                              (cs,eq) <- simplify (define te env) te tNone cs
                                              te <- msubst te
-                                             env <- msubst env
-                                             (fix_cs, gen_vs, gen_cs, te, eq) <- refine (define te env) cs te eq
                                              --traceM ("## genEnv types 2\n" ++ render (nest 6 $ pretty te))
-                                             return (fix_cs, te, eq, ds)
+                                             return (cs, te, eq, ds)
   | onTop env                           = do te <- msubst te
                                              --traceM ("## genEnv defs 1\n" ++ render (nest 6 $ pretty te))
-                                             --traceM ("     cs: " ++ prstrs cs)
+                                             --traceM ("## genEnv defs cs:\n" ++ render (nest 4 $ vcat $ map pretty cs))
                                              (cs,eq) <- simplify env te tNone cs
                                              te <- msubst te
                                              env <- msubst env
