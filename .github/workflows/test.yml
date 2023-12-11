@@ -305,6 +305,32 @@ jobs:
           path: |
             ${{ github.workspace }}/core*
 
+  test-external-projects:
+    needs: build-debs
+    runs-on: ubuntu-latest
+    container:
+      image: debian:experimental
+    steps:
+      - name: "Download .deb files"
+        uses: actions/download-artifact@v3
+        with:
+          name: acton-debs
+      - name: "Install acton from .deb"
+        run: |
+          apt update
+          apt install -y ./deb/acton_*.deb
+          actonc --version
+      - name: "Clone Telemetrify and check out acton-next branch"
+        uses: actions/checkout@v3
+        with:
+          repository: telemetrify-collector/telemetrify
+          path: telemetrify
+          ref: 'acton-next'
+      - name: "Compile acton program"
+        run: |
+          cd telemetrify
+          actonc build
+
 
   # If we are on the main branch, we'll create or update a pre-release called
   # 'tip' which holds the latest build output from the main branch!  We upload
