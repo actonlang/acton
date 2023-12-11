@@ -415,7 +415,11 @@ reduce' env eq c@(Impl _ w t@(TVar _ tv) p)
   | [wit] <- witSearch                      = do (eq',cs) <- solveImpl env wit w t p
                                                  reduce env (eq'++eq) cs
   | not $ null witSearch                    = do defer [c]; return eq
+  | [wit] <- witSearch'                     = do (eq',cs) <- solveImpl env wit w (tCon tc) p
+                                                 reduce env (eq'++eq) cs
   where witSearch                           = findWitness env t p
+        tc                                  = findTVBound env tv
+        witSearch'                          = findWitness env (tCon tc) p
   
 reduce' env eq c@(Impl _ w t@(TCon _ tc) p)
   | [wit] <- witSearch                      = do (eq',cs) <- solveImpl env wit w t p
