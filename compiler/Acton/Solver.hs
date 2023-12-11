@@ -322,7 +322,7 @@ allAbove env (TCon _ tc)                = tOpt tWild : map tCon tcons
         tcons                           = allAncestors env tc ++ [schematic' tc]
 allAbove env (TVar _ tv)
   | not $ univar tv                     = [tOpt tWild, tCon tc, tVar tv]
-  where tc                              = findTVBound env tv
+  where tc                              = schematic' $ findTVBound env tv
 allAbove env (TOpt _ t)                 = [tOpt tWild]
 allAbove env (TNone _)                  = [tOpt tWild, tNone]
 allAbove env (TFun _ _ _ _ _)           = [tOpt tWild, tFun tWild tWild tWild tWild]
