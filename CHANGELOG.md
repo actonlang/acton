@@ -1,5 +1,10 @@
 # Changelog
 
+## [0.18.5] (2023-12-12)
+
+### Testing / CI
+- Fix build of APT repo
+
 ## [0.18.4] (2023-12-12)
 
 ### Fixes
