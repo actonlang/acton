@@ -1,11 +1,21 @@
 # Changelog
 
-## Unreleased
+## [0.18.4] (2023-12-12)
+
+### Fixes
+- Add constraint forcing type of self parameter [#1598]
+- Let solver use upper bound of type variable when reducing protocol constraints
+- Remove subclass constraint on isinstance parameters
+- Type error message improvements [#1522] [#1589] [#1596]
+- Fix `actonc --debug` [#1591]
+  - Now also printing zig output
+  - `--verbose` has been removed
 
 ### Testing / CI
 - Stop testing on MacOS 11 [#1600]
   - Homebrew has dropped support for MacOS 11 so the CI job had to build stuff
     from source making it super slow and fragile, thus dropping it.
+
 
 ## [0.18.3] (2023-11-21)
 
