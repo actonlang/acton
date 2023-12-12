@@ -79,6 +79,7 @@ void $register_builtin() {
   $register_force(MEMORYERROR_ID,&B_MemoryErrorG_methods);
   $register_force(OSERROR_ID,&B_OSErrorG_methods);
   $register_force(RUNTIMEERROR_ID,&B_RuntimeErrorG_methods);
+  $register_force(CONNECTIONERROR_ID,&B_ConnectionErrorG_methods);
   $register_force(NOTIMPLEMENTEDERROR_ID,&B_NotImplementedErrorG_methods);
   $register_force(VALUEERROR_ID,&B_ValueErrorG_methods);
   //  $register_builtin_protocols();

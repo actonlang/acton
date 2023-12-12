@@ -344,6 +344,9 @@ class MemoryError (Exception):
 class OSError (Exception):
     pass
 
+class ConnectionError (OSError):
+    pass
+
 class RuntimeError (Exception):
     pass
 

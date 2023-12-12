@@ -447,6 +447,7 @@ actor Listener(cap: net.TCPListenCap, address: str, port: int, on_listen_error: 
 # TODO: default schema="https"
 # TODO: default port=None
 # TODO: default tls_verify=True
+# TODO: add arguments for configuring request buffering (size) and reconnection attempts and timeouts
 actor Client(cap: net.TCPConnectCap, scheme: str, address: str, port: ?int, tls_verify: bool, on_connect: action(Client) -> None, on_error: action(Client, str) -> None, log_handler: ?logging.Handler):
     """HTTP(S) Client
 
@@ -457,9 +458,10 @@ actor Client(cap: net.TCPConnectCap, scheme: str, address: str, port: ?int, tls_
     var _on_response: list[(bytes, action(Client, Response) -> None)] = []
     var version: ?bytes = None
     var buf = b""
-    var close_connection: bool = True
     var tcp_conn: ?net.TCPConnection = None
     var tls_conn: ?net.TLSConnection = None
+
+    var connecting: bool = True
 
     def _connect():
         if scheme == "http":
@@ -475,9 +477,18 @@ actor Client(cap: net.TCPConnectCap, scheme: str, address: str, port: ?int, tls_
 
     def _on_conn_connect():
         # If there are outstanding requests, it probably means we were
+        # disconnected or have not connected yet
+        # TODO: do not flush entire buffer if we know the server will close the
+        # connection. If the latency is so big that we're able to send the
+        # entire buffer before the server closes the connection we're just
+        # wasting resources.
         for r in _on_response:
+            _log.trace("Sending outstanding request", {"request": r.0})
             _conn_write(r.0)
-        await async on_connect(self)
+        if connecting:
+            # Dispatch the on_connect callback on first connect but not for reconnects
+            await async on_connect(self)
+            connecting = False
 
     def _on_tcp_connect(conn: net.TCPConnection) -> None:
         _on_conn_connect()
@@ -500,10 +511,14 @@ actor Client(cap: net.TCPConnectCap, scheme: str, address: str, port: ?int, tls_
             r, buf = parse_response(buf, _log)
             if r is not None:
                 if "connection" in r.headers and r.headers["connection"] == "close":
-                    close_connection = True
-                    _conn_close()
+                    # Is this really the right thing to do here? If the client
+                    # does not make a new request we just reconnected for nothing!
+                    # TODO: inspect the _on_response queue to see if there are more requests
+                    # TODO: for HTTP/1.0 do not reconnect right after the first
+                    # request, wait until the 2nd query and then assume there
+                    # will be more.
                     _log.debug("Closing TCP connection due to header: Connection: close", None)
-                    _connect()
+                    _conn_reconnect()
                 if len(_on_response) == 0:
                     _log.notice("Data received with no on_response callback set", None)
                     break
@@ -524,22 +539,28 @@ actor Client(cap: net.TCPConnectCap, scheme: str, address: str, port: ?int, tls_
     def _on_con_error(error: str) -> None:
         on_error(self, error)
 
-    def _conn_close() -> None:
+    def _conn_reconnect() -> None:
         if tcp_conn is not None:
-            def _noop(c):
-                pass
-            tcp_conn.close(_noop)
+            tcp_conn.reconnect()
         elif tls_conn is not None:
-            def _noop(c):
-                pass
-            tls_conn.close(_noop)
+            tls_conn.reconnect()
 
     def _conn_write(data: bytes) -> None:
-        _log.trace("Sending data", {"data": data})
-        if tcp_conn is not None:
-            tcp_conn.write(data)
-        elif tls_conn is not None:
-            tls_conn.write(data)
+        try:
+            _log.trace("Sending data", {"data": data})
+            # We call the write method on the TCP or TLS connection actor
+            # synchronously because we want to be able to catch exceptions
+            # signaling the socket was closed. Note that this is *not* waiting
+            # for network I/O, just waiting on system I/O for writing to the
+            # local socket buffer.
+            if tcp_conn is not None:
+                await async tcp_conn.write(data)
+            elif tls_conn is not None:
+                await async tls_conn.write(data)
+        except ConnectionError as exc:
+            # HTTP/1.0 servers close the connection after each request by default
+            _log.debug("TCP connection closed, reconnecting", {"error": str(exc)})
+            _conn_reconnect()
 
     # HTTP methods
     def get(path: str, headers: dict[str, str], on_response: action(Client, Response) -> None):
