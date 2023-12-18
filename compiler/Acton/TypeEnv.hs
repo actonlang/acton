@@ -158,6 +158,9 @@ data Equation                           = Eqn Name Type Expr
 
 type Equations                          = [Equation]
 
+instance Pretty Equation where
+    pretty (Eqn n t e)                  = pretty n <+> colon <+> pretty t <+> equals <+> pretty e
+
 bindWits eqs                            = [ Assign l0 [PVar l0 w (Just t)] e | Eqn w t e <- eqs ]
 
 impl2type t (TC n ts)                   = tCon $ TC n (t:ts)

@@ -89,11 +89,27 @@ infTop env ss                           = do --traceM ("\n## infEnv top")
                                              --traceM (prstrs cs)
                                              eq <- solveAll (define (filter typeDecl te) env) te tNone cs
                                              --traceM ("######## termred TOP")
-                                             ss <- termred <$> msubst (bindWits eq ++ ss)
+                                             ss <- termred <$> msubst (pushEqns eq ss)
                                              defaultVars (tyfree ss)
                                              te <- defaultTE env  te
                                              --traceM ("-------- done TOP")
                                              return (te, ss)
+
+pushEqns eqs ss                         = push eqns0 ss
+  where eqns0                           = [ (eq,ns) | eq <- eqs, let ns = free eq `intersect` bound ss ]
+        push eqns ss                    = bindWits (map fst eq1) ++ push' eq2 ss
+          where (eq1,eq2)               = partition (null . snd) eqns
+        push' [] ss                     = ss
+        push' eqns (s:ss)
+          | null eq1                    = s : push eq2 ss
+          | otherwise                   = inject eq1 s : push eq2 ss
+          where eq1                     = [ eq | (eq,ns) <- eqns, any (`elem` ns) ns', any (`elem` bound eq) (free s) ]
+                eq2                     = [ (eq, ns \\ ns') | (eq,ns) <- eqns ]
+                ns'                     = bound s
+        inject eqs (Decl l ds)          = Decl l [ d{ dbody = bindWits eqs ++ dbody d } | d <- ds ]
+        inject eqs (With l [] ss)       = With l [] (pushEqns eqs ss)
+        inject eqs s                    = error ("# Internal error: cyclic witnesses " ++ prstrs eqs ++ "\n# and statement\n" ++ prstr s)
+
 
 class Infer a where
     infer                               :: Env -> a -> TypeM (Constraints,Type,a)
