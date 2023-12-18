@@ -60,7 +60,8 @@ wtrans env (Assign l p@[PVar _ n (Just t)] e : ss)
   | Internal Witness _ _ <- n           = Assign l p e1 : wtrans (extscope n t e1 env) ss
   where hits                            = [ eVar n' | (n',t',e') <- witscope env, e' == e1, t' == t ]
         e1                              = trans env e
-wtrans env ss                           = trans env ss
+wtrans env (s:ss)                       = trans env s : wtrans env ss
+wtrans env []                           = []
                                 
 
 instance (Transform a) => Transform [a] where
