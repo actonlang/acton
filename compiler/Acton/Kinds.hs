@@ -308,7 +308,9 @@ instance KCheck Decl where
                                          q <- kchkQBinds env1 (q++q')
                                          Def l n q <$> kchk env1 p <*> kchk env1 k <*> kexp KType env1 t <*> kchkSuite env1 b <*> pure d <*> kfx env1 x
       where ambig                   = qualbound q \\ closeDepVarsQ (tyfree p ++ tyfree k ++ tyfree t ++ tyfree x) q
-    kchk env (Actor l n q p k b)    = do env1 <- extvars (qbound q) env
+    kchk env (Actor l n q p k b)    = do p <- convPExist env =<< convTWild p
+                                         k <- convPExist env =<< convTWild k
+                                         env1 <- extvars (qbound q) env
                                          Actor l n <$> kchkQBinds env1 q <*> kchk env1 p <*> kchk env1 k <*> kchkSuite env1 b
     kchk env (Class l n q us b)     = do env1 <- extvars (tvSelf : qbound q) env
                                          Class l n <$> kchkQBinds env1 q <*> kchkBounds env1 us <*> kchkSuite env1 b

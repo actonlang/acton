@@ -469,8 +469,8 @@ instance InfEnv Decl where
       | nodup (p,k)                     = case findName n env of
                                              NReserved -> do
                                                  te <- infActorEnv env b
-                                                 prow <- newTVarOfKind PRow
-                                                 krow <- newTVarOfKind KRow
+                                                 let prow = prowOf p
+                                                     krow = krowOf k
                                                  --traceM ("\n## infEnv actor " ++ prstr (n, NAct q prow krow te))
                                                  return ([], [(n, NAct q prow krow te)], d)
                                              _ ->
@@ -647,7 +647,7 @@ infActorEnv env ss                      = do dsigs <- mapM mkNDef dvars         
 
 matchActorAssumption env n0 p k te      = do --traceM ("## matchActorAssumption " ++ prstrs te)
                                              (css,eqs) <- unzip <$> mapM check1 te0
-                                             let cs = [Cast (DfltInfo (ploc p) 60 Nothing []) (prowOf p) p0, Cast (DfltInfo (kloc k) 61 Nothing []) (krowOf k) k0,
+                                             let cs = [Cast (DfltInfo (ploc p) 60 Nothing []) (tTuple p0 k0) (tTuple (prowOf p) (krowOf k)),
                                                        Seal (DfltInfo (ploc p) 112 Nothing []) p0, Seal (DfltInfo (kloc k) 113 Nothing []) k0]
                                              (cs,eq) <- simplify env obs tNone (cs ++ concat css)
                                              return (cs, eq ++ concat eqs)
