@@ -2,6 +2,11 @@ Building file ../test/typeerrors/ex13.act
   Compiling ex13.act for release
 
 ERROR: Error when compiling ex13 module: Type error
-Too few positional elements
+
+  |
+4 |actor Act(s:int,t:str):
+  |                ^
+Keyword element 't' is not found
+
 - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
 
