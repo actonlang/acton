@@ -89,9 +89,9 @@ infTop env ss                           = do --traceM ("\n## infEnv top")
                                              --traceM (prstrs cs)
                                              eq <- solveAll (define (filter typeDecl te) env) te tNone cs
                                              --traceM ("######## termred TOP")
-                                             ss <- termred <$> msubst (pushEqns eq ss)
                                              defaultVars (tyfree ss)
                                              te <- defaultTE env  te
+                                             ss <- termred <$> msubst (pushEqns eq ss)
                                              --traceM ("-------- done TOP")
                                              return (te, ss)
 
