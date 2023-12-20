@@ -980,6 +980,7 @@ lub env (TTuple _ p1 k1) (TTuple _ p2 k2)
                                         = tTuple <$> lub env p1 p2 <*> lub env k1 k2
 
 lub env (TOpt _ t1) (TOpt _ t2)         = tOpt <$> lub env t1 t2
+lub env (TNone _) (TNone _)             = pure tNone
 lub env (TNone _) t2@TOpt{}             = pure t2
 lub env t1@TOpt{} (TNone _)             = pure t1
 lub env (TNone _) t2                    = pure $ tOpt t2
