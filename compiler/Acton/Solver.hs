@@ -478,8 +478,8 @@ reduce' env eq (Seal info t)                = reduce env eq (map (Seal info) ts)
 reduce' env eq c                            = noRed0 c
 
 
-solveImpl env wit w t p                     = do (cs,p',we) <- instWitness env t wit
-                                                 unifyM (DfltInfo NoLoc 7 Nothing []) (tcargs p) (tcargs p')
+solveImpl env wit w t p                     = do (cs,t',we) <- instWitness env p wit
+                                                 cast env (DfltInfo NoLoc 7 Nothing []) t t'
                                                  return ([Eqn w (impl2type t p) we], cs)
 
 solveSelAttr env (wf,sc,d) c@(Sel info w t1 n t2)
@@ -534,13 +534,13 @@ findWitness env t p
         force               = isForced env
         t'                  = if force then t_ else t   -- allow instantiation only when in forced mode
         all_ws              = reverse $ filter (matching t_ p_) $ witsByPName env $ tcname p    -- all witnesses that could be used
-        (match_ws, rest_ws) = partition (matching (if force then t_ else t) p_) all_ws          -- only those that match t exactly
+        (match_ws, rest_ws) = partition (matching1 t') all_ws                                   -- only those that match t exactly
         uni_ws              = filter (unifying (DfltInfo (loc t) 11 Nothing []) t) rest_ws
         elim ws' []         = reverse ws'
         elim ws' (w:ws)
           | covered         = elim ws' ws
           | otherwise       = elim (w:ws') ws
-          where covered     = or [ matchP w' w && not (matchP w w') | w' <- ws'++ws ]
+          where covered     = or [ matchWit w' w && not (matchWit w w') | w' <- ws'++ws ]
 
 findProtoByAttr env cn n    = case filter hasAttr $ witsByTName env cn of
                                 [] -> Nothing
@@ -558,10 +558,20 @@ allExtProto env t p         = reverse [ schematic (wtype w) | w <- witsByPName e
 allExtProtoAttr             :: Env -> Name -> [Type]
 allExtProtoAttr env n       = [ tCon tc | tc <- allCons env, any ((n `elem`) . allAttrs' env . proto) (witsByTName env $ tcname tc) ]
 
+matching t p w              = match_p && eqhead t (wtype w)
+  where match_p             = matching' (tcargs p) (qbound $ binds w) (tcargs (proto w))
+        eqhead (TWild _)  _             = True
+        eqhead _          (TWild _)     = True
+        eqhead (TCon _ c) (TCon _ c')   = tcname c == tcname c'
+        eqhead (TFX _ fx) (TFX _ fx')   = fx == fx'
+        eqhead (TVar _ v) (TVar _ v')   = v == v'
+        eqhead _          _             = False
 
-matching t p w              = matching' (t : tcargs p) (qbound $ binds w) (wtype w : tcargs (proto w))
+matching1 t w               = matching' [t] (qbound $ binds w) [wtype w]
 
-matchP w w'                 = matching (wtype w) (proto w) w'
+matchWit w w'               = matching' (t : tcargs p) (qbound $ binds w') (wtype w' : tcargs (proto w'))
+  where t                   = wtype w
+        p                   = proto w
 
 matching' ts vs ts'         = isJust $ matches vs ts ts'    -- there is a substitution s with domain vs such that ts == subst s ts'
 

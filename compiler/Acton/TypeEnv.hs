@@ -125,21 +125,21 @@ instQBinds env q            = do ts <- newTVars [ tvkind v | Quant v _ <- q ]
                                  cs <- instQuals env q ts
                                  return (cs, ts)
 
-instWitness                 :: EnvF x -> Type -> Witness -> TypeM (Constraints,TCon,Expr)
-instWitness env t0 wit      = case wit of
-                                 WClass q t1 p w ws -> do
+instWitness                 :: EnvF x -> PCon -> Witness -> TypeM (Constraints,Type,Expr)
+instWitness env p0 wit      = case wit of
+                                 WClass q t p w ws -> do
                                     (cs,tvs) <- instQBinds env q
-                                    let s = (tvSelf,t0) : qbound q `zip` tvs
-                                    unify (DfltInfo (loc t0) 22 Nothing []) t0 (subst s t1)
-                                    p <- msubst (subst s p)
+                                    let s = (tvSelf,t) : qbound q `zip` tvs
+                                    unifyM (DfltInfo (loc p0) 22 Nothing []) (tcargs p0) (tcargs $ subst s p)
+                                    t <- msubst (subst s t)
                                     cs <- msubst cs
-                                    return (cs, p, wexpr ws (eCall (tApp (eQVar w) tvs) $ wvars cs))
-                                 WInst q t1 p w ws -> do
+                                    return (cs, t, wexpr ws (eCall (tApp (eQVar w) tvs) $ wvars cs))
+                                 WInst q t p w ws -> do
                                     (cs,tvs) <- instQBinds env q
-                                    let s = (tvSelf,t0) : qbound q `zip` tvs
-                                    unify (DfltInfo (loc t0) 23 Nothing []) t0 (subst s t1)
-                                    p <- msubst (subst s p)
-                                    return (cs, p, wexpr ws (eQVar w))
+                                    let s = (tvSelf,t) : qbound q `zip` tvs
+                                    unifyM (DfltInfo (loc p0) 23 Nothing []) (tcargs p0) (tcargs $ subst s p)
+                                    t <- msubst (subst s t)
+                                    return (cs, t, wexpr ws (eQVar w))
 
 instQuals                   :: EnvF x -> QBinds -> [Type] -> TypeM Constraints
 instQuals env q ts          = do let s = qbound q `zip` ts
