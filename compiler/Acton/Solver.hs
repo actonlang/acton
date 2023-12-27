@@ -533,8 +533,8 @@ findWitness env t p
         p_                  = wild p                    -- matching against wild p also accepts witnesses that would instantiate p
         force               = isForced env
         t'                  = if force then t_ else t   -- allow instantiation only when in forced mode
-        all_ws              = reverse $ filter (matching t_ p_) $ witsByPName env $ tcname p    -- all witnesses that could be used
-        (match_ws, rest_ws) = partition (matching1 t') all_ws                                   -- only those that match t exactly
+        all_ws              = reverse $ filter (matchCoarse t_ p_) $ witsByPName env $ tcname p -- all witnesses that could be used
+        (match_ws, rest_ws) = partition (matchFine t') all_ws                                   -- only those that match t exactly
         uni_ws              = filter (unifying (DfltInfo (loc t) 11 Nothing []) t) rest_ws
         elim ws' []         = reverse ws'
         elim ws' (w:ws)
@@ -551,15 +551,15 @@ hasWitness                  :: Env -> Type -> PCon -> Bool
 hasWitness env t p          =  not $ null $ findWitness env t p
 
 allExtProto                 :: Env -> Type -> PCon -> [Type]
-allExtProto env t p         = reverse [ schematic (wtype w) | w <- witsByPName env (tcname p), matching t_ p_ w ]
+allExtProto env t p         = reverse [ schematic (wtype w) | w <- witsByPName env (tcname p), matchCoarse t_ p_ w ]
   where t_                  = wild t                    -- matching against wild t also accepts witnesses that would instantiate t
         p_                  = wild p                    -- matching against wild p also accepts witnesses that would instantiate p
 
 allExtProtoAttr             :: Env -> Name -> [Type]
 allExtProtoAttr env n       = [ tCon tc | tc <- allCons env, any ((n `elem`) . allAttrs' env . proto) (witsByTName env $ tcname tc) ]
 
-matching t p w              = match_p && eqhead t (wtype w)
-  where match_p             = matching' (tcargs p) (qbound $ binds w) (tcargs (proto w))
+matchCoarse t p w           = match_p && eqhead t (wtype w)
+  where match_p             = matching (tcargs p) (qbound $ binds w) (tcargs (proto w))
         eqhead (TWild _)  _             = True
         eqhead _          (TWild _)     = True
         eqhead (TCon _ c) (TCon _ c')   = tcname c == tcname c'
@@ -567,13 +567,13 @@ matching t p w              = match_p && eqhead t (wtype w)
         eqhead (TVar _ v) (TVar _ v')   = v == v'
         eqhead _          _             = False
 
-matching1 t w               = matching' [t] (qbound $ binds w) [wtype w]
+matchFine t w               = matching [t] (qbound $ binds w) [wtype w]
 
-matchWit w w'               = matching' (t : tcargs p) (qbound $ binds w') (wtype w' : tcargs (proto w'))
-  where t                   = wtype w
-        p                   = proto w
+matchExactly t p w          = matching (t : tcargs p) (qbound $ binds w) (wtype w : tcargs (proto w))
 
-matching' ts vs ts'         = isJust $ matches vs ts ts'    -- there is a substitution s with domain vs such that ts == subst s ts'
+matchWit w w'               = matchExactly (wtype w) (proto w) w'
+
+matching ts vs ts'          = isJust $ matches vs ts ts'    -- there is a substitution s with domain vs such that ts == subst s ts'
 
 unifying info t w           = runTypeM $ tryUnify `catchError` const (return False)
   where tryUnify            = do unify info t (wtype w)
