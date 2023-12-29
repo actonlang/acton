@@ -1187,7 +1187,7 @@ instance Infer Expr where
                                              (cs1,e1') <- inferSub env t e1
                                              (cs2,e2') <- inferSub env t e2
                                              w <- newWitness
-                                             return (Impl (DfltInfo l 84 (Just e) []) w t (protocol op) :  
+                                             return (Impl (DfltInfo l 84 (Just e) []) w t (protocol op) :
                                                      cs1++cs2, tBool, eCall (eDot (eVar w) (method op)) [e1',e2'])
                                              -- TODO: This gives misleading error msg; it says that "e1 op e2 must implement protocol op"
       where protocol Eq                 = pEq
@@ -1383,7 +1383,7 @@ inferCall env unwrap l e ps ks          = do (cs1,t,e') <- infer env e
                                              return (Sub i w t (tFun fx prow krow t0)  :
                                             -- return (Sub (DfltInfo l 837 (Just (Call l e ps ks)) []) w t (tFun fx prow krow t0) :
                                                      cs1++cs2++cs3, t0, Call l (eCall (eVar w) [e']) ps' ks')
-                                  
+
 
 
 tupleTemplate i                         = do ts <- mapM (const newTVar) [0..i]              -- Handle DotI or RestI...

@@ -647,10 +647,10 @@ cast' env info r1@(TNil _ k) (TVar _ tv)
 cast' env info (TRow _ k1 n1 t1 r1) (TRow _ k2 n2 t2 r2)
   | k1 == k2 && n1 == n2                    = do cast env info t1 t2
                                                  cast env info r1 r2
-cast' env info (TNil _ _) r2@(TRow _ _ n _ _)
-                                            = posElemNotFound0 True info n
+cast' env info r1@(TNil _ _) r2@(TRow _ _ n _ _)
+                                            = posElemNotFound0 env True (Cast info r1 r2) n
 cast' env info r1@(TRow _ _ n _ _) r2@(TNil _ _)
-                                            = posElemNotFound0 False info n
+                                            = posElemNotFound0 env False (Cast info r1 r2) n
 cast' env info (TStar _ k1 r1) (TStar _ k2 r2)
   | k1 == k2                                = cast env info r1 r2
 cast' env info (TVar _ tv) r2@(TRow _ k n _ _)
@@ -851,7 +851,7 @@ subpos info f i r1@TNil{}          r@(TRow _ _ _ t2 r2)
                                                  (cs,as,es) <- subpos info f i r1 r2
                                                  return (cs, PosArg eNone as, es)
   | otherwise                               = do --traceM (" ## subpos G Nil ~ " ++ prstr r)
-                                                 posElemNotFound0 True info nWild
+                                                 posElemNotFound True (Cast info r1 r) nWild
 subpos info f i (TRow _ _ _ t1 r1) r2@TNil{}
                                             = do --traceM (" ## subpos H " ++ prstr t1 ++ " = " ++ prstr (f i))
                                                  (cs,as,es) <- subpos info f (i+1) r1 r2
@@ -869,7 +869,7 @@ subkwd0 info f ((e,t1):es) r1 (TRow _ _ n t2 r2)
                                                  return (Sub info w t1 t2 : cs, KwdArg n (eCallVar w [e]) as)
   where labels (TRow _ _ n _ r)             = n : labels r
         labels _                            = []
-subkwd0 info f ((e,t1):es) r1 r2            = posElemNotFound0 False info nWild
+subkwd0 info f ((e,t1):es) r1 r2            = posElemNotFound False (Cast info r1 r2) nWild
 
 subkwd                                      :: ErrInfo -> (Name -> Expr) -> [Name] -> KwdRow -> KwdRow -> TypeM (Constraints, KwdArg)
 subkwd info f seen r1 (TVar _ tv)           = do unif f seen r1
