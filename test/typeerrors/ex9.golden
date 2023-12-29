@@ -3,11 +3,7 @@ Building file ../test/typeerrors/ex9.act
 
 ERROR: Error when compiling ex9 module: Type error
 
-  |
-4 |a = f(3,"hej")
-  |    ^
-f has had its polymorphic type [A(Plus)] => (x: A, y: A) -> A instantiated to (x: t1, y: t1) -> t1, so
-t1 must implement __builtin__.Plus
+Cannot satisfy the following simultaneous constraints for the unknown types t0, t1:
 
   |
 4 |a = f(3,"hej")
@@ -17,19 +13,19 @@ The type of 3 (which we call t0) must implement __builtin__.Number
   |
 4 |a = f(3,"hej")
   |    ^
-f has had its polymorphic type [A(Plus)] => (A, A) -> A instantiated to (t1, t1) -> t1, so t1 must implement __builtin__.Plus
+f has had its polymorphic type [A(Plus)] => (x: A, y: A) -> A instantiated to (x: t1, y: t1) -> t1, so t1 must implement __builtin__.Plus
 
   |
 4 |a = f(3,"hej")
   |    ^^^^^^^^^^
 Type incompatibility between definition of and call of f
-f is inferred to have a type of the form [T_6w(__builtin__.Plus)] => (T_6w, T_6w) -> T_6w
+f is inferred to have a type of the form [T_6w(__builtin__.Plus)] => (x: T_6w, y: T_6w) -> T_6w
 
   |
 4 |a = f(3,"hej")
   |    ^^^^^^^^^^
 Type incompatibility between definition of and call of f
-f is inferred to have a type of the form [T_6w(__builtin__.Plus)] => (T_6w, T_6w) -> T_6w
+f is inferred to have a type of the form [T_6w(__builtin__.Plus)] => (x: T_6w, y: T_6w) -> T_6w
 
 - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
 

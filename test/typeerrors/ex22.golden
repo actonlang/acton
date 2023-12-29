@@ -12,7 +12,7 @@ ERROR: Error when compiling ex22 module: Type error
 4 |    return x
   |
 Type incompatibility between signature for and definition of f (too few arguments in call)
-f is inferred to have a type of the form _(_, _) -> _
+f is inferred to have a type of the form _(x: _, y: _) -> _
 
 - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
 

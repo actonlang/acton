@@ -12,7 +12,7 @@ ERROR: Error when compiling ex11 module: Type error
 1 |def f(s):
   |    ^
 Type incompatibility between definition of and call of f
-f is inferred to have a type of the form _(__builtin__.str) -> __builtin__.str
+f is inferred to have a type of the form _(s: __builtin__.str) -> __builtin__.str
 
 - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
 

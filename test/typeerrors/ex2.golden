@@ -12,7 +12,7 @@ ERROR: Error when compiling ex2 module: Type error
 1 |def f(x,y):
   |    ^
 Type incompatibility between definition of and call of f (too many arguments in call)
-f is inferred to have a type of the form [A(Plus)] => _(A, A) -> A
+f is inferred to have a type of the form [T_6w(__builtin__.Plus)] => T_8w(x: T_6w, y: T_6w) -> T_6w
 
 - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
 
