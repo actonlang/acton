@@ -414,35 +414,30 @@ matchingDec n sc dec dec'
   | otherwise                           = decorationMismatch n sc dec
 
 matchDefAssumption env cs def
-  | q0 == q1                            = do --traceM ("## matchDefAssumption A " ++ prstr (dname def) ++ "[" ++ prstrs q1 ++ "]")
-                                             match env cs def
-  | otherwise                           = do --traceM ("## matchDefAssumption B " ++ prstr (dname def) ++ "[" ++ prstrs q1 ++ "]")
+  | q0 == q1                            = do --traceM ("## matchDefAssumption A " ++ prstr (dname def) ++ ": " ++ prstr (Cast info t1 t2))
+                                             match env cs [] def
+  | otherwise                           = do --traceM ("## matchDefAssumption B " ++ prstr (dname def) ++ ": [" ++ prstrs q1 ++ "] => " ++ prstr (Cast info t1 t2))
                                              (cs1, tvs) <- instQBinds env q1
                                              let eq0 = witSubst env q1 cs1
                                                  s = qbound q1 `zip` tvs            -- This cannot just be memoized in the global TypeM substitution,
                                              def' <- msubstWith s def{ qbinds = [] } -- since the variables in (qbound q1) aren't necessarily globally unique
-                                             match env (cs ++ cs1) def'
+                                             match env (cs ++ cs1) eq0 def'
   where NDef (TSchema _ q0 t0) dec      = findName (dname def) env
         t2 | inClass env                = addSelf t0 (Just dec)
            | otherwise                  = t0
         q1                              = qbinds def
         env0                            = defineTVars q1 $ defineTVars q0 env
         (pos0,kwd0)                     = qual env dec (pos def) (kwd def) (qualWPar env q0)
---        pos0                            = case pos def of
---                                            PosPar nSelf t e p | inClass env && dec/=Static ->
---                                                PosPar nSelf t e $ qualWPar env q0 p
---                                            p -> qualWPar env q0 p
 
-        match env cs def                = do (cs2,eq1) <- solveScoped env0 (qbound q0) [] t1 (Cast info t1 t2 : cs)
+        match env cs eq0 def            = do (cs2,eq1) <- solveScoped env0 (qbound q0) [] t1 (Cast info t1 t2 : cs)
                                              checkNoEscape env (qbound q0)
                                              cs2 <- msubst cs2
-                                             return (cs2, def{ qbinds = noqual env q0, pos = pos0, dbody = bindWits eq1 ++ dbody def })
+                                             return (cs2, def{ qbinds = noqual env q0, pos = pos0, kwd = kwd0, dbody = bindWits (eq0++eq1) ++ dbody def })
            where t1                     = tFun (dfx def) (prowOf $ pos def) (krowOf $ kwd def) (fromJust $ ann def)
                  sc1                    = TSchema NoLoc q1 t1
                  mbl                    = findSigLoc (dname def) env
                  msg                    = "Type incompatibility between signature for and definition of "++Pretty.print (dname def)
                  info                   = maybe (DfltInfo (loc def) 58 Nothing []) (\l -> DeclInfo l (loc def) (dname def) sc1 msg) mbl
-                                             
 
 qual env dec p k qf | not (inClass env) = (qf p, k)
 qual env Static p k qf                  = (qf p, k)

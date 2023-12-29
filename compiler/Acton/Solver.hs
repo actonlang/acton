@@ -650,7 +650,7 @@ cast' env info (TRow _ k1 n1 t1 r1) (TRow _ k2 n2 t2 r2)
 cast' env info r1@(TNil _ _) r2@(TRow _ _ n _ _)
                                             = posElemNotFound0 env True (Cast info r1 r2) n
 cast' env info r1@(TRow _ _ n _ _) r2@(TNil _ _)
-                                            = posElemNotFound0 env False (Cast info r1 r2) n
+                                            = surplusRow r1
 cast' env info (TStar _ k1 r1) (TStar _ k2 r2)
   | k1 == k2                                = cast env info r1 r2
 cast' env info (TVar _ tv) r2@(TRow _ k n _ _)
