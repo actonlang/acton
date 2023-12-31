@@ -124,7 +124,7 @@ instance Transform Expr where
     trans env (Call l e p k)
       | Lambda{} <- e',
         Just s1 <- pzip (ppar e') p',
-        Just s2 <-  kzip (kpar e') k'   = termsubst (s1++s2) (exp1 e')
+        Just s2 <-  kzip (kpar e') k'   = termsubst (s1++s2) (exp1 e')      -- TODO: check that e' is linear in all its parameters!
       | TApp _ e0 ts <- e',
         Just e1 <- transCall e0 ts es   = e1
       | otherwise                       = Call l e' p' k'
@@ -195,6 +195,13 @@ eta (Lambda _ p k (Call _ e p' k') fx)
     eq2 (KwdSTAR n _) (KwdStar e)       = eVar n == e
     eq2 KwdNIL KwdNil                   = True
     eq2 _ _                             = False
+eta (Lambda _ (PosPar n (Just t) Nothing PosNIL) KwdNIL (Tuple _ p KwdNil) (TFX _ FXPure))
+  | TTuple _ r TNil{} <- t, tup 0 r p   = eLambda [(n,t)] (eVar n)
+  where tup i TNil{} PosNil             = True
+        tup i r@TRow{} (PosArg e p)     = dot i e && tup (i+1) (rtail r) p
+        tup i _ _                       = False
+        dot i (DotI _ (Var _ n') i')    = n' == NoQ n && i' == i
+        dot i _                         = False
 eta e                                   = e
 
 pzip (PosPar n _ _ p) (PosArg e a)      = do p' <- pzip p a; return $ (n, e) : p'
