@@ -324,7 +324,7 @@ instance Norm Expr where
     norm env (Strings l ss)         = return $ Strings l (catStrings ss)
     norm env (BStrings l ss)        = return $ BStrings l (catStrings ss)
     norm env (Call l e p k)         = Call l <$> norm env e <*> norm env (joinArg p k) <*> pure KwdNil
-    norm env (TApp l e ts)          = TApp l <$> normInst env ts e <*> pure ts
+    norm env (TApp l e ts)          = TApp l <$> normInst env ts e <*> pure (conv ts)
     norm env (Dot l (Var l' x) n)
       | NClass{} <- findQName x env = pure $ Dot l (Var l' x) n
     norm env (Dot l e n)
@@ -343,7 +343,7 @@ instance Norm Expr where
     norm env (DotI l e i)           = DotI l <$> norm env e <*> pure i
     norm env (RestI l e i)          = RestI l <$> norm env e <*> pure i
     norm env (Lambda l p k e fx)    = do p' <- joinPar <$> norm env p <*> norm (define (envOf p) env) k
-                                         Lambda l p' KwdNIL <$> norm env1 e <*> return fx
+                                         eta <$> (Lambda l p' KwdNIL <$> norm env1 e <*> pure fx)
       where env1                    = define (envOf p ++ envOf k) env
     norm env (Yield l e)            = Yield l <$> norm env e
     norm env (YieldFrom l e)        = YieldFrom l <$> norm env e
@@ -356,10 +356,25 @@ instance Norm Expr where
     norm env (Paren l e)            = norm env e
     norm env e                      = error ("norm unexpected: " ++ prstr e)
 
-nargs TNil{}                        = 0
-nargs p@TRow{}                      = 1 + nargs (rtail p)
+eta (Lambda _ p KwdNIL (Call _ e p' KwdNil) fx)
+  | eq1 p p'                        = e
+  where
+    eq1 (PosPar n _ _ p) (PosArg e p')  = eVar n == e && eq1 p p'
+    eq1 (PosSTAR n _) (PosStar e)       = eVar n == e
+    eq1 PosNIL PosNil                   = True
+    eq1 _ _                             = False
+eta e                               = e
 
-narg n k@TRow{}                     = if n == label k then 0 else 1 + narg n (rtail k)
+nargs (TRow _ _ _ _ r)              = 1 + nargs r
+nargs (TStar _ _ _)                 = 1
+nargs (TNil _ _)                    = 0
+
+narg n (TRow _ _ n' _ r)
+  | n == n'                         = 0
+  | otherwise                       = 1 + narg n r
+narg n (TStar _ _ _)
+  | n == attrKW                     = 0
+narg n k                            = error ("### Bad narg " ++ prstr n ++ " " ++ prstr k)
 
 instance Norm Pattern where
     norm env (PWild l a)            = return $ PWild l (conv a)
@@ -386,7 +401,7 @@ instance Norm KwdPar where
     norm env KwdNIL                 = return KwdNIL
 
 joinPar (PosPar n t e p) k          = PosPar n t e (joinPar p k)
-joinPar (PosSTAR n t) k             = PosPar n t Nothing (kwdToPosPar k)        -- TODO: sort this out...
+joinPar (PosSTAR n t) k             = PosPar n t Nothing (kwdToPosPar k)
 joinPar PosNIL k                    = kwdToPosPar k
 
 kwdToPosPar (KwdPar n t e k)        = PosPar n t e (kwdToPosPar k)
@@ -394,7 +409,7 @@ kwdToPosPar (KwdSTAR n t)           = PosPar n t Nothing PosNIL
 kwdToPosPar KwdNIL                  = PosNIL
 
 joinArg (PosArg e p) k              = PosArg e (joinArg p k)
-joinArg (PosStar e) k               = PosArg e (kwdToPosArg k)                  -- TODO: sort this out...
+joinArg (PosStar e) k               = PosArg e (kwdToPosArg k)
 joinArg PosNil k                    = kwdToPosArg k
 
 kwdToPosArg (KwdArg n e k)          = PosArg e (kwdToPosArg k)
@@ -438,7 +453,6 @@ instance Norm Assoc where
 
 -- Convert function types ---------------------------------------------------------------------------------
 
-convEnv env m (n, NClass q ps te)   = [(n, NClass q (mro1 env $ map snd ps) te)]
 convEnv env m (n, i)                = [(n, conv i)]
 
 
@@ -474,14 +488,17 @@ instance Conv Type where
     conv (TCon l c)                 = TCon l (conv c)
     conv (TTuple l p k)             = TTuple l (joinRow p k) kwdNil
     conv (TOpt l t)                 = TOpt l (conv t)
-    conv (TRow l k n t r)           = TRow l k n (conv t) (conv r)
+    conv (TRow l k n t r)           = TRow l PRow nWild (conv t) (conv r)
+    conv (TStar l k r)              = TRow l PRow nWild (TTuple l (conv r) kwdNil) posNil
+    conv (TNil l k)                 = TNil l PRow
     conv t                          = t
 
 instance Conv TCon where
     conv (TC c ts)                  = TC c (conv ts)
 
-joinRow (TRow l k n t p) r          = TRow l k n (conv t) (joinRow p r)
-joinRow p r                         = toPosRow r p
-
-toPosRow (TRow l k n t r) p         = TRow l k (name "_") t (toPosRow r p)
-toPosRow _ p                        = p
+joinRow (TRow l k n t p) r          = TRow l PRow nWild (conv t) (joinRow p r)
+joinRow (TStar l k p) r             = TRow l PRow nWild (TTuple l (conv p) kwdNil) (conv r)
+joinRow (TNil _ _) r                = conv r
+-- To be removed:
+joinRow p (TNil _ _)                = conv p
+joinRow p r                         = error ("##### joinRow " ++ prstr p ++ "  AND  " ++ prstr r)

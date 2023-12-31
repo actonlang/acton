@@ -12,7 +12,7 @@ ERROR: Error when compiling ex20 module: Type error
 4 |    return s * a
   |
 Type incompatibility between signature for and definition of f
-f is inferred to have a type of the form _(__builtin__.str, __builtin__.int) -> __builtin__.str
+f is inferred to have a type of the form _(s: __builtin__.str, a: __builtin__.int) -> __builtin__.str
 
 - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
 

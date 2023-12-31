@@ -3,12 +3,27 @@ Building file ../test/typeerrors/ex12.act
 
 ERROR: Error when compiling ex12 module: Type error
 
-Cannot satisfy the following constraint:
+Cannot satisfy the following simultaneous constraints for the unknown types t0, t1, t2:
 
   |
 2 |    env.exit()
   |    ^^^
-The type of env must have an attribute exit with type _() -> _; no such type is known.
+The type of env ( _) must have an attribute exit with type t0() -> _; no such type is known.
+
+  |
+2 |    env.exit()
+  |    ^^^^^^^^^^
+t0 must be a subclass of t1
+
+  |
+2 |    env.exit()
+  |    ^^^^^^^^^^
+t1 must implement $Wrapped[_, t2]
+
+  |
+2 |    env.exit()
+  |    ^^^^^^^^^^
+The type of env.exit() (which we call t2) must be a subclass of proc
 
 - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
 

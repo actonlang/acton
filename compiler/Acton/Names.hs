@@ -37,10 +37,11 @@ suffixWitness                       = globalName "witness"
 
 paramNames                          = globalNames ""
 pNames                              = globalNames "p"
-kNames                              = globalNames "k"
 xNames                              = globalNames "x"
 yNames                              = globalNames "y"
 tmpNames                            = globalNames "tmp"
+
+attrKW                              = globalName "kw"
 
 
 deriveQ (NoQ n)                     = n
@@ -441,6 +442,7 @@ instance Vars Type where
     free (TOpt _ t)                 = free t
     free (TCon  _ c)                = free c
     free (TRow _ _ _ t r)           = free t ++ free r
+    free (TStar _ _ r)              = free r
     free _                          = []
 
 

@@ -233,6 +233,7 @@ instance Relabel Type where
     relabel (TWild _) = TWild <$> newLoc
     relabel (TNil _ k) = TNil <$> newLoc <*> return k
     relabel (TRow _ k n t r) = TRow <$> newLoc <*> return k <*> relabel n <*> relabel t <*> relabel r
+    relabel (TStar l k r) = TStar <$> newLoc <*> return k <*> relabel r
     relabel (TFX _ fx) = TFX <$> newLoc <*> pure fx
 
 instance Relabel Constraint where

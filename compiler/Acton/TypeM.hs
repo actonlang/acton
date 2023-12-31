@@ -78,7 +78,8 @@ collectDeferred                         :: TypeM Constraints
 collectDeferred                         = lift $ state $ \st -> (deferred st, st{ deferred = [] })
 
 substitute                              :: TVar -> Type -> TypeM ()
-substitute tv t                         = lift $ {-trace ("  #substitute " ++ prstr tv ++ " ~ " ++ prstr t) $ -}
+substitute tv t                         = lift $
+                                          --trace ("  #substitute " ++ prstr tv ++ " ~ " ++ prstr t) $
                                           state $ \st -> ((), st{ currsubst = Map.insert tv t (currsubst st)})
 
 getSubstitution                         :: TypeM (Map TVar Type)
@@ -114,6 +115,7 @@ data TypeError                      = TypeError SrcLoc String
                                     | InfiniteType TVar
                                     | ConflictingRow TVar
                                     | KwdNotFound Name
+                                    | KwdUnexpected Name
                                     | PosElemNotFound ErrInfo String
                                     | EscapingVar [TVar] TSchema
                                     | NoSelStatic Name TCon
@@ -121,6 +123,7 @@ data TypeError                      = TypeError SrcLoc String
                                     | NoMut Name
                                     | LackSig Name
                                     | LackDef Name
+                                    | SurplusRow PosRow
                                     | NoRed Constraint
                                     | NoSolve (Maybe Type) [Type] [Constraint]
                                     | NoUnify ErrInfo Type Type
@@ -134,6 +137,7 @@ instance HasLoc TypeError where
     loc (InfiniteType tv)           = loc tv
     loc (ConflictingRow tv)         = loc tv
     loc (KwdNotFound n)             = loc n
+    loc (KwdUnexpected n)           = loc n
     loc (PosElemNotFound info s)    = loc info -- NoLoc     -- TODO: supply position
     loc (EscapingVar tvs t)         = loc tvs
     loc (NoSelStatic n u)           = loc n
@@ -141,10 +145,10 @@ instance HasLoc TypeError where
     loc (NoMut n)                   = loc n
     loc (LackSig n)                 = loc n
     loc (LackDef n)                 = loc n
+    loc (SurplusRow p)              = NoLoc     -- TODO: supply position
     loc (NoRed c)                   = loc c
     loc (NoSolve _ _ _)             = NoLoc
     loc (NoUnify info t1 t2)        = loc info
-
 
 intro b t mbe                          = case mbe of
                                              Nothing ->  pretty t
@@ -199,6 +203,7 @@ typeError (RigidVariable tv)         = [(loc tv, render (text "Type" <+> pretty 
 typeError (InfiniteType tv)          = [(loc tv, render (text "Type" <+> pretty tv <+> text "is infinite"))]
 typeError (ConflictingRow tv)        = [(loc tv, render (text "Type" <+> pretty tv <+> text "has conflicting extensions"))]
 typeError (KwdNotFound n)            = [(loc n, render (text "Keyword element" <+> quotes (pretty n) <+> text "is not found"))]
+typeError (KwdUnexpected n)          = [(loc n, render (text "Keyword element" <+> quotes (pretty n) <+> text "is not expected"))]
 typeError (PosElemNotFound info s)   = [(loc info, s)]
 typeError (EscapingVar tvs t)        = [(loc tvs, render (text "Type annotation" <+> pretty t <+> text "is too general, type variable" <+>
                                         pretty (head tvs) <+> text "escapes"))]
@@ -229,12 +234,14 @@ rigidVariable tv                    = throwError $ RigidVariable tv
 infiniteType tv                     = throwError $ InfiniteType tv
 conflictingRow tv                   = throwError $ ConflictingRow tv
 kwdNotFound info n                  = throwError $ KwdNotFound n
+kwdUnexpected info n                = throwError $ KwdUnexpected n
 escapingVar tvs t                   = throwError $ EscapingVar tvs t
 noSelStatic n u                     = throwError $ NoSelStatic n u
 noSelInstByClass n u                = throwError $ NoSelInstByClass n u
 noMut n                             = throwError $ NoMut n
 lackSig ns                          = throwError $ LackSig (head ns)
 lackDef ns                          = throwError $ LackDef (head ns)
+surplusRow p                        = throwError $ SurplusRow p
 noRed c                             = throwError $ NoRed c
 noSolve mbt vs cs                   = throwError $ NoSolve mbt vs cs
 noUnify info t1 t2                  = throwError $ NoUnify info t1 t2

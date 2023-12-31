@@ -854,8 +854,12 @@ funcdef =  addLoc $ do
               assertNotData l "def"
               n <- name
               q <- optbinds
-              (ppar,kpar) <- parens (funpars True)
+              (ppar,kpar) <- params
               S.Def NoLoc n q ppar kpar <$> optional (arrow *> ttype) <*> suite DEF p <*> return deco <*> return (maybe S.tWild id fx)
+
+params :: Parser (S.PosPar, S.KwdPar)
+params = try ((\k ->(S.PosNIL,k)) <$> parens (kwdpar True))
+         <|> parens (funpars True)
 
 binds :: Parser S.QBinds
 binds = brackets (do b <- qbind; bs <- many (comma *> qbind); return (b:bs))
@@ -868,7 +872,7 @@ actordef = addLoc $ do
                 assertTop l "actor"
                 nm <- name <?> "actor name"
                 q <- optbinds
-                (ppar,kpar) <- parens (funpars True)
+                (ppar,kpar) <- params
                 ss <- suite ACTOR s
                 return $ S.Actor NoLoc nm q ppar kpar ss
 
@@ -1313,17 +1317,17 @@ effect  = addLoc $
         <|> rword "action" *> return S.fxAction
 
 posrow :: Parser S.PosRow 
-posrow = posItems S.posRow S.posVar S.posNil ttype (optional tvar)
+posrow = posItems S.posRow S.posStar' S.posNil ttype (optional tvar)
 
 kwdrow :: Parser S.KwdRow                   
-kwdrow = kwdItems (uncurry S.kwdRow) S.kwdVar S.kwdNil tsig1 (optional tvar)
+kwdrow = kwdItems (uncurry S.kwdRow) S.kwdStar' S.kwdNil tsig1 (optional tvar)
    where tsig1 = do v <- name
                     colon
                     t <- ttype
                     return (v,t)
  
 funrows :: Parser (S.PosRow, S.KwdRow)
-funrows = do r <- funItems S.posRow S.posVar S.posNil ttype (optional tvar) kwdrow S.kwdNil
+funrows = do r <- funItems S.posRow S.posStar' S.posNil ttype (optional tvar) kwdrow S.kwdNil
              case r of
                Left p -> return p
                Right t -> return (S.posRow t S.posNil, S.kwdNil)
@@ -1370,7 +1374,7 @@ ttype    =  addLoc (
                     arrow
                     t <- ttype
                     return (S.TFun NoLoc (maybe S.fxPure id mbfx) p k t))
-        <|> try (do r <- parens (funItems S.posRow S.posVar S.posNil ttype (optional  tvar) kwdrow S.kwdNil)
+        <|> try (do r <- parens (funItems S.posRow S.posStar' S.posNil ttype (optional tvar) kwdrow S.kwdNil)
                     case r of
                       Left (p,k) -> return (S.TTuple NoLoc p k)
                       Right t -> return t)

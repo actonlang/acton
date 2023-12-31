@@ -5,8 +5,8 @@ ERROR: Error when compiling ex13 module: Type error
 
   |
 4 |actor Act(s:int,t:str):
-  |          ^
-Too many positional elements
+  |                ^
+Keyword element 't' is not found
 
 - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
 

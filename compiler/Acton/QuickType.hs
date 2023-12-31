@@ -90,6 +90,11 @@ qSchema env f e0@(Dot l e n)        = case t of
   where (t, e')                     = qType env f e
         addE e1 (sc, dec)           = (subst [(tvSelf,t)] sc, dec, Dot l e1 n)
         pick n (TRow l k x t r)     = if x == n then t else pick n r
+        pick n (TStar l k r)
+          | n == attrKW             = tTupleK r
+        pick n (TNil l k)
+          | n == attrKW             = tTupleK (tNil KRow)
+        pick n _                    = error ("### qSchema Dot " ++ prstr n ++ " on " ++ prstr e0 ++ "  ::  "  ++ prstr t)
 qSchema env f e                     = (monotype t, Nothing, e')
   where (t, e')                     = qType env f e
 

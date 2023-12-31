@@ -32,6 +32,7 @@ addSelf t _                             = t
 dropSelf                                :: Type -> Deco -> Type
 dropSelf (TFun l x p k t) NoDec
   | TRow _ _ _ _ p' <- p                = TFun l x p' k t
+  | TRow _ _ _ _ k' <- k                = TFun l x p k' t
 dropSelf t _                            = t
 
 selfType                                :: PosPar -> Deco -> Type
@@ -44,21 +45,24 @@ closeDepVars vs cs
   | null vs'                        = nub vs
   | otherwise                       = closeDepVars (vs'++vs) cs
   where vs'                         = concat [ deps c \\ vs | c <- cs, all (`elem` vs) (heads c) ]
+
         heads (Impl _ w t _)        = tyfree t
         heads (Cast _ t _)          = tyfree t
         heads (Sub _ w t _)         = tyfree t
         heads (Sel _ w t n _)       = tyfree t
         heads (Mut _ t n _)         = tyfree t
         heads (Seal _ t)            = tyfree t
+
         deps (Impl _ w _ p)         = tyfree p
-        deps (Cast _ _ t)           = typars t
-        deps (Sub _ w _ t)          = typars t
-        deps (Sel _ w _ n t)        = typars t
-        deps (Mut _ _ n t)          = typars t
+        deps (Cast _ _ t)           = typarams t
+        deps (Sub _ w _ t)          = typarams t
+        deps (Sel _ w _ n t)        = tyfree t
+        deps (Mut _ _ n t)          = tyfree t
         deps (Seal _ _)             = []
-        typars (TOpt _ t)           = typars t
-        typars (TCon _ c)           = tyfree c
-        typars _                    = []
+
+        typarams (TOpt _ t)         = typarams t
+        typarams (TCon _ c)         = tyfree c
+        typarams _                  = []
 
 
 closeDepVarsQ vs q
@@ -266,6 +270,7 @@ instance Subst Type where
     msubst (TWild l)                = return $ TWild l
     msubst (TNil l s)               = return $ TNil l s
     msubst (TRow l k n t r)         = TRow l k n <$> msubst t <*> msubst r
+    msubst (TStar l k r)            = TStar l k <$> msubst r
     msubst (TFX l fx)               = return $ TFX l fx
 
     tyfree (TVar _ v)               = [v]
@@ -277,6 +282,7 @@ instance Subst Type where
     tyfree (TWild _)                = []
     tyfree (TNil _ _)               = []
     tyfree (TRow _ _ _ t r)         = tyfree t ++ tyfree r
+    tyfree (TStar _ _ r)            = tyfree r
     tyfree (TFX l fx)               = []
 
     
@@ -553,6 +559,7 @@ instance Polarity Type where
     polvars (TWild _)               = ([],[])
     polvars (TNil _ _)              = ([],[])
     polvars (TRow _ _ _ t r)        = polvars t `polcat` polvars r
+    polvars (TStar _ _ r)           = polvars r
     polvars (TFX l fx)              = ([],[])
 
 instance Polarity TCon where

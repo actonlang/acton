@@ -451,7 +451,7 @@ data BinTask            = BinTask { isDefaultRoot :: Bool, binName :: String, ro
 -- return modules that have an actor called 'main'
 filterMainActor env opts paths binTask
                          = case lookup n (fromJust (Acton.Env.lookupMod m env)) of
-                               Just (A.NAct [] (A.TRow _ _ _ t A.TNil{}) A.TNil{} _)
+                               Just (A.NAct [] A.TNil{} (A.TRow _ _ _ t A.TNil{}) _)
                                    | prstr t == "Env" || prstr t == "None"
                                       || prstr t == "__builtin__.Env"|| prstr t == "__builtin__.None"-> do   -- TODO: proper check of parameter type
                                       return (Just binTask)
@@ -642,6 +642,8 @@ runRestPasses opts paths env0 parsed stubMode = do
 
                       envTmp <- Acton.Env.mkEnv (sysTypes paths) (projTypes paths) env0 parsed
                       let env = envTmp { Acton.Env.stub = stubMode }
+                      --traceM ("#################### initial env0:")
+                      --traceM (Pretty.render (Pretty.pretty env))
                       timeEnv <- getTime Monotonic
                       iff (C.timing opts) $ putStrLn("    Pass: Make environment: " ++ fmtTime (timeEnv - timeStart))
 
@@ -653,6 +655,8 @@ runRestPasses opts paths env0 parsed stubMode = do
                       (iface,tchecked,typeEnv) <- Acton.Types.reconstruct outbase env kchecked
                       iff (C.types opts) $ dump mn "types" (Pretty.print tchecked)
                       iff (C.sigs opts) $ dump mn "sigs" (Acton.Types.prettySigs env mn iface)
+                      --traceM ("#################### typed env0:")
+                      --traceM (Pretty.render (Pretty.pretty typeEnv))
                       timeTypeCheck <- getTime Monotonic
                       iff (C.timing opts) $ putStrLn("    Pass: Type check      : " ++ fmtTime (timeTypeCheck - timeKindsCheck))
 
@@ -779,7 +783,7 @@ handle errKind f src paths mn ex = do putStrLn ("\nERROR: Error when compiling "
 
 buildExecutable env opts paths binTask
                          = case lookup n (fromJust (Acton.Env.lookupMod m env)) of
-                               Just (A.NAct [] (A.TRow _ _ _ t A.TNil{}) A.TNil{} _) 
+                               Just (A.NAct [] A.TNil{} (A.TRow _ _ _ t A.TNil{}) _)
                                    | prstr t == "Env" || prstr t == "None"
                                       || prstr t == "__builtin__.Env"|| prstr t == "__builtin__.None"-> do   -- !! To do: proper check of parameter type !!
                                       iff (not (quiet opts)) $ putStrLn ("Building executable "++ makeRelative (projPath paths) binFile)
@@ -827,8 +831,8 @@ buildExecutable env opts paths binTask
 
 writeRootC :: Acton.Env.Env0 -> C.CompileOptions -> Paths -> BinTask -> IO (Maybe BinTask)
 writeRootC env opts paths binTask
-                         = case lookup n (fromJust (Acton.Env.lookupMod m env)) of
-                               Just (A.NAct [] (A.TRow _ _ _ t A.TNil{}) A.TNil{} _)
+                            = case lookup n (fromJust (Acton.Env.lookupMod m env)) of
+                               Just (A.NAct [] A.TNil{} (A.TRow _ _ _ t A.TNil{}) _)
                                    | prstr t == "Env" || prstr t == "None"
                                       || prstr t == "__builtin__.Env"|| prstr t == "__builtin__.None"-> do   -- !! To do: proper check of parameter type !!
                                       c <- Acton.CodeGen.genRoot env qn

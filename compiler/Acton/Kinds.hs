@@ -162,6 +162,7 @@ instance ConvTWild Type where
     convTWild (TOpt l t)            = TOpt l <$> convTWild t
     convTWild (TCon l c)            = TCon l <$> convTWild c
     convTWild (TRow l k n t r)      = TRow l k n <$> convTWild t <*> convTWild r
+    convTWild (TStar l k r)         = TStar l k <$> convTWild r
     convTWild t                     = return t
 
 instance ConvTWild TCon where
@@ -214,6 +215,7 @@ instance ConvPExist Type where
     convPExist env (TTuple l p k)   = TTuple l <$> convPExist env p <*> convPExist env k
     convPExist env (TOpt l t)       = TOpt l <$> convPExist env t
     convPExist env (TRow l k n t r) = TRow l k n <$> convPExist env t <*> convPExist env r
+    convPExist env (TStar l k r)    = TStar l k <$> convPExist env r
     convPExist env t                = return t
 
 instance ConvPExist TCon where
@@ -306,7 +308,9 @@ instance KCheck Decl where
                                          q <- kchkQBinds env1 (q++q')
                                          Def l n q <$> kchk env1 p <*> kchk env1 k <*> kexp KType env1 t <*> kchkSuite env1 b <*> pure d <*> kfx env1 x
       where ambig                   = qualbound q \\ closeDepVarsQ (tyfree p ++ tyfree k ++ tyfree t ++ tyfree x) q
-    kchk env (Actor l n q p k b)    = do env1 <- extvars (qbound q) env
+    kchk env (Actor l n q p k b)    = do p <- convPExist env =<< convTWild p
+                                         k <- convPExist env =<< convTWild k
+                                         env1 <- extvars (qbound q) env
                                          Actor l n <$> kchkQBinds env1 q <*> kchk env1 p <*> kchk env1 k <*> kchkSuite env1 b
     kchk env (Class l n q us b)     = do env1 <- extvars (tvSelf : qbound q) env
                                          Class l n <$> kchkQBinds env1 q <*> kchkBounds env1 us <*> kchkSuite env1 b
@@ -516,6 +520,8 @@ instance KInfer Type where
     kinfer env (TRow l k n t r)     = do t <- kexp KType env t
                                          r <- kexp k env r
                                          return (k, TRow l k n t r)
+    kinfer env (TStar l k r)        = do r <- kexp k env r
+                                         return (k, TStar l k r)
     kinfer env (TFX l fx)           = return (KFX, TFX l fx)
 
 kfx env (TVar _ tv)
@@ -594,6 +600,7 @@ instance KSubst Type where
     ksubst g (TNone l)              = return $ TNone l
     ksubst g (TNil l s)             = return $ TNil l s
     ksubst g (TRow l k n t r)       = TRow l k n <$> ksubst g t <*> ksubst g r
+    ksubst g (TStar l k r)          = TStar l k <$> ksubst g r
     ksubst g (TFX l fx)             = return $ TFX l fx
 
 instance KSubst Stmt where

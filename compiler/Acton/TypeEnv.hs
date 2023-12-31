@@ -87,7 +87,7 @@ instance WellFormed TCon where
                                 NReserved -> nameReserved n
                                 i -> err1 n ("wf: Class or protocol name expected, got " ++ show i)
             s               = qbound q `zip` ts
-            constr u t      = if isProto env (tcname u) then Impl (DfltInfo NoLoc 20 Nothing []) (name "_") t u else Cast (DfltInfo NoLoc 21 Nothing []) t (tCon u)
+            constr u t      = if isProto env (tcname u) then Impl (DfltInfo NoLoc 20 Nothing []) nWild t u else Cast (DfltInfo NoLoc 21 Nothing []) t (tCon u)
 
 wfProto                     :: EnvF x -> TCon -> TypeM (Constraints, Constraints)
 wfProto env (TC n ts)       = do cs <- instQuals env q ts
@@ -103,6 +103,7 @@ instance WellFormed Type where
     wf env (TTuple _ p k)   = wf env p ++ wf env k
     wf env (TOpt _ t)       = wf env t
     wf env (TRow _ _ _ t r) = wf env t ++ wf env r
+    wf env (TStar _ _ r)    = wf env r
     wf env _                = []
 
 
@@ -124,21 +125,21 @@ instQBinds env q            = do ts <- newTVars [ tvkind v | Quant v _ <- q ]
                                  cs <- instQuals env q ts
                                  return (cs, ts)
 
-instWitness                 :: EnvF x -> Type -> Witness -> TypeM (Constraints,TCon,Expr)
-instWitness env t0 wit      = case wit of
-                                 WClass q t1 p w ws -> do
+instWitness                 :: EnvF x -> PCon -> Witness -> TypeM (Constraints,Type,Expr)
+instWitness env p0 wit      = case wit of
+                                 WClass q t p w ws -> do
                                     (cs,tvs) <- instQBinds env q
-                                    let s = (tvSelf,t0) : qbound q `zip` tvs
-                                    unify (DfltInfo (loc t0) 22 Nothing []) t0 (subst s t1)
-                                    p <- msubst (subst s p)
+                                    let s = (tvSelf,t) : qbound q `zip` tvs
+                                    unifyM (DfltInfo (loc p0) 22 Nothing []) (tcargs p0) (tcargs $ subst s p)
+                                    t <- msubst (subst s t)
                                     cs <- msubst cs
-                                    return (cs, p, wexpr ws (eCall (tApp (eQVar w) tvs) $ wvars cs))
-                                 WInst q t1 p w ws -> do
+                                    return (cs, t, wexpr ws (eCall (tApp (eQVar w) tvs) $ wvars cs))
+                                 WInst q t p w ws -> do
                                     (cs,tvs) <- instQBinds env q
-                                    let s = (tvSelf,t0) : qbound q `zip` tvs
-                                    unify (DfltInfo (loc t0) 23 Nothing []) t0 (subst s t1)
-                                    p <- msubst (subst s p)
-                                    return (cs, p, wexpr ws (eQVar w))
+                                    let s = (tvSelf,t) : qbound q `zip` tvs
+                                    unifyM (DfltInfo (loc p0) 23 Nothing []) (tcargs p0) (tcargs $ subst s p)
+                                    t <- msubst (subst s t)
+                                    return (cs, t, wexpr ws (eQVar w))
 
 instQuals                   :: EnvF x -> QBinds -> [Type] -> TypeM Constraints
 instQuals env q ts          = do let s = qbound q `zip` ts
@@ -150,13 +151,6 @@ instQuals env q ts          = do let s = qbound q `zip` ts
 wvars                       :: Constraints -> [Expr]
 wvars cs                    = [ eVar v | Impl _ v _ _ <- cs ]
 
-mkPRow (PosPar n a _ p)     = posRow <$> maybe (newTVarOfKind PRow) return a <*> mkPRow p
-mkPRow (PosSTAR n a)        = maybe (newTVarOfKind PRow) return a
-mkPRow PosNIL               = return posNil
-
-mkKRow (KwdPar n a _ k)     = kwdRow n <$> maybe (newTVarOfKind KRow) return a <*> mkKRow k
-mkKRow (KwdSTAR n a)        = maybe (newTVarOfKind KRow) return a
-mkKRow KwdNIL               = return kwdNil
 
 -- Misc. ---------------------------------------------------------------------------------------------------------------------------
 
@@ -164,12 +158,15 @@ data Equation                           = Eqn Name Type Expr
 
 type Equations                          = [Equation]
 
+instance Pretty Equation where
+    pretty (Eqn n t e)                  = pretty n <+> colon <+> pretty t <+> equals <+> pretty e
+
 bindWits eqs                            = [ Assign l0 [PVar l0 w (Just t)] e | Eqn w t e <- eqs ]
 
 impl2type t (TC n ts)                   = tCon $ TC n (t:ts)
 
 wit2row ws                              = \p -> foldr f p ws
-  where f (w,t)                         = TRow NoLoc PRow w t
+  where f (w,t)                         = TRow NoLoc PRow nWild t
 
 wit2arg ws                              = \p -> foldr f p ws
   where f (w,t)                         = PosArg (eVar w)

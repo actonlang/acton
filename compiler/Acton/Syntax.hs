@@ -148,6 +148,8 @@ rawstr n                    = nstr n
 
 name            = Name NoLoc
 
+nWild           = name "_"
+
 globalName s    = Internal Globvar s 0
 
 globalNames s   = map (Internal Globvar s) [1..]
@@ -235,6 +237,7 @@ data Type       = TVar      { tloc::SrcLoc, tvar::TVar }
                 | TWild     { tloc::SrcLoc }
                 | TNil      { tloc::SrcLoc, rkind::Kind }
                 | TRow      { tloc::SrcLoc, rkind::Kind, label::Name, rtype::Type, rtail::TRow }
+                | TStar     { tloc::SrcLoc, rkind::Kind, rtail::TRow }
                 | TFX       { tloc::SrcLoc, tfx::FX }
                 deriving (Show,Read,Generic,NFData)
 
@@ -293,9 +296,12 @@ eCallVar c es   = eCall (eVar c) es
 eCallV c es     = eCall (Var NoLoc c) es
 eCallP e as     = Call NoLoc e as KwdNil
 eTuple es       = Tuple NoLoc (posarg es) KwdNil
+eTupleP args    = Tuple NoLoc args KwdNil
+eTupleK args    = Tuple NoLoc PosNil args
 eQVar n         = Var NoLoc n
 eVar n          = Var NoLoc (NoQ n)
 eDot e n        = Dot NoLoc e n
+eDotI e i       = DotI NoLoc e i
 eNone           = None NoLoc
 eInt n          = Int NoLoc n (show n)
 eBool b         = Bool NoLoc b
@@ -339,6 +345,7 @@ tNone           = TNone NoLoc
 tWild           = TWild NoLoc
 tNil k          = TNil NoLoc k
 tRow k          = TRow NoLoc k
+tStar k         = TStar NoLoc k
 tTFX fx         = TFX NoLoc fx
 
 tCon0 n q       = tCon $ TC n [ tVar tv | Quant tv _ <- q ]
@@ -360,33 +367,28 @@ fxWild          = tWild
 fxFun fx1 fx2   = tFun fxPure (posRow (tF0 fx1) posNil) kwdNil (tF0 fx2)
   where tF0 fx  = tFun fx posNil kwdNil tNone
 
-posRow t r      = TRow NoLoc PRow (name "_") t r
-posVar mbv      = maybe tWild tVar mbv
 posNil          = tNil PRow
+posRow          = tRow PRow nWild
+posStar         = tStar PRow
+posStar'        = posStar . maybe tWild tVar
 
-kwdRow n t r    = TRow NoLoc KRow n t r
-kwdVar mbv      = maybe tWild tVar mbv
 kwdNil          = tNil KRow
+kwdRow          = tRow KRow
+kwdStar         = tStar KRow
+kwdStar'        = kwdStar . maybe tWild tVar
 
-rowTail (TRow _ _ _ _ r)
-                = rowTail r
-rowTail r       = r
-
-findInRow n (TRow l k n' t r)
-  | n == n'             = Just (t,r)
-  | otherwise           = case findInRow n r of
-                            Nothing -> Nothing
-                            Just (t',r') -> Just (t, TRow l k n' t r')
-findInRow n (TVar _ _)  = Just (tWild,tWild)
-findInRow n (TNil _ _)  = Nothing
-
-
-prowOf (PosPar n a _ p) = posRow (case a of Just t -> t; _ -> tWild) (prowOf p)
-prowOf (PosSTAR n a)    = case a of Just (TTuple _ r _) -> r; _ -> tWild
+prowOf (PosPar n a d p) = posRow (dflt d $ case a of Just t -> t; _ -> tWild) (prowOf p)
+  where dflt Nothing    = id
+        dflt (Just e)   = tOpt
+prowOf (PosSTAR n a)    = posStar (case a of Just (TTuple _ r _) -> r; _ -> tWild)
+--prowOf (PosSTAR n a)    = (case a of Just (TTuple _ r _) -> r; _ -> tWild)
 prowOf PosNIL           = posNil
 
-krowOf (KwdPar n a _ k) = kwdRow n (case a of Just t -> t; _ -> tWild) (krowOf k)
-krowOf (KwdSTAR n a)    = case a of Just (TTuple _ _ r) -> r; _ -> tWild
+krowOf (KwdPar n a d k) = kwdRow n (dflt d $ case a of Just t -> t; _ -> tWild) (krowOf k)
+  where dflt Nothing    = id
+        dflt (Just e)   = tOpt
+krowOf (KwdSTAR n a)    = kwdStar (case a of Just (TTuple _ _ r) -> r; _ -> tWild)
+--krowOf (KwdSTAR n a)    = (case a of Just (TTuple _ _ r) -> r; _ -> tWild)
 krowOf KwdNIL           = kwdNil
 
 pArg (PosPar n a _ p)   = PosArg (eVar n) (pArg p)
@@ -398,16 +400,14 @@ kArg (KwdSTAR n a)      = KwdStar (eVar n)
 kArg KwdNIL             = KwdNil
 
 pPar ns (TRow _ PRow n t p)
-  | n == name "_"       = PosPar (head ns) (Just t) Nothing (pPar (tail ns) p)
-  | otherwise           = PosPar n (Just t) Nothing (pPar ns p)
+                        = PosPar (head ns) (Just t) Nothing (pPar (tail ns) p)
 pPar ns (TNil _ PRow)   = PosNIL
-pPar ns t               = PosSTAR (head ns) (Just t)
+pPar ns (TStar _ PRow r)= PosSTAR (head ns) (Just $ tTupleP r)
 
-kPar ns (TRow _ KRow n t p)
-  | n == name "_"       = KwdPar (head ns) (Just t) Nothing (kPar (tail ns) p)
-  | otherwise           = KwdPar n (Just t) Nothing (kPar ns p)
-kPar ns (TNil _ KRow)   = KwdNIL
-kPar ns t               = KwdSTAR (head ns) (Just t)
+kPar kw (TRow _ KRow n t r)
+                        = KwdPar n (Just t) Nothing (kPar kw r)
+kPar kw (TNil _ KRow)   = KwdNIL
+kPar kw (TStar _ KRow r)= KwdSTAR kw (Just $ tTupleK r)
 
 tRowLoc t@TRow{}        = getLoc [tloc t, loc (rtype t)]
 
@@ -482,6 +482,7 @@ instance Leaves Type where
     leaves (TTuple _ p k)   = leaves [p,k]
     leaves (TOpt _ t)       = leaves t
     leaves (TRow _ _ _ t r) = leaves [t,r]
+    leaves (TStar _ _ r)    = leaves r
     leaves _                = []
 
 instance Leaves TCon where
@@ -739,8 +740,9 @@ instance Eq Type where
     TOpt _ t1           == TOpt _ t2            = t1 == t2
     TNone _             == TNone _              = True
     TWild _             == TWild _              = True
-    TNil _ s1           == TNil _ s2            = s1 == s2
-    TRow _ s1 n1 t1 r1  == TRow _ s2 n2 t2 r2   = s1 == s2 && n1 == n2 && t1 == t2 && r1 == r2
+    TNil _ k1           == TNil _ k2            = k1 == k2
+    TRow _ k1 n1 t1 r1  == TRow _ k2 n2 t2 r2   = k1 == k2 && n1 == n2 && t1 == t2 && r1 == r2
+    TStar _ k1 r1       == TStar _ k2 r2        = k1 == k2 && r1 == r2
     TFX _ fx1           == TFX _ fx2            = fx1 == fx2
     _                   == _                    = False
 
@@ -820,5 +822,3 @@ singlePosPat _                      = False
 
 posParHead (PosPar a b c _)         = (a,b,c)
 posArgHead (PosArg a _)             = a
-posPatHead (PosPat a _)             = a
-posRowHead (TRow _ PRow _ a _)      = a
