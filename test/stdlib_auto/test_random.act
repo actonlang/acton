@@ -19,7 +19,7 @@ def _test_choice_single_element():
 
 def _test_choice_repeatability():
     lst = [1, 2, 3, 4, 5]
-    results = set(None)
+    results = set()
     for _ in range(1000):
         results.add(random.choice(lst))
     testing.assertTrue(bool(len(results) > 1), "Expected multiple unique results for repeated calls")

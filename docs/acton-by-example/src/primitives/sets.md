@@ -22,8 +22,7 @@ actor main(env):
     print("Set after discarding 'foo':", s)
 
     # Use set() to create an empty set. {} means an empty dict!
-    # TODO: remove None here once default args are in
-    empty_set = set(None)
+    empty_set = set()
 
     env.exit(0)
 ```

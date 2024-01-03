@@ -220,9 +220,8 @@ class Clock:
 class RealtimeClock(Clock):
     """Realtime clock
     """
-    # TODO: add standard argument with default = UTC
-    def __init__(self, sync: int, offset: int, error: int):
-        self.standard = "UTC"
+    def __init__(self, sync: int, offset: int, error: int, standard="UTC"):
+        self.standard = standard
         self.incarnation = _get_incarnation()
         self.sync = sync
         self.offset = offset
