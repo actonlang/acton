@@ -3,11 +3,10 @@ import numpy as np
 def harmonic(n):
     return np.sum(1/np.arange(1,n+1,1),0)
 
-def interact(input):
-    n = int(input.strip("\n"))
-    print(harmonic(n))
     
 actor main(env):
+    def interact(input):
+        n = int(input.strip("\n"))
+        print(harmonic(n))
+
     env.stdin_install(interact)
-    
-    
