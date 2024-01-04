@@ -633,6 +633,7 @@ dotCast env ent ts e n
         (argsubst, c0)              = case t0 of
                                          TCon _ tc -> splitTC env tc
                                          TVar _ tv -> splitTC env (findTVBound env tv)
+                                         TTuple{}  -> ([], cValue)
         (sc, dec)                   = findAttr' env c0 n
         t                           = subst fullsubst $ if ent then addSelf t1 dec else t1
         t1                          = exposeMsg' (sctype sc)

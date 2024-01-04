@@ -52,7 +52,7 @@ closedType env (Dot _ (Var _ x) n)
 closedType env (Dot _ e n)          = case typeOf env e of
                                         TCon _ c -> closedAttr env c n
                                         TVar _ v  -> closedAttr env (findTVBound env v) n
-                                        TTuple _ p k -> True
+                                        TTuple _ p k -> n `notElem` valueKWs
 closedType env (TApp _ e _)         = closedType env e
 closedType env (Async _ e)          = closedType env e
 closedType env _                    = True
@@ -83,7 +83,9 @@ qSchema env f e@(Dot _ (Var _ x) n)
   where info                        = findQName x env
 qSchema env f e0@(Dot l e n)        = case t of
                                         TCon _ c -> addE e' $ findAttr' env c n
-                                        TTuple _ p k -> addE e' $ (monotype $ pick n k, Nothing)
+                                        TTuple _ p k
+                                          | n `elem` valueKWs -> addE e' $ findAttr' env cValue n
+                                          | otherwise -> addE e' $ (monotype $ pick n k, Nothing)
                                         TVar _ v  -> addE e' $ findAttr' env tc n
                                            where tc = findTVBound env v
                                         t -> error ("### qSchema Dot unexpected " ++ prstr e0 ++ "  ::  " ++ prstr t)
