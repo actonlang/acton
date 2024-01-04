@@ -912,10 +912,9 @@ subkwd info f seen r1 (TRow _ _ n2 t2 r2)   = do (cs1,e) <- pick f seen r1
                                                  return ([Sub info w t t2], eCallVar w [f n])
         pick f seen (TStar _ _ r)           = do --traceM ("## subkwd Star - Row: " ++ prstr (tStar KRow r) ++ " [" ++ prstrs seen ++ "] ≈ " ++ prstr (tRow KRow n2 t2 r2))
                                                  pick (eDot (f attrKW)) seen r
-        pick f seen (TNil _ _)
-          | TOpt{} <- t2                    = do --traceM ("## subkwd Nil - Row: " ++ prstr (tNil KRow) ++ " [" ++ prstrs seen ++ "] ≈ " ++ prstr (tRow KRow n2 t2 r2))
-                                                 return ([], eNone)
-          | otherwise                       = kwdNotFound info n2
+        pick f seen (TNil _ _)              = do --traceM ("## subkwd None - Row: " ++ prstr (tNil KRow) ++ " [" ++ prstrs seen ++ "] ≈ " ++ prstr (tRow KRow n2 t2 r2))
+                                                 return ([Cast info tNone t2], eNone)
+                                                 -- kwdNotFound... info n2
 
 subkwd info f seen r1 (TStar _ _ r2)        = do (cs,e) <- match f seen r1
                                                  return (cs, KwdStar e)
