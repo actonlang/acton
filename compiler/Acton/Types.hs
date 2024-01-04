@@ -192,9 +192,10 @@ wrapped l kw env cs ts args             = do tvx <- newTVarOfKind KFX
                                              let t1 = subst [(fxSelf,fx)] t0
                                                  t2 = tFun fxPure (foldr posRow posNil ts) kwdNil t'
                                              w <- newWitness
-                                             return (Impl (DfltInfo l 29 Nothing []) w fx p :
-                                                     Cast (DfltInfo l 30 Nothing []) t1 t2 :
-                                                     cs, t', eCall (tApp (Dot l0 (eVar w) kw) tvs) args)
+                                             (cs0,_) <- simplify env [] t' [Cast (DfltInfo l 30 Nothing []) t1 t2]
+                                             t' <- msubst t'
+                                             cs1 <- msubst (Impl (DfltInfo l 29 Nothing []) w fx p : cs)
+                                             return (cs0++cs1, t', eCall (tApp (Dot l0 (eVar w) kw) tvs) args)
 
 --------------------------------------------------------------------------------------------------------------------------
 

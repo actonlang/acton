@@ -164,8 +164,7 @@ solve' env select hist te tt eq cs
         group (r:rs)                        = (r : rs1) : group rs2
           where (rs1,rs2)                   = partition (==r) rs
         rnks                                = map (rank env) solve_cs
-        tryAlts st t@(TVar _ tv) []        = do
-                                                 --trace ("### FAIL " ++ prstr t0)
+        tryAlts st t@(TVar _ tv) []        = do  --traceM ("### FAIL " ++ prstr tv ++ ":\n" ++ render (nest 4 $ vcat $ map pretty cs))
                                                  let ts = map (\n -> tCon (TC (noQ ('t':show n)) [])) [0..]
                                                      vs = filter (\v -> length (filter (\c -> v `elem` tyfree c) cs) > 1) (nub(tyfree cs))
                                                      cs' = if length cs == 1 then cs else filter (not . useless vs) cs
@@ -912,9 +911,10 @@ subkwd info f seen r1 (TRow _ _ n2 t2 r2)   = do (cs1,e) <- pick f seen r1
                                                  return ([Sub info w t t2], eCallVar w [f n])
         pick f seen (TStar _ _ r)           = do --traceM ("## subkwd Star - Row: " ++ prstr (tStar KRow r) ++ " [" ++ prstrs seen ++ "] ≈ " ++ prstr (tRow KRow n2 t2 r2))
                                                  pick (eDot (f attrKW)) seen r
-        pick f seen (TNil _ _)              = do --traceM ("## subkwd None - Row: " ++ prstr (tNil KRow) ++ " [" ++ prstrs seen ++ "] ≈ " ++ prstr (tRow KRow n2 t2 r2))
-                                                 return ([Cast info tNone t2], eNone)
-                                                 -- kwdNotFound... info n2
+        pick f seen (TNil _ _)
+          | TOpt{} <- t2                    = do --traceM ("## subkwd None - Row: " ++ prstr (tNil KRow) ++ " [" ++ prstrs seen ++ "] ≈ " ++ prstr (tRow KRow n2 t2 r2))
+                                                 return ([], eNone)
+          | otherwise                       = kwdNotFound info n2
 
 subkwd info f seen r1 (TStar _ _ r2)        = do (cs,e) <- match f seen r1
                                                  return (cs, KwdStar e)
