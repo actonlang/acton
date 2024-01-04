@@ -328,7 +328,8 @@ instance Norm Expr where
     norm env (Dot l (Var l' x) n)
       | NClass{} <- findQName x env = pure $ Dot l (Var l' x) n
     norm env (Dot l e n)
-      | TTuple _ p k <- t           = DotI l <$> norm env e <*> pure (nargs p + narg n k)
+      | TTuple _ p k <- t,
+        n `notElem` valueKWs        = DotI l <$> norm env e <*> pure (nargs p + narg n k)
       | otherwise                   = Dot l <$> norm env e <*> pure n
       where t                       = typeOf env e
     norm env (Async l e)            = Async l <$> norm env e

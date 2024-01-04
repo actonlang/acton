@@ -432,8 +432,11 @@ reduce' env eq c@(Sel _ w (TCon _ tc) n _)
   where attrSearch                          = findAttr env tc n
         protoSearch                         = findProtoByAttr env (tcname tc) n
 
+
 reduce' env eq c@(Sel info w t1@(TTuple _ _ r) n t2)
   | TVar _ tv <- r                          = do defer [c]; return eq
+  | n `elem` valueKWs                       = do let e = eLambda [(px0,t1)] (eDot (eVar px0) n)
+                                                 return (Eqn w (wFun t1 t2) e : eq)
   | otherwise                               = do --traceM ("### Sel " ++ prstr c)
                                                  select r
   where select (TRow _ _ n' t r)
