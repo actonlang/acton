@@ -1,0 +1,54 @@
+def f(x, y='world'):
+    return x + ', ' + y
+
+actor main(env):
+    out1 = f('hello')
+    out2 = f('hello', 'you')
+    out3 = f('hello', y='there')
+    out4 = f(x='hello', y='there')
+    out5 = f(y='there', x='hello')
+    out6 = f('hello', None)
+    out7 = f(x='hello')
+    out8 = f(x='hello', y=None)
+    out9 = f(y=None, x='hello')
+
+#    print(out1)
+#    print(out2)
+#    print(out3)
+#    print(out4)
+#    print(out5)
+#    print(out6)
+#    print(out7)
+#    print(out8)
+#    print(out9)
+
+    if out1 != "hello, world":
+        print("Bad 1:", out1)
+        env.exit(1)
+    if out2 != "hello, you":
+        print("Bad 2:", out2)
+        env.exit(1)
+    if out3 != "hello, there":
+        print("Bad 3:", out3)
+        env.exit(1)
+    if out4 != "hello, there":
+        print("Bad 4:", out4)
+        env.exit(1)
+    if out5 != "hello, there":
+        print("Bad 5:", out5)
+        env.exit(1)
+    if out6 != "hello, world":
+        print("Bad 6:", out6)
+        env.exit(1)
+    if out7 != "hello, world":
+        print("Bad 7:", out7)
+        env.exit(1)
+    if out8 != "hello, world":
+        print("Bad 8:", out8)
+        env.exit(1)
+    if out9 != "hello, world":
+        print("Bad 9:", out9)
+        env.exit(1)
+
+    print("All is well")
+    env.exit(0)
