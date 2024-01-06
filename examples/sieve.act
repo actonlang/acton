@@ -3,7 +3,7 @@ import math
 def sieve(n):
     isPrime = [True] * n
     isPrime[0] = False; isPrime[1] = False
-    for i in range(2,int(math.sqrt(float(n)))+1,1):
+    for i in range(2, int(math.sqrt(float(n)))+1):
         if isPrime[i]:
             for k in range(i*i,n,i): isPrime[k] = False
 
@@ -20,7 +20,7 @@ def count(bs):
 def primesTo(n):
     res = []
     isPrime = sieve(n)
-    for i in range(2,n,1):
+    for i in range(2, n):
         if isPrime[i]: res.append(i)
     return res
 

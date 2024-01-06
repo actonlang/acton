@@ -1,4 +1,4 @@
-lst = list(range(10, 15, 1))
+lst = list(range(10, 15))
 
 def even(n):
     return n % 2 == 0

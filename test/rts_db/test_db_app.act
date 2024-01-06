@@ -103,7 +103,7 @@ actor Tester(env, verbose, port_chunk):
         are_we_done()
 
     def dbc_start():
-        for i in range(0, 3, 1):
+        for i in range(3):
             port = port_chunk + (2*i)
             cmd = ["../dist/bin/actondb", "-p", str(port)]
             p = process.Process(process_cap, cmd, None, None, on_stdout, on_stderr, db_on_exit, on_error)
@@ -113,9 +113,9 @@ actor Tester(env, verbose, port_chunk):
             psp[paid] = "db%d" % i
 
     def db_args(start_port, replication_factor) -> list[str]:
-        #a = ["127.0.0.1:" for idx in range(0, replication_factor, 1)]
+        #a = ["127.0.0.1:" for idx in range(replication_factor)]
         args = ["--rts-ddb-replication", str(replication_factor)]
-        for idx in range(0, replication_factor, 1):
+        for idx in range(replication_factor):
             args.append("--rts-ddb-host")
             args.append("127.0.0.1:" + str(start_port + idx*2))
         return args

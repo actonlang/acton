@@ -52,7 +52,7 @@ actor analyzer(sample_size, loess_win_size):
        observation = numpy.concatenate(ysamples)
        smooth      = loess(time,observation,time,loess_win_size)
        print("clear\n$data <<EOD")
-       for i in range(0, 8*sample_size, 1):
+       for i in range(8*sample_size):
            print(time[i],observation[i],smooth[i])
        print("EOD")
        t0 = numpy.scalar(time[0])

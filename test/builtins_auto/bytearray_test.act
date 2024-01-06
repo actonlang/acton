@@ -4,17 +4,17 @@ actor main(env):
 # TODO: fix all this?
 #    b = bytearray(lst0)
 #    print(b.center(25,None))
-#    lst2 = list(range(65,91,1))
+#    lst2 = list(range(65, 91))
 #    b2 = bytearray(lst2)
 #    print(b2)
-#    b3 = bytearray(list(range(75,77,1)))
+#    b3 = bytearray(list(range(75, 77)))
 #    n = b2.find(b3,0,-1);
 #    print(b3,"occurs in",b2,"at pos",n)
 #    b4 = bytearray(10)
 #    print("bytearray(10) gives",b4)
 #    b4 = b.center(20,None)
 #    print(b.lstrip(b4))
-#    sep = bytearray(list(range(70,72,1)))
+#    sep = bytearray(list(range(70, 72)))
 #    print(b2.split(sep,None))
 #    b5 = bytearray("line 1\nline 2\r\n\nBjörn")
 #    print(b5)
@@ -22,7 +22,7 @@ actor main(env):
 #    print(b5.splitlines(True))
 #    lst = list(b2)
 #    print(lst[1:20:2])
-#    for i in range(0,1000,1):
+#    for i in range(1000):
 #      b2.append(65+i%26)     #add repeated copies of upper case alphabet
 #    for i in range(26,1,-1):
 #      del b2[0:10000:i]      # delete everything except the Z's

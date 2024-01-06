@@ -6,7 +6,7 @@ def test_http_parser(log):
     def partializer(testfun, query, parsed) -> bool:
         # Go through query byte by byte, and feed it to the parser one more
         # byte at a time until we get a complete request
-        for i in range(0, len(query), 1):
+        for i in range(len(query)):
             partial_request = query[0:i+1]
             req, rest = http.parse_request(partial_request, log)
             if req is not None:
@@ -44,7 +44,7 @@ def test_http_parser(log):
 
 
         # Parse request byte by byte
-        for i in range(0, len(t.query), 1):
+        for i in range(len(t.query)):
             partial_request = t.query[0:i+1]
             req, rest = http.parse_request(partial_request, log)
             if req is not None:

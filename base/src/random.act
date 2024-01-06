@@ -27,11 +27,11 @@ def sample[T](population: list[T], k: int) -> list[T]:
         raise ValueError("Sample larger than population or is negative")
 
     result = []
-    indices = list(range(0, len(population), 1))
-    for _ in range(0, k, 1):
+    indices = list(range(len(population)))
+    for _ in range(k):
         idx_to_pop = choice(indices)
         idx = 0
-        for i in range(0, len(indices), 1):
+        for i in range(len(indices)):
             if indices[i] == idx_to_pop:
                 idx = i
                 break

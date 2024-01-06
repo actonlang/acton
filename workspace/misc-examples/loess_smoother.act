@@ -20,7 +20,7 @@ def sample():
     y = numpy.unirandfloat(1.0, 3.0, 101) + math.sin(x)
     z = loess(x, y, x, 40)
     print("clear\n$data <<EOD");
-    for i in range(0, 101, 1):
+    for i in range(101):
        print(x[i],y[i],z[i])
     print("EOD")
     print("plot [0:10][0:5] \'$data\' using 1:2 with points title \"raw data\", \\")

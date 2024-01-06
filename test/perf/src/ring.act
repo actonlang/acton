@@ -34,17 +34,17 @@ actor main(env):
     stop_at = float(env.argv[2])
 
     nodes = []
-    for i in range(0, num_nodes, 1):
+    for i in range(num_nodes):
         n = Node(i)
         nodes.append(n)
-    for i in range(0, num_nodes-1, 1):
+    for i in range(num_nodes-1):
         nodes[i].set_next(nodes[i+1])
     nodes[-1].set_next(nodes[0])
     a = nodes[0].ping()
 
     var count = 0
     def stop():
-        for i in range(0, num_nodes, 1):
+        for i in range(num_nodes):
             c = nodes[i].get_count()
             print("Actor %d:" % i, c)
             count += c

@@ -44,7 +44,7 @@ actor analyzer(window_size, loess_win_size):
        observation = numpy.concatenate([observation[len(y):],y])
        trend, seasonal, resid, periodic, phase = decompose(observation, time, 52, 0.6)
        print("clear\n$data <<EOD")
-       for i in range(0, window_size, 1):
+       for i in range(window_size):
            print(time[i], observation[i], trend[i], seasonal[i], resid[i])
        print("EOD")
        t0 = numpy.scalar(time[0])

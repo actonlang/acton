@@ -9,7 +9,7 @@
 #    def __str__(self):
 #        res = "("
 #        l = len(self.p)
-#        for i in range(0, l, 1):
+#        for i in range(l):
 #            res += str(self.p[i])
 #            if i < l-1:
 #                res += "|"

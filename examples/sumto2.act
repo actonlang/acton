@@ -2,7 +2,7 @@ import numpy
 import math
 
 def sumto(n):
-    a = numpy.arange(0,n,1)
+    a = numpy.arange(0, n)
     return numpy.sum(a,None)
     
 actor main(env):

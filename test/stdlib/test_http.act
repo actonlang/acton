@@ -9,7 +9,7 @@ import net
 #    var reconnects = 0
 #
 #    def request_some(conn, n):
-#        for i in range(0, n, 1):
+#        for i in range(n):
 #            conn.get("/" + str(i), on_response)
 #            outstanding += 1
 #
@@ -44,7 +44,7 @@ actor main(env):
 #    def test_http_request_parser(query, parsed) -> bool:
 #        # Go through query byte by byte, and feed it to the parser one more
 #        # byte at a time until we get a complete request
-#        for i in range(0, len(query), 1):
+#        for i in range(len(query)):
 #            partial_request = query[0:i+1]
 #            req, rest = http.parse_request(partial_request)
 #            if req is not None:
@@ -75,7 +75,7 @@ actor main(env):
     tcpccap = net.TCPConnectCap(net.TCPCap(net.NetCap(env.cap)))
 ##
 ##    var workers = []
-##    for i in range(0, 1, 1):
+##    for i in range(1):
 ##        print("Starting worker " + str(i))
 ##        workers.append(HttpGetter(connect_auth, host, 20))
 ##

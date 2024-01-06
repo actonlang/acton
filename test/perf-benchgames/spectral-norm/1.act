@@ -7,13 +7,13 @@ def eval_A(i, j):
 
 def eval_A_times_u(u):
     res = []
-    for i in range(0, len(u), 1):
+    for i in range(len(u)):
         res.append(part_A_times_u(i,u))
     return res
 
 def eval_At_times_u(u):
     res = []
-    for i in range(0, len(u), 1):
+    for i in range(len(u)):
         res.append(part_At_times_u(i,u))
     return res
 
@@ -36,13 +36,13 @@ actor main(env):
     var u = [1] * int(env.argv[1])
     var v = []
 
-    for dummy in range(0, 10, 1):
+    for dummy in range(10):
         v = eval_AtA_times_u(u)
         u = eval_AtA_times_u(v)
 
     vBv = vv = 0
 
-    for i in range(0, len(u), 1):
+    for i in range(len(u)):
         ue = u[i]
         ve = v[i]
         vBv += ue * ve

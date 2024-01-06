@@ -1,19 +1,19 @@
 actor main(env):
     s = {400}
-    for i in range(13,1000,1):
+    for i in range(13, 1000):
         s.add(i*i)
     s.discard(64)
     s.discard(225)
     s.discard(10000)
     n = 0
-    for k in range(0,1000,1):
+    for k in range(1000):
         if k in s: n += 1
     if n != 18:
         raise ValueError("n is" + str(n) + ", not 18")
 
         env.exit(1)
     s2 = {1}
-    for i in range(0,500,1):
+    for i in range(500):
         s2.add(i*i*i*i)
     if len(s) != 985 or len(s2) != 500:
         raise ValueError("set length error 1")
