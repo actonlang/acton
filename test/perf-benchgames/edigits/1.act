@@ -49,7 +49,7 @@ actor main(env):
             print(s[i:i+10] + "\t:" + str(i+10))
         else:
             spaces = ""
-            for j in range(0, (10-(len(str(s[i:])))), 1):
+            for j in range(10-len(str(s[i:]))):
                 spaces += " "
             print(s[i:] + spaces + "\t:" + str(n))
             #print(f'{s[i:]}{" "*(10-n%10)}\t:{n}')

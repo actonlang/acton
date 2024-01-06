@@ -4,7 +4,7 @@ import testing
 # choice()
 def _test_choice_basic_functionality():
     lst = [1, 2, 3, 4, 5]
-    for _ in range(0, 1000, 1):  # Repeat many times to ensure randomness
+    for _ in range(1000):  # Repeat many times to ensure randomness
         testing.assertIn(random.choice(lst), lst, "random.choice() returned a value not in the list")
 
 def _test_choice_empty_sequence():
@@ -20,7 +20,7 @@ def _test_choice_single_element():
 def _test_choice_repeatability():
     lst = [1, 2, 3, 4, 5]
     results = set(None)
-    for _ in range(0, 1000, 1):
+    for _ in range(1000):
         results.add(random.choice(lst))
     testing.assertTrue(bool(len(results) > 1), "Expected multiple unique results for repeated calls")
 
@@ -58,7 +58,7 @@ def _test_sample_repeatability() -> None:
     lst = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
     sample_1 = random.sample(lst, 2)
 
-    for _ in range(0, 1000, 1):
+    for _ in range(1000):
         sample_2 = random.sample(lst, 2)
         if sample_1 != sample_2:
             return None
@@ -82,7 +82,7 @@ def _test_random_distribution():
     total = 1000000
     num_range = high - low
     stats = {}
-    for i in range(0, total, 1):
+    for i in range(total):
         r = random.randint(low, high)
         if r not in stats:
             stats[r] = 0
@@ -100,12 +100,12 @@ def _test_random_distribution():
             #print("n", n, " outside of expected range (", (expected_count*0.9), "-", (expected_count*1.1), "):", stats[n])
 
 def _test_random1():
-    for i in range(0, 100000, 1):
+    for i in range(100000):
         r = random.randint(0, 1234)
         testing.assertTrue(r >= 0 and r <= 1234, "random.randint() returned a value outside of the range")
 
 def _test_random2():
-    for i in range(0, 100000, 1):
+    for i in range(100000):
         r = random.randint(1293862, 97309358)
         testing.assertTrue(r >= 1293862 and r <= 97309358, "random.randint() returned a value outside of the range")
 

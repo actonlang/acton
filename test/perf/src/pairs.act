@@ -44,7 +44,7 @@ actor Node(name: str, _affinity: int):
         counter += 1
         tokens += 1
         if not _stop and tokens > 0 and partner is not None:
-            for i in range(0, 1000, 1):
+            for i in range(1000):
                 if tokens == 0:
                     return
                 tokens -= 1
@@ -58,12 +58,12 @@ actor Pairs(wthreads, num_pairs):
     nodes = []
     var count = 0
 
-    for i in range(0, num_pairs*2, 1):
+    for i in range(num_pairs*2):
         affinity = int(i // 2) % wthreads
         n = Node(str(i), affinity+1)
         nodes.append(n)
 
-#    for i in range(0, num_pairs, 1):
+#    for i in range(num_pairs):
 #        affinity = i % wthreads
 #        n1 = Node(str(i), affinity+1)
 #        n2 = Node(str(i+1), affinity+1)
@@ -81,7 +81,7 @@ actor Pairs(wthreads, num_pairs):
 
     def get_count():
         count = 0
-        for i in range(0, num_pairs*2, 1):
+        for i in range(num_pairs*2):
             c = nodes[i].get_count()
             print("Actor %d:" % i, c)
             count += c
@@ -89,11 +89,11 @@ actor Pairs(wthreads, num_pairs):
 
     def start():
 #        print("Starting...")
-        for i in range(0, num_pairs*2, 1):
+        for i in range(num_pairs*2):
             nodes[i].ping()
 
     def stop():
-        for i in range(0, num_pairs*2, 1):
+        for i in range(num_pairs*2):
             nodes[i].stop()
 
 

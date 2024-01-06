@@ -76,7 +76,7 @@ def hex_to_decimal(hex_str: str) -> int:
                '8': 8, '9': 9, 'A': 10, 'B': 11, 'C': 12, 'D': 13, 'E': 14, 'F': 15}
     decimal_value = 0
     try:
-        for i in range(0, len(hex_str), 1):
+        for i in range(len(hex_str)):
             j = len(hex_str)-i
             digit = hex_str[j-1].upper()
             decimal_value += hex_map[digit] * (16 ** i)

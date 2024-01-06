@@ -33,7 +33,7 @@ def sample(t0, n, n0, w):
 
     smooth = loess(time,observation,time,w)
     print("clear\n$data <<EOD")
-    for i in range(0, n, 1):
+    for i in range(n):
        print(time[i],observation[i],smooth[i])
     print("EOD")
     print("plot [",t0,":",t1,"][0:5] \'$data\' using 1:2 with lines title \"raw data\", \\")

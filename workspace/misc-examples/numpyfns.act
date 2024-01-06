@@ -2,7 +2,7 @@ import numpy
 import math
 
 actor main(env):
-  a = numpy.arange(0,20,1)
+  a = numpy.arange(20)
   b = numpy.tile(a,3)
   print(b)
   c = numpy.roll(a,-7)

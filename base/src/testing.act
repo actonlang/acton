@@ -520,7 +520,7 @@ actor test_runner(env: Env, unit_tests: dict[str, UnitTest], sync_actor_tests: d
                     print()
                     env.exit(0)
 
-        for i in range(0, env.nr_wthreads, 1):
+        for i in range(env.nr_wthreads):
             unit_test_runner(i, get_test, report_result)
 
     proc def _run_sync_actor_tests(args):
@@ -583,7 +583,7 @@ actor test_runner(env: Env, unit_tests: dict[str, UnitTest], sync_actor_tests: d
         for ut in unit_tests.values():
             test_res = []
             try:
-                for iteration in range(0, args.get_int("iterations"), 1):
+                for iteration in range(args.get_int("iterations")):
                     acton.rts.gc(env.syscap) # explicit GC collection
                     mem_before = acton.rts.get_mem_usage(env.syscap)
                     sw = time.Stopwatch()

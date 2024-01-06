@@ -72,7 +72,7 @@ actor WThreadMonitor(env: Env, arg_wthread_id: int):
 actor Monitor(env: Env):
     tms: dict[int, WThreadMonitor] = {}
 
-    for wthread_id in range(1, env.nr_wthreads+1, 1):
+    for wthread_id in range(1, env.nr_wthreads+1):
         tm = WThreadMonitor(env, wthread_id)
         tms[wthread_id] = tm
 

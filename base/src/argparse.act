@@ -196,7 +196,7 @@ class Parser(object):
 
         posargs = []
         skip = 0
-        for i in range(0, len(argv), 1):
+        for i in range(len(argv)):
             p = i + skip
             if p >= len(argv):
                 break
@@ -254,7 +254,7 @@ class Parser(object):
                 else:
                     posargs.append(arg)
 
-        for i in range(0, len(posargs), 1):
+        for i in range(len(posargs)):
             arg = posargs[i]
             if len(self.args) == 0:
                 rest.append(arg)
