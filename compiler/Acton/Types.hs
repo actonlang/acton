@@ -899,7 +899,9 @@ genEnv env cs te ds
                                                  ds1 = map (abstract q ds ws eq1) ds
                                              --traceM ("## genEnv defs 3 [" ++ prstrs gen_vs ++ "]\n" ++ render (nest 6 $ pretty te1))
                                              return (fix_cs, te1, eq2, ds1)
-  | otherwise                           = return (cs, te, [], ds)
+  | otherwise                           = do --traceM ("## genEnv local\n" ++ render (nest 6 $ pretty te))
+                                             --traceM ("## genEnv local cs:\n" ++ render (nest 4 $ vcat $ map pretty cs))
+                                             return (cs, te, [], ds)
   where
     qualify vs cs                       = let (q,wss) = unzip $ map qbind vs in (q, concat wss)
       where qbind v                     = (Quant v (casts ++ impls), wits)
