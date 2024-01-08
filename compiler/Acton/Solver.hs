@@ -234,7 +234,7 @@ rank env (Cast _ t1@(TVar _ v1) t2@(TVar _ v2))
 rank env (Cast _ t1@TVar{} (TOpt _ t2@TVar{}))
   | univar (tvar t1), univar (tvar t2)      = RVar t1 [t2]
 rank env (Cast _ t1@TVar{} (TOpt _ t2))
-  | univar (tvar t1)                        = RTry t1 (allBelow env t2 ++ [tOpt tWild, tNone]) False
+  | univar (tvar t1)                        = RTry t1 ([tOpt tWild, tNone] ++ allBelow env t2) False
 rank env (Cast _ TNone{} t2@TVar{})
   | univar (tvar t2)                        = RTry t2 [tOpt tWild, tNone] True
 rank env (Cast _ t1@TVar{} t2)

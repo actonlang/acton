@@ -296,11 +296,15 @@ declModule env (s : ss)             = vcat [ gen env t <+> genTopName env n <> s
 
 
 declDecl env (Def _ n q p KwdNIL (Just t) b d fx)
-  | hasNotImpl b                    = gen env t <+> genTopName env n <+> parens (gen env p) <> semi
-  | otherwise                       = (gen env t1 <+> genTopName env n <+> parens (gen env p) <+> char '{') $+$
+  | hasNotImpl b                    = gen env t <+> genTopName env n <+> parens (gen env p) <> semi $+$
+                                      text "/*" $+$
+                                      decl $+$
+                                      text "*/"
+  | otherwise                       = decl
+  where decl                        = (gen env t1 <+> genTopName env n <+> parens (gen env p) <+> char '{') $+$
                                       nest 4 (genSuite env1 b) $+$
                                       char '}'
-  where env1                        = setRet t1 $ ldefine (envOf p) $ defineTVars q env
+        env1                        = setRet t1 $ ldefine (envOf p) $ defineTVars q env
         t1                          = exposeMsg fx t
 
 declDecl env (Class _ n q as b)
@@ -487,6 +491,7 @@ genStmt env s                       = vcat [ gen env t <+> gen env n <> semi | (
         env1                        = ldefine te env
 
 instance Gen Stmt where
+    gen env s | isNotImpl s         = text "//" <+> text "NotImplemented"
     gen env (Expr _ Strings{})      = semi
     gen env (Expr _ e)              = genExp' env e <> semi
     gen env (Assign _ [p] e)        = gen env p <+> equals <+> genExp env t e <> semi
