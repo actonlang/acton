@@ -1,9 +1,43 @@
 # Changelog
 
+## [0.19.0] (2024-01-08)
+
+### Added
+- Much improved argument "rows" support [#1609] [#1617], including:
+  - positional & keywords arguments
+  - default argument values
+- `up`, `down`, `left` & `right` in `term` module now accept `n` arg [#1619]
+  - can move multiple steps in given direction
+
+### Changed
+- for `http.Client` the following positional arguments are now keyword args:
+  - `schema`: defaults to `https`
+  - `port`: defaults to `80` for schema `http` and `443` for `https`
+  - `tls_verify`: default `True`
+  - `connect_timeout`: default `10.0`
+
+### Fixes
+- Remove superfluous explicit arguments, now using default values [#1615] [#1618]
+- Now possible to print `None` [#1609]
+
+### Testing / CI
+- Now testing Telemetrify in GitHub Action workflow as part of CI testing
+  - Telemetrify is the largest known application written using Acton, so we add
+    testing of it to the Acton repo to avoid accidental breakage
+  - Telemetrify main branch is already tested with the latest release of Acton
+  - now, new changes in acton are also verified against the telemetrify repo
+  - we test against the `acton-next` branch in the telemetrify repo
+    - this enables us to make breaking changes in the Acton repo, realize the
+      break, then write a fix adapting the telemetrify code to the new Acton
+      change and push this to the `acton-next` branch after which the PR on the
+      Acton repo can be retried
+
+
 ## [0.18.5] (2023-12-12)
 
 ### Testing / CI
 - Fix build of APT repo
+
 
 ## [0.18.4] (2023-12-12)
 
