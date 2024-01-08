@@ -25,20 +25,44 @@ bg_magenta = "\x1b[45m"
 bg_cyan = "\x1b[46m"
 bg_white = "\x1b[47m"
 
-# TODO: add n arg with default 1, to go n lines up
-def up():
-    return "\x1b[A"
+def up(n=1):
+    """Move cursor up n lines.
+    """
+    if n < 0:
+        raise ValueError("n must be >= 0")
+    res = ""
+    for i in range(n):
+        res += "\x1b[A"
+    return res
 
-# TODO: add n arg with default 1, to go n lines down
-def down():
-    return "\x1b[B"
+def down(n=1):
+    """Move cursor down n lines.
+    """
+    if n < 0:
+        raise ValueError("n must be >= 0")
+    res = ""
+    for i in range(n):
+        res += "\x1b[B"
+    return res
 
-# TODO: add n arg with default 1, to go n chars right
-def right():
-    return "\x1b[C"
+def right(n=1):
+    """Move cursor right n columns.
+    """
+    if n < 0:
+        raise ValueError("n must be >= 0")
+    res = ""
+    for i in range(n):
+        res += "\x1b[C"
+    return res
 
-# TODO: add n arg with default 1, to go n chars left
-def left():
-    return "\x1b[D"
+def left(n=1):
+    """Move cursor left n columns.
+    """
+    if n < 0:
+        raise ValueError("n must be >= 0")
+    res = ""
+    for i in range(n):
+        res += "\x1b[D"
+    return res
 
 clearline = "\x1b[0G\x1b[2K"
