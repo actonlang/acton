@@ -26,13 +26,14 @@ B_NoneType B_rangeD___init__(B_range self, B_int start, B_int stop, B_int step) 
     }
     if (step) {
         int stp = from$int(step);
-        if (stp==0) {
-            $RAISE((B_BaseException)$NEW(B_ValueError,to$str("step size zero in range")));
-        }
-        else
+        if (stp == 0) {
+            $RAISE((B_BaseException)$NEW(B_ValueError, to$str("range() step size must not be zero")));
+        } else {
             self->step = stp;
-    } else
+        }
+    } else {
         self->step = 1;
+    }
     return B_None;
 }
 
