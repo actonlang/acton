@@ -110,5 +110,5 @@ actor main(env):
         print(errmsg)
 
     print("asdf")
-    hc = http.Client(tcpccap, "https", "dummyjson.com", None, True, _on_http_connect, _on_http_error, log_handler)
-    hc2 = http.Client(tcpccap, "http", "neverssl.com", None, True, _on_http_connect, _on_http_error, log_handler)
+    hc = http.Client(tcpccap, "dummyjson.com", _on_http_connect, _on_http_error, log_handler)
+    #hc2 = http.Client(tcpccap, "neverssl.com", _on_http_connect, _on_http_error, scheme="http", log_handler)

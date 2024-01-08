@@ -2,7 +2,6 @@ import acton.rts
 import json
 import logging
 import net
-from net import TCPListenConnection
 import time
 
 responses = {
@@ -444,10 +443,7 @@ actor Listener(cap: net.TCPListenCap, address: str, port: int, on_listen_error: 
 
 
 # TODO: change port to u16, when u16 has a sub-type relationship to int
-# TODO: default schema="https"
-# TODO: default port=None
-# TODO: default tls_verify=True
-actor Client(cap: net.TCPConnectCap, scheme: str, address: str, port: ?int, tls_verify: bool, on_connect: action(Client) -> None, on_error: action(Client, str) -> None, log_handler: ?logging.Handler):
+actor Client(cap: net.TCPConnectCap, address: str, on_connect: action(Client) -> None, on_error: action(Client, str) -> None, scheme: str="https", port: ?int=None, tls_verify: bool=True, log_handler: ?logging.Handler):
     """HTTP(S) Client
 
     scheme is either 'http' or 'https', the default is 'https'
@@ -465,7 +461,7 @@ actor Client(cap: net.TCPConnectCap, scheme: str, address: str, port: ?int, tls_
         if scheme == "http":
             _log.verbose("Using http scheme and port 80", None)
             tcp_port = port if port is not None else 80
-            tcp_conn = net.TCPConnection(cap, address, tcp_port, _on_tcp_connect, _on_tcp_receive, _on_tcp_error)
+            tcp_conn = net.TCPConnection(cap, address, tcp_port, _on_tcp_connect, _on_tcp_receive, _on_tcp_error, connect_timeout=10.0)
         elif scheme == "https":
             _log.verbose("Using https scheme and port 443", None)
             tls_port = port if port is not None else 443
