@@ -346,7 +346,12 @@ class IndexError (LookupError):
     pass
 
 class KeyError (LookupError):
-    pass
+    def __init__(self, msg: str, key: value):
+        self.error_message = msg
+        self.key = key
+
+    def __str__(self):
+        return "%s: %s, key: %s" % (self._name(), self.error_message, str(self.key))
 
 class MemoryError (Exception):
     pass
