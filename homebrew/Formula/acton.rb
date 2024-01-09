@@ -10,11 +10,14 @@ class Acton < Formula
   depends_on "haskell-stack" => :build
 
   def install
-    # Fix up stack config to not install project local GHC
+    # Fix up stack config to not install project local GHC and use system GHC
+    # which is idiomatic for Homebrew. Disable GHC version check as we want to
+    # allow for minor version mismatches.
     inreplace "compiler/stack.yaml", "# system-ghc: true", <<~EOS
       system-ghc: true
       install-ghc: false
       allow-newer: true
+      skip-ghc-check: true
     EOS
 
     ENV["BUILD_RELEASE"] = "1"
