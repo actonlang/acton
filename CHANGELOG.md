@@ -1,8 +1,27 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+- Homebrew Formula now somewhat decoupled from Stack version
+  - Idiomatic Homebrew Formulas use system-ghc, i.e. a GHC version installed by
+    Homebrew itself and not from Stack. Since we specify a Stack LTS resolver,
+    which is a coupled to a particular version of GHC, there is room for a
+    version mismatch.
+  - The latest occurrence of which was GHC 9.4.8 in Homebrew vs Stack LTS 21.13
+    with GHC 9.4.7. A rather silly small mismatch but that nonetheless breaks
+    the Homebrew build. This is particularly annoying because it happens only
+    after we've made a release, so the feedback is too late and thus a
+    correction version must be released to fix the version mismatch (we've
+    upgraded to LTS 21.25 with GHC 9.4.8 to align on Homebrew).
+  - Now `skip-ghc-check` is used to skip the GHC version check to allow some
+    minor mismatch to happen. We must still ensure that at least the major
+    version of GHC is aligned, like GHC 9.4.
+    
+    
 ## [0.19.1] (2024-01-08)
 
-### Fixes
+### Fixed
 - Upgraded Stack to 21.25 / GHC 9.4.8
   - This should hopefully fix the Homebrew build
 
@@ -23,7 +42,7 @@
   - `tls_verify`: default `True`
   - `connect_timeout`: default `10.0`
 
-### Fixes
+### Fixed
 - Remove superfluous explicit arguments, now using default values [#1615] [#1618]
 - Now possible to print `None` [#1609]
 
@@ -48,7 +67,7 @@
 
 ## [0.18.4] (2023-12-12)
 
-### Fixes
+### Fixed
 - Add constraint forcing type of self parameter [#1598]
 - Let solver use upper bound of type variable when reducing protocol constraints
 - Remove subclass constraint on isinstance parameters
