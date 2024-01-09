@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.19.1] (2024-01-08)
+
+### Fixes
+- Upgraded Stack to 21.25 / GHC 9.4.8
+  - This should hopefully fix the Homebrew build
+
+
 ## [0.19.0] (2024-01-08)
 
 ### Added
