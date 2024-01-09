@@ -1,7 +1,23 @@
 def f(x, y='world'):
     return x + ', ' + y
 
+class Foo(object):
+    def __init__(self, x, y='world'):
+        self.x = x
+        self.y = y
+
+    def __str__(self):
+        return self.x + ', ' + self.y
+
+class Bar(object):
+    def __init__(self):
+        pass
+
+    def f(self, x, y='world'):
+        return x + ', ' + y
+
 actor main(env):
+    # Test function call
     out1 = f('hello')
     out2 = f('hello', 'you')
     out3 = f('hello', y='there')
@@ -49,6 +65,110 @@ actor main(env):
     if out9 != "hello, world":
         print("Bad 9:", out9)
         env.exit(1)
+
+    # Test class init
+    fout1 = str(Foo('hello'))
+    fout2 = str(Foo('hello', 'you'))
+    fout3 = str(Foo('hello', y='there'))
+    fout4 = str(Foo(x='hello', y='there'))
+    fout5 = str(Foo(y='there', x='hello'))
+    fout6 = str(Foo('hello', None))
+    fout7 = str(Foo(x='hello'))
+    fout8 = str(Foo(x='hello', y=None))
+    fout9 = str(Foo(y=None, x='hello'))
+
+#    print(fout1)
+#    print(fout2)
+#    print(fout3)
+#    print(fout4)
+#    print(fout5)
+#    print(fout6)
+#    print(fout7)
+#    print(fout8)
+#    print(fout9)
+
+    if fout1 != "hello, world":
+        print("Bad 1:", fout1)
+        env.exit(1)
+    if fout2 != "hello, you":
+        print("Bad 2:", fout2)
+        env.exit(1)
+    if fout3 != "hello, there":
+        print("Bad 3:", fout3)
+        env.exit(1)
+    if fout4 != "hello, there":
+        print("Bad 4:", fout4)
+        env.exit(1)
+    if fout5 != "hello, there":
+        print("Bad 5:", fout5)
+        env.exit(1)
+    if fout6 != "hello, world":
+        print("Bad 6:", fout6)
+        env.exit(1)
+    if fout7 != "hello, world":
+        print("Bad 7:", fout7)
+        env.exit(1)
+    if fout8 != "hello, world":
+        print("Bad 8:", fout8)
+        env.exit(1)
+    if fout9 != "hello, world":
+        print("Bad 9:", fout9)
+        env.exit(1)
+
+    # Test class method
+    b = Bar()
+    # TODO: Fix this
+#    gout1 = b.f('hello')
+    gout2 = b.f('hello', 'you')
+    gout3 = b.f('hello', y='there')
+    gout4 = b.f(x='hello', y='there')
+    # TODO: Fix this
+#    gout5 = b.f(y='there', x='hello')
+    gout6 = b.f('hello', None)
+    # TODO: Fix this
+#    gout7 = b.f(x='hello')
+    gout8 = b.f(x='hello', y=None)
+    # TODO: Fix this
+#    gout9 = b.f(y=None, x='hello')
+
+#    print(gout1)
+#    print(gout2)
+#    print(gout3)
+#    print(gout4)
+#    print(gout5)
+#    print(gout6)
+#    print(gout7)
+#    print(gout8)
+#    print(gout9)
+
+#    if gout1 != "hello, world":
+#        print("Bad 1:", gout1)
+#        env.exit(1)
+    if gout2 != "hello, you":
+        print("Bad 2:", gout2)
+        env.exit(1)
+    if gout3 != "hello, there":
+        print("Bad 3:", gout3)
+        env.exit(1)
+    if gout4 != "hello, there":
+        print("Bad 4:", gout4)
+        env.exit(1)
+#    if gout5 != "hello, there":
+#        print("Bad 5:", gout5)
+#        env.exit(1)
+    if gout6 != "hello, world":
+        print("Bad 6:", gout6)
+        env.exit(1)
+#    if gout7 != "hello, world":
+#        print("Bad 7:", gout7)
+#        env.exit(1)
+    if gout8 != "hello, world":
+        print("Bad 8:", gout8)
+        env.exit(1)
+#    if gout9 != "hello, world":
+#        print("Bad 9:", gout9)
+#        env.exit(1)
+
 
     print("All is well")
     env.exit(0)
