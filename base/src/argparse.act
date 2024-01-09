@@ -79,7 +79,7 @@ class Args(object):
 
 class Parser(object):
     opts: dict[str, (name: str, type: str, nargs: str, default: ?value, help: str)]
-    args: list[(name: str, help: str, nargs: str, left: int)]
+    args: list[(name: str, help: str, required: bool, nargs: str, left: int)]
     cmds: dict[str, (help: str, parser: Parser, fn: proc(Args) -> None)]
     prog: str
 
@@ -99,12 +99,12 @@ class Parser(object):
             raise ArgumentError("Invalid option type '%s'" % type)
         self.opts[name] = (name=name, type=type, nargs=nargs, default=default, help="")
 
-    def add_arg(self, name: str, help: str = "", nargs: str = "?"):
+    def add_arg(self, name: str, help: str="", required: bool=True, nargs: str="?"):
         if nargs == "+" or nargs == "*":
             for arg in self.args:
                 if arg.nargs == "+" or arg.nargs == "*":
                     raise ArgumentError("Only one positional argument with multiple values allowed")
-        self.args.append((name=name, help=help, nargs=nargs, left=1))
+        self.args.append((name=name, help=help, required=required, nargs=nargs, left=1))
 
     def add_cmd(self, name: str, help: str, fn: proc(Args) -> None):
         p = Parser()
@@ -171,7 +171,7 @@ class Parser(object):
         if args.get_bool("help"):
             raise PrintUsage(self.get_usage())
         for arg in self.args:
-            if arg.name not in args.options:
+            if arg.required and arg.name not in args.options:
                 raise ArgumentError("Missing positional argument: %s" % arg.name)
         if cmd_parser is not None:
             args = cmd_parser._parse(rest, args)
