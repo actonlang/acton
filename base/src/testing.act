@@ -379,13 +379,13 @@ actor test_runner(env: Env, unit_tests: dict[str, UnitTest], sync_actor_tests: d
                 complete = False
                 d += " "
         d += "]"
-        printn("\r")
-        printn(d)
+        print("\r", end="")
+        print(d, end="")
 
         errors = 0
         failures = 0
         if complete:
-            printn(term.clearline + term.up() + term.clearline)
+            print(term.clearline + term.up() + term.clearline, end="")
             print("\nTests")
             tname_width = 20
             for tname, t in results.items():
@@ -466,13 +466,13 @@ actor test_runner(env: Env, unit_tests: dict[str, UnitTest], sync_actor_tests: d
                     complete = False
                     d += " "
             d += "]"
-            printn("\r")
-            printn(d)
+            print("\r", end="")
+            print(d, end="")
 
             errors = 0
             failures = 0
             if complete:
-                printn(term.clearline + term.up() + term.clearline)
+                print(term.clearline + term.up() + term.clearline, end="")
                 print("\nTests")
                 tname_width = 20
                 for tname, t in results.items():

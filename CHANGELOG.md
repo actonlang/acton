@@ -5,6 +5,18 @@
 ### Added
 - `argparse` now supports optional positional arguments
   - like so: `p.add_arg("foo", "Foo thing", required=False, nargs="?")`
+- `print()` now takes multiple new input arguments:
+  - `print(*vals, sep=" ", end="", stderr=False, flush=False)`
+  - `sep` is the separation character between values, default " "
+  - `end` is the line ending character, default "\n"
+  - Output is written to stdout per default, set `stderr=True` to write to
+    stderr instead
+  - set `flush=True` to flush the output
+
+### Changed
+- `print()` now formats to a temporary buffer before printing to reduce
+  interleaving multiple outputs
+- `printn()` has been removed in preference of using `print(foo, end="")`
 
 ### Fixed
 - Homebrew Formula now somewhat decoupled from Stack version [#1627]
