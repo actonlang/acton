@@ -46,32 +46,45 @@ B_str __str__(B_value x) {
         return x->$class->__str__(x);
 }
 
-B_NoneType B_print(B_tuple t) {
-    if (t->size > 0) {
-        B_value elem = (B_value)t->components[0];
-        fputs((const char*)__str__(elem)->str, stdout);
+B_NoneType B_print(B_tuple t, B_str sep_arg, B_str end_arg, B_bool stderr_arg, B_bool flush_arg) {
+    FILE *outfd = stdout;
+    if (stderr_arg && stderr_arg->val) {
+        outfd = stderr;
     }
-    for (int i=1; i<t->size; i++) {
-        putchar(' ');
-        B_value elem = (B_value)t->components[i];
-        fputs((const char*)__str__(elem)->str, stdout);
-    }
-    putchar('\n');
-    return B_None;
-}
+    B_str sep = to$str(" ");
+    if (sep_arg)
+        sep = sep_arg;
+    B_str end = to$str("\n");
+    if (end_arg)
+        end = end_arg;
 
-B_NoneType B_printn(B_tuple t) {
-    if (t->size > 0) {
-        B_value elem = (B_value)t->components[0];
-        char *s = elem->$class->__str__(elem);
-        fputs((const char*)__str__(elem)->str, stdout);
-    }
-    for (int i=1; i<t->size; i++) {
-        putchar(' ');
+    // Write to temporary buffer first, making us much less prone to interleaved
+    // output from multiple threads. It costs a malloc and some copies but print
+    // should not be used in performance critical code.
+    int tlen = 0;
+    for (int i=0; i<t->size; i++) {
         B_value elem = (B_value)t->components[i];
-        fputs((const char*)__str__(elem)->str, stdout);
+        tlen += __str__(elem)->nbytes + sep->nbytes;
     }
-    fflush(stdout);
+    tlen += end->nbytes;
+    char *s = malloc(tlen+1);
+    int pos = 0;
+    for (int i=0; i<t->size; i++) {
+        if (i > 0) {
+            memcpy(s+pos, sep->str, sep->nbytes);
+            pos += sep->nbytes;
+        }
+        B_value elem = (B_value)t->components[i];
+        memcpy(s+pos, __str__(elem)->str, __str__(elem)->nbytes);
+        pos += __str__(elem)->nbytes;
+    }
+    memcpy(s+pos, end->str, end->nbytes);
+    pos += end->nbytes;
+    s[pos] = '\0';
+    fputs(s, outfd);
+
+    if (flush_arg && flush_arg->val)
+        fflush(outfd);
     return B_None;
 }
 
