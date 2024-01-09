@@ -45,8 +45,8 @@ def test_opts_nargs():
 
 def test_posarg():
     p = argparse.Parser()
-    p.add_arg("infile", "input file", "?")
-    p.add_arg("outfile", "output file", "?")
+    p.add_arg("infile", "input file", True, "?")
+    p.add_arg("outfile", "output file", True, "?")
 
     args = p.parse(["./app", "foo", "bar"])
     if args.get_str("infile") != "foo":
@@ -56,8 +56,8 @@ def test_posarg():
 
 def test_posarg_nargs1():
     p = argparse.Parser()
-    p.add_arg("infile", "input file", "+")
-    p.add_arg("outfile", "output file", "?")
+    p.add_arg("infile", "input file", True, "+")
+    p.add_arg("outfile", "output file", True, "?")
 
     args = p.parse(["./app", "in1", "in2", "bar"])
     if args.get_strlist("infile") != ["in1", "in2"]:
@@ -67,8 +67,8 @@ def test_posarg_nargs1():
 
 def test_posarg_nargs2():
     p = argparse.Parser()
-    p.add_arg("infile", "input file", "?")
-    p.add_arg("outfile", "output file", "+")
+    p.add_arg("infile", "input file", True, "?")
+    p.add_arg("outfile", "output file", True, "+")
 
     args = p.parse(["./app", "in1", "out1", "out2"])
     if args.get_str("infile") != "in1":
@@ -79,22 +79,46 @@ def test_posarg_nargs2():
 
 def test_posarg_nargs_invalid():
     p = argparse.Parser()
-    p.add_arg("infile", "input file", "+")
+    p.add_arg("infile", "input file", True, "+")
     try:
-        p.add_arg("outfile", "output file", "+")
+        p.add_arg("outfile", "output file", True, "+")
     except argparse.ArgumentError:
         return
     raise ValueError("Expected ArgumentError since multiple nargs=+ args is invalid (ambiguous)")
 
 def test_posarg_missing():
     p = argparse.Parser()
-    p.add_arg("infile", "input file", "?")
+    p.add_arg("infile", "input file", True, "?")
 
     try:
         p.parse(["./app"])
     except argparse.ArgumentError:
         return
     raise ValueError("Expected ArgumentError since positional argument is missing")
+
+def test_posarg_not_required1():
+    p = argparse.Parser()
+    p.add_arg("infile", "input file", False, "?")
+    p.add_arg("outfile", "output file", False, "?")
+
+    args = p.parse(["./app", "foo", "bar"])
+    if args.get_str("infile") != "foo":
+        raise ValueError("pos arg infile != foo")
+    if args.get_str("outfile") != "bar":
+        raise ValueError("pos arg outfile != bar")
+
+def test_posarg_not_required2():
+    p = argparse.Parser()
+    p.add_arg("infile", "input file", False, "?")
+
+    # These should both work fine
+    args = p.parse(["./app"])
+    try:
+        args.get_str("infile")
+    except argparse.ArgumentError:
+        return
+    raise ValueError("Expected ArgumentError since optional positional argument is missing")
+
 
 actor Foo():
     def foo():
@@ -161,6 +185,8 @@ actor main(env):
         test_posarg_nargs1()
         test_posarg_nargs2()
         test_posarg_missing()
+        test_posarg_not_required1()
+        test_posarg_not_required2()
         test_cmd()
         #test_cmd_nested()
         test_help()

@@ -2,8 +2,12 @@
 
 ## Unreleased
 
+### Added
+- `argparse` now supports optional positional arguments
+  - like so: `p.add_arg("foo", "Foo thing", required=False, nargs="?")`
+
 ### Fixed
-- Homebrew Formula now somewhat decoupled from Stack version
+- Homebrew Formula now somewhat decoupled from Stack version [#1627]
   - Idiomatic Homebrew Formulas use system-ghc, i.e. a GHC version installed by
     Homebrew itself and not from Stack. Since we specify a Stack LTS resolver,
     which is a coupled to a particular version of GHC, there is room for a
