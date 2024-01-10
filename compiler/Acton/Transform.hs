@@ -62,7 +62,6 @@ wtrans env (Assign l p@[PVar _ n (Just t)] e : ss)
         e1                              = trans env e
 wtrans env (s:ss)                       = trans env s : wtrans env ss
 wtrans env []                           = []
-                                
 
 instance (Transform a) => Transform [a] where
     trans env                           = map (trans env)
@@ -124,7 +123,7 @@ instance Transform Expr where
     trans env (Call l e p k)
       | Lambda{} <- e',
         Just s1 <- pzip (ppar e') p',
-        Just s2 <-  kzip (kpar e') k'   = termsubst (s1++s2) (exp1 e')      -- TODO: check that e' is linear in all its parameters!
+        Just s2 <- kzip (kpar e') k'    = termsubst (s1++s2) (exp1 e')      -- TODO: check that e' is linear in all its parameters!
       | TApp _ e0 ts <- e',
         Just e1 <- transCall e0 ts es   = e1
       | otherwise                       = Call l e' p' k'
@@ -144,7 +143,7 @@ instance Transform Expr where
     trans env (CompOp l e ops)          = CompOp l (trans env e) (trans env ops)
     trans env (UnOp l op e)             = UnOp l op (trans env e)
     trans env (Dot l e n)
-      | Tuple{} <- e'                   = trans env (kwditem n $ kargs e')                  -- TODO: outrule side-effects in e
+      | Tuple{} <- e'                   = kwditem n $ kargs e'                              -- TODO: outrule side-effects in e
       | otherwise                       = Dot l e' n
       where e'                          = trans env e
     trans env (Rest l e n)
@@ -152,7 +151,7 @@ instance Transform Expr where
       | otherwise                       = Rest l e' n
       where e'                          = trans env e
     trans env (DotI l e i)
-      | Tuple{} <- e'                   = trans env (positem i $ pargs e')                  -- TODO: outrule side-effects in e
+      | Tuple{} <- e'                   = positem i $ pargs e'                              -- TODO: outrule side-effects in e
       | otherwise                       = DotI l e' i
       where e'                          = trans env e
     trans env (RestI l e i)

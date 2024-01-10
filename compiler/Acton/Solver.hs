@@ -487,9 +487,10 @@ solveImpl env wit w t p                     = do (cs,t',we) <- instWitness env p
 solveSelAttr env (wf,sc,d) c@(Sel info w t1 n t2)
                                             = do (cs,tvs,t) <- instantiate env sc
                                                  when (tvSelf `elem` snd (polvars t)) (tyerr n "Contravariant Self attribute not selectable by instance")
-                                                 let e = eLambda [(px0,t1)] (app t (tApp (eDot (wf $ eVar px0) n) tvs) $ witsOf cs)
-                                                 cast env (DfltInfo (loc c) 8 Nothing []) (subst [(tvSelf,t1)] t) t2
-                                                 return ([Eqn w (wFun t1 t2) e], cs)
+                                                 w' <- newWitness
+                                                 let e = eLambda [(px0,t1)] (eCallVar w' [app t (tApp (eDot (wf $ eVar px0) n) tvs) $ witsOf cs])
+                                                     c = Sub (DfltInfo (loc c) 8 Nothing []) w' (subst [(tvSelf,t1)] t) t2
+                                                 return ([Eqn w (wFun t1 t2) e], c:cs)
 
 --  e1.__setslice__(sl, e2)
 --  e1.__setslice__(w_Iterable, sl, e2)
@@ -509,9 +510,10 @@ solveSelWit env (p,we) c@(Sel info w t1 n t2)
                                             = do let Just (wf,sc,d) = findAttr env p n
                                                  (cs,tvs,t) <- instantiate env sc
                                                  when (tvSelf `elem` snd (polvars t)) (tyerr n "Contravariant Self attribute not selectable by instance")
-                                                 let e = eLambda [(px0,t1)] (app t (tApp (eDot (wf we) n) tvs) $ eVar px0 : witsOf cs)
-                                                 cast env (DfltInfo (loc c) 9 Nothing []) (subst [(tvSelf,t1)] t) t2
-                                                 return ([Eqn w (wFun t1 t2) e], cs)
+                                                 w' <- newWitness
+                                                 let e = eLambda [(px0,t1)] (eCallVar w' [app t (tApp (eDot (wf we) n) tvs) $ eVar px0 : witsOf cs])
+                                                     c = Sub (DfltInfo (loc c) 9 Nothing []) w' (subst [(tvSelf,t1)] t) t2
+                                                 return ([Eqn w (wFun t1 t2) e], c:cs)
 
 solveMutAttr env (wf,sc,dec) c@(Mut info t1 n t2)
                                             = do when (dec /= Just Property) (noMut n)
