@@ -2072,11 +2072,37 @@ void print_trace() {
         dup2(2, 1); // redirect output to stderr
         // TODO: enable using LLDB for MacOS support
         //execlp("lldb", "lldb", "-p", pid_buf, "--batch", "-o", "thread backtrace all", "-o", "exit", "--one-line-on-crash", "exit", name_buf, NULL);
-        execlp("gdb", "gdb", "--batch", "-n", "-ex", "thread", "-ex", "thread apply all backtrace full", name_buf, pid_buf, NULL);
+        execlp("gdb", "gdb", "--quiet", "--batch", "-n", "-ex", "thread", "-ex", "thread apply all backtrace full", name_buf, pid_buf, NULL);
         fprintf(stderr, "Unable to get detailed backtrace using lldb or gdb");
         exit(0); /* If lldb/gdb failed to start */
     } else {
         waitpid(child_pid, NULL, 0);
+    }
+}
+
+void launch_debugger(int signum) {
+    if (signum == SIGILL)
+        fprintf(stderr, "\nERROR: illegal instruction\n");
+    if (signum == SIGSEGV)
+        fprintf(stderr, "\nERROR: segmentation fault\n");
+    fprintf(stderr, "Starting interactive debugger...\n", pthread_self());
+    char pid_buf[30];
+    sprintf(pid_buf, "%d", getpid());
+    char name_buf[512];
+    name_buf[readlink("/proc/self/exe", name_buf, 511)]=0;
+#ifdef __linux__
+    prctl(PR_SET_PTRACER, PR_SET_PTRACER_ANY, 0, 0, 0);
+#endif
+    int child_pid = fork();
+    if (!child_pid) {
+        char findthread[40] = "thread find ";
+        sprintf(findthread + strlen(findthread), "%p", pthread_self());
+        execlp("gdb", "gdb", "--quiet", "-n", "-ex", findthread, name_buf, pid_buf, NULL);
+        fprintf(stderr, "Unable to get detailed backtrace using lldb or gdb");
+        exit(0); /* If lldb/gdb failed to start */
+    } else {
+        waitpid(child_pid, NULL, 0);
+        exit(0);
     }
 }
 
@@ -2190,6 +2216,7 @@ int main(int argc, char **argv) {
     long num_cores = sysconf(_SC_NPROCESSORS_ONLN);
     bool mon_on_exit = false;
     bool auto_backtrace = true;
+    bool interactive_backtrace = true;
     char *log_path = NULL;
     FILE *logf = NULL;
     bool log_stderr = false;
@@ -2216,9 +2243,7 @@ int main(int argc, char **argv) {
     // socket (which is a Unix domain socket) goes away.
     sa_pipe.sa_handler = SIG_IGN;
     // Handle signals
-    sa_ill.sa_handler = &sigillsegv_handler;
     sa_int.sa_handler = &sigint_handler;
-    sa_segv.sa_handler = &sigillsegv_handler;
     sa_term.sa_handler = &sigterm_handler;
 
     if (sigaction(SIGPIPE, &sa_pipe, NULL) == -1) {
@@ -2264,6 +2289,7 @@ int main(int argc, char **argv) {
      * argument or it does not.
      */
     static struct option long_options[] = {
+        {"rts-bt-dbg", NULL, 'x', "Interactively debug on SIGILL / SIGSEGV"},
         {"rts-debug", NULL, 'd', "RTS debug, requires program to be compiled with --dev"},
         {"rts-ddb-host", "HOST", 'h', "DDB hostname"},
         {"rts-ddb-port", "PORT", 'p', "DDB port [32000]"},
@@ -2398,9 +2424,20 @@ int main(int argc, char **argv) {
             case 'w':
                 num_wthreads = atoi(optarg);
                 break;
+            case 'x':
+                interactive_backtrace = true;
+                break;
         }
     }
     new_argv[new_argc] = NULL;
+
+    if (interactive_backtrace) {
+        sa_ill.sa_handler = &launch_debugger;
+        sa_segv.sa_handler = &launch_debugger;
+    } else {
+        sa_ill.sa_handler = &sigillsegv_handler;
+        sa_segv.sa_handler = &sigillsegv_handler;
+    }
 
     if (auto_backtrace) {
         if (sigaction(SIGILL, &sa_ill, NULL) == -1) {
