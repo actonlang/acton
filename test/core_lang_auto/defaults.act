@@ -117,19 +117,15 @@ actor main(env):
 
     # Test class method
     b = Bar()
-    # TODO: Fix this
-#    gout1 = b.f('hello')
+    gout1 = b.f('hello')
     gout2 = b.f('hello', 'you')
     gout3 = b.f('hello', y='there')
     gout4 = b.f(x='hello', y='there')
-    # TODO: Fix this
-#    gout5 = b.f(y='there', x='hello')
+    gout5 = b.f(y='there', x='hello')
     gout6 = b.f('hello', None)
-    # TODO: Fix this
-#    gout7 = b.f(x='hello')
+    gout7 = b.f(x='hello')
     gout8 = b.f(x='hello', y=None)
-    # TODO: Fix this
-#    gout9 = b.f(y=None, x='hello')
+    gout9 = b.f(y=None, x='hello')
 
 #    print(gout1)
 #    print(gout2)
@@ -141,9 +137,9 @@ actor main(env):
 #    print(gout8)
 #    print(gout9)
 
-#    if gout1 != "hello, world":
-#        print("Bad 1:", gout1)
-#        env.exit(1)
+    if gout1 != "hello, world":
+        print("Bad 1:", gout1)
+        env.exit(1)
     if gout2 != "hello, you":
         print("Bad 2:", gout2)
         env.exit(1)
@@ -153,21 +149,21 @@ actor main(env):
     if gout4 != "hello, there":
         print("Bad 4:", gout4)
         env.exit(1)
-#    if gout5 != "hello, there":
-#        print("Bad 5:", gout5)
-#        env.exit(1)
+    if gout5 != "hello, there":
+        print("Bad 5:", gout5)
+        env.exit(1)
     if gout6 != "hello, world":
         print("Bad 6:", gout6)
         env.exit(1)
-#    if gout7 != "hello, world":
-#        print("Bad 7:", gout7)
-#        env.exit(1)
+    if gout7 != "hello, world":
+        print("Bad 7:", gout7)
+        env.exit(1)
     if gout8 != "hello, world":
         print("Bad 8:", gout8)
         env.exit(1)
-#    if gout9 != "hello, world":
-#        print("Bad 9:", gout9)
-#        env.exit(1)
+    if gout9 != "hello, world":
+        print("Bad 9:", gout9)
+        env.exit(1)
 
 
     print("All is well")
