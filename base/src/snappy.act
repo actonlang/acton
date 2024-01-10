@@ -1,0 +1,9 @@
+def compress(data: bytes) -> bytes:
+    """Compress data using Snappy
+    """
+    NotImplemented
+
+def uncompress(data: bytes) -> bytes:
+    """Decompress Snappy data
+    """
+    NotImplemented
