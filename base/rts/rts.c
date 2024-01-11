@@ -2216,7 +2216,7 @@ int main(int argc, char **argv) {
     long num_cores = sysconf(_SC_NPROCESSORS_ONLN);
     bool mon_on_exit = false;
     bool auto_backtrace = true;
-    bool interactive_backtrace = true;
+    bool interactive_backtrace = false;
     char *log_path = NULL;
     FILE *logf = NULL;
     bool log_stderr = false;
