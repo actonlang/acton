@@ -1,0 +1,4 @@
+def f(x,y,*z,w):
+    return x
+
+a = f(3,w=6)
