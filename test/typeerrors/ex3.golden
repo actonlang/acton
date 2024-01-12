@@ -1,7 +1,7 @@
-Building file ../test/typeerrors/ex1.act
-  Compiling ex1.act for release
+Building file ../test/typeerrors/ex3.act
+  Compiling ex3.act for release
 
-ERROR: Error when compiling ex1 module: Type error
+ERROR: Error when compiling ex3 module: Type error
 
   |
 1 |def f(x,y):
@@ -9,8 +9,8 @@ ERROR: Error when compiling ex1 module: Type error
 
 
   |
-4 |a = f(3)
-  |    ^^^^
+4 |a = f(3,x=4)
+  |    ^^^^^^^^
 Type incompatibility between definition of and call of f (keyword argument(s) 'y' is not defined in call)
 
 - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 

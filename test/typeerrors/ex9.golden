@@ -8,7 +8,7 @@ Cannot satisfy the following simultaneous constraints for the unknown types t0, 
   |
 4 |a = f(3,"hej")
   |      ^
-The type of 3 (which we call t0) must implement __builtin__.Number
+The type of the indicated expression (which we call t0) must implement __builtin__.Number
 
   |
 4 |a = f(3,"hej")
@@ -16,16 +16,24 @@ The type of 3 (which we call t0) must implement __builtin__.Number
 f has had its polymorphic type [A(Plus)] => (x: A, y: A) -> A instantiated to (x: t1, y: t1) -> t1, so t1 must implement __builtin__.Plus
 
   |
-4 |a = f(3,"hej")
-  |    ^^^^^^^^^^
-Type incompatibility between definition of and call of f
-f is inferred to have a type of the form [T_6w(__builtin__.Plus)] => (x: T_6w, y: T_6w) -> T_6w
+1 |def f(x,y):
+  |    ^
+
 
   |
 4 |a = f(3,"hej")
   |    ^^^^^^^^^^
-Type incompatibility between definition of and call of f
-f is inferred to have a type of the form [T_6w(__builtin__.Plus)] => (x: T_6w, y: T_6w) -> T_6w
+Type incompatibility between definition of and call of f (t0 must be a subtype of t1)
+
+  |
+1 |def f(x,y):
+  |    ^
+
+
+  |
+4 |a = f(3,"hej")
+  |    ^^^^^^^^^^
+Type incompatibility between definition of and call of f (__builtin__.str must be a subclass of t1)
 
 - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
 

@@ -4,9 +4,9 @@ Building file ../test/typeerrors/ex13.act
 ERROR: Error when compiling ex13 module: Type error
 
   |
-4 |actor Act(s:int,t:str):
-  |                ^
-Keyword element 't' is not found
+2 |  a = Act(7)
+  |      ^^^^^^
+keyword component(s) 't' is not defined in tuple
 
 - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
 

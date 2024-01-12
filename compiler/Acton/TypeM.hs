@@ -114,9 +114,10 @@ data TypeError                      = TypeError SrcLoc String
                                     | RigidVariable TVar
                                     | InfiniteType TVar
                                     | ConflictingRow TVar
-                                    | KwdNotFound Name
-                                    | KwdUnexpected Name
+                                    | KwdNotFound ErrInfo Name
+                                    | KwdUnexpected ErrInfo Name
                                     | PosElemNotFound ErrInfo String
+                                    | IncompatError ErrInfo String
                                     | EscapingVar [TVar] TSchema
                                     | NoSelStatic Name TCon
                                     | NoSelInstByClass Name TCon
@@ -136,8 +137,8 @@ instance HasLoc TypeError where
     loc (RigidVariable tv)          = loc tv
     loc (InfiniteType tv)           = loc tv
     loc (ConflictingRow tv)         = loc tv
-    loc (KwdNotFound n)             = loc n
-    loc (KwdUnexpected n)           = loc n
+    loc (KwdNotFound _ n)           = loc n
+    loc (KwdUnexpected _ n)         = loc n
     loc (PosElemNotFound info s)    = loc info -- NoLoc     -- TODO: supply position
     loc (EscapingVar tvs t)         = loc tvs
     loc (NoSelStatic n u)           = loc n
@@ -150,10 +151,10 @@ instance HasLoc TypeError where
     loc (NoSolve _ _ _)             = NoLoc
     loc (NoUnify info t1 t2)        = loc info
 
-intro b t mbe                          = case mbe of
+intro t mbe                            = case mbe of
                                              Nothing ->  pretty t
-                                             Just e ->  text "The type of" <+>  pretty e <+> (if b then text "(" Pretty.<>
-                                                    (if isGen t then text "which we call" else empty) <+> pretty t Pretty.<> text ")" else empty)
+                                             Just e ->   text "The type of the indicated expression" <+> text "(" Pretty.<>
+                                                           (if isGen t then text "which we call" else text "inferred to be") <+> pretty t Pretty.<> text ")"
    where isGen (TCon _ (TC (NoQ (Name _ ('t' : ds))) [])) = all isDigit ds
          isGen _ = False
          
@@ -161,14 +162,14 @@ explainViolation c                   = case info c of
                                           Simple l s -> text s
                                           DfltInfo l n mbe ts -> -- text (show n)  $+$ 
                                                (case c of 
-                                                  Cast _ t1 t2  -> intro False t1 mbe <+> text "is not a subclass of" <+> pretty t2
-                                                  Sub _ _ t1 t2 -> intro False t1 mbe <+> text "is not a subtype of" <+> pretty t2
-                                                  Impl _ _ t p -> intro False t mbe <+> text "does not implement" <+> pretty p
-                                                  Sel _ _ t n t0 -> intro False t mbe <+> text "does not have an attribute" <+> pretty n <+> text "with type" <+> pretty t0
+                                                  Cast _ t1 t2  -> intro t1 mbe <+> text "is not a subclass of" <+> pretty t2
+                                                  Sub _ _ t1 t2 -> intro t1 mbe <+> text "is not a subtype of" <+> pretty t2
+                                                  Impl _ _ t p -> intro  t mbe <+> text "does not implement" <+> pretty p
+                                                  Sel _ _ t n t0 -> intro t mbe <+> text "does not have an attribute" <+> pretty n <+> text "with type" <+> pretty t0
                                                   _ -> pretty c <+> text "does not hold") 
-                                          DeclInfo _ _ n sc msg -> text msg $+$ pretty n <+> text "is inferred to have a type of the form"<+> pretty sc
+                                          DeclInfo _ _ n sc msg -> text msg  -- $+$ pretty n <+> text "is inferred to have type"<+> pretty sc
 
-explainRequirement b c                = case info c of
+explainRequirement c                = case info c of
                                           Simple l s -> text s
                                           DfltInfo l n mbe ts ->
                                              (if ts /= []
@@ -177,13 +178,13 @@ explainRequirement b c                = case info c of
                                                                     
                                               else empty) Pretty.<> 
                                                (case c of
-                                                   Cast _ t1 t2 -> intro b t1 mbe <+> text "must be a subclass of" <+> pretty t2
-                                                   Sub i _ t1 t2 -> intro b t1 mbe <+> text "must be a subtype of" <+> pretty t2 
-                                                   Impl _ _ t p -> intro b t mbe <+> text "must implement" <+> pretty p
-                                                   Sel _ _ t n t0 -> intro b t mbe <+> text "must have an attribute" <+> pretty n <+> text "with type" <+> pretty t0
+                                                   Cast _ t1 t2 -> intro t1 mbe <+> text "must be a subclass of" <+> pretty t2
+                                                   Sub i _ t1 t2 -> intro t1 mbe <+> text "must be a subtype of" <+> pretty t2 
+                                                   Impl _ _ t p -> intro t mbe <+> text "must implement" <+> pretty p
+                                                   Sel _ _ t n t0 -> intro t mbe <+> text "must have an attribute" <+> pretty n <+> text "with type" <+> pretty t0
                                                                           Pretty.<> text "; no such type is known."
                                                    _ -> pretty c <+> text "must hold")  
-                                          DeclInfo _ _ n sc msg -> text msg  $+$ pretty n <+> text "is inferred to have a type of the form"<+> pretty sc
+                                          DeclInfo _ _ n sc msg -> text msg   -- $+$ pretty n <+> text "is inferred to have type"<+> pretty sc
 
 
 
@@ -202,8 +203,8 @@ typeError (TypeError l str)          = [(l, str)]
 typeError (RigidVariable tv)         = [(loc tv, render (text "Type" <+> pretty tv <+> text "is rigid"))]
 typeError (InfiniteType tv)          = [(loc tv, render (text "Type" <+> pretty tv <+> text "is infinite"))]
 typeError (ConflictingRow tv)        = [(loc tv, render (text "Type" <+> pretty tv <+> text "has conflicting extensions"))]
-typeError (KwdNotFound n)            = [(loc n, render (text "Keyword element" <+> quotes (pretty n) <+> text "is not found"))]
-typeError (KwdUnexpected n)          = [(loc n, render (text "Keyword element" <+> quotes (pretty n) <+> text "is not expected"))]
+typeError (KwdNotFound _ n)          = [(loc n, render (text "Keyword element" <+> quotes (pretty n) <+> text "is not found"))]
+typeError (KwdUnexpected _ n)        = [(loc n, render (text "Keyword element" <+> quotes (pretty n) <+> text "is not expected"))]
 typeError (PosElemNotFound info s)   = [(loc info, s)]
 typeError (EscapingVar tvs t)        = [(loc tvs, render (text "Type annotation" <+> pretty t <+> text "is too general, type variable" <+>
                                         pretty (head tvs) <+> text "escapes"))]
@@ -213,28 +214,31 @@ typeError (NoMut n)                  = [(loc n, render (text "Non @property attr
 typeError (LackSig n)                = [(loc n, render (text "Declaration lacks accompanying signature"))]
 typeError (LackDef n)                = [(loc n, render (text "Signature lacks accompanying definition"))]
 typeError (NoRed c)
-    | DeclInfo l1 l2 _ _ _ <- info c = [(l1,""), (l2,render (explainViolation c))]
-    | otherwise                      = [(loc c, render (explainViolation c))]
+    | DeclInfo l1 l2 _ _ _ <- info c = [(min l1 l2,""), (max l1 l2,render (explainRequirement c <+> parens (explainRequirement c{info = dummyInfo})))]
+    | otherwise                      = [(loc c, render (explainRequirement c))]
 typeError (NoSolve mbt vs cs)        = case length cs of
                                            0 -> [(NoLoc, "Unable to give good error message: please report example")]
-                                           1 ->  (NoLoc, "Cannot satisfy the following constraint:\n") : map (mkReq False) cs
+                                           1 ->  (NoLoc, "Cannot satisfy the following constraint:\n") : concatMap mkReq cs
                                            _ ->  (NoLoc, "Cannot satisfy the following simultaneous constraints for the unknown "
                                                          ++ (if length vs==1 then "type " else "types ") ++ render(commaList vs)  ++":\n")
-                                                : map (mkReq True) cs
-         where mkReq b c             = (loc c, render (explainRequirement b c))
-               fst3 (a,_,_)          = a
-
+                                                : concatMap mkReq cs
+         where mkReq                 = typeError . NoRed
 typeError (NoUnify info t1 t2)       = case (loc t1, loc t2) of
                                           (l1@Loc{},l2@Loc{}) -> [(l1, ""),(l2,render(text "Incompatible types" <+> pretty t1 <+> text "and" <+> pretty t2))]
                                           _ ->  [(getLoc[loc info, loc t1, loc t2],render(text "Incompatible types" <+> pretty t1 <+> text "and" <+> pretty t2))]
+typeError (IncompatError info msg)   = case info of
+                                           DeclInfo l1 l2 f sc _ -> [(min l1 l2,""),(max l1 l2,msg)]
+                                           _ -> [(loc info, msg)]
+
+
 
 tyerr x s                           = throwError $ TypeError (loc x) (s ++ " " ++ prstr x)
 tyerrs xs s                         = throwError $ TypeError (loc $ head xs) (s ++ " " ++ prstrs xs)
 rigidVariable tv                    = throwError $ RigidVariable tv
 infiniteType tv                     = throwError $ InfiniteType tv
 conflictingRow tv                   = throwError $ ConflictingRow tv
-kwdNotFound info n                  = throwError $ KwdNotFound n
-kwdUnexpected info n                = throwError $ KwdUnexpected n
+kwdNotFound info n                  = throwError $ incompatError info (render(text ("keyword " ++elemSpec info) <+> quotes (pretty n) <+> text ("is not defined" ++ elemSuffix info)))
+kwdUnexpected info n                = throwError $ KwdUnexpected info n
 escapingVar tvs t                   = throwError $ EscapingVar tvs t
 noSelStatic n u                     = throwError $ NoSelStatic n u
 noSelInstByClass n u                = throwError $ NoSelInstByClass n u
@@ -246,9 +250,19 @@ noRed c                             = throwError $ NoRed c
 noSolve mbt vs cs                   = throwError $ NoSolve mbt vs cs
 noUnify info t1 t2                  = throwError $ NoUnify info t1 t2
 
-posElemNotFound True c n            = case info c of
-                                        DeclInfo{} -> throwError $ NoRed (c{info = (info c){errmsg = errmsg(info c)++" (too few arguments in call)"}})
-                                        info          -> throwError $ PosElemNotFound info "Too few positional elements"
-posElemNotFound False c n           = case info c of
-                                        DeclInfo{} -> throwError $ NoRed  (c{info = (info c){errmsg = errmsg(info c)++" (too many arguments in call)"}})
-                                        info          -> throwError $ PosElemNotFound info "Too many positional elements"
+posElemNotFound b c n               = throwError $ incompatError (info c) ("too " ++ (if b then "few " else "many positional ") ++ elemSpec (info c) ++ elemSuffix (info c))
+ 
+incompatError info msg             = case info of
+                                        DeclInfo l1 l2 f sc msg1 -> IncompatError info (msg1 ++ " (" ++ msg ++")")
+                                        _ -> IncompatError info msg
+
+elemSpec DeclInfo{}               = "argument(s)"
+elemSpec _                        = "component(s)"
+
+elemSuffix DeclInfo{}             = " in call"
+elemSuffix _                      = " in tuple"
+
+-- elemHint DeclInfo{}               = " Hint: The previous definition may have been implicit, using positional notation."
+-- elemHint _                        = ""
+
+dummyInfo                         = DfltInfo NoLoc 0 Nothing []

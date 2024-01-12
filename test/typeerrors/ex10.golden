@@ -6,7 +6,7 @@ ERROR: Error when compiling ex10 module: Type error
   |
 4 |    except int:
   |    ^^^^^^^^^^
-__builtin__.int is not a subclass of __builtin__.Exception
+__builtin__.int must be a subclass of __builtin__.Exception
 
 - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
 

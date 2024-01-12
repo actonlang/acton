@@ -11,8 +11,7 @@ ERROR: Error when compiling ex22 module: Type error
 3 |def f(x,y):
 4 |    return x
   |
-Type incompatibility between signature for and definition of f (too few arguments in call)
-f is inferred to have a type of the form _(x: _, y: _) -> _
+Type incompatibility between signature for and definition of f (too few argument(s) in call)
 
 - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
 

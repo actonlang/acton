@@ -4,9 +4,14 @@ Building file ../test/typeerrors/ex5.act
 ERROR: Error when compiling ex5 module: Type error
 
   |
-1 |def f(x,y):
-  |        ^
-Keyword element 'y' is not found
+4 |def apply(g,x):
+  |    ^^^^^
+
+
+  |
+7 |a = apply(f,3)
+  |    ^^^^^^^^^^
+Type incompatibility between definition of and call of apply (keyword argument(s) 'y' is not defined in call)
 
 - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
 

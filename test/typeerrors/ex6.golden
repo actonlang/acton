@@ -6,7 +6,7 @@ ERROR: Error when compiling ex6 module: Type error
   |
 1 |(a,b) = (1,3,5)
   |        ^^^^^^^
-Too many positional elements
+too many positional component(s) in tuple
 
 - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
 
