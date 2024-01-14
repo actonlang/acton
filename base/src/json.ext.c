@@ -59,7 +59,6 @@ void jsonQ_encode_list(yyjson_mut_doc *doc, yyjson_mut_val *node, B_list data) {
                 yyjson_mut_arr_add_int(doc, node, from$int((B_int)v));
                 break;
             case FLOAT_ID:;
-                log_debug("jsonQ_encode_list: float, value: %f", fromB_float((B_float)v));
                 yyjson_mut_arr_add_real(doc, node, fromB_float((B_float)v));
                 break;
             case BOOL_ID:;

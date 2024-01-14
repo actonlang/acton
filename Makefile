@@ -401,6 +401,9 @@ clean-base:
 	rm -rf base/build-cache base/out builder/build_runner* builder/builder* builder/zig-cache builder/zig-out
 	rm -rf $(OFILES) builtin/__builtin__.h builtin/__builtin__.c builtin/ty/out stdlib/out/
 
+bin/acton: bin/acton.act distribution1
+	$(ACTC) bin/acton.act
+
 # == DIST ==
 #
 
@@ -416,6 +419,11 @@ dist/base: base dist/lib/dev/libActon.a
 	@mkdir -p $@
 	cp -r base/Acton.toml base/builtin base/out base/rts base/src base/stdlib dist/base/
 
+dist/bin/acton: bin/acton
+	@mkdir -p $(dir $@)
+	cp $< $@.tmp
+	mv $@.tmp $@
+
 # This does a little hack, first copying and then moving the file in place. This
 # is to avoid an error if the executable is currently running. cp tries to open
 # the file and modify it, which the Linux kernel (and perhaps others?) will
@@ -428,6 +436,7 @@ dist/bin/actonc: compiler/actonc $(DIST_ZIG)
 
 #
 dist/bin/actondb: $(DIST_ZIG) $(DEPS) $(DIST_INC)
+	@mkdir -p $(dir $@)
 	$(ZIG) build --build-file $(TD)/dist/backend/build.zig $(ZIG_TARGET) --prefix $(TD)/dist/depsout -Dsyspath_include=$(TD)/dist/depsout/include
 	mv $(TD)/dist/depsout/bin/actondb $@
 	rmdir $(TD)/dist/depsout/bin
@@ -479,9 +488,11 @@ else
 	curl -o $@ https://ziglang.org/download/$(ZIG_VERSION)/zig-$(OS)-$(ARCH)-$(ZIG_VERSION).tar.xz
 endif
 
-.PHONY: distribution clean-distribution
-distribution: dist/base $(DIST_BACKEND_FILES) $(DEPSA) dist/lib/dev/libActon.a dist/lib/rel/libActon.a dist/builder $(DIST_INC) $(DIST_BINS) $(DIST_HFILES) $(DIST_ZIG)
+.PHONY: distribution1 distribution clean-distribution
+distribution1: dist/base $(DIST_BACKEND_FILES) $(DEPSA) dist/lib/dev/libActon.a dist/lib/rel/libActon.a dist/builder $(DIST_INC) $(DIST_BINS) $(DIST_HFILES) $(DIST_ZIG)
 	$(MAKE) $(DIST_DEPS)
+
+distribution: dist/bin/acton
 
 clean-distribution:
 	rm -rf dist
