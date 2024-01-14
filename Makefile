@@ -32,8 +32,10 @@ endif
 BUILD_TIME=$(shell date "+%Y%m%d.%-H.%-M.%-S")
 ifdef BUILD_RELEASE
 export VERSION_INFO?=$(VERSION)
+export DEB_DIST=stable
 else
 export VERSION_INFO?=$(VERSION).$(BUILD_TIME)
+export DEB_DIST=tip
 endif
 
 ifdef CPEDANTIC
@@ -516,7 +518,7 @@ install:
 
 .PHONY: debian/changelog
 debian/changelog: debian/changelog.in CHANGELOG.md
-	cat $< | sed 's/VERSION/$(VERSION_INFO)/' > $@
+	cat $< | sed -e 's/VERSION/$(VERSION_INFO)/' -e 's/DEB_DIST/$(DEB_DIST)/' > $@
 
 .PHONY: debs
 debs: debian/changelog

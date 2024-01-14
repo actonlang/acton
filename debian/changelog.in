@@ -1,4 +1,4 @@
-acton (VERSION) stable; urgency=medium
+acton (VERSION) DEB_DIST; urgency=medium
 
   * See CHANGELOG.md
 
