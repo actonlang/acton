@@ -506,8 +506,6 @@ jobs:
       - name: Install build prerequisites
         run: |
           apt-get update
-          apt-get install -qy git-lfs
-          git lfs install
           apt-get install -qy -t experimental reprepro
           apt-get install -qy git gnupg
       - name: Check out code of aptip.acton-lang.io repo
