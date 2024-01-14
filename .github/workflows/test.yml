@@ -492,6 +492,55 @@ jobs:
           git commit -a -m "Add Acton v${{steps.get_version.outputs.version}}"
           git push
 
+  # Update apt tip repo
+  update-apt-tip-repo:
+    # Only run on the main branch
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    container:
+      image: debian:experimental
+    permissions:
+      contents: write
+    needs: [test-macos, test-linux, build-debs]
+    steps:
+      - name: Install build prerequisites
+        run: |
+          apt-get update
+          apt-get install -qy git-lfs
+          git lfs install
+          apt-get install -qy -t experimental reprepro
+          apt-get install -qy git gnupg
+      - name: Check out code of aptip.acton-lang.io repo
+        uses: actions/checkout@v3
+        with:
+          repository: actonlang/aptip.acton-lang.io
+          path: apt
+          ssh-key: ${{ secrets.APT_TIP_DEPLOY_KEY }}
+      - name: "Download artifacts for Debian Linux"
+        uses: actions/download-artifact@v3
+        with:
+          name: acton-debs
+      - name: "Get the version"
+        id: get_version
+        run: |
+          echo "VERSION=$(ls deb/*.changes | sed -e 's/.*acton_//' -e 's/_amd64.*//')" >> $GITHUB_ENV
+          echo ::set-output name=version::$(ls deb/*.changes | sed -e 's/.*acton_//' -e 's/_amd64.*//')
+      - name: "Move .deb files in place"
+        run: |
+          cd apt
+          mv -v ../deb/* deb/
+      - name: "Configure git"
+        run: |
+          cd apt
+          git config user.name "Apt Bot"
+          git config user.email apt@acton-lang.org
+      - name: "Push updates to git repository for aptip.acton-lang.io"
+        run: |
+          cd apt
+          git add deb/*
+          git status
+          git commit -a -m "Add Acton tip v${VERSION}"
+          git push
 
   # Update our homebrew tap
   update-homebrew:
