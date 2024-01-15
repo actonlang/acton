@@ -24,68 +24,20 @@ unsigned short ushortpow(unsigned short a, unsigned short e) {
 
 // General methods ///////////////////////////////////////////////////////////////////////
 
-B_u16 B_u16G_new(B_atom a) {
-    if ($ISINSTANCE(a,B_int)->val){
-        zz_struct n = ((B_int)a)-> val;
-        if (n.size < 0 || n.size > 1) {
-            $RAISE((B_BaseException)$NEW(B_ValueError,to$str("u16(): int argument out of range")));
-        }
-        return toB_u16(n.size*n.n[0]);
+B_u16 B_u16G_new(B_atom a, B_int base) {
+    B_int b = B_intG_new(a, base);
+    unsigned long n = b->val.n[0];
+    long sz = b->val.size;
+    if (sz > 1 || sz < 0 || n > USHRT_MAX) {
+        char errmsg[1024];
+        snprintf(errmsg, sizeof(errmsg), "u16(): value %s out of range for type u16",get_str(&b->val));
+        $RAISE((B_BaseException)$NEW(B_ValueError,to$str(errmsg)));
     }
-    if ($ISINSTANCE(a,B_i64)->val) {
-        long x = ((B_i64)a)->val;
-        if (x < 0 || x > USHRT_MAX) 
-            $RAISE((B_BaseException)$NEW(B_ValueError,to$str("u16(): i64 argument out of range")));
-        return toB_u16((unsigned short)x);
-    }
-    if ($ISINSTANCE(a,B_i32)->val) {
-        int x = ((B_i32)a)->val;
-        if (x < 0 || x > USHRT_MAX) 
-            $RAISE((B_BaseException)$NEW(B_ValueError,to$str("u16(): i32 argument out of range")));
-        return toB_u16((unsigned short)x);
-    }
-    if ($ISINSTANCE(a,B_i16)->val) {
-        short x = ((B_i16)a)->val;
-        if (x < 0) 
-            $RAISE((B_BaseException)$NEW(B_ValueError,to$str("u16(): i16 argument out of range")));
-        return toB_u16((unsigned short)x);
-    }
-    if ($ISINSTANCE(a,B_u64)->val) {
-        unsigned long x = ((B_u64)a)->val;
-        if (x > USHRT_MAX) 
-            $RAISE((B_BaseException)$NEW(B_ValueError,to$str("u16(): u64 argument out of range")));
-        return toB_u16((unsigned short)x);
-    }
-    if ($ISINSTANCE(a,B_u32)->val) {
-        unsigned int x = ((B_u32)a)->val;
-        if (x > USHRT_MAX) 
-            $RAISE((B_BaseException)$NEW(B_ValueError,to$str("u16(): u32 argument out of range")));
-        return toB_u16((unsigned short)x);
-    }
-    if ($ISINSTANCE(a,B_u16)->val)return (B_u16)a;
-    if ($ISINSTANCE(a,B_float)->val) {
-        short x = round(((B_float)a)->val);
-        if (x<0)
-           $RAISE((B_BaseException)$NEW(B_ValueError,to$str("u16(): negative float argument")));
-        else
-            return toB_u16((unsigned short)x);
-    }
-    if ($ISINSTANCE(a,B_bool)->val) return toB_u16((unsigned short)((B_bool)a)->val);
-    if ($ISINSTANCE(a,B_str)->val) {
-        unsigned short x;
-        int c;
-        sscanf((char *)((B_str)a)->str,"%hu%n",&x,&c);
-        if (c==((B_str)a)->nbytes)
-            return toB_u16(x);
-        else 
-            $RAISE((B_BaseException)$NEW(B_ValueError,to$str("u16(): invalid str value for type u16")));
-    }
-    fprintf(stderr,"internal error: B_u16G_new: argument not of atomic type");
-    exit(-1);
+    return toB_u16(n);
 }
 
-B_NoneType B_u16D___init__(B_u16 self, B_atom a){
-    self->val = B_u16G_new(a)->val;
+B_NoneType B_u16D___init__(B_u16 self, B_atom a, B_int base){
+    self->val = B_u16G_new(a,base)->val;
     return B_None;
 }
 
@@ -138,7 +90,7 @@ B_complex B_IntegralD_u16D___complex__(B_IntegralD_u16 wit, B_u16 a) {
 }
 
 B_u16 B_IntegralD_u16D___fromatom__(B_IntegralD_u16 wit, B_atom a) {
-    return B_u16G_new(a);
+    return B_u16G_new(a,NULL);
 }
 
 B_u16 B_IntegralD_u16D___mul__(B_IntegralD_u16 wit,  B_u16 a, B_u16 b) {
@@ -212,11 +164,11 @@ $WORD B_IntegralD_u16D_denominator (B_IntegralD_u16 wit, B_u16 n, B_Integral wit
 }
   
 B_int B_IntegralD_u16D___int__ (B_IntegralD_u16 wit, B_u16 n) {
-    return B_intG_new((B_atom)n);
+    return B_intG_new((B_atom)n,NULL);
 }
 
 B_int B_IntegralD_u16D___index__(B_IntegralD_u16 wit, B_u16 n) {
-    return B_intG_new((B_atom)n);
+    return B_intG_new((B_atom)n,NULL);
 }
 
 B_tuple B_IntegralD_u16D___divmod__(B_IntegralD_u16 wit, B_u16 a, B_u16 b) {

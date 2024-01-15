@@ -24,42 +24,20 @@ long longpow(long a, long e) {
 
 // General methods ///////////////////////////////////////////////////////////////////////
 
-B_i64 B_i64G_new(B_atom a) {
-    if ($ISINSTANCE0(a,B_int)){
-        zz_struct n = ((B_int)a)-> val;
-        if (n.n[0] > LONG_MAX || (labs(n.size))>1) {
-            $RAISE((B_BaseException)$NEW(B_ValueError,to$str("i64(): int argument out of range")));
-        }
-        return toB_i64(n.size*n.n[0]);
+B_i64 B_i64G_new(B_atom a, B_int base) {
+    B_int b = B_intG_new(a, base);
+    unsigned long n = b->val.n[0];
+    long sz = b->val.size;
+    if (labs(sz) > 1 || (sz==1 && n > LONG_MAX) || sz == -1 && n > labs(LONG_MIN)) {
+        char errmsg[1024];
+        snprintf(errmsg, sizeof(errmsg), "i64(): value %s out of range for type i64",get_str(&b->val));
+        $RAISE((B_BaseException)$NEW(B_ValueError,to$str(errmsg)));
     }
-    if ($ISINSTANCE0(a,B_i64)) return (B_i64)a;
-    if ($ISINSTANCE0(a,B_i32)) return toB_i64((long)((B_i32)a)->val);
-    if ($ISINSTANCE0(a,B_i16)) return toB_i64((long)((B_i16)a)->val);
-    if ($ISINSTANCE0(a,B_u64)) {
-        unsigned long x = ((B_u64)a)->val;
-        if (x > LONG_MAX) 
-            $RAISE((B_BaseException)$NEW(B_ValueError,to$str("i64(): u64 argument out of range")));
-        return toB_i64((long)x);
-    }
-    if ($ISINSTANCE0(a,B_u32)) return toB_i64((long)((B_u32)a)->val);
-    if ($ISINSTANCE0(a,B_u16)) return toB_i64((long)((B_u16)a)->val);
-    if ($ISINSTANCE0(a,B_float)) return toB_i64(round(((B_float)a)->val));
-    if ($ISINSTANCE0(a,B_bool)) return toB_i64(((B_bool)a)->val);
-    if ($ISINSTANCE0(a,B_str)) {
-        long x;
-        int c;
-        sscanf((char *)((B_str)a)->str,"%ld%n",&x,&c);
-        if (c==((B_str)a)->nbytes)
-            return toB_i64(x);
-        else 
-            $RAISE((B_BaseException)$NEW(B_ValueError,to$str("int(): invalid str value for type int")));
-    }
-    fprintf(stderr,"internal error: B_i64G_new: argument not of atomic type");
-    exit(-1);
+    return toB_i64(n);
 }
-
-B_NoneType B_i64D___init__(B_i64 self, B_atom a){
-    self->val = B_i64G_new(a)->val;
+ 
+B_NoneType B_i64D___init__(B_i64 self, B_atom a, B_int base){
+    self->val = B_i64G_new(a,base)->val;
     return B_None;
 }
 
@@ -112,7 +90,7 @@ B_complex B_IntegralD_i64D___complex__(B_IntegralD_i64 wit, B_i64 a) {
 }
 
 B_i64 B_IntegralD_i64D___fromatom__(B_IntegralD_i64 wit, B_atom a) {
-    return B_i64G_new(a);
+    return B_i64G_new(a,NULL);
 }
 
 B_i64 B_IntegralD_i64D___mul__(B_IntegralD_i64 wit,  B_i64 a, B_i64 b) {
@@ -190,11 +168,11 @@ $WORD B_IntegralD_i64D_denominator (B_IntegralD_i64 wit, B_i64 n, B_Integral wit
 }
   
 B_int B_IntegralD_i64D___int__ (B_IntegralD_i64 wit, B_i64 n) {
-    return B_intG_new((B_atom)n);
+    return B_intG_new((B_atom)n,NULL);
 }
 
 B_int B_IntegralD_i64D___index__(B_IntegralD_i64 wit, B_i64 n) {
-    return B_intG_new((B_atom)n);
+    return B_intG_new((B_atom)n,NULL);
 }
 
 B_tuple B_IntegralD_i64D___divmod__(B_IntegralD_i64 wit, B_i64 a, B_i64 b) {

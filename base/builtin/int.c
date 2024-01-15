@@ -17,8 +17,7 @@
 
 // General methods ///////////////////////////////////////////////////////////////////////
 
-int set_str(zz_ptr a, char *str);
-char *get_str(zz_ptr n);
+int set_str(zz_ptr a, unsigned char *str, B_int intbase);
 
 B_int malloc_int() {
     B_int res = malloc(sizeof(struct B_int));
@@ -31,7 +30,20 @@ B_int malloc_int() {
 
 B_int B_IntegralD_intD___lshift__(B_IntegralD_int wit,  B_int a, B_int b);
 
-B_int B_intG_new(B_atom a) {
+B_int B_intG_new(B_atom a, B_int base) {
+    if(base) {
+        if ($ISINSTANCE0(a,B_str)) {
+            B_int res = malloc_int();
+            res->$class = &B_intG_methods;
+            set_str(&res->val, ((B_str)a)->str, base);
+            return res;
+        } else {
+            char errmsg[1024];
+            printf("in exception branch");
+            snprintf(errmsg, sizeof(errmsg), "integer type constructor: base argument is only allowed when converting from a str");
+            $RAISE($NEW(B_BaseException,to$str(errmsg)));
+        }
+    }
     if ($ISINSTANCE0(a,B_int)) return (B_int)a;
     if ($ISINSTANCE0(a,B_i64)) {
         return to$int(((B_i64)a)->val);
@@ -93,15 +105,15 @@ B_int B_intG_new(B_atom a) {
     if ($ISINSTANCE0(a,B_str)) {
         B_int res = malloc_int();
         res->$class = &B_intG_methods;
-        set_str(&res->val, (char *)((B_str)a)->str);
+        set_str(&res->val, ((B_str)a)->str, base);
         return res;
     }
     fprintf(stderr,"internal error: B_intG_new: argument not of atomic type\n");
     exit(-1);
 }
 
-B_NoneType B_intD___init__(B_int self, B_atom a){
-    self->val = B_intG_new(a)->val;
+B_NoneType B_intD___init__(B_int self, B_atom a, B_int base){
+    self->val = B_intG_new(a,base)->val;
     return B_None;
 }
 
@@ -173,7 +185,7 @@ B_complex B_IntegralD_intD___complex__(B_IntegralD_int wit, B_int a) {
 }
 
 B_int B_IntegralD_intD___fromatom__(B_IntegralD_int wit, B_atom a) {
-    return B_intG_new(a);
+    return B_intG_new(a,NULL);
 }
 
 B_int B_IntegralD_intD___mul__(B_IntegralD_int wit,  B_int a, B_int b) {
@@ -490,18 +502,40 @@ B_int to$int(long n) {
 B_int to$int2(char *str) {
     B_int res = malloc_int();
     res->$class = &B_intG_methods;
-    set_str(&res->val, str);
+    set_str(&res->val, str, NULL);
     return res;
 }
 
 
 // Conversion to strings /////////////////////////////////////////////////////////////////////////////
 
-// These three constants must be changed for a 32 bit machine
-
+// These four constants must be changed for a 32 bit machine
+int WORDSIZE = 64;
 int POW10INWORD = 18; // Largest power of 10 that fits in a signed long 
-double CCCC = 9.805415291306852e-2;  // log2(WORD_BITS) - log2 (POW10INWORD) - log2 (log2(10))
-char * fstr =  "%18lu";
+unsigned char POWINWORD[37] = {0,0,62,39,31,27,24,22,20,19,18,18,17,17,16,16,15,15,15,14,14,14,14,13,13,13,13,13,13,12,12,12,12,12,12,12,12}
+; //POWINWORD[n] is largest power of b that fits in a signed word
+double CCCC = 9.805415291306852e-2;  // log2(WORDSIZE) - log2 (POW10INWORD) - log2 (log2(10))
+
+// n is a valid digit in base b iff digvalue[n] < b.
+unsigned char digvalue[256] = {
+    99, 99, 99, 99, 99, 99, 99, 99, 99, 99, 99, 99, 99, 99, 99, 99,
+    99, 99, 99, 99, 99, 99, 99, 99, 99, 99, 99, 99, 99, 99, 99, 99,
+    99, 99, 99, 99, 99, 99, 99, 99, 99, 99, 99, 99, 99, 99, 99, 99,
+     0,  1,  2,  3,  4,  5,  6,  7,  8,  9, 99, 99, 99, 99, 99, 99,
+    99, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24,
+    25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 99, 99, 99, 99, 99,
+    99, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24,
+    25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 99, 99, 99, 99, 99,
+    99, 99, 99, 99, 99, 99, 99, 99, 99, 99, 99, 99, 99, 99, 99, 99,
+    99, 99, 99, 99, 99, 99, 99, 99, 99, 99, 99, 99, 99, 99, 99, 99,
+    99, 99, 99, 99, 99, 99, 99, 99, 99, 99, 99, 99, 99, 99, 99, 99,
+    99, 99, 99, 99, 99, 99, 99, 99, 99, 99, 99, 99, 99, 99, 99, 99,
+    99, 99, 99, 99, 99, 99, 99, 99, 99, 99, 99, 99, 99, 99, 99, 99,
+    99, 99, 99, 99, 99, 99, 99, 99, 99, 99, 99, 99, 99, 99, 99, 99,
+    99, 99, 99, 99, 99, 99, 99, 99, 99, 99, 99, 99, 99, 99, 99, 99,
+    99, 99, 99, 99, 99, 99, 99, 99, 99, 99, 99, 99, 99, 99, 99, 99,
+};
+
 
 int get_str0(bool ishead, zz_ptr n, zz_ptr dens[], int d, char *res, int pos) {
     if (d >= 0) {
@@ -530,6 +564,7 @@ int get_str0(bool ishead, zz_ptr n, zz_ptr dens[], int d, char *res, int pos) {
     }
 }
 
+
 char * get_str(zz_ptr nval) {
     if (nval->size == 0)
         return "0";
@@ -557,8 +592,8 @@ char * get_str(zz_ptr nval) {
             zz_mul(dens[i], dens[i-1], dens[i-1]);
         }
     }
-    // strlen is for most n one more than necessary; this is a precaution for values of n
-    // where the ... in ceil(...) is very close to an integer. So we often waste one byte.
+    // strlen is for most n one more than necessary; this is a precaution for values of n where
+    // the double value ... in ceil(...) is very close to an integer. So we often waste one byte.
     int strlen = ceil(log10((float)npos->n[nlen - 1]) + (nlen - 1) * WORD_BITS * log10(2) + is_neg_n) + 2;
     char *res = GC_MALLOC_ATOMIC(strlen);
     memset(res,'0', strlen);
@@ -572,13 +607,16 @@ char * get_str(zz_ptr nval) {
     return res;
 }
 
-int set_str0(zz_ptr a, char *nstr, int parts) {
+
+int set_str0(zz_ptr a, char *nstr, unsigned char base, int parts) {
     // assert(parts > 0);
     if (parts == 1) {
-        unsigned long val;
-        sscanf(nstr, fstr, &val); 
+        unsigned long val = 0;
+        int i = 0;
+        while (i < POWINWORD[base])
+            val = val * base + digvalue[nstr[i++]];
         zz_seti(a, val);
-        return POW10INWORD;
+        return POWINWORD[base];
     } else {
         int hi = parts/2;
         int lo = parts - hi;
@@ -586,62 +624,100 @@ int set_str0(zz_ptr a, char *nstr, int parts) {
         zz_ptr lores = malloc(sizeof(zz_struct));
         zz_init(hires);
         zz_init(lores);
-        int hidigs = set_str0(hires, nstr, hi);
-        int lodigs = set_str0(lores, &nstr[hi * POW10INWORD], lo);
-        zz_seti(a, 10);
-        zz_powi(a, a, POW10INWORD * lo);
+        int hidigs = set_str0(hires, nstr, base, hi);
+        int lodigs = set_str0(lores, &nstr[hi * POWINWORD[base]], base, lo);
+        zz_seti(a, base);
+        zz_powi(a, a, POWINWORD[base] * lo);
         zz_mul(a, a, hires);
         zz_add(a, a, lores);
         return hidigs + lodigs;
     }
 }
 
-int set_str(zz_ptr a, char *nstr) {
-    int pre=0;
+
+int set_str(zz_ptr a, unsigned char *nstr, B_int intbase) {
+    int pre = 0;
     int sgn = 1;
-    while(isspace(nstr[pre])) pre++;;
+    while(isspace(nstr[pre])) pre++;   // should leading spaces be allowed?
     if(nstr[pre]=='+')
         pre++;
     else if (nstr[pre]=='-') {
         sgn = -1;
         pre++;
     }
-    int pre_len = pre;
     int len = 0;
-    while (isdigit(nstr[pre])) {
+    int pre_len = pre;
+    unsigned char basefromstr = 0;
+    if (nstr[pre]=='0') {
+        pre++; 
+        if (nstr[pre]=='x' || nstr[pre]=='X') {
+            basefromstr = 16; pre++; pre_len += 2;
+        } else if (nstr[pre]=='o' || nstr[pre]=='O') {
+            basefromstr = 8; pre++; pre_len += 2;
+        } else if (nstr[pre]=='b' || nstr[pre]=='B') {
+            basefromstr = 2; pre++; pre_len += 2;
+        } else
+            len++;
+    }
+    unsigned char basefrompar = 0;
+    if (!intbase)
+        basefrompar = 0;
+    else {
+        long baseval = from$int(intbase);
+        if (baseval < 2 || baseval > 36) {
+            char errmsg[1024];
+            snprintf(errmsg, sizeof(errmsg), "integer type constructor: base parameter %ld is out of range (must be between 2 and 36, inclusive)", baseval);
+            $RAISE((B_BaseException)$NEW(B_ValueError,to$str(errmsg)));
+        } else
+            basefrompar = (unsigned char)baseval;
+    }
+    unsigned char base;
+    if (basefrompar==0) 
+        base = basefromstr ? basefromstr : 10;
+    else if (basefromstr==0) 
+        base = basefrompar;
+    else if (basefromstr != basefrompar) {
+        char errmsg[1024];
+        snprintf(errmsg, sizeof(errmsg), "integer type constructor: base specified in str (%d) is in conflict with base in parameter base (%d)", basefromstr, basefrompar);
+        $RAISE((B_BaseException)$NEW(B_ValueError,to$str(errmsg)));
+    } else
+        base = basefromstr; // which is equal to basefrompar
+    while (digvalue[nstr[pre]] < base) {
         len++;
         pre++;
     }
     if (len == 0 || nstr[pre] != 0) {
         char errmsg[1024];
-        snprintf(errmsg, sizeof(errmsg), "int.fromatom(): string \"%s\" cannot be converted to int", nstr);
+        snprintf(errmsg, sizeof(errmsg), "integer type constructor: string \"%s\" cannot be interpreted as an int in base %d", nstr,base);
         $RAISE((B_BaseException)$NEW(B_ValueError,to$str(errmsg)));
     }
     nstr += pre_len;
-    int parts = len / POW10INWORD;
-    int offset =  len % POW10INWORD;
-    if (offset == 0)
-        return set_str0(a, nstr, parts);
-    else {
-        zz_ptr res0 = malloc(sizeof(zz_struct));
-        zz_init(res0);
-        char *buf = GC_MALLOC_ATOMIC(offset+1);
-        memcpy(buf, nstr, offset);
-        buf[offset] = '\0';
-        unsigned long headval;
+    
+    int parts = len / POWINWORD[base];
+    int offset =  len % POWINWORD[base];
+    
+    if (offset == 0) {
+        return set_str0(a, nstr, base, parts);
+        a->size *= sgn;
+    } else {
+        unsigned long headval = 0;
         int partdigits = 0;
-        sscanf(buf, "%lu", &headval);
+        int i = 0;
+        while (i < offset)
+            headval = headval * base + digvalue[nstr[i++]];
         if (parts > 0) {
-            partdigits = set_str0(res0, &nstr[offset], parts);
-            zz_seti(a, 10);
-            zz_powi(a, a, POW10INWORD * parts);
+            zz_ptr res0 = malloc(sizeof(zz_struct));
+            zz_init(res0);
+            partdigits = set_str0(res0, &nstr[offset], base, parts);
+            zz_seti(a, base);
+            zz_powi(a, a, POWINWORD[base] * parts);
             zz_muli(a, a, headval);
             zz_add(a, a, res0);
         } else {
             zz_seti(a, headval);
         }
         a->size *= sgn;
-        return pre + offset + partdigits;
+        return pre; // we shouldn't return chars consumed since we throw exception if whole string not consumed.
     } 
 }
 

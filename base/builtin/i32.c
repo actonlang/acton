@@ -24,53 +24,21 @@ int intpow(int a, int e) {
 
 // General methods ///////////////////////////////////////////////////////////////////////
 
-B_i32 B_i32G_new(B_atom a) {
-    if ($ISINSTANCE(a,B_int)->val){
-        zz_struct n = ((B_int)a)-> val;
-        if (n.n[0] > INT_MAX || (labs(n.size))>1) {
-            $RAISE((B_BaseException)$NEW(B_ValueError,to$str("i32(): int argument out of range")));
-        }
-        return toB_i32(n.size*n.n[0]);
+B_i32 B_i32G_new(B_atom a, B_int base) {
+    B_int b = B_intG_new(a, base);
+    unsigned long n = b->val.n[0];
+    long sz = b->val.size;
+    if (labs(sz) > 1 || (sz==1 && n > INT_MAX) || sz == -1 && n > labs(INT_MIN)) {
+        char errmsg[1024];
+        snprintf(errmsg, sizeof(errmsg), "i32(): value %s out of range for type i32",get_str(&b->val));
+        $RAISE((B_BaseException)$NEW(B_ValueError,to$str(errmsg)));
     }
-    if ($ISINSTANCE(a,B_i64)->val) {
-        long x = ((B_i64)a)->val;
-        if (x > INT_MAX || x < INT_MIN) 
-            $RAISE((B_BaseException)$NEW(B_ValueError,to$str("i32(): i64 argument out of range")));
-        return toB_i32((long)x);
-    }
-
-    if ($ISINSTANCE(a,B_i32)->val) return (B_i32)a;
-    if ($ISINSTANCE(a,B_i16)->val) return toB_i32((int)((B_i16)a)->val);
-    if ($ISINSTANCE(a,B_u64)->val) {
-        unsigned long x = ((B_u64)a)->val;
-        if (x > INT_MAX) 
-            $RAISE((B_BaseException)$NEW(B_ValueError,to$str("i32(): u64 argument out of range")));
-        return toB_i32((int)x);
-    }
-    if ($ISINSTANCE(a,B_u32)->val) {
-        unsigned int x = ((B_u32)a)->val;
-        if (x > INT_MAX) 
-            $RAISE((B_BaseException)$NEW(B_ValueError,to$str("i32(): u32 argument out of range")));
-        return toB_i32((int)x);
-    }
-    if ($ISINSTANCE(a,B_u16)->val) return toB_i32((int)((B_u16)a)->val);
-    if ($ISINSTANCE(a,B_float)->val) return toB_i32(round(((B_float)a)->val));
-    if ($ISINSTANCE(a,B_bool)->val) return toB_i32(((B_bool)a)->val);
-    if ($ISINSTANCE(a,B_str)->val) {
-        int x;
-        int c;
-        sscanf((char *)((B_str)a)->str,"%d%n",&x,&c);
-        if (c==((B_str)a)->nbytes)
-            return toB_i32(x);
-        else 
-            $RAISE((B_BaseException)$NEW(B_ValueError,to$str("int(): invalid str value for type int")));
-    }
-    fprintf(stderr,"internal error: B_i32G_new: argument not of atomic type");
-    exit(-1);
+    return toB_i32(n);
 }
 
-B_NoneType B_i32D___init__(B_i32 self, B_atom a){
-    self->val = B_i32G_new(a)->val;
+
+B_NoneType B_i32D___init__(B_i32 self, B_atom a, B_int base){
+    self->val = B_i32G_new(a,base)->val;
     return B_None;
 }
 
@@ -123,7 +91,7 @@ B_complex B_IntegralD_i32D___complex__(B_IntegralD_i32 wit, B_i32 a) {
 }
 
 B_i32 B_IntegralD_i32D___fromatom__(B_IntegralD_i32 wit, B_atom a) {
-    return B_i32G_new(a);
+    return B_i32G_new(a,NULL);
 }
 
 B_i32 B_IntegralD_i32D___mul__(B_IntegralD_i32 wit,  B_i32 a, B_i32 b) {
@@ -201,11 +169,11 @@ $WORD B_IntegralD_i32D_denominator (B_IntegralD_i32 wit, B_i32 n, B_Integral wit
 }
   
 B_int B_IntegralD_i32D___int__ (B_IntegralD_i32 wit, B_i32 n) {
-    return B_intG_new((B_atom)n);
+    return B_intG_new((B_atom)n,NULL);
 }
 
 B_int B_IntegralD_i32D___index__(B_IntegralD_i32 wit, B_i32 n) {
-    return B_intG_new((B_atom)n);
+    return B_intG_new((B_atom)n,NULL);
 }
 
 B_tuple B_IntegralD_i32D___divmod__(B_IntegralD_i32 wit, B_i32 a, B_i32 b) {
