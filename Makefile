@@ -7,7 +7,7 @@ ZIG_LOCAL_CACHE_DIR ?= $(TD)/zig-cache
 export ZIG_LOCAL_CACHE_DIR
 
 ACTONC=dist/bin/actonc
-ACTC=dist/bin/actonc
+ACTC=dist/bin/actonc $(ACTONC_TARGET)
 ZIG_VERSION:=0.12.0-dev.1536+6b9f7e26c
 ZIG=$(TD)/dist/zig/zig
 AR=$(ZIG) ar
@@ -59,6 +59,7 @@ ifeq ($(shell uname -s),Linux)
 OS:=linux
 ifeq ($(shell uname -m),x86_64)
 ZIG_TARGET := -Dtarget=x86_64-linux-gnu.2.27
+ACTONC_TARGET := --target x86_64-linux-gnu.2.27
 else
 $(error "Unsupported architecture for Linux?")
 endif
