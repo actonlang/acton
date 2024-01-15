@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## [0.19.2] (2024-01-15)
 
 ### Added
 - `argparse` now supports optional positional arguments
