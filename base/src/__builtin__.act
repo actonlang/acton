@@ -29,31 +29,31 @@ class atom (value):
     pass
 
 class int (atom):
-    def __init__(self, val: atom) -> None:
+    def __init__(self, val: atom, base: ?int) -> None:
         NotImplemented
 
 class i64 (atom):
-    def __init__(self, val: atom) -> None:
+    def __init__(self, val: atom, base: ?int) -> None:
         NotImplemented
 
 class i32 (atom):
-    def __init__(self, val: atom) -> None:
+    def __init__(self, val: atom, base: ?int) -> None:
         NotImplemented
 
 class i16 (atom):
-    def __init__(self, val: atom) -> None:
+    def __init__(self, val: atom, base: ?int) -> None:
         NotImplemented
 
 class u64 (atom):
-    def __init__(self, val: atom) -> None:
+    def __init__(self, val: atom, base: ?int) -> None:
         NotImplemented
 
 class u32 (atom):
-    def __init__(self, val: atom) -> None:
+    def __init__(self, val: atom, base: ?int) -> None:
         NotImplemented
 
 class u16 (atom):
-    def __init__(self, val: atom) -> None:
+    def __init__(self, val: atom, base: ?int) -> None:
         NotImplemented
 
 class float (atom):

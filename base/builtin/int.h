@@ -11,7 +11,9 @@ long from$int(B_int n);
 B_int to$int(long n);
 B_int to$int2(char *str);
 
-B_int B_intG_new(B_atom a);
+char *get_str(zz_ptr n);
+
+B_int B_intG_new(B_atom a, B_int base);
 
 B_int $gcd(B_int, B_int);
 B_tuple $xgcd(B_int, B_int);
