@@ -12,6 +12,8 @@
   - Output is written to stdout per default, set `stderr=True` to write to
     stderr instead
   - set `flush=True` to flush the output
+- new `--rts-bt-debug` flag that launches interactive debugger (`gdb`) on
+  SIGSEGV / SIGILL
 
 ### Changed
 - `print()` now formats to a temporary buffer before printing to reduce
@@ -19,6 +21,12 @@
 - `printn()` has been removed in preference of using `print(foo, end="")`
 
 ### Fixed
+- `KeyError` now includes the key as part of the error message
+  - e.g. `KeyError: getitem: key not in dictionary, key: foobar`
+  - The string formatting of the error message including the key only happens
+    when the str representation of the exception is necessary, so it does not
+    incur a performance penalty in normal scenarios
+  - The key for which the lookup was attempted is stored in the `key` attribute
 - Homebrew Formula now somewhat decoupled from Stack version [#1627]
   - Idiomatic Homebrew Formulas use system-ghc, i.e. a GHC version installed by
     Homebrew itself and not from Stack. Since we specify a Stack LTS resolver,
