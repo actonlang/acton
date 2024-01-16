@@ -10,6 +10,7 @@ pub const FilePath = struct {
     full_path: []const u8,
     dir: []const u8,
     file_path: []const u8,
+    test_root: bool
 };
 
 // We have an absolute path we want to get to, but we have to provide it as a
@@ -195,8 +196,15 @@ pub fn build(b: *std.build.Builder) void {
                     print("   file_path: {s}\n", .{fPath.file_path});
 
                     if (std.mem.endsWith(u8, entry.basename, ".root.c")) {
+                        fPath.test_root = false;
                         root_c_files.append(fPath) catch |err| {
                             std.log.err("Error appending to root .c files: {}", .{err});
+                            std.os.exit(1);
+                        };
+                    } else if (std.mem.endsWith(u8, entry.basename, ".test_root.c")) {
+                        fPath.test_root = true;
+                        root_c_files.append(fPath) catch |err| {
+                            std.log.err("Error appending to test_root .c files: {}", .{err});
                             std.os.exit(1);
                         };
                     } else {
@@ -251,16 +259,29 @@ pub fn build(b: *std.build.Builder) void {
 
     for (root_c_files.items) |entry| {
         // Get the binary name, by removing .root.c from end and having it relative to the projpath_outtypes
-        const binname = b.allocator.alloc(u8, entry.file_path.len-8) catch |err| {
-            std.log.err("Error allocating binname: {}", .{err});
+        var nlen = ".root.c".len;
+        if (entry.test_root)
+            nlen = ".test_root.c".len - ".test_".len;
+        nlen += 1; // for the null terminator
+        const binname = b.allocator.alloc(u8, entry.file_path.len-nlen) catch |err| {
+            std.log.info("Error allocating binname: {}", .{err});
             std.os.exit(1);
         };
-        @memcpy(binname, entry.file_path[1..(entry.file_path.len-7)]);
-
+        if (entry.test_root) {
+            // Write '.test_' to start of binname
+            var buf = std.fmt.allocPrint(b.allocator, ".test_{s}", .{entry.file_path[1..entry.file_path.len - ".test_root.c".len]}) catch |err| {
+                std.log.err("Error allocating binname: {}", .{err});
+                std.os.exit(1);
+            };
+            @memcpy(binname, buf);
+        } else {
+            @memcpy(binname, entry.file_path[1..(entry.file_path.len - ".root.c".len)]);
+        }
         // Replace / with . in the binary name
         for (binname) |*ch| {
             if (ch.* == '/') ch.* = '.';
         }
+
         print("Building executable from: {s} -> {s}\n", .{entry.full_path, binname});
 
         const executable = b.addExecutable(.{

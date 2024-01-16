@@ -1,6 +1,7 @@
 
 import acton.rts
 import argparse
+import json
 import logging
 import term
 import time
@@ -192,6 +193,17 @@ class Test (object):
     name: str
     desc: str
 
+    def __init__(self, name: str, desc: str):
+        self.name = name
+        self.desc = desc
+
+    def to_json(self):
+        return {
+            "name": self.name,
+            "desc": self.desc,
+        }
+
+
 class UnitTest(Test):
     def __init__(self, fn: mut() -> None, name: str, desc: str):
         self.fn = fn
@@ -231,14 +243,26 @@ class TestResult(object):
       - for asynchronous actor & env tests, the report_result callback was called with TestResult(success=, exception=AssertionError)
     """
     success: ?bool
-    exception: ?Exception
+    exception: ?str
     duration: float
 
-    def __init__(self, success: ?bool, exception: ?Exception, duration: float):
+    def __init__(self, success: ?bool, exception: ?str, duration: float):
         self.success = success
         self.exception = exception
         self.duration = duration
 
+    def to_json(self):
+        res = {}
+        success = self.success
+        exception = self.exception
+        duration = self.duration
+        if success is not None:
+            res["success"] = success
+        if exception is not None:
+            res["exception"] = exception
+        if duration is not None:
+            res["duration"] = duration
+        return res
 
 actor unit_test_runner(i, get_test, report_result):
     """Test runner for unit tests
@@ -255,10 +279,10 @@ actor unit_test_runner(i, get_test, report_result):
                     report_result(t, TestResult(True, None, dur))
                 except AssertionError as e:
                     dur = sw.elapsed().to_float() * 1000.0
-                    report_result(t, TestResult(None, e, dur))
+                    report_result(t, TestResult(None, str(e), dur))
                 except Exception as e:
                     dur = sw.elapsed().to_float() * 1000.0
-                    report_result(t, TestResult(False, e, dur))
+                    report_result(t, TestResult(False, str(e), dur))
             else:
                 return None
 
@@ -281,10 +305,10 @@ actor sync_actor_test_runner(get_test: action() -> ?SyncActorTest, report_result
                     report_result(t, TestResult(True, None, dur))
                 except AssertionError as e:
                     dur = sw.elapsed().to_float() * 1000.0
-                    report_result(t, TestResult(None, e, dur))
+                    report_result(t, TestResult(None, str(e), dur))
                 except Exception as e:
                     dur = sw.elapsed().to_float() * 1000.0
-                    report_result(t, TestResult(False, e, dur))
+                    report_result(t, TestResult(False, str(e), dur))
             else:
                 return None
 
@@ -298,7 +322,10 @@ actor async_actor_test_runner(get_test: action() -> ?AsyncActorTest, report_resu
 
     action def _report_result(test: AsyncActorTest, sw, success: ?bool, exception: ?Exception):
         dur = sw.elapsed().to_float() * 1000.0
-        report_result(test, TestResult(success, exception, dur))
+        exc = None
+        if exception is not None:
+            exc = str(exception)
+        report_result(test, TestResult(success, exc, dur))
 
     def _run():
         while True:
@@ -310,10 +337,10 @@ actor async_actor_test_runner(get_test: action() -> ?AsyncActorTest, report_resu
                     f(lambda s, e: _report_result(t, sw, s, e), log_handler)
                 except AssertionError as e:
                     dur = sw.elapsed().to_float() * 1000.0
-                    report_result(t, TestResult(None, e, dur))
+                    report_result(t, TestResult(None, str(e), dur))
                 except Exception as e:
                     dur = sw.elapsed().to_float() * 1000.0
-                    report_result(t, TestResult(False, e, dur))
+                    report_result(t, TestResult(False, str(e), dur))
             else:
                 return None
 
@@ -326,9 +353,11 @@ actor env_test_runner(get_test: action() -> ?EnvTest, report_result, env):
     log_handler = logging.Handler("TestRunner")
 
     action def _report_result(test: EnvTest, sw, success: ?bool, exception: ?Exception):
-        print("Got env test result..")
         dur = sw.elapsed().to_float() * 1000.0
-        report_result(test, TestResult(success, exception, dur))
+        exc = None
+        if exception is not None:
+            exc = str(exception)
+        report_result(test, TestResult(success, exc, dur))
 
     def _run():
         while True:
@@ -340,145 +369,105 @@ actor env_test_runner(get_test: action() -> ?EnvTest, report_result, env):
                     f(lambda s, e: _report_result(t, sw, s, e), env, log_handler)
                 except AssertionError as e:
                     dur = sw.elapsed().to_float() * 1000.0
-                    report_result(t, TestResult(None, e, dur))
+                    report_result(t, TestResult(None, str(e), dur))
                 except Exception as e:
                     dur = sw.elapsed().to_float() * 1000.0
-                    report_result(t, TestResult(False, e, dur))
+                    report_result(t, TestResult(False, str(e), dur))
             else:
                 return None
 
     after 0: _run()
 
 
-actor test_runner(env: Env, unit_tests: dict[str, UnitTest], sync_actor_tests: dict[str, SyncActorTest], async_actor_tests: dict[str, AsyncActorTest], env_tests: dict[str, EnvTest]):
-    var results: dict[str, (test: Test, result: ?TestResult)] = {}
+class TestDisplay(object):
+    results: dict[str, dict[str, (test: Test, result: ?TestResult)]]
+    expected_modules: set[str]
 
-    for name, t in unit_tests.items():
-        results[t.name] = (test=t, result=None)
-    for name, t in sync_actor_tests.items():
-        results[t.name] = (test=t, result=None)
-    for name, t in async_actor_tests.items():
-        results[t.name] = (test=t, result=None)
-    for name, t in env_tests.items():
-        results[t.name] = (test=t, result=None)
+    def __init__(self, env):
+        self._env = env
+        self.results = {}
+        self.sw = time.Stopwatch()
+        self.expected_modules = set([''])
 
-    sw = time.Stopwatch()
+    def update(self, test: Test, test_result: ?TestResult, modname: str=""):
+        """Will return an integer when all tests are complete, otherwise None
+        The returned integer is the suggested exit code.
+        """
+        if modname not in self.results:
+            self.results[modname] = {}
+        self.results[modname][test.name] = (test=test, result=test_result)
+        if test_result is not None:
+            self.show()
 
-    def print_status():
+    def show(self):
+        pass
+
+class TestDisplayJSON(TestDisplay):
+#    def update_from_json(self, json_update: str):
+#        update = json.decode(json_update)
+
+    def show(self):
+        res = {}
+        for modname in self.results:
+            #if modname not in res:
+            #    res[modname] = {}
+            for tname, t in self.results[modname].items():
+                tres = {}
+                r = t.result
+                if r is not None:
+                    tres = r.to_json()
+                #res[modname][tname] = {"test": t.test.to_json(), "result": tres}
+                res[modname + "." + tname] = {"test": t.test.to_json(), "result": tres}
+        print(json.encode(res))
+
+
+class TestDisplayStatus(TestDisplay):
+    def show(self):
         d = "["
         complete = True
-        for tname, t in results.items():
-            r = t.result
-            if r is not None:
-                success = r.success
-                if r:
-                    d += "."
-                else:
-                    d += "!"
+        if set(self.results.keys()) != self.expected_modules:
+            complete = False
+
+        for modname in self.results:
+            if modname is not None:
+                for tname, t in self.results[modname].items():
+                    r = t.result
+                    if r is None:
+                        complete = False
             else:
                 complete = False
-                d += " "
+
+        for modname in self.results:
+            if modname is not None:
+                for tname, t in self.results[modname].items():
+                    r = t.result
+                    if r is not None:
+                        success = r.success
+                        if r:
+                            d += "."
+                        else:
+                            d += "!"
+                    else:
+                        d += " "
         d += "]"
-        print("\r", end="")
-        print(d, end="")
+        print("\r", end="", flush=True)
+        print(d, end="", flush=True)
 
         errors = 0
         failures = 0
         if complete:
             print(term.clearline + term.up() + term.clearline, end="")
-            print("\nTests")
             tname_width = 20
-            for tname, t in results.items():
-                tname_width = max([tname_width, len(t.test.name)], None)
-
-            for tname, t in results.items():
-                r = t.result
-                if r is not None:
-                    prefix = "  " + t.test.name + ": "
-                    prefix += " " * (tname_width - len(prefix))
-                    success = r.success
-                    exc = r.exception
-                    if exc is not None:
-                        if success is not None:
-                            failures += 1
-                            print(prefix + term.bold + term.red + "FAIL (%fms)" % r.duration + term.normal)
-                            for line in str(exc).splitlines(None):
-                                print(term.red + "    %s" % (line) + term.normal)
-                        else:
-                            errors += 1
-                            print(prefix + term.bold + term.red + "ERROR (%fms)" % r.duration + term.normal)
-                            for line in str(exc).splitlines(None):
-                                print(term.red + "    %s" % (line) + term.normal)
-                    else:
-                        time = "N/A"
-                        if r.duration >= 0:
-                            time = "%f" % (r.duration)
-                        print(prefix + term.green + "OK (%sms)" % (time) + term.normal)
-                #print("Test %s: %s" % (t.name, str(t.result)))
-            print("")
-            if errors > 0 and failures > 0:
-                print(term.bold + term.red + "%d error and %d failure out of %d tests (%ss)" % (errors, failures, len(results), sw.elapsed().str_ms()) + term.normal)
-                print()
-                env.exit(2)
-            elif errors > 0:
-                print(term.bold + term.red + "%d out of %d tests errored (%ss)" % (errors, len(results), sw.elapsed().str_ms()) + term.normal)
-                print()
-                env.exit(2)
-            elif failures > 0:
-                print(term.bold + term.red + "%d out of %d tests failed (%ss)" % (failures, len(results), sw.elapsed().str_ms()) + term.normal)
-                print()
-                env.exit(1)
-            else:
-                print(term.green + "All %d tests passed (%ss)" % (len(results), sw.elapsed().str_ms()) + term.normal)
-                print()
-                env.exit(0)
-
-    proc def _run_tests(args):
-        _run_unit_tests(args)
-
-    proc def _run_unit_tests(args):
-        print("Running tests...")
-        hand_out = unit_tests
-
-        def get_test():
-            r = hand_out.popitem()
-            if r is not None:
-                return r.1
-
-        def report_result(t, test_result: TestResult):
-            results[t.name] = (test=t, result=test_result)
-            print_status()
-            if len(hand_out) == 0:
-                _run_sync_actor_tests(args)
-
-        def print_status():
-            d = "["
-            complete = True
-            for tname, t in results.items():
-                r = t.result
-                if r is not None:
-                    success = r.success
-                    if r:
-                        d += "."
-                    else:
-                        d += "!"
-                else:
-                    complete = False
-                    d += " "
-            d += "]"
-            print("\r", end="")
-            print(d, end="")
-
-            errors = 0
-            failures = 0
-            if complete:
-                print(term.clearline + term.up() + term.clearline, end="")
-                print("\nTests")
-                tname_width = 20
-                for tname, t in results.items():
+            for modname in self.results:
+                for tname, t in self.results[modname].items():
                     tname_width = max([tname_width, len(t.test.name)], None)
 
-                for tname, t in results.items():
+            for modname in self.results:
+                if modname == "":
+                    print("\nTests")
+                else:
+                    print("\nTests - module %s:" % modname)
+                for tname, t in self.results[modname].items():
                     r = t.result
                     if r is not None:
                         prefix = "  " + t.test.name + ": "
@@ -501,24 +490,57 @@ actor test_runner(env: Env, unit_tests: dict[str, UnitTest], sync_actor_tests: d
                             if r.duration >= 0:
                                 time = "%f" % (r.duration)
                             print(prefix + term.green + "OK (%sms)" % (time) + term.normal)
-                    #print("Test %s: %s" % (t.name, str(t.result)))
-                print("")
-                if errors > 0 and failures > 0:
-                    print(term.bold + term.red + "%d error and %d failure out of %d tests (%ss)" % (errors, failures, len(results), sw.elapsed().str_ms()) + term.normal)
-                    print()
-                    env.exit(2)
-                elif errors > 0:
-                    print(term.bold + term.red + "%d out of %d tests errored (%ss)" % (errors, len(results), sw.elapsed().str_ms()) + term.normal)
-                    print()
-                    env.exit(2)
-                elif failures > 0:
-                    print(term.bold + term.red + "%d out of %d tests failed (%ss)" % (failures, len(results), sw.elapsed().str_ms()) + term.normal)
-                    print()
-                    env.exit(1)
-                else:
-                    print(term.green + "All %d tests passed (%ss)" % (len(results), sw.elapsed().str_ms()) + term.normal)
-                    print()
-                    env.exit(0)
+            print("")
+            if errors > 0 and failures > 0:
+                print(term.bold + term.red + "%d error and %d failure out of %d tests (%ss)" % (errors, failures, len(self.results), self.sw.elapsed().str_ms()) + term.normal)
+                print()
+                self._env.exit(2)
+            elif errors > 0:
+                print(term.bold + term.red + "%d out of %d tests errored (%ss)" % (errors, len(self.results), self.sw.elapsed().str_ms()) + term.normal)
+                print()
+                self._env.exit(2)
+            elif failures > 0:
+                print(term.bold + term.red + "%d out of %d tests failed (%ss)" % (failures, len(self.results), self.sw.elapsed().str_ms()) + term.normal)
+                print()
+                self._env.exit(1)
+            else:
+                print(term.green + "All %d tests passed (%ss)" % (len(self.results), self.sw.elapsed().str_ms()) + term.normal)
+                print()
+                self._env.exit(0)
+
+actor test_runner(env: Env, unit_tests: dict[str, UnitTest], sync_actor_tests: dict[str, SyncActorTest], async_actor_tests: dict[str, AsyncActorTest], env_tests: dict[str, EnvTest]):
+    sw = time.Stopwatch()
+    var results = TestDisplayStatus(env)
+
+    proc def _run_tests(args):
+        if args.get_bool("json"):
+            results = TestDisplayJSON(env)
+
+        for name, t in unit_tests.items():
+            results.update(t, None)
+        for name, t in sync_actor_tests.items():
+            results.update(t, None)
+        for name, t in async_actor_tests.items():
+            results.update(t, None)
+        for name, t in env_tests.items():
+            results.update(t, None)
+
+        results.show()
+        # start with unit tests, proceed with next test category after unit tests
+        _run_unit_tests(args)
+
+    proc def _run_unit_tests(args):
+        hand_out = unit_tests
+
+        def get_test():
+            r = hand_out.popitem()
+            if r is not None:
+                return r.1
+
+        def report_result(t, test_result: TestResult):
+            results.update(t, test_result)
+            if len(hand_out) == 0:
+                _run_sync_actor_tests(args)
 
         for i in range(env.nr_wthreads):
             unit_test_runner(i, get_test, report_result)
@@ -532,8 +554,7 @@ actor test_runner(env: Env, unit_tests: dict[str, UnitTest], sync_actor_tests: d
                 return r.1
 
         def report_result(t, test_result: TestResult):
-            results[t.name] = (test=t, result=test_result)
-            print_status()
+            results.update(t, test_result)
             if len(hand_out) == 0:
                 _run_async_actor_tests(args)
 
@@ -549,8 +570,7 @@ actor test_runner(env: Env, unit_tests: dict[str, UnitTest], sync_actor_tests: d
                 return r.1
 
         def report_result(t, test_result: TestResult):
-            results[t.name] = (test=t, result=test_result)
-            print_status()
+            results.update(t, test_result)
             if len(hand_out) == 0:
                 _run_env_tests(args)
 
@@ -566,8 +586,7 @@ actor test_runner(env: Env, unit_tests: dict[str, UnitTest], sync_actor_tests: d
                 return r.1
 
         def report_result(t, test_result: TestResult):
-            results[t.name] = (test=t, result=test_result)
-            print_status()
+            results.update(t, test_result)
 
         for i in range(0, min([1, env.nr_wthreads // 4], None), 1):
             env_test_runner(get_test, report_result, env)
@@ -635,6 +654,7 @@ actor test_runner(env: Env, unit_tests: dict[str, UnitTest], sync_actor_tests: d
 
     def _parse_args():
         p = argparse.Parser()
+        p.add_bool("json", "Output results as JSON")
         tp = p.add_cmd("test", "Run tests", _run_tests)
         pp = p.add_cmd("perf", "Performance benchmark tests", _run_perf_tests)
         pp.add_option("iterations", "int", "?", 1, "Number of iterations to run")
@@ -647,9 +667,3 @@ actor test_runner(env: Env, unit_tests: dict[str, UnitTest], sync_actor_tests: d
             # no command given, run all tests
             _run_tests(args)
     _parse_args()
-
-
-def __test():
-    assertEqual(1, 1, "1 == 1")
-    assertEqual("a", "a", "a == a")
-    assertNotEqual(1, 1, "1 != 1")

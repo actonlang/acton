@@ -1,0 +1,218 @@
+import argparse
+import json
+import process
+import testing
+
+actor CompilerRunner(process_cap, env, args):
+    def on_stderr(p, data):
+        print("Received output on stderr:", data)
+        env.exit(0)
+
+    def on_stdout(p, data):
+        print(data.decode(), end="")
+
+    def on_exit(p, exit_code, term_signal):
+        if exit_code != 0:
+            print("actonc exited with code: ", exit_code, " terminated with signal:", term_signal)
+        await async env.exit(exit_code)
+
+    def on_error(p, error):
+        print("Error from process:", error)
+        await async env.exit(1)
+
+    cmd = ["actonc"] + args
+    p = process.Process(process_cap, cmd, None, None, on_stdout, on_stderr, on_exit, on_error)
+
+
+actor TestModule(process_cap, modname, report_result):
+    var stdout_buf = b""
+    var stderr_buf = b""
+
+    def on_stderr(p, data: bytes):
+        stderr_buf += data
+
+    def on_stdout(p, data):
+        stdout_buf += data
+        lines = stdout_buf.splitlines(True)
+        stdout_buf = b""
+        for line in lines:
+            if line.endswith(b"\n"):
+                # valid line
+                upd = json.decode(line.decode())
+                for tname, t in upd.items():
+                    if isinstance(t, dict):
+                        tdef = t["test"]
+                        tres = t["result"]
+                        test = testing.Test(tdef["name"], tdef["desc"])
+                        test_result = None
+                        if tres is not None and tres != {}:
+                            success = None
+                            exception = None
+                            if "success" in tres:
+                                success = bool(tres["success"])
+                            if "exception" in tres:
+                                exception = str(tres["exception"])
+                            duration = float(tres["duration"])
+                            test_result = testing.TestResult(success, exception, duration)
+                        report_result(modname, test, test_result)
+            else:
+                # incomplete line
+                _stdout_buf = line
+                break
+
+    def on_exit(p, exit_code, term_signal):
+        if exit_code != 0:
+            print("actonc exited with code: ", exit_code, " terminated with signal:", term_signal)
+            print("stderr:", stderr_buf.decode())
+
+    def on_error(p, error):
+        print("Error from process:", error)
+
+    print("Running test for module", modname)
+    cmd = ["out/rel/bin/.test_" + modname, "--json"]
+    p = process.Process(process_cap, cmd, None, None, on_stdout, on_stderr, on_exit, on_error)
+
+actor RunTest(process_cap, env, args):
+    _test_modules: list[str] = []
+    modtests = {}
+
+    def _on_build_done():
+        print("Build done")
+        results = testing.TestDisplayStatus(env)
+        results.expected_modules = set(_test_modules)
+
+        for modname in _test_modules:
+            def _on_test_result(module, test_def, test_result):
+                results.update(test_def, test_result, module)
+            t = TestModule(process_cap, modname, _on_test_result)
+            modtests[modname] = t
+
+    cmdargs = build_cmd_args(args)
+    cmd = ["actonc"] + cmdargs + ["build", "--test", "--quiet"]
+
+    def on_actbuild_stdout(p, data):
+        for line in data.decode().splitlines(False):
+            _test_modules.append(line)
+
+    def on_actbuild_stderr(p, data):
+        print(data.decode(), end="", stderr=True)
+
+    def on_actbuild_exit(p, exit_code, term_signal):
+        if exit_code == 0:
+            _on_build_done()
+        else:
+            print("actonc exited with code: ", exit_code, " terminated with signal:", term_signal)
+            await async env.exit(exit_code)
+
+    def on_actbuild_error(p, error):
+        print("Error from process:", error)
+        await async env.exit(1)
+
+    p = process.Process(process_cap, cmd, None, None, on_actbuild_stdout, on_actbuild_stderr, on_actbuild_exit, on_actbuild_error)
+
+
+def build_cmd_args(args):
+    cmdargs = []
+    for argname, arg in args.options.items():
+        if argname == "actfile":
+            continue
+        if arg.type == "bool":
+            if args.get_bool(argname):
+                cmdargs.append("--" + argname)
+        elif arg.type == "str":
+            if args.get_str(argname) != '':
+                cmdargs.append("--" + argname)
+                cmdargs.append(args.get_str(argname))
+        elif arg.type == "int":
+            if args.get_int(argname) != 0:
+                cmdargs.append("--" + argname)
+                cmdargs.append(str(args.get_int(argname)))
+
+    return cmdargs
+
+
+actor main(env):
+    process_cap = process.ProcessCap(env.cap)
+
+    def _compilefile(actfile, args):
+        cmdargs = build_cmd_args(args)
+        cr = CompilerRunner(process_cap, env, [actfile] + cmdargs)
+
+    def _cmd_build(args):
+        cmdargs = build_cmd_args(args)
+        cr = CompilerRunner(process_cap, env, ["build"] + cmdargs)
+
+    def _cmd_doc(args):
+        env.exit(0)
+
+    def _cmd_new(args):
+        cr = CompilerRunner(process_cap, env, ["new"])
+        env.exit(0)
+
+    def _cmd_test(args):
+        RunTest(process_cap, env, args)
+
+    def _parse_args():
+        p = argparse.Parser()
+        p.add_bool("version", "Show version information")
+        p.add_bool("numeric-version", "Show numeric version")
+        p.add_bool("always-build", "Always build")
+        p.add_bool("parse", "Show parsing result")
+        p.add_bool("kinds", "Show results after kind checking")
+        p.add_bool("types", "Show inferred expression types")
+        p.add_bool("sigs", "Show inferred type signatures")
+        p.add_bool("norm", "Show results after syntactic normalization")
+        p.add_bool("deact", "Show results after deactorization")
+        p.add_bool("cps", "Show results after CPS conversion")
+        p.add_bool("llift", "Show results of lambda lifting")
+        p.add_bool("hgen", "Show generated .h header")
+        p.add_bool("cgen", "Show generated .c code")
+        p.add_bool("ccmd", "Show CC / LD command lines")
+        p.add_bool("timing", "Show timing information")
+        p.add_bool("auto-stub", "Allow automatica stub detection")
+        p.add_bool("stub", "Stub (.ty) file generation only")
+        p.add_bool("cpedantic", "Pedantic C compilation")
+        p.add_bool("quiet", "Be quiet")
+        p.add_bool("debug", "Print debug stuff")
+        p.add_bool("dev", "Development mode")
+        p.add_option("root", "str", "?", "", "Set root actor")
+        p.add_option("tempdir", "str", "?", "", "Directory for temporary build files")
+        p.add_option("syspath", "str", "?", "", "syspath")
+        p.add_option("cc", "str", "?", "", "C compiler")
+        p.add_option("target", "str", "?", "", "Target, e.g. x86_64-linux-gnu.2.28")
+        p.add_option("cache", "str", "?", "", "Cache directory")
+        p.add_bool("zigbuild", "Use zig build")
+        p.add_bool("nozigbuild", "Do not use zig build")
+        p.add_arg("actfile", ".act file to compile", False, "?")
+        buildp = p.add_cmd("build", "Build", _cmd_build)
+        docp = p.add_cmd("doc", "Show documentation", _cmd_doc)
+        newp = p.add_cmd("new", "New project", _cmd_new)
+        testp = p.add_cmd("test", "Test", _cmd_test)
+        #testp.add_arg("projectdir", "Project directory", True, "?")
+        return p.parse(env.argv)
+
+    try:
+        _args = _parse_args()
+        _cmd = _args.cmd
+        actfile = None
+        try:
+            actfile = _args.get_str("actfile")
+        except argparse.ArgumentError:
+            pass
+        if _cmd is not None:
+            if actfile is not None:
+                # TODO: print to stderr
+                print("Error: cannot specify both a command and an .act file")
+                await async env.exit(1)
+            _cmd(_args)
+        else:
+            if actfile is not None:
+                _compilefile(actfile, _args)
+            else:
+                env.exit(0)
+    except argparse.PrintUsage as exc:
+        print(exc)
+        env.exit(0)
+    except argparse.ArgumentError as exc:
+        print(exc)
+        env.exit(1)
