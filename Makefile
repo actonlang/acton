@@ -8,7 +8,7 @@ export ZIG_LOCAL_CACHE_DIR
 
 ACTONC=dist/bin/actonc
 ACTC=dist/bin/actonc $(ACTONC_TARGET)
-ZIG_VERSION:=0.12.0-dev.1536+6b9f7e26c
+ZIG_VERSION:=0.12.0-dev.2236+32e88251e
 ZIG=$(TD)/dist/zig/zig
 AR=$(ZIG) ar
 CC=$(ZIG) cc
@@ -162,7 +162,7 @@ clean-downloads:
 	rm -rf deps-download
 
 # /deps/libargp --------------------------------------------
-LIBARGP_REF=0b95a494f54e9d9dfd362bf0b3b320c87d697790
+LIBARGP_REF=a0e41ac937fe5d5d573fdeb16353c87e4d1e3998
 deps-download/$(LIBARGP_REF).tar.gz:
 	mkdir -p deps-download
 	curl -f -L -o $@ https://github.com/actonlang/argp-standalone/archive/$(LIBARGP_REF).tar.gz
@@ -177,7 +177,7 @@ dist/depsout/lib/libargp.a: dist/deps/libargp $(DIST_ZIG)
 	cd $< && $(ZIG) build $(ZIG_TARGET) --prefix $(TD)/dist/depsout
 
 # /deps/libbsdnt --------------------------------------------
-LIBBSDNT_REF=310417e035a9e31e44a7015159bce5a1f94e79d0
+LIBBSDNT_REF=a0af240bf32eacf5ad56a847b9a7f507c950aa53
 deps-download/$(LIBBSDNT_REF).tar.gz:
 	mkdir -p deps-download
 	curl -f -L -o $@ https://github.com/actonlang/bsdnt/archive/$(LIBBSDNT_REF).tar.gz
@@ -191,7 +191,7 @@ dist/depsout/lib/libbsdnt.a: dist/deps/libbsdnt $(DIST_ZIG)
 	cd $< && $(ZIG) build $(ZIG_TARGET) --prefix $(TD)/dist/depsout
 
 # /deps/libgc --------------------------------------------
-LIBGC_REF=311469ea84711c010067719b4e36294e0dde102c
+LIBGC_REF=c0936ed57fa7e30b6a0bf64aab4dcbec12d1c2e7
 deps-download/$(LIBGC_REF).tar.gz:
 	mkdir -p deps-download
 	curl -f -L -o $@ https://github.com/actonlang/bdwgc/archive/$(LIBGC_REF).tar.gz
@@ -199,15 +199,15 @@ deps-download/$(LIBGC_REF).tar.gz:
 dist/deps/libgc: deps-download/$(LIBGC_REF).tar.gz
 	mkdir -p $@
 	cd $@ && tar zx --strip-components=1 -f $(TD)/$<
-	rm -rf $@/cord $@/extra $@/tests $@/tools
+	rm -rf $@/cord $@/tests $@/tools
 	touch $(TD)/$@
 
 dist/depsout/lib/libactongc.a: dist/deps/libgc $(DIST_ZIG)
-	cd $< && $(ZIG) build $(ZIG_TARGET) --prefix $(TD)/dist/depsout
+	cd $< && $(ZIG) build $(ZIG_TARGET) --prefix $(TD)/dist/depsout -DBUILD_SHARED_LIBS=false -Denable_redirect_malloc -Denable_large_config -Denable_mmap
 	mv dist/depsout/lib/libgc.a $@
 
 # /deps/libmbedtls --------------------------------------------
-LIBMBEDTLS_REF=d4d34ef9bb46b2703d97aafb2a0f017fe539512d
+LIBMBEDTLS_REF=9351929a2f776e1073cdbac7963f622e77226a60
 deps-download/$(LIBMBEDTLS_REF).tar.gz:
 	mkdir -p deps-download
 	curl -f -L -o $@ https://github.com/actonlang/mbedtls/archive/$(LIBMBEDTLS_REF).tar.gz
@@ -223,7 +223,7 @@ dist/depsout/lib/libmbedcrypto.a: dist/depsout/lib/libmbedtls.a
 dist/depsout/lib/libmbedx509.a: dist/depsout/lib/libmbedtls.a
 
 # /deps/libprotobuf_c --------------------------------------------
-LIBPROTOBUF_C_REF=085a9c7b72b57015223e2cf81331677ee42eb2eb
+LIBPROTOBUF_C_REF=054ad7def7a9d6132a85747a746dde122c98b78d
 deps-download/$(LIBPROTOBUF_C_REF).tar.gz:
 	mkdir -p deps-download
 	curl -f -L -o $@ https://github.com/actonlang/protobuf-c/archive/$(LIBPROTOBUF_C_REF).tar.gz
@@ -237,7 +237,7 @@ dist/depsout/lib/libprotobuf-c.a: dist/deps/libprotobuf_c $(DIST_ZIG)
 	cd $< && $(ZIG) build $(ZIG_TARGET) --prefix $(TD)/dist/depsout
 
 # /deps/tlsuv ---------------------------------------------
-TLSUV_REF=6640673e3c07210bc89c762abb540599498f1b41
+TLSUV_REF=7a656abfa030792c79950d6f9683c0e1aed1c9af
 deps-download/$(TLSUV_REF).tar.gz:
 	mkdir -p deps-download
 	curl -f -L -o $@ https://github.com/actonlang/tlsuv/archive/$(TLSUV_REF).tar.gz
@@ -251,7 +251,7 @@ dist/depsout/lib/libtlsuv.a: dist/deps/tlsuv $(DIST_ZIG) dist/depsout/lib/libmbe
 	cd $< && $(ZIG) build $(ZIG_TARGET) --prefix $(TD)/dist/depsout --search-prefix $(TD)/dist/depsout
 
 # /deps/libutf8proc --------------------------------------
-LIBUTF8PROC_REF=d9d5995ff10b9f6abf5196da84ba6371aa0c8173
+LIBUTF8PROC_REF=ca34e8c7db7c7c28bddcf2a821d3c02e259c2215
 deps-download/$(LIBUTF8PROC_REF).tar.gz:
 	mkdir -p deps-download
 	curl -f -L -o $@ https://github.com/actonlang/utf8proc/archive/$(LIBUTF8PROC_REF).tar.gz
@@ -273,7 +273,7 @@ dist/depsout/lib/libuuid.a: dist/deps/libuuid $(DIST_ZIG)
 	cd $< && $(ZIG) build $(ZIG_TARGET) --prefix $(TD)/dist/depsout
 
 # /deps/libuv --------------------------------------------
-LIBUV_REF=a75ca2b026b958be9440023687ea84900b344a95
+LIBUV_REF=f85e52114e5149a3108123a601061d65e9c209be
 deps-download/$(LIBUV_REF).tar.gz:
 	mkdir -p deps-download
 	curl -f -L -o $@ https://github.com/actonlang/libuv/archive/$(LIBUV_REF).tar.gz
@@ -287,7 +287,7 @@ dist/depsout/lib/libuv.a: dist/deps/libuv $(DIST_ZIG)
 	cd $< && $(ZIG) build $(ZIG_TARGET) --prefix $(TD)/dist/depsout
 
 # /deps/libxml2 ------------------------------------------
-LIBXML2_REF=ed74756581a0c32d0f2f288bbf6ec07a17bbb0cc
+LIBXML2_REF=14100c19fd1d754bb39c9584fe223b2e2e1ffe77
 deps-download/$(LIBXML2_REF).tar.gz:
 	mkdir -p deps-download
 	curl -f -L -o $@ https://github.com/actonlang/libxml2/archive/$(LIBXML2_REF).tar.gz
@@ -302,7 +302,7 @@ dist/depsout/lib/libxml2.a: dist/deps/libxml2 $(DIST_ZIG)
 	cd $< && $(ZIG) build $(ZIG_TARGET) --prefix $(TD)/dist/depsout
 
 # /deps/pcre2 --------------------------------------------
-LIBPCRE2_REF=096cb970489d948127091713aad59f219ea30d00
+LIBPCRE2_REF=369f485229f211d596d742b69d3c742a65436b41
 deps-download/$(LIBPCRE2_REF).tar.gz:
 	mkdir -p deps-download
 	curl -f -L -o $@ https://github.com/actonlang/pcre2/archive/$(LIBPCRE2_REF).tar.gz
@@ -337,7 +337,7 @@ endif
 builder/builder: builder/build.zig backend/build.zig base/build.zig $(ZIG_DEP) $(DEPS_DIRS)
 	rm -rf builder/zig-cache builder/zig-out
 	(echo 'const root = @import("build.zig");'; tail -n +2 dist/zig/lib/build_runner.zig | sed -e 's/@dependencies/dependencies.zig/') > builder/build_runner.zig
-	cd builder && $(ZIG) build-exe build_runner.zig -femit-bin=builder --mod dependencies::./dependencies.zig --deps dependencies $(ZIG_ARCH_ARG)
+	cd builder && $(ZIG) build-exe build_runner.zig -femit-bin=builder $(ZIG_ARCH_ARG)
 
 .PHONY: base/out/rel/lib/libActon.a base/out/dev/lib/libActon.a
 base/out/rel/lib/libActon.a: $(ACTONC) $(DEPS)
@@ -475,7 +475,7 @@ dist/completion/acton.bash-completion: completion/acton.bash-completion
 dist/zig: deps-download/zig-$(OS)-$(ARCH)-$(ZIG_VERSION).tar.xz
 	mkdir -p $@
 	cd $@ && tar Jx --strip-components=1 -f ../../$^
-	rm -rf $@/doc $@/lib/libcxx $@/lib/libcxxabi $@/lib/libc/include/any-windows-any
+	rm -rf $@/doc
 	cp -a deps/zig-extras/* $@
 
 

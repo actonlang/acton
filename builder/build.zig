@@ -20,7 +20,7 @@ pub const FilePath = struct {
 // if there are actual commonalities between the paths and only traverse
 // upwards as far as necessary.
 fn joinPath(allocator: std.mem.Allocator, dots: []const u8, base: []const u8, relative: []const u8) []const u8 {
-    var path = allocator.alloc(u8, dots.len + base.len + relative.len + 1) catch @panic("OOM");
+    const path = allocator.alloc(u8, dots.len + base.len + relative.len + 1) catch @panic("OOM");
     _ = std.fmt.bufPrint(path, "{s}{s}/{s}", .{dots, base, relative}) catch @panic("Error joining paths");
     return path;
 }
@@ -43,7 +43,7 @@ fn dotsToRoot(allocator: std.mem.Allocator, cwd: []const u8) []const u8 {
     return dotpath;
 }
 
-pub fn build(b: *std.build.Builder) void {
+pub fn build(b: *std.Build) void {
     const buildroot_path = b.build_root.handle.realpathAlloc(b.allocator, ".") catch @panic("ASD");
     const dots_to_root = dotsToRoot(b.allocator, buildroot_path);
     defer b.allocator.free(dots_to_root);
@@ -75,6 +75,10 @@ pub fn build(b: *std.build.Builder) void {
     const dep_libgc = b.anonymousDependency(joinPath(b.allocator, dots_to_root, syspath, "deps/libgc"), @import("deps/libgc/build.zig"), .{
         .target = target,
         .optimize = optimize,
+        .BUILD_SHARED_LIBS = false,
+        .enable_redirect_malloc = true,
+        .enable_large_config = true,
+        .enable_mmap = true,
     });
 
 
@@ -140,9 +144,11 @@ pub fn build(b: *std.build.Builder) void {
     });
     // -- ActonDeps ------------------------------------------------------------
 
-    var iter_dir = b.build_root.handle.openIterableDir(
+    var iter_dir = b.build_root.handle.openDir(
         "out/types/",
-        .{},
+        .{
+            .iterate = true
+        },
     ) catch |err| {
         std.log.err("Error opening iterable dir: {}", .{err});
         std.os.exit(1);
@@ -269,7 +275,7 @@ pub fn build(b: *std.build.Builder) void {
         };
         if (entry.test_root) {
             // Write '.test_' to start of binname
-            var buf = std.fmt.allocPrint(b.allocator, ".test_{s}", .{entry.file_path[1..entry.file_path.len - ".test_root.c".len]}) catch |err| {
+            const buf = std.fmt.allocPrint(b.allocator, ".test_{s}", .{entry.file_path[1..entry.file_path.len - ".test_root.c".len]}) catch |err| {
                 std.log.err("Error allocating binname: {}", .{err});
                 std.os.exit(1);
             };
@@ -300,23 +306,23 @@ pub fn build(b: *std.build.Builder) void {
         executable.linkLibrary(libActonProject);
 
         if (use_prebuilt) {
-            executable.linkSystemLibraryName("Acton");
-            executable.linkSystemLibraryName("argp");
-            executable.linkSystemLibraryName("bsdnt");
-            executable.linkSystemLibraryName("netstring");
-            executable.linkSystemLibraryName("pcre2");
-            executable.linkSystemLibraryName("protobuf-c");
-            executable.linkSystemLibraryName("tlsuv");
-            executable.linkSystemLibraryName("mbedtls");
-            executable.linkSystemLibraryName("mbedcrypto");
-            executable.linkSystemLibraryName("mbedx509");
-            executable.linkSystemLibraryName("utf8proc");
-            executable.linkSystemLibraryName("uuid");
-            executable.linkSystemLibraryName("uv");
-            executable.linkSystemLibraryName("xml2");
-            executable.linkSystemLibraryName("yyjson");
-            executable.linkSystemLibraryName("ActonDB");
-            executable.linkSystemLibraryName("actongc");
+            executable.linkSystemLibrary("Acton");
+            executable.linkSystemLibrary("argp");
+            executable.linkSystemLibrary("bsdnt");
+            executable.linkSystemLibrary("netstring");
+            executable.linkSystemLibrary("pcre2");
+            executable.linkSystemLibrary("protobuf-c");
+            executable.linkSystemLibrary("tlsuv");
+            executable.linkSystemLibrary("mbedtls");
+            executable.linkSystemLibrary("mbedcrypto");
+            executable.linkSystemLibrary("mbedx509");
+            executable.linkSystemLibrary("utf8proc");
+            executable.linkSystemLibrary("uuid");
+            executable.linkSystemLibrary("uv");
+            executable.linkSystemLibrary("xml2");
+            executable.linkSystemLibrary("yyjson");
+            executable.linkSystemLibrary("ActonDB");
+            executable.linkSystemLibrary("actongc");
         } else {
             executable.linkLibrary(actonbase_dep.artifact("Acton"));
             executable.linkLibrary(libactondb_dep.artifact("ActonDB"));
