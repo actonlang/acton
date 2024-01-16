@@ -12,7 +12,7 @@ pub const FilePath = struct {
     file_path: []const u8,
 };
 
-pub fn build(b: *std.build.Builder) void {
+pub fn build(b: *std.Build) void {
     const buildroot_path = b.build_root.handle.realpathAlloc(b.allocator, ".") catch unreachable;
     print("Acton Base Builder\nBuilding in {s}\n", .{buildroot_path});
     const optimize = b.standardOptimizeOption(.{});
@@ -37,9 +37,11 @@ pub fn build(b: *std.build.Builder) void {
     _ = syspath_lib;
     _ = syspath;
 
-    var iter_dir = b.build_root.handle.openIterableDir(
+    var iter_dir = b.build_root.handle.openDir(
         "out/types/",
-        .{},
+        .{
+            .iterate = true
+        },
     ) catch |err| {
         std.log.err("Error opening iterable dir: {}", .{err});
         std.os.exit(1);
