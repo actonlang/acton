@@ -22,6 +22,7 @@ class Acton < Formula
 
     ENV["BUILD_RELEASE"] = "1"
     system "make"
+    bin.install "dist/bin/acton"
     bin.install "dist/bin/actonc"
     bin.install "dist/bin/actondb"
     bin.install "dist/bin/runacton"
