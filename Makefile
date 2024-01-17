@@ -137,6 +137,7 @@ DEPS_DIRS += dist/deps/libuuid
 DEPS_DIRS += dist/deps/libuv
 DEPS_DIRS += dist/deps/libxml2
 DEPS_DIRS += dist/deps/libyyjson
+DEPS_DIRS += dist/deps/libsnappy_c
 
 DEPS += dist/depsout/lib/libactongc.a
 DEPS += dist/depsout/lib/libargp.a
@@ -153,6 +154,7 @@ DEPS += dist/depsout/lib/libuv.a
 DEPS += dist/depsout/lib/libxml2.a
 DEPS += dist/depsout/lib/libnetstring.a
 DEPS += dist/depsout/lib/libyyjson.a
+DEPS += dist/depsout/lib/libsnappy-c.a
 
 .PHONE: clean-downloads
 clean-downloads:
@@ -312,6 +314,21 @@ dist/deps/pcre2: deps-download/$(LIBPCRE2_REF).tar.gz
 dist/depsout/lib/libpcre2.a: dist/deps/pcre2 $(DIST_ZIG)
 	cd $< && $(ZIG) build $(ZIG_TARGET) --prefix $(TD)/dist/depsout
 
+# /deps/libsnappy_c --------------------------------------------
+LIBSNAPPY_C_REF=599cffcb9e9319d459fba55d80d4bee7616f5511
+deps-download/$(LIBSNAPPY_C_REF).tar.gz:
+	mkdir -p deps-download
+	curl -f -L -o $@ https://github.com/actonlang/snappy/archive/$(LIBSNAPPY_C_REF).tar.gz
+
+dist/deps/libsnappy_c: deps-download/$(LIBSNAPPY_C_REF).tar.gz
+	mkdir -p $@
+	cd $@ && tar zx --strip-components=1 -f $(TD)/$<
+	touch $(TD)/$@
+
+dist/depsout/lib/libsnappy-c.a: dist/deps/libsnappy_c $(DIST_ZIG)
+	cd $< && $(ZIG) build $(ZIG_TARGET) --prefix $(TD)/dist/depsout
+
+
 # --
 dist/deps/libnetstring: deps/libnetstring $(DIST_ZIG)
 	mkdir -p $(TD)/$@
@@ -439,7 +456,7 @@ dist/builder: builder/builder
 	@mkdir -p $@
 	cp -a builder/builder builder/*.zig $@/
 
-DIST_DEPS=$(addprefix dist/deps/,libargp libbsdnt libgc libnetstring libprotobuf_c libutf8proc libuuid libuv libxml2 libyyjson pcre2)
+DIST_DEPS=$(addprefix dist/deps/,libargp libbsdnt libgc libnetstring libprotobuf_c libutf8proc libuuid libuv libxml2 libyyjson pcre2 libsnappy_c)
 dist/deps/%: deps/% $(DEPS)
 	@mkdir -p $(dir $@)
 	cp -a $< $@
