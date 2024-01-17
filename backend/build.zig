@@ -76,6 +76,7 @@ pub fn build(b: *std.Build) void {
     libactondb.defineCMacro("LOG_USER_COLOR", "");
     libactondb.addIncludePath(.{ .path = syspath_include });
     libactondb.linkLibC();
+    libactondb.linkLibCpp();
     b.installArtifact(libactondb);
 
     const actondb = b.addExecutable(.{
@@ -96,5 +97,6 @@ pub fn build(b: *std.Build) void {
     actondb.linkLibrary(dep_libuuid.artifact("uuid"));
     actondb.linkLibrary(dep_libyyjson.artifact("yyjson"));
     actondb.linkLibC();
+    actondb.linkLibCpp();
     b.installArtifact(actondb);
 }

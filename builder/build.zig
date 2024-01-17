@@ -261,6 +261,7 @@ pub fn build(b: *std.Build) void {
     libActonProject.addIncludePath(.{ .path = syspath_base });
     libActonProject.addIncludePath(.{ .path = syspath_include });
     libActonProject.linkLibC();
+    libActonProject.linkLibCpp();
     b.installArtifact(libActonProject);
 
     for (root_c_files.items) |entry| {
@@ -344,6 +345,7 @@ pub fn build(b: *std.Build) void {
         }
 
         executable.linkLibC();
+        executable.linkLibCpp();
         b.installArtifact(executable);
     }
 }
