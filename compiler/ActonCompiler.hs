@@ -67,30 +67,32 @@ import Text.Printf
 
 import qualified Data.ByteString.Char8 as B
 
-main                     =  do arg <- C.parseCmdLine
-                               case arg of
-                                   C.VersionOpt opts       -> printVersion opts
-                                   C.CmdOpt (C.New opts)   -> createProject (C.file opts)
-                                   C.CmdOpt (C.Build opts) -> buildProject $ defaultOpts {
-                                     C.alwaysbuild = C.alwaysB opts,
-                                     C.autostub = C.autostubB opts,
-                                     C.cpedantic = C.cpedanticB opts,
-                                     C.debug = C.debugB opts,
-                                     C.dev = C.devB opts,
-                                     C.root = C.rootB opts,
-                                     C.ccmd = C.ccmdB opts,
-                                     C.quiet = C.quietB opts,
-                                     C.timing = C.timingB opts,
-                                     C.cc = C.ccB opts,
-                                     C.target = C.targetB opts,
-                                     C.cachedir = C.cachedirB opts,
-                                     C.zigbuild = C.zigbuildB opts,
-                                     C.nozigbuild = C.nozigbuildB opts,
-                                     C.test = C.testB opts
-                                     }
-                                   C.CmdOpt (C.Cloud opts) -> undefined
-                                   C.CmdOpt (C.Doc opts)   -> printDocs opts
-                                   C.CompileOpt nms opts   -> compileFiles opts (catMaybes $ map filterActFile nms)
+main = do
+    hSetBuffering stdout LineBuffering
+    arg <- C.parseCmdLine
+    case arg of
+        C.VersionOpt opts       -> printVersion opts
+        C.CmdOpt (C.New opts)   -> createProject (C.file opts)
+        C.CmdOpt (C.Build opts) -> buildProject $ defaultOpts {
+          C.alwaysbuild = C.alwaysB opts,
+          C.autostub = C.autostubB opts,
+          C.cpedantic = C.cpedanticB opts,
+          C.debug = C.debugB opts,
+          C.dev = C.devB opts,
+          C.root = C.rootB opts,
+          C.ccmd = C.ccmdB opts,
+          C.quiet = C.quietB opts,
+          C.timing = C.timingB opts,
+          C.cc = C.ccB opts,
+          C.target = C.targetB opts,
+          C.cachedir = C.cachedirB opts,
+          C.zigbuild = C.zigbuildB opts,
+          C.nozigbuild = C.nozigbuildB opts,
+          C.test = C.testB opts
+          }
+        C.CmdOpt (C.Cloud opts) -> undefined
+        C.CmdOpt (C.Doc opts)   -> printDocs opts
+        C.CompileOpt nms opts   -> compileFiles opts (catMaybes $ map filterActFile nms)
 
 defaultOpts   = C.CompileOptions False False False False False False False False False False False
                                  False False False False False False False False "" "" "" ""
