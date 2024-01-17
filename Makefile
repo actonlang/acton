@@ -463,7 +463,7 @@ dist/completion/acton.bash-completion: completion/acton.bash-completion
 dist/zig: deps-download/zig-$(OS)-$(ARCH)-$(ZIG_VERSION).tar.xz
 	mkdir -p $@
 	cd $@ && tar Jx --strip-components=1 -f ../../$^
-	rm -rf $@/doc $@/lib/libcxx $@/lib/libcxxabi $@/lib/libc/include/any-windows-any
+	rm -rf $@/doc $@/lib/libc/include/any-windows-any
 	cp -a deps/zig-extras/* $@
 
 
