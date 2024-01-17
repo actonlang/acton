@@ -150,5 +150,6 @@ pub fn build(b: *std.build.Builder) void {
     libActon.addIncludePath(.{ .path = "../inc" }); // hack hack for stdlib TODO: sort out
     libActon.addIncludePath(.{ .path = "../deps/instdir/include" }); // hack hack for stdlib TODO: sort out
     libActon.linkLibC();
+    libActon.linkLibCpp();
     b.installArtifact(libActon);
 }
