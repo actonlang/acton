@@ -57,8 +57,7 @@ int ENQ_ready($Actor a) {
 #endif
 
 // Atomically enqueue actor "a" onto the right ready-queue, either a thread
-// local one or the "default" of 0 which is a shared queue among all worker
-// threads. The index is offset by 1 so worker thread 0 is at index 1.
+// local one or the "default" shared one.
 
 // Atomically dequeue and return the first actor from a ready-queue, first
 // dequeueing from the thread specific queue and second from the global shared
@@ -112,7 +111,13 @@ $Actor DEQ_ready(int idx) {
     if (res)
         return res;
 
-    res = _DEQ_ready(0);
+    // Unless we are running without threads, worker thread 0 (our main thread)
+    // is special and does not pick up work from the shared queue. It only
+    // serves special actors scheduled on it.
+    if (idx == 0)
+        return NULL;
+
+    res = _DEQ_ready(SHARED_RQ);
     return res;
 }
 

@@ -78,7 +78,7 @@ B_Env B_EnvG_newactor(B_WorldCap wc, B_SysCap sc, B_list args) {
     $tmp->syscap = sc;
     $tmp->auth = $tmp->cap;
     $tmp->argv = $tmp->args;
-    $tmp->$affinity = 0;
+    $tmp->$affinity = 0; // hard-coded to special worker on the main thread
     serialize_state_shortcut(($Actor)$tmp);
     return $tmp;
 }
