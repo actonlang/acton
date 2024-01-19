@@ -537,13 +537,19 @@ actor test_runner(env: Env, unit_tests: dict[str, UnitTest], sync_actor_tests: d
             if r is not None:
                 return r.1
 
-        def report_result(t, test_result: TestResult):
-            results.update(t, test_result)
+        def check_complete():
             if len(hand_out) == 0:
                 _run_sync_actor_tests(args)
+                return True
+            return False
 
-        for i in range(env.nr_wthreads):
-            unit_test_runner(i, get_test, report_result)
+        def report_result(t, test_result: TestResult):
+            results.update(t, test_result)
+            check_complete()
+
+        if not check_complete():
+            for i in range(env.nr_wthreads):
+                unit_test_runner(i, get_test, report_result)
 
     proc def _run_sync_actor_tests(args):
         hand_out = sync_actor_tests
@@ -553,13 +559,19 @@ actor test_runner(env: Env, unit_tests: dict[str, UnitTest], sync_actor_tests: d
             if r is not None:
                 return r.1
 
-        def report_result(t, test_result: TestResult):
-            results.update(t, test_result)
+        def check_complete():
             if len(hand_out) == 0:
                 _run_async_actor_tests(args)
+                return True
+            return False
 
-        for i in range(0, min([1, env.nr_wthreads // 4], None), 1):
-            sync_actor_test_runner(get_test, report_result)
+        def report_result(t, test_result: TestResult):
+            results.update(t, test_result)
+            check_complete()
+
+        if not check_complete():
+            for i in range(0, min([1, env.nr_wthreads // 4], None), 1):
+                sync_actor_test_runner(get_test, report_result)
 
     proc def _run_async_actor_tests(args):
         hand_out = async_actor_tests
@@ -569,13 +581,19 @@ actor test_runner(env: Env, unit_tests: dict[str, UnitTest], sync_actor_tests: d
             if r is not None:
                 return r.1
 
-        def report_result(t, test_result: TestResult):
-            results.update(t, test_result)
+        def check_complete():
             if len(hand_out) == 0:
                 _run_env_tests(args)
+                return True
+            return False
 
-        for i in range(0, min([1, env.nr_wthreads // 4], None), 1):
-            async_actor_test_runner(get_test, report_result)
+        def report_result(t, test_result: TestResult):
+            results.update(t, test_result)
+            check_complete()
+
+        if not check_complete():
+            for i in range(0, min([1, env.nr_wthreads // 4], None), 1):
+                async_actor_test_runner(get_test, report_result)
 
     proc def _run_env_tests(args):
         hand_out = env_tests
@@ -585,11 +603,18 @@ actor test_runner(env: Env, unit_tests: dict[str, UnitTest], sync_actor_tests: d
             if r is not None:
                 return r.1
 
+        def check_complete():
+            if len(hand_out) == 0:
+                # TODO: exit immediately or somethnig?
+                return True
+            return False
+
         def report_result(t, test_result: TestResult):
             results.update(t, test_result)
 
-        for i in range(0, min([1, env.nr_wthreads // 4], None), 1):
-            env_test_runner(get_test, report_result, env)
+        if not check_complete():
+            for i in range(0, min([1, env.nr_wthreads // 4], None), 1):
+                env_test_runner(get_test, report_result, env)
 
 
 
