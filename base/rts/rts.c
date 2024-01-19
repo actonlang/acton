@@ -2699,6 +2699,13 @@ int main(int argc, char **argv) {
     uv_timer_init(aux_uv_loop, timer_ev);
     uv_timer_start(timer_ev, main_timer_cb, 0, 0);
 
+    // Set affinity for main thread
+    if (cpu_pin) {
+        CPU_ZERO(&cpu_set);
+        CPU_SET(0, &cpu_set);
+        pthread_setaffinity_np(pthread_self(), sizeof(cpu_set), &cpu_set);
+    }
+
     wt_stats[0].state = WT_Idle;
     int r = uv_run(aux_uv_loop, UV_RUN_DEFAULT);
     wt_stats[0].state = WT_NoExist;
