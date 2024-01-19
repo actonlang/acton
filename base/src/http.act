@@ -172,7 +172,8 @@ class Request(object):
     def __str__(self):
         return "<http.Request " + str(self.method) + " " + str(self.path) + " " + str(self.version) + " " + self.headers.__str__() + " " + str(self.body) + ">"
 
-    def compare(self, other):
+extension Request(Eq):
+    def __eq__(self, other):
         return self.method == other.method and self.path == other.path and self.version == other.version and self.headers == other.headers and self.body == other.body
 
 
@@ -197,6 +198,10 @@ class Response(object):
 
     def decode_json(self):
         return json.decode(self.body.decode())
+
+extension Response(Eq):
+    def __eq__(self, other):
+        return self.version == other.version and self.status == other.status and self.headers == other.headers and self.body == other.body
 
 
 def parse_message(i: bytes, log: logging.Logger) -> (?Message, bytes):
