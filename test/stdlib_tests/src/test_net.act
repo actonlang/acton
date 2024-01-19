@@ -1,0 +1,26 @@
+import net
+import testing
+
+def _test_is_ipv4():
+    testing.assertTrue(net.is_ipv4("1.2.3.4"))
+    testing.assertTrue(net.is_ipv4("123.123.123.123"))
+
+    testing.assertFalse(net.is_ipv4("1.2.3.4.5"))
+    testing.assertFalse(net.is_ipv4("256.123.123.123"))
+
+def _test_is_ipv6():
+    testing.assertTrue(net.is_ipv6("2001:db8::1"))
+    testing.assertTrue(net.is_ipv6("2001:DB8::1"))
+
+    testing.assertFalse(net.is_ipv6("2001:db8::123456"))
+    testing.assertFalse(net.is_ipv6("2001:db8:::1"))
+
+
+# TODO: compiler should generate this
+__unit_tests: dict[str, testing.UnitTest] = {
+    "_test_is_ipv4": testing.UnitTest(_test_is_ipv4, "is_ipv4", "is_ipv4()"),
+    "_test_is_ipv6": testing.UnitTest(_test_is_ipv6, "is_ipv6", "is_ipv6()"),
+}
+
+actor __test_main(env):
+    testing.test_runner(env, __unit_tests, {}, {}, {})

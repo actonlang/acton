@@ -37,5 +37,5 @@ __unit_tests: dict[str, testing.UnitTest] = {
     "_test_xml": testing.UnitTest(_test_xml, "xml", "XML str -> data -> XML str"),
 }
 
-actor main(env):
+actor __test_main(env):
     testing.test_runner(env, __unit_tests, {}, {}, {})

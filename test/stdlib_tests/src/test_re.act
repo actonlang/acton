@@ -54,5 +54,5 @@ __unit_tests: dict[str, testing.UnitTest] = {
     "_test_matches": testing.UnitTest(_test_matches, "matches", "Regexp finding all matches"),
 }
 
-actor main(env):
+actor __test_main(env):
     testing.test_runner(env, __unit_tests, {}, {}, {})

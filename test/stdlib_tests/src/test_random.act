@@ -125,5 +125,5 @@ __unit_tests: dict[str, testing.UnitTest] = {
     "_test_random_distribution": testing.UnitTest(_test_random_distribution, "random_distribution", "random.randint() returns a value within the specified range"),
 }
 
-actor main(env):
+actor __test_main(env):
     testing.test_runner(env, __unit_tests, {}, {}, {})

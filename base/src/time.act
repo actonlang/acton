@@ -720,26 +720,3 @@ class PrecisionStopwatch:
         if not n.comparable(self.start):
             raise Exception("Monotonic clock not comparable")
         return n.since(self.start)
-
-
-# TODO: get rid of these
-# For some reason, we can't call these functions etc from elsewhere
-# (tests/stdlib_auto/test_time.act), so we use this test function here and at
-# least we are able to test basic functionality.
-def test():
-#    t1 = Instant.now()
-    t = Stopwatch()
-    d1 = Duration.from_parts(1, 2, 3, 4, 5, 6, RealtimeClock(1, 0, 0))
-    print("My local time is :", now())
-    print("While UTC time is:", utcnow())
-    print(d1)
-#    print(Duration(1814400+69, 0))
-    print("Elapsed time:" + str(t.elapsed().str_us()))
-    print("Elapsed time:" + str(t.elapsed().str_us()))
-#    t2 = Instant.now()
-#    d = t2.since(t1)
-#    print(str(d))
-#
-#    dt = DateTime.now()
-#    print("Current time:", dt)
-#    print("Current time:", dt.str_rfc1123())
