@@ -1,0 +1,13 @@
+import uri
+import testing
+
+def _test_uri():
+    testing.assertEqual("http", uri.get_scheme("http://www.google.com").0, "failed to get http scheme")
+
+# TODO: compiler should generate this
+__unit_tests: dict[str, testing.UnitTest] = {
+    "_test_uri": testing.UnitTest(_test_uri, "uri", "URI"),
+}
+
+actor __test_main(env):
+    testing.test_runner(env, __unit_tests, {}, {}, {})

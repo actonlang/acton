@@ -1,6 +1,7 @@
 #!/usr/bin/env runacton
 
 import acton.rts
+import argparse
 import random
 import net
 import process
@@ -41,7 +42,7 @@ actor Client(connect_cap, port: int):
         client.write(data)
 
 
-actor Tester(env, verbose, port_chunk):
+actor Tester(env, verbose, port_chunk, app_wthreads=4):
     process_cap = process.ProcessCap(env.cap)
     var ps = []
     var psp: dict[int, str] = {}
@@ -138,7 +139,7 @@ actor Tester(env, verbose, port_chunk):
     def test_ddb_server():
         connect_cap = net.TCPConnectCap(net.TCPCap(net.NetCap(env.cap)))
         port = port_chunk+199
-        cmd = ["./rts_db/ddb_test_server", str(port), "--rts-verbose"] + db_args(port_chunk, 3)
+        cmd = ["./rts_db/ddb_test_server", str(port), "--rts-verbose", "--rts-wthreads=%d" % app_wthreads] + db_args(port_chunk, 3)
         p = None
 
         def tcpc_on_connect(c):
@@ -260,6 +261,9 @@ actor Tester(env, verbose, port_chunk):
     test_ddb_server()
 
 actor main(env):
+    p = argparse.Parser()
+    p.add_bool("verbose", "verbose mode")
+
     verbose = '--verbose' in set(env.argv)
 
     # compute random base port between PORT_CHUNK_MIN and PORT_CHUNK_MAX

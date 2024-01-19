@@ -6,6 +6,7 @@ GIT_VERSION_TAG=$(shell git tag --points-at HEAD 2>/dev/null | grep "v[0-9]" | s
 ZIG_LOCAL_CACHE_DIR ?= $(TD)/zig-cache
 export ZIG_LOCAL_CACHE_DIR
 
+ACTON=$(TD)/dist/bin/acton
 ACTONC=dist/bin/actonc
 ACTC=dist/bin/actonc $(ACTONC_TARGET)
 ZIG_VERSION:=0.12.0-dev.2236+32e88251e
@@ -390,6 +391,7 @@ test-rts-db:
 
 test-stdlib:
 	cd compiler && stack test --ta '-p "stdlib"'
+	cd test/stdlib_tests && $(ACTON) test
 
 
 .PHONY: clean clean-all clean-base
