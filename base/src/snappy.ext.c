@@ -18,14 +18,15 @@ B_bytes snappyQ_compress (B_bytes data) {
     input = (char*)fromB_bytes(data);
     input_len = (size_t)data->nbytes;
 
-    compressed = malloc(snappy_max_compressed_length(input_len));
+    compressed_len = snappy_max_compressed_length(input_len);
+    compressed = malloc(compressed_len);
     status = snappy_compress(input, input_len, compressed, &compressed_len);
 
     if (SNAPPY_OK == status) {
-	ret = to$bytesD_len(compressed, (int)compressed_len);
+        ret = to$bytesD_len(compressed, (int)compressed_len);
     }
     else {
-	char *errmsg = SNAPPY_INVALID_INPUT == status ? "Invalid input" : "Buffer too small";
+        char *errmsg = SNAPPY_INVALID_INPUT == status ? "Invalid input" : "Buffer too small";
         $RAISE((B_BaseException)$NEW(B_ValueError, to$str(errmsg)));
     }
 
@@ -43,10 +44,10 @@ B_bytes snappyQ_uncompress (B_bytes data) {
     input = (char*)fromB_bytes(data);
     input_len = (size_t)data->nbytes;
 
-    snappy_uncompressed_length(input, input_len, &uncompressed_len);
+    status = snappy_uncompressed_length(input, input_len, &uncompressed_len);
 
     if (SNAPPY_OK != status) {
-	char *errmsg = SNAPPY_INVALID_INPUT == status ? "Invalid input" : "Buffer too small";
+	char *errmsg = (SNAPPY_INVALID_INPUT == status) ? "Invalid input" : "Buffer too small";
         $RAISE((B_BaseException)$NEW(B_ValueError, to$str(errmsg)));
     }
 
@@ -61,5 +62,5 @@ B_bytes snappyQ_uncompress (B_bytes data) {
         $RAISE((B_BaseException)$NEW(B_ValueError, to$str(errmsg)));
     }
 
-    return to$bytesD_len(uncompressed, (int)uncompressed_len);
+    return ret;
 }
