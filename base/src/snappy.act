@@ -1,28 +1,9 @@
-actor Json():
-    """JSON actor for distributed async processing
-
-    This actor can be used to process JSON data in a asynchronous distributed
-    fashion. The `encode` and `decode` methods are identical to the free
-    `encode` and `decode` functions in this module but by being wrapped in an
-    actor, they can be:
-    - called asynchronously
-    - the Json actor can be run by a different worker
-    Thus, by using one or multiple Json actors, the work of encoding or decoding
-    JSON can be distributed across multiple actors / workers / CPUs.
-    """
-    action def decode(data: str) -> dict[str, value]:
-        return decode(data)
-
-    action def encode(data: dict[str, value]) -> str:
-        return encode(data)
-
-
 mut def compress(data: bytes) -> bytes:
     """Decode a JSON string into a dictionary of values
     """
     NotImplemented
 
-mut def decompress(data: bytes) -> bytes:
+mut def uncompress(data: bytes) -> bytes:
     """Encode a dictionary into a JSON string
     """
     NotImplemented
