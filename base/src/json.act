@@ -17,12 +17,12 @@ actor Json():
         return encode(data)
 
 
-mut def decode(data: str) -> dict[str, value]:
+def decode(data: str) -> dict[str, value]:
     """Decode a JSON string into a dictionary of values
     """
     NotImplemented
 
-mut def encode(data: dict[str, value]) -> str:
+def encode(data: dict[str, value]) -> str:
     """Encode a dictionary into a JSON string
     """
     NotImplemented
