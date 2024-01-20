@@ -1,0 +1,53 @@
+import net
+import http
+import logging
+
+def _test_http_client_server(report_result, env, log_handler: logging.Handler):
+    log = logging.Logger(log_handler)
+
+    serv_cap = net.TCPListenCap(net.TCPCap(net.NetCap(env.cap)))
+
+    def _on_http_listen_error(listener, error):
+        pass
+
+    def _on_http_accept(server):
+        server.cb_install(_on_http_server_request, _on_http_server_error)
+
+    def _on_http_server_request(server, request, respond):
+        respond(200, {}, "Hello, world!")
+
+    def _on_http_server_error(server, error):
+        pass
+
+    server = http.Listener(serv_cap, "0.0.0.0", 8473, _on_http_listen_error, _on_http_accept)
+
+
+actor main(env):
+
+    serv_cap = net.TCPListenCap(net.TCPCap(net.NetCap(env.cap)))
+
+    def _on_http_listen_error(listener, error):
+        pass
+
+    def _on_http_accept(server):
+        server.cb_install(_on_http_server_request, _on_http_server_error)
+
+    def _on_http_server_request(server, request, respond):
+        respond(200, {}, "Hello, world!")
+
+    def _on_http_server_error(server, error):
+        pass
+
+    server = http.Listener(serv_cap, "0.0.0.0", 8473, _on_http_listen_error, _on_http_accept)
+
+    def _on_http_connect(c):
+        c.get("/", _on_http_receive)
+
+    def _on_http_receive(c, data):
+        print("GOT")
+
+    def _on_http_error(c, errmsg):
+        print(errmsg)
+
+    conn_cap = net.TCPConnectCap(net.TCPCap(net.NetCap(env.cap)))
+    client = http.Client(conn_cap, "127.0.0.1", _on_http_connect, _on_http_error, port=8473)
