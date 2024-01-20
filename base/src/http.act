@@ -426,6 +426,8 @@ actor Server(conn: net.TCPListenConnection, on_accept: action(Server) -> None, l
 
 
 # TODO: change port to u16, when u16 has a sub-type relationship to int
+# TODO: make on_listen_error optional and move it after on_accept, default should be some action that just automatically retries with a backoff
+# TODO: add restart method to restart the listener
 actor Listener(cap: net.TCPListenCap, address: str, port: int, on_listen_error: action(net.TCPListener, str) -> None, on_accept: action(Server) -> None, log_handler: ?logging.Handler):
     """HTTP Server Listener
 
