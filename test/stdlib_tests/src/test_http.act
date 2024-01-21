@@ -52,9 +52,6 @@ actor _actest_http_client_server(report_result, env, log_handler: logging.Handle
 
     serv_cap = net.TCPListenCap(net.TCPCap(net.NetCap(env.cap)))
 
-    def _on_http_listen_error(listener, error):
-        pass
-
     def _on_http_accept(server):
         server.cb_install(_on_http_server_request, _on_http_server_error)
 
@@ -64,7 +61,7 @@ actor _actest_http_client_server(report_result, env, log_handler: logging.Handle
     def _on_http_server_error(server, error):
         pass
 
-    server = http.Listener(serv_cap, "0.0.0.0", 8473, _on_http_listen_error, _on_http_accept)
+    server = http.Listener(serv_cap, "0.0.0.0", 8473, _on_http_accept)
 
     def _on_http_connect(c):
         c.get("/", {}, _on_http_receive)
