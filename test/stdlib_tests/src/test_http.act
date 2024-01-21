@@ -64,7 +64,7 @@ actor _actest_http_client_server(report_result, env, log_handler: logging.Handle
     server = http.Listener(serv_cap, "0.0.0.0", 8473, _on_http_accept)
 
     def _on_http_connect(c):
-        c.get("/", {}, _on_http_receive)
+        c.get("/", _on_http_receive)
 
     def _on_http_receive(c, data):
         report_result(True, None)

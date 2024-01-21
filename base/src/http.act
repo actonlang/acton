@@ -438,6 +438,7 @@ actor Listener(cap: net.TCPListenCap, address: str, port: int, on_accept: action
     """
     _log = logging.Logger(log_handler)
     var bufs = []
+
     def on_tcp_listener_error(listener, error):
         _log.notice("There was an error with the TCPListener socket", {"error": error})
 
@@ -545,19 +546,19 @@ actor Client(cap: net.TCPConnectCap, address: str, on_connect: action(Client) ->
             tls_conn.write(data)
 
     # HTTP methods
-    def get(path: str, headers: dict[str, str], on_response: action(Client, Response) -> None):
+    def get(path: str, on_response: action(Client, Response) -> None, headers: dict[str, str] = {}):
         req = build_request(address, b"GET", path.encode(), b"1.1", headers, b"")
         _log.debug("Sending request", {"method": "GET", "path": path})
         _on_response.append((req, on_response))
         _conn_write(req)
 
-    def head(path: str, headers: dict[str, str], on_response: action(Client, Response) -> None):
+    def head(path: str, on_response: action(Client, Response) -> None, headers: dict[str, str] = {}):
         req = build_request(address, b"HEAD", path.encode(), b"1.1", headers, b"")
         _log.debug("Sending request", {"method": "HEAD", "path": path})
         _on_response.append((req, on_response))
         _conn_write(req)
 
-    def post(path: str, headers: dict[str, str], body: bytes, on_response: action(Client, Response) -> None):
+    def post(path: str, body: bytes, on_response: action(Client, Response) -> None, headers: dict[str, str] = {}):
         if "Content-Type" not in headers:
             headers["Content-Type"] = "application/x-www-form-urlencoded"
         req = build_request(address, b"POST", path.encode(), b"1.1", headers, body)
@@ -565,13 +566,13 @@ actor Client(cap: net.TCPConnectCap, address: str, on_connect: action(Client) ->
         _on_response.append((req, on_response))
         _conn_write(req)
 
-    def put(path: str, headers: dict[str, str], body: bytes, on_response: action(Client, Response) -> None):
+    def put(path: str, body: bytes, on_response: action(Client, Response) -> None, headers: dict[str, str] = {}):
         req = build_request(address, b"PUT", path.encode(), b"1.1", headers, body)
         _log.debug("Sending request", {"method": "PUT", "path": path})
         _on_response.append((req, on_response))
         _conn_write(req)
 
-    def delete(path: str, headers: dict[str, str], on_response: action(Client, Response) -> None):
+    def delete(path: str, on_response: action(Client, Response) -> None, headers: dict[str, str] = {}):
         req = build_request(address, b"DELETE", path.encode(), b"1.1", headers, b"")
         _log.debug("Sending request", {"method": "DELETE", "path": path})
         _on_response.append((req, on_response))
