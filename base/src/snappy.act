@@ -3,7 +3,7 @@ def compress(data: bytes) -> bytes:
     """
     NotImplemented
 
-def uncompress(data: bytes) -> bytes:
+def decompress(data: bytes) -> bytes:
     """Decompress Snappy data
     """
     NotImplemented

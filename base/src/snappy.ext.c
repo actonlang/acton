@@ -33,7 +33,7 @@ B_bytes snappyQ_compress (B_bytes data) {
     return ret;
 }
 
-B_bytes snappyQ_uncompress (B_bytes data) {
+B_bytes snappyQ_decompress (B_bytes data) {
     char *input;
     char *uncompressed;
     size_t input_len;
