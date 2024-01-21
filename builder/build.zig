@@ -142,6 +142,12 @@ pub fn build(b: *std.Build) void {
         .target = target,
         .optimize = optimize,
     });
+
+    const dep_libsnappy_c = b.anonymousDependency(joinPath(b.allocator, dots_to_root, syspath, "deps/libsnappy_c"), @import("deps/libsnappy_c/build.zig"), .{
+        .target = target,
+        .optimize = optimize,
+    });
+
     // -- ActonDeps ------------------------------------------------------------
 
     var iter_dir = b.build_root.handle.openDir(
@@ -261,6 +267,7 @@ pub fn build(b: *std.Build) void {
     libActonProject.addIncludePath(.{ .path = syspath_base });
     libActonProject.addIncludePath(.{ .path = syspath_include });
     libActonProject.linkLibC();
+    libActonProject.linkLibCpp();
     b.installArtifact(libActonProject);
 
     for (root_c_files.items) |entry| {
@@ -321,6 +328,7 @@ pub fn build(b: *std.Build) void {
             executable.linkSystemLibrary("uv");
             executable.linkSystemLibrary("xml2");
             executable.linkSystemLibrary("yyjson");
+            executable.linkSystemLibrary("snappy-c");
             executable.linkSystemLibrary("ActonDB");
             executable.linkSystemLibrary("actongc");
         } else {
@@ -339,11 +347,13 @@ pub fn build(b: *std.Build) void {
             executable.linkLibrary(dep_libuv.artifact("uv"));
             executable.linkLibrary(dep_libxml2.artifact("xml2"));
             executable.linkLibrary(dep_libyyjson.artifact("yyjson"));
+            executable.linkLibrary(dep_libsnappy_c.artifact("snappy-c"));
 
             executable.linkLibrary(dep_libgc.artifact("gc"));
         }
 
         executable.linkLibC();
+        executable.linkLibCpp();
         b.installArtifact(executable);
     }
 }

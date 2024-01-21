@@ -1,0 +1,19 @@
+import snappy
+import testing
+
+def _test_snappy():
+
+    data = ("Hello world!" * 1000).encode()
+    compressed = snappy.compress(data)
+    decompressed = snappy.decompress(compressed)
+    print(len(data), len(compressed), len(decompressed))
+    testing.assertEqual(data, decompressed, "decompressed data does not match original")
+    testing.assertTrue(len(data) > len(compressed), "compressed data is not smaller than original")
+
+
+__unit_tests: dict[str, testing.UnitTest] = {
+    "_test_snappy": testing.UnitTest(_test_snappy, "snappy", "Test snappy compress & decompress"),
+}
+
+actor main(env):
+    testing.test_runner(env, __unit_tests, {}, {}, {})
