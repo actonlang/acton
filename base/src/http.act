@@ -172,7 +172,8 @@ class Request(object):
     def __str__(self):
         return "<http.Request " + str(self.method) + " " + str(self.path) + " " + str(self.version) + " " + self.headers.__str__() + " " + str(self.body) + ">"
 
-    def compare(self, other):
+extension Request(Eq):
+    def __eq__(self, other):
         return self.method == other.method and self.path == other.path and self.version == other.version and self.headers == other.headers and self.body == other.body
 
 
@@ -197,6 +198,10 @@ class Response(object):
 
     def decode_json(self):
         return json.decode(self.body.decode())
+
+extension Response(Eq):
+    def __eq__(self, other):
+        return self.version == other.version and self.status == other.status and self.headers == other.headers and self.body == other.body
 
 
 def parse_message(i: bytes, log: logging.Logger) -> (?Message, bytes):
@@ -421,7 +426,9 @@ actor Server(conn: net.TCPListenConnection, on_accept: action(Server) -> None, l
 
 
 # TODO: change port to u16, when u16 has a sub-type relationship to int
-actor Listener(cap: net.TCPListenCap, address: str, port: int, on_listen_error: action(net.TCPListener, str) -> None, on_accept: action(Server) -> None, log_handler: ?logging.Handler):
+# TODO: the on_listen_error default should be some action that just automatically retries with a backoff
+# TODO: add restart method to restart the listener
+actor Listener(cap: net.TCPListenCap, address: str, port: int, on_accept: action(Server) -> None, on_listen_error: ?action(net.TCPListener, str) -> None, log_handler: ?logging.Handler):
     """HTTP Server Listener
 
     The Listener binds to a listening socket and instantiates a http.Server
@@ -431,6 +438,7 @@ actor Listener(cap: net.TCPListenCap, address: str, port: int, on_listen_error: 
     """
     _log = logging.Logger(log_handler)
     var bufs = []
+
     def on_tcp_listener_error(listener, error):
         _log.notice("There was an error with the TCPListener socket", {"error": error})
 
@@ -538,19 +546,19 @@ actor Client(cap: net.TCPConnectCap, address: str, on_connect: action(Client) ->
             tls_conn.write(data)
 
     # HTTP methods
-    def get(path: str, headers: dict[str, str], on_response: action(Client, Response) -> None):
+    def get(path: str, on_response: action(Client, Response) -> None, headers: dict[str, str] = {}):
         req = build_request(address, b"GET", path.encode(), b"1.1", headers, b"")
         _log.debug("Sending request", {"method": "GET", "path": path})
         _on_response.append((req, on_response))
         _conn_write(req)
 
-    def head(path: str, headers: dict[str, str], on_response: action(Client, Response) -> None):
+    def head(path: str, on_response: action(Client, Response) -> None, headers: dict[str, str] = {}):
         req = build_request(address, b"HEAD", path.encode(), b"1.1", headers, b"")
         _log.debug("Sending request", {"method": "HEAD", "path": path})
         _on_response.append((req, on_response))
         _conn_write(req)
 
-    def post(path: str, headers: dict[str, str], body: bytes, on_response: action(Client, Response) -> None):
+    def post(path: str, body: bytes, on_response: action(Client, Response) -> None, headers: dict[str, str] = {}):
         if "Content-Type" not in headers:
             headers["Content-Type"] = "application/x-www-form-urlencoded"
         req = build_request(address, b"POST", path.encode(), b"1.1", headers, body)
@@ -558,13 +566,13 @@ actor Client(cap: net.TCPConnectCap, address: str, on_connect: action(Client) ->
         _on_response.append((req, on_response))
         _conn_write(req)
 
-    def put(path: str, headers: dict[str, str], body: bytes, on_response: action(Client, Response) -> None):
+    def put(path: str, body: bytes, on_response: action(Client, Response) -> None, headers: dict[str, str] = {}):
         req = build_request(address, b"PUT", path.encode(), b"1.1", headers, body)
         _log.debug("Sending request", {"method": "PUT", "path": path})
         _on_response.append((req, on_response))
         _conn_write(req)
 
-    def delete(path: str, headers: dict[str, str], on_response: action(Client, Response) -> None):
+    def delete(path: str, on_response: action(Client, Response) -> None, headers: dict[str, str] = {}):
         req = build_request(address, b"DELETE", path.encode(), b"1.1", headers, b"")
         _log.debug("Sending request", {"method": "DELETE", "path": path})
         _on_response.append((req, on_response))

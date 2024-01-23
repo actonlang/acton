@@ -6,17 +6,12 @@ def _test_time():
     time.utcnow()
     time.monotonic()
     time.time()
-    #print("Local datetime    :", time.now())
-    #print("UTC datetime      :", time.utcnow())
-    #print("Monotonic instant :", time.monotonic())
-    #print("Wall clock instant:", time.time())
 # TODO: fix so this runs, some compiler bug?
-#        t1 = time.Instant.now()
-#        t2 = time.Instant.now()
-#        d = t2.since(t1)
-#        print(d)
-    time.test()
-#        a = time.Instant.now()
+#    t1 = time.Instant.now()
+#    t2 = time.Instant.now()
+#    d = t2.since(t1)
+#    print(d)
+#    a = time.Instant.now()
 
 def _test_instant_add():
     c = time.MonotonicClock(0, 0, 0)
@@ -71,5 +66,5 @@ __unit_tests: dict[str, testing.UnitTest] = {
     "_test_instant_ord": testing.UnitTest(_test_instant_ord, "instant_ord", "Instant ordering"),
 }
 
-actor main(env):
+actor __test_main(env):
     testing.test_runner(env, __unit_tests, {}, {}, {})
