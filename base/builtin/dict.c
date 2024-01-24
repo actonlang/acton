@@ -16,7 +16,7 @@
 typedef struct $entry_struct {
     long hash;
     $WORD key;
-    $WORD value;  // deleted entry has value NULL
+    $WORD value;  // deleted entry has value DELETED
 } *$entry_t;
 
 struct $table_struct {
@@ -28,6 +28,7 @@ struct $table_struct {
     // after this follows tb_entries array;
 };
 
+#define DELETED (($WORD)1)
 
 #define DKIX_EMPTY (-1)
 #define DKIX_DUMMY (-2)  /* Used internally */
@@ -91,7 +92,7 @@ static int dictresize(B_dict d) {
     else {
         $entry_t ep = oldentries;
         for (int i = 0; i < numelements; i++) {
-            while (ep->value == NULL) ep++;
+            while (ep->value == DELETED) ep++;
             newentries[i] = *ep++;
         }
     }
@@ -138,7 +139,7 @@ int $lookdict(B_dict dict, B_Hashable hashwit, long hash, $WORD key, $WORD *res)
         }
         if (ix >= 0) {
             $entry_t entry = &TB_ENTRIES(table)[ix];
-            if (entry->value != NULL && (entry->key == key || (entry->hash == hash && hashwit->$class->__eq__(hashwit,key,entry->key)->val))) {
+            if (entry->value != DELETED && (entry->key == key || (entry->hash == hash && hashwit->$class->__eq__(hashwit,key,entry->key)->val))) {
                 // found an entry with the same or equal key
                 *res = entry->value;
                 return ix;
@@ -354,7 +355,7 @@ static $WORD B_IteratorD_dictD_next(B_IteratorD_dict self) {
     int n = table->tb_nentries;
     while (i < n) {
         $entry_t entry =  &TB_ENTRIES(table)[i];
-        if (entry->value != NULL) {
+        if (entry->value != DELETED) {
             self->nxt = i+1;
             return entry->key;
         }
@@ -462,7 +463,7 @@ static $WORD B_IteratorD_dict_values_next(B_IteratorD_dict_values self) {
     int n = table->tb_nentries;
     while (i < n) {
         $entry_t entry =  &TB_ENTRIES(table)[i];
-        if (entry->value != NULL) {
+        if (entry->value != DELETED) {
             self->nxt = i+1;
             return entry->value;
         }
@@ -516,7 +517,7 @@ static $WORD B_IteratorD_dict_items_next(B_IteratorD_dict_items self) {
     int n = table->tb_nentries;
     while (i < n) {
         $entry_t entry =  &TB_ENTRIES(table)[i];
-        if (entry->value != NULL) {
+        if (entry->value != DELETED) {
             self->nxt = i+1;
             return $NEWTUPLE(2,entry->key,entry->value);
         }
@@ -587,7 +588,7 @@ B_tuple B_MappingD_dictD_popitem (B_MappingD_dict wit, B_dict dict) {
     int ix = table->tb_nentries-1;
     while (ix >= 0) {
         $entry_t entry =  &TB_ENTRIES(table)[ix];
-        if (entry->value != NULL) {
+        if (entry->value != DELETED) {
             long hash = from$int(hashwit->$class->__hash__(hashwit,entry->key));
             int i = $lookdict_index(table,hash,ix);
             table->tb_indices[i] = DKIX_DUMMY;
@@ -600,7 +601,7 @@ B_tuple B_MappingD_dictD_popitem (B_MappingD_dict wit, B_dict dict) {
     return NULL;
 }
 
-B_NoneType B_MappingD_dictD_setdefault (B_MappingD_dict wit, B_dict dict, $WORD key, $WORD deflt) {
+$WORD B_MappingD_dictD_setdefault (B_MappingD_dict wit, B_dict dict, $WORD key, $WORD deflt) {
     if (!deflt) deflt = B_None;
     B_Hashable hashwit = wit->W_HashableD_AD_MappingD_dict;
     long hash = from$int(hashwit->$class->__hash__(hashwit,key));
@@ -608,7 +609,7 @@ B_NoneType B_MappingD_dictD_setdefault (B_MappingD_dict wit, B_dict dict, $WORD 
     int ix = $lookdict(dict,hashwit,hash,key,&value);
     if (ix >= 0)
         return value;
-    TB_ENTRIES(dict->table)[ix].value = deflt;
+    insertdict(dict, hashwit, hash, key, deflt);
     return deflt;
 }
  
@@ -643,105 +644,15 @@ B_NoneType B_IndexedD_MappingD_dictD___delitem__ (B_IndexedD_MappingD_dict wit, 
     int i = $lookdict_index(table,hash,ix);
     table->tb_indices[i] = DKIX_DUMMY;
     res = entry->value;
-    if (res == NULL) {
+    if (res == DELETED) {
         $RAISE((B_BaseException)$NEW(B_KeyError, to$str("delitem: key not in dictionary"), key));
     }
-    entry->value = NULL;
+    entry->value = DELETED;
     dict->numelements--;
     if (10*dict->numelements < dict->table->tb_size) 
         dictresize(dict);
     return B_None;
 }
-
-/*
-B_MappingD_dict B_MappingD_dictG_new(B_Hashable h) {
-    return $NEW(B_MappingD_dict, h);
-}
-
-B_NoneType B_MappingD_dictD___init__(B_MappingD_dict self, B_Hashable h) {
-    self-> W_EqD_AD_Container = (B_Eq)h;
-    self->W_Indexed = (B_Indexed)$NEW(B_IndexedD_MappingD_dict,h,(B_Mapping)self);
-    self->W_EqD_AD_Mapping = (B_Eq)h;
-    self->W_HashableD_AD_MappingD_dict = h;
-    return B_None;
-}
-
-B_IndexedD_MappingD_dict B_IndexedD_MappingD_dictG_new(B_Hashable h, B_Mapping master) {
-    return $NEW(B_IndexedD_MappingD_dict, h, master);
-}
-
-
-B_NoneType B_IndexedD_MappingD_dictD___init__(B_IndexedD_MappingD_dict self,  B_Hashable h, B_Mapping master) {
-    self->W_EqD_AD_Indexed = (B_Eq)h;
-    self->W_EqD_AD_Mapping =  (B_Eq)h;
-    self->W_Mapping = master;
-    self->W_HashableD_AD_MappingD_dict = h;
-    return B_None;
-}
-    B_Eq W_EqD_AD_Indexed;
-    B_Eq W_EqD_AD_Mapping;
-    B_Mapping W_Mapping;
-    B_Hashable W_HashableD_AD_MappingD_dict;
-
-struct  B_MappingD_dictG_class B_MappingD_dictG_methods = {
-    "B_MappingD_dict",
-    UNASSIGNED,
-    ($SuperG_class)&B_MappingG_methods,
-    B_MappingD_dictD___init__,
-    B_MappingD_dictD___serialize__,
-    B_MappingD_dictD___deserialize__,
-    (B_bool (*)(B_MappingD_dict))$default__bool__,
-    (B_str (*)(B_MappingD_dict))$default__str__,
-    (B_str (*)(B_MappingD_dict))$default__str__,
-    B_MappingD_dictD___iter__,
-    B_MappingD_dictD___fromiter__,
-    B_MappingD_dictD___len__,
-    B_MappingD_dictD___contains__,
-    B_MappingD_dictD___containsnot__,
-    B_MappingD_dictD_get,
-    B_MappingD_dictD_keys,
-    B_MappingD_dictD_values,
-    B_MappingD_dictD_items,
-    B_MappingD_dictD_update,
-    B_MappingD_dictD_popitem,
-    B_MappingD_dictD_setdefault
-};
-
-struct B_IndexedD_MappingD_dictG_class B_IndexedD_MappingD_dictG_methods = {
-    "B_IndexedD_MappingD_dict",
-    UNASSIGNED,
-    ($SuperG_class)&B_IndexedG_methods,
-    B_IndexedD_MappingD_dictD___init__,
-    B_IndexedD_MappingD_dictD___serialize__,
-    B_IndexedD_MappingD_dictD___deserialize__,
-    (B_bool (*)(B_IndexedD_MappingD_dict))$default__bool__,
-    (B_str (*)(B_IndexedD_MappingD_dict))$default__str__,
-    (B_str (*)(B_IndexedD_MappingD_dict))$default__str__,
-    B_IndexedD_MappingD_dictD___getitem__,
-    B_IndexedD_MappingD_dictD___setitem__,
-    B_IndexedD_MappingD_dictD___delitem__
-};
-
-
-struct B_OrdD_dictG_class B_OrdD_dictG_methods = {
-    "B_OrdD_dict",
-    UNASSIGNED,
-    ($SuperG_class)&B_OrdG_methods,
-    B_OrdD_dictD___init__,
-    B_OrdD_dictD___serialize__,
-    B_OrdD_dictD___deserialize__,
-    (B_bool (*)(B_OrdD_dict))$default__bool__,
-    (B_str (*)(B_OrdD_dict))$default__str__,
-    (B_str (*)(B_OrdD_dict))$default__str__,
-    B_OrdD_dictD___eq__,
-    B_OrdD_dictD___ne__,
-    B_OrdD_dictD___lt__,
-    B_OrdD_dictD___le__,
-    B_OrdD_dictD___gt__,
-    B_OrdD_dictD___ge__
-};
-
-*/
 
 void B_dictD_setitem(B_dict dict, B_Hashable hashwit, $WORD key, $WORD value) {
     long hash = from$int(hashwit->$class->__hash__(hashwit,key));
@@ -758,4 +669,18 @@ $WORD B_dictD_get(B_dict dict, B_Hashable hashwit, $WORD key, $WORD deflt) {
         return deflt;
     else
         return res;
+}
+
+B_dict B_dictD_copy(B_dict dict, B_Hashable hashwit) {
+    B_Iterable w = (B_Iterable)B_MappingD_dictG_witness;
+    return B_dictG_new(hashwit, w, dict);
+}
+
+B_NoneType B_dictD_clear(B_dict dict, B_Hashable hashwit) {
+    $table table = dict->table;
+    memset(&(table->tb_indices[0]), 0xff, table->tb_size*sizeof(int));
+    dict->numelements = 0;
+    table->tb_usable = 2*table->tb_size/3;
+    table->tb_nentries = 0;
+    return B_None;
 }

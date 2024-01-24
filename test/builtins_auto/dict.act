@@ -28,6 +28,7 @@ actor main(env):
         print("Unexpected result of del dict[\"b\"]:", d)
         await async env.exit(1)
 
+#    pop is a merhod of protocol Set, so for Mapping we have chosen name popitem...
 #    d["pop"] = 123
 #    p = d.pop("pop")
 #    if p != 123:
@@ -45,27 +46,33 @@ actor main(env):
         print("Unexpected result of d.get(\"a\"):", g)
         await async env.exit(1)
 
-# TODO: fix, seemingly broken?
-#    d.update({"c": "C"})
-#    if d != {"a": "A", "c": "C"}:
-#        print("Unexpected result of dict.update():", d)
-#        await async env.exit(1)
+    d.update({"c": "C"}.items())
+    if d != {"a": "A", "c": "C"}:
+        print("Unexpected result of dict.update():", d)
+        await async env.exit(1)
 
-#    sd = d.setdefault("setdef", "a")
-#    print(d)
-#    if sd is not None and sd.0 is not None and sd.0 != "setdef":
-#        print("Unexpected result of d.setdefault(\"setdef\", 1):", str(sd))
-#        await async env.exit(1)
+    sd = d.setdefault("setdef", "a")
+    if sd is None or (sd is not None and sd != "a") or d != {'a':'A', 'c':'C', 'setdef':'a'}:
+        print("Unexpected result of d.setdefault(\"setdef\", \"a\")")
+        await async env.exit(1)
 
+#    Code generation for calls of copy is wrong; the hashwit needed is not supplied.
+#    d = {'a' : 'A', 'b' : 'B'}
 #    d2 = d.copy()
-#    if d2 != {"a": 1}:
+#    if d2 !=  {'a' : 'A', 'b' : 'B'}:
 #        print("Unexpected result of d.copy():", d2)
 #        await async env.exit(1)
 
+#    d3 = d
 #    d.clear()
-#    if d != {}:
-#        print("Unexpected result of d.clear():", d)
-#        await async env.exit(1)
+#    if d != {} or d3 !=  {}: 
+#       print("Unexpected result of d.clear():", d)
+#       await async env.exit(1)
 
+    d1 : dict[str,?str] = {"a":"A", "b" : None, "c" : "C"}
+    del d1["a"]
+    if d1 != {"b" : None, "c" : "C"}:
+        print("Unexpected result with None value:", d1)
+        await async env.exit(1)
 
     await async env.exit(0)
