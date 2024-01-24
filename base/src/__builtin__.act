@@ -477,6 +477,11 @@ class complex (value):
 class dict[A(Hashable),B] (object):
     def __init__(self, iterable: ?Iterable[(A,B)]) -> None:
         NotImplemented
+# Code generation for calls to copy and clear becomes wrong, so we omit them for now
+#    def clear(self) -> None:
+#        NotImplemented
+#    def copy(self) -> dict[A,B]:
+#        NotImplemented
 
 class set[A(Hashable)] (object):
     def __init__(self, iterable: ?Iterable[A]) -> None:
@@ -722,7 +727,7 @@ protocol Mapping[A(Eq),B] (Container[A], Indexed[A,B]):
     items       : () -> Iterator[(A,B)]
     update      : mut(Iterable[(A,B)]) -> None
     popitem     : () -> (A,B)
-    setdefault  : mut(A,B) -> None
+    setdefault  : mut(A,B) -> ?B
 
 
 
