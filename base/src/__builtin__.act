@@ -143,7 +143,7 @@ class str (atom):
         NotImplemented
     def lower        (self) -> str:
         NotImplemented
-    def lstrip       (self, chars: str) -> str:
+    def lstrip       (self, chars: ?str) -> str:
         NotImplemented
     def partition    (self, sep: str) -> (str,str,str):
         NotImplemented
@@ -213,7 +213,7 @@ class bytes (value):
         NotImplemented
     def lower        (self) -> bytes:
         NotImplemented
-    def lstrip       (self, chars: bytes) -> bytes:
+    def lstrip       (self, chars: ?bytes) -> bytes:
         NotImplemented
     def partition    (self, sep: bytes) -> (bytes,bytes,bytes):
         NotImplemented
@@ -283,7 +283,7 @@ class bytearray (object):
         NotImplemented
     def lower        (self) -> bytearray:
         NotImplemented
-    def lstrip       (self, chars: bytearray) -> bytearray:
+    def lstrip       (self, chars: ?bytearray) -> bytearray:
         NotImplemented
     def partition    (self, sep: bytearray) -> (bytearray,bytearray,bytearray):
         NotImplemented

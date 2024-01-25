@@ -1,31 +1,29 @@
 actor main(env):
     r = range(50,250,50)
-    lst0 = list(r)
 # TODO: fix all this?
-#    b = bytearray(lst0)
-#    print(b.center(25,None))
-#    lst2 = list(range(65, 91))
-#    b2 = bytearray(lst2)
+    b = bytearray(bytes(r))
+#    print(b.center(25))
+    b2 = bytearray(bytes(range(65,91)))
 #    print(b2)
-#    b3 = bytearray(list(range(75, 77)))
-#    n = b2.find(b3,0,-1);
+    b3 = bytearray(bytes(range(75, 77)))
+    n = b2.find(b3,0,-1);
 #    print(b3,"occurs in",b2,"at pos",n)
 #    b4 = bytearray(10)
 #    print("bytearray(10) gives",b4)
-#    b4 = b.center(20,None)
-#    print(b.lstrip(b4))
-#    sep = bytearray(list(range(70, 72)))
-#    print(b2.split(sep,None))
-#    b5 = bytearray("line 1\nline 2\r\n\nBjörn")
+    b4 = b.center(20)
+#    print(b4.lstrip())
+    sep = bytearray(bytes(range(70,72)))
+#    print(b2.split(sep))
+    b5 = bytearray(b"line 1\nline 2\r\n\nhej")
 #    print(b5)
-#    print(b5.splitlines(None))
+#    print(b5.splitlines())
 #    print(b5.splitlines(True))
-#    lst = list(b2)
+    lst = list(b2)
 #    print(lst[1:20:2])
-#    for i in range(1000):
-#      b2.append(65+i%26)     #add repeated copies of upper case alphabet
-#    for i in range(26,1,-1):
-#      del b2[0:10000:i]      # delete everything except the Z's
-#    print(b2)
+    for i in range(1000):
+        b2.append(65+i%26)     #add repeated copies of upper case alphabet
+    for i in range(26,1,-1):
+      del b2[0:10000:i]      # delete everything except the Z's
+    print(b2)
 
     env.exit(0)
