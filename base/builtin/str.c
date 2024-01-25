@@ -203,27 +203,28 @@ static int fix_start_end(int nchars, B_int *start, B_int *end) {
     if (*start==NULL) {
         *start = malloc(sizeof(struct B_int));
         *start = to$int(0);
+    } else {
+        int st = from$int(*start);
+        if (st > nchars)
+            return -1;
+        if (st < 0) 
+            st += nchars+1;
+        st = st < 0 ? 0 : st;
+        *start = to$int(st);
     }
-    int st = from$int(*start);
-    if (st > nchars)
-        return -1;
-    if (st < 0) 
-        st += nchars;
-    st = st < 0 ? 0 : st;
-    *start = to$int(st);
-
     if (*end==NULL) {
         *end = malloc(sizeof(struct B_int));
         *end = to$int(nchars);
+    } else {
+        int en = from$int(*end);
+        if (en > nchars)   
+            en = nchars;      
+        else if (en < 0) 
+            en += nchars+1;     
+        en = en < 0 ? 0 : en;    
+        
+        *end = to$int(en);
     }
-    int en = from$int(*end);
-    if (en > nchars)   
-        en = nchars;      
-    else if (en < 0) 
-        en += nchars;     
-    en = en < 0 ? 0 : en;    
-
-    *end = to$int(en);
     return 0;
 }
 
@@ -234,6 +235,14 @@ static B_str mk_char(unsigned char *p) {
     for (int i=0; i<res->nbytes; i++)
         res->str[i] = p[i];
     return res;
+}
+
+int equal_bytes(unsigned char *p, unsigned char *q, int len) {
+    int i;
+    for (i=0; i<len; i++) {
+        if (p[i] != q[i]) break;
+    }
+    return i==len;
 }
 
 static int isspace_codepoint(int codepoint) {
@@ -797,23 +806,28 @@ B_str B_strD_lower(B_str s) {
     return str_transform(s,utf8proc_tolower);
 }
 
+
 B_str B_strD_lstrip(B_str s, B_str cs) {
+    if (cs==NULL) cs = whitespace_str;
     unsigned char *p = s->str;
-    int i, nbytes;
-    for (i=0; i<s->nchars; i++) {
-        B_str c = mk_char(p);
-        if (cs == NULL ?  !B_strD_isspace(c) :
-            bmh(cs->str,p,cs->nbytes,byte_length2(*p)) < 0) 
-            break;
-        p += byte_length2(*p);
+    int i, k;
+    for (i = 0; i < s->nchars; i++) {
+        unsigned char *q = cs->str;
+        for (k = 0; k < cs->nchars; k++) {
+            if (equal_bytes(p,q,byte_length2(*q))) 
+                break;
+            else
+                q +=  byte_length2(*q);
+        }    
+        if (k == cs->nchars) break;
+        p +=  byte_length2(*p);
     }
-    nbytes = s->nbytes + s->str - p;
     B_str res;
-    NEW_UNFILLED_STR(res,s->nchars-i,nbytes);
-    memcpy(res->str,p,nbytes);
+    NEW_UNFILLED_STR(res,s->nchars-i,s->str+s->nbytes-p);
+    memcpy(res->str,p,res->nbytes);
     return res;
 }
-
+ 
 B_tuple B_strD_partition(B_str s, B_str sep) {
     int n = from$int(B_strD_find(s,sep,NULL,NULL));
     if (n<0) {
@@ -1046,19 +1060,24 @@ B_list B_strD_splitlines(B_str s, B_bool keepends) {
 } 
 
 B_str B_strD_rstrip(B_str s, B_str cs) {
+    if (cs==NULL) cs = whitespace_str;
     unsigned char *p = s->str + s->nbytes;
-    int i, nbytes;
-    for (i=0; i<s->nchars; i++) {
+    int i, k;
+    for (i = 0; i < s->nchars; i++) {
+        unsigned char *q = cs->str;
         p = skip_chars(p,-1,0);
-        B_str c = mk_char(p);
-        if (cs == NULL ?  !B_strD_isspace(c) :
-            rbmh(cs->str,p,cs->nbytes,byte_length2(*p)) < 0) 
-            break;
+        for (k = 0; k < cs->nchars; k++) {
+            if (equal_bytes(p,q,byte_length2(*q))) 
+                break;
+            else
+                q += byte_length2(*q);
+        }    
+        if (k == cs->nchars) break;
     }
-    nbytes = p + byte_length2(*p) - s->str;
+    p = skip_chars(p,1,0);
     B_str res;
-    NEW_UNFILLED_STR(res,s->nchars-i,nbytes);
-    memcpy(res->str,s->str,nbytes);
+    NEW_UNFILLED_STR(res,s->nchars-i,p-s->str);
+    memcpy(res->str,s->str,res->nbytes);
     return res;
 }
 
@@ -1548,8 +1567,8 @@ B_int B_bytearrayD_find(B_bytearray s, B_bytearray sub, B_int start, B_int end) 
     B_int st = start;
     B_int en = end;
     if (fix_start_end(s->nbytes,&st,&en) < 0) return to$int(-1);
-    unsigned char *p = &s->str[from$int(start)];
-    unsigned char *q = &s->str[from$int(end)];
+    unsigned char *p = &s->str[from$int(st)];
+    unsigned char *q = &s->str[from$int(en)];
     int n = bmh(p,sub->str,q-p,sub->nbytes);
     if (n<0) return to$int(-1);
     return to$int(n+p-s->str);

@@ -1,0 +1,48 @@
+actor main(env):
+    a = " \t\n1234567".lstrip()
+    if a != "1234567" or len(a) != 7:
+        print("Unexpected result for lstrip a",a)
+        env.exit(1)
+
+    b = "www.abc.com".lstrip("w.")
+    if b != "abc.com" or len(b) != 7:
+        print("Unexpected result for lstrip b",b)
+        env.exit(1)
+
+    c = " ö∃∀∃ ö∀blabla∀ö".lstrip("∀ ∃ö")
+    if c != "blabla∀ö" or len(c) != 8:
+        print("Unexpected result for lstrip c",c)
+        env.exit(1)
+    
+    d = "adfetdfg fgdf1584848543727".rstrip("1234567890")
+    if d != "adfetdfg fgdf" or len(d) != 13:
+        print("Unexpected result for rstrip d",d)
+        env.exit(1)
+    
+    e = "björn är en rövare      ".rstrip()
+    if e != "björn är en rövare" or len(e) != 18:
+        print("Unexpected result for rstrip e",e)
+        env.exit(1)
+
+    f = "Я ду́же за́йнятий  ЯЯ  Я   ".rstrip(" Я")
+    if f != "Я ду́же за́йнятий":
+        print("Unexpected result for rstrip f",f)
+        env.exit(1)
+    
+    g = "abc".center(25)
+    h = g.strip()
+    if g != "           abc           " or h != "abc":
+        print("Unexpected result for center/strip")
+        env.exit(1)
+
+    i = b'         abc             '
+    if i.strip() != b'abc':
+        print("Unexpected result for strip i")
+        env.exit(1)
+
+    j = bytearray(i)
+    if j.strip() != bytearray(b'abc'):
+        print("Unexpected result for strip j")
+        env.exit(1)
+    
+    env.exit(0)
