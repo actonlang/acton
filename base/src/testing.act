@@ -252,17 +252,11 @@ class TestResult(object):
         self.duration = duration
 
     def to_json(self):
-        res = {}
-        success = self.success
-        exception = self.exception
-        duration = self.duration
-        if success is not None:
-            res["success"] = success
-        if exception is not None:
-            res["exception"] = exception
-        if duration is not None:
-            res["duration"] = duration
-        return res
+        return {
+            "success": self.success,
+            "exception": self.exception,
+            "duration": self.duration,
+        }
 
 actor unit_test_runner(i, get_test, report_result):
     """Test runner for unit tests
