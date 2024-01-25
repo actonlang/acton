@@ -92,10 +92,12 @@ main = do
           }
         C.CmdOpt (C.Cloud opts) -> undefined
         C.CmdOpt (C.Doc opts)   -> printDocs opts
-        C.CompileOpt nms opts   -> compileFiles opts (catMaybes $ map filterActFile nms)
+        C.CompileOpt nms opts   -> if length nms == 1 && takeExtension (head nms) == ".ty"
+                                    then printDocs (C.DocOptions (head nms) "")
+                                    else compileFiles opts (catMaybes $ map filterActFile nms)
 
 defaultOpts   = C.CompileOptions False False False False False False False False False False False
-                                 False False False False False False False False "" "" "" ""
+                                 False False False False False False False False False "" "" "" ""
                                  C.defTarget "" False False False
 
 
@@ -740,6 +742,9 @@ runRestPasses opts paths env0 parsed stubMode = do
 
                           writeFile hFile h
                           writeFile cFile c
+                          let tyFileName =  modNameToString(modName paths) ++ ".ty"
+                          iff (C.ty opts) $
+                               copyFileWithMetadata (joinPath [projTypes paths, tyFileName]) (joinPath [srcDir paths, tyFileName])
 
                           timeCodeWrite <- getTime Monotonic
                           iff (C.timing opts) $ putStrLn("    Pass: Writing code    : " ++ fmtTime (timeCodeWrite - timeCodeGen))
