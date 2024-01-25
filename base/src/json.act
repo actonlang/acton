@@ -10,19 +10,19 @@ actor Json():
     Thus, by using one or multiple Json actors, the work of encoding or decoding
     JSON can be distributed across multiple actors / workers / CPUs.
     """
-    action def decode(data: str) -> dict[str, value]:
+    action def decode(data: str) -> dict[str, ?value]:
         return decode(data)
 
-    action def encode(data: dict[str, value]) -> str:
+    action def encode(data: dict[str, ?value]) -> str:
         return encode(data)
 
 
-def decode(data: str) -> dict[str, value]:
+def decode(data: str) -> dict[str, ?value]:
     """Decode a JSON string into a dictionary of values
     """
     NotImplemented
 
-def encode(data: dict[str, value]) -> str:
+def encode(data: dict[str, ?value]) -> str:
     """Encode a dictionary into a JSON string
     """
     NotImplemented

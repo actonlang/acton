@@ -3,6 +3,7 @@ import testing
 
 def _test_json():
     test_json = [
+        """{"a":null,"b":[null]}""",
         """{"a":true,"b":false}""",
         """{"a":"1","b":2,"c":3.1}""",
         """{"a":{"b":"1","c":2,"d":[1,2]}}""",
