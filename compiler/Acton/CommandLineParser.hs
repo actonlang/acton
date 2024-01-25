@@ -50,6 +50,7 @@ data CompileOptions   = CompileOptions {
                          hgen        :: Bool,
                          cgen        :: Bool,
                          ccmd        :: Bool,
+                         ty          :: Bool,
                          timing      :: Bool,
                          autostub    :: Bool,
                          stub        :: Bool,
@@ -140,6 +141,7 @@ compileOptions = CompileOptions
         <*> switch (long "hgen"         <> help "Show the generated .h header")
         <*> switch (long "cgen"         <> help "Show the generated .c code")
         <*> switch (long "ccmd"         <> help "Show CC / LD commands")
+        <*> switch (long "ty"           <> help "Write .ty file to src file directory")
         <*> switch (long "timing"       <> help "Print timing information")
         <*> switch (long "auto-stub"    <> help "Allow automatic stub detection")
         <*> switch (long "stub"         <> help "Stub (.ty) file generation only")
