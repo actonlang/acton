@@ -38,13 +38,25 @@ reconstruct fname env0 (Module m i ss)  = do --traceM ("#################### ori
                                              InterfaceFiles.writeFile (fname ++ ".ty") mrefs iface
                                              --traceM ("#################### converted env0:")
                                              --traceM (render (pretty env0'))
-                                             return (iface, Module m i ss1, env0')
-  where env1                            = reserve (bound ss) (typeX env0)
-        (te,ss1)                        = runTypeM $ infTop env1 ss
+                                             return (iface, Module m i ss1T, env0')
+                                             
+  where ssT                             = if hasTesting i then ss ++ testStmts (emptyDict,emptyDict,emptyDict,emptyDict) else ss
+        ss1T                            = if hasTesting i then rmTests ss1 ++ finalStmts env2 ss1 else ss1
+        env1                            = reserve (bound ssT) (typeX env0)
+        (te,ss1)                        = runTypeM $ infTop env1 ssT
         env2                            = define te (setMod m env0)
         iface                           = unalias env2 te
         mrefs                           = moduleRefs1 env0
         env0'                           = convEnvProtos env0
+        hasTesting i                    = Import NoLoc [ModuleItem (ModName [name "testing"]) Nothing] `elem` i
+        rmTests (Assign _ [PVar _ n _] _ : ss)
+          | nstr n `elem` ["__unit_tests","__sync_actor_tests","__async_actor_tests", "__env_tests"]
+                                        = rmTests ss
+        rmTests (Decl _ [Actor _ n _ _ _ _] : ss)
+          | nstr n == "__test_main"     = rmTests ss
+        rmTests (s : ss)                = s : rmTests ss
+        rmTests []                      = []
+         
 
 showTyFile env0 m fname         = do (ms,te) <- InterfaceFiles.readFile fname
                                      putStrLn ("\n#################################### Interface:")
@@ -1652,3 +1664,91 @@ instance InfEnvT [Pattern] where
                                              return (cs1++cs2, te1++te2, t1, p':ps')
 
 
+
+-- Test discovery
+tEnv                                    = tCon (TC (gname [name "__builtin__"] (name "Env")) []) 
+emptyDict                               = Dict NoLoc []
+
+testStmts  (uts, sats, aats, ets)       = [dictAssign "__unit_tests" "UnitTest" uts,
+                                           dictAssign "__sync_actor_tests" "SyncActorTest" sats,
+                                           dictAssign "__async_actor_tests" "AsyncActorTest" aats,
+                                           dictAssign "__env_tests" "EnvTest" ets,
+                                           testActor]
+
+finalStmts env ss                       = trace (show (length uts, length sats, length aats, length ets)) $ testStmts (mkDict "UnitTest" uts, mkDict "SyncActorTest" sats, mkDict "AsyncActorTest" aats, mkDict "EnvTest" ets)
+   where  (uts, sats, aats, ets)        = testFuns env ss
+
+gname ns n                              = GName (ModName ns) n 
+dername a b                             = Derived (name a) (name b)
+
+dictAssign dictname cl dict             = sAssign (pVar (name dictname) (tDict tStr (testing cl))) dict
+ 
+testing tstr                            = tCon (TC (gname [name "testing"] (name tstr)) [])
+
+mkDict cl as                            = eCall (tApp (eQVar primMkDict) [tStr, testing cl]) [w,Dict NoLoc as]
+    where w                             = eCall (eQVar (gname [name "__builtin__"] (dername "Hashable" "str"))) []
+          
+testActor                               = sDecl [Actor NoLoc (name "__test_main") []
+                                                 PosNIL (KwdPar (name "env")  (Just tEnv) Nothing KwdNIL)
+                                             [sExpr (eCall (eQVar (gname [name "testing"] (name "test_runner")))
+                                                           (map (eVar . name) ["env","__unit_tests","__sync_actor_tests","__async_actor_tests","__env_tests"]))]]
+
+row2list (TRow _ _ _ t r)               = t : row2list r
+row2list (TNil _ _)                     = []
+
+mkAssoc d                               = Assoc (Strings NoLoc [nstr (dname d)])
+                                                (eCall (eQVar (gname [name "testing"] (name "UnitTest"))) [eVar (dname d), Strings NoLoc [drop 6 (nstr (dname d))], comment (dbody d)])
+   where comment (Expr _ s@(Strings _ ss) : _)  = s
+         comment _                      = Strings NoLoc [""]
+
+testFuns                                :: Env0 -> Suite -> ([Assoc],[Assoc],[Assoc],[Assoc])
+testFuns env ss                         = tF ss [] [] [] []
+   where tF (With _ _ ss' : ss) uts sats aats ets = tF (ss' ++ ss) uts sats aats ets 
+         tF (Decl l (d@Def{}:ds) : ss) uts sats aats ets
+            | isTestName (dname d)      = trace ("Trying "++show (nstr (dname d))) $
+                                          case testType (findQName (NoQ (dname d)) env) of
+                                             Just UnitType  -> tF (Decl l ds : ss) (mkAssoc d:uts) sats aats ets
+                                             Just SyncType  -> tF (Decl l ds : ss) uts (mkAssoc d:sats) aats ets
+                                             Just AsyncType -> tF (Decl l ds : ss) uts sats (mkAssoc d:aats) ets
+                                             Just EnvType   -> tF (Decl l ds : ss) uts sats aats (mkAssoc d:ets)
+                                             Nothing    -> tF (Decl l ds : ss) uts sats aats ets
+{-                                             
+                                             NDef (TSchema _ [] (TFun _ fx (TNil _ PRow) k res)) _ ->
+                                                if  (fx == fxPure || fx == fxMut) && k == tNil KRow && res == tNone
+                                                    then tF (Decl l ds : ss) (mkAssoc d:uts) sats aats ets
+                                                else let ts = row2list k in
+                                                      if fx == fxProc && res == tNone && last ts == tCon (TC (gname [name "logging"] (name "Handler")) [])
+                                                      then (if length ts == 1 then tF (Decl l ds : ss) uts (mkAssoc d:sats) aats ets
+                                                            else tF (Decl l ds : ss) uts sats aats ets)
+                                                      else tF (Decl l ds : ss) uts sats aats ets
+
+                                             _ -> trace "test named function with illegal type" $ tF ss uts sats aats ets
+-}
+            | otherwise                 = tF (Decl l ds : ss) uts sats aats ets
+         tF (Decl l (d : ds) : ss) uts sats aats ets   = tF (Decl l ds : ss) uts sats aats ets
+         tF (Decl l [] : ss) uts sats aats ets = tF ss uts sats aats ets 
+         tF (s : ss) uts sats aats ets   = tF ss uts sats aats ets
+         tF [] uts sats aats ets         = (uts, sats, aats, ets)
+
+isTestName n                             = take 6 (nstr n) == "_test_"
+
+data TestType = UnitType | SyncType | AsyncType | EnvType
+                deriving (Eq,Show,Read)
+
+testType (NDef (TSchema _ []  (TFun _ fx (TNil _ PRow) k res)) _)
+              | res /= tNone = Nothing
+              | otherwise    = case row2list k of
+                                []         -> if fx == fxPure || fx == fxMut then Just UnitType else Nothing
+                                [t]        -> if t == logging_handler then Just SyncType else Nothing
+                                [t1,t2]    -> if t2 == logging_handler && isGoodAction t1 then Just AsyncType else Nothing
+                                [t1,t2,t3] -> if t3 == logging_handler && isGoodAction t1 && t2 == tEnv then Just EnvType else Nothing
+                                _          -> Nothing
+    where logging_handler      =  tCon (TC (gname [name "logging"] (name "Handler")) [])
+          isGoodAction t@(TFun _ fx p (TNil _ KRow) res)
+             | fx == fxAction
+               && res == tNone  = trace (show t) $
+                                  case row2list p of
+                                    [t1,t2] -> (t1 == tBool || t1 == tNone) && (t2 == tNone || t2 == tException)
+                                    _       -> False
+          isGoodAction t        = trace (show t) False
+testType _                      = Nothing
