@@ -1665,7 +1665,8 @@ instance InfEnvT [Pattern] where
 
 
 
--- Test discovery
+-- Test discovery --------------------------------------------------------------
+
 tEnv                                    = tCon (TC (gname [name "__builtin__"] (name "Env")) []) 
 emptyDict                               = Dict NoLoc []
 
@@ -1675,7 +1676,7 @@ testStmts  (uts, sats, aats, ets)       = [dictAssign "__unit_tests" "UnitTest" 
                                            dictAssign "__env_tests" "EnvTest" ets,
                                            testActor]
 
-finalStmts env ss                       = trace (show (length uts, length sats, length aats, length ets)) $ testStmts (mkDict "UnitTest" uts, mkDict "SyncActorTest" sats, mkDict "AsyncActorTest" aats, mkDict "EnvTest" ets)
+finalStmts env ss                       = testStmts (mkDict "UnitTest" uts, mkDict "SyncActorTest" sats, mkDict "AsyncActorTest" aats, mkDict "EnvTest" ets)
    where  (uts, sats, aats, ets)        = testFuns env ss
 
 gname ns n                              = GName (ModName ns) n 
@@ -1705,26 +1706,13 @@ testFuns                                :: Env0 -> Suite -> ([Assoc],[Assoc],[As
 testFuns env ss                         = tF ss [] [] [] []
    where tF (With _ _ ss' : ss) uts sats aats ets = tF (ss' ++ ss) uts sats aats ets 
          tF (Decl l (d@Def{}:ds) : ss) uts sats aats ets
-            | isTestName (dname d)      = trace ("Trying "++show (nstr (dname d))) $
-                                          case testType (findQName (NoQ (dname d)) env) of
+            | isTestName (dname d)      = case testType (findQName (NoQ (dname d)) env) of
                                              Just UnitType  -> tF (Decl l ds : ss) (mkAssoc d:uts) sats aats ets
                                              Just SyncType  -> tF (Decl l ds : ss) uts (mkAssoc d:sats) aats ets
                                              Just AsyncType -> tF (Decl l ds : ss) uts sats (mkAssoc d:aats) ets
                                              Just EnvType   -> tF (Decl l ds : ss) uts sats aats (mkAssoc d:ets)
                                              Nothing    -> tF (Decl l ds : ss) uts sats aats ets
-{-                                             
-                                             NDef (TSchema _ [] (TFun _ fx (TNil _ PRow) k res)) _ ->
-                                                if  (fx == fxPure || fx == fxMut) && k == tNil KRow && res == tNone
-                                                    then tF (Decl l ds : ss) (mkAssoc d:uts) sats aats ets
-                                                else let ts = row2list k in
-                                                      if fx == fxProc && res == tNone && last ts == tCon (TC (gname [name "logging"] (name "Handler")) [])
-                                                      then (if length ts == 1 then tF (Decl l ds : ss) uts (mkAssoc d:sats) aats ets
-                                                            else tF (Decl l ds : ss) uts sats aats ets)
-                                                      else tF (Decl l ds : ss) uts sats aats ets
-
-                                             _ -> trace "test named function with illegal type" $ tF ss uts sats aats ets
--}
-            | otherwise                 = tF (Decl l ds : ss) uts sats aats ets
+             | otherwise                 = tF (Decl l ds : ss) uts sats aats ets
          tF (Decl l (d : ds) : ss) uts sats aats ets   = tF (Decl l ds : ss) uts sats aats ets
          tF (Decl l [] : ss) uts sats aats ets = tF ss uts sats aats ets 
          tF (s : ss) uts sats aats ets   = tF ss uts sats aats ets
@@ -1746,9 +1734,8 @@ testType (NDef (TSchema _ []  (TFun _ fx (TNil _ PRow) k res)) _)
     where logging_handler      =  tCon (TC (gname [name "logging"] (name "Handler")) [])
           isGoodAction t@(TFun _ fx p (TNil _ KRow) res)
              | fx == fxAction
-               && res == tNone  = trace (show t) $
-                                  case row2list p of
+               && res == tNone  = case row2list p of
                                     [t1,t2] -> (t1 == tBool || t1 == tNone) && (t2 == tNone || t2 == tException)
                                     _       -> False
-          isGoodAction t        = trace (show t) False
+          isGoodAction t        = False
 testType _                      = Nothing

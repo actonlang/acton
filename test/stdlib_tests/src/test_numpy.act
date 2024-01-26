@@ -5,10 +5,3 @@ import numpy
 
 def _test_arange():
     ar = numpy.arange(0, 3, 1)
-
-__unit_tests: dict[str, testing.UnitTest] = {
-    "_test_arange": testing.UnitTest(_test_arange, "arange", "Test arange"),
-}
-
-actor __test_main(env):
-    testing.test_runner(env, __unit_tests, {}, {}, {})

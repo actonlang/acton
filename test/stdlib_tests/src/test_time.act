@@ -57,14 +57,3 @@ def _test_instant_ord():
     testing.assertFalse(t1 > t3, "le comparison failed")
     testing.assertFalse(t3 < t1, "ge comparison failed")
     testing.assertFalse(t3 <= t1, "ge comparison failed")
-
-
-__unit_tests: dict[str, testing.UnitTest] = {
-    "_test_time": testing.UnitTest(_test_time, "time", "Time functions"),
-    "_test_instant_add": testing.UnitTest(_test_instant_add, "instant_add", "Instant addition"),
-    "_test_instant_sub": testing.UnitTest(_test_instant_sub, "instant_sub", "Instant subtraction"),
-    "_test_instant_ord": testing.UnitTest(_test_instant_ord, "instant_ord", "Instant ordering"),
-}
-
-actor __test_main(env):
-    testing.test_runner(env, __unit_tests, {}, {}, {})
