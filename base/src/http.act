@@ -70,19 +70,6 @@ responses = {
     511: b"Network Authentication Required"
 }
 
-def hex_to_decimal(hex_str: str) -> int:
-    hex_map = {'0': 0, '1': 1, '2': 2, '3': 3, '4': 4, '5': 5, '6': 6, '7': 7,
-               '8': 8, '9': 9, 'A': 10, 'B': 11, 'C': 12, 'D': 13, 'E': 14, 'F': 15}
-    decimal_value = 0
-    try:
-        for i in range(len(hex_str)):
-            j = len(hex_str)-i
-            digit = hex_str[j-1].upper()
-            decimal_value += hex_map[digit] * (16 ** i)
-    except:
-        raise ValueError("Unable to parse hexadecimal value")
-    return decimal_value
-
 
 def build_request(host: str, method: bytes, path: bytes, version: bytes, headers: dict[str, str], body: bytes) -> bytes:
     r = [ method + b" " + path + b" HTTP/" + version ]
@@ -259,7 +246,7 @@ def parse_message(i: bytes, log: logging.Logger) -> (?Message, bytes):
                             return None, i
                         else:
                             try:
-                                clen = hex_to_decimal(chunk_header.decode())
+                                clen = int(chunk_header.decode(), 16)
                                 log.trace("Chunk length: %d" % clen, None)
                             except ValueError:
                                 log.trace("Chunk header not a length", None)
