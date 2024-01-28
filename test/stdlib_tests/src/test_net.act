@@ -14,13 +14,3 @@ def _test_is_ipv6():
 
     testing.assertFalse(net.is_ipv6("2001:db8::123456"))
     testing.assertFalse(net.is_ipv6("2001:db8:::1"))
-
-
-# TODO: compiler should generate this
-__unit_tests: dict[str, testing.UnitTest] = {
-    "_test_is_ipv4": testing.UnitTest(_test_is_ipv4, "is_ipv4", "is_ipv4()"),
-    "_test_is_ipv6": testing.UnitTest(_test_is_ipv6, "is_ipv6", "is_ipv6()"),
-}
-
-actor __test_main(env):
-    testing.test_runner(env, __unit_tests, {}, {}, {})

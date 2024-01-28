@@ -8,11 +8,3 @@ def _test_snappy():
     decompressed = snappy.decompress(compressed)
     testing.assertEqual(data, decompressed, "decompressed data does not match original")
     testing.assertTrue(len(data) > len(compressed), "compressed data is not smaller than original")
-
-
-__unit_tests: dict[str, testing.UnitTest] = {
-    "_test_snappy": testing.UnitTest(_test_snappy, "snappy", "Test snappy compress & decompress"),
-}
-
-actor __test_main(env):
-    testing.test_runner(env, __unit_tests, {}, {}, {})

@@ -22,9 +22,3 @@ def _test_json():
         testing.assertIsNotNone(e, "Failed to encode to JSON")
         testing.assertEqual(s, e, "Input output via JSON round trip does not match")
 
-__unit_tests: dict[str, testing.UnitTest] = {
-    "_test_json": testing.UnitTest(_test_json, "json", "Decode JSON [str, bool]"),
-}
-
-actor __test_main(env):
-    testing.test_runner(env, __unit_tests, {}, {}, {})

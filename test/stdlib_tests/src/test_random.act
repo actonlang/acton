@@ -108,22 +108,3 @@ def _test_random2():
     for i in range(100000):
         r = random.randint(1293862, 97309358)
         testing.assertTrue(r >= 1293862 and r <= 97309358, "random.randint() returned a value outside of the range")
-
-
-__unit_tests: dict[str, testing.UnitTest] = {
-    "_test_choice_basic_functionality": testing.UnitTest(_test_choice_basic_functionality, "choice_basic_functionality", "Basic functionality of random.choice()"),
-    "_test_choice_empty_sequence": testing.UnitTest(_test_choice_empty_sequence, "choice_empty_sequence", "random.choice() raises IndexError when passed an empty sequence"),
-    "_test_choice_single_element": testing.UnitTest(_test_choice_single_element, "choice_single_element", "random.choice() returns the only element in the list"),
-    "_test_choice_repeatability": testing.UnitTest(_test_choice_repeatability, "choice_repeatability", "random.choice() returns different values when called repeatedly"),
-    "_test_random1": testing.UnitTest(_test_random1, "random1", "random.randint() returns a value within the specified range"),
-    "_test_random2": testing.UnitTest(_test_random2, "random2", "random.randint() returns a value within the specified range"),
-    "_test_sample_basic_functionality": testing.UnitTest(_test_sample_basic_functionality, "sample_basic_functionality", "Basic functionality of random.sample()"),
-    "_test_sample_size_larger_than_population": testing.UnitTest(_test_sample_size_larger_than_population, "sample_size_larger_than_population", "random.sample() raises a ValueError when k > population size"),
-    "_test_sample_with_single_element_population": testing.UnitTest(_test_sample_with_single_element_population, "sample_with_single_element_population", "random.sample() returns the only element in the population"),
-    "_test_sample_repeatability": testing.UnitTest(_test_sample_repeatability, "sample_repeatability", "random.sample() returns different values when called repeatedly"),
-    "_test_sample_size_zero": testing.UnitTest(_test_sample_size_zero, "sample_size_zero", "random.sample() returns an empty list when k=0"),
-    "_test_random_distribution": testing.UnitTest(_test_random_distribution, "random_distribution", "random.randint() returns a value within the specified range"),
-}
-
-actor __test_main(env):
-    testing.test_runner(env, __unit_tests, {}, {}, {})

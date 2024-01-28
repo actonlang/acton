@@ -44,15 +44,3 @@ def _test_matches():
     testing.assertEqual(ms[1].group[0], "foo2", "failed to match second match")
     testing.assertEqual(ms[2].group[0], "foo3", "failed to match third match")
     testing.assertEqual(ms[3].group[0], "foo4", "failed to match fourth match")
-
-
-__unit_tests: dict[str, testing.UnitTest] = {
-    "_test_basic": testing.UnitTest(_test_basic, "basic", "Basic regexp matching"),
-    "_test_group": testing.UnitTest(_test_group, "group", "Regexp matching with groups"),
-    "_test_named_groups": testing.UnitTest(_test_named_groups, "named_groups", "Regexp matching with named groups"),
-    "_test_multi_groups": testing.UnitTest(_test_multi_groups, "multi_groups", "Regexp matching with multiple groups"),
-    "_test_matches": testing.UnitTest(_test_matches, "matches", "Regexp finding all matches"),
-}
-
-actor __test_main(env):
-    testing.test_runner(env, __unit_tests, {}, {}, {})
