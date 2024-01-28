@@ -100,15 +100,15 @@ actor main(env):
     def _on_http_receive(c, data):
         print("YAY, got something")
         print(data)
-        print(data.status)
-        try:
-            print(data.to_json())
-        except:
-            print("Failed to parse json")
+        #print(data.status)
+        #try:
+        #    print(data.to_json())
+        #except:
+        #    print("Failed to parse json")
 
     def _on_http_error(c, errmsg):
         print(errmsg)
 
     print("asdf")
-    hc = http.Client(tcpccap, "dummyjson.com", _on_http_connect, _on_http_error, log_handler)
+    hc = http.Client(tcpccap, "dummyjson.com", _on_http_connect, _on_http_error, log_handler=log_handler)
     #hc2 = http.Client(tcpccap, "neverssl.com", _on_http_connect, _on_http_error, scheme="http", log_handler)
