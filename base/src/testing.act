@@ -11,10 +11,19 @@ import time
 # TODO: add actual values as args to assert functions
 # TODO: add __str__ to assert exceptions
 class NotEqualError(AssertionError):
-    def __init__(self, msg):
+    def __init__(self, msg: str, a=None, b=None):
         self.error_message = msg
-        self.a = None
-        self.b = None
+        self.a = a
+        self.b = b
+
+    def __str__(self):
+        msg = self._name()
+        err = self.error_message
+        if err is not None:
+            msg += ": " + err
+        else:
+            msg += ": not equal"
+        return msg
 
 class EqualError(AssertionError):
     def __init__(self, msg, a, b):
@@ -84,13 +93,13 @@ class NotIsInstanceError(AssertionError):
         self.b = None
 
 
-def assertEqual(a, b, msg: ?str):
-    if not (a == b):
+def assertEqual[T(Eq)](a: ?T, b: ?T, msg: ?str):
+    if a is not None and b is not None and not (a == b):
         assert_msg = "Expected equal values but they are non-equal"
         if msg is not None:
             assert_msg += ": " + msg
         # TODO: include actual values in error message
-        raise NotEqualError(assert_msg)
+        raise NotEqualError(assert_msg, a, b)
 
 def assertNotEqual(a, b, msg: ?str):
     if not (a != b):
