@@ -28,9 +28,9 @@ import Prelude hiding((<>))
 
 data SrcLoc                     = Loc Int Int | NoLoc deriving (Eq,Ord,Show,Read,Generic,NFData)
 
-instance Data.Binary.Binary SrcLoc -- where
---    put _ = return ()
---    get   = return NoLoc
+instance Data.Binary.Binary SrcLoc where
+    put _ = return ()
+    get   = return NoLoc
 
 instance Pretty SrcLoc where
     pretty (Loc l r)            = pretty l <> text "-" <> pretty r
