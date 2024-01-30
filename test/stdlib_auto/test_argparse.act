@@ -177,28 +177,30 @@ actor test_cmd_strlist():
         raise ValueError("build cmd text strlist != ['A', 'B']")
 
 
-#def test_cmd_nested():
-#    def build(args):
-#        pass
-#
-#    def build_and_run(args):
-#        pass
-#
-#    p = argparse.Parser()
-#    p.add_bool("verbose", "Enable verbose output")
-#    pb = p.add_cmd("build", build)
-#    pbr = p.add_cmd("run", build_and_run)
-#    pb.add_bool("dev", "Enable dev mode")
-#
-#    # TODO: fix nested commands
-#    args = p.parse(["./app", "--verbose", "build", "run", "--dev"])
-#    _cmd = args.cmd
-#    if cmd is None:
-#        raise ValueError("Expected build cmd set")
-#    if args.get_bool("verbose") != True:
-#        raise ValueError("build cmd verbose flag == True")
-#    if args.get_bool("dev") != True:
-#        raise ValueError("build cmd dev flag == True")
+actor test_cmd_nested():
+    proc def _build(args):
+        pass
+
+    proc def _build_and_run(args):
+        pass
+
+    p = argparse.Parser()
+    p.add_bool("verbose", "Enable verbose output")
+    pb = p.add_cmd("build", "Build stuf", _build)
+    pb.add_bool("dev", "Enable dev mode")
+    pbr = pb.add_cmd("run", "build and run stuff", _build_and_run)
+    pbr.add_bool("foo", "FOO")
+
+    _args = p.parse(["./app", "--verbose", "build", "--dev", "run", "--foo"])
+    _cmd = _args.cmd
+    if _cmd is None:
+        raise ValueError("Expected build cmd set")
+    if _args.get_bool("verbose") != True:
+        raise ValueError("build cmd verbose flag == True")
+    if _args.get_bool("dev") != True:
+        raise ValueError("build cmd dev flag == True")
+    if _args.get_bool("foo") != True:
+        raise ValueError("build cmd flag flag == True")
 
 def test_help():
     p = argparse.Parser()
@@ -222,7 +224,7 @@ actor main(env):
         test_posarg_not_required2()
         test_cmd()
         test_cmd_strlist()
-        #test_cmd_nested()
+        test_cmd_nested()
         test_help()
         env.exit(0)
     except Exception as exc:

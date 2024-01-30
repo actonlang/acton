@@ -3,7 +3,6 @@
 parser = argparse.Parser(None)
 """
 
-# TODO: nested commands
 # TODO: mutually exclusive argument groups
 # TODO: argument metavar
 # TODO: required options (oxymoronic)?
