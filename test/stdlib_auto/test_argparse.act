@@ -132,17 +132,50 @@ actor test_cmd():
 
     p = argparse.Parser()
     p.add_bool("verbose", "Enable verbose output")
+    p.add_arg("infile", "input file", True, "?")
     pb = p.add_cmd("build", "Build stuff", _build)
     pb.add_bool("dev", "Enable dev mode")
+    pb.add_option("sigs", "str", help="Show signatures of file")
 
-    _args = p.parse(["./app", "--verbose", "build", "--dev"])
+    _args = p.parse(["./app", "--verbose", "foo", "build", "--dev", "--sigs", "bar.ty"])
     _cmd = _args.cmd
     if _cmd is None:
         raise ValueError("Expected build cmd set")
     if _args.get_bool("verbose") != True:
         raise ValueError("build cmd verbose flag == True")
+    if _args.get_str("infile") != "foo":
+        raise ValueError("pos arg infile != foo")
     if _args.get_bool("dev") != True:
         raise ValueError("build cmd dev flag == True")
+    if _args.get_str("sigs") != "bar.ty":
+        raise ValueError("--sigs != bar.ty")
+
+# TODO: this should be a function, not an actor but that gives a lambdalifter error
+actor test_cmd_strlist():
+    proc def _build(args):
+        f = Foo()
+        f.foo()
+
+    p = argparse.Parser()
+    p.add_bool("verbose", "Enable verbose output")
+    p.add_arg("infile", "input file", True, "?")
+    pb = p.add_cmd("build", "Build stuff", _build)
+    pb.add_bool("dev", "Enable dev mode")
+    pb.add_option("text", "strlist", "+", [], "Text field")
+
+    _args = p.parse(["./app", "--verbose", "foo", "build", "--dev", "--text", "A", "--text", "B"])
+    _cmd = _args.cmd
+    if _cmd is None:
+        raise ValueError("Expected build cmd set")
+    if _args.get_bool("verbose") != True:
+        raise ValueError("build cmd verbose flag == True")
+    if _args.get_str("infile") != "foo":
+        raise ValueError("pos arg infile != foo")
+    if _args.get_bool("dev") != True:
+        raise ValueError("build cmd dev flag == True")
+    if _args.get_strlist("text") != ["A", "B"]:
+        raise ValueError("build cmd text strlist != ['A', 'B']")
+
 
 #def test_cmd_nested():
 #    def build(args):
@@ -188,6 +221,7 @@ actor main(env):
         test_posarg_not_required1()
         test_posarg_not_required2()
         test_cmd()
+        test_cmd_strlist()
         #test_cmd_nested()
         test_help()
         env.exit(0)

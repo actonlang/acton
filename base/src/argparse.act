@@ -245,12 +245,15 @@ class Parser(object):
                     #raise ArgumentError("Unknown option %s" % arg)
                     rest.append(arg)
             else:
+                ccmd = res.cmd
                 if arg in self.cmds:
                     # pass rest of args to subparser for command
                     cmd = self.cmds[arg]
                     res.cmd_parser = cmd.parser
                     res.cmd = cmd.fn
                     continue
+                elif ccmd is not None:
+                    rest.append(arg)
                 else:
                     posargs.append(arg)
 
