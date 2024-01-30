@@ -1449,35 +1449,6 @@ void wt_wake_cb(uv_async_t *ev) {
     // work is run later when wt_work_cb is called as part of the "check" phase.
 }
 
-char *unmangle_name(char *input) {
-    // Check for NULL input
-    if (input == NULL) {
-        return NULL;
-    }
-    char *output = malloc(strlen(input) + 1);
-    // Check for allocation failure
-    if (output == NULL) {
-        return NULL;
-    }
-
-    // Check if string starts with "B_"
-    if (strncmp(input, "B_", 2) == 0) {
-        // Copy string without "B_"
-        strcpy(output, input + 2);
-    } else {
-        // Copy string as is
-        strcpy(output, input);
-    }
-    // Handle "Q_" mangling for nested modules
-    char *pos;
-    while ((pos = strstr(output, "Q_")) != NULL) {
-        *pos = '.';
-        memmove(pos + 1, pos + 2, strlen(pos + 2) + 1);
-    }
-
-    return output;
-}
-
 void wt_work_cb(uv_check_t *ev) {
     volatile JumpBuf jump0 = NULL;
     pthread_setspecific(jump_top, NULL);

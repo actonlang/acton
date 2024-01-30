@@ -48,3 +48,5 @@ void $default__init__($WORD);
 #define $SKIPRES(cont)      (cont)
 
 #define $FORMAT($s, ...)    ({ char * $b; asprintf(&$b, $s, ##__VA_ARGS__); to$str($b); })
+
+char *unmangle_name(char *input);

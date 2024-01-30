@@ -132,10 +132,66 @@ actor test_cmd():
 
     p = argparse.Parser()
     p.add_bool("verbose", "Enable verbose output")
+    p.add_arg("infile", "input file", True, "?")
     pb = p.add_cmd("build", "Build stuff", _build)
     pb.add_bool("dev", "Enable dev mode")
+    pb.add_option("sigs", "str", help="Show signatures of file")
 
-    _args = p.parse(["./app", "--verbose", "build", "--dev"])
+    _args = p.parse(["./app", "--verbose", "foo", "build", "--dev", "--sigs", "bar.ty"])
+    _cmd = _args.cmd
+    if _cmd is None:
+        raise ValueError("Expected build cmd set")
+    if _args.get_bool("verbose") != True:
+        raise ValueError("build cmd verbose flag == True")
+    if _args.get_str("infile") != "foo":
+        raise ValueError("pos arg infile != foo")
+    if _args.get_bool("dev") != True:
+        raise ValueError("build cmd dev flag == True")
+    if _args.get_str("sigs") != "bar.ty":
+        raise ValueError("--sigs != bar.ty")
+
+# TODO: this should be a function, not an actor but that gives a lambdalifter error
+actor test_cmd_strlist():
+    proc def _build(args):
+        f = Foo()
+        f.foo()
+
+    p = argparse.Parser()
+    p.add_bool("verbose", "Enable verbose output")
+    p.add_arg("infile", "input file", True, "?")
+    pb = p.add_cmd("build", "Build stuff", _build)
+    pb.add_bool("dev", "Enable dev mode")
+    pb.add_option("text", "strlist", "+", [], "Text field")
+
+    _args = p.parse(["./app", "--verbose", "foo", "build", "--dev", "--text", "A", "--text", "B"])
+    _cmd = _args.cmd
+    if _cmd is None:
+        raise ValueError("Expected build cmd set")
+    if _args.get_bool("verbose") != True:
+        raise ValueError("build cmd verbose flag == True")
+    if _args.get_str("infile") != "foo":
+        raise ValueError("pos arg infile != foo")
+    if _args.get_bool("dev") != True:
+        raise ValueError("build cmd dev flag == True")
+    if _args.get_strlist("text") != ["A", "B"]:
+        raise ValueError("build cmd text strlist != ['A', 'B']")
+
+
+actor test_cmd_nested():
+    proc def _build(args):
+        pass
+
+    proc def _build_and_run(args):
+        pass
+
+    p = argparse.Parser()
+    p.add_bool("verbose", "Enable verbose output")
+    pb = p.add_cmd("build", "Build stuf", _build)
+    pb.add_bool("dev", "Enable dev mode")
+    pbr = pb.add_cmd("run", "build and run stuff", _build_and_run)
+    pbr.add_bool("foo", "FOO")
+
+    _args = p.parse(["./app", "--verbose", "build", "--dev", "run", "--foo"])
     _cmd = _args.cmd
     if _cmd is None:
         raise ValueError("Expected build cmd set")
@@ -143,29 +199,8 @@ actor test_cmd():
         raise ValueError("build cmd verbose flag == True")
     if _args.get_bool("dev") != True:
         raise ValueError("build cmd dev flag == True")
-
-#def test_cmd_nested():
-#    def build(args):
-#        pass
-#
-#    def build_and_run(args):
-#        pass
-#
-#    p = argparse.Parser()
-#    p.add_bool("verbose", "Enable verbose output")
-#    pb = p.add_cmd("build", build)
-#    pbr = p.add_cmd("run", build_and_run)
-#    pb.add_bool("dev", "Enable dev mode")
-#
-#    # TODO: fix nested commands
-#    args = p.parse(["./app", "--verbose", "build", "run", "--dev"])
-#    _cmd = args.cmd
-#    if cmd is None:
-#        raise ValueError("Expected build cmd set")
-#    if args.get_bool("verbose") != True:
-#        raise ValueError("build cmd verbose flag == True")
-#    if args.get_bool("dev") != True:
-#        raise ValueError("build cmd dev flag == True")
+    if _args.get_bool("foo") != True:
+        raise ValueError("build cmd flag flag == True")
 
 def test_help():
     p = argparse.Parser()
@@ -188,7 +223,8 @@ actor main(env):
         test_posarg_not_required1()
         test_posarg_not_required2()
         test_cmd()
-        #test_cmd_nested()
+        test_cmd_strlist()
+        test_cmd_nested()
         test_help()
         env.exit(0)
     except Exception as exc:
