@@ -192,10 +192,10 @@ useless vs c                           = case c of
                                              Cast _ t1 t2 -> f t1 || f t2
                                              Sub _ _ t1 t2 -> f t1 || f t2
                                              Impl _ _ t p -> f t
-                                             Sel _ _ t n t0 -> f t|| f t0
+                                             Sel _ _ t n t0 -> f t || f t0
                                              Mut _ t1 n t2 -> True   -- TODO
                                              Seal _ _ -> True        -- TODO
-     where f (TVar _ v) = notElem v vs
+     where f (TVar _ v) = notElem v (tvSelf : vs)
            f _          = False
 
 typeError                           :: TypeError -> [(SrcLoc, String)]
@@ -215,6 +215,7 @@ typeError (LackSig n)                = [(loc n, render (text "Declaration lacks 
 typeError (LackDef n)                = [(loc n, render (text "Signature lacks accompanying definition"))]
 typeError (NoRed c)
     | DeclInfo l1 l2 _ _ _ <- info c = [(min l1 l2,""), (max l1 l2,render (explainRequirement c <+> parens (explainRequirement c{info = dummyInfo})))]
+--    | DfltInfo l n mbe is <- info c  = [(loc c, render (explainRequirement c <+> parens (text ("errcode " ++ show n))))]
     | otherwise                      = [(loc c, render (explainRequirement c))]
 typeError (NoSolve mbt vs cs)        = case length cs of
                                            0 -> [(NoLoc, "Unable to give good error message: please report example")]
