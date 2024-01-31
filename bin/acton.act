@@ -5,8 +5,7 @@ import testing
 
 actor CompilerRunner(process_cap, env, args):
     def on_stderr(p, data):
-        print("Received output on stderr:", data)
-        env.exit(0)
+        print(data.decode(), stderr=True, end="")
 
     def on_stdout(p, data):
         print(data.decode(), end="")
@@ -110,7 +109,7 @@ actor RunTest(process_cap, env, args):
 def build_cmd_args(args):
     cmdargs = []
     for argname, arg in args.options.items():
-        if argname == "actfile":
+        if argname == "file":
             continue
         if arg.type == "bool":
             if args.get_bool(argname):
@@ -130,9 +129,9 @@ def build_cmd_args(args):
 actor main(env):
     process_cap = process.ProcessCap(env.cap)
 
-    def _compilefile(actfile, args):
+    def _compilefile(_file, args):
         cmdargs = build_cmd_args(args)
-        cr = CompilerRunner(process_cap, env, [actfile] + cmdargs)
+        cr = CompilerRunner(process_cap, env, [_file] + cmdargs)
 
     def _cmd_build(args):
         cmdargs = build_cmd_args(args)
@@ -179,31 +178,31 @@ actor main(env):
         p.add_option("cache", "str", "?", "", "Cache directory")
         p.add_bool("zigbuild", "Use zig build")
         p.add_bool("nozigbuild", "Do not use zig build")
-        p.add_arg("actfile", ".act file to compile", False, "?")
+        p.add_arg("file", ".act file to compile, or .ty to show", False, "?")
         buildp = p.add_cmd("build", "Build", _cmd_build)
         docp = p.add_cmd("doc", "Show documentation", _cmd_doc)
         newp = p.add_cmd("new", "New project", _cmd_new)
+        newp.add_arg("projectdir", "Project directory", True, "?")
         testp = p.add_cmd("test", "Test", _cmd_test)
-        #testp.add_arg("projectdir", "Project directory", True, "?")
         return p.parse(env.argv)
 
     try:
         _args = _parse_args()
         _cmd = _args.cmd
-        actfile = None
+        _file = None
         try:
-            actfile = _args.get_str("actfile")
+            _file = _args.get_str("file")
         except argparse.ArgumentError:
             pass
         if _cmd is not None:
-            if actfile is not None:
+            if _file is not None:
                 # TODO: print to stderr
                 print("Error: cannot specify both a command and an .act file")
                 await async env.exit(1)
             _cmd(_args)
         else:
-            if actfile is not None:
-                _compilefile(actfile, _args)
+            if _file is not None:
+                _compilefile(_file, _args)
             else:
                 env.exit(0)
     except argparse.PrintUsage as exc:

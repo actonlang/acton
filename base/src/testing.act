@@ -506,25 +506,52 @@ actor test_runner(env: Env, unit_tests: dict[str, UnitTest], sync_actor_tests: d
     sw = time.Stopwatch()
     var results = TestDisplayStatus(env)
 
-    proc def _run_tests(args):
+    def _init_results(args):
         if args.get_bool("json"):
             results = TestDisplayJSON(env)
 
+        all_tests = {}
         for name, t in unit_tests.items():
-            results.update(t, None)
+            all_tests[name] = t
         for name, t in sync_actor_tests.items():
-            results.update(t, None)
+            all_tests[name] = t
         for name, t in async_actor_tests.items():
-            results.update(t, None)
+            all_tests[name] = t
         for name, t in env_tests.items():
+            all_tests[name] = t
+
+        tests = _filter_tests(all_tests, args)
+
+        for name, t in tests.items():
             results.update(t, None)
 
+    def _filter_tests[T](tests: dict[str, T], args) -> dict[str, T]:
+        res = {}
+        test_names = set(args.get_strlist("name"))
+        if test_names == set():
+            return tests
+
+        for name, t in tests.items():
+            if name[len("_test_"):] in test_names:
+                res[name] = t
+        return res
+
+    proc def _list_tests(args):
+        _init_results(args)
+        tests = []
+        for modname in results.results.keys():
+            for t in results.results[modname].keys():
+                tests.append(modname + "." + t)
+        print(json.encode({"tests": tests}))
+
+    proc def _run_tests(args):
+        _init_results(args)
         results.show()
         # start with unit tests, proceed with next test category after unit tests
         _run_unit_tests(args)
 
     proc def _run_unit_tests(args):
-        hand_out = unit_tests
+        hand_out = _filter_tests(unit_tests, args)
 
         def get_test():
             r = hand_out.popitem()
@@ -546,7 +573,7 @@ actor test_runner(env: Env, unit_tests: dict[str, UnitTest], sync_actor_tests: d
                 unit_test_runner(i, get_test, report_result)
 
     proc def _run_sync_actor_tests(args):
-        hand_out = sync_actor_tests
+        hand_out = _filter_tests(sync_actor_tests, args)
 
         def get_test() -> ?SyncActorTest:
             r = hand_out.popitem()
@@ -568,7 +595,7 @@ actor test_runner(env: Env, unit_tests: dict[str, UnitTest], sync_actor_tests: d
                 sync_actor_test_runner(get_test, report_result)
 
     proc def _run_async_actor_tests(args):
-        hand_out = async_actor_tests
+        hand_out = _filter_tests(async_actor_tests, args)
 
         def get_test() -> ?AsyncActorTest:
             r = hand_out.popitem()
@@ -590,7 +617,7 @@ actor test_runner(env: Env, unit_tests: dict[str, UnitTest], sync_actor_tests: d
                 async_actor_test_runner(get_test, report_result)
 
     proc def _run_env_tests(args):
-        hand_out = env_tests
+        hand_out = _filter_tests(env_tests, args)
 
         def get_test() -> ?EnvTest:
             r = hand_out.popitem()
@@ -674,7 +701,9 @@ actor test_runner(env: Env, unit_tests: dict[str, UnitTest], sync_actor_tests: d
     def _parse_args():
         p = argparse.Parser()
         p.add_bool("json", "Output results as JSON")
+        lp = p.add_cmd("list", "list tests", _list_tests)
         tp = p.add_cmd("test", "Run tests", _run_tests)
+        tp.add_option("name", "strlist", nargs="+", default=[], help="Filter tests by name")
         pp = p.add_cmd("perf", "Performance benchmark tests", _run_perf_tests)
         pp.add_option("iterations", "int", "?", 1, "Number of iterations to run")
 
@@ -685,4 +714,11 @@ actor test_runner(env: Env, unit_tests: dict[str, UnitTest], sync_actor_tests: d
         else:
             # no command given, run all tests
             _run_tests(args)
-    _parse_args()
+    try:
+        _parse_args()
+    except argparse.PrintUsage as exc:
+        print(exc)
+        env.exit(0)
+    except argparse.ArgumentError as exc:
+        print(exc)
+        env.exit(1)
