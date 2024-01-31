@@ -538,8 +538,9 @@ findWitness env t p
         p_                  = wild p                    -- matching against wild p also accepts witnesses that would instantiate p
         force               = isForced env
         t'                  = if force then t_ else t   -- allow instantiation only when in forced mode
-        all_ws              = reverse $ filter (matchCoarse t_ p_) $ witsByPName env $ tcname p -- all witnesses that could be used
-        (match_ws, rest_ws) = partition (matchFine t') all_ws                                   -- only those that match t exactly
+        elimSelf wc         = wc{ proto = subst [(tvSelf,wtype wc)] (proto wc) }
+        all_ws              = reverse $ filter (matchCoarse t_ p_) $ map elimSelf $ witsByPName env $ tcname p -- all witnesses that could be used
+        (match_ws, rest_ws) = partition (matchFine t') all_ws                                                  -- only those that match t exactly
         uni_ws              = filter (unifying (DfltInfo (loc t) 11 Nothing []) t) rest_ws
         elim ws' []         = reverse ws'
         elim ws' (w:ws)
