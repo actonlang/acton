@@ -39,9 +39,10 @@ generate env srcbase m              = do return (n, h,c)
         env0                        = genEnv $ setMod (modname m) env 
 
 genRoot                            :: Acton.Env.Env0 -> QName -> IO String
-genRoot env0 qn@(GName m n)         = do return $ render (cInclude $+$ cInit $+$ cRoot)
+genRoot env0 qn@(GName m n)         = do return $ render (cInclude $+$ cIncludeMods $+$ cInit $+$ cRoot)
   where env                         = genEnv $ setMod m env0
-        cInclude                    = include env "out/types" m
+        cInclude                    = text "#include \"rts/common.h\""
+        cIncludeMods                = include env "out/types" m
         cInit                       = (text "void" <+> gen env primROOTINIT <+> parens empty <+> char '{') $+$
                                        nest 4 (gen env (GName m initKW) <> parens empty <> semi) $+$
                                        char '}'
@@ -266,6 +267,7 @@ primNEWTUPLE0                       = gPrim "NEWTUPLE0"
 
 cModule env srcbase (Module m imps stmts)
                                     = (if inBuiltin env then text "#include \"builtin/builtin.c\"" else empty) $+$
+                                      text "#include \"rts/common.h\"" $+$
                                       include env (if inBuiltin env then "" else "out/types") m $+$
                                       ext_include $+$
                                       declModule env stmts $+$
@@ -348,7 +350,7 @@ declDeserialize env n c props sup_c = (gen env (tCon c) <+> genTopName env (meth
                                               create) $+$
                                       char '}'
         create                      = gen env self <+> text "=" <+> gen env primDNEW <> parens (genTopName env n <> comma <+> gen env st) <> semi
-        alloc                       = gen env self <+> equals <+> malloc env (gname env n) <> semi $+$
+        alloc                       = gen env self <+> equals <+> acton_malloc env (gname env n) <> semi $+$
                                       gen env self <> text "->" <> gen env1 classKW <+> equals <+> char '&' <> methodtable env1 n <> semi
         super_step | [c] <- sup_c   = deserializeSup env (tcname c) <> parens (parens (gen env $ tcname c) <> gen env self <> comma <+> gen env st) <> semi
                    | otherwise      = empty
@@ -656,7 +658,7 @@ genNew env n p                      = newcon' env n <> parens (gen env p)
 
 declCon env n q b
   | null abstr || hasNotImpl b      = (gen env tRes <+> newcon env n <> parens (gen env pars) <+> char '{') $+$
-                                      nest 4 (gen env tObj <+> gen env tmpV <+> equals <+> malloc env (gname env n) <> semi $+$
+                                      nest 4 (gen env tObj <+> gen env tmpV <+> equals <+> acton_malloc env (gname env n) <> semi $+$
                                               gen env tmpV <> text "->" <> gen env1 classKW <+> equals <+> char '&' <> methodtable env1 n <> semi $+$
                                               initcall env1) $+$
                                       char '}'
@@ -674,7 +676,7 @@ declCon env n q b
         env1                        = ldefine ((tmpV, NVar tObj) : envOf pars) env
         abstr                       = abstractAttrs env (NoQ n)
 
-malloc env n                        = text "malloc" <> parens (text "sizeof" <> parens (text "struct" <+> gen env n))
+acton_malloc env n                        = text "acton_malloc" <> parens (text "sizeof" <> parens (text "struct" <+> gen env n))
 
 comma' x                            = if isEmpty x then empty else comma <+> x
 

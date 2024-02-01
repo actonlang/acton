@@ -60,17 +60,17 @@ B_slice B_sliceG_new(B_int start,B_int stop,B_int step) {
 
 B_NoneType B_sliceD___init__(B_slice s, B_int start, B_int stop, B_int step) {
     if (start) {
-        s->start = malloc(sizeof(long));
+        s->start = acton_malloc(sizeof(long));
         *s->start = from$int(start);
     } else
         s->start = NULL;
     if (stop) {
-        s->stop = malloc(sizeof(long));
+        s->stop = acton_malloc(sizeof(long));
         *s->stop = from$int(stop);
     } else
         s->stop = NULL;
     if (step) {
-        s->step = malloc(sizeof(long));
+        s->step = acton_malloc(sizeof(long));
         *s->step = from$int(step);
     } else
         s->step = NULL;
@@ -87,11 +87,11 @@ B_slice B_sliceD___deserialize__ (B_slice self, $Serial$state state) {
     $ROW this = state->row;
     state->row = this->next;
     state->row_no++;
-    B_slice res = malloc(sizeof(struct B_slice));
+    B_slice res = acton_malloc(sizeof(struct B_slice));
     res->$class = &B_sliceG_methods;
-    res->start = malloc(sizeof(long));
-    res->stop = malloc(sizeof(long));
-    res->step = malloc(sizeof(long));
+    res->start = acton_malloc(sizeof(long));
+    res->stop = acton_malloc(sizeof(long));
+    res->step = acton_malloc(sizeof(long));
     *res->start = (long)this->blob[0];
     *res->stop = (long)this->blob[1];
     *res->step = (long)this->blob[2];

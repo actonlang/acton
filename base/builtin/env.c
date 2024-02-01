@@ -52,13 +52,13 @@ void read_stdin(uv_stream_t *stream, ssize_t nread, const uv_buf_t *buf) {
     }
 
     if (buf->base)
-        free(buf->base);
+        acton_free(buf->base);
 }
 $R B_EnvD_stdin_installG_local (B_Env self, $Cont c$cont, $action cb) {
     // This should be the only call in env that does IO stuff, so it is safe to
     // pin affinity here (and not earlier)..
     pin_actor_affinity();
-    uv_tty_t *tty = malloc(sizeof(uv_tty_t));
+    uv_tty_t *tty = acton_malloc(sizeof(uv_tty_t));
     uv_tty_init(get_uv_loop(), tty, 0, 1);
     tty->data = cb;
     uv_read_start((uv_stream_t*)tty, alloc_buffer, read_stdin);
@@ -85,7 +85,7 @@ B_Env B_EnvG_newactor(B_WorldCap wc, B_SysCap sc, B_list args) {
 
 
 B_SysCap B_SysCapG_new() {
-    B_SysCap $tmp = malloc(sizeof(struct B_SysCap));
+    B_SysCap $tmp = acton_malloc(sizeof(struct B_SysCap));
     $tmp->$class = &B_SysCapG_methods;
     //   B_SysCapG_methods.__init__($tmp);
     return $tmp;
@@ -97,7 +97,7 @@ B_NoneType B_SysCapD___init__ (B_SysCap self) {
 
 
 B_WorldCap B_WorldCapG_new() {
-    B_WorldCap $tmp = malloc(sizeof(struct B_WorldCap));
+    B_WorldCap $tmp = acton_malloc(sizeof(struct B_WorldCap));
     $tmp->$class = &B_WorldCapG_methods;
     //   B_WorldCapG_methods.__init__($tmp);
     return $tmp;

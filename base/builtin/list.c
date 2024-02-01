@@ -22,8 +22,8 @@ static void expand(B_list lst,int n) {
     while (newcapacity < lst->length+n)
         newcapacity <<= 1;
     $WORD* newptr = lst->data==NULL
-        ? malloc(newcapacity*sizeof($WORD))
-        : realloc(lst->data,newcapacity*sizeof($WORD));
+        ? acton_malloc(newcapacity*sizeof($WORD))
+        : acton_realloc(lst->data,newcapacity*sizeof($WORD));
     if (newptr == NULL) {
         $RAISE((B_BaseException)$NEW(B_MemoryError,to$str("memory allocation failed")));
     }
@@ -35,7 +35,7 @@ static void shrink(B_list lst) {
     if (lst->capacity > 20 && 2*lst->length < lst->capacity) {
         int newcapacity = lst->length;
         $WORD old = lst->data;
-        lst->data = malloc(newcapacity * sizeof($WORD));
+        lst->data = acton_malloc(newcapacity * sizeof($WORD));
         lst->capacity = newcapacity;
         assert(old != NULL);
         memcpy(lst->data, old, newcapacity * sizeof($WORD));
@@ -48,12 +48,12 @@ B_list B_listD_new(int capacity) {
         fprintf(stderr,"Internal error list_new: negative capacity");
         exit(-1);
     } 
-    B_list lst = malloc(sizeof(struct B_list));
+    B_list lst = acton_malloc(sizeof(struct B_list));
     if (lst == NULL) {
         $RAISE((B_BaseException)$NEW(B_MemoryError,to$str("memory allocation failed")));
     }
     if (capacity>0) {
-        lst->data = malloc(capacity*sizeof($WORD));
+        lst->data = acton_malloc(capacity*sizeof($WORD));
         if (lst->data == NULL) {
             $RAISE((B_BaseException)$NEW(B_MemoryError,to$str("memory allocation failed")));
         }

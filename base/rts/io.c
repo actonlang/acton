@@ -16,5 +16,5 @@ uv_loop_t *get_uv_loop() {
 }
 
 void alloc_buffer(uv_handle_t *handle, size_t size, uv_buf_t *buf) {
-    *buf = uv_buf_init((char*) GC_MALLOC_ATOMIC(size), size);
+    *buf = uv_buf_init((char*) acton_malloc_atomic(size), size);
 }

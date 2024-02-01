@@ -74,7 +74,7 @@ struct B_HashableD_WORD *B_HashableD_WORDG_witness = &B_HashableD_WORD_instance;
 // small-step functions for (de)serializing the next object /////////////////////////////////////////////////
 
 $ROW $add_header(int class_id, int blob_size, $Serial$state state) {
-    $ROW res = malloc(2 * sizeof(int) + (1+blob_size)*sizeof($WORD));
+    $ROW res = acton_malloc(2 * sizeof(int) + (1+blob_size)*sizeof($WORD));
     res->class_id = class_id;
     state->row_no++;
     res->blob_size = blob_size;
@@ -183,7 +183,7 @@ void $write_serialized($ROW row, char *file) {
 }
  
 $ROW $serialize($Serializable s, $WORD (*globmap)($WORD)) {
-    $Serial$state state = malloc(sizeof(struct $Serial$state));
+    $Serial$state state = acton_malloc(sizeof(struct $Serial$state));
     state->done = $NEW(B_dict,(B_Hashable)B_HashableD_WORDG_witness,NULL,NULL);
     state->globmap = globmap;
     state->row_no=0;
@@ -194,7 +194,7 @@ $ROW $serialize($Serializable s, $WORD (*globmap)($WORD)) {
 }
 
 $ROW $glob_serialize($Serializable self, $WORD (*globmap)($WORD)) {
-    $Serial$state state = malloc(sizeof(struct $Serial$state));
+    $Serial$state state = acton_malloc(sizeof(struct $Serial$state));
     state->done = $NEW(B_dict,(B_Hashable)B_HashableD_WORDG_witness,NULL,NULL);
     state->globmap = globmap;
     state->row_no=0;
@@ -210,7 +210,7 @@ void $serialize_file($Serializable s, char *file) {
 }
 
 $Serializable $deserialize($ROW row, $WORD (*globmap)($WORD)) {
-    $Serial$state state = malloc(sizeof(struct $Serial$state));
+    $Serial$state state = acton_malloc(sizeof(struct $Serial$state));
     state->done = $NEW(B_dict,(B_Hashable)B_HashableD_intG_witness,NULL,NULL);
     state->globmap = globmap;
     state->row_no=0;
@@ -220,7 +220,7 @@ $Serializable $deserialize($ROW row, $WORD (*globmap)($WORD)) {
 }
 
 $Serializable $glob_deserialize($Serializable self, $ROW row, $WORD (*globmap)($WORD)) {
-    $Serial$state state = malloc(sizeof(struct $Serial$state));
+    $Serial$state state = acton_malloc(sizeof(struct $Serial$state));
     state->done = $NEW(B_dict,(B_Hashable)B_HashableD_intG_witness,NULL,NULL);
     state->globmap = globmap;
     state->row_no=1;
@@ -254,7 +254,7 @@ $ROW $read_serialized(char *file) {
         }
         memcpy(start,p,chunk_size);
         p+=chunk_size;
-        $ROW row = malloc(2*sizeof(int) + (init[1]+1) * sizeof($WORD));
+        $ROW row = acton_malloc(2*sizeof(int) + (init[1]+1) * sizeof($WORD));
         memcpy(row,init,2*sizeof(int));//4
         row->next = NULL;
         chunk_size =  (init[1]) * sizeof($WORD);

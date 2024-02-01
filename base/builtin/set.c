@@ -56,7 +56,7 @@ static int B_set_table_resize(B_set so, int minsize) {
     /* Get space for a new table. */
     oldtable = so->table;
 
-    newtable = malloc(sizeof(B_setentry) * newsize);
+    newtable = acton_malloc(sizeof(B_setentry) * newsize);
     if (newtable == NULL) {
         return -1;
     }
@@ -84,7 +84,7 @@ static int B_set_table_resize(B_set so, int minsize) {
         }
     }
 
-    free(oldtable);
+    acton_free(oldtable);
     return 0;
 }
 
@@ -178,9 +178,9 @@ void B_set_add_entry(B_set set, B_Hashable hashwit, $WORD key, long hash) {
 
 
 B_set B_set_copy(B_set set, B_Hashable hashwit) {
-    B_set res = malloc(sizeof(struct B_set));
+    B_set res = acton_malloc(sizeof(struct B_set));
     memcpy(res,set,sizeof(struct B_set));
-    res->table = malloc((set->mask+1)*sizeof(B_setentry));
+    res->table = acton_malloc((set->mask+1)*sizeof(B_setentry));
     memcpy(res->table,set->table,(set->mask+1)*sizeof(B_setentry));
     return res;
 }
@@ -207,7 +207,7 @@ B_NoneType B_setD___init__(B_set set, B_Hashable hashwit, B_Iterable wit, $WORD 
     set->fill = 0;
     set->mask = MIN_SIZE-1;
     set->finger = 0;
-    set->table = malloc(MIN_SIZE*sizeof(B_setentry));
+    set->table = acton_malloc(MIN_SIZE*sizeof(B_setentry));
     memset(set->table,0,MIN_SIZE*sizeof(B_setentry));
     if (wit && iterable) {
         B_Iterator it = wit->$class->__iter__(wit,iterable);
@@ -267,14 +267,14 @@ B_set B_setD___deserialize__ (B_set res, $Serial$state state) {
         return B_dictD_get(state->done,(B_Hashable)B_HashableD_intG_witness,to$int((long)this->blob[0]),NULL);
     } else {
         if (!res)
-            res = malloc(sizeof(struct B_set));
+            res = acton_malloc(sizeof(struct B_set));
         B_dictD_setitem(state->done,(B_Hashable)B_HashableD_intG_witness,to$int(state->row_no-1),res);
         res->$class = &B_setG_methods;
         res->numelements = (long)this->blob[0];
         res->fill = (long)this->blob[1];
         res->mask = (long)this->blob[2];
         res->finger = (long)this->blob[3];
-        res->table = malloc((res->mask+1)*sizeof(B_setentry));
+        res->table = acton_malloc((res->mask+1)*sizeof(B_setentry));
         memset(res->table,0,(res->mask+1)*sizeof(B_setentry));
         for (int i=0; i<=res->mask;i++) {
             B_setentry *entry = &res->table[i];
@@ -308,8 +308,8 @@ static $WORD B_IteratorD_set_next_entry(B_IteratorD_set self) {
 }
 
 static B_Iterator B_set_iter_entry(B_set set) {
-    B_IteratorD_set iter =  malloc(sizeof(struct B_IteratorD_set));
-    struct B_IteratorD_setG_class *methods = malloc(sizeof(struct B_IteratorD_setG_class));
+    B_IteratorD_set iter =  acton_malloc(sizeof(struct B_IteratorD_set));
+    struct B_IteratorD_setG_class *methods = acton_malloc(sizeof(struct B_IteratorD_setG_class));
     iter->$class = methods;
     methods->__next__ =  B_IteratorD_set_next_entry;
     iter->src = set;
@@ -379,7 +379,7 @@ B_set B_SetD_setD___fromiter__(B_SetD_set wit, B_Iterable wit2, $WORD iter) {
     res->fill = 0;
     res->mask = MIN_SIZE-1;
     res->finger = 0;
-    res->table = malloc(MIN_SIZE*sizeof(B_setentry));
+    res->table = acton_malloc(MIN_SIZE*sizeof(B_setentry));
     memset(res->table,0,MIN_SIZE*sizeof(B_setentry));
     $WORD nxt;
     while((nxt = it->$class->__next__(it))) {

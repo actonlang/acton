@@ -11,16 +11,16 @@ void $default__init__($WORD);
 // void B_printobj(char *mess,$WORD obj);
 
 
-#define $NEW($T, ...)       ({ $T $t = malloc(sizeof(struct $T)); \
+#define $NEW($T, ...)       ({ $T $t = acton_malloc(sizeof(struct $T)); \
                                $t->$class = &$T ## G_methods; \
                                $t->$class->__init__($t, ##__VA_ARGS__); \
                                $t; })
 
-#define $NEWCC($X, $c, ...) ({ $X $x = malloc(sizeof(struct $X)); \
+#define $NEWCC($X, $c, ...) ({ $X $x = acton_malloc(sizeof(struct $X)); \
                                $x->$class = &$X ## G_methods; \
                                $x->$class->__init__($x, ##__VA_ARGS__, $CONSTCONT($x,$c)); })
 
-#define $DNEW($T, $state)   ({ $T $t = malloc(sizeof(struct $T)); \
+#define $DNEW($T, $state)   ({ $T $t = acton_malloc(sizeof(struct $T)); \
                                $t->$class = &$T ## G_methods;                                     \
                                B_dictD_setitem($state->done,(B_Hashable)B_HashableD_intG_witness,to$int($state->row_no-1),$t); \
                                $t; })

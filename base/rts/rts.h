@@ -14,6 +14,7 @@
     #define IS_MACOS
 #endif
 
+#include "common.h"
 #include "../builtin/builtin.h"
 
 #define MSGQ 2

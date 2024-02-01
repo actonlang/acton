@@ -67,7 +67,7 @@ B_NoneType B_print(B_tuple t, B_str sep_arg, B_str end_arg, B_bool stderr_arg, B
         tlen += __str__(elem)->nbytes + sep->nbytes;
     }
     tlen += end->nbytes;
-    char *s = malloc(tlen+1);
+    char *s = acton_malloc(tlen+1);
     int pos = 0;
     for (int i=0; i<t->size; i++) {
         if (i > 0) {

@@ -25,7 +25,7 @@ B_NoneType $SEQD___init__ ($SEQ self) {
 $SEQ $SEQD___deserialize__ ($SEQ self, $Serial$state state) {
     if (!self) {
         if (!state) {
-            self = malloc(sizeof(struct $SEQ));
+            self = acton_malloc(sizeof(struct $SEQ));
             self->$class = &$SEQG_methods;
             return self;
         }
@@ -35,7 +35,7 @@ $SEQ $SEQD___deserialize__ ($SEQ self, $Serial$state state) {
     return self;
 }
 $SEQ $SEQG_new() {
-    $SEQ $tmp = malloc(sizeof(struct $SEQ));
+    $SEQ $tmp = acton_malloc(sizeof(struct $SEQ));
     $tmp->$class = &$SEQG_methods;
     $SEQG_methods.__init__($tmp);
     return $tmp;
@@ -55,7 +55,7 @@ struct $SEQG_class $SEQG_methods = {
 $BRK $BRKD___deserialize__ ($BRK self, $Serial$state state) {
     if (!self) {
         if (!state) {
-            self = malloc(sizeof(struct $BRK));
+            self = acton_malloc(sizeof(struct $BRK));
             self->$class = &$BRKG_methods;
             return self;
         }
@@ -65,7 +65,7 @@ $BRK $BRKD___deserialize__ ($BRK self, $Serial$state state) {
     return self;
 }
 $BRK $BRKG_new() {
-    $BRK $tmp = malloc(sizeof(struct $BRK));
+    $BRK $tmp = acton_malloc(sizeof(struct $BRK));
     $tmp->$class = &$BRKG_methods;
     $BRKG_methods.__init__($tmp);
     return $tmp;
@@ -85,7 +85,7 @@ struct $BRKG_class $BRKG_methods = {
 $CNT $CNTD___deserialize__ ($CNT self, $Serial$state state) {
     if (!self) {
         if (!state) {
-            self = malloc(sizeof(struct $CNT));
+            self = acton_malloc(sizeof(struct $CNT));
             self->$class = &$CNTG_methods;
             return self;
         }
@@ -95,7 +95,7 @@ $CNT $CNTD___deserialize__ ($CNT self, $Serial$state state) {
     return self;
 }
 $CNT $CNTG_new() {
-    $CNT $tmp = malloc(sizeof(struct $CNT));
+    $CNT $tmp = acton_malloc(sizeof(struct $CNT));
     $tmp->$class = &$CNTG_methods;
     $CNTG_methods.__init__($tmp);
     return $tmp;
@@ -123,7 +123,7 @@ void $RETD___serialize__ ($RET self, $Serial$state state) {
 $RET $RETD___deserialize__ ($RET self, $Serial$state state) {
     if (!self) {
         if (!state) {
-            self = malloc(sizeof(struct $RET));
+            self = acton_malloc(sizeof(struct $RET));
             self->$class = &$RETG_methods;
             return self;
         }
@@ -134,7 +134,7 @@ $RET $RETD___deserialize__ ($RET self, $Serial$state state) {
     return self;
 }
 $RET $RETG_new(B_value G_1) {
-    $RET $tmp = malloc(sizeof(struct $RET));
+    $RET $tmp = acton_malloc(sizeof(struct $RET));
     $tmp->$class = &$RETG_methods;
     $RETG_methods.__init__($tmp, G_1);
     return $tmp;
