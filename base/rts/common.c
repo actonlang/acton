@@ -1,6 +1,10 @@
 #include <stdlib.h>
 #include <errno.h>
 
+#include <mbedtls/platform.h>
+#include <libxml/xmlmemory.h>
+#include <tlsuv/tlsuv.h>
+
 void *(*real_malloc)(size_t) = NULL;
 void *(*real_realloc)(void *, size_t) = NULL;
 void *(*real_calloc)(size_t, size_t) = NULL;
@@ -62,6 +66,25 @@ static acton__allocator_t acton__allocator = {
     strndup
 };
 
+void *GC_calloc(size_t count, size_t size) {
+    return GC_malloc(count*size);
+}
+
+void acton_init_alloc() {
+    // UV & TLSUV are used for IO, which is always done on the GC-heap. We don't
+    // have any constants related to UV, so we can always use the GC
+    uv_replace_allocator(GC_malloc,
+                         GC_realloc,
+                         GC_calloc,
+                         GC_free);
+
+    tlsuv_replace_allocator(GC_malloc,
+                            GC_realloc,
+                            GC_calloc,
+                            GC_free);
+
+}
+
 int acton_replace_allocator(acton_malloc_func malloc_func,
                             acton_malloc_func malloc_atomic_func,
                             acton_realloc_func realloc_func,
@@ -85,6 +108,18 @@ int acton_replace_allocator(acton_malloc_func malloc_func,
     acton__allocator.strdup = strdup_func;
     acton__allocator.strndup = strndup_func;
 
+    bsdnt_replace_allocator(acton__allocator.malloc,
+                            acton__allocator.realloc,
+                            acton__allocator.free);
+
+    xmlMemSetup(acton__allocator.free,
+                acton__allocator.malloc,
+                acton__allocator.realloc,
+                acton__allocator.strdup);
+
+    mbedtls_platform_set_calloc_free(acton__allocator.calloc,
+                                     acton__allocator.free);
+
     return 0;
 }
 
@@ -95,7 +130,6 @@ void* acton_malloc(size_t size) {
 void* acton_malloc_atomic(size_t size) {
     return acton__allocator.malloc_atomic(size);
 }
-
 
 void* acton_realloc(void* ptr, size_t size) {
     return acton__allocator.realloc(ptr, size);

@@ -2,8 +2,26 @@
 
 #include <pcre2.h>
 
+static void *pcre2_malloc(size_t size, void *data) {
+    (void)data;
+    return acton_malloc(size);
+}
+
+static void pcre2_free(void *ptr, void *data) {
+    (void)data;
+    acton_free(ptr);
+}
+
+pcre2_general_context *general_context;
+
 void reQ___ext_init__() {
     // Nothing to do
+    general_context = pcre2_general_context_create(pcre2_malloc, pcre2_free, NULL);
+    if (general_context == NULL) {
+        // Handle error
+        assert(0);
+    }
+
 }
 
 
@@ -41,7 +59,7 @@ reQ_Match reQ__match (B_str arg_pattern, B_str arg_text, B_int arg_start_pos) {
                        0,                     /* default options */
                        &errornumber,          /* for error number */
                        &erroroffset,          /* for error offset */
-                       NULL);                 /* use default compile context */
+                       general_context);      /* use default compile context */
 
 
     /* Compilation failed: print the error message and exit. */

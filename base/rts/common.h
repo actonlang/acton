@@ -20,6 +20,8 @@ typedef void (*acton_free_func)(void* ptr);
 typedef char *(*acton_strdup_func)(const char* s);
 typedef char *(*acton_strndup_func)(const char* s, size_t n);
 
+void acton_init_malloc();
+
 int acton_replace_allocator(acton_malloc_func malloc_func,
                             acton_malloc_func malloc_atomic_func,
                             acton_realloc_func realloc_func,

@@ -181,7 +181,7 @@ dist/depsout/lib/libargp.a: dist/deps/libargp $(DIST_ZIG)
 	cd $< && $(ZIG) build $(ZIG_TARGET) $(ZIG_CPU) --prefix $(TD)/dist/depsout
 
 # /deps/libbsdnt --------------------------------------------
-LIBBSDNT_REF=a0af240bf32eacf5ad56a847b9a7f507c950aa53
+LIBBSDNT_REF=1f31f6903378022fec8f09a3b3f3446e961eacbc
 deps-download/$(LIBBSDNT_REF).tar.gz:
 	mkdir -p deps-download
 	curl -f -L -o $@ https://github.com/actonlang/bsdnt/archive/$(LIBBSDNT_REF).tar.gz
@@ -211,7 +211,7 @@ dist/depsout/lib/libactongc.a: dist/deps/libgc $(DIST_ZIG)
 	mv dist/depsout/lib/libgc.a $@
 
 # /deps/libmbedtls --------------------------------------------
-LIBMBEDTLS_REF=9351929a2f776e1073cdbac7963f622e77226a60
+LIBMBEDTLS_REF=9009ebc3d89f4acc43267280b7db637c4a4c7c51
 deps-download/$(LIBMBEDTLS_REF).tar.gz:
 	mkdir -p deps-download
 	curl -f -L -o $@ https://github.com/actonlang/mbedtls/archive/$(LIBMBEDTLS_REF).tar.gz
@@ -241,7 +241,7 @@ dist/depsout/lib/libprotobuf-c.a: dist/deps/libprotobuf_c $(DIST_ZIG)
 	cd $< && $(ZIG) build $(ZIG_TARGET) $(ZIG_CPU) --prefix $(TD)/dist/depsout
 
 # /deps/tlsuv ---------------------------------------------
-TLSUV_REF=c71a1980b07d1c7967b306e81cd7ba904c614dd2
+TLSUV_REF=f30ff355c06616b050002a12889b2cde4beccb19
 deps-download/$(TLSUV_REF).tar.gz:
 	mkdir -p deps-download
 	curl -f -L -o $@ https://github.com/actonlang/tlsuv/archive/$(TLSUV_REF).tar.gz
