@@ -2,22 +2,18 @@
 
 parser = argparse.Parser(None)
 
-
-How should this work?
-- depth first search for commands, nested commands means nested parsers
-- build up a list of parsers, deepest first, keep track of cmd arg position
-- no command = top level parser only
-- go through list of parsers, parse args from cmd arg position and forward, keep track of rest
-
-
-argv: --verbose new blargh --dev
+The Parser parses the passed argv in a first pass looking for options
+(--option), when sub commands are encountered, the rest of argv is passed to the
+sub command parser where it too first looks for options. This happens
+recursively for nested sub-commands. After the first pass, a second pass over
+the remaining arguments is performed, matching the rest of argv to positional
+arguments.
 """
 
 # TODO: mutually exclusive argument groups
 # TODO: argument metavar
 # TODO: required options (oxymoronic)?
 # TODO: bash completion
-# TODO: --
 #
 
 class ArgumentError(Exception):
@@ -216,7 +212,10 @@ class Parser(object):
             arg = argv[p]
             start = 0
             end = len(arg)
-            if arg.startswith('--', None, None):
+            if arg == '--':
+                posargs.extend(argv[p+1:])
+                break
+            elif arg.startswith('--', None, None):
                 start = 2
                 val_in_arg = False
                 if arg.find('=', None, None) != -1:

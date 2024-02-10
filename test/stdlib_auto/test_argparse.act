@@ -120,6 +120,19 @@ def test_posarg_not_required2():
     raise ValueError("Expected ArgumentError since optional positional argument is missing")
 
 
+def test_posarg_dashdash():
+    p = argparse.Parser()
+    p.add_arg("infile", "input file", True, "?")
+    p.add_arg("outfile", "output file", True, "?")
+
+    args = p.parse(["./app", "--", "foo", "--bar"])
+    if args.get_str("infile") != "foo":
+        raise ValueError("pos arg infile != foo")
+    if args.get_str("outfile") != "--bar":
+        raise ValueError("pos arg outfile != --bar")
+
+
+
 actor Foo():
     def foo():
         return "foo"
@@ -242,6 +255,7 @@ actor main(env):
         test_posarg_missing()
         test_posarg_not_required1()
         test_posarg_not_required2()
+        test_posarg_dashdash()
         test_cmd()
         test_cmd_strlist()
         test_cmd_nested()
