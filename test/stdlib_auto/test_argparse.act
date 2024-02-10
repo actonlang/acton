@@ -120,6 +120,19 @@ def test_posarg_not_required2():
     raise ValueError("Expected ArgumentError since optional positional argument is missing")
 
 
+def test_posarg_dashdash():
+    p = argparse.Parser()
+    p.add_arg("infile", "input file", True, "?")
+    p.add_arg("outfile", "output file", True, "?")
+
+    args = p.parse(["./app", "--", "foo", "--bar"])
+    if args.get_str("infile") != "foo":
+        raise ValueError("pos arg infile != foo")
+    if args.get_str("outfile") != "--bar":
+        raise ValueError("pos arg outfile != --bar")
+
+
+
 actor Foo():
     def foo():
         return "foo"
@@ -127,6 +140,7 @@ actor Foo():
 # TODO: this should be a function, not an actor but that gives a lambdalifter error
 actor test_cmd():
     proc def _build(args):
+        # make sure we can actually call an action here
         f = Foo()
         f.foo()
 
@@ -153,8 +167,7 @@ actor test_cmd():
 # TODO: this should be a function, not an actor but that gives a lambdalifter error
 actor test_cmd_strlist():
     proc def _build(args):
-        f = Foo()
-        f.foo()
+        pass
 
     p = argparse.Parser()
     p.add_bool("verbose", "Enable verbose output")
@@ -177,6 +190,7 @@ actor test_cmd_strlist():
         raise ValueError("build cmd text strlist != ['A', 'B']")
 
 
+# TODO: this should be a function, not an actor but that gives a lambdalifter error
 actor test_cmd_nested():
     proc def _build(args):
         pass
@@ -202,6 +216,25 @@ actor test_cmd_nested():
     if _args.get_bool("foo") != True:
         raise ValueError("build cmd flag flag == True")
 
+# TODO: this should be a function, not an actor but that gives a lambdalifter error
+actor test_cmd_optional_argument():
+    proc def _new(args):
+        pass
+
+    p = argparse.Parser()
+    p.add_arg("infile", "input file", False)
+    pb = p.add_cmd("new", "New", _new)
+    pb.add_arg("dirname")
+
+    _args = p.parse(["./app", "new", "foobar", "foo"])
+    _cmd = _args.cmd
+    if _cmd is None:
+        raise ValueError("Expected build cmd set")
+    if _args.get_str("dirname") != "foobar":
+        raise ValueError("dirname != foobar, actual: " + _args.get_str("dirname"))
+    if _args.get_str("infile") != "foo":
+        raise ValueError("pos arg infile != foo")
+
 def test_help():
     p = argparse.Parser()
     try:
@@ -222,9 +255,11 @@ actor main(env):
         test_posarg_missing()
         test_posarg_not_required1()
         test_posarg_not_required2()
+        test_posarg_dashdash()
         test_cmd()
         test_cmd_strlist()
         test_cmd_nested()
+        test_cmd_optional_argument()
         test_help()
         env.exit(0)
     except Exception as exc:

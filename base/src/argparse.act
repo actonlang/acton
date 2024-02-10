@@ -1,13 +1,19 @@
 """Command line argument parsing
 
 parser = argparse.Parser(None)
+
+The Parser parses the passed argv in a first pass looking for options
+(--option), when sub commands are encountered, the rest of argv is passed to the
+sub command parser where it too first looks for options. This happens
+recursively for nested sub-commands. After the first pass, a second pass over
+the remaining arguments is performed, matching the rest of argv to positional
+arguments.
 """
 
 # TODO: mutually exclusive argument groups
 # TODO: argument metavar
 # TODO: required options (oxymoronic)?
 # TODO: bash completion
-# TODO: --
 #
 
 class ArgumentError(Exception):
@@ -105,7 +111,7 @@ class Parser(object):
                     raise ArgumentError("Only one positional argument with multiple values allowed")
         self.args.append((name=name, help=help, required=required, nargs=nargs, left=1))
 
-    def add_cmd(self, name: str, help: str, fn: proc(Args) -> None):
+    def add_cmd(self, name: str, help: str="", fn: proc(Args) -> None):
         p = Parser()
         self.cmds[name] = (help=help, parser=p, fn=fn)
         return p
@@ -126,7 +132,10 @@ class Parser(object):
             n = arg.name
             if n is not None:
                 if arg.nargs == "?":
-                    short_opts += " %s" % (n.upper())
+                    if arg.required:
+                        short_opts += " %s" % (n.upper())
+                    else:
+                        short_opts += " [%s]" % (n.upper())
                 elif arg.nargs == "+":
                     short_opts += " %s [%s ...]" % (n.upper(), n.upper())
         if len(self.cmds) > 0:
@@ -181,6 +190,7 @@ class Parser(object):
         return args
 
     def _parse_and_consume(self, argv: list[str], res_args: ?Args) -> (Args, list[str]):
+        #print("parsing, parser", self, "argv:", argv)
         rest: list[str] = []
         if res_args is not None:
             res = res_args
@@ -202,7 +212,10 @@ class Parser(object):
             arg = argv[p]
             start = 0
             end = len(arg)
-            if arg.startswith('--', None, None):
+            if arg == '--':
+                posargs.extend(argv[p+1:])
+                break
+            elif arg.startswith('--', None, None):
                 start = 2
                 val_in_arg = False
                 if arg.find('=', None, None) != -1:
@@ -250,11 +263,18 @@ class Parser(object):
                     cmd = self.cmds[arg]
                     res.cmd_parser = cmd.parser
                     res.cmd = cmd.fn
-                    continue
-                elif ccmd is not None:
-                    rest.append(arg)
+                    cmd_parser = cmd.parser
+                    if cmd_parser is not None:
+                        cmd_args = argv[i+1:]
+                        #print(self, arg, ": cmd found, invoking cmd parser with", cmd_args)
+                        res, moreposargs = cmd_parser._parse_and_consume(cmd_args, res)
+                        posargs.extend(moreposargs)
+                    break
                 else:
+                    #print(self, arg, ": adding to posarg")
                     posargs.append(arg)
+
+        #print(self, "Do second loop for optional posargs on rest:", posargs)
 
         for i in range(len(posargs)):
             arg = posargs[i]
