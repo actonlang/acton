@@ -8,7 +8,7 @@ export ZIG_LOCAL_CACHE_DIR
 
 ACTON=$(TD)/dist/bin/acton
 ACTONC=dist/bin/actonc
-ACTC=dist/bin/actonc $(ACTONC_TARGET)
+ACTC=$(TD)/dist/bin/actonc
 ZIG_VERSION:=0.12.0-dev.2236+32e88251e
 ZIG=$(TD)/dist/zig/zig
 AR=$(ZIG) ar
@@ -412,7 +412,10 @@ test-stdlib:
 
 
 .PHONY: clean clean-all clean-base
-clean: clean-distribution clean-base
+clean: clean-cli clean-distribution clean-base
+
+clean-cli:
+	rm -rf cli/out cli/build-cache
 
 clean-all: clean clean-compiler
 	rm -rf lib/* $(ZIG_LOCAL_CACHE_DIR)
@@ -421,8 +424,11 @@ clean-base:
 	rm -rf base/build-cache base/out builder/build_runner* builder/builder* builder/zig-cache builder/zig-out
 	rm -rf $(OFILES) builtin/__builtin__.h builtin/__builtin__.c builtin/ty/out stdlib/out/
 
-bin/acton: bin/acton.act distribution1
-	$(ACTC) bin/acton.act
+bin/acton: cli/out/rel/bin/acton
+	cp -a $< $@
+
+cli/out/rel/bin/acton: distribution1
+	cd cli && $(ACTC) build $(ACTONC_TARGET)
 
 # == DIST ==
 #
