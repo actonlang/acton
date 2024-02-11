@@ -240,7 +240,7 @@ dist/depsout/lib/libprotobuf-c.a: dist/deps/libprotobuf_c $(DIST_ZIG)
 	cd $< && $(ZIG) build $(ZIG_TARGET) --prefix $(TD)/dist/depsout
 
 # /deps/tlsuv ---------------------------------------------
-TLSUV_REF=c71a1980b07d1c7967b306e81cd7ba904c614dd2
+TLSUV_REF=8653b7a9c8b446558254b713a0c7f8d4c5e36686
 deps-download/$(TLSUV_REF).tar.gz:
 	mkdir -p deps-download
 	curl -f -L -o $@ https://github.com/actonlang/tlsuv/archive/$(TLSUV_REF).tar.gz
