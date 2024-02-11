@@ -43,4 +43,4 @@ extra-deps: [Cabal-3.10.1.0,Cabal-syntax-3.10.1.0,dir-traverse-0.2.3.0,directory
 # system-ghc: true
 
 ghc-options:
-  "*": -fPIC
+  "$everything": -fPIC
