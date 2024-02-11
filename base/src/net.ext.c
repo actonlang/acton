@@ -13,7 +13,7 @@ void netQ___ext_init__() {
 
 B_bool netQ_is_ipv4 (B_str address) {
     struct sockaddr_in sa;
-    if (inet_pton(AF_INET, fromB_str(address), &(sa.sin_addr)) == 0) {
+    if (inet_pton(AF_INET, (const char *)fromB_str(address), &(sa.sin_addr)) == 0) {
         return B_False;
     } else {
         return B_True;
@@ -22,7 +22,7 @@ B_bool netQ_is_ipv4 (B_str address) {
 
 B_bool netQ_is_ipv6 (B_str address) {
     struct sockaddr_in6 sa;
-    if (inet_pton(AF_INET6, fromB_str(address), &(sa.sin6_addr)) == 0) {
+    if (inet_pton(AF_INET6, (const char *)fromB_str(address), &(sa.sin6_addr)) == 0) {
         return B_False;
     } else {
         return B_True;
@@ -80,14 +80,14 @@ B_NoneType netQ__lookup_a (B_str name, $action on_resolve, $action on_error) {
 
     struct dns_cb_data *cb_data = (struct dns_cb_data *)malloc(sizeof(struct dns_cb_data));
     cb_data->hints = hints;
-    cb_data->hostname = fromB_str(name);
+    cb_data->hostname = (char *)fromB_str(name);
     cb_data->on_resolve = on_resolve;
-    cb_data->on_error = on_error;
+    cb_data->on_error = ($action2) on_error;
 
     uv_getaddrinfo_t *req = (uv_getaddrinfo_t*)malloc(sizeof(uv_getaddrinfo_t));
     req->data = cb_data;
 
-    int r = uv_getaddrinfo(get_uv_loop(), req, _lookup_a__on_resolve, fromB_str(name), NULL, hints);
+    int r = uv_getaddrinfo(get_uv_loop(), req, _lookup_a__on_resolve, (const char *)fromB_str(name), NULL, hints);
     if (r != 0) {
         char errmsg[1024] = "Unable to run DNS query: ";
         uv_strerror_r(r, errmsg + strlen(errmsg), sizeof(errmsg)-strlen(errmsg));
@@ -145,14 +145,14 @@ B_NoneType netQ__lookup_aaaa (B_str name, $action on_resolve, $action on_error) 
 
     struct dns_cb_data *cb_data = (struct dns_cb_data *)malloc(sizeof(struct dns_cb_data));
     cb_data->hints = hints;
-    cb_data->hostname = fromB_str(name);
+    cb_data->hostname = (char *)fromB_str(name);
     cb_data->on_resolve = on_resolve;
-    cb_data->on_error = on_error;
+    cb_data->on_error = ($action2)on_error;
 
     uv_getaddrinfo_t *req = (uv_getaddrinfo_t*)malloc(sizeof(uv_getaddrinfo_t));
     req->data = cb_data;
 
-    int r = uv_getaddrinfo(get_uv_loop(), req, _lookup_aaaa__on_resolve, fromB_str(name), NULL, hints);
+    int r = uv_getaddrinfo(get_uv_loop(), req, _lookup_aaaa__on_resolve, (const char *)fromB_str(name), NULL, hints);
     if (r != 0) {
         char errmsg[1024] = "Unable to run DNS query: ";
         uv_strerror_r(r, errmsg + strlen(errmsg), sizeof(errmsg)-strlen(errmsg));
@@ -223,7 +223,7 @@ $R netQ_TCPConnectionD__connect4G_local (netQ_TCPConnection self, $Cont c$cont, 
     connect_req->data = (void *)self;
 
     struct sockaddr_in dest;
-    uv_ip4_addr(fromB_str(ip_address), from$int(self->port), &dest);
+    uv_ip4_addr((const char *)fromB_str(ip_address), from$int(self->port), &dest);
 
     uv_tcp_connect(connect_req, socket, (const struct sockaddr*)&dest, on_connect4);
 
@@ -240,7 +240,7 @@ $R netQ_TCPConnectionD__connect6G_local (netQ_TCPConnection self, $Cont c$cont, 
     connect_req->data = (void *)self;
 
     struct sockaddr_in6 dest;
-    uv_ip6_addr(fromB_str(ip_address), from$int(self->port), &dest);
+    uv_ip6_addr((const char *)fromB_str(ip_address), from$int(self->port), &dest);
 
     uv_tcp_connect(connect_req, socket, (const struct sockaddr*)&dest, on_connect6);
 
@@ -250,7 +250,7 @@ $R netQ_TCPConnectionD__connect6G_local (netQ_TCPConnection self, $Cont c$cont, 
 $R netQ_TCPConnectionD__read_startG_local (netQ_TCPConnection self, $Cont c$cont) {
     uv_tcp_t* socket = (uv_tcp_t *)from$int(self->_sock);
     socket->data = self;
-    int r = uv_read_start(socket, alloc_buffer, netQ_TCPConnection__on_receive);
+    int r = uv_read_start((uv_stream_t *)socket, alloc_buffer, netQ_TCPConnection__on_receive);
     if (r < 0) {
         char errmsg[1024] = "Failed to start reading from TCP client socket: ";
         uv_strerror_r(r, errmsg + strlen(errmsg), sizeof(errmsg)-strlen(errmsg));
@@ -266,11 +266,11 @@ $R netQ_TCPConnectionD__read_startG_local (netQ_TCPConnection self, $Cont c$cont
 $R netQ_TCPConnectionD_writeG_local (netQ_TCPConnection self, $Cont c$cont, B_bytes data) {
     uv_stream_t *stream = (uv_stream_t *)from$int(self->_sock);
     // fd == -1 means invalid FD and can happen after __resume__
-    if (stream == -1)
+    if ((long int)stream == -1)
         return $R_CONT(c$cont, B_None);
 
     uv_write_t *req = (uv_write_t *)malloc(sizeof(uv_write_t));
-    uv_buf_t buf = uv_buf_init(data->str, data->nbytes);
+    uv_buf_t buf = uv_buf_init((char *)data->str, data->nbytes);
     int r = uv_write(req, stream, &buf, 1, NULL);
     if (r < 0) {
         char errmsg[1024] = "Failed to write to TCP socket: ";
@@ -310,7 +310,7 @@ static void after_shutdown(uv_shutdown_t* req, int status) {
 $R netQ_TCPConnectionD_closeG_local (netQ_TCPConnection self, $Cont c$cont, $action on_close) {
     uv_stream_t *stream = (uv_stream_t *)from$int(self->_sock);
     // fd == -1 means invalid FD and can happen after __resume__
-    if (stream == -1)
+    if ((long int)stream == -1)
         return $R_CONT(c$cont, B_None);
 
     log_debug("Closing TCP connection");
@@ -431,10 +431,10 @@ $R netQ_TCPListenerD__initG_local (netQ_TCPListener self, $Cont c$cont) {
     int r;
     struct sockaddr_in addr4;
     struct sockaddr_in6 addr6;
-    if (inet_pton(AF_INET, fromB_str(self->address), &(addr4.sin_addr)) == 1) {
-        r = uv_ip4_addr(fromB_str(self->address), from$int(self->port), &addr4);
-    } else if (inet_pton(AF_INET6, fromB_str(self->address), &(addr6.sin6_addr)) == 1) {
-        r = uv_ip6_addr(fromB_str(self->address), from$int(self->port), &addr6);
+    if (inet_pton(AF_INET, (const char *)fromB_str(self->address), &(addr4.sin_addr)) == 1) {
+        r = uv_ip4_addr((const char *)fromB_str(self->address), from$int(self->port), &addr4);
+    } else if (inet_pton(AF_INET6, (const char *)fromB_str(self->address), &(addr6.sin6_addr)) == 1) {
+        r = uv_ip6_addr((const char *)fromB_str(self->address), from$int(self->port), &addr6);
     } else {
         char errmsg[1024] = "Address is not an IPv4 or IPv6 address: ";
         asprintf(errmsg + strlen(errmsg), "%s", fromB_str(self->address));
@@ -454,10 +454,10 @@ $R netQ_TCPListenerD__initG_local (netQ_TCPListener self, $Cont c$cont) {
         return $R_CONT(c$cont, B_None);
     }
 
-    if (inet_pton(AF_INET, fromB_str(self->address), &(addr4.sin_addr)) == 1) {
+    if (inet_pton(AF_INET, (const char *)fromB_str(self->address), &(addr4.sin_addr)) == 1) {
         r = uv_tcp_bind(server, (const struct sockaddr *)&addr4, 0);
-    } else if (inet_pton(AF_INET6, fromB_str(self->address), &(addr6.sin6_addr)) == 1) {
-        r = uv_tcp_bind(server, (const struct sockaddr6 *)&addr6, 0);
+    } else if (inet_pton(AF_INET6, (const char *)fromB_str(self->address), &(addr6.sin6_addr)) == 1) {
+        r = uv_tcp_bind(server, (const struct sockaddr *)&addr6, 0);
     }
     if (r != 0) {
         char errmsg[1024] = "Error in TCP bind: ";
@@ -493,7 +493,7 @@ B_NoneType netQ_TCPListenerD___resume__ (netQ_TCPListener self) {
 $R netQ_TCPListenConnectionD__initG_local (netQ_TCPListenConnection self, $Cont c$cont) {
     pin_actor_affinity();
 
-    uv_stream_t *client = (uv_tcp_t *)from$int(self->server_client);
+    uv_stream_t *client = (uv_stream_t *)from$int(self->server_client);
     int fd;
     uv_fileno((uv_handle_t *)client, &fd);
     uv_tcp_t* client_handle = (uv_tcp_t*) malloc(sizeof(uv_tcp_t));
@@ -541,11 +541,11 @@ $R netQ_TCPListenConnectionD__read_startG_local (netQ_TCPListenConnection self, 
 $R netQ_TCPListenConnectionD_writeG_local (netQ_TCPListenConnection self, $Cont c$cont, B_bytes data) {
     uv_stream_t *stream = (uv_stream_t *)from$int(self->client);
     // fd == -1 means invalid FD and can happen after __resume__
-    if (stream == -1)
+    if ((long int)stream == -1)
         return $R_CONT(c$cont, B_None);
 
     uv_write_t *req = (uv_write_t *)malloc(sizeof(uv_write_t));
-    uv_buf_t buf = uv_buf_init(data->str, data->nbytes);
+    uv_buf_t buf = uv_buf_init((char *)data->str, data->nbytes);
     int r = uv_write(req, stream, &buf, 1, NULL);
     if (r < 0) {
         char errmsg[1024] = "Failed to write to TCP socket: ";
@@ -604,11 +604,11 @@ void tls_on_receive(uv_stream_t *stream, ssize_t nread, const uv_buf_t* buf) {
         }
     } else if (nread == UV_EOF) {
         log_debug("TLS connection closed %p", stream);
-        tls_close(stream);
+        tls_close((tlsuv_stream_t *)stream);
     }
     else if (nread < 0) {
         log_debug("TLS read error %ld: %s", nread, uv_strerror((int) nread));
-        tls_close(stream);
+        tls_close((tlsuv_stream_t *)stream);
     }
 }
 
@@ -628,7 +628,7 @@ void tls_write_cb(uv_write_t *wreq, int status) {
 $R netQ_TLSConnectionD_closeG_local (netQ_TLSConnection self, $Cont c$cont, $action on_close) {
     uv_stream_t *stream = (uv_stream_t *)from$int(self->_stream);
     // fd == -1 means invalid FD and can happen after __resume__
-    if (stream == -1)
+    if ((long int)stream == -1)
         return $R_CONT(c$cont, B_None);
 
     self->_on_close = on_close;
@@ -642,14 +642,14 @@ $R netQ_TLSConnectionD_closeG_local (netQ_TLSConnection self, $Cont c$cont, $act
 }
 
 $R netQ_TLSConnectionD_writeG_local (netQ_TLSConnection self, $Cont c$cont, B_bytes data) {
-    uv_stream_t *stream = (uv_stream_t *)from$int(self->_stream);
+    tlsuv_stream_t *stream = (tlsuv_stream_t *)from$int(self->_stream);
     // fd == -1 means invalid FD and can happen after __resume__
-    if (stream == -1)
+    if ((long int)stream == -1)
         return $R_CONT(c$cont, B_None);
 
     uv_write_t *wreq = (uv_write_t *)malloc(sizeof(uv_write_t));
     wreq->data = self;
-    uv_buf_t buf = uv_buf_init(data->str, data->nbytes);
+    uv_buf_t buf = uv_buf_init((char *)data->str, data->nbytes);
     int r = tlsuv_stream_write(wreq, stream, &buf, tls_write_cb);
     if (r < 0) {
         char errmsg[1024] = "Failed to write to TLS TCP socket: ";
