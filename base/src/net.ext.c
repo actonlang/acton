@@ -594,11 +594,9 @@ static void tls_close(tlsuv_stream_t *stream) {
 }
 
 void tls_on_receive(uv_stream_t *stream, ssize_t nread, const uv_buf_t* buf) {
+    netQ_TLSConnection self = ((tlsuv_stream_t *)stream)->data;
     if (nread > 0) {
         if (stream->data) {
-            tls_link_t *tls = (tls_link_t *)stream->data;
-            uv_link_t *child = tls->child;
-            netQ_TLSConnection self = (netQ_TLSConnection)child->data;
             $action2 f = ($action2)self->on_receive;
             B_bytes data = to$bytesD_len(buf->base, nread);
             f->$class->__asyn__(f, self, data);
@@ -677,7 +675,7 @@ static void tls_on_connect(uv_connect_t *creq, int status) {
     }
 
     tlsuv_stream_t *stream = (tlsuv_stream_t *) creq->handle;
-    tlsuv_stream_read(stream, alloc_buffer, tls_on_receive);
+    tlsuv_stream_read_start(stream, alloc_buffer, tls_on_receive);
 
     self->$class->_on_tls_connect(self);
 }
@@ -726,7 +724,7 @@ $R netQ_TLSConnectionD__connect_tlsG_local (netQ_TLSConnection self, $Cont c$con
     // TODO: take SNI as input to TLSConnection actor
     stream->data = (void *)self;
 
-    tlsuv_stream_connect(connect_req, stream, fromB_str(self->address), from$int(self->port), tls_on_connect);
+    tlsuv_stream_connect(connect_req, stream, (const char *)fromB_str(self->address), from$int(self->port), tls_on_connect);
     self->_stream = to$int((long)stream);
 
     return $R_CONT(c$cont, B_None);
