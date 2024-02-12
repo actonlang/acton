@@ -19,12 +19,12 @@ struct B_tuple {
 extern struct B_tupleG_class B_tupleG_methods;
 B_tuple B_tupleG_new(int,...);
 
-#define $NEWTUPLE(B_len, ...)  ({ B_tuple $t = malloc(sizeof(struct B_tuple)+B_len*sizeof($WORD)); \
+#define $NEWTUPLE(B_len, ...)  ({ B_tuple $t = acton_malloc(sizeof(struct B_tuple)+B_len*sizeof($WORD)); \
             $t->$class = &B_tupleG_methods;                               \
             $t->$class->__init__($t, B_len, __VA_ARGS__);                \
             $t; })
 
-#define $NEWTUPLE0  ({ B_tuple $t = malloc(sizeof(struct B_tuple));       \
+#define $NEWTUPLE0  ({ B_tuple $t = acton_malloc(sizeof(struct B_tuple));       \
             $t->$class = &B_tupleG_methods;                               \
             $t->$class->__init__($t,0);                                  \
             $t; })

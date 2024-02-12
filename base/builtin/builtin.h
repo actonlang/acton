@@ -14,6 +14,7 @@
 #include <ctype.h>
 #include <stdatomic.h>
 
+#include "../rts/common.h"
 #include "common.h"
 
 struct B_NoneType;

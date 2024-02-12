@@ -52,7 +52,7 @@ B_bool B_boolG_new(B_value s) {
 }
 
 B_bool toB_bool(long b) {
-    B_bool res = malloc(sizeof(struct B_bool));
+    B_bool res = acton_malloc(sizeof(struct B_bool));
     res->$class = &B_boolG_methods;
     res->val = b;
     return res;

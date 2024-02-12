@@ -67,7 +67,7 @@ B_str B_i32D___repr__(B_i32 n) {
 }
 
 B_i32 toB_i32(int i) {
-    B_i32 res = malloc(sizeof(struct B_i32));
+    B_i32 res = acton_malloc(sizeof(struct B_i32));
     res->$class = &B_i32G_methods;
     res->val = i;
     return res;

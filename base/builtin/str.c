@@ -40,26 +40,26 @@ static struct B_str whitespace_struct = {&B_strG_methods,6,6,(unsigned char *)" 
 static B_str whitespace_str = &whitespace_struct;
 
 #define NEW_UNFILLED_STR(nm,nchrs,nbtes)        \
-    nm = malloc(sizeof(struct B_str));           \
+    nm = acton_malloc(sizeof(struct B_str));           \
     (nm)->$class = &B_strG_methods;               \
     (nm)->nchars = nchrs;                       \
     (nm)->nbytes = nbtes;                       \
-    (nm)->str = GC_MALLOC_ATOMIC(nbtes + 1);       \
+    (nm)->str = acton_malloc_atomic(nbtes + 1);       \
     (nm)->str[nbtes] = 0
 
 #define NEW_UNFILLED_BYTEARRAY(nm,nbtes)        \
-    nm = malloc(sizeof(struct B_bytearray));     \
+    nm = acton_malloc(sizeof(struct B_bytearray));     \
     (nm)->$class = &B_bytearrayG_methods;         \
     (nm)->nbytes = nbtes;                       \
     (nm)->capacity = nbtes;                     \
-    (nm)->str = GC_MALLOC_ATOMIC(nbtes + 1);       \
+    (nm)->str = acton_malloc_atomic(nbtes + 1);       \
     (nm)->str[nbtes] = 0
 
 #define NEW_UNFILLED_BYTES(nm,nbtes)            \
-    nm = malloc(sizeof(struct B_bytes));         \
+    nm = acton_malloc(sizeof(struct B_bytes));         \
     (nm)->$class = &B_bytesG_methods;             \
     (nm)->nbytes = nbtes;                       \
-    (nm)->str = GC_MALLOC_ATOMIC(nbtes + 1);              \
+    (nm)->str = acton_malloc_atomic(nbtes + 1);              \
     (nm)->str[nbtes] = 0
 
 // Conversion to and from C strings
@@ -201,7 +201,7 @@ static int get_index(int i, int nchars) {
 
 static int fix_start_end(int nchars, B_int *start, B_int *end) {
     if (*start==NULL) {
-        *start = malloc(sizeof(struct B_int));
+        *start = acton_malloc(sizeof(struct B_int));
         *start = to$int(0);
     } else {
         int st = from$int(*start);
@@ -213,7 +213,7 @@ static int fix_start_end(int nchars, B_int *start, B_int *end) {
         *start = to$int(st);
     }
     if (*end==NULL) {
-        *end = malloc(sizeof(struct B_int));
+        *end = acton_malloc(sizeof(struct B_int));
         *end = to$int(nchars);
     } else {
         int en = from$int(*end);
@@ -429,7 +429,7 @@ B_str B_strD___deserialize__(B_str self, $Serial$state state) {
     $ROW this = state->row;
     state->row =this->next;
     state->row_no++;
-    B_str res = malloc(sizeof(struct B_str));
+    B_str res = acton_malloc(sizeof(struct B_str));
     long nbytes;
     memcpy(&nbytes,this->blob,sizeof($WORD));
     res->$class = &B_strG_methods;
@@ -437,7 +437,7 @@ B_str B_strD___deserialize__(B_str self, $Serial$state state) {
     long nchars;
     memcpy(&nchars,this->blob+1,sizeof($WORD));
     res->nchars = (int)nchars;
-    res->str = GC_MALLOC_ATOMIC(nbytes+1);
+    res->str = acton_malloc_atomic(nbytes+1);
     memcpy(res->str,this->blob+2,nbytes+1);
     return res;
 }
@@ -1369,8 +1369,8 @@ static void expand_bytearray(B_bytearray b,int n) {
     while (newcapacity < b->nbytes+n)
         newcapacity <<= 1;
     unsigned char *newstr = b->str==NULL
-        ? GC_MALLOC_ATOMIC(newcapacity+1)
-        : realloc(b->str,newcapacity+1);
+        ? acton_malloc_atomic(newcapacity+1)
+        : acton_realloc(b->str,newcapacity+1);
     if (newstr == NULL) {
         $RAISE((B_BaseException)$NEW(B_MemoryError,to$str("memory allocation failed")));
     }
@@ -1397,7 +1397,7 @@ B_NoneType B_bytearrayD___init__(B_bytearray self, B_bytes b) {
     int len = b->nbytes;
     self->nbytes = len;
     self->capacity = len;
-    self->str = GC_MALLOC_ATOMIC(len+1);
+    self->str = acton_malloc_atomic(len+1);
     memcpy(self->str,b->str,len+1);
     return B_None;
 }
@@ -1442,12 +1442,12 @@ B_bytearray B_bytearrayD___deserialize__(B_bytearray res, $Serial$state state) {
     state->row =this->next;
     state->row_no++;
     if(!res)
-        res = malloc(sizeof(struct B_bytearray));
+        res = acton_malloc(sizeof(struct B_bytearray));
     long nbytes;
     memcpy(&nbytes,this->blob,sizeof($WORD));
     res->$class = &B_bytearrayG_methods;
     res->nbytes = (long)nbytes;
-    res->str = GC_MALLOC_ATOMIC(nbytes+1);
+    res->str = acton_malloc_atomic(nbytes+1);
     memcpy(res->str,this->blob+1,nbytes+1);
     return res;
 }
@@ -2380,7 +2380,7 @@ B_NoneType B_bytesD___init__(B_bytes self, B_Iterable wit, $WORD iter) {
     B_list lst = wit2->$class->__fromiter__(wit2,wit,iter);
     int len = lst->length;
     self->nbytes = len;
-    self->str = GC_MALLOC_ATOMIC(len+1);
+    self->str = acton_malloc_atomic(len+1);
     self->str[len] = 0;
     for (int i=0; i< len; i++) {
         int n = from$int((B_int)lst->data[i]);
@@ -2430,12 +2430,12 @@ B_bytes B_bytesD___deserialize__(B_bytes self, $Serial$state state) {
     $ROW this = state->row;
     state->row =this->next;
     state->row_no++;
-    B_bytes res = malloc(sizeof(struct B_bytes));
+    B_bytes res = acton_malloc(sizeof(struct B_bytes));
     long nbytes;
     memcpy(&nbytes,this->blob,sizeof($WORD));
     res->$class = &B_bytesG_methods;
     res->nbytes = (long)nbytes;
-    res->str = GC_MALLOC_ATOMIC(nbytes+1);
+    res->str = acton_malloc_atomic(nbytes+1);
     memcpy(res->str,this->blob+2,nbytes+1);
     return res;
 }

@@ -66,7 +66,7 @@ B_str B_u16D___repr__(B_u16 n) {
 }
 
 B_u16 toB_u16(unsigned short i) {
-    B_u16 res = malloc(sizeof(struct B_u16));
+    B_u16 res = acton_malloc(sizeof(struct B_u16));
     res->$class = &B_u16G_methods;
     res->val = i;
     return res;

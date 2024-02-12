@@ -20,9 +20,9 @@
 int set_str(zz_ptr a, unsigned char *str, B_int intbase);
 
 B_int malloc_int() {
-    B_int res = malloc(sizeof(struct B_int));
+    B_int res = acton_malloc(sizeof(struct B_int));
     res->$class = &B_intG_methods;
-    res->val.n = GC_MALLOC_ATOMIC(sizeof(unsigned long));
+    res->val.n = acton_malloc_atomic(sizeof(unsigned long));
     res->val.size = 0;
     res->val.alloc = 1;
     return res;
@@ -142,7 +142,7 @@ B_int B_intD___deserialize__(B_int res,$Serial$state state) {
             res = malloc_int();
         res->val.size = (long)this->blob[0];
         res->val.alloc = labs(res->val.size);
-        res->val.n = malloc(res->val.alloc*sizeof(long));
+        res->val.n = acton_malloc(res->val.alloc*sizeof(long));
         memcpy(res->val.n,&this->blob[1],res->val.alloc*sizeof(long));
         B_dictD_setitem(state->done,(B_Hashable)B_HashableD_intG_witness,to$int(state->row_no-1),res);
         res->$class = &B_intG_methods;
@@ -396,6 +396,7 @@ B_int B_LogicalD_IntegralD_intD___and__(B_LogicalD_IntegralD_int wit,  B_int a, 
 B_int B_LogicalD_IntegralD_intD___or__(B_LogicalD_IntegralD_int wit,  B_int a, B_int b) {
     // return toB_i64(a->val | b->val);
     $RAISE((B_BaseException)$NEW(B_NotImplementedError,to$str("Protocol Logical not implemented for int; use i64\n")));
+    return to$int(-1); // Silence compiler warning, remove when implemented
 }
                                                  
 B_int B_LogicalD_IntegralD_intD___xor__(B_LogicalD_IntegralD_int wit,  B_int a, B_int b) {
@@ -539,8 +540,8 @@ unsigned char digvalue[256] = {
 
 int get_str0(bool ishead, zz_ptr n, zz_ptr dens[], int d, char *res, int pos) {
     if (d >= 0) {
-        zz_ptr hi = malloc(sizeof(zz_struct));
-        zz_ptr lo = malloc(sizeof(zz_struct));
+        zz_ptr hi = acton_malloc(sizeof(zz_struct));
+        zz_ptr lo = acton_malloc(sizeof(zz_struct));
         zz_init_fit(hi,dens[d]->size);
         zz_init_fit(lo,dens[d]->size);
         zz_divrem(hi, lo, n, dens[d]);
@@ -551,7 +552,7 @@ int get_str0(bool ishead, zz_ptr n, zz_ptr dens[], int d, char *res, int pos) {
             return get_str0(false, lo, dens, d-1, res, newpos);
         }
     } else {
-        char *buf = GC_MALLOC_ATOMIC(POW10INWORD);
+        char *buf = acton_malloc_atomic(POW10INWORD);
         asprintf(&buf,"%lu",(unsigned long)n->n[0]);
         int len = strlen(buf);
         if (ishead) {
@@ -569,7 +570,7 @@ char * get_str(zz_ptr nval) {
     if (nval->size == 0)
         return "0";
     long nlen = BSDNT_ABS(nval->size);
-    zz_ptr npos = malloc(sizeof(zz_struct));
+    zz_ptr npos = acton_malloc(sizeof(zz_struct));
     zz_init_fit(npos,nlen);
     nn_copy(npos->n, nval->n, nlen);
     npos->size = nlen;
@@ -581,13 +582,13 @@ char * get_str(zz_ptr nval) {
         dens = NULL;
     } else {
         d = ceil(log2((double)nlen) + CCCC);  //number of squarings
-        dens = malloc(d * sizeof(zz_ptr));
-        dens[0] = malloc(sizeof(zz_struct));
+        dens = acton_malloc(d * sizeof(zz_ptr));
+        dens[0] = acton_malloc(sizeof(zz_struct));
         zz_init_fit(dens[0], 1);
         zz_seti(dens[0], 10); 
         zz_powi(dens[0], dens[0], POW10INWORD);
         for (int i=1; i < d; i++) {
-            dens[i] = malloc(sizeof(zz_struct));
+            dens[i] = acton_malloc(sizeof(zz_struct));
             zz_init_fit(dens[i], 2 * dens[i-1]->size);
             zz_mul(dens[i], dens[i-1], dens[i-1]);
         }
@@ -595,7 +596,7 @@ char * get_str(zz_ptr nval) {
     // strlen is for most n one more than necessary; this is a precaution for values of n where
     // the double value ... in ceil(...) is very close to an integer. So we often waste one byte.
     int strlen = ceil(log10((float)npos->n[nlen - 1]) + (nlen - 1) * WORD_BITS * log10(2) + is_neg_n) + 2;
-    char *res = GC_MALLOC_ATOMIC(strlen);
+    char *res = acton_malloc_atomic(strlen);
     memset(res,'0', strlen);
     int pos = 0;
     if (is_neg_n) {
@@ -620,8 +621,8 @@ int set_str0(zz_ptr a, char *nstr, unsigned char base, int parts) {
     } else {
         int hi = parts/2;
         int lo = parts - hi;
-        zz_ptr hires = malloc(sizeof(zz_struct));
-        zz_ptr lores = malloc(sizeof(zz_struct));
+        zz_ptr hires = acton_malloc(sizeof(zz_struct));
+        zz_ptr lores = acton_malloc(sizeof(zz_struct));
         zz_init(hires);
         zz_init(lores);
         int hidigs = set_str0(hires, nstr, base, hi);
@@ -706,7 +707,7 @@ int set_str(zz_ptr a, unsigned char *nstr, B_int intbase) {
         while (i < offset)
             headval = headval * base + digvalue[nstr[i++]];
         if (parts > 0) {
-            zz_ptr res0 = malloc(sizeof(zz_struct));
+            zz_ptr res0 = acton_malloc(sizeof(zz_struct));
             zz_init(res0);
             partdigits = set_str0(res0, &nstr[offset], base, parts);
             zz_seti(a, base);

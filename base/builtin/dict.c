@@ -79,7 +79,7 @@ static int dictresize(B_dict d) {
       }
     */
     /* Allocate a new table. */
-    $table newtable =  malloc(sizeof(char*) + 3*sizeof(long) + newsize*sizeof(int) + (2*newsize/3)*sizeof(struct $entry_struct));
+    $table newtable =  acton_malloc(sizeof(char*) + 3*sizeof(long) + newsize*sizeof(int) + (2*newsize/3)*sizeof(struct $entry_struct));
     newtable->tb_size = newsize;
     newtable->tb_usable = 2*newsize/3-numelements;
     newtable->tb_nentries = numelements;
@@ -97,7 +97,7 @@ static int dictresize(B_dict d) {
         }
     }
     d->table = newtable;
-    free(oldtable);
+    acton_free(oldtable);
     build_indices(newtable, newentries, numelements);
     return 0;
 }
@@ -202,7 +202,7 @@ B_dict B_dictG_new(B_Hashable hashwit, B_Iterable wit, $WORD iterable) {
 
 B_NoneType B_dictD___init__(B_dict dict, B_Hashable hashwit, B_Iterable wit, $WORD iterable) {
     dict->numelements = 0;
-    dict->table = malloc(sizeof(char*)+3*sizeof(long) + 8*sizeof(int) + 5*sizeof(struct $entry_struct));
+    dict->table = acton_malloc(sizeof(char*)+3*sizeof(long) + 8*sizeof(int) + 5*sizeof(struct $entry_struct));
     dict->table->tb_size = 8;
     dict->table->tb_usable = 5;
     dict->table->tb_nentries = 0;
@@ -232,11 +232,11 @@ B_str B_dictD___str__(B_dict self) {
         B_value value = ((B_value)item->components[1]);
         B_str keystr = key->$class->__repr__(key);
         B_str valuestr = value->$class->__repr__(value);
-        B_str elem = malloc(sizeof(struct B_str));
+        B_str elem = acton_malloc(sizeof(struct B_str));
         elem->$class = &B_strG_methods;
         elem->nbytes = keystr->nbytes+valuestr->nbytes+1;
         elem->nchars = keystr->nchars+valuestr->nchars+1;
-        elem->str = malloc(elem->nbytes+1);
+        elem->str = acton_malloc(elem->nbytes+1);
         memcpy(elem->str,keystr->str,keystr->nbytes);
         elem->str[keystr->nbytes] = ':';
         memcpy(&elem->str[keystr->nbytes+1],valuestr->str,valuestr->nbytes);
@@ -281,12 +281,12 @@ B_dict B_dictD___deserialize__(B_dict res, $Serial$state state) {
         return B_dictD_get(state->done,(B_Hashable)B_HashableD_intG_witness,to$int((long)this->blob[0]),NULL);
     } else {
         if (!res)
-            res = malloc(sizeof(struct B_dict));
+            res = acton_malloc(sizeof(struct B_dict));
         B_dictD_setitem(state->done,(B_Hashable)B_HashableD_intG_witness,to$int(state->row_no-1),res);
         res->$class = &B_dictG_methods;
         res->numelements = (long)this->blob[0];
         long tb_size = (long)this->blob[1];
-        res->table = malloc(sizeof(char*) + 3*sizeof(long) + tb_size*sizeof(int) + (2*tb_size/3)*sizeof(struct $entry_struct));
+        res->table = acton_malloc(sizeof(char*) + 3*sizeof(long) + tb_size*sizeof(int) + (2*tb_size/3)*sizeof(struct $entry_struct));
         res->table->tb_size = tb_size;
         res->table->tb_usable = (long)this->blob[2];
         res->table->tb_nentries = (long)this->blob[3];
@@ -412,7 +412,7 @@ B_dict B_MappingD_dictD___fromiter__ (B_MappingD_dict wit, B_Iterable wit2, $WOR
     B_Hashable hashwit = wit->W_HashableD_AD_MappingD_dict;
     B_dict dict = $NEW(B_dict,hashwit,NULL,NULL);
     dict->numelements = 0;
-    dict->table = malloc(sizeof(char*)+3*sizeof(long) + 8*sizeof(int) + 5*sizeof(struct $entry_struct));
+    dict->table = acton_malloc(sizeof(char*)+3*sizeof(long) + 8*sizeof(int) + 5*sizeof(struct $entry_struct));
     dict->table->tb_size = 8;
     dict->table->tb_usable = 5;
     dict->table->tb_nentries = 0;

@@ -66,7 +66,7 @@ B_range B_rangeD___deserialize__(B_range self, $Serial$state state) {
     $ROW this = state->row;
     state->row = this->next;
     state->row_no++;
-    B_range res = malloc(sizeof(struct B_range));
+    B_range res = acton_malloc(sizeof(struct B_range));
     res->$class = &B_rangeG_methods;
     res->start = (long)this->blob[0];
     res->stop = (long)this->blob[1];

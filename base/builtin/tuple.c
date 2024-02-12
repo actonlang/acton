@@ -18,7 +18,7 @@ B_NoneType B_tupleD___init__(B_tuple self,int size ,...) {
     va_list args;
     va_start(args,size);
     self->size = size;
-    self->components = malloc(size*sizeof($WORD));
+    self->components = acton_malloc(size*sizeof($WORD));
     for (int i=0; i<size; i++)
         self->components[i] = va_arg(args,$WORD);
     va_end(args);
@@ -62,9 +62,9 @@ B_tuple B_tupleD___deserialize__(B_tuple self, $Serial$state state) {
         return (B_tuple)B_dictD_get(state->done,(B_Hashable)B_HashableD_intG_witness,to$int((long)this->blob[0]),NULL);
     } else {
         int len = (int)(long)this->blob[0];
-        B_tuple res = malloc(sizeof(struct B_tuple));
+        B_tuple res = acton_malloc(sizeof(struct B_tuple));
         B_dictD_setitem(state->done,(B_Hashable)B_HashableD_intG_witness,to$int(state->row_no-1),res);
-        res->components = malloc(len * sizeof($WORD));
+        res->components = acton_malloc(len * sizeof($WORD));
         res->$class = &B_tupleG_methods;
         res->size = len;
         for (int i = 0; i < len; i++) 
@@ -196,10 +196,10 @@ B_tuple B_SliceableD_tupleD___getslice__ (B_SliceableD_tuple wit, B_tuple self, 
     normalize_slice(slc, size, &slen, &start, &stop, &step);
     //slice notation have been eliminated and default values applied.
     // slen now is the length of the slice
-    B_tuple res = malloc(sizeof(struct B_tuple));
+    B_tuple res = acton_malloc(sizeof(struct B_tuple));
     res->$class = self->$class;
     res->size = slen;
-    res->components = malloc(slen * sizeof($WORD));
+    res->components = acton_malloc(slen * sizeof($WORD));
     int t = start;
     for (int i=0; i<slen; i++) {
         res->components[i] = self->components[t];

@@ -39,6 +39,10 @@
 #ifdef __linux__
 #include <sys/prctl.h>
 #endif
+
+#include "common.h"
+#include "common.c"
+
 #include "yyjson.h"
 #include "rts.h"
 
@@ -278,7 +282,7 @@ void B_MsgD___init__(B_Msg m, $Actor to, $Cont cont, time_t baseline, $WORD valu
 */
 
 B_Msg B_MsgG_newXX( $Actor to, $Cont cont, time_t baseline, $WORD value) {
-    B_Msg m = malloc(sizeof(struct B_Msg));
+    B_Msg m = acton_malloc(sizeof(struct B_Msg));
     m->$class = &B_MsgG_methods;
     m->$next = NULL;
     m->$to = to;
@@ -456,7 +460,7 @@ $R $ConstContD___call__($ConstCont $this, $WORD _ignore) {
 }
 
 $Cont $CONSTCONT($WORD val, $Cont cont){
-    $ConstCont obj = malloc(sizeof(struct $ConstCont));
+    $ConstCont obj = acton_malloc(sizeof(struct $ConstCont));
     obj->$class = &$ConstContG_methods;
     $ConstContG_methods.__init__(obj, val, cont);
     return ($Cont)obj;
@@ -2100,7 +2104,7 @@ void launch_debugger(int signum) {
         fprintf(stderr, "\nERROR: illegal instruction\n");
     if (signum == SIGSEGV)
         fprintf(stderr, "\nERROR: segmentation fault\n");
-    fprintf(stderr, "Starting interactive debugger...\n", pthread_self());
+    fprintf(stderr, "Starting interactive debugger...\n");
     char pid_buf[30];
     sprintf(pid_buf, "%d", getpid());
     char name_buf[512];
@@ -2218,6 +2222,14 @@ int main(int argc, char **argv) {
     // Init garbage collector and suppress warnings
     GC_INIT();
     GC_set_warn_proc(DaveNull);
+    // Everything up to and including module init is static stuff, in particular
+    // module constants which are created during module init are static and do
+    // not need to be scanned. We therefore use the real_malloc (not GC_malloc)
+    // so that it is not traced by the GC, thus saving loads of work.
+    // scanning this memory over and over.
+    if (resolve_real_malloc()) {
+        acton_replace_allocator(real_malloc, real_malloc, real_realloc, real_calloc, real_free, real_strdup, real_strndup);
+    }
     int ddb_no_host = 0;
     char **ddb_host = NULL;
     char *rts_host = "localhost";
@@ -2565,6 +2577,7 @@ int main(int argc, char **argv) {
     B___init__();
     $register_rts();
     $ROOTINIT();
+    acton_replace_allocator(GC_malloc, GC_malloc_atomic, realloc, calloc, free, strdup, strndup);
 
     unsigned int seed;
     if (ddb_host) {
@@ -2638,7 +2651,7 @@ int main(int argc, char **argv) {
     // RTS Monitor Log
     pthread_t mon_log_thread;
     if (mon_log_path) {
-        pthread_create(&mon_log_thread, NULL, $mon_log_loop, (void *)mon_log_period);
+        pthread_create(&mon_log_thread, NULL, $mon_log_loop, (void *)(intptr_t)mon_log_period);
         if (cpu_pin) {
             CPU_ZERO(&cpu_set);
             CPU_SET(0, &cpu_set);
@@ -2661,7 +2674,7 @@ int main(int argc, char **argv) {
     pthread_t threads[1 + num_wthreads];
 
     for(int idx = 1; idx < num_wthreads+1; idx++) {
-        pthread_create(&threads[idx], NULL, main_loop, (void*)idx);
+        pthread_create(&threads[idx], NULL, main_loop, (void*)(intptr_t)idx);
         // Index start at 1 and we pin wthreads to CPU 1...n
         // We use CPU 0 for misc threads, like IO / mon etc
         if (cpu_pin) {

@@ -66,7 +66,7 @@ B_str B_i64D___repr__(B_i64 n) {
 }
 
 B_i64 toB_i64(long i) {
-    B_i64 res = malloc(sizeof(struct B_i64));
+    B_i64 res = acton_malloc(sizeof(struct B_i64));
     res->$class = &B_i64G_methods;
     res->val = i;
     return res;

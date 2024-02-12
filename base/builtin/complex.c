@@ -13,7 +13,7 @@
  */
 
 B_complex toB_complex(complex double c) {
-    B_complex res = malloc(sizeof(struct B_complex));
+    B_complex res = acton_malloc(sizeof(struct B_complex));
     res->$class = &B_complexG_methods;
     res->val = c;
     return res;
