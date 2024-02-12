@@ -2222,6 +2222,14 @@ int main(int argc, char **argv) {
     // Init garbage collector and suppress warnings
     GC_INIT();
     GC_set_warn_proc(DaveNull);
+    // Everything up to and including module init is static stuff, in particular
+    // module constants which are created during module init are static and do
+    // not need to be scanned. We therefore use the real_malloc (not GC_malloc)
+    // so that it is not traced by the GC, thus saving loads of work.
+    // scanning this memory over and over.
+    if (resolve_real_malloc()) {
+        acton_replace_allocator(real_malloc, real_malloc, real_realloc, real_calloc, real_free, real_strdup, real_strndup);
+    }
     int ddb_no_host = 0;
     char **ddb_host = NULL;
     char *rts_host = "localhost";
@@ -2569,6 +2577,7 @@ int main(int argc, char **argv) {
     B___init__();
     $register_rts();
     $ROOTINIT();
+    acton_replace_allocator(GC_malloc, GC_malloc_atomic, realloc, calloc, free, strdup, strndup);
 
     unsigned int seed;
     if (ddb_host) {
