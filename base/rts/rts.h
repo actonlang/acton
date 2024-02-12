@@ -19,6 +19,9 @@
 
 #define MSGQ 2
 #define MAX_WTHREADS 256
+#define NUM_RQS (MAX_WTHREADS+1)
+// The shared RQ is the top-most readyQ
+#define SHARED_RQ (NUM_RQS-1)
 
 #include "q.h"
 
@@ -198,7 +201,7 @@ void serialize_state_shortcut($Actor);
 #define $NEWACTOR($T)       ({ $T $t = malloc(sizeof(struct $T)); \
                                $t->$class = &$T ## G_methods; \
                                $ActorG_methods.__init__(($Actor)$t); \
-                               $t->$affinity = 0; \
+                               $t->$affinity = SHARED_RQ; \
                                INIT_DB_QUEUE($t->$globkey); \
                                REGISTER_ACTOR($t->$globkey); \
                                $t; })

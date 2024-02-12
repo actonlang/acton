@@ -167,7 +167,7 @@ int pthread_setaffinity_np(pthread_t thread, size_t cpu_size, cpu_set_t *cpu_set
 extern void $ROOTINIT();
 extern $Actor $ROOT();
 
-struct mpmcq rqs[MAX_WTHREADS+1];
+struct mpmcq rqs[NUM_RQS];
 
 $Actor root_actor = NULL;
 B_Env env_actor = NULL;
@@ -215,9 +215,8 @@ void wake_wt(int wtid) {
         return;
 
     // wake up corresponding worker threads....
-    if (wtid == 0) {
-        // global queue
-        for (int i = 1; i < num_wthreads+1; i++) {
+    if (wtid == SHARED_RQ) {
+        for (int i = 1; i <= num_wthreads; i++) {
             if (wt_stats[i].state == WT_Idle) {
                 uv_async_send(&wake_ev[i]);
                 return;
@@ -350,7 +349,7 @@ void $ActorD___init__($Actor a) {
     a->$catcher = NULL;
     atomic_flag_clear(&a->B_Msg_lock);
     a->$globkey = get_next_key();
-    a->$affinity = 0;
+    a->$affinity = SHARED_RQ;
     rtsd_printf("# New Actor %ld at %p of class %s", a->$globkey, a, a->$class->$GCINFO);
 }
 
@@ -390,7 +389,8 @@ $Actor $ActorD___deserialize__($Actor res, $Serial$state state) {
     res->$consume_hd = (long)$val_deserialize(state);
     res->$catcher = $step_deserialize(state);
     atomic_flag_clear(&res->B_Msg_lock);
-    res->$affinity = 0;
+    if (res->$affinity > 0)
+        res->$affinity = SHARED_RQ;
     return res;
 }
 
@@ -1500,7 +1500,7 @@ void wt_work_cb(uv_check_t *ev) {
         if (!current)
             return;
 
-        wake_wt(0);
+        wake_wt(SHARED_RQ);
 
         pthread_setspecific(self_key, current);
         volatile B_Msg m = current->B_Msg;
@@ -2550,7 +2550,7 @@ int main(int argc, char **argv) {
     init_dbc_stats();
 #endif
 
-    for (int i=0; i < num_wthreads+1; i++) {
+    for (int i=0; i <= num_wthreads; i++) {
         uv_loop_t *loop = malloc(sizeof(uv_loop_t));
         check_uv_fatal(uv_loop_init(loop), "Error initializing libuv loop: ");
         uv_loops[i] = loop;
@@ -2567,7 +2567,7 @@ int main(int argc, char **argv) {
     }
     aux_uv_loop = uv_loops[0];
 
-    for (int i=0; i <= MAX_WTHREADS; i++) {
+    for (int i=0; i < NUM_RQS; i++) {
         rqs[i].head = NULL;
         rqs[i].tail = NULL;
         rqs[i].count = 0;
@@ -2670,31 +2670,51 @@ int main(int argc, char **argv) {
         }
     }
 
-    // Start IO + worker threads
-    pthread_t threads[1 + num_wthreads];
-
-    for(int idx = 1; idx < num_wthreads+1; idx++) {
-        pthread_create(&threads[idx], NULL, main_loop, (void*)(intptr_t)idx);
+    // Start worker threads
+    pthread_t threads[num_wthreads];
+    // Worker threads run through 0..num_wthreads where 0 is the main thread,
+    // thus we need to start 1..num_wthreads. Only need to keep track of
+    // branches we start.
+    for (int idx = 1; idx <= num_wthreads; idx++) {
+        pthread_create(&threads[idx-1], NULL, main_loop, (void*)(intptr_t)idx);
         // Index start at 1 and we pin wthreads to CPU 1...n
         // We use CPU 0 for misc threads, like IO / mon etc
         if (cpu_pin) {
             CPU_ZERO(&cpu_set);
             CPU_SET(idx, &cpu_set);
-            pthread_setaffinity_np(threads[idx], sizeof(cpu_set), &cpu_set);
+            pthread_setaffinity_np(threads[idx-1], sizeof(cpu_set), &cpu_set);
         }
     }
+
+    int wtid = 0;
+    uv_loop_t *uv_loop = uv_loops[wtid];
+    pthread_setspecific(pkey_wtid, (void *)wtid);
+    pthread_setspecific(pkey_uv_loop, (void *)uv_loop);
+
+    uv_check_init(aux_uv_loop, &work_ev[wtid]);
+    uv_check_start(&work_ev[wtid], (uv_check_cb)wt_work_cb);
 
     // Run the timer queue and keep track of other periodic tasks
     timer_ev = malloc(sizeof(uv_timer_t));
     uv_timer_init(aux_uv_loop, timer_ev);
     uv_timer_start(timer_ev, main_timer_cb, 0, 0);
+
+    // Set affinity for main thread
+    if (cpu_pin) {
+        CPU_ZERO(&cpu_set);
+        CPU_SET(0, &cpu_set);
+        pthread_setaffinity_np(pthread_self(), sizeof(cpu_set), &cpu_set);
+    }
+
+    wt_stats[0].state = WT_Idle;
     int r = uv_run(aux_uv_loop, UV_RUN_DEFAULT);
+    wt_stats[0].state = WT_NoExist;
 
     // -- SHUTDOWN --
 
     // Join threads
-    for(int idx = 1; idx < num_wthreads+1; idx++) {
-        pthread_join(threads[idx], NULL);
+    for (int idx = 1; idx <= num_wthreads; idx++) {
+        pthread_join(threads[idx-1], NULL);
     }
 
     pthread_mutex_lock(&rts_exit_lock);
