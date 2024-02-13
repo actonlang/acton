@@ -1,0 +1,15 @@
+# This creates a large integer which tests that our malloc stuff works properly.
+# The initial B_int struct is malloced from builtin/int.c which uses
+# acton_malloc() which, during module initialization, points to real_malloc().
+# As we try to assign a large value, the int will be expanded, which happens
+# inside of zz_fit() in zz.c and it calls bsdnt_realloc(). bsdnt_realloc() must
+# at that time, point to real_realloc and not GC_realloc(). Before we had
+# custom allocator support in BSDNT, it would call realloc() which is link time
+# redirected to GC_realloc() and that would crash since GC_realloc() expects a
+# GC header and the initial allocation done in malloc_int() used acton_malloc()
+# -> real_malloc().
+
+a = pow(2, 127) - 1
+
+actor main(env):
+    env.exit(0)

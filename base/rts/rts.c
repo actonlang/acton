@@ -2222,6 +2222,7 @@ int main(int argc, char **argv) {
     // Init garbage collector and suppress warnings
     GC_INIT();
     GC_set_warn_proc(DaveNull);
+    acton_init_alloc();
     // Everything up to and including module init is static stuff, in particular
     // module constants which are created during module init are static and do
     // not need to be scanned. We therefore use the real_malloc (not GC_malloc)
