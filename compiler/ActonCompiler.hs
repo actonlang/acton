@@ -86,6 +86,7 @@ main = do
           C.timing = C.timingB opts,
           C.cc = C.ccB opts,
           C.target = C.targetB opts,
+          C.cpu = C.cpuB opts,
           C.cachedir = C.cachedirB opts,
           C.zigbuild = C.zigbuildB opts,
           C.nozigbuild = C.nozigbuildB opts,
@@ -99,7 +100,7 @@ main = do
 
 defaultOpts   = C.CompileOptions False False False False False False False False False False False False
                                  False False False False False False False False False "" "" "" ""
-                                 C.defTarget "" False False False
+                                 C.defTarget "" "" False False False
 
 
 -- Auxiliary functions ---------------------------------------------------------------------------------------
@@ -904,6 +905,13 @@ zigBuild env opts paths tasks binTasks = do
         use_prebuilt = if isTmp paths
                          then C.defTarget == C.target opts
                          else if C.db opts then False else C.defTarget == C.target opts
+        target_cpu = if (C.cpu opts /= "")
+                       then C.cpu opts
+                       else
+                         case (head $ splitOn "-" (C.target opts)) of
+                           "native"  -> ""
+                           "aarch64" -> if (C.target opts) == C.defTarget then "" else " -Dcpu=apple_a15 "
+                           "x86_64"  -> " -Dcpu=westmere "
     let zigCmdBase =
           if buildZigExists
             then zig paths ++ " build " ++
@@ -921,6 +929,7 @@ zigBuild env opts paths tasks binTasks = do
                  " --prefix " ++ projProfile paths ++ " --prefix-exe-dir 'bin'" ++
                  (if (C.debug opts) then " --verbose " else "") ++
                  " -Dtarget=" ++ (C.target opts) ++
+                 target_cpu ++
                  " -Doptimize=" ++ (if (C.dev opts) then "Debug" else "ReleaseFast") ++
                  (if (C.db opts) then " -Ddb " else " ") ++
                  (if (C.cpedantic opts) then " -Dcpedantic " else " ") ++

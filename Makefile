@@ -60,6 +60,7 @@ ifeq ($(shell uname -s),Linux)
 OS:=linux
 ifeq ($(shell uname -m),x86_64)
 ZIG_TARGET := -Dtarget=x86_64-linux-gnu.2.27
+ZIG_CPU := -Dcpu=skylake
 ACTONC_TARGET := --target x86_64-linux-gnu.2.27
 else
 $(error "Unsupported architecture for Linux?")
@@ -177,7 +178,7 @@ dist/deps/libargp: deps-download/$(LIBARGP_REF).tar.gz
 	touch $(TD)/$@
 
 dist/depsout/lib/libargp.a: dist/deps/libargp $(DIST_ZIG)
-	cd $< && $(ZIG) build $(ZIG_TARGET) --prefix $(TD)/dist/depsout
+	cd $< && $(ZIG) build $(ZIG_TARGET) $(ZIG_CPU) --prefix $(TD)/dist/depsout
 
 # /deps/libbsdnt --------------------------------------------
 LIBBSDNT_REF=a0af240bf32eacf5ad56a847b9a7f507c950aa53
@@ -191,7 +192,7 @@ dist/deps/libbsdnt: deps-download/$(LIBBSDNT_REF).tar.gz
 	touch $(TD)/$@
 
 dist/depsout/lib/libbsdnt.a: dist/deps/libbsdnt $(DIST_ZIG)
-	cd $< && $(ZIG) build $(ZIG_TARGET) --prefix $(TD)/dist/depsout
+	cd $< && $(ZIG) build $(ZIG_TARGET) $(ZIG_CPU) --prefix $(TD)/dist/depsout
 
 # /deps/libgc --------------------------------------------
 LIBGC_REF=c0936ed57fa7e30b6a0bf64aab4dcbec12d1c2e7
@@ -206,7 +207,7 @@ dist/deps/libgc: deps-download/$(LIBGC_REF).tar.gz
 	touch $(TD)/$@
 
 dist/depsout/lib/libactongc.a: dist/deps/libgc $(DIST_ZIG)
-	cd $< && $(ZIG) build $(ZIG_TARGET) --prefix $(TD)/dist/depsout -DBUILD_SHARED_LIBS=false -Denable_redirect_malloc -Denable_large_config -Denable_mmap
+	cd $< && $(ZIG) build $(ZIG_TARGET) $(ZIG_CPU) --prefix $(TD)/dist/depsout -DBUILD_SHARED_LIBS=false -Denable_redirect_malloc -Denable_large_config -Denable_mmap
 	mv dist/depsout/lib/libgc.a $@
 
 # /deps/libmbedtls --------------------------------------------
@@ -221,7 +222,7 @@ dist/deps/mbedtls: deps-download/$(LIBMBEDTLS_REF).tar.gz
 	touch $(TD)/$@
 
 dist/depsout/lib/libmbedtls.a: dist/deps/mbedtls $(DIST_ZIG)
-	cd $< && $(ZIG) build $(ZIG_TARGET) --prefix $(TD)/dist/depsout
+	cd $< && $(ZIG) build $(ZIG_TARGET) $(ZIG_CPU) --prefix $(TD)/dist/depsout
 dist/depsout/lib/libmbedcrypto.a: dist/depsout/lib/libmbedtls.a
 dist/depsout/lib/libmbedx509.a: dist/depsout/lib/libmbedtls.a
 
@@ -237,7 +238,7 @@ dist/deps/libprotobuf_c: deps-download/$(LIBPROTOBUF_C_REF).tar.gz
 	touch $(TD)/$@
 
 dist/depsout/lib/libprotobuf-c.a: dist/deps/libprotobuf_c $(DIST_ZIG)
-	cd $< && $(ZIG) build $(ZIG_TARGET) --prefix $(TD)/dist/depsout
+	cd $< && $(ZIG) build $(ZIG_TARGET) $(ZIG_CPU) --prefix $(TD)/dist/depsout
 
 # /deps/tlsuv ---------------------------------------------
 TLSUV_REF=c71a1980b07d1c7967b306e81cd7ba904c614dd2
@@ -251,7 +252,7 @@ dist/deps/tlsuv: deps-download/$(TLSUV_REF).tar.gz
 	touch $(TD)/$@
 
 dist/depsout/lib/libtlsuv.a: dist/deps/tlsuv $(DIST_ZIG) dist/depsout/lib/libmbedtls.a dist/depsout/lib/libuv.a
-	cd $< && $(ZIG) build $(ZIG_TARGET) --prefix $(TD)/dist/depsout --search-prefix $(TD)/dist/depsout
+	cd $< && $(ZIG) build $(ZIG_TARGET) $(ZIG_CPU) --prefix $(TD)/dist/depsout --search-prefix $(TD)/dist/depsout
 
 # /deps/libutf8proc --------------------------------------
 LIBUTF8PROC_REF=ca34e8c7db7c7c28bddcf2a821d3c02e259c2215
@@ -265,7 +266,7 @@ dist/deps/libutf8proc: deps-download/$(LIBUTF8PROC_REF).tar.gz
 	touch $(TD)/$@
 
 dist/depsout/lib/libutf8proc.a: dist/deps/libutf8proc $(DIST_ZIG)
-	cd $< && $(ZIG) build $(ZIG_TARGET) --prefix $(TD)/dist/depsout
+	cd $< && $(ZIG) build $(ZIG_TARGET) $(ZIG_CPU) --prefix $(TD)/dist/depsout
 
 # /deps/libuuid ------------------------------------------
 dist/deps/libuuid: deps/libuuid
@@ -273,7 +274,7 @@ dist/deps/libuuid: deps/libuuid
 	cp -a $</* $(TD)/$@
 
 dist/depsout/lib/libuuid.a: dist/deps/libuuid $(DIST_ZIG)
-	cd $< && $(ZIG) build $(ZIG_TARGET) --prefix $(TD)/dist/depsout
+	cd $< && $(ZIG) build $(ZIG_TARGET) $(ZIG_CPU) --prefix $(TD)/dist/depsout
 
 # /deps/libuv --------------------------------------------
 LIBUV_REF=f85e52114e5149a3108123a601061d65e9c209be
@@ -287,7 +288,7 @@ dist/deps/libuv: deps-download/$(LIBUV_REF).tar.gz
 	touch $(TD)/$@
 
 dist/depsout/lib/libuv.a: dist/deps/libuv $(DIST_ZIG)
-	cd $< && $(ZIG) build $(ZIG_TARGET) --prefix $(TD)/dist/depsout
+	cd $< && $(ZIG) build $(ZIG_TARGET) $(ZIG_CPU) --prefix $(TD)/dist/depsout
 
 # /deps/libxml2 ------------------------------------------
 LIBXML2_REF=14100c19fd1d754bb39c9584fe223b2e2e1ffe77
@@ -302,7 +303,7 @@ dist/deps/libxml2: deps-download/$(LIBXML2_REF).tar.gz
 	touch $(TD)/$@
 
 dist/depsout/lib/libxml2.a: dist/deps/libxml2 $(DIST_ZIG)
-	cd $< && $(ZIG) build $(ZIG_TARGET) --prefix $(TD)/dist/depsout
+	cd $< && $(ZIG) build $(ZIG_TARGET) $(ZIG_CPU) --prefix $(TD)/dist/depsout
 
 # /deps/pcre2 --------------------------------------------
 LIBPCRE2_REF=369f485229f211d596d742b69d3c742a65436b41
@@ -316,7 +317,7 @@ dist/deps/pcre2: deps-download/$(LIBPCRE2_REF).tar.gz
 	touch $(TD)/$@
 
 dist/depsout/lib/libpcre2.a: dist/deps/pcre2 $(DIST_ZIG)
-	cd $< && $(ZIG) build $(ZIG_TARGET) --prefix $(TD)/dist/depsout
+	cd $< && $(ZIG) build $(ZIG_TARGET) $(ZIG_CPU) --prefix $(TD)/dist/depsout
 
 # /deps/libsnappy_c --------------------------------------------
 LIBSNAPPY_C_REF=519ab55d5338c47d85452c6b0fa97ef2d0e96396
@@ -330,7 +331,7 @@ dist/deps/libsnappy_c: deps-download/$(LIBSNAPPY_C_REF).tar.gz
 	touch $(TD)/$@
 
 dist/depsout/lib/libsnappy-c.a: dist/deps/libsnappy_c $(DIST_ZIG)
-	cd $< && $(ZIG) build $(ZIG_TARGET) --prefix $(TD)/dist/depsout
+	cd $< && $(ZIG) build $(ZIG_TARGET) $(ZIG_CPU) --prefix $(TD)/dist/depsout
 
 
 # --
@@ -339,14 +340,14 @@ dist/deps/libnetstring: deps/libnetstring $(DIST_ZIG)
 	cp -a $</* $(TD)/$@
 
 dist/depsout/lib/libnetstring.a: dist/deps/libnetstring $(DIST_ZIG)
-	cd $< && $(ZIG) build $(ZIG_TARGET) --prefix $(TD)/dist/depsout
+	cd $< && $(ZIG) build $(ZIG_TARGET) $(ZIG_CPU) --prefix $(TD)/dist/depsout
 
 dist/deps/libyyjson: deps/libyyjson $(DIST_ZIG)
 	mkdir -p $(TD)/$@
 	cp -a $</* $(TD)/$@
 
 dist/depsout/lib/libyyjson.a: dist/deps/libyyjson $(DIST_ZIG)
-	cd $< && $(ZIG) build $(ZIG_TARGET) --prefix $(TD)/dist/depsout
+	cd $< && $(ZIG) build $(ZIG_TARGET) $(ZIG_CPU) --prefix $(TD)/dist/depsout
 
 
 ifeq ($(ARCH),x86_64)
