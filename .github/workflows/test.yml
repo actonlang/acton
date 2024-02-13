@@ -318,6 +318,7 @@ jobs:
       - name: "Install acton from .deb"
         run: |
           apt update
+          apt install -qy make netcat-openbsd
           apt install -y ./deb/acton_*.deb
           actonc --version
       - name: "Clone Telemetrify and check out acton-next branch"
@@ -330,6 +331,9 @@ jobs:
         run: |
           cd telemetrify
           actonc build
+          cd tests/nso-replay
+          make start
+          make test
 
 
   # If we are on the main branch, we'll create or update a pre-release called
