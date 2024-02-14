@@ -80,6 +80,7 @@ main = do
           C.debug = C.debugB opts,
           C.dev = C.devB opts,
           C.db = C.dbB opts,
+          C.no_threads = C.no_threadsB opts,
           C.root = C.rootB opts,
           C.ccmd = C.ccmdB opts,
           C.quiet = C.quietB opts,
@@ -99,7 +100,7 @@ main = do
                                     else compileFiles opts (catMaybes $ map filterActFile nms)
 
 defaultOpts   = C.CompileOptions False False False False False False False False False False False False
-                                 False False False False False False False False False "" "" "" ""
+                                 False False False False False False False False False False "" "" "" ""
                                  C.defTarget "" "" False False False
 
 
@@ -932,6 +933,7 @@ zigBuild env opts paths tasks binTasks = do
                  target_cpu ++
                  " -Doptimize=" ++ (if (C.dev opts) then "Debug" else "ReleaseFast") ++
                  (if (C.db opts) then " -Ddb " else " ") ++
+                 (if (C.no_threads opts) then " -Dno_threads " else " ") ++
                  (if (C.cpedantic opts) then " -Dcpedantic " else " ") ++
                  " -Dprojpath=" ++ projPath paths ++
                  " -Dprojpath_outtypes=" ++ joinPath [ projPath paths, "out", "types" ] ++
@@ -943,6 +945,7 @@ zigBuild env opts paths tasks binTasks = do
                  " -Dsyspath_libreldev=" ++ joinPath [ sysPath paths, "lib", reldev ] ++
                  (if use_prebuilt then " -Duse_prebuilt" else "")
 
+    iff (C.debug opts) $ putStrLn ("zigCmd: " ++ zigCmd)
     runZig opts zigCmd (Just (projPath paths))
     -- if we are in a temp acton project, copy the outputted binary next to the source file
     if (isTmp paths && not (null binTasks))
