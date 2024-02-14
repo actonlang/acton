@@ -20,10 +20,17 @@
  * IN THE SOFTWARE.
  */
 
+#ifdef ACTON_THREADS
+#include <pthread.h>
+#endif
+
+#include <uv.h>
 #include "log.h"
 
 #define MAX_CALLBACKS 32
+#ifdef ACTON_THREADS
 static pthread_mutex_t l_mutex;
+#endif
 
 typedef struct {
   log_LogFn fn;
@@ -52,8 +59,10 @@ static const char *level_colors[] = {
 
 static void stdout_callback(log_Event *ev) {
   // Get a short thread name
-  char tname[16];
+  char tname[16] = "";
+#ifdef ACTON_THREADS
   pthread_getname_np(pthread_self(), tname, 16);
+#endif
   if (strncmp(tname, "IO", 6) == 0) {
   } else if (strncmp(tname, "Worker", 6) == 0) {
     strncpy(tname, &tname[7], 4);
@@ -83,7 +92,9 @@ static void stdout_callback(log_Event *ev) {
 static void file_callback(log_Event *ev) {
   // Get a short thread name
   char tname[16];
+#ifdef ACTON_THREADS
   pthread_getname_np(pthread_self(), tname, 16);
+#endif
   if (strncmp(tname, "IO", 6) == 0) {
   } else if (strncmp(tname, "Worker", 6) == 0) {
     strncpy(tname, &tname[7], 4);
@@ -104,12 +115,16 @@ static void file_callback(log_Event *ev) {
 
 
 static void lock(void)   {
+#ifdef ACTON_THREADS
   pthread_mutex_lock(&l_mutex);
+#endif
 }
 
 
 static void unlock(void) {
+#ifdef ACTON_THREADS
   pthread_mutex_unlock(&l_mutex);
+#endif
 }
 
 
@@ -149,7 +164,7 @@ int log_add_fp(FILE *fp, int level) {
 
 static void init_event(log_Event *ev, void *udata) {
   if (!ev->date) {
-    clock_gettime(CLOCK_REALTIME, &ev->ts);
+    uv_clock_gettime(UV_CLOCK_REALTIME, &ev->ts);
     ev->date = localtime(&ev->ts.tv_sec);
   }
   ev->udata = udata;

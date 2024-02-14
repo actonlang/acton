@@ -1,3 +1,4 @@
+#define LIBXML_STATIC
 #include <libxml/xmlmemory.h>
 #include <libxml/parser.h>
 

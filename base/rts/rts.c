@@ -18,11 +18,15 @@
 #endif
 #endif
 
+#ifdef ACTON_THREADS
 #define GC_THREADS 1
+#endif
 #include <gc.h>
 
 #include <unistd.h>
+#ifdef ACTON_THREADS
 #include <pthread.h>
+#endif
 #include <stdio.h>
 #include <stdarg.h>
 #ifdef ACTON_DB
@@ -33,9 +37,13 @@
 #include <time.h>
 #include <stdlib.h>
 
+// Windows
+#ifdef _WIN32
+#else
 #include <sys/un.h>
 #include <sys/time.h>
 #include <sys/wait.h>
+#endif
 #ifdef __linux__
 #include <sys/prctl.h>
 #endif
@@ -63,7 +71,9 @@
 extern struct dbc_stat dbc_stats;
 #endif
 
+#ifndef _WIN32
 struct sigaction sa_ill, sa_int, sa_pipe, sa_segv, sa_term;
+#endif
 
 char rts_verbose = 0;
 char rts_debug = 0;
@@ -105,7 +115,6 @@ static const char *WT_State_name[] = {"poof", "work", "idle", "sleep"};
 
 
 #if defined(IS_MACOS)
-///////////////////////////////////////////////////////////////////////////////////////////////
 #include <sys/types.h>
 #include <sys/sysctl.h>
 #include <mach/mach_init.h>
@@ -181,11 +190,15 @@ $Lock next_key_lock;
 int64_t timer_consume_hd = 0;       // Lacks protection, although spinlocks wouldn't help concurrent increments. Must fix in db!
 
 time_t current_time() {
-    struct timeval now;
-    gettimeofday(&now, NULL);
-    return now.tv_sec * 1000000 + now.tv_usec;
+    uv_timespec64_t now;
+    if (uv_clock_gettime(UV_CLOCK_REALTIME, &now) != 0) {
+        log_error("uv_clock_gettime() failed");
+        return 0;
+    }
+    return now.tv_sec * 1000000 + now.tv_nsec / 1000;
 }
 
+#ifdef ACTON_THREADS
 pthread_key_t self_key;
 pthread_key_t jump_top;
 pthread_key_t pkey_wtid;
@@ -193,6 +206,11 @@ pthread_key_t pkey_uv_loop;
 
 pthread_mutex_t rts_exit_lock = PTHREAD_MUTEX_INITIALIZER;
 pthread_cond_t rts_exit_signal = PTHREAD_COND_INITIALIZER;
+
+#define GET_JUMP_TOP() (JumpBuf)pthread_getspecific(jump_top)
+#define SET_JUMP_TOP(j) pthread_setspecific(jump_top, (void *)j)
+#define SET_WTID(wtid) pthread_setspecific(pkey_wtid, (void *)wtid);
+#define NUM_THREADS num_wthreads+1
 
 void pin_actor_affinity() {
     $Actor a = ($Actor)pthread_getspecific(self_key);
@@ -206,6 +224,18 @@ void set_actor_affinity(int wthread_id) {
     log_debug("Setting affinity for %s actor %ld to WT %d", a->$class->$GCINFO, a->$globkey, wthread_id);
     a->$affinity = wthread_id;
 }
+#else
+$Actor self_actor;
+JumpBuf jump_top;
+
+#define GET_JUMP_TOP() jump_top
+#define SET_JUMP_TOP(a) jump_top = a
+#define SET_WTID(i)
+#define NUM_THREADS 1
+
+void pin_actor_affinity() { }
+void set_actor_affinity(int wthread_id) { }
+#endif
 
 void wake_wt(int wtid) {
     // We are sometimes optimistically called, i.e. the caller sometimes does
@@ -214,6 +244,7 @@ void wake_wt(int wtid) {
     if (!rqs[wtid].head)
         return;
 
+#ifdef ACTON_THREADS
     // wake up corresponding worker threads....
     if (wtid == SHARED_RQ) {
         for (int i = 1; i <= num_wthreads; i++) {
@@ -226,6 +257,9 @@ void wake_wt(int wtid) {
         // thread specific queue
         uv_async_send(&wake_ev[wtid]);
     }
+#else
+    uv_async_send(&wake_ev[wtid]);
+#endif
 
 }
 
@@ -762,7 +796,7 @@ $Catcher POP_catcher($Actor a) {
 }
 
 B_Msg $ASYNC($Actor to, $Cont cont) {
-    $Actor self = ($Actor)pthread_getspecific(self_key);
+    $Actor self = GET_SELF();
     time_t baseline = 0;
     B_Msg m = B_MsgG_newXX(to, cont, baseline, &$Done$instance);
     if (self) {                                         // $ASYNC called by actor code
@@ -779,7 +813,7 @@ B_Msg $ASYNC($Actor to, $Cont cont) {
 }
 
 B_Msg $AFTER(B_float sec, $Cont cont) {
-    $Actor self = ($Actor)pthread_getspecific(self_key);
+    $Actor self = GET_SELF();
     rtsd_printf("# AFTER by %ld", self->$globkey);
     time_t baseline = self->B_Msg->$baseline + sec->val * 1000000;
     B_Msg m = B_MsgG_newXX(self, cont, baseline, &$Done$instance);
@@ -792,45 +826,45 @@ $R $AWAIT($Cont cont, B_Msg m) {
 }
 
 $R $PUSH_C($Cont cont) {
-    $Actor self = ($Actor)pthread_getspecific(self_key);
+    $Actor self = GET_SELF();
     $Catcher c = $NEW($Catcher, cont);
     PUSH_catcher(self, c);
     return $R_CONT(cont, B_True);                   // True indicates the "try" branch
 }
 
 B_BaseException $POP_C() {
-    $Actor self = ($Actor)pthread_getspecific(self_key);
+    $Actor self = GET_SELF();
     $Catcher c = POP_catcher(self);
     B_BaseException ex = c->xval;
     return ex;
 }
 
 void $DROP_C() {
-    $Actor self = ($Actor)pthread_getspecific(self_key);
+    $Actor self = GET_SELF();
     POP_catcher(self);
 }
 
 JumpBuf $PUSH_BUF() {
-    JumpBuf current = (JumpBuf)pthread_getspecific(jump_top);
+    JumpBuf current = GET_JUMP_TOP();
     JumpBuf new = (JumpBuf)malloc(sizeof(struct JumpBuf));
     new->prev = current;
-    pthread_setspecific(jump_top, new);
+    SET_JUMP_TOP(new);
     return new;
 }
 
 B_BaseException $POP() {
-    JumpBuf topbuf = (JumpBuf)pthread_getspecific(jump_top);
-    pthread_setspecific(jump_top, topbuf->prev);
+    JumpBuf topbuf = GET_JUMP_TOP();
+    SET_JUMP_TOP(topbuf->prev);
     return topbuf->xval;
 }
 
 void $DROP() {
-    JumpBuf current = (JumpBuf)pthread_getspecific(jump_top);
-    pthread_setspecific(jump_top, current->prev);
+    JumpBuf current = GET_JUMP_TOP();
+    SET_JUMP_TOP(current->prev);
 }
 
 void $RAISE(B_BaseException e) {
-    JumpBuf jump = (JumpBuf)pthread_getspecific(jump_top);
+    JumpBuf jump = GET_JUMP_TOP();
     jump->xval = e;
     longjmp(jump->buf, 1);
 }
@@ -1472,7 +1506,7 @@ void arm_timer_ev() {
 }
 
 void wt_stop_cb(uv_async_t *ev) {
-    int wtid = (int)pthread_getspecific(pkey_wtid);
+    int wtid = GET_WTID();
     uv_check_stop(&work_ev[wtid]);
     uv_stop(get_uv_loop());
 }
@@ -1484,14 +1518,14 @@ void wt_wake_cb(uv_async_t *ev) {
 
 void wt_work_cb(uv_check_t *ev) {
     volatile JumpBuf jump0 = NULL;
-    pthread_setspecific(jump_top, NULL);
+    SET_JUMP_TOP(NULL);
 
-    int wtid = (int)pthread_getspecific(pkey_wtid);
+    int wtid = GET_WTID();
 
-    struct timespec ts_start, ts1, ts2, ts3;
+    uv_timespec64_t ts_start, ts1, ts2, ts3;
     long long int runtime = 0;
 
-    clock_gettime(CLOCK_MONOTONIC, &ts_start);
+    uv_clock_gettime(UV_CLOCK_MONOTONIC, &ts_start);
     while (true) {
         if (rts_exit) {
             return;
@@ -1502,23 +1536,23 @@ void wt_work_cb(uv_check_t *ev) {
 
         wake_wt(SHARED_RQ);
 
-        pthread_setspecific(self_key, current);
+        SET_SELF(current);
         volatile B_Msg m = current->B_Msg;
         $Cont cont = m->$cont;
         $WORD val = m->value;
 
-        clock_gettime(CLOCK_MONOTONIC, &ts1);
+        uv_clock_gettime(UV_CLOCK_MONOTONIC, &ts1);
         wt_stats[wtid].state = WT_Working;
 
         $R r;
         if (jump0 || $PUSH()) {                         // Normal path
             if (!jump0) {
-                jump0 = (JumpBuf)pthread_getspecific(jump_top);
+                jump0 = GET_JUMP_TOP();
             }
             rtsd_printf("## Running actor %ld : %s", current->$globkey, current->$class->$GCINFO);
             r = cont->$class->__call__(cont, val);
 
-            clock_gettime(CLOCK_MONOTONIC, &ts2);
+            uv_clock_gettime(UV_CLOCK_MONOTONIC, &ts2);
             long long int diff = (ts2.tv_sec * 1000000000 + ts2.tv_nsec) - (ts1.tv_sec * 1000000000 + ts1.tv_nsec);
 
             wt_stats[wtid].conts_count++;
@@ -1649,9 +1683,9 @@ void wt_work_cb(uv_check_t *ev) {
             break;
         }
         }
-        pthread_setspecific(self_key, NULL);
+        SET_SELF(NULL);
 
-        clock_gettime(CLOCK_MONOTONIC, &ts3);
+        uv_clock_gettime(UV_CLOCK_MONOTONIC, &ts3);
         long long int diff = (ts3.tv_sec * 1000000000 + ts3.tv_nsec) - (ts2.tv_sec * 1000000000 + ts2.tv_nsec);
         wt_stats[wtid].bkeep_count++;
         wt_stats[wtid].bkeep_sum += diff;
@@ -1687,14 +1721,16 @@ void *main_loop(void *idx) {
     char tname[11]; // Enough for "Worker XXX\0"
     int wtid = (int)idx;
     snprintf(tname, sizeof(tname), "Worker %d", wtid);
+    uv_loop_t *uv_loop = uv_loops[wtid];
+    SET_WTID(wtid);
+#ifdef ACTON_THREADS
+    pthread_setspecific(pkey_uv_loop, (void *)uv_loop);
 #if defined(IS_MACOS)
     pthread_setname_np(tname);
 #else
     pthread_setname_np(pthread_self(), tname);
 #endif
-    uv_loop_t *uv_loop = uv_loops[wtid];
-    pthread_setspecific(pkey_wtid, (void *)wtid);
-    pthread_setspecific(pkey_uv_loop, (void *)uv_loop);
+#endif
 
     uv_check_init(uv_loop, &work_ev[wtid]);
     uv_check_start(&work_ev[wtid], (uv_check_cb)wt_work_cb);
@@ -1762,20 +1798,33 @@ const char* stats_to_json () {
 
     yyjson_mut_obj_add_int(doc, root, "pid", pid);
 
-    struct timeval tv;
+    uv_timespec64_t ts;
+    if (uv_clock_gettime(UV_CLOCK_REALTIME, &ts) != 0) {
+        log_fatal("Unable to get precise time");
+        return NULL;
+    }
     struct tm tm;
-    gettimeofday(&tv, NULL);
-    localtime_r(&tv.tv_sec, &tm);
+#ifdef _WIN32
+    errno_t result = localtime_s(&tm, &ts.tv_sec);
+    if (result != 0) {
+        char errmsg[1024] = "Error getting time: ";
+        uv_strerror_r(errno, errmsg + strlen(errmsg), sizeof(errmsg) - strlen(errmsg));
+        log_warn("%s", errmsg);
+        return NULL;
+    }
+#else
+    localtime_r(&ts.tv_sec, &tm);
+#endif
     char dt[32];    // = "YYYY-MM-ddTHH:mm:ss.SSS+0000";
     strftime(dt, 32, "%Y-%m-%dT%H:%M:%S.000%z", &tm);
-    sprintf(dt + 20, "%03hu%s", (unsigned short)(tv.tv_usec / 1000), dt + 23);
+    sprintf(dt + 20, "%03hu%s", (unsigned short)(ts.tv_nsec / 1000000), dt + 23);
 
     yyjson_mut_obj_add_str(doc, root, "datetime", dt);
 
     // Worker threads
     yyjson_mut_val *j_stat = yyjson_mut_obj(doc);
     yyjson_mut_obj_add_val(doc, root, "wt", j_stat);
-    for (unsigned int i = 1; i < num_wthreads+1; i++) {
+    for (unsigned int i = 1; i < NUM_THREADS; i++) {
         yyjson_mut_val *j_wt = yyjson_mut_obj(doc);
         yyjson_mut_obj_add_val(doc, j_stat, wt_stats[i].key, j_wt);
         yyjson_mut_obj_add_str(doc, j_wt, "state",       WT_State_name[wt_stats[i].state]);
@@ -1835,13 +1884,16 @@ const char* db_membership_to_json () {
 
     yyjson_mut_obj_add_int(doc, root, "pid", pid);
 
-    struct timeval tv;
+    uv_timespec64_t ts;
+    if (uv_clock_gettime(UV_CLOCK_REALTIME, &ts) != 0) {
+        log_fatal("Unable to get precise time");
+        return NULL;
+    }
     struct tm tm;
-    gettimeofday(&tv, NULL);
-    localtime_r(&tv.tv_sec, &tm);
+    localtime_r(&ts.tv_sec, &tm);
     char dt[32];    // = "YYYY-MM-ddTHH:mm:ss.SSS+0000";
     strftime(dt, 32, "%Y-%m-%dT%H:%M:%S.000%z", &tm);
-    sprintf(dt + 20, "%03hu%s", (unsigned short)(tv.tv_usec / 1000), dt + 23);
+    sprintf(dt + 20, "%03hu%s", (unsigned short)(ts.tv_nsec / 1000000), dt + 23);
 
     yyjson_mut_obj_add_str(doc, root, "datetime", dt);
 
@@ -1885,13 +1937,26 @@ const char* actors_to_json () {
 
     yyjson_mut_obj_add_int(doc, root, "pid", pid);
 
-    struct timeval tv;
+    uv_timespec64_t ts;
+    if (uv_clock_gettime(UV_CLOCK_REALTIME, &ts) != 0) {
+        log_fatal("Unable to get precise time");
+        return NULL;
+    }
     struct tm tm;
-    gettimeofday(&tv, NULL);
-    localtime_r(&tv.tv_sec, &tm);
+#ifdef _WIN32
+    errno_t result = localtime_s(&tm, &ts.tv_sec);
+    if (result != 0) {
+        char errmsg[1024] = "Error getting time: ";
+        uv_strerror_r(errno, errmsg + strlen(errmsg), sizeof(errmsg) - strlen(errmsg));
+        log_warn("%s", errmsg);
+        return NULL;
+    }
+#else
+    localtime_r(&ts.tv_sec, &tm);
+#endif
     char dt[32];    // = "YYYY-MM-ddTHH:mm:ss.SSS+0000";
     strftime(dt, 32, "%Y-%m-%dT%H:%M:%S.000%z", &tm);
-    sprintf(dt + 20, "%03hu%s", (unsigned short)(tv.tv_usec / 1000), dt + 23);
+    sprintf(dt + 20, "%03hu%s", (unsigned short)(ts.tv_nsec / 1000000), dt + 23);
 
     yyjson_mut_obj_add_str(doc, root, "datetime", dt);
 
@@ -1921,7 +1986,7 @@ const char* actors_to_json () {
     return json;
 }
 
-
+#ifdef ACTON_THREADS
 void *$mon_log_loop(void *period) {
     log_info("Starting monitor log, with %d second(s) period, to: %s", (int)period, mon_log_path);
 
@@ -1968,6 +2033,9 @@ void *$mon_socket_loop() {
     pthread_setname_np(pthread_self(), "Monitor Socket");
 #endif
 
+#ifdef _WIN32
+    // TODO: implement on windows!?
+#else
     int s, client_sock, len;
     struct sockaddr_un local, remote;
     char q[100];
@@ -2067,17 +2135,20 @@ void *$mon_socket_loop() {
         close(client_sock);
     }
     return NULL;
+#endif
 }
+#endif
 
 void rts_shutdown() {
     rts_exit = 1;
     // 0 = main thread, rest is wthreads, thus +1
-    for (int i = 0; i < num_wthreads+1; i++) {
+    for (int i = 0; i < NUM_THREADS; i++) {
         uv_async_send(&stop_ev[i]);
     }
 }
 
 
+#ifndef _WIN32
 void print_trace() {
     char pid_buf[30];
     sprintf(pid_buf, "%d", getpid());
@@ -2180,6 +2251,7 @@ void sigterm_handler(int signum) {
         exit(return_val);
     }
 }
+#endif
 
 void check_uv_fatal(int status, char msg[]) {
     if (status == 0)
@@ -2241,7 +2313,12 @@ int main(int argc, char **argv) {
     int rts_dc_id = -1;
     int new_argc = argc;
     int cpu_pin;
-    long num_cores = sysconf(_SC_NPROCESSORS_ONLN);
+    uv_cpu_info_t* cpu_infos;
+    int num_cores;
+    if (uv_cpu_info(&cpu_infos, &num_cores) != 0) {
+        log_fatal("Unable to get CPU info");
+        exit(1);
+    }
     bool mon_on_exit = false;
     bool auto_backtrace = true;
     bool interactive_backtrace = false;
@@ -2252,6 +2329,7 @@ int main(int argc, char **argv) {
     appname = argv[0];
     pid = getpid();
 
+#ifndef _WIN32
     // Do line buffered output
     setlinebuf(stdout);
 
@@ -2286,13 +2364,17 @@ int main(int argc, char **argv) {
         log_fatal("Failed to install signal handler for SIGTERM: %s", strerror(errno));
         exit(1);
     }
+#endif
 
-
+#ifdef ACTON_THREADS
     pthread_key_create(&self_key, NULL);
     pthread_key_create(&jump_top, NULL);
     pthread_setspecific(self_key, NULL);
     pthread_key_create(&pkey_wtid, NULL);
     pthread_key_create(&pkey_uv_loop, NULL);
+#else
+    self_actor = NULL;
+#endif
 
     log_set_quiet(true);
     /*
@@ -2459,6 +2541,7 @@ int main(int argc, char **argv) {
     }
     new_argv[new_argc] = NULL;
 
+#ifndef _WIN32
     if (interactive_backtrace) {
         sa_ill.sa_handler = &launch_debugger;
         sa_segv.sa_handler = &launch_debugger;
@@ -2466,8 +2549,10 @@ int main(int argc, char **argv) {
         sa_ill.sa_handler = &sigillsegv_handler;
         sa_segv.sa_handler = &sigillsegv_handler;
     }
+#endif
 
     if (auto_backtrace) {
+#ifndef _WIN32
         if (sigaction(SIGILL, &sa_ill, NULL) == -1) {
             log_fatal("Failed to install signal handler for SIGILL: %s", strerror(errno));
             exit(1);
@@ -2476,6 +2561,7 @@ int main(int argc, char **argv) {
             log_fatal("Failed to install signal handler for SIGSEGV: %s", strerror(errno));
             exit(1);
         }
+#endif
     }
 
     if (log_path)
@@ -2492,6 +2578,7 @@ int main(int argc, char **argv) {
         log_add_fp(logf, LOG_TRACE);
     }
 
+#ifdef ACTON_THREADS
     if (num_wthreads > MAX_WTHREADS) {
         fprintf(stderr, "ERROR: Maximum of %d worker threads supported.\n", MAX_WTHREADS);
         fprintf(stderr, "HINT: Run this program with fewer worker threads: %s --rts-wthreads %d\n", argv[0], MAX_WTHREADS);
@@ -2511,7 +2598,14 @@ int main(int argc, char **argv) {
         cpu_pin = 0;
         log_info("Detected %ld CPUs: Using %ld worker threads (manually set). No CPU affinity used.", num_cores, num_wthreads);
     }
-
+#else
+    log_info("Running without threads, main thread will perform all work");
+    if (num_wthreads != -1) {
+        fprintf(stderr, "ERROR: Threads disabled, provided --rts-wthreads argument has no effect.\n");
+        fprintf(stderr, "HINT: You cannot compile with --no-threads and use --rts-wthreads at run time.\n");
+        exit(1);
+    }
+#endif
     // Zeroize statistics
     for (int i=0; i < MAX_WTHREADS; i++) {
         wt_stats[i].idx = i;
@@ -2552,7 +2646,7 @@ int main(int argc, char **argv) {
 #endif
 
     for (int i=0; i <= num_wthreads; i++) {
-        uv_loop_t *loop = malloc(sizeof(uv_loop_t));
+        uv_loop_t *loop = GC_malloc(sizeof(uv_loop_t));
         check_uv_fatal(uv_loop_init(loop), "Error initializing libuv loop: ");
         uv_loops[i] = loop;
 
@@ -2647,6 +2741,7 @@ int main(int argc, char **argv) {
     }
 #endif
 
+#ifdef ACTON_THREADS
     cpu_set_t cpu_set;
 
     // RTS Monitor Log
@@ -2686,11 +2781,14 @@ int main(int argc, char **argv) {
             pthread_setaffinity_np(threads[idx-1], sizeof(cpu_set), &cpu_set);
         }
     }
+#endif
 
     int wtid = 0;
     uv_loop_t *uv_loop = uv_loops[wtid];
+#ifdef ACTON_THREADS
     pthread_setspecific(pkey_wtid, (void *)wtid);
     pthread_setspecific(pkey_uv_loop, (void *)uv_loop);
+#endif
 
     uv_check_init(aux_uv_loop, &work_ev[wtid]);
     uv_check_start(&work_ev[wtid], (uv_check_cb)wt_work_cb);
@@ -2700,19 +2798,23 @@ int main(int argc, char **argv) {
     uv_timer_init(aux_uv_loop, timer_ev);
     uv_timer_start(timer_ev, main_timer_cb, 0, 0);
 
+#ifdef ACTON_THREADS
     // Set affinity for main thread
     if (cpu_pin) {
         CPU_ZERO(&cpu_set);
         CPU_SET(0, &cpu_set);
         pthread_setaffinity_np(pthread_self(), sizeof(cpu_set), &cpu_set);
     }
+#endif
 
+    // Run the uv loop for the main thread
     wt_stats[0].state = WT_Idle;
     int r = uv_run(aux_uv_loop, UV_RUN_DEFAULT);
     wt_stats[0].state = WT_NoExist;
 
     // -- SHUTDOWN --
 
+#ifdef ACTON_THREADS
     // Join threads
     for (int idx = 1; idx <= num_wthreads; idx++) {
         pthread_join(threads[idx-1], NULL);
@@ -2730,6 +2832,7 @@ int main(int argc, char **argv) {
         const char *stats_json = stats_to_json();
         printf("%s\n", stats_json);
     }
+#endif
 
     if (logf) {
         fclose(logf);

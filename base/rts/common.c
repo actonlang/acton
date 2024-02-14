@@ -1,9 +1,28 @@
 #include <stdlib.h>
 #include <errno.h>
 
+#ifdef __linux__
+#include <dlfcn.h>
+#endif
+
 #include <mbedtls/platform.h>
+#define LIBXML_STATIC
 #include <libxml/xmlmemory.h>
 #include <tlsuv/tlsuv.h>
+
+#if defined(_WIN32) || defined(_WIN64)
+
+#include <math.h>
+
+// strndup() is not available on Windows
+char *strndup( const char *s1, size_t n)
+{
+    char *copy= (char*)malloc( n+1 );
+    memcpy( copy, s1, n );
+    copy[n] = 0;
+    return copy;
+};
+#endif
 
 void *(*real_malloc)(size_t) = NULL;
 void *(*real_realloc)(void *, size_t) = NULL;
@@ -13,6 +32,7 @@ char *(*real_strdup)(const char *) = NULL;
 char *(*real_strndup)(const char *, size_t) = NULL;
 
 int resolve_real_malloc() {
+#ifdef __linux__
     real_malloc = dlsym(RTLD_NEXT, "malloc");
     if (!real_malloc) {
         fprintf(stderr, "Error in `dlsym`: %s\n", dlerror());
@@ -43,6 +63,9 @@ int resolve_real_malloc() {
         fprintf(stderr, "Error in `dlsym`: %s\n", dlerror());
         return 0;
     }
+#else
+    return 0;
+#endif
     return 1;
 }
 
@@ -82,7 +105,6 @@ void acton_init_alloc() {
                             GC_realloc,
                             GC_calloc,
                             GC_free);
-
 }
 
 int acton_replace_allocator(acton_malloc_func malloc_func,

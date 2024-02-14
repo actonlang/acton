@@ -5,7 +5,7 @@ import testing
 
 actor CompilerRunner(process_cap, env, args):
     def on_stderr(p, data):
-        print(data.decode(), stderr=True, end="")
+        print(data.decode(), err=True, end="")
 
     def on_stdout(p, data):
         print(data.decode(), end="")
@@ -90,7 +90,7 @@ actor RunTest(process_cap, env, args):
             _test_modules.append(line)
 
     def on_actbuild_stderr(p, data):
-        print(data.decode(), end="", stderr=True)
+        print(data.decode(), end="", err=True)
 
     def on_actbuild_exit(p, exit_code, term_signal):
         if exit_code == 0:
