@@ -29,7 +29,7 @@ struct $table_struct {
 };
 
 #define DELETED (($WORD)1)
-
+#define INIT_SIZE 4
 #define DKIX_EMPTY (-1)
 #define DKIX_DUMMY (-2)  /* Used internally */
 #define TB_ENTRIES(tb)                                          \
@@ -42,17 +42,22 @@ struct $table_struct {
 /*
   Internal routine used by dictresize() to build a hashtable of entries.
 %*/
-static void build_indices($table tbl, $entry_t ep, long n) {
-    long mask = tbl->tb_size - 1;
-    for (int ix = 0; ix != n; ix++, ep++) {
-        long hash = ep->hash;
-
+static void build_indices(B_Hashable hashwit, $table oldtable, $table newtable, $entry_t ep, long n) {
+    long mask = newtable->tb_size - 1;
+    for (int ix = 0; ix < n; ix++, ep++) {
+        long hash;
+        if (oldtable->tb_size > INIT_SIZE)
+            hash = ep->hash;
+        else {
+            hash = from$int(hashwit->$class->__hash__(hashwit,ep->key));
+            ep->hash = hash;
+        }
         unsigned long i = (unsigned long)hash & mask;
-        for (unsigned long perturb = hash; tbl->tb_indices[i] != DKIX_EMPTY;) {
+        for (unsigned long perturb = hash; newtable->tb_indices[i] != DKIX_EMPTY;) {
             perturb >>= PERTURB_SHIFT;
             i = mask & (i*5 + perturb + 1);
         }
-        tbl->tb_indices[i] = ix;
+        newtable->tb_indices[i] = ix;
     }
 }
 
@@ -62,48 +67,46 @@ static void build_indices($table tbl, $entry_t ep, long n) {
   actually be smaller than the old one.
 */
 
-static int dictresize(B_dict d) {
+static int dictresize(B_Hashable hashwit, B_dict d) {
     $table oldtable = d->table;
     long numelements = d->numelements;
     long newsize, minsize = 3*numelements;
     $entry_t oldentries, newentries;
-
-    for (newsize = 8; newsize < minsize; //&& newsize > 0; // ignore case when minsize is so large that newsize overflows
-         newsize <<= 1)
-        ;
-    /*
-      Again, for the moment, ignore enormous dictionary size request.
-      if (newsize <= 0) {
-      PyErr_NoMemory();
-      return -1;
-      }
-    */
+    for (newsize = INIT_SIZE; newsize < minsize; newsize <<= 1);
     /* Allocate a new table. */
     $table newtable =  acton_malloc(sizeof(char*) + 3*sizeof(long) + newsize*sizeof(int) + (2*newsize/3)*sizeof(struct $entry_struct));
     newtable->tb_size = newsize;
     newtable->tb_usable = 2*newsize/3-numelements;
     newtable->tb_nentries = numelements;
     memset(&(newtable->tb_indices[0]), 0xff, newsize*sizeof(int));
-    oldentries = TB_ENTRIES(oldtable);
     newentries = TB_ENTRIES(newtable);
-    if (oldtable->tb_nentries == numelements) {
-        memcpy(newentries, oldentries, numelements*sizeof(struct $entry_struct));
-    }
-    else {
-        $entry_t ep = oldentries;
-        for (int i = 0; i < numelements; i++) {
-            while (ep->value == DELETED) ep++;
-            newentries[i] = *ep++;
+    if (numelements > 0) {
+        oldentries = TB_ENTRIES(oldtable);
+        if (oldtable->tb_nentries == numelements) {
+            memcpy(newentries, oldentries, numelements*sizeof(struct $entry_struct));
         }
+        else {
+            $entry_t ep = oldentries;
+            for (int i = 0; i < numelements; i++) {
+                while (ep->value == DELETED) ep++;
+                newentries[i] = *ep++;
+            }
+        }
+        if (newsize > INIT_SIZE)
+            build_indices(hashwit, oldtable, newtable, newentries, numelements);
     }
+    // for (int i=0; i < newsize; i++) printf("%d -> %d\n",i,newtable->tb_indices[i]);
+    // for (int i=0; i < newtable->tb_nentries; i++){
+    //   $entry_t e = newentries + i;
+        // printf("%ld     %lu\n", e->hash, ((B_int)e->key)->val.n[0])
+        
     d->table = newtable;
-    acton_free(oldtable);
-    build_indices(newtable, newentries, numelements);
     return 0;
 }
 
 
-// Search index of hash table from offset of entry table 
+// Search index of hash table from offset of entry table
+// Only called when the dict is a hashtable (i.e. table->tb_size > INIT_SIZE)
 static int $lookdict_index($table table, long hash, int index) {
     unsigned long mask =  (table->tb_size)-1;
     unsigned long perturb = hash;
@@ -128,37 +131,59 @@ static int $lookdict_index($table table, long hash, int index) {
 // or DKIX_EMPTY if no such entry exists
 int $lookdict(B_dict dict, B_Hashable hashwit, long hash, $WORD key, $WORD *res) {
     $table table = dict->table;
-    unsigned long mask = (table->tb_size)-1, i = (unsigned long)hash & mask, perturb = hash;
-    int ix;
-    for(;;) {
-        ix = table->tb_indices[i];
-        if (ix == DKIX_EMPTY) {
-            // Unused slot
-            *res = NULL;
-            return ix;
-        }
-        if (ix >= 0) {
+    if (!table) {
+        *res = NULL;
+        //printf("no table\n");
+        return DKIX_EMPTY;
+    }
+    if (table->tb_size == INIT_SIZE) {
+        // Ignore hash and do linear search
+        for (int ix = 0; ix < table->tb_nentries; ix++) {
             $entry_t entry = &TB_ENTRIES(table)[ix];
-            if (entry->value != DELETED && (entry->key == key || (entry->hash == hash && hashwit->$class->__eq__(hashwit,key,entry->key)->val))) {
+            if (entry->value != DELETED && (entry->key == key || (hashwit->$class->__eq__(hashwit,key,entry->key)->val))) {
                 // found an entry with the same or equal key
-                *res = entry->value;
+                *res = entry->value; 
                 return ix;
             }
-            // collision; probe another location
         }
-        perturb >>= PERTURB_SHIFT;
-        i = (i*5 + perturb + 1) & mask;
-        //printf("collision; perturb is %ld, hash is %ld, mask is %ld, next probe is %ld\n", perturb,  hash, mask, i);
+        //printf("failed linear search\n");
+        return DKIX_EMPTY;
+    } else {
+        unsigned long mask = (table->tb_size)-1, i = (unsigned long)hash & mask, perturb = hash;
+        int ix;
+        for(;;) {
+            ix = table->tb_indices[i];
+            // printf("ix = %d\n",ix);
+            if (ix == DKIX_EMPTY) {
+                // Unused slot
+                *res = NULL;
+                // printf("found unused slot\n");
+                return ix;
+            }
+            if (ix >= 0) {
+                $entry_t entry = &TB_ENTRIES(table)[ix];
+                if (entry->value != DELETED && (entry->key == key || (entry->hash == hash && hashwit->$class->__eq__(hashwit,key,entry->key)->val))) {
+                    // found an entry with the same or equal key
+                    *res = entry->value;
+                    return ix;
+                }
+                // collision; probe another location
+            }
+            perturb >>= PERTURB_SHIFT;
+            i = (i*5 + perturb + 1) & mask;
+            // printf("collision; perturb is %ld, hash is %ld, mask is %ld, next probe is %ld\n", perturb,  hash, mask, i);
+        }
+        // this should be unreachable
     }
-    // this should be unreachable
 }
 
 //  Internal function to find slot in index array for an item from its hash
 //  when it is known that the key is not present in the dict.
   
 static long find_empty_slot($table table, long hash) {
-    const unsigned long mask = (table->tb_size)-1;
-
+    if (table->tb_size==INIT_SIZE)
+        return table->tb_nentries;
+    const unsigned long mask = table->tb_size-1;
     unsigned long i = (unsigned long)hash & mask;
     int ix = table->tb_indices[i];
     for (unsigned long perturb = hash; ix >= 0;) {
@@ -169,29 +194,31 @@ static long find_empty_slot($table table, long hash) {
     return i;
 }
 
-static int insertdict(B_dict dict, B_Hashable hashwit, long hash, $WORD key, $WORD value) {
+static void insertdict(B_dict dict, B_Hashable hashwit, long hash, $WORD key, $WORD value) {
     $WORD old_value;
     $table table;
     $entry_t ep;
+    if (!dict->table || dict->table->tb_usable <= 0)
+        dictresize(hashwit,dict);
+    if (dict->table->tb_size == 2*INIT_SIZE)
+         hash = from$int(hashwit->$class->__hash__(hashwit,key));
     int ix = $lookdict(dict,hashwit,hash,key,&old_value);
     if (ix == DKIX_EMPTY) {
-        if (dict->table->tb_usable <= 0 && dictresize(dict) < 0)
-            return -1;
         table = dict->table;
-        long hashpos = find_empty_slot(table,hash);
+        long newpos = find_empty_slot(table,hash);
         ep = &TB_ENTRIES(table)[table->tb_nentries];
-        table->tb_indices[hashpos] = table->tb_nentries;
+        table->tb_indices[newpos] = table->tb_nentries;
         ep->key = key;
         ep->hash = hash;
         ep->value = value;
         table->tb_usable--;
         table->tb_nentries++;
         dict->numelements++;
-        return 0;
+        return;
     }
     if (old_value != value)  //eq ??
         TB_ENTRIES(dict->table)[ix].value = value;
-    return 0;
+    return;
 }
 
 // General methods /////////////////////////////////////////////////////////////////////////
@@ -202,11 +229,7 @@ B_dict B_dictG_new(B_Hashable hashwit, B_Iterable wit, $WORD iterable) {
 
 B_NoneType B_dictD___init__(B_dict dict, B_Hashable hashwit, B_Iterable wit, $WORD iterable) {
     dict->numelements = 0;
-    dict->table = acton_malloc(sizeof(char*)+3*sizeof(long) + 8*sizeof(int) + 5*sizeof(struct $entry_struct));
-    dict->table->tb_size = 8;
-    dict->table->tb_usable = 5;
-    dict->table->tb_nentries = 0;
-    memset(&(dict->table->tb_indices[0]), 0xff, 8*sizeof(int));
+    dict->table = NULL;
     if (wit && iterable) {
         B_Iterator it = wit->$class->__iter__(wit,iterable);
         B_tuple nxt;
@@ -231,8 +254,8 @@ B_str B_dictD___str__(B_dict self) {
         B_value key = ((B_value)item->components[0]);
         B_value value = ((B_value)item->components[1]);
         B_str keystr = key->$class->__repr__(key);
-        B_str valuestr = value->$class->__repr__(value);
-        B_str elem = acton_malloc(sizeof(struct B_str));
+        B_str valuestr = value ? value->$class->__repr__(value) : to$str("None");
+        B_str elem = malloc(sizeof(struct B_str));
         elem->$class = &B_strG_methods;
         elem->nbytes = keystr->nbytes+valuestr->nbytes+1;
         elem->nchars = keystr->nchars+valuestr->nchars+1;
@@ -306,14 +329,18 @@ B_dict B_dictD___deserialize__(B_dict res, $Serial$state state) {
 B_bool B_dictrel(bool directfalse,B_OrdD_dict w, B_dict a, B_dict b) {
     if (directfalse) {
         return B_False;
-    }; 
+    };
+    if (a->numelements == 0)
+        return B_True;
     B_Hashable wH = w->W_HashableD_AD_OrdD_dict;
     B_Eq wB = w->W_EqD_BD_OrdD_dict;
     B_MappingD_dict m = B_MappingD_dictG_new(wH);
     B_Iterator it = m->$class->keys(m,a);
     $WORD x,resa,resb;
     while ((x = $next(it))) {
-        long h = from$int(wH->$class->__hash__(wH,x));
+        long h = 0;
+        if (a->table->tb_size > INIT_SIZE)
+            h = from$int(wH->$class->__hash__(wH,x));
         int ixa = $lookdict(a, wH, h, x, &resa);
         int ixb = $lookdict(b, wH, h, x ,&resb);
         if (ixb<0 || wB->$class->__ne__(wB,resa,resb)->val) return B_False;
@@ -350,6 +377,8 @@ B_bool B_OrdD_dictD___ge__ (B_OrdD_dict w, B_dict a, B_dict b) {
 // First, define Iterator class for keys  //////////////////////////////////////////////////////////////////////////////
  
 static $WORD B_IteratorD_dictD_next(B_IteratorD_dict self) {
+    if (!self->src->table)
+        return NULL;
     int i = self->nxt;
     $table table = self->src->table;
     int n = table->tb_nentries;
@@ -411,12 +440,6 @@ B_dict B_MappingD_dictD___fromiter__ (B_MappingD_dict wit, B_Iterable wit2, $WOR
     B_Iterator it = wit2->$class->__iter__(wit2,iter);
     B_Hashable hashwit = wit->W_HashableD_AD_MappingD_dict;
     B_dict dict = $NEW(B_dict,hashwit,NULL,NULL);
-    dict->numelements = 0;
-    dict->table = acton_malloc(sizeof(char*)+3*sizeof(long) + 8*sizeof(int) + 5*sizeof(struct $entry_struct));
-    dict->table->tb_size = 8;
-    dict->table->tb_usable = 5;
-    dict->table->tb_nentries = 0;
-    memset(&(dict->table->tb_indices[0]), 0xff, 8*sizeof(int));
     B_tuple nxt;
     while((nxt = (B_tuple)it->$class->__next__(it))) {
         B_dictD_setitem(dict,hashwit,nxt->components[0],nxt->components[1]);
@@ -429,9 +452,14 @@ B_int B_MappingD_dictD___len__ (B_MappingD_dict wit, B_dict dict) {
 }
   
 B_bool B_MappingD_dictD___contains__ (B_MappingD_dict wit, B_dict dict, $WORD key) {
+    if (dict->numelements == 0)
+        return B_False;
     B_Hashable hashwit = wit->W_HashableD_AD_MappingD_dict;
     $WORD res;
-    return toB_bool($lookdict(dict,hashwit,from$int(hashwit->$class->__hash__(hashwit,key)),key,&res) >= 0);
+    long h = 0;
+    if (dict->table->tb_size > INIT_SIZE)
+        h = from$int(hashwit->$class->__hash__(hashwit,key));
+    return toB_bool($lookdict(dict,hashwit,h,key,&res) >= 0);
 }
 
 B_bool B_MappingD_dictD___containsnot__ (B_MappingD_dict wit, B_dict dict, $WORD key) {
@@ -439,8 +467,12 @@ B_bool B_MappingD_dictD___containsnot__ (B_MappingD_dict wit, B_dict dict, $WORD
 }
 
 $WORD B_MappingD_dictD_get (B_MappingD_dict wit, B_dict dict, $WORD key, $WORD deflt) {
+    long hash = 0;
+    if (!dict->table)
+        return deflt;
     B_Hashable hashwit = wit->W_HashableD_AD_MappingD_dict;
-    long hash = from$int(hashwit->$class->__hash__(hashwit,key));
+    if (dict->table->tb_size > INIT_SIZE) 
+        hash = from$int(hashwit->$class->__hash__(hashwit,key));
     $WORD res;
     int ix = $lookdict(dict,hashwit,hash,key,&res);
     if (ix < 0) 
@@ -460,6 +492,8 @@ B_Iterator B_MappingD_dictD_keys (B_MappingD_dict wit, B_dict dict) {
 static $WORD B_IteratorD_dict_values_next(B_IteratorD_dict_values self) {
     int i = self->nxt;
     $table table = self->src->table;
+    if(!table)
+        return NULL;
     int n = table->tb_nentries;
     while (i < n) {
         $entry_t entry =  &TB_ENTRIES(table)[i];
@@ -514,6 +548,8 @@ struct B_IteratorD_dict_valuesG_class B_IteratorD_dict_valuesG_methods = {"B_Ite
 static $WORD B_IteratorD_dict_items_next(B_IteratorD_dict_items self) {
     int i = self->nxt;
     $table table = self->src->table;
+    if(!table)
+        return NULL;
     int n = table->tb_nentries;
     while (i < n) {
         $entry_t entry =  &TB_ENTRIES(table)[i];
@@ -583,15 +619,20 @@ B_NoneType B_MappingD_dictD_update (B_MappingD_dict wit, B_dict dict, B_Iterable
 }
 
 B_tuple B_MappingD_dictD_popitem (B_MappingD_dict wit, B_dict dict) {
+    if (dict->numelements == 0)  {
+        return NULL;
+    }
     B_Hashable hashwit = wit->W_HashableD_AD_MappingD_dict;
     $table table = dict->table;
     int ix = table->tb_nentries-1;
     while (ix >= 0) {
         $entry_t entry =  &TB_ENTRIES(table)[ix];
         if (entry->value != DELETED) {
-            long hash = from$int(hashwit->$class->__hash__(hashwit,entry->key));
-            int i = $lookdict_index(table,hash,ix);
-            table->tb_indices[i] = DKIX_DUMMY;
+            if (table->tb_size > INIT_SIZE) {
+                long hash = from$int(hashwit->$class->__hash__(hashwit,entry->key));
+                int i = $lookdict_index(table,hash,ix);
+                table->tb_indices[i] = DKIX_DUMMY;
+            }
             dict->numelements--;
             table->tb_nentries = ix;
             return $NEWTUPLE(2,entry->key,entry->value);
@@ -617,8 +658,13 @@ $WORD B_MappingD_dictD_setdefault (B_MappingD_dict wit, B_dict dict, $WORD key, 
 // B_IndexedD_MappingD_dict ///////////////////////////////////////////////////////////////////////
 
 $WORD B_IndexedD_MappingD_dictD___getitem__(B_IndexedD_MappingD_dict wit, B_dict dict, $WORD key) {
-    B_Hashable hashwit =  ((B_MappingD_dict)wit->W_Mapping)->W_HashableD_AD_MappingD_dict;
-    long hash = from$int(hashwit->$class->__hash__(hashwit,key));
+    if(dict->numelements == 0)
+        $RAISE((B_BaseException)$NEW(B_KeyError, to$str("getitem: empty dictionary"), key));
+    B_Hashable hashwit = ((B_MappingD_dict)wit->W_Mapping)->W_HashableD_AD_MappingD_dict;
+    long hash = 0;
+    if (dict->table->tb_size > INIT_SIZE) {
+        hash = from$int(hashwit->$class->__hash__(hashwit,key));
+    }
     $WORD res;
     int ix = $lookdict(dict,hashwit,hash,key,&res);
     if (ix < 0)  {
@@ -628,41 +674,60 @@ $WORD B_IndexedD_MappingD_dictD___getitem__(B_IndexedD_MappingD_dict wit, B_dict
 }
 
 B_NoneType B_IndexedD_MappingD_dictD___setitem__ (B_IndexedD_MappingD_dict wit, B_dict dict, $WORD key, $WORD value) {
-    B_dictD_setitem(dict, ((B_MappingD_dict)wit->W_Mapping)->W_HashableD_AD_MappingD_dict,key,value);
+    B_Hashable hashwit = ((B_MappingD_dict)wit->W_Mapping)->W_HashableD_AD_MappingD_dict;
+    long hash = 0;
+    if (dict->table && dict->table->tb_size > INIT_SIZE) {
+        hash = from$int(hashwit->$class->__hash__(hashwit,key));
+    }
+    insertdict(dict, hashwit, hash, key, value);     
     return B_None;
 }
+
 B_NoneType B_IndexedD_MappingD_dictD___delitem__ (B_IndexedD_MappingD_dict wit, B_dict dict, $WORD key) {
-    B_Hashable hashwit =  ((B_MappingD_dict)wit->W_Mapping)->W_HashableD_AD_MappingD_dict;
-    long hash = from$int(hashwit->$class->__hash__(hashwit,key));
+    if (dict->numelements == 0)  {
+        $RAISE((B_BaseException)$NEW(B_KeyError, to$str("delitem: empty dictionary"), key));
+    }
+    $table table = dict->table;
+    long hash = 0;
+    B_Hashable hashwit = ((B_MappingD_dict)wit->W_Mapping)->W_HashableD_AD_MappingD_dict;
+    if (dict->table->tb_size > INIT_SIZE) {
+        hash = from$int(hashwit->$class->__hash__(hashwit,key));
+    }
     $WORD res;
     int ix = $lookdict(dict,hashwit,hash,key,&res);
-    $table table = dict->table;
+    //printf("ix = %d\n",ix);
     if (ix < 0)  {
-        $RAISE((B_BaseException)$NEW(B_KeyError, to$str("getitem: key not in dictionary"), key));
+        $RAISE((B_BaseException)$NEW(B_KeyError, to$str("delitem: key not in dictionary"), key));
     }      
     $entry_t entry = &TB_ENTRIES(table)[ix];
     int i = $lookdict_index(table,hash,ix);
     table->tb_indices[i] = DKIX_DUMMY;
     res = entry->value;
     if (res == DELETED) {
-        $RAISE((B_BaseException)$NEW(B_KeyError, to$str("delitem: key not in dictionary"), key));
+        $RAISE((B_BaseException)$NEW(B_KeyError, to$str("delitem: key already deleted"), key));
     }
     entry->value = DELETED;
     dict->numelements--;
     if (10*dict->numelements < dict->table->tb_size) 
-        dictresize(dict);
+        dictresize(hashwit,dict);
     return B_None;
 }
 
 void B_dictD_setitem(B_dict dict, B_Hashable hashwit, $WORD key, $WORD value) {
-    long hash = from$int(hashwit->$class->__hash__(hashwit,key));
-    if (insertdict(dict, hashwit, hash, key, value)<0) {
-        $RAISE((B_BaseException)$NEW(B_KeyError, to$str("setitem: key not in dictionary"), key));
-    }      
+    long hash = 0;
+    if (dict->table && dict->table->tb_size > INIT_SIZE) {
+        hash = from$int(hashwit->$class->__hash__(hashwit,key));
+    }
+    insertdict(dict, hashwit, hash, key, value);     
 }
 
 $WORD B_dictD_get(B_dict dict, B_Hashable hashwit, $WORD key, $WORD deflt) {
-    long hash = from$int(hashwit->$class->__hash__(hashwit,key));
+    if (dict->numelements == 0)
+        return deflt;
+    long hash = 0;
+    if (dict->table->tb_size > INIT_SIZE) {
+        hash = from$int(hashwit->$class->__hash__(hashwit,key));
+    }
     $WORD res;
     int ix = $lookdict(dict,hashwit,hash,key,&res);
     if (ix < 0) 
@@ -671,16 +736,15 @@ $WORD B_dictD_get(B_dict dict, B_Hashable hashwit, $WORD key, $WORD deflt) {
         return res;
 }
 
+/*
 B_dict B_dictD_copy(B_dict dict, B_Hashable hashwit) {
     B_Iterable w = (B_Iterable)B_MappingD_dictG_witness;
     return B_dictG_new(hashwit, w, dict);
 }
 
 B_NoneType B_dictD_clear(B_dict dict, B_Hashable hashwit) {
-    $table table = dict->table;
-    memset(&(table->tb_indices[0]), 0xff, table->tb_size*sizeof(int));
+    $table table = NULL;
     dict->numelements = 0;
-    table->tb_usable = 2*table->tb_size/3;
-    table->tb_nentries = 0;
     return B_None;
 }
+*/
