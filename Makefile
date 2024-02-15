@@ -410,7 +410,7 @@ test-rts-db:
 
 test-stdlib:
 	cd compiler && stack test --ta '-p "stdlib"'
-	cd test/stdlib_tests && $(ACTON) test
+	cd test/stdlib_tests && $(ACTC) build && $(ACTON) test
 
 
 .PHONY: clean clean-all clean-base

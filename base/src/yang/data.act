@@ -1,0 +1,17 @@
+
+import yang.schema
+
+
+class DataNode(object):
+    schema: ?yang.schema.SchemaNode
+    def __init__(self):
+        self.schema = None
+
+class Module(DataNode):
+    def __init__(self, name):
+        self.name = name
+
+class Container(DataNode):
+    name: str
+    def __init__(self, name):
+        self.name = name

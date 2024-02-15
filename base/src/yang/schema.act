@@ -639,7 +639,7 @@ def prsrc_mAdd(name, value):
         return ", " + name + "=" + repr(value)
     return ""
 
-def _prsrc(attrs: list[(name, value)]):
+def _prsrc(attrs: list[(str, ?value)]):
     for attr in attrs:
         name, value = attr
         if value is not None:
@@ -670,8 +670,10 @@ class Revision(SchemaNode):
 
     def prsrc(self, indent=0):
         res = _ind(indent) + 'Revision("' + self.date + '"'
-        res += _prsrc("description", self.description)
-        res += _prsrc("reference", self.reference)
+        res += _prsrc([
+            ("description", self.description),
+            ("reference", self.reference)
+        ])
         res += "),\n"
         return res
 
@@ -895,22 +897,6 @@ class Container(SchemaNode):
         res += "),\n"
         return res
 
-class Deviation(SchemaNode):
-    """YANG deviation
-
-    https://www.rfc-editor.org/rfc/rfc7950.html#section-7.20.3
-    """
-    target: str
-    description: ?str
-    reference: ?str
-    deviate: list[Deviate]
-    def __init__(self, target, description=None, reference=None, deviate=[]):
-        self.parent = None
-        self.target = target
-        self.description = description
-        self.reference = reference
-        self.deviate = deviate
-
 class Deviate(object):
     """YANG deviate
 
@@ -939,6 +925,22 @@ class Deviate(object):
         self.type = type
         self.unique = unique
         self.units = units
+
+class Deviation(SchemaNode):
+    """YANG deviation
+
+    https://www.rfc-editor.org/rfc/rfc7950.html#section-7.20.3
+    """
+    target: str
+    description: ?str
+    reference: ?str
+    deviate: list[Deviate]
+    def __init__(self, target, description=None, reference=None, deviate=[]):
+        self.parent = None
+        self.target = target
+        self.description = description
+        self.reference = reference
+        self.deviate = deviate
 
 class Extension(SchemaNode):
     """YANG extension
