@@ -374,6 +374,7 @@ base/out/types/__builtin__.ty: $(ACTONC)
 .PHONY: test test-builtins test-compiler test-db test-examples test-lang test-regressions test-rts test-stdlib
 test:
 	cd compiler && stack test
+	$(MAKE) test-stdlib
 	$(MAKE) -C backend test
 	$(MAKE) test-rts-db
 
