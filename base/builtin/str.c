@@ -65,14 +65,26 @@ static B_str whitespace_str = &whitespace_struct;
 // Conversion to and from C strings
 
 B_str to$str(char *str) { 
+    B_str res;
     int nbytes = 0;
     int nchars = 0;
-
+    bool isascii = true;
     unsigned char *p = (unsigned char*)str;
+    while (*p++ != 0)
+        if (*p >= 0x80) {
+            isascii = false;
+            break;
+        }
+    if (isascii) {
+        nbytes = p - (unsigned char*)str - 1;
+        NEW_UNFILLED_STR(res, nbytes, nbytes);
+        memcpy(res->str, str, nbytes);
+        return res;
+    }
+    p = (unsigned char*)str;
     int cp, cpnbytes;
     while(1) {
         if (*p == '\0') {
-            B_str res;
             NEW_UNFILLED_STR(res,nchars, nbytes);
             memcpy(res->str,str,nbytes);
             return res;

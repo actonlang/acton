@@ -102,6 +102,8 @@ data Expr       = Var           { eloc::SrcLoc, var::QName }
                 | Set           { eloc::SrcLoc, elems::[Elem] }
                 | SetComp       { eloc::SrcLoc, elem1::Elem, comp::Comp }
                 | Paren         { eloc::SrcLoc, exp1::Expr }
+                | Box           { eloc::SrcLoc, tp :: String, exp1 :: Expr }
+                | UnBox         { eloc::SrcLoc, exp1 :: Expr }
                 deriving (Show,Read,NFData,Generic)
 
 data Pattern    = PWild         { ploc::SrcLoc, pann::Maybe Type }
@@ -114,7 +116,7 @@ data Pattern    = PWild         { ploc::SrcLoc, pann::Maybe Type }
 
 type Target     = Expr
 
-data Prefix     = Globvar | Kindvar | Xistvar | Typevar | Tempvar | Witness | NormPass | CPSPass | LLiftPass
+data Prefix     = Globvar | Kindvar | Xistvar | Typevar | Tempvar | Witness | NormPass | CPSPass | LLiftPass | BoxPass
                 deriving (Eq,Ord,Show,Read,Generic,NFData)
 
 data Name       = Name SrcLoc String | Derived Name Name | Internal Prefix String Int deriving (Generic,Show,NFData)
@@ -124,7 +126,7 @@ nloc _          = NoLoc
 
 nstr (Name _ s)             = esc s
   where esc (c:'_':s)
-          | isUpper c       = c : 'U' : '_' : esc s
+          | isUpper c       = c {- : 'U' -} : '_' : esc s
         esc (c:s)           = c : esc s
         esc ""              = ""
 nstr (Derived n s)
@@ -140,6 +142,7 @@ nstr (Internal p s i)       = prefix p ++ "_" ++ unique i ++ s
         prefix NormPass     = "N"
         prefix CPSPass      = "C"
         prefix LLiftPass    = "L"
+        prefix BoxPass      = "U"
         unique 0            = ""
         unique i            = show i
 

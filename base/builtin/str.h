@@ -9,7 +9,10 @@ struct B_str {
 
 // Constructor; str must be a null-terminated, correctly UTF-8-encoded string.
 // The constructor checks this and returns a B_str value.
-B_str to$str(char *str);
+B_str to$str(char *str);  //Dare not remove this
+
+B_str toB_str(char *str);
+
 // Destructor; recover the internal string.
 unsigned char *fromB_str(B_str str);
 

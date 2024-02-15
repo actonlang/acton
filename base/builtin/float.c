@@ -92,6 +92,13 @@ B_float to$float(double x) {
     return res;
 }
 
+B_float toB_float(double x) {
+    B_float res = acton_malloc(sizeof(struct B_float));
+    res->$class = &B_floatG_methods;
+    res->val = x;
+    return res;
+}
+
 double fromB_float(B_float x) {
     return x->val;
 }

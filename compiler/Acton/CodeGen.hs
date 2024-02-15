@@ -27,13 +27,18 @@ import Acton.Prim
 import Acton.Env
 import Acton.QuickType
 import Acton.Subst
+import qualified Acton.Boxing as B
+import Control.Monad.State.Lazy
 import Prelude hiding ((<>))
 import System.FilePath.Posix
 import Numeric
 
 generate                            :: Acton.Env.Env0 -> FilePath -> Module -> IO (String,String,String)
-generate env srcbase m              = do return (n, h,c)
-  where n                           = concat (Data.List.intersperse "." (modPath (modname m))) --render $ quotes $ gen env0 (modname m)
+generate env srcbase m              = do putStrLn(render (nest 4 $ vcat $ map pretty ss'))
+                                         return (n, h, c)
+  where ss'                         = B.runBoxM (B.boxing (B.boxEnv env) (mbody m))
+        m'                          = m{mbody = ss'}
+        n                           = concat (Data.List.intersperse "." (modPath (modname m))) --render $ quotes $ gen env0 (modname m)
         h                           = render $ hModule env0 m
         c                           = render $ cModule env0 srcbase m
         env0                        = genEnv $ setMod (modname m) env 
@@ -519,9 +524,17 @@ genBranchExp env (Call _ (TApp _ (Var _ f) _) (PosArg x PosNil) KwdNil)
 genBranchExp env e@(Call _ (Dot _ (Var _ w) op) (PosArg x (PosArg y PosNil)) KwdNil)
                                     = case findQName w env of
                                         NVar (TCon _ (TC p [TCon _ (TC t [])]))
-                                          | (p==qnOrd || p==qnEq) && elem t [qnInt, qnI64] ->
-                                             text "ORD_" <> genQName env t <> text (nstr op) <> parens(gen env x <>comma <+> gen env y) 
-                                        _ -> genBool env e <> text "->val" 
+                                          | (p==qnOrd || p==qnEq) && t == qnInt ->
+                                             text "ORD_" <> genQName env t <> text (nstr op) <> parens(gen env x <>comma <+> gen env y)
+                                          | (p==qnOrd || p==qnEq) && elem t [qnI64, qnI32, qnI16, qnU64, qnU32, qnU16, qnBool, qnFloat] ->   
+                                             parens(gen env x <> text "->val" <+> text (optext (nstr op)) <+>gen env y <> text "->val")
+                                        _ -> genBool env e <> text "->val"
+   where optext"__eq__"               = "=="
+         optext"__ne__"               = "!="
+         optext"__lt__"               = "<"
+         optext"__le__"               = "<="
+         optext"__gt__"               = ">"
+         optext"__ge__"               = ">="
 genBranchExp env e                  = genBool env e <> text "->val"
 
 genElse env []                      = empty
@@ -741,6 +754,7 @@ instance Gen Expr where
     gen env (None _)                = gen env qnNone
     gen env e@Strings{}             = gen env primToStr <> parens(hsep (map pretty (sval e)))
     gen env e@BStrings{}            = gen env primToBytes <> parens(hsep (map pretty (sval e)))
+    {-
     gen env (Call _ e@(Dot _ (Var _ w) fa) p@(PosArg (Call _ (TApp _ _ ts) (PosArg i@(Int _ n s) PosNil) KwdNil) PosNil) KwdNil)
          | fa == fromatomKW         = case wInfo of
                                          NVar (TCon _ (TC _ [TCon _ (TC tn _)]))
@@ -748,6 +762,15 @@ instance Gen Expr where
                                             | tn == qnI64 -> text "toB_i64" <> parens (text s) 
                                          _                -> genCall env [] e p
        where wInfo = findQName w env
+    gen env (Call _ e@(Dot _ (Var _ w) fa) p@(PosArg i@(Int _ n s) PosNil) KwdNil)
+         | fa == fromatomKW         = case wInfo of
+                                         NVar (TCon _ (TC _ [TCon _ (TC tn _)]))
+                                            | tn == qnInt -> gen env i
+                                            | tn == qnI64 -> text "toB_i64" <> parens (text s) 
+                                         _                -> genCall env [] e p
+       where wInfo = findQName w env
+-}
+
     gen env (Call l  (TApp _ e@(Var _ mk) _) p@(PosArg w (PosArg (Set _ es) PosNil)) KwdNil)
       | mk == primMkSet             = text "B_mk_set" <> parens (pretty (length es) <> comma <+> gen env w <> hsep [comma <+> gen env e | e <- es])
     gen env (Call l  (TApp _ e@(Var _ mk) _) p@(PosArg w (PosArg (Dict _ es) PosNil)) KwdNil)
