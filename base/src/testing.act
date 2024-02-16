@@ -712,8 +712,7 @@ actor test_runner(env: Env, unit_tests: dict[str, UnitTest], sync_actor_tests: d
         if _cmd is not None:
             _cmd(args)
         else:
-            # no command given, run all tests
-            _run_tests(args)
+            env.exit(0)
     try:
         _parse_args()
     except argparse.PrintUsage as exc:

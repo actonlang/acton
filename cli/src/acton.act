@@ -64,7 +64,7 @@ actor TestModule(process_cap, modname, report_result):
         print("Error from process:", error)
 
     print("Running test for module", modname)
-    cmd = ["out/rel/bin/.test_" + modname, "--json"]
+    cmd = ["out/rel/bin/.test_" + modname, "--json", "test"]
     p = process.Process(process_cap, cmd, None, None, on_stdout, on_stderr, on_exit, on_error)
 
 actor RunTest(process_cap, env, args):
