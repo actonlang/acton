@@ -1735,7 +1735,7 @@ testType (NDef (TSchema _ []  (TFun _ fx (TNil _ PRow) k res)) _)
           isGoodAction t@(TFun _ fx p (TNil _ KRow) res)
              | fx == fxAction
                && res == tNone  = case row2list p of
-                                    [t1,t2] -> (t1 == tBool || t1 == tNone) && (t2 == tNone || t2 == tException)
+                                    [t1,t2] -> (t1 == tOpt tBool || t1 == tBool || t1 == tNone) && (t2 == tOpt tException || t2 == tException || t2 == tNone)
                                     _       -> False
           isGoodAction t        = False
 testType _                      = Nothing
