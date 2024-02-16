@@ -19,6 +19,7 @@ actor CompilerRunner(process_cap, env, args):
         print("Error from process:", error)
         await async env.exit(1)
 
+    # TODO: find path to actonc based on location of ourselves
     cmd = ["actonc"] + args
     p = process.Process(process_cap, cmd, None, None, on_stdout, on_stderr, on_exit, on_error)
 
@@ -27,32 +28,37 @@ actor TestModule(process_cap, modname, report_result):
     var stdout_buf = b""
     var stderr_buf = b""
 
-    def on_stderr(p, data: bytes):
-        stderr_buf += data
-
-    def on_stdout(p, data):
+    def on_stdout(p, data: bytes):
         stdout_buf += data
-        lines = stdout_buf.splitlines(True)
-        stdout_buf = b""
+
+    def on_stderr(p, data):
+        stderr_buf += data
+        lines = stderr_buf.splitlines(True)
+        stderr_buf = b""
         for line in lines:
             if line.endswith(b"\n"):
                 # valid line
-                upd = json.decode(line.decode())
-                for tname, t in upd.items():
-                    if isinstance(t, dict):
-                        tdef = t["test"]
-                        tres = t["result"]
-                        test = testing.Test(tdef["name"], tdef["desc"])
-                        test_result = None
-                        if tres is not None and tres != {}:
-                            test_result = testing.TestResult(
-                                bool(tres["success"]),
-                                tres["exception"],
-                                float(tres["duration"]))
-                        report_result(modname, test, test_result)
+                try:
+                    upd = json.decode(line.decode())
+                except ValueError:
+                    print("Invalid json:", line)
+                    continue
+                else:
+                    for tname, t in upd.items():
+                        if isinstance(t, dict):
+                            tdef = t["test"]
+                            tres = t["result"]
+                            test = testing.Test(tdef["name"], tdef["desc"])
+                            test_result = None
+                            if tres is not None and tres != {}:
+                                test_result = testing.TestResult(
+                                    bool(tres["success"]),
+                                    tres["exception"],
+                                    float(tres["duration"]))
+                            report_result(modname, test, test_result)
             else:
                 # incomplete line
-                _stdout_buf = line
+                _stderr_buf = line
                 break
 
     def on_exit(p, exit_code, term_signal):
@@ -64,7 +70,7 @@ actor TestModule(process_cap, modname, report_result):
         print("Error from process:", error)
 
     print("Running test for module", modname)
-    cmd = ["out/rel/bin/.test_" + modname, "--json"]
+    cmd = ["out/rel/bin/.test_" + modname, "--json", "test"]
     p = process.Process(process_cap, cmd, None, None, on_stdout, on_stderr, on_exit, on_error)
 
 actor RunTest(process_cap, env, args):

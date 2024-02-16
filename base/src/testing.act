@@ -412,7 +412,7 @@ class TestDisplayJSON(TestDisplay):
                     tres = r.to_json()
                 #res[modname][tname] = {"test": t.test.to_json(), "result": tres}
                 res[modname + "." + tname] = {"test": t.test.to_json(), "result": tres}
-        print(json.encode(res))
+        print(json.encode(res), stderr=True)
 
 
 class TestDisplayStatus(TestDisplay):
@@ -527,7 +527,12 @@ actor test_runner(env: Env, unit_tests: dict[str, UnitTest], sync_actor_tests: d
 
     def _filter_tests[T](tests: dict[str, T], args) -> dict[str, T]:
         res = {}
-        test_names = set(args.get_strlist("name"))
+        name_filter = []
+        try:
+            name_filter = args.get_strlist("name")
+        except argparse.ArgumentError:
+            pass
+        test_names = set(name_filter)
         if test_names == set():
             return tests
 
@@ -712,8 +717,7 @@ actor test_runner(env: Env, unit_tests: dict[str, UnitTest], sync_actor_tests: d
         if _cmd is not None:
             _cmd(args)
         else:
-            # no command given, run all tests
-            _run_tests(args)
+            env.exit(0)
     try:
         _parse_args()
     except argparse.PrintUsage as exc:

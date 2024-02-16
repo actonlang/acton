@@ -374,6 +374,7 @@ base/out/types/__builtin__.ty: $(ACTONC)
 .PHONY: test test-builtins test-compiler test-db test-examples test-lang test-regressions test-rts test-stdlib
 test:
 	cd compiler && stack test
+	$(MAKE) test-stdlib
 	$(MAKE) -C backend test
 	$(MAKE) test-rts-db
 
@@ -407,9 +408,10 @@ test-rts:
 test-rts-db:
 	$(MAKE) -C test
 
-test-stdlib:
+# TODO: remove setting PATH below, acton cli should find actonc relative to itself
+test-stdlib: dist/bin/acton
 	cd compiler && stack test --ta '-p "stdlib"'
-	cd test/stdlib_tests && $(ACTON) test
+	cd test/stdlib_tests && PATH=$$PATH:$(TD)/dist/bin $(ACTON) test
 
 
 .PHONY: clean clean-all clean-base
