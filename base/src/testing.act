@@ -527,7 +527,12 @@ actor test_runner(env: Env, unit_tests: dict[str, UnitTest], sync_actor_tests: d
 
     def _filter_tests[T](tests: dict[str, T], args) -> dict[str, T]:
         res = {}
-        test_names = set(args.get_strlist("name"))
+        name_filter = []
+        try:
+            name_filter = args.get_strlist("name")
+        except argparse.ArgumentError:
+            pass
+        test_names = set(name_filter)
         if test_names == set():
             return tests
 
