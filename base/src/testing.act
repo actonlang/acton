@@ -412,7 +412,7 @@ class TestDisplayJSON(TestDisplay):
                     tres = r.to_json()
                 #res[modname][tname] = {"test": t.test.to_json(), "result": tres}
                 res[modname + "." + tname] = {"test": t.test.to_json(), "result": tres}
-        print(json.encode(res))
+        print(json.encode(res), stderr=True)
 
 
 class TestDisplayStatus(TestDisplay):
