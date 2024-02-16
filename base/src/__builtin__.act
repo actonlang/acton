@@ -318,11 +318,15 @@ class Msg[A] (value):
 ## Exceptions ##################################################################################
 
 class BaseException (value):
-    def __init__(self, msg: str) -> None:
+    def __init__(self, msg: ?str) -> None:
         self.error_message = msg
 
     def __str__(self):
-        return "%s: %s" % (self._name(), self.error_message)
+        res = self._name()
+        err = self.error_message
+        if err is not None:
+            res += ": " + err
+        return res
 
     def _name(self) -> str:
         NotImplemented
@@ -346,12 +350,17 @@ class IndexError (LookupError):
     pass
 
 class KeyError (LookupError):
-    def __init__(self, msg: str, key: value):
+    def __init__(self, msg: ?str, key: value):
         self.error_message = msg
         self.key = key
 
     def __str__(self):
-        return "%s: %s, key: %s" % (self._name(), self.error_message, str(self.key))
+        res = self._name()
+        err = self.error_message
+        if err is not None:
+            res += ": " + err
+        res += ", key: " + str(self.key)
+        return res
 
 class MemoryError (Exception):
     pass
