@@ -19,6 +19,7 @@ actor CompilerRunner(process_cap, env, args):
         print("Error from process:", error)
         await async env.exit(1)
 
+    # TODO: find path to actonc based on location of ourselves
     cmd = ["actonc"] + args
     p = process.Process(process_cap, cmd, None, None, on_stdout, on_stderr, on_exit, on_error)
 
