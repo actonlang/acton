@@ -1,6 +1,0 @@
-
-
-identifier = r"[_A-Za-z][._\-A-Za-z0-9]*"
-prefix = identifier
-keyword = '((' + prefix + '):)?(' + identifier + ')'
-comment = r'(/\*([^*]|[\r\n\s]|(\*+([^*/]|[\r\n\s])))*\*+/)|(//.*)|(/\*.*)'
