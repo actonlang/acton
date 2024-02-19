@@ -133,7 +133,7 @@ union $Bytes8 lB_pow(union $Bytes8 a, union $Bytes8 b) {
     union $Bytes8 res;
     if (b.l < 0)
         $RAISE((B_BaseException)$NEW(B_ValueError,to$str("pow for ndarray[int]: negative value in exponent array")));
-    res.l = longpow(a.l,b.l);
+    res.l = i64_pow(a.l,b.l);
     return res;
 }
 

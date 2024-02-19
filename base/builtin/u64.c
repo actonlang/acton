@@ -15,11 +15,11 @@
 // Auxiliary //////////////////////////////////////////////////////////////////////////////
 
 // only called with e>=0.
-unsigned long ulongpow(unsigned long a, unsigned long e) {
+unsigned long u64_pow(unsigned long a, unsigned long e) {
     if (e == 0) return 1;
     if (e == 1) return a;
-    if (e%2 == 0) return ulongpow(a*a,e/2);
-    return a * ulongpow(a*a,e/2);
+    if (e%2 == 0) return u64_pow(a*a,e/2);
+    return a * u64_pow(a*a,e/2);
 }
 
 // General methods ///////////////////////////////////////////////////////////////////////
@@ -98,7 +98,7 @@ B_u64 B_IntegralD_u64D___mul__(B_IntegralD_u64 wit,  B_u64 a, B_u64 b) {
 }  
   
 B_u64 B_IntegralD_u64D___pow__(B_IntegralD_u64 wit,  B_u64 a, B_u64 b) {
-    return toB_u64(ulongpow(a->val,b->val));
+    return toB_u64(u64_pow(a->val,b->val));
 }
 
 B_u64 B_IntegralD_u64D___neg__(B_IntegralD_u64 wit,  B_u64 a) {
@@ -148,7 +148,7 @@ B_u64 B_IntegralD_u64D___round__ (B_IntegralD_u64 wit, B_u64 n, B_int p) {
     long pval = p==NULL ? 0 : from$int(p);
     if (pval>=0)
         return n;
-    unsigned long p10 = ulongpow(10,-pval);
+    unsigned long p10 = u64_pow(10,-pval);
     unsigned long res = nval/p10;
     if (nval%p10 * 2 > p10)
         res++; 

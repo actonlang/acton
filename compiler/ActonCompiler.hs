@@ -29,6 +29,7 @@ import qualified Acton.Normalizer
 import qualified Acton.CPS
 import qualified Acton.Deactorizer
 import qualified Acton.LambdaLifter
+import qualified Acton.Boxing
 import qualified Acton.CodeGen
 import qualified Acton.Builtin
 import Utils
@@ -99,7 +100,7 @@ main = do
                                     else compileFiles opts (catMaybes $ map filterActFile nms)
 
 defaultOpts   = C.CompileOptions False False False False False False False False False False False False
-                                 False False False False False False False False False "" "" "" ""
+                                 False False False False False False False False False False "" "" "" ""
                                  C.defTarget "" "" False False False
 
 
@@ -708,9 +709,14 @@ runRestPasses opts paths env0 parsed stubMode = do
                       timeLLift <- getTime Monotonic
                       iff (C.timing opts) $ putStrLn("    Pass: Lambda Lifting  : " ++ fmtTime (timeLLift - timeCPS))
 
-                      (n,h,c) <- Acton.CodeGen.generate liftEnv relSrcBase lifted
+                      boxed <- Acton.Boxing.doBoxing liftEnv lifted
+                      iff (C.box opts) $ dump mn "box" (Pretty.print boxed)
+                      timeBoxing <- getTime Monotonic
+                      iff (C.timing opts) $ putStrLn("    Pass: Boxing : " ++ fmtTime (timeBoxing - timeLLift))
+
+                      (n,h,c) <- Acton.CodeGen.generate liftEnv relSrcBase boxed
                       timeCodeGen <- getTime Monotonic
-                      iff (C.timing opts) $ putStrLn("    Pass: Generating code : " ++ fmtTime (timeCodeGen - timeLLift))
+                      iff (C.timing opts) $ putStrLn("    Pass: Generating code : " ++ fmtTime (timeCodeGen - timeBoxing))
 
                       iff (C.hgen opts) $ do
                           putStrLn(h)

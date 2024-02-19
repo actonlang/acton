@@ -102,8 +102,8 @@ data Expr       = Var           { eloc::SrcLoc, var::QName }
                 | Set           { eloc::SrcLoc, elems::[Elem] }
                 | SetComp       { eloc::SrcLoc, elem1::Elem, comp::Comp }
                 | Paren         { eloc::SrcLoc, exp1::Expr }
-                | Box           { eloc::SrcLoc, tp :: String, exp1 :: Expr }
-                | UnBox         { eloc::SrcLoc, exp1 :: Expr }
+                | Box           { tp :: QName, exp1 :: Expr }
+                | UnBox         { tp :: QName, exp1 :: Expr }
                 deriving (Show,Read,NFData,Generic)
 
 data Pattern    = PWild         { ploc::SrcLoc, pann::Maybe Type }

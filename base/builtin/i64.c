@@ -15,11 +15,11 @@
 // Auxiliary //////////////////////////////////////////////////////////////////////////////
 
 // only called with e>=0.
-long longpow(long a, long e) {
+long i64_pow(long a, long e) {
     if (e == 0) return 1;
     if (e == 1) return a;
-    if (e%2 == 0) return longpow(a*a,e/2);
-    return a * longpow(a*a,e/2);
+    if (e%2 == 0) return i64_pow(a*a,e/2);
+    return a * i64_pow(a*a,e/2);
 }
 
 // General methods ///////////////////////////////////////////////////////////////////////
@@ -102,7 +102,7 @@ B_i64 B_IntegralD_i64D___pow__(B_IntegralD_i64 wit,  B_i64 a, B_i64 b) {
         // raise VALUEERROR;
         return NULL;
     }
-    return toB_i64(longpow(a->val,b->val));
+    return toB_i64(i64_pow(a->val,b->val));
 }
 
 B_i64 B_IntegralD_i64D___neg__(B_IntegralD_i64 wit,  B_i64 a) {
@@ -152,7 +152,7 @@ B_i64 B_IntegralD_i64D___round__ (B_IntegralD_i64 wit, B_i64 n, B_int p) {
     long pval = p==NULL ? 0 : from$int(p);
     if (pval>=0)
         return n;
-    long p10 = longpow(10,-pval);
+    long p10 = i64_pow(10,-pval);
     long res = nval/p10;
     if (nval%p10 * 2 > p10)
         res++; 

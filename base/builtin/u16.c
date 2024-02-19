@@ -15,11 +15,11 @@
 // Auxiliary //////////////////////////////////////////////////////////////////////////////
 
 // only called with e>=0.
-unsigned short ushortpow(unsigned short a, unsigned short e) {
+unsigned short u16_pow(unsigned short a, unsigned short e) {
     if (e == 0) return 1;
     if (e == 1) return a;
-    if (e%2 == 0) return ushortpow(a*a,e/2);
-    return a * ushortpow(a*a,e/2);
+    if (e%2 == 0) return u16_pow(a*a,e/2);
+    return a * u16_pow(a*a,e/2);
 }
 
 // General methods ///////////////////////////////////////////////////////////////////////
@@ -98,7 +98,7 @@ B_u16 B_IntegralD_u16D___mul__(B_IntegralD_u16 wit,  B_u16 a, B_u16 b) {
 }  
   
 B_u16 B_IntegralD_u16D___pow__(B_IntegralD_u16 wit,  B_u16 a, B_u16 b) {
-    return toB_u16(ushortpow(a->val,b->val));
+    return toB_u16(u16_pow(a->val,b->val));
 }
 
 B_u16 B_IntegralD_u16D___neg__(B_IntegralD_u16 wit,  B_u16 a) {
@@ -148,7 +148,7 @@ B_u16 B_IntegralD_u16D___round__ (B_IntegralD_u16 wit, B_u16 n, B_int p) {
     short pval = p==NULL ? 0 : from$int(p);
     if (pval>=0)
         return n;
-    unsigned short p10 = ushortpow(10,-pval);
+    unsigned short p10 = u16_pow(10,-pval);
     unsigned short res = nval/p10;
     if (nval%p10 * 2 > p10)
         res++; 

@@ -15,11 +15,11 @@
 // Auxiliary //////////////////////////////////////////////////////////////////////////////
 
 // only called with e>=0.
-int intpow(int a, int e) {
+int i32_pow(int a, int e) {
     if (e == 0) return 1;
     if (e == 1) return a;
-    if (e%2 == 0) return intpow(a*a,e/2);
-    return a * intpow(a*a,e/2);
+    if (e%2 == 0) return i32_pow(a*a,e/2);
+    return a * i32_pow(a*a,e/2);
 }
 
 // General methods ///////////////////////////////////////////////////////////////////////
@@ -103,7 +103,7 @@ B_i32 B_IntegralD_i32D___pow__(B_IntegralD_i32 wit,  B_i32 a, B_i32 b) {
         // raise VALUEERROR;
         return NULL;
     }
-    return toB_i32(intpow(a->val,b->val));
+    return toB_i32(i32_pow(a->val,b->val));
 }
 
 B_i32 B_IntegralD_i32D___neg__(B_IntegralD_i32 wit,  B_i32 a) {
@@ -153,7 +153,7 @@ B_i32 B_IntegralD_i32D___round__ (B_IntegralD_i32 wit, B_i32 n, B_int p) {
     int pval = p==NULL ? 0 : from$int(p);
     if (pval>=0)
         return n;
-    int p10 = intpow(10,-pval);
+    int p10 = i32_pow(10,-pval);
     int res = nval/p10;
     if (nval%p10 * 2 > p10)
         res++; 

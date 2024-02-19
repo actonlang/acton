@@ -15,11 +15,11 @@
 // Auxiliary //////////////////////////////////////////////////////////////////////////////
 
 // only called with e>=0.
-short shortpow(short a, short e) {
+short i16_pow(short a, short e) {
     if (e == 0) return 1;
     if (e == 1) return a;
-    if (e%2 == 0) return shortpow(a*a,e/2);
-    return a * shortpow(a*a,e/2);
+    if (e%2 == 0) return i16_pow(a*a,e/2);
+    return a * i16_pow(a*a,e/2);
 }
 
 // General methods ///////////////////////////////////////////////////////////////////////
@@ -102,7 +102,7 @@ B_i16 B_IntegralD_i16D___pow__(B_IntegralD_i16 wit,  B_i16 a, B_i16 b) {
         // raise VALUEERROR;
         return NULL;
     }
-    return toB_i16(shortpow(a->val,b->val));
+    return toB_i16(i16_pow(a->val,b->val));
 }
 
 B_i16 B_IntegralD_i16D___neg__(B_IntegralD_i16 wit,  B_i16 a) {
@@ -152,7 +152,7 @@ B_i16 B_IntegralD_i16D___round__ (B_IntegralD_i16 wit, B_i16 n, B_int p) {
     short pval = p==NULL ? 0 : from$int(p);
     if (pval>=0)
         return n;
-    short p10 = shortpow(10,-pval);
+    short p10 = i16_pow(10,-pval);
     short res = nval/p10;
     if (nval%p10 * 2 > p10)
         res++; 
@@ -176,6 +176,8 @@ B_int B_IntegralD_i16D___index__(B_IntegralD_i16 wit, B_i16 n) {
 }
 
 B_tuple B_IntegralD_i16D___divmod__(B_IntegralD_i16 wit, B_i16 a, B_i16 b) {
+    if (b->val == 0)
+        $RAISE((B_BaseException)$NEW(B_ZeroDivisionError, to$str("division by zero")));
     short n = a->val;
     short d = b->val;
     return $NEWTUPLE(2, toB_i16(n/d), toB_i16(n%d));

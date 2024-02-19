@@ -34,11 +34,9 @@ import System.FilePath.Posix
 import Numeric
 
 generate                            :: Acton.Env.Env0 -> FilePath -> Module -> IO (String,String,String)
-generate env srcbase m              = do putStrLn(render (nest 4 $ vcat $ map pretty ss'))
-                                         return (n, h, c)
-  where ss'                         = B.runBoxM (B.boxing (B.boxEnv env) (mbody m))
-        m'                          = m{mbody = ss'}
-        n                           = concat (Data.List.intersperse "." (modPath (modname m))) --render $ quotes $ gen env0 (modname m)
+generate env srcbase m              = do return (n, h, c)
+                     
+  where n                           = concat (Data.List.intersperse "." (modPath (modname m))) --render $ quotes $ gen env0 (modname m)
         h                           = render $ hModule env0 m
         c                           = render $ cModule env0 srcbase m
         env0                        = genEnv $ setMod (modname m) env 
@@ -514,28 +512,17 @@ instance Gen Stmt where
     gen env (While _ e b [])        = genBranch env "while" (Branch e b) 
     gen env _                       = empty
 
-genBranch env kw (Branch e b)       = (text kw <+> parens (genBranchExp env e) <+> char '{') $+$ nest 4 (genSuite env b) $+$ char '}'
+genBranch env kw (Branch e b)       = (text kw <+> parens (gen env (B.unbox qnBool e)) <+> char '{') $+$ nest 4 (genSuite env b) $+$ char '}'
 
+{-
 genBranchExp env (IsInstance _ x y) = gen env primISINSTANCE0 <> parens(gen env x <>comma <+> genQName env y)
 genBranchExp env (Call _ (Var _ f) PosNil KwdNil)
   | f `elem` [primPUSH,primPUSHF]   = gen env f <> parens(empty)
-genBranchExp env (Call _ (TApp _ (Var _ f) _) (PosArg x PosNil) KwdNil)
-   | f == primISNOTNONE             = gen env primISNOTNONE0 <> parens(gen env x)
-genBranchExp env e@(Call _ (Dot _ (Var _ w) op) (PosArg x (PosArg y PosNil)) KwdNil)
-                                    = case findQName w env of
-                                        NVar (TCon _ (TC p [TCon _ (TC t [])]))
-                                          | (p==qnOrd || p==qnEq) && t == qnInt ->
-                                             text "ORD_" <> genQName env t <> text (nstr op) <> parens(gen env x <>comma <+> gen env y)
-                                          | (p==qnOrd || p==qnEq) && elem t [qnI64, qnI32, qnI16, qnU64, qnU32, qnU16, qnBool, qnFloat] ->   
-                                             parens(gen env x <> text "->val" <+> text (optext (nstr op)) <+>gen env y <> text "->val")
-                                        _ -> genBool env e <> text "->val"
-   where optext"__eq__"               = "=="
-         optext"__ne__"               = "!="
-         optext"__lt__"               = "<"
-         optext"__le__"               = "<="
-         optext"__gt__"               = ">"
-         optext"__ge__"               = ">="
+genBranchExp env (CompOp NoLoc e1 [OpArg op e2])
+                                    = gen env e1 <+> pretty op <+> gen env e2
+genBranchExp env (Box _ e)          = gen env e
 genBranchExp env e                  = genBool env e <> text "->val"
+-}
 
 genElse env []                      = empty
 genElse env b                       = (text "else" <+> char '{') $+$ nest 4 (genSuite env b) $+$ char '}'
@@ -747,35 +734,18 @@ instance Gen Expr where
       | otherwise                   = genQName env n
     gen env (Int _ i str)
         |i <= 9223372036854775807   = gen env primToInt <> parens (text str) -- literal is 2^63-1
-         | otherwise                = gen env primToInt2 <> parens (doubleQuotes $ text (show i))
+        | otherwise                 = gen env primToInt2 <> parens (doubleQuotes $ text (show i))
     gen env (Float _ _ str)         = gen env primToFloat <> parens (text str)
     gen env (Bool _ True)           = gen env qnTrue
     gen env (Bool _ False)          = gen env qnFalse
     gen env (None _)                = gen env qnNone
     gen env e@Strings{}             = gen env primToStr <> parens(hsep (map pretty (sval e)))
     gen env e@BStrings{}            = gen env primToBytes <> parens(hsep (map pretty (sval e)))
-    {-
-    gen env (Call _ e@(Dot _ (Var _ w) fa) p@(PosArg (Call _ (TApp _ _ ts) (PosArg i@(Int _ n s) PosNil) KwdNil) PosNil) KwdNil)
-         | fa == fromatomKW         = case wInfo of
-                                         NVar (TCon _ (TC _ [TCon _ (TC tn _)]))
-                                            | tn == qnInt -> gen env i
-                                            | tn == qnI64 -> text "toB_i64" <> parens (text s) 
-                                         _                -> genCall env [] e p
-       where wInfo = findQName w env
-    gen env (Call _ e@(Dot _ (Var _ w) fa) p@(PosArg i@(Int _ n s) PosNil) KwdNil)
-         | fa == fromatomKW         = case wInfo of
-                                         NVar (TCon _ (TC _ [TCon _ (TC tn _)]))
-                                            | tn == qnInt -> gen env i
-                                            | tn == qnI64 -> text "toB_i64" <> parens (text s) 
-                                         _                -> genCall env [] e p
-       where wInfo = findQName w env
--}
-
     gen env (Call l  (TApp _ e@(Var _ mk) _) p@(PosArg w (PosArg (Set _ es) PosNil)) KwdNil)
       | mk == primMkSet             = text "B_mk_set" <> parens (pretty (length es) <> comma <+> gen env w <> hsep [comma <+> gen env e | e <- es])
     gen env (Call l  (TApp _ e@(Var _ mk) _) p@(PosArg w (PosArg (Dict _ es) PosNil)) KwdNil)
       | mk == primMkDict            = text "B_mk_dict" <> parens (pretty (length es) <> comma <+> gen env w <>  hsep [comma <+> gen env e | e <- es])
-    gen env (Call _ e p _)          = genCall env [] e p
+    gen env c@(Call _ e p _)        = genCall env [] e p
     gen env (Async _ e)             = gen env e
     gen env (TApp _ e ts)           = genInst env ts e
     gen env (IsInstance _ e c)      = gen env primISINSTANCE <> parens (gen env e <> comma <+> genQName env c)
@@ -788,16 +758,54 @@ instance Gen Expr where
        | otherwise                  = gen env primNEWTUPLE <> parens (text (show n) <> comma' (gen env p))
        where n                      = nargs p
     gen env (List _ es)             = text "B_mk_list" <> parens (pretty (length es) <> hsep [comma <+> gen env e | e <- es])
---    gen env (Set _ es)              = text "B_mk_set" <> parens (pretty (length es) <> hsep [comma <+> gen env e | e <- es])
---    gen env (Dict _ es)             = text "B_mk_dict" <> parens (pretty (length es) <> hsep [comma <+> gen env e | e <- es])
-    gen env (BinOp _ e1 And e2)     = gen env primAND <> parens (gen env t <> comma <+> gen env e1 <> comma <+> gen env e2)
+    gen env (BinOp _ e1 op e2)     
+            | op `elem` [Pow, Div, Mod, EuDiv]     -- Pow since there is no C operator, the others since they need to check for division by zero
+                                    = gencFunCall env (tstr ++ '_' : opstr op) [e1, e2]
+            | otherwise             = gen env e1 <+> binPretty op <+> gen env e2
       where t                       = typeOf env e1
-    gen env (BinOp _ e1 Or e2)      = gen env primOR <> parens (gen env t <> comma <+> gen env e1 <> comma <+> gen env e2)
-      where t                       = typeOf env e1
+            tstr                    = nstr (noq (tcname (tcon t)))
+            opstr Pow               = "pow"
+            opstr Div               = "DIV"
+            opstr Mod               = "MOD"
+            opstr EuDiv             = "FLOORDIV"
+    gen env (CompOp _ e [a])        = gen env e <+> gen env a
     gen env (UnOp _ Not e)          = gen env primNOT <> parens (gen env t <> comma <+> genBool env e)
       where t                       = typeOf env e
-    gen env (Cond _ e1 e e2)        = parens (parens (genBool env e) <> text "->val" <+> text "?" <+> gen env e1 <+> text ":" <+> gen env e2)
-    gen env e                       = error ("Unexpected expr: "++show e)
+    gen env (Cond _ e1 e e2)        = parens (parens (gen env (B.unbox qnBool e)) <+> text "?" <+> gen env e1 <+> text ":" <+> gen env e2)
+    gen env (Paren _ e)             = parens (gen env e)
+    gen env (Box tn e)              = text ("toB_"++nstr(noq tn)) <> parens (gen env e)
+    gen env (UnBox _ c@(Call _ (Var _ f) p KwdNil))
+        | f == primISNOTNONE        = genCall env [] (Var NoLoc primISNOTNONE0) p
+        | f == primISNONE           = genCall env [] (Var NoLoc primISNONE0) p
+        | f `elem` [primPUSH,primPUSHF]
+                                    = gen env f <> parens(empty)
+        | gBuiltin (noq f) `elem` B.integralTypes
+                                    = genUnboxedInt env (posargs p) c
+    gen env (UnBox _ (IsInstance _ e c))
+                                    = gen env primISINSTANCE0 <> parens(gen env e <>comma <+> genQName env c)
+    gen env (UnBox _ (Int _ n s))   = text s
+    gen env (UnBox _ (Float _ x s)) = text s
+    gen env (UnBox _ e)             = parens (gen env e) <> text "->val"
+    gen env e                       = error ("CodeGen.gen for Expr: e = " ++ show e)
+
+gencFunCall env nm []               = text nm <> parens empty
+gencFunCall env nm (x : xs)         = text nm <> parens (gen env x <> hsep [ comma <+> gen env x | x <- xs ])
+
+genUnboxedInt env [Int _ n s, None _] _
+                                    = text s
+genUnboxedInt env _ c               = parens (gen env c) <> text "->val"
+instance Gen OpArg where
+    gen env (OpArg  op e)           = compPretty op <+> gen env e
+
+compPretty Is                       = text "=="
+compPretty IsNot                    = text "!="
+compPretty op                       = pretty op
+
+binPretty And                       = text "&&"
+binPretty Or                        = text "||"
+binPretty EuDiv                     = text "/"
+binPretty op                        = pretty op
+
 genStr env s                        = text $ head $ sval s
 
 genBool env e                       = genExp env tBool e

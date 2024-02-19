@@ -133,14 +133,14 @@ instance QType Expr where
     qType env f (Await l e)         = case t of
                                         TCon _ (TC c [t]) | c == qnMsg -> (t, Await l e')
       where (t, e')                 = qType env f e
-    qType env f (BinOp l e1 Or e2)  = (t, BinOp l (qMatch f t1 t e1') Or (qMatch f t2 t e2'))
+    qType env f (BinOp l e1 op e2)  = (t, BinOp l (qMatch f t1 t e1') op (qMatch f t2 t e2'))
       where (t1, e1')               = qType env f e1
             (t2, e2')               = qType env f e2
             t                       = upbound env [t1,t2]
-    qType env f (BinOp l e1 And e2) = (t, BinOp l (qMatch f t1 t e1') And (qMatch f t2 t e2'))
-      where (t1, e1')               = qType env f e1
-            (t2, e2')               = qType env f e2
-            t                       = upbound env [t1,t2]
+--    qType env f (BinOp l e1 And e2) = (t, BinOp l (qMatch f t1 t e1') And (qMatch f t2 t e2'))
+--      where (t1, e1')               = qType env f e1
+--            (t2, e2')               = qType env f e2
+--            t                       = upbound env [t1,t2]
     qType env f (UnOp l Not e)      = (tBool, UnOp l Not (qMatch f t tBool e'))
       where (t, e')                 = qType env f e
     qType env f (Cond l e1 e e2)    = (t', Cond l (qMatch f t1 t' e1') (qMatch f t tBool e') (qMatch f t2 t' e2'))
@@ -183,7 +183,10 @@ instance QType Expr where
       where (ts, es')               = unzip $ map (qType env f) es
     qType env f (Paren l e)         = (t, Paren l e')
       where (t, e')                 = qType env f e
-
+    qType env f (Box tn e)          = (tCon (TC tn []), Box tn e)   
+    qType env f (UnBox tn e)        = (tCon (TC tn []), UnBox tn e)   
+    qType env f e                   = error ("qType, e = " ++ show e)
+   
     qMatch f t t' e                 = f t t' e
 
 instance QType Elem where

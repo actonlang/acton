@@ -48,6 +48,7 @@ data CompileOptions   = CompileOptions {
                          deact       :: Bool,
                          cps         :: Bool,
                          llift       :: Bool,
+                         box         :: Bool,
                          hgen        :: Bool,
                          cgen        :: Bool,
                          ccmd        :: Bool,
@@ -143,6 +144,7 @@ compileOptions = CompileOptions
         <*> switch (long "deact"        <> help "Show the result after deactorization")
         <*> switch (long "cps"          <> help "Show the result after CPS conversion")
         <*> switch (long "llift"        <> help "Show the result of lambda-lifting")
+        <*> switch (long "box"          <> help "Show the result of (un)boxing")
         <*> switch (long "hgen"         <> help "Show the generated .h header")
         <*> switch (long "cgen"         <> help "Show the generated .c code")
         <*> switch (long "ccmd"         <> help "Show CC / LD commands")
