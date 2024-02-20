@@ -146,17 +146,21 @@ class InError[T,U](AssertionError):
             msg += ", container: " + str(b) if b is not None else "None"
         return msg
 
-class NotIsError(AssertionError):
-    def __init__(self, msg):
-        self.error_message = msg
-        self.a = None
-        self.b = None
+class NotIsError[T(Identity)](AssertionError):
+    a: ?T
+    b: ?T
+    def __init__(self, a, b, msg: ?str=None):
+        self.a = a
+        self.b = b
+        self.error_message = msg if msg is not None else "a is not b"
 
-class IsError(AssertionError):
-    def __init__(self, msg):
-        self.error_message = msg
-        self.a = None
-        self.b = None
+class IsError[T(Identity)](AssertionError):
+    a: ?T
+    b: ?T
+    def __init__(self, a, b, msg: ?str=None):
+        self.a = a
+        self.b = b
+        self.error_message = msg if msg is not None else "a is b"
 
 class NotRaisesError(AssertionError):
     def __init__(self, msg):
@@ -199,53 +203,29 @@ def assertFalse(a, msg: ?str):
 # TODO: assertRaisesWithMessageRegex
 
 # TODO: fix this
-#def assertIs(a, b, msg: str):
+#def assertIs[T(Identity)](a: ?T, b: ?T, msg: ?str):
 #    if not (a is b):
-#        assert_msg = "Expected same objects but they are different"
-#        if msg != "":
-#            assert_msg += ": " + msg
-#        # TODO: include actual values in error message
-#        raise NotIsError(assert_msg)
-#
-#def assertIsNot(a, b, msg: str):
+#        raise NotIsError(a, b, msg)
+# TODO: fix this
+#def assertIsNot[T(Identity)](a: ?T, b: ?T, msg: ?str):
 #    if not (a is not b):
-#        assert_msg = "Expected different objects but they are the same"
-#        if msg != "":
-#            assert_msg += ": " + msg
-#        # TODO: include actual values in error message
-#        raise IsError(assert_msg)
+#        raise IsError(a, b, msg)
 
 def assertIsNone(a, msg: ?str):
     if not (a is None):
-        assert_msg = "Expected None but got non-None"
-        if msg is not None:
-            assert_msg += ": " + msg
-        # TODO: include actual values in error message
-        raise NotNoneError(assert_msg)
+        raise NotNoneError(a, msg)
 
 def assertIsNotNone(a, msg: ?str):
     if not (a is not None):
-        assert_msg = "Expected non-None but got None"
-        if msg is not None:
-            assert_msg += ": " + msg
-        # TODO: include actual values in error message
-        raise NoneError(assert_msg)
+        raise NoneError(a, msg)
 
 def assertIn(a, b, msg: ?str):
     if not (a in b):
-        assert_msg = "Expected value to be in collection but it is not"
-        if msg is not None:
-            assert_msg += ": " + msg
-        # TODO: include actual values in error message
-        raise NotInError(a, b, assert_msg)
+        raise NotInError(a, b, msg)
 
 def assertNotIn(a, b, msg: ?str):
     if a in b:
-        assert_msg = "Expected value to not be in collection but it is"
-        if msg is not None:
-            assert_msg += ": " + msg
-        # TODO: include actual values in error message
-        raise InError(assert_msg)
+        raise InError(a, b, msg)
 
 # TODO: fix this?
 #def assertIsInstance(a, b, msg: str):
