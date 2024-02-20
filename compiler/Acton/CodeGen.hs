@@ -427,7 +427,9 @@ instance Gen QName where
       | m == mBuiltin               = text "B_" <> text (nstr n)
       | otherwise                   = gen env m <> text "Q_" <> text (mkCident $ nstr n)
     gen env (NoQ n)                 = gen env n
-    gen env n@QName{}               = gen env (unalias env n)
+    gen env n@QName{}
+      | n `elem` B.mathfuns         = text (nstr (noq n))
+      | otherwise                   = gen env (unalias env n)
 
 instance Gen Name where
     gen env nm                      = text $ unCkeyword $ mkCident $ nstr nm
@@ -616,6 +618,7 @@ genCall env ts e@(Var _ n) p
   where info                        = findQName n env
 genCall env ts (Async _ e) p        = genCall env ts e p
 genCall env ts e0@(Dot _ e n) p     = genDotCall env ts (snd $ schemaOf env e0) e n p
+genCall env ts e p                  = gen env e <> parens (gen env p)
 
 instCast env [] e                   = id
 instCast env ts (Var _ x)
@@ -774,13 +777,14 @@ instance Gen Expr where
     gen env (Cond _ e1 e e2)        = parens (parens (gen env (B.unbox qnBool e)) <+> text "?" <+> gen env e1 <+> text ":" <+> gen env e2)
     gen env (Paren _ e)             = parens (gen env e)
     gen env (Box tn e)              = text ("toB_"++nstr(noq tn)) <> parens (gen env e)
-    gen env (UnBox _ c@(Call _ (Var _ f) p KwdNil))
+    gen env (UnBox _ e@(Call _ (Var _ f) p KwdNil))
         | f == primISNOTNONE        = genCall env [] (Var NoLoc primISNOTNONE0) p
         | f == primISNONE           = genCall env [] (Var NoLoc primISNONE0) p
         | f `elem` [primPUSH,primPUSHF]
                                     = gen env f <> parens(empty)
+        | f `elem` B.mathfuns       = genCall env [] e p
         | gBuiltin (noq f) `elem` B.integralTypes
-                                    = genUnboxedInt env (posargs p) c
+                                    = genUnboxedInt env (posargs p) e
     gen env (UnBox _ (IsInstance _ e c))
                                     = gen env primISINSTANCE0 <> parens(gen env e <>comma <+> genQName env c)
     gen env (UnBox _ (Int _ n s))   = text s
@@ -794,6 +798,7 @@ gencFunCall env nm (x : xs)         = text nm <> parens (gen env x <> hsep [ com
 genUnboxedInt env [Int _ n s, None _] _
                                     = text s
 genUnboxedInt env _ c               = parens (gen env c) <> text "->val"
+
 instance Gen OpArg where
     gen env (OpArg  op e)           = compPretty op <+> gen env e
 

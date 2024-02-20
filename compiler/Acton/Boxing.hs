@@ -63,7 +63,7 @@ instance Boxing a => Boxing (Maybe a) where
 
 boxingFromAtom w tNames [i@Int{}] 
    | t == qnInt                   = return i
-   | t `elem` integralTypes       = return $ Box (last tNames) (unbox t i)
+   | t `elem` numericTypes       = return $ Box (last tNames) (unbox t i)
    where t = head tNames
 boxingFromAtom w tNames [x@Float{}]= return $ Box (last tNames) (unbox (head tNames) x)
 boxingFromAtom w t es              = return $ Call NoLoc (eDot (eQVar w) fromatomKW) (posarg es) KwdNil
@@ -96,6 +96,9 @@ boxingWitness env w attr p        = case findQName w env of
 
 prims = [primISINSTANCE, primISNOTNONE, primISNONE]
 
+qMath str = QName (ModName [name "math"]) (name str)
+ 
+mathfuns = map qMath ["sqrt", "sin", "cos"]
 
 instance Boxing Expr where
     boxing env (Var l v)            = return $ Var l v
@@ -109,7 +112,10 @@ instance Boxing Expr where
     boxing env (Call l v@(Var _ f) p KwdNil)
       | f `elem`prims               = do p' <- boxing env p
                                          return $ Box qnBool $ Call l v p' KwdNil
+      | f `elem` mathfuns           = do e' <- boxing env e
+                                         return $ Box qnFloat $ eCall v [unbox qnFloat e']
       | otherwise                   = Call l <$> boxing env v <*> boxing env p <*> return KwdNil
+       where [e]                    = posargs p
     boxing env (Call l f p KwdNil)  = Call l <$> boxing env f <*> boxing env p <*> return KwdNil
     boxing env (TApp l f ts)        = TApp l <$> boxing env f <*> return ts
     boxing env (Async l e)          = Async l <$> boxing env e
