@@ -761,8 +761,9 @@ instance Gen Expr where
        | otherwise                  = gen env primNEWTUPLE <> parens (text (show n) <> comma' (gen env p))
        where n                      = nargs p
     gen env (List _ es)             = text "B_mk_list" <> parens (pretty (length es) <> hsep [comma <+> gen env e | e <- es])
-    gen env (BinOp _ e1 op e2)     
-            | op `elem` [Pow, Div, Mod, EuDiv]     -- Pow since there is no C operator, the others since they need to check for division by zero
+    gen env (BinOp _ e1 op e2)
+            | op == Div && t /= tFloat
+             || op `elem` [Pow, Mod, EuDiv]     -- Pow since there is no C operator, the others since they need to check for division by zero
                                     = gencFunCall env (tstr ++ '_' : opstr op) [e1, e2]
             | otherwise             = gen env e1 <+> binPretty op <+> gen env e2
       where t                       = typeOf env e1
@@ -783,19 +784,20 @@ instance Gen Expr where
         | f `elem` [primPUSH,primPUSHF]
                                     = gen env f <> parens(empty)
         | f `elem` B.mathfuns       = genCall env [] e p
-        | gBuiltin (noq f) `elem` B.integralTypes
+        | gBuiltin (noq f) `elem` B.integralTypes   -- f is the constructor for an integer type, so check if argument e is a literal
                                     = genUnboxedInt env (posargs p) e
     gen env (UnBox _ (IsInstance _ e c))
                                     = gen env primISINSTANCE0 <> parens(gen env e <>comma <+> genQName env c)
     gen env (UnBox _ (Int _ n s))   = text s
     gen env (UnBox _ (Float _ x s)) = text s
+    gen env (UnBox _ e@Var{})       = gen env e <> text "->val"
     gen env (UnBox _ e)             = parens (gen env e) <> text "->val"
     gen env e                       = error ("CodeGen.gen for Expr: e = " ++ show e)
 
 gencFunCall env nm []               = text nm <> parens empty
 gencFunCall env nm (x : xs)         = text nm <> parens (gen env x <> hsep [ comma <+> gen env x | x <- xs ])
 
-genUnboxedInt env [Int _ n s, None _] _
+genUnboxedInt env [Int _ n s, None _] _ 
                                     = text s
 genUnboxedInt env _ c               = parens (gen env c) <> text "->val"
 
