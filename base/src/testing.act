@@ -10,49 +10,141 @@ import time
 
 # TODO: add actual values as args to assert functions
 # TODO: add __str__ to assert exceptions
-class NotEqualError(AssertionError):
-    def __init__(self, msg):
-        self.error_message = msg
-        self.a = None
-        self.b = None
+class NotEqualError[T](AssertionError):
+    a: ?T
+    b: ?T
 
-class EqualError(AssertionError):
-    def __init__(self, msg, a, b):
-        self.error_message = msg
-        self.a = None
-        self.b = None
+    def __init__(self, a, b, msg: ?str=None):
+        self.a = a
+        self.b = b
+        self.error_message = msg if msg is not None else "Expected equal values but they are non-equal."
+        self.print_vals = True if msg is None else False
 
-class NotTrueError(AssertionError):
-    def __init__(self, msg):
-        self.error_message = msg
-        self.a = None
+    def __str__(self):
+        msg = "%s: %s" % (self._name(), self.error_message)
+        if self.print_vals:
+            a = self.a
+            msg += " A: " + str(a) if a is not None else "None"
+            b = self.b
+            msg += " B: " + str(b) if b is not None else "None"
+        return msg
 
-class NotFalseError(AssertionError):
-    def __init__(self, msg):
-        self.error_message = msg
-        self.a = None
+class EqualError[T](AssertionError):
+    a: ?T
+    b: ?T
 
-class NotNoneError(AssertionError):
-    def __init__(self, msg):
-        self.error_message = msg
-        self.a = None
+    def __init__(self, a, b, msg: ?str=None):
+        self.a = a
+        self.b = b
+        self.error_message = msg if msg is not None else "Expected non-equal values but they are equal."
+        self.print_vals = True if msg is None else False
 
-class NoneError(AssertionError):
-    def __init__(self, msg):
-        self.error_message = msg
-        self.a = None
+    def __str__(self):
+        msg = "%s: %s" % (self._name(), self.error_message)
+        if self.print_vals:
+            a = self.a
+            msg += " A: " + str(a) if a is not None else "None"
+            b = self.b
+            msg += " B: " + str(b) if b is not None else "None"
+        return msg
 
-class NotInError(AssertionError):
-    def __init__(self, msg):
-        self.error_message = msg
-        self.a = None
-        self.b = None
+class NotTrueError[T](AssertionError):
+    a: ?T
 
-class InError(AssertionError):
-    def __init__(self, msg):
-        self.error_message = msg
-        self.a = None
-        self.b = None
+    def __init__(self, a, msg: ?str=None):
+        self.a = a
+        self.error_message = msg if msg is not None else "Expected True but got non-True"
+        self.print_vals = True if msg is None else False
+
+    def __str__(self):
+        msg = "%s: %s" % (self._name(), self.error_message)
+        if self.print_vals:
+            a = self.a
+            msg += ", value: " + str(a) if a is not None else "None"
+        return msg
+
+class NotFalseError[T](AssertionError):
+    a: ?T
+
+    def __init__(self, a, msg: ?str=None):
+        self.a = a
+        self.error_message = msg if msg is not None else "Expected False but got non-False."
+        self.print_vals = True if msg is None else False
+
+    def __str__(self):
+        msg = "%s: %s" % (self._name(), self.error_message)
+        if self.print_vals:
+            a = self.a
+            msg += ", value: " + str(a) if a is not None else "None"
+        return msg
+
+class NotNoneError[T](AssertionError):
+    a: ?T
+
+    def __init__(self, a, msg: ?str=None):
+        self.a = a
+        self.error_message = msg if msg is not None else "Expected None but got non-None."
+        self.print_vals = True if msg is None else False
+
+    def __str__(self):
+        msg = "%s: %s" % (self._name(), self.error_message)
+        if self.print_vals:
+            a = self.a
+            msg += ", value: " + str(a) if a is not None else "None"
+        return msg
+
+class NoneError[T](AssertionError):
+    a: ?T
+
+    def __init__(self, a, msg: ?str=None):
+        self.a = a
+        self.error_message = msg if msg is not None else "Expected non-None but got None."
+        self.print_vals = True if msg is None else False
+
+    def __str__(self):
+        msg = "%s: %s" % (self._name(), self.error_message)
+        if self.print_vals:
+            a = self.a
+            msg += ", value: " + str(a) if a is not None else "None"
+        return msg
+
+class NotInError[T,U](AssertionError):
+    a: ?T
+    b: ?U
+
+    def __init__(self, a, b, msg: ?str=None):
+        self.a = a
+        self.b = b
+        self.error_message = msg if msg is not None else "Expected element not in container"
+        self.print_vals = True if msg is None else False
+
+    def __str__(self):
+        msg = "%s: %s" % (self._name(), self.error_message)
+        if self.print_vals:
+            a = self.a
+            msg += ", element: " + str(a) if a is not None else "None"
+            b = self.b
+            msg += ", container: " + str(b) if b is not None else "None"
+        return msg
+
+class InError[T,U](AssertionError):
+    a: ?T
+    b: ?U
+
+    def __init__(self, a, b, msg: ?str=None):
+        self.a = a
+        self.b = b
+        self.error_message = msg if msg is not None else "Expected element in container"
+        self.print_vals = True if msg is None else False
+
+    def __str__(self):
+        msg = "%s: %s" % (self._name(), self.error_message)
+        if self.print_vals:
+            a = self.a
+            msg += ", element: " + str(a) if a is not None else "None"
+            b = self.b
+            msg += ", container: " + str(b) if b is not None else "None"
+        return msg
 
 class NotIsError(AssertionError):
     def __init__(self, msg):
@@ -84,35 +176,21 @@ class NotIsInstanceError(AssertionError):
         self.b = None
 
 
-def assertEqual(a, b, msg: ?str):
-    if not (a == b):
-        assert_msg = "Expected equal values but they are non-equal"
-        if msg is not None:
-            assert_msg += ": " + msg
-        # TODO: include actual values in error message
-        raise NotEqualError(assert_msg)
+def assertEqual[T(Eq)](a: ?T, b: ?T, msg: ?str):
+    if a is not None and b is not None and not (a == b):
+        raise NotEqualError(a, b, msg)
 
 def assertNotEqual(a, b, msg: ?str):
     if not (a != b):
-        assert_msg = "Expected non-equal values but they are equal"
-        if msg is not None:
-            assert_msg += ": " + msg
-        raise EqualError(assert_msg, a, b)
+        raise EqualError(a, b, msg)
 
 def assertTrue(a, msg: ?str):
     if not bool(a):
-        assert_msg = "Expected True but got False"
-        if msg is not None:
-            assert_msg += ": " + msg
-        raise NotTrueError(assert_msg)
+        raise NotTrueError(a, msg)
 
 def assertFalse(a, msg: ?str):
     if bool(a):
-        assert_msg = "Expected False but got True"
-        if msg is not None:
-            assert_msg += ": " + msg
-        # TODO: include actual values in error message
-        raise NotFalseError(assert_msg)
+        raise NotFalseError(a, msg)
 
 # We cannot test raises right now because we need better support for taking a
 # function and its arguments as parameters or run as a context manager
@@ -159,7 +237,7 @@ def assertIn(a, b, msg: ?str):
         if msg is not None:
             assert_msg += ": " + msg
         # TODO: include actual values in error message
-        raise NotInError(assert_msg)
+        raise NotInError(a, b, assert_msg)
 
 def assertNotIn(a, b, msg: ?str):
     if a in b:
