@@ -659,7 +659,7 @@ $WORD B_MappingD_dictD_setdefault (B_MappingD_dict wit, B_dict dict, $WORD key, 
 
 $WORD B_IndexedD_MappingD_dictD___getitem__(B_IndexedD_MappingD_dict wit, B_dict dict, $WORD key) {
     if(dict->numelements == 0)
-        $RAISE((B_BaseException)$NEW(B_KeyError, to$str("getitem: empty dictionary"), key));
+        $RAISE((B_BaseException)$NEW(B_KeyError, key, to$str("getitem: empty dictionary")));
     B_Hashable hashwit = ((B_MappingD_dict)wit->W_Mapping)->W_HashableD_AD_MappingD_dict;
     long hash = 0;
     if (dict->table->tb_size > INIT_SIZE) {
@@ -668,7 +668,7 @@ $WORD B_IndexedD_MappingD_dictD___getitem__(B_IndexedD_MappingD_dict wit, B_dict
     $WORD res;
     int ix = $lookdict(dict,hashwit,hash,key,&res);
     if (ix < 0)  {
-        $RAISE((B_BaseException)$NEW(B_KeyError, to$str("getitem: key not in dictionary"), key));
+        $RAISE((B_BaseException)$NEW(B_KeyError, key, to$str("getitem: key not in dictionary")));
     }      
     return res;
 }
@@ -685,7 +685,7 @@ B_NoneType B_IndexedD_MappingD_dictD___setitem__ (B_IndexedD_MappingD_dict wit, 
 
 B_NoneType B_IndexedD_MappingD_dictD___delitem__ (B_IndexedD_MappingD_dict wit, B_dict dict, $WORD key) {
     if (dict->numelements == 0)  {
-        $RAISE((B_BaseException)$NEW(B_KeyError, to$str("delitem: empty dictionary"), key));
+        $RAISE((B_BaseException)$NEW(B_KeyError, key, to$str("delitem: empty dictionary")));
     }
     $table table = dict->table;
     long hash = 0;
@@ -697,14 +697,14 @@ B_NoneType B_IndexedD_MappingD_dictD___delitem__ (B_IndexedD_MappingD_dict wit, 
     int ix = $lookdict(dict,hashwit,hash,key,&res);
     //printf("ix = %d\n",ix);
     if (ix < 0)  {
-        $RAISE((B_BaseException)$NEW(B_KeyError, to$str("delitem: key not in dictionary"), key));
+        $RAISE((B_BaseException)$NEW(B_KeyError, key, to$str("delitem: key not in dictionary")));
     }      
     $entry_t entry = &TB_ENTRIES(table)[ix];
     int i = $lookdict_index(table,hash,ix);
     table->tb_indices[i] = DKIX_DUMMY;
     res = entry->value;
     if (res == DELETED) {
-        $RAISE((B_BaseException)$NEW(B_KeyError, to$str("delitem: key already deleted"), key));
+        $RAISE((B_BaseException)$NEW(B_KeyError, key, to$str("delitem: key already deleted")));
     }
     entry->value = DELETED;
     dict->numelements--;

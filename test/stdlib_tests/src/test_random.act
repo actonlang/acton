@@ -11,7 +11,7 @@ def _test_choice_empty_sequence():
     try:
         random.choice([])
         raise testing.NotRaisesError("random.choice() did not raise IndexError when passed an empty sequence")
-    except IndexError:
+    except ValueError:
         pass
 
 def _test_choice_single_element():
