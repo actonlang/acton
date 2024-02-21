@@ -53,9 +53,10 @@ instance UnboxClass PosArg where
    unbox t (PosStar e)             = PosStar (unbox t e)
    unbox t PosNil                  = PosNil
     
+-- Walking the syntax tree to place Box/UnBox annotations and sometimes restructure code to mimic C code on unboxed values ---------------
+
 class Boxing a where
     boxing :: BoxEnv -> a -> BoxM ([Name],a)
--- Walking the syntax tree to place Box/UnBox annotations and sometimes restructure code to mimic C code on unboxed values ---------------
 
 instance {-# OVERLAPS #-} Boxing ([Stmt]) where
     boxing env []                   = return ([],[])
