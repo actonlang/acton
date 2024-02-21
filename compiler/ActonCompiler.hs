@@ -712,7 +712,7 @@ runRestPasses opts paths env0 parsed stubMode = do
                       boxed <- Acton.Boxing.doBoxing liftEnv lifted
                       iff (C.box opts) $ dump mn "box" (Pretty.print boxed)
                       timeBoxing <- getTime Monotonic
-                      iff (C.timing opts) $ putStrLn("    Pass: Boxing : " ++ fmtTime (timeBoxing - timeLLift))
+                      iff (C.timing opts) $ putStrLn("    Pass: Boxing :          " ++ fmtTime (timeBoxing - timeLLift))
 
                       (n,h,c) <- Acton.CodeGen.generate liftEnv relSrcBase boxed
                       timeCodeGen <- getTime Monotonic
