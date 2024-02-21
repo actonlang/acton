@@ -319,6 +319,7 @@ compileFiles opts srcFiles = do
     if C.test opts
       then do
         compileBins opts paths env tasks testBinTasks
+        putStrLn "Test executables:"
         mapM_ (\t -> putStrLn (binName t)) testBinTasks
       else do
         compileBins opts paths env tasks preBinTasks
