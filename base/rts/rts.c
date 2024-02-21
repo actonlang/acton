@@ -196,7 +196,7 @@ pthread_cond_t rts_exit_signal = PTHREAD_COND_INITIALIZER;
 
 void pin_actor_affinity() {
     $Actor a = ($Actor)pthread_getspecific(self_key);
-    int i = (int)pthread_getspecific(pkey_wtid);
+    long i = (long)pthread_getspecific(pkey_wtid);
     log_debug("Pinning affinity for %s actor %ld to current WT %d", a->$class->$GCINFO, a->$globkey, i);
     a->$affinity = i;
 }
@@ -1472,7 +1472,7 @@ void arm_timer_ev() {
 }
 
 void wt_stop_cb(uv_async_t *ev) {
-    int wtid = (int)pthread_getspecific(pkey_wtid);
+    long wtid = (long)pthread_getspecific(pkey_wtid);
     uv_check_stop(&work_ev[wtid]);
     uv_stop(get_uv_loop());
 }
@@ -1486,7 +1486,7 @@ void wt_work_cb(uv_check_t *ev) {
     volatile JumpBuf jump0 = NULL;
     pthread_setspecific(jump_top, NULL);
 
-    int wtid = (int)pthread_getspecific(pkey_wtid);
+    long wtid = (long)pthread_getspecific(pkey_wtid);
 
     struct timespec ts_start, ts1, ts2, ts3;
     long long int runtime = 0;
@@ -1685,8 +1685,8 @@ void wt_work_cb(uv_check_t *ev) {
 
 void *main_loop(void *idx) {
     char tname[11]; // Enough for "Worker XXX\0"
-    int wtid = (int)idx;
-    snprintf(tname, sizeof(tname), "Worker %d", wtid);
+    long wtid = (long)idx;
+    snprintf(tname, sizeof(tname), "Worker %ld", wtid);
 #if defined(IS_MACOS)
     pthread_setname_np(tname);
 #else
@@ -1923,7 +1923,7 @@ const char* actors_to_json () {
 
 
 void *$mon_log_loop(void *period) {
-    log_info("Starting monitor log, with %d second(s) period, to: %s", (int)period, mon_log_path);
+    log_info("Starting monitor log, with %ld second(s) period, to: %s", (long)period, mon_log_path);
 
 #if defined(IS_MACOS)
     pthread_setname_np("Monitor Log");
@@ -1950,7 +1950,7 @@ void *$mon_log_loop(void *period) {
         pthread_mutex_lock(&rts_exit_lock);
         struct timespec ts;
         clock_gettime(CLOCK_REALTIME, &ts);
-        ts.tv_sec += (int)period;
+        ts.tv_sec += (long)period;
         pthread_cond_timedwait(&rts_exit_signal, &rts_exit_lock, &ts);
         pthread_mutex_unlock(&rts_exit_lock);
     }
@@ -2115,7 +2115,7 @@ void launch_debugger(int signum) {
     int child_pid = fork();
     if (!child_pid) {
         char findthread[40] = "thread find ";
-        sprintf(findthread + strlen(findthread), "%p", pthread_self());
+        sprintf(findthread + strlen(findthread), "%p", (void *)pthread_self());
         execlp("gdb", "gdb", "--quiet", "-n", "-ex", findthread, name_buf, pid_buf, NULL);
         fprintf(stderr, "Unable to get detailed backtrace using lldb or gdb");
         exit(0); /* If lldb/gdb failed to start */
@@ -2687,7 +2687,7 @@ int main(int argc, char **argv) {
         }
     }
 
-    int wtid = 0;
+    long wtid = 0;
     uv_loop_t *uv_loop = uv_loops[wtid];
     pthread_setspecific(pkey_wtid, (void *)wtid);
     pthread_setspecific(pkey_uv_loop, (void *)uv_loop);
