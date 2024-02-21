@@ -349,7 +349,12 @@ class LookupError (Exception):
     pass
 
 class IndexError (LookupError):
-    pass
+    def __init__(self, index: int, msg: ?str=None):
+        self.index = index
+        self.error_message = msg if msg is not None else "List index out of range"
+
+    def __str__(self):
+        return "%s: %s, index: %s" % (self._name(), self.error_message, str(self.index))
 
 class KeyError(LookupError):
     def __init__(self, key, msg: ?str=None):

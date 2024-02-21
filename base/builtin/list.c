@@ -170,7 +170,7 @@ $WORD B_listD_pop(B_list lst, B_int i) {
         ix = from$int(i);
     long ix0 = ix < 0 ? len + ix : ix;
     if (ix0 < 0 || ix0 >= len) {
-        $RAISE((B_BaseException)$NEW(B_IndexError,to$str("list.pop: index outside list")));
+        $RAISE((B_BaseException)$NEW(B_IndexError, to$int(ix0), to$str("pop: index outside list")));
     }
     $WORD res = lst->data[ix0];
     memmove(lst->data + ix0,
@@ -332,7 +332,7 @@ $WORD B_SequenceD_listD___getitem__(B_SequenceD_list wit, B_list lst, B_int n) {
     long ix = from$int(n);
     long ix0 = ix < 0 ? len + ix : ix;
     if (ix0 < 0 || ix0 >= len) {
-        $RAISE((B_BaseException)$NEW(B_IndexError,to$str("getitem: indexing outside list")));
+        $RAISE((B_BaseException)$NEW(B_IndexError, to$int(ix0), to$str("getitem: index outside list")));
     }
     return lst->data[ix0];
 }
@@ -342,7 +342,7 @@ B_NoneType B_SequenceD_listD___setitem__(B_SequenceD_list wit, B_list lst, B_int
     long ix = from$int(n);
     long ix0 = ix < 0 ? len + ix : ix;
     if (ix0 < 0 || ix0 >= len) {
-        $RAISE((B_BaseException)$NEW(B_IndexError,to$str("setitem: indexing outside list")));
+        $RAISE((B_BaseException)$NEW(B_IndexError, to$int(ix0), to$str("setitem: index outside list")));
     }
     lst->data[ix0] = val;
     return B_None;
@@ -353,7 +353,7 @@ B_NoneType B_SequenceD_listD___delitem__(B_SequenceD_list wit, B_list lst, B_int
     long ix = from$int(n);
     long ix0 = ix < 0 ? len + ix : ix;
     if(ix0 < 0 || ix0 >= len) {
-        $RAISE((B_BaseException)$NEW(B_IndexError,to$str("delitem: indexing outside list")));
+        $RAISE((B_BaseException)$NEW(B_IndexError, to$int(ix0), to$str("delitem: index outside list")));
     }
     memmove(lst->data + ix0,
             lst->data + (ix0 + 1),

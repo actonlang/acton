@@ -9,7 +9,7 @@ def choice[T](sequence: Sequence[T]) -> T:
     :return: A random element from the sequence.
     """
     if len(sequence) == 0:
-        raise IndexError('Cannot choose from an empty sequence')
+        raise ValueError('Cannot choose from an empty sequence')
 
     index = randint(0, len(sequence))
     return sequence[index]

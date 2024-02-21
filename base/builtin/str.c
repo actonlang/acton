@@ -191,7 +191,7 @@ static int get_index(int i, int nchars) {
         if (i >= -nchars)
             return nchars+i;
     }
-    $RAISE((B_BaseException)$NEW(B_IndexError,to$str("indexing outside str")));
+    $RAISE((B_BaseException)$NEW(B_IndexError, to$int(i), to$str("index outside str")));
     return 0;
 }
 
@@ -2152,7 +2152,7 @@ B_int B_SequenceD_bytearrayD___getitem__ (B_SequenceD_bytearray wit, B_bytearray
     long ix = from$int(n);
     long ix0 = ix < 0 ? self->nbytes + ix : ix;
     if (ix0<0 || ix0 >= self->nbytes)
-        $RAISE((B_BaseException)$NEW(B_IndexError,to$str("getitem for bytearray: indexing outside array")));
+        $RAISE((B_BaseException)$NEW(B_IndexError, to$int(ix0), to$str("getitem: index outside bytearray")));
     return to$int((long)self->str[ix0]);
 }
 
@@ -2161,7 +2161,7 @@ B_NoneType B_SequenceD_bytearrayD___setitem__ (B_SequenceD_bytearray wit, B_byte
     long val = from$int(v);
     long ix0 = ix < 0 ? self->nbytes + ix : ix;
     if (ix0<0 || ix0 >= self->nbytes)
-        $RAISE((B_BaseException)$NEW(B_IndexError,to$str("setitem for bytearray: indexing outside array")));
+        $RAISE((B_BaseException)$NEW(B_IndexError, to$int(ix0), to$str("setitem: index outside bytearray")));
     if (val<0 || val>255)
         $RAISE((B_BaseException)$NEW(B_ValueError,to$str("setitem for bytearray: value outside [0..255]")));
     self->str[ix0] = (unsigned char)val;
@@ -2173,7 +2173,7 @@ B_NoneType B_SequenceD_bytearrayD___delitem__ (B_SequenceD_bytearray wit, B_byte
     int len = self->nbytes;
     long ix0 = ix < 0 ? len + ix : ix;
     if (ix0 < 0 || ix0 >= len)
-        $RAISE((B_BaseException)$NEW(B_IndexError,to$str("delitem for bytearray: indexing outside array")));
+        $RAISE((B_BaseException)$NEW(B_IndexError, to$int(ix0), to$str("delitem: index outside bytearray")));
     memmove(self->str + ix0,self->str + (ix0 + 1),len-(ix0+1));
     self->nbytes--;
     return B_None;
@@ -3160,7 +3160,7 @@ B_int B_SliceableD_bytesD___getitem__ (B_SliceableD_bytes wit, B_bytes str, B_in
     long ix = from$int(n);
     long ix0 = ix < 0 ? str->nbytes + ix : ix;
     if (ix0<0 || ix0 >= str->nbytes)
-        $RAISE((B_BaseException)$NEW(B_IndexError,to$str("getitem for bytes: indexing outside array")));
+        $RAISE((B_BaseException)$NEW(B_IndexError, to$int(ix0), to$str("getitem: index outside bytesarray")));
     return to$int((long)str->str[ix0]);
 }
 
