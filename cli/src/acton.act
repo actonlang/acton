@@ -69,31 +69,40 @@ actor TestModule(process_cap, modname, report_result):
     def on_error(p, error):
         print("Error from process:", error)
 
-    print("Running test for module", modname)
     cmd = ["out/rel/bin/.test_" + modname, "--json", "test"]
     p = process.Process(process_cap, cmd, None, None, on_stdout, on_stderr, on_exit, on_error)
 
 actor RunTest(process_cap, env, args):
     _test_modules: list[str] = []
     modtests = {}
+    var stdout_buf = b""
+    var stderr_buf = b""
+    var stdout_tests = False
 
     def _on_build_done():
-        print("Build done")
+        print("Build done, running tests for modules:")
         results = testing.TestDisplayStatus(env)
         results.expected_modules = set(_test_modules)
 
         for modname in _test_modules:
+            print(" -", modname)
             def _on_test_result(module, test_def, test_result):
                 results.update(test_def, test_result, module)
             t = TestModule(process_cap, modname, _on_test_result)
             modtests[modname] = t
 
     cmdargs = build_cmd_args(args)
-    cmd = ["actonc"] + cmdargs + ["build", "--test", "--quiet"]
+    cmd = ["actonc"] + cmdargs + ["build", "--test"]
 
     def on_actbuild_stdout(p, data):
         for line in data.decode().splitlines(False):
-            _test_modules.append(line)
+            if line == "Test executables:":
+                stdout_tests = True
+            else:
+                if stdout_tests:
+                    _test_modules.append(line)
+                else:
+                    print(line)
 
     def on_actbuild_stderr(p, data):
         print(data.decode(), end="", stderr=True)
@@ -102,7 +111,6 @@ actor RunTest(process_cap, env, args):
         if exit_code == 0:
             _on_build_done()
         else:
-            print("actonc exited with code: ", exit_code, " terminated with signal:", term_signal)
             await async env.exit(exit_code)
 
     def on_actbuild_error(p, error):
