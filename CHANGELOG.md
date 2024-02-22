@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+## Added
+- `file.FS.exepath()` returns the path to the current executable
+
 ## Changed
 - Printing of compiler pass debug output from individual files, like `acton
   src/foo.act --types` will now only print output from the specified name and

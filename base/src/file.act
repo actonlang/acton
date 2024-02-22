@@ -14,6 +14,11 @@ class WriteFileCap():
 
 actor FS(cap: FileCap):
     """File system operations """
+
+    action def exepath() -> str:
+        """Get the path to the executable"""
+        NotImplemented
+
     action def mkdir(filename: str):
         """Make a directory"""
         pass

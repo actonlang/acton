@@ -1,4 +1,5 @@
 import argparse
+import file
 import json
 import process
 import testing
@@ -19,8 +20,10 @@ actor CompilerRunner(process_cap, env, args):
         print("Error from process:", error)
         await async env.exit(1)
 
-    # TODO: find path to actonc based on location of ourselves
-    cmd = ["actonc"] + args
+    fs = file.FS(file.FileCap(env.cap))
+    # We find the path to actonc by looking at the executable path of the
+    # current process. Since we are called 'acton', we just add a 'c'.
+    cmd = [fs.exepath() + "c"] + args
     p = process.Process(process_cap, cmd, None, None, on_stdout, on_stderr, on_exit, on_error)
 
 
@@ -67,7 +70,7 @@ actor TestModule(process_cap, modname, report_result):
 
     def on_exit(p, exit_code, term_signal):
         if exit_code != 0:
-            print("actonc exited with code: ", exit_code, " terminated with signal:", term_signal)
+            print("actonc unexpectedly exited with code: ", exit_code, " terminated with signal:", term_signal)
             print("stderr:", stderr_buf.decode())
 
     def on_error(p, error):
@@ -96,7 +99,10 @@ actor RunTest(process_cap, env, args):
             modtests[modname] = t
 
     cmdargs = build_cmd_args(args)
-    cmd = ["actonc"] + cmdargs + ["build", "--test"]
+    fs = file.FS(file.FileCap(env.cap))
+    # We find the path to actonc by looking at the executable path of the
+    # current process. Since we are called 'acton', we just add a 'c'.
+    cmd = [fs.exepath() + "c"] + cmdargs + ["build", "--test"]
 
     def on_actbuild_stdout(p, data):
         for line in data.decode().splitlines(False):
