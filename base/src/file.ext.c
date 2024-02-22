@@ -11,6 +11,19 @@ void fileQ___ext_init__() {
 
 }
 
+$R fileQ_FSD_exepathG_local (fileQ_FS self, $Cont C_cont) {
+    char exepath[1024];
+    size_t size = sizeof(exepath);
+    int r = uv_exepath(exepath, &size);
+    if (r < 0) {
+        char errmsg[1024] = "Error getting exepath: ";
+        uv_strerror_r(r, errmsg + strlen(errmsg), sizeof(errmsg)-strlen(errmsg));
+        log_warn(errmsg);
+        $RAISE(((B_BaseException)B_RuntimeErrorG_new(to$str(errmsg))));
+    }
+    return $R_CONT(C_cont, to$str(exepath));
+}
+
 $R fileQ_ReadFileD__open_fileG_local (fileQ_ReadFile self, $Cont c$cont) {
     pin_actor_affinity();
     uv_fs_t *req = (uv_fs_t *)calloc(1, sizeof(uv_fs_t));
