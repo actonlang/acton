@@ -572,7 +572,7 @@ doTask opts paths env t@(ActonTask mn src m stubMode) = do
 
     let outFiles = if stubMode then [tyFile] else [tyFile, hFile, cFile]
     ok <- checkUptoDate opts paths actFile outFiles (importsOf t)
-    if ok && not (forceCompilation opts)
+    if ok && not (mn == (modName paths) && (forceCompilation opts))
       then do
         iff (C.debug opts) (putStrLn ("    Skipping " ++ makeRelative (srcDir paths) actFile ++ " (files are up to date).") >> hFlush stdout)
         timeBeforeTy <- getTime Monotonic
@@ -669,48 +669,48 @@ runRestPasses opts paths env0 parsed stubMode = do
                       iff (C.timing opts) $ putStrLn("    Pass: Make environment: " ++ fmtTime (timeEnv - timeStart))
 
                       kchecked <- Acton.Kinds.check env parsed
-                      iff (C.kinds opts) $ dump mn "kinds" (Pretty.print kchecked)
+                      iff (C.kinds opts && mn == (modName paths)) $ dump mn "kinds" (Pretty.print kchecked)
                       timeKindsCheck <- getTime Monotonic
                       iff (C.timing opts) $ putStrLn("    Pass: Kinds check     : " ++ fmtTime (timeKindsCheck - timeEnv))
 
                       (iface,tchecked,typeEnv) <- Acton.Types.reconstruct outbase env kchecked
-                      iff (C.types opts) $ dump mn "types" (Pretty.print tchecked)
-                      iff (C.sigs opts) $ dump mn "sigs" (Acton.Types.prettySigs env mn iface)
+                      iff (C.types opts && mn == (modName paths)) $ dump mn "types" (Pretty.print tchecked)
+                      iff (C.sigs opts && mn == (modName paths)) $ dump mn "sigs" (Acton.Types.prettySigs env mn iface)
                       --traceM ("#################### typed env0:")
                       --traceM (Pretty.render (Pretty.pretty typeEnv))
                       timeTypeCheck <- getTime Monotonic
                       iff (C.timing opts) $ putStrLn("    Pass: Type check      : " ++ fmtTime (timeTypeCheck - timeKindsCheck))
 
                       (normalized, normEnv) <- Acton.Normalizer.normalize typeEnv tchecked
-                      iff (C.norm opts) $ dump mn "norm" (Pretty.print normalized)
+                      iff (C.norm opts && mn == (modName paths)) $ dump mn "norm" (Pretty.print normalized)
                       --traceM ("#################### normalized env0:")
                       --traceM (Pretty.render (Pretty.pretty normEnv))
                       timeNormalized <- getTime Monotonic
                       iff (C.timing opts) $ putStrLn("    Pass: Normalizer      : " ++ fmtTime (timeNormalized - timeTypeCheck))
 
                       (deacted,deactEnv) <- Acton.Deactorizer.deactorize normEnv normalized
-                      iff (C.deact opts) $ dump mn "deact" (Pretty.print deacted)
+                      iff (C.deact opts && mn == (modName paths)) $ dump mn "deact" (Pretty.print deacted)
                       --traceM ("#################### deacted env0:")
                       --traceM (Pretty.render (Pretty.pretty deactEnv))
                       timeDeactorizer <- getTime Monotonic
                       iff (C.timing opts) $ putStrLn("    Pass: Deactorizer     : " ++ fmtTime (timeDeactorizer - timeNormalized))
 
                       (cpstyled,cpsEnv) <- Acton.CPS.convert deactEnv deacted
-                      iff (C.cps opts) $ dump mn "cps" (Pretty.print cpstyled)
+                      iff (C.cps opts && mn == (modName paths)) $ dump mn "cps" (Pretty.print cpstyled)
                       --traceM ("#################### cps'ed env0:")
                       --traceM (Pretty.render (Pretty.pretty cpsEnv))
                       timeCPS <- getTime Monotonic
                       iff (C.timing opts) $ putStrLn("    Pass: CPS             : " ++ fmtTime (timeCPS - timeDeactorizer))
 
                       (lifted,liftEnv) <- Acton.LambdaLifter.liftModule cpsEnv cpstyled
-                      iff (C.llift opts) $ dump mn "llift" (Pretty.print lifted)
+                      iff (C.llift opts && mn == (modName paths)) $ dump mn "llift" (Pretty.print lifted)
                       --traceM ("#################### lifteded env0:")
                       --traceM (Pretty.render (Pretty.pretty liftEnv))
                       timeLLift <- getTime Monotonic
                       iff (C.timing opts) $ putStrLn("    Pass: Lambda Lifting  : " ++ fmtTime (timeLLift - timeCPS))
 
                       boxed <- Acton.Boxing.doBoxing liftEnv lifted
-                      iff (C.box opts) $ dump mn "box" (Pretty.print boxed)
+                      iff (C.box opts && mn == (modName paths)) $ dump mn "box" (Pretty.print boxed)
                       timeBoxing <- getTime Monotonic
                       iff (C.timing opts) $ putStrLn("    Pass: Boxing :          " ++ fmtTime (timeBoxing - timeLLift))
 

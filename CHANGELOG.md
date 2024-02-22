@@ -1,5 +1,17 @@
 # Changelog
 
+## Unreleased
+
+## Changed
+- Printing of compiler pass debug output from individual files, like `acton
+  src/foo.act --types` will now only print output from the specified name and
+  not dependencies
+  - Previously, dependent modules, like if `src/foo.act` imports `bar`, we would
+    also print the types debug output for the `bar` module
+  - Printing of compiler pass debug output requires recompiling the module and
+    thus shortcutting the up-to-date check. By not printing output for included
+    modules, the included modules do not need to be recompiled thus speeding up
+    the whole compilation.
 
 ## [0.20.1] (2024-02-22)
 ### Fixed
