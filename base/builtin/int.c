@@ -304,6 +304,11 @@ B_int B_IntegralD_intD___index__(B_IntegralD_int wit, B_int n) {
 }
 
 B_tuple B_IntegralD_intD___divmod__(B_IntegralD_int wit, B_int a, B_int b) {
+    if (b->val.size == 0){
+        char errmsg[1024];
+        snprintf(errmsg, sizeof(errmsg), "integer divmod: divisor is zero");
+        $RAISE((B_BaseException)$NEW(B_ZeroDivisionError,to$str(errmsg)));
+    }
     B_int q = malloc_int();
     B_int r = malloc_int();
     zz_divrem(&q->val,&r->val,&a->val,&b->val);
@@ -311,7 +316,12 @@ B_tuple B_IntegralD_intD___divmod__(B_IntegralD_int wit, B_int a, B_int b) {
 }
 
 B_int B_IntegralD_intD___floordiv__(B_IntegralD_int wit, B_int a, B_int b) {
-    B_int res = malloc_int();
+    if (b->val.size == 0){
+        char errmsg[1024];
+        snprintf(errmsg, sizeof(errmsg), "integer floordiv: divisor is zero");
+        $RAISE((B_BaseException)$NEW(B_ZeroDivisionError,to$str(errmsg)));
+    }
+     B_int res = malloc_int();
     zz_div(&res->val,&a->val,&b->val);
     return res;
 }

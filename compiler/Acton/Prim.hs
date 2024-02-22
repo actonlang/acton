@@ -110,6 +110,7 @@ witCollectionList   = GName mPrim $ Derived (deriveQ qnCollection) $ Derived (de
 primISNOTNONE       = gPrim "ISNOTNONE"
 primISNOTNONE0      = gPrim "ISNOTNONE0"
 primISNONE          = gPrim "ISNONE"
+primISNONE0         = gPrim "ISNONE0"
 
 primSKIPRESc        = gPrim "SKIPRESc"
 primSKIPRES         = gPrim "SKIPRES"

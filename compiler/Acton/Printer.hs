@@ -181,6 +181,8 @@ instance Pretty Expr where
     pretty (SetComp _ e co)         = braces (pretty e <+> pretty co)
     pretty (Paren _ e@Tuple{})      = pretty e
     pretty (Paren _ e)              = parens (pretty e)
+    pretty (Box t e)                = parens (text "BOX" <+> pretty t <+> pretty e)
+    pretty (UnBox t e)              = parens (text "UNBOX" <+> pretty t <+> pretty e)
     pretty e                        = prettyPrec 0 e  -- BinOp, CompOp, UnOp and Cond
 
 {-

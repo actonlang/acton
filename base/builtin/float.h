@@ -7,7 +7,12 @@ struct B_float {
 // #define B_RealD_floatG_new(...) B_RealFloatG_new(__VA_ARGS__)
 // #define B_RealD_float B_RealFloat
 
-B_float to$float(double x);
+B_float to$float(double x); // Dare not remove this; possibly used in compiler...?
+
+B_float toB_float(double x);
 double fromB_float(B_float x);
 
 B_float B_floatG_new(B_atom a);
+
+#define float_DIV(x,y)           (x/y)
+#define float_pow(x,y)           (pow(x,y))

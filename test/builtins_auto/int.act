@@ -12,62 +12,68 @@ import testing
 # TODO: test that division by zero raises ZeroDivisionError
 
 def test_i16_divzero():
+    n = i16(0)
     try:
-        i16(3) / i16(0)
+        i16(3) / n
     except ZeroDivisionError:
         try:
-            i16(3) // i16(0)
+            i16(3) // n
         except ZeroDivisionError:
             return
     raise testing.NotRaisesError("expected ZeroDivisionError for i16")
 
 def test_i32_divzero():
+    n = i32(0)
     try:
-        i32(3) / i32(0)
+        i32(3) / n
     except ZeroDivisionError:
         try:
-            i32(3) // i32(0)
+            i32(3) // n
         except ZeroDivisionError:
             return
     raise testing.NotRaisesError("expected ZeroDivisionError for i32")
 
 def test_i64_divzero():
+    n = i64(0)
     try:
-        i64(3) / i64(0)
+        i64(3) / n
     except ZeroDivisionError:
         try:
-            i64(3) // i64(0)
+            i64(3) // n
         except ZeroDivisionError:
             return
     raise testing.NotRaisesError("expected ZeroDivisionError for i64")
 
 def test_u16_divzero():
+    n = u16(0)
     try:
-        u16(3) / u16(0)
+        u16(3) / n
     except ZeroDivisionError:
         try:
-            u16(3) // u16(0)
+            u16(3) // n
         except ZeroDivisionError:
             return
     raise testing.NotRaisesError("expected ZeroDivisionError for u16")
 
 def test_u32_divzero():
+    n = u32(0)
     try:
-        u32(3) / u32(0)
+        u32(3) / n
     except ZeroDivisionError:
         try:
-            u32(3) // u32(0)
+            u32(3) // n
         except ZeroDivisionError:
             return
 
         raise testing.NotRaisesError("expected ZeroDivisionError for u32")
 
 def test_u64_divzero():
+    n = u64(0)
     try:
-        u64(3) / u64(0)
+        u64(3) / n
     except ZeroDivisionError:
         try:
-            u64(3) // u64(0)
+            u64(3) // n
         except ZeroDivisionError:
             return
     raise testing.NotRaisesError("expected ZeroDivisionError for u64")
@@ -164,7 +170,7 @@ def test_int():
         raise ValueError("int() of float e15 not working")
     if int(1.23456789e150) != 1234567889999999836491654725378050829066454385249330908721879362956247951768828819773169753596449374655959952724750267483926250851143576906326291251200:
         raise ValueError("int() of float e150 not working")
-    if (10**500/10**500) != 1:
+    if abs (10**500/10**500 - 1) > 1e-100:
         raise ValueError("10**500/10**500 != 1")
     if (round(123456789, 10)) != 1.23456789e8:
         raise ValueError("round(123456789, 10) != 1.23456789e8")

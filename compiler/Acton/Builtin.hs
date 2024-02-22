@@ -56,6 +56,9 @@ ixorKW                              = name "__ixor__"
 iandKW                              = name "__iand__"
 imatmulKW                           = name "__imatmul__"
 
+incrBinopKWs                        = [iaddKW, isubKW, imulKW, ipowKW, itruedivKW, imodKW, ifloordivKW,
+                                       ilshiftKW, irshiftKW, iorKW, ixorKW, iandKW, imatmulKW]  
+                                        
 addKW                               = name "__add__"
 subKW                               = name "__sub__"
 mulKW                               = name "__mul__"
@@ -70,9 +73,14 @@ xorKW                               = name "__xor__"
 andKW                               = name "__and__"
 matmulKW                            = name "__matmul__"
 
+binopKWs                            = [addKW, subKW, mulKW, powKW, truedivKW, modKW, floordivKW,
+                                       lshiftKW, rshiftKW, orKW, xorKW, andKW, matmulKW]  
+
 posKW                               = name "__pos__"
 negKW                               = name "__neg__"
 invertKW                            = name "__invert__"
+
+unopKWs                             = [posKW, negKW, invertKW]
 
 eqKW                                = name "__eq__"
 neKW                                = name "__ne__"
@@ -82,6 +90,8 @@ gtKW                                = name "__gt__"
 geKW                                = name "__ge__"
 isKW                                = name "__is__"
 isnotKW                             = name "__isnot__"
+
+compareKWs                          = [eqKW, neKW, ltKW, leKW, gtKW, geKW, isKW, isnotKW]
 
 nBuiltin                            = name "__builtin__"
 mBuiltin                            = ModName [nBuiltin]
@@ -98,6 +108,7 @@ nU64                                = name "u64"
 nU32                                = name "u32"
 nU16                                = name "u16"
 nFloat                              = name "float"
+nComplex                            = name "complex"
 nBool                               = name "bool"
 nStr                                = name "str"
 nRepr                               = name "repr"
@@ -161,6 +172,7 @@ qnU64                               = gBuiltin nU64
 qnU32                               = gBuiltin nU32
 qnU16                               = gBuiltin nU16
 qnFloat                             = gBuiltin nFloat
+qnComplex                           = gBuiltin nComplex
 qnBool                              = gBuiltin nBool
 qnStr                               = gBuiltin nStr
 qnRepr                              = gBuiltin nRepr

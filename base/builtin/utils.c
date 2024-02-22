@@ -20,7 +20,10 @@ B_set B_mk_set(int len, B_Hashable w,...) {
 }
 
 B_dict B_mk_dict(int len, B_Hashable w,...) {
-    B_dict res = B_dictG_new(w, NULL, NULL);
+    B_dict res =  acton_malloc(sizeof(struct B_dict));
+    res->$class = &B_dictG_methods;
+    res->numelements = 0;
+    res->table = NULL;
     va_list args;
     va_start(args, w);
     for (int i=0; i < len; i++) {

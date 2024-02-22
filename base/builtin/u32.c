@@ -15,11 +15,11 @@
 // Auxiliary //////////////////////////////////////////////////////////////////////////////
 
 // only called with e>=0.
-unsigned int uintpow(unsigned int a, unsigned int e) {
+unsigned int u32_pow(unsigned int a, unsigned int e) {
     if (e == 0) return 1;
     if (e == 1) return a;
-    if (e%2 == 0) return uintpow(a*a,e/2);
-    return a * uintpow(a*a,e/2);
+    if (e%2 == 0) return u32_pow(a*a,e/2);
+    return a * u32_pow(a*a,e/2);
 }
 
 // General methods ///////////////////////////////////////////////////////////////////////
@@ -98,7 +98,7 @@ B_u32 B_IntegralD_u32D___mul__(B_IntegralD_u32 wit,  B_u32 a, B_u32 b) {
 }  
   
 B_u32 B_IntegralD_u32D___pow__(B_IntegralD_u32 wit,  B_u32 a, B_u32 b) {
-    return toB_u32(uintpow(a->val,b->val));
+    return toB_u32(u32_pow(a->val,b->val));
 }
 
 B_u32 B_IntegralD_u32D___neg__(B_IntegralD_u32 wit,  B_u32 a) {
@@ -148,7 +148,7 @@ B_u32 B_IntegralD_u32D___round__ (B_IntegralD_u32 wit, B_u32 n, B_int p) {
     int pval = p==NULL ? 0 : from$int(p);
     if (pval>=0)
         return n;
-    unsigned int p10 = uintpow(10,-pval);
+    unsigned int p10 = u32_pow(10,-pval);
     unsigned int res = nval/p10;
     if (nval%p10 * 2 > p10)
         res++; 
