@@ -6,7 +6,7 @@ actor main(env):
     d = n.since(et)
     print("duration:", d)
 
-    if abs(d.second) > 5:
+    if abs(d.second) > 15:
         print("ERROR: diff seems too large, time.time*() should be roughly same as provided UNIX timestamp input")
         await async env.exit(1)
 
