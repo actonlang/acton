@@ -1,5 +1,78 @@
 # Changelog
 
+## [0.20.0] (2024-02-22)
+
+### Added
+- New `acton` CLI which takes over as the main acton program, it should be
+  called instead of `actonc`, for example `acton build` [#1645]
+  - it calls into `actonc` for doing most of the work and is currently mostly
+    just a thin wrapper
+  - over time, more functionality will be placed in the `acton` frontend
+- New `acton test` command which build and runs all test in a project [#1645]
+- The compiler now does automatic test discovery
+  - Simply doing `import testing` and functions with a name starting with
+    `_test` will be identified as a test and run by `acton test`. The functions
+    are sorted into categories based on their type signature.
+- Run-time reconfigurable `malloc`
+  - It is now possible to reconfigure which malloc to use during runtime
+  - All external libraries (libuv for example) are now configured to use a
+    particular malloc
+  - Libraries that did not support a custom alloc have now been extended with
+    support for custom malloc.
+- Module constants are placed in non-GC heap
+  - Using the reconfigurable malloc, we now make use of the "real" malloc (the
+    one libc provides) during startup of RTS and up past module init. This means
+    all module constants will be placed on the normal heap and not the GC heap.
+  - The GC is mark & sweep which means it slows down considerably when there is
+    a large live heap.
+  - This makes is a viable option to place large amounts of data as module
+    constants instead of run time state to speed up programs.
+- Fixed size integers arithmetic and comparisons are now unboxed
+  - For math heavy programs, this can produce a 4x improvement
+  - A lot of witnesses are now unnecessary and thus removed, reducing GC pressure
+- `testing` module has gotten a face lift with much better asserts
+  - The assert exceptions now include and print the values
+  - Formatting happens in `__str__` so performance of exceptions is unchanged
+- New `snappy` module in stdlib [#1655]
+  - Snappy is a fast compression library
+  - Snappy is written in C++ which implied some changes to build.zig and actonc
+- It is now possible to print a .ty file by doing: `acton foo.ty`
+- Improved size & performance of dictionaries
+  - An empty dictionary is now completely empty
+  - For low number of elements, the dictionary is actually a list with linear
+    searching
+  - For 5 elements and up, the dict starts to use a hashtable
+- `KeyError` & `IndexError` now include key  / index so it's easier to
+  understand what went wrong
+
+### Changed
+- The Debian package of Acton now depends on libc 2.27 [#1645]
+  - Previously depended on the glibc installed on the the build machine (2.36)
+    since it was expanded from `${shlibs:Depends}`
+- Now using Zig 0.12.0-dev.2236
+  - the build system has changed somewhat so all build.zig files are updated
+- DB backend is now optional, include with `acton build --db`
+- Using newer version of tlsuv library
+- RTS main thread now runs special actors, currently just `Env`
+  - This enables us to install signal handlers from `Env` since this must be
+    done from a programs main thread.
+
+### Fixed
+- `dict` changed internally to allow storing of `None`
+- Support `None` in JSON
+  - Based on the improved support of dicts
+- `lstrip`, `rstrip` & `setdefault` now work properly
+- Fix effect of `json.encode()` and `json.decode()` [#1654]
+  - They are pure!
+- Fix `testing.test_runner` when there are 0 tests to run [#]
+- Add tests of client & server in `http` module
+- `argparse` module now supports nested command parsing
+- `argparse` module now supports `--` for literal interpretation of positional
+  arguments
+- Fix compilation of projects that used TLS
+  - We had missed linking in all necessary mbedtls libraries
+
+
 ## [0.19.2] (2024-01-15)
 
 ### Added
