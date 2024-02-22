@@ -51,8 +51,12 @@ actor TestModule(process_cap, modname, report_result):
                             test = testing.Test(tdef["name"], tdef["desc"])
                             test_result = None
                             if tres is not None and tres != {}:
+                                tr_success: ?bool = None
+                                tr_success_val = tres["success"]
+                                if tr_success_val is not None:
+                                    tr_success = bool(tr_success_val)
                                 test_result = testing.TestResult(
-                                    bool(tres["success"]),
+                                    tr_success,
                                     tres["exception"],
                                     float(tres["duration"]))
                             report_result(modname, test, test_result)
