@@ -39,4 +39,5 @@
 
 - [Modules](modules.md)
 - [Compilation](compilation.md)
+- [Testing](testing.md)
 - [Run Time System](rts.md)
