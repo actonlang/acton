@@ -552,6 +552,7 @@ release: distribution
 install:
 	mkdir -p $(DESTDIR)/usr/bin $(DESTDIR)/usr/lib/acton
 	cp -a dist/. $(DESTDIR)/usr/lib/acton/
+	cd $(DESTDIR)/usr/bin && ln -s ../lib/acton/bin/acton
 	cd $(DESTDIR)/usr/bin && ln -s ../lib/acton/bin/actonc
 	cd $(DESTDIR)/usr/bin && ln -s ../lib/acton/bin/actondb
 	cd $(DESTDIR)/usr/bin && ln -s ../lib/acton/bin/runacton
