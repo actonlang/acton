@@ -4,6 +4,8 @@
 
 ## Added
 - `file.FS.exepath()` returns the path to the current executable
+- `acton` now finds `actonc` by looking at its own location rather than assuming
+  `actonc` is on the path
 
 ## Changed
 - Printing of compiler pass debug output from individual files, like `acton
@@ -15,6 +17,7 @@
     thus shortcutting the up-to-date check. By not printing output for included
     modules, the included modules do not need to be recompiled thus speeding up
     the whole compilation.
+- Always link in libprotobuf-c to allow modules to use protobuf tech
 
 ## [0.20.1] (2024-02-22)
 ### Fixed
