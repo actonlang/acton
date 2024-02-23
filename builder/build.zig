@@ -329,7 +329,6 @@ pub fn build(b: *std.Build) void {
             if (db) {
                 executable.linkSystemLibrary("ActonDB");
                 executable.linkSystemLibrary("argp");
-                executable.linkSystemLibrary("protobuf-c");
                 executable.linkSystemLibrary("uuid");
             }
             executable.linkSystemLibrary("bsdnt");
@@ -338,6 +337,7 @@ pub fn build(b: *std.Build) void {
             executable.linkSystemLibrary("mbedx509");
             executable.linkSystemLibrary("netstring");
             executable.linkSystemLibrary("pcre2");
+            executable.linkSystemLibrary("protobuf-c");
             executable.linkSystemLibrary("snappy-c");
             executable.linkSystemLibrary("tlsuv");
             executable.linkSystemLibrary("utf8proc");
@@ -350,21 +350,21 @@ pub fn build(b: *std.Build) void {
             if (db) {
                 executable.linkLibrary(libactondb_dep.artifact("ActonDB"));
                 executable.linkLibrary(dep_libargp.artifact("argp"));
-                executable.linkLibrary(dep_libprotobuf_c.artifact("protobuf-c"));
                 executable.linkLibrary(dep_libuuid.artifact("uuid"));
             }
             executable.linkLibrary(dep_libbsdnt.artifact("bsdnt"));
-            executable.linkLibrary(dep_libnetstring.artifact("netstring"));
-            executable.linkLibrary(dep_libpcre2.artifact("pcre2"));
-            executable.linkLibrary(dep_libtlsuv.artifact("tlsuv"));
+            executable.linkLibrary(dep_libmbedtls.artifact("mbedcrypto"));
             executable.linkLibrary(dep_libmbedtls.artifact("mbedtls"));
             executable.linkLibrary(dep_libmbedtls.artifact("mbedx509"));
-            executable.linkLibrary(dep_libmbedtls.artifact("mbedcrypto"));
+            executable.linkLibrary(dep_libnetstring.artifact("netstring"));
+            executable.linkLibrary(dep_libpcre2.artifact("pcre2"));
+            executable.linkLibrary(dep_libprotobuf_c.artifact("protobuf-c"));
+            executable.linkLibrary(dep_libsnappy_c.artifact("snappy-c"));
+            executable.linkLibrary(dep_libtlsuv.artifact("tlsuv"));
             executable.linkLibrary(dep_libutf8proc.artifact("utf8proc"));
             executable.linkLibrary(dep_libuv.artifact("uv"));
             executable.linkLibrary(dep_libxml2.artifact("xml2"));
             executable.linkLibrary(dep_libyyjson.artifact("yyjson"));
-            executable.linkLibrary(dep_libsnappy_c.artifact("snappy-c"));
 
             executable.linkLibrary(dep_libgc.artifact("gc"));
         }
