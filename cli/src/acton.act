@@ -165,7 +165,7 @@ actor main(env):
         env.exit(0)
 
     def _cmd_new(args):
-        cr = CompilerRunner(process_cap, env, ["new"])
+        cr = CompilerRunner(process_cap, env, ["new", args.get_str("projectdir")])
         env.exit(0)
 
     def _cmd_test(args):
