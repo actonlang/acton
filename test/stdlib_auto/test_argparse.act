@@ -216,6 +216,36 @@ actor test_cmd_nested():
     if _args.get_bool("foo") != True:
         raise ValueError("build cmd flag flag == True")
 
+
+# TODO: this should be a function, not an actor but that gives a lambdalifter error
+actor test_cmd_nested2():
+    proc def _build(args):
+        pass
+
+    proc def _build_and_run(args):
+        pass
+
+    p = argparse.Parser()
+    p.add_bool("verbose", "Enable verbose output")
+    p.add_bool("some-flag", "Some flag")
+    pb = p.add_cmd("build", "Build stuf", _build)
+    pb.add_bool("dev", "Enable dev mode")
+    pbr = pb.add_cmd("run", "build and run stuff", _build_and_run)
+    pbr.add_bool("foo", "FOO")
+
+    _args = p.parse(["./app", "--verbose", "build", "--dev", "run", "--foo", "--some-flag"])
+    _cmd = _args.cmd
+    if _cmd is None:
+        raise ValueError("Expected build cmd set")
+    if _args.get_bool("verbose") != True:
+        raise ValueError("verbose flag == True")
+    if _args.get_bool("dev") != True:
+        raise ValueError("build cmd dev flag == True")
+    if _args.get_bool("foo") != True:
+        raise ValueError("build run cmd foo flag == True")
+    if _args.get_bool("some-flag") != True:
+        raise ValueError("some-flag flag == True")
+
 # TODO: this should be a function, not an actor but that gives a lambdalifter error
 actor test_cmd_optional_argument():
     proc def _new(args):
@@ -259,6 +289,7 @@ actor main(env):
         test_cmd()
         test_cmd_strlist()
         test_cmd_nested()
+        test_cmd_nested2()
         test_cmd_optional_argument()
         test_help()
         env.exit(0)

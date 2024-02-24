@@ -2,12 +2,17 @@
 
 parser = argparse.Parser(None)
 
-The Parser parses the passed argv in a first pass looking for options
-(--option), when sub commands are encountered, the rest of argv is passed to the
-sub command parser where it too first looks for options. This happens
-recursively for nested sub-commands. After the first pass, a second pass over
-the remaining arguments is performed, matching the rest of argv to positional
-arguments.
+The Parser parses the passed argv in a first pass looking for all options
+(--option), with all unknowns arguments registered as a 'rest'. If a sub-command
+is encountered, it is registered. Once all arguments have been parsed, if a
+sub-command was identified, the sub-command parser will be run with the 'rest'
+of the arguments, i.e. the ones that could not be identified. This happens
+recursively for nested sub-commands. After all sub-command parsing is done, a
+third pass over the remaining arguments is performed, matching the rest of argv
+to positional arguments. The inner-most parser, for sub-command parsing, gets to
+parse positional argument first. This makes it possible to have optional
+positional arguments on a higher level parser but still consume positional
+arguments in a sub command.
 """
 
 # TODO: mutually exclusive argument groups
@@ -163,7 +168,7 @@ class Parser(object):
         return usage_text
 
     def parse(self, argv: list[str]) -> Args:
-        return self._parse(argv, None)
+        return self._parse(argv)
 
     def _parse(self, argin: list[str], res_args: ?Args=None) -> Args:
         if "help" not in self.opts:
@@ -203,7 +208,6 @@ class Parser(object):
             if defval is not None:
                 res.options[akey] = ("type"=aspec.type, "value"=defval)
 
-        posargs = []
         skip = 0
         for i in range(len(argv)):
             p = i + skip
@@ -213,14 +217,14 @@ class Parser(object):
             start = 0
             end = len(arg)
             if arg == '--':
-                posargs.extend(argv[p+1:])
+                rest = argv[p+1:]
                 break
-            elif arg.startswith('--', None, None):
+            elif arg.startswith('--'):
                 start = 2
                 val_in_arg = False
-                if arg.find('=', None, None) != -1:
+                if arg.find('=') != -1:
                     val_in_arg = True
-                    end = arg.find('=', None, None)
+                    end = arg.find('=')
                 akey = arg[start:end]
 
                 if akey in self.opts:
@@ -257,25 +261,31 @@ class Parser(object):
                     #raise ArgumentError("Unknown option %s" % arg)
                     rest.append(arg)
             else:
-                ccmd = res.cmd
                 if arg in self.cmds:
+                    # We found a sub-command, store which one but continue
+                    # parsing the rest of the options. Make sure not to set
                     # pass rest of args to subparser for command
-                    cmd = self.cmds[arg]
-                    res.cmd_parser = cmd.parser
-                    res.cmd = cmd.fn
-                    cmd_parser = cmd.parser
-                    if cmd_parser is not None:
-                        cmd_args = argv[i+1:]
-                        #print(self, arg, ": cmd found, invoking cmd parser with", cmd_args)
-                        res, moreposargs = cmd_parser._parse_and_consume(cmd_args, res)
-                        posargs.extend(moreposargs)
-                    break
+                    cmd_parser = res.cmd_parser
+                    if cmd_parser is None:
+                        cmd = self.cmds[arg]
+                        res.cmd = cmd.fn
+                        res.cmd_parser = cmd.parser
+                    else:
+                        rest.append(arg)
+
                 else:
-                    #print(self, arg, ": adding to posarg")
-                    posargs.append(arg)
+                    rest.append(arg)
+
+        # Run sub-command parser
+        cmd_parser = res.cmd_parser
+        if cmd_parser is not None:
+            #print(self, arg, ": cmd found, invoking cmd parser with", cmd_args)
+            res, posargs = cmd_parser._parse_and_consume(rest, res)
+        else:
+            posargs = rest
+        rest = []
 
         #print(self, "Do second loop for optional posargs on rest:", posargs)
-
         for i in range(len(posargs)):
             arg = posargs[i]
             if len(self.args) == 0:
