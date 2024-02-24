@@ -19,6 +19,9 @@
     the whole compilation.
 - Always link in libprotobuf-c to allow modules to use protobuf tech
 
+### Fixed
+- `acton new foo` now creates a new project `foo`
+
 ## [0.20.1] (2024-02-22)
 ### Fixed
 - Install `acton` frontend in Debian package
