@@ -509,7 +509,7 @@ B_int to$int(long n) {
         return &B_int_strs[n];
     else {
         B_int res = malloc_int();
-        res->val.n[0] = n < 0 ? -n : n;
+        res->val.n[0] = n > 0 ? n : (n == LONG_MIN ? 9223372036854775808 : -n);
         res->val.size = n < 0 ? -1 : n > 0;
         return res;
     }

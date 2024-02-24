@@ -30,15 +30,16 @@ B_int numpyQ_newaxis;
 // res->offset gets default value 0 (may be unsuitable when allocate_data = false)
 
 static numpyQ_ndarray G_newarray(enum ElemType typ, long ndim, B_int size, B_list shape, B_list strides, bool allocate_data) {
-    numpyQ_ndarray res = malloc(sizeof(numpyQ_ndarray));
+    numpyQ_ndarray res = acton_malloc(sizeof(numpyQ_ndarray));
     res->$class = &numpyQ_ndarrayG_methods;
     res->elem_type = typ;
+    printf("res->offset is at address %x and shape->data is at %x\n",&res->offset,shape->data);
     res->ndim = ndim;
     res->size = size;
     res->offset = 0;
     res->shape = shape;
     res->strides = strides;
-    if (allocate_data) res->data = malloc(from$int(size) * $elem_size(typ) * sizeof(union $Bytes8));
+    if (allocate_data) res->data = acton_malloc(from$int(size) * $elem_size(typ) * sizeof(union $Bytes8));
     return res;
 }
 
@@ -113,7 +114,7 @@ numpyQ_ndarray numpyQ_ndarrayD___deserialize__(numpyQ_ndarray res, $Serial$state
         return B_dictD_get(state->done,(B_Hashable)B_HashableD_intG_witness,to$int((long)this->blob[0]),NULL);
     } else {
         if (!res)
-            res = malloc(sizeof(numpyQ_ndarray));
+            res = acton_malloc(sizeof(numpyQ_ndarray));
         B_dictD_setitem(state->done,(B_Hashable)B_HashableD_intG_witness,to$int(state->row_no-1),res);
         res->$class = &numpyQ_ndarrayG_methods;
         res->elem_type = (enum ElemType)(long)this->blob[0];
@@ -121,7 +122,7 @@ numpyQ_ndarray numpyQ_ndarrayD___deserialize__(numpyQ_ndarray res, $Serial$state
         res->size = to$int((long)this->blob[2]);
         res->offset = (long)this->blob[3];
         res->elem_size = (long)this->blob[4];
-        res->data = malloc(resval*sizeof($WORD));
+        res->data = acton_malloc(resval*sizeof($WORD));
         memcpy(res->data, &this->blob[5],resval*sizeof($WORD));
         res->shape = $step_deserialize(state);
         res->strides= $step_deserialize(state);
@@ -217,7 +218,7 @@ numpyQ_ndarray numpyQ_ndarray$reshape(numpyQ_ndarray a, B_list newshape) {
         res->data = a->data;
         return res;
     } else {
-        res->data = malloc(newsize * sizeof(union $Bytes8));
+        res->data = acton_malloc(newsize * sizeof(union $Bytes8));
         union $Bytes8 *ixres = res->data;
         union $Bytes8 *ixa;
         numpyQ_array_iterator_state ita = $mk_iterator(a);
@@ -380,7 +381,7 @@ struct numpyQ_ndarrayG_class numpyQ_ndarrayG_methods = {
 
 // Aims to be as fast as possible; used in many methods below and in protocol implementations 
 numpyQ_array_iterator_state $mk_iterator(numpyQ_ndarray a) {
-    numpyQ_array_iterator_state res = malloc(sizeof(numpyQ_array_iterator_state));
+    numpyQ_array_iterator_state res = acton_malloc(sizeof(numpyQ_array_iterator_state));
     if (a->ndim==0) {
         $RAISE((B_BaseException)$NEW(B_ValueError,to$str("cannot make iterator for 0-dim array")));
     }
@@ -563,7 +564,7 @@ numpyQ_ndarray numpyQ_arange(B_int start, B_int stop, B_int step) {
     B_list shape = $NEW(B_list,NULL,NULL);
     wit->$class->append(wit,shape,to$int(len));
     B_list strides = $NEW(B_list,NULL,NULL);
-    wit->$class->append(wit,strides,to$int(1));
+    wit->$class->append(wit,strides,step);  //??? step inserted here 
     numpyQ_ndarray res = G_newarray(LongType,1,to$int(len),shape,strides,true);
     long elem = r->start;
     for (int i=0; i < len; i++) {
@@ -824,7 +825,7 @@ B_NoneType numpyQ_IteratorD_init(numpyQ_IteratorD_ndarray self, numpyQ_Primitive
 }
 
 numpyQ_IteratorD_ndarray numpyQ_IteratorD_ndarrayG_new(numpyQ_Primitive pwit, numpyQ_ndarray a) {
-    numpyQ_IteratorD_ndarray res = malloc(sizeof(numpyQ_IteratorD_ndarray ));
+    numpyQ_IteratorD_ndarray res = acton_malloc(sizeof(numpyQ_IteratorD_ndarray ));
     res->$class = &numpyQ_IteratorD_ndarrayG_methods;
     numpyQ_IteratorD_init(res,pwit,a);
     return res;

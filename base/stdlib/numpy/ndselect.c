@@ -37,7 +37,7 @@ struct numpyQ_ndselectG_class numpyQ_ndselectG_methods = {
 };
 
 numpyQ_ndselect numpyQ_ndselectG_new() {
-    numpyQ_ndselect $tmp = malloc(sizeof(numpyQ_ndselect));
+    numpyQ_ndselect $tmp = acton_malloc(sizeof(numpyQ_ndselect));
     $tmp->$class = &numpyQ_ndselectG_methods;
     numpyQ_ndselectG_methods.__init__($tmp);
     return $tmp;
@@ -75,7 +75,7 @@ struct numpyQ_ndindexG_class numpyQ_ndindexG_methods = {
 };
 
 numpyQ_ndindex numpyQ_ndindexG_new(B_int p$1) {
-    numpyQ_ndindex $tmp = malloc(sizeof(numpyQ_ndindex));
+    numpyQ_ndindex $tmp = acton_malloc(sizeof(numpyQ_ndindex));
     $tmp->$class = &numpyQ_ndindexG_methods;
     numpyQ_ndindexG_methods.__init__($tmp, p$1);
     return $tmp;
@@ -112,7 +112,7 @@ struct numpyQ_ndsliceG_class numpyQ_ndsliceG_methods = {
 };
 
 numpyQ_ndslice numpyQ_ndsliceG_new(B_slice p$1) {
-    numpyQ_ndslice $tmp = malloc(sizeof(numpyQ_ndslice));
+    numpyQ_ndslice $tmp = acton_malloc(sizeof(numpyQ_ndslice));
     $tmp->$class = &numpyQ_ndsliceG_methods;
     numpyQ_ndsliceG_methods.__init__($tmp, p$1);
     return $tmp;

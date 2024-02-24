@@ -21,7 +21,7 @@ B_NoneType numpyQ_IntegralD_ndarrayD_intD___init__(numpyQ_IntegralD_ndarrayD_int
 }; 
 
 numpyQ_IntegralD_ndarrayD_int numpyQ_IntegralD_ndarrayD_intG_new() {
-    numpyQ_IntegralD_ndarrayD_int res = malloc(sizeof (numpyQ_IntegralD_ndarrayD_int));
+    numpyQ_IntegralD_ndarrayD_int res = acton_malloc(sizeof (numpyQ_IntegralD_ndarrayD_int));
     res->$class = &numpyQ_IntegralD_ndarrayD_intG_methods;
     numpyQ_IntegralD_ndarrayD_intD___init__(res);
     return res;
@@ -103,7 +103,7 @@ B_NoneType numpyQ_LogicalD_ndarrayD_intD___init__(numpyQ_LogicalD_ndarrayD_int w
 };
 
 numpyQ_LogicalD_ndarrayD_int numpyQ_LogicalD_ndarrayD_intG_new(B_Integral W_Integral) {
-    numpyQ_LogicalD_ndarrayD_int res = malloc(sizeof (numpyQ_LogicalD_ndarrayD_int));
+    numpyQ_LogicalD_ndarrayD_int res = acton_malloc(sizeof (numpyQ_LogicalD_ndarrayD_int));
     res->$class = &numpyQ_LogicalD_ndarrayD_intG_methods;
     numpyQ_LogicalD_ndarrayD_intD___init__(res, W_Integral);
     return res;
@@ -136,7 +136,7 @@ B_NoneType numpyQ_MinusD_ndarrayD_intD___init__(numpyQ_MinusD_ndarrayD_int wit, 
 };
 
 numpyQ_MinusD_ndarrayD_int numpyQ_MinusD_ndarrayD_intG_new(B_Integral W_Integral) {
-    numpyQ_MinusD_ndarrayD_int res = malloc(sizeof (numpyQ_MinusD_ndarrayD_int));
+    numpyQ_MinusD_ndarrayD_int res = acton_malloc(sizeof (numpyQ_MinusD_ndarrayD_int));
     res->$class = &numpyQ_MinusD_ndarrayD_intG_methods;
     numpyQ_MinusD_ndarrayD_intD___init__(res, W_Integral);
     return res;
@@ -159,7 +159,7 @@ numpyQ_ndarray numpyQ_MinusD_ndarrayD_intD___sub__ (numpyQ_MinusD_ndarrayD_int w
 // numpyQ_RealFloat$ndarray //////////////////////////////////////////////////////////////////////////////////////
 
 numpyQ_RealD_ndarray numpyQ_RealFloat$ndarrayG_new(numpyQ_Primitive W_PrimitiveD_AD_numpy, B_RealFloat dummy) {
-    numpyQ_RealD_ndarray res = malloc(sizeof (numpyQ_RealD_ndarray));
+    numpyQ_RealD_ndarray res = acton_malloc(sizeof (numpyQ_RealD_ndarray));
     res->$class = &numpyQ_RealD_ndarrayG_methods;
     numpyQ_RealD_ndarrayD___init__(res, W_PrimitiveD_AD_numpy);
     return res;
@@ -174,7 +174,7 @@ B_NoneType numpyQ_RealD_ndarrayD___init__(numpyQ_RealD_ndarray wit, numpyQ_Primi
 }; 
 
 numpyQ_RealD_ndarray numpyQ_RealD_ndarrayG_new(numpyQ_Primitive W_PrimitiveD_AD_numpy) {
-    numpyQ_RealD_ndarray res = malloc(sizeof (numpyQ_RealD_ndarray));
+    numpyQ_RealD_ndarray res = acton_malloc(sizeof (numpyQ_RealD_ndarray));
     res->$class = &numpyQ_RealD_ndarrayG_methods;
     numpyQ_RealD_ndarrayD___init__(res, W_PrimitiveD_AD_numpy);
     return res;
@@ -257,7 +257,7 @@ B_NoneType numpyQ_MinusD_ndarrayD___init__(numpyQ_MinusD_ndarray wit, B_Real W_R
 };
 
 numpyQ_MinusD_ndarray numpyQ_MinusD_ndarrayG_new(B_Real W_Real) {
-    numpyQ_MinusD_ndarray res = malloc(sizeof (numpyQ_MinusD_ndarray));
+    numpyQ_MinusD_ndarray res = acton_malloc(sizeof (numpyQ_MinusD_ndarray));
     res->$class = &numpyQ_MinusD_ndarrayG_methods;
     numpyQ_MinusD_ndarrayD___init__(res, W_Real);
     return res;
@@ -284,7 +284,7 @@ B_NoneType numpyQ_DivD_ndarrayD_intD___init__(numpyQ_DivD_ndarrayD_int wit) {
 };
 
 numpyQ_DivD_ndarrayD_int numpyQ_DivD_ndarrayD_intG_new() {
-    numpyQ_DivD_ndarrayD_int res = malloc(sizeof (numpyQ_DivD_ndarrayD_int));
+    numpyQ_DivD_ndarrayD_int res = acton_malloc(sizeof (numpyQ_DivD_ndarrayD_int));
     res->$class = &numpyQ_DivD_ndarrayD_intG_methods;
     return res;
 }
@@ -310,7 +310,7 @@ B_NoneType numpyQ_DivD_ndarrayD_floatD___init__(numpyQ_DivD_ndarrayD_float wit) 
 };
 
 numpyQ_DivD_ndarrayD_float numpyQ_DivD_ndarrayD_floatG_new() {
-    numpyQ_DivD_ndarrayD_float res = malloc(sizeof (numpyQ_DivD_ndarrayD_float));
+    numpyQ_DivD_ndarrayD_float res = acton_malloc(sizeof (numpyQ_DivD_ndarrayD_float));
     res->$class = &numpyQ_DivD_ndarrayD_floatG_methods;
     return res;
 }
@@ -338,7 +338,7 @@ void numpyQ_SliceableD_ndarrayD___serialize__(numpyQ_SliceableD_ndarray wit, $Se
 }
 
 numpyQ_SliceableD_ndarray numpyQ_SliceableD_ndarrayG_new(numpyQ_Primitive pwit) {
-    numpyQ_SliceableD_ndarray res = malloc(sizeof(numpyQ_SliceableD_ndarray));
+    numpyQ_SliceableD_ndarray res = acton_malloc(sizeof(numpyQ_SliceableD_ndarray));
     res->$class = &numpyQ_SliceableD_ndarrayG_methods;
     numpyQ_SliceableD_ndarrayD___init__(res, pwit);
     return res;
@@ -392,7 +392,7 @@ B_NoneType numpyQ_CollectionD_ndarrayD___init__(numpyQ_CollectionD_ndarray self,
 }
   
 numpyQ_CollectionD_ndarray numpyQ_CollectionD_ndarrayG_new(numpyQ_Primitive pwit) {
-    numpyQ_CollectionD_ndarray res = malloc(sizeof (numpyQ_CollectionD_ndarray));
+    numpyQ_CollectionD_ndarray res = acton_malloc(sizeof (numpyQ_CollectionD_ndarray));
     res->$class = &numpyQ_CollectionD_ndarrayG_methods;
     numpyQ_CollectionD_ndarrayD___init__(res, pwit);
     return res;
@@ -722,7 +722,7 @@ numpyQ_ndarray numpyQ_RealFunsD_mathD_ndarray$atanh(numpyQ_RealFunsD_mathD_ndarr
 
                       
 numpyQ_RealFunsD_mathD_ndarray numpyQ_RealFunsD_mathD_ndarrayG_new(numpyQ_Primitive W_Primitive, mathQ_RealFuns W_RealFuns) {
-    numpyQ_RealFunsD_mathD_ndarray $tmp = malloc(sizeof(numpyQ_RealFunsD_mathD_ndarray));
+    numpyQ_RealFunsD_mathD_ndarray $tmp = acton_malloc(sizeof(numpyQ_RealFunsD_mathD_ndarray));
     $tmp->$class = &numpyQ_RealFunsD_mathD_ndarrayG_methods;
     numpyQ_RealFunsD_mathD_ndarrayG_methods.__init__($tmp, W_Primitive, W_RealFuns);
     return $tmp;
