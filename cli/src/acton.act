@@ -27,7 +27,7 @@ actor CompilerRunner(process_cap, env, args):
     p = process.Process(process_cap, cmd, None, None, on_stdout, on_stderr, on_exit, on_error)
 
 
-actor TestModule(process_cap, modname, report_result):
+actor RunModuleTest(process_cap, modname, test_cmd, on_json_output):
     var stdout_buf = b""
     var stderr_buf = b""
 
@@ -47,22 +47,7 @@ actor TestModule(process_cap, modname, report_result):
                     print("Invalid json:", line)
                     continue
                 else:
-                    for tname, t in upd.items():
-                        if isinstance(t, dict):
-                            tdef = t["test"]
-                            tres = t["result"]
-                            test = testing.Test(tdef["name"], tdef["desc"])
-                            test_result = None
-                            if tres is not None and tres != {}:
-                                tr_success: ?bool = None
-                                tr_success_val = tres["success"]
-                                if tr_success_val is not None:
-                                    tr_success = bool(tr_success_val)
-                                test_result = testing.TestResult(
-                                    tr_success,
-                                    tres["exception"],
-                                    float(tres["duration"]))
-                            report_result(modname, test, test_result)
+                    on_json_output(upd)
             else:
                 # incomplete line
                 _stderr_buf = line
@@ -76,27 +61,54 @@ actor TestModule(process_cap, modname, report_result):
     def on_error(p, error):
         print("Error from process:", error)
 
-    cmd = ["out/rel/bin/.test_" + modname, "--json", "test"]
+    cmd = ["out/rel/bin/.test_" + modname, "--json"] + test_cmd
     p = process.Process(process_cap, cmd, None, None, on_stdout, on_stderr, on_exit, on_error)
 
-actor RunTest(process_cap, env, args):
+
+def parse_json_test_result(module_name, j) -> dict[str, (test: testing.Test, result: ?testing.TestResult)]:
+    res = {}
+    for tname, t in j.items():
+        if isinstance(t, dict):
+            tdef = t["test"]
+            tres = t["result"]
+            test_def = testing.Test(tdef["name"], tdef["desc"])
+            test_result = None
+            if tres is not None and tres != {}:
+                tr_success: ?bool = None
+                tr_success_val = tres["success"]
+                if tr_success_val is not None:
+                    tr_success = bool(tr_success_val)
+                test_result = testing.TestResult(
+                    tr_success,
+                    tres["exception"],
+                    float(tres["duration"]))
+            res[module_name + tname] = (test_def, test_result)
+        else:
+            raise ValueError("Invalid json: " + str(j))
+    return res
+
+def parse_test_list_json_output(j, modname):
+    res = []
+    if isinstance(j, dict):
+        for test_name in j["tests"]:
+            res.append(modname + test_name)
+    else:
+        raise ValueError("Invalid json: " + str(j))
+    return res
+
+actor BuildProjectTests(process_cap, env, args, on_build_success, on_build_failure):
+    """Build the project test
+
+    This actor builds the project tests using `actonc build --test`. It calls
+    on_build_success with a list of the test modules if the build was
+    successful, and on_build_failure with the exit code, term signal if the
+    build failed.
+    """
     _test_modules: list[str] = []
     modtests = {}
     var stdout_buf = b""
     var stderr_buf = b""
     var stdout_tests = False
-
-    def _on_build_done():
-        print("Build done, running tests for modules:")
-        results = testing.TestDisplayStatus(env)
-        results.expected_modules = set(_test_modules)
-
-        for modname in _test_modules:
-            print(" -", modname)
-            def _on_test_result(module, test_def, test_result):
-                results.update(test_def, test_result, module)
-            t = TestModule(process_cap, modname, _on_test_result)
-            modtests[modname] = t
 
     cmdargs = build_cmd_args(args)
     fs = file.FS(file.FileCap(env.cap))
@@ -115,20 +127,91 @@ actor RunTest(process_cap, env, args):
                     print(line)
 
     def on_actbuild_stderr(p, data):
-        print(data.decode(), end="", stderr=True)
+        stderr_buf += data
 
     def on_actbuild_exit(p, exit_code, term_signal):
         if exit_code == 0:
-            _on_build_done()
+            on_build_success(_test_modules)
         else:
-            await async env.exit(exit_code)
+            on_build_failure(exit_code, term_signal, stderr_buf)
 
     def on_actbuild_error(p, error):
-        print("Error from process:", error)
-        await async env.exit(1)
+        on_build_failure(-999, -999, error)
 
     p = process.Process(process_cap, cmd, None, None, on_actbuild_stdout, on_actbuild_stderr, on_actbuild_exit, on_actbuild_error)
 
+actor RunTestList(process_cap, env, args):
+    """Print list of module tests
+
+    Will run the project module test binaries with 'list --json' to get all
+    module tests, collect the output and print a list of all project tests.
+    """
+    var _expected_modules: set[str] = set()
+    var _module_tests = {}
+
+    def print_module_tests():
+        for mn in _module_tests.keys():
+            print("Module %s:" % mn)
+            for module_test_name in _module_tests[mn]:
+                print(" ", module_test_name)
+            print()
+
+    def _on_json_output(module_name, update):
+        if module_name in _module_tests:
+            raise ValueError("Duplicate list of tests from module: " + module_name)
+        if isinstance(update, dict):
+            _module_tests[module_name] = []
+            for test_name in update["tests"]:
+                _module_tests[module_name].append(module_name + test_name)
+        else:
+            raise ValueError("Unexpected JSON data from module test: " + module_name)
+
+        if set(_module_tests.keys()) == _expected_modules:
+            print_module_tests()
+            env.exit(0)
+
+    def _run_tests(module_names: list[str]):
+        _expected_modules = set(module_names)
+
+        for module_name in module_names:
+            t = RunModuleTest(process_cap, module_name, ["list"], lambda x: _on_json_output(module_name, x))
+
+    def _on_build_failure(exit_code, term_signal, stderr_buf):
+        print("Failed to build project tests")
+        print("actonc exited with code %d / %d" %(exit_code, term_signal))
+        print("stderr:", stderr_buf)
+        env.exit(1)
+
+    project_builder = BuildProjectTests(process_cap, env, args, _run_tests, _on_build_failure)
+
+
+actor RunTestTest(process_cap, env, args):
+    var _module_tests = {}
+    results = testing.TestDisplayStatus(env)
+
+    def _on_json_output(module_name, update):
+        if isinstance(update, dict):
+            parsed_update = parse_json_test_result(module_name, update)
+            results.update_module(module_name, parsed_update)
+        else:
+            raise ValueError("Unexpected JSON data from module test: " + module_name)
+
+    def _run_tests(module_names: list[str]):
+        results.expected_modules = set(module_names)
+
+        test_cmd = ["test"]
+        for name_filter in args.get_strlist("name"):
+            test_cmd.extend(["--name", name_filter])
+        for module_name in module_names:
+            t = RunModuleTest(process_cap, module_name, test_cmd, lambda x: _on_json_output(module_name, x))
+
+    def _on_build_failure(exit_code, term_signal, stderr_buf):
+        print("Failed to build project tests")
+        print("actonc exited with code %d / %d" %(exit_code, term_signal))
+        print("stderr:", stderr_buf)
+        env.exit(1)
+
+    project_builder = BuildProjectTests(process_cap, env, args, _run_tests, _on_build_failure)
 
 def build_cmd_args(args):
     cmdargs = []
@@ -169,7 +252,10 @@ actor main(env):
         env.exit(0)
 
     def _cmd_test(args):
-        RunTest(process_cap, env, args)
+        run_tests = RunTestTest(process_cap, env, args)
+
+    def _cmd_list_test(args):
+        run_tests = RunTestList(process_cap, env, args)
 
     def _parse_args():
         p = argparse.Parser()
@@ -208,6 +294,8 @@ actor main(env):
         newp = p.add_cmd("new", "New project", _cmd_new)
         newp.add_arg("projectdir", "Project directory", True, "?")
         testp = p.add_cmd("test", "Test", _cmd_test)
+        testp.add_option("name", "strlist", "+", [], "Filter on test name")
+        testp = testp.add_cmd("list", "List tests", _cmd_list_test)
         return p.parse(env.argv)
 
     try:
@@ -220,8 +308,12 @@ actor main(env):
             pass
         if _cmd is not None:
             if _file is not None:
-                # TODO: print to stderr
-                print("Error: cannot specify both a command and an .act file")
+                if _file.endswith(".act"):
+                    print("Error: cannot specify both a command and an .act file", stderr=True)
+                elif _file.endswith(".ty"):
+                    print("Error: cannot specify both a command and an .ty file", stderr=True)
+                else:
+                    print("Unknown argument:", _file, stderr=True)
                 await async env.exit(1)
             _cmd(_args)
         else:
@@ -230,8 +322,8 @@ actor main(env):
             else:
                 env.exit(0)
     except argparse.PrintUsage as exc:
-        print(exc)
+        print(exc.error_message)
         env.exit(0)
     except argparse.ArgumentError as exc:
-        print(exc)
+        print(exc.error_message)
         env.exit(1)
