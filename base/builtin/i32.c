@@ -15,7 +15,7 @@
 // Auxiliary //////////////////////////////////////////////////////////////////////////////
 
 // only called with e>=0.
-int i32_pow(int a, int e) {
+int32_t i32_pow(int32_t a, int32_t e) {
     if (e == 0) return 1;
     if (e == 1) return a;
     if (e%2 == 0) return i32_pow(a*a,e/2);
@@ -47,7 +47,7 @@ void B_i32D___serialize__(B_i32 n, $Serial$state state) {
 }
 
 B_i32 B_i32D___deserialize__(B_i32 n, $Serial$state state) {
-    return toB_i32((int)(uintptr_t)$val_deserialize(state));
+    return toB_i32((int32_t)$val_deserialize(state));
 }
 
 B_bool B_i32D___bool__(B_i32 n) {
@@ -62,14 +62,14 @@ B_str B_i32D___repr__(B_i32 n) {
     return $FORMAT("%d", n->val);
 }
 
-B_i32 toB_i32(int i) {
+B_i32 toB_i32(int32_t i) {
     B_i32 res = acton_malloc(sizeof(struct B_i32));
     res->$class = &B_i32G_methods;
     res->val = i;
     return res;
 }
 
-int fromB_i32(B_i32 w) {
+int32_t fromB_i32(B_i32 w) {
     return w->val;
 }
 
@@ -143,14 +143,14 @@ $WORD B_IntegralD_i32D___ceil__ (B_IntegralD_i32 wit, B_i32 n, B_Integral wit2) 
 }
   
 B_i32 B_IntegralD_i32D___round__ (B_IntegralD_i32 wit, B_i32 n, B_int p) {
-    int nval = n->val;
+    int32_t nval = n->val;
     if (nval<0)
         return toB_i32(-B_IntegralD_i32D___round__(wit,toB_i32(-nval),p)->val);
-    int pval = p==NULL ? 0 : from$int(p);
+    int32_t pval = p==NULL ? 0 : from$int(p);
     if (pval>=0)
         return n;
-    int p10 = i32_pow(10,-pval);
-    int res = nval/p10;
+    int32_t p10 = i32_pow(10,-pval);
+    int32_t res = nval/p10;
     if (nval%p10 * 2 > p10)
         res++; 
     return toB_i32 (res * p10);
@@ -173,8 +173,8 @@ B_int B_IntegralD_i32D___index__(B_IntegralD_i32 wit, B_i32 n) {
 }
 
 B_tuple B_IntegralD_i32D___divmod__(B_IntegralD_i32 wit, B_i32 a, B_i32 b) {
-    int n = a->val;
-    int d = b->val;
+    int32_t n = a->val;
+    int32_t d = b->val;
     return $NEWTUPLE(2, toB_i32(n/d), toB_i32(n%d));
 }
 

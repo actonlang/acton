@@ -15,7 +15,7 @@
 // Auxiliary //////////////////////////////////////////////////////////////////////////////
 
 // only called with e>=0.
-short i16_pow(short a, short e) {
+int16_t i16_pow(int16_t a, int16_t e) {
     if (e == 0) return 1;
     if (e == 1) return a;
     if (e%2 == 0) return i16_pow(a*a,e/2);
@@ -46,7 +46,7 @@ void B_i16D___serialize__(B_i16 n, $Serial$state state) {
 }
 
 B_i16 B_i16D___deserialize__(B_i16 n, $Serial$state state) {
-    return toB_i16((short)(uintptr_t)$val_deserialize(state));
+    return toB_i16((int16_t)$val_deserialize(state));
 }
 
 B_bool B_i16D___bool__(B_i16 n) {
@@ -61,14 +61,14 @@ B_str B_i16D___repr__(B_i16 n) {
     return $FORMAT("%hd", n->val);
 }
 
-B_i16 toB_i16(short i) {
+B_i16 toB_i16(int16_t i) {
     B_i16 res = acton_malloc(sizeof(struct B_i16));
     res->$class = &B_i16G_methods;
     res->val = i;
     return res;
 }
 
-short fromB_i16(B_i16 w) {
+int16_t fromB_i16(B_i16 w) {
     return w->val;
 }
 
@@ -142,14 +142,14 @@ $WORD B_IntegralD_i16D___ceil__ (B_IntegralD_i16 wit, B_i16 n, B_Integral wit2) 
 }
   
 B_i16 B_IntegralD_i16D___round__ (B_IntegralD_i16 wit, B_i16 n, B_int p) {
-    short nval = n->val;
+    int16_t nval = n->val;
     if (nval<0)
         return toB_i16(-B_IntegralD_i16D___round__(wit,toB_i16(-nval),p)->val);
-    short pval = p==NULL ? 0 : from$int(p);
+    int16_t pval = p==NULL ? 0 : from$int(p);
     if (pval>=0)
         return n;
-    short p10 = i16_pow(10,-pval);
-    short res = nval/p10;
+    int16_t p10 = i16_pow(10,-pval);
+    int16_t res = nval/p10;
     if (nval%p10 * 2 > p10)
         res++; 
     return toB_i16 (res * p10);
@@ -174,8 +174,8 @@ B_int B_IntegralD_i16D___index__(B_IntegralD_i16 wit, B_i16 n) {
 B_tuple B_IntegralD_i16D___divmod__(B_IntegralD_i16 wit, B_i16 a, B_i16 b) {
     if (b->val == 0)
         $RAISE((B_BaseException)$NEW(B_ZeroDivisionError, to$str("division by zero")));
-    short n = a->val;
-    short d = b->val;
+    int16_t n = a->val;
+    int16_t d = b->val;
     return $NEWTUPLE(2, toB_i16(n/d), toB_i16(n%d));
 }
 
