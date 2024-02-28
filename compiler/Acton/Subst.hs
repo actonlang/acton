@@ -35,10 +35,11 @@ dropSelf (TFun l x p k t) NoDec
   | TRow _ _ _ _ k' <- k                = TFun l x p k' t
 dropSelf t _                            = t
 
-selfType                                :: PosPar -> Deco -> Type
-selfType p NoDec
+selfType                                :: PosPar -> KwdPar -> Deco -> Type
+selfType p k NoDec
   | TRow _ _ _ t _ <- prowOf p          = t
-selfType _ _                            = tSelf
+  | TRow _ _ _ t _ <- krowOf k          = t
+selfType _ _ _                          = tSelf
 
 
 closeDepVars vs cs

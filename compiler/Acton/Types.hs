@@ -749,7 +749,7 @@ instance Check Decl where
                                              wellformed env1 q
                                              wellformed env1 a
                                              when (inClass env) $ do
-                                                 unify (DfltInfo l 600 Nothing []) tSelf $ selfType p dec
+                                                 unify (DfltInfo l 600 Nothing []) tSelf $ selfType p k dec
                                              (csp,te0,p') <- infEnv env1 p
                                              (csk,te1,k') <- infEnv (define te0 env1) k
                                              (csb,_,b') <- infDefBody (define te1 (define te0 env1)) n p' k' b

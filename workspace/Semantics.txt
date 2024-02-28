@@ -258,15 +258,6 @@ Recent decisions:
 - Class inheritance is single ancestor only (all other types of mix-ins are expressed as protocol adoption)
 - Classes are the only nominal types, and only these support the 'isinstance' primitive
 - Narrowing of the option type is done through ==None and !=None comparisons
-- Narrowing of the primitive union type is done through built-ins 'isint', 'isfloat', 'isbool' and 'isstr'
-- Subtyping, as defined by class inheritance + structural rules, is ubiquitous
-- Class terms are subtypes of the function type (to allow for instantiation)
-- Type parameters to named types are written within brackets, as in List[int], dict[str,A]
-- Brackets also introduce type parameters in class declarations, as in class Bepa[T] (Apa[T]): ... 
-- And brackets introduce type parameters in explicitly polymorphic function/method declarations, as in def swap[A,B]((A,B)) -> (B,A): ...
-- Class names are also type names
-- Base class expressions are *type* expressions
-- Local classes are supported but all references to their names must be absent from the return type or env when their scope ends
 
 
 =========================================================================================================
