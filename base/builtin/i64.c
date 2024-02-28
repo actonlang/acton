@@ -55,13 +55,13 @@ B_bool B_i64D___bool__(B_i64 n) {
 
 B_str B_i64D___str__(B_i64 n) {
     char *s;
-    asprintf(&s,"%ld",n->val);
+    asprintf(&s,"%lld",n->val);
     return to$str(s);
 }
 
 B_str B_i64D___repr__(B_i64 n) {
     char *s;
-    asprintf(&s,"%ld",n->val);
+    asprintf(&s,"%lld",n->val);
     return to$str(s);
 }
 
