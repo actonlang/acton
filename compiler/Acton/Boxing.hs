@@ -42,13 +42,13 @@ unboxedVars env                    = unboxedVarsX $ envX env
 
 -- Auxiliaries ---------------------------------------------------------------------------------------------------
 
-integralTypes                      = [qnInt, qnI64, qnI32, qnI16, qnI64, qnU32, qnU16]
-numericTypes                       = integralTypes ++ [qnFloat]   -- qnComplex omitted for now
+integralTypes                      = [tInt, tI64, tI32, tI16, tI64, tU32, tU16]
+numericTypes                       = integralTypes ++ [tFloat]
 unboxableTypes                     = tail numericTypes
 
 
 class UnboxClass a where
-    unbox :: QName -> a -> a
+    unbox :: Type -> a -> a
 
 instance UnboxClass Expr where
    unbox _ (Box _ e)               = e
@@ -72,18 +72,16 @@ instance {-# OVERLAPS #-} Boxing ([Stmt]) where
                                            return $ if n `elem` ws2 then (ws1++ws2,x':xs') else (ws2,xs')
       where te                        = envOf x
             env1                      = define te env
-    boxing env (x@(Assign _ [p@(PVar _ n (Just t@(TCon _ (TC qn _))))] _) : xs)
-       | qn `elem` unboxableTypes    = do (ws1,x') <- boxing env x
-                                          (ws2,xs') <- boxing env1 xs
+    boxing env (x@(Assign _ [p@(PVar _ n (Just t))] _) : xs)
+       | t `elem` unboxableTypes     = do (ws1,x') <- boxing env x
                                           un <- newName (nstr n)
-                                          addUnboxedVar (n,un) env
+                                          (ws2,xs') <- boxing (addUnboxedVar (n,un) (define te env)) xs
                                           traceM ("Generated name "++ show un)
                                           let ss = case expr x' of
-                                                      e'@(Box qt e) -> [sAssign (PVar NoLoc un (Just t)) e, sAssign p (Box qt (Var NoLoc (NoQ un)))]
-                                                      _ -> [x',sAssign (PVar NoLoc un (Just t)) (UnBox qn (Var NoLoc (NoQ n)))]
+                                                      e'@(Box t e) -> [sAssign (PVar NoLoc un (Just t)) e, sAssign p (Box t (Var NoLoc (NoQ un)))]
+                                                      _ -> [x',sAssign (PVar NoLoc un (Just t)) (UnBox t (Var NoLoc (NoQ n)))]
                                           return (ws1++ws2, ss ++ xs')
       where te                       = envOf x
-            env1                     = addUnboxedVar n (define te env)
             
     boxing env (x : xs)              = do (ws1,x') <- boxing env x
                                           (ws2,xs') <- boxing env1 xs
@@ -107,25 +105,25 @@ instance Boxing a => Boxing (Maybe a) where
                                        return (ws1, Just x1)
     boxing env Nothing            = return ([], Nothing)
 
-boxingFromAtom w tNames [i@Int{}] ws
-   | t == qnInt                   = return (ws, i)
-   | t `elem` numericTypes        = return (ws, Box (last tNames) (unbox t i))
-   where t = head tNames
-boxingFromAtom w tNames [x@Float{}] ws
-   | t `elem` numericTypes        = return (ws, Box (last tNames) (unbox (head tNames) x))
-   where t = head tNames              -- need the guard to avoid unboxing ndarrays...
+boxingFromAtom w ts [i@Int{}] ws
+   | t == tInt                    = return (ws, i)
+   | t `elem` numericTypes        = return (ws, Box (last ts) (unbox t i))
+   where t = head ts
+boxingFromAtom w ts [x@Float{}] ws
+   | t `elem` numericTypes        = return (ws, Box (last ts) (unbox (head ts) x))
+   where t = head ts              -- need the guard to avoid unboxing ndarrays...
 boxingFromAtom w t es ws          = return (noq w : ws, Call NoLoc (eDot (eQVar w) fromatomKW) (posarg es) KwdNil)
 
-boxingBinop                       :: QName -> Name -> [Expr] -> [QName] -> [Name] -> BoxM ([Name], Expr)
-boxingBinop w attr es@[x1, x2] tNames ws
-   | t `elem` unboxableTypes      = return (ws, Box (last tNames) $ Paren NoLoc (BinOp NoLoc (unbox t x1) op (unbox t x2)))
-   where t = head tNames
+boxingBinop                       :: QName -> Name -> [Expr] -> [Type] -> [Name] -> BoxM ([Name], Expr)
+boxingBinop w attr es@[x1, x2] ts ws
+   | t `elem` unboxableTypes      = return (ws, Box (last ts) $ Paren NoLoc (BinOp NoLoc (unbox t x1) op (unbox t x2)))
+   where t = head ts
          op = bin2Binary attr
 boxingBinop w attr es _ ws        = return (noq w : ws, Call NoLoc (eDot (eQVar w) attr) (posarg es) KwdNil)
 
-boxingCompop w attr es@[x1, x2] tNames ws
-   | head tNames `elem` unboxableTypes
-                                  = return (ws, Box qnBool $ Paren NoLoc (CompOp NoLoc (unbox (head tNames) x1) [OpArg op (unbox (head tNames) x2)]))
+boxingCompop w attr es@[x1, x2] ts ws
+   | head ts `elem` unboxableTypes
+                                  = return (ws, Box tBool $ Paren NoLoc (CompOp NoLoc (unbox (head ts) x1) [OpArg op (unbox (head ts) x2)]))
    where op = cmp2Comparison attr
 boxingCompop w attr es _ ws       = return (noq w : ws, Call NoLoc (eDot (eQVar w) attr) (posarg es) KwdNil)
 
@@ -133,12 +131,11 @@ boxingWitness                      :: BoxEnv -> QName -> Name -> [Name] ->PosArg
 boxingWitness env w attr ws p     = case findQName w env of
                                         NVar (TCon _ (TC _ ts))
                                            | any (not . vFree) ts    -> return (noq w : ws, Call NoLoc (eDot (eQVar w) attr) p KwdNil)
-                                           | attr == fromatomKW      -> boxingFromAtom w (tNames ts) es ws
-                                           | attr `elem` binopKWs    -> boxingBinop w attr es (tNames ts) ws
-                                           | attr `elem` compareKWs  -> boxingCompop w attr es (tNames ts) ws
+                                           | attr == fromatomKW      -> boxingFromAtom w ts es ws
+                                           | attr `elem` binopKWs    -> boxingBinop w attr es ts ws
+                                           | attr `elem` compareKWs  -> boxingCompop w attr es ts ws
                                         _                            -> return (noq w : ws, Call NoLoc (eDot (eQVar w) attr) p KwdNil)
-   where tNames ts                = map (tcname . tcon) ts
-         es                       = posargs p
+   where es                       = posargs p
          vFree (TCon _ (TC _ _))  = True
          vFree _                  = False
 
@@ -158,14 +155,14 @@ instance Boxing Expr where
                                          return (ws1++ws2,e1)
     boxing env (Call l e@(TApp _ (Var _ f) ts) p KwdNil)
       | f `elem` prims              = do (ws1,p1) <- boxing env p
-                                         return (ws1,Box qnBool $ unbox qnBool (eCallP e p1))
+                                         return (ws1,Box tBool $ unbox tBool (eCallP e p1))
       | otherwise                   = do (ws1,p1) <- boxing env p
                                          return (ws1, eCallP e p1)
     boxing env (Call l e@(Var _ f) p KwdNil)
       | f `elem`prims               = do (ws1,p1) <- boxing env p
-                                         return (ws1,Box qnBool $ unbox qnBool (eCallP e p1))
+                                         return (ws1,Box tBool $ unbox tBool (eCallP e p1))
       | f `elem` mathfuns           = do (ws1,p1)  <- boxing env p
-                                         return (ws1,Box qnFloat $ eCallP e (unbox qnFloat p1))
+                                         return (ws1,Box tFloat $ eCallP e (unbox tFloat p1))
       | otherwise                   = do (ws1,p1) <- boxing env p
                                          return (ws1, eCallP e p1)
     boxing env (Call l f p KwdNil)  = do (ws1,f1) <- boxing env f
@@ -188,8 +185,8 @@ instance Boxing Expr where
                                          return (ws1, IsInstance l e1 qn)
     boxing env (BinOp l e1 op e2)   = do (ws1,e1') <- boxing env e1
                                          (ws2,e2') <- boxing env e2
-                                         return (ws1++ws2, Box qnBool $ Paren NoLoc (BinOp l (unbox t e1') op (unbox t e2')))
-         where t                    = tcname (tcon (typeOf env e2))
+                                         return (ws1++ws2, Box tBool $ Paren NoLoc (BinOp l (unbox t e1') op (unbox t e2')))
+         where t                    = typeOf env e2
     boxing env (CompOp l e os)      = do (ws1,e1) <- boxing env e
                                          (ws2,e2) <- boxing env os
                                          return (ws1++ws2, CompOp l e1 e2)

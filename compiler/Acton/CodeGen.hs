@@ -536,7 +536,7 @@ instance Gen Stmt where
     gen env (While _ e b [])        = genBranch env "while" (Branch e b) 
     gen env _                       = empty
 
-genBranch env kw (Branch e b)       = (text kw <+> parens (gen env (B.unbox qnBool e)) <+> char '{') $+$ nest 4 (genSuite env b) $+$ char '}'
+genBranch env kw (Branch e b)       = (text kw <+> parens (gen env (B.unbox tBool e)) <+> char '{') $+$ nest 4 (genSuite env b) $+$ char '}'
 
 {-
 genBranchExp env (IsInstance _ x y) = gen env primISINSTANCE0 <> parens(gen env x <>comma <+> genQName env y)
@@ -803,16 +803,16 @@ instance Gen Expr where
     gen env (CompOp _ e [a])        = gen env e <+> gen env a
     gen env (UnOp _ Not e)          = gen env primNOT <> parens (gen env t <> comma <+> genBool env e)
       where t                       = typeOf env e
-    gen env (Cond _ e1 e e2)        = parens (parens (gen env (B.unbox qnBool e)) <+> text "?" <+> gen env e1 <+> text ":" <+> gen env e2)
+    gen env (Cond _ e1 e e2)        = parens (parens (gen env (B.unbox tBool e)) <+> text "?" <+> gen env e1 <+> text ":" <+> gen env e2)
     gen env (Paren _ e)             = parens (gen env e)
-    gen env (Box tn e)              = text ("toB_"++nstr(noq tn)) <> parens (gen env e)
+    gen env (Box t e)              = text ("toB_"++render(pretty e)) <> parens (gen env e)
     gen env (UnBox _ e@(Call _ (Var _ f) p KwdNil))
         | f == primISNOTNONE        = genCall env [] (Var NoLoc primISNOTNONE0) p
         | f == primISNONE           = genCall env [] (Var NoLoc primISNONE0) p
         | f `elem` [primPUSH,primPUSHF]
                                     = gen env f <> parens(empty)
         | f `elem` B.mathfuns       = genCall env [] e p
-        | gBuiltin (noq f) `elem` B.integralTypes   -- f is the constructor for an integer type, so check if argument e is a literal
+        | tCon (TC (gBuiltin (noq f)) []) `elem` B.integralTypes   -- f is the constructor for an integer type, so check if argument e is a literal
                                     = genUnboxedInt env (posargs p) e
     gen env (UnBox _ e@(Call _ (Dot _ (Var _ w) op) (PosArg x (PosArg y PosNil)) KwdNil))  -- use macro for int (in)equality tests
                                     = case findQName w env of
