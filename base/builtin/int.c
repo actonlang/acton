@@ -714,7 +714,7 @@ int set_str(zz_ptr a, unsigned char *nstr, B_int intbase) {
     int offset =  len % POWINWORD[base];
     
     if (offset == 0) {
-        return set_str0(a, nstr, base, parts);
+        return set_str0(a, (char *)nstr, base, parts);
         a->size *= sgn;
     } else {
         unsigned long headval = 0;
@@ -725,7 +725,7 @@ int set_str(zz_ptr a, unsigned char *nstr, B_int intbase) {
         if (parts > 0) {
             zz_ptr res0 = acton_malloc(sizeof(zz_struct));
             zz_init(res0);
-            partdigits = set_str0(res0, &nstr[offset], base, parts);
+            partdigits = set_str0(res0, (char *)&nstr[offset], base, parts);
             zz_seti(a, base);
             zz_powi(a, a, POWINWORD[base] * parts);
             zz_muli(a, a, headval);
