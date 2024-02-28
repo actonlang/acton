@@ -54,11 +54,15 @@ B_bool B_i64D___bool__(B_i64 n) {
 }
 
 B_str B_i64D___str__(B_i64 n) {
-    return $FORMAT("%ld", n->val);
+    char *s;
+    asprintf(&s,"%lld",n->val);
+    return to$str(s);
 }
 
 B_str B_i64D___repr__(B_i64 n) {
-    return $FORMAT("%ld", n->val);
+    char *s;
+    asprintf(&s,"%lld",n->val);
+    return to$str(s);
 }
 
 B_i64 toB_i64(int64_t i) {
