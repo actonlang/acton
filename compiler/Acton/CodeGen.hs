@@ -134,7 +134,7 @@ hStmt env (Decl _ ds)               = vmap (declstub env1) ds $+$
                                       vmap (decl env1) ds $+$
                                       vmap (methstub env1) ds
   where env1                        = gdefine (envOf ds) env
-hStmt env s                         = vcat [ text "extern" <+> gen env t <+> genTopName env n <> semi | (n,NVar t) <- envOf s]
+hStmt env s                         = vcat [ text "extern" <+> genTypeDecl env n t <+> genTopName env n <> semi | (n,NVar t) <- envOf s]
 
 declstub env (Class _ n q a b)      = text "struct" <+> genTopName env n <> semi
 declstub env Def{}                  = empty
@@ -294,7 +294,7 @@ declModule env (Decl _ ds : ss)     = vcat [ declDecl env1 d | d <- ds ] $+$
   where env1                        = gdefine (envOf ds) env
         te                          = envOf ds
 declModule env (Signature{} : ss)   = declModule env ss
-declModule env (s : ss)             = vcat [ gen env t <+> genTopName env n <> semi | (n,NVar t) <- te ] $+$
+declModule env (s : ss)             = vcat [ genTypeDecl env n t <+> genTopName env n <> semi | (n,NVar t) <- te ] $+$
                                       declModule env1 ss
   where te                          = envOf s `exclude` defined env
         env1                        = gdefine te env
@@ -494,9 +494,18 @@ genSuite env (s:ss)                 = genStmt env s $+$ genSuite (ldefine (envOf
   where te                          = envOf s `exclude` defined env
         env1                        = ldefine te env
 
+
+isUnboxed (Internal BoxPass _ _)
+                                    = True
+isUnboxed _                         = False
+
+genTypeDecl env n t
+   | isUnboxed n                    = text (unboxed_c_type t)
+   | otherwise                      = gen env t
+   
 genStmt env (Decl _ ds)             = empty
 genStmt env (Assign _ [PVar _ n (Just t)] e)
-  | n `notElem` defined env         = gen env t <+> gen env n <+> equals <+> rhs <> semi
+  | n `notElem` defined env         =  genTypeDecl env n t <+> gen env n <+> equals <+> rhs <> semi
   where isWitness (Internal Witness _ _)
                                     = True
         isWitness _                 = False
@@ -878,3 +887,13 @@ instance Gen Type where
     gen env (TRow _ _ _ t r)        = gen env t <> comma <+> gen env r
     gen env (TNil _ _)              = empty
 
+unboxed_c_type t
+    | t == tI64 = "long"
+    | t == tU64 = "unsigned long"
+    | t == tI32 = "int"
+    | t == tU32 = "unsigned int"
+    | t == tI16 = "short"
+    | t == tU16 = "unsigned short"
+    | t == tFloat = "double"
+    | otherwise = error ("Internal error: trying to find unboxed type for " ++ show t)
+    
