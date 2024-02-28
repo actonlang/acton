@@ -15,7 +15,7 @@
 // Auxiliary //////////////////////////////////////////////////////////////////////////////
 
 // only called with e>=0.
-unsigned short u16_pow(unsigned short a, unsigned short e) {
+uint16_t u16_pow(uint16_t a, uint16_t e) {
     if (e == 0) return 1;
     if (e == 1) return a;
     if (e%2 == 0) return u16_pow(a*a,e/2);
@@ -61,14 +61,14 @@ B_str B_u16D___repr__(B_u16 n) {
     return $FORMAT("%hu", n->val);
 }
 
-B_u16 toB_u16(unsigned short i) {
+B_u16 toB_u16(uint16_t i) {
     B_u16 res = acton_malloc(sizeof(struct B_u16));
     res->$class = &B_u16G_methods;
     res->val = i;
     return res;
 }
 
-unsigned short fromB_u16(B_u16 w) {
+uint16_t fromB_u16(B_u16 w) {
     return w->val;
 }
 
@@ -140,12 +140,12 @@ $WORD B_IntegralD_u16D___ceil__ (B_IntegralD_u16 wit, B_u16 n, B_Integral wit2) 
 }
   
 B_u16 B_IntegralD_u16D___round__ (B_IntegralD_u16 wit, B_u16 n, B_int p) {
-    unsigned short nval = n->val;
+    uint16_t nval = n->val;
     short pval = p==NULL ? 0 : from$int(p);
     if (pval>=0)
         return n;
-    unsigned short p10 = u16_pow(10,-pval);
-    unsigned short res = nval/p10;
+    uint16_t p10 = u16_pow(10,-pval);
+    uint16_t res = nval/p10;
     if (nval%p10 * 2 > p10)
         res++; 
     return toB_u16 (res * p10);

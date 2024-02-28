@@ -15,7 +15,7 @@
 // Auxiliary //////////////////////////////////////////////////////////////////////////////
 
 // only called with e>=0.
-unsigned int u32_pow(unsigned int a, unsigned int e) {
+uint32_t u32_pow(uint32_t a, uint32_t e) {
     if (e == 0) return 1;
     if (e == 1) return a;
     if (e%2 == 0) return u32_pow(a*a,e/2);
@@ -61,14 +61,14 @@ B_str B_u32D___repr__(B_u32 n) {
     return $FORMAT("%u", n->val);
 }
 
-B_u32 toB_u32(unsigned int i) {
+B_u32 toB_u32(uint32_t i) {
     B_u32 res = acton_malloc(sizeof(struct B_u32));
     res->$class = &B_u32G_methods;
     res->val = i;
     return res;
 }
 
-unsigned int fromB_u32(B_u32 w) {
+uint32_t fromB_u32(B_u32 w) {
     return w->val;
 }
 
@@ -140,12 +140,12 @@ $WORD B_IntegralD_u32D___ceil__ (B_IntegralD_u32 wit, B_u32 n, B_Integral wit2) 
 }
   
 B_u32 B_IntegralD_u32D___round__ (B_IntegralD_u32 wit, B_u32 n, B_int p) {
-    unsigned int nval = n->val;
+    uint32_t nval = n->val;
     int pval = p==NULL ? 0 : from$int(p);
     if (pval>=0)
         return n;
-    unsigned int p10 = u32_pow(10,-pval);
-    unsigned int res = nval/p10;
+    uint32_t p10 = u32_pow(10,-pval);
+    uint32_t res = nval/p10;
     if (nval%p10 * 2 > p10)
         res++; 
     return toB_u32 (res * p10);

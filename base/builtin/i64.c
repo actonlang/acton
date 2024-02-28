@@ -15,7 +15,7 @@
 // Auxiliary //////////////////////////////////////////////////////////////////////////////
 
 // only called with e>=0.
-long i64_pow(long a, long e) {
+int64_t i64_pow(int64_t a, int64_t e) {
     if (e == 0) return 1;
     if (e == 1) return a;
     if (e%2 == 0) return i64_pow(a*a,e/2);
@@ -46,7 +46,7 @@ void B_i64D___serialize__(B_i64 n, $Serial$state state) {
 }
 
 B_i64 B_i64D___deserialize__(B_i64 n, $Serial$state state) {
-    return toB_i64((long)$val_deserialize(state));
+    return toB_i64((int64_t)$val_deserialize(state));
 }
 
 B_bool B_i64D___bool__(B_i64 n) {
@@ -61,14 +61,14 @@ B_str B_i64D___repr__(B_i64 n) {
     return $FORMAT("%ld", n->val);
 }
 
-B_i64 toB_i64(long i) {
+B_i64 toB_i64(int64_t i) {
     B_i64 res = acton_malloc(sizeof(struct B_i64));
     res->$class = &B_i64G_methods;
     res->val = i;
     return res;
 }
 
-long fromB_i64(B_i64 w) {
+int64_t fromB_i64(B_i64 w) {
     return w->val;
 }
 
@@ -142,14 +142,14 @@ $WORD B_IntegralD_i64D___ceil__ (B_IntegralD_i64 wit, B_i64 n, B_Integral wit2) 
 }
   
 B_i64 B_IntegralD_i64D___round__ (B_IntegralD_i64 wit, B_i64 n, B_int p) {
-    long nval = n->val;
+    int64_t nval = n->val;
     if (nval<0)
         return toB_i64(-B_IntegralD_i64D___round__(wit,toB_i64(-nval),p)->val);
-    long pval = p==NULL ? 0 : from$int(p);
+    int64_t pval = p==NULL ? 0 : from$int(p);
     if (pval>=0)
         return n;
-    long p10 = i64_pow(10,-pval);
-    long res = nval/p10;
+    int64_t p10 = i64_pow(10,-pval);
+    int64_t res = nval/p10;
     if (nval%p10 * 2 > p10)
         res++; 
     return toB_i64 (res * p10);
@@ -172,8 +172,8 @@ B_int B_IntegralD_i64D___index__(B_IntegralD_i64 wit, B_i64 n) {
 }
 
 B_tuple B_IntegralD_i64D___divmod__(B_IntegralD_i64 wit, B_i64 a, B_i64 b) {
-    long n = a->val;
-    long d = b->val;
+    int64_t n = a->val;
+    int64_t d = b->val;
     return $NEWTUPLE(2, toB_i64(n/d), toB_i64(n%d));
 }
 
