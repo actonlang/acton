@@ -2,6 +2,7 @@
 long B_i64D_hash(B_i64 n);
 long B_i32D_hash(B_i32 n);
 long B_i16D_hash(B_i16 n);
+long B_i8D_hash(B_i8 n);
 long B_floatD_hash(B_float v);
 long B_complexD_hash(B_complex c);
 
