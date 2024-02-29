@@ -753,9 +753,11 @@ adjust (TCon _ c) (TCon _ c') e
   | tcname c == tcname c'           = e
 adjust t t' e                       = typecast t t' e
 
+genExp env t' (Box _ (UnBox _ e))   = genExp env t' e
 genExp env t' e                     = gen env (adjust t t' e')
   where (t, e')                     = qType env adjust e
- 
+
+genExp' env (Box _ (UnBox _ e))     = genExp' env e
 genExp' env e                       = gen env e'
   where (t, e')                     = qType env adjust e
 
@@ -805,7 +807,8 @@ instance Gen Expr where
       where t                       = typeOf env e
     gen env (Cond _ e1 e e2)        = parens (parens (gen env (B.unbox tBool e)) <+> text "?" <+> gen env e1 <+> text ":" <+> gen env e2)
     gen env (Paren _ e)             = parens (gen env e)
-    gen env (Box t e)              = text ("toB_"++render(pretty e)) <> parens (gen env e)
+    gen env (Box _ (UnBox _ e))     = gen env e
+    gen env (Box t e)               = text ("toB_"++render(pretty (noq (tcname(tcon t))))) <> parens (gen env e)
     gen env (UnBox _ e@(Call _ (Var _ f) p KwdNil))
         | f == primISNOTNONE        = genCall env [] (Var NoLoc primISNOTNONE0) p
         | f == primISNONE           = genCall env [] (Var NoLoc primISNONE0) p

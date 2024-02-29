@@ -17,7 +17,7 @@ doBoxing                           :: Acton.Env.Env0 -> Module -> IO Module
 doBoxing env m                     = return m{mbody = ss}
    where (_,ss)                    = runBoxM (boxing (boxEnv env) (mbody m))
                                      
--- Boxing monad; state not yet used, but prepared for introducing unboxed variables ------------------------------
+-- Boxing monad  ---------------------------------------------------------------------------------------------------
 
 type BoxM a                        = State Int a 
 
@@ -31,7 +31,6 @@ runBoxM ss                         = evalState ss 0
 data BoxX                          = BoxX { unboxedVarsX :: [(Name,Name)] }
 
 type BoxEnv                        = EnvF BoxX
-
 
 boxEnv                             :: Env0 -> BoxEnv
 boxEnv env0                        = setX env0 (BoxX [])
@@ -78,8 +77,8 @@ instance {-# OVERLAPS #-} Boxing ([Stmt]) where
                                           (ws2,xs') <- boxing (addUnboxedVar (n,un) (define te env)) xs
                                           traceM ("Generated name "++ show un)
                                           let ss = case expr x' of
-                                                      e'@(Box t e) -> [sAssign (PVar NoLoc un (Just t)) e, sAssign p (Box t (Var NoLoc (NoQ un)))]
-                                                      _ -> [x',sAssign (PVar NoLoc un (Just t)) (UnBox t (Var NoLoc (NoQ n)))]
+                                                      Box t e -> [sAssign (pVar un t) e, sAssign p (Box t (eVar un))]
+                                                      _ -> [x',sAssign (pVar un t) (unbox t (eVar n))]
                                           return (ws1++ws2, ss ++ xs')
       where te                       = envOf x
             
