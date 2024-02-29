@@ -21,7 +21,7 @@ doBoxing env m                     = return m{mbody = ss}
 
 type BoxM a                        = State Int a 
 
-newName                             :: String -> BoxM Name
+newName                            :: String -> BoxM Name
 newName s                          = do n <- get
                                         put (n+1)
                                         return $ Internal BoxPass s n
@@ -35,8 +35,10 @@ type BoxEnv                        = EnvF BoxX
 boxEnv                             :: Env0 -> BoxEnv
 boxEnv env0                        = setX env0 (BoxX [])
 
+addUnboxedVar                      :: (Name,Name) -> BoxEnv -> BoxEnv
 addUnboxedVar p env                = modX env $ \x -> x{unboxedVarsX = p : unboxedVarsX x}
 
+unboxedVars                        :: BoxEnv -> [(Name,Name)]
 unboxedVars env                    = unboxedVarsX $ envX env
 
 -- Auxiliaries ---------------------------------------------------------------------------------------------------
@@ -66,7 +68,7 @@ class Boxing a where
 instance {-# OVERLAPS #-} Boxing ([Stmt]) where
     boxing env []                   = return ([],[])
     boxing env (x@(Assign _ [PVar _ n _] _) : xs)
-       | isWitness (NoQ n)            = do (ws1,x') <- boxing env x
+       | isWitness n                  = do (ws1,x') <- boxing env x
                                            (ws2,xs') <- boxing env1 xs
                                            return $ if n `elem` ws2 then (ws1++ws2,x':xs') else (ws2,xs')
       where te                        = envOf x
@@ -96,8 +98,8 @@ instance (Boxing a) => Boxing ([a]) where
                                          return (ws1++ws2, x1:xs2)
 
     
-isWitness (NoQ (Internal Witness _ _)) = True
-isWitness _  = False
+isWitness (Internal Witness _ _)    = True
+isWitness _                         = False
 
 instance Boxing a => Boxing (Maybe a) where
     boxing env (Just x)           = do (ws1, x1) <- boxing env x
@@ -140,30 +142,41 @@ boxingWitness env w attr ws p     = case findQName w env of
 
 prims = [primISINSTANCE, primISNOTNONE, primISNONE]
 
+unboxedPrim p
+  | p == primISINSTANCE            = primISINSTANCE0
+  | p == primISNOTNONE             = primISNOTNONE0
+  | p == primISNONE                = primISNONE0
+
 qMath str = QName (ModName [name "math"]) (name str)
  
 mathfuns = map qMath ["sqrt", "exp", "log", "sin", "cos", "tan", "asin", "acos", "atan",  "sinh", "cosh", "tanh",  "asinh", "acosh", "atanh"]
 
 instance Boxing Expr where
     boxing env (Var l v@(NoQ n))
-       | isWitness v                = return ([n],Var l v)
+       | isWitness n                = return ([n],Var l v)
+--       | otherwise                  = case lookup n ps of
+--                                          Just un -> return ([], eVar un)
+--                                          Nothing -> return ([], Var l v)
+--       where ps                     = unboxedVars env
     boxing env (Var l v)            = return ([],Var l v)
-    boxing env (Call _ (Dot _ (Var _ w) attr) p KwdNil)
-      | isWitness w                 = do (ws1,p1) <- boxing env p
+    boxing env (Call _ (Dot _ (Var _ w@(NoQ n)) attr) p KwdNil)
+      | isWitness n                 = do (ws1,p1) <- boxing env p
                                          (ws2,e1) <- boxingWitness env w attr ws1 p1
                                          return (ws1++ws2,e1)
     boxing env (Call l e@(TApp _ (Var _ f) ts) p KwdNil)
       | f `elem` prims              = do (ws1,p1) <- boxing env p
-                                         return (ws1,Box tBool $ unbox tBool (eCallP e p1))
+                                         return (ws1,Box tBool $ eCallP e' p1)
       | otherwise                   = do (ws1,p1) <- boxing env p
                                          return (ws1, eCallP e p1)
+       where e'                     = tApp (eQVar (unboxedPrim f)) ts
     boxing env (Call l e@(Var _ f) p KwdNil)
       | f `elem`prims               = do (ws1,p1) <- boxing env p
-                                         return (ws1,Box tBool $ unbox tBool (eCallP e p1))
+                                         return (ws1,Box tBool $ eCallP e' p1)
       | f `elem` mathfuns           = do (ws1,p1)  <- boxing env p
                                          return (ws1,Box tFloat $ eCallP e (unbox tFloat p1))
       | otherwise                   = do (ws1,p1) <- boxing env p
                                          return (ws1, eCallP e p1)
+       where e'                     = eQVar (unboxedPrim f)
     boxing env (Call l f p KwdNil)  = do (ws1,f1) <- boxing env f
                                          (ws2,p1) <- boxing env p
                                          return (ws1++ws2, eCallP f1 p1)
@@ -212,8 +225,13 @@ instance Boxing Expr where
                                          return (ws1, Dict l es1)
     boxing env (Paren l e)          = do (ws1,e1) <- boxing env e
                                          return (ws1, Paren l e1)
-    boxing env (Box _ (UnBox _ e))  = do (ws1,e1) <- boxing env e
+    boxing env (Box t e)  =           do (ws1,e1) <- boxing env e
+                                         case e1 of
+                                            UnBox _ e' -> return (ws1,e')
+                                            _ -> return (ws1,Box t e1)
                                          return (ws1, e1)
+--    boxing env (Box _ (UnBox _ e))  = do (ws1,e1) <- boxing env e
+--                                         return (ws1, e1)
     boxing env e                    = return ([],e)
 
 instance Boxing OpArg where

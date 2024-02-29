@@ -176,6 +176,7 @@ primEnv             = [     (noq primASYNCf,        NDef scASYNCf NoDec),
                             (noq primGCfinalizer,   NDef scGCfinalizer NoDec),
 
                             (noq primISINSTANCE,    NDef scISINSTANCE NoDec),
+                            (noq primISINSTANCE0,   NDef scISINSTANCE NoDec),
                             (noq primCAST,          NDef scCAST NoDec),
                             (noq primCONSTCONT,     NDef scCONSTCONT NoDec),
 
@@ -205,6 +206,8 @@ primEnv             = [     (noq primASYNCf,        NDef scASYNCf NoDec),
 
                             (noq primISNOTNONE,     NDef scISNOTNONE NoDec),
                             (noq primISNONE,        NDef scISNONE NoDec),
+                            (noq primISNOTNONE0,    NDef scISNOTNONE NoDec),
+                            (noq primISNONE0,       NDef scISNONE NoDec),
 
                             (noq primSKIPRESc,      NDef scSKIPRESc NoDec),
                             (noq primSKIPRES,       NDef scSKIPRES NoDec),

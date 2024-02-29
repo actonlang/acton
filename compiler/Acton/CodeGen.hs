@@ -506,15 +506,12 @@ genTypeDecl env n t
 genStmt env (Decl _ ds)             = empty
 genStmt env (Assign _ [PVar _ n (Just t)] e)
   | n `notElem` defined env         =  genTypeDecl env n t <+> gen env n <+> equals <+> rhs <> semi
-  where isWitness (Internal Witness _ _)
-                                    = True
-        isWitness _                 = False
-        rhs                         = if isWitness n 
+  where rhs                         = if B.isWitness n 
                                       then case staticWitnessName e of
                                            (Just (nm),as) -> foldr (\x y -> y <>text "->" <> myPretty (x)) (parens(myPretty (tcname(tcon t))) <> myPretty (witName nm)) as 
                                            _  ->  genExp env t e
                                       else genExp env t e
-genStmt env s                       = vcat [ gen env t <+> gen env n <> semi | (n,NVar t) <- te ] $+$
+genStmt env s                       = vcat [ genTypeDecl env n t <+> gen env n <> semi | (n,NVar t) <- te ] $+$
                                       gen env1 s
   where te                          = envOf s `exclude` defined env
         env1                        = ldefine te env
@@ -622,7 +619,7 @@ castLit env (Strings l ss) p        = format (concat ss) p
 
 genCall env [] (TApp _ e ts) p      = genCall env ts e p
 genCall env [_,t] (Var _ n) (PosArg e PosNil)
-  | n == primCAST                   = parens (parens (gen env t) <> gen env e)
+  | n == primCAST                   = parens (parens (genTypeDecl env (noq n) t) <> gen env e)
 genCall env [row] (Var _ n) (PosArg s@Strings{} (PosArg tup PosNil))
   | n == primFORMAT                 = gen env n <> parens (genStr env (formatLit s) <> castLit env s (flatten tup))
   where unbox (TNil _ _) p          = empty
@@ -753,11 +750,9 @@ adjust (TCon _ c) (TCon _ c') e
   | tcname c == tcname c'           = e
 adjust t t' e                       = typecast t t' e
 
-genExp env t' (Box _ (UnBox _ e))   = genExp env t' e
 genExp env t' e                     = gen env (adjust t t' e')
   where (t, e')                     = qType env adjust e
 
-genExp' env (Box _ (UnBox _ e))     = genExp' env e
 genExp' env e                       = gen env e'
   where (t, e')                     = qType env adjust e
 
@@ -807,7 +802,6 @@ instance Gen Expr where
       where t                       = typeOf env e
     gen env (Cond _ e1 e e2)        = parens (parens (gen env (B.unbox tBool e)) <+> text "?" <+> gen env e1 <+> text ":" <+> gen env e2)
     gen env (Paren _ e)             = parens (gen env e)
-    gen env (Box _ (UnBox _ e))     = gen env e
     gen env (Box t e)               = text ("toB_"++render(pretty (noq (tcname(tcon t))))) <> parens (gen env e)
     gen env (UnBox _ e@(Call _ (Var _ f) p KwdNil))
         | f == primISNOTNONE        = genCall env [] (Var NoLoc primISNOTNONE0) p
