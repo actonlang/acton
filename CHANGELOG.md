@@ -6,6 +6,7 @@
 - `file.FS.exepath()` returns the path to the current executable
 - `acton` now finds `actonc` by looking at its own location rather than assuming
   `actonc` is on the path
+- AbE: explain testing with `acton test`
 
 ## Changed
 - Printing of compiler pass debug output from individual files, like `acton
@@ -21,8 +22,11 @@
 
 ### Fixed
 - `acton new foo` now creates a new project `foo`
+- Fixed handling of failing tests in `acton test` [#1709]
+
 
 ## [0.20.1] (2024-02-22)
+
 ### Fixed
 - Install `acton` frontend in Debian package
 
