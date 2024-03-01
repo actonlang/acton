@@ -1,0 +1,21 @@
+class Aa(object):
+    @property
+    a: int
+
+    def __init__(self, a):
+        self.a = a
+
+    def f(self):
+        return self.a
+
+class Bb(Aa):
+    def __init__(self, a):
+        Aa.__init__(self, a)
+
+    def f(self):
+        return self.a * 2
+
+actor main(env):
+    print(Aa(1).f())
+    print(Bb(1).f())
+    env.exit(0)
