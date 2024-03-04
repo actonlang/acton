@@ -441,6 +441,16 @@ class TestDisplay(object):
         self.sw = time.Stopwatch()
         self.expected_modules = set([''])
 
+    def set_expected(self, tests: dict[str, Test], modname: str=""):
+        for test_name, test in tests.items():
+            if modname not in self.results:
+                self.results[modname] = {}
+            self.results[modname][test_name] = (test=test, result=None)
+
+    def update_module(self, module_name: str, test_results: dict[str, (test: Test, result: ?TestResult)]):
+        self.results[module_name] = test_results
+        self.show()
+
     def update(self, test: Test, test_result: ?TestResult, modname: str=""):
         """Will return an integer when all tests are complete, otherwise None
         The returned integer is the suggested exit code.
@@ -450,6 +460,26 @@ class TestDisplay(object):
         self.results[modname][test.name] = (test=test, result=test_result)
         if test_result is not None:
             self.show()
+
+    def num_tests(self):
+        cnt = 0
+        for module_name in self.results:
+            cnt += len(self.results[module_name])
+        return cnt
+
+    def skip_show(self):
+        if len(self.expected_modules) > 0 and set(self.results.keys()) != self.expected_modules:
+            return True
+        return False
+
+    def is_test_done(self, modname, name):
+        if modname in self.results and name in self.results[modname]:
+            test_res = self.results[modname][name]
+            if test_res is not None:
+                test_res_result = test_res.result
+                if test_res_result is not None:
+                    return True
+        return False
 
     def show(self):
         pass
@@ -475,6 +505,8 @@ class TestDisplayJSON(TestDisplay):
 
 class TestDisplayStatus(TestDisplay):
     def show(self):
+        if self.skip_show():
+            return
         d = "["
         complete = True
         if set(self.results.keys()) != self.expected_modules:
@@ -518,7 +550,8 @@ class TestDisplayStatus(TestDisplay):
                 if modname == "":
                     print("\nTests")
                 else:
-                    print("\nTests - module %s:" % modname)
+                    if len(self.results[modname]) > 0:
+                        print("\nTests - module %s:" % modname)
                 for tname, t in self.results[modname].items():
                     r = t.result
                     if r is not None:
@@ -544,19 +577,19 @@ class TestDisplayStatus(TestDisplay):
                             print(prefix + term.green + "OK (%sms)" % (time) + term.normal)
             print("")
             if errors > 0 and failures > 0:
-                print(term.bold + term.red + "%d error and %d failure out of %d tests (%ss)" % (errors, failures, len(self.results), self.sw.elapsed().str_ms()) + term.normal)
+                print(term.bold + term.red + "%d error and %d failure out of %d tests (%ss)" % (errors, failures, self.num_tests(), self.sw.elapsed().str_ms()) + term.normal)
                 print()
                 self._env.exit(2)
             elif errors > 0:
-                print(term.bold + term.red + "%d out of %d tests errored (%ss)" % (errors, len(self.results), self.sw.elapsed().str_ms()) + term.normal)
+                print(term.bold + term.red + "%d out of %d tests errored (%ss)" % (errors, self.num_tests(), self.sw.elapsed().str_ms()) + term.normal)
                 print()
                 self._env.exit(2)
             elif failures > 0:
-                print(term.bold + term.red + "%d out of %d tests failed (%ss)" % (failures, len(self.results), self.sw.elapsed().str_ms()) + term.normal)
+                print(term.bold + term.red + "%d out of %d tests failed (%ss)" % (failures, self.num_tests(), self.sw.elapsed().str_ms()) + term.normal)
                 print()
                 self._env.exit(1)
             else:
-                print(term.green + "All %d tests passed (%ss)" % (len(self.results), self.sw.elapsed().str_ms()) + term.normal)
+                print(term.green + "All %d tests passed (%ss)" % (self.num_tests(), self.sw.elapsed().str_ms()) + term.normal)
                 print()
                 self._env.exit(0)
 
@@ -594,8 +627,9 @@ actor test_runner(env: Env, unit_tests: dict[str, UnitTest], sync_actor_tests: d
         if test_names == set():
             return tests
 
+        TEST_PREFIX_LEN = len("_test_")
         for name, t in tests.items():
-            if name[len("_test_"):] in test_names:
+            if name[TEST_PREFIX_LEN:] in test_names:
                 res[name] = t
         return res
 
@@ -605,7 +639,13 @@ actor test_runner(env: Env, unit_tests: dict[str, UnitTest], sync_actor_tests: d
         for modname in results.results.keys():
             for t in results.results[modname].keys():
                 tests.append(modname + "." + t)
-        print(json.encode({"tests": tests}))
+        if args.get_bool("json"):
+            print(json.encode({"tests": tests}), stderr=True)
+        else:
+            print("Tests:")
+            for test in tests:
+                print(" - " + test)
+        env.exit(0)
 
     proc def _run_tests(args):
         _init_results(args)
@@ -614,18 +654,24 @@ actor test_runner(env: Env, unit_tests: dict[str, UnitTest], sync_actor_tests: d
         _run_unit_tests(args)
 
     proc def _run_unit_tests(args):
-        hand_out = _filter_tests(unit_tests, args)
+        my_tests = _filter_tests(unit_tests, args)
+        handed_out = set()
 
-        def get_test():
-            r = hand_out.popitem()
-            if r is not None:
-                return r.1
+        def get_test() -> ?UnitTest:
+            remaining = list(set(my_tests.keys()) - handed_out)
+            if len(remaining) > 0:
+                test_name = remaining[0]
+                handed_out.add(test_name)
+                test = my_tests[test_name]
+                return test
 
         def check_complete():
-            if len(hand_out) == 0:
-                _run_sync_actor_tests(args)
-                return True
-            return False
+            for test in my_tests.values():
+                if not results.is_test_done("", test.name):
+                    return False
+
+            _run_sync_actor_tests(args)
+            return True
 
         def report_result(t, test_result: TestResult):
             results.update(t, test_result)
@@ -636,18 +682,24 @@ actor test_runner(env: Env, unit_tests: dict[str, UnitTest], sync_actor_tests: d
                 unit_test_runner(i, get_test, report_result)
 
     proc def _run_sync_actor_tests(args):
-        hand_out = _filter_tests(sync_actor_tests, args)
+        my_tests = _filter_tests(sync_actor_tests, args)
+        handed_out = set()
 
         def get_test() -> ?SyncActorTest:
-            r = hand_out.popitem()
-            if r is not None:
-                return r.1
+            remaining = list(set(my_tests.keys()) - handed_out)
+            if len(remaining) > 0:
+                test_name = remaining[0]
+                handed_out.add(test_name)
+                test = my_tests[test_name]
+                return test
 
         def check_complete():
-            if len(hand_out) == 0:
-                _run_async_actor_tests(args)
-                return True
-            return False
+            for test in my_tests.values():
+                if not results.is_test_done("", test.name):
+                    return False
+
+            _run_async_actor_tests(args)
+            return True
 
         def report_result(t, test_result: TestResult):
             results.update(t, test_result)
@@ -658,18 +710,24 @@ actor test_runner(env: Env, unit_tests: dict[str, UnitTest], sync_actor_tests: d
                 sync_actor_test_runner(get_test, report_result)
 
     proc def _run_async_actor_tests(args):
-        hand_out = _filter_tests(async_actor_tests, args)
+        my_tests = _filter_tests(async_actor_tests, args)
+        handed_out = set()
 
         def get_test() -> ?AsyncActorTest:
-            r = hand_out.popitem()
-            if r is not None:
-                return r.1
+            remaining = list(set(my_tests.keys()) - handed_out)
+            if len(remaining) > 0:
+                test_name = remaining[0]
+                handed_out.add(test_name)
+                test = my_tests[test_name]
+                return test
 
         def check_complete():
-            if len(hand_out) == 0:
-                _run_env_tests(args)
-                return True
-            return False
+            for test in my_tests.values():
+                if not results.is_test_done("", test.name):
+                    return False
+
+            _run_env_tests(args)
+            return True
 
         def report_result(t, test_result: TestResult):
             results.update(t, test_result)
@@ -680,18 +738,24 @@ actor test_runner(env: Env, unit_tests: dict[str, UnitTest], sync_actor_tests: d
                 async_actor_test_runner(get_test, report_result)
 
     proc def _run_env_tests(args):
-        hand_out = _filter_tests(env_tests, args)
+        my_tests = _filter_tests(env_tests, args)
+        handed_out = set()
 
         def get_test() -> ?EnvTest:
-            r = hand_out.popitem()
-            if r is not None:
-                return r.1
+            remaining = list(set(my_tests.keys()) - handed_out)
+            if len(remaining) > 0:
+                test_name = remaining[0]
+                handed_out.add(test_name)
+                test = my_tests[test_name]
+                return test
 
         def check_complete():
-            if len(hand_out) == 0:
-                # TODO: exit immediately or somethnig?
-                return True
-            return False
+            for test in my_tests.values():
+                if not results.is_test_done("", test.name):
+                    return False
+
+            env.exit(0)
+            return True
 
         def report_result(t, test_result: TestResult):
             results.update(t, test_result)
@@ -779,8 +843,8 @@ actor test_runner(env: Env, unit_tests: dict[str, UnitTest], sync_actor_tests: d
     try:
         _parse_args()
     except argparse.PrintUsage as exc:
-        print(exc)
+        print(exc.error_message)
         env.exit(0)
     except argparse.ArgumentError as exc:
-        print(exc)
+        print(exc.error_message)
         env.exit(1)
