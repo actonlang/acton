@@ -25,3 +25,54 @@ B_str B_BaseExceptionD__name (B_BaseException self) {
 B_str B_type(B_value a) {
     return to$str(unmangle_name(a->$class->$GCINFO));
 }
+
+$R B_EnvD_getenvbG_local (B_Env self, $Cont C_cont, B_bytes name) {
+    // uv_os_getenv is not threadsafe but our Env actor forces serial execution
+
+    // Try to use a small fixed size buffer
+    size_t len = 256;
+    char smallval[256];
+    char *value = smallval;
+
+    const char* env_var = fromB_bytes(name);
+
+    // First, query the required buffer size by passing NULL as the buffer
+    int r = uv_os_getenv(env_var, value, &len);
+    if (r == UV_ENOENT) {
+        // The environment variable does not exist
+        return $R_CONT(C_cont, B_None);
+    } else if (r == UV_ENOBUFS) {
+        // Allocate the buffer and actually get the environment variable value
+        value = (char*)acton_malloc(len);
+        r = uv_os_getenv(env_var, value, &len);
+    }
+    if (r < 0) {
+        char *s;
+        asprintf(&s, "Failed to read the environment variable %s: %s", env_var, uv_strerror(r));
+        $RAISE((B_BaseException)B_RuntimeErrorG_new(to$str(s)));
+    }
+    return $R_CONT(C_cont, to$bytes(value));
+}
+
+$R B_EnvD_setenvbG_local (B_Env self, $Cont C_cont, B_bytes name, B_bytes value) {
+    const char* env_var = fromB_bytes(name);
+    const char* env_val = fromB_bytes(value);
+    int r = uv_os_setenv(env_var, env_val);
+    if (r < 0) {
+        char *s;
+        asprintf(&s, "Failed to set the environment variable %s: %s", env_var, uv_strerror(r));
+        $RAISE((B_BaseException)B_RuntimeErrorG_new(to$str(s)));
+    }
+    return $R_CONT(C_cont, B_None);
+}
+
+$R B_EnvD_unsetenvbG_local (B_Env self, $Cont C_cont, B_bytes name) {
+    const char* env_var = fromB_bytes(name);
+    int r = uv_os_unsetenv(env_var);
+    if (r < 0) {
+        char *s;
+        asprintf(&s, "Failed to unset the environment variable %s: %s", env_var, uv_strerror(r));
+        $RAISE((B_BaseException)B_RuntimeErrorG_new(to$str(s)));
+    }
+    return $R_CONT(C_cont, B_None);
+}

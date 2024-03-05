@@ -927,6 +927,38 @@ def type(a: value) -> str:
     """
     NotImplemented
 
+actor StringDecoder(cb_out: action(str) -> None, encoding: ?str="utf-8", on_error: ?action(str, bytes) -> None):
+    """Bytes to string decoder
+
+    Decodes bytes to string using the provided encoding. If no encoding is given
+    UTF-8 is used. The decoder is stateful in order to buffer incomplete multi-
+    byte characters.
+    """
+    MAX_UNICODE_CHAR_SIZE = 4
+    var buf: bytes = b""
+
+    if encoding is not None:
+        if encoding.lower() != "utf-8":
+            raise ValueError("Only utf-8 encoding is supported")
+
+    def decode(input: bytes) -> None:
+        buf += input
+        # Attempt to decode all of buf. If it fails we are likely in the middle
+        # of a multi-byte character so we try again by removing the last bytes
+        # iteratively until we succeed. UTF-8 has up to 4 bytes per character.
+        for i in range(1, MAX_UNICODE_CHAR_SIZE+1):
+            try:
+                s = buf[:-i].decode()
+                buf = buf[-i:]
+                cb_out(s)
+                return
+            except ValueError:
+                pass
+        if on_error is not None:
+            on_error("Invalid UTF-8", buf)
+        else:
+            raise ValueError("Invalid UTF-8: %s" % str(buf))
+
 ## Environment ################################################
 
 class WorldCap():
@@ -968,10 +1000,64 @@ actor Env (wc: WorldCap, sc: SysCap, args: list[str]):
     argv = args
     nr_wthreads: int = 0
 
+    action def getenv(name: str) -> ?str:
+        """Get the value of an environment variable"""
+        res = getenvb(name.encode())
+        if res is not None:
+            return res.decode()
+        return None
+
+    action def getenvb(name: bytes) -> ?bytes:
+        """Get the value of an environment variable"""
+        NotImplemented
+
+    action def setenv(n: str, v: str) -> None:
+        """Set the value of an environment variable"""
+        setenvb(n.encode(), v.encode())
+
+    action def setenvb(n: bytes, v: bytes) -> None:
+        """Set the value of an environment variable"""
+        NotImplemented
+
+    action def unsetenv(n: str) -> None:
+        """Unset an environment variable"""
+        unsetenvb(n.encode())
+
+    action def unsetenvb(n: bytes) -> None:
+        """Unset an environment variable"""
+        NotImplemented
+
     action def stdout_write(s: str) -> None:
         NotImplemented
 
-    action def stdin_install(cb: action(str) -> None) -> None:
+    action def stdin_install(on_stdin: ?action(str) -> None, encoding: ?str=None, on_error: ?action(str, bytes) -> None, on_stdin_bytes: ?action(bytes) -> None) -> None:
+        if on_stdin is None and on_stdin_bytes is None:
+            raise ValueError("At least one of on_stdin or on_stdin_bytes must be set")
+        elif on_stdin_bytes is not None:
+            if encoding is not None:
+                raise ValueError("encoding must not be set when on_stdin_bytes is set, it is only used for decoding stdin bytes to string")
+            if on_error is not None:
+                raise ValueError("on_error must not be set when on_stdin_bytes is set, it is only used for decoding error when decoding stdin bytes to string")
+            _on_stdin_bytes(on_stdin_bytes)
+        elif on_stdin is not None:
+            if encoding is None:
+                # If no encoding is given, attempt to discover the encoding used
+                # Default to utf-8 if we're unable to discover the encoding
+                encoding = "utf-8"
+                # Read encoding from the LANG environment variable
+                lang_env = getenv("LANG")
+                if lang_env is not None:
+                    try:
+                        encoding = lang_env.split(".")[1].lower()
+                    except:
+                        pass
+            # If stdin is attached to a terminal, attempt to discover the
+            # encoding used by the terminal by inspecting the LANG environment
+            # variable.
+            sd = StringDecoder(on_stdin, encoding, on_error)
+            _on_stdin_bytes(sd.decode)
+
+    action def _on_stdin_bytes(cb: action(bytes) -> None) -> None:
         NotImplemented
 
     action def exit(n: int):

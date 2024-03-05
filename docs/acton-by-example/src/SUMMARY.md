@@ -34,6 +34,9 @@
   - [Explicit types](types/explicit.md)
 - [Security](security.md)
   - [Capabilities](security/capabilities.md)
+- [Environment](environment.md)
+  - [Environment variables](environment/variables.md)
+  - [Reading stdin input](environment/stdin.md)
 - [Standard library](stdlib.md)
   - [Regular Expression](stdlib/re.md)
 
