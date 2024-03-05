@@ -65,37 +65,6 @@ actor RunModuleTest(process_cap, modname, test_cmd, on_json_output):
     p = process.Process(process_cap, cmd, None, None, on_stdout, on_stderr, on_exit, on_error)
 
 
-def parse_json_test_result(module_name, j) -> dict[str, (test: testing.Test, result: ?testing.TestResult)]:
-    res = {}
-    for tname, t in j.items():
-        if isinstance(t, dict):
-            tdef = t["test"]
-            tres = t["result"]
-            test_def = testing.Test(tdef["name"], tdef["desc"])
-            test_result = None
-            if tres is not None and tres != {}:
-                tr_success: ?bool = None
-                tr_success_val = tres["success"]
-                if tr_success_val is not None:
-                    tr_success = bool(tr_success_val)
-                test_result = testing.TestResult(
-                    tr_success,
-                    tres["exception"],
-                    float(tres["duration"]))
-            res[module_name + tname] = (test_def, test_result)
-        else:
-            raise ValueError("Invalid json: " + str(j))
-    return res
-
-def parse_test_list_json_output(j, modname):
-    res = []
-    if isinstance(j, dict):
-        for test_name in j["tests"]:
-            res.append(modname + test_name)
-    else:
-        raise ValueError("Invalid json: " + str(j))
-    return res
-
 actor BuildProjectTests(process_cap, env, args, on_build_success, on_build_failure):
     """Build the project test
 
@@ -161,8 +130,8 @@ actor RunTestList(process_cap, env, args):
             raise ValueError("Duplicate list of tests from module: " + module_name)
         if isinstance(update, dict):
             _module_tests[module_name] = []
-            for test_name in update["tests"]:
-                _module_tests[module_name].append(module_name + test_name)
+            for test in update["tests"]:
+                _module_tests[module_name].append(test["name"])
         else:
             raise ValueError("Unexpected JSON data from module test: " + module_name)
 
@@ -185,20 +154,71 @@ actor RunTestList(process_cap, env, args):
     project_builder = BuildProjectTests(process_cap, env, args, _run_tests, _on_build_failure)
 
 
-actor RunTestTest(process_cap, env, args):
-    var _module_tests = {}
-    results = testing.TestDisplayStatus(env)
+def parse_json_tests(data):
+    tests: dict[str, testing.TestInfo] = {}
+    jdata_tests = data["tests"]
+    if isinstance(jdata_tests, dict):
+        for jdata_test in jdata_tests.values():
+            if isinstance(jdata_test, dict):
+                name = jdata_test["name"]
+                desc = jdata_test["desc"]
+                if isinstance(name, str) and isinstance(desc, str):
+                    test_def = testing.Test(name, desc)
+                    tests[name] = testing.TestInfo(test_def)
+                else:
+                    raise ValueError("Invalid test list JSON")
+    else:
+        raise ValueError("Invalid test list JSON")
+    return tests
 
-    def _on_json_output(module_name, update):
-        if isinstance(update, dict):
-            parsed_update = parse_json_test_result(module_name, update)
-            results.update_module(module_name, parsed_update)
+def parse_json_test_result(data):
+    data_test = data["test"]
+    if isinstance(data_test, dict):
+        name = data_test["name"]
+        desc = data_test["desc"]
+        complete = data["complete"]
+        result = data["result"]
+        if isinstance(result, dict):
+            success = result["success"]
+            exception = result["exception"]
+            duration = result["duration"]
+            if (isinstance(name, str)
+                and isinstance(desc, str)
+                and isinstance(complete, bool)
+                and (success is None or isinstance(success, bool))
+                and (exception is None or isinstance(exception, str))
+                and isinstance(duration, float)
+                ):
+                return testing.Test(name, desc), complete, testing.TestResult(success, exception, duration)
+            else:
+                raise ValueError("Invalid test result JSON")
+        else:
+            raise ValueError("Invalid test result JSON")
+    else:
+        raise ValueError("Invalid test result JSON")
+
+
+actor RunTestTest(process_cap, env: Env, args):
+    var _module_tests = {}
+    results = testing.ProjectTestResults(env)
+    def _periodic_show():
+        results.show()
+        after 0.05: _periodic_show()
+
+    def _on_json_output(module_name, data):
+        if isinstance(data, dict):
+            if "tests" in data:
+                tests = parse_json_tests(data)
+                results.update_module(module_name, tests)
+                _periodic_show()
+            elif "test" in data:
+                test_def, complete, test_result = parse_json_test_result(data)
+                results.update(module_name, test_def, complete, test_result)
         else:
             raise ValueError("Unexpected JSON data from module test: " + module_name)
 
     def _run_tests(module_names: list[str]):
         results.expected_modules = set(module_names)
-
         test_cmd = ["test"]
         for name_filter in args.get_strlist("name"):
             test_cmd.extend(["--name", name_filter])

@@ -36,6 +36,7 @@ def _test_asyncact(report_result, log_handler: logging.Handler) -> None:
     s = AsyncTester(report_result, log_handler)
     s.test()
 
+# this doesn't work because actonc doesn't infer the right type signature
 def _test_envtest(report_result, env, log_handler: logging.Handler) -> None:
     s = EnvTester(report_result, env, log_handler)
     s.test()
