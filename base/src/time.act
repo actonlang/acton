@@ -406,7 +406,7 @@ class DateTime(object):
 
 
 
-class Instant:
+class Instant(object):
     """A specific point in time as measured with a monotonically increasing
     clock. Only useful with ~Duration~ and ~Stopwatch~ to measure elapsed time.
 
@@ -497,7 +497,7 @@ extension Instant(Ord):
 
 
 
-class Duration:
+class Duration(object):
     """Duration represents elapsed time
 
     Stored using seconds and attoseconds.
