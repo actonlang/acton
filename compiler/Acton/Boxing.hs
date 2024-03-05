@@ -37,7 +37,7 @@ boxEnv env0                        = setX env0 ()
 -- Auxiliaries ----------------------------------------------------
 
 integralTypes                      = [qnInt, qnI64, qnI32, qnI16, qnI64, qnU32, qnU16]
-numericTypes                       = integralTypes ++ [qnComplex, qnFloat]
+numericTypes                       = integralTypes ++ [qnFloat]   -- qnComplex omitted for now
 unboxableTypes                     = tail numericTypes
 
 
@@ -93,7 +93,8 @@ boxingFromAtom w tNames [i@Int{}] ws
    | t `elem` numericTypes        = return (ws, Box (last tNames) (unbox t i))
    where t = head tNames
 boxingFromAtom w tNames [x@Float{}] ws
-                                   = return (ws, Box (last tNames) (unbox (head tNames) x))
+   | t `elem` numericTypes         = return (ws, Box (last tNames) (unbox (head tNames) x))
+   where t = head tNames              -- need the guard to avoid ndarray...
 boxingFromAtom w t es ws           = return (noq w : ws, Call NoLoc (eDot (eQVar w) fromatomKW) (posarg es) KwdNil)
 
 boxingBinop                       :: QName -> Name -> [Expr] -> [QName] -> [Name] -> BoxM ([Name], Expr)
@@ -111,7 +112,7 @@ boxingCompop w attr es _ ws       = return (noq w : ws, Call NoLoc (eDot (eQVar 
 
 boxingWitness                      :: BoxEnv -> QName -> Name -> [Name] ->PosArg -> BoxM ([Name],Expr)
 boxingWitness env w attr ws p        = case findQName w env of
-                                        NVar (TCon _ (TC _ ts))
+                                        NVar (TCon _ (TC pr ts))
                                            | any (not . vFree) ts    -> return (noq w : ws, Call NoLoc (eDot (eQVar w) attr) p KwdNil)
                                            | attr == fromatomKW      -> boxingFromAtom w (tNames ts) es ws
                                            | attr `elem` binopKWs    -> boxingBinop w attr es (tNames ts) ws
