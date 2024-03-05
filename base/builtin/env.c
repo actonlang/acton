@@ -33,8 +33,8 @@ extern int return_val;
 
 // Env /////////////////////////////////////////////////////////////////////////
 
-$R B_EnvD_stdout_writeG_local (B_Env self, $Cont c$cont, B_str s) {
-    printf("%s", s->str);
+$R B_EnvD_stdout_writeG_local (B_Env self, $Cont c$cont, B_bytes d) {
+    printf("%s", d->str);
     return $R_CONT(c$cont, B_None);
 }
 void read_stdin(uv_stream_t *stream, ssize_t nread, const uv_buf_t *buf) {

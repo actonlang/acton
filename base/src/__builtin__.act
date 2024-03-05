@@ -968,10 +968,10 @@ actor Env (wc: WorldCap, sc: SysCap, args: list[str]):
     argv = args
     nr_wthreads: int = 0
 
-    action def stdout_write(s: str) -> None:
+    action def stdout_write(d: bytes) -> None:
         NotImplemented
 
-    action def stdin_install(cb: action(str) -> None) -> None:
+    action def stdin_install(cb: action(bytes) -> None) -> None:
         NotImplemented
 
     action def exit(n: int):

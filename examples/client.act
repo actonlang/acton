@@ -5,12 +5,12 @@ actor main(env):
     def on_connect(c):
         print("Client established connection to", c.remote_address(), "from", c.local_address(), "using IP version", c.ip_version())
         def conn_write(s):
-            c.write(s.encode())
+            c.write(s)
 
         env.stdin_install(conn_write)
 
     def on_receive(c, data):
-        env.stdout_write(data.decode())
+        env.stdout_write(data)
 
     def on_error(c, msg):
         print("Client ERR", msg)

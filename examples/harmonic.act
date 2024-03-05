@@ -6,7 +6,7 @@ def harmonic(n):
     
 actor main(env):
     def interact(input):
-        n = int(input.strip("\n"))
+        n = int(input.decode().strip("\n"))
         print(harmonic(n))
 
     env.stdin_install(interact)
