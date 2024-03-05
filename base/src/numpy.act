@@ -82,7 +82,7 @@ def concatenate [A (Primitive)] (arrays: list[ndarray[A]]) -> ndarray[A]:
 def mean [A (Primitive)] (a: ndarray[A], axis: ?int) -> ndarray[float]:
     NotImplemented
 
-def arange(start: ?int, stop: int, step: ?int) -> ndarray[int]:
+def arange(start: int, stop: ?int, step: int = 1) -> ndarray[int]:
     NotImplemented
 
 def linspace(a: float, b: float, n: int) -> ndarray[float]:

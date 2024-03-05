@@ -202,12 +202,12 @@ struct numpyQ_PrimitiveD_float numpyQ_PrimitiveD_floatD_instance = {&numpyQ_Prim
 numpyQ_PrimitiveD_float numpyQ_PrimitiveD_floatG_witness = &numpyQ_PrimitiveD_floatD_instance;
 
 numpyQ_PrimitiveD_int numpyQ_PrimitiveD_intG_new() {
-    numpyQ_PrimitiveD_int res = malloc(sizeof(numpyQ_PrimitiveD_int));
+    numpyQ_PrimitiveD_int res = acton_malloc(sizeof(struct numpyQ_PrimitiveD_int));
     res->$class = &numpyQ_PrimitiveD_intG_methods;
     return res;
 }
 numpyQ_PrimitiveD_float numpyQ_PrimitiveD_floatG_new() {
-    numpyQ_PrimitiveD_float res = malloc(sizeof(numpyQ_PrimitiveD_float));
+    numpyQ_PrimitiveD_float res = acton_malloc(sizeof(struct numpyQ_PrimitiveD_float));
     res->$class = &numpyQ_PrimitiveD_floatG_methods;
     return res;
 }

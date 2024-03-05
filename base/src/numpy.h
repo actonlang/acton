@@ -403,7 +403,7 @@ $WORD numpyQ_scalar(numpyQ_Primitive wit, numpyQ_ndarray a);
 
 // newaxis //////////////////////////////////////////////////////////
 
-extern B_int numpy$G_newaxis;
+extern B_int numpyQ_newaxis;
 
 struct numpyQ_IntegralD_ndarrayD_int;
 typedef struct numpyQ_IntegralD_ndarrayD_int *numpyQ_IntegralD_ndarrayD_int;
@@ -799,7 +799,7 @@ B_int numpyQ_CollectionD_ndarrayD___len__(numpyQ_CollectionD_ndarray, numpyQ_nda
 // numpyQ_RealFloat$ndarray ////////////////////////////////////////////////////////
 
 #define numpyQ_RealFloat$ndarray ((B_Real)numpyQ_RealD_ndarray)
-numpyQ_RealD_ndarray numpyQ_RealFloat$ndarrayG_new(numpyQ_Primitive,B_RealFloat); // (B_Real)numpyQ_RealD_ndarrayG_new(__VA_ARGS__)
+numpyQ_RealD_ndarray numpyQ_RealFloatD_ndarrayG_new(numpyQ_Primitive,B_RealFloat); // (B_Real)numpyQ_RealD_ndarrayG_new(__VA_ARGS__)
 
 // numpyQ_RealFunsD_mathD_ndarray ////////////////////////////////////////////////////
 
