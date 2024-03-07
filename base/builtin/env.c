@@ -37,9 +37,8 @@ $R B_EnvD_stdout_writeG_local (B_Env self, $Cont c$cont, B_str s) {
     printf("%s", s->str);
     return $R_CONT(c$cont, B_None);
 }
-void read_stdin(uv_stream_t *stream, ssize_t nread, const uv_buf_t *buf) {
-    log_info("read_stdin: %p", stream->data);
 
+void read_stdin(uv_stream_t *stream, ssize_t nread, const uv_buf_t *buf) {
     if (nread < 0){
         if (nread == UV_EOF) {
             uv_close((uv_handle_t *)stream, NULL);
@@ -50,11 +49,9 @@ void read_stdin(uv_stream_t *stream, ssize_t nread, const uv_buf_t *buf) {
             cb->$class->__asyn__(cb, to$bytesD_len(buf->base, nread));
         }
     }
-
-    if (buf->base)
-        acton_free(buf->base);
 }
-$R B_EnvD_stdin_installG_local (B_Env self, $Cont c$cont, $action cb) {
+
+$R B_EnvD__on_stdin_bytesG_local (B_Env self, $Cont c$cont, $action cb) {
     // This should be the only call in env that does IO stuff, so it is safe to
     // pin affinity here (and not earlier)..
     pin_actor_affinity();
@@ -64,6 +61,7 @@ $R B_EnvD_stdin_installG_local (B_Env self, $Cont c$cont, $action cb) {
     uv_read_start((uv_stream_t*)tty, alloc_buffer, read_stdin);
     return $R_CONT(c$cont, B_None);
 }
+
 $R B_EnvD_exitG_local (B_Env self, $Cont c$cont, B_int n) {
     return_val = from$int(n);
     rts_shutdown();
