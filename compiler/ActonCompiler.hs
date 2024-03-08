@@ -940,13 +940,7 @@ zigBuild env opts paths tasks binTasks = do
                  " -Doptimize=" ++ (if (C.dev opts) then "Debug" else "ReleaseFast") ++
                  (if (C.db opts) then " -Ddb " else " ") ++
                  (if (C.cpedantic opts) then " -Dcpedantic " else " ") ++
-                 " -Dprojpath=" ++ projPath paths ++
-                 " -Dprojpath_outtypes=" ++ joinPath [ projPath paths, "out", "types" ] ++
                  " -Dsyspath=" ++ sysPath paths ++
-                 " -Dsyspath_backend=" ++ dir_dots_to_root ++ joinPath [ sysPath paths, "backend" ] ++
-                 " -Dsyspath_base=" ++ dir_dots_to_root ++ joinPath [ sysPath paths, "base" ] ++
-                 " -Dsyspath_include=" ++ joinPath [ sysPath paths, "depsout", "include" ] ++
-                 " -Dsyspath_lib=" ++ joinPath [ sysPath paths, "depsout", "lib" ] ++
                  " -Dsyspath_libreldev=" ++ joinPath [ sysPath paths, "lib", reldev ] ++
                  (if use_prebuilt then " -Duse_prebuilt" else "")
 

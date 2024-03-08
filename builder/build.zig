@@ -19,9 +19,15 @@ pub const FilePath = struct {
 // relative to the root and can be used. It would be more elegant to figure out
 // if there are actual commonalities between the paths and only traverse
 // upwards as far as necessary.
-fn joinPath(allocator: std.mem.Allocator, dots: []const u8, base: []const u8, relative: []const u8) []const u8 {
+fn relJoinPath(allocator: std.mem.Allocator, dots: []const u8, base: []const u8, relative: []const u8) []const u8 {
     const path = allocator.alloc(u8, dots.len + base.len + relative.len + 1) catch @panic("OOM");
     _ = std.fmt.bufPrint(path, "{s}{s}/{s}", .{dots, base, relative}) catch @panic("Error joining paths");
+    return path;
+}
+
+fn joinPath(allocator: std.mem.Allocator, base: []const u8, relative: []const u8) []const u8 {
+    const path = allocator.alloc(u8, base.len + relative.len + 1) catch @panic("OOM");
+    _ = std.fmt.bufPrint(path, "{s}/{s}", .{base, relative}) catch @panic("Error joining paths");
     return path;
 }
 
@@ -47,19 +53,20 @@ pub fn build(b: *std.Build) void {
     const buildroot_path = b.build_root.handle.realpathAlloc(b.allocator, ".") catch @panic("ASD");
     const dots_to_root = dotsToRoot(b.allocator, buildroot_path);
     defer b.allocator.free(dots_to_root);
-    print("Acton Project Builder\nBuilding in {s}\n", .{buildroot_path});
     const optimize = b.standardOptimizeOption(.{});
     const target = b.standardTargetOptions(.{});
     const db = b.option(bool, "db", "") orelse false;
     const use_prebuilt = b.option(bool, "use_prebuilt", "") orelse false;
-    const projpath = b.option([]const u8, "projpath", "") orelse "";
-    const projpath_outtypes = b.option([]const u8, "projpath_outtypes", "") orelse "";
     const syspath = b.option([]const u8, "syspath", "") orelse "";
-    const syspath_backend = b.option([]const u8, "syspath_backend", "") orelse "";
-    const syspath_base = b.option([]const u8, "syspath_base", "") orelse "";
-    const syspath_include = b.option([]const u8, "syspath_include", "") orelse "";
-    const syspath_lib = b.option([]const u8, "syspath_lib", "") orelse "";
     const syspath_libreldev = b.option([]const u8, "syspath_libreldev", "") orelse "";
+
+    const projpath_outtypes = joinPath(b.allocator, buildroot_path, "out/types");
+    const syspath_backend = relJoinPath(b.allocator, dots_to_root, syspath, "backend");
+    const syspath_base = relJoinPath(b.allocator, dots_to_root, syspath, "base");
+    const syspath_include = joinPath(b.allocator, syspath, "depsout/include");
+    const syspath_lib = joinPath(b.allocator, syspath, "depsout/lib");
+
+    print("Acton Project Builder\nBuilding in {s}\n", .{buildroot_path});
 
     const libactondb_dep = b.anonymousDependency(syspath_backend, @import("backendbuild.zig"), .{
         .target = target,
@@ -71,10 +78,10 @@ pub fn build(b: *std.Build) void {
         .target = target,
         .optimize = optimize,
         .db = db,
-        .syspath_include = syspath_include,
+        .syspath = syspath,
     });
 
-    const dep_libgc = b.anonymousDependency(joinPath(b.allocator, dots_to_root, syspath, "deps/libgc"), @import("deps/libgc/build.zig"), .{
+    const dep_libgc = b.anonymousDependency(relJoinPath(b.allocator, dots_to_root, syspath, "deps/libgc"), @import("deps/libgc/build.zig"), .{
         .target = target,
         .optimize = optimize,
         .BUILD_SHARED_LIBS = false,
@@ -85,67 +92,67 @@ pub fn build(b: *std.Build) void {
 
 
     // -- ActonDeps ------------------------------------------------------------
-    const dep_libargp = b.anonymousDependency(joinPath(b.allocator, dots_to_root, syspath, "deps/libargp"), @import("deps/libargp/build.zig"), .{
+    const dep_libargp = b.anonymousDependency(relJoinPath(b.allocator, dots_to_root, syspath, "deps/libargp"), @import("deps/libargp/build.zig"), .{
         .target = target,
         .optimize = optimize,
     });
 
-    const dep_libbsdnt = b.anonymousDependency(joinPath(b.allocator, dots_to_root, syspath, "deps/libbsdnt"), @import("deps/libbsdnt/build.zig"), .{
+    const dep_libbsdnt = b.anonymousDependency(relJoinPath(b.allocator, dots_to_root, syspath, "deps/libbsdnt"), @import("deps/libbsdnt/build.zig"), .{
         .target = target,
         .optimize = optimize,
     });
 
-    const dep_libmbedtls = b.anonymousDependency(joinPath(b.allocator, dots_to_root, syspath, "deps/mbedtls"), @import("deps/mbedtls/build.zig"), .{
+    const dep_libmbedtls = b.anonymousDependency(relJoinPath(b.allocator, dots_to_root, syspath, "deps/mbedtls"), @import("deps/mbedtls/build.zig"), .{
         .target = target,
         .optimize = optimize,
     });
 
-    const dep_libnetstring = b.anonymousDependency(joinPath(b.allocator, dots_to_root, syspath, "deps/libnetstring"), @import("deps/libnetstring/build.zig"), .{
+    const dep_libnetstring = b.anonymousDependency(relJoinPath(b.allocator, dots_to_root, syspath, "deps/libnetstring"), @import("deps/libnetstring/build.zig"), .{
         .target = target,
         .optimize = optimize,
     });
 
-    const dep_libpcre2 = b.anonymousDependency(joinPath(b.allocator, dots_to_root, syspath, "deps/pcre2"), @import("deps/pcre2/build.zig"), .{
+    const dep_libpcre2 = b.anonymousDependency(relJoinPath(b.allocator, dots_to_root, syspath, "deps/pcre2"), @import("deps/pcre2/build.zig"), .{
         .target = target,
         .optimize = optimize,
     });
 
-    const dep_libprotobuf_c = b.anonymousDependency(joinPath(b.allocator, dots_to_root, syspath, "deps/libprotobuf_c"), @import("deps/libprotobuf_c/build.zig"), .{
+    const dep_libprotobuf_c = b.anonymousDependency(relJoinPath(b.allocator, dots_to_root, syspath, "deps/libprotobuf_c"), @import("deps/libprotobuf_c/build.zig"), .{
         .target = target,
         .optimize = optimize,
     });
 
-    const dep_libtlsuv = b.anonymousDependency(joinPath(b.allocator, dots_to_root, syspath, "deps/tlsuv"), @import("deps/tlsuv/build.zig"), .{
+    const dep_libtlsuv = b.anonymousDependency(relJoinPath(b.allocator, dots_to_root, syspath, "deps/tlsuv"), @import("deps/tlsuv/build.zig"), .{
         .target = target,
         .optimize = optimize,
     });
 
-    const dep_libutf8proc = b.anonymousDependency(joinPath(b.allocator, dots_to_root, syspath, "deps/libutf8proc"), @import("deps/libutf8proc/build.zig"), .{
+    const dep_libutf8proc = b.anonymousDependency(relJoinPath(b.allocator, dots_to_root, syspath, "deps/libutf8proc"), @import("deps/libutf8proc/build.zig"), .{
         .target = target,
         .optimize = optimize,
     });
 
-    const dep_libuuid = b.anonymousDependency(joinPath(b.allocator, dots_to_root, syspath, "deps/libuuid"), @import("deps/libuuid/build.zig"), .{
+    const dep_libuuid = b.anonymousDependency(relJoinPath(b.allocator, dots_to_root, syspath, "deps/libuuid"), @import("deps/libuuid/build.zig"), .{
         .target = target,
         .optimize = optimize,
     });
 
-    const dep_libuv = b.anonymousDependency(joinPath(b.allocator, dots_to_root, syspath, "deps/libuv"), @import("deps/libuv/build.zig"), .{
+    const dep_libuv = b.anonymousDependency(relJoinPath(b.allocator, dots_to_root, syspath, "deps/libuv"), @import("deps/libuv/build.zig"), .{
         .target = target,
         .optimize = optimize,
     });
 
-    const dep_libxml2 = b.anonymousDependency(joinPath(b.allocator, dots_to_root, syspath, "deps/libxml2"), @import("deps/libxml2/build.zig"), .{
+    const dep_libxml2 = b.anonymousDependency(relJoinPath(b.allocator, dots_to_root, syspath, "deps/libxml2"), @import("deps/libxml2/build.zig"), .{
         .target = target,
         .optimize = optimize,
     });
 
-    const dep_libyyjson = b.anonymousDependency(joinPath(b.allocator, dots_to_root, syspath, "deps/libyyjson"), @import("deps/libyyjson/build.zig"), .{
+    const dep_libyyjson = b.anonymousDependency(relJoinPath(b.allocator, dots_to_root, syspath, "deps/libyyjson"), @import("deps/libyyjson/build.zig"), .{
         .target = target,
         .optimize = optimize,
     });
 
-    const dep_libsnappy_c = b.anonymousDependency(joinPath(b.allocator, dots_to_root, syspath, "deps/libsnappy_c"), @import("deps/libsnappy_c/build.zig"), .{
+    const dep_libsnappy_c = b.anonymousDependency(relJoinPath(b.allocator, dots_to_root, syspath, "deps/libsnappy_c"), @import("deps/libsnappy_c/build.zig"), .{
         .target = target,
         .optimize = optimize,
     });
@@ -268,7 +275,7 @@ pub fn build(b: *std.Build) void {
         libActonProject.addCSourceFile(.{ .file = .{ .path = entry }, .flags = flags.items });
     }
 
-    libActonProject.addIncludePath(.{ .path = projpath });
+    libActonProject.addIncludePath(.{ .path = buildroot_path });
     libActonProject.addIncludePath(.{ .path = syspath_base });
     libActonProject.addIncludePath(.{ .path = syspath_include });
     libActonProject.linkLibC();
@@ -309,7 +316,7 @@ pub fn build(b: *std.Build) void {
         });
         //_ = syspath;
         executable.addCSourceFile(.{ .file = .{ .path = entry.full_path }, .flags = flags.items });
-        executable.addIncludePath(.{ .path = projpath });
+        executable.addIncludePath(.{ .path = buildroot_path });
         executable.addIncludePath(.{ .path = syspath_base });
         executable.addIncludePath(.{ .path = syspath_include });
         executable.addLibraryPath(.{ .path = "out/rel/lib/" });
