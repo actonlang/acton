@@ -70,10 +70,7 @@ pub fn build(b: *std.Build) void {
     print("Acton Project Builder\nBuilding in {s}\n", .{buildroot_path});
 
     var iter_dir = b.build_root.handle.openDir(
-        "out/types/",
-        .{
-            .iterate = true
-        },
+        "out/types/", .{ .iterate = true },
     ) catch |err| {
         std.log.err("Error opening iterable dir: {}", .{err});
         std.os.exit(1);
@@ -324,6 +321,33 @@ pub fn build(b: *std.Build) void {
             executable.addLibraryPath(.{ .path = syspath_libreldev });
             executable.addLibraryPath(.{ .path = syspath_lib });
             executable.linkLibrary(libActonProject);
+
+            // Link project dependencies
+            const deps_path = joinPath(b.allocator, buildroot_path, "deps");
+            const deps_dir = std.fs.cwd().openDir(deps_path, .{ .iterate = true });
+            if (deps_dir) |dir| {
+                //defer dir.close();
+                var deps_walker = dir.iterate();
+                while (deps_walker.next() catch unreachable) |deps_entry| {
+                    if (deps_entry.kind == .directory) {
+                        // Process sub-directory. For example, print its name.
+                        std.debug.print("Found sub-directory: {s}\n", .{deps_entry.name});
+                        const dep_path = joinPath(b.allocator, deps_path, deps_entry.name);
+                        //const dep_include = joinPath(b.allocator, dep_path, "out/types");
+                        libActonProject.addIncludePath(.{ .path = dep_path });
+                        executable.addIncludePath(.{ .path = dep_path });
+                        const dep_dep = b.anonymousDependency("deps/dumbo", @import("build.zig"), .{
+                            .target = target,
+                            .optimize = optimize,
+                            .only_lib = true,
+                            .syspath = syspath,
+                        });
+                        executable.linkLibrary(dep_dep.artifact("ActonProject"));
+                    }
+                }
+            } else |err| {
+                std.debug.print("Failed to open directory: {}\n", .{err});
+            }
 
             // Do not use prebuilt based on the use_prebuilt flag, but also do not
             // use prebuilt when there are custom options, like --db

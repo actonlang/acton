@@ -51,16 +51,17 @@ import Data.Version (showVersion)
 import qualified Data.List
 import qualified Filesystem.Path.CurrentOS as Fsco
 import System.Clock
+import System.Directory
 import System.Directory.Recursive
+import System.Exit
 import System.FileLock
+import System.FilePath ((</>))
+import System.FilePath.Posix
 import System.IO hiding (readFile, writeFile)
 import System.IO.Temp
 import System.Info
-import System.Directory
-import System.Exit
 import System.Posix.Files
 import System.Process
-import System.FilePath.Posix
 import qualified System.Environment
 import qualified System.Exit
 import qualified Paths_acton
@@ -259,6 +260,16 @@ printDocs opts = do
 
 -- Compile Acton files ---------------------------------------------------------------------------------------------
 
+findTyFile spaths mn = go spaths
+  where
+    go []     = return Nothing
+    go (p:ps) = do
+      let fullPath = joinPath (p : A.modPath mn) ++ ".ty"
+      exists <- doesFileExist fullPath
+      if exists
+        then return (Just fullPath)
+        else go ps
+
 removeOrphanFiles :: FilePath -> IO ()
 removeOrphanFiles dir = do
     -- Recursively get all files in the "out" directory.
@@ -330,6 +341,7 @@ compileFiles opts srcFiles = do
 -- Paths handling -------------------------------------------------------------------------------------
 
 data Paths      = Paths {
+                    searchPath  :: [FilePath],
                     sysPath     :: FilePath,
                     sysTypes    :: FilePath,
                     sysLib      :: FilePath,
@@ -368,6 +380,22 @@ outBase paths mn        = joinPath (projTypes paths : A.modPath mn)
 srcBase                 :: Paths -> A.ModName -> FilePath
 srcBase paths mn        = joinPath (srcDir paths : A.modPath mn)
 
+searchPaths :: C.CompileOptions -> FilePath -> FilePath -> [FilePath] -> IO [FilePath]
+searchPaths opts projtypes systypes deps = do
+  -- append /out/types to each dep
+  let deps_paths = map (\d -> joinPath [d, "out", "types"]) deps
+  return $ (projtypes : deps_paths) ++ [systypes]
+
+findDeps :: FilePath -> IO [FilePath]
+findDeps projPath = do
+    let deps_path = joinPath [projPath, "deps"]
+    dirContents <- listDirectory deps_path `catch` handleNoDepsDir
+    depPaths <- filterM doesDirectoryExist $ map (deps_path </>) dirContents
+    return depPaths
+  where
+    handleNoDepsDir :: IOException -> IO [FilePath]
+    handleNoDepsDir _ = return []
+
 findPaths               :: FilePath -> C.CompileOptions -> IO Paths
 findPaths actFile opts  = do execDir <- takeDirectory <$> System.Environment.getExecutablePath
                              sysPath <- canonicalizePath (if null $ C.syspath opts then execDir ++ "/.." else C.syspath opts)
@@ -382,12 +410,14 @@ findPaths actFile opts  = do execDir <- takeDirectory <$> System.Environment.get
                                  projTypes = joinPath [projOut, "types"]
                                  binDir  = if isTmp then srcDir else joinPath [projProfile, "bin"]
                                  modName = A.modName $ dirInSrc ++ [fileBody]
+                             deps <- findDeps projPath
+                             sPaths <- searchPaths opts projTypes sysTypes deps
                              createDirectoryIfMissing True binDir
                              createDirectoryIfMissing True projOut
                              createDirectoryIfMissing True projTypes
                              createDirectoryIfMissing True projLib
                              createDirectoryIfMissing True (getModPath projTypes modName)
-                             return $ Paths sysPath sysTypes sysLib projPath projOut projProfile projTypes projLib binDir srcDir isTmp rmTmp fileExt modName
+                             return $ Paths sPaths sysPath sysTypes sysLib projPath projOut projProfile projTypes projLib binDir srcDir isTmp rmTmp fileExt modName
   where (fileBody,fileExt) = splitExtension $ takeFileName actFile
 
         analyze "/" ds  = do let rmTmp = if (null $ C.tempdir opts) then True else False
@@ -625,9 +655,12 @@ checkUptoDate opts paths actFile outFiles imps = do
         -- not actually exist...
         potSrcFiles     = [actFile, extCFile, srcCFile, srcHFile]
         impOK iTime mn  = do
-                             impFile <- findTy paths mn
-                             impfileTime <- System.Directory.getModificationTime impFile
-                             return (impfileTime < iTime)
+                             impFile <- findTyFile (searchPath paths) mn
+                             case impFile of
+                               Nothing -> return False
+                               Just impFile -> do
+                                 impfileTime <- System.Directory.getModificationTime impFile
+                                 return (impfileTime < iTime)
         -- find .ty file by looking both in local project and in stdlib
         findTy paths mn = do
                              let localImpName = outBase paths mn ++ ".ty"
@@ -661,7 +694,7 @@ runRestPasses opts paths env0 parsed stubMode = do
 
                       timeStart <- getTime Monotonic
 
-                      envTmp <- Acton.Env.mkEnv (sysTypes paths) (projTypes paths) env0 parsed
+                      envTmp <- Acton.Env.mkEnv (searchPath paths) env0 parsed
                       let env = envTmp { Acton.Env.stub = stubMode }
                       --traceM ("#################### initial env0:")
                       --traceM (Pretty.render (Pretty.pretty env))
@@ -944,6 +977,7 @@ zigBuild env opts paths tasks binTasks = do
                  " -Dsyspath_libreldev=" ++ joinPath [ sysPath paths, "lib", reldev ] ++
                  (if use_prebuilt then " -Duse_prebuilt" else "")
 
+    iff (C.debug opts) $ putStrLn ("zigCmd: " ++ zigCmd)
     runZig opts zigCmd (Just (projPath paths))
     -- if we are in a temp acton project, copy the outputted binary next to the source file
     if (isTmp paths && not (null binTasks))
