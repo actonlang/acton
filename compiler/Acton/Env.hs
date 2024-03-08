@@ -660,11 +660,11 @@ directAncestors env qn      = [ tcname p | (ws,p) <- us, null $ catRight ws ]
   where (q,us,te)           = findConName qn env
 
 allAncestors                :: EnvF x -> TCon -> [TCon]
-allAncestors env tc         = [ schematic' c | (_, c) <- us ]
+allAncestors env tc         = [ schematic' c | (_, c) <- reverse us ]
   where (us,te)             = findCon env tc
 
 allAncestors'               :: EnvF x -> QName -> [QName]
-allAncestors' env qn        = map (tcname . snd) us
+allAncestors' env qn        = map (tcname . snd) $ reverse us
   where (q,us,te)           = findConName qn env
 
 allDescendants              :: EnvF x -> TCon -> [TCon]
@@ -853,6 +853,38 @@ mro env us                              = merge [] $ map lin us' ++ [us']
     absent                              :: WTCon -> [WTCon] -> Bool
     absent (w,h) us                     = tcname h `notElem` map (tcname . snd) us
 
+
+----------------------------------------------------------------------------------------------------------------------
+-- coercible predicate
+----------------------------------------------------------------------------------------------------------------------
+
+coercible                                   :: EnvF x -> TCon -> TCon -> Maybe Expr
+coercible env tc1@(TC n1 []) (TC n2 [])     = listToMaybe ws
+  where ws                                  = [ eQVar w | (q1,q2,w) <- coercions, q2 == n2, Just _ <- [findAncestor env tc1 q1] ]
+coercible env t1 t2                         = Nothing
+
+coercions                                   = [
+                                                (qnI64, qnInt, prim_i64_to_int),
+
+                                                (qnI32, qnI64, prim_i32_to_i64),
+                                                (qnI32, qnInt, prim_i32_to_int),
+
+                                                (qnI16, qnI32, prim_i16_to_i32),
+                                                (qnI16, qnI64, prim_i16_to_i64),
+                                                (qnI16, qnInt, prim_i16_to_int),
+
+                                                (qnU64, qnInt, prim_u64_to_int),
+
+                                                (qnU32, qnU64, prim_u32_to_u64),
+                                                (qnU32, qnI64, prim_u32_to_i64),
+                                                (qnU32, qnInt, prim_u32_to_int),
+
+                                                (qnU16, qnU32, prim_u16_to_u32),
+                                                (qnU16, qnU64, prim_u16_to_u64),
+                                                (qnU16, qnI32, prim_u16_to_i32),
+                                                (qnU16, qnI64, prim_u16_to_i64),
+                                                (qnU16, qnInt, prim_u16_to_int)
+                                            ]
 
 ----------------------------------------------------------------------------------------------------------------------
 -- castable predicate

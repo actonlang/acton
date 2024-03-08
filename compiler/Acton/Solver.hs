@@ -335,32 +335,28 @@ univars cs                              = concat $ map uni cs
         uni _                           = []
 
 allAbove env (TCon _ tc)                = tOpt tWild : map tCon tcons
-  where n                               = tcname tc
-        tcons                           = allAncestors env tc ++ [schematic' tc]
+  where tcons                           = allAncestors env tc ++ [schematic' tc]
+        tcons1                          = tc : [ TC c [] | (c,c',_) <- coercions, c' == tcname tc ]
 allAbove env (TVar _ tv)
-  | not $ univar tv                     = [tOpt tWild, tCon tc, tVar tv]
+  | not $ univar tv                     = tOpt tWild : allAbove env (tCon tc) ++ [tVar tv]
   where tc                              = schematic' $ findTVBound env tv
 allAbove env (TOpt _ t)                 = [tOpt tWild]
 allAbove env (TNone _)                  = [tOpt tWild, tNone]
 allAbove env (TFun _ _ _ _ _)           = [tOpt tWild, tFun tWild tWild tWild tWild]
 allAbove env (TTuple _ _ _)             = [tOpt tWild, tTuple tWild tWild]
---allAbove env (TRow _ k n _ _)           = [tRow k n tWild tWild]
---allAbove env (TStar _ k r)              = [tStar k tWild]
---allAbove env (TNil _ k)                 = [tNil k]
 allAbove env (TFX _ FXProc)             = [fxProc]
 allAbove env (TFX _ FXMut)              = [fxProc, fxMut]
 allAbove env (TFX _ FXPure)             = [fxProc, fxMut, fxPure]
 allAbove env (TFX _ FXAction)           = [fxProc, fxAction]
 
-allBelow env (TCon _ tc)                = map tCon $ schematic' tc : allDescendants env tc
+allBelow env (TCon _ tc)                = map tCon tcons
+  where tcons                           = concat [ schematic' c : allDescendants env c | c <- tcons0 ]
+        tcons0                          = tc : [ TC c [] | (c,c',_) <- coercions, c' == tcname tc ]
 allBelow env (TVar _ tv)                = [tVar tv]
 allBelow env (TOpt _ t)                 = tOpt tWild : allBelow env t ++ [tNone]
 allBelow env (TNone _)                  = [tNone]
 allBelow env (TFun _ _ _ _ _)           = [tFun tWild tWild tWild tWild]
 allBelow env (TTuple _ _ _)             = [tTuple tWild tWild]
---allBelow env (TRow _ k n _ _)           = [tRow k n tWild tWild]
---allBelow env (TStar _ k r)              = [tStar k tWild]
---allBelow env (TNil _ k)                 = [tNil k]
 allBelow env (TFX _ FXProc)             = [fxProc, fxMut, fxPure, fxAction]
 allBelow env (TFX _ FXMut)              = [fxMut, fxPure]
 allBelow env (TFX _ FXPure)             = [fxPure]
@@ -839,6 +835,10 @@ sub' env info eq w (TVar _ tv) t2@TTuple{}
 sub' env info eq w t1@(TVar _ tv1) t2@(TVar _ tv2)
   | tv1 == tv2                              = return (idwit env w t1 t2 : eq)
   | univar tv1 && univar tv2                = do defer [Sub info w t1 t2]; return eq
+
+sub' env info eq w t1@(TCon _ tc1) t2@(TCon _ tc2)
+  | Just e <- coercible env tc1 tc2         = do let lambda = eLambda [(px0,t1)] (eCall e [eVar px0])
+                                                 return (Eqn w (wFun t1 t2) lambda : eq)
 
 sub' env info eq w t1 t2                    = do cast env info t1 t2
                                                  return (idwit env w t1 t2 : eq)
