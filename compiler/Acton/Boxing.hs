@@ -48,9 +48,10 @@ numericTypes                       = integralTypes ++ [tFloat]
 unboxableTypes                     = tail numericTypes
 
 
-isWitness (Internal Witness _ _)    = True
-isWitness _                         = False
+isWitness (Internal Witness _ _)   = True
+isWitness _                        = False
 
+isUnboxable t                      = t `elem` unboxableTypes
 
 prims = [primISINSTANCE, primISNOTNONE, primISNONE]
 
@@ -157,32 +158,32 @@ instance Boxing Expr where
       boxingWitness                 :: BoxEnv -> QName -> Name -> [Name] ->PosArg -> BoxM ([Name],Expr)
       boxingWitness env w attr ws p = case findQName w env of
                                         NVar (TCon _ (TC _ ts))
-                                           | any (not . vFree) ts    -> return (noq w : ws, Call NoLoc (eDot (eQVar w) attr) p KwdNil)
-                                           | attr == fromatomKW      -> boxingFromAtom w ts es ws
-                                           | attr `elem` binopKWs    -> boxingBinop w attr es ts ws
-                                           | attr `elem` compareKWs  -> boxingCompop w attr es ts ws
-                                        _                            -> return (noq w : ws, Call NoLoc (eDot (eQVar w) attr) p KwdNil)
+                                           | any (not . vFree) ts    -> return ([n], Call NoLoc (eDot (eQVar w) attr) p KwdNil)
+                                           | attr == fromatomKW      -> boxingFromAtom w ts es
+                                           | attr `elem` binopKWs    -> boxingBinop w attr es ts
+                                           | attr `elem` compareKWs  -> boxingCompop w attr es ts
+                                        _                            -> return ([n], Call NoLoc (eDot (eQVar w) attr) p KwdNil)
        where es                     = posargs p
              vFree (TCon _ (TC _ _))= True
              vFree _                = False
-      boxingFromAtom w ts [i@Int{}] ws
-        | t == tInt                 = return (ws, i)
-        | t `elem` numericTypes     = return (ws, Box (last ts) (unbox t i))
+      boxingFromAtom w ts [i@Int{}]
+        | t == tInt                 = return ([], i)
+        | t `elem` numericTypes     = return ([], Box (last ts) (unbox t i))
         where t = head ts
-      boxingFromAtom w ts [x@Float{}] ws
-                                    = return (ws, Box (last ts) (unbox (head ts) x))
-      boxingFromAtom w t es ws      = return (noq w : ws, Call NoLoc (eDot (eQVar w) fromatomKW) (posarg es) KwdNil)
-      boxingBinop w attr es@[x1, x2] ts ws
-        | t `elem` unboxableTypes   = return (ws, Box (last ts) $ Paren NoLoc (BinOp NoLoc (unbox t x1) op (unbox t x2)))
+      boxingFromAtom w ts [x@Float{}]
+                                    = return ([], Box (last ts) (unbox (head ts) x))
+      boxingFromAtom w t es         = return ([n], Call NoLoc (eDot (eQVar w) fromatomKW) (posarg es) KwdNil)
+      boxingBinop w attr es@[x1, x2] ts
+        | t `elem` unboxableTypes   = return ([], Box (last ts) $ Paren NoLoc (BinOp NoLoc (unbox t x1) op (unbox t x2)))
         where t                     = head ts
               op                    = bin2Binary attr
-      boxingBinop w attr es _ ws    = return (noq w : ws, Call NoLoc (eDot (eQVar w) attr) (posarg es) KwdNil)
+      boxingBinop w attr es _       = return ([n], Call NoLoc (eDot (eQVar w) attr) (posarg es) KwdNil)
 
-      boxingCompop w attr es@[x1, x2] ts ws
+      boxingCompop w attr es@[x1, x2] ts 
         | head ts `elem` unboxableTypes
-                                    = return (ws, Box tBool $ Paren NoLoc (CompOp NoLoc (unbox (head ts) x1) [OpArg op (unbox (head ts) x2)]))
+                                    = return ([], Box tBool $ Paren NoLoc (CompOp NoLoc (unbox (head ts) x1) [OpArg op (unbox (head ts) x2)]))
         where op = cmp2Comparison attr
-      boxingCompop w attr es _ ws   = return (noq w : ws, Call NoLoc (eDot (eQVar w) attr) (posarg es) KwdNil)
+      boxingCompop w attr es _      = return ([n], Call NoLoc (eDot (eQVar w) attr) (posarg es) KwdNil)
     boxing env (Call l e@(TApp _ (Var _ f) ts) p KwdNil)
       | f `elem` prims              = do (ws1,p1) <- boxing env p
                                          return (ws1,Box tBool $ eCallP e' p1)
