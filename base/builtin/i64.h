@@ -24,3 +24,5 @@ int64_t i64_pow(int64_t a, int64_t e); // used also for ndarrays
 #define ORD_B_i64__gt__(a,b)  (a->val > b->val)
 #define ORD_B_i64__ge__(a,b)  (a->val >= b->val)
 */
+
+#define $i64_to_int(a)      B_intG_new(a, B_None)

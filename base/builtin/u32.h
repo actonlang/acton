@@ -13,3 +13,8 @@ B_u32 B_u32G_new(B_atom a, B_int base);
 #define u32_MOD(a,b)       ( {if (b==0) $RAISE((B_BaseException)$NEW(B_ZeroDivisionError,to$str("u32 mod: division by zero"))); a%b;} )
 
 uint32_t u32_pow(uint32_t a, uint32_t b);
+
+#define $u32_to_u64(a)      toB_u64(fromB_u32(a))
+
+#define $u32_to_i64(a)      toB_i64(fromB_u32(a))
+#define $u32_to_int(a)      B_intG_new(a, B_None)
