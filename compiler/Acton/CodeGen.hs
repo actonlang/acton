@@ -522,6 +522,8 @@ instance Gen Stmt where
     gen env (Expr _ e)              = genExp' env e <> semi
     gen env (Assign _ [p] e)        = gen env p <+> equals <+> genExp env t e <> semi
       where t                       = typeOf env p
+    gen env (AugAssign _ tg op e)   = genTarget env tg <+> pretty op <+> genExp env t e <> semi
+      where t                       = targetType env tg
     gen env (MutAssign _ tg e)      = genTarget env tg <+> equals <+> genExp env t e <> semi
       where t                       = targetType env tg
     gen env (Pass _)                = empty
@@ -822,6 +824,8 @@ instance Gen Expr where
                                     = gen env primISINSTANCE0 <> parens(gen env e <>comma <+> genQName env c)
     gen env (UnBox _ (Int _ n s))   = text s
     gen env (UnBox _ (Float _ x s)) = text s
+    gen env (UnBox _ v@(Var _ (NoQ n)))
+       | isUnboxed n                = gen env v
     gen env (UnBox _ e@Var{})       = gen env e <> text "->val"
     gen env (UnBox _ e)             = parens (genExp' env e) <> text "->val"
     gen env e                       = error ("CodeGen.gen for Expr: e = " ++ show e)
