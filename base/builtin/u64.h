@@ -13,3 +13,5 @@ B_u64 B_u64G_new(B_atom a, B_int base);
 #define u64_MOD(a,b)       ( {if (b==0) $RAISE((B_BaseException)$NEW(B_ZeroDivisionError,to$str("u64 mod: division by zero"))); a%b;} )
 
 uint64_t u64_pow(uint64_t a, uint64_t b);
+
+#define $u64_to_int(a)      B_intG_new(a, B_None)
