@@ -143,6 +143,28 @@ primWRAP            = gPrim "WRAP"
 primMkSet           = gPrim "mkSet"
 primMkDict          = gPrim "mkDict"
 
+prim_i16_to_i32     = gPrim "i16_to_i32"
+prim_i16_to_i64     = gPrim "i16_to_i64"
+prim_i16_to_int     = gPrim "i16_to_int"
+
+prim_i32_to_i64     = gPrim "i32_to_i64"
+prim_i32_to_int     = gPrim "i32_to_int"
+
+prim_i64_to_int     = gPrim "i64_to_int"
+
+prim_u16_to_i32     = gPrim "u16_to_i32"
+prim_u16_to_i64     = gPrim "u16_to_i64"
+prim_u16_to_int     = gPrim "u16_to_int"
+prim_u16_to_u32     = gPrim "u16_to_u32"
+prim_u16_to_u64     = gPrim "u16_to_u64"
+
+prim_u32_to_i64     = gPrim "u32_to_i64"
+prim_u32_to_int     = gPrim "u32_to_int"
+prim_u32_to_u64     = gPrim "u32_to_u64"
+
+prim_u64_to_int     = gPrim "u64_to_int"
+
+
 primEnv             = [     (noq primASYNCf,        NDef scASYNCf NoDec),
                             (noq primAFTERf,        NDef scAFTERf NoDec),
                             (noq primAWAITf,        NDef scAWAITf NoDec),
@@ -223,7 +245,24 @@ primEnv             = [     (noq primASYNCf,        NDef scASYNCf NoDec),
                             (noq primWRAP,          NDef scWRAP NoDec),
 
                             (noq primMkSet,         NDef scMkSet NoDec),
-                            (noq primMkDict,        NDef scMkDict NoDec)
+                            (noq primMkDict,        NDef scMkDict NoDec),
+
+                            (noq prim_i16_to_i32,   NDef sc_i16_to_i32 NoDec),
+                            (noq prim_i16_to_i64,   NDef sc_i16_to_i64 NoDec),
+                            (noq prim_i16_to_int,   NDef sc_i16_to_int NoDec),
+                            (noq prim_i32_to_i64,   NDef sc_i32_to_i64 NoDec),
+                            (noq prim_i32_to_int,   NDef sc_i32_to_int NoDec),
+                            (noq prim_i64_to_int,   NDef sc_i64_to_int NoDec),
+                            (noq prim_u16_to_i32,   NDef sc_u16_to_i32 NoDec),
+                            (noq prim_u16_to_i64,   NDef sc_u16_to_i64 NoDec),
+                            (noq prim_u16_to_int,   NDef sc_u16_to_int NoDec),
+                            (noq prim_u16_to_u32,   NDef sc_u16_to_u32 NoDec),
+                            (noq prim_u16_to_u64,   NDef sc_u16_to_u64 NoDec),
+                            (noq prim_u32_to_i64,   NDef sc_u32_to_i64 NoDec),
+                            (noq prim_u32_to_int,   NDef sc_u32_to_int NoDec),
+                            (noq prim_u32_to_u64,   NDef sc_u32_to_u64 NoDec),
+                            (noq prim_u64_to_int,   NDef sc_u64_to_int NoDec)
+
                       ]
 
 tSequenceListWild   = tCon (TC qnSequence [tList tWild, tWild])
@@ -537,7 +576,24 @@ scMkDict            = tSchema [quant a, quant b] tMkDict
         tHashableA  = tCon (TC qnHashable [tVar a])
         a           = TV KType $ name "A"
         b           = TV KType $ name "B"
-       
+
+sc_i16_to_i32       = tSchema [] $ tFun0 [tI16] tI32
+sc_i16_to_i64       = tSchema [] $ tFun0 [tI16] tI64
+sc_i16_to_int       = tSchema [] $ tFun0 [tI16] tInt
+sc_i32_to_i64       = tSchema [] $ tFun0 [tI32] tI64
+sc_i32_to_int       = tSchema [] $ tFun0 [tI32] tInt
+sc_i64_to_int       = tSchema [] $ tFun0 [tI64] tInt
+sc_u16_to_i32       = tSchema [] $ tFun0 [tU16] tI32
+sc_u16_to_i64       = tSchema [] $ tFun0 [tU16] tI64
+sc_u16_to_int       = tSchema [] $ tFun0 [tU16] tInt
+sc_u16_to_u32       = tSchema [] $ tFun0 [tU16] tU32
+sc_u16_to_u64       = tSchema [] $ tFun0 [tU16] tU64
+sc_u32_to_i64       = tSchema [] $ tFun0 [tU32] tI64
+sc_u32_to_int       = tSchema [] $ tFun0 [tU32] tInt
+sc_u32_to_u64       = tSchema [] $ tFun0 [tU32] tU64
+sc_u64_to_int       = tSchema [] $ tFun0 [tU64] tInt
+
+
 --  $WRAP           : [A,B,C] => ($Actor, proc(*A,**B)->C) -> action(*A,**B)->C
 scWRAP              = tSchema [quant a, quant b, quant c] tWRAP
   where tWRAP       = tFun0 [tActor, abcFun fxProc] (abcFun fxAction)
