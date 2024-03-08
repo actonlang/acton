@@ -261,6 +261,24 @@ instance Boxing OpArg where
 instance Boxing Stmt where
     boxing env (Expr l e)           = do (ws1,e1) <- boxing env e
                                          return (ws1, Expr l e1)
+    boxing env (Assign l pt@[PVar _ x Nothing]  (Call _ (Dot _ (Var _ w@(NoQ n)) attr) p KwdNil))
+      | isWitness n                 = do (ws1,p1) <- boxing env p
+                                         (ws2,s2) <- boxingWitness env w attr p1
+                                         return (ws1++ws2,s2)
+      where
+         boxingWitness env w attr p = case findQName w env of
+                                            NVar (TCon _ (TC _ ts))
+                                              | any (not . vFree) ts     -> return ([n], Assign l pt (Call NoLoc (eDot (eQVar w) attr) p KwdNil))
+                                              | attr `elem` incrBinopKWs -> boxingincrBinop w attr es ts
+                                            _                            -> return ([n], Assign l pt (Call NoLoc (eDot (eQVar w) attr) p KwdNil))
+          where es                 = posargs p
+                vFree (TCon _ (TC _ _))= True
+                vFree _            = False
+         boxingincrBinop w attr es@[x1,x2] ts
+          | t `elem` unboxableTypes = return ([], AugAssign NoLoc (unbox t x1) op (unbox t x2))
+             where t                = head ts
+                   op               = bin2Aug attr
+         boxingincrBinop w attr es _ = return ([n],  Assign l pt (Call NoLoc (eDot (eQVar w) attr) (posarg es) KwdNil))
     boxing env (Assign l ps e)      = do (ws1,e1) <- boxing env e
                                          return (ws1, Assign l ps e1)
     boxing env (MutAssign l t e)    = do (ws1,e1) <- boxing env e
@@ -379,4 +397,18 @@ cmp2Comparison kw
    | kw == isKW                    = Is
    | kw == isnotKW                 = IsNot
 
+
+bin2Aug kw
+   | kw == iaddKW                  = PlusA             
+   | kw == isubKW                  = MinusA
+   | kw == imulKW                  = MultA
+   | kw == ipowKW                  = PowA
+   | kw == itruedivKW              = DivA
+   | kw == imodKW                  = ModA
+   | kw == ifloordivKW             = EuDivA
+   | kw == ilshiftKW               = ShiftLA
+   | kw == irshiftKW               = ShiftRA
+   | kw == iorKW                   = BOrA
+   | kw == ixorKW                  = BXorA
+   | kw == iandKW                  = BAndA
 
