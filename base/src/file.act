@@ -1,3 +1,4 @@
+import random
 
 class FileCap():
     def __init__(self, cap: WorldCap):
@@ -77,6 +78,10 @@ class FileStat(value):
         """Return True if the file is a socket"""
         NotImplemented
 
+extension FileStat (Eq):
+    def __eq__(self, other) -> bool:
+        return self.name == other.name and self.dev == other.dev and self.mode == other.mode and self.nlink == other.nlink and self.uid == other.uid and self.gid == other.gid and self.rdev == other.rdev and self.ino == other.ino and self.size == other.size and self.blksize == other.blksize and self.blocks == other.blocks and self.flags == other.flags and self.gen == other.gen and self.atime == other.atime and self.mtime == other.mtime and self.ctime == other.ctime and self.birthtime == other.birthtime
+
 # TODO: refactor into a read-only version and one for writing!?
 actor FS(cap: FileCap):
     """File system operations """
@@ -96,6 +101,18 @@ actor FS(cap: FileCap):
     action def mkdir(filename: str):
         """Make a directory"""
         NotImplemented
+
+    action def mktmpdir(prefix: str=""):
+        """Make a temporary directory"""
+        # TODO: is this better implemented with mkdtemp or similar libc
+        # function? Maybe we can have this function but then we should at least
+        # do the same thing, like create the tmp dir with exclusive flags etc to
+        # make sure its our own dir.
+        base_tmp_dir = tmpdir()
+        # TODO: use a path join function
+        new_tmp_dir = base_tmp_dir + "/" + prefix + random.randstr(16)
+        mkdir(new_tmp_dir)
+        return new_tmp_dir
 
     action def listdir(path: str) -> list[str]:
         """List directory contents"""
@@ -130,6 +147,10 @@ actor FS(cap: FileCap):
         except RuntimeError:
             # dir doesn't exist
             pass
+
+    action def tmpdir() -> str:
+        """Get temporary directory"""
+        NotImplemented
 
     action def stat(filename: str) -> FileStat:
         """Get file status"""
