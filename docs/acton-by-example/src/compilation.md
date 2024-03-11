@@ -102,7 +102,7 @@ Enter your new project directory with:
 Compile:
   actonc build
 Run:
-  ./out/rel/bin/hello
+  ./out/bin/hello
 
 Initialized empty Git repository in /home/kll/hello/.git/
 $ cd hello/

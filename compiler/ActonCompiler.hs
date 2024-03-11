@@ -204,14 +204,14 @@ createProject name = do
     writeFile (joinPath [ curDir, name, "README.org" ]) (
       "* " ++ name ++ "\n" ++ name ++ " is a cool Acton project!\n\n\n"
       ++ "** Compile\n\n#+BEGIN_SRC shell\nactonc build\n#+END_SRC\n\n\n"
-      ++ "** Run\n\n#+BEGIN_SRC shell\nout/rel/bin/" ++ name ++ "\n#+END_SRC\n\n"
+      ++ "** Run\n\n#+BEGIN_SRC shell\nout/bin/" ++ name ++ "\n#+END_SRC\n\n"
       )
     createDirectoryIfMissing True (srcDir paths)
     writeFile (joinPath [(srcDir paths), name ++ ".act"]) "#\n#\n\nactor main(env):\n    print(\"Hello World!\")\n    env.exit(0)\n"
     putStrLn("Created project " ++ name)
     putStrLn("Enter your new project directory with:\n  cd " ++ name)
     putStrLn("Compile:\n  actonc build")
-    putStrLn("Run:\n  ./out/rel/bin/" ++ name)
+    putStrLn("Run:\n  ./out/bin/" ++ name)
     gitAvailable <- isGitAvailable
     iff (gitAvailable) $ do
         putStrLn("")
@@ -347,7 +347,6 @@ data Paths      = Paths {
                     sysLib      :: FilePath,
                     projPath    :: FilePath,
                     projOut     :: FilePath,
-                    projProfile :: FilePath,
                     projTypes   :: FilePath,
                     projLib     :: FilePath,
                     binDir      :: FilePath,
@@ -405,10 +404,9 @@ findPaths actFile opts  = do execDir <- takeDirectory <$> System.Environment.get
                              let sysTypes = joinPath [sysPath, "base", "out", "types"]
                                  srcDir  = if isTmp then takeDirectory absSrcFile else joinPath [projPath, "src"]
                                  projOut = joinPath [projPath, "out"]
-                                 projProfile = joinPath [projOut, if (C.dev opts) then "dev" else "rel"]
-                                 projLib = joinPath [projProfile, "lib"]
+                                 projLib = joinPath [projOut, "lib"]
                                  projTypes = joinPath [projOut, "types"]
-                                 binDir  = if isTmp then srcDir else joinPath [projProfile, "bin"]
+                                 binDir  = if isTmp then srcDir else joinPath [projOut, "bin"]
                                  modName = A.modName $ dirInSrc ++ [fileBody]
                              deps <- findDeps projPath
                              sPaths <- searchPaths opts projTypes sysTypes deps
@@ -417,7 +415,7 @@ findPaths actFile opts  = do execDir <- takeDirectory <$> System.Environment.get
                              createDirectoryIfMissing True projTypes
                              createDirectoryIfMissing True projLib
                              createDirectoryIfMissing True (getModPath projTypes modName)
-                             return $ Paths sPaths sysPath sysTypes sysLib projPath projOut projProfile projTypes projLib binDir srcDir isTmp rmTmp fileExt modName
+                             return $ Paths sPaths sysPath sysTypes sysLib projPath projOut projTypes projLib binDir srcDir isTmp rmTmp fileExt modName
   where (fileBody,fileExt) = splitExtension $ takeFileName actFile
 
         analyze "/" ds  = do let rmTmp = if (null $ C.tempdir opts) then True else False
@@ -942,9 +940,6 @@ zigBuild env opts paths tasks binTasks = do
     homeDir <- getHomeDirectory
     let cache_dir = if (not $ null $ C.cachedir opts) then (C.cachedir opts) else joinPath [ projPath paths, "build-cache" ]
         global_cache_dir = joinPath [ homeDir, ".cache", "acton", "build-cache" ]
-        use_prebuilt = if isTmp paths
-                         then C.defTarget == C.target opts
-                         else if C.db opts then False else C.defTarget == C.target opts
         target_cpu = if (C.cpu opts /= "")
                        then C.cpu opts
                        else
@@ -955,41 +950,35 @@ zigBuild env opts paths tasks binTasks = do
     let zigCmdBase =
           if buildZigExists
             then zig paths ++ " build " ++
-                 " --cache-dir " ++ cache_dir ++
+                 " --cache-dir " ++ global_cache_dir ++
                  " --global-cache-dir " ++ global_cache_dir ++
-                 " --prefix " ++ projProfile paths ++
+                 " --prefix " ++ projOut paths ++
                  " --prefix-exe-dir 'bin'" ++
                  if (C.debug opts) then " --verbose " else ""
             else (joinPath [ sysPath paths, "builder", "builder" ]) ++ " " ++
                  (joinPath [ sysPath paths, "zig/zig" ]) ++ " " ++
                  projPath paths ++ " " ++
-                 cache_dir ++ " " ++
+                 global_cache_dir ++ " " ++
                  global_cache_dir
     let zigCmd = zigCmdBase ++
-                 " --prefix " ++ projProfile paths ++ " --prefix-exe-dir 'bin'" ++
+                 " --prefix " ++ projOut paths ++ " --prefix-exe-dir 'bin'" ++
                  (if (C.debug opts) then " --verbose " else "") ++
                  " -Dtarget=" ++ (C.target opts) ++
                  target_cpu ++
                  " -Doptimize=" ++ (if (C.dev opts) then "Debug" else "ReleaseFast") ++
                  (if (C.db opts) then " -Ddb " else " ") ++
                  (if (C.cpedantic opts) then " -Dcpedantic " else " ") ++
-                 " -Dsyspath=" ++ sysPath paths ++
-                 " -Dsyspath_libreldev=" ++ joinPath [ sysPath paths, "lib", reldev ] ++
-                 (if use_prebuilt then " -Duse_prebuilt" else "")
+                 " -Dsyspath=" ++ sysPath paths
 
     iff (C.debug opts) $ putStrLn ("zigCmd: " ++ zigCmd)
     runZig opts zigCmd (Just (projPath paths))
     -- if we are in a temp acton project, copy the outputted binary next to the source file
     if (isTmp paths && not (null binTasks))
       then do
-        let srcBinFile = joinPath [ projProfile paths, "bin", (binName (head binTasks)) ]
+        let srcBinFile = joinPath [ projOut paths, "bin", (binName (head binTasks)) ]
             dstBinFile = joinPath [ binDir paths, (binName (head binTasks)) ]
         copyFile srcBinFile dstBinFile
       else return ()
     timeEnd <- getTime Monotonic
     iff (not (quiet opts)) $ putStrLn("   Finished final compilation step in  " ++ fmtTime(timeEnd - timeStart))
     return ()
-  where reldev = if C.dev opts then "dev" else "rel"
-        -- As many ../../ etc to get from the project directory to the root,
-        -- from which point an absolute path is used
-        dir_dots_to_root = joinPath $ replicate (length $ splitPath $ projPath paths) ".."

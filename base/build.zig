@@ -57,12 +57,9 @@ pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
     const cpedantic = b.option(bool, "cpedantic", "") orelse false;
     const use_db = b.option(bool, "db", "") orelse false;
-    const use_prebuilt = b.option(bool, "use_prebuilt", "") orelse false;
     const syspath = b.option([]const u8, "syspath", "") orelse "";
-    const syspath_libreldev = b.option([]const u8, "syspath_libreldev", "") orelse "";
     const libactondeps = b.option([]const u8, "libactondeps", "") orelse "";
     const libactongc = b.option([]const u8, "libactongc", "") orelse "";
-    _ = use_prebuilt;
     _ = libactongc;
     _ = libactondeps;
 
@@ -71,7 +68,6 @@ pub fn build(b: *std.Build) void {
     const syspath_include = joinPath(b.allocator, syspath, "depsout/include");
 
     print("Acton Base Builder\nBuilding in {s}\n", .{buildroot_path});
-    _ = syspath_libreldev;
 
     var iter_dir = b.build_root.handle.openDir(
         "out/types/",

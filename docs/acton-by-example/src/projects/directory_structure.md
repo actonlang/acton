@@ -36,12 +36,11 @@ considered a project.
 hierarchies of modules, for example `src/a/b.act` is imported in an Acton
 program as `import a.b`.
 
-Output goes into `out/` with subdirectories `out/rel/` and `out/dev` for release
-mode and development mode respectively. A project archive file
-(`libActonProject.a`) contains the compiled output of all modules, but is
-considered an internal implementation detail. Don't touch it.
+Output goes into `out/`. A project archive file (`libActonProject.a`) contains
+the compiled output of all modules, but is considered an internal implementation
+detail. Don't touch it.
 
-Executable binaries go in `out/dev/bin` and `out/rel/bin` respectively. The name
-of the binary is the name of the module which contains the specified root actor.
-In the example above, the root actor is `foo.main`, i.e. actor `main` in the
-module `foo` and consequently, the executable name is `foo`.
+Executable binaries go in `out/bin`. The name of the binary is the name of the
+module which contains the specified root actor.  In the example above, the root
+actor is `foo.main`, i.e. actor `main` in the module `foo` and consequently, the
+executable name is `foo`.

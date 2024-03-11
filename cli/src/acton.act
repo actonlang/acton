@@ -4,6 +4,20 @@ import json
 import process
 import testing
 
+def clean_buildcache(cap: file.FileCap):
+    fs = file.FS(cap)
+    cache_dir = fs.homedir() + "/.cache/acton"
+    #cache_dir = fs.join(fs.homedir(), ".cache", "acton")
+    total_size = 0
+    for f in fs.walk(cache_dir):
+        total_size += f.size
+    if total_size > 5000 * 1024 * 1024: # 5GB
+        print("Build cache (", total_size // (1024*1024), "MB) over 5GB, cleaning it up.")
+        fs.rmtree(cache_dir)
+        total_size = 0
+    if total_size == 0:
+        print("Acton build cache is empty: rebuilding Acton base from source, which might take a while...")
+
 actor CompilerRunner(process_cap, env, args):
     def on_stderr(p, data):
         print(data.decode(), stderr=True, end="")
@@ -20,6 +34,7 @@ actor CompilerRunner(process_cap, env, args):
         print("Error from process:", error)
         await async env.exit(1)
 
+    clean_buildcache(file.FileCap(env.cap))
     fs = file.FS(file.FileCap(env.cap))
     # We find the path to actonc by looking at the executable path of the
     # current process. Since we are called 'acton', we just add a 'c'.
@@ -61,7 +76,7 @@ actor RunModuleTest(process_cap, modname, test_cmd, on_json_output):
     def on_error(p, error):
         print("Error from process:", error)
 
-    cmd = ["out/rel/bin/.test_" + modname, "--json"] + test_cmd
+    cmd = ["out/bin/.test_" + modname, "--json"] + test_cmd
     p = process.Process(process_cap, cmd, None, None, on_stdout, on_stderr, on_exit, on_error)
 
 
@@ -106,6 +121,8 @@ actor BuildProjectTests(process_cap, env, args, on_build_success, on_build_failu
 
     def on_actbuild_error(p, error):
         on_build_failure(-999, -999, error)
+
+    clean_buildcache(file.FileCap(env.cap))
 
     p = process.Process(process_cap, cmd, None, None, on_actbuild_stdout, on_actbuild_stderr, on_actbuild_exit, on_actbuild_error)
 

@@ -144,6 +144,7 @@ DEPS_DIRS += dist/deps/libxml2
 DEPS_DIRS += dist/deps/libyyjson
 DEPS_DIRS += dist/deps/libsnappy_c
 
+# TODO: depend on include file rather than lib directory and remove lib files from distribution?
 DEPS += dist/depsout/lib/libactongc.a
 DEPS += dist/depsout/lib/libargp.a
 DEPS += dist/depsout/lib/libbsdnt.a
@@ -358,16 +359,9 @@ builder/builder: builder/build.zig backend/build.zig base/build.zig $(ZIG_DEP) $
 	(echo 'const root = @import("build.zig");'; tail -n +2 dist/zig/lib/build_runner.zig | sed -e 's/@dependencies/dependencies.zig/') > builder/build_runner.zig
 	cd builder && $(ZIG) build-exe build_runner.zig -femit-bin=builder $(ZIG_ARCH_ARG)
 
-.PHONY: base/out/rel/lib/libActon.a base/out/dev/lib/libActon.a
-base/out/rel/lib/libActon.a: $(ACTONC) $(DEPS)
+.PHONY: base/out/types/__builtin__.ty
+base/out/types/__builtin__.ty: $(ACTONC) $(DEPS)
 	cd base && ../dist/bin/actonc build --auto-stub $(CPEDANTIC)
-
-base/out/dev/lib/libActon.a: $(ACTONC) $(DEPS)
-	cd base && ../dist/bin/actonc build --auto-stub --dev $(CPEDANTIC)
-
-base/out/types/__builtin__.ty: $(ACTONC)
-	cd base && ../dist/bin/actonc src/__builtin__.act
-
 
 # top level targets
 
@@ -425,12 +419,11 @@ clean-all: clean clean-compiler
 
 clean-base:
 	rm -rf base/build-cache base/out builder/build_runner* builder/builder* builder/zig-cache builder/zig-out
-	rm -rf $(OFILES) builtin/__builtin__.h builtin/__builtin__.c builtin/ty/out stdlib/out/
 
-bin/acton: cli/out/rel/bin/acton
+bin/acton: cli/out/bin/acton
 	cp -a $< $@
 
-cli/out/rel/bin/acton: distribution1
+cli/out/bin/acton: distribution1
 	cd cli && $(ACTC) build $(ACTONC_TARGET)
 
 # == DIST ==
@@ -444,9 +437,10 @@ dist/backend%: backend/%
 
 # We depend on libActon.a because the base/out directory will be populated as a
 # result of building it, and we want to copy those files!
-dist/base: base dist/lib/dev/libActon.a
-	@mkdir -p $@
-	cp -r base/Acton.toml base/builtin base/out base/rts base/src base/stdlib dist/base/
+dist/base: base dist/base/out/types/__builtin__.ty
+	@mkdir -p $@ $@/out
+	cp -r base/Acton.toml base/builtin base/rts base/src base/stdlib dist/base/
+	cp -r base/out/types dist/base/out/
 
 dist/bin/acton: bin/acton
 	@mkdir -p $(dir $@)
@@ -488,11 +482,7 @@ dist/rts/%: base/rts/%
 	@mkdir -p $(dir $@)
 	cp $< $@
 
-dist/lib/dev/libActon.a: base/out/dev/lib/libActon.a
-	@mkdir -p $(dir $@)
-	cp $< $@
-
-dist/lib/rel/libActon.a: base/out/rel/lib/libActon.a
+dist/base/out/types/__builtin__.ty: base/out/types/__builtin__.ty
 	@mkdir -p $(dir $@)
 	cp $< $@
 
@@ -518,7 +508,7 @@ else
 endif
 
 .PHONY: distribution1 distribution clean-distribution
-distribution1: dist/base $(DIST_BACKEND_FILES) $(DEPSA) dist/lib/dev/libActon.a dist/lib/rel/libActon.a dist/builder $(DIST_INC) $(DIST_BINS) $(DIST_HFILES) $(DIST_ZIG)
+distribution1: dist/base $(DIST_BACKEND_FILES) $(DEPSA) dist/builder $(DIST_INC) $(DIST_BINS) $(DIST_HFILES) $(DIST_ZIG)
 	$(MAKE) $(DIST_DEPS)
 
 distribution: dist/bin/acton

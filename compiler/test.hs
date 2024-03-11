@@ -285,11 +285,11 @@ buildAndRun buildOpts runOpts thing = do
 -- when in a project, expect the binary to be named the same as the project
 -- without our ending, like __bf. For example, if the project is
 -- import_actor__bf, then we will run ./import_actor in
--- import_actor__bf/out/rel/bin
+-- import_actor__bf/rel/bin
 runThing opts thing = do
     twd <- canonicalizePath $ takeDirectory thing
     isProj <- doesDirectoryExist thing
-    projBinPath <- canonicalizePath $ thing ++ "/out/rel/bin"
+    projBinPath <- canonicalizePath $ thing ++ "/out/bin"
     let wd = if isProj then projBinPath else twd
     let exe = if isProj then binName else fileBody
     let cmd = "./" ++ exe ++ " " ++ opts
