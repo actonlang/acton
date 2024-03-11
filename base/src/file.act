@@ -1,3 +1,4 @@
+import random
 
 class FileCap():
     def __init__(self, cap: WorldCap):
@@ -11,18 +12,167 @@ class WriteFileCap():
     def __init__(self, cap: FileCap):
         pass
 
+class FileStat(value):
+    name: str
+    dev: u64
+    mode: u64
+    nlink: u64
+    uid: u64
+    gid: u64
+    rdev: u64
+    ino: u64
+    size: u64
+    blksize: u64
+    blocks: u64
+    flags: u64
+    gen: u64
+    atime: float
+    mtime: float
+    ctime: float
+    birthtime: float
 
+    def __init__(self, name: str, dev: u64, mode: u64, nlink: u64, uid: u64, gid: u64, rdev: u64, ino: u64, size: u64, blksize: u64, blocks: u64, flags: u64, gen: u64, atime: float, mtime: float, ctime: float, birthtime: float):
+        self.name = name
+        self.dev = dev
+        self.mode = mode
+        self.nlink = nlink
+        self.uid = uid
+        self.gid = gid
+        self.rdev = rdev
+        self.ino = ino
+        self.size = size
+        self.blksize = blksize
+        self.blocks = blocks
+        self.flags = flags
+        self.gen = gen
+        self.atime = atime
+        self.mtime = mtime
+        self.ctime = ctime
+        self.birthtime = birthtime
+
+    def is_dir(self) -> bool:
+        """Return True if the file is a directory"""
+        NotImplemented
+
+    def is_file(self) -> bool:
+        """Return True if the file is a regular file"""
+        NotImplemented
+
+    def is_symlink(self) -> bool:
+        """Return True if the file is a symbolic link"""
+        NotImplemented
+
+    def is_block_device(self) -> bool:
+        """Return True if the file is a block device"""
+        NotImplemented
+
+    def is_char_device(self) -> bool:
+        """Return True if the file is a character device"""
+        NotImplemented
+
+    def is_fifo(self) -> bool:
+        """Return True if the file is a FIFO"""
+        NotImplemented
+
+    def is_socket(self) -> bool:
+        """Return True if the file is a socket"""
+        NotImplemented
+
+extension FileStat (Eq):
+    def __eq__(self, other) -> bool:
+        return self.name == other.name and self.dev == other.dev and self.mode == other.mode and self.nlink == other.nlink and self.uid == other.uid and self.gid == other.gid and self.rdev == other.rdev and self.ino == other.ino and self.size == other.size and self.blksize == other.blksize and self.blocks == other.blocks and self.flags == other.flags and self.gen == other.gen and self.atime == other.atime and self.mtime == other.mtime and self.ctime == other.ctime and self.birthtime == other.birthtime
+
+# TODO: refactor into a read-only version and one for writing!?
 actor FS(cap: FileCap):
     """File system operations """
+
+    proc def _pin_affinity() -> None:
+        NotImplemented
+    _pin_affinity()
 
     action def exepath() -> str:
         """Get the path to the executable"""
         NotImplemented
 
+    action def homedir() -> str:
+        """Get the home directory"""
+        NotImplemented
+
     action def mkdir(filename: str):
         """Make a directory"""
-        pass
+        NotImplemented
 
+    action def mktmpdir(prefix: str=""):
+        """Make a temporary directory"""
+        base_tmp_dir = tmpdir()
+        # TODO: use a path join function
+        new_tmp_dir = base_tmp_dir + "/" + prefix + random.randstr(16)
+        mkdir(new_tmp_dir)
+        return new_tmp_dir
+
+    action def listdir(path: str) -> list[str]:
+        """List directory contents"""
+        NotImplemented
+
+    action def lstat(filename: str) -> FileStat:
+        """Get file status without following symlinks"""
+        NotImplemented
+
+    action def remove(filename: str) -> None:
+        """Remove a file"""
+        NotImplemented
+
+    action def rmdir(dirname: str) -> None:
+        """Remove a directory"""
+        NotImplemented
+
+    action def rmtree(d: str) -> None:
+        """Recursively remove a directory tree"""
+        try:
+            for entry in listdir(d):
+                try:
+                    s = lstat(d + "/" + entry)
+                    if s.is_dir():
+                        rmtree(d + "/" + entry)
+                        rmdir(d + "/" + entry)
+                    else:
+                        remove(d + "/" + entry)
+                except RuntimeError:
+                    # probably a symlink or permission denied
+                    pass
+        except RuntimeError:
+            # dir doesn't exist
+            pass
+
+    action def tmpdir() -> str:
+        """Get temporary directory"""
+        NotImplemented
+
+    action def stat(filename: str) -> FileStat:
+        """Get file status"""
+        NotImplemented
+
+    action def walk(d: str, follow_symlinks: bool=False) -> list[FileStat]:
+        """Recursively walk a directory tree"""
+        # TODO: this should be a generator
+        res = []
+        try:
+            for entry in listdir(d):
+                try:
+                    if follow_symlinks:
+                        s = stat(d + "/" + entry)
+                    else:
+                        s = lstat(d + "/" + entry)
+                    res.append(s)
+                    if s.is_dir():
+                        res.extend(walk(d + "/" + entry))
+                except RuntimeError:
+                    # probably a symlink or permission denied
+                    pass
+        except RuntimeError:
+            # dir doesn't exist
+            pass
+        return res
 
 actor ReadFile(cap: ReadFileCap, filename: str):
     """Read a file
