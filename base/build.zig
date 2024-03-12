@@ -1,5 +1,5 @@
-// Acton Project Builder
-// Performs the final build of the project by compiling the generated C code.
+// Acton Base System Builder
+// Performs the final build of the Acton base system by compiling the generated C code.
 
 const std = @import("std");
 const print = @import("std").debug.print;
@@ -12,31 +12,66 @@ pub const FilePath = struct {
     file_path: []const u8,
 };
 
+// We have an absolute path we want to get to, but we have to provide it as a
+// relative path from the current position. The easiest way to do this is to go
+// up the directory tree until we're at the root, and then the absolute path is
+// relative to the root and can be used. It would be more elegant to figure out
+// if there are actual commonalities between the paths and only traverse
+// upwards as far as necessary.
+fn relJoinPath(allocator: std.mem.Allocator, dots: []const u8, base: []const u8, relative: []const u8) []const u8 {
+    const path = allocator.alloc(u8, dots.len + base.len + relative.len + 1) catch @panic("OOM");
+    _ = std.fmt.bufPrint(path, "{s}{s}/{s}", .{dots, base, relative}) catch @panic("Error joining paths");
+    return path;
+}
+
+fn joinPath(allocator: std.mem.Allocator, base: []const u8, relative: []const u8) []const u8 {
+    const path = allocator.alloc(u8, base.len + relative.len + 1) catch @panic("OOM");
+    _ = std.fmt.bufPrint(path, "{s}/{s}", .{base, relative}) catch @panic("Error joining paths");
+    return path;
+}
+
+fn dotsToRoot(allocator: std.mem.Allocator, cwd: []const u8) []const u8 {
+    // Split up the path into its components, separated by std.fs.path.sep
+    var parts = std.mem.splitScalar(u8, cwd, std.fs.path.sep);
+    var num_parts: u16 = 0;
+    while (parts.next()) |_| {
+        num_parts += 1;
+    }
+    num_parts -= 1;
+    var dotpath = allocator.alloc(u8, 3*num_parts) catch @panic("OOM");
+    var i: u16 = 0;
+    while (i < num_parts) : (i += 1) {
+        dotpath[i*3+0] = '.';
+        dotpath[i*3+1] = '.';
+        dotpath[i*3+2] = std.fs.path.sep;
+    }
+    return dotpath;
+}
+
+
 pub fn build(b: *std.Build) void {
     const buildroot_path = b.build_root.handle.realpathAlloc(b.allocator, ".") catch unreachable;
-    print("Acton Base Builder\nBuilding in {s}\n", .{buildroot_path});
+    const dots_to_root = dotsToRoot(b.allocator, buildroot_path);
+    defer b.allocator.free(dots_to_root);
     const optimize = b.standardOptimizeOption(.{});
     const target = b.standardTargetOptions(.{});
     const cpedantic = b.option(bool, "cpedantic", "") orelse false;
     const use_db = b.option(bool, "db", "") orelse false;
     const use_prebuilt = b.option(bool, "use_prebuilt", "") orelse false;
-    const projpath = b.option([]const u8, "projpath", "") orelse "";
-    const projpath_outtypes = b.option([]const u8, "projpath_outtypes", "") orelse "";
     const syspath = b.option([]const u8, "syspath", "") orelse "";
-    const syspath_base = b.option([]const u8, "syspath_base", "") orelse "";
-    const syspath_include = b.option([]const u8, "syspath_include", "") orelse "";
-    const syspath_lib = b.option([]const u8, "syspath_lib", "") orelse "";
     const syspath_libreldev = b.option([]const u8, "syspath_libreldev", "") orelse "";
-    const syspath_backend = b.option([]const u8, "syspath_backend", "") orelse "";
     const libactondeps = b.option([]const u8, "libactondeps", "") orelse "";
     const libactongc = b.option([]const u8, "libactongc", "") orelse "";
     _ = use_prebuilt;
     _ = libactongc;
     _ = libactondeps;
-    _ = syspath_backend;
+
+    const projpath_outtypes = joinPath(b.allocator, buildroot_path, "out/types");
+    const syspath_base = relJoinPath(b.allocator, dots_to_root, syspath, "base");
+    const syspath_include = joinPath(b.allocator, syspath, "depsout/include");
+
+    print("Acton Base Builder\nBuilding in {s}\n", .{buildroot_path});
     _ = syspath_libreldev;
-    _ = syspath_lib;
-    _ = syspath;
 
     var iter_dir = b.build_root.handle.openDir(
         "out/types/",
@@ -152,7 +187,7 @@ pub fn build(b: *std.Build) void {
         libActon.addCSourceFile(.{ .file = .{ .path = entry }, .flags = flags.items });
     }
 
-    libActon.addIncludePath(.{ .path = projpath });
+    libActon.addIncludePath(.{ .path = buildroot_path });
     libActon.addIncludePath(.{ .path = syspath_base });
     libActon.addIncludePath(.{ .path = syspath_include });
     libActon.addIncludePath(.{ .path = "../inc" }); // hack hack for stdlib TODO: sort out

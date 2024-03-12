@@ -19,9 +19,15 @@ pub const FilePath = struct {
 // relative to the root and can be used. It would be more elegant to figure out
 // if there are actual commonalities between the paths and only traverse
 // upwards as far as necessary.
-fn joinPath(allocator: std.mem.Allocator, dots: []const u8, base: []const u8, relative: []const u8) []const u8 {
+fn relJoinPath(allocator: std.mem.Allocator, dots: []const u8, base: []const u8, relative: []const u8) []const u8 {
     const path = allocator.alloc(u8, dots.len + base.len + relative.len + 1) catch @panic("OOM");
     _ = std.fmt.bufPrint(path, "{s}{s}/{s}", .{dots, base, relative}) catch @panic("Error joining paths");
+    return path;
+}
+
+fn joinPath(allocator: std.mem.Allocator, base: []const u8, relative: []const u8) []const u8 {
+    const path = allocator.alloc(u8, base.len + relative.len + 1) catch @panic("OOM");
+    _ = std.fmt.bufPrint(path, "{s}/{s}", .{base, relative}) catch @panic("Error joining paths");
     return path;
 }
 
@@ -47,110 +53,21 @@ pub fn build(b: *std.Build) void {
     const buildroot_path = b.build_root.handle.realpathAlloc(b.allocator, ".") catch @panic("ASD");
     const dots_to_root = dotsToRoot(b.allocator, buildroot_path);
     defer b.allocator.free(dots_to_root);
-    print("Acton Project Builder\nBuilding in {s}\n", .{buildroot_path});
     const optimize = b.standardOptimizeOption(.{});
     const target = b.standardTargetOptions(.{});
     const db = b.option(bool, "db", "") orelse false;
+    const only_lib = b.option(bool, "only_lib", "") orelse false;
     const use_prebuilt = b.option(bool, "use_prebuilt", "") orelse false;
-    const projpath = b.option([]const u8, "projpath", "") orelse "";
-    const projpath_outtypes = b.option([]const u8, "projpath_outtypes", "") orelse "";
     const syspath = b.option([]const u8, "syspath", "") orelse "";
-    const syspath_backend = b.option([]const u8, "syspath_backend", "") orelse "";
-    const syspath_base = b.option([]const u8, "syspath_base", "") orelse "";
-    const syspath_include = b.option([]const u8, "syspath_include", "") orelse "";
-    const syspath_lib = b.option([]const u8, "syspath_lib", "") orelse "";
     const syspath_libreldev = b.option([]const u8, "syspath_libreldev", "") orelse "";
 
-    const libactondb_dep = b.anonymousDependency(syspath_backend, @import("backendbuild.zig"), .{
-        .target = target,
-        .optimize = optimize,
-        .syspath_include = syspath_include,
-    });
+    const projpath_outtypes = joinPath(b.allocator, buildroot_path, "out/types");
+    const syspath_backend = relJoinPath(b.allocator, dots_to_root, syspath, "backend");
+    const syspath_base = relJoinPath(b.allocator, dots_to_root, syspath, "base");
+    const syspath_include = joinPath(b.allocator, syspath, "depsout/include");
+    const syspath_lib = joinPath(b.allocator, syspath, "depsout/lib");
 
-    const actonbase_dep = b.anonymousDependency(syspath_base, @import("basebuild.zig"), .{
-        .target = target,
-        .optimize = optimize,
-        .db = db,
-        .syspath_include = syspath_include,
-    });
-
-    const dep_libgc = b.anonymousDependency(joinPath(b.allocator, dots_to_root, syspath, "deps/libgc"), @import("deps/libgc/build.zig"), .{
-        .target = target,
-        .optimize = optimize,
-        .BUILD_SHARED_LIBS = false,
-        .enable_redirect_malloc = true,
-        .enable_large_config = true,
-        .enable_mmap = true,
-    });
-
-
-    // -- ActonDeps ------------------------------------------------------------
-    const dep_libargp = b.anonymousDependency(joinPath(b.allocator, dots_to_root, syspath, "deps/libargp"), @import("deps/libargp/build.zig"), .{
-        .target = target,
-        .optimize = optimize,
-    });
-
-    const dep_libbsdnt = b.anonymousDependency(joinPath(b.allocator, dots_to_root, syspath, "deps/libbsdnt"), @import("deps/libbsdnt/build.zig"), .{
-        .target = target,
-        .optimize = optimize,
-    });
-
-    const dep_libmbedtls = b.anonymousDependency(joinPath(b.allocator, dots_to_root, syspath, "deps/mbedtls"), @import("deps/mbedtls/build.zig"), .{
-        .target = target,
-        .optimize = optimize,
-    });
-
-    const dep_libnetstring = b.anonymousDependency(joinPath(b.allocator, dots_to_root, syspath, "deps/libnetstring"), @import("deps/libnetstring/build.zig"), .{
-        .target = target,
-        .optimize = optimize,
-    });
-
-    const dep_libpcre2 = b.anonymousDependency(joinPath(b.allocator, dots_to_root, syspath, "deps/pcre2"), @import("deps/pcre2/build.zig"), .{
-        .target = target,
-        .optimize = optimize,
-    });
-
-    const dep_libprotobuf_c = b.anonymousDependency(joinPath(b.allocator, dots_to_root, syspath, "deps/libprotobuf_c"), @import("deps/libprotobuf_c/build.zig"), .{
-        .target = target,
-        .optimize = optimize,
-    });
-
-    const dep_libtlsuv = b.anonymousDependency(joinPath(b.allocator, dots_to_root, syspath, "deps/tlsuv"), @import("deps/tlsuv/build.zig"), .{
-        .target = target,
-        .optimize = optimize,
-    });
-
-    const dep_libutf8proc = b.anonymousDependency(joinPath(b.allocator, dots_to_root, syspath, "deps/libutf8proc"), @import("deps/libutf8proc/build.zig"), .{
-        .target = target,
-        .optimize = optimize,
-    });
-
-    const dep_libuuid = b.anonymousDependency(joinPath(b.allocator, dots_to_root, syspath, "deps/libuuid"), @import("deps/libuuid/build.zig"), .{
-        .target = target,
-        .optimize = optimize,
-    });
-
-    const dep_libuv = b.anonymousDependency(joinPath(b.allocator, dots_to_root, syspath, "deps/libuv"), @import("deps/libuv/build.zig"), .{
-        .target = target,
-        .optimize = optimize,
-    });
-
-    const dep_libxml2 = b.anonymousDependency(joinPath(b.allocator, dots_to_root, syspath, "deps/libxml2"), @import("deps/libxml2/build.zig"), .{
-        .target = target,
-        .optimize = optimize,
-    });
-
-    const dep_libyyjson = b.anonymousDependency(joinPath(b.allocator, dots_to_root, syspath, "deps/libyyjson"), @import("deps/libyyjson/build.zig"), .{
-        .target = target,
-        .optimize = optimize,
-    });
-
-    const dep_libsnappy_c = b.anonymousDependency(joinPath(b.allocator, dots_to_root, syspath, "deps/libsnappy_c"), @import("deps/libsnappy_c/build.zig"), .{
-        .target = target,
-        .optimize = optimize,
-    });
-
-    // -- ActonDeps ------------------------------------------------------------
+    print("Acton Project Builder\nBuilding in {s}\n", .{buildroot_path});
 
     var iter_dir = b.build_root.handle.openDir(
         "out/types/",
@@ -268,109 +185,200 @@ pub fn build(b: *std.Build) void {
         libActonProject.addCSourceFile(.{ .file = .{ .path = entry }, .flags = flags.items });
     }
 
-    libActonProject.addIncludePath(.{ .path = projpath });
+    libActonProject.addIncludePath(.{ .path = buildroot_path });
     libActonProject.addIncludePath(.{ .path = syspath_base });
     libActonProject.addIncludePath(.{ .path = syspath_include });
     libActonProject.linkLibC();
     libActonProject.linkLibCpp();
     b.installArtifact(libActonProject);
 
-    for (root_c_files.items) |entry| {
-        // Get the binary name, by removing .root.c from end and having it relative to the projpath_outtypes
-        var nlen = ".root.c".len;
-        if (entry.test_root)
-            nlen = ".test_root.c".len - ".test_".len;
-        nlen += 1; // for the null terminator
-        const binname = b.allocator.alloc(u8, entry.file_path.len-nlen) catch |err| {
-            std.log.info("Error allocating binname: {}", .{err});
-            std.os.exit(1);
-        };
-        if (entry.test_root) {
-            // Write '.test_' to start of binname
-            const buf = std.fmt.allocPrint(b.allocator, ".test_{s}", .{entry.file_path[1..entry.file_path.len - ".test_root.c".len]}) catch |err| {
-                std.log.err("Error allocating binname: {}", .{err});
-                std.os.exit(1);
-            };
-            @memcpy(binname, buf);
-        } else {
-            @memcpy(binname, entry.file_path[1..(entry.file_path.len - ".root.c".len)]);
-        }
-        // Replace / with . in the binary name
-        for (binname) |*ch| {
-            if (ch.* == '/') ch.* = '.';
-        }
+    if (!only_lib) {
+        const libactondb_dep = b.anonymousDependency(syspath_backend, @import("backendbuild.zig"), .{
+            .target = target,
+            .optimize = optimize,
+            .syspath_include = syspath_include,
+        });
 
-        print("Building executable from: {s} -> {s}\n", .{entry.full_path, binname});
+        const actonbase_dep = b.anonymousDependency(syspath_base, @import("basebuild.zig"), .{
+            .target = target,
+            .optimize = optimize,
+            .db = db,
+            .syspath = syspath,
+        });
 
-        const executable = b.addExecutable(.{
-            .name = binname,
+        const dep_libgc = b.anonymousDependency(relJoinPath(b.allocator, dots_to_root, syspath, "deps/libgc"), @import("deps/libgc/build.zig"), .{
+            .target = target,
+            .optimize = optimize,
+            .BUILD_SHARED_LIBS = false,
+            .enable_redirect_malloc = true,
+            .enable_large_config = true,
+            .enable_mmap = true,
+        });
+
+
+        // -- ActonDeps ------------------------------------------------------------
+        const dep_libargp = b.anonymousDependency(relJoinPath(b.allocator, dots_to_root, syspath, "deps/libargp"), @import("deps/libargp/build.zig"), .{
             .target = target,
             .optimize = optimize,
         });
-        //_ = syspath;
-        executable.addCSourceFile(.{ .file = .{ .path = entry.full_path }, .flags = flags.items });
-        executable.addIncludePath(.{ .path = projpath });
-        executable.addIncludePath(.{ .path = syspath_base });
-        executable.addIncludePath(.{ .path = syspath_include });
-        executable.addLibraryPath(.{ .path = "out/rel/lib/" });
-        executable.addLibraryPath(.{ .path = syspath_libreldev });
-        executable.addLibraryPath(.{ .path = syspath_lib });
-        executable.linkLibrary(libActonProject);
 
-        // Do not use prebuilt based on the use_prebuilt flag, but also do not
-        // use prebuilt when there are custom options, like --db
-        // Also see below.
-        if (!use_prebuilt or db) {
-            executable.linkLibrary(actonbase_dep.artifact("Acton"));
-        } else {
-            executable.linkSystemLibrary("Acton");
-        }
-        if (use_prebuilt) {
-            if (db) {
-                executable.linkSystemLibrary("ActonDB");
-                executable.linkSystemLibrary("argp");
-                executable.linkSystemLibrary("uuid");
+        const dep_libbsdnt = b.anonymousDependency(relJoinPath(b.allocator, dots_to_root, syspath, "deps/libbsdnt"), @import("deps/libbsdnt/build.zig"), .{
+            .target = target,
+            .optimize = optimize,
+        });
+
+        const dep_libmbedtls = b.anonymousDependency(relJoinPath(b.allocator, dots_to_root, syspath, "deps/mbedtls"), @import("deps/mbedtls/build.zig"), .{
+            .target = target,
+            .optimize = optimize,
+        });
+
+        const dep_libnetstring = b.anonymousDependency(relJoinPath(b.allocator, dots_to_root, syspath, "deps/libnetstring"), @import("deps/libnetstring/build.zig"), .{
+            .target = target,
+            .optimize = optimize,
+        });
+
+        const dep_libpcre2 = b.anonymousDependency(relJoinPath(b.allocator, dots_to_root, syspath, "deps/pcre2"), @import("deps/pcre2/build.zig"), .{
+            .target = target,
+            .optimize = optimize,
+        });
+
+        const dep_libprotobuf_c = b.anonymousDependency(relJoinPath(b.allocator, dots_to_root, syspath, "deps/libprotobuf_c"), @import("deps/libprotobuf_c/build.zig"), .{
+            .target = target,
+            .optimize = optimize,
+        });
+
+        const dep_libtlsuv = b.anonymousDependency(relJoinPath(b.allocator, dots_to_root, syspath, "deps/tlsuv"), @import("deps/tlsuv/build.zig"), .{
+            .target = target,
+            .optimize = optimize,
+        });
+
+        const dep_libutf8proc = b.anonymousDependency(relJoinPath(b.allocator, dots_to_root, syspath, "deps/libutf8proc"), @import("deps/libutf8proc/build.zig"), .{
+            .target = target,
+            .optimize = optimize,
+        });
+
+        const dep_libuuid = b.anonymousDependency(relJoinPath(b.allocator, dots_to_root, syspath, "deps/libuuid"), @import("deps/libuuid/build.zig"), .{
+            .target = target,
+            .optimize = optimize,
+        });
+
+        const dep_libuv = b.anonymousDependency(relJoinPath(b.allocator, dots_to_root, syspath, "deps/libuv"), @import("deps/libuv/build.zig"), .{
+            .target = target,
+            .optimize = optimize,
+        });
+
+        const dep_libxml2 = b.anonymousDependency(relJoinPath(b.allocator, dots_to_root, syspath, "deps/libxml2"), @import("deps/libxml2/build.zig"), .{
+            .target = target,
+            .optimize = optimize,
+        });
+
+        const dep_libyyjson = b.anonymousDependency(relJoinPath(b.allocator, dots_to_root, syspath, "deps/libyyjson"), @import("deps/libyyjson/build.zig"), .{
+            .target = target,
+            .optimize = optimize,
+        });
+
+        const dep_libsnappy_c = b.anonymousDependency(relJoinPath(b.allocator, dots_to_root, syspath, "deps/libsnappy_c"), @import("deps/libsnappy_c/build.zig"), .{
+            .target = target,
+            .optimize = optimize,
+        });
+
+        for (root_c_files.items) |entry| {
+            // Get the binary name, by removing .root.c from end and having it relative to the projpath_outtypes
+            var nlen = ".root.c".len;
+            if (entry.test_root)
+                nlen = ".test_root.c".len - ".test_".len;
+            nlen += 1; // for the null terminator
+            const binname = b.allocator.alloc(u8, entry.file_path.len-nlen) catch |err| {
+                std.log.info("Error allocating binname: {}", .{err});
+                std.os.exit(1);
+            };
+            if (entry.test_root) {
+                // Write '.test_' to start of binname
+                const buf = std.fmt.allocPrint(b.allocator, ".test_{s}", .{entry.file_path[1..entry.file_path.len - ".test_root.c".len]}) catch |err| {
+                    std.log.err("Error allocating binname: {}", .{err});
+                    std.os.exit(1);
+                };
+                @memcpy(binname, buf);
+            } else {
+                @memcpy(binname, entry.file_path[1..(entry.file_path.len - ".root.c".len)]);
             }
-            executable.linkSystemLibrary("bsdnt");
-            executable.linkSystemLibrary("mbedcrypto");
-            executable.linkSystemLibrary("mbedtls");
-            executable.linkSystemLibrary("mbedx509");
-            executable.linkSystemLibrary("netstring");
-            executable.linkSystemLibrary("pcre2");
-            executable.linkSystemLibrary("protobuf-c");
-            executable.linkSystemLibrary("snappy-c");
-            executable.linkSystemLibrary("tlsuv");
-            executable.linkSystemLibrary("utf8proc");
-            executable.linkSystemLibrary("uv");
-            executable.linkSystemLibrary("xml2");
-            executable.linkSystemLibrary("yyjson");
-
-            executable.linkSystemLibrary("actongc");
-        } else {
-            if (db) {
-                executable.linkLibrary(libactondb_dep.artifact("ActonDB"));
-                executable.linkLibrary(dep_libargp.artifact("argp"));
-                executable.linkLibrary(dep_libuuid.artifact("uuid"));
+            // Replace / with . in the binary name
+            for (binname) |*ch| {
+                if (ch.* == '/') ch.* = '.';
             }
-            executable.linkLibrary(dep_libbsdnt.artifact("bsdnt"));
-            executable.linkLibrary(dep_libmbedtls.artifact("mbedcrypto"));
-            executable.linkLibrary(dep_libmbedtls.artifact("mbedtls"));
-            executable.linkLibrary(dep_libmbedtls.artifact("mbedx509"));
-            executable.linkLibrary(dep_libnetstring.artifact("netstring"));
-            executable.linkLibrary(dep_libpcre2.artifact("pcre2"));
-            executable.linkLibrary(dep_libprotobuf_c.artifact("protobuf-c"));
-            executable.linkLibrary(dep_libsnappy_c.artifact("snappy-c"));
-            executable.linkLibrary(dep_libtlsuv.artifact("tlsuv"));
-            executable.linkLibrary(dep_libutf8proc.artifact("utf8proc"));
-            executable.linkLibrary(dep_libuv.artifact("uv"));
-            executable.linkLibrary(dep_libxml2.artifact("xml2"));
-            executable.linkLibrary(dep_libyyjson.artifact("yyjson"));
 
-            executable.linkLibrary(dep_libgc.artifact("gc"));
+            print("Building executable from: {s} -> {s}\n", .{entry.full_path, binname});
+
+            const executable = b.addExecutable(.{
+                .name = binname,
+                .target = target,
+                .optimize = optimize,
+            });
+            //_ = syspath;
+            executable.addCSourceFile(.{ .file = .{ .path = entry.full_path }, .flags = flags.items });
+            executable.addIncludePath(.{ .path = buildroot_path });
+            executable.addIncludePath(.{ .path = syspath_base });
+            executable.addIncludePath(.{ .path = syspath_include });
+            executable.addLibraryPath(.{ .path = "out/rel/lib/" });
+            executable.addLibraryPath(.{ .path = syspath_libreldev });
+            executable.addLibraryPath(.{ .path = syspath_lib });
+            executable.linkLibrary(libActonProject);
+
+            // Do not use prebuilt based on the use_prebuilt flag, but also do not
+            // use prebuilt when there are custom options, like --db
+            // Also see below.
+            if (!use_prebuilt or db) {
+                executable.linkLibrary(actonbase_dep.artifact("Acton"));
+            } else {
+                executable.linkSystemLibrary("Acton");
+            }
+            if (use_prebuilt) {
+                if (db) {
+                    executable.linkSystemLibrary("ActonDB");
+                    executable.linkSystemLibrary("argp");
+                    executable.linkSystemLibrary("uuid");
+                }
+                executable.linkSystemLibrary("bsdnt");
+                executable.linkSystemLibrary("mbedcrypto");
+                executable.linkSystemLibrary("mbedtls");
+                executable.linkSystemLibrary("mbedx509");
+                executable.linkSystemLibrary("netstring");
+                executable.linkSystemLibrary("pcre2");
+                executable.linkSystemLibrary("protobuf-c");
+                executable.linkSystemLibrary("snappy-c");
+                executable.linkSystemLibrary("tlsuv");
+                executable.linkSystemLibrary("utf8proc");
+                executable.linkSystemLibrary("uv");
+                executable.linkSystemLibrary("xml2");
+                executable.linkSystemLibrary("yyjson");
+
+                executable.linkSystemLibrary("actongc");
+            } else {
+                if (db) {
+                    executable.linkLibrary(libactondb_dep.artifact("ActonDB"));
+                    executable.linkLibrary(dep_libargp.artifact("argp"));
+                    executable.linkLibrary(dep_libuuid.artifact("uuid"));
+                }
+                executable.linkLibrary(dep_libbsdnt.artifact("bsdnt"));
+                executable.linkLibrary(dep_libmbedtls.artifact("mbedcrypto"));
+                executable.linkLibrary(dep_libmbedtls.artifact("mbedtls"));
+                executable.linkLibrary(dep_libmbedtls.artifact("mbedx509"));
+                executable.linkLibrary(dep_libnetstring.artifact("netstring"));
+                executable.linkLibrary(dep_libpcre2.artifact("pcre2"));
+                executable.linkLibrary(dep_libprotobuf_c.artifact("protobuf-c"));
+                executable.linkLibrary(dep_libsnappy_c.artifact("snappy-c"));
+                executable.linkLibrary(dep_libtlsuv.artifact("tlsuv"));
+                executable.linkLibrary(dep_libutf8proc.artifact("utf8proc"));
+                executable.linkLibrary(dep_libuv.artifact("uv"));
+                executable.linkLibrary(dep_libxml2.artifact("xml2"));
+                executable.linkLibrary(dep_libyyjson.artifact("yyjson"));
+
+                executable.linkLibrary(dep_libgc.artifact("gc"));
+            }
+
+            executable.linkLibC();
+            executable.linkLibCpp();
+            b.installArtifact(executable);
         }
-
-        executable.linkLibC();
-        executable.linkLibCpp();
-        b.installArtifact(executable);
     }
 }
