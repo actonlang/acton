@@ -3,25 +3,26 @@ import file
 import logging
 import testing
 
+def test_fs(env):
+    fc = file.FileCap(env.cap)
+    fs = file.FS(fc)
+    tmpdir = fs.mktmpdir()
+    fs.mkdir(tmpdir + "/foo")
+    fs.mkdir(tmpdir + "/foo2")
+    rel_things = []
+    for e in fs.walk(tmpdir):
+        rel_things.append(e.name.split("/")[-1])
+    testing.assertEqual(set(["foo", "foo2"]), set(rel_things))
+    fs.rmtree(tmpdir)
+
 actor FsTester(report_result, env, log_handler):
     log = logging.Logger(log_handler)
 
-    def test_fs():
-        fc = file.FileCap(env.cap)
-        fs = file.FS(fc)
-        tmpdir = fs.mktmpdir()
-        fs.mkdir(tmpdir + "/foo")
-        fs.mkdir(tmpdir + "/foo2")
-        rel_things = []
-        for e in fs.walk(tmpdir):
-            rel_things.append(e.name.split("/")[-1])
-        testing.assertEqual(set(["foo", "foo2"]), set(rel_things))
-        fs.rmtree(tmpdir)
 
     def test():
         log.info("EnvTester.test()", None)
         try:
-            test_fs()
+            test_fs(env)
             report_result(True, None)
         except AssertionError as exc:
             report_result(False, exc)
@@ -31,3 +32,8 @@ actor FsTester(report_result, env, log_handler):
 def _test_file_fs(report_result: action(?bool, ?Exception) -> None, env: Env, log_handler: logging.Handler) -> None:
     s = FsTester(report_result, env, log_handler)
     s.test()
+
+actor main(env):
+    test_fs(env)
+    env.exit(0)
+
