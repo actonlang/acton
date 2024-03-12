@@ -1,5 +1,13 @@
+# TODO: randint should not be pure!!! but what should it be?
 def randint(min: int, max: int) -> int:
     NotImplemented
+
+def randstr(length: int) -> str:
+    char_set = list("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789")
+    res = ""
+    for i in range(length):
+        res += choice(char_set)
+    return res
 
 def choice[T](sequence: Sequence[T]) -> T:
     """

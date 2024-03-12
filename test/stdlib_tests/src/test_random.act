@@ -108,3 +108,8 @@ def _test_random2():
     for i in range(100000):
         r = random.randint(1293862, 97309358)
         testing.assertTrue(r >= 1293862 and r <= 97309358, "random.randint() returned a value outside of the range")
+
+def _test_randstr():
+    a = random.randstr(8)
+    testing.assertEqual(8, len(a))
+    testing.assertNotEqual("", a)
