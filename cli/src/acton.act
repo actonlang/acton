@@ -317,6 +317,7 @@ actor main(env):
         p.add_bool("quiet", "Be quiet")
         p.add_bool("debug", "Print debug stuff")
         p.add_bool("dev", "Development mode")
+        p.add_bool("only-act", "Only compile .act, skip .c compilation")
         p.add_option("root", "str", "?", "", "Set root actor")
         p.add_option("tempdir", "str", "?", "", "Directory for temporary build files")
         p.add_option("syspath", "str", "?", "", "syspath")

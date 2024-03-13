@@ -82,6 +82,7 @@ main = do
           C.debug = C.debugB opts,
           C.dev = C.devB opts,
           C.db = C.dbB opts,
+          C.only_act = C.only_actB opts,
           C.root = C.rootB opts,
           C.ccmd = C.ccmdB opts,
           C.quiet = C.quietB opts,
@@ -101,8 +102,8 @@ main = do
                                     else compileFiles opts (catMaybes $ map filterActFile nms)
 
 defaultOpts   = C.CompileOptions False False False False False False False False False False False False
-                                 False False False False False False False False False False "" "" "" ""
-                                 C.defTarget "" "" False False False
+                                 False False False False False False False False False False False
+                                 "" "" "" "" C.defTarget "" "" False False False
 
 
 -- Auxiliary functions ---------------------------------------------------------------------------------------
@@ -326,15 +327,20 @@ compileFiles opts srcFiles = do
           | null (C.root opts) = map (\t -> BinTask True (modNameToString (name t)) (A.GName (name t) (A.name "main")) False) (filter (not . stubmode) tasks)
           | otherwise        = [binTask]
         preTestBinTasks = map (\t -> BinTask True (modNameToString (name t)) (A.GName (name t) (A.name "__test_main")) True) (filter (not . stubmode) tasks)
+--    iff (not (C.only_c opts)) $
     env <- compileTasks opts paths tasks
-    testBinTasks <- catMaybes <$> mapM (filterMainActor env opts paths) preTestBinTasks
-    if C.test opts
-      then do
-        compileBins opts paths env tasks testBinTasks
-        putStrLn "Test executables:"
-        mapM_ (\t -> putStrLn (binName t)) testBinTasks
-      else do
-        compileBins opts paths env tasks preBinTasks
+    if C.only_act opts
+      then
+        putStrLn "  Skipping final compilation step"
+      else
+        if C.test opts
+          then do
+            testBinTasks <- catMaybes <$> mapM (filterMainActor env opts paths) preTestBinTasks
+            compileBins opts paths env tasks testBinTasks
+            putStrLn "Test executables:"
+            mapM_ (\t -> putStrLn (binName t)) testBinTasks
+          else do
+            compileBins opts paths env tasks preBinTasks
     return ()
 
 
