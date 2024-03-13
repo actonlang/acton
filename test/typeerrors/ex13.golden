@@ -1,5 +1,5 @@
 Building file ../test/typeerrors/ex13.act
-  Compiling ex13.act for release
+  Compiling ex13.act for development
 
 ERROR: Error when compiling ex13 module: Type error
 

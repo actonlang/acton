@@ -1,5 +1,5 @@
 Building file ../test/typeerrors/ex15.act
-  Compiling ex15.act for release
+  Compiling ex15.act for development
 
 ERROR: Error when compiling ex15 module: Type error
 

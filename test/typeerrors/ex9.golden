@@ -1,5 +1,5 @@
 Building file ../test/typeerrors/ex9.act
-  Compiling ex9.act for release
+  Compiling ex9.act for development
 
 ERROR: Error when compiling ex9 module: Type error
 
