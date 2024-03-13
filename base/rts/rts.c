@@ -63,7 +63,7 @@
 extern struct dbc_stat dbc_stats;
 #endif
 
-struct sigaction sa_ill, sa_int, sa_pipe, sa_segv, sa_term;
+struct sigaction sa_abrt, sa_ill, sa_int, sa_pipe, sa_segv, sa_term;
 
 char rts_verbose = 0;
 char rts_debug = 0;
@@ -2125,7 +2125,7 @@ void launch_debugger(int signum) {
     }
 }
 
-void sigillsegv_handler(int signum) {
+void crash_handler(int signum) {
     if (signum == SIGILL)
         fprintf(stderr, "\nERROR: illegal instruction\n");
     if (signum == SIGSEGV)
@@ -2256,11 +2256,13 @@ int main(int argc, char **argv) {
     setlinebuf(stdout);
 
     // Signal handling
+    sigfillset(&sa_abrt.sa_mask);
     sigfillset(&sa_ill.sa_mask);
     sigfillset(&sa_int.sa_mask);
     sigfillset(&sa_pipe.sa_mask);
     sigfillset(&sa_segv.sa_mask);
     sigfillset(&sa_term.sa_mask);
+    sa_abrt.sa_flags = SA_RESTART;
     sa_ill.sa_flags = SA_RESTART;
     sa_int.sa_flags = SA_RESTART;
     sa_pipe.sa_flags = SA_RESTART;
@@ -2460,14 +2462,20 @@ int main(int argc, char **argv) {
     new_argv[new_argc] = NULL;
 
     if (interactive_backtrace) {
+        sa_abrt.sa_handler = &launch_debugger;
         sa_ill.sa_handler = &launch_debugger;
         sa_segv.sa_handler = &launch_debugger;
     } else {
-        sa_ill.sa_handler = &sigillsegv_handler;
-        sa_segv.sa_handler = &sigillsegv_handler;
+        sa_abrt.sa_handler = &crash_handler;
+        sa_ill.sa_handler = &crash_handler;
+        sa_segv.sa_handler = &crash_handler;
     }
 
     if (auto_backtrace) {
+        if (sigaction(SIGABRT, &sa_abrt, NULL) == -1) {
+            log_fatal("Failed to install signal handler for SIGABRT: %s", strerror(errno));
+            exit(1);
+        }
         if (sigaction(SIGILL, &sa_ill, NULL) == -1) {
             log_fatal("Failed to install signal handler for SIGILL: %s", strerror(errno));
             exit(1);
