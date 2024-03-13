@@ -1,5 +1,5 @@
 Building file ../test/typeerrors/ex8.act
-  Compiling ex8.act for release
+  Compiling ex8.act for development
 
 ERROR: Error when compiling ex8 module: Type error
 

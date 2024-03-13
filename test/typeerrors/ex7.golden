@@ -1,5 +1,5 @@
 Building file ../test/typeerrors/ex7.act
-  Compiling ex7.act for release
+  Compiling ex7.act for development
 
 ERROR: Error when compiling ex7 module: Type error
 

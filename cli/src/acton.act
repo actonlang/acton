@@ -98,7 +98,7 @@ actor BuildProjectTests(process_cap, env, args, on_build_success, on_build_failu
     fs = file.FS(file.FileCap(env.cap))
     # We find the path to actonc by looking at the executable path of the
     # current process. Since we are called 'acton', we just add a 'c'.
-    cmd = [fs.exepath() + "c"] + cmdargs + ["build", "--test"]
+    cmd = [fs.exepath() + "c"] + cmdargs + ["build", "--dev", "--test"]
 
     def on_actbuild_stdout(p, data):
         for line in data.decode().splitlines(False):

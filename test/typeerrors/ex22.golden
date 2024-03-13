@@ -1,5 +1,5 @@
 Building file ../test/typeerrors/ex22.act
-  Compiling ex22.act for release
+  Compiling ex22.act for development
 
 ERROR: Error when compiling ex22 module: Type error
 

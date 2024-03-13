@@ -1,5 +1,5 @@
 Building file ../test/typeerrors/ex23.act
-  Compiling ex23.act for release
+  Compiling ex23.act for development
 
 ERROR: Error when compiling ex23 module: Type error
 

@@ -1,5 +1,5 @@
 Building file ../test/typeerrors/ex17.act
-  Compiling ex17.act for release
+  Compiling ex17.act for development
 
 ERROR: Error when compiling ex17 module: Type error
 

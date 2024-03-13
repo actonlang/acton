@@ -68,7 +68,6 @@ data CompileOptions   = CompileOptions {
                          cc          :: String,
                          target      :: String,
                          cpu         :: String,
-                         cachedir    :: String,
                          zigbuild    :: Bool,
                          nozigbuild  :: Bool,
                          test        :: Bool
@@ -89,7 +88,6 @@ data BuildOptions = BuildOptions {
                          ccB         :: String,
                          targetB     :: String,
                          cpuB        :: String,
-                         cachedirB   :: String,
                          zigbuildB   :: Bool,
                          nozigbuildB :: Bool,
                          testB       :: Bool
@@ -167,7 +165,6 @@ compileOptions = CompileOptions
         <*> strOption (long "cc"        <> metavar "PATH" <> value "" <> help "CC")
         <*> strOption (long "target"    <> metavar "TARGET" <> value defTarget <> help "Target, e.g. x86_64-linux-gnu.2.28")
         <*> strOption (long "cpu"       <> metavar "CPU" <> value "" <> help "CPU, e.g. skylake")
-        <*> strOption (long "cache"     <> metavar "CACHEDIR" <> value "" <> help "Cache directory")
         <*> switch (long "zigbuild"     <> help "Use zig build")
         <*> switch (long "no-zigbuild"  <> help "Don't use zig build")
         <*> switch (long "test"         <> help "Build tests")
@@ -188,7 +185,6 @@ buildCommand          = Build <$> (
         <*> strOption (long "cc"        <> metavar "PATH" <>  value "" <> help "CC")
         <*> strOption (long "target"    <> metavar "TARGET" <> value defTarget <> help "Target, e.g. x86_64-linux-gnu.2.28")
         <*> strOption (long "cpu"       <> metavar "CPU" <> value "" <> help "CPU, e.g. skylake")
-        <*> strOption (long "cache"     <> metavar "CACHEDIR" <> value "" <> help "Cache directory")
         <*> switch (long "zigbuild"     <> help "Use zig build")
         <*> switch (long "no-zigbuild"  <> help "Don't use zig build")
         <*> switch (long "test"         <> help "Build tests")

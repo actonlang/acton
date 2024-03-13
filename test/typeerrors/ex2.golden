@@ -1,5 +1,5 @@
 Building file ../test/typeerrors/ex2.act
-  Compiling ex2.act for release
+  Compiling ex2.act for development
 
 ERROR: Error when compiling ex2 module: Type error
 

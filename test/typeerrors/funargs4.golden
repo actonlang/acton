@@ -1,5 +1,5 @@
 Building file ../test/typeerrors/funargs4.act
-  Compiling funargs4.act for release
+  Compiling funargs4.act for development
 
 ERROR: Error when compiling funargs4 module: Type error
 

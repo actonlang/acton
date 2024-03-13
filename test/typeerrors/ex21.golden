@@ -1,5 +1,5 @@
 Building file ../test/typeerrors/ex21.act
-  Compiling ex21.act for release
+  Compiling ex21.act for development
 
 ERROR: Error when compiling ex21 module: Type error
 
