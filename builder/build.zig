@@ -211,6 +211,7 @@ pub fn build(b: *std.Build) void {
             .optimize = optimize,
             .BUILD_SHARED_LIBS = false,
             .enable_redirect_malloc = true,
+            .enable_ignore_free = true,
             .enable_large_config = true,
             .enable_mmap = true,
         });
