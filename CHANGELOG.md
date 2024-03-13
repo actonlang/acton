@@ -1,14 +1,75 @@
 # Changelog
 
-## Unreleased
+## [0.21.0] (2024-03-13)
 
 ## Added
+- `acton test` testing has been revamped, now doing multiple test iterations
+  - each test will be run for at least 1ms, for many smaller unit tests this
+    means the test case run hundreds of times
+  - all the internals have been rewritten to handle multiple tests results from
+    a test
+  - running multiple test iterations gives better performance measurement but
+    can also show flakiness in tests
+- `acton test list` will list all the test names in a project
+- `acton test --name foo --name bar` will filter to only run tests named `foo`
+  and `bar` in a project
+- AbE: explain testing with `acton test`
+- New methods to interact with environment variables [#1723]
+  - `getenv` & `getenvb` to read an environment variable
+  - `setenv` & `setenvb` to set an environment variable
+  - `unsetenv` & `unsetenvb` to set an environment variable
+  - The first set of functions work with strings and attempt to automatically
+    detect the encoding, although utf-8 is the only supported encoding by Acton
+    right now.
+  - The functions ending with `b` work with bytes data which can be used for
+    explicit control over encoding.
+- `env.stdin_install` now supports both `str` and `bytes` [#1723]
+  - It was orignally built to work with `str` which meant it decoded data from
+    stdin automatically. This assumed utf-8 encoding.
+  - `env.stdin_install` was then changed so the callback would get `bytes`,
+    which is technically more correct (it could just be bytes!) but leaves it to
+    the application programmer to decode data.
+  - A new interface now offers the best of both worlds:
+    - `env.stdin_install(on_stdin, encoding, on_stdin_bytes)`
+    - by specifying `env.stdin_install(on_stdin=my_cb)`, `my_cb` will be called
+      and get `str` input. The encoding is detected by reading the `LANG`
+      environment variable or defaults to `utf-8`. It is possible to explicitly
+      specify the encoding with the `encoding` argument.
+    - Use `env.stdin_install(on_stdin_bytes=my_cb)` to instead receive bytes
+- Acton now always compiles everything from source
+  - Previously, pre-compiled binary libraries were shipped for the native
+    target, so on x86_64-linux, there was a libActon.a compiled for x86_64-linux
+  - Now we just ship the source code of Acton base etc and perform the full C
+    compilation when we actually run actonc
+  - The first invokations of `acton build` is slow, taking up to a few minutes,
+    but as all results are cached, subsequent invokations run in fractions of a
+    second.
+  - `~/.cache/acton` is used to store the cache and it is wiped if it reaches
+    5GB after which it will be automatically re-populated when the next `acton
+    build` is called
+- Low level compiler support for dependencies
+  - Place Acton project dependencies in the `deps/` folder and the compiler will
+    automatically find them to allow inclusion of Acton modules from other Acton
+    projects
+  - This implements the low level internal support for finding modules in other
+    projects and correctly linking together the final output
+  - There is NO support for managing the dependency download itself or even
+    compiling the dependency
+- `SIGABRT` is now automatically handled by the crash handler for automatic
+  backtrace printing or interactive debugging, just like we already manage
+  `SIGILL` and `SIGSEGV`
+  - This simplifies debugging of Acton itself after catastrophic crashes
+- `file` module now has methods to interact with file system, like listing
+  files, making directories, stating files, removing files and walking directory
+  trees.
 - `file.FS.exepath()` returns the path to the current executable
 - `acton` now finds `actonc` by looking at its own location rather than assuming
   `actonc` is on the path
-- AbE: explain testing with `acton test`
+- Add `--only-act` to only perform Acton compilation and skip C compilation
 
 ## Changed
+- `acton test` will compile test functions in dev mode to get asserts
+- The `dev` and `rel` folders have been removed, e.g. `out/rel/bin` -> `out/bin`
 - Printing of compiler pass debug output from individual files, like `acton
   src/foo.act --types` will now only print output from the specified name and
   not dependencies
@@ -19,10 +80,36 @@
     modules, the included modules do not need to be recompiled thus speeding up
     the whole compilation.
 - Always link in libprotobuf-c to allow modules to use protobuf tech
+- Improved argparse parsing by doing a descent first parsing of options and into
+  sub-commands with positional argument parsing happening as a second pass
+  [#1714]
 
 ### Fixed
 - `acton new foo` now creates a new project `foo`
 - Fixed handling of failing tests in `acton test` [#1709]
+- Fixed required since self is now parsed as a kwd param [#1715]
+- Upgrade GC
+  - Now ignoring `free()`. This was also previously the case but this was lost
+    when we upstreamed the new build.zig for bdwgc. It is now back, which is
+    required for handling the "edge", like where syscall / libc calls do malloc
+    and then free. uv_fs_scandir is an example of such, which was recently added
+    and triggered a bug.
+  - Incremental collection has been fixed on Linux so that it should work,
+    although it is not supported by the Acton RTS. Incremental collection is
+    likely much slower for most programs but with better responsiveness. It
+    could potentially be better for very large heaps as well as overhead of
+    virtual dirty bit now only hits from a very small heap. It remains to be
+    seen.
+- `testing.test_runner` has been fixed with regards to scheduling, now we
+  actually wait for a test kind to be completed before proceeding to the next.
+  Previously for async tests we would spawn all tests immediately and then
+  proceed to next test category, so we would oversubscribe the tests runners
+  giving worse performance.
+- Various fixes to test output, like count of tess was wrong
+- numpy now compiles and runs. There are new tests cases!
+
+### Testing / CI
+- Tests, like of builtins etc, now run with `--dev` so we get assertions
 
 
 ## [0.20.1] (2024-02-22)
