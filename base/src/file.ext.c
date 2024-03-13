@@ -202,6 +202,19 @@ $R fileQ_FSD_statG_local (fileQ_FS self, $Cont C_cont, B_str filename) {
     return $R_CONT(C_cont, res);
 }
 
+$R fileQ_FSD_tmpdirG_local (fileQ_FS self, $Cont C_cont) {
+    size_t size = 1024; // Initial buffer size for the tmp directory path
+    char *buffer = (char*)malloc(size);
+    int r = uv_os_tmpdir(buffer, &size);
+    if (r < 0) {
+        char errmsg[1024] = "Error getting temporary directory: ";
+        uv_strerror_r(r, errmsg + strlen(errmsg), sizeof(errmsg)-strlen(errmsg));
+        log_warn(errmsg);
+        $RAISE(((B_BaseException)B_RuntimeErrorG_new(to$str(errmsg))));
+    }
+    return $R_CONT(C_cont, to$str(buffer));
+}
+
 $R fileQ_ReadFileD__open_fileG_local (fileQ_ReadFile self, $Cont c$cont) {
     pin_actor_affinity();
     uv_fs_t *req = (uv_fs_t *)acton_malloc(sizeof(uv_fs_t));
