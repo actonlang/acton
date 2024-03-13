@@ -949,10 +949,11 @@ zigBuild env opts paths tasks binTasks = do
         target_cpu = if (C.cpu opts /= "")
                        then C.cpu opts
                        else
-                         case (head $ splitOn "-" (C.target opts)) of
-                           "native"  -> ""
-                           "aarch64" -> if (C.target opts) == C.defTarget then "" else " -Dcpu=apple_a15 "
-                           "x86_64"  -> " -Dcpu=westmere "
+                         case (splitOn "-" (C.target opts)) of
+                           ("native":_:_)        -> ""
+                           ("aarch64":"macos":_) -> " -Dcpu=apple_a15 "
+                           ("x86_64":_:_)        -> " -Dcpu=westmere "
+                           (_:_:_)               -> ""
     let zigCmdBase =
           if buildZigExists
             then zig paths ++ " build " ++
