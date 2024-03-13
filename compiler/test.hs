@@ -314,7 +314,7 @@ buildThing opts thing = do
     projPath <- canonicalizePath thing
     curDir <- getCurrentDirectory
     let wd = if proj then projPath else curDir
-    let actCmd    = (id actonc) ++ " " ++ (if proj then "build " else thing) ++ " --always-build " ++ opts
+    let actCmd    = (id actonc) ++ " " ++ (if proj then "build " else thing) ++ " --dev --always-build " ++ opts
     (returnCode, cmdOut, cmdErr) <- readCreateProcessWithExitCode (shell $ actCmd){ cwd = Just wd } ""
     return (returnCode, cmdOut, cmdErr)
 
