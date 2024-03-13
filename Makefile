@@ -402,10 +402,9 @@ test-rts:
 test-rts-db:
 	$(MAKE) -C test
 
-# TODO: remove setting PATH below, acton cli should find actonc relative to itself
 test-stdlib: dist/bin/acton
 	cd compiler && stack test --ta '-p "stdlib"'
-	cd test/stdlib_tests && PATH=$$PATH:$(TD)/dist/bin $(ACTON) test
+	cd test/stdlib_tests && $(ACTON) test
 
 
 .PHONY: clean clean-all clean-base
