@@ -8,5 +8,5 @@ actonc build
 
 ** Run
 #+BEGIN_SRC shell
-out/rel/bin/import-class__bf
+out/bin/import-class__bf
 #+END_SRC

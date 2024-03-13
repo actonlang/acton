@@ -8,5 +8,5 @@ actonc build
 
 ** Run
 #+BEGIN_SRC shell
-out/rel/bin/rebuild
+out/bin/rebuild
 #+END_SRC

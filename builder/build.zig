@@ -57,9 +57,7 @@ pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
     const db = b.option(bool, "db", "") orelse false;
     const only_lib = b.option(bool, "only_lib", "") orelse false;
-    const use_prebuilt = b.option(bool, "use_prebuilt", "") orelse false;
     const syspath = b.option([]const u8, "syspath", "") orelse "";
-    const syspath_libreldev = b.option([]const u8, "syspath_libreldev", "") orelse "";
 
     const projpath_outtypes = joinPath(b.allocator, buildroot_path, "out/types");
     const syspath_backend = relJoinPath(b.allocator, dots_to_root, syspath, "backend");
@@ -70,10 +68,7 @@ pub fn build(b: *std.Build) void {
     print("Acton Project Builder\nBuilding in {s}\n", .{buildroot_path});
 
     var iter_dir = b.build_root.handle.openDir(
-        "out/types/",
-        .{
-            .iterate = true
-        },
+        "out/types/", .{ .iterate = true },
     ) catch |err| {
         std.log.err("Error opening iterable dir: {}", .{err});
         std.os.exit(1);
@@ -320,62 +315,57 @@ pub fn build(b: *std.Build) void {
             executable.addIncludePath(.{ .path = buildroot_path });
             executable.addIncludePath(.{ .path = syspath_base });
             executable.addIncludePath(.{ .path = syspath_include });
-            executable.addLibraryPath(.{ .path = "out/rel/lib/" });
-            executable.addLibraryPath(.{ .path = syspath_libreldev });
             executable.addLibraryPath(.{ .path = syspath_lib });
             executable.linkLibrary(libActonProject);
 
-            // Do not use prebuilt based on the use_prebuilt flag, but also do not
-            // use prebuilt when there are custom options, like --db
-            // Also see below.
-            if (!use_prebuilt or db) {
-                executable.linkLibrary(actonbase_dep.artifact("Acton"));
-            } else {
-                executable.linkSystemLibrary("Acton");
-            }
-            if (use_prebuilt) {
-                if (db) {
-                    executable.linkSystemLibrary("ActonDB");
-                    executable.linkSystemLibrary("argp");
-                    executable.linkSystemLibrary("uuid");
+            // Link project dependencies
+            const deps_path = joinPath(b.allocator, buildroot_path, "deps");
+            const deps_dir = std.fs.cwd().openDir(deps_path, .{ .iterate = true });
+            if (deps_dir) |dir| {
+                //defer dir.close();
+                var deps_walker = dir.iterate();
+                while (deps_walker.next() catch unreachable) |deps_entry| {
+                    if (deps_entry.kind == .directory) {
+                        // Process sub-directory. For example, print its name.
+                        std.debug.print("Found sub-directory: {s}\n", .{deps_entry.name});
+                        const dep_path = joinPath(b.allocator, deps_path, deps_entry.name);
+                        //const dep_include = joinPath(b.allocator, dep_path, "out/types");
+                        libActonProject.addIncludePath(.{ .path = dep_path });
+                        executable.addIncludePath(.{ .path = dep_path });
+                        const dep_dep = b.anonymousDependency("deps/dumbo", @import("build.zig"), .{
+                            .target = target,
+                            .optimize = optimize,
+                            .only_lib = true,
+                            .syspath = syspath,
+                        });
+                        executable.linkLibrary(dep_dep.artifact("ActonProject"));
+                    }
                 }
-                executable.linkSystemLibrary("bsdnt");
-                executable.linkSystemLibrary("mbedcrypto");
-                executable.linkSystemLibrary("mbedtls");
-                executable.linkSystemLibrary("mbedx509");
-                executable.linkSystemLibrary("netstring");
-                executable.linkSystemLibrary("pcre2");
-                executable.linkSystemLibrary("protobuf-c");
-                executable.linkSystemLibrary("snappy-c");
-                executable.linkSystemLibrary("tlsuv");
-                executable.linkSystemLibrary("utf8proc");
-                executable.linkSystemLibrary("uv");
-                executable.linkSystemLibrary("xml2");
-                executable.linkSystemLibrary("yyjson");
-
-                executable.linkSystemLibrary("actongc");
-            } else {
-                if (db) {
-                    executable.linkLibrary(libactondb_dep.artifact("ActonDB"));
-                    executable.linkLibrary(dep_libargp.artifact("argp"));
-                    executable.linkLibrary(dep_libuuid.artifact("uuid"));
-                }
-                executable.linkLibrary(dep_libbsdnt.artifact("bsdnt"));
-                executable.linkLibrary(dep_libmbedtls.artifact("mbedcrypto"));
-                executable.linkLibrary(dep_libmbedtls.artifact("mbedtls"));
-                executable.linkLibrary(dep_libmbedtls.artifact("mbedx509"));
-                executable.linkLibrary(dep_libnetstring.artifact("netstring"));
-                executable.linkLibrary(dep_libpcre2.artifact("pcre2"));
-                executable.linkLibrary(dep_libprotobuf_c.artifact("protobuf-c"));
-                executable.linkLibrary(dep_libsnappy_c.artifact("snappy-c"));
-                executable.linkLibrary(dep_libtlsuv.artifact("tlsuv"));
-                executable.linkLibrary(dep_libutf8proc.artifact("utf8proc"));
-                executable.linkLibrary(dep_libuv.artifact("uv"));
-                executable.linkLibrary(dep_libxml2.artifact("xml2"));
-                executable.linkLibrary(dep_libyyjson.artifact("yyjson"));
-
-                executable.linkLibrary(dep_libgc.artifact("gc"));
+            } else |err| {
+                std.debug.print("Failed to open directory: {}\n", .{err});
             }
+
+            executable.linkLibrary(actonbase_dep.artifact("Acton"));
+            if (db) {
+                executable.linkLibrary(libactondb_dep.artifact("ActonDB"));
+                executable.linkLibrary(dep_libargp.artifact("argp"));
+                executable.linkLibrary(dep_libuuid.artifact("uuid"));
+            }
+            executable.linkLibrary(dep_libbsdnt.artifact("bsdnt"));
+            executable.linkLibrary(dep_libmbedtls.artifact("mbedcrypto"));
+            executable.linkLibrary(dep_libmbedtls.artifact("mbedtls"));
+            executable.linkLibrary(dep_libmbedtls.artifact("mbedx509"));
+            executable.linkLibrary(dep_libnetstring.artifact("netstring"));
+            executable.linkLibrary(dep_libpcre2.artifact("pcre2"));
+            executable.linkLibrary(dep_libprotobuf_c.artifact("protobuf-c"));
+            executable.linkLibrary(dep_libsnappy_c.artifact("snappy-c"));
+            executable.linkLibrary(dep_libtlsuv.artifact("tlsuv"));
+            executable.linkLibrary(dep_libutf8proc.artifact("utf8proc"));
+            executable.linkLibrary(dep_libuv.artifact("uv"));
+            executable.linkLibrary(dep_libxml2.artifact("xml2"));
+            executable.linkLibrary(dep_libyyjson.artifact("yyjson"));
+
+            executable.linkLibrary(dep_libgc.artifact("gc"));
 
             executable.linkLibC();
             executable.linkLibCpp();
