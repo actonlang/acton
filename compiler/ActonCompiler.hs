@@ -90,7 +90,6 @@ main = do
           C.cc = C.ccB opts,
           C.target = C.targetB opts,
           C.cpu = C.cpuB opts,
-          C.cachedir = C.cachedirB opts,
           C.zigbuild = C.zigbuildB opts,
           C.nozigbuild = C.nozigbuildB opts,
           C.test = C.testB opts
@@ -103,7 +102,7 @@ main = do
 
 defaultOpts   = C.CompileOptions False False False False False False False False False False False False
                                  False False False False False False False False False False False
-                                 "" "" "" "" C.defTarget "" "" False False False
+                                 "" "" "" "" C.defTarget "" False False False
 
 
 -- Auxiliary functions ---------------------------------------------------------------------------------------
@@ -944,8 +943,7 @@ zigBuild env opts paths tasks binTasks = do
     -- custom build.zig ?
     buildZigExists <- doesFileExist $ projPath paths ++ "/build.zig"
     homeDir <- getHomeDirectory
-    let cache_dir = if (not $ null $ C.cachedir opts) then (C.cachedir opts) else joinPath [ projPath paths, "build-cache" ]
-        global_cache_dir = joinPath [ homeDir, ".cache", "acton", "build-cache" ]
+    let global_cache_dir = joinPath [ homeDir, ".cache", "acton", "build-cache" ]
         target_cpu = if (C.cpu opts /= "")
                        then C.cpu opts
                        else
