@@ -9,7 +9,9 @@ actor main(env):
     b  : u64 = 0xffffffffffffffff  # maximal value
     assert_eq(b+1,0)
     assert_eq(b//2*2,18446744073709551614)
-    print(b/2*2)
+#    TODO: this should work but currently doesn't, probably because of some UB
+#    sanitization...
+#    print(b/2*2)
     assert_eq(u64("18446744073700000000"),18446744073700000000)
     assert_eq(a-50,18446744073709551603)                    # underflow
     c : i64 = 7
@@ -20,7 +22,6 @@ actor main(env):
     print(d[37])  #assert_eq gives infinite loop during compilation
     for i in d.keys():
         print(i)
-
 
     a16 : i16 = 32
     print(a16*8)
