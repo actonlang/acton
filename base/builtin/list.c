@@ -154,8 +154,9 @@ B_NoneType B_listD_clear(B_list lst) {
 }
 
 B_NoneType B_listD_extend(B_list lst, B_list other) {
+    if (other->length == 0)
+        return B_None;
     expand(lst, other->length);
-    assert(other->data != NULL);
     memcpy(lst->data + lst->length, other->data, other->length * sizeof($WORD));
     lst->length += other->length;
     return B_None;
