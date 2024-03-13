@@ -32,11 +32,6 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
     });
 
-    const dep_libsnappy_c = b.anonymousDependency("deps/libsnappy_c", @import("deps/libsnappy_c/build.zig"), .{
-        .target = target,
-        .optimize = optimize,
-    });
-
     const libactondb_sources = [_][]const u8 {
         "comm.c",
         "hash_ring.c",
@@ -101,7 +96,6 @@ pub fn build(b: *std.Build) void {
     actondb.linkLibrary(dep_libprotobuf_c.artifact("protobuf-c"));
     actondb.linkLibrary(dep_libuuid.artifact("uuid"));
     actondb.linkLibrary(dep_libyyjson.artifact("yyjson"));
-    actondb.linkLibrary(dep_libsnappy_c.artifact("snappy-c"));
     actondb.linkLibC();
     actondb.linkLibCpp();
     b.installArtifact(actondb);
