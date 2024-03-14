@@ -66,11 +66,8 @@ data CompileOptions   = CompileOptions {
                          tempdir     :: String,
                          syspath     :: String,
                          deppath     :: String,
-                         cc          :: String,
                          target      :: String,
                          cpu         :: String,
-                         zigbuild    :: Bool,
-                         nozigbuild  :: Bool,
                          test        :: Bool
                      } deriving Show
 
@@ -86,12 +83,9 @@ data BuildOptions = BuildOptions {
                          ccmdB       :: Bool,
                          quietB      :: Bool,
                          timingB     :: Bool,
-                         ccB         :: String,
                          targetB     :: String,
                          cpuB        :: String,
                          deppathB    :: String,
-                         zigbuildB   :: Bool,
-                         nozigbuildB :: Bool,
                          testB       :: Bool
                      } deriving Show
                          
@@ -165,11 +159,8 @@ compileOptions = CompileOptions
         <*> strOption (long "tempdir"   <> metavar "TEMPDIR" <> value "" <> help "Set directory for build files")
         <*> strOption (long "syspath"   <> metavar "TARGETDIR" <> value "" <> help "Set syspath")
         <*> strOption (long "deppath"   <> metavar "DIR" <> value "" <> help "Set deppath")
-        <*> strOption (long "cc"        <> metavar "PATH" <> value "" <> help "CC")
         <*> strOption (long "target"    <> metavar "TARGET" <> value defTarget <> help "Target, e.g. x86_64-linux-gnu.2.28")
         <*> strOption (long "cpu"       <> metavar "CPU" <> value "" <> help "CPU, e.g. skylake")
-        <*> switch (long "zigbuild"     <> help "Use zig build")
-        <*> switch (long "no-zigbuild"  <> help "Don't use zig build")
         <*> switch (long "test"         <> help "Build tests")
 
 buildCommand          = Build <$> (
@@ -185,12 +176,9 @@ buildCommand          = Build <$> (
         <*> switch (long "ccmd"         <> help "Show CC / LD commands")
         <*> switch (long "quiet"        <> help "Don't print stuff")
         <*> switch (long "timing"       <> help "Print timing information")
-        <*> strOption (long "cc"        <> metavar "PATH" <>  value "" <> help "CC")
         <*> strOption (long "target"    <> metavar "TARGET" <> value defTarget <> help "Target, e.g. x86_64-linux-gnu.2.28")
         <*> strOption (long "cpu"       <> metavar "CPU" <> value "" <> help "CPU, e.g. skylake")
         <*> strOption (long "deppath"   <> metavar "DIR" <> value "" <> help "Set deppath")
-        <*> switch (long "zigbuild"     <> help "Use zig build")
-        <*> switch (long "no-zigbuild"  <> help "Don't use zig build")
         <*> switch (long "test"         <> help "Build tests")
     )
                  
