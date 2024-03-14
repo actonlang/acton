@@ -65,6 +65,7 @@ data CompileOptions   = CompileOptions {
                          root        :: String,
                          tempdir     :: String,
                          syspath     :: String,
+                         deppath     :: String,
                          cc          :: String,
                          target      :: String,
                          cpu         :: String,
@@ -88,6 +89,7 @@ data BuildOptions = BuildOptions {
                          ccB         :: String,
                          targetB     :: String,
                          cpuB        :: String,
+                         deppathB    :: String,
                          zigbuildB   :: Bool,
                          nozigbuildB :: Bool,
                          testB       :: Bool
@@ -162,6 +164,7 @@ compileOptions = CompileOptions
         <*> strOption (long "root"      <> metavar "ROOTACTOR" <> value "" <> help "Set root actor")
         <*> strOption (long "tempdir"   <> metavar "TEMPDIR" <> value "" <> help "Set directory for build files")
         <*> strOption (long "syspath"   <> metavar "TARGETDIR" <> value "" <> help "Set syspath")
+        <*> strOption (long "deppath"   <> metavar "DIR" <> value "" <> help "Set deppath")
         <*> strOption (long "cc"        <> metavar "PATH" <> value "" <> help "CC")
         <*> strOption (long "target"    <> metavar "TARGET" <> value defTarget <> help "Target, e.g. x86_64-linux-gnu.2.28")
         <*> strOption (long "cpu"       <> metavar "CPU" <> value "" <> help "CPU, e.g. skylake")
@@ -185,6 +188,7 @@ buildCommand          = Build <$> (
         <*> strOption (long "cc"        <> metavar "PATH" <>  value "" <> help "CC")
         <*> strOption (long "target"    <> metavar "TARGET" <> value defTarget <> help "Target, e.g. x86_64-linux-gnu.2.28")
         <*> strOption (long "cpu"       <> metavar "CPU" <> value "" <> help "CPU, e.g. skylake")
+        <*> strOption (long "deppath"   <> metavar "DIR" <> value "" <> help "Set deppath")
         <*> switch (long "zigbuild"     <> help "Use zig build")
         <*> switch (long "no-zigbuild"  <> help "Don't use zig build")
         <*> switch (long "test"         <> help "Build tests")

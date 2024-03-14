@@ -6,7 +6,7 @@ class ProcessCap():
     def __init__(self, cap: WorldCap):
         pass
 
-actor Process(cap: ProcessCap, cmd: list[str], workdir: ?str, env: ?dict[str, str], on_stdout: action(Process, bytes) -> None, on_stderr: action(Process, bytes) -> None, on_exit: action(Process, int, int) -> None, on_error: action(Process,str) -> None):
+actor Process(cap: ProcessCap, cmd: list[str], workdir: ?str, env: ?dict[str, str], on_stdout: action(Process, bytes) -> None, on_stderr: action(Process, bytes) -> None, on_exit: action(Process, int, int) -> None, on_error: action(Process, str) -> None):
     """A process
     - cap: capability to start processes
     - cmd: the command to run

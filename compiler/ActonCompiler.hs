@@ -88,6 +88,7 @@ main = do
           C.quiet = C.quietB opts,
           C.timing = C.timingB opts,
           C.cc = C.ccB opts,
+          C.deppath = C.deppathB opts,
           C.target = C.targetB opts,
           C.cpu = C.cpuB opts,
           C.zigbuild = C.zigbuildB opts,
@@ -102,7 +103,7 @@ main = do
 
 defaultOpts   = C.CompileOptions False False False False False False False False False False False False
                                  False False False False False False False False False False False
-                                 "" "" "" "" C.defTarget "" False False False
+                                 "" "" "" "" "" C.defTarget "" False False False
 
 
 -- Auxiliary functions ---------------------------------------------------------------------------------------
@@ -390,11 +391,11 @@ searchPaths opts projtypes systypes deps = do
   let deps_paths = map (\d -> joinPath [d, "out", "types"]) deps
   return $ (projtypes : deps_paths) ++ [systypes]
 
-findDeps :: FilePath -> IO [FilePath]
-findDeps projPath = do
-    let deps_path = joinPath [projPath, "deps"]
-    dirContents <- listDirectory deps_path `catch` handleNoDepsDir
-    depPaths <- filterM doesDirectoryExist $ map (deps_path </>) dirContents
+findDeps :: FilePath -> FilePath -> IO [FilePath]
+findDeps projPath deps_path = do
+    let dpath = if null deps_path then joinPath [projPath, "deps"] else deps_path
+    dirContents <- listDirectory dpath `catch` handleNoDepsDir
+    depPaths <- filterM doesDirectoryExist $ map (dpath </>) dirContents
     return depPaths
   where
     handleNoDepsDir :: IOException -> IO [FilePath]
@@ -413,7 +414,7 @@ findPaths actFile opts  = do execDir <- takeDirectory <$> System.Environment.get
                                  projTypes = joinPath [projOut, "types"]
                                  binDir  = if isTmp then srcDir else joinPath [projOut, "bin"]
                                  modName = A.modName $ dirInSrc ++ [fileBody]
-                             deps <- findDeps projPath
+                             deps <- findDeps projPath (C.deppath opts)
                              sPaths <- searchPaths opts projTypes sysTypes deps
                              createDirectoryIfMissing True binDir
                              createDirectoryIfMissing True projOut
@@ -970,6 +971,7 @@ zigBuild env opts paths tasks binTasks = do
                  (if (C.debug opts) then " --verbose " else "") ++
                  " -Dtarget=" ++ (C.target opts) ++
                  target_cpu ++
+                 " -Ddeps_path=" ++ (C.deppath opts) ++
                  " -Doptimize=" ++ (if (C.dev opts) then "Debug" else "ReleaseFast") ++
                  (if (C.db opts) then " -Ddb " else " ") ++
                  (if (C.cpedantic opts) then " -Dcpedantic " else " ") ++
