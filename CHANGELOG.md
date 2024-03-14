@@ -8,6 +8,9 @@
 - `file.FS.cwd()` to get current working directory
 - `file.join_path()` to join path components
 
+### Changed
+- Rename `--only-act` to `--skip-build`
+
 ### Removed
 - `actonc` no longer supports `--no-zigbuild` / `--zigbuild` (it's now the
   default/only choice). It hasn't been tested in quite some time now and the zig

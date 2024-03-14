@@ -361,7 +361,7 @@ builder/builder: builder/build.zig backend/build.zig base/build.zig $(ZIG_DEP) $
 
 .PHONY: base/out/types/__builtin__.ty
 base/out/types/__builtin__.ty: $(ACTONC) $(DEPS)
-	cd base && ../dist/bin/actonc build --auto-stub --only-act $(CPEDANTIC)
+	cd base && ../dist/bin/actonc build --auto-stub --skip-build $(CPEDANTIC)
 
 # top level targets
 

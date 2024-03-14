@@ -82,7 +82,7 @@ main = do
           C.debug = C.debugB opts,
           C.dev = C.devB opts,
           C.db = C.dbB opts,
-          C.only_act = C.only_actB opts,
+          C.skip_build = C.skip_buildB opts,
           C.root = C.rootB opts,
           C.ccmd = C.ccmdB opts,
           C.quiet = C.quietB opts,
@@ -321,9 +321,9 @@ compileFiles opts srcFiles = do
         preTestBinTasks = map (\t -> BinTask True (modNameToString (name t)) (A.GName (name t) (A.name "__test_main")) True) (filter (not . stubmode) tasks)
 --    iff (not (C.only_c opts)) $
     env <- compileTasks opts paths tasks
-    if C.only_act opts
+    if C.skip_build opts
       then
-        putStrLn "  Skipping final compilation step"
+        putStrLn "  Skipping final build step"
       else
         if C.test opts
           then do

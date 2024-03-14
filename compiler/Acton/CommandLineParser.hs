@@ -60,7 +60,7 @@ data CompileOptions   = CompileOptions {
                          quiet       :: Bool,
                          debug       :: Bool,
                          dev         :: Bool,
-                         only_act    :: Bool,
+                         skip_build  :: Bool,
 --                         only_c      :: Bool,
                          root        :: String,
                          tempdir     :: String,
@@ -77,7 +77,7 @@ data BuildOptions = BuildOptions {
                          dbB         :: Bool,
                          debugB      :: Bool,
                          devB        :: Bool,
-                         only_actB   :: Bool,
+                         skip_buildB :: Bool,
                          autostubB   :: Bool,
                          rootB       :: String,
                          ccmdB       :: Bool,
@@ -153,7 +153,7 @@ compileOptions = CompileOptions
         <*> switch (long "quiet"        <> help "Don't print stuff")
         <*> switch (long "debug"        <> help "Print debug stuff")
         <*> switch (long "dev"          <> help "Development mode; include debug symbols etc")
-        <*> switch (long "only-act"     <> help "Only compile .act, skip .c compilation ")
+        <*> switch (long "skip-build"   <> help "Skip final bulid of .c files")
 --        <*> switch (long "only-c"       <> help "Just compile .c files, skip .act compilation (might mean using outdated .c files)")
         <*> strOption (long "root"      <> metavar "ROOTACTOR" <> value "" <> help "Set root actor")
         <*> strOption (long "tempdir"   <> metavar "TEMPDIR" <> value "" <> help "Set directory for build files")
@@ -170,7 +170,7 @@ buildCommand          = Build <$> (
         <*> switch (long "db"           <> help "Enable DB backend")
         <*> switch (long "debug"        <> help "Print debug stuff")
         <*> switch (long "dev"          <> help "Development mode; include debug symbols etc")
-        <*> switch (long "only-act"     <> help "Only compile .act, skip .c compilation ")
+        <*> switch (long "skip-build"   <> help "Skip final build of .c files")
         <*> switch (long "auto-stub"    <> help "Allow automatic stub detection")
         <*> strOption (long "root"      <> metavar "ROOTACTOR" <> value "" <> help "Set root actor")
         <*> switch (long "ccmd"         <> help "Show CC / LD commands")
