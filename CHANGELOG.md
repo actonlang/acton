@@ -5,6 +5,9 @@
 ### Added
 - `acton build` now builds dependencies in `deps/` before building the main
   project
+- `acton --only-build` performs only the low level build from .C source,
+  skipping compilation of .act files. This can be used if you want to modify the
+  C source by hand and still leverage the low level builder to perform the build.
 - `file.FS.cwd()` to get current working directory
 - `file.join_path()` to join path components
 

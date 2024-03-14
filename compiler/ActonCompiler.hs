@@ -82,6 +82,7 @@ main = do
           C.debug = C.debugB opts,
           C.dev = C.devB opts,
           C.db = C.dbB opts,
+          C.only_build = C.only_buildB opts,
           C.skip_build = C.skip_buildB opts,
           C.root = C.rootB opts,
           C.ccmd = C.ccmdB opts,
@@ -99,7 +100,7 @@ main = do
                                     else compileFiles opts (catMaybes $ map filterActFile nms)
 
 defaultOpts   = C.CompileOptions False False False False False False False False False False False False
-                                 False False False False False False False False False False False
+                                 False False False False False False False False False False False False
                                  "" "" "" "" C.defTarget "" False
 
 
@@ -319,7 +320,6 @@ compileFiles opts srcFiles = do
           | null (C.root opts) = map (\t -> BinTask True (modNameToString (name t)) (A.GName (name t) (A.name "main")) False) (filter (not . stubmode) tasks)
           | otherwise        = [binTask]
         preTestBinTasks = map (\t -> BinTask True (modNameToString (name t)) (A.GName (name t) (A.name "__test_main")) True) (filter (not . stubmode) tasks)
---    iff (not (C.only_c opts)) $
     env <- compileTasks opts paths tasks
     if C.skip_build opts
       then
@@ -586,9 +586,8 @@ doTask opts paths env t@(ActonTask mn src m stubMode) = do
 
     let outFiles = if stubMode then [tyFile] else [tyFile, hFile, cFile]
     ok <- checkUptoDate opts paths actFile outFiles (importsOf t)
-    if ok && not (mn == (modName paths) && (forceCompilation opts))
+    if C.only_build opts || (ok && not (mn == (modName paths) && (forceCompilation opts)))
       then do
-        iff (C.debug opts) (putStrLn ("    Skipping " ++ makeRelative (srcDir paths) actFile ++ " (files are up to date).") >> hFlush stdout)
         timeBeforeTy <- getTime Monotonic
         (_,te) <- InterfaceFiles.readFile tyFile
         timeEnd <- getTime Monotonic
