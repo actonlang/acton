@@ -60,17 +60,14 @@ data CompileOptions   = CompileOptions {
                          quiet       :: Bool,
                          debug       :: Bool,
                          dev         :: Bool,
-                         only_act    :: Bool,
---                         only_c      :: Bool,
+                         only_build  :: Bool,
+                         skip_build  :: Bool,
                          root        :: String,
                          tempdir     :: String,
                          syspath     :: String,
                          deppath     :: String,
-                         cc          :: String,
                          target      :: String,
                          cpu         :: String,
-                         zigbuild    :: Bool,
-                         nozigbuild  :: Bool,
                          test        :: Bool
                      } deriving Show
 
@@ -80,18 +77,16 @@ data BuildOptions = BuildOptions {
                          dbB         :: Bool,
                          debugB      :: Bool,
                          devB        :: Bool,
-                         only_actB   :: Bool,
+                         only_buildB :: Bool,
+                         skip_buildB :: Bool,
                          autostubB   :: Bool,
                          rootB       :: String,
                          ccmdB       :: Bool,
                          quietB      :: Bool,
                          timingB     :: Bool,
-                         ccB         :: String,
                          targetB     :: String,
                          cpuB        :: String,
                          deppathB    :: String,
-                         zigbuildB   :: Bool,
-                         nozigbuildB :: Bool,
                          testB       :: Bool
                      } deriving Show
                          
@@ -159,17 +154,14 @@ compileOptions = CompileOptions
         <*> switch (long "quiet"        <> help "Don't print stuff")
         <*> switch (long "debug"        <> help "Print debug stuff")
         <*> switch (long "dev"          <> help "Development mode; include debug symbols etc")
-        <*> switch (long "only-act"     <> help "Only compile .act, skip .c compilation ")
---        <*> switch (long "only-c"       <> help "Just compile .c files, skip .act compilation (might mean using outdated .c files)")
+        <*> switch (long "only-build"   <> help "Only perform final build of .c files, do not compile .act files")
+        <*> switch (long "skip-build"   <> help "Skip final bulid of .c files")
         <*> strOption (long "root"      <> metavar "ROOTACTOR" <> value "" <> help "Set root actor")
         <*> strOption (long "tempdir"   <> metavar "TEMPDIR" <> value "" <> help "Set directory for build files")
         <*> strOption (long "syspath"   <> metavar "TARGETDIR" <> value "" <> help "Set syspath")
         <*> strOption (long "deppath"   <> metavar "DIR" <> value "" <> help "Set deppath")
-        <*> strOption (long "cc"        <> metavar "PATH" <> value "" <> help "CC")
         <*> strOption (long "target"    <> metavar "TARGET" <> value defTarget <> help "Target, e.g. x86_64-linux-gnu.2.28")
         <*> strOption (long "cpu"       <> metavar "CPU" <> value "" <> help "CPU, e.g. skylake")
-        <*> switch (long "zigbuild"     <> help "Use zig build")
-        <*> switch (long "no-zigbuild"  <> help "Don't use zig build")
         <*> switch (long "test"         <> help "Build tests")
 
 buildCommand          = Build <$> (
@@ -179,18 +171,16 @@ buildCommand          = Build <$> (
         <*> switch (long "db"           <> help "Enable DB backend")
         <*> switch (long "debug"        <> help "Print debug stuff")
         <*> switch (long "dev"          <> help "Development mode; include debug symbols etc")
-        <*> switch (long "only-act"     <> help "Only compile .act, skip .c compilation ")
+        <*> switch (long "only-build"   <> help "Only perform final build of .c files, do not compile .act files")
+        <*> switch (long "skip-build"   <> help "Skip final build of .c files")
         <*> switch (long "auto-stub"    <> help "Allow automatic stub detection")
         <*> strOption (long "root"      <> metavar "ROOTACTOR" <> value "" <> help "Set root actor")
         <*> switch (long "ccmd"         <> help "Show CC / LD commands")
         <*> switch (long "quiet"        <> help "Don't print stuff")
         <*> switch (long "timing"       <> help "Print timing information")
-        <*> strOption (long "cc"        <> metavar "PATH" <>  value "" <> help "CC")
         <*> strOption (long "target"    <> metavar "TARGET" <> value defTarget <> help "Target, e.g. x86_64-linux-gnu.2.28")
         <*> strOption (long "cpu"       <> metavar "CPU" <> value "" <> help "CPU, e.g. skylake")
         <*> strOption (long "deppath"   <> metavar "DIR" <> value "" <> help "Set deppath")
-        <*> switch (long "zigbuild"     <> help "Use zig build")
-        <*> switch (long "no-zigbuild"  <> help "Don't use zig build")
         <*> switch (long "test"         <> help "Build tests")
     )
                  

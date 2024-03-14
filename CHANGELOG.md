@@ -5,8 +5,23 @@
 ### Added
 - `acton build` now builds dependencies in `deps/` before building the main
   project
+- `acton --only-build` performs only the low level build from .C source,
+  skipping compilation of .act files. This can be used if you want to modify the
+  C source by hand and still leverage the low level builder to perform the build.
 - `file.FS.cwd()` to get current working directory
 - `file.join_path()` to join path components
+
+### Changed
+- Rename `--only-act` to `--skip-build`
+
+### Removed
+- `actonc` no longer supports `--no-zigbuild` / `--zigbuild` (it's now the
+  default/only choice). It hasn't been tested in quite some time now and the zig
+  build system works well enough that there is basically no reason to keep the
+  old system around.
+- `actonc` no longer accepts `--cc` since we now always build using the zig
+  build system which implies the clang version that Zig ships.
+- `actonc` no longer supports explicit `--stub` compilation, use `--auto-stub`
 
 ### Fixed
 - Correct dependency path computation in builder
