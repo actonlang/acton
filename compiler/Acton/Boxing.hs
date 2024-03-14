@@ -7,6 +7,7 @@ import Acton.Env
 import Acton.QuickType
 import Acton.Prim
 import Acton.Builtin
+import Acton.Subst
 import Pretty
 import Utils
 import Debug.Trace
@@ -33,12 +34,12 @@ newNames []                        = return []
 
 runBoxM ss                         = evalState ss 0
 
-data BoxX                          = BoxX { unboxedVarsX :: [(Name,Name)], isTopLevelX :: Bool, delayedUnboxX :: Bool }
+data BoxX                          = BoxX { unboxedVarsX :: [(Name,Name)], isTopLevelX :: Bool, delayedUnboxX :: Bool, inClassX :: Bool }
 
 type BoxEnv                        = EnvF BoxX
 
 boxEnv                             :: Env0 -> BoxEnv
-boxEnv env0                        = setX env0 (BoxX [] True False)
+boxEnv env0                        = setX env0 (BoxX [] True False False)
 
 addUnboxedVars                     :: [(Name,Name)] -> BoxEnv -> BoxEnv
 addUnboxedVars ps env               = modX env $ \x -> x{unboxedVarsX = ps ++ unboxedVarsX x}
@@ -54,6 +55,10 @@ setDelayedUnbox b env              = modX env $ \x -> x{delayedUnboxX = b}
 
 isDelayedUnbox env                 = delayedUnboxX $ envX env
 
+setInClass b env                   = modX env $ \x -> x{inClassX = b}
+
+isInClass env                      = inClassX $ envX env
+
 -- Auxiliaries ---------------------------------------------------------------------------------------------------
 
 integralTypes                      = [tInt, tI64, tI32, tI16, tI64, tU32, tU16]
@@ -66,6 +71,9 @@ isWitness _                        = False
 
 isInternal (Internal _ _ _)        = True
 isInternal _                       = False
+
+isUnboxed (Internal BoxPass _ _)    = True
+isUnboxed _                         = False
 
 isUnboxable t                      = t `elem` unboxableTypes
 
@@ -116,7 +124,7 @@ instance {-# OVERLAPS #-} Boxing ([Stmt]) where
                                           return (ws1++ws2, s : ss ++ xs')
       where te                       = envOf x
             
-    boxing env (x : xs)              = do ps <- newNames [n | (n,NDef (TSchema _ [] (TFun _ _ p _ t)) _) <- te, isUnboxable t ||  hasUnboxableType p]
+    boxing env (x : xs)              = do ps <- if (isInClass env) then return [] else newNames [n | (n,NDef (TSchema _ [] (TFun _ _ p _ t)) _) <- te, isUnboxable t ||  hasUnboxableType p]
                                           (ws1,x') <- boxing (addUnboxedVars ps env) x
                                           (ws2,xs') <- boxing (addUnboxedVars ps env1) xs
                                           return (ws1++ws2, x' : xs')
@@ -141,12 +149,12 @@ instance Boxing a => Boxing (Maybe a) where
 
 instance Boxing Expr where
     boxing env e@(Var l (NoQ n))
-       | isWitness n                = return ([n],e)
---       | otherwise                  = case lookup n ps of
---                                          Just un -> return ([], Box (typeOf env e) eVar un)
---                                          Nothing -> return ([], e)
---       where ps                     = unboxedVars env
-    boxing env (Var l v)            = return ([],Var l v)
+       | isWitness n                = return ([n], e)
+       | otherwise                  = case lookup n ps of
+                                          Just un -> return ([], Box (typeOf env e) (eVar un))
+                                          Nothing -> return ([], e)
+       where ps                     = unboxedVars env
+    boxing env v@Var{}              = return ([], v)
     boxing env (Call _ (Dot _ (Var _ w@(NoQ n)) attr) p KwdNil)
       | isWitness n                 = do (ws1,p1) <- boxing env p
                                          (ws2,e1) <- boxingWitness env w attr ws1 p1
@@ -186,6 +194,22 @@ instance Boxing Expr where
       | otherwise                   = do (ws1,p1) <- boxing env p
                                          return (ws1, eCallP e p1)
        where e'                     = tApp (eQVar (unboxedPrim f)) ts
+    boxing env c@(Call l e@(Var _ (NoQ n)) p KwdNil)
+      | isUnboxable t               = do (ws1,p1) <- boxing env p
+                                      --   traceM ("Calling "++show n++", unboxedVars are "++show (unboxedVars env) ++ ", t = "++show t)
+                                         case lookup n (unboxedVars env) of
+                                            Just un -> return (ws1, Box t (eCallP (eVar un) (ub env p1)))
+                                            Nothing -> return (ws1, eCallP e p1)
+       where t                      = typeOf env c
+             ub env (PosArg e p)
+               | isUnboxable t      = PosArg (unbox t e) (ub env p)
+               | otherwise          = PosArg e (ub env p)
+              where t = typeOf env e
+             ub env (PosStar e)
+               | isUnboxable t      = PosStar (unbox t e)
+               | otherwise          = PosStar e
+              where t = typeOf env e
+             ub env PosNil          = PosNil
     boxing env (Call l e@(Var _ f) p KwdNil)
       | f `elem`prims               = do (ws1,p1) <- boxing env p
                                          return (ws1,Box tBool $ eCallP e' p1)
@@ -258,16 +282,47 @@ instance Boxing OpArg where
 instance Boxing Stmt where
     boxing env (Expr l e)           = do (ws1,e1) <- boxing env e
                                          return (ws1, Expr l e1)
-    boxing env (Assign l pt@[PVar _ x Nothing]  (Call _ (Dot _ (Var _ w@(NoQ n)) attr) p KwdNil))
+    boxing env (Assign l [pt@(PVar _ x Nothing)]  e@(Call _ (Dot _ (Var _ w@(NoQ n)) attr) p KwdNil))
+      | isWitness n 
+                                    = do (ws1,p1) <- boxing env p
+                                         (ws2,pt2) <- boxing env pt
+                                         (ws3,s3) <- boxingWitness env pt2 w attr p1
+                                         return (ws1++ws2++ws3,s3)
+      where
+         boxingWitness env pt w attr p = case findQName w env of
+                                            NVar (TCon _ (TC _ ts))
+                                              | any (not . vFree) ts     -> return ([n], Assign l [pt] (eCallP (eDot (eQVar w) attr) p))
+                                              | attr `elem` incrBinopKWs -> boxingincrBinop pt w attr es ts
+                                            _                            -> do (ws,e') <- boxing env e
+                                                                               return (ws, Assign l [pt] (if isUnboxed (pn pt) then unbox t e' else e'))
+          where es                 = posargs p
+                vFree (TCon _ (TC _ _))= True
+                vFree _            = False
+                t                  = typeOf env e
+         boxingincrBinop pt w attr es@[x1,x2] ts
+          | isUnboxable t          = return ([], AugAssign NoLoc (unbox t x1) op (unbox t x2))
+             where t               = head ts
+                   op              = bin2Aug attr
+         boxingincrBinop pt w attr es _
+                                   = return ([n],  Assign l [pt] (eCall (eDot (eQVar w) attr) es))
+    boxing env (Assign l [pt@PVar{}] e)
+                                   = do (ws1,pt1) <- boxing env pt
+                                        (ws2,e2) <- boxing env e
+                                        return (ws1++ws2, Assign l [pt1] (if isUnboxed (pn pt1) then unbox t e2 else e2))
+             where t               = typeOf env e
+    boxing env (Assign l ps e)     = do (ws1,ps1) <- boxing env ps
+                                        (ws2,e2) <- boxing env e
+                                        return (ws1++ws2, Assign l ps1 e2)
+    boxing env (MutAssign l tg@Dot{}  (Call _ (Dot _ (Var _ w@(NoQ n)) attr) p KwdNil))
       | isWitness n                 = do (ws1,p1) <- boxing env p
                                          (ws2,s2) <- boxingWitness env w attr p1
                                          return (ws1++ws2,s2)
       where
          boxingWitness env w attr p = case findQName w env of
                                             NVar (TCon _ (TC _ ts))
-                                              | any (not . vFree) ts     -> return ([n], Assign l pt (eCallP (eDot (eQVar w) attr) p))
+                                              | any (not . vFree) ts     -> return ([n], MutAssign l tg (eCallP (eDot (eQVar w) attr) p))
                                               | attr `elem` incrBinopKWs -> boxingincrBinop w attr es ts
-                                            _                            -> return ([n], Assign l pt (eCallP (eDot (eQVar w) attr) p))
+                                            _                            -> return ([n], MutAssign l tg (eCallP (eDot (eQVar w) attr) p))
           where es                 = posargs p
                 vFree (TCon _ (TC _ _))= True
                 vFree _            = False
@@ -275,9 +330,7 @@ instance Boxing Stmt where
           | isUnboxable t           = return ([], AugAssign NoLoc (unbox t x1) op (unbox t x2))
              where t                = head ts
                    op               = bin2Aug attr
-         boxingincrBinop w attr es _ = return ([n],  Assign l pt (eCall (eDot (eQVar w) attr) es))
-    boxing env (Assign l ps e)      = do (ws1,e1) <- boxing env e
-                                         return (ws1, Assign l ps e1)
+         boxingincrBinop w attr es _ = return ([n],  MutAssign l tg (eCall (eDot (eQVar w) attr) es))
     boxing env (MutAssign l t e)    = do (ws1,e1) <- boxing env e
                                          return (ws1, MutAssign l t e1)
     boxing env (AugAssign l t aop e)= do (ws1,e1) <- boxing env e
@@ -288,28 +341,32 @@ instance Boxing Stmt where
     boxing env (Pass l)             = return ([], Pass l)
     boxing env (Delete l t)         = return ([], Delete l t)
     boxing env (Return l (Just e))  = do (ws1,e1) <- boxing env e
-                                         if (isDelayedUnbox env)
+                                         if (isUnboxable t && isDelayedUnbox env)
                                           then return (ws1, Return l (Just (unbox t e1)))
                                           else return (ws1, Return l (Just e1))
         where t                     = typeOf env e
+    boxing env (Return l Nothing)   = return ([], Return l Nothing)
     boxing env (Raise l e)          = do (ws1,e1) <- boxing env e
-                                         return (ws1,Raise l e1)
+                                         return (ws1, Raise l e1)
     boxing env (Break l)            = return ([], Break l)
     boxing env (Continue l)         = return ([], Continue l)
-    boxing env (If l bs ss)         = do (ws1,bs1) <- boxing env bs
-                                         (ws2,ss1) <- boxing env ss
+    boxing env (If l bs ss)         = do (ws1,bs1) <- boxing env1 bs
+                                         (ws2,ss1) <- boxing env1 ss
                                          return (ws1++ws2,If l bs1 ss1)
+       where env1 = setTopLevel False env
     boxing env (While l e ss els)   = do (ws1,e1) <- boxing env e
-                                         (ws2,ss1) <- boxing env ss
-                                         (ws3,els1) <- boxing env els
+                                         (ws2,ss1) <- boxing env1 ss
+                                         (ws3,els1) <- boxing env1 els
                                          return (ws1++ws2++ws3, While l e1 ss1 els1)
-    boxing env (Try l ss hs els fs) = do (ws1,ss1) <- boxing env ss
-                                         (ws2,hs1) <- boxing env hs
-                                         (ws3,els1) <- boxing env els
-                                         (ws4,fs1) <- boxing env fs
+       where env1 = setTopLevel False env
+    boxing env (Try l ss hs els fs) = do (ws1,ss1) <- boxing env1 ss
+                                         (ws2,hs1) <- boxing env1 hs
+                                         (ws3,els1) <- boxing env1 els
+                                         (ws4,fs1) <- boxing env1 fs
                                          return (ws1++ws2++ws3++ws4, Try l ss1 hs1 els1 fs1)
+       where env1 = setTopLevel False env
     boxing env (With l ws ss)       = do (ws1,ws') <- boxing env ws
-                                         (ws2,ss1) <- boxing env ss
+                                         (ws2,ss1) <- boxing (setTopLevel False env) ss
                                          return (ws1++ws2, With l ws' ss1)
     boxing env (VarAssign l ps e)   = do (ws1,e1) <- boxing env e
                                          return (ws1, VarAssign l ps e)
@@ -320,14 +377,46 @@ instance Boxing Stmt where
     boxing env g@(Decl l ds)        = do (ws1, ds1) <- boxing env1 ds
                                          return (ws1, Decl l ds1)
       where te                      = envOf g
-            env1                    = define te env
+            env1                    = setTopLevel False $ define te env
+
+instance {-# OVERLAPS #-} Boxing [Decl] where
+    boxing env (c@Class{} : ds)     = do (ws1,c1) <- boxing (setInClass True env) c
+                                         (ws2,ds2) <- boxing env ds
+                                         return (ws1++ws2,c1:ds2)
+    boxing env (d@Def{} : ds)
+      | hasNotImpl (dbody d)        = do (ws,ds1) <- boxing env ds
+                                         return (ws, d : ds1)
+      | otherwise                   = case lookup (dname d) (unboxedVars env) of
+                                        Just un -> do
+                                           (ws1,d1) <- boxing (setDelayedUnbox True env) d{dname = un}
+                                           let ds1 =  [mkWrapper d un]
+                                           (ws2,ds2) <- boxing env ds
+                                           return (ws1++ws2,d1 : ds1 ++ ds2)
+                                        _ -> do
+                                           (ws1,d1) <- boxing env d
+                                           (ws2,ds2) <- boxing env ds
+                                           return (ws1++ws2,d1:ds2)
+       where mkWrapper (Def l n q p _ (Just t) ss dec fx) un
+                | isUnboxable t     = Def l n q p KwdNIL (Just t) [Return NoLoc (Just (Box t (eCallP (eVar un) (ub p))))] dec fx
+                | otherwise         = Def l n q p KwdNIL (Just t) [Return NoLoc (Just (eCallP (eVar un) (ub p)))] dec fx
+             ub (PosPar n (Just t) _ p)
+               | isUnboxable t      = PosArg (unbox t (eVar n)) (ub p)
+               | otherwise          = PosArg (eVar n) (ub p)
+             ub (PosSTAR n _)       = PosStar (eVar n)
+             ub PosNIL              = PosNil
+    boxing env []                   = return ([],[])
 
 instance Boxing Decl where
-    boxing env (Class l n q cs ss)  = do (ws1, ss1) <- boxing env ss
-                                         return (ws1, Class l n q cs ss1)
+    boxing env (Class l n q cs ss)  = do (ws1, ss1) <- boxing env1 ss'
+                                         return (ws1, Class l n q cs ss1) 
+        where ss'                   = subst [(tvSelf, tCon c)] ss
+              c                     = TC (NoQ n) (map tVar $ qbound q)
+              env1                  = defineTVars q env
     boxing env (Def l n q p KwdNIL t ss dec fx)
-                                    = do (ws1,p1) <- boxing env p
-                                         (ws2,ss1) <- boxing env1 ss
+                                    = do ps <- if (isInClass env) then return [] else newNames [n | (n,NVar t) <- te, isUnboxable t]
+                                         let env2 = addUnboxedVars ps $ env1
+                                         (ws1,p1) <- boxing env2 p
+                                         (ws2,ss1) <- boxing env2 ss
                                          return (ws1++ws2,Def l n q p1 KwdNIL t ss1 dec fx)
       where te                      = envOf p
             env1                    = define te env
@@ -343,7 +432,10 @@ instance Boxing Handler where
 
 instance Boxing PosPar where
     boxing env (PosPar n t e p)    = do (ws1, e1) <- boxing env e
-                                        return (ws1, PosPar n t e1 p)
+                                        (ws2, p2) <- boxing env p
+                                        case lookup n (unboxedVars env) of
+                                           Just un -> return (ws1++ws2, PosPar un t e1 p2)
+                                           _ -> return (ws1++ws2, PosPar n t e1 p2)
     boxing env (PosSTAR n t)       = return ([],PosSTAR n t)
     boxing env PosNIL              = return ([],PosNIL)
 
@@ -371,7 +463,19 @@ instance Boxing Assoc where
 instance Boxing WithItem where
     boxing env (WithItem e mbp)    = do (ws1,e1) <- boxing env e
                                         return (ws1, WithItem e1 mbp)
-    
+
+instance Boxing Pattern where 
+    boxing env v@(PVar l n mbt)    = case lookup n ps of
+                                            Just un -> return ([], PVar l un mbt)
+                                            Nothing -> return ([], v)
+        where ps                   = unboxedVars env
+    boxing env (PParen l p)        = do (ws,p') <- boxing env p
+                                        return (ws, PParen l p')
+    boxing env (PList l ps mbp)    = do (ws1, ps1) <- boxing env ps
+                                        (ws2, mbp2) <- boxing env mbp
+                                        return (ws1++ws2, PList l ps1 mbp2)
+       
+
 
 bin2Binary kw
    | kw == addKW                   = Plus
