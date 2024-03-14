@@ -58,6 +58,9 @@ pub fn build(b: *std.Build) void {
     const db = b.option(bool, "db", "") orelse false;
     const only_lib = b.option(bool, "only_lib", "") orelse false;
     const syspath = b.option([]const u8, "syspath", "") orelse "";
+    const arg_deps_path = b.option([]const u8, "deps_path", "") orelse "";
+
+    const deps_path = if (arg_deps_path.len > 0) arg_deps_path else joinPath(b.allocator, buildroot_path, "deps");
 
     const projpath_outtypes = joinPath(b.allocator, buildroot_path, "out/types");
     const syspath_backend = relJoinPath(b.allocator, dots_to_root, syspath, "backend");
@@ -65,7 +68,7 @@ pub fn build(b: *std.Build) void {
     const syspath_include = joinPath(b.allocator, syspath, "depsout/include");
     const syspath_lib = joinPath(b.allocator, syspath, "depsout/lib");
 
-    print("Acton Project Builder\nBuilding in {s}\n", .{buildroot_path});
+    print("Acton Project Builder - building {s}\nDeps path: {s}\n", .{buildroot_path, deps_path});
 
     var iter_dir = b.build_root.handle.openDir(
         "out/types/", .{ .iterate = true },
@@ -181,6 +184,24 @@ pub fn build(b: *std.Build) void {
     }
 
     libActonProject.addIncludePath(.{ .path = buildroot_path });
+
+    // project dependencies
+    const deps_dir = std.fs.cwd().openDir(deps_path, .{ .iterate = true });
+    if (deps_dir) |dir| {
+        //defer dir.close();
+        var deps_walker = dir.iterate();
+        while (deps_walker.next() catch unreachable) |dep_entry| {
+
+            if (dep_entry.kind == .directory) {
+                std.debug.print("Found sub-directory: {s}\n", .{dep_entry.name});
+                const dep_path = joinPath(b.allocator, deps_path, dep_entry.name);
+                libActonProject.addIncludePath(.{ .path = dep_path });
+            }
+        }
+    } else |err| {
+        std.debug.print("Failed to open directory: {}\n", .{err});
+    }
+
     libActonProject.addIncludePath(.{ .path = syspath_base });
     libActonProject.addIncludePath(.{ .path = syspath_include });
     libActonProject.linkLibC();
@@ -210,7 +231,6 @@ pub fn build(b: *std.Build) void {
             .enable_large_config = true,
             .enable_mmap = true,
         });
-
 
         // -- ActonDeps ------------------------------------------------------------
         const dep_libargp = b.anonymousDependency(relJoinPath(b.allocator, dots_to_root, syspath, "deps/libargp"), @import("deps/libargp/build.zig"), .{
@@ -318,18 +338,15 @@ pub fn build(b: *std.Build) void {
             executable.addLibraryPath(.{ .path = syspath_lib });
             executable.linkLibrary(libActonProject);
 
-            // Link project dependencies
-            const deps_path = joinPath(b.allocator, buildroot_path, "deps");
-            const deps_dir = std.fs.cwd().openDir(deps_path, .{ .iterate = true });
+            // project dependencies
             if (deps_dir) |dir| {
                 //defer dir.close();
                 var deps_walker = dir.iterate();
                 while (deps_walker.next() catch unreachable) |dep_entry| {
+
                     if (dep_entry.kind == .directory) {
-                        // Process sub-directory. For example, print its name.
                         std.debug.print("Found sub-directory: {s}\n", .{dep_entry.name});
                         const dep_path = joinPath(b.allocator, deps_path, dep_entry.name);
-                        libActonProject.addIncludePath(.{ .path = dep_path });
                         executable.addIncludePath(.{ .path = dep_path });
                         const dep_path_rel = joinPath(b.allocator, "deps", dep_entry.name);
                         const dep_dep = b.anonymousDependency(dep_path_rel, @import("build.zig"), .{
@@ -337,6 +354,7 @@ pub fn build(b: *std.Build) void {
                             .optimize = optimize,
                             .only_lib = true,
                             .syspath = syspath,
+                            .deps_path = deps_path,
                         });
                         executable.linkLibrary(dep_dep.artifact("ActonProject"));
                     }
