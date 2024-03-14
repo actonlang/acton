@@ -464,8 +464,7 @@ parseActFile opts paths actFile = do
     where detectStubMode :: Paths -> String -> C.CompileOptions -> IO Bool
           detectStubMode paths srcfile opts = do
                     exists <- doesFileExist cFile
-                    let doStub = exists && C.autostub opts
-                    return (C.stub opts || doStub)
+                    return (exists && C.autostub opts)
               where cFile = replaceExtension srcfile ".c"
 
 
@@ -528,7 +527,7 @@ compileTasks opts paths tasks
         containsBuiltin (AcyclicSCC task) = name task == (A.modName ["__builtin__"])
 
 compileBins opts paths env tasks preBinTasks = do
-    iff (not (altOutput opts) && not (C.stub opts)) $ do
+    iff (not (altOutput opts)) $ do
       detBinTasks <- catMaybes <$> mapM (filterMainActor env opts paths) preBinTasks
       let binTasks = if (null (C.root opts)) then detBinTasks else preBinTasks
       zigBuild env opts paths tasks binTasks
@@ -747,7 +746,7 @@ runRestPasses opts paths env0 parsed stubMode = do
 
                           writeFile hFile h
                           writeFile cFile c
-                          let tyFileName =  modNameToString(modName paths) ++ ".ty"
+                          let tyFileName = modNameToString(modName paths) ++ ".ty"
                           iff (C.ty opts) $
                                copyFileWithMetadata (joinPath [projTypes paths, tyFileName]) (joinPath [srcDir paths, tyFileName])
 

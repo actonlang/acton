@@ -21,6 +21,7 @@
   old system around.
 - `actonc` no longer accepts `--cc` since we now always build using the zig
   build system which implies the clang version that Zig ships.
+- `actonc` no longer supports explicit `--stub` compilation, use `--auto-stub`
 
 ### Fixed
 - Correct dependency path computation in builder
