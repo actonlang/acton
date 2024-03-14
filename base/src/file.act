@@ -82,6 +82,14 @@ extension FileStat (Eq):
     def __eq__(self, other) -> bool:
         return self.name == other.name and self.dev == other.dev and self.mode == other.mode and self.nlink == other.nlink and self.uid == other.uid and self.gid == other.gid and self.rdev == other.rdev and self.ino == other.ino and self.size == other.size and self.blksize == other.blksize and self.blocks == other.blocks and self.flags == other.flags and self.gen == other.gen and self.atime == other.atime and self.mtime == other.mtime and self.ctime == other.ctime and self.birthtime == other.birthtime
 
+def join_path(parts: list[str], sep: ?str=None) -> str:
+    """Join two paths"""
+    # TODO: support more than just / as separator based on platform
+    psep = "/"
+    if sep is not None:
+        psep = sep
+    return psep.join(parts)
+
 # TODO: refactor into a read-only version and one for writing!?
 actor FS(cap: FileCap):
     """File system operations """
@@ -89,6 +97,10 @@ actor FS(cap: FileCap):
     proc def _pin_affinity() -> None:
         NotImplemented
     _pin_affinity()
+
+    action def cwd() -> str:
+        """Get the current working directory"""
+        NotImplemented
 
     action def exepath() -> str:
         """Get the path to the executable"""
@@ -177,6 +189,7 @@ actor FS(cap: FileCap):
             # dir doesn't exist
             pass
         return res
+
 
 actor ReadFile(cap: ReadFileCap, filename: str):
     """Read a file

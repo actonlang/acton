@@ -51,6 +51,20 @@ B_bool fileQ_FileStatD_is_socket (fileQ_FileStat self) {
     return toB_bool(S_ISSOCK(fromB_u64(self->mode)));
 }
 
+// action def cwd() -> str:
+$R fileQ_FSD_cwdG_local (fileQ_FS self, $Cont C_cont) {
+    char cwd[1024];
+    size_t size = sizeof(cwd);
+    int r = uv_cwd(cwd, &size);
+    if (r < 0) {
+        char errmsg[1024] = "Error getting cwd: ";
+        uv_strerror_r(r, errmsg + strlen(errmsg), sizeof(errmsg)-strlen(errmsg));
+        log_warn(errmsg);
+        $RAISE(((B_BaseException)B_RuntimeErrorG_new(to$str(errmsg))));
+    }
+    return $R_CONT(C_cont, to$str(cwd));
+}
+
 // action def exepath() -> str:
 $R fileQ_FSD_exepathG_local (fileQ_FS self, $Cont C_cont) {
     char exepath[1024];

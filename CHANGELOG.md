@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Added
+- `file.FS.cwd()` to get current working directory
+- `file.join_path()` to join path components
+
 ### Fixed
 - Correct dependency path computation in builder
 
