@@ -1,8 +1,14 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+- Correct dependency path computation in builder
+
+
 ## [0.21.0] (2024-03-13)
 
-## Added
+### Added
 - `acton test` testing has been revamped, now doing multiple test iterations
   - each test will be run for at least 1ms, for many smaller unit tests this
     means the test case run hundreds of times
@@ -67,7 +73,7 @@
   `actonc` is on the path
 - Add `--only-act` to only perform Acton compilation and skip C compilation
 
-## Changed
+### Changed
 - `acton test` will compile test functions in dev mode to get asserts
 - The `dev` and `rel` folders have been removed, e.g. `out/rel/bin` -> `out/bin`
 - Printing of compiler pass debug output from individual files, like `acton

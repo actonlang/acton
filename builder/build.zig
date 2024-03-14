@@ -324,15 +324,15 @@ pub fn build(b: *std.Build) void {
             if (deps_dir) |dir| {
                 //defer dir.close();
                 var deps_walker = dir.iterate();
-                while (deps_walker.next() catch unreachable) |deps_entry| {
-                    if (deps_entry.kind == .directory) {
+                while (deps_walker.next() catch unreachable) |dep_entry| {
+                    if (dep_entry.kind == .directory) {
                         // Process sub-directory. For example, print its name.
-                        std.debug.print("Found sub-directory: {s}\n", .{deps_entry.name});
-                        const dep_path = joinPath(b.allocator, deps_path, deps_entry.name);
-                        //const dep_include = joinPath(b.allocator, dep_path, "out/types");
+                        std.debug.print("Found sub-directory: {s}\n", .{dep_entry.name});
+                        const dep_path = joinPath(b.allocator, deps_path, dep_entry.name);
                         libActonProject.addIncludePath(.{ .path = dep_path });
                         executable.addIncludePath(.{ .path = dep_path });
-                        const dep_dep = b.anonymousDependency("deps/dumbo", @import("build.zig"), .{
+                        const dep_path_rel = joinPath(b.allocator, "deps", dep_entry.name);
+                        const dep_dep = b.anonymousDependency(dep_path_rel, @import("build.zig"), .{
                             .target = target,
                             .optimize = optimize,
                             .only_lib = true,
