@@ -181,10 +181,11 @@ instance Deact Decl where
 
     deact env d                     = error ("deact unexpected decl: " ++ prstr d)
 
-newact env n q p                    = Def l0 (newactName n) q p KwdNIL (Just t) [newassign, waitinit, sReturn x] NoDec fxProc
+newact env n q p                    = Def l0 (newactName n) q p KwdNIL (Just t) [newassign, install_gc_finalizer, waitinit, sReturn x] NoDec fxProc
   where t                           = tCon $ TC (NoQ n) (map tVar $ qbound q)
         x                           = eVar g_act
         newassign                   = sAssign (pVar g_act t) (eCall (tApp (eQVar primNEWACTOR) [t]) [])
+        install_gc_finalizer        = sExpr $ eCall (tApp (eQVar primGCfinalizer) [t]) [x]
         waitinit                    = sExpr $ eCall (tApp (eQVar primAWAITf) [tNone]) [asyncmsg]
         asyncmsg                    = eCall (tApp (eQVar primASYNCf) [tNone]) [x, closure]
         closure                     = Lambda l0 PosNIL KwdNIL initcall fxProc

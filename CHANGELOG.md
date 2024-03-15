@@ -3,6 +3,9 @@
 ## Unreleased
 
 ### Added
+- Acton RTS now supports actor cleanup through GC finalization
+  - Define a `action def __cleanup__():` action on your actor and it will be run
+    when the actor is about to be garbage collected
 - `acton build` now builds dependencies in `deps/` before building the main
   project
 - `acton --only-build` performs only the low level build from .C source,
@@ -17,8 +20,20 @@
   memory management mixed with GC managed memory.
   - As before, module constants are placed in the regular heap, so that the GC
     does not have to scan it.
+- `process.Process` now takes an optional timeout argument to stop the process
+- New `process.RunProcess` that waits for a process to exit and then reports to
+  a callback with the buffered output from stdout / stderr
+  - This can provide a simpler interface than `process.Process` if you just want
+    to wait for the process to finish running before starting to parse its
+    output as you'll get a single invokation and the full output rather than
+    receive it piecemeal
 
 ### Changed
+- The work dir and environment arguments of `process.Process` have been moved to
+  the end as they are optional, making it possible to invoke with fewer args
+- Tests run by `acton test` are now compiled with `--dev` and thus have C
+  asserts enabled, similarly the test.hs that drives the test in the Acton repo
+  now compile with `--dev` to get C asserts
 - Rename `--only-act` to `--skip-build`
 
 ### Removed
@@ -36,6 +51,9 @@
 - `file.WriteFile.write()` now truncates file to avoid leftover tail of old
   content
 - `time.Stopwatch().reset()` now works
+- Test crashes are now handled
+  - If the test program (e.g. `._test_foo`) crashes from an assert or similar,
+    the top test runner now captures this and reflects it in the output
 - Correct dependency path computation in builder
 - Makefile now more idempotent to avoid building when nothing has changed
 

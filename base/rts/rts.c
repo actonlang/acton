@@ -367,6 +367,10 @@ B_NoneType $ActorD___resume__($Actor self) {
   return B_None;
 }
 
+B_NoneType $ActorD___cleanup__($Actor self) {
+  return B_None;
+}
+
 void $ActorD___serialize__($Actor self, $Serial$state state) {
     $step_serialize(self->$waitsfor,state);
     $val_serialize(ITEM_ID,&self->$consume_hd,state);
@@ -492,7 +496,8 @@ struct $ActorG_class $ActorG_methods = {
     $ActorD___bool__,
     $ActorD___str__,
     $ActorD___str__,
-    $ActorD___resume__
+    $ActorD___resume__,
+    $ActorD___cleanup__
 };
 
 struct $CatcherG_class $CatcherG_methods = {

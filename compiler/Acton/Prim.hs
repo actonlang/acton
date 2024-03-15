@@ -81,6 +81,7 @@ tRET                = tCon $ TC primRET []
 
 primASSERT          = gPrim "ASSERT"
 primNEWACTOR        = gPrim "NEWACTOR"
+primGCfinalizer     = gPrim "GCfinalizer"
 
 primISINSTANCE      = gPrim "ISINSTANCE"
 primISINSTANCE0     = gPrim "ISINSTANCE0"
@@ -172,6 +173,7 @@ primEnv             = [     (noq primASYNCf,        NDef scASYNCf NoDec),
 
                             (noq primASSERT,        NDef scASSERT NoDec),
                             (noq primNEWACTOR,      NDef scNEWACTOR NoDec),
+                            (noq primGCfinalizer,   NDef scGCfinalizer NoDec),
 
                             (noq primISINSTANCE,    NDef scISINSTANCE NoDec),
                             (noq primCAST,          NDef scCAST NoDec),
@@ -274,7 +276,8 @@ clActor             = NClass [] (leftpath [cValue]) te
                         (boolKW,              NDef (monotype $ tFun fxPure posNil kwdNil tBool) NoDec),
                         (strKW,               NDef (monotype $ tFun fxPure posNil kwdNil tStr) NoDec),
                         (reprKW,              NDef (monotype $ tFun fxPure posNil kwdNil tStr) NoDec),
-                        (resumeKW,            NDef (monotype $ tFun fxMut posNil kwdNil tNone) NoDec)
+                        (resumeKW,            NDef (monotype $ tFun fxMut posNil kwdNil tNone) NoDec),
+                        (cleanupKW,           NDef (monotype $ tFun fxMut posNil kwdNil tNone) NoDec)
                       ]
 
 --  class $SEQ (BaseException, value):
@@ -421,11 +424,16 @@ scNEWACTOR          = tSchema [Quant a [cActor]] tNEWACTOR
   where tNEWACTOR   = tFun fxPure posNil kwdNil (tVar a)
         a           = TV KType $ name "A"
 
---  $ISINSTANCE     : pure (struct,_) -> bool
+--  $GCfinalizer    : [A($Actor)] => pure (A) -> None
+scGCfinalizer       = tSchema [Quant a [cActor]] tGCfin
+  where tGCfin      = tFun fxPure (posRow (tVar a) posNil) kwdNil tNone
+        a           = TV KType $ name "A"
+
+--  $ISINSTANCE     : pure (struct, _) -> bool
 scISINSTANCE        = tSchema [] tISINSTANCE
   where tISINSTANCE = tFun fxPure (posRow tValue $ posRow tWild posNil) kwdNil tNone
 
---  $CAST           : [A,B] => (A) -> B
+--  $CAST           : [A, B] => (A) -> B
 scCAST              = tSchema [quant a, quant b] tCAST
   where tCAST       = tFun fxPure (posRow (tVar a) posNil) kwdNil (tVar b)
         a           = TV KType $ name "A"

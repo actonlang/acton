@@ -805,6 +805,11 @@ isVar e                             = case isQVar e of Just (NoQ n) -> Just n; _
 
 hasNotImpl ss                       = any isNotImpl ss
 
+-- Check for __cleanup__ method on actor
+hasCleanup ss                       = any isCleanup ss
+
+isCleanup (Def _ n _ _ _ _ _ _ _)   = n == Name NoLoc "__cleanup__"
+
 isNotImpl (Expr _ e)                = e == eNotImpl
 isNotImpl (Assign _ _ e)            = e == eNotImpl
 isNotImpl (Decl _ ds)               = any (hasNotImpl . dbody) ds
