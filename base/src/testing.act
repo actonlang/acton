@@ -242,6 +242,7 @@ def assertNotIn(a, b, msg: ?str):
 #            assert_msg += ": " + msg
 #        raise IsInstanceError(assert_msg)
 
+
 # -------------------------------------------------------------------------------
 
 class TestLogger(logging.Logger):
