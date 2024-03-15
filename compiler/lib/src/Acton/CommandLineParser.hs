@@ -61,6 +61,7 @@ data CompileOptions   = CompileOptions {
                          quiet       :: Bool,
                          debug       :: Bool,
                          dev         :: Bool,
+                         listimports :: Bool,
                          only_build  :: Bool,
                          skip_build  :: Bool,
                          no_threads  :: Bool,
@@ -81,6 +82,7 @@ data BuildOptions = BuildOptions {
                          no_threadsB :: Bool,
                          debugB      :: Bool,
                          devB        :: Bool,
+                         listimportsB :: Bool,
                          only_buildB :: Bool,
                          skip_buildB :: Bool,
                          autostubB   :: Bool,
@@ -159,6 +161,7 @@ compileOptions = CompileOptions
         <*> switch (long "quiet"        <> help "Don't print stuff")
         <*> switch (long "debug"        <> help "Print debug stuff")
         <*> switch (long "dev"          <> help "Development mode; include debug symbols etc")
+        <*> switch (long "list-imports" <> help "List module imports")
         <*> switch (long "only-build"   <> help "Only perform final build of .c files, do not compile .act files")
         <*> switch (long "skip-build"   <> help "Skip final bulid of .c files")
         <*> switch (long "no-threads"   <> help "Don't use threads")
@@ -179,6 +182,7 @@ buildCommand          = Build <$> (
         <*> switch (long "no-threads"   <> help "Don't use threads")
         <*> switch (long "debug"        <> help "Print debug stuff")
         <*> switch (long "dev"          <> help "Development mode; include debug symbols etc")
+        <*> switch (long "list-imports" <> help "List module imports")
         <*> switch (long "only-build"   <> help "Only perform final build of .c files, do not compile .act files")
         <*> switch (long "skip-build"   <> help "Skip final build of .c files")
         <*> switch (long "auto-stub"    <> help "Allow automatic stub detection")
