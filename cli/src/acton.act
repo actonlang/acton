@@ -39,7 +39,7 @@ actor CompilerRunner(process_cap, env, args, wdir=None):
     # We find the path to actonc by looking at the executable path of the
     # current process. Since we are called 'acton', we just add a 'c'.
     cmd = [fs.exepath() + "c"] + args
-    p = process.Process(process_cap, cmd, wdir, None, on_stdout, on_stderr, on_exit, on_error)
+    p = process.Process(process_cap, cmd, on_stdout, on_stderr, on_exit, on_error, wdir)
 
 
 actor CompilerBuildRunner(process_cap, env, args, wdir=None, on_success: action() -> None, on_error: action(str) -> None):
@@ -62,7 +62,7 @@ actor CompilerBuildRunner(process_cap, env, args, wdir=None, on_success: action(
     # We find the path to actonc by looking at the executable path of the
     # current process. Since we are called 'acton', we just add a 'c'.
     cmd = [fs.exepath() + "c", "build"] + args
-    p = process.Process(process_cap, cmd, wdir, None, on_actonc_stdout, on_actonc_stderr, on_actonc_exit, on_actonc_error)
+    p = process.Process(process_cap, cmd, on_actonc_stdout, on_actonc_stderr, on_actonc_exit, on_actonc_error, wdir)
 
 
 actor BuildProject(process_cap, env, args):
@@ -161,7 +161,7 @@ actor BuildProjectTests(process_cap, env, args, on_build_success, on_build_failu
 
     clean_buildcache(file.FileCap(env.cap))
 
-    p = process.Process(process_cap, cmd, None, None, on_actbuild_stdout, on_actbuild_stderr, on_actbuild_exit, on_actbuild_error)
+    p = process.Process(process_cap, cmd, on_actbuild_stdout, on_actbuild_stderr, on_actbuild_exit, on_actbuild_error)
 
 
 actor RunModuleTest(process_cap, modname, test_cmd, on_json_output):
@@ -199,7 +199,7 @@ actor RunModuleTest(process_cap, modname, test_cmd, on_json_output):
         print("Error from process:", error)
 
     cmd = ["out/bin/.test_" + modname, "--json"] + test_cmd
-    p = process.Process(process_cap, cmd, None, None, on_stdout, on_stderr, on_exit, on_error)
+    p = process.Process(process_cap, cmd, on_stdout, on_stderr, on_exit, on_error)
 
 
 actor RunTestList(process_cap, env, args):

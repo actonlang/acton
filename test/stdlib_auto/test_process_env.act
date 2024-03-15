@@ -28,7 +28,7 @@ actor main(env):
     def test():
         print("Starting process..")
         pc = process.ProcessCap(env.cap)
-        p = process.Process(pc, ["env"], None, {"FOO": "BAR"}, on_stdout, on_stderr, on_exit, on_error)
+        p = process.Process(pc, ["env"], on_stdout, on_stderr, on_exit, on_error, env={"FOO": "BAR"})
 
     def ex():
         print("Test timeout, exiting with error")

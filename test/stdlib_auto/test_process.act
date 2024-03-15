@@ -25,7 +25,7 @@ actor main(env):
     def test():
         print("Starting process..")
         pc = process.ProcessCap(env.cap)
-        p = process.Process(pc, ["echo", "HELLO"], None, None, on_stdout, on_stderr, on_exit, on_error)
+        p = process.Process(pc, ["echo", "HELLO"], on_stdout, on_stderr, on_exit, on_error)
 
     def ex():
         print("Test timeout, should exit with error but not now... disabled due to faulty error")

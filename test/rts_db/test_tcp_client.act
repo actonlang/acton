@@ -127,7 +127,7 @@ actor Tester(env, verbose, port_chunk):
         for i in range(3):
             port = port_chunk + (2*i)
             cmd = ["../dist/bin/actondb", "-p", str(port)]
-            p = process.Process(process_cap, cmd, None, None, on_stdout, on_stderr, db_on_exit, on_error)
+            p = process.Process(process_cap, cmd, on_stdout, on_stderr, db_on_exit, on_error)
             p_alive += 1
             ps.append(p)
             paid = p.aid()
@@ -171,7 +171,7 @@ actor Tester(env, verbose, port_chunk):
                     break
             are_we_done()
 
-        p_srv = process.Process(process_cap, cmd_srv, None, None, app_server_on_stdout, on_stderr, app_server_on_exit, on_error)
+        p_srv = process.Process(process_cap, cmd_srv, app_server_on_stdout, on_stderr, app_server_on_exit, on_error)
         p_alive += 1
         if p_srv is not None:
             ps.append(p_srv)
@@ -192,7 +192,7 @@ actor Tester(env, verbose, port_chunk):
                     state = 4
                     tcp_expect += 1
                     log("state 2: Starting test tcp client app")
-                    p = process.Process(process_cap, cmd, None, None, app_client_on_stdout, on_stderr, app_client_on_exit, on_error)
+                    p = process.Process(process_cap, cmd, app_client_on_stdout, on_stderr, app_client_on_exit, on_error)
                     p_alive += 1
                     if p is not None:
                         ps.append(p)
@@ -240,7 +240,7 @@ actor Tester(env, verbose, port_chunk):
         log("Running TCP client test")
         dbc_start()
         log("Starting TCP client app: " + " ".join(cmd))
-        p = process.Process(process_cap, cmd, None, None, app_client_on_stdout, on_stderr, app_client_on_exit, on_error)
+        p = process.Process(process_cap, cmd, app_client_on_stdout, on_stderr, app_client_on_exit, on_error)
         p_alive += 1
         if p is not None:
             ps.append(p)
