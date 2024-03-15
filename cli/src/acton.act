@@ -332,6 +332,9 @@ actor RunTestTest(process_cap, env: Env, args):
         test_cmd = ["test"]
         for name_filter in args.get_strlist("name"):
             test_cmd.extend(["--name", name_filter])
+        if len(module_names) == 0:
+            print("No tests found")
+            env.exit(0)
         for module_name in module_names:
             t = RunModuleTest(process_cap, module_name, test_cmd, lambda x: _on_json_output(module_name, x), lambda x, y, z: _on_test_error(module_name, x, y, z))
 
