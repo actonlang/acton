@@ -164,9 +164,11 @@ actor BuildProjectTests(process_cap, env, args, on_build_success, on_build_failu
     p = process.Process(process_cap, cmd, None, None, on_actbuild_stdout, on_actbuild_stderr, on_actbuild_exit, on_actbuild_error)
 
 
-actor RunModuleTest(process_cap, modname, test_cmd, on_json_output):
+actor RunModuleTest(process_cap, modname, test_cmd, on_json_output, on_test_error):
     var stdout_buf = b""
     var stderr_buf = b""
+    var errout = ""
+    var likely_json = True
 
     def on_stdout(p, data: bytes):
         stdout_buf += data
@@ -176,27 +178,30 @@ actor RunModuleTest(process_cap, modname, test_cmd, on_json_output):
         lines = stderr_buf.splitlines(True)
         stderr_buf = b""
         for line in lines:
-            if line.endswith(b"\n"):
-                # valid line
-                try:
-                    upd = json.decode(line.decode())
-                except ValueError:
-                    print("Invalid json:", line)
-                    continue
+            if likely_json:
+                if line.endswith(b"\n"):
+                    # valid line
+                    try:
+                        upd = json.decode(line.decode())
+                    except ValueError:
+                        #print("Invalid json:", line)
+                        likely_json = False
+                    else:
+                        on_json_output(upd)
                 else:
-                    on_json_output(upd)
-            else:
-                # incomplete line
-                _stderr_buf = line
-                break
+                    # incomplete line
+                    _stderr_buf = line
+                    break
+            if not likely_json:
+                errout += line.decode()
+
 
     def on_exit(p, exit_code, term_signal):
-        if exit_code != 0:
-            print("actonc unexpectedly exited with code: ", exit_code, " terminated with signal:", term_signal)
-            print("stderr:", stderr_buf.decode())
+        if exit_code != 0 or term_signal != 0:
+            on_test_error(exit_code, term_signal, errout)
 
     def on_error(p, error):
-        print("Error from process:", error)
+        on_test_error(-1, -1, error)
 
     cmd = ["out/bin/.test_" + modname, "--json"] + test_cmd
     p = process.Process(process_cap, cmd, None, None, on_stdout, on_stderr, on_exit, on_error)
@@ -232,11 +237,14 @@ actor RunTestList(process_cap, env, args):
             print_module_tests()
             env.exit(0)
 
+    def _on_test_error(exit_code, term_signal, stderr_buf):
+        pass
+
     def _run_tests(module_names: list[str]):
         _expected_modules = set(module_names)
 
         for module_name in module_names:
-            t = RunModuleTest(process_cap, module_name, ["list"], lambda x: _on_json_output(module_name, x))
+            t = RunModuleTest(process_cap, module_name, ["list"], lambda x: _on_json_output(module_name, x), _on_test_error)
 
     def _on_build_failure(exit_code, term_signal, stderr_buf):
         print("Failed to build project tests")
@@ -310,13 +318,22 @@ actor RunTestTest(process_cap, env: Env, args):
         else:
             raise ValueError("Unexpected JSON data from module test: " + module_name)
 
+    def _on_test_error(module_name, exit_code, term_signal, errout):
+        errmsg = "Module test error: "
+        try:
+            errmsg += errout.splitlines()[0]
+        except IndexError:
+            pass
+        for test_name, test in results.results[module_name].items():
+            results.update(module_name, test.definition, True, testing.TestResult(None, str(errmsg), 1.0))
+
     def _run_tests(module_names: list[str]):
         results.expected_modules = set(module_names)
         test_cmd = ["test"]
         for name_filter in args.get_strlist("name"):
             test_cmd.extend(["--name", name_filter])
         for module_name in module_names:
-            t = RunModuleTest(process_cap, module_name, test_cmd, lambda x: _on_json_output(module_name, x))
+            t = RunModuleTest(process_cap, module_name, test_cmd, lambda x: _on_json_output(module_name, x), lambda x, y, z: _on_test_error(module_name, x, y, z))
 
     def _on_build_failure(exit_code, term_signal, stderr_buf):
         print("Failed to build project tests")
