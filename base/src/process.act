@@ -6,12 +6,18 @@ class ProcessCap():
     def __init__(self, cap: WorldCap):
         pass
 
-actor Process(cap: ProcessCap, cmd: list[str], workdir: ?str, env: ?dict[str, str], on_stdout: action(Process, bytes) -> None, on_stderr: action(Process, bytes) -> None, on_exit: action(Process, int, int) -> None, on_error: action(Process, str) -> None):
+actor Process(cap: ProcessCap,
+              cmd: list[str],
+              on_stdout: action(Process, bytes) -> None,
+              on_stderr: action(Process, bytes) -> None,
+              on_exit: action(Process, int, int) -> None,
+              on_error: action(Process, str) -> None,
+              workdir: ?str=None,
+              env: ?dict[str, str]=None,
+              timeout: ?float=None):
     """A process
     - cap: capability to start processes
     - cmd: the command to run
-    - workdir: working directory, use None for current directory
-    - env: environment for process, use None to inherit current environment
     - on_stdout: stdout callback actor method
     - on_stderr: stderr callback actor method
     - on_exit: exit callback
@@ -19,6 +25,9 @@ actor Process(cap: ProcessCap, cmd: list[str], workdir: ?str, env: ?dict[str, st
       - exit code
       - signal that caused program to exit
     - on_error: error callback
+    - workdir: working directory, use None for current directory
+    - env: environment for process, use None to inherit current environment
+    - timeout: time in seconds before process is stopped
     """
     _p = 0
 
@@ -76,6 +85,56 @@ actor Process(cap: ProcessCap, cmd: list[str], workdir: ?str, env: ?dict[str, st
         stopped.
         """
         terminate()
-        after 1: kill()
+        after 1.0: kill()
 
     _create_process()
+
+    if timeout is not None:
+        after timeout: stop()
+
+
+actor RunProcess(cap: ProcessCap,
+                 cmd: list[str],
+                 on_exit: action(Process, int, int, bytes, bytes) -> None,
+                 on_error: action(Process, str) -> None,
+                 workdir: ?str,
+                 env: ?dict[str, str],
+                 timeout: ?float=None):
+    """Run a process and wait for it to finish
+    """
+    var out_buf = b""
+    var err_buf = b""
+
+    def _on_stdout(p: Process, data: bytes):
+        out_buf += data
+
+    def _on_stderr(p: Process, data: bytes):
+        err_buf += data
+
+    def _on_exit(p: Process, exit_code: int, signal: int):
+        on_exit(p, exit_code, signal, out_buf, err_buf)
+
+    p = Process(cap, cmd, _on_stdout, _on_stderr, _on_exit, on_error, workdir, env, timeout)
+
+    def signal(sig: int):
+        """Send signal to process"""
+        p.signal(sig)
+
+    def kill():
+        """Abrubtly kill process by sending SIGKILL
+        """
+        p.kill()
+
+    def terminate():
+        """Stop process by sending SIGTERM
+        """
+        p.terminate()
+
+    def stop():
+        """Stop process
+
+        Attempts to stop process using normal means, which means SIGTERM on a
+        Unix system. After kill_after seconds (defaults to 1), SIGKILL is sent
+        to ensure the process is stopped.
+        """
+        p.stop()

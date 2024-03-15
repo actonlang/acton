@@ -106,7 +106,7 @@ actor Tester(env, verbose, port_chunk):
         for i in range(3):
             port = port_chunk + (2*i)
             cmd = ["../dist/bin/actondb", "-p", str(port)]
-            p = process.Process(process_cap, cmd, None, None, on_stdout, on_stderr, db_on_exit, on_error)
+            p = process.Process(process_cap, cmd, on_stdout, on_stderr, db_on_exit, on_error)
             p_alive += 1
             ps.append(p)
             paid = p.aid()
@@ -125,7 +125,7 @@ actor Tester(env, verbose, port_chunk):
     def test_ddb_app():
         dbc_start()
         cmd = ["rts_db/ddb_test_app", "--rts-verbose"] + db_args(port_chunk, 3)
-        p = process.Process(process_cap, cmd, None, None, on_stdout, on_stderr, app_on_exit, on_error)
+        p = process.Process(process_cap, cmd, on_stdout, on_stderr, app_on_exit, on_error)
         p_alive += 1
         paid = p.aid()
         psp[paid] = "app"

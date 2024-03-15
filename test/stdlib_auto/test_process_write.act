@@ -32,7 +32,7 @@ actor main(env):
     def test():
         print("Starting process..")
         pc = process.ProcessCap(env.cap)
-        p = process.Process(pc, ["cat"], None, None, on_stdout, on_stderr, on_exit, on_error)
+        p = process.Process(pc, ["cat"], on_stdout, on_stderr, on_exit, on_error)
         p.write(b"hejsan\n")
 
     def ex():
