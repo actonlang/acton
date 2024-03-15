@@ -528,7 +528,10 @@ instance Gen Stmt where
     gen env s | isNotImpl s         = text "//" <+> text "NotImplemented"
     gen env (Expr _ Strings{})      = semi
     gen env (Expr _ e)              = genExp' env e <> semi
-    gen env (Assign _ [p] e)        = gen env p <+> equals <+> genExp env t e <> semi
+    gen env (Assign _ [p] e)
+        | B.isUnboxable t           = gen env p <+> equals <+> gen env e <> semi
+        | otherwise                 = gen env p <+> equals <+> genExp env t e <> semi
+       
       where t                       = typeOf env p
     gen env (AugAssign _ tg op e)   = genTarget env tg <+> pretty op <+> genExp env t e <> semi
       where t                       = targetType env tg
@@ -826,7 +829,7 @@ instance Gen Expr where
     gen env (UnBox _ v@(Var _ (NoQ n)))
        | isUnboxed n                = gen env v
     gen env (UnBox _ e@Var{})       = gen env e <> text "->val"
-    gen env (UnBox _ e)             = parens (genExp' env e) <> text "->val"
+    gen env (UnBox _ e)             = parens (gen env e) <> text "->val"
     gen env e                       = error ("CodeGen.gen for Expr: e = " ++ show e)
 
 gencFunCall env nm []               = text nm <> parens empty
