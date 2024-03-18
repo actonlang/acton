@@ -334,9 +334,9 @@ univars cs                              = concat $ map uni cs
           | univar v && univar v'       = [v,v']
         uni _                           = []
 
-allAbove env (TCon _ tc)                = tOpt tWild : map tCon tcons
-  where tcons                           = allAncestors env tc ++ [schematic' tc]
-        tcons1                          = tc : [ TC c [] | (c,c',_) <- coercions, c' == tcname tc ]
+allAbove env (TCon _ tc)                = tOpt tWild : map tCon tcons1
+  where tcons1                          = [ TC c1 [] | tc0 <- tcons0, (c,c1,_) <- coercions, c == tcname tc0 ] ++ tcons0
+        tcons0                          = allAncestors env tc ++ [schematic' tc]
 allAbove env (TVar _ tv)
   | not $ univar tv                     = tOpt tWild : allAbove env (tCon tc) ++ [tVar tv]
   where tc                              = schematic' $ findTVBound env tv
@@ -349,8 +349,8 @@ allAbove env (TFX _ FXMut)              = [fxProc, fxMut]
 allAbove env (TFX _ FXPure)             = [fxProc, fxMut, fxPure]
 allAbove env (TFX _ FXAction)           = [fxProc, fxAction]
 
-allBelow env (TCon _ tc)                = map tCon tcons
-  where tcons                           = concat [ schematic' c : allDescendants env c | c <- tcons0 ]
+allBelow env (TCon _ tc)                = map tCon tcons1
+  where tcons1                          = concat [ schematic' c : allDescendants env c | c <- tcons0 ]
         tcons0                          = tc : [ TC c [] | (c,c',_) <- coercions, c' == tcname tc ]
 allBelow env (TVar _ tv)                = [tVar tv]
 allBelow env (TOpt _ t)                 = tOpt tWild : allBelow env t ++ [tNone]
