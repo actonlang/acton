@@ -8,6 +8,15 @@
     when the actor is about to be garbage collected
 - `acton build` now builds dependencies in `deps/` before building the main
   project
+- `acton test` now excludes the time spent in GC from test times
+  - This is probably somewhat approximate and not super accurate, in particular
+    for tests with very short test durations
+- `acton test perf` is now expanded and support all kinds of tests (previously
+  only unit tests were supported)
+- `acton test perf --record` can save a performance snapshot to disk
+  - Subsequent invocations of `acton test perf` will back the data from disk and
+    display a comparison with percentage diff
+- AbE: testing documentation is much improved!
 - `acton --only-build` performs only the low level build from .C source,
   skipping compilation of .act files. This can be used if you want to modify the
   C source by hand and still leverage the low level builder to perform the build.
@@ -27,6 +36,10 @@
     to wait for the process to finish running before starting to parse its
     output as you'll get a single invokation and the full output rather than
     receive it piecemeal
+- `env.is_tty()` to check if stdout is a TTY
+- `acton.rts.start_gc_performance_measurement()` to start a GC perf measurement
+- `acton.rts.get_gc_time()` to get the GC timings
+- More grey shades in `term`
 
 ### Changed
 - The work dir and environment arguments of `process.Process` have been moved to
@@ -34,6 +47,8 @@
 - Tests run by `acton test` are now compiled with `--dev` and thus have C
   asserts enabled, similarly the test.hs that drives the test in the Acton repo
   now compile with `--dev` to get C asserts
+- `acton test` now runs test for at least 50ms
+- `acton test perf` now runs test for at least 1s
 - Rename `--only-act` to `--skip-build`
 - Acton build cache now uses up to 15GB instead of 5GB
 

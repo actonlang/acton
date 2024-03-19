@@ -19,6 +19,18 @@ def disable_gc(cap: SysCap) -> None:
     """
     NotImplemented
 
+
+def start_gc_performance_measurement(cap: SysCap) -> None:
+    """Start performance measurement of the garbage collector
+
+    Jedi level. This is not the function you are looking for.
+    """
+    NotImplemented
+
+def get_gc_time(cap: SysCap) -> (total: u64, mark: u64, sweep: u64):
+    """Get GC time in milliseconds"""
+    NotImplemented
+
 def get_mem_usage(cap: SysCap) -> u64:
     """Get memory usage in number of bytes
 

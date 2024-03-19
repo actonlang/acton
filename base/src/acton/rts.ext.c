@@ -26,6 +26,26 @@ B_NoneType actonQ_rtsQ_disable_gc (B_SysCap cap) {
     return B_None;
 }
 
+// def start_gc_performance_measurement(cap: SysCap) -> None:
+B_NoneType actonQ_rtsQ_start_gc_performance_measurement (B_SysCap cap) {
+    GC_start_performance_measurement();
+    return B_None;
+}
+
+// def get_gc_time(cap: SysCap) -> (total: u64, mark: u64, sweep: u64):
+B_tuple actonQ_rtsQ_get_gc_time (B_SysCap cap) {
+    unsigned long total = GC_get_full_gc_total_time();
+    unsigned long mark = GC_get_stopped_mark_total_time();
+    unsigned long sweep = total - mark;
+
+    B_tuple res = $NEWTUPLE(3,
+                            toB_u64(total),
+                            toB_u64(mark),
+                            toB_u64(sweep)
+                            );
+    return res;
+}
+
 B_u64 actonQ_rtsQ_get_heap_size (B_SysCap cap) {
     return toB_u64(GC_get_heap_size());
 }

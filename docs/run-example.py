@@ -17,23 +17,32 @@ import time
 # (nothing supports that), so using python for now
 SRCNAME='python'
 
-def run(source):
+def run_cmd(workdir, cmd):
+    current_dir = os.getcwd()
+    acton = os.path.join(current_dir, "../dist/bin/acton")
+    # Run acton in the specified working directory
+    os.environ["PATH"] = os.path.join(current_dir, "../dist/bin") + ":" + os.getenv("PATH")
+    cp = subprocess.run(cmd, shell=True, cwd=workdir, capture_output=True, text=True)
+    # filter out color codes
+    output = re.sub(r'\x1b\[[0-9;]*m', '', cp.stdout)
+    output = re.sub(r'Building project in .*', 'Building project in /home/user/foo', output)
+    return output
+
+def run(source, cmd=None):
+    cmd = cmd or "acton build && out/bin/example"
     with tempfile.TemporaryDirectory() as tmpdirname:
         print(f"Got a temp dir: {tmpdirname}")
         try:
-            sfe = tmpdirname + "/example"
-            sfn = sfe + ".act"
-            sf = open(sfn, "w")
-            sf.write(source)
-            sf.close()
-            subprocess.run(["../dist/bin/actonc", sfn])
-            os.chmod(sfe, 0o755)
-            output = subprocess.check_output([sfe]).decode("utf-8")
+            run_cmd(tmpdirname, "acton new example")
+            source_file = open(tmpdirname + "/example/src/example.act", "w")
+            source_file.write(source)
+            source_file.close()
+            output = run_cmd(os.path.join(tmpdirname, "example"), cmd)
+            return output
         except Exception as exc:
             print(exc)
             print(f"ERROR, check {tmpdirname}")
             time.sleep(60)
-    return output
 
 def get_source_from_md(content):
     """Extract Acton source code from Markdown document
@@ -50,12 +59,49 @@ def get_source_from_md(content):
     """
     look_for = '^Source:$'
     source = ""
+    filename = None
     for line in content:
         if look_for == '^Source:$' and re.search(look_for, line):
-            look_for = f"^```{SRCNAME}$"
+            look_for = f"^```{SRCNAME}"
             continue
 
-        if look_for == f"^```{SRCNAME}$":
+        if look_for == f"^```{SRCNAME}":
+            if not re.search(look_for, line):
+                raise ValueError(f"Didn't find source block, ```{SRCNAME} should follow the Source: line")
+
+            m = re.match(r"^```{SRCNAME} (.+)$", line)
+            if m:
+                filename = m.group(1)
+            look_for = '^```$'
+            continue
+
+        if look_for == "^```$":
+            if re.search(look_for, line):
+                return source, filename
+            source += line
+
+    if look_for == '^Source:$':
+        raise ValueError("Didn't find source block, missing 'Source:' line")
+
+
+def get_run_from_md(content):
+    """Extract Acton source code from Markdown document
+
+    We just get the first run block and it should look like:
+
+        Run:
+        ```sh
+        acton test
+        ```
+    """
+    look_for = '^Run:$'
+    source = ""
+    for line in content:
+        if look_for == '^Run:$' and re.search(look_for, line):
+            look_for = f"^```sh$"
+            continue
+
+        if look_for == f"^```sh$":
             if not re.search(look_for, line):
                 raise ValueError(f"Didn't find source block, ```{SRCNAME} should follow the Source: line")
             look_for = '^```$'
@@ -65,9 +111,6 @@ def get_source_from_md(content):
             if re.search(look_for, line):
                 return source
             source += line
-
-    if look_for == '^Source:$':
-        raise ValueError("Didn't find source block, missing 'Source:' line")
 
 
 def write_output_to_md_content(output, md_content):
@@ -114,10 +157,11 @@ def process(md):
     #print("----------------------------------------------------")
     #print("".join(md_content))
     #print("----------------------------------------------------")
-    source = get_source_from_md(md_content)
+    source, src_file = get_source_from_md(md_content)
+    cmd = get_run_from_md(md_content)
     #print("SOURCE:")
     #print(source)
-    output = run(source)
+    output = run(source, cmd)
     #print("OUTPUT:")
     #print(output)
     new_md = write_output_to_md_content(output, md_content)
