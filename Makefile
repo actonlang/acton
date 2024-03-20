@@ -438,12 +438,12 @@ dist/backend%: backend/%
 # result of building it, and we want to copy those files!
 dist/base: base dist/base/out/types/__builtin__.ty
 	@mkdir -p $@ $@/out
-	cp -r base/Acton.toml base/builtin base/rts base/src base/stdlib dist/base/
-	cp -r base/out/types dist/base/out/
+	cp -a base/Acton.toml base/builtin base/rts base/src base/stdlib dist/base/
+	cp -a base/out/types dist/base/out/
 
 dist/bin/acton: bin/acton
 	@mkdir -p $(dir $@)
-	cp $< $@.tmp
+	cp -a $< $@.tmp
 	mv $@.tmp $@
 
 # This does a little hack, first copying and then moving the file in place. This
@@ -483,7 +483,7 @@ dist/rts/%: base/rts/%
 
 dist/base/out/types/__builtin__.ty: base/out/types/__builtin__.ty
 	@mkdir -p $(dir $@)
-	cp $< $@
+	cp -a $< $@
 
 dist/completion/acton.bash-completion: completion/acton.bash-completion
 	mkdir -p $(dir $@)
