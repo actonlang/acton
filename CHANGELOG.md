@@ -25,6 +25,7 @@
 
 ### Fixed
 - Correct dependency path computation in builder
+- Makefile now more idempotent to avoid building when nothing has changed
 
 
 ## [0.21.0] (2024-03-13)
