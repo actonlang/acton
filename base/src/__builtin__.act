@@ -357,7 +357,7 @@ class IndexError (LookupError):
         return "%s: %s, index: %s" % (self._name(), self.error_message, str(self.index))
 
 class KeyError(LookupError):
-    def __init__(self, key, msg: ?str=None):
+    def __init__(self, key: value, msg: ?str=None):
         self.key = key
         self.error_message = msg if msg is not None else "Key not found"
 
