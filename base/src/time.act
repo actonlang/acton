@@ -623,7 +623,7 @@ def utcnow() -> DateTime:
     return DateTime(None, tz, None, None, tm_year, tm_month, tm_day, tm_hour, tm_minute, tm_second, t.attosecond, tm_wday, tm_yday)
 
 
-class Stopwatch:
+class Stopwatch(object):
     """Stopwatch measures elapsed time
 
     The watch is started when it is created and the elapsed time can be
@@ -672,22 +672,21 @@ class Stopwatch:
         self.start_mono = monotonic()
         self.start_real = time()
 
-# TODO: actonc bug not allowing this method?
-#    def reset(self):
-#        self.start_mono = monotonic()
-#        self.start_real = time()
-
     def elapsed(self) -> Duration:
-        """Return the elapsed time since the timer was started.
+        """Return the elapsed time since start
         """
         n = monotonic()
         if n.comparable(self.start_mono):
             return n.since(self.start_mono)
         return time().since(self.start_real)
 
+    def reset(self):
+        self.start_mono = monotonic()
+        self.start_real = time()
 
-class PrecisionStopwatch:
-    """A precision timer that measures elapsed time using the monotonic clock.
+
+class PrecisionStopwatch(object):
+    """A precision stopwatch to measure elapsed time using the monotonic clock.
 
     Similar to Stopwatch but if there is no reliable monotonic clock available,
     such as after actor migration, PrecisionStopwatch will fail rather than
@@ -708,15 +707,13 @@ class PrecisionStopwatch:
     def __init__(self):
         self.start = monotonic()
 
-# TODO: actonc bug not allowing this method?
-#    def reset(self):
-#        self.start_mono = monotonic()
-#        self.start_real = time()
-
     def elapsed(self) -> Duration:
-        """Return the elapsed time since the timer was started.
+        """Return the elapsed time since start
         """
         n = monotonic()
         if not n.comparable(self.start):
             raise Exception("Monotonic clock not comparable")
         return n.since(self.start)
+
+    def reset(self):
+        self.start = monotonic()
