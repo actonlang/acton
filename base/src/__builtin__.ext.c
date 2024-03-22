@@ -76,3 +76,8 @@ $R B_EnvD_unsetenvbG_local (B_Env self, $Cont C_cont, B_bytes name) {
     }
     return $R_CONT(C_cont, B_None);
 }
+
+// action def is_tty() -> bool:
+$R B_EnvD_is_ttyG_local (B_Env self, $Cont C_cont) {
+    return $R_CONT(C_cont, toB_bool(isatty(1)));
+}
