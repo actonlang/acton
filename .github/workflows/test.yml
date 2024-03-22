@@ -233,13 +233,13 @@ jobs:
           tar Jxf $(ls acton-darwin*.tar.xz | tail -n1)
       - name: "Compile acton program"
         run: |
-          actonc --version
+          export PATH=$(pwd)/acton/bin:$PATH
+          acton version --full
           echo '#!/usr/bin/env runacton'   > test-runtime.act
           echo 'actor main(env):'          >> test-runtime.act
           echo '    print("Hello, world")' >> test-runtime.act
           echo '    env.exit(0)'           >> test-runtime.act
           chmod a+x test-runtime.act
-          export PATH=$(pwd)/acton/bin:$PATH
           ./test-runtime.act
           ./test-runtime.act | grep "Hello, world"
 
