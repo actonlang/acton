@@ -214,6 +214,10 @@ jobs:
         os: [macos-11, macos-12, macos-13, macos-14]
     runs-on: ${{ matrix.os }}
     steps:
+      - name: "Machine info"
+        run: |
+          uname -a
+          system_profiler SPHardwareDataType
       - name: "Download artifacts for Macos, built on macos-12"
         uses: actions/download-artifact@v3
         with:
