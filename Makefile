@@ -434,8 +434,9 @@ dist/backend%: backend/%
 	mkdir -p $(dir $@)
 	cp -a $< $@
 
-# We depend on libActon.a because the base/out directory will be populated as a
-# result of building it, and we want to copy those files!
+# We depend on __builtin__.ty because the base/out directory will be populated
+# as a result of building it, and we want to copy those files!
+.PHONY: dist/base
 dist/base: base dist/base/out/types/__builtin__.ty
 	@mkdir -p $@ $@/out
 	cp -a base/Acton.toml base/builtin base/rts base/src base/stdlib dist/base/
