@@ -28,6 +28,7 @@
   which it was previously incorrect inferred as
 - `file.WriteFile.write()` now truncates file to avoid leftover tail of old
   content
+- `time.Stopwatch().reset()` now works
 - Correct dependency path computation in builder
 - Makefile now more idempotent to avoid building when nothing has changed
 
