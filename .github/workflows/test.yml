@@ -33,7 +33,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [macos-12, macos-13]
+        os: [macos-12, macos-13, macos-14]
     runs-on: ${{ matrix.os }}
     steps:
       - name: "Show env"
@@ -68,7 +68,7 @@ jobs:
         uses: actions/upload-artifact@v3
         with:
           name: acton-${{ matrix.os }}
-          path: ${{ github.workspace }}/acton-darwin-x86_64*
+          path: ${{ github.workspace }}/acton-darwin-*
           if-no-files-found: error
       - name: "Run tests"
         run: make -C ${{ github.workspace }} test
@@ -211,24 +211,35 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [macos-11, macos-12, macos-13]
+        os: [macos-11, macos-12, macos-13, macos-14]
     runs-on: ${{ matrix.os }}
     steps:
-      - name: "Download artifacts for Macos, built on macos-12"
+      - name: "Machine info"
+        run: |
+          uname -a
+          system_profiler SPHardwareDataType
+      - name: "Download artifacts for Macos x86_64, built on macos-12"
+        if: ${{ matrix.os != 'macos-14' }}
         uses: actions/download-artifact@v3
         with:
           name: acton-macos-12
+      - name: "Download artifacts for Macos arm64, built on macos-14"
+        if: ${{ matrix.os == 'macos-14' }}
+        uses: actions/download-artifact@v3
+        with:
+          name: acton-macos-14
       - name: "Extract acton"
         run: |
-          tar Jxvf $(ls acton-darwin*.tar.xz | tail -n1)
+          tar Jxf $(ls acton-darwin*.tar.xz | tail -n1)
       - name: "Compile acton program"
         run: |
+          export PATH=$(pwd)/acton/bin:$PATH
+          acton version --full
           echo '#!/usr/bin/env runacton'   > test-runtime.act
           echo 'actor main(env):'          >> test-runtime.act
           echo '    print("Hello, world")' >> test-runtime.act
           echo '    env.exit(0)'           >> test-runtime.act
           chmod a+x test-runtime.act
-          export PATH=$(pwd)/acton/bin:$PATH
           ./test-runtime.act
           ./test-runtime.act | grep "Hello, world"
 
@@ -356,15 +367,15 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - name: "Check out repository code"
         uses: actions/checkout@v3
-      - name: "Download artifacts for Macos, built on macos-12"
+      - name: "Download artifacts for Macos x86_64, built on macos-12"
         uses: actions/download-artifact@v3
         with:
           name: acton-macos-12
-      - name: "Download artifacts for Linux, built on Debian:12"
+      - name: "Download artifacts for Linux x86_64, built on Debian:12"
         uses: actions/download-artifact@v3
         with:
           name: acton-debian-12
-      - name: "Download artifacts for Debian Linux"
+      - name: "Download artifacts for Debian Linux x86_64"
         uses: actions/download-artifact@v3
         with:
           name: acton-debs
@@ -390,7 +401,7 @@ jobs:
           token: ${{ secrets.GITHUB_TOKEN }}
           replacesArtifacts: true
       - name: "Remove version number from darwin tar ball"
-        run: mv $(ls acton-darwin*.tar.xz | tail -n1) acton-darwin-x86_64-tip.tar.xz
+        run: mv $(ls acton-darwin-x86_64*.tar.xz | tail -n1) acton-darwin-x86_64-tip.tar.xz
       - name: "Remove version number from linux tar ball"
         run: mv $(ls acton-linux-x86_64*.tar.xz | tail -n1) acton-linux-x86_64-tip.tar.xz
       - name: "Remove version number from debian package"

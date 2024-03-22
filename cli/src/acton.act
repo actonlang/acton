@@ -391,10 +391,14 @@ actor main(env):
     def _cmd_list_test(args):
         run_tests = RunTestList(process_cap, env, args)
 
+    def _cmd_version(args):
+        if args.get_bool("full"):
+            CompilerRunner(process_cap, env, ["--version"])
+        else:
+            CompilerRunner(process_cap, env, ["--numeric-version"])
+
     def _parse_args():
         p = argparse.Parser()
-        p.add_bool("version", "Show version information")
-        p.add_bool("numeric-version", "Show numeric version")
         p.add_bool("always-build", "Always build")
         p.add_bool("parse", "Show parsing result")
         p.add_bool("kinds", "Show results after kind checking")
@@ -428,6 +432,9 @@ actor main(env):
         testp = p.add_cmd("test", "Test", _cmd_test)
         testp.add_option("name", "strlist", "+", [], "Filter on test name")
         testp = testp.add_cmd("list", "List tests", _cmd_list_test)
+        version_p = p.add_cmd("version", "Show version", _cmd_version)
+        version_p.add_bool("full", "Show full version info")
+
         return p.parse(env.argv)
 
     try:
