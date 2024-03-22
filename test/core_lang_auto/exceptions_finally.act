@@ -1,0 +1,22 @@
+
+
+def fun1() -> int:
+    dummy: list[int] = []
+    try:
+        a = dummy[0]
+    except IndexError:
+        a = 1
+    except Exception:
+        a = 2
+    return a
+# TODO: remove return above and uncomment following two lines:
+#    finally:
+#        return a
+
+actor main(env):
+    out1 = fun1()
+    if out1 != 1:
+        print("Bad 1:", out1)
+        env.exit(1)
+
+    env.exit(0)
