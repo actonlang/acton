@@ -68,7 +68,7 @@ jobs:
         uses: actions/upload-artifact@v3
         with:
           name: acton-${{ matrix.os }}
-          path: ${{ github.workspace }}/acton-darwin-x86_64*
+          path: ${{ github.workspace }}/acton-darwin-*
           if-no-files-found: error
       - name: "Run tests"
         run: make -C ${{ github.workspace }} test
@@ -356,15 +356,15 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - name: "Check out repository code"
         uses: actions/checkout@v3
-      - name: "Download artifacts for Macos, built on macos-12"
+      - name: "Download artifacts for Macos x86_64, built on macos-12"
         uses: actions/download-artifact@v3
         with:
           name: acton-macos-12
-      - name: "Download artifacts for Linux, built on Debian:12"
+      - name: "Download artifacts for Linux x86_64, built on Debian:12"
         uses: actions/download-artifact@v3
         with:
           name: acton-debian-12
-      - name: "Download artifacts for Debian Linux"
+      - name: "Download artifacts for Debian Linux x86_64"
         uses: actions/download-artifact@v3
         with:
           name: acton-debs
@@ -390,7 +390,7 @@ jobs:
           token: ${{ secrets.GITHUB_TOKEN }}
           replacesArtifacts: true
       - name: "Remove version number from darwin tar ball"
-        run: mv $(ls acton-darwin*.tar.xz | tail -n1) acton-darwin-x86_64-tip.tar.xz
+        run: mv $(ls acton-darwin-x86_64*.tar.xz | tail -n1) acton-darwin-x86_64-tip.tar.xz
       - name: "Remove version number from linux tar ball"
         run: mv $(ls acton-linux-x86_64*.tar.xz | tail -n1) acton-linux-x86_64-tip.tar.xz
       - name: "Remove version number from debian package"
