@@ -53,6 +53,9 @@ endif
 # -- Apple Mac OS X ------------------------------------------------------------
 ifeq ($(shell uname -s),Darwin)
 OS:=macos
+ifeq ($(shell uname -m),arm64)
+ZIG_CPU := -Dcpu=apple_a15
+endif
 endif
 
 # -- Linux ---------------------------------------------------------------------
