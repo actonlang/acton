@@ -218,15 +218,22 @@ jobs:
         run: |
           uname -a
           system_profiler SPHardwareDataType
-      - name: "Download artifacts for Macos, built on macos-12"
+      - name: "Download artifacts for Macos x86_64, built on macos-12"
+        if: ${{ matrix.os != 'macos-14' }}
         uses: actions/download-artifact@v3
         with:
           name: acton-macos-12
+      - name: "Download artifacts for Macos arm64, built on macos-14"
+        if: ${{ matrix.os == 'macos-14' }}
+        uses: actions/download-artifact@v3
+        with:
+          name: acton-macos-14
       - name: "Extract acton"
         run: |
-          tar Jxvf $(ls acton-darwin*.tar.xz | tail -n1)
+          tar Jxf $(ls acton-darwin*.tar.xz | tail -n1)
       - name: "Compile acton program"
         run: |
+          actonc --version
           echo '#!/usr/bin/env runacton'   > test-runtime.act
           echo 'actor main(env):'          >> test-runtime.act
           echo '    print("Hello, world")' >> test-runtime.act
