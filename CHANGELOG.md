@@ -24,6 +24,8 @@
 - `actonc` no longer supports explicit `--stub` compilation, use `--auto-stub`
 
 ### Fixed
+- `file.WriteFile.write()` now truncates file to avoid leftover tail of old
+  content
 - Correct dependency path computation in builder
 - Makefile now more idempotent to avoid building when nothing has changed
 
