@@ -33,7 +33,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [macos-12, macos-13]
+        os: [macos-12, macos-13, macos-14]
     runs-on: ${{ matrix.os }}
     steps:
       - name: "Show env"
@@ -211,7 +211,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [macos-11, macos-12, macos-13]
+        os: [macos-11, macos-12, macos-13, macos-14]
     runs-on: ${{ matrix.os }}
     steps:
       - name: "Download artifacts for Macos, built on macos-12"
