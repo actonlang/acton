@@ -24,6 +24,8 @@
 - `actonc` no longer supports explicit `--stub` compilation, use `--auto-stub`
 
 ### Fixed
+- `key` argument in `KeyError(key)` is now of type `value`, not `list[None]`
+  which it was previously incorrect inferred as
 - `file.WriteFile.write()` now truncates file to avoid leftover tail of old
   content
 - Correct dependency path computation in builder
