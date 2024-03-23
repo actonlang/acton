@@ -26,7 +26,7 @@ void reQ___ext_init__() {
 }
 
 
-// TODO: use u64 instead of unt for arg_start_pos
+// TODO: use u64 instead of int for arg_start_pos
 reQ_Match reQ__match (B_str arg_pattern, B_str arg_text, B_int arg_start_pos) {
     B_Hashable hwit = B_HashableD_strG_witness;
     B_SequenceD_list swit = B_SequenceD_listG_witness;
