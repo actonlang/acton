@@ -2089,8 +2089,7 @@ void print_trace() {
     int child_pid = fork();
     if (!child_pid) {
         dup2(2, 1); // redirect output to stderr
-        // TODO: enable using LLDB for MacOS support
-        //execlp("lldb", "lldb", "-p", pid_buf, "--batch", "-o", "thread backtrace all", "-o", "exit", "--one-line-on-crash", "exit", name_buf, NULL);
+        execlp("lldb", "lldb", "-p", pid_buf, "--batch", "-o", "thread backtrace all", "-o", "exit", "--one-line-on-crash", "exit", name_buf, NULL);
         execlp("gdb", "gdb", "--quiet", "--batch", "-n", "-ex", "thread", "-ex", "thread apply all backtrace full", name_buf, pid_buf, NULL);
         fprintf(stderr, "Unable to get detailed backtrace using lldb or gdb");
         exit(0); /* If lldb/gdb failed to start */
