@@ -816,6 +816,7 @@ void $DROP_C() {
 
 JumpBuf $PUSH_BUF() {
     WorkerCtx wctx = (WorkerCtx)pthread_getspecific(pkey_wctx);
+    assert(wctx != NULL);
     JumpBuf current = wctx->jump_top;
     JumpBuf new = (JumpBuf)GC_malloc(sizeof(struct JumpBuf));
     new->prev = current;
@@ -825,14 +826,20 @@ JumpBuf $PUSH_BUF() {
 
 B_BaseException $POP() {
     WorkerCtx wctx = (WorkerCtx)pthread_getspecific(pkey_wctx);
+    assert(wctx != NULL);
     JumpBuf current = wctx->jump_top;
+    assert(current != NULL);
+    assert(current->prev != NULL);
     wctx->jump_top = current->prev;
     return current->xval;
 }
 
 void $DROP() {
     WorkerCtx wctx = (WorkerCtx)pthread_getspecific(pkey_wctx);
+    assert(wctx != NULL);
     JumpBuf current = wctx->jump_top;
+    assert(current != NULL);
+    assert(current->prev != NULL);
     wctx->jump_top = current->prev;
 }
 
@@ -1492,6 +1499,7 @@ void wt_wake_cb(uv_async_t *ev) {
 
 void wt_work_cb(uv_check_t *ev) {
     WorkerCtx wctx = (WorkerCtx)pthread_getspecific(pkey_wctx);
+    assert(wctx->id >= 0 && wctx->id < 256);
     volatile JumpBuf jump0 = NULL;
 
     struct timespec ts_start, ts1, ts2, ts3;
@@ -1542,6 +1550,8 @@ void wt_work_cb(uv_check_t *ev) {
             else if (diff < (long long int)100 * 1000000000) { wt_stats[wctx->id].conts_100s++; }
             else                              { wt_stats[wctx->id].conts_inf++; }
         } else {                                        // Exceptional path
+            assert(jump0 != NULL);
+            assert(jump0->xval != NULL);
             B_BaseException ex = jump0->xval;
             rtsd_printf("## (%d) Actor %ld : %s longjmp exception: %s", wctx->id, current->$globkey, current->$class->$GCINFO, ex->$class->$GCINFO);
             r = $R_FAIL(ex);

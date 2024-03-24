@@ -113,6 +113,7 @@ $Actor _DEQ_ready(int idx) {
 #endif
 
 $Actor DEQ_ready(int idx) {
+    assert(idx >= 0 && idx < 256);
     $Actor res = _DEQ_ready(idx);
     if (res)
         return res;
