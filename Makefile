@@ -521,7 +521,6 @@ clean-distribution:
 
 # == release ==
 # This is where we take our distribution and turn it into a release tar ball
-PLATARCH=$(shell uname -s -m | sed -e 's/ /-/' | tr '[A-Z]' '[a-z]')
 GNU_TAR := $(shell sed --version 2>&1 | grep GNU >/dev/null 2>&1; echo $$?)
 ifeq ($(GNU_TAR),0)
 TAR_TRANSFORM_OPT=--transform 's,^dist,acton,'
@@ -532,13 +531,13 @@ endif
 # Do grep to only get a version number. If there's an error, we get an empty
 # string which is better than getting the error message itself.
 ACTONC_VERSION=$(shell $(ACTONC) --numeric-version 2>/dev/null | grep -E "^[0-9.]+$$")
-.PHONY: acton-$(PLATARCH)-$(ACTONC_VERSION).tar.xz
-acton-$(PLATARCH)-$(ACTONC_VERSION).tar.xz:
+.PHONY: acton-$(OS)-$(ARCH)-$(ACTONC_VERSION).tar.xz
+acton-$(OS)-$(ARCH)-$(ACTONC_VERSION).tar.xz:
 	tar cv $(TAR_TRANSFORM_OPT) --exclude .gitignore dist | xz -z -0 --threads=0 > $@
 
 .PHONY: release
 release: distribution
-	$(MAKE) acton-$(PLATARCH)-$(ACTONC_VERSION).tar.xz
+	$(MAKE) acton-$(OS)-$(ARCH)-$(ACTONC_VERSION).tar.xz
 
 # This target is used by the debian packaging
 .PHONY: install
