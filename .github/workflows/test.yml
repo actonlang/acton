@@ -33,8 +33,17 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [macos-12, macos-13, macos-14]
-    runs-on: ${{ matrix.os }}
+        include:
+          - os: "macos"
+            version: "12"
+            arch: "x86_64"
+          - os: "macos"
+            version: "13"
+            arch: "x86_64"
+          - os: "macos"
+            version: "14"
+            arch: "aarch64"
+    runs-on: ${{ matrix.os }}-${{ matrix.version }}
     steps:
       - name: "Show env"
         run: env
@@ -54,7 +63,7 @@ jobs:
           path: |
             ~/.cache/acton/
             ~/.stack
-          key: test-macos
+          key: test-${{ matrix.os }}-${{ matrix.version }}-${{ matrix.arch }}
       - name: "Install build prerequisites"
         run: brew install haskell-stack
       - name: "Build Acton"
@@ -65,8 +74,8 @@ jobs:
       - name: "Upload artifact"
         uses: actions/upload-artifact@v3
         with:
-          name: acton-${{ matrix.os }}
-          path: ${{ github.workspace }}/acton-darwin-*
+          name: acton-${{ matrix.os }}-${{ matrix.version }}-${{ matrix.arch }}
+          path: ${{ github.workspace }}/acton-*
           if-no-files-found: error
       - name: "Run tests"
         run: make -C ${{ github.workspace }} test
@@ -139,7 +148,7 @@ jobs:
         uses: actions/upload-artifact@v3
         with:
           name: acton-${{ matrix.os }}-${{ matrix.version }}
-          path: ${{ github.workspace }}/acton-linux-x86_64*
+          path: ${{ github.workspace }}/acton-*
           if-no-files-found: error
       - name: "Run tests"
         run: make -C ${GITHUB_WORKSPACE} test
@@ -216,15 +225,15 @@ jobs:
         if: ${{ matrix.os != 'macos-14' }}
         uses: actions/download-artifact@v3
         with:
-          name: acton-macos-12
+          name: acton-macos-12-x86_64
       - name: "Download artifacts for Macos arm64, built on macos-14"
         if: ${{ matrix.os == 'macos-14' }}
         uses: actions/download-artifact@v3
         with:
-          name: acton-macos-14
+          name: acton-macos-14-aarch64
       - name: "Extract acton"
         run: |
-          tar Jxf $(ls acton-darwin*.tar.xz | tail -n1)
+          tar Jxf $(ls acton-macos-*.tar.xz | tail -n1)
       - name: "Compile acton program"
         run: |
           export PATH=$(pwd)/acton/bin:$PATH
@@ -364,7 +373,7 @@ jobs:
       - name: "Download artifacts for Macos x86_64, built on macos-12"
         uses: actions/download-artifact@v3
         with:
-          name: acton-macos-12
+          name: acton-macos-12-x86_64
       - name: "Download artifacts for Linux x86_64, built on Debian:12"
         uses: actions/download-artifact@v3
         with:
@@ -394,8 +403,8 @@ jobs:
           tag: "tip"
           token: ${{ secrets.GITHUB_TOKEN }}
           replacesArtifacts: true
-      - name: "Remove version number from darwin tar ball"
-        run: mv $(ls acton-darwin-x86_64*.tar.xz | tail -n1) acton-darwin-x86_64-tip.tar.xz
+      - name: "Remove version number from macos tar ball"
+        run: mv $(ls acton-macos-x86_64*.tar.xz | tail -n1) acton-macos-x86_64-tip.tar.xz
       - name: "Remove version number from linux tar ball"
         run: mv $(ls acton-linux-x86_64*.tar.xz | tail -n1) acton-linux-x86_64-tip.tar.xz
       - name: "Remove version number from debian package"
@@ -429,7 +438,7 @@ jobs:
       - name: "Download artifacts for Macos, built on macos-12"
         uses: actions/download-artifact@v3
         with:
-          name: acton-macos-12
+          name: acton-macos-12-x86_64
       - name: "Download artifacts for Linux, built on Debian:12"
         uses: actions/download-artifact@v3
         with:
