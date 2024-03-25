@@ -30,7 +30,7 @@ B_int numpyQ_newaxis;
 // res->offset gets default value 0 (may be unsuitable when allocate_data = false)
 
 static numpyQ_ndarray G_newarray(enum ElemType typ, long ndim, B_int size, B_list shape, B_list strides, bool allocate_data) {
-    numpyQ_ndarray res = malloc(sizeof(struct numpyQ_ndarray));
+    numpyQ_ndarray res = acton_malloc(sizeof(struct numpyQ_ndarray));
     res->$class = &numpyQ_ndarrayG_methods;
     res->elem_type = typ;
     res->ndim = ndim;
@@ -38,7 +38,7 @@ static numpyQ_ndarray G_newarray(enum ElemType typ, long ndim, B_int size, B_lis
     res->offset = 0;
     res->shape = shape;
     res->strides = strides;
-    if (allocate_data) res->data = malloc(from$int(size) * $elem_size(typ) * sizeof(union $Bytes8));
+    if (allocate_data) res->data = acton_malloc(from$int(size) * $elem_size(typ) * sizeof(union $Bytes8));
     return res;
 }
 

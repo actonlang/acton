@@ -87,7 +87,7 @@ void timeQ___ext_init__() {
     //   clock_gettime operations per second: 56995674.769229
     // We don't want to slow down our programs like that, getting the time
     // should be cheap, which is why we do this somewhat elaborate dance.
-    uv_timer_t *time__get_clock_data_ev = malloc(sizeof(uv_timer_t));
+    uv_timer_t *time__get_clock_data_ev = acton_malloc(sizeof(uv_timer_t));
     uv_timer_init(aux_uv_loop, time__get_clock_data_ev);
     uv_timer_start(time__get_clock_data_ev, time__get_clock_data_cb, 10000, 10000);
     time__get_clock_data_cb(NULL);

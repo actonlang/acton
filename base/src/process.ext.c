@@ -1,5 +1,4 @@
-#define GC_THREADS 1
-#include <gc.h>
+#include "rts/common.h"
 
 #include <uv.h>
 #include "../rts/io.h"
@@ -44,9 +43,6 @@ void read_stderr(uv_stream_t *stream, ssize_t nread, const uv_buf_t *buf) {
             f->$class->__asyn__(f, self, to$bytesD_len(buf->base, nread));
         }
     }
-
-    if (buf->base)
-        free(buf->base);
 }
 
 void read_stdout(uv_stream_t *stream, ssize_t nread, const uv_buf_t *buf) {
@@ -62,9 +58,6 @@ void read_stdout(uv_stream_t *stream, ssize_t nread, const uv_buf_t *buf) {
             f->$class->__asyn__(f, self, to$bytesD_len(buf->base, nread));
         }
     }
-
-    if (buf->base)
-        free(buf->base);
 }
 
 $R processQ_ProcessD_aidG_local (processQ_Process self, $Cont c$cont) {
@@ -73,20 +66,20 @@ $R processQ_ProcessD_aidG_local (processQ_Process self, $Cont c$cont) {
 
 $R processQ_ProcessD__create_processG_local (processQ_Process self, $Cont c$cont) {
     pin_actor_affinity();
-    struct process_data *process_data = calloc(1, sizeof(struct process_data));
+    struct process_data *process_data = acton_calloc(1, sizeof(struct process_data));
     process_data->process = self;
     process_data->on_stdout = self->on_stdout;
     process_data->on_stderr = self->on_stderr;
     process_data->on_exit = self->on_exit;
 
-    uv_process_options_t *options = calloc(1, sizeof(uv_process_options_t));
+    uv_process_options_t *options = acton_calloc(1, sizeof(uv_process_options_t));
 
-    uv_process_t *req = calloc(1, sizeof(uv_process_t));
+    uv_process_t *req = acton_calloc(1, sizeof(uv_process_t));
     self->_p = to$int((long)req);
 
     req->data = process_data;
 
-    char **args = (char **)malloc((self->cmd->length+1) * sizeof(char *));
+    char **args = (char **)acton_malloc((self->cmd->length+1) * sizeof(char *));
 
     int i;
     for (i = 0; i < self->cmd->length; i++) {
@@ -101,7 +94,7 @@ $R processQ_ProcessD__create_processG_local (processQ_Process self, $Cont c$cont
     if (self->env == B_None) {
         options->env = NULL;
     } else {
-        char **env = (char **)calloc((self->env->numelements+1), sizeof(char *));
+        char **env = (char **)acton_calloc((self->env->numelements+1), sizeof(char *));
         B_IteratorD_dict_items iter = $NEW(B_IteratorD_dict_items, self->env);
         B_tuple item;
         for (i=0; i < self->env->numelements; i++) {
@@ -109,7 +102,7 @@ $R processQ_ProcessD__create_processG_local (processQ_Process self, $Cont c$cont
             char *key = fromB_str((B_str)item->components[0]);
             char *value = fromB_str((B_str)item->components[1]);
             size_t env_size = strlen(key) + strlen(value) + 2;
-            char *env_var = malloc(env_size);
+            char *env_var = acton_malloc(env_size);
             snprintf(env_var, env_size, "%s=%s", key, value);
             env[i] = env_var;
         }
@@ -184,7 +177,7 @@ $R processQ_ProcessD_signalG_local (processQ_Process self, $Cont c$cont, B_int s
 $R processQ_ProcessD_writeG_local (processQ_Process self, $Cont c$cont, B_bytes data) {
     uv_process_t *p = (uv_process_t *)from$int(self->_p);
 
-    uv_write_t *req = (uv_write_t *)malloc(sizeof(uv_write_t));
+    uv_write_t *req = (uv_write_t *)acton_malloc(sizeof(uv_write_t));
     uv_buf_t buf = uv_buf_init(data->str, data->nbytes);
 
     struct process_data *process_data = (struct process_data *)p->data;

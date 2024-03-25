@@ -1,13 +1,13 @@
 #include <libxml/xmlmemory.h>
 #include <libxml/parser.h>
 
-// The macro below is from builtin/str.c. We should not duplicate it...
+// TODO: The macro below is from builtin/str.c. We should not duplicate it...
 #define NEW_UNFILLED_STR(nm, nchrs, nbtes)      \
-    nm = malloc(sizeof(struct B_str));           \
+    nm = acton_malloc(sizeof(struct B_str));           \
     (nm)->$class = &B_strG_methods;               \
     (nm)->nchars = nchrs;                       \
     (nm)->nbytes = nbtes;                       \
-    (nm)->str = malloc((nm)->nbytes + 1);       \
+    (nm)->str = acton_malloc_atomic((nm)->nbytes + 1);       \
     (nm)->str[(nm)->nbytes] = 0
 
 

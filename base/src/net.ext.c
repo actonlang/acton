@@ -72,19 +72,19 @@ static void _lookup_a__on_resolve (uv_getaddrinfo_t *req, int status, struct add
 }
 
 B_NoneType netQ__lookup_a (B_str name, $action on_resolve, $action on_error) {
-    struct addrinfo *hints = (struct addrinfo *)malloc(sizeof(struct addrinfo));
+    struct addrinfo *hints = (struct addrinfo *)acton_malloc(sizeof(struct addrinfo));
     hints->ai_family = PF_INET;
     hints->ai_socktype = SOCK_STREAM;
     hints->ai_protocol = IPPROTO_TCP;
     hints->ai_flags = 0;
 
-    struct dns_cb_data *cb_data = (struct dns_cb_data *)malloc(sizeof(struct dns_cb_data));
+    struct dns_cb_data *cb_data = (struct dns_cb_data *)acton_malloc(sizeof(struct dns_cb_data));
     cb_data->hints = hints;
     cb_data->hostname = (char *)fromB_str(name);
     cb_data->on_resolve = on_resolve;
     cb_data->on_error = ($action2) on_error;
 
-    uv_getaddrinfo_t *req = (uv_getaddrinfo_t*)malloc(sizeof(uv_getaddrinfo_t));
+    uv_getaddrinfo_t *req = (uv_getaddrinfo_t*)acton_malloc(sizeof(uv_getaddrinfo_t));
     req->data = cb_data;
 
     int r = uv_getaddrinfo(get_uv_loop(), req, _lookup_a__on_resolve, (const char *)fromB_str(name), NULL, hints);
@@ -137,19 +137,19 @@ static void _lookup_aaaa__on_resolve (uv_getaddrinfo_t *req, int status, struct 
 }
 
 B_NoneType netQ__lookup_aaaa (B_str name, $action on_resolve, $action on_error) {
-    struct addrinfo *hints = (struct addrinfo *)malloc(sizeof(struct addrinfo));
+    struct addrinfo *hints = (struct addrinfo *)acton_malloc(sizeof(struct addrinfo));
     hints->ai_family = PF_INET6;
     hints->ai_socktype = SOCK_STREAM;
     hints->ai_protocol = IPPROTO_TCP;
     hints->ai_flags = 0;
 
-    struct dns_cb_data *cb_data = (struct dns_cb_data *)malloc(sizeof(struct dns_cb_data));
+    struct dns_cb_data *cb_data = (struct dns_cb_data *)acton_malloc(sizeof(struct dns_cb_data));
     cb_data->hints = hints;
     cb_data->hostname = (char *)fromB_str(name);
     cb_data->on_resolve = on_resolve;
     cb_data->on_error = ($action2)on_error;
 
-    uv_getaddrinfo_t *req = (uv_getaddrinfo_t*)malloc(sizeof(uv_getaddrinfo_t));
+    uv_getaddrinfo_t *req = (uv_getaddrinfo_t*)acton_malloc(sizeof(uv_getaddrinfo_t));
     req->data = cb_data;
 
     int r = uv_getaddrinfo(get_uv_loop(), req, _lookup_aaaa__on_resolve, (const char *)fromB_str(name), NULL, hints);
@@ -215,11 +215,11 @@ void on_connect6(uv_connect_t *connect_req, int status) {
 
 $R netQ_TCPConnectionD__connect4G_local (netQ_TCPConnection self, $Cont c$cont, B_str ip_address) {
     log_debug("TCP connecting over IPv4 to %s", fromB_str(ip_address));
-    uv_tcp_t* socket = (uv_tcp_t*)malloc(sizeof(uv_tcp_t));
+    uv_tcp_t* socket = (uv_tcp_t*)acton_malloc(sizeof(uv_tcp_t));
     uv_tcp_init(get_uv_loop(), socket);
     self->_sock4 = to$int((long)socket);
 
-    uv_connect_t* connect_req = (uv_connect_t*)malloc(sizeof(uv_connect_t));
+    uv_connect_t* connect_req = (uv_connect_t*)acton_malloc(sizeof(uv_connect_t));
     connect_req->data = (void *)self;
 
     struct sockaddr_in dest;
@@ -232,11 +232,11 @@ $R netQ_TCPConnectionD__connect4G_local (netQ_TCPConnection self, $Cont c$cont, 
 
 $R netQ_TCPConnectionD__connect6G_local (netQ_TCPConnection self, $Cont c$cont, B_str ip_address) {
     log_debug("TCP connecting over IPv6 to %s", fromB_str(ip_address));
-    uv_tcp_t* socket = (uv_tcp_t*)malloc(sizeof(uv_tcp_t));
+    uv_tcp_t* socket = (uv_tcp_t*)acton_malloc(sizeof(uv_tcp_t));
     uv_tcp_init(get_uv_loop(), socket);
     self->_sock6 = to$int((long)socket);
 
-    uv_connect_t* connect_req = (uv_connect_t*)malloc(sizeof(uv_connect_t));
+    uv_connect_t* connect_req = (uv_connect_t*)acton_malloc(sizeof(uv_connect_t));
     connect_req->data = (void *)self;
 
     struct sockaddr_in6 dest;
@@ -269,7 +269,7 @@ $R netQ_TCPConnectionD_writeG_local (netQ_TCPConnection self, $Cont c$cont, B_by
     if ((long int)stream == -1)
         return $R_CONT(c$cont, B_None);
 
-    uv_write_t *req = (uv_write_t *)malloc(sizeof(uv_write_t));
+    uv_write_t *req = (uv_write_t *)acton_malloc(sizeof(uv_write_t));
     uv_buf_t buf = uv_buf_init((char *)data->str, data->nbytes);
     int r = uv_write(req, stream, &buf, 1, NULL);
     if (r < 0) {
@@ -314,10 +314,10 @@ $R netQ_TCPConnectionD_closeG_local (netQ_TCPConnection self, $Cont c$cont, $act
         return $R_CONT(c$cont, B_None);
 
     log_debug("Closing TCP connection");
-    struct close_cb_data *cb_data = (struct close_cb_data *)malloc(sizeof(struct close_cb_data));
+    struct close_cb_data *cb_data = (struct close_cb_data *)acton_malloc(sizeof(struct close_cb_data));
     cb_data->self = self;
     cb_data->on_close = on_close;
-    uv_shutdown_t *req = (uv_shutdown_t *)malloc(sizeof(uv_shutdown_t));
+    uv_shutdown_t *req = (uv_shutdown_t *)acton_malloc(sizeof(uv_shutdown_t));
     req->data = (void *)cb_data;
     int r = uv_shutdown(req, stream, after_shutdown);
     self->_sock = to$int(-1);
@@ -404,7 +404,7 @@ void on_new_connection(uv_stream_t *server, int status) {
         return;
     }
 
-    uv_tcp_t *client = (uv_tcp_t*) malloc(sizeof(uv_tcp_t));
+    uv_tcp_t *client = (uv_tcp_t*)acton_malloc(sizeof(uv_tcp_t));
     uv_tcp_init(get_uv_loop(), client);
     int r = uv_accept(server, (uv_stream_t *)client);
     if (r != 0) {
@@ -425,7 +425,7 @@ void on_new_connection(uv_stream_t *server, int status) {
 $R netQ_TCPListenerD__initG_local (netQ_TCPListener self, $Cont c$cont) {
     pin_actor_affinity();
 
-    uv_tcp_t *server = (uv_tcp_t *)malloc(sizeof(uv_tcp_t));
+    uv_tcp_t *server = (uv_tcp_t *)acton_malloc(sizeof(uv_tcp_t));
     uv_tcp_init(get_uv_loop(), server);
     server->data = (void *)self;
     int r;
@@ -496,7 +496,7 @@ $R netQ_TCPListenConnectionD__initG_local (netQ_TCPListenConnection self, $Cont 
     uv_stream_t *client = (uv_stream_t *)from$int(self->server_client);
     int fd;
     uv_fileno((uv_handle_t *)client, &fd);
-    uv_tcp_t* client_handle = (uv_tcp_t*) malloc(sizeof(uv_tcp_t));
+    uv_tcp_t* client_handle = (uv_tcp_t*)acton_malloc(sizeof(uv_tcp_t));
     uv_tcp_init(get_uv_loop(), client_handle);
     uv_tcp_open(client_handle, fd);
     self->client = to$int((long)client_handle);
@@ -544,7 +544,7 @@ $R netQ_TCPListenConnectionD_writeG_local (netQ_TCPListenConnection self, $Cont 
     if ((long int)stream == -1)
         return $R_CONT(c$cont, B_None);
 
-    uv_write_t *req = (uv_write_t *)malloc(sizeof(uv_write_t));
+    uv_write_t *req = (uv_write_t *)acton_malloc(sizeof(uv_write_t));
     uv_buf_t buf = uv_buf_init((char *)data->str, data->nbytes);
     int r = uv_write(req, stream, &buf, 1, NULL);
     if (r < 0) {
@@ -647,7 +647,7 @@ $R netQ_TLSConnectionD_writeG_local (netQ_TLSConnection self, $Cont c$cont, B_by
     if ((long int)stream == -1)
         return $R_CONT(c$cont, B_None);
 
-    uv_write_t *wreq = (uv_write_t *)malloc(sizeof(uv_write_t));
+    uv_write_t *wreq = (uv_write_t *)acton_malloc(sizeof(uv_write_t));
     wreq->data = self;
     uv_buf_t buf = uv_buf_init((char *)data->str, data->nbytes);
     int r = tlsuv_stream_write(wreq, stream, &buf, tls_write_cb);
@@ -704,11 +704,11 @@ void tlsuv_logger(int level, const char *file, unsigned int line, const char *ms
 }
 
 $R netQ_TLSConnectionD__connect_tlsG_local (netQ_TLSConnection self, $Cont c$cont) {
-    uv_connect_t* connect_req = (uv_connect_t*)calloc(1, sizeof(uv_connect_t));
+    uv_connect_t* connect_req = (uv_connect_t*)acton_calloc(1, sizeof(uv_connect_t));
     connect_req->data = (void *)self;
 
     //tlsuv_set_debug(5, tlsuv_logger);
-    tlsuv_stream_t *stream = (tlsuv_stream_t *)malloc(sizeof(tlsuv_stream_t));
+    tlsuv_stream_t *stream = (tlsuv_stream_t *)acton_malloc(sizeof(tlsuv_stream_t));
     tlsuv_stream_init(get_uv_loop(), stream, NULL);
 
     // Default is to verify TLS certificate. Should we disable verification?

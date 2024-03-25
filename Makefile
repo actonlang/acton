@@ -211,7 +211,7 @@ dist/deps/libgc: deps-download/$(LIBGC_REF).tar.gz
 	touch $(TD)/$@
 
 dist/depsout/lib/libactongc.a: dist/deps/libgc $(DIST_ZIG)
-	cd $< && $(ZIG) build $(ZIG_TARGET) $(ZIG_CPU) --prefix $(TD)/dist/depsout -DBUILD_SHARED_LIBS=false -Denable_redirect_malloc -Denable_ignore_free -Denable_large_config -Denable_mmap
+	cd $< && $(ZIG) build $(ZIG_TARGET) $(ZIG_CPU) --prefix $(TD)/dist/depsout -DBUILD_SHARED_LIBS=false -Denable_large_config -Denable_mmap
 	mv dist/depsout/lib/libgc.a $@
 
 # /deps/libmbedtls --------------------------------------------

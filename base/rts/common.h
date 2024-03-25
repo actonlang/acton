@@ -3,14 +3,8 @@
 #include <stddef.h>
 #include <stdlib.h>
 
-extern void *(*real_malloc)(size_t);
-extern void *(*real_malloc_atomic)(size_t);
-extern void *(*real_realloc)(void *, size_t);
-extern void *(*real_calloc)(size_t, size_t);
-extern void (*real_free)(void *);
-extern char *(*real_strdup)(const char *);
-extern char *(*real_strndup)(const char *, size_t);
-int resolve_real_malloc();
+#define GC_THREADS 1
+#include <gc.h>
 
 typedef void *(*acton_malloc_func)(size_t size);
 typedef void *(*acton_malloc_func)(size_t size);

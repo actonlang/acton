@@ -115,7 +115,7 @@ reQ_Match reQ__match (B_str arg_pattern, B_str arg_text, B_int arg_start_pos) {
         PCRE2_SPTR substring_start = text + ovector[2*i];
         size_t substring_length = ovector[2*i+1] - ovector[2*i];
         // TODO: get rid of extra copy, need to$str that takes a length
-        char *substring = malloc(substring_length + 1);
+        char *substring = acton_malloc(substring_length + 1);
         memcpy(substring, substring_start, substring_length);
         swit->$class->append(swit, groups, to$str(substring));
         end_pos = ovector[2*i+1];
@@ -157,11 +157,11 @@ reQ_Match reQ__match (B_str arg_pattern, B_str arg_text, B_int arg_start_pos) {
 
             // Offset of name in name table is 2 bytes after the number of the substring it refers to (n) and 2 bytes after the length of the name string (which is held in the first two bytes of the entry). The name string is not necessarily zero-terminated, so we have to use memcpy() to copy it to a buffer and add a terminating zero.
             // TODO: get rid of extra copy, need to$str that takes a length
-            char *group_name = malloc(name_entry_size - (2 + 1));
+            char *group_name = acton_malloc(name_entry_size - (2 + 1));
             memcpy(group_name, tabptr + 2, name_entry_size - (2 + 1));
             group_name[name_entry_size - (2 + 1)] = '\0';
 
-            char *substring = malloc(substring_length + 1);
+            char *substring = acton_malloc(substring_length + 1);
             memcpy(substring, substring_start, substring_length);
             substring[substring_length] = '\0';
 

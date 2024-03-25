@@ -218,7 +218,7 @@ $R fileQ_FSD_statG_local (fileQ_FS self, $Cont C_cont, B_str filename) {
 
 $R fileQ_FSD_tmpdirG_local (fileQ_FS self, $Cont C_cont) {
     size_t size = 1024; // Initial buffer size for the tmp directory path
-    char *buffer = (char*)malloc(size);
+    char *buffer = (char*)acton_malloc(size);
     int r = uv_os_tmpdir(buffer, &size);
     if (r < 0) {
         char errmsg[1024] = "Error getting temporary directory: ";

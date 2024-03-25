@@ -5,46 +5,7 @@
 #include <libxml/xmlmemory.h>
 #include <tlsuv/tlsuv.h>
 
-void *(*real_malloc)(size_t) = NULL;
-void *(*real_realloc)(void *, size_t) = NULL;
-void *(*real_calloc)(size_t, size_t) = NULL;
-void (*real_free)(void *) = NULL;
-char *(*real_strdup)(const char *) = NULL;
-char *(*real_strndup)(const char *, size_t) = NULL;
-
-int resolve_real_malloc() {
-    real_malloc = dlsym(RTLD_NEXT, "malloc");
-    if (!real_malloc) {
-        fprintf(stderr, "Error in `dlsym`: %s\n", dlerror());
-        return 0;
-    }
-    real_realloc = dlsym(RTLD_NEXT, "realloc");
-    if (!real_realloc) {
-        fprintf(stderr, "Error in `dlsym`: %s\n", dlerror());
-        return 0;
-    }
-    real_calloc = dlsym(RTLD_NEXT, "calloc");
-    if (!real_calloc) {
-        fprintf(stderr, "Error in `dlsym`: %s\n", dlerror());
-        return 0;
-    }
-    real_free = dlsym(RTLD_NEXT, "free");
-    if (!real_free) {
-        fprintf(stderr, "Error in `dlsym`: %s\n", dlerror());
-        return 0;
-    }
-    real_strdup = dlsym(RTLD_NEXT, "strdup");
-    if (!real_strdup) {
-        fprintf(stderr, "Error in `dlsym`: %s\n", dlerror());
-        return 0;
-    }
-    real_strndup = dlsym(RTLD_NEXT, "strndup");
-    if (!real_strndup) {
-        fprintf(stderr, "Error in `dlsym`: %s\n", dlerror());
-        return 0;
-    }
-    return 1;
-}
+#include "rts/common.h"
 
 typedef struct {
     acton_malloc_func malloc;
