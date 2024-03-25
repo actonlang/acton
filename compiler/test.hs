@@ -1,4 +1,5 @@
 {-# LANGUAGE CPP #-}
+import Control.Monad
 import Data.List
 import Data.List.Split
 import Data.Maybe
@@ -54,9 +55,10 @@ main = do
       , regressionSegfaultTests
       , rtsAutoTests
       , rtsTests
-      , stdlibAutoTests
       , stdlibTests
+      , stdlibAutoTests
       , typeErrorAutoTests
+      , crossCompileTests
       ]
   where timeout :: Timeout
         timeout = mkTimeout (10*60*1000000)
@@ -89,14 +91,6 @@ compilerTests =
         (returnCode, cmdOut, cmdErr) <- readCreateProcessWithExitCode (shell $ "rm -rf ../test/compiler/subdash/out") ""
         testBuild "" ExitSuccess False "../test/compiler/subdash/"
         testBuild "" ExitSuccess False "../test/compiler/subdash/"
-  , testCase "build hello --target aarch64-macos-none" $ do
-        testBuild "--target aarch64-macos-none" ExitSuccess False "../test/compiler/hello/"
-  , testCase "build hello --target x86_64-macos-none" $ do
-        testBuild "--target x86_64-macos-none" ExitSuccess False "../test/compiler/hello/"
-  , testCase "build hello --target x86_64-linux-gnu.2.27" $ do
-        testBuild "--target x86_64-linux-gnu.2.27" ExitSuccess False "../test/compiler/hello/"
-  , testCase "build hello --target x86_64-linux-musl" $ do
-        testBuild "--target x86_64-linux-musl" ExitSuccess False "../test/compiler/hello/"
   ]
 
 actoncProjTests =
@@ -174,6 +168,18 @@ stdlibTests =
           testBuildAndRun "" (show epoch) ExitSuccess False "../test/stdlib/test_time.act"
   ]
 
+crossCompileTests =
+  testGroup "cross-compilation tests"
+  [
+    testCase "build hello --target aarch64-macos-none" $ do
+        testBuild "--target aarch64-macos-none" ExitSuccess False "../test/compiler/hello/"
+  , testCase "build hello --target x86_64-macos-none" $ do
+        testBuild "--target x86_64-macos-none" ExitSuccess False "../test/compiler/hello/"
+  , testCase "build hello --target x86_64-linux-gnu.2.27" $ do
+        testBuild "--target x86_64-linux-gnu.2.27" ExitSuccess False "../test/compiler/hello/"
+  , testCase "build hello --target x86_64-linux-musl" $ do
+        testBuild "--target x86_64-linux-musl" ExitSuccess False "../test/compiler/hello/"
+  ]
 
 -- Creates testgroup from .act files found in specified directory
 --createTests :: String -> String -> List -> TestTree
@@ -207,7 +213,7 @@ createAutoTest file = do
                       else (head fileParts) ++ " (" ++testExp ++ ")"
         testFunc  = case testExp of
                         "bf" -> testBuild ""
-                        _    -> testBuildAndRun "" ""
+                        _    -> testBuildAndRunRepeat "" "" 100
         expRet    = case testExp of
                         "bf" -> (ExitFailure 1)
                         "rf" -> (ExitFailure 1)
@@ -268,13 +274,25 @@ testBuild opts expRet expFail thing = do
 
 -- expFail & expRet refers to the acton program, we always assume compilation
 -- with actonc succeeds
-testBuildAndRun buildOpts runOpts expRet expFail thing = do
+
+testBuildAndRun buildOpts runOpts expRet expFail thing =
+    testBuildAndRunRepeat buildOpts runOpts 1 expRet expFail thing
+
+testBuildAndRunRepeat buildOpts runOpts numRuns expRet expFail thing = do
     testBuildThing buildOpts ExitSuccess False thing
-    (returnCode, cmdOut, cmdErr) <- runThing runOpts thing
-    iff (expFail == False && returnCode /= expRet) (
-        putStrLn("\nERROR: when running application " ++ thing ++ ", the return code (" ++ (show returnCode) ++ ") not as expected (" ++ (show expRet) ++ ")\nSTDOUT:\n" ++ cmdOut ++ "STDERR:\n" ++ cmdErr)
-        )
-    assertEqual ("application should return " ++ (show expRet)) expRet returnCode
+    replicateM_ numRuns $ do
+        (returnCode, cmdOut, cmdErr) <- runThing runOpts thing
+        when (expFail == False && returnCode /= expRet) $
+            putStrLn("\nERROR: when running application " ++ thing ++
+                     ", the return code (" ++ show returnCode ++
+                     ") not as expected (" ++ show expRet ++
+                     ")\nSTDOUT:\n" ++ cmdOut ++ "STDERR:\n" ++ cmdErr)
+        assertEqual ("application should return " ++ show expRet) expRet returnCode
+--    (returnCode, cmdOut, cmdErr) <- runThing runOpts thing
+--    iff (expFail == False && returnCode /= expRet) (
+--        putStrLn("\nERROR: when running application " ++ thing ++ ", the return code (" ++ (show returnCode) ++ ") not as expected (" ++ (show expRet) ++ ")\nSTDOUT:\n" ++ cmdOut ++ "STDERR:\n" ++ cmdErr)
+--        )
+--    assertEqual ("application should return " ++ (show expRet)) expRet returnCode
 
 buildAndRun :: String -> String -> FilePath -> IO (ExitCode, String, String)
 buildAndRun buildOpts runOpts thing = do

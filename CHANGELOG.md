@@ -42,6 +42,7 @@
 
 ### Testing / CI
 - Test on MacOS 14 on Apple M1 / arm64 / aarch64
+- Many tests are now repeatedly 100 times to give some idea of stability
 
 
 ## [0.21.0] (2024-03-13)
