@@ -54,13 +54,11 @@ jobs:
           path: |
             ~/.cache/acton/
             ~/.stack
-            ~/zig-cache
-          key: ${{ matrix.os }}
+          key: test-macos
       - name: "Install build prerequisites"
         run: brew install haskell-stack
       - name: "Build Acton"
         run: |
-          export ZIG_LOCAL_CACHE_DIR=~/zig-cache
           make -j2 -C ${{ github.workspace }} BUILD_RELEASE=${{ env.BUILD_RELEASE }}
       - name: "Build a release"
         run: make -C ${{ github.workspace }} release
@@ -119,8 +117,7 @@ jobs:
           path: |
             ~/.cache/acton/
             ~/.stack
-            ~/zig-cache
-          key: ${{ matrix.os }}-${{ matrix.version }}
+          key: test-linux
       - name: "chown our home dir to avoid stack complaining"
         run: chown -R root:root /github/home
       - name: "Install build prerequisites"
@@ -135,7 +132,6 @@ jobs:
           echo "PATH=~/.local/bin:$PATH" >> $GITHUB_ENV
       - name: "Build Acton"
         run: |
-          export ZIG_LOCAL_CACHE_DIR=~/zig-cache
           make -j2 -C ${GITHUB_WORKSPACE} BUILD_RELEASE=${{ env.BUILD_RELEASE }}
       - name: "Build a release"
         run: make -C ${GITHUB_WORKSPACE} release
@@ -170,8 +166,7 @@ jobs:
           path: |
             ~/.cache/acton/
             ~/.stack
-            ~/zig-cache
-          key: build-debs
+          key: test-linux
       - name: "Install build prerequisites"
         run: |
           apt-get update
@@ -184,7 +179,6 @@ jobs:
           echo "PATH=~/.local/bin:$PATH" >> $GITHUB_ENV
       - name: "Build Debian packages"
         run: |
-          export ZIG_LOCAL_CACHE_DIR=~/zig-cache
           make -C ${GITHUB_WORKSPACE} debs BUILD_RELEASE=${{ env.BUILD_RELEASE }}
       - name: "Compute variables"
         id: vars
