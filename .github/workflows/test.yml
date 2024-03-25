@@ -47,9 +47,9 @@ jobs:
           sudo sysctl kern.corefile=core.%P
           ulimit -c unlimited
       - name: "Check out repository code"
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
       - name: "Cache stuff"
-        uses: actions/cache@v3
+        uses: actions/cache@v4
         with:
           path: |
             ~/.cache/acton/
@@ -112,9 +112,9 @@ jobs:
         run: |
           echo "BUILD_RELEASE=1" >> $GITHUB_ENV
       - name: "Check out repository code"
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
       - name: "Cache stuff"
-        uses: actions/cache@v3
+        uses: actions/cache@v4
         with:
           path: |
             ~/.cache/acton/
@@ -163,9 +163,9 @@ jobs:
           echo "BUILD_RELEASE=1" >> $GITHUB_ENV
         if: startsWith(github.ref, 'refs/tags/v')
       - name: "Check out repository code"
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
       - name: "Cache stuff"
-        uses: actions/cache@v3
+        uses: actions/cache@v4
         with:
           path: |
             ~/.cache/acton/
@@ -276,7 +276,7 @@ jobs:
           env
           cat /proc/cpuinfo
       - name: "Download .deb files"
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v3 # Ubuntu 18.04 doesn't support v4 which uses Node 20 which depends on glibc 2.28
         with:
           name: acton-debs
       - name: "Install acton from .deb"
@@ -333,7 +333,7 @@ jobs:
           apt install -y ./deb/acton_*.deb
           actonc --version
       - name: "Clone Telemetrify and check out acton-next branch"
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           repository: telemetrify-collector/telemetrify
           path: telemetrify
@@ -366,7 +366,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - name: "Check out repository code"
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
       - name: "Download artifacts for Macos x86_64, built on macos-12"
         uses: actions/download-artifact@v3
         with:
@@ -431,7 +431,7 @@ jobs:
     needs: [test-macos, test-linux, build-debs]
     steps:
       - name: "Check out repository code"
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
       - name: "Download artifacts for Macos, built on macos-12"
         uses: actions/download-artifact@v3
         with:
@@ -479,7 +479,7 @@ jobs:
         with:
           gpg_private_key: ${{ secrets.APT_GPG_PRIVATE_KEY }}
       - name: Check out code of apt.acton-lang.io repo
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           repository: actonlang/apt.acton-lang.io
           path: apt
@@ -524,7 +524,7 @@ jobs:
           apt-get install -qy -t experimental reprepro
           apt-get install -qy git gnupg
       - name: Check out code of aptip.acton-lang.io repo
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           repository: actonlang/aptip.acton-lang.io
           path: apt
@@ -563,7 +563,7 @@ jobs:
     needs: [test-macos, test-linux, build-debs]
     steps:
       - name: "Check out code of main acton repo"
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
       - name: "Get the version from common.mk"
         id: get_version
         run: echo "version=$(grep VERSION= common.mk | cut -d = -f 2)" >> $GITHUB_OUTPUT
@@ -572,7 +572,7 @@ jobs:
       - id: shasum
         run: echo "sum=$(sha256sum v${{ steps.get_version.outputs.version }}.tar.gz | cut -d' ' -f1)" >> $GITHUB_OUTPUT
       - name: "Check out code of our brew repo"
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           repository: actonlang/homebrew-acton
           path: homebrew-acton
@@ -583,7 +583,7 @@ jobs:
         run: |
           sed -i -e 's,^  url.*,  url "https://github.com/actonlang/acton/archive/refs/tags/v${{ steps.get_version.outputs.version }}.tar.gz",' -e 's/^  sha256.*/  sha256 "${{ steps.shasum.outputs.sum }}"/' homebrew-acton/Formula/acton.rb
       - name: "Create Pull Request"
-        uses: peter-evans/create-pull-request@v3
+        uses: peter-evans/create-pull-request@v4
         with:
           path: homebrew-acton
           token: ${{ secrets.ACTBOT_PAT }}
