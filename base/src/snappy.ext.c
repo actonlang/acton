@@ -19,7 +19,7 @@ B_bytes snappyQ_compress (B_bytes data) {
     input_len = (size_t)data->nbytes;
 
     compressed_len = snappy_max_compressed_length(input_len);
-    compressed = malloc(compressed_len);
+    compressed = acton_malloc(compressed_len);
     status = snappy_compress(input, input_len, compressed, &compressed_len);
 
     if (SNAPPY_OK == status) {
@@ -51,7 +51,7 @@ B_bytes snappyQ_decompress (B_bytes data) {
         $RAISE((B_BaseException)$NEW(B_ValueError, to$str(errmsg)));
     }
 
-    uncompressed = malloc(uncompressed_len);
+    uncompressed = acton_malloc(uncompressed_len);
     snappy_uncompress(input, input_len, uncompressed, &uncompressed_len);
 
     if (SNAPPY_OK == status) {

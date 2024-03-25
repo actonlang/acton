@@ -10,6 +10,13 @@
   C source by hand and still leverage the low level builder to perform the build.
 - `file.FS.cwd()` to get current working directory
 - `file.join_path()` to join path components
+- Link time redirection of malloc & friends is now removed. All malloc calls are
+  instead explicit, either directly to `GC_MALLOC` or via `acton_malloc` which
+  is our own malloc function which is runtime reconfigurable. While there is no
+  usage of malloc directly from our code, that is now possible to do manual
+  memory management mixed with GC managed memory.
+  - As before, module constants are placed in the regular heap, so that the GC
+    does not have to scan it.
 
 ### Changed
 - Rename `--only-act` to `--skip-build`

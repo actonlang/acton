@@ -37,7 +37,7 @@ struct numpyQ_ndselectG_class numpyQ_ndselectG_methods = {
 };
 
 numpyQ_ndselect numpyQ_ndselectG_new() {
-    numpyQ_ndselect $tmp = malloc(sizeof(struct numpyQ_ndselect));
+    numpyQ_ndselect $tmp = acton_malloc(sizeof(struct numpyQ_ndselect));
     $tmp->$class = &numpyQ_ndselectG_methods;
     numpyQ_ndselectG_methods.__init__($tmp);
     return $tmp;

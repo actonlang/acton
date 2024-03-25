@@ -198,7 +198,7 @@ void serialize_state_shortcut($Actor);
 #define REGISTER_ACTOR(key)
 #endif
 
-#define $NEWACTOR($T)       ({ $T $t = malloc(sizeof(struct $T)); \
+#define $NEWACTOR($T)       ({ $T $t = GC_malloc(sizeof(struct $T)); \
                                $t->$class = &$T ## G_methods; \
                                $ActorG_methods.__init__(($Actor)$t); \
                                $t->$affinity = SHARED_RQ; \

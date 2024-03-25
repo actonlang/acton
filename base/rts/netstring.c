@@ -136,12 +136,12 @@ size_t netstring_add_ex(char **netstring, char *data, size_t len) {
   size_next = num_len + len + 2;
 
   if (*netstring == 0) {
-    ptr = malloc(size_next + 1);
+    ptr = acton_malloc(size_next + 1);
     if (ptr == 0) return 0;
     *netstring = ptr;
   } else {
     size_prev = strlen(*netstring);
-    ptr = realloc(*netstring, size_prev + size_next + 1);
+    ptr = acton_realloc(*netstring, size_prev + size_next + 1);
     if (ptr == 0) return 0;
     *netstring = ptr;
     ptr += size_prev;

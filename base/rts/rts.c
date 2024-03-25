@@ -281,7 +281,7 @@ void B_MsgD___init__(B_Msg m, $Actor to, $Cont cont, time_t baseline, $WORD valu
 */
 
 B_Msg B_MsgG_newXX( $Actor to, $Cont cont, time_t baseline, $WORD value) {
-    B_Msg m = acton_malloc(sizeof(struct B_Msg));
+    B_Msg m = GC_malloc(sizeof(struct B_Msg));
     m->$class = &B_MsgG_methods;
     m->$next = NULL;
     m->$to = to;
@@ -322,7 +322,7 @@ void B_MsgD___serialize__(B_Msg self, $Serial$state state) {
 B_Msg B_MsgD___deserialize__(B_Msg res, $Serial$state state) {
     if (!res) {
         if (!state) {
-            res = malloc(sizeof (struct B_Msg));
+            res = GC_malloc(sizeof (struct B_Msg));
             res->$class = &B_MsgG_methods;
             return res;
         }
@@ -376,7 +376,7 @@ void $ActorD___serialize__($Actor self, $Serial$state state) {
 $Actor $ActorD___deserialize__($Actor res, $Serial$state state) {
     if (!res) {
         if (!state) {
-            res = malloc(sizeof(struct $Actor));
+            res = GC_malloc(sizeof(struct $Actor));
             res->$class = &$ActorG_methods;
             return res;
         }
@@ -460,7 +460,7 @@ $R $ConstContD___call__($ConstCont $this, $WORD _ignore) {
 }
 
 $Cont $CONSTCONT($WORD val, $Cont cont){
-    $ConstCont obj = acton_malloc(sizeof(struct $ConstCont));
+    $ConstCont obj = GC_malloc(sizeof(struct $ConstCont));
     obj->$class = &$ConstContG_methods;
     $ConstContG_methods.__init__(obj, val, cont);
     return ($Cont)obj;
@@ -812,7 +812,7 @@ void $DROP_C() {
 
 JumpBuf $PUSH_BUF() {
     JumpBuf current = (JumpBuf)pthread_getspecific(jump_top);
-    JumpBuf new = (JumpBuf)malloc(sizeof(struct JumpBuf));
+    JumpBuf new = (JumpBuf)GC_malloc(sizeof(struct JumpBuf));
     new->prev = current;
     pthread_setspecific(jump_top, new);
     return new;
@@ -1044,7 +1044,7 @@ $ROW extract_row($WORD *blob, size_t blob_size) {
     if (words_left == 0)
         return NULL;
     BlobHd* head = (BlobHd*)blob;
-    $ROW fst = malloc(sizeof(struct $ROW) + head->blob_size*sizeof($WORD));
+    $ROW fst = GC_malloc(sizeof(struct $ROW) + head->blob_size*sizeof($WORD));
     $ROW row = fst;
     while (!rts_exit) {
         long size = 1 + head->blob_size;
@@ -1054,7 +1054,7 @@ $ROW extract_row($WORD *blob, size_t blob_size) {
         if (words_left == 0)
             break;
         head = (BlobHd*)blob;
-        row->next = malloc(sizeof(struct $ROW) + head->blob_size*sizeof($WORD));
+        row->next = GC_malloc(sizeof(struct $ROW) + head->blob_size*sizeof($WORD));
         row = row->next;
     };
     row->next = NULL;
@@ -2020,11 +2020,11 @@ void *$mon_socket_loop() {
 
                 if (memcmp(str, "actors", len) == 0) {
                     const char *json = actors_to_json();
-                    char *send_buf = malloc(strlen(json)+14); // 14 = maximum digits for length is 9 (999999999) + : + ; + \0
+                    char *send_buf = GC_malloc(strlen(json)+14); // 14 = maximum digits for length is 9 (999999999) + : + ; + \0
                     sprintf(send_buf, "%lu:%s,", strlen(json), json);
                     int send_res = send(client_sock, send_buf, strlen(send_buf), 0);
-                    free((void *)json);
-                    free((void *)send_buf);
+                    //free((void *)json);
+                    //free((void *)send_buf);
                     if (send_res < 0) {
                         log_info("Mon socket: Error sending");
                         break;
@@ -2034,11 +2034,11 @@ void *$mon_socket_loop() {
 #ifdef ACTON_DB
                 if (memcmp(str, "membership", len) == 0) {
                     const char *json = db_membership_to_json();
-                    char *send_buf = malloc(strlen(json)+14); // 14 = maximum digits for length is 9 (999999999) + : + ; + \0
+                    char *send_buf = GC_malloc(strlen(json)+14); // 14 = maximum digits for length is 9 (999999999) + : + ; + \0
                     sprintf(send_buf, "%lu:%s,", strlen(json), json);
                     int send_res = send(client_sock, send_buf, strlen(send_buf), 0);
-                    free((void *)json);
-                    free((void *)send_buf);
+                    //free((void *)json);
+                    //free((void *)send_buf);
                     if (send_res < 0) {
                         log_info("Mon socket: Error sending");
                         break;
@@ -2048,11 +2048,11 @@ void *$mon_socket_loop() {
 
                 if (memcmp(str, "WTS", len) == 0) {
                     const char *json = stats_to_json();
-                    char *send_buf = malloc(strlen(json)+14); // 14 = maximum digits for length is 9 (999999999) + : + ; + \0
+                    char *send_buf = GC_malloc(strlen(json)+14); // 14 = maximum digits for length is 9 (999999999) + : + ; + \0
                     sprintf(send_buf, "%lu:%s,", strlen(json), json);
                     int send_res = send(client_sock, send_buf, strlen(send_buf), 0);
-                    free((void *)json);
-                    free((void *)send_buf);
+                    //free((void *)json);
+                    //free((void *)send_buf);
                     if (send_res < 0) {
                         log_info("Mon socket: Error sending");
                         break;
@@ -2222,14 +2222,7 @@ int main(int argc, char **argv) {
     GC_INIT();
     GC_set_warn_proc(DaveNull);
     acton_init_alloc();
-    // Everything up to and including module init is static stuff, in particular
-    // module constants which are created during module init are static and do
-    // not need to be scanned. We therefore use the real_malloc (not GC_malloc)
-    // so that it is not traced by the GC, thus saving loads of work.
-    // scanning this memory over and over.
-    if (resolve_real_malloc()) {
-        acton_replace_allocator(real_malloc, real_malloc, real_realloc, real_calloc, real_free, real_strdup, real_strndup);
-    }
+    acton_replace_allocator(GC_malloc, GC_malloc_atomic, GC_realloc, GC_calloc, GC_free, GC_strdup, GC_strndup);
     int ddb_no_host = 0;
     char **ddb_host = NULL;
     char *rts_host = "localhost";
@@ -2347,7 +2340,7 @@ int main(int argc, char **argv) {
     int new_argc_dst = 0;
     // stop scanning once we've seen '--', passing the rest verbatim
     int opt_scan = 1;
-    char **new_argv = malloc((argc+1) * sizeof *new_argv);
+    char **new_argv = acton_malloc((argc+1) * sizeof *new_argv);
     char *optarg = NULL;
     for (int i = 0; i < argc; i++) {
         ch = 0;
@@ -2409,7 +2402,7 @@ int main(int argc, char **argv) {
                 print_help(long_options);
                 break;
             case 'h':
-                ddb_host = realloc(ddb_host, ++ddb_no_host * sizeof *ddb_host);
+                ddb_host = acton_realloc(ddb_host, ++ddb_no_host * sizeof *ddb_host);
                 ddb_host[ddb_no_host-1] = optarg;
                 break;
             case 'k':
@@ -2440,7 +2433,7 @@ int main(int argc, char **argv) {
                 rts_dc_id = atoi(optarg);
                 break;
             case 'N':
-                rts_host = strdup(optarg);
+                rts_host = acton_strdup(optarg);
                 break;
             case 's':
                 log_stderr = true;
@@ -2559,7 +2552,7 @@ int main(int argc, char **argv) {
 #endif
 
     for (int i=0; i <= num_wthreads; i++) {
-        uv_loop_t *loop = malloc(sizeof(uv_loop_t));
+        uv_loop_t *loop = acton_malloc(sizeof(uv_loop_t));
         check_uv_fatal(uv_loop_init(loop), "Error initializing libuv loop: ");
         uv_loops[i] = loop;
 
@@ -2581,11 +2574,17 @@ int main(int argc, char **argv) {
         rqs[i].count = 0;
     }
 
+    // RTS startup and module is static stuff, in particular module constants
+    // which are created during module init are static and do not need to be
+    // scanned. We therefore use the real_malloc (not GC_malloc) so that it is
+    // not traced by the GC, thus saving loads of work scanning this memory
+    // over and over.
+    acton_replace_allocator(malloc, malloc, realloc, calloc, free, strdup, strndup);
     $register_builtin();
     B___init__();
     $register_rts();
     $ROOTINIT();
-    acton_replace_allocator(GC_malloc, GC_malloc_atomic, realloc, calloc, free, strdup, strndup);
+    acton_replace_allocator(GC_malloc, GC_malloc_atomic, GC_realloc, GC_calloc, GC_free, GC_strdup, GC_strndup);
 
     unsigned int seed;
     if (ddb_host) {
@@ -2597,7 +2596,7 @@ int main(int argc, char **argv) {
         int * seed_ports = (int *) malloc(ddb_no_host * sizeof(int));
 
         for (int i=0; i<ddb_no_host; i++) {
-            seed_hosts[i] = strdup(ddb_host[i]);
+            seed_hosts[i] = acton_strdup(ddb_host[i]);
             seed_ports[i] = ddb_port;
             char *colon = strchr(seed_hosts[i], ':');
             if (colon) {
@@ -2703,7 +2702,7 @@ int main(int argc, char **argv) {
     uv_check_start(&work_ev[wtid], (uv_check_cb)wt_work_cb);
 
     // Run the timer queue and keep track of other periodic tasks
-    timer_ev = malloc(sizeof(uv_timer_t));
+    timer_ev = GC_malloc(sizeof(uv_timer_t));
     uv_timer_init(aux_uv_loop, timer_ev);
     uv_timer_start(timer_ev, main_timer_cb, 0, 0);
 
