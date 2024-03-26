@@ -281,7 +281,7 @@ dist/depsout/lib/libuuid.a: dist/deps/libuuid $(DIST_ZIG)
 	cd $< && $(ZIG) build $(ZIG_TARGET) $(ZIG_CPU) --prefix $(TD)/dist/depsout
 
 # /deps/libuv --------------------------------------------
-LIBUV_REF=f85e52114e5149a3108123a601061d65e9c209be
+LIBUV_REF=5cd49cfde1ecb19d564b7cc7752ea3b98c86ffe7
 deps-download/$(LIBUV_REF).tar.gz:
 	mkdir -p deps-download
 	curl -f -L -o $@ https://github.com/actonlang/libuv/archive/$(LIBUV_REF).tar.gz

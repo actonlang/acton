@@ -1,0 +1,35 @@
+import acton.rts
+import process
+
+NUM=1000
+
+actor GC(env):
+    def _tihi():
+        acton.rts.gc(env.syscap)
+        after 0.0001: _tihi()
+
+    after 0: _tihi()
+
+
+actor main(env):
+    var exited = 0
+    def on_exit(p, exit_code, term_signal, stdout_buf, stderr_buf):
+        exited += 1
+        print("Process exited with code: ", exit_code, " terminated with signal:", term_signal, "  exited:", exited)
+        if exited == NUM:
+            print("Enough...")
+            env.exit(0)
+
+    def on_error(p, error):
+        print("Error from process:", error)
+        await async env.exit(1)
+
+    def test():
+        print("Starting process..")
+        pc = process.ProcessCap(env.cap)
+        p = process.RunProcess(pc, ["echo", "HELLO"], on_exit, on_error)
+
+    gc = GC(env)
+
+    for i in range(NUM):
+        test()
