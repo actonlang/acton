@@ -20,6 +20,7 @@
 
 ### Changed
 - Rename `--only-act` to `--skip-build`
+- Acton build cache now uses up to 15GB instead of 5GB
 
 ### Removed
 - `actonc` no longer supports `--no-zigbuild` / `--zigbuild` (it's now the
@@ -41,6 +42,7 @@
 
 ### Testing / CI
 - Test on MacOS 14 on Apple M1 / arm64 / aarch64
+- Many tests are now repeatedly 100 times to give some idea of stability
 
 
 ## [0.21.0] (2024-03-13)

@@ -11,7 +11,7 @@ def clean_buildcache(cap: file.FileCap):
     total_size = 0
     for f in fs.walk(cache_dir):
         total_size += f.size
-    if total_size > 5000 * 1024 * 1024: # 5GB
+    if total_size > 15 * 1024 * 1024 * 1024: # 5GB
         print("Build cache (", total_size // (1024*1024), "MB) over 5GB, cleaning it up.")
         fs.rmtree(cache_dir)
         total_size = 0

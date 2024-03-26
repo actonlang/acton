@@ -176,7 +176,7 @@ class Sink(object):
     def set_formatter(self, formatter: Formatter):
         self.formatter = formatter
 
-    def handle(self, m: Message):
+    proc def handle(self, m: Message):
         raise NotImplementedError("")
 
 

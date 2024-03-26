@@ -1,7 +1,7 @@
 import acton.rts
 import process
 
-NUM=1000
+NUM=100
 
 actor GC(env):
     def _tihi():
