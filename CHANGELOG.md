@@ -20,6 +20,7 @@
 
 ### Changed
 - Rename `--only-act` to `--skip-build`
+- Acton build cache now uses up to 15GB instead of 5GB
 
 ### Removed
 - `actonc` no longer supports `--no-zigbuild` / `--zigbuild` (it's now the
