@@ -1,0 +1,101 @@
+import logging
+import testing
+
+class TestSink(logging.Sink):
+    expected: list[logging.Message]
+
+    def __init__(self, report_result: action(?bool, ?Exception) -> None, expected=[]):
+        self.formatter = logging.DefaultFormatter()
+        self.report_result = report_result
+        self.expected = expected
+
+    def handle(self, m: logging.Message):
+        try:
+            e = self.expected.pop(0)
+            self._compare_msg(e, m)
+        except AssertionError as exc:
+            self.report_result(False, exc)
+        except Exception as exc:
+            self.report_result(None, exc)
+        if len(self.expected) == 0:
+            self.report_result(True, None)
+
+    def _compare_msg(self, e, m):
+        mmsg = m.msg
+        emsg = e.msg
+        same_msg = (mmsg is None and emsg is None) or (mmsg is not None and emsg is not None and mmsg == emsg)
+        testing.assertEqual(e.level, m.level)
+        testing.assertEqual(e.path, m.path)
+        testing.assertEqual(e.name, m.name)
+        testing.assertEqual(e.msg, m.msg)
+        e_data = e.data
+        e_keys = list(e_data.keys()) if e_data is not None else []
+        m_data = m.data
+        m_keys = list(m_data.keys()) if m_data is not None else []
+        testing.assertEqual(e_keys, m_keys)
+
+def deepfun(p_logh):
+    logh = logging.Handler("deepfun")
+    logh.set_handler(p_logh)
+    log = logging.Logger(logh)
+    log.name = "deepy"
+    log.emergency("deep emergency", None)
+    log.alert("deep alert", None)
+    log.critical("deep critical", None)
+    log.error("deep error", None)
+    log.warning("deep warning", None)
+    log.info("deep info", None)
+    log.notice("deep notice", None)
+    log.debug("deep debug", None)
+    log.verbose("deep verbose", None)
+    log.trace("deep trace", None)
+
+actor MyApp(log_handler):
+    logh = logging.Handler("MyApp")
+    logh.set_handler(log_handler)
+    log = logging.Logger(logh)
+    log.info("Starting up", None)
+
+    def _work():
+        log.info("Doing some work", None)
+        log.info("Bidabopp", {"actor": "MyApp", "thing": "bopp", "number": 42})
+        deepfun(logh)
+    _work()
+
+actor LogTester(report_result: action(?bool, ?Exception) -> None, log_handler: logging.Handler):
+
+    expected_logs = [
+        logging.Message(logging.INFO, [], "", "hej", None),
+        logging.Message(logging.INFO, [], "", "hello", None),
+        logging.Message(logging.DEBUG, [], "", "dello", None),
+        logging.Message(logging.INFO, ["MyApp"], "", "Starting up", None),
+        logging.Message(logging.INFO, ["MyApp"], "", "Doing some work", None),
+        logging.Message(logging.INFO, ["MyApp"], "", "Bidabopp", {"actor": "MyApp", "thing": "bopp", "number": 42}),
+        logging.Message(logging.EMERGENCY, ["MyApp", "deepfun", "deepy"], "deepy", "deep emergency", None),
+        logging.Message(logging.ALERT, ["MyApp", "deepfun", "deepy"], "deepy", "deep alert", None),
+        logging.Message(logging.CRITICAL, ["MyApp", "deepfun", "deepy"], "deepy", "deep critical", None),
+        logging.Message(logging.ERROR, ["MyApp", "deepfun", "deepy"], "deepy", "deep error", None),
+        logging.Message(logging.WARNING, ["MyApp", "deepfun", "deepy"], "deepy", "deep warning", None),
+        logging.Message(logging.INFO, ["MyApp", "deepfun", "deepy"], "deepy", "deep info", None),
+        logging.Message(logging.NOTICE, ["MyApp", "deepfun", "deepy"], "deepy", "deep notice", None),
+        logging.Message(logging.DEBUG, ["MyApp", "deepfun", "deepy"], "deepy", "deep debug", None),
+        logging.Message(logging.VERBOSE, ["MyApp", "deepfun", "deepy"], "deepy", "deep verbose", None),
+        logging.Message(logging.TRACE, ["MyApp", "deepfun", "deepy"], "deepy", "deep trace", None),
+    ]
+    ts = TestSink(report_result, expected_logs)
+    loghandler = logging.Handler(None)
+    loghandler.add_sink(ts)
+
+    log = logging.Logger(loghandler)
+    log.info("hej")
+
+    def logsome():
+        log.info("hello", None)
+        log.debug("dello", None)
+    logsome()
+
+    my_app = MyApp(loghandler)
+
+
+proc def _test_logging(report_result: action(?bool, ?Exception) -> None, log_handler: logging.Handler) -> None:
+    lt = LogTester(report_result, log_handler)
