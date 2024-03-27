@@ -2095,7 +2095,7 @@ void print_trace() {
     if (!child_pid) {
         dup2(2, 1); // redirect output to stderr
         execlp("lldb", "lldb", "-p", pid_buf, "--batch", "-o", "thread backtrace all", "-o", "exit", "--one-line-on-crash", "exit", name_buf, NULL);
-        execlp("gdb", "gdb", "--quiet", "--batch", "-n", "-ex", "thread", "-ex", "thread apply all backtrace full", name_buf, pid_buf, NULL);
+        execlp("gdb", "gdb", "--quiet", "--batch", "-n", "-ex", "set confirm off", "-ex", "set pagination off", "-ex", "set debuginfod enabled off", "-ex", "thread", "-ex", "thread apply all backtrace full", name_buf, pid_buf, NULL);
         fprintf(stderr, "Unable to get detailed backtrace using lldb or gdb");
         exit(0); /* If lldb/gdb failed to start */
     } else {
@@ -2104,6 +2104,7 @@ void print_trace() {
 }
 
 void launch_debugger(int signum) {
+    fprintf(stderr, "\nERROR: This is the automatic debug launcher for %s\n", appname);
     if (signum == SIGILL)
         fprintf(stderr, "\nERROR: illegal instruction\n");
     if (signum == SIGSEGV)
@@ -2120,7 +2121,7 @@ void launch_debugger(int signum) {
     if (!child_pid) {
         char findthread[40] = "thread find ";
         sprintf(findthread + strlen(findthread), "%p", (void *)pthread_self());
-        execlp("gdb", "gdb", "--quiet", "-n", "-ex", findthread, name_buf, pid_buf, NULL);
+        execlp("gdb", "gdb", "--quiet", "-n", "-ex", "set confirm off", "-ex", findthread, name_buf, pid_buf, NULL);
         fprintf(stderr, "Unable to get detailed backtrace using lldb or gdb");
         exit(0); /* If lldb/gdb failed to start */
     } else {
@@ -2130,10 +2131,11 @@ void launch_debugger(int signum) {
 }
 
 void crash_handler(int signum) {
+    fprintf(stderr, "\nERROR: This is the automatic crash handler for %s\n", appname);
     if (signum == SIGILL)
-        fprintf(stderr, "\nERROR: illegal instruction\n");
+        fprintf(stderr, "ERROR: illegal instruction\n");
     if (signum == SIGSEGV)
-        fprintf(stderr, "\nERROR: segmentation fault\n");
+        fprintf(stderr, "ERROR: segmentation fault\n");
     fprintf(stderr, "NOTE: this is likely a bug in acton, please report this at:\n");
     fprintf(stderr, "NOTE: https://github.com/actonlang/acton/issues/new\n");
     fprintf(stderr, "NOTE: include the backtrace printed below between -- 8< -- lines\n");
