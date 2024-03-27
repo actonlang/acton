@@ -8,6 +8,8 @@
 #include <pthread.h>
 #include <setjmp.h>
 
+#include <uv.h>
+
 #ifdef __gnu_linux__
     #define IS_GNU_LINUX
 #elif  __APPLE__ && __MACH__
@@ -69,7 +71,7 @@ struct wt_stat {
 };
 extern struct wt_stat wt_stats[MAX_WTHREADS];
 
-extern pthread_key_t pkey_wtid;
+extern pthread_key_t pkey_wctx;
 extern pthread_key_t pkey_uv_loop;
 struct B_Msg;
 struct $ConstCont;
@@ -221,6 +223,14 @@ struct JumpBuf {
     jmp_buf buf;
     B_BaseException xval;
     JumpBuf prev;
+};
+
+struct WorkerCtx;
+typedef struct WorkerCtx *WorkerCtx;
+struct WorkerCtx {
+    long id;
+    uv_loop_t *uv_loop;
+    volatile JumpBuf jump_top;
 };
 
 JumpBuf $PUSH_BUF();
