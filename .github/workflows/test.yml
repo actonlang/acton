@@ -78,17 +78,16 @@ jobs:
           path: ${{ github.workspace }}/acton-*
           if-no-files-found: error
       - name: "Run tests"
-        run: make -C ${{ github.workspace }} test
-      - name: "Upload core file & binaries as artifacts on test failure"
+        run: |
+          ulimit -c unlimited
+          make -C ${{ github.workspace }} test
+      - name: "Upload whole test dir as artifact on test failure"
         if: failure()
         uses: actions/upload-artifact@v3
         with:
           name: test-debug-${{ matrix.os }}-${{ github.run_id }}.zip
           path: |
-            ${{ github.workspace }}/test/core*
-            ${{ github.workspace }}/test/db*.log
-            ${{ github.workspace }}/test/rts/ddb_test_client
-            ${{ github.workspace }}/test/rts/ddb_test_server
+            ${{ github.workspace }}/test
 
 
   test-linux:
@@ -133,7 +132,7 @@ jobs:
         run: |
           export DEBIAN_FRONTEND=noninteractive
           apt-get update
-          apt-get install -qy bzip2 curl g++ haskell-stack make procps zlib1g-dev
+          apt-get install -qy bzip2 curl g++ gdb haskell-stack make procps zlib1g-dev
       - name: "Upgrade stack on old distributions"
         if: ${{ (matrix.os == 'ubuntu' && (matrix.version == '20.04' || matrix.version == '22.04')) || (matrix.os == 'debian' && matrix.version == '11') }}
         run: |
@@ -151,7 +150,16 @@ jobs:
           path: ${{ github.workspace }}/acton-*
           if-no-files-found: error
       - name: "Run tests"
-        run: make -C ${GITHUB_WORKSPACE} test
+        run: |
+          ulimit -c unlimited
+          make -C ${GITHUB_WORKSPACE} test
+      - name: "Upload whole test dir as artifact on test failure"
+        if: failure()
+        uses: actions/upload-artifact@v3
+        with:
+          name: test-debug-${{ matrix.os }}-${{ github.run_id }}.zip
+          path: |
+            ${{ github.workspace }}/test
 
 
   build-debs:
