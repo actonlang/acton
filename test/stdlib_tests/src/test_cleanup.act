@@ -1,0 +1,41 @@
+import logging
+import testing
+
+actor Foo(cb):
+    print("Foo starting")
+    action def __cleanup__():
+        print("Foo.__cleanup__")
+        cb()
+
+
+actor CleanupTester(report_result, log_handler):
+    var started = 0
+    var cleaned_up = 0
+
+    def _count_cleanup():
+        cleaned_up += 1
+        print("Cleaned up:", cleaned_up)
+        if cleaned_up > 80:
+            report_result(True, None)
+
+    for i in range(100):
+        Foo(_count_cleanup)
+
+    def _dummy():
+        a = 0
+        for i in range(999):
+            a += i
+        after 0.1: _dummy()
+    after 0: _dummy()
+
+actor main(env):
+    def rr(success: bool, exc: ?str):
+        print("RR", success, exc)
+        env.exit(0)
+
+    print("Testing...")
+    log_handler = logging.Handler("ASDF")
+    c = CleanupTester(rr, log_handler)
+
+def _test_cleanup(report_result: action(?bool, ?Exception) -> None, log_handler: logging.Handler) -> None:
+    s = CleanupTester(report_result, log_handler)

@@ -129,6 +129,7 @@ struct $ActorG_class {
     B_str (*__str__)($Actor);
     B_str (*__repr__)($Actor);
     B_NoneType (*__resume__)($Actor);
+    B_NoneType (*__cleanup__)($Actor);
 };
 struct $Actor {
     struct $ActorG_class *$class;
@@ -206,6 +207,8 @@ void serialize_state_shortcut($Actor);
                                REGISTER_ACTOR($t->$globkey); \
                                $t; })
 
+#define $GCfinalizer(act, fn) GC_register_finalizer(act, fn, NULL, NULL, NULL)
+
 $R $PUSH_C($Cont);
 B_BaseException $POP_C();
 void $DROP_C();
@@ -243,6 +246,7 @@ void set_actor_affinity(int wthread_id);
 
 void $Actor$serialize($Actor, B_NoneType);
 void $Actor$deserialize($Actor, B_NoneType);
+B_NoneType $ActorD___cleanup__($Actor);
 
 B_bool B_MsgD___bool__(B_Msg self); 
 B_str B_MsgD___str__(B_Msg self);

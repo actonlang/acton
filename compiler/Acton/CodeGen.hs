@@ -318,6 +318,7 @@ declDecl env (Class _ n q as b)
     | otherwise                     = vcat [ declDecl env1 d{ dname = methodname n (dname d) } | Decl _ ds <- b', d@Def{} <- ds ] $+$
                                       declSerialize env1 n c props sup_c $+$
                                       declDeserialize env1 n c props sup_c $+$
+                                      declCleanup env1 n sup_c $+$
                                       declCon env1 n q b $+$
                                       text "struct" <+> classname env n <+> methodtable env n <> semi
   where b'                          = subst [(tvSelf, tCon c)] b
@@ -327,6 +328,18 @@ declDecl env (Class _ n q as b)
         sup_c                       = filter ((`elem` special_repr) . tcname) as
         special_repr                = [primActor] -- To be extended...
         cDefinedClass               = inBuiltin env && any hasNotImpl [b' | Decl _ ds <- b, Def{dname=n',dbody=b'} <- ds, n' == initKW ]
+
+declCleanup env n sup_c
+  -- TODO: only match if this is an actor, or even better if this actor has a __cleanup__ method defined (not empty!?)
+  | not (null sup_c)                = -- Only for actors
+                                      text "void" <+> genTopName env (methodname n (name "_GC_finalizer")) <+> parens (text "void *obj, void *cdata") <+> char '{' $+$
+                                      -- t_cleanupQ_Foo self = (t_cleanupQ_Foo)obj;
+                                      -- self->$class->__cleanup__(self);
+                                      nest 4 ((genTopName env n) <+> gen env self <+> equals <+> parens (genTopName env n) <> text "obj" <> semi $+$
+                                              gen env self <> text "->" <> gen env classKW <> text "->" <> gen env cleanupKW <> parens (gen env self) <> semi) $+$
+                                      char '}'
+  | otherwise                       = empty
+  where self                        = name "self"
 
 declSerialize env n c props sup_c   = (text "void" <+> genTopName env (methodname n serializeKW) <+> parens (gen env pars) <+> char '{') $+$
                                       nest 4 (super_step $+$ vcat [ step i | i <- props \\ super_attrs ]) $+$
@@ -612,6 +625,12 @@ genCall env [row] (Var _ n) (PosArg s@Strings{} (PosArg tup PosNil))
         flatten e                   = foldr PosArg PosNil $ map (DotI l0 e) [0..]
 genCall env [t] (Var _ n) PosNil
   | n == primNEWACTOR               = gen env n <> parens (gen env t)
+-- Only install GC_finalizer if one is defined, i.e. we don't have the default
+-- $ActorD___cleanup__
+-- TODO: would be even better to determine this in the compiler and not emit
+-- this line rather than inspect the method table at run time
+genCall env [TCon _ tc] (Var _ n) p
+  | n == primGCfinalizer            = text "if" <+> parens (gen env p <> text "->" <> gen env classKW <> text "->" <> gen env cleanupKW <+> text "!= $ActorD___cleanup__") <+> gen env n <> parens (gen env p <> comma <+> genTopName env (methodname (noq $ tcname tc) (name "_GC_finalizer")))
 genCall env ts e@(Var _ n) p
   | NClass{} <- info                = genNew env n p
   | NDef{} <- info                  = (instCast env ts e $ gen env e) <> parens (gen env p)

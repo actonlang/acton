@@ -37,7 +37,8 @@ delsliceKW                          = name "__delslice__"
 appendKW                            = name "append"
 boolKW                              = name "__bool__"
 strKW                               = name "__str__"
-reprKW                               = name "__repr__"
+reprKW                              = name "__repr__"
+cleanupKW                           = name "__cleanup__"
 resumeKW                            = name "__resume__"
 
 valueKWs                            = [boolKW, strKW, reprKW]

@@ -24,6 +24,7 @@
   - [Concurrency](actors/concurrency.md)
   - [Sync Method calls](actors/sync_method_call.md)
   - [Async Method calls](actors/async_method_call.md)
+  - [Cleanup](actors/cleanup.md)
 - [Control flow](control_flow.md)
   - [actors](control_flow/actors.md)
   - [if / elif / else](control_flow/if_else.md)
