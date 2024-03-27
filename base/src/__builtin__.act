@@ -1057,6 +1057,9 @@ actor Env (wc: WorldCap, sc: SysCap, args: list[str]):
             sd = StringDecoder(on_stdin, encoding, on_error)
             _on_stdin_bytes(sd.decode)
 
+    action def is_tty() -> bool:
+        NotImplemented
+
     action def _on_stdin_bytes(cb: action(bytes) -> None) -> None:
         NotImplemented
 
