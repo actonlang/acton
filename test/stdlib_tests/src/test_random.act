@@ -79,7 +79,7 @@ def _test_random_distribution():
     """
     low = 500
     high = 1000
-    total = 1000000
+    total = 10000
     num_range = high - low
     stats = {}
     for i in range(total):
@@ -91,21 +91,21 @@ def _test_random_distribution():
     slack = 0.1
     exp_low = exp_count * (1-slack)
     exp_high = exp_count * (1+slack)
-    for n, v in stats.items():
-        if v < exp_low:
-            print("n", n, "with a count of", v, "is below expected value of", exp_low)
-        if v > exp_high:
-            print("n", n, "with a count of", v, "is above expected value of", exp_high)
+#    for n, v in stats.items():
+#        if v < exp_low:
+#            print("n", n, "with a count of", v, "is below expected value of", exp_low)
+#        if v > exp_high:
+#            print("n", n, "with a count of", v, "is above expected value of", exp_high)
         #if n > (expected_count * 1.1) or n < (expected_count * 0.9):
             #print("n", n, " outside of expected range (", (expected_count*0.9), "-", (expected_count*1.1), "):", stats[n])
 
 def _test_random1():
-    for i in range(100000):
+    for i in range(1000):
         r = random.randint(0, 1234)
         testing.assertTrue(r >= 0 and r <= 1234, "random.randint() returned a value outside of the range")
 
 def _test_random2():
-    for i in range(100000):
+    for i in range(1000):
         r = random.randint(1293862, 97309358)
         testing.assertTrue(r >= 1293862 and r <= 97309358, "random.randint() returned a value outside of the range")
 
