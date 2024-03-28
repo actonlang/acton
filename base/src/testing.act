@@ -712,9 +712,19 @@ actor env_test_runner(syscap, config, get_test, report_complete, env):
 
     after 0: _run_next()
 
+class ModuleError(object):
+    exit_code: int
+    term_signal: int
+    errout: str
+
+    def __init__(self, exit_code: int, term_signal: int, err: str):
+        self.exit_code = exit_code
+        self.term_signal = term_signal
+        self.err = err
 
 class ProjectTestResults(object):
     results: dict[str, dict[str, TestInfo]]
+    module_error: dict[str, ModuleError]
     last_results: dict[str, dict[str, TestInfo]]
     sw: time.Stopwatch
     expected_modules: set[str]
@@ -724,6 +734,7 @@ class ProjectTestResults(object):
 
     def __init__(self, perf_data: str, perf_mode: bool=False):
         self.results = {}
+        self.module_error = {}
         self.last_results = self.parse_perf_data(perf_data)
         self.sw = time.Stopwatch()
         self.expected_modules = set([''])
@@ -779,6 +790,9 @@ class ProjectTestResults(object):
         tres = self.results[module_name][test.name]
         if test_result is not None:
             tres.update(complete, test_result)
+
+    def update_module_error(self, module_name: str, moderr: ModuleError):
+        self.module_error[module_name] = moderr
 
     def num_tests(self):
         cnt = 0
@@ -878,6 +892,11 @@ class ProjectTestResults(object):
             elif len(self.results[modname]) > 0:
                 print("\nTests - module %s:" % modname)
                 self.printed_lines += 2
+            if modname in self.module_error:
+                moderr = self.module_error[modname]
+                print("Exit code: %d  term signal: %d" % (moderr.exit_code, moderr.term_signal))
+                print(moderr.err)
+                continue
             for tname, tinfo in self.results[modname].items():
                 prefix = "  " + tinfo.definition.name + ": "
                 prefix += " " * (tname_width - len(prefix))

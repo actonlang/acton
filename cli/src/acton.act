@@ -306,16 +306,15 @@ actor RunTestTest(env: Env, args, perf_mode: bool=False):
         else:
             raise ValueError("Unexpected JSON data from module test: " + module_name)
 
-    def _on_test_error(module_name, exit_code, term_signal, errout):
+    def _on_test_error(module_name: str, exit_code: int, term_signal: int, errout: str):
         errmsg = "Module test error, exit_code %d and term signal %d, errout: " % (exit_code, term_signal)
         try:
-            #errmsg += errout.splitlines()[0]
             errmsg += errout
         except IndexError:
             pass
         if module_name in ptr.results:
-            for test_name, test in ptr.results[module_name].items():
-                ptr.update_result(module_name, test.definition, True, testing.TestResult(None, str(errmsg), 1.0))
+            moderr = testing.ModuleError(exit_code, term_signal, errout)
+            ptr.update_module_error(module_name, moderr)
 
     def _run_tests(module_names: list[str]):
         ptr.expected_modules = set(module_names)
