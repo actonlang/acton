@@ -182,6 +182,7 @@ B_int B_IntegralD_intD___add__(B_IntegralD_int wit,  B_int a, B_int b) {
 
 B_complex B_IntegralD_intD___complex__(B_IntegralD_int wit, B_int a) {
     $RAISE((B_BaseException)$NEW(B_NotImplementedError, to$str("Number.__complex__ not implemented for int")));
+    return NULL; // This is just to silence compiler warning, above RAISE will longjmp from here anyway
 }
 
 B_int B_IntegralD_intD___fromatom__(B_IntegralD_int wit, B_atom a) {
@@ -226,12 +227,12 @@ B_int B_IntegralD_intD___pos__(B_IntegralD_int wit,  B_int a) {
 
 $WORD B_IntegralD_intD_real(B_IntegralD_int wit, B_int a, B_Real wit2) {
     $RAISE((B_BaseException)$NEW(B_NotImplementedError,to$str("Number.__real__ not implemented for int")));
-    return B_None; // Silence compiler warning, remove when implemented
+    return NULL; // This is just to silence compiler warning, above RAISE will longjmp from here anyway
 }
 
 $WORD B_IntegralD_intD_imag(B_IntegralD_int wit, B_int a, B_Real wit2) {
     $RAISE((B_BaseException)$NEW(B_NotImplementedError,to$str("Number.__imag__ not implemented for int")));
-    return B_None; // Silence compiler warning, remove when implemented
+    return NULL; // This is just to silence compiler warning, above RAISE will longjmp from here anyway
 }
 
 $WORD B_IntegralD_intD___abs__(B_IntegralD_int wit, B_int a, B_Real wit2) {
@@ -404,19 +405,19 @@ B_int B_IntegralD_intD___invert__(B_IntegralD_int wit,  B_int a) {
 B_int B_LogicalD_IntegralD_intD___and__(B_LogicalD_IntegralD_int wit,  B_int a, B_int b) {
     // return toB_i64(a->val & b->val);
     $RAISE((B_BaseException)$NEW(B_NotImplementedError,to$str("Protocol Logical not implemented for int; use i64\n")));
-    return to$int(-1); // Silence compiler warning, remove when implemented
+    return NULL; // This is just to silence compiler warning, above RAISE will longjmp from here anyway
 }
                                                  
 B_int B_LogicalD_IntegralD_intD___or__(B_LogicalD_IntegralD_int wit,  B_int a, B_int b) {
     // return toB_i64(a->val | b->val);
     $RAISE((B_BaseException)$NEW(B_NotImplementedError,to$str("Protocol Logical not implemented for int; use i64\n")));
-    return to$int(-1); // Silence compiler warning, remove when implemented
+    return NULL; // This is just to silence compiler warning, above RAISE will longjmp from here anyway
 }
                                                  
 B_int B_LogicalD_IntegralD_intD___xor__(B_LogicalD_IntegralD_int wit,  B_int a, B_int b) {
     // return toB_i64(a->val ^ b->val);
     $RAISE((B_BaseException)$NEW(B_NotImplementedError,to$str("Protocol Logical not implemented for int; use i64\n")));
-    return to$int(-1); // Silence compiler warning, remove when implemented
+    return NULL; // This is just to silence compiler warning, above RAISE will longjmp from here anyway
 }
  
 // B_MinusD_IntegralD_int  ////////////////////////////////////////////////////////////////////////////////////////
