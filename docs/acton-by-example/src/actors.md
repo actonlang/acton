@@ -32,6 +32,12 @@ actonc actors.act
 
 Output:
 ```sh
+No dependencies found, building project
+Building project in /tmp/tmp_nwgl0ik/example
+  Compiling example.act for release
+   Finished compilation in   0.015 s
+  Final compilation step
+   Finished final compilation step in   0.437 s
 Starting up actor FOO
 Hello world from FOO
 ```

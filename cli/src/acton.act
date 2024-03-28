@@ -3,6 +3,7 @@ import file
 import json
 import process
 import testing
+from testing import TestInfo
 
 def clean_buildcache(cap: file.FileCap):
     fs = file.FS(cap)
@@ -107,7 +108,6 @@ actor BuildProject(process_cap, env, args):
         print("Error building dependency", name, error)
 
     if len(deps) == 0:
-        print("No dependencies found, building project")
         build_project()
     else:
         print("Building dependencies:")
@@ -117,7 +117,7 @@ actor BuildProject(process_cap, env, args):
             cr = CompilerBuildRunner(process_cap, env, cmdargs, file.join_path(["deps", dep]), lambda: on_dep_build(dep) , lambda x: on_dep_build_error(dep, x))
 
 
-actor BuildProjectTests(process_cap, env, args, on_build_success, on_build_failure):
+actor BuildProjectTests(process_cap, env, on_build_success, on_build_failure, dev: bool=True):
     """Build the project test
 
     This actor builds the project tests using `actonc build --test`. It calls
@@ -131,11 +131,12 @@ actor BuildProjectTests(process_cap, env, args, on_build_success, on_build_failu
     var stderr_buf = b""
     var stdout_tests = False
 
-    cmdargs = build_cmd_args(args)
     fs = file.FS(file.FileCap(env.cap))
     # We find the path to actonc by looking at the executable path of the
     # current process. Since we are called 'acton', we just add a 'c'.
-    cmd = [fs.exepath() + "c"] + cmdargs + ["build", "--dev", "--test"]
+    cmd = [fs.exepath() + "c"] + ["build", "--test"]
+    if dev:
+        cmd.append("--dev")
 
     def on_actbuild_stdout(p, data):
         for line in data.decode().splitlines(False):
@@ -163,6 +164,22 @@ actor BuildProjectTests(process_cap, env, args, on_build_success, on_build_failu
 
     p = process.Process(process_cap, cmd, on_actbuild_stdout, on_actbuild_stderr, on_actbuild_exit, on_actbuild_error)
 
+def parse_json_tests(data):
+    tests: dict[str, testing.TestInfo] = {}
+    jdata_tests = data["tests"]
+    if isinstance(jdata_tests, dict):
+        for jdata_test in jdata_tests.values():
+            if isinstance(jdata_test, dict):
+                name = jdata_test["name"]
+                desc = jdata_test["desc"]
+                if isinstance(name, str) and isinstance(desc, str):
+                    test_def = testing.Test(name, desc)
+                    tests[name] = testing.TestInfo(test_def)
+                else:
+                    raise ValueError("Invalid test list JSON")
+    else:
+        raise ValueError("Invalid test list JSON")
+    return tests
 
 actor RunModuleTest(process_cap, modname, test_cmd, on_json_output, on_test_error):
     var stdout_buf = b""
@@ -198,7 +215,7 @@ actor RunModuleTest(process_cap, modname, test_cmd, on_json_output, on_test_erro
 
     def on_exit(p, exit_code, term_signal):
         if exit_code != 0 or term_signal != 0:
-            on_test_error(exit_code, term_signal, errout)
+            on_test_error(exit_code, term_signal, stdout_buf.decode() + errout)
 
     def on_error(p, error):
         on_test_error(-1, -1, error)
@@ -207,12 +224,13 @@ actor RunModuleTest(process_cap, modname, test_cmd, on_json_output, on_test_erro
     p = process.Process(process_cap, cmd, on_stdout, on_stderr, on_exit, on_error)
 
 
-actor RunTestList(process_cap, env, args):
+actor RunTestList(env, args):
     """Print list of module tests
 
     Will run the project module test binaries with 'list --json' to get all
     module tests, collect the output and print a list of all project tests.
     """
+    process_cap = process.ProcessCap(env.cap)
     var _expected_modules: set[str] = set()
     var _module_tests = {}
 
@@ -252,84 +270,57 @@ actor RunTestList(process_cap, env, args):
         print("stderr:", stderr_buf)
         env.exit(1)
 
-    project_builder = BuildProjectTests(process_cap, env, args, _run_tests, _on_build_failure)
+    project_builder = BuildProjectTests(process_cap, env, _run_tests, _on_build_failure)
 
 
-def parse_json_tests(data):
-    tests: dict[str, testing.TestInfo] = {}
-    jdata_tests = data["tests"]
-    if isinstance(jdata_tests, dict):
-        for jdata_test in jdata_tests.values():
-            if isinstance(jdata_test, dict):
-                name = jdata_test["name"]
-                desc = jdata_test["desc"]
-                if isinstance(name, str) and isinstance(desc, str):
-                    test_def = testing.Test(name, desc)
-                    tests[name] = testing.TestInfo(test_def)
-                else:
-                    raise ValueError("Invalid test list JSON")
-    else:
-        raise ValueError("Invalid test list JSON")
-    return tests
-
-def parse_json_test_result(data):
-    data_test = data["test"]
-    if isinstance(data_test, dict):
-        name = data_test["name"]
-        desc = data_test["desc"]
-        complete = data["complete"]
-        result = data["result"]
-        if isinstance(result, dict):
-            success = result["success"]
-            exception = result["exception"]
-            duration = result["duration"]
-            if (isinstance(name, str)
-                and isinstance(desc, str)
-                and isinstance(complete, bool)
-                and (success is None or isinstance(success, bool))
-                and (exception is None or isinstance(exception, str))
-                and isinstance(duration, float)
-                ):
-                return testing.Test(name, desc), complete, testing.TestResult(success, exception, duration)
-            else:
-                raise ValueError("Invalid test result JSON")
-        else:
-            raise ValueError("Invalid test result JSON")
-    else:
-        raise ValueError("Invalid test result JSON")
-
-
-actor RunTestTest(process_cap, env: Env, args):
+actor RunTestTest(env: Env, args, perf_mode: bool=False):
+    process_cap = process.ProcessCap(env.cap)
     var _module_tests = {}
-    results = testing.ProjectTestResults(env)
+    var perf_data = "{}"
+    try:
+        perf_file = file.ReadFile(file.ReadFileCap(file.FileCap(env.cap)), "perf_data")
+        perf_data = perf_file.read().decode()
+    except:
+        pass
+    ptr = testing.ProjectTestResults(perf_data, perf_mode)
+
     def _periodic_show():
-        results.show()
+        r = ptr.show(only_show_complete=not env.is_tty())
+        if r is not None:
+            if args.get_bool("record"):
+                perf_wfile = file.WriteFile(file.WriteFileCap(file.FileCap(env.cap)), "perf_data")
+                perf_wfile.write(ptr.to_json().encode())
+                perf_wfile.close()
+            env.exit(r)
         after 0.05: _periodic_show()
 
     def _on_json_output(module_name, data):
         if isinstance(data, dict):
             if "tests" in data:
                 tests = parse_json_tests(data)
-                results.update_module(module_name, tests)
+                ptr.update_module(module_name, tests)
                 _periodic_show()
-            elif "test" in data:
-                test_def, complete, test_result = parse_json_test_result(data)
-                results.update(module_name, test_def, complete, test_result)
+            elif "test_info" in data:
+                test_info = TestInfo.from_json(data["test_info"])
+                ptr.update(module_name, test_info.definition.name, test_info)
         else:
             raise ValueError("Unexpected JSON data from module test: " + module_name)
 
-    def _on_test_error(module_name, exit_code, term_signal, errout):
-        errmsg = "Module test error: "
+    def _on_test_error(module_name: str, exit_code: int, term_signal: int, errout: str):
+        errmsg = "Module test error, exit_code %d and term signal %d, errout: " % (exit_code, term_signal)
         try:
-            errmsg += errout.splitlines()[0]
+            errmsg += errout
         except IndexError:
             pass
-        for test_name, test in results.results[module_name].items():
-            results.update(module_name, test.definition, True, testing.TestResult(None, str(errmsg), 1.0))
+        if module_name in ptr.results:
+            moderr = testing.ModuleError(exit_code, term_signal, errout)
+            ptr.update_module_error(module_name, moderr)
 
     def _run_tests(module_names: list[str]):
-        results.expected_modules = set(module_names)
+        ptr.expected_modules = set(module_names)
         test_cmd = ["test"]
+        if perf_mode:
+            test_cmd.append("perf")
         for name_filter in args.get_strlist("name"):
             test_cmd.extend(["--name", name_filter])
         if len(module_names) == 0:
@@ -344,7 +335,13 @@ actor RunTestTest(process_cap, env: Env, args):
         print("stderr:", stderr_buf)
         env.exit(1)
 
-    project_builder = BuildProjectTests(process_cap, env, args, _run_tests, _on_build_failure)
+    # TODO: let dev mode enable for normal test and disable, i.e. use release mode for perf tests
+    # However, we have some stability issue due to wonky compilation
+    # optimizations so we get crashes. Thus we now always run in dev mode to get
+    # actually working code.
+    #dev = not perf_mode
+    dev = True
+    project_builder = BuildProjectTests(process_cap, env, _run_tests, _on_build_failure, dev=dev)
 
 def build_cmd_args(args):
     cmdargs = []
@@ -386,10 +383,13 @@ actor main(env):
         env.exit(0)
 
     def _cmd_test(args):
-        run_tests = RunTestTest(process_cap, env, args)
+        run_tests = RunTestTest(env, args, perf_mode=False)
+
+    def _cmd_test_perf(args):
+        run_tests = RunTestTest(env, args, perf_mode=True)
 
     def _cmd_list_test(args):
-        run_tests = RunTestList(process_cap, env, args)
+        run_tests = RunTestList(env, args)
 
     def _cmd_version(args):
         if args.get_bool("full"):
@@ -430,11 +430,12 @@ actor main(env):
         newp = p.add_cmd("new", "New project", _cmd_new)
         newp.add_arg("projectdir", "Project directory", True, "?")
         testp = p.add_cmd("test", "Test", _cmd_test)
+        testp.add_bool("record", "Record test performance results")
         testp.add_option("name", "strlist", "+", [], "Filter on test name")
-        testp = testp.add_cmd("list", "List tests", _cmd_list_test)
+        testlistp = testp.add_cmd("list", "List tests", _cmd_list_test)
+        testperfp = testp.add_cmd("perf", "Perf", _cmd_test_perf)
         version_p = p.add_cmd("version", "Show version", _cmd_version)
         version_p.add_bool("full", "Show full version info")
-
         return p.parse(env.argv)
 
     try:
@@ -446,13 +447,8 @@ actor main(env):
         except argparse.ArgumentError:
             pass
         if _cmd is not None:
-            if _file is not None:
-                if _file.endswith(".act"):
-                    print("Error: cannot specify both a command and an .act file", stderr=True)
-                elif _file.endswith(".ty"):
-                    print("Error: cannot specify both a command and an .ty file", stderr=True)
-                else:
-                    print("Unknown argument:", _file, stderr=True)
+            if _file is not None and (_file.endswith(".act") or _file.endswith(".ty")):
+                print("Error: cannot specify both a command and an .act/.ty file", stderr=True)
                 await async env.exit(1)
             _cmd(_args)
         else:

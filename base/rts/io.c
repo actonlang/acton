@@ -12,7 +12,8 @@
 extern char rts_exit;
 
 uv_loop_t *get_uv_loop() {
-    return (uv_loop_t *)pthread_getspecific(pkey_uv_loop);
+    WorkerCtx wctx = (WorkerCtx)pthread_getspecific(pkey_wctx);
+    return (uv_loop_t *)wctx->uv_loop;
 }
 
 void alloc_buffer(uv_handle_t *handle, size_t size, uv_buf_t *buf) {

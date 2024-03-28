@@ -46,7 +46,7 @@ void B_u32D___serialize__(B_u32 n, $Serial$state state) {
 }
 
 B_u32 B_u32D___deserialize__(B_u32 n, $Serial$state state) {
-    return toB_u32((int)$val_deserialize(state));
+    return toB_u32((int)(uintptr_t)$val_deserialize(state));
 }
 
 B_bool B_u32D___bool__(B_u32 n) {

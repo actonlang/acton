@@ -46,7 +46,7 @@ void B_i16D___serialize__(B_i16 n, $Serial$state state) {
 }
 
 B_i16 B_i16D___deserialize__(B_i16 n, $Serial$state state) {
-    return toB_i16((short)$val_deserialize(state));
+    return toB_i16((short)(uintptr_t)$val_deserialize(state));
 }
 
 B_bool B_i16D___bool__(B_i16 n) {

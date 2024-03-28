@@ -263,13 +263,12 @@ class Test(object):
         }
 
     @staticmethod
-    def from_json(data: dict[str, str]):
+    def from_json(data: dict[str, ?value]):
         name = data["name"]
         desc = data["desc"]
         if isinstance(name, str) and isinstance(desc, str):
             return Test(name, desc)
-        else:
-            raise ValueError("Invalid Test JSON")
+        raise ValueError("Test: Invalid JSON")
 
 class UnitTest(Test):
     def __init__(self, fn: mut() -> None, name: str, desc: str):
@@ -348,12 +347,13 @@ class TestInfo(object):
     max_duration: float
     avg_duration: float
     total_duration: float
+    test_duration: float
     num_iterations: int
     num_failures: int
     num_errors: int
     results: list[TestResult]
 
-    def __init__(self, definition: Test, complete: bool=False, success: ?bool=None, exception: ?str=None, flaky: bool=False, min_duration: float=-1.0, max_duration: float=-1.0, avg_duration: float=-1.0, total_duration: float=-1.0, num_iterations: int=-1, num_failures: int=-1, num_errors: int=-1, results: list[TestResult]=[]):
+    def __init__(self, definition: Test, complete: bool=False, success: ?bool=None, exception: ?str=None, flaky: bool=False, min_duration: float=-1.0, max_duration: float=-1.0, avg_duration: float=-1.0, total_duration: float=0.0, test_duration: float=0.0, num_iterations: int=0, num_failures: int=0, num_errors: int=0, results: list[TestResult]=[]):
         self.definition = definition
         self.complete = complete
         self.success = success
@@ -363,12 +363,13 @@ class TestInfo(object):
         self.max_duration = max_duration
         self.avg_duration = avg_duration
         self.total_duration = total_duration
+        self.test_duration = test_duration
         self.num_iterations = num_iterations
         self.num_failures = num_failures
         self.num_errors = num_errors
         self.results = results
 
-    def update(self, complete, result: TestResult):
+    def update(self, complete, result: TestResult, test_duration: float=-1.0):
         self.complete = complete
         self.results.append(result)
         exc = result.exception
@@ -380,6 +381,8 @@ class TestInfo(object):
         self.max_duration = -1.0
         self.avg_duration = -1.0
         self.total_duration = 0.0
+        if test_duration > 0.0:
+            self.test_duration = test_duration
         self.num_iterations = len(self.results)
         self.num_failures = 0
         self.num_errors = 0
@@ -401,12 +404,19 @@ class TestInfo(object):
             self.success = False
         elif self.num_errors > 0:
             self.success = None
+        else:
+            self.success = True
         if (self.num_failures == 0 and self.num_errors == 0) or self.num_failures == self.num_iterations or self.num_errors == self.num_iterations:
             self.flaky = False
         else:
             self.flaky = True
 
-    def to_json(self):
+    def to_json(self, include_results: bool=False):
+        test_results = []
+        if include_results:
+            for r in self.results:
+                test_results.append(r.to_json())
+
         return {
             "definition": self.definition.to_json(),
             "complete": self.complete,
@@ -417,23 +427,37 @@ class TestInfo(object):
             "max_duration": self.max_duration,
             "avg_duration": self.avg_duration,
             "total_duration": self.total_duration,
+            "test_duration": self.test_duration,
             "num_iterations": self.num_iterations,
             "num_failures": self.num_failures,
             "num_errors": self.num_errors,
-            #"results": [r.to_json() for r in self.results],
+            "results": test_results
         }
 
     @staticmethod
-    def from_json(json_data):
-        definition = Test.from_json(json_data["definition"])
+    def from_json(json_data: dict[str, ?value]) -> TestInfo:
+        def take_definition(jd: dict[str, ?value]) -> Test:
+            if "definition" in jd:
+                test_definition = jd["definition"]
+                if isinstance(test_definition, dict):
+                    return Test.from_json(test_definition)
+            raise ValueError("Invalid Test JSON")
+        definition: Test = take_definition(json_data)
         complete = json_data["complete"]
-        success = json_data["success"]
+        suc = json_data["success"]
+        success: ?bool = None
+        if suc is not None and isinstance(suc, bool):
+            success = suc
         exc = json_data["exception"]
+        exception: ?str = None
+        if exc is not None and isinstance(exc, str):
+            exception = exc
         flaky = json_data["flaky"]
         min_duration = json_data["min_duration"]
         max_duration = json_data["max_duration"]
         avg_duration = json_data["avg_duration"]
         total_duration = json_data["total_duration"]
+        test_duration = json_data["test_duration"]
         num_iterations = json_data["num_iterations"]
         num_failures = json_data["num_failures"]
         num_errors = json_data["num_errors"]
@@ -451,63 +475,79 @@ class TestInfo(object):
                     results.append(TestResult(r_success, r_exception, r_duration))
                 else:
                     raise ValueError("Invalid TestResult JSON")
-        exception: ?str = None
-        if isinstance(exc, str):
-            exception = exc
         if (isinstance(complete, bool)
-            and isinstance(success, bool)
             and isinstance(flaky, bool)
             and isinstance(min_duration, float)
             and isinstance(max_duration, float)
             and isinstance(avg_duration, float)
             and isinstance(total_duration, float)
+            and isinstance(test_duration, float)
             and isinstance(num_iterations, int)
             and isinstance(num_failures, int)
             and isinstance(num_errors, int)
             ):
-            return TestInfo(definition, complete, success, exception, flaky, min_duration, max_duration, avg_duration, total_duration, num_iterations, num_failures, num_errors, results)
+            return TestInfo(definition, complete, success, exception, flaky, min_duration, max_duration, avg_duration, total_duration, test_duration, num_iterations, num_failures, num_errors, results)
         else:
             raise ValueError("Invalid TestInfo JSON")
 
-# TODO: make this configurable
-# It doesn't seem to work well bumping up this value much beyond a few ms.
-# Probably because we are sending a test_result update for each test run which
-# becomes excessively chatty. Should probably summarize results and send the
-# summary at a lower frequency.
-MIN_TEST_DURATION = 1.0
+class TestRunnerConfig(object):
+    perf_mode: bool
+    min_test_duration: float
+    output_enabled: bool
 
-actor unit_test_runner(i, get_test, report_result):
+    def __init__(self, perf_mode: bool, args):
+        self.perf_mode = perf_mode
+        mtd = 0.05
+        try:
+            mtd = float(args.get_int("min_time")) / 1000.0
+        except:
+            pass
+        self.output_enabled = False if args.get_bool("no_output") else True
+        self.min_test_duration = mtd
+
+actor unit_test_runner(syscap, config, get_test, report_complete):
     """Test runner for unit tests
     """
     def _run_fn(f):
+        gc_time_start = acton.rts.get_gc_time(syscap).total
         sw = time.Stopwatch()
         try:
             f()
-            dur = sw.elapsed().to_float() * 1000.0
-            return TestResult(True, None, dur)
+            success = True
+            exception = None
         except AssertionError as e:
-            dur = sw.elapsed().to_float() * 1000.0
-            return TestResult(False, str(e), dur)
+            success = False
+            exception = str(e)
         except Exception as e:
-            dur = sw.elapsed().to_float() * 1000.0
-            return TestResult(None, str(e), dur)
+            success = None
+            exception = str(e)
+        full_dur = sw.elapsed().to_float() * 1000.0
+        gc_time_end = acton.rts.get_gc_time(syscap).total
+        gc_dur = float(gc_time_end - gc_time_start)
+        testiter_dur = full_dur - gc_dur
+        return TestResult(success, exception, testiter_dur)
 
     def _run():
         while True:
-            t = get_test()
-            if t is not None:
+            try:
+                t = get_test()
+                test_info = TestInfo(t)
                 f = t.fn
-                total_dur = 0.0
+                test_sw = time.Stopwatch()
+                last_report = time.Stopwatch()
                 complete = False
                 while True:
                     test_result = _run_fn(f)
-                    total_dur += test_result.duration
-                    if total_dur > MIN_TEST_DURATION:
+                    if test_sw.elapsed().to_float() > config.min_test_duration:
                         complete = True
-                    report_result(t, complete, test_result)
+                    test_info.update(complete, test_result, test_sw.elapsed().to_float() * 1000.0)
+                    if (last_report.elapsed().to_float() > 0.05 or complete) and config.output_enabled:
+                        print(json.encode({"test_info": test_info.to_json()}), stderr=True)
+                        last_report.reset()
                     if complete:
+                        report_complete(t.name)
                         break
-            else:
+            except Exception as e:
                 return None
 
     after 0: _run()
@@ -518,144 +558,208 @@ actor unit_test_runner(i, get_test, report_result):
 # possible
 # TODO: investigate if we can turn this into async style, which would open up
 # for collapsing this with the async_actor_test_runner and env_test_runner
-actor sync_actor_test_runner(get_test: action() -> ?SyncActorTest, report_result):
+actor sync_actor_test_runner(syscap, config, get_test, report_complete):
     """Test runner for sync actor tests
     """
     log_handler = logging.Handler("TestRunner")
 
     def _run_fn(f):
+        gc_time_start = acton.rts.get_gc_time(syscap).total
         sw = time.Stopwatch()
+        success = None   # TODO: remove, but compiler complains
+        exception = None # TODO: remove, but compiler complains
         try:
             f(log_handler)
-            dur = sw.elapsed().to_float() * 1000.0
-            return TestResult(True, None, dur)
+            success = True
+            exception = None
         except AssertionError as e:
-            dur = sw.elapsed().to_float() * 1000.0
-            return TestResult(False, str(e), dur)
+            success = False
+            exception = str(e)
         except Exception as e:
-            dur = sw.elapsed().to_float() * 1000.0
-            return TestResult(None, str(e), dur)
+            success = None
+            exception = str(e)
+        full_dur = sw.elapsed().to_float() * 1000.0
+        gc_time_end = acton.rts.get_gc_time(syscap).total
+        gc_dur = float(gc_time_end - gc_time_start)
+        testiter_dur = full_dur - gc_dur
+        return TestResult(success, exception, testiter_dur)
 
     def _run():
         while True:
-            t = get_test()
-            if t is not None:
+            try:
+                t = get_test()
+                test_info = TestInfo(t)
                 f = t.fn
-                total_dur = 0.0
+                test_sw = time.Stopwatch()
+                last_report = time.Stopwatch()
                 complete = False
-                while True:
+                for i in range(999999):
                     test_result = _run_fn(f)
-                    total_dur += test_result.duration
-                    if total_dur > MIN_TEST_DURATION:
+                    if test_sw.elapsed().to_float() > config.min_test_duration:
                         complete = True
-                    report_result(t, complete, test_result)
+                    test_info.update(complete, test_result, test_sw.elapsed().to_float() * 1000.0)
+                    if (last_report.elapsed().to_float() > 0.05 or complete) and config.output_enabled:
+                        print(json.encode({"test_info": test_info.to_json()}), stderr=True)
+                        last_report.reset()
                     if complete:
+                        report_complete(t.name)
                         break
-            else:
+            except Exception as e:
                 return None
 
     after 0: _run()
 
 
 # TODO: add a timeout to this
-actor async_actor_test_runner(get_test: action() -> ?AsyncActorTest, report_result):
+actor async_actor_test_runner(syscap, config, get_test, report_complete):
     """Test runner for async actor tests
     """
     log_handler = logging.Handler("TestRunner")
-    var total_duration = 0.0
+    var test_sw = time.Stopwatch()
+    var last_report = time.Stopwatch()
+    var test_info = None
 
-    action def _report_result(test: AsyncActorTest, sw, success: ?bool, exception: ?Exception):
-        dur = sw.elapsed().to_float() * 1000.0
-        total_duration += dur
-        complete = False
-        if total_duration > MIN_TEST_DURATION:
-            complete = True
-        exc = None
-        if exception is not None:
-            exc = str(exception)
-        report_result(test, complete, TestResult(success, exc, dur))
+    action def _report_result(test: AsyncActorTest, sw, gc_time_start, success: ?bool, exception: ?Exception):
+        full_dur = sw.elapsed().to_float() * 1000.0
+        gc_time_end = acton.rts.get_gc_time(syscap).total
+        gc_dur = float(gc_time_end - gc_time_start)
+        testiter_dur = full_dur - gc_dur
+        test_dur = test_sw.elapsed().to_float()
+        complete = True if test_dur > config.min_test_duration else False
+        if test_info is not None:
+            exc = str(exception) if exception is not None else None
+            test_info.update(complete, TestResult(success, exc, testiter_dur), test_dur*1000.0)
+        if last_report.elapsed().to_float() > 0.05 or complete:
+            if test_info is not None and config.output_enabled:
+                print(json.encode({"test_info": test_info.to_json()}), stderr=True)
+            last_report.reset()
         if not complete:
             _run_fn(test)
         else:
+            report_complete(test.name)
             _run_next()
 
     def _run_fn(t):
-        sw = time.Stopwatch()
         f = t.fn
+        gc_time_start = acton.rts.get_gc_time(syscap).total
+        sw = time.Stopwatch()
         try:
-            f(lambda s, e: _report_result(t, sw, s, e), log_handler)
+            f(lambda s, e: _report_result(t, sw, gc_time_start, s, e), log_handler)
         except AssertionError as e:
-            _report_result(t, sw, False, e)
+            _report_result(t, sw, gc_time_start, False, e)
         except Exception as e:
-            _report_result(t, sw, None, e)
+            _report_result(t, sw, gc_time_start, None, e)
 
     def _run_next():
         """Get the next available test and run it"""
-        total_duration = 0.0
-        t = get_test()
-        if t is not None:
+        test_sw = time.Stopwatch()
+        try:
+            t = get_test()
+            test_info = TestInfo(t)
             _run_fn(t)
+        except Exception as e:
+            return None
 
     after 0: _run_next()
 
 
-actor env_test_runner(get_test: action() -> ?EnvTest, report_result, env):
+actor env_test_runner(syscap, config, get_test, report_complete, env):
     """Test runner for async actor tests
     """
     log_handler = logging.Handler("TestRunner")
-    var total_duration = 0.0
+    var test_sw = time.Stopwatch()
+    var last_report = time.Stopwatch()
+    var test_info = None
 
-    action def _report_result(test: EnvTest, sw, success: ?bool, exception: ?Exception):
-        dur = sw.elapsed().to_float() * 1000.0
-        total_duration += dur
-        complete = False
-        if total_duration > MIN_TEST_DURATION:
-            complete = True
-        exc = None
-        if exception is not None:
-            exc = str(exception)
-        report_result(test, complete, TestResult(success, exc, dur))
+    action def _report_result(test: EnvTest, sw, gc_time_start, success: ?bool, exception: ?Exception):
+        full_dur = sw.elapsed().to_float() * 1000.0
+        gc_time_end = acton.rts.get_gc_time(syscap).total
+        gc_dur = float(gc_time_end - gc_time_start)
+        testiter_dur = full_dur - gc_dur
+        test_dur = test_sw.elapsed().to_float()
+        complete = True if test_dur > config.min_test_duration else False
+        if test_info is not None:
+            exc = str(exception) if exception is not None else None
+            test_info.update(complete, TestResult(success, exc, testiter_dur), test_dur*1000.0)
+        if last_report.elapsed().to_float() > 0.05 or complete:
+            if test_info is not None and config.output_enabled:
+                print(json.encode({"test_info": test_info.to_json()}), stderr=True)
+            last_report.reset()
         if not complete:
             _run_fn(test)
         else:
+            report_complete(test.name)
             _run_next()
 
     def _run_fn(t):
-        sw = time.Stopwatch()
         f = t.fn
+        gc_time_start = acton.rts.get_gc_time(syscap).total
+        sw = time.Stopwatch()
         try:
-            f(lambda s, e: _report_result(t, sw, s, e), env, log_handler)
+            f(lambda s, e: _report_result(t, sw, gc_time_start, s, e), env, log_handler)
         except AssertionError as e:
-            _report_result(t, sw, False, e)
+            _report_result(t, sw, gc_time_start, False, e)
         except Exception as e:
-            _report_result(t, sw, None, e)
+            _report_result(t, sw, gc_time_start, None, e)
 
     def _run_next():
         """Get the next available test and run it"""
-        total_duration = 0.0
-        t = get_test()
-        if t is not None:
+        test_sw = time.Stopwatch()
+        try:
+            t = get_test()
+            test_info = TestInfo(t)
             _run_fn(t)
+        except Exception as e:
+            return None
 
     after 0: _run_next()
 
+class ModuleError(object):
+    exit_code: int
+    term_signal: int
+    errout: str
+
+    def __init__(self, exit_code: int, term_signal: int, err: str):
+        self.exit_code = exit_code
+        self.term_signal = term_signal
+        self.err = err
 
 class ProjectTestResults(object):
-    _env: Env
     results: dict[str, dict[str, TestInfo]]
+    module_error: dict[str, ModuleError]
+    last_results: dict[str, dict[str, TestInfo]]
     sw: time.Stopwatch
     expected_modules: set[str]
     printed_lines: int
-    last_print: time.Instant
+    up_to_date: bool
+    perf_mode: bool
 
-    def __init__(self, env):
-        self._env = env
+    def __init__(self, perf_data: str, perf_mode: bool=False):
         self.results = {}
+        self.module_error = {}
+        self.last_results = self.parse_perf_data(perf_data)
         self.sw = time.Stopwatch()
         self.expected_modules = set([''])
         self.printed_lines = 0
-        self.last_print = time.monotonic()
-        self.last_print.second -= 1
+        self.up_to_date = False
+        self.perf_mode = perf_mode
+
+    def parse_perf_data(self, perf_data: str) -> dict[str, dict[str, TestInfo]]:
+        """Parse performance data from a file
+        """
+        try:
+            pd = json.decode(perf_data)
+            res = {}
+            for modname, modres in pd.items():
+                resmodres = {}
+                if isinstance(modname, str) and isinstance(modres, dict):
+                    for tname, tinfo in modres.items():
+                        resmodres[tname] = TestInfo.from_json(tinfo)
+                res[modname] = resmodres
+            return res
+        except:
+            print("Failed to parse performance data")
+            return {}
 
     def set_expected(self, tests: dict[str, Test], modname: str=""):
         for test_name, test in tests.items():
@@ -666,11 +770,21 @@ class ProjectTestResults(object):
     def update_module(self, module_name: str, test_results: dict[str, TestInfo]):
         """Update test results for all tests in a module
         """
+        self.up_to_date = False
         self.results[module_name] = test_results
 
-    def update(self, module_name: str, test: Test, complete: bool, test_result: TestResult):
+    def update(self, module_name: str, test_name: str, test_info: TestInfo):
         """Update result for individual test
         """
+        self.up_to_date = False
+        if module_name not in self.results:
+            self.results[module_name] = {}
+        self.results[module_name][test_name] = test_info
+
+    def update_result(self, module_name: str, test: Test, complete: bool, test_result: TestResult):
+        """Update result for individual test
+        """
+        self.up_to_date = False
         if module_name not in self.results:
             self.results[module_name] = {}
         if test.name not in self.results[module_name]:
@@ -678,6 +792,9 @@ class ProjectTestResults(object):
         tres = self.results[module_name][test.name]
         if test_result is not None:
             tres.update(complete, test_result)
+
+    def update_module_error(self, module_name: str, moderr: ModuleError):
+        self.module_error[module_name] = moderr
 
     def num_tests(self):
         cnt = 0
@@ -696,12 +813,57 @@ class ProjectTestResults(object):
             return test_info.complete
         return False
 
-    def show_updated(self, test, complete, test_result, modname):
-        pass
+    def to_json(self):
+        """Return JSON encoded results that can be saved to a file
+        """
+        # TODO: rewrite using comprehensions
+        res = {}
+        for modname in self.results:
+            modres = {}
+            for tname, tinfo in self.results[modname].items():
+                modres[tname] = tinfo.to_json()
+            res[modname] = modres
+        return json.encode(res)
 
-    def show(self):
-        if self.skip_show():
+    def show(self, only_show_complete=False):
+        def format_timing(module_name, test_name):
+            def format_diff(new, old):
+                diff = new - old
+                pct_diff = diff / old * 100
+                sign = "+" if diff > 0 else ""
+                color = term.green if diff < 0 else term.red
+                diff_str = "%s%.2f%%" % (sign, pct_diff)
+                return color + "%-10s" % diff_str + term.normal
+
+            tinfo = self.results[module_name][test_name]
+
+            min_dur = "--"
+            avg_dur = "--"
+            max_dur = "--"
+            min_dur_diff = "--"
+            avg_dur_diff = "--"
+            max_dur_diff = "--"
+            if tinfo.num_iterations > 0:
+                min_dur = "%5.2f" % tinfo.min_duration + term.grey13 + "ms" + term.normal
+                avg_dur = "%5.2f" % tinfo.avg_duration + term.grey13 + "ms" + term.normal
+                max_dur = "%5.2f" % tinfo.max_duration + term.grey13 + "ms" + term.normal
+                min_dur_diff = ""
+                avg_dur_diff = ""
+                max_dur_diff = ""
+
+                try:
+                    last_tinfo = self.last_results[module_name][test_name]
+                    min_dur_diff = format_diff(tinfo.min_duration, last_tinfo.min_duration)
+                    avg_dur_diff = format_diff(tinfo.avg_duration, last_tinfo.avg_duration)
+                    max_dur_diff = format_diff(tinfo.max_duration, last_tinfo.max_duration)
+                except:
+                    pass
+
+            return "%7s %10s %sAvg:%s %7s %10s %7s %10s" % (min_dur, min_dur_diff, term.grey18, term.normal, avg_dur, avg_dur_diff, max_dur, max_dur_diff)
+
+        if self.skip_show() or self.up_to_date:
             return
+        self.up_to_date = True
 
         complete = True
         if set(self.results.keys()) != self.expected_modules:
@@ -710,11 +872,8 @@ class ProjectTestResults(object):
             for test_name, test_info in self.results[module_name].items():
                 if not test_info.complete:
                     complete = False
-
-        now = time.monotonic()
-        if now.since(self.last_print).to_float() < 0.05:
+        if only_show_complete and not complete:
             return
-        self.last_print = now
 
         errors = 0
         failures = 0
@@ -735,65 +894,81 @@ class ProjectTestResults(object):
             elif len(self.results[modname]) > 0:
                 print("\nTests - module %s:" % modname)
                 self.printed_lines += 2
+            if modname in self.module_error:
+                moderr = self.module_error[modname]
+                print("Exit code: %d  term signal: %d" % (moderr.exit_code, moderr.term_signal))
+                print(moderr.err)
+                continue
             for tname, tinfo in self.results[modname].items():
                 prefix = "  " + tinfo.definition.name + ": "
                 prefix += " " * (tname_width - len(prefix))
                 success = tinfo.success
                 exc = tinfo.exception
+                status = ""
+                msg = ""
+                run_info = ""
                 if tinfo.complete:
                     if exc is not None:
-                        flaky_info = "("
-                        msg = ""
+                        msg += term.bold + term.red
                         if tinfo.flaky:
-                            msg = "FLAKY "
+                            msg += "FLAKY "
                         if tinfo.num_errors > 0:
-                            msg += "ERROR"
+                            msg += "ERR"
                             errors += 1
-                            flaky_info += "%d errors" % tinfo.num_errors
+                            run_info += "%d errors" % tinfo.num_errors
                         if tinfo.num_errors > 0 and tinfo.num_failures > 0:
                             msg += "/"
-                            flaky_info += " and "
+                            run_info += " and "
                         if tinfo.num_failures > 0:
                             msg += "FAIL"
                             failures += 1
-                            flaky_info += "%d failures" % tinfo.num_failures
-                        flaky_info += " out of %d runs in %3.3fms)" % (tinfo.num_iterations, tinfo.total_duration)
-
-                        print(prefix + term.bold + term.red + msg + " " + flaky_info + term.normal)
-                        self.printed_lines += 1
-                        for line in str(exc).splitlines(None):
-                            print(term.red + "    %s" % (line) + term.normal)
-                            self.printed_lines += 1
+                            run_info += "%d failures" % tinfo.num_failures
+                        if tinfo.num_errors > 0 or tinfo.num_failures > 0:
+                            run_info += " out of "
                     else:
-                        print(prefix + term.green + "OK (%3d runs in %-3.3fms)" % (tinfo.num_iterations, tinfo.total_duration) + term.normal)
-                        self.printed_lines += 1
+                        msg += term.green + "OK" + term.normal
                 else:
-                    print(prefix + term.bold + term.yellow + "RUNNING (%3d runs in %.3fms)" % (tinfo.num_iterations, tinfo.total_duration) + term.normal)
-                    self.printed_lines += 1
+                    msg = term.yellow + "**" + term.normal
+
+                run_info += "%4d runs in %3.3fms" % (tinfo.num_iterations, tinfo.test_duration)
+
+                l = prefix + msg + ": "
+                if self.perf_mode:
+                    l += format_timing(modname, tname) + " "
+                l += run_info + term.normal
+                print(l)
+                self.printed_lines += 1
+                if tinfo.complete and exc is not None:
+                    for line in str(exc).splitlines(None):
+                        print(term.red + "    %s" % (line) + term.normal)
+                        self.printed_lines += 1
         if complete:
             print("")
             if errors > 0 and failures > 0:
                 print(term.bold + term.red + "%d error and %d failure out of %d tests (%ss)" % (errors, failures, self.num_tests(), self.sw.elapsed().str_ms()) + term.normal)
                 print()
-                self._env.exit(2)
+                return 2
             elif errors > 0:
                 print(term.bold + term.red + "%d out of %d tests errored (%ss)" % (errors, self.num_tests(), self.sw.elapsed().str_ms()) + term.normal)
                 print()
-                self._env.exit(2)
+                return 2
             elif failures > 0:
                 print(term.bold + term.red + "%d out of %d tests failed (%ss)" % (failures, self.num_tests(), self.sw.elapsed().str_ms()) + term.normal)
                 print()
-                self._env.exit(1)
+                return 1
             else:
                 print(term.green + "All %d tests passed (%ss)" % (self.num_tests(), self.sw.elapsed().str_ms()) + term.normal)
                 print()
-                self._env.exit(0)
+                return 0
 
 class ModuleTestResults(object):
     tests: dict[str, TestInfo]
+    last_show: time.Instant
 
     def __init__(self):
         self.tests = {}
+        self.last_show = time.monotonic()
+        self.last_show.second -= 1
 
     def set_tests(self, tests: dict[str, TestInfo]):
         self.tests = tests
@@ -801,22 +976,28 @@ class ModuleTestResults(object):
     def update(self, test: Test, complete: bool, test_result: TestResult):
         if test.name not in self.tests:
             self.tests[test.name] = TestInfo(test)
-        self.tests[test.name].update(complete, test_result)
-        print(json.encode({"test": test.to_json(), "complete": complete, "result": test_result.to_json()}), stderr=True)
+        tinfo = self.tests[test.name]
+        tinfo.update(complete, test_result)
+        self.show_test(test.name)
 
     def is_test_done(self, name):
         if name in self.tests:
             return self.tests[name].complete
         return False
 
+    def show_test(self, test_name: str):
+        tinfo = self.tests[test_name]
+        now = time.monotonic()
+        if tinfo.complete == False and now.since(self.last_show).to_float() < 0.05:
+            return
+        self.last_show = now
+        print(json.encode({"test_info": tinfo.to_json()}), stderr=True)
+
     def show(self):
         res = {}
         for test in self.tests.values():
             res[test.definition.name] = test.definition.to_json()
         print(json.encode({"tests": res}), stderr=True)
-
-    def show_updated(self, test, complete, test_result, modname):
-        print(json.encode({"test": test.to_json(), "complete": complete, "result": test_result.to_json()}), stderr=True)
 
 
 
@@ -868,189 +1049,130 @@ actor test_runner(env: Env, unit_tests: dict[str, UnitTest], sync_actor_tests: d
         print(json.encode({"tests": tests}), stderr=True)
         env.exit(0)
 
-    proc def _run_tests(args):
+    proc def _run_tests(args, perf_mode: bool=False):
+        trconfig = TestRunnerConfig(perf_mode, args)
+        if trconfig.perf_mode:
+            acton.rts.start_gc_performance_measurement(env.syscap)
         _init_results(args)
-        results.show()
+        if trconfig.output_enabled:
+            results.show()
         # start with unit tests, proceed with next test category after unit tests
-        _run_unit_tests(args)
+        _run_unit_tests(args, trconfig)
 
-    proc def _run_unit_tests(args):
+    proc def _run_unit_tests(args, config: TestRunnerConfig):
+        test_concurrency = 1 if config.perf_mode else env.nr_wthreads
         my_tests = _filter_tests(unit_tests, args)
-        handed_out = set()
+        to_hand_out = list(my_tests.keys())
+        tests_complete = set()
 
-        def get_test() -> ?UnitTest:
-            remaining = list(set(my_tests.keys()) - handed_out)
-            if len(remaining) > 0:
-                test_name = remaining[0]
-                handed_out.add(test_name)
-                test = my_tests[test_name]
-                return test
+        def get_test() -> UnitTest:
+            test_id = to_hand_out.pop()
+            test = my_tests[test_id]
+            return test
 
         def check_complete():
-            for test in my_tests.values():
-                if not results.is_test_done(test.name):
-                    return False
-            _run_sync_actor_tests(args)
-            return True
+            if tests_complete == set(my_tests.keys()):
+                _run_sync_actor_tests(args, config)
+                return True
+            return False
 
-        def report_result(t, complete, test_result: TestResult):
-            results.update(t, complete, test_result)
+        def report_complete(t):
+            tests_complete.add("_test_" + t)
             check_complete()
 
         if not check_complete():
-            for i in range(env.nr_wthreads):
-                unit_test_runner(i, get_test, report_result)
+            for i in range(test_concurrency):
+                unit_test_runner(env.syscap, config, get_test, report_complete)
 
-    proc def _run_sync_actor_tests(args):
+    proc def _run_sync_actor_tests(args, config: TestRunnerConfig):
+        test_concurrency = 1 if config.perf_mode else min([1, env.nr_wthreads // 4])
         my_tests = _filter_tests(sync_actor_tests, args)
-        handed_out = set()
+        to_hand_out = list(my_tests.keys())
+        tests_complete = set()
 
-        def get_test() -> ?SyncActorTest:
-            remaining = list(set(my_tests.keys()) - handed_out)
-            if len(remaining) > 0:
-                test_name = remaining[0]
-                handed_out.add(test_name)
-                test = my_tests[test_name]
-                return test
+        def get_test() -> SyncActorTest:
+            test_id = to_hand_out.pop()
+            test = my_tests[test_id]
+            return test
 
         def check_complete():
-            for test in my_tests.values():
-                if not results.is_test_done(test.name):
-                    return False
-            _run_async_actor_tests(args)
-            return True
+            if tests_complete == set(my_tests.keys()):
+                _run_async_actor_tests(args, config)
+                return True
+            return False
 
-        def report_result(t, complete, test_result: TestResult):
-            results.update(t, complete, test_result)
+        def report_complete(t):
+            tests_complete.add("_test_" + t)
             check_complete()
 
         if not check_complete():
-            for i in range(0, min([1, env.nr_wthreads // 4], None), 1):
-                sync_actor_test_runner(get_test, report_result)
+            for i in range(test_concurrency):
+                sync_actor_test_runner(env.syscap, config, get_test, report_complete)
 
-    proc def _run_async_actor_tests(args):
+    proc def _run_async_actor_tests(args, config: TestRunnerConfig):
+        test_concurrency = 1 if config.perf_mode else min([1, env.nr_wthreads // 4])
         my_tests = _filter_tests(async_actor_tests, args)
-        handed_out = set()
+        to_hand_out = list(my_tests.keys())
+        tests_complete = set()
 
-        def get_test() -> ?AsyncActorTest:
-            remaining = list(set(my_tests.keys()) - handed_out)
-            if len(remaining) > 0:
-                test_name = remaining[0]
-                handed_out.add(test_name)
-                test = my_tests[test_name]
-                return test
+        def get_test() -> AsyncActorTest:
+            test_id = to_hand_out.pop()
+            test = my_tests[test_id]
+            return test
 
         def check_complete():
-            for test in my_tests.values():
-                if not results.is_test_done(test.name):
-                    return False
-            _run_env_tests(args)
-            return True
+            if tests_complete == set(my_tests.keys()):
+                _run_env_tests(args, config)
+                return True
+            return False
 
-        def report_result(t, complete, test_result: TestResult):
-            results.update(t, complete, test_result)
+        def report_complete(t):
+            tests_complete.add("_test_" + t)
             check_complete()
 
         if not check_complete():
-            for i in range(0, min([1, env.nr_wthreads // 4], None), 1):
-                async_actor_test_runner(get_test, report_result)
+            for i in range(test_concurrency):
+                async_actor_test_runner(env.syscap, config, get_test, report_complete)
 
-    proc def _run_env_tests(args):
+    proc def _run_env_tests(args, config: TestRunnerConfig):
+        test_concurrency = 1 if config.perf_mode else min([1, env.nr_wthreads // 4])
         my_tests = _filter_tests(env_tests, args)
-        handed_out = set()
+        to_hand_out = list(my_tests.keys())
+        tests_complete = set()
 
-        def get_test() -> ?EnvTest:
-            remaining = list(set(my_tests.keys()) - handed_out)
-            if len(remaining) > 0:
-                test_name = remaining[0]
-                handed_out.add(test_name)
-                test = my_tests[test_name]
-                return test
+        def get_test() -> EnvTest:
+            test_id = to_hand_out.pop()
+            test = my_tests[test_id]
+            return test
 
         def check_complete():
-            for test in my_tests.values():
-                if not results.is_test_done(test.name):
-                    return False
-            env.exit(0)
-            return True
+            if tests_complete == set(my_tests.keys()):
+                env.exit(0)
+                return True
+            return False
 
-        def report_result(t, complete, test_result: TestResult):
-            results.update(t, complete, test_result)
+        def report_complete(t):
+            tests_complete.add("_test_" + t)
             check_complete()
 
         if not check_complete():
-            for i in range(0, min([1, env.nr_wthreads // 4], None), 1):
-                env_test_runner(get_test, report_result, env)
-
+            for i in range(test_concurrency):
+                env_test_runner(env.syscap, config, get_test, report_complete, env)
 
 
     proc def _run_perf_tests(args):
-        print("Running performance tests")
-        # - disable GC
-        acton.rts.disable_gc(env.syscap)
-
-        all_good = True
-        for ut in unit_tests.values():
-            test_res = []
-            try:
-                for iteration in range(args.get_int("iterations")):
-                    acton.rts.gc(env.syscap) # explicit GC collection
-                    mem_before = acton.rts.get_mem_usage(env.syscap)
-                    sw = time.Stopwatch()
-                    ut.fn() # run test function
-                    dur = sw.elapsed().to_float() * 1000.0
-                    mem_after = acton.rts.get_mem_usage(env.syscap)
-                    gc_sw = time.Stopwatch()
-                    acton.rts.gc(env.syscap)
-                    gc_dur = gc_sw.elapsed().to_float() * 1000.0
-                    mem_usage = mem_after - mem_before
-                    test_res.append((dur=dur, gc_dur=gc_dur, mem_usage=mem_usage))
-
-                total_mem_usage = 0
-                min_dur = 999999999999.0
-                max_dur = 0.0
-                total_dur = 0.0
-                total_gc_dur = 0.0
-                for res in test_res:
-                    total_mem_usage += int(res.mem_usage)
-                    min_dur = min([min_dur, res.dur], None)
-                    max_dur = max([max_dur, res.dur], None)
-                    total_dur += res.dur
-                    total_gc_dur += res.gc_dur
-
-                avg_mem_usage = total_mem_usage / len(test_res)
-                avg_dur = total_dur / float(len(test_res))
-                avg_gc_dur = total_gc_dur / float(len(test_res))
-                print("Test %s: %sOK%s" % (ut.name, str(term.green), str(term.normal)))
-                print("   iterations  : %12d" % args.get_int("iterations"))
-                print("   CPU time    : %12f / %12f / %12f ms min/avg/max" % (min_dur, avg_dur, max_dur))
-                print("   Mem usage   : %12d bytes (approximate)" % int(avg_mem_usage))
-                print("   GC CPU time : %12f ms" % (avg_gc_dur))
-            except AssertionError as exc:
-                print("Test %s: %sFAILED%s" % (ut.name, term.bold + term.red, term.normal))
-                for line in str(exc).splitlines(None):
-                    print(term.red + "    %s" % (line) + term.normal)
-                all_good = False
-            except Exception as exc:
-                print("Test %s: %sERROR%s" % (ut.name, term.bold + term.red, term.normal))
-                for line in str(exc).splitlines(None):
-                    print(term.red + "    %s" % (line) + term.normal)
-                all_good = False
-
-        acton.rts.enable_gc(env.syscap)
-        if all_good:
-            env.exit(0)
-        else:
-            env.exit(1)
+        _run_tests(args, perf_mode=True)
 
     def _parse_args():
         p = argparse.Parser()
         p.add_bool("json", "Output results as JSON")
+        p.add_bool("no_output", "No result output")
         lp = p.add_cmd("list", "list tests", _list_tests)
         tp = p.add_cmd("test", "Run tests", _run_tests)
         tp.add_option("name", "strlist", nargs="+", default=[], help="Filter tests by name")
-        pp = p.add_cmd("perf", "Performance benchmark tests", _run_perf_tests)
+        pp = tp.add_cmd("perf", "Performance benchmark tests", _run_perf_tests)
         pp.add_option("iterations", "int", "?", 1, "Number of iterations to run")
+        pp.add_option("min_time", "int", "?", 1000, "Minimum time to run a test in milliseconds")
 
         args = p.parse(env.argv)
         _cmd = args.cmd
