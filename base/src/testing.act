@@ -493,6 +493,7 @@ class TestInfo(object):
 class TestRunnerConfig(object):
     perf_mode: bool
     min_test_duration: float
+    output_enabled: bool
 
     def __init__(self, perf_mode: bool, args):
         self.perf_mode = perf_mode
@@ -501,6 +502,7 @@ class TestRunnerConfig(object):
             mtd = float(args.get_int("min_time")) / 1000.0
         except:
             pass
+        self.output_enabled = False if args.get_bool("no_output") else True
         self.min_test_duration = mtd
 
 actor unit_test_runner(syscap, config, get_test, report_complete):
@@ -539,7 +541,7 @@ actor unit_test_runner(syscap, config, get_test, report_complete):
                     if test_sw.elapsed().to_float() > config.min_test_duration:
                         complete = True
                     test_info.update(complete, test_result, test_sw.elapsed().to_float() * 1000.0)
-                    if last_report.elapsed().to_float() > 0.05 or complete:
+                    if (last_report.elapsed().to_float() > 0.05 or complete) and config.output_enabled:
                         print(json.encode({"test_info": test_info.to_json()}), stderr=True)
                         last_report.reset()
                     if complete:
@@ -596,7 +598,7 @@ actor sync_actor_test_runner(syscap, config, get_test, report_complete):
                     if test_sw.elapsed().to_float() > config.min_test_duration:
                         complete = True
                     test_info.update(complete, test_result, test_sw.elapsed().to_float() * 1000.0)
-                    if last_report.elapsed().to_float() > 0.05 or complete:
+                    if (last_report.elapsed().to_float() > 0.05 or complete) and config.output_enabled:
                         print(json.encode({"test_info": test_info.to_json()}), stderr=True)
                         last_report.reset()
                     if complete:
@@ -628,7 +630,7 @@ actor async_actor_test_runner(syscap, config, get_test, report_complete):
             exc = str(exception) if exception is not None else None
             test_info.update(complete, TestResult(success, exc, testiter_dur), test_dur*1000.0)
         if last_report.elapsed().to_float() > 0.05 or complete:
-            if test_info is not None:
+            if test_info is not None and config.output_enabled:
                 print(json.encode({"test_info": test_info.to_json()}), stderr=True)
             last_report.reset()
         if not complete:
@@ -680,7 +682,7 @@ actor env_test_runner(syscap, config, get_test, report_complete, env):
             exc = str(exception) if exception is not None else None
             test_info.update(complete, TestResult(success, exc, testiter_dur), test_dur*1000.0)
         if last_report.elapsed().to_float() > 0.05 or complete:
-            if test_info is not None:
+            if test_info is not None and config.output_enabled:
                 print(json.encode({"test_info": test_info.to_json()}), stderr=True)
             last_report.reset()
         if not complete:
@@ -1052,7 +1054,8 @@ actor test_runner(env: Env, unit_tests: dict[str, UnitTest], sync_actor_tests: d
         if trconfig.perf_mode:
             acton.rts.start_gc_performance_measurement(env.syscap)
         _init_results(args)
-        results.show()
+        if trconfig.output_enabled:
+            results.show()
         # start with unit tests, proceed with next test category after unit tests
         _run_unit_tests(args, trconfig)
 
@@ -1163,6 +1166,7 @@ actor test_runner(env: Env, unit_tests: dict[str, UnitTest], sync_actor_tests: d
     def _parse_args():
         p = argparse.Parser()
         p.add_bool("json", "Output results as JSON")
+        p.add_bool("no_output", "No result output")
         lp = p.add_cmd("list", "list tests", _list_tests)
         tp = p.add_cmd("test", "Run tests", _run_tests)
         tp.add_option("name", "strlist", nargs="+", default=[], help="Filter tests by name")
