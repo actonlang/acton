@@ -47,6 +47,14 @@ pruneStmts xs []                        = []
 pruneBody env n ss                      = pruneStmts xs ss
   where xs                              = directAttrs env n
 
+instance Pretty ([QName], WPath, TCon) where
+    pretty (ws, ws0, p)                 = parens (pretty ws0 <+> colon <+> pretty p)
+
+instance Pretty WPath where
+    pretty ws0                          = hcat (punctuate (text "_") (map f ws0))
+        where f (Left w)                = text "L:" Pretty.<> pretty w
+              f (Right w)               = text "R:" Pretty.<> pretty w
+
 convProtocol env n0 q ps0 eq wmap b     = mainClass : sibClasses
   where ps                              = trim ps0
         q1                              = qSelf' : noqual env q
@@ -58,8 +66,9 @@ convProtocol env n0 q ps0 eq wmap b     = mainClass : sibClasses
 
         immsibs                         = [ (witAttr w, tCon $ convProto p, inherited ws0) | ([w],ws0,p) <- ps ]
 
-        mainClass                       = --trace ("###  MRO for " ++ prstr n0 ++ ": " ++ prstrs ps0) $
-                                          --trace ("  # SIBS for " ++ prstr n0 ++ ": " ++ prstrs [ sibName ws n0 | (ws,_,_,_,_) <- allsibs ]) $
+        mainClass                       = trace ("###  MRO for " ++ prstr n0 ++ ": " ++ prstrs ps0) $
+                                          --trace ("  # SIBS for " ++ prstr n0 ++ ": " ++ prstrs [ sibName ws n0 | (ws,_,_,_,_) <- allsibs ])
+                                          trace ("     ps: " ++ prstrs ps) $
                                           Class NoLoc n0 q1 bases mainClassBody
           where mainClassBody           = qsigs ++ psigs ++ Decl NoLoc [mainInit] : convStmts tSelf' eq1 (pruneBody env (NoQ n0) b)
                 psigs                   = [ Signature NoLoc [n] (monotype t) Property | (n,t,False) <- immsibs ]
