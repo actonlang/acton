@@ -821,10 +821,11 @@ tvarWit tv p                = Internal Witness (nstr $ Derived (deriveQ $ tcname
 
 mro2                                    :: EnvF x -> [TCon] -> ([WTCon],[WTCon])
 mro2 env []                             = ([], [])
-mro2 env (u:us)
-  | isActor env (tcname u)              = err1 u "Actor subclassing not allowed"
-  | isProto env (tcname u)              = ([], mro env (u:us))
-  | otherwise                           = (mro env [u], mro env us)
+mro2 env us
+  | not $ null acts                     = err1 (head acts) "Actor subclassing not allowed"
+  | otherwise                           = (mro env cs, mro env ps)
+  where acts                            = filter (isActor env . tcname) us
+        (cs,ps)                         = break (isProto env . tcname) us
 
 mro1 env us                             = mro env us
 

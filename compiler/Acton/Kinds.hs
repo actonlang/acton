@@ -468,7 +468,8 @@ kchkBounds env []                   = return []
 kchkBounds env (u:us)               = do (k,u) <- kinfer env u
                                          case k of
                                             KProto -> (:) u <$> kchkPBounds env us
-                                            _ -> do kunify (loc u) k KType; (:) u <$> kchkPBounds env us
+                                            _ | inBuiltin env -> do kunify (loc u) k KType; (:) u <$> kchkBounds env us
+                                              | otherwise -> do kunify (loc u) k KType; (:) u <$> kchkPBounds env us
     
 kchkPBounds env us                  = mapM (kexp KProto env) us
 

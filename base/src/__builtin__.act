@@ -28,48 +28,48 @@ class object (value):
 class atom (value):
     pass
 
+class float (atom):
+    def __init__(self, val: atom) -> None:
+        NotImplemented
+
 class int (atom):
     def __init__(self, val: atom, base: ?int) -> None:
         NotImplemented
 
-class i64 (atom):
+class i64 (int):
     def __init__(self, val: atom, base: ?int) -> None:
         NotImplemented
 
-class i32 (atom):
+class u64 (int):
     def __init__(self, val: atom, base: ?int) -> None:
         NotImplemented
 
-class i16 (atom):
+class i32 (i64,float):
     def __init__(self, val: atom, base: ?int) -> None:
         NotImplemented
 
-class i8 (atom):
+class u32 (i64,u64,float):
     def __init__(self, val: atom, base: ?int) -> None:
         NotImplemented
 
-class u64 (atom):
+class i16 (i32):
     def __init__(self, val: atom, base: ?int) -> None:
         NotImplemented
 
-class u32 (atom):
+class u16 (i32,u32):
     def __init__(self, val: atom, base: ?int) -> None:
         NotImplemented
 
-class u16 (atom):
+class i8 (i16):
     def __init__(self, val: atom, base: ?int) -> None:
         NotImplemented
 
-class u8 (atom):
+class u8 (i16,u16):
     def __init__(self, val: atom, base: ?int) -> None:
         NotImplemented
 
-class u1 (atom):
+class u1 (i8,u8):
     def __init__(self, val: atom, base: ?int) -> None:
-        NotImplemented
-
-class float (atom):
-    def __init__(self, val: atom) -> None:
         NotImplemented
 
 class bool (atom):
