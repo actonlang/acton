@@ -36,6 +36,10 @@
     to wait for the process to finish running before starting to parse its
     output as you'll get a single invokation and the full output rather than
     receive it piecemeal
+- Add `.unix_s()` `.unix_ms()` `.unix_us()` `.unix_ns()` to `time.Instant`
+  - To get a Unix timestamp (seconds since 1970-01-01 00:00:00), as seconds,
+    milliseconds, microseconds or nanoseconds respectively
+- `env.is_tty()` to check if stdout is a TTY
 - `acton.rts.start_gc_performance_measurement()` to start a GC perf measurement
 - `acton.rts.get_gc_time()` to get the GC timings
 - `env.is_tty()` to check if stdout is a TTY

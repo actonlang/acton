@@ -488,6 +488,26 @@ class Instant(object):
     def comparable(self, other: Instant) -> bool:
         return self.clock.comparable(other.clock)
 
+    def unix_s(self) -> int:
+        """Return the time in seconds since the Unix epoch
+        """
+        return self.second
+
+    def unix_ms(self) -> int:
+        """Return the time in milliseconds since the Unix epoch
+        """
+        return self.second * 1000 + self.attosecond // 10**15
+
+    def unix_us(self) -> int:
+        """Return the time in microseconds since the Unix epoch
+        """
+        return self.second * 1000000 + self.attosecond // 10**12
+
+    def unix_ns(self) -> int:
+        """Return the time in nanoseconds since the Unix epoch
+        """
+        return self.second * 1000000000 + self.attosecond // 10**9
+
 extension Instant(Ord):
     def __eq__(self, other):
         return self.second == other.second and self.attosecond == other.attosecond
