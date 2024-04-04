@@ -50,6 +50,7 @@
 - `term` improvements:
   - More grey shades
   - `term.clear` && `term.top` to clear and move cursor to top
+- `http.Client.close()` to explicitly close a connection
 
 ### Changed
 - The work dir and environment arguments of `process.Process` have been moved to

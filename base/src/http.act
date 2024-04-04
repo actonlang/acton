@@ -532,6 +532,9 @@ actor Client(cap: net.TCPConnectCap, address: str, on_connect: action(Client) ->
         elif tls_conn is not None:
             tls_conn.write(data)
 
+    def close():
+        _conn_close()
+
     # HTTP methods
     def get(path: str, on_response: action(Client, Response) -> None, headers: dict[str, str] = {}):
         req = build_request(address, b"GET", path.encode(), b"1.1", headers, b"")
