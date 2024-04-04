@@ -51,7 +51,24 @@ B_u64 actonQ_rtsQ_get_heap_size (B_SysCap cap) {
 }
 
 B_u64 actonQ_rtsQ_get_mem_usage (B_SysCap cap) {
-    return toB_u64(GC_get_heap_size() - (GC_get_free_bytes() + GC_get_unmapped_bytes()));
+    return toB_u64(GC_get_heap_size() - GC_get_free_bytes());
+}
+
+// def get_gc_total_bytes(cap: SysCap) -> u64:
+B_u64 actonQ_rtsQ_get_gc_total_bytes (B_SysCap cap) {
+    return toB_u64(GC_get_total_bytes());
+}
+
+//def get_gc_bytes_since_gc(cap: SysCap) -> u64:
+B_u64 actonQ_rtsQ_get_gc_bytes_since_gc (B_SysCap cap) {
+    return toB_u64(GC_get_bytes_since_gc());
+}
+
+// def get_rss(cap: SysCap) -> u64:
+B_u64 actonQ_rtsQ_get_rss (B_SysCap cap) {
+    size_t rsm;
+    int r = uv_resident_set_memory(&rsm);
+    return toB_u64(rsm);
 }
 
 B_NoneType actonQ_rtsQ_sleep (B_SysCap cap, B_float sleep_time) {

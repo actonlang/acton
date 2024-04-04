@@ -45,6 +45,26 @@ def get_mem_usage(cap: SysCap) -> u64:
     """
     NotImplemented
 
+def get_gc_total_bytes(cap: SysCap) -> u64:
+    """Get total number of bytes allocated on the GC heap
+    """
+    NotImplemented
+
+def get_gc_bytes_since_gc(cap: SysCap) -> u64:
+    """Get number of bytes allocated on the GC heap since last GC
+    """
+    NotImplemented
+
+def get_rss(cap: SysCap) -> u64:
+    """Get Resident Set Size in number of bytes
+
+    The Resident Set Size (RSS) is the amount of memory occupied by the process
+    in RAM. It includes the heap, the stack, and the code segment. It does not
+    include memory that is swapped out to disk. It is the amount of memory that
+    the process is actually using in RAM.
+    """
+    NotImplemented
+
 # sleep is sort of dangerous - it will actually put the RTS thread executing the
 # actor calling this function to sleep. This could be seen as ultrabad, like we
 # would want to just pause execution of one actor and let the RTS thread process
