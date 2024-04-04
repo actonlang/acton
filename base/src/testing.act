@@ -311,17 +311,23 @@ class TestResult(object):
     success: ?bool
     exception: ?str
     duration: float
+    mem_usage_delta: int
+    rss_delta: int
 
-    def __init__(self, success: ?bool, exception: ?str, duration: float):
+    def __init__(self, success: ?bool, exception: ?str, duration: float, mem_usage_delta: int, rss_delta: int):
         self.success = success
         self.exception = exception
         self.duration = duration
+        self.mem_usage_delta = mem_usage_delta
+        self.rss_delta = rss_delta
 
     def to_json(self):
         return {
             "success": self.success,
             "exception": self.exception,
             "duration": self.duration,
+            "mem_usage_delta": self.mem_usage_delta,
+            "rss_delta": self.rss_delta,
         }
 
     @staticmethod
@@ -329,11 +335,15 @@ class TestResult(object):
         success = data["success"]
         exception = data["exception"]
         duration = data["duration"]
+        mem_usage_delta = data["mem_usage_delta"]
+        rss_delta = data["rss_delta"]
         if (isinstance(success, bool)
             and isinstance(exception, str)
             and isinstance(duration, float)
+            and isinstance(mem_usage_delta, int)
+            and isinstance(rss_delta, int)
             ):
-            return TestResult(success, exception, duration)
+            return TestResult(success, exception, duration, mem_usage_delta, rss_delta)
         raise ValueError("Invalid TestResult JSON")
 
 
@@ -343,6 +353,7 @@ class TestInfo(object):
     success: ?bool
     exception: ?str
     flaky: bool
+    leaky: bool
     min_duration: float
     max_duration: float
     avg_duration: float
@@ -351,14 +362,32 @@ class TestInfo(object):
     num_iterations: int
     num_failures: int
     num_errors: int
+    mem_usage_delta_avg: int
+    rss_delta_avg: int
+    rss_delta_positive_count: int
     results: list[TestResult]
 
-    def __init__(self, definition: Test, complete: bool=False, success: ?bool=None, exception: ?str=None, flaky: bool=False, min_duration: float=-1.0, max_duration: float=-1.0, avg_duration: float=-1.0, total_duration: float=0.0, test_duration: float=0.0, num_iterations: int=0, num_failures: int=0, num_errors: int=0, results: list[TestResult]=[]):
+    def __init__(self,
+                 definition: Test,
+                 complete: bool=False,
+                 success: ?bool=None,
+                 exception: ?str=None,
+                 flaky: bool=False,
+                 min_duration: float=-1.0,
+                 max_duration: float=-1.0,
+                 avg_duration: float=-1.0,
+                 total_duration: float=0.0,
+                 test_duration: float=0.0,
+                 num_iterations: int=0,
+                 num_failures: int=0,
+                 num_errors: int=0,
+                 results: list[TestResult]=[]):
         self.definition = definition
         self.complete = complete
         self.success = success
         self.exception = exception
         self.flaky = flaky
+        self.leaky = False
         self.min_duration = min_duration
         self.max_duration = max_duration
         self.avg_duration = avg_duration
@@ -367,6 +396,9 @@ class TestInfo(object):
         self.num_iterations = num_iterations
         self.num_failures = num_failures
         self.num_errors = num_errors
+        self.mem_usage_delta_avg = 0
+        self.rss_delta_avg = 0
+        self.rss_delta_positive_count = 0
         self.results = results
 
     def update(self, complete, result: TestResult, test_duration: float=-1.0):
@@ -377,6 +409,7 @@ class TestInfo(object):
             self.exception = exc
 
         self.flaky = False
+        self.leaky = False
         self.min_duration = -1.0
         self.max_duration = -1.0
         self.avg_duration = -1.0
@@ -386,6 +419,9 @@ class TestInfo(object):
         self.num_iterations = len(self.results)
         self.num_failures = 0
         self.num_errors = 0
+        self.mem_usage_delta_avg = 0
+        self.rss_delta_avg = 0
+        self.rss_delta_positive_count = 0
         for result in self.results:
             res_success = result.success
             if res_success == False:
@@ -399,17 +435,30 @@ class TestInfo(object):
                 self.max_duration = result.duration
             self.total_duration += result.duration
 
+            self.mem_usage_delta_avg += result.mem_usage_delta
+            self.rss_delta_avg += result.rss_delta
+            if result.rss_delta > 0:
+                self.rss_delta_positive_count += 1
+
+        self.mem_usage_delta_avg = self.mem_usage_delta_avg // self.num_iterations
+        self.rss_delta_avg = self.rss_delta_avg // self.num_iterations
         self.avg_duration = self.total_duration / float(self.num_iterations)
+
         if self.num_failures > 0:
             self.success = False
         elif self.num_errors > 0:
             self.success = None
         else:
             self.success = True
+
         if (self.num_failures == 0 and self.num_errors == 0) or self.num_failures == self.num_iterations or self.num_errors == self.num_iterations:
             self.flaky = False
         else:
             self.flaky = True
+
+        #
+        if self.rss_delta_positive_count > min([1, self.num_iterations // 2]) and self.rss_delta_avg > 0:
+            self.leaky = True
 
     def to_json(self, include_results: bool=False):
         test_results = []
@@ -464,15 +513,20 @@ class TestInfo(object):
         results: list[TestResult] = []
         json_data_results = json_data["results"]
         if isinstance(json_data_results, list):
+            # TODO: Use TestResult.from_json() instead
             for r in json_data_results:
                 r_success = r["success"]
                 r_exception = r["exception"]
                 r_duration = r["duration"]
+                r_mem_usage_delta = r["mem_usage_delta"]
+                r_rss_delta = r["rss_delta"]
                 if (isinstance(r_success, bool)
                     and isinstance(r_exception, str)
                     and isinstance(r_duration, float)
+                    and isinstance(r_mem_usage_delta, int)
+                    and isinstance(r_rss_delta, int)
                     ):
-                    results.append(TestResult(r_success, r_exception, r_duration))
+                    results.append(TestResult(r_success, r_exception, r_duration, r_mem_usage_delta, r_rss_delta))
                 else:
                     raise ValueError("Invalid TestResult JSON")
         if (isinstance(complete, bool)
@@ -508,7 +562,12 @@ class TestRunnerConfig(object):
 actor unit_test_runner(syscap, config, get_test, report_complete):
     """Test runner for unit tests
     """
-    def _run_fn(f):
+    def _run_fn(t):
+        f = t.fn
+        # Run GC to get accurate memory usage
+        acton.rts.gc(syscap)
+        rss_before = int(acton.rts.get_rss(syscap))
+        gc_total_bytes_start = int(acton.rts.get_gc_total_bytes(syscap))
         gc_time_start = acton.rts.get_gc_time(syscap).total
         sw = time.Stopwatch()
         try:
@@ -525,7 +584,11 @@ actor unit_test_runner(syscap, config, get_test, report_complete):
         gc_time_end = acton.rts.get_gc_time(syscap).total
         gc_dur = float(gc_time_end - gc_time_start)
         testiter_dur = full_dur - gc_dur
-        return TestResult(success, exception, testiter_dur)
+        gc_total_bytes_end = int(acton.rts.get_gc_total_bytes(syscap))
+        mem_usage_delta = gc_total_bytes_end - gc_total_bytes_start
+        rss_after = int(acton.rts.get_rss(syscap))
+        rss_delta = rss_after - rss_before
+        return TestResult(success, exception, testiter_dur, mem_usage_delta, rss_delta)
 
     def _run():
         while True:
@@ -536,12 +599,14 @@ actor unit_test_runner(syscap, config, get_test, report_complete):
                 test_sw = time.Stopwatch()
                 last_report = time.Stopwatch()
                 complete = False
+                gctotb_before = acton.rts.get_gc_total_bytes(syscap)
                 while True:
-                    test_result = _run_fn(f)
+                    test_result = _run_fn(t)
                     if test_sw.elapsed().to_float() > config.min_test_duration:
                         complete = True
                     test_info.update(complete, test_result, test_sw.elapsed().to_float() * 1000.0)
                     if (last_report.elapsed().to_float() > 0.05 or complete) and config.output_enabled:
+                        gctotb_after = acton.rts.get_gc_total_bytes(syscap)
                         print(json.encode({"test_info": test_info.to_json()}), stderr=True)
                         last_report.reset()
                     if complete:
@@ -564,6 +629,8 @@ actor sync_actor_test_runner(syscap, config, get_test, report_complete):
     log_handler = logging.Handler("TestRunner")
 
     def _run_fn(f):
+        rss_before = int(acton.rts.get_rss(syscap))
+        gc_total_bytes_start = int(acton.rts.get_gc_total_bytes(syscap))
         gc_time_start = acton.rts.get_gc_time(syscap).total
         sw = time.Stopwatch()
         success = None   # TODO: remove, but compiler complains
@@ -582,7 +649,11 @@ actor sync_actor_test_runner(syscap, config, get_test, report_complete):
         gc_time_end = acton.rts.get_gc_time(syscap).total
         gc_dur = float(gc_time_end - gc_time_start)
         testiter_dur = full_dur - gc_dur
-        return TestResult(success, exception, testiter_dur)
+        gc_total_bytes_end = int(acton.rts.get_gc_total_bytes(syscap))
+        mem_usage_delta = gc_total_bytes_end - gc_total_bytes_start
+        rss_after = int(acton.rts.get_rss(syscap))
+        rss_delta = rss_after - rss_before
+        return TestResult(success, exception, testiter_dur, mem_usage_delta, rss_delta)
 
     def _run():
         while True:
@@ -619,16 +690,20 @@ actor async_actor_test_runner(syscap, config, get_test, report_complete):
     var last_report = time.Stopwatch()
     var test_info = None
 
-    action def _report_result(test: AsyncActorTest, sw, gc_time_start, success: ?bool, exception: ?Exception):
+    action def _report_result(test: AsyncActorTest, sw, rss_before, gc_total_bytes_start, gc_time_start, success: ?bool, exception: ?Exception):
         full_dur = sw.elapsed().to_float() * 1000.0
         gc_time_end = acton.rts.get_gc_time(syscap).total
         gc_dur = float(gc_time_end - gc_time_start)
         testiter_dur = full_dur - gc_dur
+        gc_total_bytes_end = int(acton.rts.get_gc_total_bytes(syscap))
+        mem_usage_delta = gc_total_bytes_end - gc_total_bytes_start
+        rss_after = int(acton.rts.get_rss(syscap))
+        rss_delta = rss_after - rss_before
         test_dur = test_sw.elapsed().to_float()
         complete = True if test_dur > config.min_test_duration else False
         if test_info is not None:
             exc = str(exception) if exception is not None else None
-            test_info.update(complete, TestResult(success, exc, testiter_dur), test_dur*1000.0)
+            test_info.update(complete, TestResult(success, exc, testiter_dur, mem_usage_delta, rss_delta), test_dur*1000.0)
         if last_report.elapsed().to_float() > 0.05 or complete:
             if test_info is not None and config.output_enabled:
                 print(json.encode({"test_info": test_info.to_json()}), stderr=True)
@@ -641,14 +716,16 @@ actor async_actor_test_runner(syscap, config, get_test, report_complete):
 
     def _run_fn(t):
         f = t.fn
+        rss_before = int(acton.rts.get_rss(syscap))
+        gc_total_bytes_start = int(acton.rts.get_gc_total_bytes(syscap))
         gc_time_start = acton.rts.get_gc_time(syscap).total
         sw = time.Stopwatch()
         try:
-            f(lambda s, e: _report_result(t, sw, gc_time_start, s, e), log_handler)
+            f(lambda s, e: _report_result(t, sw, rss_before, gc_total_bytes_start, gc_time_start, s, e), log_handler)
         except AssertionError as e:
-            _report_result(t, sw, gc_time_start, False, e)
+            _report_result(t, sw, rss_before, gc_total_bytes_start, gc_time_start, False, e)
         except Exception as e:
-            _report_result(t, sw, gc_time_start, None, e)
+            _report_result(t, sw, rss_before, gc_total_bytes_start, gc_time_start, None, e)
 
     def _run_next():
         """Get the next available test and run it"""
@@ -671,16 +748,20 @@ actor env_test_runner(syscap, config, get_test, report_complete, env):
     var last_report = time.Stopwatch()
     var test_info = None
 
-    action def _report_result(test: EnvTest, sw, gc_time_start, success: ?bool, exception: ?Exception):
+    action def _report_result(test: EnvTest, sw, rss_before, gc_total_bytes_start, gc_time_start, success: ?bool, exception: ?Exception):
         full_dur = sw.elapsed().to_float() * 1000.0
         gc_time_end = acton.rts.get_gc_time(syscap).total
         gc_dur = float(gc_time_end - gc_time_start)
         testiter_dur = full_dur - gc_dur
+        gc_total_bytes_end = int(acton.rts.get_gc_total_bytes(syscap))
+        mem_usage_delta = gc_total_bytes_end - gc_total_bytes_start
+        rss_after = int(acton.rts.get_rss(syscap))
+        rss_delta = rss_after - rss_before
         test_dur = test_sw.elapsed().to_float()
         complete = True if test_dur > config.min_test_duration else False
         if test_info is not None:
             exc = str(exception) if exception is not None else None
-            test_info.update(complete, TestResult(success, exc, testiter_dur), test_dur*1000.0)
+            test_info.update(complete, TestResult(success, exc, testiter_dur, mem_usage_delta, rss_delta), test_dur*1000.0)
         if last_report.elapsed().to_float() > 0.05 or complete:
             if test_info is not None and config.output_enabled:
                 print(json.encode({"test_info": test_info.to_json()}), stderr=True)
@@ -693,14 +774,16 @@ actor env_test_runner(syscap, config, get_test, report_complete, env):
 
     def _run_fn(t):
         f = t.fn
+        rss_before = int(acton.rts.get_rss(syscap))
+        gc_total_bytes_start = int(acton.rts.get_gc_total_bytes(syscap))
         gc_time_start = acton.rts.get_gc_time(syscap).total
         sw = time.Stopwatch()
         try:
-            f(lambda s, e: _report_result(t, sw, gc_time_start, s, e), env, log_handler)
+            f(lambda s, e: _report_result(t, sw, rss_before, gc_total_bytes_start, gc_time_start, s, e), env, log_handler)
         except AssertionError as e:
-            _report_result(t, sw, gc_time_start, False, e)
+            _report_result(t, sw, rss_before, gc_total_bytes_start, gc_time_start, False, e)
         except Exception as e:
-            _report_result(t, sw, gc_time_start, None, e)
+            _report_result(t, sw, rss_before, gc_total_bytes_start, gc_time_start, None, e)
 
     def _run_next():
         """Get the next available test and run it"""
