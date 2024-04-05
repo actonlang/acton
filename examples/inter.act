@@ -1,0 +1,37 @@
+# An interacive terminal program that increments and decrements a counter based
+# on user input. The program will exit when the user types 'q'. There is also a
+# periodic incrementation of the counter every 5 seconds.
+#
+# The actor based asynchronous I/O model of Acton makes it very natural to
+# express event-driven reactive programs like this that can react to user input
+# while not blocking on I/O, thus allowing for other tasks to be performed, in
+# this case the periodic incrementation of the counter.
+
+actor main(env: Env):
+    var count = 0
+
+    def interact(input):
+        if input == "q":
+            print("Quitting!")
+            env.exit(0)
+        elif input == "i":
+            count += 1
+            print("Incrementing! Count is now:", count)
+        elif input == "d":
+            count -= 1
+            print("Decrementing! Count is now:", count)
+        else:
+            print("Unknown command:", input)
+
+    # Set non-canonical mode, so we get each key stroke directly
+    env.set_stdin(canonical=False)
+    # Turn off terminal echo
+    env.set_stdin(echo=False)
+    env.stdin_install(interact)
+    print("Type 'q' to quit, 'i' to increment a counter and 'd' to decrement it.")
+
+    def periodic():
+        count += 1
+        print("Periodic +1 increment. Count is now:", count)
+        after 5: periodic()
+    after 1: periodic()
