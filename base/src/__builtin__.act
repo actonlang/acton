@@ -946,10 +946,10 @@ actor StringDecoder(cb_out: action(str) -> None, encoding: ?str="utf-8", on_erro
         # Attempt to decode all of buf. If it fails we are likely in the middle
         # of a multi-byte character so we try again by removing the last bytes
         # iteratively until we succeed. UTF-8 has up to 4 bytes per character.
-        for i in range(1, MAX_UNICODE_CHAR_SIZE+1):
+        for i in range(len(buf), len(buf)-MAX_UNICODE_CHAR_SIZE, -1):
             try:
-                s = buf[:-i].decode()
-                buf = buf[-i:]
+                s = buf[:i].decode()
+                buf = buf[i:]
                 cb_out(s)
                 return
             except ValueError:
@@ -1056,6 +1056,9 @@ actor Env (wc: WorldCap, sc: SysCap, args: list[str]):
             # variable.
             sd = StringDecoder(on_stdin, encoding, on_error)
             _on_stdin_bytes(sd.decode)
+
+    action def set_stdin(canonical: ?bool, echo: ?bool) -> None:
+        NotImplemented
 
     action def is_tty() -> bool:
         NotImplemented

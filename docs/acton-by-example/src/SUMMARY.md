@@ -38,6 +38,7 @@
 - [Environment](environment.md)
   - [Environment variables](environment/variables.md)
   - [Reading stdin input](environment/stdin.md)
+  - [Interactive stdin input](environment/interactive_stdin.md)
 - [Standard library](stdlib.md)
   - [Regular Expression](stdlib/re.md)
 

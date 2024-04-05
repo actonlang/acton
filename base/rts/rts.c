@@ -21,6 +21,7 @@
 #define GC_THREADS 1
 #include <gc.h>
 
+#include <termios.h>
 #include <unistd.h>
 #include <pthread.h>
 #include <stdio.h>
@@ -248,6 +249,8 @@ int64_t get_next_key() {
 #ifdef ACTON_DB
 remote_db_t * db = NULL;
 #endif
+
+struct termios old_stdin_attr;
 
 ////////////////////////////////////////////////////////////////////////////////////////
 
@@ -2088,6 +2091,8 @@ void *$mon_socket_loop() {
 }
 
 void rts_shutdown() {
+    tcsetattr(STDIN_FILENO, TCSANOW, &old_stdin_attr);
+
     rts_exit = 1;
     // 0 = main thread, rest is wthreads, thus +1
     for (int i = 0; i < num_wthreads+1; i++) {
@@ -2591,6 +2596,8 @@ int main(int argc, char **argv) {
         rqs[i].tail = NULL;
         rqs[i].count = 0;
     }
+
+    tcgetattr(STDIN_FILENO, &old_stdin_attr);
 
     // RTS startup and module is static stuff, in particular module constants
     // which are created during module init are static and do not need to be

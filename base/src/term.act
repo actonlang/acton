@@ -50,6 +50,9 @@ bg_magenta = "\x1b[45m"
 bg_cyan = "\x1b[46m"
 bg_white = "\x1b[47m"
 
+clear = "\x1b[0J"
+top = "\x1b[H"
+
 def up(n=1):
     """Move cursor up n lines.
     """

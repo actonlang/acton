@@ -21,7 +21,10 @@
 #define GC_THREADS 1
 #include <gc.h>
 
+#include <termios.h>
+#include <unistd.h>
 #include <uv.h>
+
 #include "env.h"
 
 #include "../rts/io.h"
@@ -35,6 +38,30 @@ extern int return_val;
 
 $R B_EnvD_stdout_writeG_local (B_Env self, $Cont c$cont, B_str s) {
     printf("%s", s->str);
+    return $R_CONT(c$cont, B_None);
+}
+
+$R B_EnvD_set_stdinG_local (B_Env self, $Cont c$cont, B_bool canonical, B_bool echo) {
+    struct termios attr;
+    tcgetattr(STDIN_FILENO, &attr);
+
+    if (canonical != NULL) {
+        if (fromB_bool(canonical) == true) {
+            attr.c_lflag |= ICANON; // Set ICANON flag
+        } else {
+            attr.c_lflag &= ~ICANON; // Remove ICANON flag
+        }
+    }
+
+    if (echo != NULL) {
+        if (fromB_bool(echo) == true) {
+            attr.c_lflag |= ECHO;
+        } else {
+            attr.c_lflag &= ~ECHO;
+        }
+    }
+
+    tcsetattr(STDIN_FILENO, TCSANOW, &attr);
     return $R_CONT(c$cont, B_None);
 }
 
@@ -56,7 +83,7 @@ $R B_EnvD__on_stdin_bytesG_local (B_Env self, $Cont c$cont, $action cb) {
     // pin affinity here (and not earlier)..
     pin_actor_affinity();
     uv_tty_t *tty = acton_malloc(sizeof(uv_tty_t));
-    uv_tty_init(get_uv_loop(), tty, 0, 1);
+    uv_tty_init(get_uv_loop(), tty, STDIN_FILENO, 1);
     tty->data = cb;
     uv_read_start((uv_stream_t*)tty, alloc_buffer, read_stdin);
     return $R_CONT(c$cont, B_None);

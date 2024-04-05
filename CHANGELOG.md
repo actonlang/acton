@@ -36,10 +36,20 @@
     to wait for the process to finish running before starting to parse its
     output as you'll get a single invokation and the full output rather than
     receive it piecemeal
-- `env.is_tty()` to check if stdout is a TTY
 - `acton.rts.start_gc_performance_measurement()` to start a GC perf measurement
 - `acton.rts.get_gc_time()` to get the GC timings
-- More grey shades in `term`
+- `env.is_tty()` to check if stdout is a TTY
+- `env.set_stdin(canonical: bool, echo: bool)` to set stdin options
+  - `canonical` is the default mode which is line buffered where the OS /
+    terminal offers line editing capabilities and we only receive the input ones
+    carriage return is hit
+  - setting `env.set_stdin(canonical=False)` turns stdin into non-canonical mode
+    where each character as entered is immediately forwarded to the stdin
+    callback so we can react to it, great for interactive applications!
+  - `echo` enables (the default) or disables echoing of characters
+- `term` improvements:
+  - More grey shades
+  - `term.clear` && `term.top` to clear and move cursor to top
 
 ### Changed
 - The work dir and environment arguments of `process.Process` have been moved to
