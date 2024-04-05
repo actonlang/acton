@@ -1500,7 +1500,6 @@ void wt_wake_cb(uv_async_t *ev) {
 void wt_work_cb(uv_check_t *ev) {
     WorkerCtx wctx = (WorkerCtx)pthread_getspecific(pkey_wctx);
     assert(wctx->id >= 0 && wctx->id < 256);
-    volatile JumpBuf jump0 = NULL;
 
     struct timespec ts_start, ts1, ts2, ts3;
     long long int runtime = 0;
@@ -1525,9 +1524,9 @@ void wt_work_cb(uv_check_t *ev) {
         wt_stats[wctx->id].state = WT_Working;
 
         $R r;
-        if (jump0 || $PUSH()) {                         // Normal path
-            if (!jump0) {
-                jump0 = wctx->jump_top;
+        if (wctx->jump0 || $PUSH()) {                         // Normal path
+            if (!wctx->jump0) {
+                wctx->jump0 = wctx->jump_top;
             }
             rtsd_printf("## Running actor %ld : %s", current->$globkey, current->$class->$GCINFO);
             r = cont->$class->__call__(cont, val);
@@ -1550,9 +1549,9 @@ void wt_work_cb(uv_check_t *ev) {
             else if (diff < (long long int)100 * 1000000000) { wt_stats[wctx->id].conts_100s++; }
             else                              { wt_stats[wctx->id].conts_inf++; }
         } else {                                        // Exceptional path
-            assert(jump0 != NULL);
-            assert(jump0->xval != NULL);
-            B_BaseException ex = jump0->xval;
+            assert(wctx->jump0 != NULL);
+            assert(wctx->jump0->xval != NULL);
+            B_BaseException ex = wctx->jump0->xval;
             rtsd_printf("## (%d) Actor %ld : %s longjmp exception: %s", wctx->id, current->$globkey, current->$class->$GCINFO, ex->$class->$GCINFO);
             r = $R_FAIL(ex);
         }
@@ -1704,6 +1703,7 @@ void *main_loop(void *idx) {
     wctx->id = (long)idx;
     wctx->uv_loop = uv_loops[wctx->id];
     wctx->jump_top = NULL;
+    wctx->jump0 = NULL;
     pthread_setspecific(pkey_wctx, (void *)wctx);
 
     char tname[11]; // Enough for "Worker XXX\0"
