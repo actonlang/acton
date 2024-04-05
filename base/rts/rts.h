@@ -231,6 +231,7 @@ struct WorkerCtx {
     long id;
     uv_loop_t *uv_loop;
     volatile JumpBuf jump_top;
+    volatile JumpBuf jump0;
 };
 
 JumpBuf $PUSH_BUF();
